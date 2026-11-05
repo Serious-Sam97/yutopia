@@ -40,6 +40,8 @@ import {
   panelTile,
   placedFootprint,
   Q,
+  quarterOf,
+  quarterYaw,
   runBetween,
   surfaceAt,
   takenId,
@@ -52,9 +54,10 @@ import {
   VOID,
   type WorldObjectDef,
   WQ,
-  WZ_PX,
+  WZ,
   wallTakes,
 } from "@yutopia/shared";
+
 import type { SetupItem } from "@/lib/api";
 import { tr, trMaybe } from "@/lib/i18n";
 import { C } from "../art/palette";
@@ -65,9 +68,6 @@ import { buildSound } from "./sounds";
 
 // Marks this chunk for `pnpm budget` (build mode loads on demand).
 export const BUILD_CHUNK = "yutopia-build";
-
-// biome-ignore lint/suspicious/noExplicitAny: decoded Colyseus schema objects
-type S = any;
 
 // Something in your hand: where it goes (def), where it came from (null for a
 // new copy), and its offset from the tile under the pointer. Things on a
@@ -88,7 +88,7 @@ const onTop = (o: { kind: string }) => !!entry(o.kind).onSurface;
 const ghostId = () => `ghost-${Math.random().toString(36).slice(2, 8)}`;
 // where a thing is, for "has its move arrived yet?"
 const spotKey = (o: WorldObjectDef) =>
-  `${o.x},${o.y},${o.rot ?? 0},${onTop(o) ? topRect(o).x + topRect(o).y * 1e4 : ""}`;
+  `${o.x},${o.y},${quarterOf(o)},${onTop(o) ? topRect(o).x + topRect(o).y * 1e4 : ""}`;
 
 interface Press {
   sx: number; // where the button went down (screen px)
@@ -101,7 +101,7 @@ interface Press {
 
 const DRAG_PX = 6; // movement that turns a press into a drag
 const TURN_PX = 42; // sideways drag per quarter turn (the Sims gesture)
-const LIFT = 10; // how high held things float
+const LIFT = 0.2552; // how high held things float (m)
 
 // Build mode, loaded when an owner first opens it. Furniture works like The
 // Sims: the hand picks up what you point at (its drawn shape), carries it with
@@ -189,7 +189,7 @@ export class BuildController {
     return this.model?.allObjects() ?? [];
   }
   private bodies(): Point[] {
-    return this.room ? [...this.room.state.players.values()].map((p: S) => ({ x: p.x, y: p.y })) : [];
+    return this.room ? [...this.room.state.players.values()].map((p) => ({ x: p.x, y: p.y })) : [];
   }
   private holder(id: string): { uid: number; name: string } | null {
     const h: string | undefined = this.room?.state.holds?.get(id);
@@ -231,7 +231,13 @@ export class BuildController {
       if (h.ride && host) {
         // on a desk in the same hand: where the desk takes it
         const on = carried(h.ride.hostFrom, host, [h.ride.hostFrom, h.ride.from])[0] ?? h.ride.from;
-        def = { ...h.def, x: on.x, y: on.y, rot: on.rot, props: { ...(h.def.props ?? {}), c: on.props?.c } };
+        def = {
+          ...h.def,
+          x: on.x,
+          y: on.y,
+          yaw: quarterYaw(quarterOf(on)),
+          props: { ...(h.def.props ?? {}), c: on.props?.c },
+        };
       } else if (fine && h.qx !== undefined && h.qy !== undefined)
         def = topAt(h.def, this.cell.x + h.qx, this.cell.y + h.qy);
       else def = { ...h.def, x: this.anchor.x + h.dx, y: this.anchor.y + h.dy };
@@ -292,7 +298,7 @@ export class BuildController {
     const key = (a: typeof aim) => {
       const h = this.hand[0];
       const d = !h ? null : slot ? openingNear(h.def, a.face, a.along) : hangNear(h.def, a.face, a.along, a.z);
-      return d ? `${d.x},${d.y},${d.rot},${d.props?.wu},${d.props?.wz}` : "";
+      return d ? `${d.x},${d.y},${quarterOf(d)},${d.props?.wu},${d.props?.wz}` : "";
     };
     return !was || key(was) !== key(aim);
   }
@@ -368,7 +374,7 @@ export class BuildController {
       kind,
       x: this.anchor.x,
       y: this.anchor.y,
-      rot,
+      yaw: quarterYaw(rot),
       props: props ?? (kind === "chair" ? { desk: true } : undefined),
     };
     // (a wall item at its own height until it's aimed somewhere)
@@ -386,7 +392,7 @@ export class BuildController {
     const b = hud.get().build;
     if (b.mode !== "place") return;
     const cur = this.hand[0];
-    if (this.hand.length === 1 && !cur.origin && cur.def.kind === b.kind && cur.def.rot === b.rot) return;
+    if (this.hand.length === 1 && !cur.origin && cur.def.kind === b.kind && quarterOf(cur.def) === b.rot) return;
     if (this.hand.some((h) => h.origin)) return; // moving something: leave it
     this.setHand([this.freshHeld(b.kind, b.props, b.rot)]);
   }
@@ -503,7 +509,7 @@ export class BuildController {
         kind: def.kind,
         x: def.x,
         y: def.y,
-        rot: def.rot ?? 0,
+        yaw: def.yaw ?? 0,
         // moved: as stored (never drawing-only flags), in its new cell if on a
         // top, at its new spot if on a wall
         props: h.origin ? { ...(this.storedProps(h.origin.id) ?? {}), ...spotProps(def) } : def.props,
@@ -569,7 +575,7 @@ export class BuildController {
   // What's in hand, for the action bar: the first thing and how many.
   handInfo(): { kind: string; props?: Record<string, unknown>; rot: number; count: number } | null {
     const h = this.hand[0];
-    return h ? { kind: h.def.kind, props: h.def.props, rot: h.def.rot ?? 0, count: this.hand.length } : null;
+    return h ? { kind: h.def.kind, props: h.def.props, rot: quarterOf(h.def), count: this.hand.length } : null;
   }
 
   // Design tool: a new look for the selection (variant, decor kind, or a reshuffle).
@@ -581,7 +587,7 @@ export class BuildController {
       // a thing on a surface keeps its middle (a monitor is bigger than a mug)
       const c = onTop(o) ? topCentre(o) : null;
       const d = c ? topNear({ ...o, props }, c.x, c.y) : { ...o, props };
-      return { id: o.id, kind: o.kind, x: d.x, y: d.y, rot: o.rot ?? 0, props: d.props };
+      return { id: o.id, kind: o.kind, x: d.x, y: d.y, yaw: o.yaw ?? 0, props: d.props };
     });
     if (items.length === 1) this.send("obj:put", { ...items[0], refId: sel[0].refId ?? null });
     else this.send("obj:batch", { items });
@@ -666,7 +672,7 @@ export class BuildController {
           if (isDoorKind(h.def.kind) && doorLeaves(h.def.kind)) return { ...h, def: swung(h.def) };
           return entry(h.def.kind).wall || isOpening(h.def.kind)
             ? h
-            : { ...h, def: { ...h.def, rot: ((h.def.rot ?? 0) + 1) % 4 } };
+            : { ...h, def: { ...h.def, yaw: quarterYaw(quarterOf(h.def) + 1) } };
         }
         return turnAbout(h, pivot);
       });
@@ -674,7 +680,7 @@ export class BuildController {
       if (this.hanging()) this.flip = !this.flip;
       const b = hud.get().build;
       if (b.mode === "place" && this.hand.length === 1 && !this.hand[0].origin && !this.hanging() && !this.slotting())
-        this.setBuild({ rot: this.hand[0].def.rot ?? 0 });
+        this.setBuild({ rot: quarterOf(this.hand[0].def) });
       buildSound("rotate");
       return this.drawHand();
     }
@@ -717,7 +723,7 @@ export class BuildController {
     }
     for (const o of alone) {
       const c = topCentre(o);
-      defs.push(topNear({ ...o, rot: ((o.rot ?? 0) + 1) % 4 }, c.x, c.y));
+      defs.push(topNear({ ...o, yaw: quarterYaw((quarterOf(o) + 1) % 4) }, c.x, c.y));
     }
     const sofar: WorldObjectDef[] = [];
     for (const d of defs) {
@@ -739,7 +745,7 @@ export class BuildController {
         kind: d.kind,
         x: d.x,
         y: d.y,
-        rot: d.rot ?? 0,
+        yaw: quarterYaw(quarterOf(d)),
         refId: d.refId ?? null,
         props: props(d),
       });
@@ -750,7 +756,7 @@ export class BuildController {
           kind: d.kind,
           x: d.x,
           y: d.y,
-          rot: d.rot ?? 0,
+          yaw: d.yaw ?? 0,
           props: props(d),
         })),
       });
@@ -818,7 +824,7 @@ export class BuildController {
       kind: o.kind,
       dx: o.x - x0,
       dy: o.y - y0,
-      rot: o.rot ?? 0,
+      yaw: o.yaw ?? 0,
       props: Object.keys(this.copyable(o.props)).length ? this.copyable(o.props) : null,
     }));
   }
@@ -835,7 +841,7 @@ export class BuildController {
       kind: it.kind,
       x: t.x + it.dx,
       y: t.y + it.dy,
-      rot: it.rot,
+      yaw: it.yaw,
       props: it.props ?? undefined,
     }));
     const ids = new Map(src.map((o) => [o.id, ghostId()]));
@@ -853,7 +859,7 @@ export class BuildController {
     } else {
       const o = this.model?.getObject(pick.id);
       if (!o || !entry(o.kind).buildable) return;
-      this.setBuild({ mode: "place", kind: o.kind, props: this.copyable(o.props), rot: o.rot ?? 0 });
+      this.setBuild({ mode: "place", kind: o.kind, props: this.copyable(o.props), rot: quarterOf(o) });
     }
     this.hand = [];
     this.syncPlace();
@@ -918,10 +924,10 @@ export class BuildController {
     if (!o || !m) return null;
     const { w, h } = placedFootprint(o);
     const c = onTop(o) ? topCentre(o) : entry(o.kind).wall ? hangSpot(o, 0.15) : { x: o.x + w / 2, y: o.y + h / 2 };
-    const z = onTop(o) ? (Number(o.props?.z) || 0) + 30 : entry(o.kind).wall ? hangOf(o).z1 + 10 : 52;
+    const z = onTop(o) ? (Number(o.props?.z) || 0) + 0.77 : entry(o.kind).wall ? hangOf(o).z1 + 0.26 : 1.33;
     return this.client(c.x, c.y, z);
   }
-  // a world point (`z` iso px up) in client px (the view answers from its canvas's corner)
+  // a world point (`z` m up) in client px (the view answers from its canvas's corner)
   private client(x: number, y: number, z: number): { x: number; y: number } | null {
     const p = this.model?.worldToClient(x, y, z);
     if (!p) return null;
@@ -1161,7 +1167,7 @@ export class BuildController {
         const k = hangOf(this.placed()[0].def);
         const z = a.z ?? (k.z0 + k.z1) / 2;
         const along = d[0] * (Math.sign(a.face.dir === "h" ? rx : ry) || 1);
-        this.aim = { ...a, along: a.along + along / WQ, z: z - d[1] * WZ_PX };
+        this.aim = { ...a, along: a.along + along / WQ, z: z - d[1] * WZ };
       } else if (this.fine()) this.cell = { x: this.cell.x + mx, y: this.cell.y + my };
       else this.anchor = { x: this.anchor.x + mx, y: this.anchor.y + my };
       buildSound("snap");
@@ -1793,7 +1799,7 @@ function spotProps(d: WorldObjectDef): Record<string, unknown> {
 function otherSide(map: MapDef, others: WorldObjectDef[], o: WorldObjectDef): WorldObjectDef | null {
   const h = hangOf(o);
   const face: Face = { dir: h.dir, line: h.line, side: h.side > 0 ? -1 : 1 };
-  const wz = Math.round(h.lift / WZ_PX);
+  const wz = Math.round(h.lift / WZ);
   for (let k = 0; k <= 2 * WQ; k++)
     for (const s of k ? [1, -1] : [1]) {
       const def = hangAt(o, face, h.u0 + s * k, wz);
@@ -1811,8 +1817,8 @@ function swung(o: WorldObjectDef): WorldObjectDef {
 function turn(h: Held): Held {
   const e = entry(h.def.kind);
   if (e.wall || isOpening(h.def.kind)) return h; // things on (and in) walls face the room
-  const { h: fh } = footprint(h.def.kind, h.def.rot ?? 0);
-  return { ...h, def: { ...h.def, rot: ((h.def.rot ?? 0) + 1) % 4 }, dx: 1 - h.dy - fh, dy: h.dx };
+  const { h: fh } = footprint(h.def.kind, quarterOf(h.def));
+  return { ...h, def: { ...h.def, yaw: quarterYaw((quarterOf(h.def) + 1) % 4) }, dx: 1 - h.dy - fh, dy: h.dx };
 }
 
 // The middle of what's in hand (tile offsets from the pointer's tile).
@@ -1824,7 +1830,7 @@ function handMiddle(hand: Held[]): Point {
   let x1 = Number.NEGATIVE_INFINITY;
   let y1 = Number.NEGATIVE_INFINITY;
   for (const h of solid) {
-    const { w, h: d } = footprint(h.def.kind, h.def.rot ?? 0);
+    const { w, h: d } = footprint(h.def.kind, quarterOf(h.def));
     x0 = Math.min(x0, h.dx);
     y0 = Math.min(y0, h.dy);
     x1 = Math.max(x1, h.dx + w);
@@ -1838,7 +1844,7 @@ function handMiddle(hand: Held[]): Point {
 function turnAbout(h: Held, p: Point): Held {
   const e = entry(h.def.kind);
   if (e.wall || isOpening(h.def.kind)) return h; // things on (and in) walls face the room
-  const { w, h: d } = footprint(h.def.kind, h.def.rot ?? 0);
+  const { w, h: d } = footprint(h.def.kind, quarterOf(h.def));
   const cx = h.dx + w / 2 - p.x;
   const cy = h.dy + d / 2 - p.y;
   // (x, y) → (−y, x): the same clockwise turn as the footprint's
@@ -1846,7 +1852,7 @@ function turnAbout(h: Held, p: Point): Held {
   const ny = p.y + cx;
   return {
     ...h,
-    def: { ...h.def, rot: ((h.def.rot ?? 0) + 1) % 4 },
+    def: { ...h.def, yaw: quarterYaw((quarterOf(h.def) + 1) % 4) },
     dx: Math.round(nx - d / 2),
     dy: Math.round(ny - w / 2),
   };
@@ -1855,12 +1861,17 @@ function turnAbout(h: Held, p: Point): Held {
 // A quarter turn of something held on its own on a surface, about the middle of
 // the cell under the pointer.
 function turnTop(h: Held): Held {
-  const rot = ((h.def.rot ?? 0) + 1) % 4;
+  const rot = (quarterOf(h.def) + 1) % 4;
   const [w, d] = topSize(h.def);
   const ux = (h.qx ?? 0) + w / 2 - 0.5;
   const uy = (h.qy ?? 0) + d / 2 - 0.5;
-  const [w2, d2] = topSize({ ...h.def, rot });
-  return { ...h, def: { ...h.def, rot }, qx: Math.round(0.5 - uy - w2 / 2), qy: Math.round(0.5 + ux - d2 / 2) };
+  const [w2, d2] = topSize({ ...h.def, yaw: quarterYaw(rot) });
+  return {
+    ...h,
+    def: { ...h.def, yaw: quarterYaw(rot) },
+    qx: Math.round(0.5 - uy - w2 / 2),
+    qy: Math.round(0.5 + ux - d2 / 2),
+  };
 }
 
 function rectOf(a: Point, b: Point) {

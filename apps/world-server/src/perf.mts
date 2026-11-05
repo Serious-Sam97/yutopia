@@ -7,7 +7,7 @@
 //   pnpm --filter @yutopia/world-server perf
 
 import { monitorEventLoopDelay } from "node:perf_hooks";
-import { ANIM, dirFromDelta, findPath, type Point, ROOM_NAME } from "@yutopia/shared";
+import { ANIM, type Point, ROOM_NAME } from "@yutopia/shared";
 import { dayNests, dayOf, NESTS } from "@yutopia/shared/dark";
 import { CHUNK, checkEdits, heightAt, landBounds, SURFACES, walkableTile } from "@yutopia/shared/grounds";
 import { encodeBytes, encodeHeights, type GroundsEdits } from "@yutopia/shared/grounds-edits";
@@ -73,7 +73,7 @@ const rooms: Room[] = [];
 let winded = 0; // times an outdoor bot ran out of breath
 let awake = 0; // bots struck down (DARK)
 
-if (process.env.YUTOPIA_PHYSICS !== "0") {
+{
   // (the room and its physics world are made with the first one in)
   const first = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
     sandbox: 1,
@@ -112,7 +112,7 @@ for (let i = 0; i < BOTS; i++) {
   // walking the world as the server has it: its floor, its grid for them (locked doors and all)
   const world = WorldRoom.current;
   if (!world) throw new Error("no world room");
-  const grid = world.gridFor(800000 + i, me.level);
+  const _grid = world.gridFor(800000 + i, me.level);
   const areas = world.levelMap(me.level).areas.filter((a) => world.mayEnter(me, a.key));
   let path: Point[] = [];
   let seq = 0;
@@ -205,8 +205,7 @@ for (let i = 0; i < BOTS; i++) {
         room.send("pos", {
           x: pos.x,
           y: pos.y,
-          z: heightAt(pos.x - 60, pos.y - 10),
-          d: dirFromDelta(east ? 1 : -1, 0),
+          z: heightAt(pos.x, pos.y),
           a: ANIM.walk,
           seq: ++seq,
           mv: packMv(g) | (breath.winded ? MV_WINDED : 0),
@@ -217,16 +216,15 @@ for (let i = 0; i < BOTS; i++) {
       }
       if (!path.length) {
         const a = areas[Math.floor(Math.random() * areas.length)];
-        path = findPath(grid, pos, { x: a.x + Math.random() * a.w, y: a.y + Math.random() * a.h }) ?? [];
+        path =
+          world.wayFor(800000 + i, me.level, pos, { x: a.x + Math.random() * a.w, y: a.y + Math.random() * a.h }) ?? [];
       }
       let budget = speed * dt;
-      let d = 0;
       while (budget > 0 && path.length) {
         const wp = path[0];
         const dx = wp.x - pos.x;
         const dy = wp.y - pos.y;
         const dist = Math.hypot(dx, dy);
-        d = dirFromDelta(dx, dy);
         yaw = Math.atan2(dy, dx);
         if (dist <= budget) {
           Object.assign(pos, wp);
@@ -242,7 +240,6 @@ for (let i = 0; i < BOTS; i++) {
       room.send("pos", {
         x: pos.x,
         y: pos.y,
-        d,
         a: moving ? ANIM.walk : ANIM.idle,
         seq: ++seq,
         mv: packMv(moving ? gait : "still"),

@@ -1,4 +1,4 @@
-import { hangOf, hangPoint, ISO_PX, TEXT_FACE, type WorldObjectDef } from "@yutopia/shared";
+import { hangOf, hangPoint, TEXT_FACE, type WorldObjectDef } from "@yutopia/shared";
 import { GAME_ASPECT } from "@yutopia/shared/games";
 import { GLASS, glassCorners } from "@yutopia/shared/media";
 import {
@@ -21,7 +21,6 @@ import { isNative, wordsOf } from "../furn/native";
 import { CLOCK_FACE } from "../furn/walls";
 import { drawFlaps, drawTicker, FLAPS_PX, TICKER_PX } from "../furn/words";
 import type { WorldModel } from "../model";
-import { zt } from "./kit3d";
 
 // Live pictures in 3D: what plays on TVs and big screens, the board walls'
 // VU meters, whiteboard miniatures, the consoles on the game-room TVs: their
@@ -32,7 +31,7 @@ export interface Live {
   src: HTMLCanvasElement | HTMLVideoElement;
   tl: [number, number]; // the picture's top-left / top-right corners (world tiles)
   tr: [number, number];
-  zTop: number; // iso px
+  zTop: number; // m
   zBot: number;
   version: number; // what's on the canvas (counts its redraws; uploaded when it moves)
   live?: boolean; // redrawn as it plays: further than NEAR it keeps its last frame
@@ -217,7 +216,7 @@ function placeQuad(mesh: Mesh, l: Live) {
   const dy = l.tr[1] - l.tl[1];
   const len = Math.hypot(dx, dy) || 1;
   let w = len;
-  let h = zt(l.zTop - l.zBot);
+  let h = l.zTop - l.zBot;
   if (l.fit) {
     // letterboxed inside the glass
     if (w / h > l.fit) w = h * l.fit;
@@ -229,7 +228,7 @@ function placeQuad(mesh: Mesh, l: Live) {
   const ny = ux;
   const cx = (l.tl[0] + l.tr[0]) / 2 + nx * 0.014;
   const cy = (l.tl[1] + l.tr[1]) / 2 + ny * 0.014;
-  const cz = zt((l.zTop + l.zBot) / 2);
+  const cz = (l.zTop + l.zBot) / 2;
   const m = new Matrix4().makeBasis(new Vector3(ux, 0, uy), new Vector3(0, 1, 0), new Vector3(nx, 0, ny));
   m.scale(new Vector3(w, h, 1));
   m.setPosition(cx, cz, cy);
@@ -323,7 +322,7 @@ export class LiveFeed {
       const tl = hangPoint(o, p.ox, p.oy + 0.1);
       const tr = hangPoint(o, p.ox + len, p.oy + 0.1);
       const up = hangOf(o).lift;
-      const at = { tl, tr, zTop: p.zTop + up, zBot: p.zTop + up - p.ph };
+      const at = { tl, tr, zTop: p.zTop + up, zBot: p.zTop + up - p.h };
       const video = model.shareVideo(id);
       if (video) {
         const fit = (video.videoWidth || 16) / (video.videoHeight || 9);
@@ -397,8 +396,8 @@ export class LiveFeed {
         src: b.canvas,
         tl: hangPoint(o, f.x0, f.z),
         tr: hangPoint(o, f.x1, f.z),
-        zTop: f.y1 * ISO_PX + up,
-        zBot: f.y0 * ISO_PX + up,
+        zTop: f.y1 + up,
+        zBot: f.y0 + up,
         version: b.version,
         live: true,
         glow: ticker,
@@ -445,8 +444,8 @@ export class LiveFeed {
         src: this.hands?.canvas as HTMLCanvasElement,
         tl: hangPoint(o, x - r, z + 0.004),
         tr: hangPoint(o, x + r, z + 0.004),
-        zTop: (y + r) * ISO_PX + up,
-        zBot: (y - r) * ISO_PX + up,
+        zTop: y + r + up,
+        zBot: y - r + up,
         version: minute,
         glow: false,
       };

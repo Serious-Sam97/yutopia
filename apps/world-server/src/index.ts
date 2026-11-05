@@ -1,5 +1,6 @@
 import { spHour } from "@yutopia/shared";
 import { config } from "./config.ts";
+import { metrics } from "./metrics.ts";
 import { startWorldServer } from "./server.ts";
 
 const server = await startWorldServer(config.port);
@@ -24,6 +25,26 @@ try {
 } catch (e) {
   console.warn("[clock] couldn't check São Paulo's hour against Intl:", (e as Error).message);
 }
+
+// What nothing else caught (a plain setTimeout's callback, a promise no one awaited): logged and
+// counted, the world kept up — a feature's bug shouldn't drop everyone (docs/plan/72-the-3d-core.md,
+// phase 1). A storm of them (STORM in a minute) says the process is in a bad way: it exits, and
+// the container's restart policy brings it back.
+const STORM = 30;
+let recent: number[] = [];
+function caught(kind: string, e: unknown) {
+  metrics.inc(kind === "uncaughtException" ? "uncaught_exceptions_total" : "unhandled_rejections_total");
+  console.error(`[world] ${kind}:`, (e as Error)?.stack ?? e);
+  const now = Date.now();
+  recent = recent.filter((t) => now - t < 60_000);
+  recent.push(now);
+  if (recent.length >= STORM) {
+    console.error(`[world] ${STORM} uncaught errors in a minute: exiting for a clean restart`);
+    process.exit(1);
+  }
+}
+process.on("uncaughtException", (e) => caught("uncaughtException", e));
+process.on("unhandledRejection", (e) => caught("unhandledRejection", e));
 
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
   process.on(sig, () => void server.gracefullyShutdown(true));

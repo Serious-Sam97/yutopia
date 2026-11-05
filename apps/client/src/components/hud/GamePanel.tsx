@@ -447,7 +447,7 @@ function ConsoleControls({
                 type="button"
                 className="deck-btn"
                 style={{ height: 28, fontSize: 11 }}
-                onClick={() => w?.grabCable(id)}
+                onClick={() => w?.cable.grabCable(id)}
               >
                 🔌 {t("plug")}
               </button>

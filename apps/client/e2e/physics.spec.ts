@@ -9,7 +9,7 @@ import { ANA, enter, test, token } from "./helpers";
 
 const GPU = process.env.YUTOPIA_GPU === "1";
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
-const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
+const G = (x: number, y: number) => ({ x, y });
 
 test("the physics shapes: built in the browser, drawn round you, nothing refused", async ({ page }) => {
   test.skip(!GPU, "needs the GPU: YUTOPIA_GPU=1");

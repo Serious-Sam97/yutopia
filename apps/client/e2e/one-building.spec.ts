@@ -164,8 +164,7 @@ test("a lift's car carries me down the shaft: every floor on the way, in it all 
   await ride(0, 4);
 });
 
-// (the ground floor's coords are the building's less GROUND_OFFSET)
-const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
+const G = (x: number, y: number) => ({ x, y });
 
 test("a thing on the snow 3 m below: out of reach — no prompt, the server won't hand it up; down by it, picked up", async ({
   page,

@@ -14,7 +14,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 function aWorld(): void
 {
     World::current()->update(['name' => 'Studio', 'layout' => ['width' => 16, 'height' => 16, 'theme' => 'snow'], 'settings' => ['playlists' => [['list' => 'PL1']]], 'seeded_at' => now()]);
-    WorldObject::create(['uid' => 'desk-1', 'kind' => 'desk', 'x' => 4, 'y' => 5, 'rot' => 1, 'props' => ['ownerId' => 1]]);
+    WorldObject::create(['uid' => 'desk-1', 'kind' => 'desk', 'x' => 4, 'y' => 5, 'yaw' => M_PI / 2, 'props' => ['ownerId' => 1]]);
     WorldObject::create(['uid' => 'plant-1', 'kind' => 'plant', 'x' => 2, 'y' => 3]);
 }
 
@@ -23,7 +23,7 @@ it('keeps the world aside and puts it back exactly', function () {
     aWorld();
     Desk::create(['user_id' => $ana->id, 'desk_uid' => 'desk-1']);
     $snap = app(WorldSnapshot::class)->export();
-    expect($snap)->toMatchArray(['yutopia' => 'world', 'version' => 1, 'name' => 'Studio', 'seeded' => true])
+    expect($snap)->toMatchArray(['yutopia' => 'world', 'version' => 3, 'name' => 'Studio', 'seeded' => true])
         ->and($snap['objects'])->toHaveCount(2)
         ->and($snap['desks'])->toBe([['userId' => $ana->id, 'desk' => 'desk-1']]);
 

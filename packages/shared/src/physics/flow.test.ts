@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Grid } from "../grid.ts";
 import { CHUNK } from "../grounds.ts";
 import {
   flowCode,
@@ -10,6 +9,7 @@ import {
   type MoveEnv,
   NO_INPUT,
   newBody,
+  openFloor,
   SPIN_LEN,
   stepBody,
 } from "../move/index.ts";
@@ -19,7 +19,7 @@ import { flowParts, GroundsFlow } from "./flow.ts";
 
 // Flowmotion out on the Grounds (physics/flow.ts): what each solid is, as the move core asks it
 
-const at0 = () => ({ ox: 0, oy: 0, elev: 0 });
+const at0 = () => ({ elev: 0 });
 const only = (s: GroundSolid[]) => (cx: number, cz: number) => (cx === 0 && cz === 0 ? s : []);
 
 test("GroundsFlow: lamp posts and trunks are poles; fences rails; buildings walls to run, low walls none", () => {
@@ -73,15 +73,15 @@ test("GroundsFlow: a turned rail and wall, and a floor's frame", () => {
     s: { t: "box", x: 10, y: 0.55, z: 10, hx: 3, hy: 0.55, hz: 0.04, a },
   };
   const wall: GroundSolid = { what: "tower", s: { t: "box", x: 20, y: 4, z: 20, hx: 2, hy: 4, hz: 2, a } };
-  const f = new GroundsFlow(() => ({ ox: 5, oy: 5, elev: 2 }), only([rail, wall]));
-  // (the floor's coords: the world's less its frame)
-  const r = f.rail(10 - 5, 10 - 5, 1.1 - 2, 0.3);
+  const f = new GroundsFlow(() => ({ elev: 2 }), only([rail, wall]));
+  // (the floor's x, y the world's; its heights over its own height)
+  const r = f.rail(10, 10, 1.1 - 2, 0.3);
   assert.ok(r, "on the rail's middle");
   assert.ok(Math.abs(r.ux - Math.cos(a)) < 1e-9 && Math.abs(r.uy + Math.sin(a)) < 1e-9, "along its turn");
   assert.ok(Math.abs(r.z - (1.1 - 2)) < 1e-9);
   // the tower's corner faces turned too: from straight out along its local +x, the normal is that
   const out = 2 + 0.25 + 0.1;
-  const w = f.wall(20 + Math.cos(a) * out - 5, 20 - Math.sin(a) * out - 5, 0 - 2, -1, 0, 0.55);
+  const w = f.wall(20 + Math.cos(a) * out, 20 - Math.sin(a) * out, 0 - 2, -1, 0, 0.55);
   assert.ok(w && Math.abs(w.nx - Math.cos(a)) < 1e-9 && Math.abs(w.ny + Math.sin(a)) < 1e-9);
   assert.ok(w && Math.abs(w.d - 0.1) < 1e-9 && w.top === 8 - 2);
 });
@@ -91,9 +91,12 @@ test("GroundsFlow: a grind runs on from one fence stretch onto the next past its
     { what: "fence", s: box3(2, 9.95, 5, 10.05, 0, 1.2) },
     { what: "fence", s: box3(5, 9.95, 8, 10.05, 0, 1.2) },
   ];
-  const grid = new Grid(20, 20);
-  grid.walk.fill(1);
-  const env: MoveEnv = { grid, footing: () => "floor", flow: new GroundsFlow(at0, only(solids)) };
+  // (a floor with nothing to stand on over it: only the flow's runs hold the body up)
+  const env: MoveEnv = {
+    grid: openFloor(() => Number.POSITIVE_INFINITY),
+    footing: () => "floor",
+    flow: new GroundsFlow(at0, only(solids)),
+  };
   const b = newBody(2.5, 10.1, 1.5);
   b.up = true;
   b.vz = -1;
@@ -150,7 +153,7 @@ test("Flowmotion on the wire: a move's byte and back (its side), nonsense refuse
 test("the building's: its walls with the outside on a side to run, up to the storey; the parkour pieces outside", async () => {
   const { blankMap } = await import("../map-edit.ts");
   const { canPlace } = await import("../build.ts");
-  const { STOREY } = await import("../levels.ts");
+  const { STOREY } = await import("../units.ts");
   const { buildingSolids } = await import("./build.ts");
   // a 12 × 8 studio, its east third out of doors (x 8..11) behind a wall at x 8, a wall inside at x 4
   const map = blankMap("t", "t", 12, 8);

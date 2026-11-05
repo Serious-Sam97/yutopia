@@ -227,7 +227,11 @@ function PeopleTab() {
             {keys.plate}
           </span>
         )}
-        <button type="button" className="ghost-btn flex items-center gap-1.5" onClick={() => w?.pickArrival(true)}>
+        <button
+          type="button"
+          className="ghost-btn flex items-center gap-1.5"
+          onClick={() => w?.arrival.pickArrival(true)}
+        >
           <Icon name="pin" size={15} />
           {t("myArrival")}
         </button>

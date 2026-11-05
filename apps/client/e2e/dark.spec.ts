@@ -10,7 +10,7 @@ import { ANA, enter, test, token } from "./helpers";
 // building and the Grounds (every world has them), so no fixture is put back.
 
 // the ground floor's corner is at (-60, -10) in the building's coords
-const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
+const G = (x: number, y: number) => ({ x, y });
 // review shots: YUTOPIA_SHOTS=<dir> (with the GPU: YUTOPIA_GPU=1)
 const dir = process.env.YUTOPIA_SHOTS;
 if (process.env.YUTOPIA_GPU === "1")

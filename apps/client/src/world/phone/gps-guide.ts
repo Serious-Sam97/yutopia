@@ -32,7 +32,7 @@ export class Guide {
   private root: Group | null = null;
   private mesh: Mesh | null = null;
   private tpOf: unknown = null;
-  private drawn: { r: Route | null; at: number; level: number; ox: number } = { r: null, at: -1, level: -1, ox: 0 };
+  private drawn: { r: Route | null; at: number; level: number } = { r: null, at: -1, level: -1 };
 
   constructor(private readonly ctl: WorldController) {}
 
@@ -47,13 +47,12 @@ export class Guide {
     // where the ground floor is from mine, every frame (the 3D view is in my floor's coords)
     if (tp && this.root) {
       const f = tp.groundsFrame();
-      this.root.position.set(-f.x, f.y, -f.z);
+      this.root.position.set(0, f.y, 0);
       this.root.visible = f.visible;
     }
     const d = this.drawn;
-    const ox = this.ctl.map?.ox ?? 0;
-    if (d.r === r && Math.abs(d.at - at) < 2 && d.level === this.ctl.level && d.ox === ox) return;
-    this.drawn = { r, at, level: this.ctl.level, ox };
+    if (d.r === r && Math.abs(d.at - at) < 2 && d.level === this.ctl.level) return;
+    this.drawn = { r, at, level: this.ctl.level };
     const pts: [number, number][] = [];
     const from = Math.max(0, at - BEHIND);
     const to = Math.min(r.dist, at + AHEAD);
@@ -80,7 +79,7 @@ export class Guide {
       this.root.name = "gps-guide";
       tp.scene.add(this.root);
       const f = tp.groundsFrame();
-      this.root.position.set(-f.x, f.y, -f.z);
+      this.root.position.set(0, f.y, 0);
     }
     const pos: number[] = [];
     const uv: number[] = [];

@@ -33,7 +33,6 @@ async function waitFor(fn: () => boolean, ms = 6000) {
 }
 // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
 const me = (room: Room): any => room.state.players.get(room.sessionId);
-const OFF = { x: -60, y: -10 };
 const props = (o: { props: string }) => JSON.parse(o.props) as Record<string, unknown>;
 
 test("into a lot car, driven, a passenger beside, out — and it's parked where it stopped", async () => {
@@ -53,7 +52,7 @@ test("into a lot car, driven, a passenger beside, out — and it's parked where 
   assert.ok(cars.length > 3, "the lot has cars");
   // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
   const o: any = cars[0];
-  const pose = parkedPose({ x: o.x, y: o.y, rot: o.rot, props: props(o) });
+  const pose = parkedPose({ x: o.x, y: o.y, yaw: o.yaw, props: props(o) });
   // (in the aisle by its nose: the bays beside it may be taken)
   const door = { x: pose.x + Math.cos(pose.a) * 3.4, y: pose.y + Math.sin(pose.a) * 3.4 };
   a.send("teleport", { to: { ...door, level: 0 } });
@@ -68,28 +67,28 @@ test("into a lot car, driven, a passenger beside, out — and it's parked where 
   // a parked car it knocked, come to rest: put where it stopped (not when it couldn't have got there)
   // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
   const others: any[] = cars.filter((c: any) => c.id !== o.id);
-  const poseOf = (c: { x: number; y: number; rot: number; props: string }) =>
-    parkedPose({ x: c.x, y: c.y, rot: c.rot, props: props(c) });
+  const poseOf = (c: { x: number; y: number; yaw: number; props: string }) =>
+    parkedPose({ x: c.x, y: c.y, yaw: c.yaw, props: props(c) });
   others.sort((p, q) => {
-    const d = (c: typeof p) => Math.hypot(poseOf(c).x + OFF.x - v().x, poseOf(c).y + OFF.y - v().z);
+    const d = (c: typeof p) => Math.hypot(poseOf(c).x - v().x, poseOf(c).y - v().z);
     return d(p) - d(q);
   });
   const hit = others[0];
   const before = poseOf(hit);
-  const to = { x: before.x + OFF.x + 0.8, z: before.y + OFF.y + 0.3, a: before.a + 0.2 };
+  const to = { x: before.x + 0.8, z: before.y + 0.3, a: before.a + 0.2 };
   if (Math.hypot(to.x - v().x, to.z - v().z) < 12) {
     a.send("car:shove", { id: hit.id, ...to });
-    await waitFor(() => Math.abs(poseOf(a.state.objects.get(hit.id)).x + OFF.x - to.x) < 0.05);
+    await waitFor(() => Math.abs(poseOf(a.state.objects.get(hit.id)).x - to.x) < 0.05);
     const after = poseOf(a.state.objects.get(hit.id));
     assert.ok(
-      Math.abs(after.y + OFF.y - to.z) < 0.05 &&
+      Math.abs(after.y - to.z) < 0.05 &&
         Math.abs(Math.atan2(Math.sin(after.a - to.a), Math.cos(after.a - to.a))) < 0.01,
       "shoved where it stopped",
     );
     await sleep(300);
     a.send("car:shove", { id: hit.id, x: to.x + 40, z: to.z, a: to.a });
     await sleep(300);
-    assert.ok(Math.abs(poseOf(a.state.objects.get(hit.id)).x + OFF.x - to.x) < 0.05, "a knock can't send it 40 m");
+    assert.ok(Math.abs(poseOf(a.state.objects.get(hit.id)).x - to.x) < 0.05, "a knock can't send it 40 m");
   } else assert.fail(`no parked car near enough to knock (${Math.hypot(to.x - v().x, to.z - v().z).toFixed(1)} m)`);
   // a passenger gets in beside
   const b = await join(42);
@@ -132,7 +131,7 @@ test("into a lot car, driven, a passenger beside, out — and it's parked where 
   }
   await waitFor(() => v().seq === 40);
   assert.ok(Math.hypot(v().x - x, v().z - z) < 0.01, "it is where the driver says");
-  assert.ok(Math.abs(me(a).x + OFF.x - x) < 2.5, "the driver is carried in it");
+  assert.ok(Math.abs(me(a).x - x) < 2.5, "the driver is carried in it");
   // faster than any car goes: believed all the same (no put-backs — the user's call, 2026-10-28);
   // only a state that isn't numbers is let go
   let snapped = false;
@@ -154,11 +153,8 @@ test("into a lot car, driven, a passenger beside, out — and it's parked where 
   await waitFor(() => me(a).busy === "" && me(b).busy === "");
   await waitFor(() => !a.state.vehicles.get(vid), 8000);
   const parked = a.state.objects.get(o.id);
-  const pp = parkedPose({ x: parked.x, y: parked.y, rot: parked.rot, props: props(parked) });
-  assert.ok(
-    Math.hypot(pp.x + OFF.x - x, pp.y + OFF.y - z) < 0.2,
-    `parked where it stopped: ${pp.x + OFF.x} ${pp.y + OFF.y} vs ${x} ${z}`,
-  );
+  const pp = parkedPose({ x: parked.x, y: parked.y, yaw: parked.yaw, props: props(parked) });
+  assert.ok(Math.hypot(pp.x - x, pp.y - z) < 0.2, `parked where it stopped: ${pp.x} ${pp.y} vs ${x} ${z}`);
   assert.ok(!props(parked).driven);
   assert.equal(typeof props(parked).a, "number");
   // the lot put back (an admin's): each car in its own bay, as it was
@@ -189,7 +185,7 @@ test("its tank and its wear: only down from the driver, kept when parked; a pass
   await sleep(300);
   // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
   const o: any = [...a.state.objects.values()].filter((c: any) => c.kind === "car" && !props(c).driven)[1];
-  const pose = parkedPose({ x: o.x, y: o.y, rot: o.rot, props: props(o) });
+  const pose = parkedPose({ x: o.x, y: o.y, yaw: o.yaw, props: props(o) });
   const door = { x: pose.x + Math.cos(pose.a) * 3.4, y: pose.y + Math.sin(pose.a) * 3.4 };
   for (const r of [a, b]) r.send("teleport", { to: { ...door, level: 0 } });
   await waitFor(() => me(a).level === 0 && me(b).level === 0);
@@ -291,7 +287,7 @@ test("stuck: pulled out to a clear spot near by (the server's pick), not again s
   await sleep(300);
   // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
   const o: any = [...r.state.objects.values()].filter((c: any) => c.kind === "car" && !props(c).driven)[2];
-  const pose = parkedPose({ x: o.x, y: o.y, rot: o.rot, props: props(o) });
+  const pose = parkedPose({ x: o.x, y: o.y, yaw: o.yaw, props: props(o) });
   const door = { x: pose.x + Math.cos(pose.a) * 3.4, y: pose.y + Math.sin(pose.a) * 3.4 };
   r.send("teleport", { to: { ...door, level: 0 } });
   await waitFor(() => me(r).level === 0);
@@ -338,12 +334,12 @@ test("the cars that live away from the lot: made where they live; the pickup's b
   const home = (id: string) => HOME_CARS.find((h) => h.id === id) as (typeof HOME_CARS)[number];
   const poseOf = (id: string) => {
     const o = a.state.objects.get(id);
-    return parkedPose({ x: o.x, y: o.y, rot: o.rot, props: props(o) });
+    return parkedPose({ x: o.x, y: o.y, yaw: o.yaw, props: props(o) });
   };
   // where they live, with their roles
   for (const id of ["farm-pickup", "town-car-3", "gas-rental"]) {
     const p = poseOf(id);
-    assert.ok(Math.hypot(p.x + OFF.x - home(id).x, p.y + OFF.y - home(id).z) < 0.05, `${id} at home`);
+    assert.ok(Math.hypot(p.x - home(id).x, p.y - home(id).z) < 0.05, `${id} at home`);
   }
   assert.equal(props(a.state.objects.get("town-car-3")).role, "police");
   assert.equal(props(a.state.objects.get("farm-pickup")).model, "pickup");
@@ -353,7 +349,7 @@ test("the cars that live away from the lot: made where they live; the pickup's b
   const p0 = poseOf("farm-pickup");
   const door = { x: p0.x - Math.sin(p0.a) * 2.2, y: p0.y + Math.cos(p0.a) * 2.2 };
   for (const r of [a, b]) {
-    r.send("teleport", { to: { x: 30, y: 20, level: 0 } });
+    r.send("teleport", { to: { x: -30, y: 10, level: 0 } });
     await waitFor(() => me(r).level === 0);
     r.send("teleport", { to: { ...door, level: 0 } });
     await waitFor(() => Math.hypot(me(r).x - door.x, me(r).y - door.y) < 3);
@@ -404,14 +400,11 @@ test("the cars that live away from the lot: made where they live; the pickup's b
   for (const r of [a, b]) r.send("car:leave", {});
   await waitFor(() => !a.state.vehicles.get(vid), 8000);
   const moved = poseOf("farm-pickup");
-  assert.ok(
-    Math.hypot(moved.x + OFF.x - home("farm-pickup").x, moved.y + OFF.y - home("farm-pickup").z) > 4,
-    "left where it stopped",
-  );
+  assert.ok(Math.hypot(moved.x - home("farm-pickup").x, moved.y - home("farm-pickup").z) > 4, "left where it stopped");
   a.send("mod:cars", {});
   await waitFor(() => {
     const p = poseOf("farm-pickup");
-    return Math.hypot(p.x + OFF.x - home("farm-pickup").x, p.y + OFF.y - home("farm-pickup").z) < 0.05;
+    return Math.hypot(p.x - home("farm-pickup").x, p.y - home("farm-pickup").z) < 0.05;
   });
 });
 
@@ -431,11 +424,11 @@ test("a snowmobile: its one rider, no more", async () => {
   await waitFor(() => !!a.state.objects.get("pond-sled-0"));
   await sleep(300);
   const o = a.state.objects.get("pond-sled-0");
-  const p = parkedPose({ x: o.x, y: o.y, rot: o.rot, props: props(o) });
+  const p = parkedPose({ x: o.x, y: o.y, yaw: o.yaw, props: props(o) });
   assert.equal(props(o).model, "snowmobile");
   const by = { x: p.x, y: p.y + 1.6 };
   for (const r of [a, b]) {
-    r.send("teleport", { to: { x: 30, y: 20, level: 0 } });
+    r.send("teleport", { to: { x: -30, y: 10, level: 0 } });
     await waitFor(() => me(r).level === 0);
     r.send("teleport", { to: { ...by, level: 0 } });
     await waitFor(() => Math.hypot(me(r).x - by.x, me(r).y - by.y) < 3);
@@ -468,8 +461,8 @@ test("into the pond (plan 66): driven in deep, its people are out of it afloat, 
   await waitFor(() => !!r.state.objects.get("pond-sled-0"));
   await sleep(300);
   const o = r.state.objects.get("pond-sled-0");
-  const pose = parkedPose({ x: o.x, y: o.y, rot: o.rot, props: props(o) });
-  r.send("teleport", { to: { x: 30, y: 20, level: 0 } });
+  const pose = parkedPose({ x: o.x, y: o.y, yaw: o.yaw, props: props(o) });
+  r.send("teleport", { to: { x: -30, y: 10, level: 0 } });
   await waitFor(() => me(r).level === 0);
   r.send("teleport", { to: { x: pose.x, y: pose.y + 1.6, level: 0 } });
   await waitFor(() => Math.hypot(me(r).x - pose.x, me(r).y - pose.y - 1.6) < 3);

@@ -16,7 +16,6 @@ process.env.YUTOPIA_WORLD_SECRET = "test";
 process.env.YUTOPIA_INTERNAL_SECRET = "test";
 
 const PORT = 31000 + Math.floor(Math.random() * 100); // (its own hundred: no two files share one — they run at once)
-const OFF = { x: -60, y: -10 }; // the ground floor's corner in the building's coords
 let server: { gracefullyShutdown: (exit?: boolean) => Promise<void> };
 const rooms: Room[] = [];
 before(async () => {
@@ -52,18 +51,18 @@ async function person(uid: number, sandbox: number) {
 }
 // on the land at (bx, bz), the building's coords
 async function standAt(room: Room, bx: number, bz: number, crouch = false) {
-  const to = { x: bx - OFF.x, y: bz - OFF.y };
+  const to = { x: bx, y: bz };
   // (crouched before going: a teleport lands with the last pos's gait)
   if (crouch) {
     const m = me(room);
-    room.send("pos", { x: m.x, y: m.y, z: m.z, d: 2, a: 0, seq: 0, mv: packMv("still") | 8 });
+    room.send("pos", { x: m.x, y: m.y, z: m.z, yaw: 96, a: 0, seq: 0, mv: packMv("still") | 8 });
     await waitFor(() => (me(room).mv & 8) !== 0);
   }
   if (Math.hypot(me(room).x - to.x, me(room).y - to.y) > 0.5) {
     room.send("teleport", { to: { ...to, level: 0 } });
     await waitFor(() => me(room).level === 0 && Math.hypot(me(room).x - to.x, me(room).y - to.y) < 0.5);
   }
-  room.send("pos", { ...to, z: heightAt(bx, bz), d: 2, a: 0, seq: 0, mv: packMv("still") | (crouch ? 8 : 0) });
+  room.send("pos", { ...to, z: heightAt(bx, bz), yaw: 96, a: 0, seq: 0, mv: packMv("still") | (crouch ? 8 : 0) });
 }
 const hour = async (room: Room, h: number) => {
   room.send("mod:hour", { h });
@@ -86,7 +85,7 @@ function spotNear(x: number, z: number, r: number, clear = 14) {
 }
 // the ones round a nest (building coords): within 7 tiles of it
 const round = (room: Room, n: { x: number; z: number }) =>
-  shadows(room).filter((s) => Math.hypot(s.x + OFF.x - n.x, s.y + OFF.y - n.z) < 7);
+  shadows(room).filter((s) => Math.hypot(s.x - n.x, s.y - n.z) < 7);
 
 test("by day nobody comes out of the dark; a nest out there, asleep, once you're near", async () => {
   const a = await person(801, 81);

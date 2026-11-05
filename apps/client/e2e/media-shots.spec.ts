@@ -50,7 +50,7 @@ test("media shots: the new screens by day and night, the remote", async ({ page 
       for (let y = 0; y < map.height; y++)
         for (let x = 0; x < map.width; x++) {
           const d = Math.hypot(x - ax, y - ay);
-          if (d >= bd || !canPlace(map, placed, { id: "p", kind, x, y, rot: 0 }, bodies)) continue;
+          if (d >= bd || !canPlace(map, placed, { id: "p", kind, x, y, yaw: 0 }, bodies)) continue;
           if (reach && !findPath(grid, { x: sp.x, y: sp.y }, { x: x + 1.5, y: y + 1.5 })) continue;
           best = { x, y };
           bd = d;
@@ -62,14 +62,14 @@ test("media shots: the new screens by day and night, the remote", async ({ page 
     for (const k of ["tv_hd", "tv_wall", "projector_screen"]) {
       const at = k === "tv_hd" ? R : near(k, (R?.x ?? 0) + 2, R?.y ?? 0, false);
       if (!at) continue;
-      const o = { id: `shot-${k}-${stamp}`, kind: k, ...at, rot: 0 };
+      const o = { id: `shot-${k}-${stamp}`, kind: k, ...at, yaw: 0 };
       await put(page, o);
       await has(page, o.id);
       ids.push(o.id);
       placed.push(o);
     }
     const ca = near("tv_console", (R?.x ?? 0) + 1, (R?.y ?? 0) + 3, false);
-    const con = { id: `shot-tv_console-${stamp}`, kind: "tv_console", x: ca?.x ?? 0, y: ca?.y ?? 0, rot: 0 };
+    const con = { id: `shot-tv_console-${stamp}`, kind: "tv_console", x: ca?.x ?? 0, y: ca?.y ?? 0, yaw: 0 };
     if (ca) {
       await put(page, con);
       await has(page, con.id);
@@ -84,7 +84,7 @@ test("media shots: the new screens by day and night, the remote", async ({ page 
     ] as const) {
       const at = near("side_table", ax, ay, false);
       if (!at) continue;
-      const table = { id: `shot-table-${kind}-${stamp}`, kind: "side_table", ...at, rot: 0 };
+      const table = { id: `shot-table-${kind}-${stamp}`, kind: "side_table", ...at, yaw: 0 };
       await put(page, table);
       await has(page, table.id);
       ids.push(table.id);
@@ -92,7 +92,7 @@ test("media shots: the new screens by day and night, the remote", async ({ page 
       let top: WorldObjectDef | null = null;
       for (let qy = at.y * Q; qy < (at.y + 1) * Q && !top; qy++)
         for (let qx = at.x * Q; qx < (at.x + 1) * Q && !top; qx++) {
-          const t = topAt({ id: `shot-${kind}-${stamp}`, kind, x: 0, y: 0, rot: 0 }, qx, qy);
+          const t = topAt({ id: `shot-${kind}-${stamp}`, kind, x: 0, y: 0, yaw: 0 }, qx, qy);
           if (canPlace(map, placed, t, [])) top = t;
         }
       if (!top) continue;

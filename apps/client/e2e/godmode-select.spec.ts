@@ -45,7 +45,7 @@ test("God mode's select: the farmhouse and the farm lane picked; the lane taken 
   await makeDraft(tok, "e2e: select");
   await enter(page, tok, space);
   await holdHour(page, 13);
-  await page.evaluate((p) => (window as any).__yutopia.teleport(p), { x: FIELD.x + 60, y: FIELD.z + 10, level: 0 });
+  await page.evaluate((p) => (window as any).__yutopia.teleport(p), { x: FIELD.x, y: FIELD.z, level: 0 });
   await page.waitForTimeout(4000);
   await page.keyboard.press("o");
   await expect.poll(() => god(page).then((g) => g.on && g.loaded), { timeout: 15_000 }).toBe(true);

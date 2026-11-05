@@ -1,6 +1,6 @@
 "use client";
 
-import { emptyEdges, type MapDef, setEdge, type WorldObjectDef } from "@yutopia/shared";
+import { emptyEdges, type MapDef, quarterYaw, setEdge, type WorldObjectDef } from "@yutopia/shared";
 import { notFound } from "next/navigation";
 import { useEffect, useState } from "react";
 import { FloorBake } from "@/world/art/floors";
@@ -54,9 +54,9 @@ function testRoom(ch: string): { map: MapDef; objects: WorldObjectDef[] } {
   for (let x = 1; x < W; x++) setEdge(map, { x, y: 1, dir: "h" }, "p"); // (the door goes in it)
   for (let y = 1; y < H; y++) setEdge(map, { x: 1, y, dir: "v" }, "p");
   const objects: WorldObjectDef[] = [
-    { id: "door", kind: "door", x: 3, y: 1, rot: 0, props: { state: "closed" } },
-    { id: "desk", kind: "desk", x: 2, y: 3, rot: 0 },
-    { id: "plant", kind: "plant", x: 5, y: 2, rot: 0 },
+    { id: "door", kind: "door", x: 3, y: 1, yaw: quarterYaw(0), props: { state: "closed" } },
+    { id: "desk", kind: "desk", x: 2, y: 3, yaw: quarterYaw(0) },
+    { id: "plant", kind: "plant", x: 5, y: 2, yaw: quarterYaw(0) },
   ];
   if (ch === "~") map.areas.push({ key: "s", name: "Stage", kind: "stage", x: 2, y: 2, w: 5, h: 3 });
   return { map, objects };

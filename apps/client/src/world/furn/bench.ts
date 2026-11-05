@@ -5,6 +5,7 @@ import {
   emptyEdges,
   entry,
   type MapDef,
+  quarterYaw,
   SEAT_NEXT,
   SEAT_SPEC,
   SURFACE,
@@ -12,6 +13,7 @@ import {
   setEdge,
   type WorldObjectDef,
 } from "@yutopia/shared";
+import { ART_PX as ISO } from "@yutopia/shared/units";
 import * as T from "three";
 import { Out } from "../tp/kit3d";
 import { Post3 } from "../tp/post3d";
@@ -68,7 +70,6 @@ export interface BenchOpts {
 
 /** Today's seats and desk top, as the iso art had them (the bench's "Today" column is drawn as it
  *  was: useFurn("old")) — before plan 67 put them at true scale (shared furniture.ts). */
-const ISO = 45.25 * Math.cos(Math.PI / 6);
 const TODAY_SEATS: Record<string, SeatShape> = {
   chair: { top: 14 / ISO, front: 0.3, back: -0.32, lean: [0, 0.15] },
   armchair: { top: 13.5 / ISO, front: 0.4, back: -0.21, lean: [0.1, 0.3], solid: true, arms: 19 / ISO },
@@ -76,9 +77,9 @@ const TODAY_SEATS: Record<string, SeatShape> = {
   beanbag: { top: 11 / ISO, front: 0.36, back: null, lean: [0.4, 0.4], solid: true },
   bench: { top: 11.2 / ISO, front: 0.32, back: null, lean: [0, 0] },
 };
-const TODAY_DESK = 25;
-/** …and the tops of today's tables things stood on (iso px). */
-const OLD_TOPS: Record<string, number> = { side_table: 14, cupboard: 26, coffee_table: 13 };
+const TODAY_DESK = 0.638; // (m: the desks before plan 67, 25 of the old art's px)
+/** …and the tops of today's tables things stood on (m). */
+const OLD_TOPS: Record<string, number> = { side_table: 0.3573, cupboard: 0.6635, coffee_table: 0.3317 };
 
 /** Where things stand on the bench's desks (cells of its two tiles; the desk turned to face us). */
 const ON_DESK: { kind: string; d?: string; tile: number; c: [number, number] }[] = [
@@ -169,8 +170,8 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
     ON_HOSTS.forEach(([host, thing, c], k) => {
       const at = (i: number) => X0b + i * Sb;
       const put = (i: number, z: number): WorldObjectDef[] => [
-        { id: `h${i}`, kind: host, x: at(i), y: ROW0, rot: 0 },
-        { id: `t${i}`, kind: thing, x: at(i), y: ROW0, rot: 0, props: { c, z } },
+        { id: `h${i}`, kind: host, x: at(i), y: ROW0, yaw: quarterYaw(0) },
+        { id: `t${i}`, kind: thing, x: at(i), y: ROW0, yaw: quarterYaw(0), props: { c, z } },
       ];
       cols.push({ label: "Today", geo: null, seat: null, old: put(2 * k, OLD_TOPS[host]) });
       const out = new Out();
@@ -258,7 +259,7 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
               kind: subject,
               x: X0,
               y: entry(subject).wall ? 1 : ROW,
-              rot,
+              yaw: quarterYaw(rot),
               props: { variant: 0 },
             },
           ];
@@ -281,7 +282,7 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
       kind: "chair",
       x: X0,
       y: ROW + 1,
-      rot: 2,
+      yaw: quarterYaw(2),
       props: { pull: DESK_PULL, occupied: true },
     });
   const world = new World3(items, map, objects, 8);
@@ -410,7 +411,7 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
       const who = [0, 7, 11, 5, 9, 2][i % 6];
       if (atDesk) {
         // sat at the desk, typing: today's chair at today's desk, the new at the new
-        const top = c.geo ? (SURFACE_NEXT.desk ?? SURFACE.desk) : TODAY_DESK / ISO;
+        const top = c.geo ? (SURFACE_NEXT.desk ?? SURFACE.desk) : TODAY_DESK;
         add(
           who,
           [X0 + i * S + 0.5, ROW + 1.5 - DESK_PULL],

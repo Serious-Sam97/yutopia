@@ -8,8 +8,8 @@ import { ANA, enter, test, token } from "./helpers";
 
 const GPU = process.env.YUTOPIA_GPU === "1";
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
-// (the ground floor's coords are the building's less GROUND_OFFSET; the fence runs along z −360)
-const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
+// (the fence runs along z −360)
+const G = (x: number, y: number) => ({ x, y });
 const FENCE_Y = G(0, -360).y;
 
 const me = (page: Page) =>

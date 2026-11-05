@@ -1,4 +1,4 @@
-import { ANIM, dirFromDelta, GROUND_OFFSET } from "@yutopia/shared";
+import { ANIM, faceByte, type KartRecord, type KartResults } from "@yutopia/shared";
 import { terrainAt } from "@yutopia/shared/grounds";
 import {
   ALL_READY_MS,
@@ -66,8 +66,6 @@ import { registerFeature } from "./index.ts";
 // drives it and reports it 20×/s; here we check it's a kart that could be there, count laps and
 // places, and own the clock, the crates, everything that flies, and every hit. Vortex's karts are
 // driven here, with the same sim. The park's record lives here (the room's, while it's up).
-
-const off = GROUND_OFFSET; // (a player's x, y + off: the Grounds' coords)
 const RACE_MAX_MS = 8 * 60_000;
 const QUIET_MS = 4000;
 // a thrower's view: others' karts drawn 110 ms behind (kart/karts.ts BEHIND), plus half their
@@ -126,16 +124,7 @@ registerFeature((room: WorldRoom) => {
   crates.push(...circuitCrates());
   for (const c of bowlCrates()) crates.push({ ...c, battle: true });
   const crateBack = crates.map(() => 0);
-  const record: {
-    /** the Figure Eight's best lap (the first record: kept where it was) */
-    best: { t: number; name: string } | null;
-    /** the other layouts' best laps, by layout ("oval", "oval-r"…) */
-    bests: Record<string, { t: number; name: string }>;
-    /** the layout raced, kept till someone changes it */
-    layout: { key: string; reverse: boolean };
-    last: { at: number; mode: string; top: string[] }[];
-    wins: Record<string, number>;
-  } = { best: null, bests: {}, layout: { key: "eight", reverse: false }, last: [], wins: {} };
+  const record: KartRecord = { best: null, bests: {}, layout: { key: "eight", reverse: false }, last: [], wins: {} };
   // (as it was saved: the API keeps it in the world's settings)
   {
     const saved = room.savedKarts as Partial<typeof record> | null;
@@ -248,8 +237,8 @@ registerFeature((room: WorldRoom) => {
     // (told first: its client lets go of the kart before the snap, not when the state comes)
     room.send(client, "kart:out", {});
     // on the land there, as a car's door puts you (not under it: z 0 is 2 m down at the desk)
-    const x = KART_DESK.x + 2 * KART_DESK.face - off.x;
-    const y = KART_DESK.z + 1 - off.y;
+    const x = KART_DESK.x + 2 * KART_DESK.face;
+    const y = KART_DESK.z + 1;
     const g = room.gridFor(p.uid, 0);
     room.moveTo(client, p, { x, y, level: 0 }, { z: g.onLand(x, y) ? g.groundAt(x, y, 0) : 0 });
   };
@@ -258,8 +247,8 @@ registerFeature((room: WorldRoom) => {
     const p = room.state.players.get(client.sessionId);
     if (!p || p.level !== 0 || bySid.has(p.sid)) return;
     if (p.busy || p.downAt || p.fellAt) return room.send(client, "kart:no", { why: "busy" });
-    const bx = p.x + off.x;
-    const bz = p.y + off.y;
+    const bx = p.x;
+    const bz = p.y;
     const nearDesk = Math.hypot(bx - KART_DESK.x, bz - KART_DESK.z) < KART_REACH;
     const nearRack =
       Math.abs(bx - KART_RACK.x) < KART_REACH &&
@@ -429,7 +418,7 @@ registerFeature((room: WorldRoom) => {
       : ks
           .sort((a, b) => (a.done && b.done ? a.done - b.done : a.done ? -1 : b.done ? 1 : a.place - b.place))
           .map((s) => ({ name: s.name, colour: s.colour, time: s.done, best: s.best, lap: s.lap, vortex: !!s.vortex }));
-    park.results = JSON.stringify({ mode: park.mode, laps: park.laps, rows });
+    park.results = JSON.stringify({ mode: park.mode, laps: park.laps, rows } satisfies KartResults);
     const top = rows.slice(0, 3).map((r) => r.name);
     record.last = [{ at: now, mode: park.mode, top }, ...record.last].slice(0, 10);
     if (rows[0]) record.wins[rows[0].name] = (record.wins[rows[0].name] ?? 0) + 1;
@@ -939,12 +928,12 @@ registerFeature((room: WorldRoom) => {
 
   /** The people in karts, in their seats (their own `pos` isn't taken while they drive). */
   const seat = (p: Player, s: KartSlot) => {
-    p.x = s.x - off.x;
-    p.y = s.z - off.y;
+    p.x = s.x;
+    p.y = s.z;
     p.z = s.y + 0.25;
     p.level = 0;
     p.a = ANIM.sit;
-    p.d = dirFromDelta(Math.cos(s.a), Math.sin(s.a), p.d as 0);
+    p.yaw = faceByte(Math.cos(s.a), Math.sin(s.a), p.yaw);
   };
 
   // ── the change's show (shared KART_SHOW): the Grounds' ploughs, one a quarter of the circuit ──

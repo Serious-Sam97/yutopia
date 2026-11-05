@@ -31,7 +31,18 @@ import { gzipSync } from "node:zlib";
 // (raised to 446 on 2026-11-03, free to: plan 68 phases 3–25 — ~150 kinds' catalog entries, shapes and
 //  seats (shared fam/, on the page as every kind's are), the Furnish panel's lists, the games' and the
 //  kitchen's strings; 443.5, the models, games and panels lazy)
-const BUDGETS = { "/page": 446, "/login/page": 160 }; // KB gzip
+// (raised to 456 on 2026-11-05, the user's standing call on budgets: plan 72 phases 6–7 — the one world frame, the
+// structure's ops and Place, the floor's questions on Jolt, in place of the tile grid and its A*: 452.5 → 455.7)
+// (raised to 457 on 2026-11-05, the user's standing call on budgets: plan 72 phase 8 — an edit spread over frames,
+// the lifts' cars as bodies in Jolt each frame and the shafts' floors: 455.7 → 456.6)
+const BUDGETS = { "/page": 457, "/login/page": 160 }; // KB gzip
+// (/page raised from 451 on 2026-11-04 under the same call: plan 72's phase 4 — the controller split
+// into 17 feature modules (world/ctl), the same code: what the minifier can't shorten — `this.c.x`,
+// `this.<feature>.x`, the forwarders for what's read from outside — 449.7 → 451.2; the lazy chunks
+// unchanged)
+// (/page raised from 446 on 2026-11-04 under the user's standing call to raise as needed: plan 72's phase 1 —
+// the HUD's parts each in its own error boundary (Guard), the page's errors reported (lib/crash.ts),
+// the error screen app/error.tsx that loads with the root — 445.5 → 449.7)
 const dist = new URL(`../apps/client/${process.env.NEXT_DIST_DIR ?? ".next-prod"}/`, import.meta.url).pathname;
 const manifest = JSON.parse(readFileSync(`${dist}app-build-manifest.json`, "utf8"));
 let failed = false;
@@ -62,7 +73,7 @@ const LAZY = {
   "yutopia-os": 15, // VortexOS on the computers' glass (docs/plan/19-vortexos.md)
   "yutopia-phone": 60, // the phone: Vortex Mobile's screens, calls, camera, sounds (docs/plan/21-cellphone.md)
   "yutopia-chars": 58.5, // (raised from 58 on 2026-11-02 under the user's standing call to raise as needed: plan 66's swim — the hook that loads its own chunk, yutopia-swim — tipped it over 58.0) // (raised from 40 on 2026-10-22 by the user's call: 39.1, the next detail on people would tip it; to 50 on 2026-10-31 by the user's call: the character pass — docs/plan/59 — 48.8; to 58 the same day by the user's call: the wardrobe — docs/plan/60 — 55.8) // the 3D people: the model builder, motion, iso sprites (docs/plan/22-people-3d.md)
-  "yutopia-input": 17, // (raised from 15.5 on 2026-11-02 under the user's standing call to raise as needed: plan 66's swimming — shared move/swim.ts, the walker's breath and water — 15.0 → 16.5) // (raised from 15 on 2026-11-02 under the user's standing call to raise as needed: 14.99 → 15.04 with plan 65's phase 3 — none of the weather in it, the minifier's names moved with the shared modules) // the keys by position, the pad, my body's movement core (docs/plan/29-the-move.md)
+  "yutopia-input": 17.5, // (raised from 17 on 2026-11-05 under the user's standing call to raise as needed: plan 72 phase 8 — measured 17.1; the lifts' code isn't in it) // (raised from 15.5 on 2026-11-02 under the user's standing call to raise as needed: plan 66's swimming — shared move/swim.ts, the walker's breath and water — 15.0 → 16.5) // (raised from 15 on 2026-11-02 under the user's standing call to raise as needed: 14.99 → 15.04 with plan 65's phase 3 — none of the weather in it, the minifier's names moved with the shared modules) // the keys by position, the pad, my body's movement core (docs/plan/29-the-move.md)
   "yutopia-anim": 15, // plan 58's animations, loaded with the 3D people when asked for (docs/plan/58-the-animation.md)
   "yutopia-air": 15, // plan 58 phase 5's: over things with the hands placed, Flowmotion's grips, the ragdoll and the get-ups (loaded with the hero's)
   "yutopia-acts": 15, // plan 58 phase 6's: sitting, the hands and the phone, busy, together, the emotes (loaded with the hero's)

@@ -164,6 +164,7 @@ settings:
 
 overrides:
   '@types/earcut': 3.0.0
+  jolt-physics: link:./packages/jolt
 
 importers:
 
@@ -274,11 +275,16 @@ importers:
         specifier: ^5.9.2
         version: 5.9.3
 
+  packages/jolt: {}
+
   packages/shared:
     dependencies:
       jolt-physics:
-        specifier: 1.1.1
-        version: 1.1.1
+        specifier: link:../jolt
+        version: link:../jolt
+      recast-navigation:
+        specifier: 0.44.0
+        version: 0.44.0
     devDependencies:
       '@types/node':
         specifier: ^20
@@ -296,8 +302,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       jolt-physics:
-        specifier: 1.1.1
-        version: 1.1.1
+        specifier: link:../../packages/jolt
+        version: link:../../packages/jolt
     devDependencies:
       esbuild:
         specifier: 0.28.2
@@ -838,6 +844,15 @@ packages:
     resolution: {integrity: sha512-IxHuYURa3+FQ6BKePlgChZkqABUKFYH6Bwbw7V/pWU1pP6iR1sCI26l7P9ThUEB385ruZn/tZS3CXDUF5IA1NQ==}
     engines: {node: '>=6.0'}
 
+  '@recast-navigation/core@0.44.0':
+    resolution: {integrity: sha512-N4YO9JBXrGFf3LkrhXmABa7pEwLHvq/gq6o7pLKKu5A4JAp+A5y/9424ps3cVpO1m7ibh3zlXmeewTut9LeXQw==}
+
+  '@recast-navigation/generators@0.44.0':
+    resolution: {integrity: sha512-i2N/sCfuq7IJcSuMmHuX2Uer6oonr9PzFZTrPpwS/e2t+ZpVLHb3DHFY9evKrL2X8diO7sDUDBOpTfW/4Nwucw==}
+
+  '@recast-navigation/wasm@0.44.0':
+    resolution: {integrity: sha512-VNv7xv50cFCdsGd2LdQWZqtLcWXB7nyi4Ilq9t5GMn3GEfCmJEbbeZWSXX5Mgdc4yj71QueTv15V7hPDAQ9gaw==}
+
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
 
@@ -1058,9 +1073,6 @@ packages:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
     hasBin: true
 
-  jolt-physics@1.1.1:
-    resolution: {integrity: sha512-kMCQu/b4wbHwy7EgZWaSbUyDthIKZUvAGGqta4pBF4Pdq+ljWaNvQoa5hPr/PkVCUVsqcoLwXITUm6975mQhiQ==}
-
   jose@5.10.0:
     resolution: {integrity: sha512-s+3Al/p9g32Iq+oqXxkW//7jk2Vig6FF1CFqzVXoTUXt2qz89YWbL+OwS17NFYEvxC35n0FKeGO2LGYSxeM2Gg==}
 
@@ -1250,6 +1262,9 @@ packages:
   react@19.1.0:
     resolution: {integrity: sha512-FS+XFBNvn3GTAWq26joslQgWNoFu08F4kl0J4CgdNKADkdSGXQyTCnKteIAJy96Br6YbpEU1LSzV5dYtjMkMDg==}
     engines: {node: '>=0.10.0'}
+
+  recast-navigation@0.44.0:
+    resolution: {integrity: sha512-Qu5ETIZZo69uk3lvjJpdgopPUFp95dTmKljckjpSdL1IbdX26837R8j4nC2oHT6tEKViVwkIvy9Zbzyxr27GiQ==}
 
   require-in-the-middle@5.2.0:
     resolution: {integrity: sha512-efCx3b+0Z69/LGJmm9Yvi4cqEdxnoGnxYxGxBghkkTTFeXRtTCmmhO0AnAfHz59k957uTSuy8WaHqOs8wbYUWg==}
@@ -1715,6 +1730,17 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@recast-navigation/core@0.44.0':
+    dependencies:
+      '@recast-navigation/wasm': 0.44.0
+
+  '@recast-navigation/generators@0.44.0':
+    dependencies:
+      '@recast-navigation/core': 0.44.0
+      '@recast-navigation/wasm': 0.44.0
+
+  '@recast-navigation/wasm@0.44.0': {}
+
   '@swc/helpers@0.5.15':
     dependencies:
       tslib: 2.8.1
@@ -1919,8 +1945,6 @@ snapshots:
 
   jiti@2.7.0: {}
 
-  jolt-physics@1.1.1: {}
-
   jose@5.10.0: {}
 
   jose@6.2.12: {}
@@ -2093,6 +2117,11 @@ snapshots:
       scheduler: 0.26.0
 
   react@19.1.0: {}
+
+  recast-navigation@0.44.0:
+    dependencies:
+      '@recast-navigation/core': 0.44.0
+      '@recast-navigation/generators': 0.44.0
 
   require-in-the-middle@5.2.0:
     dependencies:

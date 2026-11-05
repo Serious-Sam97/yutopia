@@ -31,6 +31,8 @@ export function unpackMv(mv: number): { gait: Gait; crouch: boolean; aim: boolea
 export const yawToByte = (yaw: number) => Math.round((yaw / (2 * Math.PI)) * 256) & 255;
 export const byteToYaw = (b: number) => ((b & 255) / 256) * 2 * Math.PI;
 
+export { byteFace, face8, faceByte, faceStep } from "../facing.ts";
+
 export interface MoveSpec {
   /** tiles / s on a floor (the ground's own `speed` multiplies them outdoors) */
   walk: number;

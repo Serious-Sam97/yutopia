@@ -1,4 +1,4 @@
-import { entry, footprint, placedFootprint, type WorldObjectDef } from "./catalog.ts";
+import { entry, footprint, placedFootprint, quarterOf, quarterYaw, type WorldObjectDef } from "./catalog.ts";
 
 // Things on surfaces (mugs, monitors, the radio…) sit on a quarter-tile grid
 // over the desk, table or shelf under them, Sims-style: a desk comes bare and
@@ -44,9 +44,9 @@ const KIND_SIZE: Record<string, [number, number]> = {
   jack_o_lantern: [2, 2],
 };
 
-export function topSize(o: { kind: string; rot?: number; props?: Record<string, unknown> }): [number, number] {
+export function topSize(o: { kind: string; yaw?: number; props?: Record<string, unknown> }): [number, number] {
   const s = KIND_SIZE[o.kind] ?? TOP_SIZE[String(o.props?.d)] ?? [1, 1];
-  return (o.rot ?? 0) % 2 ? [s[1], s[0]] : s;
+  return quarterOf(o) % 2 ? [s[1], s[0]] : s;
 }
 
 // The cell its back corner is in (old tabletops without one: the middle).
@@ -88,8 +88,8 @@ export function topNear(o: WorldObjectDef, x: number, y: number): WorldObjectDef
 export function hostLocal(o: WorldObjectDef, x: number, y: number): [number, number] {
   let lx = x - o.x;
   let ly = y - o.y;
-  let { w: W, h: H } = footprint(o.kind, o.rot ?? 0);
-  for (let i = 0; i < ((o.rot ?? 0) & 3); i++) {
+  let { w: W, h: H } = footprint(o.kind, quarterOf(o));
+  for (let i = 0; i < (quarterOf(o) & 3); i++) {
     [lx, ly] = [ly, W - lx];
     [W, H] = [H, W];
   }
@@ -101,7 +101,7 @@ export function hostWorld(o: WorldObjectDef, lx: number, ly: number): [number, n
   let y = ly;
   let W = e.w;
   let H = e.h;
-  for (let i = 0; i < ((o.rot ?? 0) & 3); i++) {
+  for (let i = 0; i < (quarterOf(o) & 3); i++) {
     [x, y] = [H - y, x];
     [W, H] = [H, W];
   }
@@ -165,12 +165,12 @@ export function riders(host: WorldObjectDef, objects: WorldObjectDef[]): WorldOb
 // each keeps its spot on the top, in the host's own turned frame, and turns
 // with it.
 export function carried(before: WorldObjectDef, after: WorldObjectDef, objects: WorldObjectDef[]): WorldObjectDef[] {
-  const turns = ((((after.rot ?? 0) - (before.rot ?? 0)) % 4) + 4) % 4;
+  const turns = (((quarterOf(after) - quarterOf(before)) % 4) + 4) % 4;
   return riders(before, objects).map((t) => {
     const c = topCentre(t);
     const [lx, ly] = hostLocal(before, c.x, c.y);
     const [wx, wy] = hostWorld(after, lx, ly);
-    return topNear({ ...t, rot: ((t.rot ?? 0) + turns) % 4 }, wx, wy);
+    return topNear({ ...t, yaw: quarterYaw((quarterOf(t) + turns) % 4) }, wx, wy);
   });
 }
 
@@ -251,9 +251,9 @@ export function splitBuiltIns(o: WorldObjectDef): { self: WorldObjectDef; add: W
       kind: o.kind === "radio" ? "side_table" : "cupboard",
       x: o.x,
       y: o.y,
-      rot: o.rot ?? 0,
+      yaw: quarterYaw(quarterOf(o)),
     };
-    const on = topNear({ ...self, rot: o.rot ?? 0 }, o.x + 0.5, o.y + 0.5);
+    const on = topNear({ ...self, yaw: quarterYaw(quarterOf(o)) }, o.x + 0.5, o.y + 0.5);
     on.props = { ...on.props, z: entry(host.kind).surface ?? 0 };
     return { self: on, add: [host] };
   }
@@ -265,7 +265,7 @@ export function splitBuiltIns(o: WorldObjectDef): { self: WorldObjectDef; add: W
       kind: s.kind ?? "tabletop",
       x: 0,
       y: 0,
-      rot: ((s.rot ?? 0) + (o.rot ?? 0)) % 4,
+      yaw: quarterYaw(((s.rot ?? 0) + quarterOf(o)) % 4),
       props: { ...(s.d ? { d: s.d } : {}), seed: hash(`${o.id}|${i}`), z },
     };
     return topNear(t, wx, wy);

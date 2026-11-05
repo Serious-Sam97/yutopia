@@ -190,9 +190,9 @@ export interface GameInfo {
 }
 
 // Where the picture is on a CRT TV (rot-0 local tiles on its 2 × 1 footprint,
-// z in px): the glass on its front face (+y). The art draws the tube around it;
+// z in m): the glass on its front face (+y). The art draws the tube around it;
 // the engine puts the live picture on it.
-export const TV_SCREEN = { x0: 0.48, x1: 1.32, y: 0.79, z0: 18, z1: 42 } as const;
+export const TV_SCREEN = { x0: 0.48, x1: 1.32, y: 0.79, z0: 0.4593, z1: 1.0718 } as const;
 
 // A rot-0 local point on a w × h footprint, turned like the items' drawings
 // (90° clockwise steps, the same turn as `Sketch.rp`).

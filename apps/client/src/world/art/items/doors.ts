@@ -1,4 +1,5 @@
 import { doorLeaves, doorShut, doorSlides, openingCut } from "@yutopia/shared";
+import { artPx } from "@yutopia/shared/units";
 import { paintOf } from "./home";
 import { type Draw, type Face, type Mat, type Sketch, sh, type V3 } from "./kit";
 import { K, M } from "./pal";
@@ -522,7 +523,7 @@ function archway(s: Sketch, D: number) {
 // ── the door ─────────────────────────────────────────────────────────────────
 export function doorItem(s: Sketch, kind: string, props: Props) {
   const n = kind === "door_double" ? 2 : 1;
-  const D = openingCut(kind)[1];
+  const D = artPx(openingCut(kind)[1]); // (this drawing's px)
   if (kind === "archway") {
     if (props._part !== "leaf") archway(s, D);
     return;

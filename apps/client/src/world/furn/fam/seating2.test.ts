@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { entry, SEAT_SPEC } from "@yutopia/shared";
+import { entry, quarterYaw, SEAT_SPEC } from "@yutopia/shared";
 import { Box3, type BufferGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from "three";
 import type { LivePart } from "../kit";
 import { liveAt, liveGroup } from "../liveparts";
@@ -35,7 +35,7 @@ function topAt(o: Group, x: number, z: number, from = 0.62): number {
   return hit ? hit.point.y : 0;
 }
 const live = (kind: string, props: Record<string, unknown> = {}) =>
-  (modelOf({ id: "q", kind, x: 0, y: 0, rot: 0, props }).userData.live as LivePart[]) ?? [];
+  (modelOf({ id: "q", kind, x: 0, y: 0, yaw: quarterYaw(0), props }).userData.live as LivePart[]) ?? [];
 
 test("seating 2: every kind and look, empty and sat in — on its footprint, under the ceiling, sat at its spec", () => {
   for (const kind of KINDS) {
@@ -45,7 +45,7 @@ test("seating 2: every kind and look, empty and sat in — on its footprint, und
     for (let variant = 0; variant < LOOKS[kind].length; variant++)
       for (const id of ["a", "b", "c", "d", "e", "f"])
         for (const occupied of [false, true]) {
-          const g = modelOf({ id, kind, x: 0, y: 0, rot: 0, props: { variant, occupied } });
+          const g = modelOf({ id, kind, x: 0, y: 0, yaw: quarterYaw(0), props: { variant, occupied } });
           const w = whole(g);
           const b = new Box3().setFromObject(w);
           const what = `${kind} ${variant} ${id}${occupied ? " sat" : ""}`;

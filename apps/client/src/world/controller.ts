@@ -4,91 +4,65 @@ import {
   ANIM,
   across,
   areaAt,
+  byteFace,
   type ClientMessages,
   CONTACT,
-  dirFromDelta,
-  doorCentre,
-  doorLeaves,
-  doorOwner,
-  doorReach,
   EMOTES,
   entry,
-  findPath,
+  face8,
+  faceByte,
   floorAt,
   floorOf,
   floorsOf,
-  footprint,
-  Grid,
   getMap,
   HEAR_RADIUS,
   HELD,
   type Height,
-  hangSpot,
   hangStrip,
   hearingGain,
   inLift,
-  isDoorKind,
   isHeld,
-  isJump,
   isPrivate,
   isSocial,
-  isToyHeld,
   type JumpKind,
-  type JumpNow,
   JumpTrack,
-  jumpArc,
-  jumpNowAt,
   jumpTimes,
-  type LiftMotion,
   levelMap,
   liftFront,
-  liftHere,
-  liftMotion,
   type MapDef,
-  mayLockDoor,
-  objectActions,
   objLevel,
   onLevel,
+  overFloor,
   type Point,
   parseAvatar,
   placedFootprint,
+  quarterOf,
+  quarterYaw,
   ROOM_NAME,
-  reachOf,
+  SEAT_FACE,
   type ServerMessages,
-  SOCIAL,
   SOCIAL_MS,
-  STAIRS_D,
-  STAIRS_W,
   STEP_LABELS,
-  STOREY,
   seatFront,
   setAreasBeyond,
   setOutdoors,
-  socialFor,
   spHour,
-  stairsDoor,
-  stairsLocal,
-  stairsWayUp,
   stereoPan,
-  THROWN,
   TICK_HZ,
-  tileAt,
-  V_FLIGHT,
-  type WbItem,
   type WorldObjectDef,
-  ZPX_TILE,
+  worldZ,
 } from "@yutopia/shared";
-import { COMPUTER_REACH, computerAway, isComputer } from "@yutopia/shared/computer";
-import { keyFooting, MATS, TILE_FOOTING } from "@yutopia/shared/footing";
-import { CABLE_REACH, gap, isConsole, isGameTv } from "@yutopia/shared/games";
+import { isGameTv } from "@yutopia/shared/games";
 import { isRadio, type RadioState, radioOf } from "@yutopia/shared/media";
-import type { WaterHere } from "@yutopia/shared/move";
-import { type BattleEvent, type PetLook, type PetOutfit, type Species, toyAt } from "@yutopia/shared/pets";
-import { offBand, spanOf } from "@yutopia/shared/reach";
+import { type Species, toyAt } from "@yutopia/shared/pets";
+import { Place } from "@yutopia/shared/physics/place";
+import { applyOps, mapFromStructure, type Structure } from "@yutopia/shared/structure";
+import type { Npc, Player, WorldObject, WorldState } from "@yutopia/state";
 import { Client, getStateCallbacks, type Room } from "colyseus.js";
 import { ApiError, type Session, yutopia } from "@/lib/api";
-import { type Key, lang, tr } from "@/lib/i18n";
-import { deviceQuality, prefs, type Quality, resolveQuality, setPrefs, subscribePrefs } from "@/lib/prefs";
+import { reportError, setErrorSink } from "@/lib/crash";
+import { lang, tr } from "@/lib/i18n";
+import { deviceQuality, prefs, subscribePrefs } from "@/lib/prefs";
 import { ActionQueue } from "./actions";
 import { loadChars } from "./art/chars-load";
 import { loadItemArt } from "./art/items-load";
@@ -97,35 +71,42 @@ import { loadPets, pets as petsArt } from "./art/pets-load";
 import { loadThemes } from "./art/themes-load";
 import { mixer } from "./audio";
 import type { BuildController } from "./build/controller";
-import { fanfare, machineSound, pianoNote, socialSound } from "./foley";
+import { Arrival } from "./ctl/arrival";
+import { Whiteboards } from "./ctl/boards";
+import { Cable } from "./ctl/cable";
+import { INTERP_MS, type Remote, rainOf, type Sample, VORTEX_LOOK } from "./ctl/common";
+import { Doors } from "./ctl/doors";
+import { Focus } from "./ctl/focus";
+import { Input } from "./ctl/input";
+import { Jumps } from "./ctl/jumps";
+import { Lifts } from "./ctl/lifts";
+import { Loading } from "./ctl/loading";
+import { ActionMenu } from "./ctl/menu";
+import { Pets } from "./ctl/pets";
+import { Photo } from "./ctl/photo";
+import { QualityWatch } from "./ctl/quality";
+import { Steps } from "./ctl/steps";
+import { Tables } from "./ctl/tables";
+import { Water } from "./ctl/water";
+import { fanfare, pianoNote, socialSound } from "./foley";
 import type { GameRoom } from "./games/room";
 import type { GodController } from "./god/controller";
 import { layEdits, loadGrounds, wantEdits } from "./grounds-load";
-import { jumps, loadJumps } from "./jumps-load";
-import { thingLabel } from "./labels";
-import { liftSound, loadLiftSounds, nearGain } from "./lift-sound";
+import { loadJumps } from "./jumps-load";
+import { liftSound } from "./lift-sound";
 import { Media } from "./media";
 import type { MediaRoom } from "./media/room";
 import { type AvatarState, WorldModel } from "./model";
 import type { OsRoom } from "./os/room";
-import { activePad } from "./pads";
 import { FramePerf } from "./perf";
 import type { PerfReport } from "./perf-report";
-import type { PetView } from "./petview";
 import type { Phone } from "./phone";
 import type { SlotTracks } from "./slots";
 import { type Floor, radio, sound } from "./sound";
-import type { Ears, Footfalls, Shoe, Space, StepGait, StepPlayer, Walker } from "./steps";
-import { loadSteps, steps } from "./steps-load";
-import { type ActTarget, type BattleView, hud, type Person, type PetInfo, toast } from "./store";
-import type { GameTables } from "./tables";
+import type { Space } from "./steps";
+import { hud, type Person, toast } from "./store";
 import type { Body3, CamMode, ThirdPersonView } from "./tp/view";
 
-// biome-ignore lint/suspicious/noExplicitAny: decoded Colyseus schema objects
-type S = any;
-
-/** How long after the land changes my feet are kept on it (till the physics' ground is made). */
-const LAND_SHIFTED_MS = 6000;
 // map edits that act on a floor (the one I'm on, unless they say)
 const FLOOR_EDITS = new Set<string>([
   "map:paint",
@@ -137,92 +118,23 @@ const FLOOR_EDITS = new Set<string>([
   "map:room:remove",
 ]);
 
-// someone as they were at a moment of their own clock, put on mine (docs/plan/29-the-move.md M7)
-interface Sample {
-  t: number;
-  x: number;
-  y: number;
-  z: number;
-  d: number;
-  a: number;
-  mv: number;
-  yaw: number;
-}
+// (a remote's height over their floor, as everyone is drawn: Player.z is the world's)
 const sampleOf = (
-  p: { x: number; y: number; z?: number; d: number; a: number; mv?: number; yaw?: number },
+  p: { x: number; y: number; z?: number; level?: number; a: number; mv?: number; yaw?: number },
   t: number,
 ): Sample => ({
   t,
   x: p.x,
   y: p.y,
-  z: p.z ?? 0,
-  d: p.d,
+  z: overFloor(p.level ?? 0, p.z ?? 0),
   a: p.a,
   mv: p.mv ?? 0,
   yaw: p.yaw ?? 0,
 });
 
-interface Remote {
-  level: number; // the floor they're on (their coords are that floor's)
-  buf: Sample[];
-  off: number; // their clock to mine: the lowest gap seen (NaN: none yet)
-  verbAt: number; // when their last verb shows (as late as they're drawn)
-  offAt: number;
-  jumpKey: string; // their last jump (kind|server ms), timed from when it showed up here
-  track: JumpTrack;
-  flow: number; // their Flowmotion move (Player.flow) and when it shows here
-  flowAt: number;
-  carried?: boolean; // in a car last frame (out of it: their feet heard down)
-}
-
-const INTERP_MS = 110;
 const MEDIA_SLEEP_MS = 5 * 60_000; // quiet this long: the voice line sleeps
 const MEDIA_NEAR = HEAR_RADIUS + 4; // someone this close (tiles) keeps it awake
 const LIVEKIT_TOKEN_FRESH_MS = 5 * 3600_000; // LiveKit tokens last 6 h (apps/api Tokens)
-const IDLE_MS = 3000; // nothing moved for this long: frames at 30/s
-// the loading screen (docs/plan/35-the-loading.md): down once it's all built and this
-// many frames in a row have come this steadily — or after the cap, whatever's left
-const STEADY_FRAMES = 10;
-const STEADY_MS = 50;
-const LOAD_CAP_MS = 15_000;
-const WANT_MS = 6000; // how long what a pet wants shows over its head
-const INTERACT_RANGE = 1.7;
-/** A lock-on's reach (tiles), and how long it holds on out of it (ms): docs/plan/56-the-controls.md E */
-const LOCK_RANGE = 14;
-const LOCK_LOST_MS = 1500;
-/** Use held this long: the focus's menu, not its main action (ms; docs/plan/56-the-controls.md C) */
-const USE_HOLD = 350;
-const TAB_TAP_MS = 250; // Tab let go sooner: a tap, the next in reach (the dark's TAB_PEEK_MS)
-const MENU_STEP: Record<string, number> = {
-  KeyW: -1,
-  ArrowUp: -1,
-  KeyA: -1,
-  ArrowLeft: -1,
-  KeyS: 1,
-  ArrowDown: 1,
-  KeyD: 1,
-  ArrowRight: 1,
-};
-/** half a stride, by gait (tiles: plan 58's walk2/run2/crouch2Stride) — a step by the way gone */
-const HALF_STRIDE: Record<StepGait, number> = { walk: 0.62, crouch: 0.66, jog: 1.31, sprint: 1.77 };
-/** walked this long (s) with no step of the body's, it isn't stepping: steps by the way gone */
-const QUIET = 0.5;
-// the water's ice thin under it (docs/plan/65-the-weather.md, 66 S4: a creak, a crack; shared grounds.ts
-// iceAt's), how long stood on it till it gives
-const THIN_ICE = 0.95;
-// water this deep catches a fall (shared move SWIM.catch: a copy — the move core's the input chunk's,
-// not the page's)
-const SWIM_CATCH = 1.3;
-const THIN_GIVES = 1.5;
-// the water's sound (docs/plan/66 S9): how far someone in it is heard (m: water-sound.ts HEARD), and
-// the river's current past which it's the falls' roar, not the rapid's (m/s)
-const WATER_HEARD = 30;
-const FALLS_SPEED = 2.4;
-// how much of the rain on the building's roof is heard indoors: on its top floor, under it (too loud
-// at all of it, on the user's ear 2026-11-02), and the floors below, through the windows
-const ROOF_TOP = 0.55;
-const ROOF_BELOW = 0.25;
-/** out on the land, a building's floor underfoot: inside one of the town's (its room rings) */
 const FLOORED = new Set<Floor>(["wood", "tile", "carpet", "earth", "hollow"]);
 const JUMP_HEARD = 9; // tiles: others' jumps are heard this far
 
@@ -230,12 +142,45 @@ const JUMP_HEARD = 9; // tiles: others' jumps are heard this far
 const notDriven = (o: { kind: string; props?: Record<string, unknown> | null }) => o.kind !== "car" || !o.props?.driven;
 
 export class WorldController {
+  readonly loading: Loading = new Loading(this);
+
+  readonly doors: Doors = new Doors(this);
+
+  readonly quality: QualityWatch = new QualityWatch(this);
+
+  readonly tableGames: Tables = new Tables(this);
+
+  readonly boards: Whiteboards = new Whiteboards(this);
+
+  readonly cable: Cable = new Cable(this);
+
+  readonly photos: Photo = new Photo(this);
+
+  readonly arrival: Arrival = new Arrival(this);
+
+  readonly focus: Focus = new Focus(this);
+
+  readonly input: Input = new Input(this);
+
+  readonly steps: Steps = new Steps(this);
+
+  readonly jumps: Jumps = new Jumps(this);
+
+  readonly water: Water = new Water(this);
+
+  readonly menu: ActionMenu = new ActionMenu(this);
+
+  readonly pets: Pets = new Pets(this);
+
+  readonly lifts: Lifts = new Lifts(this);
+
   model: WorldModel | null = null;
-  room: Room<S> | null = null;
+  room: Room<WorldState> | null = null;
   media: Media;
   session: Session | null = null;
   map!: MapDef; // the floor I'm on (shared levels.ts)
-  grid!: Grid;
+  /** My place on my floor (shared physics Place): Jolt's once it's in — till then the floor's map. */
+  grid!: Place;
   // the building: its home map with every floor, the floor I'm on, and the
   // things on every floor (the model only has my floor's)
   building!: MapDef;
@@ -243,8 +188,8 @@ export class WorldController {
   readonly objs = new Map<string, WorldObjectDef>();
   readonly host: HTMLElement;
   // my body (docs/plan/29-the-move.md): the movement core under the keys and the pad (input chunk)
-  private walker: import("./input").Walker | null = null;
-  private walkYaw = 0;
+  walker: import("./input").Walker | null = null;
+  walkYaw = 0;
   private myVerb: { kind: string; t: number } | undefined;
   // my Flowmotion move as it's drawn, and as it was last sent (Player.flow)
   private myFlow: import("./input/walker").WalkOut["flow"] = null;
@@ -253,30 +198,43 @@ export class WorldController {
   private lastPitch = 0;
   private lastMv = 0;
   /** me in the water (plan 66): 0 out, 1 wading, 2 afloat, 3 under */
-  private mySwim = 0;
+  mySwim = 0;
   /** the ice's holes as the room last said them, mine just broken, how long I've stood on thin ice */
-  private holesWire = "";
-  private myHoles: { x: number; z: number; r: number; at: number }[] = [];
-  private thinFor = 0;
+  holesWire = "";
+  myHoles: { x: number; z: number; r: number; at: number }[] = [];
+  thinFor = 0;
   private lastYaw = 0;
   // my feet (shared/jump.ts): how high (up on something, in a jump), my jump's stage,
   // whether it's left the ground yet; Space pressed just before landing, waiting
-  private height: Height = { z: 0, vz: 0, up: false };
-  private jumpTrack = new JumpTrack();
-  private jumpStages = new Map<string, string>(); // everyone's jump stage last frame (dust, sound)
+  height: Height = { z: 0, vz: 0, up: false };
+  jumpTrack = new JumpTrack();
+  jumpStages = new Map<string, string>(); // everyone's jump stage last frame (dust, sound)
   /** review shots / e2e: a jump of mine held at this moment (s in), while it's set */
   jumpHold: { kind: JumpKind; t: number } | null = null;
-  private path: Point[] | null = null;
-  private pathTarget: { objectId?: string } | null = null;
-  private me = { x: 0, y: 0, d: 0, a: 0 as number };
-  private lastSent = { x: 0, y: 0, z: 0, d: 0, a: 0, t: 0, l: 0 };
+  private walkPath: Point[] | null = null;
+  /** The way I'm walking (null: none — set so, a way asked for is let go too). */
+  get path(): Point[] | null {
+    return this.walkPath;
+  }
+  set path(v: Point[] | null) {
+    this.walkPath = v;
+    if (!v) this.way = null;
+  }
+  pathTarget: { objectId?: string } | null = null;
+  /** A way asked of the server (its navmesh — docs/plan/72 phase 7), till it answers: where to, what
+   *  for, and the waypoints after it (a staircase's flights). */
+  way: { n: number; level: number; target: Point; objectId?: string; quiet: boolean; after: Point[] } | null = null;
+  private wayN = 0;
+  // (`yaw`: which way I face, world radians on 8 ways — shared move face8; the body's own turn is meAngle)
+  me = { x: 0, y: 0, yaw: 0, a: 0 as number };
+  private lastSent = { x: 0, y: 0, z: 0, yaw: 0, a: 0, t: 0, l: 0 };
   private seq = 0;
   private remotes = new Map<string, Remote>();
   private npcBuf = new Map<string, { t: number; x: number; y: number }[]>();
   private petBuf = new Map<string, { t: number; x: number; y: number }[]>();
-  private petHurt = new Map<string, number>(); // pet id → when it last took a hit (client ms)
-  private toyPick: string | null = null; // a toy I'm walking over to pick up
-  private battleSeen = ""; // the last battle round shown (id|round)
+  petHurt = new Map<string, number>(); // pet id → when it last took a hit (client ms)
+  toyPick: string | null = null; // a toy I'm walking over to pick up
+  battleSeen = ""; // the last battle round shown (id|round)
   private hear = new Set<string>();
   private raf = 0;
   private lastFrame = 0;
@@ -285,20 +243,20 @@ export class WorldController {
   private rafGap = 1000 / 60; // how often the screen asks for a frame (ms, smoothed)
   /** where each frame's time goes (perf.ts; `__yutopia.perf()`) */
   readonly framePerf = new FramePerf();
-  private objsRev = 0; // the things changed (tp.update is skipped while nothing it reads has)
+  objsRev = 0; // the things changed (tp.update is skipped while nothing it reads has)
   private tpKey: string | null = null;
   private tpBuilt: unknown = null;
   private tpFor: unknown = null;
-  private activeAt = 0;
-  private hudFrames = new Set<() => void>();
-  private stopped = false;
+  activeAt = 0;
+  hudFrames = new Set<() => void>();
+  stopped = false;
   private timers: ReturnType<typeof setInterval>[] = [];
   private offPrefs: (() => void) | null = null;
   private offLook: (() => void) | null = null;
   private reconnecting = false;
   private peopleAt = 0;
   private followAt = 0;
-  private uidToSid = new Map<number, string>();
+  uidToSid = new Map<number, string>();
   onOpenPanel: (kind: string, objectId?: string) => void = () => {};
   readonly actions: ActionQueue;
 
@@ -307,8 +265,8 @@ export class WorldController {
     this.actions = new ActionQueue({
       me: () => this.me,
       focused: () => !!this.room?.state.players.get(this.room.sessionId)?.focus,
-      setFacing: (d) => {
-        this.me.d = d;
+      setFacing: (yaw) => {
+        this.me.yaw = yaw;
       },
       grid: () => this.grid,
       object: (id) => this.model?.getObject(id),
@@ -332,7 +290,7 @@ export class WorldController {
         this.pathTarget = null;
       },
       send: (type, msg) => this.send(type, msg),
-      activate: (id) => this.activateObject(id, false),
+      activate: (id) => this.menu.activateObject(id, false),
       machineBusy: () => performance.now() < this.usingUntil,
       busyFor: (what, ms) => {
         this.usingWhat = what;
@@ -438,34 +396,34 @@ export class WorldController {
     hud.set({ worldName: s.world.name, canBuild: s.canBuild, isAdmin: s.user.isAdmin, phase: "connecting" });
     this.map = getMap(s.world.mapKey);
     this.building = this.map;
-    this.grid = Grid.from(this.map, this.map.objects);
+    this.grid = new Place(null, this.map, this.map.objects);
 
     const model = new WorldModel(this.map);
     this.model = model;
-    this.autoTier = deviceQuality();
-    model.setQuality(this.qualityNow(), prefs().reducedMotion);
+    this.quality.autoTier = deviceQuality();
+    model.setQuality(this.quality.qualityNow(), prefs().reducedMotion);
     model.events = {
       onTileClick: (x, y, mods) => {
         if (hud.get().build.on) return this.buildClick(x, y);
-        if (hud.get().pickArrival) return this.setArrival({ x, y });
+        if (hud.get().pickArrival) return this.arrival.setArrival({ x, y });
         if (hud.get().menu) return hud.set({ menu: null });
         // a toy in hand: Shift / right-click (or the chip's Throw) throws it there, or points the laser
-        if (this.throwAt(x, y, !!mods?.shift || !!mods?.right)) return;
+        if (this.pets.throwAt(x, y, !!mods?.shift || !!mods?.right)) return;
         // a click on the floor: go there (dropping whatever was queued) — on a
         // stairwell's flights, up or down them to the other floor
         this.actions.clear();
         this.toyPick = null;
-        if (this.climbAt(x, y)) return;
+        if (this.doors.climbAt(x, y)) return;
         this.walkTo({ x, y });
       },
-      onToyClick: (id) => this.pickToy(id),
+      onToyClick: (id) => this.pets.pickToy(id),
       onAvatarClick: (sid, at) => {
-        if (sid.startsWith("pet:")) return void this.openMenu({ type: "pet", id: sid.slice(4) }, at);
+        if (sid.startsWith("pet:")) return void this.menu.openMenu({ type: "pet", id: sid.slice(4) }, at);
         if (sid.startsWith("npc:")) return this.send("vortex:poke", {});
         // yourself: your look, your drink…; anyone else: what to do with them
-        if (sid === this.room?.sessionId) return this.openMenu({ type: "self" }, at);
+        if (sid === this.room?.sessionId) return this.menu.openMenu({ type: "self" }, at);
         const p = this.room?.state.players.get(sid);
-        if (p && !p.bot) this.openMenu({ type: "person", sid }, at);
+        if (p && !p.bot) this.menu.openMenu({ type: "person", sid }, at);
       },
       onObjectClick: (id, at) => {
         // a button on an elevator car's own panel (3D): a floor, open, close
@@ -476,31 +434,31 @@ export class WorldController {
         if (b.on && o && b.tool === "walls") return; // walls/floors paint by dragging
         if (b.on && o) return this.buildClick(o.x + 0.5, o.y + 0.5);
         // carrying a cable: a TV clicked is where it goes
-        if (hud.get().cable && o && isGameTv(o.kind)) return this.activateObject(id, true);
+        if (hud.get().cable && o && isGameTv(o.kind)) return this.menu.activateObject(id, true);
         // an elevator: in when it's open, else a call (no menu to go through)
-        if (o?.kind === "elevator") return this.activateObject(id, true);
+        if (o?.kind === "elevator") return this.menu.activateObject(id, true);
         // a staircase (3D): up it from its floor, down it from the one above
         const st = !o ? this.objs.get(id) : o;
         if (st?.kind === "stairs" && !hud.get().build.on) {
           this.actions.clear();
-          this.climb(st, objLevel(st, this.building) === this.level);
+          this.doors.climb(st, objLevel(st, this.building) === this.level);
           return;
         }
-        if (!this.openMenu({ type: "object", id }, at)) this.activateObject(id, true);
+        if (!this.menu.openMenu({ type: "object", id }, at)) this.menu.activateObject(id, true);
       },
-      onPointerWorld: (x, y) => (hud.get().pickArrival ? this.hoverArrival(x, y) : this.buildHover(x, y)),
+      onPointerWorld: (x, y) => (hud.get().pickArrival ? this.arrival.hoverArrival(x, y) : this.buildHover(x, y)),
       onPointerDown: (x, y) => this.buildDown(x, y),
       onPointerUp: (x, y) => this.buildUp(x, y),
       onWheel: (dy) => this.build?.wheel(dy) ?? false,
     };
-    this.offLook = hud.subscribe(this.watchLook);
+    this.offLook = hud.subscribe(this.focus.watchLook);
     this.offPrefs = subscribePrefs(() => {
-      this.model?.setQuality(this.qualityNow(), prefs().reducedMotion);
-      if (this.tp && this.tp.quality !== this.qualityNow()) this.tp.toQuality(this.qualityNow());
+      this.model?.setQuality(this.quality.qualityNow(), prefs().reducedMotion);
+      if (this.tp && this.tp.quality !== this.quality.qualityNow()) this.tp.warmup.toQuality(this.quality.qualityNow());
       this.syncView();
     });
     // Auto quality: step down a tier when this device can't keep up
-    this.timers.push(setInterval(() => this.watchFrameRate(), 1000));
+    this.timers.push(setInterval(() => this.quality.watchFrameRate(), 1000));
     this.updateNight(true);
 
     await this.join();
@@ -508,8 +466,10 @@ export class WorldController {
     // how the game runs here, reported (docs/plan/39-the-telemetry.md; its own chunk, which
     // stops itself once this stops)
     void import("./telemetry").then((m) => m.startTelemetry(this));
-    this.bindInput();
-    this.holdLoading("enter");
+    // the page's errors to the server from now on (lib/crash.ts: the ones before, sent now)
+    setErrorSink((e) => this.room?.send("client:error", e));
+    this.input.bindInput();
+    this.loading.holdLoading("enter");
     this.lastFrame = performance.now();
     this.lastTick = this.lastFrame;
     this.activeAt = this.lastFrame;
@@ -523,7 +483,7 @@ export class WorldController {
       const gap = t - this.lastTick;
       this.lastTick = t;
       if (gap > 0 && gap < 100) this.rafGap += (gap - this.rafGap) * 0.1;
-      const cap = this.fpsCap(t);
+      const cap = this.quality.fpsCap(t);
       const every = cap ? Math.max(1, Math.round(1000 / this.rafGap / cap)) : 1;
       if (++this.tick % every) return;
       const dt = Math.min(0.1, (t - this.lastFrame) / 1000);
@@ -552,7 +512,7 @@ export class WorldController {
     const s = this.session as Session;
     const client = new Client(s.worldUrl);
     try {
-      const room: Room<S> = reconnectToken
+      const room: Room<WorldState> = reconnectToken
         ? await client.reconnect(reconnectToken)
         : await client.joinOrCreate(ROOM_NAME, { token: s.worldToken });
       if (this.stopped) {
@@ -578,7 +538,7 @@ export class WorldController {
     }
   }
 
-  private wireRoom(room: Room<S>) {
+  private wireRoom(room: Room<WorldState>) {
     const $ = getStateCallbacks(room);
     const model = this.model as WorldModel;
     this.remotes.clear();
@@ -586,12 +546,13 @@ export class WorldController {
     model.clearAvatars();
     this.uidToSid.clear();
 
-    $(room.state).players.onAdd((p: S, sid: string) => {
+    $(room.state).players.onAdd((p, sid) => {
       const local = sid === room.sessionId;
       this.uidToSid.set(p.uid, sid);
       if (local) {
-        this.me = { x: p.x, y: p.y, d: p.d, a: p.a };
-        this.height = { z: p.z ?? 0, vz: 0, up: false };
+        this.me = { x: p.x, y: p.y, yaw: byteFace(p.yaw), a: p.a };
+        // (my height over my floor: what the walker works in; Player.z is the world's)
+        this.height = { z: overFloor(p.level ?? 0, p.z ?? 0), vz: 0, up: false };
         this.setLevel(p.level ?? 0);
         this.lastSent = { ...this.me, z: this.height.z, t: 0, l: this.level };
         model.localId = sid;
@@ -630,50 +591,62 @@ export class WorldController {
           t = Math.max(p.mt + r.off, (last?.t ?? 0) + 1);
         }
         const s = sampleOf(p, t);
-        if (!last || ["x", "y", "z", "d", "a", "mv", "yaw"].some((k) => last[k as "x"] !== s[k as "x"])) {
+        if (!last || ["x", "y", "z", "a", "mv", "yaw"].some((k) => last[k as "x"] !== s[k as "x"])) {
           r.buf.push(s);
           if (r.buf.length > 12) r.buf.shift();
         }
       });
     });
-    $(room.state).players.onRemove((p: S, sid: string) => {
+    $(room.state).players.onRemove((p, sid) => {
       model.removeAvatar(sid);
       this.remotes.delete(sid);
       if (this.uidToSid.get(p.uid) === sid) this.uidToSid.delete(p.uid);
       if (!p.bot) mixer.blip("leave");
     });
 
-    this.applyMapFromState();
-    $(room.state).listen("mapVersion", () => {
+    room.onMessage("struct:full", (m: ServerMessages["struct:full"]) => {
+      this.structure = m.structure;
+      this.structRev = m.rev;
       this.mapDirty = true;
     });
+    room.onMessage("struct:ops", (m: ServerMessages["struct:ops"]) => {
+      // (behind, or not here yet: it whole again)
+      if (!this.structure || m.rev !== this.structRev + 1) {
+        if (m.rev > this.structRev) room.send("struct:get", {});
+        return;
+      }
+      this.structure = applyOps(this.structure, m.ops);
+      this.structRev = m.rev;
+      this.mapDirty = true;
+    });
+    room.send("struct:get", {});
     // god mode's edits to the Grounds (docs/plan/53-the-god-mode.md): the revision live, laid here
     $(room.state).listen("groundsRev", (rev: number) => wantEdits(rev));
     room.onMessage("god:edits", (e: ServerMessages["god:edits"]) => layEdits(e));
     model.setObjects([]);
     // every floor's things kept; the model has mine
-    const putObj = (o: S) => {
+    const putObj = (o: WorldObject) => {
       const def = objFromState(o);
       this.objs.set(def.id, def);
       this.objsRev++;
-      if (def.kind === "elevator") this.liftHeard(def);
+      if (def.kind === "elevator") this.lifts.liftHeard(def);
       // (a lot car out being driven isn't where it was parked: the car itself is drawn)
-      if (objLevel(def, this.building) === this.level && notDriven(def)) model.upsertObject(this.liftDrawn(def));
+      if (objLevel(def, this.building) === this.level && notDriven(def)) model.upsertObject(this.lifts.liftDrawn(def));
       else if (model.getObject(def.id)) model.removeObject(def.id);
       this.objectsDirty = true;
     };
-    $(room.state).objects.onAdd((o: S) => {
+    $(room.state).objects.onAdd((o) => {
       putObj(o);
       $(o).onChange(() => putObj(o));
     });
-    $(room.state).objects.onRemove((o: S) => {
+    $(room.state).objects.onRemove((o) => {
       this.objs.delete(o.id);
       this.objsRev++;
       model.removeObject(o.id);
       this.objectsDirty = true;
     });
 
-    $(room.state).npcs.onAdd((n: S, id: string) => {
+    $(room.state).npcs.onAdd((n, id) => {
       model.upsertAvatar(`npc:${id}`, this.npcState(n));
       let lastSay = n.sayAt;
       this.npcBuf.set(id, [{ t: performance.now(), x: n.x, y: n.y }]);
@@ -691,13 +664,13 @@ export class WorldController {
         this.say(`npc:${id}`, n.say, 7000);
       });
     });
-    $(room.state).npcs.onRemove((_n: S, id: string) => model.removeAvatar(`npc:${id}`));
+    $(room.state).npcs.onRemove((_n, id) => model.removeAvatar(`npc:${id}`));
 
     // pets (features/pets.ts): drawn like people, with their sounds near me
-    $(room.state).pets.onAdd((pet: S, id: string) => {
+    $(room.state).pets.onAdd((pet, id) => {
       this.petBuf.set(id, [{ t: performance.now(), x: pet.x, y: pet.y }]);
       void loadPets(); // its drawing, animation, sounds and strings
-      if (pet.alive) model.upsertAvatar(`pet:${id}`, this.petState(pet));
+      if (pet.alive) model.upsertAvatar(`pet:${id}`, this.pets.petState(pet));
       let lastSay = pet.sayAt;
       let floor = pet.floor ?? 0;
       $(pet).onChange(() => {
@@ -723,19 +696,19 @@ export class WorldController {
         this.say(`pet:${id}`, P.petNoise(sp, pet.say as never, lang()), 2200);
         P.petSound(P.SPECIES_DEFS[sp].sound, pet.say, Math.max(0.15, 1 - d / 12));
       });
-      this.publishPets();
+      this.pets.publishPets();
     });
-    $(room.state).pets.onRemove((_pet: S, id: string) => {
+    $(room.state).pets.onRemove((_pet, id) => {
       model.removeAvatar(`pet:${id}`);
       this.petBuf.delete(id);
-      this.publishPets();
+      this.pets.publishPets();
     });
-    $(room.state).battles.onAdd((b: S) => {
-      $(b).onChange(() => this.watchBattle(b));
-      this.watchBattle(b);
+    $(room.state).battles.onAdd((b) => {
+      $(b).onChange(() => this.pets.watchBattle(b));
+      this.pets.watchBattle(b);
     });
-    $(room.state).battles.onRemove(() => this.publishPets());
-    $(room.state).toys.onRemove((t: S) => {
+    $(room.state).battles.onRemove(() => this.pets.publishPets());
+    $(room.state).toys.onRemove((t) => {
       if (this.toyPick === t.id) this.toyPick = null;
     });
 
@@ -767,14 +740,15 @@ export class WorldController {
     mirrorLocks();
   }
 
-  private wireMessages(room: Room<S>) {
+  private wireMessages(room: Room<WorldState>) {
     room.onMessage("snap", (m: ServerMessages["snap"]) => {
       if (m.level !== undefined) this.setLevel(m.level);
       this.me.x = m.x;
       this.me.y = m.y;
-      this.height = { z: m.z ?? 0, vz: 0, up: false };
+      this.height = { z: overFloor(this.level, m.z ?? 0), vz: 0, up: false };
       this.path = null;
     });
+    room.onMessage("way", (m: ServerMessages["way"]) => this.wayHere(m));
     room.onMessage("hear", (m: ServerMessages["hear"]) => {
       this.hear = new Set(m.ids);
       const uids = new Set<string>();
@@ -830,7 +804,7 @@ export class WorldController {
       hud.set({ mySpawn: m.at });
       if (hud.get().pickArrival) return this.model?.showMine(m.at);
       // just set: show where for a moment
-      if (m.at && (m.at.x !== was?.x || m.at.y !== was?.y) && this.arrivalAsked) this.flashArrival();
+      if (m.at && (m.at.x !== was?.x || m.at.y !== was?.y) && this.arrival.arrivalAsked) this.arrival.flashArrival();
     });
     // someone's playing the piano: from where they are (fades over ~10 tiles)
     room.onMessage("piano:note", (m: ServerMessages["piano:note"]) => {
@@ -849,7 +823,7 @@ export class WorldController {
       mixer.blip("knock");
       hud.set({ challenge: { battle: m.battle, fromName: m.fromName, pet: m.pet, mine: m.mine } });
     });
-    room.onMessage("pet:event", (m: ServerMessages["pet:event"]) => this.petEvent(m));
+    room.onMessage("pet:event", (m: ServerMessages["pet:event"]) => this.pets.petEvent(m));
     // texts and the like, from the API (world/phone): the phone's chunk takes them
     room.onMessage(
       "phone:live",
@@ -876,17 +850,17 @@ export class WorldController {
       for (const f of this.vortexListeners) f(m.text);
     });
     room.onMessage("wb:scene", (m: ServerMessages["wb:scene"]) => {
-      this.wbScenes.set(m.objectId, m.items);
-      this.emitWb(m.objectId);
+      this.boards.wbScenes.set(m.objectId, m.items);
+      this.boards.emitWb(m.objectId);
     });
     room.onMessage("wb:op", (m: ServerMessages["wb:op"]) => {
-      const items = this.wbScenes.get(m.objectId) ?? this.persistedScene(m.objectId);
+      const items = this.boards.wbScenes.get(m.objectId) ?? this.boards.persistedScene(m.objectId);
       if (m.op.t === "add") items.push(m.op.item);
       else if (m.op.t === "del")
         items.splice(0, items.length, ...items.filter((x) => x.id !== (m.op as { id: string }).id));
       else items.splice(0, items.length);
-      this.wbScenes.set(m.objectId, items);
-      this.emitWb(m.objectId);
+      this.boards.wbScenes.set(m.objectId, items);
+      this.boards.emitWb(m.objectId);
     });
     room.onMessage("arcade:scores", () => {});
     room.onMessage("game:tv", (m: ServerMessages["game:tv"]) => this.games?.onTvToken(m));
@@ -956,6 +930,7 @@ export class WorldController {
   }
 
   stop() {
+    setErrorSink(null);
     this.framePerf.dispose();
     this.stopped = true;
     this.offLandShifted?.();
@@ -963,8 +938,8 @@ export class WorldController {
     this.walker?.dispose();
     this.build?.dispose();
     this.slots?.dispose();
-    this.tables?.dispose();
-    this.chess?.dispose();
+    this.tableGames.tables?.dispose();
+    this.tableGames.chess?.dispose();
     this.games?.dispose();
     this.screens?.dispose();
     this.os?.dispose();
@@ -972,9 +947,9 @@ export class WorldController {
     this.cars = null;
     cancelAnimationFrame(this.raf);
     for (const t of this.timers) clearInterval(t);
-    if (this.arrivalFlash) clearTimeout(this.arrivalFlash);
+    if (this.arrival.arrivalFlash) clearTimeout(this.arrival.arrivalFlash);
     if (hud.get().pickArrival) hud.set({ pickArrival: false });
-    this.unbindInput();
+    this.input.unbindInput();
     this.closeTp();
     this.offPrefs?.();
     this.offLook?.();
@@ -990,46 +965,10 @@ export class WorldController {
     this.send("item:drop", {});
   }
 
-  // ── a console's cable: taken from its panel, plugged in at a TV ─────────
-  grabCable(consoleId: string) {
-    mixer.blip("click");
-    hud.set({ cable: { consoleId }, panel: { kind: null } });
-  }
-
-  dropCable(why?: string) {
-    if (!hud.get().cable) return;
-    hud.set({ cable: null });
-    if (why) toast(why, "warn");
-  }
-
-  // still in hand: the console's there, not plugged in yet, and I haven't
-  // walked further off than the cable goes
-  private checkCable() {
-    const c = hud.get().cable;
-    if (!c) return;
-    const o = this.model?.getObject(c.consoleId);
-    if (!o) return this.dropCable();
-    if (typeof o.props?.tv === "string") {
-      mixer.blip("pop");
-      return this.dropCable();
-    }
-    const { w, h } = placedFootprint(o);
-    const me = { x: this.me.x, y: this.me.y, w: 0, h: 0 };
-    if (gap({ x: o.x, y: o.y, w, h }, me) > CABLE_REACH + 2) this.dropCable(tr("cableTooFar"));
-  }
-
-  // the cable from the console to my hands (the 3D view draws it)
-  private cableEnds(): { from: Point; to: Point } | null {
-    const c = hud.get().cable;
-    const o = c ? this.model?.getObject(c.consoleId) : undefined;
-    if (!o) return null;
-    return { from: { x: o.x + 0.5, y: o.y + 0.3 }, to: { x: this.me.x, y: this.me.y } };
-  }
-
   // What I'm busy with (shown on my body for everyone): a machine for a moment,
   // or the piano / whiteboard / computer while its panel is open.
-  private usingWhat = "";
-  private usingUntil = 0;
+  usingWhat = "";
+  usingUntil = 0;
   private busySent = "";
   private syncBusy() {
     const panel = hud.get().panel;
@@ -1044,8 +983,8 @@ export class WorldController {
         ? pk
         : pk === "slotcar" && this.slots?.atControls()
           ? "slotcar"
-          : (pk === "pool" || pk === "pong") && this.tables?.busy()
-            ? (this.tables?.busy() as string)
+          : (pk === "pool" || pk === "pong") && this.tableGames.tables?.busy()
+            ? (this.tableGames.tables?.busy() as string)
             : this.games?.atPad()
               ? "gamepad"
               : performance.now() < this.usingUntil
@@ -1171,13 +1110,13 @@ export class WorldController {
     if (!st) return true;
     let busy = false;
     // a console's picture going out on a TV here (everyone gets it through this line)
-    st.consoles?.forEach((c: S) => {
+    st.consoles?.forEach((c) => {
       if (c.live) busy = true;
     });
     if (busy) return true;
     // someone close enough to walk into earshot in a moment
     const meSid = this.room?.sessionId;
-    st.players?.forEach((p: S, sid: string) => {
+    st.players?.forEach((p, sid) => {
       if (busy || sid === meSid || p.bot) return;
       if (Math.hypot(p.x - this.me.x, p.y - this.me.y) < MEDIA_NEAR) busy = true;
     });
@@ -1216,90 +1155,13 @@ export class WorldController {
     (await this.ensurePhone())?.setOpen(open);
   }
 
-  // ── the phone's camera (world/phone/camera.ts): the view becomes the viewfinder ──
-  // Photo is your eyes (first person, the lens zooms), Selfie a camera at
-  // arm's length in front of you (Q / E walk it round you).
-  private photo: {
-    mode: "photo" | "selfie";
-    angle: number; // the selfie camera, round me (world radians)
-    tilt: number;
-    zoom: number;
-    was: { cam: CamMode | null; yaw: number; pitch: number };
-  } | null = null;
-  photoMode(mode: "photo" | "selfie" | null) {
-    const tp = this.tp;
-    if (!mode) {
-      const was = this.photo?.was;
-      this.photo = null;
-      if (tp) {
-        tp.lens(null);
-        tp.setMode(this.camWanted());
-        if (was) {
-          tp.yaw = was.yaw;
-          tp.pitch = was.pitch;
-        }
-      }
-      return;
-    }
-    const was = this.photo?.was ?? {
-      cam: tp ? (this.tp?.mode ?? null) : null,
-      yaw: tp?.yaw ?? 0,
-      pitch: tp?.pitch ?? 0,
-    };
-    this.photo = { mode, angle: this.meAngle, tilt: 0, zoom: 1, was };
-    tp?.setLook(false);
-    if (tp) {
-      tp.lens(mode === "photo" ? 1 : null);
-      if (mode === "photo") {
-        tp.setMode("first");
-        tp.yaw = this.meAngle;
-        tp.pitch = 0.04;
-      } else tp.setMode("chase");
-    }
-  }
-  photoZoom(z: number) {
-    if (!this.photo) return;
-    this.photo.zoom = z;
-    this.tp?.lens(this.photo.mode === "photo" ? z : null);
-  }
-  photoTurn(dir: number) {
-    if (!this.photo) return;
-    if (this.photo.mode === "selfie") this.photo.angle += dir * 0.22;
-    else if (this.tp) this.tp.yaw += dir * 0.09;
-  }
-  photoTilt(dir: number) {
-    if (!this.photo) return;
-    if (this.photo.mode === "selfie") this.photo.tilt = Math.max(-0.4, Math.min(0.5, this.photo.tilt + dir * 0.08));
-    else if (this.tp) this.tp.pitch = Math.max(-0.6, Math.min(0.8, this.tp.pitch + dir * 0.05));
-  }
-  // the selfie camera in 3D (null otherwise): at arm's length, a little above
-  private photoCam(): ThirdPersonView["gameCam"] {
-    const p = this.photo;
-    if (!p || p.mode !== "selfie" || !this.tp) return null;
-    const a = p.angle;
-    const r = 1.35 / Math.max(1, p.zoom * 0.8);
-    // the billboards face back along the camera's yaw: point it at me
-    this.tp.yaw = a + Math.PI;
-    return {
-      eye: [this.me.x + Math.cos(a) * r, this.me.y + Math.sin(a) * r, 1.78 + p.tilt],
-      look: [this.me.x, this.me.y, 1.42 + p.tilt * 0.4],
-      showMe: true,
-      fov: 56,
-    };
-  }
   // the canvas the world is drawn on right now (the phone records it)
   viewCanvas(): HTMLCanvasElement | null {
     return this.tp?.renderer.domElement ?? null;
   }
-  snapshot(): HTMLCanvasElement | null {
-    return this.tp?.snapshot() ?? null;
-  }
   // the world's host on the page (client px): the view's canvas fills it
   hostRect(): DOMRect {
     return this.host.getBoundingClientRect();
-  }
-  flashPerson(sid: string) {
-    this.tp?.flash(sid);
   }
 
   // ── slot-car tracks: their own chunk (world/slots.ts), loaded once a track is here ──
@@ -1313,89 +1175,6 @@ export class WorldController {
       if (this.stopped || !this.model || !room) return;
       this.slots = new m.SlotTracks(this.model, room, (type, msg) => this.send(type as never, msg as never));
       this.slots.refresh();
-    });
-  }
-
-  // ── the game tables (pool, ping-pong): their own chunk (world/tables), loaded once one is here ──
-  // ── chess at the table (plan 70): its own chunk (world/chess), loaded once a floor has a board ──
-  chess: import("./chess").ChessPlay | null = null;
-  private chessLoading: Promise<void> | null = null;
-  private chessChanged() {
-    if (this.chess) return this.chess.refresh();
-    if (
-      this.chessLoading ||
-      !this.model?.allObjects().some((o) => o.kind === "chess_table" || o.kind === "wizard_chess")
-    )
-      return;
-    this.chessLoading = import("./chess").then((m) => {
-      const model = this.model;
-      const room = this.room;
-      if (this.stopped || !model || !room) return;
-      this.chess = new m.ChessPlay({
-        model: {
-          getObject: (id) => model.getObject(id),
-          allObjects: () => model.allObjects(),
-          rayAt: (cx, cy) => model.rayAt(cx, cy),
-        },
-        room,
-        send: (type, msg) => this.send(type as never, msg as never),
-        me: () => this.me,
-        grid: () => this.grid,
-        walkTo: (p) => {
-          this.walkTo(p, undefined, true);
-        },
-        men: () => this.tp?.world?.chessMen ?? null,
-        physics: () => this.tp?.physicsSpace() ?? null,
-        stand: (x, y) => {
-          if (this.grid.ok(Math.floor(x), Math.floor(y))) {
-            this.me.x = x;
-            this.me.y = y;
-          }
-        },
-        openPanel: (kind, id) => this.onOpenPanel(kind, id),
-        closePanel: (kind) => {
-          if (hud.get().panel.kind === kind) hud.set({ panel: { kind: null } });
-        },
-      });
-    });
-  }
-  tables: GameTables | null = null;
-  private tablesLoading: Promise<void> | null = null;
-  private tableVortexes = new Set<string>();
-  private tablesChanged() {
-    if (this.tables) return this.tables.refresh();
-    if (
-      this.tablesLoading ||
-      !this.model?.allObjects().some((o) => o.kind === "pool_table" || o.kind === "pingpong_table")
-    )
-      return;
-    this.tablesLoading = import("./tables").then((m) => {
-      const room = this.room;
-      const model = this.model;
-      if (this.stopped || !model || !room) return;
-      this.tables = new m.GameTables({
-        model,
-        room,
-        send: (type, msg) => this.send(type as never, msg as never),
-        walkTo: (p) => {
-          this.walkTo(p, undefined, true);
-        },
-        face: (x, y) => {
-          if (this.path) return;
-          this.me.d = dirFromDelta(x - this.me.x, y - this.me.y, this.me.d as 0);
-          this.meAngle = Math.atan2(y - this.me.y, x - this.me.x);
-        },
-        stand: (x, y) => {
-          if (this.path || !this.grid.ok(Math.floor(x), Math.floor(y))) return;
-          this.me.x = x;
-          this.me.y = y;
-        },
-        worldHttp: () => this.worldHttp,
-        where: () => this.walker?.where() ?? { ...this.me, z: 0 },
-        aiming: () => !!this.walker?.aiming,
-        level: () => this.level,
-      });
-      this.tables.refresh();
     });
   }
 
@@ -1422,16 +1201,18 @@ export class WorldController {
     if (this.mapDirty) {
       this.mapDirty = false;
       this.applyMapFromState();
+      // (the 3D view's walls for it the next frame, not this one: docs/plan/72 phase 8, an edit's cost)
+      this.tpDue = Math.max(this.tpDue, now + 1);
     }
-    this.updateDoors();
+    this.doors.updateDoors();
     if (this.objectsDirty) {
       // batched: hundreds of objects arrive in the first patch
       this.objectsDirty = false;
       this.rebuildGrid();
       this.build?.checkPending();
       this.slotsChanged();
-      this.tablesChanged();
-      this.chessChanged();
+      this.tableGames.tablesChanged();
+      this.tableGames.chessChanged();
       this.gamesChanged();
       this.screensChanged();
       hud.set((h) => ({ objectsVersion: h.objectsVersion + 1 }));
@@ -1440,9 +1221,9 @@ export class WorldController {
     this.driveVehicles(dt);
     this.isolated("cars", () => this.cars?.frame(dt, now));
     this.moveLocal(dt);
-    this.hearAround(dt);
+    this.steps.hearAround(dt);
     this.updateLift();
-    this.stairsDoors();
+    this.doors.stairsDoors();
     if (hud.get().build.on) {
       this.actions.clear();
       if (hud.get().menu) hud.set({ menu: null });
@@ -1453,8 +1234,8 @@ export class WorldController {
     const open = !isPrivate(here) && here?.kind !== "stage";
     if (this.tp) this.tp.earshot = hud.get().media.mic && open && hud.get().me?.status !== "dnd" ? HEAR_RADIUS : 0;
     this.isolated("slots", () => this.slots?.frame(dt, this.me));
-    this.isolated("tables", () => this.tables?.frame(dt, this.me));
-    this.isolated("chess", () => this.chess?.frame());
+    this.isolated("tables", () => this.tableGames.tables?.frame(dt, this.me));
+    this.isolated("chess", () => this.tableGames.chess?.frame());
     this.isolated("games", () => this.games?.frame(dt, this.me));
     this.isolated("media", () => this.screens?.frame(dt, this.me));
     this.computersChanged();
@@ -1507,7 +1288,7 @@ export class WorldController {
     if (lp?.act && lp.actAt !== this.facedAct) {
       this.facedAct = lp.actAt;
       const other = room.state.players.get(lp.actWith);
-      if (other && !this.path) this.me.d = dirFromDelta(other.x - this.me.x, other.y - this.me.y, this.me.d as 0);
+      if (other && !this.path) this.me.yaw = face8(other.x - this.me.x, other.y - this.me.y, this.me.yaw);
     }
     const tp = this.tp;
     const bodies: Body3[] = [];
@@ -1517,7 +1298,7 @@ export class WorldController {
         ...this.avatarState(lp, true),
         x: this.me.x,
         y: this.me.y,
-        d: this.me.d,
+        yaw: this.me.yaw,
         a: this.me.a,
         mv: this.lastMv,
         verb: this.myVerb,
@@ -1525,16 +1306,16 @@ export class WorldController {
         pitch: this.myPitch,
         angle: this.meAngle,
         focused: this.walker?.focus,
-        ...this.myJump(now),
+        ...this.jumps.myJump(now),
         swim: this.mySwim,
-        overWater: this.overDeep(this.me.x, this.me.y),
-        waterOver: this.waterOver(this.me.x, this.me.y, this.height.z),
+        overWater: this.water.overDeep(this.me.x, this.me.y),
+        waterOver: this.water.waterOver(this.me.x, this.me.y, this.height.z),
       };
-      this.jumpEffects(localSid, st, 1);
+      this.jumps.jumpEffects(localSid, st, 1);
       this.life?.print(localSid, st, now, this.map, this.grid.onLand(st.x, st.y));
       const inCar = !!this.cars?.inCar();
-      if (this.wasInCar && !inCar) this.alighted.push(localSid);
-      this.wasInCar = inCar;
+      if (this.steps.wasInCar && !inCar) this.steps.alighted.push(localSid);
+      this.steps.wasInCar = inCar;
       if (inCar) {
         if (model.hasAvatar(localSid)) model.removeAvatar(localSid);
       } else model.upsertAvatar(localSid, st);
@@ -1565,22 +1346,22 @@ export class WorldController {
         ...(hidden ? { status: "away" } : null),
         x: pos.x,
         y: pos.y,
-        d: at.d,
+        yaw: byteFace(at.yaw),
         a: at.a,
         mv: at.mv,
         // (their verb, if it's one: timed from when it shows, by the 3D people)
         verb: p.jump ? { kind: p.jump, t: 0, at: r.verbAt } : undefined,
         // (their Flowmotion move, likewise: docs/plan/56-the-controls.md F)
-        ...this.theirFlow(r, p, now),
+        ...this.jumps.theirFlow(r, p, now),
         pitch: p.pitch / 40,
         // (their facing as they turned, not 8 ways: from the move's own senders)
         angle: p.mt ? (at.yaw / 128) * Math.PI : undefined,
-        ...this.theirJump(r, p, pos, now),
-        swim: this.swimOf(pos.x, pos.y, pos.z),
-        overWater: this.overDeep(pos.x, pos.y),
-        waterOver: this.waterOver(pos.x, pos.y, pos.z),
+        ...this.jumps.theirJump(r, p, pos, now),
+        swim: this.water.swimOf(pos.x, pos.y, pos.z),
+        overWater: this.water.overDeep(pos.x, pos.y),
+        waterOver: this.water.waterOver(pos.x, pos.y, pos.z),
       };
-      this.jumpEffects(
+      this.jumps.jumpEffects(
         sid,
         st,
         here ? Math.max(0, 1 - Math.hypot(pos.x - this.me.x, pos.y - this.me.y) / JUMP_HEARD) : 0,
@@ -1588,7 +1369,7 @@ export class WorldController {
       // the model keeps my floor's; 3D draws everyone where they are in the building
       // (someone in a car: the car draws them, sitting in it)
       const carried = !!this.cars?.seatedIds().has(sid) || unseen;
-      if (r.carried && !carried && !unseen) this.alighted.push(sid);
+      if (r.carried && !carried && !unseen) this.steps.alighted.push(sid);
       r.carried = carried;
       if (here && !carried) this.life?.print(sid, st, now, this.map, this.grid.onLand(st.x, st.y));
       else this.life?.prints.forget(sid);
@@ -1623,7 +1404,7 @@ export class WorldController {
       } else this.media.setVoice(String(p.uid), 0, 0);
     }
     const night = model.getDaylight().night;
-    room.state.npcs.forEach((n: S, id: string) => {
+    room.state.npcs.forEach((n, id) => {
       const pos = interpolate(this.npcBuf.get(id) ?? [{ t: 0, x: n.x, y: n.y }], renderAt);
       // (the guard, the Kart Park's folk: people of the Grounds' life, not Vortex)
       const guard = n.kind === "guard" ? this.life?.guard(n, night) : n.kind === "folk" ? this.life?.folk(n) : null;
@@ -1652,7 +1433,7 @@ export class WorldController {
     // Vortexes at the game tables (a Vortex for every game)
     const tv = new Set<string>();
     // (and sat in the chess tables' empty chairs, plan 70)
-    for (const v of [...(this.tables?.vortexes() ?? []), ...(this.chess?.vortexes() ?? [])] as {
+    for (const v of [...(this.tableGames.tables?.vortexes() ?? []), ...(this.tableGames.chess?.vortexes() ?? [])] as {
       key: string;
       x: number;
       y: number;
@@ -1666,7 +1447,7 @@ export class WorldController {
         ...this.npcState({
           x: v.x,
           y: v.y,
-          d: dirFromDelta(Math.cos(v.angle), Math.sin(v.angle), 3),
+          yaw: faceByte(Math.cos(v.angle), Math.sin(v.angle), 128),
           a: 0,
           mood: v.mood,
         }),
@@ -1677,12 +1458,12 @@ export class WorldController {
       model.upsertAvatar(id, st);
       if (tp) bodies.push({ ...st, id, reduced, level: this.level });
     }
-    for (const id of this.tableVortexes) if (!tv.has(id)) model.removeAvatar(id);
-    this.tableVortexes = tv;
+    for (const id of this.tableGames.tableVortexes) if (!tv.has(id)) model.removeAvatar(id);
+    this.tableGames.tableVortexes = tv;
     // toys in the air and on the floor (shared/pets.ts): where each is right now
     const toyList: { id: string; kind: string; x: number; y: number; z: number }[] = [];
     const wall = Date.now();
-    room.state.toys.forEach((t: S) => {
+    room.state.toys.forEach((t) => {
       if (t.state === "mouth") return;
       const at = toyAt({ fromX: t.fromX, fromY: t.fromY, toX: t.x, toY: t.y, at: t.at, dur: t.dur }, wall);
       toyList.push({ id: t.id, kind: t.kind, x: at.x, y: at.y, z: at.z });
@@ -1694,7 +1475,7 @@ export class WorldController {
       if (t && Math.hypot(t.x - this.me.x, t.y - this.me.y) < 1.6) this.send("toy:pick", { id: t.id });
       this.toyPick = null;
     }
-    room.state.pets.forEach((pet: S, id: string) => {
+    room.state.pets.forEach((pet, id) => {
       // (in a car: the car draws it, in its seat — car/cars.ts; in a lift's car it's drawn as ever)
       const inCar = pet.ride && pet.ride !== "lift";
       if (!pet.alive || inCar) {
@@ -1702,7 +1483,7 @@ export class WorldController {
         return;
       }
       const pos = interpolate(this.petBuf.get(id) ?? [{ t: 0, x: pet.x, y: pet.y }], renderAt);
-      const st = { ...this.petState(pet), x: pos.x, y: pos.y };
+      const st = { ...this.pets.petState(pet), x: pos.x, y: pos.y };
       // (out on the land its feet are on it — the hills, the road —; in a lift's car, the car's height)
       if ((pet.floor ?? 0) === this.level && !pet.z) st.z = this.grid.groundAt(pos.x, pos.y, 0, 0.25);
       if ((pet.floor ?? 0) === this.level) model.upsertAvatar(`pet:${id}`, st);
@@ -1710,8 +1491,8 @@ export class WorldController {
       if (tp) bodies.push({ ...st, id: `pet:${id}`, reduced, level: pet.floor ?? 0 });
     });
     // their steps (docs/plan/63-the-steps.md, phase 3): everyone else's near me, as they land
-    if (bodies.length > 1) this.theirSteps(bodies, dt);
-    this.waterSound(bodies, dt);
+    if (bodies.length > 1) this.steps.theirSteps(bodies, dt);
+    this.water.waterSound(bodies, dt);
     this.watchActs();
     lap = perf.lap("logic", lap); // (doors, things, moving, the tables and screens, the people)
     if (tp) {
@@ -1720,8 +1501,8 @@ export class WorldController {
       // room — and my arrival pin while I pick one, outside it too
       const building = hud.get().build.on;
       const look = building || model.minePin() ? model.buildLook() : null;
-      tp.setBuild(look, building);
-      tp.floorHover = hud.get().pickArrival;
+      tp.buildPick.setBuild(look, building);
+      tp.buildPick.floorHover = hud.get().pickArrival;
       if (now >= this.tpDue || (look && look.hidden.size !== this.tpHidden)) {
         this.tpDue = now + 200;
         this.tpHidden = look?.hidden.size ?? 0;
@@ -1740,47 +1521,48 @@ export class WorldController {
           const all = [...this.objs.values()]
             .filter((o) => !this.cars || o.kind !== "car")
             .map((o) => model.getObject(o.id) ?? o);
+          tp.structure = this.structure;
           tp.update(this.building, look?.hidden.size ? all.filter((o) => !look.hidden.has(o.id)) : all, this.level);
         }
       }
       lap = perf.lap("tp.update", lap);
       tp.setLiveFrom({ model, screens: this.screens, games: this.games, os: this.os });
       tp.setCars(this.slots?.cars() ?? []);
-      tp.setTables(this.tables?.scene3d() ?? null);
+      tp.setTables(this.tableGames.tables?.scene3d() ?? null);
       tp.gameCam =
         this.god?.camera(this.godDt(now)) ??
         this.cars?.camera() ??
-        this.photoCam() ??
-        this.chess?.gameCam() ??
-        this.tables?.gameCam() ??
-        this.liftCam(now) ??
+        this.photos.photoCam() ??
+        this.tableGames.chess?.gameCam() ??
+        this.tableGames.tables?.gameCam() ??
+        this.lifts.liftCam(now) ??
         null;
-      if (this.liftsDirty) {
-        this.liftsDirty = false;
+      if (this.lifts.liftsDirty) {
+        this.lifts.liftsDirty = false;
         tp.setLifts(
           [...this.objs.values()].filter((o) => o.kind === "elevator"),
-          this.liftSince,
+          this.lifts.liftSince,
         );
       }
-      tp.setCable(this.cableEnds());
+      tp.setCable(this.cable.cableEnds());
       tp.setGames(this.games?.scene3d() ?? null);
       // (a hidden tab: nothing to draw for)
-      tp.tagsHidden = !!hud.get().panel.kind || !!this.photo;
+      tp.tags.tagsHidden = !!hud.get().panel.kind || !!this.photos.photo;
       // (in a car I'm not in `bodies` — the car draws me — but the view still follows me)
       const seat = this.cars?.mySeat();
       if (!document.hidden) tp.frame(dt, bodies, localSid, seat ? { ...seat, level: 0 } : undefined);
       lap = perf.lap("tp.frame", lap);
     }
     for (const cb of this.hudFrames) cb();
-    this.checkCable();
-    this.updatePrompt();
+    this.cable.checkCable();
+    this.focus.updatePrompt();
     if (now - this.peopleAt > 250) {
       this.peopleAt = now;
       this.publishPeople();
     }
     this.follow(now);
     this.updateAudioScene();
-    this.watchLoading(now);
+    this.loading.watchLoading(now);
     perf.lap("hud", lap);
     perf.end();
   }
@@ -1835,7 +1617,7 @@ export class WorldController {
     if (JSON.stringify(now) !== JSON.stringify(was)) hud.set({ radio: now });
   }
 
-  private objectsDirty = false;
+  objectsDirty = false;
 
   private moveLocal(dt: number) {
     // in a car: in my seat (the server says so too: world-server features/cars.ts)
@@ -1850,8 +1632,12 @@ export class WorldController {
       this.meAngle = ride.angle ?? this.meAngle;
       return;
     }
-    // in a lift's car on the move: it carries me (the server too: world-server features/lifts.ts)
-    if (this.liftCarry(performance.now())) return;
+    // in a lift's car on the move: it carries me — its floor under me in Jolt (the server holds me
+    // in it too: world-server features/lifts.ts)
+    const phys = this.tp?.body.physics;
+    const nowMs = performance.now();
+    phys?.setLifts(this.lifts.carBodies(nowMs));
+    if (this.lifts.liftCarry(nowMs, !!phys)) return;
     // the land changed under me (god mode's edits laid, the park's layout raced): till my body's
     // ground is made again (tp/physics3d.ts: a second or so), never under the land — onto it, as
     // the server sets me (docs/plan/53-the-god-mode.md)
@@ -1862,35 +1648,33 @@ export class WorldController {
     // the pad or a click-to-walk path (the input chunk: until it's here, I stand still)
     const w = this.walker;
     if (!w) return;
-    w.limp = !!this.tp?.limpMe();
+    w.limp = !!this.tp?.body.limpMe();
     // (down on the ragdoll: where my body's gone, my place — it tumbles on from a fall; it slid back
     // to where I'd stood to get up)
-    const drift = w.limp ? this.tp?.limpDrift() : null;
+    const drift = w.limp ? this.tp?.body.limpDrift() : null;
     if (drift && Math.hypot(drift.dx, drift.dz) > 0.02) {
       w.driftBy(drift.dx, drift.dz);
     }
-    const upYaw = w.limp ? this.tp?.limpFacing() : null;
+    const upYaw = w.limp ? this.tp?.body.limpFacing() : null;
     if (upYaw != null) w.faceYaw(upYaw);
     const first = this.firstPerson();
     const lp = this.room?.state.players.get(this.room.sessionId);
     const playing = !!this.games?.playing();
     if (this.tp) this.tp.padFree = !playing;
-    const map = this.map;
     const G = this.G;
     const out = w.frame(dt, {
       grid: this.grid,
       // (outdoors on the land: snow, the trails, the pond's ice; else a floor)
-      footing: (x, y) =>
-        G && this.grid.onLand(x, y)
-          ? G.surfaceTileAt(Math.floor(x + (map.ox ?? 0)), Math.floor(y + (map.oy ?? 0)))
-          : "floor",
+      footing: (x, y) => (G && this.grid.onLand(x, y) ? G.surfaceTileAt(Math.floor(x), Math.floor(y)) : "floor"),
       // (a car on the move is in the way)
       blocked: this.level === 0 && this.cars ? (x, y) => !!this.cars?.blocks(x, y) : undefined,
       // (locked on: the way to them, exactly — the camera comes round after it, and going by its
       // turn, still behind, a circle round them spiralled out)
-      camYaw: this.lock ? Math.atan2(this.lock.y - this.me.y, this.lock.x - this.me.x) : (this.tp?.lookYaw ?? 0),
+      camYaw: this.focus.lock
+        ? Math.atan2(this.focus.lock.y - this.me.y, this.focus.lock.x - this.me.x)
+        : (this.tp?.lookYaw ?? 0),
       // (locked on: I face it, and go round it — docs/plan/56 E)
-      faceLook: first || !!this.lock,
+      faceLook: first || !!this.focus.lock,
       canJump: !!lp && this.me.a !== ANIM.sit && !lp.busy && !lp.act && !playing,
       // (aiming, in 3D, anywhere: a gun, or the flashlight raised — world/dark/arms.ts; a quick
       // right click on a thing is still its menu)
@@ -1899,21 +1683,21 @@ export class WorldController {
       path: this.path,
       at: { x: this.me.x, y: this.me.y, z: this.height.z },
       // (the Grounds' pond and river, out on the land: docs/plan/66-the-water.md)
-      water: G && this.level === 0 ? (x, y) => this.waterAt(x, y) : undefined,
+      water: G && this.level === 0 ? (x, y) => this.water.waterAt(x, y) : undefined,
       camPitch: this.tp?.aimPitch,
       waterTemp: this.room?.state.weather?.water,
     });
     this.mySwim = out.swim;
-    this.thinIce(dt, out);
+    this.water.thinIce(dt, out);
     // the camera on the arrows (the stick's the view's own)
     if (this.tp) {
       this.tp.keyLook = w.camKeys();
       this.tp.myFacing = out.yaw;
       // aiming help on a pad or the keys (not the mouse's: docs/plan/56 E): onto whoever's on my floor
-      this.tp.aimAssist = hud.get().padLive || !this.tp.looking;
+      this.tp.aimAssist = hud.get().padLive || !this.tp.mouseLook.looking;
       if (out.aim && this.room) {
         const list: { x: number; y: number; z: number }[] = [];
-        this.room.state.players.forEach((p: S, sid: string) => {
+        this.room.state.players.forEach((p, sid) => {
           if (sid !== this.room?.sessionId && (p.level ?? 0) === this.level) list.push({ x: p.x, y: p.y, z: 1.2 });
         });
         this.tp.aimTargets = list;
@@ -1927,20 +1711,20 @@ export class WorldController {
       hud.set({ following: null });
     }
     // (the pad's buttons: X uses, Y the camera, ↑ the torch)
-    if (out.presses.has("use") && !this.use) this.use = { src: "pad", at: now, done: false };
+    if (out.presses.has("use") && !this.focus.use) this.focus.use = { src: "pad", at: now, done: false };
     if (out.presses.has("recenter")) this.tp?.recenter();
-    if (out.presses.has("lock")) this.toggleLock();
-    if (out.presses.has("focusPrev")) this.cycleFocus(-1);
-    if (out.presses.has("focusNext")) this.cycleFocus(1);
-    this.holdFrame(now);
+    if (out.presses.has("lock")) this.focus.toggleLock();
+    if (out.presses.has("focusPrev")) this.focus.cycleFocus(-1);
+    if (out.presses.has("focusNext")) this.focus.cycleFocus(1);
+    this.focus.holdFrame(now);
     // a menu open: the pad moves its choice, A does it, B closes it (the walker's off it meanwhile)
     if (hud.get().menu) {
       const mp = w.menuPad();
-      if (mp.step) this.menuStep(mp.step);
-      if (mp.pick) this.menuPick();
-      if (mp.back) this.closeMenu();
+      if (mp.step) this.menu.menuStep(mp.step);
+      if (mp.pick) this.menu.menuPick();
+      if (mp.back) this.menu.closeMenu();
     }
-    if (out.presses.has("camera")) this.swapCamera();
+    if (out.presses.has("camera")) this.focus.swapCamera();
     if (out.presses.has("torch")) this.toggleTorch();
     let moved = out.moved;
     const went = Math.hypot(out.x - this.me.x, out.y - this.me.y);
@@ -1955,13 +1739,13 @@ export class WorldController {
     // (first person: I keep facing where I look — S walks backwards, A / D sideways)
     if (!first && (moved || turned)) {
       this.meAngle = out.yaw;
-      this.me.d = dirFromDelta(Math.cos(out.yaw), Math.sin(out.yaw), this.me.d as 0);
+      this.me.yaw = face8(Math.cos(out.yaw), Math.sin(out.yaw), this.me.yaw);
     }
     if (this.path && !this.path.length) {
-      this.path = null;
+      this.walkPath = null; // (a way asked for meanwhile still comes)
       const target = this.pathTarget;
       this.pathTarget = null;
-      if (target?.objectId) this.activateObject(target.objectId, false);
+      if (target?.objectId) this.menu.activateObject(target.objectId, false);
     }
     // a jump: the view's stages from its take-off; everyone else told (after where I am, below)
     const jumped = out.jumped;
@@ -1974,7 +1758,14 @@ export class WorldController {
     // where it has a floor under them — up the stairs, or a flier through a ceiling (its frame is a
     // storey off, its coords maybe shifted; beside the building the land rises and falls as it
     // likes)
-    const change = floorAt(this.building, this.level, this.me, hgt.z);
+    // (the floor from the slab under me — Jolt's, once it's in; the floors' tiles till then)
+    const change = floorAt(
+      this.building,
+      this.level,
+      this.me,
+      hgt.z,
+      phys ? (l, q) => phys.slabUnder(l, q.x, q.y) : undefined,
+    );
     if (change) {
       const from = this.level;
       const at = change.at;
@@ -1986,16 +1777,16 @@ export class WorldController {
       const rest = this.path?.map((p) => across(this.building, from, change.level, p)) ?? null;
       if (this.tp) this.tp.carryFrom = from; // (the 3D camera keeps its place in the building)
       this.setLevel(change.level);
-      this.path = rest?.length ? rest : null;
+      this.walkPath = rest?.length ? rest : null;
       moved = true;
     }
     // (up on something or in the air nobody sits down: a jump over a chair lands on its feet)
     const seat = hgt.up || hgt.z > 0 || this.jumpTrack.kind ? null : this.grid.seatAt(this.me.x, this.me.y);
     // (what's underfoot: on the land snow, the trail, the ice — or a floor's tile)
-    const floor = this.myFooting(hgt.z);
+    const floor = this.steps.myFooting(hgt.z);
     // my steps (docs/plan/63-the-steps.md): never in the air, a verb or a move, nor down on hands and
     // knees in the dark (their own sounds: the steps chunk's Footfalls); the stairs' treads as any floor
-    this.feet = {
+    this.steps.feet = {
       // (nor swimming: plan 66)
       ok:
         !hgt.up &&
@@ -2006,7 +1797,7 @@ export class WorldController {
         !this.tp?.downed.has(this.room?.sessionId ?? ""),
       gait: out.gait === "crouch" || out.gait === "jog" || out.gait === "sprint" ? out.gait : "walk",
     };
-    this.stepsBy(went, floor, dt);
+    this.steps.stepsBy(went, floor, dt);
     if (moved) this.me.a = ANIM.walk;
     else if (seat) {
       this.me.a = ANIM.sit;
@@ -2018,7 +1809,7 @@ export class WorldController {
         w.shift(at.x - this.me.x, at.y - this.me.y, 0);
         this.me.x = at.x;
         this.me.y = at.y;
-        this.me.d = [1, 3, 5, 7][seat.rot % 4]; // away from the seat's back (server `seatFacing`)
+        this.me.yaw = byteFace(SEAT_FACE[seat.rot & 3]); // away from the seat's back (server `seatFacing`)
         // (the body's own yaw too: else it's still the way I walked onto it, and sends me back round)
         const [fx, fy] = seatFront(seat.rot);
         w.faceYaw(Math.atan2(fy, fx));
@@ -2026,22 +1817,22 @@ export class WorldController {
       }
     } else this.me.a = ANIM.idle;
     // a selfie: I face the camera (it's in front of me)
-    if (this.photo?.mode === "selfie" && !moved) {
-      const a = this.tp ? this.photo.angle : Math.atan2(1, 1);
-      this.me.d = dirFromDelta(Math.cos(a), Math.sin(a), this.me.d as 0);
+    if (this.photos.photo?.mode === "selfie" && !moved) {
+      const a = this.tp ? this.photos.photo.angle : Math.atan2(1, 1);
+      this.me.yaw = face8(Math.cos(a), Math.sin(a), this.me.yaw);
       this.meAngle = a;
     }
     // first person: I face where I look; else a seat, a high-five turns me (input/walker.ts)
     const view = first ? this.tp : null;
-    this.meAngle = w.face(this.me, view, moved, this.lookD, this.meAngle, dirFromDelta);
-    this.lookD = view ? this.me.d : -1;
+    this.meAngle = w.face(this.me, view, moved, this.lookYaw, this.meAngle, face8);
+    this.lookYaw = view ? this.me.yaw : Number.NaN;
 
     const changed =
       Math.abs(this.me.x - this.lastSent.x) > 0.01 ||
       Math.abs(this.me.y - this.lastSent.y) > 0.01 ||
       Math.abs(this.height.z - this.lastSent.z) > 0.01 ||
       this.level !== this.lastSent.l ||
-      this.me.d !== this.lastSent.d ||
+      this.me.yaw !== this.lastSent.yaw ||
       this.me.a !== this.lastSent.a ||
       out.mv !== this.lastMv ||
       out.yawByte !== this.lastYaw ||
@@ -2061,9 +1852,8 @@ export class WorldController {
       this.send("pos", {
         x: this.me.x,
         y: this.me.y,
-        z,
+        z: worldZ(this.level, z),
         l: this.level,
-        d: this.me.d,
         a: this.me.a,
         seq: ++this.seq,
         mv: out.mv,
@@ -2083,18 +1873,32 @@ export class WorldController {
     }
   }
 
-  walkTo(target: Point, objectId?: string, quiet = false): boolean {
-    if (hud.get().build.on) return false;
-    const path = findPath(this.grid, this.me, target);
-    if (!path) {
-      if (!quiet) this.tp?.showMarker(target.x, target.y);
-      return false;
-    }
-    this.path = path;
-    this.pathTarget = objectId ? { objectId } : null;
-    const end = path[path.length - 1] ?? target;
-    this.tp?.showMarker(end.x, end.y);
+  /** Walk to `target` on my floor (then on along `after`): the way asked of the server, walked when
+   *  it comes (meanwhile any way I'm on goes on). False: not now (building, no room). */
+  walkTo(target: Point, objectId?: string, quiet = false, after: Point[] = []): boolean {
+    if (hud.get().build.on || !this.room) return false;
+    const n = ++this.wayN;
+    this.way = { n, level: this.level, target, objectId, quiet, after };
+    this.send("way", { n, x: target.x, y: target.y, fx: this.me.x, fy: this.me.y });
     return true;
+  }
+
+  // the way asked for, come: walked (one asked since, or let go, or another floor now: dropped)
+  private wayHere(m: ServerMessages["way"]) {
+    const w = this.way;
+    if (!w || w.n !== m.n) return;
+    this.way = null;
+    if (w.level !== this.level) return;
+    if (!m.pts) {
+      if (!w.quiet) this.tp?.showMarker(w.target.x, w.target.y);
+      this.path = null;
+      return;
+    }
+    const path = [...m.pts.map(([x, y]) => ({ x, y })), ...w.after];
+    this.path = path;
+    this.pathTarget = w.objectId ? { objectId: w.objectId } : null;
+    const end = path[path.length - 1] ?? w.target;
+    this.tp?.showMarker(end.x, end.y);
   }
 
   private follow(now: number) {
@@ -2107,313 +1911,18 @@ export class WorldController {
     if (Math.hypot(p.x - this.me.x, p.y - this.me.y) > 1.8) this.walkTo({ x: p.x, y: p.y + 1 });
   }
 
-  // ── interactions ─────────────────────────────────────────────────────────
-  private nearestInteractable(): WorldObjectDef | null {
-    if (!this.model) return null;
-    let best: WorldObjectDef | null = null;
-    let bestD = INTERACT_RANGE;
-    const cable = !!hud.get().cable; // a cable in hand: only what it plugs into
-    for (const o of this.model.allObjects()) {
-      const e = entry(o.kind);
-      if (!e.interact || (cable && !isGameTv(o.kind))) continue;
-      const d = this.reach(o);
-      if (d < bestD) {
-        bestD = d;
-        best = o;
-      }
-    }
-    return best;
-  }
-
-  // The mouse is the camera (docs/plan/56-the-controls.md A, 3D only): the pointer locked in play,
-  // the mouse turns the camera — a click on the world takes it, Esc (the browser's) lets it go.
-  // It lets go by itself when something wants the pointer — a menu, a panel, build mode, god
-  // mode, a side panel, choosing my arrival — and comes back when that's gone (if it was mine).
-  private aimId: string | null = null; // the usable thing under the crosshair
-  private lookWas = { menu: false, panel: false, build: false, side: null as string | null, pick: false, kart: false };
-  private relock = false;
-  /** Something on screen wants the pointer (the cursor): no locking it to the camera now. */
-  pointerWanted(): boolean {
-    const h = hud.get();
-    return (
-      !!h.menu ||
-      !!h.panel.kind ||
-      h.build.on ||
-      h.pickArrival ||
-      h.side !== null ||
-      h.phone.open ||
-      h.kartUi ||
-      !!this.god?.on
-    );
-  }
-  // C (3D only): third person ↔ first person. Into first person from a key
-  // press, mouse look starts at once (half the mode without it).
-  private swapCamera() {
-    const v = this.tp;
-    if (!v) return;
-    const view = prefs().view === "1p" ? "3p" : "1p";
-    setPrefs({ view });
-    v.setMode(this.camWanted());
-  }
-  private watchLook = () => {
-    const h = hud.get();
-    const now = {
-      menu: !!h.menu,
-      panel: !!h.panel.kind,
-      build: h.build.on,
-      side: h.side,
-      pick: h.pickArrival,
-      kart: h.kartUi,
-    };
-    const was = this.lookWas;
-    this.lookWas = now;
-    const tp = this.tp;
-    if (!tp) return;
-    const opened =
-      (now.menu && !was.menu) ||
-      (now.panel && !was.panel) ||
-      (now.build && !was.build) ||
-      (now.pick && !was.pick) ||
-      (now.kart && !was.kart) ||
-      (now.side !== null && now.side !== was.side);
-    if (opened && tp.looking) {
-      this.relock = true;
-      tp.setLook(false);
-    }
-    // all of it gone again: back to the camera (Chrome locks again without a click after a
-    // let-go from code; where the browser says no, the next click on the world does)
-    if (this.relock && !this.pointerWanted()) {
-      this.relock = false;
-      tp.resumeLook();
-    }
-  };
-  // what E / X uses: in mouse look the thing under the crosshair (when it's
-  // something to use), else the nearest
-  private aimedObject(): WorldObjectDef | null {
-    if (!this.aimId || !this.tp?.looking || hud.get().cable) return null;
-    const o = this.model?.getObject(this.aimId);
-    return o && entry(o.kind).interact ? o : null;
-  }
-
-  // How far up or down a thing is out of my hands' band (shared reach.ts, as the server
-  // measures: what it stands on, its shapes' height) — 0 within it; a flier over the lot reaches
-  // nothing down there.
-  /** How far my hands are up or down from something lying at height `g` on my floor (shared
-   *  reach.ts: 0 within their band) — the dark's drops and spots ask it. */
-  offAt(g: number): number {
-    return offBand(this.height.z, g, g);
-  }
-  private offBand(o: WorldObjectDef): number {
-    const g = this.grid.onLand(o.x, o.y) ? (this.grid.outside?.height(o.x, o.y) ?? 0) : 0;
-    const [y0, y1] = spanOf(o);
-    return offBand(this.height.z, g + y0, g + y1);
-  }
-  // …and how far my hands are from it: across the floor to it, and that
-  private reach(o: WorldObjectDef): number {
-    const across = reachOf(o, this.me);
-    const off = this.offBand(o);
-    return off ? Math.hypot(across, off) : across;
-  }
-
-  private updatePrompt() {
-    if (this.cars?.prompt(hud)) return; // (a car: in by its door, or out — car/cars.ts)
-    // the shuttle at its stop, near: on (or off, riding)
-    const lp = this.room?.state.players.get(this.room.sessionId);
-    const ride =
-      this.level === 0
-        ? (this.life?.prompt(
-            this.room?.state.vehicles,
-            lp?.busy === RIDING,
-            this.me,
-            this.map.ox ?? 0,
-            this.map.oy ?? 0,
-          ) ?? null)
-        : null;
-    if (ride) {
-      const cur = hud.get().prompt;
-      if (cur?.objectId !== ride.objectId || cur.label !== ride.label) hud.set({ prompt: ride });
-      return;
-    }
-    // what's in front of me (docs/plan/56-the-controls.md C: the walker's focus, a few times a
-    // second); in first person, what the crosshair's on first
-    const tg = this.walker?.targets;
-    const now = performance.now();
-    this.focusHost.room = this.room;
-    this.focusHost.level = this.level;
-    if (tg && now - this.focusAt > 120) {
-      this.focusAt = now;
-      tg.update();
-      this.lockFrame(now);
-      // (locked on: the prompt's the lock's, wherever it is)
-      const f = this.lock ?? tg.focus;
-      const items = (this.lock ? [this.lock] : tg.list).map((t) => ({
-        key: t.key,
-        kind: t.kind,
-        label: t.kind === "toy" ? tr(`act_${t.act}` as Key) : t.label,
-        act: t.act,
-        objectId: t.objectId,
-      }));
-      const at = Math.max(
-        0,
-        items.findIndex((t) => t.key === f?.key),
-      );
-      const sig = `${items.map((t) => `${t.key}|${t.act}`).join(",")}@${at}`;
-      if (sig !== this.focusSig) {
-        this.focusSig = sig;
-        hud.set({ targets: items.length ? { items, at } : null });
-      }
-    }
-    const pad = this.walker?.controls.pad.live ?? false;
-    if (pad !== hud.get().padLive) hud.set({ padLive: pad });
-    const fo = tg?.focus;
-    // (in an elevator's car its panel is the way to use it: no "X" for it)
-    const near =
-      this.aimedObject() ??
-      (tg ? (fo?.objectId ? (this.model?.getObject(fo.objectId) ?? null) : null) : this.nearestInteractable());
-    const o = near?.kind === "elevator" && hud.get().lift ? null : near;
-    const cur = hud.get().prompt;
-    // (a seat, my desk: no use of their own, only their menu's)
-    const kind = !o ? "" : hud.get().cable ? "plug" : (entry(o.kind).interact ?? "menu");
-    if ((o?.id ?? null) === (cur?.objectId ?? null) && kind === (cur?.kind ?? "")) return;
-    this.tp?.setHighlight(this.footprintOf(o?.id));
-    hud.set({
-      prompt: o ? { objectId: o.id, kind, label: kind === "plug" ? tr("cablePlug") : thingLabel(o) } : null,
-    });
-  }
-
-  /** What the focus (input/targets.ts) asks of the world. */
-  readonly focusHost: import("./input/targets").TargetHost = {
-    room: null,
-    level: 0,
-    me: () => this.me,
-    facing: () => this.walkYaw,
-    camYaw: () => this.tp?.lookYaw ?? this.walkYaw,
-    objects: () => this.model?.allObjects() ?? [],
-    reach: (o) => this.reach(o),
-    cable: () => !!hud.get().cable,
-    inLift: () => !!hud.get().lift,
-    menuFor: (t) => this.menuFor(t),
-  };
-  /** Use, tapped: a car's door, the shuttle, else the focus's main action (docs/plan/56 C). */
-  interact() {
-    const p = hud.get().prompt;
-    if (p && this.cars?.act(p.kind, p.objectId)) return;
-    if (p?.kind === "ride" || p?.kind === "ride:leave")
-      return this.send(p.kind === "ride" ? "ride:board" : "ride:leave", {});
-    const f = this.lock ?? this.walker?.targets?.focus;
-    if (p && (!f || this.aimedObject())) return this.activateObject(p.objectId, false);
-    if (!f) return;
-    // (locked on to it from over there: walked over to)
-    if (f.kind === "object" && f.act === "use") return this.activateObject(f.objectId ?? "", !!this.lock);
-    if (f.kind === "npc") return this.send("vortex:poke", {});
-    if (f.kind === "toy") return this.pickToy(f.key.slice(4));
-    if (f.menu) this.doAct(f.act, f.menu, f.label);
-  }
-  /** The next (1) or previous (-1) in the prompt's stack is the focus: [ ], the prompt's ‹ ›. */
-  cycleFocus(by: 1 | -1) {
-    this.walker?.targets?.cycle(by);
-    this.focusAt = 0;
-  }
-  /** One in the prompt's stack, clicked, is the focus. */
-  pickFocus(key: string) {
-    this.walker?.targets?.pick(key);
-    this.focusAt = 0;
-  }
-  /** Use, held: the focus's menu over it on screen, or mine with nothing in focus. */
-  focusMenu() {
-    if (hud.get().prompt?.kind.startsWith("car") || hud.get().prompt?.kind.startsWith("ride")) return this.interact();
-    const f = this.lock ?? this.walker?.targets?.focus;
-    if (f && !f.menu) return this.interact();
-    const target: ActTarget = f?.menu ?? { type: "self" };
-    const at = f ?? this.me;
-    const r = this.hostRect();
-    const s = this.clientAt(at.x, at.y, f?.kind === "object" ? 20 : 47);
-    const where = { x: r.left + s.x, y: r.top + s.y };
-    this.walker?.clear();
-    if (!this.openMenu(target, where, true) && f?.kind === "object") this.activateObject(f.objectId ?? "", false);
-  }
-  // ── the lock-on (docs/plan/56-the-controls.md E): F / the wheel's button / RB holds on to the
-  // focus, or who the camera's looking at; the camera frames us both, I face it, Use acts on it;
-  // ← → / a flick of the stick or the mouse goes to the next one that way; again, or out of
-  // range for a moment, lets go
-  private lock: import("./input/targets").Target | null = null;
-  private lockLostAt = 0;
-  private lockSide = 0;
-  toggleLock() {
-    const tg = this.walker?.targets;
-    if (!tg) return;
-    this.lock = this.lock ? null : (tg.focus ?? tg.lockable(LOCK_RANGE)[0] ?? null);
-    this.lockLostAt = 0;
-    this.showLock();
-  }
-  private showLock() {
-    const l = this.lock;
-    const cur = hud.get().lockOn;
-    if ((cur?.label ?? null) !== (l?.label ?? null)) hud.set({ lockOn: l ? { label: l.label } : null });
-    // (its feet: someone's own, else where my feet are)
-    if (this.tp)
-      this.tp.lockAt = l
-        ? { x: l.x, y: l.y, z: l.z ?? this.height.z, id: l.kind === "person" ? l.key.slice(2) : undefined }
-        : null;
-    this.focusSig = "";
-  }
-  private lockFrame(now: number) {
-    const tg = this.walker?.targets;
-    const l = this.lock;
-    if (!tg || !l) return;
-    const t = tg.find(l.key, LOCK_RANGE + 4);
-    if (t) {
-      this.lock = t;
-      this.lockLostAt = 0;
-    } else if (!this.lockLostAt) this.lockLostAt = now;
-    else if (now - this.lockLostAt > LOCK_LOST_MS) this.lock = null;
-    // the next one that way: ← → (the camera's keys), the right stick or the mouse flicked
-    const keys = this.walker?.camKeys().x ?? 0;
-    const stick = activePad()?.axes[2] ?? 0;
-    const side = keys || (Math.abs(stick) > 0.7 ? Math.sign(stick) : 0);
-    const flick = this.tp?.takeFlick() ?? 0;
-    const go = flick || (side && side !== this.lockSide ? side : 0);
-    this.lockSide = side;
-    if (go && this.lock) this.lock = tg.next(this.lock, go, LOCK_RANGE) ?? this.lock;
-    this.showLock();
-  }
-  // Use held down: a tap on its release, the menu past USE_HOLD (keys and a pad: docs/plan/56 C)
-  private use: { src: "key" | "pad"; at: number; done: boolean } | null = null;
-  private focusAt = 0;
-  private focusSig = "";
-  private holdFrame(now: number) {
-    const u = this.use;
-    if (!u) return;
-    if (u.src === "pad" && !this.walker?.padHeld("use")) {
-      this.use = null;
-      if (!u.done) this.interact();
-      return;
-    }
-    if (!u.done && now - u.at >= USE_HOLD) {
-      u.done = true;
-      this.focusMenu();
-    }
-  }
-
   // ── the lot's cars, driven (docs/plan/28-the-car.md; car/cars.ts, loaded on their own) ──
-  private cars: import("./car/cars").Cars | null = null;
+  cars: import("./car/cars").Cars | null = null;
   private lifeCars: { id: string; kind: string; x: number; z: number; a: number; shown: boolean; h?: number }[] = [];
 
   // ── life on the Grounds (docs/plan/27, phase 6; grounds-life.ts, loaded with them) ──
-  private life: import("./grounds-life").GroundsLife | null = null;
+  life: import("./grounds-life").GroundsLife | null = null;
   private driveVehicles(dt: number) {
     if (!this.life || !this.room) return;
-    const list = this.life.drive(
-      dt,
-      this.room.state.vehicles,
-      this.me,
-      this.map.ox ?? 0,
-      this.map.oy ?? 0,
-      this.level === 0,
-    );
+    const list = this.life.drive(dt, this.room.state.vehicles, this.me, this.level === 0);
     // (the Grounds' own: the drivable ones are the car module's)
     this.lifeCars = list.filter((v) => /^(shuttle|plough|visitor)$/.test(v.kind));
-    this.tp?.setVehicles(this.lifeCars);
+    this.tp?.vehicles.setVehicles(this.lifeCars);
   }
 
   // Moves between people: a spark and its sound where the hands meet (one of
@@ -2422,7 +1931,7 @@ export class WorldController {
   private watchActs() {
     const room = this.room;
     if (!room) return;
-    room.state.players.forEach((p: S, sid: string) => {
+    room.state.players.forEach((p, sid) => {
       const key = p.act ? `${p.act}|${p.actAt}` : "";
       if (this.actsSeen.get(sid) === key) return;
       this.actsSeen.set(sid, key);
@@ -2436,14 +1945,14 @@ export class WorldController {
         if (!a || !b) return;
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
         const d = Math.hypot(mid.x - this.me.x, mid.y - this.me.y);
-        this.model?.puff(mid.x, mid.y, "spark", act === "highfive" ? 66 : 44);
+        this.model?.puff(mid.x, mid.y, "spark", act === "highfive" ? 1.68 : 1.12);
         socialSound(act, Math.max(0, 1 - d / 9));
       }, SOCIAL_MS[act] * CONTACT);
     });
   }
 
   // Where someone is drawn right now (me: where I am).
-  private whereIs(sid: string): Point | null {
+  whereIs(sid: string): Point | null {
     if (sid === this.room?.sessionId) return { x: this.me.x, y: this.me.y };
     const r = this.remotes.get(sid);
     return r ? interpolate(r.buf, performance.now() - INTERP_MS) : null;
@@ -2452,325 +1961,6 @@ export class WorldController {
   // ── the action menu ──────────────────────────────────────────────────────
   private facedAct = 0;
 
-  // What can be done with it, with a title (and a line about it): null when
-  // there's nothing to do.
-  menuFor(target: ActTarget): { title: string; subtitle?: string; items: { act: string; ok: boolean }[] } | null {
-    const room = this.room;
-    const me = room?.state.players.get(room.sessionId);
-    if (!room || !me) return null;
-    if (target.type === "self") {
-      const items = [{ act: "look", ok: true }];
-      if (me.held) items.push({ act: "putDown", ok: true });
-      if (me.focus) items.push({ act: "unfocus", ok: true });
-      items.push({ act: "arriveHere", ok: true });
-      if (hud.get().mySpawn) items.push({ act: "arriveUsual", ok: true });
-      // a pet off exploring (or told to stay) somewhere: called back from here
-      if (this.petsAway().length) items.push({ act: "callPets", ok: true });
-      return { title: me.name, items };
-    }
-    if (target.type === "pet") {
-      const pet = room.state.pets.get(target.id);
-      const P = petsArt();
-      if (!pet || !pet.alive || !P) return null;
-      const mine = pet.sid === room.sessionId;
-      const items: { act: string; ok: boolean }[] = [{ act: "petpet", ok: !pet.battle }];
-      const sp = pet.species as Species;
-      if (mine) {
-        const free = !pet.battle;
-        items.push({ act: "snack", ok: free }, { act: "water", ok: free }, { act: "speak", ok: free });
-        const far = Math.hypot(pet.x - me.x, pet.y - me.y) > 3;
-        if (far) items.push({ act: "come", ok: free });
-        if (pet.mode !== "follow") items.push({ act: "followMe", ok: free });
-        if (pet.mode !== "explore") items.push({ act: "explore", ok: free });
-        if (pet.mode !== "stay") items.push({ act: "stay", ok: free });
-        if (pet.mode !== "sleep") items.push({ act: "sleep", ok: free });
-        const t = safeParse(pet.tricks) as Record<string, number>;
-        const known = P.tricksFor(sp).filter((x) => P.learned(t, x));
-        if (known.length) items.push({ act: `trick_${known[0]}`, ok: free });
-        items.push({ act: "petCare", ok: true });
-      } else {
-        const myFree =
-          [...room.state.players.values()].length > 0 && hud.get().pets.some((x) => x.mine && x.alive && !x.battle);
-        // its owner away (docs/plan/51-the-pet.md): anyone may feed and water it
-        if (!pet.sid) items.push({ act: "snack", ok: !pet.battle }, { act: "water", ok: !pet.battle });
-        items.push({ act: "challenge", ok: myFree && !pet.battle }, { act: "petCare", ok: true });
-      }
-      const feeling = tr(`feel_${P.feelingOf(petNeeds(pet))}` as never);
-      return { title: pet.name, subtitle: `${tr(`sp_${sp}` as never)} · Lv ${pet.level} · ${feeling}`, items };
-    }
-    if (target.type === "person") {
-      const p = room.state.players.get(target.sid);
-      if (!p) return null;
-      const can = socialFor({ held: me.held, status: me.status }, { held: p.held, status: p.status });
-      const items: { act: string; ok: boolean }[] = SOCIAL.map((act) => ({ act, ok: can.includes(act) }))
-        // cheers and give only make sense with drinks about
-        .filter((i) => i.ok || (i.act !== "cheers" && i.act !== "give"));
-      items.push({ act: "follow", ok: true }, { act: "profile", ok: true });
-      return { title: p.name, subtitle: p.focus ? tr("focusing") : undefined, items };
-    }
-    const o = this.model?.getObject(target.id);
-    if (!o) return null;
-    // someone else's desk: whose (and who they are, when they're here)
-    const owner = Number(o.props?.ownerId);
-    if (o.kind === "desk" && owner && owner !== this.myUid()) {
-      if (!this.uidToSid.has(owner)) return null;
-      return {
-        title: `${String(o.props?.ownerName ?? "").split(" ")[0]} · ${entry(o.kind).label}`,
-        items: [{ act: "profile", ok: true }],
-      };
-    }
-    const acts = objectActions(o, {
-      uid: this.myUid(),
-      focus: !!me.focus,
-      radioOn: radioOf(o).playing,
-      mayLock: (d) => mayLockDoor(this.map, d, { uid: this.myUid(), admin: me.admin }),
-    });
-    if (!acts.length) return null;
-    const e = entry(o.kind);
-    const title = o.kind === "tabletop" && o.props?.d === "desklamp" ? tr("deskLamp") : e.label;
-    return { title, items: acts.map((act) => ({ act, ok: true })) };
-  }
-
-  openMenu(target: ActTarget, at: { x: number; y: number }, chosen = false): boolean {
-    const m = this.menuFor(target);
-    if (!m) return false;
-    mixer.blip("click");
-    // (opened on the keys or a pad: the first that can be done chosen, moved with them)
-    const sel = chosen
-      ? Math.max(
-          0,
-          m.items.findIndex((i) => i.ok),
-        )
-      : undefined;
-    hud.set({ menu: { x: at.x, y: at.y, target, ...m, sel } });
-    return true;
-  }
-  /** The open menu's choice moved by `by` (round its ring, past what can't be done). */
-  private menuStep(by: number) {
-    const m = hud.get().menu;
-    if (!m) return;
-    const n = m.items.length;
-    let i = m.sel ?? (by > 0 ? -1 : 0);
-    for (let k = 0; k < n; k++) {
-      i = (i + by + n) % n;
-      if (m.items[i].ok) break;
-    }
-    hud.set({ menu: { ...m, sel: i } });
-  }
-  private menuPick() {
-    const m = hud.get().menu;
-    const it = m?.items[m.sel ?? -1];
-    if (it?.ok) this.pickAction(it.act);
-  }
-
-  closeMenu() {
-    if (hud.get().menu) hud.set({ menu: null });
-  }
-
-  // Picked from the menu: queued (walk there, then do it).
-  pickAction(act: string) {
-    const m = hud.get().menu;
-    if (!m) return;
-    hud.set({ menu: null });
-    this.doAct(act, m.target, m.title);
-  }
-  /** An action on a target: a menu's pick, or Use tapped on the focus (docs/plan/56 C). */
-  doAct(act: string, target: ActTarget, title: string) {
-    const m = { target, title };
-    // looking things up happens at once (no need to walk over)
-    const t = m.target;
-    const desk = t.type === "object" ? this.model?.getObject(t.id) : undefined;
-    const owner = Number(desk?.props?.ownerId);
-    if (act === "profile" && desk) return hud.set({ inspect: owner });
-    if (act === "profile" && t.type === "person") {
-      const p = this.room?.state.players.get(t.sid);
-      if (p) hud.set({ inspect: p.uid });
-      return;
-    }
-    if (act === "look") return hud.set({ panel: { kind: "avatar" } });
-    // a pet's commands need no walking over; care, toys and lessons do
-    if (t.type === "pet") {
-      const id = t.id;
-      if (act === "petCare") return hud.set({ panel: { kind: "pets" }, petFocus: id });
-      const cmd = act === "followMe" ? "follow" : act;
-      if (
-        cmd === "come" ||
-        cmd === "stay" ||
-        cmd === "follow" ||
-        cmd === "explore" ||
-        cmd === "sleep" ||
-        cmd === "speak"
-      )
-        return this.send("pet:cmd", { id, cmd });
-      const tk = act.slice(6);
-      if (act.startsWith("trick_") && petsArt()?.isTrick(tk))
-        return this.send("pet:cmd", { id, cmd: "trick", trick: tk as never });
-    }
-    if (act === "arriveHere") return this.setArrival({ x: this.me.x, y: this.me.y });
-    if (act === "arriveUsual") return this.setArrival(null);
-    if (act === "callPets") {
-      for (const id of this.petsAway()) this.send("pet:cmd", { id, cmd: "follow" });
-      return;
-    }
-    this.actions.add(act, m.target, m.title);
-  }
-
-  activateObject(id: string, walkIfFar: boolean) {
-    const o = this.model?.getObject(id);
-    if (!o || this.offBand(o) > 0) return;
-    const e = entry(o.kind);
-    if (!e.interact) return;
-    const { w, h } = placedFootprint(o);
-    // an elevator (shared lift.ts): its doors open here, a click takes me in;
-    // shut, I call it to my floor (from in front of its doors). In it, its
-    // panel does the rest.
-    if (e.interact === "lift") {
-      if (inLift(o, this.me)) return;
-      if (o.props?.door === "open" && liftHere(o, this.map)) {
-        if (walkIfFar) this.walkTo({ x: o.x + w / 2, y: o.y + h / 2 });
-        return;
-      }
-      const front = liftFront(o);
-      if (Math.hypot(front.x - this.me.x, front.y - this.me.y) > 2) {
-        const to = walkIfFar ? this.grid.nearestOpen(front.x, front.y, 3) : null;
-        if (to) this.walkTo(to, id);
-        return;
-      }
-      mixer.blip("click");
-      this.send("lift:call", { id });
-      if (o.props?.door !== "open") toast(tr("liftCalled"));
-      return;
-    }
-    // a computer: sit down at its desk (the seat nearest me), else stand in front of it
-    if (isComputer(o.kind) && computerAway(o, this.me) > COMPUTER_REACH - 0.15) {
-      if (!walkIfFar) return;
-      let seat: { x: number; y: number } | null = null;
-      let best = Number.POSITIVE_INFINITY;
-      for (let y = o.y - 1; y <= o.y + 1; y++)
-        for (let x = o.x - 1; x <= o.x + 1; x++) {
-          if (!this.grid.seatAt(x + 0.5, y + 0.5)) continue;
-          const d = Math.hypot(x + 0.5 - this.me.x, y + 0.5 - this.me.y);
-          if (d < best) {
-            best = d;
-            seat = { x: x + 0.5, y: y + 0.5 };
-          }
-        }
-      const to =
-        seat ?? this.grid.nearestOpen(o.x + 0.5, o.y - 0.5, 3) ?? this.grid.nearestOpen(o.x + 0.5, o.y + 1.5, 3);
-      if (to) this.walkTo(to, id);
-      return;
-    }
-    if (!isComputer(o.kind) && reachOf(o, this.me) > INTERACT_RANGE + 0.3) {
-      if (!walkIfFar) return;
-      // walk to the nearest open tile in front of it (a wall item: its side of the wall), then open
-      const spot = e.wall ? hangSpot(o, 0.7) : null;
-      const front = spot
-        ? this.grid.nearestOpen(spot.x, spot.y, 4)
-        : (this.grid.nearestOpen(o.x + w / 2, o.y + h + 0.5, 4) ?? this.grid.nearestOpen(o.x + w / 2, o.y + h / 2, 4));
-      if (front) this.walkTo(front, id);
-      return;
-    }
-    // turn to face it
-    const ox = o.x + w / 2;
-    const oy = o.y + h / 2;
-    if (Math.hypot(ox - this.me.x, oy - this.me.y) > 0.2)
-      this.me.d = dirFromDelta(ox - this.me.x, oy - this.me.y, this.me.d as 0);
-    // a console's cable in hand: into this TV (the server says if it reaches)
-    const cable = hud.get().cable;
-    if (cable) {
-      if (isGameTv(o.kind)) this.send("game:plug", { id: cable.consoleId, tv: id });
-      else toast(tr("cableNotHere"), "warn");
-      return;
-    }
-    if (
-      e.interact === "coffee" ||
-      e.interact === "water" ||
-      e.interact === "vending" ||
-      e.interact === "cocoa" ||
-      e.interact === "tea" ||
-      e.interact === "icecream"
-    ) {
-      // the machine does its thing (a moment, its sound), then hands you a
-      // drink, sipped little by little (shared/held.ts)
-      if (performance.now() < this.usingUntil) return;
-      const how = {
-        coffee: ["brew", 1600, "coffeeMade"],
-        // (as long as the body takes at it: chars/anim/acts.ts MACHINE_S, plan 62)
-        water: ["pour", 1400, "waterPoured"],
-        vending: ["clunk", 1500, "sodaBought"],
-        cocoa: ["pour", 1600, "cocoaPoured"],
-        tea: ["pour", 1600, "teaMade"],
-        icecream: ["clunk", 1400, "iceCreamScooped"],
-      } as const;
-      const [snd, ms, msg] = how[e.interact];
-      this.usingWhat = e.interact;
-      this.usingUntil = performance.now() + ms;
-      machineSound(snd);
-      setTimeout(() => {
-        this.send("item:take", { id });
-        toast(tr(msg));
-      }, ms);
-      return;
-    }
-    // a chess table (plan 70): to a free chair and sat in it, playing on the board itself — or watching
-    if (e.interact === "chess") {
-      if (this.chess) this.chess.use(id);
-      else {
-        this.chessChanged();
-        void this.chessLoading?.then(() => this.chess?.use(id));
-      }
-      return;
-    }
-    if (e.interact === "piano") {
-      this.onOpenPanel("piano", id);
-      return;
-    }
-    // (plan 68) a present: opened if it's mine (the server says); a wrapping table: who it's for
-    if (e.interact === "present") {
-      this.send("present:open", { id });
-      return;
-    }
-    if (e.interact === "wrap") {
-      const held = hud.get().held?.kind;
-      if (!isHeld(held)) toast(tr("wrapHoldFirst"), "warn");
-      else hud.set({ wrap: { id } });
-      return;
-    }
-    if (e.interact === "lamp") {
-      mixer.blip("click");
-      this.send("lamp:set", { id, on: o.props?.on === false });
-      return;
-    }
-    // (no panel for a switch: one opened anyway would swallow the keys)
-    if (e.interact === "switch") {
-      mixer.blip("click");
-      this.send("lights:room", { id, on: o.props?.on === false });
-      return;
-    }
-    if (e.interact === "terminal") this.send("vortex:poke", {});
-    // a computer: the server says if it's mine (computer:ok opens its panel)
-    if (e.interact === "computer") {
-      this.send("computer:use", { id });
-      return;
-    }
-    // a pet's bowl: fill it; the toy box: the Pets cabinet's Play deck (no panel of their own)
-    if (e.interact === "petbowl" || e.interact === "waterbowl") {
-      mixer.blip("click");
-      this.send("pet:bowl", { id });
-      return;
-    }
-    if (e.interact === "toybox") {
-      this.onOpenPanel("pets", id);
-      return;
-    }
-    // a media TV with a console plugged in: the TV's own panel (its inputs, the remote among them)
-    const plugged =
-      e.interact === "media" &&
-      isGameTv(o.kind) &&
-      !!this.model?.allObjects().some((x) => isConsole(x.kind) && x.props?.tv === id);
-    this.onOpenPanel(plugged ? "tv" : e.interact, id);
-  }
-
   // ── people / HUD ─────────────────────────────────────────────────────────
   private publishPeople() {
     const room = this.room;
@@ -2778,7 +1968,7 @@ export class WorldController {
     const people: Person[] = [];
     let me: Person | null = null;
     const admin = !!room.state.players.get(room.sessionId)?.admin;
-    room.state.players.forEach((p: S, sid: string) => {
+    room.state.players.forEach((p, sid) => {
       const local = sid === room.sessionId;
       // (a hidden admin: on no one's list but the admins' — shared admin.ts POWERS.hidden)
       if (!local && p.powers & 8 && !admin) return;
@@ -2812,209 +2002,12 @@ export class WorldController {
     const vx = room.state.npcs.get("vortex");
     hud.set({ vortex: vx ? { x: vx.x, y: vx.y, say: vx.say, sayAt: vx.sayAt, mood: vx.mood } : null });
     const petsAt: { x: number; y: number }[] = [];
-    room.state.pets.forEach((pet: S) => {
+    room.state.pets.forEach((pet) => {
       // (lost: not where it is — where it was last seen is on the GPS)
       if (pet.sid === room.sessionId && pet.alive && pet.mode !== "lost") petsAt.push({ x: pet.x, y: pet.y });
     });
     if (petsAt.length || hud.get().myPetsAt.length) hud.set({ myPetsAt: petsAt });
-    this.publishPets();
-  }
-
-  // ── pets ─────────────────────────────────────────────────────────────────
-  private petState(pet: S): AvatarState {
-    const view: PetView = {
-      id: pet.id,
-      species: pet.species as Species,
-      look: petLook(pet),
-      outfit: petOutfit(pet),
-      mode: pet.mode,
-      act: pet.act,
-      actAt: pet.actAt,
-      feeling: petsArt()?.feelingOf(petNeeds(pet)) ?? "ok",
-      level: pet.level,
-      mine: pet.sid === this.room?.sessionId,
-      hurtAt: this.petHurt.get(pet.id),
-      lookAt: this.whereIs(pet.sid),
-      carry: pet.carry || null,
-      mood: pet.mood || undefined,
-    };
-    return {
-      // (its owner away: whose it is on its tag — "Rex · Ana's")
-      name: pet.sid ? pet.name : `${pet.name} · ${String(pet.owner).split(" ")[0]}'s`,
-      avatar: VORTEX_LOOK,
-      x: pet.x,
-      y: pet.y,
-      z: pet.z || undefined, // (in a lift's car: its height)
-      d: pet.d,
-      a: pet.a,
-      status: "online",
-      speaking: false,
-      emote: pet.want && Date.now() - pet.wantAt < WANT_MS ? pet.want : "", // what it wants, over its head
-      mic: false,
-      pet: view,
-    };
-  }
-
-  // My pets not at my heels (exploring, staying put, waiting where I left them): "Call my pets" brings them.
-  private petsAway(): string[] {
-    const room = this.room;
-    const out: string[] = [];
-    room?.state.pets.forEach((pet: S) => {
-      if (
-        pet.sid === room.sessionId &&
-        pet.alive &&
-        !pet.battle &&
-        (pet.mode === "explore" || pet.mode === "stay" || pet.mode === "wait")
-      )
-        out.push(pet.id);
-    });
-    return out;
-  }
-
-  // The pets in the room and the battle I'm in, for the panel and the menus.
-  private petsKey = "";
-  publishPets() {
-    const room = this.room;
-    if (!room) return;
-    const mySid = room.sessionId;
-    const pets: PetInfo[] = [];
-    room.state.pets.forEach((pet: S) => {
-      pets.push({
-        id: pet.id,
-        uid: pet.uid,
-        owner: pet.owner,
-        mine: pet.sid === mySid,
-        name: pet.name,
-        species: pet.species as Species,
-        look: petLook(pet),
-        outfit: petOutfit(pet),
-        needs: petNeeds(pet),
-        xp: pet.xp,
-        level: pet.level,
-        tricks: safeParse(pet.tricks) as Record<string, number>,
-        alive: pet.alive,
-        wins: pet.wins,
-        losses: pet.losses,
-        mode: pet.mode,
-        act: pet.act,
-        battle: pet.battle,
-        near: Math.hypot(pet.x - this.me.x, pet.y - this.me.y) <= 2.8,
-        want: pet.want,
-        traits: safeParse(pet.traits) as PetInfo["traits"],
-        bonds: safeParse(pet.bonds) as PetInfo["bonds"],
-      });
-    });
-    pets.sort((a, b) => Number(b.mine) - Number(a.mine) || a.name.localeCompare(b.name));
-    let battle: BattleView | null = null;
-    room.state.battles.forEach((b: S) => {
-      const mine = b.sidA === mySid ? "a" : b.sidB === mySid ? "b" : null;
-      if (b.phase === "offer" || (!mine && battle)) return;
-      if (mine || !battle)
-        battle = {
-          id: b.id,
-          a: b.a,
-          b: b.b,
-          mine,
-          hpA: b.hpA,
-          hpB: b.hpB,
-          maxA: b.maxA,
-          maxB: b.maxB,
-          moveA: b.moveA,
-          moveB: b.moveB,
-          round: b.round,
-          phase: b.phase,
-          until: b.until,
-          log: safeParseList(b.log) as BattleEvent[],
-          winner: b.winner,
-        };
-    });
-    const key = JSON.stringify([pets, battle]);
-    if (key === this.petsKey) return;
-    this.petsKey = key;
-    hud.set({ pets, battle });
-  }
-
-  // A round played out: who got hit flashes, and the sounds of it.
-  private watchBattle(b: S) {
-    const key = `${b.id}|${b.round}|${b.phase}`;
-    if (this.battleSeen === key) return;
-    this.battleSeen = key;
-    if (b.phase !== "anim") return this.publishPets();
-    const log = safeParseList(b.log) as BattleEvent[];
-    let at = 0;
-    for (const ev of log) {
-      if (!ev.dmg) continue;
-      const hit = ev.who === "a" ? b.b : b.a;
-      at += 350;
-      setTimeout(() => {
-        this.petHurt.set(hit, performance.now());
-        const pet = this.room?.state.pets.get(hit);
-        if (pet) {
-          const d = Math.hypot(pet.x - this.me.x, pet.y - this.me.y);
-          this.model?.puff(pet.x, pet.y, "spark", 40);
-          socialSound("fistbump", Math.max(0, 1 - d / 10));
-        }
-      }, at);
-    }
-    this.publishPets();
-  }
-
-  private petEvent(m: ServerMessages["pet:event"]) {
-    if (!petsArt()) return void loadPets().then(() => this.petEvent(m)); // (its strings come with the chunk)
-    const pet = this.room?.state.pets.get(m.id);
-    const name = pet?.name ?? "";
-    const trick = m.trick ? tr(`trick_${m.trick}` as never) : "";
-    const text = tr(`petEv_${m.kind}` as never)
-      .replace("{name}", name)
-      .replace("{n}", String(m.n ?? ""))
-      .replace("{trick}", trick);
-    if (!text) return;
-    if (m.kind === "levelUp" || m.kind === "learned" || m.kind === "won") fanfare(0.6);
-    toast(text, m.kind === "died" ? "warn" : "info");
-  }
-
-  // A toy in my hand thrown where I click (or the laser pointed there): true when it was.
-  private throwAt(x: number, y: number, mods: boolean): boolean {
-    const me = this.room?.state.players.get(this.room.sessionId);
-    const held = me?.held;
-    if (!held || !isToyHeld(held)) return false;
-    const armed = hud.get().throwArm;
-    if (!armed && !mods) return false;
-    if (armed) hud.set({ throwArm: false });
-    if ((THROWN as readonly string[]).includes(held)) this.send("toy:throw", { x, y });
-    else if (held === "laser") this.send("laser:point", { x, y });
-    else return false;
-    this.actions.clear();
-    return true;
-  }
-  armThrow(on = true) {
-    hud.set({ throwArm: on });
-  }
-  // A toy on the floor clicked: picked up (walking over first)
-  pickToy(id: string) {
-    const t = this.room?.state.toys.get(id);
-    if (!t || t.state !== "floor") return;
-    if (Math.hypot(t.x - this.me.x, t.y - this.me.y) < 1.6) return this.send("toy:pick", { id });
-    this.actions.clear();
-    this.toyPick = id;
-    this.walkTo({ x: t.x, y: t.y });
-  }
-  // Take a toy into my hand (from the Pets panel; the toy box hands them out too)
-  takeToy(toy: string) {
-    this.send("toy:take", { toy: toy as never });
-  }
-
-  // Answering a battle proposed to me, and my move each round.
-  answerChallenge(accept: boolean) {
-    const c = hud.get().challenge;
-    if (!c) return;
-    hud.set({ challenge: null });
-    this.send("pet:answer", { battle: c.battle, accept });
-  }
-  battleMove(move: string) {
-    const b = hud.get().battle;
-    if (!b || !b.mine) return;
-    this.send("pet:move", { battle: b.id, move: move as never });
+    this.pets.publishPets();
   }
 
   setStatus(status: "online" | "away" | "dnd") {
@@ -3023,232 +2016,12 @@ export class WorldController {
 
   // ── jumping ─────────────────────────────────────────────────────────────
 
-  // the water at (x, y) on the ground floor (docs/plan/66-the-water.md), the floor's coords and my
-  // heights: the Grounds' pond and river, out on the land
-  private waterAt(x: number, y: number): WaterHere | null {
-    const G = this.G;
-    if (!G || this.level !== 0 || !this.grid.onLand(x, y)) return null;
-    const gx = x + (this.map.ox ?? 0);
-    const gz = y + (this.map.oy ?? 0);
-    const w = G.waterAt(gx, gz);
-    return w ? { level: w.level, bed: w.bed, vx: w.flow[0], vy: w.flow[1], ice: !!G.iceAt(gx, gz) } : null;
-  }
-  // how someone at (x, y, z) is in the water: 0 out, 1 wading, 2 afloat, 3 under (from where they
-  // are: nothing on the wire says it)
-  private swimOf(x: number, y: number, z: number): number {
-    const w = this.waterAt(x, y);
-    if (!w || z > w.level - 0.15) return 0;
-    if (w.level - w.bed < 1.15 || z <= w.bed + 0.05) return 1;
-    return z < w.level - 1.6 ? 3 : 2;
-  }
-
-  // the water's sound (docs/plan/66-the-water.md S9): where I am (its beds), who's in it near me (their
-  // splashes, strokes, gasps), a car gone in, the ice giving way — the Grounds' sound plays it
-  private riverSpots: { rapid: [number, number][]; falls: [number, number][] } | null = null;
-  private waterSound(bodies: Body3[], dt: number) {
-    const W = this.life?.sound.water;
-    const G = this.G;
-    if (!W || !G) return;
-    const ox = this.map.ox ?? 0;
-    const oy = this.map.oy ?? 0;
-    const sid = this.room?.sessionId ?? "";
-    const land = this.level === 0 && this.grid.onLand(this.me.x, this.me.y);
-    const x = this.me.x + ox;
-    const z = this.me.y + oy;
-    // (the rapid and the falls: the river's samples by its current, every fourth)
-    if (!this.riverSpots) {
-      const r = G.riverWater();
-      const spots: { rapid: [number, number][]; falls: [number, number][] } = { rapid: [], falls: [] };
-      G.RIVER.line.forEach((p, i) => {
-        if (i % 4 || r.speed[i] <= G.ICE_FAST) return;
-        spots[r.speed[i] > FALLS_SPEED ? "falls" : "rapid"].push([p[0], p[1]]);
-      });
-      this.riverSpots = spots;
-    }
-    const near = (pts: [number, number][]) => {
-      let d = 1e9;
-      for (const [px, pz] of pts) d = Math.min(d, Math.hypot(px - x, pz - z));
-      return d;
-    };
-    const P = G.POND;
-    const e = Math.hypot((x - P.cx) / P.rx, (z - P.cz) / P.rz);
-    const wat = land ? this.waterAt(this.me.x, this.me.y) : null;
-    const ice = this.room?.state.weather?.ice ?? 1;
-    const waders = [];
-    for (const b of bodies) {
-      if (b.id.startsWith("pet:") || (b.level ?? 0) !== 0 || this.level !== 0) continue;
-      const me = b.id === sid;
-      if (!me && Math.hypot(b.x - this.me.x, b.y - this.me.y) > WATER_HEARD) continue;
-      const w = me ? null : { ...b, level: b.level ?? 0 };
-      waders.push({
-        id: b.id,
-        swim: b.swim ?? 0,
-        x: b.x,
-        y: b.y,
-        z: b.z ?? 0,
-        gain: w ? this.ears.gain(w) : 1,
-        pan: w ? this.ears.pan(w) : 0,
-        gender: b.avatar.gender,
-        me,
-      });
-    }
-    // (the cars near in deep water, their middle under its level)
-    const cars = [];
-    for (const c of this.cars?.where() ?? []) {
-      const d = Math.hypot(c.x - x, c.z - z);
-      if (d > WATER_HEARD * 2 || this.level !== 0) continue;
-      const w = G.waterAt(c.x, c.z);
-      const at = { x: c.x - ox, y: c.z - oy, level: 0 };
-      cars.push({
-        id: c.id,
-        wet: !!w && w.depth >= 1 && c.y < w.level + 0.3,
-        gain: Math.max(0, 1 - d / (WATER_HEARD * 2)),
-        pan: this.tp?.pan(this.me, at) ?? 0,
-      });
-    }
-    const holes = [...G.holesFromWire(this.holesWire), ...this.myHoles].map((h) => {
-      const d = Math.hypot(h.x - x, h.z - z);
-      return {
-        key: `${Math.round(h.x)},${Math.round(h.z)}`,
-        gain: this.level === 0 ? Math.max(0, 1 - d / (WATER_HEARD * 2)) : 0,
-        pan: this.tp?.pan(this.me, { x: h.x - ox, y: h.z - oy }) ?? 0,
-      };
-    });
-    W.update(
-      dt,
-      {
-        swim: this.mySwim,
-        speed: this.stepped.speed,
-        out: land && !this.cars?.inCar(),
-        up: this.tp?.earUp() ?? 0,
-        pond: land ? Math.max(0, 1 - (Math.abs(e - 1) * Math.min(P.rx, P.rz)) / 25) : 0,
-        rapid: land ? near(this.riverSpots.rapid) : 1e9,
-        falls: land ? near(this.riverSpots.falls) : 1e9,
-        current: wat ? Math.hypot(wat.vx, wat.vy) : 0,
-        ice,
-        soaked: this.tp?.wetness(sid),
-      },
-      waders,
-      cars,
-      holes,
-    );
-  }
-
-  // thin ice under my feet (plan 66 S4): stood on a second and a half, or landed on hard, it gives — a
-  // hole for everyone (the room checks it), mine at once (the physics' ice made again round it)
-  private thinIce(dt: number, out: { up: boolean; swim: number; landed: number | null }) {
-    const G = this.G;
-    if (!G || !this.room || this.level !== 0 || out.up || out.swim || !this.grid.onLand(this.me.x, this.me.y)) {
-      this.thinFor = 0;
-      return;
-    }
-    const x = this.me.x + (this.map.ox ?? 0);
-    const z = this.me.y + (this.map.oy ?? 0);
-    if (!G.iceAt(x, z)?.thin) {
-      this.thinFor = 0;
-      return;
-    }
-    this.thinFor += dt;
-    // (its giving way heard: the water's sound, as the hole comes — waterSound)
-    this.life?.sound.water.preload("ice-crack");
-    if (this.thinFor < THIN_GIVES && (out.landed ?? 0) < 0.3) return;
-    this.thinFor = 0;
-    this.room.send("ice:break", { x, z });
-    this.myHoles.push({ x, z, r: G.ICE_HOLE.r, at: Date.now() });
-    G.setIceHoles([...G.holesFromWire(this.holesWire), ...this.myHoles]);
-  }
-
-  // the water over someone's feet at (x, y, z) (m; wading's waterline), or undefined out of it
-  private waterOver(x: number, y: number, z: number): number | undefined {
-    const w = this.waterAt(x, y);
-    return w && w.level > z ? w.level - z : undefined;
-  }
-
-  // over water deep enough to catch a fall (plan 66: no ragdoll into it)
-  private overDeep(x: number, y: number): boolean {
-    const w = this.waterAt(x, y);
-    return !!w && w.level - w.bed >= SWIM_CATCH;
-  }
-
   // what's under (x, y) from z down: the grid's, and where that has them off it (up on a roof, a
   // wall's top — or in the air) Jolt's say in 3D, as the move core stands on it
-  private groundUnder(x: number, y: number, z: number): number {
+  groundUnder(x: number, y: number, z: number): number {
     const g = this.grid.groundAt(x, y, z);
     if (z <= g + 0.03 || !this.tp) return g;
-    return Math.max(g, this.tp.groundUnder(this.grid, this.level, x, y, z));
-  }
-
-  // my jump as the views show it, my feet's height and what's under them
-  private myJump(now: number): { jump?: JumpNow; z: number; ground: number } {
-    const h = this.height;
-    // (what's really under me — up on a roof, the roof — as the move core has it)
-    const ground = this.groundUnder(this.me.x, this.me.y, h.z);
-    const hold = this.jumpHold;
-    if (hold) return { jump: jumpNowAt(hold.kind, hold.t) ?? undefined, z: h.z + jumpArc(hold.kind, hold.t).h, ground };
-    return { jump: this.jumpTrack.update(now, h.up) ?? undefined, z: h.z, ground };
-  }
-
-  // someone's Flowmotion move: from when it showed up here, as late as their position is drawn
-  private theirFlow(r: Remote, p: S, now: number): { flowCode: number; flowAt: number } {
-    const f = p.flow ?? 0;
-    if (f !== r.flow) {
-      r.flow = f;
-      r.flowAt = now + INTERP_MS;
-    }
-    return { flowCode: f, flowAt: r.flowAt };
-  }
-
-  // someone else's: from when it showed up here, as late as their position is drawn
-  private theirJump(r: Remote, p: S, at: { x: number; y: number; z: number }, now: number) {
-    const key = `${p.jump}|${p.jumpAt}`;
-    if (key !== r.jumpKey) {
-      r.jumpKey = key;
-      if (isJump(p.jump)) r.track.begin(p.jump, now + INTERP_MS);
-      r.verbAt = now + INTERP_MS;
-      void loadJumps();
-    }
-    const ground = this.groundUnder(at.x, at.y, at.z);
-    // (afloat in the water isn't in the air: plan 66)
-    const jump = r.track.update(now, at.z > ground + 0.03 && !this.swimOf(at.x, at.y, at.z)) ?? undefined;
-    return { jump, z: at.z, ground };
-  }
-
-  // dust kicked up at take-off and thrown out on landing, a whoosh, a thud (`near`: 0..1, how loud)
-  private jumpEffects(id: string, st: { x: number; y: number; jump?: JumpNow; ground?: number }, near: number) {
-    const stage = st.jump?.stage ?? "";
-    const was = this.jumpStages.get(id) ?? "";
-    if (stage === was) return;
-    if (stage) this.jumpStages.set(id, stage);
-    else this.jumpStages.delete(id);
-    const j = st.jump;
-    if (!j) return;
-    const hard = j.kind !== "hop" ? 1 : 0.6;
-    // (up on something the dust is on its top)
-    const lift = (st.ground ?? 0) * ZPX_TILE;
-    // (the soles off and onto what's under them: the steps' recordings, once they're in)
-    const S = steps();
-    const pan =
-      id === this.room?.sessionId ? 0 : { pan: this.tp?.pan(this.me, st) ?? 0, lp: this.ears.lp?.({ id, ...st }) ?? 0 };
-    if (stage === "air" && was === "crouch") {
-      this.model?.puff(st.x, st.y, "kick", lift, hard);
-      if (near > 0) jumps()?.jumpSound(j.kind, near);
-      if (near > 0 && S)
-        this.stepPlayer(S).step(this.footingAt(st.x, st.y, st.ground ?? 0), {
-          gait: "sprint",
-          shoe: "soft",
-          gain: near * 0.8,
-          pan,
-        });
-    } else if (stage === "land") {
-      this.model?.puff(st.x, st.y, "land", lift, hard);
-      const f = this.footingAt(st.x, st.y, st.ground ?? 0);
-      if (near > 0) jumps()?.landSound(j.kind, f, near, !S);
-      if (near > 0 && S) {
-        this.stepPlayer(S).land(f, hard, { gain: near, pan, thud: false });
-        // (in a lift's car: its floor on its cables answers)
-        if (this.inLiftCar(st.x, st.y)) this.stepPlayer(S).liftCar(hard, near, pan);
-      }
-    }
+    return Math.max(g, this.tp.body.groundUnder(this.grid, this.level, x, y, z));
   }
 
   emote(i: number) {
@@ -3259,40 +2032,6 @@ export class WorldController {
   teleport(to: ClientMessages["teleport"]["to"]) {
     this.path = null;
     this.send("teleport", { to });
-  }
-
-  // ── my own arrival point (features/arrival.ts on the server) ─────────────
-  private arrivalAsked = false; // I changed it this session (so the pin flashes)
-  private arrivalFlash: ReturnType<typeof setTimeout> | null = null;
-
-  // choose it on the map: the next floor click sets it (Esc cancels)
-  pickArrival(on: boolean) {
-    hud.set({ pickArrival: on, menu: null });
-    if (on) this.actions.clear();
-    if (this.arrivalFlash) clearTimeout(this.arrivalFlash);
-    this.model?.showMine(on ? hud.get().mySpawn : null);
-  }
-
-  // here (a tile), or null: back to the space's arrival point
-  setArrival(at: Point | null) {
-    this.arrivalAsked = true;
-    this.send("spawn:mine", { at: at && { x: Math.floor(at.x), y: Math.floor(at.y) } });
-    if (hud.get().pickArrival) this.pickArrival(false);
-  }
-
-  private hoverArrival(x: number, y: number) {
-    const tx = Math.floor(x);
-    const ty = Math.floor(y);
-    const ok = this.grid.ok(tx, ty) && this.grid.fits(tx + 0.5, ty + 0.5);
-    this.model?.showMine(hud.get().mySpawn, { x: tx, y: ty, ok });
-  }
-
-  private flashArrival() {
-    if (this.arrivalFlash) clearTimeout(this.arrivalFlash);
-    this.model?.showMine(hud.get().mySpawn);
-    this.arrivalFlash = setTimeout(() => {
-      if (!hud.get().pickArrival) this.model?.showMine(null);
-    }, 2500);
   }
 
   admit(k: { from: string; area: string }) {
@@ -3350,7 +2089,7 @@ export class WorldController {
     if (!model || !room) return;
     const screens = hud.get().screens;
     let video: HTMLVideoElement | null = null;
-    room.state.players.forEach((p: S) => {
+    room.state.players.forEach((p) => {
       const a = areaAt(this.map, p.x, p.y);
       if (a?.kind === "stage" && screens[String(p.uid)]) video = screens[String(p.uid)];
     });
@@ -3365,32 +2104,6 @@ export class WorldController {
     return () => {
       this.vortexListeners.delete(fn);
     };
-  }
-
-  // ── whiteboards ──────────────────────────────────────────────────────────
-  private wbScenes = new Map<string, WbItem[]>();
-  private wbListeners = new Set<(objectId: string, items: WbItem[]) => void>();
-
-  onWhiteboard(fn: (objectId: string, items: WbItem[]) => void) {
-    this.wbListeners.add(fn);
-    return () => {
-      this.wbListeners.delete(fn);
-    };
-  }
-
-  whiteboardItems(objectId: string): WbItem[] {
-    return this.wbScenes.get(objectId) ?? this.persistedScene(objectId);
-  }
-
-  private persistedScene(objectId: string): WbItem[] {
-    const scene = this.model?.getObject(objectId)?.props?.scene;
-    return Array.isArray(scene) ? [...(scene as WbItem[])] : [];
-  }
-
-  private emitWb(objectId: string) {
-    const items = this.whiteboardItems(objectId);
-    this.model?.setWhiteboard(objectId, items);
-    for (const f of this.wbListeners) f(objectId, items);
   }
 
   // The light follows the world's hour (art/daylight.ts: day, golden hour, dusk,
@@ -3415,16 +2128,16 @@ export class WorldController {
   private tpLoading = false;
   private tpDue = 0;
   private tpHidden = 0;
-  private meAngle = 0; // my facing in 3D (free; others see the nearest of 8)
-  private lookD = -1; // first person: the 8-way facing I last set from where I look
+  meAngle = 0; // my facing in 3D (free; others see the nearest of 8)
+  private lookYaw = Number.NaN; // first person: the 8-way facing I last set from where I look
   private viewNow: "none" | "3d" = "none"; // (none: before the 3D view has opened, or if it failed)
 
   // the 3D camera the prefs ask for (first person steps back out to the
   // chase camera while build mode is on: placing things from inside your
   // head is awkward)
-  private camWanted(): CamMode {
+  camWanted(): CamMode {
     // the phone's camera: Photo is my eyes, Selfie a camera out in front of me
-    if (this.photo) return this.photo.mode === "photo" ? "first" : "chase";
+    if (this.photos.photo) return this.photos.photo.mode === "photo" ? "first" : "chase";
     if (prefs().view === "1p") return hud.get().build.on ? "chase" : "first";
     // (one camera behind you: how it follows is its own setting — docs/plan/56-the-controls.md D)
     return "chase";
@@ -3448,8 +2161,8 @@ export class WorldController {
     if (!this.model || !this.room) return;
     this.tp?.setMode(this.camWanted());
     if (this.tp) {
-      this.tp.lookSens = prefs().lookSens;
-      this.tp.lookInvert = prefs().lookInvert;
+      this.tp.mouseLook.lookSens = prefs().lookSens;
+      this.tp.mouseLook.lookInvert = prefs().lookInvert;
       this.tp.handsOn = prefs().hands1p;
       this.camPrefs(this.tp);
     }
@@ -3460,7 +2173,7 @@ export class WorldController {
     };
     // the loading screen up first, painted, then the work behind it (entering, it's up already)
     if (hud.get().loading.on) return go();
-    this.holdLoading("view");
+    this.loading.holdLoading("view");
     requestAnimationFrame(() => requestAnimationFrame(go));
   }
 
@@ -3483,9 +2196,10 @@ export class WorldController {
         keys: false,
         themes,
         level: this.level,
-        quality: this.qualityNow(),
+        quality: this.quality.qualityNow(),
+        structure: this.structure,
       });
-      v.prints = this.life?.prints ?? null;
+      v.printsPart.prints = this.life?.prints ?? null;
       v.events = {
         floor: (x, y, mods) => model.events.onTileClick?.(x, y, mods),
         person: (id, at) => model.events.onAvatarClick?.(id, at),
@@ -3502,18 +2216,18 @@ export class WorldController {
         wheel: (dy) => model.events.onWheel?.(dy) ?? false,
         look: (on) => {
           hud.set({ look: on });
-          if (!on) this.aimId = null;
+          if (!on) this.focus.aimId = null;
         },
         lookRefused: () => toast(tr("lookRefused")),
         aim: (at) => {
-          this.aimId = at?.object ?? null;
-          this.updatePrompt();
+          this.focus.aimId = at?.object ?? null;
+          this.focus.updatePrompt();
         },
       };
       // what's under the pointer and where things are on screen: as this camera sees them
       model.view = {
         picks: (filter) =>
-          v
+          v.buildPick
             .picksAtPointer()
             .filter((p) => {
               if (p.dress) return true;
@@ -3524,29 +2238,41 @@ export class WorldController {
               p.dress ? { id: p.id, dress: true as const, kind: p.kind ?? "" } : { id: p.id, dress: false as const },
             ),
         project: (x, y, z) => v.project(x, y, z),
-        floorAt: (cx, cy, z) => v.floorAt(cx, cy, z),
-        rayAt: (cx, cy) => v.rayAt(cx, cy),
-        lookedThrough: () => v.lookedThrough(),
+        floorAt: (cx, cy, z) => v.buildPick.floorAt(cx, cy, z),
+        rayAt: (cx, cy) => v.buildPick.rayAt(cx, cy),
+        lookedThrough: () => v.buildPick.lookedThrough(),
         puff: (x, y, kind, lift, hard) => v.puff(x, y, kind, lift, hard),
       };
       v.mount(host);
-      v.setQuality(this.qualityNow());
+      v.warmup.setQuality(this.quality.qualityNow());
       v.setMode(this.camWanted());
-      v.lookSens = prefs().lookSens;
-      v.lookInvert = prefs().lookInvert;
+      v.mouseLook.lookSens = prefs().lookSens;
+      v.mouseLook.lookInvert = prefs().lookInvert;
       this.camPrefs(v);
       v.handsOn = prefs().hands1p;
       v.setHour(this.hour);
-      v.warming = hud.get().loading.on;
+      v.warmup.warming = hud.get().loading.on;
       v.yaw = this.meAngle; // start behind me
       // (the camera takes the mouse only when nothing on screen wants the pointer)
-      v.canLock = () => !this.pointerWanted();
+      v.mouseLook.canLock = () => !this.focus.pointerWanted();
       // (the feet as the bodies put them down: the steps — mine, everyone else's near me)
-      v.onStep = (id, side) => (id === this.room?.sessionId ? this.myStep(side) : this.footfalls?.body(id, side));
-      v.onThud = (id, hard) => this.footfalls?.impact(id, hard);
-      v.onHop = (id, hard) => (id === this.room?.sessionId ? this.myHop(hard) : this.footfalls?.landed(id, hard));
+      v.onStep = (id, side) =>
+        id === this.room?.sessionId ? this.steps.myStep(side) : this.steps.footfalls?.body(id, side);
+      v.onThud = (id, hard) => this.steps.footfalls?.impact(id, hard);
+      v.onHop = (id, hard) =>
+        id === this.room?.sessionId ? this.steps.myHop(hard) : this.steps.footfalls?.landed(id, hard);
       this.tp = v;
       this.tpHost = host;
+      // (Jolt's world in: my place asked of it from now on)
+      v.body.onPhysics = () => this.rebuildGrid();
+      // the GPU took the 3D view's context away (a driver reset, too many tabs): said, and
+      // reported; three gets it back by itself when the browser gives it (view.ts redraws the bakes)
+      const canvas = v.renderer.domElement;
+      canvas.addEventListener("webglcontextlost", () => {
+        toast(tr("glLost"), "warn", 8000);
+        reportError("webgl", new Error("context lost"));
+      });
+      canvas.addEventListener("webglcontextrestored", () => toast(tr("glBack"), "info", 3000));
       v.setHighlight(this.footprintOf(hud.get().prompt?.objectId));
     } catch (e) {
       console.error("third person", e);
@@ -3559,7 +2285,7 @@ export class WorldController {
 
   private closeTp() {
     this.tp?.destroy();
-    this.aimId = null;
+    this.focus.aimId = null;
     if (hud.get().look) hud.set({ look: false });
     this.tp = null;
     this.tpHost?.remove();
@@ -3568,7 +2294,7 @@ export class WorldController {
   }
 
   // the floor outline of a thing (wall items: just in front of their wall)
-  private footprintOf(id: string | undefined): { x: number; y: number; w: number; h: number } | null {
+  footprintOf(id: string | undefined): { x: number; y: number; w: number; h: number } | null {
     const o = id ? this.model?.getObject(id) : undefined;
     if (!o) return null;
     if (entry(o.kind).wall) {
@@ -3581,11 +2307,11 @@ export class WorldController {
 
   // A speech bubble over someone (Vortex, a pet).
   private say(id: string, text: string, ms?: number) {
-    this.tp?.say(id, text, ms);
+    this.tp?.tags.say(id, text, ms);
   }
 
   // Where a world point is on screen (px from the world canvas's top-left; hostRect() for client
-  // px). `z`: iso px above the floor (as the shared hang code measures).
+  // px). `z`: metres above the floor.
   clientAt(x: number, y: number, z: number): { x: number; y: number } {
     return this.model?.worldToClient(x, y, z) ?? { x: -9999, y: -9999 };
   }
@@ -3663,11 +2389,12 @@ export class WorldController {
   }
 
   // ── build mode support ───────────────────────────────────────────────────
-  // My walk grid: locked doors of my own rooms let me through.
+  // My place on my floor: locked doors of my own rooms let me through (Jolt's, once it's in).
   rebuildGrid() {
     if (!this.model) return;
     // (every floor's things: the stairs up from the floor below count here)
-    this.grid = Grid.from(this.map, [...this.objs.values()], { uid: this.myUid() || null });
+    this.grid =
+      this.tp?.body.placeFor(this.myUid() || null, this.level) ?? new Place(null, this.map, [...this.objs.values()]);
   }
 
   // Standing in an elevator's car: its panel (the floors it goes to). The car's
@@ -3733,10 +2460,10 @@ export class WorldController {
   }
 
   /** The room's things as the server has them, on my floor (e2e reads these). */
-  floorObjects(): S[] {
+  floorObjects(): WorldObject[] {
     const home = floorOf(this.building);
-    const out: S[] = [];
-    this.room?.state.objects?.forEach((o: S) => {
+    const out: WorldObject[] = [];
+    this.room?.state.objects?.forEach((o) => {
       let l: unknown;
       try {
         l = JSON.parse(o.props || "{}").level;
@@ -3759,252 +2486,6 @@ export class WorldController {
     return levelMap(this.building, level)?.name ?? `${tr("floor")} ${level}`;
   }
 
-  // ── the loading screen (docs/plan/35-the-loading.md) ──────────────────
-  // Up on entering, until what the view shows is all built and a few frames in
-  // a row have come steadily; never longer than LOAD_CAP_MS.
-  private loadFrom = 0; // when it went up (0: it's down)
-  private loadSteady = 0; // steady frames in a row, everything built
-  private loadLast = 0;
-  private holdLoading(why: "enter" | "view") {
-    this.loadFrom = performance.now();
-    this.loadLast = 0;
-    this.loadSteady = 0;
-    hud.set({ loading: { on: true, progress: why === "enter" ? hud.get().loading.progress : 0, why } });
-    if (this.tp) this.tp.warming = true;
-  }
-  private watchLoading(now: number) {
-    if (!this.loadFrom) return;
-    const gap = this.loadLast ? now - this.loadLast : 0;
-    this.loadLast = now;
-    const r = this.readiness();
-    const built = r.done >= r.of;
-    this.loadSteady = built && gap > 0 && gap < STEADY_MS ? this.loadSteady + 1 : 0;
-    if ((built && this.loadSteady >= STEADY_FRAMES) || now - this.loadFrom > LOAD_CAP_MS) {
-      if (!built) console.warn("loading cut short", r);
-      this.loadFrom = 0;
-      if (this.tp) this.tp.warming = false;
-      hud.set((h) => ({ loading: { ...h.loading, on: false, progress: 1 } }));
-      return;
-    }
-    // (never backwards: a part found late adds to what's left, not to what's shown)
-    const p = Math.min(0.98, r.done / Math.max(1, r.of));
-    const l = hud.get().loading;
-    if (p > l.progress + 0.01) hud.set({ loading: { ...l, progress: p } });
-  }
-  // what's built: each part 0..1 — the Grounds, their life, the cars, then the 3D view's own
-  // parts (tp/view.ts readiness)
-  private readiness(): { done: number; of: number } {
-    const G = !!this.G;
-    const v = this.tp?.readiness() ?? { done: 0, of: 9 };
-    return { done: +G + +(!!this.life || !G) + +(!!this.cars || !G) + v.done, of: 3 + v.of };
-  }
-
-  // ── the stairs (shared stairs.ts) ─────────────────────────────────────
-  // A click on a stairwell's flights: on my floor's own stairs (flight A's
-  // side) up them, on the ones coming up from the floor below (flight B's) down.
-  private climbAt(x: number, y: number): boolean {
-    let up: WorldObjectDef | null = null;
-    let down: WorldObjectDef | null = null;
-    for (const o of this.objs.values()) {
-      if (o.kind !== "stairs") continue;
-      const l = objLevel(o, this.building);
-      if (l !== this.level && l !== this.level - 1) continue;
-      const p = across(this.building, this.level, l, { x, y });
-      const { u, v } = stairsLocal(o, p.x, p.y);
-      // (its flights and half landing: the landing by the door is floor, walked to)
-      if (u < 0 || u > STAIRS_W || v < V_FLIGHT || v > STAIRS_D) continue;
-      if (l === this.level) up = o;
-      else down = o;
-    }
-    if (up && down) {
-      const p = { x, y };
-      return this.climb(stairsLocal(up, p.x, p.y).u >= 2 ? up : down, stairsLocal(up, p.x, p.y).u >= 2);
-    }
-    if (up) return this.climb(up, true);
-    if (down) return this.climb(down, false);
-    return false;
-  }
-
-  /** Walk to a staircase and up it (from its floor) or down it (from the floor
-   *  above): over to its door, then the flights, out on the other floor. */
-  private climb(o: WorldObjectDef, up: boolean): boolean {
-    if (hud.get().build.on) return false;
-    const S = objLevel(o, this.building);
-    if (up ? S !== this.level : S + 1 !== this.level) return false;
-    const way = stairsWayUp(o).map((p) => across(this.building, S, this.level, p));
-    const pts = up ? way : [...way].reverse();
-    const lead = findPath(this.grid, this.me, pts[0]);
-    if (!lead) return false;
-    this.path = [...lead, ...pts.slice(1)];
-    this.pathTarget = null;
-    const end = pts[pts.length - 1];
-    this.tp?.showMarker(end.x, end.y);
-    return true;
-  }
-
-  // The fire doors on my floor: they swing open as someone comes near and shut
-  // behind them (the 3D view draws it, both views hear it).
-  private fireDoors = new Map<string, boolean>();
-  private stairsDoors() {
-    const people: { x: number; y: number }[] = [this.me];
-    this.room?.state.players.forEach((p: S, sid: string) => {
-      if (sid !== this.room?.sessionId && (p.level ?? 0) === this.level) people.push({ x: p.x, y: p.y });
-    });
-    for (const o of this.objs.values()) {
-      if (o.kind !== "stairs" || objLevel(o, this.building) !== this.level) continue;
-      const d = stairsDoor(o);
-      const open = people.some((p) => Math.hypot(p.x - d.x, p.y - d.y) < 1.15);
-      const was = this.fireDoors.get(o.id);
-      this.fireDoors.set(o.id, open);
-      if (was === undefined || was === open) continue;
-      loadLiftSounds();
-      const gain = nearGain(Math.hypot(d.x - this.me.x, d.y - this.me.y));
-      liftSound(open ? "stairs/door-open" : "stairs/door-close", { gain: gain * 0.75, delay: open ? 0 : 0.35 });
-    }
-  }
-
-  // ── the elevators' motion (shared lift.ts: liftMotion) ─────────────────
-  // When each stop's phase was heard of: the doors and the car move from then
-  // (everyone hears it at about the same moment). Its sounds start with it.
-  private liftSince = new Map<string, number>();
-  private liftKeys = new Map<string, string>();
-  private liftsDirty = true;
-  private liftHeard(o: WorldObjectDef) {
-    loadLiftSounds(); // (the building has elevators: their sounds, decoded ahead)
-    const p = o.props ?? {};
-    const key = `${p.ph}|${p.len}|${p.at}|${p.to}`;
-    this.liftsDirty = true;
-    if (this.liftKeys.get(o.id) === key) return;
-    const was = this.liftKeys.get(o.id);
-    this.liftKeys.set(o.id, key);
-    this.liftSince.set(o.id, performance.now());
-    if (was !== undefined) this.liftSound(o, was);
-  }
-
-  // A stop's phase changed (`was`: the one before): what it sounds like, if it's
-  // on my floor — the doors, the chime as it arrives, the ride if I'm in it.
-  private liftRide: ((fade?: number) => void) | null = null;
-  private liftSound(o: WorldObjectDef, wasKey: string) {
-    loadLiftSounds();
-    const [was, , wasAt, wasTo] = wasKey.split("|");
-    if (objLevel(o, this.building) !== this.level) return;
-    const p = o.props ?? {};
-    const ph = String(p.ph ?? "");
-    const len = (Number(p.len) || 0) / 1000;
-    const here = p.at === this.level;
-    const c = { x: o.x + 1, y: o.y + 1 };
-    const inside = inLift(o, this.me);
-    const gain = inside ? 1 : nearGain(Math.hypot(c.x - this.me.x, c.y - this.me.y));
-    if (here && ph === "opening") {
-      if (was === "moving") liftSound("lift/chime", { gain: gain * 0.7 });
-      // (one tone for a car that came up, a second, lower, for one that came down)
-      if (was === "moving" && Number(wasTo) < Number(wasAt))
-        liftSound("lift/chime", { gain: gain * 0.7, rate: 0.8, delay: 0.42 });
-      liftSound("lift/door-open", { gain: gain * 0.8, rate: 1.7 / Math.max(0.5, len) });
-    }
-    if (here && ph === "closing") liftSound("lift/door-close", { gain: gain * 0.8, rate: 1.7 / Math.max(0.5, len) });
-    if (ph === "moving" && inside) {
-      this.liftRide?.(0.3);
-      const stop = liftSound("lift/ride.wav", { gain: 0.7, loop: true });
-      this.liftRide = stop;
-      if (stop) setTimeout(() => stop(0.6), Math.max(0, len - 0.6) * 1000);
-    }
-  }
-
-  /** An elevator stop as it stands now (its doors' step, the car
-   *  there or not); anything else as it is. */
-  private liftDrawn(o: WorldObjectDef): WorldObjectDef {
-    if (o.kind !== "elevator") return o;
-    const now = performance.now();
-    const m = liftMotion(o, objLevel(o, this.building), (now - (this.liftSince.get(o.id) ?? now)) / 1000);
-    return { ...o, props: { ...(o.props ?? {}), anim: Math.round(m.doors * 5) / 5, here: m.here } };
-  }
-
-  /** The car I'm standing in on my floor (and its motion), if I am. */
-  private myLift(now: number): { o: WorldObjectDef; m: LiftMotion } | null {
-    for (const o of this.objs.values()) {
-      if (o.kind !== "elevator" || objLevel(o, this.building) !== this.level || !inLift(o, this.me)) continue;
-      return { o, m: liftMotion(o, this.level, (now - (this.liftSince.get(o.id) ?? now)) / 1000) };
-    }
-    return null;
-  }
-
-  // In a lift's car on the move: up (or down) the shaft with it, the building's one space
-  // (docs/plan/50-the-volume.md, D) — my height its floor's, my floor the one it's passing (its
-  // frame a storey up each: shared floorAt); my walk waits for the doors.
-  private liftCarry(now: number): boolean {
-    const at = this.myLift(now);
-    if (!at || at.m.phase !== "moving") return false;
-    this.path = null;
-    this.actions.clear();
-    const h = this.height;
-    h.z = (at.m.car - this.level) * STOREY;
-    h.vz = 0;
-    h.up = false;
-    const ch = floorAt(this.building, this.level, this.me, h.z);
-    if (ch) {
-      const from = this.level;
-      this.me.x = ch.at.x;
-      this.me.y = ch.at.y;
-      h.z += ch.dz;
-      if (this.tp) this.tp.carryFrom = from; // (the 3D camera keeps its place in the building)
-      this.setLevel(ch.level);
-    }
-    return true;
-  }
-
-  // In the car (3D), the camera rides in it with you: high in its back corner,
-  // over your shoulder to the doors and the panel; it sways a hair on the way.
-  private liftCam(now: number): {
-    eye: [number, number, number];
-    look: [number, number, number];
-    showMe: boolean;
-    fov: number;
-    snap: boolean;
-  } | null {
-    const at = this.myLift(now);
-    if (this.tp) this.tp.liftIn = at?.o.id ?? null;
-    if (!at) {
-      if (this.tp) {
-        this.tp.liftSway = 0;
-        this.tp.liftRise = 0;
-      }
-      return null;
-    }
-    const { o, m } = at;
-    const moving = m.phase === "moving";
-    const sway = moving ? Math.sin((now / 1000) * 31) * 0.002 + Math.sin((now / 1000) * 7.3) * 0.003 : 0;
-    // (and on the way up the shaft its floor's under my feet, between this floor and the next)
-    const rise = moving ? this.height.z : 0;
-    if (this.tp) {
-      this.tp.liftSway = sway;
-      this.tp.liftRise = rise;
-    }
-    // the car's own frame: doors on its local −y side (rot 0), turned with it
-    const r = (o.rot ?? 0) & 3;
-    const turn = (u: number, v: number): [number, number] => {
-      const dx = u - 1;
-      const dy = v - 1;
-      const c = [1, 0, -1, 0][r];
-      const s = [0, 1, 0, -1][r];
-      return [o.x + 1 + dx * c - dy * s, o.y + 1 + dx * s + dy * c];
-    };
-    const [ex, ey] = turn(1, 1.82);
-    const [lx, ly] = turn(1, -1.6);
-    // (the keys follow this camera — W towards the doors — and so does the one
-    // behind me as I walk out)
-    if (this.tp) this.tp.yaw = Math.atan2(ly - ey, lx - ex);
-    // (on the way, held to the car: eased, it'd lag out through its ceiling — and each floor passed
-    // moves the frame a storey under it)
-    return {
-      eye: [ex, ey, 2.2 + sway + rise],
-      look: [lx, ly, 1.15 + sway + rise],
-      showMe: true,
-      fov: 74,
-      snap: moving,
-    };
-  }
-
   // To another floor (the stairs, a ride, a teleport): my walk grid, the model
   // and the HUD that floor's now.
   setLevel(level: number) {
@@ -4017,7 +2498,7 @@ export class WorldController {
     this.model.setObjects(
       onLevel(this.objs.values(), this.map)
         .filter(notDriven)
-        .map((o) => this.liftDrawn(o)),
+        .map((o) => this.lifts.liftDrawn(o)),
     );
     this.rebuildGrid();
     this.path = null;
@@ -4028,32 +2509,10 @@ export class WorldController {
 
   // The map lives in room state (per-space layout): rebuild walls/floors on change.
   private applyMapFromState() {
-    const st = this.room?.state;
-    if (!st?.tiles || !this.model || !st.width) return;
-    let areas = [];
-    try {
-      areas = JSON.parse(st.areas || "[]");
-    } catch {}
-    const base = getMap(st.mapKey);
-    let levels = [];
-    try {
-      levels = JSON.parse(st.levels || "[]");
-    } catch {}
-    this.building = {
-      ...base,
-      width: st.width,
-      height: st.height,
-      tiles: [...st.tiles],
-      hWalls: [...(st.hWalls ?? [])],
-      vWalls: [...(st.vWalls ?? [])],
-      hBacks: st.hBacks?.length ? [...st.hBacks] : undefined,
-      vBacks: st.vBacks?.length ? [...st.vBacks] : undefined,
-      areas,
-      spawn: { x: st.spawnX, y: st.spawnY },
-      objects: [],
-      floor: st.floor ?? 0,
-      levels,
-    };
+    const st = this.structure;
+    if (!st || !this.model) return;
+    // the tile maps the code not yet ported reads, made from the structure (plan 72 phase 6)
+    this.building = { ...mapFromStructure(st), objects: [] };
     // the floor I'm on (gone: the home one)
     const lm = levelMap(this.building, this.level);
     if (!lm) this.level = floorOf(this.building);
@@ -4062,241 +2521,16 @@ export class WorldController {
     this.rebuildGrid();
     hud.set((h) => ({ mapVersion: h.mapVersion + 1, floor: this.level, floors: floorsOf(this.building) }));
   }
+  // The building's structure (docs/plan/72-the-3d-core.md, phase 6) and its revision: whole when
+  // asked for, then each edit's operations applied here as the server applied them.
+  structure: Structure | null = null;
+  structRev = -1;
   private mapDirty = false;
 
-  // Doors swing open while someone walks through them; chairs show who sits
-  // in them; the radio's display lights while it plays.
-  private passing = new Map<string, boolean>();
-  private updateDoors() {
-    const model = this.model;
-    const room = this.room;
-    if (!model || !room) return;
-    const sitting = new Set<string>();
-    if (this.me.a === ANIM.sit) sitting.add(`${Math.floor(this.me.x)},${Math.floor(this.me.y)}`);
-    room.state.players.forEach((p: S, sid: string) => {
-      if (sid !== room.sessionId && p.a === ANIM.sit && (p.level ?? 0) === this.level)
-        sitting.add(`${Math.floor(p.x)},${Math.floor(p.y)}`);
-    });
-    for (const o of model.allObjects()) {
-      // (every seat: plan 68's rock, turn and sway while sat in — the sitter anywhere on it)
-      if (entry(o.kind).seat) {
-        const fp = placedFootprint(o);
-        let occupied = false;
-        for (let dy = 0; dy < fp.h && !occupied; dy++)
-          for (let dx = 0; dx < fp.w && !occupied; dx++) occupied = sitting.has(`${o.x + dx},${o.y + dy}`);
-        // (a desk's chair comes in to it with whoever's on it: plan 62, the grid's `seatSpot`)
-        const pull = occupied ? (this.grid.seatAt(o.x + 0.5, o.y + 0.5)?.pull ?? 0) : 0;
-        if (!!o.props?.occupied !== occupied || (Number(o.props?.pull) || 0) !== pull)
-          model.upsertObject({ ...o, props: { ...(o.props ?? {}), occupied, pull } });
-        continue;
-      }
-      if (isRadio(o.kind)) {
-        // its display lights while it plays (its own state)
-        const playing = radioOf(o).playing;
-        if (!!o.props?.on !== playing) model.upsertObject({ ...o, props: { ...(o.props ?? {}), on: playing } });
-        continue;
-      }
-      if (!isDoorKind(o.kind) || !doorLeaves(o.kind)) continue;
-      // someone in the doorway: close to the middle of the door's edges
-      const c = doorCentre(o);
-      const half = entry(o.kind).w / 2;
-      // (plan 68: the automatic doors open from further off)
-      const reach = doorReach(o.kind);
-      const on = (x: number, y: number) =>
-        (o.rot ?? 0) % 2 === 0
-          ? Math.abs(x - c.x) < half && Math.abs(y - c.y) < reach
-          : Math.abs(y - c.y) < half && Math.abs(x - c.x) < reach;
-      // (a locked door swings only for its room's owner, the one who can go
-      // through it: anyone else at it finds it shut)
-      const locked = o.props?.state === "locked";
-      const owner = locked ? doorOwner(this.map, o) : null;
-      const may = (uid: number) => !locked || (owner != null && uid === owner);
-      let occupied = may(this.myUid()) && on(this.me.x, this.me.y);
-      room.state.players.forEach((p: S, sid: string) => {
-        if (sid !== room.sessionId && (p.level ?? 0) === this.level && on(p.x, p.y) && may(p.uid)) occupied = true;
-      });
-      if (!locked)
-        room.state.npcs.forEach((n: S) => {
-          if (on(n.x, n.y)) occupied = true;
-        });
-      if ((this.passing.get(o.id) ?? false) !== occupied) {
-        this.passing.set(o.id, occupied);
-        model.upsertObject({ ...o, props: { ...(o.props ?? {}), passing: occupied } });
-      }
-    }
-  }
-
-  // ── quality ──────────────────────────────────────────────────────────────
-  private autoTier: Quality = "high";
-  private slowFor = 0;
-  private startedAt = Date.now();
-
-  qualityNow(): Quality {
-    return prefs().quality === "auto" ? this.autoTier : resolveQuality(prefs().quality);
-  }
-
-  // Frames per second, at most, right now: the setting — or 30 once nothing
-  // has moved for a while (ambient life alone doesn't need more). 0 = no cap.
-  private fpsCap(now: number): number {
-    const cap = prefs().maxFps;
-    if (!cap) return 0;
-    const last = Math.max(this.activeAt, this.model?.activeAt ?? 0, this.tp?.activeAt ?? 0);
-    const h = hud.get();
-    const idle = now - last > IDLE_MS && !h.build.on && !h.menu && !this.path;
-    return idle ? Math.min(30, cap) : cap;
-  }
-
-  // HUD pieces that follow the picture (tags, meters): run once per drawn frame
-  onFrame(cb: () => void): () => void {
-    this.hudFrames.add(cb);
-    return () => void this.hudFrames.delete(cb);
-  }
-
-  private watchFrameRate() {
-    const e = this.model;
-    if (!e || !this.tp || prefs().quality !== "auto" || Date.now() - this.startedAt < 8000 || document.hidden) return;
-    const fps = this.tp.fps;
-    // (under the cap, or 30 when idle: slow is well under what's asked for)
-    const cap = this.fpsCap(performance.now());
-    const floor = cap ? Math.min(40, cap * 0.7) : 40;
-    this.slowFor = fps > 0 && fps < floor ? this.slowFor + 1 : 0;
-    if (this.slowFor < 6 || this.autoTier === "lowest") return;
-    this.slowFor = 0;
-    this.autoTier = this.autoTier === "high" ? "medium" : this.autoTier === "medium" ? "low" : "lowest";
-    e.setQuality(this.autoTier, prefs().reducedMotion);
-    this.tp?.toQuality(this.autoTier);
-  }
-
-  meTile() {
-    return { x: this.me.x, y: this.me.y };
-  }
-
-  // ── input ────────────────────────────────────────────────────────────────
-  private onKeyDown = (e: KeyboardEvent) => {
-    this.activeAt = performance.now();
-    // (the world's still being built behind the loading screen: nothing to do yet)
-    if (hud.get().loading.on) return;
-    const t = e.target as HTMLElement;
-    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable))
-      return;
-    if (hud.get().pickArrival && e.key === "Escape") {
-      e.preventDefault();
-      return this.pickArrival(false);
-    }
-    // the action menu: a number picks, Esc closes; W S / A D / the arrows move the choice, E,
-    // Enter or Space does it (docs/plan/56-the-controls.md C)
-    const menu = hud.get().menu;
-    if (menu) {
-      const i = Number(e.key) - 1;
-      const step = MENU_STEP[e.code] ?? 0;
-      if (e.key === "Escape") this.closeMenu();
-      else if (Number.isInteger(i) && i >= 0 && menu.items[i]?.ok) this.pickAction(menu.items[i].act);
-      else if (step) this.menuStep(step);
-      else if ((e.code === "KeyE" || e.code === "Enter" || e.code === "Space") && !e.repeat) {
-        if (menu.sel !== undefined) this.menuPick();
-      } else return;
-      e.preventDefault();
-      return;
-    }
-    // [ ] (LB and the pad's ↑ ↓: the walker's): the next in the prompt's stack is the focus
-    if ((e.code === "BracketLeft" || e.code === "BracketRight") && this.walker?.targets?.list.length) {
-      this.cycleFocus(e.code === "BracketRight" ? 1 : -1);
-      e.preventDefault();
-      return;
-    }
-    // Tab tapped, the same (Shift+Tab: back), on its release; held, the dark's look at the pockets
-    // (build mode's Tab is its own)
-    if (e.code === "Tab" && !hud.get().build.on && !hud.get().panel.kind && !this.god?.on) {
-      e.preventDefault();
-      if (!e.repeat) this.tabDown = { at: e.timeStamp, back: e.shiftKey };
-      return;
-    }
-    if (hud.get().cable && e.key === "Escape" && !hud.get().panel.kind) {
-      e.preventDefault();
-      return this.dropCable();
-    }
-    // the phone: while it's out it takes the arrows, Enter, Backspace and Esc (WASD still walks)
-    if (hud.get().phone.open && !hud.get().panel.kind && !hud.get().build.on && this.phone?.key(e)) {
-      e.preventDefault();
-      return;
-    }
-    if (hud.get().panel.kind && e.key !== "Escape") return;
-    // god mode: its camera's keys, its own (on foot in the draft: Esc goes back up)
-    if (!hud.get().panel.kind && this.god?.key(e, true)) {
-      e.preventDefault();
-      return;
-    }
-    // in a car: its controls (docs/plan/28-the-car.md, car/controls.ts)
-    if (this.cars?.inCar() && !e.metaKey && !e.ctrlKey && this.cars.key(e, true)) {
-      e.preventDefault();
-      return;
-    }
-    const key = e.key.toLowerCase();
-    if (hud.get().build.on && (e.metaKey || e.ctrlKey) && key === "d") {
-      e.preventDefault();
-      this.build?.duplicate();
-      return;
-    }
-    if (hud.get().build.on && (e.metaKey || e.ctrlKey) && (key === "z" || key === "y")) {
-      e.preventDefault();
-      if (key === "y" || e.shiftKey) this.redo();
-      else this.undo();
-      return;
-    }
-    // (Ctrl's the walk: held, the moving keys still move — Ctrl's other keys stay the browser's)
-    const walking = e.ctrlKey && !e.metaKey && !e.altKey && !!this.walker?.controls.movesMe(e.code);
-    if ((e.metaKey || e.ctrlKey) && !walking) return;
-    if (this.buildKey(key)) {
-      e.preventDefault();
-      return;
-    }
-    // moving and jumping: the keys by where they are on the keyboard (input/bindings.ts)
-    if (this.walker?.controls.world(e.code)) {
-      if (e.code !== "ShiftLeft" && e.code !== "ShiftRight") e.preventDefault();
-      void mixer.resume();
-      return;
-    }
-    if (e.repeat) return;
-    if (key === "e") {
-      // a tap on its release, the menu held (holdFrame)
-      if (!this.use) this.use = { src: "key", at: performance.now(), done: false };
-    } else if (key === "m") void this.toggleMic();
-    else if (key === "v") void this.toggleCam();
-    else if (key === "y") this.swapCamera();
-    else if (key === "p" && !hud.get().build.on) void this.togglePhone();
-    // (the lantern on L till it's an item in the pockets: plan 57 — F focuses, the walker's)
-    else if (key === "l" && !hud.get().build.on) this.toggleTorch();
-    else if (key === "o" && hud.get().isAdmin && !hud.get().build.on) void this.toggleGod();
-    else if (key >= "1" && key <= "8") this.emote(Number(key) - 1);
-    else if (key === "+" || key === "=") this.tp?.zoomBy(1 / 1.15);
-    else if (key === "-") this.tp?.zoomBy(1.15);
-  };
-
-  private tabDown: { at: number; back: boolean } | null = null;
-  private onKeyUp = (e: KeyboardEvent) => {
-    if (e.key.toLowerCase() === "e" && this.use?.src === "key") {
-      const u = this.use;
-      this.use = null;
-      if (!u.done) this.interact();
-    }
-    if (e.code === "Tab" && this.tabDown) {
-      const t = this.tabDown;
-      this.tabDown = null;
-      // (by the events' own times: a long frame between the two is no hold)
-      if (e.timeStamp - t.at < TAB_TAP_MS) this.cycleFocus(t.back ? -1 : 1);
-    }
-    if (this.god?.key(e, false)) return;
-    this.walker?.controls.up(e.code);
-    this.cars?.key(e, false);
-  };
-  private onBlur = () => {
-    this.tabDown = null;
-    this.walker?.clear();
-    this.cars?.blur();
-  };
-  private onFirstGesture = () => void mixer.resume();
-
-  private bindInput() {
+  // The play's own chunks, loaded once the world's joined (from Input.bindInput): my body's
+  // controls, the land round the ground floor, its life and the lot's cars. (Here, not in
+  // ctl/input.ts: these lazy imports keep the page's chunks as they were — plan 72 phase 4.)
+  loadPlay() {
     void loadJumps(); // (a jump's dust and sounds: small, fetched now so the first one has them)
     // my body's controls and the movement core (docs/plan/29-the-move.md): a chunk of their own
     void import("./input").then((m) => {
@@ -4316,7 +2550,7 @@ export class WorldController {
       void import("./grounds-life").then((m) => {
         if (!this.G) return;
         this.life = new m.GroundsLife(G);
-        if (this.tp) this.tp.prints = this.life.prints;
+        if (this.tp) this.tp.printsPart.prints = this.life.prints;
       });
       // (the lot's cars, driven: docs/plan/28-the-car.md, in a chunk of their own — through the view's, tp/game-view.ts)
       void Promise.all([import("./tp/game-view").then((v) => v.loadCars()), loadChars()]).then(([m]) => {
@@ -4325,225 +2559,34 @@ export class WorldController {
         this.objectsDirty = true;
       });
     });
-    window.addEventListener("keydown", this.onKeyDown);
-    window.addEventListener("keyup", this.onKeyUp);
-    window.addEventListener("blur", this.onBlur);
-    window.addEventListener("pointerdown", this.onFirstGesture);
-    window.addEventListener("focus", this.onFocus);
-    window.addEventListener("pagehide", this.onPage);
-    window.addEventListener("pageshow", this.onPage);
   }
 
-  // On the way out (a reload, the tab closed, another page): a goodbye, so the room
-  // lets me go at once — without one it keeps a faded me for a reconnection, a ghost
-  // (docs/plan/36-the-ghost.md). Twice, as neither always gets out before the page is
-  // gone: a beacon (the room cuts my line as a leave, or gives up the seat kept for it)
-  // and the socket's own consented close; my voice goes with it. Stopped with it;
-  // back from the back/forward cache (pageshow): gone from the room, so in again anew.
-  private onPage = (e: PageTransitionEvent) => {
-    if (e.type === "pageshow") return e.persisted && location.reload();
-    this.stopped = true;
-    const r = this.room;
-    if (!r) return;
-    navigator.sendBeacon(`${this.session?.worldUrl.replace(/^ws/, "http")}/bye`, r.reconnectionToken);
-    r.connection.close(4000); // (and the socket's own: a consented leave — whichever gets there)
-  };
-  private unbindInput() {
-    window.removeEventListener("keydown", this.onKeyDown);
-    window.removeEventListener("keyup", this.onKeyUp);
-    window.removeEventListener("blur", this.onBlur);
-    window.removeEventListener("pointerdown", this.onFirstGesture);
-    window.removeEventListener("focus", this.onFocus);
-    window.removeEventListener("pagehide", this.onPage);
-    window.removeEventListener("pageshow", this.onPage);
+  meTile() {
+    return { x: this.me.x, y: this.me.y };
   }
-
-  // back from another tab (maybe the lobby's avatar editor): pick up a saved look
-  private onFocus = () => {
-    if (this.room && hud.get().phase === "ready") void this.syncLook();
-  };
 
   // the Grounds (docs/plan/27), once loaded: what's underfoot out there, its sound
-  private G: typeof import("@yutopia/shared/grounds") | null = null;
+  G: typeof import("@yutopia/shared/grounds") | null = null;
   /** till when the land under me may have moved (`ontoLand`) */
-  private landShifted = 0;
-  private offLandShifted: (() => void) | null = null;
+  landShifted = 0;
+  offLandShifted: (() => void) | null = null;
   /** Under the land where I stand (on the ground floor, out on it): onto it. */
   private ontoLand() {
     if (this.level !== 0 || !this.grid.onLand(this.me.x, this.me.y)) return;
     const g = this.grid.outside?.height(this.me.x, this.me.y);
     if (g !== undefined && this.height.z < g - 0.05) this.height = { z: g, vz: 0, up: false };
   }
-  /** What (x, y)'s feet are on at z, on my floor (docs/plan/63-the-steps.md): what Jolt says they
-   *  stand on — a car's roof, a desk, a porch, a bridge's deck — else the floor's tile (a rug on it)
-   *  or the land (under a bridge: the ice). */
-  footingAt(x: number, y: number, z: number): Floor {
-    const on = this.tp?.underfoot(this.grid, this.level, x, y, z)?.on ?? "";
-    const night = this.model?.getDaylight().night ?? 0;
-    const land = (under = false) => this.life?.footingAt(x, y, this.map, night, this.storm, under) ?? "asphalt";
-    const f = on
-      ? keyFooting(
-          on,
-          (id) => this.objs.get(id)?.kind,
-          (what) => this.life?.thingFooting(what, x, y, this.map, night, this.storm) ?? "snow",
-        )
-      : null;
-    if (f) return f;
-    if (this.grid.onLand(x, y)) return land(on === "land");
-    const t = this.matAt(x, y) ?? TILE_FOOTING[tileAt(this.map, Math.floor(x), Math.floor(y))] ?? "wood";
-    // (the lot's asphalt, open to the sky, wet in the rain as the roads are: docs/plan/65)
-    return t === "asphalt" && this.level === 0 && (this.G?.underfoot().wet ?? 0) > 0.4 ? "wet" : t;
-  }
-  // my steps' state: may they be heard now, at what gait; where the body isn't stepping them, the
-  // way gone since the last
-  private feet: { ok: boolean; gait: StepGait } = { ok: false, gait: "walk" };
-  // (`quiet`: s walked with no step of the body's — it's not stepping: first person, off screen…)
-  private stepped = { quiet: 0, way: 0, side: "R" as "L" | "R", speed: 0 };
-  private stepper: StepPlayer | null = null;
-  private shoe: { avatar: string; shoe: Shoe } = { avatar: "", shoe: "soft" };
-  /** A foot of mine put down (the body's: the 3D view's onStep), or by the way gone (`side` none). */
-  private myStep(side?: "L" | "R") {
-    if (!this.feet.ok) return;
-    if (side) this.stepped.quiet = 0;
-    this.stepped.way = 0;
-    this.stepped.side = side ?? (this.stepped.side === "L" ? "R" : "L");
-    const f = this.myFooting(this.height.z);
-    const S = steps();
-    if (!S) {
-      void loadSteps();
-      sound.stepSynth(f, this.feet.gait === "crouch" ? 0.22 : 0.7);
-      return;
-    }
-    const av = this.room?.state.players.get(this.room.sessionId)?.avatar ?? "";
-    if (av !== this.shoe.avatar) this.shoe = { avatar: av, shoe: S.shoeOf(parseAvatar(av).shoes) };
-    // (setting off, stopping, turning on the spot — the body's slow steps: the sole scuffed too)
-    this.stepPlayer(S).step(f, {
-      gait: this.feet.gait,
-      shoe: this.shoe.shoe,
-      scuff: !!side && this.stepped.speed < S.SCUFF,
-      // (wading, or soaked out of it: docs/plan/66 S9)
-      water: this.waterOver(this.me.x, this.me.y, this.height.z),
-      soaked: this.tp?.wetness(this.room?.sessionId ?? ""),
-    });
-    // (thin ice under me: near its edge while it's young, or all of it then — docs/plan/65, 66 S4)
-    const G = this.G;
-    const thin =
-      f === "ice" && G && this.level === 0 && this.grid.onLand(this.me.x, this.me.y)
-        ? G.iceAt(this.me.x + (this.map.ox ?? 0), this.me.y + (this.map.oy ?? 0))?.thin
-        : false;
-    if (thin && Math.random() < 0.35)
-      this.life?.sound.crack(
-        Math.min(1, 0.4 + (THIN_ICE - (this.room?.state.weather?.ice ?? 1)) / THIN_ICE),
-        this.feet.gait === "crouch" ? 0.4 : 1,
-      );
-  }
-  /** The Grounds' sound round me, every frame — on foot, in a car, on the shuttle, in a lift, in god
-   *  mode. Open to the sky out on the land and on the ground floor's asphalt and concrete (the lot,
-   *  the pavements: as the view's fog has them); under the building's roof on its top floor, its
-   *  windows' rain below. */
-  private hearAround(dt: number) {
-    const land = this.level === 0 && this.grid.onLand(this.me.x, this.me.y);
-    const t = tileAt(this.map, Math.floor(this.me.x), Math.floor(this.me.y));
-    // (the top: the office's own floor too — the building's levels list the floors under it)
-    const top = Math.max(this.building.floor ?? 0, ...(this.building.levels ?? []).map((l) => l.index));
-    this.life?.hear(
-      dt,
-      this.me,
-      this.map,
-      land || (this.level === 0 && (t === "a" || t === "c")),
-      this.model?.getDaylight().night ?? 0,
-      this.storm,
-      this.tp?.fogAir ?? 0,
-      { ...this.hearWeather(), roof: this.level >= top ? ROOF_TOP : ROOF_BELOW, up: this.tp?.earUp() ?? 0 },
-    );
-  }
-  /** The weather for the Grounds' sound (docs/plan/65-the-weather.md W8): the room's, as the view's. */
-  private hearWeather() {
-    const w = this.room?.state.weather;
-    return {
-      car: !!this.cars?.inCar(),
-      hour: this.model?.getDaylight().hour ?? 12,
-      wx: w
-        ? {
-            rain: rainOf(w, this.storm),
-            sleet: w.kind === "sleet",
-            thunder: w.thunder ?? 0,
-            temp: w.temp ?? -5,
-            wet: w.wet ?? 0,
-            ice: w.ice ?? 1,
-            cloud: w.cloud ?? 1,
-            vol: w.vol ?? 1,
-          }
-        : undefined,
-    };
-  }
-  /** Both my feet down at once out of my own hop (a turn round from a run: the 3D view's onHop). */
-  private myHop(hard: number) {
-    const S = steps();
-    if (!S || !this.feet.ok) return;
-    this.stepPlayer(S).land(this.myFooting(this.height.z), hard, { shoe: this.shoe.shoe, thud: false });
-  }
   /** Standing in a lift's car on my floor (its floor answers a landing). */
-  private inLiftCar(x: number, y: number): boolean {
+  inLiftCar(x: number, y: number): boolean {
     for (const o of this.objs.values())
       if (o.kind === "elevator" && objLevel(o, this.building) === this.level && inLift(o, { x, y })) return true;
     return false;
-  }
-  private stepPlayer(S: NonNullable<ReturnType<typeof steps>>): StepPlayer {
-    this.stepper ??= new S.StepPlayer(
-      () => (mixer.ctx?.state === "running" ? mixer.ctx : null),
-      () => mixer.buses.effects,
-      (g, gain) => sound.stepSynth(g, gain * (this.stepper?.vol ?? 1)),
-    );
-    return this.stepper;
-  }
-  // everyone else's: the nearest few on my floor, as loud and where the voices' rule has them (a
-  // stairwell's other floor not: their feet aren't on mine), on what's under their feet
-  private footfalls: Footfalls | null = null;
-  private ears: Ears = {
-    me: "",
-    level: 0,
-    gain: (w) =>
-      hearingGain(
-        this.building,
-        { x: this.me.x, y: this.me.y, level: this.level },
-        { x: w.x, y: w.y, level: w.level ?? this.level },
-        true,
-      ),
-    pan: (w) => this.tp?.pan(this.me, w) ?? 0,
-    footing: (w) => this.footingAt(w.x, w.y, w.z ?? w.ground ?? 0),
-    down: (id) => this.tp?.downed.get(id),
-    lift: (w) => this.inLiftCar(w.x, w.y),
-    soaked: (w) => this.tp?.wetness(w.id) ?? 0,
-    // (phase 5) the far off's top lost; through a doorway, another room: muffled
-    lp: (w) => {
-      // (and faster in the morning fog: docs/plan/64-the-fog.md F6)
-      const f = 16000 / (1 + 0.35 * Math.hypot(w.x - this.me.x, w.y - this.me.y) * (1 + 1.5 * (this.tp?.fogAir ?? 0)));
-      const a = areaAt(this.map, w.x, w.y);
-      const b = areaAt(this.map, this.me.x, this.me.y);
-      return (a?.key ?? "") !== (b?.key ?? "") && a?.kind !== "stage" && b?.kind !== "stage" ? Math.min(f, 900) : f;
-    },
-  };
-  /** who stepped out of a car this frame (their feet heard down once they're drawn again) */
-  private alighted: string[] = [];
-  private wasInCar = false;
-  private theirSteps(bodies: Walker[], dt: number) {
-    const S = steps();
-    if (!S) {
-      void loadSteps();
-      return;
-    }
-    this.footfalls ??= new S.Footfalls(this.stepPlayer(S));
-    this.ears.me = this.room?.sessionId ?? "";
-    this.ears.level = this.level;
-    this.footfalls.frame(bodies, this.ears, dt, performance.now());
-    for (const id of this.alighted.splice(0)) this.footfalls.alight(id);
   }
   // where the body isn't stepping (first person, `?anim=old`, reduced motion, before its chunk's
   // in): a step every half a stride I go (plan 58's strides: tiles)
   // the kind of space I'm in, for the steps' reverb (phase 5): the stairs, a lift's car, a room by its
   // size (the server room's metal, a booth's deadened walls), out on the land by what's underfoot
-  private spaceHere(f: Floor): Space {
+  spaceHere(f: Floor): Space {
     if (this.grid.onRamp(this.me.x, this.me.y)) return "stairs";
     if (this.inLiftCar(this.me.x, this.me.y)) return "lift";
     if (this.grid.onLand(this.me.x, this.me.y))
@@ -4555,54 +2598,13 @@ export class WorldController {
     const n = a.w * a.h;
     return n < 60 ? "small" : n < 250 ? "room" : "hall";
   }
-  private stepsBy(went: number, f: Floor, dt: number) {
-    this.stepper?.space(this.spaceHere(f));
-    // (the steps' volume an admin set, for everyone: the room's)
-    this.stepper?.volume(this.room?.state.stepsVol ?? 1);
-    // (the puddles out there: a splash now and then on a wet way — docs/plan/65)
-    this.stepper?.puddled(this.room?.state.weather?.puddles ?? 0);
-    if (dt > 0 && went < 1.5) this.stepped.speed += (went / dt - this.stepped.speed) * Math.min(1, dt * 8);
-    this.stepper?.preload(f);
-    if (!this.feet.ok || went > 1.5) return;
-    this.stepped.way += went;
-    // (setting off, the body's first foot's down a third of a second in: none by the way till half a
-    // second's gone with no foot of its own)
-    if (went > 0) this.stepped.quiet += dt;
-    if (this.stepped.quiet < QUIET) return;
-    if (this.stepped.way >= HALF_STRIDE[this.feet.gait]) this.myStep();
-  }
-  // mine, looked again only when I've gone a little way (a step's worth) or up or down
-  private footing = { x: Number.NaN, y: Number.NaN, z: 0, level: -1, f: "wood" as Floor };
-  private myFooting(z: number): Floor {
-    const m = this.footing;
-    if (Math.hypot(this.me.x - m.x, this.me.y - m.y) < 0.2 && Math.abs(z - m.z) < 0.1 && m.level === this.level)
-      return m.f;
-    this.footing = { x: this.me.x, y: this.me.y, z, level: this.level, f: this.footingAt(this.me.x, this.me.y, z) };
-    return this.footing.f;
-  }
-  // the rugs and mats on my floor, by tile (made again when the things or my floor change)
-  private mats: { key: string; at: Map<number, Floor> } | null = null;
-  private matAt(x: number, y: number): Floor | undefined {
-    const key = `${this.objsRev}|${this.level}`;
-    if (this.mats?.key !== key) {
-      const at = new Map<number, Floor>();
-      for (const o of onLevel(this.objs.values(), this.map)) {
-        const m = MATS[o.kind];
-        if (!m) continue;
-        const { w, h } = footprint(o.kind, o.rot ?? 0);
-        for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) at.set((o.y + j) * 4096 + o.x + i, m);
-      }
-      this.mats = { key, at };
-    }
-    return this.mats.at.get(Math.floor(y) * 4096 + Math.floor(x));
-  }
 
   /** The GPS (docs/plan/37-the-gps.md): where I am on the Grounds' coords (my
    *  floor's corner is somewhere in them), facing (0: north, clockwise), my floor. */
   gpsWhere(): { x: number; z: number; h: number; level: number } {
     return {
-      x: this.me.x + (this.map.ox ?? 0),
-      z: this.me.y + (this.map.oy ?? 0),
+      x: this.me.x,
+      z: this.me.y,
       h: this.meAngle + Math.PI / 2,
       level: this.level,
     };
@@ -4617,7 +2619,7 @@ export class WorldController {
   wind = 0;
 
   // ── helpers ──────────────────────────────────────────────────────────────
-  private avatarState(p: S, _local: boolean): AvatarState {
+  private avatarState(p: Player, _local: boolean): AvatarState {
     const look = parseAvatar(p.avatar);
     return {
       name: p.name,
@@ -4625,7 +2627,7 @@ export class WorldController {
       avatar: p.focus ? { ...look, accessory: "headphones" } : look,
       x: p.x,
       y: p.y,
-      d: p.d,
+      yaw: byteFace(p.yaw),
       a: p.a,
       status: p.status,
       speaking: p.speaking,
@@ -4658,13 +2660,14 @@ export class WorldController {
     };
   }
 
-  private npcState(n: S): AvatarState {
+  // (Vortex as the room has him, or a stand-in of his drawn by the Grounds' life: what's read of him)
+  private npcState(n: Pick<Npc, "x" | "y" | "yaw" | "a" | "mood">): AvatarState {
     return {
       name: "VORTEX",
       avatar: VORTEX_LOOK,
       x: n.x,
       y: n.y,
-      d: n.d,
+      yaw: byteFace(n.yaw),
       a: n.a,
       status: "online",
       speaking: false,
@@ -4674,68 +2677,130 @@ export class WorldController {
       npc: true,
     };
   }
-}
 
-// riding the shuttle (docs/plan/27, phase 6: grounds-life.ts)
-const RIDING = "ride:shuttle";
+  /** (moved to ActionMenu: read from outside) */
+  menuFor(...a: Parameters<ActionMenu["menuFor"]>): ReturnType<ActionMenu["menuFor"]> {
+    return this.menu.menuFor(...a);
+  }
+  /** (moved to ActionMenu: read from outside) */
+  openMenu(...a: Parameters<ActionMenu["openMenu"]>): ReturnType<ActionMenu["openMenu"]> {
+    return this.menu.openMenu(...a);
+  }
+  /** (moved to ActionMenu: read from outside) */
+  activateObject(...a: Parameters<ActionMenu["activateObject"]>): ReturnType<ActionMenu["activateObject"]> {
+    return this.menu.activateObject(...a);
+  }
 
-const VORTEX_LOOK = parseAvatar({
-  body: "slim",
-  skin: "#9aa67e",
-  hair: "mohawk",
-  hairColor: "#c4402b",
-  top: "jacket",
-  topColor: "#2a2420",
-  bottom: "trousers",
-  bottomColor: "#1c1410",
-  accessory: "glasses",
-  accessoryColor: "#ffa630",
-});
+  /** (moved to Steps: read from outside) */
+  footingAt(...a: Parameters<Steps["footingAt"]>): ReturnType<Steps["footingAt"]> {
+    return this.steps.footingAt(...a);
+  }
+  /** (moved to Steps: read from outside) */
+  get feet() {
+    return this.steps.feet;
+  }
+  set feet(v) {
+    this.steps.feet = v;
+  }
+  /** (moved to Steps: read from outside) */
+  get stepper() {
+    return this.steps.stepper;
+  }
+  set stepper(v) {
+    this.steps.stepper = v;
+  }
+  /** (moved to Steps: read from outside) */
+  myStep(...a: Parameters<Steps["myStep"]>): ReturnType<Steps["myStep"]> {
+    return this.steps.myStep(...a);
+  }
+  /** (moved to Steps: read from outside) */
+  get footfalls() {
+    return this.steps.footfalls;
+  }
+  set footfalls(v) {
+    this.steps.footfalls = v;
+  }
+  /** (moved to Steps: read from outside) */
+  get ears() {
+    return this.steps.ears;
+  }
+  set ears(v) {
+    this.steps.ears = v;
+  }
+  /** (moved to Steps: read from outside) */
+  myFooting(...a: Parameters<Steps["myFooting"]>): ReturnType<Steps["myFooting"]> {
+    return this.steps.myFooting(...a);
+  }
 
-// A pet's look, clothes and needs as the server keeps them (it cleans them on the way in).
-const petNeeds = (pet: S) => ({
-  food: pet.food,
-  water: pet.water,
-  energy: pet.energy,
-  fun: pet.fun,
-  health: pet.health,
-});
-const petLook = (pet: S): PetLook =>
-  ({ color: "#c68a5e", mark: "none", markColor: "#efe4cc", breed: "", ...safeParse(pet.look) }) as PetLook;
-const petOutfit = (pet: S): PetOutfit =>
-  ({
-    hat: "none",
-    hatColor: "#c4402b",
-    collar: "none",
-    collarColor: "#c4402b",
-    coat: "none",
-    coatColor: "#6e7b3a",
-    ...safeParse(pet.outfit),
-  }) as PetOutfit;
+  /** (moved to Focus: read from outside) */
+  offAt(...a: Parameters<Focus["offAt"]>): ReturnType<Focus["offAt"]> {
+    return this.focus.offAt(...a);
+  }
+  /** (moved to Focus: read from outside) */
+  get focusHost() {
+    return this.focus.focusHost;
+  }
+  /** (moved to Focus: read from outside) */
+  interact(...a: Parameters<Focus["interact"]>): ReturnType<Focus["interact"]> {
+    return this.focus.interact(...a);
+  }
 
-function safeParse(s: string): Record<string, unknown> {
-  try {
-    const v = JSON.parse(s || "{}");
-    return v && typeof v === "object" ? v : {};
-  } catch {
-    return {};
+  /** (moved to Photo: read from outside) */
+  photoMode(...a: Parameters<Photo["photoMode"]>): ReturnType<Photo["photoMode"]> {
+    return this.photos.photoMode(...a);
+  }
+  /** (moved to Photo: read from outside) */
+  photoZoom(...a: Parameters<Photo["photoZoom"]>): ReturnType<Photo["photoZoom"]> {
+    return this.photos.photoZoom(...a);
+  }
+  /** (moved to Photo: read from outside) */
+  photoTurn(...a: Parameters<Photo["photoTurn"]>): ReturnType<Photo["photoTurn"]> {
+    return this.photos.photoTurn(...a);
+  }
+  /** (moved to Photo: read from outside) */
+  photoTilt(...a: Parameters<Photo["photoTilt"]>): ReturnType<Photo["photoTilt"]> {
+    return this.photos.photoTilt(...a);
+  }
+  /** (moved to Photo: read from outside) */
+  snapshot(...a: Parameters<Photo["snapshot"]>): ReturnType<Photo["snapshot"]> {
+    return this.photos.snapshot(...a);
+  }
+  /** (moved to Photo: read from outside) */
+  flashPerson(...a: Parameters<Photo["flashPerson"]>): ReturnType<Photo["flashPerson"]> {
+    return this.photos.flashPerson(...a);
+  }
+
+  /** (moved to Tables: read from outside) */
+  get chess() {
+    return this.tableGames.chess;
+  }
+  set chess(v) {
+    this.tableGames.chess = v;
+  }
+  /** (moved to Tables: read from outside) */
+  get tables() {
+    return this.tableGames.tables;
+  }
+  set tables(v) {
+    this.tableGames.tables = v;
+  }
+
+  /** (moved to QualityWatch: read from outside) */
+  qualityNow(...a: Parameters<QualityWatch["qualityNow"]>): ReturnType<QualityWatch["qualityNow"]> {
+    return this.quality.qualityNow(...a);
+  }
+  /** (moved to QualityWatch: read from outside) */
+  onFrame(...a: Parameters<QualityWatch["onFrame"]>): ReturnType<QualityWatch["onFrame"]> {
+    return this.quality.onFrame(...a);
   }
 }
-function safeParseList(s: string): unknown[] {
-  try {
-    const v = JSON.parse(s || "[]");
-    return Array.isArray(v) ? v : [];
-  } catch {
-    return [];
-  }
-}
 
-function objFromState(o: S): WorldObjectDef {
+function objFromState(o: WorldObject): WorldObjectDef {
   let props: Record<string, unknown> = {};
   try {
     props = JSON.parse(o.props || "{}");
   } catch {}
-  return { id: o.id, kind: o.kind, x: o.x, y: o.y, rot: o.rot, refId: o.refId || null, props };
+  return { id: o.id, kind: o.kind, x: o.x, y: o.y, yaw: quarterYaw(quarterOf(o)), refId: o.refId || null, props };
 }
 
 // where someone was at `at` (between the samples round it; past the last, on the way they were
@@ -4765,7 +2830,5 @@ function interpolate<T extends { t: number; x: number; y: number; z?: number; a?
   return of(buf[buf.length - 1]);
 }
 
-/** How hard it's raining (0 … 1) by the room's weather: what the view draws and the sound plays. */
-function rainOf(w: { kind?: string; fall?: number }, storm: number): number {
-  return w.kind === "rain" || w.kind === "sleet" ? Math.min(1, Math.max(storm, (w.fall ?? 0) * 1.5)) : 0;
-}
+/** How long after the land changes my feet are kept on it (till the physics' ground is made). */
+const LAND_SHIFTED_MS = 6000;

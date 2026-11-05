@@ -1,6 +1,6 @@
-import { ISO_PX } from "@yutopia/shared";
 import { TV_SCREEN } from "@yutopia/shared/games";
 import { GLASS } from "@yutopia/shared/media";
+import { artM as iso } from "@yutopia/shared/units";
 import { ball, box, cushion, cyl, type Look, lathe, type Model, ring, rod, tube } from "./kit";
 import { P, shade } from "./palette";
 
@@ -31,7 +31,6 @@ export const SCREEN_LOOKS = {
   console_ps1_slim: ["Slim disc console", "Slim, with its screen"],
 } as const;
 
-const iso = (px: number) => px / ISO_PX;
 const BACK = 0.004; // the glass behind the picture's plane (its case further behind still: never level with it)
 const WOOD_GRAIN = 0x6a4428;
 
@@ -71,8 +70,8 @@ export function crtTv(m: Model, o: Look) {
   const g = TV_SCREEN;
   const body = o.look === 1 ? 0x24231f : WOOD_GRAIN;
   const trim = o.look === 1 ? 0x3a3935 : 0xc9b48a;
-  const y0 = iso(g.z0);
-  const y1 = iso(g.z1);
+  const y0 = g.z0;
+  const y1 = g.z1;
   const face = g.y;
   // the stand: a top, a shelf, four legs
   m.add(box([1.4, 0.03, 0.56], 0.006, 2), P.walnutDark, { at: [1, 0.4, 0.52] });
@@ -147,7 +146,7 @@ export function tvConsole(m: Model, o: Look) {
     at: [1, 0.1 + (top - 0.1) / 2, (0.26 + face) / 2 - BACK - 0.004],
   });
   m.add(box([1.86, 0.025, face - 0.24], 0.006), shade(wood, 1.12), { at: [1, top - 0.0125, (0.26 + face) / 2 - BACK] });
-  glass(m, g.x0, g.x1, iso(g.z0), iso(g.z1), face, shade(wood, 0.8), 0.04);
+  glass(m, g.x0, g.x1, g.z0, g.z1, face, shade(wood, 0.8), 0.04);
   // the speaker: grille cloth, slats over it; the dials under it
   m.add(box([0.36, 0.5, 0.006]), 0xc9b48a, { at: [1.67, 0.75, face - BACK - 0.003] });
   for (let i = 0; i < 9; i++)
@@ -162,8 +161,8 @@ export function tvPortable(m: Model, o: Look) {
   const g = GLASS.tv_portable;
   const c = o.look === 1 ? P.cream : 0xa83a2c;
   const face = g.y;
-  const y0 = iso(g.z0);
-  const y1 = iso(g.z1);
+  const y0 = g.z0;
+  const y1 = g.z1;
   m.add(cushion([0.5, y1 - y0 + 0.1, face - 0.45], 0.04, 2), c, {
     at: [0.5, (y0 + y1) / 2, (0.45 + face) / 2 - BACK - 0.003],
   });
@@ -216,7 +215,7 @@ export function projector(m: Model, o: Look) {
 // (their front faces at z 0.74, the cartridge ones' power LED at (0.3, 0.051): room.ts LED_FRONT)
 const FRONT = 0.74;
 const ledFront = (m: Model, on = 0xff6a3a) =>
-  m.add(box([0.012, 0.008, 0.004]), on, { at: [0.3, iso(2), FRONT + 0.001], glow: true });
+  m.add(box([0.012, 0.008, 0.004]), on, { at: [0.3, 0.051, FRONT + 0.001], glow: true });
 
 /** The 2600: a black ribbed top, a wood-grain front with its switches, the cartridge slot. */
 export function console2600(m: Model, _o: Look) {
@@ -319,7 +318,7 @@ export function consolePs1(m: Model, _o: Look) {
     [0.66, 0x8a8780],
   ] as [number, number][])
     m.add(cyl(0.02, 0.02, 0.006, 12), c, { at: [x, 0.105, 0.6] });
-  m.add(cyl(0.012, 0.012, 0.006, 10), 0x7dff7a, { at: [0.7, iso(4.5) - 0.006, 0.545], glow: true });
+  m.add(cyl(0.012, 0.012, 0.006, 10), 0x7dff7a, { at: [0.7, 0.1148 - 0.006, 0.545], glow: true });
   for (const x of [0.35, 0.65]) m.add(box([0.08, 0.025, 0.004]), P.ink, { at: [x, 0.04, 0.737] });
 }
 
@@ -341,7 +340,7 @@ export function consolePs1Slim(m: Model, o: Look) {
     0xd8d4cc,
     { at: [0.47, 0.088, 0.56] },
   );
-  m.add(cyl(0.01, 0.01, 0.006, 10), 0x7dff7a, { at: [0.71, iso(3.7) - 0.006, 0.67], glow: true });
+  m.add(cyl(0.01, 0.01, 0.006, 10), 0x7dff7a, { at: [0.71, 0.0944 - 0.006, 0.67], glow: true });
   if (o.look === 1) {
     const l = { x0: 0.29, x1: 0.65, y: 0.336, z0: 5.8, z1: 16.8 };
     m.add(box([0.38, iso(l.z1) - iso(l.z0) + 0.04, 0.02], 0.006, 2), 0xd8d4cc, {
@@ -359,8 +358,8 @@ export function consolePs1Slim(m: Model, o: Look) {
 export function tvWall(m: Model, o: Look) {
   const g = GLASS.tv_wall;
   const c = o.look === 1 ? 0x24231f : 0x8f8b84;
-  const y0 = iso(g.z0);
-  const y1 = iso(g.z1);
+  const y0 = g.z0;
+  const y1 = g.z1;
   m.add(box([0.62, y1 - y0 + 0.1, 0.2], 0.03, 2), c, { at: [0.48, (y0 + y1) / 2, g.y - 0.1 - BACK - 0.006] });
   m.add(box([0.4, y1 - y0 - 0.04, 0.1], 0.05, 2), shade(c, 0.85), { at: [0.46, (y0 + y1) / 2, g.y - 0.24] });
   glass(m, g.x0, g.x1, y0, y1, g.y, shade(c, 0.8), 0.02);
@@ -372,8 +371,8 @@ export function tvWall(m: Model, o: Look) {
 
 /** A flat panel on a wall mount: its thin bezel, a little chin with its LED. */
 function flatPanel(m: Model, g: { x0: number; x1: number; y: number; z0: number; z1: number }) {
-  const y0 = iso(g.z0);
-  const y1 = iso(g.z1);
+  const y0 = g.z0;
+  const y1 = g.z1;
   const cx = (g.x0 + g.x1) / 2;
   m.add(box([g.x1 - g.x0 + 0.04, y1 - y0 + 0.04, 0.03], 0.006, 2), 0x1b1b1d, {
     at: [cx, (y0 + y1) / 2, g.y - 0.017 - BACK - 0.004],
@@ -390,8 +389,8 @@ export const tvGiant = (m: Model, _o: Look) => flatPanel(m, GLASS.tv_giant);
  *  black border, the bar and the pull tab at its foot. */
 export function projectorScreen(m: Model, _o: Look) {
   const g = GLASS.projector_screen;
-  const y0 = iso(g.z0);
-  const y1 = iso(g.z1);
+  const y0 = g.z0;
+  const y1 = g.z1;
   m.add(rod(0.05, 0.05, 2.96, "x", 14), P.alum, { at: [1.5, y1 + 0.08, 0.16] });
   for (const x of [0.06, 2.94]) m.add(box([0.03, 0.12, 0.08], 0.004), P.steel, { at: [x, y1 + 0.08, 0.14] });
   glass(m, g.x0, g.x1, y0, y1, g.y, P.ink, 0.04, { matte: true, depth: 0.004 });
@@ -404,8 +403,8 @@ export function projectorScreen(m: Model, _o: Look) {
  *  its red velvet curtains back to either side. */
 export function cinemaScreen(m: Model, o: Look) {
   const g = GLASS.cinema_screen;
-  const y0 = iso(g.z0);
-  const y1 = iso(g.z1);
+  const y0 = g.z0;
+  const y1 = g.z1;
   glass(m, g.x0, g.x1, y0, y1, g.y, P.ink, 0.08, { matte: true, depth: 0.03 });
   m.add(box([5.9, 0.28, 0.06], 0.01, 2), o.look === 1 ? 0x6a1a1c : P.ink, { at: [3, y1 + 0.2, g.y - 0.02] });
   if (o.look !== 1) return;

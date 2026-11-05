@@ -248,8 +248,6 @@ export class DarkSound {
     const lp = room.state.players.get(room.sessionId);
     const hour = room.state.hour as number;
     const night = nightness(hour);
-    const ox = ctl.map?.ox ?? 0;
-    const oy = ctl.map?.oy ?? 0;
     const list = out ? this.shades.list() : [];
 
     // the drone: the danger here, turned towards hunted by how near the nearest is
@@ -278,9 +276,9 @@ export class DarkSound {
       ? dangerAt({
           hour,
           storm: room.state.storm,
-          x: me.x + ox,
-          z: me.y + oy,
-          lit: night > 0.3 && inLampPool(me.x + ox, me.y + oy),
+          x: me.x,
+          z: me.y,
+          lit: night > 0.3 && inLampPool(me.x, me.y),
           inHQ: false,
         })
       : 0;

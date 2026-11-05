@@ -74,7 +74,7 @@ test("pool balls: a ball off the table thrown knocks Bia down; the cue fires bal
     ]) {
       const p = { x: Math.floor(sp.x) + dx, y: Math.floor(sp.y) + dy };
       await ana.evaluate(
-        ([i, q]) => (window as any).__yutopia.send("obj:put", { id: i, kind: "pool_table", x: q.x, y: q.y, rot: 0 }),
+        ([i, q]) => (window as any).__yutopia.send("obj:put", { id: i, kind: "pool_table", x: q.x, y: q.y, yaw: 0 }),
         [id, p] as const,
       );
       await ana.waitForTimeout(600);

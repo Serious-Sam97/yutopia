@@ -11,9 +11,9 @@ export class Player extends Schema {
   @type("string") name = "";
   @type("float32") x = 0;
   @type("float32") y = 0;
-  @type("float32") z = 0; // feet off the floor (on something, in a jump, on the stairs), tiles
+  @type("float32") z = 0; // the feet's height, the world's (m; plan 72 phase 6 — shared levels.ts
+  // overFloor gives it over their floor, what the grid and the walker work in)
   @type("uint8") level = 0; // the floor they're on (shared levels.ts)
-  @type("uint8") d = 0;
   @type("uint8") a = 0;
   @type("string") area = "";
   @type("string") status = "online";
@@ -142,12 +142,14 @@ export class Flare extends Schema {
   @type("uint8") level = 0;
 }
 
+// A thing (plan 72 phase 5: metres and radians, floats end to end — still placed on whole tiles
+// and turned by quarters until the build tool frees them, phase 11).
 export class WorldObject extends Schema {
   @type("string") id = "";
   @type("string") kind = "";
-  @type("int16") x = 0;
-  @type("int16") y = 0;
-  @type("uint8") rot = 0;
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") yaw = 0;
   @type("number") refId = 0;
   @type("string") props = "{}";
 }
@@ -159,7 +161,8 @@ export class Npc extends Schema {
   @type("float32") y = 0;
   // how high they're drawn (0: on the ground under them; the Kart Park's folk sitting: their seat's)
   @type("float32") z = 0;
-  @type("uint8") d = 0;
+  // which way they face: a byte, 256 a turn (shared move faceByte), as a player's `yaw`
+  @type("uint8") yaw = 0;
   @type("uint8") a = 0;
   @type("string") mood = "idle";
   @type("string") say = "";
@@ -335,7 +338,7 @@ export class Pet extends Schema {
   @type("float32") x = 0;
   @type("float32") y = 0;
   @type("uint8") floor = 0; // the floor of the building it's on (its owner's, shared levels.ts)
-  @type("uint8") d = 0;
+  @type("uint8") yaw = 0; // which way it faces: a byte, 256 a turn (shared move faceByte)
   @type("uint8") a = 0; // ANIM: idle / walk / sit (asleep)
   @type("string") mode = "follow"; // shared PetMode
   // what it's doing right now ("" for nothing): eat, drink, pet, play:<toy>,
@@ -578,25 +581,12 @@ export class Weather extends Schema {
 export class WorldState extends Schema {
   @type("string") name = "";
   @type("string") mapKey = "studio";
-  // the map itself (the world's layout): tiles rows, rooms as JSON, arrival point
-  @type("uint16") width = 0;
-  @type("uint16") height = 0;
-  @type(["string"]) tiles = new ArraySchema<string>();
-  // walls on tile edges (map v2): north edges per row, west edges per row
-  @type(["string"]) hWalls = new ArraySchema<string>();
-  @type(["string"]) vWalls = new ArraySchema<string>();
-  // their other faces' materials where they differ (shared map.ts: two faces); empty = none
-  @type(["string"]) hBacks = new ArraySchema<string>();
-  @type(["string"]) vBacks = new ArraySchema<string>();
-  @type("string") areas = "[]";
-  @type("float32") spawnX = 0;
-  @type("float32") spawnY = 0;
-  @type("uint32") mapVersion = 0;
+  // the building's structure's revision (docs/plan/72-the-3d-core.md, phase 6): the structure
+  // itself goes by message — whole when asked ("struct:get" → "struct:full"), then edits as
+  // operations ("struct:ops", from one revision to the next) — never the whole map again
+  @type("uint32") structRev = 0;
   // god mode's edits to the Grounds laid now (docs/plan/53-the-god-mode.md): clients fetch them
   @type("uint32") groundsRev = 0;
-  // the building (shared levels.ts): the floor the map above is, and the others (LevelDef[], JSON)
-  @type("uint8") floor = 0;
-  @type("string") levels = "[]";
   // the weather over the Grounds (shared weather.ts): 0 calm … 1 a blizzard, and
   // where the wind blows from (radians)
   @type("float32") storm = 0;

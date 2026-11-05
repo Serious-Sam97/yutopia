@@ -82,7 +82,7 @@ export class VitalsHud {
           const d = Math.hypot(p.x - me.x, p.y - me.y);
           if (d > TEAM || !ctl.grid.onLand(p.x, p.y)) return;
           // (out of every light in the dark, unseen: no tag over them either — docs/plan/44 N4)
-          if (ctl.tp?.isUnseen(p.sid)) return;
+          if (ctl.tp?.eyes.isUnseen(p.sid)) return;
           seen.add(p.sid);
           let el = this.tags.get(p.sid);
           if (!el) {
@@ -91,7 +91,7 @@ export class VitalsHud {
             this.root.append(el);
             this.tags.set(p.sid, el);
           }
-          const c = ctl.clientAt(p.x, p.y, (p.z + 1.95) * 39.19);
+          const c = ctl.clientAt(p.x, p.y, p.z + 1.95);
           const r = ctl.hostRect();
           el.style.left = `${c.x + r.left}px`;
           el.style.top = `${c.y + r.top}px`;

@@ -82,7 +82,7 @@ async function spotFor(page: Page, kind: string, x: number, y: number, front = {
   spots.sort((a, b) => Math.hypot(a[0] - x, a[1] - y) - Math.hypot(b[0] - x, b[1] - y));
   for (const [sx, sy] of spots)
     if (
-      canPlace(map, objects, { id: "probe", kind, x: sx, y: sy, rot: 0 }, bodies) &&
+      canPlace(map, objects, { id: "probe", kind, x: sx, y: sy, yaw: 0 }, bodies) &&
       findPath(grid, { x: x + 0.5, y: y + 0.5 }, { x: sx + front.dx + 0.5, y: sy + front.dy + 0.5 })
     )
       return { x: sx, y: sy };
@@ -118,7 +118,7 @@ test("media: a YouTube video on a wall TV — left playing, found at the right s
     const sp = await ana.evaluate(() => (window as any).__yutopia.map.spawn);
     const at = await spotFor(ana, "tv_hd", Math.floor(sp.x), Math.floor(sp.y), { dx: 1, dy: 1 });
     expect(at, "a wall for the TV").toBeTruthy();
-    await ana.evaluate((o) => (window as any).__yutopia.send("obj:put", o), { id: tvId, kind: "tv_hd", ...at, rot: 0 });
+    await ana.evaluate((o) => (window as any).__yutopia.send("obj:put", o), { id: tvId, kind: "tv_hd", ...at, yaw: 0 });
     await ana.waitForFunction((i) => !!(window as any).__yutopia.room.state.objects.get(i), tvId, { timeout: 10_000 });
     // put a video on it
     await ana.evaluate(
@@ -209,7 +209,7 @@ test("media: YouTube on a radio — its own queue, the card plays near it, a sta
   for (const d of objects.filter((o) => o.kind === "desk"))
     for (let qy = d.y * Q; qy < (d.y + 2) * Q && !box; qy++)
       for (let qx = d.x * Q; qx < (d.x + 2) * Q && !box; qx++) {
-        const r = topAt({ id: radioId, kind: "radio", x: 0, y: 0, rot: 0 }, qx, qy);
+        const r = topAt({ id: radioId, kind: "radio", x: 0, y: 0, yaw: 0 }, qx, qy);
         if (canPlace(map, objects, r, [])) box = r;
       }
   expect(box, "a desk with room for a radio").toBeTruthy();
@@ -337,7 +337,7 @@ test("media: one saved playlist after another on a radio", async ({ browser }) =
   for (const d of objects.filter((o) => o.kind === "desk"))
     for (let qy = d.y * Q; qy < (d.y + 2) * Q && !box; qy++)
       for (let qx = d.x * Q; qx < (d.x + 2) * Q && !box; qx++) {
-        const r = topAt({ id: radioId, kind: "radio", x: 0, y: 0, rot: 0 }, qx, qy);
+        const r = topAt({ id: radioId, kind: "radio", x: 0, y: 0, yaw: 0 }, qx, qy);
         if (canPlace(map, objects, r, [])) box = r;
       }
   expect(box, "a desk with room for a radio").toBeTruthy();
@@ -423,7 +423,7 @@ test("media: Jellyfin on a console TV — the stream on the glass, in step (live
       id: tvId,
       kind: "tv_console",
       ...at,
-      rot: 0,
+      yaw: 0,
     });
     await ana.waitForFunction((i) => !!(window as any).__yutopia.room.state.objects.get(i), tvId, { timeout: 10_000 });
     await ana.evaluate(

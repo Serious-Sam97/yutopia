@@ -1,3 +1,4 @@
+import { quarterOf } from "./catalog.ts";
 // Media on TVs and the radio (docs/plan/10-media.md): what plays, the shared
 // timeline everyone keeps to, the queue, where each TV's glass is, and the
 // checks on what people send. Shared by the client (players, panels), the
@@ -194,7 +195,7 @@ export function skip(m: MediaState, now: number, by: string): MediaState {
 
 // ── where the picture goes ───────────────────────────────────────────────────
 // The glass of each display, in rot-0 local tiles (x along the front, y the
-// plane it's on, z px up): the art draws the set around it, the client maps
+// plane it's on, z m up): the art draws the set around it, the client maps
 // the picture onto it. `wall`: hangs on a wall (any face, anywhere: hang.ts).
 export interface Glass {
   x0: number;
@@ -212,14 +213,14 @@ export interface Glass {
 // few hundredths in front of it.
 export const GLASS: Record<string, Glass> = {
   crt_tv: { ...TV_SCREEN, aspect: 4 / 3, look: "crt" },
-  tv_console: { x0: 0.42, x1: 1.4, y: 0.87, z0: 15, z1: 40, aspect: 4 / 3, look: "crt" },
-  tv_portable: { x0: 0.3, x1: 0.62, y: 0.69, z0: 4, z1: 12.5, aspect: 4 / 3, look: "crt", top: true },
-  tv_wall: { x0: 0.22, x1: 0.7, y: 0.42, z0: 55, z1: 74, aspect: 4 / 3, look: "crt", wall: true },
-  tv_hd: { x0: 0.2, x1: 2.8, y: 0.17, z0: 28, z1: 78, aspect: 16 / 9, look: "hd", wall: true },
-  projector_screen: { x0: 0.16, x1: 2.84, y: 0.15, z0: 24, z1: 80, aspect: 16 / 9, look: "screen", wall: true },
-  tv_giant: { x0: 0.35, x1: 4.65, y: 0.17, z0: 28, z1: 115, aspect: 16 / 9, look: "hd", wall: true },
-  cinema_screen: { x0: 0.68, x1: 5.32, y: 0.15, z0: 18, z1: 112, aspect: 16 / 9, look: "screen", wall: true },
-  screen_wall: { x0: 0.14, x1: 3.86, y: 0.16, z0: 21, z1: 73, aspect: 16 / 9, look: "hd", wall: true },
+  tv_console: { x0: 0.42, x1: 1.4, y: 0.87, z0: 0.3828, z1: 1.0207, aspect: 4 / 3, look: "crt" },
+  tv_portable: { x0: 0.3, x1: 0.62, y: 0.69, z0: 0.1021, z1: 0.319, aspect: 4 / 3, look: "crt", top: true },
+  tv_wall: { x0: 0.22, x1: 0.7, y: 0.42, z0: 1.4035, z1: 1.8884, aspect: 4 / 3, look: "crt", wall: true },
+  tv_hd: { x0: 0.2, x1: 2.8, y: 0.17, z0: 0.7145, z1: 1.9904, aspect: 16 / 9, look: "hd", wall: true },
+  projector_screen: { x0: 0.16, x1: 2.84, y: 0.15, z0: 0.6124, z1: 2.0415, aspect: 16 / 9, look: "screen", wall: true },
+  tv_giant: { x0: 0.35, x1: 4.65, y: 0.17, z0: 0.7145, z1: 2.9346, aspect: 16 / 9, look: "hd", wall: true },
+  cinema_screen: { x0: 0.68, x1: 5.32, y: 0.15, z0: 0.4593, z1: 2.858, aspect: 16 / 9, look: "screen", wall: true },
+  screen_wall: { x0: 0.14, x1: 3.86, y: 0.16, z0: 0.5359, z1: 1.8628, aspect: 16 / 9, look: "hd", wall: true },
   // (plan 68 phase 8: the video wall, the outdoor cinema, the radio-TV cabinet)
   ...FAM_GLASS,
 };
@@ -228,7 +229,7 @@ export const DISPLAY_KINDS = Object.keys(GLASS);
 export const isDisplay = (kind: string): boolean => Object.hasOwn(GLASS, kind);
 
 // The glass's top-left and top-right corners in world tiles, and its top and
-// bottom z (px). Wall displays and TVs turn with the item; a
+// bottom z (m). Wall displays and TVs turn with the item; a
 // portable TV turns round its middle and stands on its surface (props.z).
 export function glassCorners(o: WorldObjectDef): {
   tl: [number, number];
@@ -274,7 +275,7 @@ export function displaySpot(o: WorldObjectDef): { x: number; y: number } {
   const g = GLASS[o.kind];
   if (g?.wall) return hangSpot(o);
   if (g?.top) return topCentre(o);
-  const { w, h } = footprint(o.kind, o.rot ?? 0);
+  const { w, h } = footprint(o.kind, quarterOf(o));
   return { x: o.x + w / 2, y: o.y + h / 2 };
 }
 

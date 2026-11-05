@@ -21,9 +21,10 @@ import {
   standAisles,
   standRoof,
 } from "@yutopia/shared/kart";
+import { artPx } from "@yutopia/shared/units";
 import type * as THREE_NS from "three";
 import { drawBoardFace } from "../../kart/track-map";
-import { MeshSketch, Out, ZPX } from "../kit3d";
+import { MeshSketch, Out } from "../kit3d";
 
 // The Kart Park round its circuit (docs/plan/46-the-karts.md, "the way in"): the paddock (its
 // painted concrete, the rack's shed, race control's hut behind the desk, the lap records, the
@@ -611,7 +612,7 @@ function benches(e: ParkEnv) {
     const out = new Out();
     for (const [i, t] of KART_THINGS.entries()) {
       if (t.kind !== "bench") continue;
-      const lift = e.padY(t.x, t.z) * ZPX;
+      const lift = artPx(e.padY(t.x, t.z)); // (the item art's px)
       const s = new MeshSketch({
         rot: t.hz > t.hx ? 1 : 0,
         w: 3,

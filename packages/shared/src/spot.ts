@@ -1,34 +1,28 @@
 import type { WorldObjectDef } from "./catalog.ts";
+import { quarterYaw } from "./catalog.ts";
 import { type BayBoard, bayById, bayId, boardOf, claimable, type LotBay, type LotLayout } from "./lot.ts";
 
 // Someone's own bay (docs/plan/43-the-spot.md): a claimed bay of the lot has a board at its head
 // with their name, a world object of its own (kind `bayboard`, id `bay-<bay id>`) on the ground
 // floor, saved like any other. Its tile is the post's; the post's exact spot in it is `ox`/`oy`
 // (the lot's numbers don't fall on tiles). One bay each, plain bays only (lot.ts `claimable`).
-//
-// `off`: the ground floor's corner in the building's coords (shared GROUND_OFFSET, the map's
-// ox/oy); the lot is laid out in the building's.
+// The lot is laid out in the world's coords, the ground floor's places too (plan 72's one frame).
 
 export const BOARD_KIND = "bayboard";
 export const boardId = (bay: string) => `bay-${bay}`;
 
 /** The board object for `b`, claimed by `owner`. */
-export function boardObject(
-  l: LotLayout,
-  b: LotBay,
-  owner: { id: number; name: string },
-  off: { x: number; y: number },
-): WorldObjectDef {
+export function boardObject(l: LotLayout, b: LotBay, owner: { id: number; name: string }): WorldObjectDef {
   const w: BayBoard = boardOf(l, b);
-  const mx = w.x - off.x;
-  const my = w.z - off.y;
+  const mx = w.x;
+  const my = w.z;
   const r3 = (v: number) => Math.round(v * 1000) / 1000;
   return {
     id: boardId(bayId(b)),
     kind: BOARD_KIND,
     x: Math.floor(mx),
     y: Math.floor(my),
-    rot: 0,
+    yaw: quarterYaw(0),
     props: {
       level: 0,
       bay: bayId(b),
@@ -66,11 +60,11 @@ export function boardOfOwner(objects: Iterable<WorldObjectDef>, uid: number): Wo
   return null;
 }
 
-/** Where a board's post stands, in the building's coords. */
-export function postOf(o: WorldObjectDef, off: { x: number; y: number }): { x: number; z: number } {
+/** Where a board's post stands. */
+export function postOf(o: WorldObjectDef): { x: number; z: number } {
   return {
-    x: o.x + (Number(o.props?.ox) || 0) + off.x,
-    z: o.y + (Number(o.props?.oy) || 0) + off.y,
+    x: o.x + (Number(o.props?.ox) || 0),
+    z: o.y + (Number(o.props?.oy) || 0),
   };
 }
 

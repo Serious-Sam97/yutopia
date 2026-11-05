@@ -11,7 +11,7 @@ const put = (page: Page, o: Record<string, unknown>) =>
 const obj = (page: Page, id: string) =>
   page.evaluate((i) => {
     const o = (window as any).__yutopia.room.state.objects.get(i);
-    return o ? { x: o.x, y: o.y, rot: o.rot } : null;
+    return o ? { x: o.x, y: o.y, rot: Math.round(o.yaw / (Math.PI / 2)) & 3 } : null;
   }, id);
 const setBuild = (page: Page, b: Record<string, unknown>) =>
   page.evaluate((p) => {
@@ -64,7 +64,7 @@ test("wall things hang on a west wall", async ({ page }) => {
   expect(spot, "the Lab has a free stretch of west wall by a corner").not.toBeNull();
   const { x, y } = spot as { x: number; y: number };
   try {
-    await put(page, { id, kind: "whiteboard", x, y, rot: 3, props: {} });
+    await put(page, { id, kind: "whiteboard", x, y, yaw: (3 * Math.PI) / 2, props: {} });
     await expect.poll(() => obj(page, id)).toEqual({ x, y, rot: 3 });
     // drawn on that wall: its box in the 3D view runs along y, thin across it
     await page.waitForFunction((i) => (window as any).__yutopia.tp.world.picks.some((p: any) => p.id === i), id, {
@@ -109,7 +109,7 @@ test("the sofa: Use held on it, Sit, and you sit on it", async ({ page }) => {
   const X = Math.floor(sp.x) - 1;
   const Y = Math.floor(sp.y) - 3;
   try {
-    await put(page, { id, kind: "sofa", x: X, y: Y, rot: 0, props: {} });
+    await put(page, { id, kind: "sofa", x: X, y: Y, yaw: 0, props: {} });
     await expect.poll(() => obj(page, id)).toEqual({ x: X, y: Y, rot: 0 });
     await actOn(page, X + 1.5, Y + 0.5, { key: `o:${id}` });
     const menu = page.getByRole("menu", { name: /Sofa/ });

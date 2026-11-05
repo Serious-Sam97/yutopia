@@ -9,7 +9,7 @@ import { ANA, BIA, enter, holdHour, test, token, walkTo } from "./helpers";
 // schedule at the end.
 
 // the ground floor's corner is at (-60, -10) in the studio's coords
-const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
+const G = (x: number, y: number) => ({ x, y });
 
 async function open(page: Page, who: typeof ANA) {
   await page.addInitScript(() => {

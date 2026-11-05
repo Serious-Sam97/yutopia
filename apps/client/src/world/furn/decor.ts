@@ -1,4 +1,3 @@
-import { ISO_PX } from "@yutopia/shared";
 import { ball, box, cushion, cyl, type Look, lathe, leaf, type Model, ring, rod, tube, type V3 } from "./kit";
 import { P, shade } from "./palette";
 
@@ -28,7 +27,6 @@ export const DECOR_LOOKS = {
   pk_pole_tall: ["Tall swing pole"],
 } as const;
 
-const iso = (px: number) => px / ISO_PX;
 const rnd = (a: number, b: number, s: number) => {
   const x = Math.sin(a * 127.1 + b * 311.7 + s * 74.7) * 43758.5453;
   return x - Math.floor(x);
@@ -301,7 +299,7 @@ export function partition(m: Model, o: Look) {
 /** A cream column, its shaft fluted, on a walnut base under a walnut capital; (look 1) a note taped
  *  on it. */
 export function column(m: Model, o: Look) {
-  const H = iso(84);
+  const H = 2.1435;
   m.add(box([0.6, 0.12, 0.6], 0.01), P.walnutDark, { at: [0.5, 0.06, 0.5] });
   m.add(
     lathe(
@@ -587,7 +585,7 @@ export function pkRail(m: Model, len: number) {
 /** A free-standing concrete wall 4 tiles wide, `h` m tall: a plinth, the formwork's seams a metre
  *  apart, a cap. */
 export function pkWall(m: Model, h: number) {
-  const cap = iso(6);
+  const cap = 0.1531;
   m.add(box([4.04, 0.15, 0.36], 0.01), 0x857f75, { at: [2, 0.075, 0.5] });
   m.add(box([4, h - cap - 0.15, 0.3], 0.006), 0xb8b2a6, { at: [2, 0.15 + (h - cap - 0.15) / 2, 0.5] });
   for (let y = 1; y < h - cap - 0.1; y += 1)

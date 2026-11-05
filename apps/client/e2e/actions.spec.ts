@@ -30,8 +30,8 @@ test("the action menu: pick from the ring, the queue walks you over and does it"
   const piano = `e2e-am-piano-${stamp}`;
   const cooler = `e2e-am-cool-${stamp}`;
   try {
-    await put(page, { id: piano, kind: "piano", x: X + 3, y: Y, rot: 0 });
-    await put(page, { id: cooler, kind: "water_cooler", x: X, y: Y, rot: 0 });
+    await put(page, { id: piano, kind: "piano", x: X + 3, y: Y, yaw: 0 });
+    await put(page, { id: cooler, kind: "water_cooler", x: X, y: Y, yaw: 0 });
     await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.model.getObject(id), piano)).toBe(true);
     // (between the two, both in reach)
     await walkTo(page, X + 2, Y + 1.9, 20_000);
@@ -91,7 +91,7 @@ test("people: a high five both of you do, a drink handed over", async ({ browser
     const sp = await ana.evaluate(() => (window as any).__yutopia.map.spawn);
     const X = Math.floor(sp.x) - 4;
     const Y = Math.floor(sp.y) - 5;
-    await put(ana, { id: cooler, kind: "water_cooler", x: X, y: Y, rot: 0 });
+    await put(ana, { id: cooler, kind: "water_cooler", x: X, y: Y, yaw: 0 });
     await walkTo(bia, X + 3.5, Y + 3.5, 20_000);
     await walkTo(ana, X + 1.5, Y + 3.5, 20_000);
     await holdCamera(ana, { at: { x: X + 2, y: Y + 2.5 }, dist: 8 });
@@ -125,7 +125,8 @@ test("people: a high five both of you do, a drink handed over", async ({ browser
     await actOn(ana, b.x, b.y, { key: `p:${biaSid}`, near: 1.8 });
     await ana.getByRole("menuitem", { name: "Hand over your drink" }).click();
     await expect.poll(async () => (await me(bia)).held, { timeout: 15_000 }).toBe("cup");
-    expect((await me(ana)).held).toBe("");
+    // (her hand empties in a patch of its own, a moment after Bia's fills)
+    await expect.poll(async () => (await me(ana)).held, { timeout: 5000 }).toBe("");
   } finally {
     await ana.evaluate((id) => (window as any).__yutopia.send("obj:remove", { id }), cooler);
     await bia.evaluate(() => (window as any).__yutopia.send("item:drop", {}));
@@ -194,8 +195,8 @@ test("my desk: focus with headphones on; the room's lights by the switch; a card
     );
     expect(spots.area, "the desk is in a room").toBeTruthy();
     const a = spots.area as { x: number; y: number; w: number; h: number };
-    await put(page, { id: sw, kind: "light_switch", x: a.x + a.w - 1, y: a.y, rot: 0 });
-    await put(page, { id: lamp, kind: "lamp", x: a.x, y: a.y + a.h - 1, rot: 0 });
+    await put(page, { id: sw, kind: "light_switch", x: a.x + a.w - 1, y: a.y, yaw: 0 });
+    await put(page, { id: lamp, kind: "lamp", x: a.x, y: a.y + a.h - 1, yaw: 0 });
     await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.model.getObject(id), lamp)).toBe(true);
     await holdCamera(page, { at: { x: a.x + a.w - 1, y: a.y }, dist: 8 });
     await page.waitForTimeout(400);
@@ -244,7 +245,7 @@ test("my desk: focus with headphones on; the room's lights by the switch; a card
           kind: d.kind,
           x: d.x,
           y: d.y,
-          rot: d.rot ?? 0,
+          yaw: d.yaw ?? 0,
           props: d.props ?? {},
         }),
       desk,

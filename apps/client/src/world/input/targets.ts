@@ -1,6 +1,7 @@
 import { entry, isSocial, type WorldObjectDef } from "@yutopia/shared";
 import { isGameTv } from "@yutopia/shared/games";
 import { TOYS } from "@yutopia/shared/pets";
+import type { WorldState } from "@yutopia/state";
 import { thingLabel } from "../labels";
 import type { ActTarget } from "../store";
 
@@ -34,7 +35,7 @@ export interface Target {
 
 /** What the focus asks of the world (the controller). */
 export interface TargetHost {
-  room: { sessionId: string; state: S } | null;
+  room: { sessionId: string; state: WorldState } | null;
   level: number;
   me(): { x: number; y: number };
   /** where I face (rad, the floor's atan2) and where the camera looks */
@@ -49,8 +50,6 @@ export interface TargetHost {
   inLift(): boolean;
   menuFor(t: ActTarget): { title: string; items: { act: string; ok: boolean }[] } | null;
 }
-// biome-ignore lint/suspicious/noExplicitAny: the room's schema state, read as the controller reads it
-type S = any;
 
 /** How far each kind is in reach (tiles): a thing's own (the controller's INTERACT_RANGE), the rest. */
 export const REACH = { object: 1.7, person: 2.4, pet: 2.2, npc: 2.6, toy: 2.4 };
@@ -189,7 +188,7 @@ export class Targets {
     }
     if (!cable) {
       // people (not me, not the bots)
-      room.state.players.forEach((p: S, sid: string) => {
+      room.state.players.forEach((p, sid) => {
         if (sid === room.sessionId || p.bot || !here(p)) return;
         const menu: ActTarget = { type: "person", sid };
         const items = h.menuFor(menu)?.items ?? [];
@@ -201,7 +200,7 @@ export class Targets {
         );
       });
       // pets (alive, not riding in a car)
-      room.state.pets.forEach((pet: S, id: string) => {
+      room.state.pets.forEach((pet, id) => {
         // (a pet's `level` is how far it's come on; its floor is `floor`)
         if (!pet.alive || (pet.ride && pet.ride !== "lift") || (pet.floor ?? h.level) !== h.level) return;
         const menu: ActTarget = { type: "pet", id };
@@ -222,7 +221,7 @@ export class Targets {
           REACH.npc,
         );
       // toys lying about
-      room.state.toys?.forEach((t: S) => {
+      room.state.toys?.forEach((t) => {
         if (t.state !== "floor") return;
         const kind = (TOYS as readonly string[]).includes(t.kind) ? (t.kind as string) : "ball";
         add(

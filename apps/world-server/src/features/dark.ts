@@ -1,5 +1,5 @@
 import { StateView } from "@colyseus/schema";
-import { across, findPath, levelMap, type Point } from "@yutopia/shared";
+import { across, levelMap, type Point } from "@yutopia/shared";
 import { beamAt, beamOf } from "@yutopia/shared/beam";
 import {
   atHead,
@@ -119,12 +119,13 @@ registerFeature((room: WorldRoom) => {
   let viewsAt = 0;
   let landAt = 0;
   let clock = 0; // s
-  const ground = () => levelMap(room.map, 0);
-  const ox = () => ground()?.ox ?? 0;
-  const oy = () => ground()?.oy ?? 0;
+  const _ground = () => levelMap(room.map, 0);
   const grid = () => room.gridFor(0, 0);
-  // (people's coords are the ground floor's; the Grounds' are the building's)
-  const toB = (x: number, y: number) => ({ x: x + ox(), z: y + oy() });
+  // (a line out on the ground floor with nothing in it that stops sight: Jolt's — a wall, a trunk)
+  const seen = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) =>
+    room.sight?.(0, a, b) ?? true;
+  // (a spot as the Grounds name it: x, z)
+  const toB = (x: number, y: number) => ({ x, z: y });
   const outside = (p: { level: number; x: number; y: number }) => p.level === 0 && grid().onLand(p.x, p.y);
 
   // ── the light: the lamps' pools (not in a blackout), flares (phase 5) ─────
@@ -140,7 +141,7 @@ registerFeature((room: WorldRoom) => {
       const d = Math.hypot(l.x - b.x, l.z - b.z);
       if (d < (LAMP_POOL_R[l.kind] ?? 5) && d < bd) {
         bd = d;
-        best = { x: l.x - ox(), y: l.z - oy() };
+        best = { x: l.x, y: l.z };
       }
     }
     return best;
@@ -210,8 +211,8 @@ registerFeature((room: WorldRoom) => {
   // `from` someone, behind their beam if it can
   const spawnPoint = (p: { x: number; y: number; yaw: number }, night: number, dark: boolean): Point | null => {
     const g = grid();
-    const doorsX = HQ_DOORS.x - ox();
-    const doorsY = HQ_DOORS.z - oy();
+    const doorsX = HQ_DOORS.x;
+    const doorsY = HQ_DOORS.z;
     const behind = byteToYaw(p.yaw) + Math.PI;
     for (let k = 0; k < 12; k++) {
       const a = behind + (Math.random() - 0.5) * (k < 6 ? 1.6 : Math.PI * 2);
@@ -219,11 +220,11 @@ registerFeature((room: WorldRoom) => {
       const x = p.x + Math.cos(a) * r;
       const y = p.y + Math.sin(a) * r;
       // (only on land already made: making it here is a long tick — land.ts makes it ahead)
-      if (!ready(x + ox(), y + oy()) || !g.onLand(x, y) || !g.fits(x, y, 0.35)) continue;
+      if (!ready(x, y) || !g.onLand(x, y) || !g.fits(x, y, 0.35)) continue;
       if (Math.hypot(x - doorsX, y - doorsY) < NEAR_HQ) continue;
       if (lampAt(x, y, night, dark)) continue;
       // (not on the long road nor its verges: off it, the Long Wood's theirs — docs/plan/69, L7)
-      if (onLongRoad(x + ox(), y + oy())) continue;
+      if (onLongRoad(x, y)) continue;
       return { x, y };
     }
     return null;
@@ -245,9 +246,7 @@ registerFeature((room: WorldRoom) => {
     return false;
   };
   const free = (x: number, y: number, fleeing: boolean, night: number, dark: boolean) =>
-    grid().onLand(x, y) &&
-    grid().fits(x, y, 0.3) &&
-    (fleeing || (!lampAt(x, y, night, dark) && !onLongRoad(x + ox(), y + oy())));
+    grid().onLand(x, y) && grid().fits(x, y, 0.3) && (fleeing || (!lampAt(x, y, night, dark) && !onLongRoad(x, y)));
   const walk = (r: Run, goal: Point, speed: number, dt: number, night: number, dark: boolean) => {
     const s = r.shade;
     const fleeing = s.state === "flee";
@@ -289,7 +288,7 @@ registerFeature((room: WorldRoom) => {
     if (!r.path.length && paths < PATHS_A_TICK && clock - r.pathAt > REPATH) {
       paths++;
       r.pathAt = clock;
-      r.path = findPath(grid(), { x: s.x, y: s.y }, goal, 1500) ?? [];
+      r.path = room.wayFor(0, 0, { x: s.x, y: s.y }, goal) ?? [];
     }
   };
 
@@ -389,8 +388,8 @@ registerFeature((room: WorldRoom) => {
     const g = grid();
     for (let i = 0; i < today.count; i++) {
       const nr = today.all[i];
-      const nx = nr.nest.x - ox();
-      const ny = nr.nest.z - oy();
+      const nx = nr.nest.x;
+      const ny = nr.nest.z;
       let near = Number.POSITIVE_INFINITY;
       for (const q of prey) near = Math.min(near, Math.hypot(q.x - nx, q.y - ny));
       revive(nr.alive, nr.deadAt, now, near);
@@ -410,7 +409,7 @@ registerFeature((room: WorldRoom) => {
             const rr = 1.5 + Math.random() * 3.5;
             const x = nx + Math.cos(a) * rr;
             const y = ny + Math.sin(a) * rr;
-            if (!ready(x + ox(), y + oy()) || !g.onLand(x, y) || !g.fits(x, y, 0.35)) continue;
+            if (!ready(x, y) || !g.onLand(x, y) || !g.fits(x, y, 0.35)) continue;
             const id = spawn(x, y, clock, true);
             nr.runs[k] = id;
             nestOf.set(id, { n: nr, slot: k });
@@ -446,8 +445,8 @@ registerFeature((room: WorldRoom) => {
       if (!best) return null;
       const d = rayDir(ray.yaw, ray.pitch);
       const hit = { x: ray.x + d.x * best.t, y: ray.y + d.y * best.t, z: ray.z + d.z * best.t };
-      // (a wall or a trunk on the way: it stops there)
-      if (!grid().clear({ x: ray.x, y: ray.y }, { x: hit.x, y: hit.y }, 0.02, Math.max(ray.z, hit.z))) return null;
+      // (a wall or a trunk on the way: it stops there — Jolt's sight, the shot's own line)
+      if (!seen(ray, hit)) return null;
       const s = best.r.shade;
       const head = atHead(ray, best.t, best.z);
       const kind = wound(s, damage(best.t, head), clock);
@@ -525,7 +524,7 @@ registerFeature((room: WorldRoom) => {
       // the land round those out there made ahead, as far as the shadowed come from (once a second)
       if (now - landAt >= 1000) {
         landAt = now;
-        for (const p of prey) prefetch(p.x + ox(), p.y + oy(), 68); // (the day's nests come out at 64)
+        for (const p of prey) prefetch(p.x, p.y, 68); // (the day's nests come out at 64)
       }
 
       // the director: per group of people out there, as many as the danger buys
@@ -595,8 +594,7 @@ registerFeature((room: WorldRoom) => {
             beamAt(beam, s.x, s.y, r.z + 0.9),
             beamAt(beam, s.x, s.y, r.z + 1.4),
           );
-          if (k > 0 && grid().clear({ x: beam.x, y: beam.y }, { x: s.x, y: s.y }, 0.02, beam.z))
-            burn += 0.6 + 0.4 * Math.min(1, k * 3); // (in the cone at all: 27/s at least, 45 close in — shared fsm.ts SHADE.burn)
+          if (k > 0 && seen(beam, { x: s.x, y: s.y, z: beam.z })) burn += 0.6 + 0.4 * Math.min(1, k * 3); // (in the cone at all: 27/s at least, 45 close in — shared fsm.ts SHADE.burn)
         }
         const light = lampAt(s.x, s.y, night, dark);
         const sense: ShadeSense = {
@@ -614,7 +612,7 @@ registerFeature((room: WorldRoom) => {
             const k = `${Math.round(x * 2)},${Math.round(y * 2)}`;
             const was = r.sight.get(k);
             if (was && t - was.t < 0.2) return was.v;
-            const v = grid().clear({ x: s.x, y: s.y }, { x, y }, 0.02, r.z + 1.4);
+            const v = seen({ x: s.x, y: s.y, z: r.z + 1.4 }, { x, y, z: r.z + 1.4 });
             r.sight.set(k, { v, t });
             if (r.sight.size > 64) r.sight.clear();
             return v;

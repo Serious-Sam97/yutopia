@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { entry } from "@yutopia/shared";
+import { entry, quarterYaw } from "@yutopia/shared";
 import type { BufferGeometry } from "three";
 import type { LivePart } from "../kit";
 import { liveAt } from "../liveparts";
@@ -35,7 +35,7 @@ const tris = (g: BufferGeometry) =>
     ((g.userData.live as LivePart[]) ?? []).reduce((n, p) => n + p.geo.attributes.position.count, 0)) /
   3;
 const model = (kind: string, props: Record<string, unknown> = {}) =>
-  modelOf({ id: `${kind}-t`, kind, x: 0, y: 0, rot: 0, props });
+  modelOf({ id: `${kind}-t`, kind, x: 0, y: 0, yaw: quarterYaw(0), props });
 const live = (kind: string, props: Record<string, unknown> = {}) =>
   (model(kind, props).userData.live as LivePart[]) ?? [];
 
@@ -45,7 +45,7 @@ test("decor: every look on its footprint, under the ceiling, on the floor, under
     assert.equal(e.variants ?? 1, LOOKS[kind].length, `${kind}: a look a variant`);
     for (let variant = 0; variant < LOOKS[kind].length; variant++)
       for (const seed of ["a", "b", "c", "d"]) {
-        const g = modelOf({ id: `${kind}-${seed}`, kind, x: 0, y: 0, rot: 0, props: { variant } });
+        const g = modelOf({ id: `${kind}-${seed}`, kind, x: 0, y: 0, yaw: quarterYaw(0), props: { variant } });
         const b = bounds(g);
         const what = `${kind} ${variant}`;
         const [w, h] = e.onSurface ? [1, 1] : [e.w, e.h];

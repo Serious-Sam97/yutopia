@@ -1,4 +1,5 @@
 {
+  "app/global-error.tsx": 2,
   "app/layout.tsx": 1,
   "components/AvatarEditor.tsx": 11,
   "components/hud/ComputerPanel.tsx": 28,

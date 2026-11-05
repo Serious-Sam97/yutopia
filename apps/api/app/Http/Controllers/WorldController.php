@@ -71,16 +71,16 @@ class WorldController extends Controller
             'name' => ['required', 'string', 'max:40'],
             'items' => ['required', 'array', 'min:1', 'max:40'],
             'items.*.kind' => ['required', 'string', 'alpha_dash', 'max:32'],
-            'items.*.dx' => ['required', 'integer', 'between:0,16'],
-            'items.*.dy' => ['required', 'integer', 'between:0,16'],
-            'items.*.rot' => ['required', 'integer', 'between:0,3'],
+            'items.*.dx' => ['required', 'numeric', 'between:0,16'],
+            'items.*.dy' => ['required', 'numeric', 'between:0,16'],
+            'items.*.yaw' => ['required', 'numeric', 'between:-7,7'],
             'items.*.props' => ['sometimes', 'nullable', 'array'],
         ]);
         abort_if(strlen(json_encode($data['items'])) > 16000, 422, 'That setup is too big.');
         $user = $request->user();
         abort_if(Setup::where('user_id', $user->id)->count() >= Setup::MAX, 422, 'You have plenty of setups already.');
         $items = array_map(fn (array $i) => [
-            'kind' => $i['kind'], 'dx' => $i['dx'], 'dy' => $i['dy'], 'rot' => $i['rot'], 'props' => $i['props'] ?? null,
+            'kind' => $i['kind'], 'dx' => $i['dx'], 'dy' => $i['dy'], 'yaw' => $i['yaw'], 'props' => $i['props'] ?? null,
         ], $data['items']);
         $setup = Setup::create(['user_id' => $user->id, 'name' => trim($data['name']), 'items' => $items]);
 

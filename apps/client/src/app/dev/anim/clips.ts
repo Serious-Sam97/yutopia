@@ -1,4 +1,4 @@
-import { Grid, type JumpKind, jumpArc, jumpNowAt, jumpTimes } from "@yutopia/shared";
+import { type JumpKind, jumpArc, jumpNowAt, jumpTimes } from "@yutopia/shared";
 import {
   type FlowLook,
   KH_FEEL,
@@ -7,6 +7,7 @@ import {
   type MoveInput,
   NO_INPUT,
   newBody,
+  openFloor,
   stepBody,
 } from "@yutopia/shared/move";
 import type { PhysicsWorld } from "@yutopia/shared/physics";
@@ -830,14 +831,6 @@ export interface Frame {
 export const RATE = 120;
 
 const wrapPi = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
-/** An open floor 200 m a side for the move core. */
-function open(): Grid {
-  const g = new Grid(200, 200);
-  g.walk.fill(1);
-  g.top.fill(0);
-  return g;
-}
-
 /** A clip, `after` or `before`, `live` or raw, at `rate` frames a second. */
 export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: boolean, rate = RATE): Frame[] | null {
   const n = Math.round(clip.len * rate) + 1;
@@ -881,14 +874,8 @@ export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: bo
   let was: ReturnType<typeof jumpArc>["stage"] | null = null;
   // (4c: the move core's body on an open floor, facing three's +z — the floor's +y, south)
   // (5a: the clip's ground under the core's own feet — a ledge — a tile at a time)
-  const grid = open();
-  if (clip.coreGround && clip.ground)
-    for (let y = 0; y < 200; y++)
-      for (let x = 0; x < 200; x++) {
-        const h = clip.ground(x + 0.5 - 100, y + 0.5 - 100);
-        grid.top[y * 200 + x] = h;
-        if (clip.blocks && h > 0) grid.walk[y * 200 + x] = 0;
-      }
+  const ground = clip.coreGround ? clip.ground : undefined;
+  const grid = openFloor((tx, ty) => (ground ? Math.fround(ground(tx + 0.5 - 100, ty + 0.5 - 100)) : 0), !!clip.blocks);
   const body = newBody(100, 100, clip.coreGround && clip.ground ? clip.ground(0, 0) : 0, Math.PI / 2);
   const env: MoveEnv = { grid, footing: () => "floor" };
   for (let i = 0; i < n; i++) {

@@ -8,7 +8,8 @@
     "start": "tsx --env-file-if-exists=../../.env src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "YUTOPIA_WEATHER=winter tsx --test src/**/*.test.ts",
-    "perf": "tsx src/perf.mts"
+    "perf": "tsx src/perf.mts",
+    "world-v4": "tsx --env-file-if-exists=../../.env src/world-v4.ts"
   },
   "dependencies": {
     "@colyseus/schema": "3.0.76",

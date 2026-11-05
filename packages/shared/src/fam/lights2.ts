@@ -155,5 +155,5 @@ export const SURFACES: Record<string, number> = {};
 export const STANDS: Record<string, number> = {};
 // (on a wall: quarter tiles along, its lowest and highest iso px)
 export const HANGS: Record<string, [number, number, number]> = {
-  fairy_lights: [11, 63, 86],
+  fairy_lights: [11, 1.6076, 2.1946],
 };

@@ -1,4 +1,4 @@
-import { footprint } from "@yutopia/shared";
+import { footprint, quarterOf } from "@yutopia/shared";
 import {
   isSlotTrack,
   plausibleCar,
@@ -65,7 +65,7 @@ registerFeature((room: WorldRoom) => {
     const o = track(id);
     const p = room.state.players.get(sid);
     if (!o || !p) return Number.POSITIVE_INFINITY;
-    const { w, h } = footprint(o.kind, o.rot);
+    const { w, h } = footprint(o.kind, quarterOf(o));
     const cx = Math.max(o.x, Math.min(p.x, o.x + w));
     const cy = Math.max(o.y, Math.min(p.y, o.y + h));
     return room.reach3(p, fromSchema(o), Math.hypot(p.x - cx, p.y - cy), { x: cx, y: cy });

@@ -86,8 +86,8 @@ class YondraImport
             }
 
             return [
-                'uid' => $o->uid, 'kind' => $o->kind, 'x' => (int) $o->x, 'y' => (int) $o->y, 'rot' => (int) $o->rot,
-                'ref_id' => $o->ref_id, 'props' => $props ? json_encode($props) : null,
+                'uid' => $o->uid, 'kind' => $o->kind, 'x' => (float) $o->x, 'y' => (float) $o->y, 'yaw' => ((int) $o->rot & 3) * (M_PI / 2),
+                'ref_id' => $o->ref_id, 'props' => $props ? json_encode(WorldSnapshot::toV2(['props' => $props])['props']) : null,
                 'created_at' => $o->created_at, 'updated_at' => $o->updated_at,
             ];
         })->all();
@@ -113,7 +113,15 @@ class YondraImport
         $mine = fn (string $t, array $cols) => $this->rows($t, fn ($q) => $q->orderBy('id'))
             ->filter(fn ($r) => $has($r['user_id']))->map(fn ($r) => $this->only($r, $cols))->values()->all();
         $avatars = $mine('yutopia_avatars', ['id', 'user_id', 'layers', 'created_at', 'updated_at']);
-        $setups = $mine('yutopia_setups', ['id', 'user_id', 'name', 'items', 'created_at', 'updated_at']);
+        // (their items turned by yaw, not rot: docs/plan/72-the-3d-core.md, phase 5)
+        $setups = array_map(function (array $r) {
+            $items = is_string($r['items']) ? json_decode($r['items'], true) : $r['items'];
+            if (is_array($items)) {
+                $r['items'] = json_encode(array_map(fn ($i) => is_array($i) ? WorldSnapshot::toV2(['props' => $i['props'] ?? null] + $i) : $i, $items));
+            }
+
+            return $r;
+        }, $mine('yutopia_setups', ['id', 'user_id', 'name', 'items', 'created_at', 'updated_at']));
         $pets = $mine('yutopia_pets', ['id', 'user_id', 'species', 'name', 'look', 'outfit', 'needs', 'xp', 'tricks', 'traits', 'memory', 'bonds', 'alive', 'wins', 'losses', 'born_at', 'died_at', 'seen_at', 'created_at', 'updated_at']);
         $phones = $mine('yutopia_phones', ['id', 'user_id', 'settings', 'created_at', 'updated_at']);
         $contacts = collect($mine('yutopia_contacts', ['id', 'user_id', 'contact_id', 'created_at', 'updated_at']))

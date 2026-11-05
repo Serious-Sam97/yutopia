@@ -48,9 +48,9 @@ test("a dog and a cat get in with Ana, ride as she drives, and get out with her"
       c.room.state.objects.forEach((o: any) => {
         const p = JSON.parse(o.props);
         if (o.kind !== "car" || p.driven || p.model === "offroad" || p.ownerId) return;
-        const w = o.rot % 2 ? 2 : 5;
-        const h = o.rot % 2 ? 5 : 2;
-        const a = Math.PI + (o.rot % 4) * (Math.PI / 2);
+        const w = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 2 : 5;
+        const h = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 5 : 2;
+        const a = Math.PI + ((Math.round(o.yaw / (Math.PI / 2)) & 3) % 4) * (Math.PI / 2);
         out.push({ id: o.id, x: o.x + w / 2 + (p.dx ?? 0), y: o.y + h / 2 + (p.dz ?? 0), a });
       });
       return out[0];

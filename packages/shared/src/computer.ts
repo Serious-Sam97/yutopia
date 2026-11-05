@@ -1,3 +1,4 @@
+import { quarterOf } from "./catalog.ts";
 // The studio's computers run VortexOS (docs/plan/19-vortexos.md): one person
 // at a time sits down, the real OS runs in their panel, and everyone else sees
 // a drawn picture of it on the monitor — the boot, the login, the desktop in
@@ -71,9 +72,9 @@ export function cleanLabel(s: unknown, max = 40): string {
 // In the item's own 1 × 1 frame (a thing on a desk: round its middle, lifted
 // by props.z), rot 0. The monitor faces −y (whoever sits at the desk), so x0
 // is the viewer's left: the +x side.
-export const COMPUTER_GLASS = { x0: 0.665, x1: 0.335, y: 0.296, z0: 8, z1: 17.6, aspect: 4 / 3 };
+export const COMPUTER_GLASS = { x0: 0.665, x1: 0.335, y: 0.296, z0: 0.2041, z1: 0.4491, aspect: 4 / 3 };
 
-// Where the picture goes, in world tiles + iso px (like media.ts glassCorners).
+// Where the picture goes, in world metres (like media.ts glassCorners).
 export function computerGlass(o: WorldObjectDef): {
   tl: [number, number];
   tr: [number, number];
@@ -83,7 +84,7 @@ export function computerGlass(o: WorldObjectDef): {
   if (!isComputer(o.kind)) return null;
   const g = COMPUTER_GLASS;
   const lift = Number(o.props?.z) || 0;
-  const rot = (o.rot ?? 0) & 3;
+  const rot = quarterOf(o) & 3;
   const c = topCentre(o);
   const a = turnLocal(g.x0, g.y, rot, 1, 1);
   const b = turnLocal(g.x1, g.y, rot, 1, 1);
@@ -98,7 +99,7 @@ export function computerGlass(o: WorldObjectDef): {
 // Whether the iso camera (which sees the +x and +y faces) sees its glass:
 // it faces −y at rot 0, +x at rot 1, +y at rot 2.
 export function computerFacing(o: WorldObjectDef): boolean {
-  const r = (o.rot ?? 0) & 3;
+  const r = quarterOf(o) & 3;
   return r === 1 || r === 2;
 }
 

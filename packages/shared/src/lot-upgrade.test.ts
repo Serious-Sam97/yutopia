@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { campusBuilding, entranceZOf, upgradeGround, upgradeLot } from "./building.ts";
 import { parkedPose } from "./car/park.ts";
 import type { WorldObjectDef } from "./catalog.ts";
+import { quarterOf, quarterYaw } from "./catalog.ts";
 import { LOT, lotLayout } from "./lot.ts";
 import type { LevelDef, MapDef } from "./map.ts";
 import { studio } from "./maps/studio.ts";
@@ -59,19 +60,24 @@ function before(deep: 48 | 60) {
   ];
   const things = objects.map((o): WorldObjectDef => {
     const lamp = /^lamp-post-(\d)$/.exec(o.id);
-    if (lamp) return { ...o, ...F(l0, oldLamps[Number(lamp[1])][0], oldLamps[Number(lamp[1])][1]), rot: 0 };
+    if (lamp) return { ...o, ...F(l0, oldLamps[Number(lamp[1])][0], oldLamps[Number(lamp[1])][1]), yaw: quarterYaw(0) };
     const car = /^car-(\d+)$/.exec(o.id);
     if (!car) return o;
     const i = Number(car[1]);
     if (i === 7) return { ...o, ...F(l0, -58, 70), props: { ...o.props, a: 0.4 } };
     const at = F(l0, -50 + (i % 4) * 9, -2 + Math.floor(i / 4) * 11);
-    return { ...o, ...at, rot: i % 2 ? 0 : 2, props: { ...o.props, ...(i % 3 ? {} : { a: 0.3 + i * 0.01 }) } };
+    return {
+      ...o,
+      ...at,
+      yaw: quarterYaw(i % 2 ? 0 : 2),
+      props: { ...o.props, ...(i % 3 ? {} : { a: 0.3 + i * 0.01 }) },
+    };
   });
   const builder: WorldObjectDef = {
     id: "b-car-test",
     kind: "car",
     ...F(l0, -31, 46),
-    rot: 0,
+    yaw: quarterYaw(0),
     props: { level: 0, variant: 2 },
   };
   const driven = things.find((o) => o.id === "car-5") as WorldObjectDef;
@@ -105,7 +111,7 @@ for (const deep of [48, 60] as const)
     // the lamps: on the islands, reaching over the aisles
     for (const [i, m] of l.lamps.entries()) {
       const o = by.get(`lamp-post-${i}`) as WorldObjectDef;
-      assert.deepEqual({ x: o.x, y: o.y, rot: o.rot }, { ...F(l0, m.x, m.z), rot: m.rot }, `lamp ${i}`);
+      assert.deepEqual({ x: o.x, y: o.y, rot: quarterOf(o) }, { ...F(l0, m.x, m.z), rot: m.rot }, `lamp ${i}`);
     }
     // each seeded car on the lot in its own bay, square (no angle left)
     for (const [i, c] of l.cars.entries()) {
@@ -113,7 +119,7 @@ for (const deep of [48, 60] as const)
       const o = by.get(`car-${i}`) as WorldObjectDef;
       const at = mid(l0, o);
       assert.ok(Math.hypot(at.x - c.x, at.z - c.z) < 0.02, `car-${i} in its bay (${at.x}, ${at.z})`);
-      assert.equal(o.rot, c.dir > 0 ? 0 : 2);
+      assert.equal(quarterOf(o), c.dir > 0 ? 0 : 2);
       assert.equal(o.props?.a, undefined);
     }
     // the one being driven and the one on the land: as they were

@@ -13,7 +13,7 @@ import { ANA, enter, test, token } from "./helpers";
 const GPU = process.env.YUTOPIA_GPU === "1";
 const dir = process.env.YUTOPIA_SHOTS;
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
-const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
+const G = (x: number, y: number) => ({ x, y });
 const w = (page: Page, fn: (y: any) => unknown) =>
   page.evaluate((src) => new Function("y", `return (${src})(y)`)((window as any).__yutopia), fn.toString());
 const shot = (page: Page, name: string) => page.screenshot({ path: `${dir}/${name}.png` });

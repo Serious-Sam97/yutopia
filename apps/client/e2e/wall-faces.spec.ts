@@ -14,7 +14,9 @@ const remove = (page: Page, id: string) =>
 const obj = (page: Page, id: string) =>
   page.evaluate((i) => {
     const o = (window as any).__yutopia.room.state.objects.get(i);
-    return o ? { x: o.x, y: o.y, rot: o.rot, props: JSON.parse(o.props || "{}") } : null;
+    return o
+      ? { x: o.x, y: o.y, rot: Math.round(o.yaw / (Math.PI / 2)) & 3, props: JSON.parse(o.props || "{}") }
+      : null;
   }, id);
 const setBuild = (page: Page, b: Record<string, unknown>) =>
   page.evaluate((p) => {
@@ -99,8 +101,8 @@ test("both faces of a wall: a material each, things on either, anywhere on it", 
 
     // a whiteboard on the back face, a quarter tile along, two steps up; a
     // poster on the front, half a tile along and high
-    await put(page, { id: ids.back, kind: "whiteboard", x, y: y - 1, rot: 2, props: { wu: 1, wz: 2 } });
-    await put(page, { id: ids.front, kind: "poster", x: x + 1, y, rot: 0, props: { wu: 2, wz: 4 } });
+    await put(page, { id: ids.back, kind: "whiteboard", x, y: y - 1, yaw: Math.PI, props: { wu: 1, wz: 2 } });
+    await put(page, { id: ids.front, kind: "poster", x: x + 1, y, yaw: 0, props: { wu: 2, wz: 4 } });
     await expect.poll(async () => (await obj(page, ids.back))?.props).toEqual({ wu: 1, wz: 2 });
     await expect.poll(async () => (await obj(page, ids.front))?.props).toEqual({ wu: 2, wz: 4 });
 
@@ -125,7 +127,7 @@ test("both faces of a wall: a material each, things on either, anywhere on it", 
     });
     await page.waitForFunction(() => !!(window as any).__yutopia.build, null, { timeout: 15_000 });
     const before = new Set(await page.evaluate(() => [...(window as any).__yutopia.room.state.objects.keys()]));
-    const p = await at(page, x + 0.75, y + 0.1, 96);
+    const p = await at(page, x + 0.75, y + 0.1, 2.45);
     await page.mouse.move(p.x - 30, p.y - 30);
     await page.mouse.move(p.x, p.y, { steps: 4 });
     await page.waitForTimeout(300);
@@ -143,18 +145,18 @@ test("both faces of a wall: a material each, things on either, anywhere on it", 
       (had) => [...(window as any).__yutopia.room.state.objects.keys()].find((k: string) => !had.includes(k)),
       [...before] as string[],
     );
-    // (a clock: a tile-wide drawing, its face in the middle at 52 px; a step is 9.8 px)
+    // (a clock: a tile-wide drawing, its face in the middle at 1.33 m; a step is 0.25 m)
     const c = await obj(page, ids.hand);
     const placed = {
       rot: c?.rot,
       line: c?.y,
       mid: (c?.x ?? 0) + (c?.props.wu ?? 0) / 4 + 0.5,
-      z: 52 + (c?.props.wz ?? 0) * 9.8,
+      z: 1.3269 + (c?.props.wz ?? 0) * 0.25,
     };
     expect(placed.rot).toBe(0);
     expect(placed.line).toBe(y);
     expect(Math.abs(placed.mid - (x + 0.75))).toBeLessThanOrEqual(0.25);
-    expect(Math.abs(placed.z - 96)).toBeLessThanOrEqual(10);
+    expect(Math.abs(placed.z - 2.45)).toBeLessThanOrEqual(0.26);
 
     // R with it selected: over to the wall's other side, same spot
     await setBuild(page, { mode: "hand", selected: [ids.hand] });
@@ -245,7 +247,7 @@ test("third person: a click high up a wall, above the horizon, hangs the thing",
     // a point high on its face that the camera sees above the horizon
     const p = await page.evaluate((s) => {
       const t = (window as any).__yutopia.tp;
-      const c = t.project(s.x + 1, s.y + 0.1, 112 / 39.19);
+      const c = t.project(s.x + 1, s.y + 0.1, 2.858);
       const r = t.renderer.domElement.getBoundingClientRect();
       return c ? { x: r.left + c.x, y: r.top + c.y, floor: t.floorAt(r.left + c.x, r.top + c.y) } : null;
     }, spot);

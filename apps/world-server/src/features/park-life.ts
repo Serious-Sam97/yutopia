@@ -1,4 +1,4 @@
-import { ANIM, dirFromDelta, GROUND_OFFSET } from "@yutopia/shared";
+import { ANIM, faceByte } from "@yutopia/shared";
 import { heightAt } from "@yutopia/shared/grounds";
 import {
   KART_DESK,
@@ -23,8 +23,6 @@ import { registerFeature } from "./index.ts";
 // benches, the rack, the stands and the podium (sitting where there's room). Walked in straight
 // legs along the paddock's walk from the gate (shared: clear of everything), as the night guard
 // is (grounds-life.ts).
-
-const off = GROUND_OFFSET; // (a player's x, y + off: the Grounds' coords)
 const SITTING = KART_SITTING; // (busy "ride:…": the room leaves my pose alone, as a rider's)
 const V = 1.25; // a visitor's pace, m/s
 // (by how they walk — plan 58 4e: the old slower, the tired too, the brisk quicker)
@@ -64,12 +62,12 @@ registerFeature((room: WorldRoom) => {
   // ── anyone sitting down ──
   const pose = (p: Player, i: number) => {
     const s = seats[i];
-    p.x = s.x - off.x;
-    p.y = s.z - off.y;
+    p.x = s.x;
+    p.y = s.z;
     p.z = seatZ(s);
     p.level = 0;
     p.a = ANIM.sit;
-    p.d = dirFromDelta(Math.cos(s.a), Math.sin(s.a), p.d as 0);
+    p.yaw = faceByte(Math.cos(s.a), Math.sin(s.a), p.yaw);
   };
   // (`walk`: walked off it, as off the office's bench — they go on from the seat, no snap)
   const standUp = (sid: string, snap = true, walk = false) => {
@@ -85,8 +83,8 @@ registerFeature((room: WorldRoom) => {
           const [x, z] = seats[i].out;
           p.busy = "";
           p.a = ANIM.idle;
-          p.x = x - off.x;
-          p.y = z - off.y;
+          p.x = x;
+          p.y = z;
           p.z = heightAt(x, z);
           const c = room.clients.getById(sid);
           if (c && snap) room.send(c, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
@@ -97,9 +95,9 @@ registerFeature((room: WorldRoom) => {
   /** In reach of a seat: a bench's, by it; a stand's, at its front or its ends, abreast of it. */
   // (and in three dimensions: the seat at its height, not reached from over it — shared reach.ts)
   const reaches = (p: Player, s: KartSeat) => {
-    const x = p.x + off.x;
-    const z = p.y + off.y;
-    if (room.upOff(p, { x: s.x - off.x, y: s.z - off.y }, s.top) > 0) return false;
+    const x = p.x;
+    const z = p.y;
+    if (room.upOff(p, { x: s.x, y: s.z }, s.top) > 0) return false;
     if (s.stand === undefined) return Math.hypot(x - s.x, z - s.z) < 2.2;
     const st = KART_STANDS[s.stand];
     return Math.abs(x - s.x) < 2.6 && z > st.z - 3 && z < st.z + st.rows * 1.2 + 1.5;
@@ -155,10 +153,10 @@ registerFeature((room: WorldRoom) => {
     // (visitors start about the walk, spread out)
     const at = spots?.[0] ?? { x: SPINE + (k % 2 ? 1 : -1), z: KART_GATE.z - 8 - k * 9, a: -Math.PI / 2 };
     Object.assign(npc, {
-      x: at.x - off.x,
-      y: at.z - off.y,
+      x: at.x,
+      y: at.z,
       a: ANIM.idle,
-      d: dirFromDelta(Math.cos(at.a), Math.sin(at.a), 0),
+      yaw: faceByte(Math.cos(at.a), Math.sin(at.a)),
     });
     room.state.npcs.set(npc.id, npc);
     walkers.push({
@@ -233,21 +231,21 @@ registerFeature((room: WorldRoom) => {
     const t = w.leg[0];
     if (!t) return true;
     const n = w.npc;
-    const gx = n.x + off.x;
-    const gz = n.y + off.y;
+    const gx = n.x;
+    const gz = n.y;
     const d = Math.hypot(t.x - gx, t.z - gz);
     const step = w.v * dt;
     n.a = ANIM.walk;
     n.z = 0;
     if (d <= step) {
-      n.x = t.x - off.x;
-      n.y = t.z - off.y;
+      n.x = t.x;
+      n.y = t.z;
       w.leg.shift();
       return w.leg.length === 0;
     }
     n.x += ((t.x - gx) / d) * step;
     n.y += ((t.z - gz) / d) * step;
-    n.d = dirFromDelta((t.x - gx) / d, (t.z - gz) / d, n.d as 0);
+    n.yaw = faceByte((t.x - gx) / d, (t.z - gz) / d, n.yaw);
     return false;
   };
   const say = (w: Walker, now: number) => {
@@ -288,9 +286,9 @@ registerFeature((room: WorldRoom) => {
             if (walk(w, dt)) n.a = ANIM.idle;
             continue;
           }
-          const sp = w.spots.find((s) => Math.hypot(s.x - off.x - n.x, s.z - off.y - n.y) < 0.2) ?? w.spots[0];
+          const sp = w.spots.find((s) => Math.hypot(s.x - n.x, s.z - n.y) < 0.2) ?? w.spots[0];
           n.a = ANIM.idle;
-          n.d = dirFromDelta(Math.cos(sp.a), Math.sin(sp.a), n.d as 0);
+          n.yaw = faceByte(Math.cos(sp.a), Math.sin(sp.a), n.yaw);
           if (w.spots.length > 1 && now > w.until) {
             const next = w.spots[(w.spots.indexOf(sp) + 1) % w.spots.length];
             w.leg = [{ x: next.x, z: next.z }];
@@ -304,15 +302,15 @@ registerFeature((room: WorldRoom) => {
           // arrived: sit down, or stand looking at it
           if (w.seat >= 0) {
             const s = seats[w.seat];
-            n.x = s.x - off.x;
-            n.y = s.z - off.y;
+            n.x = s.x;
+            n.y = s.z;
             n.z = seatZ(s);
             n.a = ANIM.sit;
-            n.d = dirFromDelta(Math.cos(s.a), Math.sin(s.a), n.d as 0);
+            n.yaw = faceByte(Math.cos(s.a), Math.sin(s.a), n.yaw);
           } else {
             n.a = ANIM.idle;
             const a = facing[w.stop as Stop] ?? 0;
-            n.d = dirFromDelta(Math.cos(a), Math.sin(a), n.d as 0);
+            n.yaw = faceByte(Math.cos(a), Math.sin(a), n.yaw);
           }
           continue;
         }
@@ -326,8 +324,8 @@ registerFeature((room: WorldRoom) => {
           const s = seats[w.seat];
           taken.delete(w.seat);
           w.seat = -1;
-          n.x = s.out[0] - off.x;
-          n.y = s.out[1] - off.y;
+          n.x = s.out[0];
+          n.y = s.out[1];
           n.z = 0;
           sync();
         }
@@ -352,7 +350,7 @@ registerFeature((room: WorldRoom) => {
                   : 10 + Math.random() * 15);
         // (the time there starts once they're there: walking's on top)
         let len = 0;
-        let [px, pz] = [n.x + off.x, n.y + off.y];
+        let [px, pz] = [n.x, n.y];
         for (const q of w.leg) {
           len += Math.hypot(q.x - px, q.z - pz);
           [px, pz] = [q.x, q.z];

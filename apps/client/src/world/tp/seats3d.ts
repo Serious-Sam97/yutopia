@@ -1,7 +1,6 @@
 import { SEAT_NEXT, SEAT_SPEC, type SeatSpec } from "@yutopia/shared";
 import type { Bone } from "three";
 import { FURN } from "../furn/flag";
-import { ZPX } from "./kit3d";
 
 // Where a sitter goes on each seat (docs/plan/62-the-touch.md, phase 1): the seats' own shapes, and
 // her place on one fitted to her.
@@ -13,7 +12,7 @@ import { ZPX } from "./kit3d";
 // sits: a park bench, a stand's row.
 export type SeatShape = SeatSpec;
 export const SEATS: Record<string, SeatShape> = FURN === "new" ? { ...SEAT_SPEC, ...SEAT_NEXT } : SEAT_SPEC;
-const SEAT_LAND: SeatShape = { top: 14 / ZPX, front: 0, back: null, lean: [0, 0] };
+const SEAT_LAND: SeatShape = { top: 0.3573, front: 0, back: null, lean: [0, 0] };
 const PELVIS = 0.09; // m: the seat of the trousers behind the hips' joint
 const BLADES = 0.45; // m: the shoulder blades over the hips, sat
 /** Where the hips go along the seat (m ahead of its middle) and how far she leans back: the knees at

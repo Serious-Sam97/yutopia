@@ -1,4 +1,5 @@
-import { type Grid, moveStep } from "../grid.ts";
+import { moveStep } from "../ground.ts";
+import type { Point } from "../iso.ts";
 import { type Height, JUMP_G, type JumpKind, stepHeight } from "../jump.ts";
 import type { FlowKind, FlowNow, FlowWorld } from "./flow.ts";
 import { type Gait, MOVE, type MoveSpec, STEP_DT } from "./spec.ts";
@@ -55,9 +56,21 @@ export const NO_INPUT: MoveInput = {
 };
 
 /** What a body asks of the world it moves through: where it fits, what's under it, whether a way's
- *  clear — the grid's answers (iso, the 3D view before Jolt's in) or Jolt's (shared/physics
- *  JoltCollider). */
-export type Collider = Pick<Grid, "fitsAt" | "groundAt" | "clear" | "onRamp" | "onLand" | "speedAt">;
+ *  clear — Jolt's (shared/physics Place), or a test's or a bench's own floor (move/floor.ts). */
+export interface Collider {
+  /** a body (radius r) with its feet z over the floor fits at (x, y): nothing in its way, something under it */
+  fitsAt(x: number, y: number, z: number, r?: number): boolean;
+  /** what a body there stands on, its feet z over the floor (within a step over them) */
+  groundAt(x: number, y: number, z: number, r?: number): number;
+  /** a body slides straight from a to b, its feet z up */
+  clear(a: Point, b: Point, r?: number, z?: number): boolean;
+  /** on a staircase's treads */
+  onRamp(x: number, y: number): boolean;
+  /** out on the land (the feet follow the ground) */
+  onLand(x: number, y: number): boolean;
+  /** how fast a body goes there (1 on a floor) */
+  speedAt(x: number, y: number): number;
+}
 
 /** How a body is moved and kept on its feet (docs/plan/50-the-volume.md C): by its velocity for
  *  dt — along what's in the way (a blocked way's speed gone), up a step `stepUp` high walking and

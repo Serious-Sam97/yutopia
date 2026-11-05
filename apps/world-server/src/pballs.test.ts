@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
-import { ROOM_NAME } from "@yutopia/shared";
+import { ROOM_NAME, STOREY } from "@yutopia/shared";
 import { aimPitch, KNOCK, OFF_TABLE, PBALL } from "@yutopia/shared/pool-throw";
 import { Client, type Room } from "colyseus.js";
 
@@ -82,7 +82,7 @@ test("a ball off the table thrown at A knocks A down; it lies there, is picked u
     [1, 25],
     [2, 25],
   ]) {
-    b.send("obj:put", { id, kind: "pool_table", x, y, rot: 0 });
+    b.send("obj:put", { id, kind: "pool_table", x, y, yaw: 0 });
     await sleep(300);
     if (b.state.objects.get(id)) break;
   }
@@ -128,7 +128,7 @@ test("the cue taken down fires balls: A knocked down again; not while a game's o
   const a = await person(903, 92);
   const b = await person(904, 92);
   const at = await standIn(a, 10.5, 22.5, 4);
-  const from = await standIn(b, 2.5, 22.5, 4);
+  let from = await standIn(b, 2.5, 22.5, 4);
   const id = "t-pool2";
   for (const [x, y] of [
     [1, 23],
@@ -138,15 +138,21 @@ test("the cue taken down fires balls: A knocked down again; not while a game's o
     [0, 23],
     [3, 23],
   ]) {
-    b.send("obj:put", { id, kind: "pool_table", x, y, rot: 0 });
+    b.send("obj:put", { id, kind: "pool_table", x, y, yaw: 0 });
     await sleep(300);
     if (b.state.objects.get(id)) break;
   }
   await waitFor(() => onTable(b, id).length === 16, 3000);
+  // (at the table's open side: it can land against a wall with B behind it — the server's reach
+  // looks through Jolt, and a wall's in the way)
+  const t = b.state.objects.get(id) as { x: number; y: number };
+  from = await standIn(b, t.x + 2, t.y - 0.7, 4);
   b.send("pball:take", { id, what: "cue" });
   await waitFor(() => me(b).gun === "cue");
+  // (and back, A in sight down the room)
+  from = await standIn(b, 2.5, 22.5, 4);
   // from the tip, a little ahead of the hands, straight at A's chest
-  const oz = me(b).z + 1.3;
+  const oz = me(b).z - me(b).level * STOREY + 1.3; // (over their floor)
   const yaw = Math.atan2(at.y - from.y, at.x - from.x);
   b.send("pball:fire", {
     ox: from.x + Math.cos(yaw) * 0.8,
@@ -162,7 +168,8 @@ test("the cue taken down fires balls: A knocked down again; not while a game's o
   b.send("pball:fire", { ox: from.x + 5, oy: from.y, oz, yaw, pitch: 0 });
   await sleep(500);
   assert.equal(b.state.pballs.size, 1);
-  // put back
+  // put back (at the table again)
+  await standIn(b, t.x + 2, t.y - 0.7, 4);
   b.send("pball:back", {});
   await waitFor(() => me(b).gun === "");
 

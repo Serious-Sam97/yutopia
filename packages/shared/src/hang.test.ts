@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { canPlace } from "./build.ts";
 import type { WorldObjectDef } from "./catalog.ts";
+import { quarterOf, quarterYaw } from "./catalog.ts";
 import {
   faceHit,
   faceNear,
@@ -15,7 +16,7 @@ import {
   liftRange,
   reachOf,
   WQ,
-  WZ_PX,
+  WZ,
   wallSpan,
 } from "./hang.ts";
 import { applyStep, diffStep, snapshot } from "./history.ts";
@@ -46,25 +47,25 @@ const board = (o: Partial<WorldObjectDef> = {}): WorldObjectDef => ({
   kind: "whiteboard",
   x: 4,
   y: 8,
-  rot: 0,
+  yaw: quarterYaw(0),
   ...o,
 });
 
 test("older wall items stay where they were: north wall, or turned (rot 3) the west one", () => {
-  const north = board({ rot: 2 }); // any other stored turn was the north wall
+  const north = board({ yaw: quarterYaw(2) }); // any other stored turn was the north wall
   assert.equal(hangOf(north).rot, 0);
   assert.deepEqual(wallSpan(north), [
     { dir: "h", x: 4, y: 8 },
     { dir: "h", x: 5, y: 8 },
   ]);
-  const west = board({ x: 0, y: 3, rot: 3 });
+  const west = board({ x: 0, y: 3, yaw: quarterYaw(3) });
   assert.deepEqual(wallSpan(west), [
     { dir: "v", x: 0, y: 3 },
     { dir: "v", x: 0, y: 4 },
   ]);
   // made explicit, nothing moves
   const c = hangCanon(north);
-  assert.equal(c.rot, 0);
+  assert.equal(quarterOf(c), 0);
   assert.deepEqual(c.props, { wu: 0, wz: 0 });
   assert.deepEqual(hangOf(c), hangOf(north));
 });
@@ -75,7 +76,7 @@ test("wall items hang on either face, anywhere along it and up it", () => {
   assert.ok(canPlace(map, [], south));
   // the back face of the same wall: from the tile north of it, facing −y
   const north = hangAt(board({ id: "n" }), { dir: "h", line: 8, side: -1 }, 4 * WQ, 0);
-  assert.equal(north.rot, 2);
+  assert.equal(quarterOf(north), 2);
   assert.equal(north.y, 7);
   assert.equal(hangOf(north).line, 8);
   assert.ok(canPlace(map, [south], north), "both faces of one wall take things");
@@ -87,7 +88,7 @@ test("wall items hang on either face, anywhere along it and up it", () => {
   const [, top] = liftRange("whiteboard");
   assert.ok(top >= 5, "a whiteboard can go up a good way");
   const up = hangAt(board({ id: "o" }), { dir: "h", line: 8, side: 1 }, 4 * WQ + 3, 5);
-  assert.equal(hangOf(up).z0, hangOf(south).z0 + 5 * WZ_PX);
+  assert.equal(hangOf(up).z0, hangOf(south).z0 + 5 * WZ);
   assert.ok(canPlace(map, [south], up), "above the other one");
   // the edges it covers: a quarter tile into a third one
   assert.deepEqual(
@@ -114,11 +115,11 @@ test("wall items hang on either face, anywhere along it and up it", () => {
 
 test("near a point: the middle under the pointer, on the grid, kept on the wall", () => {
   const map = hall();
-  const o = hangNear(board(), { dir: "h", line: 8, side: -1 }, 7.1, 60);
+  const o = hangNear(board(), { dir: "h", line: 8, side: -1 }, 7.1, 1.53);
   const h = hangOf(o);
   assert.equal(h.side, -1);
   assert.equal((h.u0 + h.u1) / 2 / WQ, 7, "middle on the nearest quarter");
-  assert.ok(Math.abs((h.z0 + h.z1) / 2 - 60) <= WZ_PX / 2);
+  assert.ok(Math.abs((h.z0 + h.z1) / 2 - 1.53) <= WZ / 2);
   assert.ok(canPlace(map, [], o));
   // z null keeps how high it was
   const same = hangNear({ ...o, props: { ...o.props, wz: 2 } }, { dir: "h", line: 8, side: 1 }, 7, null);
@@ -134,19 +135,19 @@ test("near a point: the middle under the pointer, on the grid, kept on the wall"
 test("pointing at a wall: the face the ray meets first, looking at it", () => {
   const map = hall();
   // the iso camera looks down towards −x −y: from in front of the wall's south face
-  const ray = { o: { x: 9, y: 10, z: 600 }, d: { x: -2, y: -2, z: -600 } };
-  // its point at the wall's face (y 8.1): t = 0.95 → x 7.1, z 30
+  const ray = { o: { x: 9, y: 10, z: 15 }, d: { x: -2, y: -2, z: -15 } };
+  // its point at the wall's face (y 8.1): t = 0.95 → x 7.1, z 0.75
   const hit = faceHit(map, ray);
   assert.ok(hit);
   assert.deepEqual(hit.face, { dir: "h", line: 8, side: 1 });
-  assert.ok(Math.abs(hit.along - 7.1) < 1e-9 && Math.abs(hit.z - 30) < 1e-9);
+  assert.ok(Math.abs(hit.along - 7.1) < 1e-9 && Math.abs(hit.z - 0.75) < 1e-9);
   // looked through (cut away): the next one behind it, or none
   assert.equal(
     faceHit(map, ray, (e) => e.dir === "h" && e.y === 8),
     null,
   );
   // from the other side the back face answers
-  const back = faceHit(map, { o: { x: 9, y: 5, z: 80 }, d: { x: 0, y: 1, z: -10 } });
+  const back = faceHit(map, { o: { x: 9, y: 5, z: 2 }, d: { x: 0, y: 1, z: -0.25 } });
   assert.deepEqual(back?.face, { dir: "h", line: 8, side: -1 });
   // nothing to point at: the face nearest the floor point
   assert.deepEqual(faceNear(map, 7.3, 7.8)?.face, { dir: "h", line: 8, side: -1 });

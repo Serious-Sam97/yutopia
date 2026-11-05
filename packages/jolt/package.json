@@ -1,0 +1,21 @@
+{
+  "name": "jolt-physics",
+  "version": "1.1.1-grow.1",
+  "description": "JoltPhysics.js 1.1.1 (wasm-compat), built here with a growing heap: see README.md",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "dist/jolt-physics.wasm-compat.js",
+  "types": "dist/jolt-physics.wasm-compat.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/jolt-physics.wasm-compat.d.ts",
+      "default": "./dist/jolt-physics.wasm-compat.js"
+    },
+    "./wasm-compat": {
+      "types": "./dist/jolt-physics.wasm-compat.d.ts",
+      "default": "./dist/jolt-physics.wasm-compat.js"
+    },
+    "./package.json": "./package.json"
+  }
+}

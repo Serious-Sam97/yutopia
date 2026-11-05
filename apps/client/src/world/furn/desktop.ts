@@ -1,4 +1,3 @@
-import { ISO_PX } from "@yutopia/shared";
 import { COMPUTER_GLASS } from "@yutopia/shared/computer";
 import { ball, box, cushion, cyl, extrude, type Look, lathe, leaf, type Model, ring, rod, tube, type V3 } from "./kit";
 import { P, shade } from "./palette";
@@ -19,7 +18,6 @@ export const DESKTOP_LOOKS = {
 } as const;
 
 const C = 0.5; // the frame's middle
-const iso = (px: number) => px / ISO_PX;
 const COLORS = [0x8a2f2a, 0xc9a24a, 0x3f5f8a, 0x5f7a3a, 0xe6dcc4, 0x6a4a7a, 0xb5562f, 0x2b2a28, 0x3d7f8a];
 const pick = (seed: number, k = 0) => COLORS[Math.floor(((seed * 7.31 + k * 0.37) % 1) * COLORS.length)];
 
@@ -36,7 +34,7 @@ export function computer(m: Model, o: Look) {
   const back = 0.72;
   const x0 = 0.28;
   const x1 = 0.72;
-  const top = iso(g.z1) + 0.05;
+  const top = g.z1 + 0.05;
   // the foot, and the case on it: deeper at the back for the tube
   m.add(box([0.3, 0.02, 0.3], 0.006, 2), dark, { at: [C, 0.01, 0.52] });
   m.add(box([x1 - x0, top - 0.02, 0.2], 0.012, 2), body, { at: [C, 0.02 + (top - 0.02) / 2, front + 0.1] });
@@ -45,8 +43,8 @@ export function computer(m: Model, o: Look) {
   });
   // the bezel round the glass, the glass set back in it, a soft reflection across its top
   const gw = g.x0 - g.x1;
-  const gz0 = iso(g.z0);
-  const gz1 = iso(g.z1);
+  const gz0 = g.z0;
+  const gz1 = g.z1;
   // (a frame round it, never over it: the live picture is drawn on the glass's plane, in front)
   const bz = shade(body, 0.9);
   const bw = 0.025;

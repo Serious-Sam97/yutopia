@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { canPlace, hungOnEdge } from "./build.ts";
 import type { WorldObjectDef } from "./catalog.ts";
-import { Grid, lockedEdge, mayLockDoor } from "./grid.ts";
+import { quarterOf, quarterYaw } from "./catalog.ts";
+import { lockedEdge, mayLockDoor } from "./doors.ts";
 import { hangFits } from "./hang.ts";
 import { hWall, setEdge, vWall } from "./map.ts";
 import { addRoom, blankMap, edgeBlocker, paintBlocker, setRoomWalls } from "./map-edit.ts";
@@ -22,7 +23,7 @@ import {
   openingsIntoWalls,
   wallCuts,
 } from "./openings.ts";
-import { findPath } from "./path.ts";
+import { testWorld, wayOn } from "./physics/testing.ts";
 
 // A 32×24 studio with Ana's office (4..8 × 4..7, owner 7), walls round it and
 // its door in the bottom wall at (6, 8).
@@ -47,7 +48,7 @@ const door = (props: Record<string, unknown> = {}): WorldObjectDef => ({
   kind: "door",
   x: 6,
   y: 8,
-  rot: 0,
+  yaw: quarterYaw(0),
   props: { state: "open", roomKey: "room-ana", ...props },
 });
 
@@ -65,14 +66,21 @@ test("doors go in a wall (it stays), with floor both sides; never in the open, a
   assert.ok(canPlace(glass, [], door()), "a glass wall takes a door");
   assert.ok(!canPlace(glass, [], { ...door(), kind: "window", id: "w" }), "but not a window");
   // west walls: rot 1
-  assert.ok(canPlace(map, [], { ...door(), x: 4, y: 5, rot: 1 }));
+  assert.ok(canPlace(map, [], { ...door(), x: 4, y: 5, yaw: quarterYaw(1) }));
   // one per edge
   assert.match(openingBlocker(map, [door()], { ...door(), id: "d2" }) ?? "", /door is there/);
 });
 
-test("windows: in any full wall (outer ones too), wide ones across two edges with no wall meeting between", () => {
+test("windows: in any full wall (outer ones too), wide ones across two edges with no wall meeting between", async () => {
   const { map } = office();
-  const win = (o: Partial<WorldObjectDef>): WorldObjectDef => ({ id: "w", kind: "window", x: 10, y: 0, rot: 0, ...o });
+  const win = (o: Partial<WorldObjectDef>): WorldObjectDef => ({
+    id: "w",
+    kind: "window",
+    x: 10,
+    y: 0,
+    yaw: quarterYaw(0),
+    ...o,
+  });
   assert.ok(canPlace(map, [], win({})), "the outer wall");
   assert.ok(canPlace(map, [], win({ x: 5, y: 4 })), "between rooms");
   const wide = win({ kind: "window_wide", x: 5, y: 4 });
@@ -91,8 +99,9 @@ test("windows: in any full wall (outer ones too), wide ones across two edges wit
   assert.ok(canPlace(parted, [], win({ kind: "window_wide", x: 10, y: 0 })), "beside it is fine");
   assert.ok(!canPlace(map, [], win({ x: 15, y: 15 })), "not in the open");
   // they don't let anyone through
-  const g = Grid.from(map, [win({ x: 6, y: 8 })]);
-  assert.ok(!g.step(6, 8, 6, 7));
+  const w = await testWorld(map, [win({ x: 6, y: 8 })]);
+  assert.ok(!w.place().step(6, 8, 6, 7));
+  w.dispose();
 });
 
 test("wall items and openings: never over one, either face; above a door is fine", () => {
@@ -103,21 +112,21 @@ test("wall items and openings: never over one, either face; above a door is fine
     kind: "poster",
     x: 6,
     y: 8,
-    rot: 0,
+    yaw: quarterYaw(0),
     props: { wu: 0, wz: 0, ...props },
   });
   assert.ok(hangFits(map, [], poster({})), "on the bare wall");
   assert.ok(!hangFits(map, [d], poster({})), "over the door: no");
-  assert.ok(!hangFits(map, [d], { ...poster({}), y: 7, rot: 2 }), "nor on its other face");
+  assert.ok(!hangFits(map, [d], { ...poster({}), y: 7, yaw: quarterYaw(2) }), "nor on its other face");
   // a clock high up over the door's lintel (lowest 43 + 5 steps × 9.8 = 92 > 88)
-  assert.ok(hangFits(map, [d], { id: "c", kind: "clock", x: 6, y: 8, rot: 0, props: { wu: 1, wz: 5 } }));
+  assert.ok(hangFits(map, [d], { id: "c", kind: "clock", x: 6, y: 8, yaw: quarterYaw(0), props: { wu: 1, wz: 5 } }));
   assert.match(openingBlocker(map, [poster({})], d, hungOnEdge([poster({})])) ?? "", /Poster hangs there/);
   assert.ok(!canPlace(map, [poster({})], d));
 });
 
 test("the walls round a door or window stay: no taking them away, no window paint, repaint them freely", () => {
   const { map } = office();
-  const objs = [door(), { id: "w", kind: "window", x: 5, y: 4, rot: 0 }];
+  const objs = [door(), { id: "w", kind: "window", x: 5, y: 4, yaw: quarterYaw(0) }];
   assert.match(edgeBlocker(map, objs, { dir: "h", x: 6, y: 8 }, ".") ?? "", /door is in that wall/);
   assert.match(edgeBlocker(map, objs, { dir: "h", x: 6, y: 8 }, "h") ?? "", /door/);
   assert.equal(edgeBlocker(map, objs, { dir: "h", x: 6, y: 8 }, "b"), null, "brick is fine");
@@ -133,9 +142,9 @@ test("the walls round a door or window stay: no taking them away, no window pain
 });
 
 test("in hand: an opening snaps its middle to the pointer along the wall", () => {
-  const w: WorldObjectDef = { id: "w", kind: "window_wide", x: 0, y: 0, rot: 0 };
-  assert.deepEqual(openingNear(w, { dir: "h", line: 4 }, 6.2), { ...w, x: 5, y: 4, rot: 0 });
-  assert.deepEqual(openingNear(door(), { dir: "v", line: 4 }, 5.7), { ...door(), x: 4, y: 5, rot: 1 });
+  const w: WorldObjectDef = { id: "w", kind: "window_wide", x: 0, y: 0, yaw: quarterYaw(0) };
+  assert.deepEqual(openingNear(w, { dir: "h", line: 4 }, 6.2), { ...w, x: 5, y: 4, yaw: quarterYaw(0) });
+  assert.deepEqual(openingNear(door(), { dir: "v", line: 4 }, 5.7), { ...door(), x: 4, y: 5, yaw: quarterYaw(1) });
 });
 
 test("older saves: doors in a gap get their wall, painted-on windows become windows (once)", () => {
@@ -152,7 +161,7 @@ test("older saves: doors in a gap get their wall, painted-on windows become wind
   assert.equal(hWall(r.map, 12, 0), "p");
   assert.equal(vWall(r.map, 0, 6), "p");
   assert.deepEqual(
-    r.added.map((o) => [o.id, o.kind, o.x, o.y, o.rot]),
+    r.added.map((o) => [o.id, o.kind, o.x, o.y, quarterOf(o)]),
     [
       ["win-h12-0", "window", 12, 0, 0],
       ["win-v0-6", "window", 0, 6, 1],
@@ -168,7 +177,7 @@ test("older saves: doors in a gap get their wall, painted-on windows become wind
     if (o.kind === "door" || o.kind.startsWith("window")) assert.ok(canPlace(s.map, [], o), o.id);
 });
 
-test("locks: only the room's owner locks and unlocks (not an admin); unowned rooms: admins", () => {
+test("locks: only the room's owner locks and unlocks (not an admin); unowned rooms: admins", async () => {
   const { map } = office();
   const d = door({ state: "locked" });
   assert.ok(mayLockDoor(map, d, { uid: 7 }));
@@ -180,9 +189,9 @@ test("locks: only the room's owner locks and unlocks (not an admin); unowned roo
   // locked: only Ana gets in
   const outside = { x: 6.5, y: 12.5 };
   const inside = { x: 6.5, y: 5.5 };
-  assert.equal(findPath(Grid.from(map, [d], { uid: 8 }), outside, inside)?.length ?? 0, 0);
-  assert.ok(findPath(Grid.from(map, [d], { uid: 7 }), outside, inside));
-  assert.ok(findPath(Grid.from(map, [door({ state: "closed" })], { uid: 8 }), outside, inside), "closed: anyone");
+  assert.equal(await wayOn(map, [d], 8, outside, inside), null);
+  assert.ok(await wayOn(map, [d], 7, outside, inside));
+  assert.ok(await wayOn(map, [door({ state: "closed" })], 8, outside, inside), "closed: anyone");
   // nor round it: while it's locked the room's walls are Ana's to change
   assert.match(lockedEdge(map, [d], { dir: "v", x: 4, y: 5 }, 8) ?? "", /Ana locked Ana's office/);
   assert.equal(lockedEdge(map, [d], { dir: "v", x: 4, y: 5 }, 7), null);
@@ -190,14 +199,14 @@ test("locks: only the room's owner locks and unlocks (not an admin); unowned roo
   assert.equal(lockedEdge(map, [d], { dir: "v", x: 20, y: 5 }, 8), null, "elsewhere: anyone builds");
 });
 
-test("door kinds: a double door takes two edges, saloon doors and archways don't lock, archways never shut", () => {
+test("door kinds: a double door takes two edges, saloon doors and archways don't lock, archways never shut", async () => {
   const { map } = office();
   const dbl: WorldObjectDef = {
     id: "dd",
     kind: "door_double",
     x: 5,
     y: 8,
-    rot: 0,
+    yaw: quarterYaw(0),
     props: { state: "locked", roomKey: "room-ana" },
   };
   assert.ok(canPlace(map, [], dbl));
@@ -209,22 +218,35 @@ test("door kinds: a double door takes two edges, saloon doors and archways don't
     ],
   );
   // locked: both its edges are wall for others, open for Ana
-  const g8 = Grid.from(map, [dbl], { uid: 8 });
+  const wd = await testWorld(map, [dbl]);
+  const g8 = wd.place(undefined, 8);
   assert.ok(!g8.step(5, 8, 5, 7) && !g8.step(6, 8, 6, 7));
-  const g7 = Grid.from(map, [dbl], { uid: 7 });
+  const g7 = wd.place(undefined, 7);
   assert.ok(g7.step(5, 8, 5, 7) && g7.step(6, 8, 6, 7));
+  wd.dispose();
   // saloon doors: anyone through, never locked (even "locked" in a save), nobody may lock them
-  const saloon: WorldObjectDef = { id: "s", kind: "door_saloon", x: 6, y: 8, rot: 0, props: { state: "locked" } };
-  assert.ok(Grid.from(map, [saloon], { uid: 8 }).step(6, 8, 6, 7));
+  const saloon: WorldObjectDef = {
+    id: "s",
+    kind: "door_saloon",
+    x: 6,
+    y: 8,
+    yaw: quarterYaw(0),
+    props: { state: "locked" },
+  };
+  const ws = await testWorld(map, [saloon]);
+  assert.ok(ws.place(undefined, 8).step(6, 8, 6, 7));
+  ws.dispose();
   assert.ok(!mayLockDoor(map, saloon, { uid: 7 }));
   assert.equal(doorStartState("door_saloon"), "closed");
   assert.ok(doorShut({ kind: "door_saloon", props: {} }), "saloon doors hang shut…");
   assert.ok(!doorBlocksLight({ kind: "door_saloon", props: {} }), "…and let light over them");
   // an archway: no door at all
-  const arch: WorldObjectDef = { id: "a", kind: "archway", x: 6, y: 8, rot: 0, props: { state: "locked" } };
+  const arch: WorldObjectDef = { id: "a", kind: "archway", x: 6, y: 8, yaw: quarterYaw(0), props: { state: "locked" } };
   assert.ok(!doorShut(arch) && !mayLockDoor(map, arch, { uid: 7 }) && doorLeaves("archway") === 0);
-  assert.ok(Grid.from(map, [arch], { uid: 8 }).step(6, 8, 6, 7));
-  assert.deepEqual(openingCut("archway"), [0, 98]);
+  const wa = await testWorld(map, [arch]);
+  assert.ok(wa.place(undefined, 8).step(6, 8, 6, 7));
+  wa.dispose();
+  assert.deepEqual(openingCut("archway"), [0, 2.5008]);
   // a barn door slides; the rest swing
   assert.ok(doorSlides("door_barn") && !doorSlides("door"));
   assert.ok(isDoorKind("door_barn") && !isDoorKind("window") && isWindowKind("window_tall"));

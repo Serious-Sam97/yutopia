@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { canPlace } from "./build.ts";
-import { doorFits, doorOwner, Grid } from "./grid.ts";
+import { quarterYaw } from "./catalog.ts";
+import { doorFits, doorOwner } from "./doors.ts";
 import { areaAt, hWall, tileAt, vWall } from "./map.ts";
 import {
   addRoom,
@@ -17,7 +18,7 @@ import {
   validLayout,
 } from "./map-edit.ts";
 import { studio, studioV1 } from "./maps/studio.ts";
-import { findPath } from "./path.ts";
+import { testWorld, wayOn } from "./physics/testing.ts";
 
 test("painting floors: anywhere, but no floor taken from under furniture, people, the spawn or a board", () => {
   assert.equal(paintBlocker(studio, studio.objects, [], 10, 3, ","), null);
@@ -34,7 +35,7 @@ test("painting floors: anywhere, but no floor taken from under furniture, people
   assert.equal(tileAt(studio, 10, 3), ".", "original untouched");
 });
 
-test("painting walls on edges: never through furniture, or away from a board; no painted-on windows", () => {
+test("painting walls on edges: never through furniture, or away from a board; no painted-on windows", async () => {
   assert.equal(edgeBlocker(studio, studio.objects, { x: 10, y: 5, dir: "h" }, "p"), null);
   // desks at (3,6) and (3,7) span x 3..4: an edge between their two tiles cuts through
   assert.match(edgeBlocker(studio, studio.objects, { x: 4, y: 6, dir: "v" }, "p") ?? "", /Desk/);
@@ -50,14 +51,16 @@ test("painting walls on edges: never through furniture, or away from a board; no
   assert.equal(hWall(m, 10, 5), "b");
   assert.equal(hWall(studio, 10, 5), ".", "original untouched");
   // a wall across the floor now blocks walking across it
-  const g = Grid.from(m, []);
+  const w = await testWorld(m, []);
+  const g = w.place();
   assert.ok(!g.step(10, 4, 10, 5));
   assert.ok(g.step(11, 4, 11, 5));
+  w.dispose();
 });
 
 test("layouts round-trip and are validated (v2, and v1 still reads)", () => {
   const l = layoutFromMap(studio);
-  assert.equal(l.version, 2);
+  assert.equal(l.version, 3, "metres and radians (plan 72 phase 5)");
   assert.ok(validLayout(l));
   assert.ok(!validLayout({ ...l, width: 500 }));
   assert.ok(!validLayout({ ...l, tiles: l.tiles.map((r, i) => (i === 3 ? `${r.slice(0, -1)}Z` : r)) }));
@@ -108,7 +111,7 @@ test("blank map: walls along the border, floor everywhere, valid", () => {
   assert.equal(areaAt(m, 5, 5)?.key, "main");
 });
 
-test("rooms: walls on their edges, a doorway, an owner, and a locked door only the owner passes", () => {
+test("rooms: walls on their edges, a doorway, an owner, and a locked door only the owner passes", async () => {
   const base = blankMap("b", "B", 32, 24);
   const res = addRoom(base, [], [], {
     key: "room-ana",
@@ -131,23 +134,23 @@ test("rooms: walls on their edges, a doorway, an owner, and a locked door only t
   assert.equal(vWall(map, 9, 5), "p", "right");
   assert.equal(tileAt(map, 5, 5), ",");
   assert.equal(tileAt(map, 3, 3), ".", "no tile lost to walls");
-  assert.deepEqual(door, { x: 6, y: 8, rot: 0 });
+  assert.deepEqual(door, { x: 6, y: 8, yaw: 0 });
   assert.equal(hWall(map, 6, 8), "p", "the door's wall: the door goes in it");
   assert.ok(doorFits(map, { x: 6, y: 8, dir: "h" }));
   assert.equal(areaAt(map, 5, 5)?.ownerId, 7);
-  const d = { id: "d", kind: "door", x: 6, y: 8, rot: 0, props: { state: "locked" } };
+  const d = { id: "d", kind: "door", x: 6, y: 8, yaw: quarterYaw(0), props: { state: "locked" } };
   assert.ok(canPlace(map, [], d), "door fits the doorway");
   assert.ok(!canPlace(map, [], { ...d, x: 15, y: 15 }), "not in the open");
   assert.equal(doorOwner(map, d), 7);
   const outside = { x: 6.5, y: 12.5 };
   const inside = { x: 6.5, y: 5.5 };
-  assert.equal(findPath(Grid.from(map, [d], { uid: 8 }), outside, inside)?.length ?? 0, 0, "others can't get in");
-  assert.ok(findPath(Grid.from(map, [d], { uid: 7 }), outside, inside), "the owner can");
-  assert.equal(findPath(Grid.from(map, [d]), outside, inside)?.length ?? 0, 0, "no identity: blocked");
+  assert.equal(await wayOn(map, [d], 8, outside, inside), null, "others can't get in");
+  assert.ok(await wayOn(map, [d], 7, outside, inside), "the owner can");
+  assert.equal(await wayOn(map, [d], null, outside, inside), null, "no identity: blocked");
   const closed = { ...d, props: { state: "closed" } };
-  assert.ok(findPath(Grid.from(map, [closed], { uid: 8 }), outside, inside), "closed (unlocked) doors open for anyone");
+  assert.ok(await wayOn(map, [closed], 8, outside, inside), "closed (unlocked) doors open for anyone");
   // a wall can't cut through furniture
-  const desk = { id: "k", kind: "desk", x: 14, y: 12, rot: 0 };
+  const desk = { id: "k", kind: "desk", x: 14, y: 12, yaw: quarterYaw(0) };
   const bad = addRoom(base, [desk], [], {
     key: "room-x",
     name: "X",

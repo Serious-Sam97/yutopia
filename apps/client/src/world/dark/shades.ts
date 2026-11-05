@@ -1,5 +1,6 @@
 import type { AvatarLayers } from "@yutopia/shared";
 import { beamAt, beamOf } from "@yutopia/shared/beam";
+import { face8 } from "@yutopia/shared/facing";
 import { heightAt } from "@yutopia/shared/grounds";
 import type { WorldController } from "../controller";
 import type { AvatarState } from "../model";
@@ -98,16 +99,6 @@ function officeLook(seed: number): AvatarLayers {
     shoesColor: pick(["#2a2420", "#5b3a26"]),
     beard: pick(["none", "none", "none", "stubble"]),
   } as AvatarLayers;
-}
-
-// a person's 8-way facing, `d` (shared iso.ts dirFromDelta: the screen's angle, tiles 2:1)
-function dir8(angle: number): number {
-  const dx = Math.cos(angle);
-  const dy = Math.sin(angle);
-  const sx = (dx - dy) * 2;
-  const sy = dx + dy;
-  const i = Math.round(Math.atan2(-sx, sy) / (Math.PI / 4));
-  return ((i % 8) + 8) % 8;
 }
 
 // the upper body they're posed in, by state (chars/moves.ts shadePose)
@@ -216,11 +207,9 @@ export class Shades {
       .map((s) => ({ id: s.id, x: s.x, y: s.y, z: this.ground(s.x, s.y) }));
   }
 
-  // (their x / y are the ground floor's: upstairs, its corner isn't my floor's)
+  // (their x / y are the world's, as the land's)
   private ground(x: number, y: number): number {
-    const ctl = this.ctl;
-    const map = ctl.level === 0 ? ctl.map : (ctl.building?.levels?.find((l) => l.index === 0) ?? ctl.building);
-    return heightAt(x + (map?.ox ?? 0), y + (map?.oy ?? 0));
+    return heightAt(x, y);
   }
 
   // 0..1: fading in as it comes into range, out as it goes
@@ -236,7 +225,7 @@ export class Shades {
       avatar: s.look,
       x: s.x,
       y: s.y,
-      d: dir8(s.angle),
+      yaw: face8(Math.cos(s.angle), Math.sin(s.angle)),
       a: moving ? 1 : 0,
       status: "online",
       speaking: false,

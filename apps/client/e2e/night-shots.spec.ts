@@ -40,7 +40,7 @@ const hold = (page: Page, h: number) =>
   }, h);
 /** Out on the lot (building coords; the ground floor's corner at (-60, -10)). */
 const at = async (page: Page, x: number, z: number) => {
-  await page.evaluate(([xx, zz]) => (window as any).__yutopia.teleport({ x: xx + 60, y: zz + 10, level: 0 }), [x, z]);
+  await page.evaluate(([xx, zz]) => (window as any).__yutopia.teleport({ x: xx, y: zz, level: 0 }), [x, z]);
   await page.waitForTimeout(4000);
 };
 /** A picture from a camera of my own (building coords), the 3D view's renderer: a data URL. */
@@ -77,10 +77,11 @@ const dark = (page: Page, eyes: number) =>
           for (const k of ["landLight", "lmGlowK"]) if (pu[k] && !u[k]) u[k] = pu[k];
         }
       });
-      const wf = tp.weatherFrame;
-      tp.weatherFrame = function (this: any) {
-        wf.call(this);
-        if (w.__night) this.scene.fog.color.setRGB(0, 0, 0);
+      // (the weather's frame: the view's Mood part — plan 72 phase 4)
+      const wf = tp.mood.weatherFrame;
+      tp.mood.weatherFrame = function (this: any, ...a: unknown[]) {
+        wf.call(this, ...a);
+        if (w.__night) tp.scene.fog.color.setRGB(0, 0, 0);
       };
       // the lamps' pools a touch stronger: islands
       if (u.lmGlowK) u.lmGlowK.value *= 1.3;
@@ -420,13 +421,13 @@ test("built: headlamps on someone", async ({ page, browser }) => {
     c.room.state.objects.forEach((o: any) => {
       const p = JSON.parse(o.props);
       if (o.kind !== "car" || p.driven || p.model === "offroad") return;
-      const w = o.rot % 2 ? 2 : 5;
-      const h = o.rot % 2 ? 5 : 2;
+      const w = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 2 : 5;
+      const h = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 5 : 2;
       out.push({
         id: o.id,
         x: o.x + w / 2 + (p.dx ?? 0),
         y: o.y + h / 2 + (p.dz ?? 0),
-        a: Math.PI + (o.rot % 4) * (Math.PI / 2),
+        a: Math.PI + ((Math.round(o.yaw / (Math.PI / 2)) & 3) % 4) * (Math.PI / 2),
       });
     });
     return out[0];
@@ -464,13 +465,9 @@ test("built: headlamps on someone", async ({ page, browser }) => {
       for (const n of document.querySelectorAll("nextjs-portal")) n.remove();
     });
     await a.screenshot({ path: `${BUILT}/3d-headlamps-driver.png` });
-    // Bia's own view: from beside her, looking back at the car (building coords: the floor's + (-60, -10))
-    const side = { x: at.x - 60 + Math.sin(car.a) * 4, z: at.y - 10 - Math.cos(car.a) * 4 };
-    const url = await look(
-      b,
-      [side.x + Math.cos(car.a) * 3, 2.2, side.z + Math.sin(car.a) * 3],
-      [car.x - 60, 0.8, car.y - 10],
-    );
+    // Bia's own view: from beside her, looking back at the car
+    const side = { x: at.x + Math.sin(car.a) * 4, z: at.y - Math.cos(car.a) * 4 };
+    const url = await look(b, [side.x + Math.cos(car.a) * 3, 2.2, side.z + Math.sin(car.a) * 3], [car.x, 0.8, car.y]);
     writeFileSync(`${BUILT}/3d-headlamps-side.png`, Buffer.from(url.split(",")[1], "base64"));
     const lit = await b.evaluate(() => {
       const tp = (window as any).__yutopia.tp;

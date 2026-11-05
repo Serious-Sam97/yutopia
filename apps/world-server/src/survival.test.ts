@@ -19,7 +19,6 @@ process.env.YUTOPIA_WORLD_SECRET = "test";
 process.env.YUTOPIA_INTERNAL_SECRET = "test";
 
 const PORT = 32500 + Math.floor(Math.random() * 100); // (its own hundred: no two files share one — they run at once)
-const OFF = { x: -60, y: -10 }; // the ground floor's corner in the building's coords
 let server: { gracefullyShutdown: (exit?: boolean) => Promise<void> };
 const rooms: Room[] = [];
 before(async () => {
@@ -70,7 +69,7 @@ async function person(uid: number, roles = "member,builder"): Promise<Person> {
 }
 // to a spot on the land (the building's coords)
 async function goTo(p: Person, bx: number, bz: number) {
-  const to = { x: bx - OFF.x, y: bz - OFF.y };
+  const to = { x: bx, y: bz };
   p.room.send("teleport", { to: { ...to, level: 0 } });
   await waitFor(() => me(p.room).level === 0 && Math.hypot(me(p.room).x - to.x, me(p.room).y - to.y) < 0.5);
 }
@@ -86,10 +85,10 @@ test("a sprint across the pond drains stamina; out of breath, no roll — and no
   a.snaps = 0; // (the teleport's own)
   const send = (gait: "sprint" | "jog") => {
     a.room.send("pos", {
-      x: bx - OFF.x,
-      y: bz - OFF.y,
+      x: bx,
+      y: bz,
       z: heightAt(bx, bz),
-      d: 2,
+      yaw: 96,
       a: 1,
       seq: 0,
       mv: packMv(gait),
@@ -116,7 +115,7 @@ test("a sprint across the pond drains stamina; out of breath, no roll — and no
   assert.equal(a.snaps, sent, "a sprint while winded isn't put back");
   // where the server has me; a roll refused
   await sleep(100);
-  bx = me(a.room).x + OFF.x;
+  bx = me(a.room).x;
   a.room.send("jump", { k: "roll" });
   await sleep(150);
   assert.notEqual(me(a.room).jump, "roll", "no roll out of breath");
@@ -175,7 +174,7 @@ test("the locker's revolver: loaded the first time; dropped, picked up by someon
   const d: any = [...a.room.state.drops.values()][0];
   assert.equal(d.item, "revolver");
   assert.equal(d.loaded, 6);
-  await goTo(b, d.x + OFF.x, d.y + OFF.y);
+  await goTo(b, d.x, d.y);
   b.room.send("dark:pick", { id: d.id });
   await waitFor(() => b.inv?.quick[0]?.id === "revolver");
   assert.equal(loaded0(b), 6);
@@ -199,10 +198,10 @@ test("the torch focused: on, aiming, out on the land — the battery runs down; 
   await goTo(a, -250, -60);
   const aim = (on: boolean) =>
     a.room.send("pos", {
-      x: -250 - OFF.x,
-      y: -60 - OFF.y,
+      x: -250,
+      y: -60,
       z: heightAt(-250, -60),
-      d: 2,
+      yaw: 96,
       a: 0,
       seq: 0,
       mv: packMv("still") | (on ? MV_AIM : 0),
@@ -235,10 +234,10 @@ test("one body a person: one kept for a reconnection, the battery runs down at 1
   await goTo(b, -250, -60);
   const aim = (on: boolean) =>
     b.room.send("pos", {
-      x: -250 - OFF.x,
-      y: -60 - OFF.y,
+      x: -250,
+      y: -60,
       z: heightAt(-250, -60),
-      d: 2,
+      yaw: 96,
       a: 0,
       seq: 0,
       mv: packMv("still") | (on ? MV_AIM : 0),
@@ -349,7 +348,7 @@ test("a supply locker, built: a kit a day — what fits; tomorrow another; kept 
   const { kitClock } = await import("./features/survival.ts");
   const a = await person(381);
   // built in the studio (level 4), by the reception
-  a.room.send("obj:put", { id: "kit-locker", kind: "locker", x: 8, y: 23, rot: 0, props: { level: 4 } });
+  a.room.send("obj:put", { id: "kit-locker", kind: "locker", x: 8, y: 23, yaw: 0, props: { level: 4 } });
   await waitFor(() => !!a.room.state.objects.get("kit-locker"));
   const f = lockerFront(a.room.state.objects.get("kit-locker"));
   const open = async (p: Person) => {
@@ -410,9 +409,9 @@ test("the torch focused indoors too: on, aiming, on the studio's floor", async (
   await sleep(300);
   const p = { x: me(a.room).x, y: me(a.room).y };
   a.room.send("phone:torch", { on: true });
-  a.room.send("pos", { x: p.x, y: p.y, z: 0, d: 2, a: 0, seq: 0, mv: packMv("still") | MV_AIM });
+  a.room.send("pos", { x: p.x, y: p.y, z: 0, yaw: 96, a: 0, seq: 0, mv: packMv("still") | MV_AIM });
   await waitFor(() => me(a.room).focused === true);
-  a.room.send("pos", { x: p.x, y: p.y, z: 0, d: 2, a: 0, seq: 0, mv: packMv("still") });
+  a.room.send("pos", { x: p.x, y: p.y, z: 0, yaw: 96, a: 0, seq: 0, mv: packMv("still") });
   await waitFor(() => me(a.room).focused === false);
   a.room.send("phone:torch", { on: false });
 });

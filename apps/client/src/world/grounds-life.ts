@@ -1,6 +1,6 @@
 "use client";
 
-import { floorOf, GROUND_OFFSET, type MapDef, parseAvatar } from "@yutopia/shared";
+import { byteFace, floorOf, type MapDef, parseAvatar } from "@yutopia/shared";
 import type { Footing } from "@yutopia/shared/footing";
 import type * as GroundsModule from "@yutopia/shared/grounds";
 import type { GroundWhat } from "@yutopia/shared/shapes/grounds";
@@ -81,16 +81,9 @@ export class GroundsLife {
     this.sound = new GroundsSound(G);
   }
 
-  /** A frame: where each is, eased; a horn heard from where it is. `me` the
-   *  floor's coords (the ground floor's corner at `ox, oy`), `here` on it. */
-  drive(
-    dt: number,
-    vehicles: Vehicles | undefined,
-    me: { x: number; y: number },
-    ox: number,
-    oy: number,
-    here: boolean,
-  ) {
+  /** A frame: where each is, eased; a horn heard from where it is. `here`: I'm on the ground
+   *  floor. */
+  drive(dt: number, vehicles: Vehicles | undefined, me: { x: number; y: number }, here: boolean) {
     if (!vehicles) return [];
     const k = 1 - Math.exp(-dt * 10);
     vehicles.forEach((v, id) => {
@@ -111,7 +104,7 @@ export class GroundsLife {
       const was = this.honks.get(id) ?? v.honkAt;
       this.honks.set(id, v.honkAt);
       if (v.honkAt !== was && v.shown && here) {
-        const d = Math.hypot(c.x - ox - me.x, c.z - oy - me.y);
+        const d = Math.hypot(c.x - me.x, c.z - me.y);
         if (d < 60) this.sound.horn(1 - d / 60, v.kind === "shuttle");
       }
     });
@@ -131,8 +124,8 @@ export class GroundsLife {
       this.prints.prune(now);
     }
     if (floorOf(map) !== 0 || !land) return this.prints.forget(id);
-    const x = st.x + (map.ox ?? 0);
-    const z = st.y + (map.oy ?? 0);
+    const x = st.x;
+    const z = st.y;
     const s = this.G.surfaceTileAt(Math.floor(x), Math.floor(z));
     // (in snow only — where it lies there now: docs/plan/65, W5 — not on the grass)
     if (s !== "snow" && s !== "deep") return this.prints.forget(id);
@@ -153,10 +146,10 @@ export class GroundsLife {
    *  building's floor, a road's slush and black ice — and its snow in a storm, the cold and the cover
    *  as the cars have them (car/cars.ts; not the ploughs' cells). `under`: on the land itself, under
    *  a bridge. */
-  footingAt(x: number, y: number, map: MapDef, night: number, storm: number, under = false): Footing {
+  footingAt(x: number, y: number, _map: MapDef, night: number, storm: number, under = false): Footing {
     const cold = Math.min(1, 0.35 + 0.5 * night + 0.3 * storm);
     const cover = Math.max(0, storm - 0.2) * 0.9;
-    return this.G.footingAt(x + (map.ox ?? 0), y + (map.oy ?? 0), cold, cover, under);
+    return this.G.footingAt(x, y, cold, cover, under);
   }
   /** A Grounds' thing stood on at (x, y) (a roof, a porch, a bridge's deck — by its way there). */
   thingFooting(what: GroundWhat, x: number, y: number, map: MapDef, night: number, storm: number): Footing {
@@ -167,15 +160,14 @@ export class GroundsLife {
   hear(
     dt: number,
     me: { x: number; y: number },
-    map: { ox?: number; oy?: number },
     land: boolean,
     night: number,
     storm: number,
     fog = 0,
     more: Pick<Here, "car" | "hour" | "wx" | "roof" | "up"> = {},
   ) {
-    const x = me.x + (map.ox ?? 0);
-    const z = me.y + (map.oy ?? 0);
+    const x = me.x;
+    const z = me.y;
     const inside = this.G.INSIDES.some((i) => x >= i.b.x0 && x < i.b.x1 && z >= i.b.z0 && z < i.b.z1);
     this.sound.update(dt, {
       x,
@@ -200,9 +192,9 @@ export class GroundsLife {
   }
 
   /** Riding the shuttle (or the bus): where it carries me (the server says), seated, facing its way. */
-  seat(p: { busy?: string; x: number; y: number; d: number; z?: number } | undefined) {
+  seat(p: { busy?: string; x: number; y: number; yaw: number; z?: number } | undefined) {
     if (p?.busy !== RIDING) return null;
-    return { me: { x: p.x, y: p.y, d: p.d, a: 2 }, z: p.z ?? 0, angle: this.heading(p) };
+    return { me: { x: p.x, y: p.y, yaw: byteFace(p.yaw), a: 2 }, z: p.z ?? 0, angle: this.heading(p) };
   }
 
   /** The heading of what I'm riding (the shuttle, or the bus — the nearer: I face its way). */
@@ -211,27 +203,20 @@ export class GroundsLife {
     const b = this.cars.get(BUS_ID);
     if (!b || !p) return s?.a;
     if (!s) return b.a;
-    const d = (c: Car) => Math.hypot(c.x - this.ox - p.x, c.z - this.oy - p.y);
+    const d = (c: Car) => Math.hypot(c.x - p.x, c.z - p.y);
     return d(b) < d(s) ? b.a : s.a;
   }
-  /** The ground floor's corner (the building's coords): set as the prompt's asked. */
-  private ox = 0;
-  private oy = 0;
 
   /** At its stop, near it: on; riding: off. */
   prompt(
     vehicles: Vehicles | undefined,
     riding: boolean,
     me: { x: number; y: number },
-    ox: number,
-    oy: number,
   ): { objectId: string; kind: string; label: string } | null {
-    this.ox = ox;
-    this.oy = oy;
     // (the shuttle, or the long road's bus: the nearer at its stop)
     const near = (id: string) => {
       const v = vehicles?.get(id);
-      return v?.shown && v.stop ? { id, v, d: Math.hypot(v.x - ox - me.x, v.z - oy - me.y) } : null;
+      return v?.shown && v.stop ? { id, v, d: Math.hypot(v.x - me.x, v.z - me.y) } : null;
     };
     const at = [near(SHUTTLE_ID), near(BUS_ID)].filter((x) => !!x).sort((a, b) => a.d - b.d)[0];
     if (!at) return null;
@@ -250,7 +235,7 @@ export class GroundsLife {
 
   /** The Kart Park's folk (shared KART_FOLK; world-server features/park-life.ts walks them): by
    *  their name, the staff's with what they do. */
-  folk(n: { id: string; x: number; y: number; d: number; a: number }): AvatarState | null {
+  folk(n: { id: string; x: number; y: number; yaw: number; a: number }): AvatarState | null {
     const f = this.G.KART_FOLK.find((k) => `folk-${k.id}` === n.id);
     if (!f) return null;
     let look = this.folkLooks.get(f.id);
@@ -264,7 +249,7 @@ export class GroundsLife {
       avatar: look,
       x: n.x,
       y: n.y,
-      d: n.d,
+      yaw: byteFace(n.yaw),
       a: n.a,
       status: "online",
       speaking: false,
@@ -277,17 +262,17 @@ export class GroundsLife {
 
   /** The night guard: a dark uniform and a cap, a flashlight; he says nothing. (A bot, not
    *  Vortex — `npc` is his —, so no muted mic shown.) */
-  guard(n: { x: number; y: number; d: number; a: number }, night = 1): AvatarState {
+  guard(n: { x: number; y: number; yaw: number; a: number }, night = 1): AvatarState {
     // (his flashlight: on outside after dark, off at his post in the gatehouse)
-    const gx = n.x + GROUND_OFFSET.x;
-    const gz = n.y + GROUND_OFFSET.y;
+    const gx = n.x;
+    const gz = n.y;
     const atPost = gx > -34 && gx < -29 && gz > -367 && gz < -361;
     return {
       name: t("nightGuard"),
       avatar: GUARD_LOOK,
       x: n.x,
       y: n.y,
-      d: n.d,
+      yaw: byteFace(n.yaw),
       a: n.a,
       status: "online",
       speaking: false,

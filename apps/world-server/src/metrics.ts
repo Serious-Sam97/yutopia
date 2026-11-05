@@ -79,7 +79,14 @@ const add = (m: Map<string, Timing>, name: string, ms: number) => {
   if (ms > t.max) t.max = ms;
 };
 
+let lastTick = 0; // (performance.now() of the last world tick; 0: none yet)
+
 export const metrics = {
+  /** How long since a room last ticked (ms; null: none has yet). A room that's up but not
+   *  ticking is a world frozen for everyone in it — the health check's question. */
+  tickAge(): number | null {
+    return lastTick ? performance.now() - lastTick : null;
+  },
   inc(name: string, by = 1) {
     counters.set(name, (counters.get(name) ?? 0) + by);
   },
@@ -93,6 +100,7 @@ export const metrics = {
   },
   /** The features' tick; `whose`: its slowest feature's name and time. */
   tick(ms: number, whose = "") {
+    lastTick = performance.now();
     add(timings, "tick", ms);
     worst(whose ? `tick (${whose})` : "tick", ms);
   },

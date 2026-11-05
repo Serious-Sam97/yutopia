@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { entry } from "@yutopia/shared";
+import { entry, quarterYaw } from "@yutopia/shared";
 import { Box3, type BufferGeometry, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from "three";
 import type { LivePart } from "../kit";
 import { liveAt } from "../liveparts";
@@ -15,7 +15,7 @@ import { LOOKS, OC, RTV, VW } from "./screens2";
 const KINDS = Object.keys(LOOKS);
 const mat = new MeshBasicMaterial();
 const of = (kind: string, props: Record<string, unknown> = {}, id = "s") =>
-  modelOf({ id, kind, x: 0, y: 0, rot: 0, props });
+  modelOf({ id, kind, x: 0, y: 0, yaw: quarterYaw(0), props });
 const live = (g: BufferGeometry) => (g.userData.live as LivePart[] | undefined) ?? [];
 const glowOf = (g: BufferGeometry) => g.userData.glow as BufferGeometry | null;
 

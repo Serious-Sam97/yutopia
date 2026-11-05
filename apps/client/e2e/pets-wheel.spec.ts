@@ -30,7 +30,9 @@ const self = (page: Page) =>
 const release = (page: Page) =>
   page.evaluate(() => {
     const c = (window as any).__yutopia;
-    c.room.state.pets.forEach((p: any) => p.sid === c.room.sessionId && c.send("pet:release", { id: p.id }));
+    c.room.state.pets.forEach((p: any) => {
+      if (p.sid === c.room.sessionId) c.send("pet:release", { id: p.id });
+    });
   });
 /** Hold T, the pointer onto a word of the wheel, let go. */
 async function wheel(page: Page, word: string, shot?: string) {

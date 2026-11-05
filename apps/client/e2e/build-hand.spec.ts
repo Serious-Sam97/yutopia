@@ -20,7 +20,7 @@ async function at(page: Page, x: number, y: number, z = 0) {
 // Clicks a thing where it shows (leaves overlap in a row: points on it until
 // the hover is on that one, the way you would).
 async function grab(page: Page, id: string, x: number, y: number) {
-  for (const z of [38, 30, 22, 44, 16]) {
+  for (const z of [0.97, 0.77, 0.56, 1.12, 0.41]) {
     const p = await at(page, x, y, z);
     await page.mouse.move(p.x, p.y);
     await page.waitForTimeout(120);
@@ -36,7 +36,7 @@ const plantsAt = (page: Page, ids: string[]) =>
     (skip) =>
       [...(window as any).__yutopia.floorObjects()]
         .filter((o: any) => o.kind === "plant" && !skip.includes(o.id))
-        .map((o: any) => ({ id: o.id, x: o.x, y: o.y, rot: o.rot })),
+        .map((o: any) => ({ id: o.id, x: o.x, y: o.y, rot: Math.round(o.yaw / (Math.PI / 2)) & 3 })),
     ids,
   );
 

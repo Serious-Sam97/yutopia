@@ -1,6 +1,10 @@
 import { GLASS } from "@yutopia/shared/media";
+import { artPx } from "@yutopia/shared/units";
 import { type Draw, fe, fr, INK, type Sketch, sh, te } from "./kit";
 import { K, M } from "./pal";
+
+// (the shared glass is in metres; this drawing measures in the old art's px)
+const px = <T extends { z0: number; z1: number }>(g: T): T => ({ ...g, z0: artPx(g.z0), z1: artPx(g.z1) });
 
 // More screens (docs/plan/10-media.md): a CRT on a wall bracket, the big HD
 // panel, a pull-down projector screen and its film projector, a wooden console
@@ -31,7 +35,7 @@ function glass(d: Draw, y: number, x0: number, x1: number, z0: number, z1: numbe
 // ── CRT on a wall bracket (1 tile): a waiting-room / bar set on a black arm ──
 export function tvWall(s: Sketch) {
   const cream = Math.floor(s.seed * 2) === 1;
-  const g = GLASS.tv_wall;
+  const g = px(GLASS.tv_wall);
   const front = g.y - WALL; // the set's front face, wall-local
   // the bracket: a plate on the wall, an arm out under the set
   s.box({ x: 0.42, y: -0.04, w: 0.16, d: 0.06, z: 44, h: 12, mat: M.graphite, line: 0.8 });
@@ -57,7 +61,7 @@ export function tvWall(s: Sketch) {
 
 // ── big HD TV (3 tiles): a slim black panel, a soundbar under it ─────────────
 export function tvHd(s: Sketch) {
-  const g = GLASS.tv_hd;
+  const g = px(GLASS.tv_hd);
   const front = g.y - WALL;
   s.shape({ x: 0.1, y: -0.06, w: 2.8, d: 0.02, z: g.z0 - 5, h: g.z1 - g.z0 + 10 }, (d) => {
     d.poly("s", fr("s", -0.05, 0.18, 2.94, g.z0 - 7, g.z1 + 2), "#1a120c", { op: 0.2 });
@@ -87,7 +91,7 @@ export function tvHd(s: Sketch) {
 // ── giant TV (5 tiles, for the tall walls): a slim panel between two tower
 // speakers, a soundbar under it. Story: a game controller left on its cable.
 export function tvGiant(s: Sketch) {
-  const g = GLASS.tv_giant;
+  const g = px(GLASS.tv_giant);
   const front = g.y - WALL;
   s.shape({ x: 0.3, y: -0.06, w: 4.4, d: 0.02, z: g.z0 - 5, h: g.z1 - g.z0 + 10 }, (d) => {
     d.poly("s", fr("s", -0.05, 0.38, 4.78, g.z0 - 7, g.z1 + 2), "#1a120c", { op: 0.2 });
@@ -138,7 +142,7 @@ const VELVET = [
   { c: "#1f2f5a", lit: "#2f4479", dark: "#141f3e" },
 ];
 export function cinemaScreen(s: Sketch) {
-  const g = GLASS.cinema_screen;
+  const g = px(GLASS.cinema_screen);
   const front = g.y - WALL;
   const v = VELVET[Math.floor(s.seed * VELVET.length) % VELVET.length];
   // the black masking frame and the screen in it
@@ -189,7 +193,7 @@ export function cinemaScreen(s: Sketch) {
 
 // ── pull-down projector screen (3 tiles): a roller case, the matte cloth ─────
 export function projectorScreen(s: Sketch) {
-  const g = GLASS.projector_screen;
+  const g = px(GLASS.projector_screen);
   const front = g.y - WALL;
   // the roller case across the top
   s.cyl({ x: 1.5, y: 0.0, z: g.z1 + 2, r: 0.05, h: 4, mat: M.aluminium, line: 0.8 });
@@ -253,7 +257,7 @@ export function projector(s: Sketch, p: Props) {
 // ── console TV (2 tiles): a walnut cabinet on short legs, big glass, a grille ─
 export function tvConsole(s: Sketch) {
   const teak = Math.floor(s.seed * 2) === 1;
-  const g = GLASS.tv_console;
+  const g = px(GLASS.tv_console);
   const front = g.y - 0.01;
   for (const x of [0.16, 1.78])
     for (const y of [0.2, 0.76]) s.box({ x, y, w: 0.06, d: 0.06, z: 0, h: 5, mat: M.walnutDark, line: 0.5 });
@@ -302,7 +306,7 @@ export function tvConsole(s: Sketch) {
 // ── portable CRT (on a desk): silver or cream, a handle, a telescopic antenna ─
 export function tvPortable(s: Sketch) {
   const cream = Math.floor(s.seed * 2) === 1;
-  const g = GLASS.tv_portable;
+  const g = px(GLASS.tv_portable);
   const front = g.y - 0.01;
   const cab = cream ? { c: K.putty, top: "#e4d9bb", gloss: 0.4 } : { c: "#a9a59b", top: "#c4bfb3", gloss: 0.7 };
   s.box({ x: 0.24, y: 0.36, w: 0.52, d: front - 0.36, z: 0, h: 15, mat: cab, puff: 0.6 }, (d) => {

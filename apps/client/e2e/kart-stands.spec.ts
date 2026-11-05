@@ -12,7 +12,7 @@ import { ANA, enter, test, token } from "./helpers";
 const dir = process.env.YUTOPIA_SHOTS;
 if (process.env.YUTOPIA_FIREFOX !== "1")
   test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
-const G = (x: number, z: number) => ({ x: x + 60, y: z + 10 });
+const G = (x: number, z: number) => ({ x, y: z });
 const st = KART_STANDS[0];
 const mx = (st.x0 + st.x1) / 2;
 

@@ -1,6 +1,6 @@
 import type { CatalogEntry } from "../catalog.ts";
 import type { SeatSpec } from "../furniture.ts";
-import { box, cyl, isoPx, type KindShape, one } from "./units.ts";
+import { box, cyl, type KindShape, one } from "./units.ts";
 
 // Plan 68 phase 4 (docs/plan/68-more-furniture.md): Desks & tables — the new kinds' catalog entries, shapes
 // (from their models: the client's world/furn/fam/tables2.ts), seats, surfaces, stand heights and hang
@@ -29,7 +29,7 @@ export const CATALOG = {
     buildable: true,
     variants: 4,
     look: 0,
-    surface: isoPx(S.corner_desk),
+    surface: S.corner_desk,
     top: [0, 0, 8, 3],
   },
   // (things stand on its taboret; its lamp switched as a lamp)
@@ -43,7 +43,7 @@ export const CATALOG = {
     look: 0,
     interact: "lamp",
     light: { color: 0xffe2b0, radius: 2.2, intensity: 0.3 },
-    surface: isoPx(S.drafting_table),
+    surface: S.drafting_table,
     top: [6, 0, 8, 4],
   },
   workbench: {
@@ -54,7 +54,7 @@ export const CATALOG = {
     buildable: true,
     variants: 2,
     look: 0,
-    surface: isoPx(S.workbench),
+    surface: S.workbench,
     top: [0, 0, 8, 3],
   },
   round_table: {
@@ -65,7 +65,7 @@ export const CATALOG = {
     buildable: true,
     variants: 2,
     look: 0,
-    surface: isoPx(S.round_table),
+    surface: S.round_table,
     top: [2, 2, 10, 10],
   },
   dining_table: {
@@ -76,7 +76,7 @@ export const CATALOG = {
     buildable: true,
     variants: 2,
     look: 0,
-    surface: isoPx(S.dining_table),
+    surface: S.dining_table,
   },
   // (the big one's top: the small one under it is lower)
   nesting_tables: {
@@ -87,7 +87,7 @@ export const CATALOG = {
     buildable: true,
     variants: 2,
     look: 0,
-    surface: isoPx(S.nesting_tables),
+    surface: S.nesting_tables,
     top: [0, 0, 4, 3],
   },
   bedside_table: {
@@ -98,7 +98,7 @@ export const CATALOG = {
     buildable: true,
     variants: 2,
     look: 0,
-    surface: isoPx(S.bedside_table),
+    surface: S.bedside_table,
     top: [1, 1, 3, 3],
   },
   folding_table: {
@@ -109,7 +109,7 @@ export const CATALOG = {
     buildable: true,
     variants: 2,
     look: 0,
-    surface: isoPx(S.folding_table),
+    surface: S.folding_table,
   },
 } satisfies Record<string, CatalogEntry>;
 

@@ -7,7 +7,7 @@ import { ANA, enter, test, token } from "./helpers";
 // time, the ground floor's lot is walkable. Opt-in review shots: YUTOPIA_SHOTS=<dir>.
 const dir = process.env.YUTOPIA_SHOTS;
 // the ground floor's corner is at (-60, -10) in the studio's coords
-const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
+const G = (x: number, y: number) => ({ x, y });
 
 const state = (page: any) =>
   page.evaluate(() => {

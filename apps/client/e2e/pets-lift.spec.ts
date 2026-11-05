@@ -26,7 +26,9 @@ const now = (page: Page) =>
 const release = (page: Page) =>
   page.evaluate(() => {
     const c = (window as any).__yutopia;
-    c.room.state.pets.forEach((p: any) => p.sid === c.room.sessionId && c.send("pet:release", { id: p.id }));
+    c.room.state.pets.forEach((p: any) => {
+      if (p.sid === c.room.sessionId) c.send("pet:release", { id: p.id });
+    });
   });
 
 test("a dog follows Ana into the lift, rides down in it with her, and walks out into the lobby", async ({ page }) => {

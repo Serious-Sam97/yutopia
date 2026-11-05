@@ -1,4 +1,4 @@
-import { toScreen, type WorldObjectDef } from "@yutopia/shared";
+import { quarterOf, toScreen, type WorldObjectDef } from "@yutopia/shared";
 import {
   ballAt,
   flightEvents,
@@ -14,7 +14,8 @@ import {
   solveServe,
   solveShot,
 } from "@yutopia/shared/pong";
-import { TABLES, tableAway, tableCentre, tableHeading, tablePx, toTable, toWorld } from "@yutopia/shared/tables";
+import { TABLES, tableAway, tableCentre, tableHeading, tableZ, toTable, toWorld } from "@yutopia/shared/tables";
+import type { PongTable } from "@yutopia/state";
 import { hud } from "../store";
 import type { TableScene3 } from "../tp/tables3d";
 import type { TableHost } from "./pool";
@@ -89,15 +90,12 @@ export function contactPlan(f: PongFlight, seat: number): { t: number; x: number
 // and tell the server. Someone else's hit reaches me late: that flight plays
 // a little fast for a moment until it's caught up (no jump).
 
-// biome-ignore lint/suspicious/noExplicitAny: colyseus schema instances
-type S = any;
 type Pt = { x: number; y: number };
 
 const K = "pingpong_table" as const;
 const G = TABLES[K];
 const HL = PONG_L / 2;
 const HW = PONG_W / 2;
-const ZPX = 45.25 * Math.cos(Math.PI / 6); // iso px of height per tile (tablePx's unit)
 const HEAR = 12;
 const SEND_MS = 33;
 const CATCH = 260; // ms: a display behind real time closes the gap over about this long
@@ -149,7 +147,8 @@ interface PView {
   lastSpeed: number;
 }
 
-const zPx = (z: number) => (z >= 0 ? tablePx(K, z) : G.top * (1 + z / 0.76));
+// a height in the table's frame (m over its top; under it, down to the floor at −0.76) → the world's
+const zW = (z: number) => (z >= 0 ? tableZ(K, z) : G.top * (1 + z / 0.76));
 // a table-frame vector → three's world (X = tile x, Y = up, Z = tile y), turned with the table
 function v3(v: [number, number, number], rot: number): [number, number, number] {
   const X = v[0];
@@ -223,7 +222,7 @@ export class PongTables {
     for (const def of defs) {
       keep.add(def.id);
       const old = this.views.get(def.id);
-      if (old && old.def.x === def.x && old.def.y === def.y && (old.def.rot ?? 0) === (def.rot ?? 0)) {
+      if (old && old.def.x === def.x && old.def.y === def.y && quarterOf(old.def) === quarterOf(def)) {
         old.def = def;
         continue;
       }
@@ -256,13 +255,12 @@ export class PongTables {
     this.views.delete(id);
     if (this.focus === id) this.setFocus(null);
   }
-  private table(id: string): S | undefined {
+  private table(id: string): PongTable | undefined {
     return this.host.room.state.pong?.get(id);
   }
-  private mySeat(t: S | undefined): number {
+  private mySeat(t: PongTable | undefined): number {
     if (!t) return -1;
-    for (const [k, s] of t.seats as Map<string, S>)
-      if (s.sid === this.host.room.sessionId && !s.vortex) return Number(k);
+    for (const [k, s] of t.seats) if (s.sid === this.host.room.sessionId && !s.vortex) return Number(k);
     return -1;
   }
   private parse<T>(s: string | undefined): T | null {
@@ -355,7 +353,7 @@ export class PongTables {
     }
     const ray = this.host.model.rayAt(cx, cy);
     if (!ray || ray.d.z >= -1e-6) return;
-    const zp = zPx(0.15);
+    const zp = zW(0.15);
     const k = (zp - ray.o.z) / ray.d.z;
     const p = toTable(v.def, ray.o.x + ray.d.x * k, ray.o.y + ray.d.y * k);
     this.aim = { x: 0, y: Math.max(-HW - 0.45, Math.min(HW + 0.45, p.y)) };
@@ -784,7 +782,7 @@ export class PongTables {
   }
 
   // a seat's racket now: mine, streamed, Vortex's (going for his shot), or at rest
-  private racketOf(v: PView, t: S | undefined, k: 0 | 1): Racket | null {
+  private racketOf(v: PView, t: PongTable | undefined, k: 0 | 1): Racket | null {
     const s = t?.seats.get(String(k));
     if (!s || t?.phase === "lobby") return null;
     const own = k === 0 ? -1 : 1;
@@ -854,7 +852,7 @@ export class PongTables {
     for (const [id, v] of this.views) {
       const t = this.table(id);
       if (!t) continue;
-      for (const [k, s] of t.seats as Map<string, S>) {
+      for (const [k, s] of t.seats) {
         if (!s.vortex) continue;
         const seat = Number(k) as 0 | 1;
         const own = seat === 0 ? -1 : 1;
@@ -889,7 +887,7 @@ export class PongTables {
     for (const [id, v] of this.views) {
       const t = this.table(id);
       const o = v.def;
-      const rot = o.rot ?? 0;
+      const rot = quarterOf(o);
       const sf = this.drawn(v);
       let ball: PongBall | null = sf ? ballAt(sf.f, sf.at).ball : null;
       if (!ball && t?.phase === "play") {
@@ -905,9 +903,9 @@ export class PongTables {
           for (let k = 7; k >= 0; k--) {
             const q = ballAt(sf.f, Math.max(sf.f.t0, sf.at - k * 16)).ball;
             const qw = toWorld(o, q.x, q.y);
-            trail.push([qw.x, qw.y, zPx(q.z) / ZPX]);
+            trail.push([qw.x, qw.y, zW(q.z)]);
           }
-        into.pongBalls.push({ key: id, x: w.x, y: w.y, z: zPx(ball.z) / ZPX, shadowZ: zPx(under) / ZPX, trail });
+        into.pongBalls.push({ key: id, x: w.x, y: w.y, z: zW(ball.z), shadowZ: zW(under), trail });
       }
       // the guides to the ball coming to me
       const seat = this.mySeat(t);
@@ -917,7 +915,7 @@ export class PongTables {
         const col = Math.abs(p.y - this.me.y) <= REACH_LAT ? 0xa8e07a : 0xffb35c;
         const W = (x: number, y: number, z: number): [number, number, number] => {
           const q = toWorld(o, x, y);
-          return [q.x, q.y, zPx(z) / ZPX];
+          return [q.x, q.y, zW(z)];
         };
         const m = W(p.x, p.y, p.z);
         const floorZ = Math.abs(p.x) <= HL && Math.abs(p.y) <= HW ? 0.002 : -0.76;
@@ -970,7 +968,7 @@ export class PongTables {
           key: `${id}:${k}`,
           x: w.x,
           y: w.y,
-          z: zPx(q.z) / ZPX,
+          z: zW(q.z),
           n: v3(q.N, rot),
           up: v3(q.U, rot),
           rubber: k === 0 ? 0xb3261e : 0x1f4ea8,
@@ -989,7 +987,7 @@ export class PongTables {
     const own = seat === 0 ? -1 : 1;
     // behind my end and above it, the whole table in view, easing across with my racket
     this.camY += (Math.max(-0.45, Math.min(0.45, this.me.y * 0.4)) - this.camY) * 0.08;
-    const top = G.top / ZPX;
+    const top = G.top;
     // (looking down at my half: my racket and where I meet the ball mid-screen,
     // above the console; the far end and the other player still in view)
     const eye = toWorld(v.def, own * (HL + 1.6), this.camY);

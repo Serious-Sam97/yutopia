@@ -101,6 +101,8 @@ export function perfRow(uid: number, r: PerfReport, snaps: number, at = Date.now
   };
 }
 
+const CLIENT_ERRORS_LOGGED = 20; // a session's errors written to the log (the rest only counted)
+
 registerFeature((room: WorldRoom) => {
   const queue: PerfRow[] = [];
   const lastAt = new WeakMap<WorldClient, number>();
@@ -116,6 +118,20 @@ registerFeature((room: WorldRoom) => {
   room.clock.setInterval(flush, FLUSH_MS);
 
   room.on("perf:ping", (client, m) => room.send(client, "perf:pong", { t: num(m.t, 0, Number.MAX_SAFE_INTEGER) }));
+
+  // the page's errors (client lib/crash.ts): a few a session logged, all counted
+  const errorsFrom = new WeakMap<object, number>();
+  room.on("client:error", (client, m) => {
+    metrics.inc("client_errors_total");
+    const n = (errorsFrom.get(client) ?? 0) + 1;
+    errorsFrom.set(client, n);
+    if (n > CLIENT_ERRORS_LOGGED) return;
+    const p = room.state.players.get(client.sessionId);
+    const text = (v: unknown, max: number) => String(v ?? "").slice(0, max);
+    console.warn(
+      `[client] ${p?.name ?? "?"} (${p?.uid ?? "?"}) ${text(m.where, 40)}: ${text(m.message, 300)}\n${text(m.stack, 1200)}`,
+    );
+  });
 
   room.on("perf:report", (client, m) => {
     const p = room.state.players.get(client.sessionId);

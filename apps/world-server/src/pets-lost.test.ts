@@ -43,8 +43,7 @@ interface Who {
   toasts: string[];
 }
 const me = (w: Who): S => w.room.state.players.get(w.room.sessionId);
-const OFF = { x: -60, y: -10 }; // the Grounds' metres = the ground floor's tiles + this
-const tile = (x: number, z: number) => ({ x: x - OFF.x, y: z - OFF.y });
+const tile = (x: number, z: number) => ({ x: x, y: z });
 const OPEN = tile(-148, -4); // open ground, no lamp near, no trees
 const DEEP = tile(-268, -184); // the deep woods
 const props = (o: { props: string }) => JSON.parse(o.props) as Record<string, unknown>;
@@ -73,7 +72,7 @@ const hour = async (w: Who, h: number) => {
 /** In a lot car, driving: a state at (x, z) metres going `sp` m/s along its heading. */
 async function inACar(w: Who) {
   const o: S = [...w.room.state.objects.values()].find((x: S) => x.kind === "car" && !props(x).driven);
-  const pose = parkedPose({ x: o.x, y: o.y, rot: o.rot, props: props(o) });
+  const pose = parkedPose({ x: o.x, y: o.y, yaw: o.yaw, props: props(o) });
   w.room.send("teleport", { to: { x: pose.x + Math.cos(pose.a) * 3.4, y: pose.y + Math.sin(pose.a) * 3.4, level: 0 } });
   await waitFor(() => me(w).level === 0);
   w.room.send("car:enter", { id: o.id, seat: 0 });
@@ -129,7 +128,7 @@ test("left behind by the car: lost; not heard from far; seen and followed by a f
     }
     car.at(x, z, 0);
   })();
-  await waitFor(() => Math.hypot(rex.x + OFF.x - x, rex.y + OFF.y - z) > LOST.far + 10, 15_000);
+  await waitFor(() => Math.hypot(rex.x - x, rex.y - z) > LOST.far + 10, 15_000);
   // called to follow now, far behind: it runs after the car — and is lost
   ana.room.send("pet:cmd", { id: rex.id, cmd: "follow" });
   await waitFor(() => rex.mode === "follow");
@@ -204,7 +203,7 @@ test("the dangers, lost only: hunger and thirst, the cold at night, a car's hit,
   await hour(ana, 12);
   const car = await inACar(ana);
   const hit = async (pet: S) => {
-    const m = { x: pet.x + OFF.x, z: pet.y + OFF.y };
+    const m = { x: pet.x, z: pet.y };
     car.at(m.x, m.z, 6);
     await waitFor(() => Math.abs((car.v().x as number) - m.x) < 0.01);
     ana.room.send("pet:hit", { id: pet.id });

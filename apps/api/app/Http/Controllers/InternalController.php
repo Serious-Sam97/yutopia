@@ -51,6 +51,8 @@ class InternalController extends Controller
             'mapKey' => $world->map_key,
             'seeded' => $world->seeded_at !== null,
             'layout' => $world->layout,
+            // the building as walls, slabs and rooms (docs/plan/72-the-3d-core.md, phase 6): the truth
+            'structure' => $world->structure,
             'playlists' => $world->settings['playlists'] ?? [],
             'loot' => $world->settings['loot'] ?? null,
             'karts' => $world->settings['karts'] ?? null,
@@ -75,7 +77,7 @@ class InternalController extends Controller
         $o = $request->validate($this->objectRules(''));
         $row = WorldObject::updateOrCreate(
             ['uid' => $o['id']],
-            ['kind' => $o['kind'], 'x' => $o['x'], 'y' => $o['y'], 'rot' => $o['rot'] ?? 0, 'ref_id' => $o['refId'] ?? null, 'props' => $o['props'] ?? null],
+            ['kind' => $o['kind'], 'x' => $o['x'], 'y' => $o['y'], 'yaw' => $o['yaw'] ?? 0, 'ref_id' => $o['refId'] ?? null, 'props' => $o['props'] ?? null],
         );
 
         return response()->json(['object' => $row->toWorld()]);
@@ -113,8 +115,8 @@ class InternalController extends Controller
     {
         $data = $request->validate([
             'spawn' => ['present', 'nullable', 'array'],
-            'spawn.x' => ['required_with:spawn', 'numeric', 'between:0,160'],
-            'spawn.y' => ['required_with:spawn', 'numeric', 'between:0,160'],
+            'spawn.x' => ['required_with:spawn', 'numeric', 'between:-2000,2000'],
+            'spawn.y' => ['required_with:spawn', 'numeric', 'between:-2000,2000'],
             // the floor it's on (the building's, see layout); none: the home floor
             'spawn.level' => ['nullable', 'integer', 'between:0,12'],
         ]);
@@ -140,7 +142,7 @@ class InternalController extends Controller
     {
         $row = LastSpot::where('user_id', $userId)->first();
 
-        return response()->json(['spot' => $row ? $row->only(['x', 'y', 'level', 'd']) : null]);
+        return response()->json(['spot' => $row ? $row->only(['x', 'y', 'level', 'yaw']) : null]);
     }
 
     // Where people are, from the world-server: as each leaves, and everyone now and
@@ -153,7 +155,7 @@ class InternalController extends Controller
             'spots.*.x' => ['required', 'numeric', 'between:-2000,2000'],
             'spots.*.y' => ['required', 'numeric', 'between:-2000,2000'],
             'spots.*.level' => ['required', 'integer', 'between:0,12'],
-            'spots.*.d' => ['required', 'integer', 'between:0,7'],
+            'spots.*.yaw' => ['required', 'integer', 'between:0,255'],
         ]);
         $known = User::whereIn('id', array_column($data['spots'], 'user_id'))->pluck('id')->flip();
         $now = Carbon::now();
@@ -167,12 +169,12 @@ class InternalController extends Controller
                 'x' => (float) $s['x'],
                 'y' => (float) $s['y'],
                 'level' => (int) $s['level'],
-                'd' => (int) $s['d'],
+                'yaw' => (int) $s['yaw'],
                 'created_at' => $now,
                 'updated_at' => $now,
             ];
         }
-        LastSpot::upsert($rows, ['user_id'], ['x', 'y', 'level', 'd', 'updated_at']);
+        LastSpot::upsert($rows, ['user_id'], ['x', 'y', 'level', 'yaw', 'updated_at']);
 
         return response()->json(['saved' => count($rows)]);
     }
@@ -293,10 +295,32 @@ class InternalController extends Controller
     // already applied the shared rules; this is the storage-side shape check.
     // Map v2 keeps walls on tile edges (hWalls: height + 1 rows of width chars,
     // vWalls: height rows of width + 1); v1 layouts had "#" wall tiles.
+    // The building's structure (shared structure/ Structure, version 4), from the world-server: kept
+    // whole. Checked for its shape and size here; what it says is the world-server's to check.
+    public function structure(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'structure' => ['required', 'array'],
+            'structure.version' => ['required', 'integer', 'in:4'],
+            'structure.key' => ['required', 'string', 'max:40'],
+            'structure.name' => ['required', 'string', 'max:80'],
+            'structure.home' => ['required', 'integer', 'between:0,12'],
+            'structure.spawn' => ['required', 'array', 'size:2'],
+            'structure.floors' => ['required', 'array', 'min:1', 'max:13'],
+            'structure.slabs' => ['present', 'array', 'max:5000'],
+            'structure.walls' => ['present', 'array', 'max:20000'],
+            'structure.rooms' => ['present', 'array', 'max:2000'],
+        ]);
+        abort_if(strlen(json_encode($data['structure'])) > 4_000_000, 422, 'That structure is too big.');
+        World::current()->update(['structure' => $request->input('structure')]);
+
+        return response()->json(['ok' => true]);
+    }
+
     public function layout(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'version' => ['nullable', 'integer', 'in:2'],
+            'version' => ['nullable', 'integer', 'in:2,3'],
             'width' => ['required', 'integer', 'between:16,96'],
             'height' => ['required', 'integer', 'between:16,96'],
             'tiles' => ['required', 'array'],
@@ -618,9 +642,10 @@ class InternalController extends Controller
             $p.'id' => ['required', 'string', 'max:64'],
             $p.'kind' => ['required', 'string', 'max:40'],
             // (out on the Grounds round the ground floor too: a car left on the lawn — docs/plan/28)
-            $p.'x' => ['required', 'integer', 'between:-2000,2000'],
-            $p.'y' => ['required', 'integer', 'between:-2000,2000'],
-            $p.'rot' => ['nullable', 'integer', 'between:0,3'],
+            $p.'x' => ['required', 'numeric', 'between:-2000,2000'],
+            $p.'y' => ['required', 'numeric', 'between:-2000,2000'],
+            // (radians: π/2 a quarter turn — docs/plan/72-the-3d-core.md, phase 5)
+            $p.'yaw' => ['nullable', 'numeric', 'between:-7,7'],
             $p.'refId' => ['nullable', 'integer'],
             $p.'props' => ['nullable', 'array'],
         ];

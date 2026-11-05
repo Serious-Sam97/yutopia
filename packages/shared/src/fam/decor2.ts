@@ -75,5 +75,5 @@ export const SEATS: Record<string, SeatSpec> = {};
 export const SURFACES: Record<string, number> = {};
 export const STANDS: Record<string, number> = {};
 export const HANGS: Record<string, [number, number, number]> = {
-  moss_wall: [6, 39, 79],
+  moss_wall: [6, 0.9952, 2.0159],
 };

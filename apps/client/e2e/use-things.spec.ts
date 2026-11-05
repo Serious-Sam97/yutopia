@@ -21,9 +21,9 @@ test("a cup from the cooler, a can from the machine, a tune on the piano", async
   const Y = Math.floor(sp.y) - 5;
   const stamp = Date.now().toString(36);
   const items = [
-    { id: `e2e-cool-${stamp}`, kind: "water_cooler", x: X, y: Y, rot: 0 },
-    { id: `e2e-vend-${stamp}`, kind: "vending", x: X + 2, y: Y, rot: 0 },
-    { id: `e2e-piano-${stamp}`, kind: "piano", x: X + 4, y: Y, rot: 0 },
+    { id: `e2e-cool-${stamp}`, kind: "water_cooler", x: X, y: Y, yaw: 0 },
+    { id: `e2e-vend-${stamp}`, kind: "vending", x: X + 2, y: Y, yaw: 0 },
+    { id: `e2e-piano-${stamp}`, kind: "piano", x: X + 4, y: Y, yaw: 0 },
   ];
   // walk up to it and settle (the path ends a moment after we're near)
   const goTo = async (x: number, y: number) => {
@@ -91,7 +91,7 @@ test("every radio its own: its station next to it, the other's faint when it's o
         kind: "side_table",
         x,
         y: 14,
-        rot: 0,
+        yaw: 0,
       });
       await page.waitForTimeout(300);
       await page.evaluate((o) => (window as any).__yutopia.send("obj:put", o), {
@@ -99,7 +99,7 @@ test("every radio its own: its station next to it, the other's faint when it's o
         kind: "radio",
         x,
         y: 14,
-        rot: 0,
+        yaw: 0,
         props: { c: [0, 0] },
       });
     }

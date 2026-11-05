@@ -8,7 +8,7 @@ import { ANA, enter, test, token } from "./helpers";
 // Chrome's software GL — a weak GPU's stand-in. The numbers are logged; what's held: the tier, and
 // the median frame.
 const GPU = process.env.YUTOPIA_GPU === "1";
-const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
+const G = (x: number, y: number) => ({ x, y });
 // how much slower the CPU (YUTOPIA_SLOW=1: as it is, to compare)
 const SLOW = Number(process.env.YUTOPIA_SLOW ?? 4);
 

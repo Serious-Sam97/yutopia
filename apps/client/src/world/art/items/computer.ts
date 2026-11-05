@@ -1,6 +1,10 @@
 import { COMPUTER_GLASS } from "@yutopia/shared/computer";
+import { artPx } from "@yutopia/shared/units";
 import { fe, fr, INK, type Sketch, sh } from "./kit";
 import { K, M } from "./pal";
+
+// (the shared glass is in metres; this drawing measures in the old art's px)
+const px = <T extends { z0: number; z1: number }>(g: T): T => ({ ...g, z0: artPx(g.z0), z1: artPx(g.z1) });
 
 type Props = Record<string, unknown>;
 
@@ -13,7 +17,7 @@ type Props = Record<string, unknown>;
 // glass (world/os), exactly on COMPUTER_GLASS.
 export function computer(s: Sketch, p: Props) {
   const black = Math.floor(s.seed * 2) === 1;
-  const g = COMPUTER_GLASS;
+  const g = px(COMPUTER_GLASS);
   const F = g.y + 0.004; // the front face's plane (the glass sits a hair in front of it)
   const x0 = 0.28;
   const x1 = 0.72;

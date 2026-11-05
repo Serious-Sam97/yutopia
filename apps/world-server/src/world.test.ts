@@ -61,10 +61,10 @@ test("moves are taken as sent: a step, and straight through the walls — nobody
   const start = { x: me(a).x, y: me(a).y };
   const snaps: { x: number; y: number }[] = [];
   a.onMessage("snap", (m) => snaps.push(m));
-  a.send("pos", { x: start.x + 0.2, y: start.y, d: 6, a: 1, seq: 1 });
+  a.send("pos", { x: start.x + 0.2, y: start.y, yaw: 224, a: 1, seq: 1 });
   await waitFor(() => Math.abs(me(a).x - (start.x + 0.2)) < 0.01);
   await sleep(60);
-  a.send("pos", { x: 40.5, y: 5.5, d: 6, a: 1, seq: 2 }); // straight into the War Room
+  a.send("pos", { x: 40.5, y: 5.5, yaw: 224, a: 1, seq: 2 }); // straight into the War Room
   await waitFor(() => Math.abs(me(a).x - 40.5) < 0.01);
   assert.equal(snaps.length, 0);
 });

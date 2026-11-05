@@ -144,6 +144,7 @@ Route::middleware('internal')->prefix('internal')->group(function () {
     Route::post('/admin-log', [InternalController::class, 'adminLog']);
     Route::post('/world/seed', [InternalController::class, 'seed']);
     Route::put('/world/layout', [InternalController::class, 'layout']);
+    Route::put('/world/structure', [InternalController::class, 'structure']);
     Route::put('/world/playlists', [InternalController::class, 'playlists']);
     // the Kart Park's record (docs/plan/46-the-karts.md): best lap, the last races, wins
     Route::put('/world/karts', [InternalController::class, 'karts']);

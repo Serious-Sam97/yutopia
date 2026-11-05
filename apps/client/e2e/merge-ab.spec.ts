@@ -28,7 +28,7 @@ test.use({
   launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] },
 });
 
-const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 }); // (the Grounds' offset)
+const G = (x: number, y: number) => ({ x, y });
 const SPOTS = [
   { x: 17.5, y: 14.5, level: 4 }, // the Tracking Room
   { x: 6.5, y: 28.5, level: 4 }, // by the stairs, walls all round (fades)

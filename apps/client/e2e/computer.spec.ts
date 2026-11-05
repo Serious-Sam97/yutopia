@@ -54,7 +54,7 @@ async function deskSpot(page: Page, sp: { x: number; y: number }, id: string) {
     );
     if (!clear) continue;
     await page.evaluate(
-      ([d, i]) => (window as any).__yutopia.send("obj:put", { id: i, kind: "desk", x: d.x, y: d.y, rot: 2 }),
+      ([d, i]) => (window as any).__yutopia.send("obj:put", { id: i, kind: "desk", x: d.x, y: d.y, yaw: Math.PI }),
       [D, id] as const,
     );
     const placed = await expect
@@ -91,7 +91,7 @@ test("a computer boots VortexOS for everyone, one person at a time", async ({ pa
       ([d, i]) => {
         const w = (window as any).__yutopia;
         // (turned to face the camera: the sitter on the +y side)
-        w.send("obj:put", { id: i.chair, kind: "chair", x: d.x, y: d.y + 1, rot: 2, props: { desk: true } });
+        w.send("obj:put", { id: i.chair, kind: "chair", x: d.x, y: d.y + 1, yaw: Math.PI, props: { desk: true } });
       },
       [D, ids] as const,
     );
@@ -105,8 +105,8 @@ test("a computer boots VortexOS for everyone, one person at a time", async ({ pa
           kind: "computer",
           x: d.x,
           y: d.y,
-          rot: 2,
-          props: { c: [1, 0], z: 25 },
+          yaw: Math.PI,
+          props: { c: [1, 0], z: 0.638 },
         }),
       [D, ids] as const,
     );
@@ -206,7 +206,7 @@ test("a computer in use, seen in third person", async ({ page, browser }) => {
     await page.evaluate(
       ([d, i]) => {
         const w = (window as any).__yutopia;
-        w.send("obj:put", { id: i.chair, kind: "chair", x: d.x + 1, y: d.y + 1, rot: 2, props: { desk: true } });
+        w.send("obj:put", { id: i.chair, kind: "chair", x: d.x + 1, y: d.y + 1, yaw: Math.PI, props: { desk: true } });
       },
       [D, ids] as const,
     );
@@ -220,8 +220,8 @@ test("a computer in use, seen in third person", async ({ page, browser }) => {
           kind: "computer",
           x: d.x,
           y: d.y,
-          rot: 2,
-          props: { c: [1, 0], z: 25, seed: 0.8 },
+          yaw: Math.PI,
+          props: { c: [1, 0], z: 0.638, seed: 0.8 },
         }),
       [D, ids] as const,
     );
@@ -274,7 +274,7 @@ test("the real VortexOS: boot, sign in with Yutopia, desktop, stand up", async (
     await page.evaluate(
       ([d, i]) => {
         const w = (window as any).__yutopia;
-        w.send("obj:put", { id: i.chair, kind: "chair", x: d.x, y: d.y + 1, rot: 2, props: { desk: true } });
+        w.send("obj:put", { id: i.chair, kind: "chair", x: d.x, y: d.y + 1, yaw: Math.PI, props: { desk: true } });
       },
       [D, ids] as const,
     );
@@ -288,8 +288,8 @@ test("the real VortexOS: boot, sign in with Yutopia, desktop, stand up", async (
           kind: "computer",
           x: d.x,
           y: d.y,
-          rot: 2,
-          props: { c: [1, 0], z: 25 },
+          yaw: Math.PI,
+          props: { c: [1, 0], z: 0.638 },
         }),
       [D, ids] as const,
     );
@@ -358,8 +358,8 @@ test("a VortexOS that doesn't talk back: no NO SIGNAL, the glass goes on by itse
           kind: "computer",
           x: d.x,
           y: d.y,
-          rot: 2,
-          props: { c: [1, 0], z: 25 },
+          yaw: Math.PI,
+          props: { c: [1, 0], z: 0.638 },
         }),
       [D, ids] as const,
     );

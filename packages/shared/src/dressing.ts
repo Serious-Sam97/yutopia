@@ -1,4 +1,4 @@
-import { entry, footprint, type WorldObjectDef } from "./catalog.ts";
+import { entry, footprint, quarterOf, type WorldObjectDef } from "./catalog.ts";
 import { hangOf, wallSpan } from "./hang.ts";
 import { type AreaDef, areaAt, holdsItems, hWall, isFloor, isWallEdge, type MapDef, tileAt, vWall } from "./map.ts";
 import { isDoorKind, isOpening, openingEdges } from "./openings.ts";
@@ -45,7 +45,7 @@ export interface DressItem {
   kind: DressKind;
   x: number; // world tiles (float): where it stands / hangs
   y: number;
-  z: number; // px above the floor
+  z: number; // m above the floor
   seed: number; // 0..1, picks a look
   solid: boolean; // blocks walking (floor items)
   tile?: [number, number]; // floor items: the tile they take
@@ -84,7 +84,7 @@ export function dressItems(map: MapDef, objects: Iterable<WorldObjectDef>): Dres
     if (e.wall || isOpening(o.kind)) {
       if (isDoorKind(o.kind)) {
         // the doorway's tiles both sides, and one more each way along the wall
-        const odd = (o.rot ?? 0) % 2 === 1;
+        const odd = quarterOf(o) % 2 === 1;
         const n = entry(o.kind).w;
         for (let d = -1; d <= n; d++)
           for (const [x, y] of odd
@@ -100,7 +100,7 @@ export function dressItems(map: MapDef, objects: Iterable<WorldObjectDef>): Dres
       }
       continue;
     }
-    const { w, h } = footprint(o.kind, o.rot ?? 0);
+    const { w, h } = footprint(o.kind, quarterOf(o));
     for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) taken.add(`${o.x + dx},${o.y + dy}`);
   }
   const hung = new Set<string>();
@@ -133,7 +133,7 @@ export function dressItems(map: MapDef, objects: Iterable<WorldObjectDef>): Dres
         if (hung.has(`${x - 1},${y}`) || hung.has(`${x + 1},${y}`) || near.has(`${x},${y}`)) continue;
         if (x - lastFrame < 3 || r() > p * 0.55) continue;
         lastFrame = x;
-        push({ id: `d-${a.key}-f${x}-${y}`, kind: "frame", x: x + 0.5, y, z: 0, seed: r(), solid: false });
+        push({ id: `d-${a.key}-f${x - a.x}-${y - a.y}`, kind: "frame", x: x + 0.5, y, z: 0, seed: r(), solid: false });
       }
     // ── floor: corners first (plants), then along the back wall ──
     const free = (x: number, y: number) =>
@@ -153,7 +153,7 @@ export function dressItems(map: MapDef, objects: Iterable<WorldObjectDef>): Dres
       taken.add(`${x},${y}`);
       taken.add(`d${x},${y}`);
       push({
-        id: `d-${a.key}-${kind}-${x}-${y}`,
+        id: `d-${a.key}-${kind}-${x - a.x}-${y - a.y}`,
         kind,
         x: x + 0.5,
         y: y + 0.5,

@@ -5,4 +5,5 @@ export * from "./body.ts";
 export * from "./build.ts";
 export * from "./flow.ts";
 export * from "./load.ts";
+export * from "./place.ts";
 export * from "./world.ts";

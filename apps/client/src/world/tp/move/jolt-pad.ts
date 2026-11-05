@@ -1,13 +1,13 @@
-import type { Grid } from "@yutopia/shared";
+import { blankMap, STOREY } from "@yutopia/shared";
 import type { Collider, FlowWorld, Mover } from "@yutopia/shared/move";
 import { FLOW_MOVES } from "@yutopia/shared/move/flow-moves";
 import {
   CharacterMover,
   type Frame,
-  JoltCollider,
   type Land,
   loadJolt,
   PhysicsWorld,
+  Place,
   sizesFor,
 } from "@yutopia/shared/physics";
 import { box3, type Solid3 } from "@yutopia/shared/shapes";
@@ -17,7 +17,7 @@ import * as T3 from "three";
 // Jolt boxes, its dummies as posts, and what the grid couldn't have — two chunks of land (ramps at
 // 20°, 35° and 50°, a bumpy hill), a lamp post, a trunk, a fence, a thin wall and balls loose to
 // knock about — moved through by the world's own Jolt character (shared/physics CharacterMover)
-// and asked by the world's own questions (JoltCollider), so the feel signed off here is the world's.
+// and asked by the world's own questions (Place), so the feel signed off here is the world's.
 
 /** The land: x 0..64, z 64..96 (two of the Grounds' 32 m chunks, named as the Grounds' are). */
 export const LAND = { x0: 0, x1: 64, z0: 64, z1: 96 };
@@ -32,7 +32,8 @@ const RAMPS: { x0: number; x1: number; deg: number }[] = [
 ];
 const PLATEAU = 3;
 /** How tall the pad's walls stand (drawn, and in Jolt). */
-export const WALL_H = 3.5;
+/** The pad's walls: a storey high (shared units.ts). */
+export const PAD_WALL_H = STOREY;
 
 /** The land's height at (x, z): the ramps up to a 3 m plateau, then a hill with bumps on it. */
 export function landHeight(x: number, z: number): number {
@@ -91,7 +92,7 @@ export async function joltPad(
   for (const [x, y, h] of tops) {
     if (isDummy(x, y)) continue;
     // (a wall stands 3.5 m, as drawn; the pad's edge 10, so nothing's jumped out over it)
-    const top = Number.isFinite(h) ? h : edge(x, y) ? 10 : WALL_H;
+    const top = Number.isFinite(h) ? h : edge(x, y) ? 10 : PAD_WALL_H;
     boxes.push(box3(x, y, x + 1, y + 1, 0, top));
   }
   const posts: Solid3[] = dummies.map(([x, y]) => ({ t: "cyl", x: x + 0.5, z: y + 0.5, r: 0.38, y0: 0, y1: 1.9 }));
@@ -125,14 +126,9 @@ export async function joltPad(
   const balls = BALLS.map((r, i) => ({ r, id: world.addThing({ kind: "ball", r }, 44 + i * 2, r + 0.5, 57) }));
   world.settle();
 
-  // the collider asks its grid only where the land is (the pad's floor is all Jolt's)
-  const landGrid = {
-    onLand: onPadLand,
-    onRamp: () => false,
-    speedAt: () => 1,
-  } as unknown as Grid;
-  const frame: Frame = { ox: 0, oy: 0, elev: 0 };
-  const collider = new JoltCollider(world, landGrid, frame);
+  // the pad's questions on its world (a floor with no land of its own round it: Jolt's everywhere)
+  const frame: Frame = { elev: 0 };
+  const collider = new Place(world, blankMap("pad", "pad", size.w, size.h), []);
   const mover = new CharacterMover(
     world,
     () => frame,

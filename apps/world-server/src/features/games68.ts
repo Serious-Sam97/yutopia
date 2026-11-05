@@ -1,4 +1,4 @@
-import { chairAt, entry, footprint, HELD, isHeld, objLevel, type WorldObjectDef } from "@yutopia/shared";
+import { chairAt, entry, footprint, HELD, isHeld, objLevel, quarterOf, type WorldObjectDef } from "@yutopia/shared";
 import { legal, type Move, outcome, parseFen, play, START, toFen } from "@yutopia/shared/games68/chess";
 import { clawDrop, prizesOf } from "@yutopia/shared/games68/claw";
 import { DARTS_A_TURN, dartScore } from "@yutopia/shared/games68/darts";
@@ -61,7 +61,7 @@ registerFeature((room: WorldRoom) => {
   const warn = (c: WorldClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
   const persistFailed = (e: Error) => console.warn("[games68] save failed", e.message);
   const near = (p: Player, o: WorldObjectDef) => {
-    const { w, h } = footprint(o.kind, o.rot);
+    const { w, h } = footprint(o.kind, quarterOf(o));
     const cx = Math.max(o.x, Math.min(p.x, o.x + w));
     const cy = Math.max(o.y, Math.min(p.y, o.y + h));
     return objLevel(o, room.map) === p.level && room.reach3(p, o, Math.hypot(p.x - cx, p.y - cy)) <= REACH;
@@ -177,7 +177,7 @@ registerFeature((room: WorldRoom) => {
   const knock = (o: WorldObjectDef, uid: number, from: number) => {
     const q = [...room.state.players.values()].find((x) => x.uid === uid);
     if (!q) return;
-    const { w, h } = footprint(o.kind, o.rot);
+    const { w, h } = footprint(o.kind, quarterOf(o));
     // (the blow from the taker's square: ranks along the board's x, 1.1 m a square past its 0.6 m edge)
     const f = chairAt(o, {
       u: 0.6 + (7 - Math.floor(from / 8) + 0.5) * 1.1,

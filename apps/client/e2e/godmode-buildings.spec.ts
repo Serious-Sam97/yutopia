@@ -59,8 +59,8 @@ test("God mode's buildings: a house put down, turned, moved, walked into; refuse
   await enter(page, tok, space);
   await holdHour(page, 13);
   await page.evaluate((p) => (window as any).__yutopia.teleport(p), {
-    x: FIELD.x + 60,
-    y: FIELD.z + 10 + 16,
+    x: FIELD.x,
+    y: FIELD.z + 16,
     level: 0,
   });
   await page.waitForTimeout(4000);

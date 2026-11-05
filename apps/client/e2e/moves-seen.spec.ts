@@ -9,7 +9,7 @@ import { ANA, BIA, enter, test, token } from "./helpers";
 
 const GPU = process.env.YUTOPIA_GPU === "1";
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
-const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
+const G = (x: number, y: number) => ({ x, y });
 const LOT = { x: 37.8, y: 30 };
 const LAMP = { x: -19.44, z: -102.99 };
 

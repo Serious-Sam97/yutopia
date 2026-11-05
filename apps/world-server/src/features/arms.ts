@@ -1,4 +1,4 @@
-import { ANIM } from "@yutopia/shared";
+import { ANIM, overFloor } from "@yutopia/shared";
 import {
   ARM,
   ARMS,
@@ -79,11 +79,9 @@ registerFeature((room: WorldRoom) => {
     hands.set(sid, h);
     return h;
   };
-  const ox = () => room.levelMap(0).ox ?? 0;
-  const oy = () => room.levelMap(0).oy ?? 0;
   // the ground at (x, y) in a floor's own frame: the land's, out on it; the floor's (0) indoors
   const floorAt = (g: { onLand(x: number, y: number): boolean }, x: number, y: number) =>
-    g.onLand(x, y) ? heightAt(x + ox(), y + oy()) : 0;
+    g.onLand(x, y) ? heightAt(x, y) : 0;
   // where everyone was, the last second or so (a shot is taken against where its shooter saw them)
   const trails = new Map<string, Was[]>();
   const free = (p: Player) => !p.busy && !p.act && p.a !== ANIM.sit && p.hp > 0 && !p.fellAt;
@@ -119,7 +117,7 @@ registerFeature((room: WorldRoom) => {
       let t: number | null = null;
       let head = false;
       for (const dt of [-REWIND.slackMs, 0, REWIND.slackMs]) {
-        const w = pastAt(trail, seenAt + dt) ?? { x: q.x, y: q.y, z: q.z, at: null };
+        const w = pastAt(trail, seenAt + dt) ?? { x: q.x, y: q.y, z: overFloor(q.level, q.z), at: null };
         if (w.at && w.at.level !== p.level) continue;
         const h = w.at?.crouch ? CROUCHED : BODY.h;
         const m = rayMeets(ray, w.x, w.y, w.z, range, REWIND.slack, h);
@@ -206,9 +204,11 @@ registerFeature((room: WorldRoom) => {
     // the muzzle where the server has them (a ray from elsewhere isn't theirs)
     // (their feet: where they stand — p.z, the land's height out on it — or the floor under them,
     // whichever's lower, a message's lag either way)
+    // (heights over their floor, as the muzzle's: Player.z is the world's)
+    const pz = overFloor(p.level, p.z);
     const floor = floorAt(room.gridFor(p.uid, p.level), p.x, p.y);
-    const feet = Math.min(p.z, floor);
-    if (Math.hypot(ox - p.x, oy - p.y) > MUZZLE_REACH || oz < feet || oz > Math.max(p.z, floor) + 2.4) return;
+    const feet = Math.min(pz, floor);
+    if (Math.hypot(ox - p.x, oy - p.y) > MUZZLE_REACH || oz < feet || oz > Math.max(pz, floor) + 2.4) return;
     hd.shotAt = now;
     hd.reloadAt = 0;
     h.w.loaded--;
@@ -218,7 +218,6 @@ registerFeature((room: WorldRoom) => {
     const seenAt = now - REWIND.delay - lag;
     const seenPeople = now - REWIND.people - lag;
     const seed = Number(m?.seed) >>> 0;
-    const g = room.gridFor(p.uid, p.level);
     // the spread: the bloom from its own shot times, how they stand and go — then this shot's on it
     const id = h.w.id;
     const mv = unpackMv(p.mv);
@@ -244,8 +243,8 @@ registerFeature((room: WorldRoom) => {
       if (!who) continue;
       const d = rayDir(ray.yaw, ray.pitch);
       const at = { x: ox + d.x * who.t, y: oy + d.y * who.t, z: oz + d.z * who.t };
-      // (a wall or a trunk on the way: it stops there)
-      if (!g.clear({ x: ox, y: oy }, at, 0.02, Math.max(oz, at.z))) continue;
+      // (a wall or a trunk on the way: it stops there — Jolt's sight, the shot's own line)
+      if (!(room.sight?.(p.level, { x: ox, y: oy, z: oz }, at) ?? true)) continue;
       const q = who.q;
       const n = damageAt(id, pvpDamage(id), who.t, who.head);
       room.survival?.hurt(q.sid, n);
@@ -271,7 +270,7 @@ registerFeature((room: WorldRoom) => {
     room.survival?.changed(client.sessionId);
     const level = p.level;
     const g = room.gridFor(p.uid, level);
-    const z0 = p.z + FLARE.hand;
+    const z0 = overFloor(level, p.z) + FLARE.hand;
     const yaw = Number(m?.yaw) || 0;
     const pitch = Math.max(-0.6, Math.min(1, Number(m?.pitch) || 0));
     const to = flareFlight(
@@ -302,7 +301,7 @@ registerFeature((room: WorldRoom) => {
       for (const q of room.state.players.values()) {
         const t = trails.get(q.sid) ?? [];
         trails.set(q.sid, t);
-        t.push({ t: now, x: q.x, y: q.y, z: q.z, level: q.level, crouch: unpackMv(q.mv).crouch });
+        t.push({ t: now, x: q.x, y: q.y, z: overFloor(q.level, q.z), level: q.level, crouch: unpackMv(q.mv).crouch });
         while (t.length > 2 && now - t[0].t > KEPT_MS) t.shift();
       }
       // flares landing: lit
@@ -311,7 +310,7 @@ registerFeature((room: WorldRoom) => {
           const f = pending[i];
           pending.splice(i, 1);
           // (into deep water: out — plan 66)
-          if (f.level === 0 && inDeepWater(f.x + ox(), f.y + oy())) continue;
+          if (f.level === 0 && inDeepWater(f.x, f.y)) continue;
           room.dark?.light(f.x, f.y, f.z, f.level, now);
         }
       // reloads: a round at a time out of the pockets, till full or out (the double-barrel opened

@@ -1,4 +1,4 @@
-import { type AvatarLayers, DEFAULT_AVATAR, Grid } from "@yutopia/shared";
+import { type AvatarLayers, DEFAULT_AVATAR } from "@yutopia/shared";
 import {
   type Body,
   dodging,
@@ -25,7 +25,7 @@ import type { LookAt } from "../../chars/anim/hero";
 import { isMac, keyLabel, khBindings, learnLayout, padLabel, plan29Bindings, walkKeys } from "../../input/bindings";
 import { afterFirstStep, camLook, HeldOver, MoveControls } from "../../input/controls";
 import { type CamTune, type Follow, FollowCam } from "../follow-cam";
-import { joltPad, LAND, onPadLand, WALL_H, YARD } from "./jolt-pad";
+import { joltPad, LAND, onPadLand, PAD_WALL_H, YARD } from "./jolt-pad";
 
 // /dev/move — the sandbox (docs/plan/29-the-move.md, phase 1): walk, run,
 // jump, vault, climb, roll and slide on a test pad made to try each thing —
@@ -38,7 +38,7 @@ import { joltPad, LAND, onPadLand, WALL_H, YARD } from "./jolt-pad";
 // on the panel (or ?today=1) to compare; a tower to double-jump, wide gaps to
 // air-dash, and dummies to lock on to. On Jolt (phase 1b, H.1): the world's own
 // character and questions (jolt-pad.ts), ramps, a hill, posts, a fence, a thin
-// wall and balls to knock about; ?grid=1 for the old grid's way.
+// wall and balls to knock about.
 
 // ── the pad (tiles; the floor's x east, y south: three's X, Z) ───────────────
 const W = 96;
@@ -81,13 +81,9 @@ const DUMMIES: [number, number][] = [
 ];
 const LOCK_RANGE = 14;
 
-function buildPad(): { grid: Grid; tops: [number, number, number][] } {
-  const g = new Grid(W, H);
-  g.walk.fill(1);
-  g.top.fill(0);
+function buildPad(): { tops: [number, number, number][] } {
   const tops: [number, number, number][] = [];
   const block = (x: number, y: number, h: number) => {
-    g.block(x, y, h);
     tops.push([x, y, h]);
   };
   // the ladder: walls across the way north, each a tile thick and three wide, to get over
@@ -144,7 +140,7 @@ function buildPad(): { grid: Grid; tops: [number, number, number][] } {
     block(0, j, Number.POSITIVE_INFINITY);
     block(W - 1, j, Number.POSITIVE_INFINITY);
   }
-  return { grid: g, tops };
+  return { tops };
 }
 
 function padMesh(tops: [number, number, number][]): T3.Object3D {
@@ -175,7 +171,7 @@ function padMesh(tops: [number, number, number][]): T3.Object3D {
     if (isDummy(x, y)) continue;
     const solid = !Number.isFinite(h);
     const m = new T3.Mesh(box, solid ? wall : stand);
-    const hh = solid ? WALL_H : h;
+    const hh = solid ? PAD_WALL_H : h;
     m.scale.set(1, hh, 1);
     m.position.set(x + 0.5, hh / 2, y + 0.5);
     m.castShadow = true;
@@ -267,22 +263,17 @@ export async function runMoveSandbox(el: HTMLElement, opts: { avatar?: AvatarLay
   sun.shadow.bias = -0.0005;
   scene.add(sun, sun.target);
 
-  const { grid, tops } = buildPad();
+  const { tops } = buildPad();
   scene.add(padMesh(tops));
-  // on Jolt, as the world (?grid=1: the old grid's way, to compare)
-  const jolt =
-    new URLSearchParams(location.search).get("grid") === "1" ? null : await joltPad(tops, { w: W, h: H }, DUMMIES);
-  if (jolt) {
-    scene.add(jolt.mesh);
-    for (const [t, x, z] of jolt.labels) scene.add(label(t, x, z, 1.3));
-  }
+  // on Jolt, as the world
+  const jolt = await joltPad(tops, { w: W, h: H }, DUMMIES);
+  scene.add(jolt.mesh);
+  for (const [t, x, z] of jolt.labels) scene.add(label(t, x, z, 1.3));
   // KH (plan 56) or today's (plan 29), switched on the panel: the body, the keys, the camera
   let kh = new URLSearchParams(location.search).get("today") !== "1";
   let spec: MoveSpec = structuredClone(kh ? KH_MOVE : MOVE);
   const speedAt = (x: number, y: number) => SPEED[footingAt(x, y)] ?? 1;
-  const env: MoveEnv = jolt
-    ? { grid: jolt.collider, mover: jolt.mover, footing: footingAt, speed: speedAt, flow: jolt.flow }
-    : { grid, footing: footingAt, speed: speedAt };
+  const env: MoveEnv = { grid: jolt.collider, mover: jolt.mover, footing: footingAt, speed: speedAt, flow: jolt.flow };
 
   // ── the body and its look
   let body: Body = newBody(START.x, START.y, 0, -Math.PI / 2);
@@ -1093,7 +1084,7 @@ function panel(host: HTMLElement, spec: MoveSpec, cam: CamTune, kh: boolean, ctx
           `mouse / ${k("ArrowLeft")}${k("ArrowUp")}${k("ArrowDown")}${k("ArrowRight")} camera · wheel: in/out · ${k("KeyR")} behind me<br>` +
           `${k("KeyF")} / wheel click: focus (lock on) (← → or a flick: next) · ${k("KeyY")} 1st/3rd · ${k("Backspace")} back to start<br>` +
           `click: the mouse is the camera (no pointer) · Esc lets it go<br>` +
-          `on Jolt, as the world (?grid=1: the old grid) · south: the yard, the ramps, the hill<br>` +
+          `on Jolt, as the world · south: the yard, the ramps, the hill<br>` +
           `Flowmotion (the yard): jump at a wall in the air, or roll into it: a kick · run fast into the tall wall: run up it · run fast at a wall slantwise: run along it · roll or run fast into the pole or the trunk, hold Shift: swing, let go: flung · land on a rail: grind, jump off · fall at a ledge too high: hang, forward: up<br>` +
           `pad: left stick (tilt = speed) · right stick camera · ${padLabel(0)} jump · ${padLabel(2)} dodge/dash · ${padLabel(1)} crouch · ${padLabel(5)} lock · ${padLabel(11)} behind me · ${padLabel(6)} aim · ${padLabel(8)} camera`
       : `${k("KeyW")}${k("KeyA")}${k("KeyS")}${k("KeyD")} / arrows move · ${k("ShiftLeft")} sprint · ${k("AltLeft")} walk<br>` +

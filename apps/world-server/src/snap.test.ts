@@ -33,8 +33,8 @@ async function waitFor(fn: () => boolean, ms = 8000) {
 }
 
 let n = 0;
-// someone out in the car park (open, flat snow), at (30.5, y0)
-async function out(y0 = 30.5) {
+// someone out in the car park (open, flat snow), at (−29.5, y0)
+async function out(y0 = 20.5) {
   n++;
   const room: Room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
     sandbox: 3950 + n,
@@ -45,7 +45,7 @@ async function out(y0 = 30.5) {
   room.onMessage("snap", (m) => snaps.push(m));
   room.onMessage("*", () => {});
   await waitFor(() => !!room.state?.players?.get(room.sessionId));
-  room.send("teleport", { to: { x: 30.5, y: y0, level: 0 } });
+  room.send("teleport", { to: { x: -29.5, y: y0, level: 0 } });
   const me = () => room.state.players.get(room.sessionId);
   await waitFor(() => me().level === 0 && Math.abs(me().y - y0) < 0.6);
   // (the teleport is a snap too: what was sent before it is let go for a second)
@@ -54,7 +54,7 @@ async function out(y0 = 30.5) {
   const msg = (dy: number, dmt: number) => {
     p.y += dy;
     p.mt += dmt;
-    return { x: p.x, y: p.y, z: 0, l: 0, d: 0, a: 1, seq: ++p.seq, mv: 2, yaw: 0, pitch: 0, mt: p.mt };
+    return { x: p.x, y: p.y, z: 0, l: 0, a: 1, seq: ++p.seq, mv: 2, yaw: 0, pitch: 0, mt: p.mt };
   };
   snaps.length = 0; // (the teleport's own)
   return { room, snaps, me, msg };
@@ -77,8 +77,8 @@ test("a hiccup: a second of jogging handed over at once — nobody put back", as
 });
 
 test("in the second after a teleport, a move from far off (sent before it) is let go", async () => {
-  const s = await out(38.5);
-  s.room.send("teleport", { to: { x: 30.5, y: 38.5, level: 0 } });
+  const s = await out(28.5);
+  s.room.send("teleport", { to: { x: -29.5, y: 28.5, level: 0 } });
   await sleep(200);
   const was = s.me().y;
   s.room.send("pos", s.msg(20, 50));

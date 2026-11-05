@@ -17,7 +17,10 @@ mkdirSync(out, { recursive: true });
 
 async function token(email: string): Promise<string> {
   const ctx = await request.newContext();
-  const res = await ctx.post(`${api}/api/login`, { data: { email, password: pass }, headers: { Accept: "application/json" } });
+  const res = await ctx.post(`${api}/api/login`, {
+    data: { email, password: pass },
+    headers: { Accept: "application/json" },
+  });
   return (await res.json()).token;
 }
 async function open(browser: Browser, email: string): Promise<Page> {
@@ -69,7 +72,12 @@ const frames = (p: Page, ms: number) =>
           if (now < end) requestAnimationFrame(step);
           else {
             const s = [...d.slice(2)].sort((a, b) => a - b);
-            done({ median: +s[Math.floor(s.length / 2)].toFixed(1), max: +s[s.length - 1].toFixed(1), over33: s.filter((x) => x > 33.4).length, n: s.length });
+            done({
+              median: +s[Math.floor(s.length / 2)].toFixed(1),
+              max: +s[s.length - 1].toFixed(1),
+              over33: s.filter((x) => x > 33.4).length,
+              n: s.length,
+            });
           }
         };
         requestAnimationFrame(step);
@@ -113,21 +121,29 @@ try {
   }, ID);
   if (!at) throw new Error("no room for a table near Ana");
   await ana.evaluate(
-    ([id, p]) => (window as any).__yutopia.room.send("obj:put", {
+    ([id, p]) =>
+      (window as any).__yutopia.room.send("obj:put", {
         id,
         kind: "chess_table",
         x: p.x,
         y: p.y,
-        rot: 0,
+        yaw: 0,
         props: { variant: 1, level: (window as any).__yutopia.level },
       }),
     [ID, at] as const,
   );
-  await ana.waitForFunction((id) => !!(window as any).__yutopia.model.getObject(id), ID, { timeout: 10_000 }).catch(async (e) => {
-    console.log("at", at, "toasts", JSON.stringify(await ana.evaluate(() => (window as any).__hud.get().toasts)));
-    console.log("me", JSON.stringify(await ana.evaluate(() => ({ ...(window as any).__yutopia.me, level: (window as any).__yutopia.level }))));
-    throw e;
-  });
+  await ana
+    .waitForFunction((id) => !!(window as any).__yutopia.model.getObject(id), ID, { timeout: 10_000 })
+    .catch(async (e) => {
+      console.log("at", at, "toasts", JSON.stringify(await ana.evaluate(() => (window as any).__hud.get().toasts)));
+      console.log(
+        "me",
+        JSON.stringify(
+          await ana.evaluate(() => ({ ...(window as any).__yutopia.me, level: (window as any).__yutopia.level })),
+        ),
+      );
+      throw e;
+    });
   console.log("table at", at);
   console.log("frames, the lobby with the table in view:", JSON.stringify(await frames(ana, 4000)));
   await ana.waitForTimeout(1500);
@@ -143,11 +159,20 @@ try {
             const w = (window as any).__yutopia;
             const o = w.model.getObject(id);
             const seats = [];
-            for (let dx = -1; dx <= 2; dx++) for (let dy = -1; dy <= 1; dy++) {
-              const s = w.grid.seatAt(o.x + dx + 0.5, o.y + dy + 0.5);
-              if (s) seats.push({ x: o.x + dx, y: o.y + dy, s });
-            }
-            return { chess: !!w.chess, me: w.me, path: w.path?.length, o: { x: o.x, y: o.y }, seats, hud: (window as any).__hud.get().chess, panel: (window as any).__hud.get().panel };
+            for (let dx = -1; dx <= 2; dx++)
+              for (let dy = -1; dy <= 1; dy++) {
+                const s = w.grid.seatAt(o.x + dx + 0.5, o.y + dy + 0.5);
+                if (s) seats.push({ x: o.x + dx, y: o.y + dy, s });
+              }
+            return {
+              chess: !!w.chess,
+              me: w.me,
+              path: w.path?.length,
+              o: { x: o.x, y: o.y },
+              seats,
+              hud: (window as any).__hud.get().chess,
+              panel: (window as any).__hud.get().panel,
+            };
           }, ID),
         ),
       );
@@ -161,7 +186,10 @@ try {
   // Bia across
   const bia = await open(browser, "bia@yutopia.test");
   const level = await ana.evaluate(() => (window as any).__yutopia.level);
-  await bia.evaluate(([p, l]) => (window as any).__yutopia.teleport({ x: p.x + 1, y: p.y + 2, level: l }), [at, level] as const);
+  await bia.evaluate(([p, l]) => (window as any).__yutopia.teleport({ x: p.x + 1, y: p.y + 2, level: l }), [
+    at,
+    level,
+  ] as const);
   await bia.waitForFunction((id) => !!(window as any).__yutopia.model.getObject(id), ID, { timeout: 15_000 });
   await bia.waitForTimeout(2500);
   await bia.evaluate((id) => (window as any).__yutopia.activateObject(id, true), ID);
@@ -183,7 +211,15 @@ try {
       await whitePage.evaluate(() => {
         const c = (window as any).__yutopia.chess;
         const o = c.table();
-        return { picked: c.picked, cursor: c.cursor, myTurn: c.myTurn(), at: c.at, uid: c.myUid(), w: o?.props?.w, fen: o?.props?.fen };
+        return {
+          picked: c.picked,
+          cursor: c.cursor,
+          myTurn: c.myTurn(),
+          at: c.at,
+          uid: c.myUid(),
+          w: o?.props?.w,
+          fen: o?.props?.fen,
+        };
       }),
     ),
   );
@@ -191,7 +227,9 @@ try {
   await key(whitePage, "ArrowUp", 2);
   await key(whitePage, "KeyE");
   await shot(whitePage, "3-pawn-marching", 450);
-  await whitePage.waitForFunction(() => (window as any).__hud.get().chess?.moves.length === 1, null, { timeout: 10_000 });
+  await whitePage.waitForFunction(() => (window as any).__hud.get().chess?.moves.length === 1, null, {
+    timeout: 10_000,
+  });
   await shot(whitePage, "4-e4", 1600);
 
   // black: d7–d5 (the cursor on black's side starts at e2 too; move it there: d7 is index 11)
@@ -206,7 +244,9 @@ try {
     c.cursor = 27;
   });
   await key(blackPage, "KeyE");
-  await blackPage.waitForFunction(() => (window as any).__hud.get().chess?.moves.length === 2, null, { timeout: 10_000 });
+  await blackPage.waitForFunction(() => (window as any).__hud.get().chess?.moves.length === 2, null, {
+    timeout: 10_000,
+  });
   await blackPage.waitForTimeout(2200);
 
   // white takes: e4×d5 — the capture played out (the cut close, the pawn breaking)
@@ -229,7 +269,9 @@ try {
 
   // Bia resigns: the white king? no — black's: the crown comes off
   await blackPage.evaluate((id) => (window as any).__yutopia.room.send("chess:resign", { id }), ID);
-  await whitePage.waitForFunction(() => (window as any).__hud.get().chess?.state === "resign", null, { timeout: 10_000 });
+  await whitePage.waitForFunction(() => (window as any).__hud.get().chess?.state === "resign", null, {
+    timeout: 10_000,
+  });
   await shot(whitePage, "8-resign-uncrown", 1100);
   await shot(whitePage, "9-resign-crown", 2000);
   // the wheel: over the top
@@ -247,27 +289,39 @@ try {
     await ana.bringToFront();
     await ana.evaluate(() => (window as any).__yutopia.chess.newGame());
     await ana.waitForTimeout(800);
-    await ana.waitForFunction(() => (window as any).__hud.get().chess?.canVortex, null, { timeout: 15_000 }).catch(async (e) => {
-      console.log("hud.chess:", JSON.stringify(await chessHud(ana)), "props:", JSON.stringify(await props(ana)));
-      throw e;
-    });
+    await ana
+      .waitForFunction(() => (window as any).__hud.get().chess?.canVortex, null, { timeout: 15_000 })
+      .catch(async (e) => {
+        console.log("hud.chess:", JSON.stringify(await chessHud(ana)), "props:", JSON.stringify(await props(ana)));
+        throw e;
+      });
     await ana.evaluate(() => (window as any).__yutopia.chess.vortex("medium"));
-    await ana.waitForFunction(() => !!(window as any).__hud.get().chess?.vortex.b || !!(window as any).__hud.get().chess?.vortex.w, null, {
-      timeout: 10_000,
-    });
+    await ana.waitForFunction(
+      () => !!(window as any).__hud.get().chess?.vortex.b || !!(window as any).__hud.get().chess?.vortex.w,
+      null,
+      {
+        timeout: 10_000,
+      },
+    );
     await shot(ana, "11-vortex-sat", 1500);
     console.log("frames, sat with Vortex, nothing moving:", JSON.stringify(await frames(ana, 4000)));
     // (my move, whichever side Vortex left me: my king's pawn two squares)
     const mine = (await chessHud(ana)).side as "w" | "b";
     await ana.waitForFunction(() => (window as any).__hud.get().chess?.myTurn, null, { timeout: 20_000 });
     const n0 = (await chessHud(ana)).moves.length;
-    await ana.evaluate((sq) => {
-      (window as any).__yutopia.chess.cursor = sq;
-    }, mine === "w" ? 52 : 12);
+    await ana.evaluate(
+      (sq) => {
+        (window as any).__yutopia.chess.cursor = sq;
+      },
+      mine === "w" ? 52 : 12,
+    );
     await key(ana, "KeyE");
-    await ana.evaluate((sq) => {
-      (window as any).__yutopia.chess.cursor = sq;
-    }, mine === "w" ? 36 : 28);
+    await ana.evaluate(
+      (sq) => {
+        (window as any).__yutopia.chess.cursor = sq;
+      },
+      mine === "w" ? 36 : 28,
+    );
     await key(ana, "KeyE");
     console.log("frames, my move and his playing out:", JSON.stringify(await frames(ana, 6000)));
     await ana.waitForFunction((n) => (window as any).__hud.get().chess?.moves.length >= n + 2, n0, { timeout: 25_000 });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { entry, SEAT_SPEC, STAND, SURFACE } from "@yutopia/shared";
+import { entry, quarterYaw, SEAT_SPEC, STAND, SURFACE } from "@yutopia/shared";
 import { type BufferGeometry, DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from "three";
 import type { LivePart } from "../kit";
 import { liveAt } from "../liveparts";
@@ -41,7 +41,7 @@ function topAt(g: BufferGeometry, x: number, z: number, from: number): number {
 }
 
 const model = (kind: string, props: Record<string, unknown> = {}, id = "k") =>
-  modelOf({ id, kind, x: 0, y: 0, rot: 0, props });
+  modelOf({ id, kind, x: 0, y: 0, yaw: quarterYaw(0), props });
 
 test("kitchen: every look on its footprint, on the floor, under the ceiling and 8k tris", () => {
   for (const kind of KINDS) {

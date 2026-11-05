@@ -9,6 +9,7 @@ import {
   isWallEdge,
   type MapDef,
   nearestEdge,
+  spanOf,
   tileAt,
 } from "./map.ts";
 import { isDoorKind, openingEdges } from "./openings.ts";
@@ -39,7 +40,8 @@ export function panelAt(
 ): Panel | null {
   const hit = ray ? faceHit(map, ray, skip) : null;
   if (hit) {
-    const a = Math.min(Math.floor(hit.along), (hit.face.dir === "h" ? map.width : map.height) - 1);
+    const sp = spanOf(map);
+    const a = Math.min(Math.floor(hit.along), (hit.face.dir === "h" ? sp.x1 : sp.y1) - 1);
     return hit.face.dir === "h"
       ? { dir: "h", x: a, y: hit.face.line, side: hit.face.side }
       : { dir: "v", x: hit.face.line, y: a, side: hit.face.side };
@@ -63,7 +65,7 @@ export function joinedFaces(map: MapDef, objects: WorldObjectDef[], p: Panel, ca
   const closed = (e: Edge) => isWallEdge(edgeAt(map, e)) || doors.has(`${e.dir}${e.x},${e.y}`);
   const [sx, sy] = panelTile(p);
   if (!isFloor(tileAt(map, sx, sy))) return [p];
-  const seen = new Set<number>([sy * map.width + sx]);
+  const seen = new Set<string>([`${sx},${sy}`]);
   const queue: [number, number][] = [[sx, sy]];
   const out: Panel[] = [];
   const face = (e: Edge, side: 1 | -1) => {
@@ -83,7 +85,7 @@ export function joinedFaces(map: MapDef, objects: WorldObjectDef[], p: Panel, ca
         continue;
       }
       if (!isFloor(tileAt(map, nx, ny))) continue;
-      const k = ny * map.width + nx;
+      const k = `${nx},${ny}`;
       if (seen.has(k)) continue;
       seen.add(k);
       queue.push([nx, ny]);

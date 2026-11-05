@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
 import { canPlace } from "./build.ts";
-import { footprint, type WorldObjectDef } from "./catalog.ts";
+import { footprint, quarterOf, type WorldObjectDef } from "./catalog.ts";
 import {
   ANALOG_COMBO,
   CABLE_REACH,
@@ -87,13 +87,20 @@ test("the ready-made game room fits on an empty floor", () => {
   } as unknown as MapDef;
   const placed: WorldObjectDef[] = [];
   GAME_ROOM_SETUP.forEach((it, i) => {
-    const o: WorldObjectDef = { id: `g${i}`, kind: it.kind, x: 2 + it.dx, y: 2 + it.dy, rot: it.rot, props: it.props };
+    const o: WorldObjectDef = {
+      id: `g${i}`,
+      kind: it.kind,
+      x: 2 + it.dx,
+      y: 2 + it.dy,
+      yaw: it.yaw,
+      props: it.props,
+    };
     assert.ok(canPlace(map, placed, o), `${it.kind} at ${it.dx},${it.dy}`);
     placed.push(o);
   });
   // the consoles' cables reach the TV
   const tv = placed.find((o) => o.kind === "crt_tv") as WorldObjectDef;
-  const rect = (o: WorldObjectDef) => ({ x: o.x, y: o.y, ...footprint(o.kind, o.rot) });
+  const rect = (o: WorldObjectDef) => ({ x: o.x, y: o.y, ...footprint(o.kind, quarterOf(o)) });
   for (const c of placed.filter((o) => isConsole(o.kind))) {
     assert.ok(gap(rect(c), rect(tv)) <= CABLE_REACH, c.kind);
     assert.ok(CONSOLES[c.kind]);

@@ -54,7 +54,8 @@ async function download(name, url, tries = 3) {
       if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
       return Buffer.from(await res.arrayBuffer());
     } catch (e) {
-      if (i >= tries) throw new Error(`${name}: ${e.message} (${e.cause?.code ?? "no code"}) after ${tries} tries`, { cause: e });
+      if (i >= tries)
+        throw new Error(`${name}: ${e.message} (${e.cause?.code ?? "no code"}) after ${tries} tries`, { cause: e });
       console.warn(`[emu] ${name}: ${e.cause?.code ?? e.message}, retrying (${i}/${tries})`);
       await new Promise((r) => setTimeout(r, 2000 * i));
     }

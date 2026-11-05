@@ -151,7 +151,7 @@ export class Down {
     // the signs over them (not me): a red cross, the time left, a ring while someone holds
     const me = this.walker.where();
     const at = (x: number, y: number, z: number) => {
-      const c = ctl.clientAt(x, y, z * 39.19);
+      const c = ctl.clientAt(x, y, z);
       const r = ctl.hostRect();
       return { x: c.x + r.left, y: c.y + r.top };
     };

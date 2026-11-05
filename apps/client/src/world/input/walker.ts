@@ -1,4 +1,4 @@
-import type { dirFromDelta, Grid, JumpKind, Point } from "@yutopia/shared";
+import type { JumpKind, Point } from "@yutopia/shared";
 import {
   type Body,
   type FlowLook,
@@ -24,6 +24,7 @@ import {
   type WaterHere,
   yawToByte,
 } from "@yutopia/shared/move";
+import type { Place } from "@yutopia/shared/physics/place";
 import { FULL_VITALS, freshClock, spendRoll, stepVitals } from "@yutopia/shared/vitals";
 import type { WorldController } from "../controller";
 import { hud } from "../store";
@@ -41,7 +42,7 @@ import { Targets } from "./targets";
 // body is put there too.
 
 export interface WalkCtx {
-  grid: Grid;
+  grid: Place;
   footing(x: number, y: number): Footing;
   /** something the grid doesn't know about in the way (a car on the move) */
   blocked?(x: number, y: number): boolean;
@@ -123,11 +124,12 @@ const FAST_SPEC: MoveSpec = {
   crouch: KH_FEEL.crouch * FAST_X,
   aim: KH_FEEL.aim * FAST_X,
 };
-/** The grid with nothing in the way (through walls): only the ground's height is kept. */
-function noWalls(grid: Grid): Grid {
-  const g = Object.create(grid) as Grid;
-  g.fitsAt = () => true;
-  g.clear = () => true;
+/** Till Jolt's world is in (a second after the 3D view): nowhere to go — the body holds where it is,
+ *  on the floor's height. */
+function holdStill(place: Place): Place {
+  const g = Object.create(place) as Place;
+  g.fitsAt = () => false;
+  g.clear = () => false;
   return g;
 }
 /** A flier's step: across at a jog's pace (×3 sprinting), up while the jump's held, down while
@@ -177,18 +179,6 @@ function stepFly(b: Body, inp: MoveInput, env: MoveEnv, dt: number, sinking: boo
   b.gait = mag < 0.05 ? "still" : inp.sprint ? "sprint" : "jog";
   return {};
 }
-
-// the 8 facings (shared/iso.ts) as world angles, for my 3D facing
-const DIR_ANGLE = [
-  [1, 1],
-  [0, 1],
-  [-1, 1],
-  [-1, 0],
-  [-1, -1],
-  [0, -1],
-  [1, -1],
-  [1, 0],
-].map(([x, y]) => Math.atan2(y, x));
 
 /** A click-to-walk path, step by step: towards its next point (one passed counts as reached:
  *  no turning back for it), easing into the last; walked off as it goes. */
@@ -401,31 +391,30 @@ export class Walker {
   inventory(): void {
     this.loadDark(() => this.dark?.inventory());
   }
-  /** My 8-way facing (`me.d`) and drawn angle (returned) after a frame. First person (`view`): I face where I look — turned some other
+  /** My 8-way facing (`me.yaw`, radians on 8 ways) and drawn angle (returned) after a frame. First person (`view`): I face where I look — turned some other
    *  way (a seat, someone high-fiving me) the view turns there — flipping 8-way only a
    *  little past a boundary (no flutter on it, no message spam). Else, turned some other
    *  way while standing, I face it in 3D too. */
   face(
-    me: { d: number },
+    me: { yaw: number },
     view: { yaw: number; lookYaw?: number } | null,
     moved: boolean,
-    lookD: number,
+    lookYaw: number, // (NaN: none)
     angle: number,
-    dir8: typeof dirFromDelta, // (the page's: importing it here splits the page's chunks)
+    face8: (dx: number, dy: number, was?: number) => number, // (the page's: importing it here splits the page's chunks)
   ): number {
-    const dirFromDelta = dir8;
     if (view) {
-      if (me.d !== lookD && lookD >= 0) view.yaw = DIR_ANGLE[me.d] ?? view.yaw;
-      const d8 = dirFromDelta(Math.cos(view.yaw), Math.sin(view.yaw), me.d as 0);
-      if (d8 !== me.d) {
-        let off = view.yaw - (DIR_ANGLE[me.d] ?? view.yaw);
+      if (me.yaw !== lookYaw && !Number.isNaN(lookYaw)) view.yaw = me.yaw;
+      const f8 = face8(Math.cos(view.yaw), Math.sin(view.yaw), me.yaw);
+      if (f8 !== me.yaw) {
+        let off = view.yaw - me.yaw;
         off = Math.atan2(Math.sin(off), Math.cos(off));
-        if (Math.abs(off) > Math.PI / 8 + 0.1 || lookD < 0) me.d = d8;
+        if (Math.abs(off) > Math.PI / 8 + 0.1 || Number.isNaN(lookYaw)) me.yaw = f8;
       }
       // (aiming: as the body stands — turned onto the crosshair, bladed: shared beam.ts AIM_BLADE)
       return this.aiming ? (view.lookYaw ?? view.yaw) + AIM_BLADE : view.yaw;
     }
-    if (!moved && dirFromDelta(Math.cos(angle), Math.sin(angle), me.d as 0) !== me.d) return DIR_ANGLE[me.d] ?? angle;
+    if (!moved && face8(Math.cos(angle), Math.sin(angle), me.yaw) !== me.yaw) return me.yaw;
     return angle;
   }
 
@@ -549,10 +538,10 @@ export class Walker {
     const clip = (this.powers & P_CLIP) !== 0;
     const fast = (this.powers & P_FAST) !== 0;
     // my body on Jolt's world in 3D (docs/plan/50-the-volume.md C: its character moves me, through
-    // my own locked doors), the grid's way in iso and until Jolt's in
+    // my own locked doors) — till it's in, still
     const room = this.ctl?.room;
     const uid = room?.state.players.get(room.sessionId)?.uid ?? null;
-    const phys = this.ctl?.tp?.physicsBody(uid, this.ctl.level, clip, c.grid, this.flying) ?? null;
+    const phys = this.ctl?.tp?.body.physicsBody(uid, this.ctl.level, clip, this.flying) ?? null;
     // (a private space I may not go into: its edge stops me like a wall — nobody's put back)
     const shut = clip ? null : this.shutBy(uid);
     const blocked = clip ? undefined : shut ? (x: number, y: number) => !!c.blocked?.(x, y) || shut(x, y) : c.blocked;
@@ -563,7 +552,7 @@ export class Walker {
     const water = clip ? undefined : c.water;
     const env: MoveEnv = phys
       ? { grid: phys.collider, mover: phys.mover, footing: c.footing, blocked, flow, water }
-      : { grid: clip ? noWalls(c.grid) : c.grid, footing: c.footing, blocked, water };
+      : { grid: holdStill(c.grid), footing: c.footing, blocked, water };
     move.pitch = c.camPitch;
     const flying = this.flying;
     if (flying) {

@@ -42,12 +42,12 @@ async function drag(page: Page, from: [number, number], to: [number, number], st
   await page.mouse.up();
 }
 const tile = (page: Page, x: number, y: number) =>
-  page.evaluate(([tx, ty]) => (window as any).__yutopia.room.state.tiles[ty][tx], [x, y]);
+  page.evaluate(([tx, ty]) => (window as any).__yutopia.building.tiles[ty][tx], [x, y]);
 const hWall = (page: Page, x: number, y: number) =>
-  page.evaluate(([tx, ty]) => (window as any).__yutopia.room.state.hWalls[ty][tx], [x, y]);
+  page.evaluate(([tx, ty]) => (window as any).__yutopia.building.hWalls[ty][tx], [x, y]);
 const vWall = (page: Page, x: number, y: number) =>
-  page.evaluate(([tx, ty]) => (window as any).__yutopia.room.state.vWalls[ty][tx], [x, y]);
-const width = (page: Page) => page.evaluate(() => (window as any).__yutopia.room.state.width);
+  page.evaluate(([tx, ty]) => (window as any).__yutopia.building.vWalls[ty][tx], [x, y]);
+const width = (page: Page) => page.evaluate(() => (window as any).__yutopia.building.width);
 const kinds = (page: Page, kind: string) =>
   page.evaluate(
     (k) =>

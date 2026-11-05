@@ -1,4 +1,4 @@
-import { entry, footprint, type WorldObjectDef } from "./catalog.ts";
+import { entry, footprint, quarterYaw, type WorldObjectDef } from "./catalog.ts";
 import {
   type AreaDef,
   emptyEdges,
@@ -212,7 +212,7 @@ export function convertV1(
     if (o.kind === "door") {
       const r = doorwayRot(v1, o.x, o.y);
       if (r === null) return o;
-      const d = r === 0 ? { ...o, y: o.y + 1, rot: 0 } : { ...o, x: o.x + 1, rot: 1 };
+      const d = r === 0 ? { ...o, y: o.y + 1, yaw: quarterYaw(0) } : { ...o, x: o.x + 1, yaw: quarterYaw(1) };
       changed.push(d);
       return d;
     }

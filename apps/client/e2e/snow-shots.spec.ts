@@ -17,7 +17,7 @@ test("the look: snow settled on someone out a while", async ({ page }) => {
   });
   await enter(page, await token(ANA));
   await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
-  await page.evaluate(() => (window as any).__yutopia.teleport({ x: -62 + 60, y: -222 + 10, level: 0 }));
+  await page.evaluate(() => (window as any).__yutopia.teleport({ x: -62, y: -222, level: 0 }));
   await page.waitForTimeout(6000);
   for (const [name, k, yaw, pitch, dist] of [
     ["snow-none", 0, 2.4, 0.25, 3.2],

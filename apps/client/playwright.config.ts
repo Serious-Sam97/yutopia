@@ -5,6 +5,8 @@ import { defineConfig, devices } from "@playwright/test";
 // accounts, and puts the one world back to a fixture (e2e/worlds) as specs need.
 export default defineConfig({
   testDir: "./e2e",
+  // (e2e/ci is the smoke's: its own config, playwright.ci.config.ts — no local stack)
+  testIgnore: ["ci/**"],
   timeout: 90_000,
   workers: 1,
   reporter: [["list"]],

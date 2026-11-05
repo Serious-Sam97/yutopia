@@ -1,4 +1,4 @@
-import { footprint } from "../catalog.ts";
+import { footprint, quarterOf, quarterYaw } from "../catalog.ts";
 import { CAR_BODY, carKindOf } from "./body.ts";
 
 // A parked car as a world object (docs/plan/28-the-car.md, Together): the
@@ -11,7 +11,7 @@ import { CAR_BODY, carKindOf } from "./body.ts";
 export interface ParkedObj {
   x: number;
   y: number;
-  rot?: number;
+  yaw?: number;
   props?: Record<string, unknown> | null;
 }
 
@@ -20,7 +20,7 @@ export const rotHeading = (rot: number) => Math.PI + (((rot % 4) + 4) % 4) * (Ma
 
 /** Where a parked car stands: its middle (the floor's coords), its heading, its height. */
 export function parkedPose(o: ParkedObj): { x: number; y: number; a: number; h: number | null } {
-  const rot = o.rot ?? 0;
+  const rot = quarterOf(o);
   const { w, h } = footprint("car", rot);
   const p = o.props ?? {};
   const a = typeof p.a === "number" ? p.a : rotHeading(rot);
@@ -62,7 +62,7 @@ export function parkAt(
   a: number,
   height: number,
   props: Record<string, unknown>,
-): { x: number; y: number; rot: number; props: Record<string, unknown> } {
+): { x: number; y: number; yaw: number; props: Record<string, unknown> } {
   const rot = (((Math.round((a - Math.PI) / (Math.PI / 2)) % 4) + 4) % 4) as 0 | 1 | 2 | 3;
   const { w, h } = footprint("car", rot);
   const ox = Math.round(x - w / 2);
@@ -73,7 +73,7 @@ export function parkAt(
   out.dz = Math.round((y - h / 2 - oy) * 100) / 100;
   out.a = Math.round(Math.atan2(Math.sin(a), Math.cos(a)) * 1000) / 1000;
   out.hy = Math.round(height * 100) / 100;
-  return { x: ox, y: oy, rot, props: out };
+  return { x: ox, y: oy, yaw: quarterYaw(rot), props: out };
 }
 
 /** A car left near a bay of the lot (`bays`: the lot's, building coords; `x, z` its middle there,

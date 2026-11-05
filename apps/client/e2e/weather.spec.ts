@@ -18,7 +18,7 @@ test.use({
 });
 
 const LOT = { x: 37.8, y: 30 }; // the lot's east aisle (the ground floor's)
-const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 }); // the land's coords → the ground floor's
+const G = (x: number, y: number) => ({ x, y }); // the land's coords → the ground floor's
 const POND = { cx: -240, cz: -60, rx: 48, rz: 34 }; // (shared grounds.ts POND)
 const POND_SHELF = 0.88; // (shared grounds.ts: where its shelf ends, on its ellipse)
 
@@ -100,14 +100,14 @@ const onPond = (p: Page) =>
   p.evaluate((P) => {
     const w = (window as any).__yutopia;
     const m = w.room.state.players.get(w.room.sessionId);
-    return Math.hypot((m.x - 60 - P.cx) / P.rx, (m.y - 10 - P.cz) / P.rz);
+    return Math.hypot((m.x - P.cx) / P.rx, (m.y - P.cz) / P.rz);
   }, POND);
 // four seconds walking (W) towards the pond's middle
 async function walkIn(p: Page) {
   await p.evaluate((P) => {
     const w = (window as any).__yutopia;
     const m = w.room.state.players.get(w.room.sessionId);
-    w.tp.yaw = Math.atan2(P.cz + 10 - m.y, P.cx + 60 - m.x);
+    w.tp.yaw = Math.atan2(P.cz - m.y, P.cx - m.x);
   }, POND);
   await p.keyboard.down("KeyW");
   await p.waitForTimeout(4000);
@@ -234,9 +234,9 @@ test("the weather heard: grass underfoot on a green day, mud soaked, the rain's 
       const w = (window as any).__yutopia;
       const log: string[] = [];
       (window as any).__steps = log;
-      const was = w.__myStep ?? w.myStep.bind(w);
+      const was = w.__myStep ?? w.steps.myStep.bind(w.steps); // (world/ctl/steps.ts — plan 72 phase 4)
       w.__myStep = was;
-      w.myStep = (side?: string) => {
+      w.steps.myStep = (side?: string) => {
         log.push(w.myFooting(w.height.z));
         was(side);
       };

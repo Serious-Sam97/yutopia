@@ -16,7 +16,10 @@ mkdirSync(out, { recursive: true });
 
 async function token(email: string): Promise<string> {
   const ctx = await request.newContext();
-  const res = await ctx.post(`${api}/api/login`, { data: { email, password: pass }, headers: { Accept: "application/json" } });
+  const res = await ctx.post(`${api}/api/login`, {
+    data: { email, password: pass },
+    headers: { Accept: "application/json" },
+  });
   return (await res.json()).token;
 }
 async function open(browser: Browser, email: string): Promise<Page> {
@@ -58,7 +61,12 @@ const frames = (p: Page, ms: number) =>
           if (now < end) requestAnimationFrame(step);
           else {
             const s = [...d.slice(2)].sort((a, b) => a - b);
-            done({ median: +s[Math.floor(s.length / 2)].toFixed(1), max: +s[s.length - 1].toFixed(1), over33: s.filter((x) => x > 33.4).length, n: s.length });
+            done({
+              median: +s[Math.floor(s.length / 2)].toFixed(1),
+              max: +s[s.length - 1].toFixed(1),
+              over33: s.filter((x) => x > 33.4).length,
+              n: s.length,
+            });
           }
         };
         requestAnimationFrame(step);
@@ -108,7 +116,7 @@ try {
         kind: "wizard_chess",
         x: p.x,
         y: p.y,
-        rot: 0,
+        yaw: 0,
         props: { variant: 1, level: l },
       }),
     [ID, at, level] as const,
@@ -135,7 +143,10 @@ try {
   await ana.waitForFunction(() => !!(window as any).__hud.get().chess?.vortex.b, null, { timeout: 10_000 });
   // Bia stands in for white's e2 pawn (e2: square 52 — rank 2 at x 0.6 + 1.5·1.1, file e at z 0.6 + 4.5·1.1)
   bia = await open(browser, "bia@yutopia.test");
-  await bia.evaluate(([p]) => (window as any).__yutopia.teleport({ x: p.x + 0.6 + 1.5 * 1.1, y: p.y + 0.6 + 4.5 * 1.1, level: 0 }), [at] as const);
+  await bia.evaluate(
+    ([p]) => (window as any).__yutopia.teleport({ x: p.x + 0.6 + 1.5 * 1.1, y: p.y + 0.6 + 4.5 * 1.1, level: 0 }),
+    [at] as const,
+  );
   await bia.waitForTimeout(3000);
   await bia.evaluate((id) => (window as any).__yutopia.activateObject(id, true), ID);
   await bia.waitForFunction(

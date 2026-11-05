@@ -14,7 +14,9 @@ const remove = (page: Page, id: string) =>
 const obj = (page: Page, id: string) =>
   page.evaluate((i) => {
     const o = (window as any).__yutopia.room.state.objects.get(i);
-    return o ? { kind: o.kind, x: o.x, y: o.y, rot: o.rot, props: JSON.parse(o.props || "{}") } : null;
+    return o
+      ? { kind: o.kind, x: o.x, y: o.y, rot: Math.round(o.yaw / (Math.PI / 2)) & 3, props: JSON.parse(o.props || "{}") }
+      : null;
   }, id);
 const setBuild = (page: Page, b: Record<string, unknown>) =>
   page.evaluate((p) => {
@@ -94,7 +96,7 @@ test("doors and windows go into a wall from the catalog; the wall stays, a door 
     await holdCamera(page, { dist: 6 });
     await page.waitForTimeout(600);
     await setBuild(page, { mode: "place", kind: "door", props: null, rot: 0 });
-    const p = await at(page, x + 0.5, y + 0.1, 40);
+    const p = await at(page, x + 0.5, y + 0.1, 1.02);
     await page.mouse.move(p.x - 30, p.y + 20);
     await page.mouse.move(p.x, p.y, { steps: 4 });
     await page.waitForTimeout(300);
@@ -112,13 +114,13 @@ test("doors and windows go into a wall from the catalog; the wall stays, a door 
     const wide = `e2e-win-wide-${Date.now().toString(36)}`;
     const tall = `e2e-win-tall-${Date.now().toString(36)}`;
     made.push(wide, tall);
-    await put(page, { id: wide, kind: "window_wide", x: x + 1, y, rot: 0 });
-    await put(page, { id: tall, kind: "window_tall", x: x + 3, y, rot: 0 });
+    await put(page, { id: wide, kind: "window_wide", x: x + 1, y, yaw: 0 });
+    await put(page, { id: tall, kind: "window_tall", x: x + 3, y, yaw: 0 });
     await expect.poll(async () => (await obj(page, wide))?.kind).toBe("window_wide");
     await expect.poll(async () => (await obj(page, tall))?.kind).toBe("window_tall");
     // nothing hangs over them
     const poster = `e2e-poster-${Date.now().toString(36)}`;
-    await put(page, { id: poster, kind: "poster", x: x + 1, y, rot: 0, props: { wu: 0, wz: 0 } });
+    await put(page, { id: poster, kind: "poster", x: x + 1, y, yaw: 0, props: { wu: 0, wz: 0 } });
     await expect(page.getByText(/doesn't fit/i).first()).toBeVisible();
     expect(await obj(page, poster)).toBeNull();
     await setBuild(page, { on: false, mode: "hand", selected: [] });
@@ -188,11 +190,11 @@ test("doors and windows: review shots", async ({ page }) => {
   const state = (id: string, st: string) =>
     page.evaluate(([i, v]) => (window as any).__yutopia.send("door:set", { id: i, state: v }), [id, st]);
   try {
-    await put(page, { id: ids.a, kind: "door", x, y, rot: 0 });
-    await put(page, { id: ids.w, kind: "window", x: x + 1, y, rot: 0 });
-    await put(page, { id: ids.g, kind: "door", x: x + 2, y, rot: 0, props: { glass: true, swing: -1 } });
-    await put(page, { id: ids.ww, kind: "window_wide", x: x + 3, y, rot: 0 });
-    await put(page, { id: ids.wt, kind: "window_tall", x: x + 5, y, rot: 0 });
+    await put(page, { id: ids.a, kind: "door", x, y, yaw: 0 });
+    await put(page, { id: ids.w, kind: "window", x: x + 1, y, yaw: 0 });
+    await put(page, { id: ids.g, kind: "door", x: x + 2, y, yaw: 0, props: { glass: true, swing: -1 } });
+    await put(page, { id: ids.ww, kind: "window_wide", x: x + 3, y, yaw: 0 });
+    await put(page, { id: ids.wt, kind: "window_tall", x: x + 5, y, yaw: 0 });
     await expect.poll(async () => !!(await obj(page, ids.wt))).toBe(true);
     await holdHour(page, 11);
     await holdCamera(page);
@@ -291,7 +293,7 @@ test("door kinds: review shots", async ({ page }) => {
   };
   try {
     for (const [i, [kind, dx, props]] of doors.entries())
-      await put(page, { id: ids[i], kind, x: x + dx, y, rot: 0, props });
+      await put(page, { id: ids[i], kind, x: x + dx, y, yaw: 0, props });
     await expect.poll(async () => !!(await obj(page, ids[ids.length - 1]))).toBe(true);
     await holdHour(page, 11);
     // (a fixed look at a spot: me four tiles south of it, the camera behind me looking north)
@@ -402,7 +404,7 @@ test("window kinds: review shots", async ({ page }) => {
     await holdCamera(page, { yaw: -Math.PI / 2, pitch: 0.45, dist: 9 / zoom });
   };
   try {
-    for (const [i, [kind, dx]] of wins.entries()) await put(page, { id: ids[i], kind, x: x + dx, y, rot: 0 });
+    for (const [i, [kind, dx]] of wins.entries()) await put(page, { id: ids[i], kind, x: x + dx, y, yaw: 0 });
     await expect.poll(async () => !!(await obj(page, ids[ids.length - 1]))).toBe(true);
     await page.evaluate((q) => (window as any).__yutopia.teleport({ x: q.x, y: q.y }), { x: x + 6, y: y + 4.5 });
     await holdHour(page, 11);

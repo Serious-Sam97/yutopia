@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { type AuthContext, type Client, Room } from "@colyseus/core";
+import type { SlabUnder } from "@yutopia/shared";
 import {
   ANIM,
   across,
@@ -10,14 +11,10 @@ import {
   CATALOG,
   type ClientMessages,
   calledSky,
-  campusBuilding,
   canPlace,
   carried,
   clampLift,
-  clearCoreFronts,
-  convertV1,
   DECOR,
-  dirFromDelta,
   doorStartState,
   EMOTES,
   edgeAt,
@@ -25,13 +22,10 @@ import {
   entry,
   FOG_KINDS,
   type FogKind,
-  findPath,
   floorsOf,
   fogAt,
   fogOf,
   footprint,
-  GROUND_OFFSET,
-  Grid,
   type Ground,
   getMap,
   groundAt,
@@ -43,23 +37,26 @@ import {
   isJump,
   isKind,
   isOpening,
-  isV2,
-  layoutFromMap,
+  LAYOUT_VERSION,
   levelMap,
   liftFront,
   lockedRooms,
   lotLayout,
   type MapDef,
   mapFromLayout,
-  moveBlocks,
   objLevel,
   onLevel,
   openingBlocker,
   openingEdges,
-  openingsIntoWalls,
+  outdoorsOf,
+  overFloor,
+  type Point,
   parseAvatar,
+  quarterOf,
+  quarterYaw,
   replacedByTemplate,
   ringOf,
+  SEAT_FACE,
   type ServerMessages,
   type Sky,
   SPLIT_KINDS,
@@ -69,23 +66,20 @@ import {
   skyAt,
   spDay,
   spHour,
-  splitAll,
   stepGround,
-  studioV1,
   TEMPLATES,
   TICK_HZ,
   thunderOf,
+  tileInMap,
   topCell,
-  topsOnHosts,
-  upgradeCore,
-  upgradeGround,
-  upgradeLot,
   validLayout,
   WEATHER_CALLS,
   type WeatherCall,
   type WorldObjectDef,
   weatherFrom,
   windAt,
+  worldToV3,
+  worldZ,
 } from "@yutopia/shared";
 import {
   FOG_CALL_MS,
@@ -95,14 +89,28 @@ import {
   STORM_CALL_MS,
   WEATHER_CALL_MS,
 } from "@yutopia/shared/admin";
-import { monitorsToComputers } from "@yutopia/shared/computer";
 import { cleanText } from "@yutopia/shared/glyphs";
 import { editsNow, groundsAreaAt, groundsOutdoors, inDeepWater, setUnderfoot } from "@yutopia/shared/grounds";
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
-import { type Collider, isFlowCode, isVerb, MV_WINDED } from "@yutopia/shared/move";
+import { isFlowCode, isVerb, MV_WINDED } from "@yutopia/shared/move";
+import { BuildingNav } from "@yutopia/shared/nav";
+import { Place } from "@yutopia/shared/physics";
 import { type Feet, HAND, offBand, spanOf } from "@yutopia/shared/reach";
-import { WALL_H } from "@yutopia/shared/shapes";
+import { type Solid3, WALL_H } from "@yutopia/shared/shapes";
 import { boardOfOwner } from "@yutopia/shared/spot";
+import {
+  applyOps,
+  attachAll,
+  attachable,
+  diffStructures,
+  mapFromStructure,
+  STRUCTURE_VERSION,
+  type StructOp,
+  type Structure,
+  structureFromMap,
+  withOn,
+} from "@yutopia/shared/structure";
+import { finishWorld } from "@yutopia/shared/structure/finish";
 import { ApiError, api, type PresenceEntry, type WorldInfo } from "./api.ts";
 import { verifyWorldToken, type WorldClaims } from "./auth.ts";
 import { config } from "./config.ts";
@@ -175,6 +183,11 @@ const STATUSES: Status[] = ["online", "away", "dnd"];
 
 // The one world everybody walks in: a single room for the whole process (never a
 // second copy writing the same world), its voice in one LiveKit room.
+// a feature's tick that throws this many times in a row (~5 s at 20 Hz) is switched off
+const TICK_FAILS = 100;
+// a failed layout save tried again after these (the last one repeats)
+const LAYOUT_RETRY_MS = [2_000, 5_000, 15_000, 30_000, 60_000];
+
 export class WorldRoom extends Room<WorldState> {
   // the most people in at once; past it a join is refused (Colyseus would
   // otherwise open a second copy of the world at maxClients)
@@ -191,7 +204,8 @@ export class WorldRoom extends Room<WorldState> {
   static held = false;
 
   map!: MapDef;
-  grid!: Grid;
+  /** The home floor's place for nobody in particular (no one's locked doors open). */
+  grid!: Place;
   readonly livekitRoom = "world";
   private features: Feature[] = [];
   /** Who's being carried (a lift's car on the move): their own moves aren't taken meanwhile. */
@@ -204,7 +218,7 @@ export class WorldRoom extends Room<WorldState> {
   // here till they're back: fresher than the API's for a quick return (its save may
   // still be on the way), and by the server, not the room — the last one out closes
   // the room (autoDispose), and they come back to a new one
-  private static lastSpot = new Map<number, Spot & { d: number }>();
+  private static lastSpot = new Map<number, Spot & { yaw: number }>();
   private presenceTimer: ReturnType<typeof setTimeout> | null = null;
   // removed by an admin: until when, and who (the admins' panel lists them: docs/plan/48-the-admin.md)
   private removedUntil = new Map<number, number>();
@@ -235,6 +249,61 @@ export class WorldRoom extends Room<WorldState> {
 
   broadcastMsg<K extends keyof ServerMessages>(type: K, msg: ServerMessages[K], except?: Client): void {
     this.broadcast(type, msg, except ? { except } : undefined);
+  }
+
+  // ── a feature that throws (docs/plan/72-the-3d-core.md, phase 1) ──
+  // One feature's bug must never take the world down with it: each feature's hooks and its tick
+  // run on their own (the rest still run), what's thrown is logged and counted; a tick that has
+  // thrown TICK_FAILS times in a row is switched off (said loudly, `features_off`) rather than
+  // throwing 20 times a second for ever. Anything else Colyseus runs for the room (its own hooks,
+  // the clock's timers, the simulation interval) comes to `onUncaughtException`.
+  private featureOff = new Set<number>();
+  private tickFails: number[] = [];
+  private failLogged = new Map<string, number>();
+
+  /** Every feature's `name` hook, each on its own. */
+  hook<K extends Exclude<keyof Feature, "tick">>(name: K, ...args: Parameters<NonNullable<Feature[K]>>) {
+    for (let i = 0; i < this.features.length; i++) {
+      const f = this.features[i];
+      const fn = f[name] as ((...a: unknown[]) => void) | undefined;
+      if (!fn) continue;
+      try {
+        fn.apply(f, args);
+      } catch (e) {
+        this.featureFailed(i, name, e);
+      }
+    }
+  }
+
+  private featureFailed(i: number, what: string, e: unknown) {
+    const name = featureNames[i] ?? `feature ${i}`;
+    metrics.inc("feature_errors_total");
+    // (logged the first time and every 200th after, by feature and hook: a tick throwing at 20 Hz
+    // would bury everything else)
+    const key = `${name}.${what}`;
+    const n = (this.failLogged.get(key) ?? 0) + 1;
+    this.failLogged.set(key, n);
+    if (n === 1 || n % 200 === 0) console.error(`[world] ${key} threw (${n}×):`, (e as Error)?.stack ?? e);
+    if (what !== "tick") return;
+    this.tickFails[i] = (this.tickFails[i] ?? 0) + 1;
+    if (this.tickFails[i] >= TICK_FAILS && !this.featureOff.has(i)) {
+      this.featureOff.add(i);
+      metrics.inc("features_switched_off_total");
+      console.error(`[world] ${name}'s tick threw ${TICK_FAILS} times in a row: switched off until a restart`);
+    }
+  }
+
+  /** The features whose tick is switched off (the health check and /metrics say so). */
+  featuresOff(): string[] {
+    return [...this.featureOff].map((i) => featureNames[i] ?? `feature ${i}`);
+  }
+
+  /** What Colyseus caught for the room — its hooks, the clock's timers, the simulation interval
+   *  (it wraps them all once this exists): logged and counted, the room goes on. */
+  onUncaughtException(err: unknown, methodName: string) {
+    metrics.inc("room_errors_total");
+    const e = (err as { cause?: unknown })?.cause ?? err;
+    console.error(`[world] ${methodName} threw:`, (e as Error)?.stack ?? e);
   }
 
   /** Each message's handlers: a type may have several (the HQ shuttle's and the long road's bus
@@ -291,7 +360,9 @@ export class WorldRoom extends Room<WorldState> {
 
     const info = config.offline
       ? config.worldFile
-        ? (JSON.parse(readFileSync(config.worldFile, "utf8")) as WorldInfo)
+        ? // (a world kept as a file, saved before metres: brought up to today's form as it's read —
+          // the database's are moved by the API's migration; shared migrate.ts)
+          worldToV3(JSON.parse(readFileSync(config.worldFile, "utf8")) as WorldInfo).world
         : null
       : await api.world().catch((e) => {
           WorldRoom.current = null;
@@ -302,147 +373,47 @@ export class WorldRoom extends Room<WorldState> {
     if (info?.edits && info.edits.rev !== editsNow().rev) landEdits(info.edits);
     this.state.groundsRev = editsNow().rev;
     const base = getMap(info?.mapKey ?? "studio");
-    const layout = info?.layout && validLayout(info.layout) ? info.layout : null;
-    let objects: WorldObjectDef[] = info?.objects ?? base.objects;
-    if (layout && isV2(layout)) this.map = mapFromLayout(base.key, base.name, layout);
-    else if (layout) {
-      // saved before map v2 (walls were tiles): convert, boards and doors included
-      const v1 = { ...mapFromLayout(base.key, base.name, layout), tiles: [...layout.tiles], hWalls: [], vWalls: [] };
-      const c = convertV1(v1, objects);
-      this.map = c.map;
-      objects = c.objects;
-      this.migrated = c.changed;
-    } else {
-      this.map = base;
-      // the built-in Studio, seeded before map v2: move its boards and doors too
-      if (info?.seeded) {
-        const c = convertV1(studioV1, objects);
-        objects = c.objects;
-        this.migrated = c.changed;
-      }
-    }
-    if (this.migrated) console.log(`[map v2] the world: converted (${this.migrated.length} objects moved)`);
-    // doors and windows set into walls (openings.ts): doors in a gap get their
-    // wall, windows painted on become windows — once, stored right away
-    const into = openingsIntoWalls(this.map, objects);
-    if (into.mapChanged) {
-      // (a world seeded from now, or offline: its seed carries the windows too)
-      this.map = info?.seeded ? into.map : { ...into.map, objects: [...into.map.objects, ...into.added] };
-      objects = into.objects;
-      console.log(`[openings] the world: into the walls (${into.added.length} windows)`);
-      if (!config.offline && info?.seeded) {
-        await saveAll(into.added, (o) => api.putObject(o));
-        if (this.migrated) this.saveMigration();
-        else await api.putLayout(layoutFromMap(this.map)).catch((e) => console.warn("[openings] layout", e.message));
-      }
-    }
-    this.state.mapKey = this.map.key;
-    this.syncMapState();
-    this.state.name = info?.name ?? "Offline studio";
-    if (info && !info.seeded) {
-      objects = (await api.seed(this.map.objects)).objects;
-      // a fresh world starts on map v2: store its layout so it's never taken for an old one
-      if (!layout) void api.putLayout(layoutFromMap(this.map)).catch(() => {});
-    }
-    // furniture from before bare desks: what was drawn on it becomes real
-    // things, once, stored before anyone can move them
-    const bare = splitAll(objects);
-    objects = bare.objects;
-    if (bare.changed.length) {
-      console.log(`[bare] the world: ${bare.changed.length} things set out on their own`);
-      if (!config.offline) await saveAll(bare.changed, (o) => api.putObject(o));
-    }
-    // monitors from before the computers (shared/computer.ts): each becomes one, once
-    const pcs = monitorsToComputers(objects);
-    objects = pcs.objects;
-    if (pcs.changed.length) {
-      console.log(`[computers] the world: ${pcs.changed.length} monitors are computers now`);
-      if (!config.offline) await saveAll(pcs.changed, (o) => api.putObject(o));
-    }
-    // things on desks and tables at their host's top as it is now (plan 67: the desks rose to
-    // 0.74 m; a tabletop keeps the height it was put down at), once, stored
-    const lifted = topsOnHosts(objects);
-    objects = lifted.objects;
-    if (lifted.changed.length) {
-      console.log(`[tops] the world: ${lifted.changed.length} things set on their hosts' tops again`);
-      if (!config.offline) await saveAll(lifted.changed, (o) => api.putObject(o));
-    }
-    // the building (docs/plan/25-building-floors.md): a world from before floors
-    // becomes the top of five — the lobby and the lot below, the core — once,
-    // stored right away
-    const building = config.building ? campusBuilding(this.map, objects) : null;
-    if (building) {
-      this.map = building.map;
-      const moved = new Map(building.moved.map((o) => [o.id, o]));
-      objects = [...objects.map((o) => moved.get(o.id) ?? o), ...building.add];
-      this.syncMapState();
-      console.log(
-        `[building] the world: ${floorsOf(this.map).length} floors (${building.add.length} new things, ${building.moved.length} moved)`,
+    // the building (docs/plan/72-the-3d-core.md, phase 6): its structure is the truth, the tile map
+    // the code not yet ported reads is made from it (shared structure/to-map.ts)
+    let objects: WorldObjectDef[];
+    const saved = info?.structure as Structure | undefined;
+    if (saved?.version === STRUCTURE_VERSION) {
+      this.structure = saved;
+      objects = info?.objects ?? [];
+    } else if (info?.seeded && !config.offline) {
+      // a world from before structures: refused, loudly — it's made one once, offline
+      WorldRoom.current = null;
+      throw new Error(
+        "The world has no structure yet: run `pnpm --filter @yutopia/world-server world-v4` (plan 72 phase 6)",
       );
-      if (!config.offline) {
-        await saveAll([...building.moved, ...building.add], (o) => api.putObject(o));
-        await api.putLayout(layoutFromMap(this.map)).catch((e) => console.warn("[building] layout", e.message));
+    } else if (info?.seeded) {
+      // (offline, a world kept as a file from before structures: made one here — files only)
+      const layout = info.layout && validLayout(info.layout) ? info.layout : null;
+      if (!layout || (layout.version ?? 2) < LAYOUT_VERSION) throw new Error("The world file's layout is too old");
+      const done = finishWorld(mapFromLayout(base.key, base.name, layout), info.objects ?? [], {
+        fresh: false,
+        building: config.building,
+      });
+      this.structure = structureFromMap(done.map);
+      objects = attachAll(this.structure, done.objects, (o) => objLevel(o, done.map)).objects;
+    } else {
+      // a new world: the built-in studio, made today's (the old boot's conversions, once)
+      const done = finishWorld(base, base.objects, { fresh: true, building: config.building });
+      for (const l of done.log) console.log(`[world] new: ${l}`);
+      this.structure = structureFromMap(done.map);
+      // (its doors, windows and hung things fixed to their walls)
+      objects = attachAll(this.structure, done.objects, (o) => objLevel(o, done.map)).objects;
+      if (info) {
+        objects = (await api.seed(objects)).objects;
+        await api.putStructure(this.structure);
       }
     }
-    // a building with the first core (the stairs' landing one tile deep): today's
-    const upgraded = config.building ? upgradeCore(this.map, objects) : null;
-    if (upgraded) {
-      this.map = upgraded.map;
-      objects = upgraded.objects;
-      this.syncMapState();
-      console.log(`[building] the core: a row deeper (${upgraded.moved.length} things moved)`);
-      if (!config.offline) {
-        await saveAll(upgraded.moved, (o) => api.putObject(o));
-        await api.putLayout(layoutFromMap(this.map)).catch((e) => console.warn("[building] layout", e.message));
-      }
-    }
-    // the courtyard's blocks moved out of a bigger studio's way (they stood in
-    // its wall): the old ones go, what was built in them goes with them
-    const shifted = config.building ? moveBlocks(this.map, objects) : null;
-    if (shifted) {
-      this.map = shifted.map;
-      objects = shifted.objects;
-      this.syncMapState();
-      console.log(`[building] the courtyard's blocks moved (${shifted.moved.length} things with them)`);
-      if (!config.offline) {
-        await saveAll(shifted.moved, (o) => api.putObject(o));
-        await api.putLayout(layoutFromMap(this.map)).catch((e) => console.warn("[building] layout", e.message));
-      }
-    }
-    // the Grounds (docs/plan/27): the courtyard's blocks' ground floors become
-    // the ground floor's own (it grows to take them in; nothing on it moves)
-    const grown = config.building ? upgradeGround(this.map) : null;
-    if (grown) {
-      this.map = grown;
-      this.syncMapState();
-      console.log("[building] the ground floor: the courtyard's blocks in it");
-      if (!config.offline)
-        await api.putLayout(layoutFromMap(this.map)).catch((e) => console.warn("[building] layout", e.message));
-    }
-    // the lot (docs/plan/42-the-lot.md): the old one stamped again as today's — its pavement, the
-    // lamps on the islands, every car on it squared into a bay
-    const relot = config.building ? upgradeLot(this.map, objects) : null;
-    if (relot) {
-      this.map = relot.map;
-      objects = relot.objects;
-      this.syncMapState();
-      console.log(`[building] the lot: today's (${relot.moved.length} things moved)`);
-      if (!config.offline) {
-        await saveAll(relot.moved, (o) => api.putObject(o));
-        await api.putLayout(layoutFromMap(this.map)).catch((e) => console.warn("[building] layout", e.message));
-      }
-    }
-    // nothing standing in front of the elevators' and the stairs' doors
-    const fronts = clearCoreFronts(this.map, objects);
-    if (fronts.length) {
-      const moved = new Map(fronts.map((o) => [o.id, o]));
-      objects = objects.map((o) => moved.get(o.id) ?? o);
-      console.log(`[building] the core's doors: ${fronts.length} things moved out of the way`);
-      if (!config.offline) await saveAll(fronts, (o) => api.putObject(o));
-    }
+    this.map = mapFromStructure(this.structure);
+    this.state.mapKey = this.map.key;
+    this.state.name = info?.name ?? "Offline studio";
+    this.syncMapState();
     for (const o of objects) this.state.objects.set(o.id, toSchema(o));
     this.rebuildGrid();
-    if (this.migrated && config.saveMigrations) this.saveMigration();
 
     this.state.playlists = JSON.stringify(cleanPlaylists(info?.playlists ?? []));
     this.savedLoot = info?.loot ?? null;
@@ -466,6 +437,8 @@ export class WorldRoom extends Room<WorldState> {
     }
     this.registerMessages();
     this.features = installFeatures(this);
+    // (the physics world built before anyone's let in: Jolt the only truth — plan 72 phase 7)
+    await this.physicsReady;
 
     this.setPatchRate(1000 / TICK_HZ);
     let last = Date.now();
@@ -479,9 +452,14 @@ export class WorldRoom extends Room<WorldState> {
       let worstAt = -1;
       for (let i = 0; i < this.features.length; i++) {
         const f = this.features[i];
-        if (!f.tick) continue;
+        if (!f.tick || this.featureOff.has(i)) continue;
         const a = performance.now();
-        f.tick(dt, now);
+        try {
+          f.tick(dt, now);
+          this.tickFails[i] = 0;
+        } catch (e) {
+          this.featureFailed(i, "tick", e);
+        }
         const d = performance.now() - a;
         if (d > worst) {
           worst = d;
@@ -620,7 +598,8 @@ export class WorldRoom extends Room<WorldState> {
       .catch((e) => console.warn(`[sound] ${what}`, e.message));
   }
   private saveWeather(): Promise<void> {
-    if (config.offline) return Promise.resolve();
+    // (offline; or a room that never got its state: its onCreate refused — nothing to keep)
+    if (config.offline || !this.state?.weather) return Promise.resolve();
     const w = this.state.weather;
     const g = this.groundSet?.want ?? w;
     const call = this.weatherSet ? { to: this.weatherSet.to, by: w.by, until: this.weatherSet.until } : null;
@@ -745,11 +724,13 @@ export class WorldRoom extends Room<WorldState> {
     p.level = at.level;
     p.x = open.x;
     p.y = open.y;
-    if (back) p.d = back.d;
+    // (on their floor: its height, the world's)
+    p.z = worldZ(at.level, 0);
+    if (back) p.yaw = back.yaw;
     p.area = this.areaOf(p)?.key ?? "";
     this.state.players.set(client.sessionId, p);
     metrics.inc("joins_total");
-    for (const f of this.features) f.join?.(client, p);
+    this.hook("join", client, p);
     if (p.admin) this.sendRemoved(client);
     // their old line's seat, still kept for a reconnection: given up now, so the old one goes at
     // once — with this one already here, as when a second tab takes over (no ghost of themselves)
@@ -763,11 +744,11 @@ export class WorldRoom extends Room<WorldState> {
   // on the nearest open tile if that one's taken now; not if the floor's gone, or the
   // walls have changed round it (walled in, a room shut to them now), as for their own
   // arrival point: the arrival point then (also for anyone the first time).
-  private comeBack(p: Player, sid: string): (Spot & { d: number }) | null {
+  private comeBack(p: Player, sid: string): (Spot & { yaw: number }) | null {
     const old = [...this.state.players.values()].find((q) => q.uid === p.uid && q.sid !== sid);
     const last = WorldRoom.lastSpot.get(p.uid);
     WorldRoom.lastSpot.delete(p.uid);
-    const was = old ? { level: old.level, x: old.x, y: old.y, d: old.d } : last;
+    const was = old ? { level: old.level, x: old.x, y: old.y, yaw: old.yaw } : last;
     if (!WorldRoom.comeBack || !was || !levelMap(this.map, was.level)) return null;
     const g = this.gridFor(p.uid, was.level);
     // (out on the land: it's all one place)
@@ -776,7 +757,7 @@ export class WorldRoom extends Room<WorldState> {
     if (!open) return null;
     const at = { x: open.x, y: open.y, level: was.level };
     if (this.arrivalProblem(p, at, this.homeSpot())) return null;
-    return { ...at, d: was.d };
+    return { ...at, yaw: was.yaw };
   }
 
   // Where everyone is, saved (as each leaves, and everyone a minute apart: a server
@@ -785,7 +766,7 @@ export class WorldRoom extends Room<WorldState> {
     if (config.offline) return;
     const spots = players
       .filter((p) => !p.bot)
-      .map((p) => ({ user_id: p.uid, x: p.x, y: p.y, level: p.level, d: p.d }));
+      .map((p) => ({ user_id: p.uid, x: p.x, y: p.y, level: p.level, yaw: p.yaw }));
     if (spots.length) void api.putLastSpots(spots).catch(() => {});
   }
 
@@ -821,7 +802,7 @@ export class WorldRoom extends Room<WorldState> {
       client.userData?.kicked || this.clients.some((c) => c !== client && c.auth?.userId === client.auth?.userId);
     if (p && !consented && !replaced && !client.userData?.bye) {
       p.status = "away";
-      for (const f of this.features) f.drop?.(client, p);
+      this.hook("drop", client, p);
       const seat = this.allowReconnection(client, WorldRoom.RECONNECT_SECONDS);
       this.waiting.set(p.uid, {
         sid: client.sessionId,
@@ -831,7 +812,7 @@ export class WorldRoom extends Room<WorldState> {
       try {
         const again = (await seat) as WorldClient;
         p.status = "online";
-        for (const f of this.features) f.back?.(again, p);
+        this.hook("back", again, p);
         return;
       } catch {
         // timed out, or they're back in a new session (onJoin) — fall through and remove
@@ -840,10 +821,10 @@ export class WorldRoom extends Room<WorldState> {
       }
     }
     if (p && !p.bot) {
-      WorldRoom.lastSpot.set(p.uid, { level: p.level, x: p.x, y: p.y, d: p.d });
+      WorldRoom.lastSpot.set(p.uid, { level: p.level, x: p.x, y: p.y, yaw: p.yaw });
       this.saveSpots([p]);
     }
-    if (p) for (const f of this.features) f.leave?.(client, p);
+    if (p) this.hook("leave", client, p);
     this.state.players.delete(client.sessionId);
     // Only drop the LiveKit identity if this person has no other live session.
     const stillHere = [...this.state.players.values()].some((q) => q.uid === p?.uid);
@@ -859,15 +840,28 @@ export class WorldRoom extends Room<WorldState> {
     // an edit still waiting on its debounce (e.g. a deploy right after a resize)
     if (this.layoutTimer) {
       clearTimeout(this.layoutTimer);
-      await this.saveLayout();
+      await this.saveStructure();
     }
     if (!config.offline) await api.presence([]).catch(() => {});
     await this.saveWeather();
-    for (const f of this.features) f.dispose?.();
+    this.hook("dispose");
   }
 
   // ── messages ───────────────────────────────────────────────────────────────
   private registerMessages() {
+    // the building's structure, whole: asked for on joining, and by anyone who fell behind its edits
+    this.on("struct:get", (client) =>
+      this.send(client, "struct:full", { rev: this.structRev, structure: this.structure }),
+    );
+    // a way somewhere on my floor (walk-to: docs/plan/72 phase 7 — the navmesh is the server's)
+    this.on("way", (client, m) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || ![m.n, m.x, m.y, m.fx, m.fy].every(Number.isFinite)) return;
+      const r2 = (v: number) => Math.round(v * 100) / 100;
+      void this.waySoon(p.uid, p.level, { x: m.fx, y: m.fy }, { x: m.x, y: m.y }).then((way) =>
+        this.send(client, "way", { n: m.n, pts: way ? way.map((q): [number, number] => [r2(q.x), r2(q.y)]) : null }),
+      );
+    });
     this.on("pos", (client, m) => {
       const p = this.state.players.get(client.sessionId);
       if (!p || !Number.isFinite(m.x) || !Number.isFinite(m.y)) return;
@@ -900,12 +894,11 @@ export class WorldRoom extends Room<WorldState> {
       if (level !== p.level) {
         const was = p.level;
         p.level = level;
-        for (const f of this.features) f.levelChange?.(client, p, was, level);
+        this.hook("levelChange", client, p, was, level);
       }
       p.x = to.x;
       p.y = to.y;
       p.z = z;
-      p.d = (Math.max(0, Math.min(7, m.d | 0)) as number) ?? 0;
       p.a = m.a === ANIM.walk || m.a === ANIM.sit ? m.a : ANIM.idle;
       if (Number.isFinite(m.mv)) p.mv = (m.mv as number) & 31;
       // (out of breath, they say: taken at their word — it only holds them back)
@@ -913,13 +906,15 @@ export class WorldRoom extends Room<WorldState> {
       if (Number.isFinite(m.yaw)) p.yaw = (m.yaw as number) & 255;
       if (Number.isFinite(m.pitch)) p.pitch = Math.max(-127, Math.min(127, (m.pitch as number) | 0));
       if (Number.isFinite(m.mt)) p.mt = (m.mt as number) >>> 0;
-      // (their feet on something: a jump may start from here a moment after)
-      if (z - grid.groundAt(to.x, to.y, z) < 0.06) ud.footAt = now;
+      // (their feet on something: a jump may start from here a moment after — the grid's heights
+      // are over their floor's; Player.z is the world's)
+      const rz = overFloor(level, z);
+      if (rz - grid.groundAt(to.x, to.y, rz) < 0.06) ud.footAt = now;
       const area = nextArea?.key ?? "";
       if (area !== p.area) {
         const prev = p.area;
         p.area = area;
-        for (const f of this.features) f.areaChange?.(client, p, prev, area);
+        this.hook("areaChange", client, p, prev, area);
         this.cleanBooths();
         this.pushPresence();
       }
@@ -945,7 +940,8 @@ export class WorldRoom extends Room<WorldState> {
       if (!air && (isJump(p.jump) || isVerb(p.jump)) && now - p.jumpAt < 200) return;
       const grid = this.moveAsk(p.uid, p.level);
       // (the feet a hair up already: the jump's first step can be in the last position sent)
-      const grounded = p.z - grid.groundAt(p.x, p.y, p.z) < 0.2;
+      const rz = overFloor(p.level, p.z);
+      const grounded = rz - grid.groundAt(p.x, p.y, rz) < 0.2;
       // (in the air on purpose — a second jump, an air dash: taken as sent, docs/plan/56 B)
       if (!grounded && now - data(client).footAt > 350 && k !== "mantle" && !air) return;
       // (a roll costs stamina outside; out of breath, none)
@@ -1028,7 +1024,7 @@ export class WorldRoom extends Room<WorldState> {
         // my own bay of the lot (docs/plan/43-the-spot.md): in it, by the aisle
         const board = boardOfOwner([...this.state.objects.values()].map(fromSchema), p.uid);
         const b = board ? bayById(lotLayout(), String(board.props?.bay)) : null;
-        if (b) target = { x: b.x + b.dir * 1.6 - GROUND_OFFSET.x, y: b.z - GROUND_OFFSET.y, level: 0 };
+        if (b) target = { x: b.x + b.dir * 1.6, y: b.z, level: 0 };
       } else if (typeof m.to === "object" && m.to && "userId" in m.to) {
         const userId = m.to.userId;
         const other = [...this.state.players.values()].find((q) => q.uid === userId);
@@ -1050,7 +1046,7 @@ export class WorldRoom extends Room<WorldState> {
               .map(([dx, dy]) => ({ x: other.x + dx, y: other.y + dy }))
               .find((c) => {
                 if (!og.fits(c.x, c.y)) return false;
-                const way = findPath(og, other, c);
+                const way = this.wayFor(p.uid, other.level, other, c);
                 return !!way && way.length <= 4;
               }) ??
             og.nearestOpen(other.x + 1, other.y + 1) ??
@@ -1063,9 +1059,10 @@ export class WorldRoom extends Room<WorldState> {
         const y = Number(m.to.y);
         const level = Number.isInteger(m.to.level) ? (m.to.level as number) : p.level;
         const lm = levelMap(this.map, level);
-        // (or out on the land round the ground floor)
-        const inside = x >= 0 && y >= 0 && lm && x < lm.width && y < lm.height;
-        const land = lm && !inside && this.gridFor(p.uid, level).ok(Math.floor(x), Math.floor(y));
+        // (or out on the land round the ground floor: land that's there to stand on — what's on it, a
+        // parked car, the landing below finds its way round)
+        const inside = lm && tileInMap(lm, x, y);
+        const land = lm && !inside && !!outdoorsOf(lm)?.walkable(Math.floor(x), Math.floor(y));
         if (lm && Number.isFinite(x) && Number.isFinite(y) && (inside || land)) target = { x, y, level };
       }
       if (!target) return;
@@ -1073,7 +1070,7 @@ export class WorldRoom extends Room<WorldState> {
       // your floor's way up (an elevator, the stairs) when it's another floor
       const mine = this.gridFor(p.uid, target.level);
       // (out in open water — beside someone swimming: in it, afloat — plan 66)
-      const wet = target.level === 0 && inDeepWater(target.x + GROUND_OFFSET.x, target.y + GROUND_OFFSET.y);
+      const wet = target.level === 0 && inDeepWater(target.x, target.y);
       const landing = wet || mine.fits(target.x, target.y) ? target : mine.nearestOpen(target.x, target.y);
       const startAt: { x: number; y: number } =
         target.level === p.level ? p : (this.levelEntry(target.level, p.uid) ?? landing ?? p);
@@ -1083,7 +1080,7 @@ export class WorldRoom extends Room<WorldState> {
         // through walls needs no way at all)
         (!(p.admin && hasPower(p.powers, "clip")) &&
           !mine.onLand(landing.x, landing.y) &&
-          !findPath(mine, startAt, landing)?.length &&
+          !this.wayFor(p.uid, target.level, startAt, landing)?.length &&
           Math.hypot(landing.x - startAt.x, landing.y - startAt.y) > 0.5)
       ) {
         this.send(client, "toast", { text: "Can't get there — the door is locked.", tone: "warn" });
@@ -1103,12 +1100,12 @@ export class WorldRoom extends Room<WorldState> {
       const at = seat ? mine.seatSpot(landing.x, landing.y) : landing;
       p.x = at.x;
       p.y = at.y;
-      p.z = mine.onLand(landing.x, landing.y) ? mine.groundAt(landing.x, landing.y, 0) : 0;
+      p.z = worldZ(p.level, mine.onLand(landing.x, landing.y) ? mine.groundAt(landing.x, landing.y, 0) : 0);
       p.a = seat ? ANIM.sit : ANIM.idle;
-      if (seat) p.d = seatFacing(seat.rot);
+      if (seat) p.yaw = seatFacing(seat.rot);
       p.area = area?.key ?? "";
       this.send(client, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
-      if (was !== p.level) for (const f of this.features) f.levelChange?.(client, p, was, p.level);
+      if (was !== p.level) this.hook("levelChange", client, p, was, p.level);
       this.pushPresence();
     });
 
@@ -1347,7 +1344,7 @@ export class WorldRoom extends Room<WorldState> {
       return `Someone's in ${area.name} with the door shut — try again when it's free.`;
     const start = g.fits(from.x, from.y) ? from : g.nearestOpen(from.x, from.y);
     if (!start) return "Can't get there from here.";
-    if (Math.hypot(start.x - at.x, start.y - at.y) < 0.5 || findPath(g, start, at, g.width * g.height)?.length)
+    if (Math.hypot(start.x - at.x, start.y - at.y) < 0.5 || this.wayFor(p.uid, at.level, start, at)?.length)
       return null;
     return "Can't get there — the door is locked.";
   }
@@ -1381,7 +1378,7 @@ export class WorldRoom extends Room<WorldState> {
       if (q && q.area === areaKey) this.send(c, "knock", { from: client.sessionId, fromName: p.name, area: areaKey });
     }
     this.send(client, "toast", { text: `Knocked on ${area.name}. Waiting for someone to let you in…` });
-    for (const f of this.features) f.knock?.(client, p, areaKey);
+    this.hook("knock", client, p, areaKey);
   }
 
   private cleanBooths() {
@@ -1470,13 +1467,46 @@ export class WorldRoom extends Room<WorldState> {
 
   // ── build mode ──────────────────────────────────────────────────────────────
   // ── the map ─────────────────────────────────────────────────────────────────
-  private personalGrids = new Map<string, Grid>();
+  // each person's place on a floor (their own locked doors open), made as it's asked; let go on
+  // every rebuild (and when the physics world's in)
+  private places = new Map<string, Place>();
+  private things: WorldObjectDef[] = [];
   private layoutTimer: ReturnType<typeof setTimeout> | null = null;
 
   // ── reach (docs/plan/50-the-volume.md E; shared reach.ts): a flat distance made the 3D one ──
   /** Sight between two points of a floor (its coords, heights over it): no wall, floor, locked door
    *  or land between — Jolt's (features/physics.ts sets it); none yet, seen. */
   sight: ((level: number, a: Feet, b: Feet) => boolean) | null = null;
+  /** Something solid at a point of a floor (its coords, height over it), a ball `r` round there —
+   *  a wall, a floor, a thing (Jolt's; features/physics.ts sets it); none yet, nothing. */
+  solidAt: ((level: number, p: Feet, r: number) => boolean) | null = null;
+  /** Floor `l` has a floor under `p`: its slab, or the stairs' treads up into its well — Jolt's
+   *  (features/physics.ts sets it; shared stairs.ts floorAt asks it). */
+  slabUnder: SlabUnder | null = null;
+  /** The lifts (features/lifts.ts sets them each tick; features/physics.ts puts them in Jolt —
+   *  docs/plan/72 phase 8): each car where it is (shared liftCarBody), and what's in a shaft — a
+   *  floor there on every floor it goes through (shared lift.ts shaftAt). */
+  liftCars: { key: string; solids: Solid3[]; at: [number, number, number] }[] = [];
+  inShaft: ((level: number, p: { x: number; y: number }) => boolean) | null = null;
+  /** The room's physics world being built (features/physics.ts); onCreate waits for it. */
+  physicsReady: Promise<void> | null = null;
+  /** Every floor's navmesh (shared nav: recast — plan 72 phase 7), kept matching the building by
+   *  features/physics.ts; the locked doors by key and whose they are. */
+  readonly nav = new BuildingNav();
+  lockedDoors: ReadonlyMap<string, number | null> = new Map();
+  /** The way for someone on a floor (the navmesh; their own locked doors let through): the
+   *  waypoints after `from`, null when there's none. */
+  wayFor(uid: number | null, level: number, from: Point, to: Point): Point[] | null {
+    return this.nav.path(level, from, to, { open: this.doorsOf(uid) }) ?? null;
+  }
+  /** The same, waiting for a window on the land to be made if it needs one (walk-to). */
+  waySoon(uid: number | null, level: number, from: Point, to: Point): Promise<Point[] | null> {
+    return this.nav.pathSoon(level, from, to, { open: this.doorsOf(uid) });
+  }
+  // (the locked doors someone passes: their own rooms')
+  private doorsOf(uid: number | null): string[] {
+    return uid == null ? [] : [...this.lockedDoors].filter(([, owner]) => owner === uid).map(([k]) => k);
+  }
   /** How far a body's hands are from a thing, `flat` across to `at` (the thing's point each feature
    *  measures to; none: its footprint's nearest): its height out of their band added in, Infinity
    *  through a wall (`sight` false: a door, in its wall). Each feature keeps its own reach. */
@@ -1488,7 +1518,7 @@ export class WorldRoom extends Room<WorldState> {
     sight = true,
   ): number {
     if (!at) {
-      const { w, h } = footprint(o.kind, o.rot ?? 0);
+      const { w, h } = footprint(o.kind, quarterOf(o));
       at = { x: Math.max(o.x, Math.min(p.x, o.x + w)), y: Math.max(o.y, Math.min(p.y, o.y + h)) };
     }
     const level = objLevel(o, this.map);
@@ -1506,7 +1536,7 @@ export class WorldRoom extends Room<WorldState> {
    *  of a body's hands' band (0: within it) — a car's door, the shuttle, a desk out on the land. */
   upOff(p: { uid: number; z: number; level: number }, at: { x: number; y: number }, h: number): number {
     const g = this.groundOf(p.uid, p.level, at.x, at.y);
-    return offBand(p.z, g, g + h);
+    return offBand(overFloor(p.level, p.z), g, g + h);
   }
   /** The same to a spot spanning [y0, y1] over the floor (no thing of the world's: a seat, a bay,
    *  a vehicle's door). */
@@ -1518,31 +1548,42 @@ export class WorldRoom extends Room<WorldState> {
     y1 = y0,
     sight = true,
   ): number {
-    const off = offBand(p.z, y0, y1);
+    // (heights over the floor: Player.z is the world's)
+    const z = overFloor(p.level, p.z);
+    const off = offBand(z, y0, y1);
     const out = off ? Math.hypot(flat, off) : flat;
     if (!sight || !this.sight) return out;
-    const hand = { x: p.x, y: p.y, z: p.z + HAND };
+    const hand = { x: p.x, y: p.y, z: z + HAND };
     const to = { x: at.x, y: at.y, z: Math.max(y0, Math.min(y1, hand.z)) };
     return this.sight(p.level, hand, to) ? out : Number.POSITIVE_INFINITY;
   }
 
-  /** The physics world's answers for a person's move on a floor (docs/plan/50-the-volume.md C:
-   *  features/physics.ts sets it once Jolt's world is built; `clip`, an admin through walls) —
-   *  else their grid's. */
-  colliderFor: ((uid: number, level: number, clip: boolean) => Collider | null) | null = null;
-  moveAsk(uid: number, level: number, clip = false): Collider {
-    return this.colliderFor?.(uid, level, clip) ?? this.gridFor(uid, level);
+  /** A floor's questions answered by Jolt (shared physics Place) for someone: features/physics.ts
+   *  sets it once the room's world is built (before anyone's in); `clip`, an admin through walls. */
+  placeFor: ((uid: number | null, level: number, clip: boolean, things: readonly WorldObjectDef[]) => Place) | null =
+    null;
+  /** Someone's move on a floor: their place (through walls, `clip`). */
+  moveAsk(uid: number, level: number, clip = false): Place {
+    return this.placeOf(uid, level, clip);
   }
-
-  // Each person's walk grid on a floor: locked doors are walls unless it's their room.
-  gridFor(uid: number, level = this.home): Grid {
-    const key = `${uid}|${level}`;
-    let g = this.personalGrids.get(key);
+  /** Someone's place on a floor: through their own locked doors, not others'. */
+  gridFor(uid: number | null, level = this.home): Place {
+    return this.placeOf(uid, level, false);
+  }
+  private placeOf(uid: number | null, level: number, clip: boolean): Place {
+    const key = `${uid}|${level}|${clip ? 1 : 0}`;
+    let g = this.places.get(key);
     if (!g) {
-      g = Grid.from(this.levelMap(level), [...this.state.objects.values()].map(fromSchema), { uid });
-      this.personalGrids.set(key, g);
+      const lm = this.levelMap(level);
+      g = this.placeFor?.(uid, level, clip, this.things) ?? new Place(null, lm, this.things);
+      this.places.set(key, g);
     }
     return g;
+  }
+  /** (the physics world's in, or made again: everyone's places asked anew) */
+  forgetPlaces(): void {
+    this.places.clear();
+    this.grid = this.gridFor(null, this.home);
   }
 
   // ── the building (shared levels.ts) ─────────────────────────────────────
@@ -1585,11 +1626,11 @@ export class WorldRoom extends Room<WorldState> {
     p.level = to.level;
     p.x = to.x;
     p.y = to.y;
-    p.z = o.z ?? 0;
+    p.z = worldZ(to.level, o.z ?? 0);
     p.area = this.areaOf(p)?.key ?? "";
     if (!o.carried) this.send(client, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
-    if (was !== p.level) for (const f of this.features) f.levelChange?.(client, p, was, p.level);
-    if (o.carried) for (const f of this.features) f.carried?.(client, p);
+    if (was !== p.level) this.hook("levelChange", client, p, was, p.level);
+    if (o.carried) this.hook("carried", client, p);
     this.pushPresence();
   }
 
@@ -1607,66 +1648,62 @@ export class WorldRoom extends Room<WorldState> {
     return g.fits(lm.spawn.x, lm.spawn.y) ? lm.spawn : g.nearestOpen(lm.spawn.x, lm.spawn.y);
   }
 
-  // Objects moved by a v1 → v2 conversion that isn't stored yet.
-  private migrated: WorldObjectDef[] | null = null;
-
-  // Write a conversion back: the v2 layout and the boards/doors it moved.
-  private saveMigration() {
-    const moved = this.migrated;
-    this.migrated = null;
-    if (config.offline || !moved) return;
-    void api.putLayout(layoutFromMap(this.map)).catch((e) => console.warn("[map v2] layout", e.message));
-    for (const o of moved) void api.putObject(o).catch((e) => console.warn("[map v2] object", e.message));
-    console.log("[map v2] the world: saved");
-  }
+  // The building (docs/plan/72-the-3d-core.md, phase 6): its structure and revision (the truth);
+  // `map` is made from it for the code that reads tile maps.
+  structure!: Structure;
+  structRev = 0;
 
   syncMapState() {
-    const m = this.map;
-    this.state.floor = m.floor ?? 0;
-    this.state.levels = JSON.stringify(m.levels ?? []);
-    this.state.width = m.width;
-    this.state.height = m.height;
-    this.state.tiles.clear();
-    for (const row of m.tiles) this.state.tiles.push(row);
-    this.state.hWalls.clear();
-    for (const row of m.hWalls) this.state.hWalls.push(row);
-    this.state.vWalls.clear();
-    for (const row of m.vWalls) this.state.vWalls.push(row);
-    this.state.hBacks.clear();
-    for (const row of m.hBacks ?? []) this.state.hBacks.push(row);
-    this.state.vBacks.clear();
-    for (const row of m.vBacks ?? []) this.state.vBacks.push(row);
-    this.state.areas = JSON.stringify(m.areas);
-    this.state.spawnX = m.spawn.x;
-    this.state.spawnY = m.spawn.y;
-    this.state.mapVersion += 1;
+    this.state.structRev = this.structRev;
   }
 
-  // Apply a new map: state, grids, and (debounced) storage in the API.
+  // An edit made: what turns the structure into the edited map's, applied as operations — kept,
+  // sent to everyone (each applies the same), stored (debounced). The map made again from it.
   commitMap(next: MapDef) {
-    this.map = next;
+    const ops = diffStructures(this.structure, structureFromMap(next));
+    if (!ops.length) return;
+    this.applyStruct(ops);
+  }
+  applyStruct(ops: StructOp[]) {
+    this.structure = applyOps(this.structure, ops);
+    this.structRev++;
+    this.map = mapFromStructure(this.structure);
     this.syncMapState();
+    this.broadcast("struct:ops", { rev: this.structRev, ops });
     this.rebuildGrid();
     for (const c of this.clients) {
       const p = this.state.players.get(c.sessionId);
       if (p) p.area = this.areaOf(p)?.key ?? "";
     }
     if (config.offline) return;
-    // the first edit of a converted map saves the whole conversion with it
-    if (this.migrated) this.saveMigration();
     if (this.layoutTimer) clearTimeout(this.layoutTimer);
-    this.layoutTimer = setTimeout(() => void this.saveLayout(), 1200);
+    this.layoutTimer = setTimeout(() => void this.saveStructure(), 1200);
   }
 
-  private saveLayout() {
+  // A save that failed for the API's or the network's sake (not refused as invalid) is tried
+  // again, later each time (LAYOUT_RETRY_MS), until it goes or a newer edit's save takes over —
+  // the structure lives only in this process's memory until then (docs/plan/72-the-3d-core.md phase 1).
+  private layoutTries = 0;
+  private saveStructure(): Promise<void> {
     this.layoutTimer = null;
+    const structure = this.structure;
     return api
-      .putLayout(layoutFromMap(this.map))
-      .then(() => this.toBuilders("build:saved", { ok: true, at: Date.now() }))
+      .putStructure(structure)
+      .then(() => {
+        this.layoutTries = 0;
+        this.toBuilders("build:saved", { ok: true, at: Date.now() });
+      })
       .catch((e) => {
-        console.warn("[layout] save failed", e.message);
+        console.warn("[structure] save failed", e.message);
         const rejected = e instanceof ApiError && e.status >= 400 && e.status < 500;
         this.toBuilders("build:saved", { ok: false, at: Date.now(), rejected });
+        if (rejected) return;
+        metrics.inc("layout_save_retries_total");
+        const wait = LAYOUT_RETRY_MS[Math.min(this.layoutTries, LAYOUT_RETRY_MS.length - 1)];
+        this.layoutTries++;
+        // (a newer edit already waiting saves the newer structure: no retry of this one)
+        if (this.layoutTimer || this.structure !== structure) return;
+        this.layoutTimer = setTimeout(() => void this.saveStructure(), wait);
       });
   }
 
@@ -1708,14 +1745,31 @@ export class WorldRoom extends Room<WorldState> {
     for (const c of this.clients) {
       const p = this.state.players.get(c.sessionId);
       if (!p || levelMap(this.map, p.level)) continue;
-      Object.assign(p, this.homeSpot(), { z: 0 });
-      this.send(c, "snap", { x: p.x, y: p.y, z: 0, level: p.level });
+      Object.assign(p, this.homeSpot());
+      p.z = worldZ(p.level, 0);
+      this.send(c, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
     }
   }
 
   rebuildGrid() {
-    this.personalGrids.clear();
-    this.grid = Grid.from(this.map, [...this.state.objects.values()].map(fromSchema));
+    const all = [...this.state.objects.values()].map(fromSchema);
+    this.reattach(all);
+    this.things = all;
+    this.forgetPlaces();
+  }
+
+  // Doors, windows and hung things fixed to their walls (shared structure/attach.ts: `props.on`,
+  // the wall and how far along it): kept right whatever moved — the thing, or a wall's run (the
+  // tile tool's edits give walls new ids). A thing whose wall changed is saved with its new `on`.
+  private reattach(all: WorldObjectDef[]) {
+    for (const [i, o] of all.entries()) {
+      if (!attachable(o.kind)) continue;
+      const n = withOn(this.structure, o, objLevel(o, this.map));
+      if (n === o) continue;
+      all[i] = n;
+      this.state.objects.set(n.id, toSchema(n));
+      if (!config.offline) void api.putObject(n).catch((e) => console.warn("[attach] save failed", e.message));
+    }
   }
 
   private async putObject(client: WorldClient, m: ClientMessages["obj:put"]) {
@@ -1723,9 +1777,12 @@ export class WorldRoom extends Room<WorldState> {
     if (!p?.builder || !isKind(m.kind) || !CATALOG[m.kind as keyof typeof CATALOG]) return;
     const e = entry(m.kind);
     if (!e.buildable) return;
-    const rot = ((m.rot | 0) + 4) % 4;
-    const x = m.x | 0;
-    const y = m.y | 0;
+    // (metres and radians as sent — plan 72 phase 5; the build tool still sends whole tiles and
+    // quarter turns, and the rules below read the quarter)
+    if (![m.x, m.y, m.yaw ?? 0].every(Number.isFinite)) return;
+    const rot = quarterOf(m);
+    const x = m.x;
+    const y = m.y;
     const id = typeof m.id === "string" && m.id ? m.id.slice(0, 64) : `b-${m.kind}-${Date.now().toString(36)}`;
     const existing = this.state.objects.get(id);
     if (existing && existing.kind !== m.kind) return;
@@ -1754,7 +1811,7 @@ export class WorldRoom extends Room<WorldState> {
       kind: m.kind,
       x,
       y,
-      rot,
+      yaw: quarterYaw(rot),
       refId: m.refId ?? existing?.refId ?? null,
       props: cleanProps(m.kind, props0, sameFloor, x, y, rot),
     };
@@ -1771,9 +1828,9 @@ export class WorldRoom extends Room<WorldState> {
       def.props = { ...(def.props ?? {}), shaft: String(same?.props?.shaft ?? def.id), door: "closed" };
     }
     if (isOpening(def.kind)) {
-      // doors and windows sit in a wall, on edges (rot even: from the north
+      // doors and windows sit in a wall, on edges (a quarter turn even: from the north
       // edge of x, y; odd: from the west edge); never into someone's locked room
-      def.rot = rot % 2;
+      def.yaw = quarterYaw(rot % 2);
       const why =
         this.lockBreak(p, null, existing ? [fromSchema(existing), def] : [def], level) ??
         openingBlocker(lm, sameFloor, def, hungOnEdge(sameFloor));
@@ -1917,10 +1974,6 @@ export class WorldRoom extends Room<WorldState> {
     }
     return sent;
   }
-
-  facing(from: { x: number; y: number }, to: { x: number; y: number }) {
-    return dirFromDelta(to.x - from.x, to.y - from.y);
-  }
 }
 
 export function toSchema(o: WorldObjectDef): WorldObject {
@@ -1929,7 +1982,7 @@ export function toSchema(o: WorldObjectDef): WorldObject {
   w.kind = o.kind;
   w.x = o.x;
   w.y = o.y;
-  w.rot = o.rot ?? 0;
+  w.yaw = o.yaw ?? 0;
   w.refId = o.refId ?? 0;
   w.props = JSON.stringify(o.props ?? {});
   return w;
@@ -1971,7 +2024,7 @@ export function cleanProps(
   )
     delete out.color;
   if (entry(kind).onSurface) {
-    const def: WorldObjectDef = { id: "", kind, x, y, rot, props: out };
+    const def: WorldObjectDef = { id: "", kind, x, y, yaw: quarterYaw(rot), props: out };
     out.c = topCell(def);
     out.z = entry(hostOf(others, def)?.kind ?? "").surface ?? 0;
   }
@@ -1993,14 +2046,8 @@ export function cleanProps(
   return out;
 }
 
-// Store many objects, a few at a time (a failed one is logged, not fatal).
-async function saveAll(list: WorldObjectDef[], put: (o: WorldObjectDef) => Promise<unknown>) {
-  for (let i = 0; i < list.length; i += 8)
-    await Promise.all(list.slice(i, i + 8).map((o) => put(o).catch((e) => console.warn("[bare]", o.id, e.message))));
-}
-
 export function fromSchema(o: WorldObject): WorldObjectDef {
-  return { id: o.id, kind: o.kind, x: o.x, y: o.y, rot: o.rot, refId: o.refId || null, props: safeJson(o.props) };
+  return { id: o.id, kind: o.kind, x: o.x, y: o.y, yaw: o.yaw, refId: o.refId || null, props: safeJson(o.props) };
 }
 
 export function safeJson(s: string): Record<string, unknown> {
@@ -2016,9 +2063,9 @@ export function safeJson(s: string): Record<string, unknown> {
 // A seat is drawn with its back on −y and turned like everything else (90°
 // clockwise steps, `Sketch.rp`): rot 0 faces +y (screen down-left = SW),
 // 1 faces −x (NW), 2 faces −y (NE), 3 faces +x (SE) — the same turn as wall
-// items (rot 3 = on the west wall, facing east).
+// items (rot 3 = on the west wall, facing east). As a facing byte (256 a turn: +y is 64).
 export function seatFacing(rot: number): number {
-  return [1, 3, 5, 7][rot % 4];
+  return SEAT_FACE[rot & 3];
 }
 
 // Messages only arrive after onJoin has filled userData.

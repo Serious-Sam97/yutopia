@@ -1,6 +1,6 @@
 import type { CatalogEntry } from "../catalog.ts";
 import type { SeatSpec } from "../furniture.ts";
-import { box, cyl, isoPx, type KindShape, one } from "./units.ts";
+import { box, cyl, type KindShape, one } from "./units.ts";
 
 // Plan 68 phase 19 (docs/plan/68-more-furniture.md): Outdoors — the new kinds' catalog entries, shapes
 // (from their models: the client's world/furn/fam/outdoors.ts), seats, surfaces, stand heights and hang
@@ -47,7 +47,7 @@ export const CATALOG = {
     outdoor: true,
     variants: 3,
     look: 0,
-    surface: isoPx(PICNIC_TOP),
+    surface: PICNIC_TOP,
     top: [1, 3, 7, 5],
   },
   bike_rack: { label: "Bike rack", w: 3, h: 2, solid: true, buildable: true, outdoor: true, variants: 3, look: 0 },

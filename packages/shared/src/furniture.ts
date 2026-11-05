@@ -7,10 +7,6 @@
 // desks, tables and storage: 2026-11-03).
 
 import { FAM_SEATS, FAM_STANDS, FAM_SURFACES } from "./fam/index.ts";
-import { ISO_PX, isoPx } from "./fam/units.ts";
-
-export { ISO_PX, isoPx };
-const iso = (px: number) => px / ISO_PX;
 
 /** Where a sitter goes on a seat (as drawn, sat on: the cushion sunk, the back leant), m along the
  *  way its sitter faces from the tile's middle (plan 62): the cushion's top less what it gives, its
@@ -93,16 +89,16 @@ export const STAND: Record<string, number> = {
   vending: 1.8,
   piano: 1.27,
   crt_tv: 1.13, // (plan 67: its cabinet's top)
-  tv_console: iso(46),
+  tv_console: 1.1738,
   cart_shelf: 0.8,
   disc_rack: 1.38,
   slot_track: 0.77,
   pool_table: 0.86,
   pingpong_table: 0.76,
   mixing_desk: 0.84,
-  speaker_cab: iso(46),
-  column: iso(84),
-  car: iso(56),
+  speaker_cab: 1.1738,
+  column: 2.1435,
+  car: 1.429,
   server_rack: 1.98,
   crt_terminal: 1.16, // (the terminal's top: its cart's free edge is too narrow to stand on)
   pet_house: 0.72, // (plan 67: its roof's ridge, where a body lands — Jolt, physics/furniture.test)
@@ -112,8 +108,8 @@ export const STAND: Record<string, number> = {
   fridge: 1.82,
   toy_box: 0.5, // (plan 67 phase 8: its lid)
   // (a parkour wall's cap: run up and stood on)
-  pk_wall: iso(125),
-  pk_wall_tall: iso(235),
+  pk_wall: 3.1898,
+  pk_wall_tall: 5.9968,
   // (plan 68's families: fam/*.ts)
   ...FAM_STANDS,
 };

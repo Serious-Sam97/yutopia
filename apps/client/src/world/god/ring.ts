@@ -57,15 +57,15 @@ export class BrushRing {
   }
 
   /** At (x, z) on the land (the Grounds' coords), `r` m round; `f`: the floor's frame (the scene's
-   *  x, z are the Grounds' less f.x, f.z; its height the land's plus f.y). Null: not shown. */
-  show(at: { x: number; z: number } | null, r: number, f: { x: number; z: number; y: number }) {
+   *  x, z are the Grounds'; its height the land's plus f.y). Null: not shown. */
+  show(at: { x: number; z: number } | null, r: number, f: { y: number }) {
     if (!at) {
       this.root.visible = false;
       this.key = "";
       return;
     }
     this.root.visible = true;
-    const k = `${at.x.toFixed(2)},${at.z.toFixed(2)},${r},${f.x},${f.z},${f.y}`;
+    const k = `${at.x.toFixed(2)},${at.z.toFixed(2)},${r},${f.y}`;
     if (k === this.key) return;
     this.key = k;
     for (const [line, rr] of [
@@ -77,13 +77,13 @@ export class BrushRing {
         const a = (i / SEG) * Math.PI * 2;
         const x = at.x + Math.cos(a) * rr;
         const z = at.z + Math.sin(a) * rr;
-        p.setXYZ(i, x - f.x, terrainAt(x, z) + 0.25 + f.y, z - f.z);
+        p.setXYZ(i, x, terrainAt(x, z) + 0.25 + f.y, z);
       }
       p.needsUpdate = true;
       line.geometry.computeBoundingSphere();
       if (line === this.inner) line.computeLineDistances();
     }
-    this.dot.position.set(at.x - f.x, terrainAt(at.x, at.z) + 0.3 + f.y, at.z - f.z);
+    this.dot.position.set(at.x, terrainAt(at.x, at.z) + 0.3 + f.y, at.z);
   }
 
   dispose() {

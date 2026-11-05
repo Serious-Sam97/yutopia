@@ -3,15 +3,15 @@ import {
   type AreaDef,
   across,
   areaAt,
-  dirFromDelta,
-  findPath,
+  faceByte,
+  faceStep,
   floorsOf,
-  GROUND_OFFSET,
   inLiftDoorway,
   isDoorKind,
   isToyHeld,
   objLevel,
   openingCentre,
+  overFloor,
   type Point,
   RUN_SPEED,
   THROWN,
@@ -170,17 +170,6 @@ const IDLE_SETS: Record<Species, { kind: string; ms: number; when: (n: Needs) =>
     { kind: "wing", ms: 2000, when: () => true },
   ],
 };
-// the 8 facings (shared/iso.ts DIRS: S, SW, W, NW, N, NE, E, SE) as world vectors
-const FACING: [number, number][] = [
-  [1, 1],
-  [0, 1],
-  [-1, 1],
-  [-1, 0],
-  [-1, -1],
-  [0, -1],
-  [1, -1],
-  [1, 0],
-];
 const BOWL_REACH = 2.2;
 const SETTLE_MS = 5000;
 const SAVE_MS = 30_000;
@@ -275,7 +264,7 @@ const BED_TO = 6;
 // circle on the GPS; how often a sighting tells its owner; how deep the woods are to be the wild
 const LEG_MIN = 10;
 const LEG_MAX = 40;
-const LEG_NODES = 6000;
+const _LEG_NODES = 6000;
 const SIGHT_TOLD_MS = 10 * 60_000;
 const WILD_TREES = 0.9;
 const HIT_AGAIN_MS = 4000;
@@ -460,18 +449,17 @@ registerFeature((room: WorldRoom) => {
   const go = (pet: Pet, to: Point): boolean => {
     const r = runs.get(pet.id);
     if (!r) return false;
-    const g = room.gridFor(pet.uid, pet.floor);
-    const p = findPath(g, pet, to, g.width * g.height);
+    const p = room.wayFor(pet.uid, pet.floor, pet, to);
     if (!p) return false;
     r.path = p;
     return true;
   };
   // Beside someone: at their side first (where a camera behind them still
   // sees it), then ahead, behind last; among equals the nearest spot.
-  const goNear = (pet: Pet, p: Point & { d?: number; level?: number }, radius = 1.3): boolean => {
+  const goNear = (pet: Pet, p: Point & { yaw?: number; level?: number }, radius = 1.3): boolean => {
     if (p.level !== undefined && p.level !== pet.floor) return false; // (someone on another floor)
     const g = room.gridFor(pet.uid, pet.floor);
-    const [fx, fy] = FACING[(p.d ?? 0) & 7];
+    const [fx, fy] = faceStep(p.yaw ?? 0);
     const ahead = Math.atan2(fy, fx);
     const spots: { x: number; y: number; rank: number }[] = [];
     for (let i = 0; i < 8; i++) {
@@ -484,11 +472,11 @@ registerFeature((room: WorldRoom) => {
     }
     spots.sort((a, b) => a.rank - b.rank);
     // (a spot on the far side of a wall fits but is a long way round: skip it)
-    return spots.some((s) => g.fits(s.x, s.y) && nearBy(g, p, s) && go(pet, s));
+    return spots.some((s) => g.fits(s.x, s.y) && nearBy(pet.uid, pet.floor, p, s) && go(pet, s));
   };
   // reachable from `from` in a couple of steps (not round a wall)
-  const nearBy = (g: ReturnType<typeof room.gridFor>, from: Point, to: Point) => {
-    const path = findPath(g, from, to);
+  const nearBy = (uid: number, level: number, from: Point, to: Point) => {
+    const path = room.wayFor(uid, level, from, to);
     if (!path) return false;
     let len = 0;
     let prev = from;
@@ -501,7 +489,7 @@ registerFeature((room: WorldRoom) => {
   const face = (pet: Pet, at: Point) => {
     const dx = at.x - pet.x;
     const dy = at.y - pet.y;
-    if (Math.hypot(dx, dy) > 0.05) pet.d = dirFromDelta(dx, dy);
+    if (Math.hypot(dx, dy) > 0.05) pet.yaw = faceByte(dx, dy, pet.yaw);
   };
   const act = (pet: Pet, what: string, at?: Point) => {
     pet.act = what;
@@ -631,7 +619,7 @@ registerFeature((room: WorldRoom) => {
       pet.y = spot.y;
     } else {
       // at their side (not ahead, where a camera behind them can't see it)
-      const [fx, fy] = FACING[p.d & 7];
+      const [fx, fy] = faceStep(p.yaw);
       pet.floor = p.level;
       const g = room.gridFor(p.uid, p.level);
       const want = [
@@ -640,12 +628,12 @@ registerFeature((room: WorldRoom) => {
         { x: p.x + fx * 1.3, y: p.y + fy * 1.3 },
       ];
       const spot =
-        want.map((w) => g.nearestOpen(w.x, w.y, 2)).find((o) => o && nearBy(g, p, o)) ??
+        want.map((w) => g.nearestOpen(w.x, w.y, 2)).find((o) => o && nearBy(p.uid, p.level, p, o)) ??
         g.nearestOpen(p.x, p.y, 3) ??
         ({ x: p.x, y: p.y } as Point);
       pet.x = spot.x;
       pet.y = spot.y;
-      pet.d = p.d;
+      pet.yaw = p.yaw;
     }
     setNeeds(pet, rec.needs);
     pet.xp = rec.xp;
@@ -752,7 +740,7 @@ registerFeature((room: WorldRoom) => {
     if (area) return area.name;
     const g = room.gridFor(pet.uid, pet.floor);
     if (g.onLand(pet.x, pet.y)) {
-      const at = placeAt(pet.x + GROUND_OFFSET.x, pet.y + GROUND_OFFSET.y);
+      const at = placeAt(pet.x, pet.y);
       if (at.name) return at.name;
     }
     return "where you left it";
@@ -1261,7 +1249,7 @@ registerFeature((room: WorldRoom) => {
     toys.set(t.id, t);
     p.held = "";
     p.heldAt = 0;
-    p.d = dirFromDelta(to.x - p.x, to.y - p.y, p.d as 0);
+    p.yaw = faceByte(to.x - p.x, to.y - p.y, p.yaw);
     // the arm follows through
     p.busy = "throw";
     room.clock.setTimeout(() => {
@@ -1301,7 +1289,7 @@ registerFeature((room: WorldRoom) => {
     t.y = to.y;
     t.at = Date.now();
     t.dur = 0;
-    p.d = dirFromDelta(to.x - p.x, to.y - p.y, p.d as 0);
+    p.yaw = faceByte(to.x - p.x, to.y - p.y, p.yaw);
   });
 
   // A pet with nothing to do and a toy of its owner's on the floor goes for it.
@@ -1569,7 +1557,7 @@ registerFeature((room: WorldRoom) => {
       (o) =>
         o.kind === "pet_bed" &&
         (!home || areaAt(map, o.x + 0.5, o.y + 0.5)?.key === home.key) &&
-        findPath(room.gridFor(pet.uid, pet.floor), pet, { x: o.x + 0.5, y: o.y + 0.5 }),
+        room.wayFor(pet.uid, pet.floor, pet, { x: o.x + 0.5, y: o.y + 0.5 }),
     );
     if (bed) go(pet, { x: bed.x + 0.5, y: bed.y + 0.5 });
     else {
@@ -1623,7 +1611,7 @@ registerFeature((room: WorldRoom) => {
   const byDistance = (list: WorldObjectDef[], pet: Pet) =>
     [...list].sort((a, b) => Math.hypot(a.x - pet.x, a.y - pet.y) - Math.hypot(b.x - pet.x, b.y - pet.y));
   const centre = (o: WorldObjectDef) => ({ x: o.x + 0.5, y: o.y + 0.5 });
-  const reachable = (pet: Pet) => (o: WorldObjectDef) => !!findPath(room.gridFor(pet.uid, pet.floor), pet, centre(o));
+  const reachable = (pet: Pet) => (o: WorldObjectDef) => !!room.wayFor(pet.uid, pet.floor, pet, centre(o));
   // a bowl with something in it: over to it, and a portion gone (finishAct eat / drink)
   const goEat = (pet: Pet, r: Run, bowl: WorldObjectDef) => {
     r.bowl = bowl.id;
@@ -2183,7 +2171,7 @@ registerFeature((room: WorldRoom) => {
       // a sniff about: a step or two nearby, still beside them
       const g = room.gridFor(pet.uid, pet.floor);
       const t = { x: p.x + (Math.random() * 2 - 1) * 1.6, y: p.y + (Math.random() * 2 - 1) * 1.6 };
-      if (g.fits(t.x, t.y) && nearBy(g, p, t)) go(pet, t);
+      if (g.fits(t.x, t.y) && nearBy(pet.uid, pet.floor, p, t)) go(pet, t);
     } else if (roll < 0.45) {
       face(pet, p);
     } else if (roll < 0.6 && n.energy < 70) {
@@ -2200,7 +2188,7 @@ registerFeature((room: WorldRoom) => {
       const post = objects(pet.floor).find(
         (o) => o.kind === "scratch_post" && Math.hypot(o.x + 0.5 - p.x, o.y + 0.5 - p.y) < 6,
       );
-      if (post && goNear(pet, { x: post.x + 0.5, y: post.y + 0.5, d: 0 }, 0.9)) {
+      if (post && goNear(pet, { x: post.x + 0.5, y: post.y + 0.5, yaw: 32 }, 0.9)) {
         act(pet, "scratch");
         r.until = now + 7000;
       }
@@ -2325,25 +2313,25 @@ registerFeature((room: WorldRoom) => {
   // false, and it's asked again.
   /** Where to follow someone to: them, or — out swimming in deep water — the bank nearest them
    *  (plan 66: a pet doesn't swim). */
-  const swimmingTo = (p: Player): { x: number; y: number; d: number; level: number } => {
-    const at = { x: p.x, y: p.y, d: p.d, level: p.level };
+  const swimmingTo = (p: Player): { x: number; y: number; yaw: number; level: number } => {
+    const at = { x: p.x, y: p.y, yaw: p.yaw, level: p.level };
     if (p.level !== 0) return at;
-    const x = p.x + GROUND_OFFSET.x;
-    const z = p.y + GROUND_OFFSET.y;
+    const x = p.x;
+    const z = p.y;
     if (!inDeepWater(x, z)) return at;
     const b = bankNear(x, z);
-    return b ? { ...at, x: b.x - GROUND_OFFSET.x, y: b.z - GROUND_OFFSET.y } : at;
+    return b ? { ...at, x: b.x, y: b.z } : at;
   };
   const comeAlong = (pet: Pet, p: Player): boolean => {
     const g = room.gridFor(pet.uid, p.level);
-    const [fx, fy] = FACING[p.d & 7];
+    const [fx, fy] = faceStep(p.yaw);
     const want = [
       { x: p.x - fy * 1.1, y: p.y + fx * 1.1 },
       { x: p.x + fy * 1.1, y: p.y - fx * 1.1 },
       { x: p.x - fx * 1.1, y: p.y - fy * 1.1 },
       { x: p.x + fx * 1.1, y: p.y + fy * 1.1 },
     ];
-    const at = want.map((w) => g.nearestOpen(w.x, w.y, 2)).find((o) => o && nearBy(g, p, o));
+    const at = want.map((w) => g.nearestOpen(w.x, w.y, 2)).find((o) => o && nearBy(pet.uid, p.level, p, o));
     if (!at) return false;
     stop(pet);
     pet.act = "";
@@ -2372,7 +2360,7 @@ registerFeature((room: WorldRoom) => {
     pet.floor = p.level;
     pet.x = p.x + off.x;
     pet.y = p.y + off.y;
-    pet.z = p.z;
+    pet.z = overFloor(p.level, p.z);
     pet.a = ANIM.sit;
   };
 
@@ -2479,7 +2467,7 @@ registerFeature((room: WorldRoom) => {
 
   // ── lost (docs/plan/51-the-pet.md, D4) ───────────────────────────────────
   // its spot in the Grounds' metres
-  const metres = (pet: Pet) => ({ x: pet.x + GROUND_OFFSET.x, z: pet.y + GROUND_OFFSET.y });
+  const metres = (pet: Pet) => ({ x: pet.x, z: pet.y });
   // out under the sky: the ground floor, in no building (the lot's on the ground floor's map,
   // not its land, and it's outside all the same)
   const outside = (pet: Pet) => {
@@ -2552,7 +2540,7 @@ registerFeature((room: WorldRoom) => {
       const lamp = LAMPS.map((l) => ({ l, d: Math.hypot(l.x - m.x, l.z - m.z) }))
         .filter((x) => x.d < LEG_MAX && x.d > 2)
         .sort((a, b) => a.d - b.d)[0];
-      if (lamp) to = g.nearestOpen(lamp.l.x - GROUND_OFFSET.x, lamp.l.z - GROUND_OFFSET.y, 3);
+      if (lamp) to = g.nearestOpen(lamp.l.x, lamp.l.z, 3);
     }
     for (let i = 0; i < 8 && !to; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -2560,7 +2548,7 @@ registerFeature((room: WorldRoom) => {
       const t = g.nearestOpen(pet.x + Math.cos(a) * d, pet.y + Math.sin(a) * d, 3);
       if (t && !r.trail.some((q) => Math.hypot(q.x - t.x, q.y - t.y) < 8)) to = t;
     }
-    const path = to && findPath(g, pet, to, LEG_NODES);
+    const path = to && room.wayFor(pet.uid, pet.floor, pet, to);
     if (path?.length && to) {
       r.path = path;
       r.trail = [...r.trail.slice(-5), to];
@@ -2621,7 +2609,7 @@ registerFeature((room: WorldRoom) => {
   const carSpot = (v: Vehicle, lx: number, lz: number): Point => {
     const ca = Math.cos(v.a);
     const sa = Math.sin(v.a);
-    return { x: v.x + ca * lx - sa * lz - GROUND_OFFSET.x, y: v.z + sa * lx + ca * lz - GROUND_OFFSET.y };
+    return { x: v.x + ca * lx - sa * lz, y: v.z + sa * lx + ca * lz };
   };
   // a seat for a pet: nobody in it, no other pet in it (-1: none — a full car, or not a car)
   const freeSeat = (v: Vehicle, except = ""): number => {
@@ -2639,7 +2627,7 @@ registerFeature((room: WorldRoom) => {
     pet.x = at.x;
     pet.y = at.y;
     pet.floor = 0;
-    pet.d = dirFromDelta(Math.cos(v.a), Math.sin(v.a));
+    pet.yaw = faceByte(Math.cos(v.a), Math.sin(v.a), pet.yaw);
   };
   // Its owner in a car, it following and close: to a free door and in. False: not
   // for it (too far, the car moving, no room) — it runs after them as ever.
@@ -2729,7 +2717,7 @@ registerFeature((room: WorldRoom) => {
         if (Math.hypot(c.x - pet.x, c.y - pet.y) < 0.8) return true;
       } else if (o.kind === "elevator" && inLiftDoorway(o, pet, 0.3)) return true;
     }
-    const [fx, fy] = FACING[p.d & 7];
+    const [fx, fy] = faceStep(p.yaw);
     const ax = pet.x - p.x;
     const ay = pet.y - p.y;
     const ahead = (ax * fx + ay * fy) / Math.hypot(fx, fy);
@@ -2747,7 +2735,7 @@ registerFeature((room: WorldRoom) => {
   // A step to its owner's side (left or right, whichever it can walk to), out of the way.
   const stepAside = (pet: Pet, r: Run, p: Player, now: number) => {
     const g = room.gridFor(pet.uid, pet.floor);
-    const [fx, fy] = FACING[p.d & 7];
+    const [fx, fy] = faceStep(p.yaw);
     const l = Math.hypot(fx, fy);
     const sides = [
       { x: p.x - (fy / l) * 1.2, y: p.y + (fx / l) * 1.2 },
@@ -3294,7 +3282,7 @@ registerFeature((room: WorldRoom) => {
             const dx = wp.x - pet.x;
             const dy = wp.y - pet.y;
             const dd = Math.hypot(dx, dy);
-            if (dd > 0.001) pet.d = dirFromDelta(dx, dy);
+            if (dd > 0.001) pet.yaw = faceByte(dx, dy, pet.yaw);
             if (dd <= budget) {
               pet.x = wp.x;
               pet.y = wp.y;

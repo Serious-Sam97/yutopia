@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { after, test } from "node:test";
 import { entry, standHeight } from "./catalog.ts";
-import { Grid, moveStep, ZPX_TILE } from "./grid.ts";
+import { moveStep } from "./ground.ts";
 import {
   type Height,
   isJump,
@@ -14,6 +14,8 @@ import {
   stepHeight,
 } from "./jump.ts";
 import type { MapDef } from "./map.ts";
+import type { Place } from "./physics/place.ts";
+import { type TestWorld, testWorld } from "./physics/testing.ts";
 
 test("a jump crouches, flies a gravity arc up to its apex and lands", () => {
   for (const kind of ["hop", "flip"] as const) {
@@ -41,7 +43,12 @@ test("a jump crouches, flies a gravity arc up to its apex and lands", () => {
 });
 
 // a bare 10×6 room: a desk (2×1) at (3, 2), an arcade at (6, 2), a lamp at (8, 2)
-function room() {
+// (on Jolt, as the game has it: physics/testing.ts)
+const worlds: TestWorld[] = [];
+after(() => {
+  for (const w of worlds.splice(0)) w.dispose();
+});
+async function room(): Promise<Place> {
   const W = 10;
   const H = 6;
   const map: MapDef = {
@@ -62,28 +69,34 @@ function room() {
     { id: "a", kind: "speaker_cab", x: 6, y: 2 },
     { id: "l", kind: "lamp", x: 8, y: 2 },
   ];
-  return Grid.from(map, objects, undefined, { dressing: false });
+  const w = await testWorld(map, objects);
+  worlds.push(w);
+  return w.place();
 }
 
-test("things have tops to stand on (or not), and bodies fit by their feet's height", () => {
-  const g = room();
-  assert.equal(g.topAt(0, 0), 0);
-  assert.ok(Math.abs(g.topAt(3, 2) - (entry("desk").surface ?? 0) / ZPX_TILE) < 1e-6);
-  assert.ok(Math.abs(g.topAt(6, 2) - (standHeight("speaker_cab") ?? 0) / ZPX_TILE) < 1e-6);
+test("things have tops to stand on (or not), and bodies fit by their feet's height", async () => {
+  const g = await room();
+  // (Jolt's heights: to its float's grain)
+  const near = (a: number, b: number) => Math.abs(a - b) < 1e-4;
+  assert.ok(near(g.topAt(0, 0), 0));
+  assert.ok(near(g.topAt(3, 2), entry("desk").surface ?? 0));
+  // (the cabinet's body is its drawn box: 1.17 up, a few mm under the catalog's stand height)
+  assert.ok(Math.abs(g.topAt(6, 2) - (standHeight("speaker_cab") ?? 0)) < 0.01);
   assert.equal(g.topAt(8, 2), Number.POSITIVE_INFINITY); // a lamp: no
   // on the floor: the desk blocks; feet over the desk's top: it holds them
   assert.equal(g.fitsAt(3.5, 2.5, 0), false);
   assert.equal(g.fitsAt(3.5, 2.5, 0.8), true);
-  assert.ok(Math.abs(g.groundAt(3.5, 2.5, 0.8) - (entry("desk").surface ?? 0) / ZPX_TILE) < 1e-6);
+  assert.ok(near(g.groundAt(3.5, 2.5, 0.8), entry("desk").surface ?? 0));
   // half over its edge: still on it
   assert.ok(g.groundAt(3.1, 1.9, 0.76) > 0.7);
-  assert.equal(g.fitsAt(8.5, 2.5, 5), false);
+  // (up in the air over the lamp: room for a body — Jolt's fitsAt is room, a floor under it somewhere)
+  assert.equal(g.fitsAt(8.5, 2.5, 5), true);
   assert.equal(standHeight("lamp"), undefined);
   assert.equal(standHeight("desk"), entry("desk").surface);
 });
 
 // walk at `speed` along +x from x0 at y, jumping at `at` s; the feet's height on the way
-function run(g: Grid, kind: "hop" | "flip", x0: number, y: number, speed: number, at = 0) {
+function run(g: Place, kind: "hop" | "flip", x0: number, y: number, speed: number, at = 0) {
   const h: Height = { z: 0, vz: 0, up: false };
   let x = x0;
   let launched = false;
@@ -102,32 +115,30 @@ function run(g: Grid, kind: "hop" | "flip", x0: number, y: number, speed: number
   return { x, z: h.z, landedOn };
 }
 
-test("a hop lands on a desk, a flip on the speaker; a hop can't reach the speaker", () => {
-  const g = room();
+test("a hop lands on a desk, a flip on the speaker; a hop can't reach the speaker", async () => {
+  const g = await room();
   // from the floor walking towards the desk (3..5): up, over its edge, landed on it
   const onDesk = run(g, "hop", 2.0, 2.5, 2.5, 0);
-  assert.ok(Math.abs(onDesk.landedOn - (entry("desk").surface ?? 0) / ZPX_TILE) < 1e-6, `landed at ${onDesk.landedOn}`);
+  assert.ok(Math.abs(onDesk.landedOn - (entry("desk").surface ?? 0)) < 1e-4, `landed at ${onDesk.landedOn}`);
   // a hop at the speaker's side: stopped by it, back on the floor
   const atArcade = run(g, "hop", 5.4, 2.5, 3, 0);
-  assert.ok(atArcade.x < 5.8 && atArcade.z === 0);
+  // (its box 0.66 across its tile's middle: stopped a body's half-width short of its face, 6.17)
+  assert.ok(atArcade.x < 6.17 - 0.2 && Math.abs(atArcade.z) < 1e-4, `${atArcade.x}, ${atArcade.z}`);
   // a flip from right by it clears it and lands on top
   const flip = run(g, "flip", 5.3, 2.5, 1.2, 0);
-  assert.ok(
-    Math.abs(flip.landedOn - (standHeight("speaker_cab") ?? 0) / ZPX_TILE) < 1e-6,
-    `flip landed at ${flip.landedOn}`,
-  );
+  assert.ok(Math.abs(flip.landedOn - (standHeight("speaker_cab") ?? 0)) < 0.01, `flip landed at ${flip.landedOn}`);
 });
 
-test("walking off the edge of something drops you to the floor", () => {
-  const g = room();
-  const h: Height = { z: 25 / ZPX_TILE, vz: 0, up: false };
+test("walking off the edge of something drops you to the floor", async () => {
+  const g = await room();
+  const h: Height = { z: 0.638, vz: 0, up: false };
   let x = 4.5;
   let landed = false;
   for (let t = 0; t < 1.5; t += 1 / 60) {
     x = moveStep(g, { x, y: 2.5 }, { x: -1, y: 0 }, 2, 1 / 60, h.z).x;
     landed = stepHeight(g, x, 2.5, h, 1 / 60) || landed;
   }
-  assert.ok(x < 2.8 && h.z === 0 && landed);
+  assert.ok(x < 2.8 && Math.abs(h.z) < 1e-4 && landed, `${x}, ${h.z}, ${landed}`);
 });
 
 test("the stage of a jump follows its landing, a fall shows as a hop's air and landing", () => {

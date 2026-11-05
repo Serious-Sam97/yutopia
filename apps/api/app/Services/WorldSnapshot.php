@@ -17,7 +17,10 @@ use Throwable;
 // shut), replaces the data, and lets the room open again from it.
 class WorldSnapshot
 {
-    public const VERSION = 1;
+    // 2: metres and radians (docs/plan/72-the-3d-core.md, phase 5): a thing's height on what it's
+    // on in metres, its turn as `yaw`; a 1 is brought up to it on import. 3: the building's
+    // `structure` with it (phase 6) — an older one without it needs tools/world-v4.mts after.
+    public const VERSION = 3;
 
     public function __construct(private readonly WorldServer $world) {}
 
@@ -31,6 +34,7 @@ class WorldSnapshot
             'name' => $w->name,
             'mapKey' => $w->map_key,
             'layout' => $w->layout,
+            'structure' => $w->structure,
             'settings' => $w->settings,
             'seeded' => $w->seeded_at !== null,
             'objects' => WorldObject::orderBy('id')->get()->map->toWorld()->all(),
@@ -46,8 +50,15 @@ class WorldSnapshot
      */
     public function import(array $snap, bool $clearSpawns = false): array
     {
-        abort_unless(($snap['yutopia'] ?? null) === 'world' && (int) ($snap['version'] ?? 0) === self::VERSION, 422, 'Not a world snapshot.');
+        $version = (int) ($snap['version'] ?? 0);
+        abort_unless(($snap['yutopia'] ?? null) === 'world' && $version >= 1 && $version <= self::VERSION, 422, 'Not a world snapshot.');
         abort_unless(is_array($snap['objects'] ?? null) && count($snap['objects']) <= 5000, 422, 'A snapshot needs its objects (at most 5000).');
+        if ($version < 2) {
+            $snap['objects'] = array_map(fn (array $o) => self::toV2($o), $snap['objects']);
+            if (is_array($snap['layout'] ?? null)) {
+                $snap['layout']['version'] = 3; // (shared migrate.ts LAYOUT_VERSION)
+            }
+        }
         $held = $this->hold(true);
         try {
             DB::transaction(function () use ($snap, $clearSpawns) {
@@ -56,6 +67,7 @@ class WorldSnapshot
                     'name' => (string) ($snap['name'] ?? $w->name),
                     'map_key' => (string) ($snap['mapKey'] ?? 'studio'),
                     'layout' => $snap['layout'] ?? null,
+                    'structure' => $snap['structure'] ?? null,
                     'settings' => $snap['settings'] ?? null,
                     'seeded_at' => ($snap['seeded'] ?? true) ? now() : null,
                 ]);
@@ -64,9 +76,9 @@ class WorldSnapshot
                     WorldObject::insert(array_map(fn (array $o) => [
                         'uid' => (string) $o['id'],
                         'kind' => (string) $o['kind'],
-                        'x' => (int) $o['x'],
-                        'y' => (int) $o['y'],
-                        'rot' => (int) ($o['rot'] ?? 0),
+                        'x' => (float) $o['x'],
+                        'y' => (float) $o['y'],
+                        'yaw' => (float) ($o['yaw'] ?? 0),
                         'ref_id' => $o['refId'] ?? null,
                         'props' => empty($o['props']) ? null : json_encode($o['props']),
                         'created_at' => now(),
@@ -103,6 +115,23 @@ class WorldSnapshot
         }
 
         return ['objects' => count($snap['objects']), 'roomClosed' => $held];
+    }
+
+    /** A thing from a version 1 snapshot in today's form, as the 2026_11_05 migrations: its props.z
+     *  (how high it stands on what it's on) from the old item art's px into metres (only a plainly
+     *  px one: over 3), its `rot` (quarter turns) as `yaw` (radians). */
+    public static function toV2(array $o): array
+    {
+        $z = $o['props']['z'] ?? null;
+        if (is_numeric($z) && (float) $z > 3) {
+            $o['props']['z'] = round((float) $z / 39.18765, 4);
+        }
+        if (! isset($o['yaw'])) {
+            $o['yaw'] = ((int) ($o['rot'] ?? 0) & 3) * (M_PI / 2);
+        }
+        unset($o['rot']);
+
+        return $o;
     }
 
     // (no world-server configured: tests, or the API alone; nothing to close)

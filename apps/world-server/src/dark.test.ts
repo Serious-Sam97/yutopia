@@ -20,7 +20,6 @@ process.env.YUTOPIA_WORLD_SECRET = "test";
 process.env.YUTOPIA_INTERNAL_SECRET = "test";
 
 const PORT = 30300 + Math.floor(Math.random() * 100); // (its own hundred: no two files share one — they run at once)
-const OFF = { x: -60, y: -10 }; // the ground floor's corner in the building's coords
 const POND = { x: -250, z: -60 }; // open ice, far from the lamps and the HQ
 let server: { gracefullyShutdown: (exit?: boolean) => Promise<void> };
 const rooms: Room[] = [];
@@ -58,12 +57,12 @@ async function person(uid: number, sandbox: number, hits: { n: number }[] = []) 
 }
 // on the land at (bx, bz), the building's coords; feet on the ground (so a roll may start)
 async function standAt(room: Room, bx: number, bz: number, mv = 0, yaw = 0) {
-  const to = { x: bx - OFF.x, y: bz - OFF.y };
+  const to = { x: bx, y: bz };
   if (Math.hypot(me(room).x - to.x, me(room).y - to.y) > 0.5) {
     room.send("teleport", { to: { ...to, level: 0 } });
     await waitFor(() => me(room).level === 0 && Math.hypot(me(room).x - to.x, me(room).y - to.y) < 0.5);
   }
-  room.send("pos", { ...to, z: heightAt(bx, bz), d: 2, a: 0, seq: 0, mv, yaw });
+  room.send("pos", { ...to, z: heightAt(bx, bz), a: 0, seq: 0, mv, yaw });
 }
 const hour = async (room: Room, h: number) => {
   room.send("mod:hour", { h });
@@ -82,7 +81,7 @@ test("out of the dark: 25–45 tiles off, emerging, never in a pool or by the HQ
   for (const s of shadows(a)) {
     const d = Math.hypot(s.x - here.x, s.y - here.y);
     assert.ok(d > 20 && d < 47, `out of the dark at ${d.toFixed(1)}`);
-    const b = { x: s.x + OFF.x, z: s.y + OFF.y };
+    const b = { x: s.x, z: s.y };
     assert.equal(inLampPool(b.x, b.z), false, "never in a pool");
     assert.ok(Math.hypot(b.x - HQ_DOORS.x, b.z - HQ_DOORS.z) > 40, "never by the HQ");
   }
@@ -107,9 +106,8 @@ test("those indoors see them through the windows, and are never struck", async (
     room.send("teleport", { to: { x, y, level } });
     await waitFor(() => me(room).level === level && Math.hypot(me(room).x - x, me(room).y - y) < 1.5);
   };
-  // in the lobby by its east wall (the ground floor's coords), and up in the studio (level 4: its
-  // own, its corner the building's — some 50 tiles off over the ground)
-  await stand(lobby, 105.5, 28.5, 0);
+  // in the lobby by its east wall, and up in the studio (level 4)
+  await stand(lobby, 45.5, 18.5, 0);
   await stand(studio, 10.5, 22.5, 4);
   // A out on the snow east of the HQ; one called up 8–14 tiles off
   await standAt(a, 60, 18);
@@ -179,7 +177,6 @@ test("a focused beam burns its shield off: exposed", async () => {
       x: me(a).x,
       y: me(a).y,
       z: heightAt(POND.x, POND.z),
-      d: 2,
       a: 0,
       seq: 0,
       mv: packMv("still") | MV_AIM,
@@ -211,7 +208,7 @@ test("nobody comes into a lamp's pool, nor strikes whoever stands in it", async 
   const t0 = Date.now();
   while (Date.now() - t0 < 6000) {
     for (const s of shadows(a)) {
-      const d = Math.hypot(s.x + OFF.x - lamp.x, s.y + OFF.y - lamp.z);
+      const d = Math.hypot(s.x - lamp.x, s.y - lamp.z);
       assert.ok(d >= R - 0.2, `one in the pool, ${d.toFixed(2)} from the lamp`);
     }
     await sleep(100);

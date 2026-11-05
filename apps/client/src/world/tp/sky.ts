@@ -21,7 +21,7 @@ import {
   Vector3,
 } from "three";
 import { DARK_LEFT, type Daylight, darkK, EYES_LIFT } from "../art/daylight";
-import { Campus, GROUND } from "./campus";
+import { Campus, GROUND, type Outline } from "./campus";
 import { GroundsStream } from "./grounds-stream";
 import { landBounce, landLight, litBalance, patchGrounds, patchOutdoors } from "./light3d";
 import { Rain } from "./rain3d";
@@ -114,6 +114,8 @@ export class Surroundings {
     map: MapDef,
     private T: Themes,
     cuts: Map<string, WallCut> = new Map(),
+    /** the building's outline from its structure (campus.ts Outline; none: the map's) */
+    outline: Outline | null = null,
   ) {
     const { rng } = T;
     // the dome: top → middle → horizon colours, as the iso sky
@@ -179,7 +181,7 @@ export class Surroundings {
     this.root.add(this.dome, this.stars);
 
     // the campus draws the building itself
-    this.campus = new Campus(map, T, cuts);
+    this.campus = new Campus(map, T, cuts, outline);
     this.root.add(this.campus.root);
     // all of it out under the sky: the open sky's balance of sun and fill (light3d.ts)
     const seen = new Set<Material>();
@@ -196,13 +198,7 @@ export class Surroundings {
     // the pass above: it patches its own materials, the trees' with more.)
     const g0 = map.levels?.some((l) => l.index === 0) ? levelMap(map, 0) : null;
     if (g0) {
-      const ox = g0.ox ?? 0;
-      const oy = g0.oy ?? 0;
-      const covered = (bx: number, bz: number) => {
-        const x = Math.floor(bx - ox);
-        const y = Math.floor(bz - oy);
-        return x >= 0 && y >= 0 && x < g0.width && y < g0.height && isFloor(tileAt(g0, x, y));
-      };
+      const covered = (bx: number, bz: number) => isFloor(tileAt(g0, Math.floor(bx), Math.floor(bz)));
       // (what lies on the ground floor — the lot's snow — lit as the floor is: `floorLit`, view.ts)
       this.grounds = new GroundsStream(
         T,

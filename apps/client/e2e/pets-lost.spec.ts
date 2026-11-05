@@ -69,9 +69,9 @@ test("Rex left in the lot, Ana drives off far away: lost; the panel and the GPS 
       c.room.state.objects.forEach((o: any) => {
         const p = JSON.parse(o.props);
         if (o.kind !== "car" || p.driven || p.ownerId || p.role === "show" || p.retire || p.model === "offroad") return;
-        const w = o.rot % 2 ? 2 : 5;
-        const h = o.rot % 2 ? 5 : 2;
-        const a = Math.PI + (o.rot % 4) * (Math.PI / 2);
+        const w = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 2 : 5;
+        const h = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 5 : 2;
+        const a = Math.PI + ((Math.round(o.yaw / (Math.PI / 2)) & 3) % 4) * (Math.PI / 2);
         const x = o.x + w / 2 + (p.dx ?? 0);
         const y = o.y + h / 2 + (p.dz ?? 0);
         const d = Math.hypot(x - at.x, y - at.y);

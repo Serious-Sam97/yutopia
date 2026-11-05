@@ -4,7 +4,7 @@
 import {
   ANIM,
   avatarFromSeed,
-  dirFromDelta,
+  faceByte,
   findPath,
   Grid,
   getMap,
@@ -37,12 +37,12 @@ async function bot(i: number) {
   $(room.state).objects.onAdd(() => {
     grid = Grid.from(
       map,
-      [...room.state.objects.values()].map((o: { id: string; kind: string; x: number; y: number; rot: number }) => ({
+      [...room.state.objects.values()].map((o: { id: string; kind: string; x: number; y: number; yaw: number }) => ({
         id: o.id,
         kind: o.kind,
         x: o.x,
         y: o.y,
-        rot: o.rot,
+        yaw: o.yaw,
       })),
     );
   });
@@ -50,7 +50,7 @@ async function bot(i: number) {
   const pos: Point = { x: me.x, y: me.y };
   let path: Point[] = [];
   let wait = Math.random() * 3;
-  let d = 0;
+  let yaw = 0;
   let seq = 0;
   void avatarFromSeed(id);
   room.onMessage("snap", (m: Point) => {
@@ -83,7 +83,7 @@ async function bot(i: number) {
       const dx = wp.x - pos.x;
       const dy = wp.y - pos.y;
       const dist = Math.hypot(dx, dy);
-      if (dist > 0.001) d = dirFromDelta(dx, dy);
+      if (dist > 0.001) yaw = faceByte(dx, dy, yaw);
       if (dist <= budget) {
         pos.x = wp.x;
         pos.y = wp.y;
@@ -95,7 +95,7 @@ async function bot(i: number) {
         budget = 0;
       }
     }
-    room.send("pos", { x: pos.x, y: pos.y, d, a: path.length ? ANIM.walk : ANIM.idle, seq: ++seq });
+    room.send("pos", { x: pos.x, y: pos.y, yaw, a: path.length ? ANIM.walk : ANIM.idle, seq: ++seq });
   }, dt * 1000);
   return () => {
     clearInterval(timer);

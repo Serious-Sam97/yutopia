@@ -111,6 +111,11 @@ export interface MapDef {
   floor?: number;
   ox?: number;
   oy?: number;
+  /** its places are the world's (plan 72 phase 6: every map the structure gives, structure/to-map):
+   *  areas, spawn and every x, y asked of it in world metres, its tile rows starting at (ox, oy).
+   *  Absent: an older map, its places its own tiles' (a floor's corner at ox, oy in the
+   *  building's: levels.ts) — the built-in maps and the old boot's conversions (structure/finish). */
+  world?: true;
   home?: number;
   levels?: LevelDef[];
   outdoor?: boolean;
@@ -138,12 +143,54 @@ export interface LevelDef {
   spawn?: { x: number; y: number };
 }
 
+/** Where a map's tile rows start, in the coordinates its places are in: a world map's corner
+ *  (MapDef.world), an older map's own 0, 0. */
+export const originOf = (map: { world?: true; ox?: number; oy?: number }): { x: number; y: number } =>
+  map.world ? { x: map.ox ?? 0, y: map.oy ?? 0 } : { x: 0, y: 0 };
+/** What turns a map's places into the world's: nothing on a world map (MapDef.world), an older
+ *  floor's corner on one of those (its places its own tiles'). */
+export const worldShift = (map: { world?: true; ox?: number; oy?: number }): { x: number; y: number } =>
+  map.world ? { x: 0, y: 0 } : { x: map.ox ?? 0, y: map.oy ?? 0 };
+/** The tiles a map spans, in its places' coordinates: [x0, y0, x1, y1) (loop x0 ≤ x < x1). */
+export function spanOf(map: { world?: true; ox?: number; oy?: number; width: number; height: number }) {
+  const o = originOf(map);
+  return { x0: o.x, y0: o.y, x1: o.x + map.width, y1: o.y + map.height };
+}
+
+/** Is an edge one of the map's (its places' coordinates)? */
+export function edgeInMap(
+  map: { world?: true; ox?: number; oy?: number; width: number; height: number },
+  e: Edge,
+): boolean {
+  const { x0, y0, x1, y1 } = spanOf(map);
+  return e.dir === "h"
+    ? e.x >= x0 && e.x < x1 && e.y >= y0 && e.y <= y1
+    : e.y >= y0 && e.y < y1 && e.x >= x0 && e.x <= x1;
+}
+/** Is a tile one of the map's (its places' coordinates)? */
+export function tileInMap(
+  map: { world?: true; ox?: number; oy?: number; width: number; height: number },
+  x: number,
+  y: number,
+): boolean {
+  const { x0, y0, x1, y1 } = spanOf(map);
+  return x >= x0 && y >= y0 && x < x1 && y < y1;
+}
+
 // The wall on the north edge of (x, y) / the west edge of (x, y).
 export function hWall(map: MapDef, x: number, y: number): string {
+  if (map.world) {
+    x -= map.ox ?? 0;
+    y -= map.oy ?? 0;
+  }
   if (x < 0 || x >= map.width || y < 0 || y > map.height) return NO_WALL;
   return map.hWalls[y]?.[x] ?? NO_WALL;
 }
 export function vWall(map: MapDef, x: number, y: number): string {
+  if (map.world) {
+    x -= map.ox ?? 0;
+    y -= map.oy ?? 0;
+  }
   if (y < 0 || y >= map.height || x < 0 || x > map.width) return NO_WALL;
   return map.vWalls[y]?.[x] ?? NO_WALL;
 }
@@ -157,12 +204,12 @@ export function faceMat(map: MapDef, e: Edge, side: number): WallMat | null {
   const ch = edgeAt(map, e);
   if (!isFacedWall(ch)) return null;
   if (side > 0) return ch.toLowerCase() as WallMat;
-  const rows = e.dir === "h" ? map.hBacks : map.vBacks;
-  const b = rows?.[e.y]?.[e.x];
-  return b && FACE_MATS.includes(b) ? (b as WallMat) : (ch.toLowerCase() as WallMat);
+  const b = backAt(map, e);
+  return b !== NO_WALL ? (b as WallMat) : (ch.toLowerCase() as WallMat);
 }
 export function backAt(map: MapDef, e: Edge): string {
-  const b = (e.dir === "h" ? map.hBacks : map.vBacks)?.[e.y]?.[e.x];
+  const o = originOf(map);
+  const b = (e.dir === "h" ? map.hBacks : map.vBacks)?.[e.y - o.y]?.[e.x - o.x];
   return b && FACE_MATS.includes(b) ? b : NO_WALL;
 }
 
@@ -199,21 +246,38 @@ export function emptyEdges(width: number, height: number): { hWalls: string[]; v
   };
 }
 
-export function setEdge(map: { hWalls: string[]; vWalls: string[] }, e: Edge, ch: string): void {
+/** (A world map's edges are world: its corner taken off.) */
+export function setEdge(
+  map: { hWalls: string[]; vWalls: string[]; world?: true; ox?: number; oy?: number },
+  e: Edge,
+  ch: string,
+): void {
+  const o = originOf(map);
+  const [x, y] = [e.x - o.x, e.y - o.y];
   const rows = e.dir === "h" ? map.hWalls : map.vWalls;
-  const row = rows[e.y];
-  if (row === undefined || e.x < 0 || e.x >= row.length) return;
-  rows[e.y] = row.slice(0, e.x) + ch + row.slice(e.x + 1);
+  const row = rows[y];
+  if (row === undefined || x < 0 || x >= row.length) return;
+  rows[y] = row.slice(0, x) + ch + row.slice(x + 1);
 }
 
 // Set the back face's material ("." = as the front). The rows are made (as
 // long as the walls' rows) the first time one is set. (Mutates `map`'s arrays:
 // give it copies.)
 export function setBack(
-  map: { hWalls: string[]; vWalls: string[]; hBacks?: string[]; vBacks?: string[] },
-  e: Edge,
+  map: {
+    hWalls: string[];
+    vWalls: string[];
+    hBacks?: string[];
+    vBacks?: string[];
+    world?: true;
+    ox?: number;
+    oy?: number;
+  },
+  e0: Edge,
   ch: string,
 ): void {
+  const o = originOf(map);
+  const e = { ...e0, x: e0.x - o.x, y: e0.y - o.y };
   const key = e.dir === "h" ? "hBacks" : "vBacks";
   const walls = e.dir === "h" ? map.hWalls : map.vWalls;
   if (!map[key]) {
@@ -231,6 +295,10 @@ export const hasBacks = (map: { hBacks?: string[]; vBacks?: string[] }): boolean
   [...(map.hBacks ?? []), ...(map.vBacks ?? [])].some((r) => /[^.]/.test(r));
 
 export function tileAt(map: MapDef, x: number, y: number): string {
+  if (map.world) {
+    x -= map.ox ?? 0;
+    y -= map.oy ?? 0;
+  }
   if (x < 0 || y < 0 || x >= map.width || y >= map.height) return VOID;
   return map.tiles[y][x] ?? VOID;
 }

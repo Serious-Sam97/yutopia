@@ -1,3 +1,4 @@
+import { worldZ } from "@yutopia/shared";
 import { BUILDINGS, CHUNK, checkEdits, editsNow, heightAt } from "@yutopia/shared/grounds";
 import type { GroundsEdits } from "@yutopia/shared/grounds-edits";
 import { beyondLand, REACH_MARGIN } from "@yutopia/shared/land";
@@ -45,14 +46,14 @@ registerFeature((room: WorldRoom) => {
     for (const p of room.state.players.values()) {
       const g = room.gridFor(p.uid, p.level);
       if (!g.onLand(p.x, p.y)) continue;
-      const lm = room.levelMap(p.level);
-      const x = p.x + (lm.ox ?? 0);
-      const z = p.y + (lm.oy ?? 0);
+      const _lm = room.levelMap(p.level);
+      const x = p.x;
+      const z = p.y;
       if (!dirty.has(`${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`)) continue;
       // (on grown land taken away, past the world's edge now: back where they arrive — docs/plan/69)
       if (beyondLand(x, z) > REACH_MARGIN) {
         const to = room.arrivalFor(p);
-        Object.assign(p, { x: to.x, y: to.y, level: to.level, z: 0 });
+        Object.assign(p, { x: to.x, y: to.y, level: to.level, z: worldZ(to.level, 0) });
         const c = room.clients.getById(p.sid) as WorldClient | undefined;
         if (c) {
           room.send(c, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
@@ -76,8 +77,8 @@ registerFeature((room: WorldRoom) => {
           [x, b.z0 - 0.8, z - b.z0],
           [x, b.z1 + 0.8, b.z1 - z],
         ].sort((a, c) => a[2] - c[2])[0];
-        p.x = out[0] - (lm.ox ?? 0);
-        p.y = out[1] - (lm.oy ?? 0);
+        p.x = out[0];
+        p.y = out[1];
         p.z = heightAt(out[0], out[1]);
         const c = room.clients.getById(p.sid) as WorldClient | undefined;
         if (c) room.send(c, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });

@@ -142,7 +142,7 @@ test("the GPS outdoors: where I am on the land, the route as a ribbon", async ({
   await enter(page, await token(ANA), await useWorld("demo"));
   await page.waitForFunction(() => (window as any).__yutopia.phone, null, { timeout: 30_000 });
   // on the driveway, by the lot
-  await page.evaluate(() => (window as any).__yutopia.teleport({ x: -40 + 60, y: -40 + 10, level: 0 }));
+  await page.evaluate(() => (window as any).__yutopia.teleport({ x: -40, y: -40, level: 0 }));
   await page.waitForFunction(() => (window as any).__yutopia.level === 0, null, { timeout: 20_000 });
   await loaded(page);
   const at = await yu(page, (w) => w.gpsWhere());

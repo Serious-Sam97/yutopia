@@ -1,6 +1,6 @@
 import type { CatalogEntry } from "../catalog.ts";
 import type { SeatSpec } from "../furniture.ts";
-import { box, cyl, isoPx, type KindShape, one } from "./units.ts";
+import { box, cyl, type KindShape, one } from "./units.ts";
 
 // Plan 68 phase 5 (docs/plan/68-more-furniture.md): Storage — the new kinds' catalog entries, shapes
 // (from their models: the client's world/furn/fam/storage2.ts), seats, surfaces, stand heights and hang
@@ -23,7 +23,7 @@ export const CATALOG = {
     buildable: true,
     variants: 2,
     look: 0,
-    surface: isoPx(SURFACES.plan_chest),
+    surface: SURFACES.plan_chest,
     top: [1, 0, 7, 3], // (its top board, over the drawers)
   },
   // lit inside (switched as a lamp), its trophies by its seed
@@ -48,7 +48,7 @@ export const CATALOG = {
     buildable: true,
     variants: 2,
     look: 0,
-    surface: isoPx(SURFACES.office_safe),
+    surface: SURFACES.office_safe,
     top: [1, 1, 3, 3],
   },
   shoe_rack: { label: "Shoe & boot rack", w: 1, h: 1, solid: true, buildable: true, variants: 2, look: 0 },
@@ -84,5 +84,5 @@ export const STANDS: Record<string, number> = {
 };
 export const HANGS: Record<string, [number, number, number]> = {
   // (its two banks of tapes, the ledge with what's on it)
-  cassette_rack: [4, 41, 80],
+  cassette_rack: [4, 1.0462, 2.0415],
 };

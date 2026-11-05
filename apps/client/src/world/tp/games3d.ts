@@ -13,7 +13,6 @@ import {
   TubeGeometry,
   Vector3,
 } from "three";
-import { zt } from "./kit3d";
 import { mergeWith } from "./merge-static";
 import { type PadLook, ps1Pad } from "./pads3d";
 
@@ -23,7 +22,7 @@ import { type PadLook, ps1Pad } from "./pads3d";
 
 type P = { x: number; y: number };
 export interface GameScene3 {
-  cables: { from: P; to: P; up: number }[]; // up: iso px it climbs at the end (a wall TV's screen)
+  cables: { from: P; to: P; up: number }[]; // up: m it climbs at the end (a wall TV's screen)
   pads: {
     key: string;
     system: string;
@@ -37,9 +36,9 @@ export interface GameScene3 {
   leds: (P & { h?: number; color?: number })[]; // h: tiles up (default: a front LED's)
 }
 
-// where hands are, iso px up (the 3D drawings stand taller than iso's 30 / 21)
-export const HAND_STAND = 44;
-export const HAND_SIT = 32;
+// where hands are, m up (the 3D drawings stand taller than iso's)
+export const HAND_STAND = 1.1228;
+export const HAND_SIT = 0.8166;
 const CORD = 0.006; // tube radii, tiles
 const CABLE = 0.011;
 
@@ -126,7 +125,7 @@ export class GamesIn3D {
     for (const c of s.cables) {
       const mid = mix(c.from, c.to, 0.5);
       const pts = [floor(c.from, 0.03), floor({ x: mid.x + 0.12, y: mid.y + 0.1 }), floor(c.to)];
-      if (c.up > 0) pts.push(new Vector3(c.to.x, zt(c.up) - 0.02, c.to.y));
+      if (c.up > 0) pts.push(new Vector3(c.to.x, c.up - 0.02, c.to.y));
       tube(pts, CABLE);
     }
 

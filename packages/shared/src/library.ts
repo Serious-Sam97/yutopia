@@ -276,17 +276,17 @@ export function builtinGame(id: string): BuiltinGame | undefined {
 // cartridge shelf beside it, two consoles on the rug in front, bean bags and a
 // sofa facing it, a lamp; and a disc corner — the disc rack by the shelf, the
 // grey disc console with the others. Offsets in tiles from the group's corner (5 × 5).
-export const GAME_ROOM_SETUP: { kind: string; dx: number; dy: number; rot: number; props?: Record<string, unknown> }[] =
+export const GAME_ROOM_SETUP: { kind: string; dx: number; dy: number; yaw: number; props?: Record<string, unknown> }[] =
   [
-    { kind: "rug", dx: 0, dy: 1, rot: 0, props: { variant: 1 } },
-    { kind: "crt_tv", dx: 1, dy: 0, rot: 0 },
-    { kind: "cart_shelf", dx: 3, dy: 0, rot: 0 },
-    { kind: "lamp", dx: 0, dy: 0, rot: 0 },
-    { kind: "console_nes", dx: 1, dy: 2, rot: 0, props: { variant: 1 } },
-    { kind: "console_snes", dx: 2, dy: 2, rot: 0 },
-    { kind: "console_ps1", dx: 3, dy: 2, rot: 0 },
-    { kind: "disc_rack", dx: 4, dy: 1, rot: 0 },
-    { kind: "beanbag", dx: 1, dy: 3, rot: 2 },
-    { kind: "beanbag", dx: 2, dy: 3, rot: 2 },
-    { kind: "sofa", dx: 0, dy: 4, rot: 2 },
+    { kind: "rug", dx: 0, dy: 1, yaw: 0, props: { variant: 1 } },
+    { kind: "crt_tv", dx: 1, dy: 0, yaw: 0 },
+    { kind: "cart_shelf", dx: 3, dy: 0, yaw: 0 },
+    { kind: "lamp", dx: 0, dy: 0, yaw: 0 },
+    { kind: "console_nes", dx: 1, dy: 2, yaw: 0, props: { variant: 1 } },
+    { kind: "console_snes", dx: 2, dy: 2, yaw: 0 },
+    { kind: "console_ps1", dx: 3, dy: 2, yaw: 0 },
+    { kind: "disc_rack", dx: 4, dy: 1, yaw: 0 },
+    { kind: "beanbag", dx: 1, dy: 3, yaw: Math.PI },
+    { kind: "beanbag", dx: 2, dy: 3, yaw: Math.PI },
+    { kind: "sofa", dx: 0, dy: 4, yaw: Math.PI },
   ];

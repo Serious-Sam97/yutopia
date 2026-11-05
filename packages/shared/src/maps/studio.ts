@@ -1,4 +1,5 @@
 import type { WorldObjectDef } from "../catalog.ts";
+import { quarterYaw } from "../catalog.ts";
 import { convertV1 } from "../convert.ts";
 import { type AreaDef, entryWallItem, hWall, MapBuilder, type MapDef, setEdge, vWall, type WallMat } from "../map.ts";
 
@@ -54,7 +55,7 @@ const areas: AreaDef[] = [
 
 const objects: WorldObjectDef[] = [];
 const add = (id: string, kind: string, x: number, y: number, rot = 0, props?: Record<string, unknown>) =>
-  objects.push({ id, kind, x, y, rot, ...(props ? { props } : {}) });
+  objects.push({ id, kind, x, y, yaw: quarterYaw(rot), ...(props ? { props } : {}) });
 
 // ── Tracking Room ────────────────────────────────────────────────────────────
 for (const [i, bx] of [3, 8, 13, 18].entries()) add(`board-${i + 1}`, "board_wall", bx, 1);
@@ -162,7 +163,7 @@ add("lounge-vending", "vending", 23, 21);
 add("lounge-water", "water_cooler", 15, 21);
 add("lounge-piano", "piano", 17, 21);
 add("lounge-tt-stand", "side_table", 22, 24);
-add("lounge-turntable", "turntable", 22, 24, 0, { c: [1, 1], z: 14 });
+add("lounge-turntable", "turntable", 22, 24, 0, { c: [1, 1], z: 0.3573 });
 for (const [i, [x, y]] of [
   [24, 21],
   [24, 34],

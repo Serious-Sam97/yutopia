@@ -1,9 +1,9 @@
 import {
   CATALOG,
   entry,
-  ISO_PX,
   isKind,
   isOpening,
+  quarterOf,
   SURFACE,
   TEXT_DEFAULT,
   variantOf,
@@ -226,7 +226,7 @@ const dayOf = (o: WorldObjectDef) => (typeof o.props?._day === "number" ? o.prop
 
 /** A door or window (plan 68 phase 13: furn/openings.ts) as the catalog's pictures and the bench
  *  draw it: on its own, no posts at its ends. */
-const opening = (kind: string): Kind => {
+const opening = (_kind: string): Kind => {
   const L = (o: WorldObjectDef) => openingLook(o, entry(o.kind).w, 0, entry(o.kind).w);
   return { signed: true, look: (o) => JSON.stringify(L(o)), make: (o) => openingModel(L(o)) };
 };
@@ -588,7 +588,7 @@ export function liveInto(o: WorldObjectDef, lit: Material, glow: Material, glass
   if (isOpening(o.kind)) {
     // (in its wall: along it from its first edge, turned for a west one — as openingInto places it)
     g.position.set(o.x, 0, o.y);
-    g.rotation.y = (o.rot ?? 0) % 2 === 1 ? -Math.PI / 2 : 0;
+    g.rotation.y = quarterOf(o) % 2 === 1 ? -Math.PI / 2 : 0;
     return g;
   }
   const f = frameOf(o);
@@ -610,7 +610,7 @@ export function openingInto(out: Out, o: WorldObjectDef, a0: number, a1: number)
     g = openingModel(L);
     openings.set(key, g);
   }
-  const west = (o.rot ?? 0) % 2 === 1;
+  const west = quarterOf(o) % 2 === 1;
   const at = (x: number, y: number, z: number): [number, number, number] =>
     west ? [o.x - z, y, o.y + x] : [o.x + x, y, o.y + z];
   const nor = (x: number, z: number): [number, number] => (west ? [-z, x] : [x, z]);
@@ -703,7 +703,7 @@ export function nativeDressInto(out: Out, d: { kind: string; x: number; y: numbe
     g = thing(d.kind, seed, true);
     dressCache.set(key, g);
   }
-  into(out, g, { x: d.x - 0.5, y: d.y - 0.5, rot: 0, w: 1, h: 1, lift: d.z / ISO_PX }, 0);
+  into(out, g, { x: d.x - 0.5, y: d.y - 0.5, rot: 0, w: 1, h: 1, lift: d.z }, 0);
 }
 
 function into(

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { entry } from "@yutopia/shared";
+import { entry, quarterYaw } from "@yutopia/shared";
 import { type BufferGeometry, DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from "three";
 import type { LivePart } from "../kit";
 import { liveAt } from "../liveparts";
@@ -53,7 +53,7 @@ function hit(g: BufferGeometry, from: [number, number, number], dir: [number, nu
 const topAt = (g: BufferGeometry, x: number, z: number, from = 3) => hit(g, [x, from, z], [0, -1, 0])?.y ?? 0;
 
 const model = (kind: string, variant: number, id = "t") =>
-  modelOf({ id, kind, x: 0, y: 0, rot: 0, props: { variant } });
+  modelOf({ id, kind, x: 0, y: 0, yaw: quarterYaw(0), props: { variant } });
 
 test(`play & music: every kind and look on its footprint, under the ceiling, on the floor, under 8k tris`, () => {
   for (const kind of Object.keys(LOOKS)) {

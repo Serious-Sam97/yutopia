@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AIM_BLADE, BEAM, beamAt, beamOf, beamReaches } from "./beam.ts";
-import { Grid } from "./grid.ts";
 
 // (looking east: aiming, the body's bladed AIM_BLADE right of it)
 const east = (focus: boolean, pitch: number | null = null) =>
@@ -54,14 +53,22 @@ test("a beam's facing turns with yaw (not 8 ways)", () => {
   }
 });
 
-test("a wall stops it", () => {
-  const g = new Grid(20, 5);
-  g.walk.fill(1);
-  g.top.fill(0);
+test("a wall stops it", async () => {
+  // (Jolt's sight, as the world-server asks it: a floor, then a wall across the way)
+  const { PhysicsWorld, sizesFor } = await import("./physics/world.ts");
+  const { loadJolt } = await import("./physics/load.ts");
+  const { box3 } = await import("./shapes/index.ts");
+  const w = await PhysicsWorld.create(loadJolt, sizesFor({ statics: 4 }));
+  w.setStatic("slab", [box3(0, 0, 20, 5, -0.2, 0)], "floor");
+  w.settle();
+  const sees = (a: { x: number; y: number; z: number }, c: { x: number; y: number; z: number }) =>
+    w.sees(a.x, a.z, a.y, c.x, c.z, c.y);
   const b = beamOf(1.5, 2.5, 0, 0, null, false);
-  assert.ok(beamReaches(g, b, 8.5, 2.5));
-  g.block(5, 2, 3); // (a wall, over the hand)
-  assert.equal(beamReaches(g, b, 8.5, 2.5), false);
+  assert.ok(beamReaches(sees, b, 8.5, 2.5));
+  w.setStatic("wall", [box3(5, 0, 6, 5, 0, 3)], "wall"); // (a wall, over the hand)
+  w.settle();
+  assert.equal(beamReaches(sees, b, 8.5, 2.5), false);
+  w.destroy();
 });
 
 test("it starts in the left hand: ahead of the feet, to the left of the body's line", () => {

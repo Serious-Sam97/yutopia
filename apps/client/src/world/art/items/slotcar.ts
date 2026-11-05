@@ -11,6 +11,7 @@ import {
   slotStops,
   slotTrackOf,
 } from "@yutopia/shared/slotcar";
+import { artPx } from "@yutopia/shared/units";
 import { fr, INK, rnd, type Sketch, sh, te, tr, type V3 } from "./kit";
 import { K, M } from "./pal";
 
@@ -33,7 +34,7 @@ import { K, M } from "./pal";
 // leaves room (first free spot of a few), so a figure of eight or a cloverleaf
 // through the middle isn't built over.
 
-const Z = SLOT_TOP;
+const Z = artPx(SLOT_TOP); // (this drawing's px)
 const FELT = "#5f7a3a";
 const ASPHALT = "#3b3a36";
 const RAIL = "#a39c8e"; // steel

@@ -1,4 +1,4 @@
-import { entry, footprint, HELD, type HeldKind, heldState, isHeld } from "@yutopia/shared";
+import { entry, footprint, HELD, type HeldKind, heldState, isHeld, quarterOf } from "@yutopia/shared";
 import { heldBall } from "@yutopia/shared/pool-throw";
 import { fromSchema, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
@@ -19,7 +19,7 @@ registerFeature((room: WorldRoom) => {
       (k) => how && (HELD[k].from as readonly string[]).includes(how),
     );
     if (!kind) return;
-    const { w, h } = footprint(o.kind, o.rot);
+    const { w, h } = footprint(o.kind, quarterOf(o));
     const cx = Math.max(o.x, Math.min(p.x, o.x + w));
     const cy = Math.max(o.y, Math.min(p.y, o.y + h));
     // (in three dimensions: shared reach.ts — a flier over the machine doesn't reach it)

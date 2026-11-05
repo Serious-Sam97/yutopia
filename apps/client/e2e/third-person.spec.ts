@@ -169,7 +169,7 @@ test("third person: emotes and phones over there, Use on a sofa in 3D seats you"
       kind: "sofa",
       x: X,
       y: Y,
-      rot: 0,
+      yaw: 0,
       props: {},
     });
     // in the 3D room (redrawn where it changed) and clickable

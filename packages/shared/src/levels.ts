@@ -1,6 +1,7 @@
 import type { WorldObjectDef } from "./catalog.ts";
 import type { Point } from "./iso.ts";
 import { isFloor, type LevelDef, type MapDef } from "./map.ts";
+import { STOREY } from "./units.ts";
 
 // The building: floors stacked STOREY tiles apart (docs/plan/25-building-floors.md).
 // The world's map is its *home* floor (the studio) and carries the others in
@@ -11,11 +12,13 @@ import { isFloor, type LevelDef, type MapDef } from "./map.ts";
 // Each floor is drawn, walked, heard and built on its own; stairs and
 // elevators (stairs.ts, lifts) go between them.
 
-export const STOREY = 3.5; // tiles, floor to floor (the walls are 3.27, the rest is ceiling and slab)
-
 export const floorOf = (m: { floor?: number }): number => m.floor ?? 0;
 export const homeOf = (m: { floor?: number; home?: number }): number => m.home ?? m.floor ?? 0;
 export const elevOf = (level: number): number => level * STOREY;
+/** A person's height (Player.z: the world's, plan 72 phase 6) as one over their floor — what a
+ *  floor's grid and the walker work in till phase 7 — and back. */
+export const overFloor = (level: number, z: number): number => z - elevOf(level);
+export const worldZ = (level: number, z: number): number => z + elevOf(level);
 
 /** Every floor of the building, bottom up. */
 export function floorsOf(m: MapDef): number[] {
@@ -25,15 +28,24 @@ export function floorsOf(m: MapDef): number[] {
 
 export const hasFloor = (m: MapDef, level: number): boolean => floorsOf(m).includes(level);
 
-/** Where floor `level`'s corner is, in the building's coords. */
+/** Where floor `level`'s corner is (where its tile rows start), in the building's coords — on a
+ *  world map (MapDef.world) the world's, the home floor's own corner too. */
 export function offsetOf(m: MapDef, level: number): Point {
-  if (level === homeOf(m)) return { x: 0, y: 0 };
+  if (level === homeOf(m)) return m.world ? { x: m.ox ?? 0, y: m.oy ?? 0 } : { x: 0, y: 0 };
   const l = m.levels?.find((v) => v.index === level);
   return { x: l?.ox ?? 0, y: l?.oy ?? 0 };
 }
 
-/** A point on floor `from` in floor `to`'s coords (the same spot of the building). */
+/** What turns floor `level`'s places into the world's: nothing on a world map (MapDef.world, its
+ *  places are the world's), the floor's corner on an older one. */
+export function shiftOf(m: MapDef, level: number): Point {
+  return m.world ? { x: 0, y: 0 } : offsetOf(m, level);
+}
+
+/** A point on floor `from` in floor `to`'s coords (the same spot of the building). A world map's
+ *  floors share the world's (MapDef.world): the point as it is. */
 export function across(m: MapDef, from: number, to: number, p: Point): Point {
+  if (m.world) return { x: p.x, y: p.y };
   const a = offsetOf(m, from);
   const b = offsetOf(m, to);
   return { x: p.x + a.x - b.x, y: p.y + a.y - b.y };
@@ -57,11 +69,12 @@ export function levelMap(m: MapDef, level: number): MapDef | null {
     hBacks: l.hBacks,
     vBacks: l.vBacks,
     areas: l.areas,
-    spawn: l.spawn ?? centreOf(l),
+    spawn: l.spawn ?? centreOf(l, m.world ? l.ox : 0, m.world ? l.oy : 0),
     objects: [],
     floor: l.index,
     ox: l.ox,
     oy: l.oy,
+    ...(m.world ? { world: true as const } : {}),
     home,
     levels: m.levels,
     outdoor: l.outdoor,
@@ -103,11 +116,11 @@ export function levelDefOf(lm: MapDef, was?: LevelDef): LevelDef {
   };
 }
 
-function centreOf(l: { width: number; height: number; tiles: string[] }): Point {
+function centreOf(l: { width: number; height: number; tiles: string[] }, ox: number, oy: number): Point {
   // the floor tile nearest the middle (a floor's own arrival point)
   const cx = l.width / 2;
   const cy = l.height / 2;
-  let best: Point = { x: cx, y: cy };
+  let best: Point = { x: cx + ox, y: cy + oy };
   let bd = Number.POSITIVE_INFINITY;
   for (let y = 0; y < l.height; y++)
     for (let x = 0; x < l.width; x++) {
@@ -115,7 +128,7 @@ function centreOf(l: { width: number; height: number; tiles: string[] }): Point 
       const d = (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2;
       if (d < bd) {
         bd = d;
-        best = { x: x + 0.5, y: y + 0.5 };
+        best = { x: x + 0.5 + ox, y: y + 0.5 + oy };
       }
     }
   return best;

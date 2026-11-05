@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
-import { canPlace, ROOM_NAME, studio } from "@yutopia/shared";
+import { canPlace, quarterYaw, ROOM_NAME, studio } from "@yutopia/shared";
 import type { MediaState } from "@yutopia/shared/media";
 import { Client, type Room } from "colyseus.js";
 
@@ -116,15 +116,15 @@ const mediaOf = (p: Person, id: string): MediaState | null => {
 // a TV on the floor somewhere free
 async function placeTv(b: Person, id: string, kind = "tv_console", props?: Record<string, unknown>) {
   const objects = [...b.room.state.objects.values()].map(
-    (o: { id: string; kind: string; x: number; y: number; rot: number; props: string }) => ({
+    (o: { id: string; kind: string; x: number; y: number; yaw: number; props: string }) => ({
       ...o,
       props: JSON.parse(o.props || "{}"),
     }),
   );
   for (let y = 4; y < studio.height - 2; y++)
     for (let x = 4; x < studio.width - 3; x++)
-      if (canPlace(studio, objects, { id, kind, x, y, rot: 0 }, [])) {
-        b.room.send("obj:put", { id, kind, x, y, rot: 0, props });
+      if (canPlace(studio, objects, { id, kind, x, y, yaw: quarterYaw(0) }, [])) {
+        b.room.send("obj:put", { id, kind, x, y, yaw: 0, props });
         await waitFor(() => !!b.room.state.objects.get(id));
         return;
       }
@@ -259,7 +259,7 @@ test("media: every TV its own; a copy starts with nothing on, a move keeps what 
       mediaOf(ana, "tv-one")?.paused === false,
   );
   const live = JSON.stringify(mediaOf(ana, "tv-one"));
-  ana.room.send("obj:put", { id: "tv-one", kind: one.kind, x: one.x, y: one.y, rot: 0, props });
+  ana.room.send("obj:put", { id: "tv-one", kind: one.kind, x: one.x, y: one.y, yaw: 0, props });
   await sleep(400);
   assert.equal(JSON.stringify(mediaOf(ana, "tv-one")), live);
 });

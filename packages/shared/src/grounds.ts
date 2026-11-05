@@ -114,7 +114,7 @@ import {
   type WayDef,
 } from "./grounds-edits.ts";
 import type { LotLayout } from "./lot.ts";
-import type { AreaDef, MapDef } from "./map.ts";
+import { type AreaDef, type MapDef, worldShift } from "./map.ts";
 import type { GroundWhat } from "./shapes/grounds.ts";
 
 // The Grounds (docs/plan/27-the-grounds.md): the land round the headquarters
@@ -2859,7 +2859,8 @@ export function surfaceTileAt(tx: number, tz: number): Surface {
  *  level 0 of a map with floors; nothing for any other floor or a lone map. */
 export function groundsOutdoors(map: MapDef): ReturnType<typeof outdoorsAt> | null {
   if ((map.floor ?? 0) !== 0 || !map.levels?.length) return null;
-  return outdoorsAt(map.ox ?? 0, map.oy ?? 0);
+  const w = worldShift(map);
+  return outdoorsAt(w.x, w.y);
 }
 
 // the bridges' decks: the bridged samples of the ways, boxed for a quick "not here"
@@ -3229,8 +3230,7 @@ export function placeAt(x: number, z: number): { key: string; name: string; priv
 /** Rooms and places round a building's ground floor (shared map.ts setAreasBeyond). */
 export function groundsAreaAt(map: MapDef, x: number, y: number): AreaDef | null {
   if ((map.floor ?? 0) !== 0 || !map.levels?.length) return null;
-  const ox = map.ox ?? 0;
-  const oy = map.oy ?? 0;
+  const { x: ox, y: oy } = worldShift(map);
   const p = placeAt(x + ox, y + oy);
   if (p.b)
     return {

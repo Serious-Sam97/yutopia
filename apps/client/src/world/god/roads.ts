@@ -30,7 +30,7 @@ import { RoadGhost } from "./road-ghost";
 // widened or lit, no more; nothing over what's anchored (said before it's drawn). Each a step.
 // The Select tool's too: a whole way picked, dragged, taken away (`grabWay`, `upWay`).
 
-type Frame = { x: number; z: number; y: number };
+type Frame = { y: number };
 type Ground = { x: number; z: number; h: number } | null;
 export interface RoadsHost {
   draft(): GroundsEdits;
@@ -344,7 +344,7 @@ export class RoadsTool {
     this.ghost.show(def?.pts ?? null, def?.w ?? 0, o.mode !== "remove" && !wayLocked(key ?? ""), null, f);
   }
   hide() {
-    this.ghost?.show(null, 0, true, null, { x: 0, z: 0, y: 0 });
+    this.ghost?.show(null, 0, true, null, { y: 0 });
   }
   dispose() {
     this.ghost?.dispose();

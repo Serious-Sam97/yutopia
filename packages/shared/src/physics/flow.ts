@@ -189,8 +189,8 @@ export class GroundsFlow implements FlowWorld {
 
   pole(x: number, y: number, z: number, reach: number) {
     const f = this.frame();
-    const X = f.ox + x;
-    const Z = f.oy + y;
+    const X = x;
+    const Z = y;
     const Y = f.elev + z;
     let best: Pole | null = null;
     let bd = reach;
@@ -204,13 +204,13 @@ export class GroundsFlow implements FlowWorld {
           best = p;
         }
       }
-    return best && { x: best.x - f.ox, y: best.z - f.oy, r: best.r, top: best.y1 - f.elev };
+    return best && { x: best.x, y: best.z, r: best.r, top: best.y1 - f.elev };
   }
 
   wall(x: number, y: number, z: number, _ux: number, _uy: number, reach: number) {
     const f = this.frame();
-    const X = f.ox + x;
-    const Z = f.oy + y;
+    const X = x;
+    const Z = y;
     const Y = f.elev + z;
     const near = this.near(X, Z, reach);
     let best: { nx: number; ny: number; d: number; top: number; run: boolean } | null = null;
@@ -249,8 +249,8 @@ export class GroundsFlow implements FlowWorld {
 
   rail(x: number, y: number, z: number, reach: number) {
     const f = this.frame();
-    const X = f.ox + x;
-    const Z = f.oy + y;
+    const X = x;
+    const Z = y;
     const Y = f.elev + z;
     let best: { x: number; y: number; z: number; ux: number; uy: number; back: number; ahead: number } | null = null;
     let bd = Number.POSITIVE_INFINITY;
@@ -272,8 +272,8 @@ export class GroundsFlow implements FlowWorld {
         if (across > reach || across >= bd) continue;
         bd = across;
         best = {
-          x: b.x + ux * s - f.ox,
-          y: b.z + uz * s - f.oy,
+          x: b.x + ux * s,
+          y: b.z + uz * s,
           z: top - f.elev,
           ux,
           uy: uz,

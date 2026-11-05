@@ -114,7 +114,7 @@ test("sent home from the lobby, it goes; hungry, its office's bowl; a friend kno
   ana.room.send("map:room:update", { key: "war-room", ownerId: 83, ownerName: "P83" });
   // a bowl in the office, with something in it
   ana.room.send("obj:batch", {
-    items: [{ id: "h-bowl", kind: "pet_bowl", x: 44, y: 3, rot: 0, props: { portions: 3 } }],
+    items: [{ id: "h-bowl", kind: "pet_bowl", x: 44, y: 3, yaw: 0, props: { portions: 3 } }],
   });
   await waitFor(() => !!ana.room.state.objects.get("h-bowl"));
   ana.room.send("pet:adopt", { species: "dog", name: "Bo" });

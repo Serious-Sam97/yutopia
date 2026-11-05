@@ -1,6 +1,7 @@
 import {
   footprint,
   hearingGain,
+  quarterOf,
   type ServerMessages,
   stereoPan,
   variantOf,
@@ -21,6 +22,7 @@ import {
   turnLocal,
 } from "@yutopia/shared/games";
 import { displaySpot, GLASS, glassCorners, tvInput, tvVolume } from "@yutopia/shared/media";
+import type { GameConsole, WorldState } from "@yutopia/state";
 import { prefs } from "@/lib/prefs";
 import type { WorldController } from "../controller";
 import { type GameView, hud, toast } from "../store";
@@ -45,14 +47,11 @@ import { TvStream } from "./tv";
 //  · your pad: keyboard / gamepad while the console's panel is open;
 //  · the TV's sound for viewers, from where the TV is.
 
-// biome-ignore lint/suspicious/noExplicitAny: colyseus schema instances
-type S = any;
-
 const AUTOSAVE_MS = 45_000;
 const MIN_HOLD_MS = 80;
 // The slim disc console's flip-up screen (its variant 1): where its glass is
-// (rot-0 local tiles on its front face, height in px; art/items/games.ts)
-const LCD = { x0: 0.29, x1: 0.65, y: 0.336, z0: 5.8, z1: 16.8 };
+// (rot-0 local tiles on its front face, height in m; art/items/games.ts)
+const LCD = { x0: 0.29, x1: 0.65, y: 0.336, z0: 0.148, z1: 0.4287 };
 // (the art's seed for an id: kit.ts's seedOf, here so the item art's chunk isn't pulled in)
 function seedOf(id: string): number {
   let h = 2166136261;
@@ -72,19 +71,17 @@ interface LcdView {
   seen: number[]; // the video frame copied last (nextFrame)
 } // a remote press lasts at least this (a few emulator frames)
 const SKIP_KEYS = new Set(["Escape", "Tab"]);
-// Where a console's power LED is (rot-0 local tiles, height in px) and its
+// Where a console's power LED is (rot-0 local tiles, height in m) and its
 // colour: on the front of the cartridge consoles, on the top of the disc ones
 // (where their drawings put it, art/items/games.ts).
 const LED: Record<string, { at: [number, number]; z: number; color: number }> = {
-  console_ps1: { at: [0.7, 0.545], z: 4.5, color: 0x7dff7a },
-  console_ps1_slim: { at: [0.71, 0.67], z: 3.7, color: 0x7dff7a },
+  console_ps1: { at: [0.7, 0.545], z: 0.1148, color: 0x7dff7a },
+  console_ps1_slim: { at: [0.71, 0.67], z: 0.0944, color: 0x7dff7a },
 };
-const LED_FRONT = { at: [0.3, 0.74] as [number, number], z: 2, color: 0xff6a3a };
-// iso px of height → tiles, as tp/kit3d's zt (not imported: that's three.js's chunk)
-const zt = (z: number) => z / (45.25 * Math.cos(Math.PI / 6));
+const LED_FRONT = { at: [0.3, 0.74] as [number, number], z: 0.051, color: 0xff6a3a };
 const ledOf = (o: WorldObjectDef) => {
   const l = LED[o.kind] ?? LED_FRONT;
-  const [x, y] = turnLocal(l.at[0], l.at[1], o.rot ?? 0, 1, 1);
+  const [x, y] = turnLocal(l.at[0], l.at[1], quarterOf(o), 1, 1);
   return { x: o.x + x, y: o.y + y, z: l.z, color: l.color };
 };
 
@@ -177,7 +174,7 @@ export class GameRoom {
   private get model() {
     return this.w.model;
   }
-  private get state(): S {
+  private get state(): WorldState | undefined {
     return this.w.room?.state;
   }
   private get mySid(): string {
@@ -187,10 +184,10 @@ export class GameRoom {
     return this.model?.getObject(id);
   }
   private rect(o: WorldObjectDef) {
-    const { w, h } = footprint(o.kind, o.rot ?? 0);
+    const { w, h } = footprint(o.kind, quarterOf(o));
     return { x: o.x, y: o.y, w, h };
   }
-  private consoleOf(id: string): S | undefined {
+  private consoleOf(id: string): GameConsole | undefined {
     return this.state?.consoles?.get(id);
   }
 
@@ -265,8 +262,8 @@ export class GameRoom {
   private syncHosting() {
     if (this.switching) return;
     const sid = this.mySid;
-    let mine: [string, S] | null = null;
-    for (const [id, c] of this.state.consoles as Map<string, S>) if (c.host === sid) mine = [id, c];
+    let mine: [string, GameConsole] | null = null;
+    for (const [id, c] of this.state?.consoles ?? new Map<string, GameConsole>()) if (c.host === sid) mine = [id, c];
     const h = this.hosting;
     const stop = !!h && (!mine || mine[0] !== h.id);
     const next = mine && (!h || stop) ? mine : null;
@@ -280,7 +277,7 @@ export class GameRoom {
     });
   }
 
-  private async startHosting(id: string, c: S) {
+  private async startHosting(id: string, c: GameConsole) {
     const system = c.system as GameSystem;
     const canvas = document.createElement("canvas");
     this.holder.append(canvas);
@@ -590,7 +587,7 @@ export class GameRoom {
 
   // ── the pictures ─────────────────────────────────────────────────────────
   // what a TV shows: the console on its input, if that's on
-  private tvShows(tv: WorldObjectDef): { id: string; c: S } | null {
+  private tvShows(tv: WorldObjectDef): { id: string; c: GameConsole } | null {
     const input = tvInput(tv);
     // (only while its cable's still in this TV: an older TV may still name it)
     const c = input && this.obj(input)?.props?.tv === tv.id ? this.consoleOf(input) : undefined;
@@ -697,7 +694,7 @@ export class GameRoom {
         v.ver++;
       }
       // its glass, turned with the console
-      const rot = o.rot ?? 0;
+      const rot = quarterOf(o);
       const a = turnLocal(LCD.x0, LCD.y, rot, 1, 1);
       const b = turnLocal(LCD.x1, LCD.y, rot, 1, 1);
       v.at = { tl: [o.x + a[0], o.y + a[1]], tr: [o.x + b[0], o.y + b[1]], zTop: LCD.z1, zBot: LCD.z0 };
@@ -757,7 +754,7 @@ export class GameRoom {
       const ports = Array.from({ length: SYSTEMS[system].ports }, (_, i) => {
         const sid = c ? (i === 0 ? c.p1 : c.p2) : "";
         return {
-          name: sid ? (i === 0 ? c.p1Name : c.p2Name) : "",
+          name: sid && c ? (i === 0 ? c.p1Name : c.p2Name) : "",
           me: !!sid && sid === this.mySid,
           analog: !!c && !!(i === 0 ? c.a1 : c.a2),
         };
@@ -833,14 +830,14 @@ export class GameRoom {
           const at = { x: (g.tl[0] + g.tr[0]) / 2, y: (g.tl[1] + g.tr[1]) / 2 };
           out.cables.push({ from, to: at, up: g.zBot });
         } else {
-          const { w, h } = footprint(tv.kind, tv.rot ?? 0);
+          const { w, h } = footprint(tv.kind, quarterOf(tv));
           out.cables.push({ from, to: { x: tv.x + w / 2, y: tv.y + h / 2 }, up: 0 });
         }
       }
       if (c) {
         const l = ledOf(o);
         // (the front LED a touch out of the face; the disc ones' on their tops)
-        out.leds.push(LED[o.kind] ? { x: l.x, y: l.y, h: zt(l.z), color: l.color } : { x: o.x + 0.3, y: o.y + 0.8 });
+        out.leds.push(LED[o.kind] ? { x: l.x, y: l.y, h: l.z, color: l.color } : { x: o.x + 0.3, y: o.y + 0.8 });
       }
       const system = CONSOLES[o.kind];
       for (let port = 1; port <= SYSTEMS[system].ports; port++) {

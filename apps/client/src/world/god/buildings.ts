@@ -25,7 +25,7 @@ import { ThingGhost } from "./thing-ghost";
 // sides swapped, its door round). Any building — a new one or the generator's — dragged moves
 // it; a click picks it (the panel then changes it); Delete takes it away. What's anchored stays.
 
-type Frame = { x: number; z: number; y: number };
+type Frame = { y: number };
 type Ground = { x: number; z: number; h: number } | null;
 type Face = GodHud["buildings"]["face"];
 export interface BuildingsHost {
@@ -237,7 +237,7 @@ export class BuildingsTool {
       const az = cz + oz * (dd / 2 + 1);
       const a = this.arrow as Mesh;
       a.visible = true;
-      a.position.set(ax - f.x, terrainAt(ax, az) + f.y + 0.3, az - f.z);
+      a.position.set(ax, terrainAt(ax, az) + f.y + 0.3, az);
       a.rotation.y = Math.atan2(-oz, ox);
       // (as big as the building's half across, 6.7 m at least: read from high up)
       a.scale.setScalar(Math.max(1.2, Math.min(w, dd) / 9));
@@ -273,7 +273,7 @@ export class BuildingsTool {
     if (why !== o.blocked) this.setO({ blocked: why });
   }
   hide() {
-    this.ghost?.show(null, 0, [0, 0, 0, 0, 0], 1, "ok", { x: 0, z: 0, y: 0 });
+    this.ghost?.show(null, 0, [0, 0, 0, 0, 0], 1, "ok", { y: 0 });
     if (this.arrow) this.arrow.visible = false;
   }
   dispose() {

@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { entry, footprint } from "./catalog.ts";
-import { Grid, isLegalMove, moveStep } from "./grid.ts";
+import { entry, footprint, quarterOf, quarterYaw } from "./catalog.ts";
+import { moveStep } from "./ground.ts";
 import { hearingGain, stereoPan } from "./hearing.ts";
 import { dirFromDelta, screenInputToWorld, toScreen, toWorld } from "./iso.ts";
 import { areaAt, holdsItems, hWall, isFloor, tileAt } from "./map.ts";
 import { studio } from "./maps/studio.ts";
-import { findPath } from "./path.ts";
+import { testWorld } from "./physics/testing.ts";
 
 test("iso projection round-trips", () => {
   for (const [x, y] of [
@@ -38,7 +38,7 @@ test("studio map is rectangular and every object sits on floor without overlaps"
     assert.ok(!ids.has(o.id), `duplicate id ${o.id}`);
     ids.add(o.id);
     const e = entry(o.kind);
-    const { w, h } = footprint(o.kind, o.rot);
+    const { w, h } = footprint(o.kind, quarterOf(o));
     for (let dy = 0; dy < h; dy++)
       for (let dx = 0; dx < w; dx++) {
         const x = o.x + dx;
@@ -54,55 +54,47 @@ test("studio map is rectangular and every object sits on floor without overlaps"
   }
 });
 
-test("every walkable tile and every area is reachable from spawn", () => {
-  const g = Grid.from(studio, studio.objects);
-  const seen = new Uint8Array(g.width * g.height);
-  const q = [[Math.floor(studio.spawn.x), Math.floor(studio.spawn.y)]];
-  seen[g.idx(q[0][0], q[0][1])] = 1;
-  while (q.length) {
-    const [x, y] = q.pop() as number[];
-    for (const [dx, dy] of [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ]) {
-      const nx = x + dx;
-      const ny = y + dy;
-      if (g.step(x, y, nx, ny) && !seen[g.idx(nx, ny)]) {
-        seen[g.idx(nx, ny)] = 1;
-        q.push([nx, ny]);
-      }
-    }
-  }
-  for (let y = 0; y < g.height; y++)
-    for (let x = 0; x < g.width; x++) if (g.ok(x, y)) assert.ok(seen[g.idx(x, y)], `unreachable ${x},${y}`);
+test("every walkable tile and every area is reachable from spawn", async () => {
+  // (Jolt's floor and the navmesh's ways: physics/testing.ts)
+  const w = await testWorld(studio, studio.objects);
+  const g = w.place();
+  const nav = (await w.nav()).floor(0);
+  assert.ok(nav);
+  for (let y = 0; y < studio.height; y++)
+    for (let x = 0; x < studio.width; x++)
+      if (g.ok(x, y)) assert.ok(nav.path(studio.spawn, { x: x + 0.5, y: y + 0.5 }), `unreachable ${x},${y}`);
   for (const a of studio.areas) {
-    const p = findPath(g, studio.spawn, { x: a.x + a.w / 2, y: a.y + a.h / 2 });
+    const p = nav.path(studio.spawn, { x: a.x + a.w / 2, y: a.y + a.h / 2 });
     assert.ok(p && p.length > 0, `no path to ${a.key}`);
   }
+  w.dispose();
 });
 
-test("paths never cross walls or furniture", () => {
-  const g = Grid.from(studio, studio.objects);
-  const path = findPath(g, studio.spawn, { x: 44.5, y: 17.5 }); // spawn → booth 3
+test("paths never cross walls or furniture", async () => {
+  const w = await testWorld(studio, studio.objects);
+  const g = w.place();
+  const path = (await w.nav()).floor(0)?.path(studio.spawn, { x: 44.5, y: 17.5 }); // spawn → booth 3
   assert.ok(path);
   let prev = studio.spawn;
   for (const p of path) {
-    assert.ok(g.clear(prev, p), `segment ${JSON.stringify(prev)} → ${JSON.stringify(p)}`);
+    // (a thin line along it: through nothing — the navmesh keeps about a body's radius off what's
+    // in the way, to its 0.11 m cells)
+    assert.ok(g.clear(prev, p, 0.05), `segment ${JSON.stringify(prev)} → ${JSON.stringify(p)}`);
     prev = p;
   }
   assert.equal(areaAt(studio, prev.x, prev.y)?.key, "booth-3");
+  w.dispose();
 });
 
-test("movement slides along walls and server rejects teleports through them", () => {
-  const g = Grid.from(studio, studio.objects);
+test("movement slides along walls, and no way goes through one", async () => {
+  const w = await testWorld(studio, studio.objects);
+  const g = w.place();
   let p = { x: 1.5, y: 23.5 };
   for (let i = 0; i < 30; i++) p = moveStep(g, p, { x: -1, y: 0 }, 4, 0.05);
   assert.ok(p.x >= 0.3 && p.x <= 0.55 && g.fits(p.x, p.y), `stops at the thin wall: ${p.x}`);
-  assert.ok(isLegalMove(g, { x: 6.5, y: 28.5 }, { x: 6.7, y: 28.5 }, 0.05));
-  assert.ok(!isLegalMove(g, { x: 6.5, y: 28.5 }, { x: 16.5, y: 28.5 }, 0.05), "too far");
-  assert.ok(!isLegalMove(g, { x: 12.5, y: 25.5 }, { x: 14.5, y: 25.5 }, 0.5), "through the lobby wall");
+  assert.ok(g.clear({ x: 6.5, y: 28.5 }, { x: 6.7, y: 28.5 }, 0.05));
+  assert.ok(!g.clear({ x: 12.5, y: 25.5 }, { x: 14.5, y: 25.5 }, 0.05), "through the lobby wall");
+  w.dispose();
 });
 
 test("hearing: proximity, private rooms, booths and the stage", () => {
@@ -144,8 +136,12 @@ test("templates fit their room without overlaps", async () => {
       t.objects.some((o) => o.props?.desk),
       `${t.key} has desks`,
     );
-    const g = Grid.from(studio, placed);
-    assert.ok(findPath(g, studio.spawn, { x: 22.5, y: 2.5 }), `${t.key}: tracking room still walkable`);
+    const w = await testWorld(studio, placed);
+    assert.ok(
+      (await w.nav()).floor(0)?.path(studio.spawn, { x: 22.5, y: 2.5 }),
+      `${t.key}: tracking room still walkable`,
+    );
+    w.dispose();
   }
 });
 
@@ -153,7 +149,10 @@ test("placement: no furniture in walls, wall items need a wall", async () => {
   const { canPlace } = await import("./build.ts");
   assert.ok(canPlace(studio, studio.objects, { id: "p", kind: "plant", x: 0, y: 3 }), "old wall tiles are floor now");
   assert.ok(canPlace(studio, studio.objects, { id: "p", kind: "plant", x: 10, y: 3 }));
-  assert.ok(!canPlace(studio, studio.objects, { id: "s", kind: "desk", x: 28, y: 9, rot: 0 }), "never across a wall");
+  assert.ok(
+    !canPlace(studio, studio.objects, { id: "s", kind: "desk", x: 28, y: 9, yaw: quarterYaw(0) }),
+    "never across a wall",
+  );
   assert.ok(!canPlace(studio, studio.objects, { id: "w", kind: "whiteboard", x: 10, y: 3 }), "no wall behind");
   assert.ok(canPlace(studio, studio.objects, { id: "w", kind: "whiteboard", x: 11, y: 0 }), "on the north wall");
   assert.ok(!canPlace(studio, studio.objects, { id: "w", kind: "poster", x: 6, y: 0 }), "not on a window");

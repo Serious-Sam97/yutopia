@@ -62,7 +62,7 @@ test("pool: lean in, play Vortex, break with the mouse — seen from across the 
     ]) {
       const p = { x: Math.floor(sp.x) + dx, y: Math.floor(sp.y) + dy };
       await ana.evaluate(
-        ([i, q]) => (window as any).__yutopia.send("obj:put", { id: i, kind: "pool_table", x: q.x, y: q.y, rot: 0 }),
+        ([i, q]) => (window as any).__yutopia.send("obj:put", { id: i, kind: "pool_table", x: q.x, y: q.y, yaw: 0 }),
         [id, p] as const,
       );
       await ana.waitForTimeout(600);
@@ -105,7 +105,7 @@ test("pool: lean in, play Vortex, break with the mouse — seen from across the 
       // the head ball: on the foot spot (table metres +0.495, 0) — tiles: x 2 + 0.495·1.55, y 1
       const r = w.hostRect();
       const on = (x: number, y: number) => {
-        const p = w.model.worldToClient(x, y, 26.7);
+        const p = w.model.worldToClient(x, y, 0.6813);
         return { x: r.left + p.x, y: r.top + p.y };
       };
       return { head: on(o.x + 2 + 0.495 * 1.55, o.y + 1), cue: on(o.x + 2 - 0.495 * 1.55, o.y + 1) };

@@ -1,4 +1,4 @@
-import { BODY_R, CAR_COLOURS, dirFromDelta, GROUND_OFFSET, parseAvatar, type WorldObjectDef } from "@yutopia/shared";
+import { BODY_R, CAR_COLOURS, face8, parseAvatar, type WorldObjectDef } from "@yutopia/shared";
 import {
   CAR_FLAGS,
   CAR_HZ,
@@ -31,6 +31,7 @@ import {
   toWire,
 } from "@yutopia/shared/car";
 import type * as GroundsModule from "@yutopia/shared/grounds";
+import type { WorldState } from "@yutopia/state";
 import {
   BackSide,
   Color,
@@ -150,16 +151,12 @@ const t = (k: string) => trMaybe(k) ?? k;
 
 interface RoomLike {
   sessionId: string;
-  // biome-ignore lint/suspicious/noExplicitAny: the room's decoded state
-  state: any;
+  state: WorldState;
   send(type: string, m: unknown): void;
   onMessage(type: string, cb: (m: never) => void): () => void;
 }
 export interface CarsHost {
   room(): RoomLike | null;
-  /** the ground floor's corner in the building's coords (map ox, oy) */
-  ox(): number;
-  oy(): number;
   level(): number;
   me(): { x: number; y: number };
   /** my user id (my own bay: car/spot.ts) */
@@ -186,16 +183,6 @@ type Pets = typeof import("../art/pets");
 /** How big a pet is in a seat (as people are drawn a touch smaller there; more so pets — a
  *  capybara would fill the back seat): the stills' SEAT_SCALE (tp/pet-stage.ts). */
 const PET_SEAT = 0.72;
-// a pet as the room's state has it (the fields a seat needs)
-interface PetWire {
-  ride: string;
-  seat: number;
-  alive: boolean;
-  species: import("@yutopia/shared/pets").Species;
-  look: string;
-  outfit: string;
-}
-
 // a sample of someone else's car
 interface Sample {
   t: number;
@@ -343,8 +330,6 @@ export function attachCars(c: any, G: typeof GroundsModule): Cars {
   return new Cars(
     {
       room: () => c.room,
-      ox: () => c.map.ox ?? 0,
-      oy: () => c.map.oy ?? 0,
       level: () => c.level,
       me: () => c.me,
       uid: () => c.myUid(),
@@ -426,12 +411,15 @@ export class Cars {
     // (some browsers send one huge jump as the lock starts)
     if (Math.abs(e.movementX) > 400 || Math.abs(e.movementY) > 400) return;
     const tp = this.host.tp();
-    const k = locked ? 0.0024 * (tp?.lookSens ?? 1) : 0.0055;
+    const k = locked ? 0.0024 * (tp?.mouseLook.lookSens ?? 1) : 0.0055;
     const look = this.cam.look;
     // (all the way round the car behind it; from the driver's seat, as far as a head turns)
     const far = this.cam.mode === "cockpit" ? 2.4 : Math.PI;
     look.yaw = Math.max(-far, Math.min(far, look.yaw + e.movementX * k));
-    look.pitch = Math.max(-0.5, Math.min(0.4, look.pitch - e.movementY * k * 0.8 * (tp?.lookInvert ? -1 : 1)));
+    look.pitch = Math.max(
+      -0.5,
+      Math.min(0.4, look.pitch - e.movementY * k * 0.8 * (tp?.mouseLook.lookInvert ? -1 : 1)),
+    );
     this.mouseAt = this.time;
   };
   private listenMouse(c: HTMLCanvasElement) {
@@ -547,9 +535,7 @@ export class Cars {
     this.G.setKartShow(park?.showing ? Number(park.show ?? 0) : -1);
     if (!this.karts) {
       const me = this.host.me();
-      const near =
-        this.host.level() === 0 &&
-        Math.hypot(me.x + this.host.ox() - this.G.KART_PARK.x, me.y + this.host.oy() - this.G.KART_PARK.z) < 420;
+      const near = this.host.level() === 0 && Math.hypot(me.x - this.G.KART_PARK.x, me.y - this.G.KART_PARK.z) < 420;
       if ((near || room?.state.karts?.get("park")?.karts.size) && !this.kartsLoading) {
         this.kartsLoading = true;
         void import("../kart/karts").then((m) => {
@@ -586,7 +572,7 @@ export class Cars {
       c.me.y = s.y;
       c.me.a = 2; // (sitting: shared ANIM.sit)
       c.meAngle = s.a;
-      c.me.d = dirFromDelta(Math.cos(s.a), Math.sin(s.a), c.me.d);
+      c.me.yaw = face8(Math.cos(s.a), Math.sin(s.a), c.me.yaw);
     }
     return true;
   }
@@ -603,8 +589,8 @@ export class Cars {
     const ca = Math.cos(a);
     const sa = Math.sin(a);
     return {
-      x: p.x + ca * lx - sa * lz - this.host.ox(),
-      y: p.z + sa * lx + ca * lz - this.host.oy(),
+      x: p.x + ca * lx - sa * lz,
+      y: p.z + sa * lx + ca * lz,
       a,
       ground: p.y - SPECS[l.kind].cog,
     };
@@ -643,14 +629,13 @@ export class Cars {
     this.spots.refresh(
       () => this.host.objects(),
       this.host.uid(),
-      { x: this.host.ox(), y: this.host.oy() },
       performance.now(),
       (o) => {
         // (driven: where it is now; parked: its object, on the ground floor)
         const l = this.live.get(`car:${o.id}`);
         const q = l ? null : parkedPose(o);
-        const x = l ? l.pose.p.x : (q?.x ?? 0) + GROUND_OFFSET.x;
-        const z = l ? l.pose.p.z : (q?.y ?? 0) + GROUND_OFFSET.y;
+        const x = l ? l.pose.p.x : (q?.x ?? 0);
+        const z = l ? l.pose.p.z : (q?.y ?? 0);
         return { x, z, where: this.G.placeAt(x, z).name };
       },
     );
@@ -661,7 +646,7 @@ export class Cars {
     const inBay = (id: string) => {
       const p = this.parked.get(id)?.pose;
       const me = this.host.me();
-      return !!p && this.spots.sameBay(me.x + this.host.ox(), me.y + this.host.oy(), p.x, p.z);
+      return !!p && this.spots.sameBay(me.x, me.y, p.x, p.z);
     };
     // (by its door — within 2.2 of its middle — the car's, though)
     const carWins = !!near && (near.kind !== "car" || inBay(near.objectId) || this.nearD < 2.2);
@@ -704,14 +689,14 @@ export class Cars {
   private spotNow(): SpotPrompt | null {
     if (this.host.level() !== 0) return null;
     const me = this.host.me();
-    return this.spots.prompt(me.x + this.host.ox(), me.y + this.host.oy(), this.host.uid());
+    return this.spots.prompt(me.x, me.y, this.host.uid());
   }
   /** By MOTORS' door or a vehicle on show, on foot: the dealer's prompt (docs/plan/43-the-spot.md). */
   private motorsNow(): { objectId: string; kind: string; label: string } | null {
     if (this.host.level() !== 0) return null;
     const me = this.host.me();
-    const x = me.x + this.host.ox();
-    const z = me.y + this.host.oy();
+    const x = me.x;
+    const z = me.y;
     const M = this.G.MOTORS;
     if (x < M.yard.x0 - 20 || x > M.yard.x1 + 2 || z < M.yard.z0 - 4 || z > M.yard.z1 + 2) return null;
     const door = Math.hypot(x - MOTORS_DOOR.x, z - MOTORS_DOOR.z) < 2.6;
@@ -759,8 +744,8 @@ export class Cars {
   /** Something that blocks walking: a live car's body, its model's size, a body round (x, y)
    *  touching it (the ground floor's coords; parked, its object blocks — shared grid.ts). */
   blocks(x: number, y: number): boolean {
-    const bx = x + this.host.ox();
-    const bz = y + this.host.oy();
+    const bx = x;
+    const bz = y;
     for (const [, l] of this.live) {
       const a = headingFromQ(l.pose.q);
       const b = boxOf(SPECS[l.kind]);
@@ -797,9 +782,9 @@ export class Cars {
       if (this.root.parent !== tp.scene) tp.scene.add(this.root);
       this.listenMouse(tp.renderer.domElement);
       const f = tp.groundsFrame();
-      this.root.position.set(-f.x, f.y, -f.z);
+      this.root.position.set(0, f.y, 0);
       this.root.visible = f.visible;
-      tp.matrices(this.root);
+      tp.culling.matrices(this.root);
     }
     this.nowMs = now;
     this.updateEnv(tp);
@@ -1007,7 +992,7 @@ export class Cars {
       if (v.kind !== "plough" || !v.shown || Math.abs(v.v ?? 0) < 1.5) continue;
       const cx = Math.cos(v.a);
       const sx = Math.sin(v.a);
-      if (Math.hypot(v.x - me.x - this.host.ox(), v.z - me.y - this.host.oy()) > 90) continue;
+      if (Math.hypot(v.x - me.x, v.z - me.y) > 90) continue;
       const bx = v.x + cx * 4.6 - sx * 1.2;
       const bz = v.z + sx * 4.6 + cx * 1.2;
       // (at its own height when it says: the Kart Park's, under the bridge's span or up its ramps)
@@ -1019,7 +1004,7 @@ export class Cars {
       for (const l of this.live.values()) {
         const sp = Math.hypot(l.pose.v.x, l.pose.v.z);
         if (l.kind !== "ploughtruck" || sp < 1.5) continue;
-        if (Math.hypot(l.pose.p.x - me.x - this.host.ox(), l.pose.p.z - me.y - this.host.oy()) > 90) continue;
+        if (Math.hypot(l.pose.p.x - me.x, l.pose.p.z - me.y) > 90) continue;
         const a = headingFromQ(l.pose.q);
         const cx = Math.cos(a);
         const sx = Math.sin(a);
@@ -1090,19 +1075,17 @@ export class Cars {
 
   // ── the parked cars: the lot's (and wherever they were left) ───────────────
   private syncParked(tp: ThirdPersonView | null, dt: number) {
-    const ox = this.host.ox();
-    const oy = this.host.oy();
     const seen = new Set<string>();
     const me = this.host.me();
-    const mx = me.x + ox;
-    const mz = me.y + oy;
+    const mx = me.x;
+    const mz = me.y;
     const camAt = tp ? tp.camera.position : null;
     for (const o of this.host.objects()) {
       if (o.kind !== "car" || (Number(o.props?.level ?? 0) | 0) !== 0 || o.props?.driven) continue;
       seen.add(o.id);
       const pose = parkedPose(o);
-      let x = pose.x + ox;
-      let z = pose.y + oy;
+      let x = pose.x;
+      let z = pose.y;
       let a = pose.a;
       // (knocked by me: where it's sliding; told to the server, till its object has caught up)
       const sh = this.shoves.get(o.id);
@@ -1172,7 +1155,7 @@ export class Cars {
       }
       if (p.full?.root.userData.stillDue && tp) {
         p.full.root.userData.stillDue = false;
-        tp.stillModel(p.full.root);
+        tp.culling.stillModel(p.full.root);
       }
       if (p.full) {
         p.full.root.visible = near;
@@ -1483,7 +1466,7 @@ export class Cars {
     const P = this.host.pets();
     if (!P) return;
     const keep = new Set<string>();
-    room.state.pets.forEach((pet: PetWire, id: string) => {
+    room.state.pets.forEach((pet, id) => {
       const seat = l.model.seats[pet.seat];
       if (pet.ride !== l.id || !pet.alive || !seat) return;
       keep.add(id);
@@ -1501,7 +1484,12 @@ export class Cars {
           return {};
         }
       };
-      const model = new P.PetModel(pet.species, json(pet.look), json(pet.outfit), (c, o) => P.petMaterial(c, o));
+      const model = new P.PetModel(
+        pet.species as import("@yutopia/shared/pets").Species,
+        json(pet.look),
+        json(pet.outfit),
+        (c, o) => P.petMaterial(c, o),
+      );
       const holder = new Group();
       holder.add(model.root);
       const side = Math.sign(seat.hip.z) || 1;
@@ -1603,7 +1591,7 @@ export class Cars {
   /** Someone else's car heard: its engine and tyres from what it sends, by distance. */
   private hearRemote(l: LiveView, s: Sample, sp: number, dt: number) {
     const me = this.host.me();
-    const d = Math.hypot(l.pose.p.x - (me.x + this.host.ox()), l.pose.p.z - (me.y + this.host.oy()));
+    const d = Math.hypot(l.pose.p.x - me.x, l.pose.p.z - me.y);
     const on = d < 70 && !!(s.fl & CAR_FLAGS.engine) && mixer.ctx?.state === "running";
     if (on && !l.sound && mixer.ctx) l.sound = soundOf(mixer.ctx, l.kind);
     if (!on && l.sound) {
@@ -1970,7 +1958,7 @@ export class Cars {
         room.state.vehicles.forEach((v: VehWire) => {
           if (v.obj === id) {
             driven = true;
-            at = { x: v.x - this.host.ox(), y: v.z - this.host.oy() };
+            at = { x: v.x, y: v.z };
           }
         });
         const def = [...this.host.objects()].find((x) => x.id === id);
@@ -2026,7 +2014,7 @@ export class Cars {
       }
     // (whoever stands in them takes their light: the view's tint)
     const tp = this.host.tp();
-    if (tp && tp.carBeams !== this.beamLights) tp.carBeams = this.beamLights;
+    if (tp && tp.eyes.carBeams !== this.beamLights) tp.eyes.carBeams = this.beamLights;
     const shadow = q === "high";
     if (shadow !== this.beamShadow) {
       // (only when the tier changes: that recompiles anyway)
@@ -2115,7 +2103,7 @@ export class Cars {
       fwd.set(-1, 0, 0).transformDirection(m.root.matrix);
       lit = fl & CAR_FLAGS.high ? "high" : "low";
     }
-    for (const v of tp.vehicleLamps()) {
+    for (const v of tp.vehicles.vehicleLamps()) {
       const d = cam.distanceTo(v.a);
       if (d >= best) continue;
       best = d;
@@ -2203,8 +2191,8 @@ export class Cars {
     if (room)
       room.state.players.forEach((p: { x: number; y: number; z: number; level: number }, sid: string) => {
         if (p.level !== 0 || this.seated.has(sid)) return;
-        const px = p.x + this.host.ox();
-        const pz = p.y + this.host.oy();
+        const px = p.x;
+        const pz = p.y;
         if (!near(px, pz, 0.4) || p.z - this.G.heightAt(px, pz) > CAR_ROOF) return;
         out.push({ kind: "circle", x: px, z: pz, r: 0.38, soft: true, what: "person", id: sid });
       });
@@ -2213,8 +2201,8 @@ export class Cars {
       room.state.pets.forEach(
         (p: { x: number; y: number; floor: number; ride: string; alive: boolean }, id: string) => {
           if (p.floor !== 0 || p.ride || !p.alive) return;
-          const px = p.x + this.host.ox();
-          const pz = p.y + this.host.oy();
+          const px = p.x;
+          const pz = p.y;
           if (near(px, pz, 0.35)) out.push({ kind: "circle", x: px, z: pz, r: 0.3, soft: true, what: "pet", id });
         },
       );
@@ -2275,7 +2263,7 @@ export class Cars {
     // my pets on their way to a door (docs/plan/51-the-pet.md)
     const coming: string[] = [];
     const room = this.host.room();
-    room?.state.pets.forEach((pet: PetWire & { sid: string; act: string; name: string }) => {
+    room?.state.pets.forEach((pet) => {
       if (pet.sid === room.sessionId && pet.act === "board") coming.push(pet.name);
     });
     if (m.sim) {
@@ -2323,8 +2311,8 @@ export class Cars {
   /** The car (and its seat) X would get me into: the nearest within reach, by the door I'm at. */
   private nearest(): { id: string; seat: number; owner: string; d: number } | null {
     const me = this.host.me();
-    const bx = me.x + this.host.ox();
-    const bz = me.y + this.host.oy();
+    const bx = me.x;
+    const bz = me.y;
     let best: { id: string; seat: number; d: number; owner: string } | null = null;
     // (someone's own: whose, and whether its wheel's mine — theirs, or their keys lent me today)
     const uid = this.host.uid();

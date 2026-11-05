@@ -1,6 +1,18 @@
 "use client";
 
-import { avatarFromSeed, Grid, openingsIntoWalls, splitAll, studio } from "@yutopia/shared";
+import {
+  avatarFromSeed,
+  entry,
+  floorOf,
+  footprint,
+  isFloor,
+  openingsIntoWalls,
+  quarterOf,
+  quarterYaw,
+  splitAll,
+  studio,
+  tileAt,
+} from "@yutopia/shared";
 import { notFound } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -61,7 +73,14 @@ export default function ThirdPersonDemo() {
     const table = q.get("table");
     if (slot || table) {
       const [fw, fh] = table ? [4, 2] : [4, 3];
-      const grid = Grid.from(map, objects);
+      // (a floor's tile, nothing solid on it)
+      const taken = new Set<string>();
+      for (const o of objects) {
+        if (!entry(o.kind).solid) continue;
+        const { w, h } = footprint(o.kind, quarterOf(o));
+        for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) taken.add(`${o.x + dx},${o.y + dy}`);
+      }
+      const grid = { ok: (x: number, y: number) => isFloor(tileAt(map, x, y)) && !taken.has(`${x},${y}`) };
       const sx = Number(q.get("x")) || map.spawn.x;
       const sy = Number(q.get("y")) || map.spawn.y;
       let best: { x: number; y: number; d: number } | null = null;
@@ -80,11 +99,18 @@ export default function ThirdPersonDemo() {
           kind: table,
           x: best.x,
           y: best.y,
-          rot: 0,
+          yaw: quarterYaw(0),
           props: { variant: Number(q.get("v") ?? 0) },
         });
       else if (best)
-        objects.push({ id: "demo-slot", kind: "slot_track", x: best.x, y: best.y, rot: 0, props: { track: slot } });
+        objects.push({
+          id: "demo-slot",
+          kind: "slot_track",
+          x: best.x,
+          y: best.y,
+          yaw: quarterYaw(0),
+          props: { track: slot },
+        });
       (window as unknown as { __demoSlot?: unknown }).__demoSlot = best;
     }
     let stop = false;
@@ -129,11 +155,13 @@ export default function ThirdPersonDemo() {
                         }
                       : null;
       const view = new ThirdPersonView(map, objects, P, items, { themes });
+      // (the bots and you on Jolt's world once the view's is in)
+      demo.placeOf = () => view.body.placeFor(null, floorOf(map));
       view.mount(tpHost.current);
       // (a gun out: over the shoulder, aiming; &reload=1 reloading it — broken open, a round going in)
       if (doing === "gun" && q.get("aim") !== "0") Object.assign(view, { aim: true, armed: true });
       if (doing === "gun" && q.get("reload") === "1")
-        view.myGun = { kick: 0, cock: 0, turn: 0, open: 1, loaded: 1, trigger: 0, reload: 1 };
+        view.guns.myGun = { kick: 0, cock: 0, turn: 0, open: 1, loaded: 1, trigger: 0, reload: 1 };
       cleanup.push(() => view.destroy());
       const st = view.world.stats;
       let state: Hud = {
@@ -149,7 +177,7 @@ export default function ThirdPersonDemo() {
       const push = () => setHud({ ...state });
       view.setMode(state.cam);
       const quality = q.get("quality");
-      if (quality === "medium" || quality === "low") view.setQuality(quality);
+      if (quality === "medium" || quality === "low") view.warmup.setQuality(quality);
       view.setHour(state.hour);
       view.lean = state.lean;
       if (q.get("yaw")) view.yaw = Number(q.get("yaw"));
@@ -201,7 +229,7 @@ export default function ThirdPersonDemo() {
           name: "",
           avatar: shadeLook,
           ...shadeAt,
-          d: 0,
+          yaw: Math.PI / 4,
           a: 0,
           angle: shadeDir + Number(q.get("face") ?? 0),
           status: "online",
@@ -250,7 +278,7 @@ export default function ThirdPersonDemo() {
         // (an act plays again every 2.5 s, so there's always one to look at)
         if (meState?.act) Object.assign(demo.me, { actAt: Math.floor(Date.now() / 2500) * 2500 });
         view.frame(dt, withShade ? [...demo.all(), shade()] : demo.all(), "me");
-        for (const m of demo.said.splice(0)) view.say(m.id, m.text);
+        for (const m of demo.said.splice(0)) view.tags.say(m.id, m.text);
         frames++;
         fpsT += dt;
         if (fpsT >= 0.5) {

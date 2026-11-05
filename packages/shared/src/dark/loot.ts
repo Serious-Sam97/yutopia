@@ -1,3 +1,4 @@
+import { quarterOf } from "../catalog.ts";
 import { SP_OFFSET_H } from "../clock.ts";
 import { BUILDINGS, type Building, editsVersion, INSIDES, TOWN_CARS, TRACTOR } from "../grounds.ts";
 import type { ItemId, StackId } from "../inventory.ts";
@@ -140,13 +141,13 @@ export const LOCKER_KIT: LootItem[] = [
 ];
 /** Where you open a thing from (its floor's coords): its tile's middle, a little out the way its
  *  front faces (drawn on +y; turned clockwise: rot 1 −x, 2 −y, 3 +x — as a seat faces). */
-export function lockerFront(o: { x: number; y: number; rot?: number }): { x: number; y: number } {
+export function lockerFront(o: { x: number; y: number; yaw?: number }): { x: number; y: number } {
   const [dx, dy] = [
     [0, 1],
     [-1, 0],
     [0, -1],
     [1, 0],
-  ][(o.rot ?? 0) & 3];
+  ][quarterOf(o) & 3];
   return { x: o.x + 0.5 + dx * 0.9, y: o.y + 0.5 + dy * 0.9 };
 }
 

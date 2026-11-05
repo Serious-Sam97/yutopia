@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { entry, hangSize, ISO_PX } from "@yutopia/shared";
+import { entry, hangSize, quarterYaw } from "@yutopia/shared";
 import { kindSolids } from "@yutopia/shared/shapes";
 import type { BufferGeometry } from "three";
 import type { LivePart } from "../kit";
@@ -44,7 +44,7 @@ const tris = (g: BufferGeometry) => {
   );
 };
 const model = (kind: string, props: Record<string, unknown> = {}, id = `w-${kind}`) =>
-  modelOf({ id, kind, x: 0, y: 0, rot: 0, props });
+  modelOf({ id, kind, x: 0, y: 0, yaw: quarterYaw(0), props });
 
 test("on the walls: every look hung on its face, across its footprint, under 8k tris, its hang size round it", () => {
   for (const kind of KINDS) {
@@ -67,11 +67,11 @@ test("on the walls: every look hung on its face, across its footprint, under 8k 
           `${what}: ${n} quarters along for ${(b.x1 - b.x0).toFixed(2)} m`,
         );
         assert.ok(
-          lo / ISO_PX <= b.y0 + 0.03 && hi / ISO_PX >= b.y1 - 0.03,
+          lo <= b.y0 + 0.03 && hi >= b.y1 - 0.03,
           `${what}: hung ${lo}..${hi} px for ${b.y0.toFixed(2)}..${b.y1.toFixed(2)}`,
         );
       }
-    assert.ok(kindSolids({ id: "s", kind, x: 0, y: 0, rot: 0 }).length > 0, `${kind}: shaped`);
+    assert.ok(kindSolids({ id: "s", kind, x: 0, y: 0, yaw: quarterYaw(0) }).length > 0, `${kind}: shaped`);
   }
 });
 

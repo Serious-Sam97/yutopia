@@ -6,7 +6,8 @@ import { Client, type Room } from "colyseus.js";
 
 // A lift's car carries its riders (docs/plan/50-the-volume.md, D: one building): on the way down
 // the shaft they're where it is — each floor it passes theirs a moment, their height over it the
-// car's floor's — and what they say meanwhile isn't taken; the doors open where it stops, them in it.
+// car's floor's — and what they say meanwhile isn't taken; the doors open where it stops, them in it
+// (where their own car, standing on it, has brought them: no snap).
 process.env.YUTOPIA_OFFLINE = "1";
 process.env.YUTOPIA_WORLD_SECRET = "test";
 process.env.YUTOPIA_INTERNAL_SECRET = "test";
@@ -50,7 +51,7 @@ test("a ride down: the car carries its rider through every floor on the way, at 
     let at = { x: me().x, y: me().y };
     for (const [x, y] of path) {
       await sleep(Math.max(55, (Math.hypot(x - at.x, y - at.y) / 4.5) * 1000));
-      r.send("pos", { x, y, z: 0, l: 4, d: 0, a: 1, seq: ++seq });
+      r.send("pos", { x, y, z: 4 * STOREY, l: 4, yaw: 32, a: 1, seq: ++seq });
       at = { x, y };
     }
     await sleep(150);
@@ -84,9 +85,10 @@ test("a ride down: the car carries its rider through every floor on the way, at 
   const t = Date.now();
   while (Date.now() - t < 12_000) {
     seen.add(me().level);
-    heights.push(me().level * STOREY + me().z);
+    heights.push(me().z); // (the world's height: plan 72 phase 6)
     // (what they say on the way isn't taken: the car has them — till it's down, where it stops)
-    if (me().level > 0) r.send("pos", { x: 9, y: 26, z: 0, l: me().level, d: 0, a: 1, seq: ++seq });
+    if (me().level > 0)
+      r.send("pos", { x: 9, y: 26, z: me().level * STOREY, l: me().level, yaw: 32, a: 1, seq: ++seq });
     if (me().level === 0 && JSON.parse(stop(0).props).door === "open") break;
     await sleep(60);
   }
@@ -99,6 +101,7 @@ test("a ride down: the car carries its rider through every floor on the way, at 
     assert.ok(heights[i] <= heights[i - 1] + 0.05, `down all the way (${heights[i - 1]} → ${heights[i]})`);
   assert.equal(me().level, 0);
   assert.ok(Math.abs(me().z) < 0.01, "on the ground floor's floor");
-  assert.ok(me().y - 10 > 29, "still in the car, not where they said");
-  assert.equal(snaps.length, 1, "told once, where it stops");
+  assert.ok(me().y > 29, "still in the car, not where they said");
+  // (not told: their own car brought them — a body under them in their own Jolt, plan 72 phase 8)
+  assert.equal(snaps.length, 0, "not snapped where it stops");
 });

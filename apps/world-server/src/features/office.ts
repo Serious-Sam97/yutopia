@@ -1,4 +1,4 @@
-import { areaAt, onLevel, type WorldObjectDef } from "@yutopia/shared";
+import { areaAt, onLevel, quarterOf, type WorldObjectDef } from "@yutopia/shared";
 import {
   furnishedIn,
   furnishRoom,
@@ -69,7 +69,7 @@ registerFeature((room: WorldRoom) => {
     // (a top's host found on this floor only, as placing does)
     const now = onLevel(objects(), map);
     for (const o of add) {
-      const def = { ...o, props: cleanProps(o.kind, o.props ?? {}, now, o.x, o.y, o.rot ?? 0) };
+      const def = { ...o, props: cleanProps(o.kind, o.props ?? {}, now, o.x, o.y, quarterOf(o)) };
       room.state.objects.set(def.id, toSchema(def));
       now.push(def);
       if (!config.offline) api.putObject(def).catch(persistFailed);

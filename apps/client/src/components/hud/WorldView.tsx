@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { getToken } from "@/lib/api";
+import { installCrashHandlers } from "@/lib/crash";
 import { prefs, subscribePrefs } from "@/lib/prefs";
 import { mixer } from "@/world/audio";
 import { WorldController } from "@/world/controller";
@@ -17,6 +18,7 @@ const OWN_PANELS = new Set(["settings", "avatar", "pets"]);
 import { ActionMenu, ActionQueueBar, ArrivalChip, FocusChip } from "./Actions";
 import { WorldCtx } from "./ctx";
 import { Dock } from "./Dock";
+import { Guard } from "./Guard";
 import {
   CableChip,
   ConnectionOverlay,
@@ -91,6 +93,7 @@ export function WorldView({ to }: { to?: string | null }) {
       router.replace("/login");
       return;
     }
+    installCrashHandlers();
     const c = new WorldController(host.current as HTMLDivElement);
     c.onOpenPanel = (kind, objectId) => {
       // only a panel that exists: an unknown kind would sit open unseen and swallow the keys
@@ -141,36 +144,136 @@ export function WorldView({ to }: { to?: string | null }) {
           the body's background, which would hide it outside a stacking context of its own) */}
       <main className="relative isolate h-full w-full overflow-hidden select-none">
         <div ref={host} className="absolute inset-0" />
-        <VideoBubbles />
+        <Guard name="VideoBubbles">
+          <VideoBubbles />
+        </Guard>
         <div className="pointer-events-none absolute inset-0" style={camera ? { display: "none" } : undefined}>
-          {(!building || godWalking) && <TopBar />}
-          {!building && <Rituals />}
-          {!building && side && <SidePanel />}
-          <PersonCard />
-          <Knocks />
-          <Toasts />
-          {!building && <Prompt />}
-          {!building && <LiftPanel />}
-          {!building && <HeldChip />}
-          {!building && <WrapPicker />}
-          {!building && <CableChip />}
-          {!building && <LookHint />}
-          {!building && <LockChip />}
-          {!building && <FocusChip />}
-          {!building && <ArrivalChip />}
-          {!building && <ActionQueueBar />}
-          {!building && <PetOverlays />}
-          {!building && <ScreenTray />}
-          {building && !god && <BuildMode />}
-          {god && <GodHud />}
-          {!racing && <Minimap />}
-          {!building && !racing && <Dock />}
-          {admin && !building && <AdminHud />}
-          <PanelHost />
-          {!building && <ActionMenu />}
+          {(!building || godWalking) && (
+            <Guard name="TopBar">
+              <TopBar />
+            </Guard>
+          )}
+          {!building && (
+            <Guard name="Rituals">
+              <Rituals />
+            </Guard>
+          )}
+          {!building && side && (
+            <Guard name="SidePanel">
+              <SidePanel />
+            </Guard>
+          )}
+          <Guard name="PersonCard">
+            <PersonCard />
+          </Guard>
+          <Guard name="Knocks">
+            <Knocks />
+          </Guard>
+          <Guard name="Toasts">
+            <Toasts />
+          </Guard>
+          {!building && (
+            <Guard name="Prompt">
+              <Prompt />
+            </Guard>
+          )}
+          {!building && (
+            <Guard name="LiftPanel">
+              <LiftPanel />
+            </Guard>
+          )}
+          {!building && (
+            <Guard name="HeldChip">
+              <HeldChip />
+            </Guard>
+          )}
+          {!building && (
+            <Guard name="WrapPicker">
+              <WrapPicker />
+            </Guard>
+          )}
+          {!building && (
+            <Guard name="CableChip">
+              <CableChip />
+            </Guard>
+          )}
+          {!building && (
+            <Guard name="LookHint">
+              <LookHint />
+            </Guard>
+          )}
+          {!building && (
+            <Guard name="LockChip">
+              <LockChip />
+            </Guard>
+          )}
+          {!building && (
+            <Guard name="FocusChip">
+              <FocusChip />
+            </Guard>
+          )}
+          {!building && (
+            <Guard name="ArrivalChip">
+              <ArrivalChip />
+            </Guard>
+          )}
+          {!building && (
+            <Guard name="ActionQueueBar">
+              <ActionQueueBar />
+            </Guard>
+          )}
+          {!building && (
+            <Guard name="PetOverlays">
+              <PetOverlays />
+            </Guard>
+          )}
+          {!building && (
+            <Guard name="ScreenTray">
+              <ScreenTray />
+            </Guard>
+          )}
+          {building && !god && (
+            <Guard name="BuildMode">
+              <BuildMode />
+            </Guard>
+          )}
+          {god && (
+            <Guard name="GodHud">
+              <GodHud />
+            </Guard>
+          )}
+          {!racing && (
+            <Guard name="Minimap">
+              <Minimap />
+            </Guard>
+          )}
+          {!building && !racing && (
+            <Guard name="Dock">
+              <Dock />
+            </Guard>
+          )}
+          {admin && !building && (
+            <Guard name="AdminHud">
+              <AdminHud />
+            </Guard>
+          )}
+          <Guard name="PanelHost">
+            <PanelHost />
+          </Guard>
+          {!building && (
+            <Guard name="ActionMenu">
+              <ActionMenu />
+            </Guard>
+          )}
         </div>
-        {!building && <PhoneLayer />}
-        <ConnectionOverlay />
+        {!building && (
+          <Guard name="PhoneLayer">
+            <PhoneLayer />
+          </Guard>
+        )}
+        <Guard name="ConnectionOverlay">
+          <ConnectionOverlay />
+        </Guard>
       </main>
     </WorldCtx.Provider>
   );

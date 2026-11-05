@@ -21,7 +21,14 @@ const server = (page: Page) =>
   page.evaluate(() => {
     const w = (window as any).__yutopia;
     const p = w.room.state.players.get(w.room.sessionId);
-    return { jump: p.jump as string, mv: p.mv as number, x: p.x as number, y: p.y as number, z: p.z as number };
+    // (z over their floor: Player.z is the world's height, a storey of 3.5 m a floor)
+    return {
+      jump: p.jump as string,
+      mv: p.mv as number,
+      x: p.x as number,
+      y: p.y as number,
+      z: (p.z - p.level * 3.5) as number,
+    };
   });
 
 test("the verbs: a vault over a desk, onto an arcade, a roll, crouching and a slide", async ({ page }) => {
@@ -111,8 +118,8 @@ test("the verbs: a vault over a desk, onto an arcade, a roll, crouching and a sl
     await page.evaluate(
       ([d, a, sp]) => {
         const w = (window as any).__yutopia;
-        w.send("obj:put", { id: d, kind: "desk", x: sp.x, y: sp.y + 2, rot: 0 });
-        w.send("obj:put", { id: a, kind: "arcade", x: sp.x, y: sp.y + 6, rot: 0 });
+        w.send("obj:put", { id: d, kind: "desk", x: sp.x, y: sp.y + 2, yaw: 0 });
+        w.send("obj:put", { id: a, kind: "arcade", x: sp.x, y: sp.y + 6, yaw: 0 });
       },
       [ids.desk, ids.arcade, s] as const,
     );

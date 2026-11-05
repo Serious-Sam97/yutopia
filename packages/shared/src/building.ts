@@ -1,5 +1,5 @@
 import { canPlace } from "./build.ts";
-import { entry, placedFootprint, type WorldObjectDef } from "./catalog.ts";
+import { entry, placedFootprint, quarterYaw, type WorldObjectDef } from "./catalog.ts";
 import { convertV1 } from "./convert.ts";
 import type { Point } from "./iso.ts";
 import { floorOf, floorsOf, levelMap, objLevel, offsetOf } from "./levels.ts";
@@ -16,6 +16,7 @@ import {
   MapBuilder,
   type MapDef,
   setEdge,
+  spanOf,
   tileAt,
 } from "./map.ts";
 import { isOpening, openingEdges } from "./openings.ts";
@@ -106,7 +107,7 @@ function bayPlace(c: { x: number; z: number; dir: number }, bx: number, by: numb
   return {
     x: x + bx,
     y: z + by,
-    rot: c.dir > 0 ? 0 : 2,
+    yaw: quarterYaw(c.dir > 0 ? 0 : 2),
     dx: Math.round((c.x - 2.5 - x) * 100) / 100,
     dz: Math.round((c.z - 1 - z) * 100) / 100,
   };
@@ -123,10 +124,11 @@ function stampLot(rows: string[][], bx: number, by: number) {
 /** The middle of the studio's longest run of floor on its west side (where
  *  the campus puts the entrance). */
 export function entranceZOf(home: MapDef): number {
-  let best = { len: 0, mid: home.height / 2 };
+  const sp = spanOf(home);
+  let best = { len: 0, mid: (sp.y0 + sp.y1) / 2 };
   let start = -1;
-  for (let y = 0; y <= home.height; y++) {
-    const f = y < home.height && isFloor(tileAt(home, 0, y));
+  for (let y = sp.y0; y <= sp.y1; y++) {
+    const f = y < sp.y1 && isFloor(tileAt(home, sp.x0, y));
     if (f && start < 0) start = y;
     if (!f && start >= 0) {
       if (y - start > best.len) best = { len: y - start, mid: (start + y) / 2 };
@@ -182,7 +184,7 @@ function coreThings(level: number, off: Point, top: boolean, c: Core | null): Wo
     kind: "elevator",
     x: s.x - off.x,
     y: s.y - off.y,
-    rot: 0,
+    yaw: 0,
     props: { level, shaft: s.shaft, door: "closed" },
   }));
   if (!top)
@@ -191,7 +193,7 @@ function coreThings(level: number, off: Point, top: boolean, c: Core | null): Wo
       kind: "stairs",
       x: st.x - off.x,
       y: st.y - off.y,
-      rot: 0,
+      yaw: quarterYaw(0),
       props: { level },
     });
   return out;
@@ -208,7 +210,7 @@ function outerWindows(m: MapDef, level: number, skip: (e: Edge) => boolean = () 
       kind: "window",
       x: e.x,
       y: e.y,
-      rot: e.dir === "h" ? 0 : 1,
+      yaw: quarterYaw(e.dir === "h" ? 0 : 1),
       props: { level },
     });
   };
@@ -309,7 +311,7 @@ function lobbyRooms(): { map: MapDef; objects: WorldObjectDef[] } {
   ];
   const objects: WorldObjectDef[] = [];
   const add = (id: string, kind: string, x: number, y: number, rot = 0, props?: Record<string, unknown>) =>
-    objects.push({ id: `g-${id}`, kind, x, y, rot, ...(props ? { props } : {}) });
+    objects.push({ id: `g-${id}`, kind, x, y, yaw: quarterYaw(rot), ...(props ? { props } : {}) });
   add("reception", "reception", 9, 12, 1);
   add("reception-chair", "chair", 10, 13, 1);
   for (const [i, [x, y]] of [
@@ -477,7 +479,7 @@ export function groundLevel(
       kind: "car",
       x: at.x,
       y: at.y,
-      rot: at.rot,
+      yaw: at.yaw,
       props: {
         level: 0,
         variant: c.colour,
@@ -492,7 +494,7 @@ export function groundLevel(
     const x = Math.floor(l.x) + bx;
     const y = Math.floor(l.z) + by;
     if (!take(x, y, 1, 1)) continue;
-    objects.push({ id: `lamp-post-${i}`, kind: "lamp_post", x, y, rot: l.rot, props: { level: 0 } });
+    objects.push({ id: `lamp-post-${i}`, kind: "lamp_post", x, y, yaw: quarterYaw(l.rot), props: { level: 0 } });
   }
   const front = (e: Edge) => e.dir === "v" && e.x === bx;
   objects.push(...outerWindows(m, 0, front));
@@ -869,7 +871,7 @@ export function upgradeLot(
   for (const [i, m] of l.lamps.entries()) {
     const o = objects.find((x) => x.id === `lamp-post-${i}`);
     if (!o || !onGround(o)) continue;
-    moved.set(o.id, { ...o, x: Math.floor(m.x) + bx, y: Math.floor(m.z) + by, rot: m.rot });
+    moved.set(o.id, { ...o, x: Math.floor(m.x) + bx, y: Math.floor(m.z) + by, yaw: quarterYaw(m.rot) });
   }
   // the cars on the lot (their middles; the building's coords)
   const middle = (o: WorldObjectDef) => {
@@ -882,7 +884,7 @@ export function upgradeLot(
     delete props.a;
     delete props.hy;
     delete props.parkedAt;
-    moved.set(o.id, { ...o, x: at.x, y: at.y, rot: at.rot, props });
+    moved.set(o.id, { ...o, x: at.x, y: at.y, yaw: at.yaw, props });
   };
   const seededOf = (id: string) => l.cars[Number(/^car-(\d+)$/.exec(id)?.[1] ?? -1)];
   const bayOf = (c: { x: number; z: number }) => l.bays.findIndex((b) => b.x === c.x && Math.abs(b.z - c.z) < 1);

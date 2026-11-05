@@ -50,6 +50,6 @@ export const SURFACES: Record<string, number> = {};
 export const STANDS: Record<string, number> = {};
 export const HANGS: Record<string, [number, number, number]> = {
   // (swagged from three hooks over heads: the leaves hanging under the twine, the flags under the cord)
-  leaf_garland: [12, 71, 90],
-  bunting: [12, 70, 90],
+  leaf_garland: [12, 1.8118, 2.2966],
+  bunting: [12, 1.7863, 2.2966],
 };

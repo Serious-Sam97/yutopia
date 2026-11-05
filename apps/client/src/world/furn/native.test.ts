@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  ART_PX,
   entry,
   HANDS_AT,
-  ISO_PX,
   PIANO_STOOL,
+  quarterYaw,
   SEAT_NEXT,
   SEAT_SPEC,
   SURFACE,
@@ -74,7 +75,7 @@ test("turned as the shapes are, every turn; its vertices marked for the cel", ()
   const m = bounds(g.attributes.position.array);
   for (let rot = 0; rot < 4; rot++) {
     const out = new Out();
-    nativeInto(out, { ...chair, rot });
+    nativeInto(out, { ...chair, yaw: quarterYaw(rot) });
     const b = bounds(out.lit.pos);
     const a = turnPoint({ ...chair, rot }, 1, 1, m.x0, m.z0);
     const c = turnPoint({ ...chair, rot }, 1, 1, m.x1, m.z1);
@@ -93,8 +94,8 @@ test("turned as the shapes are, every turn; its vertices marked for the cel", ()
   ]) {
     const a = new Out();
     const b = new Out();
-    nativeInto(a, { ...chair, rot });
-    nativeInto(b, { ...chair, rot, props: { pull: 0.4 } });
+    nativeInto(a, { ...chair, yaw: quarterYaw(rot) });
+    nativeInto(b, { ...chair, yaw: quarterYaw(rot), props: { pull: 0.4 } });
     const ba = bounds(a.lit.pos);
     const bb = bounds(b.lit.pos);
     assert.ok(Math.abs(bb.x0 - ba.x0 - dx) < 1e-5 && Math.abs(bb.z0 - ba.z0 - dz) < 1e-5, `pulled at rot ${rot}`);
@@ -152,7 +153,7 @@ test("desks, tables, storage: on the footprint, the top at its spec under every 
     const top = TOP_NEXT[kind] ?? e.top ?? [0, 0, e.w * 4, e.h * 4];
     for (let variant = 0; variant < n; variant++)
       for (const id of ["a", "b", "c"]) {
-        const g = modelOf({ id, kind, x: 0, y: 0, rot: 0, props: { variant } });
+        const g = modelOf({ id, kind, x: 0, y: 0, yaw: quarterYaw(0), props: { variant } });
         const b = bounds(g.attributes.position.array);
         const what = `${kind} ${variant} ${id}`;
         assert.ok(b.x0 >= -0.005 && b.x1 <= e.w + 0.005, `${what}: across ${b.x0.toFixed(3)}..${b.x1.toFixed(3)}`);
@@ -175,7 +176,7 @@ test("desks, tables, storage: on the footprint, the top at its spec under every 
 
 test("a desk's knees: nothing under it along its sitters' side, either tile", () => {
   for (let variant = 0; variant < 4; variant++) {
-    const g = modelOf({ id: "a", kind: "desk", x: 0, y: 0, rot: 0, props: { variant } });
+    const g = modelOf({ id: "a", kind: "desk", x: 0, y: 0, yaw: quarterYaw(0), props: { variant } });
     const p = g.attributes.position.array;
     for (let i = 0; i < p.length; i += 3) {
       const [x, y, z] = [p[i], p[i + 1], p[i + 2]];
@@ -221,9 +222,16 @@ test("desk things: in their frame, on their top, under 3k tris; the dressing dra
     }
   // a mug put down by hand and one the room's dressing set out: the same model, at the same height
   const a = new Out();
-  nativeInto(a, { id: "m", kind: "tabletop", x: 3, y: 4, rot: 0, props: { d: "mug", seed: 0.37, c: [1, 1], z: 29 } });
+  nativeInto(a, {
+    id: "m",
+    kind: "tabletop",
+    x: 3,
+    y: 4,
+    yaw: quarterYaw(0),
+    props: { d: "mug", seed: 0.37, c: [1, 1], z: 29 },
+  });
   const b = new Out();
-  const c = topCentre({ id: "m", kind: "tabletop", x: 3, y: 4, rot: 0, props: { d: "mug", c: [1, 1] } });
+  const c = topCentre({ id: "m", kind: "tabletop", x: 3, y: 4, yaw: quarterYaw(0), props: { d: "mug", c: [1, 1] } });
   nativeDressInto(b, { kind: "mug", x: c.x, y: c.y, z: 29, seed: 0.37 });
   const [ba, bb] = [bounds(a.lit.pos), bounds(b.lit.pos)];
   for (const k of ["x0", "x1", "y0", "y1", "z0", "z1"] as const)
@@ -241,7 +249,7 @@ test("the computer's glass: nothing in front of it where the picture's drawn, it
       [0.9, 0.9],
     ]) {
       const x = g.x1 + (g.x0 - g.x1) * u;
-      const y = (g.z0 + (g.z1 - g.z0) * v) / ISO_PX;
+      const y = g.z0 + (g.z1 - g.z0) * v;
       const hit = new Raycaster(new Vector3(x, y, -1), new Vector3(0, 0, 1)).intersectObject(mesh)[0];
       assert.ok(hit, `look ${variant}: the glass at ${u},${v}`);
       assert.ok(
@@ -266,7 +274,7 @@ test("screens: across each picture, the glass first, just behind its plane; the 
         [0.92, 0.9],
       ]) {
         const x = x0 + (x1 - x0) * u;
-        const y = (g.z0 + (g.z1 - g.z0) * v) / ISO_PX;
+        const y = g.z0 + (g.z1 - g.z0) * v;
         const hit = new Raycaster(new Vector3(x, y, g.y + 2), new Vector3(0, 0, -1)).intersectObject(mesh)[0];
         assert.ok(hit, `${kind} ${variant}: the glass at ${u},${v}`);
         assert.ok(
@@ -277,12 +285,12 @@ test("screens: across each picture, the glass first, just behind its plane; the 
     }
   }
   const leds: [string, number, [number, number, number]][] = [
-    ["console_2600", 0, [0.3, 2 / ISO_PX, 0.74]],
-    ["console_nes", 0, [0.3, 2 / ISO_PX, 0.74]],
-    ["console_nes", 1, [0.3, 2 / ISO_PX, 0.74]],
-    ["console_snes", 0, [0.3, 2 / ISO_PX, 0.74]],
-    ["console_ps1", 0, [0.7, 4.5 / ISO_PX, 0.545]],
-    ["console_ps1_slim", 0, [0.71, 3.7 / ISO_PX, 0.67]],
+    ["console_2600", 0, [0.3, 2 / ART_PX, 0.74]],
+    ["console_nes", 0, [0.3, 2 / ART_PX, 0.74]],
+    ["console_nes", 1, [0.3, 2 / ART_PX, 0.74]],
+    ["console_snes", 0, [0.3, 2 / ART_PX, 0.74]],
+    ["console_ps1", 0, [0.7, 4.5 / ART_PX, 0.545]],
+    ["console_ps1_slim", 0, [0.71, 3.7 / ART_PX, 0.67]],
   ];
   for (const [kind, variant, [x, y, z]] of leds) {
     const glow = modelOf({ id: "l", kind, x: 0, y: 0, props: { variant } }).userData.glow;
@@ -331,7 +339,7 @@ test("play, tech, music, lights: on the footprint, the tops, keys and parts wher
     const [ox0, oz0, ox1, oz1] = k.out ?? [0, 0, e.w, e.h];
     for (let variant = 0; variant < k.looks; variant++)
       for (const id of ["a", "b", "c"]) {
-        const g = modelOf({ id, kind, x: 0, y: 0, rot: 0, props: { variant } });
+        const g = modelOf({ id, kind, x: 0, y: 0, yaw: quarterYaw(0), props: { variant } });
         const b = bounds(g.attributes.position.array);
         const what = `${kind} ${variant} ${id}`;
         assert.ok(b.x0 >= ox0 - 0.005 && b.x1 <= ox1 + 0.005, `${what}: across ${b.x0.toFixed(3)}..${b.x1.toFixed(3)}`);
@@ -341,18 +349,18 @@ test("play, tech, music, lights: on the footprint, the tops, keys and parts wher
       }
   }
   // the tables' tops (the ping-pong top away from its lines and net; the slot board on its felt)
-  const pong = modelOf({ id: "p", kind: "pingpong_table", x: 0, y: 0, rot: 0 });
+  const pong = modelOf({ id: "p", kind: "pingpong_table", x: 0, y: 0, yaw: quarterYaw(0) });
   for (const [x, z] of [
     [1, 0.5],
     [3, 1.5],
     [0.6, 1.4],
   ])
     assert.ok(Math.abs(topAt(pong, x, z, 2) - TABLE_TOP.pingpong_table) < 0.004, `ping-pong top at ${x},${z}`);
-  const slot = modelOf({ id: "s", kind: "slot_track", x: 0, y: 0, rot: 0 });
+  const slot = modelOf({ id: "s", kind: "slot_track", x: 0, y: 0, yaw: quarterYaw(0) });
   assert.ok(Math.abs(topAt(slot, 0.05, 1.5, 2) - TABLE_TOP.slot_track) < 0.012, "the slot board at its spec");
   // the piano: its keys' top where the hands go, its bench's top the stool's seat
   for (const variant of [0, 1]) {
-    const pi = modelOf({ id: "k", kind: "piano", x: 0, y: 0, rot: 0, props: { variant } });
+    const pi = modelOf({ id: "k", kind: "piano", x: 0, y: 0, yaw: quarterYaw(0), props: { variant } });
     const [kx, kz, kh] = HANDS_AT.piano.keys;
     assert.ok(Math.abs(topAt(pi, kx + 0.012, kz, 1) - kh) < 0.02, `piano ${variant}: its keys at ${kh}`);
     assert.ok(
@@ -368,7 +376,7 @@ test("play, tech, music, lights: on the footprint, the tops, keys and parts wher
   };
   for (const [kind, parts] of Object.entries({ water_cooler: HANDS_AT.water_cooler, vending: HANDS_AT.vending }))
     for (const [part, at] of Object.entries(parts)) {
-      const d = near(modelOf({ id: "h", kind, x: 0, y: 0, rot: 0 }), at);
+      const d = near(modelOf({ id: "h", kind, x: 0, y: 0, yaw: quarterYaw(0) }), at);
       assert.ok(d < 0.05, `${kind}'s ${part}: ${d.toFixed(3)} from where the hand goes`);
     }
   // a lamp lit only when on
@@ -406,7 +414,7 @@ test("on the walls: hung on the face, the live pictures' surfaces just behind th
         { variant, art: "vu", seed: 0.1 },
         { variant, art: "yondra", seed: 0.9, on: false },
       ]) {
-        const g = modelOf({ id: "w", kind, x: 0, y: 0, rot: 0, props });
+        const g = modelOf({ id: "w", kind, x: 0, y: 0, yaw: quarterYaw(0), props });
         const b = bounds(g.attributes.position.array);
         const what = `${kind} ${JSON.stringify(props)}`;
         assert.ok(b.x0 >= -0.005 && b.x1 <= e.w + 0.005, `${what}: along ${b.x0.toFixed(3)}..${b.x1.toFixed(3)}`);
@@ -415,13 +423,16 @@ test("on the walls: hung on the face, the live pictures' surfaces just behind th
         assert.ok(g.attributes.position.count / 3 < 8000, `${what}: ${g.attributes.position.count / 3} tris`);
       }
   }
-  const px = (p: number) => p / ISO_PX;
+  const px = (p: number) => p / ART_PX;
   for (const [kind, x0, x1, z0, z1, plane] of [
     ["board_wall", 0.14, 2.86, 27, 67, 0.16],
     ["screen_wall", 0.14, 3.86, 21, 73, 0.16],
     ["whiteboard", 0.14, 1.86, 27, 61, 0.165],
   ] as const) {
-    const mesh = new Mesh(modelOf({ id: "w", kind, x: 0, y: 0, rot: 0 }), new MeshBasicMaterial({ side: DoubleSide }));
+    const mesh = new Mesh(
+      modelOf({ id: "w", kind, x: 0, y: 0, yaw: quarterYaw(0) }),
+      new MeshBasicMaterial({ side: DoubleSide }),
+    );
     for (const [u, v] of [
       [0.5, 0.5],
       [0.04, 0.05],
@@ -479,7 +490,7 @@ test("decor, floor, pets, outside: on the footprint, on the floor, the bowls fil
           kind,
           x: 0,
           y: 0,
-          rot: 0,
+          yaw: quarterYaw(0),
           props: { variant, d, seed: id.charCodeAt(0) / 128, portions: 3 },
         });
         const b = bounds(g.attributes.position.array);
@@ -499,7 +510,7 @@ test("decor, floor, pets, outside: on the footprint, on the floor, the bowls fil
   const out = new Out();
   nativeDressInto(out, { kind: "bin", x: 2.5, y: 3.5, z: 0, seed: 0.3 });
   const placed = new Out();
-  nativeInto(placed, { id: "x", kind: "decor", x: 2, y: 3, rot: 0, props: { d: "bin", seed: 0.3 } });
+  nativeInto(placed, { id: "x", kind: "decor", x: 2, y: 3, yaw: quarterYaw(0), props: { d: "bin", seed: 0.3 } });
   assert.equal(out.lit.pos.length, placed.lit.pos.length);
   // a frame the room hangs on its wall: the picture frame's model, on the wall's face (its back at
   // 0.1 from the wall's line, as a hung one's)
@@ -520,7 +531,7 @@ test("the staples: their tops and seats at the spec, the ceiling lights lit when
     ["shelving", SURFACE.shelving],
   ] as const)
     for (let variant = 0; variant < (entry(kind).variants ?? 1); variant++) {
-      const g = modelOf({ id: "t", kind, x: 0, y: 0, rot: 0, props: { variant } });
+      const g = modelOf({ id: "t", kind, x: 0, y: 0, yaw: quarterYaw(0), props: { variant } });
       const e = entry(kind);
       const h = topAt(g, e.w / 2 - 0.2, e.h / 2, want + 0.5);
       assert.ok(Math.abs(h - want) < 0.012, `${kind} ${variant}: its top at ${h.toFixed(3)} (want ${want})`);
@@ -529,13 +540,13 @@ test("the staples: their tops and seats at the spec, the ceiling lights lit when
     ["bar_stool", 0.5, 0.5],
     ["phone_booth", 0.5, 0.3],
   ] as const) {
-    const g = modelOf({ id: "s", kind, x: 0, y: 0, rot: 0 });
+    const g = modelOf({ id: "s", kind, x: 0, y: 0, yaw: quarterYaw(0) });
     const h = topAt(g, x, z, SEAT_SPEC[kind].top + 0.3);
     assert.ok(Math.abs(h - SEAT_SPEC[kind].top) < 0.03, `${kind}: its seat at ${h.toFixed(3)}`);
   }
   for (const kind of ["standing_desk", "filing_cabinet", "printer", "fridge", "bar_stool", "high_table", "coat_rack"]) {
     const e = entry(kind);
-    const b = bounds(modelOf({ id: "f", kind, x: 0, y: 0, rot: 0 }).attributes.position.array);
+    const b = bounds(modelOf({ id: "f", kind, x: 0, y: 0, yaw: quarterYaw(0) }).attributes.position.array);
     assert.ok(
       b.x0 >= -0.005 && b.x1 <= e.w + 0.005 && b.z0 >= -0.005 && b.z1 <= e.h + 0.005,
       `${kind}: on its footprint`,
@@ -543,7 +554,7 @@ test("the staples: their tops and seats at the spec, the ceiling lights lit when
     assert.ok(b.y0 > -0.006 && b.y0 < 0.012, `${kind}: on the floor`);
   }
   for (const kind of ["pendant_light", "panel_light"]) {
-    const b = bounds(modelOf({ id: "l", kind, x: 0, y: 0, rot: 0 }).attributes.position.array);
+    const b = bounds(modelOf({ id: "l", kind, x: 0, y: 0, yaw: quarterYaw(0) }).attributes.position.array);
     assert.ok(Math.abs(b.y1 - 3.27) < 0.01, `${kind}: up at the ceiling (${b.y1.toFixed(3)})`);
     assert.ok(modelOf({ id: "l", kind, x: 0, y: 0 }).userData.glow, `${kind}: lit`);
     assert.ok(!modelOf({ id: "l", kind, x: 0, y: 0, props: { on: false } }).userData.glow, `${kind}: off`);
@@ -556,7 +567,7 @@ test("plan 68's heroes: on their footprints, at their spec; live parts apart and
   for (const kind of ["loveseat", "fireplace", "lava_lamp"])
     for (let variant = 0; variant < 3; variant++) {
       const e = entry(kind);
-      const g = modelOf({ id: "h", kind, x: 0, y: 0, rot: 0, props: { variant } });
+      const g = modelOf({ id: "h", kind, x: 0, y: 0, yaw: quarterYaw(0), props: { variant } });
       const b = bounds(g.attributes.position.array);
       const what = `${kind} ${variant}`;
       assert.ok(
@@ -567,12 +578,12 @@ test("plan 68's heroes: on their footprints, at their spec; live parts apart and
       assert.ok(g.attributes.position.count / 3 < 8000, `${what}: under 8k tris`);
     }
   for (let variant = 0; variant < 3; variant++) {
-    const sofa = modelOf({ id: "s", kind: "loveseat", x: 0, y: 0, rot: 0, props: { variant } });
+    const sofa = modelOf({ id: "s", kind: "loveseat", x: 0, y: 0, yaw: quarterYaw(0), props: { variant } });
     for (const x of [0.6, 1.4]) {
       const h = topAt(sofa, x, 0.5 + SEAT_SPEC.loveseat.front - 0.15, 1);
       assert.ok(Math.abs(h - SEAT_SPEC.loveseat.top) < 0.03, `loveseat ${variant}: its seat at ${h.toFixed(3)}`);
     }
-    const fire = modelOf({ id: "f", kind: "fireplace", x: 0, y: 0, rot: 0, props: { variant } });
+    const fire = modelOf({ id: "f", kind: "fireplace", x: 0, y: 0, yaw: quarterYaw(0), props: { variant } });
     const top = entry("fireplace").top ?? [0, 0, 8, 4];
     for (let cx = top[0]; cx < top[2]; cx++) {
       const h = topAt(fire, (cx + 0.5) / 4, (top[1] + 0.5) / 4, SURFACE.fireplace + 0.3);
@@ -583,11 +594,11 @@ test("plan 68's heroes: on their footprints, at their spec; live parts apart and
     }
     // its flames live (lit), none when out
     assert.ok((fire.userData.live as unknown[]).length > 0, `fireplace ${variant}: flames`);
-    const out = modelOf({ id: "f", kind: "fireplace", x: 0, y: 0, rot: 0, props: { variant, on: false } });
+    const out = modelOf({ id: "f", kind: "fireplace", x: 0, y: 0, yaw: quarterYaw(0), props: { variant, on: false } });
     assert.equal((out.userData.live as unknown[]).length, 0, `fireplace ${variant}: out, no flames`);
   }
   // the lava lamp's blobs rise and fall with the clock; its glass stays put
-  const lamp = modelOf({ id: "l", kind: "lava_lamp", x: 0, y: 0, rot: 0 });
+  const lamp = modelOf({ id: "l", kind: "lava_lamp", x: 0, y: 0, yaw: quarterYaw(0) });
   const parts = lamp.userData.live as LivePart[];
   assert.ok(parts.some((p) => p.glass) && parts.filter((p) => p.anim.kind === "lava").length >= 3);
   const blob = parts.find((p) => p.anim.kind === "lava");
@@ -596,7 +607,7 @@ test("plan 68's heroes: on their footprints, at their spec; live parts apart and
   assert.ok(Math.max(...ys) - Math.min(...ys) > 0.05, "a blob rises and falls");
   // (a model's still parts don't hold its live ones)
   const plain = new Out();
-  nativeInto(plain, { id: "l", kind: "lava_lamp", x: 0, y: 0, rot: 0 });
+  nativeInto(plain, { id: "l", kind: "lava_lamp", x: 0, y: 0, yaw: quarterYaw(0) });
   assert.equal(plain.lit.pos.length / 3, lamp.attributes.position.count);
 });
 
@@ -628,7 +639,7 @@ test("live parts in the world: at every turn where the model's own points go", (
 // its border chases; the ticker and the split-flap a still housing round a face the screens draw on.
 test("words on things: the marquee spells its words, the boards frame their faces", () => {
   const sign = (kind: string, text?: string) =>
-    modelOf({ id: "w", kind, x: 0, y: 0, rot: 0, props: text === undefined ? {} : { text } });
+    modelOf({ id: "w", kind, x: 0, y: 0, yaw: quarterYaw(0), props: text === undefined ? {} : { text } });
   for (const kind of ["marquee_sign", "vfd_ticker", "split_flap"]) {
     const e = entry(kind);
     const b = bounds(sign(kind).attributes.position.array);
@@ -657,7 +668,7 @@ test("Christmas: on their footprints, lit and moving, named and dated", () => {
   for (const kind of XMAS)
     for (let variant = 0; variant < (entry(kind).variants ?? 1); variant++) {
       const e = entry(kind);
-      const g = modelOf({ id: "x", kind, x: 0, y: 0, rot: 0, props: { variant } });
+      const g = modelOf({ id: "x", kind, x: 0, y: 0, yaw: quarterYaw(0), props: { variant } });
       const b = bounds(g.attributes.position.array);
       const what = `${kind} ${variant}`;
       const [w, h] = e.onSurface ? [1, 1] : [e.w, e.h];
@@ -671,7 +682,7 @@ test("Christmas: on their footprints, lit and moving, named and dated", () => {
       assert.ok(g.attributes.position.count / 3 < 8000, `${what}: under 8k tris`);
     }
   const live = (kind: string, props: Record<string, unknown> = {}) =>
-    (modelOf({ id: "x", kind, x: 0, y: 0, rot: 0, props }).userData.live as LivePart[]) ?? [];
+    (modelOf({ id: "x", kind, x: 0, y: 0, yaw: quarterYaw(0), props }).userData.live as LivePart[]) ?? [];
   // the lights: sets blinking out of step, so something's always changing; none when off
   for (const kind of ["xmas_tree", "xmas_tree_small", "garland"]) {
     const sets = live(kind).filter((p) => p.anim.kind === "blink");
@@ -695,19 +706,20 @@ test("Christmas: on their footprints, lit and moving, named and dated", () => {
   assert.ok(!live("xmas_village", { on: false }).length, "and stops when it's off");
   // a stocking's name: another model a name, none drawn for nothing
   const tris = (text?: string) =>
-    modelOf({ id: "s", kind: "stocking", x: 0, y: 0, rot: 0, props: text === undefined ? {} : { text } }).attributes
-      .position.count;
+    modelOf({ id: "s", kind: "stocking", x: 0, y: 0, yaw: quarterYaw(0), props: text === undefined ? {} : { text } })
+      .attributes.position.count;
   assert.ok(tris("SAM") > tris(), "a name on its cuff");
   assert.equal(tris("sam!"), tris("SAM!"), "as the face draws it");
   // full on Christmas Day
   const sock = (d: number) =>
-    modelOf({ id: "s", kind: "stocking", x: 0, y: 0, rot: 0, props: { text: "SAM", _day: d } });
+    modelOf({ id: "s", kind: "stocking", x: 0, y: 0, yaw: quarterYaw(0), props: { text: "SAM", _day: d } });
   assert.ok(sock(25).attributes.position.count > sock(24).attributes.position.count, "full on the 25th");
   // the advent calendar: shut before December, open to the day in it
   assert.equal(adventDay(new Date(2026, 10, 3)), 0);
   assert.equal(adventDay(new Date(2026, 11, 12)), 12);
   assert.equal(adventDay(new Date(2026, 11, 31)), 25);
-  const cal = (d: number) => modelOf({ id: "a", kind: "advent_calendar", x: 0, y: 0, rot: 0, props: { _day: d } });
+  const cal = (d: number) =>
+    modelOf({ id: "a", kind: "advent_calendar", x: 0, y: 0, yaw: quarterYaw(0), props: { _day: d } });
   assert.notEqual(cal(0), cal(12), "opened to the day");
   assert.ok(
     bounds(cal(12).attributes.position.array).z1 > bounds(cal(0).attributes.position.array).z1,
@@ -769,5 +781,8 @@ test("a moving seat's sitter goes with it: seatMotion turns as its live part doe
       }
     }
   // (a seat that doesn't move: no motion)
-  assert.equal(seatMotion({ id: "c", kind: "chair", x: 0, y: 0, rot: 0, props: { occupied: true } }, 1), null);
+  assert.equal(
+    seatMotion({ id: "c", kind: "chair", x: 0, y: 0, yaw: quarterYaw(0), props: { occupied: true } }, 1),
+    null,
+  );
 });

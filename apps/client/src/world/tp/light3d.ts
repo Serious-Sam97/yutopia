@@ -13,6 +13,7 @@ import {
 } from "three";
 import { daylight, litCap, outAmbient } from "../art/daylight";
 import { headlights, type LightMap, type LightSource, lightMapFor, lightSig, lightSources } from "../art/light";
+import { type Piece, type Shader, yuLit } from "../look/yulit";
 import { skyLeft } from "./sky-left";
 import { kindOf, layerShader, type WxKind } from "./wx3d";
 
@@ -90,37 +91,45 @@ function ledgeShader(shader: { uniforms: Record<string, unknown>; fragmentShader
     );
 }
 export function patchOutdoors(m: Material) {
-  // (its own hook kept, called first — and the snow's layer after it: docs/plan/65, W4)
+  // (its own hook kept, called first — the family's base — and the snow's layer after it: docs/plan/65,
+  // W4)
   const own = m.onBeforeCompile;
+  const key = m.customProgramCacheKey.call(m);
+  yuLit(m, { base: { key, patch: (sh, r) => own.call(m, sh, r) }, light: outdoorsPiece(m) });
+}
+
+/** The open sky's light as a part of a material of the family (look/yulit.ts): the day's balance of
+ *  sun and fill out under it, what's left of the sky's in the pitch dark, the snow's layer by `m`'s
+ *  kind, its ledges' snow by their mask (its userData.wxLedge). */
+export function outdoorsPiece(m: Material): Piece {
   const kind = kindOf(m);
   const ledge = m.userData.wxLedge as Texture | undefined;
-  m.onBeforeCompile = (shader, r) => {
-    own.call(m, shader, r);
-    shader.uniforms.lmSunOut = litBalance.lmSunOut;
-    shader.uniforms.lmFillOut = litBalance.lmFillOut;
-    shader.uniforms.lmCap = litBalance.lmCap;
-    shader.uniforms.lmSkyLeft = litBalance.lmSkyLeft;
-    shader.fragmentShader = shader.fragmentShader
-      .replace(
-        "#include <common>",
-        "#include <common>\nuniform float lmSunOut;\nuniform float lmFillOut;\nuniform float lmCap;\nuniform float lmSkyLeft;",
-      )
-      .replace(
-        "#include <lights_fragment_begin>",
-        balanced("1.0")
-          .replace("directLight.color *= lmSunK;", "directLight.color *= lmSunK * lmSkyLeft;")
-          .replace(
-            "irradiance += lmFillK * getHemisphereLightIrradiance(",
-            "irradiance += lmFillK * lmSkyLeft * getHemisphereLightIrradiance(",
-          ),
-      )
-      .replace("#include <opaque_fragment>", ROLL_OFF);
-    layerShader(shader, kind);
-    if (ledge && kind !== "none") ledgeShader(shader, ledge);
+  return {
+    key: `outdoors-${kind}${ledge ? "-ledge" : ""}`,
+    patch: (shader) => {
+      shader.uniforms.lmSunOut = litBalance.lmSunOut;
+      shader.uniforms.lmFillOut = litBalance.lmFillOut;
+      shader.uniforms.lmCap = litBalance.lmCap;
+      shader.uniforms.lmSkyLeft = litBalance.lmSkyLeft;
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          "#include <common>",
+          "#include <common>\nuniform float lmSunOut;\nuniform float lmFillOut;\nuniform float lmCap;\nuniform float lmSkyLeft;",
+        )
+        .replace(
+          "#include <lights_fragment_begin>",
+          balanced("1.0")
+            .replace("directLight.color *= lmSunK;", "directLight.color *= lmSunK * lmSkyLeft;")
+            .replace(
+              "irradiance += lmFillK * getHemisphereLightIrradiance(",
+              "irradiance += lmFillK * lmSkyLeft * getHemisphereLightIrradiance(",
+            ),
+        )
+        .replace("#include <opaque_fragment>", ROLL_OFF);
+      layerShader(shader, kind);
+      if (ledge && kind !== "none") ledgeShader(shader, ledge);
+    },
   };
-  const key = m.customProgramCacheKey;
-  m.customProgramCacheKey = () => `yutopia-outdoors-${kind}${ledge ? "-ledge" : ""}|${key.call(m)}`;
-  m.needsUpdate = true;
 }
 
 // The Grounds' land and all on it (docs/plan/27): out under the sky as the campus
@@ -236,7 +245,13 @@ export class Light3 {
     if (sig === this.sig) return;
     this.sig = sig;
     // (each floor's bake kept, shared with the iso view: art/light.ts)
-    this.lm = lightMapFor(map, objects, bake);
+    // (from the bake before, on the same floor: only the lamps an edit touched again)
+    this.lm = lightMapFor(
+      map,
+      objects,
+      bake,
+      this.lm?.map.key === map.key && this.lm.map.floor === map.floor ? this.lm : undefined,
+    );
     this.uniforms.lmSize.value.set(map.width, map.height);
     this.openSky(map);
     this.lampGlow(map, objects);
@@ -322,13 +337,24 @@ export class Light3 {
     this.composite();
   }
 
+  /** Composite again whatever it was (a GPU reset emptied the canvas). */
+  redraw() {
+    this.composited = null;
+    this.composite();
+  }
+
   /** Where the floor's corner is in the scene (x, z): a floor drawn below mine. */
   setOffset(x: number, z: number) {
     this.uniforms.lmOff.value.set(x, z);
   }
 
+  // (what was composited last: the same bake at the same hour — setHour after an edit's update —
+  // is the same picture, ~10 ms not spent again)
+  private composited: { lm: LightMap; hour: number } | null = null;
   private composite() {
     if (!this.lm) return;
+    if (this.composited?.lm === this.lm && this.composited.hour === this.hour) return;
+    this.composited = { lm: this.lm, hour: this.hour };
     const d = daylight(this.hour);
     // (lit things kept under the bloom after dark: daylight.ts litCap)
     litBalance.lmCap.value = litCap(d.night);
@@ -341,56 +367,71 @@ export class Light3 {
     this.tex.needsUpdate = true;
   }
 
-  /** Does a lamp's light reach (x, y) on this floor (no wall or shut door between)? */
+  /** Does a lamp's light reach (x, y) on this floor (no wall or shut door between)? The lamp in
+   *  the floor's own frame (as its things were given), the point in the scene's. */
   reaches(l: LightSource, x: number, y: number): boolean {
-    return this.lm?.reaches(l, x, y) ?? true;
+    const o = this.uniforms.lmOff.value;
+    return this.lm?.reaches(l, x - o.x, y - o.y) ?? true;
   }
 
-  // the light at a point, ambient included (0xRRGGBB, as iso tints people)
+  // the light at a point of the scene, ambient included (0xRRGGBB, as iso tints people)
   tintAt(x: number, y: number): number {
     if (!this.lm) return 0xffffff;
     const d = daylight(this.hour);
-    return this.lm.tintAt(x, y, d.ambient, d.window, outAmbient(d));
+    const o = this.uniforms.lmOff.value;
+    return this.lm.tintAt(x - o.x, y - o.y, d.ambient, d.window, outAmbient(d));
   }
 
-  // Make a material take this light (Lambert: its lit colour is multiplied).
+  // Make a material take this light (Lambert: its lit colour is multiplied) — one of the family with
+  // only this light (look/yulit.ts).
   patch(m: Material) {
+    yuLit(m, { light: this.piece(m) });
+  }
+
+  /** This light as a part of a material of the family (look/yulit.ts): the light map, the day's
+   *  balance, the lamps' pools; the snow's layer where `m`'s open to the sky (its userData.wx — else
+   *  a way, or nothing on glass); and what else `m` asks for (its userData.grounds: the lot's cover). */
+  piece(m: Material): Piece {
     const u = this.uniforms;
-    m.onBeforeCompile = (shader) => {
-      shader.uniforms.lmTex = u.lmTex;
-      shader.uniforms.lmSize = u.lmSize;
-      shader.uniforms.lmOff = u.lmOff;
-      shader.uniforms.lmCap = litBalance.lmCap;
-      shader.uniforms.lmSky = u.lmSky;
-      shader.uniforms.lmGlow = u.lmGlow;
-      shader.uniforms.lmGlowK = litBalance.lmGlowK;
-      shader.uniforms.lmSunOut = litBalance.lmSunOut;
-      shader.uniforms.lmFillOut = litBalance.lmFillOut;
-      shader.uniforms.lmDark = litBalance.lmDark;
-      shader.uniforms.lmEyes = litBalance.lmEyes;
-      shader.uniforms.landLight = landLight;
-      shader.vertexShader = shader.vertexShader
-        .replace(
-          "#include <common>",
-          "#include <common>\nuniform vec2 lmSize;\nuniform vec2 lmOff;\nvarying vec2 vLmUv;\nvarying float vLmUp;",
-        )
-        .replace(
-          "#include <project_vertex>",
-          `#include <project_vertex>
+    const kind: WxKind = (m.userData.wx as WxKind | undefined) ?? (m.transparent ? "none" : "way");
+    const extra = m.userData.grounds as { patch: (s: Shader) => void; key: string } | undefined;
+    return {
+      key: `lightmap${extra?.key ?? ""}-${kind}`,
+      patch: (shader) => {
+        shader.uniforms.lmTex = u.lmTex;
+        shader.uniforms.lmSize = u.lmSize;
+        shader.uniforms.lmOff = u.lmOff;
+        shader.uniforms.lmCap = litBalance.lmCap;
+        shader.uniforms.lmSky = u.lmSky;
+        shader.uniforms.lmGlow = u.lmGlow;
+        shader.uniforms.lmGlowK = litBalance.lmGlowK;
+        shader.uniforms.lmSunOut = litBalance.lmSunOut;
+        shader.uniforms.lmFillOut = litBalance.lmFillOut;
+        shader.uniforms.lmDark = litBalance.lmDark;
+        shader.uniforms.lmEyes = litBalance.lmEyes;
+        shader.uniforms.landLight = landLight;
+        shader.vertexShader = shader.vertexShader
+          .replace(
+            "#include <common>",
+            "#include <common>\nuniform vec2 lmSize;\nuniform vec2 lmOff;\nvarying vec2 vLmUv;\nvarying float vLmUp;",
+          )
+          .replace(
+            "#include <project_vertex>",
+            `#include <project_vertex>
           vec4 lmW = modelMatrix * vec4( transformed, 1.0 );
           vec3 lmN = normalize( mat3( modelMatrix ) * objectNormal );
           vLmUv = ( lmW.xz - lmOff + lmN.xz * 0.22 ) / lmSize;
           vLmUp = lmN.y;`,
-        );
-      shader.fragmentShader = shader.fragmentShader
-        .replace(
-          "#include <common>",
-          "#include <common>\nuniform sampler2D lmTex;\nuniform sampler2D lmSky;\nuniform sampler2D lmGlow;\nuniform float lmGlowK;\nuniform float lmCap;\nuniform float lmSunOut;\nuniform float lmFillOut;\nuniform float lmDark;\nuniform float lmEyes;\nuniform vec3 landLight;\nvarying vec2 vLmUv;\nvarying float vLmUp;",
-        )
-        .replace("#include <lights_fragment_begin>", balanced("texture2D( lmSky, clamp( vLmUv, 0.0, 1.0 ) ).r"))
-        .replace(
-          "#include <opaque_fragment>",
-          `// (out under the sky in the dark, what's lit is lit by lamps hung high: a face turned
+          );
+        shader.fragmentShader = shader.fragmentShader
+          .replace(
+            "#include <common>",
+            "#include <common>\nuniform sampler2D lmTex;\nuniform sampler2D lmSky;\nuniform sampler2D lmGlow;\nuniform float lmGlowK;\nuniform float lmCap;\nuniform float lmSunOut;\nuniform float lmFillOut;\nuniform float lmDark;\nuniform float lmEyes;\nuniform vec3 landLight;\nvarying vec2 vLmUv;\nvarying float vLmUp;",
+          )
+          .replace("#include <lights_fragment_begin>", balanced("texture2D( lmSky, clamp( vLmUv, 0.0, 1.0 ) ).r"))
+          .replace(
+            "#include <opaque_fragment>",
+            `// (out under the sky in the dark, what's lit is lit by lamps hung high: a face turned
           // up takes their light, one standing (a pole, a car's side) next to none of it)
           // (their pools — lmGlow — on faces turned up only)
           // (past the floor's edge — a wall's outer face, someone out on the land — the land's light:
@@ -402,18 +443,14 @@ export class Light3 {
           // (and on the lot, what eyes adjusted to the dark see: a faint fill of its own)
           outgoingLight *= mix( landLight, texture2D( lmTex, clamp( vLmUv, 0.0, 1.0 ) ).rgb, lmOn ) * mix( 1.0, 0.08 + 0.92 * lmUp, lmOut ) + lmEyes * lmOut;
           outgoingLight += diffuseColor.rgb * texture2D( lmGlow, clamp( vLmUv, 0.0, 1.0 ) ).rgb * lmGlowK * mix( 1.0, lmUp, lmOut ) * lmOn;${ROLL_OFF}`,
-        );
-      // (and what else the material asks for: the lot's snow cover — roads3d.ts lotCover)
-      const extra = m.userData.grounds as { patch: (s: typeof shader) => void; key: string } | undefined;
-      extra?.patch(shader);
-      // (the snow's layer on its tiles open to the sky — the lot, the pavements by the doors: trodden
-      // ways — docs/plan/65)
-      layerShader(shader, kind, true);
+          );
+        // (and what else the material asks for: the lot's snow cover — roads3d.ts lotCover)
+        extra?.patch(shader);
+        // (the snow's layer on its tiles open to the sky — the lot, the pavements by the doors: trodden
+        // ways — docs/plan/65)
+        layerShader(shader, kind, true);
+      },
     };
-    const kind: WxKind = (m.userData.wx as WxKind | undefined) ?? (m.transparent ? "none" : "way");
-    m.customProgramCacheKey = () =>
-      `yutopia-lightmap${(m.userData.grounds as { key?: string } | undefined)?.key ?? ""}-${kind}`;
-    m.needsUpdate = true;
   }
 
   dispose() {

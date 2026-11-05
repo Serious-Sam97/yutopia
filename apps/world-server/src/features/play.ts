@@ -1,4 +1,4 @@
-import { footprint, PIANO_RANGE, USES } from "@yutopia/shared";
+import { footprint, PIANO_RANGE, quarterOf, USES } from "@yutopia/shared";
 import { REACH_UP } from "@yutopia/shared/reach";
 import { fromSchema, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
@@ -24,7 +24,7 @@ registerFeature((room: WorldRoom) => {
     const o = room.state.objects.get(String(m?.id ?? ""));
     const n = Number(m?.n);
     if (!p || !o || o.kind !== "piano" || !Number.isInteger(n) || n < PIANO_RANGE[0] || n > PIANO_RANGE[1]) return;
-    const { w, h } = footprint(o.kind, o.rot);
+    const { w, h } = footprint(o.kind, quarterOf(o));
     const cx = Math.max(o.x, Math.min(p.x, o.x + w));
     const cy = Math.max(o.y, Math.min(p.y, o.y + h));
     if (room.reach3(p, fromSchema(o), Math.hypot(p.x - cx, p.y - cy), { x: cx, y: cy }) > REACH) return;

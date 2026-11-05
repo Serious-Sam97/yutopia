@@ -14,19 +14,19 @@ test.skip(!OUT, "set YUTOPIA_SHOTS=<folder> to take the disc console shots");
 
 const stamp = Date.now().toString(36);
 const corner = (x: number, y: number) => [
-  { id: `dc-tv-${stamp}`, kind: "crt_tv", x, y, rot: 0 },
+  { id: `dc-tv-${stamp}`, kind: "crt_tv", x, y, yaw: 0 },
   {
     id: `dc-grey-${stamp}`,
     kind: "console_ps1",
     x,
     y: y + 2,
-    rot: 0,
+    yaw: 0,
     props: { lid: "open", cart: 1, cartColor: "#c4402b", card: 1, on: true },
   },
-  { id: `dc-lcd-${stamp}`, kind: "console_ps1_slim", x: x + 1, y: y + 2, rot: 0, props: { variant: 1, on: true } },
-  { id: `dc-slim-${stamp}`, kind: "console_ps1_slim", x: x + 2, y: y + 1, rot: 0, props: { variant: 0, card: 1 } },
-  { id: `dc-rack-${stamp}`, kind: "disc_rack", x: x + 2, y, rot: 0, props: { variant: 0 } },
-  { id: `dc-rack2-${stamp}`, kind: "disc_rack", x: x + 3, y, rot: 0, props: { variant: 1 } },
+  { id: `dc-lcd-${stamp}`, kind: "console_ps1_slim", x: x + 1, y: y + 2, yaw: 0, props: { variant: 1, on: true } },
+  { id: `dc-slim-${stamp}`, kind: "console_ps1_slim", x: x + 2, y: y + 1, yaw: 0, props: { variant: 0, card: 1 } },
+  { id: `dc-rack-${stamp}`, kind: "disc_rack", x: x + 2, y, yaw: 0, props: { variant: 0 } },
+  { id: `dc-rack2-${stamp}`, kind: "disc_rack", x: x + 3, y, yaw: 0, props: { variant: 1 } },
 ];
 
 // Put the corner down near the arrival point (the server says no to a bad spot).

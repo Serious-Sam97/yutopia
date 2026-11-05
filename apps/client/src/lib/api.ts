@@ -104,7 +104,7 @@ export interface SetupItem {
   kind: string;
   dx: number;
   dy: number;
-  rot: number;
+  yaw: number; // radians (π/2 a quarter turn)
   props?: Record<string, unknown> | null;
 }
 export interface Setup {

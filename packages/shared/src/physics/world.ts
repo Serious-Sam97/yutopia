@@ -7,9 +7,10 @@
 //   1. Sizes, never an abort: mMaxBodies, pairs and contacts fixed at creation from the world's
 //      own counts (sizesFor: ×2 headroom); every add checked first — past the limit it's refused
 //      and logged, never handed to Jolt (whose temp allocator, run out, aborts the process). And
-//      its memory: this build's heap is a fixed 128 MB that never grows (a world ~14 MB empty,
-//      the whole game's ~34 MB), and running out aborts Jolt for good — so a world isn't made,
-//      nor an add made, without MIN_FREE left.
+//      its memory: our build's heap (packages/jolt: the published one's is a fixed 128 MB) starts
+//      at 128 MB and grows to HEAP_MAX (a world ~14 MB empty, the whole game's ~34 MB, ~15 MB a
+//      room with the land round one person — plan 72 phase 7); running out aborts Jolt for good —
+//      so a world isn't made, nor an add made, without MIN_FREE left of HEAP_MAX.
 //   2. Continuous collision on everything that moves by itself: a thing (addThing) is always
 //      EMotionQuality_LinearCast (without it 81 of 400 balls fell through the land).
 //   3. One owner, scratch objects made once and reused; the long session's heap flat
@@ -21,6 +22,7 @@
 import type Jolt from "jolt-physics";
 import type { Solid3, SolidBox3 } from "../shapes/index.ts";
 import type { JoltModule } from "./load.ts";
+import { BODY } from "./size.ts";
 
 /** A ragdoll's part (docs/plan/58 5d): a bone's body, set at its joint `at` (world, m) turned `q`
  *  (the bone's own turn: what it reads back is the bone's), a capsule of radius `r` from the joint
@@ -126,6 +128,8 @@ export interface Land {
 export const LAYER = { solid: 0, moving: 1, land: 2, floor: 3, door: 4, wall: 5 } as const;
 export type Layer = keyof typeof LAYER;
 const MOVING = LAYER.moving;
+/** How far over its top a ground cast starts (groundUnder) */
+const LIFT = 0.002;
 /** What a question or a body on the move meets: everything; through walls (an admin's power: only
  *  the floors and the land hold you); a ghost (through walls, flying: the floors too — up through
  *  a ceiling onto the next floor, docs/plan/50 D); tops (all but the land: what's stood on over
@@ -152,8 +156,7 @@ const NONE = 14;
 const RAG = 15;
 const LAYERS = 16;
 
-/** A body's size (docs/plan/50 C): a capsule this round and tall, its feet at its position. */
-export const BODY = { r: 0.25, h: 1.75 };
+export { BODY } from "./size.ts";
 /** Bodies a question or a body on the move goes through (locked doors its owner may pass). */
 export interface Pass {
   readonly keys: string;
@@ -164,10 +167,18 @@ const MB = 1024 * 1024;
 const MIN_FREE = 16 * MB; // Jolt's heap kept free: an add past this is refused (guardrail 1)
 const NEW_WORLD = 24 * MB; // what making a world wants free: its temp allocator (10 MB), its tables
 
-/** Jolt's heap: what's free of it (all of it, not just what it's taken from the system yet). */
+/** How far Jolt's heap can grow (packages/jolt/build.sh: MAXIMUM_MEMORY). */
+const HEAP_MAX = 2048 * MB;
+/** Jolt's heap: what's free of it (to HEAP_MAX, not just what it's taken from the system yet).
+ *  Asking exactly walks its allocator (sGetFreeMemory: mallinfo) — a world's every add asked it, and
+ *  a test's dozen worlds spent most of their time there (plan 72 phase 7) — so the heap's size is
+ *  taken first: what's past it is free for sure (the heap grows), and only near HEAP_MAX is it
+ *  asked exactly. */
 function freeOf(J: JoltModule): number {
-  const used = J.JoltInterface.prototype.sGetTotalMemory() - J.JoltInterface.prototype.sGetFreeMemory();
-  return J.HEAPU8.length - used;
+  const size = J.JoltInterface.prototype.sGetTotalMemory();
+  const max = Math.max(size, HEAP_MAX);
+  if (max - size > 8 * NEW_WORLD) return max - size;
+  return max - (size - J.JoltInterface.prototype.sGetFreeMemory());
 }
 
 // (a way turned by a turn, x y z w: q · v · q⁻¹)
@@ -203,6 +214,9 @@ export class PhysicsWorld {
   private readonly named = new Map<number, string>();
   private readonly things = new Map<number, Owned>();
   private readonly vehicles = new Map<string, Owned & { box: SolidBox3 }>();
+  private readonly carriers = new Map<string, Owned & { sig: string; at: [number, number, number] }>();
+  /** who stood on a carrier when last moved: its key, and where it was then */
+  private readonly rides = new Map<number, { key: string; at: [number, number, number] }>();
   private readonly chars = new Map<number, Jolt.CharacterVirtual>();
   private readonly rags = new Map<
     number,
@@ -314,7 +328,7 @@ export class PhysicsWorld {
     const J = await load();
     const free = freeOf(J);
     if (free < NEW_WORLD)
-      throw new Error(`[physics] no room for a world: ${(free / MB).toFixed(1)} MB of Jolt's 128 MB heap free`);
+      throw new Error(`[physics] no room for a world: ${(free / MB).toFixed(1)} MB of Jolt's heap free`);
     return new PhysicsWorld(J, sizes, log);
   }
 
@@ -983,6 +997,53 @@ export class PhysicsWorld {
     return this.vehicles.keys();
   }
 
+  // ── carriers: what moves and carries whoever stands on it (a lift's car: docs/plan/72 phase 8) ──
+  /** A carrier with its origin at (x, y, z), its solids its own (from that origin), holding you up
+   *  as a slab does (layer floor). Again with the same solids it's moved there — whoever stood on it
+   *  goes with it (moveCharacter). False if refused. */
+  setCarrier(key: string, solids: Solid3[], x: number, y: number, z: number): boolean {
+    const J = this.J;
+    const sig = JSON.stringify(solids);
+    const had = this.carriers.get(key);
+    if (had && had.sig === sig) {
+      if (had.at[0] !== x || had.at[1] !== y || had.at[2] !== z) {
+        this.r.Set(x, y, z);
+        this.bodies.SetPositionAndRotation(had.id, this.r, this.turn(0), J.EActivation_DontActivate);
+        had.at = [x, y, z];
+      }
+      return true;
+    }
+    this.removeCarrier(key);
+    if (!solids.length || !this.room(`carrier ${key}`)) return false;
+    const cs = new J.StaticCompoundShapeSettings();
+    for (const s of solids) {
+      const st = this.solidSettings(s);
+      if (!st) continue;
+      const [sx, sy, sz] = this.middle(s);
+      this.v.Set(sx, sy, sz);
+      cs.AddShape(this.v, this.turn(s.t === "box" ? s.a : 0), st, 0);
+    }
+    const shape = this.shape(cs);
+    if (!shape) return false;
+    const o = this.make(this.settings(shape, x, y, z, 0, J.EMotionType_Kinematic, LAYER.floor), false);
+    shape.Release();
+    this.carriers.set(key, { ...o, sig, at: [x, y, z] });
+    this.named.set(o.id.GetIndexAndSequenceNumber(), key);
+    return true;
+  }
+
+  removeCarrier(key: string): void {
+    const o = this.carriers.get(key);
+    if (!o) return;
+    this.named.delete(o.id.GetIndexAndSequenceNumber());
+    this.drop(o);
+    this.carriers.delete(key);
+  }
+
+  carrierKeys(): IterableIterator<string> {
+    return this.carriers.keys();
+  }
+
   // ── bodies (docs/plan/50 C; phase 3 moves people with them) ──
   addCharacter(x: number, y: number, z: number): number | null {
     if (this.dead) return null;
@@ -1010,6 +1071,35 @@ export class PhysicsWorld {
   ): boolean {
     const ch = this.chars.get(id);
     if (!ch) return false;
+    // stood on a carrier when last moved: on with it as far as it's gone since (a lift's car going
+    // up the shaft lifts its riders as it goes; one going down lets them down with it)
+    const ride = this.rides.get(id);
+    if (ride) {
+      const c = this.carriers.get(ride.key);
+      if (c && (c.at[0] !== ride.at[0] || c.at[1] !== ride.at[1] || c.at[2] !== ride.at[2])) {
+        const p = ch.GetPosition();
+        this.r.Set(p.GetX() + c.at[0] - ride.at[0], p.GetY() + c.at[1] - ride.at[1], p.GetZ() + c.at[2] - ride.at[2]);
+        ch.SetPosition(this.r);
+      }
+    }
+    const on = this.moveOn(ch, vx, vy, vz, dt, walking, o);
+    // (what it stands on now: a carrier's, kept with where that carrier is)
+    const key = on ? this.named.get(ch.GetGroundBodyID().GetIndexAndSequenceNumber()) : undefined;
+    const c = key ? this.carriers.get(key) : undefined;
+    if (key && c) this.rides.set(id, { key, at: [c.at[0], c.at[1], c.at[2]] });
+    else this.rides.delete(id);
+    return on;
+  }
+
+  private moveOn(
+    ch: Jolt.CharacterVirtual,
+    vx: number,
+    vy: number,
+    vz: number,
+    dt: number,
+    walking: boolean,
+    o: { stepUp?: number; stickDown?: number; mask?: Mask; pass?: Pass | null; along?: boolean },
+  ): boolean {
     let up = vy;
     if (o.along && walking && ch.GetGroundState() === this.J.EGroundState_OnGround) {
       // the way across the ground lifted onto its plane (a walkable one: not a wall's side)
@@ -1086,6 +1176,7 @@ export class PhysicsWorld {
   placeCharacter(id: number, x: number, y: number, z: number): void {
     const ch = this.chars.get(id);
     if (!ch) return;
+    this.rides.delete(id); // (put somewhere: not carried from where it stood)
     this.r.Set(x, y, z);
     ch.SetPosition(this.r);
   }
@@ -1093,6 +1184,7 @@ export class PhysicsWorld {
   removeCharacter(id: number): void {
     const ch = this.chars.get(id);
     if (!ch) return;
+    this.rides.delete(id);
     this.J.destroy(ch);
     this.chars.delete(id);
   }
@@ -1219,8 +1311,10 @@ export class PhysicsWorld {
     if (!shape) return null;
     const J = this.J;
     const m = this.masks[mask];
-    this.r.Set(x, top + T / 2, z);
-    this.v.Set(0, -depth, 0);
+    // (from a hair over `top`: a surface right at it is met on the way down, not where it starts)
+    const from = top + LIFT;
+    this.r.Set(x, from + T / 2, z);
+    this.v.Set(0, -(depth + LIFT), 0);
     const cast = new J.RShapeCast(shape, this.one, J.RMat44.prototype.sTranslation(this.r), this.v);
     this.castHit.Reset();
     this.r.Set(0, 0, 0);
@@ -1228,7 +1322,12 @@ export class PhysicsWorld {
       .GetNarrowPhaseQuery()
       .CastShape(cast, this.castSettings, this.r, this.castHit, m.bp, m.obj, this.passFilter(pass), this.shapeFilter);
     J.destroy(cast);
-    return this.castHit.HadHit() ? top - this.castHit.mHit.mFraction * depth : null;
+    if (!this.castHit.HadHit()) return null;
+    const f = this.castHit.mHit.mFraction;
+    // (met where it starts: the box began inside something beside the body — a parked car's side
+    // grazed by a corner — not on it; what's under the body's middle instead)
+    if (f <= 1e-9 && r > 0.05) return this.groundUnder(x, top, z, Math.max(0.04, r / 2), depth, mask, pass);
+    return from - f * (depth + LIFT);
   }
 
   /** What the last groundUnder stood on: its static's key (setStatic's, setLand's) or its
@@ -1336,6 +1435,7 @@ export class PhysicsWorld {
     for (const id of [...this.proxies.keys()]) this.removeProxies(id);
     for (const id of [...this.things.keys()]) this.removeThing(id);
     for (const id of [...this.vehicles.keys()]) this.removeVehicle(id);
+    for (const k of [...this.carriers.keys()]) this.removeCarrier(k);
     for (const k of [...this.statics.keys()]) this.remove(k);
     for (const s of [...this.spheres.values(), ...this.boxes.values()]) s.Release();
     this.spheres.clear();

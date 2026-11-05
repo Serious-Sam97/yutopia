@@ -691,7 +691,7 @@ function PlayTab({ pet, t }: { pet: PetInfo; t: Tr }) {
                 {!mineNow ? (
                   <DeckKey
                     onClick={() => {
-                      w?.takeToy(toy);
+                      w?.pets.takeToy(toy);
                       if (toy !== "rope" && toy !== "feather") hud.set({ panel: { kind: null } });
                     }}
                   >
@@ -708,7 +708,7 @@ function PlayTab({ pet, t }: { pet: PetInfo; t: Tr }) {
                 ) : (
                   <DeckKey
                     onClick={() => {
-                      w?.armThrow(true);
+                      w?.pets.armThrow(true);
                       hud.set({ panel: { kind: null } });
                     }}
                   >

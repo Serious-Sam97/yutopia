@@ -110,10 +110,10 @@ export class Arms {
       if (!ARMS[gun]) return;
       const tp = this.ctl.tp;
       if (!tp) return;
-      const o = tp.muzzleOf(m.sid) ?? { x: m.ox, y: m.oy, z: m.oz };
+      const o = tp.guns.muzzleOf(m.sid) ?? { x: m.ox, y: m.oy, z: m.oz };
       const rays = pellets(gun, m.yaw, m.pitch, m.seed, m.spread).map((d) => this.flight(o.x, o.y, o.z, d, 30));
       tp.arms().shot(o.x, o.y, o.z, rays, gun, m.oz - HAND);
-      tp.gunShot(m.sid);
+      tp.guns.gunShot(m.sid);
       tp.heard(m.ox, m.oy);
       // (far off: dulled, heard further; near: as the place I'm in sounds)
       const me = this.walker.where();
@@ -308,7 +308,7 @@ export class Arms {
       }
     }
     // (or one of us)
-    const them = tp.personAlongLook();
+    const them = tp.pointerPart.personAlongLook();
     if (them !== null && them + 0.2 < t) {
       t = them + 0.2;
       onBody = true;
@@ -330,7 +330,7 @@ export class Arms {
     const toAim = Math.hypot(aim.x - o.x, aim.y - o.y, aim.z - o.z);
     const most = onBody && g.id === "revolver" ? toAim : 30;
     // (out of the muzzle as it's drawn, where there's one)
-    const mz = tp.muzzleOf(this.ctl.room?.sessionId ?? "") ?? o;
+    const mz = tp.guns.muzzleOf(this.ctl.room?.sessionId ?? "") ?? o;
     tp.arms().shot(
       mz.x,
       mz.y,
@@ -342,7 +342,7 @@ export class Arms {
     tp.heard(mz.x, mz.y);
     // the kick: on my look (most of it settles back), in my hands
     const feel = FEEL[g.id];
-    tp.kick(feel.up * (0.85 + Math.random() * 0.3), feel.side * (Math.random() * 2 - 1), feel.settle);
+    tp.guns.kick(feel.up * (0.85 + Math.random() * 0.3), feel.side * (Math.random() * 2 - 1), feel.settle);
     this.kickAt = now / 1000;
     if (g.id === "revolver") {
       this.cock = 0; // (the hammer falls; the thumb cocks it again, the cylinder turning a notch)
@@ -373,7 +373,7 @@ export class Arms {
    *  wall or the ground (a puff there). */
   private flight(x: number, y: number, z: number, d: { yaw: number; pitch: number }, most: number) {
     const gunMost = Math.min(most, 30);
-    const stop = this.ctl.tp?.rayStop(x, y, z, d.yaw, d.pitch, gunMost) ?? null;
+    const stop = this.ctl.tp?.pointerPart.rayStop(x, y, z, d.yaw, d.pitch, gunMost) ?? null;
     return { ...d, len: stop ? stop.t : gunMost, hit: stop?.what ?? null };
   }
 
@@ -394,7 +394,7 @@ export class Arms {
     const tp = this.ctl.tp;
     if (!tp) return;
     if (!g) {
-      tp.myGun = null;
+      tp.guns.myGun = null;
       return;
     }
     const ease = (v: number, to: number, rate: number) => v + (to - v) * (1 - Math.exp(-dt * rate));
@@ -426,7 +426,7 @@ export class Arms {
       trigger: since < 0.08 ? 1 : 0,
       reload: this.reloadK,
     });
-    tp.myGun = this.fx;
+    tp.guns.myGun = this.fx;
   }
 
   // ── every frame ──────────────────────────────────────────────────────────
@@ -494,7 +494,7 @@ export class Arms {
     // the crosshair, aiming (3D); a mark on it when a shot met one
     // (down the sights in first person, the sights are the crosshair)
     const tp = this.ctl.tp;
-    const aiming = this.walker.aiming && !!tp && tp.ads < 0.6;
+    const aiming = this.walker.aiming && !!tp && tp.guns.ads < 0.6;
     this.cross.style.display = aiming ? "block" : "none";
     if (aiming && tp) {
       const marked = performance.now() < this.markUntil;

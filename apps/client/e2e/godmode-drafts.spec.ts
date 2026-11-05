@@ -67,7 +67,7 @@ test("God mode's drafts: named, two kept, switched, left and come back to, renam
   await clearDrafts(tok);
   await enter(page, tok, space);
   await holdHour(page, 13);
-  await page.evaluate((p) => (window as any).__yutopia.teleport(p), { x: AT.x + 60, y: AT.z + 10, level: 0 });
+  await page.evaluate((p) => (window as any).__yutopia.teleport(p), { x: AT.x, y: AT.z, level: 0 });
   await page.waitForTimeout(4000);
   const was = await y(page, (y) => y.room.state.groundsRev);
   await page.keyboard.press("o");
@@ -199,7 +199,7 @@ test("God mode's drafts: one made on an older revision brought up to date as it 
   await makeDraft(tok, "e2e: another");
   await enter(page, tok, space);
   await holdHour(page, 13);
-  await page.evaluate((p) => (window as any).__yutopia.teleport(p), { x: AT.x + 60, y: AT.z + 10, level: 0 });
+  await page.evaluate((p) => (window as any).__yutopia.teleport(p), { x: AT.x, y: AT.z, level: 0 });
   await page.waitForTimeout(4000);
   try {
     await page.keyboard.press("o");

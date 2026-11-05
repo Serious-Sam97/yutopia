@@ -21,7 +21,7 @@ const dir = process.env.YUTOPIA_SHOTS;
 if (process.env.YUTOPIA_FIREFOX !== "1")
   test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 // the ground floor's corner is at (-60, -10) in the building's coords
-const G = (x: number, z: number) => ({ x: x + 60, y: z + 10 });
+const G = (x: number, z: number) => ({ x, y: z });
 
 async function open(page: Page, view: "3p" | "1p") {
   await page.addInitScript((v) => {

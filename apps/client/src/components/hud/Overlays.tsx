@@ -1,10 +1,9 @@
 "use client";
 
-import { HELD, heldState, isHeld, isToyHeld } from "@yutopia/shared";
+import { HELD, heldState, isHeld, isToyHeld, originOf, tileAt } from "@yutopia/shared";
 import { useEffect, useRef, useState } from "react";
 import { type Key, trMaybe, useTr } from "@/lib/i18n";
 import { COCOA_MUG, HELD_BOX, heldSvg, MUG_COLORS, TEA_MUG } from "@/world/art/held";
-import { PERSON } from "@/world/art/iso";
 import { svgDoc } from "@/world/art/svgdoc";
 import { useHud } from "@/world/store";
 import { ItemThumb } from "./build/thumbs";
@@ -74,7 +73,7 @@ export function Prompt() {
   const step = (by: 1 | -1) => (
     <button
       type="button"
-      onClick={() => w?.cycleFocus(by)}
+      onClick={() => w?.focus.cycleFocus(by)}
       title={t(by > 0 ? "focusNext" : "focusPrev")}
       aria-label={t(by > 0 ? "focusNext" : "focusPrev")}
       className="pointer-events-auto cabinet rounded-full h-9 px-1.5 grid place-items-center shrink-0 text-lg"
@@ -101,7 +100,7 @@ export function Prompt() {
           <button
             type="button"
             key={it.key}
-            onClick={() => w?.pickFocus(it.key)}
+            onClick={() => w?.focus.pickFocus(it.key)}
             className="pointer-events-auto cabinet rounded-full pl-1 pr-3 py-1 flex items-center gap-2"
             style={{ transform: "scale(.86)", opacity: 0.72 }}
           >
@@ -234,7 +233,12 @@ export function CableChip() {
       <span className="mono text-[11px] truncate" style={{ color: "var(--muted)" }}>
         · {t("cableHint")}
       </span>
-      <button type="button" className="deck-btn" style={{ height: 28, fontSize: 12 }} onClick={() => w?.dropCable()}>
+      <button
+        type="button"
+        className="deck-btn"
+        style={{ height: 28, fontSize: 12 }}
+        onClick={() => w?.cable.dropCable()}
+      >
         {t("cableLetGo")}
       </button>
     </div>
@@ -324,7 +328,7 @@ export function HeldChip() {
             className={`deck-btn ${armed ? "primary" : ""}`}
             style={{ height: 28, fontSize: 12 }}
             aria-pressed={armed}
-            onClick={() => w?.armThrow(!armed)}
+            onClick={() => w?.pets.armThrow(!armed)}
           >
             {trMaybe(throws ? "throwArm" : "pointArm")}
           </button>
@@ -473,7 +477,7 @@ export function VideoBubbles() {
         if (node.style.display !== display) node.style.display = display;
         if (hide) continue;
         // over their head, on the screen
-        const p = w.clientAt(x, y, 116 * PERSON);
+        const p = w.clientAt(x, y, 2.277);
         const t = `translate(${Math.round(p.x - 60)}px, ${Math.round(p.y - 90)}px)`;
         if (node.style.transform !== t) node.style.transform = t;
       }
@@ -629,6 +633,10 @@ export function Minimap() {
     c.height = map.height * S;
     const x = c.getContext("2d") as CanvasRenderingContext2D;
     x.clearRect(0, 0, c.width, c.height);
+    // (its tiles drawn from its corner; rooms and people are the world's: the corner taken off)
+    const o = originOf(map);
+    const X = (v: number) => (v - o.x) * S;
+    const Y = (v: number) => (v - o.y) * S;
     for (let yy = 0; yy < map.height; yy++)
       for (let xx = 0; xx < map.width; xx++) {
         const ch = map.tiles[yy][xx];
@@ -663,26 +671,26 @@ export function Minimap() {
       const label = a.name.toUpperCase();
       if (x.measureText(label).width > a.w * S - 8 || a.h * S < 22) continue;
       x.fillStyle = "rgba(26,18,12,.55)";
-      x.fillRect(a.x * S + 3, a.y * S + 3, x.measureText(label).width + 6, 16);
+      x.fillRect(X(a.x) + 3, Y(a.y) + 3, x.measureText(label).width + 6, 16);
       x.fillStyle = "#efe4cc";
-      x.fillText(label, a.x * S + 6, a.y * S + 5);
+      x.fillText(label, X(a.x) + 6, Y(a.y) + 5);
     }
     // the room you're in
     const mine = map.areas.find((a) => a.key === me?.area);
     if (mine) {
       x.strokeStyle = "#ffb35c";
       x.lineWidth = 3;
-      x.strokeRect(mine.x * S + 1.5, mine.y * S + 1.5, mine.w * S - 3, mine.h * S - 3);
+      x.strokeRect(X(mine.x) + 1.5, Y(mine.y) + 1.5, mine.w * S - 3, mine.h * S - 3);
     }
     // (after dark, nobody out under the sky is seen from afar — docs/plan/44-the-night.md N4)
     const dark = (w?.model?.getDaylight().dark ?? 0) > 0.5;
     // (and the map itself dimmed: its paper shouldn't glare in the pitch dark)
     c.style.filter = dark ? "brightness(.5) saturate(.8)" : "";
     for (const p of people) {
-      if (dark && "ac".includes(map.tiles[Math.floor(p.y)]?.[Math.floor(p.x)] || "x")) continue;
+      if (dark && "ac".includes(tileAt(map, Math.floor(p.x), Math.floor(p.y)).trim() || "x")) continue;
       x.fillStyle = p.bot ? "#a39d8c" : p.hearing ? "#ffa630" : "#efe4cc";
       x.beginPath();
-      x.arc(p.x * S, p.y * S, 4, 0, Math.PI * 2);
+      x.arc(X(p.x), Y(p.y), 4, 0, Math.PI * 2);
       x.fill();
     }
     // my pets: a small teal dot, ringed (one off exploring is easy to find)
@@ -691,14 +699,14 @@ export function Minimap() {
       x.strokeStyle = "#1a120c";
       x.lineWidth = 1.5;
       x.beginPath();
-      x.arc(p.x * S, p.y * S, 3.5, 0, Math.PI * 2);
+      x.arc(X(p.x), Y(p.y), 3.5, 0, Math.PI * 2);
       x.fill();
       x.stroke();
     }
     // the car I last drove: an amber car (off the map: at its edge, the way to it)
     if (carAt) {
-      const cx = Math.max(6, Math.min(c.width - 6, carAt.x * S));
-      const cy = Math.max(5, Math.min(c.height - 5, carAt.y * S));
+      const cx = Math.max(6, Math.min(c.width - 6, X(carAt.x)));
+      const cy = Math.max(5, Math.min(c.height - 5, Y(carAt.y)));
       x.fillStyle = "#ffb24a";
       x.strokeStyle = "#1a120c";
       x.lineWidth = 1.5;
@@ -708,26 +716,26 @@ export function Minimap() {
     if (vortex) {
       x.fillStyle = "#ff2d95";
       x.beginPath();
-      x.arc(vortex.x * S, vortex.y * S, 4, 0, Math.PI * 2);
+      x.arc(X(vortex.x), Y(vortex.y), 4, 0, Math.PI * 2);
       x.fill();
     }
     if (me) {
       x.fillStyle = "rgba(255,90,42,.25)";
       x.beginPath();
-      x.arc(me.x * S, me.y * S, 14, 0, Math.PI * 2);
+      x.arc(X(me.x), Y(me.y), 14, 0, Math.PI * 2);
       x.fill();
       x.fillStyle = "#ff5a2a";
       x.strokeStyle = "#1a120c";
       x.lineWidth = 2;
       x.beginPath();
-      x.arc(me.x * S, me.y * S, 6, 0, Math.PI * 2);
+      x.arc(X(me.x), Y(me.y), 6, 0, Math.PI * 2);
       x.fill();
       x.stroke();
     }
   }, [w, people, me, vortex, petsAt, carAt, phase, mapVersion]);
 
   // (+ brings the camera in: its distance shrinks)
-  const zoom = (f: number) => w?.tp?.zoomBy(1 / f);
+  const zoom = (f: number) => w?.tp?.lensPart.zoomBy(1 / f);
   const shown = building || !me || me.area === "lot" || !w?.grid?.onLand(me.x, me.y);
   if (!shown) return null;
   return (
@@ -743,8 +751,9 @@ export function Minimap() {
           const r = (e.currentTarget.firstChild as HTMLCanvasElement).getBoundingClientRect();
           const map = w?.map;
           if (!map) return;
-          const tx = ((e.clientX - r.left) / r.width) * map.width;
-          const ty = ((e.clientY - r.top) / r.height) * map.height;
+          const o = originOf(map);
+          const tx = ((e.clientX - r.left) / r.width) * map.width + o.x;
+          const ty = ((e.clientY - r.top) / r.height) * map.height + o.y;
           w?.walkTo({ x: tx, y: ty });
         }}
       >

@@ -1,22 +1,22 @@
 import {
   type AvatarLayers,
   avatarFromSeed,
+  byteFace,
   DEFAULT_AVATAR,
-  dirFromDelta,
-  findPath,
-  Grid,
+  face8,
   type MapDef,
   moveStep,
   type Point,
   RUN_SPEED,
+  SEAT_FACE,
   WALK_SPEED,
   type WorldObjectDef,
 } from "@yutopia/shared";
-import { dirAngle } from "./people3d";
+import { Place } from "@yutopia/shared/physics/place";
 
 // A tiny offline world for the third-person demo: you and a few people who
 // wander, sit and get up again, moved by the same shared rules the server
-// checks (Grid, moveStep, findPath). Each body is exactly what the server
+// checks (Place: Jolt's world once the view's is in; moveStep). Each body is exactly what the server
 // sends for a person (x, y, d = one of 8 facings, a = idle / walk / sit), so
 // either view — iso or third person — can draw the same people.
 
@@ -26,7 +26,7 @@ export interface Body {
   avatar: AvatarLayers;
   x: number;
   y: number;
-  d: number; // 8 facings (shared/iso.ts)
+  yaw: number; // which way they face (world radians, on 8 ways: shared facing.ts)
   a: number; // 0 idle, 1 walk, 2 sit
   angle: number; // you only: your facing in world radians (third person turns freely)
   // a little life, as the server would send it
@@ -55,11 +55,15 @@ const LINES = [
   "brb",
 ];
 
-const SEAT_DIR = [1, 3, 5, 7]; // seat rot → facing, away from the seat's back (as the controller does)
 const NAMES = ["Ana", "Bia", "Caio", "Duda", "Enzo", "Flora", "Gui", "Helô", "Iara", "João", "Kika", "Lia"];
 
 export class DemoWorld {
-  readonly grid: Grid;
+  /** Jolt's place on the floor, once the view's world is in (the page sets it) */
+  placeOf: (() => Place | null) | null = null;
+  private readonly onMap: Place;
+  get grid(): Place {
+    return this.placeOf?.() ?? this.onMap;
+  }
   readonly me: Body;
   readonly bots: Bot[] = [];
   private seats: Point[] = [];
@@ -71,14 +75,16 @@ export class DemoWorld {
     crowd: number,
     me: AvatarLayers = DEFAULT_AVATAR,
   ) {
-    this.grid = Grid.from(map, objects);
+    this.onMap = new Place(null, map, objects);
     let a = 7;
     this.rnd = () => {
       a = (a * 1103515245 + 12345) >>> 0;
       return ((a >>> 8) & 0xffff) / 0x10000;
     };
-    for (const idx of this.grid.seats.keys())
-      this.seats.push({ x: (idx % map.width) + 0.5, y: Math.floor(idx / map.width) + 0.5 });
+    for (const k of this.onMap.seats.keys()) {
+      const [x, y] = k.split(",").map(Number);
+      this.seats.push({ x: x + 0.5, y: y + 0.5 });
+    }
     const s = map.spawn;
     this.me = {
       id: "me",
@@ -86,7 +92,7 @@ export class DemoWorld {
       avatar: me,
       x: s.x,
       y: s.y,
-      d: 0,
+      yaw: Math.PI / 4,
       a: 0,
       angle: Math.PI / 4,
       status: "available",
@@ -102,7 +108,7 @@ export class DemoWorld {
         avatar: avatarFromSeed(i * 7.31 + 3),
         x: at.x,
         y: at.y,
-        d: i % 8,
+        yaw: byteFace(((i % 8) + 1) * 32),
         a: 0,
         angle: 0,
         path: null,
@@ -125,8 +131,8 @@ export class DemoWorld {
 
   private randomSpot(): Point | null {
     for (let k = 0; k < 200; k++) {
-      const x = Math.floor(this.rnd() * this.map.width);
-      const y = Math.floor(this.rnd() * this.map.height);
+      const x = Math.floor(this.map.ox ?? 0) + Math.floor(this.rnd() * this.map.width);
+      const y = Math.floor(this.map.oy ?? 0) + Math.floor(this.rnd() * this.map.height);
       if (this.grid.ok(x, y) && !this.grid.seatAt(x + 0.5, y + 0.5) && this.grid.fits(x + 0.5, y + 0.5))
         return { x: x + 0.5, y: y + 0.5 };
     }
@@ -149,7 +155,7 @@ export class DemoWorld {
       let d = want - me.angle;
       d = Math.atan2(Math.sin(d), Math.cos(d));
       me.angle += d * Math.min(1, dt * 12);
-      me.d = dirFromDelta(Math.cos(me.angle), Math.sin(me.angle), me.d as 0);
+      me.yaw = face8(Math.cos(me.angle), Math.sin(me.angle), me.yaw);
       me.a = moved ? 1 : 0;
     } else {
       const seat = this.grid.seatAt(me.x, me.y);
@@ -157,8 +163,8 @@ export class DemoWorld {
         if (me.a !== 2) {
           me.x = Math.floor(me.x) + 0.5;
           me.y = Math.floor(me.y) + 0.5;
-          me.d = SEAT_DIR[seat.rot % 4];
-          me.angle = dirAngle(me.d);
+          me.yaw = byteFace(SEAT_FACE[seat.rot & 3]);
+          me.angle = me.yaw;
         }
         me.a = 2;
       } else me.a = 0;
@@ -203,7 +209,8 @@ export class DemoWorld {
         b.wait = 1;
         return;
       }
-      b.path = findPath(this.grid, b, goal);
+      // (straight there when nothing's in the way: a demo's bots, no paths)
+      b.path = this.grid.clear(b, goal) ? [goal] : null;
       if (!b.path?.length) {
         b.path = null;
         b.wait = 1;
@@ -226,7 +233,7 @@ export class DemoWorld {
         b.y += (dy / d) * left;
         left = 0;
       }
-      if (d > 0.001) b.d = dirFromDelta(dx, dy, b.d as 0);
+      if (d > 0.001) b.yaw = face8(dx, dy, b.yaw);
     }
     b.a = 1;
     if (!b.path.length) {
@@ -235,7 +242,7 @@ export class DemoWorld {
       if (seat) {
         b.x = Math.floor(b.x) + 0.5;
         b.y = Math.floor(b.y) + 0.5;
-        b.d = SEAT_DIR[seat.rot % 4];
+        b.yaw = byteFace(SEAT_FACE[seat.rot & 3]);
         b.a = 2;
         b.seated = 8 + this.rnd() * 20;
       } else {

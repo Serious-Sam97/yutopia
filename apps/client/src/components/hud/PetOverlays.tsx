@@ -36,7 +36,7 @@ function ChallengePrompt() {
         type="button"
         className="deck-btn primary"
         style={{ height: 30, fontSize: 12 }}
-        onClick={() => w?.answerChallenge(true)}
+        onClick={() => w?.pets.answerChallenge(true)}
       >
         {t("petAccept")}
       </button>
@@ -44,7 +44,7 @@ function ChallengePrompt() {
         type="button"
         className="ghost-btn"
         style={{ height: 30, fontSize: 12 }}
-        onClick={() => w?.answerChallenge(false)}
+        onClick={() => w?.pets.answerChallenge(false)}
       >
         {t("petDecline")}
       </button>
@@ -128,7 +128,7 @@ function BattleBar() {
                 style={{ height: 34 }}
                 disabled={!!myMove || (m === "special" && !special)}
                 title={m === "special" && !special ? t("petSpecialLocked") : undefined}
-                onClick={() => w?.battleMove(m)}
+                onClick={() => w?.pets.battleMove(m)}
               >
                 {t(`move_${m}` as Key)}
               </button>

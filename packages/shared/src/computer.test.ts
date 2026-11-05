@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { quarterYaw } from "./catalog.ts";
 import {
   cleanLabel,
   computerFacing,
@@ -13,19 +14,26 @@ import { canPlace, studio, type WorldObjectDef } from "./index.ts";
 
 // The studio's computers (docs/plan/19-vortexos.md).
 test("computers: the glass on the monitor, turned with it, lifted onto the desk", () => {
-  const pc: WorldObjectDef = { id: "pc", kind: "computer", x: 10, y: 3, rot: 0, props: { c: [1, 2], z: 25 } };
+  const pc: WorldObjectDef = {
+    id: "pc",
+    kind: "computer",
+    x: 10,
+    y: 3,
+    yaw: quarterYaw(0),
+    props: { c: [1, 2], z: 0.64 },
+  };
   const g = computerGlass(pc);
   assert.ok(g);
-  assert.equal(g.zTop, 17.6 + 25);
+  assert.equal(g.zTop, 0.4491 + 0.64);
   assert.ok(g.zTop > g.zBot);
   // facing −y at rot 0: its left (as you look at it) is the +x side
   assert.ok(g.tl[0] > g.tr[0]);
   assert.equal(g.tl[1], g.tr[1]);
   // turned: the glass turns too, and only rot 1/2 face the iso camera
-  const turned = computerGlass({ ...pc, rot: 2 });
+  const turned = computerGlass({ ...pc, yaw: quarterYaw(2) });
   assert.ok(turned && turned.tl[0] < turned.tr[0]);
   assert.deepEqual(
-    [0, 1, 2, 3].map((rot) => computerFacing({ ...pc, rot })),
+    [0, 1, 2, 3].map((rot) => computerFacing({ ...pc, yaw: quarterYaw(rot) })),
     [false, true, true, false],
   );
   assert.equal(computerGlass({ ...pc, kind: "tv_portable" }), null);
@@ -42,20 +50,34 @@ test("computers: what an OS may report", () => {
 });
 
 test("computers: the desks' old monitors become computers, in place, once", () => {
-  const desk: WorldObjectDef = { id: "d", kind: "desk", x: 10, y: 3, rot: 0, props: { split: 1 } };
+  const desk: WorldObjectDef = { id: "d", kind: "desk", x: 10, y: 3, yaw: quarterYaw(0), props: { split: 1 } };
   const mon: WorldObjectDef = {
     id: "m",
     kind: "tabletop",
     x: 10,
     y: 3,
-    rot: 2,
+    yaw: quarterYaw(2),
     props: { d: "monitor", c: [1, 2], z: 25, seed: 0.7 },
   };
-  const mug: WorldObjectDef = { id: "u", kind: "tabletop", x: 11, y: 3, rot: 0, props: { d: "mug", c: [0, 0], z: 25 } };
+  const mug: WorldObjectDef = {
+    id: "u",
+    kind: "tabletop",
+    x: 11,
+    y: 3,
+    yaw: quarterYaw(0),
+    props: { d: "mug", c: [0, 0], z: 25 },
+  };
   const one = monitorsToComputers([desk, mon, mug]);
   assert.equal(one.changed.length, 1);
   const pc = one.objects.find((o) => o.id === "m");
-  assert.deepEqual(pc, { id: "m", kind: "computer", x: 10, y: 3, rot: 2, props: { c: [1, 2], z: 25, seed: 0.7 } });
+  assert.deepEqual(pc, {
+    id: "m",
+    kind: "computer",
+    x: 10,
+    y: 3,
+    yaw: quarterYaw(2),
+    props: { c: [1, 2], z: 25, seed: 0.7 },
+  });
   assert.ok(canPlace(studio, [desk, mug], pc as WorldObjectDef), "still fits where the monitor was");
   assert.equal(monitorsToComputers(one.objects).changed.length, 0);
 });

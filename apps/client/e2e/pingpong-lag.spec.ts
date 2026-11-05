@@ -106,7 +106,7 @@ test(`ping-pong: two people, one ${LAG} ms away — hits taken, no jumps, real r
       const p = { x: Math.floor(sp.x) + dx, y: Math.floor(sp.y) + dy };
       await ana.evaluate(
         ([i, q]) =>
-          (window as any).__yutopia.send("obj:put", { id: i, kind: "pingpong_table", x: q.x, y: q.y, rot: 0 }),
+          (window as any).__yutopia.send("obj:put", { id: i, kind: "pingpong_table", x: q.x, y: q.y, yaw: 0 }),
         [id, p] as const,
       );
       await ana.waitForTimeout(600);

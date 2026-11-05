@@ -1,3 +1,4 @@
+import { quarterOf } from "./catalog.ts";
 // The two game tables (Fita 13): the pool table (pool.ts, 8-ball) and the
 // ping-pong table (pong.ts). The games run in real units — metres, with the
 // playing surface's centre at 0, x along the table's length, y across it, z up,
@@ -7,16 +8,12 @@
 // a mirror (right english would curve left). This is where the two meet: how big a metre is
 // on each table, where the playing surface lies on the item, and how high.
 //
-// Heights in the world are iso px (the item kit's z). Furniture heights are
-// drawn short (a desk's top is 23 px), so a table's top sits at furniture
-// height, but anything ABOVE it — a ball in flight, the net — is drawn to the
-// table's own true scale (metres × tiles-per-metre × px-per-tile), so arcs and
-// bounces keep their real shape.
+// Heights in the world are metres. A table's top sits at its furniture height,
+// and anything ABOVE it — a ball in flight, the net — is drawn to the table's
+// own scale (its metres × tiles-per-metre), as its length and width are, so
+// arcs and bounces keep their real shape.
 
-import { isoPx, TABLE_TOP } from "./furniture.ts";
-
-// iso px of height per tile (the item kit: a tile edge is 45.25 px, seen 30° down)
-const ZPX = 45.25 * Math.cos(Math.PI / 6);
+import { TABLE_TOP } from "./furniture.ts";
 
 export type TableKind = "pool_table" | "pingpong_table";
 
@@ -24,16 +21,16 @@ export interface TableGeo {
   w: number; // footprint, tiles (rot 0)
   h: number;
   tpm: number; // tiles per metre on this table
-  top: number; // px: the playing surface
+  top: number; // m: the playing surface
   len: number; // m: the playing surface (x)
   wid: number; // m (y)
 }
 
 export const TABLES: Record<TableKind, TableGeo> = {
   // a 7-ft table: 1.981 × 0.991 m of cloth (pool.ts), rails round it
-  pool_table: { w: 4, h: 2, tpm: 1.55, top: isoPx(TABLE_TOP.pool_table), len: 1.981, wid: 0.991 },
+  pool_table: { w: 4, h: 2, tpm: 1.55, top: TABLE_TOP.pool_table, len: 1.981, wid: 0.991 },
   // regulation: 2.74 × 1.525 m (pong.ts)
-  pingpong_table: { w: 4, h: 2, tpm: 1.26, top: isoPx(TABLE_TOP.pingpong_table), len: 2.74, wid: 1.525 },
+  pingpong_table: { w: 4, h: 2, tpm: 1.26, top: TABLE_TOP.pingpong_table, len: 2.74, wid: 1.525 },
 };
 
 export const isGameTable = (kind: string): kind is TableKind => Object.hasOwn(TABLES, kind);
@@ -53,14 +50,14 @@ export function tableMetres(kind: TableKind, tx: number, ty: number): [number, n
   const g = TABLES[kind];
   return [(tx - g.w / 2) / g.tpm, (g.h / 2 - ty) / g.tpm];
 }
-// a height over the playing surface (m) → iso px
-export function tablePx(kind: TableKind, mz: number): number {
+// a height over the playing surface (the table's m) → the world's height (m)
+export function tableZ(kind: TableKind, mz: number): number {
   const g = TABLES[kind];
-  return g.top + mz * g.tpm * ZPX;
+  return g.top + mz * g.tpm;
 }
-export function tableMz(kind: TableKind, px: number): number {
+export function tableMz(kind: TableKind, z: number): number {
   const g = TABLES[kind];
-  return (px - g.top) / (g.tpm * ZPX);
+  return (z - g.top) / g.tpm;
 }
 
 // rot-0 item tiles → the object's turned footprint (90° clockwise steps, the
@@ -92,19 +89,19 @@ export interface TableObj {
   kind: string;
   x: number;
   y: number;
-  rot?: number;
+  yaw?: number;
 }
 export function toWorld(o: TableObj, mx: number, my: number): { x: number; y: number } {
   const kind = o.kind as TableKind;
   const g = TABLES[kind];
   const [tx, ty] = tableTiles(kind, mx, my);
-  const [X, Y] = tableTurn(tx, ty, o.rot ?? 0, g.w, g.h);
+  const [X, Y] = tableTurn(tx, ty, quarterOf(o), g.w, g.h);
   return { x: o.x + X, y: o.y + Y };
 }
 export function toTable(o: TableObj, x: number, y: number): { x: number; y: number } {
   const kind = o.kind as TableKind;
   const g = TABLES[kind];
-  const [tx, ty] = tableUnturn(x - o.x, y - o.y, o.rot ?? 0, g.w, g.h);
+  const [tx, ty] = tableUnturn(x - o.x, y - o.y, quarterOf(o), g.w, g.h);
   const [mx, my] = tableMetres(kind, tx, ty);
   return { x: mx, y: my };
 }
@@ -115,7 +112,7 @@ export function tableCentre(o: TableObj): { x: number; y: number } {
 // how far a world point is from the table's footprint edge (0 on or inside it)
 export function tableAway(o: TableObj, x: number, y: number): number {
   const g = TABLES[o.kind as TableKind];
-  const [w, h] = (o.rot ?? 0) % 2 ? [g.h, g.w] : [g.w, g.h];
+  const [w, h] = quarterOf(o) % 2 ? [g.h, g.w] : [g.w, g.h];
   const cx = Math.max(o.x, Math.min(x, o.x + w));
   const cy = Math.max(o.y, Math.min(y, o.y + h));
   return Math.hypot(x - cx, y - cy);
@@ -135,6 +132,6 @@ export function standFor(o: TableObj, mx: number, my: number, heading: number, g
   let t = 0;
   const inside = (x: number, y: number) => x > -gap && x < g.w + gap && y > -gap && y < g.h + gap;
   while (t < 6 && inside(tx + dx * t, ty + dy * t)) t += 0.05;
-  const [X, Y] = tableTurn(tx + dx * t, ty + dy * t, o.rot ?? 0, g.w, g.h);
+  const [X, Y] = tableTurn(tx + dx * t, ty + dy * t, quarterOf(o), g.w, g.h);
   return { x: o.x + X, y: o.y + Y };
 }

@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { Grid } from "../grid.ts";
 import {
   CHUNK,
   DOCK,
-  deckAt,
   heightAt,
   ICE_TOP,
   POND,
@@ -12,16 +10,17 @@ import {
   POND_SHELF,
   RIVER,
   riverWater,
-  SHELF,
   setUnderfoot,
   terrainAt,
   walkableTile,
   waterAt,
 } from "../grounds.ts";
+import { blankMap } from "../map-edit.ts";
 import { KH_FEEL, type MoveEnv, NO_INPUT, newBody, STEP_DT, SWIM, stepBody } from "../move/index.ts";
-import { CharacterMover, JoltCollider } from "./body.ts";
+import { CharacterMover } from "./body.ts";
 import { ICE_WALK, WorldBuilder } from "./build.ts";
 import { loadJolt } from "./load.ts";
+import { Place } from "./place.ts";
 import { PhysicsWorld, sizesFor } from "./world.ts";
 
 // The water (docs/plan/65-the-weather.md, W6; docs/plan/66-the-water.md, phases 1–2): it has depth — a
@@ -65,10 +64,9 @@ function walk(w: PhysicsWorld, x: number, z: number): { r: number; y: number } {
 test("the pond open: a body walks in from its north shore, wades its shelf and swims out over the deep", async () => {
   const w = await pond(true);
   // (the move's own body on Jolt, the Grounds' coords as the floor's: z the land's)
-  const grid = new Grid(1, 1);
-  const frame = { ox: 0, oy: 0, elev: 0 };
+  const frame = { elev: 0 };
   const env: MoveEnv = {
-    grid: new JoltCollider(w, grid, frame),
+    grid: new Place(w, blankMap("pond", "pond", 8, 8), []),
     mover: new CharacterMover(w, () => frame),
     footing: () => "snow",
     water: (x, y) => {
@@ -92,10 +90,9 @@ test("the pond open: a body walks in from its north shore, wades its shelf and s
 
 test("the pond open: swum to the dock's end, Space climbs out onto its planks", async () => {
   const w = await pond(true);
-  const grid = new Grid(1, 1);
-  const frame = { ox: 0, oy: 0, elev: 0 };
+  const frame = { elev: 0 };
   const env: MoveEnv = {
-    grid: new JoltCollider(w, grid, frame),
+    grid: new Place(w, blankMap("pond", "pond", 8, 8), []),
     mover: new CharacterMover(w, () => frame),
     footing: () => "snow",
     water: (x, y) => {

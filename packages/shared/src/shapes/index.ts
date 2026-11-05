@@ -6,23 +6,25 @@
 // A kind's parts are in its own frame at rot 0 — u across its footprint (0..w), v down it
 // (0..h) — and turned with it the way the art and the stairs turn things (stairs.ts
 // `stairsPoint`): rot 1 puts its v = 0 side on the east, 2 south, 3 west.
-import { entry, footprint, type ObjectKind, PIANO_STOOL, rotOf, standHeight, type WorldObjectDef } from "../catalog.ts";
+import {
+  entry,
+  footprint,
+  type ObjectKind,
+  PIANO_STOOL,
+  quarterOf,
+  rotOf,
+  standHeight,
+  type WorldObjectDef,
+} from "../catalog.ts";
 import { SEAT_SPEC } from "../furniture.ts";
 import { hangOf } from "../hang.ts";
-import { STOREY } from "../levels.ts";
 import { type Edge, HALF_WALL, isWallEdge } from "../map.ts";
 import { openingCut } from "../openings.ts";
 import { topCentre } from "../tops.ts";
+import { HALF_WALL_H, SLAB, STOREY, WALL_H, WALL_T } from "../units.ts";
 
-/** Iso px of height a metre (the art's ZPX: 45.25 · cos 30°). */
-export const PX_PER_M = 39.19;
-export const m = (px: number): number => +(px / PX_PER_M).toFixed(3);
-
-export const WALL_H = m(128); // 3.266
-export const WALL_T = 0.2; // as grid.ts WALL_T: centred on its edge
-export const HALF_WALL_H = m(34);
-/** The slab under each storey's floor: what's left of a storey over its walls. */
-export const SLAB = +(STOREY - WALL_H).toFixed(3);
+// (the building's measures: units.ts)
+export { HALF_WALL_H, SLAB, WALL_H, WALL_T };
 
 export type { BoxPart, CylPart, KindShape, Part } from "../fam/units.ts";
 
@@ -86,7 +88,7 @@ export const box3 = (x0: number, z0: number, x1: number, z1: number, y0: number,
 });
 
 /** A point of a footprint (u, v) at rot 0 → the floor's tile coords, turned (as stairs.ts). */
-export function turnPoint(o: { x: number; y: number; rot?: number }, w: number, h: number, u: number, v: number) {
+export function turnPoint(o: { x: number; y: number; rot: number }, w: number, h: number, u: number, v: number) {
   let X = u;
   let Y = v;
   let W = w;
@@ -114,16 +116,15 @@ export function wallSolids(
   const at = (y0: number, y1: number) =>
     e.dir === "h" ? box3(e.x, e.y - t, e.x + 1, e.y + t, y0, y1) : box3(e.x - t, e.y, e.x + t, e.y + 1, y0, y1);
   if (!cut) return { solids: [at(0, top)] };
-  const y0 = m(cut.z0);
-  const y1 = Math.min(top, m(cut.z1));
+  const y0 = cut.z0;
+  const y1 = Math.min(top, cut.z1);
   const solids = [...(y0 > 0 ? [at(0, y0)] : []), ...(y1 < top ? [at(y1, top)] : [])];
   return entry(cut.kind).opening === "window" ? { solids, pane: at(y0, y1) } : { solids };
 }
 
 /** An opening's hole (m up from its floor): a door's way through, a window's glass. */
 export function openingHole(kind: string): [number, number] {
-  const [z0, z1] = openingCut(kind);
-  return [m(z0), m(z1)];
+  return openingCut(kind);
 }
 
 /** A floor's slab: its tiles' tops at `elev`, SLAB thick under them. */
@@ -421,13 +422,13 @@ export function frameOf(o: WorldObjectDef): { x: number; y: number; rot: number;
   const e = entry(o.kind);
   if (e.wall) {
     const h = hangOf(o);
-    return { x: h.ax, y: h.ay, rot: h.rot, w: e.w, h: e.h, lift: m(h.lift) };
+    return { x: h.ax, y: h.ay, rot: h.rot, w: e.w, h: e.h, lift: h.lift };
   }
   if (e.onSurface) {
     const c = topCentre(o);
-    return { x: c.x - 0.5, y: c.y - 0.5, rot: rotOf(o), w: 1, h: 1, lift: m(Number(o.props?.z) || 0) };
+    return { x: c.x - 0.5, y: c.y - 0.5, rot: rotOf(o), w: 1, h: 1, lift: Number(o.props?.z) || 0 };
   }
-  return { x: o.x, y: o.y, rot: o.rot ?? 0, w: e.w, h: e.h, lift: 0 };
+  return { x: o.x, y: o.y, rot: quarterOf(o), w: e.w, h: e.h, lift: 0 };
 }
 
 /** A placed thing's solids in its floor's coords, `elev` m up (its storey). Doors and windows
@@ -461,7 +462,7 @@ export function standOff(kind: ObjectKind): number | null {
   const [body] = SHAPES[kind].parts;
   if (st === undefined || !body) return null;
   const top = body.y1;
-  const d = top - m(st);
+  const d = top - st;
   return Math.abs(d) > 0.08 ? +d.toFixed(2) : null;
 }
 

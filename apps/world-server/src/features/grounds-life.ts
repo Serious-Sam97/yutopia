@@ -1,4 +1,4 @@
-import { ANIM, dirFromDelta, entranceZOf, GROUND_OFFSET, levelMap, lotLayout } from "@yutopia/shared";
+import { ANIM, entranceZOf, faceByte, levelMap, lotLayout } from "@yutopia/shared";
 import { isCarKind } from "@yutopia/shared/car";
 import { nightness } from "@yutopia/shared/dark";
 import { along, GUARD_ROUND, heightAt, LOT, type Route, SHUTTLE, visitorRoute } from "@yutopia/shared/grounds";
@@ -17,7 +17,7 @@ import { ploughAt } from "./ploughed.ts";
 // coming down hard with some lying: docs/plan/65-the-weather.md; never to a downpour): from the
 // town square to the headquarters and back along the shuttle's roads, again
 // while it's still snowing, then home. Positions are the building's coords (shared
-// grounds.ts); people's are the ground floor's (the building's less GROUND_OFFSET).
+// grounds.ts); people's too (the ground floor's places are the world's: plan 72's one frame).
 
 // (YUTOPIA_LIFE_FAST: the tests' — a trip in seconds, not minutes)
 const FAST = process.env.YUTOPIA_LIFE_FAST === "1";
@@ -46,7 +46,6 @@ interface Drive {
 
 registerFeature((room: WorldRoom) => {
   const has = () => !!levelMap(room.map, 0);
-  const off = GROUND_OFFSET;
   const make = (id: string, kind: string) => {
     const v = new Vehicle();
     v.id = id;
@@ -102,25 +101,25 @@ registerFeature((room: WorldRoom) => {
   let shift: "post" | "out" | "round" | "home" | "in" = "post";
   let leg: { x: number; z: number }[] = [];
   let homeDir: 1 | -1 = 1;
-  Object.assign(guard, { x: POST.x - off.x, y: POST.z - off.y, a: ANIM.idle });
+  Object.assign(guard, { x: POST.x, y: POST.z, a: ANIM.idle });
   // walks him towards the next point of `leg` (true: there)
   const walkLeg = (dt: number): boolean => {
     const t = leg[0];
     if (!t) return true;
-    const gx = guard.x + off.x;
-    const gz = guard.y + off.y;
+    const gx = guard.x;
+    const gz = guard.y;
     const d = Math.hypot(t.x - gx, t.z - gz);
     const step = GUARD_V * dt;
     guard.a = ANIM.walk;
     if (d <= step) {
-      guard.x = t.x - off.x;
-      guard.y = t.z - off.y;
+      guard.x = t.x;
+      guard.y = t.z;
       leg.shift();
       return leg.length === 0;
     }
     guard.x += ((t.x - gx) / d) * step;
     guard.y += ((t.z - gz) / d) * step;
-    guard.d = dirFromDelta((t.x - gx) / d, (t.z - gz) / d, guard.d as 0);
+    guard.yaw = faceByte((t.x - gx) / d, (t.z - gz) / d, guard.yaw);
     return false;
   };
 
@@ -129,7 +128,7 @@ registerFeature((room: WorldRoom) => {
   const outside = () => {
     const out = [...room.state.players.values()]
       .filter((p) => p.level === 0 && !p.busy.startsWith("ride:") && !p.busy.startsWith("drive:"))
-      .map((p) => ({ x: p.x + off.x, z: p.y + off.y }));
+      .map((p) => ({ x: p.x, z: p.y }));
     room.state.vehicles.forEach((v) => {
       if (!isCarKind(v.kind)) return;
       for (const k of [-2.2, 0, 2.2]) out.push({ x: v.x + Math.cos(v.a) * k, z: v.z + Math.sin(v.a) * k });
@@ -180,12 +179,12 @@ registerFeature((room: WorldRoom) => {
     const side = i % 2 ? 0.55 : -0.55;
     const bx = v.x + Math.cos(v.a) * back - Math.sin(v.a) * side;
     const bz = v.z + Math.sin(v.a) * back + Math.cos(v.a) * side;
-    p.x = bx - off.x;
-    p.y = bz - off.y;
+    p.x = bx;
+    p.y = bz;
     p.z = heightAt(bx, bz) + 0.55;
     p.level = 0;
     p.a = ANIM.sit;
-    p.d = dirFromDelta(Math.cos(v.a), Math.sin(v.a), p.d as 0);
+    p.yaw = faceByte(Math.cos(v.a), Math.sin(v.a), p.yaw);
   };
   const alight = (sid: string, i: number) => {
     riders.delete(sid);
@@ -197,8 +196,8 @@ registerFeature((room: WorldRoom) => {
     const bz = v.z + Math.sin(v.a) * (0.8 - i * 0.9) + Math.cos(v.a) * 2.4;
     p.busy = "";
     p.a = ANIM.idle;
-    p.x = bx - off.x;
-    p.y = bz - off.y;
+    p.x = bx;
+    p.y = bz;
     p.z = heightAt(bx, bz);
     const c = room.clients.getById(sid);
     if (c) room.send(c, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
@@ -209,8 +208,8 @@ registerFeature((room: WorldRoom) => {
     const v = shuttle.veh;
     if (!p || !has() || p.level !== 0 || !v.stop || riders.size >= 8 || p.busy === RIDING) return;
     // (in three dimensions: shared reach.ts — the bus 3 m tall on the road)
-    const flat = Math.hypot(p.x + off.x - v.x, p.y + off.y - v.z);
-    if (Math.hypot(flat, room.upOff(p, { x: v.x - off.x, y: v.z - off.y }, 3)) > BOARD_REACH) return;
+    const flat = Math.hypot(p.x - v.x, p.y - v.z);
+    if (Math.hypot(flat, room.upOff(p, { x: v.x, y: v.z }, 3)) > BOARD_REACH) return;
     riders.add(client.sessionId);
     p.busy = RIDING;
     v.riders = riders.size;
@@ -327,7 +326,7 @@ registerFeature((room: WorldRoom) => {
       }
       if (shift === "post") {
         guard.a = ANIM.idle;
-        guard.d = dirFromDelta(-1, 0, guard.d as 0); // looking out at the road
+        guard.yaw = faceByte(-1, 0, guard.yaw); // looking out at the road
       } else if (shift === "out") {
         if (walkLeg(dt)) {
           shift = "round";
@@ -362,10 +361,10 @@ registerFeature((room: WorldRoom) => {
         }
         if (shift === "round" || shift === "home") {
           const g = along(GUARD_ROUND, gS);
-          guard.x = g.x - off.x;
-          guard.y = g.z - off.y;
+          guard.x = g.x;
+          guard.y = g.z;
           const k = shift === "home" ? homeDir : 1;
-          guard.d = dirFromDelta(Math.cos(g.a) * k, Math.sin(g.a) * k, guard.d as 0);
+          guard.yaw = faceByte(Math.cos(g.a) * k, Math.sin(g.a) * k, guard.yaw);
         }
       }
     },

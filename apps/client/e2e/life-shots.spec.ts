@@ -7,7 +7,7 @@ import { ANA, enter, test, token } from "./helpers";
 const dir = process.env.YUTOPIA_SHOTS;
 if (dir) test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 
-const G = (x: number, z: number) => ({ x: x + 60, y: z + 10, level: 0 });
+const G = (x: number, z: number) => ({ x, y: z, level: 0 });
 
 test("the look: what moves, in the game", async ({ page }) => {
   test.skip(!dir, "YUTOPIA_SHOTS not set");

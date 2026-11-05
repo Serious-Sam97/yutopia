@@ -1,6 +1,6 @@
 "use client";
 
-import { type AvatarLayers, DEFAULT_AVATAR } from "@yutopia/shared";
+import { type AvatarLayers, DEFAULT_AVATAR, STOREY, WALL_H } from "@yutopia/shared";
 import { notFound } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { playSample, sample } from "@/world/sfx";
@@ -24,7 +24,6 @@ import { playSample, sample } from "@/world/sfx";
 
 type Scene = "landing" | "car" | "ride" | "stairs" | "iso" | "isostairs";
 const SCENES: Scene[] = ["landing", "car", "ride", "stairs", "iso", "isostairs"];
-const STOREY = 3.5;
 const LOOP = 15;
 
 // what happens when (one timeline for the doors, the car, the people, the sounds)
@@ -366,7 +365,7 @@ export default function LiftPrototype() {
       lobbyFloor.position.set(3, 0, -8);
       lobbyFloor.receiveShadow = true;
       const plaster = new THREE.MeshStandardMaterial({ color: "#f1eee8", roughness: 0.9 });
-      const wallH = 3.27;
+      const wallH = WALL_H;
       const wall = new THREE.Group();
       // the wall at z = 0 from x −4 to 10, open where the doors are (cars at 0..2 and 2..4, the stairs' door 4.1..5.2)
       const gaps: [number, number][] = [

@@ -8,10 +8,15 @@ import {
   lotBanksOf,
   lotLayout,
   type MapDef,
+  openingCut,
+  STOREY,
   tileAt,
   vWall,
+  WALL_H,
   type WallCut,
 } from "@yutopia/shared";
+import { crossings } from "@yutopia/shared/physics/structure-solids";
+import type { Ring } from "@yutopia/shared/structure";
 import {
   AdditiveBlending,
   type Box3,
@@ -49,6 +54,7 @@ import {
 import type { Daylight } from "../art/daylight";
 import type { Themes } from "./sky";
 import { driftAlong, flatSnow, snowBox } from "./snow3d";
+import type { WallEdges } from "./walls3d";
 import { atOf, mergeGeometries, snowShadow, tagged, wx } from "./wx3d";
 
 // The snow theme's outside, in 3D: the studio is the top floor of a corporate
@@ -62,13 +68,11 @@ import { atOf, mergeGeometries, snowShadow, tagged, wx } from "./wx3d";
 // Units are tiles, y up, the studio's floor at y = 0 (map y → z).
 
 export const GROUND = -14; // four storeys down
-const STOREY = 3.5;
-const WALL = 128 / 39.19; // the studio's walls (WALL_H iso px, as tiles)
+const WALL = WALL_H; // the studio's walls
 const PARAPET = 3.9;
 const SKIN = 0.12; // the facade stands this far outside the floor's edge
 const BAY = 4; // one curtain-wall bay (tiles)
-const WIN0 = 36 / 39.19; // the studio's windows, bottom and top (iso px → tiles)
-const WIN1 = 88 / 39.19;
+const [WIN0, WIN1] = openingCut("window"); // the studio's windows, bottom and top
 
 // ── geometry builder: non-indexed triangles with position, normal, uv, colour ─
 export class G {
@@ -204,7 +208,7 @@ export const place = (g: BufferGeometry, x: number, y: number, z: number, ry = 0
 };
 
 // ── the footprint's outer edges, as runs with their outward side ─────────────
-interface Run {
+export interface Run {
   x0: number;
   z0: number;
   x1: number;
@@ -245,6 +249,41 @@ function runs(f: (x: number, z: number) => boolean, x0: number, z0: number, x1: 
   return out;
 }
 const runLen = (r: Run) => Math.abs(r.x1 - r.x0) + Math.abs(r.z1 - r.z0);
+
+/** The building's outline, from its structure (docs/plan/72-the-3d-core.md, phase 8: the campus's
+ *  outside from the structure): the home floor's slabs' rings (what's floor, read even-odd) and its
+ *  walls as the drawing asks them (walls3d.ts) — in the home map's own frame. */
+export interface Outline {
+  rings: Ring[];
+  edges: WallEdges;
+}
+
+/** What's floor at a tile by the rings (even-odd at its middle): a row's crossings each, once. */
+function ringFloor(rings: Ring[]): (x: number, z: number) => boolean {
+  const rows = new Map<number, number[]>();
+  return (x, z) => {
+    let xs = rows.get(z);
+    if (!xs) {
+      xs = crossings(rings, z + 0.5);
+      rows.set(z, xs);
+    }
+    let n = 0;
+    for (const c of xs) if (c < x + 0.5) n++;
+    return n % 2 === 1;
+  };
+}
+
+/** The main block's facade's runs: its footprint's outer edges with their outward side, from the
+ *  outline when there is one (merged as the tiles' were: the same runs — campus.test.ts), else the
+ *  map's floor tiles (`W` × `H`). */
+export function facadeRuns(map: MapDef, outline?: Outline | null): Run[] {
+  const W = map.width;
+  const H = map.height;
+  const floor = outline
+    ? ringFloor(outline.rings)
+    : (x: number, z: number) => x >= 0 && z >= 0 && x < W && z < H && isFloor(tileAt(map, x, z));
+  return runs(floor, -1, -1, W + 1, H + 1);
+}
 
 // ── textures ─────────────────────────────────────────────────────────────────
 // The curtain wall: 4 bays × 4 storeys. Each storey: a concrete spandrel with
@@ -1314,6 +1353,8 @@ export class Campus {
     map: MapDef,
     private T: Themes,
     cuts: Map<string, WallCut> = new Map(),
+    /** the building's outline from its structure (none: the map's tiles and edges) */
+    outline: Outline | null = null,
   ) {
     const W = map.width;
     const H = map.height;
@@ -1329,7 +1370,6 @@ export class Campus {
     this.fz0 = -0.5;
     this.fx1 = W + 0.5;
     this.fz1 = H + 0.5;
-    const floor = (x: number, z: number) => x >= 0 && z >= 0 && x < W && z < H && isFloor(tileAt(map, x, z));
     const { map: facadeMap, lit, ledge } = facadeCanvases(T);
     this.facade = new MeshLambertMaterial({
       map: facadeMap,
@@ -1384,13 +1424,22 @@ export class Campus {
     const topSkin = new G();
     const cap = new G();
     const coping = new G();
-    const mainRuns = runs(floor, -1, -1, W + 1, H + 1);
+    // (its outline: the home floor's slabs; its walls, the structure's — or, with none, the map's)
+    const mainRuns = facadeRuns(map, outline);
+    const wallAt = (e: { dir: "h" | "v"; x: number; y: number }) =>
+      outline
+        ? e.dir === "h"
+          ? outline.edges.h(e.x, e.y)
+          : outline.edges.v(e.x, e.y)
+        : e.dir === "h"
+          ? hWall(map, e.x, e.y)
+          : vWall(map, e.x, e.y);
     // a window in the studio's wall there (shared openings.ts; older saves' painted ones): its hole, tiles up
     const win = (r: Run, i: number): [number, number] | null => {
       const e = r.nz !== 0 ? { dir: "h" as const, x: r.x0 + i, y: r.z0 } : { dir: "v" as const, x: r.x0, y: r.z0 + i };
       const c = cuts.get(edgeKey(e));
-      if (c && isWindowKind(c.kind)) return [c.z0 / 39.19, c.z1 / 39.19];
-      return isWindow(e.dir === "h" ? hWall(map, e.x, e.y) : vWall(map, e.x, e.y)) ? [WIN0, WIN1] : null;
+      if (c && isWindowKind(c.kind)) return [c.z0, c.z1];
+      return isWindow(wallAt(e)) ? [WIN0, WIN1] : null;
     };
     for (const r of mainRuns) this.facadeRun(skin, cap, coping, r, 0, (i) => win(r, i), topSkin);
     const mainWhite = this.lambert(0xdcd8d0);

@@ -17,7 +17,7 @@ export function WhiteboardPanel({ objectId }: { objectId: string }) {
   const t = useTr();
   const w = useWorld();
   const canvas = useRef<HTMLCanvasElement>(null);
-  const [items, setItems] = useState<WbItem[]>(() => w?.whiteboardItems(objectId) ?? []);
+  const [items, setItems] = useState<WbItem[]>(() => w?.boards.whiteboardItems(objectId) ?? []);
   const [tool, setTool] = useState<Tool>("pen");
   const [ink, setInk] = useState(INKS[0]);
   const drawing = useRef<number[] | null>(null);
@@ -26,7 +26,7 @@ export function WhiteboardPanel({ objectId }: { objectId: string }) {
   useEffect(() => {
     if (!w) return;
     w.send("wb:get", { objectId });
-    return w.onWhiteboard((id, next) => {
+    return w.boards.onWhiteboard((id, next) => {
       if (id === objectId) setItems([...next]);
     });
   }, [w, objectId]);

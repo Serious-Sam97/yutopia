@@ -15,7 +15,7 @@ const dir = process.env.YUTOPIA_SHOTS;
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 
 // the ground floor's corner is at (-60, -10) in the building's coords
-const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
+const G = (x: number, y: number) => ({ x, y });
 
 const prefs = (page: Page) =>
   page.addInitScript(() => {
@@ -123,7 +123,7 @@ test("a focused beam on someone: the same on both screens", async ({ page, brows
   // (run out, and coming back: under the 25% it takes to focus again)
   expect(await page.evaluate(() => (window as any).__yutopia.walker.vitals.bat as number)).toBeLessThan(25);
   expect(await page.evaluate(() => (window as any).__yutopia.walker.breath.drained as boolean)).toBe(true);
-  await expect(page.locator(".dk-bat")).toBeVisible();
+  await expect(page.locator(".dk-bat:not(.dk-air)")).toBeVisible();
 
   // let go: wide again on both
   await page.mouse.up({ button: "right" });

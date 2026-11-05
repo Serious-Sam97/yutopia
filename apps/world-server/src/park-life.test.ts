@@ -12,9 +12,6 @@ import { Client, type Room } from "colyseus.js";
 process.env.YUTOPIA_OFFLINE = "1";
 process.env.YUTOPIA_WORLD_SECRET = "test";
 process.env.YUTOPIA_INTERNAL_SECRET = "test";
-// (no physics world: the visitors start for the benches when the room does, and Jolt's start
-// shifts when that is — the seats they take here are timed against it)
-process.env.YUTOPIA_PHYSICS = "0";
 
 const PORT = 31100 + Math.floor(Math.random() * 100); // (its own hundred: no two files share one — they run at once)
 let server: { gracefullyShutdown: (exit?: boolean) => Promise<void> };
@@ -39,7 +36,6 @@ const me = (room: Room): any => room.state.players.get(room.sessionId);
 // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
 const park = (room: Room): any => room.state.karts.get("park");
 const taken = (r: Room) => String(park(r).seats).split(",").filter(Boolean).map(Number);
-const OFF = { x: -60, y: -10 };
 let sandbox = 40;
 async function join(uid: number, s: number) {
   const r = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
@@ -52,7 +48,7 @@ async function join(uid: number, s: number) {
   return r;
 }
 async function goTo(r: Room, x: number, z: number) {
-  const at = { x: x - OFF.x, y: z - OFF.y, level: 0 };
+  const at = { x: x, y: z, level: 0 };
   r.send("teleport", { to: at });
   await waitFor(() => Math.hypot(me(r).x - at.x, me(r).y - at.y) < 1.5);
 }
@@ -70,28 +66,29 @@ test("a bench by the fire: sat on, one a seat, got up from", async () => {
   a.send("park:sit", { i });
   await waitFor(() => me(a).busy === KART_SITTING);
   assert.equal(me(a).a, 2, "sitting");
-  assert.ok(Math.abs(me(a).x + OFF.x - q.x) < 0.01 && Math.abs(me(a).y + OFF.y - q.z) < 0.01, "on the seat");
+  assert.ok(Math.abs(me(a).x - q.x) < 0.01 && Math.abs(me(a).y - q.z) < 0.01, "on the seat");
   assert.ok(Math.abs(me(a).z - (heightAt(q.x, q.z) + q.top - SIT_HIP)) < 0.01, "at its height");
-  assert.deepEqual(taken(a), [i]);
+  // (mine taken — the park's visitors may sit on the bench's others meanwhile)
+  assert.ok(taken(a).includes(i));
   // (someone else: not that one)
   b.send("park:sit", { i });
   await sleep(300);
   assert.equal(me(b).busy, "");
   // my moves aren't mine while I sit
-  a.send("pos", { x: me(a).x + 3, y: me(a).y, d: 0, a: 1, z: me(a).z });
+  a.send("pos", { x: me(a).x + 3, y: me(a).y, yaw: 32, a: 1, z: me(a).z });
   await sleep(300);
-  assert.ok(Math.abs(me(a).x + OFF.x - q.x) < 0.01, "still on it");
+  assert.ok(Math.abs(me(a).x - q.x) < 0.01, "still on it");
   a.send("park:stand", {});
   await waitFor(() => me(a).busy === "");
-  assert.ok(Math.hypot(me(a).x + OFF.x - q.out[0], me(a).y + OFF.y - q.out[1]) < 0.01, "up in front of it");
-  assert.deepEqual(taken(a), []);
+  assert.ok(Math.hypot(me(a).x - q.out[0], me(a).y - q.out[1]) < 0.01, "up in front of it");
+  assert.ok(!taken(a).includes(i));
   // walked off it, as off the office's bench: up where I was, my moves mine again
   a.send("park:sit", { i });
   await waitFor(() => me(a).busy === KART_SITTING);
   a.send("park:stand", { walk: true });
   await waitFor(() => me(a).busy === "");
-  assert.ok(Math.hypot(me(a).x + OFF.x - q.x, me(a).y + OFF.y - q.z) < 0.01, "up where I sat");
-  assert.deepEqual(taken(a), []);
+  assert.ok(Math.hypot(me(a).x - q.x, me(a).y - q.z) < 0.01, "up where I sat");
+  assert.ok(!taken(a).includes(i));
 });
 
 test("the stands: the crowd's seats aren't anyone's; a row up from the front; leaving frees it", async () => {

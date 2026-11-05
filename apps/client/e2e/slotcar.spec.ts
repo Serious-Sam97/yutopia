@@ -44,7 +44,7 @@ test("a race on the slot-car track: lights, GO, fly off — seen from across the
     ]) {
       const p = { x: Math.floor(sp.x) + dx, y: Math.floor(sp.y) + dy };
       await ana.evaluate(
-        ([i, q]) => (window as any).__yutopia.send("obj:put", { id: i, kind: "slot_track", x: q.x, y: q.y, rot: 0 }),
+        ([i, q]) => (window as any).__yutopia.send("obj:put", { id: i, kind: "slot_track", x: q.x, y: q.y, yaw: 0 }),
         [id, p] as const,
       );
       await ana.waitForTimeout(600);

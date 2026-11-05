@@ -1,4 +1,5 @@
 import type { WorldObjectDef } from "@yutopia/shared";
+import { quarterOf } from "@yutopia/shared";
 import {
   type CarState,
   laneOffset,
@@ -21,6 +22,7 @@ import {
   slotTurn,
   stepCar,
 } from "@yutopia/shared/slotcar";
+import type { SlotCar, SlotRace, WorldState } from "@yutopia/state";
 import { mixer } from "./audio";
 import { fanfare } from "./foley";
 import type { WorldModel } from "./model";
@@ -35,8 +37,6 @@ import { hud, type SlotLane, type SlotView } from "./store";
 // Marks this chunk for `pnpm budget`.
 export const SLOTS_CHUNK = "yutopia-slots";
 
-// biome-ignore lint/suspicious/noExplicitAny: colyseus schema instances
-type S = any;
 type Send = (type: string, msg: Record<string, unknown>) => void;
 
 const DELAY = 110; // ms behind the newest report: others' cars ride between two
@@ -82,7 +82,7 @@ export class SlotTracks {
 
   constructor(
     private model: WorldModel,
-    private room: { state: S; sessionId: string },
+    private room: { state: WorldState; sessionId: string },
     private send: Send,
   ) {}
 
@@ -93,7 +93,7 @@ export class SlotTracks {
     for (const def of defs) {
       keep.add(def.id);
       const old = this.tracks.get(def.id);
-      if (old && old.def.x === def.x && old.def.y === def.y && (old.def.rot ?? 0) === (def.rot ?? 0)) {
+      if (old && old.def.x === def.x && old.def.y === def.y && quarterOf(old.def) === quarterOf(def)) {
         old.def = def;
         continue;
       }
@@ -153,14 +153,14 @@ export class SlotTracks {
   myLane(id: string): number {
     const race = this.race(id);
     if (!race) return -1;
-    for (const [lane, c] of race.cars as Map<string, S>) if (c.sid === this.room.sessionId) return Number(lane);
+    for (const [lane, c] of race.cars) if (c.sid === this.room.sessionId) return Number(lane);
     return -1;
   }
   racing(): boolean {
     return !!this.carTrack && this.race(this.carTrack)?.phase === "race" && !this.finished;
   }
 
-  private race(id: string): S | undefined {
+  private race(id: string): SlotRace | undefined {
     return this.room.state.slots?.get(id);
   }
 
@@ -256,7 +256,7 @@ export class SlotTracks {
     if (phase === "countdown" && lights > v.lights && dist < HEAR) this.beep(523, 0.14, dist);
     v.lights = lights;
 
-    const rot = o.rot ?? 0;
+    const rot = quarterOf(o);
     const setup = this.setupOf(id);
     const tr = setup.track;
     const local = (x: number, y: number): [number, number] => {
@@ -266,9 +266,8 @@ export class SlotTracks {
 
     // the cars: everyone's lane, parked on the grid when nobody drives it
     const mineLane = this.myLane(id);
-    const cars = (race?.cars ?? new Map()) as Map<string, S>;
     for (let lane = 0; lane < SLOT_LANES; lane++) {
-      const c = cars.get(String(lane));
+      const c = race?.cars.get(String(lane));
       let st: CarState;
       if (lane === mineLane && this.carTrack === id && phase === "race") st = this.car;
       else if (c && phase === "race") st = this.others(v, lane, c, now);
@@ -279,12 +278,12 @@ export class SlotTracks {
       if (off && !v.wasOff[lane] && lane !== mineLane) {
         const p = slotPoint(st.s, laneOffset(lane), tr);
         const [wx, wy] = local(p.x, p.y);
-        this.model.puff(wx, wy, "spark", SLOT_TOP + 2);
+        this.model.puff(wx, wy, "spark", SLOT_TOP + 0.05);
         if (dist < HEAR) this.crashSound(o, Math.max(0, 1 - dist / HEAR));
       } else if (off && !v.wasOff[lane] && lane === mineLane) {
         const p = slotPoint(st.s, laneOffset(lane), tr);
         const [wx, wy] = local(p.x, p.y);
-        this.model.puff(wx, wy, "spark", SLOT_TOP + 2);
+        this.model.puff(wx, wy, "spark", SLOT_TOP + 0.05);
       }
       v.wasOff[lane] = off;
       this.carPose(lane, st, local, setup);
@@ -293,7 +292,7 @@ export class SlotTracks {
   }
 
   // Someone else's car, a moment behind their reports (smooth at any frame rate).
-  private others(v: TrackView, lane: number, c: S, now: number): CarState {
+  private others(v: TrackView, lane: number, c: SlotCar, now: number): CarState {
     const buf = v.lanes[lane];
     const sig = `${c.s}|${c.off}`;
     if (sig !== v.seen[lane]) {
@@ -332,7 +331,7 @@ export class SlotTracks {
       x = c.x;
       y = c.y;
       h = c.h + (this.model.stillMotion() ? 0 : c.spin);
-      lift = Math.sin(Math.min(1, st.off / 0.5) * Math.PI) * 5 * c.out;
+      lift = Math.sin(Math.min(1, st.off / 0.5) * Math.PI) * 0.1276 * c.out;
     } else {
       const p = slotPoint(st.s - GRID_BACK, off, setup.track);
       x = p.x;
@@ -346,7 +345,7 @@ export class SlotTracks {
     }
     const [cx, cy] = local(x, y);
     const [hx, hy] = local(x + Math.cos(h), y + Math.sin(h));
-    const z = SLOT_TOP + 0.3 + lift;
+    const z = SLOT_TOP + 0.0077 + lift;
     this.poses.push({ x: cx, y: cy, z, h: Math.atan2(hy - cy, hx - cx), color: COLORS[lane], tilt });
   }
 
@@ -365,12 +364,12 @@ export class SlotTracks {
     // positions: the finished by place, then whoever's furthest round
     const order =
       race?.phase === "race" || race?.phase === "done"
-        ? [...(race.cars as Map<string, S>).entries()]
+        ? [...race.cars.entries()]
             .sort(([, a], [, b]) => (a.place || 99) - (b.place || 99) || b.s - a.s)
             .map(([lane]) => lane)
         : [];
     if (race)
-      for (const [lane, c] of race.cars as Map<string, S>)
+      for (const [lane, c] of race.cars)
         lanes[Number(lane)] = {
           pos: order.indexOf(lane) + 1,
           name: c.name,
@@ -402,7 +401,7 @@ export class SlotTracks {
   }
 
   private distanceTo(o: WorldObjectDef, me: { x: number; y: number }) {
-    const rot = o.rot ?? 0;
+    const rot = quarterOf(o);
     const w = rot % 2 ? 3 : 4;
     const h = rot % 2 ? 4 : 3;
     const cx = Math.max(o.x, Math.min(me.x, o.x + w));
@@ -448,7 +447,7 @@ export class SlotTracks {
     // a little detune per lane so four cars don't merge into one note
     voice.osc.frequency.setTargetAtTime((90 + k * 340) * (1 + lane * 0.035), t, 0.04);
     voice.gain.gain.setTargetAtTime((0.012 + 0.045 * k) * near, t, 0.05);
-    const rot = o.rot ?? 0;
+    const rot = quarterOf(o);
     const cx = o.x + (rot % 2 ? 1.5 : 2);
     const cy = o.y + (rot % 2 ? 2 : 1.5);
     voice.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, (cx - cy - (me.x - me.y)) / 8)), t, 0.1);

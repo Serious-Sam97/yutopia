@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { entry, isOpening, type ObjectKind } from "@yutopia/shared";
+import { entry, isOpening, type ObjectKind, quarterYaw } from "@yutopia/shared";
 import { kindSolids, openingHole, type Solid3 } from "@yutopia/shared/shapes";
 import * as items from "../art/items";
 import { type Bounds3, KINDS, modelBounds } from "./model-bounds";
@@ -92,7 +92,7 @@ test("every kind's shapes fit its 3D model, at every turn", () => {
 test("doors and windows: the model frames its wall's cut", () => {
   const bad: string[] = [];
   for (const kind of KINDS.filter(isOpening) as ObjectKind[]) {
-    const m = modelBounds(items, { id: `${kind}-t`, kind, x: 3, y: 5, rot: 0 });
+    const m = modelBounds(items, { id: `${kind}-t`, kind, x: 3, y: 5, yaw: quarterYaw(0) });
     assert.ok(m, kind);
     const [h0, h1] = openingHole(kind);
     // (the frame round the hole: a little under a window's sill, over a door's head; a door's

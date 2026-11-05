@@ -1,4 +1,4 @@
-import { doorShut, ISO_PX, openingCut } from "@yutopia/shared";
+import { doorShut, openingCut } from "@yutopia/shared";
 import { type BufferGeometry, CylinderGeometry, ExtrudeGeometry, Path, Shape, TorusGeometry } from "three";
 import { ball, box, cyl, Model, merged } from "./kit";
 import { P, shade } from "./palette";
@@ -12,7 +12,6 @@ import { P, shade } from "./palette";
 // automatic doors slide; the revolving door's wings turn (live) while someone's passing.
 
 const T = 0.1; // the wall's half thickness (art/items/walls.ts WALL_HALF_T)
-const Z = (px: number) => px / ISO_PX;
 const GLASS = 0xcfe3ea;
 
 export interface OpeningLook {
@@ -230,7 +229,7 @@ function saloonLeaf(put: Put, lw: number, c: number) {
 // ── the doors ────────────────────────────────────────────────────────────────────────────────────
 
 function door(m: Model, L: OpeningLook) {
-  const D = Z(openingCut(L.kind)[1]);
+  const D = openingCut(L.kind)[1];
   const [x0, x1] = [L.a0, L.a1];
   const open = !L.shut;
   const kind = L.kind;
@@ -410,8 +409,8 @@ function door(m: Model, L: OpeningLook) {
 
 function window(m: Model, L: OpeningLook) {
   const [p0, p1] = openingCut(L.kind);
-  const y0 = Z(p0);
-  const y1 = Z(p1);
+  const y0 = p0;
+  const y1 = p1;
   const [x0, x1] = [L.a0, L.a1];
   const kind = L.kind;
   const studio = kind === "window_studio";
@@ -538,7 +537,7 @@ function window(m: Model, L: OpeningLook) {
 
 /** An archway: the plate round its arch, the keystone, its casing round the arch on both faces. */
 function archway(m: Model, L: OpeningLook) {
-  const D = Z(openingCut(L.kind)[1]);
+  const D = openingCut(L.kind)[1];
   const [x0, x1] = [L.a0, L.a1];
   const cx = (x0 + x1) / 2;
   const r = (x1 - x0) / 2 - 0.05;

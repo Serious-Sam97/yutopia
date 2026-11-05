@@ -1,4 +1,4 @@
-import { STAIRS_D, stairsDoor, V_FLIGHT, V_TURN } from "@yutopia/shared";
+import { STAIRS_D, STOREY, stairsDoor, V_FLIGHT, V_TURN } from "@yutopia/shared";
 import {
   BoxGeometry,
   BufferGeometry,
@@ -34,7 +34,6 @@ import { mergeStatic } from "./merge-static";
 // wall rail; painted block walls; the floor's number stencilled big at the
 // landing; a bulkhead light; a fire door at the entry, its leaf swinging.
 
-export const STOREY = 3.5;
 const N = 9; // steps a flight
 const F = V_FLIGHT; // the flights start here (the door's landing is 0..F deep)
 const T = V_TURN; // and turn here (the half landing T..T+2)

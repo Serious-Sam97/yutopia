@@ -32,7 +32,6 @@ async function waitFor(fn: () => boolean, ms = 5000) {
 // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
 const me = (room: Room): any => room.state.players.get(room.sessionId);
 // the ground floor's coords are the building's less (−60, −10)
-const OFF = { x: -60, y: -10 };
 
 test("the shuttle: on at the headquarters' stop, carried to the town square, off at its kerb", async () => {
   const a = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
@@ -46,7 +45,7 @@ test("the shuttle: on at the headquarters' stop, carried to the town square, off
   await waitFor(() => sh().shown);
   // (it starts at the headquarters; wait for it to be there, at a stop)
   await waitFor(() => sh().stop === "hq", 30_000);
-  const at = { x: sh().x - OFF.x - 2.5, y: sh().z - OFF.y };
+  const at = { x: sh().x - 2.5, y: sh().z };
   a.send("teleport", { to: { ...at, level: 0 } });
   await waitFor(() => me(a).level === 0 && Math.hypot(me(a).x - at.x, me(a).y - at.y) < 2);
   a.send("ride:board", {});
@@ -54,8 +53,8 @@ test("the shuttle: on at the headquarters' stop, carried to the town square, off
   assert.equal(sh().riders, 1);
   // off it goes; at the town square they're let off
   await waitFor(() => sh().stop === "town" && me(a).busy === "", 30_000);
-  const x = me(a).x + OFF.x;
-  const z = me(a).y + OFF.y;
+  const x = me(a).x;
+  const z = me(a).y;
   assert.ok(Math.abs(x - 412) < 8 && Math.abs(z - -401) < 5, `off at the square: ${x}, ${z}`);
   assert.equal(sh().riders, 0);
 });
@@ -81,7 +80,7 @@ test("the guard's shift: at his post by day, out of the gatehouse's door to the 
   rooms.push(a);
   // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
   const g = (): any => a.state.npcs.get("guard");
-  const at = () => ({ x: g().x + OFF.x, z: g().y + OFF.y });
+  const at = () => ({ x: g().x, z: g().y });
   const inGatehouse = () => at().x > -34 && at().x < -29 && at().z > -367 && at().z < -361;
   await waitFor(() => !!a.state.npcs?.get("guard"));
   // midday: at his post, standing

@@ -14,7 +14,7 @@ const dir = process.env.YUTOPIA_SHOTS;
 if (process.env.YUTOPIA_FIREFOX !== "1")
   test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 test.use({ viewport: { width: 1280, height: 800 } });
-const G = (x: number, z: number) => ({ x: x + 60, y: z + 10 });
+const G = (x: number, z: number) => ({ x, y: z });
 
 async function open(page: Page, who: typeof ANA, view: "3p" | "1p" = "3p") {
   await page.addInitScript((v) => {

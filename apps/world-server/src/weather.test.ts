@@ -108,7 +108,11 @@ test("the ground: snowed in for everyone, then melting by the rule; melted over 
   // then the rule: a warm rain melts it, a little each second
   admin.send("mod:weather", { to: "rain", now: true });
   await waitFor(() => weather(guest).snow < 1 && weather(guest).snow > 0.99, 5000);
-  await waitFor(() => weather(guest).wet > 0.7, 5000);
+  // (and the ground getting wetter by the rule — slowly: soaked in ~30 min of rain. Not a level:
+  // the schedule's ground that day is what the snow fell on, wet or dry — 0.7 by 5 s held only on
+  // a wet day, red since 2026-11-03)
+  const wetAt = weather(guest).wet;
+  await waitFor(() => weather(guest).wet > wetAt + 0.001, 5000);
   // melted, over two minutes: on its way, who's said
   admin.send("mod:ground", { to: "melt" });
   await waitFor(() => weather(guest).groundTo === "melt" && weather(guest).groundBy === "P85");

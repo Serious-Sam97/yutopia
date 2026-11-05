@@ -18,10 +18,15 @@
 import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { type Browser, chromium, type Page, request } from "@playwright/test";
-import { GROUNDS, POND, POND_LEVEL, RIVER, terrainAt } from "@yutopia/shared/grounds";
+import { landBounds, POND, POND_LEVEL, RIVER, terrainAt } from "@yutopia/shared/grounds";
 import { along, delta, level, nearRiver, slope, speed, waterAt } from "./water-course.mts";
 
-const out = resolve(process.argv[2] ?? (process.env.REAL ? "../../design/screens/water/game" : "../../design/screens/water"));
+// (the land's box: shared land.ts — docs/plan/69)
+const GROUNDS = landBounds();
+
+const out = resolve(
+  process.argv[2] ?? (process.env.REAL ? "../../design/screens/water/game" : "../../design/screens/water"),
+);
 mkdirSync(out, { recursive: true });
 const base = process.env.YUTOPIA_E2E_URL ?? "http://localhost:3100";
 const api = process.env.YUTOPIA_E2E_API ?? "http://localhost:8100";

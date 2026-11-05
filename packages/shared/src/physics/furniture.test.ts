@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { CATALOG, placedFootprint, standHeight, type WorldObjectDef } from "../catalog.ts";
-import { ISO_PX } from "../furniture.ts";
+import { CATALOG, placedFootprint, quarterYaw, standHeight, type WorldObjectDef } from "../catalog.ts";
 import { isOpening } from "../openings.ts";
 import { blocksOf, kindSolids, type Solid3 } from "../shapes/index.ts";
 import { loadJolt } from "./load.ts";
@@ -41,7 +40,7 @@ test("every solid piece in Jolt: walked at from four sides, stopped where it blo
       const w = await PhysicsWorld.create(loadJolt, sizesFor({ statics: 16, things: 8 }));
       worlds.push(w);
       w.setLand("land", flat());
-      const o: WorldObjectDef = { id: `t-${kind}`, kind, x: 0, y: 0, rot, props: {} };
+      const o: WorldObjectDef = { id: `t-${kind}`, kind, x: 0, y: 0, yaw: quarterYaw(rot), props: {} };
       const solids = kindSolids(o, 0);
       w.setStatic("thing", solids);
       w.settle();
@@ -92,7 +91,7 @@ test("every solid piece in Jolt: walked at from four sides, stopped where it blo
       // (a top narrower than a body isn't stood on: a fireplace's mantel shelf)
       const narrow = solids[0].t === "box" && Math.min(solids[0].hx, solids[0].hz) < BODY.r * 0.6;
       if (st !== undefined && !narrow) {
-        const top = st / ISO_PX;
+        const top = st;
         // (its body's middle, or a quarter along it where something else stands over the middle: a
         // net, a terminal on its cart, a roof's ridge)
         const body = solids[0];

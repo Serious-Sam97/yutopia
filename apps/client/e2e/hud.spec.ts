@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect } from "@playwright/test";
-import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld, walkNear } from "./helpers";
 
 // The main HUD (proposal v2): top bars, the side panel (people · room) with
 // who can hear you, quick emotes, the phone key, the status menu, the minimap.
@@ -18,7 +18,7 @@ test("HUD: who hears you, emotes, the phone key, people, room, status, minimap",
   await enter(ana, ta, s);
   await enter(bia, tb, s);
   const at = await ana.evaluate(() => (window as any).__yutopia.meTile());
-  await walkTo(bia, at.x + 1.5, at.y + 0.5, 25_000);
+  await walkNear(bia, at.x + 1.5, at.y + 0.5, 25_000);
 
   // top bars: where I am — the room's name, who's here under it (people come in at the arrival point) — who's in
   const here = await ana.evaluate(() => (window as any).__hud.get().me?.areaName as string);

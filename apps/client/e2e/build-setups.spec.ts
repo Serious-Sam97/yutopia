@@ -42,14 +42,14 @@ test("Tab steps through what's stacked; a dressed desk saved as a setup and plac
   try {
     // a desk with a computer and a desk lamp on it
     const send = (o: Record<string, unknown>) => page.evaluate((x) => (window as any).__yutopia.send("obj:put", x), o);
-    await send({ id: `e2e-su-desk-${stamp}`, kind: "desk", x: X, y: Y, rot: 0 });
+    await send({ id: `e2e-su-desk-${stamp}`, kind: "desk", x: X, y: Y, yaw: 0 });
     await page.waitForTimeout(300);
     await send({
       id: `e2e-su-mon-${stamp}`,
       kind: "computer",
       x: X + 1,
       y: Y,
-      rot: 0,
+      yaw: 0,
       props: { c: [1, 1] },
     });
     await send({
@@ -57,7 +57,7 @@ test("Tab steps through what's stacked; a dressed desk saved as a setup and plac
       kind: "tabletop",
       x: X,
       y: Y,
-      rot: 0,
+      yaw: 0,
       props: { d: "desklamp", c: [1, 1] },
     });
     await expect.poll(async () => (await mine(page, before)).length).toBe(3);
@@ -70,7 +70,7 @@ test("Tab steps through what's stacked; a dressed desk saved as a setup and plac
     await page.waitForTimeout(500);
 
     // ── over the computer: it's what you'd grab; Tab: the desk under it
-    const mon = await at(page, X + 1.375, Y + 0.375, 34);
+    const mon = await at(page, X + 1.375, Y + 0.375, 0.87);
     await page.mouse.move(mon.x, mon.y);
     await expect.poll(async () => (await build(page)).hover?.label).toBe("Computer");
     expect((await build(page)).hover.of.n).toBeGreaterThanOrEqual(2);

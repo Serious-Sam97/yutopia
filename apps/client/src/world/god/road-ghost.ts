@@ -24,7 +24,7 @@ const GREEN = 0x8aa04a; // (--good)
 const MAX_LINE = 1500;
 const UP = 0.45;
 
-type Frame = { x: number; z: number; y: number };
+type Frame = { y: number };
 
 export class RoadGhost {
   readonly root = new Group();
@@ -80,7 +80,7 @@ export class RoadGhost {
       return;
     }
     this.root.visible = true;
-    const k = `${JSON.stringify(pts)}|${w}|${ok}|${joined}|${f.x},${f.z},${f.y}`;
+    const k = `${JSON.stringify(pts)}|${w}|${ok}|${joined}|${f.y}`;
     if (k === this.key) return;
     this.key = k;
     const c = ok ? AMBER : RED;
@@ -99,16 +99,15 @@ export class RoadGhost {
       const l = Math.hypot(bx - ax, bz - az) || 1;
       const nx = (-(bz - az) / l) * (w / 2);
       const nz = ((bx - ax) / l) * (w / 2);
-      bp.setXYZ(i * 2, x + nx - f.x, y(x + nx, z + nz), z + nz - f.z);
-      bp.setXYZ(i * 2 + 1, x - nx - f.x, y(x - nx, z - nz), z - nz - f.z);
+      bp.setXYZ(i * 2, x + nx, y(x + nx, z + nz), z + nz);
+      bp.setXYZ(i * 2 + 1, x - nx, y(x - nx, z - nz), z - nz);
       if (i) idx.push(i * 2 - 2, i * 2 - 1, i * 2, i * 2 - 1, i * 2 + 1, i * 2);
     }
     bp.needsUpdate = true;
     this.band.geometry.setIndex(idx);
     this.band.geometry.setDrawRange(0, idx.length);
     const lp = this.middle.geometry.getAttribute("position") as Float32BufferAttribute;
-    for (let i = 0; i < line.length; i++)
-      lp.setXYZ(i, line[i][0] - f.x, y(line[i][0], line[i][1]) + 0.05, line[i][1] - f.z);
+    for (let i = 0; i < line.length; i++) lp.setXYZ(i, line[i][0], y(line[i][0], line[i][1]) + 0.05, line[i][1]);
     lp.needsUpdate = true;
     this.middle.geometry.setDrawRange(0, line.length);
     this.middle.computeLineDistances();
@@ -122,10 +121,10 @@ export class RoadGhost {
     }
     for (const [i, d] of this.dots.entries()) {
       d.visible = i < pts.length;
-      if (d.visible) d.position.set(pts[i][0] - f.x, y(pts[i][0], pts[i][1]) + 0.1, pts[i][1] - f.z);
+      if (d.visible) d.position.set(pts[i][0], y(pts[i][0], pts[i][1]) + 0.1, pts[i][1]);
     }
     this.join.visible = !!joined;
-    if (joined) this.join.position.set(joined[0] - f.x, y(joined[0], joined[1]) + 0.1, joined[1] - f.z);
+    if (joined) this.join.position.set(joined[0], y(joined[0], joined[1]) + 0.1, joined[1]);
   }
 
   dispose() {

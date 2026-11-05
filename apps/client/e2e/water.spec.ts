@@ -19,7 +19,7 @@ test.use({
 });
 
 const POND = { cx: -240, cz: -60, rx: 48, rz: 34 }; // (shared grounds.ts POND)
-const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 }); // the land's coords → the ground floor's
+const G = (x: number, y: number) => ({ x, y }); // the land's coords → the ground floor's
 const send = (p: Page, type: string, m: unknown) =>
   p.evaluate(([t, mm]) => (window as any).__yutopia.room.send(t, mm), [type, m] as const);
 const go = async (p: Page, at: { x: number; y: number }) => {
@@ -40,8 +40,7 @@ const body = (p: Page) =>
   p.evaluate(() => {
     const w = (window as any).__yutopia;
     const b = w.walker.body;
-    const m = w.map;
-    const wat = w.G.waterAt(b.x + (m.ox ?? 0), b.y + (m.oy ?? 0));
+    const wat = w.G.waterAt(b.x, b.y);
     return {
       z: b.z as number,
       swim: (b.swim ?? null) as { under: boolean } | null,
@@ -55,7 +54,7 @@ const face = (p: Page, away = false) =>
     ([P, a]) => {
       const w = (window as any).__yutopia;
       const m = w.room.state.players.get(w.room.sessionId);
-      const yaw = Math.atan2(P.cz + 10 - m.y, P.cx + 60 - m.x) + (a ? Math.PI : 0);
+      const yaw = Math.atan2(P.cz - m.y, P.cx - m.x) + (a ? Math.PI : 0);
       w.tp.yaw = yaw;
       w.walker.body.yaw = yaw;
     },
@@ -129,8 +128,7 @@ test("the water as two: Bia wades, swims, dives and comes out soaked, Ana sees i
       () => {
         const w = (window as any).__yutopia;
         const b = w.walker.body;
-        const m = w.map;
-        return !b.swim && !w.G.waterAt(b.x + (m.ox ?? 0), b.y + (m.oy ?? 0));
+        return !b.swim && !w.G.waterAt(b.x, b.y);
       },
       null,
       { timeout: 40_000 },
@@ -177,8 +175,7 @@ test("the water as two: Bia wades, swims, dives and comes out soaked, Ana sees i
       () => {
         const w = (window as any).__yutopia;
         const b = w.walker.body;
-        const m = w.map;
-        const wat = w.G.waterAt(b.x + (m.ox ?? 0), b.y + (m.oy ?? 0));
+        const wat = w.G.waterAt(b.x, b.y);
         return !!wat && b.z < wat.level - 0.3;
       },
       null,
@@ -268,8 +265,7 @@ test("the water heard: wading steps, treading and strokes afloat, under muffled,
       () => {
         const w = (window as any).__yutopia;
         const b = w.walker.body;
-        const m = w.map;
-        return !b.swim && !w.G.waterAt(b.x + (m.ox ?? 0), b.y + (m.oy ?? 0));
+        return !b.swim && !w.G.waterAt(b.x, b.y);
       },
       null,
       { timeout: 40_000 },

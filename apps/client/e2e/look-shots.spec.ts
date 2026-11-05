@@ -9,7 +9,7 @@ const dir = process.env.YUTOPIA_SHOTS;
 if (dir) test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 
 // the Grounds' coords → the ground floor's (its corner at -60, -10)
-const G = (x: number, z: number) => ({ x: x + 60, y: z + 10, level: 0 });
+const G = (x: number, z: number) => ({ x, y: z, level: 0 });
 interface Spot {
   name: string;
   at: { x: number; y: number; level?: number };

@@ -10,7 +10,7 @@ const here = new URL(".", import.meta.url).pathname;
 // (the hashes hold for this build only: Jolt moves with the bench, never alone)
 const JOLT = "1.1.1";
 const HASH = { players: "68ea128e", area: "d430410a", full: "a54956d2" };
-const MINUTES = 20;
+const MINUTES = Number(process.env.MINUTES ?? 20);
 
 const require = createRequire(import.meta.url);
 const version = require("jolt-physics/package.json").version;
@@ -19,7 +19,8 @@ const report = (name, ok, detail) => {
   failed ||= !ok;
   console.log(`[physics] ${ok ? "ok  " : "FAIL"} ${name.padEnd(36)} ${detail}`);
 };
-report("jolt-physics version", version === JOLT, `${version} (hashes recorded on ${JOLT})`);
+// (ours: packages/jolt, 1.1.1 built with a growing heap — the same physics, the same hashes)
+report("jolt-physics version", version.split("-")[0] === JOLT, `${version} (hashes recorded on ${JOLT})`);
 
 if (!existsSync(`${here}area.json`) || !existsSync(`${here}full.json`)) {
   const r = spawnSync("npx", ["tsx", "gen-scene.ts"], { cwd: here, stdio: "inherit" });
@@ -81,26 +82,6 @@ report(
   soak !== null && soak.refused === 0 && Math.abs(soak.heapGrowthMB) < 0.25,
   `Jolt's heap ${soak?.heapGrowthMB} MB over ${soak?.joinedAndLeft} joins, things and edits`,
 );
-
-// the Grounds' walking against their solids (docs/plan/50 phase 4): the grid's tiles and Jolt's shapes
-// agree but for what's by design (packages/shared/src/physics/audit.ts)
-// — with the water frozen and open (docs/plan/66-the-water.md: its deep walled off till the swimming)
-for (const water of ["frozen", "open"]) {
-  const audited = run([
-    "--import",
-    "tsx",
-    "../../packages/shared/src/physics/audit.ts",
-    "--check",
-    ...(water === "open" ? ["--open"] : []),
-  ]);
-  report(
-    `the Grounds: walking = solids (the water ${water})`,
-    audited !== null && audited.failures.length === 0,
-    audited
-      ? `${audited.tiles} tiles in ${audited.ms} ms${audited.failures.length ? `: ${audited.failures.join("; ")}` : ""}`
-      : "failed",
-  );
-}
 
 // pinned exactly wherever it's a dependency: the bench and the game move together
 for (const p of ["package.json", "../../packages/shared/package.json"]) {

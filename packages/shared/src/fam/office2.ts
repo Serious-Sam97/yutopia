@@ -1,6 +1,6 @@
 import type { CatalogEntry } from "../catalog.ts";
 import type { SeatSpec } from "../furniture.ts";
-import { box, cyl, isoPx, type KindShape, one } from "./units.ts";
+import { box, cyl, type KindShape, one } from "./units.ts";
 
 // Plan 68 phase 6 (docs/plan/68-more-furniture.md): Office — the new kinds' catalog entries, shapes
 // (from their models: the client's world/furn/fam/office2.ts), seats, surfaces, stand heights and hang
@@ -45,7 +45,7 @@ export const CATALOG = {
     h: 1,
     solid: true,
     buildable: true,
-    surface: isoPx(SURFACES.security_desk),
+    surface: SURFACES.security_desk,
     top: [1, 2, 7, 4], // (its front: the monitors and the camera keyboard behind)
     light: { color: 0xa8c8d8, radius: 2, intensity: 0.25, h: 1.1 },
   },
@@ -75,7 +75,7 @@ export const CATALOG = {
     h: 1,
     solid: true,
     buildable: true,
-    surface: isoPx(SURFACES.sorting_desk),
+    surface: SURFACES.sorting_desk,
     top: [1, 2, 7, 4], // (its front: the pigeonholes behind, the scale and the stamp at its ends)
   },
 } satisfies Record<string, CatalogEntry>;
@@ -104,7 +104,7 @@ export const STANDS: Record<string, number> = {
 };
 export const HANGS: Record<string, [number, number, number]> = {
   // (the clock between its card racks; the extinguisher under its sign; the cabinet)
-  punch_clock: [4, 39, 65],
-  fire_extinguisher: [2, 21, 60],
-  first_aid_cabinet: [2, 46, 65],
+  punch_clock: [4, 0.9952, 1.6587],
+  fire_extinguisher: [2, 0.5359, 1.5311],
+  first_aid_cabinet: [2, 1.1738, 1.6587],
 };

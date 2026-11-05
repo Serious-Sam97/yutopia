@@ -33,7 +33,6 @@ async function waitFor(fn: () => boolean, ms = 5000) {
 // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
 const me = (room: Room): any => room.state.players.get(room.sessionId);
 // the ground floor's coords are the building's less (−60, −10)
-const OFF = { x: -60, y: -10 };
 
 test("the bus: on at Main Street's stop, carried up Long Pine Road, off at Silver Lake's", async () => {
   const a = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
@@ -49,7 +48,7 @@ test("the bus: on at Main Street's stop, carried up Long Pine Road, off at Silve
   for (let go = 0; go < 4 && me(a).busy !== "ride:shuttle"; go++) {
     await waitFor(() => bus().stop === "town", 120_000);
     const b = bus();
-    const at = { x: b.x - Math.sin(b.a) * 3 - OFF.x, y: b.z + Math.cos(b.a) * 3 - OFF.y };
+    const at = { x: b.x - Math.sin(b.a) * 3, y: b.z + Math.cos(b.a) * 3 };
     a.send("teleport", { to: { ...at, level: 0 } });
     await waitFor(() => me(a).level === 0 && Math.hypot(me(a).x - at.x, me(a).y - at.y) < 2).catch(() => {});
     a.send("ride:board", {});
@@ -59,11 +58,11 @@ test("the bus: on at Main Street's stop, carried up Long Pine Road, off at Silve
   assert.equal(bus().riders, 1);
   // off it goes, up the road (seated, carried); at the lake they're let off
   await waitFor(() => bus().stop === "", 10_000);
-  await waitFor(() => Math.hypot(me(a).x + OFF.x - BUS_STOPS.town.x, me(a).y + OFF.y - BUS_STOPS.town.z) > 500, 30_000);
+  await waitFor(() => Math.hypot(me(a).x - BUS_STOPS.town.x, me(a).y - BUS_STOPS.town.z) > 500, 30_000);
   assert.equal(me(a).busy, "ride:shuttle", "carried");
   await waitFor(() => bus().stop === "lake" && me(a).busy === "", 90_000);
-  const x = me(a).x + OFF.x;
-  const z = me(a).y + OFF.y;
+  const x = me(a).x;
+  const z = me(a).y;
   assert.ok(Math.hypot(x - BUS_STOPS.lake.x, z - BUS_STOPS.lake.z) < 15, `off at the lake: ${x}, ${z}`);
   assert.equal(bus().riders, 0);
 });

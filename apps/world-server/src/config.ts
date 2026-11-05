@@ -23,16 +23,9 @@ export const config = {
   worldFile: process.env.YUTOPIA_OFFLINE === "1" ? (process.env.YUTOPIA_WORLD_FILE ?? "") : "",
   // Dev only: accept "bot:<id>:<name>" tokens next to real people (perf swarm).
   allowBots: process.env.YUTOPIA_OFFLINE === "1" || process.env.YUTOPIA_ALLOW_BOTS === "1",
-  // Map v2 (walls on edges): spaces saved as v1 are converted when they load.
-  // With this on, the conversion is written back right away (layout + moved
-  // boards/doors); otherwise only when someone edits the map.
-  saveMigrations: process.env.YUTOPIA_MAP_V2_SAVE === "1",
   // The building (docs/plan/25-building-floors.md): a world with one floor
   // becomes the top of five, once. Off: it stays as it is (tests of other things).
   building: process.env.YUTOPIA_BUILDING !== "0",
-  // The physics world (docs/plan/50-the-volume.md): Jolt, built at start. Off: none (tests of
-  // other things; nothing needs it before phase 3).
-  physics: process.env.YUTOPIA_PHYSICS !== "0",
   // Media on TVs (docs/plan/10-media.md). Jellyfin: the server, an API key
   // (never leaves this process) and the Jellyfin user whose libraries Yutopia
   // shows (default: the first administrator). YouTube: a Data API key for

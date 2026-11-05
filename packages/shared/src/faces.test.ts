@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { quarterYaw } from "./catalog.ts";
 import { cornerNear, joinedFaces, otherFace, panelAt, panelKey, panelTile, runBetween } from "./faces.ts";
 import { applyEdges, blankMap } from "./map-edit.ts";
 
@@ -24,7 +25,7 @@ test("panels: one face of one edge, the tile it looks into, the other face", () 
 test("the panel under the pointer: the face the ray meets, else the floor's side of the nearest wall", () => {
   const m = studio();
   // iso ray from the south-east, onto the room's north wall inside (its +y face)
-  const hit = panelAt(m, { o: { x: 7.5, y: 6.5, z: 180 }, d: { x: -1, y: -1, z: -50 } }, null);
+  const hit = panelAt(m, { o: { x: 7.5, y: 6.5, z: 4.6 }, d: { x: -1, y: -1, z: -1.28 } }, null);
   assert.deepEqual(hit, { dir: "h", x: 5, y: 4, side: 1 });
   // no ray: on the floor just inside the south wall → its inner (−y) face
   assert.deepEqual(panelAt(m, null, { x: 6.4, y: 6.8 }), { dir: "h", x: 6, y: 7, side: -1 });
@@ -47,7 +48,7 @@ test("joined faces: every wall face round the space a face looks into (doors clo
   // a gap in the south wall: the room joins the studio round it — closed again by a door there
   const open = applyEdges(m, [{ dir: "h", x: 6, y: 7, ch: "." }]);
   assert.ok(joinedFaces(open, [], { dir: "h", x: 5, y: 7, side: -1 }).length > 20);
-  const door = { id: "d", kind: "door", x: 6, y: 7, rot: 0 };
+  const door = { id: "d", kind: "door", x: 6, y: 7, yaw: quarterYaw(0) };
   assert.equal(joinedFaces(open, [door], { dir: "h", x: 5, y: 7, side: -1 }).length, 13);
 });
 

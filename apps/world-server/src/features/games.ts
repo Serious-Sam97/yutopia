@@ -1,4 +1,4 @@
-import { footprint, hearingGain, objLevel, type WorldObjectDef } from "@yutopia/shared";
+import { footprint, hearingGain, objLevel, quarterOf, type WorldObjectDef } from "@yutopia/shared";
 import {
   CABLE_REACH,
   CONSOLES,
@@ -40,7 +40,7 @@ registerFeature((room: WorldRoom) => {
     return o ? fromSchema(o) : undefined;
   };
   const rect = (o: WorldObjectDef) => {
-    const { w, h } = footprint(o.kind, o.rot ?? 0);
+    const { w, h } = footprint(o.kind, quarterOf(o));
     return { x: o.x, y: o.y, w, h };
   };
   // how far someone is from a thing's footprint
@@ -343,7 +343,7 @@ registerFeature((room: WorldRoom) => {
         if (!c.host) continue;
         c.since = Date.now();
         // the picture for everyone in the world, the sound for whoever's in earshot of the TV
-        const { w, h } = footprint(tv.kind, tv.rot ?? 0);
+        const { w, h } = footprint(tv.kind, quarterOf(tv));
         const speaker = { x: tv.x + w / 2, y: tv.y + h / 2, dnd: false, level: objLevel(tv, room.map) };
         const video: string[] = [];
         const audio: string[] = [];

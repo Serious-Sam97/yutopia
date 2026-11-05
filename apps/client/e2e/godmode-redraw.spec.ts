@@ -171,7 +171,7 @@ test.beforeAll(async ({ browser }) => {
   anaToken = await token(ANA);
   await enter(page, anaToken, space);
   await holdHour(page, 13);
-  await page.evaluate((p) => (window as any).__yutopia.teleport(p), { x: AT.x + 60, y: AT.z + 10, level: 0 });
+  await page.evaluate((p) => (window as any).__yutopia.teleport(p), { x: AT.x, y: AT.z, level: 0 });
   // (there, and what's round her made)
   await expect.poll(() => seen(page).then((s) => s.drawn !== null && s.solid !== null), { timeout: 60_000 }).toBe(true);
   await page.waitForTimeout(3000);

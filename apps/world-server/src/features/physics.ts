@@ -1,4 +1,4 @@
-import { elevOf, levelMap, offsetOf } from "@yutopia/shared";
+import { elevOf, levelMap, objLevel, outdoorsOf, shiftOf, spanOf } from "@yutopia/shared";
 import {
   CHUNK,
   chunkCount,
@@ -10,18 +10,19 @@ import {
   layoutVersion,
   underfoot,
 } from "@yutopia/shared/grounds";
+import { loadNav } from "@yutopia/shared/nav";
 import {
   type BuildingSolids,
   buildingSolids,
-  JoltCollider,
   loadJolt,
   PhysicsWorld,
+  Place,
   passKeys,
   sizesFor,
+  slabsOf,
   staticCount,
   WorldBuilder,
 } from "@yutopia/shared/physics";
-import { config } from "../config.ts";
 import { onLandChanged, prefetch } from "../land.ts";
 import { metrics } from "../metrics.ts";
 import { fromSchema, type WorldRoom } from "../WorldRoom.ts";
@@ -48,13 +49,12 @@ const WANT_MS = 500; // what's wanted worked out this often
 const MAX_CHUNKS = 2400;
 
 const worlds = new WeakMap<WorldRoom, PhysicsWorld>();
-/** The room's physics world, once it's built (null before, or with YUTOPIA_PHYSICS=0). */
+/** The room's physics world, once it's built (null before). */
 export const physicsOf = (room: WorldRoom): PhysicsWorld | null => worlds.get(room) ?? null;
 
-// (one world a process: Jolt's heap is a fixed 128 MB, the whole world ~34 MB of it — the game has
-// one room; tests that make more get it in the first, while it lives)
+// (a world a room — plan 72 phase 7: Jolt the only truth; its heap grows, packages/jolt — the
+// gauges the last room's: the game has one)
 let current: { room: WorldRoom; world: PhysicsWorld; ready: () => number } | null = null;
-let owner: WorldRoom | null = null;
 metrics.gauge("physics_bodies", () => current?.world.counts().bodies ?? 0);
 metrics.gauge("physics_max_bodies", () => current?.world.counts().maxBodies ?? 0);
 metrics.gauge("physics_statics", () => current?.world.counts().statics ?? 0);
@@ -68,9 +68,6 @@ metrics.gauge("process_heap_bytes", () => process.memoryUsage().heapUsed);
 metrics.gauge("process_rss_bytes", () => process.memoryUsage().rss);
 
 registerFeature((room) => {
-  if (!config.physics) return {};
-  if (owner) return {};
-  owner = room;
   let world: PhysicsWorld | null = null;
   let build: WorldBuilder | null = null;
   let gone = false;
@@ -86,9 +83,7 @@ registerFeature((room) => {
   const built = () => build?.chunksBuilt().size ?? 0;
   /** Where the people out there are, and the cars moving, ahead (the building's coords). */
   const near = (): [number, number][] => {
-    const g = levelMap(room.map, 0);
-    const ox = g?.ox ?? 0;
-    const oy = g?.oy ?? 0;
+    const { x: ox, y: oy } = shiftOf(room.map, 0);
     const out: [number, number][] = [];
     for (const p of room.state.players.values()) if (p.level === 0) out.push([p.x + ox, p.y + oy]);
     // (a car parked needs nothing: the cars aren't on Jolt here; one carrying someone, or going, its way)
@@ -137,14 +132,37 @@ registerFeature((room) => {
   };
 
   const objects = () => [...room.state.objects.values()].map(fromSchema);
+  /** The navmesh made to match the building's solids (a floor's fixed part again when it changed;
+   *  its things as obstacles), and who passes which locked door. */
+  const syncNav = async (b: BuildingSolids) => {
+    const t0 = performance.now();
+    const floorOfThing = (id: string) => {
+      const o = room.state.objects.get(id);
+      return o ? objLevel(fromSchema(o), room.map) : null;
+    };
+    const g = levelMap(room.map, 0);
+    // (the land round it: only a ground floor out among the Grounds)
+    const sp = g && outdoorsOf(g) ? spanOf(g) : null;
+    room.lockedDoors = b.locked;
+    const { made } = await room.nav.sync(
+      b,
+      floorOfThing,
+      sp ? { x0: sp.x0, z0: sp.y0, x1: sp.x1, z1: sp.y1 } : undefined,
+    );
+    const ms = performance.now() - t0;
+    if (made.length) console.log(`[nav] floors ${made.join(", ")} made in ${Math.round(ms)} ms`);
+  };
   // god mode's edits laid (docs/plan/53-the-god-mode.md): the chunks they changed and built, again
   const offLand = onLandChanged((cs) => {
     for (const [cx, cz] of cs) if (build?.hasChunk(cx, cz)) again.add(`${cx},${cz}`);
     wantAt = 0;
+    // (the ground floor's mesh has the land round it: made again)
+    if (solids) void syncNav(solids).catch((e) => console.warn("[nav] failed:", (e as Error).message));
   });
-  void (async () => {
+  // (built before the room lets anyone in: WorldRoom.onCreate waits for it)
+  room.physicsReady = (async () => {
     const t0 = performance.now();
-    const b = buildingSolids(room.map, objects());
+    const b = buildingSolids(room.map, objects(), room.structure);
     // (sizes for the whole world: every chunk's land and things, the building, 500 things, the cars)
     const chunks = Math.min(landChunks(CHUNK).length, MAX_CHUNKS);
     const sizes = sizesFor({ statics: staticCount(b, chunks), things: 500, vehicles: b.cars.size + 64 });
@@ -154,42 +172,62 @@ registerFeature((room) => {
     build = new WorldBuilder(w);
     build.building(b);
     solids = b;
+    // every floor's navmesh, from the same solids (shared nav — plan 72 phase 7)
+    await loadNav();
+    if (gone) return;
+    await syncNav(b);
     // (sight for reach: docs/plan/50 E — a hand to what it reaches for, no wall between)
     room.sight = (level, a, b) => {
       if (!world) return true;
-      const o = offsetOf(room.map, level);
+      const o = shiftOf(room.map, level);
       const e = elevOf(level);
       return world.sees(o.x + a.x, e + a.z, o.y + a.y, o.x + b.x, e + b.z, o.y + b.y);
     };
-    room.colliderFor = (uid, level, clip) => {
-      if (!world || !solids) return null;
-      const off = offsetOf(room.map, level);
-      return new JoltCollider(
-        world,
-        room.gridFor(uid, level),
-        { ox: off.x, oy: off.y, elev: elevOf(level) },
-        { mask: clip ? "clip" : "all", pass: world.pass(passKeys(solids, uid)) },
-      );
+    room.slabUnder = slabsOf(
+      w,
+      (id) => room.state.objects.get(id)?.kind === "stairs",
+      (l, p) => !!room.inShaft?.(l, p),
+    );
+    room.solidAt = (level, p, r) => {
+      if (!world) return false;
+      const o = shiftOf(room.map, level);
+      return world.overlaps(o.x + p.x, elevOf(level) + p.z, o.y + p.y, r) > 0;
     };
+    // a floor's questions on this world, for someone (through their own locked doors)
+    room.placeFor = (uid, level, clip, things) =>
+      new Place(world, room.levelMap(level), things, {
+        mask: clip ? "clip" : "all",
+        pass: world && solids ? world.pass(passKeys(solids, uid)) : null,
+      });
+    room.forgetPlaces();
     grid = room.grid;
     worlds.set(room, w);
     current = { room, world: w, ready: built };
     console.log(
       `[physics] the building: ${b.statics.size} statics, ${b.cars.size} cars in ${Math.round(performance.now() - t0)} ms (room for ${sizes.maxBodies} bodies)`,
     );
-  })().catch((e) => console.error("[physics] couldn't start:", e));
+  })();
 
   return {
     tick() {
       if (!world || !build) return;
+      // the lifts' cars where they are (features/lifts.ts): whoever's on one with it
+      const cars = new Set<string>();
+      for (const c of room.liftCars) {
+        cars.add(c.key);
+        world.setCarrier(c.key, c.solids, ...c.at);
+      }
+      for (const k of [...world.carrierKeys()]) if (!cars.has(k)) world.removeCarrier(k);
       // the water's ice as the weather has it, and its holes (docs/plan/65 W6, 66 S4)
       build.ice(underfoot().ice, iceHolesNow());
       // the building edited (a new grid every time): made again where it changed
       if (room.grid !== grid) {
         grid = room.grid;
         const t0 = performance.now();
-        solids = buildingSolids(room.map, objects());
+        solids = buildingSolids(room.map, objects(), room.structure);
         build.building(solids);
+        // (a floor made again a few tiles at a time: till then the one there was answers)
+        void syncNav(solids).catch((e) => console.warn("[nav] failed:", (e as Error).message));
         metrics.time("physics_build", performance.now() - t0);
       }
       // the park's layout changed: its chunks built, again once the worker's made them anew
@@ -228,12 +266,14 @@ registerFeature((room) => {
     dispose() {
       gone = true;
       offLand();
-      room.colliderFor = null;
+      room.placeFor = null;
       room.sight = null;
-      owner = null;
+      room.solidAt = null;
+      room.slabUnder = null;
       if (current?.room === room) current = null;
       world?.destroy();
       world = null;
+      room.nav.dispose();
     },
   };
 });

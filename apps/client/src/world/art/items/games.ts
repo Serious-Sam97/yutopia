@@ -1,6 +1,10 @@
 import { TV_SCREEN } from "@yutopia/shared/games";
+import { artPx } from "@yutopia/shared/units";
 import { fe, fr, INK, type Mat, rnd, type Sketch, sh, te, tr } from "./kit";
 import { K, M } from "./pal";
+
+// (the shared glass is in metres; this drawing measures in the old art's px)
+const px = <T extends { z0: number; z1: number }>(g: T): T => ({ ...g, z0: artPx(g.z0), z1: artPx(g.z1) });
 
 // The game room (docs/plan/09-game-room.md): a CRT TV on its stand, the
 // consoles, the cartridge shelf. Drawn true to the originals' silhouettes,
@@ -18,7 +22,7 @@ const cartColor = (p: Props): string | null =>
 // bulging a little, a knob panel with a speaker grille, rabbit ears on top.
 export function crtTv(s: Sketch) {
   const silver = Math.floor(s.seed * 2) === 1;
-  const S = TV_SCREEN;
+  const S = px(TV_SCREEN);
   // the stand
   s.box({ x: 0.06, y: 0.1, w: 1.88, d: 0.8, z: 0, h: 13, mat: M.walnut }, (d) => {
     d.poly("s", fr("s", 0.9, 0.12, 0.96, 1.5, 11.5), "#2a1a10"); // open shelf

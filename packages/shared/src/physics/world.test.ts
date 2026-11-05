@@ -68,20 +68,13 @@ test("guardrail 1: past its sizes an add is refused and logged, never handed to 
   assert.ok(w.addThing({ kind: "ball", r: 0.2 }, 0, 5, 0) !== null);
 });
 
-test("guardrail 1: no world made without room in Jolt's heap (it never grows, and running out aborts it)", async () => {
+test("guardrail 1: worlds made past the published build's 128 MB — our Jolt's heap grows (packages/jolt)", async () => {
   const made: PhysicsWorld[] = [];
-  let error = "";
-  try {
-    for (let i = 0; i < 20; i++)
-      made.push(await PhysicsWorld.create(loadJolt, sizesFor({ statics: 2600, things: 500 })));
-  } catch (e) {
-    error = (e as Error).message;
-  } finally {
-    worlds.push(...made);
-  }
-  assert.match(error, /no room for a world/);
-  assert.ok(made.length >= 3, `${made.length} made`);
-  // (and the last of them still works)
+  for (let i = 0; i < 20; i++) made.push(await PhysicsWorld.create(loadJolt, sizesFor({ statics: 2600, things: 500 })));
+  worlds.push(...made);
+  const J = await loadJolt();
+  assert.ok(J.HEAPU8.length > 128 * 1024 * 1024, `the heap grew: ${(J.HEAPU8.length / 2 ** 20).toFixed(0)} MB`);
+  // (and the last of them still works; past HEAP_MAX a world isn't made — world.ts freeOf)
   const w = made[made.length - 1];
   assert.ok(w.setStatic("a", [box3(0, 0, 1, 1, 0, 1)]));
 });

@@ -1,5 +1,6 @@
-import { toScreen } from "@yutopia/shared";
+import { overFloor, toScreen } from "@yutopia/shared";
 import { aimPitch, flightAt, heldBall, type Launch, PBALL, SETTLE, settleAt } from "@yutopia/shared/pool-throw";
+import type { Player, PoolBallOut } from "@yutopia/state";
 import { lang } from "@/lib/i18n";
 import { hud, toast } from "../store";
 import type { TableScene3 } from "../tp/tables3d";
@@ -15,11 +16,7 @@ import { clack, cueTip, cushion } from "./sound";
 // crosshair — else the floor there); E takes one lying near, B puts the ball or the cue back; the
 // sounds.
 
-const ZPX = 45.25 * Math.cos(Math.PI / 6); // iso px of height per tile (a ray's z)
 const R_DRAW = 0.0443; // a ball's radius, tiles (as the tables draw theirs)
-
-// biome-ignore lint/suspicious/noExplicitAny: a colyseus schema instance
-type S = any;
 
 interface Seen {
   t0: number; // performance.now() when it showed up here (its flight is timed from then)
@@ -50,7 +47,7 @@ export class PoolBallsOut {
     window.addEventListener("keydown", this.onKey, true);
   }
 
-  private me(): S | undefined {
+  private me(): Player | undefined {
     const r = this.host.room;
     return r.state.players.get(r.sessionId);
   }
@@ -110,10 +107,10 @@ export class PoolBallsOut {
     const now = performance.now();
     let best: { key: string; d: number } | null = null;
     for (const [key, b] of this.host.room.state.pballs ?? new Map()) {
-      if ((b as S).level !== lvl || (b as S).t1 < 0) continue;
+      if (b.level !== lvl || b.t1 < 0) continue;
       const s = this.seen.get(key);
-      if (s && (now - s.t0) / 1000 < (b as S).t1 + SETTLE) continue;
-      const d = Math.hypot((b as S).rx - at.x, (b as S).ry - at.y);
+      if (s && (now - s.t0) / 1000 < b.t1 + SETTLE) continue;
+      const d = Math.hypot(b.rx - at.x, b.ry - at.y);
       if (d <= PBALL.reach && (!best || d < best.d)) best = { key, d };
     }
     return best?.key ?? null;
@@ -131,8 +128,8 @@ export class PoolBallsOut {
     }
     const ray = this.host.model.rayAt(px, py);
     if (!ray) return;
-    const o = { x: ray.o.x, y: ray.o.y, z: ray.o.z / ZPX };
-    const d0 = { x: ray.d.x, y: ray.d.y, z: ray.d.z / ZPX };
+    const o = { x: ray.o.x, y: ray.o.y, z: ray.o.z };
+    const d0 = { x: ray.d.x, y: ray.d.y, z: ray.d.z };
     const len = Math.hypot(d0.x, d0.y, d0.z) || 1;
     const d = { x: d0.x / len, y: d0.y / len, z: d0.z / len };
     const me = this.host.where();
@@ -144,10 +141,12 @@ export class PoolBallsOut {
       const x = o.x + d.x * t;
       const y = o.y + d.y * t;
       const z = o.z + d.z * t;
-      for (const [id, q] of this.host.room.state.players as Map<string, S>) {
+      for (const [id, q] of this.host.room.state.players) {
         if (id === sid || (q.level ?? 0) !== lvl) continue;
-        if (Math.hypot(q.x - x, q.y - y) < 0.34 && z > q.z - 0.05 && z < q.z + 1.85) {
-          target = { x: q.x, y: q.y, z: q.z + 1.1 };
+        // (their feet over the floor, as the ray's: Player.z is the world's)
+        const qz = overFloor(lvl, q.z);
+        if (Math.hypot(q.x - x, q.y - y) < 0.34 && z > qz - 0.05 && z < qz + 1.85) {
+          target = { x: q.x, y: q.y, z: qz + 1.1 };
           break;
         }
       }
@@ -176,7 +175,7 @@ export class PoolBallsOut {
     const now = performance.now();
     const state = this.host.room.state;
     const keep = new Set<string>();
-    for (const [key, b] of (state.pballs ?? new Map()) as Map<string, S>) {
+    for (const [key, b] of state.pballs ?? new Map<string, PoolBallOut>()) {
       keep.add(key);
       let s = this.seen.get(key);
       if (!s) {
@@ -216,14 +215,14 @@ export class PoolBallsOut {
   }
 
   // where a ball out is now (tiles, z up): flying, dropping off what it met, lying
-  private at(b: S, s: Seen, now: number) {
+  private at(b: PoolBallOut, s: Seen, now: number) {
     const t = (now - s.t0) / 1000;
     const f: Launch = { x0: b.x0, y0: b.y0, z0: b.z0, vx: b.vx, vy: b.vy, vz: b.vz };
     if (b.t1 < 0 || t < b.t1) return flightAt(f, Math.min(t, PBALL.maxSecs));
     return settleAt({ x: b.x1, y: b.y1, z: b.z1 }, { x: b.rx, y: b.ry, z: b.rz }, t - b.t1);
   }
 
-  private sound(b: S, me: { x: number; y: number }, kind: "fire" | "hit" | "stop") {
+  private sound(b: PoolBallOut, me: { x: number; y: number }, kind: "fire" | "hit" | "stop") {
     const x = kind === "fire" ? b.x0 : b.x1;
     const y = kind === "fire" ? b.y0 : b.y1;
     const gain = Math.max(0, 1 - Math.hypot(x - me.x, y - me.y) / 14) * 0.9;
@@ -254,7 +253,7 @@ export class PoolBallsOut {
   // the balls out, flying and lying, turning as they roll (on my floor)
   scene3d(into: TableScene3) {
     const lvl = this.host.level();
-    for (const [key, b] of (this.host.room.state.pballs ?? new Map()) as Map<string, S>) {
+    for (const [key, b] of this.host.room.state.pballs ?? new Map<string, PoolBallOut>()) {
       const s = this.seen.get(key);
       if (!s?.last || b.level !== lvl) continue;
       const p = s.last;

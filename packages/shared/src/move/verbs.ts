@@ -1,6 +1,7 @@
-import { BODY_R, type Grid } from "../grid.ts";
+import { BODY_R } from "../ground.ts";
+import type { Collider } from "./step.ts";
 
-type Asks = Pick<Grid, "fitsAt" | "groundAt" | "clear">;
+type Asks = Pick<Collider, "fitsAt" | "groundAt" | "clear">;
 
 import { MOVE, type MoveSpec } from "./spec.ts";
 

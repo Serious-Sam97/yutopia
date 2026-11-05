@@ -1,4 +1,4 @@
-import { CATALOG, entry, type ObjectKind, type WorldObjectDef } from "@yutopia/shared";
+import { CATALOG, entry, type ObjectKind, quarterYaw, type WorldObjectDef } from "@yutopia/shared";
 import { Box3, MeshBasicMaterial } from "three";
 import { liveInto } from "../furn/native";
 import { World3 } from "./build";
@@ -60,7 +60,14 @@ export function modelBounds(items: Items, o: WorldObjectDef): Bounds3 | null {
 export function kindBounds(items: Items, kind: ObjectKind, props: Record<string, unknown> = {}): Bounds3 | null {
   let all: Bounds3 | null = null;
   for (let v = 0; v < (entry(kind).variants ?? 1); v++) {
-    const b = modelBounds(items, { id: `${kind}-${v}`, kind, x: 0, y: 0, rot: 0, props: { variant: v, ...props } });
+    const b = modelBounds(items, {
+      id: `${kind}-${v}`,
+      kind,
+      x: 0,
+      y: 0,
+      yaw: quarterYaw(0),
+      props: { variant: v, ...props },
+    });
     if (!b) continue;
     all = all
       ? {

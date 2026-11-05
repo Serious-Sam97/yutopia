@@ -39,10 +39,10 @@ export function ActionMenu() {
         type="button"
         aria-label={t("actCancel")}
         className="absolute inset-0 cursor-default"
-        onClick={() => w?.closeMenu()}
+        onClick={() => w?.menu.closeMenu()}
         onContextMenu={(e) => {
           e.preventDefault();
-          w?.closeMenu();
+          w?.menu.closeMenu();
         }}
       />
       <div
@@ -86,7 +86,7 @@ export function ActionMenu() {
                 type="button"
                 role="menuitem"
                 disabled={!it.ok}
-                onClick={() => w?.pickAction(it.act)}
+                onClick={() => w?.menu.pickAction(it.act)}
                 className="pointer-events-auto absolute cabinet rounded-full pl-1.5 pr-3.5 h-9 flex items-center gap-2 text-[13px] whitespace-nowrap pop-in act-item disabled:opacity-45"
                 style={{
                   left: ix,
@@ -128,7 +128,7 @@ function ActionSheet() {
         aria-label={t("actCancel")}
         className="absolute inset-0 cursor-default"
         style={{ background: "rgba(10,6,4,.35)" }}
-        onClick={() => w?.closeMenu()}
+        onClick={() => w?.menu.closeMenu()}
       />
       <div
         role="menu"
@@ -153,7 +153,7 @@ function ActionSheet() {
               type="button"
               role="menuitem"
               disabled={!it.ok}
-              onClick={() => w?.pickAction(it.act)}
+              onClick={() => w?.menu.pickAction(it.act)}
               className="deck-btn justify-start text-[13px]"
               style={{ height: 40 }}
             >
@@ -237,7 +237,7 @@ export function ArrivalChip() {
           type="button"
           className="ghost-btn whitespace-nowrap"
           style={{ height: 28, fontSize: 12 }}
-          onClick={() => w?.setArrival(null)}
+          onClick={() => w?.arrival.setArrival(null)}
         >
           {t("arrivalUsual")}
         </button>
@@ -246,7 +246,7 @@ export function ArrivalChip() {
         type="button"
         className="deck-btn"
         style={{ height: 28, fontSize: 12 }}
-        onClick={() => w?.pickArrival(false)}
+        onClick={() => w?.arrival.pickArrival(false)}
       >
         {t("actCancel")}
       </button>

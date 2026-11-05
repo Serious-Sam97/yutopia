@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { canPlace } from "./build.ts";
-import { entry, placedFootprint, type WorldObjectDef } from "./catalog.ts";
+import { entry, placedFootprint, quarterOf, type WorldObjectDef } from "./catalog.ts";
 import { studio as STUDIO } from "./maps/studio.ts";
 import { furnishedIn, furnishRoom, isRoomPlan, planFor, ROOM_PLANS, refurnished, refurnishFloor } from "./office.ts";
 import { hostOf } from "./tops.ts";
@@ -109,10 +109,10 @@ test("seats face what they're at; a top's things go with it; an owned desk stays
     for (const s of add.filter((o) => o.kind === seat)) {
       const t = tables.reduce((b, o) => (Math.hypot(o.x - s.x, o.y - s.y) < Math.hypot(b.x - s.x, b.y - s.y) ? o : b));
       const tw = placedFootprint(t);
-      const [fx, fy] = facing(s.rot ?? 0);
+      const [fx, fy] = facing(quarterOf(s));
       const dx = t.x + tw.w / 2 - (s.x + 0.5);
       const dy = t.y + tw.h / 2 - (s.y + 0.5);
-      assert.ok(fx * dx + fy * dy > 0, `${key}: the ${seat} at ${s.x},${s.y} (rot ${s.rot}) faces its ${at}`);
+      assert.ok(fx * dx + fy * dy > 0, `${key}: the ${seat} at ${s.x},${s.y} (rot ${quarterOf(s)}) faces its ${at}`);
     }
   }
   const lounge = map.areas.find((x) => x.key === "lounge");

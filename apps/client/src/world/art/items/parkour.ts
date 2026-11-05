@@ -1,10 +1,11 @@
+import { ART_PX } from "@yutopia/shared/units";
 import type { Mat, Sketch } from "./kit";
 
 // Parkour, out of doors (shared catalog's pk_*: Flowmotion grinds the rails, runs up and kicks off
 // the walls, swings round the poles — physics/flow.ts): a steel rail on posts, a concrete wall
 // with a cap, a steel pole on a plate with a hazard band at its foot. Sizes as shapes/index.ts.
 
-const PX = 39.19; // iso px a metre (shapes PX_PER_M)
+const PX = ART_PX; // this drawing's px a metre up
 const STEEL: Mat = { c: "#7d8590", top: "#a9b1bb", left: "#8b939d", right: "#666d76", gloss: 0.8 };
 const STEEL_DARK: Mat = { c: "#4f555c", top: "#646a72" };
 const RUBBER: Mat = { c: "#2b2b2e", top: "#3a3a3e" };

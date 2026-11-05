@@ -8,6 +8,8 @@ import {
   levelMap,
   objLevel,
   onLevel,
+  quarterOf,
+  quarterYaw,
   type WorldObjectDef,
 } from "@yutopia/shared";
 import { deckBuilding, decked } from "@yutopia/shared/christmas";
@@ -95,7 +97,7 @@ registerFeature((room: WorldRoom) => {
               kind: "present",
               x: table.x + dx,
               y: table.y + dy,
-              rot: 0,
+              yaw: quarterYaw(0),
               props: {
                 variant: Math.floor(Math.random() * 3),
                 gift: p.held,
@@ -149,7 +151,7 @@ registerFeature((room: WorldRoom) => {
     for (const o of add) {
       const lm = levelMap(room.map, objLevel(o, room.map));
       const level = lm ? onLevel(now, lm) : now;
-      const def = { ...o, props: cleanProps(o.kind, o.props ?? {}, level, o.x, o.y, o.rot ?? 0) };
+      const def = { ...o, props: cleanProps(o.kind, o.props ?? {}, level, o.x, o.y, quarterOf(o)) };
       room.state.objects.set(def.id, toSchema(def));
       now.push(def);
       if (!config.offline) api.putObject(def).catch(persistFailed);

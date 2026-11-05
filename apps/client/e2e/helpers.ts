@@ -105,7 +105,11 @@ export async function useWorld(name: World = "demo"): Promise<World> {
     headers: { Authorization: `Bearer ${await token(ANA)}`, Accept: "application/json" },
   });
   const ana = (await me.json()).user.id as number;
-  for (const o of [...(snap.objects ?? []).map((x: any) => x.props), ...(snap.layout?.areas ?? [])])
+  for (const o of [
+    ...(snap.objects ?? []).map((x: any) => x.props),
+    ...(snap.layout?.areas ?? []),
+    ...(snap.structure?.rooms ?? []).map((r: any) => r.props),
+  ])
     if (o?.ownerId === 1) o.ownerId = ana;
   const res = await ctx.post(`${API}/api/e2e/world`, {
     data: snap,
@@ -182,8 +186,8 @@ export async function loaded(page: Page, timeout = 60_000) {
 export const world = (page: Page, fn: (w: any, h: any) => unknown) =>
   page.evaluate(fn as never, null as never) as Promise<unknown>;
 
-// A world point on the page (client px) as the 3D camera sees it: tiles, `z` iso px up
-// (39.19 a tile, as the build code measures). Off screen / behind the camera: far off.
+// A world point on the page (client px) as the 3D camera sees it: metres, `z` up. Off screen /
+// behind the camera: far off.
 export const screenAt = (page: Page, x: number, y: number, z = 0) =>
   page.evaluate(
     ([tx, ty, tz]) => {
@@ -229,22 +233,66 @@ export const holdHour = (page: Page, h: number) =>
   }, h);
 
 export async function walkTo(page: Page, x: number, y: number, ms = 12_000) {
-  await page.evaluate(
+  const went = await page.evaluate(
     ([px, py]) =>
-      (window as unknown as { __yutopia: { walkTo(p: { x: number; y: number }): void } }).__yutopia.walkTo({
+      (window as unknown as { __yutopia: { walkTo(p: { x: number; y: number }): boolean } }).__yutopia.walkTo({
         x: px,
         y: py,
       }),
     [x, y],
   );
-  await page.waitForFunction(
+  await page
+    .waitForFunction(
+      ([px, py]) => {
+        const t = (window as unknown as { __yutopia: { meTile(): { x: number; y: number } } }).__yutopia.meTile();
+        return Math.hypot(t.x - px, t.y - py) < 1.2;
+      },
+      [x, y],
+      { timeout: ms },
+    )
+    .catch(async (e) => {
+      // (where they got to, and whether the spot can be stood on at all: a walk that can't end
+      // there says so instead of a bare timeout)
+      const why = await page
+        .evaluate(
+          ([px, py]) => {
+            const c = (window as any).__yutopia;
+            const t = c.meTile();
+            const open = c.grid?.nearestOpen?.(px, py, 3);
+            const start = c.grid?.ok?.(Math.floor(t.x), Math.floor(t.y)) ? "open" : "blocked";
+            return `at ${t.x.toFixed(2)},${t.y.toFixed(2)} (floor ${c.level}, standing on a ${start} tile); the spot ${c.grid?.ok?.(Math.floor(px), Math.floor(py)) ? "open" : "blocked"}, nearest open ${open ? `${open.x},${open.y}` : "none"}; path ${c.path ? c.path.length : "none"}`;
+          },
+          [x, y],
+        )
+        .catch(() => "");
+      throw new Error(
+        `walkTo ${x.toFixed(2)},${y.toFixed(2)}: ${went ? "" : "no path found; "}not there in ${ms} ms — ${why}\n${(e as Error).message}`,
+      );
+    });
+}
+
+/** Walk to somewhere near (x, y) that has a way there: the spots in rings round it, nearest first, the
+ *  first with a path (a layout changes under a fixed spot: plan 49's core put a wall where hud.spec
+ *  walked). Returns where it went. */
+export async function walkNear(page: Page, x: number, y: number, ms = 20_000): Promise<{ x: number; y: number }> {
+  const to = await page.evaluate(
     ([px, py]) => {
-      const t = (window as unknown as { __yutopia: { meTile(): { x: number; y: number } } }).__yutopia.meTile();
-      return Math.hypot(t.x - px, t.y - py) < 1.2;
+      const c = (window as any).__yutopia;
+      const offs: [number, number][] = [[0, 0]];
+      for (let r = 1; r <= 3; r++)
+        for (let dy = -r; dy <= r; dy++)
+          for (let dx = -r; dx <= r; dx++) if (Math.max(Math.abs(dx), Math.abs(dy)) === r) offs.push([dx, dy]);
+      for (const [dx, dy] of offs) {
+        const p = { x: px + dx, y: py + dy };
+        if (c.grid?.ok?.(Math.floor(p.x), Math.floor(p.y)) && c.walkTo(p, undefined, true)) return p;
+      }
+      return null;
     },
     [x, y],
-    { timeout: ms },
   );
+  if (!to) throw new Error(`walkNear ${x.toFixed(2)},${y.toFixed(2)}: no spot within 3 with a way there`);
+  await walkTo(page, to.x, to.y, ms);
+  return to;
 }
 
 // Use on something (docs/plan/56-the-controls.md C — no clicking the world): close enough to it,

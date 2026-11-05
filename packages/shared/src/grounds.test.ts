@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { BLOCKS, campusBuilding, moveBlocks, upgradeGround } from "./building.ts";
 import type { WorldObjectDef } from "./catalog.ts";
-import { Grid, moveStep, RUN_SPEED, setOutdoors } from "./grid.ts";
+import { quarterYaw } from "./catalog.ts";
+import { moveStep, RUN_SPEED, setOutdoors } from "./ground.ts";
 import { GATE, groundsAreaAt, groundsOutdoors, heightAt, INSIDES, walkableTile, wallEdgeAt } from "./grounds.ts";
 import { hearingGain } from "./hearing.ts";
 import { type Height, stepHeight } from "./jump.ts";
@@ -10,7 +11,9 @@ import { levelMap } from "./levels.ts";
 import { areaAt, edgeAt, type LevelDef, type MapDef, setAreasBeyond, setEdge, tileAt } from "./map.ts";
 import { studio } from "./maps/studio.ts";
 import { openingsIntoWalls } from "./openings.ts";
-import { findPath } from "./path.ts";
+import type { Place } from "./physics/place.ts";
+import { type TestWorld, testWorld } from "./physics/testing.ts";
+import { foldMap, foldThings } from "./structure/fold.ts";
 import { splitAll } from "./tops.ts";
 
 // The ground floor on the Grounds (docs/plan/27-the-grounds.md): past the
@@ -23,7 +26,19 @@ function ground() {
   const moved = new Map(b.moved.map((o) => [o.id, o]));
   const objects = [...into.objects.map((o) => moved.get(o.id) ?? o), ...b.add];
   const g0 = levelMap(b.map, 0) as MapDef;
-  return { g0, grid: Grid.from(g0, objects), map: b.map };
+  return { g0, map: b.map, objects };
+}
+// …on Jolt in the world's frame (the building's coords: structure/fold.ts), the land built round
+// the floor and in each of `land`'s rectangles (x, z); its place on the ground floor, and its ways
+const worlds: TestWorld[] = [];
+after(() => {
+  for (const w of worlds.splice(0)) w.dispose();
+});
+async function onJolt(land: { x0: number; z0: number; x1: number; z1: number }[] = []) {
+  const { map, objects } = ground();
+  const w = await testWorld(foldMap(map), foldThings(map, objects), { land });
+  worlds.push(w);
+  return { place: w.place(0), nav: await w.nav() };
 }
 setOutdoors(groundsOutdoors);
 setAreasBeyond(groundsAreaAt);
@@ -36,9 +51,14 @@ after(() => {
 const B = (g0: MapDef, p: { x: number; y: number }) => ({ x: p.x + (g0.ox ?? 0), y: p.y + (g0.oy ?? 0) });
 const L = (g0: MapDef, x: number, y: number) => ({ x: x - (g0.ox ?? 0), y: y - (g0.oy ?? 0) });
 
-/** Walk a found way from `from` to `to` (the floor's coords), feet on the ground. */
-function walk(grid: Grid, g0: MapDef, from: { x: number; y: number }, to: { x: number; y: number }) {
-  const path = findPath(grid, from, to);
+/** Walk a found way from `from` to `to` (the building's coords: the world's), feet on the ground. */
+async function walk(
+  j: { place: Place; nav: Awaited<ReturnType<TestWorld["nav"]>> },
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+) {
+  const grid = j.place;
+  const path = await j.nav.pathSoon(0, from, to);
   assert.ok(path, `a way from ${from.x},${from.y} to ${to.x},${to.y}`);
   let pos = { ...from };
   const h: Height = { z: grid.groundAt(pos.x, pos.y, 0), vz: 0, up: false };
@@ -52,12 +72,12 @@ function walk(grid: Grid, g0: MapDef, from: { x: number; y: number }, to: { x: n
       if (d < 0.05) break;
       const step = Math.min(d, RUN_SPEED / 60);
       const next = moveStep(grid, pos, { x: dx / d, y: dy / d }, step * 60, 1 / 60, h.z);
-      assert.ok(next.x !== pos.x || next.y !== pos.y, `stuck at ${JSON.stringify(B(g0, pos))} z ${h.z.toFixed(2)}`);
+      assert.ok(next.x !== pos.x || next.y !== pos.y, `stuck at ${JSON.stringify(pos)} z ${h.z.toFixed(2)}`);
       pos = next;
       stepHeight(grid, pos.x, pos.y, h, 1 / 60);
-      assert.ok(!h.up, `never off the ground walking (at ${JSON.stringify(B(g0, pos))})`);
+      assert.ok(!h.up, `never off the ground walking (at ${JSON.stringify(pos)})`);
       if (grid.onLand(pos.x, pos.y)) {
-        const b = B(g0, pos);
+        const b = pos;
         assert.ok(
           Math.abs(h.z - heightAt(b.x, b.y)) < 0.25,
           `feet on the land at ${b.x},${b.y}: ${h.z} vs ${heightAt(b.x, b.y)}`,
@@ -70,65 +90,70 @@ function walk(grid: Grid, g0: MapDef, from: { x: number; y: number }, to: { x: n
   return { pos, hi, lo };
 }
 
-test("the Grounds round the ground floor: out of the lot, onto the land", () => {
-  const { g0, grid } = ground();
+test("the Grounds round the ground floor: out of the lot, onto the land", async () => {
+  const j = await onJolt([{ x0: -200, z0: -60, x1: 0, z1: 60 }]);
+  const grid = j.place;
   // the lot is the stored floor; west of it, past the floor's own tiles, the land
-  const lot = L(g0, -30, 20);
+  const lot = { x: -30, y: 20 };
   assert.ok(grid.ok(Math.floor(lot.x), Math.floor(lot.y)));
   assert.ok(!grid.onLand(lot.x, lot.y), "the lot is the floor's own");
-  const lawn = L(g0, -90, 20);
+  const lawn = { x: -90, y: 20 };
   assert.ok(grid.onLand(lawn.x, lawn.y), "the lawn is land");
   assert.ok(grid.ok(Math.floor(lawn.x), Math.floor(lawn.y)));
   // the trail into the woods, to the pond's shore
-  const r = walk(grid, g0, lot, L(g0, -160, -6));
-  const at = B(g0, r.pos);
+  const r = await walk(j, lot, { x: -160, y: -6 });
+  const at = r.pos;
   assert.ok(Math.hypot(at.x + 160, at.y + 6) < 1, `got there (${at.x}, ${at.y})`);
 });
 
-test("the Grounds: up the driveway to the gate, the floor never changing", () => {
-  const { g0, grid } = ground();
-  const r = walk(grid, g0, L(g0, -48, -6), L(g0, -40, -330));
+test("the Grounds: up the driveway to the gate, the floor never changing", async () => {
+  const j = await onJolt([{ x0: -100, z0: -400, x1: 0, z1: 20 }]);
+  const r = await walk(j, { x: -48, y: -6 }, { x: -40, y: -330 });
   assert.ok(r.hi > 2.9, `climbed (the driveway's top ${r.hi.toFixed(2)} — a storey's band, but it's the land)`);
   // the gate lets you through; the fence either side doesn't (a wall on the tiles' edge: thin as
   // it's drawn — docs/plan/50-the-volume.md)
   assert.ok(!wallEdgeAt("h", Math.floor(GATE.x), GATE.z));
   assert.ok(wallEdgeAt("h", Math.floor(GATE.x) + 20, GATE.z));
-  const through = walk(grid, g0, L(g0, -40, -330), L(g0, -40, -380));
-  assert.ok(B(g0, through.pos).y < -375, "out past the gate");
+  const through = await walk(j, { x: -40, y: -330 }, { x: -40, y: -380 });
+  assert.ok(through.pos.y < -375, "out past the gate");
 });
 
-test("the Grounds: the fence and the ridges are the edge", () => {
-  const { g0, grid } = ground();
+test("the Grounds: the fence and the ridges are the edge", async () => {
+  const round = (x: number, z: number) => ({ x0: x - 20, z0: z - 20, x1: x + 20, z1: z + 20 });
+  const { place: grid } = await onJolt([round(-400, 0), round(0, 170), round(220, -100), round(-470, -100)]);
   // the fence: a wall on the tiles' edges (thin as it's drawn), stepped across nowhere
   for (const [x, z, dx, dz] of [
     [-400, 0, -1, 0],
     [0, 170, 0, 1],
     [220, -100, 1, 0],
   ]) {
-    const p = L(g0, x - (dx > 0 ? 1 : 0), z - (dz > 0 ? 1 : 0));
+    const p = { x: x - (dx > 0 ? 1 : 0), y: z - (dz > 0 ? 1 : 0) };
     const [tx, ty] = [Math.floor(p.x), Math.floor(p.y)];
     assert.ok(grid.ok(tx, ty), `inside the fence at ${x},${z}`);
     assert.ok(!grid.step(tx, ty, tx + dx, ty + dz), `the fence at ${x},${z}`);
   }
   // far out on the ridges: nothing to stand on
-  const p = L(g0, -470, -100);
+  const p = { x: -470, y: -100 };
   assert.ok(!grid.ok(Math.floor(p.x), Math.floor(p.y)));
 });
 
-test("the courtyard's blocks: their ground floors are the ground floor's own, and you walk in", () => {
-  const { g0, grid, map } = ground();
+test("the courtyard's blocks: their ground floors are the ground floor's own, and you walk in", async () => {
+  const { g0, map } = ground();
+  const j = await onJolt();
+  const grid = j.place;
   assert.equal(upgradeGround(map), null, "once");
   for (const b of BLOCKS) {
     const mid = L(g0, (b.x0 + b.x1) / 2 - 6, (b.y0 + b.y1) / 2 + 3);
     assert.equal(areaAt(g0, mid.x, mid.y)?.key, b.key);
-    assert.ok(!grid.onLand(mid.x, mid.y), `${b.name}: the floor's own tiles`);
+    const w = B(g0, mid);
+    assert.ok(!grid.onLand(w.x, w.y), `${b.name}: the floor's own tiles`);
   }
   // from the lot, round the headquarters, across the courtyard, in at the east block's doors
-  const r = walk(grid, g0, L(g0, -30, 20), L(g0, 82, 18));
-  const at = B(g0, r.pos);
-  assert.equal(areaAt(g0, r.pos.x, r.pos.y)?.key, "east-block", `inside (${at.x}, ${at.y})`);
+  const r = await walk(j, { x: -30, y: 20 }, { x: 82, y: 18 });
+  const at = L(g0, r.pos.x, r.pos.y);
+  assert.equal(areaAt(g0, at.x, at.y)?.key, "east-block", `inside (${r.pos.x}, ${r.pos.y})`);
   // its glass is a wall: straight through it from the courtyard, no
-  assert.ok(!grid.clear(L(g0, 72, 30), L(g0, 80, 30)));
+  assert.ok(!grid.clear({ x: 72, y: 30 }, { x: 80, y: 30 }));
 });
 
 test("the blocks moved out of a bigger studio's way: a stored floor's old ones go, what was in them goes with them", () => {
@@ -167,7 +192,14 @@ test("the blocks moved out of a bigger studio's way: a stored floor's old ones g
     ),
   };
   // a desk someone built in the old east block
-  const desk: WorldObjectDef = { id: "d1", kind: "desk", x: 70 - ox, y: 20 - oy, rot: 0, props: { level: 0 } };
+  const desk: WorldObjectDef = {
+    id: "d1",
+    kind: "desk",
+    x: 70 - ox,
+    y: 20 - oy,
+    yaw: quarterYaw(0),
+    props: { level: 0 },
+  };
   const r = moveBlocks(old, [desk]);
   assert.ok(r, "moved");
   assert.equal(moveBlocks(r.map, r.objects), null, "once");
@@ -183,16 +215,19 @@ test("the blocks moved out of a bigger studio's way: a stored floor's old ones g
   assert.deepEqual([r.moved[0]?.x, r.moved[0]?.y], [86 - ox, 20 - oy]);
 });
 
-test("the town: into the bar by its door, never through its wall; inside, you hear each other, not the street", () => {
-  const { g0, grid, map } = ground();
+test("the town: into the bar by its door, never through its wall; inside, you hear each other, not the street", async () => {
+  const { g0, map } = ground();
   const bar = INSIDES.find((i) => i.b.sign === "BAR");
   assert.ok(bar);
   const b = bar.b;
+  const j = await onJolt([{ x0: b.x0 - 40, z0: -440, x1: b.x1 + 40, z1: b.z1 + 40 }]);
+  const grid = j.place;
   // its wall is a wall: from the pavement straight in, no
-  assert.ok(!grid.clear(L(g0, b.x0 + 3, b.z0 - 1.5), L(g0, b.x0 + 3, b.z0 + 2)));
+  assert.ok(!grid.clear({ x: b.x0 + 3, y: b.z0 - 1.5 }, { x: b.x0 + 3, y: b.z0 + 2 }));
   // by the door, yes (from Main Street to a table)
-  const r = walk(grid, g0, L(g0, (b.x0 + b.x1) / 2, -405), L(g0, b.x0 + 4.2, b.z0 + 6.5));
-  const room = areaAt(g0, r.pos.x, r.pos.y);
+  const r = await walk(j, { x: (b.x0 + b.x1) / 2, y: -405 }, { x: b.x0 + 4.2, y: b.z0 + 6.5 });
+  const inside = L(g0, r.pos.x, r.pos.y);
+  const room = areaAt(g0, inside.x, inside.y);
   assert.equal(room?.name, "Bar");
   assert.equal(room?.kind, "private");
   // out on the street, the place is the street

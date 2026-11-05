@@ -17,3 +17,5 @@ apps/client/test-results
 apps/client/public/emu/cores
 apps/client/public/emu/games
 docker/livekit.local.yaml
+# our own Jolt build (packages/jolt: built with Docker by build.sh, nothing else builds it — kept)
+!packages/jolt/dist

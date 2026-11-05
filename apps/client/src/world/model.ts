@@ -1,5 +1,6 @@
 import {
   type AvatarLayers,
+  artM,
   entry,
   type JumpNow,
   type MapDef,
@@ -32,7 +33,8 @@ export interface AvatarState {
   avatar: AvatarLayers;
   x: number;
   y: number;
-  d: number;
+  /** which way they face: world radians, atan2 of the way (plan 72 phase 5: was 8 iso screen ways) */
+  yaw: number;
   a: number; // 0 idle, 1 walk, 2 sit
   status: string;
   speaking: boolean;
@@ -127,7 +129,7 @@ export interface SpotPin {
   pick: { x: number; y: number; ok: boolean } | null;
 }
 
-/** What the 3D view answers about the screen (set while it's up). `z`s in tiles; client px. */
+/** What the 3D view answers about the screen (set while it's up). `z`s in metres; client px. */
 export interface ModelView {
   picks(filter?: (o: WorldObjectDef) => boolean): Pick[];
   project(x: number, y: number, z: number): { x: number; y: number } | null;
@@ -137,8 +139,6 @@ export interface ModelView {
   puff(x: number, y: number, kind: PuffKind, lift: number, hard: number): void;
 }
 
-// a height in iso px (as the build controller and the shared hang code measure) → tiles
-const ZPX = 39.19;
 // a wall display's picture, px per tile along the wall (shared hang.ts: the panels sit as they did)
 const S = 36;
 const css = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
@@ -250,7 +250,7 @@ export class WorldModel {
         (o.x !== s.x ||
           o.y !== s.y ||
           o.a !== s.a ||
-          o.d !== s.d ||
+          o.yaw !== s.yaw ||
           o.emote !== s.emote ||
           o.speaking !== s.speaking ||
           o.status !== s.status ||
@@ -275,16 +275,16 @@ export class WorldModel {
     return this.avatars.has(id);
   }
   // where someone is right now (world tiles), sitting or not, facing which way
-  avatarAt(id: string): { x: number; y: number; sitting: boolean; dir: number } | null {
+  avatarAt(id: string): { x: number; y: number; sitting: boolean; yaw: number } | null {
     const s = this.avatars.get(id);
-    return s ? { x: s.x, y: s.y, sitting: s.a === 2, dir: s.d } : null;
+    return s ? { x: s.x, y: s.y, sitting: s.a === 2, yaw: s.yaw } : null;
   }
 
   // ── wall displays ────────────────────────────────────────────────────────
   // Board walls show a VU meter of cards per section; big screens the board or
   // a live screen share; whiteboards a miniature of their scene. The 3D view
-  // puts each on its wall's face (tp/live.ts), from `ox` along it, `zTop` (iso
-  // px) its top, `pw` × `ph` its size (px, S a tile).
+  // puts each on its wall's face (tp/live.ts), from `ox` along it, `zTop` (m) its
+  // top and `h` (m) its height; its picture `pw` × `ph` (canvas px, S a tile).
   private boardContent = new Map<string, BoardContent>();
   private screenVideo = new Map<string, HTMLVideoElement>();
   private wbLive = new Map<string, WbItem[]>();
@@ -295,6 +295,7 @@ export class WorldModel {
       ox: number;
       oy: number;
       zTop: number;
+      h: number;
       pw: number;
       ph: number;
       draw: (g: CanvasRenderingContext2D) => void;
@@ -355,7 +356,8 @@ export class WorldModel {
       def: o,
       ox: 0.14,
       oy: 0.06,
-      zTop: z1,
+      zTop: artM(z1),
+      h: artM(ph),
       pw,
       ph,
       draw: (g) => this.drawDisplay(g, o.id, wide, pw, ph),
@@ -374,7 +376,8 @@ export class WorldModel {
       def: o,
       ox: 0.14,
       oy: 0.065,
-      zTop: 61,
+      zTop: artM(61),
+      h: artM(ph),
       pw,
       ph,
       draw: (g) => drawWhiteboard(g, items, pw, ph),
@@ -489,7 +492,7 @@ export class WorldModel {
   setGhost(o: WorldObjectDef | null, valid: boolean) {
     this.setGhosts(o ? [{ def: o, ok: valid }] : [], 0);
   }
-  // What you're holding: one or many, lifted `lift` iso px with a gentle bob.
+  // What you're holding: one or many, lifted `lift` m with a gentle bob.
   setGhosts(items: { def: WorldObjectDef; ok: boolean }[], lift: number) {
     this.ghostItems = items;
     this.ghostLift = lift;
@@ -559,20 +562,20 @@ export class WorldModel {
   pickAt(filter?: (o: WorldObjectDef) => boolean): Pick | null {
     return this.picksAt(filter)[0] ?? null;
   }
-  // where a world point (`z` iso px up) is on the screen: px from the world canvas's top-left
+  // where a world point (`z` m up) is on the screen: px from the world canvas's top-left
   // (the controller's hostRect() for client px)
   worldToClient(x: number, y: number, z = 0): { x: number; y: number } {
-    return this.view?.project(x, y, z / ZPX) ?? { x: -9999, y: -9999 };
+    return this.view?.project(x, y, z) ?? { x: -9999, y: -9999 };
   }
   // the floor point under a client px
   screenToWorld(clientX: number, clientY: number): { x: number; y: number } {
     return this.view?.floorAt(clientX, clientY, 0) ?? { x: -1, y: -1 };
   }
-  // the world point under the pointer at height `z` iso px (on a surface that high)
+  // the world point under the pointer at height `z` m (on a surface that high)
   pointerWorld(z = 0): { x: number; y: number } {
-    return this.view?.floorAt(this.pointerAt.x, this.pointerAt.y, z / ZPX) ?? { x: -1, y: -1 };
+    return this.view?.floorAt(this.pointerAt.x, this.pointerAt.y, z) ?? { x: -1, y: -1 };
   }
-  // The ray from the camera through the pointer (world tiles, z in iso px).
+  // The ray from the camera through the pointer (world metres, z up).
   pointerRay(): Ray | null {
     return this.view?.rayAt(this.pointerAt.x, this.pointerAt.y) ?? null;
   }

@@ -10,6 +10,9 @@ import { handleMedia } from "./media/http.ts";
 import { metrics } from "./metrics.ts";
 import { WorldRoom } from "./WorldRoom.ts";
 
+// a room up but not ticking for this long: the health check says the world is frozen
+const HEALTH_TICK_MS = 5000;
+
 const PUSH_MAX_BYTES = 2 * 1024 * 1024;
 
 // A signed call from the API (signed like ours to it, the path included): its
@@ -117,9 +120,23 @@ export async function startWorldServer(port: number): Promise<Server> {
     if (req.url === "/internal/push") return void (await handlePush(req, res));
     if (req.url === "/internal/hold") return void (await handleHold(req, res));
     if (req.url === "/health") {
+      // (honest — docs/plan/72-the-3d-core.md phase 1: a world that's up but hasn't ticked for
+      // HEALTH_TICK_MS is frozen for everyone in it: 503, for the container's healthcheck. A
+      // feature switched off after throwing leaves it up, said as `degraded`.)
       const rooms = await matchMaker.query({ name: ROOM_NAME });
-      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
-      res.end(JSON.stringify({ ok: true, rooms: rooms.length, clients: rooms.reduce((n, r) => n + r.clients, 0) }));
+      const age = metrics.tickAge();
+      const frozen = rooms.length > 0 && age !== null && age > HEALTH_TICK_MS;
+      const off = [...WorldRoom.live].flatMap((r) => r.featuresOff());
+      res.writeHead(frozen ? 503 : 200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(
+        JSON.stringify({
+          ok: !frozen,
+          rooms: rooms.length,
+          clients: rooms.reduce((n, r) => n + r.clients, 0),
+          tickAgeMs: age === null ? null : Math.round(age),
+          ...(off.length ? { degraded: true, featuresOff: off } : {}),
+        }),
+      );
       return;
     }
     res.writeHead(404).end();

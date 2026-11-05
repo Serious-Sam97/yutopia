@@ -137,9 +137,9 @@ if (spots.includes("lobby")) {
 }
 
 if (spots.includes("lot")) {
-  // the lot's east aisle, looking up it (floor coords: the ground's + 60, + 10)
-  const X = Number(process.env.LOT_X ?? 37.8);
-  const Y = Number(process.env.LOT_Y ?? 30);
+  // the lot's east aisle, looking up it
+  const X = Number(process.env.LOT_X ?? -22.2);
+  const Y = Number(process.env.LOT_Y ?? 20);
   await tp(ana, X, Y, 0);
   await ana.waitForTimeout(3000);
   await ready(ana);

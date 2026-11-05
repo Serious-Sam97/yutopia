@@ -1,6 +1,6 @@
 import type { CatalogEntry } from "../catalog.ts";
 import type { SeatSpec } from "../furniture.ts";
-import { box, ISO_PX, isoPx, type KindShape, one } from "./units.ts";
+import { box, type KindShape, one } from "./units.ts";
 
 // Plan 68 phase 8 (docs/plan/68-more-furniture.md): Screens & TVs — the new kinds' catalog entries, shapes
 // (from their models: the client's world/furn/fam/screens2.ts), seats, surfaces, stand heights and hang
@@ -61,7 +61,7 @@ export const CATALOG = {
     buildable: true,
     interact: "media",
     variants: 3,
-    surface: isoPx(0.86),
+    surface: 0.86,
     top: [0, 1, 8, 3], // (its top, over the cabinet 0.26–0.8 m in)
     light: { color: 0xbfd0ff, radius: 2.2, intensity: 0.22 },
   },
@@ -91,20 +91,19 @@ export const SHAPES = {
 export const SEATS: Record<string, SeatSpec> = {};
 export const SURFACES: Record<string, number> = { radio_tv_cabinet: 0.86 };
 export const STANDS: Record<string, number> = { security_monitors: 1.6 };
-const px = (m: number) => Math.round(m * ISO_PX * 10) / 10;
 export const HANGS: Record<string, [number, number, number]> = {
   // (5 m of the wall's 6: the frame round the nine panels)
-  video_wall: [20, px(0.3), px(3.08)],
+  video_wall: [20, 0.3011, 3.0801],
 };
 
 /** Where the media's picture would be drawn on each (as shared media.ts GLASS: x0/x1 across the
  *  footprint in tiles, `y` the picture's plane in the kind's frame — out from the wall for a wall
- *  piece, z for a floor one — z0/z1 its foot and head in iso px): each model's own picture sits a hair
+ *  piece, z for a floor one — z0/z1 its foot and head in m): each model's own picture sits a hair
  *  behind it. Spread into media.ts GLASS: YouTube and Jellyfin on them (`interact: "media"`) — the video
  *  wall's across all nine panels. (The
  *  client's fam/screens2.ts VW, OC and RTV are the same planes, drawn to.) */
 export const GLASS = {
-  video_wall: { x0: 0.6, x1: 5.4, y: 0.19, z0: isoPx(0.34), z1: isoPx(3.04), aspect: 16 / 9, look: "hd", wall: true },
-  outdoor_cinema: { x0: 0.4, x1: 5.6, y: 0.49, z0: isoPx(1.0), z1: isoPx(3.925), aspect: 16 / 9, look: "screen" },
-  radio_tv_cabinet: { x0: 0.76, x1: 1.2, y: 0.805, z0: isoPx(0.39), z1: isoPx(0.72), aspect: 4 / 3, look: "crt" },
+  video_wall: { x0: 0.6, x1: 5.4, y: 0.19, z0: 0.34, z1: 3.04, aspect: 16 / 9, look: "hd", wall: true },
+  outdoor_cinema: { x0: 0.4, x1: 5.6, y: 0.49, z0: 1.0, z1: 3.925, aspect: 16 / 9, look: "screen" },
+  radio_tv_cabinet: { x0: 0.76, x1: 1.2, y: 0.805, z0: 0.39, z1: 0.72, aspect: 4 / 3, look: "crt" },
 } as const;

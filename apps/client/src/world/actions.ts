@@ -1,16 +1,16 @@
 import {
   ANIM,
   type ClientMessages,
-  dirFromDelta,
   entry,
+  face8,
   footprint,
-  type Grid,
   hangSpot,
   isSocial,
   liftFront,
   PIANO_STOOL,
   type Point,
   placedFootprint,
+  quarterOf,
   reachOf,
   SOCIAL_MS,
   SOCIAL_REACH,
@@ -18,6 +18,7 @@ import {
   type WorldObjectDef,
 } from "@yutopia/shared";
 import { COMPUTER_REACH, computerAway } from "@yutopia/shared/computer";
+import type { Place } from "@yutopia/shared/physics/place";
 import { tr } from "@/lib/i18n";
 import { type ActTarget, hud, toast } from "./store";
 
@@ -36,11 +37,11 @@ export interface Queued {
 
 // What the queue needs from the world controller.
 export interface ActionHost {
-  me(): { x: number; y: number; d: number; a: number };
+  me(): { x: number; y: number; yaw: number; a: number };
   /** the room has me focusing (the queue's Focus stops asking once it does) */
   focused?(): boolean;
-  setFacing(d: number): void;
-  grid(): Grid;
+  setFacing(yaw: number): void;
+  grid(): Place;
   object(id: string): WorldObjectDef | undefined;
   person(sid: string): { x: number; y: number; uid: number; name: string } | undefined;
   pet(id: string): { x: number; y: number; name: string } | undefined;
@@ -267,7 +268,7 @@ export class ActionQueue {
     if (q.target.type === "pet") {
       const p = h.pet(q.target.id);
       if (!p) return null;
-      h.setFacing(dirFromDelta(p.x - me.x, p.y - me.y, me.d as 0));
+      h.setFacing(face8(p.x - me.x, p.y - me.y, me.yaw));
       const id = q.target.id;
       // care by hand, a toy, a lesson, a trick, a battle (shared/pets.ts)
       if (q.act === "petpet" || q.act === "snack" || q.act === "water") {
@@ -296,7 +297,7 @@ export class ActionQueue {
     if (q.target.type === "person") {
       const p = h.person(q.target.sid);
       if (!p) return null;
-      h.setFacing(dirFromDelta(p.x - me.x, p.y - me.y, me.d as 0));
+      h.setFacing(face8(p.x - me.x, p.y - me.y, me.yaw));
       if (isSocial(q.act)) {
         h.send("social", { to: q.target.sid, act: q.act });
         return later(SOCIAL_MS[q.act]);
@@ -323,7 +324,7 @@ export class ActionQueue {
       const at = entry(o.kind).wall ? hangSpot(o, 0) : { x: o.x + w / 2, y: o.y + d / 2 };
       const dx = at.x - me.x;
       const dy = at.y - me.y;
-      if (Math.hypot(dx, dy) > 0.2) h.setFacing(dirFromDelta(dx, dy, me.d as 0));
+      if (Math.hypot(dx, dy) > 0.2) h.setFacing(face8(dx, dy, me.yaw));
     }
     switch (q.act) {
       case "sit":
@@ -432,7 +433,7 @@ const FRONT: [number, number][] = [
   [-1, 0],
 ];
 const CLOSE = new Set(["whiteboard", "coffee", "water", "vending", "piano"]);
-function frontOf(grid: Grid, o: WorldObjectDef): Point | null {
+function frontOf(grid: Place, o: WorldObjectDef): Point | null {
   const { w, h } = placedFootprint(o);
   if (o.kind === "elevator") {
     const at = liftFront(o, 0.6);
@@ -445,7 +446,7 @@ function frontOf(grid: Grid, o: WorldObjectDef): Point | null {
     const at = hangSpot(o, close ? 0.4 : 0.5);
     return grid.fits(at.x, at.y) ? at : grid.nearestOpen(at.x, at.y, 3);
   }
-  const [fx, fy] = FRONT[(o.rot ?? 0) % 4];
+  const [fx, fy] = FRONT[quarterOf(o) % 4];
   // (the piano: behind its stool, out in front of it — PIANO_STOOL; she's drawn sat on it to play)
   const out = entry(o.kind).onSurface
     ? 0.23
@@ -464,8 +465,8 @@ function frontOf(grid: Grid, o: WorldObjectDef): Point | null {
 // or for a desk the chair at it nearest to me — walked to just in front of it,
 // on its tile (plan 62: sitting down goes back onto it from there, not stood in it).
 const SEAT_FRONT = 0.36;
-function seatFor(grid: Grid, o: WorldObjectDef, me: Point): Point | null {
-  const { w, h } = footprint(o.kind, o.rot ?? 0);
+function seatFor(grid: Place, o: WorldObjectDef, me: Point): Point | null {
+  const { w, h } = footprint(o.kind, quarterOf(o));
   const pad = entry(o.kind).seat ? 0 : 1;
   let best: Point | null = null;
   let bestD = Number.POSITIVE_INFINITY;
@@ -488,7 +489,7 @@ function seatFor(grid: Grid, o: WorldObjectDef, me: Point): Point | null {
 }
 
 // An open tile right beside someone, the one nearest to me.
-function besideOf(grid: Grid, p: Point, me: Point): Point | null {
+function besideOf(grid: Place, p: Point, me: Point): Point | null {
   const tx = Math.floor(p.x);
   const ty = Math.floor(p.y);
   let best: Point | null = null;

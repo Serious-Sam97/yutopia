@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { entry, SURFACE } from "@yutopia/shared";
+import { entry, quarterYaw, SURFACE } from "@yutopia/shared";
 import { type BufferGeometry, DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from "three";
 import type { LivePart } from "../kit";
 import { liveAt } from "../liveparts";
@@ -53,7 +53,7 @@ function hit(g: BufferGeometry, from: [number, number, number], dir: [number, nu
 const topAt = (g: BufferGeometry, x: number, z: number, from = 3) => hit(g, [x, from, z], [0, -1, 0])?.y ?? 0;
 
 const model = (kind: string, variant: number, id = "t") =>
-  modelOf({ id, kind, x: 0, y: 0, rot: 0, props: { variant } });
+  modelOf({ id, kind, x: 0, y: 0, yaw: quarterYaw(0), props: { variant } });
 
 test(`game room: every kind and look on its footprint, under the ceiling, on the floor, under 8k tris`, () => {
   for (const kind of Object.keys(LOOKS)) {
@@ -97,7 +97,14 @@ test("game room: the playing surfaces where PLAY has them", () => {
     // the chess board: an empty square; in the world no men on it (plan 70: they're the living men,
     // drawn apart: chessmen3d.ts), in its picture a white rook on a1, a black king on e8
     const ch = model("chess_table", v);
-    const pic = modelOf({ id: "t", kind: "chess_table", x: 0, y: 0, rot: 0, props: { variant: v, _thumb: true } });
+    const pic = modelOf({
+      id: "t",
+      kind: "chess_table",
+      x: 0,
+      y: 0,
+      yaw: quarterYaw(0),
+      props: { variant: v, _thumb: true },
+    });
     const C = PLAY.chess_table;
     const sq = (r: number, f: number) => [C.x0 + (r + 0.5) * C.sq + 0.004, C.z0 + (f + 0.5) * C.sq + 0.003] as const;
     assert.ok(

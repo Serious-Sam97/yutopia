@@ -1,4 +1,5 @@
 import { TABLES } from "@yutopia/shared/tables";
+import { artPx } from "@yutopia/shared/units";
 import { fr, type Mat, rnd, type Sketch, sh, te, tr } from "./kit";
 import { K, M } from "./pal";
 
@@ -15,7 +16,7 @@ import { K, M } from "./pal";
 // with brass corner plates, the felt with its spots, a ball-return tray at the
 // foot end and a cube of chalk on the rail.
 const POOL = TABLES.pool_table;
-const PT = POOL.top; // the cloth
+const PT = artPx(POOL.top); // the cloth (this drawing's px)
 const PCX = POOL.w / 2;
 const PCY = POOL.h / 2;
 const HL = (POOL.len / 2) * POOL.tpm; // cloth half-length, tiles
@@ -384,12 +385,12 @@ function pocketBlock(
 // grey) with its white lines, a steel apron, two leg frames on casters and
 // the centre supports, the net on its clamp posts.
 const PP = TABLES.pingpong_table;
-const TT = PP.top;
+const TT = artPx(PP.top);
 const TCX = PP.w / 2;
 const TCY = PP.h / 2;
 const THL = (PP.len / 2) * PP.tpm;
 const THW = (PP.wid / 2) * PP.tpm;
-const NET_H = 0.1525 * PP.tpm * 45.25 * Math.cos(Math.PI / 6); // true scale over the top
+const NET_H = artPx(0.1525 * PP.tpm); // true scale over the top
 const NET_OUT = 0.1525 * PP.tpm; // the net runs past the sides
 
 const PONG_LOOKS = ["#1f4f86", "#2b6a4a", "#56616c"];

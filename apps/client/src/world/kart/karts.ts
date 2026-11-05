@@ -1,4 +1,5 @@
-import { type AvatarLayers, parseAvatar } from "@yutopia/shared";
+import type { KartRecord, KartResultRow, KartResults, ServerMessages } from "@yutopia/shared";
+import { type AvatarLayers, byteFace, parseAvatar } from "@yutopia/shared";
 import {
   bankAt,
   bowlCrates,
@@ -46,6 +47,7 @@ import {
   vortexBrawler,
   vortexRacer,
 } from "@yutopia/shared/kart";
+import type { KartPark, KartSlot, Player, WorldState } from "@yutopia/state";
 import {
   BoxGeometry,
   BufferGeometry,
@@ -87,17 +89,13 @@ import { drawBoardFace, drawTrackMap } from "./track-map";
 
 export const KART_PLAY_CHUNK = "yutopia-kart-play";
 
-// biome-ignore lint/suspicious/noExplicitAny: decoded schema state
-type S = any;
 interface Host {
   room(): {
     sessionId: string;
-    state: S;
+    state: WorldState;
     send(t: string, m: unknown): void;
-    onMessage(t: string, f: (m: S) => void): () => void;
+    onMessage<K extends keyof ServerMessages>(t: K, f: (m: ServerMessages[K]) => void): () => void;
   } | null;
-  ox(): number;
-  oy(): number;
   level(): number;
   me(): { x: number; y: number };
   tp(): ThirdPersonView | null;
@@ -217,23 +215,23 @@ export class Karts {
     const room = host.room();
     if (room) {
       this.offs.push(
-        room.onMessage("kart:snap", (m: S) => this.snap(m)),
+        room.onMessage("kart:snap", (m) => this.snap(m)),
         room.onMessage("kart:out", () => {
           this.gotOut = this.mine;
         }),
         // my ping (the guns' own exchange): my items judged where I saw the others
-        room.onMessage("arms:pong", (m: S) => {
+        room.onMessage("arms:pong", (m) => {
           const rtt = performance.now() - Number(m.t);
           if (rtt > 0 && rtt < 2000) this.rtt = this.rtt ? this.rtt * 0.8 + rtt * 0.2 : rtt;
         }),
-        room.onMessage("kart:hit", (m: S) => this.hit(m)),
-        room.onMessage("kart:boost", (m: S) => {
+        room.onMessage("kart:hit", (m) => this.hit(m)),
+        room.onMessage("kart:boost", (m) => {
           if (!this.sim) return;
           this.sim.boost = Math.max(this.sim.boost, m.secs);
           this.spec.boostTop = m.top ?? KART.boostTop;
           this.say(m.top ? "THE PLOUGH!" : "COFFEE!", 0.8);
         }),
-        room.onMessage("kart:no", (m: S) =>
+        room.onMessage("kart:no", (m) =>
           host.toast(
             m.why === "racing"
               ? "A race is on: a kart's yours when it's done"
@@ -252,7 +250,7 @@ export class Karts {
 
   /** The layout raced (the park's state: docs/plan/47-the-track-changer.md): my laps, my kart's
    *  world, the crates' places and the minimap's from it. */
-  private followLayout(p: S) {
+  private followLayout(p: KartPark) {
     const key = String(p.layout ?? "eight");
     const reverse = p.reverse === true;
     if (key === this.track.key && reverse === this.track.reverse) return;
@@ -262,7 +260,7 @@ export class Karts {
     this.cratePos = null;
     this.mapFit = null;
   }
-  private park(): S | null {
+  private park(): KartPark | null {
     return this.host.room()?.state.karts?.get("park") ?? null;
   }
   private world(): KartWorld {
@@ -306,7 +304,7 @@ export class Karts {
   private say(text: string, secs = 1.4) {
     this.callout = { text, until: this.time + secs };
   }
-  private mySlot(): S | null {
+  private mySlot(): KartSlot | null {
     return this.mine !== null ? (this.park()?.karts.get(this.mine) ?? null) : null;
   }
 
@@ -338,7 +336,7 @@ export class Karts {
   // ── the park's seats (shared kartSeats; world-server features/park-life.ts poses you) ──
   private seats = kartSeats();
   /** My player, if I'm sat on one of them. */
-  private sitting(): S | null {
+  private sitting(): Player | null {
     const room = this.host.room();
     const p = room?.state.players.get(room.sessionId);
     return p?.busy === PARK_SITTING ? p : null;
@@ -347,8 +345,8 @@ export class Karts {
   private mySeatAt(): KartSeat | null {
     const p = this.sitting();
     if (!p) return null;
-    const x = p.x + this.host.ox();
-    const z = p.y + this.host.oy();
+    const x = p.x;
+    const z = p.y;
     return this.seats.find((s) => Math.abs(s.x - x) < 0.1 && Math.abs(s.z - z) < 0.1) ?? null;
   }
   private taken(): Set<number> {
@@ -376,8 +374,8 @@ export class Karts {
     if (this.host.level() !== 0 || c.height?.up || c.path || c.walker?.controls?.moving?.()) return;
     const room = this.host.room();
     if (room?.state.players.get(room.sessionId)?.busy) return;
-    const x = me.x + this.host.ox();
-    const z = me.y + this.host.oy();
+    const x = me.x;
+    const z = me.y;
     const taken = this.taken();
     const i = this.seats.findIndex(
       (s, k) => s.stand === undefined && !taken.has(k) && Math.hypot(x - s.x, z - s.z) < 0.45,
@@ -390,8 +388,8 @@ export class Karts {
    *  or ends, abreast — the lowest row first. */
   private seatNear(): number {
     const me = this.host.me();
-    const x = me.x + this.host.ox();
-    const z = me.y + this.host.oy();
+    const x = me.x;
+    const z = me.y;
     const taken = this.taken();
     let best = -1;
     let bd = Number.POSITIVE_INFINITY;
@@ -417,11 +415,11 @@ export class Karts {
   private following = false;
   private atStands(): boolean {
     const me = this.host.me();
-    const x = me.x + this.host.ox();
-    const z = me.y + this.host.oy();
+    const x = me.x;
+    const z = me.y;
     return KART_STANDS.some((st) => x > st.x0 - 4 && x < st.x1 + 4 && z > st.z - 8 && z < st.z + st.rows * 1.2 + 4);
   }
-  private follow(p: S, dt: number) {
+  private follow(p: KartPark, dt: number) {
     if (this.following && (this.mine || p.phase === "lobby" || !this.atStands())) {
       this.following = false;
       this.camNow = null;
@@ -432,7 +430,7 @@ export class Karts {
     this.watching = watching;
     if (!this.following && !watching) return;
     let lead: View | undefined;
-    for (const [key, s] of p.karts as Map<string, S>) if (s.place === 1) lead = this.views.get(key);
+    for (const [key, s] of p.karts) if (s.place === 1) lead = this.views.get(key);
     lead ??= [...this.views.values()][0];
     if (!lead) return;
     const a = lead.pose.a;
@@ -452,7 +450,7 @@ export class Karts {
   mySeat(): { x: number; y: number; a: number; ground: number } | null {
     const s = this.sim;
     if (!this.mine || !s) return null;
-    return { x: s.x - this.host.ox(), y: s.z - this.host.oy(), a: s.a, ground: s.y };
+    return { x: s.x, y: s.z, a: s.a, ground: s.y };
   }
   // biome-ignore lint/suspicious/noExplicitAny: the controller's private state
   carry(c: any): boolean {
@@ -473,7 +471,7 @@ export class Karts {
       c.me.x = sat.x;
       c.me.y = sat.y;
       c.me.a = 2;
-      c.me.d = sat.d;
+      c.me.yaw = byteFace(sat.yaw);
       c.height.z = sat.z;
       if (seat) c.meAngle = seat.a;
       return true;
@@ -522,8 +520,8 @@ export class Karts {
         label: this.following ? "Stop following" : "Follow the race",
       };
     const me = this.host.me();
-    const x = me.x + this.host.ox();
-    const z = me.y + this.host.oy();
+    const x = me.x;
+    const z = me.y;
     const near =
       Math.hypot(x - KART_DESK.x, z - KART_DESK.z) < KART_REACH ||
       (Math.abs(x - KART_RACK.x) < KART_REACH && z > KART_RACK.z0 - 3 && z < KART_RACK.z0 + KART_RACK.n * KART_RACK.dz);
@@ -561,9 +559,7 @@ export class Karts {
   /** Near the park (or in a kart): worth drawing at all. */
   near(): boolean {
     const me = this.host.me();
-    return (
-      this.mine !== null || Math.hypot(me.x + this.host.ox() - KART_PARK.x, me.y + this.host.oy() - KART_PARK.z) < 420
-    );
+    return this.mine !== null || Math.hypot(me.x - KART_PARK.x, me.y - KART_PARK.z) < 420;
   }
 
   // ── a frame ──
@@ -628,7 +624,7 @@ export class Karts {
       if (this.root.parent !== tp.scene) tp.scene.add(this.root);
       if (!this.warmed) this.warm(tp);
       const f = tp.groundsFrame();
-      this.root.position.set(-f.x, f.y, -f.z);
+      this.root.position.set(0, f.y, 0);
       this.root.visible = f.visible;
       this.lightGantry(tp, p.phase);
       this.paintBoards(tp, p);
@@ -671,7 +667,7 @@ export class Karts {
   private bog = 0;
 
   /** My kart: the sim at its steps, reported 20×/s; the camera behind it. */
-  private drive(dt: number, p: S) {
+  private drive(dt: number, p: KartPark) {
     const k = this.sim;
     if (!this.mine || !k) return;
     const pad = activePad();
@@ -1001,13 +997,13 @@ export class Karts {
   }
 
   // ── everyone's karts drawn ──
-  private draw(dt: number, p: S) {
+  private draw(dt: number, p: KartPark) {
     const room = this.host.room();
     const players = room?.state.players;
     const seen = new Set<string>();
     const now = this.time;
     let madeThisFrame = false;
-    for (const [key, s] of p.karts as Map<string, S>) {
+    for (const [key, s] of p.karts) {
       seen.add(key);
       const look = s.vortex ? "vortex" : (players?.get(s.sid)?.avatar ?? "{}");
       let v = this.views.get(key);
@@ -1142,7 +1138,7 @@ export class Karts {
     for (const key of [...this.views.keys()]) if (!seen.has(key)) this.drop(key);
     this.fxs.update(dt);
   }
-  private hear(v: View, speed: number | null, s?: S) {
+  private hear(v: View, speed: number | null, s?: KartSlot) {
     if (speed === null || !mixer.ctx) {
       if (v.sound && speed === null) {
         v.sound.dispose();
@@ -1177,7 +1173,7 @@ export class Karts {
   }
   /** Where I hear from: my kart (or where I stand), and which way the camera's right is. */
   private listener(): { x: number; z: number; pan(dx: number, dz: number): number } {
-    const me = this.sim ?? { x: this.host.me().x + this.host.ox(), z: this.host.me().y + this.host.oy() };
+    const me = this.sim ?? { x: this.host.me().x, z: this.host.me().y };
     const cam = this.host.tp()?.camera;
     let rx = 0;
     let rz = 0;
@@ -1196,7 +1192,7 @@ export class Karts {
       },
     };
   }
-  private make(key: string, s: S, look: string): View | null {
+  private make(key: string, s: KartSlot, look: string): View | null {
     const C = this.host.chars();
     if (!C || !this.factory || !this.ink) return null;
     const [colour, trim] = KART_COLOURS[s.colour] ?? KART_COLOURS[0];
@@ -1411,12 +1407,12 @@ export class Karts {
     const b = this.boardThing;
     if (!b || this.host.level() !== 0 || this.mine) return false;
     const me = this.host.me();
-    const x = me.x + this.host.ox();
-    const z = me.y + this.host.oy();
+    const x = me.x;
+    const z = me.y;
     return Math.abs(x - b.x) < b.hx + 1.2 && z > b.z && z < b.z + 3.2;
   }
   /** What's raced next, said short: for the board's strip and the desk's. */
-  private nextRace(p: S, long: boolean): string {
+  private nextRace(p: KartPark, long: boolean): string {
     const name = kartLayout(this.track.key).name.replace(/^The /, "").toUpperCase();
     const how = p.mode === "battle" ? "BATTLE" : long ? `GRAND PRIX · ${p.laps} LAPS` : `GP ${p.laps} LAPS`;
     if (p.phase !== "lobby")
@@ -1428,7 +1424,7 @@ export class Karts {
   private boardsLook = 0;
   private boards: { face: Object3D | null; desk: Object3D | null } = { face: null, desk: null };
   /** The board's face and the desk's strip painted again when what they say changes. */
-  private paintBoards(tp: ThirdPersonView, p: S) {
+  private paintBoards(tp: ThirdPersonView, p: KartPark) {
     const inScene = (o: Object3D | null) => {
       let top = o;
       while (top?.parent) top = top.parent;
@@ -1511,17 +1507,17 @@ export class Karts {
     if (hud.get().kartUi !== on) hud.set({ kartUi: on });
   }
   /** Why it can't be set now (empty: it can). */
-  private circuitsWhy(p: S): string {
+  private circuitsWhy(p: KartPark): string {
     if (p.phase !== "lobby") return "A race is on: after it.";
     if (p.showing) return "The ploughs are out: a moment.";
-    if ([...(p.karts as Map<string, S>).values()].some((k) => k.sid)) return "Someone's out on the track.";
+    if ([...p.karts.values()].some((k) => k.sid)) return "Someone's out on the track.";
     return "";
   }
-  private drawCircuits(p: S) {
+  private drawCircuits(p: KartPark) {
     const el = this.circuits;
     if (!el) return;
     if (!this.byBoard()) return this.closeCircuits();
-    let rec: S = {};
+    let rec: Partial<KartRecord> = {};
     try {
       rec = p.record ? JSON.parse(p.record) : {};
     } catch {}
@@ -1732,9 +1728,9 @@ export class Karts {
     this.root.add(g);
     return g;
   }
-  private drawShots(p: S) {
+  private drawShots(p: KartPark) {
     const seen = new Set<string>();
-    for (const [id, t] of p.shots as Map<string, S>) {
+    for (const [id, t] of p.shots) {
       if (t.kind === "stapler") continue;
       seen.add(id);
       let g = this.shots.get(id);
@@ -1780,7 +1776,7 @@ export class Karts {
       }
   }
   private cratePos: { x: number; z: number; y: number; battle: boolean }[] | null = null;
-  private drawCrates(p: S) {
+  private drawCrates(p: KartPark) {
     if (!this.cratePos) {
       const t = this.track;
       this.cratePos = [];
@@ -1974,7 +1970,7 @@ export class Karts {
   private q(k: string): HTMLElement {
     return this.hud?.querySelector(`[data-k="${k}"]`) as HTMLElement;
   }
-  private drawHud(p: S) {
+  private drawHud(p: KartPark) {
     if (!this.hud || !this.sim) return;
     const s = this.mySlot();
     const k = this.sim;
@@ -2016,7 +2012,7 @@ export class Karts {
     score.style.display = battle ? "block" : "none";
     if (battle) {
       const left = p.phase === "race" ? Math.max(0, 180 - (this.time - this.goAt)) : 180;
-      const rows = [...(p.karts as Map<string, S>).entries()].sort((a, b) => b[1].score - a[1].score);
+      const rows = [...p.karts.entries()].sort((a, b) => b[1].score - a[1].score);
       score.innerHTML = `<div class="lcd" style="font-size:30px;text-align:center">${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, "0")}</div>
 ${rows
   .slice(0, 5)
@@ -2051,7 +2047,7 @@ ${rows
       ? "—"
       : this.time < this.rollUntil
         ? names[Math.floor(this.time * 14) % names.length]
-        : `${ITEMS[item as ItemKind]?.name ?? item}${s.itemN > 1 ? ` ×${s.itemN}` : ""}`;
+        : `${ITEMS[item as ItemKind]?.name ?? item}${s && s.itemN > 1 ? ` ×${s.itemN}` : ""}`;
     // sparks, speed, call-outs
     const cols = ["#8fc0ff", "#e8a33d", "#c48cff"];
     [...this.q("meter").children].forEach((m, i) => {
@@ -2073,7 +2069,7 @@ ${rows
   // the circuit small, everyone a dot in their kart's colour, me ringed in the lamp's (docs/plan/45)
   private mapPts: { x: number; y: number; over: boolean }[] | null = null;
   private mapFit: { x0: number; z0: number; k: number } | null = null;
-  private drawMap(p: S, on: boolean) {
+  private drawMap(p: KartPark, on: boolean) {
     const box = this.q("mapBox");
     box.style.display = on ? "block" : "none";
     if (!on) return;
@@ -2130,7 +2126,7 @@ ${rows
     const s0 = t.pts[0];
     g.fillStyle = "#ece6da";
     g.fillRect(X(s0.x) - 1.5, Z(s0.z) - 5, 3, 10);
-    for (const [key, s] of p.karts as Map<string, S>) {
+    for (const [key, s] of p.karts) {
       if (key === this.mine) continue;
       g.beginPath();
       g.arc(X(s.x), Z(s.z), 4.5, 0, Math.PI * 2);
@@ -2153,7 +2149,7 @@ ${rows
   }
 
   // ── the lobby: between races, in a kart (the paddock's desk's panel) ──
-  private drawLobby(p: S) {
+  private drawLobby(p: KartPark) {
     const tp = this.host.tp();
     const show = !!this.mine && p.phase === "lobby";
     if (!show) {
@@ -2163,7 +2159,7 @@ ${rows
       this.wantPointer();
       return;
     }
-    const rows = [...(p.karts as Map<string, S>).entries()];
+    const rows = [...p.karts.entries()];
     const sig = JSON.stringify([
       p.autoAt ? Math.ceil((p.autoAt - Date.now()) / 1000) : 0,
       p.mode,
@@ -2186,7 +2182,7 @@ ${rows
       (tp?.hostEl ?? document.body).appendChild(this.lobby);
       this.wantPointer();
     }
-    let rec: S = {};
+    let rec: Partial<KartRecord> = {};
     try {
       rec = p.record ? JSON.parse(p.record) : {};
     } catch {}
@@ -2269,7 +2265,7 @@ ${p.autoAt ? `<div class="mono" style="font-size:12px;color:var(--amber);padding
   }
 
   // ── at the flag ──
-  private drawResults(p: S) {
+  private drawResults(p: KartPark) {
     const tp = this.host.tp();
     if (p.phase !== "done" || !this.mine || !p.results) {
       this.results?.remove();
@@ -2277,14 +2273,14 @@ ${p.autoAt ? `<div class="mono" style="font-size:12px;color:var(--amber);padding
       return;
     }
     if (this.results) return;
-    let r: S;
+    let r: KartResults;
     try {
       r = JSON.parse(p.results);
     } catch {
       return;
     }
     const me = this.mySlot();
-    const myRow = r.rows.findIndex((x: S) => x.name === me?.name && !x.vortex);
+    const myRow = r.rows.findIndex((x) => x.name === me?.name && !x.vortex);
     const d = document.createElement("div");
     d.className = "cabinet";
     d.style.cssText =
@@ -2296,8 +2292,8 @@ ${podium(r.rows)}
 ${r.rows
   .slice(0, 8)
   .map(
-    (x: S, i: number) =>
-      `<div style="display:flex;align-items:center;gap:8px;height:24px;padding:0 8px;border-radius:4px;${i === myRow ? "background:color-mix(in srgb,var(--amber) 12%,transparent);color:var(--amber)" : ""}"><span class="lcd" style="width:14px">${i + 1}</span><span style="width:12px;height:12px;border-radius:50%;background:${KART_COLOURS[x.colour][0]}"></span><span style="flex:1">${esc(x.name)}</span><span class="lcd">${r.mode === "battle" ? x.score : x.time ? (i === 0 ? fmt(x.time) : `+${((x.time - first.time) / 1000).toFixed(2)}`) : `lap ${x.lap}`}</span></div>`,
+    (x, i) =>
+      `<div style="display:flex;align-items:center;gap:8px;height:24px;padding:0 8px;border-radius:4px;${i === myRow ? "background:color-mix(in srgb,var(--amber) 12%,transparent);color:var(--amber)" : ""}"><span class="lcd" style="width:14px">${i + 1}</span><span style="width:12px;height:12px;border-radius:50%;background:${KART_COLOURS[x.colour][0]}"></span><span style="flex:1">${esc(x.name)}</span><span class="lcd">${r.mode === "battle" ? x.score : x.time ? (i === 0 ? fmt(x.time) : `+${((x.time - (first.time ?? 0)) / 1000).toFixed(2)}`) : `lap ${x.lap}`}</span></div>`,
   )
   .join("")}`;
     (tp?.hostEl ?? document.body).appendChild(d);
@@ -2306,7 +2302,7 @@ ${r.rows
 
   // ── the tower: the order on its VFD board, live in a race ──
   private tower: { mesh: Mesh; canvas: HTMLCanvasElement; tex: CanvasTexture; at: number; sig: string } | null = null;
-  private drawTower(p: S) {
+  private drawTower(p: KartPark) {
     if (!this.tower) {
       const canvas = document.createElement("canvas");
       canvas.width = 512;
@@ -2336,7 +2332,7 @@ ${r.rows
     const t = this.tower;
     if (this.time - t.at < 0.5) return;
     t.at = this.time;
-    const rows = [...(p.karts as Map<string, S>).values()].sort((a, b) => (a.place || 99) - (b.place || 99));
+    const rows = [...p.karts.values()].sort((a, b) => (a.place || 99) - (b.place || 99));
     const battle = p.mode === "battle" && p.phase !== "lobby";
     const lap = Math.max(0, ...rows.map((r) => r.lap));
     const head = p.phase === "lobby" ? "FREE LAPS" : battle ? "BATTLE" : `LAP ${Math.min(p.laps, lap + 1)}/${p.laps}`;
@@ -2377,7 +2373,7 @@ ${r.rows
 }
 
 /** The first three on their steps, second, first, third: a medal each, the kart's colour. */
-function podium(rows: S[]): string {
+function podium(rows: KartResultRow[]): string {
   const medal = ["var(--amber)", "var(--cream-dim)", "var(--teak)"];
   const step = (i: number, h: number) => {
     const x = rows[i];

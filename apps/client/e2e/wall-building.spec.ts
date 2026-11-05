@@ -154,7 +154,7 @@ test("the Walls tool, Sims-style: runs, paint with indicators, the inspector, th
     // ── Paint: the face under the pointer, before you click ──
     await setBuild(page, { wallMode: "paint", paint: "b" });
     // the room's north wall, inside (its +y face, which the camera sees)
-    const p = await pointAt(page, X0 + 1.5, Y0 + 0.1, 60);
+    const p = await pointAt(page, X0 + 1.5, Y0 + 0.1, 1.53);
     await expect
       .poll(async () => (await build(page)).wallTag)
       .toMatchObject({ kind: "face", far: false, from: "p", to: "b", n: 1 });
@@ -176,7 +176,7 @@ test("the Walls tool, Sims-style: runs, paint with indicators, the inspector, th
     // Shift-click: the whole room inside, in cork
     await setBuild(page, { paint: "k" });
     await page.keyboard.down("Shift");
-    await pointAt(page, X0 + 2.5, Y0 + 0.1, 60);
+    await pointAt(page, X0 + 2.5, Y0 + 0.1, 1.53);
     await expect.poll(async () => (await build(page)).wallTag?.n).toBe(14);
     await page.mouse.click(p.x + 1, p.y);
     await page.keyboard.up("Shift");
@@ -186,13 +186,13 @@ test("the Walls tool, Sims-style: runs, paint with indicators, the inspector, th
     expect(await edge(page, "v", X0 + 4, Y0 + 1)).toBe("p"); // …its outside
     // E: sample a face (the north wall inside: cork now)
     await setBuild(page, { paint: "w" });
-    await pointAt(page, X0 + 2.5, Y0 + 0.1, 60);
+    await pointAt(page, X0 + 2.5, Y0 + 0.1, 1.53);
     await page.keyboard.press("e");
     await expect.poll(async () => (await build(page)).paint).toBe("k");
 
     // ── Select: the inspector ──
     await setBuild(page, { wallMode: "select" });
-    const s = await pointAt(page, X0 + 1.5, Y0 + 0.1, 60);
+    const s = await pointAt(page, X0 + 1.5, Y0 + 0.1, 1.53);
     await page.mouse.click(s.x, s.y);
     const card = page.getByTestId("wall-inspector");
     await expect(card).toBeVisible();
@@ -263,7 +263,10 @@ test("close up: Paint shows the face under the pointer", async ({ page }) => {
     const cut = new Set(
       [...w.floorObjects()]
         .filter((o: any) => o.kind === "door" || String(o.kind).startsWith("window"))
-        .flatMap((o: any) => [o.rot % 2 ? `v${o.x},${o.y}` : `h${o.x},${o.y}`, `h${o.x + 1},${o.y}`]),
+        .flatMap((o: any) => [
+          (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? `v${o.x},${o.y}` : `h${o.x},${o.y}`,
+          `h${o.x + 1},${o.y}`,
+        ]),
     );
     // (not the building's core: its stairs and elevators' walls)
     const core = (x: number, y: number) =>
@@ -299,7 +302,7 @@ test("close up: Paint shows the face under the pointer", async ({ page }) => {
     await page.waitForTimeout(1200);
     const p = await page.evaluate((s) => {
       const t = (window as any).__yutopia.tp;
-      const c = t.project(s.x + 0.5, s.y + 0.1, 60 / 39.19);
+      const c = t.project(s.x + 0.5, s.y + 0.1, 1.53);
       const r = t.renderer.domElement.getBoundingClientRect();
       return c ? { x: r.left + c.x, y: r.top + c.y } : null;
     }, spot);

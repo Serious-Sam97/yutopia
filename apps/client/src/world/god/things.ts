@@ -24,7 +24,7 @@ import { ThingGhost } from "./thing-ghost";
 // it (the panel then turns it, sizes it, changes its words; Delete takes it away); Alt and a
 // click takes its kind for the catalog. What's anchored stays (a toast says why). Each a step.
 
-type Frame = { x: number; z: number; y: number };
+type Frame = { y: number };
 type Ground = { x: number; z: number; h: number } | null;
 export interface ThingsHost {
   draft(): GroundsEdits;
@@ -288,8 +288,8 @@ export class ThingsTool {
     if (why !== o.blocked) this.setO({ blocked: why });
   }
   hide() {
-    this.ghost?.show(null, 0, [0, 0, 0, 0, 0], 1, "ok", { x: 0, z: 0, y: 0 });
-    this.line?.show(null, 0, true, null, { x: 0, z: 0, y: 0 });
+    this.ghost?.show(null, 0, [0, 0, 0, 0, 0], 1, "ok", { y: 0 });
+    this.line?.show(null, 0, true, null, { y: 0 });
   }
   dispose() {
     this.ghost?.dispose();

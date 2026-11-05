@@ -11,6 +11,9 @@ import { ANA, BIA, enter, test, token } from "./helpers";
 // YUTOPIA_GPU=1. It needs only the building, so no fixture is put back;
 // `mod:cars` puts the lot back first.
 const GPU = process.env.YUTOPIA_GPU === "1";
+// (the driving frame budget only with YUTOPIA_PERF=1 as well — plan 72 phase 3: a performance budget,
+// tracked by the plan's bench; with the GPU alone this checks the drive and the passenger)
+const PERF = GPU && process.env.YUTOPIA_PERF === "1";
 const dir = process.env.YUTOPIA_SHOTS;
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 
@@ -46,9 +49,9 @@ const aCar = (page: Page) =>
     c.room.state.objects.forEach((o: any) => {
       const p = JSON.parse(o.props);
       if (o.kind !== "car" || p.driven || p.model === "offroad") return;
-      const w = o.rot % 2 ? 2 : 5;
-      const h = o.rot % 2 ? 5 : 2;
-      const a = Math.PI + (o.rot % 4) * (Math.PI / 2);
+      const w = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 2 : 5;
+      const h = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 5 : 2;
+      const a = Math.PI + ((Math.round(o.yaw / (Math.PI / 2)) & 3) % 4) * (Math.PI / 2);
       cars.push({ id: o.id, x: o.x + w / 2 + (p.dx ?? 0), y: o.y + h / 2 + (p.dz ?? 0), a });
     });
     return cars[0];
@@ -80,8 +83,9 @@ test("a lot car: driven out with a passenger, left where it stopped", async ({ p
   await a.waitForTimeout(800);
   const car = await aCar(a);
   expect(car, "a car in its bay").toBeTruthy();
-  // in the aisle by its nose
-  const aisle = { x: car.x + Math.cos(car.a) * 3.4, y: car.y + Math.sin(car.a) * 3.4 };
+  // in the aisle by its nose — 2.7 from its middle: at 3.4 you stand in the free bay across the aisle
+  // and its "spot:claim" prompt (plan 43) wins over the car's
+  const aisle = { x: car.x + Math.cos(car.a) * 2.7, y: car.y + Math.sin(car.a) * 2.7 };
   await getIn(a, aisle, /^drive:car:/);
   // the 3D view, the car's camera
   await a.waitForFunction(() => !!(window as any).__yutopia.tp?.gameCam?.snap, null, { timeout: 20_000 });
@@ -106,7 +110,7 @@ test("a lot car: driven out with a passenger, left where it stopped", async ({ p
     ([id, x0, y0]) => {
       const c = (window as any).__yutopia;
       const v = c.room.state.vehicles.get(id);
-      return Math.hypot(v.x - c.map.ox - (x0 as number), v.z - c.map.oy - (y0 as number));
+      return Math.hypot(v.x - (x0 as number), v.z - (y0 as number));
     },
     [vid, car.x, car.y],
   );
@@ -115,7 +119,7 @@ test("a lot car: driven out with a passenger, left where it stopped", async ({ p
   const hitch = await worst(a);
   if (dir) await a.screenshot({ path: `${dir}/car-driven-3p.png` });
   if (dir) await b.screenshot({ path: `${dir}/car-driven-passenger.png` });
-  if (GPU) expect(hitch, "no frame over 100 ms while driving").toBeLessThan(100);
+  if (PERF) expect(hitch, "no frame over 100 ms while driving").toBeLessThan(100);
   // stopped (the handbrake), both out; it parks where it stopped
   await a.keyboard.down("Space");
   await expect
@@ -139,7 +143,7 @@ test("a lot car: driven out with a passenger, left where it stopped", async ({ p
     .toBe(true);
   const parked = await b.evaluate((id) => {
     const o = (window as any).__yutopia.room.state.objects.get(id);
-    return { ...JSON.parse(o.props), rot: o.rot };
+    return { ...JSON.parse(o.props), rot: Math.round(o.yaw / (Math.PI / 2)) & 3 };
   }, car.id);
   // (at its own heading where it stopped — or, stopped roughly in a free bay, put square in it)
   if (typeof parked.a !== "number") expect(parked.dx !== undefined, "squared into a bay").toBe(true);
@@ -153,12 +157,13 @@ test("a lot car: driven out with a passenger, left where it stopped", async ({ p
             const c = (window as any).__yutopia;
             const o = c.room.state.objects.get(id);
             const p = JSON.parse(o.props);
-            const w = o.rot % 2 ? 2 : 5;
-            const h = o.rot % 2 ? 5 : 2;
+            const w = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 2 : 5;
+            const h = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 5 : 2;
             const x = o.x + w / 2 + (p.dx ?? 0);
             const y = o.y + h / 2 + (p.dz ?? 0);
             // (the sedan: 4.9 long, its middle 0.13 behind its CoG, 1.86 wide; squared in a bay, its turn's heading)
-            const A = typeof p.a === "number" ? p.a : Math.PI + (o.rot % 4) * (Math.PI / 2);
+            const A =
+              typeof p.a === "number" ? p.a : Math.PI + ((Math.round(o.yaw / (Math.PI / 2)) & 3) % 4) * (Math.PI / 2);
             const mx = x - Math.cos(A) * 0.13;
             const my = y - Math.sin(A) * 0.13;
             const side = (d: number) => c.grid.fits(mx - Math.sin(A) * d, my + Math.cos(A) * d);
@@ -186,9 +191,9 @@ test("a parked car knocked: it slides, stops, and stays there for everyone", asy
     c.room.state.objects.forEach((o: any) => {
       const p = JSON.parse(o.props);
       if (o.kind !== "car" || p.driven) return;
-      const w = o.rot % 2 ? 2 : 5;
-      const h = o.rot % 2 ? 5 : 2;
-      const a = Math.PI + (o.rot % 4) * (Math.PI / 2);
+      const w = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 2 : 5;
+      const h = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 5 : 2;
+      const a = Math.PI + ((Math.round(o.yaw / (Math.PI / 2)) & 3) % 4) * (Math.PI / 2);
       cars.push({ id: o.id, x: o.x + w / 2 + (p.dx ?? 0), y: o.y + h / 2 + (p.dz ?? 0), a, model: p.model });
     });
     for (const s of cars) {
@@ -213,8 +218,8 @@ test("a parked car knocked: it slides, stops, and stays there for everyone", asy
     pg.evaluate((oid) => {
       const o = (window as any).__yutopia.room.state.objects.get(oid);
       const p = JSON.parse(o.props);
-      const w = o.rot % 2 ? 2 : 5;
-      const h = o.rot % 2 ? 5 : 2;
+      const w = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 2 : 5;
+      const h = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 5 : 2;
       return { x: o.x + w / 2 + (p.dx ?? 0), y: o.y + h / 2 + (p.dz ?? 0), a: p.a as number | undefined };
     }, id);
   // straight back across the aisle into it
@@ -267,8 +272,8 @@ test("a car passes under a flier 3 m up; for someone on the ground it stops", as
         const c = (window as any).__yutopia;
         const v = c.room.state.vehicles.get(id);
         if (!v) return 0;
-        const dx = v.x - c.map.ox - (x0 as number);
-        const dy = v.z - c.map.oy - (y0 as number);
+        const dx = v.x - (x0 as number);
+        const dy = v.z - (y0 as number);
         return dx * Math.cos(h as number) + dy * Math.sin(h as number);
       },
       [`car:${car.id}`, car.x, car.y, car.a],

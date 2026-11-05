@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { Grid } from "../grid.ts";
+import { blankMap } from "../map-edit.ts";
 import {
   type Body,
   KH_FEEL,
@@ -15,8 +15,9 @@ import {
   stepBody,
 } from "../move/index.ts";
 import { box3, type Solid3 } from "../shapes/index.ts";
-import { CharacterMover, type Frame, JoltCollider } from "./body.ts";
+import { CharacterMover, type Frame } from "./body.ts";
 import { loadJolt } from "./load.ts";
+import { Place } from "./place.ts";
 import { BODY, PhysicsWorld, sizesFor } from "./world.ts";
 
 // The move on Jolt (docs/plan/50-the-volume.md, phase 3): move.test.ts's numbers, carried over —
@@ -29,7 +30,7 @@ afterEach(() => {
   for (const w of worlds.splice(0)) w.destroy();
 });
 
-const FRAME: Frame = { ox: 0, oy: 0, elev: 0 };
+const FRAME: Frame = { elev: 0 };
 /** A w × h pad on Jolt, `blocks` [x, y, top] solid tiles; the move's env on it. */
 async function pad(w = 40, h = 12, blocks: [number, number, number][] = [], extra: Solid3[] = []) {
   const world = await PhysicsWorld.create(loadJolt, sizesFor({ statics: 64 }));
@@ -38,10 +39,7 @@ async function pad(w = 40, h = 12, blocks: [number, number, number][] = [], extr
   const solids = blocks.map(([x, y, t]) => box3(x, y, x + 1, y + 1, 0, Math.min(4, t)));
   if (solids.length || extra.length) world.setStatic("blocks", [...solids, ...extra]);
   world.settle();
-  const grid = new Grid(w, h);
-  grid.walk.fill(1);
-  grid.top.fill(0);
-  const collider = new JoltCollider(world, grid, FRAME);
+  const collider = new Place(world, blankMap("pad", "pad", w, h), []);
   const mover = new CharacterMover(world, () => FRAME);
   const env: MoveEnv = { grid: collider, mover, footing: () => "floor" };
   return { world, env, collider, mover };
@@ -254,30 +252,30 @@ test("the server's questions: a body doesn't fit in a wall, does beside it; the 
   assert.equal(collider.fitsAt(25, 6, 0, 0.05), false, "off the world's edge");
 });
 
-// The HQ as the world-server loads it, on Jolt; each floor's frame.
+// The HQ as the world-server loads it, on Jolt, in the world's frame (structure/fold.ts: every
+// floor's x, y the world's, as the game has it); each floor's frame, its height.
 async function hq() {
   const { campusBuilding } = await import("../building.ts");
   const { studio } = await import("../maps/studio.ts");
   const { openingsIntoWalls } = await import("../openings.ts");
   const { splitAll } = await import("../tops.ts");
-  const { elevOf, offsetOf } = await import("../levels.ts");
+  const { elevOf } = await import("../levels.ts");
   const { buildingSolids, WorldBuilder } = await import("./build.ts");
   const into = openingsIntoWalls(studio, splitAll(studio.objects).objects);
   const cb = campusBuilding(into.map, into.objects);
   assert.ok(cb);
-  const map = cb.map;
+  const { foldMap, foldThing } = await import("../structure/fold.ts");
   const moved = new Map(cb.moved.map((o) => [o.id, o]));
-  const objects = [...into.objects.map((o) => moved.get(o.id) ?? o), ...cb.add];
+  const local = [...into.objects.map((o) => moved.get(o.id) ?? o), ...cb.add];
+  const map = foldMap(cb.map);
+  const objects = local.map((o) => foldThing(cb.map, o));
   const b0 = buildingSolids(map, objects);
-  const world = await PhysicsWorld.create(loadJolt, sizesFor({ statics: b0.statics.size }));
-  worlds.push(world);
-  new WorldBuilder(world).building(b0);
-  world.settle();
-  const frame = (l: number): Frame => {
-    const o = offsetOf(map, l);
-    return { ox: o.x, oy: o.y, elev: elevOf(l) };
-  };
-  return { map, objects, world, frame };
+  const pw = await PhysicsWorld.create(loadJolt, sizesFor({ statics: b0.statics.size }));
+  worlds.push(pw);
+  new WorldBuilder(pw).building(b0);
+  pw.settle();
+  const frame = (l: number): Frame => ({ elev: elevOf(l) });
+  return { map, objects, world: pw, frame };
 }
 
 test("up a flight of the HQ's stairs to the floor above, the floor changed on the way as the game does", async () => {
@@ -289,16 +287,18 @@ test("up a flight of the HQ's stairs to the floor above, the floor changed on th
   assert.ok(stairs, "a flight with a floor above it");
   let level = objLevel(stairs, map);
   const start = level;
-  const grids = new Map<number, Grid>();
-  const gridOf = (l: number) => {
-    let g = grids.get(l);
+  const places = new Map<number, Place>();
+  const placeOf = (l: number) => {
+    let g = places.get(l);
     if (!g) {
-      g = Grid.from(levelMap(map, l) ?? map, objects);
-      grids.set(l, g);
+      g = new Place(world, levelMap(map, l) ?? map, objects);
+      places.set(l, g);
     }
     return g;
   };
   const mover = new CharacterMover(world, () => frame(level));
+  const { slabsOf } = await import("./place.ts");
+  const slabs = slabsOf(world, (id) => objects.some((o) => o.id === id && o.kind === "stairs"));
   // the way up, in the stairs' own frame: flight A (u 3), the half landing, flight B (u 1) back
   let way = [
     [3, 6],
@@ -309,8 +309,7 @@ test("up a flight of the HQ's stairs to the floor above, the floor changed on th
   const b = newBody(s.x, s.y, 0);
   let airborne = 0;
   for (let i = 0; i < 20 / STEP_DT && way.length; i++) {
-    const g = gridOf(level);
-    const env: MoveEnv = { grid: new JoltCollider(world, g, frame(level)), mover, footing: () => "floor" };
+    const env: MoveEnv = { grid: placeOf(level), mover, footing: () => "floor" };
     const [w] = way;
     const d = Math.hypot(w.x - b.x, w.y - b.y);
     if (d < 0.3) {
@@ -320,7 +319,8 @@ test("up a flight of the HQ's stairs to the floor above, the floor changed on th
     stepBody(b, go({ x: (w.x - b.x) / d, y: (w.y - b.y) / d }), env);
     if (b.up) airborne++;
     // past a storey's band: the next floor's frame (the controller's floorAt)
-    const ch = floorAt(map, level, b, b.z);
+    // (the floor from the slab under the feet: Jolt's, as the game asks it)
+    const ch = floorAt(map, level, b, b.z, slabs);
     if (ch) {
       way = way.map((p) => across(map, level, ch.level, p));
       b.x = ch.at.x;
@@ -336,20 +336,24 @@ test("up a flight of the HQ's stairs to the floor above, the floor changed on th
 });
 
 test("one building: a flier stops at the ceiling; through walls, up through it onto the floors above; the roof over the top", async () => {
-  const { STOREY, elevOf, floorsOf } = await import("../levels.ts");
+  const { elevOf, floorsOf } = await import("../levels.ts");
+  const { STOREY } = await import("../units.ts");
   const { floorAt } = await import("../stairs.ts");
   const { FLY } = await import("../admin.ts");
   const { WALL_H } = await import("../shapes/index.ts");
+  const { levelMap } = await import("../levels.ts");
+  const { spanOf } = await import("../map.ts");
   const { map, world, frame } = await hq();
   const floors = floorsOf(map);
   const top = Math.max(...floors);
   // a tile of floor 1 with its ceiling right over it (nothing between: no stairwell, no lift)
   const f1 = frame(1);
+  const s1 = spanOf(levelMap(map, 1) as NonNullable<ReturnType<typeof levelMap>>);
   let spot: { x: number; y: number } | null = null;
-  for (let y = 4; y < 32 && !spot; y++)
-    for (let x = 4; x < 44 && !spot; x++) {
-      const X = f1.ox + x + 0.5;
-      const Z = f1.oy + y + 0.5;
+  for (let y = s1.y0 + 4; y < s1.y0 + 32 && !spot; y++)
+    for (let x = s1.x0 + 4; x < s1.x0 + 44 && !spot; x++) {
+      const X = x + 0.5;
+      const Z = y + 0.5;
       const up = world.rayHit(X, f1.elev + 0.5, Z, 0, 1, 0, 6);
       if (up !== null && Math.abs(up - (WALL_H - 0.5)) < 0.01 && world.fits(X, f1.elev + 0.1, Z, 0.3, 1.7))
         spot = { x: x + 0.5, y: y + 0.5 };
@@ -402,26 +406,30 @@ test("one building: a flier stops at the ceiling; through walls, up through it o
   assert.ok(roof.z < WALL_H - BODY.h + 0.05, `the roof stops a flier: z ${roof.z.toFixed(2)}`);
   // over the roof, or beside the building, a height is just a height: no floor of the building
   assert.equal(floorAt(map, 0, { x: -40, y: -5 }, 8), null, "beside the building");
-  const g = { x: spot.x - frame(0).ox, y: spot.y - frame(0).oy };
+  const g = spot;
   assert.equal(floorAt(map, 0, g, elevOf(top) + STOREY + 1), null, "on the roof");
-  assert.equal(floorAt(map, 2, { x: -3, y: 10 }, 0.5)?.level, 0, "out through a wall up a floor: outdoors");
+  const s2 = spanOf(levelMap(map, 2) as NonNullable<ReturnType<typeof levelMap>>);
+  assert.equal(
+    floorAt(map, 2, { x: s2.x0 - 3, y: s2.y0 + 10 }, 0.5)?.level,
+    0,
+    "out through a wall up a floor: outdoors",
+  );
   assert.equal(floorAt(map, 0, g, elevOf(2) + 0.3)?.level, 2, "up in the building: that floor");
 });
 
-test("on land the world hasn't built yet (just teleported far): the grid's way, standing, not falling", async () => {
+test("on land the world hasn't built yet (just teleported far): the land's own way, standing, not falling", async () => {
   const world = await PhysicsWorld.create(loadJolt, sizesFor({ statics: 8 }));
   worlds.push(world);
   // (a floor 10 a side; past it the land, 2 up, everywhere — and none of it in Jolt's world)
-  const grid = new Grid(10, 10);
-  grid.walk.fill(1);
-  grid.top.fill(0);
-  grid.outside = { walkable: () => true, height: () => 2 };
-  const collider = new JoltCollider(world, grid, FRAME);
+  const collider = new Place(world, blankMap("floor", "floor", 10, 10), [], undefined, {
+    walkable: () => true,
+    height: () => 2,
+  });
   const mover = new CharacterMover(
     world,
     () => FRAME,
     undefined,
-    (x, y) => grid.onLand(x, y),
+    (x, y) => collider.onLand(x, y),
   );
   const env: MoveEnv = { grid: collider, mover, footing: () => "floor" };
   assert.equal(mover.ready(50, 5), false);
@@ -532,7 +540,7 @@ test("Main Street's kerb walked up from any way at it — head on, aslant, nearl
     const sz = az + nz * (hw - 2 * Math.sin(a)) - tz * 2 * Math.cos(a);
     const m = new CharacterMover(
       world,
-      () => ({ ox: 0, oy: 0, elev: 0 }),
+      () => ({ elev: 0 }),
       undefined,
       () => true,
     );
@@ -550,5 +558,49 @@ test("Main Street's kerb walked up from any way at it — head on, aslant, nearl
     }
     assert.ok(on, `${speed} m/s at ${deg}°: up on the pavement`);
     assert.ok(slow <= 1, `${speed} m/s at ${deg}°: held up ${slow} frames`);
+  }
+});
+
+test("the floor from the slab under you: Jolt's slabs say what the floors' tiles said, every tile of every floor", async () => {
+  const { floorsOf, levelMap } = await import("../levels.ts");
+  const { isFloor, spanOf, tileAt } = await import("../map.ts");
+  const { slabsOf } = await import("./place.ts");
+  const { stairsPoint, wellsOf } = await import("../stairs.ts");
+  const { liftShafts, shaftAt } = await import("../lift.ts");
+  const { map, objects, world } = await hq();
+  // (a lift's shaft: a floor on every floor it goes through — the car's, wherever it is)
+  const slabs = slabsOf(
+    world,
+    (id) => objects.some((o) => o.id === id && o.kind === "stairs"),
+    shaftAt(liftShafts(objects, map)),
+  );
+  for (const l of floorsOf(map)) {
+    const lm = levelMap(map, l);
+    assert.ok(lm);
+    const sp = spanOf(lm);
+    const differ: string[] = [];
+    let n = 0;
+    // (a stairwell up from the floor below: its treads deep in it are near that floor, not this one —
+    // floorAt asks here only near this floor's height, at a flight's top: below)
+    const wells = wellsOf(
+      lm,
+      objects.filter((o) => o.kind === "stairs"),
+    );
+    for (let y = sp.y0; y < sp.y1; y++)
+      for (let x = sp.x0; x < sp.x1; x++) {
+        if (wells.has(`${x},${y}`)) continue;
+        const tile = isFloor(tileAt(lm, x, y));
+        if (slabs(l, { x: x + 0.5, y: y + 0.5 }) !== tile) differ.push(`${x},${y}`);
+        n++;
+      }
+    assert.deepEqual(differ, [], `floor ${l}: ${n} tiles`);
+  }
+  // a flight's top, in the well up into the floor above: the treads there are that floor's floor
+  for (const s of objects.filter((o) => o.kind === "stairs")) {
+    const { objLevel } = await import("../levels.ts");
+    const up = objLevel(s, map) + 1;
+    if (!floorsOf(map).includes(up)) continue;
+    const top = stairsPoint(s, 1, 2.4);
+    assert.ok(slabs(up, top), `the top of ${s.id}'s flight B: floor ${up}'s`);
   }
 });

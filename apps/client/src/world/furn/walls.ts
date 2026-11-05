@@ -1,6 +1,7 @@
-import { ISO_PX, TEXT_FACE } from "@yutopia/shared";
+import { TEXT_FACE } from "@yutopia/shared";
 import { glyphDots } from "@yutopia/shared/glyphs";
 import { GLASS } from "@yutopia/shared/media";
+import { artM as iso } from "@yutopia/shared/units";
 import { ball, box, cyl, type Look, type Model, merged, ring, rod, type V3 } from "./kit";
 import { P, shade } from "./palette";
 
@@ -25,7 +26,6 @@ export const WALL_LOOKS = {
 } as const;
 
 const FACE = 0.1; // the wall's face
-const iso = (px: number) => px / ISO_PX;
 const rnd = (a: number, b: number, s: number) => {
   const x = Math.sin(a * 127.1 + b * 311.7 + s * 74.7) * 43758.5453;
   return x - Math.floor(x);
@@ -60,29 +60,29 @@ function sticky(m: Model, x: number, y: number, z: number, tilt: number) {
  *  0.16), brass screws and a maker's plate, a marker tray with two markers and the eraser; a sticky
  *  note on the frame. */
 export function boardWall(m: Model) {
-  const [x0, x1, y0, y1] = [0.14, 2.86, iso(27), iso(67)];
-  slab(m, 0.06, 2.94, iso(22), iso(72), 0.05, P.walnut);
+  const [x0, x1, y0, y1] = [0.14, 2.86, 0.689, 1.7097];
+  slab(m, 0.06, 2.94, 0.5614, 1.8373, 0.05, P.walnut);
   m.add(box([x1 - x0, y1 - y0, 0.006]), P.glass, { at: [(x0 + x1) / 2, (y0 + y1) / 2, 0.153] });
   bars(m, x0, x1, y0, y1, 0.05, 0.172, P.walnutDark);
   for (const [x, y] of [
-    [0.09, iso(70)],
-    [2.91, iso(70)],
-    [0.09, iso(24)],
-    [2.91, iso(24)],
+    [0.09, 1.7863],
+    [2.91, 1.7863],
+    [0.09, 0.6124],
+    [2.91, 0.6124],
   ])
     m.add(cyl(0.008, 0.008, 0.004, 8), P.brass, { at: [x, y, 0.172], rot: [Math.PI / 2, 0, 0] });
-  m.add(box([0.28, 0.06, 0.004], 0.002), P.brass, { at: [1.5, iso(24.3), 0.174] });
+  m.add(box([0.28, 0.06, 0.004], 0.002), P.brass, { at: [1.5, 0.6201, 0.174] });
   // the marker tray
-  m.add(box([2, 0.03, 0.1], 0.004), P.alum, { at: [1.5, iso(19.5), FACE + 0.05] });
+  m.add(box([2, 0.03, 0.1], 0.004), P.alum, { at: [1.5, 0.4976, FACE + 0.05] });
   for (const [x, c] of [
     [0.79, 0xc4402b],
     [1.04, 0x3f4a5a],
   ] as const)
-    m.add(rod(0.008, 0.008, 0.16, "x", 8), c, { at: [x, iso(19.5) + 0.023, 0.17] });
-  m.add(box([0.24, 0.04, 0.06], 0.006), P.cream, { at: [2.17, iso(19.5) + 0.035, 0.16] });
-  m.add(box([0.24, 0.012, 0.06]), P.graphite, { at: [2.17, iso(19.5) + 0.02, 0.16] });
+    m.add(rod(0.008, 0.008, 0.16, "x", 8), c, { at: [x, 0.4976 + 0.023, 0.17] });
+  m.add(box([0.24, 0.04, 0.06], 0.006), P.cream, { at: [2.17, 0.4976 + 0.035, 0.16] });
+  m.add(box([0.24, 0.012, 0.06]), P.graphite, { at: [2.17, 0.4976 + 0.02, 0.16] });
   // (story) the sticky note
-  sticky(m, 2.76, iso(71.5), 0.172, 0.06);
+  sticky(m, 2.76, 1.8246, 0.172, 0.06);
 }
 
 // ── the big screen (4×1) ──────────────────────────────────────────────────────────────────────────
@@ -90,31 +90,31 @@ export function boardWall(m: Model) {
  *  soundbar under it on its bracket, the ON AIR lamp over it; its red standby LED, a sticky note. */
 export function screenWall(m: Model) {
   const g = GLASS.screen_wall;
-  const [x0, x1, y0, y1] = [g.x0, g.x1, iso(g.z0), iso(g.z1)];
-  slab(m, 0.06, 3.94, iso(16), iso(78), 0.045, 0x2b2b2e);
+  const [x0, x1, y0, y1] = [g.x0, g.x1, g.z0, g.z1];
+  slab(m, 0.06, 3.94, 0.4083, 1.9904, 0.045, 0x2b2b2e);
   m.add(box([x1 - x0, y1 - y0, 0.006]), P.glass, { at: [(x0 + x1) / 2, (y0 + y1) / 2, g.y - 0.004 - 0.003] });
   bars(m, x0, x1, y0, y1, 0.035, g.y + 0.008, 0x1d1d20);
-  m.add(box([0.012, 0.008, 0.004]), 0xd84a3a, { at: [3.8, iso(18), g.y + 0.01], glow: true });
+  m.add(box([0.012, 0.008, 0.004]), 0xd84a3a, { at: [3.8, 0.4593, g.y + 0.01], glow: true });
   // the soundbar and its bracket
-  m.add(box([1.6, iso(5), 0.09], 0.02, 2), P.graphite, { at: [2, iso(12.5), FACE + 0.06] });
+  m.add(box([1.6, 0.1276, 0.09], 0.02, 2), P.graphite, { at: [2, 0.319, FACE + 0.06] });
   for (let i = 0; i < 24; i++)
-    m.add(box([0.02, 0.05, 0.002]), 0x45413a, { at: [1.28 + i * 0.06, iso(12.5), FACE + 0.106] });
-  m.add(box([0.3, 0.02, 0.06]), P.steel, { at: [2, iso(10) - 0.01, FACE + 0.03] });
+    m.add(box([0.02, 0.05, 0.002]), 0x45413a, { at: [1.28 + i * 0.06, 0.319, FACE + 0.106] });
+  m.add(box([0.3, 0.02, 0.06]), P.steel, { at: [2, 0.2552 - 0.01, FACE + 0.03] });
   // the ON AIR lamp
-  m.add(box([0.6, iso(6), 0.08], 0.01), P.graphite, { at: [2, iso(83), FACE + 0.04] });
-  m.add(box([0.52, iso(4), 0.004]), 0x5a2018, { at: [2, iso(83), FACE + 0.082] });
+  m.add(box([0.6, 0.1531, 0.08], 0.01), P.graphite, { at: [2, 2.118, FACE + 0.04] });
+  m.add(box([0.52, 0.1021, 0.004]), 0x5a2018, { at: [2, 2.118, FACE + 0.082] });
   for (let i = 0; i < 5; i++)
-    m.add(box([0.06, iso(2), 0.002]), 0xb8705e, { at: [1.82 + i * 0.09, iso(83), FACE + 0.085] });
+    m.add(box([0.06, 0.051, 0.002]), 0xb8705e, { at: [1.82 + i * 0.09, 2.118, FACE + 0.085] });
   // (story) the sticky note on its bezel
-  sticky(m, 3.68, iso(74.5), g.y + 0.008, -0.08);
+  sticky(m, 3.68, 1.9011, g.y + 0.008, -0.08);
 }
 
 // ── the whiteboard (2×1) ──────────────────────────────────────────────────────────────────────────
 /** An aluminium frame round the board (the live miniature on it: x 0.14–1.86, 27–61 px, at 0.165),
  *  the ghosts of erased marker on it, a tray with three markers and the eraser. */
 export function whiteboard(m: Model) {
-  const [x0, x1, y0, y1] = [0.14, 1.86, iso(27), iso(61)];
-  slab(m, 0.08, 1.92, iso(24), iso(64), 0.04, P.alum);
+  const [x0, x1, y0, y1] = [0.14, 1.86, 0.689, 1.5566];
+  slab(m, 0.08, 1.92, 0.6124, 1.6332, 0.04, P.alum);
   m.add(box([x1 - x0, y1 - y0, 0.02]), 0xf6f3ea, { at: [(x0 + x1) / 2, (y0 + y1) / 2, 0.151] });
   bars(m, x0, x1, y0, y1, 0.035, 0.172, P.alum);
   for (let i = 0; i < 4; i++) {
@@ -123,27 +123,27 @@ export function whiteboard(m: Model) {
     sheet(m, x, y, 0.161, 0.22 + rnd(i, 3, 0) * 0.2, 0.012, 0xdfe3e8, (rnd(i, 4, 0) - 0.5) * 0.2);
   }
   // the tray, the markers and the eraser
-  m.add(box([1.6, 0.025, 0.1], 0.004), P.alum, { at: [1, iso(22), FACE + 0.05] });
+  m.add(box([1.6, 0.025, 0.1], 0.004), P.alum, { at: [1, 0.5614, FACE + 0.05] });
   for (const [x, c] of [
     [0.48, 0xc4402b],
     [0.68, 0x3f4a5a],
     [0.88, P.olive],
   ] as const) {
-    m.add(rod(0.008, 0.008, 0.14, "x", 8), c, { at: [x, iso(22) + 0.02, 0.16] });
-    m.add(rod(0.0085, 0.0085, 0.03, "x", 8), shade(c, 0.7), { at: [x + 0.08, iso(22) + 0.02, 0.16] });
+    m.add(rod(0.008, 0.008, 0.14, "x", 8), c, { at: [x, 0.5614 + 0.02, 0.16] });
+    m.add(rod(0.0085, 0.0085, 0.03, "x", 8), shade(c, 0.7), { at: [x + 0.08, 0.5614 + 0.02, 0.16] });
   }
-  m.add(box([0.2, 0.04, 0.06], 0.006), P.graphite, { at: [1.5, iso(22) + 0.032, 0.16] });
-  m.add(box([0.2, 0.012, 0.06]), P.cream, { at: [1.5, iso(22) + 0.058, 0.16] });
+  m.add(box([0.2, 0.04, 0.06], 0.006), P.graphite, { at: [1.5, 0.5614 + 0.032, 0.16] });
+  m.add(box([0.2, 0.012, 0.06]), P.cream, { at: [1.5, 0.5614 + 0.058, 0.16] });
 }
 
 // ── the notice board (2×1) ────────────────────────────────────────────────────────────────────────
 /** Cork in a walnut or an oak frame, or a felt pinboard crossed with ribbons; notes pinned on it
  *  (seeded), a polaroid. */
 export function noticeBoard(m: Model, o: Look) {
-  const [x0, x1, y0, y1] = [0.14, 1.86, iso(31), iso(59)];
+  const [x0, x1, y0, y1] = [0.14, 1.86, 0.7911, 1.5056];
   const frameC = o.look === 1 ? P.oak : P.walnut;
   const felt = o.look === 2;
-  slab(m, 0.08, 1.92, iso(28), iso(62), 0.025, frameC);
+  slab(m, 0.08, 1.92, 0.7145, 1.5821, 0.025, frameC);
   m.add(box([x1 - x0, y1 - y0, 0.012]), felt ? 0x4c6a6e : 0xc49a6c, {
     at: [(x0 + x1) / 2, (y0 + y1) / 2, FACE + 0.031],
   });
@@ -175,14 +175,14 @@ export function noticeBoard(m: Model, o: Look) {
     m.add(ball(0.012, 6), 0xc4402b, { at: [x, y + 0.09, S + 0.01] });
   }
   // (story) a polaroid
-  sheet(m, 1.62, iso(49), S + 0.001, 0.24, 0.26, P.paperWhite, -0.08);
-  sheet(m, 1.62, iso(50), S + 0.003, 0.18, 0.15, 0x8a9a7a, -0.08);
+  sheet(m, 1.62, 1.2504, S + 0.001, 0.24, 0.26, P.paperWhite, -0.08);
+  sheet(m, 1.62, 1.2759, S + 0.003, 0.18, 0.15, 0x8a9a7a, -0.08);
 }
 
 // ── the acoustic panel (1×1) ──────────────────────────────────────────────────────────────────────
 /** A felt frame round a grid of foam pyramids, alternating light and dark. */
 export function acousticPanel(m: Model) {
-  slab(m, 0.14, 0.86, iso(22), iso(68), 0.03, 0x7d3a2c);
+  slab(m, 0.14, 0.86, 0.5614, 1.7352, 0.03, 0x7d3a2c);
   for (let r = 0; r < 5; r++)
     for (let c = 0; c < 3; c++) {
       const x = 0.28 + c * 0.22;
@@ -199,7 +199,7 @@ export function acousticPanel(m: Model) {
 /** A round wall clock: a walnut rim, its cream face with the hours marked. The world draws its hands
  *  live (tp/live.ts: the time where you are, on CLOCK_FACE); its pictures (`thumb`) show ten past
  *  ten. */
-export const CLOCK_FACE = { x: 0.5, y: iso(52), r: 0.15, z: FACE + 0.032 } as const;
+export const CLOCK_FACE = { x: 0.5, y: 1.3269, r: 0.15, z: FACE + 0.032 } as const;
 export function clock(m: Model, o: Look & { thumb?: boolean }) {
   const { x, y, r, z } = CLOCK_FACE;
   m.add(ring(r + 0.012, 0.02, 6, 32), P.walnutDark, { at: [x, y, FACE + 0.02], rot: [Math.PI / 2, 0, 0] });
@@ -233,12 +233,12 @@ export function neon(m: Model, o: Look) {
   const v = o.look;
   const c = NEON[v] ?? NEON[0];
   const Z = FACE + 0.05;
-  m.add(box([1.6, iso(28), 0.012], 0.004), 0x1c1a24, { at: [1, iso(50), FACE + 0.035] });
+  m.add(box([1.6, 0.7145, 0.012], 0.004), 0x1c1a24, { at: [1, 1.2759, FACE + 0.035] });
   for (const [x, y] of [
-    [0.26, iso(38)],
-    [1.74, iso(38)],
-    [0.26, iso(62)],
-    [1.74, iso(62)],
+    [0.26, 0.9697],
+    [1.74, 0.9697],
+    [0.26, 1.5821],
+    [1.74, 1.5821],
   ])
     m.add(cyl(0.01, 0.01, 0.035, 8), P.chrome, { at: [x, y, FACE], rot: [Math.PI / 2, 0, 0] });
   const line = (pts: [number, number][], close = false) => {
@@ -300,8 +300,8 @@ export function neon(m: Model, o: Look) {
 // ── the poster (1×1) ──────────────────────────────────────────────────────────────────────────────
 /** A framed print by `art`: a big cassette, a VU meter, a Yondra sunset; a strip of tape on a corner. */
 export function poster(m: Model, art: string) {
-  const [x0, x1, y0, y1] = [0.16, 0.84, iso(33), iso(63)];
-  slab(m, 0.12, 0.88, iso(30), iso(66), 0.022, 0x2b2420);
+  const [x0, x1, _y0, _y1] = [0.16, 0.84, 0.8421, 1.6076];
+  slab(m, 0.12, 0.88, 0.7655, 1.6842, 0.022, 0x2b2420);
   const F = FACE + 0.023;
   const at = (u: number, z: number): V3 => [u, iso(z), F];
   const rect = (u0: number, u1: number, z0: number, z1: number, c: number, dz = 0) =>
@@ -319,15 +319,15 @@ export function poster(m: Model, art: string) {
         rot: [0, 0, Math.PI / 2 - a],
       });
     }
-    const n = Math.atan2(iso(54) - iso(42), 0.16);
-    m.add(box([Math.hypot(0.16, iso(54) - iso(42)), 0.005, 0.002]), 0xc4402b, {
-      at: [0.58, (iso(42) + iso(54)) / 2, F + 0.004],
+    const n = Math.atan2(1.378 - 1.0718, 0.16);
+    m.add(box([Math.hypot(0.16, 1.378 - 1.0718), 0.005, 0.002]), 0xc4402b, {
+      at: [0.58, (1.0718 + 1.378) / 2, F + 0.004],
       rot: [0, 0, n],
     });
     rect(0.3, 0.7, 35, 38, P.walnut, 0.002);
   } else if (art === "yondra") {
     rect(x0, x1, 33, 63, P.walnutDark);
-    m.add(cyl(0.18, 0.18, 0.002, 24), P.mustard, { at: [0.5, iso(47), F + 0.002], rot: [Math.PI / 2, 0, 0] });
+    m.add(cyl(0.18, 0.18, 0.002, 24), P.mustard, { at: [0.5, 1.1994, F + 0.002], rot: [Math.PI / 2, 0, 0] });
     for (const [z, c] of [
       [44, P.rust],
       [47.5, 0xd9a441],
@@ -341,20 +341,20 @@ export function poster(m: Model, art: string) {
     rect(0.24, 0.76, 40, 56, P.graphite, 0.002);
     rect(0.3, 0.7, 50, 54, P.cream, 0.004);
     for (const u of [0.38, 0.62]) {
-      m.add(cyl(0.06, 0.06, 0.002, 18), P.cream, { at: [u, iso(46), F + 0.004], rot: [Math.PI / 2, 0, 0] });
-      m.add(cyl(0.025, 0.025, 0.002, 12), P.graphite, { at: [u, iso(46), F + 0.006], rot: [Math.PI / 2, 0, 0] });
+      m.add(cyl(0.06, 0.06, 0.002, 18), P.cream, { at: [u, 1.1738, F + 0.004], rot: [Math.PI / 2, 0, 0] });
+      m.add(cyl(0.025, 0.025, 0.002, 12), P.graphite, { at: [u, 1.1738, F + 0.006], rot: [Math.PI / 2, 0, 0] });
     }
     rect(0.36, 0.64, 41, 42.4, 0x4a463e, 0.004);
     for (let i = 0; i < 3; i++) rect(0.24, 0.76, 58 + i * 1.6, 58.6 + i * 1.6, shade(0xd9a441, 0.8), 0.002);
   }
-  sheet(m, 0.76, iso(64.5), F + 0.006, 0.18, 0.08, 0xe8dbb5, 0.3);
+  sheet(m, 0.76, 1.6459, F + 0.006, 0.18, 0.08, 0xe8dbb5, 0.3);
 }
 
 // ── the light switch (1×1) ────────────────────────────────────────────────────────────────────────
 /** A cream plate by the door, its rocker pressed up (on) or down (off). */
 export function lightSwitch(m: Model, o: Look) {
   const on = o.on !== false;
-  const [y0, y1] = [iso(32), iso(45)];
+  const [y0, y1] = [0.8166, 1.1483];
   const cy = (y0 + y1) / 2;
   m.add(box([0.14, y1 - y0, 0.012], 0.004, 2), P.cream, { at: [0.5, cy, FACE + 0.006] });
   m.add(box([0.06, 0.16, 0.006], 0.002), shade(P.cream, 0.82), { at: [0.5, cy, FACE + 0.012] });
@@ -369,28 +369,28 @@ export function lightSwitch(m: Model, o: Look) {
 export function pictureFrame(m: Model, seed: number) {
   const art = Math.floor(seed * 3);
   const w = 0.22 + ((seed * 10) % 1) * 0.12;
-  const [y0, y1] = [iso(40), iso(60)];
+  const [y0, y1] = [1.0207, 1.5311];
   slab(m, 0.5 - w, 0.5 + w, y0, y1, 0.03, P.walnutDark);
   const F = FACE + 0.031;
-  const [u0, u1, v0, v1] = [0.5 - w + 0.04, 0.5 + w - 0.04, iso(42), iso(58)];
+  const [u0, u1, v0, v1] = [0.5 - w + 0.04, 0.5 + w - 0.04, 1.0718, 1.4801];
   const rect = (a: number, b: number, c: number, d: number, col: number, dz = 0) =>
     m.add(box([b - a, d - c, 0.002]), col, { at: [(a + b) / 2, (c + d) / 2, F + 0.001 + dz] });
   rect(u0, u1, v0, v1, P.paperWhite);
   const [p0, p1] = [u0 + 0.012, u1 - 0.012];
   if (art === 0) {
-    rect(p0, p1, iso(49), iso(57), 0x9fc2d8, 0.002);
-    rect(p0, p1, iso(43), iso(50), P.olive, 0.002);
+    rect(p0, p1, 1.2504, 1.4545, 0x9fc2d8, 0.002);
+    rect(p0, p1, 1.0973, 1.2759, P.olive, 0.002);
     m.add(cyl(0.022, 0.022, 0.002, 12), P.mustard, {
-      at: [0.5 + w * 0.4, iso(55), F + 0.005],
+      at: [0.5 + w * 0.4, 1.4035, F + 0.005],
       rot: [Math.PI / 2, 0, 0],
     });
   } else if (art === 1)
     for (const [k, c] of [P.rust, 0xd9a441, P.olive, 0x3f4a5a].entries())
       rect(p0, p1, iso(43 + k * 3.5), iso(46 + k * 3.5), c, 0.002);
   else {
-    rect(p0, p1, iso(43), iso(57), 0x6b5a4a, 0.002);
-    m.add(ball(0.05, 10), 0xe4b48e, { at: [0.5, iso(49), F + 0.004], scale: [1, 1.15, 0.1] });
-    rect(0.44, 0.56, iso(43), iso(46), P.rust, 0.004);
+    rect(p0, p1, 1.0973, 1.4545, 0x6b5a4a, 0.002);
+    m.add(ball(0.05, 10), 0xe4b48e, { at: [0.5, 1.2504, F + 0.004], scale: [1, 1.15, 0.1] });
+    rect(0.44, 0.56, 1.0973, 1.1738, P.rust, 0.004);
   }
 }
 

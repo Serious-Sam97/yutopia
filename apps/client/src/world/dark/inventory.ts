@@ -95,8 +95,8 @@ export class InventoryPanel {
       this.open = true;
       // (mouse look on: the pointer shown while it's open — let go here, so the browser locks it
       // again on closing without asking for a click)
-      this.relook = !!this.ctl.tp?.looking;
-      if (this.relook) this.ctl.tp?.setLook(false);
+      this.relook = !!this.ctl.tp?.mouseLook.looking;
+      if (this.relook) this.ctl.tp?.mouseLook.setLook(false);
       this.el.style.display = "block";
       this.shown = "";
       this.render();
@@ -107,7 +107,7 @@ export class InventoryPanel {
     this.el.style.display = "none";
     this.warn.style.display = "none";
     this.endDrag();
-    if (this.relook) this.ctl.tp?.resumeLook();
+    if (this.relook) this.ctl.tp?.mouseLook.resumeLook();
     this.relook = false;
   }
 

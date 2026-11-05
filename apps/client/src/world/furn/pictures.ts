@@ -1,4 +1,4 @@
-import { entry, TEXT_FACE } from "@yutopia/shared";
+import { entry, quarterYaw, TEXT_FACE } from "@yutopia/shared";
 import {
   ACESFilmicToneMapping,
   Box3,
@@ -81,7 +81,7 @@ export const looksOf = (kind: string): readonly string[] => LOOK_NAMES[kind] ?? 
  *  fit, into the shared renderer's canvas. */
 function render(kind: string, props: Record<string, unknown>, w: number, h: number, turn: number) {
   const g = rig(w, h);
-  const geo = modelOf({ id: "catalog", kind, x: 0, y: 0, rot: 0, props: { _thumb: true, ...props } });
+  const geo = modelOf({ id: "catalog", kind, x: 0, y: 0, yaw: quarterYaw(0), props: { _thumb: true, ...props } });
   const mesh = new Mesh(geo, mat);
   const glow = geo.userData.glow;
   if (glow) mesh.add(new Mesh(glow, glowMat));

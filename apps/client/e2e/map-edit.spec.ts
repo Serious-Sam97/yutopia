@@ -74,7 +74,7 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
   );
   await ana.getByRole("button", { name: /^S\s*32×24$/ }).click();
   await ana.getByRole("button", { name: /Start from a blank/ }).click();
-  await expect.poll(() => st(ana, () => (window as any).__yutopia.room.state.width)).toBe(32);
+  await expect.poll(() => st(ana, () => (window as any).__yutopia.building.width)).toBe(32);
   // stand near where we'll build so it's on screen (no walking in build mode)
   const build = (on: boolean, tool = "rooms") =>
     ana.evaluate(
@@ -99,11 +99,11 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
   await ana.getByRole("tab", { name: /Walls/ }).click();
   await ana.getByRole("button", { name: "Brick", exact: true }).click();
   await dragWorld(ana, [16, 3.5], [16, 12.5]);
-  await expect.poll(() => st(ana, () => (window as any).__yutopia.room.state.vWalls[8][16])).toBe("b");
-  expect(await st(ana, () => (window as any).__yutopia.room.state.tiles[8][16])).toBe("."); // no floor lost
+  await expect.poll(() => st(ana, () => (window as any).__yutopia.building.vWalls[8][16])).toBe("b");
+  expect(await st(ana, () => (window as any).__yutopia.building.tiles[8][16])).toBe("."); // no floor lost
   // one straight line: nothing painted across it where the pointer passed corners
   const across = (await st(ana, () =>
-    [4, 5, 6, 7, 8, 9, 10, 11, 12].map((y) => (window as any).__yutopia.room.state.hWalls[y].slice(15, 17)).join(""),
+    [4, 5, 6, 7, 8, 9, 10, 11, 12].map((y) => (window as any).__yutopia.building.hWalls[y].slice(15, 17)).join(""),
   )) as string;
   expect(across).toBe(".".repeat(18));
 
@@ -175,6 +175,6 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
   );
   await ana.getByRole("spinbutton").first().fill("40");
   await ana.getByRole("button", { name: /^Resize to/ }).click();
-  await expect.poll(() => st(ana, () => (window as any).__yutopia.room.state.width)).toBe(40);
-  expect(await st(ana, () => (window as any).__yutopia.room.state.vWalls[8][16])).toBe("b");
+  await expect.poll(() => st(ana, () => (window as any).__yutopia.building.width)).toBe(40);
+  expect(await st(ana, () => (window as any).__yutopia.building.vWalls[8][16])).toBe("b");
 });

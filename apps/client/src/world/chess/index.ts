@@ -4,12 +4,13 @@ import {
   FAM_COMMANDERS as COMMANDERS,
   chairAt,
   entry,
-  type Grid,
   type WorldObjectDef,
 } from "@yutopia/shared";
 import { legalMoves, outcome, parseFen, START, sqName } from "@yutopia/shared/games68/chess";
 import { isChessLevel } from "@yutopia/shared/games68/engine";
 import { replay } from "@yutopia/shared/games68/san";
+import type { Place } from "@yutopia/shared/physics/place";
+import type { Player, WorldState } from "@yutopia/state";
 import { Matrix4, Vector3 } from "three";
 import { BOARDS, type Board, type ChessMen3, squareOn } from "../furn/chessmen3d";
 import { hud } from "../store";
@@ -31,8 +32,6 @@ import { type ChessSound, chessSound } from "./sound";
 
 export const CHESS_CHUNK = "yutopia-chess";
 
-// biome-ignore lint/suspicious/noExplicitAny: colyseus schema instances
-type S = any;
 type Pt = { x: number; y: number };
 export interface ChessHost {
   model: {
@@ -43,10 +42,10 @@ export interface ChessHost {
       cy: number,
     ): { o: { x: number; y: number; z: number }; d: { x: number; y: number; z: number } } | null;
   };
-  room: { state: S; sessionId: string };
+  room: { state: WorldState; sessionId: string };
   send(type: string, msg: Record<string, unknown>): void;
   me(): { x: number; y: number; a: number; level?: number };
-  grid(): Grid;
+  grid(): Place;
   walkTo(p: Pt): void;
   /** the floor's living men (the 3D view's), if it's drawn */
   men(): ChessMen3 | null;
@@ -224,10 +223,8 @@ export class ChessPlay {
   }
   /** Someone holding a side who's walked off (the server frees it then too). */
   private away(uid: number, o: WorldObjectDef): boolean {
-    let p: S = null;
-    this.host.room.state.players.forEach((q: S) => {
-      if (q.uid === uid) p = q;
-    });
+    let p: Player | null = null;
+    for (const q of this.host.room.state.players.values()) if (q.uid === uid) p = q;
     if (!p) return true;
     const { w, h } = { w: entry(o.kind).w, h: entry(o.kind).h };
     return Math.hypot(p.x - (o.x + w / 2), p.y - (o.y + h / 2)) > 3.5;
@@ -477,9 +474,7 @@ export class ChessPlay {
     const f = o ? this.host.men()?.frameOf(o.id) : null;
     const ray = this.host.model.rayAt(cx, cy);
     if (!o || !f || !ray || ray.d.z >= -1e-6) return null;
-    // (the ray's height in iso px, as the view gives it: 39.19 a tile)
-    const top = (f.b.top * 39.19) / 1;
-    const t = (top - ray.o.z) / ray.d.z;
+    const t = (f.b.top - ray.o.z) / ray.d.z;
     const world = new Vector3(ray.o.x + ray.d.x * t, f.b.top, ray.o.y + ray.d.y * t);
     const local = world.applyMatrix4(new Matrix4().copy(f.place).invert());
     const r = Math.floor((local.x - f.b.x0) / f.b.sq);

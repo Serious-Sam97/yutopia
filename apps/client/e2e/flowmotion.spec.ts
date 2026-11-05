@@ -9,8 +9,7 @@ import { ANA, enter, test, token } from "./helpers";
 
 const GPU = process.env.YUTOPIA_GPU === "1";
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
-// (the ground floor's coords are the building's less GROUND_OFFSET)
-const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
+const G = (x: number, y: number) => ({ x, y });
 // the driveway's lamp at 100 m (shared grounds.ts LAMPS: nothing else within 4 m, the land flat)
 const LAMP = { x: -19.44, z: -102.99 };
 // the company's fence along z −360, 1.2 m

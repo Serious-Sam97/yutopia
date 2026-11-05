@@ -83,8 +83,8 @@ export class Phone {
     if (p.open === open) return;
     if (open) {
       // (mouse look on: the pointer shown while it's out — and locked again when it's put away)
-      this.relook = !!this.ctl.tp?.looking;
-      this.ctl.tp?.setLook(false);
+      this.relook = !!this.ctl.tp?.mouseLook.looking;
+      this.ctl.tp?.mouseLook.setLook(false);
       void this.loadContacts();
       // an incoming call or a peeked text opens straight to it
       const peek = p.peek;
@@ -112,7 +112,7 @@ export class Phone {
       ui("close", 0.6);
       if (p.camera) this.camera.close();
       const h = hud.get();
-      if (this.relook && !h.menu && !h.panel.kind && !h.build.on) this.ctl.tp?.resumeLook();
+      if (this.relook && !h.menu && !h.panel.kind && !h.build.on) this.ctl.tp?.mouseLook.resumeLook();
       this.relook = false;
     }
     this.pose();

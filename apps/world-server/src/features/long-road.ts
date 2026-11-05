@@ -1,4 +1,4 @@
-import { ANIM, dirFromDelta, GROUND_OFFSET, levelMap } from "@yutopia/shared";
+import { ANIM, faceByte, levelMap } from "@yutopia/shared";
 import { isCarKind } from "@yutopia/shared/car";
 import { along, heightAt, LONG_BUS, type Route } from "@yutopia/shared/grounds";
 import { config } from "../config.ts";
@@ -39,7 +39,6 @@ registerFeature((room: WorldRoom) => {
   const routes = LONG_BUS;
   if (!routes) return {};
   const has = () => !!levelMap(room.map, 0);
-  const off = GROUND_OFFSET;
   const make = (id: string, kind: string) => {
     const v = new Vehicle();
     v.id = id;
@@ -63,7 +62,7 @@ registerFeature((room: WorldRoom) => {
   const outside = () => {
     const out = [...room.state.players.values()]
       .filter((p) => p.level === 0 && !p.busy.startsWith("ride:") && !p.busy.startsWith("drive:"))
-      .map((p) => ({ x: p.x + off.x, z: p.y + off.y }));
+      .map((p) => ({ x: p.x, z: p.y }));
     room.state.vehicles.forEach((v) => {
       if (!isCarKind(v.kind)) return;
       for (const k of [-2.2, 0, 2.2]) out.push({ x: v.x + Math.cos(v.a) * k, z: v.z + Math.sin(v.a) * k });
@@ -106,12 +105,12 @@ registerFeature((room: WorldRoom) => {
     const side = i % 2 ? 0.55 : -0.55;
     const bx = v.x + Math.cos(v.a) * back - Math.sin(v.a) * side;
     const bz = v.z + Math.sin(v.a) * back + Math.cos(v.a) * side;
-    p.x = bx - off.x;
-    p.y = bz - off.y;
+    p.x = bx;
+    p.y = bz;
     p.z = heightAt(bx, bz) + 0.55;
     p.level = 0;
     p.a = ANIM.sit;
-    p.d = dirFromDelta(Math.cos(v.a), Math.sin(v.a), p.d as 0);
+    p.yaw = faceByte(Math.cos(v.a), Math.sin(v.a), p.yaw);
   };
   const alight = (sid: string, i: number) => {
     riders.delete(sid);
@@ -122,8 +121,8 @@ registerFeature((room: WorldRoom) => {
     const bz = v.z + Math.sin(v.a) * (0.8 - i * 0.9) + Math.cos(v.a) * 2.6;
     p.busy = "";
     p.a = ANIM.idle;
-    p.x = bx - off.x;
-    p.y = bz - off.y;
+    p.x = bx;
+    p.y = bz;
     p.z = heightAt(bx, bz);
     const c = room.clients.getById(sid);
     if (c) room.send(c, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
@@ -134,8 +133,8 @@ registerFeature((room: WorldRoom) => {
     const p = room.state.players.get(client.sessionId);
     const v = bus.veh;
     if (!p || !has() || p.level !== 0 || !v.stop || riders.size >= SEATS || p.busy === RIDING) return;
-    const flat = Math.hypot(p.x + off.x - v.x, p.y + off.y - v.z);
-    if (Math.hypot(flat, room.upOff(p, { x: v.x - off.x, y: v.z - off.y }, 3)) > BOARD_REACH) return;
+    const flat = Math.hypot(p.x - v.x, p.y - v.z);
+    if (Math.hypot(flat, room.upOff(p, { x: v.x, y: v.z }, 3)) > BOARD_REACH) return;
     riders.add(client.sessionId);
     p.busy = RIDING;
     v.riders = riders.size;

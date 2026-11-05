@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { entry, ISO_PX, standHeight } from "@yutopia/shared";
+import { entry, quarterYaw, standHeight } from "@yutopia/shared";
 import type { BufferGeometry } from "three";
 import { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from "three";
 import type { LivePart } from "../kit";
@@ -35,7 +35,7 @@ const tris = (g: BufferGeometry) =>
     ((g.userData.live as LivePart[]) ?? []).reduce((n, p) => n + p.geo.attributes.position.count, 0)) /
   3;
 const model = (kind: string, props: Record<string, unknown> = {}) =>
-  modelOf({ id: `${kind}-t`, kind, x: 0, y: 0, rot: 0, props });
+  modelOf({ id: `${kind}-t`, kind, x: 0, y: 0, yaw: quarterYaw(0), props });
 const live = (kind: string, props: Record<string, unknown> = {}) =>
   (model(kind, props).userData.live as LivePart[]) ?? [];
 
@@ -51,7 +51,7 @@ test("rugs & floor: every look on its footprint, on the floor, under 8k tris; ru
             kind,
             x: 0,
             y: 0,
-            rot: 0,
+            yaw: quarterYaw(0),
             props: { variant, ...(color ? { color } : {}) },
           });
           const b = bounds(g);
@@ -78,7 +78,7 @@ function topAt(g: BufferGeometry, x: number, z: number): number {
 test("stage: the risers and steps stood on at their tops", () => {
   for (let variant = 0; variant < 3; variant++) {
     const riser = model("stage_riser", { variant });
-    const top = (standHeight("stage_riser") ?? 0) / ISO_PX;
+    const top = standHeight("stage_riser") ?? 0;
     for (const [x, z] of [
       [0.5, 0.55],
       [1.5, 0.3],

@@ -20,7 +20,7 @@ class Worlds
                 foreach ($objects as $o) {
                     WorldObject::updateOrCreate(
                         ['uid' => $o['id']],
-                        ['kind' => $o['kind'], 'x' => $o['x'], 'y' => $o['y'], 'rot' => $o['rot'] ?? 0, 'ref_id' => $o['refId'] ?? null, 'props' => $o['props'] ?? null],
+                        ['kind' => $o['kind'], 'x' => $o['x'], 'y' => $o['y'], 'yaw' => $o['yaw'] ?? 0, 'ref_id' => $o['refId'] ?? null, 'props' => $o['props'] ?? null],
                     );
                 }
                 $world->update(['seeded_at' => now()]);

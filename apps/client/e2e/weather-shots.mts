@@ -26,7 +26,7 @@ const base = process.env.YUTOPIA_E2E_URL ?? "http://localhost:3100";
 const api = process.env.YUTOPIA_E2E_API ?? "http://localhost:8100";
 const pass = process.env.YUTOPIA_DEMO_PASSWORD ?? "yutopia-demo";
 const quality = process.env.QUALITY ?? "high";
-const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 }); // the land's coords → the ground floor's
+const G = (x: number, y: number) => ({ x, y }); // the land's coords → the ground floor's
 
 async function token(email: string): Promise<string> {
   const ctx = await request.newContext();
@@ -592,16 +592,43 @@ async function setState(p: Page, s: State, hour: number, land: { data: string; x
           // an icosahedron, flat faced, a few clumps of it
           const t = (1 + Math.sqrt(5)) / 2;
           const V = [
-            [-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t],
-            [0, -1, -t], [0, 1, -t], [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1],
+            [-1, t, 0],
+            [1, t, 0],
+            [-1, -t, 0],
+            [1, -t, 0],
+            [0, -1, t],
+            [0, 1, t],
+            [0, -1, -t],
+            [0, 1, -t],
+            [t, 0, -1],
+            [t, 0, 1],
+            [-t, 0, -1],
+            [-t, 0, 1],
           ].map((v) => {
             const l = Math.hypot(...v);
             return v.map((c) => c / l);
           });
           const F = [
-            [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2],
-            [10, 7, 6], [7, 1, 8], [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5],
-            [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1],
+            [0, 11, 5],
+            [0, 5, 1],
+            [0, 1, 7],
+            [0, 7, 10],
+            [0, 10, 11],
+            [1, 5, 9],
+            [5, 11, 4],
+            [11, 10, 2],
+            [10, 7, 6],
+            [7, 1, 8],
+            [3, 9, 4],
+            [3, 4, 2],
+            [3, 2, 6],
+            [3, 6, 8],
+            [3, 8, 9],
+            [4, 9, 5],
+            [2, 4, 11],
+            [6, 2, 10],
+            [8, 6, 7],
+            [9, 8, 1],
           ];
           // once subdivided, jittered: lumpy
           const tris: number[][][] = [];
@@ -637,7 +664,11 @@ async function setState(p: Page, s: State, hour: number, land: { data: string; x
             for (const tri of tris) {
               const P = tri.map((v) => {
                 const j = jit(v);
-                return [(ox + j[0] * s) * cr * h, bb.min.y + cy * h + (oy + j[1] * s * 0.85) * cr * h, (oz + j[2] * s) * cr * h];
+                return [
+                  (ox + j[0] * s) * cr * h,
+                  bb.min.y + cy * h + (oy + j[1] * s * 0.85) * cr * h,
+                  (oz + j[2] * s) * cr * h,
+                ];
               });
               const u = P[1].map((x, i) => x - P[0][i]);
               const v = P[2].map((x, i) => x - P[0][i]);
@@ -770,9 +801,18 @@ async function setState(p: Page, s: State, hour: number, land: { data: string; x
                   "float cover = clamp(base + snow * 0.6 + (big - 0.5) * 0.8 + park * 0.18, 0.0, 1.0);",
                   "float wxWin = smoothstep(0.0, 0.2, base + snow);\n  float cover = clamp(base + snow * 0.6 + (big - 0.5) * 0.8 + park * 0.18, 0.0, 1.0) * wxWin;",
                 )
-                .replace("cover = max(cover, edge * (0.5 + snow * 0.45)", "cover = max(cover, wxWin * edge * (0.5 + snow * 0.45)")
-                .replace("float salt = smoothstep(0.66, 0.78, rdFbm(P * 0.45 + 17.0)) * bare;", "float salt = smoothstep(0.66, 0.78, rdFbm(P * 0.45 + 17.0)) * bare * wxWin;")
-                .replace("float wet = smoothstep(0.62, 0.8, rdFbm(P * 0.16 + 31.0)) * bare;", "float wet = smoothstep(0.62, 0.8, rdFbm(P * 0.16 + 31.0)) * bare * max(wxWin * 0.7, wxWet);");
+                .replace(
+                  "cover = max(cover, edge * (0.5 + snow * 0.45)",
+                  "cover = max(cover, wxWin * edge * (0.5 + snow * 0.45)",
+                )
+                .replace(
+                  "float salt = smoothstep(0.66, 0.78, rdFbm(P * 0.45 + 17.0)) * bare;",
+                  "float salt = smoothstep(0.66, 0.78, rdFbm(P * 0.45 + 17.0)) * bare * wxWin;",
+                )
+                .replace(
+                  "float wet = smoothstep(0.62, 0.8, rdFbm(P * 0.16 + 31.0)) * bare;",
+                  "float wet = smoothstep(0.62, 0.8, rdFbm(P * 0.16 + 31.0)) * bare * max(wxWin * 0.7, wxWet);",
+                );
             }
             sh.fragmentShader = sh.fragmentShader
               .replace("#include <common>", `#include <common>\n${src.PARS}`)
@@ -864,7 +904,8 @@ async function setState(p: Page, s: State, hour: number, land: { data: string; x
           if (m.__wxBase === undefined) m.__wxBase = u.rdBase.value;
           u.rdBase.value = m.__wxBase * rs;
         }
-        if (u?.landBounce && !win.__wxBounce) win.__wxBounce = { u: u.landBounce.value, snow: u.landBounce.value.clone() };
+        if (u?.landBounce && !win.__wxBounce)
+          win.__wxBounce = { u: u.landBounce.value, snow: u.landBounce.value.clone() };
         if (u?.landLight && !win.__wxLand) win.__wxLand = u.landLight.value;
       });
       // the ground's bounce: green-grey off grass, the snow's cold blue as it lies
@@ -913,8 +954,9 @@ async function setState(p: Page, s: State, hour: number, land: { data: string; x
       win.__wxFog = s.sky === "clear" ? [210, 1150, 0.88] : s.sky === "grey" ? [40, 420, 0.82] : null;
       if (!tp.__wxFrame) {
         tp.__wxFrame = true;
-        const wf = tp.weatherFrame.bind(tp);
-        tp.weatherFrame = (dt: number, b: any) => {
+        // (the weather's frame: the view's Mood part — plan 72 phase 4)
+        const wf = tp.mood.weatherFrame.bind(tp.mood);
+        tp.mood.weatherFrame = (dt: number, b: any) => {
           wf(dt, b);
           const f = (window as any).__wxFog;
           if (!f) return;
@@ -962,10 +1004,16 @@ async function setState(p: Page, s: State, hour: number, land: { data: string; x
             [x - sx * wdt + lean, y + L, z - sz * wdt],
           ];
           const tri = [q[0], q[1], q[2], q[0], q[2], q[3]];
-          tri.forEach((v, j) => pos.set(v, i * 18 + j * 3));
+          for (const [j, v] of tri.entries()) pos.set(v, i * 18 + j * 3);
         }
-        geo.setAttribute("position", new (basic.geometry.attributes.position.constructor)(pos, 3));
-        const mat = new basic.material.constructor({ color: 0xb8c2cc, transparent: true, opacity: 0.4, depthWrite: false, fog: true });
+        geo.setAttribute("position", new basic.geometry.attributes.position.constructor(pos, 3));
+        const mat = new basic.material.constructor({
+          color: 0xb8c2cc,
+          transparent: true,
+          opacity: 0.4,
+          depthWrite: false,
+          fog: true,
+        });
         rain = new basic.constructor(geo, mat);
         rain.frustumCulled = false;
         rain.renderOrder = 5;
@@ -1083,7 +1131,8 @@ const SPOTS: Spot[] = [
   // a car parked on Main Street, close
   { name: "car", at: G(380, -398), to: G(390, -405), pitch: 0.3, dist: 4.5, car: true },
 ];
-const hh = (h: number) => `${Math.floor(h)}${h % 1 ? String(Math.round((h % 1) * 60)).padStart(2, "0") : "00"}`.padStart(4, "0");
+const hh = (h: number) =>
+  `${Math.floor(h)}${h % 1 ? String(Math.round((h % 1) * 60)).padStart(2, "0") : "00"}`.padStart(4, "0");
 
 // ── the contact sheets: a page of the stills, screenshotted ──
 async function sheets(browser: Browser) {
@@ -1127,7 +1176,10 @@ if (process.env.SHEETS) {
   process.exit(0);
 }
 const ana = await open(browser, "ana@yutopia.test");
-if (process.env.DEBUG) await ana.evaluate((d) => ((window as any).__wxDebugOn = d), Number(process.env.DEBUG));
+if (process.env.DEBUG)
+  await ana.evaluate((d) => {
+    (window as any).__wxDebugOn = d;
+  }, Number(process.env.DEBUG));
 const wantSpots = process.env.SPOTS?.split(",");
 const wantStates = process.env.STATES?.split(",");
 const hours = process.env.HOURS?.split(",").map(Number) ?? (quality === "high" ? [12, 19.25, 22] : [12]);
@@ -1164,10 +1216,12 @@ for (const s of SPOTS) {
   }
   const at = await me(ana);
   console.log(s.name, at);
-  const land = landMap(at.x - 60, at.y - 10);
+  const land = landMap(at.x, at.y);
   await frame(ana, to, { pitch: s.pitch, dist: s.dist });
   for (const h of hours) {
-    const states = STATES.filter((x) => (wantStates ? wantStates.includes(x.name) : h === 12 && quality === "high" ? true : LATE.includes(x.name)));
+    const states = STATES.filter((x) =>
+      wantStates ? wantStates.includes(x.name) : h === 12 && quality === "high" ? true : LATE.includes(x.name),
+    );
     for (const st of states) {
       // (twice: the materials compile after the first, and the uniforms they hand over are read then)
       await setState(ana, st, h, land);

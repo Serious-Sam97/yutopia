@@ -50,7 +50,7 @@ export class ThingGhost {
     foot: readonly [number, number, number, number, number],
     s: number,
     tone: keyof typeof COLOURS,
-    f: { x: number; z: number; y: number },
+    f: { y: number },
   ) {
     if (!at) {
       this.root.visible = false;
@@ -58,12 +58,12 @@ export class ThingGhost {
       return;
     }
     this.root.visible = true;
-    const k = `${at.x},${at.z},${ry},${foot},${s},${tone},${f.x},${f.z},${f.y}`;
+    const k = `${at.x},${at.z},${ry},${foot},${s},${tone},${f.y}`;
     if (k === this.key) return;
     this.key = k;
     this.mat.color.setHex(COLOURS[tone]);
     const [x0, z0, x1, z1, h] = foot;
-    this.root.position.set(at.x - f.x, terrainAt(at.x, at.z) + f.y, at.z - f.z);
+    this.root.position.set(at.x, terrainAt(at.x, at.z) + f.y, at.z);
     this.root.rotation.y = ry;
     this.box.scale.set(Math.max(0.1, (x1 - x0) * s), Math.max(0.1, h * s), Math.max(0.1, (z1 - z0) * s));
     this.box.position.set(((x0 + x1) / 2) * s, 0, ((z0 + z1) / 2) * s);

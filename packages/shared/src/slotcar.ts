@@ -16,18 +16,18 @@
 // it, and every curve is as tight for every lane — and each lane draws that
 // progress on its own line, so the outer car looks faster in a corner but no
 // lane is shorter.
-import { isoPx, TABLE_TOP } from "./furniture.ts";
+import { TABLE_TOP } from "./furniture.ts";
 
 export const SLOT_LANES = 4;
 export const SLOT_LANE_GAP = 0.12; // tiles between lanes
 export const SLOT_HALF_WIDTH = 0.29; // centre line to the track's edge (with the kerb)
-export const SLOT_TOP = isoPx(TABLE_TOP.slot_track); // px: the table's top, where the track lies (plan 67)
+export const SLOT_TOP = TABLE_TOP.slot_track; // m: the table's top, where the track lies (plan 67)
 export const SLOT_LAPS = [3, 5, 10] as const;
 export const SLOT_REACH = 2.6; // how far from the table you can hold a controller
 // each lane's car (and its stripe on the grid): red, blue, amber, green
 export const SLOT_COLORS = ["#c4402b", "#4f86c6", "#f0a12c", "#7fa34a"] as const;
-// the start lights hang over the line on a gantry this high over the track
-export const SLOT_GANTRY = 15;
+// the start lights hang over the line on a gantry this high over the track (m)
+export const SLOT_GANTRY = 0.3828;
 
 // Physics, in tiles and seconds.
 export const SLOT_VMAX = 4; // flat out
@@ -422,11 +422,11 @@ export function slotDistance(x: number, y: number, id: SlotTrackId = "classic"):
 }
 
 // The five start lamps sit on top of the gantry's bar, across the track
-// (rot-0 table tiles, z in px).
+// (rot-0 table tiles, z in m).
 export function slotLamps(id: SlotTrackId = "classic"): { x: number; y: number; z: number }[] {
   return [-2, -1, 0, 1, 2].map((i) => {
     const p = slotPoint(0.02, i * 0.1, id);
-    return { x: p.x, y: p.y, z: SLOT_TOP + SLOT_GANTRY + 4 };
+    return { x: p.x, y: p.y, z: SLOT_TOP + SLOT_GANTRY + 0.1021 };
   });
 }
 

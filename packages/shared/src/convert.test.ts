@@ -1,17 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { canPlace } from "./build.ts";
+import { quarterOf, quarterYaw } from "./catalog.ts";
 import { convertV1 } from "./convert.ts";
-import { doorEdge, doorFits, Grid } from "./grid.ts";
+import { doorEdge, doorFits } from "./doors.ts";
 import { areaAt, holdsItems, hWall, isFloor, MapBuilder, type MapDef, tileAt, WALL } from "./map.ts";
 import { layoutFromMap, validLayout } from "./map-edit.ts";
 import { studio, studioV1 } from "./maps/studio.ts";
 import { openingsIntoWalls } from "./openings.ts";
-import { findPath } from "./path.ts";
+import { testWorld, wayOn } from "./physics/testing.ts";
 
 // Connected components of walkable tiles: v1 by tile adjacency, v2 by steps
 // (which also respect walls on edges).
-function components(map: MapDef, grid: Grid, edges: boolean): Int32Array {
+function components(map: MapDef, step: ((x: number, y: number, nx: number, ny: number) => boolean) | null): Int32Array {
   const W = map.width;
   const comp = new Int32Array(W * map.height).fill(-1);
   let n = 0;
@@ -31,7 +32,7 @@ function components(map: MapDef, grid: Grid, edges: boolean): Int32Array {
       ]) {
         const nx = x + dx;
         const ny = y + dy;
-        const ok = edges ? grid.step(x, y, nx, ny) : isFloor(tileAt(map, nx, ny));
+        const ok = step ? step(x, y, nx, ny) : isFloor(tileAt(map, nx, ny));
         if (ok && comp[ny * W + nx] === -1) {
           comp[ny * W + nx] = n;
           q.push(ny * W + nx);
@@ -52,13 +53,15 @@ test("the studio converts: no wall tiles, a valid v2 layout, rooms gain the wall
   assert.equal(after, studio.width * studio.height, "the old walls all became floor");
 });
 
-test("conversion keeps who can reach whom, and rooms where they were", () => {
-  const v1g = Grid.from({ ...studioV1, hWalls: [], vWalls: [] }, []);
-  const v2g = Grid.from(studio, [], undefined, { dressing: false });
-  const c1 = components(studioV1, v1g, false);
-  const c2 = components(studio, v2g, true);
+test("conversion keeps who can reach whom, and rooms where they were", async () => {
+  // (v1: its floor tiles, the walls were tiles; v2: a body's steps on Jolt, the walls on edges)
+  const w = await testWorld(studio, []);
+  const v2g = w.place();
+  const c1 = components(studioV1, null);
+  const c2 = components(studio, (x, y, nx, ny) => v2g.step(x, y, nx, ny));
   const floors: number[] = [];
-  for (let i = 0; i < c1.length; i++) if (c1[i] !== -1) floors.push(i);
+  // (the tiles a body stands on: Jolt has the rooms' dressing — a corner plant — the grid here hadn't)
+  for (let i = 0; i < c1.length; i++) if (c1[i] !== -1 && v2g.ok(i % 48, Math.floor(i / 48))) floors.push(i);
   for (const a of floors)
     for (const b of [floors[0], floors[floors.length - 1], floors[Math.floor(floors.length / 2)]])
       assert.equal(c1[a] === c1[b], c2[a] === c2[b], `connectivity of ${a % 48},${Math.floor(a / 48)}`);
@@ -73,10 +76,11 @@ test("conversion keeps who can reach whom, and rooms where they were", () => {
   assert.ok(!v2g.step(28, 8, 29, 8), "tracking ↮ war room");
   assert.ok(v2g.step(28, 5, 29, 5), "…except through the doorway");
   assert.ok(!v2g.step(33, 17, 34, 17) || !v2g.step(34, 17, 35, 17), "booth 1 ↮ booth 2");
-  assert.ok(findPath(v2g, studio.spawn, { x: 44.5, y: 17.5 }), "spawn → booth 3");
+  assert.ok((await w.nav()).floor(0)?.path(studio.spawn, { x: 44.5, y: 17.5 }), "spawn → booth 3");
+  w.dispose();
 });
 
-test("conversion moves boards onto their wall and doors onto their edge", () => {
+test("conversion moves boards onto their wall and doors onto their edge", async () => {
   for (const o of studio.objects) {
     if (o.kind.endsWith("_wall") || o.kind === "poster" || o.kind === "whiteboard" || o.kind === "notice_board")
       assert.ok(holdsItems(hWall(studio, o.x, o.y)), `${o.id} hangs on a wall`);
@@ -106,11 +110,18 @@ test("conversion moves boards onto their wall and doors onto their edge", () => 
     ],
     objects: [],
   };
-  const door = { id: "door-room-a", kind: "door", x: 7, y: 9, rot: 0, props: { state: "locked", roomKey: "room-a" } };
+  const door = {
+    id: "door-room-a",
+    kind: "door",
+    x: 7,
+    y: 9,
+    yaw: quarterYaw(0),
+    props: { state: "locked", roomKey: "room-a" },
+  };
   const conv = convertV1(v1, [door]);
   const { objects, changed } = conv;
   const d = objects[0];
-  assert.deepEqual([d.x, d.y, d.rot], [7, 10, 0], "onto the edge below the old doorway");
+  assert.deepEqual([d.x, d.y, quarterOf(d)], [7, 10, 0], "onto the edge below the old doorway");
   assert.equal(changed.length, 1);
   // then into a wall of its own (openings.ts): the wall beside it
   assert.equal(hWall(conv.map, 7, 10), ".", "converted v1: a doorway");
@@ -120,7 +131,7 @@ test("conversion moves boards onto their wall and doors onto their edge", () => 
   assert.ok(canPlace(map, [], d));
   const outside = { x: 7.5, y: 13.5 };
   const inside = { x: 7.5, y: 6.5 };
-  assert.equal(findPath(Grid.from(map, [d], { uid: 8 }), outside, inside)?.length ?? 0, 0, "locked for others");
-  assert.ok(findPath(Grid.from(map, [d], { uid: 7 }), outside, inside), "open for the owner");
+  assert.equal(await wayOn(map, [d], 8, outside, inside), null, "locked for others");
+  assert.ok(await wayOn(map, [d], 7, outside, inside), "open for the owner");
   assert.equal(areaAt(map, 7.5, 9.5)?.key, "room-a", "the room grew over its bottom wall");
 });

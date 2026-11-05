@@ -1,4 +1,14 @@
-import { entry, hangStrip, isFloor, type MapDef, placedFootprint, tileAt, type WorldObjectDef } from "@yutopia/shared";
+import {
+  entry,
+  hangStrip,
+  isFloor,
+  type MapDef,
+  placedFootprint,
+  spanOf,
+  tileAt,
+  WALL_H,
+  type WorldObjectDef,
+} from "@yutopia/shared";
 import {
   BoxGeometry,
   BufferGeometry,
@@ -17,9 +27,7 @@ import {
   SphereGeometry,
   Vector3,
 } from "three";
-import { WALL_H } from "../art/furniture";
 import { cardTexture, type Pick3, type World3 } from "./build";
-import { zt } from "./kit3d";
 
 // Build mode in 3D: what it shows (the model's buildLook) — the things in your
 // hand as see-through ghosts (green where they fit, red where not, lifted with a
@@ -93,7 +101,7 @@ export class BuildLayer {
     if (look.grid && !this.grid) this.makeGrid();
     if (!look.grid) this.clearGrid();
     // what's in hand bobs gently
-    this.ghosts.position.y = look.lift > 0 ? zt(look.lift) + Math.sin(this.time * 3) * 0.03 : 0;
+    this.ghosts.position.y = look.lift > 0 ? look.lift + Math.sin(this.time * 3) * 0.03 : 0;
   }
 
   // ── what's in your hand ───────────────────────────────────────────────────
@@ -180,8 +188,8 @@ export class BuildLayer {
         cue(ok(good), 0.6),
       );
       strip.position.set(e.dir === "h" ? e.x + 0.5 : e.x, 0.016, e.dir === "h" ? e.y : e.y + 0.5);
-      const face = new Mesh(new PlaneGeometry(1, zt(WALL_H)), cue(ok(good), g.remove ? 0.12 : 0.22));
-      face.position.set(e.dir === "h" ? e.x + 0.5 : e.x, zt(WALL_H) / 2, e.dir === "h" ? e.y : e.y + 0.5);
+      const face = new Mesh(new PlaneGeometry(1, WALL_H), cue(ok(good), g.remove ? 0.12 : 0.22));
+      face.position.set(e.dir === "h" ? e.x + 0.5 : e.x, WALL_H / 2, e.dir === "h" ? e.y : e.y + 0.5);
       if (e.dir === "v") face.rotation.y = Math.PI / 2;
       const rim = new LineSegments(
         new EdgesGeometry(face.geometry),
@@ -216,7 +224,7 @@ export class BuildLayer {
     for (const f of look.faces) {
       const p = f.p;
       const col = !f.ok ? BAD : f.sel ? VFD : AMBER;
-      const top = zt(WALL_H);
+      const top = WALL_H;
       const off = p.side * 0.106;
       const [cx, cy] = p.dir === "h" ? [p.x + 0.5, p.y + off] : [p.x + off, p.y + 0.5];
       const face = new Mesh(
@@ -305,8 +313,9 @@ export class BuildLayer {
   private makeGrid() {
     const pts: number[] = [];
     const m = this.map;
-    for (let y = 0; y < m.height; y++)
-      for (let x = 0; x < m.width; x++) {
+    const sp = spanOf(m);
+    for (let y = sp.y0; y < sp.y1; y++)
+      for (let x = sp.x0; x < sp.x1; x++) {
         if (!isFloor(tileAt(m, x, y))) continue;
         pts.push(x, 0.012, y, x + 1, 0.012, y, x, 0.012, y, x, 0.012, y + 1);
         if (!isFloor(tileAt(m, x + 1, y))) pts.push(x + 1, 0.012, y, x + 1, 0.012, y + 1);

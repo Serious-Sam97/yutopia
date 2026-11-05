@@ -9,11 +9,11 @@ class World extends Model
 {
     protected $table = 'world';
 
-    protected $fillable = ['name', 'map_key', 'layout', 'settings', 'seeded_at'];
+    protected $fillable = ['name', 'map_key', 'layout', 'structure', 'settings', 'seeded_at'];
 
     protected function casts(): array
     {
-        return ['settings' => 'array', 'layout' => 'array', 'seeded_at' => 'datetime'];
+        return ['settings' => 'array', 'layout' => 'array', 'structure' => 'array', 'seeded_at' => 'datetime'];
     }
 
     public static function current(): self

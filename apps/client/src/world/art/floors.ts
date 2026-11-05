@@ -8,6 +8,7 @@ import {
   lotLayout,
   lotStripes,
   type MapDef,
+  quarterOf,
   tileAt,
   vWall,
   type WorldObjectDef,
@@ -350,7 +351,13 @@ const AO_PX = 8; // per tile
 // Darkness from walls (thin walls on edges, and anything that isn't floor: strong,
 // wide) and solid furniture (soft, close), in plan
 // space, one byte of alpha per AO pixel.
-export function aoCanvas(map: MapDef, objects: WorldObjectDef[]): HTMLCanvasElement {
+// `only`: just the tiles in that rect worked out, the rest left clear (World3.relayout bakes again
+// only the floor's chunks round an edit: each pixel worked out exactly as the whole floor's would be).
+export function aoCanvas(
+  map: MapDef,
+  objects: WorldObjectDef[],
+  only?: { x0: number; y0: number; x1: number; y1: number },
+): HTMLCanvasElement {
   const W = map.width;
   const H = map.height;
   const occ = new Float32Array(W * H); // 0..1 occluder strength per tile
@@ -359,7 +366,7 @@ export function aoCanvas(map: MapDef, objects: WorldObjectDef[]): HTMLCanvasElem
   for (const o of objects) {
     const e = entry(o.kind);
     if (!e.solid || e.wall) continue;
-    const { w, h } = footprint(o.kind, o.rot ?? 0);
+    const { w, h } = footprint(o.kind, quarterOf(o));
     boxes.push({ x0: o.x + 0.06, y0: o.y + 0.06, x1: o.x + w - 0.06, y1: o.y + h - 0.06 });
   }
   // footprints bucketed by the tiles they can darken, so each pixel checks a few
@@ -368,18 +375,48 @@ export function aoCanvas(map: MapDef, objects: WorldObjectDef[]): HTMLCanvasElem
     for (let ty = Math.max(0, Math.floor(b.y0 - 0.5)); ty <= Math.min(H - 1, Math.floor(b.y1 + 0.5)); ty++)
       for (let tx = Math.max(0, Math.floor(b.x0 - 0.5)); tx <= Math.min(W - 1, Math.floor(b.x1 + 0.5)); tx++)
         near[ty * W + tx].push(b);
+  // the walls on the edges, read once (docs/plan/72 phase 8: an edit's cost — per pixel they were
+  // ~30 reads of the map's rows); a tile with nothing within reach (no blocked tile round it, no
+  // wall on an edge near, no furniture's footprint) isn't darkened at all
+  const hE = new Uint8Array((H + 3) * (W + 2));
+  const vE = new Uint8Array((H + 2) * (W + 3));
+  const hAt = (X: number, Y: number) => (X < -1 || Y < -1 || X > W || Y > H + 1 ? 0 : hE[(Y + 1) * (W + 2) + X + 1]);
+  const vAt = (X: number, Y: number) => (X < -1 || Y < -1 || X > W + 1 || Y > H ? 0 : vE[(Y + 1) * (W + 3) + X + 1]);
+  for (let Y = -1; Y <= H + 1; Y++)
+    for (let X = -1; X <= W; X++) if (isWallEdge(hWall(map, X, Y))) hE[(Y + 1) * (W + 2) + X + 1] = 1;
+  for (let Y = -1; Y <= H; Y++)
+    for (let X = -1; X <= W + 1; X++) if (isWallEdge(vWall(map, X, Y))) vE[(Y + 1) * (W + 3) + X + 1] = 1;
+  const quiet = (tx: number, ty: number) => {
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = tx + dx;
+        const ny = ty + dy;
+        if (nx >= 0 && ny >= 0 && nx < W && ny < H && occ[ny * W + nx]) return false;
+      }
+    for (let Y = ty - 1; Y <= ty + 2; Y++) for (let X = tx - 1; X <= tx + 1; X++) if (hAt(X, Y)) return false;
+    for (let X = tx - 1; X <= tx + 2; X++) for (let Y = ty - 1; Y <= ty + 1; Y++) if (vAt(X, Y)) return false;
+    return near[ty * W + tx].length === 0;
+  };
+  const still = new Int8Array(W * H).fill(-1); // (1 quiet, 0 not, −1 not asked yet)
   const c = canvas(W * AO_PX, H * AO_PX);
   const g = c.getContext("2d") as CanvasRenderingContext2D;
   const img = g.createImageData(c.width, c.height);
   const RW = 0.95; // wall reach (tiles)
   const RO = 0.45; // furniture reach
   const fall = (d: number, R: number) => (d >= R ? 0 : (1 - d / R) ** 1.6);
-  for (let py = 0; py < c.height; py++) {
-    for (let px = 0; px < c.width; px++) {
+  const py0 = only ? Math.max(0, only.y0 * AO_PX) : 0;
+  const py1 = only ? Math.min(c.height, only.y1 * AO_PX) : c.height;
+  const px0 = only ? Math.max(0, only.x0 * AO_PX) : 0;
+  const px1 = only ? Math.min(c.width, only.x1 * AO_PX) : c.width;
+  for (let py = py0; py < py1; py++) {
+    for (let px = px0; px < px1; px++) {
       const tx = Math.floor(px / AO_PX);
       const ty = Math.floor(py / AO_PX);
       let a: number;
-      if (occ[ty * W + tx]) a = 0.6;
+      const ti = ty * W + tx;
+      if (still[ti] < 0) still[ti] = quiet(tx, ty) ? 1 : 0;
+      if (occ[ti]) a = 0.6;
+      else if (still[ti]) a = 0;
       else {
         const x = (px + 0.5) / AO_PX;
         const y = (py + 0.5) / AO_PX;
@@ -396,14 +433,14 @@ export function aoCanvas(map: MapDef, objects: WorldObjectDef[]): HTMLCanvasElem
         // thin walls on edges nearby (0.2 thick)
         for (let Y = ty - 1; Y <= ty + 2; Y++)
           for (let X = tx - 1; X <= tx + 1; X++) {
-            if (!isWallEdge(hWall(map, X, Y))) continue;
+            if (!hAt(X, Y)) continue;
             const ddx = Math.max(X - x, 0, x - (X + 1));
             const ddy = Math.max(Math.abs(y - Y) - 0.1, 0);
             lit *= 1 - 0.95 * fall(Math.hypot(ddx, ddy), RW);
           }
         for (let X = tx - 1; X <= tx + 2; X++)
           for (let Y = ty - 1; Y <= ty + 1; Y++) {
-            if (!isWallEdge(vWall(map, X, Y))) continue;
+            if (!vAt(X, Y)) continue;
             const ddx = Math.max(Math.abs(x - X) - 0.1, 0);
             const ddy = Math.max(Y - y, 0, y - (Y + 1));
             lit *= 1 - 0.95 * fall(Math.hypot(ddx, ddy), RW);
@@ -423,7 +460,10 @@ export function aoCanvas(map: MapDef, objects: WorldObjectDef[]): HTMLCanvasElem
       img.data[i + 3] = Math.round(a * 255);
     }
   }
-  g.putImageData(img, 0, 0);
+  // (only what was worked out written: the rest of the canvas is never read — the bake takes its
+  // chunks in `only`)
+  if (only) g.putImageData(img, 0, 0, px0, py0, Math.max(0, px1 - px0), Math.max(0, py1 - py0));
+  else g.putImageData(img, 0, 0);
   return c;
 }
 
@@ -451,6 +491,8 @@ export class FloorBake {
     readonly res: number,
     chunkPx = 1024,
     wells: Set<string> = new Set(),
+    // the AO worked out only in these tiles (aoCanvas): for a bake of only the chunks in them
+    aoOnly?: { x0: number; y0: number; x1: number; y1: number },
   ) {
     const W = map.width;
     const H = map.height;
@@ -471,7 +513,7 @@ export class FloorBake {
       if (!isDoorKind(o.kind)) continue;
       // across the doorway: along x from the north edge of its tile, or along y from the west one
       const n = entry(o.kind).w;
-      if ((o.rot ?? 0) % 2 === 0) this.sills.push([o.x + 0.05, o.y - 0.1, n - 0.1, 0.2]);
+      if (quarterOf(o) % 2 === 0) this.sills.push([o.x + 0.05, o.y - 0.1, n - 0.1, 0.2]);
       else this.sills.push([o.x - 0.1, o.y + 0.05, 0.2, n - 0.1]);
     }
     const st = map.areas.find((a) => a.kind === "stage");
@@ -483,7 +525,7 @@ export class FloorBake {
       const oy = map.oy ?? 0;
       this.stripes = lotStripes(lotLayout()).map(([x, z, w, h]) => [x - ox, z - oy, w, h]);
     }
-    this.ao = aoCanvas(map, objects);
+    this.ao = aoCanvas(map, objects, aoOnly);
     // screen bounds of the floor, cut into chunks of `chunkPx` device px
     const x0 = -H * HW;
     const x1 = W * HW;

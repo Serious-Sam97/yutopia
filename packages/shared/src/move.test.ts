@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parkAt, parkedBody, SPECS } from "./car/index.ts";
-import { BODY_R, Grid, moveStep, setOutdoors } from "./grid.ts";
+import { quarterYaw, type WorldObjectDef } from "./catalog.ts";
+import { BODY_R, moveStep, setOutdoors } from "./ground.ts";
 import { BENCH, outdoorsAt } from "./grounds.ts";
 import type { MapDef } from "./map.ts";
 import { FLOW_MOVES } from "./move/flow-moves.ts";
@@ -9,6 +10,7 @@ import {
   Allowance,
   type Body,
   byteToYaw,
+  type Collider,
   dodging,
   type FlowWorld,
   type Footing,
@@ -21,6 +23,7 @@ import {
   type MoveSpec,
   NO_INPUT,
   newBody,
+  openFloor,
   packMv,
   probeVault,
   STEP_DT,
@@ -34,15 +37,16 @@ import {
 
 // The numbers docs/plan/29-the-move.md's phase 1 must hit.
 
-/** An open pad, w × h tiles of floor; `blocks`: [x, y, top] solid tiles you can stand on. */
-function pad(w = 40, h = 12, blocks: [number, number, number][] = []): Grid {
-  const g = new Grid(w, h);
-  g.walk.fill(1);
-  g.top.fill(0);
-  for (const [x, y, t] of blocks) g.block(x, y, t);
-  return g;
+/** An open pad, w × h tiles of floor (walls past it); `blocks`: [x, y, top] solid tiles you can
+ *  stand on (move/floor.ts openFloor). */
+function pad(w = 40, h = 12, blocks: [number, number, number][] = []): Collider {
+  const tops = new Map(blocks.map(([x, y, t]) => [`${x},${y}`, t]));
+  return openFloor(
+    (tx, ty) => (tx < 0 || ty < 0 || tx >= w || ty >= h ? Number.POSITIVE_INFINITY : (tops.get(`${tx},${ty}`) ?? 0)),
+    true,
+  );
 }
-const on = (grid: Grid, f: Footing = "floor"): MoveEnv => ({ grid, footing: () => f });
+const on = (grid: Collider, f: Footing = "floor"): MoveEnv => ({ grid, footing: () => f });
 const go = (o: Partial<MoveInput> = {}): MoveInput => ({ ...NO_INPUT, x: 1, ...o });
 
 /** Steps `b` for `secs` under `inp(t)` (t: s since the start); every step's events. */
@@ -235,15 +239,8 @@ test("outdoors, the bench on the land is vaulted, a parked car's roof climbed on
     [0.45, "vault"],
     [1.43, "mantle"],
   ] as const) {
-    // land everywhere; a row of tiles at x 6 you can't walk, with something on them
-    const g = new Grid(20, 12);
-    g.land.fill(1);
-    for (let y = 0; y < 12; y++) for (let x = 0; x < 20; x++) g.walk[y * 20 + x] = x === 6 && y > 2 && y < 9 ? 0 : 1;
-    g.outside = {
-      walkable: () => true,
-      height: () => 0,
-      top: (tx, ty) => (tx === 6 && ty > 2 && ty < 9 ? top : Number.NaN),
-    };
+    // a row of tiles at x 6 you can't walk, with something on them `top` high
+    const g = openFloor((tx, ty) => (tx === 6 && ty > 2 && ty < 9 ? top : 0), true);
     const p = probeVault(g, 5.2, 6, 0, 1, 0);
     assert.equal(p?.kind ?? null, want, `top ${top}`);
     // walking into it (no jump): it stops you
@@ -253,27 +250,40 @@ test("outdoors, the bench on the land is vaulted, a parked car's roof climbed on
   }
 });
 
-test("on the real Grounds: the clearing's bench is got over with a jump from either side, and stops a walk", () => {
-  // (a one-tile grid at the building's corner: everything else is the land round it)
-  const g = new Grid(1, 1);
-  g.outside = outdoorsAt(0, 0);
+test("on the real Grounds: the clearing's bench is got over with a jump from either side, and stops a walk", async () => {
+  // (Jolt's world with the Grounds round the bench: its land and its things — the bench among them)
+  const { PhysicsWorld, sizesFor } = await import("./physics/world.ts");
+  const { loadJolt } = await import("./physics/load.ts");
+  const { WorldBuilder } = await import("./physics/build.ts");
+  const { Place } = await import("./physics/place.ts");
+  const { blankMap } = await import("./map-edit.ts");
+  const world = await PhysicsWorld.create(loadJolt, sizesFor({ statics: 64 }));
+  new WorldBuilder(world).groundRect(BENCH.x - 40, BENCH.z - 40, BENCH.x + 40, BENCH.z + 40);
+  world.settle();
+  const g = new Place(world, blankMap("corner", "corner", 1, 1), [], undefined, outdoorsAt(0, 0));
   const env: MoveEnv = { grid: g, footing: () => "snow" };
   // (its middle: it's drawn a metre each side of BENCH.x)
   const x = BENCH.x + 0.5;
   const row = Math.floor(BENCH.z);
-  // its seat: ~0.5 over the lower ground north of it, ~0.35 over the slope south of it — a
-  // vault, or (no landing as low beyond it) up onto it
+  // got over or up onto from either side (Jolt's bench is its seat and back in one block, 1.0 over
+  // the ground where it stands — shapes/grounds.ts — so a mantle from the lower north, a vault or
+  // a mantle from the slope south)
   for (const [y, dir] of [
     [row - 0.6, 1],
     [row + 1.25, -1],
   ] as const) {
     const p = probeVault(g, x, y, g.groundAt(x, y, 50), 0, dir);
-    assert.ok(p && p.h > 0.28 && p.h < 0.6, `from ${dir > 0 ? "the north" : "the south"}: its seat ${p?.h}`);
+    assert.ok(
+      p && p.h > 0.28 && p.h <= MOVE.mantle.high + 1e-9,
+      `from ${dir > 0 ? "the north" : "the south"}: ${p?.kind} ${p?.h}`,
+    );
   }
   // walked into without a jump: it stops you
   const b = newBody(x, row + 2.5, g.groundAt(x, row + 2.5, 50));
   for (let i = 0; i < 240; i++) stepBody(b, go({ x: 0, y: -1 }), env);
-  assert.ok(b.y > row + 1, "stopped at it");
+  // (its south face 0.6 past BENCH.z: stopped a body's half-width short of it)
+  assert.ok(b.y > BENCH.z + 0.6 && b.y < BENCH.z + 0.6 + 0.4, `stopped at it: ${b.y}`);
+  world.destroy();
 });
 
 test("a vault carries the body over the top and down beyond it; a mantle leaves it standing on top", () => {
@@ -523,7 +533,20 @@ test("the server's allowance lets an honest sprint by and stops a fast one", () 
   assert.ok(speedCap("roll") > cap);
 });
 
-test("a parked car is solid to the skin of its body: either model, any angle, on the floor or out past it", () => {
+test("a parked car is solid to the skin of its body: either model, any angle, on the floor or out past it", async () => {
+  const { PhysicsWorld, sizesFor } = await import("./physics/world.ts");
+  const { loadJolt } = await import("./physics/load.ts");
+  const { buildingSolids, WorldBuilder } = await import("./physics/build.ts");
+  const { Place } = await import("./physics/place.ts");
+  const { box3 } = await import("./shapes/index.ts");
+  // (Jolt's: the car's body, on flat ground everywhere — no land of the Grounds')
+  const placeWith = async (things: WorldObjectDef[]) => {
+    const world = await PhysicsWorld.create(loadJolt, sizesFor({ statics: 8, vehicles: 4 }));
+    new WorldBuilder(world).building(buildingSolids(map, things));
+    world.setStatic("ground", [box3(-20, -20, 100, 100, -0.2, 0)], "floor");
+    world.settle();
+    return { world, place: new Place(world, map, things, undefined, null) };
+  };
   // a 6 × 6 floor with flat land all round it
   const map: MapDef = {
     key: "t",
@@ -546,9 +569,9 @@ test("a parked car is solid to the skin of its body: either model, any angle, on
       ])
         for (const car of [
           { id: "c", kind: "car", ...parkAt(x, y, 0.6, 0, { model }) },
-          { id: "c", kind: "car", x: x - 1, y: y - 2.5, rot: 1, props: { model, dx: 0.37, dz: -0.21 } },
+          { id: "c", kind: "car", x: x - 1, y: y - 2.5, yaw: quarterYaw(1), props: { model, dx: 0.37, dz: -0.21 } },
         ]) {
-          const g = Grid.from(map, [car], undefined, { dressing: false });
+          const { world, place: g } = await placeWith([car]);
           const b = parkedBody(car);
           const spec = SPECS[model].body;
           assert.ok(Math.abs(b.hx - (spec.ahead + spec.behind) / 2) < 1e-9 && Math.abs(b.hy - spec.width / 2) < 1e-9);
@@ -556,7 +579,7 @@ test("a parked car is solid to the skin of its body: either model, any angle, on
           const sa = Math.sin(b.a);
           // along it (u) and across it (v) from its middle
           const at = (u: number, v: number) => ({ x: b.x + ca * u - sa * v, y: b.y + sa * u + ca * v });
-          const where = `${model} at ${x}, ${y}, ${car.rot === undefined ? "angled" : "square"}`;
+          const where = `${model} at ${x}, ${y}, ${car.yaw === undefined ? "angled" : "square"}`;
           for (const [u, v] of [
             [0, 1],
             [0, -1],
@@ -566,7 +589,8 @@ test("a parked car is solid to the skin of its body: either model, any angle, on
           ]) {
             const skin = (d: number) => at(u * (b.hx + d), v * (b.hy + d));
             const into = skin(BODY_R - 0.05);
-            const clear = skin(BODY_R + 0.05);
+            // (Jolt's body is square, BODY_R each way: by an angled car its corner reaches √2 of it)
+            const clear = skin(BODY_R * Math.SQRT2 + 0.05);
             assert.ok(!g.fits(into.x, into.y), `${where}: a body's into it at ${u}, ${v}`);
             if (u === 0 || v === 0) assert.ok(g.fits(clear.x, clear.y), `${where}: room beside it at ${u}, ${v}`);
           }
@@ -575,13 +599,16 @@ test("a parked car is solid to the skin of its body: either model, any angle, on
           let pos = { x: p.x, y: p.y };
           for (let i = 0; i < 120; i++) pos = moveStepTo(g, pos, { x: sa, y: -ca });
           const gap = -(pos.x - b.x) * sa + (pos.y - b.y) * ca - b.hy;
-          assert.ok(gap >= BODY_R - 1e-6 && gap < BODY_R + 0.1, `${where}: stopped ${gap} from its side`);
+          // (the square body's side or corner to it, a walk's step short at most)
+          assert.ok(gap >= BODY_R - 1e-6 && gap < BODY_R * Math.SQRT2 + 0.1, `${where}: stopped ${gap} from its side`);
           // its roof: something to stand on
           const roof = g.groundAt(b.x, b.y, 2);
           assert.ok(roof > 1.3 && roof < 1.5 && g.fitsAt(b.x, b.y, roof), `${where}: its roof ${roof}`);
           // driven off: nothing there
-          const gone = Grid.from(map, [{ ...car, props: { ...car.props, driven: 1 } }], undefined, { dressing: false });
-          assert.ok(gone.fits(b.x, b.y), `${where}: driven off`);
+          const off = await placeWith([{ ...car, props: { ...car.props, driven: 1 } }]);
+          assert.ok(off.place.fits(b.x, b.y), `${where}: driven off`);
+          off.world.destroy();
+          world.destroy();
         }
   } finally {
     setOutdoors(null);
@@ -589,7 +616,7 @@ test("a parked car is solid to the skin of its body: either model, any angle, on
 });
 
 /** A walk's 1/60 s step in direction d (as the walker's moveStep takes it). */
-function moveStepTo(g: Grid, pos: { x: number; y: number }, d: { x: number; y: number }) {
+function moveStepTo(g: Collider, pos: { x: number; y: number }, d: { x: number; y: number }) {
   return moveStep(g, pos, d, 4.2, 1 / 60);
 }
 
@@ -701,7 +728,7 @@ const FLOW: FlowWorld = {
       ? { x, y: 9, z: 1, ux: 1, uy: 0, back: x - 2, ahead: 12 - x }
       : null,
 };
-const flowEnv = (grid: Grid): MoveEnv => ({ grid, footing: () => "floor", flow: FLOW });
+const flowEnv = (grid: Collider): MoveEnv => ({ grid, footing: () => "floor", flow: FLOW });
 const dash = (o: Partial<MoveInput> = {}): MoveInput => ({ ...NO_INPUT, x: 1, sprint: true, ...o });
 
 test("Flowmotion: a jump at a wall in the air kicks off it, up and back", () => {

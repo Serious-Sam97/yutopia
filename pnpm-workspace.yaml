@@ -10,3 +10,5 @@ allowBuilds:
 
 overrides:
   "@types/earcut": "3.0.0"
+  # Jolt built here with a growing heap (packages/jolt/README.md)
+  "jolt-physics": "link:./packages/jolt"

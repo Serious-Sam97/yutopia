@@ -50,7 +50,7 @@ test("the feet's footing: each floor's tile, a desk's top, a rug", async ({ page
       }
     for (const o of objs) {
       if (o.kind === "desk" && !out.desk) {
-        const [dw, dh] = (o.rot ?? 0) % 2 ? [1, 2] : [2, 1];
+        const [dw, dh] = (Math.round(o.yaw / (Math.PI / 2)) & 3 ?? 0) % 2 ? [1, 2] : [2, 1];
         const u = under(o.x + dw / 2, o.y + dh / 2, 0.64);
         if (u.on === `thing:${o.id}`) out.desk = { id: o.id, ...u };
       }

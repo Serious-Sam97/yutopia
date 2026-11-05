@@ -166,8 +166,8 @@ registerFeature((room: WorldRoom) => {
   const people = new Map<number, Survivor>(); // by user id
   const hello = new Set<string>(); // sids whose chunk listens
   const ground = () => levelMap(room.map, 0);
-  // building coords (the Grounds') of a ground-floor spot
-  const toB = (x: number, y: number) => ({ x: x + (ground()?.ox ?? 0), z: y + (ground()?.oy ?? 0) });
+  // a spot as the Grounds name it (x, z)
+  const toB = (x: number, y: number) => ({ x, z: y });
   const onLand = (p: Player) => p.level === 0 && room.gridFor(p.uid, 0).onLand(p.x, p.y);
   const inside = (bx: number, bz: number) =>
     INSIDES.some((i) => bx >= i.b.x0 && bx < i.b.x1 && bz >= i.b.z0 && bz < i.b.z1);
@@ -271,8 +271,8 @@ registerFeature((room: WorldRoom) => {
       const b = toB(x, y);
       const bank = inDeepWater(b.x, b.z) ? bankNear(b.x, b.z) : null;
       if (bank) {
-        x = bank.x - (ground()?.ox ?? 0);
-        y = bank.z - (ground()?.oy ?? 0);
+        x = bank.x;
+        y = bank.z;
       }
     }
     const d = new Drop();
@@ -314,7 +314,7 @@ registerFeature((room: WorldRoom) => {
     const all = todays(day);
     const k = room.dark?.peaceful ? 0 : nestCount(all, c.out.length);
     const want = new Set<string>();
-    const g = ground();
+    const _g = ground();
     for (let i = 0; i < k; i++) {
       const cache = all[i].cache;
       if (!cache || c.left[cache.id]?.length === 0) continue;
@@ -323,8 +323,8 @@ registerFeature((room: WorldRoom) => {
       const w = new CacheWire();
       w.id = cache.id;
       w.kind = cache.kind;
-      w.x = cache.x - (g?.ox ?? 0);
-      w.y = cache.z - (g?.oy ?? 0);
+      w.x = cache.x;
+      w.y = cache.z;
       room.state.caches.set(w.id, w);
     }
     for (const id of [...room.state.caches.keys()]) if (!want.has(id)) room.state.caches.delete(id);

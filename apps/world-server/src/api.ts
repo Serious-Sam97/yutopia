@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import type { Layout, SavedWeather, WorldObjectDef } from "@yutopia/shared";
+import type { SavedWeather, WorldObjectDef } from "@yutopia/shared";
 import type { GroundsEdits } from "@yutopia/shared/grounds-edits";
 import type { Inventory } from "@yutopia/shared/inventory";
 import type { PetOut, PetRecord } from "@yutopia/shared/pets";
@@ -30,6 +30,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   const raw = body === undefined ? "" : JSON.stringify(body);
   const ts = Math.floor(Date.now() / 1000).toString();
   const full = `/api/internal${path}`;
+  // (a network failure or a timeout counted like an error answer: most callers let it pass)
   const res = await fetch(`${config.apiInternal}${full}`, {
     method,
     headers: {
@@ -40,6 +41,9 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     },
     body: raw || undefined,
     signal: AbortSignal.timeout(8000),
+  }).catch((e: unknown) => {
+    metrics.inc("api_errors_total");
+    throw e;
   });
   if (!res.ok) metrics.inc("api_errors_total");
   if (!res.ok)
@@ -53,6 +57,8 @@ export interface WorldInfo {
   seeded: boolean;
   objects: WorldObjectDef[];
   layout?: unknown;
+  // the building as walls, slabs and rooms (shared structure/: version 4, the truth — phase 6)
+  structure?: unknown;
   playlists?: unknown; // the YouTube playlists played here (features/media.ts)
   loot?: unknown; // the Grounds' loot: spots, the night's budget, drops (features/survival.ts)
   karts?: unknown; // the Kart Park's record (features/karts.ts)
@@ -97,7 +103,6 @@ export const api = {
   adminLog: (e: { adminId: number; kind: string; targetId?: number; target?: string; detail?: string }) =>
     call<{ ok: boolean }>("POST", "/admin-log", e),
   seed: (objects: WorldObjectDef[]) => call<{ objects: WorldObjectDef[] }>("POST", "/world/seed", { objects }),
-  putLayout: (layout: Layout) => call("PUT", "/world/layout", layout),
   putPlaylists: (playlists: unknown[]) => call("PUT", "/world/playlists", { playlists }),
   putKarts: (record: unknown) => call("PUT", "/world/karts", { record }),
   putSound: (sound: {
@@ -126,6 +131,8 @@ export const api = {
     draftId?: number;
   }) => call<{ revision: { rev: number } }>("POST", "/grounds/revisions", b),
   putObject: (o: WorldObjectDef) => call<{ object: WorldObjectDef }>("PUT", "/objects", o),
+  // the building's structure, whole (docs/plan/72-the-3d-core.md, phase 6)
+  putStructure: (structure: unknown) => call("PUT", "/world/structure", { structure }),
   deleteObject: (uid: string) => call("DELETE", `/objects/${encodeURIComponent(uid)}`),
   // a cartridge someone uploaded (game room)
   game: (gameId: number) =>
@@ -141,10 +148,11 @@ export const api = {
     call<{ spawn: { x: number; y: number; level?: number | null } | null }>("GET", `/spawn/${userId}`),
   putSpawn: (userId: number, spawn: { x: number; y: number; level?: number } | null) =>
     call("PUT", `/spawn/${userId}`, { spawn }),
-  // where someone was when they last left (they come back there: docs/plan/36-the-ghost.md)
+  // where someone was when they last left (they come back there: docs/plan/36-the-ghost.md), and
+  // which way they faced (a byte, 256 a turn: shared move yawToByte)
   lastSpot: (userId: number) =>
-    call<{ spot: { x: number; y: number; level: number; d: number } | null }>("GET", `/last-spot/${userId}`),
-  putLastSpots: (spots: { user_id: number; x: number; y: number; level: number; d: number }[]) =>
+    call<{ spot: { x: number; y: number; level: number; yaw: number } | null }>("GET", `/last-spot/${userId}`),
+  putLastSpots: (spots: { user_id: number; x: number; y: number; level: number; yaw: number }[]) =>
     call("PUT", "/last-spots", { spots }),
   // who's in the world and where (the phone's contacts show it)
   presence: (people: PresenceEntry[]) => call("POST", "/presence", { people }),

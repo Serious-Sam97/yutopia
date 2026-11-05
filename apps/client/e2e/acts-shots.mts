@@ -224,9 +224,9 @@ if (process.env.PROBE) {
     const c = (window as any).__yutopia;
     const objs: any[] = [];
     c.room.state.objects.forEach((o: any) => {
-      objs.push({ id: o.id, k: o.kind, x: o.x, y: o.y, r: o.rot, p: o.props });
+      objs.push({ id: o.id, k: o.kind, x: o.x, y: o.y, r: Math.round(o.yaw / (Math.PI / 2)) & 3, p: o.props });
     });
-    return { level: c.level, map: c.map, levels: c.room.state.levels, objs };
+    return { level: c.level, map: c.map, levels: JSON.stringify(c.building.levels ?? []), objs };
   });
   writeFileSync(process.env.PROBE, JSON.stringify(r, null, 1));
   await browser.close();
@@ -318,38 +318,38 @@ const log = (what: string, v: unknown) => console.log(`  ${what}:`, JSON.stringi
 
 // the things, out on Ana's floor (her office's west of them; a partition at x 15, y 1..12)
 const PUT: Record<string, unknown>[] = [
-  { id: "acts-chair", kind: "chair", x: 10, y: 11, rot: 0 },
-  { id: "acts-armchair", kind: "armchair", x: 13, y: 11, rot: 0 },
-  { id: "acts-beanbag", kind: "beanbag", x: 7, y: 11, rot: 0 },
-  { id: "acts-sofa", kind: "sofa", x: 19, y: 11, rot: 0 },
-  { id: "acts-bench", kind: "bench", x: 24, y: 11, rot: 0 },
+  { id: "acts-chair", kind: "chair", x: 10, y: 11, yaw: 0 },
+  { id: "acts-armchair", kind: "armchair", x: 13, y: 11, yaw: 0 },
+  { id: "acts-beanbag", kind: "beanbag", x: 7, y: 11, yaw: 0 },
+  { id: "acts-sofa", kind: "sofa", x: 19, y: 11, yaw: 0 },
+  { id: "acts-bench", kind: "bench", x: 24, y: 11, yaw: 0 },
   // a desk with a computer and a keyboard, its chair (the sitter on +y, facing −y)
-  { id: "acts-desk", kind: "desk", x: 9, y: 15, rot: 2 },
-  { id: "acts-desk-chair", kind: "chair", x: 9, y: 16, rot: 2, props: { desk: true } },
-  { id: "acts-desk-pc", kind: "computer", x: 9, y: 15, rot: 2, props: { c: [1, 0], z: 25 } },
-  { id: "acts-desk-kb", kind: "tabletop", x: 9, y: 15, rot: 2, props: { d: "keyboard", c: [1, 3], z: 25 } },
+  { id: "acts-desk", kind: "desk", x: 9, y: 15, yaw: Math.PI },
+  { id: "acts-desk-chair", kind: "chair", x: 9, y: 16, yaw: Math.PI, props: { desk: true } },
+  { id: "acts-desk-pc", kind: "computer", x: 9, y: 15, yaw: Math.PI, props: { c: [1, 0], z: 0.638 } },
+  { id: "acts-desk-kb", kind: "tabletop", x: 9, y: 15, yaw: Math.PI, props: { d: "keyboard", c: [1, 3], z: 0.638 } },
   // a bare desk and its chair (sat at, nothing to type on)
-  { id: "acts-mdesk", kind: "desk", x: 13, y: 15, rot: 2 },
-  { id: "acts-mdesk-chair", kind: "chair", x: 13, y: 16, rot: 2, props: { desk: true } },
+  { id: "acts-mdesk", kind: "desk", x: 13, y: 15, yaw: Math.PI },
+  { id: "acts-mdesk-chair", kind: "chair", x: 13, y: 16, yaw: Math.PI, props: { desk: true } },
   // the reception desk (higher), a computer and a keyboard on it
-  { id: "acts-rec", kind: "reception", x: 17, y: 15, rot: 2 },
-  { id: "acts-rec-chair", kind: "chair", x: 18, y: 16, rot: 2, props: { desk: true } },
-  { id: "acts-rec-pc", kind: "computer", x: 18, y: 15, rot: 2, props: { c: [1, 0], z: 29 } },
-  { id: "acts-rec-kb", kind: "tabletop", x: 18, y: 15, rot: 2, props: { d: "keyboard", c: [1, 3], z: 29 } },
+  { id: "acts-rec", kind: "reception", x: 17, y: 15, yaw: Math.PI },
+  { id: "acts-rec-chair", kind: "chair", x: 18, y: 16, yaw: Math.PI, props: { desk: true } },
+  { id: "acts-rec-pc", kind: "computer", x: 18, y: 15, yaw: Math.PI, props: { c: [1, 0], z: 0.74 } },
+  { id: "acts-rec-kb", kind: "tabletop", x: 18, y: 15, yaw: Math.PI, props: { d: "keyboard", c: [1, 3], z: 0.74 } },
   // a desk with no chair: the computer used stood
-  { id: "acts-sdesk", kind: "desk", x: 22, y: 15, rot: 2 },
-  { id: "acts-sdesk-pc", kind: "computer", x: 22, y: 15, rot: 2, props: { c: [1, 0], z: 25 } },
-  { id: "acts-sdesk-kb", kind: "tabletop", x: 22, y: 15, rot: 2, props: { d: "keyboard", c: [1, 3], z: 25 } },
-  { id: "acts-counter", kind: "counter", x: 4, y: 12, rot: 0 },
-  { id: "acts-coffee", kind: "coffee_machine", x: 4, y: 12, rot: 0, props: { c: [0, 1], z: 26 } },
-  { id: "acts-water", kind: "water_cooler", x: 9, y: 20, rot: 0 },
-  { id: "acts-vending", kind: "vending", x: 12, y: 20, rot: 0 },
-  { id: "acts-arcade", kind: "arcade", x: 15, y: 19, rot: 0 },
-  { id: "acts-piano", kind: "piano", x: 19, y: 19, rot: 0 },
-  { id: "acts-slot", kind: "slot_track", x: 23, y: 19, rot: 0 },
-  { id: "acts-pool", kind: "pool_table", x: 27, y: 14, rot: 0 },
-  { id: "acts-pong", kind: "pingpong_table", x: 27, y: 7, rot: 0 },
-  { id: "acts-wb", kind: "whiteboard", x: 12, y: 0, rot: 0 },
+  { id: "acts-sdesk", kind: "desk", x: 22, y: 15, yaw: Math.PI },
+  { id: "acts-sdesk-pc", kind: "computer", x: 22, y: 15, yaw: Math.PI, props: { c: [1, 0], z: 0.638 } },
+  { id: "acts-sdesk-kb", kind: "tabletop", x: 22, y: 15, yaw: Math.PI, props: { d: "keyboard", c: [1, 3], z: 0.638 } },
+  { id: "acts-counter", kind: "counter", x: 4, y: 12, yaw: 0 },
+  { id: "acts-coffee", kind: "coffee_machine", x: 4, y: 12, yaw: 0, props: { c: [0, 1], z: 26 } },
+  { id: "acts-water", kind: "water_cooler", x: 9, y: 20, yaw: 0 },
+  { id: "acts-vending", kind: "vending", x: 12, y: 20, yaw: 0 },
+  { id: "acts-arcade", kind: "arcade", x: 15, y: 19, yaw: 0 },
+  { id: "acts-piano", kind: "piano", x: 19, y: 19, yaw: 0 },
+  { id: "acts-slot", kind: "slot_track", x: 23, y: 19, yaw: 0 },
+  { id: "acts-pool", kind: "pool_table", x: 27, y: 14, yaw: 0 },
+  { id: "acts-pong", kind: "pingpong_table", x: 27, y: 7, yaw: 0 },
+  { id: "acts-wb", kind: "whiteboard", x: 12, y: 0, yaw: 0 },
 ];
 
 // the still pair (and more) for someone sat or busy, settled
@@ -577,7 +577,7 @@ try {
   // ── the Kart Park: a bench by the fire, a seat up the stands ──
   if (want("park")) {
     const seats = kartSeats();
-    const G = (x: number, z: number) => ({ x: x + 60, y: z + 10 });
+    const G = (x: number, z: number) => ({ x, y: z });
     const bench = seats.findIndex((s) => s.stand === undefined && Math.abs(Math.sin(s.a)) > 0.5);
     const st = KART_STANDS[0];
     const mid = (st.x0 + st.x1) / 2;
@@ -641,8 +641,8 @@ try {
       c.room.state.objects.forEach((o) => {
         const p = JSON.parse(o.props);
         if (o.kind !== "car" || p.driven || p.model === "offroad" || p.role === "show" || p.owner || p.retire) return;
-        const w = o.rot % 2 ? 2 : 5, h = o.rot % 2 ? 5 : 2;
-        cars.push({ id: o.id, x: o.x + w / 2 + (p.dx ?? 0), y: o.y + h / 2 + (p.dz ?? 0), a: Math.PI + (o.rot % 4) * (Math.PI / 2) });
+        const w = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 2 : 5, h = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 5 : 2;
+        cars.push({ id: o.id, x: o.x + w / 2 + (p.dx ?? 0), y: o.y + h / 2 + (p.dz ?? 0), a: Math.PI + ((Math.round(o.yaw / (Math.PI / 2)) & 3) % 4) * (Math.PI / 2) });
       });
       return cars.find((k) => k.id === "car-4") ?? cars[0];
     `);

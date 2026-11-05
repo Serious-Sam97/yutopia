@@ -1,4 +1,4 @@
-import type { Grid, MapDef, WorldObjectDef } from "@yutopia/shared";
+import { levelMap, liftShafts, type MapDef, shaftAt, type WorldObjectDef } from "@yutopia/shared";
 import { CHUNK, hasChunk, iceHolesNow, onGroundsChanged, underfoot } from "@yutopia/shared/grounds";
 import type { Collider, FlowWorld, Mover } from "@yutopia/shared/move";
 import {
@@ -8,15 +8,18 @@ import {
   type Frame,
   GroundsFlow,
   groundsThingAt,
-  JoltCollider,
   loadJolt,
   PhysicsWorld,
+  Place,
   passKeys,
   sizesFor,
+  slabsOf,
   staticCount,
   type Through,
   WorldBuilder,
 } from "@yutopia/shared/physics";
+import type { Solid3 } from "@yutopia/shared/shapes";
+import type { Structure } from "@yutopia/shared/structure";
 import { BufferGeometry, Float32BufferAttribute, LineBasicMaterial, LineSegments, type Scene } from "three";
 
 // The browser's physics world (docs/plan/50-the-volume.md): Jolt, built from the same data as the
@@ -36,7 +39,7 @@ const MOVED = 6; // m you go before it's drawn again
 
 export interface PhysicsSource {
   /** the building (the home floor, carrying the others) and every thing in it */
-  world(): { building: MapDef; objects: WorldObjectDef[] };
+  world(): { building: MapDef; objects: WorldObjectDef[]; structure?: Structure | null };
   /** where you are, the building's coords */
   at(): { x: number; z: number };
   /** a floor's place in the building */
@@ -61,7 +64,10 @@ export class BrowserPhysics {
   private readonly flow: GroundsFlow;
   private level = 0;
   private through: Through = { mask: "all", pass: null };
-  private land: Grid | null = null;
+  private land: Place | null = null;
+  // the places asked for lately, by who, which floor and how (made again when the building changes)
+  private places = new Map<string, Place>();
+  private placesOf: unknown = null;
   // the chunks changed since they were built here (made again when their land is)
   private readonly stale = new Set<string>();
   private readonly offChanged: () => void;
@@ -114,8 +120,8 @@ export class BrowserPhysics {
     return this.world.rayHit(x - f.x, y - f.y, z - f.z, dx, dy, dz, max, "sight");
   }
   static async start(scene: Scene, src: PhysicsSource): Promise<BrowserPhysics> {
-    const { building, objects } = src.world();
-    const solids = buildingSolids(building, objects);
+    const { building, objects, structure } = src.world();
+    const solids = buildingSolids(building, objects, structure ?? undefined);
     const chunks = (2 * KEEP + 1) ** 2 + (2 * RING + 1) ** 2; // (round you, those kept, a jump's worth)
     const world = await PhysicsWorld.create(
       loadJolt,
@@ -129,12 +135,12 @@ export class BrowserPhysics {
 
   // the building as it is now (an edit: only what changed made again)
   private keepUp(): number {
-    const { building, objects } = this.src.world();
+    const { building, objects, structure } = this.src.world();
     // (a wall built or taken away is the map's: it too)
     if (objects === this.seen && building === this.seenMap) return 0;
     this.seen = objects;
     this.seenMap = building;
-    this.solids = buildingSolids(building, objects);
+    this.solids = buildingSolids(building, objects, structure ?? undefined);
     this.flow.building(this.solids.flow);
     const made = this.build.building(this.solids);
     return made.made + made.removed;
@@ -176,40 +182,87 @@ export class BrowserPhysics {
   /** My body on it: the walker's mover and questions, on `level` (my floor's grid saying where the
    *  stairs and the land are), `uid` through my own locked doors, `clip` through walls (an
    *  admin's power: flying, `fly`, through the floors and ceilings too). */
+  /** A floor's questions on this world for someone (shared physics Place): through their own
+   *  locked doors; `clip` through walls (an admin's power: flying, `fly`, through floors too). */
+  place(uid: number | null, level: number, clip = false, fly = false): Place {
+    this.keepUp();
+    if (this.placesOf !== this.seen) {
+      this.places.clear();
+      this.placesOf = this.seen;
+    }
+    const mask = clip ? (fly ? "ghost" : "clip") : "all";
+    const key = `${uid}|${level}|${mask}`;
+    let p = this.places.get(key);
+    if (!p) {
+      const { building, objects } = this.src.world();
+      const through: Through = { mask, pass: this.world.pass(passKeys(this.solids, uid)) };
+      p = new Place(this.world, levelMap(building, level) ?? building, objects, through);
+      this.places.set(key, p);
+    }
+    return p;
+  }
+
+  /** My body on it: the walker's mover and questions, on `level`, `uid` through my own locked
+   *  doors, `clip` through walls (an admin's power: flying, `fly`, through the floors and ceilings
+   *  too). */
   body(
     uid: number | null,
     level: number,
     clip: boolean,
-    grid: Grid,
     fly = false,
   ): { collider: Collider; mover: Mover; flow: FlowWorld } {
-    this.keepUp();
+    const place = this.place(uid, level, clip, fly);
     this.level = level;
-    this.land = grid;
-    const mask = clip ? (fly ? "ghost" : "clip") : "all";
-    this.through = { mask, pass: this.world.pass(passKeys(this.solids, uid)) };
-    return {
-      collider: new JoltCollider(this.world, grid, this.src.frameOf(level), this.through),
-      mover: this.mover,
-      flow: this.flow,
-    };
+    this.land = place;
+    this.through = place.through;
+    return { collider: place, mover: this.mover, flow: this.flow };
   }
 
-  /** What's under (x, y) on `level`'s floor from z down (its own coords): the land or the top of
-   *  anything there — a roof, a wall's top — as the move core stands on it (the grid knows only the
-   *  land and its floor: up on a roof it'd say the land below). */
-  groundUnder(grid: Grid, level: number, x: number, y: number, z: number): number {
-    return new JoltCollider(this.world, grid, this.src.frameOf(level)).groundAt(x, y, z);
+  /** Floor `level` has a floor under (x, y): its slab, the stairs' treads up into its well, or a
+   *  lift's shaft it goes through (shared physics slabsOf — the floor from the slab under you). */
+  slabUnder(level: number, x: number, y: number): boolean {
+    this.keepUp();
+    if (this.slabsFor !== this.seen) {
+      const { building } = this.src.world();
+      const seen = this.seen;
+      this.slabs = slabsOf(
+        this.world,
+        (id) => seen.some((o) => o.id === id && o.kind === "stairs"),
+        shaftAt(liftShafts(seen, building)),
+      );
+      this.slabsFor = seen;
+    }
+    return this.slabs?.(level, { x, y }) ?? false;
+  }
+  private slabs: ReturnType<typeof slabsOf> | null = null;
+  private slabsFor: unknown = null;
+
+  /** The lifts' cars where they are now (shared physics liftCarBody): moved there, whoever stands
+   *  on one with it (docs/plan/72 phase 8); a shaft gone, its car with it. */
+  setLifts(cars: { key: string; solids: Solid3[]; at: [number, number, number] }[]): void {
+    if (this.dead) return;
+    const keep = new Set<string>();
+    for (const c of cars) {
+      keep.add(c.key);
+      this.world.setCarrier(c.key, c.solids, ...c.at);
+    }
+    for (const k of [...this.world.carrierKeys()]) if (!keep.has(k)) this.world.removeCarrier(k);
+  }
+
+  /** What's under (x, y) on `level`'s floor from z down: the land or the top of anything there — a
+   *  roof, a wall's top — as the move core stands on it. */
+  groundUnder(level: number, x: number, y: number, z: number): number {
+    return this.place(null, level).groundAt(x, y, z);
   }
 
   /** What's under (x, y) from z down on `level`, as groundUnder finds it, and what it is (the steps':
    *  docs/plan/63-the-steps.md) — "land", Jolt's key for it (`thing:id`, `slab:L:…`, `car:id`…), a
    *  Grounds chunk's thing by its kind (`grounds:roof`); "" where Jolt can't say yet. */
-  underfoot(grid: Grid, level: number, x: number, y: number, z: number): { g: number; on: string } {
+  underfoot(level: number, x: number, y: number, z: number): { g: number; on: string } {
     const f = this.src.frameOf(level);
-    const u = new JoltCollider(this.world, grid, f).underfoot(x, y, z);
+    const u = this.place(null, level).underfoot(x, y, z);
     if (!u.on.startsWith("grounds:")) return u;
-    const what = groundsThingAt(u.on, f.ox + x, f.oy + y, f.elev + u.g);
+    const what = groundsThingAt(u.on, x, y, f.elev + u.g);
     return { g: u.g, on: what ? `grounds:${what}` : "land" };
   }
 

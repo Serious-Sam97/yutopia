@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { Grid } from "../grid.ts";
+import { blankMap } from "../map-edit.ts";
 import {
   type Body,
   KH_FEEL,
@@ -15,8 +15,9 @@ import {
   type WaterHere,
 } from "../move/index.ts";
 import { box3 } from "../shapes/index.ts";
-import { CharacterMover, type Frame, JoltCollider } from "./body.ts";
+import { CharacterMover, type Frame } from "./body.ts";
 import { loadJolt } from "./load.ts";
+import { Place } from "./place.ts";
 import { PhysicsWorld, sizesFor } from "./world.ts";
 
 // The swimming (docs/plan/66-the-water.md, phase 2) on Jolt: a pool in a pad — the land at 0, the
@@ -29,7 +30,7 @@ afterEach(() => {
 });
 
 const LEVEL = -0.2;
-const FRAME: Frame = { ox: 0, oy: 0, elev: 0 };
+const FRAME: Frame = { elev: 0 };
 async function pool(current = 0) {
   const world = await PhysicsWorld.create(loadJolt, sizesFor({ statics: 64 }));
   worlds.push(world);
@@ -45,10 +46,7 @@ async function pool(current = 0) {
     "floor",
   );
   world.settle();
-  const grid = new Grid(40, 12);
-  grid.walk.fill(1);
-  grid.top.fill(0);
-  const collider = new JoltCollider(world, grid, FRAME);
+  const collider = new Place(world, blankMap("pad", "pad", 40, 12), []);
   const mover = new CharacterMover(world, () => FRAME);
   const water = (x: number): WaterHere | null =>
     x >= 10 && x < 30

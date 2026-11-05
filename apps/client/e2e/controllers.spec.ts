@@ -143,14 +143,14 @@ test("controllers: rebind on a fake pad, the analog switch, pad 2's stick throug
         id: tvId,
         kind: "crt_tv",
         ...p,
-        rot: 0,
+        yaw: 0,
       });
       await ana.evaluate((q) => (window as any).__yutopia.send("obj:put", q), {
         id: conId,
         kind: "console_ps1",
         x: p.x + 1,
         y: p.y + 2,
-        rot: 0,
+        yaw: 0,
         props: { tv: tvId },
       });
       await ana.waitForTimeout(800);

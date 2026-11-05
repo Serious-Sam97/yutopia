@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
+import { quarterOf } from "../catalog.ts";
 import { kindFooting } from "../footing.ts";
-import { Grid, ZPX_TILE } from "../grid.ts";
 import { onLevel } from "../levels.ts";
 import { tileAt } from "../map.ts";
+import { blankMap } from "../map-edit.ts";
 import { box3 } from "../shapes/index.ts";
-import { type Frame, JoltCollider } from "./body.ts";
+import type { Frame } from "./body.ts";
 import { loadJolt } from "./load.ts";
+import { Place } from "./place.ts";
 import { PhysicsWorld, sizesFor } from "./world.ts";
 
 // What the feet stand on, as Jolt has it (docs/plan/63-the-steps.md, phase 1): the top under them
@@ -16,7 +18,7 @@ const worlds: PhysicsWorld[] = [];
 afterEach(() => {
   for (const w of worlds.splice(0)) w.destroy();
 });
-const FRAME: Frame = { ox: 0, oy: 0, elev: 0 };
+const _FRAME: Frame = { elev: 0 };
 
 async function pad() {
   const world = await PhysicsWorld.create(loadJolt, sizesFor({ statics: 16 }));
@@ -25,10 +27,7 @@ async function pad() {
   world.setStatic("thing:d1", [box3(2, 2, 4, 3, 0, 0.64)]);
   world.setVehicle("car:c1", box3(10, 2, 14.4, 3.8, 0, 1.43));
   world.settle();
-  const grid = new Grid(20, 10);
-  grid.walk.fill(1);
-  grid.top.fill(0);
-  return { world, at: new JoltCollider(world, grid, FRAME) };
+  return { world, at: new Place(world, blankMap("pad", "pad", 20, 10), []) };
 }
 
 test("the floor, a desk's top, a parked car's roof: each named, at the feet's height", async () => {
@@ -72,15 +71,17 @@ test("the HQ: a desk stood on is the desk; the floor beside it its tile", async 
   const { studio } = await import("../maps/studio.ts");
   const { openingsIntoWalls } = await import("../openings.ts");
   const { splitAll } = await import("../tops.ts");
-  const { elevOf, levelMap, offsetOf } = await import("../levels.ts");
+  const { levelMap } = await import("../levels.ts");
   const { standHeight } = await import("../catalog.ts");
   const { buildingSolids, WorldBuilder } = await import("./build.ts");
   const into = openingsIntoWalls(studio, splitAll(studio.objects).objects);
   const cb = campusBuilding(into.map, into.objects);
   assert.ok(cb);
-  const map = cb.map;
+  // (in the world's frame, as the game has it: structure/fold.ts)
+  const { foldMap, foldThing } = await import("../structure/fold.ts");
   const moved = new Map(cb.moved.map((o) => [o.id, o]));
-  const objects = [...into.objects.map((o) => moved.get(o.id) ?? o), ...cb.add];
+  const objects = [...into.objects.map((o) => moved.get(o.id) ?? o), ...cb.add].map((o) => foldThing(cb.map, o));
+  const map = foldMap(cb.map);
   const b = buildingSolids(map, objects);
   const world = await PhysicsWorld.create(loadJolt, sizesFor({ statics: b.statics.size }));
   worlds.push(world);
@@ -89,11 +90,10 @@ test("the HQ: a desk stood on is the desk; the floor beside it its tile", async 
   const lm = levelMap(map, 0) ?? map;
   const desk = onLevel(objects, lm).find((o) => o.kind === "desk");
   assert.ok(desk, "a desk on the ground floor");
-  const o = offsetOf(map, 0);
-  const at = new JoltCollider(world, Grid.from(lm, objects), { ox: o.x, oy: o.y, elev: elevOf(0) });
-  const top = (standHeight("desk") ?? 0) / ZPX_TILE;
+  const at = new Place(world, lm, objects);
+  const top = standHeight("desk") ?? 0;
   // (its footprint's middle: a desk is 2 × 1, turned by rot)
-  const [w, h] = (desk.rot ?? 0) % 2 ? [1, 2] : [2, 1];
+  const [w, h] = quarterOf(desk) % 2 ? [1, 2] : [2, 1];
   const on = at.underfoot(desk.x + w / 2, desk.y + h / 2, top);
   assert.equal(on.on, `thing:${desk.id}`);
   assert.equal(kindFooting("desk"), "wood");

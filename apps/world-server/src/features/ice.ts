@@ -21,9 +21,9 @@ registerFeature((room: WorldRoom) => {
     const x = Number(m?.x);
     const z = Number(m?.z);
     if (!p || p.level !== 0 || !Number.isFinite(x) || !Number.isFinite(z)) return;
-    const g = levelMap(room.map, 0);
+    const _g = levelMap(room.map, 0);
     // (where they are, as the Grounds have it: within a step of where they say)
-    if (Math.hypot(p.x + (g?.ox ?? 0) - x, p.y + (g?.oy ?? 0) - z) > 3) return;
+    if (Math.hypot(p.x - x, p.y - z) > 3) return;
     if (!iceAt(x, z)?.thin) return;
     if (holes.some((h) => Math.hypot(h.x - x, h.z - z) < h.r)) return;
     holes = [...holes, { x, z, r: ICE_HOLE.r, at: Date.now() }].slice(-ICE_HOLE.most);

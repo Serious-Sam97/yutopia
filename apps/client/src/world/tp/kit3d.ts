@@ -1,3 +1,4 @@
+import { ART_PX } from "@yutopia/shared/units";
 import { Color, CylinderGeometry, ShapeUtils, Vector2 } from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { type Draw, type Face, INK, type Mat, mixc, type Pt, Sketch, sh, type V3 } from "../art/items/kit";
@@ -8,13 +9,14 @@ import { type Draw, type Face, INK, type Mat, mixc, type Pt, Sketch, sh, type V3
 // free-hand SVG (`raw`: leaves, glows, screen content) becomes a camera-facing
 // card cut from the iso drawing.
 //
-// Units: x/y in tiles; heights come in iso px and are turned into tiles with
-// ZPX (the iso camera looks down 30°, so a px of height is 1/cos 30° of a px of
-// ground, and a tile edge is 45.25 px long).
+// Units: x/y in metres; the item drawings' heights come in the old art's px and
+// are turned into metres here, at the art's edge (shared units.ts ART_PX: the
+// iso camera looked down 30°, so a px of height was 1/cos 30° of a px of ground,
+// and a tile edge 45.25 px long). Nothing outside the item art measures in px.
 
-export const LPX = 45.25; // iso px per tile of horizontal length
-export const ZPX = LPX * Math.cos(Math.PI / 6); // iso px of height per tile (39.19)
-export const zt = (z: number) => z / ZPX;
+const LPX = 45.25; // the art's px per metre of horizontal length
+const ZPX = ART_PX; // …of height (39.19)
+const zt = (z: number) => z / ZPX;
 
 const EPS = 0.02;
 

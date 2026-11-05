@@ -1,5 +1,5 @@
 import { canPlace } from "./build.ts";
-import { entry, placedFootprint, type WorldObjectDef } from "./catalog.ts";
+import { entry, placedFootprint, quarterYaw, type WorldObjectDef } from "./catalog.ts";
 import { hangEdges, hangOf } from "./hang.ts";
 import type { Point } from "./iso.ts";
 import { atLevel, floorOf, onLevel } from "./levels.ts";
@@ -180,7 +180,7 @@ export function furnishRoom(
   let n = 0;
   const put = (kind: string, x: number, y: number, rot = 0, props: Record<string, unknown> = {}): boolean => {
     const o = atLevel(
-      { id: `${a.key}-${plan}-${level}${tag && `-${tag}`}-${n++}`, kind, x, y, rot, props },
+      { id: `${a.key}-${plan}-${level}${tag && `-${tag}`}-${n++}`, kind, x, y, yaw: quarterYaw(rot), props },
       level,
       map,
     );
@@ -222,7 +222,7 @@ export function furnishRoom(
   };
   /** A piece's w × h (turned) inside the room's walkway-edged rectangle. */
   const fits = (kind: string, x: number, y: number, rot = 0) => {
-    const { w, h } = placedFootprint({ kind, rot });
+    const { w, h } = placedFootprint({ kind, yaw: quarterYaw(rot) });
     return x >= x0 && y >= y0 && x + w <= x1 && y + h <= y1;
   };
   if (W < 2 || H < 2) return [];

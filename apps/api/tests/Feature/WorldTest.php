@@ -61,7 +61,7 @@ it('hands the world-server the one world, created on first ask', function () {
 it('furnishes the world once', function () {
     $objects = [
         ['id' => 'wall-a', 'kind' => 'board_wall', 'x' => 3, 'y' => 1],
-        ['id' => 'desk-1', 'kind' => 'desk', 'x' => 4, 'y' => 5, 'rot' => 1, 'props' => ['label' => 'A']],
+        ['id' => 'desk-1', 'kind' => 'desk', 'x' => 4, 'y' => 5, 'yaw' => M_PI / 2, 'props' => ['label' => 'A']],
     ];
 
     $res = internalCall($this, 'POST', '/api/internal/world/seed', ['objects' => $objects])->assertOk();
@@ -72,7 +72,7 @@ it('furnishes the world once', function () {
     $show = internalCall($this, 'GET', '/api/internal/world')->assertOk();
     expect($show->json('seeded'))->toBeTrue()
         ->and($show->json('objects'))->toHaveCount(2)
-        ->and(collect($show->json('objects'))->firstWhere('id', 'desk-1')['x'])->toBe(4);
+        ->and(collect($show->json('objects'))->firstWhere('id', 'desk-1')['x'])->toEqual(4);
 });
 
 it('keeps a TV\'s and a radio\'s media with their objects', function () {
@@ -97,8 +97,8 @@ it('keeps the playlists played in the world', function () {
 
 it('moves and deletes objects from build mode', function () {
     internalCall($this, 'PUT', '/api/internal/objects', ['id' => 'plant-1', 'kind' => 'plant', 'x' => 2, 'y' => 3])->assertOk();
-    internalCall($this, 'PUT', '/api/internal/objects', ['id' => 'plant-1', 'kind' => 'plant', 'x' => 5, 'y' => 3, 'rot' => 2])
-        ->assertJsonPath('object.x', 5)->assertJsonPath('object.rot', 2);
+    internalCall($this, 'PUT', '/api/internal/objects', ['id' => 'plant-1', 'kind' => 'plant', 'x' => 5, 'y' => 3, 'yaw' => M_PI])
+        ->assertJsonPath('object.x', 5.0)->assertJsonPath('object.yaw', M_PI);
     internalCall($this, 'DELETE', '/api/internal/objects/plant-1')->assertOk();
 
     expect(WorldObject::count())->toBe(0);
@@ -148,19 +148,19 @@ it('keeps where each person last was, out on the Grounds too, for coming back th
     $put = fn (array $spots) => internalCall($this, 'PUT', '/api/internal/last-spots', ['spots' => $spots]);
 
     expect($get($ana))->toBeNull();
-    $put([['user_id' => $ana->id, 'x' => 12.5, 'y' => 7.5, 'level' => 4, 'd' => 3]])->assertOk();
-    expect($get($ana))->toEqual(['x' => 12.5, 'y' => 7.5, 'level' => 4, 'd' => 3]);
+    $put([['user_id' => $ana->id, 'x' => 12.5, 'y' => 7.5, 'level' => 4, 'yaw' => 128]])->assertOk();
+    expect($get($ana))->toEqual(['x' => 12.5, 'y' => 7.5, 'level' => 4, 'yaw' => 128]);
     // everyone at once (now and then), out on the land, someone unknown skipped; the newest wins
     $put([
-        ['user_id' => $ana->id, 'x' => -310.5, 'y' => -88.25, 'level' => 0, 'd' => 6],
-        ['user_id' => $bia->id, 'x' => 30.5, 'y' => 20.5, 'level' => 2, 'd' => 0],
-        ['user_id' => 999999, 'x' => 1, 'y' => 1, 'level' => 0, 'd' => 0],
+        ['user_id' => $ana->id, 'x' => -310.5, 'y' => -88.25, 'level' => 0, 'yaw' => 224],
+        ['user_id' => $bia->id, 'x' => 30.5, 'y' => 20.5, 'level' => 2, 'yaw' => 32],
+        ['user_id' => 999999, 'x' => 1, 'y' => 1, 'level' => 0, 'yaw' => 0],
     ])->assertOk()->assertJson(['saved' => 2]);
-    expect($get($ana))->toEqual(['x' => -310.5, 'y' => -88.25, 'level' => 0, 'd' => 6])
-        ->and($get($bia))->toEqual(['x' => 30.5, 'y' => 20.5, 'level' => 2, 'd' => 0])
+    expect($get($ana))->toEqual(['x' => -310.5, 'y' => -88.25, 'level' => 0, 'yaw' => 224])
+        ->and($get($bia))->toEqual(['x' => 30.5, 'y' => 20.5, 'level' => 2, 'yaw' => 32])
         ->and(LastSpot::count())->toBe(2);
-    $put([['user_id' => $ana->id, 'x' => 5000, 'y' => 1, 'level' => 0, 'd' => 0]])->assertStatus(422);
-    $put([['user_id' => $ana->id, 'x' => 1, 'y' => 1, 'level' => 0, 'd' => 9]])->assertStatus(422);
+    $put([['user_id' => $ana->id, 'x' => 5000, 'y' => 1, 'level' => 0, 'yaw' => 0]])->assertStatus(422);
+    $put([['user_id' => $ana->id, 'x' => 1, 'y' => 1, 'level' => 0, 'yaw' => 300]])->assertStatus(422);
 });
 
 it('keeps who is in the world for the phone', function () {
@@ -272,9 +272,9 @@ it('keeps my build setups: save, list, delete — mine only, checked', function 
     $ana = User::factory()->create();
     $bea = User::factory()->create();
     $desk = ['name' => 'My desk', 'items' => [
-        ['kind' => 'desk', 'dx' => 0, 'dy' => 0, 'rot' => 0, 'props' => ['variant' => 2]],
-        ['kind' => 'tabletop', 'dx' => 0, 'dy' => 0, 'rot' => 0, 'props' => ['d' => 'monitor', 'c' => [1, 1]]],
-        ['kind' => 'chair', 'dx' => 0, 'dy' => 1, 'rot' => 2],
+        ['kind' => 'desk', 'dx' => 0, 'dy' => 0, 'yaw' => 0, 'props' => ['variant' => 2]],
+        ['kind' => 'tabletop', 'dx' => 0, 'dy' => 0, 'yaw' => 0, 'props' => ['d' => 'monitor', 'c' => [1, 1]]],
+        ['kind' => 'chair', 'dx' => 0, 'dy' => 1, 'yaw' => M_PI],
     ]];
     $id = $this->actingAs($ana)->postJson('/api/setups', $desk)->assertCreated()->assertJsonPath('setup.name', 'My desk')->json('setup.id');
     $this->actingAs($ana)->getJson('/api/setups')->assertOk()
@@ -282,9 +282,9 @@ it('keeps my build setups: save, list, delete — mine only, checked', function 
     $this->actingAs($bea)->getJson('/api/setups')->assertJsonCount(0, 'setups');
     $this->actingAs($bea)->deleteJson("/api/setups/{$id}")->assertNotFound();
     $this->actingAs($ana)->postJson('/api/setups', ['name' => 'x', 'items' => []])->assertUnprocessable();
-    $this->actingAs($ana)->postJson('/api/setups', ['name' => 'x', 'items' => [['kind' => 'desk', 'dx' => -1, 'dy' => 0, 'rot' => 0]]])->assertUnprocessable();
-    $this->actingAs($ana)->postJson('/api/setups', ['name' => 'x', 'items' => [['kind' => 'desk', 'dx' => 0, 'dy' => 0, 'rot' => 4]]])->assertUnprocessable();
-    $this->actingAs($ana)->postJson('/api/setups', ['name' => 'x', 'items' => [['kind' => '<b>', 'dx' => 0, 'dy' => 0, 'rot' => 0]]])->assertUnprocessable();
+    $this->actingAs($ana)->postJson('/api/setups', ['name' => 'x', 'items' => [['kind' => 'desk', 'dx' => -1, 'dy' => 0, 'yaw' => 0]]])->assertUnprocessable();
+    $this->actingAs($ana)->postJson('/api/setups', ['name' => 'x', 'items' => [['kind' => 'desk', 'dx' => 0, 'dy' => 0, 'yaw' => 8]]])->assertUnprocessable();
+    $this->actingAs($ana)->postJson('/api/setups', ['name' => 'x', 'items' => [['kind' => '<b>', 'dx' => 0, 'dy' => 0, 'yaw' => 0]]])->assertUnprocessable();
     $this->actingAs($ana)->deleteJson("/api/setups/{$id}")->assertOk();
     $this->actingAs($ana)->getJson('/api/setups')->assertJsonCount(0, 'setups');
 });
@@ -461,4 +461,14 @@ it('keeps the Kart Park\'s record', function () {
     // (the playlists beside it untouched, and it beside them)
     internalCall($this, 'PUT', '/api/internal/world/playlists', ['playlists' => [['list' => 'PL1']]])->assertOk();
     expect(internalCall($this, 'GET', '/api/internal/world')->json('karts.best.t'))->toBe(33450);
+});
+
+it('keeps the building\'s structure the world-server sends, checked for its shape', function () {
+    $s = ['version' => 4, 'key' => 'studio', 'name' => 'Studio', 'home' => 0, 'spawn' => [3.5, 4.5],
+        'floors' => [['index' => 0, 'name' => 'Studio', 'z' => 0, 'grid' => ['x0' => 0, 'y0' => 0, 'w' => 16, 'h' => 16]]],
+        'slabs' => [], 'walls' => [], 'rooms' => []];
+    internalCall($this, 'PUT', '/api/internal/world/structure', ['structure' => $s])->assertOk();
+    internalCall($this, 'GET', '/api/internal/world')->assertOk()->assertJsonPath('structure.spawn', [3.5, 4.5]);
+    internalCall($this, 'PUT', '/api/internal/world/structure', ['structure' => [...$s, 'version' => 3]])->assertStatus(422);
+    internalCall($this, 'PUT', '/api/internal/world/structure', ['structure' => [...$s, 'floors' => []]])->assertStatus(422);
 });

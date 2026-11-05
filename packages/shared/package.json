@@ -8,6 +8,12 @@
   "exports": {
     ".": "./src/index.ts",
     "./slotcar": "./src/slotcar.ts",
+    "./units": "./src/units.ts",
+    "./facing": "./src/facing.ts",
+    "./structure": "./src/structure/index.ts",
+    "./structure/finish": "./src/structure/finish.ts",
+    "./structure/fold": "./src/structure/fold.ts",
+    "./nav": "./src/nav/index.ts",
     "./office": "./src/office.ts",
     "./glyphs": "./src/glyphs.ts",
     "./christmas": "./src/christmas.ts",
@@ -59,6 +65,8 @@
     "./shapes": "./src/shapes/index.ts",
     "./shapes/grounds": "./src/shapes/grounds.ts",
     "./physics": "./src/physics/index.ts",
+    "./physics/place": "./src/physics/place.ts",
+    "./physics/structure-solids": "./src/physics/structure-solids.ts",
     "./reach": "./src/reach.ts"
   },
   "scripts": {
@@ -66,11 +74,12 @@
     "test": "tsx --test 'src/**/*.test.ts'"
   },
   "dependencies": {
-    "jolt-physics": "1.1.1"
+    "jolt-physics": "1.1.1",
+    "recast-navigation": "0.44.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.2",
     "@types/node": "^20",
-    "tsx": "^4.20.0"
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.2"
   }
 }

@@ -1,20 +1,20 @@
+import { crossings } from "@yutopia/shared/physics/structure-solids";
+import type { Structure } from "@yutopia/shared/structure";
 // (first: the fog chunks swapped before anything below makes a material — fog3d.ts)
 import "./fog3d";
 import {
   across,
   cutsSig,
-  EMOTES,
-  type Emote,
   elevOf,
   entry,
   floorOf,
   floorsOf,
-  type Grid,
   HANDS_AT,
   hangSpot,
   homeOf,
   hostWorld,
   isFloor,
+  isWindow,
   KEYBOARD_TOP,
   levelMap,
   liftFloorName,
@@ -26,34 +26,21 @@ import {
   PIANO_STOOL,
   type Point,
   placedFootprint,
-  rimeAt,
   SEAT_SPEC,
-  STAIRS_D,
   STOREY,
-  spDay,
   surfaceAt,
   tileAt,
   topCentre,
-  WANTS,
-  type Want,
   type WorldObjectDef,
   wallCuts,
   wellsOf,
 } from "@yutopia/shared";
-import { AIM_BLADE, BEAM, type Beam, beamAt, beamOf } from "@yutopia/shared/beam";
-import {
-  LAMPS as GROUND_LAMPS,
-  KART_LAND,
-  type StreetThing,
-  standLights,
-  terrainAt,
-  waterAt,
-} from "@yutopia/shared/grounds";
-import { LONG_ROAD } from "@yutopia/shared/longroad";
+import { BEAM, type Beam, beamOf } from "@yutopia/shared/beam";
+import { type StreetThing, terrainAt } from "@yutopia/shared/grounds";
 import { ALOFT, KH_MOVE, MV_AIM } from "@yutopia/shared/move";
+import { localThing, localView } from "@yutopia/shared/structure/fold";
 import {
   AdditiveBlending,
-  Box3,
   BoxGeometry,
   BufferGeometry,
   type Camera,
@@ -68,9 +55,6 @@ import {
   Frustum,
   Group,
   HemisphereLight,
-  InstancedBufferAttribute,
-  InstancedMesh,
-  LinearSRGBColorSpace,
   LineBasicMaterial,
   LineLoop,
   LineSegments,
@@ -86,7 +70,6 @@ import {
   PerspectiveCamera,
   PlaneGeometry,
   PointLight,
-  Quaternion,
   Raycaster,
   RingGeometry,
   Scene,
@@ -100,56 +83,60 @@ import {
   TubeGeometry,
   Vector2,
   Vector3,
-  Vector4,
   WebGLRenderer,
-  WebGLRenderTarget,
+  type WebGLRenderTarget,
 } from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { tr } from "@/lib/i18n";
 import type { Quality } from "@/lib/prefs";
 import { chars, loadChars } from "../art/chars-load";
-import { daylight, EYES_LIFT } from "../art/daylight";
-import { emoteUrl } from "../art/emotes";
-import type { LightSource } from "../art/light";
+import { daylight } from "../art/daylight";
 import type { people } from "../art/people-load";
 import { loadPets, pets as petsArt } from "../art/pets-load";
 import type { PetModel } from "../art/pets3d";
-import { nearLift, unseen } from "../eyes";
-import { type Footprints, printLeft } from "../footprints";
-import { isNative, seatMotion } from "../furn/native";
 import type { PuffKind } from "../model";
 import { activePad } from "../pads";
 import { Arms3 } from "./arms3d";
-import { BelowCull, boxInParent, HIDDEN_LAYER } from "./below-cull";
-import { Bubbles } from "./bubbles3d";
+import { HIDDEN_LAYER } from "./below-cull";
 import { type FadeGroup, type Items, World3 } from "./build";
-import { BuildLayer, type BuildLook } from "./build3d";
-import { carGeometry, GROUND } from "./campus";
+import { BuildLayer } from "./build3d";
+import type { Outline } from "./campus";
 import { FogBanks } from "./fog-banks";
-import { farFor, flatLight, fogColour, hazeDensity, inkLeft, LIFT_TOP, mf, roomBounds } from "./fog3d";
+import { flatLight } from "./fog3d";
 import { FollowCam } from "./follow-cam";
 import { type GameScene3, GamesIn3D, HAND_SIT, HAND_STAND } from "./games3d";
 import { CASTER_LAYER } from "./grounds-stream";
-import type { GunFx } from "./guns3d";
 import { Hands1P, handsDoing } from "./hands1p";
-import { ZPX, zt } from "./kit3d";
-import { type Gather, lazyMatrices, seal } from "./lazy-matrices";
+import { lazyMatrices } from "./lazy-matrices";
 import { type LiftStop3, Lifts3, liftMats } from "./lift3d";
-import { Light3, landLight, litBalance, patchGrounds } from "./light3d";
+import { Light3, landLight, litBalance } from "./light3d";
 import { type Live, LiveFeed, type LiveSources, LiveSurfaces } from "./live";
-import { mergeStill, PROXIED, shadowProxy } from "./merge-static";
-import { dirAngle, type Keys, Person3, type PersonIn } from "./people3d";
+import { PROXIED } from "./merge-static";
+import { Body } from "./parts/body";
+import { BuildPick } from "./parts/buildpick";
+import { FOV, GROUND_POOL, hashId, LAMPS, LIMITS, segBox } from "./parts/common";
+import { Culling } from "./parts/culling";
+import { Eyes } from "./parts/eyes";
+import { Guns } from "./parts/guns";
+import { Lens } from "./parts/lens";
+import { MouseLook } from "./parts/look";
+import { Mood } from "./parts/mood";
+import { Pointer } from "./parts/pointer";
+import { Prints } from "./parts/prints";
+import { Seats } from "./parts/seats";
+import { Sun } from "./parts/sun";
+import { Tags } from "./parts/tags";
+import { Vehicles } from "./parts/vehicles";
+import { Warmup } from "./parts/warmup";
+import { type Keys, Person3, type PersonIn } from "./people3d";
 import { type Mats as CharMats, Person3D } from "./person3d";
-import { BrowserPhysics } from "./physics3d";
-import { Post3 } from "./post3d";
+import type { Post3 } from "./post3d";
 import { Shroud3 } from "./shroud3d";
 import { fogFor, type Ground, Surroundings, type Themes } from "./sky";
 import { type StairStop3, Stairs3, stairMats } from "./stairs3d";
 import { heldPoolBall, type TableScene3, TablesIn3D } from "./tables3d";
-import { tailPatch } from "./tail-glow";
 import { streetGeometry } from "./town3d";
-import { busModel, ploughModel } from "./vehicles3d";
-import { wx, wxNow } from "./wx3d";
+import { edgesOfMap, edgesOfWalls, type WallEdges } from "./walls3d";
+import { wx } from "./wx3d";
 
 type People = NonNullable<ReturnType<typeof people>>;
 
@@ -217,13 +204,13 @@ function partsOf(o: WorldObjectDef, here: WorldObjectDef[], x: number, y: number
       // on a counter: its buttons on top of the front, then the cup under the spout
       const c = topCentre(o);
       const host = surfaceAt(here, Math.floor(c.x), Math.floor(c.y));
-      const top = (host ? (entry(host.kind).surface ?? 0) : 0) / ZPX;
+      const top = host ? (entry(host.kind).surface ?? 0) : 0;
       const dx = x - c.x;
       const dy = y - c.y;
       const n = Math.hypot(dx, dy) || 1;
       return [
-        { x: c.x + (dx / n) * 0.1, y: c.y + (dy / n) * 0.1, h: top + 16 / ZPX },
-        { x: c.x + (dx / n) * 0.17, y: c.y + (dy / n) * 0.17, h: top + 3 / ZPX },
+        { x: c.x + (dx / n) * 0.1, y: c.y + (dy / n) * 0.1, h: top + 0.4083 },
+        { x: c.x + (dx / n) * 0.17, y: c.y + (dy / n) * 0.17, h: top + 0.0766 },
       ];
     }
     case "whiteboard": {
@@ -243,6 +230,15 @@ const noLifts = (objects: WorldObjectDef[]): WorldObjectDef[] =>
 
 export type CamMode = "chase" | "free" | "first";
 
+export type Body3 = Omit<PersonIn, "angle"> & {
+  id: string;
+  yaw: number; // which way they face (world radians; `angle` when they turned freely)
+  level?: number; // the floor they're on (shared levels.ts; their x / y are that floor's)
+  angle?: number;
+  mic?: boolean;
+  bot?: boolean;
+};
+
 // Someone to draw: what the server sends for a person (8 facings `d`; `a` 0
 // idle, 1 walk, 2 sit). `angle`: your own facing, free (radians) — others turn
 // between their 8. `npc`: Vortex.
@@ -254,24 +250,13 @@ function jumpDip(b: Body3): number {
   return 0;
 }
 
-export type Body3 = Omit<PersonIn, "angle"> & {
-  id: string;
-  d: number;
-  level?: number; // the floor they're on (shared levels.ts; their x / y are that floor's)
-  angle?: number;
-  mic?: boolean;
-  bot?: boolean;
-};
-
-// the lamps lit at a tier (the pool's first n)
-const lampsFor = (q: Quality) => (q === "high" ? LAMPS : q === "medium" ? 6 : q === "low" ? 3 : 2);
-
 export interface ViewOpts {
   themes: Themes; // the themes chunk (the sky, trees), shared with iso
   keys?: boolean; // its own keyboard (the demo); the live world reads keys itself
   tags?: boolean; // name tags over heads (default on)
   level?: number; // the floor to show (shared levels.ts; default: the map's own)
   quality?: Quality; // the tier it starts at (Lowest: no antialiasing, for good)
+  structure?: Structure | null; // the building's (its outline: the campus's outside — campus.ts)
 }
 
 // Clicks: on the floor (tiles) or on someone (their id, where on the page).
@@ -292,25 +277,6 @@ export interface ViewEvents {
   aim?: (at: { person?: string; object?: string } | null) => void;
 }
 
-const LAMPS = 10; // point lights in the pool (the nearest lamps get them)
-const LAMP_REACH = 16; // tiles from the camera's target a lamp gets one within
-// the Grounds' lamps after dark (docs/plan/27, the night): how high the head
-// hangs (tiles over the ground), how far and how hard it lights; the pool's
-// lights reach further out there (the road ahead lit, lamp to lamp)
-const GROUND_LAMP: Record<string, { h: number; radius: number; intensity: number }> = {
-  cobra: { h: 8.4, radius: 15, intensity: 26 },
-  town: { h: 4.4, radius: 10, intensity: 11 },
-  lone: { h: 4.4, radius: 10, intensity: 11 },
-  porch: { h: 2.2, radius: 6, intensity: 4 },
-  flood: { h: 12.8, radius: 30, intensity: 70 },
-};
-const STAND_LIGHTS = KART_LAND ? standLights() : [];
-// a flare burning on the snow (docs/plan/30-the-dark.md D6), lighting like a ground lamp, red
-const FLARE_LAMP = { h: 0.5, radius: 8, intensity: 6 };
-// one of the shadowed shot down: the shot's flash through it, then the light it burns away in
-const DEATH_LAMP = { h: 1.1, radius: 9, intensity: 8 };
-const GROUND_REACH = 44;
-const GROUND_POOL = 4; // their own point lights (High; fewer below)
 // the phones' flashlights: spot lights (always there, dark when off: no shader
 // changes), mine and the nearest other's; a beam you see in the snow and fog
 const TORCHES = 2;
@@ -320,7 +286,6 @@ const BEAM_LEN = BEAM.wide.len;
 const BEAM_HALF = BEAM.wide.half;
 const FOCUS_ALONG = BEAM.focus.len / BEAM_LEN;
 const FOCUS_ACROSS = (Math.tan(BEAM.focus.half) * BEAM.focus.len) / (Math.tan(BEAM_HALF) * BEAM_LEN);
-const LAMP_FADE = 4; // …fading out over the last few
 const LAMP_GLOW = 3.5; // how strongly a lamp post's pool lights what's under it at night
 const CAM_ROOM = 2.2; // the least room in front of a wall for the camera to stand there (else it rises)
 const CAM_LIFT_MAX = 1.3; // …up to this pitch
@@ -329,20 +294,18 @@ const SWIM_LIFT = 0.3; // …afloat, this much more: my head, just out of the wa
 // first person: where your eyes are (the name tag sits at 2.0 / 1.45)
 const EYE_1P = 1.7;
 const EYE_1P_SEATED = 1.2;
-const FOV = 50;
 const VEIL_MS = 150; // into or out of first person: the dip to dark, and back (setMode)
 const AIM_HELP = 0.12; // rad: aiming on a pad or keys, someone this near the reticle is helped onto
-
-const LIMITS: Record<CamMode, { pitch: [number, number]; dist: [number, number] }> = {
-  // (the KH camera: low and behind — docs/plan/56-the-controls.md D; follow-cam.ts keeps it there)
-  chase: { pitch: [-0.15, 0.75], dist: [2, 12] },
-  free: { pitch: [-0.12, 1.45], dist: [1.2, 14] },
-  first: { pitch: [-1.25, 1.25], dist: [0, 0] },
-};
 
 // the stairwells' tiles as a signature (a floor rebuilt when they change)
 const wellsKey = (w: { floor: Set<string>; ceiling: Set<string> }) =>
   `${[...w.floor].sort().join(";")}/${[...w.ceiling].sort().join(";")}`;
+
+/** A floor kept built (every floor is built once and kept): its layout's and stairwells' signature. */
+type Floor3 = { world: World3; sig: string; lit?: Light3; wells: string };
+/** Can a new layout be laid on this built floor (World3.relayout) — the same size and stairwells? */
+const sameShape = (f: Floor3, map: MapDef, wells: string) =>
+  f.wells === wells && f.world.map.width === map.width && f.world.map.height === map.height;
 
 /** God mode's hands on the view (world/god): the pointer and the wheel, all of them, while it's on. */
 export interface GodInput {
@@ -352,7 +315,114 @@ export interface GodInput {
   wheel(e: WheelEvent): void;
 }
 
+/** A floor as tp/build.ts and the light maps draw it: in its own frame (its corner at 0, 0 — shared
+ *  structure/fold.ts localView), its things and its stairwells' tiles with it; `corner` where that
+ *  frame sits in the world (its World3 and light map placed there). Everything else in the scene is
+ *  the world's. (Phase 8 draws the structure in the world's frame and this goes.) */
+function drawnFloor(lm: MapDef, here: WorldObjectDef[], all: WorldObjectDef[], structure: Structure | null) {
+  const corner = lm.world ? { x: lm.ox ?? 0, y: lm.oy ?? 0 } : { x: 0, y: 0 };
+  const map = localView(lm);
+  const shift = (set: Set<string>) =>
+    corner.x || corner.y
+      ? new Set(
+          [...set].map((k) => {
+            const [x, y] = k.split(",").map(Number);
+            return `${x - corner.x},${y - corner.y}`;
+          }),
+        )
+      : set;
+  // (its walls from the structure — walls3d.ts: phase 8 — or, with none, the map's edges)
+  const edges = structure ? edgesOfWalls(structure.walls, floorOf(lm), corner) : edgesOfMap(map);
+  // (its indoor slabs' rings — the lot's asphalt and concrete are open sky: no ceiling — for the
+  // ceiling over them)
+  const ringsOf = (keep: (top: string) => boolean) =>
+    structure
+      ? structure.slabs
+          .filter((sl) => sl.floor === floorOf(lm) && keep(sl.top))
+          .flatMap((sl) => [sl.outline, ...sl.holes])
+          .map((r) => r.map(([x, y]): [number, number] => [x - corner.x, y - corner.y]))
+      : null;
+  const rings = ringsOf((t) => t !== "a" && t !== "c");
+  // (and all of them: what's floor at all — below-cull's)
+  const floorRings = ringsOf(() => true);
+  return {
+    map,
+    objects: here.map((o) => localThing(lm, o)),
+    wells: { floor: shift(wellsOf(lm, all)), ceiling: shift(wellsOf(lm, all, "ceiling")) },
+    corner,
+    edges,
+    rings,
+    floorRings,
+  };
+}
+/** The home floor's outline from the structure, in the home map's own frame (campus.ts Outline: the
+ *  campus's outside drawn from it — docs/plan/72 phase 8), made when it's asked for, and a key for
+ *  what of it the facade draws: its slabs' rings and its windows' walls (an edit elsewhere leaves
+ *  it). None without a structure (the map's, then). */
+function outlineOf(building: MapDef, structure: Structure | null): { outline: () => Outline | null; key: string } {
+  if (!structure) return { outline: () => null, key: "" };
+  const f = floorOf(building);
+  const corner = building.world ? { x: building.ox ?? 0, y: building.oy ?? 0 } : { x: 0, y: 0 };
+  const rings = structure.slabs
+    .filter((sl) => sl.floor === f)
+    .flatMap((sl) => [sl.outline, ...sl.holes])
+    .map((r) => r.map(([x, y]): [number, number] => [x - corner.x, y - corner.y]));
+  // (windows on the outline only: floor one side, none the other — the facade's)
+  const inside = (x: number, y: number) => crossings(rings, y).filter((c) => c < x).length % 2 === 1;
+  const wins = structure.walls
+    .filter((w) => {
+      if (w.floor !== f || !isWindow(w.front)) return false;
+      const [mx, my] = [(w.a[0] + w.b[0]) / 2 - corner.x, (w.a[1] + w.b[1]) / 2 - corner.y];
+      const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]) || 1;
+      const [nx, ny] = [-(w.b[1] - w.a[1]) / len / 2, (w.b[0] - w.a[0]) / len / 2];
+      return inside(mx + nx, my + ny) !== inside(mx - nx, my - ny);
+    })
+    .map((w) => `${w.a}:${w.b}`)
+    .sort();
+  let made: Outline | null = null;
+  return {
+    outline: () => {
+      made ??= { rings, edges: edgesOfWalls(structure.walls, f, corner) };
+      return made;
+    },
+    key: `${JSON.stringify(rings)}|${wins.join(";")}`,
+  };
+}
+
+/** (what the layout signature can't see: the walls off the lattice) */
+const freeSig = (e: WallEdges) => (e.free.length ? JSON.stringify(e.free) : "");
+
 export class ThirdPersonView {
+  readonly warmup: Warmup = new Warmup(this);
+
+  readonly body: Body = new Body(this);
+
+  readonly culling: Culling = new Culling(this);
+
+  readonly seats: Seats = new Seats(this);
+
+  readonly tags: Tags = new Tags(this);
+
+  readonly sunPart: Sun = new Sun(this);
+
+  readonly mood: Mood = new Mood(this);
+
+  readonly vehicles: Vehicles = new Vehicles(this);
+
+  readonly buildPick: BuildPick = new BuildPick(this);
+
+  readonly pointerPart: Pointer = new Pointer(this);
+
+  readonly mouseLook: MouseLook = new MouseLook(this);
+
+  readonly lensPart: Lens = new Lens(this);
+
+  readonly guns: Guns = new Guns(this);
+
+  readonly eyes: Eyes = new Eyes(this);
+
+  readonly printsPart: Prints = new Prints(this);
+
   readonly renderer: WebGLRenderer;
   readonly scene = new Scene();
   // (near 0.1, not less: the depth buffer's precision is spent near the camera,
@@ -366,43 +436,44 @@ export class ThirdPersonView {
   // the floors above aren't drawn (the Sims rule), the campus moves to match.
   map: MapDef;
   building: MapDef;
+  /** the building's structure (the controller's: plan 72 phase 6) — its walls and slabs are the
+   *  physics' (physics3d.ts) */
+  structure: Structure | null = null;
   level: number;
   // every floor built so far (mine is `world`); `lit`: the light map its things take
-  private floors = new Map<number, { world: World3; sig: string; lit?: Light3 }>();
+  floors = new Map<number, Floor3>();
   // the floors drawn below mine: each its own light map, so they take the hour too
   private below = new Map<number, Light3>();
   private wellSig = "";
-  private people = new Map<string, Person3>();
+  people = new Map<string, Person3>();
   // the 3D people (world/chars): a model each, built a few a frame; the
   // drawing above stands in until a person's model is ready (and for Vortex)
-  private people3 = new Map<string, Person3D>();
-  private charF: InstanceType<NonNullable<ReturnType<typeof chars>>["CharFactory"]> | null = null;
+  people3 = new Map<string, Person3D>();
+  charF: InstanceType<NonNullable<ReturnType<typeof chars>>["CharFactory"]> | null = null;
   private charMats: CharMats | null = null;
   private propMats = new Map<string, Material>();
   charsChunk = "";
   // first person: my own arms when they're doing something (hands1p.ts; Settings can turn them off)
-  private hands: Hands1P | null = null;
-  private handsSpare: Hands1P | null = null; // (made ahead, or put by out of first person)
+  hands: Hands1P | null = null;
+  handsSpare: Hands1P | null = null; // (made ahead, or put by out of first person)
   handsOn = true;
   // pets: real models (art/pets3d.ts), lit by the room, turned to where they walk
-  private pets3 = new Map<string, { model: PetModel; key: string; turned: number }>();
+  pets3 = new Map<string, { model: PetModel; key: string; turned: number }>();
   private hemi = new HemisphereLight(0xffffff, 0x6b4a33, 1);
-  private sun = new DirectionalLight(0xffffff, 2);
-  private pool: PointLight[] = [];
-  private groundPool: PointLight[] = []; // the Grounds' lamps (groundLamps)
-  private around: Surroundings;
-  private host: HTMLElement | null = null;
+  sun = new DirectionalLight(0xffffff, 2);
+  pool: PointLight[] = [];
+  groundPool: PointLight[] = []; // the Grounds' lamps (groundLamps)
+  around: Surroundings;
+  host: HTMLElement | null = null;
   private ro: ResizeObserver | null = null;
-  private tagLayer: HTMLDivElement | null = null;
-  private tagEls = new Map<string, Tag>();
-  private ray = new Raycaster();
-  private live = new LiveSurfaces();
-  private light = new Light3();
-  private post: Post3 | null = null;
+  ray = new Raycaster();
+  live = new LiveSurfaces();
+  light = new Light3();
+  post: Post3 | null = null;
   quality: Quality = "high";
-  private lamps = LAMPS;
-  private nightLevel = 0;
-  private dark = 0; // out under the sky: daylight.ts `dark`
+  lamps = LAMPS;
+  nightLevel = 0;
+  dark = 0; // out under the sky: daylight.ts `dark`
   fps = 60; // measured (auto quality steps down on it)
   // The pixel ratio, kept to the screen's (docs/plan/38-the-lag.md, round 3): a browser can
   // say 2 while this view starts and 1 a moment later (Firefox did, on a 1× monitor: 4× the
@@ -431,7 +502,7 @@ export class ThirdPersonView {
   dist = 4.2;
   lean = 0.55; // how far people's drawings tip back towards a camera looking down
   hour = 12;
-  private target = new Vector3();
+  target = new Vector3();
   private targetReady = false;
   padFree = true; // the gamepad moves me and the camera (not while it plays a console)
   /** the camera's keys held this frame (the arrows: docs/plan/56-the-controls.md phase 2) */
@@ -452,7 +523,7 @@ export class ThirdPersonView {
   /** round a pole (Flowmotion's swing: docs/plan/56-the-controls.md F): the pole, my floor's, and
    *  how far round it I go — the camera holds still on it */
   swingAt: { x: number; y: number; r: number } | null = null;
-  private flickX = 0;
+  flickX = 0;
   /** A sideways flick of the mouse while locked on (-1, 1; 0 none): the next target that way. */
   takeFlick(): number {
     if (Math.abs(this.flickX) < 140) return 0;
@@ -481,26 +552,26 @@ export class ThirdPersonView {
   get lookYaw(): number {
     return this.yaw + (this.aimOn ? this.aimTurn : 0);
   }
-  private aimOn = false;
-  private aimTurn = 0;
-  private aimUp = 0;
-  private aimDir = new Vector3();
-  private aimHit = new Vector3(); // what the crosshair is on (the view's coords), aiming
+  aimOn = false;
+  aimTurn = 0;
+  aimUp = 0;
+  aimDir = new Vector3();
+  aimHit = new Vector3(); // what the crosshair is on (the view's coords), aiming
   private aheadFor = 0; // s I've been going roughly where it looks
   private eyeY = EYE_1P; // first person: the eyes' height (eases sitting down / getting up)
-  private meId = "";
-  private dragged = -10; // time of the last manual turn
+  meId = "";
+  dragged = -10; // time of the last manual turn
   activeAt = 0; // when the pointer or keys last did something here (performance.now)
-  private time = 0;
+  time = 0;
 
   // input
   private keys = new Set<string>();
-  private drag: { x: number; y: number; id: number; x0: number; y0: number; t: number } | null = null;
+  drag: { x: number; y: number; id: number; x0: number; y0: number; t: number } | null = null;
   private tint = new Color(1, 1, 1);
-  private personTint = new Color(1, 1, 1);
+  personTint = new Color(1, 1, 1);
   // the Grounds' mood (docs/plan/27): the weather, the flashlights, breath in the cold
-  private storm = 0;
-  private torch3: {
+  storm = 0;
+  torch3: {
     spot: SpotLight;
     beam: Mesh;
     mat: ShaderMaterial;
@@ -521,8 +592,8 @@ export class ThirdPersonView {
   /** my torch's battery (0 … 100, the walker's vitals): low, it flickers */
   battery = 100;
   private lensAt = new Vector3();
-  private breathAt = new Map<string, number>();
-  private stormFog = new Color();
+  breathAt = new Map<string, number>();
+  stormFog = new Color();
   /** The weather (shared weather.ts, eased by the controller). */
   setWeather(storm: number, wind: number) {
     this.storm = storm;
@@ -539,8 +610,8 @@ export class ThirdPersonView {
     this.snowing = falling;
   }
   /** How hard it's snowing (the room's weather; 1 till it's said: a still's). */
-  private snowing = 1;
-  private wind = 0;
+  snowing = 1;
+  wind = 0;
   /** The morning fog (the room's state, docs/plan/64-the-fog.md): its haze and its wall, 0 … 1,
    *  and how far it's lifted burning off; eased here (a called one comes at once). */
   setFog(haze: number, wall: number, lift = 0) {
@@ -548,7 +619,7 @@ export class ThirdPersonView {
     this.fogWant.wall = wall;
     this.fogWant.lift = lift;
   }
-  private fogWant = { haze: 0, wall: 0, lift: 0 };
+  fogWant = { haze: 0, wall: 0, lift: 0 };
   /** How much the morning fog calls for lamps, 0 … 1 (none below 0.2 of it, all of it by 0.5): the
    *  cars' headlamps and the Grounds' vehicles' come on in it as after dark (docs/plan/64 F4). */
   /** How thick the air is with the morning fog, 0 … 1 (its haze or its wall): beams show in it. */
@@ -591,16 +662,16 @@ export class ThirdPersonView {
     mesh.renderOrder = 4;
     return { mesh, mat, len: BEAM_LEN, half: BEAM_HALF };
   }
-  private banks: FogBanks | null = null;
-  private rime = 0;
-  private fogNow = { haze: 0, wall: 0, lift: 0 };
+  banks: FogBanks | null = null;
+  rime = 0;
+  fogNow = { haze: 0, wall: 0, lift: 0 };
   // the room I'm in, for the fog (its tiles' bounds), and the tile it was found from
-  private roomAt = "";
-  private room: { x0: number; y0: number; x1: number; y1: number } | null = null;
-  private roomMap: MapDef | null = null; // (the floor's map it was found in: a new one, found again)
+  roomAt = "";
+  room: { x0: number; y0: number; x1: number; y1: number } | null = null;
+  roomMap: MapDef | null = null; // (the floor's map it was found in: a new one, found again)
   // the sun and the open sky's fill by the hour (setHour), before the fog's flat light
-  private sunIntensity = 1;
-  private fillOut = 1;
+  sunIntensity = 1;
+  fillOut = 1;
   private frustum = new Frustum();
   private projView = new Matrix4();
   private sphere = new Sphere(new Vector3(), 1.1);
@@ -633,28 +704,28 @@ export class ThirdPersonView {
     // every render of the scene (mine, a car's mirror, the warm-up's): each floor's loose
     // pieces left out an area at a time when out of that camera's view (World3.cullLoose)
     this.scene.onBeforeRender = (_r, _s, cam) => {
-      const f = this.looseFrustum;
-      this.looseM.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
-      f.setFromProjectionMatrix(this.looseM);
+      const f = this.culling.looseFrustum;
+      this.culling.looseM.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+      f.setFromProjectionMatrix(this.culling.looseM);
       for (const b of this.floors.values()) if (b.world.root.parent) b.world.cullLoose(f);
       // the parked cars (still, a box each) out of this camera's view: off for this render
       // only — the shadow pass has them on again (they cast), and after it they're as they
       // were (the cars' own code shows and hides their models every frame)
-      if (this.viewCull)
+      if (this.culling.viewCull)
         for (const top of this.scene.children)
           if (top.userData.cullKids && top.visible)
             for (const o of top.children) {
               if (!o.userData.still || !o.visible) continue;
-              const b = this.stillBox(o);
+              const b = this.culling.stillBox(o);
               if (b && !f.intersectsBox(b)) {
                 o.visible = false;
-                this.viewHid.push(o);
+                this.culling.viewHid.push(o);
               }
             }
     };
     this.scene.onAfterRender = () => {
-      for (const o of this.viewHid) o.visible = true;
-      this.viewHid.length = 0;
+      for (const o of this.culling.viewHid) o.visible = true;
+      this.culling.viewHid.length = 0;
     };
     // (the shadow pass sees what's left out: three tests a caster's layers against the view's
     // camera there, not the light's — so for that pass the camera takes the hidden layer too)
@@ -667,8 +738,8 @@ export class ThirdPersonView {
       sm.render = (lights: unknown, scene: unknown, camera: Camera) => {
         const mask = camera.layers.mask;
         camera.layers.enable(HIDDEN_LAYER);
-        this.below3.shadowPass(true);
-        for (const o of this.viewHid) o.visible = true;
+        this.culling.below3.shadowPass(true);
+        for (const o of this.culling.viewHid) o.visible = true;
         for (const root of PROXIED) {
           if (!root.parent) {
             PROXIED.delete(root);
@@ -684,8 +755,8 @@ export class ThirdPersonView {
           (render as (l: unknown, s: unknown, c: Camera) => void)(lights, scene, camera);
         } finally {
           camera.layers.mask = mask;
-          this.below3.shadowPass(false);
-          for (const o of this.viewHid) o.visible = false;
+          this.culling.below3.shadowPass(false);
+          for (const o of this.culling.viewHid) o.visible = false;
           for (const c of off) c.visible = true;
           off.length = 0;
         }
@@ -697,21 +768,21 @@ export class ThirdPersonView {
     this.renderer.shadowMap.type = PCFShadowMap;
     this.renderer.setPixelRatio(this.ratioFor("high"));
     this.light.update(map, objects);
-    this.indexSeats(map, objects);
+    this.seats.indexSeats(map, objects);
     this.world = new World3(
       items,
       map,
       noLifts(objects),
       this.renderer.capabilities.getMaxAnisotropy(),
-      (m) => this.light.patch(m),
+      (m) => this.light.piece(m),
       wells,
     );
     this.scene.add(this.world.root);
     // a GPU reset (Chrome, mid-call) empties big canvases: draw the baked ones again
     this.renderer.domElement.addEventListener("webglcontextrestored", () => {
       this.world.rebakeFloor();
-      this.light.setHour(this.hour);
-      for (const l of this.below.values()) l.setHour(this.hour);
+      this.light.redraw();
+      for (const l of this.below.values()) l.redraw();
     });
     this.scene.add(this.hemi);
     this.lifts3 = new Lifts3(this.renderer);
@@ -933,12 +1004,19 @@ void main() {
     }
     // what the studio stands in (clouds / city / snow), the sky by the hour
     const home = onLevel(all, building);
-    this.winSig = cutsSig(home);
-    this.around = new Surroundings(building, opts.themes, wallCuts(home));
+    this.structure = opts.structure ?? null;
+    const out = this.outline();
+    this.winSig = `${cutsSig(home)}|${out.key}`;
+    this.around = new Surroundings(building, opts.themes, wallCuts(home), out.outline());
     this.around.floorLit = (m) => this.light.patch(m);
     this.prepareGrounds();
     this.scene.add(this.around.root);
-    this.floors.set(this.level, { world: this.world, sig: `${layoutSig(map)}|${this.wellSig}`, lit: this.light });
+    this.floors.set(this.level, {
+      world: this.world,
+      sig: `${layoutSig(map)}|${this.wellSig}`,
+      lit: this.light,
+      wells: this.wellSig,
+    });
     this.placeFloors(all);
     const fog = fogFor();
     this.scene.fog = new Fog(0xa8c8e0, fog.near, fog.far);
@@ -980,15 +1058,15 @@ void main() {
     );
     this.earshotRing.visible = false;
     for (const o of [this.highlight, this.marker, this.earshotRing]) o.position.y = 0.012;
-    this.builder = new BuildLayer(map);
-    this.scene.add(this.highlight, this.marker, this.earshotRing, this.live.root, this.builder.root);
+    this.buildPick.builder = new BuildLayer(map);
+    this.scene.add(this.highlight, this.marker, this.earshotRing, this.live.root, this.buildPick.builder.root);
     this.setHour(12);
-    this.setQuality("high");
+    this.warmup.setQuality("high");
   }
 
   // Little bursts, as iso's `puff`: warm sparks, confetti over a head (a card
   // done), a poof of dust, a drop. Tiny sprites with a bit of gravity.
-  private fx: {
+  fx: {
     s: Sprite;
     vx: number;
     vy: number;
@@ -1001,10 +1079,10 @@ void main() {
     size?: number;
     op?: number; // its opacity, fresh (else 1, or 0.7 swelling)
   }[] = [];
-  /** `lift`: px off the floor; `hard` (a jump's "land" / "kick"): how hard, 0..1 */
+  /** `lift`: m off the floor; `hard` (a jump's "land" / "kick"): how hard, 0..1 */
   puff(x: number, y: number, kind: PuffKind, lift = 0, hard = 1) {
     if (this.reduced) return;
-    const z = zt(lift) + (kind === "land" || kind === "kick" ? 0.04 : 0);
+    const z = lift + (kind === "land" || kind === "kick" ? 0.04 : 0);
     const add = (
       color: number,
       size: number,
@@ -1104,7 +1182,7 @@ void main() {
   private cableKey = "";
   // The game room: cables, pads (by their consoles or in hands), power LEDs —
   // drawn once the people are placed (held pads go where their hands are).
-  private games3: GamesIn3D | null = null;
+  games3: GamesIn3D | null = null;
   private gameScene: GameScene3 | null = null;
   setGames(s: GameScene3 | null) {
     this.gameScene = s;
@@ -1128,7 +1206,7 @@ void main() {
     const tx = (cam.x - at.x) / d;
     const tz = (cam.z - at.z) / d;
     const side = port === 1 ? -0.07 : 0.07;
-    return new Vector3(at.x + tx * 0.14 + tz * side, zt(sitting ? HAND_SIT : HAND_STAND), at.z + tz * 0.14 - tx * side);
+    return new Vector3(at.x + tx * 0.14 + tz * side, sitting ? HAND_SIT : HAND_STAND, at.z + tz * 0.14 - tx * side);
   }
 
   setCable(ends: { from: { x: number; y: number }; to: { x: number; y: number } } | null) {
@@ -1151,7 +1229,7 @@ void main() {
     const dy = b.y - a.y;
     const len = Math.hypot(dx, dy) || 1;
     // the hand: a little in front of me, on the console's side
-    const hand = new Vector3(b.x - (dx / len) * 0.18, zt(30), b.y - (dy / len) * 0.18);
+    const hand = new Vector3(b.x - (dx / len) * 0.18, 0.7655, b.y - (dy / len) * 0.18);
     const along = (t: number, h: number) => new Vector3(a.x + dx * t, h, a.y + dy * t);
     const pts = [new Vector3(a.x, 0.04, a.y), along(0.35, 0.015), along(0.75, 0.015), along(0.93, 0.18), hand];
     this.cable.geometry.dispose();
@@ -1233,7 +1311,7 @@ void main() {
   } | null = null;
   private gcEye = new Vector3();
   private gcLook = new Vector3();
-  private gcMix = 0; // 0 = the usual camera, 1 = the game's
+  gcMix = 0; // 0 = the usual camera, 1 = the game's
   private gcReady = false;
 
   private cars: Group[] = [];
@@ -1271,7 +1349,7 @@ void main() {
       const c = list[i];
       g.visible = !!c;
       if (!c) return;
-      g.position.set(c.x, zt(c.z), c.y);
+      g.position.set(c.x, c.z, c.y);
       g.rotation.set(c.tilt * 0.25, -c.h, 0, "YXZ");
       (g.userData.body as MeshLambertMaterial).color.setHex(c.color);
     });
@@ -1336,7 +1414,7 @@ void main() {
 
   mount(host: HTMLElement) {
     this.host = host;
-    this.startPhysics();
+    this.body.startPhysics();
     const c = this.renderer.domElement;
     c.style.display = "block";
     c.style.touchAction = "none";
@@ -1346,21 +1424,21 @@ void main() {
     this.ro.observe(host);
     this.watchDpr();
     this.resize();
-    c.addEventListener("pointerdown", this.onDown);
-    c.addEventListener("pointermove", this.onMove);
-    c.addEventListener("pointerup", this.onUp);
-    c.addEventListener("pointercancel", this.onUp);
+    c.addEventListener("pointerdown", this.pointerPart.onDown);
+    c.addEventListener("pointermove", this.pointerPart.onMove);
+    c.addEventListener("pointerup", this.pointerPart.onUp);
+    c.addEventListener("pointercancel", this.pointerPart.onUp);
     c.addEventListener("wheel", this.onWheel, { passive: false });
     c.addEventListener("contextmenu", this.noMenu);
-    document.addEventListener("pointerlockchange", this.onLockChange);
-    document.addEventListener("pointerlockerror", this.onLockError);
+    document.addEventListener("pointerlockchange", this.mouseLook.onLockChange);
+    document.addEventListener("pointerlockerror", this.mouseLook.onLockError);
     const x = document.createElement("div");
     x.style.cssText =
       "position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;" +
       "background:#f6eedb;box-shadow:0 0 0 1.5px rgba(26,16,10,.75);pointer-events:none;display:none;" +
       "transition:transform .12s,background .12s";
     host.appendChild(x);
-    this.crosshair = x;
+    this.mouseLook.crosshair = x;
     const veil = document.createElement("div");
     veil.style.cssText = `position:absolute;inset:0;background:#0b0907;opacity:0;pointer-events:none;transition:opacity ${VEIL_MS}ms ease`;
     host.appendChild(veil);
@@ -1374,7 +1452,7 @@ void main() {
       const t = document.createElement("div");
       t.style.cssText = "position:absolute;inset:0;pointer-events:none;overflow:hidden";
       host.appendChild(t);
-      this.tagLayer = t;
+      this.tags.tagLayer = t;
     }
   }
 
@@ -1382,6 +1460,7 @@ void main() {
   // the areas whose things changed are redrawn (cheap: call it often).
   // `building`: the home map with every floor; `objects`: everything on every
   // floor; `level`: the floor I'm on.
+  private lightLater: (() => void) | null = null;
   update(building: MapDef, objects: WorldObjectDef[], level = this.level) {
     const map = levelMap(building, level) ?? building;
     const moved = level !== this.level;
@@ -1394,17 +1473,40 @@ void main() {
     this.hereObjects = objects;
     this.keysAt.clear();
     this.partsAt.clear();
-    const wells = { floor: wellsOf(map, all), ceiling: wellsOf(map, all, "ceiling") };
+    // (my floor drawn in its own frame, placed at its corner: drawnFloor)
+    const drawn = drawnFloor(map, objects, all, this.structure);
+    const wells = drawn.wells;
     const wellSig = wellsKey(wells);
-    this.light.update(map, objects);
-    this.indexSeats(map, objects);
-    const home = onLevel(all, building);
-    const winSig = cutsSig(home);
     // my floor: kept from before (every floor is built once and kept — going
     // up or down only moves and shows them), built again when its layout changed
-    const sig = `${layoutSig(map)}|${wellSig}`;
+    const sig = `${layoutSig(map)}|${wellSig}|${freeSig(drawn.edges)}`;
     let mine = this.floors.get(level);
-    if (mine && mine.sig !== sig) {
+    // (a wall built or a tile laid: the floor kept, its walls and floor made again — World3.relayout;
+    // another size or other stairwells: built anew)
+    const relay = !!mine && mine.sig !== sig && sameShape(mine, drawn.map, wellSig);
+    // (an edit on the floor I'm on — its walls drawn this frame —: its light the next, with the
+    // things it touched; docs/plan/72 phase 8, an edit's cost)
+    const lightNow = () => {
+      this.lightLater = null;
+      this.light.update(drawn.map, drawn.objects);
+    };
+    if (relay && !moved && mine?.world === this.world) {
+      this.lightLater = lightNow;
+      requestAnimationFrame(() => this.lightLater === lightNow && lightNow());
+    } else lightNow();
+    this.light.setOffset(drawn.corner.x, drawn.corner.y);
+    this.seats.indexSeats(map, objects);
+    const home = onLevel(all, building);
+    // (the campus's outside: again when the studio's windows changed, or its outline from the
+    // structure — its slabs' edge, its window walls)
+    const winSig = `${cutsSig(home)}|${this.outline().key}`;
+    let relaid = false;
+    if (mine && relay) {
+      mine.world.relayout(drawn.map, noLifts(drawn.objects), drawn.edges, drawn.rings, drawn.floorRings);
+      mine.sig = sig;
+      mine.wells = wellSig;
+      relaid = true;
+    } else if (mine && mine.sig !== sig) {
       this.scene.remove(mine.world.root);
       mine.world.dispose();
       mine = undefined;
@@ -1412,21 +1514,24 @@ void main() {
     if (!mine) {
       const world = new World3(
         this.items,
-        map,
-        noLifts(objects),
+        drawn.map,
+        noLifts(drawn.objects),
         this.renderer.capabilities.getMaxAnisotropy(),
-        (m) => this.light.patch(m),
+        (m) => this.light.piece(m),
         wells,
+        drawn.edges,
+        drawn.rings,
+        drawn.floorRings,
       );
-      mine = { world, sig, lit: this.light };
+      mine = { world, sig, lit: this.light, wells: wellSig };
       this.floors.set(level, mine);
       this.scene.add(world.root);
-    } else mine.world.update(noLifts(objects));
+    } else if (!relaid) mine.world.update(noLifts(drawn.objects));
     if (moved) this.cameraAcross(from);
     const changed = mine.world !== this.world || layoutSig(map) !== layoutSig(this.map);
     if (mine.world !== this.world) {
       // (the floor I left takes its own light map below mine: placeFloors)
-      if (mine.lit !== this.light) mine.world.setLight((m) => this.light.patch(m));
+      if (mine.lit !== this.light) mine.world.setLight((m) => this.light.piece(m));
       mine.lit = this.light;
       this.world = mine.world;
     }
@@ -1437,7 +1542,7 @@ void main() {
     if (winSig !== this.winSig) this.surround(building, home);
     this.winSig = winSig;
     if (!changed && !moved) return;
-    this.builder.setMap(map);
+    this.buildPick.builder.setMap(map);
     const fog = fogFor();
     (this.scene.fog as Fog).near = fog.near;
     (this.scene.fog as Fog).far = fog.far;
@@ -1448,12 +1553,25 @@ void main() {
 
   // what the studio stands in, again (a new layout, or the windows changed)
   private winSig = "";
+  // (the home floor's outline, kept while the structure's the same)
+  private outlined: { of: Structure | null; building: MapDef | null; at: ReturnType<typeof outlineOf> } = {
+    of: null,
+    building: null,
+    at: { outline: () => null, key: "" },
+  };
+  private outline(): ReturnType<typeof outlineOf> {
+    const o = this.outlined;
+    if (o.of !== this.structure || o.building !== this.building) {
+      this.outlined = { of: this.structure, building: this.building, at: outlineOf(this.building, this.structure) };
+    }
+    return this.outlined.at;
+  }
   private surround(building: MapDef, home: WorldObjectDef[]) {
     this.scene.remove(this.around.root);
     this.banks?.dispose();
     this.banks = null;
     this.around.dispose();
-    this.around = new Surroundings(building, this.opts.themes, wallCuts(home));
+    this.around = new Surroundings(building, this.opts.themes, wallCuts(home), this.outline().outline());
     this.around.floorLit = (m) => this.light.patch(m);
     this.prepareGrounds();
     this.scene.add(this.around.root);
@@ -1461,11 +1579,15 @@ void main() {
     this.setHour(this.hour);
   }
 
-  // Where floor `level` is from mine: its corner and its height.
-  private offsetTo(level: number): { x: number; y: number; h: number } {
+  // Where floor `level`'s own frame is (its corner: what tp/build.ts and the light maps draw from)
+  // and how far it is up from mine. (Everything else — people, things — is in the world's frame:
+  // a floor is only up or down from mine.)
+  private cornerTo(level: number): { x: number; y: number; h: number } {
     const a = offsetOf(this.building, level);
-    const b = offsetOf(this.building, this.level);
-    return { x: a.x - b.x, y: a.y - b.y, h: elevOf(level) - elevOf(this.level) };
+    return { x: a.x, y: a.y, h: this.upTo(level) };
+  }
+  private upTo(level: number): number {
+    return elevOf(level) - elevOf(this.level);
   }
 
   // Every floor kept built (`floors`): mine at the origin, the ones below where
@@ -1488,7 +1610,8 @@ void main() {
         if (b) {
           if (!b.world.root.parent) this.scene.add(b.world.root);
           b.world.root.visible = true;
-          b.world.root.position.set(0, 0, 0);
+          const c = offsetOf(this.building, f);
+          b.world.root.position.set(c.x, 0, c.y);
           b.world.root.updateMatrix(); // (World3: its matrix made when it moves)
           b.world.setFading(true);
         }
@@ -1500,17 +1623,24 @@ void main() {
         if (b) this.scene.remove(b.world.root);
         continue;
       }
-      const lm = levelMap(this.building, f);
-      if (!lm) continue;
-      const objs = onLevel(all, lm);
-      const wells = { floor: wellsOf(lm, all), ceiling: wellsOf(lm, all, "ceiling") };
-      const sig = `${layoutSig(lm)}|${wellsKey(wells)}`;
-      if (b && b.sig !== sig) {
+      const wlm = levelMap(this.building, f);
+      if (!wlm) continue;
+      const drawn = drawnFloor(wlm, onLevel(all, wlm), all, this.structure);
+      const { map: lm, objects: objs, wells, edges, rings, floorRings } = drawn;
+      const wk = wellsKey(wells);
+      const sig = `${layoutSig(lm)}|${wk}|${freeSig(edges)}`;
+      let relaid = false;
+      if (b && b.sig !== sig && sameShape(b, lm, wk)) {
+        b.world.relayout(lm, noLifts(objs), edges, rings, floorRings);
+        b.sig = sig;
+        b.wells = wk;
+        relaid = true;
+      } else if (b && b.sig !== sig) {
         this.scene.remove(b.world.root);
         b.world.dispose();
         b = undefined;
       }
-      const o = this.offsetTo(f);
+      const o = this.cornerTo(f);
       const lit = this.belowLight(f, lm, objs);
       lit.setOffset(o.x, o.y);
       if (!b) {
@@ -1519,15 +1649,18 @@ void main() {
           lm,
           noLifts(objs),
           this.renderer.capabilities.getMaxAnisotropy(),
-          (m) => lit.patch(m),
+          (m) => lit.piece(m),
           wells,
+          edges,
+          rings,
+          floorRings,
         );
-        b = { world, sig, lit };
+        b = { world, sig, lit, wells: wk };
         this.floors.set(f, b);
         this.scene.add(world.root);
-      } else b.world.update(noLifts(objs));
+      } else if (!relaid) b.world.update(noLifts(objs));
       if (b.lit !== lit) {
-        b.world.setLight((m) => lit.patch(m));
+        b.world.setLight((m) => lit.piece(m));
         b.lit = lit;
       }
       if (!b.world.root.parent) this.scene.add(b.world.root);
@@ -1554,7 +1687,7 @@ void main() {
   // The elevators (tp/lift3d.ts): every stop's landing and car, drawn apart
   // from the floors' things and moved every frame from the shared motion —
   // `since`: when each stop's current phase was heard of (performance.now()).
-  private lifts3: Lifts3 | null = null;
+  lifts3: Lifts3 | null = null;
   private liftObjs: WorldObjectDef[] = [];
   private liftSince = new Map<string, number>();
   liftSway = 0; // (the car I'm riding: its sway, tiles)
@@ -1579,7 +1712,7 @@ void main() {
       const motion = liftMotion(o, level, since);
       stops.push({
         o,
-        off: this.offsetTo(level),
+        off: { x: 0, y: 0, h: this.upTo(level) },
         motion,
         floors,
         floor: liftFloorName(level),
@@ -1595,13 +1728,13 @@ void main() {
 
   // The staircases (tp/stairs3d.ts): each floor's stairwell, its fire doors
   // opening for whoever comes near (anyone on that floor, as drawn here)
-  private stairs3 = new Stairs3();
+  stairs3 = new Stairs3();
   private syncStairs(dt: number, bodies: Body3[]) {
     const stops: StairStop3[] = [];
     for (const o of this.allObjects) {
       if (o.kind !== "stairs") continue;
       const level = objLevel(o, this.building);
-      const off = this.offsetTo(level);
+      const off = { x: 0, y: 0, h: this.upTo(level) };
       stops.push({
         shown: level <= this.level,
         o,
@@ -1618,7 +1751,7 @@ void main() {
   // little apart) and drawn once off screen — so their geometry and textures
   // are on the GPU and their shaders compiled before anyone goes there: a
   // floor change then only moves and shows what's ready.
-  private allObjects: WorldObjectDef[] = [];
+  allObjects: WorldObjectDef[] = [];
   private hereObjects: WorldObjectDef[] = [];
 
   // (plan 62) The keys someone at a desk types on: the keyboard ahead of them (else in front of the
@@ -1639,7 +1772,7 @@ void main() {
       if (!board && d !== "monitor" && o.kind !== "computer") continue;
       const c = topCentre(o);
       const host = surfaceAt(this.hereObjects, Math.floor(c.x), Math.floor(c.y));
-      const top = (host ? (entry(host.kind).surface ?? 0) : 0) / ZPX;
+      const top = host ? (entry(host.kind).surface ?? 0) : 0;
       // (a screen faces whoever uses it: the keys a little this side of it, on the desk)
       let kx = c.x;
       let ky = c.y;
@@ -1692,17 +1825,17 @@ void main() {
     return out;
   }
   private partsAt = new Map<string, Keys[] | null>();
-  private warmAt = 0;
-  private cutWarm = false;
-  private warmTarget: WebGLRenderTarget | null = null;
-  private warmCam = new OrthographicCamera(-1, 1, 1, -1, 0.1, 400);
+  warmAt = 0;
+  cutWarm = false;
+  warmTarget: WebGLRenderTarget | null = null;
+  warmCam = new OrthographicCamera(-1, 1, 1, -1, 0.1, 400);
   private warmUp(now: number) {
     if (now < this.warmAt || !this.allObjects.length) return;
     // (not before the sun's shadow map is made: drawn without it — the warm-up
     // keeps it from updating — every lit thing's draw failed, a burst of GL errors)
     if (this.sun.castShadow && !this.sun.shadow.map) return;
     // (behind the loading screen: one after another, a frame apart)
-    this.warmAt = now + (this.warm ? 0 : 600);
+    this.warmAt = now + (this.warmup.warm ? 0 : 600);
     const f = floorsOf(this.building).find((l) => !this.floors.has(l));
     if (f === undefined) {
       // last: the building's glass cut above a floor (campus.cutAbove) — its
@@ -1717,29 +1850,35 @@ void main() {
         const c = this.warmCam;
         const r = Math.max(hw, hh) / 2 + 4;
         Object.assign(c, { left: -r, right: r, top: r, bottom: -r });
-        const o = this.offsetTo(homeOf(this.building));
+        const o = this.cornerTo(homeOf(this.building));
         c.position.set(o.x + hw / 2, o.h + 80, o.y + hh / 2);
         c.lookAt(o.x + hw / 2, o.h - 20, o.y + hh / 2);
         c.far = 400;
         c.updateProjectionMatrix();
-        this.warmDraw(c);
+        this.warmup.warmDraw(c);
         this.lifts3?.showAll(false);
         this.stairs3.showAll(false);
         this.around.campus.cutAbove(STOREY - 0.15);
-        this.warmDraw(this.camera);
+        this.warmup.warmDraw(this.camera);
         this.around.campus.cutAbove(null);
       }
       return;
     }
-    const lm = levelMap(this.building, f);
-    if (!lm) {
+    const wlm = levelMap(this.building, f);
+    if (!wlm) {
       this.warmAt = Number.POSITIVE_INFINITY;
       return;
     }
     const all = this.allObjects;
-    const wells = { floor: wellsOf(lm, all), ceiling: wellsOf(lm, all, "ceiling") };
-    const objs = onLevel(all, lm);
-    const o = this.offsetTo(f);
+    const {
+      map: lm,
+      objects: objs,
+      wells,
+      edges,
+      rings,
+      floorRings,
+    } = drawnFloor(wlm, onLevel(all, wlm), all, this.structure);
+    const o = this.cornerTo(f);
     const lit = this.belowLight(f, lm, objs);
     lit.setOffset(o.x, o.y);
     const world = new World3(
@@ -1747,10 +1886,14 @@ void main() {
       lm,
       noLifts(objs),
       this.renderer.capabilities.getMaxAnisotropy(),
-      (m) => lit.patch(m),
+      (m) => lit.piece(m),
       wells,
+      edges,
+      rings,
+      floorRings,
     );
-    this.floors.set(f, { world, sig: `${layoutSig(lm)}|${wellsKey(wells)}`, lit });
+    const wk = wellsKey(wells);
+    this.floors.set(f, { world, sig: `${layoutSig(lm)}|${wk}|${freeSig(edges)}`, lit, wells: wk });
     this.scene.add(world.root);
     world.root.position.set(o.x, o.h, o.y);
     world.root.updateMatrix();
@@ -1765,142 +1908,10 @@ void main() {
     c.lookAt(o.x + lm.width / 2, o.h, o.y + lm.height / 2);
     c.updateProjectionMatrix();
     // (lit by a light map as every floor is, mine or one below: one set of shaders)
-    this.warmDraw(c);
+    this.warmup.warmDraw(c);
     // (kept only if it's below mine: one above waits out of the scene)
     if (f > this.level) this.scene.remove(world.root);
     else world.root.visible = f < this.level;
-  }
-
-  // ── ready (docs/plan/35-the-loading.md) ──
-  // Behind the loading screen everything is built as fast as it goes (a long
-  // frame doesn't show there): the other floors one after another, the land and
-  // the people with bigger budgets a frame. The screen goes when it's all built
-  // and every shader in the scene is compiled.
-  private warm = false;
-  private drawn = 0; // frames drawn
-  private preparing = 0; // the Grounds' new things whose shaders are compiling
-  private compiled: "no" | "going" | "done" = "no";
-  private most = { blocks: 0, statics: 0 };
-  get warming(): boolean {
-    return this.warm;
-  }
-  set warming(on: boolean) {
-    this.warm = on;
-    if (this.around.grounds) this.around.grounds.boost = on;
-    if (on) this.warmAt = 0;
-  }
-  /** How built this view is: its parts' shares done (each 0..1) of how many. Ready when
-   *  done === of. */
-  readiness(): { done: number; of: number } {
-    const parts: number[] = [];
-    // (a few frames first: the people and the land are only asked for by a frame)
-    parts.push(Math.min(1, this.drawn / 3));
-    // the sun's shadow map (made by the first frame drawn: the floors wait for it)
-    parts.push(!this.sun.castShadow || this.sun.shadow.map ? 1 : 0);
-    // every floor built and drawn once, and the building's cut (warmUp)
-    const all = floorsOf(this.building).length;
-    parts.push(this.cutWarm ? 1 : Math.min(0.95, this.floors.size / Math.max(1, all)));
-    // the land, the rest of the Grounds, their shaders
-    const g = this.around.grounds;
-    if (g) {
-      this.most.blocks = Math.max(this.most.blocks, g.left.blocks);
-      this.most.statics = Math.max(this.most.statics, g.left.statics);
-      parts.push(this.most.blocks ? 1 - g.left.blocks / this.most.blocks : 1);
-      parts.push(this.most.statics ? 1 - g.left.statics / this.most.statics : 1);
-      parts.push(this.preparing ? 0 : 1);
-    }
-    // the people (their chunk, then everyone's model)
-    parts.push(!this.charF ? 0 : this.charF.pending ? 0.5 : 1);
-    // last: every shader in the scene (and my hands') compiled, once all the rest is in it
-    const rest = parts.every((p) => p >= 1);
-    if (rest && this.compiled === "no") this.compileAll();
-    parts.push(this.compiled === "done" ? 1 : 0);
-    return { done: parts.reduce((a, b) => a + b, 0), of: parts.length };
-  }
-  // (into the target the frame draws to, so they're the programs it uses: High's
-  // finish draws the scene into a linear buffer — as warmDraw)
-  private compileAll() {
-    this.compiled = "going";
-    const r = this.renderer;
-    if (this.post) {
-      this.warmTarget ??= new WebGLRenderTarget(4, 4, { colorSpace: LinearSRGBColorSpace });
-      r.setRenderTarget(this.warmTarget);
-    }
-    const jobs = [r.compileAsync(this.scene, this.camera), r.compileAsync(this.fadeSamples(), this.camera, this.scene)];
-    const h = this.hands ?? this.handsSpare;
-    if (h) jobs.push(r.compileAsync(h.scene, h.camera));
-    r.setRenderTarget(null);
-    void Promise.all(jobs)
-      .catch(() => {})
-      .then(() => {
-        if (!this.gone) this.drawAll();
-        this.compiled = "done";
-      });
-  }
-  // The see-through copies my floor's pieces take when they fade (applyFade), one of each
-  // kind, kept: their shaders compiled too — else the first wall to fade linked one then
-  private fadeKept: Material[] = [];
-  private fadeSamples(): Scene {
-    const s = new Scene();
-    const seen = new Set<string>();
-    for (const f of this.world.fades)
-      for (const m of f.objects) {
-        if (!(m instanceof Mesh || m instanceof LineSegments)) continue;
-        const base = (m.userData.base ?? m.material) as Material;
-        const a = m.geometry.attributes;
-        const k = `${base.uuid}|${m.type}|${Object.keys(a).map((n) => n + a[n].itemSize)}`;
-        if (seen.has(k)) continue;
-        seen.add(k);
-        const own = base.clone();
-        own.transparent = true;
-        own.depthWrite = false;
-        this.fadeKept.push(own);
-        s.add(m instanceof LineSegments ? new LineSegments(m.geometry, own) : new Mesh(m.geometry, own));
-      }
-    return s;
-  }
-  // …and all of it drawn once, every piece in view (from above, off screen): each mesh's
-  // buffers and each texture go up to the GPU behind the screen — else the first look
-  // round put them up then, tens of MB in a second or two
-  private drawAll() {
-    const box = new Box3().setFromObject(this.scene);
-    if (box.isEmpty()) return;
-    const c = this.warmCam;
-    const r = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) / 2 + 2;
-    const x = (box.min.x + box.max.x) / 2;
-    const z = (box.min.z + box.max.z) / 2;
-    Object.assign(c, { left: -r, right: r, top: r, bottom: -r, far: box.max.y - box.min.y + 20 });
-    c.position.set(x, box.max.y + 10, z);
-    c.lookAt(x, box.min.y, z);
-    c.updateProjectionMatrix();
-    this.warmDraw(c);
-    c.far = 400;
-  }
-
-  // One draw of the warm-up, as the screen draws (so the shaders compiled are the
-  // ones it uses): High into a tiny linear target, as its finish's buffer;
-  // Medium and Low into one pixel of the screen itself — its tones and colours —
-  // which the frame then draws over.
-  private warmView = new Vector4();
-  private warmDraw(cam: Camera) {
-    const r = this.renderer;
-    const shadows = r.shadowMap.autoUpdate;
-    r.shadowMap.autoUpdate = false;
-    if (this.post) {
-      this.warmTarget ??= new WebGLRenderTarget(4, 4, { colorSpace: LinearSRGBColorSpace });
-      r.setRenderTarget(this.warmTarget);
-      r.render(this.scene, cam);
-      r.setRenderTarget(null);
-    } else {
-      r.getViewport(this.warmView);
-      r.setViewport(0, 0, 1, 1);
-      r.setScissor(0, 0, 1, 1);
-      r.setScissorTest(true);
-      r.render(this.scene, cam);
-      r.setScissorTest(false);
-      r.setViewport(this.warmView);
-    }
-    r.shadowMap.autoUpdate = shadows;
   }
 
   // My floor changed: the scene now sits round the new one. Up or down the
@@ -1910,8 +1921,7 @@ void main() {
   carryFrom: number | null = null;
   private cameraAcross(from: number) {
     if (this.carryFrom === from) {
-      const o = this.offsetTo(from);
-      const d = new Vector3(o.x, o.h, o.y);
+      const d = new Vector3(0, this.upTo(from), 0);
       this.target.add(d);
       this.camera.position.add(d);
       this.gcEye.add(d);
@@ -1935,7 +1945,7 @@ void main() {
   // The campus is built in the home floor's coords, its ground STOREYs below it.
   private placeAround() {
     const home = homeOf(this.building);
-    const o = this.offsetTo(home);
+    const o = this.cornerTo(home);
     // (its snow a little under the ground floor's: what it lays on the snow —
     // shadows, slush, light — stays clear of the floor's own surface, or the
     // two fight over the same depth and flicker)
@@ -1944,7 +1954,7 @@ void main() {
   }
 
   // the ratio a fresh load picks on this screen at this quality
-  private ratioFor(q: Quality): number {
+  ratioFor(q: Quality): number {
     const dpr = window.devicePixelRatio || 1;
     return q === "high" ? Math.min(2, dpr) : q === "medium" ? Math.min(1.5, dpr) : q === "low" ? 1 : 0.75;
   }
@@ -1960,7 +1970,7 @@ void main() {
     this.dprQuery?.addEventListener("change", this.onDpr);
   }
 
-  private resize() {
+  resize() {
     if (!this.host) return;
     const ratio = this.ratioFor(this.quality);
     if (ratio !== this.renderer.getPixelRatio()) {
@@ -1978,269 +1988,8 @@ void main() {
     chars()?.inkResolution(w, h);
   }
 
-  // High: shadows in detail, bloom and the finish; Medium: softer shadows, no
-  // finish; Low: no shadows, fewer lamps, 1× pixels; Lowest: fewer still, ¾ of a
-  // pixel a pixel (and no antialiasing, from the start: ViewOpts).
-  // A change mid-game (auto quality, Settings): every shader the new one needs (the lamps
-  // lit, the shadows cast change them all) compiled first, a few a frame, against stand-ins
-  // for the scene's lights — the scene drawn as it was meanwhile — then switched. At once,
-  // every lit thing's shader was linked in one frame: 0.8 s here, seconds in Firefox.
-  private qualityTo: Quality | null = null;
-  toQuality(q: Quality) {
-    if (q === (this.qualityTo ?? this.quality)) return;
-    this.qualityTo = q;
-    void this.compileFor(q).then(() => {
-      if (!this.gone && this.qualityTo === q) this.setQuality(q);
-    });
-  }
-  private async compileFor(q: Quality) {
-    const r = this.renderer;
-    // the lights as `q` has them (setQuality): how many lamps, which cast shadows
-    const stand = new Scene();
-    stand.fog = this.scene.fog;
-    stand.environment = this.scene.environment;
-    const lamps = lampsFor(q);
-    const torches = this.torch3.map((t) => t.spot as Object3D);
-    const shown = (o: Object3D) => {
-      for (let x: Object3D | null = o; x; x = x.parent) if (!x.visible) return false;
-      return true;
-    };
-    this.scene.traverse((o) => {
-      if (!(o as PointLight).isLight) return;
-      const lamp = this.pool.indexOf(o as PointLight);
-      if (lamp >= 0 ? lamp >= lamps || !(o.parent && shown(o.parent)) : !shown(o)) return;
-      const l = o.clone(false);
-      l.visible = true; // (a lamp `q` lights that's off now)
-      if (o === this.sun) l.castShadow = q === "high" || q === "medium";
-      const t = torches.indexOf(o);
-      if (t >= 0) l.castShadow = q === "high" && t === 0;
-      stand.add(l);
-    });
-    // one of each kind of thing drawn (its materials, what its geometry carries)
-    const reps: Object3D[] = [];
-    const kinds = new Set<string>();
-    this.scene.traverseVisible((o) => {
-      const m = (o as Mesh).material as Material | Material[] | undefined;
-      if (!m || (o as PointLight).isLight) return;
-      const g = (o as Mesh).geometry as BufferGeometry | undefined;
-      const a = g?.attributes ?? {};
-      const k = `${(Array.isArray(m) ? m : [m]).map((x) => x.uuid)}|${o.type}|${Object.keys(a).map((n) => n + a[n].itemSize)}|${Object.keys(g?.morphAttributes ?? {})}`;
-      if (kinds.has(k)) return;
-      kinds.add(k);
-      let lit = false;
-      o.traverse((x) => {
-        lit ||= !!(x as PointLight).isLight;
-      });
-      if (!lit) reps.push(o); // (one holding a light: compiled when it's switched, as before)
-    });
-    // a few a frame, each lot ready before the next — into what the frame draws to (Medium
-    // and High: their finish's linear buffer, as compileAll; Low: the screen)
-    for (let i = 0; i < reps.length; ) {
-      if (this.gone || this.qualityTo !== q) return;
-      const t0 = performance.now();
-      const lot: Promise<unknown>[] = [];
-      const to = r.getRenderTarget();
-      if (q === "high" || q === "medium") {
-        this.warmTarget ??= new WebGLRenderTarget(4, 4, { colorSpace: LinearSRGBColorSpace });
-        r.setRenderTarget(this.warmTarget);
-      } else r.setRenderTarget(null);
-      while (i < reps.length && performance.now() - t0 < 4) lot.push(r.compileAsync(reps[i++], this.camera, stand));
-      r.setRenderTarget(to);
-      await Promise.all(lot).catch(() => {});
-      await new Promise((done) => requestAnimationFrame(done));
-    }
-  }
+  pageRect = () => this.renderer.domElement.getBoundingClientRect();
 
-  setQuality(q: Quality) {
-    this.quality = q;
-    this.qualityTo = null;
-    this.renderer.setPixelRatio(this.ratioFor(q));
-    if (!this.ratioAtStart && this.host) {
-      this.ratioAtStart = this.renderer.getPixelRatio();
-      this.dprAtStart = window.devicePixelRatio || 1;
-    }
-    this.sun.castShadow = q === "high" || q === "medium";
-    const size = q === "high" ? 2048 : 1024;
-    if (this.sun.shadow.mapSize.x !== size) {
-      this.sun.shadow.mapSize.set(size, size);
-      this.sun.shadow.map?.dispose();
-      this.sun.shadow.map = null;
-    }
-    this.lamps = lampsFor(q);
-    this.around.grounds?.far?.setQuality(q);
-    // the first flashlight (mine) throws shadows on High — its shadow map drawn once now, so it's
-    // there even while it's off (a shadow-casting light with no map yet: every lit draw failed —
-    // "mismatch between texture format and sampler type" — and only the ink was left)
-    for (const [i, tc] of this.torch3.entries()) {
-      tc.spot.castShadow = q === "high" && i === 0;
-      if (tc.spot.castShadow) tc.spot.shadow.needsUpdate = true;
-    }
-    this.pool.forEach((l, i) => {
-      l.visible = i < this.lamps;
-    });
-    if (q === "high" || q === "medium") {
-      if (this.post && this.post.lite !== (q === "medium")) {
-        this.post.dispose();
-        this.post = null;
-      }
-      this.post ??= new Post3(this.renderer, this.scene, this.camera, q === "medium");
-      this.post.setNight(this.nightLevel);
-    } else {
-      this.post?.dispose();
-      this.post = null;
-    }
-    this.resize();
-  }
-
-  // A gun (docs/plan/32-the-arms.md): what mine is doing (world/dark/arms.ts sets it: my body's and
-  // my hands' gun pose it), and a shot's kick on my look — most of it comes back by itself, the
-  // rest is mine to pull down.
-  myGun: GunFx | null = null;
-  private kickIn = { up: 0, side: 0 }; // (rad, still to come)
-  private kickOut = { up: 0, side: 0 }; // (rad, settling back)
-  kick(up: number, side: number, settle: number) {
-    this.kickIn.up += up;
-    this.kickIn.side += side;
-    this.kickOut.up += up * settle;
-    this.kickOut.side += side * settle;
-  }
-  // Everyone else's gun (plan 32, phase 4): their shots' kicks (by id, this view's time), and what
-  // their hands are doing, eased from what the server says (`arm`: drawing, reloading, open).
-  private gunKicks = new Map<string, number>();
-  private gunFxs = new Map<string, GunFx & { turnTo: number }>();
-  /** Where someone's gun's muzzle is drawn (the floor's coords, z up) — mine in first person where
-   *  my hands show it — or null: no gun drawn (the flash and the tracers come out of it). */
-  muzzleOf(id: string): { x: number; y: number; z: number } | null {
-    const v = new Vector3();
-    // (first person: my body isn't drawn; my hands are, by their own lens — where the world's
-    // camera would show that same spot)
-    if (id === this.meId && this.mode === "first") {
-      if (!this.hands?.muzzleFor(this.camera, v)) return null;
-    } else if (!this.people3.get(id)?.gunMuzzle(v)) return null;
-    return { x: v.x, y: v.z, z: v.y };
-  }
-
-  /** Someone else fired (`arms:shot`): their gun kicks, their hammer falls. */
-  gunShot(id: string) {
-    this.gunKicks.set(id, this.time);
-    const f = this.gunFxs.get(id);
-    if (f) f.turnTo += 1;
-  }
-  private otherGun(b: Body3, dt: number): GunFx | null {
-    if (!b.gun) {
-      this.gunFxs.delete(b.id);
-      return null;
-    }
-    let f = this.gunFxs.get(b.id);
-    if (!f) {
-      f = { kick: 0, cock: 0, turn: 0, turnTo: 0, open: 0, loaded: 6, trigger: 0, reload: 0 };
-      this.gunFxs.set(b.id, f);
-    }
-    const ease = (v: number, to: number, rate: number) => v + (to - v) * (1 - Math.exp(-dt * rate));
-    const since = this.time - (this.gunKicks.get(b.id) ?? -9);
-    const aiming = ((b.mv ?? 0) & MV_AIM) !== 0;
-    const loading = b.arm === 2 || b.arm === 3;
-    f.kick = since < 0.035 ? since / 0.035 : Math.exp(-(since - 0.035) * (b.gun === "shotgun" ? 9 : 13));
-    f.cock = ease(f.cock, aiming && since > 0.12 ? 1 : 0, 18);
-    f.turn = ease(f.turn, f.turnTo, 14);
-    f.open = ease(f.open, loading ? 1 : 0, 12);
-    f.reload = ease(f.reload, loading && !aiming ? 1 : 0, 8);
-    f.trigger = since < 0.08 ? 1 : 0;
-    return f;
-  }
-
-  /** How far down the sights (0..1), first person. */
-  get ads(): number {
-    return this.hands?.ads ?? 0;
-  }
-  private pageRect = () => this.renderer.domElement.getBoundingClientRect();
-  private fov1p = FOV; // first person's own lens (the wheel zooms it), down the sights closer
-
-  // The phone's camera in first person: its zoom (1 = the eye's lens). null lets go.
-  lensFov: number | null = null;
-  lens(zoom: number | null) {
-    this.lensFov = zoom === null ? null : Math.max(14, FOV / zoom);
-    if (zoom === null && this.mode !== "first") this.camera.fov = FOV;
-  }
-
-  // The frame as it is (the phone's camera): drawn now and copied in the same
-  // task, so it's there without keeping the drawing buffer.
-  snapshot(): HTMLCanvasElement | null {
-    const tags = this.tagLayer?.style.display ?? "";
-    // (the canvas alone: a glass with a player behind it gets its picture back for this one)
-    this.live.holes(this.camera, this.pageRect, true);
-    if (this.post) this.post.render(false);
-    else this.renderer.render(this.scene, this.camera);
-    this.live.holes(this.camera, this.pageRect);
-    const src = this.renderer.domElement;
-    const c = document.createElement("canvas");
-    c.width = src.width;
-    c.height = src.height;
-    const g = c.getContext("2d");
-    if (!g) return null;
-    g.drawImage(src, 0, 0);
-    if (this.tagLayer) this.tagLayer.style.display = tags;
-    return c;
-  }
-
-  // Someone took a photo: the flash, at their hand.
-  private flashes: { s: Sprite; t: number }[] = [];
-  private flashTex: CanvasTexture | null = null;
-  flash(id: string) {
-    const p3 = this.people3.get(id);
-    const p = this.people.get(id);
-    if (!p && !p3?.ready) return;
-    if (!this.flashTex) {
-      const c = document.createElement("canvas");
-      c.width = c.height = 64;
-      const g = c.getContext("2d") as CanvasRenderingContext2D;
-      const r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-      r.addColorStop(0, "rgba(255,255,255,1)");
-      r.addColorStop(0.2, "rgba(255,250,235,.8)");
-      r.addColorStop(1, "rgba(255,240,210,0)");
-      g.fillStyle = r;
-      g.fillRect(0, 0, 64, 64);
-      this.flashTex = new CanvasTexture(c);
-    }
-    const s = new Sprite(
-      new SpriteMaterial({ map: this.flashTex, blending: AdditiveBlending, depthWrite: false, transparent: true }),
-    );
-    if (p3?.ready) s.position.copy(p3.hand("R"));
-    else if (p) s.position.set(p.root.position.x, 1.5, p.root.position.z);
-    s.scale.setScalar(0.2);
-    s.renderOrder = 999;
-    this.scene.add(s);
-    this.flashes.push({ s, t: 0 });
-  }
-  private stepFlashes(dt: number) {
-    for (const f of this.flashes) {
-      f.t += dt;
-      const k = f.t / 0.3;
-      f.s.scale.setScalar(0.25 + k * 1.6);
-      (f.s.material as SpriteMaterial).opacity = Math.max(0, 1 - k * k);
-    }
-    for (const f of this.flashes.filter((x) => x.t > 0.3)) {
-      this.scene.remove(f.s);
-      (f.s.material as SpriteMaterial).dispose();
-    }
-    this.flashes = this.flashes.filter((x) => x.t <= 0.3);
-  }
-
-  zoomBy(k: number) {
-    // (first person: the lens, not the distance)
-    if (this.mode === "first") {
-      this.fov1p = Math.max(40, Math.min(80, this.fov1p * k));
-      return;
-    }
-    // (the chase camera: how far back it rests — it eases there, and further in a dash)
-    if (this.mode === "chase" && !this.buildMode) {
-      const L = LIMITS.chase.dist;
-      this.follow.tune.dist = Math.max(L[0], Math.min(L[1] - 3, this.follow.tune.dist * k));
-      return;
-    }
-    this.dist *= k;
-    this.clampCam();
-  }
   // the lock-on's ring at its feet, turning (docs/plan/56-the-controls.md E)
   private lockRing: Mesh | null = null;
   private drawLock() {
@@ -2284,7 +2033,7 @@ void main() {
   setMode(m: CamMode) {
     if (m === (this.modeNext ?? this.mode)) return;
     const across = (m === "first") !== (this.mode === "first");
-    if (across && this.veil && this.drawn > 0 && !this.warm) {
+    if (across && this.veil && this.warmup.drawn > 0 && !this.warmup.warm) {
       this.modeNext = m;
       if (this.veilT) return; // (already dipping: it takes the latest at the bottom)
       this.veil.style.opacity = "1";
@@ -2308,7 +2057,7 @@ void main() {
   private applyMode(m: CamMode) {
     if (m === this.mode) return;
     this.mode = m;
-    this.showCrosshair();
+    this.mouseLook.showCrosshair();
     if (m !== "first" && this.camera.fov !== FOV) {
       this.camera.fov = FOV;
       this.camera.updateProjectionMatrix();
@@ -2402,80 +2151,6 @@ void main() {
     return { x: fx * f - fy * r, y: fy * f + fx * r };
   }
 
-  // Stereo pan of a sound at `src` for a listener at `ear`, as this camera sees
-  // it (the iso view pans by screen x; here by the camera's right).
-  /** Where the Grounds' coords (the building's) sit in my floor's 3D frame: the scene's x, z are
-   *  theirs less (x, z); its height theirs plus y (docs/plan/28-the-car.md: the cars draw so). */
-  // ── the physics world (docs/plan/50-the-volume.md; tp/physics3d.ts): my body moves on it ──
-  private physics: BrowserPhysics | null = null;
-  /** (plan 58 5d) the world's physics for a ragdoll; someone's limp this frame; mine is */
-  private readonly ragSpace = () => this.physics?.ragdollSpace() ?? null;
-  /** (plan 70 phase 9) The physics world and my floor's origin in it (a life-size board's men are
-   *  kinematic boxes in it), or null before it's up. */
-  physicsSpace() {
-    return this.ragSpace();
-  }
-  private limpNow = false;
-  private meLimp = false;
-  /** (plan 61) what's worn swinging on Jolt — me and the nearest few: its own chunk, once the physics is in */
-  private sway: import("@/world/sway/hub").SwayHub | null = null;
-  private swayAsked = false;
-  /** (plan 58 5d) I'm down on the ragdoll: the walker holds me still till I'm up */
-  limpMe(): boolean {
-    return this.meLimp;
-  }
-  private meDrift: { dx: number; dz: number } | null = null;
-  private meUp: number | null = null;
-  /** (plan 58 5d) Getting up off the ragdoll: the way my body's turned — the walker faces it, so up
-   *  I don't turn back round to the way I'd faced before the fall. */
-  limpFacing(): number | null {
-    return this.meUp;
-  }
-  /** (plan 58 5d) How far my ragdoll's hips have gone from where I am (the scene's x, z = my floor's
-   *  x, y): the walker follows them, so I get up where I lie and the camera stays on me. */
-  limpDrift(): { dx: number; dz: number } | null {
-    return this.meDrift;
-  }
-  /** (plan 58 4f) the ground under a spot on my floor, by Jolt's ray down (null: none, or no physics) */
-  private readonly groundAt = (x: number, y: number, from: number): number | null => {
-    const hit = this.physics?.ray(x, from, y, 0, -1, 0, 1.4) ?? null;
-    return hit === null ? null : from - hit;
-  };
-  private physicsAsked = false;
-  /** Jolt's world in the browser, made once the view's up (until it's in, the grid moves me). */
-  private startPhysics(): void {
-    if (this.physicsAsked) return;
-    this.physicsAsked = true;
-    void BrowserPhysics.start(this.scene, {
-      world: () => ({ building: this.building, objects: this.allObjects }),
-      at: () => {
-        const off = offsetOf(this.building, this.level);
-        return { x: this.camera.position.x + off.x, z: this.camera.position.z + off.y };
-      },
-      frameOf: (level) => {
-        const off = offsetOf(this.building, level);
-        return { ox: off.x, oy: off.y, elev: elevOf(level) };
-      },
-      frame: () => {
-        const off = offsetOf(this.building, this.level);
-        return { x: -off.x, y: -elevOf(this.level), z: -off.y };
-      },
-    })
-      .then((p) => {
-        if (this.gone) p.stop();
-        else this.physics = p;
-      })
-      .catch((e) => console.warn("[physics] the browser's world couldn't start:", e));
-  }
-  /** My body on Jolt's world (the walker's: input/walker.ts) — null till it's in. */
-  physicsBody(uid: number | null, level: number, clip: boolean, grid: Grid, fly = false) {
-    return this.physics?.body(uid, level, clip, grid, fly) ?? null;
-  }
-  /** What's under (x, y) from z down on `level` as Jolt has it (a roof, not the land under it), or
-   *  the grid's say till the physics is in. */
-  groundUnder(grid: Grid, level: number, x: number, y: number, z: number): number {
-    return this.physics?.groundUnder(grid, level, x, y, z) ?? grid.groundAt(x, y, z);
-  }
   /** Each body's feet as they're put down (docs/plan/63-the-steps.md): its id, which foot — set by
    *  the controller (mine, everyone else's near). */
   onStep: ((id: string, side: "L" | "R") => void) | undefined = undefined;
@@ -2485,25 +2160,14 @@ void main() {
   onThud: ((id: string, hard: number) => void) | undefined = undefined;
   /** What's under (x, y) from z down on `level` and what it is, as Jolt has it (the steps'), or null
    *  till the physics is in. */
-  underfoot(grid: Grid, level: number, x: number, y: number, z: number): { g: number; on: string } | null {
-    return this.physics?.underfoot(grid, level, x, y, z) ?? null;
+  underfoot(level: number, x: number, y: number, z: number): { g: number; on: string } | null {
+    return this.body.physics?.underfoot(level, x, y, z) ?? null;
   }
-  /** Every solid near you as Jolt holds it, drawn over the scene (the admins'): on, or off. */
-  physicsDebug(on: boolean): void {
-    this.physics?.showShapes(on);
-  }
-  /** The physics world, when its shapes are drawn (the admin panel's counts). */
-  get physicsShown(): BrowserPhysics | null {
-    return this.physics?.shapesShown ? this.physics : null;
-  }
-  /** Where floor `level`'s coords sit in the Grounds' (added to a point on it: the Grounds'). */
-  floorOffset(level: number): { x: number; z: number } {
-    const o = offsetOf(this.building, level);
-    return { x: o.x, z: o.y };
-  }
-  groundsFrame(): { x: number; z: number; y: number; visible: boolean } {
-    const off = offsetOf(this.building, this.level);
-    return { x: off.x, z: off.y, y: elevOf(0) - elevOf(this.level), visible: !!this.around.grounds };
+
+  /** How the Grounds sit in the scene: as high as the ground floor is from mine (their x, z the
+   *  scene's: plan 72's one frame), and whether they're drawn. */
+  groundsFrame(): { y: number; visible: boolean } {
+    return { y: elevOf(0) - elevOf(this.level), visible: !!this.around.grounds };
   }
   /** The element the view is drawn into (an overlay goes in it). */
   get hostEl(): HTMLElement | null {
@@ -2516,39 +2180,6 @@ void main() {
     return Math.max(-1, Math.min(1, ((src.x - ear.x) * rx + (src.y - ear.y) * ry) / 6));
   }
 
-  // What seat is on each tile (its catalog kind): a sitter's hips rest at its
-  // cushion's height.
-  private seatKinds = new Map<number, string>();
-  private seatObjs = new Map<number, WorldObjectDef>();
-  private indexSeats(map: MapDef, objects: WorldObjectDef[]) {
-    this.seatKinds.clear();
-    this.seatObjs.clear();
-    for (const o of objects) {
-      if (!entry(o.kind).seat) continue;
-      const { w, h } = placedFootprint(o);
-      for (let dy = 0; dy < h; dy++)
-        for (let dx = 0; dx < w; dx++) {
-          this.seatKinds.set((o.y + dy) * map.width + o.x + dx, o.kind);
-          this.seatObjs.set((o.y + dy) * map.width + o.x + dx, o);
-        }
-    }
-  }
-  /** A sitter goes with a seat that moves while sat in (plan 68: the egg chair swivels, the rocking
-   *  chair rocks, the hanging chair and the hammock sway — furn/native.ts seatMotion), turned about
-   *  the same point by the same amount as its live part, this frame. Anyone else: upright. */
-  private rideSeat(root: Object3D, seat: WorldObjectDef | undefined) {
-    // (the person sets only its heading each frame: a tilt from the seat is this frame's alone)
-    if (root.rotation.x || root.rotation.z) root.rotation.set(0, root.rotation.y, 0);
-    if (!seat || !isNative(seat.kind)) return;
-    const m = seatMotion(seat, this.time);
-    if (!m || !m.angle) return;
-    const q = this.rideQ.setFromAxisAngle(m.axis, m.angle);
-    const pivot = m.pivot.add(this.world.root.position);
-    root.position.sub(pivot).applyQuaternion(q).add(pivot);
-    root.quaternion.premultiply(q);
-  }
-  private rideQ = new Quaternion();
-
   // One frame: people from the world's bodies (`me` = whose camera this is).
   /** Bodies besides the room's people: the shadowed (world/dark, docs/plan/30-the-dark.md D5). */
   extraBodies: (() => Body3[]) | null = null;
@@ -2557,7 +2188,7 @@ void main() {
   downed = new Map<string, "down" | "kneel">();
   /** Flares burning (world/dark gives them: the floor's coords, feet z, s lit): a red ground lamp each. */
   flares: { x: number; y: number; z: number; t: number }[] = [];
-  private deaths: { x: number; y: number; z: number; t: number }[] = [];
+  deaths: { x: number; y: number; z: number; t: number }[] = [];
   private arms3: Arms3 | null = null;
   /** Shots, sparks, flares in the air and on the snow (tp/arms3d.ts), made when first wanted. */
   arms(): Arms3 {
@@ -2571,9 +2202,9 @@ void main() {
     this.time += dt;
     // (the swimmers' rings and wakes, found again each frame; the bubbles up: plan 66)
     for (const v of wx.wxSwim.value) v.w = 0;
-    this.swimN = 0;
-    this.bubbleDt = dt;
-    this.bubbles?.step(dt, this.time);
+    this.mood.swimN = 0;
+    this.mood.bubbleDt = dt;
+    this.mood.bubbles?.step(dt, this.time);
     this.ratioIn -= dt;
     if (this.ratioIn <= 0) {
       this.ratioIn = 1;
@@ -2589,15 +2220,15 @@ void main() {
     }
     this.warmUp(performance.now());
     this.syncLifts(performance.now());
-    // everyone in my floor's frame: the floors below where they are, above not drawn
+    // everyone where they are (the world's frame): the floors below down where they are, above not drawn
     bodies = bodies.flatMap((b) => {
       // (on the earbud — on a call, the phone put away: no phone in the hand, a bud in the ear)
       if (b.phone === "bud") b = { ...b, phone: "", bud: true };
       const l = b.level ?? this.level;
-      const o = this.offsetTo(l);
       if (l === this.level) return [b];
       if (l > this.level) return [];
-      return [{ ...b, x: b.x + o.x, y: b.y + o.y, z: (b.z ?? 0) + o.h, ground: (b.ground ?? 0) + o.h }];
+      const h = this.upTo(l);
+      return [{ ...b, z: (b.z ?? 0) + h, ground: (b.ground ?? 0) + h }];
     });
     const me = bodies.find((b) => b.id === meId);
     this.syncStairs(dt, bodies);
@@ -2605,7 +2236,7 @@ void main() {
     // look around: the arrows, the right stick — the chase camera's the KH camera's (follow-cam.ts,
     // below); the others turn as they did (Q / E in the views that read their own keys)
     // (build mode keeps the camera where it's put: placing things, it mustn't come round)
-    const chase = this.mode === "chase" && !this.god && !this.buildMode;
+    const chase = this.mode === "chase" && !this.god && !this.buildPick.buildMode;
     let lx = this.keyLook.x;
     let ly = this.keyLook.y;
     if (pad) {
@@ -2626,9 +2257,9 @@ void main() {
       }
     } else if (lx || ly) this.dragged = this.time;
     // mouse look: the mouse aims the camera (no swinging in behind you)
-    if (this.looking) {
+    if (this.mouseLook.looking) {
       this.dragged = this.time;
-      this.aimAt();
+      this.mouseLook.aimAt();
     }
     this.meId = meId;
     const first = this.mode === "first";
@@ -2715,10 +2346,9 @@ void main() {
     } else if (seat && (seat.level ?? this.level) <= this.level) {
       // not drawn (in a car): the target's still where I am — it stayed where I got in, and the
       // land, the sun's shadows and the lamps all stayed round there (the town went bare and white)
-      const o = this.offsetTo(seat.level);
-      this.meAt = { x: seat.x + o.x, y: seat.y + o.y };
+      this.meAt = { x: seat.x, y: seat.y };
       this.walkAt = { ...this.meAt };
-      this.target.set(seat.x + o.x, EYE - 0.3 + seat.ground + o.h, seat.y + o.y);
+      this.target.set(seat.x, EYE - 0.3 + seat.ground + this.upTo(seat.level ?? this.level), seat.y);
       this.targetReady = true;
     }
     if (this.god) {
@@ -2733,12 +2363,12 @@ void main() {
     // a shot's kick: up (pitch > 0 is down) and a little aside, fast; settling back slower
     const kin = 1 - Math.exp(-dt * 38);
     const kout = 1 - Math.exp(-dt * 7);
-    const ku = this.kickIn.up * kin - this.kickOut.up * kout;
-    const ks = this.kickIn.side * kin - this.kickOut.side * kout;
-    this.kickIn.up *= 1 - kin;
-    this.kickIn.side *= 1 - kin;
-    this.kickOut.up *= 1 - kout;
-    this.kickOut.side *= 1 - kout;
+    const ku = this.guns.kickIn.up * kin - this.guns.kickOut.up * kout;
+    const ks = this.guns.kickIn.side * kin - this.guns.kickOut.side * kout;
+    this.guns.kickIn.up *= 1 - kin;
+    this.guns.kickIn.side *= 1 - kin;
+    this.guns.kickOut.up *= 1 - kout;
+    this.guns.kickOut.side *= 1 - kout;
     this.pitch -= ku;
     this.yaw += ks;
     this.clampCam();
@@ -2772,7 +2402,7 @@ void main() {
       if (cam.y < floor + 0.25) cam.y = floor + 0.25;
       this.camera.lookAt(this.target.x + sx, this.target.y + up, this.target.z + sz);
     }
-    this.aimFrame(dt, me);
+    this.pointerPart.aimFrame(dt, me);
     this.drawLock();
 
     // a game camera: ease over to it (and back when it lets go)
@@ -2791,18 +2421,20 @@ void main() {
       cam.lerp(this.gcEye, m);
       this.camera.lookAt(look.lerp(this.gcLook, m));
     }
-    this.underWater();
+    this.mood.underWater();
     // the lens: a game camera's own, or the photo zoom in first person
-    const fov = gc?.fov ?? (first ? (this.lensFov ?? this.fov1p * (1 - 0.18 * this.ads)) : FOV - 8 * this.aimK);
+    const fov =
+      gc?.fov ??
+      (first ? (this.lensPart.lensFov ?? this.lensPart.fov1p * (1 - 0.18 * this.guns.ads)) : FOV - 8 * this.aimK);
     if (Math.abs(this.camera.fov - fov) > 0.05) {
       this.camera.fov += (fov - this.camera.fov) * (1 - Math.exp(-dt * 10));
       this.camera.updateProjectionMatrix();
     }
 
     this.reduced = !!me?.reduced;
-    this.builder.sync(this.buildLook, this.world, dt);
+    this.buildPick.builder.sync(this.buildPick.buildLook, this.world, dt);
     this.stepFx(dt);
-    this.stepFlashes(dt);
+    this.lensPart.stepFlashes(dt);
     // (god mode: the buildings whole from above)
     if (!this.god) this.fadeWalls(dt);
     this.around.campus.cutAbove(!this.god && this.insideBelowHome(me) ? STOREY - 0.15 : null);
@@ -2815,17 +2447,17 @@ void main() {
       this.around.grounds.fadeOff = !!this.god;
     }
     this.around.update(dt, this.camera.position, !me?.reduced, this.target);
-    this.drawPrints(performance.now());
+    this.printsPart.drawPrints(performance.now());
     this.drawCues(dt, !!me?.reduced);
-    this.placeSun();
-    this.assignLamps(dt);
-    this.weatherFrame(dt, me);
-    if (!me?.reduced) this.breathe(bodies);
+    this.sunPart.placeSun();
+    this.sunPart.assignLamps(dt);
+    this.mood.weatherFrame(dt, me);
+    if (!me?.reduced) this.vehicles.breathe(bodies);
 
     // cards and people face back along the camera's view (all the same way)
     const face = this.yaw + Math.PI;
     for (const c of this.world.cards) c.rotation.y = Math.PI / 2 - face;
-    for (const c of this.builder.ghostCards) c.rotation.y = Math.PI / 2 - face;
+    for (const c of this.buildPick.builder.ghostCards) c.rotation.y = Math.PI / 2 - face;
 
     // people (drawn again each frame only when on screen; far ones every third frame)
     this.camera.updateMatrixWorld();
@@ -2836,7 +2468,7 @@ void main() {
     const seen = new Set<string>();
     const seenPets = new Set<string>();
     let mySeat: string | undefined;
-    this.unseen.clear();
+    this.eyes.unseen.clear();
     // (plan 58's mood: the shadowed about, for everyone's tension)
     const shadesNear = bodies.filter((b) => b.shade && !b.shade.killed);
     for (const b of bodies) {
@@ -2852,7 +2484,7 @@ void main() {
       // (held down by a dog: lying there, not getting up — docs/plan/52-the-pet-two.md D8)
       const ft = this.fellT(b);
       const fell = ft !== undefined && b.pinned ? Math.min(ft, 1.4) : ft;
-      const angle3 = fell !== undefined ? (b.fellYaw ?? 0) + Math.PI : (b.angle ?? dirAngle(b.d));
+      const angle3 = fell !== undefined ? (b.fellYaw ?? 0) + Math.PI : (b.angle ?? b.yaw);
       const hidden3 =
         ((first || (this.gameCam !== null && this.gcMix > 0.5 && !this.gameCam.showMe)) && b.id === meId) ||
         this.byLens(b);
@@ -2866,7 +2498,8 @@ void main() {
           this.scene.add(p3.root);
         }
         this.sphere.center.set(b.x, (b.z ?? 0) + 0.9, b.y); // (up on a roof too)
-        const seat3 = b.a === 2 ? this.seatKinds.get(Math.floor(b.y) * this.map.width + Math.floor(b.x)) : undefined;
+        const seat3 =
+          b.a === 2 ? this.seats.seatKinds.get(Math.floor(b.y) * this.map.width + Math.floor(b.x)) : undefined;
         // (the shadowed: not there yet while the dark gathers, gone as it goes)
         const sh = b.shade;
         const shadeT = sh ? (performance.now() - sh.since) / 1000 : 0;
@@ -2877,17 +2510,19 @@ void main() {
             (sh.fade ?? 1) < 0.5);
         p3.root.visible = !hidden3 && !notThere;
         // (the light on them; out on the land, past the floor's light map, as a tint of their own)
-        const c = this.lightOn(b, me);
+        const c = this.eyes.lightOn(b, me);
         const L = landLight.value;
         // (and wet from the rain: darker, clothes and hair — docs/plan/65 W7)
-        const wk = 1 - 0.32 * this.wetOf(b, dt);
+        const wk = 1 - 0.32 * this.mood.wetOf(b, dt);
         p3.setTint(
-          this.onLand(b.x, b.y) ? this.ownTint.setRGB((wk * c.r) / L.r, (wk * c.g) / L.g, (wk * c.b) / L.b) : null,
+          this.mood.onLand(b.x, b.y)
+            ? this.eyes.ownTint.setRGB((wk * c.r) / L.r, (wk * c.g) / L.g, (wk * c.b) / L.b)
+            : null,
         );
         p3.setWater(b.swim === 1 && b.waterOver ? b.waterOver : null);
-        if (b.swim) this.swimmer(b.id, p3);
+        if (b.swim) this.mood.swimmer(b.id, p3);
         if (b.id === meId) mySeat = seat3;
-        p3.gunFx = b.id === meId ? this.myGun : this.otherGun(b, dt);
+        p3.gunFx = b.id === meId ? this.guns.myGun : this.guns.otherGun(b, dt);
         p3.update(
           {
             ...b,
@@ -2912,27 +2547,27 @@ void main() {
               (!hidden3 && this.frustum.intersectsSphere(this.sphere)) ||
               (b.id === meId && first && this.handsOn && handsDoing(b) !== ""),
             lowQuality: this.quality === "low" || this.quality === "lowest",
-            mood: this.moodOf(b, shadesNear),
-            groundAt: this.groundAt,
-            rag: this.ragSpace,
-            sway: this.sway?.skipOf(b.id),
+            mood: this.mood.moodOf(b, shadesNear),
+            groundAt: this.body.groundAt,
+            rag: this.body.ragSpace,
+            sway: this.body.sway?.skipOf(b.id),
             step: this.onStep,
             thud: this.onThud,
             hop: this.onHop,
           },
         );
-        this.rideSeat(
+        this.seats.rideSeat(
           p3.root,
-          b.a === 2 ? this.seatObjs.get(Math.floor(b.y) * this.map.width + Math.floor(b.x)) : undefined,
+          b.a === 2 ? this.seats.seatObjs.get(Math.floor(b.y) * this.map.width + Math.floor(b.x)) : undefined,
         );
         // (plan 58 5d: down on the ragdoll — the physics stepped while anyone is; mine holds the walker)
-        if (p3.limp?.on) this.limpNow = true;
+        if (p3.limp?.on) this.body.limpNow = true;
         if (b.id === meId) {
-          this.meLimp = !!p3.limp?.on;
-          this.meDrift = p3.limp?.drift() ?? null;
-          this.meUp = p3.upFacing();
+          this.body.meLimp = !!p3.limp?.on;
+          this.body.meDrift = p3.limp?.drift() ?? null;
+          this.body.meUp = p3.upFacing();
         }
-        this.snowFall(b, p3, dt, hidden3);
+        this.mood.snowFall(b, p3, dt, hidden3);
         if (p3.ready) {
           // (its drawing stood in until now)
           const old = this.people.get(b.id);
@@ -2951,8 +2586,8 @@ void main() {
         this.people.set(b.id, p);
         this.scene.add(p.root);
       }
-      const angle = b.angle ?? dirAngle(b.d);
-      this.lightOn(b, me);
+      const angle = b.angle ?? b.yaw;
+      this.eyes.lightOn(b, me);
       this.sphere.center.set(b.x, (b.z ?? 0) + 0.9, b.y); // (up on a roof too)
       // first person: you aren't drawn (the camera is inside you); the rig
       // keeps stepping so the other cameras find you as you left them
@@ -2964,7 +2599,7 @@ void main() {
       const onScreen = !hidden && this.frustum.intersectsSphere(this.sphere);
       const near = Math.hypot(cam.x - b.x, cam.z - b.y) < 12;
       const redraw = onScreen && (near || (this.tick + hashId(b.id)) % 3 === 0);
-      const seat = b.a === 2 ? this.seatKinds.get(Math.floor(b.y) * this.map.width + Math.floor(b.x)) : undefined;
+      const seat = b.a === 2 ? this.seats.seatKinds.get(Math.floor(b.y) * this.map.width + Math.floor(b.x)) : undefined;
       p.update(
         { ...b, angle, seat },
         dt,
@@ -2987,15 +2622,15 @@ void main() {
       }
     // (plan 61: what's worn swinging on Jolt — me and the nearest few: their stand-ins and anchors to
     // their bones, the step, their bones where it has them)
-    const ph = this.physics;
-    if (ph && this.charF && !this.swayAsked) {
-      this.swayAsked = true;
+    const ph = this.body.physics;
+    if (ph && this.charF && !this.body.swayAsked) {
+      this.body.swayAsked = true;
       void import("@/world/sway/hub").then((m) => {
-        const rs = this.physics?.ragdollSpace();
-        if (rs && !this.gone) this.sway = new m.SwayHub(rs.world, rs.origin);
+        const rs = this.body.physics?.ragdollSpace();
+        if (rs && !this.gone) this.body.sway = new m.SwayHub(rs.world, rs.origin);
       });
     }
-    const sw = this.sway;
+    const sw = this.body.sway;
     if (sw) {
       const near: { id: string; model: Person3D["model"]; d: number }[] = [];
       for (const [id, p] of this.people3)
@@ -3003,9 +2638,9 @@ void main() {
       sw.pre(near, Math.min(dt, 1 / 30), meId ?? undefined);
     }
     // (plan 58 5d: the ragdolls in the world's physics, a step on while anyone's down — or swings)
-    if (this.limpNow || sw?.active) ph?.step(dt);
+    if (this.body.limpNow || sw?.active) ph?.step(dt);
     sw?.post();
-    this.limpNow = false;
+    this.body.limpNow = false;
     for (const [id, p] of this.people3)
       if (!seen.has(id)) {
         p.dispose();
@@ -3052,13 +2687,13 @@ void main() {
     // first person: my hands, posed by my body's motion, framed in front of my eyes
     const C3 = this.chars();
     if (first && this.handsOn && me && !me.npc && C3 && this.charF && this.charMats && this.gcMix < 0.002) {
-      const angle = me.angle ?? dirAngle(me.d);
+      const angle = me.angle ?? me.yaw;
       if (!this.hands && this.handsSpare) {
         this.hands = this.handsSpare;
         this.handsSpare = null;
       }
       this.hands ??= new Hands1P(C3, this.charF, this.charMats, { ...me, angle });
-      this.hands.gunFx = this.myGun;
+      this.hands.gunFx = this.guns.myGun;
       this.hands.update(
         { ...me, angle, seat: mySeat },
         this.people3.get(me.id)?.motionOut ?? null,
@@ -3066,7 +2701,7 @@ void main() {
         this.camera,
         this.pitch,
         // (a flip turns the body over: the hands drop out of view for it)
-        this.lensFov !== null || (me.jump?.kind === "flip" && me.jump.stage === "air" && !me.reduced),
+        this.lensPart.lensFov !== null || (me.jump?.kind === "flip" && me.jump.stage === "air" && !me.reduced),
         this.quality === "low" || this.quality === "lowest",
       );
     } else if (this.hands) {
@@ -3074,15 +2709,24 @@ void main() {
       this.handsSpare?.dispose();
       this.handsSpare = this.hands;
       this.hands = null;
-    } else if (this.warm && !this.handsSpare && this.handsOn && me && !me.npc && C3 && this.charF && this.charMats) {
+    } else if (
+      this.warmup.warm &&
+      !this.handsSpare &&
+      this.handsOn &&
+      me &&
+      !me.npc &&
+      C3 &&
+      this.charF &&
+      this.charMats
+    ) {
       // made ahead behind the loading screen: the first time into first person built them in
       // one frame (a hitch)
-      this.handsSpare = new Hands1P(C3, this.charF, this.charMats, { ...me, angle: me.angle ?? dirAngle(me.d) });
+      this.handsSpare = new Hands1P(C3, this.charF, this.charMats, { ...me, angle: me.angle ?? me.yaw });
     }
     // the flashlights: after the people and my hands (out of the lens in a hand where it is this frame)
     this.torches(bodies, meId, dt);
     // build what's waiting (nearest first), a few milliseconds a frame
-    this.charF?.pump(this.warm ? 30 : 4);
+    this.charF?.pump(this.warmup.warm ? 30 : 4);
     for (const [id, e] of this.pets3)
       if (!seenPets.has(id)) {
         this.scene.remove(e.model.root);
@@ -3096,20 +2740,20 @@ void main() {
       // the scene's matrices once, here — the cull below reads them, the render doesn't make
       // them again (Low and Lowest: only where something moved, lazy-matrices.ts — and on the
       // way, what of the land and the campus my floor might hide)
-      const slab = this.noCull ? null : this.world.slab();
+      const slab = this.culling.noCull ? null : this.world.slab();
       if (this.quality === "low" || this.quality === "lowest") {
-        const g = this.gather;
+        const g = this.culling.gather;
         g.root = this.around.root;
         g.below = slab ? slab.slab.at.y - 0.02 : Number.NEGATIVE_INFINITY;
         g.out.length = 0;
         lazyMatrices(this.scene, slab ? g : null);
-        this.gathered = slab ? g.out : null;
+        this.culling.gathered = slab ? g.out : null;
       } else this.scene.updateMatrixWorld();
       this.scene.matrixWorldAutoUpdate = false;
-      this.matricesMade = true;
+      this.culling.matricesMade = true;
       try {
         // (what my floor hides from this camera left out of this one render: below-cull.ts)
-        this.cullBelow(slab);
+        this.culling.cullBelow(slab);
         this.live.holes(this.camera, this.pageRect);
         if (this.post) this.post.render(dt > 0 && !me?.reduced, hands);
         else {
@@ -3123,188 +2767,17 @@ void main() {
           }
         }
       } finally {
-        this.below3.end();
+        this.culling.below3.end();
         this.scene.matrixWorldAutoUpdate = true;
-        this.matricesMade = false;
-        this.gathered = null;
+        this.culling.matricesMade = false;
+        this.culling.gathered = null;
       }
-      this.drawTags(bodies);
+      this.tags.drawTags(bodies);
     }
-    this.drawn++;
+    this.warmup.drawn++;
     const now = performance.now();
     if (this.lastFrameAt) this.fps += (1000 / Math.max(1, now - this.lastFrameAt) - this.fps) * 0.05;
     this.lastFrameAt = now;
-  }
-
-  // ── what my floor hides (below-cull.ts) ─────────────────────────────────────
-  private below3 = new BelowCull();
-  private cullUnits: { obj: Object3D; box: Box3 }[] = [];
-  private belowBoxes = new WeakMap<Object3D, { at: Vector3; box: Box3 }>();
-  private eyeAt = new Vector3();
-  /** (tests: nothing left out — the same picture, the long way) */
-  noCull = false;
-  private looseFrustum = new Frustum();
-  private viewHid: Object3D[] = []; // (parked cars out of the current render's view)
-  private looseM = new Matrix4();
-  /** (tests: every floor drawn the old way, piece by piece — the same picture: World3) */
-  setUnmerged(on: boolean) {
-    this.viewCull = !on;
-    for (const b of this.floors.values()) b.world.setUnmerged(on);
-    this.games3?.setUnmerged(on);
-  }
-  private viewCull = true;
-  /** Glass and ink merged too (World3.setMergeClear: a few overlapping see-through pixels
-   *  blend in another order). */
-  setMergeClear(on: boolean) {
-    for (const b of this.floors.values()) b.world.setMergeClear(on);
-  }
-  private gather: Gather = { root: this.scene, below: 0, out: [] };
-  private gathered: Gather["out"] | null = null;
-  private cullBelow(slab: ReturnType<World3["slab"]>) {
-    this.below3.setSlab(slab?.slab ?? null, slab?.key ?? null);
-    if (!slab) return;
-    // (and its walls: solid ones hide what's outside below their top — not while faded)
-    const shell = this.world.shell();
-    const map = this.world.map;
-    this.below3.setShell(shell, shell.key, (x, y) => !isFloor(tileAt(map, x, y)));
-    this.below3.faded = this.world.fades.filter((f) => f.alpha < 0.999 && (!f.item || f.wall));
-    const units = this.cullUnits;
-    let n = 0;
-    const unit = () => {
-      units[n] ??= { obj: this.scene, box: new Box3() };
-      return units[n];
-    };
-    // the floors below mine: each thing built on them (a still mesh, an area, a card…)
-    for (const [f, b] of this.floors) {
-      if (f >= this.level || !b.world.root.visible || !b.world.root.parent) continue;
-      const at = b.world.root.position;
-      for (const c of b.world.root.children) {
-        const u = unit();
-        // (a still piece's box kept while its floor stays where it is; cards turn: every frame)
-        const had = this.belowBoxes.get(c);
-        if (had && !c.matrixAutoUpdate && had.at.equals(at)) u.box.copy(had.box);
-        else if (c.userData.loose) {
-          // (an area's loose pieces: their bounds, kept by the floor while they don't change)
-          const lb = b.world.looseBox(c);
-          if (!lb) continue;
-          u.box.copy(lb).translate(at);
-        } else {
-          if (!boxInParent(c as Mesh, u.box)) continue;
-          u.box.translate(at);
-          if (!c.matrixAutoUpdate) this.belowBoxes.set(c, { at: at.clone(), box: u.box.clone() });
-        }
-        u.obj = c;
-        n++;
-      }
-    }
-    // the stairwells and lift stops below: round their footprint, a storey (and a bit) high
-    const around = (o: Object3D, r: number, top: number) => {
-      if (!o.visible || o.position.y > -0.01) return;
-      const u = unit();
-      const p = o.position;
-      u.box.min.set(p.x - r, p.y - 0.5, p.z - r);
-      u.box.max.set(p.x + r, p.y + top, p.z + r);
-      u.obj = o;
-      n++;
-    };
-    // things that stand still outside: the parked cars, the campus (boxes made when they move)
-    const still = (o: Object3D) => {
-      const b = this.stillBox(o);
-      if (!b) return;
-      const u = unit();
-      u.box.copy(b);
-      u.obj = o;
-      n++;
-    };
-    for (const top of this.scene.children)
-      if (top.userData.cullKids) for (const o of top.children) if (o.userData.still && o.visible) still(o);
-    // (the campus mesh by mesh: its groups move inside it — with my floor — so a group's box
-    // can't be kept by its own place; each mesh's can, by its own world matrix)
-    const eye = this.camera.getWorldPosition(this.eyeAt);
-    const got = this.gathered;
-    if (got)
-      // (gathered by the matrices' pass: those low enough to be under my floor)
-      for (let i = 0; i < got.length; i += 2) {
-        const u = unit();
-        u.box.copy(got[i + 1] as Box3);
-        u.obj = got[i] as Object3D;
-        n++;
-      }
-    else
-      this.around.root.traverseVisible((o) => {
-        const d = o as Mesh & { isLine?: boolean };
-        if (d.isMesh || d.isLine) still(o);
-      });
-    for (const o of this.stairs3.root.children) around(o, STAIRS_D / 2 + 1, STOREY + 1.5);
-    for (const o of this.lifts3?.root.children ?? []) around(o, 2, STOREY + 0.5);
-    units.length = n;
-    this.below3.begin(this.camera, units);
-    // my floor's cards: a card is flat, so only one side of it faces the camera — with its
-    // front toward the camera, its back mesh draws nothing (left out: a draw fewer each)
-    for (const c of this.world.cards) {
-      if (!c.userData.cardBack || !c.visible) continue;
-      const g = (c as Mesh).geometry;
-      if (!g.boundingSphere) g.computeBoundingSphere();
-      const p0 = (g.boundingSphere as Sphere).center;
-      const ry = c.rotation.y;
-      const sn = Math.sin(ry);
-      const cs = Math.cos(ry);
-      const at = this.world.root.position;
-      const px = at.x + c.position.x + p0.x * cs + p0.z * sn;
-      const pz = at.z + c.position.z - p0.x * sn + p0.z * cs;
-      // (its front's normal: +z turned about y; the eye on that side of its plane)
-      if (sn * (eye.x - px) + cs * (eye.z - pz) > 1e-6 && !c.rotation.x && !c.rotation.z) this.below3.hideAlso(c);
-    }
-  }
-
-  /** A model that stands still from now on (a parked car: nothing on it moves): the pieces at
-   *  its origin drawn merged, a material each, its shadow in a draw or two (merge-static.ts),
-   *  its parts' own matrices made once (the model itself may still be slid by a knock). */
-  stillModel(root: Object3D) {
-    mergeStill(root);
-    shadowProxy(root, HIDDEN_LAYER);
-    root.traverse((o) => {
-      if (o === root) return;
-      o.updateMatrix();
-      o.matrixAutoUpdate = false;
-    });
-    seal(root);
-  }
-
-  /** `root`'s world matrices made now (Low and Lowest: only where something moved). */
-  matrices(root: Object3D) {
-    if (this.quality === "low" || this.quality === "lowest") lazyMatrices(root);
-    else root.updateMatrixWorld();
-  }
-
-  // A still thing's world box, made again only when it moves; null if its bounds can't be
-  // trusted (anything three itself doesn't cull by its box: particles, sprites, instances,
-  // skinned or unculled meshes — their points move without the box knowing).
-  private stillBoxes = new WeakMap<Object3D, { m: Matrix4; box: Box3 | null }>();
-  private matricesMade = false; // (this frame's, all of them: frame())
-  private stillBox(o: Object3D): Box3 | null {
-    if (!this.matricesMade) o.updateWorldMatrix(true, false);
-    const had = this.stillBoxes.get(o);
-    if (had?.m.equals(o.matrixWorld)) return had.box;
-    let ok = true;
-    o.traverse((x) => {
-      const d = x as Mesh & {
-        isPoints?: boolean;
-        isSprite?: boolean;
-        isInstancedMesh?: boolean;
-        isSkinnedMesh?: boolean;
-        isLine?: boolean;
-      };
-      if (d.isPoints || d.isSprite || d.isInstancedMesh || d.isSkinnedMesh) ok = false;
-      else if ((d.isMesh || d.isLine) && !d.frustumCulled) ok = false;
-    });
-    const box = ok ? new Box3().setFromObject(o) : null;
-    if (box?.isEmpty()) {
-      this.stillBoxes.set(o, { m: o.matrixWorld.clone(), box: null });
-      return null;
-    }
-    this.stillBoxes.set(o, { m: o.matrixWorld.clone(), box });
-    return box;
   }
 
   // The 3D people's chunk, its factory and materials (lit by the room); null while it loads.
@@ -3411,10 +2884,10 @@ void main() {
         b.name,
       );
       this.scene.add(model.root);
-      e = { model, key, turned: dirAngle(b.d) };
+      e = { model, key, turned: b.yaw };
       this.pets3.set(b.id, e);
     }
-    const angle = dirAngle(b.d);
+    const angle = b.yaw;
     let d = angle - e.turned;
     d = Math.atan2(Math.sin(d), Math.cos(d));
     e.turned += d * Math.min(1, dt * 9);
@@ -3451,108 +2924,6 @@ void main() {
     e.model.root.visible = true;
   }
 
-  // Over heads, as in iso: the name tag (status dot, a slash when the mic is
-  // off), the emote above it, chat bubbles above that. HTML over the canvas
-  // (crisp at any distance), hidden behind standing walls and far away.
-  // name tags off while a panel covers the world (they're HTML, above the canvas)
-  tagsHidden = false;
-  private drawTags(bodies: Body3[]) {
-    const layer = this.tagLayer;
-    if (!layer) return;
-    const hide = this.tagsHidden ? "none" : "";
-    if (layer.style.display !== hide) layer.style.display = hide;
-    const cam = this.camera.position;
-    const now = performance.now();
-    const seen = new Set<string>();
-    for (const b of bodies) {
-      if (b.shade) continue; // (the shadowed have no names)
-      seen.add(b.id);
-      // (and in the morning fog, past what it leaves of them: docs/plan/64-the-fog.md F5)
-      const fogK = this.fogSeen(b);
-      if (fogK < 0.1) this.unseen.add(b.id);
-      const dark = this.unseen.has(b.id);
-      let t = this.tagEls.get(b.id);
-      if (!t) {
-        t = makeTag();
-        layer.appendChild(t.root);
-        this.tagEls.set(b.id, t);
-      }
-      // (in god mode: building the open world — docs/plan/53-the-god-mode.md)
-      const label = b.busy === "god" ? `${b.name} · ${tr("godBuilding")}` : b.name;
-      if (t.name.textContent !== label) t.name.textContent = label;
-      const dot = b.pet
-        ? b.pet.look.color
-        : b.npc
-          ? "#c4402b"
-          : b.status === "dnd"
-            ? "#b5562f"
-            : b.status === "away"
-              ? "#8d877a"
-              : "#6e7b3a";
-      const muted = !b.mic && !b.npc && !b.bot && !b.pet;
-      const dotKey = `${dot}|${muted}`;
-      if (t.dotKey !== dotKey) {
-        t.dotKey = dotKey;
-        t.dot.style.background = dot;
-        t.slash.style.display = muted ? "" : "none";
-      }
-      const emote =
-        b.emote && ((EMOTES as readonly string[]).includes(b.emote) || (WANTS as readonly string[]).includes(b.emote))
-          ? (b.emote as Emote | Want)
-          : "";
-      if (t.emoteKey !== emote) {
-        t.emoteKey = emote;
-        if (emote) t.emote.src = emoteUrl(emote);
-      }
-      // (out in the dark, unseen: no name, no emote — the bubble still: they're heard)
-      const showEmote = emote && !dark ? "" : "none";
-      if (t.emote.style.display !== showEmote) t.emote.style.display = showEmote;
-      const pill = t.name.parentElement as HTMLElement;
-      const showName = dark ? "none" : "";
-      if (pill.style.display !== showName) pill.style.display = showName;
-      // (fading with them as the fog takes them; a bubble not: they're heard)
-      const fade = fogK >= 0.5 ? "" : (Math.max(0, fogK - 0.1) / 0.4).toFixed(2);
-      if (pill.style.opacity !== fade) {
-        pill.style.opacity = fade;
-        t.emote.style.opacity = fade;
-      }
-      if (t.bubbleUntil && now > t.bubbleUntil) {
-        t.bubbleUntil = 0;
-        t.bubble.style.display = "none";
-      }
-      const p3 = this.people3.get(b.id);
-      const pe = b.pet ? this.pets3.get(b.id) : undefined;
-      // (a pet's over its back, where it stands: the land's height, a lift's car)
-      const h = b.pet
-        ? (pe?.model.root.position.y ?? b.z ?? 0) + (pe?.model.height ?? 0.8) + 0.18
-        : p3?.ready
-          ? p3.tagY()
-          : b.npc
-            ? 1.6
-            : b.a === 2
-              ? 1.45
-              : 2.0;
-      const far = Math.hypot(cam.x - b.x, cam.z - b.y) > 16;
-      // (first person: nothing over your own head — the camera is in it)
-      const mine = this.mode === "first" && b.id === this.meId;
-      // (someone on a floor below: the floor's between us — no tag through it)
-      const below = (b.level ?? this.level) !== this.level;
-      const p = far || mine || below || this.hidden(b.x, b.y, h) ? null : this.project(b.x, b.y, h);
-      t.root.style.display = p ? "" : "none";
-      if (p) {
-        const bob = emote && !b.reduced ? Math.sin(now / 166) * 2 : 0;
-        t.emote.style.transform = `translate(-50%, ${bob}px)`;
-        t.root.style.transform = `translate(${p.x}px, ${p.y}px)`;
-        t.root.style.zIndex = String(Math.round(10000 - Math.hypot(cam.x - b.x, cam.z - b.y) * 100));
-      }
-    }
-    for (const [id, t] of this.tagEls)
-      if (!seen.has(id)) {
-        t.root.remove();
-        this.tagEls.delete(id);
-      }
-  }
-
   /** Where someone is drawn now (their 3D model, or the drawing standing in), in tiles; null if not at all. (tests) */
   /** (tests) my hands in first person: drawn, and what they're doing */
   handsNow(): { shown: boolean; doing: string } | null {
@@ -3568,16 +2939,7 @@ void main() {
     return null;
   }
 
-  // A chat bubble over someone's head (as the iso engine's `say`).
-  say(id: string, text: string, ms = 6000) {
-    const t = this.tagEls.get(id);
-    if (!t) return;
-    t.bubble.textContent = text.length > 140 ? `${text.slice(0, 137)}…` : text;
-    t.bubble.style.display = "";
-    t.bubbleUntil = performance.now() + ms;
-  }
-
-  private clampCam() {
+  clampCam() {
     const L = LIMITS[this.mode];
     // (aiming: up to looking above level)
     this.pitch = Math.max(this.aimK > 0.5 ? -0.5 : L.pitch[0], Math.min(L.pitch[1], this.pitch));
@@ -3615,7 +2977,7 @@ void main() {
     if (cp > 0.01) {
       const home = homeOf(this.building);
       if (this.level < home) {
-        const o = this.offsetTo(home);
+        const o = this.cornerTo(home);
         const m = 0.3; // (clear of the wall's inner face)
         const x0 = o.x + m;
         const z0 = o.y + m;
@@ -3629,7 +2991,7 @@ void main() {
         }
       }
       // (not building: placing things by a wall, the camera stays where it's put)
-      if (!this.buildMode) {
+      if (!this.buildPick.buildMode) {
         const cx = t.x + dx * this.dist * cp;
         const cz = t.z + dz * this.dist * cp;
         for (const f of this.world.fades) {
@@ -3648,12 +3010,11 @@ void main() {
         // the Grounds' buildings round the ground floor (the town's, the blocks')
         const g = this.around.grounds;
         if (g && this.level === 0) {
-          const off = offsetOf(this.building, 0);
           for (const b of g.boxes) {
-            const x0 = b.x0 - off.x - 0.3;
-            const y0 = b.z0 - off.y - 0.3;
-            const x1 = b.x1 - off.x + 0.3;
-            const y1 = b.z1 - off.y + 0.3;
+            const x0 = b.x0 - 0.3;
+            const y0 = b.z0 - 0.3;
+            const x1 = b.x1 + 0.3;
+            const y1 = b.z1 + 0.3;
             if (Math.max(x0 - t.x, 0, t.x - x1) + Math.max(y0 - t.z, 0, t.z - y1) > this.dist + 2) continue;
             if (t.x > x0 && t.x < x1 && t.z > y0 && t.z < y1) continue; // (you're in it: its outside's gone)
             const hit = segBox(t.x, t.z, cx, cz, x0, y0, x1, y1);
@@ -3664,7 +3025,7 @@ void main() {
           }
         }
         // the shuttle and the visitor's car (their box, square to the ground)
-        for (const m of this.veh3.values()) {
+        for (const m of this.vehicles.veh3.values()) {
           const big = m.userData.big as boolean;
           const half = big ? 5.2 : 2.6;
           const r = Math.abs(Math.cos(m.rotation.y)) * half + Math.abs(Math.sin(m.rotation.y)) * 1.3;
@@ -3685,9 +3046,9 @@ void main() {
     // (not building: placing things by a wall, the camera stays where it's put)
     // (round a pole the look's from inside it: the ray starts out past its side)
     const from = this.swingAt ? Math.max(0, this.swingAt.r - 0.25) : 0;
-    const hit = this.buildMode
+    const hit = this.buildPick.buildMode
       ? null
-      : (this.physics?.ray(
+      : (this.body.physics?.ray(
           t.x + dx * cp * from,
           t.y + sp * from,
           t.z + dz * cp * from,
@@ -3724,7 +3085,7 @@ void main() {
       }
       // (build mode's walls up / down override it)
       // (walls and what hangs on them: not tall furniture)
-      const view = this.buildLook?.wallView;
+      const view = this.buildPick.buildLook?.wallView;
       if (!f.item || f.wall) {
         if (view === "up") block = false;
         else if (view === "down") block = true;
@@ -3736,727 +3097,6 @@ void main() {
       applyFade(f, this.world.materials);
       this.world.faded(f); // (its pieces drawn themselves while faded: World3)
     }
-  }
-
-  private sunX = new Vector3();
-  private sunY = new Vector3();
-  private sunZ = new Vector3();
-  private sunAt = new Vector3();
-  private placeSun() {
-    const el = this.sun.userData.el as number;
-    const az = this.sun.userData.az as number;
-    const t = this.target;
-    // azimuth: east → south → west over the day; +y is "south" on the map
-    const dx = -Math.cos(az) * Math.cos(el);
-    const dz = Math.sin(az) * Math.cos(el);
-    const dy = Math.sin(el);
-    // the shadows cover what's in view: a box round you, reaching further ahead
-    // the further back the camera stands (a far free camera saw them stop
-    // short); its size in steps, so its texels stay put between them
-    const sc = this.sun.shadow.camera;
-    const cam = this.camera.position;
-    const back = Math.hypot(cam.x - t.x, cam.z - t.z);
-    const R = 14 + 2 * Math.round(Math.max(0, back - 6) * 0.75);
-    if (sc.right !== R) {
-      Object.assign(sc, { left: -R, right: R, top: R, bottom: -R, far: 2 * R + 50 });
-      sc.updateProjectionMatrix();
-    }
-    const ahead = (R - 14) * 0.6 + 2;
-    const fx = t.x + Math.cos(this.yaw) * ahead;
-    const fz = t.z + Math.sin(this.yaw) * ahead;
-    // the shadow map moves with you a whole texel at a time (snapped in the
-    // light's view): sliding with you, every shadow's edge crawled and shimmered
-    const texel = (sc.right - sc.left) / this.sun.shadow.mapSize.x;
-    const z = this.sunZ.set(dx, dy, dz).normalize();
-    const x = this.sunX.set(z.z, 0, -z.x).normalize(); // up × z
-    const y = this.sunY.crossVectors(z, x);
-    const p = this.sunAt.set(fx, 0, fz);
-    const u = p.dot(x);
-    const v = p.dot(y);
-    p.addScaledVector(x, Math.round(u / texel) * texel - u).addScaledVector(y, Math.round(v / texel) * texel - v);
-    const far = R + 20;
-    this.sun.position.set(p.x + dx * far, p.y + dy * far, p.z + dz * far);
-    this.sun.target.position.copy(p);
-  }
-
-  // The point lights go to the lamps nearest the camera's target that light
-  // where it is (a lamp in the next room shone through the wall onto this one's
-  // things); each fades in and out with its distance, with the last one in
-  // reach when there are more lamps than lights, and as a wall or a door comes
-  // between — every frame: a lamp switching on or off as you walked by was a
-  // flash on the floor round it.
-  private lampSeen = new Map<string, number>(); // how much each lamp lights where you are (eased)
-  private assignLamps(dt: number) {
-    const d = daylight(this.hour);
-    const t = this.target;
-    const ease = 1 - Math.exp(-dt * 6);
-    const seen = new Map<string, number>();
-    const all: { l: LightSource; d: number; w: number }[] = [];
-    for (const l of this.world.lights) {
-      const dist = Math.hypot(l.x - t.x, l.y - t.z);
-      if (dist >= LAMP_REACH) continue;
-      const key = `${l.x},${l.y}`;
-      const want = this.light.reaches(l, t.x, t.z) ? 1 : 0;
-      const was = this.lampSeen.get(key) ?? want;
-      const w = Math.abs(want - was) < 0.01 ? want : was + (want - was) * ease;
-      seen.set(key, w);
-      if (w > 0.001) all.push({ l, d: dist, w });
-    }
-    this.lampSeen = seen;
-    all.sort((a, b) => a.d - b.d);
-    const near = all.slice(0, this.lamps);
-    const edge = Math.min(LAMP_REACH, all[this.lamps]?.d ?? LAMP_REACH);
-    // (the light map has their pools; this lights what stands up — in the pitch dark, all of it: a
-    // lamp post's people and cars as lit as its pool, docs/plan/44-the-night.md)
-    const k = (0.15 + 1.1 * d.night) * (1 + 7 * d.dark);
-    this.pool.forEach((p, i) => {
-      const n = near[i];
-      const fade = n ? Math.min(1, Math.max(0, (edge - n.d) / LAMP_FADE)) : 0;
-      if (!n || fade <= 0) {
-        p.intensity = 0;
-        return;
-      }
-      p.color.setHex(n.l.color);
-      p.position.set(n.l.x, n.l.h ?? 1.05, n.l.y);
-      p.distance = n.l.radius * 1.4;
-      p.intensity = n.l.intensity * k * fade * fade * (3 - 2 * fade) * n.w;
-    });
-    this.groundLamps(d.night);
-  }
-
-  // the Grounds' lamps after dark (the ground floor's frame): a pool of their
-  // own (in the lot's they took its lamps' places and, as bright as they are,
-  // their fade at the pool's edge was a pop), the nearest lit, fading over 10 tiles
-  private groundLamps(night: number) {
-    const g = this.around.grounds;
-    const on = Math.min(1, Math.max(0, night * 1.3 - 0.1));
-    const n = this.quality === "high" ? GROUND_POOL : this.quality === "medium" ? 2 : 1;
-    const near: {
-      x: number;
-      y: number;
-      h: number;
-      c: (typeof GROUND_LAMP)[string];
-      d: number;
-      flare?: boolean;
-      color?: number;
-    }[] = [];
-    // a death first of all (short, and the brightest thing there; the ground floor's)
-    for (const f of this.level === 0 ? this.deaths : []) {
-      const d = Math.hypot(f.x - this.target.x, f.y - this.target.z);
-      const smooth = (a: number, b: number) => {
-        const k = Math.max(0, Math.min(1, (f.t - a) / (b - a)));
-        return k * k * (3 - 2 * k);
-      };
-      const k = Math.max(Math.exp(-f.t * 9), 0.35 * smooth(0.45, 1.05) * (1 - smooth(1.15, 1.9)));
-      if (d < GROUND_REACH && k > 0.01)
-        near.push({
-          x: f.x,
-          y: f.y,
-          h: f.z + DEATH_LAMP.h,
-          c: { ...DEATH_LAMP, intensity: DEATH_LAMP.intensity * k },
-          d: -2,
-          flare: true,
-          color: f.t < 0.2 ? 0xfff4e6 : 0xffd08a,
-        });
-    }
-    // flares first, day or night: red, ~6 over 11 tiles (the mocks' 02-hud-night), flickering
-    // (my floor's: dark/arms.ts hands over only those)
-    for (const f of this.flares) {
-      const d = Math.hypot(f.x - this.target.x, f.y - this.target.z);
-      if (d < GROUND_REACH)
-        near.push({
-          x: f.x + 0.1,
-          y: f.y,
-          h: f.z + 0.5,
-          c: { ...FLARE_LAMP, intensity: FLARE_LAMP.intensity * (0.85 + 0.15 * Math.sin(this.time * 23 + f.t * 7)) },
-          d: -1,
-          flare: true,
-        });
-    }
-    if (g && this.level === 0 && on > 0) {
-      const off = offsetOf(this.building, 0);
-      const t = this.target;
-      for (const l of GROUND_LAMPS) {
-        const x = l.x - off.x;
-        const y = l.z - off.y;
-        const d = Math.hypot(x - t.x, y - t.z);
-        if (d < GROUND_REACH)
-          near.push({ x, y, h: g.heightAt(l.x, l.z) + GROUND_LAMP[l.kind].h, c: GROUND_LAMP[l.kind], d });
-      }
-      // (the Kart Park's stands: lamps under their roofs, floods over the straight — not posts)
-      for (const l of STAND_LIGHTS) {
-        const x = l.x - off.x;
-        const y = l.z - off.y;
-        const d = Math.hypot(x - t.x, y - t.z);
-        if (d < GROUND_REACH) near.push({ x, y, h: g.heightAt(l.x, l.z) + l.h, c: l, d, color: 0xffe6bc });
-      }
-      near.sort((a, b) => a.d - b.d);
-    }
-    const edge = Math.min(GROUND_REACH, near[n]?.d ?? GROUND_REACH);
-    this.groundPool.forEach((p, i) => {
-      const l = i < n ? near[i] : undefined;
-      const fade = l ? Math.min(1, Math.max(0, (edge - l.d) / 10)) : 0;
-      if (!l || fade <= 0) {
-        p.intensity = 0;
-        return;
-      }
-      p.position.set(l.x, l.h, l.y);
-      // (a little wider in the pitch dark: an island of snow — docs/plan/44-the-night.md N2)
-      p.distance = l.c.radius * (1.4 + 0.35 * this.dark);
-      p.color.setHex(l.color ?? (l.flare ? 0xff3a24 : 0xffd29a));
-      p.intensity = l.flare ? l.c.intensity : l.c.intensity * on * fade * fade * (3 - 2 * fade);
-    });
-  }
-
-  // ── the Grounds' mood (docs/plan/27) ──
-  // a storm: the fog closes in, white (as dark as the hour)
-  private weatherFrame(dt: number, me?: Body3) {
-    const f = fogFor();
-    const s = this.storm;
-    const fog = this.scene.fog as Fog;
-    // (god mode's camera, high over the land: the fog that far further off, and so the lens)
-    const up = this.god ? this.god.dist * this.gcMix : 0;
-    // (the weather's air: further on a clear day, closer in the rain — docs/plan/65, W3)
-    const near = f.near + (210 - f.near) * wxNow.clear + (40 - f.near) * wxNow.rain;
-    // (the long road: the air sees the far land — 2.6 km on a grey day, 14 km on a clear one, the
-    // rain's 600 m; a storm and the morning's wall as ever — docs/plan/69, L6)
-    const [usual, clearFar, rainFar] = LONG_ROAD ? [2600, 14000, 600] : [f.far, 1150, 420];
-    const fogFar = usual + (clearFar - usual) * wxNow.clear + (rainFar - usual) * wxNow.rain;
-    fog.near = near + up + (4 - near) * s;
-    fog.far = fogFar + up * 1.6 + (55 - fogFar) * s;
-    // (the far ridges: the haze the air has at 700 m, a clear day's kept off them as it was)
-    const at = Math.min(1, Math.max(0, (700 - fog.near) / Math.max(1, fog.far - fog.near)));
-    wx.wxHaze.value = 0.92 * at * (1 - wxNow.clear);
-    const mist = this.morningFog(dt, me, up);
-    // (in the wall nothing past its reach is seen: the camera sees no further, the sky brought in)
-    const far = farFor(mist.wall, Math.max(f.cameraFar, up * 2.5), mf.mfV.value);
-    if (Math.abs(this.camera.far - far) > 1) {
-      this.camera.far = far;
-      this.camera.updateProjectionMatrix();
-      this.around.setReach(far);
-    }
-    const l = landLight.value;
-    this.stormFog.setRGB(
-      Math.min(1, l.r * 1.15) * 0.84,
-      Math.min(1, l.g * 1.15) * 0.88,
-      Math.min(1, l.b * 1.15) * 0.92,
-    );
-    fog.color.copy(this.around.horizon).lerp(this.stormFog, Math.min(1, s * 1.4));
-    // the far land: its projection, the scene's haze; gone in the wall and a storm — but for god mode's
-    // camera, over them both (its fog pushed out with it: the land it sees was an island in white)
-    const seen = this.god ? 1 : (1 - Math.min(1, s * 2)) * (mist.wall < 0.02 ? 1 : 0);
-    this.around.grounds?.far?.frame(this.camera, fog, seen);
-  }
-
-  // The morning fog (docs/plan/64-the-fog.md, F2): fog3d.ts's uniforms by the fog, the hour and
-  // where I am; the sky, the ink and the light with it
-  private morningFog(dt: number, me: Body3 | undefined, up: number): { haze: number; wall: number; lift: number } {
-    const n = this.fogNow;
-    const k = 1 - Math.exp(-dt * 2);
-    n.haze += (this.fogWant.haze - n.haze) * k;
-    n.wall += (this.fogWant.wall - n.wall) * k;
-    n.lift += (this.fogWant.lift - n.lift) * k;
-    if (n.haze < 1e-3) n.haze = 0;
-    if (n.wall < 1e-3) n.wall = 0;
-    const { haze, wall } = n;
-    mf.mfA.value = hazeDensity(haze);
-    mf.mfW.value = wall;
-    // (burning off: clear under a floor that rises)
-    mf.mfLift.value = n.lift > 1e-3 ? LIFT_TOP * n.lift : -1000;
-    // (from god mode's height the wall's further off, as the storm's is)
-    mf.mfV.value = 18 + up;
-    // its floor: the land's height 0 where the land is drawn (the campus moves with the floor shown)
-    mf.mfY0.value = this.around.campus.root.position.y + GROUND;
-    mf.mfT.value = this.time;
-    mf.mfWind.value[0] = Math.cos(this.wind) * 0.004;
-    mf.mfWind.value[1] = Math.sin(this.wind) * 0.004;
-    fogColour(mf.mfCol.value, landLight.value, this.hour, wall);
-    // towards the sun, gold while it's low (the wall's hardly)
-    const el = this.sun.userData.el as number;
-    const az = this.sun.userData.az as number;
-    mf.mfSun.value.set(-Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el)).normalize();
-    const l = landLight.value;
-    const lum = Math.max(l.r, l.g, l.b) * 1.2;
-    const sc = this.sun.color;
-    mf.mfSunCol.value.setRGB(Math.min(1, sc.r * lum), Math.min(1, sc.g * lum * 0.92), Math.min(1, sc.b * lum * 0.8));
-    mf.mfSunK.value = (el > -0.12 ? Math.max(0, 1 - el / 0.7) * 0.5 : 0) * (1 - 0.85 * wall);
-    // (the water's glint: plan 66 S7 — the sun up and out, none in the wall)
-    const sv = mf.mfSun.value;
-    wx.wxSun.value.set(
-      sv.x,
-      sv.y,
-      sv.z,
-      el > 0 ? Math.min(1, el / 0.15) * (1 - wall) * Math.min(1, this.sun.intensity * 2.5) : 0,
-    );
-    // none of it inside the room I'm in (a storm's neither)
-    this.roomBox(me);
-    // the rime on the trees: the day's (built through a foggy morning, there till noon), or what a
-    // called one's left — eased over minutes
-    const rimeWant = Math.max(rimeAt(spDay(Date.now()), this.hour), 0.9 * Math.max(haze, wall));
-    this.rime += (rimeWant - this.rime) * (1 - Math.exp(-dt / (rimeWant > this.rime ? 240 : 600)));
-    if (this.around.grounds) this.around.grounds.rime.value = this.rime;
-    // the lamps' glows grown to halos in it
-    if (this.around.grounds) this.around.grounds.halo = 1 + 1.4 * haze + 0.6 * wall;
-    this.around.campus.lampFog = this.lampFog;
-    // the banks over the low places (High only; made the first time they're wanted)
-    const grounds = this.around.grounds;
-    const banks = this.quality === "high" && grounds ? haze * (1 - wall) * (1 - n.lift) : 0;
-    if (banks > 0.01 && !this.banks && grounds) this.banks = new FogBanks(grounds.root);
-    if (this.banks) {
-      const o = this.around.campus.root.position;
-      const c = this.camera.position;
-      this.banks.update(banks, mf.mfCol.value, this.wind, { x: c.x - o.x, z: c.z - o.z }, this.time);
-    }
-    // the sky whited out by it, the ink's lines going with what they outline, the light flat in the wall
-    this.around.setFog(haze > 0 || wall > 0 ? Math.min(1, Math.max(haze * 1.1, wall * 2.5)) : 0, wall, mf.mfCol.value);
-    // (the ink: the haze where the camera is — none under its lifted floor — and none of it at all
-    // in the room I'm in, its lines as they were)
-    const inside = mf.mfBox.value > 0.5;
-    const camY = this.camera.position.y;
-    const lifted = camY < mf.mfY0.value + mf.mfLift.value;
-    // (the ink takes the haze at eye height as 0.71 of its floor's: ink3d.ts, fog3d.ts inkLeft)
-    const atCam = hazeDensity(haze) * Math.exp(-Math.max(0, camY - mf.mfY0.value) / mf.mfH.value);
-    this.post?.setFog(inside || lifted ? 0 : atCam / 0.71, inside ? 0 : wall, mf.mfV.value);
-    // (the sun itself dimmed: every surface's shadows go, the ice's too; the open sky's fill up — and
-    // in the rain about half as much: no crisp sun shadows in a downpour. docs/plan/65)
-    const flat = flatLight(Math.max(wall, 0.55 * wxNow.rain));
-    this.sun.intensity = this.sunIntensity * flat.sun;
-    litBalance.lmFillOut.value = this.fillOut * flat.fill;
-    mf.mfFlat.value = 1 - flat.sun;
-    return n;
-  }
-
-  // the room I'm in: the floor's indoor tiles round me (the lot's asphalt and concrete are out), or
-  // a Grounds building's box out on the land; none on the open sky
-  private roomBox(me: Body3 | undefined) {
-    const box = mf.mfBox;
-    if (!me) {
-      box.value = 0;
-      return;
-    }
-    const tx = Math.floor(me.x);
-    const ty = Math.floor(me.y);
-    const z = me.z ?? 0;
-    if (this.onLand(me.x, me.y)) {
-      this.roomAt = "";
-      const g = this.around.grounds;
-      const o = this.around.campus.root.position;
-      const lx = me.x - o.x;
-      const lz = me.y - o.z;
-      const b = g?.boxes.find((q) => lx >= q.x0 && lx <= q.x1 && lz >= q.z0 && lz <= q.z1);
-      if (!b || z > o.y + GROUND + b.top) {
-        box.value = 0;
-        return;
-      }
-      box.value = 1;
-      mf.mfBoxMin.value.set(b.x0 + o.x, z - 0.5, b.z0 + o.z);
-      mf.mfBoxMax.value.set(b.x1 + o.x, o.y + GROUND + b.top, b.z1 + o.z);
-      return;
-    }
-    const key = `${this.level}|${tx}|${ty}`;
-    if (key !== this.roomAt || this.roomMap !== this.map) {
-      this.roomAt = key;
-      this.roomMap = this.map;
-      const ground = this.level === 0;
-      this.room = roomBounds(
-        this.map.tiles,
-        tx,
-        ty,
-        (ch) => !ch || ch === " " || (ground && (ch === "a" || ch === "c")),
-      );
-    }
-    const r = this.room;
-    box.value = r ? 1 : 0;
-    if (!r) return;
-    // (a little past its walls: a camera against one, a hair outside them, is still in here)
-    mf.mfBoxMin.value.set(r.x0 - 0.35, z - 0.5, r.y0 - 0.35);
-    mf.mfBoxMax.value.set(r.x1 + 0.35, z + STOREY, r.y1 + 0.35);
-  }
-
-  /** How high the camera — the ear — is over the land under it (m): the weather's ground sounds fade
-   *  as it goes up (docs/plan/65, W8). 0 with no land about. */
-  earUp(): number {
-    const g = this.around.grounds;
-    if (!g) return 0;
-    const c = this.camera.position;
-    const o = wx.wxOff.value;
-    return Math.max(0, c.y - (g.topAt(c.x - o.x, c.z - o.z) + o.y));
-  }
-
-  // Wet from the rain (docs/plan/65, W7): soaked over three minutes or so out in it (faster in a
-  // downpour), dried in four under cover or indoors, slower out in the open once it's stopped. Each
-  // viewer keeps its own count.
-  private wetOn = new Map<string, number>();
-  // Under the water (docs/plan/66-the-water.md, S8): the camera never half in it (kept 12 cm off its
-  // surface, on the side the target's on); under it, the murk and the light on its bed (fog3d.ts), its
-  // colour by the light out there — the sun's on its bed fading with depth
-  private underWater() {
-    const U = mf.mfUw.value;
-    U.z = 0;
-    if (this.level !== 0 || this.god) return;
-    const cam = this.camera.position;
-    const o = wx.wxOff.value;
-    const w = waterAt(cam.x - o.x, cam.z - o.z);
-    if (!w) return;
-    const lv = w.level + o.y;
-    if (Math.abs(cam.y - lv) < 0.12) {
-      cam.y = this.target.y >= lv ? lv + 0.12 : lv - 0.12;
-      this.camera.updateMatrixWorld();
-    }
-    if (cam.y >= lv) return;
-    const f = this.scene.fog?.color ?? mf.mfCol.value;
-    const lum = f.r * 0.3 + f.g * 0.55 + f.b * 0.15;
-    mf.mfUwCol.value.setRGB(0.012, 0.05, 0.048).multiplyScalar(Math.min(1.6, 0.1 + lum * 2.2));
-    wx.wxUwCol.value.copy(mf.mfUwCol.value);
-    U.set(
-      lv,
-      w.kind === "river" ? 0.2 : 0.14,
-      1,
-      Math.min(1, wx.wxSun.value.w * 1.2) * Math.max(0, 1 - (lv - cam.y) / 8),
-    );
-  }
-
-  // Who's in the water near (plan 66 S7): their rings and wakes on it — the first eight each frame
-  // (the view's own order: the nearest come first), where they are and how they go
-  private swimN = 0;
-  private swimWas = new Map<string, { x: number; z: number; t: number }>();
-  private readonly swimAt = new Vector3();
-  private bubbles: Bubbles | null = null;
-  private readonly bubbleAt = new Vector3();
-  private bubbleDt = 0;
-  private swimmer(id: string, p3: Person3D) {
-    const S = wx.wxSwim.value;
-    if (this.swimN >= S.length) return;
-    const at = p3.root.getWorldPosition(this.swimAt).sub(wx.wxOff.value);
-    const was = this.swimWas.get(id);
-    const dt = was ? this.time - was.t : 0;
-    const vx = was && dt > 0 ? (at.x - was.x) / dt : 0;
-    const vz = was && dt > 0 ? (at.z - was.z) / dt : 0;
-    this.swimWas.set(id, { x: at.x, z: at.z, t: this.time });
-    // (under: bubbles off the head — S8)
-    const w = this.level === 0 ? waterAt(at.x, at.z) : null;
-    if (w && at.y < w.level - 1.7) {
-      this.bubbles ??= new Bubbles(this.scene);
-      this.bubbleAt.copy(at).add(wx.wxOff.value);
-      this.bubbleAt.y += 1.55;
-      this.bubbles.emit(id, this.bubbleAt, w.level + wx.wxOff.value.y, this.bubbleDt);
-    }
-    const v = S[this.swimN++];
-    // (still, the rings alone: a speed just over none)
-    v.set(at.x, at.z, Math.atan2(vz, vx), Math.max(0.01, Math.min(3, Math.hypot(vx, vz))));
-  }
-
-  /** How wet someone is (0 … 1): the steps' squelch after the water (docs/plan/66 S9). */
-  wetness(id: string): number {
-    return this.wetOn.get(id) ?? 0;
-  }
-
-  private wetOf(b: Body3, dt: number): number {
-    const sheltered = !!b.busy && (b.busy.startsWith("ride:") || b.busy.startsWith("drive:"));
-    const out = !sheltered && this.underSky(b.x, b.y);
-    const rain = wxNow.rain;
-    const was = this.wetOn.get(b.id) ?? (out ? rain : 0);
-    // (in the water to the chest, soaked at once; wading, half way in a few seconds — plan 66 S3)
-    if ((b.swim ?? 0) >= 2) {
-      this.wetOn.set(b.id, 1);
-      return 1;
-    }
-    const rate = b.swim === 1 && was < 0.5 ? 0.15 : out && rain > 0.02 ? (0.4 + rain) / 180 : out ? -1 / 900 : -1 / 240;
-    const k = Math.max(0, Math.min(1, was + rate * dt));
-    this.wetOn.set(b.id, k);
-    return k;
-  }
-  // Snow settling on people out under the sky (docs/plan/33-the-look.md): their shoulders and
-  // heads white after six minutes or so out in a steady fall (a minute and a half in a storm), gone
-  // again in a minute and a half indoors (or in a car, on the shuttle) — and out under the sky in
-  // ten when it's stopped (docs/plan/65: only while it snows). Each viewer keeps its own count.
-  private snowOn = new Map<string, number>();
-  private snowFall(b: Body3, p3: Person3D, dt: number, hidden: boolean) {
-    if (!Person3D.snowMat) {
-      Person3D.snowMat = new MeshLambertMaterial({ color: 0xf2f5f8 });
-      Person3D.snowMat.userData.wx = "none"; // (it is snow: no dusting on it — wx3d.ts)
-      patchGrounds(Person3D.snowMat);
-    }
-    const sheltered = !!b.busy && (b.busy.startsWith("ride:") || b.busy.startsWith("drive:"));
-    const out = !sheltered && this.underSky(b.x, b.y);
-    const was = this.snowOn.get(b.id) ?? 0;
-    const falling = Math.min(1, this.snowing * 1.5);
-    const rate = !out ? -1 / 90 : falling > 0.02 ? ((1 + 3 * this.storm) * falling) / 360 : -1 / 600;
-    const k = Math.max(0, Math.min(1, was + rate * dt));
-    this.snowOn.set(b.id, k);
-    p3.snowK = hidden ? 0 : k;
-    p3.updateSnow();
-  }
-  // The mood (plan 58 C.6), someone's tension 0..1: the night out under the sky (wary, not afraid —
-  // indoors, lit, hardly), and the shadowed close (all of it within 5 m, from 16 m). A shade's own is
-  // the dark itself (person3d).
-  private moodOf(b: Body3, shades: Body3[]): number {
-    const night = this.nightLevel * (this.underSky(b.x, b.y) ? 0.7 : 0.2);
-    let near = 0;
-    for (const s of shades) {
-      const d = Math.hypot(s.x - b.x, s.y - b.y);
-      near = Math.max(near, Math.min(1, Math.max(0, (16 - d) / 11)));
-    }
-    return Math.min(1, Math.max(night, near * (0.6 + 0.4 * this.nightLevel)));
-  }
-  // out under the open sky: on the land, or the lot's open tiles (asphalt, concrete)
-  private underSky(x: number, y: number): boolean {
-    if (this.level !== 0) return false;
-    if (this.onLand(x, y)) return true;
-    const ch = tileAt(this.map, Math.floor(x), Math.floor(y));
-    return ch === "a" || ch === "c";
-  }
-  // out on the land (the ground floor's frame, off its own tiles)
-  private onLand(x: number, y: number): boolean {
-    if (this.level !== 0 || !this.around.grounds) return false;
-    return !(
-      x >= 0 &&
-      y >= 0 &&
-      x < this.map.width &&
-      y < this.map.height &&
-      isFloor(tileAt(this.map, Math.floor(x), Math.floor(y)))
-    );
-  }
-
-  // the light on someone out on the land: the hour's, the lamps' near, a beam's (`skip`: not
-  // this one's own torch)
-  private landTint(x: number, y: number, out: Color, skip?: string) {
-    out.copy(landLight.value);
-    for (const p of [...this.pool, ...this.groundPool]) {
-      if (p.intensity <= 0) continue;
-      const d = Math.hypot(p.position.x - x, p.position.z - y) / (p.distance * 0.6);
-      if (d >= 1) continue;
-      const k = (1 - d) * (1 - d) * Math.min(1, p.intensity / 8) * 0.8;
-      out.r += k * p.color.r;
-      out.g += k * p.color.g;
-      out.b += k * p.color.b;
-    }
-    for (const t of this.torch3) {
-      if (!t.on || (skip && t.who === skip)) continue;
-      // (shared beam.ts: the same test iso and the server make; a focused beam is the brighter)
-      const k = beamAt(t.on, x, y) * (0.2 + 0.9 * this.nightLevel) * (t.on.focus ? 1.5 : 1);
-      if (k <= 0) continue;
-      out.r += k;
-      out.g += k * 0.97;
-      out.b += k * 0.9;
-    }
-    out.r = Math.min(1, out.r);
-    out.g = Math.min(1, out.g);
-    out.b = Math.min(1, out.b);
-  }
-
-  // ── the eyes (docs/plan/44-the-night.md N3; world/eyes.ts, run by the dark's chunk) ──
-  private glareTint = new Color();
-  private ownTint = new Color();
-  // The light on someone (the people's tint): the floor's light map; out on the land the land's own
-  // (its lamps, the beams); headlamps; and in the dark what's seen right round me (myself too).
-  // Out under the sky after dark, whoever's out of all of it and further off is unseen: no name,
-  // no emote (docs/plan/44-the-night.md N4).
-  private lightOn(b: Body3, me: Body3 | undefined): Color {
-    const c = this.personTint.setHex(this.light.tintAt(b.x, b.y));
-    if (this.onLand(b.x, b.y)) this.landTint(b.x, b.y, c);
-    if (this.underSky(b.x, b.y)) {
-      this.headlampTint(b.x, b.y, c);
-      const d = me ? Math.hypot(b.x - me.x, b.y - me.y) : 0;
-      const k = nearLift(d, this.dark);
-      c.setRGB(Math.min(1, c.r + k), Math.min(1, c.g + k), Math.min(1, c.b + k * 1.1));
-      if (unseen(c.r * 0.3 + c.g * 0.55 + c.b * 0.15, d, this.dark)) this.unseen.add(b.id);
-    }
-    return c;
-  }
-  private unseen = new Set<string>(); // out in the dark, unseen this frame (N4: no name, no emote)
-  // How much of someone the morning fog leaves, 0 … 1 (docs/plan/64-the-fog.md F5): by how far
-  // they are from the camera, as the ink's lines go (fog3d.ts inkLeft) — all of them in here with
-  // me (the room's out of it)
-  private fogSeen(b: Body3): number {
-    const n = this.fogNow;
-    if (n.haze <= 0 && n.wall <= 0) return 1;
-    if (mf.mfBox.value > 0.5 && !this.underSky(b.x, b.y)) return 1;
-    const c = this.camera.position;
-    const d = Math.hypot(c.x - b.x, c.y - ((b.z ?? 0) + 1.4), c.z - b.y);
-    return inkLeft(d, n.haze, n.wall, mf.mfV.value);
-  }
-  /** Out in the dark and unseen this frame (no name, no emote; the dark's HUD hides its tag too). */
-  isUnseen(id: string): boolean {
-    return this.unseen.has(id);
-  }
-  /** How bright it is where `id` stands at (x, y), 0 … 1 (the people's tint's luminance): the
-   *  rooms, a lamp's pool, headlamps or someone's torch on them — not their own torch. */
-  glareAt(x: number, y: number, id: string): number {
-    if (!this.underSky(x, y)) return 1;
-    const c = this.glareTint.setHex(this.light.tintAt(x, y));
-    if (this.onLand(x, y)) this.landTint(x, y, c, id);
-    this.headlampTint(x, y, c);
-    return c.r * 0.3 + c.g * 0.55 + c.b * 0.15;
-  }
-  /** How adjusted my eyes are to the dark (0 … 1): the land, the campus, the cars and the lot
-   *  lift a little. */
-  setEyes(e: number) {
-    this.around.setEyes(e);
-    litBalance.lmEyes.value = EYES_LIFT.lot3 * e * this.dark;
-  }
-
-  /** The real headlamps (car/cars.ts gives them: the nearest lit car's), for the tint of
-   *  whoever stands in them (docs/plan/44-the-night.md N2). */
-  carBeams: SpotLight[] = [];
-  private beamDir = new Vector3();
-  private beamAt = new Vector3();
-  // the light on someone out under the sky from those headlamps: a cone from each, fading ahead
-  private headlampTint(x: number, y: number, out: Color) {
-    for (const s of this.carBeams) {
-      if (s.intensity <= 0) continue;
-      // (in the scene: they hang off the car module's own group)
-      const at = s.getWorldPosition(this.beamAt);
-      const d = s.target.getWorldPosition(this.beamDir).sub(at).setY(0).normalize();
-      const px = x - at.x;
-      const py = y - at.z;
-      const along = px * d.x + py * d.z;
-      const reach = s.distance * 0.6;
-      if (along <= 0 || along >= reach) continue;
-      const side = Math.abs(px * d.z - py * d.x);
-      const half = 0.6 + along * Math.tan(s.angle);
-      if (side >= half) continue;
-      const k = (1 - along / reach) ** 2 * (1 - (side / half) ** 2) * (s.intensity / 120) * 0.6;
-      out.r = Math.min(1, out.r + k);
-      out.g = Math.min(1, out.g + k * 0.95);
-      out.b = Math.min(1, out.b + k * 0.86);
-    }
-  }
-
-  // ── what drives on the Grounds (docs/plan/27, phase 6): the visitor's car,
-  // the shuttle; lit as the land is (dark at night), headlamps glowing ──
-  private veh3 = new Map<string, Group>();
-  private vehMat: MeshLambertMaterial | null = null;
-  setVehicles(
-    list: { id: string; kind: string; x: number; z: number; a: number; v?: number; shown: boolean; h?: number }[],
-  ) {
-    const g = this.around.grounds;
-    const off = offsetOf(this.building, this.level);
-    const up = elevOf(0) - elevOf(this.level);
-    const seen = new Set<string>();
-    for (const v of list) {
-      if (!g || !v.shown) continue;
-      seen.add(v.id);
-      let m = this.veh3.get(v.id);
-      if (!m) {
-        m = v.kind === "shuttle" ? this.busModel() : v.kind === "plough" ? this.ploughModel() : this.carModel(v.id);
-        // (its headlamps, for car/cars.ts's real light: either side of its nose, −x)
-        const box = new Box3().setFromObject(m);
-        const w = (box.max.z - box.min.z) * 0.36;
-        const y = m.userData.big ? 1.1 : 0.55;
-        m.userData.heads = [new Vector3(box.min.x, y, -w), new Vector3(box.min.x, y, w)];
-        // (and its tail lamps' red on the snow behind)
-        const tail = tailPatch(box.max.x);
-        m.add(tail);
-        m.userData.tailGlow = tail;
-        this.veh3.set(v.id, m);
-        this.scene.add(m);
-      }
-      const px = v.x - off.x;
-      const pz = v.z - off.y;
-      // its wheels turn by how far it went (the shuttle's)
-      const wheels = m.userData.wheels as Group[] | undefined;
-      if (wheels && m.userData.at) {
-        const [ax, az] = m.userData.at as [number, number];
-        const d = Math.hypot(px - ax, pz - az);
-        if (d < 5) for (const w of wheels) w.rotation.z -= d / 0.5;
-      }
-      m.userData.at = [px, pz];
-      // (on the move: its headlamps a real light — car/cars.ts; parked, just their glow)
-      m.userData.moving = Math.abs(v.v ?? 0) > 0.2;
-      m.position.set(px, (v.h ?? g.heightAt(v.x, v.z)) + up + 0.03, pz);
-      // (the models' noses point −x: turned to the heading)
-      m.rotation.y = Math.PI - v.a;
-      // (their lamps on in the morning fog as after dark)
-      const n = Math.max(this.nightLevel, 0.6 * this.lampFog);
-      for (const l of m.userData.glow as MeshBasicMaterial[]) l.opacity = Math.min(1, 0.25 + n * 1.2);
-      for (const l of m.userData.tail as MeshBasicMaterial[]) l.opacity = Math.min(1, 0.35 + n * 1.1);
-      const tg = m.userData.tailGlow as Mesh<PlaneGeometry, MeshBasicMaterial>;
-      tg.material.opacity = 0.35 * n;
-      tg.visible = n > 0.2;
-      // (the plough's beacon: turning — a flash twice a second)
-      const b = m.userData.beacon as MeshBasicMaterial | undefined;
-      if (b) b.opacity = 0.35 + 0.65 * Math.max(0, Math.sin(performance.now() / 160)) ** 4;
-    }
-    for (const [id, m] of this.veh3)
-      if (!seen.has(id)) {
-        this.scene.remove(m);
-        this.veh3.delete(id);
-      }
-  }
-  /** The Grounds' own vehicles' headlamps (their lamps are on after dark), in the scene:
-   *  car/cars.ts gives the nearest a real light. */
-  vehicleLamps(): { a: Vector3; b: Vector3; fwd: Vector3 }[] {
-    const out: { a: Vector3; b: Vector3; fwd: Vector3 }[] = [];
-    for (const m of this.veh3.values()) {
-      const h = m.userData.heads as Vector3[] | undefined;
-      if (!h || !m.visible || !m.userData.moving) continue;
-      m.updateMatrixWorld();
-      out.push({
-        a: h[0].clone().applyMatrix4(m.matrixWorld),
-        b: h[1].clone().applyMatrix4(m.matrixWorld),
-        fwd: new Vector3(-1, 0, 0).transformDirection(m.matrixWorld),
-      });
-    }
-    return out;
-  }
-  private vehicleMat(): MeshLambertMaterial {
-    if (!this.vehMat) {
-      this.vehMat = new MeshLambertMaterial({ vertexColors: true });
-      patchGrounds(this.vehMat);
-    }
-    return this.vehMat;
-  }
-  private lampsOf(xs: number, w: number, y: number): Mesh {
-    const lamps = new MeshBasicMaterial({ color: 0xfff1cc, transparent: true, toneMapped: false });
-    const geo = mergeGeometries(
-      [-1, 1].map((s) => new BoxGeometry(0.06, 0.18, 0.3).translate(xs, y, (s * w) / 2)),
-      false,
-    );
-    return new Mesh(geo, lamps);
-  }
-  /** The visitor's car: one of the town's colours and shapes (by its id), snow on it from the
-   *  drive in, headlamps and tail lamps. */
-  private carModel(id: string): Group {
-    const root = new Group();
-    let h = 0;
-    for (const c of id) h = (h * 31 + c.charCodeAt(0)) | 0;
-    const colours = [0x4a5a73, 0x6b2430, 0x2f4a3b, 0xcbbd98, 0x1f2124, 0x6a4a35];
-    const { solid, glass } = carGeometry((h & 4) !== 0, colours[Math.abs(h) % colours.length], true);
-    root.add(new Mesh(solid, this.vehicleMat()), new Mesh(glass, this.vehicleMat()));
-    const l = this.lampsOf(-2.52, 1.2, 0.55);
-    root.add(l);
-    const tail = new MeshBasicMaterial({ color: 0xff3a24, transparent: true, toneMapped: false });
-    root.add(
-      new Mesh(
-        mergeGeometries(
-          [-1, 1].map((s) => new BoxGeometry(0.05, 0.14, 0.5).translate(2.53, 0.68, s * 0.62)),
-          false,
-        ),
-        tail,
-      ),
-    );
-    root.userData.glow = [l.material];
-    root.userData.tail = [tail];
-    for (const c of root.children) c.castShadow = true;
-    return root;
-  }
-  private ploughModel(): Group {
-    const b = ploughModel(this.vehicleMat());
-    b.root.userData.big = true;
-    b.root.userData.glow = [b.lamps];
-    b.root.userData.tail = [b.tail];
-    b.root.userData.beacon = b.beacon;
-    b.root.userData.wheels = b.wheels;
-    return b.root;
-  }
-  private busModel(): Group {
-    const b = busModel(this.vehicleMat());
-    b.root.userData.big = true;
-    b.root.userData.glow = [b.lamps, b.sign];
-    b.root.userData.tail = [b.tail];
-    b.root.userData.wheels = b.wheels;
-    return b.root;
   }
 
   // the Grounds' new things: their shaders compiled off the frame (on a layer no
@@ -4479,9 +3119,9 @@ void main() {
         }
       });
       for (const t of maps) this.renderer.initTexture(t);
-      this.preparing++;
+      this.warmup.preparing++;
       void this.renderer.compileAsync(o, this.camera, this.scene).then(() => {
-        this.preparing--;
+        this.warmup.preparing--;
         for (const [c, m] of masks) c.layers.mask = m;
       });
     };
@@ -4489,7 +3129,7 @@ void main() {
     const warm = new Group();
     const puff = new Sprite(
       new SpriteMaterial({
-        map: this.puffMap(),
+        map: this.vehicles.puffMap(),
         color: 0xf4f7fa,
         transparent: true,
         depthWrite: false,
@@ -4502,7 +3142,7 @@ void main() {
     this.banks ??= new FogBanks(g.root);
     const banks = this.banks.warm();
     const beam = new Mesh(this.beamCone ?? undefined, this.torch3[0]?.mat);
-    warm.add(puff, this.carModel("visitor"), this.busModel(), banks, beam);
+    warm.add(puff, this.vehicles.carModel("visitor"), this.vehicles.busModel(), banks, beam);
     void this.renderer.compileAsync(warm, this.camera, this.scene).then(() => {
       puff.material.dispose();
       banks.geometry.dispose();
@@ -4546,7 +3186,7 @@ void main() {
         b.x,
         b.y,
         b.z ?? b.ground ?? 0,
-        b.angle ?? dirAngle(b.d),
+        b.angle ?? b.yaw,
         aiming ? (b.pitch ?? 0) : null,
         !!b.focused,
       );
@@ -4648,81 +3288,6 @@ void main() {
     }
   }
 
-  // a soft round puff (a sprite with no picture is a square)
-  private puffTex: CanvasTexture | null = null;
-  private puffMap(): CanvasTexture {
-    if (this.puffTex) return this.puffTex;
-    const c = document.createElement("canvas");
-    c.width = c.height = 32;
-    const g = c.getContext("2d") as CanvasRenderingContext2D;
-    const r = g.createRadialGradient(16, 16, 0, 16, 16, 16);
-    r.addColorStop(0, "rgba(255,255,255,1)");
-    r.addColorStop(0.5, "rgba(255,255,255,0.55)");
-    r.addColorStop(1, "rgba(255,255,255,0)");
-    g.fillStyle = r;
-    g.fillRect(0, 0, 32, 32);
-    this.puffTex = new CanvasTexture(c);
-    return this.puffTex;
-  }
-
-  // breath in the cold: a little cloud now and then from everyone out on the land (when the air's
-  // cold: under 8 °C — docs/plan/65 W9)
-  private breathe(bodies: Body3[]) {
-    if (Person3D.airCold < 0.05) return;
-    const now = this.time;
-    const cam = this.camera.position;
-    for (const b of bodies) {
-      if (
-        b.npc ||
-        b.pet ||
-        b.busy === "ride:shuttle" ||
-        !this.onLand(b.x, b.y) ||
-        Math.hypot(cam.x - b.x, cam.z - b.y) > 16
-      )
-        continue;
-      const next = this.breathAt.get(b.id) ?? now + (hashId(b.id) % 100) / 40;
-      if (now < next) {
-        this.breathAt.set(b.id, next);
-        continue;
-      }
-      // (quicker running)
-      this.breathAt.set(b.id, now + (b.a === 1 ? 1.6 : 2.8) + Math.random() * 0.6);
-      const a = b.angle ?? dirAngle(b.d);
-      const feet = b.z ?? b.ground ?? 0;
-      for (let i = 0; i < 3; i++) {
-        const s = new Sprite(
-          new SpriteMaterial({
-            map: this.puffMap(),
-            color: 0xf4f7fa,
-            transparent: true,
-            depthWrite: false,
-            opacity: 0.32,
-            toneMapped: false,
-          }),
-        );
-        s.material.color.multiply(landLight.value).multiplyScalar(1.4);
-        s.scale.setScalar(0.08);
-        s.position.set(b.x + Math.cos(a) * 0.22, feet + 1.52, b.y + Math.sin(a) * 0.22);
-        this.scene.add(s);
-        const sp = 0.3 + Math.random() * 0.2;
-        this.fx.push({
-          s,
-          vx: Math.cos(a) * sp + (Math.random() - 0.5) * 0.1,
-          vy: Math.sin(a) * sp + (Math.random() - 0.5) * 0.1,
-          vz: 0.1 + Math.random() * 0.08,
-          t: -i * 0.06,
-          // (it hangs in the morning fog's still, damp air)
-          life: 1.3 * (1 + 1.2 * this.fogAir),
-          g: -0.05,
-          drag: 1.6 * (1 - 0.4 * this.fogAir),
-          grow: 4,
-          size: 0.08,
-          op: 0.3,
-        });
-      }
-    }
-  }
-
   // screen position of a world point (tiles, h = height in tiles), or null behind the camera
   project(x: number, y: number, h: number): { x: number; y: number } | null {
     const v = new Vector3(x, h, y).project(this.camera);
@@ -4747,532 +3312,6 @@ void main() {
     return { calls: r.calls, triangles: r.triangles, build: this.world.stats };
   }
 
-  // ── input ────────────────────────────────────────────────────────────────
-  // two fingers: pinch to zoom (phones, tablets), as in iso
-  private touches = new Map<number, { x: number; y: number }>();
-  private pinch = 0;
-  private onTouch(e: PointerEvent): boolean {
-    if (e.pointerType !== "touch") return false;
-    if (e.type === "pointerdown" || e.type === "pointermove")
-      this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    else this.touches.delete(e.pointerId);
-    if (this.touches.size !== 2) {
-      this.pinch = 0;
-      return false;
-    }
-    const [a, b] = [...this.touches.values()];
-    const d = Math.hypot(a.x - b.x, a.y - b.y);
-    if (this.pinch) {
-      this.dist *= this.pinch / Math.max(1, d);
-      this.clampCam();
-    }
-    this.pinch = d;
-    this.drag = null; // no orbit (and no click) while pinching
-    return true;
-  }
-
-  private onDown = (e: PointerEvent) => {
-    this.activeAt = performance.now();
-    if (this.god) {
-      this.renderer.domElement.setPointerCapture(e.pointerId);
-      return this.god.input.down(e);
-    }
-    // the mouse is the camera (docs/plan/56-the-controls.md A): its buttons aim and fire (the
-    // walker's, the dark's), and nothing in the world is clicked
-    if (this.looking) return;
-    if (this.onTouch(e)) return;
-    // not locked yet (or Esc let it go): a click takes the pointer back — build mode's and the
-    // arrival's own picking aside, which want it
-    if (this.mouseCam(e)) {
-      this.setLook(true);
-      return;
-    }
-    this.renderer.domElement.setPointerCapture(e.pointerId);
-    // build mode: the left button builds (the right one turns the camera)
-    if (this.buildMode && e.button === 0) {
-      this.buildPress = { id: e.pointerId, x0: e.clientX, y0: e.clientY, t: performance.now() };
-      const f = this.buildAt(e.clientX, e.clientY);
-      this.events.buildDown?.(f.x, f.y);
-      return;
-    }
-    this.drag = { x: e.clientX, y: e.clientY, id: e.pointerId, x0: e.clientX, y0: e.clientY, t: performance.now() };
-  };
-  private onMove = (e: PointerEvent) => {
-    this.activeAt = performance.now();
-    if (this.god) return this.god.input.move(e);
-    if (this.looking) {
-      // (some browsers send one huge jump as the lock starts)
-      if (Math.abs(e.movementX) > 400 || Math.abs(e.movementY) > 400) return;
-      this.dragged = this.time;
-      if (this.mode === "chase" && !this.god && !this.buildMode) {
-        // the KH camera's: by how far it moved; locked on, a sideways flick is the next target
-        const f = this.follow;
-        f.yaw = this.yaw;
-        f.pitch = this.pitch;
-        f.mouse(e.movementX, e.movementY, !!this.lockAt);
-        this.yaw = f.yaw;
-        this.pitch = f.pitch;
-        if (this.lockAt) this.flickX = this.flickX * 0.8 + e.movementX;
-        return;
-      }
-      const k = 0.0024 * this.lookSens;
-      this.yaw += e.movementX * k;
-      this.pitch += e.movementY * k * 0.8 * (this.lookInvert ? -1 : 1);
-      this.clampCam();
-      return;
-    }
-    if (this.onTouch(e)) return;
-    if (this.mouseCam(e)) return;
-    this.pointer = { x: e.clientX, y: e.clientY };
-    if (this.buildMode || this.floorHover) {
-      const f = this.buildAt(e.clientX, e.clientY);
-      this.events.buildMove?.(f.x, f.y, this.pointer);
-    }
-    if (!this.drag || this.drag.id !== e.pointerId)
-      return this.buildMode ? undefined : this.hover(e.clientX, e.clientY);
-    const dx = e.clientX - this.drag.x;
-    const dy = e.clientY - this.drag.y;
-    this.drag.x = e.clientX;
-    this.drag.y = e.clientY;
-    this.yaw += dx * 0.0055;
-    this.pitch += dy * 0.004;
-    this.dragged = this.time;
-    this.clampCam();
-  };
-  private onUp = (e: PointerEvent) => {
-    if (this.god) return this.god.input.up(e);
-    this.onTouch(e);
-    if (this.mouseCam(e)) return;
-    const b = this.buildPress;
-    if (b && b.id === e.pointerId) {
-      this.buildPress = null;
-      const f = this.buildAt(e.clientX, e.clientY);
-      this.events.buildUp?.(f.x, f.y);
-      // a click: build mode's click on the floor there (it picks what's under the pointer itself)
-      if (e.type === "pointerup" && Math.hypot(e.clientX - b.x0, e.clientY - b.y0) < 6 && performance.now() - b.t < 600)
-        this.events.floor?.(f.x, f.y);
-      return;
-    }
-    const d = this.drag;
-    if (d?.id !== e.pointerId) return;
-    this.drag = null;
-    // a click (not a drag): someone, or a spot on the floor (armed, the right button only aims)
-    if (
-      e.type === "pointerup" &&
-      !(e.button === 2 && this.armed) &&
-      Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < 6 &&
-      performance.now() - d.t < 600
-    )
-      this.pick(e.clientX, e.clientY, { shift: e.shiftKey, right: e.button === 2 });
-  };
-
-  /** A mouse in play: the camera's, not a pointer (touch taps and drags as it did; build mode and
-   *  choosing my arrival on the floor still point). */
-  private mouseCam(e: PointerEvent): boolean {
-    return e.pointerType === "mouse" && !this.buildMode && !this.floorHover;
-  }
-
-  // the nearest usable thing along the ray (its 3D box; see-through walls don't
-  // stop it) — an elevator car's buttons first (you're in the car's own box)
-  private pickObject(): string | null {
-    const btn = this.lifts3?.buttonPicks.length ? this.nearestPick(this.lifts3.buttonPicks) : null;
-    if (btn) return btn;
-    return this.nearestPick([...this.world.picks, ...(this.lifts3?.picks ?? []), ...this.stairs3.picks]);
-  }
-  private nearestPick(
-    picks: { id: string; use: boolean; x0: number; y0: number; z0: number; x1: number; y1: number; z1: number }[],
-  ): string | null {
-    const o = this.ray.ray.origin;
-    const d = this.ray.ray.direction;
-    let best: string | null = null;
-    let bestT = Number.POSITIVE_INFINITY;
-    for (const p of picks) {
-      if (!p.use) continue;
-      let t0 = 0;
-      let t1 = bestT;
-      let ok = true;
-      for (const [oa, da, lo, hi] of [
-        [o.x, d.x, p.x0, p.x1],
-        [o.y, d.y, p.z0, p.z1],
-        [o.z, d.z, p.y0, p.y1],
-      ]) {
-        if (Math.abs(da) < 1e-9) {
-          if (oa < lo || oa > hi) ok = false;
-          continue;
-        }
-        let a = (lo - oa) / da;
-        let b = (hi - oa) / da;
-        if (a > b) [a, b] = [b, a];
-        t0 = Math.max(t0, a);
-        t1 = Math.min(t1, b);
-        if (t0 > t1) ok = false;
-      }
-      if (ok && t0 < bestT) {
-        bestT = t0;
-        best = p.id;
-      }
-    }
-    // a wall in the way (standing, not faded) hides what's behind it
-    if (best !== null) {
-      const hit = o.clone().addScaledVector(d, bestT);
-      if (this.hidden(hit.x, hit.z, hit.y)) return null;
-    }
-    return best;
-  }
-
-  private setRay(clientX: number, clientY: number) {
-    const r = this.renderer.domElement.getBoundingClientRect();
-    const ndc = new Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
-    this.ray.setFromCamera(ndc, this.camera);
-  }
-
-  /** How far along the crosshair's line (from the camera, tiles) one of the others stands, or null. */
-  personAlongLook(): number | null {
-    this.ray.setFromCamera(new Vector2(0, 0), this.camera);
-    let best: number | null = null;
-    for (const [id, p] of this.people3) {
-      if (id === this.meId) continue;
-      const t = p.hitDistance(this.ray.ray);
-      if (t !== null && (best === null || t < best)) best = t;
-    }
-    return best;
-  }
-
-  /** Where a shot from (x, y, z) — the floor's coords, z up — going `yaw`, `pitch` stops within `max`:
-   *  the first wall (or anything solid this view fades), else the ground (the land's or the floor's);
-   *  null: neither (docs/plan/32-the-arms.md: tracers that stop where the shot did). */
-  rayStop(
-    x: number,
-    y: number,
-    z: number,
-    yaw: number,
-    pitch: number,
-    max: number,
-  ): { t: number; what: "wall" | "ground" } | null {
-    const c = Math.cos(pitch);
-    const dx = Math.cos(yaw) * c;
-    const dy = Math.sin(yaw) * c;
-    const dz = Math.sin(pitch);
-    let t = max;
-    let what: "wall" | "ground" | null = null;
-    const ex = x + dx * max;
-    const ey = y + dy * max;
-    for (const f of this.world.fades) {
-      if (f.item) continue;
-      const k = segBox(x, y, ex, ey, f.x0, f.y0, f.x1, f.y1);
-      if (k === null || k <= 0.01) continue;
-      const at = k * max;
-      if (at < t && z + dz * at < f.top) {
-        t = at;
-        what = "wall";
-      }
-    }
-    const off = offsetOf(this.building, 0);
-    const g = this.around.grounds;
-    for (let s = 0.3; s < t; s += 0.2) {
-      const px = x + dx * s;
-      const py = y + dy * s;
-      const floor = g && this.onLand(px, py) ? g.heightAt(px + off.x, py + off.y) : 0;
-      if (z + dz * s <= floor) {
-        t = s;
-        what = "ground";
-        break;
-      }
-    }
-    return what ? { t, what } : null;
-  }
-
-  // Aiming: what the crosshair is on — the first wall beyond me, else the ground (the land's or the
-  // floor's), within 16 tiles — and the turn and the pitch that point the flashlight in my hand
-  // (shared beam.ts, held out) at it. Eased: the crosshair crossing an edge doesn't snap the body.
-  private aimFrame(dt: number, me: Body3 | undefined) {
-    const was = this.aimOn;
-    this.aimOn = this.aim && !!me;
-    if (!this.aimOn || !me) return;
-    const cam = this.camera.position;
-    const d = this.camera.getWorldDirection(this.aimDir);
-    const L = 16;
-    // past me (the walls between the camera and me are faded, or behind me)
-    const near = Math.max(0, (me.x - cam.x) * d.x + (me.y - cam.z) * d.z) + 0.6;
-    let t = L;
-    const ex = cam.x + d.x * L;
-    const ez = cam.z + d.z * L;
-    for (const f of this.world.fades) {
-      if (f.item || f.alpha < 0.5) continue;
-      const k = segBox(cam.x, cam.z, ex, ez, f.x0, f.y0, f.x1, f.y1);
-      if (k === null) continue;
-      const at = k * L;
-      if (at > near && at < t && cam.y + d.y * at < f.top) t = at;
-    }
-    // the ground: a step at a time (the land rises and falls; a floor is 0)
-    const off = offsetOf(this.building, 0);
-    const g = this.around.grounds;
-    for (let s = near; s < t; s += 0.25) {
-      const x = cam.x + d.x * s;
-      const z = cam.z + d.z * s;
-      const floor = g && this.onLand(x, z) ? g.heightAt(x + off.x, z + off.y) : 0;
-      if (cam.y + d.y * s <= floor) {
-        t = s;
-        break;
-      }
-    }
-    const tx = cam.x + d.x * t;
-    const ty = cam.y + d.y * t;
-    const tz = cam.z + d.z * t;
-    this.aimHit.set(tx, ty, tz);
-    // from the lens (held out) to there — not nearer than 2.5
-    // (as the body faces: last frame's turn on the camera's)
-    const o = beamOf(me.x, me.y, me.z ?? me.ground ?? 0, this.yaw + (was ? this.aimTurn : 0) + AIM_BLADE, 0, false);
-    const flat = Math.max(2.5, Math.hypot(tx - o.x, tz - o.y));
-    let turn = Math.atan2(tz - o.y, tx - o.x) - this.yaw;
-    turn = Math.max(-0.35, Math.min(0.35, Math.atan2(Math.sin(turn), Math.cos(turn))));
-    const up = Math.max(-0.9, Math.min(0.9, Math.atan2(ty - o.z, flat)));
-    const k = was ? 1 - Math.exp(-dt * 14) : 1;
-    this.aimTurn += (turn - this.aimTurn) * k;
-    this.aimUp += (up - this.aimUp) * k;
-  }
-
-  // what's under the pointer: someone, or something to use
-  private personAt(): string | null {
-    // the 3D people: the nearest one the ray passes through
-    let best: { id: string; t: number } | null = null;
-    for (const [id, p] of this.people3) {
-      const t = p.hitDistance(this.ray.ray);
-      if (t !== null && (!best || t < best.t)) best = { id, t };
-    }
-    if (best) return best.id;
-    const planes: Object3D[] = [];
-    for (const p of this.people.values()) if (p.plane.visible && p.root.visible) planes.push(p.plane);
-    for (const hit of this.ray.intersectObjects(planes, false)) {
-      const found = [...this.people].find(([, p]) => p.plane === hit.object);
-      if (found && hit.uv && found[1].opaqueAt(hit.uv.x, hit.uv.y)) return found[0];
-    }
-    // pets: their meshes
-    const roots: Object3D[] = [...this.pets3.values()].map((e) => e.model.root);
-    const hit = this.ray.intersectObjects(roots, true)[0];
-    if (hit) {
-      let o: Object3D | null = hit.object;
-      while (o && !roots.includes(o)) o = o.parent;
-      if (o) return [...this.pets3].find(([, e]) => e.model.root === o)?.[0] ?? null;
-    }
-    return null;
-  }
-
-  private hoverAt = 0;
-  private hover(clientX: number, clientY: number) {
-    const now = performance.now();
-    if (now - this.hoverAt < 50) return; // a few times a second is plenty
-    this.hoverAt = now;
-    this.setRay(clientX, clientY);
-    const any = this.personAt() ?? this.pickObject();
-    this.renderer.domElement.style.cursor = any ? "pointer" : "";
-  }
-
-  // ── build mode ─────────────────────────────────────────────────────────────
-  buildMode = false;
-  private buildPress: { id: number; x0: number; y0: number; t: number } | null = null;
-  private pointer = { x: 0, y: 0 };
-  private buildLook: BuildLook | null = null;
-  private builder: BuildLayer;
-  // what build mode shows (and my arrival pin, outside it too: `on` false)
-  setBuild(look: BuildLook | null, on = !!look) {
-    if (on) this.setLook(false);
-    this.buildMode = on;
-    this.buildLook = look;
-  }
-  // the floor under the pointer wanted outside build mode too (picking my arrival point)
-  floorHover = false;
-
-  // the floor under a point of the screen (tiles), or null looking up; `h`:
-  // the point at that height instead (on a surface that high, in tiles)
-  // The ray through a screen point, from the camera (world tiles; z in iso px).
-  rayAt(
-    clientX: number,
-    clientY: number,
-  ): { o: { x: number; y: number; z: number }; d: { x: number; y: number; z: number } } {
-    this.setRay(clientX, clientY);
-    const o = this.ray.ray.origin;
-    const d = this.ray.ray.direction;
-    return { o: { x: o.x, y: o.z, z: o.y * 39.19 }, d: { x: d.x, y: d.z, z: d.y * 39.19 } };
-  }
-
-  // The walls this view looks through now (faded runs): "h3,4" keys.
-  lookedThrough(): Set<string> {
-    const out = new Set<string>();
-    for (const f of this.world.fades) {
-      if (f.item || f.alpha >= 0.5) continue;
-      if (f.y1 - f.y0 < 0.5) {
-        const y = Math.round((f.y0 + f.y1) / 2);
-        for (let x = Math.floor(f.x0 + 0.2); x < f.x1 - 0.2; x++) out.add(`h${x},${y}`);
-      } else if (f.x1 - f.x0 < 0.5) {
-        const x = Math.round((f.x0 + f.x1) / 2);
-        for (let y = Math.floor(f.y0 + 0.2); y < f.y1 - 0.2; y++) out.add(`v${x},${y}`);
-      }
-    }
-    return out;
-  }
-
-  // Where build mode's pointer is on the floor. Pointing above the horizon (high
-  // up a wall, the camera low) there's no floor under it: the last floor point
-  // then, so presses, drags and clicks still reach build mode (a wall item in
-  // hand goes by the pointer's ray anyway).
-  private lastBuildFloor: { x: number; y: number } | null = null;
-  private buildAt(clientX: number, clientY: number): { x: number; y: number } {
-    const f = this.floorAt(clientX, clientY);
-    if (f) this.lastBuildFloor = f;
-    if (f ?? this.lastBuildFloor) return (f ?? this.lastBuildFloor) as { x: number; y: number };
-    const c = this.camera.position;
-    return { x: c.x, y: c.z };
-  }
-
-  floorAt(clientX: number, clientY: number, h = 0): { x: number; y: number } | null {
-    this.setRay(clientX, clientY);
-    const o = this.ray.ray.origin;
-    const d = this.ray.ray.direction;
-    if (d.y >= -1e-4 || o.y <= h) return null;
-    const t = (h - o.y) / d.y;
-    return { x: o.x + d.x * t, y: o.z + d.z * t };
-  }
-
-  // Everything under the pointer, front first (build mode's pick: furniture and
-  // the rooms' clutter, as the iso engine's `picksAt`).
-  picksAtPointer(): { id: string; dress: boolean; kind?: string; t: number }[] {
-    this.setRay(this.pointer.x, this.pointer.y);
-    const o = this.ray.ray.origin;
-    const d = this.ray.ray.direction;
-    const out: { id: string; dress: boolean; kind?: string; t: number }[] = [];
-    for (const p of this.world.picks) {
-      let t0 = 0;
-      let t1 = Number.POSITIVE_INFINITY;
-      let ok = true;
-      for (const [oa, da, lo, hi] of [
-        [o.x, d.x, p.x0, p.x1],
-        [o.y, d.y, p.z0, p.z1],
-        [o.z, d.z, p.y0, p.y1],
-      ]) {
-        if (Math.abs(da) < 1e-9) {
-          if (oa < lo || oa > hi) ok = false;
-          continue;
-        }
-        let a = (lo - oa) / da;
-        let b = (hi - oa) / da;
-        if (a > b) [a, b] = [b, a];
-        t0 = Math.max(t0, a);
-        t1 = Math.min(t1, b);
-        if (t0 > t1) ok = false;
-      }
-      if (ok) out.push({ id: p.id, dress: !!p.dress, kind: p.dress?.kind, t: t0 });
-    }
-    // small things on a surface first (as iso: a mug wins over its desk), then nearest
-    return out.sort((a, b) => a.t - b.t);
-  }
-
-  private pick(clientX: number, clientY: number, mods?: { shift: boolean; right: boolean }) {
-    this.setRay(clientX, clientY);
-    // the nearest drawing actually under the pointer (not a plane's empty margin)
-    const who = this.personAt();
-    if (who) return this.events.person?.(who, { x: clientX, y: clientY });
-    const toyHit = this.ray.intersectObjects(
-      [...this.toys3.values()].map((t) => t.root),
-      true,
-    )[0];
-    if (toyHit) {
-      let o: Object3D | null = toyHit.object;
-      while (o?.parent && !o.userData.toyId) o = o.parent;
-      if (o?.userData.toyId) return this.events.toy?.(o.userData.toyId as string);
-    }
-    const hitObj = this.pickObject();
-    if (hitObj) return this.events.object?.(hitObj, { x: clientX, y: clientY });
-    const o = this.ray.ray.origin;
-    const dir = this.ray.ray.direction;
-    if (dir.y >= -1e-4) return;
-    // out on the land (the ground floor): where the ray meets the ground
-    const land = this.landAt(o, dir);
-    if (land) return this.events.floor?.(land.x, land.y, mods);
-    const t = -o.y / dir.y;
-    const x = o.x + dir.x * t;
-    const y = o.z + dir.z * t;
-    if (x >= 0 && y >= 0 && x < this.map.width && y < this.map.height) this.events.floor?.(x, y, mods);
-  }
-
-  // ── footprints in the snow (world/footprints.ts): one instanced mesh, fading ──
-  prints: Footprints | null = null;
-  private printMesh: InstancedMesh | null = null;
-  private printLeftAttr: InstancedBufferAttribute | null = null;
-  private printVersion = -1;
-  private printFaded = 0;
-  private drawPrints(now: number) {
-    const f = this.prints;
-    if (!f) return;
-    const N = 1600;
-    // (made up front, its shader compiled then: not with the first print)
-    if (!this.printMesh) {
-      const c = document.createElement("canvas");
-      c.width = 32;
-      c.height = 20;
-      const g = c.getContext("2d") as CanvasRenderingContext2D;
-      const grd = g.createRadialGradient(16, 10, 0, 16, 10, 15);
-      grd.addColorStop(0, "rgba(255,255,255,1)");
-      grd.addColorStop(0.7, "rgba(255,255,255,0.8)");
-      grd.addColorStop(1, "rgba(255,255,255,0)");
-      g.fillStyle = grd;
-      g.beginPath();
-      g.ellipse(16, 10, 15, 9, 0, 0, Math.PI * 2);
-      g.fill();
-      const tex = new CanvasTexture(c);
-      const mat = new MeshBasicMaterial({
-        color: 0x5f7290,
-        map: tex,
-        transparent: true,
-        opacity: 0.5,
-        depthWrite: false,
-      });
-      mat.onBeforeCompile = (sh) => {
-        sh.vertexShader = sh.vertexShader
-          .replace("#include <common>", "#include <common>\nattribute float aLeft;\nvarying float vLeft;")
-          .replace("#include <begin_vertex>", "#include <begin_vertex>\nvLeft = aLeft;");
-        sh.fragmentShader = sh.fragmentShader
-          .replace("#include <common>", "#include <common>\nvarying float vLeft;")
-          .replace("#include <opaque_fragment>", "diffuseColor.a *= vLeft;\n#include <opaque_fragment>");
-      };
-      const geo = new PlaneGeometry(0.2, 0.12).rotateX(-Math.PI / 2);
-      this.printLeftAttr = new InstancedBufferAttribute(new Float32Array(N), 1);
-      geo.setAttribute("aLeft", this.printLeftAttr);
-      this.printMesh = new InstancedMesh(geo, mat, N);
-      this.printMesh.frustumCulled = false;
-      this.printMesh.renderOrder = 1;
-      this.scene.add(this.printMesh);
-      this.printMesh.count = 1;
-      this.renderer.compile(this.printMesh, this.camera);
-      this.printMesh.count = 0;
-    }
-    const on = this.level === 0 && f.list.length > 0;
-    this.printMesh.visible = on;
-    if (!on) return;
-    // (a print is a shadow in the snow: in the pitch dark, as dark as what's round it)
-    (this.printMesh.material as MeshBasicMaterial).color.setHex(0x5f7290).multiplyScalar(litBalance.lmSkyLeft.value);
-    const fade = now - this.printFaded > 1000;
-    if (f.version === this.printVersion && !fade) return;
-    this.printVersion = f.version;
-    this.printFaded = now;
-    const m = new Matrix4();
-    const q = new Quaternion();
-    const up = new Vector3(0, 1, 0);
-    const one = new Vector3(1, 1, 1);
-    const at = new Vector3();
-    const left = this.printLeftAttr as InstancedBufferAttribute;
-    const n = Math.min(N, f.list.length);
-    for (let i = 0; i < n; i++) {
-      const p = f.list[f.list.length - n + i];
-      m.compose(at.set(p.x, p.z + 0.035, p.y), q.setFromAxisAngle(up, -p.a), one);
-      this.printMesh.setMatrixAt(i, m);
-      left.setX(i, printLeft(p, now));
-    }
-    this.printMesh.count = n;
-    this.printMesh.instanceMatrix.needsUpdate = true;
-    left.needsUpdate = true;
-  }
-
   /** God mode's pointer: where the ray through the screen's (clientX, clientY) meets the land (the
    *  Grounds' own heights, not their chunks': far off none's made), the Grounds' coords; null
    *  over the sky. */
@@ -5291,7 +3330,7 @@ void main() {
     const o = this.ray.ray.origin;
     const d = this.ray.ray.direction;
     const f = this.groundsFrame();
-    const below = (t: number) => o.y + d.y * t <= terrainAt(o.x + d.x * t + f.x, o.z + d.z * t + f.z) + f.y;
+    const below = (t: number) => o.y + d.y * t <= terrainAt(o.x + d.x * t, o.z + d.z * t) + f.y;
     let t0 = 0;
     let t1 = -1;
     for (let t = 2; t < this.camera.far; t += 2 + t * 0.01)
@@ -5305,18 +3344,17 @@ void main() {
       if (below(m)) t1 = m;
       else t0 = m;
     }
-    const x = o.x + d.x * t1 + f.x;
-    const z = o.z + d.z * t1 + f.z;
+    const x = o.x + d.x * t1;
+    const z = o.z + d.z * t1;
     return { x, z, h: terrainAt(x, z) };
   }
 
-  /** Where a ray (my floor's coords) first meets the land round the ground floor, off
-   *  the floor's own tiles; null on any other floor, or when it meets the floor first. */
-  private landAt(o: Vector3, dir: Vector3): { x: number; y: number } | null {
+  /** Where a ray (the scene's) first meets the land round the ground floor, off the floor's own
+   *  tiles; null on any other floor, or when it meets the floor first. */
+  landAt(o: Vector3, dir: Vector3): { x: number; y: number } | null {
     const g = this.around.grounds;
     if (this.level !== 0 || !g) return null;
-    const off = offsetOf(this.building, 0);
-    const below = (t: number) => o.y + dir.y * t <= g.heightAt(o.x + dir.x * t + off.x, o.z + dir.z * t + off.y);
+    const below = (t: number) => o.y + dir.y * t <= g.heightAt(o.x + dir.x * t, o.z + dir.z * t);
     let t0 = 0;
     let t1 = -1;
     for (let t = 0.5; t < 500; t += 0.5)
@@ -5345,7 +3383,7 @@ void main() {
   }
 
   // pets' toys (shared/pets.ts): a mesh each, where it is (in the air too)
-  private toys3 = new Map<string, { root: Group; kind: string; shadow: Mesh }>();
+  toys3 = new Map<string, { root: Group; kind: string; shadow: Mesh }>();
   setToys(list: { id: string; kind: string; x: number; y: number; z: number }[]) {
     const P = petsArt();
     if (!P && list.length) void loadPets();
@@ -5394,128 +3432,41 @@ void main() {
     this.activeAt = performance.now();
     e.preventDefault();
     if (this.god) return this.god.input.wheel(e);
-    if (this.buildMode && this.events.wheel?.(e.deltaY)) return; // turning what you hold
-    this.zoomBy(e.deltaY > 0 ? 1.1 : 1 / 1.1);
+    if (this.buildPick.buildMode && this.events.wheel?.(e.deltaY)) return; // turning what you hold
+    this.lensPart.zoomBy(e.deltaY > 0 ? 1.1 : 1 / 1.1);
   };
   private onKey = (e: KeyboardEvent) => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
     this.activeAt = performance.now();
     if (e.type === "keydown" && e.code === "KeyZ" && !this.god && !e.repeat && !e.metaKey && !e.ctrlKey)
-      this.setLook(!this.looking);
+      this.mouseLook.setLook(!this.mouseLook.looking);
     if (e.type === "keydown") this.keys.add(e.code);
     else this.keys.delete(e.code);
   };
   private onBlur = () => this.keys.clear();
   private noMenu = (e: Event) => e.preventDefault();
 
-  // ── mouse look ─────────────────────────────────────────────────────────────
-  // The browser owns the lock: Esc, another window or tab let it go, and right
-  // after Esc it refuses to lock again for a moment. `looking` follows it.
-  looking = false;
-  /** the pointer may be locked to the camera now (the controller's: nothing on screen wants it) */
-  canLock: () => boolean = () => true;
-  lookSens = 1; // × the base speed
-  lookInvert = false;
-  private crosshair: HTMLDivElement | null = null;
-  private aimKey = "";
-  private aimDue = 0;
-  setLook(on: boolean, quiet = false) {
-    const c = this.renderer.domElement;
-    if (!on) {
-      if (document.pointerLockElement === c) document.exitPointerLock();
-      return;
-    }
-    if (this.looking || this.buildMode || !c.requestPointerLock || !this.canLock()) return;
-    // raw mouse movement where there is (Chrome); a plain lock elsewhere (Firefox)
-    const lock = c.requestPointerLock as (o?: { unadjustedMovement?: boolean }) => Promise<void> | undefined;
-    // a refusal: the promise says so (Chrome), or the error event (Firefox: no promise)
-    const refused = () => {
-      if (!quiet) this.events.lookRefused?.();
-    };
-    this.lockAsked = 0;
-    try {
-      const p = lock.call(c, { unadjustedMovement: true });
-      if (!p?.catch) this.lockAsked = quiet ? 0 : 1;
-      else
-        p.catch(() => {
-          if (document.pointerLockElement === c) return;
-          const q = lock.call(c);
-          if (q?.catch) q.catch(refused);
-          else this.lockAsked = quiet ? 0 : 1;
-        });
-    } catch {
-      this.lockAsked = quiet ? 0 : 1;
-      lock.call(c);
-    }
-  }
-  // Back to mouse look after something borrowed the pointer (the phone, the bag).
-  // Chrome locks again without a click after letting go from code; where the
-  // browser says no, the pointer just stays out (no toast: nobody asked).
-  resumeLook() {
-    this.setLook(true, true);
-  }
-  private onLockChange = () => {
-    const on = document.pointerLockElement === this.renderer.domElement;
-    if (on === this.looking) return;
-    this.looking = on;
-    this.drag = null;
-    this.renderer.domElement.style.cursor = "";
-    this.showCrosshair();
-    this.aimKey = "";
-    if (!on) this.events.aim?.(null);
-    this.events.look?.(on);
-  };
-  // the aim's dot: in first person only (in third person you see where you look)
-  private showCrosshair() {
-    if (this.crosshair) this.crosshair.style.display = this.looking && this.mode === "first" ? "block" : "none";
-  }
-  private lockAsked = 0;
-  private onLockError = () => {
-    if (!this.lockAsked) return;
-    this.lockAsked = 0;
-    this.events.lookRefused?.();
-  };
-  // what the crosshair is on (a few times a second)
-  private aimAt() {
-    const now = performance.now();
-    if (now - this.aimDue < 80) return;
-    this.aimDue = now;
-    const r = this.renderer.domElement.getBoundingClientRect();
-    this.setRay(r.left + r.width / 2, r.top + r.height / 2);
-    const person = this.personAt();
-    const object = person ? null : this.pickObject();
-    const key = person ? `p${person}` : object ? `o${object}` : "";
-    if (key === this.aimKey) return;
-    this.aimKey = key;
-    const x = this.crosshair;
-    if (x) {
-      x.style.background = key ? "#ffa630" : "#f6eedb";
-      x.style.transform = key ? "scale(1.6)" : "";
-    }
-    this.events.aim?.(person ? { person } : object ? { object } : null);
-  }
-
-  private gone = false;
+  gone = false;
   destroy() {
-    this.bubbles?.dispose();
-    this.sway?.dispose();
-    this.sway = null;
-    this.physics?.stop();
-    this.physics = null;
+    this.mood.bubbles?.dispose();
+    this.body.sway?.dispose();
+    this.body.sway = null;
+    this.body.physics?.stop();
+    this.body.physics = null;
     this.gone = true;
     this.shroud?.dispose();
     this.arms3?.dispose();
     const c = this.renderer.domElement;
-    c.removeEventListener("pointerdown", this.onDown);
-    c.removeEventListener("pointermove", this.onMove);
-    c.removeEventListener("pointerup", this.onUp);
-    c.removeEventListener("pointercancel", this.onUp);
+    c.removeEventListener("pointerdown", this.pointerPart.onDown);
+    c.removeEventListener("pointermove", this.pointerPart.onMove);
+    c.removeEventListener("pointerup", this.pointerPart.onUp);
+    c.removeEventListener("pointercancel", this.pointerPart.onUp);
     c.removeEventListener("wheel", this.onWheel);
     c.removeEventListener("contextmenu", this.noMenu);
-    document.removeEventListener("pointerlockchange", this.onLockChange);
-    document.removeEventListener("pointerlockerror", this.onLockError);
+    document.removeEventListener("pointerlockchange", this.mouseLook.onLockChange);
+    document.removeEventListener("pointerlockerror", this.mouseLook.onLockError);
     if (document.pointerLockElement === c) document.exitPointerLock();
-    this.crosshair?.remove();
+    this.mouseLook.crosshair?.remove();
     clearTimeout(this.veilT);
     this.veil?.remove();
     window.removeEventListener("keydown", this.onKey);
@@ -5523,9 +3474,9 @@ void main() {
     window.removeEventListener("blur", this.onBlur);
     this.ro?.disconnect();
     this.dprQuery?.removeEventListener("change", this.onDpr);
-    this.tagLayer?.remove();
+    this.tags.tagLayer?.remove();
     this.live.dispose();
-    this.builder.dispose();
+    this.buildPick.builder.dispose();
     for (const f of this.fx) (f.s.material as SpriteMaterial).dispose();
     this.post?.dispose();
     this.light.dispose();
@@ -5544,40 +3495,153 @@ void main() {
     this.stairs3.dispose();
     for (const b of this.floors.values()) b.world.dispose();
     this.warmTarget?.dispose();
-    for (const m of this.fadeKept) m.dispose();
+    for (const m of this.warmup.fadeKept) m.dispose();
     this.banks?.dispose();
     this.around.dispose();
     this.renderer.dispose();
     c.remove();
   }
-}
 
-// Where a 2D segment first enters a box (0..1 along it), or null.
-function segBox(ax: number, ay: number, bx: number, by: number, x0: number, y0: number, x1: number, y1: number) {
-  let t0 = 0;
-  let t1 = 1;
-  const dx = bx - ax;
-  const dy = by - ay;
-  for (const [p, q] of [
-    [-dx, ax - x0],
-    [dx, x1 - ax],
-    [-dy, ay - y0],
-    [dy, y1 - ay],
-  ]) {
-    if (p === 0) {
-      if (q < 0) return null;
-      continue;
-    }
-    const r = q / p;
-    if (p < 0) {
-      if (r > t1) return null;
-      if (r > t0) t0 = r;
-    } else {
-      if (r < t0) return null;
-      if (r < t1) t1 = r;
-    }
+  /** (in Eyes: read from outside) */
+  get unseen() {
+    return this.eyes.unseen;
   }
-  return t0;
+  set unseen(v) {
+    this.eyes.unseen = v;
+  }
+  /** (in Eyes: read from outside) */
+  isUnseen(...a: Parameters<Eyes["isUnseen"]>): ReturnType<Eyes["isUnseen"]> {
+    return this.eyes.isUnseen(...a);
+  }
+  /** (in Eyes: read from outside) */
+  glareAt(...a: Parameters<Eyes["glareAt"]>): ReturnType<Eyes["glareAt"]> {
+    return this.eyes.glareAt(...a);
+  }
+  /** (in Eyes: read from outside) */
+  get carBeams() {
+    return this.eyes.carBeams;
+  }
+  set carBeams(v) {
+    this.eyes.carBeams = v;
+  }
+  /** (in Warmup: read from outside) */
+  readiness(...a: Parameters<Warmup["readiness"]>): ReturnType<Warmup["readiness"]> {
+    return this.warmup.readiness(...a);
+  }
+  /** (in Warmup: read from outside) */
+  setQuality(...a: Parameters<Warmup["setQuality"]>): ReturnType<Warmup["setQuality"]> {
+    return this.warmup.setQuality(...a);
+  }
+  /** (in BuildPick: read from outside) */
+  get builder() {
+    return this.buildPick.builder;
+  }
+  set builder(v) {
+    this.buildPick.builder = v;
+  }
+  /** (in BuildPick: read from outside) */
+  pick(...a: Parameters<BuildPick["pick"]>): ReturnType<BuildPick["pick"]> {
+    return this.buildPick.pick(...a);
+  }
+  /** (in Mood: read from outside) */
+  weatherFrame(...a: Parameters<Mood["weatherFrame"]>): ReturnType<Mood["weatherFrame"]> {
+    return this.mood.weatherFrame(...a);
+  }
+  /** (in Mood: read from outside) */
+  get wetOn() {
+    return this.mood.wetOn;
+  }
+  set wetOn(v) {
+    this.mood.wetOn = v;
+  }
+  /** (in MouseLook: read from outside) */
+  get looking() {
+    return this.mouseLook.looking;
+  }
+  set looking(v) {
+    this.mouseLook.looking = v;
+  }
+  /** (in Culling: read from outside) */
+  get below3() {
+    return this.culling.below3;
+  }
+  set below3(v) {
+    this.culling.below3 = v;
+  }
+  /** (in Culling: read from outside) */
+  setUnmerged(...a: Parameters<Culling["setUnmerged"]>): ReturnType<Culling["setUnmerged"]> {
+    return this.culling.setUnmerged(...a);
+  }
+  /** (in Culling: read from outside) */
+  setMergeClear(...a: Parameters<Culling["setMergeClear"]>): ReturnType<Culling["setMergeClear"]> {
+    return this.culling.setMergeClear(...a);
+  }
+  /** (in Culling: read from outside) */
+  cullBelow(...a: Parameters<Culling["cullBelow"]>): ReturnType<Culling["cullBelow"]> {
+    return this.culling.cullBelow(...a);
+  }
+  /** (in Guns: read from outside) */
+  get myGun() {
+    return this.guns.myGun;
+  }
+  set myGun(v) {
+    this.guns.myGun = v;
+  }
+  /** (in Guns: read from outside) */
+  get ads() {
+    return this.guns.ads;
+  }
+  /** (in Body: read from outside) */
+  get physics() {
+    return this.body.physics;
+  }
+  set physics(v) {
+    this.body.physics = v;
+  }
+  /** (in Body: read from outside) */
+  get sway() {
+    return this.body.sway;
+  }
+  set sway(v) {
+    this.body.sway = v;
+  }
+  /** (in Body: read from outside) */
+  physicsBody(...a: Parameters<Body["physicsBody"]>): ReturnType<Body["physicsBody"]> {
+    return this.body.physicsBody(...a);
+  }
+  /** (in Body: read from outside) */
+  physicsDebug(...a: Parameters<Body["physicsDebug"]>): ReturnType<Body["physicsDebug"]> {
+    return this.body.physicsDebug(...a);
+  }
+  /** (in Body: read from outside) */
+  get physicsShown() {
+    return this.body.physicsShown;
+  }
+  /** (in Lens: read from outside) */
+  snapshot(...a: Parameters<Lens["snapshot"]>): ReturnType<Lens["snapshot"]> {
+    return this.lensPart.snapshot(...a);
+  }
+
+  /** (in Tags: read from outside) */
+  get tagEls() {
+    return this.tags.tagEls;
+  }
+  set tagEls(v) {
+    this.tags.tagEls = v;
+  }
+
+  /** (in BuildPick: read from outside) */
+  rayAt(...a: Parameters<BuildPick["rayAt"]>): ReturnType<BuildPick["rayAt"]> {
+    return this.buildPick.rayAt(...a);
+  }
+  /** (in BuildPick: read from outside) */
+  lookedThrough(...a: Parameters<BuildPick["lookedThrough"]>): ReturnType<BuildPick["lookedThrough"]> {
+    return this.buildPick.lookedThrough(...a);
+  }
+  /** (in BuildPick: read from outside) */
+  floorAt(...a: Parameters<BuildPick["floorAt"]>): ReturnType<BuildPick["floorAt"]> {
+    return this.buildPick.floorAt(...a);
+  }
 }
 
 function applyFade(f: FadeGroup, shared: World3["materials"]) {
@@ -5604,55 +3668,6 @@ function applyFade(f: FadeGroup, shared: World3["materials"]) {
   }
 }
 
-// ── over heads ───────────────────────────────────────────────────────────────
-interface Tag {
-  root: HTMLDivElement;
-  name: HTMLSpanElement;
-  dot: HTMLSpanElement;
-  slash: HTMLSpanElement;
-  emote: HTMLImageElement;
-  bubble: HTMLDivElement;
-  dotKey: string;
-  emoteKey: string;
-  bubbleUntil: number;
-}
-
-// The iso look: a dark pill in Share Tech Mono, the paper bubble with a walnut
-// edge, the emote's own drawing.
-function makeTag(): Tag {
-  const root = document.createElement("div");
-  root.style.cssText = "position:absolute;left:0;top:0;width:0;height:0;will-change:transform";
-  const stack = document.createElement("div");
-  stack.style.cssText =
-    "position:absolute;left:0;bottom:0;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:3px";
-  const bubble = document.createElement("div");
-  bubble.style.cssText =
-    "display:none;max-width:196px;padding:5px 8px;border-radius:8px;background:rgba(247,240,222,.96);border:1px solid rgba(91,58,38,.6);color:#2a1a12;font:12px/15px Inter,ui-sans-serif,system-ui,sans-serif;text-align:left;white-space:normal;overflow-wrap:anywhere;width:max-content;position:relative;margin-bottom:4px";
-  const emote = document.createElement("img");
-  emote.alt = "";
-  emote.style.cssText = "display:none;width:34px;height:34px;position:relative;left:50%";
-  const pill = document.createElement("div");
-  pill.style.cssText =
-    "display:flex;align-items:center;gap:6px;height:18px;padding:0 9px 0 7px;border-radius:9px;background:rgba(30,23,18,.78);color:#efe4cc;font:12px/18px 'Share Tech Mono',ui-monospace,monospace;letter-spacing:.3px;white-space:nowrap";
-  const dot = document.createElement("span");
-  dot.style.cssText = "position:relative;width:6.4px;height:6.4px;border-radius:50%;flex:none";
-  const slash = document.createElement("span");
-  slash.style.cssText =
-    "display:none;position:absolute;left:50%;top:50%;width:8.5px;height:1.4px;background:#efe4cc;transform:translate(-50%,-50%) rotate(45deg)";
-  dot.appendChild(slash);
-  const name = document.createElement("span");
-  pill.append(dot, name);
-  stack.append(bubble, emote, pill);
-  root.appendChild(stack);
-  return { root, name, dot, slash, emote, bubble, dotKey: "", emoteKey: "", bubbleUntil: 0 };
-}
-
 // (the walls' back faces too: painting only a far side changes nothing else here)
 const layoutSig = (m: MapDef) =>
   `${m.width}x${m.height}|${m.tiles.join("")}|${m.hWalls.join("")}|${m.vWalls.join("")}|${(m.hBacks ?? []).join("")}|${(m.vBacks ?? []).join("")}`;
-
-function hashId(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}

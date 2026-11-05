@@ -17,7 +17,7 @@ const qualities = (process.argv[3] ?? "high,medium").split(",");
 const APP = process.env.APP ?? "http://localhost:3100";
 const API = "http://localhost:8100";
 const PORT = 2667;
-const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
+const G = (x: number, y: number) => ({ x, y });
 const SPOTS: { name: string; at: { x: number; y: number } | "spawn"; yaw: number }[] = [
   { name: "office (floor 4)", at: "spawn", yaw: 0 },
   { name: "lot", at: { x: 37.8, y: 30 }, yaw: Math.PI },
@@ -179,7 +179,13 @@ const real = (p: Page, ms: number) =>
 const programs = (p: Page) => p.evaluate(() => (window as any).__yutopia.tp.renderer.info.programs.length);
 
 const browser = await chromium.launch({
-  args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", "--enable-precise-memory-info", "--autoplay-policy=no-user-gesture-required"],
+  args: [
+    "--use-angle=metal",
+    "--enable-gpu",
+    "--ignore-gpu-blocklist",
+    "--enable-precise-memory-info",
+    "--autoplay-policy=no-user-gesture-required",
+  ],
 });
 const report: any = { at: new Date().toISOString(), qualities: {} };
 for (const q of qualities) {
@@ -195,7 +201,9 @@ for (const q of qualities) {
       await page.waitForTimeout(2500);
       const f = await frame(page);
       R.frames.push({ spot: s.name, weather: w.name, ...f });
-      console.log(`  ${q} ${s.name} ${w.name}: ${f.total} ms (cpu ${f.cpu}) · ${f.calls} draws · ${f.programs} programs`);
+      console.log(
+        `  ${q} ${s.name} ${w.name}: ${f.total} ms (cpu ${f.cpu}) · ${f.calls} draws · ${f.programs} programs`,
+      );
     }
   }
   // ── a weather coming in: the longest real frame in the 3 s after, the shaders made ──
@@ -256,7 +264,14 @@ for (const q of qualities) {
         const b = await fetch(`/sfx/weather/${f}`).then((r) => r.arrayBuffer());
         const t0 = performance.now();
         const a = await ctx.decodeAudioData(b);
-        out.push({ slot, file: f, kb: Math.round(b.byteLength / 1024), decodeMs: +(performance.now() - t0).toFixed(1), secs: +a.duration.toFixed(1), mb: +((a.length * a.numberOfChannels * 4) / 1048576).toFixed(1) });
+        out.push({
+          slot,
+          file: f,
+          kb: Math.round(b.byteLength / 1024),
+          decodeMs: +(performance.now() - t0).toFixed(1),
+          secs: +a.duration.toFixed(1),
+          mb: +((a.length * a.numberOfChannels * 4) / 1048576).toFixed(1),
+        });
       }
     }
     await ctx.close();
@@ -282,7 +297,8 @@ for (const q of qualities) {
       const total = profile.endTime - profile.startTime;
       const dt: number[] = profile.timeDeltas;
       const self = new Map<number, number>();
-      for (let i = 0; i < profile.samples.length; i++) self.set(profile.samples[i], (self.get(profile.samples[i]) ?? 0) + (dt[i] ?? 0));
+      for (let i = 0; i < profile.samples.length; i++)
+        self.set(profile.samples[i], (self.get(profile.samples[i]) ?? 0) + (dt[i] ?? 0));
       const byFile = new Map<string, number>();
       const byFn = new Map<string, number>();
       for (const n of profile.nodes) {
@@ -294,7 +310,10 @@ for (const q of qualities) {
         byFn.set(fn, (byFn.get(fn) ?? 0) + us);
       }
       const top = (m: Map<string, number>, k: number) =>
-        [...m].sort((a, b) => b[1] - a[1]).slice(0, k).map(([n, us]) => ({ n, pct: +((100 * us) / total).toFixed(1) }));
+        [...m]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, k)
+          .map(([n, us]) => ({ n, pct: +((100 * us) / total).toFixed(1) }));
       R.profile[name] = { real: r, byFile: top(byFile, 30), byFn: top(byFn, 40) };
       console.log(`  profile ${name}: ${r.fps} fps, worst ${r.worst} ms`);
     }

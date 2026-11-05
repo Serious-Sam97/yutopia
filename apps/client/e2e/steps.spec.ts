@@ -3,7 +3,7 @@ import { expect } from "@playwright/test";
 import { BIA, enter, test, token, walkTo } from "./helpers";
 
 // My steps in the game (docs/plan/63-the-steps.md, phase 2): Bia walks a few metres across her
-// floor; each step heard is logged (the controller's myStep) — from the body's feet as they're put
+// floor; each step heard is logged (the steps' myStep: world/ctl/steps.ts) — from the body's feet as they're put
 // down, at the walk's pace, the feet in turn, on what's under them — and none once she's still.
 // The world isn't swapped; run with YUTOPIA_GPU=1 (the body's feet are the 3D view's).
 
@@ -16,8 +16,8 @@ test("my steps: the body's feet as they land, at the walk's pace, in turn; none 
     const w = (window as any).__yutopia;
     const log: { t: number; side: string; f: string; ok: boolean }[] = [];
     (window as any).__steps = log;
-    const was = w.myStep.bind(w);
-    w.myStep = (side?: string) => {
+    const was = w.steps.myStep.bind(w.steps); // (the steps: world/ctl/steps.ts — plan 72 phase 4)
+    w.steps.myStep = (side?: string) => {
       log.push({ t: performance.now(), side: side ?? "", f: w.myFooting(w.height.z), ok: w.feet.ok });
       was(side);
     };

@@ -1,4 +1,4 @@
-import { offsetOf } from "@yutopia/shared";
+import { shiftOf } from "@yutopia/shared";
 import type { GpsFriend } from "@yutopia/shared/phone";
 import { api } from "../api.ts";
 import { config } from "../config.ts";
@@ -46,7 +46,7 @@ function friendOf(line: Line, p: Player): GpsFriend | null {
   const room = line.room;
   const area = room.areaByKey(p.area);
   if (p.status === "dnd" || area?.kind === "booth") return null;
-  const off = offsetOf(room.map, p.level);
+  const off = shiftOf(room.map, p.level);
   return {
     uid: p.uid,
     name: p.name,

@@ -64,7 +64,7 @@ test("God mode's shell: in and out, the camera, the draft, walk it, publish, rol
   await clearDrafts(tok);
   await enter(page, tok, space);
   await holdHour(page, 13);
-  await page.evaluate((p) => (window as any).__yutopia.teleport(p), { x: AT.x + 60, y: AT.z + 10, level: 0 });
+  await page.evaluate((p) => (window as any).__yutopia.teleport(p), { x: AT.x, y: AT.z, level: 0 });
   await page.waitForTimeout(4000);
   const was = await y(page, (y) => y.room.state.groundsRev);
   const standing = await y(page, (y) => y.meTile());

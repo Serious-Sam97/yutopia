@@ -89,6 +89,11 @@ const D = {
   buildingWorld: ["Building the world…", "Construindo o mundo…"],
   changingView: ["Changing the view…", "Mudando a vista…"],
   reconnecting: ["Signal lost — reconnecting…", "Sinal perdido — reconectando…"],
+  glLost: [
+    "The graphics card dropped the 3D view — it comes back by itself in a moment",
+    "A placa de vídeo largou a vista 3D — ela volta sozinha em instantes",
+  ],
+  glBack: ["3D view back", "Vista 3D de volta"],
   kicked: ["You opened Yutopia in another tab.", "Você abriu o Yutopia em outra aba."],
   removed: ["An admin removed you from the studio for a while.", "Um admin te tirou do estúdio por um tempo."],
   mute: ["Mute", "Silenciar"],

@@ -14,7 +14,7 @@ const base = process.env.YUTOPIA_E2E_URL ?? "http://localhost:3100";
 const api = process.env.YUTOPIA_E2E_API ?? "http://localhost:8100";
 const pass = process.env.YUTOPIA_DEMO_PASSWORD ?? "yutopia-demo";
 const quality = process.env.QUALITY ?? "high";
-const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 }); // the land's coords → the ground floor's
+const G = (x: number, y: number) => ({ x, y }); // the land's coords → the ground floor's
 
 async function token(email: string): Promise<string> {
   const ctx = await request.newContext();

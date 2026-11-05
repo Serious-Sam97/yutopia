@@ -112,8 +112,8 @@ test("disc console: plug in, a disc, the BIOS gate, play for everyone, pads, sav
       );
       if (busy) continue;
       for (const o of [
-        { id: tvId, kind: "crt_tv", x: p.x, y: p.y, rot: 0 },
-        { id: conId, kind: "console_ps1", x: p.x + 1, y: p.y + 2, rot: 0 },
+        { id: tvId, kind: "crt_tv", x: p.x, y: p.y, yaw: 0 },
+        { id: conId, kind: "console_ps1", x: p.x + 1, y: p.y + 2, yaw: 0 },
       ])
         await ana.evaluate((q) => (window as any).__yutopia.send("obj:put", q), o);
       await ana.waitForTimeout(700);
@@ -323,14 +323,14 @@ test("disc console: a big disc comes down once, with its progress", async ({ bro
         id: tvId,
         kind: "crt_tv",
         ...p,
-        rot: 0,
+        yaw: 0,
       });
       await page.evaluate((q) => (window as any).__yutopia.send("obj:put", q), {
         id: conId,
         kind: "console_ps1",
         x: p.x + 1,
         y: p.y + 2,
-        rot: 0,
+        yaw: 0,
         props: { tv: tvId },
       });
       await page.waitForTimeout(800);
@@ -425,14 +425,14 @@ test("disc console: the slim one's own screen shows the game", async ({ browser 
         id: tvId,
         kind: "crt_tv",
         ...p,
-        rot: 0,
+        yaw: 0,
       });
       await page.evaluate((q) => (window as any).__yutopia.send("obj:put", q), {
         id: conId,
         kind: "console_ps1_slim",
         x: p.x + 1,
         y: p.y + 2,
-        rot: 0,
+        yaw: 0,
         props: { tv: tvId, variant: 1 },
       });
       await page.waitForTimeout(800);

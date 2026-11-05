@@ -47,7 +47,6 @@ async function waitFor(fn: () => boolean, ms = 8000) {
 const me = (room: Room): any => room.state.players.get(room.sessionId);
 // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
 const park = (room: Room): any => room.state.karts.get("park");
-const OFF = { x: -60, y: -10 };
 let sandbox = 20;
 async function join(uid: number, s: number) {
   const r = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
@@ -66,7 +65,7 @@ async function take(r: Room) {
   r.onMessage("kart:hit", () => {});
   r.onMessage("kart:boost", () => {});
   r.onMessage("kart:no", () => {});
-  const at = { x: KART_DESK.x + 2 - OFF.x, y: KART_DESK.z - OFF.y, level: 0 };
+  const at = { x: KART_DESK.x + 2, y: KART_DESK.z, level: 0 };
   r.send("teleport", { to: at });
   await waitFor(() => Math.hypot(me(r).x - at.x, me(r).y - at.y) < 2);
   r.send("kart:take", {});
@@ -113,7 +112,7 @@ test("a kart at the desk, free laps counted, given back", async () => {
   await waitFor(() => !!park(a).record && JSON.parse(park(a).record).best?.name === "K61");
   // where I am: in my seat, in the kart
   // (a tick behind its last report, at most)
-  assert.ok(Math.hypot(me(a).x + OFF.x - slot().x, me(a).y + OFF.y - slot().z) < 3);
+  assert.ok(Math.hypot(me(a).x - slot().x, me(a).y - slot().z) < 3);
   // given back: told I'm out, then put by the desk on the land (not under it, at 0)
   const got: string[] = [];
   const to: { at?: { x: number; y: number; z?: number } } = {};
@@ -460,7 +459,7 @@ test("the track changer: anyone's, in the quiet lobby; the grid, the ground and 
   await waitFor(() => park(a).showing === true);
   const why: string[] = [];
   a.onMessage("kart:no", (m: { why: string }) => why.push(m.why));
-  const desk = { x: KART_DESK.x + 2 - OFF.x, y: KART_DESK.z - OFF.y, level: 0 };
+  const desk = { x: KART_DESK.x + 2, y: KART_DESK.z, level: 0 };
   a.send("teleport", { to: desk });
   await waitFor(() => Math.hypot(me(a).x - desk.x, me(a).y - desk.y) < 2);
   a.send("kart:take", {});

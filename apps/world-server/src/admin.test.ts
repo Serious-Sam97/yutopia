@@ -34,8 +34,8 @@ async function waitFor(fn: () => boolean, ms = 8000) {
 }
 
 let n = 0;
-// one sandbox each test; someone in it out in the car park at (30.5, y)
-async function join(sandbox: number, uid: number, roles: string, y = 30.5) {
+// one sandbox each test; someone in it out in the car park at (−29.5, y)
+async function join(sandbox: number, uid: number, roles: string, y = 20.5) {
   const room: Room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
     sandbox,
     token: `dev:${uid}:P${uid}:${roles}`,
@@ -46,7 +46,7 @@ async function join(sandbox: number, uid: number, roles: string, y = 30.5) {
   room.onMessage("snap", (m) => snaps.push(m));
   room.onMessage("*", (type, msg) => said.push({ type: String(type), msg }));
   await waitFor(() => !!room.state?.players?.get(room.sessionId));
-  room.send("teleport", { to: { x: 30.5, y, level: 0 } });
+  room.send("teleport", { to: { x: -29.5, y, level: 0 } });
   const me = () => room.state.players.get(room.sessionId);
   await waitFor(() => me().level === 0 && Math.abs(me().y - y) < 0.6);
   await sleep(1100); // (the teleport's snap: what was sent before it is let go for a second)
@@ -59,8 +59,8 @@ const sandbox = () => 4600 + ++n;
 
 test("a member's powers and moderation are refused; an admin's are taken", async () => {
   const s = sandbox();
-  const ana = await join(s, 1, ADMIN, 30.5);
-  const bia = await join(s, 2, MEMBER, 34.5);
+  const ana = await join(s, 1, ADMIN, 20.5);
+  const bia = await join(s, 2, MEMBER, 24.5);
   bia.room.send("mod:power", { power: "fly", on: true });
   bia.room.send("mod:freeze", { userId: 1, minutes: 5 });
   bia.room.send("mod:notice", { text: "not from a member" });
@@ -78,12 +78,12 @@ test("a member's powers and moderation are refused; an admin's are taken", async
 
 test("flying: a move 8 tiles up is taken — for a flier, and (no put-backs) for anyone", async () => {
   const s = sandbox();
-  const ana = await join(s, 11, ADMIN, 30.5);
-  const bia = await join(s, 12, MEMBER, 34.5);
+  const ana = await join(s, 11, ADMIN, 20.5);
+  const bia = await join(s, 12, MEMBER, 24.5);
   ana.room.send("mod:power", { power: "fly", on: true });
   await waitFor(() => ana.me().powers === POWERS.fly);
   const up = (who: typeof ana, mt: number) =>
-    who.room.send("pos", { x: who.me().x, y: who.me().y, z: 8, l: 0, d: 0, a: 0, mv: 0, yaw: 0, pitch: 0, mt });
+    who.room.send("pos", { x: who.me().x, y: who.me().y, z: 8, l: 0, a: 0, mv: 0, yaw: 0, pitch: 0, mt });
   up(ana, 200_000);
   up(bia, 200_000);
   await sleep(400);
@@ -95,12 +95,12 @@ test("flying: a move 8 tiles up is taken — for a flier, and (no put-backs) for
 
 test("held still: every move put back till it's over; a notice reaches everyone", async () => {
   const s = sandbox();
-  const ana = await join(s, 21, ADMIN, 30.5);
-  const bia = await join(s, 22, MEMBER, 34.5);
+  const ana = await join(s, 21, ADMIN, 20.5);
+  const bia = await join(s, 22, MEMBER, 24.5);
   ana.room.send("mod:freeze", { userId: 22, minutes: 5 });
   await waitFor(() => bia.me().frozenUntil > Date.now());
   const y = bia.me().y;
-  bia.room.send("pos", { x: bia.me().x, y: y + 0.2, z: 0, l: 0, d: 0, a: 1, mv: 2, yaw: 0, pitch: 0, mt: 300_050 });
+  bia.room.send("pos", { x: bia.me().x, y: y + 0.2, z: 0, l: 0, a: 1, mv: 2, yaw: 0, pitch: 0, mt: 300_050 });
   await sleep(300);
   assert.ok(Math.abs(bia.me().y - y) < 0.01, "didn't move");
   assert.ok(bia.snaps.length > 0, "put back");
@@ -113,8 +113,8 @@ test("held still: every move put back till it's over; a notice reaches everyone"
 
 test("brought here, then removed for an hour, then let back in", async () => {
   const s = sandbox();
-  const ana = await join(s, 31, ADMIN, 30.5);
-  const bia = await join(s, 32, MEMBER, 40.5);
+  const ana = await join(s, 31, ADMIN, 20.5);
+  const bia = await join(s, 32, MEMBER, 30.5);
   ana.room.send("mod:bring", { userId: 32 });
   await waitFor(() => Math.hypot(bia.me().x - ana.me().x, bia.me().y - ana.me().y) < 2.5);
   ana.room.send("mod:kick", { userId: 32, minutes: 60 });
@@ -136,12 +136,12 @@ test("brought here, then removed for an hour, then let back in", async () => {
 
 test("height counts: no high-five with a flier up there, either way; back down, it lands", async () => {
   const s = sandbox();
-  const ana = await join(s, 41, ADMIN, 30.5);
-  const bia = await join(s, 42, MEMBER, 31.5);
+  const ana = await join(s, 41, ADMIN, 20.5);
+  const bia = await join(s, 42, MEMBER, 21.5);
   ana.room.send("mod:power", { power: "fly", on: true });
   await waitFor(() => ana.me().powers === POWERS.fly);
   const at = (z: number, mt: number) =>
-    ana.room.send("pos", { x: ana.me().x, y: ana.me().y, z, l: 0, d: 0, a: 0, mv: 0, yaw: 0, pitch: 0, mt });
+    ana.room.send("pos", { x: ana.me().x, y: ana.me().y, z, l: 0, a: 0, mv: 0, yaw: 0, pitch: 0, mt });
   at(6, 400_000);
   await waitFor(() => ana.me().z > 5);
   bia.room.send("social", { to: ana.room.sessionId, act: "highfive" });

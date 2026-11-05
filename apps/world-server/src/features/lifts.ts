@@ -1,13 +1,17 @@
 import {
   across,
   BODY_R,
+  carElev,
   floorAt,
   inLift,
   inLiftDoorway,
+  liftCarBody,
   liftFront,
+  liftShafts,
   objLevel,
   rideAt,
   STOREY,
+  shaftAt,
   type WorldObjectDef,
 } from "@yutopia/shared";
 import type { Player } from "../schema.ts";
@@ -27,7 +31,10 @@ import { registerFeature } from "./index.ts";
 // shut at the home floor. On the way the car carries its riders up (or down)
 // the shaft, the building's one space (docs/plan/50-the-volume.md, D): each
 // tick where it is, their floor the one it's passing (shared floorAt), their
-// own clients moving them the same from the stops' props.
+// own clients moving them the same from the stops' props. The car is a body in Jolt where it is
+// (docs/plan/72 phase 8: lifts as moving platforms — features/physics.ts; the browser's too, where
+// it carries its rider standing on it): the riders are held in it here, so a rider whose page has
+// stopped drawing (a hidden tab) still arrives with it; at the stop they're where it is, not told.
 
 const OPEN_MS = 7000; // doors stay open this long with nobody coming or going
 const CLOSE_MS = 1300; // the doors closing (drawn eased over this)
@@ -190,7 +197,7 @@ registerFeature((room: WorldRoom) => {
       if (!p || !client) continue;
       const here = across(room.map, c.at, p.level, { x: from.x + r.dx, y: from.y + r.dy });
       const z = (car - p.level) * STOREY;
-      const ch = floorAt(room.map, p.level, here, z);
+      const ch = floorAt(room.map, p.level, here, z, room.slabUnder ?? undefined);
       const at = ch?.at ?? here;
       room.moveTo(
         client,
@@ -216,8 +223,9 @@ registerFeature((room: WorldRoom) => {
         const p = room.state.players.get(r.sid) as Player | undefined;
         const client = room.clients.getById(r.sid) as WorldClient | undefined;
         if (!p || !client) continue;
-        // (still in it: nobody walks out of a moving car)
-        room.moveTo(client, p, { x: stop.x + r.dx, y: stop.y + r.dy, level: to });
+        // (still in it: nobody walks out of a moving car — not told: their own car under them has
+        // brought them here, standing where they stand in it)
+        room.moveTo(client, p, { x: stop.x + r.dx, y: stop.y + r.dy, level: to }, { carried: true });
       }
     c.riders = [];
   };
@@ -225,6 +233,20 @@ registerFeature((room: WorldRoom) => {
   return {
     tick(_dt, now) {
       for (const o of room.state.objects.values()) if (o.kind === "elevator") car(shaftOf(fromSchema(o)));
+      // each car where it is, for Jolt; what's in a shaft (a floor on every floor it goes through)
+      const all = [...room.state.objects.values()].filter((o) => o.kind === "elevator").map(fromSchema);
+      const shafts = liftShafts(all, room.map);
+      room.inShaft = shaftAt(shafts);
+      room.liftCars = [];
+      for (const [k, list] of shafts) {
+        const c = cars.get(k);
+        if (!list[0]) continue;
+        const at =
+          c?.phase === "moving"
+            ? rideAt(c.at, c.to ?? c.at, (now - c.since) / 1000, Math.max(1, c.until - c.since) / 1000)
+            : (c?.at ?? list[0].level);
+        room.liftCars.push(liftCarBody(list[0].o, carElev(at)));
+      }
       for (const c of cars.values()) {
         if (!stops(c.shaft).length) {
           cars.delete(c.shaft);

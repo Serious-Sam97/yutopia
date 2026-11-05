@@ -5,7 +5,7 @@
 // a squash on landing. Walking off the edge of something drops you. Only the
 // heights and the stages live here — how the body moves through them is the
 // client's (chars/motion.ts `jumpPose`).
-import type { Grid } from "./grid.ts";
+import type { Collider } from "./move/step.ts";
 
 // (a leap: running's jump in the KH body — the flip's height, leant forward, not turned over: the
 // flip is the jump in the air there — docs/plan/58-the-animation.md)
@@ -82,7 +82,7 @@ export interface Height {
 /** One step of the feet at (x, y): in the air they fall and land on the highest
  *  top they clear; on something, walking off its edge drops them. True on landing. */
 export function stepHeight(
-  grid: Pick<Grid, "groundAt" | "onRamp" | "onLand">,
+  grid: Pick<Collider, "groundAt" | "onRamp" | "onLand">,
   x: number,
   y: number,
   h: Height,

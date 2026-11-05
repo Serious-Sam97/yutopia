@@ -22,14 +22,10 @@ Object.defineProperty(globalThis, "navigator", {
 });
 
 async function slide(hold: boolean, after: "run" | "jump") {
-  const { Grid } = await import("@yutopia/shared");
-  const { KH_MOVE, NO_INPUT, newBody, stepBody, STEP_DT } = await import("@yutopia/shared/move");
+  const { KH_MOVE, NO_INPUT, newBody, openFloor, stepBody, STEP_DT } = await import("@yutopia/shared/move");
   const { khBindings } = await import("./bindings");
   const { MoveControls } = await import("./controls");
-  const g = new Grid(80, 12);
-  g.walk.fill(1);
-  g.top.fill(0);
-  const env = { grid: g, footing: () => "floor" as const };
+  const env = { grid: openFloor(), footing: () => "floor" as const };
   const c = new MoveControls({ ...khBindings(), crouchHold: hold });
   const b = newBody(2, 6);
   const frames = (secs: number) => {

@@ -1,3 +1,4 @@
+import { overFloor } from "@yutopia/shared";
 import { MUZZLE_REACH } from "@yutopia/shared/dark";
 import { heightAt } from "@yutopia/shared/grounds";
 import { unpackMv } from "@yutopia/shared/move";
@@ -56,16 +57,13 @@ registerFeature((room: WorldRoom) => {
   };
 
   const warn = (c: WorldClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
-  const ox = () => room.levelMap(0).ox ?? 0;
-  const oy = () => room.levelMap(0).oy ?? 0;
   // the floor at (x, y) in a floor's own frame: the land's out on it, else 0
   const floorOf = (uid: number, level: number) => {
     const g = room.gridFor(uid, level);
     return {
-      ground: (x: number, y: number) => (g.onLand(x, y) ? heightAt(x + ox(), y + oy()) : 0),
-      // (a wall, or something standing higher than the ball is)
-      blocked: (x: number, y: number, z: number) =>
-        !g.fitsAt(x, y, Math.max(0, z - (g.onLand(x, y) ? heightAt(x + ox(), y + oy()) : 0)) - 0.05, 0.02),
+      ground: (x: number, y: number) => (g.onLand(x, y) ? heightAt(x, y) : 0),
+      // (a wall, or something standing higher than the ball is: Jolt's, where the ball is)
+      blocked: (x: number, y: number, z: number) => room.solidAt?.(level, { x, y, z }, 0.02) ?? false,
     };
   };
   const able = (p: Player) =>
@@ -222,7 +220,7 @@ registerFeature((room: WorldRoom) => {
     const f = launch(
       p.x + Math.cos(yaw) * 0.25,
       p.y + Math.sin(yaw) * 0.25,
-      p.z + PBALL.hand,
+      overFloor(p.level, p.z) + PBALL.hand,
       yaw,
       Math.max(-0.8, Math.min(1.2, pitch)),
       PBALL.throwSpeed,
@@ -245,7 +243,8 @@ registerFeature((room: WorldRoom) => {
     const [x, y, z, yaw, pitch] = [m?.ox, m?.oy, m?.oz, m?.yaw, m?.pitch].map(Number);
     if (![x, y, z, yaw, pitch].every(Number.isFinite)) return;
     // (the tip where the server has them: a cue's length out at most, about the hands' height)
-    if (Math.hypot(x - p.x, y - p.y) > MUZZLE_REACH + 0.9 || z < p.z - 0.2 || z > p.z + 2.6) return;
+    const pz = overFloor(p.level, p.z);
+    if (Math.hypot(x - p.x, y - p.y) > MUZZLE_REACH + 0.9 || z < pz - 0.2 || z > pz + 2.6) return;
     sentAt.set(p.sid, now);
     send(
       p,
@@ -275,7 +274,7 @@ registerFeature((room: WorldRoom) => {
         const people: Column[] = [];
         for (const q of room.state.players.values()) {
           if (q.level !== fl.level || q.sid === fl.by || !able(q)) continue;
-          people.push({ id: q.sid, x: q.x, y: q.y, z: q.z, h: unpackMv(q.mv).crouch ? 1.25 : 1.8 });
+          people.push({ id: q.sid, x: q.x, y: q.y, z: overFloor(q.level, q.z), h: unpackMv(q.mv).crouch ? 1.25 : 1.8 });
         }
         const { ground, blocked } = floorOf(fl.uid, fl.level);
         const s = flyStep(fl.f, fl.t, t, people, ground, blocked, fl.by);

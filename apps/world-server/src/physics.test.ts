@@ -11,7 +11,6 @@ import { Client, type Room } from "colyseus.js";
 process.env.YUTOPIA_OFFLINE = "1";
 process.env.YUTOPIA_WORLD_SECRET = "test";
 process.env.YUTOPIA_INTERNAL_SECRET = "test";
-process.env.YUTOPIA_PHYSICS = "1";
 process.env.YUTOPIA_LAND_DROP_MS = "1500"; // (nobody near for 1.5 s: out — docs/plan/69, L2)
 
 const PORT = 32100 + Math.floor(Math.random() * 100); // (its own hundred: no two files share one — they run at once)
@@ -44,10 +43,9 @@ async function until(fn: (g: Record<string, number>) => boolean, ms: number) {
   }
 }
 
-// (the company's fence along z −360 — shared grounds.ts FENCE — at x 0: the ground floor's coords
-// are the building's less GROUND_OFFSET)
-const FX = 0 + 60;
-const FY = -360 + 10;
+// (the company's fence along z −360 — shared grounds.ts FENCE — at x 0)
+const FX = 0;
+const FY = -360;
 
 test("the room's physics world: the building at once, the Grounds round whoever's out there", async () => {
   room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
@@ -80,7 +78,7 @@ test("an edit in build mode: the thing's body made, nothing else", async () => {
     [40, 30],
     [12, 20],
   ])
-    room.send("obj:put", { id: `phys-plant-${x}-${y}`, kind: "plant", x, y, rot: 0 });
+    room.send("obj:put", { id: `phys-plant-${x}-${y}`, kind: "plant", x, y, yaw: 0 });
   const g = await until((g) => g.physics_statics > before.physics_statics, 10_000);
   assert.ok(g.physics_statics - before.physics_statics <= 5, "a body a plant, no more");
   assert.equal(g.physics_ground_chunks, before.physics_ground_chunks, "the Grounds untouched");
@@ -112,7 +110,7 @@ async function crossFence(roles: string, uid: number, up: number) {
   for (let i = 1; i <= 20; i++) {
     const y = FY - 2.5 + i * 0.25;
     const z = terrainAt(FX + 0.5 - 60, y - 10) + up;
-    r.send("pos", { x: FX + 0.5, y, z, l: 0, mt: mt + i * 120, d: 0, a: 1 });
+    r.send("pos", { x: FX + 0.5, y, z, l: 0, mt: mt + i * 120, yaw: 32, a: 1 });
     await sleep(120);
   }
   await sleep(300);
@@ -128,8 +126,8 @@ test("someone goes far off: the land there built, where they were taken out", as
   const me = () => room?.state?.players?.get(room.sessionId);
   const before = await gauges();
   // (the Kart Park, ~450 m north: none of the chunks round the fence)
-  room.send("teleport", { to: { x: 54 + 60, y: -760 + 10, level: 0 } });
-  for (let t = Date.now(); Math.abs((me()?.y ?? 0) - (-760 + 10)) > 2 && Date.now() - t < 8000; ) await sleep(20);
+  room.send("teleport", { to: { x: 54, y: -760, level: 0 } });
+  for (let t = Date.now(); Math.abs((me()?.y ?? 0) - -760) > 2 && Date.now() - t < 8000; ) await sleep(20);
   // (both rings built for a moment, then the fence's taken out)
   await until((g) => g.physics_ground_chunks > before.physics_ground_chunks + 30, 30_000);
   await until((g) => g.physics_ground_chunks < before.physics_ground_chunks + 20, 30_000);
@@ -173,7 +171,7 @@ test("reach in three dimensions: a mug from the machine on the ground, not flyin
   for (let t = Date.now(); me().powers === 0 && Date.now() - t < 3000; ) await sleep(20);
   const z0 = me().z;
   for (let i = 1; i <= 8; i++) {
-    r.send("pos", { x: me().x, y: me().y, z: z0 + i * 0.5, mt: Math.floor(performance.now()), d: 0, a: 0 });
+    r.send("pos", { x: me().x, y: me().y, z: z0 + i * 0.5, mt: Math.floor(performance.now()), yaw: 32, a: 0 });
     await sleep(80);
   }
   for (let t = Date.now(); me().z < z0 + 3.9 && Date.now() - t < 3000; ) await sleep(20);
@@ -208,10 +206,11 @@ async function upAFloor(roles: string, uid: number, powers: string[]) {
   // up, half a metre at a time, past the band (2.9): floor 2's frame, a storey lower
   const mt = Math.floor(performance.now());
   let i = 0;
-  for (const z of [0.5, 1, 1.5, 2, 2.5, 2.85]) r.send("pos", { ...at, z, l: 1, mt: mt + ++i * 120, d: 0, a: 0 });
+  for (const z of [0.5, 1, 1.5, 2, 2.5, 2.85])
+    r.send("pos", { ...at, z: z + STOREY, l: 1, mt: mt + ++i * 120, yaw: 32, a: 0 });
   await sleep(200);
   for (const z of [3.3, 3.8, 4.3]) {
-    r.send("pos", { ...at, z: z - STOREY, l: 2, mt: mt + ++i * 120, d: 0, a: 0 });
+    r.send("pos", { ...at, z: z + STOREY, l: 2, mt: mt + ++i * 120, yaw: 32, a: 0 });
     await sleep(120);
   }
   await sleep(400);

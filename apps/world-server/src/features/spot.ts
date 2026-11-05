@@ -1,4 +1,4 @@
-import { bayById, GROUND_OFFSET, levelMap, lotLayout } from "@yutopia/shared";
+import { bayById, levelMap, lotLayout } from "@yutopia/shared";
 import { BOARD_KIND, boardObject, boardOfOwner, boardsOf, cantClaim } from "@yutopia/shared/spot";
 import { api } from "../api.ts";
 import { config } from "../config.ts";
@@ -12,7 +12,6 @@ import { registerFeature } from "./index.ts";
 // is towed out of it (features/cars.ts), and the tow never parks in one.
 
 registerFeature((room: WorldRoom) => {
-  const off = GROUND_OFFSET;
   const no = (c: WorldClient, why: string) => room.send(c, "spot:no", { why });
   const objects = () => [...room.state.objects.values()].map(fromSchema);
   const drop = (id: string) => {
@@ -30,7 +29,7 @@ registerFeature((room: WorldRoom) => {
     const bay = String(m?.bay ?? "");
     const l = lotLayout();
     const all = objects();
-    const why = cantClaim(l, all, bay, p.uid, p.x + off.x, p.y + off.y);
+    const why = cantClaim(l, all, bay, p.uid, p.x, p.y);
     if (why === "yours") return;
     if (why) return no(client, why);
     const target = bayById(l, bay);
@@ -38,7 +37,7 @@ registerFeature((room: WorldRoom) => {
     // (one each: their old board comes down)
     const old = boardOfOwner(all, p.uid);
     if (old) drop(old.id);
-    const next = boardObject(l, target, { id: p.uid, name: p.name }, off);
+    const next = boardObject(l, target, { id: p.uid, name: p.name });
     room.state.objects.set(next.id, toSchema(next));
     room.rebuildGrid();
     room.rescue();

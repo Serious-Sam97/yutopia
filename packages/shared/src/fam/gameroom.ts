@@ -1,6 +1,6 @@
 import type { CatalogEntry } from "../catalog.ts";
 import type { SeatSpec } from "../furniture.ts";
-import { box, isoPx, type KindShape, one } from "./units.ts";
+import { box, type KindShape, one } from "./units.ts";
 
 // Plan 68 phase 9 (docs/plan/68-more-furniture.md): Game room — the new kinds' catalog entries, shapes
 // (from their models: the client's world/furn/fam/gameroom.ts), seats, surfaces, stand heights and hang
@@ -112,7 +112,7 @@ export const CATALOG = {
     variants: 3,
     look: 0,
     paint: true,
-    surface: isoPx(0.74),
+    surface: 0.74,
   },
   cornhole_board: {
     label: "Beanbag toss board",
@@ -173,4 +173,4 @@ export const CHAIRS: Record<string, { u: number; v: number; face: number }[]> = 
 export const SURFACES: Record<string, number> = { card_table: 0.74 };
 export const STANDS: Record<string, number> = { air_hockey: 0.865, foosball: 0.91 };
 // (the dartboard: across its open cabinet's doors, from the pub board's slate to the cabinet's top)
-export const HANGS: Record<string, [number, number, number]> = { dartboard: [4, 42, 82] };
+export const HANGS: Record<string, [number, number, number]> = { dartboard: [4, 1.0718, 2.0925] };

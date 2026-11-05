@@ -1,7 +1,9 @@
-import { footprint } from "./catalog.ts";
+import { footprint, quarterOf } from "./catalog.ts";
 import type { Point } from "./iso.ts";
 import { objLevel } from "./levels.ts";
 import type { Edge } from "./map.ts";
+import type { Solid3 } from "./shapes/index.ts";
+import { STOREY } from "./units.ts";
 
 // An elevator's stop on a floor (the catalog's `elevator`, 2 × 2): a box with
 // its doors on one side — north at rot 0, then east, south, west (as Sketch.rp
@@ -10,13 +12,13 @@ import type { Edge } from "./map.ts";
 // doors are a way in while they're open; on a floor it isn't at, it's the
 // empty shaft: no floor at all, so nobody ends up standing in it.
 
-type Stop = { kind?: string; x: number; y: number; rot?: number; props?: Record<string, unknown> | null };
+type Stop = { kind?: string; x: number; y: number; yaw?: number; props?: Record<string, unknown> | null };
 
 const SIDES = ["n", "e", "s", "w"] as const;
 type Side = (typeof SIDES)[number];
 
 function sideEdges(o: Stop, side: Side): Edge[] {
-  const { w, h } = footprint("elevator", o.rot ?? 0);
+  const { w, h } = footprint("elevator", quarterOf(o));
   const out: Edge[] = [];
   if (side === "n" || side === "s") {
     const y = side === "n" ? o.y : o.y + h;
@@ -28,7 +30,7 @@ function sideEdges(o: Stop, side: Side): Edge[] {
   return out;
 }
 
-const doorSide = (o: Stop): Side => SIDES[((o.rot ?? 0) & 3) as 0 | 1 | 2 | 3];
+const doorSide = (o: Stop): Side => SIDES[(quarterOf(o) & 3) as 0 | 1 | 2 | 3];
 
 /** The edges its doors are on. */
 export const liftDoorEdges = (o: Stop): Edge[] => sideEdges(o, doorSide(o));
@@ -39,7 +41,7 @@ export const liftWallEdges = (o: Stop): Edge[] =>
 
 /** Where to stand to call it: `d` tiles out from the middle of its doors. */
 export function liftFront(o: Stop, d = 0.7): Point {
-  const { w, h } = footprint("elevator", o.rot ?? 0);
+  const { w, h } = footprint("elevator", quarterOf(o));
   const cx = o.x + w / 2;
   const cy = o.y + h / 2;
   switch (doorSide(o)) {
@@ -56,7 +58,7 @@ export function liftFront(o: Stop, d = 0.7): Point {
 
 /** Is a point inside its car's footprint? */
 export function inLift(o: Stop, p: Point): boolean {
-  const { w, h } = footprint("elevator", o.rot ?? 0);
+  const { w, h } = footprint("elevator", quarterOf(o));
   return p.x >= o.x && p.x < o.x + w && p.y >= o.y && p.y < o.y + h;
 }
 
@@ -69,7 +71,7 @@ export function liftHere(o: Stop, m: { floor?: number; home?: number }): boolean
 
 /** Is a body (radius r) in its doorway — across the door line, or touching it? */
 export function inLiftDoorway(o: Stop, p: Point, r: number): boolean {
-  const { w, h } = footprint("elevator", o.rot ?? 0);
+  const { w, h } = footprint("elevator", quarterOf(o));
   const pad = r + 0.12;
   switch (doorSide(o)) {
     case "n":
@@ -136,3 +138,102 @@ export function liftMotion(o: { props?: Record<string, unknown> | null }, level:
 
 /** A floor's short name on a display: G for the ground, else its number. */
 export const liftFloorName = (level: number): string => (level === 0 ? "G" : String(level));
+
+// ── the shaft (docs/plan/72-the-3d-core.md, phase 8: lifts as moving platforms) ─────────────────
+// A shaft is open from its lowest stop to its highest: every floor's slab between has a hole its
+// size (the floor below shows through, as at the stairs), its walls go the whole storey, each
+// landing's doors shut unless the car's there with them open (physics/build.ts). The car is a
+// moving body in Jolt (its floor, its ceiling: physics/build.ts liftCarBody) where liftMotion
+// says it is; who stands on it goes with it.
+
+type ShaftStop = Stop & { id: string };
+
+/** A stop's shaft (its props.shaft; a lone stop is its own). */
+export const shaftOf = (o: ShaftStop): string => String(o.props?.shaft ?? o.id);
+
+/** The building's shafts (a world map's things: world x, y): each one's stops, lowest floor first. */
+export function liftShafts<T extends ShaftStop>(
+  objects: Iterable<T & { kind: string }>,
+  m: { floor?: number; home?: number },
+): Map<string, { level: number; o: T }[]> {
+  const out = new Map<string, { level: number; o: T }[]>();
+  for (const o of objects) {
+    if (o.kind !== "elevator") continue;
+    const k = shaftOf(o);
+    const list = out.get(k) ?? [];
+    list.push({ level: objLevel(o, m), o });
+    out.set(k, list);
+  }
+  for (const list of out.values()) list.sort((a, b) => a.level - b.level);
+  return out;
+}
+
+/** A stop's footprint, world: [x0, y0, x1, y1]. */
+export function liftRect(o: Stop): [number, number, number, number] {
+  const { w, h } = footprint("elevator", quarterOf(o));
+  return [o.x, o.y, o.x + w, o.y + h];
+}
+
+/** Where floor `level` is open to the one below for a lift's shaft (it goes on down from there) or to
+ *  the one above (`up`: it goes on up): the shafts' footprints, world. */
+export function shaftHoles(
+  shafts: Map<string, { level: number; o: Stop }[]>,
+  level: number,
+  up = false,
+): [number, number, number, number][] {
+  const out: [number, number, number, number][] = [];
+  for (const list of shafts.values()) {
+    const lo = list[0]?.level;
+    const hi = list[list.length - 1]?.level;
+    if (lo === undefined || hi === undefined) continue;
+    if (up ? level >= lo && level < hi : level > lo && level <= hi) out.push(liftRect(list[0].o));
+  }
+  return out;
+}
+
+/** What says floor `level` has a floor under (x, y) in a shaft: anywhere from its lowest stop to its
+ *  highest — the car's floor, whichever floor it's at (stairs.ts floorAt: riding, the floor it's
+ *  passing; the slab's hole isn't "out of the building"). */
+export function shaftAt(shafts: Map<string, { level: number; o: Stop }[]>): (level: number, p: Point) => boolean {
+  const spans = [...shafts.values()]
+    .filter((l) => l.length)
+    .map((l) => ({ lo: l[0].level, hi: l[l.length - 1].level, r: liftRect(l[0].o) }));
+  return (level, p) =>
+    spans.some((s) => level >= s.lo && level <= s.hi && p.x >= s.r[0] && p.x < s.r[2] && p.y >= s.r[1] && p.y < s.r[3]);
+}
+
+/** The car's floor's height (world m) at a floor `car` (between two on the way: liftMotion's). */
+export const carElev = (car: number): number => car * STOREY;
+
+/** A car's floor's thickness, and its ceiling's height inside it (tp/lift3d.ts CAR_H) (m). */
+export const CAR_FLOOR = 0.15;
+const CAR_H = 2.5;
+
+// (a box as shapes' box3 makes one: here, so the page needn't take the shapes for it)
+const box = (x0: number, z0: number, x1: number, z1: number, y0: number, y1: number): Solid3 => ({
+  t: "box",
+  x: (x0 + x1) / 2,
+  y: (y0 + y1) / 2,
+  z: (z0 + z1) / 2,
+  hx: Math.abs(x1 - x0) / 2,
+  hy: Math.abs(y1 - y0) / 2,
+  hz: Math.abs(z1 - z0) / 2,
+  a: 0,
+});
+
+/** A lift's car as Jolt has it (a carrier: PhysicsWorld.setCarrier) — its floor and its ceiling,
+ *  the shaft's walls round it the stops' statics (physics/build.ts): `stop` any of its stops (world
+ *  x, y), `elev` its floor's height now (carElev of liftMotion's car). Its solids are its own (the
+ *  body's origin its floor's corner), `at` where that is. */
+export function liftCarBody(
+  stop: ShaftStop,
+  elev: number,
+): { key: string; solids: Solid3[]; at: [number, number, number] } {
+  const [x0, y0, x1, y1] = liftRect(stop);
+  const [w, h] = [x1 - x0, y1 - y0];
+  return {
+    key: `liftcar:${shaftOf(stop)}`,
+    solids: [box(0, 0, w, h, -CAR_FLOOR, 0), box(0, 0, w, h, CAR_H, CAR_H + 0.1)],
+    at: [x0, elev, y0],
+  };
+}

@@ -13,6 +13,7 @@ import {
   tvVolume,
   ytThumb,
 } from "@yutopia/shared/media";
+import { artPx } from "@yutopia/shared/units";
 import { lang } from "@/lib/i18n";
 import { prefs } from "@/lib/prefs";
 import type { WorldController } from "../controller";
@@ -185,7 +186,7 @@ export class MediaRoom {
     const gl = GLASS[def.kind];
     // the canvas has the glass's own shape (1 tile ≈ 36 px along a face)
     const gw = Math.max(0.2, gl.x1 - gl.x0) * S;
-    const gh = Math.max(4, gl.z1 - gl.z0);
+    const gh = Math.max(4, artPx(gl.z1 - gl.z0)); // (px, as S: the old art's)
     const W = 320;
     const H = Math.max(60, Math.round((W * gh) / gw));
     const canvas = document.createElement("canvas");

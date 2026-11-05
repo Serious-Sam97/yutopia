@@ -36,7 +36,6 @@ async function waitFor(fn: () => boolean, ms = 8000) {
 // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
 type S = any;
 const me = (r: Room): S => r.state.players.get(r.sessionId);
-const OFF = { x: -60, y: -10 };
 const props = (o: { props: string }) => JSON.parse(o.props) as Record<string, unknown>;
 const join = async (uid: number, sandbox: number) => {
   const r = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
@@ -59,7 +58,7 @@ test("a dog and a cat get in with their owner, ride, give a seat up, and get out
   await waitFor(() => mine().length === 2);
   // out to a car in the lot, the pets with her
   const o: S = [...a.state.objects.values()].find((x: S) => x.kind === "car");
-  const pose = parkedPose({ x: o.x, y: o.y, rot: o.rot, props: props(o) });
+  const pose = parkedPose({ x: o.x, y: o.y, yaw: o.yaw, props: props(o) });
   const door = { x: pose.x + Math.cos(pose.a) * 3.4, y: pose.y + Math.sin(pose.a) * 3.4 };
   a.send("teleport", { to: { ...door, level: 0 } });
   await waitFor(() => me(a).level === 0 && Math.hypot(me(a).x - door.x, me(a).y - door.y) < 2.5);
@@ -108,13 +107,12 @@ test("a dog and a cat get in with their owner, ride, give a seat up, and get out
   a.send("car:state", wire(41, 0));
   await waitFor(() => v().seq === 41);
   await sleep(150);
-  for (const p of mine())
-    assert.ok(Math.hypot(p.x + OFF.x - x, p.y + OFF.y - z) < 2, `${p.name} carried: ${p.x + OFF.x},${p.y + OFF.y}`);
+  for (const p of mine()) assert.ok(Math.hypot(p.x - x, p.y - z) < 2, `${p.name} carried: ${p.x},${p.y}`);
   // someone takes a pet's seat: it moves to another (one's still free)
   const taken = mine()[0];
   const b = await join(62, 51);
   for (const t of ["toast", "snap", "spawn:mine", "media:key", "hear", "pet:event"]) b.onMessage(t, () => {});
-  b.send("teleport", { to: { x: x - OFF.x + Math.sin(v().a) * 2, y: z - OFF.y - Math.cos(v().a) * 2, level: 0 } });
+  b.send("teleport", { to: { x: x + Math.sin(v().a) * 2, y: z - Math.cos(v().a) * 2, level: 0 } });
   await waitFor(() => me(b).level === 0);
   const want = taken.seat;
   b.send("car:enter", { id: vid, seat: want });
@@ -125,7 +123,7 @@ test("a dog and a cat get in with their owner, ride, give a seat up, and get out
   a.send("car:leave", {});
   await waitFor(() => !me(a).busy);
   await waitFor(() => mine().every((p) => p.ride === "" && p.mode === "follow"));
-  for (const p of mine()) assert.ok(Math.hypot(p.x + OFF.x - x, p.y + OFF.y - z) < 5, `${p.name} out by the car`);
+  for (const p of mine()) assert.ok(Math.hypot(p.x - x, p.y - z) < 5, `${p.name} out by the car`);
   // back in, they with her; then she leaves the world: out of the car, waiting there
   a.send("car:enter", { id: vid, seat: 0 });
   await waitFor(() => mine().filter((p) => p.ride === vid).length >= 1, 15_000);

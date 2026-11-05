@@ -1,6 +1,6 @@
 import type { CatalogEntry } from "../catalog.ts";
 import type { SeatSpec } from "../furniture.ts";
-import { box, cyl, isoPx, type KindShape, one } from "./units.ts";
+import { box, cyl, type KindShape, one } from "./units.ts";
 
 // Plan 68 phase 18 (docs/plan/68-more-furniture.md): Kitchen & café — the new kinds' catalog entries, shapes
 // (from their models: the client's world/furn/fam/kitchen.ts), seats, surfaces, stand heights and hang
@@ -28,7 +28,7 @@ export const CATALOG = {
     variants: 3,
     look: 0,
     paint: true,
-    surface: isoPx(TOP.kitchen_island),
+    surface: TOP.kitchen_island,
   },
   counter_stool: {
     label: "Counter stool",
@@ -50,7 +50,7 @@ export const CATALOG = {
     variants: 3,
     look: 0,
     interact: "lamp", // (the hob lit and out)
-    surface: isoPx(TOP.kitchen_stove),
+    surface: TOP.kitchen_stove,
     top: [0, 1, 4, 4], // (the hob, before its backguard)
     light: { color: 0xffa860, radius: 1.8, intensity: 0.22 },
   },
@@ -63,7 +63,7 @@ export const CATALOG = {
     buildable: true,
     variants: 3,
     look: 0,
-    surface: isoPx(TOP.dishwasher),
+    surface: TOP.dishwasher,
   },
   fruit_bowl: { label: "Fruit bowl", w: 1, h: 1, solid: false, onSurface: true, buildable: true, variants: 3, look: 0 },
   toaster: { label: "Toaster", w: 1, h: 1, solid: false, onSurface: true, buildable: true, variants: 3, look: 0 },
@@ -86,7 +86,7 @@ export const CATALOG = {
     buildable: true,
     variants: 3,
     look: 0,
-    surface: isoPx(TOP.cafe_counter),
+    surface: TOP.cafe_counter,
     top: [5, 0, 12, 4], // (the till's end: the pastry case takes the left)
     light: { color: 0xffe6bc, radius: 2.4, intensity: 0.3 },
   },

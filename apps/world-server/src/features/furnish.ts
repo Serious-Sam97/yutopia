@@ -10,6 +10,8 @@ import {
   isOpening,
   levelMap,
   objLevel,
+  quarterOf,
+  quarterYaw,
   takenId,
   type WorldObjectDef,
 } from "@yutopia/shared";
@@ -90,7 +92,7 @@ registerFeature((room: WorldRoom) => {
         kind: it.kind,
         x,
         y,
-        rot: ((it.rot | 0) + 4) % 4,
+        yaw: quarterYaw(((quarterOf(it) | 0) + 4) % 4),
         refId: existing?.refId || null,
         props: cleanProps(
           it.kind,
@@ -98,7 +100,7 @@ registerFeature((room: WorldRoom) => {
           [...rest, ...next],
           x,
           y,
-          ((it.rot | 0) + 4) % 4,
+          ((quarterOf(it) | 0) + 4) % 4,
         ),
       };
       def.props = keepPlaying(def.props, existing ? (fromSchema(existing).props ?? {}) : null);
@@ -174,7 +176,7 @@ registerFeature((room: WorldRoom) => {
       kind,
       x,
       y,
-      rot: 0,
+      yaw: quarterYaw(0),
       props: cleanProps(kind, { d: piece.kind, seed: piece.seed }, all, x, y),
     };
     room.state.objects.set(def.id, toSchema(def));

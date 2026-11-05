@@ -43,24 +43,23 @@ export class Spots {
   /** where the pool cars stand (the building's coords): a bay with one in it is claimed from its end */
   private pool: { x: number; z: number }[] = [];
 
-  /** Read the boards again (a few times a second at most). `off`: the ground floor's corner. */
+  /** Read the boards again (a few times a second at most). */
   refresh(
     objects: () => Iterable<WorldObjectDef>,
     uid: number,
-    off: { x: number; y: number },
     now: number,
     locate: (o: WorldObjectDef) => { x: number; z: number; where: string },
   ) {
     if (now - this.at < 300) return;
     this.at = now;
     this.boards = boardsOf(objects());
-    this.posts = [...this.boards.values()].map((o) => postOf(o, off));
+    this.posts = [...this.boards.values()].map((o) => postOf(o));
     this.pool = [];
     for (const o of objects()) {
       const p = o.props;
       if (o.kind !== "car" || p?.ownerId || p?.driven || p?.role === "show" || Number(p?.level ?? 0) !== 0) continue;
       const q = parkedPose(o);
-      this.pool.push({ x: q.x + off.x, z: q.y + off.y });
+      this.pool.push({ x: q.x, z: q.y });
     }
     let mine: string | null = null;
     for (const [id, o] of this.boards) if (Number(o.props?.ownerId) === uid) mine = id;

@@ -1,5 +1,5 @@
 import { canPlace } from "./build.ts";
-import { entry, placedFootprint, type WorldObjectDef } from "./catalog.ts";
+import { entry, placedFootprint, quarterOf, quarterYaw, type WorldObjectDef } from "./catalog.ts";
 import type { Point } from "./iso.ts";
 import { atLevel, floorOf, floorsOf, levelMap, onLevel } from "./levels.ts";
 import type { AreaDef, MapDef } from "./map.ts";
@@ -39,7 +39,7 @@ export function deckRoom(
   let n = 0;
   const put = (kind: string, x: number, y: number, rot = 0, props: Record<string, unknown> = {}): boolean => {
     const o = atLevel(
-      { id: `${XMAS_TAG}${a.key}-${level}${tag && `-${tag}`}-${n++}`, kind, x, y, rot, props },
+      { id: `${XMAS_TAG}${a.key}-${level}${tag && `-${tag}`}-${n++}`, kind, x, y, yaw: quarterYaw(rot), props },
       level,
       map,
     );
@@ -81,7 +81,7 @@ export function deckRoom(
   // stockings either side of a fireplace, on its wall
   for (const f of here)
     if (f.kind === "fireplace" && f.x >= a.x && f.x < a.x + a.w && f.y >= a.y && f.y < a.y + a.h) {
-      const r = (f.rot ?? 0) & 3;
+      const r = quarterOf(f) & 3;
       if (r === 0 || r === 2)
         for (const sx of [f.x - 1, f.x + 2]) put("stocking", sx, f.y, r, { wu: r === 0 ? 2 : 0, variant: sx % 3 });
     }

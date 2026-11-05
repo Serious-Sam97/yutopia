@@ -1,6 +1,6 @@
 import type { startFlow, stepFlow } from "./flow-moves.ts";
 import type { MoveSpec } from "./spec.ts";
-import type { Body, Collider } from "./step.ts";
+import type { Body } from "./step.ts";
 
 // Flowmotion (docs/plan/56-the-controls.md F): momentum off the world, after Kingdom Hearts 3 —
 //   a wall kick: jump at a wall in the air, or roll into one, and kick off it, up and back;

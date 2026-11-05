@@ -12,7 +12,7 @@ import { ANA, BIA, enter, test, token } from "./helpers";
 const GPU = process.env.YUTOPIA_GPU === "1";
 const dir = process.env.YUTOPIA_SHOTS;
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
-const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
+const G = (x: number, y: number) => ({ x, y });
 const prefs = (page: Page) =>
   page.addInitScript(() => {
     const k = "yutopia:prefs";

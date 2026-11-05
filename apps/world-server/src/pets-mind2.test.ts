@@ -58,7 +58,7 @@ const hour = async (w: Who, h: number) => {
   w.room.send("mod:hour", { h });
   await waitFor(() => Math.abs(w.room.state.hour - h) < 0.01);
 };
-const LOT = { x: 40, y: 22, level: 0 };
+const LOT = { x: -20, y: 12, level: 0 };
 
 test("neglected it sulks; its owner busy, it lies down quiet; a stranger in the dark, a bark between them", async () => {
   const ana = await join(101, 81);

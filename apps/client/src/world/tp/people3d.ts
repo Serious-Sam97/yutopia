@@ -8,6 +8,7 @@ import {
   SOCIAL_MS,
 } from "@yutopia/shared";
 import type { FlowLook } from "@yutopia/shared/move";
+import { ART_PX } from "@yutopia/shared/units";
 import {
   CanvasTexture,
   CircleGeometry,
@@ -30,7 +31,6 @@ import { svgDoc } from "../art/svgdoc";
 import { viewFor } from "../art/views";
 import { type VortexMood, vortexSvg } from "../art/vortex/vortexArt";
 import type { PetView } from "../petview";
-import { ZPX } from "./kit3d";
 
 type People = NonNullable<ReturnType<typeof people>>;
 
@@ -243,7 +243,7 @@ export class Person3 {
     this.tex = new CanvasTexture(this.canvas);
     this.tex.colorSpace = SRGBColorSpace;
     this.mat = new MeshBasicMaterial({ map: this.tex, alphaTest: 0.45, side: DoubleSide });
-    this.s = (P.FIT * PERSON) / ZPX;
+    this.s = (P.FIT * PERSON) / ART_PX; // (the paper people's drawing, in the old art's px)
     const s = this.s;
     const geo = new PlaneGeometry((BX1 - BX0) * s, (BY1 - BY0) * s);
     // feet (board 60, 168) at the origin
@@ -450,11 +450,11 @@ export class Person3 {
     // drawn. Sitting down / getting up slides there over a moment (the hips
     // drop from standing height onto the cushion).
     const s = this.s;
-    const baseY = -(2 * PERSON) / ZPX;
+    const baseY = -(2 * PERSON) / ART_PX;
     if (this.sitW === null || p.reduced) this.sitW = sitting ? 1 : 0;
     else this.sitW = Math.max(0, Math.min(1, this.sitW + (sitting ? dt : -dt) / SIT_IN));
     const w = this.sitW * this.sitW * (3 - 2 * this.sitW);
-    const hipY = Math.max((SEAT_HIP[p.seat ?? ""] ?? 14) / ZPX, SIT_FEET * s + 0.015);
+    const hipY = Math.max((SEAT_HIP[p.seat ?? ""] ?? 14) / ART_PX, SIT_FEET * s + 0.015);
     this.root.position.set(p.x, sitting ? 0 : (p.z ?? 0), p.y);
     // how much the camera looks at the seat's front (1) … side (0) … back (-1)
     const front = cam ? Math.cos(Math.atan2(cam.z - p.y, cam.x - p.x) - p.angle) : 1;

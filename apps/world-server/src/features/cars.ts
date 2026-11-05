@@ -1,4 +1,4 @@
-import { ANIM, bayId, CAR_COLOURS, dirFromDelta, GROUND_OFFSET, levelMap, lotLayout } from "@yutopia/shared";
+import { ANIM, bayId, CAR_COLOURS, faceByte, levelMap, lotLayout, quarterOf } from "@yutopia/shared";
 import {
   BUYABLE,
   bayFor,
@@ -85,7 +85,6 @@ const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 const num = (x: unknown, or: number) => (typeof x === "number" && Number.isFinite(x) ? x : or);
 
 registerFeature((room: WorldRoom) => {
-  const off = GROUND_OFFSET;
   const live = new Map<string, Live>();
   const bySid = new Map<string, string>();
   const has = () => !!levelMap(room.map, 0);
@@ -101,9 +100,7 @@ registerFeature((room: WorldRoom) => {
   const SUNK_TOW_MS = 2 * 60_000;
   const sunk = (def: ReturnType<typeof fromSchema>) => {
     const pose = parkedPose(def);
-    return (
-      wetAt(pose.x + off.x, pose.y + off.y) >= SUNK && Date.now() - (Number(def.props?.parkedAt) || 0) >= SUNK_TOW_MS
-    );
+    return wetAt(pose.x, pose.y) >= SUNK && Date.now() - (Number(def.props?.parkedAt) || 0) >= SUNK_TOW_MS;
   };
   /** The car `sid` is driving (the driver's seat), if any. */
   const driven = (sid: string) => {
@@ -137,12 +134,12 @@ registerFeature((room: WorldRoom) => {
     const v = l.veh;
     const seats = SEATS_OF[l.spec.kind];
     const s = at(v, seats.at[i][0], seats.at[i][1]);
-    p.x = s.x - off.x;
-    p.y = s.z - off.y;
+    p.x = s.x;
+    p.y = s.z;
     p.z = v.y - l.spec.cog + seats.hip[i];
     p.level = 0;
     p.a = ANIM.sit;
-    p.d = dirFromDelta(Math.cos(v.a), Math.sin(v.a), p.d as 0);
+    p.yaw = faceByte(Math.cos(v.a), Math.sin(v.a), p.yaw);
   };
 
   /** Someone's own, and its keys aren't theirs: whose it is. */
@@ -167,7 +164,7 @@ registerFeature((room: WorldRoom) => {
       if (seat === 0 && !mayDrive(def.props, p.uid, Date.now())) return notYours(client, def.props);
       const pose = parkedPose(def);
       // (gone down in the water: nobody gets in — it's towed in a minute or two)
-      if (wetAt(pose.x + off.x, pose.y + off.y) >= SUNK) return no(client, "gone");
+      if (wetAt(pose.x, pose.y) >= SUNK) return no(client, "gone");
       // (in three dimensions: shared reach.ts — a car's 1.5 tall)
       if (Math.hypot(p.x - pose.x, p.y - pose.y, room.upOff(p, pose, CAR_H)) > REACH) return no(client, "far");
       const kind = carKindOf(def.props?.model);
@@ -175,8 +172,8 @@ registerFeature((room: WorldRoom) => {
       const v = new Vehicle();
       v.id = `car:${o.id}`;
       v.kind = kind;
-      v.x = pose.x + off.x;
-      v.z = pose.y + off.y;
+      v.x = pose.x;
+      v.z = pose.y;
       v.a = pose.a;
       v.y = (pose.h ?? heightAt(v.x, v.z)) + spec.cog;
       const q = headingQuat(pose.a);
@@ -197,7 +194,7 @@ registerFeature((room: WorldRoom) => {
       room.state.objects.set(o.id, toSchema({ ...def, props: { ...(def.props ?? {}), driven: 1 } }));
       room.rebuildGrid();
     } else {
-      const at = { x: l.veh.x - off.x, y: l.veh.z - off.y };
+      const at = { x: l.veh.x, y: l.veh.z };
       if (Math.hypot(p.x - at.x, p.y - at.y, room.upOff(p, at, CAR_H)) > REACH) return no(client, "far");
       if (Math.hypot(l.veh.vx, l.veh.vz) > OUT_V) return no(client, "moving");
       if (seat === 0) {
@@ -307,7 +304,7 @@ registerFeature((room: WorldRoom) => {
     if (now - (knockedAt.get(sid) ?? 0) < 4000 || l.sp < KNOCK_V) return;
     // (high over the car: it passes under them — docs/plan/49-the-height.md)
     // (its body against theirs: over a car's roof, nobody's knocked — shared reach.ts)
-    const at = { x: v.x - off.x, y: v.z - off.y };
+    const at = { x: v.x, y: v.z };
     if (Math.hypot(q.x - at.x, q.y - at.y, room.upOff(q, at, CAR_H)) > KNOCK_REACH) return;
     knockedAt.set(sid, now);
     q.fellAt = now;
@@ -322,7 +319,7 @@ registerFeature((room: WorldRoom) => {
       for (const o of room.state.objects.values()) {
         // (the bays' name boards: a post, its planks along the bay's head — shared spot.ts)
         if (o.kind === BOARD_KIND) {
-          const p = postOf(fromSchema(o), off);
+          const p = postOf(fromSchema(o));
           if (Math.abs(p.x - x) < r + 0.6 && Math.abs(p.z - z) < r + 0.6)
             out.push({ kind: "box", x: p.x, z: p.z, hx: 0.08, hz: 0.55, what: "post" });
           continue;
@@ -331,8 +328,8 @@ registerFeature((room: WorldRoom) => {
         const def = fromSchema(o);
         if (def.props?.driven) continue;
         const b = parkedBody(def);
-        const bx = b.x + off.x;
-        const bz = b.y + off.y;
+        const bx = b.x;
+        const bz = b.y;
         if (Math.abs(bx - x) < r + 3 && Math.abs(bz - z) < r + 3)
           out.push({ kind: "box", x: bx, z: bz, hx: b.hx, hz: b.hy, a: b.a, what: "car" });
       }
@@ -433,12 +430,12 @@ registerFeature((room: WorldRoom) => {
     const now = Date.now();
     if (now - (shovedAt.get(o.id) ?? 0) < 250) return;
     const was = parkedPose(def);
-    if (Math.hypot(was.x + off.x - x, was.y + off.y - z) > SHOVE_MAX) return;
+    if (Math.hypot(was.x - x, was.y - z) > SHOVE_MAX) return;
     if (Math.hypot(l.veh.x - x, l.veh.z - z) > SHOVE_REACH) return;
     if (!inLandBounds(x, z)) return;
     if (BUILDINGS.some((b) => inBuilt(b, x, z))) return;
     shovedAt.set(o.id, now);
-    const spot = parkAt(x - off.x, z - off.y, a, heightAt(x, z), { ...(def.props ?? {}), level: 0 });
+    const spot = parkAt(x, z, a, heightAt(x, z), { ...(def.props ?? {}), level: 0 });
     const next = { ...def, ...spot };
     room.state.objects.set(o.id, toSchema(next));
     room.rebuildGrid();
@@ -466,8 +463,8 @@ registerFeature((room: WorldRoom) => {
       const [lx, lz] = SEATS_OF[l.spec.kind].out[i][0];
       const s = at(l.veh, lx, lz);
       const w = waterAt(s.x, s.z);
-      p.x = s.x - off.x;
-      p.y = s.z - off.y;
+      p.x = s.x;
+      p.y = s.z;
       p.z = w ? Math.max(heightAt(s.x, s.z), w.level - SWIM.ride) : heightAt(s.x, s.z);
       p.level = 0;
       const c = clientOf(sid);
@@ -480,8 +477,8 @@ registerFeature((room: WorldRoom) => {
     const ways = SEATS_OF[l.spec.kind].out[i];
     for (const [lx, lz] of ways) {
       const s = at(l.veh, lx, lz);
-      const x = s.x - off.x;
-      const y = s.z - off.y;
+      const x = s.x;
+      const y = s.z;
       if (g.fits(x, y)) {
         spot = { x, y };
         break;
@@ -489,7 +486,7 @@ registerFeature((room: WorldRoom) => {
     }
     if (!spot) {
       const s = at(l.veh, ways[0][0], ways[0][1]);
-      spot = g.nearestOpen(s.x - off.x, s.z - off.y, 6) ?? { x: s.x - off.x, y: s.z - off.y };
+      spot = g.nearestOpen(s.x, s.z, 6) ?? { x: s.x, y: s.z };
     }
     p.x = spot.x;
     p.y = spot.y;
@@ -538,16 +535,16 @@ registerFeature((room: WorldRoom) => {
       ![...room.state.objects.values()].some((x) => {
         if (x.kind !== "car" || x.id === o.id) return false;
         const p = parkedPose(fromSchema(x));
-        return !fromSchema(x).props?.driven && Math.abs(p.x + off.x - b.x) < 2 && Math.abs(p.y + off.y - b.z) < 1.4;
+        return !fromSchema(x).props?.driven && Math.abs(p.x - b.x) < 2 && Math.abs(p.y - b.z) < 1.4;
       });
     let spot: ReturnType<typeof parkAt>;
     if (b && bay && free) {
-      spot = parkAt(b.x - off.x, b.z - off.y, bay.a, 0, props);
+      spot = parkAt(b.x, b.z, bay.a, 0, props);
       // (in a bay it stands square, as the lot's cars do)
       delete spot.props.a;
       delete spot.props.hy;
       delete spot.props.parkedAt;
-    } else spot = parkAt(v.x - off.x, v.z - off.y, v.a, heightAt(v.x, v.z), props);
+    } else spot = parkAt(v.x, v.z, v.a, heightAt(v.x, v.z), props);
     const next = { ...def, ...spot };
     room.state.objects.set(o.id, toSchema(next));
     room.rebuildGrid();
@@ -575,7 +572,7 @@ registerFeature((room: WorldRoom) => {
     }
     const taken = new Set<number>(claimed.keys());
     const bayOf = (x: number, y: number) =>
-      lot.bays.findIndex((b) => Math.abs(b.x - (x + off.x)) < 1.6 && Math.abs(b.z - (y + off.y)) < 1.2);
+      lot.bays.findIndex((b) => Math.abs(b.x - x) < 1.6 && Math.abs(b.z - y) < 1.2);
     /** In someone's own bay, not theirs to be in. */
     const intruding = (def: ReturnType<typeof fromSchema>) => {
       const pose = parkedPose(def);
@@ -593,7 +590,7 @@ registerFeature((room: WorldRoom) => {
       if (b >= 0) taken.add(b);
     }
     const put = (def: ReturnType<typeof fromSchema>, x: number, z: number, dir: number) => {
-      const spot = parkAt(x - off.x, z - off.y, dir > 0 ? Math.PI : 0, 0, { ...(def.props ?? {}), level: 0 });
+      const spot = parkAt(x, z, dir > 0 ? Math.PI : 0, 0, { ...(def.props ?? {}), level: 0 });
       // (in a bay it stands square, as the lot's cars do)
       delete spot.props.a;
       delete spot.props.hy;
@@ -618,22 +615,22 @@ registerFeature((room: WorldRoom) => {
       const out = intruding(def);
       if (all && mine && !claimed.has(mine.bay)) {
         // (already there: left as it is, but for its wear)
-        const square = typeof def.props?.a !== "number" && o.rot === (mine.c.dir > 0 ? 0 : 2);
-        if (!square || Math.hypot(pose.x + off.x - mine.c.x, pose.y + off.y - mine.c.z) > 0.02)
+        const square = typeof def.props?.a !== "number" && quarterOf(o) === (mine.c.dir > 0 ? 0 : 2);
+        if (!square || Math.hypot(pose.x - mine.c.x, pose.y - mine.c.z) > 0.02)
           put(def, mine.c.x, mine.c.z, mine.c.dir);
         continue;
       }
       if (typeof def.props?.a !== "number" && !out && !down && !(all && mine)) continue;
       const parkedAt = Number(def.props?.parkedAt) || 0;
-      const bx = pose.x + off.x;
-      const bz = pose.y + off.y;
+      const bx = pose.x;
+      const bz = pose.y;
       const inLot = bx > LOT.x0 && bx < LOT.x1 && bz > LOT.z0 && bz < LOT.z1;
       if (!all && !down) {
         const dry = num(def.props?.fuel, 1) <= 0.01;
         // (in someone's bay: out the next time nobody's near, however long it's been there)
         if (!out && (inLot || Date.now() - parkedAt < (dry ? EMPTY_TOW_MS : TOW_MS))) continue;
         const near = [...room.state.players.values()].some(
-          (p) => p.level === 0 && Math.hypot(p.x + off.x - bx, p.y + off.y - bz) < TOW_NEAR,
+          (p) => p.level === 0 && Math.hypot(p.x - bx, p.y - bz) < TOW_NEAR,
         );
         if (near) continue;
       }
@@ -704,8 +701,8 @@ registerFeature((room: WorldRoom) => {
     const p = room.state.players.get(client.sessionId);
     if (!p || !p.uid || !has() || p.level !== 0) return;
     if (/^(drive|ride):/.test(p.busy)) return no(client, "busy");
-    const bx = p.x + off.x;
-    const bz = p.y + off.y;
+    const bx = p.x;
+    const bz = p.y;
     const Y = MOTORS.yard;
     if (bx < Y.x0 - BUY_NEAR - 14 || bx > Y.x1 + BUY_NEAR || bz < Y.z0 - BUY_NEAR || bz > Y.z1 + BUY_NEAR)
       return no(client, "far");
@@ -720,7 +717,7 @@ registerFeature((room: WorldRoom) => {
     const inBay = [...room.state.objects.values()].some((o) => {
       if (o.kind !== "car") return false;
       const b = parkedBody(fromSchema(o));
-      return Math.hypot(b.x + off.x - c.x, b.y + off.y - c.z) < 2.6;
+      return Math.hypot(b.x - c.x, b.y - c.z) < 2.6;
     });
     const at = inBay ? freeSpot(carWorld, spec, bx, bz, c.a, 24) : { x: c.x, z: c.z, a: c.a };
     if (!at) return no(client, "full");
@@ -744,7 +741,7 @@ registerFeature((room: WorldRoom) => {
     };
     if (model !== "sedan") props.model = model;
     const id = `own-${p.uid}-${Date.now().toString(36)}`;
-    const next = { id, kind: "car", ...parkAt(at.x - off.x, at.z - off.y, at.a, heightAt(at.x, at.z), props) };
+    const next = { id, kind: "car", ...parkAt(at.x, at.z, at.a, heightAt(at.x, at.z), props) };
     room.state.objects.set(id, toSchema(next));
     room.rebuildGrid();
     room.rescue();
@@ -763,10 +760,10 @@ registerFeature((room: WorldRoom) => {
     const colour = Number(m?.colour);
     if (!Number.isInteger(colour) || colour < 0 || colour >= CAR_COLOURS.length) return no(client, "model");
     const spec = SPECS[model as CarKind];
-    // a few metres ahead, facing my way (the world's x, z: off the floor's by GROUND_OFFSET)
+    // a few metres ahead, facing my way (the world's x, z)
     const yaw = (p.yaw / 256) * Math.PI * 2;
-    const bx = p.x + off.x + Math.cos(yaw) * 5;
-    const bz = p.y + off.y + Math.sin(yaw) * 5;
+    const bx = p.x + Math.cos(yaw) * 5;
+    const bz = p.y + Math.sin(yaw) * 5;
     const at = freeSpot(carWorld, spec, bx, bz, yaw, 14);
     if (!at) return no(client, "full");
     const props: Record<string, unknown> = {
@@ -779,7 +776,7 @@ registerFeature((room: WorldRoom) => {
     };
     if (model !== "sedan") props.model = model;
     const id = `adm-${p.uid}-${Date.now().toString(36)}`;
-    const next = { id, kind: "car", ...parkAt(at.x - off.x, at.z - off.y, at.a, heightAt(at.x, at.z), props) };
+    const next = { id, kind: "car", ...parkAt(at.x, at.z, at.a, heightAt(at.x, at.z), props) };
     room.state.objects.set(id, toSchema(next));
     room.rebuildGrid();
     room.rescue();
@@ -923,7 +920,7 @@ registerFeature((room: WorldRoom) => {
       delete props.grime;
       delete props.dmg;
     } else props.fuel = Math.max(0.3, num(props.fuel, 0.7));
-    const spot = parkAt(h.x - off.x, h.z - off.y, h.a, heightAt(h.x, h.z), props);
+    const spot = parkAt(h.x, h.z, h.a, heightAt(h.x, h.z), props);
     const next = { id: h.id, kind: "car", ...spot };
     room.state.objects.set(h.id, toSchema(next));
     if (!config.offline) void api.putObject(next).catch((e) => console.warn("[cars] home", e.message));
@@ -948,8 +945,8 @@ registerFeature((room: WorldRoom) => {
     const def = fromSchema(o as Parameters<typeof fromSchema>[0]);
     if (def.props?.driven) return true;
     const pose = parkedPose(def);
-    const bx = pose.x + off.x;
-    const bz = pose.y + off.y;
+    const bx = pose.x;
+    const bz = pose.y;
     const away = Math.hypot(bx - h.x, bz - h.z) > 1.5;
     if (all) {
       putHome(h, def.props ?? {}, true);
@@ -969,9 +966,7 @@ registerFeature((room: WorldRoom) => {
     if (Date.now() - parkedAt < (dry ? EMPTY_TOW_MS : TOW_MS)) return true;
     const near = [...room.state.players.values()].some(
       (p) =>
-        p.level === 0 &&
-        (Math.hypot(p.x + off.x - bx, p.y + off.y - bz) < TOW_NEAR ||
-          Math.hypot(p.x + off.x - h.x, p.y + off.y - h.z) < TOW_NEAR),
+        p.level === 0 && (Math.hypot(p.x - bx, p.y - bz) < TOW_NEAR || Math.hypot(p.x - h.x, p.y - h.z) < TOW_NEAR),
     );
     if (near) return true;
     const props = { ...(def.props ?? {}) };

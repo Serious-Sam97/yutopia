@@ -31,7 +31,7 @@ const into = (page: Page, dx = 0) =>
   page.evaluate(
     ([x, z]) => {
       // (the ground floor's corner in the building's coords: shared GROUND_OFFSET)
-      (window as any).__yutopia.teleport({ x: x + 60, y: z + 10, level: 0 });
+      (window as any).__yutopia.teleport({ x, y: z, level: 0 });
     },
     [BAY.x + dx, BAY.z],
   );
@@ -90,7 +90,7 @@ test("a bay claimed standing in it, the board up with the name, given up again",
   await look(page, [-21.5, 1.8, 11], [BAY.post, 1.5, BAY.z], "game-3d-aisle");
   await look(page, [-10.4, 1.75, 12.6], [BAY.post, 1.55, BAY.z], "game-3d-pavement");
   // "My bay": from the doors, back into it
-  await page.evaluate(() => (window as any).__yutopia.teleport({ x: 60 - 11, y: 10 + 18, level: 0 }));
+  await page.evaluate(() => (window as any).__yutopia.teleport({ x: -11, y: 18, level: 0 }));
   await page.waitForTimeout(800);
   await page.evaluate(() => (window as any).__yutopia.teleport("bay"));
   await expect
@@ -99,7 +99,7 @@ test("a bay claimed standing in it, the board up with the name, given up again",
         page.evaluate(() => {
           const c = (window as any).__yutopia;
           const p = c.room.state.players.get(c.room.sessionId);
-          return [p.x - 60, p.y - 10];
+          return [p.x, p.y];
         }),
       { timeout: 10_000 },
     )
@@ -122,7 +122,7 @@ test("MOTORS: by a car on show, the dealer's panel, one taken — beside her in 
   test.setTimeout(240_000);
   await open(page, "3p");
   // on the forecourt, by the sedan on show (MOTORS: shared grounds.ts)
-  await page.evaluate(() => (window as any).__yutopia.teleport({ x: 506.4 + 60, y: -393.6 + 10, level: 0 }));
+  await page.evaluate(() => (window as any).__yutopia.teleport({ x: 506.4, y: -393.6, level: 0 }));
   await page.waitForFunction(() => (window as any).__hud.get().prompt?.kind === "motors", null, { timeout: 30_000 });
   // (the vehicles on show are there, and none offers its wheel)
   const show = await page.evaluate(() => {
@@ -199,7 +199,7 @@ test("the keys, two people: Bia only beside in Ana's car; lent, she drives it, h
   const mine = () => a.evaluate(() => (window as any).__hud.get().myCar?.id ?? "");
   await a.waitForTimeout(1500);
   const was = await mine();
-  await a.evaluate(() => (window as any).__yutopia.teleport({ x: 512 + 60, y: -393.5 + 10, level: 0 }));
+  await a.evaluate(() => (window as any).__yutopia.teleport({ x: 512, y: -393.5, level: 0 }));
   await a.waitForTimeout(2000);
   await a.evaluate(() => (window as any).__yutopia.room.send("car:buy", { model: "sedan", colour: 1, plate: "" }));
   await expect.poll(mine, { timeout: 15_000 }).not.toBe(was);
@@ -213,9 +213,9 @@ test("the keys, two people: Bia only beside in Ana's car; lent, she drives it, h
     const id = (window as any).__hud.get().myCar.id;
     const o = c.room.state.objects.get(id);
     const p = JSON.parse(o.props);
-    const w = o.rot % 2 ? 2 : 5;
-    const h = o.rot % 2 ? 5 : 2;
-    const a = Math.PI + (o.rot % 4) * (Math.PI / 2);
+    const w = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 2 : 5;
+    const h = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 5 : 2;
+    const a = Math.PI + ((Math.round(o.yaw / (Math.PI / 2)) & 3) % 4) * (Math.PI / 2);
     const x = o.x + w / 2 + (p.dx ?? 0);
     const y = o.y + h / 2 + (p.dz ?? 0);
     // (beside it: its west side when it lies along z — on the forecourt the rail's east of the
@@ -282,9 +282,9 @@ test("row D: a free bay beside a parked car offers its claim; a bay with a pool 
     c.room.state.objects.forEach((o: any) => {
       const p = JSON.parse(o.props);
       if (o.kind !== "car" || p.ownerId || p.driven || (p.level ?? 0) !== 0) return;
-      const w = o.rot % 2 ? 2 : 5;
-      const h = o.rot % 2 ? 5 : 2;
-      cars.push({ x: o.x + w / 2 + (p.dx ?? 0) - 60, z: o.y + h / 2 + (p.dz ?? 0) - 10 });
+      const w = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 2 : 5;
+      const h = (Math.round(o.yaw / (Math.PI / 2)) & 3) % 2 ? 5 : 2;
+      cars.push({ x: o.x + w / 2 + (p.dx ?? 0), z: o.y + h / 2 + (p.dz ?? 0) });
     });
     return zs.map((z) => cars.some((q) => Math.abs(q.x + 15.8) < 2.8 && Math.abs(q.z - z) < 1.4));
   }, D.map(zOf));
@@ -292,10 +292,7 @@ test("row D: a free bay beside a parked car offers its claim; a bay with a pool 
   const beside = D.filter((s, i) => !full[i] && taken.some((t) => Math.abs(t - s) === 1));
   test.skip(!taken.length || !beside.length, "no pool car in row D to stand by");
   const at = async (x: number, s: number) => {
-    await page.evaluate(
-      ([xx, zz]) => (window as any).__yutopia.teleport({ x: xx + 60, y: zz + 10, level: 0 }),
-      [x, zOf(s)],
-    );
+    await page.evaluate(([xx, zz]) => (window as any).__yutopia.teleport({ x: xx, y: zz, level: 0 }), [x, zOf(s)]);
     await page.waitForTimeout(1500);
     return page.evaluate(() => (window as any).__hud.get().prompt);
   };

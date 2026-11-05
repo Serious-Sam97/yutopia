@@ -261,7 +261,7 @@ test("its mind: hungry with an empty bowl it begs there; filled, it eats; a frie
   const bx = (me(ana).x | 0) + 1;
   const by = me(ana).y | 0;
   ana.room.send("obj:batch", {
-    items: [{ id: "t-bowl", kind: "pet_bowl", x: bx, y: by, rot: 0, props: { portions: 0 } }],
+    items: [{ id: "t-bowl", kind: "pet_bowl", x: bx, y: by, yaw: 0, props: { portions: 0 } }],
   });
   await waitFor(() => !!ana.room.state.objects.get("t-bowl"));
   ana.room.send("pet:adopt", { species: "dog", name: "Rex" });
@@ -311,7 +311,7 @@ test("floors: a pet left behind (told to stay) goes after its owner when called;
   ana.room.send("pet:cmd", { id: pet().id, cmd: "stay" });
   await waitFor(() => pet().mode === "stay");
   // down to the lobby (the ground floor's corner is at −60, −10 in the studio's)
-  ana.room.send("teleport", { to: { x: 72.5, y: 27.5, level: 0 } });
+  ana.room.send("teleport", { to: { x: 12.5, y: 17.5, level: 0 } });
   await waitFor(() => me(ana).level === 0);
   await sleep(3200);
   assert.equal(pet().floor, 4, "it stayed upstairs");

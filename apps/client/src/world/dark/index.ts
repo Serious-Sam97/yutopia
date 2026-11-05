@@ -41,7 +41,6 @@ addStrings(STRINGS, DARK_CHUNK);
 const t = (key: string, vars: Record<string, string> = {}) =>
   (trMaybe(key) ?? key).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
 const itemName = (id: ItemId) => t(`dark_item_${id}`);
-const TPX = 39.19; // iso px a tile up (the views' clientAt)
 const AMBER = "#e9a33a";
 const TAB_PEEK_MS = 250; // Tab held this long, with things in reach to go round: the pockets (the controller's TAB_TAP_MS)
 
@@ -130,7 +129,7 @@ class Dark implements DarkHooks {
   private airSeen = 0;
   private hadLying = false;
   // the supply lockers on my floor (looked for twice a second: they're built and moved rarely)
-  private lockers: { id: string; x: number; y: number; rot: number }[] = [];
+  private lockers: { id: string; x: number; y: number; yaw: number }[] = [];
   private lockersAt = 0;
   private lockersLevel = -1;
   private lockersHere(now: number) {
@@ -141,14 +140,14 @@ class Dark implements DarkHooks {
     const home = ctl.building?.home ?? ctl.building?.floor ?? 0;
     const out: typeof this.lockers = [];
     ctl.room?.state.objects?.forEach(
-      (o: { id: string; kind: string; x: number; y: number; rot: number; props: string }) => {
+      (o: { id: string; kind: string; x: number; y: number; yaw: number; props: string }) => {
         if (o.kind !== "locker") return;
         let level = home;
         try {
           const l = JSON.parse(o.props || "{}").level;
           if (typeof l === "number") level = l;
         } catch {}
-        if (level === ctl.level) out.push({ id: o.id, x: o.x, y: o.y, rot: o.rot });
+        if (level === ctl.level) out.push({ id: o.id, x: o.x, y: o.y, yaw: o.yaw });
       },
     );
     this.lockers = out;
@@ -186,7 +185,7 @@ class Dark implements DarkHooks {
     this.arc.setAttribute("class", "abs");
     this.arcLabel.className = "abs dk-arc-l";
     this.bat.className = "abs dk-bat";
-    this.airEl.className = "abs dk-bat";
+    this.airEl.className = "abs dk-bat dk-air"; // (the battery's look, its own name: the breath)
     this.quickEl.className = "abs dk-quick";
     this.col.className = "dk-col";
     this.arcLabel.textContent = t("dark_winded");
@@ -527,9 +526,9 @@ class Dark implements DarkHooks {
     this.eyesAt = now;
     const dark = ctl.model?.getDaylight().dark ?? 0;
     // (indoors, nowhere yet, and no 3D view yet: the rooms' light)
-    const lum = !out || !Number.isFinite(x) || !ctl.tp ? 1 : ctl.tp.glareAt(x, y, ctl.room?.sessionId ?? "");
+    const lum = !out || !Number.isFinite(x) || !ctl.tp ? 1 : ctl.tp.eyes.glareAt(x, y, ctl.room?.sessionId ?? "");
     this.eyesT = stepEyes(this.eyesT, dt, glareOf(lum), dark);
-    ctl.tp?.setEyes(eyesOf(this.eyesT));
+    ctl.tp?.eyes.setEyes(eyesOf(this.eyesT));
   }
 
   private frame() {
@@ -546,12 +545,10 @@ class Dark implements DarkHooks {
     const out = ctl.level === 0 && !!ctl.room;
     const me = this.walker.where();
     this.eyes(out, me.x, me.y);
-    const ox = ctl.map?.ox ?? 0;
-    const oy = ctl.map?.oy ?? 0;
     // the ground at (x, y) on my floor: the snow's, out on it; the floor's indoors
-    const floorZ = (x: number, y: number) => (out && ctl.grid.onLand(x, y) ? heightAt(x + ox, y + oy) : 0);
+    const floorZ = (x: number, y: number) => (out && ctl.grid.onLand(x, y) ? heightAt(x, y) : 0);
     const at = (x: number, y: number, h: number) => {
-      const c = ctl.clientAt(x, y, h * TPX);
+      const c = ctl.clientAt(x, y, h);
       const r = ctl.hostRect();
       return { x: c.x + r.left, y: c.y + r.top };
     };
@@ -572,24 +569,24 @@ class Dark implements DarkHooks {
         }
       }
     if (out && Number.isFinite(me.x)) {
-      const bx = me.x + ox;
-      const bz = me.y + oy;
+      const bx = me.x;
+      const bz = me.y;
       for (const s of lootNow()) {
-        const d = far(s.x - bx, s.z - bz, s.x - ox, s.z - oy);
+        const d = far(s.x - bx, s.z - bz, s.x, s.z);
         if (d <= bestD) {
           bestD = d;
-          best = { kind: "spot", id: s.id, label: t(`dark_place_${s.place}`), x: s.x - ox, y: s.z - oy, z: me.z };
+          best = { kind: "spot", id: s.id, label: t(`dark_place_${s.place}`), x: s.x, y: s.z, z: me.z };
         }
       }
-      const dl = far(LOCKER.x - bx, LOCKER.z - bz, LOCKER.x - ox, LOCKER.z - oy);
+      const dl = far(LOCKER.x - bx, LOCKER.z - bz, LOCKER.x, LOCKER.z);
       if (dl <= bestD) {
         bestD = dl;
         best = {
           kind: "spot",
           id: "locker",
           label: t("dark_place_locker"),
-          x: LOCKER.x - ox,
-          y: LOCKER.z - oy,
+          x: LOCKER.x,
+          y: LOCKER.z,
           z: me.z,
         };
       }

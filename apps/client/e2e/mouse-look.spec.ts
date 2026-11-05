@@ -51,8 +51,9 @@ test("the mouse is the camera: a click takes it, it turns the camera, it picks n
   const picks = await page.evaluate(() => {
     const tp = (window as any).__yutopia.tp;
     (window as any).__picks = 0;
-    const pick = tp.pick.bind(tp);
-    tp.pick = (...a: unknown[]) => {
+    // (the pointer's pick: the view's BuildPick part — plan 72 phase 4)
+    const pick = tp.buildPick.pick.bind(tp.buildPick);
+    tp.buildPick.pick = (...a: unknown[]) => {
       (window as any).__picks++;
       return pick(...a);
     };

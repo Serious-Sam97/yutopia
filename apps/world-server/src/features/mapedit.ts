@@ -28,15 +28,19 @@ import {
   onLevel,
   openingBlocker,
   paintBlocker,
+  quarterOf,
+  quarterYaw,
   ROOM_KINDS,
   resizeMap,
   roomKey,
   setRoomWalls,
+  spanOf,
   tileAt,
   WALL_MATS,
   type WallMat,
   type WorldObjectDef,
   withLevel,
+  worldZ,
 } from "@yutopia/shared";
 import { api } from "../api.ts";
 import { config } from "../config.ts";
@@ -177,7 +181,8 @@ registerFeature((room: WorldRoom) => {
     if (!builder(client)) return;
     const next = resizeMap(room.map, Number(m.width), Number(m.height));
     if (blocked(client, next)) return;
-    for (const o of things(room.home)) if (o.x >= next.width || o.y >= next.height) void drop(o.id);
+    const sp = spanOf(next);
+    for (const o of things(room.home)) if (o.x >= sp.x1 || o.y >= sp.y1) void drop(o.id);
     room.commitMap(next);
     room.rescue();
     room.broadcastMsg("toast", { text: `The studio is now ${next.width}×${next.height}.` });
@@ -198,8 +203,8 @@ registerFeature((room: WorldRoom) => {
       p.x = next.spawn.x + (Math.random() - 0.5) * 3;
       p.y = next.spawn.y + (Math.random() - 0.5);
       p.desk = "";
-      p.z = 0;
-      room.send(c, "snap", { x: p.x, y: p.y, z: 0, level: p.level });
+      p.z = worldZ(p.level, 0);
+      room.send(c, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
     }
     room.broadcastMsg("toast", { text: `A blank ${w}×${h} studio. Time to build.` });
   });
@@ -252,7 +257,7 @@ registerFeature((room: WorldRoom) => {
           kind: "door",
           x: res.door.x,
           y: res.door.y,
-          rot: res.door.rot,
+          yaw: quarterYaw(quarterOf(res.door)),
           props: { state: "open", roomKey: key },
         },
         level,

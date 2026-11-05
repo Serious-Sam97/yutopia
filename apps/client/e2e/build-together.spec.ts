@@ -48,7 +48,7 @@ test("two builders: one hand at a time, and you can see whose", async ({ browser
     await walkTo(bia, spot.x - 2.5, spot.y + 1.5, 20_000);
     plant = `tg-plant-${Date.now().toString(36)}`;
     await ana.evaluate(
-      ([id, p]) => (window as any).__yutopia.send("obj:put", { id, kind: "plant", x: p.x, y: p.y, rot: 0 }),
+      ([id, p]) => (window as any).__yutopia.send("obj:put", { id, kind: "plant", x: p.x, y: p.y, yaw: 0 }),
       [plant, spot] as const,
     );
     await expect.poll(() => bia.evaluate((id) => !!(window as any).__yutopia.model.getObject(id), plant)).toBe(true);

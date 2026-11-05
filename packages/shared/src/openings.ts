@@ -1,10 +1,11 @@
-import { entry, type WorldObjectDef } from "./catalog.ts";
+import { entry, quarterOf, quarterYaw, type WorldObjectDef } from "./catalog.ts";
 import {
   type AreaDef,
   backAt,
   type Edge,
   type EdgeDir,
   edgeAt,
+  edgeInMap,
   HALF_WALL,
   hWall,
   isFloor,
@@ -14,6 +15,7 @@ import {
   NO_WALL,
   setBack,
   setEdge,
+  spanOf,
   tileAt,
   vWall,
 } from "./map.ts";
@@ -63,36 +65,36 @@ export function doorShut(o: { kind: string; props?: Record<string, unknown> }): 
 export const doorBlocksLight = (o: { kind: string; props?: Record<string, unknown> }): boolean =>
   doorShut(o) && o.kind !== "door_saloon";
 
-// The hole each one cuts, px up (the art draws its frame in it: art/items).
-// Doors and the windows' tops line up with the doorways (DOOR_Z 88).
+// The hole each one cuts, m up (the art draws its frame in it: art/items).
+// Doors and the windows' tops line up with the doorways (2.25 m).
 const CUTS: Record<string, [number, number]> = {
-  door: [0, 88],
-  door_double: [0, 88],
-  door_studio: [0, 88],
-  door_barn: [0, 88],
-  door_saloon: [0, 88],
-  archway: [0, 98],
-  door_auto: [0, 88],
-  door_revolving: [0, 88],
-  door_garage: [0, 96],
-  window: [36, 88],
-  window_wide: [36, 88],
-  window_tall: [12, 100],
-  window_round: [38, 78],
-  window_arched: [26, 96],
-  window_high: [94, 118],
-  window_stained: [20, 100],
-  window_blinds: [36, 88],
-  window_studio: [28, 92],
+  door: [0, 2.2456],
+  door_double: [0, 2.2456],
+  door_studio: [0, 2.2456],
+  door_barn: [0, 2.2456],
+  door_saloon: [0, 2.2456],
+  archway: [0, 2.5008],
+  door_auto: [0, 2.2456],
+  door_revolving: [0, 2.2456],
+  door_garage: [0, 2.4498],
+  window: [0.9187, 2.2456],
+  window_wide: [0.9187, 2.2456],
+  window_tall: [0.3062, 2.5518],
+  window_round: [0.9697, 1.9904],
+  window_arched: [0.6635, 2.4498],
+  window_high: [2.3987, 3.0112],
+  window_stained: [0.5104, 2.5518],
+  window_blinds: [0.9187, 2.2456],
+  window_studio: [0.7145, 2.3477],
 };
 export function openingCut(kind: string): [number, number] {
-  return CUTS[kind] ?? (isDoorKind(kind) ? [0, 88] : [36, 88]);
+  return CUTS[kind] ?? (isDoorKind(kind) ? [0, 2.2456] : [0.9187, 2.2456]);
 }
 
-export const openingDir = (o: { rot?: number }): EdgeDir => ((o.rot ?? 0) % 2 === 0 ? "h" : "v");
+export const openingDir = (o: { yaw?: number }): EdgeDir => (quarterOf(o) % 2 === 0 ? "h" : "v");
 
 // The edges it takes.
-export function openingEdges(o: { kind: string; x: number; y: number; rot?: number }): Edge[] {
+export function openingEdges(o: { kind: string; x: number; y: number; yaw?: number }): Edge[] {
   const dir = openingDir(o);
   const n = Math.max(1, entry(o.kind).w);
   return Array.from({ length: n }, (_, i) => (dir === "h" ? { dir, x: o.x + i, y: o.y } : { dir, x: o.x, y: o.y + i }));
@@ -165,11 +167,7 @@ export function openingBlocker(
   const edges = openingEdges(o);
   const [z0, z1] = openingCut(o.kind);
   for (const e of edges) {
-    const inMap =
-      e.dir === "h"
-        ? e.x >= 0 && e.x < map.width && e.y >= 0 && e.y <= map.height
-        : e.y >= 0 && e.y < map.height && e.x >= 0 && e.x <= map.width;
-    if (!inMap) return "outside the map";
+    if (!edgeInMap(map, e)) return "outside the map";
     const ch = edgeAt(map, e);
     if (!isWallEdge(ch)) return door ? "doors go in a wall" : "windows go in a wall";
     if (!wallTakes(o.kind, ch)) return ch === HALF_WALL ? "not in a half wall" : "not in a glass wall";
@@ -201,11 +199,11 @@ export function openingBlocker(
 export function openingNear(o: WorldObjectDef, f: { dir: EdgeDir; line: number }, along: number): WorldObjectDef {
   const n = Math.max(1, entry(o.kind).w);
   const k = Math.floor(along - n / 2 + 0.5);
-  return f.dir === "h" ? { ...o, x: k, y: f.line, rot: 0 } : { ...o, x: f.line, y: k, rot: 1 };
+  return f.dir === "h" ? { ...o, x: k, y: f.line, yaw: quarterYaw(0) } : { ...o, x: f.line, y: k, yaw: quarterYaw(1) };
 }
 
 // The middle of it, on its wall's line (tile coords).
-export function openingCentre(o: { kind: string; x: number; y: number; rot?: number }): { x: number; y: number } {
+export function openingCentre(o: { kind: string; x: number; y: number; yaw?: number }): { x: number; y: number } {
   const n = Math.max(1, entry(o.kind).w);
   return openingDir(o) === "h" ? { x: o.x + n / 2, y: o.y } : { x: o.x, y: o.y + n / 2 };
 }
@@ -260,10 +258,11 @@ export function openingsIntoWalls(
     mapChanged = true;
     const id = `win-${e.dir}${e.x}-${e.y}`;
     if (doors.has(edgeKey(e)) || have.has(id)) return;
-    added.push({ id, kind: "window", x: e.x, y: e.y, rot: e.dir === "h" ? 0 : 1 });
+    added.push({ id, kind: "window", x: e.x, y: e.y, yaw: quarterYaw(e.dir === "h" ? 0 : 1) });
   };
-  for (let y = 0; y <= next.height; y++) for (let x = 0; x < next.width; x++) window({ dir: "h", x, y });
-  for (let y = 0; y < next.height; y++) for (let x = 0; x <= next.width; x++) window({ dir: "v", x, y });
+  const sp = spanOf(next);
+  for (let y = sp.y0; y <= sp.y1; y++) for (let x = sp.x0; x < sp.x1; x++) window({ dir: "h", x, y });
+  for (let y = sp.y0; y < sp.y1; y++) for (let x = sp.x0; x <= sp.x1; x++) window({ dir: "v", x, y });
   if (!mapChanged) return { map, objects, added, mapChanged };
   return { map: next, objects: [...objects, ...added], added, mapChanged };
 }

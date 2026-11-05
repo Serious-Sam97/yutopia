@@ -1,3 +1,4 @@
+import type { StructOp, Structure } from "./structure/index.ts";
 // Messages between client and world-server (Colyseus room "world": the one world).
 
 import type { Social } from "./actions.ts";
@@ -33,6 +34,35 @@ export interface JoinOptions {
 
 // A player's performance over a window of play (docs/plan/39-the-telemetry.md). Frame times
 // in ms; percentiles over the window's frames; stage averages per frame drawn.
+/** The Kart Park's record (KartPark.record, JSON; the world's settings keep it): the best laps and
+ *  the last races. */
+export interface KartRecord {
+  /** the Figure Eight's best lap (the first record: kept where it was) */
+  best: { t: number; name: string } | null;
+  /** the other layouts' best laps, by layout ("oval", "oval-r"…) */
+  bests: Record<string, { t: number; name: string }>;
+  /** the layout raced, kept till someone changes it */
+  layout: { key: string; reverse: boolean };
+  last: { at: number; mode: string; top: string[] }[];
+  wins: Record<string, number>;
+}
+/** One kart at the flag (a race's: time, best, lap; a battle's: score). */
+export interface KartResultRow {
+  name: string;
+  colour: number;
+  vortex: boolean;
+  score?: number;
+  time?: number;
+  best?: number;
+  lap?: number;
+}
+/** The last race's results (KartPark.results, JSON). */
+export interface KartResults {
+  mode: string;
+  laps: number;
+  rows: KartResultRow[];
+}
+
 export interface PerfReport {
   session: string; // one page load
   client: { version: string; commit: string }; // the build it runs (docs/plan/40-the-version.md)
@@ -94,7 +124,6 @@ export interface ClientMessages {
     y: number;
     z?: number;
     l?: number;
-    d: number;
     a: number;
     seq: number;
     mv?: number;
@@ -109,6 +138,9 @@ export interface ClientMessages {
   jump: { k: JumpKind | VerbKind; h?: number; air?: boolean };
   /** a Flowmotion move begun or ended (move/flow.ts flowCode; 0 none) */
   flow: { f: number };
+  /** the way from (fx, fy) to (x, y) on my floor, asked (walk-to: the server's navmesh — docs/plan/72
+   *  phase 7); `n` mine to match the answer */
+  way: { n: number; x: number; y: number; fx: number; fy: number };
   // take something to carry from a thing that hands it out (a mug from the coffee machine)
   "item:take": { id: string };
   "item:drop": Record<string, never>;
@@ -191,14 +223,14 @@ export interface ClientMessages {
     kind: string;
     x: number;
     y: number;
-    rot: number;
+    yaw: number;
     refId?: number | null;
     props?: Record<string, unknown>;
   };
   "obj:remove": { id: string };
   // several at once, all or nothing: moves of existing ids, or new copies (no id)
   "obj:batch": {
-    items: { id?: string; kind: string; x: number; y: number; rot: number; props?: Record<string, unknown> }[];
+    items: { id?: string; kind: string; x: number; y: number; yaw: number; props?: Record<string, unknown> }[];
   };
   "obj:removeMany": { ids: string[] };
   // what I have in my hand right now (others can't grab it); [] puts it all down
@@ -300,6 +332,7 @@ export interface ClientMessages {
   "map:resize": { width: number; height: number };
   "map:new": { width: number; height: number };
   "map:spawn": { x: number; y: number };
+  "struct:get": Record<string, never>;
   // floors: a blank one on top of the building (its footprint and core), the top one gone
   "level:add": Record<string, never>;
   "level:remove": { level: number };
@@ -496,6 +529,9 @@ export interface ClientMessages {
   "perf:report": PerfReport;
   // a round trip to the world-server, timed by the client (the report's ping)
   "perf:ping": { t: number };
+  // something broke in the page (client lib/crash.ts: an uncaught error, a HUD part): logged and
+  // counted by the server (docs/plan/72-the-3d-core.md, phase 1)
+  "client:error": { where: string; message: string; stack: string };
   // down and up (D7): holding to get someone up (their session id; on: started, off: let go),
   // holding my own first aid while I'm down; admins: down at once (to try it)
   "dark:revive": { sid: string; on: boolean };
@@ -511,6 +547,9 @@ export interface ServerMessages {
   "god:refused": { reason: string; problems: string[] };
   "god:edits": GroundsEdits;
   snap: { x: number; y: number; z?: number; level?: number };
+  /** the way asked for (`n` its ask): its waypoints after where I was, the last the target (or the
+   *  nearest of it there is); null: none */
+  way: { n: number; pts: [number, number][] | null };
   // my car put back where the server has it (a state it couldn't believe)
   "car:snap": CarWire & { id: string };
   "car:no": { why: string; who?: string }; // (who: whose it is, "owned")
@@ -561,6 +600,10 @@ export interface ServerMessages {
   "build:history": { undo: number; redo: number; undoLabel: string | null; redoLabel: string | null };
   // rejected: Yondra answered and refused the map (vs. couldn't be reached)
   "build:saved": { ok: boolean; at: number; rejected?: boolean };
+  // the building's structure (docs/plan/72-the-3d-core.md, phase 6): whole, when asked for; then
+  // each edit as operations from one revision to the next (behind: ask for it whole again)
+  "struct:full": { rev: number; structure: Structure };
+  "struct:ops": { rev: number; ops: StructOp[] };
   // to whoever streams a console: its TV's LiveKit token; another player's
   // pad; who may see the picture and who may hear it (user ids)
   "game:tv": { id: string; token: string; identity: string };

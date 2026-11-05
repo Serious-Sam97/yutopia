@@ -8,6 +8,7 @@ import {
   EDGE_CHARS,
   type Edge,
   edgeAt,
+  edgeInMap,
   emptyEdges,
   FACE_MATS,
   FLOORS,
@@ -20,9 +21,12 @@ import {
   type LevelDef,
   type MapDef,
   NO_WALL,
+  originOf,
   setBack,
   setEdge,
+  spanOf,
   tileAt,
+  tileInMap,
   VOID,
   type WallMat,
 } from "./map.ts";
@@ -34,7 +38,7 @@ import { edgeKey, isDoorKind, isOpening, openingEdges, wallCuts, wallTakes } fro
 // (authority).
 
 export interface Layout {
-  version?: 2;
+  version?: 2 | 3; // 3: metres and radians (plan 72 phase 5; shared migrate.ts)
   width: number;
   height: number;
   tiles: string[];
@@ -65,7 +69,7 @@ export const ROOM_KINDS: AreaKind[] = ["private", "open", "booth"];
 
 export function layoutFromMap(map: MapDef): Layout {
   return {
-    version: 2,
+    version: 3,
     width: map.width,
     height: map.height,
     tiles: [...map.tiles],
@@ -200,7 +204,7 @@ export function paintBlocker(
   y: number,
   ch: string,
 ): string | null {
-  if (x < 0 || y < 0 || x >= map.width || y >= map.height) return "outside the map";
+  if (!tileInMap(map, x, y)) return "outside the map";
   if (!(PAINT_CHARS as readonly string[]).includes(ch)) return "unknown tile";
   if (isFloor(ch)) return null;
   if (Math.floor(map.spawn.x) === x && Math.floor(map.spawn.y) === y) return "that's where people arrive";
@@ -225,16 +229,13 @@ export function paintBlocker(
 
 export function applyPaint(map: MapDef, cells: { x: number; y: number; ch: string }[]): MapDef {
   const tiles = [...map.tiles];
-  for (const c of cells) setTile(tiles, c.x, c.y, c.ch);
+  const o = originOf(map);
+  for (const c of cells) setTile(tiles, c.x - o.x, c.y - o.y, c.ch);
   return { ...map, tiles };
 }
 
 // ── walls ──────────────────────────────────────────────────────────────────
-function inMap(map: MapDef, e: Edge): boolean {
-  return e.dir === "h"
-    ? e.x >= 0 && e.x < map.width && e.y >= 0 && e.y <= map.height
-    : e.y >= 0 && e.y < map.height && e.x >= 0 && e.x <= map.width;
-}
+const inMap = edgeInMap;
 
 // The two tiles an edge separates.
 export function edgeSides(e: Edge): [[number, number], [number, number]] {
@@ -338,9 +339,12 @@ export function resizeMap(map: MapDef, width: number, height: number): MapDef {
     Array.from({ length: n }, (_, y) => (rows[y] ?? "").slice(0, len).padEnd(len, NO_WALL));
   const tiles: string[] = [];
   for (let y = 0; y < h; y++) tiles.push((y < map.height ? map.tiles[y].slice(0, w) : "").padEnd(w, VOID));
+  // (its corner stays: the new far edges, in its places' coordinates)
+  const o = originOf(map);
+  const [X1, Y1] = [o.x + w, o.y + h];
   const areas = map.areas
-    .map((a) => ({ ...a, w: Math.min(a.w, w - a.x), h: Math.min(a.h, h - a.y) }))
-    .filter((a) => a.w > 0 && a.h > 0 && a.x < w && a.y < h);
+    .map((a) => ({ ...a, w: Math.min(a.w, X1 - a.x), h: Math.min(a.h, Y1 - a.y) }))
+    .filter((a) => a.w > 0 && a.h > 0 && a.x < X1 && a.y < Y1);
   const next: MapDef = {
     ...map,
     width: w,
@@ -358,12 +362,13 @@ export function resizeMap(map: MapDef, width: number, height: number): MapDef {
 }
 
 export function firstFloor(map: MapDef): Point | null {
-  const cx = map.width / 2;
-  const cy = map.height / 2;
+  const sp = spanOf(map);
+  const cx = (sp.x0 + sp.x1) / 2;
+  const cy = (sp.y0 + sp.y1) / 2;
   let best: Point | null = null;
   let bestD = Number.POSITIVE_INFINITY;
-  for (let y = 0; y < map.height; y++)
-    for (let x = 0; x < map.width; x++)
+  for (let y = sp.y0; y < sp.y1; y++)
+    for (let x = sp.x0; x < sp.x1; x++)
       if (isFloor(tileAt(map, x, y))) {
         const d = Math.hypot(x - cx, y - cy);
         if (d < bestD) {
@@ -419,15 +424,16 @@ export interface RoomSpec {
 
 // A room (an area) and, optionally, walls on the edges around it and a door
 // in the middle of the bottom wall (the top one at the map's edge). Returns
-// where the door goes: the edge, as a door object's x, y, rot.
+// where the door goes: the edge, as a door object's x, y, yaw.
 export function addRoom(
   map: MapDef,
   objects: WorldObjectDef[],
   _bodies: Point[],
   r: RoomSpec,
-): { map: MapDef; door: { x: number; y: number; rot: 0 | 1 } | null } | string {
+): { map: MapDef; door: { x: number; y: number; yaw: number } | null } | string {
   if (r.w < 2 || r.h < 2) return "rooms need at least 2×2 tiles";
-  if (r.x < 0 || r.y < 0 || r.x + r.w > map.width || r.y + r.h > map.height) return "the room doesn't fit in the map";
+  const sp = spanOf(map);
+  if (r.x < sp.x0 || r.y < sp.y0 || r.x + r.w > sp.x1 || r.y + r.h > sp.y1) return "the room doesn't fit in the map";
   if (map.areas.some((a) => a.key === r.key)) return "a room with that name exists";
   const floor = r.floor && isFloor(r.floor) ? r.floor : null;
   const cells: { x: number; y: number; ch: string }[] = [];
@@ -438,12 +444,12 @@ export function addRoom(
       else if (!isFloor(t)) cells.push({ x, y, ch: floor ?? "." });
     }
   let next = applyPaint(map, cells);
-  let door: { x: number; y: number; rot: 0 | 1 } | null = null;
+  let door: { x: number; y: number; yaw: number } | null = null;
   if (r.walls) {
     const mat = r.wall ?? (r.kind === "booth" ? "f" : "p");
     const dx = r.x + Math.floor(r.w / 2);
     // the doorway: bottom wall, or the top one when the room sits on the map's bottom edge
-    const dy = r.y + r.h < map.height ? r.y + r.h : r.y;
+    const dy = r.y + r.h < sp.y1 ? r.y + r.h : r.y;
     const walls: EdgeEdit[] = [];
     for (const e of ring(r.x, r.y, r.w, r.h)) {
       const cur = edgeAt(next, e);
@@ -459,7 +465,7 @@ export function addRoom(
     }
     next = applyEdges(next, walls);
     // (a door or window there already: no second one)
-    if (!wallCuts(objects).has(edgeKey({ dir: "h", x: dx, y: dy }))) door = { x: dx, y: dy, rot: 0 };
+    if (!wallCuts(objects).has(edgeKey({ dir: "h", x: dx, y: dy }))) door = { x: dx, y: dy, yaw: 0 };
   }
   const area: AreaDef = {
     key: r.key,

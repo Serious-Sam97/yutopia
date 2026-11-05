@@ -1,5 +1,5 @@
 import { FAM_CATALOG } from "./fam/index.ts";
-import { isoPx, STAND, SURFACE } from "./furniture.ts";
+import { STAND, SURFACE } from "./furniture.ts";
 
 // Every placeable thing in the world. Footprints are in tiles at rot 0; rot 1/3
 // swap width and height. `wall` objects hang on a wall face, anywhere along and
@@ -65,7 +65,7 @@ export interface CatalogEntry {
   // its fabric or paint can be chosen (props.color, a hex): sofas, rugs, lamps…
   paint?: boolean;
   // tabletops (mugs, monitors, the radio…) sit on items with a surface this
-  // many px up; `top`: the part of it they can stand on, in quarter-tile cells
+  // many metres up; `top`: the part of it they can stand on, in quarter-tile cells
   // of the rot-0 footprint [x0, y0, x1, y1] (default: all of it)
   surface?: number;
   top?: [number, number, number, number];
@@ -86,7 +86,7 @@ export interface CatalogEntry {
 export const PIANO_STOOL: [number, number] = [1, 1.1];
 
 export const CATALOG = {
-  desk: { label: "Desk", w: 2, h: 1, solid: true, buildable: true, variants: 4, look: 0, surface: isoPx(SURFACE.desk) },
+  desk: { label: "Desk", w: 2, h: 1, solid: true, buildable: true, variants: 4, look: 0, surface: SURFACE.desk },
   chair: { label: "Chair", w: 1, h: 1, solid: false, seat: true, buildable: true, variants: 4, look: 0, paint: true },
   board_wall: { label: "Board wall", w: 3, h: 1, solid: false, wall: true, buildable: true },
   screen_wall: { label: "Big screen", w: 4, h: 1, solid: false, wall: true, interact: "screen", buildable: true },
@@ -124,7 +124,7 @@ export const CATALOG = {
     h: 2,
     solid: true,
     buildable: true,
-    surface: isoPx(SURFACE.meeting_table),
+    surface: SURFACE.meeting_table,
   },
   coffee_table: {
     label: "Coffee table",
@@ -132,9 +132,9 @@ export const CATALOG = {
     h: 1,
     solid: true,
     buildable: true,
-    surface: isoPx(SURFACE.coffee_table),
+    surface: SURFACE.coffee_table,
   },
-  side_table: { label: "Side table", w: 1, h: 1, solid: true, buildable: true, surface: isoPx(SURFACE.side_table) },
+  side_table: { label: "Side table", w: 1, h: 1, solid: true, buildable: true, surface: SURFACE.side_table },
   bookcase: {
     label: "Bookcase",
     w: 2,
@@ -143,7 +143,7 @@ export const CATALOG = {
     buildable: true,
     look: 0,
     variants: 3,
-    surface: isoPx(SURFACE.bookcase),
+    surface: SURFACE.bookcase,
     top: [0, 1, 8, 3],
   },
   partition: { label: "Room divider", w: 2, h: 1, solid: true, buildable: true, variants: 3, paint: true },
@@ -155,11 +155,11 @@ export const CATALOG = {
     buildable: true,
     look: 0,
     variants: 2,
-    surface: isoPx(SURFACE.counter),
+    surface: SURFACE.counter,
     top: [0, 0, 4, 4], // the sink takes the right half
     paint: true,
   },
-  cupboard: { label: "Cupboard", w: 1, h: 1, solid: true, buildable: true, surface: isoPx(SURFACE.cupboard) },
+  cupboard: { label: "Cupboard", w: 1, h: 1, solid: true, buildable: true, surface: SURFACE.cupboard },
   // a supply locker (docs/plan/30-the-dark.md): a kit a day for anyone, wherever it's put
   locker: { label: "Supply locker", w: 1, h: 1, solid: true, buildable: true },
   sofa: { label: "Sofa", w: 3, h: 1, solid: false, seat: true, buildable: true, variants: 3, look: 0, paint: true },
@@ -209,7 +209,7 @@ export const CATALOG = {
     buildable: true,
     look: 0,
     variants: 3,
-    surface: isoPx(SURFACE.tape_shelf),
+    surface: SURFACE.tape_shelf,
     top: [0, 1, 8, 3],
   },
   water_cooler: { label: "Water cooler", w: 1, h: 1, solid: true, interact: "water", buildable: true },
@@ -356,7 +356,7 @@ export const CATALOG = {
     h: 1,
     solid: true,
     buildable: true,
-    surface: isoPx(SURFACE.reception),
+    surface: SURFACE.reception,
     top: [0, 0, 12, 3], // (the work surface, behind the visitors' ledge: plan 67)
   },
   mic_stand: { label: "Mic stand", w: 1, h: 1, solid: true, buildable: true },
@@ -499,7 +499,7 @@ export const CATALOG = {
     buildable: true,
     variants: 2,
     look: 0,
-    surface: isoPx(SURFACE.standing_desk),
+    surface: SURFACE.standing_desk,
   },
   filing_cabinet: { label: "Filing cabinet", w: 1, h: 1, solid: true, buildable: true, variants: 2, look: 0 },
   printer: { label: "Copier", w: 1, h: 1, solid: true, buildable: true },
@@ -511,7 +511,7 @@ export const CATALOG = {
     buildable: true,
     variants: 2,
     look: 0,
-    surface: isoPx(SURFACE.shelving),
+    surface: SURFACE.shelving,
     top: [0, 1, 8, 3], // (its shelf 0.3–0.7 m in, as a bookcase's)
   },
   fridge: { label: "Fridge", w: 1, h: 1, solid: true, buildable: true, variants: 2, look: 0 },
@@ -533,7 +533,7 @@ export const CATALOG = {
     h: 1,
     solid: true,
     buildable: true,
-    surface: isoPx(SURFACE.high_table),
+    surface: SURFACE.high_table,
     top: [1, 1, 3, 3], // (its round top: the cells inside it)
   },
   phone_booth: { label: "Phone booth", w: 1, h: 1, solid: false, seat: true, buildable: true, paint: true },
@@ -577,7 +577,7 @@ export const CATALOG = {
     interact: "lamp",
     variants: 3,
     look: 0,
-    surface: isoPx(SURFACE.fireplace),
+    surface: SURFACE.fireplace,
     top: [1, 2, 7, 3], // (its mantel shelf)
     light: { color: 0xff9a4a, radius: 4.5, intensity: 0.6 },
   },
@@ -774,17 +774,17 @@ export function registerKinds(kinds: Record<string, CatalogEntry>): void {
   for (const [k, e] of Object.entries(kinds)) extra.set(k, e);
 }
 
-// What a body can stand on once it's jumped up there (shared/jump.ts): the top of the thing, iso px
-// up (39.2 px a tile). Surfaces (desks, tables, shelves…) are stood on at their surface; the solid
+// What a body can stand on once it's jumped up there (shared/jump.ts): the top of the thing, metres
+// up. Surfaces (desks, tables, shelves…) are stood on at their surface; the solid
 // things without one at their `STAND` (furniture.ts, m).
 
-/** How high a body stands on top of this (iso px), or undefined: it can't. */
+/** How high a body stands on top of this (m), or undefined: it can't. */
 export function standHeight(kind: string): number | undefined {
   const e = entry(kind);
   if (!e.solid || e.wall) return undefined;
   if (!isKind(kind)) return undefined;
   const at = STAND[kind];
-  return at !== undefined ? isoPx(at) : e.surface;
+  return at ?? e.surface;
 }
 
 export function footprint(kind: string, rot = 0): { w: number; h: number } {
@@ -799,16 +799,26 @@ export function wallRot(rot = 0): 0 | 3 {
   return rot === 3 ? 3 : 0;
 }
 
-// The turn something is laid out and drawn with (wall items: the face they
-// hang on, hang.ts `hangRot`).
-export function rotOf(o: { kind: string; rot?: number; props?: Record<string, unknown> }): number {
-  if (!entry(o.kind).wall) return o.rot ?? 0;
-  return Number.isInteger(o.props?.wu) ? (o.rot ?? 0) & 3 : wallRot(o.rot);
+// How a thing is turned (docs/plan/72-the-3d-core.md, phase 5): its `yaw`, radians, a quarter turn
+// π/2 the way the old `rot` counted them (rot 1 = π/2). Things still turn by quarters (plan 72
+// phase 11 frees them), so the code asks for the quarter.
+export const QUARTER = Math.PI / 2;
+/** Its turn in quarters, 0..3. */
+export const quarterOf = (o: { yaw?: number }): 0 | 1 | 2 | 3 =>
+  (((Math.round((o.yaw ?? 0) / QUARTER) % 4) + 4) % 4) as 0 | 1 | 2 | 3;
+/** A turn in quarters as a yaw (0, π/2, π, 3π/2). */
+export const quarterYaw = (q: number): number => (Number.isFinite(q) ? ((Math.round(q) % 4) + 4) % 4 : 0) * QUARTER;
+
+// The turn something is laid out and drawn with, in quarters (wall items: the face they hang on,
+// hang.ts `hangRot`).
+export function rotOf(o: { kind: string; yaw?: number; props?: Record<string, unknown> }): number {
+  if (!entry(o.kind).wall) return quarterOf(o);
+  return Number.isInteger(o.props?.wu) ? quarterOf(o) : wallRot(quarterOf(o));
 }
 
 // Its footprint where it stands (wall items: the tiles along their wall, from
 // the tile it's in front of; hang.ts has where exactly).
-export function placedFootprint(o: { kind: string; rot?: number; props?: Record<string, unknown> }): {
+export function placedFootprint(o: { kind: string; yaw?: number; props?: Record<string, unknown> }): {
   w: number;
   h: number;
 } {
@@ -820,7 +830,8 @@ export interface WorldObjectDef {
   kind: string;
   x: number;
   y: number;
-  rot?: number;
+  /** how it's turned: radians, π/2 a quarter (quarterOf) */
+  yaw?: number;
   refId?: number | null;
   props?: Record<string, unknown>;
 }

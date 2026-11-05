@@ -113,13 +113,13 @@ function Shapes() {
   const w = useWorld();
   const t = useWords(W);
   const tp = w?.tp ?? null;
-  const [on, setOn] = useState(!!tp?.physicsShown);
+  const [on, setOn] = useState(!!tp?.body.physicsShown);
   const [counts, setCounts] = useState<{ bodies: number; maxBodies: number; heap: number; refused: number } | null>(
     null,
   );
   useEffect(() => {
     if (!on) return setCounts(null);
-    const id = setInterval(() => setCounts(tp?.physicsShown?.counts() ?? null), 1000);
+    const id = setInterval(() => setCounts(tp?.body.physicsShown?.counts() ?? null), 1000);
     return () => clearInterval(id);
   }, [on, tp]);
   return (
@@ -129,7 +129,7 @@ function Shapes() {
           on={on}
           label={t("shapes")}
           onFlip={() => {
-            tp?.physicsDebug(!on);
+            tp?.body.physicsDebug(!on);
             setOn(!on);
           }}
         />

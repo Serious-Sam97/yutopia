@@ -1,6 +1,6 @@
 import { TABLES } from "@yutopia/shared/tables";
 import { Color, ShapeUtils, Vector2 } from "three";
-import { type Out, zt } from "./kit3d";
+import type { Out } from "./kit3d";
 
 // The pool table in 3D, its own model (the iso view draws the item's sketch,
 // art/items/gametables.ts; this is the same table, built for being looked at
@@ -45,12 +45,12 @@ const OY0 = BY0 - RAIL;
 const OY1 = BY1 + RAIL;
 
 // heights (tiles): the cloth at the item's furniture height, what's above it to scale
-const ZC = zt(TABLES.pool_table.top); // the cloth (shared furniture.ts TABLE_TOP: plan 67)
+const ZC = TABLES.pool_table.top; // the cloth (shared furniture.ts TABLE_TOP: plan 67)
 const ZN = ZC + 0.036 * TPM; // the cushion's nose: where it meets a ball (63% of one up)
 const ZB = ZC + 0.042 * TPM; // the cushion's back
 const ZR = ZC + 0.046 * TPM; // the rail's top
 const ZA = ZC - 0.05; // the rail's underside (the apron's top, hidden under it)
-const ZP = ZC - zt(9.5); // the apron's bottom
+const ZP = ZC - 0.2424; // the apron's bottom
 const POCKET_DEEP = 0.085 * TPM; // tables/pool.ts POCKET_DEPTH (m), in tiles
 const ZT = ZC - POCKET_DEEP; // the throat's bottom
 const RR = 0.022; // the rail's rounded outer edge
@@ -675,15 +675,15 @@ export function poolTable3(out: Out, at: { x: number; y: number }, rot: number, 
   // ── turned legs: a foot, a bun, a long baluster, a brass collar, a block under the apron ──
   const legProf: [number, number][] = [
     [0.07, 0],
-    [0.072, zt(2)],
-    [0.1, zt(2.6)],
-    [0.1, zt(4.6)],
-    [0.084, zt(5.4)],
-    [0.062, zt(7)],
-    [0.07, zt(9.6)],
-    [0.086, zt(11.6)],
-    [0.096, zt(11.7)],
-    [0.096, zt(13.1)],
+    [0.072, 0.051],
+    [0.1, 0.0663],
+    [0.1, 0.1174],
+    [0.084, 0.1378],
+    [0.062, 0.1786],
+    [0.07, 0.245],
+    [0.086, 0.296],
+    [0.096, 0.2986],
+    [0.096, 0.3343],
   ];
   const SEG = 14;
   for (const [lx, ly] of [
@@ -711,7 +711,7 @@ export function poolTable3(out: Out, at: { x: number; y: number }, rot: number, 
         );
       }
     }
-    box(lx - 0.1, ly - 0.1, lx + 0.1, ly + 0.1, zt(13.1), ZP, wood, { inked: true, noTop: true });
+    box(lx - 0.1, ly - 0.1, lx + 0.1, ly + 0.1, 0.3343, ZP, wood, { inked: true, noTop: true });
   }
 
   // ── the ball return: a trough along the foot end, the potted balls lie in it ──
@@ -721,7 +721,7 @@ export function poolTable3(out: Out, at: { x: number; y: number }, rot: number, 
     const tx1 = 3.93;
     const ty0 = 0.6;
     const ty1 = 1.99;
-    const zf = zt(19.4); // its floor
+    const zf = 0.4951; // its floor
     const zl = zf + 0.026;
     box(tx0, ty0, tx1, ty1, zf - 0.035, zf, woodDark, { top: col("#2a1a12"), inked: true });
     // its lips round the floor

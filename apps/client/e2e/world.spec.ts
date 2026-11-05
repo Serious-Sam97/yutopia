@@ -11,7 +11,7 @@ test("sign in, arrive at the arrival point, My desk, walk across the building", 
   const at = await page.evaluate(() => {
     const w = (window as any).__yutopia;
     const p = w.room.state.players.get(w.room.sessionId);
-    return { x: p.x, y: p.y, spawn: { x: w.room.state.spawnX, y: w.room.state.spawnY }, desk: p.desk as string };
+    return { x: p.x, y: p.y, spawn: { x: w.building.spawn.x, y: w.building.spawn.y }, desk: p.desk as string };
   });
   expect(Math.hypot(at.x - at.spawn.x, at.y - at.spawn.y)).toBeLessThan(1.5);
   // your desk is still yours: "My desk" takes you there

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CATALOG, entry } from "./catalog.ts";
+import { CATALOG, entry, quarterYaw } from "./catalog.ts";
 import {
   advance,
   cleanItem,
@@ -110,7 +110,7 @@ test("media: every display kind is in the catalog, glass inside its footprint", 
     assert.ok(g.x0 >= 0 && g.x1 <= w && g.x1 > g.x0, `${k}: x within the item`);
     assert.ok(g.z1 > g.z0, `${k}: z`);
     assert.equal(!!g.wall, !!e.wall, `${k}: wall`);
-    const c = glassCorners({ id: "x", kind: k, x: 5, y: 5, rot: 0, props: { z: 25 } });
+    const c = glassCorners({ id: "x", kind: k, x: 5, y: 5, yaw: quarterYaw(0), props: { z: 25 } });
     assert.ok(c);
   }
   // the CRT shows media only on its TV input; the big screen unless set to a board / stage

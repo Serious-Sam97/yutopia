@@ -1,4 +1,4 @@
-import { entry, footprint, rotOf, type WorldObjectDef } from "./catalog.ts";
+import { entry, footprint, quarterOf, quarterYaw, rotOf, type WorldObjectDef } from "./catalog.ts";
 import { FAM_HANGS } from "./fam/index.ts";
 import {
   type Edge,
@@ -9,10 +9,12 @@ import {
   isFloor,
   isWallEdge,
   type MapDef,
+  spanOf,
   tileAt,
   vWall,
 } from "./map.ts";
 import { edgeKey, isDoorKind, wallCuts } from "./openings.ts";
+import { WALL_H } from "./units.ts";
 
 // Things on walls, Sims-style — like things on a desk's top (tops.ts): a board,
 // a poster, a TV hangs anywhere on either face of a wall, on a grid of quarter
@@ -25,43 +27,43 @@ import { edgeKey, isDoorKind, wallCuts } from "./openings.ts";
 // facing −x; 2 on the south wall, facing −y; 3 on the west wall, facing +x;
 // x, y = the tile in front of it; props.wu = how many quarter tiles its drawing
 // is shifted along the wall (+x or +y) from that tile's corner (0..3); props.wz
-// = how many quarter-tile steps it's raised (lowered when negative) from its
+// = how many quarter-metre steps it's raised (lowered when negative) from its
 // own height. Older saves have neither: wu 0, wz 0, and only rot 3 is the west
-// wall (any other turn the north wall).
-export const WQ = 4; // steps per tile, along and up
-export const WZ_PX = 9.8; // px per step up (a quarter tile, 39.2 px a tile)
-export const HANG_LOW = 5; // the skirting's top
-export const HANG_HIGH = 125; // under the wall's cap (WALL_Z 128 − 3 in art/items/walls.ts)
+// wall (any other turn the north wall). Heights in metres (plan 72 phase 5).
+export const WQ = 4; // steps per tile along
+export const WZ = 0.25; // m a step up
+export const HANG_LOW = 0.1276; // the skirting's top
+export const HANG_HIGH = 3.1898; // under the wall's cap (its top 8 cm)
 
 // Each wall item at rest: [quarter tiles along (centred in its drawing, which
-// is `w` tiles wide: 4·w − this is even), lowest px, highest px].
+// is `w` tiles wide: 4·w − this is even), lowest m, highest m].
 const HANG_SIZE: Record<string, [number, number, number]> = {
-  board_wall: [12, 19, 72],
-  screen_wall: [16, 10, 86],
-  whiteboard: [8, 22, 64],
-  notice_board: [8, 28, 62],
-  acoustic_panel: [4, 22, 68],
-  clock: [2, 43, 61],
-  neon: [6, 36, 64],
-  poster: [4, 30, 66],
-  light_switch: [2, 32, 45],
-  frame: [2, 40, 60],
-  wall_shelf: [7, 53, 69], // (plan 67: its board 1.45 m up, what's on it)
+  board_wall: [12, 0.4848, 1.8373],
+  screen_wall: [16, 0.2552, 2.1946],
+  whiteboard: [8, 0.5614, 1.6332],
+  notice_board: [8, 0.7145, 1.5821],
+  acoustic_panel: [4, 0.5614, 1.7352],
+  clock: [2, 1.0973, 1.5566],
+  neon: [6, 0.9187, 1.6332],
+  poster: [4, 0.7655, 1.6842],
+  light_switch: [2, 0.8166, 1.1483],
+  frame: [2, 1.0207, 1.5311],
+  wall_shelf: [7, 1.3525, 1.7608], // (plan 67: its board 1.45 m up, what's on it)
   // (plan 68: words on things — the marquee's panel, the ticker's strip, the split-flap's board)
-  marquee_sign: [11, 60, 87],
-  vfd_ticker: [7, 76, 85],
-  split_flap: [11, 56, 83],
+  marquee_sign: [11, 1.5311, 2.2201],
+  vfd_ticker: [7, 1.9394, 2.1691],
+  split_flap: [11, 1.429, 2.118],
   // (plan 68 phase 2: Christmas — a stocking under its hook, the wreath, the garland over heads, the
   // advent calendar's board)
-  stocking: [2, 26, 52],
-  wreath: [4, 45, 79],
-  garland: [12, 74, 91],
-  advent_calendar: [4, 45, 77],
-  tv_wall: [4, 44, 80],
-  tv_hd: [12, 17, 80],
-  projector_screen: [12, 17, 86],
-  tv_giant: [20, 15, 118],
-  cinema_screen: [24, 6, 124],
+  stocking: [2, 0.6635, 1.3269],
+  wreath: [4, 1.1483, 2.0159],
+  garland: [12, 1.8884, 2.3222],
+  advent_calendar: [4, 1.1483, 1.9649],
+  tv_wall: [4, 1.1228, 2.0415],
+  tv_hd: [12, 0.4338, 2.0415],
+  projector_screen: [12, 0.4338, 2.1946],
+  tv_giant: [20, 0.3828, 3.0112],
+  cinema_screen: [24, 0.1531, 3.1643],
   // (plan 68's families: fam/*.ts)
   ...FAM_HANGS,
 };
@@ -70,7 +72,7 @@ export function hangSize(kind: string): [number, number, number] {
   const s = HANG_SIZE[kind];
   if (s) return s;
   const w = entry(kind).w;
-  return [w * WQ, 24, 64];
+  return [w * WQ, 0.6124, 1.6332];
 }
 
 // A wall face: the wall line (`line` = y of a wall along x, x of one along y)
@@ -90,8 +92,8 @@ const isInt = (v: unknown): v is number => typeof v === "number" && Number.isInt
 export const freeHang = (o: { props?: Record<string, unknown> }): boolean => isInt(o.props?.wu);
 
 // The face it hangs on, as a turn.
-export function hangRot(o: { rot?: number; props?: Record<string, unknown> }): 0 | 1 | 2 | 3 {
-  const r = (o.rot ?? 0) & 3;
+export function hangRot(o: { yaw?: number; props?: Record<string, unknown> }): 0 | 1 | 2 | 3 {
+  const r = quarterOf(o) & 3;
   if (freeHang(o)) return r as 0 | 1 | 2 | 3;
   return r === 3 ? 3 : 0;
 }
@@ -100,9 +102,9 @@ export interface Hang extends Face {
   rot: 0 | 1 | 2 | 3;
   u0: number; // its span along the wall, in quarter tiles (world)
   u1: number;
-  z0: number; // how high it reaches, px (raised)
+  z0: number; // how high it reaches, m (raised)
   z1: number;
-  lift: number; // px it's raised from its own height
+  lift: number; // m it's raised from its own height
   ax: number; // its drawing's corner (the tile frame it's drawn in), world tiles
   ay: number;
 }
@@ -119,7 +121,7 @@ export function hangOf(o: WorldObjectDef): Hang {
   const [n, lo, hi] = hangSize(o.kind);
   const m = (entry(o.kind).w * WQ - n) / 2;
   const u0 = (dir === "h" ? ax : ay) * WQ + m;
-  const lift = wz * WZ_PX;
+  const lift = wz * WZ;
   return { rot, dir, line, side, u0, u1: u0 + n, z0: lo + lift, z1: hi + lift, lift, ax, ay };
 }
 
@@ -207,21 +209,21 @@ export function hangAt(o: WorldObjectDef, f: Face, u: number, wz: number): World
   const c = Math.round(u - m); // its drawing's corner, in quarter tiles
   const k = Math.floor(c / WQ);
   const [x, y] = frontTile(f, k);
-  return { ...o, x, y, rot: faceRot(f), props: { ...(o.props ?? {}), wu: c - k * WQ, wz: Math.round(wz) } };
+  return { ...o, x, y, yaw: quarterYaw(faceRot(f)), props: { ...(o.props ?? {}), wu: c - k * WQ, wz: Math.round(wz) } };
 }
 
-// Hung on a face with its middle as near `along` (world tiles) and `z` (px) as
+// Hung on a face with its middle as near `along` (world tiles) and `z` (m) as
 // the grid allows; `z` null keeps how high it is.
 export function hangNear(o: WorldObjectDef, f: Face, along: number, z: number | null): WorldObjectDef {
   const [n, lo, hi] = hangSize(o.kind);
-  const wz = z === null ? (isInt(o.props?.wz) ? (o.props?.wz as number) : 0) : Math.round((z - (lo + hi) / 2) / WZ_PX);
+  const wz = z === null ? (isInt(o.props?.wz) ? (o.props?.wz as number) : 0) : Math.round((z - (lo + hi) / 2) / WZ);
   return hangAt(o, f, Math.round(along * WQ - n / 2), clampLift(o.kind, wz));
 }
 
 // Lifts that keep it on the wall (between the skirting and the cap).
 export function liftRange(kind: string): [number, number] {
   const [, lo, hi] = hangSize(kind);
-  return [Math.ceil((HANG_LOW - lo) / WZ_PX - 1e-9), Math.floor((HANG_HIGH - hi) / WZ_PX + 1e-9)];
+  return [Math.ceil((HANG_LOW - lo) / WZ - 1e-9), Math.floor((HANG_HIGH - hi) / WZ + 1e-9)];
 }
 export function clampLift(kind: string, wz: number): number {
   const [a, b] = liftRange(kind);
@@ -234,8 +236,8 @@ export function hangCanon(o: WorldObjectDef): WorldObjectDef {
   if (!entry(o.kind).wall) return o;
   const h = hangOf(o);
   const wu = Math.round((h.dir === "h" ? h.ax - o.x : h.ay - o.y) * WQ);
-  const wz = Math.round(h.lift / WZ_PX);
-  return { ...o, rot: h.rot, props: { ...(o.props ?? {}), wu, wz } };
+  const wz = Math.round(h.lift / WZ);
+  return { ...o, yaw: quarterYaw(h.rot), props: { ...(o.props ?? {}), wu, wz } };
 }
 
 const overlaps = (a0: number, a1: number, b0: number, b1: number) => a0 < b1 - 1e-6 && b0 < a1 - 1e-6;
@@ -291,17 +293,17 @@ export function hangFits(map: MapDef, others: WorldObjectDef[], o: WorldObjectDe
 }
 
 // ── pointing at a wall ───────────────────────────────────────────────────────
-// A ray from the camera through the pointer (world tiles, z in px): `o` where
-// it starts, `d` its direction.
+// A ray from the camera through the pointer (world metres, z up): `o` where it
+// starts, `d` its direction.
 export interface Ray {
   o: { x: number; y: number; z: number };
   d: { x: number; y: number; z: number };
 }
 const FACE_OUT = 0.1; // a wall's face is this far out from its line (WALL_HALF_T)
-const WALL_TOP = HANG_HIGH + 3;
+const WALL_TOP = WALL_H;
 
 // The wall face the ray meets first, facing it, where: along (world tiles) and
-// z (px). `skip`: walls to look through (faded, cut away).
+// z (m). `skip`: walls to look through (faded, cut away).
 export function faceHit(
   map: MapDef,
   ray: Ray,
@@ -326,8 +328,9 @@ export function faceHit(
     if (along < a0 || along > a0 + 1 || z < 0 || z > WALL_TOP) return;
     best = { face: { dir, line, side }, along, z, t };
   };
-  for (let y = 0; y <= map.height; y++) for (let x = 0; x < map.width; x++) test("h", x, y);
-  for (let y = 0; y < map.height; y++) for (let x = 0; x <= map.width; x++) test("v", x, y);
+  const sp = spanOf(map);
+  for (let y = sp.y0; y <= sp.y1; y++) for (let x = sp.x0; x < sp.x1; x++) test("h", x, y);
+  for (let y = sp.y0; y < sp.y1; y++) for (let x = sp.x0; x <= sp.x1; x++) test("v", x, y);
   return best;
 }
 

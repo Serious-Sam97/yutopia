@@ -1,4 +1,4 @@
-import { toScreen, type WorldObjectDef } from "@yutopia/shared";
+import { quarterOf, toScreen, type WorldObjectDef } from "@yutopia/shared";
 import { BALL_R, POOL_L, POOL_W, type PoolBall, type PoolShot, PoolSim, placeOk } from "@yutopia/shared/pool";
 import { aimGuide, onTheEight, POOL_POCKETS, type PoolGame, unpackBalls, unpackGame } from "@yutopia/shared/pool-game";
 import { OFF_TABLE } from "@yutopia/shared/pool-throw";
@@ -9,11 +9,12 @@ import {
   tableAway,
   tableCentre,
   tableHeading,
-  tablePx,
   tableTurn,
+  tableZ,
   toTable,
   toWorld,
 } from "@yutopia/shared/tables";
+import type { PoolTable, WorldState } from "@yutopia/state";
 import type { WorldModel } from "../model";
 import { hud, toast } from "../store";
 import type { TableScene3 } from "../tp/tables3d";
@@ -29,15 +30,13 @@ import { chalk, clack, cueTip, cushion, pocketDrop } from "./sound";
 // the table is. At a table's controls: a game camera takes over (gameCam), and
 // the pointer aims, pulls back and shoots.
 
-// biome-ignore lint/suspicious/noExplicitAny: colyseus schema instances
-type S = any;
 type Send = (type: string, msg: Record<string, unknown>) => void;
 type Pt = { x: number; y: number };
 
 export interface TableHost {
   model: WorldModel;
   // biome-ignore lint/suspicious/noExplicitAny: a server message's body
-  room: { state: S; sessionId: string; onMessage?: (type: string, cb: (m: any) => void) => unknown };
+  room: { state: WorldState; sessionId: string; onMessage?: (type: string, cb: (m: any) => void) => unknown };
   send: Send;
   walkTo(p: Pt): void;
   face(x: number, y: number): void;
@@ -48,9 +47,8 @@ export interface TableHost {
 
 const K = "pool_table" as const;
 const G = TABLES[K];
-const ZPX = 45.25 * Math.cos(Math.PI / 6); // iso px of height per tile (tablePx's unit)
 const R_T = BALL_R * G.tpm; // a ball's radius, tiles
-const BALL_Z = tablePx(K, BALL_R); // px: a ball's centre
+const BALL_Z = tableZ(K, BALL_R); // m: a ball's centre
 const CLOTH_Z = G.top;
 const CUE_LEN = 1.45; // m
 const HEAR = 12; // tiles
@@ -200,7 +198,7 @@ export class PoolTables {
     for (const def of defs) {
       keep.add(def.id);
       const old = this.views.get(def.id);
-      if (old && old.def.x === def.x && old.def.y === def.y && (old.def.rot ?? 0) === (def.rot ?? 0)) {
+      if (old && old.def.x === def.x && old.def.y === def.y && quarterOf(old.def) === quarterOf(def)) {
         old.def = def;
         continue;
       }
@@ -237,13 +235,12 @@ export class PoolTables {
     if (this.focus === id) this.setFocus(null);
   }
 
-  private table(id: string): S | undefined {
+  private table(id: string): PoolTable | undefined {
     return this.host.room.state.pool?.get(id);
   }
-  private mySeat(t: S | undefined): number {
+  private mySeat(t: PoolTable | undefined): number {
     if (!t) return -1;
-    for (const [k, s] of t.seats as Map<string, S>)
-      if (s.sid === this.host.room.sessionId && !s.vortex) return Number(k);
+    for (const [k, s] of t.seats) if (s.sid === this.host.room.sessionId && !s.vortex) return Number(k);
     return -1;
   }
   private rolling(v: View) {
@@ -707,7 +704,7 @@ export class PoolTables {
   }
 
   private aimOf(
-    t: S | undefined,
+    t: PoolTable | undefined,
   ): { a: number; p: number; sx: number; sy: number; cx?: number; cy?: number; drag?: boolean } | null {
     if (!t?.aim) return null;
     try {
@@ -756,11 +753,11 @@ export class PoolTables {
   }
 
   // the seated players who aren't shooting hold their cues upright
-  private waitingSpots(v: View, t: S | undefined): { seat: number; x: number; y: number }[] {
+  private waitingSpots(v: View, t: PoolTable | undefined): { seat: number; x: number; y: number }[] {
     const out: { seat: number; x: number; y: number }[] = [];
     const g = v.game;
     if (!t || t.phase === "lobby") return out;
-    for (const [k, s] of t.seats as Map<string, S>) {
+    for (const [k, s] of t.seats) {
       const seat = Number(k);
       if (g && g.turn === seat && t.phase === "play") continue;
       if (s.vortex) {
@@ -776,7 +773,7 @@ export class PoolTables {
   // where Vortex stands: behind his shot when it's his turn (once he's drawing
   // the cue back; while he thinks, behind the cue ball looking down the table),
   // else at the foot end
-  private vortexSpot(v: View, t: S, seat: number): Pt & { d: number } {
+  private vortexSpot(v: View, t: PoolTable, seat: number): Pt & { d: number } {
     const g = v.game;
     const aim = this.aimOf(t);
     if (g && g.turn === seat && t.phase === "play") {
@@ -796,7 +793,7 @@ export class PoolTables {
   // The way round a table: its footprint grown by `gap`, as a loop (world
   // tiles) — Vortex goes round it, never across.
   private loop(def: WorldObjectDef, gap = 0.4) {
-    const rot = def.rot ?? 0;
+    const rot = quarterOf(def);
     const [w, h] = rot % 2 ? [G.h, G.w] : [G.w, G.h];
     const x0 = def.x - gap;
     const y0 = def.y - gap;
@@ -832,7 +829,7 @@ export class PoolTables {
     for (const [id, v] of this.views) {
       const t = this.table(id);
       if (!t) continue;
-      for (const [k, s] of t.seats as Map<string, S>) {
+      for (const [k, s] of t.seats) {
         if (!s.vortex) continue;
         const key = `pool:${id}:${k}`;
         const want = this.vortexSpot(v, t, Number(k));
@@ -867,7 +864,7 @@ export class PoolTables {
     for (const key of [...this.vortexAt.keys()]) if (!out.some((o) => o.key === key)) this.vortexAt.delete(key);
     return out;
   }
-  private resultOf(t: S): PoolInfo["result"] {
+  private resultOf(t: PoolTable): PoolInfo["result"] {
     try {
       return t.result ? JSON.parse(t.result) : null;
     } catch {
@@ -877,10 +874,9 @@ export class PoolTables {
 
   // ── 3D ───────────────────────────────────────────────────────────────────
   scene3d(into: TableScene3) {
-    const zt = (px: number) => px / ZPX;
     for (const [id, v] of this.views) {
       const o = v.def;
-      const rot = o.rot ?? 0;
+      const rot = quarterOf(o);
       const t = this.table(id);
       let trayI = 0;
       for (const b of v.shown) {
@@ -894,11 +890,11 @@ export class PoolTables {
           const [tx, ty] = tableTurn(G.w - 0.13, 0.66 + trayI++ * (2 * R_T + 0.004), rot, G.w, G.h);
           wx = o.x + tx;
           wy = o.y + ty;
-          z = 19.4 + R_T * ZPX;
+          z = 0.4951 + R_T; // (the tray's floor, the ball on it)
         } else if (f && drop) {
           // into the pocket: over the lip and down the hole (the 3D table's are real holes)
           ({ x: wx, y: wy } = toWorld(o, f.x, f.y));
-          z = BALL_Z - f.sink * G.tpm * ZPX;
+          z = BALL_Z - f.sink * G.tpm;
           if (f.flash >= 0) {
             const pk = POOL_POCKETS[drop.pocket];
             const w = toWorld(o, pk.x, pk.y);
@@ -906,7 +902,7 @@ export class PoolTables {
               key: `${id}:flash${b.id}`,
               x: w.x,
               y: w.y,
-              z: zt(CLOTH_Z) + 0.006,
+              z: CLOTH_Z + 0.006,
               r: holeR(pk.side) * G.tpm * (1.05 + 0.9 * f.flash),
               color: flashColor(b.id),
               alpha: 0.95 * (1 - f.flash),
@@ -918,7 +914,7 @@ export class PoolTables {
           id: b.id,
           x: wx,
           y: wy,
-          z: zt(z),
+          z,
           r: R_T,
           q: ballQuat(b.q as Q, rot),
           alpha,
@@ -957,12 +953,12 @@ export class PoolTables {
           const B = toWorld(o, butt[0], butt[1]);
           const cue = {
             key: `${id}:shot`,
-            tip: [A.x, A.y, zt(tablePx(K, tip[2]))] as [number, number, number],
-            butt: [B.x, B.y, zt(tablePx(K, butt[2]))] as [number, number, number],
+            tip: [A.x, A.y, tableZ(K, tip[2])] as [number, number, number],
+            butt: [B.x, B.y, tableZ(K, butt[2])] as [number, number, number],
           };
           into.cues.push(cue);
           // (plan 62: the shooter drawn at it — not Vortex, he walks there himself)
-          const s = (t.seats as Map<string, S>).get(String(g.turn));
+          const s = t.seats.get(String(g.turn));
           if (s?.sid && !s.vortex) {
             into.shooters ??= [];
             into.shooters.push({ sid: s.sid, tip: cue.tip, butt: cue.butt });
@@ -970,7 +966,7 @@ export class PoolTables {
         }
         if (mine && !v.sim && !this.drag && t.guide !== "pro") {
           const gd = aimGuide(g.balls, this.angle);
-          const z = zt(BALL_Z);
+          const z = BALL_Z;
           const W = (mx: number, my: number): [number, number, number] => {
             const w = toWorld(o, mx, my);
             return [w.x, w.y, z];
@@ -1011,7 +1007,7 @@ export class PoolTables {
               key: `${id}:pk${i}`,
               x: w.x,
               y: w.y,
-              z: zt(CLOTH_Z + 0.4),
+              z: CLOTH_Z + 0.0102,
               r: R_T * 2.4,
               color: this.called === i ? 0xffa630 : 0xf4ecd8,
               alpha: this.called === i ? 0.95 : 0.5,
@@ -1026,7 +1022,7 @@ export class PoolTables {
             key: `${id}:hand`,
             x: w.x,
             y: w.y,
-            z: zt(CLOTH_Z + 0.3),
+            z: CLOTH_Z + 0.0077,
             r: R_T * (2.3 + pulse * 0.35),
             color: ok ? 0xf4ecd8 : 0xd8553a,
             alpha: 0.8,
@@ -1045,7 +1041,7 @@ export class PoolTables {
         key: id,
         x: c.x,
         y: c.y,
-        z: zt(CLOTH_Z) + 1.25,
+        z: CLOTH_Z + 1.25,
         along: tableHeading(0, rot),
         len: 1.35 * G.tpm,
         ghost: this.focus === id && this.cam === "top" ? 1 : 0,
@@ -1060,7 +1056,7 @@ export class PoolTables {
     if (!v) return null;
     const o = v.def;
     const c = tableCentre(o);
-    const zTop = G.top / ZPX;
+    const zTop = G.top;
     const cue = v.shown.find((b) => b.id === 0 && b.down < 0);
     const t = this.table(o.id);
     const g = v.game;
@@ -1069,7 +1065,7 @@ export class PoolTables {
       const mine = g && this.mySeat(t) === g.turn;
       const a = mine ? this.angle : (this.aimOf(t)?.a ?? this.angle);
       const w = toWorld(o, cue.x, cue.y);
-      const h = tableHeading(a, o.rot ?? 0);
+      const h = tableHeading(a, quarterOf(o));
       const dx = Math.cos(h);
       const dy = Math.sin(h);
       return { eye: [w.x - dx * 1.25, w.y - dy * 1.25, zTop + 0.62], look: [w.x + dx * 1.1, w.y + dy * 1.1, zTop] };
@@ -1077,7 +1073,7 @@ export class PoolTables {
     // over the table, the long side across the picture; from the side I was on
     // when I came to it — picked once: I walk round the table to every shot,
     // and following me there turned the whole picture round
-    const h = tableHeading(0, o.rot ?? 0);
+    const h = tableHeading(0, quarterOf(o));
     const px = -Math.sin(h);
     const py = Math.cos(h);
     if (this.topSide?.id !== o.id) {
@@ -1098,7 +1094,7 @@ export class PoolTables {
   }
   tableAngle(id: string, h: number) {
     const v = this.views.get(id);
-    return v ? tableAngle(h, v.def.rot ?? 0) : h;
+    return v ? tableAngle(h, quarterOf(v.def)) : h;
   }
 
   dispose() {

@@ -1,4 +1,5 @@
 import { openingCut } from "@yutopia/shared";
+import { ART_PX, artPx } from "@yutopia/shared/units";
 import { type Draw, type Mat, type Sketch, sh, type V3 } from "./kit";
 import { K, M } from "./pal";
 import { WALL_HALF_T } from "./walls";
@@ -23,12 +24,12 @@ const SILL = T + 0.07; // the sill stands out of both faces
 const GLASS: Mat = { c: "#a9c2d0", top: "#a9c2d0", left: "#a9c2d0", right: "#8ea7b5", flat: true };
 const J = 0.06; // jamb width, tiles
 const BAR = 0.028; // glazing bar, tiles
-const PX = 39.19; // iso px a tile (heights against widths)
+const PX = ART_PX; // this drawing's px a metre up (heights against widths)
 // one colour on every face: fills read as one shape (their steps' sides would show)
 const FILL: Mat = { c: K.walnut, top: K.walnut, left: K.walnut, right: K.walnut, flat: true };
 
 export function windowItem(s: Sketch, kind: string, n: number) {
-  const [z0, z1] = openingCut(kind);
+  const [z0, z1] = openingCut(kind).map(artPx); // (this drawing's px)
   if (kind === "window_round") return porthole(s, z0, z1);
   const head = 3;
   const studio = kind === "window_studio";

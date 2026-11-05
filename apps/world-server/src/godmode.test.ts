@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
-import { GROUND_OFFSET, ROOM_NAME } from "@yutopia/shared";
+import { ROOM_NAME } from "@yutopia/shared";
 import { CHUNK, editsNow, heightAt, walkableTile } from "@yutopia/shared/grounds";
 import { encodeHeights, type GroundsEdits } from "@yutopia/shared/grounds-edits";
 import { Client, type Room } from "colyseus.js";
@@ -93,7 +93,7 @@ test("a member's publish is dropped; a draft against the rules refused, with why
 
 test("an admin's publish laid: the revision moves, the one standing there lifted onto the land", async () => {
   const a = await join(33, ADMIN);
-  const to = { x: FIELD.x - GROUND_OFFSET.x, y: FIELD.z - GROUND_OFFSET.y, level: 0 };
+  const to = { x: FIELD.x, y: FIELD.z, level: 0 };
   a.room.send("teleport", { to });
   await waitFor(() => a.me().level === 0 && Math.hypot(a.me().x - to.x, a.me().y - to.y) < 0.6);
   await sleep(1100);
@@ -151,7 +151,7 @@ test("god mode: a member can't go in; an admin's body marked building, on foot w
 
 test("a building published over someone: they're moved out of it, by its nearest wall, and told", async () => {
   const a = await join(38, ADMIN);
-  const to = { x: FIELD.x - GROUND_OFFSET.x, y: FIELD.z - GROUND_OFFSET.y, level: 0 };
+  const to = { x: FIELD.x, y: FIELD.z, level: 0 };
   a.room.send("teleport", { to });
   await waitFor(() => a.me().level === 0 && Math.hypot(a.me().x - to.x, a.me().y - to.y) < 0.6);
   await sleep(1100);
@@ -187,8 +187,8 @@ test("a building published over someone: they're moved out of it, by its nearest
   await waitFor(() => a.said.some((s) => s.type === "god:published"));
   const snap = a.said.find((s) => s.type === "snap")?.msg as { x: number; y: number } | undefined;
   assert.ok(snap, "set down somewhere");
-  const gx = snap.x + GROUND_OFFSET.x;
-  const gz = snap.y + GROUND_OFFSET.y;
+  const gx = snap.x;
+  const gz = snap.y;
   assert.ok(Math.abs(gz - FIELD.z) < 0.5, "along the wall from where they stood");
   assert.ok(gx < x0 && x0 - gx < 1.5, `out by the west wall: ${gx} (the wall at ${x0})`);
   assert.ok(a.said.some((s) => s.type === "toast" && /Field House stands here now/.test(String(s.msg.text))));
@@ -225,7 +225,7 @@ test("land grown (docs/plan/69, phase 10): a member's dropped, one not joined re
   let spot = { x: 32, z: 420 };
   for (let dx = 0; dx < 40 && !walkableTile(spot.x, spot.z); dx++) spot = { x: 32 + dx, z: 420 };
   assert.ok(walkableTile(spot.x, spot.z), "walked");
-  const to = { x: spot.x + 0.5 - GROUND_OFFSET.x, y: spot.z + 0.5 - GROUND_OFFSET.y, level: 0 };
+  const to = { x: spot.x + 0.5, y: spot.z + 0.5, level: 0 };
   a.room.send("teleport", { to });
   await waitFor(() => a.me().level === 0 && Math.hypot(a.me().x - to.x, a.me().y - to.y) < 0.6);
   await sleep(1500);

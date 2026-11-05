@@ -85,7 +85,7 @@ test("the tool: drawn south of the town, laid with the panel's biome; over it re
   t.down(at(0, 300));
   t.move(at(300, 700));
   // (drawn as it goes: red, with why; its size)
-  t.frame(at(300, 700), { x: 0, z: 0, y: 0 });
+  t.frame(at(300, 700), { y: 0 });
   assert.match(hud.get().god.grow.blocked ?? "", /over god-land-1/);
   assert.deepEqual(hud.get().god.grow.drawing, { x0: 0, z0: 288, x1: 320, z1: 704 });
   t.up(at(300, 700), false);

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
-import { ROOM_NAME } from "@yutopia/shared";
+import { ROOM_NAME, STOREY } from "@yutopia/shared";
 import { AIM_BLADE } from "@yutopia/shared/beam";
 import { ARM, ARMS, BODY, damageAt, FLARE, pvpDamage, SHADE_STATES } from "@yutopia/shared/dark";
 import { heightAt } from "@yutopia/shared/grounds";
@@ -22,7 +22,6 @@ process.env.YUTOPIA_WORLD_SECRET = "test";
 process.env.YUTOPIA_INTERNAL_SECRET = "test";
 
 const PORT = 30100 + Math.floor(Math.random() * 100); // (its own hundred: no two files share one — they run at once)
-const OFF = { x: -60, y: -10 };
 const POND = { x: -250, z: -60 };
 let server: { gracefullyShutdown: (exit?: boolean) => Promise<void> };
 const rooms: Room[] = [];
@@ -86,7 +85,7 @@ async function person(uid: number, sandbox: number): Promise<Person> {
   after(() => clearInterval(rec));
   return who;
 }
-const at = (bx: number, bz: number) => ({ x: bx - OFF.x, y: bz - OFF.y });
+const at = (bx: number, bz: number) => ({ x: bx, y: bz });
 async function standAt(p: Person, bx: number, bz: number) {
   const to = at(bx, bz);
   p.room.send("teleport", { to: { ...to, level: 0 } });
@@ -100,7 +99,6 @@ function aim(p: Person, x: number, y: number) {
     x: m.x,
     y: m.y,
     z: m.z,
-    d: 2,
     a: 0,
     seq: 0,
     mv: packMv("still") | MV_AIM,
@@ -113,11 +111,11 @@ function aim(p: Person, x: number, y: number) {
 function fire(p: Person, x: number, y: number, lag = 0, from?: { x: number; y: number }) {
   const m = me(p.room);
   const o = from ?? { x: m.x, y: m.y };
-  const oz = heightAt(m.x + OFF.x, m.y + OFF.y) + 1.35;
+  const oz = heightAt(m.x, m.y) + 1.35;
   const yaw = Math.atan2(y - o.y, x - o.x);
   const d = Math.hypot(x - o.x, y - o.y);
   // (down at its chest)
-  const pitch = Math.atan2(heightAt(x + OFF.x, y + OFF.y) + 1 - oz, d);
+  const pitch = Math.atan2(heightAt(x, y) + 1 - oz, d);
   p.room.send("arms:fire", { ox: o.x, oy: o.y, oz, yaw, pitch, lag, seed: 7 });
 }
 // (a shot at one of them mustn't pass through A on its way: A's off B's line to (x, y))
@@ -264,7 +262,7 @@ test("a flare thrown lands ahead, lit for 12 s: nobody comes into it", async () 
   assert.ok(Math.abs(f.until - f.at - FLARE.secs * 1000) < 1);
   assert.equal(b.inv?.pockets.find((s) => s?.id === "flare")?.n, 2, "one flare used");
   // B stands in its light; they're called up round it
-  await standAt(b, f.x + OFF.x + 1, f.y + OFF.y);
+  await standAt(b, f.x + 1, f.y);
   b.room.send("mod:dark", { mode: "normal", spawn: 4 });
   const t0 = Date.now();
   while (Date.now() - t0 < 5000) {
@@ -288,9 +286,10 @@ async function standIn(p: Person, x: number, y: number, level: number) {
 // a shot from my hand at someone standing at (x, y) (at their chest), as the client sends it
 function shootAt(p: Person, x: number, y: number, seed = 7, high = 1) {
   const m = me(p.room);
-  const oz = m.z + 1.35;
+  const fz = m.z - m.level * STOREY; // (over their floor: Player.z is the world's)
+  const oz = fz + 1.35;
   const yaw = Math.atan2(y - m.y, x - m.x);
-  const pitch = Math.atan2(m.z + high - oz, Math.hypot(x - m.x, y - m.y));
+  const pitch = Math.atan2(fz + high - oz, Math.hypot(x - m.x, y - m.y));
   p.room.send("arms:fire", { ox: m.x, oy: m.y, oz, yaw, pitch, lag: 0, seed });
 }
 const indoors = async (sandbox: number, level: number, ax: number, ay: number, bx: number, by: number) => {
@@ -310,7 +309,7 @@ const indoors = async (sandbox: number, level: number, ax: number, ay: number, b
 
 test("the lobby: B's revolver hits A for half what one of the shadowed takes; A's told who", async () => {
   // (the ground floor's lobby: a clear row through it, the glass doors' height)
-  const { a, b, at } = await indoors(65, 0, 73.5, 27.5, 63.5, 27.5);
+  const { a, b, at } = await indoors(65, 0, 13.5, 17.5, 3.5, 17.5);
   shootAt(b, at.x, at.y);
   await waitFor(() => b.hits.length === 1, 3000);
   assert.equal(b.hits[0].kind, "person");
@@ -342,7 +341,7 @@ test("the studio (level 4): a shot there counts too; four put one of us down, th
 });
 
 test("the shotgun: each pellet that meets one of us takes half its own", async () => {
-  const { a, b, at } = await indoors(67, 0, 66.5, 27.5, 63.5, 27.5);
+  const { a, b, at } = await indoors(67, 0, 6.5, 17.5, 3.5, 17.5);
   b.room.send("arms:draw", { slot: 1 });
   await waitFor(() => me(b.room).gun === "shotgun");
   await sleep(ARMS.shotgun.rate * 1000 + 50);
@@ -356,12 +355,12 @@ test("the shotgun: each pellet that meets one of us takes half its own", async (
 });
 
 test("another floor: nobody's hit; a wall on the way stops it", async () => {
-  // out by the building's west wall (the ground floor's coords), A hit where they stand
-  const { a, b, at } = await indoors(68, 0, 10.5, 22.5, 4.5, 22.5);
+  // in the lobby, A hit where they stand
+  const { a, b, at } = await indoors(68, 0, 13.5, 17.5, 3.5, 17.5);
   shootAt(b, at.x, at.y);
   await waitFor(() => b.hits.length === 1, 3000);
   await waitFor(() => me(a.room).hp === 75);
-  // the same spot on the studio's floor (level 4): B's shot there meets nobody
+  // right over it on the studio's floor (level 4): B's shot there meets nobody
   await standIn(a, at.x, at.y, 4);
   await sleep(ARMS.revolver.rate * 1000);
   shootAt(b, at.x, at.y, 8);
@@ -370,9 +369,9 @@ test("another floor: nobody's hit; a wall on the way stops it", async () => {
   assert.equal(b.hits.length, 1, "on another floor: missed");
   assert.equal(me(a.room).hp, 75);
   // A in the south offices, the lobby's east wall between them
-  const there = await standIn(a, 84.5, 34.5, 0);
-  const here = await standIn(b, 80.5, 34.5, 0);
-  assert.ok(there.x > 82.2 && here.x < 81.8, `either side of the wall: B ${here.x}, A ${there.x}`);
+  const there = await standIn(a, 24.5, 24.5, 0);
+  const here = await standIn(b, 20.5, 24.5, 0);
+  assert.ok(there.x > 22.2 && here.x < 21.8, `either side of the wall: B ${here.x}, A ${there.x}`);
   aim(b, there.x, there.y);
   await sleep(ARMS.revolver.rate * 1000 + 50);
   shootAt(b, there.x, there.y, 9);
@@ -395,7 +394,7 @@ test("a flare thrown indoors lands on that floor, lit there", async () => {
 
 // ── the feel's rules (docs/plan/32-the-arms.md) ────────────────────────────
 test("a gun's up only after its draw: a shot before it isn't; Player.arm says drawing, then idle", async () => {
-  const { a, b, at } = await indoors(70, 0, 73.5, 27.5, 63.5, 27.5);
+  const { a, b, at } = await indoors(70, 0, 13.5, 17.5, 3.5, 17.5);
   b.room.send("arms:draw", { slot: -1 });
   await waitFor(() => me(b.room).gun === "");
   b.room.send("arms:draw", { slot: 0 });
@@ -411,7 +410,13 @@ test("a gun's up only after its draw: a shot before it isn't; Player.arm says dr
 });
 
 test("the head: a shot at A's head takes half again; the server's spread goes out with the shot", async () => {
-  const { a, b, at } = await indoors(71, 0, 73.5, 27.5, 63.5, 27.5);
+  const { a, b, at } = await indoors(71, 0, 13.5, 17.5, 3.5, 17.5);
+  console.log(
+    "[headdbg] A",
+    JSON.stringify({ x: me(a.room).x, y: me(a.room).y, z: me(a.room).z, mv: me(a.room).mv, a: me(a.room).a }),
+    "B",
+    JSON.stringify({ x: me(b.room).x, y: me(b.room).y, z: me(b.room).z }),
+  );
   shootAt(b, at.x, at.y, 7, 1.68);
   await waitFor(() => b.hits.length === 1, 3000);
   assert.equal(b.hits[0].head, true);
@@ -428,7 +433,7 @@ test("the head: a shot at A's head takes half again; the server's spread goes ou
 });
 
 test("the double-barrel at 10 tiles: each pellet that meets A takes less than at 3", async () => {
-  const { a, b, at } = await indoors(72, 0, 73.5, 27.5, 63.5, 27.5);
+  const { a, b, at } = await indoors(72, 0, 13.5, 17.5, 3.5, 17.5);
   b.room.send("arms:draw", { slot: 1 });
   await waitFor(() => me(b.room).gun === "shotgun");
   await sleep(ARMS.shotgun.draw * 1000 + 50);
@@ -443,7 +448,7 @@ test("the double-barrel at 10 tiles: each pellet that meets A takes less than at
 });
 
 test("the double-barrel's reload: broken open, a shell at a time, shut; a shot while open snaps it shut", async () => {
-  const { b } = await indoors(73, 0, 73.5, 27.5, 63.5, 27.5);
+  const { b } = await indoors(73, 0, 13.5, 17.5, 3.5, 17.5);
   b.room.send("arms:draw", { slot: 1 });
   await waitFor(() => me(b.room).gun === "shotgun");
   await sleep(ARMS.shotgun.draw * 1000 + 50);

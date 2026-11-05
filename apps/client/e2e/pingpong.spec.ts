@@ -80,7 +80,7 @@ test("ping-pong: serve to Vortex with the mouse, he plays it back — seen from 
       const p = { x: Math.floor(sp.x) + dx, y: Math.floor(sp.y) + dy };
       await ana.evaluate(
         ([i, q]) =>
-          (window as any).__yutopia.send("obj:put", { id: i, kind: "pingpong_table", x: q.x, y: q.y, rot: 0 }),
+          (window as any).__yutopia.send("obj:put", { id: i, kind: "pingpong_table", x: q.x, y: q.y, yaw: 0 }),
         [id, p] as const,
       );
       await ana.waitForTimeout(600);
@@ -115,7 +115,7 @@ test("ping-pong: serve to Vortex with the mouse, he plays it back — seen from 
         ([o, x, y, z]) => {
           const w = (window as any).__yutopia;
           const r = w.hostRect();
-          const p = w.model.worldToClient(o.x + 2 + x * 1.26, o.y + 1 - y * 1.26, 24 + z * 1.26 * 39.19);
+          const p = w.model.worldToClient(o.x + 2 + x * 1.26, o.y + 1 - y * 1.26, 0.6124 + z * 1.26);
           return { x: r.left + p.x, y: r.top + p.y };
         },
         [T, mx, my, mz] as const,

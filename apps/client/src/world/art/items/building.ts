@@ -1,4 +1,5 @@
 import { CAR_COLOURS } from "@yutopia/shared";
+import { ART_PX } from "@yutopia/shared/units";
 import { shade } from "../palette";
 import type { Mat, Sketch } from "./kit";
 import { K, M } from "./pal";
@@ -7,7 +8,7 @@ import { K, M } from "./pal";
 // elevator's car, and outside the lot's cars and lamp posts. Heights in iso px
 // (39.19 a tile), as every item.
 
-const P = 39.19; // px a tile up
+const P = ART_PX; // px a metre up
 const STOREY = 3.5 * P;
 const HALF = STOREY / 2;
 const N = 9; // steps a flight

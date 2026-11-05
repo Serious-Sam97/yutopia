@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { WorldObjectDef } from "@yutopia/shared";
+import type { WorldState } from "@yutopia/state";
 import { type TargetHost, Targets } from "./targets";
 
 // The focus (docs/plan/56-the-controls.md C): what's in front of me, near, wins; behind me only
@@ -25,7 +26,8 @@ function host(o: {
         ),
         npcs: new Map(),
         toys: new Map(),
-      },
+        // (a stand-in: only what the targets read — the room's state is the server's schema)
+      } as unknown as WorldState,
     },
     level: 0,
     me: () => ({ x: 0, y: 0 }),

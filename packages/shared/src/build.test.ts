@@ -1,21 +1,28 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { canPlace, TEMPLATES } from "./build.ts";
-import { entry, placedFootprint, rotOf, variantOf, type WorldObjectDef } from "./catalog.ts";
+import { entry, placedFootprint, quarterOf, quarterYaw, rotOf, variantOf, type WorldObjectDef } from "./catalog.ts";
 import { dressItems } from "./dressing.ts";
 import { CHAIRS } from "./fam/gameroom.ts";
-import { chairAt, DESK_PULL, Grid, seatFront } from "./grid.ts";
+import { chairAt, DESK_PULL, seatFront } from "./ground.ts";
 import { hungOn, wallSpan } from "./hang.ts";
 import { holdsItems, vWall } from "./map.ts";
 import { edgeBlocker } from "./map-edit.ts";
 import { studio } from "./maps/studio.ts";
-import { findPath } from "./path.ts";
+import { Place } from "./physics/place.ts";
+import { testWorld } from "./physics/testing.ts";
 import { carried, hostOf, riders, splitAll, splitBuiltIns, surfaceAt, topAt, topCentre, topRect } from "./tops.ts";
 
-const desk = (x: number, y: number, rot = 0): WorldObjectDef => ({ id: "desk", kind: "desk", x, y, rot });
+const desk = (x: number, y: number, rot = 0): WorldObjectDef => ({
+  id: "desk",
+  kind: "desk",
+  x,
+  y,
+  yaw: quarterYaw(rot),
+});
 // a tabletop with its back corner on world cell (qx, qy) (quarter tiles)
 const top = (id: string, d: string, qx: number, qy: number, rot = 0): WorldObjectDef =>
-  topAt({ id, kind: "tabletop", x: 0, y: 0, rot, props: { d } }, qx, qy);
+  topAt({ id, kind: "tabletop", x: 0, y: 0, yaw: quarterYaw(rot), props: { d } }, qx, qy);
 
 test("a desk takes as many things as fit, a quarter tile at a time", () => {
   const free = studio.objects.filter((o) => o.x > 20 || o.y > 20); // clear a corner of the tracking room
@@ -40,11 +47,11 @@ test("a desk takes as many things as fit, a quarter tile at a time", () => {
 });
 
 test("a shelf's top is narrower than the shelf", () => {
-  const shelf: WorldObjectDef = { id: "s", kind: "tape_shelf", x: 5, y: 5, rot: 0 };
+  const shelf: WorldObjectDef = { id: "s", kind: "tape_shelf", x: 5, y: 5, yaw: quarterYaw(0) };
   assert.ok(hostOf([shelf], top("p", "photo", 21, 21)), "the middle of the top");
   assert.ok(!hostOf([shelf], top("p", "photo", 21, 20)), "the front edge is open shelving");
   // turned, the narrow top turns with it
-  const turned = { ...shelf, rot: 1 };
+  const turned = { ...shelf, yaw: quarterYaw(1) };
   assert.ok(hostOf([turned], top("p", "photo", 21, 21)));
   assert.ok(!hostOf([turned], top("p", "photo", 20, 21)));
 });
@@ -55,7 +62,7 @@ test("what stands on a surface rides along when it moves or turns, and turns too
   const at = (after: WorldObjectDef) =>
     carried(before, after, [before, kb]).map((t) => {
       const c = topCentre(t);
-      return [c.x, c.y, t.rot];
+      return [c.x, c.y, quarterOf(t)];
     });
   assert.deepEqual(at(desk(10, 2)), [[11.5, 2.125, 0]], "moved: same spot");
   // a half turn: the keyboard goes to the other side, facing the other way
@@ -64,7 +71,7 @@ test("what stands on a surface rides along when it moves or turns, and turns too
   const turned = carried(before, desk(5, 5, 1), [before, kb])[0];
   const back = carried(desk(5, 5, 1), before, [desk(5, 5, 1), turned])[0];
   assert.deepEqual(topRect(back), topRect(kb));
-  assert.equal(back.rot, 0);
+  assert.equal(quarterOf(back), 0);
   // only things on it come along
   assert.deepEqual(riders(before, [before, top("far", "mug", 80, 80)]), []);
 });
@@ -83,12 +90,12 @@ test("bare furniture: what used to be drawn on it becomes real things, once", ()
     assert.ok(canPlace(studio, placed, t), `${t.props?.d} fits`);
     placed = [...placed, t];
   }
-  assert.ok(s.add.filter((t) => t.kind === "computer").every((t) => t.rot === 2));
+  assert.ok(s.add.filter((t) => t.kind === "computer").every((t) => quarterOf(t) === 2));
   assert.ok(s.add.every((t) => t.props?.z === entry("desk").surface));
   // a second run finds it split
   assert.equal(splitBuiltIns(s.self), null);
   // the radio steps onto a side table of its own
-  const r = splitBuiltIns({ id: "radio", kind: "radio", x: 3, y: 4, rot: 0 });
+  const r = splitBuiltIns({ id: "radio", kind: "radio", x: 3, y: 4, yaw: quarterYaw(0) });
   assert.equal(r?.add[0].kind, "side_table");
   assert.ok(r && canPlace(studio, r.add, r.self));
   // a whole room: hosts first, ids stable, the second run changes nothing
@@ -130,7 +137,13 @@ test("a room's hidden pieces keep the rules out of the way; nothing's generated 
 });
 
 test("wall items hang on a north wall, or turned (rot 3) on a west wall", () => {
-  const board = (x: number, y: number, rot = 0): WorldObjectDef => ({ id: "wb", kind: "whiteboard", x, y, rot });
+  const board = (x: number, y: number, rot = 0): WorldObjectDef => ({
+    id: "wb",
+    kind: "whiteboard",
+    x,
+    y,
+    yaw: quarterYaw(rot),
+  });
   // a stretch of the studio's west wall that holds things (no window, two tiles)
   const y = Array.from({ length: studio.height }, (_, i) => i).find(
     (i) =>
@@ -158,9 +171,10 @@ test("wall items hang on a north wall, or turned (rot 3) on a west wall", () => 
 test("a chair at a desk pulls in to it, sat on; one with nothing before it stays (plan 62)", () => {
   // (the chair's back on +y at rot 2: its sitter faces −y, the desk there)
   const d = desk(6, 6);
-  const at: WorldObjectDef = { id: "c", kind: "chair", x: 6, y: 7, rot: 2 };
-  const alone: WorldObjectDef = { id: "a", kind: "chair", x: 10, y: 7, rot: 2 };
-  const g = Grid.from(studio, [d, at, alone], undefined, { dressing: false });
+  const at: WorldObjectDef = { id: "c", kind: "chair", x: 6, y: 7, yaw: quarterYaw(2) };
+  const alone: WorldObjectDef = { id: "a", kind: "chair", x: 10, y: 7, yaw: quarterYaw(2) };
+  // (a floor's seats are its things': no physics needed to ask them)
+  const g = new Place(null, studio, [d, at, alone]);
   assert.equal(g.seatAt(6.5, 7.5)?.pull, DESK_PULL);
   assert.deepEqual(g.seatSpot(6.5, 7.5), { x: 6.5, y: 7.5 - DESK_PULL });
   // (still on the chair's own tile: it's still the seat you're on)
@@ -168,16 +182,18 @@ test("a chair at a desk pulls in to it, sat on; one with nothing before it stays
   assert.equal(g.seatAt(10.5, 7.5)?.pull, 0);
   assert.deepEqual(g.seatSpot(10.5, 7.5), { x: 10.5, y: 7.5 });
   // (turned away from the desk: not pulled)
-  const back = Grid.from(studio, [d, { ...at, rot: 0 }], undefined, { dressing: false });
+  const back = new Place(null, studio, [d, { ...at, yaw: 0 }]);
   assert.equal(back.seatAt(6.5, 7.5)?.pull, 0);
 });
 
 // (plan 70) the chess table's chairs face each other across the board, at every turn of the table:
 // each its own seat, sat in at the chair's middle, facing the board's middle; the table between them
-test("a chess table's two chairs: seats facing the board at every turn, sat in at their middles", () => {
+test("a chess table's two chairs: seats facing the board at every turn, sat in at their middles", async () => {
   for (let rot = 0; rot < 4; rot++) {
-    const t: WorldObjectDef = { id: "ch", kind: "chess_table", x: 6, y: 6, rot };
-    const g = Grid.from(studio, [t], undefined, { dressing: false });
+    const t: WorldObjectDef = { id: "ch", kind: "chess_table", x: 6, y: 6, yaw: quarterYaw(rot) };
+    const wt = await testWorld(studio, [t]);
+    const g = wt.place();
+    const nav = (await wt.nav()).floor(0);
     const { w, h } = placedFootprint(t);
     const mid = { x: 6 + w / 2, y: 6 + h / 2 };
     const spots = CHAIRS.chess_table.map((c) => {
@@ -194,20 +210,23 @@ test("a chess table's two chairs: seats facing the board at every turn, sat in a
       assert.ok(g.fits(spot.x, spot.y), `rot ${rot}: a body fits there`);
       // (and a walk gets there: its tile stepped onto from beside the table)
       assert.ok(
-        findPath(g, { x: mid.x + (spot.x - mid.x) * 2.2, y: mid.y + (spot.y - mid.y) * 2.2 }, spot),
+        nav?.path({ x: mid.x + (spot.x - mid.x) * 2.2, y: mid.y + (spot.y - mid.y) * 2.2 }, spot),
         `rot ${rot}: walked to`,
       );
       return spot;
     });
     assert.ok(Math.hypot(spots[0].x - spots[1].x, spots[0].y - spots[1].y) > 1.2, "the chairs at either end");
+    wt.dispose();
   }
 });
 
-test("a sofa is three seats, walkable, facing the way it's turned", () => {
-  const sofa: WorldObjectDef = { id: "s", kind: "sofa", x: 6, y: 6, rot: 2 };
-  const g = Grid.from(studio, [sofa], undefined, { dressing: false });
+test("a sofa is three seats, walkable, facing the way it's turned", async () => {
+  const sofa: WorldObjectDef = { id: "s", kind: "sofa", x: 6, y: 6, yaw: quarterYaw(2) };
+  const w = await testWorld(studio, [sofa]);
+  const g = w.place();
   for (const x of [6, 7, 8]) {
     assert.ok(g.ok(x, 6), `tile ${x} is walkable`);
-    assert.deepEqual(g.seats.get(g.idx(x, 6)), { id: "s", rot: 2, kind: "sofa", pull: 0 });
+    assert.deepEqual(g.seats.get(`${x},6`), { id: "s", rot: 2, kind: "sofa", pull: 0 });
   }
+  w.dispose();
 });

@@ -1,5 +1,4 @@
 import {
-  backAt,
   cutsSig,
   type DressItem,
   type DressKind,
@@ -13,7 +12,6 @@ import {
   hangOf,
   hangStrip,
   hasActions,
-  hWall,
   isDoorKind,
   isFloor,
   isOpening,
@@ -24,14 +22,18 @@ import {
   NO_WALL,
   openingEdges,
   placedFootprint,
+  quarterOf,
   rotOf,
   tileAt,
   topCentre,
-  vWall,
+  WALL_H,
   type WallCut,
   type WorldObjectDef,
   wallCuts,
 } from "@yutopia/shared";
+import { crossings, slabBoxes } from "@yutopia/shared/physics/structure-solids";
+import type { Ring } from "@yutopia/shared/structure";
+import { ART_PX, artPx } from "@yutopia/shared/units";
 import {
   BackSide,
   Box3,
@@ -58,15 +60,20 @@ import {
   UnsignedByteType,
 } from "three";
 import { FloorBake } from "../art/floors";
-import { piece, WALL_H } from "../art/furniture";
+import { piece, WALL_H as WALL_PX } from "../art/furniture";
 import { INK } from "../art/items/kit";
 import { type LightSource, lightSources } from "../art/light";
 import { ChessMen3, isBoard } from "../furn/chessmen3d";
 import { animateLive } from "../furn/liveparts";
-import { celLit } from "../furn/look";
 import { isNative, isNativeDress, liveInto, nativeDressInto, nativeInto, openingInto } from "../furn/native";
+import { CEL, fadePiece, type Piece, yuLit } from "../look/yulit";
 import { boxInParent, type Slab } from "./below-cull";
-import { type Geo, MeshSketch, type Opts3, Out, zt } from "./kit3d";
+import { type Geo, MeshSketch, type Opts3, Out } from "./kit3d";
+import { edgesOfMap, type FreeWall, piecesOf, turnOut, type WallEdges } from "./walls3d";
+
+// (the walls and posts are still the item art's drawings, measured in its px: phase 8 redraws them)
+const zt = (px: number) => px / ART_PX;
+
 import { poolTable3 } from "./pooltable3d";
 
 // the item drawings: the same lazy chunk the iso engine loads (art/scene.ts)
@@ -84,7 +91,9 @@ export type Items = typeof import("../art/items");
 //   tall   — furniture taller than 1.25 tiles stands on its own and fades too
 //   floor  — baked again only when what stands on it moves
 
-const AREA = 6; // tiles per merged area side
+/** A cell's side (m): the floor's walls and things are merged a cell at a time, one mesh per
+ *  material, cells square to the world (docs/plan/72 phase 8: an edit rebuilds only its cells). */
+const CELL = 8;
 const TALL = 1.25; // tiles: furniture taller than this can fade
 const RUN = 4; // wall edges per fade group
 // the merged meshes' fade flags: a slot per fade group, 255 drawn, 0 dropped (World3.faded)
@@ -109,7 +118,7 @@ export interface FadeGroup {
   x0: number;
   y0: number;
   x1: number;
-  y1: number; // plan AABB, tiles
+  y1: number; // plan AABB, the world's (World3.corner added)
   top: number; // tiles
   objects: Object3D[];
   alpha: number;
@@ -119,7 +128,7 @@ export interface FadeGroup {
   index?: number; // its slot in the merged meshes' fade flags (World3.faded)
 }
 
-// Something you can click: its 3D bounds (tiles; z = height).
+// Something you can click: its 3D bounds (the world's, World3.corner added; z = height).
 export interface Pick3 {
   id: string;
   use: boolean; // something to use (live clicks); everything is picked in build mode
@@ -158,26 +167,39 @@ export class World3 {
   };
   picks: Pick3[] = [];
   fades: FadeGroup[] = [];
+  /** Where this floor's own frame is in the world (its map's corner: a world floor's drawn from its
+   *  local view, shared structure/fold.ts — tp/view.ts places `root` there). Its picks and fades
+   *  are the world's. */
+  get corner(): { x: number; y: number } {
+    return { x: this.map.ox ?? 0, y: this.map.oy ?? 0 };
+  }
+  /** the cell a place of this floor is in (cellKey) */
+  private cellOf(x: number, y: number): string {
+    return cellKey(x, y, this.corner);
+  }
   cards: Object3D[] = []; // turned to the camera every frame
   lights: LightSource[] = [];
   stats = { triangles: 0, meshes: 0, cards: 0, ms: 0, areas: 0 };
 
   private walls: Built[] = [];
   private wallFades: FadeGroup[] = [];
+  private wallParts = new Map<string, { built: Built; fade?: FadeGroup }>();
   private areas = new Map<string, { sig: string; built: Built }>();
   private tall = new Map<string, { sig: string; built: Built; fade: FadeGroup }>();
   private tallIds = new Set<string>(); // things known to stand tall (drawn on their own)
-  private floor: { meshes: Mesh[]; sig: string } | null = null;
+  private floor: { meshes: Mesh[]; chunks: Map<string, Mesh>; sig: string } | null = null;
   private objects: WorldObjectDef[] = [];
   private cardN = 0;
   private posts = new Set<string>(); // "x,y" of every wall post (doors stop at them too)
   private cuts = new Map<string, WallCut>(); // doors' and windows' holes, by edge
+  /** the floor's walls as drawn (the structure's: walls3d.ts; a map's edges where there's none) */
+  private edges: WallEdges;
   private cutSig = "";
   // a floor that isn't mine never fades: its walls' solid parts drawn merged (setFading)
   private fading = true;
   // ── drawn merged (docs/plan/38-the-lag.md, round 4) ──
   // Every opaque piece — the walls' low parts and runs, each area's things, the tall
-  // things — is drawn merged an area (AREA tiles) at a time, one mesh per material; the
+  // things — is drawn merged a cell (CELL m, the world's) at a time, one mesh per material; the
   // pieces themselves wait out of the scene (`held`): three walks every object in the scene
   // every frame, and on a big furnished floor that walk cost more than the drawing. Each
   // merged point carries its fade group (`aFade`, 0: none). A group that fades has its
@@ -200,18 +222,26 @@ export class World3 {
   private loose = new Map<string, { group: Group; box: Box3; dirty: boolean; world: Box3; at: number[] }>();
   private looseHid = new Set<Group>();
 
-  // `light`: how lit materials take the room's light (the iso light map)
+  // `light`: the room's light, as a part of a lit material (tp/light3d.ts Light3.piece; none: three's
+  // lights alone)
   constructor(
     private items: Items,
-    readonly map: MapDef,
+    public map: MapDef,
     objects: WorldObjectDef[],
     private anisotropy = 4,
-    light: (m: Material) => void = () => {},
+    light: ((m: Material) => Piece) | null = null,
     // the stairwells (shared wellsOf): no floor where the stairs from below come
     // up, no ceiling over this floor's own
     private wells: { floor: Set<string>; ceiling: Set<string> } = { floor: new Set(), ceiling: new Set() },
+    edges?: WallEdges,
+    /** the floor's indoor slabs' rings (its own frame, read even-odd: the structure's — the ceiling
+     *  over them); none: its tiles */
+    private rings: Ring[] | null = null,
+    /** all its slabs' rings (the lot's too: what's floor at all — below-cull's slab and shell) */
+    private floorRings: Ring[] | null = null,
   ) {
     const t0 = performance.now();
+    this.edges = edges ?? edgesOfMap(map);
     // (the floor is moved by the view, which makes its matrix then: not every frame)
     this.root.matrixAutoUpdate = false;
     this.lightFn = light;
@@ -220,8 +250,8 @@ export class World3 {
     for (const m of [this.materials.lit, this.materials.clearBack, this.materials.clearFront]) m.userData.fade = true;
     // (the kit's things are in the lit buffers, marked: shaded cel, as the people — world/furn/look.ts)
     this.materials.lit.userData.cel = true;
-    this.withFade(this.materials.glow);
-    this.withFade(this.materials.ink);
+    yuLit(this.materials.glow, { fade: this.fade });
+    yuLit(this.materials.ink, { fade: this.fade });
     this.light(this.materials.lit);
     this.light(this.materials.clear);
     this.light(this.materials.clearBack);
@@ -233,15 +263,21 @@ export class World3 {
     this.stats.ms = performance.now() - t0;
   }
 
-  // ── walls (once per layout) ────────────────────────────────────────────────
-  private buildWalls() {
+  // ── walls (once per layout; a new layout: again only the pieces it touches) ──
+  // The walls are pieces, each drawn and merged on its own (`wallParts`): the low parts an
+  // area at a time (`low|<area>`), the upper parts a run of up to RUN edges along a line at a
+  // time (`run|h|<y>|<n>`, each fading as one), and the ceiling. `only`: build just these
+  // pieces (World3.relayout — what an edit touched), the rest kept as they are.
+  private buildWalls(only?: Set<string>) {
     const { post, wall, WALL_HALF_T } = this.items;
     const map = this.map;
+    const E = this.edges;
+    const want = (k: string) => !only || only.has(k);
     const low = new Map<string, Out>();
-    const lowOf = (x: number, y: number) => getOr(low, areaKey(x, y), () => new Out());
+    const lowOf = (x: number, y: number) => getOr(low, this.cellOf(x, y), () => new Out());
     const runs = new Map<string, { out: Out; x0: number; y0: number; x1: number; y1: number; top: number }>();
     const runOf = (dir: "h" | "v", x: number, y: number, top: number) => {
-      const k = dir === "h" ? `h|${y}|${Math.floor(x / RUN)}` : `v|${x}|${Math.floor(y / RUN)}`;
+      const k = runKey(dir, x, y);
       const r = getOr(runs, k, () => ({ out: new Out(), x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9, top: 0 }));
       const [ax, ay, bx, by] = dir === "h" ? [x, y - 0.1, x + 1, y + 0.1] : [x - 0.1, y, x + 0.1, y + 1];
       r.x0 = Math.min(r.x0, ax);
@@ -257,36 +293,39 @@ export class World3 {
     const posts = new Map<string, { height: number; ch: string; e: string; w: string; s: string }>();
     for (let Y = 0; Y <= map.height; Y++)
       for (let X = 0; X <= map.width; X++) {
-        const w = hWall(map, X - 1, Y);
-        const e = hWall(map, X, Y);
-        const n = vWall(map, X, Y - 1);
-        const s = vWall(map, X, Y);
+        const w = E.h(X - 1, Y);
+        const e = E.h(X, Y);
+        const n = E.v(X, Y - 1);
+        const s = E.v(X, Y);
         const touching = [w, e, n, s].filter(isWallEdge);
         if (!touching.length) continue;
         const straight =
           (isWallEdge(w) && isWallEdge(e) && !isWallEdge(n) && !isWallEdge(s) && half(w) === half(e)) ||
           (isWallEdge(n) && isWallEdge(s) && !isWallEdge(w) && !isWallEdge(e) && half(n) === half(s));
         if (straight) continue;
-        const height = touching.every(half) ? 34 : WALL_H;
+        const height = touching.every(half) ? 34 : WALL_PX;
         posts.set(`${X},${Y}`, { height, ch: touching.find((c) => !half(c)) ?? touching[0], e, w, s });
       }
     const addWall = (dir: "h" | "v", x: number, y: number, ch: string) => {
+      const wantLow = want(`low|${this.cellOf(x, y)}`);
+      const wantRun = want(`run|${runKey(dir, x, y)}`);
+      if (!wantLow && !wantRun) return;
       // a wall stops at the post's faces: running on to the joint, its faces
       // would lie in the post's own (in other colours) and flicker
       const [ax, ay, bx, by] = dir === "h" ? [x, y, x + 1, y] : [x, y, x, y + 1];
       const a0 = posts.has(`${ax},${ay}`) ? WALL_HALF_T : 0;
       const a1 = posts.has(`${bx},${by}`) ? 1 - WALL_HALF_T : 1;
       const clip = dir === "h" ? { x0: a0, x1: a1, y0: -1, y1: 1 } : { x0: -1, x1: 1, y0: a0, y1: a1 };
-      const top = ch === HALF_WALL ? 34 : WALL_H;
-      const run = runOf(dir, x, y, zt(top));
-      const back = backAt(map, { dir, x, y });
+      const top = ch === HALF_WALL ? 34 : WALL_PX;
+      const run = wantRun ? runOf(dir, x, y, zt(top)) : null;
+      const back = E.back({ dir, x, y });
       const c = this.cuts.get(edgeKey({ dir, x, y }));
-      const cut = c ? ([c.z0, c.z1] as const) : null;
+      const cut = c ? ([artPx(c.z0), artPx(c.z1)] as const) : null; // (the art's px)
       if (back === NO_WALL) {
         // one material through and through: drawn once, its face mirrored onto the other side
         const at = { w: 1, h: 1, seed: 0.37, clip, at: [x, y] as [number, number], mirror: true };
-        wall(sketch({ ...at, out: lowOf(x, y) }), dir, ch, "low", undefined, cut);
-        wall(sketch({ ...at, out: run.out }), dir, ch, "high", undefined, cut);
+        if (wantLow) wall(sketch({ ...at, out: lowOf(x, y) }), dir, ch, "low", undefined, cut);
+        if (run) wall(sketch({ ...at, out: run.out }), dir, ch, "high", undefined, cut);
         return;
       }
       // two faces: the front half as it is, the back half drawn as the front of
@@ -294,73 +333,212 @@ export class World3 {
       const bch = isWindow(ch) ? back.toUpperCase() : back;
       const behind: [number, number] = dir === "h" ? [x, y - 1] : [x - 1, y];
       const bclip = dir === "h" ? { x0: a0, x1: a1, y0: 0, y1: 2 } : { x0: 0, x1: 2, y0: a0, y1: a1 };
-      for (const [part, out] of [
-        ["low", lowOf(x, y)],
-        ["high", run.out],
-      ] as const) {
+      const parts: ["low" | "high", Out][] = [];
+      if (wantLow) parts.push(["low", lowOf(x, y)]);
+      if (run) parts.push(["high", run.out]);
+      for (const [part, out] of parts) {
         wall(sketch({ w: 1, h: 1, seed: 0.37, clip, at: [x, y], out }), dir, ch, part, "front", cut);
         wall(sketch({ w: 1, h: 1, seed: 0.37, clip: bclip, at: behind, rot: 2, out }), dir, bch, part, "back", cut);
       }
     };
     for (let y = 0; y <= map.height; y++)
       for (let x = 0; x < map.width; x++) {
-        const ch = hWall(map, x, y);
+        const ch = E.h(x, y);
         if (isWallEdge(ch)) addWall("h", x, y, ch);
       }
     for (let y = 0; y < map.height; y++)
       for (let x = 0; x <= map.width; x++) {
-        const ch = vWall(map, x, y);
+        const ch = E.v(x, y);
         if (isWallEdge(ch)) addWall("v", x, y, ch);
       }
+    // walls on neither axis, or off the metres (walls3d.ts): pieces along their own line, each the
+    // x-wall's piece turned and placed; a post at each end the lattice's posts don't hold
+    const freeEnds = new Set<string>();
+    if (!only || only.has(FREE))
+      for (const fw of E.free)
+        this.freeWall(fw, posts, freeEnds, (id) => getOr(low, `${FREE}|${id}`, () => new Out()), runs, sketch);
     this.posts = new Set(posts.keys());
     for (const [key, { height, ch, e, w, s }] of posts) {
       const [X, Y] = key.split(",").map(Number);
-      post(sketch({ w: 1, h: 1, at: [X, Y], out: lowOf(X, Y) }), height, "low", ch);
+      if (want(`low|${this.cellOf(X, Y)}`))
+        post(sketch({ w: 1, h: 1, at: [X, Y], out: lowOf(X, Y) }), height, "low", ch);
       // the upper part fades with the run it belongs to most (h first)
-      const hx = isWallEdge(e) ? X : X - 1;
-      const run =
-        isWallEdge(e) || isWallEdge(w)
-          ? runOf("h", Math.max(0, hx), Y, zt(height))
-          : runOf("v", X, isWallEdge(s) ? Y : Y - 1, zt(height));
-      post(sketch({ w: 1, h: 1, at: [X, Y], out: run.out }), height, "high", ch);
+      const [dir, rx, ry] = postRun(X, Y, e, w, s);
+      if (want(`run|${runKey(dir, rx, ry)}`))
+        post(sketch({ w: 1, h: 1, at: [X, Y], out: runOf(dir, rx, ry, zt(height)).out }), height, "high", ch);
     }
-    for (const [k, out] of low) this.walls.push(this.mount(out, k));
-    this.buildCeiling();
-    for (const r of runs.values()) {
-      const b = this.mount(r.out, areaKey((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2));
-      this.walls.push(b);
-      const f: FadeGroup = { x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1, top: r.top, objects: b.objs, alpha: 1 };
-      this.wallFades.push(f);
+    // (each piece built replaces the one it was; one of `only` that has no walls now goes)
+    const made = new Set<string>();
+    for (const [k, out] of low) {
+      made.add(`low|${k}`);
+      this.setWallPart(`low|${k}`, { built: this.mount(out, k) });
+    }
+    if (!only) this.buildCeiling();
+    for (const [k, r] of runs) {
+      const b = this.mount(r.out, this.cellOf((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2));
+      const c = this.corner;
+      const f: FadeGroup = {
+        x0: r.x0 + c.x,
+        y0: r.y0 + c.y,
+        x1: r.x1 + c.x,
+        y1: r.y1 + c.y,
+        top: r.top,
+        objects: b.objs,
+        alpha: 1,
+      };
+      made.add(`run|${k}`);
+      this.setWallPart(`run|${k}`, { built: b, fade: f });
       this.tagFade(b, f);
     }
+    if (only) for (const k of only) if (!made.has(k)) this.setWallPart(k, null);
+    // (the walls off the lattice drawn again: one of theirs that's gone, gone)
+    if (only?.has(FREE))
+      for (const k of [...this.wallParts.keys()])
+        if (k.includes(`|${FREE}|`) && !made.has(k)) this.setWallPart(k, null);
+    this.listWalls();
+  }
+
+  // A wall on neither axis or off the metres (walls3d.ts): a metre at a time along it, each piece
+  // the x-wall's (drawn from the origin along +x, both faces) turned and placed; its low parts in
+  // the area each piece's middle is in, its upper parts in runs of RUN pieces (`free|<id>|<n>`,
+  // each fading as one); a post at each end that isn't one of the lattice's (or already has one).
+  private freeWall(
+    fw: FreeWall,
+    posts: Map<string, unknown>,
+    freeEnds: Set<string>,
+    lowOf: (id: string) => Out,
+    runs: Map<string, { out: Out; x0: number; y0: number; x1: number; y1: number; top: number }>,
+    sketch: (o: Opts3) => MeshSketch,
+  ) {
+    const { post, wall, WALL_HALF_T } = this.items;
+    const pieces = piecesOf(fw);
+    const top = fw.ch === HALF_WALL ? 34 : WALL_PX;
+    const ends = [fw.a, fw.b].map((p) => `${p[0]},${p[1]}`);
+    const postAt = ends.map((k) => !posts.has(k));
+    const lowOut = lowOf(fw.id);
+    pieces.forEach((p, i) => {
+      const a0 = i === 0 && postAt[0] ? WALL_HALF_T : 0;
+      const a1 = i === pieces.length - 1 && postAt[1] ? p.len - WALL_HALF_T : p.len;
+      const clip = { x0: a0, x1: a1, y0: -1, y1: 1 };
+      const bclip = { x0: a0, x1: a1, y0: 0, y1: 2 };
+      const lo = new Out();
+      const hi = new Out();
+      for (const [part, out] of [
+        ["low", lo],
+        ["high", hi],
+      ] as const) {
+        if (fw.back === NO_WALL) {
+          wall(
+            sketch({ w: 1, h: 1, seed: 0.37, clip, at: [0, 0], mirror: true, out }),
+            "h",
+            fw.ch,
+            part,
+            undefined,
+            null,
+          );
+        } else {
+          const bch = isWindow(fw.ch) ? fw.back.toUpperCase() : fw.back;
+          wall(sketch({ w: 1, h: 1, seed: 0.37, clip, at: [0, 0], out }), "h", fw.ch, part, "front", null);
+          wall(sketch({ w: 1, h: 1, seed: 0.37, clip: bclip, at: [0, -1], rot: 2, out }), "h", bch, part, "back", null);
+        }
+        turnOut(out, p.angle, p.at[0], p.at[1]);
+      }
+      appendOut(lowOut, lo);
+      const k = `${FREE}|${fw.id}|${Math.floor(i / RUN)}`;
+      const r = getOr(runs, k, () => ({ out: new Out(), x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9, top: 0 }));
+      appendOut(r.out, hi);
+      for (const [x, y] of [p.at, [p.at[0] + Math.cos(p.angle) * p.len, p.at[1] + Math.sin(p.angle) * p.len]]) {
+        r.x0 = Math.min(r.x0, x - 0.1);
+        r.y0 = Math.min(r.y0, y - 0.1);
+        r.x1 = Math.max(r.x1, x + 0.1);
+        r.y1 = Math.max(r.y1, y + 0.1);
+      }
+      r.top = Math.max(r.top, zt(top));
+    });
+    // its posts: square to the wall, at each end not already one of the lattice's
+    const angle = pieces[0]?.angle ?? 0;
+    [fw.a, fw.b].forEach((at, i) => {
+      // (two walls off the lattice meeting: one post)
+      if (!postAt[i] || !pieces.length || freeEnds.has(ends[i])) return;
+      freeEnds.add(ends[i]);
+      for (const [part, out] of [
+        ["low", lowOut],
+        [
+          "high",
+          getOr(runs, `${FREE}|${fw.id}|${i === 0 ? 0 : Math.floor((pieces.length - 1) / RUN)}`, () => ({
+            out: new Out(),
+            x0: at[0] - 0.1,
+            y0: at[1] - 0.1,
+            x1: at[0] + 0.1,
+            y1: at[1] + 0.1,
+            top: zt(top),
+          })).out,
+        ],
+      ] as const) {
+        const o = new Out();
+        post(sketch({ w: 1, h: 1, at: [0, 0], out: o }), top, part, fw.ch);
+        turnOut(o, angle, at[0], at[1]);
+        appendOut(out, o);
+      }
+    });
+  }
+
+  // a wall piece put in (or taken away: null), the one it replaces taken down
+  private setWallPart(key: string, part: { built: Built; fade?: FadeGroup } | null) {
+    const had = this.wallParts.get(key);
+    if (had) this.unmount(had.built);
+    if (part) this.wallParts.set(key, part);
+    else this.wallParts.delete(key);
+  }
+  // (the lists the rest reads — a new array each time: below-cull.ts's shell keys on it)
+  private listWalls() {
+    const parts = [...this.wallParts.values()];
+    this.walls = parts.map((p) => p.built);
+    this.wallFades = parts.flatMap((p) => (p.fade ? [p.fade] : []));
   }
 
   // Ceilings over every floor tile at the walls' height, facing down: seen
   // from below only (a low free camera, eye level), never from above.
   private buildCeiling() {
     const map = this.map;
-    const z = zt(WALL_H);
+    const z = WALL_H;
     const pos: number[] = [];
+    // from the structure: its indoor slabs less the wells going up (physics/structure-solids.ts
+    // slabBoxes: the same rectangles Jolt's slabs are), each a quad wound to face down
+    if (this.rings) {
+      const holes = [...this.wells.ceiling].map((k): [number, number, number, number] => {
+        const [x, y] = k.split(",").map(Number);
+        return [x, y, x + 1, y + 1];
+      });
+      for (const b of slabBoxes(this.rings, holes, 0)) {
+        const [x0, x1, y0, y1] = [b.x - b.hx, b.x + b.hx, b.z - b.hz, b.z + b.hz];
+        pos.push(x0, z, y0, x1, z, y0, x1, z, y1, x0, z, y0, x1, z, y1, x0, z, y1);
+      }
+    }
     // (none outdoors — the lot is open sky — nor over a stairwell)
     const under = (x: number, y: number) => {
       const ch = tileAt(map, x, y);
       return isFloor(ch) && ch !== "a" && ch !== "c" && !this.wells.ceiling.has(`${x},${y}`);
     };
-    for (let y = 0; y < map.height; y++) {
-      let x = 0;
-      while (x < map.width) {
-        if (!under(x, y)) {
-          x++;
-          continue;
+    if (!this.rings)
+      for (let y = 0; y < map.height; y++) {
+        let x = 0;
+        while (x < map.width) {
+          if (!under(x, y)) {
+            x++;
+            continue;
+          }
+          let x1 = x;
+          while (x1 < map.width && under(x1, y)) x1++;
+          // a run of floor along x: one quad, wound to face down
+          pos.push(x, z, y, x1, z, y, x1, z, y + 1, x, z, y, x1, z, y + 1, x, z, y + 1);
+          x = x1;
         }
-        let x1 = x;
-        while (x1 < map.width && under(x1, y)) x1++;
-        // a run of floor along x: one quad, wound to face down
-        pos.push(x, z, y, x1, z, y, x1, z, y + 1, x, z, y, x1, z, y + 1, x, z, y + 1);
-        x = x1;
       }
+    if (!pos.length) {
+      this.setWallPart("ceiling", null);
+      return;
     }
-    if (!pos.length) return;
     const geo = new BufferGeometry();
     geo.setAttribute("position", new Float32BufferAttribute(pos, 3));
     geo.computeVertexNormals();
@@ -370,21 +548,129 @@ export class World3 {
     mesh.name = "ceiling";
     this.root.add(mesh);
     still(mesh);
-    this.walls.push({ objs: [mesh], cards: [], soft: { rects: [], dots: [] }, picks: [], dispose: [geo, mat] });
+    this.setWallPart("ceiling", {
+      built: { objs: [mesh], cards: [], soft: { rects: [], dots: [] }, picks: [], dispose: [geo, mat] },
+    });
+  }
+
+  // what the last `update` drew again (areas, tall things): their contact shadows on the floor's
+  // bake change with them (relayout bakes again round them too — a wall can move a room's
+  // dressing to its far side)
+  private redrawn: TileRect | null = null;
+  private redrew(r: { x0: number; y0: number; x1: number; y1: number }) {
+    const b = { x0: Math.floor(r.x0), y0: Math.floor(r.y0), x1: Math.ceil(r.x1), y1: Math.ceil(r.y1) };
+    this.redrawn = this.redrawn ? union(this.redrawn, b) : b;
+  }
+  // (a fade group's rect is the world's: back to the floor's own)
+  private redrewFade(f: FadeGroup) {
+    const c = this.corner;
+    this.redrew({ x0: f.x0 - c.x, y0: f.y0 - c.y, x1: f.x1 - c.x, y1: f.y1 - c.y });
+  }
+  private redrewArea(k: string) {
+    // (a cell is the world's: back to the floor's own)
+    const [ax, ay] = k.split(",").map(Number);
+    const c = this.corner;
+    this.redrew({ x0: ax * CELL - c.x, y0: ay * CELL - c.y, x1: (ax + 1) * CELL - c.x, y1: (ay + 1) * CELL - c.y });
+  }
+
+  // ── a new layout on the same floor (again only what it touches) ──────────────
+  /** The same floor with its layout changed — a wall built or taken away, a face painted, a
+   *  tile laid (the Walls and Rooms tools): the walls and the ceiling made again, the floor
+   *  baked again, the things kept as they're drawn. Only the dressing that changed (`update`'s
+   *  areas) and the doors and windows whose frame meets a post that came or went are drawn
+   *  again. Building the whole floor anew cost ~0.5 s a wall on a furnished floor (the things,
+   *  not the walls). The caller builds anew instead for a floor of another size or other
+   *  stairwells. */
+  relayout(
+    map: MapDef,
+    objects: WorldObjectDef[],
+    edges?: WallEdges,
+    rings?: Ring[] | null,
+    floorRings?: Ring[] | null,
+  ) {
+    // (an edit before this one not yet done: now, at once)
+    this.flushSoon();
+    const was = this.posts;
+    const old = this.map;
+    const oldEdges = this.edges;
+    const floorWas = this.floor;
+    this.map = map;
+    this.edges = edges ?? edgesOfMap(map);
+    this.rings = rings ?? null;
+    this.floorRings = floorRings ?? null;
+    const touched = touchedWalls(old, map, oldEdges, this.edges);
+    this.buildWalls(touched.keys);
+    // where the floor's bake changes: round the edges that changed (the AO reaches ~2 tiles),
+    // and the doors and windows drawn again below; all of it if the tiles changed
+    let near: TileRect | null = touched.box && grow(touched.box, FLOOR_REACH);
+    // (the ceiling covers the floor tiles: again only if they changed)
+    if (old.tiles.join("\n") !== map.tiles.join("\n")) {
+      this.buildCeiling();
+      this.listWalls();
+      near = { x0: 0, y0: 0, x1: map.width, y1: map.height };
+    }
+    this.collect();
+    // An edit's work over three frames (docs/plan/72 phase 8, an edit's cost): its walls in this
+    // one; the things it touched (a door's frame, a room's dressing) the next; the floor's bake
+    // the one after (bakeSoon). `flushSoon` does what's left at once.
+    this.later = () => this.relaidThings(objects, was, near, floorWas);
+    this.later.id = raf(() => this.flushSoon(false));
+  }
+
+  private later: ((() => void) & { id?: unknown }) | null = null;
+  private relaidThings(objects: WorldObjectDef[], was: Set<string>, near: TileRect | null, floorWas: unknown) {
+    // a door's or window's frame stops at a post at either end (drawObject): drawn again
+    // where one of those posts came or went
+    for (const o of objects) {
+      if (!isOpening(o.kind)) continue;
+      const edges = openingEdges(o);
+      const first = edges[0];
+      const last = edges[edges.length - 1];
+      if (!first || !last) continue;
+      const ends = [`${first.x},${first.y}`, first.dir === "h" ? `${last.x + 1},${last.y}` : `${last.x},${last.y + 1}`];
+      if (ends.every((k) => was.has(k) === this.posts.has(k))) continue;
+      const t = this.tall.get(o.id);
+      if (t) t.sig = "";
+      else {
+        const a = this.areas.get(this.cellOf(...anchorOf(o)));
+        if (a) a.sig = "";
+      }
+      // (its contact shadow on the floor: baked again too)
+      const box = grow({ x0: first.x, y0: first.y, x1: last.x + 1, y1: last.y + 1 }, FLOOR_REACH);
+      near = near ? union(near, box) : box;
+    }
+    this.update(objects);
+    if (this.redrawn) {
+      const box = grow(this.redrawn, SOFT_REACH);
+      near = near ? union(near, box) : box;
+    }
+    // (`update` stops early when none of the things changed)
+    this.collect();
+    // the floor's bake reads the walls too (their AO): again near what changed — all of it if the
+    // things changed too (`update` has baked it whole then) or the tiles did
+    // (the next frame: an edit's own frame has the walls — docs/plan/72 phase 8, an edit's cost)
+    if (this.floor === floorWas) this.bakeSoon(near ?? undefined);
+  }
+  /** What an edit left for the frames after (`bake`: its floor's bake too), now: the checks
+   *  compare it at once; the next edit starts from it. */
+  flushSoon(bake = true) {
+    const f = this.later;
+    this.later = null;
+    f?.();
+    if (bake) this.flushBake();
   }
 
   // ── furniture + clutter (again where it changed) ────────────────────────────
   update(objects: WorldObjectDef[]) {
     this.objects = objects;
+    this.redrawn = null;
     // a door or window came, went or moved: the walls again, with their holes
     const sig = cutsSig(objects);
     let rewalled = false;
     if (sig !== this.cutSig) {
       this.cutSig = sig;
       this.cuts = wallCuts(objects);
-      for (const b of this.walls) this.unmount(b);
-      this.walls = [];
-      this.wallFades = [];
+      for (const k of [...this.wallParts.keys()]) this.setWallPart(k, null);
       this.buildWalls();
       rewalled = true;
     }
@@ -398,13 +684,13 @@ export class World3 {
         continue;
       }
       const at = anchorOf(o);
-      const a = area(areaKey(at[0], at[1]));
+      const a = area(this.cellOf(at[0], at[1]));
       a.objs.push(o);
       a.sig.push(sig);
     }
     for (const d of dressItems(this.map, objects)) {
       const at = dressAt(d);
-      const a = area(areaKey(at[0], at[1]));
+      const a = area(this.cellOf(at[0], at[1]));
       a.dress.push(d);
       a.sig.push(`d|${d.kind}|${d.x}|${d.y}|${d.z}|${bucket(d.seed)}`);
     }
@@ -436,6 +722,7 @@ export class World3 {
         append(out, one);
       }
       if (had) this.unmount(had.built);
+      this.redrewArea(k);
       const built = this.mount(out, k);
       built.picks = picks;
       // a tall thing found while drawing changes this area's list: keep it from redrawing next time
@@ -449,6 +736,7 @@ export class World3 {
       if (!byArea.has(k)) {
         this.unmount(had.built);
         this.areas.delete(k);
+        this.redrewArea(k);
         changed = true;
       }
     // tall furniture
@@ -458,7 +746,7 @@ export class World3 {
       changed = true;
       if (had) this.unmount(had.built);
       const one = this.drawObject(t.o);
-      const built = this.mount(one.out, areaKey(...anchorOf(t.o)));
+      const built = this.mount(one.out, this.cellOf(...anchorOf(t.o)));
       if (one.pick) built.picks = [one.pick];
       // a wall item: the strip along its face of the wall, and the wall's thickness;
       // a window: its stretch of the wall line
@@ -471,8 +759,11 @@ export class World3 {
         else [r.x0, r.x1] = [Math.min(r.x0, hg.line - 0.1), Math.max(r.x1, hg.line + 0.1)];
       }
       const fade: FadeGroup = {
-        ...r,
-        top: hang ? zt(WALL_H) : one.top, // (a wall item fades exactly when its wall does)
+        x0: r.x0 + this.corner.x,
+        y0: r.y0 + this.corner.y,
+        x1: r.x1 + this.corner.x,
+        y1: r.y1 + this.corner.y,
+        top: hang ? WALL_H : one.top, // (a wall item fades exactly when its wall does)
         objects: built.objs,
         alpha: 1,
         item: true,
@@ -480,10 +771,13 @@ export class World3 {
       };
       this.tall.set(id, { sig: t.sig, built, fade });
       this.tagFade(built, fade);
+      this.redrewFade(fade);
+      if (had) this.redrewFade(had.fade);
     }
     for (const [id, had] of this.tall)
       if (!tallNow.has(id)) {
         this.unmount(had.built);
+        this.redrewFade(had.fade);
         this.tall.delete(id);
         this.tallIds.delete(id);
         changed = true;
@@ -506,9 +800,32 @@ export class World3 {
         at: this.root.position,
         w: map.width,
         h: map.height,
-        covers: (x, y) => isFloor(tileAt(map, x, y)) && !wells.has(`${x},${y}`),
+        covers: (x, y) => this.isFloorAt(x, y) && !wells.has(`${x},${y}`),
       },
     };
+  }
+
+  /** Tile (x, y) of this floor is floor (its slabs' — the structure's, read even-odd at its middle —
+   *  or, with none, its tiles). */
+  private isFloorAt(x: number, y: number): boolean {
+    if (!this.floorRings) return isFloor(tileAt(this.map, x, y));
+    const m = this.floorMask();
+    return x >= 0 && y >= 0 && x < m.w && y < m.h && m.bits[y * m.w + x] === 1;
+  }
+  // (the slabs read once a row, kept till they change: the cull asks every tile several times)
+  private mask: { rings: Ring[]; w: number; h: number; bits: Uint8Array } | null = null;
+  private floorMask() {
+    const rings = this.floorRings as Ring[];
+    if (this.mask?.rings === rings) return this.mask;
+    const { width: w, height: h } = this.map;
+    const bits = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) {
+      const xs = crossings(rings, y + 0.5);
+      for (let k = 0; k + 1 < xs.length; k += 2)
+        for (let x = Math.max(0, Math.ceil(xs[k] - 0.5)); x < w && x + 0.5 < xs[k + 1]; x++) bits[y * w + x] = 1;
+    }
+    this.mask = { rings, w, h, bits };
+    return this.mask;
   }
 
   /** The floor's walls for below-cull.ts: the tiles a sight line could leave the floor by
@@ -516,10 +833,9 @@ export class World3 {
    *  solid full wall (a window, a door, glass, a half wall, no wall) — and that top (tiles).
    *  `key` changes when the walls are built again. */
   shell(): { bad: (x: number, y: number) => boolean; top: number; key: unknown } {
-    const map = this.map;
-    const inside = (x: number, y: number) => isFloor(tileAt(map, x, y));
+    const inside = (x: number, y: number) => this.isFloorAt(x, y);
     const solid = (dir: "h" | "v", x: number, y: number) => {
-      const ch = dir === "h" ? hWall(map, x, y) : vWall(map, x, y);
+      const ch = dir === "h" ? this.edges.h(x, y) : this.edges.v(x, y);
       return (
         isWallEdge(ch) &&
         ch === ch.toLowerCase() &&
@@ -535,7 +851,7 @@ export class World3 {
     };
     const wells = this.wells.floor;
     return {
-      top: zt(WALL_H),
+      top: WALL_H,
       key: this.walls,
       bad: (x, y) =>
         wells.has(`${x},${y}`) || gap("h", x, y) || gap("h", x, y + 1) || gap("v", x, y) || gap("v", x + 1, y),
@@ -814,27 +1130,8 @@ export class World3 {
     return out;
   }
 
-  // (chained after whatever patched it before — the room's light map, light3d.ts)
-  private withFade(m: Material) {
-    const inner = m.onBeforeCompile;
-    const key = m.customProgramCacheKey;
-    m.onBeforeCompile = (sh, r) => {
-      inner.call(m, sh, r);
-      sh.uniforms.fadeFlags = this.flagsU;
-      sh.vertexShader = sh.vertexShader
-        .replace("#include <common>", "#include <common>\nattribute float aFade;\nuniform sampler2D fadeFlags;")
-        .replace(
-          "#include <project_vertex>",
-          `#include <project_vertex>
-  if (aFade > 0.5) {
-    int fi = int(aFade + 0.5);
-    if (texelFetch(fadeFlags, ivec2(fi % ${FLAG_W}, fi / ${FLAG_W}), 0).r < 0.5) gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
-  }`,
-        );
-    };
-    m.customProgramCacheKey = () => `${key.call(m)}|fade`;
-    m.needsUpdate = true;
-  }
+  // (the fade flags as a part of the shared materials: look/yulit.ts)
+  private readonly fade = fadePiece(this.flagsU, FLAG_W);
 
   // what clicks, fades, cards and lights see: everything built, gathered
   private collect() {
@@ -843,7 +1140,12 @@ export class World3 {
       ...[...this.areas.values()].map((a) => a.built),
       ...[...this.tall.values()].map((t) => t.built),
     ];
-    this.picks = all.flatMap((b) => b.picks);
+    // (what's clicked and what fades are the world's: the scene's — the floor's frame placed at its
+    // corner, `corner`)
+    const c = this.corner;
+    this.picks = all
+      .flatMap((b) => b.picks)
+      .map((p) => ({ ...p, x0: p.x0 + c.x, y0: p.y0 + c.y, x1: p.x1 + c.x, y1: p.y1 + c.y }));
     this.cards = all.flatMap((b) => b.cards);
     this.fades = [...this.wallFades, ...[...this.tall.values()].map((t) => t.fade)];
     this.lights = lightSources(this.objects);
@@ -857,7 +1159,7 @@ export class World3 {
     const out = new Out();
     if (isOpening(o.kind)) {
       // a door or window in its wall (rot 3 on west edges)
-      const rot = (o.rot ?? 0) % 2 === 1 ? 3 : 0;
+      const rot = quarterOf(o) % 2 === 1 ? 3 : 0;
       // open leaves (and a barn door, always: it rolls along the face) are drawn whole
       const leaves = isDoorKind(o.kind) && doorLeaves(o.kind) > 0 && (!doorShut(o) || doorSlides(o.kind));
       // the frame stops at a post at either end (the wall beside it ends in one),
@@ -883,7 +1185,8 @@ export class World3 {
       const rot = rotOf(o);
       const ref = { kind: o.kind, id: o.id, rot, props: o.props };
       const at = anchorOf(o);
-      const lift = e.onSurface ? Number(o.props?.z) || 0 : e.wall ? hangOf(o).lift : 0;
+      // (the item art's px: its drawings are lifted in them)
+      const lift = artPx(e.onSurface ? Number(o.props?.z) || 0 : e.wall ? hangOf(o).lift : 0);
       if (isNative(o.kind)) {
         // redrawn by the kit (docs/plan/67-the-furniture.md: world/furn/native.ts)
         nativeInto(out, o);
@@ -934,7 +1237,7 @@ export class World3 {
     if (isNativeDress(d.kind)) return nativeDressInto(out, { ...d, ...xyOf(dressAt(d)) });
     const seed = bucket(d.seed);
     const s = new MeshSketch({ w: 1, h: 1, seed, at: dressAt(d), out });
-    this.items.dressing(s, d.kind as DressKind, d.z, seed);
+    this.items.dressing(s, d.kind as DressKind, artPx(d.z), seed);
     s.end();
   }
 
@@ -1113,28 +1416,59 @@ export class World3 {
   }
 
   // ── the floor, from above, with the items' contact shadows ────────────────
-  // (baked again only when something on it moves or comes or goes)
-  private bakeFloor() {
+  // (baked again only when something on it moves or comes or goes; `near`: a new layout —
+  // World3.relayout — bakes again only the chunks that come within it, the rest kept)
+  private bakeFloor(near?: TileRect) {
     const sig = this.objects
-      .map((o) => `${o.id}|${o.kind}|${o.x}|${o.y}|${o.rot ?? 0}`)
+      .map((o) => `${o.id}|${o.kind}|${o.x}|${o.y}|${quarterOf(o)}`)
       .sort()
       .join(";");
-    if (this.floor?.sig === sig) return;
+    if (!near && this.floor?.sig === sig) return;
     const map = this.map;
     const px = Math.max(16, Math.min(64, Math.floor(4096 / Math.max(map.width, map.height))));
     // in pieces of at most 1024 px a side, as the iso view bakes it: a canvas
     // the size of the whole floor (12 M px on a big map) is slow in Chrome, and
     // on some of them comes out blank
     const CH = Math.max(1, Math.floor(1024 / px));
-    const bake = new FloorBake(map, this.objects, 1, 1024, this.wells.floor);
+    // only near the edit: the chunks it reaches, their AO worked out a tile past them (the
+    // drawing's scaling reads one pixel over each chunk's edge)
+    const kept = near && this.floor ? this.floor.chunks : null;
+    const hit = (cx: number, cy: number, w: number, h: number) =>
+      !kept || !near || (cx < near.x1 && cx + w > near.x0 && cy < near.y1 && cy + h > near.y0);
+    let aoOnly: TileRect | undefined;
+    if (kept)
+      for (let cy = 0; cy < map.height; cy += CH)
+        for (let cx = 0; cx < map.width; cx += CH) {
+          const w = Math.min(CH, map.width - cx);
+          const h = Math.min(CH, map.height - cy);
+          if (!hit(cx, cy, w, h)) continue;
+          aoOnly = aoOnly
+            ? {
+                x0: Math.min(aoOnly.x0, cx - 1),
+                y0: Math.min(aoOnly.y0, cy - 1),
+                x1: Math.max(aoOnly.x1, cx + w + 1),
+                y1: Math.max(aoOnly.y1, cy + h + 1),
+              }
+            : { x0: cx - 1, y0: cy - 1, x1: cx + w + 1, y1: cy + h + 1 };
+        }
+    if (kept && !aoOnly) return; // (nothing of the floor's within reach)
+    const bake = new FloorBake(map, this.objects, 1, 1024, this.wells.floor, aoOnly);
     const floorAt = (x: number, y: number) => isFloor(tileAt(map, x, y)) && !this.wells.floor.has(`${x},${y}`);
     const softs = [...this.areas.values(), ...this.tall.values()].map((a) => a.built.soft);
-    this.dropFloor();
-    const meshes: Mesh[] = [];
+    if (!kept) this.dropFloor();
+    const chunks = new Map<string, Mesh>();
     for (let cy = 0; cy < map.height; cy += CH)
       for (let cx = 0; cx < map.width; cx += CH) {
         const w = Math.min(CH, map.width - cx);
         const h = Math.min(CH, map.height - cy);
+        const key = `${cx},${cy}`;
+        if (kept && !hit(cx, cy, w, h)) {
+          const m = kept.get(key);
+          if (m) chunks.set(key, m);
+          continue;
+        }
+        const was = kept?.get(key);
+        if (was) dropFloorMesh(this.root, was);
         // one quad per run of floor tiles (the void outside is cut by the
         // shape, never by the texture's alpha: a lost canvas can't take the floor away)
         const pos: number[] = [];
@@ -1178,45 +1512,33 @@ export class World3 {
         mesh.name = "floor";
         this.root.add(mesh);
         still(mesh);
-        meshes.push(mesh);
+        chunks.set(key, mesh);
       }
-    this.floor = { meshes, sig };
+    this.floor = { meshes: [...chunks.values()], chunks, sig };
   }
 
   private dropFloor() {
-    for (const m of this.floor?.meshes ?? []) {
-      this.root.remove(m);
-      m.geometry.dispose();
-      const mat = m.material as MeshLambertMaterial;
-      mat.map?.dispose();
-      mat.dispose();
-    }
+    for (const m of this.floor?.meshes ?? []) dropFloorMesh(this.root, m);
     this.floor = null;
   }
 
   // The room's light on its lit materials: the floor I'm on takes the light
   // map, the others (kept built, below mine) don't (it's mine, in my floor's
   // coords). Switching only swaps the shader variant (both stay compiled).
-  private lightFn: (m: Material) => void = () => {};
+  private lightFn: ((m: Material) => Piece) | null = null;
   private litMats = new Set<Material>();
+  // (one of the family: the room's light, the cel bands on what's marked, the fade flags — look/yulit.ts)
   private light(m: Material) {
     this.litMats.add(m);
-    this.lightFn(m);
-    if (m.userData.cel) celLit(m);
-    if (m.userData.fade) this.withFade(m);
+    yuLit(m, {
+      light: this.lightFn?.(m) ?? null,
+      cel: m.userData.cel ? CEL : null,
+      fade: m.userData.fade ? this.fade : null,
+    });
   }
-  setLight(fn: ((m: Material) => void) | null) {
-    this.lightFn = fn ?? (() => {});
-    for (const m of this.litMats) {
-      if (fn) fn(m);
-      else {
-        m.onBeforeCompile = () => {};
-        m.customProgramCacheKey = () => "";
-        m.needsUpdate = true;
-      }
-      if (m.userData.cel) celLit(m);
-      if (m.userData.fade) this.withFade(m);
-    }
+  setLight(fn: ((m: Material) => Piece) | null) {
+    this.lightFn = fn;
+    for (const m of this.litMats) this.light(m);
   }
 
   // ── live parts (plan 68: a lava lamp's blobs, a fire's flames) ─────────────────────────────────
@@ -1290,7 +1612,26 @@ export class World3 {
     }
   }
 
+  // the floor's bake near an edit, the next frame (more edits meanwhile: their rects together)
+  private soon: { near: TileRect | undefined; whole: boolean; id: number } | null = null;
+  private bakeSoon(near?: TileRect) {
+    if (this.soon) {
+      this.soon.whole ||= !near;
+      this.soon.near = this.soon.near && near ? union(this.soon.near, near) : (this.soon.near ?? near);
+      return;
+    }
+    this.soon = { near, whole: !near, id: raf(() => this.flushBake()) as unknown as number };
+  }
+  private flushBake() {
+    const s = this.soon;
+    if (!s) return;
+    this.soon = null;
+    this.bakeFloor(s.whole ? undefined : s.near);
+  }
+
   dispose() {
+    this.soon = null;
+    this.later = null;
     this.glassMat?.dispose();
     this.chess?.dispose();
     for (const b of this.walls) this.unmount(b);
@@ -1307,6 +1648,10 @@ export class World3 {
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+
+// the next frame (node's tests: the next turn)
+const raf = (f: () => void): unknown =>
+  typeof requestAnimationFrame === "function" ? requestAnimationFrame(f) : setTimeout(f, 0);
 // The items' contact shadows on a floor piece (tiles cx, cy, w by h at `px`
 // a tile), soft without a canvas filter (a filtered fill on a big canvas is
 // what Chrome draws slowly, or not at all): a few fills of each shape, from a
@@ -1360,7 +1705,145 @@ function softShadows(
   g.restore();
 }
 
-const areaKey = (x: number, y: number) => `${Math.floor(x / AREA)},${Math.floor(y / AREA)}`;
+/** The cell a place of a floor is in (its frame's; `c` the floor's corner in the world: cells are
+ *  the world's). */
+const cellKey = (x: number, y: number, c: { x: number; y: number }) =>
+  `${Math.floor((x + c.x) / CELL)},${Math.floor((y + c.y) / CELL)}`;
+/** The wall parts of walls off the lattice (World3.freeWall): `free|<wall>|<run>`; as a key of
+ *  `buildWalls(only)`, all of them again. */
+const FREE = "free";
+/** What one sketch drew, added to another's (a turned piece into its area's or run's). */
+function appendOut(to: Out, from: Out): void {
+  for (const k of ["lit", "glow", "clear"] as const) {
+    to[k].pos.push(...from[k].pos);
+    to[k].nor.push(...from[k].nor);
+    to[k].col.push(...from[k].col);
+  }
+  to.lines.push(...from.lines);
+  to.lineCol.push(...from.lineCol);
+  to.cards.push(...from.cards);
+  to.decals.push(...from.decals);
+  to.soft.rects.push(...from.soft.rects);
+  to.soft.dots.push(...from.soft.dots);
+}
+// the run an edge's upper part is drawn and fades in (up to RUN edges along its line)
+const runKey = (dir: "h" | "v", x: number, y: number) =>
+  dir === "h" ? `h|${y}|${Math.floor(x / RUN)}` : `v|${x}|${Math.floor(y / RUN)}`;
+// a post's upper part fades with the run it belongs to most (h first): that run's edge
+// (`e`, `w`, `s`: the edges east, west and south of the post)
+function postRun(X: number, Y: number, e: string, w: string, s: string): ["h" | "v", number, number] {
+  if (isWallEdge(e) || isWallEdge(w)) return ["h", Math.max(0, isWallEdge(e) ? X : X - 1), Y];
+  return ["v", X, isWallEdge(s) ? Y : Y - 1];
+}
+
+/** The wall pieces (World3's `low|…`, `run|…`) a new layout touches: at each end of every edge
+ *  that changed (its wall, its back face), in the old layout and the new, the pieces of every
+ *  wall meeting there (its end is clipped to the post there, which may have come or gone) and
+ *  of the post itself. Every other piece comes out of `buildWalls` exactly as it was. */
+export function touchedWalls(
+  a: MapDef,
+  b: MapDef,
+  ea: WallEdges = edgesOfMap(a),
+  eb: WallEdges = edgesOfMap(b),
+): { keys: Set<string>; box: TileRect | null } {
+  const corner = { x: b.ox ?? 0, y: b.oy ?? 0 };
+  const areaKey = (x: number, y: number) => cellKey(x, y, corner);
+  const pts = new Set<string>();
+  const changed = (dir: "h" | "v", x: number, y: number) =>
+    (dir === "h" ? ea.h(x, y) !== eb.h(x, y) : ea.v(x, y) !== eb.v(x, y)) ||
+    ea.back({ dir, x, y }) !== eb.back({ dir, x, y });
+  const W = Math.max(a.width, b.width);
+  const H = Math.max(a.height, b.height);
+  for (let y = 0; y <= H; y++)
+    for (let x = 0; x < W; x++)
+      if (changed("h", x, y)) {
+        pts.add(`${x},${y}`);
+        pts.add(`${x + 1},${y}`);
+      }
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x <= W; x++)
+      if (changed("v", x, y)) {
+        pts.add(`${x},${y}`);
+        pts.add(`${x},${y + 1}`);
+      }
+  const out = new Set<string>();
+  for (const k of pts) {
+    const [X, Y] = k.split(",").map(Number);
+    for (const m of [ea, eb]) {
+      const e = m.h(X, Y);
+      const w = m.h(X - 1, Y);
+      const n = m.v(X, Y - 1);
+      const s = m.v(X, Y);
+      const meeting: ["h" | "v", number, number, string][] = [
+        ["h", X, Y, e],
+        ["h", X - 1, Y, w],
+        ["v", X, Y - 1, n],
+        ["v", X, Y, s],
+      ];
+      let any = false;
+      for (const [d, x, y, ch] of meeting) {
+        if (!isWallEdge(ch)) continue;
+        any = true;
+        out.add(`low|${areaKey(x, y)}`);
+        out.add(`run|${runKey(d, x, y)}`);
+      }
+      if (!any) continue;
+      out.add(`low|${areaKey(X, Y)}`);
+      const [d, rx, ry] = postRun(X, Y, e, w, s);
+      out.add(`run|${runKey(d, rx, ry)}`);
+    }
+  }
+  // (the walls off the lattice: all of them again when any changed — and the lattice's pieces at
+  // their ends, where a post may have come or gone)
+  if (JSON.stringify(ea.free) !== JSON.stringify(eb.free)) {
+    out.add(FREE);
+    for (const w of [...ea.free, ...eb.free])
+      for (const [x, y] of [w.a, w.b]) {
+        const p = { x0: Math.floor(x), y0: Math.floor(y), x1: Math.ceil(x), y1: Math.ceil(y) };
+        pts.add(`${p.x0},${p.y0}`);
+        if (Number.isInteger(x) && Number.isInteger(y)) {
+          out.add(`low|${areaKey(x, y)}`);
+          for (const [d, rx, ry] of [
+            ["h", x, y],
+            ["h", x - 1, y],
+            ["v", x, y],
+            ["v", x, y - 1],
+          ] as const)
+            out.add(`run|${runKey(d, rx, ry)}`);
+        }
+      }
+  }
+  let box: TileRect | null = null;
+  for (const k of pts) {
+    const [X, Y] = k.split(",").map(Number);
+    const p = { x0: X, y0: Y, x1: X, y1: Y };
+    box = box ? union(box, p) : p;
+  }
+  return { keys: out, box };
+}
+
+/** A rect of tiles (x1, y1 past its last). */
+type TileRect = { x0: number; y0: number; x1: number; y1: number };
+const grow = (r: TileRect, by: number): TileRect => ({ x0: r.x0 - by, y0: r.y0 - by, x1: r.x1 + by, y1: r.y1 + by });
+const union = (a: TileRect, b: TileRect): TileRect => ({
+  x0: Math.min(a.x0, b.x0),
+  y0: Math.min(a.y0, b.y0),
+  x1: Math.max(a.x1, b.x1),
+  y1: Math.max(a.y1, b.y1),
+});
+// how far a wall's darkening reaches across the floor's bake (art/floors.ts aoCanvas: walls
+// RW 0.95 tiles from the tile's neighbours — 2 tiles, and one more to be safe)
+const FLOOR_REACH = 3;
+// how far a thing's contact shadow reaches past its area or footprint on the floor's bake
+const SOFT_REACH = 2;
+
+function dropFloorMesh(root: Object3D, m: Mesh) {
+  root.remove(m);
+  m.geometry.dispose();
+  const mat = m.material as MeshLambertMaterial;
+  mat.map?.dispose();
+  mat.dispose();
+}
 
 function getOr<K, V>(m: Map<K, V>, k: K, make: () => V): V {
   let v = m.get(k);
@@ -1388,7 +1871,7 @@ function anchorOf(o: WorldObjectDef): [number, number] {
 // a door's or window's stretch of its wall line, the wall's thickness deep
 function edgeRect(o: WorldObjectDef): { x0: number; y0: number; x1: number; y1: number } {
   const n = Math.max(1, entry(o.kind).w);
-  return (o.rot ?? 0) % 2 === 0
+  return quarterOf(o) % 2 === 0
     ? { x0: o.x, y0: o.y - 0.1, x1: o.x + n, y1: o.y + 0.1 }
     : { x0: o.x - 0.1, y0: o.y, x1: o.x + 0.1, y1: o.y + n };
 }
@@ -1409,7 +1892,7 @@ function objectSig(o: WorldObjectDef): string {
   const p = Object.entries(o.props ?? {})
     .filter(([k]) => !QUIET_PROPS.has(k) && !QUIET_OF[o.kind]?.has(k))
     .sort(([a], [b]) => (a < b ? -1 : 1));
-  return `${o.id}|${o.kind}|${o.x}|${o.y}|${o.rot ?? 0}|${JSON.stringify(p)}`;
+  return `${o.id}|${o.kind}|${o.x}|${o.y}|${quarterOf(o)}|${JSON.stringify(p)}`;
 }
 
 // the highest point drawn (tiles)

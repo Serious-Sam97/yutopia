@@ -83,13 +83,13 @@ export function beamAt(b: Beam, px: number, py: number, pz?: number): number {
   return (1 - d / len) * (1 - (off / half) ** 2);
 }
 
-/** Nothing solid between a beam and (px, py) (a wall, a trunk: whatever the grid
- *  won't let through). */
+/** The beam gets from the hand to (px, py) at its height: nothing that stops sight between (Jolt's
+ *  sight — the world-server's room.sight: a wall, a trunk). */
 export function beamReaches(
-  grid: { clear(a: { x: number; y: number }, b: { x: number; y: number }, r: number, z: number): boolean },
+  sees: (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) => boolean,
   b: Beam,
   px: number,
   py: number,
 ): boolean {
-  return grid.clear({ x: b.x, y: b.y }, { x: px, y: py }, 0.02, b.z);
+  return sees({ x: b.x, y: b.y, z: b.z }, { x: px, y: py, z: b.z });
 }

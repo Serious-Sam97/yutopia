@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { entry, SURFACE } from "@yutopia/shared";
+import { entry, quarterYaw, SURFACE } from "@yutopia/shared";
 import { type BufferGeometry, DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from "three";
 import { type LivePart, Model } from "../kit";
 import { modelOf } from "../native";
@@ -34,7 +34,7 @@ function allBounds(g: BufferGeometry) {
 const tris = (g: BufferGeometry) =>
   (g.attributes.position.count + ((g.userData.glow as BufferGeometry | null)?.attributes.position.count ?? 0)) / 3;
 const live = (kind: string, props: Record<string, unknown> = {}) =>
-  (modelOf({ id: "x", kind, x: 0, y: 0, rot: 0, props }).userData.live as LivePart[]) ?? [];
+  (modelOf({ id: "x", kind, x: 0, y: 0, yaw: quarterYaw(0), props }).userData.live as LivePart[]) ?? [];
 /** What's hit looking straight down at (x, z) from `from` m up: its height (0: nothing). */
 function topAt(g: BufferGeometry, x: number, z: number, from: number): number {
   const hit = new Raycaster(new Vector3(x, from, z), new Vector3(0, -1, 0)).intersectObject(
@@ -51,7 +51,7 @@ test("storage: every kind and look on its footprint, on the floor or the wall, u
     for (let variant = 0; variant < looks.length; variant++)
       for (const id of IDS)
         for (const on of [true, false]) {
-          const g = modelOf({ id, kind, x: 0, y: 0, rot: 0, props: { variant, on } });
+          const g = modelOf({ id, kind, x: 0, y: 0, yaw: quarterYaw(0), props: { variant, on } });
           const b = allBounds(g);
           const what = `${kind} ${variant} ${id}${on ? "" : " off"}`;
           assert.ok(b.x0 >= -0.005 && b.x1 <= e.w + 0.005, `${what}: across ${b.x0.toFixed(3)}..${b.x1.toFixed(3)}`);
@@ -78,7 +78,7 @@ test("storage tops: at their spec under every cell things stand on, every look a
     const [x0, y0, x1, y1] = e.top;
     for (let variant = 0; variant < (e.variants ?? 1); variant++)
       for (const id of IDS) {
-        const g = modelOf({ id, kind, x: 0, y: 0, rot: 0, props: { variant } });
+        const g = modelOf({ id, kind, x: 0, y: 0, yaw: quarterYaw(0), props: { variant } });
         for (let cy = y0; cy < y1; cy++)
           for (let cx = x0; cx < x1; cx++) {
             const h = topAt(g, (cx + 0.5) / 4, (cy + 0.5) / 4, want + 0.3);
@@ -93,7 +93,7 @@ test("storage tops: at their spec under every cell things stand on, every look a
 test("the display cabinet: lit inside when on, out when off; its panes see-through", () => {
   const glow = (on: boolean) =>
     (
-      modelOf({ id: "x", kind: "display_cabinet", x: 0, y: 0, rot: 0, props: { on } }).userData
+      modelOf({ id: "x", kind: "display_cabinet", x: 0, y: 0, yaw: quarterYaw(0), props: { on } }).userData
         .glow as BufferGeometry | null
     )?.attributes.position.count ?? 0;
   assert.ok(glow(true) > 0, "lit");

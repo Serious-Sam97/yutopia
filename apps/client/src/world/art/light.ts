@@ -12,6 +12,7 @@ import {
   isWindowKind,
   type MapDef,
   openingEdges,
+  quarterOf,
   rotOf,
   tileAt,
   topCentre,
@@ -187,6 +188,10 @@ export function headlights(objects: WorldObjectDef[]): { x: number; y: number; d
   return out;
 }
 
+/** A rectangle of the light map's samples (inclusive). */
+type SampleRect = { x0: number; y0: number; x1: number; y1: number };
+const meets = (a: SampleRect, b: SampleRect) => a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1;
+
 export class LightMap {
   readonly w: number; // samples
   readonly h: number;
@@ -201,9 +206,16 @@ export class LightMap {
   private hBlk: Uint8Array; // walls on north edges that block light (glass and half walls don't)
   private vBlk: Uint8Array; // … on west edges
 
+  /** what gives light, and into which: the lamps (`light`), the windows' pools (`win`) */
+  private srcs: { s: LightSource; win: boolean }[] = [];
+
+  /** `prev`: the same floor's map before an edit — the light of every lamp the edit can't change
+   *  kept from it; only the lamps whose reach meets what changed (a wall, a door, a tile, the lamp
+   *  itself) added again, inside their reach. (A floor of another size: all of it.) */
   constructor(
     readonly map: MapDef,
     objects: WorldObjectDef[],
+    prev?: LightMap,
   ) {
     const W = map.width;
     const H = map.height;
@@ -240,27 +252,89 @@ export class LightMap {
         if (isWindowKind(o.kind)) glazed.push(e);
       }
     }
-    for (const s of lightSources(objects)) this.add(s);
+    for (const s of lightSources(objects)) this.srcs.push({ s, win: false });
     // windows to the outside: a soft pool of light just inside each pane
+    const pool = (x: number, y: number) => ({ x, y, color: 0xffffff, radius: 4.2, intensity: 0.9 });
     for (const e of glazed) {
       const [a, b] = e.dir === "h" ? [floor(e.x, e.y - 1), floor(e.x, e.y)] : [floor(e.x - 1, e.y), floor(e.x, e.y)];
       if (a === b) continue; // between two rooms: no daylight of its own
       const inn = b ? 0.45 : -0.45;
       const at = e.dir === "h" ? { x: e.x + 0.5, y: e.y + inn } : { x: e.x + inn, y: e.y + 0.5 };
-      this.add({ ...at, color: 0xffffff, radius: 4.2, intensity: 0.9 }, this.win);
+      this.srcs.push({ s: pool(at.x, at.y), win: true });
     }
     for (let y = 0; y <= H; y++)
       for (let x = 0; x < W; x++)
-        if (isWindow(hWall(map, x, y))) {
-          const inY = floor(x, y) ? y + 0.45 : y - 0.45;
-          this.add({ x: x + 0.5, y: inY, color: 0xffffff, radius: 4.2, intensity: 0.9 }, this.win);
-        }
+        if (isWindow(hWall(map, x, y)))
+          this.srcs.push({ s: pool(x + 0.5, floor(x, y) ? y + 0.45 : y - 0.45), win: true });
     for (let y = 0; y < H; y++)
       for (let x = 0; x <= W; x++)
-        if (isWindow(vWall(map, x, y))) {
-          const inX = floor(x, y) ? x + 0.45 : x - 0.45;
-          this.add({ x: inX, y: y + 0.5, color: 0xffffff, radius: 4.2, intensity: 0.9 }, this.win);
-        }
+        if (isWindow(vWall(map, x, y)))
+          this.srcs.push({ s: pool(floor(x, y) ? x + 0.45 : x - 0.45, y + 0.5), win: true });
+    const again = prev && prev.w === this.w && prev.h === this.h ? this.touched(prev) : null;
+    if (!again) {
+      for (const { s, win } of this.srcs) this.add(s, win ? this.win : undefined);
+      return;
+    }
+    // (an edit: the old light kept, the samples the lamps it touches reach made again)
+    this.light.set((prev as LightMap).light);
+    this.win.set((prev as LightMap).win);
+    for (const r of again) {
+      for (let py = r.y0; py <= r.y1; py++) {
+        this.light.fill(0, (py * this.w + r.x0) * 3, (py * this.w + r.x1 + 1) * 3);
+        this.win.fill(0, py * this.w + r.x0, py * this.w + r.x1 + 1);
+      }
+    }
+    for (const { s, win } of this.srcs)
+      if (again.some((r) => meets(this.reachOf(s), r))) this.add(s, win ? this.win : undefined, again);
+  }
+
+  // a lamp's reach in samples (as `add` reads it)
+  private reachOf(s: LightSource): SampleRect {
+    const R = s.radius;
+    return {
+      x0: Math.max(0, Math.floor((s.x - R) * PX)),
+      x1: Math.min(this.w - 1, Math.ceil((s.x + R) * PX)),
+      y0: Math.max(0, Math.floor((s.y - R) * PX)),
+      y1: Math.min(this.h - 1, Math.ceil((s.y + R) * PX)),
+    };
+  }
+
+  // The samples an edit can have changed since `prev` (null: none — the light as it was): the
+  // reaches of every lamp (old and new) whose reach takes in a tile or an edge that changed, and of
+  // every lamp that came, went or moved.
+  private touched(prev: LightMap): SampleRect[] | null {
+    const W = this.map.width;
+    const H = this.map.height;
+    let box: { x0: number; y0: number; x1: number; y1: number } | null = null;
+    const hit = (x0: number, y0: number, x1: number, y1: number) => {
+      box = box
+        ? { x0: Math.min(box.x0, x0), y0: Math.min(box.y0, y0), x1: Math.max(box.x1, x1), y1: Math.max(box.y1, y1) }
+        : { x0, y0, x1, y1 };
+    };
+    for (let i = 0; i < this.block.length; i++)
+      if (this.block[i] !== prev.block[i]) hit(i % W, Math.floor(i / W), (i % W) + 1, Math.floor(i / W) + 1);
+    for (let i = 0; i < this.hBlk.length; i++)
+      if (this.hBlk[i] !== prev.hBlk[i]) hit(i % W, Math.floor(i / W), (i % W) + 1, Math.floor(i / W));
+    for (let i = 0; i < this.vBlk.length; i++)
+      if (this.vBlk[i] !== prev.vBlk[i])
+        hit(i % (W + 1), Math.floor(i / (W + 1)), i % (W + 1), Math.floor(i / (W + 1)) + 1);
+    const key = (q: { s: LightSource; win: boolean }) => JSON.stringify(q);
+    const was = new Set(prev.srcs.map(key));
+    const now = new Set(this.srcs.map(key));
+    const out: SampleRect[] = [];
+    for (const q of [...prev.srcs, ...this.srcs]) {
+      const moved = !was.has(key(q)) || !now.has(key(q));
+      const b = box as { x0: number; y0: number; x1: number; y1: number } | null;
+      const near =
+        b &&
+        q.s.x + q.s.radius >= b.x0 &&
+        q.s.x - q.s.radius <= b.x1 &&
+        q.s.y + q.s.radius >= b.y0 &&
+        q.s.y - q.s.radius <= b.y1;
+      if (moved || near) out.push(this.reachOf(q.s));
+    }
+    void H;
+    return out;
   }
 
   private blocked(x: number, y: number): boolean {
@@ -312,15 +386,14 @@ export class LightMap {
     return this.visible(s, x, y);
   }
 
-  private add(s: LightSource, into?: Float32Array) {
+  // a lamp's light added (`only`: in these samples alone)
+  private add(s: LightSource, into?: Float32Array, only?: SampleRect[]) {
     const [r, g, b] = rgbOf(s.color);
     const R = s.radius;
-    const x0 = Math.max(0, Math.floor((s.x - R) * PX));
-    const x1 = Math.min(this.w - 1, Math.ceil((s.x + R) * PX));
-    const y0 = Math.max(0, Math.floor((s.y - R) * PX));
-    const y1 = Math.min(this.h - 1, Math.ceil((s.y + R) * PX));
+    const { x0, x1, y0, y1 } = this.reachOf(s);
     for (let py = y0; py <= y1; py++)
       for (let px = x0; px <= x1; px++) {
+        if (only && !only.some((q) => px >= q.x0 && px <= q.x1 && py >= q.y0 && py <= q.y1)) continue;
         const x = (px + 0.5) / PX;
         const y = (py + 0.5) / PX;
         const d = Math.hypot(x - s.x, y - s.y, HEIGHT);
@@ -412,18 +485,24 @@ const baked = new Map<string, LightMap>();
 export function lightSig(map: MapDef, objects: WorldObjectDef[]): string {
   const doors = objects
     .filter((o) => isOpening(o.kind))
-    .map((o) => `${o.kind},${o.x},${o.y},${o.rot ?? 0},${o.props?.state ?? ""}`)
+    .map((o) => `${o.kind},${o.x},${o.y},${quarterOf(o)},${o.props?.state ?? ""}`)
     .join(";");
   return `${map.key}|${map.floor ?? ""}|${map.width}x${map.height}|${map.tiles.join("")}|${map.hWalls.join("")}|${map.vWalls.join("")}|${JSON.stringify(lightSources(objects))}|${doors}`;
 }
-export function lightMapFor(map: MapDef, objects: WorldObjectDef[], sig = lightSig(map, objects)): LightMap {
+export function lightMapFor(
+  map: MapDef,
+  objects: WorldObjectDef[],
+  sig = lightSig(map, objects),
+  /** the floor's map before (an edit: only what it touched baked again) */
+  prev?: LightMap,
+): LightMap {
   let lm = baked.get(sig);
   if (lm) {
     baked.delete(sig);
     baked.set(sig, lm);
     return lm;
   }
-  lm = new LightMap(map, objects);
+  lm = new LightMap(map, objects, prev);
   baked.set(sig, lm);
   if (baked.size > 8) baked.delete(baked.keys().next().value as string);
   return lm;

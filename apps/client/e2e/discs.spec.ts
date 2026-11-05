@@ -52,7 +52,7 @@ async function putRack(page: Page, id: string) {
     [-6, -2],
   ]) {
     const at = { x: Math.floor(sp.x) + dx, y: Math.floor(sp.y) + dy };
-    await page.evaluate((q) => (window as any).__yutopia.send("obj:put", q), { id, kind: "disc_rack", ...at, rot: 0 });
+    await page.evaluate((q) => (window as any).__yutopia.send("obj:put", q), { id, kind: "disc_rack", ...at, yaw: 0 });
     await page.waitForTimeout(700);
     if (await page.evaluate((i) => !!(window as any).__yutopia.room.state.objects.get(i), id)) return;
   }

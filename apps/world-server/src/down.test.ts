@@ -18,7 +18,6 @@ process.env.YUTOPIA_WORLD_SECRET = "test";
 process.env.YUTOPIA_INTERNAL_SECRET = "test";
 
 const PORT = 30400 + Math.floor(Math.random() * 100); // (its own hundred: no two files share one — they run at once)
-const OFF = { x: -60, y: -10 };
 const POND = { x: -250, z: -60 };
 let server: { gracefullyShutdown: (exit?: boolean) => Promise<void> };
 const rooms: Room[] = [];
@@ -67,10 +66,10 @@ async function person(uid: number, sandbox: number): Promise<Person> {
   return who;
 }
 async function standAt(p: Person, bx: number, bz: number) {
-  const to = { x: bx - OFF.x, y: bz - OFF.y };
+  const to = { x: bx, y: bz };
   p.room.send("teleport", { to: { ...to, level: 0 } });
   await waitFor(() => me(p.room).level === 0 && Math.hypot(me(p.room).x - to.x, me(p.room).y - to.y) < 0.5);
-  p.room.send("pos", { ...to, z: heightAt(bx, bz), d: 2, a: 0, seq: 0, mv: 0 });
+  p.room.send("pos", { ...to, z: heightAt(bx, bz), yaw: 96, a: 0, seq: 0, mv: 0 });
   await sleep(100);
 }
 const down = async (p: Person) => {
@@ -110,7 +109,7 @@ test("alone: woken at the office, 50 health, what they carried kept", async () =
   await down(c);
   await waitFor(() => c.awake === 1, 8000);
   await waitFor(() => me(c.room).downAt === 0 && me(c.room).hp === DOWN.awakeHp);
-  assert.notEqual(Math.round(me(c.room).x), Math.round(POND.x - OFF.x), "not on the pond any more");
+  assert.notEqual(Math.round(me(c.room).x), Math.round(POND.x), "not on the pond any more");
   assert.equal(c.inv?.quick[0]?.id, "revolver", "what they carried, kept");
 });
 
@@ -155,10 +154,10 @@ test("down: a crawl, no jog, no jump", async () => {
     for (let i = 0; i < n; i++) {
       bx += speed * 0.05;
       f.room.send("pos", {
-        x: bx - OFF.x,
-        y: POND.z - OFF.y,
+        x: bx,
+        y: POND.z,
         z: heightAt(bx, POND.z),
-        d: 2,
+        yaw: 96,
         a: 1,
         seq: 0,
         mv: packMv("crouch"),
@@ -204,7 +203,7 @@ test("in the air: a jump marked `air` (a second jump) is taken, an air dash too;
   await standAt(f, POND.x + 4, POND.z);
   await sleep(1100); // (the teleport's snap: what was sent before it is let go for a second)
   const g = heightAt(POND.x + 4, POND.z);
-  const up = { x: POND.x + 4 - OFF.x, y: POND.z - OFF.y, z: g + 2, d: 2, a: 0, seq: 0, mv: 0 };
+  const up = { x: POND.x + 4, y: POND.z, z: g + 2, yaw: 96, a: 0, seq: 0, mv: 0 };
   // two metres up for half a second: off the ground longer than coyote time and a message's lag
   for (let i = 0; i < 10; i++) {
     f.room.send("pos", up);

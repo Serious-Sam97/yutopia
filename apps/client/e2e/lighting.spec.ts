@@ -65,8 +65,15 @@ const look = (page: Page, v: { hour: number; yaw: number; pitch: number; dist: n
   }, v);
 
 test("no GL errors: loading, every quality, every floor, day and night", async ({ page }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(150_000);
   await open3p(page);
+  // loaded on the lot, the worst case — its cars' headlamps cast shadows on High, their maps made
+  // only by the first frames' shadow pass: entering there drew ~200 lit draws with no map (plan 72
+  // phase 3; warmDraw). (Where you enter is where you last were: put there, then in again.)
+  await goTo(page, LOT);
+  await page.waitForTimeout(1000);
+  await page.reload();
+  await page.waitForFunction(() => !!(window as any).__yutopia?.tp, null, { timeout: 60_000 });
   await page.waitForTimeout(2000);
   for (const q of ["medium", "low", "high"]) {
     await page.evaluate((q) => (window as any).__yutopia.tp.setQuality(q), q);

@@ -1,4 +1,4 @@
-import { ANIM, areaAt, dirFromDelta, findPath, type Point } from "@yutopia/shared";
+import { ANIM, areaAt, faceByte, type Point } from "@yutopia/shared";
 import { isRadio } from "@yutopia/shared/media";
 import { api } from "../api.ts";
 import { config } from "../config.ts";
@@ -61,7 +61,7 @@ registerFeature((room: WorldRoom) => {
 
   const go = (to: Point) => {
     if (!okTarget(to)) return false;
-    const p = findPath(room.grid, npc, to);
+    const p = room.wayFor(null, room.home, npc, to);
     if (!p?.length) return false;
     path = p;
     return true;
@@ -102,7 +102,7 @@ registerFeature((room: WorldRoom) => {
     if (now - (lastPoke.get(p.uid) ?? 0) < POKE_COOLDOWN) return;
     lastPoke.set(p.uid, now);
     npc.mood = "glitch";
-    npc.d = dirFromDelta(p.x - npc.x, p.y - npc.y);
+    npc.yaw = faceByte(p.x - npc.x, p.y - npc.y, npc.yaw);
     void say("poke", p.uid, client);
   });
 
@@ -146,7 +146,7 @@ registerFeature((room: WorldRoom) => {
           const dx = wp.x - npc.x;
           const dy = wp.y - npc.y;
           const d = Math.hypot(dx, dy);
-          if (d > 0.001) npc.d = dirFromDelta(dx, dy);
+          if (d > 0.001) npc.yaw = faceByte(dx, dy, npc.yaw);
           if (d <= budget) {
             npc.x = wp.x;
             npc.y = wp.y;

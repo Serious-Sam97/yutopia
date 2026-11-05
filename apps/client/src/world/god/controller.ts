@@ -175,8 +175,7 @@ export class GodController {
     this.walking = false;
     // (out of my head: where I stand, looking the way I look)
     const me = this.w.meTile();
-    const f = tp.floorOffset(this.w.level);
-    this.at = { x: me.x + f.x, z: me.y + f.z };
+    this.at = { x: me.x, z: me.y };
     this.up = UP.start;
     this.pitch = PITCH.start;
     this.yaw = tp.yaw;
@@ -243,7 +242,7 @@ export class GodController {
     const tp = this.w.tp;
     if (!tp) return;
     this.end();
-    this.ring?.show(null, 0, { x: 0, z: 0, y: 0 });
+    this.ring?.show(null, 0, { y: 0 });
     this.roads?.cancel();
     this.roads?.hide();
     this.things?.cancel();
@@ -258,8 +257,7 @@ export class GodController {
     this.w.send("god:walk", { on });
     if (on) {
       // (the ground floor's coords: where the camera looks)
-      const f = tp.floorOffset(0);
-      this.w.teleport({ x: this.at.x - f.x, y: this.at.z - f.z, level: 0 });
+      this.w.teleport({ x: this.at.x, y: this.at.z, level: 0 });
       tp.god = null;
     } else tp.god = { at: new Vector3(), dist: this.up, input: this.input };
     this.set({ walking: on, publish: null, map: false });
@@ -278,7 +276,7 @@ export class GodController {
     const ez = this.at.z - Math.sin(this.yaw) * back;
     const ey = Math.max(g + this.up, terrainAt(ex, ez) + 2);
     const f = tp.groundsFrame();
-    tp.god.at.set(this.at.x - f.x, g + f.y, this.at.z - f.z);
+    tp.god.at.set(this.at.x, g + f.y, this.at.z);
     tp.god.dist = Math.hypot(back, ey - g);
     // (the billboards — trees' cards, the people — face back along this camera)
     tp.yaw = this.yaw;
@@ -301,8 +299,8 @@ export class GodController {
     else this.grow?.hide();
     this.readouts();
     return {
-      eye: [ex - f.x, ez - f.z, ey + f.y],
-      look: [this.at.x - f.x, this.at.z - f.z, g + f.y],
+      eye: [ex, ez, ey + f.y],
+      look: [this.at.x, this.at.z, g + f.y],
       showMe: true,
       snap: true,
     };
@@ -706,7 +704,7 @@ export class GodController {
     return null;
   }
   /** Each frame: the box or line round what's under the pointer (else round the picked one). */
-  private selectFrame(at: { x: number; z: number; h: number } | null, f: { x: number; z: number; y: number }) {
+  private selectFrame(at: { x: number; z: number; h: number } | null, f: { y: number }) {
     const g = hud.get().god;
     const kind = this.selDrag?.kind ?? this.selectHit(at) ?? g.picked;
     // (the picked one's tool shows it when the pointer's on nothing: no hover for the others)
@@ -878,7 +876,7 @@ export class GodController {
     this.layStroke();
     this.stroke = null;
   }
-  private showRing(f: { x: number; z: number; y: number }) {
+  private showRing(f: { y: number }) {
     const g = hud.get().god;
     const woods = g.tool === "nature" && ["plant", "clear", "generated"].includes(g.nature.mode);
     const on = g.tool === "land" || g.tool === "paint" || woods;
@@ -1288,8 +1286,7 @@ export class GodController {
     const tp = this.w.tp;
     for (const p of this.w.room?.state.players.values() ?? []) {
       if (p.level !== 0 || !tp) continue;
-      const f = tp.floorOffset(0);
-      if (lifted.has(`${Math.floor((p.x + f.x) / 32)},${Math.floor((p.y + f.z) / 32)}`)) standing++;
+      if (lifted.has(`${Math.floor(p.x / 32)},${Math.floor(p.y / 32)}`)) standing++;
     }
     return {
       count,

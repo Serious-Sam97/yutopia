@@ -24,7 +24,7 @@ for (const view of ["3p"] as const)
     await page.waitForTimeout(7000);
     const worst: number[] = [];
     // down to 3, to the lobby, home, and the same again (the second round: kept floors)
-    const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
+    const G = (x: number, y: number) => ({ x, y });
     for (const to of [
       { x: 20.5, y: 12.5, level: 3 },
       { ...G(12.5, 17.5), level: 0 },

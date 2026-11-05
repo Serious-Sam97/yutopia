@@ -17,7 +17,7 @@ test.use({
     args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", "--autoplay-policy=no-user-gesture-required"],
   },
 });
-const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
+const G = (x: number, y: number) => ({ x, y });
 const prefs = (page: Page) =>
   page.addInitScript(() => {
     const k = "yutopia:prefs";
@@ -88,10 +88,21 @@ test("the HUD at night, hurt and cold, focusing, armed; the dark's sounds", asyn
     page.evaluate((s) => Number((document.querySelector(s) as HTMLElement).style.opacity), sel);
   expect(await opacity(".dk-vig"), "hurt: the vignette").toBeGreaterThan(0.3);
   expect(await opacity(".dk-frost"), "cold: the frost").toBeGreaterThan(0.5);
-  await expect(page.locator(".dk-bat")).toBeVisible();
+  await expect(page.locator(".dk-bat:not(.dk-air)")).toBeVisible();
   await expect(page.locator(".dk-arms .cyl")).toBeVisible();
   await expect(page.locator(".dk-cross")).toBeVisible();
-  await expect(page.locator(".dk-team").first()).toContainText(/\d+ m/);
+  // Bia's tag (distance, health): only while Ana sees her — in Ana's beam, not by her own torch
+  // (docs/plan/44-the-night.md N4: the teammate tag hides for the unseen, it gave them away)
+  await page.evaluate(() => {
+    const y = (window as any).__yutopia;
+    const me = y.room.state.players.get(y.room.sessionId);
+    let bia: any = null;
+    y.room.state.players.forEach((p: any) => {
+      if (p.sid !== y.room.sessionId) bia = p;
+    });
+    y.tp.yaw = Math.atan2(bia.y - me.y, bia.x - me.x);
+  });
+  await expect(page.locator(".dk-team").first()).toContainText(/\d+ m/, { timeout: 8000 });
   // the sound: the drone playing, the focus's hum
   const loops = await page.evaluate(() => [...(window as any).__dark.voices.loops.keys()] as string[]);
   expect(

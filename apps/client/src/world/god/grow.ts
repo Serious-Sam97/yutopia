@@ -14,7 +14,7 @@ import { type GodHud, hud, toast } from "../store";
 // draft outlined faintly while the tool's on, the picked one (or the one under the pointer)
 // brighter. The pieces are god mode's own: changed in the draft's `land.add`, never `change`.
 
-type Frame = { x: number; z: number; y: number };
+type Frame = { y: number };
 type Ground = { x: number; z: number; h: number } | null;
 type Rect = { x0: number; z0: number; x1: number; z1: number };
 export interface GrowHost {
@@ -121,12 +121,12 @@ class Outline {
     this.line.visible = true;
     this.mat.color.setHex(color);
     this.mat.opacity = opacity;
-    const k = `${r.x0},${r.z0},${r.x1},${r.z1},${f.x},${f.z},${f.y}`;
+    const k = `${r.x0},${r.z0},${r.x1},${r.z1},${f.y}`;
     if (k === this.key && lay === this.lay) return;
     this.key = k;
     this.lay = lay;
     const pts: number[] = [];
-    const put = (x: number, z: number) => pts.push(x - f.x, terrainAt(x, z) + UP + f.y, z - f.z);
+    const put = (x: number, z: number) => pts.push(x, terrainAt(x, z) + UP + f.y, z);
     const side = (ax: number, az: number, bx: number, bz: number) => {
       const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / STEP));
       for (let i = 0; i < n; i++) put(ax + ((bx - ax) * i) / n, az + ((bz - az) * i) / n);
@@ -285,8 +285,8 @@ export class GrowTool {
       this.setO({ blocked: why, drawing: r });
   }
   hide() {
-    for (const l of this.outlines) l.show(null, { x: 0, z: 0, y: 0 }, AMBER, 0, null);
-    this.ghost?.show(null, { x: 0, z: 0, y: 0 }, GREEN, 0, null);
+    for (const l of this.outlines) l.show(null, { y: 0 }, AMBER, 0, null);
+    this.ghost?.show(null, { y: 0 }, GREEN, 0, null);
   }
   dispose() {
     for (const l of this.outlines) l.dispose();

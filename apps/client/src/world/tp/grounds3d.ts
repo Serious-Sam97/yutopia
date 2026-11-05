@@ -1,4 +1,4 @@
-import { CAR_COLOURS } from "@yutopia/shared";
+import { CAR_COLOURS, STOREY } from "@yutopia/shared";
 import {
   BENCH,
   BUILDINGS,
@@ -161,7 +161,6 @@ export const loadKarts = () => import("./karts3d");
 // headquarters at y = 0. Phase 1 makes this the game's: chunks streamed in
 // and out as you walk instead of built once round a spot.
 
-const STOREY = 3.5;
 const BAY = 4;
 
 /** A lamp's light, for the scene to light the nearest few for real. */

@@ -81,8 +81,8 @@ test("game room: plug in, cartridge, on — everyone sees the TV, pad 2 plays, c
     ]) {
       const p = { x: Math.floor(sp.x) + dx, y: Math.floor(sp.y) + dy };
       for (const o of [
-        { id: tvId, kind: "crt_tv", x: p.x, y: p.y, rot: 0 },
-        { id: conId, kind: "console_nes", x: p.x + 1, y: p.y + 2, rot: 0 },
+        { id: tvId, kind: "crt_tv", x: p.x, y: p.y, yaw: 0 },
+        { id: conId, kind: "console_nes", x: p.x + 1, y: p.y + 2, yaw: 0 },
       ])
         await ana.evaluate((q) => (window as any).__yutopia.send("obj:put", q), o);
       await ana.waitForTimeout(700);
@@ -204,8 +204,8 @@ test("bring your cartridge: upload, play, save, come back and carry on", async (
     const sp = await page.evaluate(() => (window as any).__yutopia.map.spawn);
     const p = { x: Math.floor(sp.x) - 2, y: Math.floor(sp.y) - 6 };
     for (const o of [
-      { id: tvId, kind: "crt_tv", x: p.x, y: p.y, rot: 0 },
-      { id: conId, kind: "console_nes", x: p.x + 1, y: p.y + 2, rot: 0 },
+      { id: tvId, kind: "crt_tv", x: p.x, y: p.y, yaw: 0 },
+      { id: conId, kind: "console_nes", x: p.x + 1, y: p.y + 2, yaw: 0 },
     ])
       await page.evaluate((q) => (window as any).__yutopia.send("obj:put", q), o);
     await expect
@@ -289,14 +289,14 @@ test("phone: the touch pad plays", async ({ browser }) => {
       kind: "crt_tv",
       x: p.x,
       y: p.y,
-      rot: 0,
+      yaw: 0,
     });
     await page.evaluate((q) => (window as any).__yutopia.send("obj:put", q), {
       id: ids[1],
       kind: "console_nes",
       x: p.x + 1,
       y: p.y + 2,
-      rot: 0,
+      yaw: 0,
     });
     await expect
       .poll(() => page.evaluate((i) => !!(window as any).__yutopia.room.state.objects.get(i), ids[1]))
@@ -343,8 +343,8 @@ test("a Console TV takes a console too: the cable, the game on its glass, back t
   ]) {
     const p = { x: Math.floor(sp.x) + dx, y: Math.floor(sp.y) + dy };
     for (const o of [
-      { id: tvId, kind: "tv_console", x: p.x, y: p.y, rot: 0 },
-      { id: conId, kind: "console_nes", x: p.x + 1, y: p.y + 2, rot: 0 },
+      { id: tvId, kind: "tv_console", x: p.x, y: p.y, yaw: 0 },
+      { id: conId, kind: "console_nes", x: p.x + 1, y: p.y + 2, yaw: 0 },
     ])
       await page.evaluate((q) => (window as any).__yutopia.send("obj:put", q), o);
     await page.waitForTimeout(700);
@@ -424,10 +424,10 @@ test("two games at once: one each, both TVs live for everyone; a second of mine 
     ]) {
       const p = { x: Math.floor(sp.x) + dx, y: Math.floor(sp.y) + dy };
       for (const o of [
-        { id: tvA, kind: "crt_tv", x: p.x, y: p.y, rot: 0 },
-        { id: conA, kind: "console_nes", x: p.x + 1, y: p.y + 2, rot: 0 },
-        { id: tvB, kind: "crt_tv", x: p.x + 4, y: p.y, rot: 0 },
-        { id: conB, kind: "console_nes", x: p.x + 5, y: p.y + 2, rot: 0 },
+        { id: tvA, kind: "crt_tv", x: p.x, y: p.y, yaw: 0 },
+        { id: conA, kind: "console_nes", x: p.x + 1, y: p.y + 2, yaw: 0 },
+        { id: tvB, kind: "crt_tv", x: p.x + 4, y: p.y, yaw: 0 },
+        { id: conB, kind: "console_nes", x: p.x + 5, y: p.y + 2, yaw: 0 },
       ])
         await ana.evaluate((q) => (window as any).__yutopia.send("obj:put", q), o);
       await ana.waitForTimeout(800);

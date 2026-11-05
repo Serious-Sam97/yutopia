@@ -1,7 +1,10 @@
 import type { WorldObjectDef } from "./catalog.ts";
+import { quarterOf } from "./catalog.ts";
 import type { Point } from "./iso.ts";
-import { across, elevOf, floorOf, floorsOf, levelMap, objLevel, STOREY } from "./levels.ts";
+import { across, elevOf, floorOf, floorsOf, levelMap, objLevel } from "./levels.ts";
+import { liftShafts, shaftHoles } from "./lift.ts";
 import { type Edge, isFloor, type MapDef, tileAt } from "./map.ts";
+import { STOREY } from "./units.ts";
 
 // A staircase (the catalog's `stairs`): a switchback in a 4 × 6 well from its
 // floor to the one above (docs/plan/25-building-floors.md). Local coords (rot
@@ -52,12 +55,12 @@ export function rampHeight(r: Ramp, x: number, y: number): number {
 export const inRamp = (r: Ramp, x: number, y: number): boolean => x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1;
 
 /** Local (u, v) → tile coords of the stairs' floor (the same turn as Sketch.rp). */
-export function stairsPoint(o: { x: number; y: number; rot?: number }, u: number, v: number): Point {
+export function stairsPoint(o: { x: number; y: number; yaw?: number }, u: number, v: number): Point {
   let X = u;
   let Y = v;
   let W = STAIRS_W;
   let H = STAIRS_D;
-  for (let i = 0; i < ((o.rot ?? 0) & 3); i++) {
+  for (let i = 0; i < (quarterOf(o) & 3); i++) {
     [X, Y] = [H - Y, X];
     [W, H] = [H, W];
   }
@@ -65,8 +68,8 @@ export function stairsPoint(o: { x: number; y: number; rot?: number }, u: number
 }
 
 /** Tile coords → local (u, v). */
-export function stairsLocal(o: { x: number; y: number; rot?: number }, x: number, y: number): { u: number; v: number } {
-  const r = (o.rot ?? 0) & 3;
+export function stairsLocal(o: { x: number; y: number; yaw?: number }, x: number, y: number): { u: number; v: number } {
+  const r = quarterOf(o) & 3;
   const X = x - o.x;
   const Y = y - o.y;
   if (r === 1) return { u: Y, v: STAIRS_D - X };
@@ -76,7 +79,7 @@ export function stairsLocal(o: { x: number; y: number; rot?: number }, x: number
 }
 
 // a local rectangle (u0..u1 × v0..v1) as a tile-coords rectangle
-function rect(o: { x: number; y: number; rot?: number }, u0: number, v0: number, u1: number, v1: number) {
+function rect(o: { x: number; y: number; yaw?: number }, u0: number, v0: number, u1: number, v1: number) {
   const a = stairsPoint(o, u0, v0);
   const b = stairsPoint(o, u1, v1);
   return { x0: Math.min(a.x, b.x), y0: Math.min(a.y, b.y), x1: Math.max(a.x, b.x), y1: Math.max(a.y, b.y) };
@@ -84,7 +87,7 @@ function rect(o: { x: number; y: number; rot?: number }, u0: number, v0: number,
 
 // a local slope along v (from v0 at h0 to v1 at h1) as a ramp
 function slope(
-  o: { x: number; y: number; rot?: number },
+  o: { x: number; y: number; yaw?: number },
   u0: number,
   u1: number,
   v0: number,
@@ -100,7 +103,7 @@ function slope(
 }
 
 /** The stairs' surfaces, `dz` up from their floor (−STOREY: seen from the floor above). */
-export function stairsRamps(o: { x: number; y: number; rot?: number }, dz = 0): Ramp[] {
+export function stairsRamps(o: { x: number; y: number; yaw?: number }, dz = 0): Ramp[] {
   return [
     slope(o, 2, STAIRS_W, V_FLIGHT, V_TURN, dz, dz + HALF), // flight A
     slope(o, 0, STAIRS_W, V_TURN, STAIRS_D, dz + HALF, dz + HALF), // the half landing
@@ -109,7 +112,7 @@ export function stairsRamps(o: { x: number; y: number; rot?: number }, dz = 0): 
 }
 
 /** The tiles of the well (v 2..7): no floor of their own, only the treads. */
-export function stairsWell(o: { x: number; y: number; rot?: number }): [number, number][] {
+export function stairsWell(o: { x: number; y: number; yaw?: number }): [number, number][] {
   const r = rect(o, 0, V_FLIGHT, STAIRS_W, STAIRS_D);
   const out: [number, number][] = [];
   for (let y = r.y0; y < r.y1; y++) for (let x = r.x0; x < r.x1; x++) out.push([x, y]);
@@ -117,7 +120,7 @@ export function stairsWell(o: { x: number; y: number; rot?: number }): [number, 
 }
 
 // a local line (u, v0..v1 or u0..u1, v) as the tile edges along it
-function lineEdges(o: { x: number; y: number; rot?: number }, a: [number, number], b: [number, number]): Edge[] {
+function lineEdges(o: { x: number; y: number; yaw?: number }, a: [number, number], b: [number, number]): Edge[] {
   const p = stairsPoint(o, a[0], a[1]);
   const q = stairsPoint(o, b[0], b[1]);
   const out: Edge[] = [];
@@ -127,13 +130,13 @@ function lineEdges(o: { x: number; y: number; rot?: number }, a: [number, number
 }
 
 /** The wall between the two flights. */
-export function stairsDivider(o: { x: number; y: number; rot?: number }): Edge[] {
+export function stairsDivider(o: { x: number; y: number; yaw?: number }): Edge[] {
   return lineEdges(o, [2, V_FLIGHT], [2, V_TURN]);
 }
 
 /** On a floor with nothing going up: the rail across the top of the hole where
  *  the next flight would start (the flight below is a floor down). */
-export function stairsTopRail(o: { x: number; y: number; rot?: number }): Edge[] {
+export function stairsTopRail(o: { x: number; y: number; yaw?: number }): Edge[] {
   return lineEdges(o, [2, V_FLIGHT], [STAIRS_W, V_FLIGHT]);
 }
 
@@ -157,22 +160,29 @@ export function floorChange(z: number, level: number, floors: number[]): { level
   return null;
 }
 
+/** Whether floor `l` has a floor under `p` (in its own coords): the browser asks Jolt's slabs
+ *  (docs/plan/72 phase 7: the floor from the slab under you); without one, the floor's tiles. */
+export type SlabUnder = (l: number, p: Point) => boolean;
+
 /** The floor a body's feet are on, from their height, anywhere in the building (docs/plan/50 D:
  *  one building — the stairs, a flier through a ceiling): past a storey's band, the next floor up
- *  or down where that floor has a floor under them; as many as it's gone past. Over the top
- *  floor's roof, or out through a wall up a floor, outdoors: the ground floor's frame (the land's).
- *  Null: the floor it was. `m` the building, `p` in floor `level`'s coords. */
+ *  or down where that floor has a floor under them (`slab`: what says so — Jolt's slabs; none, the
+ *  floor's tiles); as many as it's gone past. Over the top floor's roof, or out through a wall up
+ *  a floor, outdoors: the ground floor's frame (the land's). Null: the floor it was. `m` the
+ *  building, `p` in floor `level`'s coords. */
 export function floorAt(
   m: MapDef,
   level: number,
   p: Point,
   z: number,
+  slab?: SlabUnder,
 ): { level: number; dz: number; at: Point } | null {
   const floors = floorsOf(m);
   const has = (l: number) => {
     if (!floors.includes(l)) return false;
-    const lm = levelMap(m, l);
     const q = across(m, level, l, p);
+    if (slab) return slab(l, q);
+    const lm = levelMap(m, l);
     return !!lm && isFloor(tileAt(lm, Math.floor(q.x), Math.floor(q.y)));
   };
   const outdoors = () =>
@@ -206,17 +216,22 @@ export function wellsOf(
 ): Set<string> {
   const f = floorOf(map);
   const out = new Set<string>();
-  for (const o of objects) {
+  const all = [...objects];
+  for (const o of all) {
     if (o.kind !== "stairs") continue;
     const l = objLevel(o, map);
     const at = which === "ceiling" ? (l === f ? o : null) : l === f - 1 ? { ...o, ...across(map, l, f, o) } : null;
     if (at) for (const [x, y] of stairsWell(at)) out.add(`${x},${y}`);
   }
+  // a lift's shaft going on down from here (the floor), or up (the ceiling): open its size
+  // (docs/plan/72 phase 8: lifts as moving platforms — its car's floor and ceiling are its own)
+  for (const [x0, y0, x1, y1] of shaftHoles(liftShafts(all, map), f, which === "ceiling"))
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) out.add(`${x},${y}`);
   return out;
 }
 
 /** The middle of the stairs' fire doors (the pair on their door side, u 0..2). */
-export function stairsDoor(o: { x: number; y: number; rot?: number }): Point {
+export function stairsDoor(o: { x: number; y: number; yaw?: number }): Point {
   return stairsPoint(o, 1, 0);
 }
 
@@ -224,7 +239,7 @@ export function stairsDoor(o: { x: number; y: number; rot?: number }): Point {
  *  (its floor's tile coords; the last point is on the floor above, in the same
  *  spot of the building): flight A, the half landing, flight B. Reversed, the
  *  way down from the floor above. */
-export function stairsWayUp(o: { x: number; y: number; rot?: number }): Point[] {
+export function stairsWayUp(o: { x: number; y: number; yaw?: number }): Point[] {
   const [f, t] = [V_FLIGHT, V_TURN];
   return [
     [1, 0.9],

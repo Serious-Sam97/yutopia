@@ -137,9 +137,7 @@ export function shoesLap(p: Paint, kind: string, c: string, skin: string): strin
   const left = (() => {
     const foot = "M45.5 122 Q44.5 129 49.5 129.5 L57 129.5 Q58 125.5 55 122Z";
     if (kind === "sandals")
-      return (
-        fill(foot, skin) + `<path d="M46.2 126 Q50.6 124.6 55.4 126" stroke="${c}" stroke-width="1.4" fill="none"/>`
-      );
+      return `${fill(foot, skin)}<path d="M46.2 126 Q50.6 124.6 55.4 126" stroke="${c}" stroke-width="1.4" fill="none"/>`;
     let g = "";
     if (kind === "boots") g += fill("M47.2 116.5 L55.6 116.5 L55.6 123 L47.2 123Z", c);
     else if (kind === "hightops") g += fill("M47.4 119 L55.4 119 L55.4 123 L47.4 123Z", c);
@@ -154,7 +152,7 @@ export function shoeLapSide(p: Paint, kind: string, c: string, skin: string): st
   const { fill, shade } = p;
   const foot = "M28.5 127.5 Q26.5 128 26.5 131.5 Q26.5 134 29.5 134 L41.5 134 L41.5 127.5Z";
   if (kind === "sandals")
-    return fill(foot, skin) + `<path d="M27 133.6 H41.6 M30 129.6 L35 128.6" stroke="${c}" stroke-width="1.4"/>`;
+    return `${fill(foot, skin)}<path d="M27 133.6 H41.6 M30 129.6 L35 128.6" stroke="${c}" stroke-width="1.4"/>`;
   let g = "";
   if (kind === "boots") g += fill("M33 119.5 L41.8 119.5 L41.8 128 L33 128Z", c);
   else if (kind === "hightops") g += fill("M33.4 122.5 L41.6 122.5 L41.6 128 L33.4 128Z", c);

@@ -24,6 +24,41 @@ jobs:
       - run: pnpm contrast
       - run: pnpm perf
 
+  # The smoke e2e (docs/plan/72-the-3d-core.md, phase 3): the page built and served, an offline
+  # world-server, the API faked by the spec (apps/client/e2e/ci) — the world comes up, a walk, a
+  # wall, nothing thrown. CI's browser draws in software: slow, so few and generous checks.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @yutopia/client exec playwright install --with-deps chromium
+      - run: NEXT_DIST_DIR=.next-prod pnpm --filter @yutopia/client build
+      - run: pnpm --filter @yutopia/client test:smoke
+
+  # The API's tests (Pest; phpunit.xml forces SQLite in memory: no database to stand up) and its style.
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: pdo_sqlite, sqlite3, mbstring, bcmath, intl
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: cp .env.example .env && php artisan key:generate
+      - run: ./vendor/bin/pest
+      - run: ./vendor/bin/pint --test
+
   # Jolt (docs/plan/50, guardrails 3–4) on x86-64: the bench's 8 behaviour checks, its hashes
   # against the recorded ones (tools/physics-bench/RESULTS.md) and its heap over a long session.
   # A hash that differs means Jolt isn't deterministic here: build it with CROSS_PLATFORM_DETERMINISTIC.

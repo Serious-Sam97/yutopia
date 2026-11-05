@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { entry, ISO_PX, SURFACE } from "@yutopia/shared";
+import { entry, quarterYaw, SURFACE } from "@yutopia/shared";
 import { Box3, type BufferGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from "three";
 import type { LivePart } from "../kit";
 import { liveGroup } from "../liveparts";
@@ -39,11 +39,11 @@ test("desks & tables 2: every kind and look on its footprint, its top at its spe
     assert.equal(e.variants ?? 1, LOOKS[kind].length, `${kind}: a name a look`);
     const want = SURFACE[kind];
     assert.ok(want !== undefined && e.surface !== undefined, `${kind}: a surface`);
-    assert.ok(Math.abs((e.surface as number) / ISO_PX - want) < 0.001, `${kind}: the catalog's iso px read back`);
+    assert.ok(Math.abs((e.surface as number) - want) < 0.001, `${kind}: the catalog's surface read back`);
     const top = e.top ?? [0, 0, e.w * 4, e.h * 4];
     for (let variant = 0; variant < LOOKS[kind].length; variant++)
       for (const id of ["a", "b", "c", "d", "e", "f"]) {
-        const g = modelOf({ id, kind, x: 0, y: 0, rot: 0, props: { variant } });
+        const g = modelOf({ id, kind, x: 0, y: 0, yaw: quarterYaw(0), props: { variant } });
         const w = whole(g);
         const b = new Box3().setFromObject(w);
         const what = `${kind} ${variant} ${id}`;
@@ -82,7 +82,8 @@ test("desks & tables 2: the knees — nothing under a desk's top where its sitte
   };
   for (const [kind, spaces] of Object.entries(knees))
     for (let variant = 0; variant < LOOKS[kind].length; variant++) {
-      const p = modelOf({ id: "k", kind, x: 0, y: 0, rot: 0, props: { variant } }).attributes.position.array;
+      const p = modelOf({ id: "k", kind, x: 0, y: 0, yaw: quarterYaw(0), props: { variant } }).attributes.position
+        .array;
       for (let i = 0; i < p.length; i += 3) {
         const [x, y, z] = [p[i], p[i + 1], p[i + 2]];
         if (y <= 0.05 || y >= 0.6) continue;
@@ -104,7 +105,7 @@ test("desks & tables 2: the drafting table's lamp lights, and goes out switched 
           kind: "drafting_table",
           x: 0,
           y: 0,
-          rot: 0,
+          yaw: quarterYaw(0),
           props: { variant, ...(on === undefined ? {} : { on }) },
         }).userData.glow as BufferGeometry | null
       )?.attributes.position.count ?? 0;

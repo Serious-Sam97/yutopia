@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
-import { findPath, ROOM_NAME } from "@yutopia/shared";
+import { ROOM_NAME, STOREY } from "@yutopia/shared";
 import { Client, type Room } from "colyseus.js";
 
 // The lift (docs/plan/52-the-pet-two.md, item 8 / D1): a dog following its owner into car A rides with
@@ -53,15 +53,14 @@ test("a dog following into the lift rides down and up in the car with its owner,
     const room = WorldRoom.current;
     const p = me();
     if (!room) return false;
-    const g = room.gridFor(95, p.level);
-    return pet().floor === p.level && !!findPath(g, pet(), { x: p.x, y: p.y });
+    return pet().floor === p.level && !!room.wayFor(95, p.level, pet(), { x: p.x, y: p.y });
   };
   let seq = 0;
   const step = async (path: [number, number][], level = 4) => {
     let at = { x: me().x, y: me().y };
     for (const [x, y] of path) {
       await sleep(Math.max(55, (Math.hypot(x - at.x, y - at.y) / 4.5) * 1000));
-      r.send("pos", { x, y, z: 0, l: level, d: 0, a: 1, seq: ++seq });
+      r.send("pos", { x, y, z: level * STOREY, l: level, yaw: 32, a: 1, seq: ++seq });
       at = { x, y };
     }
     await sleep(150);
@@ -97,9 +96,10 @@ test("a dog following into the lift rides down and up in the car with its owner,
       samples++;
       assert.equal(p.floor, me().level, "on her floor");
       assert.ok(Math.hypot(p.x - me().x, p.y - me().y) < 1, "beside her, in the car");
-      assert.ok(Math.abs(p.z - me().z) < 0.01, "at the car's height");
+      assert.ok(Math.abs(p.z - (me().z - me().level * STOREY)) < 0.01, "at the car's height");
     }
-    if (me().level > 0) r.send("pos", { x: 9, y: 26, z: 0, l: me().level, d: 0, a: 1, seq: ++seq });
+    if (me().level > 0)
+      r.send("pos", { x: 9, y: 26, z: me().level * STOREY, l: me().level, yaw: 32, a: 1, seq: ++seq });
     if (me().level === 0 && JSON.parse(stop(0).props).door === "open") break;
     await sleep(60);
   }
@@ -136,7 +136,7 @@ test("shut in where it can't get to its owner: put back at their side", async ()
   const me = (): S => r.state?.players?.get(r.sessionId);
   await waitFor(() => !!me(), 8000);
   // out in the lot (the ground floor), the dog with her
-  r.send("teleport", { to: { x: 40, y: 22, level: 0 } });
+  r.send("teleport", { to: { x: -20, y: 12, level: 0 } });
   await waitFor(() => me().level === 0);
   r.send("pet:adopt", { species: "dog", name: "Bo" });
   await waitFor(() => r.state.pets?.size === 1);
@@ -176,7 +176,7 @@ test("up or down on foot: it goes where she left the floor first, then comes alo
     [8.0, 28.2],
     [8.8, 28.5],
   ]) {
-    r.send("pos", { x, y, z: 0, l: lvl, d: 0, a: 1, seq: ++seq });
+    r.send("pos", { x, y, z: lvl * STOREY, l: lvl, yaw: 32, a: 1, seq: ++seq });
     await sleep(260);
   }
   await waitFor(() => Math.hypot(me().x - B.x, me().y - B.y) < 0.5);
@@ -192,10 +192,10 @@ test("up or down on foot: it goes where she left the floor first, then comes alo
   assert.ok(Math.hypot(lastUp.x - B.x, lastUp.y - B.y) < 2, `left from where she did: ${lastUp.x},${lastUp.y}`);
   assert.ok(Math.hypot(pet().x - me().x, pet().y - me().y) < 3, "beside her down there");
   // right in front of her (where she faces): it steps aside
-  r.send("teleport", { to: { x: 40, y: 22, level: 0 } });
+  r.send("teleport", { to: { x: -20, y: 12, level: 0 } });
   await waitFor(() => me().level === 0);
   await waitFor(() => pet().floor === 0 && Math.hypot(pet().x - me().x, pet().y - me().y) < 3, 10_000);
-  r.send("pos", { x: me().x, y: me().y, z: 0, l: 0, d: 0, a: 0, seq: ++seq });
+  r.send("pos", { x: me().x, y: me().y, z: 0, l: 0, yaw: 32, a: 0, seq: ++seq });
   await sleep(300);
   // (FACING[0]: +x +y)
   r.send("pet:test", { id: pet().id, at: { x: me().x + 0.7, y: me().y + 0.7 } });

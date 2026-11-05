@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { entry, hangSize, ISO_PX } from "@yutopia/shared";
+import { entry, hangSize, quarterYaw } from "@yutopia/shared";
 import { kindSolids } from "@yutopia/shared/shapes";
 import type { BufferGeometry } from "three";
 import type { LivePart } from "../kit";
@@ -46,7 +46,7 @@ const tris = (g: BufferGeometry) => {
   );
 };
 const model = (kind: string, props: Record<string, unknown> = {}) =>
-  modelOf({ id: `l-${kind}`, kind, x: 0, y: 0, rot: 0, props });
+  modelOf({ id: `l-${kind}`, kind, x: 0, y: 0, yaw: quarterYaw(0), props });
 
 test("lights: every look, lit and out, on its footprint, under the ceiling, under 8k tris", () => {
   for (const kind of KINDS) {
@@ -134,9 +134,10 @@ test("lights: the fairy lights twinkle, the candles flicker, the crystals glint,
 });
 
 test("lights: shaped from their models; the fairy lights hang where their hang size says", () => {
-  for (const kind of KINDS) assert.ok(kindSolids({ id: "s", kind, x: 0, y: 0, rot: 0 }).length > 0, `${kind}: shaped`);
+  for (const kind of KINDS)
+    assert.ok(kindSolids({ id: "s", kind, x: 0, y: 0, yaw: quarterYaw(0) }).length > 0, `${kind}: shaped`);
   const [n, lo, hi] = hangSize("fairy_lights");
   const b = bounds(model("fairy_lights"));
   assert.ok(n >= Math.ceil((b.x1 - b.x0) * 4) - 1, `its span ${n}`);
-  assert.ok(lo / ISO_PX <= b.y0 + 0.03 && hi / ISO_PX >= b.y1 - 0.03, `its height ${lo}..${hi} px`);
+  assert.ok(lo <= b.y0 + 0.03 && hi >= b.y1 - 0.03, `its height ${lo}..${hi} px`);
 });

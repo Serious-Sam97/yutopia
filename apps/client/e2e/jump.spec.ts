@@ -182,12 +182,12 @@ test("a hop up onto a desk: standing on it, seen up there, dropping off its edge
   try {
     await page.evaluate((s) => (window as any).__yutopia.teleport({ x: s.x + 0.5, y: s.y + 0.5 }), spot);
     await page.evaluate(
-      ([id, s]) => (window as any).__yutopia.send("obj:put", { id, kind: "desk", x: s.x + 2, y: s.y, rot: 0 }),
+      ([id, s]) => (window as any).__yutopia.send("obj:put", { id, kind: "desk", x: s.x + 2, y: s.y, yaw: 0 }),
       [desk, spot] as const,
     );
     await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.model.getObject(id), desk)).toBe(true);
     await page.waitForTimeout(1200);
-    const top = 25 / 39.19;
+    const top = 0.74; // (a desk's top: shared catalog standHeight("desk"))
     // (the camera looking north-west: D + S go along +x, A + W back)
     await page.evaluate(() => {
       const t = (window as any).__yutopia.tp;

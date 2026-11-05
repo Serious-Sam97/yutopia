@@ -1,5 +1,6 @@
-import { avatarFromSeed, emptyEdges, type MapDef, setEdge, type WorldObjectDef } from "@yutopia/shared";
+import { avatarFromSeed, emptyEdges, type MapDef, quarterYaw, setEdge, type WorldObjectDef } from "@yutopia/shared";
 import { parseFen, START } from "@yutopia/shared/games68/chess";
+import { ART_PX } from "@yutopia/shared/units";
 import * as T from "three";
 import { Post3 } from "../tp/post3d";
 import { legOf, type SeatShape, seatFit } from "../tp/seats3d";
@@ -446,13 +447,13 @@ export async function runChess(el: HTMLElement, o: ChessOpts): Promise<() => voi
   const inWorld = o.shot === "world";
   const placed: WorldObjectDef[] = inWorld
     ? [
-        { id, kind: "chess_table", x: TX, y: TZ, rot: 0, props: { variant: o.set, fen: MID } },
+        { id, kind: "chess_table", x: TX, y: TZ, yaw: 0, props: { variant: o.set, fen: MID } },
         {
           id: "w2",
           kind: "chess_table",
           x: TX + 3,
           y: TZ + 1,
-          rot: 1,
+          yaw: Math.PI / 2,
           props: { variant: (o.set + 1) % 3, fen: "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2" },
         },
       ]
@@ -469,7 +470,7 @@ export async function runChess(el: HTMLElement, o: ChessOpts): Promise<() => voi
     kind: "chess_table",
     x: 0,
     y: 0,
-    rot: 0,
+    yaw: quarterYaw(0),
     props: { variant: o.set, fen: today ? MID : "8/8/8/8/8/8/8/8 w - - 0 1" },
   };
   if (showTable) {
@@ -746,7 +747,7 @@ export async function runChess(el: HTMLElement, o: ChessOpts): Promise<() => voi
     });
     // (his 240×225 drawing at the world's size: 120 board units wide, 0.0115 m a unit)
     // (sat: smaller than his floating self, a seated person's size, low over the seat to peer at the board)
-    const U = (0.585 / 1.3 / (45.25 * Math.cos(Math.PI / 6))) * 0.62;
+    const U = (0.585 / 1.3 / ART_PX) * 0.62;
     const geo = new T.PlaneGeometry(120 * U, 112.5 * U).translate(0, (112.5 * U) / 2, 0);
     vortex = new T.Mesh(geo, new T.MeshBasicMaterial({ map: tex, alphaTest: 0.45, side: T.DoubleSide }));
     const [sx1, sz1] = PLAY.chess_table.seats[1];

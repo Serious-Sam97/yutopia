@@ -1,24 +1,17 @@
 // A body on Jolt (docs/plan/50-the-volume.md, C): the shared move's body (shared/move) moved by
-// Jolt's character, and its questions — where it fits, what's under it, whether a way is clear —
-// answered by Jolt's world: for the walker in the 3D view, its vault and mantle probes, and the
-// server's check of every move. The body lives on a floor (levels.ts): its x, y the floor's,
-// its z up from its floor; Jolt's world is the building's, in one space — `Frame` maps one to the
-// other (a storey up, a corner over).
-import { BODY_R, type Grid, STEP } from "../grid.ts";
+// Jolt's character. Its questions — where it fits, what's under it, whether a way is clear — are a
+// floor's Place's (physics/place.ts). The body lives on a floor (levels.ts): its z up from its
+// floor; Jolt's world is the building's, in one space — `Frame` maps one to the other (a storey
+// up; a corner over, on an older map's floors).
 import { JUMP_G } from "../jump.ts";
-import { STOREY } from "../levels.ts";
-import type { Body, Collider, Mover } from "../move/step.ts";
-import { BODY, type Mask, type Pass, type PhysicsWorld } from "./world.ts";
+import type { Body, Mover } from "../move/step.ts";
+import type { Mask, Pass, PhysicsWorld } from "./world.ts";
 
-/** Where a floor is in the building: its corner, its height. */
+/** A floor in the building: its height (every floor's x, y the world's — plan 72's one frame). */
 export interface Frame {
-  ox: number;
-  oy: number;
   elev: number;
 }
 
-/** How deep under the feet the ground is looked for: past it, nothing (no walking off the world). */
-const DEEP = 3 * STOREY;
 /** Walking on the land, the feet are kept to it this far down (downhill: the grid's 0.6); indoors
  *  a step's height (off anything higher, a fall). */
 const STICK_LAND = 0.6;
@@ -28,90 +21,6 @@ const STICK_LAND = 0.6;
 export interface Through {
   mask: Mask;
   pass: Pass | null;
-}
-
-/** The six questions of the move, of Jolt's world (the grid still says where the stairs, the land
- *  and their speeds are — what's underfoot, not what's in the way). Where the land isn't built
- *  yet (the server's first seconds, the browser's far chunks), the grid's own answers. */
-export class JoltCollider implements Collider {
-  constructor(
-    private readonly world: PhysicsWorld,
-    private readonly grid: Grid,
-    private readonly frame: Frame,
-    private readonly through: Through = { mask: "all", pass: null },
-  ) {}
-
-  /** Jolt can answer here: on the building's floor, or on land that's built. */
-  private ready(x: number, y: number): boolean {
-    if (!this.grid.onLand(x, y)) return true;
-    const X = this.frame.ox + x;
-    const Z = this.frame.oy + y;
-    return this.world.has(`land:${Math.floor(X / 32)},${Math.floor(Z / 32)}`);
-  }
-
-  fitsAt(x: number, y: number, z: number, r = BODY_R): boolean {
-    if (!this.ready(x, y)) return this.grid.fitsAt(x, y, z, r);
-    const f = this.frame;
-    const X = f.ox + x;
-    const Z = f.oy + y;
-    const Y = f.elev + z;
-    // (from a step over the feet: a step is walked onto, not into; the land is never in the way —
-    // a slope's uphill side is ground, not a wall: grid.ts — and through walls nothing is)
-    if (this.through.mask === "all" && !this.world.fits(X, Y + STEP, Z, r, BODY.h - STEP, "tops", this.through.pass))
-      return false;
-    // and something under it, near enough (no walking off the world's edge)
-    return this.world.groundUnder(X, Y + STEP, Z, r, DEEP, "all") !== null;
-  }
-
-  groundAt(x: number, y: number, z: number, r = BODY_R): number {
-    if (!this.ready(x, y)) return this.grid.groundAt(x, y, z, r);
-    const f = this.frame;
-    const X = f.ox + x;
-    const Z = f.oy + y;
-    const top = f.elev + z + STEP;
-    // the land under the middle of you (a slope's uphill side isn't a step to stand on); the top
-    // of anything else under any of you
-    const land = this.world.rayHit(X, top, Z, 0, -1, 0, DEEP, "land");
-    const on = this.world.groundUnder(X, top, Z, r, DEEP, "tops", this.through.pass);
-    const g = Math.max(land === null ? Number.NEGATIVE_INFINITY : top - land, on ?? Number.NEGATIVE_INFINITY);
-    return g === Number.NEGATIVE_INFINITY ? -2 * STOREY : g - f.elev;
-  }
-
-  /** What's under the feet at (x, y) from z down, as groundAt finds it: its top (`g`) and what it
-   *  is — "land", a static's key (`thing:id`, `grounds:cx,cz`, `slab:L:cx,cz`…) or a car's id; ""
-   *  where Jolt can't say (the land not built yet: the grid's). */
-  underfoot(x: number, y: number, z: number, r = BODY_R): { g: number; on: string } {
-    if (!this.ready(x, y)) return { g: this.grid.groundAt(x, y, z, r), on: "" };
-    const f = this.frame;
-    const X = f.ox + x;
-    const Z = f.oy + y;
-    const top = f.elev + z + STEP;
-    const land = this.world.rayHit(X, top, Z, 0, -1, 0, DEEP, "land");
-    const on = this.world.groundUnder(X, top, Z, r, DEEP, "tops", this.through.pass);
-    const l = land === null ? Number.NEGATIVE_INFINITY : top - land;
-    if (on === null || l >= on) return { g: l === Number.NEGATIVE_INFINITY ? -2 * STOREY : l - f.elev, on: "land" };
-    return { g: on - f.elev, on: this.world.underKey() ?? "" };
-  }
-
-  clear(a: { x: number; y: number }, b: { x: number; y: number }, r = BODY_R, z = 0): boolean {
-    const d = Math.hypot(b.x - a.x, b.y - a.y);
-    const steps = Math.max(1, Math.ceil(d / 0.1));
-    for (let i = 1; i <= steps; i++) {
-      const t = i / steps;
-      if (!this.fitsAt(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, z, r)) return false;
-    }
-    return true;
-  }
-
-  onRamp(x: number, y: number): boolean {
-    return this.grid.onRamp(x, y);
-  }
-  onLand(x: number, y: number): boolean {
-    return this.grid.onLand(x, y);
-  }
-  speedAt(x: number, y: number): number {
-    return this.grid.speedAt(x, y);
-  }
 }
 
 /** The body moved by Jolt's character (CharacterVirtual): it slides along what's in the way,
@@ -137,15 +46,14 @@ export class CharacterMover implements Mover {
   /** The land under (x, y) is in the world (or it isn't land: the building's floors are). */
   ready(x: number, y: number): boolean {
     if (!this.onLand(x, y)) return true;
-    const f = this.frame();
-    return this.world.has(`land:${Math.floor((f.ox + x) / 32)},${Math.floor((f.oy + y) / 32)}`);
+    return this.world.has(`land:${Math.floor(x / 32)},${Math.floor(y / 32)}`);
   }
 
   step(b: Body, dt: number, stepUp: number, blocked?: (x: number, y: number) => boolean, fly = false): boolean {
     const f = this.frame();
-    const X = f.ox + b.x;
+    const X = b.x;
     const Y = f.elev + b.z;
-    const Z = f.oy + b.y;
+    const Z = b.y;
     if (this.id === null) this.id = this.world.addCharacter(X, Y, Z);
     const id = this.id;
     if (id === null) return false;
@@ -165,8 +73,8 @@ export class CharacterMover implements Mover {
     });
     const p = this.p;
     this.world.characterAt(id, p);
-    let nx = p[0] - f.ox;
-    let ny = p[2] - f.oy;
+    let nx = p[0];
+    let ny = p[2];
     // (a car on the move, the grid's: in the way like a wall — one that came onto me, walked out of)
     if (blocked?.(nx, ny) && !blocked(b.x, b.y)) {
       nx = b.x;

@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { quarterYaw } from "./catalog.ts";
 import { applyStep, diffStep, snapshot } from "./history.ts";
 import { hWall, tileAt } from "./map.ts";
 import { applyEdges, applyPaint, resizeMap } from "./map-edit.ts";
 import { studio } from "./maps/studio.ts";
 
-const plant = { id: "p1", kind: "plant", x: 10, y: 3, rot: 0 };
+const plant = { id: "p1", kind: "plant", x: 10, y: 3, yaw: quarterYaw(0) };
 
 test("undo/redo: floor paint, walls and objects go back and forth", () => {
   const before = snapshot(studio, studio.objects);
