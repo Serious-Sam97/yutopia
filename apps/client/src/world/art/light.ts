@@ -20,17 +20,13 @@ import {
   vWall,
   type WorldObjectDef,
 } from "@yutopia/shared";
-import type { RGB } from "./daylight";
 import { seedOf } from "./seed";
 
-// Baked light: every light source is ray-marched across the tile grid (walls
-// and shut doors block it), with a soft falloff, into an RGB buffer in plan
-// space (PX per tile). The engine adds the ambient light of the hour and
-// multiplies the floor by it, and tints walls, items and people with the same
-// values at their position — so light lands on things instead of floating.
-
-export const PX = 8; // light samples per tile
-const HEIGHT = 0.35; // lights sit a little above the floor (no hot pinpoint)
+// What lights a floor and what stands in its way (docs/plan/72-the-3d-core.md, phase 9: the light itself
+// is the light volume's, art/light-volume.ts): its lamps and the things that glow, its windows' pools of
+// daylight, and its walls and shut doors — a lamp's light reaches a point when the straight line to it
+// crosses none of them, ray-marched across the floor's tiles (a wall stands the storey: the same at
+// every height).
 
 export interface LightSource {
   x: number; // tiles
@@ -39,9 +35,42 @@ export interface LightSource {
   radius: number;
   intensity: number;
   h?: number; // how high it hangs (tiles; the 3D view's lamps), when it's not a room lamp
+  z?: number; // where its light comes from over its floor (m: the light volume's — art/light-volume.ts)
 }
 
-const rgbOf = (c: number): RGB => [((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255];
+// Where each kind's light comes from over its floor (m): a lamp's shade, a screen's middle, a sign on
+// the wall, a fire's flames (the light volume's: docs/plan/72 phase 9). One that hangs (`h`) from there.
+const LIGHT_Z: Record<string, number> = {
+  neon: 1.6,
+  lamp: 1.45,
+  radio: 0.9,
+  vending: 1.2,
+  slot_track: 0.85,
+  pool_table: 1.5,
+  turntable: 0.9,
+  mixing_desk: 0.95,
+  server_rack: 1.1,
+  crt_terminal: 1.0,
+  fireplace: 0.5,
+  lava_lamp: 0.6,
+  marquee_sign: 1.9,
+  xmas_tree: 1.2,
+  xmas_tree_small: 0.5,
+  garland: 2.0,
+  xmas_village: 0.4,
+  candle_arch: 0.9,
+  reindeer: 0.8,
+  snow_globe: 0.5,
+  // (what glows on a desk or a wall, beyond the catalog's lamps)
+  desklamp: 1.15,
+  monitor: 1.0,
+  desk: 1.0,
+  board_wall: 1.4,
+  screen_wall: 1.5,
+  arcade: 1.3,
+  meeting_table: 0.8,
+  standup_mat: 0.05,
+};
 
 // local rot-0 point → world, same turn as the item art (90° clockwise steps)
 function place(o: WorldObjectDef, lx: number, ly: number): [number, number] {
@@ -155,18 +184,20 @@ export function lightSources(objects: WorldObjectDef[]): LightSource[] {
       // (a lot's lamp post: well up its pole, over the cars and people it lights
       // — its head, at ~8.8, is too high for a point light to reach them)
       const h = o.kind === "lamp_post" ? 3.3 : (c as { h?: number }).h;
-      out.push({ x, y, color, radius: c.radius, intensity: c.intensity, ...(h ? { h } : {}) });
+      const z = h ?? LIGHT_Z[o.kind] ?? 1;
+      out.push({ x, y, color, radius: c.radius, intensity: c.intensity, z, ...(h ? { h } : {}) });
     }
     const t = o.kind === "tabletop" ? TOPS[String(o.props?.d ?? "")] : undefined;
     if (t && !(t.switched && o.props?.on === false)) {
       const at = topCentre(o);
-      out.push({ x: at.x, y: at.y + 0.3, color: t.color, radius: t.radius, intensity: t.intensity });
+      const z = LIGHT_Z[String(o.props?.d ?? "")] ?? 1;
+      out.push({ x: at.x, y: at.y + 0.3, color: t.color, radius: t.radius, intensity: t.intensity, z });
     }
     const s = SCREENS[o.kind];
     if (s)
       for (const [lx, ly] of s.at) {
         const [x, y] = place(o, lx, ly);
-        out.push({ x, y, color: s.color, radius: s.radius, intensity: s.intensity });
+        out.push({ x, y, color: s.color, radius: s.radius, intensity: s.intensity, z: LIGHT_Z[o.kind] ?? 1 });
       }
   }
   return out;
@@ -188,49 +219,27 @@ export function headlights(objects: WorldObjectDef[]): { x: number; y: number; d
   return out;
 }
 
-/** A rectangle of the light map's samples (inclusive). */
-type SampleRect = { x0: number; y0: number; x1: number; y1: number };
-const meets = (a: SampleRect, b: SampleRect) => a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1;
+/** A rectangle of a floor (m, its own frame). */
+export type Rect = { x0: number; y0: number; x1: number; y1: number };
+const meets = (a: Rect, b: Rect) => a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1;
 
+/** A floor's light sources and what blocks them (its tiles, its walls, its doors). */
 export class LightMap {
-  readonly w: number; // samples
-  readonly h: number;
-  readonly light: Float32Array; // r, g, b per sample (lights only, no ambient)
-  // daylight through windows, as a single strength per sample: coloured by the
-  // hour (sun / moon) when composited, so the time of day never needs a re-bake
-  readonly win: Float32Array;
-  // per sample: under the open sky (the lot's asphalt and concrete), which takes
-  // the outside's ambient (in the dark: next to none) rather than the rooms'
-  readonly open: Uint8Array;
   private block: Uint8Array; // per tile: 1 = blocks light (no floor)
   private hBlk: Uint8Array; // walls on north edges that block light (glass and half walls don't)
   private vBlk: Uint8Array; // … on west edges
-
-  /** what gives light, and into which: the lamps (`light`), the windows' pools (`win`) */
+  /** what gives light: the lamps, and the windows' pools (`win`) */
   private srcs: { s: LightSource; win: boolean }[] = [];
+  get sources(): readonly { s: LightSource; win: boolean }[] {
+    return this.srcs;
+  }
 
-  /** `prev`: the same floor's map before an edit — the light of every lamp the edit can't change
-   *  kept from it; only the lamps whose reach meets what changed (a wall, a door, a tile, the lamp
-   *  itself) added again, inside their reach. (A floor of another size: all of it.) */
   constructor(
     readonly map: MapDef,
     objects: WorldObjectDef[],
-    prev?: LightMap,
   ) {
     const W = map.width;
     const H = map.height;
-    this.w = W * PX;
-    this.h = H * PX;
-    this.light = new Float32Array(this.w * this.h * 3);
-    this.win = new Float32Array(this.w * this.h);
-    this.open = new Uint8Array(this.w * this.h);
-    for (let y = 0; y < H; y++)
-      for (let x = 0; x < W; x++) {
-        const ch = tileAt(map, x, y);
-        if (ch !== "a" && ch !== "c") continue;
-        for (let sy = 0; sy < PX; sy++)
-          this.open.fill(1, (y * PX + sy) * this.w + x * PX, (y * PX + sy) * this.w + x * PX + PX);
-      }
     this.block = new Uint8Array(W * H);
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!isFloor(tileAt(map, x, y))) this.block[y * W + x] = 1;
     this.hBlk = new Uint8Array((H + 1) * W);
@@ -270,42 +279,16 @@ export class LightMap {
       for (let x = 0; x <= W; x++)
         if (isWindow(vWall(map, x, y)))
           this.srcs.push({ s: pool(floor(x, y) ? x + 0.45 : x - 0.45, y + 0.5), win: true });
-    const again = prev && prev.w === this.w && prev.h === this.h ? this.touched(prev) : null;
-    if (!again) {
-      for (const { s, win } of this.srcs) this.add(s, win ? this.win : undefined);
-      return;
-    }
-    // (an edit: the old light kept, the samples the lamps it touches reach made again)
-    this.light.set((prev as LightMap).light);
-    this.win.set((prev as LightMap).win);
-    for (const r of again) {
-      for (let py = r.y0; py <= r.y1; py++) {
-        this.light.fill(0, (py * this.w + r.x0) * 3, (py * this.w + r.x1 + 1) * 3);
-        this.win.fill(0, py * this.w + r.x0, py * this.w + r.x1 + 1);
-      }
-    }
-    for (const { s, win } of this.srcs)
-      if (again.some((r) => meets(this.reachOf(s), r))) this.add(s, win ? this.win : undefined, again);
   }
 
-  // a lamp's reach in samples (as `add` reads it)
-  private reachOf(s: LightSource): SampleRect {
-    const R = s.radius;
-    return {
-      x0: Math.max(0, Math.floor((s.x - R) * PX)),
-      x1: Math.min(this.w - 1, Math.ceil((s.x + R) * PX)),
-      y0: Math.max(0, Math.floor((s.y - R) * PX)),
-      y1: Math.min(this.h - 1, Math.ceil((s.y + R) * PX)),
-    };
-  }
-
-  // The samples an edit can have changed since `prev` (null: none — the light as it was): the
-  // reaches of every lamp (old and new) whose reach takes in a tile or an edge that changed, and of
-  // every lamp that came, went or moved.
-  private touched(prev: LightMap): SampleRect[] | null {
+  /** Where the light can have changed since `prev` (the same floor before an edit), by `reach` (where
+   *  a source's light goes: the light volume's): the reaches of every source — before and now —
+   *  whose reach takes in a tile or an edge that changed, and of every source that came, went or
+   *  moved. Null: a floor of another size (all of it). */
+  changedSince(prev: LightMap, reach: (q: { s: LightSource; win: boolean }) => Rect): Rect[] | null {
     const W = this.map.width;
-    const H = this.map.height;
-    let box: { x0: number; y0: number; x1: number; y1: number } | null = null;
+    if (W !== prev.map.width || this.map.height !== prev.map.height) return null;
+    let box: Rect | null = null;
     const hit = (x0: number, y0: number, x1: number, y1: number) => {
       box = box
         ? { x0: Math.min(box.x0, x0), y0: Math.min(box.y0, y0), x1: Math.max(box.x1, x1), y1: Math.max(box.y1, y1) }
@@ -321,19 +304,13 @@ export class LightMap {
     const key = (q: { s: LightSource; win: boolean }) => JSON.stringify(q);
     const was = new Set(prev.srcs.map(key));
     const now = new Set(this.srcs.map(key));
-    const out: SampleRect[] = [];
+    const out: Rect[] = [];
+    const b = box as Rect | null;
     for (const q of [...prev.srcs, ...this.srcs]) {
+      const r = reach(q);
       const moved = !was.has(key(q)) || !now.has(key(q));
-      const b = box as { x0: number; y0: number; x1: number; y1: number } | null;
-      const near =
-        b &&
-        q.s.x + q.s.radius >= b.x0 &&
-        q.s.x - q.s.radius <= b.x1 &&
-        q.s.y + q.s.radius >= b.y0 &&
-        q.s.y - q.s.radius <= b.y1;
-      if (moved || near) out.push(this.reachOf(q.s));
+      if (moved || (b && meets(r, b))) out.push(r);
     }
-    void H;
     return out;
   }
 
@@ -355,8 +332,9 @@ export class LightMap {
     return (step(ax, ay, bx, ay) || step(bx, ay, bx, by)) && (step(ax, ay, ax, by) || step(ax, by, bx, by));
   }
 
-  // Is the straight line from the light to (x, y) clear of walls?
-  private visible(s: LightSource, x: number, y: number): boolean {
+  /** Is the straight line from a light to (x, y) clear of walls (and of what's off the floor, but
+   *  for its end)? */
+  sees(s: LightSource, x: number, y: number): boolean {
     const dx = x - s.x;
     const dy = y - s.y;
     const d = Math.hypot(dx, dy);
@@ -380,90 +358,10 @@ export class LightMap {
     return true;
   }
 
-  /** Does a light reach (x, y) — no wall or shut door in the way? (the 3D view's lamps) */
+  /** Does a light reach (x, y) — on the floor, no wall or shut door in the way? (the 3D view's lamps) */
   reaches(s: LightSource, x: number, y: number): boolean {
     if (this.blocked(x, y)) return false;
-    return this.visible(s, x, y);
-  }
-
-  // a lamp's light added (`only`: in these samples alone)
-  private add(s: LightSource, into?: Float32Array, only?: SampleRect[]) {
-    const [r, g, b] = rgbOf(s.color);
-    const R = s.radius;
-    const { x0, x1, y0, y1 } = this.reachOf(s);
-    for (let py = y0; py <= y1; py++)
-      for (let px = x0; px <= x1; px++) {
-        if (only && !only.some((q) => px >= q.x0 && px <= q.x1 && py >= q.y0 && py <= q.y1)) continue;
-        const x = (px + 0.5) / PX;
-        const y = (py + 0.5) / PX;
-        const d = Math.hypot(x - s.x, y - s.y, HEIGHT);
-        if (d >= R) continue;
-        if (!this.visible(s, x, y)) continue;
-        const f = (1 - (d / R) ** 2) ** 2 * s.intensity;
-        if (into) {
-          into[py * this.w + px] += f;
-          continue;
-        }
-        const i = (py * this.w + px) * 3;
-        this.light[i] += r * f;
-        this.light[i + 1] += g * f;
-        this.light[i + 2] += b * f;
-      }
-  }
-
-  // ambient + light, clamped to 1, as a canvas (plan space, PX per tile); `out`:
-  // the ambient under the open sky (the rooms' when not given)
-  composite(ambient: RGB, win: RGB, into?: HTMLCanvasElement, out: RGB = ambient): HTMLCanvasElement {
-    const c = into ?? document.createElement("canvas");
-    c.width = this.w;
-    c.height = this.h;
-    const g = c.getContext("2d") as CanvasRenderingContext2D;
-    const img = g.createImageData(this.w, this.h);
-    const L = this.light;
-    const Wn = this.win;
-    const O = this.open;
-    for (let i = 0, j = 0, k = 0; i < L.length; i += 3, j += 4, k++) {
-      const w = Math.min(1, Wn[k]);
-      const a = O[k] ? out : ambient;
-      img.data[j] = Math.min(255, (a[0] + L[i] + win[0] * w) * 255);
-      img.data[j + 1] = Math.min(255, (a[1] + L[i + 1] + win[1] * w) * 255);
-      img.data[j + 2] = Math.min(255, (a[2] + L[i + 2] + win[2] * w) * 255);
-      img.data[j + 3] = 255;
-    }
-    g.putImageData(img, 0, 0);
-    return c;
-  }
-
-  // Light at a world point (bilinear), ambient included (`out` under the open sky), as a 0xRRGGBB tint.
-  tintAt(x: number, y: number, ambient: RGB, win: RGB = [0, 0, 0], out: RGB = ambient): number {
-    const fx = Math.max(0, Math.min(this.w - 1.001, x * PX - 0.5));
-    const fy = Math.max(0, Math.min(this.h - 1.001, y * PX - 0.5));
-    const ix = Math.floor(fx);
-    const iy = Math.floor(fy);
-    const tx = fx - ix;
-    const ty = fy - iy;
-    const L = this.light;
-    const at = (xx: number, yy: number, k: number) => L[(yy * this.w + xx) * 3 + k];
-    const Wn = this.win;
-    const wat = (xx: number, yy: number) => Wn[yy * this.w + xx];
-    const w = Math.min(
-      1,
-      wat(ix, iy) * (1 - tx) * (1 - ty) +
-        wat(ix + 1, iy) * tx * (1 - ty) +
-        wat(ix, iy + 1) * (1 - tx) * ty +
-        wat(ix + 1, iy + 1) * tx * ty,
-    );
-    const o = this.open[Math.round(fy) * this.w + Math.round(fx)]; // (the nearest sample's)
-    let rgb = 0;
-    for (let k = 0; k < 3; k++) {
-      const v =
-        at(ix, iy, k) * (1 - tx) * (1 - ty) +
-        at(ix + 1, iy, k) * tx * (1 - ty) +
-        at(ix, iy + 1, k) * (1 - tx) * ty +
-        at(ix + 1, iy + 1, k) * tx * ty;
-      rgb = (rgb << 8) | Math.round(Math.min(1, (o ? out : ambient)[k] + v + win[k] * w) * 255);
-    }
-    return rgb;
+    return this.sees(s, x, y);
   }
 }
 
@@ -478,9 +376,8 @@ export function affectsLight(o: WorldObjectDef): boolean {
 }
 
 // ── kept per floor ──────────────────────────────────────────────────────────
-// A floor's bake, kept (a few): going back to a floor, or the other view
-// lighting the same one, doesn't ray-march it again. Keyed by everything that
-// lights it or stands in the light's way.
+// A floor's light sources and what stands in their way, kept (a few): going back to a floor finds its
+// light volume (made from it) again. Keyed by everything that lights it or stands in the light's way.
 const baked = new Map<string, LightMap>();
 export function lightSig(map: MapDef, objects: WorldObjectDef[]): string {
   const doors = objects
@@ -489,20 +386,14 @@ export function lightSig(map: MapDef, objects: WorldObjectDef[]): string {
     .join(";");
   return `${map.key}|${map.floor ?? ""}|${map.width}x${map.height}|${map.tiles.join("")}|${map.hWalls.join("")}|${map.vWalls.join("")}|${JSON.stringify(lightSources(objects))}|${doors}`;
 }
-export function lightMapFor(
-  map: MapDef,
-  objects: WorldObjectDef[],
-  sig = lightSig(map, objects),
-  /** the floor's map before (an edit: only what it touched baked again) */
-  prev?: LightMap,
-): LightMap {
+export function lightMapFor(map: MapDef, objects: WorldObjectDef[], sig = lightSig(map, objects)): LightMap {
   let lm = baked.get(sig);
   if (lm) {
     baked.delete(sig);
     baked.set(sig, lm);
     return lm;
   }
-  lm = new LightMap(map, objects, prev);
+  lm = new LightMap(map, objects);
   baked.set(sig, lm);
   if (baked.size > 8) baked.delete(baked.keys().next().value as string);
   return lm;

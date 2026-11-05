@@ -1,4 +1,4 @@
-import type { JumpKind, Point } from "@yutopia/shared";
+import { inArea, type JumpKind, type Point } from "@yutopia/shared";
 import {
   type Body,
   type FlowLook,
@@ -752,9 +752,7 @@ export class Walker {
     return (x, y) => {
       // (the floor's own room there: the one on top)
       let a: (typeof map.areas)[number] | null = null;
-      for (const q of map.areas)
-        if (x >= q.x && x < q.x + q.w && y >= q.y && y < q.y + q.h && (!a || (q.priority ?? 0) > (a.priority ?? 0)))
-          a = q;
+      for (const q of map.areas) if (inArea(q, x, y) && (!a || (q.priority ?? 0) > (a.priority ?? 0))) a = q;
       if (!a || a.key === here) return false;
       const locked = st.locks.has(a.key);
       if (a.kind !== "booth" && !locked) return false;

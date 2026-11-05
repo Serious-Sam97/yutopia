@@ -966,3 +966,94 @@ the code reads are made from it. Still to come in this phase: listed at the end.
     outline the same from either. Stills within the noise. Client 286.
   - Not drawn from the structure yet: the other two blocks and the bridge (the campus's own scenery,
     not the building's structure), the ground floor's lobby front (its doors from `entranceZOf`).
+
+### Phase 9 — built 2026-11-05 (the user: "continue!"; then "Real heights")
+- **The light volume** (`art/light-volume.ts`): a floor's light in three dimensions — 4 samples a
+  metre across, 8 layers up its storey (layer 0 the floor, the last the slab over it) — sampled by
+  the 3D view where a face is (`Light3`: a `sampler3D`, the floor's height in the scene `lmY`), the
+  hour's ambient (the rooms' and the open sky's) and the windows' daylight put together on the GPU
+  instead of painted into a canvas each hour. The plan-space light map and its composite are gone;
+  `art/light.ts LightMap` is what lights a floor and what stands in the way (its lamps and windows'
+  pools, its walls and shut doors, the line to a point ray-marched across the tiles — a wall stands
+  the storey).
+- **Lamps at their heights** (the user's pick between that and lamps at the floor, from stills:
+  `design/screens/light-volume/`): each source has its height (`LightSource.z`: a floor lamp's shade
+  1.45, a pendant 2.3, a panel 3.2, a fire 0.5, wall signs 1.6–2.0, a window's pool 1.3 — `LIGHT_Z`).
+  The floor is lit exactly as before: a source at z gets R'² = R² + z² − 0.35², I' = I·(R'/R)⁴, which
+  makes its light on the floor what the light map's was (proven: `light-volume.test.ts`, floors 0 and
+  4, within half-float precision); above the floor, walls, furniture and people are lit by their
+  distance to it in 3D — the band a lamp painted up the whole wall and onto the ceiling is a glow
+  round its shade. People take the tint at chest height (`tintAt(x, y, 1.2)`).
+- **An edit** makes the volume from the one before (`LightMap.changedSince` with the volume's own
+  reach): only the sources whose reach meets what changed added again — proven equal to a fresh one
+  (`light.test.ts`: 25 random edits, a lamp moved, a door turned). `light.update` 1.7–3.4 ms an edit
+  on prod's floor 4 (it was 7–10 with a float copy converted whole).
+- **Memory:** half floats only, the texture's own array (one copy, CPU and GPU alike), no cache of old
+  volumes: prod's world 3 MB a 64 × 48 m floor, 14.7 MB the ground floor with the lot (~27 MB all
+  five). The render's CPU time unchanged (A/B against the last commit: 5.6–5.8 ms vs 5.7–6.1).
+- **The floor's look per slab** (`art/floors.ts`): each slab painted in its own shape with its
+  material (the structure's slabs, less the wells), a hair past its edge so two meet without a seam;
+  the strips between materials from the slabs too; the floor's quads from the slabs' rings
+  (`World3.isFloorAt`). The iso view's turn (`FloorBake.draw`, its screen chunks, `floorRes`) is
+  gone — `/dev/rooms` turns the plan itself for its old sheet. Stills against the volume's run:
+  indoors 0–2 levels off, outdoors the usual noise. The floor's bake an edit 9.2–9.5 ms (6–8 with
+  the tiles' squares), in its own frame.
+- Budgets: page 456.5 KB (457); the Grounds' line 171.2 → 202.9 (184 → 205) with no code moved in —
+  the bundler put light3d in with the people's art chunk (every chunk together 5,074 KB in 259 files,
+  the same as the last commit's, built in a worktree to see).
+- Checked: client 289; stills (8 places × day/night) — day unchanged, night as signed off; the edit
+  check `VERIFY=20` 20/20 (it now puts the floor on the map's own slabs and tiles first, baked whole:
+  its edits are the map's, not the structure's).
+- **Left:** the light's occlusion from the structure's walls (a wall off the lattice, phase 11's;
+  the ray-march is across the tiles), light through stairwells and shafts between floors (each floor
+  its own volume), the AO from the structure's walls (`aoCanvas` reads the map's edges), slabs off
+  the lattice and at other heights in the floor's quads (none can be made yet). A one-off seen once:
+  the campus's facade bands bright in one stills run's lot (not again in three) — the campus built
+  again while the structure arrived, not confirmed.
+
+### Phase 10 — built 2026-11-05 (the user: "Phase 10")
+- **Rooms as polygons.** A room is the face its walls close round (phase 6's `roomsFromWalls`); the
+  adapter's areas now carry it (`AreaDef.outline`, world frame, folded with the area) when it isn't
+  their rectangle, and `inArea(a, x, y)` tests it (even-odd), else the rectangle. `areaAt` asks it,
+  so everything that finds a room by a point does: a door's room and owner (`doorRoom`: the room
+  one side of its edge and not the other), locks and who passes (the walker's closed rooms), the
+  room's dressing (`dressing.ts`), its lights by its switch (`lights:room`), the office's plans
+  (`furnishedIn`), stand-ups, pets' home room and their rounds, Vortex's areas, hearing, the room
+  panel's things, Christmas's decorations. The area's rectangle is kept as drawn (what a map made
+  from the structure again keeps: the round trip leaves the derived outline out).
+- **Measured on prod's saved world:** all 28 rooms' outlines are their rectangles (`ROOMS=1
+  e2e/wall-hitch.mts`), and the campus's too — nothing changes there today; a room whose walls
+  close round more than its rectangle (phase 11's free walls) is the whole of it.
+- **Sound:** voices already pan by the 3D camera (`tp.pan`); a phone's ring did by the old iso screen
+  (`stereoPan`), now by the camera too.
+- Checked: `structure/room-shape.test.ts` — an L-shaped room drawn as its top arm's rectangle: its
+  outline the L (six corners), its arm down the office by `areaAt`, the inner corner's outside not,
+  its door's edge the office's, two in it hear each other and one outside (it's private) doesn't.
+  Shared 614, client 289, world-server 204/206 (Vortex, the loot: green alone).
+- **Left:** what lays a room out by its rectangle (the dressing's rows, the office's plans, Christmas's
+  places, the room's middle a walk-to aims at) takes the rectangle, not the rest of an L; voices
+  muffled through walls (a Jolt ray on the wall layer) is the user's choice, not built.
+
+### Phase 0 — the build tool's mocks, made 2026-11-05 (the user: "Continue then")
+- **`design/build-tool/`**: 11 stills, the decisions' sheet and a reel (a room drawn wall by wall,
+  `reel-draw-a-room.mp4` / `.gif`). Made over the game's own 3D view — floor 3 of the studio (blank)
+  and the east field by the woods for god mode — with the mock's walls, arc, slabs, ghosts, guides
+  and dots drawn into its scene as real 3D (`mock/capture.spec.ts`, as Bia on Metal, its own camera,
+  people hidden; the shots in `mock/shots.mjs`), the HUD and the notes over it in HTML from the
+  live classes (`mock/build-tool.html`, `mock/render.mjs`).
+- The stills: 01 drawing a wall (click-click chaining, length and angle typed), 02 the snaps (ends,
+  middles, square, a wall's line carried on; 0.5 m grid, 15°), 03 an arc (two ends, its bow), 04 a
+  wall's height (dragged to a rail), 05 a room found as the chain closes (named there), 06 a door
+  slid along its wall, 07 a floor drawn at a height (a mezzanine), 08 the level (the floors and the
+  mezzanine between), 09 stairs between two slabs, 10 a thing at 23° with its back to a wall, 11 the
+  same drawing outdoors in god mode, 12 the six decisions with a pick each (arcs: yes; thickness:
+  three; pitched roofs: later; posts: where walls meet at an angle; a split room: the bigger part
+  keeps it; a level: the floors and what's between).
+- **Decided** (the user, 2026-11-05, asked one by one): arcs in v1 (ends snap as a straight wall's,
+  bowed by the middle in 0.25 m steps or a half circle, doors and windows in them); three wall
+  thicknesses (0.1 a partition, 0.2, 0.3 outer); **pitched roofs now** (a gable or a hip drawn over a
+  closed set of walls — not my pick: in phase 11, with the flat ones); a post where walls meet at an
+  angle, none where one carries straight on; a wall across a room — the bigger part keeps it (name,
+  owner, lock), the smaller a new room, unnamed; the level — the floors at their heights, a slab
+  between them (a mezzanine) under its floor, PgUp/PgDn through them, a height of its own for any;
+  snaps on by default (Shift: free; 0.5 m grid, 15°; things turn 15° on R).

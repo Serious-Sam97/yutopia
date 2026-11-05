@@ -1,18 +1,19 @@
-import { type MapDef, tileAt, type WorldObjectDef } from "@yutopia/shared";
+import { type MapDef, STOREY, tileAt, type WorldObjectDef } from "@yutopia/shared";
 import {
-  CanvasTexture,
   Color,
+  Data3DTexture,
   DataTexture,
+  HalfFloatType,
   LinearFilter,
   type Material,
   RGBAFormat,
   ShaderChunk,
-  SRGBColorSpace,
   type Texture,
   Vector2,
 } from "three";
 import { daylight, litCap, outAmbient } from "../art/daylight";
 import { headlights, type LightMap, type LightSource, lightMapFor, lightSig, lightSources } from "../art/light";
+import { LAYERS, LightVolume } from "../art/light-volume";
 import { type Piece, type Shader, yuLit } from "../look/yulit";
 import { skyLeft } from "./sky-left";
 import { kindOf, layerShader, type WxKind } from "./wx3d";
@@ -187,29 +188,41 @@ uniform vec3 landBounce;`,
   m.needsUpdate = true;
 }
 
+// a volume's samples as the GPU takes them: half floats, four to a sample (its own array, sent as it is)
+function volumeTexture(data: Uint16Array, w: number, h: number, d: number): Data3DTexture {
+  const t = new Data3DTexture(data, w, h, d);
+  t.format = RGBAFormat;
+  t.type = HalfFloatType;
+  t.magFilter = LinearFilter;
+  t.minFilter = LinearFilter;
+  t.unpackAlignment = 1;
+  t.needsUpdate = true;
+  return t;
+}
+
 export class Light3 {
   private lm: LightMap | null = null;
-  private canvas = document.createElement("canvas");
-  private tex = new CanvasTexture(this.canvas);
+  private vol: LightVolume | null = null;
   private sig = "";
   private hour = 12;
   private skySig = "";
   private sky = new DataTexture(new Uint8Array(4), 1, 1, RGBAFormat); // the open tiles (r)
   private glow = new DataTexture(new Uint8Array(4), 1, 1, RGBAFormat); // the lamp posts' pools (rgb, ÷2)
   readonly uniforms = {
-    lmTex: { value: this.tex },
     lmSize: { value: new Vector2(1, 1) },
     lmOff: { value: new Vector2(0, 0) },
     lmSky: { value: this.sky },
     lmGlow: { value: this.glow },
+    // (the light volume's: its samples, the floor's height in the scene, the hour's ambient — the
+    // rooms' and the open sky's — and the windows' colour, put together on the GPU)
+    lmVol: { value: volumeTexture(new Uint16Array(4), 1, 1, 1) },
+    lmY: { value: 0 },
+    lmAmb: { value: new Color(1, 1, 1) },
+    lmAmbOut: { value: new Color(1, 1, 1) },
+    lmWinC: { value: new Color(0, 0, 0) },
   };
 
   constructor() {
-    this.tex.colorSpace = SRGBColorSpace; // light values as the iso view multiplies them (in sRGB)
-    this.tex.flipY = false; // row 0 = y 0
-    this.tex.magFilter = LinearFilter;
-    this.tex.minFilter = LinearFilter;
-    this.tex.generateMipmaps = false;
     this.sky.magFilter = LinearFilter;
     this.sky.minFilter = LinearFilter;
     this.sky.flipY = false;
@@ -244,18 +257,36 @@ export class Light3 {
     const sig = `${bake}|${JSON.stringify(headlights(objects))}`;
     if (sig === this.sig) return;
     this.sig = sig;
-    // (each floor's bake kept, shared with the iso view: art/light.ts)
-    // (from the bake before, on the same floor: only the lamps an edit touched again)
-    this.lm = lightMapFor(
-      map,
-      objects,
-      bake,
-      this.lm?.map.key === map.key && this.lm.map.floor === map.floor ? this.lm : undefined,
-    );
+    // (each floor's kept: art/light.ts; its volume made from the one before on the same floor —
+    // only what an edit touched again)
+    this.lm = lightMapFor(map, objects, bake);
+    const before = this.vol?.lm.map.key === map.key && this.vol.lm.map.floor === map.floor ? this.vol : null;
     this.uniforms.lmSize.value.set(map.width, map.height);
+    // (the floor's volume: this light's own, made again only when what lights it changed — from the
+    // one before on the same floor, where the edit touched)
+    if (this.vol?.lm !== this.lm) {
+      const v = new LightVolume(this.lm, before ?? undefined);
+      this.upload(v);
+      this.vol = v;
+    }
     this.openSky(map);
     this.lampGlow(map, objects);
     this.composite();
+  }
+
+  // the volume to the GPU (its texture sent whole: three sends a 3D texture whole — 3 MB a floor of
+  // 64 × 48 m, a fraction of a millisecond's copy on the GPU's side)
+  private upload(v: LightVolume) {
+    const u = this.uniforms;
+    const t = u.lmVol.value;
+    const img = t.image as { data: Uint16Array; width: number; height: number; depth: number };
+    if (img.width === v.w && img.height === v.h && img.depth === v.d) {
+      img.data = v.data;
+      t.needsUpdate = true;
+      return;
+    }
+    t.dispose();
+    u.lmVol.value = volumeTexture(v.data, v.w, v.h, v.d);
   }
 
   // the lamp posts' pools (those that hang high: `h`) and the cars' beams, walls
@@ -337,34 +368,30 @@ export class Light3 {
     this.composite();
   }
 
-  /** Composite again whatever it was (a GPU reset emptied the canvas). */
+  /** Its textures sent again (a GPU reset lost them). */
   redraw() {
-    this.composited = null;
-    this.composite();
+    this.uniforms.lmVol.value.needsUpdate = true;
+    this.sky.needsUpdate = true;
+    this.glow.needsUpdate = true;
   }
 
-  /** Where the floor's corner is in the scene (x, z): a floor drawn below mine. */
-  setOffset(x: number, z: number) {
+  /** Where the floor's corner is in the scene (x, z) and its floor's height (`y`: a floor drawn
+   *  below mine). */
+  setOffset(x: number, z: number, y = 0) {
     this.uniforms.lmOff.value.set(x, z);
+    this.uniforms.lmY.value = y;
   }
 
-  // (what was composited last: the same bake at the same hour — setHour after an edit's update —
-  // is the same picture, ~10 ms not spent again)
-  private composited: { lm: LightMap; hour: number } | null = null;
+  // the hour's colours to the GPU — the rooms' ambient, the open sky's, the windows' daylight — put
+  // together there with the volume's light (no picture to paint)
   private composite() {
-    if (!this.lm) return;
-    if (this.composited?.lm === this.lm && this.composited.hour === this.hour) return;
-    this.composited = { lm: this.lm, hour: this.hour };
     const d = daylight(this.hour);
     // (lit things kept under the bloom after dark: daylight.ts litCap)
     litBalance.lmCap.value = litCap(d.night);
-    const w = this.canvas.width;
-    this.lm.composite(d.ambient, d.window, this.canvas, outAmbient(d));
-    if (w !== this.canvas.width) {
-      // a new size needs a new GPU texture
-      this.tex.dispose();
-    }
-    this.tex.needsUpdate = true;
+    const u = this.uniforms;
+    u.lmAmb.value.setRGB(...d.ambient);
+    u.lmAmbOut.value.setRGB(...outAmbient(d));
+    u.lmWinC.value.setRGB(...d.window);
   }
 
   /** Does a lamp's light reach (x, y) on this floor (no wall or shut door between)? The lamp in
@@ -374,12 +401,13 @@ export class Light3 {
     return this.lm?.reaches(l, x - o.x, y - o.y) ?? true;
   }
 
-  // the light at a point of the scene, ambient included (0xRRGGBB, as iso tints people)
-  tintAt(x: number, y: number): number {
-    if (!this.lm) return 0xffffff;
+  // the light at a point of the scene (`up` over the floor: a person's chest), ambient included
+  // (0xRRGGBB: a person's tint)
+  tintAt(x: number, y: number, up = 1.2): number {
+    if (!this.vol) return 0xffffff;
     const d = daylight(this.hour);
     const o = this.uniforms.lmOff.value;
-    return this.lm.tintAt(x - o.x, y - o.y, d.ambient, d.window, outAmbient(d));
+    return this.vol.tintAt(x - o.x, y - o.y, up, d.ambient, d.window, outAmbient(d));
   }
 
   // Make a material take this light (Lambert: its lit colour is multiplied) — one of the family with
@@ -396,9 +424,8 @@ export class Light3 {
     const kind: WxKind = (m.userData.wx as WxKind | undefined) ?? (m.transparent ? "none" : "way");
     const extra = m.userData.grounds as { patch: (s: Shader) => void; key: string } | undefined;
     return {
-      key: `lightmap${extra?.key ?? ""}-${kind}`,
+      key: `lightvol${extra?.key ?? ""}-${kind}`,
       patch: (shader) => {
-        shader.uniforms.lmTex = u.lmTex;
         shader.uniforms.lmSize = u.lmSize;
         shader.uniforms.lmOff = u.lmOff;
         shader.uniforms.lmCap = litBalance.lmCap;
@@ -413,7 +440,7 @@ export class Light3 {
         shader.vertexShader = shader.vertexShader
           .replace(
             "#include <common>",
-            "#include <common>\nuniform vec2 lmSize;\nuniform vec2 lmOff;\nvarying vec2 vLmUv;\nvarying float vLmUp;",
+            "#include <common>\nuniform vec2 lmSize;\nuniform vec2 lmOff;\nuniform float lmY;\nvarying vec2 vLmUv;\nvarying float vLmUp;\nvarying float vLmH;",
           )
           .replace(
             "#include <project_vertex>",
@@ -421,12 +448,13 @@ export class Light3 {
           vec4 lmW = modelMatrix * vec4( transformed, 1.0 );
           vec3 lmN = normalize( mat3( modelMatrix ) * objectNormal );
           vLmUv = ( lmW.xz - lmOff + lmN.xz * 0.22 ) / lmSize;
-          vLmUp = lmN.y;`,
+          vLmUp = lmN.y;
+          vLmH = lmW.y - lmY;`,
           );
         shader.fragmentShader = shader.fragmentShader
           .replace(
             "#include <common>",
-            "#include <common>\nuniform sampler2D lmTex;\nuniform sampler2D lmSky;\nuniform sampler2D lmGlow;\nuniform float lmGlowK;\nuniform float lmCap;\nuniform float lmSunOut;\nuniform float lmFillOut;\nuniform float lmDark;\nuniform float lmEyes;\nuniform vec3 landLight;\nvarying vec2 vLmUv;\nvarying float vLmUp;",
+            "#include <common>\nuniform sampler3D lmVol;\nuniform vec3 lmAmb;\nuniform vec3 lmAmbOut;\nuniform vec3 lmWinC;\nvarying float vLmH;\nuniform sampler2D lmSky;\nuniform sampler2D lmGlow;\nuniform float lmGlowK;\nuniform float lmCap;\nuniform float lmSunOut;\nuniform float lmFillOut;\nuniform float lmDark;\nuniform float lmEyes;\nuniform vec3 landLight;\nvarying vec2 vLmUv;\nvarying float vLmUp;",
           )
           .replace("#include <lights_fragment_begin>", balanced("texture2D( lmSky, clamp( vLmUv, 0.0, 1.0 ) ).r"))
           .replace(
@@ -436,14 +464,24 @@ export class Light3 {
           // (their pools — lmGlow — on faces turned up only)
           // (past the floor's edge — a wall's outer face, someone out on the land — the land's light:
           // landLight; a person's own tint on top, view.ts)
+          // (the light where the face is — up its floor's storey too — and the hour's ambient and the
+          // windows' daylight added: each clamped to 1, then as an sRGB colour reads)
+          vec4 lmV = texture( lmVol, vec3( clamp( vLmUv, 0.0, 1.0 ), ( clamp( vLmH / ${STOREY.toFixed(3)}, 0.0, 1.0 ) * ${(LAYERS - 1).toFixed(1)} + 0.5 ) / ${LAYERS.toFixed(1)} ) );
+          vec3 lmC = min( vec3( 1.0 ), mix( lmAmb, lmAmbOut, texture2D( lmSky, clamp( vLmUv, 0.0, 1.0 ) ).r ) + lmV.rgb + lmWinC * min( 1.0, lmV.a ) );
+          lmC = sRGBTransferEOTF( vec4( lmC, 1.0 ) ).rgb;
           vec2 lmIn = step( vec2( 0.0 ), vLmUv ) * step( vLmUv, vec2( 1.0 ) );
           float lmOn = lmIn.x * lmIn.y;
           float lmOut = texture2D( lmSky, clamp( vLmUv, 0.0, 1.0 ) ).r * lmDark * lmOn;
           float lmUp = clamp( vLmUp, 0.0, 1.0 );
           // (and on the lot, what eyes adjusted to the dark see: a faint fill of its own)
-          outgoingLight *= mix( landLight, texture2D( lmTex, clamp( vLmUv, 0.0, 1.0 ) ).rgb, lmOn ) * mix( 1.0, 0.08 + 0.92 * lmUp, lmOut ) + lmEyes * lmOut;
+          outgoingLight *= mix( landLight, lmC, lmOn ) * mix( 1.0, 0.08 + 0.92 * lmUp, lmOut ) + lmEyes * lmOut;
           outgoingLight += diffuseColor.rgb * texture2D( lmGlow, clamp( vLmUv, 0.0, 1.0 ) ).rgb * lmGlowK * mix( 1.0, lmUp, lmOut ) * lmOn;${ROLL_OFF}`,
           );
+        shader.uniforms.lmVol = u.lmVol;
+        shader.uniforms.lmY = u.lmY;
+        shader.uniforms.lmAmb = u.lmAmb;
+        shader.uniforms.lmAmbOut = u.lmAmbOut;
+        shader.uniforms.lmWinC = u.lmWinC;
         // (and what else the material asks for: the lot's snow cover — roads3d.ts lotCover)
         extra?.patch(shader);
         // (the snow's layer on its tiles open to the sky — the lot, the pavements by the doors: trodden
@@ -454,7 +492,7 @@ export class Light3 {
   }
 
   dispose() {
-    this.tex.dispose();
+    this.uniforms.lmVol.value.dispose();
     this.sky.dispose();
     this.glow.dispose();
   }

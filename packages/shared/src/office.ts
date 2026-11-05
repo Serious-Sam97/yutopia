@@ -3,7 +3,7 @@ import { entry, placedFootprint, quarterYaw, type WorldObjectDef } from "./catal
 import { hangEdges, hangOf } from "./hang.ts";
 import type { Point } from "./iso.ts";
 import { atLevel, floorOf, onLevel } from "./levels.ts";
-import type { AreaDef, MapDef } from "./map.ts";
+import { type AreaDef, inArea, type MapDef } from "./map.ts";
 import { isOpening } from "./openings.ts";
 import { hostOf, splitAll } from "./tops.ts";
 
@@ -125,7 +125,7 @@ export function furnishedIn(objects: WorldObjectDef[], a: AreaDef, map: MapDef):
     const { w, h } = placedFootprint(o);
     const cx = o.x + w / 2;
     const cy = o.y + h / 2;
-    return cx >= a.x && cx < a.x + a.w && cy >= a.y && cy < a.y + a.h;
+    return inArea(a, cx, cy);
   };
   const owned = floor.filter((o) => inside(o) && o.props?.ownerId != null);
   const ownedAt = (o: WorldObjectDef) => {

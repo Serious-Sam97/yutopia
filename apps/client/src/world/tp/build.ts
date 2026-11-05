@@ -59,7 +59,7 @@ import {
   Texture,
   UnsignedByteType,
 } from "three";
-import { FloorBake } from "../art/floors";
+import { FloorBake, type FloorSlab } from "../art/floors";
 import { piece, WALL_H as WALL_PX } from "../art/furniture";
 import { INK } from "../art/items/kit";
 import { type LightSource, lightSources } from "../art/light";
@@ -239,6 +239,9 @@ export class World3 {
     private rings: Ring[] | null = null,
     /** all its slabs' rings (the lot's too: what's floor at all — below-cull's slab and shell) */
     private floorRings: Ring[] | null = null,
+    /** its slabs each with its material (its own frame): the floor's look painted per slab
+     *  (art/floors.ts FloorBake); none: its tiles */
+    private slabs: FloorSlab[] | null = null,
   ) {
     const t0 = performance.now();
     this.edges = edges ?? edgesOfMap(map);
@@ -587,6 +590,7 @@ export class World3 {
     edges?: WallEdges,
     rings?: Ring[] | null,
     floorRings?: Ring[] | null,
+    slabs?: FloorSlab[] | null,
   ) {
     // (an edit before this one not yet done: now, at once)
     this.flushSoon();
@@ -598,6 +602,7 @@ export class World3 {
     this.edges = edges ?? edgesOfMap(map);
     this.rings = rings ?? null;
     this.floorRings = floorRings ?? null;
+    this.slabs = slabs ?? null;
     const touched = touchedWalls(old, map, oldEdges, this.edges);
     this.buildWalls(touched.keys);
     // where the floor's bake changes: round the edges that changed (the AO reaches ~2 tiles),
@@ -1452,8 +1457,9 @@ export class World3 {
             : { x0: cx - 1, y0: cy - 1, x1: cx + w + 1, y1: cy + h + 1 };
         }
     if (kept && !aoOnly) return; // (nothing of the floor's within reach)
-    const bake = new FloorBake(map, this.objects, 1, 1024, this.wells.floor, aoOnly);
-    const floorAt = (x: number, y: number) => isFloor(tileAt(map, x, y)) && !this.wells.floor.has(`${x},${y}`);
+    const bake = new FloorBake(map, this.objects, this.wells.floor, aoOnly, this.slabs);
+    // (what's floor: the slabs' — the structure's — or the tiles'; less the wells)
+    const floorAt = (x: number, y: number) => this.isFloorAt(x, y) && !this.wells.floor.has(`${x},${y}`);
     const softs = [...this.areas.values(), ...this.tall.values()].map((a) => a.built.soft);
     if (!kept) this.dropFloor();
     const chunks = new Map<string, Mesh>();

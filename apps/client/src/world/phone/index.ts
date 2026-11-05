@@ -632,12 +632,14 @@ export class Phone {
           const g = hearingGain(this.ctl.map, meP, p);
           const d = Math.hypot(p.x - meP.x, p.y - meP.y);
           const gain = Math.max(g, d < 2 ? 0.6 : 0) * 0.55;
+          // (left or right as the 3D camera looks — docs/plan/72 phase 10; the plan's turn without it)
+          const pan = this.ctl.tp ? this.ctl.tp.pan(meP, p) : stereoPan(meP, p);
           let r = this.ringers.get(sid);
           if (!r || r.tone !== p.tone) {
             r?.stop();
-            r = new Ringer(p.tone as Ringtone, gain, stereoPan(meP, p));
+            r = new Ringer(p.tone as Ringtone, gain, pan);
             this.ringers.set(sid, r);
-          } else r.set(gain, stereoPan(meP, p));
+          } else r.set(gain, pan);
         }
         // someone took a photo near me: the flash and the shutter
         const last = this.shots.get(sid);

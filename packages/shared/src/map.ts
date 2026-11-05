@@ -88,6 +88,24 @@ export interface AreaDef {
   dressing?: "tidy" | "lived" | "busy" | null;
   // generated pieces someone took (turned into real objects) or removed
   dressOff?: string[];
+  // its outline (the structure's room: the face its walls close round — docs/plan/72 phase 10), in the
+  // same frame as x, y; none: the rectangle x, y, w, h is the room
+  outline?: [number, number][];
+}
+
+/** Is (x, y) in the room — its outline (even-odd), or its rectangle when it has none? */
+export function inArea(a: AreaDef, x: number, y: number): boolean {
+  if (x < a.x || y < a.y || x >= a.x + a.w || y >= a.y + a.h) {
+    if (!a.outline) return false;
+  } else if (!a.outline) return true;
+  const r = a.outline;
+  let n = 0;
+  for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+    const [xi, yi] = r[i];
+    const [xj, yj] = r[j];
+    if (yi > y !== yj > y && x < xi + ((y - yi) / (yj - yi)) * (xj - xi)) n++;
+  }
+  return n % 2 === 1;
 }
 
 export interface MapDef {
@@ -311,7 +329,7 @@ export function isFloor(ch: string): ch is FloorChar {
 export function areaAt(map: MapDef, x: number, y: number): AreaDef | null {
   let best: AreaDef | null = null;
   for (const a of map.areas) {
-    if (x >= a.x && x < a.x + a.w && y >= a.y && y < a.y + a.h) {
+    if (inArea(a, x, y)) {
       if (!best || (a.priority ?? 0) > (best.priority ?? 0)) best = a;
     }
   }

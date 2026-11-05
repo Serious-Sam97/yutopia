@@ -1,6 +1,17 @@
 import { entry, footprint, quarterOf, type WorldObjectDef } from "./catalog.ts";
 import { hangOf, wallSpan } from "./hang.ts";
-import { type AreaDef, areaAt, holdsItems, hWall, isFloor, isWallEdge, type MapDef, tileAt, vWall } from "./map.ts";
+import {
+  type AreaDef,
+  areaAt,
+  holdsItems,
+  hWall,
+  inArea as inRoom,
+  isFloor,
+  isWallEdge,
+  type MapDef,
+  tileAt,
+  vWall,
+} from "./map.ts";
 import { isDoorKind, isOpening, openingEdges } from "./openings.ts";
 
 // Dressing: the clutter that makes a room lived in, chosen per room as a preset
@@ -71,7 +82,7 @@ function rng(seed: number) {
 
 // inside the room, and the room is the one in charge there (not a nested corner)
 function inArea(map: MapDef, a: AreaDef, x: number, y: number) {
-  return x >= a.x && x < a.x + a.w && y >= a.y && y < a.y + a.h && areaAt(map, x + 0.5, y + 0.5)?.key === a.key;
+  return inRoom(a, x + 0.5, y + 0.5) && areaAt(map, x + 0.5, y + 0.5)?.key === a.key;
 }
 
 export function dressItems(map: MapDef, objects: Iterable<WorldObjectDef>): DressItem[] {

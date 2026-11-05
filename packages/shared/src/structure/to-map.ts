@@ -72,7 +72,19 @@ function makeGrid(s: Structure, f: Floor): Grid {
     .filter((r) => r.floor === f.index)
     .map((r) => {
       const [rx0, ry0, rx1, ry1] = r.rect;
-      return { key: r.key, ...r.props, x: rx0, y: ry0, w: rx1 - rx0, h: ry1 - ry0 } as AreaDef;
+      // (its outline when it isn't its rectangle: the walls' face it fills — phase 10; its rectangle
+      // kept as drawn, what a map made from it again keeps)
+      const box =
+        r.outline.length === 4 && r.outline.every(([x, y]) => (x === rx0 || x === rx1) && (y === ry0 || y === ry1));
+      return {
+        key: r.key,
+        ...r.props,
+        x: rx0,
+        y: ry0,
+        w: rx1 - rx0,
+        h: ry1 - ry0,
+        ...(box ? {} : { outline: r.outline.map(([x, y]): [number, number] => [x, y]) }),
+      } as AreaDef;
     });
   const out: Grid = {
     width: w,

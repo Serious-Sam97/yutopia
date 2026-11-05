@@ -1,6 +1,6 @@
 import { quarterOf, quarterYaw, type WorldObjectDef } from "./catalog.ts";
 import type { Point } from "./iso.ts";
-import { type AreaDef, type Edge, edgeAt, isFloor, type MapDef, tileAt } from "./map.ts";
+import { type AreaDef, type Edge, edgeAt, inArea, isFloor, type MapDef, tileAt } from "./map.ts";
 import { doorLockable, openingCentre, ringOf, wallTakes } from "./openings.ts";
 
 // ── doors ──────────────────────────────────────────────────────────────────
@@ -35,10 +35,11 @@ export function doorRoom(
     if (a) return a;
   }
   const e = doorEdge(door);
+  // (the rooms whose edge it's on: the room one side of it, not the other — its outline's, phase 10)
   const rings = map.areas.filter((a) =>
     e.dir === "h"
-      ? (e.y === a.y || e.y === a.y + a.h) && e.x >= a.x && e.x < a.x + a.w
-      : (e.x === a.x || e.x === a.x + a.w) && e.y >= a.y && e.y < a.y + a.h,
+      ? inArea(a, e.x + 0.5, e.y - 0.5) !== inArea(a, e.x + 0.5, e.y + 0.5)
+      : inArea(a, e.x - 0.5, e.y + 0.5) !== inArea(a, e.x + 0.5, e.y + 0.5),
   );
   return rings.find((a) => a.ownerId) ?? rings[0] ?? null;
 }

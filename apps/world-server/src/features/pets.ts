@@ -7,6 +7,7 @@ import {
   faceStep,
   floorsOf,
   inLiftDoorway,
+  inArea as inRoomShape,
   isDoorKind,
   isToyHeld,
   objLevel,
@@ -2225,7 +2226,7 @@ registerFeature((room: WorldRoom) => {
   // least lately, a sniff at two or three things there (or a corner of it),
   // then on to the next, until it's called back. Booths and the standup ring
   // stay private.
-  const inArea = (a: AreaDef, at: Point) => at.x >= a.x && at.x < a.x + a.w && at.y >= a.y && at.y < a.y + a.h;
+  const inArea = (a: AreaDef, at: Point) => inRoomShape(a, at.x, at.y);
   // somewhere open in the room (or anywhere), as far as it can find from
   // where it has stopped lately: a big open floor gets covered, not circled
   const spotIn = (pet: Pet, r: Run, a: AreaDef | null): Point | null => {

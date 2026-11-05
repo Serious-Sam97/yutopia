@@ -18,7 +18,13 @@ export function foldMap(m: MapDef): MapDef {
   const dress = (a: AreaDef) => (a.dressOff ? { dressOff: a.dressOff.map((id) => dressIn(id, a.x, a.y)) } : {});
   const levels = m.levels?.map((l) => ({
     ...l,
-    areas: l.areas.map((a) => ({ ...a, x: a.x + l.ox, y: a.y + l.oy, ...dress(a) })),
+    areas: l.areas.map((a) => ({
+      ...a,
+      x: a.x + l.ox,
+      y: a.y + l.oy,
+      ...(a.outline ? { outline: a.outline.map(([x, y]): [number, number] => [x + l.ox, y + l.oy]) } : {}),
+      ...dress(a),
+    })),
     ...(l.spawn ? { spawn: { x: l.spawn.x + l.ox, y: l.spawn.y + l.oy } } : {}),
   }));
   const areas = m.areas.map((a) => ({ ...a, ...dress(a) }));
@@ -56,7 +62,12 @@ export function localView(lm: MapDef): MapDef {
   if (!ox && !oy) return rest;
   return {
     ...rest,
-    areas: lm.areas.map((a) => ({ ...a, x: a.x - ox, y: a.y - oy })),
+    areas: lm.areas.map((a) => ({
+      ...a,
+      x: a.x - ox,
+      y: a.y - oy,
+      ...(a.outline ? { outline: a.outline.map(([x, y]): [number, number] => [x - ox, y - oy]) } : {}),
+    })),
     spawn: { x: lm.spawn.x - ox, y: lm.spawn.y - oy },
     ...(lm.core ? { core: { x: lm.core.x - ox, y: lm.core.y - oy } } : {}),
   };

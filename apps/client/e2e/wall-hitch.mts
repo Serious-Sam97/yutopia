@@ -255,9 +255,45 @@ try {
         // the shader programs linked, and the material family's among them (look/yulit.ts)
         programs: c.tp.renderer.info.programs?.length ?? 0,
         family: (c.tp.renderer.info.programs ?? []).filter((p: any) => String(p.cacheKey).includes("yu|")).length,
+        // each floor's light volume drawn (art/light-volume.ts): its samples, MB on the GPU (half floats)
+        volumes: [c.tp.light, ...(c.tp.below?.values?.() ?? [])].map((l: any) => {
+          const v = l.vol;
+          return v
+            ? `${v.lm.map.floor ?? "?"}:${v.w}x${v.h}x${v.d}=${((v.w * v.h * v.d * 8) / 1048576).toFixed(1)}MB`
+            : "none";
+        }),
       };
     });
     console.log("times:", JSON.stringify(t));
+  }
+  // ROOMS=1: the structure's rooms against their old rectangles (plan 72 phase 10): which rooms' outlines
+  // aren't their rectangles, by floor
+  if (process.env.ROOMS) {
+    const r = await page.evaluate(() => {
+      const st = (window as any).__yutopia.structure;
+      const area2 = (ring: [number, number][]) => {
+        let a = 0;
+        for (let i = 0; i < ring.length; i++) {
+          const [x0, y0] = ring[i];
+          const [x1, y1] = ring[(i + 1) % ring.length];
+          a += x0 * y1 - x1 * y0;
+        }
+        return Math.abs(a) / 2;
+      };
+      const out: string[] = [];
+      for (const room of st.rooms) {
+        const [x0, y0, x1, y1] = room.rect;
+        const ra = (x1 - x0) * (y1 - y0);
+        const oa = area2(room.outline);
+        if (Math.abs(oa - ra) > 1e-6 || room.outline.length !== 4)
+          out.push(
+            `${room.floor}:${room.key} "${room.props?.name ?? ""}" rect ${ra} m² → ${oa} m² (${room.outline.length} corners)`,
+          );
+      }
+      return { rooms: st.rooms.length, differ: out };
+    });
+    console.log(`rooms: ${r.rooms}, outline ≠ rect: ${r.differ.length}`);
+    for (const d of r.differ) console.log(`  ${d}`);
   }
   const verify = Number(process.env.VERIFY ?? 0);
   if (verify) {
@@ -325,6 +361,11 @@ try {
       const chars = [...wallChars];
       const report: string[] = [];
       let bad = 0;
+      // (the edits here are the map's, not the structure's: the floor put on its map's own walls, slabs
+      // and tiles first, and baked whole — as a fresh build from the map is)
+      mine.relayout(mine.map, mine.objects);
+      mine.flushSoon?.();
+      mine.rebakeFloor?.();
       {
         // the baseline: as it is, against a fresh build
         const fresh = new W3(tp.items, mine.map, mine.objects, 4, () => {}, mine.wells);

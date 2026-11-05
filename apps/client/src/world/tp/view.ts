@@ -345,6 +345,17 @@ function drawnFloor(lm: MapDef, here: WorldObjectDef[], all: WorldObjectDef[], s
   const rings = ringsOf((t) => t !== "a" && t !== "c");
   // (and all of them: what's floor at all — below-cull's)
   const floorRings = ringsOf(() => true);
+  // (each with its material: the floor's look painted per slab — art/floors.ts, phase 9)
+  const slabs = structure
+    ? structure.slabs
+        .filter((sl) => sl.floor === floorOf(lm))
+        .map((sl) => ({
+          top: sl.top,
+          rings: [sl.outline, ...sl.holes].map((r) =>
+            r.map(([x, y]): [number, number] => [x - corner.x, y - corner.y]),
+          ),
+        }))
+    : null;
   return {
     map,
     objects: here.map((o) => localThing(lm, o)),
@@ -353,6 +364,7 @@ function drawnFloor(lm: MapDef, here: WorldObjectDef[], all: WorldObjectDef[], s
     edges,
     rings,
     floorRings,
+    slabs,
   };
 }
 /** The home floor's outline from the structure, in the home map's own frame (campus.ts Outline: the
@@ -1502,7 +1514,7 @@ void main() {
     const winSig = `${cutsSig(home)}|${this.outline().key}`;
     let relaid = false;
     if (mine && relay) {
-      mine.world.relayout(drawn.map, noLifts(drawn.objects), drawn.edges, drawn.rings, drawn.floorRings);
+      mine.world.relayout(drawn.map, noLifts(drawn.objects), drawn.edges, drawn.rings, drawn.floorRings, drawn.slabs);
       mine.sig = sig;
       mine.wells = wellSig;
       relaid = true;
@@ -1522,6 +1534,7 @@ void main() {
         drawn.edges,
         drawn.rings,
         drawn.floorRings,
+        drawn.slabs,
       );
       mine = { world, sig, lit: this.light, wells: wellSig };
       this.floors.set(level, mine);
@@ -1626,12 +1639,12 @@ void main() {
       const wlm = levelMap(this.building, f);
       if (!wlm) continue;
       const drawn = drawnFloor(wlm, onLevel(all, wlm), all, this.structure);
-      const { map: lm, objects: objs, wells, edges, rings, floorRings } = drawn;
+      const { map: lm, objects: objs, wells, edges, rings, floorRings, slabs } = drawn;
       const wk = wellsKey(wells);
       const sig = `${layoutSig(lm)}|${wk}|${freeSig(edges)}`;
       let relaid = false;
       if (b && b.sig !== sig && sameShape(b, lm, wk)) {
-        b.world.relayout(lm, noLifts(objs), edges, rings, floorRings);
+        b.world.relayout(lm, noLifts(objs), edges, rings, floorRings, slabs);
         b.sig = sig;
         b.wells = wk;
         relaid = true;
@@ -1642,7 +1655,7 @@ void main() {
       }
       const o = this.cornerTo(f);
       const lit = this.belowLight(f, lm, objs);
-      lit.setOffset(o.x, o.y);
+      lit.setOffset(o.x, o.y, o.h);
       if (!b) {
         const world = new World3(
           this.items,
@@ -1654,6 +1667,7 @@ void main() {
           edges,
           rings,
           floorRings,
+          slabs,
         );
         b = { world, sig, lit, wells: wk };
         this.floors.set(f, b);
@@ -1877,10 +1891,11 @@ void main() {
       edges,
       rings,
       floorRings,
+      slabs,
     } = drawnFloor(wlm, onLevel(all, wlm), all, this.structure);
     const o = this.cornerTo(f);
     const lit = this.belowLight(f, lm, objs);
-    lit.setOffset(o.x, o.y);
+    lit.setOffset(o.x, o.y, o.h);
     const world = new World3(
       this.items,
       lm,
@@ -1891,6 +1906,7 @@ void main() {
       edges,
       rings,
       floorRings,
+      slabs,
     );
     const wk = wellsKey(wells);
     this.floors.set(f, { world, sig: `${layoutSig(lm)}|${wk}|${freeSig(edges)}`, lit, wells: wk });

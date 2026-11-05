@@ -3,7 +3,7 @@
 // every room, the floors' places, names, spawns, the core. (Used by the tests and the migration's
 // dry run; the raw arrays may differ only where they say nothing, e.g. back rows all ".".)
 import { floorsOf, levelMap } from "../levels.ts";
-import { backAt, hWall, type MapDef, spanOf, tileAt, vWall } from "../map.ts";
+import { type AreaDef, backAt, hWall, type MapDef, spanOf, tileAt, vWall } from "../map.ts";
 import { foldMap } from "./fold.ts";
 import { structureFromMap } from "./from-map.ts";
 import { mapFromStructure } from "./to-map.ts";
@@ -67,7 +67,9 @@ export function mapDiff(a0: MapDef, b0: MapDef): string[] {
         const e = { dir: "v" as const, x, y };
         if (vWall(la, x, y) !== vWall(lb, x, y) || backAt(la, e) !== backAt(lb, e)) out.push(`floor ${f} v${x},${y}`);
       }
-    if (norm(la.areas) !== norm(lb.areas)) out.push(`floor ${f} areas`);
+    // (a room's outline is the structure's, worked out from its walls: what's kept is the rest)
+    const kept = (as: AreaDef[]) => as.map(({ outline: _o, ...a }) => a);
+    if (norm(kept(la.areas)) !== norm(kept(lb.areas))) out.push(`floor ${f} areas`);
   }
   return out;
 }

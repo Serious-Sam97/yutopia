@@ -2,7 +2,7 @@ import { canPlace } from "./build.ts";
 import { entry, placedFootprint, quarterOf, quarterYaw, type WorldObjectDef } from "./catalog.ts";
 import type { Point } from "./iso.ts";
 import { atLevel, floorOf, floorsOf, levelMap, onLevel } from "./levels.ts";
-import type { AreaDef, MapDef } from "./map.ts";
+import { type AreaDef, inArea, type MapDef } from "./map.ts";
 import { planFor, refurnished } from "./office.ts";
 import { isOpening } from "./openings.ts";
 
@@ -48,7 +48,9 @@ export function deckRoom(
       const { w, h } = placedFootprint(o);
       // (inside the room, clear of the doors)
       if (x < a.x || y < a.y || x + w > a.x + a.w || y + h > a.y + a.h) return false;
-      for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) if (clear.has(`${x + dx},${y + dy}`)) return false;
+      for (let dy = 0; dy < h; dy++)
+        for (let dx = 0; dx < w; dx++)
+          if (clear.has(`${x + dx},${y + dy}`) || !inArea(a, x + dx + 0.5, y + dy + 0.5)) return false;
     }
     if (!canPlace(map, [...here, ...out], o, bodies)) return false;
     out.push(o);
@@ -80,7 +82,7 @@ export function deckRoom(
   if (a.w >= 6) for (let x = a.x; x + 3 <= a.x + a.w; x++) if (put("garland", x, a.y, 0, { wu: 0 })) break;
   // stockings either side of a fireplace, on its wall
   for (const f of here)
-    if (f.kind === "fireplace" && f.x >= a.x && f.x < a.x + a.w && f.y >= a.y && f.y < a.y + a.h) {
+    if (f.kind === "fireplace" && inArea(a, f.x + 0.5, f.y + 0.5)) {
       const r = quarterOf(f) & 3;
       if (r === 0 || r === 2)
         for (const sx of [f.x - 1, f.x + 2]) put("stocking", sx, f.y, r, { wu: r === 0 ? 2 : 0, variant: sx % 3 });
@@ -101,7 +103,7 @@ export function deckRoom(
   for (const host of here) {
     if (k >= smalls.length) break;
     const surface = entry(host.kind).surface;
-    if (!surface || host.x < a.x || host.x >= a.x + a.w || host.y < a.y || host.y >= a.y + a.h) continue;
+    if (!surface || !inArea(a, host.x + 0.5, host.y + 0.5)) continue;
     if (put(smalls[k], host.x, host.y, 0, { z: surface })) k++;
   }
   return out;

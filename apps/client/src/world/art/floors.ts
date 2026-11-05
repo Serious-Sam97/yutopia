@@ -14,14 +14,12 @@ import {
   type WorldObjectDef,
 } from "@yutopia/shared";
 
-// Floors, baked: each material is a seamless top-down texture (4×4 tiles,
-// generated once), filled into the floor in plan space through an isometric
-// transform, then ambient occlusion (wall bases, corners, under furniture),
-// door thresholds and strips between materials are painted on top. The result
-// is cut into canvas chunks the engine turns into sprites.
+// Floors, baked: each material is a seamless top-down texture (4×4 tiles, generated once), painted
+// over the floor's slabs in their own space — the plan, seen from straight above (docs/plan/72-the-3d-
+// core.md, phase 9: the floor's look per slab; the iso view's turn is gone) — then ambient occlusion
+// (wall bases, corners, under furniture), door thresholds and strips between materials on top. The 3D
+// view lays it on the floor in pieces (tp/build.ts bakeFloor).
 
-const HW = 32;
-const HH = 16;
 export const T = 64; // plan px per tile at res 1
 const PERIOD = 4; // texture repeats every 4 tiles
 
@@ -468,15 +466,26 @@ export function aoCanvas(
 }
 
 // ── the bake ───────────────────────────────────────────────────────────────
-export interface FloorChunk {
-  x: number; // screen px (1×) of the chunk's top-left
-  y: number;
-  w: number;
-  h: number;
+/** A slab of the floor (its own frame, m): its material and its rings (outline and holes, read
+ *  even-odd — the structure's: docs/plan/72 phase 6). */
+export interface FloorSlab {
+  top: string;
+  rings: [number, number][][];
+}
+
+// (a point in a slab's rings, even-odd)
+function inRings(rings: [number, number][][], x: number, y: number): boolean {
+  let n = 0;
+  for (const r of rings)
+    for (let i = 0; i < r.length; i++) {
+      const [ax, ay] = r[i];
+      const [bx, by] = r[(i + 1) % r.length];
+      if (ay > y !== by > y && x < ax + ((y - ay) / (by - ay)) * (bx - ax)) n++;
+    }
+  return n % 2 === 1;
 }
 
 export class FloorBake {
-  readonly chunks: FloorChunk[] = [];
   private ao: HTMLCanvasElement;
   private byMat = new Map<string, [number, number][]>();
   private edges: [number, number, number, number][] = []; // plan rects (tiles) for strips
@@ -484,29 +493,36 @@ export class FloorBake {
   private stage: [number, number, number, number] | null = null;
   private stripes: [number, number, number, number][] = []; // the lot's painted bays
 
-  // `wells`: tiles open to the floor below (stairwells, shared wellsOf): no floor there
+  // `wells`: tiles open to the floor below (stairwells, lifts' shafts — shared wellsOf): no floor there.
+  // `slabs`: the floor's slabs (the structure's); none — the tests', the dev pages' maps — its tiles
   constructor(
     readonly map: MapDef,
     objects: WorldObjectDef[],
-    readonly res: number,
-    chunkPx = 1024,
-    wells: Set<string> = new Set(),
+    private wells: Set<string> = new Set(),
     // the AO worked out only in these tiles (aoCanvas): for a bake of only the chunks in them
     aoOnly?: { x0: number; y0: number; x1: number; y1: number },
+    private slabs: FloorSlab[] | null = null,
   ) {
     const W = map.width;
     const H = map.height;
+    // what each tile's floor is: the slab over its middle (the structure's), or its tile
+    const matAt = slabs
+      ? (x: number, y: number) => {
+          for (const sl of slabs) if (inRings(sl.rings, x + 0.5, y + 0.5)) return sl.top;
+          return tileAt(map, -1, -1);
+        }
+      : (x: number, y: number) => tileAt(map, x, y);
     for (let y = 0; y < H; y++)
       for (let x = 0; x < W; x++) {
-        const ch = tileAt(map, x, y);
+        const ch = matAt(x, y);
         if (!isFloor(ch) || wells.has(`${x},${y}`)) continue;
         const list = this.byMat.get(ch) ?? [];
         list.push([x, y]);
         this.byMat.set(ch, list);
         // material transitions on the right and bottom edges
-        const r = tileAt(map, x + 1, y);
+        const r = matAt(x + 1, y);
         if (isFloor(r) && r !== ch) this.edges.push([x + 1 - 0.035, y, 0.07, 1]);
-        const b = tileAt(map, x, y + 1);
+        const b = matAt(x, y + 1);
         if (isFloor(b) && b !== ch) this.edges.push([x, y + 1 - 0.035, 1, 0.07]);
       }
     for (const o of objects) {
@@ -526,31 +542,6 @@ export class FloorBake {
       this.stripes = lotStripes(lotLayout()).map(([x, z, w, h]) => [x - ox, z - oy, w, h]);
     }
     this.ao = aoCanvas(map, objects, aoOnly);
-    // screen bounds of the floor, cut into chunks of `chunkPx` device px
-    const x0 = -H * HW;
-    const x1 = W * HW;
-    const y1 = (W + H) * HH;
-    const step = chunkPx / res;
-    for (let y = 0; y < y1; y += step)
-      for (let x = x0; x < x1; x += step)
-        this.chunks.push({ x, y, w: Math.min(step, x1 - x), h: Math.min(step, y1 - y) });
-  }
-
-  // Draw one chunk (device px = screen px × res).
-  draw(i: number): HTMLCanvasElement {
-    const k = this.chunks[i];
-    const res = this.res;
-    const c = canvas(k.w * res, k.h * res);
-    const g = c.getContext("2d") as CanvasRenderingContext2D;
-    // plan (u, v in px, T per tile) → screen → device
-    g.setTransform((res * HW) / T, (res * HH) / T, (-res * HW) / T, (res * HH) / T, -k.x * res, -k.y * res);
-    const visible = (x: number, y: number) => {
-      const sx = (x - y) * HW;
-      const sy = (x + y) * HH;
-      return sx + HW >= k.x && sx - HW <= k.x + k.w && sy + 2 * HH >= k.y && sy <= k.y + k.h;
-    };
-    this.paint(g, res, visible);
-    return c;
   }
 
   // The floor seen from straight above, `px` canvas px per tile: the tiles
@@ -569,22 +560,50 @@ export class FloorBake {
   private paint(g: CanvasRenderingContext2D, res: number, visible: (x: number, y: number) => boolean) {
     const ms = Math.round(T * res);
     const e = 0.6 / res; // overlap so materials meet without hairline gaps
-    for (const [ch, tiles] of this.byMat) {
+    const pattern = (ch: string) => {
       const tex = materialCanvas(ch, ms);
-      if (!tex) continue;
-      const pat = g.createPattern(tex, "repeat");
-      if (!pat) continue;
-      pat.setTransform(new DOMMatrix().scale(T / ms));
-      g.fillStyle = pat;
-      g.beginPath();
-      let any = false;
-      for (const [x, y] of tiles) {
-        if (!visible(x, y)) continue;
-        g.rect(x * T - e, y * T - e, T + 2 * e, T + 2 * e);
-        any = true;
+      const pat = tex && g.createPattern(tex, "repeat");
+      pat?.setTransform(new DOMMatrix().scale(T / ms));
+      return pat || null;
+    };
+    if (this.slabs) {
+      // each slab in its own shape (less the wells), its material a hair past its edge all round —
+      // where two meet, no hairline between them (as the tiles' squares overlapped)
+      for (const sl of this.slabs) {
+        if (!isFloor(sl.top)) continue;
+        const pat = pattern(sl.top);
+        if (!pat) continue;
+        g.beginPath();
+        for (const r of sl.rings) {
+          for (let i = 0; i < r.length; i++)
+            if (i) g.lineTo(r[i][0] * T, r[i][1] * T);
+            else g.moveTo(r[i][0] * T, r[i][1] * T);
+          g.closePath();
+        }
+        for (const k of this.wells) {
+          const [x, y] = k.split(",").map(Number);
+          if (inRings(sl.rings, x + 0.5, y + 0.5)) g.rect(x * T, y * T, T, T);
+        }
+        g.fillStyle = pat;
+        g.fill("evenodd");
+        g.strokeStyle = pat;
+        g.lineWidth = 2 * e;
+        g.stroke();
       }
-      if (any) g.fill();
-    }
+    } else
+      for (const [ch, tiles] of this.byMat) {
+        const pat = pattern(ch);
+        if (!pat) continue;
+        g.fillStyle = pat;
+        g.beginPath();
+        let any = false;
+        for (const [x, y] of tiles) {
+          if (!visible(x, y)) continue;
+          g.rect(x * T - e, y * T - e, T + 2 * e, T + 2 * e);
+          any = true;
+        }
+        if (any) g.fill();
+      }
     // ambient occlusion, only where there's floor
     g.imageSmoothingEnabled = true;
     g.imageSmoothingQuality = "high";
@@ -614,10 +633,4 @@ export class FloorBake {
       g.fillRect(x * T, y * T, w * T, h * T);
     }
   }
-}
-
-// Resolution for the floor bake: crisp, but never more than ~12 M pixels.
-export function floorRes(map: MapDef, quality: "high" | "medium" | "low", zoomScale = 1): number {
-  const px = (map.width + map.height) * HW * (map.width + map.height) * HH;
-  return Math.min((quality === "high" ? 1.5 : quality === "medium" ? 1.2 : 1) * zoomScale, Math.sqrt(12e6 / px));
 }

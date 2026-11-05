@@ -3,7 +3,7 @@
 import { emptyEdges, type MapDef, quarterYaw, setEdge, type WorldObjectDef } from "@yutopia/shared";
 import { notFound } from "next/navigation";
 import { useEffect, useState } from "react";
-import { FloorBake } from "@/world/art/floors";
+import { FloorBake, T } from "@/world/art/floors";
 import { postArt, wallArt } from "@/world/art/items";
 import type { ItemArt } from "@/world/art/items/kit";
 
@@ -173,6 +173,19 @@ function WallCorner({ ch, z }: { ch: string; z: number }) {
   );
 }
 
+// (the plan turned and squashed as the iso view drew it — this sheet's own: the game draws its floors
+// from straight above, docs/plan/72 phase 9 — at 2× the iso view's screen px)
+function isoOf(plan: HTMLCanvasElement): HTMLCanvasElement {
+  const P = T * 2; // the plan's px a tile
+  const c = document.createElement("canvas");
+  c.width = (W + H) * HW * 2;
+  c.height = (W + H) * HH * 2;
+  const g = c.getContext("2d") as CanvasRenderingContext2D;
+  g.setTransform((HW * 2) / P, (HH * 2) / P, (-HW * 2) / P, (HH * 2) / P, H * HW * 2, 0);
+  g.drawImage(plan, 0, 0);
+  return c;
+}
+
 export default function Rooms() {
   if (process.env.NODE_ENV === "production") notFound();
   const [baked, setBaked] = useState<Record<string, string>>({});
@@ -180,8 +193,7 @@ export default function Rooms() {
     const out: Record<string, string> = {};
     for (const [ch] of MATS) {
       const { map, objects } = testRoom(ch);
-      const bake = new FloorBake(map, objects, 2, 4096);
-      out[ch] = bake.draw(0).toDataURL();
+      out[ch] = isoOf(new FloorBake(map, objects).drawPlan(T * 2)).toDataURL();
     }
     setBaked(out);
   }, []);

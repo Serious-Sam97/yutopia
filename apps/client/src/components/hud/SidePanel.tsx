@@ -1,6 +1,6 @@
 "use client";
 
-import { entry, isOpening, isPrivate } from "@yutopia/shared";
+import { entry, inArea, isOpening, isPrivate } from "@yutopia/shared";
 import { type Key, useTr } from "@/lib/i18n";
 import { hud, type Person, type SideTab, useHud } from "@/world/store";
 import { ItemThumb } from "./build/thumbs";
@@ -273,8 +273,7 @@ function RoomTab() {
       </p>
     );
   const here = [me, ...people.filter((p) => !p.bot && p.area === area.key)];
-  const inside = (o: { x: number; y: number }) =>
-    o.x >= area.x && o.x < area.x + area.w && o.y >= area.y && o.y < area.y + area.h;
+  const inside = (o: { x: number; y: number }) => inArea(area, o.x, o.y);
   const things = (w?.model?.allObjects() ?? [])
     .filter((o) => entry(o.kind).interact && !isOpening(o.kind) && inside(o))
     .slice(0, 8);
