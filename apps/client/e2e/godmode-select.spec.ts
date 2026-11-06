@@ -16,7 +16,7 @@ const toScreen = (page: Page, x: number, z: number) =>
       const f = t.groundsFrame();
       const v = t.camera.position
         .clone()
-        .set(gx - f.x, y.G.terrainAt(gx, gz) + f.y, gz - f.z)
+        .set(gx, y.G.terrainAt(gx, gz) + f.y, gz)
         .project(t.camera);
       const r = t.renderer.domElement.getBoundingClientRect();
       return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };

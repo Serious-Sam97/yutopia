@@ -1514,7 +1514,9 @@ void main() {
   // `building`: the home map with every floor; `objects`: everything on every
   // floor; `level`: the floor I'm on.
   private lightLater: (() => void) | null = null;
-  update(building: MapDef, objects: WorldObjectDef[], level = this.level) {
+  /** `solids`: every thing solid in the building, for the physics — the drawn ones and those drawn
+   *  by their own (the lot's parked cars, car/cars.ts) — `objects` if not said. */
+  update(building: MapDef, objects: WorldObjectDef[], level = this.level, solids: WorldObjectDef[] = objects) {
     const map = levelMap(building, level) ?? building;
     const moved = level !== this.level;
     const from = this.level;
@@ -1522,6 +1524,7 @@ void main() {
     this.level = level;
     const all = objects;
     this.allObjects = all;
+    this.solidObjects = solids;
     objects = onLevel(all, map);
     this.hereObjects = objects;
     this.keysAt.clear();
@@ -1820,6 +1823,8 @@ void main() {
   // are on the GPU and their shaders compiled before anyone goes there: a
   // floor change then only moves and shows what's ready.
   allObjects: WorldObjectDef[] = [];
+  /** every thing that's solid (the physics'): `allObjects` and the parked cars drawn by their own */
+  solidObjects: WorldObjectDef[] = [];
   private hereObjects: WorldObjectDef[] = [];
 
   // (plan 62) The keys someone at a desk types on: the keyboard ahead of them (else in front of the

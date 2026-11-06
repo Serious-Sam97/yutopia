@@ -8,6 +8,7 @@ import {
   Color,
   CylinderGeometry,
   DoubleSide,
+  FrontSide,
   Group,
   IcosahedronGeometry,
   InstancedBufferAttribute,
@@ -123,7 +124,7 @@ function partMat(kind: Kind, o: { map?: CanvasTexture; color?: string; side?: bo
     roughness: 0.85,
     color: o.color ?? "#ffffff",
     map: o.map ?? null,
-    side: o.side ? DoubleSide : undefined,
+    side: o.side ? DoubleSide : FrontSide,
   });
   const patch = (sh: { uniforms: Record<string, unknown>; vertexShader: string }) => {
     Object.assign(sh.uniforms, u);

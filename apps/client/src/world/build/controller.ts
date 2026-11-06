@@ -1316,7 +1316,11 @@ export class BuildController {
         const along = d[0] * (Math.sign(a.face.dir === "h" ? rx : ry) || 1);
         this.aim = { ...a, along: a.along + along / WQ, z: z - d[1] * WZ };
       } else if (this.fine()) this.cell = { x: this.cell.x + mx, y: this.cell.y + my };
-      else this.anchor = { x: this.anchor.x + mx, y: this.anchor.y + my };
+      else if (this.freeOne() && this.freeAt) {
+        // (standing free: its own spot a metre over — the anchor follows it)
+        this.freeAt = { x: this.freeAt.x + mx, y: this.freeAt.y + my };
+        this.anchor = { x: Math.floor(this.freeAt.x), y: Math.floor(this.freeAt.y) };
+      } else this.anchor = { x: this.anchor.x + mx, y: this.anchor.y + my };
       buildSound("snap");
       this.drawHand();
     } else if (furn && this.hand.length && key === "enter") this.drop();

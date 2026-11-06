@@ -100,10 +100,10 @@ test("doors and windows go into a wall from the catalog; the wall stays, a door 
     // the catalog has a Doors tab and a Windows tab
     await setBuild(page, { on: true, tool: "furniture", mode: "hand", catalogTab: "doors" });
     await page.waitForFunction(() => !!(window as any).__yutopia.build, null, { timeout: 15_000 });
-    await expect(page.getByRole("tab", { name: "Doors", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tab", { name: /^Doors\b/ })).toHaveAttribute("aria-selected", "true");
     await expect(page.getByText("Saloon doors").first()).toBeVisible();
     await expect(page.getByText("Tall window")).toHaveCount(0);
-    await page.getByRole("tab", { name: "Windows", exact: true }).click();
+    await page.getByRole("tab", { name: /^Windows\b/ }).click();
     await expect(page.getByText("Tall window").first()).toBeVisible();
     await expect(page.getByText("Saloon doors")).toHaveCount(0);
 

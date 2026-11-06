@@ -6,7 +6,7 @@ import type { ThirdPersonView } from "../view";
 /** What Body reads of the ThirdPersonView (plan 72 phase 4: its dependencies, said). */
 export type BodyHost = Pick<
   ThirdPersonView,
-  "allObjects" | "building" | "camera" | "gone" | "level" | "scene" | "structure"
+  "allObjects" | "solidObjects" | "building" | "camera" | "gone" | "level" | "scene" | "structure"
 >;
 
 export class Body {
@@ -69,7 +69,7 @@ export class Body {
     if (this.physicsAsked) return;
     this.physicsAsked = true;
     void BrowserPhysics.start(this.c.scene, {
-      world: () => ({ building: this.c.building, objects: this.c.allObjects, structure: this.c.structure }),
+      world: () => ({ building: this.c.building, objects: this.c.solidObjects, structure: this.c.structure }),
       // (the scene's x, z the world's — plan 72's one frame — its heights from my floor's)
       at: () => ({ x: this.c.camera.position.x, z: this.c.camera.position.z }),
       frameOf: (level) => ({ elev: elevOf(level) }),

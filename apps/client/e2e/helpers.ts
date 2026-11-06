@@ -94,6 +94,9 @@ export async function makeDraft(
 // Needs the API's YUTOPIA_E2E=1 (local stacks only); it closes the live room while
 // it swaps (anyone in the world is put out and comes back to the fixture).
 export type World = "demo" | "lab";
+/** A browser a spec launches itself: on the GPU with YUTOPIA_GPU=1, as the config's (software
+ *  rendering two pages of a furnished floor can't finish loading in a spec's time). */
+export const SPEC_GPU_ARGS = process.env.YUTOPIA_GPU === "1" ? GPU_ARGS : [];
 let current: World | null = null;
 
 export async function useWorld(name: World = "demo"): Promise<World> {
@@ -121,9 +124,9 @@ export async function useWorld(name: World = "demo"): Promise<World> {
   return name;
 }
 
-export async function enter(page: Page, tok: string, worldName?: World) {
-  // biome-ignore lint/correctness/useHookAtTopLevel: an e2e helper, not a React hook
-  if (worldName) await useWorld(worldName);
+export async function enter(page: Page, tok: string, worldName: World = "demo") {
+  // (a spec that names no world is the demo's — not whichever fixture the spec before it left)
+  await useWorld(worldName);
   await page.addInitScript((t) => {
     localStorage.setItem("yutopia:token", t);
     // a fixed tier: Auto would step down mid-test in a headless browser (software GPU)

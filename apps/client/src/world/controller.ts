@@ -1530,11 +1530,16 @@ export class WorldController {
           // my floor's as the model has them: a door swung open for someone
           // passing, a seat taken, a radio's display on live only there)
           // (the lot's cars: drawn by car/cars.ts once it's here)
-          const all = [...this.objs.values()]
-            .filter((o) => !this.cars || o.kind !== "car")
-            .map((o) => model.getObject(o.id) ?? o);
+          const every = [...this.objs.values()].map((o) => model.getObject(o.id) ?? o);
+          const all = every.filter((o) => !this.cars || o.kind !== "car");
           tp.structure = this.structure;
-          tp.update(this.building, look?.hidden.size ? all.filter((o) => !look.hidden.has(o.id)) : all, this.level);
+          // (the parked cars still solid: the physics has every thing — tp/physics3d.ts)
+          tp.update(
+            this.building,
+            look?.hidden.size ? all.filter((o) => !look.hidden.has(o.id)) : all,
+            this.level,
+            every.filter(notDriven),
+          );
         }
       }
       lap = perf.lap("tp.update", lap);
@@ -2583,6 +2588,14 @@ export class WorldController {
     if (!lm) this.level = floorOf(this.building);
     this.map = lm ?? this.building;
     this.model.setMap(this.map);
+    // (my floor's things sorted again by it: the things can come before the structure does — a fresh
+    // page — and were sorted by no building then)
+    this.model.setObjects(
+      onLevel(this.objs.values(), this.map)
+        .filter(notDriven)
+        .map((o) => this.lifts.liftDrawn(o)),
+    );
+    this.objectsDirty = true;
     this.rebuildGrid();
     hud.set((h) => ({ mapVersion: h.mapVersion + 1, floor: this.level, floors: floorsOf(this.building) }));
   }
@@ -2629,6 +2642,11 @@ export class WorldController {
   /** Where I stand (m, my floor's frame). */
   meAt() {
     return { x: this.me.x, y: this.me.y };
+  }
+  /** The room at (x, y) on my floor, by its key ("" in none) — as hearing, doors and the rest have
+   *  rooms (shared map.ts areaAt: the highest priority of those it's in). */
+  areaKeyAt(x: number, y: number): string {
+    return areaAt(this.map, x, y)?.key ?? "";
   }
 
   // the Grounds (docs/plan/27), once loaded: what's underfoot out there, its sound

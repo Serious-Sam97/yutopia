@@ -165,7 +165,7 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
       st(ana, () => [...(window as any).__yutopia.floorObjects()].filter((o: any) => o.kind === "chair").length),
     )
     .toBe(1);
-  await ana.getByRole("tab", { name: "Desks", exact: true }).click();
+  await ana.getByRole("tab", { name: /^Desks( \d+)?$/ }).click();
   await clickFloor(ana, 5, 4);
   await ana.getByLabel("Whose desk is this?").selectOption({ label: "Ana Demo" });
   await ana.getByRole("button", { name: "Save" }).click();

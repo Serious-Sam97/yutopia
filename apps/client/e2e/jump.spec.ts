@@ -64,7 +64,7 @@ test("Space jumps: a hop, a flip on the run, seen by others, off the floor", asy
   expect(await page.evaluate((sid) => (window as any).__yutopia.model.avatars.get(sid).jump ?? "", me)).toBe("");
   await ctx.close();
 
-  // running (Shift + a direction) it's a flip
+  // running (Shift + a direction) it's a leap (plan 58: the flip is the jump in the air)
   const at0 = await page.evaluate((sid) => (window as any).__yutopia.room.state.players.get(sid).jumpAt, me);
   await page.keyboard.down("Shift");
   await page.keyboard.down("s");
@@ -80,7 +80,7 @@ test("Space jumps: a hop, a flip on the run, seen by others, off the floor", asy
     const p = (window as any).__yutopia.room.state.players.get(sid);
     return { jump: p.jump, at: p.jumpAt };
   }, me);
-  expect(after.jump).toBe("flip");
+  expect(after.jump).toBe("leap");
   expect(after.at).toBeGreaterThan(at0);
   await page.waitForTimeout(1200);
 
@@ -251,7 +251,7 @@ test("a hop up onto a desk: standing on it, seen up there, dropping off its edge
       return { x: w.me.x, z: w.model.avatars.get(sid).z ?? 0 };
     }, me);
     expect(down.x).toBeLessThan(spot.x + 2);
-    expect(down.z).toBe(0);
+    expect(down.z).toBeCloseTo(0, 2); // (on the floor: Jolt rests a hair over it)
   } finally {
     await page.evaluate((id) => (window as any).__yutopia.send("obj:remove", { id }), desk);
     await ctx.close();

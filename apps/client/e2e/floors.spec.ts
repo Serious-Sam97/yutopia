@@ -120,8 +120,13 @@ test("the lot: out through the glass doors, a car to jump up on", async ({ page 
   const car = await page.evaluate(() => {
     const c = (window as any).__yutopia;
     const o = [...c.objs.values()].find((x: any) => x.kind === "car" && x.props.level === 0);
-    // (a parked car is a box of its own in the grid — docs/plan/28: its roof what's stood on there)
-    return { x: o.x, y: o.y, fits: c.grid.fits(o.x + 2.5, o.y + 1), top: c.grid.standOn(o.x + 2.5, o.y + 1, 10) };
+    // (a parked car is solid — docs/plan/28 — and its roof is what Jolt has underfoot there)
+    return {
+      x: o.x,
+      y: o.y,
+      fits: c.grid.fits(o.x + 2.5, o.y + 1),
+      top: c.tp.underfoot(0, o.x + 2.5, o.y + 1, 10)?.g ?? 0,
+    };
   });
   expect(car.fits).toBe(false);
   expect(car.top).toBeGreaterThan(1.2);
@@ -141,7 +146,7 @@ test("the stairs by a click: up them from floor 3, down them again from 4", asyn
   await expect.poll(async () => (await state(page)).level, { timeout: 8000 }).toBe(3);
   await page.waitForTimeout(1500);
   // a click on flight A's treads: over to the door, up, out on floor 4
-  await page.evaluate((p) => (window as any).__yutopia.engine.events.onFloorClick(p.x + 3.2, p.y + 2.5), S);
+  await page.evaluate((p) => (window as any).__yutopia.model.events.onFloorClick(p.x + 3.2, p.y + 2.5), S);
   await expect.poll(async () => (await state(page)).level, { timeout: 20_000 }).toBe(4);
   await expect
     .poll(() => page.evaluate(() => (window as any).__yutopia.path?.length ?? 0), { timeout: 10_000 })
@@ -150,6 +155,6 @@ test("the stairs by a click: up them from floor 3, down them again from 4", asyn
   // out on the landing (two tiles deep, v 0..2): where the way up ends, v 1.2 (shared stairsWayUp)
   expect(Math.abs(top.y - (S.y + 1.2))).toBeLessThan(0.5);
   // from floor 4, a click on flight B down in the well: back to floor 3's landing
-  await page.evaluate((p) => (window as any).__yutopia.engine.events.onFloorClick(p.x + 1, p.y + 2.5), S);
+  await page.evaluate((p) => (window as any).__yutopia.model.events.onFloorClick(p.x + 1, p.y + 2.5), S);
   await expect.poll(async () => (await state(page)).level, { timeout: 20_000 }).toBe(3);
 });

@@ -157,6 +157,23 @@ function body(
     const v: [number, number] = side > 0 ? [T - 0.001, T + p] : [-T - p, -T + 0.001];
     box(out, f, a, v, s, rgba(col));
   };
+  // a plate on a face, `p` out from it — its front only: sides a few mm deep don't show, and a brick
+  // wall has some 185 bricks a metre (a box each was 1,850 triangles a metre of wall)
+  const plate = (side: 1 | -1, ua: number, ub: number, za: number, zb: number, col: string, p: number) => {
+    const s = span(b0, b1, za, zb);
+    const a = span(u[0], u[1], ua, ub);
+    if (!s || !a) return;
+    const v = side * (T + p);
+    const c = rgba(col);
+    out.lit.quad(
+      P(f, a[0], v, s[0]),
+      P(f, a[1], v, s[0]),
+      P(f, a[1], v, s[1]),
+      P(f, a[0], v, s[1]),
+      N(f, 0, side, 0),
+      c,
+    );
+  };
   // (a pattern's places along the piece: whole steps from the wall's own start, run on from the
   // piece before)
   const base = d.along ?? 0;
@@ -195,7 +212,7 @@ function body(
         for (let z = SKIRT + 0.005, row = 0; z < top - CAP - 0.02; z += course, row++)
           for (const x of along(0.225, row % 2 ? 0.1125 : 0)) {
             const k = 0.9 + (((Math.round(x * 40) * 7 + row * 13 + Math.floor(seed * 10)) % 5) / 5) * 0.16;
-            strip(s, x + 0.005, x + 0.22, z, Math.min(z + 0.065, top - CAP), tone(BRICK, k), 0.006);
+            plate(s, x + 0.005, x + 0.22, z, Math.min(z + 0.065, top - CAP), tone(BRICK, k), 0.006);
           }
       return;
     }
@@ -209,7 +226,7 @@ function body(
           for (let i = 0; i < 14; i++) {
             const ux = x + ((i * 37) % 97) / 97;
             const z = CORK1 + (((i * 53) % 89) / 89) * (top - CAP - CORK1 - 0.05);
-            strip(s, ux, ux + 0.02, z, z + 0.02, "#9c754c", 0.002);
+            plate(s, ux, ux + 0.02, z, z + 0.02, "#9c754c", 0.002);
           }
       return;
     }

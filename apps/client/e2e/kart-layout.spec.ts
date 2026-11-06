@@ -73,8 +73,8 @@ test("a Grand Prix on each layout: changed, its show waited out, eight karts hom
             const fr = tp.groundsFrame();
             const cam = tp.camera.clone();
             cam.far = 3000;
-            cam.position.set(c[0] - fr.x, 190 + fr.y, c[1] + 120 - fr.z);
-            cam.lookAt(c[0] - fr.x, fr.y, c[1] - fr.z);
+            cam.position.set(c[0], 190 + fr.y, c[1] + 120);
+            cam.lookAt(c[0], fr.y, c[1]);
             cam.updateProjectionMatrix();
             cam.updateMatrixWorld();
             const fog = tp.scene.fog;

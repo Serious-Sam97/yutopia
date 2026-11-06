@@ -14,7 +14,7 @@ const PERF = GPU && process.env.YUTOPIA_PERF === "1";
 const dir = process.env.YUTOPIA_SHOTS;
 if (GPU || dir) test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 
-const OFF = { x: -60, y: -10 }; // the ground floor's corner in the studio's coords
+const OFF = { x: 0, y: 0 }; // (the Grounds and the ground floor: one frame since plan 72 phase 5)
 
 // (`quality`: the second rider on Lowest — her browser streaming the town in stalls the first's frames)
 async function open(page: Page, who: typeof ANA, view: "3p" | "1p", quality = "high") {

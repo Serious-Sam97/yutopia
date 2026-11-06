@@ -151,8 +151,8 @@ for (const view of ["3p"] as const)
           const tp = (window as any).__yutopia.tp;
           const fr = tp.groundsFrame();
           const cam = tp.camera.clone();
-          cam.position.set(g.x - Math.cos(g.a) * 6 - fr.x, 3 + fr.y, g.z - Math.sin(g.a) * 6 - fr.z);
-          cam.lookAt(g.x + Math.cos(g.a) * 40 - fr.x, 1 + fr.y, g.z + Math.sin(g.a) * 40 - fr.z);
+          cam.position.set(g.x - Math.cos(g.a) * 6, 3 + fr.y, g.z - Math.sin(g.a) * 6);
+          cam.lookAt(g.x + Math.cos(g.a) * 40, 1 + fr.y, g.z + Math.sin(g.a) * 40);
           cam.updateMatrixWorld();
           tp.renderer.render(tp.scene, cam);
           return tp.renderer.domElement.toDataURL("image/png") as string;
@@ -178,8 +178,8 @@ for (const view of ["3p"] as const)
           const tp = (window as any).__yutopia.tp;
           const fr = tp.groundsFrame();
           const cam = tp.camera.clone();
-          cam.position.set(b.x - fr.x, 3.6 + fr.y, b.z + 3.4 - fr.z);
-          cam.lookAt(b.x - fr.x, 3.5 + fr.y, b.z - fr.z);
+          cam.position.set(b.x, 3.6 + fr.y, b.z + 3.4);
+          cam.lookAt(b.x, 3.5 + fr.y, b.z);
           cam.updateMatrixWorld();
           tp.renderer.render(tp.scene, cam);
           return tp.renderer.domElement.toDataURL("image/png") as string;
@@ -216,8 +216,8 @@ for (const view of ["3p"] as const)
             const r = tp.renderer;
             const look = (p: { x: number; z: number }) => {
               const cam = tp.camera.clone();
-              cam.position.set(p.x - fr.x, 30 + fr.y, p.z - fr.z + 0.01);
-              cam.lookAt(p.x - fr.x, fr.y, p.z - fr.z);
+              cam.position.set(p.x, 30 + fr.y, p.z + 0.01);
+              cam.lookAt(p.x, fr.y, p.z);
               cam.updateMatrixWorld();
               r.setRenderTarget(null);
               r.render(tp.scene, cam);

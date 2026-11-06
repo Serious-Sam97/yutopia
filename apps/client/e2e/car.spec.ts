@@ -56,6 +56,12 @@ const aCar = (page: Page) =>
     });
     return cars[0];
   });
+/** By a parked car's front door: a metre forward of its middle and 1.4 to its side — within 2.2 of
+ *  its middle the car's prompt wins over the bay's (plan 43), and the car's solid. */
+const doorOf = (c: { x: number; y: number; a: number }) => ({
+  x: c.x + Math.cos(c.a) * 1.0 - Math.sin(c.a) * 1.4,
+  y: c.y + Math.sin(c.a) * 1.0 + Math.cos(c.a) * 1.4,
+});
 const worst = (page: Page) =>
   page.evaluate(() => {
     const W = window as any;
@@ -83,9 +89,9 @@ test("a lot car: driven out with a passenger, left where it stopped", async ({ p
   await a.waitForTimeout(800);
   const car = await aCar(a);
   expect(car, "a car in its bay").toBeTruthy();
-  // in the aisle by its nose — 2.7 from its middle: at 3.4 you stand in the free bay across the aisle
-  // and its "spot:claim" prompt (plan 43) wins over the car's
-  const aisle = { x: car.x + Math.cos(car.a) * 2.7, y: car.y + Math.sin(car.a) * 2.7 };
+  // by its front door (in the aisle, the free bay across it and its "spot:claim" prompt — plan 43 —
+  // win over the car's)
+  const aisle = doorOf(car);
   await getIn(a, aisle, /^drive:car:/);
   // the 3D view, the car's camera
   await a.waitForFunction(() => !!(window as any).__yutopia.tp?.gameCam?.snap, null, { timeout: 20_000 });
@@ -211,7 +217,7 @@ test("a parked car knocked: it slides, stops, and stays there for everyone", asy
   });
   expect(pair, "a car with another across the aisle behind it").toBeTruthy();
   const { s, t } = pair as { s: any; t: any };
-  await getIn(a, { x: s.x - Math.cos(s.a) * 3.4, y: s.y - Math.sin(s.a) * 3.4 }, /^drive:car:/);
+  await getIn(a, doorOf(s), /^drive:car:/);
   await a.waitForFunction(() => !!(window as any).__yutopia.tp?.gameCam?.snap, null, { timeout: 20_000 });
   await a.waitForTimeout(2500); // (the engine started)
   const poseOf = (pg: Page, id: string) =>

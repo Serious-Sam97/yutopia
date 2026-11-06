@@ -1,8 +1,9 @@
-import { floorsOf } from "@yutopia/shared";
+import { type AvatarLayers, floorsOf } from "@yutopia/shared";
 import {
   Box3,
   type BufferGeometry,
   type Camera,
+  Color,
   type InstancedMesh,
   LinearSRGBColorSpace,
   LineSegments,
@@ -17,6 +18,7 @@ import {
 } from "three";
 import type { Quality } from "@/lib/prefs";
 import { Post3 } from "../post3d";
+import { Proxy3, Vortex3 } from "../stand3d";
 import type { ThirdPersonView } from "../view";
 import { LAMPS } from "./common";
 
@@ -121,6 +123,7 @@ export class Warmup {
     const jobs = [
       r.compileAsync(this.c.scene, this.c.camera),
       r.compileAsync(this.fadeSamples(), this.c.camera, this.c.scene),
+      r.compileAsync(this.standSamples(), this.c.camera, this.c.scene),
     ];
     const h = this.c.hands ?? this.c.handsSpare;
     if (h) jobs.push(r.compileAsync(h.scene, h.camera));
@@ -154,6 +157,21 @@ export class Warmup {
         this.fadeKept.push(own);
         s.add(m instanceof LineSegments ? new LineSegments(m.geometry, own) : new Mesh(m.geometry, own));
       }
+    return s;
+  }
+
+  // Someone not built yet (their stand-in, its shadow and speaking ring) and Vortex's drawing: one
+  // of each, kept — else the first of them to come into view linked their shaders then
+  private standKept: (Proxy3 | Vortex3)[] = [];
+  standSamples(): Scene {
+    const s = new Scene();
+    const p = new Proxy3("warm");
+    const avatar = { skin: "#c8a07a", topColor: "#5a6a7a", bottomColor: "#3a3a40", hairColor: "#2a2018" };
+    p.update({ avatar: avatar as AvatarLayers, x: 0, y: 0, angle: 0, a: 0, speaking: true }, new Color(1, 1, 1));
+    const v = new Vortex3("warm-vortex");
+    v.plane.visible = true; // (compiled only what's shown)
+    this.standKept.push(p, v);
+    s.add(p.root, v.root);
     return s;
   }
 

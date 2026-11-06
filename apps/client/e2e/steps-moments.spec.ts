@@ -41,7 +41,8 @@ test("a jump: the push off and the landing on the floor's recordings, no walking
   const kinds = log.map((l) => l.k);
   expect(kinds, "pushed off on the floor").toContain("step");
   expect(kinds, "landed on it").toContain("land");
-  expect(log.filter((l) => l.k === "land").every((l) => l.f === "wood" || l.f === "carpet")).toBe(true);
+  // (on the floor where she stands: the demo's lobby is tiled)
+  expect(log.filter((l) => l.k === "land").every((l) => ["wood", "carpet", "tile"].includes(l.f))).toBe(true);
   // (the landing's own two soles are `step`s inside `land`: none else while in the air)
   const air = log.filter((l) => l.k === "step" && l.up);
   expect(air.length, "no walking steps in the air").toBeLessThanOrEqual(2);

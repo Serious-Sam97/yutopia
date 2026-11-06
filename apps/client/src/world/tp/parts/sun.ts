@@ -86,7 +86,9 @@ export class Sun {
 
   assignLamps(dt: number) {
     const d = daylight(this.c.hour);
-    const t = this.c.target;
+    // (the lights are the floor's, in its own frame: where I look, in it)
+    const off = this.c.light.offset();
+    const t = { x: this.c.target.x - off.x, z: this.c.target.z - off.z };
     const ease = 1 - Math.exp(-dt * 6);
     const seen = new Map<string, number>();
     const all: { l: LightSource; d: number; w: number }[] = [];
@@ -94,7 +96,7 @@ export class Sun {
       const dist = Math.hypot(l.x - t.x, l.y - t.z);
       if (dist >= LAMP_REACH) continue;
       const key = `${l.x},${l.y}`;
-      const want = this.c.light.reaches(l, t.x, t.z) ? 1 : 0;
+      const want = this.c.light.reaches(l, t.x + off.x, t.z + off.z) ? 1 : 0;
       const was = this.lampSeen.get(key) ?? want;
       const w = Math.abs(want - was) < 0.01 ? want : was + (want - was) * ease;
       seen.set(key, w);
@@ -115,7 +117,7 @@ export class Sun {
         return;
       }
       p.color.setHex(n.l.color);
-      p.position.set(n.l.x, n.l.h ?? 1.05, n.l.y);
+      p.position.set(n.l.x + off.x, (n.l.h ?? 1.05) + off.y, n.l.y + off.z);
       p.distance = n.l.radius * 1.4;
       p.intensity = n.l.intensity * k * fade * fade * (3 - 2 * fade) * n.w;
     });

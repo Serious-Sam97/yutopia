@@ -79,29 +79,35 @@ test("the hand: Shift keeps placing, wheel and drag turn, arrows nudge, Delete r
     await expect.poll(async () => (await plantsAt(page, before)).length).toBe(3);
     await expect.poll(async () => (await build(page)).mode).toBe("hand");
 
-    // ── pick one up; the wheel turns it a quarter, a sideways drag
-    // while pressing another
+    // ── pick one up; the wheel turns it, a sideways drag while pressing turns it again (a thing
+    // that can stand free: 15° a step — plan 72 phase 11.9)
     const first = (await plantsAt(page, before)).find((p) => p.x === X + 2);
     const leaves = await grab(page, first?.id ?? "", X + 2.5, Y + 0.5);
     await expect.poll(async () => (await build(page)).held).toEqual([first?.id]);
     await page.mouse.wheel(0, 120);
-    await expect.poll(() => page.evaluate(() => (window as any).__yutopia.build.handInfo()?.rot)).toBe(1);
+    const yaw = () => page.evaluate(() => (window as any).__yutopia.build.hand[0]?.def.yaw ?? 0);
+    await expect.poll(async () => +(await yaw()).toFixed(3)).toBe(+(Math.PI / 12).toFixed(3));
     await page.mouse.down();
     await page.mouse.move(leaves.x + 60, leaves.y, { steps: 6 }); // the Sims gesture
     await page.mouse.up();
-    await expect.poll(() => page.evaluate(() => (window as any).__yutopia.build.handInfo()?.rot)).toBe(2);
+    await expect.poll(async () => +(await yaw()).toFixed(3)).toBe(+(Math.PI / 6).toFixed(3));
     // (the pointer back over where it was: what's held follows it)
     await page.mouse.move(leaves.x, leaves.y, { steps: 4 });
     await page.waitForTimeout(200);
     expect((await build(page)).carrying).toBe(1); // turning doesn't drop it
 
-    // ── the arrows nudge it two tiles down (+y), Enter puts it there, turned
+    // ── the arrows nudge it two metres down (+y), Enter puts it there, turned — free, its middle
+    // where it was held plus the nudges (plan 72 phase 11.9: turned off the quarters, it stands free)
+    const was = await page.evaluate(() => (window as any).__yutopia.build.placed?.()?.[0]?.def);
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Enter");
     await expect
-      .poll(async () => (await plantsAt(page, before)).find((p) => p.id === first?.id))
-      .toEqual(expect.objectContaining({ x: X + 2, y: Y + 2, rot: 2 }));
+      .poll(async () => {
+        const o = await page.evaluate((id) => (window as any).__yutopia.objs.get(id), first?.id);
+        return o && { x: o.x, y: o.y, yaw: +(o.yaw ?? 0).toFixed(3), free: !!o.props?.free };
+      })
+      .toEqual({ x: was.x, y: was.y + 2, yaw: +(Math.PI / 6).toFixed(3), free: true });
 
     // ── Delete while holding: gone
     const second = (await plantsAt(page, before)).find((p) => p.x === X + 1);

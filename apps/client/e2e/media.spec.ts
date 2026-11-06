@@ -1,7 +1,7 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 
 import { expect, type Page } from "@playwright/test";
-import { canPlace, findPath, Grid, type MapDef, Q, topAt, type WorldObjectDef } from "@yutopia/shared";
+import { canPlace, type MapDef, Q, topAt, type WorldObjectDef } from "@yutopia/shared";
 import { ANA, BIA, enter, test, token, useWorld } from "./helpers";
 
 // Media on TVs and the radio, end to end (docs/plan/10-media.md). YouTube's
@@ -72,21 +72,28 @@ async function liveMap(
   });
 }
 
-// a free spot for a thing, nearest to (x, y) first, whose front (dx, dy from
-// it) anyone can walk to from (x, y) — locked rooms are out (uid 0: a stranger)
+// a free spot for a thing, nearest to (x, y) first, whose front (dx, dy from it) is open floor
+// where anyone can stand (the way there is the server's navmesh: walk() finds out)
 async function spotFor(page: Page, kind: string, x: number, y: number, front = { dx: 1, dy: 2 }, r = 40) {
   const { map, objects, bodies } = await liveMap(page);
-  const grid = Grid.from(map, objects, { uid: 0 });
   const spots: [number, number][] = [];
   for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) spots.push([x + dx, y + dy]);
   spots.sort((a, b) => Math.hypot(a[0] - x, a[1] - y) - Math.hypot(b[0] - x, b[1] - y));
-  for (const [sx, sy] of spots)
-    if (
-      canPlace(map, objects, { id: "probe", kind, x: sx, y: sy, yaw: 0 }, bodies) &&
-      findPath(grid, { x: x + 0.5, y: y + 0.5 }, { x: sx + front.dx + 0.5, y: sy + front.dy + 0.5 })
-    )
-      return { x: sx, y: sy };
-  return null;
+  const fit = spots.filter(([sx, sy]) => canPlace(map, objects, { id: "probe", kind, x: sx, y: sy, yaw: 0 }, bodies));
+  // (its front in my own room: a TV on a wall faces one side of it)
+  const open = await page.evaluate(
+    ([pts, f]) => {
+      const w = (window as any).__yutopia;
+      const room = w.areaKeyAt(w.me.x, w.me.y);
+      return pts.map(([sx, sy]) => {
+        const [fx, fy] = [sx + f.dx + 0.5, sy + f.dy + 0.5];
+        return (w.grid.fits(fx, fy) && w.areaKeyAt(fx, fy) === room) as boolean;
+      });
+    },
+    [fit.slice(0, 400), front] as const,
+  );
+  const i = open.indexOf(true);
+  return i >= 0 ? { x: fit[i][0], y: fit[i][1] } : null;
 }
 
 async function walk(page: Page, to: { x: number; y: number }, ms = 30_000) {
@@ -116,7 +123,8 @@ test("media: a YouTube video on a wall TV — left playing, found at the right s
   const tvId = `e2e-hd-${Date.now().toString(36)}`;
   try {
     const sp = await ana.evaluate(() => (window as any).__yutopia.map.spawn);
-    const at = await spotFor(ana, "tv_hd", Math.floor(sp.x), Math.floor(sp.y), { dx: 1, dy: 1 });
+    // (its front where Ana will stand to watch: the walk below goes there)
+    const at = await spotFor(ana, "tv_hd", Math.floor(sp.x), Math.floor(sp.y), { dx: 1, dy: 2 });
     expect(at, "a wall for the TV").toBeTruthy();
     await ana.evaluate((o) => (window as any).__yutopia.send("obj:put", o), { id: tvId, kind: "tv_hd", ...at, yaw: 0 });
     await ana.waitForFunction((i) => !!(window as any).__yutopia.room.state.objects.get(i), tvId, { timeout: 10_000 });

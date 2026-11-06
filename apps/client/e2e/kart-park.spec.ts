@@ -59,8 +59,8 @@ const look = (page: Page, from: number[], to: number[]) =>
       const fr = tp.groundsFrame();
       const cam = tp.camera.clone();
       cam.far = 3000;
-      cam.position.set(f[0] - fr.x, f[1] + fr.y, f[2] - fr.z);
-      cam.lookAt(a[0] - fr.x, a[1] + fr.y, a[2] - fr.z);
+      cam.position.set(f[0], f[1] + fr.y, f[2]);
+      cam.lookAt(a[0], a[1] + fr.y, a[2]);
       cam.updateProjectionMatrix();
       cam.updateMatrixWorld();
       tp.renderer.render(tp.scene, cam);

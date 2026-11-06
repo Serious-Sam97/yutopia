@@ -15,7 +15,7 @@ const dir = process.env.YUTOPIA_SHOTS;
 if (GPU || dir) test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 
 // the ground floor's corner is at (-60, -10) in the studio's coords
-const LOT = { x: 38, y: 24, level: 0 }; // (the lot's aisle E: docs/plan/42-the-lot.md)
+const LOT = { x: -23, y: 24, level: 0 }; // (an aisle of the lot between its lamps: docs/plan/42-the-lot.md, the world's frame)
 
 async function open3p(page: Page) {
   await page.addInitScript(() => {
@@ -104,8 +104,8 @@ test("the lot's lamps fade in and out as you walk by at night, never pop", async
     };
     requestAnimationFrame(tick);
   });
-  await walkTo(page, 38, 44, 8000).catch(() => {});
-  await walkTo(page, 19, 30, 8000).catch(() => {});
+  await walkTo(page, -23, 46, 8000).catch(() => {});
+  await walkTo(page, -40, 30, 8000).catch(() => {});
   const frames: { at: number[]; on: number[] }[] = await page.evaluate(() => (window as any).__lamps);
   expect(frames.length).toBeGreaterThan(60);
   expect(Math.max(...frames.flatMap((f) => f.on))).toBeGreaterThan(0.2); // (the lamps are on)

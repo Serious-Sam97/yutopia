@@ -921,7 +921,7 @@ export class Grounds3 {
     const cache = shared ? this.sh.lambert : this.ownLambert;
     let m = cache.get(key);
     if (!m) {
-      m = new MeshLambertMaterial({ color: hex, map, vertexColors: vertex });
+      m = new MeshLambertMaterial({ color: hex, map: map ?? null, vertexColors: vertex });
       if (wx) m.userData.wx = wx;
       if (shared) this.sh.disp.push(m);
       else this.keep(m);

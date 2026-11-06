@@ -56,7 +56,11 @@ test("a dog and a cat get in with Ana, ride as she drives, and get out with her"
       return out[0];
     });
     expect(car, "a car in its bay").toBeTruthy();
-    const aisle = { x: car.x + Math.cos(car.a) * 3.4, y: car.y + Math.sin(car.a) * 3.4 };
+    // (by its front door: within 2.2 of its middle the car's prompt wins over the bay's — plan 43)
+    const aisle = {
+      x: car.x + Math.cos(car.a) * 1.0 - Math.sin(car.a) * 1.4,
+      y: car.y + Math.sin(car.a) * 1.0 + Math.cos(car.a) * 1.4,
+    };
     await page.evaluate((p) => (window as any).__yutopia.teleport({ ...p, level: 0 }), aisle);
     // (the pets come down with her and catch up)
     await page.waitForTimeout(4000);

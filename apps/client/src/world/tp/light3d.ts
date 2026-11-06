@@ -390,6 +390,11 @@ export class Light3 {
     this.uniforms.lmOff.value.set(x, z);
     this.uniforms.lmY.value = y;
   }
+  /** Where the floor's own frame (its lights', its light map's) is in the scene. */
+  offset(): { x: number; z: number; y: number } {
+    const o = this.uniforms.lmOff.value;
+    return { x: o.x, z: o.y, y: this.uniforms.lmY.value };
+  }
 
   // the hour's colours to the GPU — the rooms' ambient, the open sky's, the windows' daylight — put
   // together there with the volume's light (no picture to paint)

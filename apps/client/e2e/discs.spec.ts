@@ -91,8 +91,12 @@ test("disc rack: the BIOS, a disc in pieces carried on after the tab closed, the
   try {
     await openRack(page, rack);
 
-    // the BIOS: none yet; not a known dump; the test one
-    await expect(page.getByText("This console needs its BIOS")).toBeVisible();
+    // the BIOS: none yet (unless the space has a real one already — someone's, kept); not a known
+    // dump; the test one
+    const others = ((await (await (await api(tok)).get("/api/bios")).json()).bios ?? []).filter(
+      (b: any) => b.model !== "Test BIOS",
+    ).length;
+    if (!others) await expect(page.getByText("This console needs its BIOS")).toBeVisible();
     // (by what the server says: a toast can wait behind others)
     const biosSaid = () => page.waitForResponse((r) => r.request().method() === "POST" && /\/bios$/.test(r.url()));
     let said = biosSaid();

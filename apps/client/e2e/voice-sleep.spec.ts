@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { chromium, expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
+import { ANA, BIA, enter, SPEC_GPU_ARGS, test, token, useWorld, walkTo } from "./helpers";
 
 // The voice line sleeps after a quiet spell (nothing of mine live, nobody near)
 // and wakes on demand; proximity voice must work exactly as before. The wait is
@@ -20,6 +20,7 @@ async function launch() {
     args: [
       "--use-fake-device-for-media-stream",
       "--use-fake-ui-for-media-stream",
+      ...SPEC_GPU_ARGS,
       "--autoplay-policy=no-user-gesture-required",
     ],
   });
@@ -51,6 +52,8 @@ async function goFar(page: Page, from: { x: number; y: number }) {
       [2, m.height - 3],
       [m.width - 3, m.height - 3],
       [Math.floor(m.width / 2), 2],
+      // (and every room's middle: a floor drawn free needn't reach its map's corners)
+      ...m.areas.map((a: any) => [a.x + a.w / 2, a.y + a.h / 2]),
     ]) {
       const o = w.grid.nearestOpen(x, y);
       if (!o) continue;
@@ -146,7 +149,22 @@ test("proximity voice still works: walking up to someone wakes both lines, and y
     await ana.waitForTimeout(1500);
     expect(await asleep(ana)).toBe(true);
     // Bia walks over to Ana: Ana's line wakes and Bia's voice reaches her
-    await walkTo(bia, anaAt.x + 1.5, anaAt.y + 0.5, 40_000);
+    const near = await ana.evaluate(() => {
+      // (a free spot a step or two off, in Ana's own room — as shared map.ts areaAt has rooms — the
+      // lift's core beside the arrival point is another room, and rooms between hush voices)
+      const w = (window as any).__yutopia;
+      const me = w.meAt();
+      const areaOf = (ax: number, ay: number): string => w.areaKeyAt(ax, ay);
+      const room = areaOf(me.x, me.y);
+      for (const r of [1.6, 2.2, 3])
+        for (let k = 0; k < 16; k++) {
+          const x = me.x + r * Math.cos((k * Math.PI) / 8);
+          const y = me.y + r * Math.sin((k * Math.PI) / 8);
+          if (areaOf(x, y) === room && w.grid.fits(x, y)) return { x, y };
+        }
+      return { x: me.x + 1.5, y: me.y + 0.5 };
+    });
+    await walkTo(bia, near.x, near.y, 40_000);
     await expect.poll(() => asleep(ana), { timeout: 10_000 }).toBe(false);
     const biaUid = await bia.evaluate(() => (window as any).__yutopia.myUid());
     await expect

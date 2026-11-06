@@ -119,8 +119,8 @@ import {
   type StructOp,
   type Structure,
   stopOnDeckWhy,
-  viewOf,
   structureFromMap,
+  viewOf,
   wallOf,
   withOn,
 } from "@yutopia/shared/structure";
@@ -1086,16 +1086,23 @@ export class WorldRoom extends Room<WorldState> {
       // (out in open water — beside someone swimming: in it, afloat — plan 66)
       const wet = target.level === 0 && inDeepWater(target.x, target.y);
       const landing = wet || mine.fits(target.x, target.y) ? target : mine.nearestOpen(target.x, target.y);
-      const startAt: { x: number; y: number } =
-        target.level === p.level ? p : (this.levelEntry(target.level, p.uid) ?? landing ?? p);
+      const entry = this.levelEntry(target.level, p.uid);
+      const startAt: { x: number; y: number } = target.level === p.level ? p : (entry ?? landing ?? p);
+      // (a way there from where I am — or, on my own floor, from its way in: out on the land the
+      // building's rooms have no way to them from where I stand, and a teleport needn't walk)
+      const reach = (from: { x: number; y: number } | null | undefined) =>
+        !!from &&
+        !!landing &&
+        (!!this.wayFor(p.uid, target.level, from, landing)?.length ||
+          Math.hypot(landing.x - from.x, landing.y - from.y) <= 0.5);
       if (
         !landing ||
         // (the land outdoors is all one place: no need to find the way there; an admin going
         // through walls needs no way at all)
         (!(p.admin && hasPower(p.powers, "clip")) &&
           !mine.onLand(landing.x, landing.y) &&
-          !this.wayFor(p.uid, target.level, startAt, landing)?.length &&
-          Math.hypot(landing.x - startAt.x, landing.y - startAt.y) > 0.5)
+          !reach(startAt) &&
+          !(target.level === p.level && reach(entry)))
       ) {
         this.send(client, "toast", { text: "Can't get there — the door is locked.", tone: "warn" });
         return;

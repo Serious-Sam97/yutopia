@@ -36,10 +36,15 @@ test("someone walking past: their steps heard, near, from their side, on their f
   const to = await cai.evaluate(() => {
     const w = (window as any).__yutopia;
     const me = w.meAt();
+    // (in her room — as shared map.ts areaAt has it: the highest priority of those it's in — walls or
+    // another room between them would hush the steps)
+    const areaOf = (ax: number, ay: number): string => w.areaKeyAt(ax, ay);
+    const room = areaOf(me.x, me.y);
     for (let r = 6; r >= 4; r--)
       for (let a = 0; a < 16; a++) {
         const x = Math.floor(me.x + r * Math.cos((a * Math.PI) / 8));
         const y = Math.floor(me.y + r * Math.sin((a * Math.PI) / 8));
+        if (areaOf(x + 0.5, y + 0.5) !== room) continue;
         if (w.grid.fits?.(x + 0.5, y + 0.5) && !w.grid.onLand(x + 0.5, y + 0.5)) return { x, y };
       }
     return null;

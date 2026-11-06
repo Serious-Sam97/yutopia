@@ -1,13 +1,13 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { chromium, expect } from "@playwright/test";
-import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
+import { ANA, BIA, enter, SPEC_GPU_ARGS, test, token, useWorld, walkTo } from "./helpers";
 
 // A camera turned off is a muted track that stays published: the bubble over the
 // person must go away (no black square) and come back when the camera is on again.
 test("video bubble shows only while the camera is on", async () => {
   test.setTimeout(180_000);
   const browser = await chromium.launch({
-    args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"],
+    args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", ...SPEC_GPU_ARGS],
   });
   try {
     const [ta, tb] = [await token(ANA), await token(BIA)];
@@ -44,6 +44,7 @@ test("a shared screen: your tile, theirs, big, and gone when you stop", async ()
     args: [
       "--use-fake-device-for-media-stream",
       "--use-fake-ui-for-media-stream",
+      ...SPEC_GPU_ARGS,
       "--auto-select-desktop-capture-source=Entire screen",
     ],
   });

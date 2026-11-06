@@ -11,7 +11,8 @@ const GPU = process.env.YUTOPIA_GPU === "1";
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 const G = (x: number, y: number) => ({ x, y });
 const LOT = { x: 37.8, y: 30 };
-const LAMP = { x: -19.44, z: -102.99 };
+// the driveway's lamp the run swings round: where the Grounds have it now (god mode may have moved it)
+const LAMP_KEY = "lamp:driveway:100";
 
 async function inWorld(page: Page, who: typeof ANA) {
   await page.addInitScript(() => {
@@ -93,6 +94,10 @@ test("Ana's new moves, drawn on her in Bia's browser: a double jump, an air dash
 
   // the driveway's lamp: Ana runs fast at it from the west, round it, lets go; Bia watches from the
   // north of it
+  const LAMP: { x: number; z: number } = await page.evaluate((key) => {
+    const l = (window as any).__yutopia.G.LAMPS.find((q: any) => q.key === key);
+    return { x: l.x, z: l.z };
+  }, LAMP_KEY);
   await goTo(page, G(LAMP.x - 3.2, LAMP.z + 0.25), 0);
   await goTo(bia, G(LAMP.x, LAMP.z - 7), Math.PI / 2);
   await page.waitForTimeout(4500);

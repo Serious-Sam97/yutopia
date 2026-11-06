@@ -60,7 +60,7 @@ test("two builders: one hand at a time, and you can see whose", async ({ browser
     await ana.waitForTimeout(600);
 
     // Ana picks it up (by its leaves)
-    const leaves = await at(ana, spot.x + 0.5, spot.y + 0.5, 34);
+    const leaves = await at(ana, spot.x + 0.5, spot.y + 0.5, 0.87);
     await ana.mouse.move(leaves.x, leaves.y);
     await ana.waitForTimeout(150);
     await ana.mouse.click(leaves.x, leaves.y);
@@ -70,7 +70,7 @@ test("two builders: one hand at a time, and you can see whose", async ({ browser
       .toContain("Ana Demo");
 
     // Bia points at it: held by Ana (tag + rust outline); her click is refused
-    const there = await at(bia, spot.x + 0.5, spot.y + 0.5, 34);
+    const there = await at(bia, spot.x + 0.5, spot.y + 0.5, 0.87);
     await bia.mouse.move(there.x, there.y);
     await expect.poll(async () => (await build(bia)).hover?.by ?? null).toBe("Ana Demo");
     await expect(bia.getByText("held by Ana Demo")).toBeVisible();
@@ -90,14 +90,14 @@ test("two builders: one hand at a time, and you can see whose", async ({ browser
     expect((await build(bia)).carrying).toBe(0);
 
     // Ana puts it down a tile over: it's free, and Bia can take it now
-    const drop = await at(ana, spot.x + 1.5, spot.y + 0.5, 34);
+    const drop = await at(ana, spot.x + 1.5, spot.y + 0.5, 0.87);
     await ana.mouse.move(drop.x, drop.y, { steps: 4 });
     await ana.mouse.click(drop.x, drop.y);
     await expect
       .poll(() => bia.evaluate((id) => (window as any).__yutopia.room.state.holds.get(id) ?? "", plant))
       .toBe("");
     const moved = await bia.evaluate((id) => (window as any).__yutopia.model.getObject(id), plant);
-    const free = await at(bia, moved.x + 0.5, moved.y + 0.5, 34);
+    const free = await at(bia, moved.x + 0.5, moved.y + 0.5, 0.87);
     await bia.mouse.move(free.x, free.y);
     await bia.waitForTimeout(150);
     await bia.mouse.click(free.x, free.y);

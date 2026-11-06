@@ -17,7 +17,7 @@ test.use({
   },
 });
 
-const LOT = { x: 37.8, y: 30 }; // the lot's east aisle (the ground floor's)
+const LOT = { x: -22.2, y: 20 }; // the lot's east aisle (the world's frame)
 const G = (x: number, y: number) => ({ x, y }); // the land's coords → the ground floor's
 const POND = { cx: -240, cz: -60, rx: 48, rz: 34 }; // (shared grounds.ts POND)
 const POND_SHELF = 0.88; // (shared grounds.ts: where its shelf ends, on its ellipse)
@@ -133,7 +133,7 @@ test("the weather as two: the same in both views; snow on the lot for both, melt
     await send(ana, "mod:weather", { to: "snow", now: true });
     await send(ana, "mod:ground", { to: "snow", now: true });
     await go(bia, LOT);
-    await look(bia, { x: 0, y: 34 });
+    await look(bia, { x: -60, y: 24 });
     for (const p of [ana, bia])
       await p.waitForFunction(() => (window as any).__wxLayer.wx.wxSnow.value > 0.99, null, { timeout: 10_000 });
     const [a1, b1] = [await view(ana), await view(bia)];

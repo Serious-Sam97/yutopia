@@ -13,7 +13,7 @@ const GPU = process.env.YUTOPIA_GPU === "1";
 const dir = process.env.YUTOPIA_SHOTS;
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 // the ground floor's corner is at (-60, -10) in the building's coords
-const OFF = { x: -60, y: -10 };
+const OFF = { x: 0, y: 0 }; // (the Grounds and the ground floor: one frame since plan 72 phase 5)
 const shot = async (page: Page, name: string) => {
   if (dir) await page.screenshot({ path: `${dir}/${name}.png` });
 };

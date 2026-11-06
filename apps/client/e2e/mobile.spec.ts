@@ -34,19 +34,23 @@ test("phone: world loads, HUD fits, tap to walk", async ({ page }) => {
     const w = (window as any).__yutopia;
     const t = w.tp;
     const r = t.renderer.domElement.getBoundingClientRect();
+    // (in my own room, as shared map.ts areaAt has rooms: the lift's core beside the arrival point
+    // is open floor to the grid but no way into it)
+    const areaOf = (ax: number, ay: number): string => w.areaKeyAt(ax, ay);
+    const room = areaOf(w.me.x, w.me.y);
     for (const d of [3, 2.5, 2])
       for (const a of [0, 1, -1, 2, -2, 3, -3]) {
         const yaw = t.yaw + a * 0.5;
         const x = w.me.x + Math.cos(yaw) * d;
         const y = w.me.y + Math.sin(yaw) * d;
-        if (!w.grid.fits(x, y)) continue;
+        if (!w.grid.fits(x, y) || areaOf(x, y) !== room) continue;
         const s = t.project(x, y, 0);
         if (!s) continue;
         const cx = r.left + s.x;
         const cy = r.top + s.y;
         if (document.elementFromPoint(cx, cy) !== t.renderer.domElement) continue;
-        t.setRay(cx, cy);
-        if (t.personAt() || t.pickObject()) continue;
+        t.pointerPart.setRay(cx, cy);
+        if (t.pointerPart.personAt() || t.pointerPart.pickObject()) continue;
         return { x: cx, y: cy };
       }
     return null;

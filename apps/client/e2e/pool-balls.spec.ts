@@ -109,6 +109,20 @@ test("pool balls: a ball off the table thrown knocks Bia down; the cue fires bal
 
     // click Bia — the ball goes at her
     const b = await mine(bia);
+    // (the camera turned her way, held: the mouse is the camera — plan 56 — and it faces anywhere)
+    await ana.evaluate(
+      ([bx, by]) => {
+        const w = (window as any).__yutopia;
+        const me = w.meAt();
+        const t = w.tp;
+        t.yaw = Math.atan2(by - me.y, bx - me.x);
+        t.pitch = 0.25;
+        t.dist = 5;
+        t.dragged = 1e12;
+      },
+      [b.x, b.y] as const,
+    );
+    await ana.waitForTimeout(500);
     const aim = await chest3d(ana, b.x, b.y);
     await ana.mouse.click(aim.x, aim.y);
     await expect.poll(() => fellAt(ana, "Bia Demo"), { timeout: 5000 }).toBeGreaterThan(0);
