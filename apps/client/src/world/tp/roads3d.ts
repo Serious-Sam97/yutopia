@@ -566,7 +566,7 @@ float rdNoise(vec2 p) {
 float rdFbm(vec2 p) { return 0.55 * rdNoise(p) + 0.3 * rdNoise(p * 2.3 + 11.0) + 0.15 * rdNoise(p * 5.1 + 3.0); }
 `;
 // (in the Grounds' own coords — their meshes sit at the root's origin; the campus is placed
-// in the world elsewhere — so a join's point means the same as WAYS' and iso's noise matches)
+// in the world elsewhere — so a join's point means the same as WAYS')
 const VARY = (sh: { vertexShader: string; fragmentShader: string }) => {
   sh.vertexShader = sh.vertexShader
     .replace("#include <common>", "#include <common>\nvarying vec3 vRdW;")

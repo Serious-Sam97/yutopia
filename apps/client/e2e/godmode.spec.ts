@@ -37,7 +37,7 @@ const laid = (page: Page) =>
   page.evaluate(
     ([x, z]) => {
       const G = (window as any).__yutopia.G;
-      return G ? { rev: G.editsNow().rev as number, surface: G.surfaceTileAt(x, z) as string } : null;
+      return G ? { rev: G.editsNow().rev as number, surface: G.surfaceCellAt(x, z) as string } : null;
     },
     [TILE.x, TILE.z],
   );

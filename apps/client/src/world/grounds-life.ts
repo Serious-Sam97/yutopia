@@ -126,7 +126,7 @@ export class GroundsLife {
     if (floorOf(map) !== 0 || !land) return this.prints.forget(id);
     const x = st.x;
     const z = st.y;
-    const s = this.G.surfaceTileAt(Math.floor(x), Math.floor(z));
+    const s = this.G.surfaceCellAt(Math.floor(x), Math.floor(z));
     // (in snow only — where it lies there now: docs/plan/65, W5 — not on the grass)
     if (s !== "snow" && s !== "deep") return this.prints.forget(id);
     const f = this.G.weatheredFooting(s, x, z);

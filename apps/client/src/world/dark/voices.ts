@@ -139,7 +139,7 @@ export class DarkSound {
   }
   private listenerYaw(): number {
     const e = this.ctl.tp?.camera.matrixWorld.elements;
-    // (3D: where the camera looks; iso: up the screen)
+    // (where the camera looks; before there's one, the camera's starting yaw)
     return e ? Math.atan2(-e[10], -e[8]) : -Math.PI * 0.75;
   }
 

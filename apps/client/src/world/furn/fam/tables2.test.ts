@@ -9,7 +9,7 @@ import { LOOKS } from "./tables2";
 
 // Plan 68 phase 4 (docs/plan/68-more-furniture.md): the new desks and tables — every kind and look on
 // its footprint, on the floor, under the ceiling, under 8k tris; its top at shared SURFACE under the
-// middle of every quarter-tile cell its catalog `top` lets things stand in (and the catalog's iso px
+// middle of every quarter-tile cell its catalog `top` lets things stand in (and the catalog's `surface`
 // read back to it); the desks' knee spaces empty where their sitters go; the drafting lamp lit and out.
 
 const mat = new MeshBasicMaterial({ side: DoubleSide });

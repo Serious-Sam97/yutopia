@@ -40,7 +40,7 @@ import {
   TOBOGGAN,
   TRACTOR,
 } from "./car/index.ts";
-import { atPump, heightAt, PUMPS, treesIn, walkableTile } from "./grounds.ts";
+import { atPump, heightAt, PUMPS, treesIn, walkableCell } from "./grounds.ts";
 import { lotLayout } from "./lot.ts";
 
 // The car's physics against the numbers of docs/plan/28-the-car.md (phase 1).
@@ -551,7 +551,7 @@ test("the gas station: driven in off Main Street to beside either pump, either s
     assert.ok(atPump(s.p.x, s.p.z), `from x ${x}: at a pump (${s.p.x.toFixed(1)}, ${s.p.z.toFixed(1)})`);
   }
   assert.ok(
-    walkableTile(314, -389) && !walkableTile(313, -389) && !walkableTile(312, -380),
+    walkableCell(314, -389) && !walkableCell(313, -389) && !walkableCell(312, -380),
     "round the islands, not into the kiosk",
   );
 });

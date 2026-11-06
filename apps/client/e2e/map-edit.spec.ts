@@ -20,7 +20,7 @@ async function look(page: Page, x: number, y: number) {
   await holdCamera(page, { at: { x, y }, yaw: -Math.PI / 2, dist: 9, pitch: 1.0 });
   await page.waitForTimeout(250);
 }
-async function clickTile(page: Page, x: number, y: number) {
+async function clickFloor(page: Page, x: number, y: number) {
   await look(page, x + 0.5, y + 0.5);
   const p = await screen(page, x, y);
   await page.mouse.move(p.x, p.y);
@@ -156,17 +156,17 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
   await ana.getByRole("tab", { name: /Furnish/ }).click();
   await ana.getByRole("tab", { name: /^Desks & tables/ }).click();
   await ana.getByRole("button", { name: "Desk", exact: true }).click();
-  await clickTile(ana, 5, 5);
+  await clickFloor(ana, 5, 5);
   await ana.getByRole("tab", { name: /^Seating/ }).click();
   await ana.getByRole("button", { name: "Chair", exact: true }).click();
-  await clickTile(ana, 5, 4);
+  await clickFloor(ana, 5, 4);
   await expect
     .poll(() =>
       st(ana, () => [...(window as any).__yutopia.floorObjects()].filter((o: any) => o.kind === "chair").length),
     )
     .toBe(1);
   await ana.getByRole("tab", { name: "Desks", exact: true }).click();
-  await clickTile(ana, 5, 4);
+  await clickFloor(ana, 5, 4);
   await ana.getByLabel("Whose desk is this?").selectOption({ label: "Ana Demo" });
   await ana.getByRole("button", { name: "Save" }).click();
   await expect
@@ -197,7 +197,7 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
   await walkTo(bia, 6.5, 10.5, 20_000);
   await bia.evaluate(() => (window as any).__yutopia.walkTo({ x: 6.5, y: 6.5 }));
   await bia.waitForTimeout(2500);
-  const biaPos = (await st(bia, () => (window as any).__yutopia.meTile())) as { x: number; y: number };
+  const biaPos = (await st(bia, () => (window as any).__yutopia.meAt())) as { x: number; y: number };
   expect(biaPos.y).toBeGreaterThan(8);
   await bia.evaluate(() =>
     (window as any).__yutopia.teleport({
@@ -205,7 +205,7 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
     }),
   );
   await expect(bia.getByText(/door is locked/i)).toBeVisible();
-  const after = (await st(bia, () => (window as any).__yutopia.meTile())) as { x: number; y: number };
+  const after = (await st(bia, () => (window as any).__yutopia.meAt())) as { x: number; y: number };
   expect(after.y).toBeGreaterThan(8);
   await holdCamera(bia);
   await bia.waitForTimeout(500);

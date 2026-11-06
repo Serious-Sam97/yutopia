@@ -3906,7 +3906,7 @@ export class Grounds3 {
     const r = groundsRng(b.x0 * 31 + 7);
     const fh = 3.8;
     const H = b.floors * fh + 0.8;
-    // (what it looks like: decided with the iso view's — world/grounds-look.ts)
+    // (what it looks like: world/grounds-look.ts)
     const L = shopLook(b);
     const { civic, diner, brick } = L;
     const wall = this.wallPic(brick ? "brick" : "siding", b.tint ?? L.wall, b.x0);
@@ -4382,7 +4382,7 @@ export class Grounds3 {
    *  chimney, the mailbox at the pavement. */
   private house(b: Building) {
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
-    // (what it looks like: decided with the iso view's — world/grounds-look.ts)
+    // (what it looks like: world/grounds-look.ts)
     const L = houseLook(b);
     const q = groundsRng(b.z0 * 17 + b.x0);
     const { kind, H } = L;

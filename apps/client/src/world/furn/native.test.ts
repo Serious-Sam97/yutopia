@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  ART_PX,
   entry,
   HANDS_AT,
   PIANO_STOOL,
@@ -285,12 +284,12 @@ test("screens: across each picture, the glass first, just behind its plane; the 
     }
   }
   const leds: [string, number, [number, number, number]][] = [
-    ["console_2600", 0, [0.3, 2 / ART_PX, 0.74]],
-    ["console_nes", 0, [0.3, 2 / ART_PX, 0.74]],
-    ["console_nes", 1, [0.3, 2 / ART_PX, 0.74]],
-    ["console_snes", 0, [0.3, 2 / ART_PX, 0.74]],
-    ["console_ps1", 0, [0.7, 4.5 / ART_PX, 0.545]],
-    ["console_ps1_slim", 0, [0.71, 3.7 / ART_PX, 0.67]],
+    ["console_2600", 0, [0.3, 0.051, 0.74]],
+    ["console_nes", 0, [0.3, 0.051, 0.74]],
+    ["console_nes", 1, [0.3, 0.051, 0.74]],
+    ["console_snes", 0, [0.3, 0.051, 0.74]],
+    ["console_ps1", 0, [0.7, 0.1148, 0.545]],
+    ["console_ps1_slim", 0, [0.71, 0.0944, 0.67]],
   ];
   for (const [kind, variant, [x, y, z]] of leds) {
     const glow = modelOf({ id: "l", kind, x: 0, y: 0, props: { variant } }).userData.glow;
@@ -423,11 +422,10 @@ test("on the walls: hung on the face, the live pictures' surfaces just behind th
         assert.ok(g.attributes.position.count / 3 < 8000, `${what}: ${g.attributes.position.count / 3} tris`);
       }
   }
-  const px = (p: number) => p / ART_PX;
   for (const [kind, x0, x1, z0, z1, plane] of [
-    ["board_wall", 0.14, 2.86, 27, 67, 0.16],
-    ["screen_wall", 0.14, 3.86, 21, 73, 0.16],
-    ["whiteboard", 0.14, 1.86, 27, 61, 0.165],
+    ["board_wall", 0.14, 2.86, 0.689, 1.7097, 0.16],
+    ["screen_wall", 0.14, 3.86, 0.5359, 1.8628, 0.16],
+    ["whiteboard", 0.14, 1.86, 0.689, 1.5566, 0.165],
   ] as const) {
     const mesh = new Mesh(
       modelOf({ id: "w", kind, x: 0, y: 0, yaw: quarterYaw(0) }),
@@ -439,7 +437,7 @@ test("on the walls: hung on the face, the live pictures' surfaces just behind th
       [0.96, 0.95],
     ]) {
       const hit = new Raycaster(
-        new Vector3(x0 + (x1 - x0) * u, px(z0 + (z1 - z0) * v), 1),
+        new Vector3(x0 + (x1 - x0) * u, z0 + (z1 - z0) * v, 1),
         new Vector3(0, 0, -1),
       ).intersectObject(mesh)[0];
       assert.ok(

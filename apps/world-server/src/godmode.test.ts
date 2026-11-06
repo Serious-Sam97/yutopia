@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { ROOM_NAME } from "@yutopia/shared";
-import { CHUNK, editsNow, heightAt, walkableTile } from "@yutopia/shared/grounds";
+import { CHUNK, editsNow, heightAt, walkableCell } from "@yutopia/shared/grounds";
 import { encodeHeights, type GroundsEdits } from "@yutopia/shared/grounds-edits";
 import { Client, type Room } from "colyseus.js";
 
@@ -202,7 +202,7 @@ test("land grown (docs/plan/69, phase 10): a member's dropped, one not joined re
   m.room.send("god:publish", { draftId: 41 });
   await sleep(500);
   const rev0 = m.room.state.groundsRev;
-  assert.ok(!walkableTile(32, 420), "a member's: not laid");
+  assert.ok(!walkableCell(32, 420), "a member's: not laid");
   const a = await join(42, ADMIN);
   a.said.length = 0;
   offlineDrafts.set(420, {
@@ -223,8 +223,8 @@ test("land grown (docs/plan/69, phase 10): a member's dropped, one not joined re
   a.room.send("god:publish", { draftId: 421, note: "a forest south" });
   await waitFor(() => a.room.state.groundsRev === rev0 + 1);
   let spot = { x: 32, z: 420 };
-  for (let dx = 0; dx < 40 && !walkableTile(spot.x, spot.z); dx++) spot = { x: 32 + dx, z: 420 };
-  assert.ok(walkableTile(spot.x, spot.z), "walked");
+  for (let dx = 0; dx < 40 && !walkableCell(spot.x, spot.z); dx++) spot = { x: 32 + dx, z: 420 };
+  assert.ok(walkableCell(spot.x, spot.z), "walked");
   const to = { x: spot.x + 0.5, y: spot.z + 0.5, level: 0 };
   a.room.send("teleport", { to });
   await waitFor(() => a.me().level === 0 && Math.hypot(a.me().x - to.x, a.me().y - to.y) < 0.6);
@@ -234,7 +234,7 @@ test("land grown (docs/plan/69, phase 10): a member's dropped, one not joined re
   a.said.length = 0;
   a.room.send("god:rollback", { rev: rev0 });
   await waitFor(() => a.room.state.groundsRev === rev0 + 2);
-  assert.ok(!walkableTile(spot.x, spot.z), "past the edge again");
+  assert.ok(!walkableCell(spot.x, spot.z), "past the edge again");
   await waitFor(() => a.said.some((s) => s.type === "toast" && /land you stood on is gone/.test(String(s.msg.text))));
   assert.ok(Math.hypot(a.me().x - to.x, a.me().y - to.y) > 50, "moved off it");
 });

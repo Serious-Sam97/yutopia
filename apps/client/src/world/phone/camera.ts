@@ -12,9 +12,8 @@ import { type CameraState, type PhotoRef, phone } from "./store";
 
 // The camera (docs/plan/21-cellphone.md § 6). The screen becomes the
 // viewfinder: the world's own view, framed by the camera's controls (the HUD
-// hides). In 3D, Photo looks through your eyes (the wheel zooms) and Selfie
-// puts a camera at arm's length facing you (Q / E walk it round you); in iso,
-// Photo frames the view as it is and Selfie leans in on you. The shot is the
+// hides). Photo looks through your eyes (the wheel zooms) and Selfie puts a
+// camera at arm's length facing you (Q / E walk it round you). The shot is the
 // world's own frame, filtered, saved in the API (the Gallery), and everyone
 // near you sees the arm up and the flash.
 

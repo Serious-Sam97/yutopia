@@ -7,10 +7,9 @@ import type { PoolInfo } from "@/world/tables/pool";
 import { useWorld } from "./ctx";
 import { usePadFrame } from "./usePad";
 
-// The pool table's console: the camera leans in over the table (iso) or takes
-// a game camera (3D), and this sits under it. In the lobby: two seats, Vortex
-// at a level in the other one, the shot clock, the guideline, the table's
-// chalkboard. Playing: both players' plates with their seven balls (lit while
+// The pool table's console: a game camera takes the view, and this sits under
+// it. In the lobby: two seats, Vortex at a level in the other one, the shot
+// clock, the guideline, the table's chalkboard. Playing: both players' plates with their seven balls (lit while
 // on the table), whose turn, the spin disc (where the tip hits the cue ball),
 // the power meter, and the aim — the pointer on the table: move to aim, press
 // and pull back to shoot, Shift for fine aim, the wheel or ←/→ to nudge, drag

@@ -4,7 +4,6 @@
 // (apps/api/database/migrations/2026_11_05_*, the same rules); this moves the worlds kept as files
 // (a saved world for the offline world-server, the e2e suite's fixtures).
 import { quarterYaw } from "./catalog.ts";
-import { ART_PX } from "./units.ts";
 
 export const LAYOUT_VERSION = 3;
 
@@ -20,8 +19,11 @@ export interface SavedWorld {
   format?: number;
 }
 
+/** The old item art's px a metre up (45.25 · cos 30°: its iso camera looked down 30° and a tile's
+ *  edge was 45.25 px) — only old saves still measure in it. */
+const OLD_PX = 45.25 * Math.cos(Math.PI / 6);
 /** The old art's px → metres, to 0.1 mm. */
-const m = (px: number): number => Math.round((px / ART_PX) * 1e4) / 1e4;
+const m = (px: number): number => Math.round((px / OLD_PX) * 1e4) / 1e4;
 
 /** One thing in version 3's form (a copy when it changes; the same object when not): its `rot` as
  *  `yaw`, and its height on what it's on in metres — only a height that is plainly px (over 3: a px

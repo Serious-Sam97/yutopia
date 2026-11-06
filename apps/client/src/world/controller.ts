@@ -413,7 +413,7 @@ export class WorldController {
     this.quality.autoTier = deviceQuality();
     model.setQuality(this.quality.qualityNow(), prefs().reducedMotion);
     model.events = {
-      onTileClick: (x, y, mods) => {
+      onFloorClick: (x, y, mods) => {
         if (hud.get().build.on) return this.buildClick(x, y);
         if (hud.get().pickArrival) return this.arrival.setArrival({ x, y });
         if (hud.get().menu) return hud.set({ menu: null });
@@ -1677,7 +1677,7 @@ export class WorldController {
     const out = w.frame(dt, {
       grid: this.grid,
       // (outdoors on the land: snow, the trails, the pond's ice; else a floor)
-      footing: (x, y) => (G && this.grid.onLand(x, y) ? G.surfaceTileAt(Math.floor(x), Math.floor(y)) : "floor"),
+      footing: (x, y) => (G && this.grid.onLand(x, y) ? G.surfaceCellAt(Math.floor(x), Math.floor(y)) : "floor"),
       // (a car on the move is in the way)
       blocked: this.level === 0 && this.cars ? (x, y) => !!this.cars?.blocks(x, y) : undefined,
       // (locked on: the way to them, exactly — the camera comes round after it, and going by its
@@ -2209,7 +2209,7 @@ export class WorldController {
       });
       v.printsPart.prints = this.life?.prints ?? null;
       v.events = {
-        floor: (x, y, mods) => model.events.onTileClick?.(x, y, mods),
+        floor: (x, y, mods) => model.events.onFloorClick?.(x, y, mods),
         person: (id, at) => model.events.onAvatarClick?.(id, at),
         toy: (id) => model.events.onToyClick?.(id),
         object: (id, at) => model.events.onObjectClick?.(id, at),
@@ -2626,7 +2626,8 @@ export class WorldController {
     });
   }
 
-  meTile() {
+  /** Where I stand (m, my floor's frame). */
+  meAt() {
     return { x: this.me.x, y: this.me.y };
   }
 

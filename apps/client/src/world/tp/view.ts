@@ -142,7 +142,7 @@ import { streetGeometry } from "./town3d";
 import { edgesOfMap, edgesOfWalls, type WallEdges } from "./walls3d";
 import { wx } from "./wx3d";
 
-// The third-person view: the world (build.ts) and its people (people3d.ts)
+// The third-person view: the world (build.ts) and its people (person3d.ts)
 // seen by a camera behind and above you. Two cameras:
 //   chase — follows behind you, looks down 20–57° (the drawn people read best
 //           from above), turns with you as you walk; drag / Q E to look around
@@ -151,7 +151,7 @@ import { wx } from "./wx3d";
 //           where you look; you aren't drawn (the camera is inside you)
 // WASD moves relative to the camera in all three. Mouse look (Z): the pointer is
 // locked and the mouse turns the camera; a crosshair picks what a click uses. Walls between the camera and you
-// turn see-through (the iso view's "wall-down", in 3D).
+// turn see-through.
 
 // (the elevators and the staircases are drawn by Lifts3 / Stairs3, not with the floor's things)
 /** (plan 62) The keys: how far off a keyboard is still the one typed on (tiles); a keyboard's top
@@ -173,7 +173,7 @@ const footCentre = (o: WorldObjectDef) => {
   const { w, h } = placedFootprint(o);
   return { x: o.x + w / 2, y: o.y + h / 2 };
 };
-/** A thing's parts the hands go to (its drawing's own tiles and iso px, at rot 0 — art/items), in the
+/** A thing's parts the hands go to (its own tiles and m up, at rot 0 — shared furniture.ts HANDS_AT), in the
  *  world, for someone at (x, y): what's pressed first, then what's taken or played along. */
 function partsOf(o: WorldObjectDef, here: WorldObjectDef[], x: number, y: number): Keys[] | null {
   const atM = ([lx, ly, m]: readonly [number, number, number]): Keys => {
@@ -253,7 +253,7 @@ function jumpDip(b: Body3): number {
 }
 
 export interface ViewOpts {
-  themes: Themes; // the themes chunk (the sky, trees), shared with iso
+  themes: Themes; // the themes chunk (the sky, trees)
   keys?: boolean; // its own keyboard (the demo); the live world reads keys itself
   tags?: boolean; // name tags over heads (default on)
   level?: number; // the floor to show (shared levels.ts; default: the map's own)
@@ -543,7 +543,7 @@ export class ThirdPersonView {
   private ratioIn = 1; // (s to the next check)
   private dprQuery: MediaQueryList | null = null;
   private lastFrameAt = 0;
-  // on the floor, as in iso: the nearest usable thing's outline, where you
+  // on the floor: the nearest usable thing's outline, where you
   // clicked to walk, how far your voice carries
   private highlight: Mesh;
   private highlightLine: LineLoop;
@@ -554,7 +554,7 @@ export class ThirdPersonView {
   private meAt = { x: 0, y: 0 };
 
   mode: CamMode = "chase";
-  yaw = -Math.PI * 0.75; // looking where the iso camera looks
+  yaw = -Math.PI * 0.75; // looking where the iso camera looked
   pitch = 0.25; // (the KH camera's rest: follow-cam.ts CAM_TUNE.pitch)
   dist = 4.2;
   lean = 0.55; // how far people's drawings tip back towards a camera looking down
@@ -1117,7 +1117,7 @@ void main() {
     this.warmup.setQuality("high");
   }
 
-  // Little bursts, as iso's `puff`: warm sparks, confetti over a head (a card
+  // Little bursts: warm sparks, confetti over a head (a card
   // done), a poof of dust, a drop. Tiny sprites with a bit of gravity.
   fx: {
     s: Sprite;
@@ -1430,7 +1430,7 @@ void main() {
     return a;
   }
 
-  // The nearest usable thing (iso's "press E" outline): its footprint, or null.
+  // The nearest usable thing (the "press E" outline): its footprint, or null.
   setHighlight(r: { x: number; y: number; w: number; h: number } | null) {
     this.highlight.visible = !!r;
     if (!r) return;
@@ -1461,7 +1461,7 @@ void main() {
     if (e.visible) {
       e.position.set(this.meAt.x, 0.012, this.meAt.y);
       e.scale.set(this.earshot, 1, this.earshot);
-      e.rotation.y = reduced ? 0 : -this.time * 0.08 * ((Math.PI * 2) / 44); // turning slowly, as in iso
+      e.rotation.y = reduced ? 0 : -this.time * 0.08 * ((Math.PI * 2) / 44); // turning slowly
     }
   }
 
@@ -1866,7 +1866,7 @@ void main() {
   }
 
   // (plan 62, phase 3) What someone busy at a thing puts their hands to, on the thing itself: the
-  // nearest of its kind ahead of them, its parts from its drawing (art/items, rot 0) turned with it —
+  // nearest of its kind ahead of them, its parts (shared furniture.ts HANDS_AT, rot 0) turned with it —
   // a machine's button then where its drink comes out, a tap, the piano's keys, the whiteboard's face
   // (along it where they stand). Floor x, y and height (tiles).
   private partsFor(busy: string, x: number, y: number, angle: number): Keys[] | null {
@@ -2150,10 +2150,10 @@ void main() {
     this.night = d.night > 0.5;
     this.nightLevel = d.night;
     this.post?.setNight(d.night);
-    // the sky (as in iso); far things fade into its horizon
+    // the sky; far things fade into its horizon
     this.around.setDay(d);
     (this.scene.fog as Fog).color.copy(this.around.horizon);
-    // the hour's colour comes from the light map (as in iso); these only give
+    // the hour's colour comes from the light map; these only give
     // things their shape: a neutral fill from above, warm from the floor…
     this.hemi.color.setRGB(1, 1, 1, SRGBColorSpace);
     this.hemi.groundColor.setRGB(0.62, 0.52, 0.44, SRGBColorSpace);
@@ -3150,7 +3150,7 @@ void main() {
         if (view === "up") block = false;
         else if (view === "down") block = true;
       }
-      const want = block ? 0.06 : 1; // cut down to the skirting, as iso's wall-down
+      const want = block ? 0.06 : 1; // cut down to the skirting
       if (Math.abs(f.alpha - want) < 0.002 && (f.alpha === 1 || f.alpha === want)) continue;
       f.alpha += (want - f.alpha) * Math.min(1, dt * 10);
       if (Math.abs(f.alpha - want) < 0.01) f.alpha = want;

@@ -53,7 +53,7 @@ const shot = async (page: Page, name: string) => {
   if (dir) await page.screenshot({ path: `${dir}/${name}.png` });
 };
 const me = (page: Page) =>
-  page.evaluate(() => ({ ...(window as any).__yutopia.meTile(), z: (window as any).__yutopia.height.z }));
+  page.evaluate(() => ({ ...(window as any).__yutopia.meAt(), z: (window as any).__yutopia.height.z }));
 const worst = (page: Page, reset = false) =>
   page.evaluate((r) => {
     const W = window as any;
@@ -113,7 +113,7 @@ for (const view of ["3p"] as const)
     await walkTo(page, G(82, 18).x, G(82, 18).y, 90_000);
     const inside = await page.evaluate(() => {
       const c = (window as any).__yutopia;
-      const m = c.meTile();
+      const m = c.meAt();
       return c.map.areas.find((a: any) => m.x >= a.x && m.x < a.x + a.w && m.y >= a.y && m.y < a.y + a.h)?.key;
     });
     expect(inside).toBe("east-block");
@@ -178,7 +178,7 @@ for (const view of ["3p"] as const)
     const car = await page.evaluate(
       (rows) => {
         const c = (window as any).__yutopia;
-        const m = c.meTile();
+        const m = c.meAt();
         for (let x = m.x - 60; x < m.x + 60; x++) for (const y of rows) if (!c.grid.ok(x, y)) return { x, y };
         return null;
       },

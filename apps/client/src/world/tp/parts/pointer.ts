@@ -50,7 +50,7 @@ export class Pointer {
   constructor(private readonly c: PointerHost) {}
 
   // ── input ────────────────────────────────────────────────────────────────
-  // two fingers: pinch to zoom (phones, tablets), as in iso
+  // two fingers: pinch to zoom (phones, tablets)
   touches = new Map<number, { x: number; y: number }>();
 
   pinch = 0;

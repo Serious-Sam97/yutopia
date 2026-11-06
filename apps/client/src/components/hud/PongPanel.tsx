@@ -7,9 +7,8 @@ import type { PongInfo } from "@/world/tables/pong";
 import { useWorld } from "./ctx";
 import { usePadFrame } from "./usePad";
 
-// The ping-pong table's console: the camera leans in (iso) or stands behind
-// your end (3D), and this sits under it — the flip-card scoreboard (points,
-// games, who serves), the last hit's speed on the LED meter, Assisted / Pro.
+// The ping-pong table's console: the camera stands behind your end, and this
+// sits under it — the flip-card scoreboard (points, games, who serves), the last hit's speed on the LED meter, Assisted / Pro.
 // The racket is your pointer over your end of the table: swing through the
 // ball (faster swing, harder hit); hold the left button to brush up (topspin),
 // the right one to chop (backspin). Serving: click to toss, then swing.

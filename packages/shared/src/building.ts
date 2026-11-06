@@ -85,7 +85,7 @@ export function findCore(home: TileMap, objects: WorldObjectDef[] = []): Core | 
 // x −56..−10) and the path to the doors
 export const GROUND_OFFSET = { x: -60, y: -10 };
 
-/** The campus's own seeded random (the same as the iso art's `rng`). */
+/** The campus's own seeded random. */
 export function seeded(seed: number): () => number {
   let a = seed >>> 0;
   return () => {

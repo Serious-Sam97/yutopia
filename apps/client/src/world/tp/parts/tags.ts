@@ -17,7 +17,7 @@ export class Tags {
 
   tagEls = new Map<string, Tag>();
 
-  // Over heads, as in iso: the name tag (status dot, a slash when the mic is
+  // Over heads: the name tag (status dot, a slash when the mic is
   // off), the emote above it, chat bubbles above that. HTML over the canvas
   // (crisp at any distance), hidden behind standing walls and far away.
   // name tags off while a panel covers the world (they're HTML, above the canvas)
@@ -120,7 +120,7 @@ export class Tags {
       }
   }
 
-  // A chat bubble over someone's head (as the iso engine's `say`).
+  // A chat bubble over someone's head.
   say(id: string, text: string, ms = 6000) {
     const t = this.tagEls.get(id);
     if (!t) return;
@@ -130,7 +130,7 @@ export class Tags {
   }
 }
 
-// The iso look: a dark pill in Share Tech Mono, the paper bubble with a walnut
+// The tags' look: a dark pill in Share Tech Mono, the paper bubble with a walnut
 // edge, the emote's own drawing.
 function makeTag(): Tag {
   const root = document.createElement("div");

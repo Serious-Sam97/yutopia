@@ -479,7 +479,7 @@ test("the track changer: anyone's, in the quiet lobby; the grid, the ground and 
   const eight = kartTrack();
   const spot = oval.pts.find((p) => !eight.pts.some((q) => Math.hypot(p.x - q.x, p.z - q.z) < 14));
   assert.ok(spot);
-  if (spot) assert.equal(G.surfaceTileAt(Math.floor(spot.x), Math.floor(spot.z)), "asphalt");
+  if (spot) assert.equal(G.surfaceCellAt(Math.floor(spot.x), Math.floor(spot.z)), "asphalt");
   // a kart out on it: on the Oval's grid; and while it's out, no changing
   const snaps = await take(a);
   const g = oval.grid.map((q) => Math.hypot(q.x - snaps[0].x, q.z - snaps[0].z));

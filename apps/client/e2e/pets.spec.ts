@@ -24,7 +24,7 @@ const pets = (page: Page) =>
       carry: p.carry,
     }));
   });
-const me = (page: Page) => page.evaluate(() => (window as any).__yutopia.meTile());
+const me = (page: Page) => page.evaluate(() => (window as any).__yutopia.meAt());
 const send = (page: Page, type: string, msg: unknown) =>
   page.evaluate(([t, m]) => (window as any).__yutopia.send(t, m), [type, msg] as const);
 const release = async (page: Page) => {

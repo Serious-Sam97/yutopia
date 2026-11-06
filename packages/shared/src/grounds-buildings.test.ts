@@ -10,7 +10,7 @@ import {
   steepleOf,
   turnOf,
   WAYS,
-  walkableTile,
+  walkableCell,
 } from "./grounds.ts";
 import {
   addBuilding,
@@ -63,7 +63,7 @@ test("a house in the field: by the rules, on its plot, solid there, off the walk
   applyEdits(e);
   assert.equal(buildingAt(FIELD.x, FIELD.z), "god-building-1");
   assert.equal(groundSurfaceAt(FIELD.x, FIELD.z), "floor");
-  assert.equal(walkableTile(Math.floor(FIELD.x), Math.floor(FIELD.z)), false);
+  assert.equal(walkableCell(Math.floor(FIELD.x), Math.floor(FIELD.z)), false);
   assert.ok(solidsOver(house()).some((g) => g.what === "building"));
   // taken away: the field again
   applyEdits(removeBuilding(e, "god-building-1"));
@@ -107,8 +107,8 @@ test("a gas station put down: its own forecourt, its kiosk built; the town's pum
     "on its own plot",
   );
   // its forecourt walked, its islands not
-  assert.equal(walkableTile(Math.floor(g.x0 + 10), Math.floor(g.z0 + 1)), true);
-  assert.equal(walkableTile(Math.floor(g.x0 + 7), Math.floor(g.z0 + 5)), false);
+  assert.equal(walkableCell(Math.floor(g.x0 + 10), Math.floor(g.z0 + 1)), true);
+  assert.equal(walkableCell(Math.floor(g.x0 + 7), Math.floor(g.z0 + 5)), false);
   assert.equal(atPump(g.x0 + 9, g.z0 + 5), false, "no fuel here");
   applyEdits(NO_EDITS);
 });

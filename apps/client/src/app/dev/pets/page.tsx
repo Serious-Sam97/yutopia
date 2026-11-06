@@ -16,8 +16,7 @@ import { usePets } from "@/components/usePets";
 import type { BodyMood, Face3, PoseKind } from "@/world/art/pets3d";
 
 // Dev-only review sheet for the pet models (docs/plan/14-pets-v2.md): every
-// species on a turntable, in each pose, with a few looks and outfits; and the
-// iso sprites the world draws, in the 8 facings.
+// species on a turntable, in each pose, with a few looks and outfits.
 const POSES: PoseKind[] = [
   "idle",
   "walk",
@@ -114,33 +113,6 @@ function Turn({
       style={{ width: size, height: size, background: "#6f5a48", borderRadius: 8 }}
     />
   );
-}
-
-function Iso({ species, look, outfit, pose }: { species: Species; look: PetLook; outfit: PetOutfit; pose: PoseKind }) {
-  const P = usePets();
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const c = ref.current;
-    if (!P || !c) return;
-    const g = c.getContext("2d") as CanvasRenderingContext2D;
-    g.clearRect(0, 0, c.width, c.height);
-    for (let d = 0; d < 8; d++) {
-      const act =
-        pose === "idle" || pose === "walk" || pose === "sleep"
-          ? ""
-          : `trick:${pose === "sit" ? "sit" : pose === "jump" ? "jump" : "dance"}`;
-      const sp = P.petRenderer().sprite(
-        species,
-        look,
-        outfit,
-        d,
-        { a: pose === "walk" ? 1 : pose === "sleep" ? 2 : 0, mode: "follow", act, actAt: 0, feeling: "happy" },
-        1000,
-      );
-      if (sp) g.drawImage(sp.canvas, d * 110, 0, sp.canvas.width * 0.55, sp.canvas.height * 0.55);
-    }
-  }, [P, species, look, outfit, pose]);
-  return <canvas ref={ref} width={880} height={120} style={{ background: "#8a6d52", borderRadius: 8 }} />;
 }
 
 export default function PetsSheet() {
@@ -283,9 +255,6 @@ export default function PetsSheet() {
                 t={0}
                 yaw={0}
               />
-            </div>
-            <div className="mt-2">
-              <Iso species={sp} look={look} outfit={outfit} pose={pose} />
             </div>
           </section>
         );

@@ -37,7 +37,7 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 // marking and clothes, with a procedural rig: breathing, blinking, a wagging
 // tail, a head that looks at you, a walk cycle, and a pose for everything it
 // does (sleep, tricks, play, battles). The third-person view shows it in the
-// room; the iso view renders it into sprites (pets-render.ts); the panel spins
+// room; pets-render.ts makes the HUD's pictures of it; the panel spins
 // it on a turntable. Units: tiles, +X forward, +Y up. Origin: between the feet.
 
 export type PoseKind =
@@ -1752,7 +1752,7 @@ export class PetModel {
 
   // ── posing ────────────────────────────────────────────────────────────────
   // `dt` in seconds for the eased bits (the head turning, blinking); pass 0
-  // to land exactly on the pose (the iso renderer).
+  // to land exactly on the pose (the HUD's pictures: pets-render.ts).
   pose(p: PoseIn, dt = 0, now = 0) {
     const pr = this.pr;
     const [bx, by] = pr.body;

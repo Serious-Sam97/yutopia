@@ -1360,7 +1360,7 @@ export const GROUND_WHATS: Record<GroundWhat, { label: string; how: string; odd?
   tree_pine: {
     label: "Spruce",
     how: "a trunk 0.3 × 1.45 × its scale round (~0.44), from 0.25 in the snow to its tip (10.5 × 1.45 × scale × sy, ~15 m); its boughs open",
-    odd: "trunk only (the plan's recommended answer, open question: or the canopy solid too?). Walking blocks the tree's whole tile (iso, paths: the grid's coarse); the trunk is round, a hair into the tiles round it",
+    odd: "trunk only (the plan's recommended answer, open question: or the canopy solid too?). Paths block the tree's whole cell (the grid's coarse); the trunk is round, a hair into the cells round it",
   },
   tree_birch: {
     label: "Birch",
@@ -1496,7 +1496,6 @@ export const GROUND_WHATS: Record<GroundWhat, { label: string; how: string; odd?
   kart_fence: {
     label: "Kart Park fence",
     how: "a wall 0.14 thick in 3 m pieces to 1.0 (its posts; the rails 0.45 and 0.9; lowered from 1.4, 2026-10-27); the gate open",
-    odd: "the iso view still draws it 1.15 m (the rail art MOTORS' rails share; iso is being retired)",
   },
   kart_gate: {
     label: "Kart Park gate",

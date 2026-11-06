@@ -1,7 +1,7 @@
 // Footprints in the snow (docs/plan/27-the-grounds.md): whoever walks on the
 // open snow or deep in the woods leaves a print a stride, left and right; they
 // fill back in over a few minutes. The controller records them (it moves
-// everyone), the views draw them: iso as small sprites, 3D as instances.
+// everyone), the 3D view draws them as instances (tp/parts/prints.ts).
 // Coords: the ground floor's own (tiles), z the ground's height there.
 
 export const PRINT_LIFE_MS = 4 * 60_000;

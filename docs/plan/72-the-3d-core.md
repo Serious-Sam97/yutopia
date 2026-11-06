@@ -1570,3 +1570,23 @@ the code reads are made from it. Still to come in this phase: listed at the end.
       decals, contact shadows): no cards, no ink lines, no `Layers`; the build view, the benches,
       `model-bounds` and the view take no `items`; the catalog's SVG thumb fallback (none where WebGL
       can't draw); `/dev/items`, `/dev/rooms` (the iso sheets).
+    - Committed 01815b7.
+  - **The old art's px retired** (`ART_PX`, `artPx`, `artM` gone from shared `units.ts`): the
+    building's things, the neon, the poster, the picture frame, the clocks' and boards' heights,
+    the shelf screen's glass, the panels' glass (`model.ts`) and the tests in metres (the same
+    numbers to 0.1 mm); Vortex at the chess bench sized as `Vortex3` is; the media room's glass
+    canvas S px a metre both ways (it was 36 along and 39.19 up — the video's letterbox worked out
+    in a slightly squashed space). Old saves still come up through `migrate.ts`'s own `OLD_PX`.
+  - **The pets' iso sprites** (8 facings, toys) gone from `art/pets-render.ts`: it's the HUD's
+    pictures only (portrait, turntable); `/dev/pets` loses its sprite strip. The lift car's `cut`
+    option and `/dev/lift`'s two iso scenes gone; `grounds-shots`' orthographic stills keep their
+    names, their field is `ortho`.
+  - **Tile words:** `meTile()` → `meAt()`, `onTileClick` → `onFloorClick`, the specs' `clickTile` →
+    `clickFloor`; the Grounds' land cells: `walkableCell`, `surfaceCellAt`, `carBlockedCell`.
+  - **Comments** describing the iso view, the sketches, the item art and the paper people as if
+    they were still there rewritten across the client, the shared package and the world-server.
+    Dead code they pointed at removed: `jumpDust`, the themes' iso helpers, the light's `land2`,
+    `glassFacing`, `computerFacing`, `registerKinds`, the paper people's phone drawing.
+  - **Checks:** shared 655, client 284, the world-server compiles; production build and budgets ok
+    (page 466.7/469 KB); as Bia floors 4 and 0 and the kart park load with no page errors.
+  - **Phase 12 done.**

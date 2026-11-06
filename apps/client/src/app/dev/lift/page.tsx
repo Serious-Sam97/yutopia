@@ -10,7 +10,7 @@ import { playSample, sample } from "@/world/sfx";
 // stairs3d.ts) in a scene of their own, with the motion and the sounds on one
 // timeline. Dev only (or a build with NEXT_PUBLIC_YUTOPIA_SHOTS=1).
 //
-//   /dev/lift?scene=landing|car|ride|stairs|iso|isostairs   which shot
+//   /dev/lift?scene=landing|car|ride|stairs   which shot
 //   &t=2.9      the timeline frozen at t seconds (a still); without it, it plays
 //   &from=5     playing, from there
 //   &w=&h=      the canvas' size (default: the window)
@@ -19,11 +19,10 @@ import { playSample, sample } from "@/world/sfx";
 // · in 3.3–5.0 · "4" pressed 5.3 · doors shut 6.0–7.1 · the ride 7.3–11.5
 // (G → 4) · chime 11.6, doors open 11.8–12.9 · out. Sounds: the CC0 samples
 // in public/sfx where they're there (world/sfx.ts), synthesised stand-ins for
-// the rest. In the iso shot the walls
-// towards the camera are cut, as the iso view's "cut" walls.
+// the rest.
 
-type Scene = "landing" | "car" | "ride" | "stairs" | "iso" | "isostairs";
-const SCENES: Scene[] = ["landing", "car", "ride", "stairs", "iso", "isostairs"];
+type Scene = "landing" | "car" | "ride" | "stairs";
+const SCENES: Scene[] = ["landing", "car", "ride", "stairs"];
 const LOOP = 15;
 
 // what happens when (one timeline for the doors, the car, the people, the sounds)
@@ -477,7 +476,7 @@ export default function LiftPrototype() {
       const stopA = new L.LiftLanding(mats, { floor: "G" });
       stopA.root.position.x = 2;
       const stopB = new L.LiftLanding(mats, { floor: "G" });
-      const car = new L.LiftCar(["4", "3", "2", "1", "G"], mats, { cut: sc.startsWith("iso") });
+      const car = new L.LiftCar(["4", "3", "2", "1", "G"], mats);
       car.root.position.x = 2;
       const carGroup = new THREE.Group();
       carGroup.add(car.root);
@@ -490,8 +489,8 @@ export default function LiftPrototype() {
       const stairs = new S.Stairwell({
         floor: "G",
         next: "GROUND · EXIT ↑ LOT",
-        storeys: sc.startsWith("iso") ? 1 : 2,
-        walls: sc.startsWith("iso") ? [] : ["e", "s"],
+        storeys: 2,
+        walls: ["e", "s"],
       });
       stairs.root.position.set(4.05, 0, 0);
 
@@ -518,8 +517,7 @@ export default function LiftPrototype() {
       let well: InstanceType<typeof S.Stairwell> | null = null; // (the stairs shot's)
       // ── which shot ──
       const cam = new THREE.PerspectiveCamera(sc === "car" || sc === "ride" ? 74 : 38, W / H, 0.05, 200);
-      let ortho: InstanceType<typeof THREE.OrthographicCamera> | null = null;
-      if (sc === "landing" || sc === "car" || sc === "ride" || sc.startsWith("iso")) {
+      if (sc === "landing" || sc === "car" || sc === "ride") {
         world.add(lobby, stopA.root, stopB.root, carGroup, shaftWalls, stairs.root);
       }
       if (sc === "landing") {
@@ -529,29 +527,6 @@ export default function LiftPrototype() {
         // the camera rides in the car: high in the back corner, past the people to the doors and the panel
         cam.position.set(3.0, 2.2, 1.86);
         cam.lookAt(3.0, 1.15, -1.6);
-      } else if (sc.startsWith("iso")) {
-        // the iso view: no ceiling, the walls towards the camera cut low
-        extras.visible = false;
-        for (const w of shaftWalls.children) {
-          w.scale.y = 0.15;
-          w.position.y = (wallH * 0.15) / 2;
-        }
-        const k = 3.9;
-        ortho = new THREE.OrthographicCamera((-k * W) / H, (k * W) / H, k, -k, 0.1, 100);
-        // the iso view's angle: from the south-east, 30° down
-        const yaw = Math.PI * 0.25;
-        const pitch = Math.PI / 6;
-        // (the cars: the stairs left out — in the game they're there, in front)
-        if (sc === "iso") stairs.root.visible = false;
-        const tgt = sc === "iso" ? new THREE.Vector3(2.0, 0.5, 0.2) : new THREE.Vector3(5.8, 0.9, 2.6);
-        ortho.position.set(
-          tgt.x + Math.cos(yaw) * 20 * Math.cos(pitch),
-          tgt.y + 20 * Math.sin(pitch),
-          tgt.z + Math.sin(yaw) * 20 * Math.cos(pitch),
-        );
-        ortho.lookAt(tgt);
-        // (the iso cuts the walls between you and the camera: here the lobby's
-        // wall is behind, the core's own walls show as they would)
       } else if (sc === "stairs") {
         world.background = new THREE.Color("#cfcac1");
         well = new S.Stairwell({ floor: "3", next: "FLOOR 3 · LOBBY ↓ G", storeys: 2, walls: ["w", "s"] });
@@ -634,14 +609,7 @@ export default function LiftPrototype() {
             p.m.root.rotation.y = 0;
           } else {
             // (a still of the landing: waiting at the doors; playing, they walk in)
-            const w =
-              sc === "landing"
-                ? frozen !== null
-                  ? 0
-                  : s.walk
-                : sc === "car" || sc === "ride" || sc.startsWith("iso")
-                  ? 1
-                  : s.walk;
+            const w = sc === "landing" ? (frozen !== null ? 0 : s.walk) : sc === "car" || sc === "ride" ? 1 : s.walk;
             const pos = new THREE.Vector3().lerpVectors(p.from, p.to, w);
             p.m.root.position.copy(pos);
             p.m.root.rotation.y = w >= 1 ? Math.PI : 0;
@@ -682,7 +650,7 @@ export default function LiftPrototype() {
           for (let k = 0; k < 6; k++) fire(`step${k}`, t, T.walkIn[0] + k * 0.3, () => a.step());
         }
         lastT = t;
-        renderer.render(world, ortho ?? cam);
+        renderer.render(world, cam);
         if (ready === people.length && frozen !== null) (window as unknown as { __shot?: boolean }).__shot = true;
         setClock(Math.round(t * 10) / 10);
       };

@@ -1,7 +1,6 @@
 import { TEXT_FACE } from "@yutopia/shared";
 import { glyphDots } from "@yutopia/shared/glyphs";
 import { GLASS } from "@yutopia/shared/media";
-import { artM as iso } from "@yutopia/shared/units";
 import { ball, box, cyl, type Look, type Model, merged, ring, rod, type V3 } from "./kit";
 import { P, shade } from "./palette";
 
@@ -119,7 +118,7 @@ export function whiteboard(m: Model) {
   bars(m, x0, x1, y0, y1, 0.035, 0.172, P.alum);
   for (let i = 0; i < 4; i++) {
     const x = 0.4 + rnd(i, 1, 0) * 1.0;
-    const y = iso(33 + rnd(i, 2, 0) * 22);
+    const y = 0.8421 + rnd(i, 2, 0) * 0.5614;
     sheet(m, x, y, 0.161, 0.22 + rnd(i, 3, 0) * 0.2, 0.012, 0xdfe3e8, (rnd(i, 4, 0) - 0.5) * 0.2);
   }
   // the tray, the markers and the eraser
@@ -168,7 +167,7 @@ export function noticeBoard(m: Model, o: Look) {
   const cols = [P.paperWhite, 0xe8c25a, P.cream, 0xd8e0d0];
   for (let i = 0; i < 6; i++) {
     const x = 0.35 + (i % 3) * 0.52 + rnd(i, 1, o.seed) * 0.12;
-    const y = iso(38.5 + Math.floor(i / 3) * 12 + rnd(i, 2, o.seed) * 4);
+    const y = 0.9825 + Math.floor(i / 3) * 0.3062 + rnd(i, 2, o.seed) * 0.1021;
     const t = (rnd(i, 3, o.seed) - 0.5) * 0.12;
     sheet(m, x, y, S + 0.001, 0.3, 0.23, cols[i % 4], t);
     for (let k = 0; k < 3; k++) sheet(m, x - 0.02, y + 0.04 - k * 0.05, S + 0.003, 0.18, 0.006, 0x6b5a40, t);
@@ -186,7 +185,7 @@ export function acousticPanel(m: Model) {
   for (let r = 0; r < 5; r++)
     for (let c = 0; c < 3; c++) {
       const x = 0.28 + c * 0.22;
-      const y = iso(25 + r * 8.4 + 3.8);
+      const y = 0.638 + r * 0.2144 + 0.097;
       // (a four-sided cone turned square to the grid, then tipped out of the wall)
       m.add(cyl(0.14, 0.004, 0.05, 4).rotateY(Math.PI / 4), (r + c) % 2 ? 0x7d3a2c : 0x9e4a36, {
         at: [x, y, FACE + 0.03],
@@ -242,7 +241,7 @@ export function neon(m: Model, o: Look) {
   ])
     m.add(cyl(0.01, 0.01, 0.035, 8), P.chrome, { at: [x, y, FACE], rot: [Math.PI / 2, 0, 0] });
   const line = (pts: [number, number][], close = false) => {
-    const p: V3[] = pts.map(([u, z]) => [u, iso(z), Z]);
+    const p: V3[] = pts.map(([u, z]) => [u, z, Z]);
     if (close) p.push(p[0]);
     for (let i = 0; i < p.length - 1; i++) {
       const [a, b] = [p[i], p[i + 1]];
@@ -256,22 +255,22 @@ export function neon(m: Model, o: Look) {
   };
   if (v === 0) {
     line([
-      [0.72, 56],
-      [0.78, 42],
-      [1.12, 42],
-      [1.18, 56],
+      [0.72, 1.429],
+      [0.78, 1.0718],
+      [1.12, 1.0718],
+      [1.18, 1.429],
     ]);
     line(
       Array.from({ length: 9 }, (_, i) => {
         const a = -Math.PI / 2 + (i / 8) * Math.PI;
-        return [1.17 + Math.cos(a) * 0.07, 50 + Math.sin(a) * -4] as [number, number];
+        return [1.17 + Math.cos(a) * 0.07, 1.2759 + Math.sin(a) * -0.1021] as [number, number];
       }),
     );
     for (const u of [0.86, 1.02])
       line([
-        [u, 58],
-        [u + 0.04, 60.5],
-        [u - 0.02, 62],
+        [u, 1.4801],
+        [u + 0.04, 1.5439],
+        [u - 0.02, 1.5821],
       ]);
   } else if (v === 1) {
     const heart: [number, number][] = [];
@@ -279,19 +278,19 @@ export function neon(m: Model, o: Look) {
       const t = (i / 24) * Math.PI * 2;
       const x = 16 * Math.sin(t) ** 3;
       const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
-      heart.push([1 + x * 0.019, 50 + y * 0.55]);
+      heart.push([1 + x * 0.019, 1.2759 + y * 0.014]);
     }
     line(heart, true);
   } else
     line(
       [
-        [1.06, 61],
-        [0.86, 49],
-        [1.0, 49],
-        [0.92, 39],
-        [1.16, 52],
-        [1.02, 52],
-        [1.12, 61],
+        [1.06, 1.5566],
+        [0.86, 1.2504],
+        [1.0, 1.2504],
+        [0.92, 0.9952],
+        [1.16, 1.3269],
+        [1.02, 1.3269],
+        [1.12, 1.5566],
       ],
       true,
     );
@@ -303,16 +302,16 @@ export function poster(m: Model, art: string) {
   const [x0, x1, _y0, _y1] = [0.16, 0.84, 0.8421, 1.6076];
   slab(m, 0.12, 0.88, 0.7655, 1.6842, 0.022, 0x2b2420);
   const F = FACE + 0.023;
-  const at = (u: number, z: number): V3 => [u, iso(z), F];
+  const at = (u: number, z: number): V3 => [u, z, F];
   const rect = (u0: number, u1: number, z0: number, z1: number, c: number, dz = 0) =>
-    m.add(box([u1 - u0, iso(z1) - iso(z0), 0.002]), c, {
-      at: [(u0 + u1) / 2, (iso(z0) + iso(z1)) / 2, F + 0.001 + dz],
+    m.add(box([u1 - u0, z1 - z0, 0.002]), c, {
+      at: [(u0 + u1) / 2, (z0 + z1) / 2, F + 0.001 + dz],
     });
   if (art === "vu") {
-    rect(x0, x1, 33, 63, P.cream);
+    rect(x0, x1, 0.8421, 1.6076, P.cream);
     for (let i = 0; i <= 12; i++) {
       const a = Math.PI * (0.15 + (i / 12) * 0.7);
-      const [u, z] = [0.5 - Math.cos(a) * 0.26, 42 + Math.sin(a) * 15];
+      const [u, z] = [0.5 - Math.cos(a) * 0.26, 1.0718 + Math.sin(a) * 0.3828];
       const p = at(u, z);
       m.add(box([0.006, i % 2 ? 0.02 : 0.034, 0.002]), i > 8 ? 0xc4402b : P.ink, {
         at: [p[0], p[1], F + 0.003],
@@ -324,28 +323,28 @@ export function poster(m: Model, art: string) {
       at: [0.58, (1.0718 + 1.378) / 2, F + 0.004],
       rot: [0, 0, n],
     });
-    rect(0.3, 0.7, 35, 38, P.walnut, 0.002);
+    rect(0.3, 0.7, 0.8931, 0.9697, P.walnut, 0.002);
   } else if (art === "yondra") {
-    rect(x0, x1, 33, 63, P.walnutDark);
+    rect(x0, x1, 0.8421, 1.6076, P.walnutDark);
     m.add(cyl(0.18, 0.18, 0.002, 24), P.mustard, { at: [0.5, 1.1994, F + 0.002], rot: [Math.PI / 2, 0, 0] });
     for (const [z, c] of [
-      [44, P.rust],
-      [47.5, 0xd9a441],
-      [51, P.olive],
+      [1.1228, P.rust],
+      [1.2121, 0xd9a441],
+      [1.3014, P.olive],
     ] as const)
-      rect(x0, x1, z - 3.4, z, c, 0.004);
-    rect(x0, x1, 33, 40.6, P.walnutDark, 0.005);
-    for (let i = 0; i < 3; i++) rect(0.3, 0.7 - i * 0.1, 35 + i * 1.6, 35.8 + i * 1.6, P.cream, 0.006);
+      rect(x0, x1, z - 0.0868, z, c, 0.004);
+    rect(x0, x1, 0.8421, 1.036, P.walnutDark, 0.005);
+    for (let i = 0; i < 3; i++) rect(0.3, 0.7 - i * 0.1, 0.8931 + i * 0.0408, 0.9136 + i * 0.0408, P.cream, 0.006);
   } else {
-    rect(x0, x1, 33, 63, 0xd9a441);
-    rect(0.24, 0.76, 40, 56, P.graphite, 0.002);
-    rect(0.3, 0.7, 50, 54, P.cream, 0.004);
+    rect(x0, x1, 0.8421, 1.6076, 0xd9a441);
+    rect(0.24, 0.76, 1.0207, 1.429, P.graphite, 0.002);
+    rect(0.3, 0.7, 1.2759, 1.378, P.cream, 0.004);
     for (const u of [0.38, 0.62]) {
       m.add(cyl(0.06, 0.06, 0.002, 18), P.cream, { at: [u, 1.1738, F + 0.004], rot: [Math.PI / 2, 0, 0] });
       m.add(cyl(0.025, 0.025, 0.002, 12), P.graphite, { at: [u, 1.1738, F + 0.006], rot: [Math.PI / 2, 0, 0] });
     }
-    rect(0.36, 0.64, 41, 42.4, 0x4a463e, 0.004);
-    for (let i = 0; i < 3; i++) rect(0.24, 0.76, 58 + i * 1.6, 58.6 + i * 1.6, shade(0xd9a441, 0.8), 0.002);
+    rect(0.36, 0.64, 1.0462, 1.082, 0x4a463e, 0.004);
+    for (let i = 0; i < 3; i++) rect(0.24, 0.76, 1.4801 + i * 0.0408, 1.4954 + i * 0.0408, shade(0xd9a441, 0.8), 0.002);
   }
   sheet(m, 0.76, 1.6459, F + 0.006, 0.18, 0.08, 0xe8dbb5, 0.3);
 }
@@ -386,7 +385,7 @@ export function pictureFrame(m: Model, seed: number) {
     });
   } else if (art === 1)
     for (const [k, c] of [P.rust, 0xd9a441, P.olive, 0x3f4a5a].entries())
-      rect(p0, p1, iso(43 + k * 3.5), iso(46 + k * 3.5), c, 0.002);
+      rect(p0, p1, 1.0973 + k * 0.0893, 1.1738 + k * 0.0893, c, 0.002);
   else {
     rect(p0, p1, 1.0973, 1.4545, 0x6b5a4a, 0.002);
     m.add(ball(0.05, 10), 0xe4b48e, { at: [0.5, 1.2504, F + 0.004], scale: [1, 1.15, 0.1] });

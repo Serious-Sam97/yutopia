@@ -735,7 +735,7 @@ registerFeature((room: WorldRoom) => {
       variant: colour,
       plate,
       ownerId: p.uid,
-      // (not `ownerName`: the iso view labels whatever has one — a desk, a name board)
+      // (not `ownerName`: the world labels whatever has one — a desk, a name board)
       owner: p.name,
       fuel: 1,
     };

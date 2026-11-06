@@ -244,7 +244,7 @@ export async function walkTo(page: Page, x: number, y: number, ms = 12_000) {
   await page
     .waitForFunction(
       ([px, py]) => {
-        const t = (window as unknown as { __yutopia: { meTile(): { x: number; y: number } } }).__yutopia.meTile();
+        const t = (window as unknown as { __yutopia: { meAt(): { x: number; y: number } } }).__yutopia.meAt();
         return Math.hypot(t.x - px, t.y - py) < 1.2;
       },
       [x, y],
@@ -257,7 +257,7 @@ export async function walkTo(page: Page, x: number, y: number, ms = 12_000) {
         .evaluate(
           ([px, py]) => {
             const c = (window as any).__yutopia;
-            const t = c.meTile();
+            const t = c.meAt();
             const open = c.grid?.nearestOpen?.(px, py, 3);
             const start = c.grid?.ok?.(Math.floor(t.x), Math.floor(t.y)) ? "open" : "blocked";
             return `at ${t.x.toFixed(2)},${t.y.toFixed(2)} (floor ${c.level}, standing on a ${start} tile); the spot ${c.grid?.ok?.(Math.floor(px), Math.floor(py)) ? "open" : "blocked"}, nearest open ${open ? `${open.x},${open.y}` : "none"}; path ${c.path ? c.path.length : "none"}`;
@@ -300,7 +300,7 @@ export async function walkNear(page: Page, x: number, y: number, ms = 20_000): P
 // then E held (its menu) or tapped (its main action).
 export async function actOn(page: Page, x: number, y: number, o: { key?: string; near?: number; hold?: boolean } = {}) {
   const near = o.near ?? 1.3;
-  const m = (await page.evaluate(() => (window as any).__yutopia.meTile())) as { x: number; y: number };
+  const m = (await page.evaluate(() => (window as any).__yutopia.meAt())) as { x: number; y: number };
   const d = Math.hypot(x - m.x, y - m.y);
   if (d > near + 0.25) {
     const k = (d - near) / d;

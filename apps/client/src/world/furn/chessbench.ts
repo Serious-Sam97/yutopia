@@ -1,6 +1,5 @@
 import { avatarFromSeed, emptyEdges, quarterYaw, setEdge, type TileMap, type WorldObjectDef } from "@yutopia/shared";
 import { parseFen, START } from "@yutopia/shared/games68/chess";
-import { ART_PX } from "@yutopia/shared/units";
 import * as T from "three";
 import { Post3 } from "../tp/post3d";
 import { legOf, type SeatShape, seatFit } from "../tp/seats3d";
@@ -729,7 +728,7 @@ export async function runChess(el: HTMLElement, o: ChessOpts): Promise<() => voi
       people.push({ m, mo: new C.Motion3(0.3 + seed * 0.01), at: [TX + x, TZ + z], yaw });
     }
   }
-  // Vortex over black's chair: his drawing (exactly Yondra's, as the world draws him: people3d.ts),
+  // Vortex over black's chair: his drawing (exactly Yondra's, as the world draws him: stand3d.ts Vortex3),
   // turned to the camera, a little bob, his face by the game
   let vortex: T.Mesh | null = null;
   let vortexReady = !o.vortex;
@@ -744,10 +743,10 @@ export async function runChess(el: HTMLElement, o: ChessOpts): Promise<() => voi
       tex.needsUpdate = true;
       vortexReady = true;
     });
-    // (his 240×225 drawing at the world's size: 120 board units wide, 0.0115 m a unit)
-    // (sat: smaller than his floating self, a seated person's size, low over the seat to peer at the board)
-    const U = (0.585 / 1.3 / ART_PX) * 0.62;
-    const geo = new T.PlaneGeometry(120 * U, 112.5 * U).translate(0, (112.5 * U) / 2, 0);
+    // (his 240×225 drawing at the world's size, 1.378 m wide — tp/stand3d.ts Vortex3 — sat: smaller
+    // than his floating self, a seated person's size, low over the seat to peer at the board)
+    const VW = 1.378 * 0.62;
+    const geo = new T.PlaneGeometry(VW, (VW * 225) / 240).translate(0, (VW * 225) / 240 / 2, 0);
     vortex = new T.Mesh(geo, new T.MeshBasicMaterial({ map: tex, alphaTest: 0.45, side: T.DoubleSide }));
     const [sx1, sz1] = PLAY.chess_table.seats[1];
     vortex.position.set(TX + sx1 - 0.02, PLAY.chess_table.seat - 0.04, TZ + sz1);

@@ -38,24 +38,3 @@ export function keyed(keys: [number, ...string[]][], hour: number): number[] {
   const s = t * t * (3 - 2 * t);
   return a.slice(1).map((c, k) => lerpHex(c as string, b[k + 1] as string, s));
 }
-
-// iso helpers for shells
-export const HW = 32;
-export const HH = 16;
-export const P = (x: number, y: number): [number, number] => [(x - y) * HW, (x + y) * HH];
-
-// Visit the floor's outer south and east edges (the ones facing the camera):
-// `a → b` runs along the edge in screen order.
-export function outerEdges(
-  floorAt: (x: number, y: number) => boolean,
-  width: number,
-  height: number,
-  visit: (a: [number, number], b: [number, number], side: "s" | "e") => void,
-) {
-  for (let y = 0; y < height; y++)
-    for (let x = 0; x < width; x++) {
-      if (!floorAt(x, y)) continue;
-      if (!floorAt(x, y + 1)) visit(P(x, y + 1), P(x + 1, y + 1), "s");
-      if (!floorAt(x + 1, y)) visit(P(x + 1, y + 1), P(x + 1, y), "e");
-    }
-}

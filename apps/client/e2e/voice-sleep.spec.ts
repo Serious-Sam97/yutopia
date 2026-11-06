@@ -79,7 +79,7 @@ test("alone and muted, the voice line sleeps (letting go of the mic); the mic wa
   const browser = await launch();
   try {
     const ana = await open(browser, ANA);
-    await goFar(ana, await ana.evaluate(() => (window as any).__yutopia.meTile()));
+    await goFar(ana, await ana.evaluate(() => (window as any).__yutopia.meAt()));
     await expect.poll(() => asleep(ana), { timeout: SLEEP + 10_000 }).toBe(true);
     expect(await ana.evaluate(() => (window as any).__yutopia.media.room)).toBeNull();
     expect((await hud(ana)).offline).toBe(false);
@@ -135,7 +135,7 @@ test("proximity voice still works: walking up to someone wakes both lines, and y
   try {
     const ana = await open(browser, ANA);
     const bia = await open(browser, BIA);
-    const anaAt = await ana.evaluate(() => (window as any).__yutopia.meTile());
+    const anaAt = await ana.evaluate(() => (window as any).__yutopia.meAt());
     await goFar(bia, anaAt);
     // both alone: both asleep
     await expect.poll(() => asleep(ana), { timeout: SLEEP + 12_000 }).toBe(true);
@@ -183,7 +183,7 @@ test("a phone call between two sleeping lines works, and keeps them awake while 
   try {
     const ana = await open(browser, ANA);
     const bia = await open(browser, BIA);
-    const anaAt = await ana.evaluate(() => (window as any).__yutopia.meTile());
+    const anaAt = await ana.evaluate(() => (window as any).__yutopia.meAt());
     await goFar(bia, anaAt);
     await expect.poll(() => asleep(ana), { timeout: SLEEP + 12_000 }).toBe(true);
     await expect.poll(() => asleep(bia), { timeout: SLEEP + 12_000 }).toBe(true);

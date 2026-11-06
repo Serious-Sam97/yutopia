@@ -175,7 +175,7 @@ test.describe("drawn merged", () => {
       await page.evaluate((p) => (window as any).__yutopia.teleport(p), at);
       await page.waitForFunction(
         (p) => {
-          const t = (window as any).__yutopia.meTile();
+          const t = (window as any).__yutopia.meAt();
           return Math.hypot(t.x - p.x, t.y - p.y) < 2 && (window as any).__yutopia.level === p.level;
         },
         at,

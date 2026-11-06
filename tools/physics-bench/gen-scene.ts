@@ -1,7 +1,7 @@
 // The real Grounds as an engine-neutral scene: the land's heights (1 m apart) and every tile you
 // can't walk as a box (merged along rows), 2.5 m over the ground there. Same file for both engines.
 import { writeFileSync } from "node:fs";
-import { GROUNDS, heightAt, walkableTile } from "../../packages/shared/src/grounds.ts";
+import { GROUNDS, heightAt, walkableCell } from "../../packages/shared/src/grounds.ts";
 
 function scene(name: string, x0: number, z0: number, w: number, d: number) {
   const t0 = performance.now();
@@ -19,7 +19,7 @@ function scene(name: string, x0: number, z0: number, w: number, d: number) {
       run = -1;
     };
     for (let ix = 0; ix < w; ix++) {
-      const blocked = !walkableTile(x0 + ix, z0 + iz);
+      const blocked = !walkableCell(x0 + ix, z0 + iz);
       const g = heightAt(x0 + ix + 0.5, z0 + iz + 0.5);
       if (!blocked) {
         flush(ix);
@@ -40,7 +40,7 @@ function scene(name: string, x0: number, z0: number, w: number, d: number) {
   const spawns: number[] = [];
   for (let iz = 8; iz < d - 8; iz += 9)
     for (let ix = 8; ix < w - 8; ix += 9)
-      if (walkableTile(x0 + ix, z0 + iz))
+      if (walkableCell(x0 + ix, z0 + iz))
         spawns.push(x0 + ix + 0.5, z0 + iz + 0.5, heightAt(x0 + ix + 0.5, z0 + iz + 0.5));
   const out = { name, x0, z0, w, d, heights: Array.from(heights), boxes, spawns };
   writeFileSync(new URL(`./${name}.json`, import.meta.url), JSON.stringify(out));

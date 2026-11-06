@@ -24,7 +24,7 @@ async function look(page: Page, x: number, y: number) {
   await holdCamera(page, { at: { x, y }, yaw: -Math.PI / 2, dist: 9, pitch: 1.0 });
   await page.waitForTimeout(250);
 }
-async function clickTile(page: Page, x: number, y: number) {
+async function clickFloor(page: Page, x: number, y: number) {
   await look(page, x + 0.5, y + 0.5);
   const p = await screen(page, x + 0.5, y + 0.5);
   await page.mouse.move(p.x, p.y);
@@ -87,7 +87,7 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   await page.evaluate(() => (window as any).__yutopia.teleport({ x: 14.5, y: 9.5 }));
   await page.waitForFunction(
     () => {
-      const t = (window as any).__yutopia.meTile();
+      const t = (window as any).__yutopia.meAt();
       return Math.hypot(t.x - 14.5, t.y - 9.5) < 1;
     },
     null,
@@ -131,7 +131,7 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   await page.getByRole("button", { name: "Floors", exact: true }).click();
   await page.getByRole("button", { name: "Tile", exact: true }).click();
   await page.getByRole("button", { name: "Fill room", exact: true }).click();
-  await clickTile(page, 9, 4);
+  await clickFloor(page, 9, 4);
   await expect.poll(() => tile(page, 11, 5)).toBe("_");
   expect(await tile(page, 8, 3)).toBe("_");
   expect(await tile(page, 13, 4)).toBe(".");
@@ -152,11 +152,11 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   await expect(page.getByRole("button", { name: "Plant", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Desk", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Plant", exact: true }).click();
-  await clickTile(page, 15, 10);
+  await clickFloor(page, 15, 10);
   await expect.poll(async () => (await kinds(page, "plant")).length).toBe(1);
-  await clickTile(page, 15, 10); // pick it up
+  await clickFloor(page, 15, 10); // pick it up
   await page.keyboard.press("c"); // a copy of it on the pointer (the original goes back)
-  await clickTile(page, 17, 10);
+  await clickFloor(page, 17, 10);
   await expect.poll(async () => (await kinds(page, "plant")).length).toBe(2);
   const plants = await kinds(page, "plant");
   expect(plants.map((p) => `${p.x},${p.y}`).sort()).toEqual(["15,10", "17,10"]);
@@ -166,7 +166,7 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   // A chair, then Bia dragged onto it from the Desks panel
   await page.getByPlaceholder(/Search furniture/).fill("chair");
   await page.getByRole("button", { name: "Chair", exact: true }).click();
-  await clickTile(page, 19, 10);
+  await clickFloor(page, 19, 10);
   await expect.poll(async () => (await kinds(page, "chair")).length).toBe(1);
   await page.getByRole("tab", { name: /Desks/ }).click();
   await look(page, 19.5, 10.5);
@@ -205,7 +205,7 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   await page.getByRole("button", { name: "Go there" }).click();
   await page.waitForFunction(
     () => {
-      const t = (window as any).__yutopia.meTile();
+      const t = (window as any).__yutopia.meAt();
       return t.x >= 21 && t.x <= 26 && t.y >= 3 && t.y <= 7;
     },
     null,

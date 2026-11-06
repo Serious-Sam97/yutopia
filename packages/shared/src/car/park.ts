@@ -6,7 +6,7 @@ import { CAR_BODY, carKindOf } from "./body.ts";
 // the nose to −x, each turn a quarter clockwise seen from above), placed
 // exactly by props.dx / dz. Driven and left anywhere, props.a holds its exact
 // heading and props.hy its height; x, y and rot stay the nearest whole tile and
-// quarter turn (the iso view draws it so).
+// quarter turn (its place on the grid).
 
 export interface ParkedObj {
   x: number;

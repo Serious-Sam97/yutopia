@@ -1,6 +1,5 @@
 import { TV_SCREEN } from "@yutopia/shared/games";
 import { GLASS } from "@yutopia/shared/media";
-import { artM as iso } from "@yutopia/shared/units";
 import { ball, box, cushion, cyl, type Look, lathe, type Model, ring, rod, tube } from "./kit";
 import { P, shade } from "./palette";
 
@@ -342,14 +341,14 @@ export function consolePs1Slim(m: Model, o: Look) {
   );
   m.add(cyl(0.01, 0.01, 0.006, 10), 0x7dff7a, { at: [0.71, 0.0944 - 0.006, 0.67], glow: true });
   if (o.look === 1) {
-    const l = { x0: 0.29, x1: 0.65, y: 0.336, z0: 5.8, z1: 16.8 };
-    m.add(box([0.38, iso(l.z1) - iso(l.z0) + 0.04, 0.02], 0.006, 2), 0xd8d4cc, {
-      at: [(l.x0 + l.x1) / 2, (iso(l.z0) + iso(l.z1)) / 2, l.y - 0.012 - BACK],
+    const l = { x0: 0.29, x1: 0.65, y: 0.336, z0: 0.148, z1: 0.4287 };
+    m.add(box([0.38, l.z1 - l.z0 + 0.04, 0.02], 0.006, 2), 0xd8d4cc, {
+      at: [(l.x0 + l.x1) / 2, (l.z0 + l.z1) / 2, l.y - 0.012 - BACK],
     });
-    m.add(box([l.x1 - l.x0, iso(l.z1) - iso(l.z0), 0.003]), P.glass, {
-      at: [(l.x0 + l.x1) / 2, (iso(l.z0) + iso(l.z1)) / 2, l.y - BACK - 0.0015],
+    m.add(box([l.x1 - l.x0, l.z1 - l.z0, 0.003]), P.glass, {
+      at: [(l.x0 + l.x1) / 2, (l.z0 + l.z1) / 2, l.y - BACK - 0.0015],
     });
-    m.add(box([0.08, iso(l.z0), 0.03], 0.006), 0xd8d4cc, { at: [0.47, iso(l.z0) / 2 + 0.02, 0.33] });
+    m.add(box([0.08, l.z0, 0.03], 0.006), 0xd8d4cc, { at: [0.47, l.z0 / 2 + 0.02, 0.33] });
   }
 }
 

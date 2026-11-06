@@ -451,18 +451,11 @@ export class LiftCar {
   readonly spill: SpotLight;
   private mats: LiftMats;
 
-  /** `cut`: the iso view's cut-away — the back and the sides low, no ceiling
-   *  (the iso camera looks into the car from behind it). */
-  constructor(
-    floors: string[] = ["4", "3", "2", "1", "G"],
-    mats = liftMats(),
-    opts: { cut?: boolean; lights?: boolean } = {},
-  ) {
+  constructor(floors: string[] = ["4", "3", "2", "1", "G"], mats = liftMats(), opts: { lights?: boolean } = {}) {
     const m = mats;
     this.mats = mats;
-    const cut = !!opts.cut;
     const lights = opts.lights !== false;
-    const WH = cut ? 0.35 : CAR_H; // the walls' height
+    const WH = CAR_H; // the walls' height
     // the inner faces: well clear of the shaft's walls (the map's, WALL_T thick
     // with their skirting, and the posts at the corners), or they show through
     const i0 = 0.18;
@@ -492,11 +485,9 @@ export class LiftCar {
     panels(i0, -1);
     panels(i1, 1);
     this.root.add(box(w, WH, 0.02, m.steel, 1, WH / 2, back + 0.01));
-    if (!cut) {
-      const mirror = box(w - 0.3, CAR_H - 0.95, 0.012, m.mirror, 1, 0.95 + (CAR_H - 0.95) / 2 - 0.08, back - 0.006);
-      mirror.castShadow = false;
-      this.root.add(mirror);
-    }
+    const mirror = box(w - 0.3, CAR_H - 0.95, 0.012, m.mirror, 1, 0.95 + (CAR_H - 0.95) / 2 - 0.08, back - 0.006);
+    mirror.castShadow = false;
+    this.root.add(mirror);
     this.root.add(box(w, 0.12, 0.03, m.darkSteel, 1, 0.06, back - 0.015));
     // the handrail: walnut, round, on the back and both sides, on brackets
     const rail = (len: number, x: number, z: number, along: "x" | "z") => {
@@ -519,13 +510,11 @@ export class LiftCar {
     ])
       this.root.add(box(0.03, 0.03, 0.03, m.steel, x, 0.92, z));
     // the ceiling: a steel frame round a backlit panel, and the car's light
-    if (!cut) {
-      this.root.add(box(w, 0.04, back - front, m.darkSteel, 1, CAR_H + 0.02, (front + back) / 2));
-      const glow = new Mesh(new PlaneGeometry(w - 0.4, back - front - 0.4), m.ceiling);
-      glow.rotation.x = Math.PI / 2;
-      glow.position.set(1, CAR_H - 0.002, (front + back) / 2);
-      this.root.add(glow);
-    }
+    this.root.add(box(w, 0.04, back - front, m.darkSteel, 1, CAR_H + 0.02, (front + back) / 2));
+    const glow = new Mesh(new PlaneGeometry(w - 0.4, back - front - 0.4), m.ceiling);
+    glow.rotation.x = Math.PI / 2;
+    glow.position.set(1, CAR_H - 0.002, (front + back) / 2);
+    this.root.add(glow);
     // (the game leaves them out: every light costs every surface in the scene;
     // the backlit ceiling and the room's light map carry it there)
     this.light = new PointLight("#fff1dc", lights ? 2.3 : 0, 4.2, 1.6);
@@ -605,7 +594,7 @@ export class LiftCar {
   }
 }
 
-// (the motion's maths is shared with the iso view and the server: shared lift.ts)
+// (the motion's maths is shared with the server: shared lift.ts)
 export { doorEase, rideAt } from "@yutopia/shared";
 
 // ── in the game: every stop on the floors drawn ─────────────────────────────

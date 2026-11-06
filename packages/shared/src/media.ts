@@ -261,15 +261,6 @@ export function glassCorners(o: WorldObjectDef): {
   return { tl: [x + a[0], y + a[1]], tr: [x + b[0], y + b[1]], zTop: g.z1 + up, zBot: g.z0 + up };
 }
 
-// Whether the glass faces the iso camera (rot 0 / 3: wall displays on the
-// faces it sees too).
-export function glassFacing(o: WorldObjectDef): boolean {
-  const g = GLASS[o.kind];
-  if (!g) return false;
-  const r = rotOf(o) & 3;
-  return r === 0 || r === 3;
-}
-
 // Where its sound comes from: in front of the glass, on the floor.
 export function displaySpot(o: WorldObjectDef): { x: number; y: number } {
   const g = GLASS[o.kind];

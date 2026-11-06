@@ -55,7 +55,7 @@ export const SHAPES = {
 export const SEATS: Record<string, SeatSpec> = {};
 export const SURFACES: Record<string, number> = {};
 export const STANDS: Record<string, number> = {};
-// (quarter tiles along the wall, its lowest and highest iso px: m × 39.19)
+// (quarter tiles along the wall, its lowest and highest, m up)
 export const HANGS: Record<string, [number, number, number]> = {
   cuckoo_clock: [2, 1.0462, 2.118],
   world_clocks: [10, 1.5821, 2.0415],

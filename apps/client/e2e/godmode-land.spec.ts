@@ -31,7 +31,7 @@ const under = (page: Page, px: number, py: number) =>
       const t = (window as any).__yutopia.tp;
       const r = t.renderer.domElement.getBoundingClientRect();
       const p = t.landUnder(r.left + a, r.top + b);
-      return p ? { ...p, surface: (window as any).__yutopia.G.surfaceTileAt(Math.floor(p.x), Math.floor(p.z)) } : null;
+      return p ? { ...p, surface: (window as any).__yutopia.G.surfaceCellAt(Math.floor(p.x), Math.floor(p.z)) } : null;
     },
     [px, py],
   );
@@ -116,7 +116,7 @@ test("God mode's brushes: the land raised under a held brush and undone; a path 
   for (const p of [from, to])
     expect(
       await page.evaluate(
-        ([x, z]) => (window as any).__yutopia.G.surfaceTileAt(Math.floor(x), Math.floor(z)),
+        ([x, z]) => (window as any).__yutopia.G.surfaceCellAt(Math.floor(x), Math.floor(z)),
         [p?.x, p?.z],
       ),
     ).toBe("path");

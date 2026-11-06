@@ -27,11 +27,11 @@ import { type Piece, type Shader, yuLit } from "../look/yulit";
 import { skyLeft } from "./sky-left";
 import { kindOf, layerShader, type WxKind } from "./wx3d";
 
-// The iso view's light, in 3D: the same baked light map (lamps and windows
+// The light, in 3D: a baked light map (lamps and windows
 // ray-marched across the tiles, walls and shut doors blocking them) plus the
 // hour's ambient, as one plan-space texture that every lit surface multiplies
-// by — sampled a little in front of the face it's on, as the iso view lights a
-// wall by the floor in front of it. People take the same tint where they stand.
+// by — sampled a little in front of the face it's on, so a wall is lit by the
+// floor in front of it. People take the same tint where they stand.
 // One per floor drawn: mine at the origin, each floor below with its own (its
 // `offset`: where its corner is in the scene), so every floor takes the hour.
 //

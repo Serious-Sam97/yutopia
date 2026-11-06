@@ -2581,7 +2581,7 @@ function makeChunk(cx: number, cz: number): GroundsChunk {
           if (v > hi) hi = v;
         }
       // (a bridge's deck: walkable whatever's under it; the water: its ice's flat, its shelf's waded —
-      // `walkableTile` says which, by the weather: plan 66)
+      // `walkableCell` says which, by the weather: plan 66)
       const flat = deckAt(x, z) !== null || waterAt(x, z) !== null;
       walk[j * CHUNK + i] = !blocked.has(j * CHUNK + i) && (flat || hi - lo < 0.9) && walkable(x, z) ? 1 : 0;
     }
@@ -2635,7 +2635,7 @@ function walkable(x: number, z: number): boolean {
  *  the world's edge — what's really there. Not the tiles people walk round (a tree's, a
  *  lamp's, a steep one's: a car hits the trunk, climbs what it can). Buildings are boxes of
  *  their own. */
-export function carBlockedTile(tx: number, tz: number): boolean {
+export function carBlockedCell(tx: number, tz: number): boolean {
   // (and the Kart Park, its gate too: the karts are the park's, the cars stay out)
   return (
     !walkable(tx + 0.5, tz + 0.5) ||
@@ -2802,12 +2802,12 @@ export function iceAt(x: number, z: number, ice = UNDER.ice): { top: number; thi
   return { top: w.level + ICE_TOP, thin: ice < 0.3 || (ice < 0.95 && fromEdge < 2) };
 }
 
-export function walkableTile(tx: number, tz: number): boolean {
+export function walkableCell(tx: number, tz: number): boolean {
   const cx = Math.floor(tx / CHUNK);
   const cz = Math.floor(tz / CHUNK);
   if (groundsChunk(cx, cz).walk[(tz - cz * CHUNK) * CHUNK + (tx - cx * CHUNK)] !== 1) return false;
   // (open water's walked only on its shelf: the pond's, the river's — W6, plan 66 S1, S4)
-  if (surfaceTileAt(tx, tz) !== "ice") return true;
+  if (surfaceCellAt(tx, tz) !== "ice") return true;
   // (its ice where it's iced over; else its shelf, waded)
   return !!iceAt(tx + 0.5, tz + 0.5) || (waterAt(tx + 0.5, tz + 0.5)?.depth ?? 0) < SHELF;
 }
@@ -2825,10 +2825,10 @@ export function outdoorsAt(
   top(tx: number, ty: number): number;
 } {
   return {
-    walkable: (tx, ty) => walkableTile(tx + ox, ty + oy),
+    walkable: (tx, ty) => walkableCell(tx + ox, ty + oy),
     top: (tx, ty) => topTile(tx + ox, ty + oy),
     height: (x, y) => heightAt(x + ox, y + oy),
-    speed: (x, y) => speedOn(surfaceTileAt(Math.floor(x + ox), Math.floor(y + oy))),
+    speed: (x, y) => speedOn(surfaceCellAt(Math.floor(x + ox), Math.floor(y + oy))),
     edge: (dir, x, y) => wallEdgeAt(dir, x + ox, y + oy),
   };
 }
@@ -2849,7 +2849,7 @@ const surfaces = new Map<number, Uint8Array>();
 /** The surfaces a painted tile can be (its byte: the index + 1; 0 as generated). */
 export const SURFACES: Surface[] = ["snow", "deep", "path", "asphalt", "walk", "ice", "floor", "rock", "sand"];
 /** What the tile (tx, tz) (building coords) is. */
-export function surfaceTileAt(tx: number, tz: number): Surface {
+export function surfaceCellAt(tx: number, tz: number): Surface {
   const cx = Math.floor(tx / CHUNK);
   const cz = Math.floor(tz / CHUNK);
   const k = chunkKey(cx, cz);

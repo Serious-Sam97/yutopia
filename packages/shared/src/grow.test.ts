@@ -9,7 +9,7 @@ import {
   terrainAt,
   treeDensity,
   WAYS,
-  walkableTile,
+  walkableCell,
   waterAt,
 } from "./grounds.ts";
 import { type GroundsEdits, type GrowDef, NO_EDITS } from "./grounds-edits.ts";
@@ -34,11 +34,11 @@ const MID = { x: 32, z: 420 };
 test("none grown: the land's as it was; a piece laid is land you walk into, and taken away again", () => {
   applyEdits(NO_EDITS);
   const regions = landRegions().length;
-  const was = { walk: walkableTile(MID.x, MID.z), h: terrainAt(MID.x, MID.z), chunk: chunkHash(1, 13) };
+  const was = { walk: walkableCell(MID.x, MID.z), h: terrainAt(MID.x, MID.z), chunk: chunkHash(1, 13) };
   assert.equal(was.walk, false, "past the edge: scenery");
   applyEdits(edits(1, piece("forest")));
   assert.equal(landRegions().length, regions + 1);
-  assert.ok(walkableTile(MID.x, MID.z) || treeDensity(MID.x + 0.5, MID.z + 0.5) > 0.3, "walked (a tree's tile aside)");
+  assert.ok(walkableCell(MID.x, MID.z) || treeDensity(MID.x + 0.5, MID.z + 0.5) > 0.3, "walked (a tree's tile aside)");
   // (no ridge: its land down to the town's, not 40 m up)
   assert.ok(Math.abs(terrainAt(MID.x, MID.z) - terrainAt(32, 150)) < 20, `${terrainAt(MID.x, MID.z)}`);
   assert.ok(treeDensity(MID.x, MID.z) > 0.5 || treeDensity(MID.x + 40, MID.z) > 0.5, "a forest");
@@ -49,7 +49,7 @@ test("none grown: the land's as it was; a piece laid is land you walk into, and 
   applyEdits(edits(2, piece("forest")));
   applyEdits(NO_EDITS);
   assert.equal(landRegions().length, regions);
-  assert.equal(walkableTile(MID.x, MID.z), false);
+  assert.equal(walkableCell(MID.x, MID.z), false);
   assert.equal(terrainAt(MID.x, MID.z), was.h);
   assert.equal(chunkHash(1, 13), was.chunk, "its chunks back as they were");
 });
@@ -131,7 +131,7 @@ test("the rules: on the grid, joined to the land, not over another, sized; a roa
   applyEdits({ ...edits(8, piece("meadow")), ways: road });
   assert.ok(WAYS.some((w) => w.key === "god-south"));
   assert.equal(groundSurfaceAt(36, 400), "asphalt");
-  assert.ok(walkableTile(36, 400));
+  assert.ok(walkableCell(36, 400));
   applyEdits(NO_EDITS);
 });
 

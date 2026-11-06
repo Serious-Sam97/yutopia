@@ -13,7 +13,6 @@ import {
   tvVolume,
   ytThumb,
 } from "@yutopia/shared/media";
-import { artPx } from "@yutopia/shared/units";
 import { lang } from "@/lib/i18n";
 import { prefs } from "@/lib/prefs";
 import type { WorldController } from "../controller";
@@ -41,7 +40,7 @@ export const MEDIA_CHUNK = "yutopia-media";
 //    loudest few, each at its own volume), a stream that fails is tried again;
 //  · Watch makes the card big (YouTube) or shows the Jellyfin stream big.
 
-const S = 36; // px along a face per tile (the glass sizes in GLASS)
+const S = 36; // the glass canvas's px a metre (the glass sizes in GLASS)
 const PROJECTOR_REACH = 7;
 const CARD_GRACE_MS = 2500;
 const MAX_JF_STREAMS = 3; // Jellyfin TVs streaming to me at once (the loudest)
@@ -184,9 +183,9 @@ export class MediaRoom {
 
   private make(def: WorldObjectDef): Glassed {
     const gl = GLASS[def.kind];
-    // the canvas has the glass's own shape (1 tile ≈ 36 px along a face)
+    // the canvas has the glass's own shape (S px a metre, along it and up it)
     const gw = Math.max(0.2, gl.x1 - gl.x0) * S;
-    const gh = Math.max(4, artPx(gl.z1 - gl.z0)); // (px, as S: the old art's)
+    const gh = Math.max(4, (gl.z1 - gl.z0) * S);
     const W = 320;
     const H = Math.max(60, Math.round((W * gh) / gw));
     const canvas = document.createElement("canvas");

@@ -94,7 +94,7 @@ async function walk(page: Page, to: { x: number; y: number }, ms = 30_000) {
   if (!ok) return false;
   await page.waitForFunction(
     (p) => {
-      const t = (window as any).__yutopia.meTile();
+      const t = (window as any).__yutopia.meAt();
       return Math.hypot(t.x - p.x, t.y - p.y) < 1.3;
     },
     to,
@@ -148,7 +148,7 @@ test("media: a YouTube video on a wall TV — left playing, found at the right s
     await stubYouTube(bia);
     await enter(bia, tb, s);
     // far away (she arrives at the arrival point, well out of earshot): no card
-    const me0 = await bia.evaluate(() => (window as any).__yutopia.meTile());
+    const me0 = await bia.evaluate(() => (window as any).__yutopia.meAt());
     expect(Math.hypot(me0.x - front.x, me0.y - front.y)).toBeGreaterThan(8);
     await bia.waitForTimeout(3000);
     expect((await status(bia))?.card ?? false).toBe(false);

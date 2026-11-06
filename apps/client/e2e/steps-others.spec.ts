@@ -35,7 +35,7 @@ test("someone walking past: their steps heard, near, from their side, on their f
   // Cai walks a few metres from beside Bia
   const to = await cai.evaluate(() => {
     const w = (window as any).__yutopia;
-    const me = w.meTile();
+    const me = w.meAt();
     for (let r = 6; r >= 4; r--)
       for (let a = 0; a < 16; a++) {
         const x = Math.floor(me.x + r * Math.cos((a * Math.PI) / 8));

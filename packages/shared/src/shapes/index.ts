@@ -104,7 +104,7 @@ export function turnPoint(o: { x: number; y: number; rot: number }, w: number, h
 
 // ── the building: walls, their openings, the floors' slabs ──
 /** A wall on an edge (map.ts: `ch` its char) with what's cut into it (openings.ts `wallCuts`:
- *  z0..z1 iso px). A door's hole is open; a window's holds its glass, which stops a body as the
+ *  z0..z1 m up). A door's hole is open; a window's holds its glass, which stops a body as the
  *  wall does — so it's the wall's sill, head and pane, the pane its own part (light and sight
  *  go through it: phase 5). */
 export function wallSolids(
@@ -140,7 +140,8 @@ export const slabSolid = (x0: number, z0: number, x1: number, z1: number, elev: 
 // y at the lowest they hang: hang.ts lifts them); things on a surface in a 1 × 1 frame round the
 // spot they're on (tops.ts), y from that surface.
 const flat = (u0: number, v0: number, u1: number, v1: number, y1: number) => one(box(u0, v0, u1, v1, 0, y1));
-const DOOR = "the hole's frame and leaf (art/items/walls.ts); walking through it is the wall's cut (wallSolids)";
+const DOOR =
+  "the hole's frame and leaf (the client's furn/openings.ts); walking through it is the wall's cut (wallSolids)";
 const WINDOW = "set in a wall: the wall's sill and head and the pane between (wallSolids)";
 
 export const SHAPES: Record<ObjectKind, KindShape> = {
@@ -332,7 +333,7 @@ export const SHAPES: Record<ObjectKind, KindShape> = {
     box(0.32, 0.86, 0.68, 0.98, 0, 0.01),
   ),
   toy_box: flat(0.14, 0.24, 0.86, 0.76, 0.5),
-  // parkour (art/items/parkour.ts): a rail one thin box to its top (ground along: physics/flow.ts
+  // parkour (the client's furn/decor.ts): a rail one thin box to its top (ground along: physics/flow.ts
   // takes a rail ≤ 0.13 m half thick), a wall a slab, a pole a rod
   // the office staples (plan 67 phase 8b, world/furn/staples.ts: from the models)
   standing_desk: flat(0.05, 0.07, 1.95, 0.93, 1.05),

@@ -50,9 +50,9 @@ import { TvStream } from "./tv";
 const AUTOSAVE_MS = 45_000;
 const MIN_HOLD_MS = 80;
 // The slim disc console's flip-up screen (its variant 1): where its glass is
-// (rot-0 local tiles on its front face, height in m; art/items/games.ts)
+// (rot-0 local tiles on its front face, height in m; its model: furn/screens.ts)
 const LCD = { x0: 0.29, x1: 0.65, y: 0.336, z0: 0.148, z1: 0.4287 };
-// (the art's seed for an id: kit.ts's seedOf, here so the item art's chunk isn't pulled in)
+// (a thing's seed for an id: art/seed.ts's seedOf, as furn/native.ts idHash; its own copy here)
 function seedOf(id: string): number {
   let h = 2166136261;
   for (let i = 0; i < id.length; i++) {
@@ -73,7 +73,7 @@ interface LcdView {
 const SKIP_KEYS = new Set(["Escape", "Tab"]);
 // Where a console's power LED is (rot-0 local tiles, height in m) and its
 // colour: on the front of the cartridge consoles, on the top of the disc ones
-// (where their drawings put it, art/items/games.ts).
+// (where their models put it, furn/screens.ts).
 const LED: Record<string, { at: [number, number]; z: number; color: number }> = {
   console_ps1: { at: [0.7, 0.545], z: 0.1148, color: 0x7dff7a },
   console_ps1_slim: { at: [0.71, 0.67], z: 0.0944, color: 0x7dff7a },

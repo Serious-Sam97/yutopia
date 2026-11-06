@@ -80,11 +80,11 @@ test("the phone: out with P, the grid by keyboard, walking with it, others see i
   await expect.poll(async () => (await ph(page)).stack.at(-1).app).toBe("home");
 
   // walking with it out: WASD still moves me
-  const before = (await world(page, (w) => w.meTile())) as { x: number; y: number };
+  const before = (await world(page, (w) => w.meAt())) as { x: number; y: number };
   await page.keyboard.down("s");
   await page.waitForTimeout(600);
   await page.keyboard.up("s");
-  const after = (await world(page, (w) => w.meTile())) as { x: number; y: number };
+  const after = (await world(page, (w) => w.meAt())) as { x: number; y: number };
   expect(Math.hypot(after.x - before.x, after.y - before.y)).toBeGreaterThan(0.3);
   expect((await ph(page)).open).toBe(true);
 

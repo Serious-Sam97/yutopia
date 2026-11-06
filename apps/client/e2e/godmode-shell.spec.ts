@@ -67,7 +67,7 @@ test("God mode's shell: in and out, the camera, the draft, walk it, publish, rol
   await page.evaluate((p) => (window as any).__yutopia.teleport(p), { x: AT.x, y: AT.z, level: 0 });
   await page.waitForTimeout(4000);
   const was = await y(page, (y) => y.room.state.groundsRev);
-  const standing = await y(page, (y) => y.meTile());
+  const standing = await y(page, (y) => y.meAt());
   const low = await camY(page);
 
   // in: O
@@ -104,7 +104,7 @@ test("God mode's shell: in and out, the camera, the draft, walk it, publish, rol
   );
   if (GPU) expect(panW, "panning at 80 m").toBeLessThan(50);
   // (the body stayed where it stood)
-  const still = await y(page, (y) => y.meTile());
+  const still = await y(page, (y) => y.meAt());
   expect(Math.hypot(still.x - standing.x, still.y - standing.y)).toBeLessThan(0.5);
   // the pointer's readout
   await expect.poll(() => god(page).then((g) => !!g.pointer), { timeout: 5000 }).toBe(true);
@@ -135,10 +135,10 @@ test("God mode's shell: in and out, the camera, the draft, walk it, publish, rol
   const id = (await god(page)).draft.id;
   const saved = (await (await call(tok, "GET", `/api/admin/grounds/drafts/${id}`)).json()).draft;
   expect([saved?.name, !!saved?.data.paint?.[`${TILE.cx},${TILE.cz}`]]).toEqual([name, true]);
-  expect(await y(page, (y) => y.G.surfaceTileAt(-150, -110))).toBe("path");
+  expect(await y(page, (y) => y.G.surfaceCellAt(-150, -110))).toBe("path");
   await page.keyboard.press("Control+z");
   await expect.poll(() => god(page).then((g) => g.changes)).toBe(0);
-  expect(await y(page, (y) => y.G.surfaceTileAt(-150, -110))).not.toBe("path");
+  expect(await y(page, (y) => y.G.surfaceCellAt(-150, -110))).not.toBe("path");
   await page.keyboard.press("Control+Shift+z");
   await expect.poll(() => god(page).then((g) => g.changes)).toBe(1);
 
@@ -154,7 +154,7 @@ test("God mode's shell: in and out, the camera, the draft, walk it, publish, rol
   await expect
     .poll(
       async () => {
-        const me = await y(page, (y) => y.meTile());
+        const me = await y(page, (y) => y.meAt());
         return Math.hypot(me.x - look.x, me.y - look.z) < 3;
       },
       { timeout: 10_000 },
@@ -198,5 +198,5 @@ test("God mode's shell: in and out, the camera, the draft, walk it, publish, rol
   await expect.poll(() => god(page).then((g) => g.on)).toBe(false);
   await expect.poll(() => busy(page), { timeout: 5000 }).toBe("");
   await expect.poll(() => camY(page), { timeout: 5000 }).toBeLessThan(low + 15);
-  await expect.poll(() => y(page, (y) => y.G.surfaceTileAt(-150, -110))).not.toBe("path");
+  await expect.poll(() => y(page, (y) => y.G.surfaceCellAt(-150, -110))).not.toBe("path");
 });

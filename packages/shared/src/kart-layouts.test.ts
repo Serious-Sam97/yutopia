@@ -91,17 +91,17 @@ test("the layout raced: what's asphalt in the park follows it; what's walked rou
     [tx, tz],
     [Math.floor(eight.pts[150].x), Math.floor(eight.pts[150].z)],
   ])
-    walkBefore.set(`${x},${z}`, G.walkableTile(x, z));
-  assert.notEqual(G.surfaceTileAt(tx, tz), "asphalt", "snow while the Figure Eight's raced");
+    walkBefore.set(`${x},${z}`, G.walkableCell(x, z));
+  assert.notEqual(G.surfaceCellAt(tx, tz), "asphalt", "snow while the Figure Eight's raced");
   assert.equal(G.setParkLayout("oval", false), true);
   assert.equal(G.setParkLayout("oval", false), false, "the same: nothing to do");
   assert.deepEqual(P.kartLayoutNow(), { key: "oval", reverse: false });
   assert.equal(P.kartTrackNow(), oval);
-  assert.equal(G.surfaceTileAt(tx, tz), "asphalt", "the Oval's asphalt now");
+  assert.equal(G.surfaceCellAt(tx, tz), "asphalt", "the Oval's asphalt now");
   // the rest as it was
   for (const [k, w] of walkBefore) {
     const [x, z] = k.split(",").map(Number);
-    assert.equal(G.walkableTile(x, z), w, `walk at ${k}`);
+    assert.equal(G.walkableCell(x, z), w, `walk at ${k}`);
   }
   // no bridge on the Oval: where its ramps and span stood, and their guard strips, the land, walked
   // on (snow, but where the Oval's own road is)
@@ -112,17 +112,17 @@ test("the layout raced: what's asphalt in the park follows it; what's walked rou
     for (const [x, z] of sides(p)) {
       assert.equal(P.kartDeckAt(x, z), null, `no deck at ${p.s}`);
       assert.equal(G.heightAt(x, z), G.landAt(x, z), `the land's height at ${p.s}`);
-      assert.equal(G.walkableTile(Math.floor(x), Math.floor(z)), true, `walked at ${p.s}`);
+      assert.equal(G.walkableCell(Math.floor(x), Math.floor(z)), true, `walked at ${p.s}`);
       if (!P.kartOnCircuit(x, z, 0)) assert.notEqual(G.groundSurfaceAt(x, z), "asphalt", `snow at ${p.s}`);
     }
   G.setParkLayout("nope", false);
   assert.deepEqual(P.kartLayoutNow(), { key: "eight", reverse: false }, "a key not known: the Figure Eight");
-  assert.notEqual(G.surfaceTileAt(tx, tz), "asphalt");
+  assert.notEqual(G.surfaceCellAt(tx, tz), "asphalt");
   // (and back: the bridge with it, its span up and its strips not walked)
   const top = eight.pts[eight.cross.over];
   assert.ok(Math.abs(G.heightAt(top.x, top.z) - G.landAt(top.x, top.z) - P.BRIDGE_H) < 0.1, "the span's deck");
   const [sx, sz] = sides(top)[1];
-  assert.equal(G.walkableTile(Math.floor(sx), Math.floor(sz)), false, "its guard strip");
+  assert.equal(G.walkableCell(Math.floor(sx), Math.floor(sz)), false, "its guard strip");
 });
 
 test("the floodlights: off every layout's road, and every layout lit", () => {

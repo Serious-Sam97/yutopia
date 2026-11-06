@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ART_PX, entry, hangSize } from "@yutopia/shared";
+import { entry, hangSize } from "@yutopia/shared";
 import { type BufferGeometry, Euler, Matrix4, Vector3 } from "three";
 import { type LivePart, Model } from "../kit";
 import { liveAt } from "../liveparts";
@@ -93,7 +93,7 @@ test("seasons: every look on its footprint, on the floor or its wall, under the 
           // (on the wall's face, between the heights hang.ts has it at)
           const [, lo, hi] = hangSize(kind);
           if (b.z0 < 0.099) bad.push(`${what}: behind the wall's face`);
-          if (Math.abs(b.y0 - lo) * ART_PX > 1.5 || Math.abs(b.y1 - hi) * ART_PX > 1.5)
+          if (Math.abs(b.y0 - lo) > 0.038 || Math.abs(b.y1 - hi) > 0.038)
             bad.push(`${what}: hangs ${b.y0.toFixed(3)}–${b.y1.toFixed(3)} m, not ${lo}–${hi}`);
         } else if (kind === "paper_chains") {
           if (b.y0 < 2.4) bad.push(`${what}: under heads (${b.y0.toFixed(2)})`);

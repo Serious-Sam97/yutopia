@@ -166,7 +166,7 @@ export class Gps {
     if (phone.get().settings.shareLocation) this.shareAt = 0;
   }
 
-  // ── the guide in the world (the route on the ground, 3D or iso) ──────────
+  // ── the guide in the world (the route on the ground) ──────────
   private drawGuide() {
     const g = phone.get().gps;
     if (!g.route) {

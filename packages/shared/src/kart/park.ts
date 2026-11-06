@@ -862,9 +862,9 @@ export function crowdDraw(x: number, row: number): number {
 }
 /** A player sat on one of the park's seats (their `busy`: the room leaves their pose alone). */
 export const KART_SITTING = "ride:park";
-/** How far a sitter's hips rest over the height they're drawn at (the views' chair: 14 iso px). */
+/** How far a sitter's hips rest over the height they're drawn at (a chair's: the old art's 14 px). */
 export const SIT_HIP = 0.3572;
-/** The office's bench (catalog `bench`, art/items/seating.ts): its slats' top. */
+/** The office's bench (catalog `bench`, the client's furn/seating.ts): its slats' top. */
 export const BENCH_TOP = 0.296;
 export interface KartSeat {
   x: number;

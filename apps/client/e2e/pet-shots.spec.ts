@@ -237,7 +237,7 @@ test("the pet panel's mocks in the game: where it is, waiting in the office", as
     // into the War Room (Ana's office, in the mock)
     await send(page, "teleport", { to: { x: 41, y: 6 } });
     await page.waitForTimeout(3000);
-    const at = (await page.evaluate(() => (window as any).__yutopia.meTile())) as { x: number; y: number };
+    const at = (await page.evaluate(() => (window as any).__yutopia.meAt())) as { x: number; y: number };
     await holdCamera(page, { at, yaw: -Math.PI * 0.6, pitch: 0.55, dist: 7 });
     await page.waitForTimeout(2500);
     // the top bar: the room as hers

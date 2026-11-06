@@ -1,9 +1,8 @@
 import type { Building } from "@yutopia/shared/grounds";
 
-// How each building on the Grounds looks (docs/plan/33-the-look.md, phase 7): the choices both
-// views make the same — a shop's wall, its front, its awning; a townhouse's kind, colour and
-// shutters. Decided once from the building, its own seed (no drawing order in it), so 3D
-// (tp/grounds3d.ts) and iso (art/grounds-items.ts) agree. No three.js here: both chunks take it.
+// How each building on the Grounds looks (docs/plan/33-the-look.md, phase 7): a shop's wall, its
+// front, its awning; a townhouse's kind, colour and shutters. Decided once from the building, its
+// own seed (no drawing order in it), so tp/grounds3d.ts draws it the same every time. No three.js here.
 
 /** The same small generator as the Grounds' (shared groundsRng), by a seed. */
 function rngOf(seed: number) {

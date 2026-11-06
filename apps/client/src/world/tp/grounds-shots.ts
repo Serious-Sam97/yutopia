@@ -56,7 +56,7 @@ interface Shot {
   cam: V3;
   look: V3;
   fov?: number;
-  iso?: number; // orthographic: half the view's height in tiles
+  ortho?: number; // orthographic, from the south-east 30° down: half the view's height (m)
   radius?: number;
   people: Who[];
   snow?: number; // flakes
@@ -340,7 +340,7 @@ export function shots(): Record<string, Shot> {
       hour: "day",
       cam: [0, 0, 0],
       look: [-104, 0, 8],
-      iso: 28,
+      ortho: 28,
       people: [
         { x: -103, z: 13.2, to: [-130, 5], a: ANA, walk: 9 },
         { x: -66, z: 18.4, to: [-90, 15], a: DUDA, walk: 4 },
@@ -749,12 +749,12 @@ function kartShots(): Record<string, Shot> {
       snow: 60,
       karts: { karts: [], rack: true },
     },
-    // iso: the paddock, the gate, the car park and the circle; the billboard on the corner
+    // from above: the paddock, the gate, the car park and the circle; the billboard on the corner
     "kart-iso-paddock": {
       hour: "day",
       cam: [0, 0, 0],
       look: [KART_GATE.x - 6, 0, KART_GATE.z - 22],
-      iso: 30,
+      ortho: 30,
       people: [{ x: KART_GATE.x, z: KART_GATE.z - 8, to: [KART_GATE.x, KART_DESK.z], a: ANA }],
       snow: 0,
       karts: { karts: [], rack: true },
@@ -763,17 +763,17 @@ function kartShots(): Record<string, Shot> {
       hour: "day",
       cam: [0, 0, 0],
       look: [KART_SIGN.x - 6, 0, KART_SIGN.z + 4],
-      iso: 16,
+      ortho: 16,
       people: [],
       snow: 0,
       karts: { karts: [] },
     },
-    // iso: the start straight, the stands, the tower
+    // from above: the start straight, the stands, the tower
     "kart-iso": {
       hour: "day",
       cam: [0, 0, 0],
       look: [C0.x + 80, 0, C0.z + 48],
-      iso: 26,
+      ortho: 26,
       people: [{ x: C0.x + 90, z: C0.z + 66, to: [C0.x + 90, C0.z + 50], a: CAI }],
       snow: 0,
       karts: {
@@ -925,12 +925,12 @@ function lotShots(): Record<string, Shot> {
       people: [{ x: -22.2, z: 10, to: [-22.2, 30], a: ANA, walk: 4, light: true }],
       snow: 2500,
     },
-    // the iso angle
+    // from above, 30° down
     "lot-iso": {
       hour: "day",
       cam: [0, 0, 0],
       look: [-30, 0, 18],
-      iso: 34,
+      ortho: 34,
       people: [
         { x: -22.2, z: 12, to: [-22.2, 30], a: ANA, walk: 9 },
         { x: -11.6, z: 20, to: [-11.6, 40], a: CAI, walk: 4 },
@@ -1068,12 +1068,12 @@ function spotShots(): Record<string, Shot> {
       people: [{ x: -16.4, z: 14.8, to: [-13, 14.8], a: CAI }],
       snow: 600,
     },
-    // the iso angle
+    // from above, 30° down
     "spot-iso": {
       hour: "day",
       cam: [0, 0, 0],
       look: [-30, 0, 13],
-      iso: 15,
+      ortho: 15,
       boards: NAMES,
       cars: ownCars(),
       people: [
@@ -1631,7 +1631,7 @@ function carShots(lamp: { x: number; z: number }): Record<string, Shot> {
       hour: "day",
       cam: [0, 0, 0],
       look: [-40, 0, 16],
-      iso: 8,
+      ortho: 8,
       people: [{ x: -41.6, z: 11.2, to: [-39, 13], a: BIA, walk: 6 }],
       cars: [
         {
@@ -1820,7 +1820,7 @@ export async function runShot(
   const scene = new T3.Scene();
   scene.fog = new T3.FogExp2(
     P.fog,
-    (shot.iso !== undefined ? P.density * 0.12 : P.density * (shot.storm ? 1.7 : 1)) * (shot.haze ?? 1),
+    (shot.ortho !== undefined ? P.density * 0.12 : P.density * (shot.storm ? 1.7 : 1)) * (shot.haze ?? 1),
   );
   scene.background = new T3.Color(P.horizon);
   // the sky: a gradient dome (overcast: no sun disc; night: a faint glow low down)
@@ -1863,7 +1863,7 @@ export async function runShot(
   }
 
   // ── the Grounds round the shot ──
-  const ortho = shot.iso !== undefined;
+  const ortho = shot.ortho !== undefined;
   const tx = shot.look[0];
   const tz = shot.look[2];
   const mid = ortho ? { x: tx, z: tz } : { x: (shot.cam[0] * 2 + tx) / 3, z: (shot.cam[2] * 2 + tz) / 3 };
@@ -2157,9 +2157,9 @@ export async function runShot(
   // ── the camera ──
   let cam: THREE_NS.Camera;
   if (ortho) {
-    const k = shot.iso ?? 20;
+    const k = shot.ortho ?? 20;
     const o = new T3.OrthographicCamera((-k * W) / H, (k * W) / H, k, -k, 1, 900);
-    // the iso view's angle: from the south-east, 30° down
+    // from the south-east, 30° down
     const yaw = Math.PI * 0.25;
     const pitch = Math.PI / 6;
     const tgt = new T3.Vector3(tx, groundAt(tx, tz), tz);

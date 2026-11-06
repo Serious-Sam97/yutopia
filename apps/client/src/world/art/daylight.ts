@@ -76,11 +76,11 @@ function darkAt(h: number): number {
 // What's left of the sky's light outside at full dark, as a share of the night's
 // before it (lamps, beams, headlights and lit windows aren't the sky's: they stay):
 // the land and what's on it in 3D (linear — 1% on white snow is still plainly grey
-// on screen), the lot's ambient in the light map (both views), the land in iso.
-export const DARK_LEFT = { land3: 0.035, lot: 0.03, land2: 0.06 };
+// on screen), the lot's ambient in the light map.
+export const DARK_LEFT = { land3: 0.035, lot: 0.03 };
 // …and what eyes adjusted to it (eyes.ts, 0 … 1) put back on top: the nearest shapes come back,
 // grey (the lot's in 3D as a fill of its own: light3d.ts lmEyes, linear)
-export const EYES_LIFT = { land3: 0.085, lot: 0.06, land2: 0.1, lot3: 0.006 };
+export const EYES_LIFT = { land3: 0.085, lot: 0.06, lot3: 0.006 };
 /** The sky's light outside, by how dark it is: 1 → `left` (geometric, so it falls
  *  evenly, not all at the end). */
 export const darkK = (dark: number, left: number) => left ** dark;

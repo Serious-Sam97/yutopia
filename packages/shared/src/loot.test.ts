@@ -12,18 +12,18 @@ import {
   REFILL_MIN,
   rollLoot,
 } from "./dark/loot.ts";
-import { groundsRng, walkableTile } from "./grounds.ts";
+import { groundsRng, walkableCell } from "./grounds.ts";
 import { STACKS } from "./inventory.ts";
 
 test("every spot stands on walkable ground, ids unique, every place has some", () => {
   assert.equal(new Set(LOOT.map((s) => s.id)).size, LOOT.length);
-  for (const s of LOOT) assert.ok(walkableTile(Math.floor(s.x), Math.floor(s.z)), `${s.id} at ${s.x}, ${s.z}`);
+  for (const s of LOOT) assert.ok(walkableCell(Math.floor(s.x), Math.floor(s.z)), `${s.id} at ${s.x}, ${s.z}`);
   const places = new Set(LOOT.map((s) => s.place));
   for (const p of Object.keys(REFILL_MIN)) assert.ok(places.has(p as Place), p);
   // (the town's 14, Silver Lake's two cabins: docs/plan/69)
   assert.equal(LOOT.filter((s) => s.place === "house").length, 16);
   assert.ok(LOOT.filter((s) => s.place === "glovebox").length > 10);
-  assert.ok(walkableTile(Math.floor(LOCKER.x), Math.floor(LOCKER.z)), `the locker ${LOCKER.x}, ${LOCKER.z}`);
+  assert.ok(walkableCell(Math.floor(LOCKER.x), Math.floor(LOCKER.z)), `the locker ${LOCKER.x}, ${LOCKER.z}`);
 });
 
 test("the ammo budget holds: no more rounds or shells than the night has", () => {

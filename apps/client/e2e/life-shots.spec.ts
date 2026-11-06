@@ -95,7 +95,7 @@ test("the look: what moves, in the game", async ({ page }) => {
           c.room.state.npcs.forEach((n: any) => {
             if (n.kind === "guard") g = { x: n.x, y: n.y };
           });
-          const m = c.meTile();
+          const m = c.meAt();
           const t = c.tp;
           t.setHour(23);
           if (g) t.yaw = Math.atan2((g as any).y - m.y, (g as any).x - m.x);

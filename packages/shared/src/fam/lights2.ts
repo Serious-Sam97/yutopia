@@ -153,7 +153,7 @@ export const SHAPES = {
 export const SEATS: Record<string, SeatSpec> = {};
 export const SURFACES: Record<string, number> = {};
 export const STANDS: Record<string, number> = {};
-// (on a wall: quarter tiles along, its lowest and highest iso px)
+// (on a wall: quarter tiles along, its lowest and highest, m up)
 export const HANGS: Record<string, [number, number, number]> = {
   fairy_lights: [11, 1.6076, 2.1946],
 };

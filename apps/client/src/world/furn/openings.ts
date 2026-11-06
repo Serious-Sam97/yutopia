@@ -11,7 +11,7 @@ import { P, shade } from "./palette";
 // wall (props.swing −1: to the other side) while it's open or someone's passing; a barn door and the
 // automatic doors slide; the revolving door's wings turn (live) while someone's passing.
 
-const T = 0.1; // the wall's half thickness (art/items/walls.ts WALL_HALF_T)
+const T = 0.1; // the wall's half thickness (shared WALL_T / 2)
 const GLASS = 0xcfe3ea;
 
 export interface OpeningLook {

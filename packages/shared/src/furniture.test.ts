@@ -3,7 +3,6 @@ import { test } from "node:test";
 import { entry, quarterYaw, standHeight } from "./catalog.ts";
 import { SEAT_NEXT, SEAT_SPEC, STAND, STAND_NEXT, SURFACE, SURFACE_NEXT, TOP_NEXT } from "./furniture.ts";
 import { topsOnHosts } from "./tops.ts";
-import { ART_PX, artM, artPx } from "./units.ts";
 
 // Plan 67 phase 1 (docs/plan/67-the-furniture.md): the furniture's measures moved into one place in
 // metres; the catalog reads them back exactly. Since seating and the desks went live (phase 3) the
@@ -22,10 +21,7 @@ test("the catalog reads its surfaces and stand heights from the spec (m, exact)"
   assert.equal(standHeight("whiteboard"), undefined);
 });
 
-test("the old item art's px and metres go back and forth to 0.1 mm; the seats at true scale", () => {
-  for (const px of [11, 11.2, 13, 13.4, 13.5, 14, 16.6, 19, 25, 62, 235])
-    assert.ok(Math.abs(artPx(artM(px)) - px) < 0.004);
-  assert.equal(ART_PX, 45.25 * Math.cos(Math.PI / 6));
+test("the seats at true scale", () => {
   // a real chair's seat and a sofa's for the 1.79 m people (plan 67 B)
   assert.equal(SEAT_SPEC.chair.top, 0.47);
   assert.ok(SEAT_SPEC.sofa.top > 0.43 && SEAT_SPEC.sofa.top < 0.48);

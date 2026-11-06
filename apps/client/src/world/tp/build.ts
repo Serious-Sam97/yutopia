@@ -70,7 +70,6 @@ import { boxInParent, type Slab } from "./below-cull";
 import { type Geo, Out } from "./kit3d";
 import { edgesOfMap, type FreeWall, piecesOf, turnOut, type WallEdges } from "./walls3d";
 
-// (the walls and posts are still the item art's drawings, measured in its px: phase 8 redraws them)
 // a wall's half thickness (m): a post is twice it square
 const WALL_HALF_T = WALL_T / 2;
 // the ink of the floor's drawn contact shadows
@@ -1306,7 +1305,7 @@ export class World3 {
     }
     if (freeTurn) turnOut(out, freeTurn.yaw, freeTurn.x, freeTurn.y);
     const top = topOf(out);
-    // what clicks reach: in the live world (as iso) things to use, or with
+    // what clicks reach: in the live world things to use, or with
     // something to do — a chair, my desk; in build mode, everything
     const b = boundsOf(out);
     return {
@@ -1458,7 +1457,7 @@ export class World3 {
     if (!near && this.floor?.sig === sig) return;
     const map = this.map;
     const px = Math.max(16, Math.min(64, Math.floor(4096 / Math.max(map.width, map.height))));
-    // in pieces of at most 1024 px a side, as the iso view bakes it: a canvas
+    // in pieces of at most 1024 px a side: a canvas
     // the size of the whole floor (12 M px on a big map) is slow in Chrome, and
     // on some of them comes out blank
     const CH = Math.max(1, Math.floor(1024 / px));
@@ -1764,7 +1763,7 @@ const DECK_COLOR: Record<string, number> = {
 /** The wall parts of walls off the lattice (World3.freeWall): `free|<wall>|<run>`; as a key of
  *  `buildWalls(only)`, all of them again. */
 const FREE = "free";
-/** What one sketch drew, added to another's (a turned piece into its area's or run's). */
+/** One piece's buffers, added to another's (a turned piece into its area's or run's). */
 function appendOut(to: Out, from: Out): void {
   for (const k of ["lit", "glow", "clear"] as const) {
     to[k].pos.push(...from[k].pos);
@@ -1903,7 +1902,7 @@ function getOr<K, V>(m: Map<K, V>, k: K, make: () => V): V {
   return v;
 }
 
-// where an object's sketch starts (things on a surface: around their spot on it)
+// where an object's model starts (things on a surface: around their spot on it)
 function anchorOf(o: WorldObjectDef): [number, number] {
   if (entry(o.kind).onSurface) {
     const c = topCentre(o);
@@ -1930,10 +1929,10 @@ function footRect(o: WorldObjectDef): { x0: number; y0: number; x1: number; y1: 
   return { x0: o.x, y0: o.y, x1: o.x + w, y1: o.y + h };
 }
 
-// the clutter's sketch is centred on (0.5, 0.5); frames hang on the edge at y
+// the clutter's model is centred on (0.5, 0.5); frames hang on the edge at y
 const xyOf = ([x, y]: [number, number]) => ({ x: x + 0.5, y: y + 0.5 });
 const dressAt = (d: DressItem): [number, number] => [d.x - 0.5, d.kind === "frame" ? d.y : d.y - 0.5];
-// seeds are bucketed (as in iso) so look-alike pieces share a drawing
+// seeds are bucketed so look-alike pieces share a model
 const bucket = (seed: number) => (Math.floor(seed * 12) + 0.5) / 12;
 
 // everything about a thing that changes how it's drawn
@@ -1977,7 +1976,7 @@ function boundsOf(o: Out): Omit<Pick3, "id" | "use" | "dress"> | null {
   return { x0: x0 - p, y0: y0 - p, z0: z0 - p, x1: x1 + p, y1: y1 + p, z1: z1 + p };
 }
 
-// add one sketch's buffers to another (no spread: these get long)
+// add one piece's buffers to another (no spread: these get long)
 function append(dst: Out, src: Out) {
   const cat = (a: number[], b: number[]) => {
     for (let i = 0; i < b.length; i++) a.push(b[i]);

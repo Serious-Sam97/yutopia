@@ -10,7 +10,7 @@ import { type Bounds3, KINDS, modelBounds } from "./model-bounds";
 // checked too.
 
 const TOL = 0.06; // m, any face
-// (drawn by their own builders in 3D — Stairs3, Lifts3 — not World3: their item art isn't what shows)
+// (drawn by their own builders in 3D — Stairs3, Lifts3 — not World3: the kit's model of them isn't what shows)
 const OWN = new Set<string>(["stairs", "elevator"]);
 // (a plant's leaves are walked through, plan 67: only its pot is solid — the shape inside the drawing)
 // (and an arc lamp's head over the next tile, a coat rack's coats: walked under, brushed past)

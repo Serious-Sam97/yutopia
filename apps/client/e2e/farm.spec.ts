@@ -98,7 +98,7 @@ for (const view of ["3p"] as const)
     await walkTo(page, gate.x, gate.y, 60_000);
     const row = G(411, -300);
     await walkTo(page, row.x, row.y, 60_000);
-    const at = await page.evaluate(() => (window as any).__yutopia.meTile());
+    const at = await page.evaluate(() => (window as any).__yutopia.meAt());
     expect(Math.hypot(at.x - row.x, at.y - row.y), "up the row").toBeLessThan(1.5);
     await shot(page, `farm-${view}-corn`);
     const w2 = await worst(page);

@@ -12,7 +12,7 @@ import {
   riverWater,
   setUnderfoot,
   terrainAt,
-  walkableTile,
+  walkableCell,
   waterAt,
 } from "../grounds.ts";
 import { blankMap } from "../map-edit.ts";
@@ -160,13 +160,13 @@ test("the paths keep off open water past the shelf (swum, not walked), wade the 
   const tx = Math.floor(POND.cx);
   const tz = Math.floor(POND.cz);
   setUnderfoot({ ice: ICE_WALK - 0.1 });
-  assert.equal(walkableTile(tx, tz), false, "the pond's middle, open");
-  assert.equal(walkableTile(Math.floor(POND.cx + POND.rx * 0.95), tz), true, "its shelf, open");
+  assert.equal(walkableCell(tx, tz), false, "the pond's middle, open");
+  assert.equal(walkableCell(Math.floor(POND.cx + POND.rx * 0.95), tz), true, "its shelf, open");
   setUnderfoot({ ice: 1 });
-  assert.equal(walkableTile(tx, tz), true, "the pond's middle, frozen");
+  assert.equal(walkableCell(tx, tz), true, "the pond's middle, frozen");
   // (the land beside it either way)
   setUnderfoot({ ice: 0 });
-  assert.equal(walkableTile(tx, Math.floor(POND.cz - POND.rz - 10)), true);
+  assert.equal(walkableCell(tx, Math.floor(POND.cz - POND.rz - 10)), true);
 });
 
 test("the river runs downhill: its level never rises southwards, and stays under its old bed", () => {

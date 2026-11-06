@@ -392,7 +392,7 @@ export class Mood {
     }
     for (const t of this.c.torch3) {
       if (!t.on || (skip && t.who === skip)) continue;
-      // (shared beam.ts: the same test iso and the server make; a focused beam is the brighter)
+      // (shared beam.ts: the same test the server makes; a focused beam is the brighter)
       const k = beamAt(t.on, x, y) * (0.2 + 0.9 * this.c.nightLevel) * (t.on.focus ? 1.5 : 1);
       if (k <= 0) continue;
       out.r += k;

@@ -136,7 +136,7 @@ for (const view of ["3p"] as const)
           const z = p.z - Math.cos(p.a) * o;
           return {
             up: G.heightAt(p.x, p.z) - G.landAt(p.x, p.z),
-            strip: G.walkableTile(Math.floor(x), Math.floor(z)),
+            strip: G.walkableCell(Math.floor(x), Math.floor(z)),
             drawn: (window as any).__yutopia.tp?.scene.getObjectByName("kart-bridge")?.visible ?? null,
           };
         },
@@ -203,7 +203,7 @@ for (const view of ["3p"] as const)
       );
       await page.waitForTimeout(3000);
       const under = await page.evaluate(
-        (q) => (window as any).__yutopia.G.surfaceTileAt(Math.floor(q.x), Math.floor(q.z)),
+        (q) => (window as any).__yutopia.G.surfaceCellAt(Math.floor(q.x), Math.floor(q.z)),
         lost,
       );
       expect(under, "underfoot where the Figure Eight was").not.toBe("asphalt");

@@ -1,7 +1,7 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
 import { dayNests, dayOf, NESTS } from "@yutopia/shared/dark";
-import { walkableTile } from "@yutopia/shared/grounds";
+import { walkableCell } from "@yutopia/shared/grounds";
 import { ANA, enter, test, token, walkTo } from "./helpers";
 
 // The day (docs/plan/31-the-day.md, phase 3): Ana out by day near one of the
@@ -48,7 +48,7 @@ for (const zone of ["woods", "farm"] as const)
       const a = (k / 64) * Math.PI * 2;
       const x = Math.floor(n.x + Math.cos(a) * 22) + 0.5;
       const z = Math.floor(n.z + Math.sin(a) * 22) + 0.5;
-      if (walkableTile(Math.floor(x), Math.floor(z)) && all.every((m) => m === n || Math.hypot(m.x - x, m.z - z) > 14))
+      if (walkableCell(Math.floor(x), Math.floor(z)) && all.every((m) => m === n || Math.hypot(m.x - x, m.z - z) > 14))
         from = { x, z };
     }
     expect(from).toBeTruthy();

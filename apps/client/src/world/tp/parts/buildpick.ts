@@ -94,7 +94,7 @@ export class BuildPick {
   }
 
   // Everything under the pointer, front first (build mode's pick: furniture and
-  // the rooms' clutter, as the iso engine's `picksAt`).
+  // the rooms' clutter).
   picksAtPointer(): { id: string; dress: boolean; kind?: string; t: number }[] {
     this.c.pointerPart.setRay(this.pointer.x, this.pointer.y);
     const o = this.c.ray.ray.origin;
@@ -122,7 +122,7 @@ export class BuildPick {
       }
       if (ok) out.push({ id: p.id, dress: !!p.dress, kind: p.dress?.kind, t: t0 });
     }
-    // small things on a surface first (as iso: a mug wins over its desk), then nearest
+    // small things on a surface first (a mug wins over its desk), then nearest
     return out.sort((a, b) => a.t - b.t);
   }
 

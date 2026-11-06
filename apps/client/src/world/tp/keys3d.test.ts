@@ -10,8 +10,8 @@ import { legOf, SEATS, seatFit } from "./seats3d";
 // sat at it or stood — wherever on the desk it is within reach: the knuckles just over its keys, over
 // the keyboard itself (not in the air in front of the desk).
 
-const KEYS_TOP = 0.684;
-const KNEE_R = 0.05; // m: the knee's front before its joint // m: a keyboard's top on a desk (a desk 25 iso px, the keyboard 1.8 more)
+const KEYS_TOP = 0.684; // m: a keyboard's top on a desk (the old art's: a desk 25 px, the keyboard 1.8 more)
+const KNEE_R = 0.05; // m: the knee's front before its joint
 
 test("typing: the hands on the keys, sat at a desk or stood at it", () => {
   const f = new CharFactory();
@@ -28,7 +28,7 @@ test("typing: the hands on the keys, sat at a desk or stood at it", () => {
       [0, KEYS_TOP, 0.4],
       [0, KEYS_TOP, 0.5],
       [0.12, KEYS_TOP, 0.45],
-      // (a reception desk's: 29 iso px)
+      // (a reception desk's: the old art's 29 px)
       [0, 0.786, 0.42],
     ] as [number, number, number][]) {
       for (const [how, act, lift] of [

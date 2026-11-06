@@ -3,7 +3,7 @@ import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { ROOM_NAME } from "@yutopia/shared";
 import { dayNests, dayOf, NESTS, SHADE_STATES } from "@yutopia/shared/dark";
-import { heightAt, walkableTile } from "@yutopia/shared/grounds";
+import { heightAt, walkableCell } from "@yutopia/shared/grounds";
 import { packMv } from "@yutopia/shared/move";
 import { Client, type Room } from "colyseus.js";
 
@@ -77,7 +77,7 @@ function spotNear(x: number, z: number, r: number, clear = 14) {
     const a = (k / 64) * Math.PI * 2;
     const sx = x + Math.cos(a) * r;
     const sz = z + Math.sin(a) * r;
-    if (!walkableTile(Math.floor(sx), Math.floor(sz))) continue;
+    if (!walkableCell(Math.floor(sx), Math.floor(sz))) continue;
     if (nests.some((n) => (n.x !== x || n.z !== z) && Math.hypot(n.x - sx, n.z - sz) < clear)) continue;
     return { x: Math.floor(sx) + 0.5, z: Math.floor(sz) + 0.5 };
   }
@@ -94,7 +94,7 @@ test("by day nobody comes out of the dark; a nest out there, asleep, once you're
   let lone: { x: number; z: number } | null = null;
   for (let z = -300; z < 100 && !lone; z += 23)
     for (let x = -350; x < 200 && !lone; x += 29) {
-      if (!walkableTile(Math.floor(x), Math.floor(z))) continue;
+      if (!walkableCell(Math.floor(x), Math.floor(z))) continue;
       if (nests.every((n) => Math.hypot(n.x - x, n.z - z) > 110))
         lone = { x: Math.floor(x) + 0.5, z: Math.floor(z) + 0.5 };
     }

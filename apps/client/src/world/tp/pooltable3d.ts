@@ -55,7 +55,7 @@ const ZT = ZC - POCKET_DEEP; // the throat's bottom
 const RR = 0.022; // the rail's rounded outer edge
 
 // the pockets' holes: a corner's 18 mm out past the cloth's corner, a side's
-// 45 mm out past the edge (shared/pool.ts), radius as the iso art draws them
+// 45 mm out past the edge (shared/pool.ts), radius as the old art drew them
 interface Hole {
   x: number;
   y: number;
@@ -79,7 +79,7 @@ const SIDE_NOSE = (0.132 / 2) * TPM; // either side of a side pocket's middle
 const CORNER_JAW = (142 * Math.PI) / 180;
 const SIDE_JAW = (104 * Math.PI) / 180;
 
-// the cloths and their wood (as the iso art: green, blue, wine)
+// the cloths and their wood (green, blue, wine)
 const LOOKS: { cloth: string; wood: string; woodDark: string }[] = [
   { cloth: "#2f6a4c", wood: "#5b3a26", woodDark: "#3e2718" },
   { cloth: "#2c587a", wood: "#3a2a20", woodDark: "#2a1d15" },

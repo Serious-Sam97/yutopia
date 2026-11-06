@@ -12,28 +12,6 @@ const ready = (): AudioContext | null => {
   return c && c.state === "running" ? c : null;
 };
 
-/** A jump's dust in iso (world px from (x, y)): `hard` 0..1, how hard it went. */
-export function jumpDust(kind: "land" | "kick", hard: number, x: number, y: number) {
-  const land = kind === "land";
-  const n = Math.round((land ? 22 : 8) * (0.5 + hard / 2));
-  return Array.from({ length: n }, (_, i) => {
-    const a = (i / n) * Math.PI * 2 + Math.random() * 0.3;
-    const sp = (land ? 70 : 34) * (0.5 + hard / 2) * (0.75 + Math.random() * 0.5);
-    return {
-      x: x + Math.cos(a) * 6,
-      y: y + Math.sin(a) * 3,
-      vx: Math.cos(a) * sp,
-      vy: Math.sin(a) * sp * 0.5,
-      t: 0,
-      life: (land ? 0.55 : 0.35) + Math.random() * 0.2,
-      r: (land ? 3 : 2.2) + Math.random() * 2.5,
-      c: Math.random() < 0.5 ? 0xe6d6b4 : 0xcdb894,
-      g: -14, // (drifting up as it slows)
-      drag: 4.5,
-    };
-  });
-}
-
 /** Off the floor: air rushing past (a flip: a swish that goes round with the turn). `gain`: 0..1, how near. */
 export function jumpSound(kind: JumpKind, gain = 1) {
   const ctx = ready();

@@ -11,7 +11,7 @@ import {
   POND_LEVEL,
   setIceHoles,
   setUnderfoot,
-  walkableTile,
+  walkableCell,
 } from "../grounds.ts";
 import { KH_FEEL, type MoveEnv, NO_INPUT, newBody, SWIM, stepBody } from "../move/index.ts";
 import { FULL_VITALS, freshClock, stepVitals } from "../vitals.ts";
@@ -63,7 +63,7 @@ test("a hole: no ice in it, walked round it; its sheet has no piece there; the w
   setIceHoles([h]);
   assert.equal(iceAt(x, z), null, "in it, the water");
   assert.ok(iceAt(x + 2, z), "beside it, the ice");
-  assert.equal(walkableTile(Math.floor(x), Math.floor(z)), false, "the paths keep out of it");
+  assert.equal(walkableCell(Math.floor(x), Math.floor(z)), false, "the paths keep out of it");
   const sheet = iceSheet(1, [h]);
   for (const s of sheet)
     if (s.t === "box")

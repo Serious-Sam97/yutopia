@@ -6,7 +6,7 @@ import { petRenderer } from "./pets-render";
 import { PetModel, rigOf } from "./pets3d";
 
 // The pets chunk (docs/plan/14-pets-v2.md): the 3D models and their rig
-// (pets3d.ts), the renderer that turns them into iso sprites, turntables and
+// (pets3d.ts), the renderer that turns them into the HUD's turntables and
 // portraits (pets-render.ts), the pets' sounds, their interface strings, and
 // the rules the world's controller needs once there's a pet about.
 export const PETS_CHUNK = "yutopia-pets";
@@ -15,7 +15,7 @@ addStrings(PET_STRINGS, PETS_CHUNK); // their interface text comes with this chu
 if (typeof window !== "undefined") (window as unknown as { __pets: unknown }).__pets = { petRenderer, PetModel, rigOf };
 
 export { feelingOf, isTrick, learned, petNoise, SPECIES_DEFS, tricksFor } from "@yutopia/shared/pets";
-export { dirAngle, type PetSprite, petRenderer, type ToySprite, toySpriteOf } from "./pets-render";
+export { petRenderer } from "./pets-render";
 export {
   type Face3,
   PetModel,

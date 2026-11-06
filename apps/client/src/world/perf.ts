@@ -11,7 +11,7 @@ export class Ring {
   readonly v = new Float32Array(PERF_N);
   n = 0;
   i = 0;
-  at = 0; // when it last had one (a stage that stopped — iso's while in 3D — drops out of the report)
+  at = 0; // when it last had one (a stage that stopped drops out of the report)
   push(x: number) {
     this.at = performance.now();
     this.v[this.i] = x;

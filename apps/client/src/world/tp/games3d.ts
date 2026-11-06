@@ -16,7 +16,7 @@ import {
 import { mergeWith } from "./merge-static";
 import { type PadLook, ps1Pad } from "./pads3d";
 
-// The game room in 3D (world/games/room.ts draws the same in iso): consoles'
+// The game room in 3D (world/games/room.ts runs it): consoles'
 // cables to their TVs, the pads — lying by the console, or in a player's hands
 // with the cord trailing back — and the red power LED of each one that's on.
 
@@ -36,7 +36,7 @@ export interface GameScene3 {
   leds: (P & { h?: number; color?: number })[]; // h: tiles up (default: a front LED's)
 }
 
-// where hands are, m up (the 3D drawings stand taller than iso's)
+// where hands are, m up
 export const HAND_STAND = 1.1228;
 export const HAND_SIT = 0.8166;
 const CORD = 0.006; // tube radii, tiles

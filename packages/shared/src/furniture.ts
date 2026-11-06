@@ -1,10 +1,9 @@
 // The furniture's measures (docs/plan/67-the-furniture.md, phase 1): where a kind is sat on, what
 // stands on it and how high a body stands on top of it, one place a kind, in metres. The catalog's
-// `surface` and `standHeight` (iso px, as the rest of the world reads them) and the 3D view's seats
-// (tp/seats3d.ts) are read from here. Phase 1 moved the iso art's numbers in unchanged; the
-// families' phases (2–8) change them as each is redrawn at true scale — first in the *_NEXT tables
-// (drawn with the client's ?furn=new), moved up here when the family goes live (seating and the
-// desks, tables and storage: 2026-11-03).
+// `surface` and `standHeight` and the 3D view's seats (tp/seats3d.ts) are read from here. Phase 1
+// moved the iso art's numbers in unchanged; the families' phases (2–8) change them as each is redrawn
+// at true scale — first in the *_NEXT tables (drawn with the client's ?furn=new), moved up here when
+// the family goes live (seating and the desks, tables and storage: 2026-11-03).
 
 import { FAM_SEATS, FAM_STANDS, FAM_SURFACES } from "./fam/index.ts";
 

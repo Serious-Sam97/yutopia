@@ -4,7 +4,7 @@ import { BLOCKS, campusBuilding, moveBlocks, upgradeGround } from "./building.ts
 import type { WorldObjectDef } from "./catalog.ts";
 import { quarterYaw } from "./catalog.ts";
 import { moveStep, RUN_SPEED, setOutdoors } from "./ground.ts";
-import { GATE, groundsAreaAt, groundsOutdoors, heightAt, INSIDES, walkableTile, wallEdgeAt } from "./grounds.ts";
+import { GATE, groundsAreaAt, groundsOutdoors, heightAt, INSIDES, walkableCell, wallEdgeAt } from "./grounds.ts";
 import { hearingGain } from "./hearing.ts";
 import { type Height, stepHeight } from "./jump.ts";
 import { levelMap } from "./levels.ts";
@@ -282,7 +282,7 @@ test("the bridges: their decks flush with the way (no lip), their sides closed",
       const o = w.w / 2 + 1;
       assert.ok(onBridgeRail(x + nx * s * o, z + nz * s * o), `${w.key}: past its rail`);
       assert.equal(
-        walkableTile(Math.floor(x + nx * s * o), Math.floor(z + nz * s * o)),
+        walkableCell(Math.floor(x + nx * s * o), Math.floor(z + nz * s * o)),
         false,
         `${w.key}: nobody walks off it`,
       );

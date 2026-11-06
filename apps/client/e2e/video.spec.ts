@@ -18,7 +18,7 @@ test("video bubble shows only while the camera is on", async () => {
     const bia = await (await browser.newContext(ctx)).newPage();
     await enter(ana, ta, s);
     await enter(bia, tb, s);
-    const at = await ana.evaluate(() => (window as any).__yutopia.meTile());
+    const at = await ana.evaluate(() => (window as any).__yutopia.meAt());
     await walkTo(bia, at.x + 1.5, at.y + 0.5, 30_000);
     const bubbles = () => bia.locator("[data-x] video").count();
 

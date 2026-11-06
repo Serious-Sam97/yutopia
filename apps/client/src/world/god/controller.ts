@@ -174,7 +174,7 @@ export class GodController {
     this.on = true;
     this.walking = false;
     // (out of my head: where I stand, looking the way I look)
-    const me = this.w.meTile();
+    const me = this.w.meAt();
     this.at = { x: me.x, z: me.y };
     this.up = UP.start;
     this.pitch = PITCH.start;

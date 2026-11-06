@@ -42,7 +42,7 @@ const paint = (page: Page, x: number) =>
     [x, AT.z, CHUNK.cx, CHUNK.cz],
   );
 const surface = (page: Page, x: number): Promise<string> =>
-  page.evaluate(([tx, tz]) => (window as any).__yutopia.G.surfaceTileAt(tx, tz), [x, AT.z]);
+  page.evaluate(([tx, tz]) => (window as any).__yutopia.G.surfaceCellAt(tx, tz), [x, AT.z]);
 /** The list opened from the draft's name in the strip. */
 const list = async (page: Page) => {
   if (!(await god(page)).drafts.open) await page.getByRole("button", { name: "Your drafts" }).click();

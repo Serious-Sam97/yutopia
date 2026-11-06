@@ -37,7 +37,7 @@ interface Built {
 
 const SEG = 20;
 
-// The phone's screen: Vortex Mobile lit up (as phone-art.ts draws it in iso) —
+// The phone's screen: Vortex Mobile lit up —
 // its dusk gradient, the orb, the apps. One texture for every phone.
 let screenTex: Texture | null = null;
 function phoneScreen(): Texture | null {

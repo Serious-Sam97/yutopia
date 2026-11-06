@@ -133,7 +133,7 @@ test("near a point: the middle under the pointer, on the grid, kept on the wall"
 
 test("pointing at a wall: the face the ray meets first, looking at it", () => {
   const map = hall();
-  // the iso camera looks down towards −x −y: from in front of the wall's south face
+  // as the iso camera looked, down towards −x −y: from in front of the wall's south face
   const ray = { o: { x: 9, y: 10, z: 15 }, d: { x: -2, y: -2, z: -15 } };
   // its point at the wall's face (y 8.1): t = 0.95 → x 7.1, z 0.75
   const hit = faceHit(map, ray);

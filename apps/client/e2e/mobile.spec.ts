@@ -27,7 +27,7 @@ test("phone: world loads, HUD fits, tap to walk", async ({ page }) => {
     })
     .toBe(true);
   const before = await page.evaluate(() =>
-    (window as never as { __yutopia: { meTile(): { x: number; y: number } } }).__yutopia.meTile(),
+    (window as never as { __yutopia: { meAt(): { x: number; y: number } } }).__yutopia.meAt(),
   );
   // tap bare floor a few tiles away from me, clear of the HUD (not someone, not something to use)
   const p = await page.evaluate(() => {
@@ -56,7 +56,7 @@ test("phone: world loads, HUD fits, tap to walk", async ({ page }) => {
   await page.touchscreen.tap(p.x, p.y);
   await page.waitForTimeout(1500);
   const after = await page.evaluate(() =>
-    (window as never as { __yutopia: { meTile(): { x: number; y: number } } }).__yutopia.meTile(),
+    (window as never as { __yutopia: { meAt(): { x: number; y: number } } }).__yutopia.meAt(),
   );
   expect(Math.hypot(after.x - before.x, after.y - before.y)).toBeGreaterThan(0.8);
   await page.screenshot({ path: "../../design/screens/06-mobile.png" });

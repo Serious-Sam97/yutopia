@@ -18,7 +18,7 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 import { litCap } from "../art/daylight";
 import { InkPass } from "./ink3d";
 
-// High quality's finish, as the iso view's (world/post.ts): screens, lamps and
+// High quality's finish: screens, lamps and
 // neon bloom at night, then the grade (docs/plan/33-the-look.md: blue in the
 // shade, warm in the light), a soft vignette and a whisper of film grain. The
 // world's ink line (ink3d.ts) first. Medium: the ink and the grade, no bloom or
@@ -118,7 +118,7 @@ export class Post3 {
 
   // 0 by day … 1 at night: how much glows
   setNight(n: number) {
-    this.bloom.strength = 1.2 * n; // (iso's High halo round lamps, screens and light strips)
+    this.bloom.strength = 1.2 * n; // (High's halo round lamps, screens and light strips)
     this.bloom.enabled = n > 0.05 && !this.lite;
     this.ink.setNight(n);
     // over what lit things can reach (light3d.ts): only what glows blooms

@@ -122,7 +122,7 @@ test("the land: the road in off the county road to the gate, the pad level under
 test("walking in the park: round the fence (through the gate), the stands, the bowl; over the bridge", async () => {
   const G = await import("./grounds.ts");
   const P = await import("./kart/park.ts");
-  const walk = (x: number, z: number) => G.walkableTile(Math.floor(x), Math.floor(z));
+  const walk = (x: number, z: number) => G.walkableCell(Math.floor(x), Math.floor(z));
   // the fence (a wall on the tiles' edges, thin as it's drawn), but its gate
   assert.equal(G.wallEdgeAt("v", KART_FENCE.x0, KART_PARK.z), true);
   assert.equal(G.wallEdgeAt("h", KART_GATE.x, KART_GATE.z), false);
@@ -175,11 +175,11 @@ test("walking in the park: round the fence (through the gate), the stands, the b
     G.groundSurfaceAt((P.KART_PADDOCK.x0 + P.KART_PADDOCK.x1) / 2, (P.KART_PADDOCK.z0 + P.KART_PADDOCK.z1) / 2),
     "walk",
   );
-  assert.equal(G.carBlockedTile(Math.floor(KART_GATE.x), Math.floor(KART_GATE.z)), true);
-  assert.equal(G.carBlockedTile(Math.floor(on.x), Math.floor(on.z)), true);
+  assert.equal(G.carBlockedCell(Math.floor(KART_GATE.x), Math.floor(KART_GATE.z)), true);
+  assert.equal(G.carBlockedCell(Math.floor(on.x), Math.floor(on.z)), true);
   // and the road in is a car's
   const r = KART_ROAD[1];
-  assert.equal(G.carBlockedTile(Math.floor(r[0]), Math.floor(r[1])), false);
+  assert.equal(G.carBlockedCell(Math.floor(r[0]), Math.floor(r[1])), false);
 });
 
 test("the park and its car park named where you are", async () => {
@@ -207,21 +207,21 @@ test("Vortex's rubber band: quicker behind, Easy and Medium easing off ahead, Ha
 
 test("outside the gate: the car park, the turning circle, the billboard on the corner", async () => {
   const G = await import("./grounds.ts");
-  const walk = (x: number, z: number) => G.walkableTile(Math.floor(x), Math.floor(z));
+  const walk = (x: number, z: number) => G.walkableCell(Math.floor(x), Math.floor(z));
   const C = KART_CARPARK;
   // the car park's bays and aisle level and asphalt, cars in; its footway paved; the trees cleared
   for (let x = C.x0 + 1; x < C.x1; x += 3)
     for (let z = C.z0 + 1; z < C.z1; z += 3) {
       assert.equal(G.groundSurfaceAt(x, z), "asphalt", `car park ${x}, ${z}`);
       assert.ok(Math.abs(G.groundAt(x, z) - KART_PARK.h) < 0.05, `level ${x}, ${z}`);
-      assert.equal(G.carBlockedTile(Math.floor(x), Math.floor(z)), false, `cars at ${x}, ${z}`);
+      assert.equal(G.carBlockedCell(Math.floor(x), Math.floor(z)), false, `cars at ${x}, ${z}`);
       assert.equal(G.treeDensity(x, z), 0);
     }
   assert.equal(G.groundSurfaceAt((C.x0 + C.x1) / 2, (C.walk[0] + C.walk[1]) / 2), "walk");
   assert.ok(C.bx + C.bays * 2.7 < C.x1 - 2, "the bays fit");
   // the circle: driven round its island, the island not
-  assert.equal(G.carBlockedTile(Math.floor(KART_TURN.x), Math.floor(KART_TURN.z)), true);
-  assert.equal(G.carBlockedTile(Math.floor(KART_TURN.x - KART_TURN.r + 2), Math.floor(KART_TURN.z)), false);
+  assert.equal(G.carBlockedCell(Math.floor(KART_TURN.x), Math.floor(KART_TURN.z)), true);
+  assert.equal(G.carBlockedCell(Math.floor(KART_TURN.x - KART_TURN.r + 2), Math.floor(KART_TURN.z)), false);
   // the billboard: back off the county road, its posts walked round, clear of the road in and the river
   const county = G.WAYS.find((w) => w.key === "road");
   assert.ok(county);
@@ -237,7 +237,7 @@ test("outside the gate: the car park, the turning circle, the billboard on the c
 test("the paddock: the shed's posts, race control, the podium walked round (the benches onto); the desk and the rack reached", async () => {
   const G = await import("./grounds.ts");
   const P = await import("./kart/park.ts");
-  const walk = (x: number, z: number) => G.walkableTile(Math.floor(x), Math.floor(z));
+  const walk = (x: number, z: number) => G.walkableCell(Math.floor(x), Math.floor(z));
   for (const t of KART_THINGS) {
     // (the fire's benches as the office's: walked onto, sat on)
     assert.equal(walk(t.x, t.z), t.kind === "bench", `${t.kind} at ${t.x}, ${t.z}`);
@@ -261,7 +261,7 @@ test("the paddock: the shed's posts, race control, the podium walked round (the 
 test("the park's seats: stood up from onto open ground, the benches facing the fire, a third for the crowd", async () => {
   const G = await import("./grounds.ts");
   const P = await import("./kart/park.ts");
-  const walk = (x: number, z: number) => G.walkableTile(Math.floor(x), Math.floor(z));
+  const walk = (x: number, z: number) => G.walkableCell(Math.floor(x), Math.floor(z));
   const all = P.kartSeats();
   const fire = KART_THINGS.find((t) => t.kind === "fire");
   assert.ok(fire);
@@ -290,7 +290,7 @@ test("the park's seats: stood up from onto open ground, the benches facing the f
 test("the stands: two aisles a stand with no seats on them, walked round from its front wall, lit", async () => {
   const P = await import("./kart/park.ts");
   const G = await import("./grounds.ts");
-  const walk = (x: number, z: number) => G.walkableTile(Math.floor(x), Math.floor(z));
+  const walk = (x: number, z: number) => G.walkableCell(Math.floor(x), Math.floor(z));
   for (const [i, st] of P.KART_STANDS.entries()) {
     const seats = P.kartSeats().filter((s) => s.stand === i);
     for (const a of P.standAisles(st))

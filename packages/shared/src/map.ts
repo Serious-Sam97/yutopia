@@ -52,7 +52,7 @@ export const wallMat = (ch: string): WallMat => (ch === HALF_WALL ? "p" : (ch.to
 // A full opaque wall (plaster, walnut, foam, brick, cork; with a window or not)
 // has two faces, each in its own material: the edge's char is the "front" one
 // (the +y face of a wall along x, the +x face of one along y: the faces the iso
-// view looks at), `hBacks` / `vBacks` (same shape as hWalls / vWalls) the other
+// view looked at), `hBacks` / `vBacks` (same shape as hWalls / vWalls) the other
 // one — "." (or nothing stored) = the same as the front. Glass and half walls
 // are one thing through and through.
 export const FACE_MATS = "pwfbk";

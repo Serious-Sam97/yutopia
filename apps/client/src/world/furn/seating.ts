@@ -23,7 +23,7 @@ import { P, shade } from "./palette";
 // down it, y up; a seat faces +z (its rot 0). At true scale for the 1.79 m people (shared
 // furniture.ts SEAT_NEXT has where each is sat on), Rich: piping, tufting, the hardware. Each kind's
 // looks are its `props.variant`s (the Look picker), its story details (a cardigan on a chair's back,
-// a newspaper on an arm) a seeded extra, as the iso art had them.
+// a newspaper on an arm) a seeded extra.
 
 export type SeatLook = Look;
 

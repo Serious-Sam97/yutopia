@@ -3,15 +3,15 @@ import test from "node:test";
 import * as G from "./grounds.ts";
 import {
   CHUNK,
-  carBlockedTile,
+  carBlockedCell,
   heightAt,
   iceAt,
   longDressIn,
-  surfaceTileAt,
+  surfaceCellAt,
   terrainAt,
   treesIn,
   WAYS,
-  walkableTile,
+  walkableCell,
   waterAt,
 } from "./grounds.ts";
 import {
@@ -68,9 +68,9 @@ test("the road: its line the spine, its heights the profile, asphalt and walkabl
     );
     const tx = Math.floor(x);
     const tz = Math.floor(z);
-    assert.ok(walkableTile(tx, tz), `walkable at km ${(S[i] / 1000).toFixed(2)}`);
-    assert.ok(!carBlockedTile(tx, tz), `driven at km ${(S[i] / 1000).toFixed(2)}`);
-    assert.equal(surfaceTileAt(tx, tz), "asphalt");
+    assert.ok(walkableCell(tx, tz), `walkable at km ${(S[i] / 1000).toFixed(2)}`);
+    assert.ok(!carBlockedCell(tx, tz), `driven at km ${(S[i] / 1000).toFixed(2)}`);
+    assert.equal(surfaceCellAt(tx, tz), "asphalt");
   }
 });
 
@@ -132,7 +132,7 @@ test("what lines it: rails where it drops (solid, kept off), posts, poles past t
   assert.ok(r && r.bx !== undefined && r.bz !== undefined);
   const mx = Math.floor((r.x + (r.bx ?? 0)) / 2);
   const mz = Math.floor((r.z + (r.bz ?? 0)) / 2);
-  assert.ok(carBlockedTile(mx, mz));
+  assert.ok(carBlockedCell(mx, mz));
 });
 
 test("the land round it: a band 300 m either side walked, past it the walls; Silver Lake swum", () => {
@@ -141,9 +141,9 @@ test("the land round it: a band 300 m either side walked, past it the walls; Sil
   // (150 m off it, in the wood: most of the ground walked — the trees' tiles aside)
   let free = 0;
   for (let a = 0; a < 10; a++)
-    for (let b = 0; b < 10; b++) if (walkableTile(Math.floor(x) + a, Math.floor(z) - 150 + b)) free++;
+    for (let b = 0; b < 10; b++) if (walkableCell(Math.floor(x) + a, Math.floor(z) - 150 + b)) free++;
   assert.ok(free > 50, `${free} of 100 walked`);
-  assert.ok(!walkableTile(Math.floor(x), Math.floor(z) - 700));
+  assert.ok(!walkableCell(Math.floor(x), Math.floor(z) - 700));
   const w = waterAt(LAKE.cx, LAKE.cz);
   assert.ok(w && w.kind === "lake" && w.depth > 10);
 });
@@ -163,7 +163,7 @@ test("Silver Lake ices from its shores in, walked on it; the creek runs open; a 
   const lake = iceSheet(1).filter((b) => b.t === "box" && Math.hypot(b.x - LAKE.cx, b.z - LAKE.cz) < LAKE.rx);
   assert.ok(lake.length > 100, `${lake.length} boxes`);
   // (the path from the road between the cabins to the boathouse, walked; the GPS's way there)
-  for (const [x, z] of SHORE.path) assert.ok(walkableTile(Math.floor(x), Math.floor(z)), `${x}, ${z}`);
+  for (const [x, z] of SHORE.path) assert.ok(walkableCell(Math.floor(x), Math.floor(z)), `${x}, ${z}`);
   const end = SHORE.path[SHORE.path.length - 1];
   routeOver(G);
   const r = route(SPINE[at(10)] as [number, number], end, "foot");

@@ -9,7 +9,7 @@
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import { ANIM, type Point, ROOM_NAME } from "@yutopia/shared";
 import { dayNests, dayOf, NESTS } from "@yutopia/shared/dark";
-import { CHUNK, checkEdits, heightAt, landBounds, SURFACES, walkableTile } from "@yutopia/shared/grounds";
+import { CHUNK, checkEdits, heightAt, landBounds, SURFACES, walkableCell } from "@yutopia/shared/grounds";
 import { encodeBytes, encodeHeights, type GroundsEdits } from "@yutopia/shared/grounds-edits";
 import { type Gait, KH_MOVE, MV_WINDED, packMv, yawToByte } from "@yutopia/shared/move";
 import { FULL_VITALS, freshClock, stepVitals } from "@yutopia/shared/vitals";
@@ -64,7 +64,7 @@ function by(n: { x: number; z: number }): { x: number; y: number } | null {
     const a = (k / 48) * Math.PI * 2;
     const x = Math.floor(n.x + Math.cos(a) * 30) + 0.5;
     const z = Math.floor(n.z + Math.sin(a) * 30) + 0.5;
-    if (walkableTile(Math.floor(x), Math.floor(z)) && nests.every((m) => Math.hypot(m.x - x, m.z - z) > 20))
+    if (walkableCell(Math.floor(x), Math.floor(z)) && nests.every((m) => Math.hypot(m.x - x, m.z - z) > 20))
       return { x: x + 60, y: z + 10 };
   }
   return null;

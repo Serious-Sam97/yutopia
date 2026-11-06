@@ -2365,7 +2365,7 @@ export class Campus {
   }
 
   // The hour: everything outside takes the ambient (and goes blue-dark at
-  // night, as the iso backdrop); the glass reflects the sky; lights come on.
+  // night); the glass reflects the sky; lights come on.
   /** `dark`: what's left of the sky's light in the pitch dark (sky.ts: as the land's) */
   setDay(d: Daylight, skyMid: number, dark = 1) {
     const amb = new Color(d.ambient[0], d.ambient[1], d.ambient[2]);

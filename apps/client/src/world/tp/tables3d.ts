@@ -21,7 +21,7 @@ import {
 } from "three";
 import { paintSphere, type Q } from "../tables/ballart";
 
-// The game tables in 3D (world/tables draws the same in iso): the pool balls
+// The game tables in 3D (world/tables runs them): the pool balls
 // (their numbers and stripes turning as the physics turns them), the cues —
 // the shooter's along the aim, the others' standing by their players — the
 // shooter's guideline and ghost ball, the called pocket, the billiard lamp over

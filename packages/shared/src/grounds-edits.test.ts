@@ -12,12 +12,12 @@ import {
   heightAt,
   INSIDES,
   LAMPS,
-  surfaceTileAt,
+  surfaceCellAt,
   terrainAt,
   treeKey,
   treesIn,
   WAYS,
-  walkableTile,
+  walkableCell,
 } from "./grounds.ts";
 import { encodeBytes, encodeHeights, type GroundsEdits, NO_EDITS, TREE_MASK } from "./grounds-edits.ts";
 import { groundsHash } from "./grounds-hash.ts";
@@ -142,7 +142,7 @@ test("no edits: the Grounds are today's, every chunk", () => {
 });
 
 test("the edits laid: each changes what it says", () => {
-  const was = { h: terrainAt(MID.x, MID.z), lamp: walkableTile(122, -252), v: editsVersion };
+  const was = { h: terrainAt(MID.x, MID.z), lamp: walkableCell(122, -252), v: editsVersion };
   const stopWas = groundsThings().find((t) => t.key === "street:stop");
   const dirty = applyEdits(EDITS);
   assert.ok(G.editsVersion > was.v, "laid: the version moves");
@@ -152,7 +152,7 @@ test("the edits laid: each changes what it says", () => {
   // the path painted
   const px = (HILL.cx + 1) * CHUNK + 5;
   const pz = HILL.cz * CHUNK + 10;
-  assert.equal(surfaceTileAt(px, pz), "path");
+  assert.equal(surfaceCellAt(px, pz), "path");
   assert.equal(groundSurfaceAt(px + 0.5, pz + 0.5), "path");
   // the trees: one birch left in the chunk, in its first cell
   const trees = treesIn(-5, -4);
@@ -179,7 +179,7 @@ test("the edits laid: each changes what it says", () => {
   );
   // the things: the clearing's lamp gone (its tile walked), the stop sign moved, a lamp put down
   assert.ok(!LAMPS.some((l) => l.key === "lamp:clearing"));
-  assert.ok(!was.lamp && walkableTile(122, -252), "the lamp's tile walkable");
+  assert.ok(!was.lamp && walkableCell(122, -252), "the lamp's tile walkable");
   assert.equal(groundsThings().find((t) => t.key === "street:stop")?.x, 426);
   assert.notEqual(stopWas?.x, 426);
   assert.ok(LAMPS.some((l) => l.key === "god-lamp-1" && l.kind === "town"));

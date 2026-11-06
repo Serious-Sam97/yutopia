@@ -150,7 +150,7 @@ test("doors and windows go into a wall from the catalog; the wall stays, a door 
     await page.evaluate((q) => (window as any).__yutopia.teleport({ x: q.x + 0.5, y: q.y + 1.5 }), { x, y });
     await page.waitForTimeout(600);
     await walkTo(page, x + 0.5, y - 1.5);
-    expect(await page.evaluate(() => (window as any).__yutopia.meTile().y)).toBeLessThan(y);
+    expect(await page.evaluate(() => (window as any).__yutopia.meAt().y)).toBeLessThan(y);
     expect(
       await page.evaluate((q) => (window as any).__yutopia.grid.step(q.x + 1, q.y, q.x + 1, q.y - 1), { x, y }),
     ).toBe(false);

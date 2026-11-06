@@ -12,10 +12,6 @@ export type BodyHost = Pick<
 export class Body {
   constructor(private readonly c: BodyHost) {}
 
-  // Stereo pan of a sound at `src` for a listener at `ear`, as this camera sees
-  // it (the iso view pans by screen x; here by the camera's right).
-  /** Where the Grounds' coords (the building's) sit in my floor's 3D frame: the scene's x, z are
-   *  theirs less (x, z); its height theirs plus y (docs/plan/28-the-car.md: the cars draw so). */
   // ── the physics world (docs/plan/50-the-volume.md; tp/physics3d.ts): my body moves on it ──
   physics: BrowserPhysics | null = null;
 

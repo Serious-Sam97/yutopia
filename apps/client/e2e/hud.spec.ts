@@ -17,7 +17,7 @@ test("HUD: who hears you, emotes, the phone key, people, room, status, minimap",
   ana.on("pageerror", (e) => errors.push(e.message));
   await enter(ana, ta, s);
   await enter(bia, tb, s);
-  const at = await ana.evaluate(() => (window as any).__yutopia.meTile());
+  const at = await ana.evaluate(() => (window as any).__yutopia.meAt());
   await walkNear(bia, at.x + 1.5, at.y + 0.5, 25_000);
 
   // top bars: where I am — the room's name, who's here under it (people come in at the arrival point) — who's in

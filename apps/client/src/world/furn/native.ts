@@ -148,7 +148,7 @@ import {
 } from "./xmas";
 
 // The kinds the kit draws in the world (docs/plan/67-the-furniture.md, phase 1): World3.drawObject
-// asks here before the iso art. Each model is built once a look (its kind and what changes it: the
+// asks here. Each model is built once a look (its kind and what changes it: the
 // fabric), in its own frame — x across its footprint, z down it, y up, metres — and turned into the
 // world's buffers as the physics' shapes are turned (shared shapes turnPoint), its vertices marked
 // for the cel (look.ts). `signed`: its family's signed off, drawn for everyone; otherwise only with
@@ -200,7 +200,7 @@ export const LOOK_NAMES: Record<string, readonly string[]> = {
   ),
 };
 
-/** The iso art's seed for an id (kit.ts seedOf, world/games/room.ts): what picked a look unset. */
+/** A thing's seed for an id (FNV-1a, as art/seed.ts seedOf and world/games/room.ts): what picked a look unset. */
 function idHash(id: string): number {
   let h = 2166136261;
   for (let i = 0; i < id.length; i++) {
@@ -211,7 +211,7 @@ function idHash(id: string): number {
 }
 /** A placed thing's look: its picked variant — unset, as everything else in the world reads it
  *  (shared variantOf: the catalog's `look` where a room should match, else picked by its id, as the
- *  iso art and the game room's LCD do) — its fabric or paint, its seed, sat on. */
+ *  game room's LCD does) — its fabric or paint, its seed, sat on. */
 function lookOf(o: WorldObjectDef): Look {
   const n = LOOK_NAMES[o.kind]?.length ?? 1;
   const v = isKind(o.kind) ? variantOf(o, idHash(o.id)) : 0;
@@ -398,7 +398,7 @@ const KINDS: Record<string, Kind> = {
   },
   frame: {
     signed: true,
-    // (its picture by props.seed, the iso art's 0.5 unset)
+    // (its picture by props.seed, 0.5 unset)
     look: (o) => frameSeed(o.props?.seed).toFixed(3),
     make: (o) => {
       const m = new Model(2);
@@ -777,7 +777,7 @@ export function isNativeDress(kind: string): boolean {
 }
 const dressCache = new Map<string, BufferGeometry>();
 /** A piece of the rooms' dressing (shared dressing.ts), drawn as the same thing put down by hand is:
- *  round its middle (x, y), `z` iso px up, unturned. */
+ *  round its middle (x, y), `z` m up, unturned. */
 export function nativeDressInto(out: Out, d: { kind: string; x: number; y: number; z: number; seed: number }): void {
   const seed = thingSeed(d.seed);
   const key = `${d.kind}|${seed}`;

@@ -6,7 +6,7 @@ import {
   LAMPS,
   SNOW_POLES,
   STREET,
-  surfaceTileAt,
+  surfaceCellAt,
   WAYS,
   wallEdgeAt,
 } from "./grounds.ts";
@@ -79,7 +79,7 @@ function hashChunk(cx: number, cz: number, f: ChunkFnvs) {
   }
   // (every other tile's surface, as walking reads them: kept per chunk)
   for (let j = 0; j < CHUNK; j += 2)
-    for (let i = 0; i < CHUNK; i += 2) surfaces.str(surfaceTileAt(cx * CHUNK + i, cz * CHUNK + j));
+    for (let i = 0; i < CHUNK; i += 2) surfaces.str(surfaceCellAt(cx * CHUNK + i, cz * CHUNK + j));
   for (const g of groundSolidsIn(cx, cz)) {
     solids.str(g.what);
     for (const v of Object.values(g.s)) typeof v === "number" ? solids.num(v) : solids.str(String(v));

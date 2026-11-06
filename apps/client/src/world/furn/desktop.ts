@@ -4,9 +4,9 @@ import { P, shade } from "./palette";
 
 // What stands on desks and tables (docs/plan/67-the-furniture.md, phase 4), in a thing-on-a-surface's
 // frame: one tile, its middle at (0.5, 0.5), y up from the top it stands on (its host's: the lift
-// is the host's surface), facing −z — whoever sits at the desk (the catalog's rot 0, as the iso art
-// had it). Each keeps inside the quarter-tile cells it takes (shared tops.ts TOP_SIZE), but for a
-// lamp's arm or an antenna reaching over. What stays where the world needs it: the computer's
+// is the host's surface), facing −z — whoever sits at the desk (the catalog's rot 0). Each keeps
+// inside the quarter-tile cells it takes (shared tops.ts TOP_SIZE), but for a lamp's arm or an
+// antenna reaching over. What stays where the world needs it: the computer's
 // glass exactly on shared COMPUTER_GLASS (the VortexOS picture is drawn there), the coffee
 // machine's buttons and cup where the hands go (view.ts partsOf).
 
@@ -394,7 +394,7 @@ export function bell(m: Model, _seed: number) {
 /** A wooden table radio: a speaker behind its grille cloth, the tuning dial's window, two knobs, a
  *  telescopic antenna up at an angle. Its dial lit when it plays. */
 export function radio(m: Model, o: Look) {
-  m.facing = Math.PI; // (drawn facing −z; it faces the room, as the iso art had it)
+  m.facing = Math.PI; // (drawn facing −z; it faces the room)
   const on = o.on === true;
   m.add(box([0.42, 0.22, 0.18], 0.02, 3), P.walnut, { at: [C, 0.12, C] });
   m.add(box([0.4, 0.012, 0.16], 0.004), P.walnutDark, { at: [C, 0.006, C] });
@@ -429,7 +429,7 @@ export function radio(m: Model, o: Look) {
 /** A walnut turntable: the platter and its mat, a record on it, the tonearm on its rest, the speed
  *  buttons and the feet. */
 export function turntable(m: Model, o: Look) {
-  m.facing = Math.PI; // (drawn facing −z; it faces the room, as the iso art had it)
+  m.facing = Math.PI; // (drawn facing −z; it faces the room)
   m.add(box([0.46, 0.06, 0.36], 0.01, 2), P.walnut, { at: [C, 0.045, C] });
   m.add(box([0.44, 0.006, 0.34]), P.steel, { at: [C, 0.078, C] });
   for (const [x, z] of [
@@ -469,7 +469,7 @@ export function turntable(m: Model, o: Look) {
  *  wand, the buttons on top of its front (where the hands press: 0.41 up), cups warming on top.
  *  The cup goes under the spout, on the tray (0.08). */
 export function coffeeMachine(m: Model, _o: Look) {
-  m.facing = Math.PI; // (drawn facing −z; it faces the room, as the iso art had it)
+  m.facing = Math.PI; // (drawn facing −z; it faces the room)
   const steel = P.steelLight;
   m.add(box([0.32, 0.36, 0.3], 0.02, 2), steel, { at: [C, 0.06 + 0.18, C + 0.02] });
   m.add(box([0.3, 0.06, 0.32], 0.01, 2), shade(steel, 0.8), { at: [C, 0.03, C] });

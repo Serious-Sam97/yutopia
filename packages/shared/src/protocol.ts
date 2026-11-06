@@ -80,7 +80,7 @@ export interface PerfReport {
   };
   long: { n: number; worst: number }; // long tasks (>50 ms)
   stages: Record<string, number>; // stage → average ms a frame
-  draws: number | null; // 3D draw calls in a sampled frame (null in iso)
+  draws: number | null; // 3D draw calls in a sampled frame (null before the 3D view's up)
   culled: number | null; // things left out of that frame (3D)
   where: {
     level: number;
@@ -105,7 +105,7 @@ export interface PerfReport {
     cores: number;
     memory: number | null;
     // the 3D view's pixel ratio now, what it started with (and the screen's then), how
-    // often it was put right since (null in iso) — docs/plan/38-the-lag.md, round 3
+    // often it was put right since (null before the 3D view's up) — docs/plan/38-the-lag.md, round 3
     ratio: number | null;
     ratioAtStart: number | null;
     dprAtStart: number | null;

@@ -17,8 +17,8 @@ import { Place } from "@yutopia/shared/physics/place";
 // A tiny offline world for the third-person demo: you and a few people who
 // wander, sit and get up again, moved by the same shared rules the server
 // checks (Place: Jolt's world once the view's is in; moveStep). Each body is exactly what the server
-// sends for a person (x, y, d = one of 8 facings, a = idle / walk / sit), so
-// either view — iso or third person — can draw the same people.
+// sends for a person (x, y, yaw on 8 ways, a = idle / walk / sit), so the view draws them as it
+// does the world's people.
 
 export interface Body {
   id: string;

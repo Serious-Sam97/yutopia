@@ -13,7 +13,7 @@ const me = (page: Page) =>
   page.evaluate(() => {
     const w = (window as any).__yutopia;
     const p = w.room.state.players.get(w.room.sessionId);
-    return { ...w.meTile(), busy: p.busy, held: p.held, act: p.act, focus: p.focus, sid: w.room.sessionId };
+    return { ...w.meAt(), busy: p.busy, held: p.held, act: p.act, focus: p.focus, sid: w.room.sessionId };
   });
 const queue = (page: Page) => page.evaluate(() => (window as any).__hud.get().queue.map((q: any) => q.act));
 const put = (page: Page, o: Record<string, unknown>) =>

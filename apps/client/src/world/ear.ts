@@ -1,5 +1,5 @@
-// Where a sound is, left or right of the one hearing it (plan 72 phase 12: by the camera's facing —
-// the iso screen's x, which the old pan went by, retired): the 3D view tells its yaw each frame;
+// Where a sound is, left or right of the one hearing it (plan 72 phase 12: by the camera's facing):
+// the 3D view tells its yaw each frame;
 // before it has, as if facing north.
 let yaw = -Math.PI / 2;
 

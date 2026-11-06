@@ -47,9 +47,9 @@ type Prop = ReturnType<Chars["buildProp"]>;
 type MotionOut = ReturnType<InstanceType<Chars["Motion3"]>["update"]>;
 
 // A person in 3D (docs/plan/22-people-3d.md, P4): their Ligne claire model
-// (world/chars), posed every frame by the same motion layers as the 2D people,
+// (world/chars), posed every frame by its motion layers (chars/motion.ts),
 // lit by the room's light map, sitting on real seat heights, holding real
-// things. Vortex stays his drawing (people3d.ts): he must look exactly like
+// things. Vortex stays his drawing (stand3d.ts Vortex3): he must look exactly like
 // Yondra's.
 
 const SIT_IN = 0.3; // s: sitting down / getting up
@@ -828,7 +828,7 @@ export class Person3D {
     this.model.setEyes(mo.eyes?.[0] ?? 0, mo.eyes?.[1] ?? 0);
 
     this.props(p, held, mo.sip);
-    // away: faded, like iso
+    // away: faded
     const away = p.status === "away";
     // (the shadowed: dark while their shield holds; bare — their office clothes — exposed)
     const dark = !!p.shade && p.shade.dark > 0.5 && !!this.mats.shade;

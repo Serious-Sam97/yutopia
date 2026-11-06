@@ -2,13 +2,13 @@ import {
   BENCH,
   BUILDINGS,
   CHUNK,
-  carBlockedTile,
+  carBlockedCell,
   FORECOURT,
   heightAt,
   LAMPS,
   MOTORS,
   roadFooting,
-  surfaceTileAt,
+  surfaceCellAt,
   treesIn,
   underfoot,
   waterAt,
@@ -30,7 +30,7 @@ import type { CarSpec } from "./specs.ts";
  *  the earth bare, mud soaked, the snow's when it lies), the roads' patches while the snow's about,
  *  wet in the rain. */
 export function groundAt(x: number, z: number, cold = 0.5): Ground {
-  const s = surfaceTileAt(Math.floor(x), Math.floor(z));
+  const s = surfaceCellAt(Math.floor(x), Math.floor(z));
   if (s === "asphalt") return roadFooting(x, z, cold) ?? (underfoot().wet > 0.4 ? "wet" : "asphalt");
   if (s === "snow" || s === "deep" || s === "path") {
     const f = weatheredFooting(s, x, z);
@@ -138,7 +138,7 @@ function chunkSolids(cx: number, cz: number): Solid[] {
     if (z < z1) {
       let run = -1;
       for (let x = x0; x <= x1; x++) {
-        const solid = x < x1 && carBlockedTile(x, z) && !inAny(x + 0.5, z + 0.5);
+        const solid = x < x1 && carBlockedCell(x, z) && !inAny(x + 0.5, z + 0.5);
         if (solid && run < 0) run = x;
         if (!solid && run >= 0) {
           const k = `${run},${x}`;

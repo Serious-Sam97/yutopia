@@ -90,7 +90,7 @@ if (process.env.HEADLESS === "1") {
   await page.waitForFunction(() => window.__hud?.get().phase === "ready", null, { timeout: 120000 });
   const at = await page.evaluate(() => ({
     level: window.__yutopia.level,
-    at: window.__yutopia.meTile(),
+    at: window.__yutopia.meAt(),
     objects: window.__yutopia.room.state.objects.size,
   }));
   console.log("[prod-world] check:", JSON.stringify(at));

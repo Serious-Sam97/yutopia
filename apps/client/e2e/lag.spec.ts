@@ -61,7 +61,7 @@ async function goTo(page: Page, at: { x: number; y: number; level: number }) {
   await page.evaluate((p) => (window as any).__yutopia.teleport(p), at);
   await page.waitForFunction(
     (p) => {
-      const t = (window as any).__yutopia.meTile();
+      const t = (window as any).__yutopia.meAt();
       return Math.hypot(t.x - p.x, t.y - p.y) < 2;
     },
     at,
@@ -74,7 +74,7 @@ async function goTo(page: Page, at: { x: number; y: number; level: number }) {
 async function pace(page: Page, to?: { x: number; y: number }) {
   await page.evaluate(async (target) => {
     const c = (window as any).__yutopia;
-    const from = c.meTile();
+    const from = c.meAt();
     let there = target;
     if (!there) {
       for (const [dx, dy] of [
@@ -101,7 +101,7 @@ async function pace(page: Page, to?: { x: number; y: number }) {
     let goal = there;
     c.walkTo(goal);
     (window as any).__pace = setInterval(() => {
-      const t = c.meTile();
+      const t = c.meAt();
       if (Math.hypot(t.x - goal.x, t.y - goal.y) < 1.2 || !c.path?.length) {
         goal = goal === there ? from : there;
         c.walkTo(goal);

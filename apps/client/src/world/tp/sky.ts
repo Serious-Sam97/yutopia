@@ -29,11 +29,10 @@ import { Rain } from "./rain3d";
 import { stepRoadSnow } from "./roads3d";
 import { layDry, ROOFS, WxEase, wx, wxHold, wxNow } from "./wx3d";
 
-// the themes' drawings and skies: the same lazy chunk the iso view loads
+// the themes' drawings and skies: their own lazy chunk (art/themes-load.ts)
 export type Themes = typeof import("../art/themes");
 
-// What surrounds the building in 3D (as the iso view's backdrop, with the same
-// sky by the hour): a sky dome with stars at night and an overcast deck, and the
+// What surrounds the building in 3D (the sky by the hour): a sky dome with stars at night and an overcast deck, and the
 // snow campus (tp/campus.ts) — the block, the lot, the field.
 
 // the dome's radius (tiles): the campus reaches far (see fogFor)
@@ -119,7 +118,7 @@ export class Surroundings {
     outline: Outline | null = null,
   ) {
     const { rng } = T;
-    // the dome: top → middle → horizon colours, as the iso sky
+    // the dome: top → middle → horizon colours
     this.domeMat = new ShaderMaterial({
       side: BackSide,
       depthWrite: false,

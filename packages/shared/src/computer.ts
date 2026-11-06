@@ -96,13 +96,6 @@ export function computerGlass(o: WorldObjectDef): {
   };
 }
 
-// Whether the iso camera (which sees the +x and +y faces) sees its glass:
-// it faces −y at rot 0, +x at rot 1, +y at rot 2.
-export function computerFacing(o: WorldObjectDef): boolean {
-  const r = quarterOf(o) & 3;
-  return r === 1 || r === 2;
-}
-
 // ── desks set up before the computers ────────────────────────────────────────
 // A monitor on a desk (a tabletop piece) becomes a computer, in its place,
 // once: same id, cell, turn and lift.

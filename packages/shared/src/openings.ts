@@ -21,7 +21,7 @@ import { cellOf, hWallOf, vWallOf, wallOf } from "./structure/query.ts";
 
 // Doors and windows, Sims-style: things set into a wall. The wall stays a wall
 // (its material, both faces) and the opening cuts its own hole through it, the
-// whole width of each edge it takes, from z0 to z1 (iso px). Stored like a
+// whole width of each edge it takes, from z0 to z1 (m up). Stored like a
 // door always was: rot even = edges along x from the north edge of (x, y),
 // rot odd = edges along y from the west edge of (x, y); `w` of them (catalog).
 // Doors let people through (unless locked for them, grid.ts); windows don't.
@@ -64,7 +64,7 @@ export function doorShut(o: { kind: string; props?: Record<string, unknown> }): 
 export const doorBlocksLight = (o: { kind: string; props?: Record<string, unknown> }): boolean =>
   doorShut(o) && o.kind !== "door_saloon";
 
-// The hole each one cuts, m up (the art draws its frame in it: art/items).
+// The hole each one cuts, m up (the kit draws its frame in it: furn/openings.ts).
 // Doors and the windows' tops line up with the doorways (2.25 m).
 const CUTS: Record<string, [number, number]> = {
   door: [0, 2.2456],

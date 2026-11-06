@@ -14,7 +14,7 @@ const pet = (page: Page, id: string) =>
     const p = (window as any).__yutopia.room.state.pets.get(i);
     return p ? { x: p.x as number, y: p.y as number, mode: p.mode as string, act: p.act as string } : null;
   }, id);
-const me = (page: Page) => page.evaluate(() => (window as any).__yutopia.meTile() as { x: number; y: number });
+const me = (page: Page) => page.evaluate(() => (window as any).__yutopia.meAt() as { x: number; y: number });
 const send = (page: Page, type: string, msg: unknown) =>
   page.evaluate(([t, m]) => (window as any).__yutopia.send(t, m), [type, msg] as const);
 const mine = (page: Page) =>

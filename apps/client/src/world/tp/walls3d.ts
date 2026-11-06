@@ -161,9 +161,9 @@ export function piecesOf(
   return out;
 }
 
-/** Turn what a sketch drew (three's frame: x, up, z = the floor's y) about the up axis by `angle`
+/** Turn a piece's buffers (three's frame: x, up, z = the floor's y) about the up axis by `angle`
  *  (the floor's x towards its y) and move it by (x, z): a piece drawn along +x from the origin,
- *  placed along a wall. Its faces, ink, decals and cards. */
+ *  placed along a wall. Its faces and decals. */
 export function turnOut(out: Out, angle: number, x: number, z: number, lift = 0): void {
   const c = Math.cos(angle);
   const s = Math.sin(angle);

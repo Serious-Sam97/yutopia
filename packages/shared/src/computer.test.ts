@@ -1,15 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { quarterYaw } from "./catalog.ts";
-import {
-  cleanLabel,
-  computerFacing,
-  computerGlass,
-  isEra,
-  isPhase,
-  monitorsToComputers,
-  nextPhaseOk,
-} from "./computer.ts";
+import { cleanLabel, computerGlass, isEra, isPhase, monitorsToComputers, nextPhaseOk } from "./computer.ts";
 import { canPlace, studio, type WorldObjectDef } from "./index.ts";
 
 // The studio's computers (docs/plan/19-vortexos.md).
@@ -29,13 +21,9 @@ test("computers: the glass on the monitor, turned with it, lifted onto the desk"
   // facing −y at rot 0: its left (as you look at it) is the +x side
   assert.ok(g.tl[0] > g.tr[0]);
   assert.equal(g.tl[1], g.tr[1]);
-  // turned: the glass turns too, and only rot 1/2 face the iso camera
+  // turned: the glass turns too
   const turned = computerGlass({ ...pc, yaw: quarterYaw(2) });
   assert.ok(turned && turned.tl[0] < turned.tr[0]);
-  assert.deepEqual(
-    [0, 1, 2, 3].map((rot) => computerFacing({ ...pc, yaw: quarterYaw(rot) })),
-    [false, true, true, false],
-  );
   assert.equal(computerGlass({ ...pc, kind: "tv_portable" }), null);
 });
 

@@ -13,7 +13,7 @@ import {
   TRACTOR,
   treeDensity,
   treesIn,
-  walkableTile,
+  walkableCell,
   wallEdgeAt,
 } from "./grounds.ts";
 
@@ -21,7 +21,7 @@ import {
 // Street — a lane down from the square to the barn's doors and the farmhouse,
 // the barn walked into, the cornfield walked through, the tractor in the way.
 
-const walk = (x: number, z: number) => walkableTile(Math.floor(x), Math.floor(z));
+const walk = (x: number, z: number) => walkableCell(Math.floor(x), Math.floor(z));
 
 test("the farm: cleared, flat, the lane from the square to the barn and the farmhouse", () => {
   // no trees anywhere on it

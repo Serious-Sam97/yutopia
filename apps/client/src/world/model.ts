@@ -1,6 +1,5 @@
 import {
   type AvatarLayers,
-  artM,
   entry,
   type JumpNow,
   type MapDef,
@@ -21,7 +20,6 @@ import type { PetView } from "./petview";
 // things on my floor as they are this moment (a door swung open for someone passing, a seat
 // taken, a radio on), who's where, what the wall displays show, the hour's light, and what build
 // mode is showing. The 3D view draws from it, and answers it what's on the screen where (`view`).
-// It was the iso engine's own state, before iso was retired.
 
 export type PuffKind = "drop" | "poof" | "spark" | "confetti" | "land" | "kick";
 
@@ -93,7 +91,7 @@ export interface ClickMods {
   right: boolean;
 }
 export interface ModelEvents {
-  onTileClick?: (x: number, y: number, mods?: ClickMods) => void;
+  onFloorClick?: (x: number, y: number, mods?: ClickMods) => void;
   onToyClick?: (id: string) => void; // a pet's toy on the floor
   onAvatarClick?: (id: string, at: { x: number; y: number }) => void; // at: client px
   onObjectClick?: (id: string, at: { x: number; y: number }) => void;
@@ -381,16 +379,16 @@ export class WorldModel {
   private keepDisplay(o: WorldObjectDef) {
     const wide = o.kind === "screen_wall";
     const tiles = wide ? 4 : 3;
-    const z0 = wide ? 21 : 27;
-    const z1 = wide ? 73 : 67;
+    // (its glass from z0 to z1 up its wall, m; its picture's canvas px high, as it was drawn)
+    const [z0, z1] = wide ? [0.5359, 1.8628] : [0.689, 1.7097];
     const pw = (tiles - 0.28) * S;
-    const ph = z1 - z0;
+    const ph = wide ? 52 : 40;
     this.panels.set(o.id, {
       def: o,
       ox: 0.14,
       oy: 0.06,
-      zTop: artM(z1),
-      h: artM(ph),
+      zTop: z1,
+      h: z1 - z0,
       pw,
       ph,
       draw: (g) => this.drawDisplay(g, o.id, wide, pw, ph),
@@ -409,8 +407,8 @@ export class WorldModel {
       def: o,
       ox: 0.14,
       oy: 0.065,
-      zTop: artM(61),
-      h: artM(ph),
+      zTop: 1.5566,
+      h: 0.8676,
       pw,
       ph,
       draw: (g) => drawWhiteboard(g, items, pw, ph),
@@ -647,7 +645,7 @@ export class WorldModel {
     return this.view?.throughAt(x, y) ?? false;
   }
 
-  // Dust when something lands, a poof when it goes, sparks, confetti (world tiles; `lift` iso px
+  // Dust when something lands, a poof when it goes, sparks, confetti (world tiles; `lift` m
   // off the floor; `hard`, a jump's "land" / "kick": how hard, 0..1).
   puff(x: number, y: number, kind: PuffKind = "drop", lift = 0, hard = 1) {
     this.view?.puff(x, y, kind, lift, hard);

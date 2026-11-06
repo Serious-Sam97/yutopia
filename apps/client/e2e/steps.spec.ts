@@ -25,7 +25,7 @@ test("my steps: the body's feet as they land, at the walk's pace, in turn; none 
   // somewhere 5–8 tiles off that she can walk to
   const to = await page.evaluate(() => {
     const w = (window as any).__yutopia;
-    const me = w.meTile();
+    const me = w.meAt();
     for (let r = 8; r >= 5; r--)
       for (let a = 0; a < 16; a++) {
         const x = Math.floor(me.x + r * Math.cos((a * Math.PI) / 8));

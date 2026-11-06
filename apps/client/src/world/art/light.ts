@@ -70,7 +70,7 @@ const LIGHT_Z: Record<string, number> = {
   standup_mat: 0.05,
 };
 
-// local rot-0 point → world, same turn as the item art (90° clockwise steps)
+// local rot-0 point → world, turned as the catalog turns things (90° clockwise steps)
 function place(o: WorldObjectDef, lx: number, ly: number): [number, number] {
   const e = entry(o.kind);
   let x = lx;
