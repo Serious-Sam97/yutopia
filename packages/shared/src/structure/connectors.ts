@@ -6,6 +6,7 @@
 // each floor sharing a shaft) and these are read from them.
 import type { WorldObjectDef } from "../catalog.ts";
 import { footprint, quarterOf } from "../catalog.ts";
+import { flightRise } from "../flight.ts";
 import { elevOf, floorsOf, objLevel } from "../levels.ts";
 import { liftFront } from "../lift.ts";
 import type { MapDef } from "../map.ts";
@@ -25,7 +26,7 @@ export interface ConnectorStop {
 export interface Connector {
   /** a staircase: its thing's id; a lift: `lift:{shaft}` */
   id: string;
-  kind: "stairs" | "lift";
+  kind: "stairs" | "lift" | "flight";
   /** its footprint (world) */
   outline: Ring;
   /** the heights it joins, bottom up */
@@ -62,6 +63,23 @@ export function connectorsOf(map: MapDef, objects: Iterable<WorldObjectDef>): Co
           { floor: level + 1, z: elevOf(level + 1), thing: o.id, at: xy(way[way.length - 1]) },
         ],
         ramps: stairsRamps(o, elevOf(level)),
+      });
+    } else if (o.kind === "flight") {
+      // a flight of steps up to a mezzanine (phase 11.8): its floor and the mezzanine over it
+      const at = (u: number, v: number): XY => {
+        let [X, Y, W, H] = [u, v, 1, 3];
+        for (let i = 0; i < (quarterOf(o) & 3); i++) [X, Y, W, H] = [H - Y, X, H, W];
+        return [o.x + X, o.y + Y];
+      };
+      const rise = flightRise(o);
+      out.push({
+        id: o.id,
+        kind: "flight",
+        outline: [at(0, 0), at(0, 3), at(1, 3), at(1, 0)],
+        stops: [
+          { floor: level, z: elevOf(level), thing: o.id, at: at(0.5, -0.4) },
+          { floor: level, z: elevOf(level) + rise, thing: o.id, at: at(0.5, 3.4) },
+        ],
       });
     } else if (o.kind === "elevator") {
       const k = String(o.props?.shaft ?? o.id);

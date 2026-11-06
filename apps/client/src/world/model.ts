@@ -118,6 +118,38 @@ export interface EdgeGhost {
   ok: boolean;
   remove?: boolean;
 }
+// A wall drawn free (plan 72 phase 11): from a to b (world m), h high; `remove`: one about to go.
+export interface SegGhost {
+  a: [number, number];
+  b: [number, number];
+  h: number;
+  ok: boolean;
+  remove?: boolean;
+  mat?: string;
+  /** an arc: the points it's drawn along, a to b */
+  pts?: [number, number][];
+  /** how thick (m; none: 0.2) */
+  t?: number;
+}
+// Where the pointer snapped (an end, a middle, a line carried on, square): a mark there, and the
+// line it's in line with
+export interface SnapMark {
+  p: [number, number];
+  kind: string;
+  from?: [number, number];
+  /** up off the floor (m): a wall's top being dragged, and where the guide starts up there */
+  z?: number;
+  fromZ?: number;
+}
+/** A floor drawn free (build/freefloors.ts): its corners, holes, whether it fits, closed yet. */
+export interface PolyGhost {
+  pts: [number, number][];
+  holes?: [number, number][][];
+  ok: boolean;
+  closed: boolean;
+  remove?: boolean;
+  top?: string;
+}
 export interface FaceGhost {
   p: { x: number; y: number; dir: "h" | "v"; side: 1 | -1 };
   mat: string | null; // a material to preview on it
@@ -136,6 +168,7 @@ export interface ModelView {
   floorAt(clientX: number, clientY: number, z: number): { x: number; y: number } | null;
   rayAt(clientX: number, clientY: number): Ray;
   lookedThrough(): Set<string>;
+  throughAt(x: number, y: number): boolean;
   puff(x: number, y: number, kind: PuffKind, lift: number, hard: number): void;
 }
 
@@ -472,6 +505,10 @@ export class WorldModel {
   private ghostLift = 0;
   private edgeGhosts: EdgeGhost[] = [];
   private faceGhosts: FaceGhost[] = [];
+  private segGhosts: SegGhost[] = [];
+  private polyGhosts: PolyGhost[] = [];
+  private cueLift = 0;
+  private snapMarks: SnapMark[] = [];
   private rectGhost: { x: number; y: number; w: number; h: number; ok: boolean } | null = null;
   private spawnOn = false;
   private spawnPick: { x: number; y: number; ok: boolean } | null = null;
@@ -504,6 +541,19 @@ export class WorldModel {
   // Walls about to go on edges (a run being drawn); `remove`: walls about to go.
   setEdgeGhosts(list: EdgeGhost[]) {
     this.edgeGhosts = list;
+  }
+  // Walls drawn free about to go in (or out), and where the pointer snapped.
+  setSegGhosts(list: SegGhost[], marks: SnapMark[] = []) {
+    this.segGhosts = list;
+    this.snapMarks = marks;
+  }
+  // Floors drawn free about to go in (or out), and the working height the tool's cues stand at.
+  setPolyGhosts(list: PolyGhost[], marks?: SnapMark[]) {
+    this.polyGhosts = list;
+    if (marks) this.snapMarks = marks;
+  }
+  setCueLift(m: number) {
+    this.cueLift = m;
   }
   // Wall faces the Walls tool points at (one face of one edge each).
   setFaceGhosts(list: FaceGhost[]) {
@@ -540,6 +590,10 @@ export class WorldModel {
       lift: this.ghostLift,
       edges: this.edgeGhosts,
       faces: this.faceGhosts,
+      segs: this.segGhosts,
+      marks: this.snapMarks,
+      polys: this.polyGhosts,
+      over: this.cueLift,
       wallView: this.wallView,
       rect: this.rectGhost,
       spawn: this.spawnOn ? { at: this.map.spawn, pick: this.spawnPick } : null,
@@ -587,6 +641,10 @@ export class WorldModel {
   // The walls the view looks through right now (cut away / faded): "h3,4" keys.
   lookedThrough(): Set<string> {
     return this.view?.lookedThrough() ?? new Set();
+  }
+  /** A wall at (x, y) is looked through right now (cut away / faded). */
+  throughAt(x: number, y: number): boolean {
+    return this.view?.throughAt(x, y) ?? false;
   }
 
   // Dust when something lands, a poof when it goes, sparks, confetti (world tiles; `lift` iso px

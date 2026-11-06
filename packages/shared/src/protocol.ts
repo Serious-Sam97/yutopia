@@ -322,14 +322,48 @@ export interface ClientMessages {
   "mod:clear": Record<string, never>;
   // any door's lock, from anywhere (an owned room's too)
   "mod:door": { id: string; locked: boolean };
-  // map editing (builders); `level`: which floor of the building (levels.ts;
-  // none: the home floor)
-  "map:paint": { cells: { x: number; y: number; ch: string }[]; level?: number }; // floors (tiles)
-  // walls (tile edges); `side` (a material on a wall that's there): paint only that face
-  "map:walls": { edges: { x: number; y: number; dir: "h" | "v"; ch: string; side?: 1 | -1 }[]; level?: number };
-  // paint wall faces (panels: one face of one edge) — never builds or removes a wall
-  "map:faces": { faces: { x: number; y: number; dir: "h" | "v"; side: 1 | -1 }[]; mat: string; level?: number };
-  "map:resize": { width: number; height: number };
+  // the building's edits (builders; docs/plan/72 phase 11 — the structure's, the tile tools gone);
+  // `level`: which floor of the building (levels.ts; none: the home floor)
+  // walls drawn free (docs/plan/72 phase 11): ends in world metres, put in and taken away by id; `n`
+  // answered with the new ones' ids (struct:walls:ok)
+  /** roofs over closed sets of walls (plan 72 phase 11.7): put on, taken off by id */
+  "struct:roofs": {
+    level?: number;
+    add?: { outline: [number, number][]; kind: "flat" | "gable" | "hip"; pitch?: number; ridge?: 0 | 1 }[];
+    remove?: string[];
+  };
+  /** floors drawn free (plan 72 phase 11.7): polygons of a material at the floor's height or a
+   *  mezzanine's over it; slabs taken away by id */
+  "struct:slabs": {
+    level?: number;
+    add?: { outline: [number, number][]; holes?: [number, number][][]; top: string; over?: number }[];
+    remove?: string[];
+    n?: number;
+  };
+  /** wall faces painted (plan 72 phase 11 — the tile tools' Paint retired): stretches of faces (m
+   *  along each wall from its `a`; `side` +1 its front), or every face round a room */
+  "struct:paint": {
+    level?: number;
+    stretches?: { id: string; side: 1 | -1; from: number; to: number; mat: string }[];
+    room?: string;
+    mat?: string;
+  };
+  "struct:walls": {
+    level?: number;
+    add?: {
+      a: [number, number];
+      b: [number, number];
+      front: string;
+      height?: number;
+      bow?: number;
+      thick?: number;
+      over?: number;
+    }[];
+    /** walls that are there: a new height, a new thickness (phase 11.4) */
+    set?: { id: string; height?: number; thick?: number; front?: string; back?: string }[];
+    remove?: string[];
+    n?: number;
+  };
   "map:new": { width: number; height: number };
   "map:spawn": { x: number; y: number };
   "struct:get": Record<string, never>;
@@ -341,21 +375,6 @@ export interface ClientMessages {
   "lift:call": { id: string };
   "lift:go": { id: string; level: number };
   "lift:close": { id: string }; // in the car: shut its doors now
-  "map:room": {
-    name: string;
-    kind: string;
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-    ownerId: number | null;
-    ownerName: string | null;
-    walls: boolean;
-    floor?: string;
-    wall?: string; // wall material (p, w, f, b, k, g)
-    level?: number;
-  };
-  "map:room:walls": { key: string; wall: string; level?: number }; // repaint a room's walls
   "map:room:update": {
     key: string;
     level?: number;
@@ -604,6 +623,9 @@ export interface ServerMessages {
   // each edit as operations from one revision to the next (behind: ask for it whole again)
   "struct:full": { rev: number; structure: Structure };
   "struct:ops": { rev: number; ops: StructOp[] };
+  /** walls drawn: their ids; the rooms they closed round (phase 11.5: new, to be named) */
+  "struct:walls:ok": { n: number | null; ids: string[]; found?: string[] };
+  "struct:slabs:ok": { n: number | null; ids: string[] };
   // to whoever streams a console: its TV's LiveKit token; another player's
   // pad; who may see the picture and who may hear it (user ids)
   "game:tv": { id: string; token: string; identity: string };

@@ -13,7 +13,7 @@ import {
   jumpTimes,
   stepHeight,
 } from "./jump.ts";
-import type { MapDef } from "./map.ts";
+import type { TileMap } from "./map.ts";
 import type { Place } from "./physics/place.ts";
 import { type TestWorld, testWorld } from "./physics/testing.ts";
 
@@ -51,7 +51,7 @@ after(() => {
 async function room(): Promise<Place> {
   const W = 10;
   const H = 6;
-  const map: MapDef = {
+  const map: TileMap = {
     key: "t",
     name: "t",
     width: W,

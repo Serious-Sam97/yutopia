@@ -19,7 +19,6 @@ export function MapPanel() {
   useEffect(() => setSize(cur), [cur.width, cur.height]);
   const largest = MAP_SIZES[MAP_SIZES.length - 1];
   const sizeText = `${size.width}×${size.height}`;
-  const changed = size.width !== cur.width || size.height !== cur.height;
 
   return (
     <>
@@ -30,6 +29,7 @@ export function MapPanel() {
         </span>
       </header>
       <div className="flex-1 min-h-0 overflow-y-auto scroll-thin px-3 pb-3 flex flex-col gap-2.5">
+        {/* (the size a blank start makes — plan 72 phase 11: floors are drawn, not resized) */}
         <h3 className="grp">{t("buildSize")}</h3>
         {/* the sizes drawn to scale, nested from the corner */}
         <div className="vfd-window relative h-[170px] shrink-0">
@@ -90,17 +90,6 @@ export function MapPanel() {
             </label>
           ))}
         </div>
-        <button
-          type="button"
-          className="deck-btn w-full"
-          disabled={!changed}
-          onClick={() => {
-            const shrink = size.width < cur.width || size.height < cur.height;
-            if (!shrink || window.confirm(t("buildShrinkConfirm"))) w?.send("map:resize", size);
-          }}
-        >
-          {t("buildResizeTo").replace("{size}", sizeText)}
-        </button>
         <button
           type="button"
           className="ghost-btn w-full flex items-center justify-center gap-2"

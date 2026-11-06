@@ -12,14 +12,16 @@ import {
   isFloor,
   isOuterEdge,
   isWallEdge,
-  type LevelDef,
   MapBuilder,
   type MapDef,
   setEdge,
   spanOf,
+  type TileLevel,
+  type TileMap,
   tileAt,
 } from "./map.ts";
 import { isOpening, openingEdges } from "./openings.ts";
+import { cellOf } from "./structure/query.ts";
 
 // The Ruptura-style headquarters made real (docs/plan/25-building-floors.md):
 // the studio is the top of five floors; below it three blank office floors and
@@ -51,7 +53,7 @@ const stairsOf = (c: Core) => ({ x: STAIRS_AT.x - CORE.x + c.x, y: STAIRS_AT.y -
 /** Where the core goes in a studio (null: nowhere it fits): all floor, and
  *  where it disturbs least — walls it would cut through, things it would move.
  *  The designed spot (the south end of the studio's Lobby) when it's nearly free. */
-export function findCore(home: MapDef, objects: WorldObjectDef[] = []): Core | null {
+export function findCore(home: TileMap, objects: WorldObjectDef[] = []): Core | null {
   const fits = (c: Core) => {
     for (let y = c.y; y < c.y + CORE.h; y++)
       for (let x = c.x; x < c.x + CORE.w; x++) if (!isFloor(tileAt(home, x, y))) return false;
@@ -128,7 +130,7 @@ export function entranceZOf(home: MapDef): number {
   let best = { len: 0, mid: (sp.y0 + sp.y1) / 2 };
   let start = -1;
   for (let y = sp.y0; y <= sp.y1; y++) {
-    const f = y < sp.y1 && isFloor(tileAt(home, sp.x0, y));
+    const f = y < sp.y1 && isFloor(cellOf(home, sp.x0, y));
     if (f && start < 0) start = y;
     if (!f && start >= 0) {
       if (y - start > best.len) best = { len: y - start, mid: (start + y) / 2 };
@@ -201,7 +203,7 @@ function coreThings(level: number, off: Point, top: boolean, c: Core | null): Wo
 
 // windows every few tiles along a floor's outer walls (not into the core, not
 // where something else is set in the wall)
-function outerWindows(m: MapDef, level: number, skip: (e: Edge) => boolean = () => false): WorldObjectDef[] {
+function outerWindows(m: TileMap, level: number, skip: (e: Edge) => boolean = () => false): WorldObjectDef[] {
   const out: WorldObjectDef[] = [];
   const add = (e: Edge, along: number) => {
     if (along % 4 !== 2 || !isWallEdge(edgeAt(m, e)) || edgeAt(m, e) === "g" || !isOuterEdge(m, e) || skip(e)) return;
@@ -220,7 +222,7 @@ function outerWindows(m: MapDef, level: number, skip: (e: Edge) => boolean = () 
 }
 
 // walls on every outer edge of a set of floor tiles
-function outerWalls(m: MapDef, ch = "p"): MapDef {
+function outerWalls(m: TileMap, ch = "p"): TileMap {
   const out = { ...m, hWalls: [...m.hWalls], vWalls: [...m.vWalls] };
   for (let y = 0; y <= m.height; y++)
     for (let x = 0; x < m.width; x++) if (isOuterEdge(m, { dir: "h", x, y })) setEdge(out, { dir: "h", x, y }, ch);
@@ -250,14 +252,14 @@ const coreArea = (off: Point, level: number, c: Core | null): AreaDef[] =>
 /** A blank office floor on the studio's footprint: bare tile floor, the
  *  curtain wall's windows, the core. Builders make it something. */
 export function blankLevel(
-  home: MapDef,
+  home: TileMap,
   index: number,
   core: Core | null = home.core ?? findCore(home),
-): { level: LevelDef; objects: WorldObjectDef[] } {
+): { level: TileLevel; objects: WorldObjectDef[] } {
   const tiles = home.tiles.map((r) => [...r].map((c) => (isFloor(c) ? "_" : " ")).join(""));
-  let m: MapDef = { ...home, tiles, ...emptyEdges(home.width, home.height), hBacks: undefined, vBacks: undefined };
+  let m: TileMap = { ...home, tiles, ...emptyEdges(home.width, home.height), hBacks: undefined, vBacks: undefined };
   m = withCore(outerWalls(m), { x: 0, y: 0 }, core);
-  const level: LevelDef = {
+  const level: TileLevel = {
     index,
     name: `Floor ${index}`,
     ox: 0,
@@ -279,7 +281,7 @@ export function blankLevel(
 // The lobby of a 48 × 36 studio (the designed one, docs/plan/25 mocks): the
 // glass front on the lot side with the doors in it, the reception, the core to
 // the south, the long white corridor east through the offices.
-function lobbyRooms(): { map: MapDef; objects: WorldObjectDef[] } {
+function lobbyRooms(): { map: TileMap; objects: WorldObjectDef[] } {
   const tiles = new MapBuilder(48, 36)
     .room(0, 0, 22, 7, ",") // Mail room
     .room(0, 7, 22, 29, "_") // Lobby
@@ -370,9 +372,9 @@ function lobbyRooms(): { map: MapDef; objects: WorldObjectDef[] } {
 
 /** The ground floor: the lobby (on the studio's footprint) and the lot. */
 export function groundLevel(
-  home: MapDef,
+  home: TileMap,
   core: Core | null = home.core ?? findCore(home),
-): { level: LevelDef; objects: WorldObjectDef[] } {
+): { level: TileLevel; objects: WorldObjectDef[] } {
   const off = GROUND_OFFSET;
   const bx = -off.x; // the building's corner in this floor's coords
   const by = -off.y;
@@ -392,7 +394,7 @@ export function groundLevel(
   for (let y = 0; y < home.height; y++)
     for (let x = 0; x < home.width; x++)
       if (isFloor(tileAt(home, x, y))) rows[y + by][x + bx] = inside ? inside.map.tiles[y][x] : "_";
-  let m: MapDef = {
+  let m: TileMap = {
     ...home,
     width: W,
     height: H,
@@ -447,7 +449,7 @@ export function groundLevel(
       : [{ key: "ground-lobby", name: "Lobby", kind: "open" as const, x: bx, y: by, w: home.width, h: home.height }]),
     ...coreArea(off, 0, core),
   ];
-  const level: LevelDef = {
+  const level: TileLevel = {
     index: 0,
     name: "Ground",
     ox: off.x,
@@ -505,10 +507,10 @@ export function groundLevel(
 /** The studio as the top of the building: the core cut into it, and the
  *  things standing where it goes moved out of its way. */
 export function homeWithCore(
-  home: MapDef,
+  home: TileMap,
   objects: WorldObjectDef[],
   core: Core | null,
-): { map: MapDef; moved: WorldObjectDef[] } {
+): { map: TileMap; moved: WorldObjectDef[] } {
   const map = withCore(home, { x: 0, y: 0 }, core);
   map.areas = [...home.areas.filter((a) => !a.key.startsWith("core-")), ...coreArea({ x: 0, y: 0 }, CAMPUS_HOME, core)];
   if (!core) return { map, moved: [] };
@@ -545,7 +547,7 @@ function inFront(c: Core, o: WorldObjectDef): boolean {
 
 /** Things standing in front of the core's doors, on any floor, moved aside
  *  (a building made before they were kept clear: the studio's lobby lamp). */
-export function clearCoreFronts(home: MapDef, objects: WorldObjectDef[]): WorldObjectDef[] {
+export function clearCoreFronts(home: TileMap, objects: WorldObjectDef[]): WorldObjectDef[] {
   const core = home.core;
   if (!core) return [];
   const moved: WorldObjectDef[] = [];
@@ -569,7 +571,7 @@ export function clearCoreFronts(home: MapDef, objects: WorldObjectDef[]): WorldO
 }
 
 function nearestFree(
-  map: MapDef,
+  map: TileMap,
   others: WorldObjectDef[],
   o: WorldObjectDef,
   hitsCore: (o: WorldObjectDef) => boolean,
@@ -591,9 +593,9 @@ function nearestFree(
  *  anything else in its way (or in front of its doors) moved aside. null:
  *  nothing to do, or no floor there to grow into. */
 export function upgradeCore(
-  home: MapDef,
+  home: TileMap,
   objects: WorldObjectDef[],
-): { map: MapDef; objects: WorldObjectDef[]; moved: WorldObjectDef[] } | null {
+): { map: TileMap; objects: WorldObjectDef[]; moved: WorldObjectDef[] } | null {
   const old = home.core;
   const area = home.areas.find((a) => a.key.startsWith("core-"));
   if (!old || !area || area.h === CORE.h) return null;
@@ -603,7 +605,7 @@ export function upgradeCore(
     ...areas.filter((a) => !a.key.startsWith("core-")),
     ...coreArea(off, level, c),
   ];
-  const map: MapDef = {
+  const map: TileMap = {
     ...withCore(home, { x: 0, y: 0 }, c),
     core: c,
     areas: rooms(home.areas, { x: 0, y: 0 }, floorOf(home)),
@@ -689,9 +691,9 @@ const OLD_CORES: Record<string, { x: number; y: number; w: number; h: number }> 
  *  them move with them, and upgradeGround puts them in again where they stand
  *  now. Null: nothing to move. */
 export function moveBlocks(
-  map: MapDef,
+  map: TileMap,
   objects: WorldObjectDef[],
-): { map: MapDef; objects: WorldObjectDef[]; moved: WorldObjectDef[] } | null {
+): { map: TileMap; objects: WorldObjectDef[]; moved: WorldObjectDef[] } | null {
   const l0 = map.levels?.find((l) => l.index === 0);
   if (!l0) return null;
   const ox = l0.ox;
@@ -714,7 +716,7 @@ export function moveBlocks(
       ? (e.y === sy0 || e.y === sy1) && e.x >= sx0 && e.x < sx1
       : (e.x === sx0 || e.x === sx1) && e.y >= sy0 && e.y < sy1;
   const clear = (e: Edge) => {
-    if (!onOutline(e) && "gp".includes(edgeAt(l0 as unknown as MapDef, e))) setEdge(m, e, ".");
+    if (!onOutline(e) && "gp".includes(edgeAt(l0 as unknown as TileMap, e))) setEdge(m, e, ".");
   };
   const moved: WorldObjectDef[] = [];
   let out = objects;
@@ -739,7 +741,7 @@ export function moveBlocks(
     });
   }
   const keys = new Set(old.map((o) => o.b.key));
-  const level: LevelDef = {
+  const level: TileLevel = {
     ...l0,
     tiles: rows.map((r) => r.join("")),
     hWalls: m.hWalls,
@@ -754,12 +756,12 @@ export function moveBlocks(
 
 /** The ground floor with the blocks' ground floors in it (null: they're there,
  *  or it has no ground floor). */
-export function upgradeGround(map: MapDef): MapDef | null {
+export function upgradeGround(map: TileMap): TileMap | null {
   const l0 = map.levels?.find((l) => l.index === 0);
   if (!l0 || l0.areas.some((a) => a.key === BLOCKS[0].key)) return null;
   return upgradeBlocks(map, new Set(BLOCKS.map((b) => b.key)));
 }
-function upgradeBlocks(map: MapDef, which: Set<string>): MapDef | null {
+function upgradeBlocks(map: TileMap, which: Set<string>): TileMap | null {
   const l0 = map.levels?.find((l) => l.index === 0);
   if (!l0) return null;
   const blocks = BLOCKS.filter((b) => which.has(b.key));
@@ -771,8 +773,8 @@ function upgradeBlocks(map: MapDef, which: Set<string>): MapDef | null {
     ...rows.map((r) => r.padEnd(w, ch)),
     ...Array.from({ length: n - rows.length }, () => ch.repeat(w)),
   ];
-  const m: MapDef = {
-    ...(levelMap(map, 0) as MapDef),
+  const m: TileMap = {
+    ...(levelMap(map, 0) as TileMap),
     width: W,
     height: H,
     tiles: pad(l0.tiles, H, W, " "),
@@ -812,7 +814,7 @@ function upgradeBlocks(map: MapDef, which: Set<string>): MapDef | null {
     for (let y = c.y; y < c.y + c.h; y++) for (const x of [c.x, c.x + c.w]) setEdge(m, { dir: "v", x, y }, "p");
     areas.push({ key: b.key, name: b.name, kind: "open", x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
   }
-  const level: LevelDef = {
+  const level: TileLevel = {
     ...l0,
     width: W,
     height: H,
@@ -832,9 +834,9 @@ function upgradeBlocks(map: MapDef, which: Set<string>): MapDef | null {
  *  seeded car (car-i) into its own bay and any other car parked on it into the free bay nearest
  *  it. Cars being driven, the ones that live elsewhere and everything off the lot stay as they are. */
 export function upgradeLot(
-  map: MapDef,
+  map: TileMap,
   objects: WorldObjectDef[],
-): { map: MapDef; objects: WorldObjectDef[]; moved: WorldObjectDef[] } | null {
+): { map: TileMap; objects: WorldObjectDef[]; moved: WorldObjectDef[] } | null {
   const l0 = map.levels?.find((l) => l.index === 0);
   if (!l0) return null;
   const bx = -l0.ox;
@@ -851,7 +853,7 @@ export function upgradeLot(
   ];
   const rows = pad(l0.tiles, H, " ").map((r) => [...r]);
   stampLot(rows, bx, by);
-  const level: LevelDef = {
+  const level: TileLevel = {
     ...l0,
     height: H,
     tiles: rows.map((r) => r.join("")),
@@ -919,15 +921,15 @@ export function upgradeLot(
 
 /** The whole building from a studio with no floors yet (null: it has them). */
 export function campusBuilding(
-  home: MapDef,
+  home: TileMap,
   objects: WorldObjectDef[],
-): { map: MapDef; add: WorldObjectDef[]; moved: WorldObjectDef[] } | null {
+): { map: TileMap; add: WorldObjectDef[]; moved: WorldObjectDef[] } | null {
   if (home.levels?.length || floorOf(home) !== 0) return null;
   const core = findCore(home, objects);
   const studio = homeWithCore(home, objects, core);
   const ground = groundLevel(home, core);
   const blanks = [1, 2, 3].map((i) => blankLevel(home, i, core));
-  const map: MapDef = {
+  const map: TileMap = {
     ...studio.map,
     floor: CAMPUS_HOME,
     levels: [ground.level, ...blanks.map((b) => b.level)],

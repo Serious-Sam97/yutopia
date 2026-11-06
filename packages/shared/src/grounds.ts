@@ -2028,6 +2028,8 @@ export interface StreetThing {
     | "planter"
     | "sign"
     | "fence"
+    // a wall drawn along a line out of doors (plan 72 phase 11.10: the build tool's walls, in god mode)
+    | "gwall"
     // parkour pieces: grind rails, free-standing walls, swing poles (Flowmotion's)
     | "pk_rail"
     | "pk_rail_long"
@@ -2044,7 +2046,12 @@ export interface StreetThing {
   text?: string;
   /** a fence's line */
   pts?: P[];
+  /** an outdoor wall's height over the land (m; GWALL_HEIGHT.base when not given) */
+  h?: number;
 }
+/** An outdoor wall's heights (plan 72 phase 11: god-mode walls with heights): low as a garden's
+ *  edge to as high as a storey and more. */
+export const GWALL_HEIGHT = { min: 0.6, base: 2.4, max: 6 };
 export const STREET: StreetThing[] = [];
 /** How far a long thing reaches either side of where it stands, along its own x (a grind rail, a
  *  parkour wall): picked anywhere along it, what it reaches checked, redrawn round all of it. */
@@ -2215,6 +2222,7 @@ function layThings() {
           ...(c.s !== undefined && { s: c.s }),
           ...(c.text !== undefined && { text: c.text }),
           ...(c.pts !== undefined && { pts: c.pts }),
+          ...(c.h !== undefined && { h: c.h }),
         }
       : null;
   const edit = <T extends { key: string; x: number; z: number; ry: number }>(list: T[]) => {
@@ -2244,6 +2252,7 @@ function layThings() {
         ...(t.s !== undefined && { s: t.s }),
         ...(t.text !== undefined && { text: t.text }),
         ...(t.pts !== undefined && { pts: t.pts }),
+        ...(t.h !== undefined && { h: t.h }),
       });
   }
 }
@@ -3447,6 +3456,7 @@ export type GroundsThingKind =
   | "street"
   | "snowpole"
   | "fence"
+  | "gwall"
   | "landmark"
   | "scarecrow"
   | "town-car"
@@ -3574,7 +3584,7 @@ function sigs(): Map<string, { sig: string; r: Rect }> {
       r: { x0: g.def.x0 - 300, z0: g.def.z0 - 300, x1: g.def.x1 + 300, z1: g.def.z1 + 300 },
     });
   for (const t of STREET) {
-    const sig = `${t.kind} ${t.x} ${t.z} ${t.ry} ${t.s ?? ""} ${t.text ?? ""} ${t.pts ? JSON.stringify(t.pts) : ""}`;
+    const sig = `${t.kind} ${t.x} ${t.z} ${t.ry} ${t.s ?? ""} ${t.text ?? ""} ${t.pts ? JSON.stringify(t.pts) : ""} ${t.h ?? ""}`;
     const r = t.pts
       ? {
           x0: Math.min(...t.pts.map((p) => p[0])) - 3,
@@ -3714,6 +3724,7 @@ const THING_KINDS = new Set<string>([
   "planter",
   "sign",
   "fence",
+  "gwall",
   "pk_rail",
   "pk_rail_long",
   "pk_wall",
@@ -3937,9 +3948,11 @@ export function checkEdits(e: GroundsEdits): string[] {
       no(`${d.key}: only a boulder or a planter is sized`);
     if (d.s !== undefined && !(d.s >= THING_SIZE.min && d.s <= THING_SIZE.max))
       no(`${d.key}: ${THING_SIZE.min}–${THING_SIZE.max} times its size`);
+    if (d.h !== undefined && (d.kind !== "gwall" || !(d.h >= GWALL_HEIGHT.min && d.h <= GWALL_HEIGHT.max)))
+      no(`${d.key}: a wall's height, ${GWALL_HEIGHT.min}–${GWALL_HEIGHT.max} m`);
     if (d.text !== undefined && (d.kind !== "sign" || typeof d.text !== "string" || d.text.length > SIGN_TEXT))
       no(`${d.key}: a sign's words, ${SIGN_TEXT} at most`);
-    if (d.kind === "fence") {
+    if (d.kind === "fence" || d.kind === "gwall") {
       const ok =
         Array.isArray(d.pts) &&
         d.pts.length >= 2 &&
@@ -3947,7 +3960,7 @@ export function checkEdits(e: GroundsEdits): string[] {
         d.pts.every((p, i, all) => i === 0 || Math.hypot(p[0] - all[i - 1][0], p[1] - all[i - 1][1]) <= FENCE_RUN);
       if (!ok) no(`${d.key}: a fence's line: 2–${EDIT_LIMITS.wayPts} points, each run ${FENCE_RUN} m at most`);
       else if (fenceLine(d.pts as P[]).some(([x, z]) => !inWorld(x, z))) no(`${d.key}: past the world's edge`);
-    } else if (d.pts !== undefined) no(`${d.key}: only a fence has a line`);
+    } else if (d.pts !== undefined) no(`${d.key}: only a fence or a wall has a line`);
   }
   // a generator's thing moved: anywhere in the world too
   for (const [k, c] of Object.entries(e.things?.change ?? {}))

@@ -1,4 +1,5 @@
-import { STOREY, tileAt } from "@yutopia/shared";
+import { STOREY } from "@yutopia/shared";
+import { cellOf } from "@yutopia/shared/structure";
 import { DataUtils } from "three";
 import type { RGB } from "./daylight";
 import type { LightMap, LightSource, Rect } from "./light";
@@ -156,7 +157,7 @@ export class LightVolume {
           }
       return v;
     };
-    const ch = tileAt(this.lm.map, Math.floor(x), Math.floor(y));
+    const ch = cellOf(this.lm.map, Math.floor(x), Math.floor(y));
     const amb = ch === "a" || ch === "c" ? out : ambient;
     const w = Math.min(1, at(3));
     let rgb = 0;

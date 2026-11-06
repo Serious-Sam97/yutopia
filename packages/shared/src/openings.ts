@@ -16,9 +16,11 @@ import {
   setBack,
   setEdge,
   spanOf,
+  type TileMap,
   tileAt,
   vWall,
 } from "./map.ts";
+import { cellOf, hWallOf, vWallOf, wallOf } from "./structure/query.ts";
 
 // Doors and windows, Sims-style: things set into a wall. The wall stays a wall
 // (its material, both faces) and the opening cuts its own hole through it, the
@@ -94,7 +96,15 @@ export function openingCut(kind: string): [number, number] {
 export const openingDir = (o: { yaw?: number }): EdgeDir => (quarterOf(o) % 2 === 0 ? "h" : "v");
 
 // The edges it takes.
-export function openingEdges(o: { kind: string; x: number; y: number; yaw?: number }): Edge[] {
+export function openingEdges(o: {
+  kind: string;
+  x: number;
+  y: number;
+  yaw?: number;
+  props?: Record<string, unknown> | null;
+}): Edge[] {
+  // (one in a wall drawn free: on no tile edge — structure/free-openings.ts)
+  if (o.props?.free === true) return [];
   const dir = openingDir(o);
   const n = Math.max(1, entry(o.kind).w);
   return Array.from({ length: n }, (_, i) => (dir === "h" ? { dir, x: o.x + i, y: o.y } : { dir, x: o.x, y: o.y + i }));
@@ -125,10 +135,13 @@ export function wallCuts(objects: Iterable<WorldObjectDef>): Map<string, WallCut
 
 // A short signature of all the holes (walls are drawn again when it changes).
 export function cutsSig(objects: Iterable<WorldObjectDef>): string {
-  return [...wallCuts(objects).entries()]
-    .map(([k, c]) => `${k}:${c.z0}-${c.z1}`)
-    .sort()
-    .join(";");
+  const list = [...objects];
+  // (and those in walls drawn free: by their wall and spot — plan 72 phase 11.6)
+  const free = list.flatMap((o) => {
+    const on = o.props?.free === true && isOpening(o.kind) ? (o.props.on as { wall?: string; at?: number }) : null;
+    return on ? [`free:${on.wall}@${on.at}:${openingCut(o.kind).join("-")}:${entry(o.kind).w}`] : [];
+  });
+  return [...[...wallCuts(list).entries()].map(([k, c]) => `${k}:${c.z0}-${c.z1}`), ...free].sort().join(";");
 }
 
 // Can this wall take it? Full walls (any material, either face) take both;
@@ -168,12 +181,12 @@ export function openingBlocker(
   const [z0, z1] = openingCut(o.kind);
   for (const e of edges) {
     if (!edgeInMap(map, e)) return "outside the map";
-    const ch = edgeAt(map, e);
+    const ch = wallOf(map, e);
     if (!isWallEdge(ch)) return door ? "doors go in a wall" : "windows go in a wall";
     if (!wallTakes(o.kind, ch)) return ch === HALF_WALL ? "not in a half wall" : "not in a glass wall";
     const [[ax, ay], [bx, by]] = sidesOf(e);
-    const a = isFloor(tileAt(map, ax, ay));
-    const b = isFloor(tileAt(map, bx, by));
+    const a = isFloor(cellOf(map, ax, ay));
+    const b = isFloor(cellOf(map, bx, by));
     if (door ? !(a && b) : !(a || b)) return door ? "a door needs floor on both sides" : "no floor by it";
     for (const [h0, h1, label] of hung(e)) if (overlaps(h0, h1, z0, z1)) return `${label} hangs there`;
   }
@@ -181,8 +194,8 @@ export function openingBlocker(
   for (let i = 1; i < edges.length; i++) {
     const across =
       edges[0].dir === "h"
-        ? [vWall(map, o.x + i, o.y - 1), vWall(map, o.x + i, o.y)]
-        : [hWall(map, o.x - 1, o.y + i), hWall(map, o.x, o.y + i)];
+        ? [vWallOf(map, o.x + i, o.y - 1), vWallOf(map, o.x + i, o.y)]
+        : [hWallOf(map, o.x - 1, o.y + i), hWallOf(map, o.x, o.y + i)];
     if (across.some(isWallEdge)) return "a wall meets it there";
   }
   const mine = new Set(edges.map(edgeKey));
@@ -203,8 +216,19 @@ export function openingNear(o: WorldObjectDef, f: { dir: EdgeDir; line: number }
 }
 
 // The middle of it, on its wall's line (tile coords).
-export function openingCentre(o: { kind: string; x: number; y: number; yaw?: number }): { x: number; y: number } {
+export function openingCentre(o: {
+  kind: string;
+  x: number;
+  y: number;
+  yaw?: number;
+  props?: Record<string, unknown> | null;
+}): { x: number; y: number } {
   const n = Math.max(1, entry(o.kind).w);
+  // (in a wall drawn free: from its start along its yaw)
+  if (o.props?.free === true) {
+    const yaw = o.yaw ?? 0;
+    return { x: o.x + (Math.cos(yaw) * n) / 2, y: o.y + (Math.sin(yaw) * n) / 2 };
+  }
   return openingDir(o) === "h" ? { x: o.x + n / 2, y: o.y } : { x: o.x, y: o.y + n / 2 };
 }
 
@@ -215,10 +239,10 @@ export function openingCentre(o: { kind: string; x: number; y: number; yaw?: num
 // (a copy when it changed) and the windows made (ids from where they are: the
 // same every time, so a conversion that's run twice makes nothing new).
 export function openingsIntoWalls(
-  map: MapDef,
+  map: TileMap,
   objects: WorldObjectDef[],
-): { map: MapDef; objects: WorldObjectDef[]; added: WorldObjectDef[]; mapChanged: boolean } {
-  const next: MapDef = {
+): { map: TileMap; objects: WorldObjectDef[]; added: WorldObjectDef[]; mapChanged: boolean } {
+  const next: TileMap = {
     ...map,
     hWalls: [...map.hWalls],
     vWalls: [...map.vWalls],

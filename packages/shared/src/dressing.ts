@@ -1,18 +1,8 @@
 import { entry, footprint, quarterOf, type WorldObjectDef } from "./catalog.ts";
 import { hangOf, wallSpan } from "./hang.ts";
-import {
-  type AreaDef,
-  areaAt,
-  holdsItems,
-  hWall,
-  inArea as inRoom,
-  isFloor,
-  isWallEdge,
-  type MapDef,
-  tileAt,
-  vWall,
-} from "./map.ts";
+import { type AreaDef, areaAt, holdsItems, inArea as inRoom, isFloor, isWallEdge, type MapDef } from "./map.ts";
 import { isDoorKind, isOpening, openingEdges } from "./openings.ts";
+import { cellOf, hWallOf, vWallOf } from "./structure/query.ts";
 
 // Dressing: the clutter that makes a room lived in, chosen per room as a preset
 // and placed by rules, the same on every client and on the server (so a plant
@@ -136,8 +126,8 @@ export function dressItems(map: MapDef, objects: Iterable<WorldObjectDef>): Dres
       for (let x = a.x; x < a.x + a.w; x++) {
         if (
           !inArea(map, a, x, y) ||
-          !isFloor(tileAt(map, x, y)) ||
-          !holdsItems(hWall(map, x, y)) ||
+          !isFloor(cellOf(map, x, y)) ||
+          !holdsItems(hWallOf(map, x, y)) ||
           hung.has(`${x},${y}`)
         )
           continue;
@@ -148,11 +138,11 @@ export function dressItems(map: MapDef, objects: Iterable<WorldObjectDef>): Dres
       }
     // ── floor: corners first (plants), then along the back wall ──
     const free = (x: number, y: number) =>
-      inArea(map, a, x, y) && isFloor(tileAt(map, x, y)) && !taken.has(`${x},${y}`) && !near.has(`${x},${y}`);
-    const wallN = (x: number, y: number) => isWallEdge(hWall(map, x, y));
-    const wallS = (x: number, y: number) => isWallEdge(hWall(map, x, y + 1));
-    const wallW = (x: number, y: number) => isWallEdge(vWall(map, x, y));
-    const wallE = (x: number, y: number) => isWallEdge(vWall(map, x + 1, y));
+      inArea(map, a, x, y) && isFloor(cellOf(map, x, y)) && !taken.has(`${x},${y}`) && !near.has(`${x},${y}`);
+    const wallN = (x: number, y: number) => isWallEdge(hWallOf(map, x, y));
+    const wallS = (x: number, y: number) => isWallEdge(hWallOf(map, x, y + 1));
+    const wallW = (x: number, y: number) => isWallEdge(vWallOf(map, x, y));
+    const wallE = (x: number, y: number) => isWallEdge(vWallOf(map, x + 1, y));
     const besideDressing = (x: number, y: number) =>
       [
         [1, 0],

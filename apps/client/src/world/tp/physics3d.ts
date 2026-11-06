@@ -227,7 +227,7 @@ export class BrowserPhysics {
       const seen = this.seen;
       this.slabs = slabsOf(
         this.world,
-        (id) => seen.some((o) => o.id === id && o.kind === "stairs"),
+        (id) => seen.some((o) => o.id === id && (o.kind === "stairs" || o.kind === "flight")),
         shaftAt(liftShafts(seen, building)),
       );
       this.slabsFor = seen;

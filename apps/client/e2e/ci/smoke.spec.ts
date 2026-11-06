@@ -80,7 +80,7 @@ test("the world comes up, I walk, a wall goes up — and the page throws nothing
   // (the nearest few in turn: one with a thing across it or a lock is refused, said in a toast)
   const edges = await page.evaluate(() => {
     const c = (window as any).__yutopia;
-    const m = c.map;
+    const m = c.rows(); // (the floor as rows, asked of the structure)
     const floorAt = (x: number, y: number) => {
       const t = m.tiles[y]?.[x];
       return !!t && t !== " "; // (" " is the void; "." is wood)
@@ -99,15 +99,16 @@ test("the world comes up, I walk, a wall goes up — and the page throws nothing
   for (const e of edges.list) {
     await page.evaluate(
       ([lv, ed]) => {
-        (window as any).__yutopia.room.send("map:walls", {
+        // (a wall one edge long, on whole metres: it reads back as that edge)
+        (window as any).__yutopia.room.send("struct:walls", {
           level: lv,
-          edges: [{ x: ed.x, y: ed.y, dir: "h", ch: "p" }],
+          add: [{ a: [ed.x, ed.y], b: [ed.x + 1, ed.y], front: "p" }],
         });
       },
       [edges.level, e] as const,
     );
     built = await page
-      .waitForFunction(([ed]) => (window as any).__yutopia.map.hWalls[ed.y][ed.x] === "p", [e] as const, {
+      .waitForFunction(([ed]) => (window as any).__yutopia.rows()?.hWalls[ed.y]?.[ed.x] === "p", [e] as const, {
         timeout: 8000, // (a frame or two a second here: the map's applied in the next frame)
       })
       .then(() => true)

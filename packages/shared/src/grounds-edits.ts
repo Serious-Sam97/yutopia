@@ -58,6 +58,8 @@ export interface ThingDef {
   text?: string;
   /** a fence's line (its points; x, z its first) */
   pts?: P[];
+  /** an outdoor wall's height (m) */
+  h?: number;
 }
 /** What a piece of grown land is (docs/plan/69, phase 10: the user's eight). */
 export type GrowBiome = "forest" | "meadow" | "hills" | "mountains" | "lake" | "farmland" | "beach" | "desert";

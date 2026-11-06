@@ -1,9 +1,11 @@
 "use client";
 
-import { HELD, heldState, isHeld, isToyHeld, originOf, tileAt } from "@yutopia/shared";
+import { HELD, heldState, isHeld, isToyHeld, originOf } from "@yutopia/shared";
+import { cellOf, hWallOf, slabAt, vWallOf, wallPoints } from "@yutopia/shared/structure";
 import { useEffect, useRef, useState } from "react";
 import { type Key, trMaybe, useTr } from "@/lib/i18n";
 import { COCOA_MUG, HELD_BOX, heldSvg, MUG_COLORS, TEA_MUG } from "@/world/art/held";
+import { MINIMAP } from "@/world/art/minimap";
 import { svgDoc } from "@/world/art/svgdoc";
 import { useHud } from "@/world/store";
 import { ItemThumb } from "./build/thumbs";
@@ -637,9 +639,73 @@ export function Minimap() {
     const o = originOf(map);
     const X = (v: number) => (v - o.x) * S;
     const Y = (v: number) => (v - o.y) * S;
-    for (let yy = 0; yy < map.height; yy++)
+    // from the structure (plan 72 phase 11.11): its floors as they're drawn (polygons, the last on
+    // top; a mezzanine over them), its walls as they stand (any angle, an arc by its chords), its
+    // rooms by their outlines
+    const st = w?.structure;
+    const fl = st?.floors.find((f) => f.index === w?.level);
+    if (st && fl) {
+      const ring = (r: readonly [number, number][]) => {
+        x.moveTo(X(r[0][0]), Y(r[0][1]));
+        for (const p of r.slice(1)) x.lineTo(X(p[0]), Y(p[1]));
+        x.closePath();
+      };
+      for (const deck of [false, true])
+        for (const sl of st.slabs) {
+          if (sl.floor !== fl.index || Math.abs(sl.z - fl.z) >= 1e-3 !== deck) continue;
+          x.beginPath();
+          ring(sl.outline);
+          for (const h of sl.holes) ring(h);
+          x.globalAlpha = deck ? 0.7 : 1;
+          x.fillStyle = MINIMAP.floors[sl.top] ?? MINIMAP.floor;
+          x.fill("evenodd");
+          if (deck) {
+            x.strokeStyle = MINIMAP.ink;
+            x.lineWidth = 1.5;
+            x.stroke();
+          }
+          x.globalAlpha = 1;
+        }
+      x.lineCap = "round";
+      for (const wl of st.walls) {
+        if (wl.floor !== fl.index) continue;
+        x.strokeStyle = wl.front === "h" || wl.height < 1.5 ? MINIMAP.rail : MINIMAP.wall;
+        x.lineWidth = Math.max(2, (wl.thick ?? 0.2) * S);
+        x.beginPath();
+        const pts = wallPoints(wl);
+        x.moveTo(X(pts[0][0]), Y(pts[0][1]));
+        for (const p of pts.slice(1)) x.lineTo(X(p[0]), Y(p[1]));
+        x.stroke();
+      }
+      x.font = "600 13px 'Share Tech Mono', ui-monospace, monospace";
+      x.textBaseline = "top";
+      for (const r of st.rooms) {
+        if (r.floor !== fl.index || (Number(r.props.priority) || 0) > 1) continue;
+        const label = String(r.props.name ?? "").toUpperCase();
+        const [x0, y0, x1, y1] = [
+          Math.min(...r.outline.map((p) => p[0])),
+          Math.min(...r.outline.map((p) => p[1])),
+          Math.max(...r.outline.map((p) => p[0])),
+          Math.max(...r.outline.map((p) => p[1])),
+        ];
+        if (!label || x.measureText(label).width > (x1 - x0) * S - 8 || (y1 - y0) * S < 22) continue;
+        x.fillStyle = "rgba(26,18,12,.55)";
+        x.fillRect(X(x0) + 3, Y(y0) + 3, x.measureText(label).width + 6, 16);
+        x.fillStyle = MINIMAP.label;
+        x.fillText(label, X(x0) + 6, Y(y0) + 5);
+      }
+      const mine = st.rooms.find((r) => r.key === me?.area && r.floor === fl.index);
+      if (mine && mine.outline.length > 2) {
+        x.strokeStyle = MINIMAP.mine;
+        x.lineWidth = 3;
+        x.beginPath();
+        ring(mine.outline);
+        x.stroke();
+      }
+    }
+    for (let yy = 0; !st && yy < map.height; yy++)
       for (let xx = 0; xx < map.width; xx++) {
-        const ch = map.tiles[yy][xx];
+        const ch = cellOf(map, o.x + xx, o.y + yy);
         if (ch === " ") continue;
         x.fillStyle =
           ch === "~"
@@ -655,18 +721,18 @@ export function Minimap() {
                     : "#a07a52";
         x.fillRect(xx * S, yy * S, S, S);
       }
-    // walls
+    // walls (with no structure: the tile map's — the dev pages')
     x.fillStyle = "#2a1c13";
-    for (let yy = 0; yy <= map.height; yy++)
+    for (let yy = 0; !st && yy <= map.height; yy++)
       for (let xx = 0; xx < map.width; xx++)
-        if ((map.hWalls[yy]?.[xx] ?? ".") !== ".") x.fillRect(xx * S, yy * S - 1, S, 2);
-    for (let yy = 0; yy < map.height; yy++)
+        if (hWallOf(map, o.x + xx, o.y + yy) !== ".") x.fillRect(xx * S, yy * S - 1, S, 2);
+    for (let yy = 0; !st && yy < map.height; yy++)
       for (let xx = 0; xx <= map.width; xx++)
-        if ((map.vWalls[yy]?.[xx] ?? ".") !== ".") x.fillRect(xx * S - 1, yy * S, 2, S);
+        if (vWallOf(map, o.x + xx, o.y + yy) !== ".") x.fillRect(xx * S - 1, yy * S, 2, S);
     // room labels, where they fit
     x.font = "600 13px 'Share Tech Mono', ui-monospace, monospace";
     x.textBaseline = "top";
-    for (const a of map.areas) {
+    for (const a of st ? [] : map.areas) {
       if ((a.priority ?? 0) > 1) continue;
       const label = a.name.toUpperCase();
       if (x.measureText(label).width > a.w * S - 8 || a.h * S < 22) continue;
@@ -676,7 +742,7 @@ export function Minimap() {
       x.fillText(label, X(a.x) + 6, Y(a.y) + 5);
     }
     // the room you're in
-    const mine = map.areas.find((a) => a.key === me?.area);
+    const mine = st ? null : map.areas.find((a) => a.key === me?.area);
     if (mine) {
       x.strokeStyle = "#ffb35c";
       x.lineWidth = 3;
@@ -687,7 +753,12 @@ export function Minimap() {
     // (and the map itself dimmed: its paper shouldn't glare in the pitch dark)
     c.style.filter = dark ? "brightness(.5) saturate(.8)" : "";
     for (const p of people) {
-      if (dark && "ac".includes(tileAt(map, Math.floor(p.x), Math.floor(p.y)).trim() || "x")) continue;
+      // (out on the lot's asphalt or concrete: the structure's slab there, else the tile map's)
+      const under =
+        st && w
+          ? (slabAt(st, w.level, [p.x, p.y])?.top ?? "x")
+          : cellOf(map, Math.floor(p.x), Math.floor(p.y)).trim() || "x";
+      if (dark && "ac".includes(under)) continue;
       x.fillStyle = p.bot ? "#a39d8c" : p.hearing ? "#ffa630" : "#efe4cc";
       x.beginPath();
       x.arc(X(p.x), Y(p.y), 4, 0, Math.PI * 2);

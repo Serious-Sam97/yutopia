@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyEdges, blankMap, type MapDef } from "@yutopia/shared";
+import { applyEdges, blankMap, type TileMap } from "@yutopia/shared";
 import { touchedWalls } from "./build";
 
 // A wall built or taken away redraws only the wall pieces it touches (docs/plan/72-the-3d-core.md,
@@ -8,7 +8,7 @@ import { touchedWalls } from "./build";
 // end (its end clipped to the post there), and the posts' — in the old layout and the new. (That
 // the floor drawn so is the floor built afresh is e2e/wall-hitch.mts VERIFY's: it needs a canvas.)
 
-const room = (): MapDef => {
+const room = (): TileMap => {
   const m = blankMap("t", "t", 24, 24);
   // a 4 × 3 room at (2, 2): walls round it
   const edges = [];

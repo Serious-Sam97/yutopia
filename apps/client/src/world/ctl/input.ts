@@ -62,8 +62,13 @@ export class Input {
       e.preventDefault();
       return;
     }
-    // [ ] (LB and the pad's ↑ ↓: the walker's): the next in the prompt's stack is the focus
-    if ((e.code === "BracketLeft" || e.code === "BracketRight") && this.c.walker?.targets?.list.length) {
+    // [ ] (LB and the pad's ↑ ↓: the walker's): the next in the prompt's stack is the focus (build mode's
+    // [ ] are its own: the walls' view)
+    if (
+      (e.code === "BracketLeft" || e.code === "BracketRight") &&
+      !hud.get().build.on &&
+      this.c.walker?.targets?.list.length
+    ) {
       this.c.focus.cycleFocus(e.code === "BracketRight" ? 1 : -1);
       e.preventDefault();
       return;

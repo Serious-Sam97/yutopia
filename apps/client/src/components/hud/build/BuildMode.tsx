@@ -1,17 +1,7 @@
 "use client";
 
-import {
-  areaAt,
-  CLOTH_COLORS,
-  DECOR,
-  edgeAt,
-  entry,
-  faceMat,
-  footprint,
-  isOpening,
-  panelTile,
-  TEXT_DEFAULT,
-} from "@yutopia/shared";
+import { CLOTH_COLORS, DECOR, entry, footprint, isOpening, TEXT_DEFAULT } from "@yutopia/shared";
+import { wallLength, workingHeights } from "@yutopia/shared/structure";
 import { useEffect, useRef, useState } from "react";
 import { yutopia } from "@/lib/api";
 import { type Key, trMaybe, useTr } from "@/lib/i18n";
@@ -22,7 +12,7 @@ import { floorLabel } from "../FloorChip";
 import { Icon, type IconName } from "../icons";
 import { Catalog, sizeLabel } from "./Catalog";
 import { DesksPanel } from "./DesksPanel";
-import { DeskDialog, RoomDialog } from "./Dialogs";
+import { DeskDialog } from "./Dialogs";
 import { MapPanel } from "./MapPanel";
 import { RoomsPanel } from "./RoomsPanel";
 import { ItemThumb } from "./thumbs";
@@ -102,10 +92,10 @@ export function BuildMode() {
       {keys && <KeysCard onClose={() => setKeys(false)} />}
       {b.tool === "furniture" && <HoverTag />}
       {b.tool === "walls" && <WallTagChip />}
-      {b.tool === "walls" && b.wallMode === "select" && b.wallSel.length > 0 && <WallInspector />}
+      {b.foundRoom && <FoundRoom roomKey={b.foundRoom} />}
+      {b.tool === "walls" && b.wallMode === "select" && b.freeSel && <FreeWallInspector />}
       {b.tool === "furniture" && b.selected.length > 0 && b.carrying === 0 && <ItemToolbar />}
       <ActionBar />
-      {b.roomDraft && <RoomDialog draft={b.roomDraft} members={members} />}
       {b.deskDraft && <DeskDialog seatId={b.deskDraft} members={members} />}
     </>
   );
@@ -250,7 +240,7 @@ function ToolRail({ keys, onKeys }: { keys: boolean; onKeys: () => void }) {
           onClick={() => {
             w?.clearRoomGhost();
             hud.set((s) => ({
-              build: { ...s.build, tool: x.key, roomDraft: null, deskDraft: null, pickSpawn: false },
+              build: { ...s.build, tool: x.key, deskDraft: null, pickSpawn: false },
             }));
           }}
         >
@@ -624,6 +614,58 @@ function HoverTag() {
   );
 }
 
+// A room the walls just closed round (plan 72 phase 11.5; the mocks' 05): named here, or later in
+// Rooms (Esc, or anything else, leaves it "New room"). It doesn't take the keys: a run may go on
+// (a length typed) — a click in it to name it.
+function FoundRoom({ roomKey }: { roomKey: string }) {
+  const t = useTr();
+  const w = useWorld();
+  const [name, setName] = useState("");
+  const close = () => hud.set((s) => ({ build: { ...s.build, foundRoom: null } }));
+  const save = () => {
+    const n = name.trim();
+    if (n) w?.send("map:room:update", { key: roomKey, name: n });
+    close();
+  };
+  return (
+    <div
+      data-testid="found-room"
+      className="pointer-events-auto fixed left-1/2 -translate-x-1/2 bottom-[112px] z-30 rounded-lg px-3 py-2.5 flex items-center gap-2"
+      style={{
+        background: "rgba(30,23,18,.96)",
+        border: "1px solid var(--vfd)",
+        boxShadow: "0 6px 24px rgba(0,0,0,.5)",
+      }}
+    >
+      <span className="mono text-[11px] uppercase tracking-wide" style={{ color: "var(--vfd)" }}>
+        {t("roomFound")}
+      </span>
+      <button
+        type="button"
+        className="ghost-btn mono text-[11px] px-2 h-7"
+        onClick={close}
+        aria-label={t("buildDismiss")}
+      >
+        ✕
+      </button>
+      <input
+        className="field"
+        style={{ padding: "4px 10px", fontSize: 13, width: 190 }}
+        placeholder={t("roomNameIt")}
+        value={name}
+        maxLength={40}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === "Enter") save();
+          if (e.key === "Escape") close();
+        }}
+        onBlur={() => name.trim() && save()}
+      />
+    </div>
+  );
+}
+
 // The Walls tool's chip by the pointer: the face it's on — the room it looks into, its material now → the brush's — or a run
 // being drawn (how many walls, how many skipped and why).
 function WallTagChip() {
@@ -642,7 +684,13 @@ function WallTagChip() {
     });
   }, [w]);
   if (!tag) return null;
-  const bad = !!tag.why && (tag.kind === "face" ? !tag.to : tag.n === 0);
+  const bad = !!tag.why && (tag.kind === "face" ? !tag.to : tag.kind === "draw" ? true : tag.n === 0);
+  const SNAP_KEYS: Record<string, Key> = {
+    end: "snapEnd",
+    middle: "snapMiddle",
+    line: "snapLine",
+    square: "snapSquare",
+  };
   const swatch = (m: string | null) => {
     const c = WALL_SWATCHES.find((s) => s.ch === `w:${m}`)?.face;
     return c ? (
@@ -660,7 +708,35 @@ function WallTagChip() {
         color: "var(--cream)",
       }}
     >
-      {tag.kind === "face" ? (
+      {tag.kind === "draw" ? (
+        tag.remove ? (
+          <span style={{ color: "var(--danger-text)" }}>{t("wallTakeAway")}</span>
+        ) : (
+          <>
+            <span style={{ color: "var(--vfd)" }}>
+              {tag.typed !== null ? `${tag.typed || "…"} m` : `${tag.len.toFixed(2)} m`}
+            </span>
+            {tag.len > 0 && tag.bow == null && tag.height === undefined && ` · ${Math.round(tag.ang)}°`}
+            {tag.height !== undefined && (
+              <span style={{ color: "var(--cream)" }}>
+                {" · "}
+                {t("wallHigh").replace("{h}", tag.height.toFixed(2))}
+                {tag.thick !== undefined && ` · ${t("wallThickTag").replace("{t}", String(tag.thick))}`}
+              </span>
+            )}
+            {tag.bow != null && (
+              <span style={{ color: "var(--cream)" }}>
+                {" · "}
+                {tag.half ? t("arcHalf") : t("arcBow").replace("{m}", Math.abs(tag.bow).toFixed(2))}
+              </span>
+            )}
+            {SNAP_KEYS[tag.snap] && <span style={{ color: "var(--muted)" }}> · {t(SNAP_KEYS[tag.snap])}</span>}
+            {tag.n > 0 && (
+              <span style={{ color: "var(--muted)" }}> · {t("wallDrawn").replace("{n}", String(tag.n))}</span>
+            )}
+          </>
+        )
+      ) : tag.kind === "face" ? (
         <>
           <span style={{ color: "var(--vfd)" }}>{t("wallThisSide")}</span>
           {" · "}
@@ -705,12 +781,12 @@ function WallTagChip() {
   );
 }
 
-// Select in the Walls tool: a card over the wall(s) picked — what it is, both
-// faces (their material and the room each looks into), and what to do.
-function WallInspector() {
+// Select on a wall drawn free (plan 72 phase 11.11): a card over it — what it is, how long, high and
+// thick, both its faces, and what to do (the tile walls' card's own actions, by its id).
+function FreeWallInspector() {
   const t = useTr();
   const w = useWorld();
-  const sel = useHud((s) => s.build.wallSel);
+  const id = useHud((s) => s.build.freeSel);
   useHud((s) => s.mapVersion);
   const el = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -719,7 +795,6 @@ function WallInspector() {
       const node = el.current;
       const at = w.build?.wallAnchor();
       if (!node || !at) return;
-      // over the wall (client px), but never under the top bar or off the screen (walls are tall)
       const h = node.offsetHeight;
       const wd = node.offsetWidth;
       const x = Math.min(Math.max(at.x, wd / 2 + 8), window.innerWidth - wd / 2 - 8);
@@ -728,33 +803,23 @@ function WallInspector() {
       if (node.style.transform !== tr) node.style.transform = tr;
     });
   }, [w]);
-  const map = w?.map;
-  const p = sel[0];
-  if (!map || !p) return null;
-  const ch = edgeAt(map, p);
-  const faced = /^[pwfbkPWFBK]$/.test(ch);
-  const room = (side: 1 | -1) => {
-    const [x, y] = panelTile({ ...p, side });
-    return areaAt(map, x + 0.5, y + 0.5)?.name ?? t("wallOpenFloor");
-  };
-  const kind = ch === "g" ? t("wallGlass") : ch === "h" ? t("wallHalf") : t("wallInspect");
-  const face = (side: 1 | -1, label: Key) => {
-    const m = faceMat(map, p, side);
+  const wall = w?.build?.freeWall(id ?? null);
+  if (!wall) return null;
+  const faced = /^[pwfbk]$/.test(wall.front);
+  const kind = wall.front === "g" ? t("wallGlass") : wall.front === "h" ? t("wallHalf") : t("wallInspect");
+  const len = wallLength(wall);
+  const face = (m: string, label: Key) => {
     const c = WALL_SWATCHES.find((s) => s.ch === `w:${m}`)?.face;
     return (
       <div className="flex items-center gap-2 text-[12px]">
         <span
           className="inline-block w-4 h-4 rounded"
-          style={{ background: c ?? "#3a4a4a", border: "1px solid #2a1a12" }}
+          style={{ background: c ?? "var(--muted)", border: "1px solid var(--edge)" }}
         />
-        <span
-          className="mono uppercase text-[10px]"
-          style={{ color: side === p.side ? "var(--vfd)" : "var(--cream-dim)" }}
-        >
+        <span className="mono uppercase text-[10px]" style={{ color: "var(--cream-dim)" }}>
           {t(label)}
         </span>
         <span>{faced ? matLabel(m) : kind}</span>
-        <span style={{ color: "var(--muted)" }}>· {room(side)}</span>
       </div>
     );
   };
@@ -763,7 +828,7 @@ function WallInspector() {
       type="button"
       className="mono text-[11px] uppercase tracking-wide px-2 h-8 rounded-md hover:bg-white/10"
       style={{ color: danger ? "var(--danger-text)" : "var(--cream)", border: "1px solid var(--edge)" }}
-      onClick={() => w?.build?.wallAction(a)}
+      onClick={() => w?.build?.freeWallAction(a)}
     >
       {t(label)}
     </button>
@@ -772,14 +837,16 @@ function WallInspector() {
     <div ref={el} className="pointer-events-none fixed left-0 top-0 z-10">
       <section
         aria-label={t("wallInspect")}
-        data-testid="wall-inspector"
+        data-testid="free-wall-inspector"
         className="pointer-events-auto cabinet p-2.5 flex flex-col gap-2 rise min-w-[260px]"
       >
-        <h3 className="lcd text-lg leading-none">
-          {sel.length > 1 ? t("wallsSelected").replace("{n}", String(sel.length)) : kind}
-        </h3>
-        {face(p.side, "wallThisSide")}
-        {face(p.side > 0 ? -1 : 1, "wallOtherSide")}
+        <h3 className="lcd text-lg leading-none">{kind}</h3>
+        <div className="mono text-[11px]" style={{ color: "var(--muted)" }}>
+          {`${len.toFixed(2)} m`} · {t("wallHigh").replace("{h}", wall.height.toFixed(2))} ·{" "}
+          {t("wallThickTag").replace("{t}", String(wall.thick ?? 0.2))}
+        </div>
+        {face(wall.front, "wallThisSide")}
+        {face(wall.back ?? wall.front, "wallOtherSide")}
         <div className="flex flex-wrap gap-1.5">
           {faced && act("wallSame", "same")}
           {faced && act("wallSwap", "swap")}
@@ -964,9 +1031,24 @@ function FloorPicker() {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key !== "PageUp" && e.key !== "PageDown") return;
-      const i = floors.indexOf(floor) + (e.key === "PageUp" ? 1 : -1);
+      const up = e.key === "PageUp";
+      // (the Walls tool: through this floor's mezzanines first — plan 72 phase 11.7 — then the floors,
+      // arriving on the floor itself)
+      const b = hud.get().build;
+      if (w?.structure && b.on && b.tool === "walls") {
+        const hs = workingHeights(w.structure, w.level);
+        const j = hs.findIndex((v) => Math.abs(v - (b.over ?? 0)) < 1e-3) + (up ? 1 : -1);
+        if (j >= 0 && j < hs.length) {
+          e.preventDefault();
+          hud.set((s) => ({ build: { ...s.build, over: hs[j] } }));
+          w.refreshGhost();
+          return;
+        }
+      }
+      const i = floors.indexOf(floor) + (up ? 1 : -1);
       if (i < 0 || i >= floors.length) return;
       e.preventDefault();
+      hud.set((s) => ({ build: { ...s.build, over: 0 } }));
       w?.goToFloor(floors[i]);
     };
     window.addEventListener("keydown", onKey);

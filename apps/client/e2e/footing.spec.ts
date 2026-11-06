@@ -32,7 +32,7 @@ test("the feet's footing: each floor's tile, a desk's top, a rug", async ({ page
   const seen = await page.evaluate((chars) => {
     const w = (window as any).__yutopia;
     const level = w.level;
-    const map = w.map;
+    const map = w.rows(); // (the floor as rows, asked of the structure)
     const under = (x: number, y: number, z: number) => ({
       on: w.tp.underfoot(w.grid, level, x, y, z)?.on,
       footing: w.footingAt(x, y, z),

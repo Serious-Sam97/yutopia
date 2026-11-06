@@ -185,7 +185,10 @@ registerFeature((room) => {
     };
     room.slabUnder = slabsOf(
       w,
-      (id) => room.state.objects.get(id)?.kind === "stairs",
+      (id) => {
+        const k = room.state.objects.get(id)?.kind;
+        return k === "stairs" || k === "flight";
+      },
       (l, p) => !!room.inShaft?.(l, p),
     );
     room.solidAt = (level, p, r) => {

@@ -4,13 +4,13 @@ import {
   DESK_PULL,
   emptyEdges,
   entry,
-  type MapDef,
   quarterYaw,
   SEAT_NEXT,
   SEAT_SPEC,
   SURFACE,
   SURFACE_NEXT,
   setEdge,
+  type TileMap,
   type WorldObjectDef,
 } from "@yutopia/shared";
 import { ART_PX as ISO } from "@yutopia/shared/units";
@@ -233,7 +233,7 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
   const ROW = ROW0;
   const W = X0 + n * S + 4;
   const H = 9;
-  const map: MapDef = {
+  const map: TileMap = {
     key: "bench",
     name: "bench",
     width: W,

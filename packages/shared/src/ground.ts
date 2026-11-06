@@ -64,7 +64,20 @@ export interface Seat {
   rot: number;
   kind: string;
   pull: number;
+  /** a free seat's (docs/plan/72 phase 11.9 — turned any way): the way its sitter faces, a unit
+   *  step on the floor, and where they sit (its seat's line nearest the tile) */
+  front?: [number, number];
+  spot?: { x: number; y: number };
 }
+/** The way a seat's sitter faces, a unit step on the floor: a free one's own, else by its turn. */
+export const seatDir = (s: Seat): [number, number] => s.front ?? seatFront(s.rot);
+/** …as radians (atan2 of the step). */
+export const seatYaw = (s: Seat): number => {
+  const [fx, fy] = seatDir(s);
+  return Math.atan2(fy, fx);
+};
+/** …as a facing byte (256 a turn: +y is 64) — the world server's `seatFacing` for a free one. */
+export const seatByte = (s: Seat): number => Math.round((seatYaw(s) / Math.PI) * 128) & 255;
 /** A chair of a kind whose seats face different ways (fam CHAIRS: the chess table's), placed: its
  *  middle (tiles), the way it faces (a seat's rot) and its middle along that way from its tile's
  *  middle (a seat's `pull`). */

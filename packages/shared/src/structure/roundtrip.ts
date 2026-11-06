@@ -1,12 +1,13 @@
-// What the adapter must give back (docs/plan/72-the-3d-core.md, phase 6): a map turned into a
+// What the structure must answer (docs/plan/72-the-3d-core.md, phase 6): a map turned into a
 // structure and back reads the same — every floor's tiles, every edge's wall and both its faces,
 // every room, the floors' places, names, spawns, the core. (Used by the tests and the migration's
 // dry run; the raw arrays may differ only where they say nothing, e.g. back rows all ".".)
 import { floorsOf, levelMap } from "../levels.ts";
-import { type AreaDef, backAt, hWall, type MapDef, spanOf, tileAt, vWall } from "../map.ts";
+import { type AreaDef, type MapDef, spanOf, type TileMap } from "../map.ts";
 import { foldMap } from "./fold.ts";
 import { structureFromMap } from "./from-map.ts";
-import { mapFromStructure } from "./to-map.ts";
+import { backOf, cellOf, hWallOf, vWallOf } from "./query.ts";
+import { viewOf } from "./view.ts";
 
 const norm = (v: unknown): string =>
   JSON.stringify(v, (_k, x) =>
@@ -55,17 +56,19 @@ export function mapDiff(a0: MapDef, b0: MapDef): string[] {
     const { x0, y0, x1, y1 } = spanOf(la);
     for (let y = y0; y < y1; y++)
       for (let x = x0; x < x1; x++)
-        if (tileAt(la, x, y) !== tileAt(lb, x, y))
-          out.push(`floor ${f} tile ${x},${y}: ${tileAt(la, x, y)} vs ${tileAt(lb, x, y)}`);
+        if (cellOf(la, x, y) !== cellOf(lb, x, y))
+          out.push(`floor ${f} tile ${x},${y}: ${cellOf(la, x, y)} vs ${cellOf(lb, x, y)}`);
     for (let y = y0; y <= y1; y++)
       for (let x = x0; x < x1; x++) {
         const e = { dir: "h" as const, x, y };
-        if (hWall(la, x, y) !== hWall(lb, x, y) || backAt(la, e) !== backAt(lb, e)) out.push(`floor ${f} h${x},${y}`);
+        if (hWallOf(la, x, y) !== hWallOf(lb, x, y) || backOf(la, e) !== backOf(lb, e))
+          out.push(`floor ${f} h${x},${y}`);
       }
     for (let y = y0; y < y1; y++)
       for (let x = x0; x <= x1; x++) {
         const e = { dir: "v" as const, x, y };
-        if (vWall(la, x, y) !== vWall(lb, x, y) || backAt(la, e) !== backAt(lb, e)) out.push(`floor ${f} v${x},${y}`);
+        if (vWallOf(la, x, y) !== vWallOf(lb, x, y) || backOf(la, e) !== backOf(lb, e))
+          out.push(`floor ${f} v${x},${y}`);
       }
     // (a room's outline is the structure's, worked out from its walls: what's kept is the rest)
     const kept = (as: AreaDef[]) => as.map(({ outline: _o, ...a }) => a);
@@ -75,4 +78,4 @@ export function mapDiff(a0: MapDef, b0: MapDef): string[] {
 }
 
 /** A map through a structure and back: where it doesn't read the same (empty: it does). */
-export const roundTrip = (m: MapDef): string[] => mapDiff(m, mapFromStructure(structureFromMap(m)));
+export const roundTrip = (m: TileMap): string[] => mapDiff(m, viewOf(structureFromMap(m)));

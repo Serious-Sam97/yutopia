@@ -107,10 +107,16 @@ test("the room I'm in: its indoor tiles' bounds, none out on the lot", () => {
   // a hall and an office through a door, the lot's asphalt west, nothing north
   const tiles = ["          ", "aaa.....  ", "aaa.....  ", "aaa...ww  ", "aaa   ww  "];
   const open = (ch: string | undefined) => !ch || ch === " " || ch === "a";
-  assert.equal(roomBounds(tiles, 1, 2, open), null);
-  assert.equal(roomBounds(tiles, 0, 0, open), null);
-  assert.deepEqual(roomBounds(tiles, 4, 2, open), { x0: 3, y0: 1, x1: 8, y1: 5 });
-  assert.deepEqual(roomBounds(tiles, 6, 4, open), { x0: 3, y0: 1, x1: 8, y1: 5 });
+  // (asked of cells, within the floor's extent — its corner anywhere: here at 20, -7)
+  const [ox, oy] = [20, -7];
+  const cell = (x: number, y: number) => tiles[y - oy]?.[x - ox];
+  const ext = { x0: ox, y0: oy, x1: ox + 10, y1: oy + tiles.length };
+  const at = (x: number, y: number) => roomBounds(cell, ext, x + ox, y + oy, open);
+  const back = (r: ReturnType<typeof at>) => r && { x0: r.x0 - ox, y0: r.y0 - oy, x1: r.x1 - ox, y1: r.y1 - oy };
+  assert.equal(at(1, 2), null);
+  assert.equal(at(0, 0), null);
+  assert.deepEqual(back(at(4, 2)), { x0: 3, y0: 1, x1: 8, y1: 5 });
+  assert.deepEqual(back(at(6, 4)), { x0: 3, y0: 1, x1: 8, y1: 5 });
 });
 
 test("the ink's lines go with the fog: all of them close, none deep in the wall", () => {

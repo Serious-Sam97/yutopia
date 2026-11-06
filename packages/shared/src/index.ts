@@ -9,6 +9,8 @@ export * from "./doors.ts";
 export * from "./dressing.ts";
 export * from "./faces.ts";
 export * from "./facing.ts";
+export * from "./flight.ts";
+export * from "./free-things.ts";
 export * from "./furniture.ts";
 export * from "./ground.ts";
 export * from "./hang.ts";
@@ -30,12 +32,12 @@ export * from "./tops.ts";
 export * from "./units.ts";
 export * from "./weather.ts";
 
-import type { MapDef } from "./map.ts";
+import type { TileMap } from "./map.ts";
 import { studio, studioV1 } from "./maps/studio.ts";
 
 export { studio, studioV1 };
-export const MAPS: Record<string, MapDef> = { studio };
-export function getMap(key: string): MapDef {
+export const MAPS: Record<string, TileMap> = { studio };
+export function getMap(key: string): TileMap {
   return MAPS[key] ?? studio;
 }
 export { FAM_CHAIRS, FAM_COMMANDERS, FAM_KINDS } from "./fam/index.ts";

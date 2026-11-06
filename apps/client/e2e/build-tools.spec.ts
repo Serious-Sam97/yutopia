@@ -41,12 +41,18 @@ async function drag(page: Page, from: [number, number], to: [number, number], st
     await page.mouse.move(a.x + ((b.x - a.x) * i) / steps, a.y + ((b.y - a.y) * i) / steps);
   await page.mouse.up();
 }
-const tile = (page: Page, x: number, y: number) =>
-  page.evaluate(([tx, ty]) => (window as any).__yutopia.building.tiles[ty][tx], [x, y]);
-const hWall = (page: Page, x: number, y: number) =>
-  page.evaluate(([tx, ty]) => (window as any).__yutopia.building.hWalls[ty][tx], [x, y]);
-const vWall = (page: Page, x: number, y: number) =>
-  page.evaluate(([tx, ty]) => (window as any).__yutopia.building.vWalls[ty][tx], [x, y]);
+// (the home floor as rows from its corner, asked of the structure: plan 72 phase 11)
+const home = (page: Page, rows: "tiles" | "hWalls" | "vWalls", x: number, y: number) =>
+  page.evaluate(
+    ([r, tx, ty]) => {
+      const w = (window as any).__yutopia;
+      return w.rows(w.structure.home)[r][ty][tx];
+    },
+    [rows, x, y] as const,
+  );
+const tile = (page: Page, x: number, y: number) => home(page, "tiles", x, y);
+const hWall = (page: Page, x: number, y: number) => home(page, "hWalls", x, y);
+const vWall = (page: Page, x: number, y: number) => home(page, "vWalls", x, y);
 const width = (page: Page) => page.evaluate(() => (window as any).__yutopia.building.width);
 const kinds = (page: Page, kind: string) =>
   page.evaluate(
@@ -92,11 +98,12 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   await build(true, "walls");
   await expect(page.getByRole("region", { name: /build mode/i })).toBeVisible();
 
-  // Box: a carpet rectangle in one drag (floors have their own tab)
+  // Box: a carpet rectangle in one drag (floors have their own tab; drawn free, plan 72 phase 11:
+  // its corners snap to the grid, so pressed by the cells' corners)
   await page.getByRole("button", { name: "Floors", exact: true }).click();
   await page.getByRole("button", { name: "Carpet", exact: true }).click();
   await page.getByRole("button", { name: "Box", exact: true }).click();
-  await drag(page, [16.5, 4.5], [19.5, 6.5]);
+  await drag(page, [16.1, 4.1], [19.9, 6.9]);
   await expect.poll(() => tile(page, 16, 4)).toBe(",");
   expect(await tile(page, 19, 6)).toBe(",");
   expect(await tile(page, 20, 6)).toBe(".");
@@ -114,7 +121,7 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   await page.getByRole("button", { name: "Build", exact: true }).click();
   await page.getByRole("button", { name: "Brick", exact: true }).click();
   await page.getByRole("button", { name: "Box", exact: true }).click();
-  await drag(page, [8.5, 3.5], [11.5, 5.5]);
+  await drag(page, [8.1, 3.1], [11.9, 5.9]);
   await expect.poll(() => hWall(page, 8, 3)).toBe("b");
   expect(await hWall(page, 11, 6)).toBe("b");
   expect(await vWall(page, 8, 4)).toBe("b");
@@ -129,11 +136,12 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   expect(await tile(page, 8, 3)).toBe("_");
   expect(await tile(page, 13, 4)).toBe(".");
 
-  // Erase: drag along the top wall line, corner to corner, in Build
+  // Erase: drag along the top wall line, in Build (a wall the pointer comes near goes, whole: so
+  // clear of the corners, where the sides are)
   await page.getByRole("button", { name: "Build", exact: true }).click();
   await page.getByRole("button", { name: "Brick", exact: true }).click();
   await page.getByRole("button", { name: "Erase", exact: true }).click();
-  await drag(page, [8.2, 3], [11.8, 3], 18);
+  await drag(page, [8.6, 3], [11.4, 3], 18);
   await expect.poll(() => hWall(page, 9, 3)).toBe(".");
   expect(await vWall(page, 8, 4)).toBe("b"); // the sides stay
 
@@ -171,11 +179,27 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   await expect.poll(async () => (await kinds(page, "chair"))[0]?.props.ownerName).toBe("Bia Demo");
   await shot(page, "build-desks");
 
-  // Rooms: draw one, then "go there"
+  // Rooms: walls boxed round one find it (plan 72 phase 11), named in the prompt; then "go there"
+  await page.getByRole("tab", { name: /Walls/ }).click();
+  await page.getByRole("button", { name: "Build", exact: true }).click();
+  await page.getByRole("button", { name: "Box", exact: true }).click();
+  await drag(page, [21.1, 3.1], [25.9, 6.9]);
+  const prompt = page.getByTestId("found-room");
+  await prompt.getByRole("textbox").fill("Lab room");
+  await prompt.getByRole("textbox").press("Enter");
+  // (its walls close it all round: a door in its south wall, the way in)
+  await page.evaluate(() =>
+    (window as any).__yutopia.send("obj:put", {
+      id: "e2e-lab-room-door",
+      kind: "door",
+      x: 23,
+      y: 7,
+      yaw: 0,
+      props: { state: "open" },
+    }),
+  );
+  await page.waitForFunction(() => !!(window as any).__yutopia.room.state.objects.get("e2e-lab-room-door"));
   await page.getByRole("tab", { name: /Rooms/ }).click();
-  await drag(page, [21.5, 3.5], [25.5, 6.5]);
-  await page.getByPlaceholder("Ana's office").fill("Lab room");
-  await page.getByRole("button", { name: "Create room" }).click();
   await page.getByRole("button", { name: /LAB ROOM/ }).click();
   await shot(page, "build-rooms");
   await page.getByRole("button", { name: "Go there" }).click();

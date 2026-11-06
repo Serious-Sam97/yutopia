@@ -1,5 +1,7 @@
 "use client";
 
+import { ROOF_PITCHES, WALL_HEIGHTS, WALL_THICKS, workingHeights } from "@yutopia/shared/structure";
+import { Fragment } from "react";
 import { type Key, useTr } from "@/lib/i18n";
 import { hud, type PaintMode, useHud, type WallMode, type WallView } from "@/world/store";
 import { useWorld } from "../ctx";
@@ -15,6 +17,15 @@ export const WALL_SWATCHES = [
   { ch: "w:k", label: "Cork", face: "#c49a6c", side: "#9a754f", dots: true },
   { ch: "w:g", label: "Glass", face: "rgba(150,190,200,.55)", side: "rgba(110,150,160,.55)" },
 ] as const;
+// the snaps a wall's drawn with (plan 72 phase 11): the grid (m), the angle steps (°); 0 off
+const SNAP_GRIDS = [0.5, 1, 0] as const;
+const SNAP_ANGLES = [15, 45, 0] as const;
+// how high and how thick new walls go up (plan 72 phase 11.4; the user's three thicknesses)
+const HEIGHTS: [number, Key][] = [
+  [WALL_HEIGHTS.ceiling, "hCeiling"],
+  [WALL_HEIGHTS.rail, "hRail"],
+  [WALL_HEIGHTS.low, "hLow"],
+];
 const OPENINGS = [{ ch: "w:h", label: "Half wall" }] as const;
 export const FLOOR_SWATCHES = [
   { ch: ".", label: "Wood", fill: "#8f6038", line: "#6f4527" },
@@ -30,12 +41,16 @@ export const WALL_MATERIALS = WALL_SWATCHES.map((w) => ({ key: w.ch.slice(2), la
 
 const MODES: [PaintMode, Key][] = [
   ["line", "buildLine"],
+  ["arc", "buildArc"],
   ["box", "buildBox"],
+  ["adjust", "buildAdjust"],
   ["fill", "buildFill"],
   ["erase", "buildErase"],
 ];
 export const MODE_HINT: Record<PaintMode, Key> = {
   line: "buildHintLine",
+  arc: "buildHintArc",
+  adjust: "buildHintAdjust",
   box: "buildHintBox",
   fill: "buildHintFill",
   erase: "buildHintErase",
@@ -147,6 +162,7 @@ const TABS: [WallMode, Key][] = [
   ["build", "wallModeBuild"],
   ["paint", "wallModePaint"],
   ["floors", "wallModeFloors"],
+  ["roof", "wallModeRoof"],
   ["select", "wallModeSelect"],
 ];
 const VIEWS: [WallView, Key][] = [
@@ -158,27 +174,37 @@ export const WALL_HINT: Record<WallMode, Key> = {
   build: "wallHintBuild",
   paint: "wallHintPaint",
   floors: "wallHintFloors",
+  roof: "wallHintRoof",
   select: "wallHintSelect",
 };
 export const matLabel = (m: string | null): string =>
   m === "g" ? "Glass" : m === "h" ? "Half wall" : (WALL_SWATCHES.find((w) => w.ch === `w:${m}`)?.label ?? "");
 
+const mode0 = (m: WallMode) => m;
+// new mezzanines' heights over the floor (m): a floor's own and the ones it has are offered too
+const DECKS = [1.25, 1.75, 2.25];
+
 export function WallsPanel() {
   const t = useTr();
   const w = useWorld();
   const b = useHud((s) => s.build);
+  useHud((s) => s.mapVersion);
+  // the heights things are drawn at here (phase 11.7): the floor, its mezzanines; Floors offers new ones
+  const have = w?.structure ? workingHeights(w.structure, w.level) : [0];
+  const heights = [...new Set([...have, ...(mode0(b.wallMode) === "floors" ? DECKS : [])])].sort((p, q) => p - q);
   const set = (patch: Partial<typeof b>) => hud.set((s) => ({ build: { ...s.build, ...patch } }));
   const mode = b.wallMode;
   // each tab keeps a brush that fits it
   const pick = (m: WallMode) => {
     const floor = !b.brush.startsWith("w:");
-    const patch: Partial<typeof b> = { wallMode: m, wallSel: [] };
+    const patch: Partial<typeof b> = { wallMode: m, freeSel: null };
     if (m === "floors" && !floor) patch.brush = ".";
     if (m === "build" && floor) patch.brush = "w:p";
     if (m === "build" && b.paintMode === "fill") patch.paintMode = "line";
+    if (m === "floors" && (b.paintMode === "arc" || b.paintMode === "adjust")) patch.paintMode = "line";
     set(patch);
   };
-  const modes = MODES.filter(([m]) => (mode === "floors" ? true : m !== "fill"));
+  const modes = MODES.filter(([m]) => (mode === "floors" ? m !== "arc" && m !== "adjust" : m !== "fill"));
   return (
     <>
       <header className="flex items-baseline justify-between px-4 pt-3 pb-2">
@@ -201,6 +227,25 @@ export function WallsPanel() {
             ))}
           </fieldset>
         )}
+        {(mode === "build" || mode === "floors") && heights.length > 1 && (
+          <div className="grid grid-cols-[auto_1fr] items-center gap-x-2">
+            <span className="mono text-[11px] uppercase tracking-wide" style={{ color: "var(--muted)" }}>
+              {t("workingHeight")}
+            </span>
+            <fieldset className="seg min-w-0" aria-label={t("workingHeight")} data-testid="walls-over">
+              {heights.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  aria-pressed={Math.abs((b.over ?? 0) - v) < 1e-3}
+                  onClick={() => set({ over: v })}
+                >
+                  {v ? `+${v} m` : t("workingFloor")}
+                </button>
+              ))}
+            </fieldset>
+          </div>
+        )}
         {mode === "build" && (
           <>
             <h3 className="grp">{t("buildWalls")}</h3>
@@ -211,6 +256,59 @@ export function WallsPanel() {
                 </Swatch>
               ))}
             </div>
+            {b.paintMode !== "erase" && (
+              <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1.5">
+                <span className="mono text-[11px] uppercase tracking-wide" style={{ color: "var(--muted)" }}>
+                  {t("wallHeight")}
+                </span>
+                <fieldset className="seg min-w-0" aria-label={t("wallHeight")} data-testid="walls-height">
+                  {HEIGHTS.map(([v, label]) => (
+                    <button
+                      key={v}
+                      type="button"
+                      aria-pressed={Math.abs(b.wallHeight - v) < 1e-3}
+                      onClick={() => set({ wallHeight: v })}
+                    >
+                      {t(label)}
+                    </button>
+                  ))}
+                </fieldset>
+                <span className="mono text-[11px] uppercase tracking-wide" style={{ color: "var(--muted)" }}>
+                  {t("wallThick")}
+                </span>
+                <fieldset className="seg min-w-0" aria-label={t("wallThick")} data-testid="walls-thick">
+                  {WALL_THICKS.map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      aria-pressed={Math.abs(b.wallThick - v) < 1e-6}
+                      onClick={() => set({ wallThick: v })}
+                    >
+                      {v} m
+                    </button>
+                  ))}
+                </fieldset>
+                {(
+                  [
+                    ["snapGrid", "snapGrid", SNAP_GRIDS, (v: number) => `${v} m`],
+                    ["snapAngle", "snapAngle", SNAP_ANGLES, (v: number) => `${v}°`],
+                  ] as const
+                ).map(([field, label, opts, fmt]) => (
+                  <Fragment key={field}>
+                    <span className="mono text-[11px] uppercase tracking-wide" style={{ color: "var(--muted)" }}>
+                      {t(label)}
+                    </span>
+                    <fieldset className="seg min-w-0" aria-label={t(label)} data-testid={`walls-${field}`}>
+                      {opts.map((v) => (
+                        <button key={v} type="button" aria-pressed={b[field] === v} onClick={() => set({ [field]: v })}>
+                          {v ? fmt(v) : t("snapOff")}
+                        </button>
+                      ))}
+                    </fieldset>
+                  </Fragment>
+                ))}
+              </div>
+            )}
             <h3 className="grp">{t("buildOpenings")}</h3>
             <div className="grid grid-cols-4 gap-[6px]">
               {OPENINGS.map((o) => (
@@ -259,6 +357,45 @@ export function WallsPanel() {
                 <WallChip ch={s.ch} />
               </Swatch>
             ))}
+          </div>
+        )}
+        {mode === "roof" && (
+          <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1.5">
+            <span className="mono text-[11px] uppercase tracking-wide" style={{ color: "var(--muted)" }}>
+              {t("roofKind")}
+            </span>
+            <fieldset className="seg min-w-0" aria-label={t("roofKind")} data-testid="roof-kind">
+              {(
+                [
+                  ["flat", "roofFlat"],
+                  ["gable", "roofGable"],
+                  ["hip", "roofHip"],
+                ] as const
+              ).map(([k, label]) => (
+                <button key={k} type="button" aria-pressed={b.roofKind === k} onClick={() => set({ roofKind: k })}>
+                  {t(label)}
+                </button>
+              ))}
+            </fieldset>
+            {b.roofKind !== "flat" && (
+              <>
+                <span className="mono text-[11px] uppercase tracking-wide" style={{ color: "var(--muted)" }}>
+                  {t("roofPitch")}
+                </span>
+                <fieldset className="seg min-w-0" aria-label={t("roofPitch")} data-testid="roof-pitch">
+                  {ROOF_PITCHES.map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      aria-pressed={b.roofPitch === v}
+                      onClick={() => set({ roofPitch: v })}
+                    >
+                      {v}°
+                    </button>
+                  ))}
+                </fieldset>
+              </>
+            )}
           </div>
         )}
         {mode === "floors" && (

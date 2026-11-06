@@ -4,6 +4,7 @@ import {
   BUILDINGS,
   type BuildingKind,
   CHUNK,
+  GWALL_HEIGHT,
   growDefs,
   landBounds,
   landRegions,
@@ -176,7 +177,7 @@ const W = {
   treeHint: ["click: a tree there, or none", "clique: uma árvore ali, ou nenhuma"],
   rockHint: ["click: a boulder there", "clique: uma pedra ali"],
   place: ["Place", "Pôr"],
-  aLine: ["A line (fences)", "Uma linha (cercas)"],
+  aLine: ["A line (fences, walls)", "Uma linha (cercas, muros)"],
   thingsHint: [
     "R turns · drag one to move it · click: picks it · Delete takes it away · Alt-click: its kind",
     "R gira · arraste para mover · clique: escolhe · Delete tira · Alt-clique: o tipo",
@@ -187,6 +188,10 @@ const W = {
   turn: ["Turn", "Girar"],
   scale: ["Scale", "Escala"],
   words: ["Words", "Palavras"],
+  height: ["Height", "Altura"],
+  angle: ["Angle", "Ângulo"],
+  anyWay: ["Any", "Livre"],
+  curve: ["Arc", "Arco"],
   picked: ["picked", "escolhido"],
   takeAway: ["Take it away", "Tirar"],
   stays: ["stays where it is", "fica onde está"],
@@ -854,6 +859,7 @@ const THING_ICONS: Partial<Record<ThingKind, IconName>> = {
   postbox: "send",
   sign: "tag",
   fence: "wall",
+  gwall: "wall",
   snowpole: "pin",
   boulder: "move",
   planter: "leaf",
@@ -878,6 +884,7 @@ const THING_WORDS: Partial<Record<ThingKind, string>> = {
   postbox: "Caixa de correio",
   sign: "Placa",
   fence: "Cerca",
+  gwall: "Muro",
   snowpole: "Estaca de neve",
   boulder: "Pedra",
   planter: "Floreira",
@@ -916,7 +923,17 @@ function ThingsOptions({ g }: { g: GodState }) {
             className="px-2.5 whitespace-nowrap"
             aria-pressed={o.mode === m}
             onClick={() =>
-              w?.god?.thingsTool()?.setKind(m === "line" ? "fence" : o.kind === "fence" ? "bench" : o.kind)
+              w?.god
+                ?.thingsTool()
+                ?.setKind(
+                  m === "line"
+                    ? o.kind === "gwall"
+                      ? "gwall"
+                      : "fence"
+                    : o.kind === "fence" || o.kind === "gwall"
+                      ? "bench"
+                      : o.kind,
+                )
             }
           >
             {t(m === "place" ? "place" : "aLine")}
@@ -1010,6 +1027,10 @@ function ThingsPanel({ g }: { g: GodState }) {
   const commitScale = (e: React.SyntheticEvent<HTMLInputElement>) => {
     if (o.sel) tool()?.setOpts({ s: Number(e.currentTarget.value) });
   };
+  const commitHeight = (e: React.SyntheticEvent<HTMLInputElement>) => {
+    if (o.sel) tool()?.setOpts({ h: Number(e.currentTarget.value) });
+  };
+  const [h0, h1] = [GWALL_HEIGHT.min, GWALL_HEIGHT.max];
   return (
     <aside className="pointer-events-auto cabinet absolute top-[92px] right-3 w-64 max-h-[calc(100vh-200px)] overflow-y-auto scroll-thin p-3 hidden sm:block">
       <div className="flex items-baseline justify-between">
@@ -1087,6 +1108,55 @@ function ThingsPanel({ g }: { g: GodState }) {
               />
               <span className="mono text-[11.5px] w-9">{o.s.toFixed(1)}</span>
             </label>
+          )}
+          {o.kind === "gwall" && (
+            <label className="flex items-center gap-2">
+              <span className="text-[12.5px] w-12" style={{ color: "var(--cream-dim)" }}>
+                {t("height")}
+              </span>
+              <input
+                type="range"
+                className="slider flex-1"
+                aria-label={t("height")}
+                min={h0}
+                max={h1}
+                step={0.1}
+                value={o.h}
+                style={{ "--v": `${((o.h - h0) / (h1 - h0)) * 100}%` } as React.CSSProperties}
+                onChange={(e) => tool()?.setOpts({ h: Number(e.target.value) }, false)}
+                onPointerUp={commitHeight}
+                onKeyUp={commitHeight}
+              />
+              <span className="mono text-[11.5px] w-9">{o.h.toFixed(1)} m</span>
+            </label>
+          )}
+          {c.line && !o.sel && (
+            <div className="flex items-center gap-2">
+              <span className="text-[12.5px] w-12" style={{ color: "var(--cream-dim)" }}>
+                {t("angle")}
+              </span>
+              <div className="seg flex-1" role="radiogroup" aria-label={t("angle")}>
+                {([0, 15, 45] as const).map((a) => (
+                  <button
+                    key={a}
+                    type="button"
+                    className="px-2 flex-1"
+                    aria-pressed={o.snapA === a}
+                    onClick={() => tool()?.setOpts({ snapA: a }, false)}
+                  >
+                    {a ? `${a}°` : t("anyWay")}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="chip shrink-0"
+                aria-pressed={o.curve}
+                onClick={() => tool()?.setOpts({ curve: !o.curve }, false)}
+              >
+                {t("curve")}
+              </button>
+            </div>
           )}
           {c.text && (
             <label className="block">

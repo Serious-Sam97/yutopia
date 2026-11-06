@@ -47,6 +47,14 @@ export class BuildPick {
   }
 
   // The walls this view looks through now (faded runs): "h3,4" keys.
+  /** A wall at (x, y) is looked through right now (cut away or faded for the view: any wall — the
+   *  free ones too, plan 72 phase 11). */
+  throughAt(x: number, y: number): boolean {
+    for (const f of this.c.world.fades)
+      if (!f.item && f.alpha < 0.5 && x >= f.x0 - 0.15 && x <= f.x1 + 0.15 && y >= f.y0 - 0.15 && y <= f.y1 + 0.15)
+        return true;
+    return false;
+  }
   lookedThrough(): Set<string> {
     const out = new Set<string>();
     for (const f of this.c.world.fades) {

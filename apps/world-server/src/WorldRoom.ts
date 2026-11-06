@@ -11,6 +11,7 @@ import {
   CATALOG,
   type ClientMessages,
   calledSky,
+  canBeFree,
   canPlace,
   carried,
   clampLift,
@@ -22,10 +23,12 @@ import {
   entry,
   FOG_KINDS,
   type FogKind,
+  flightRise,
   floorsOf,
   fogAt,
   fogOf,
   footprint,
+  freeFits,
   type Ground,
   getMap,
   groundAt,
@@ -34,12 +37,14 @@ import {
   homeOf,
   hostOf,
   hungOnEdge,
+  isFreeThing,
   isJump,
   isKind,
   isOpening,
   LAYOUT_VERSION,
   levelMap,
   liftFront,
+  liftRect,
   lockedRooms,
   lotLayout,
   type MapDef,
@@ -60,13 +65,16 @@ import {
   type ServerMessages,
   type Sky,
   SPLIT_KINDS,
+  STOREY,
   type Status,
+  seatByte,
   setAreasBeyond,
   setOutdoors,
   skyAt,
   spDay,
   spHour,
   stepGround,
+  stopOver,
   TEMPLATES,
   TICK_HZ,
   thunderOf,
@@ -103,11 +111,17 @@ import {
   attachAll,
   attachable,
   diffStructures,
-  mapFromStructure,
+  freeOpeningWhy,
+  isFreeOpening,
+  onOf,
+  placeOnWall,
   STRUCTURE_VERSION,
   type StructOp,
   type Structure,
+  stopOnDeckWhy,
+  viewOf,
   structureFromMap,
+  wallOf,
   withOn,
 } from "@yutopia/shared/structure";
 import { finishWorld } from "@yutopia/shared/structure/finish";
@@ -374,7 +388,7 @@ export class WorldRoom extends Room<WorldState> {
     this.state.groundsRev = editsNow().rev;
     const base = getMap(info?.mapKey ?? "studio");
     // the building (docs/plan/72-the-3d-core.md, phase 6): its structure is the truth, the tile map
-    // the code not yet ported reads is made from it (shared structure/to-map.ts)
+    // its view — floors, rooms, the arrival point — made from it (shared structure/view.ts)
     let objects: WorldObjectDef[];
     const saved = info?.structure as Structure | undefined;
     if (saved?.version === STRUCTURE_VERSION) {
@@ -408,7 +422,7 @@ export class WorldRoom extends Room<WorldState> {
         await api.putStructure(this.structure);
       }
     }
-    this.map = mapFromStructure(this.structure);
+    this.map = viewOf(this.structure);
     this.state.mapKey = this.map.key;
     this.state.name = info?.name ?? "Offline studio";
     this.syncMapState();
@@ -1102,7 +1116,7 @@ export class WorldRoom extends Room<WorldState> {
       p.y = at.y;
       p.z = worldZ(p.level, mine.onLand(landing.x, landing.y) ? mine.groundAt(landing.x, landing.y, 0) : 0);
       p.a = seat ? ANIM.sit : ANIM.idle;
-      if (seat) p.yaw = seatFacing(seat.rot);
+      if (seat) p.yaw = seat.front ? seatByte(seat) : seatFacing(seat.rot);
       p.area = area?.key ?? "";
       this.send(client, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
       if (was !== p.level) this.hook("levelChange", client, p, was, p.level);
@@ -1649,7 +1663,7 @@ export class WorldRoom extends Room<WorldState> {
   }
 
   // The building (docs/plan/72-the-3d-core.md, phase 6): its structure and revision (the truth);
-  // `map` is made from it for the code that reads tile maps.
+  // `map` its view — floors, rooms, the arrival point — every floor and wall asked of the structure.
   structure!: Structure;
   structRev = 0;
 
@@ -1657,17 +1671,16 @@ export class WorldRoom extends Room<WorldState> {
     this.state.structRev = this.structRev;
   }
 
-  // An edit made: what turns the structure into the edited map's, applied as operations — kept,
-  // sent to everyone (each applies the same), stored (debounced). The map made again from it.
-  commitMap(next: MapDef) {
-    const ops = diffStructures(this.structure, structureFromMap(next));
-    if (!ops.length) return;
-    this.applyStruct(ops);
+  // An edit made as the building it leaves (the structure after it): what turns one into the other,
+  // applied as operations — kept, sent to everyone (each applies the same), stored (debounced).
+  commitStructure(next: Structure) {
+    const ops = diffStructures(this.structure, next);
+    if (ops.length) this.applyStruct(ops);
   }
   applyStruct(ops: StructOp[]) {
     this.structure = applyOps(this.structure, ops);
     this.structRev++;
-    this.map = mapFromStructure(this.structure);
+    this.map = viewOf(this.structure);
     this.syncMapState();
     this.broadcast("struct:ops", { rev: this.structRev, ops });
     this.rebuildGrid();
@@ -1816,6 +1829,34 @@ export class WorldRoom extends Room<WorldState> {
       props: cleanProps(m.kind, props0, sameFloor, x, y, rot),
     };
     def = atLevel(def, level, this.map);
+    // a thing placed free (plan 72 phase 11.9): its middle and its turn as sent, where it fits
+    if (props0.free === true && canBeFree(def.kind)) {
+      const r = (v: number) => Math.round(v * 1000) / 1000;
+      const yaw = (((m.yaw ?? 0) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) || 0;
+      def = {
+        ...def,
+        x: r(m.x),
+        y: r(m.y),
+        yaw: Math.round(yaw * 1e5) / 1e5,
+        props: { ...(def.props ?? {}), free: true },
+      };
+      const why = freeFits(def, sameFloor, this.structure, level);
+      if (why) {
+        this.send(client, "toast", { text: `Can't put it there: ${why}.`, tone: "warn" });
+        return;
+      }
+    } else if (def.props && "free" in def.props && !isOpening(def.kind)) {
+      const { free: _f, ...rest } = def.props;
+      def = { ...def, props: rest };
+    }
+    // an elevator's stop up on a mezzanine (plan 72 phase 11): all of it on one, at that height
+    if (def.kind === "elevator" && stopOver(def)) {
+      const why = stopOnDeckWhy(this.structure, level, liftRect(def), stopOver(def));
+      if (why) {
+        this.send(client, "toast", { text: `Can't put it there: ${why}.`, tone: "warn" });
+        return;
+      }
+    }
     // an elevator's stop joins the shaft of the stops at the same spot on the
     // other floors (or starts one of its own)
     if (def.kind === "elevator" && !def.props?.shaft) {
@@ -1827,7 +1868,24 @@ export class WorldRoom extends Room<WorldState> {
       });
       def.props = { ...(def.props ?? {}), shaft: String(same?.props?.shaft ?? def.id), door: "closed" };
     }
-    if (isOpening(def.kind)) {
+    // a door or window in a wall drawn free (plan 72 phase 11.6): by its wall and how far along it its
+    // middle is — placed from there, checked against that wall and what's in it
+    const freeOn = isOpening(def.kind) && props0.free === true ? onOf({ props: props0 }) : null;
+    if (freeOn) {
+      const on = { wall: String(freeOn.wall), at: Math.round(Number(freeOn.at) * 1e4) / 1e4 };
+      const why = freeOpeningWhy(this.structure, level, def.kind, on, sameFloor, def.id);
+      const w = this.structure.walls.find((q) => q.id === on.wall);
+      if (why || !w) {
+        this.send(client, "toast", { text: `Can't put it there: ${why ?? "no wall there"}.`, tone: "warn" });
+        return;
+      }
+      def = { ...def, ...placeOnWall(w, on.at, def.kind), props: { ...(def.props ?? {}), free: true, on } };
+      const locked = this.lockBreak(p, null, existing ? [fromSchema(existing), def] : [def], level);
+      if (locked) {
+        this.send(client, "toast", { text: `Can't put it there: ${locked}.`, tone: "warn" });
+        return;
+      }
+    } else if (isOpening(def.kind)) {
       // doors and windows sit in a wall, on edges (a quarter turn even: from the north
       // edge of x, y; odd: from the west edge); never into someone's locked room
       def.yaw = quarterYaw(rot % 2);
@@ -1838,6 +1896,8 @@ export class WorldRoom extends Room<WorldState> {
         this.send(client, "toast", { text: `Can't put it there: ${why}.`, tone: "warn" });
         return;
       }
+    }
+    if (isOpening(def.kind)) {
       // a door keeps its state (a new one, or a copy, starts open: nobody locks by placing)
       const start = doorStartState(def.kind);
       if (start)
@@ -1916,7 +1976,8 @@ export class WorldRoom extends Room<WorldState> {
         const a = next.areas.find((x) => x.key === area.key);
         if (!a || a.ownerId !== area.ownerId || a.x !== area.x || a.y !== area.y || a.w !== area.w || a.h !== area.h)
           return why;
-        if (ring.some((e) => edgeAt(lm, e) !== edgeAt(next, e))) return why;
+        const nl = levelMap(next, level) ?? next;
+        if (ring.some((e) => wallOf(lm, e) !== wallOf(nl, e))) return why;
       }
       const keys = new Set(ring.map(edgeKey));
       for (const o of objs) if (isOpening(o.kind) && openingEdges(o).some((e) => keys.has(edgeKey(e)))) return why;
@@ -1925,6 +1986,11 @@ export class WorldRoom extends Room<WorldState> {
   }
 
   placementOk(o: WorldObjectDef, others: WorldObjectDef[]): boolean {
+    // (one in a wall drawn free: checked against that wall; a thing placed free, against what's round
+    // it — putObject)
+    if (isFreeOpening(o) || isFreeThing(o)) return true;
+    // (a lift's stop on a mezzanine: over the floor's grid — checked against its deck, putObject)
+    if (o.kind === "elevator" && stopOver(o)) return true;
     const level = objLevel(o, this.map);
     const bodies = [...this.state.players.values()].filter((q) => q.level === level);
     return canPlace(this.levelMap(level), others, o, bodies);
@@ -2005,6 +2071,14 @@ export function cleanProps(
   rot = 0,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { ...props };
+  // (a flight of steps: as high as it's said to rise, in reason — plan 72 phase 11.8)
+  if (kind === "flight") out.rise = flightRise({ props: out });
+  // (a lift's stop up on a mezzanine: how high, m — plan 72 phase 11; nothing else's)
+  if (kind === "elevator" && out.deck !== undefined) {
+    const d = Math.round(Number(out.deck) * 1000) / 1000;
+    if (d > 0 && d < STOREY) out.deck = d;
+    else delete out.deck;
+  } else delete out.deck;
   const n = entry(kind).variants ?? 1;
   if (
     out.variant !== undefined &&

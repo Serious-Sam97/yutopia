@@ -23,8 +23,43 @@ const setBuild = (page: Page, b: Record<string, unknown>) =>
     const h = (window as any).__hud;
     h.set({ build: { ...h.get().build, ...p } });
   }, b);
-const walls = (page: Page, edges: Record<string, unknown>[]) =>
-  page.evaluate((e) => (window as any).__yutopia.send("map:walls", { edges: e }), edges);
+// the wall standing on a cell edge along x of my floor (straight, on whole metres): its id, its back
+// face, how long — or null
+const wallOn = (page: Page, x: number, y: number) =>
+  page.evaluate(
+    ([ex, ey]) => {
+      const w = (window as any).__yutopia;
+      const q = w.structure.walls.find(
+        (q: any) =>
+          q.floor === w.level &&
+          !q.bow &&
+          q.a[1] === ey &&
+          q.b[1] === ey &&
+          Math.min(q.a[0], q.b[0]) <= ex &&
+          Math.max(q.a[0], q.b[0]) >= ex + 1,
+      );
+      return q
+        ? {
+            id: q.id as string,
+            back: (q.back ?? q.front) as string,
+            len: Math.hypot(q.b[0] - q.a[0], q.b[1] - q.a[1]),
+          }
+        : null;
+    },
+    [x, y],
+  );
+// a wall's back face (−y on a wall along x), all of it, in `mat` (struct:paint: not split)
+const paintBack = (page: Page, wall: { id: string; len: number }, mat: string) =>
+  page.evaluate(
+    ([q, m]) =>
+      (window as any).__yutopia.send("struct:paint", {
+        level: (window as any).__yutopia.level,
+        stretches: [{ id: q.id, side: -1, from: 0, to: q.len, mat: m }],
+      }),
+    [wall, mat] as const,
+  );
+// (the floor as rows from its corner, asked of the structure: plan 72 phase 11)
+const rows = (page: Page) => page.evaluate(() => (window as any).__yutopia.rows());
 async function at(page: Page, x: number, y: number, z = 0) {
   return page.evaluate(
     ([tx, ty, tz]) => {
@@ -45,7 +80,7 @@ test("both faces of a wall: a material each, things on either, anywhere on it", 
   // near, no wall meeting it (an inside wall), and the material it is
   const spot = await page.evaluate(() => {
     const w = (window as any).__yutopia;
-    const m = w.map;
+    const m = w.rows();
     const solid = (ch: string | undefined) => !!ch && "pwfbk".includes(ch);
     const floor = (x: number, y: number) => {
       const ch = m.tiles[y]?.[x];
@@ -72,7 +107,7 @@ test("both faces of a wall: a material each, things on either, anywhere on it", 
     const near = (x: number, y: number) => hung.some((o: any) => Math.abs(o.x - x) < 6 && Math.abs(o.y - y) < 3);
     // (not the building's core: its stairs and elevators' walls)
     const core = (x: number, y: number) =>
-      m.areas.some(
+      w.map.areas.some(
         (a: any) => a.key.startsWith("core-") && x >= a.x - 4 && x <= a.x + a.w && y >= a.y - 1 && y <= a.y + a.h,
       );
     const v = (x: number, y: number) => m.vWalls[y]?.[x] ?? ".";
@@ -88,23 +123,26 @@ test("both faces of a wall: a material each, things on either, anywhere on it", 
   expect(spot, "the Lab has an inside wall with room on both faces").not.toBeNull();
   const { x, y, ch } = spot as { x: number; y: number; ch: string };
   const mat = ch.toLowerCase();
-  const other = mat === "k" ? "b" : "k";
   const stamp = Date.now().toString(36);
   const ids = { back: `e2e-wb-back-${stamp}`, front: `e2e-poster-${stamp}`, hand: "" };
+  // (the wall it's part of: its back painted whole, so it isn't split, and put back as it was after)
+  const wall = await wallOn(page, x + 1, y);
+  expect(wall, "the wall on that edge").not.toBeNull();
+  const { id: wallId, back: backWas, len } = wall as { id: string; back: string; len: number };
+  const backRow = (await rows(page)).hBacks[y][x + 1] as string;
+  const other = ["k", "b", "f"].find((m) => m !== mat && m !== backWas) as string;
   try {
     // the back face (−y: the room north of it) in another material; the front keeps its own
-    await walls(page, [{ x: x + 1, y, dir: "h", ch: other, side: -1 }]);
-    await expect
-      .poll(() => page.evaluate((p) => (window as any).__yutopia.map.hBacks?.[p.y]?.[p.x + 1], { x, y }))
-      .toBe(other);
-    expect(await page.evaluate((p) => (window as any).__yutopia.map.hWalls[p.y][p.x + 1], { x, y })).toBe(ch);
+    await paintBack(page, { id: wallId, len }, other);
+    await expect.poll(async () => (await rows(page)).hBacks[y][x + 1]).toBe(other);
+    expect((await rows(page)).hWalls[y][x + 1]).toBe(ch);
 
     // a whiteboard on the back face, a quarter tile along, two steps up; a
     // poster on the front, half a tile along and high
     await put(page, { id: ids.back, kind: "whiteboard", x, y: y - 1, yaw: Math.PI, props: { wu: 1, wz: 2 } });
     await put(page, { id: ids.front, kind: "poster", x: x + 1, y, yaw: 0, props: { wu: 2, wz: 4 } });
-    await expect.poll(async () => (await obj(page, ids.back))?.props).toEqual({ wu: 1, wz: 2 });
-    await expect.poll(async () => (await obj(page, ids.front))?.props).toEqual({ wu: 2, wz: 4 });
+    await expect.poll(async () => (await obj(page, ids.back))?.props).toMatchObject({ wu: 1, wz: 2 });
+    await expect.poll(async () => (await obj(page, ids.front))?.props).toMatchObject({ wu: 2, wz: 4 });
 
     // the front face (the back one is behind its wall), from the south-east in front of it
     await page.evaluate((p) => (window as any).__yutopia.teleport({ x: p.x + 1.5, y: p.y + 2.5 }), { x, y });
@@ -176,11 +214,9 @@ test("both faces of a wall: a material each, things on either, anywhere on it", 
     });
   } finally {
     for (const id of Object.values(ids)) if (id) await remove(page, id);
-    await walls(page, [{ x: x + 1, y, dir: "h", ch: mat, side: -1 }]);
+    await paintBack(page, { id: wallId, len }, backWas);
   }
-  await expect
-    .poll(() => page.evaluate((p) => (window as any).__yutopia.map.hBacks?.[p.y]?.[p.x + 1] ?? ".", { x, y }))
-    .toBe(".");
+  await expect.poll(async () => (await rows(page)).hBacks[y][x + 1]).toBe(backRow);
 });
 
 // In third person, high up a wall with the camera low, the pointer looks above
@@ -198,7 +234,7 @@ test("third person: a click high up a wall, above the horizon, hangs the thing",
   // two tiles of solid north wall (facing +y) with open floor in front, nothing hung near
   const spot = await page.evaluate(() => {
     const w = (window as any).__yutopia;
-    const m = w.map;
+    const m = w.rows();
     const solid = (ch: string | undefined) => !!ch && "pwfbk".includes(ch);
     const wallKinds = new Set([
       "board_wall",
@@ -297,7 +333,7 @@ test("a wall drag stays on its line, wobble and jumps and all", async ({ page })
   // a 6 × 3 patch of open floor with no walls on its edges
   const spot = await page.evaluate(() => {
     const w = (window as any).__yutopia;
-    const m = w.map;
+    const m = w.rows();
     const open = (x: number, y: number) => !!w.grid?.ok?.(x, y);
     const none = (s: string | undefined) => !s || s === ".";
     for (let y = 2; y < m.height - 4; y++)
@@ -315,8 +351,9 @@ test("a wall drag stays on its line, wobble and jumps and all", async ({ page })
   });
   expect(spot, "the Lab has open floor").not.toBeNull();
   const { x, y } = spot as { x: number; y: number };
-  const row = (yy: number) => page.evaluate((r) => (window as any).__yutopia.map.hWalls[r].slice(0, 200), yy);
+  const row = (yy: number) => page.evaluate((r) => (window as any).__yutopia.rows().hWalls[r].slice(0, 200), yy);
   const before = [await row(y - 1), await row(y), await row(y + 1)];
+  const had = (await page.evaluate(() => (window as any).__yutopia.structure.walls.map((q: any) => q.id))) as string[];
   try {
     await setBuild(page, { on: true, tool: "walls", wallMode: "build", brush: "w:p", paintMode: "line" });
     await page.waitForFunction(() => !!(window as any).__yutopia.build, null, { timeout: 15_000 });
@@ -328,24 +365,23 @@ test("a wall drag stays on its line, wobble and jumps and all", async ({ page })
         [0.9, 0.62],
         [1.4, -0.58],
         [3.6, 0.7],
-        [4.5, -0.3],
+        [5, -0.3],
       ])
         b.hover(p.x + dx, p.y + dy);
-      b.up(p.x + 4.5, p.y - 0.3);
+      // (drawn free, plan 72 phase 11: the angle snaps to the line it wobbled along)
+      b.up(p.x + 5, p.y - 0.3);
+      b.key("escape");
     }, spot);
     await expect.poll(async () => (await row(y)).slice(x, x + 5)).toBe("ppppp");
     expect((await row(y - 1)).slice(x, x + 6)).toBe(before[0].slice(x, x + 6));
     expect((await row(y + 1)).slice(x, x + 6)).toBe(before[2].slice(x, x + 6));
   } finally {
-    await page.evaluate(
-      (p) =>
-        (window as any).__yutopia.send("map:walls", {
-          edges: [0, 1, 2, 3, 4, 5].flatMap((d) =>
-            [p.y - 1, p.y, p.y + 1].map((yy) => ({ x: p.x + d, y: yy, dir: "h", ch: "." })),
-          ),
-        }),
-      spot,
-    );
+    // (what the drag put up, taken down by id)
+    await page.evaluate((h) => {
+      const w = (window as any).__yutopia;
+      const ids = w.structure.walls.filter((q: any) => q.floor === w.level && !h.includes(q.id)).map((q: any) => q.id);
+      if (ids.length) w.send("struct:walls", { level: w.level, remove: ids });
+    }, had);
     await setBuild(page, { on: false });
   }
   await expect.poll(async () => (await row(y)).slice(x, x + 6)).toBe(before[1].slice(x, x + 6));

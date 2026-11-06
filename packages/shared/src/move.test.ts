@@ -4,7 +4,7 @@ import { parkAt, parkedBody, SPECS } from "./car/index.ts";
 import { quarterYaw, type WorldObjectDef } from "./catalog.ts";
 import { BODY_R, moveStep, setOutdoors } from "./ground.ts";
 import { BENCH, outdoorsAt } from "./grounds.ts";
-import type { MapDef } from "./map.ts";
+import type { TileMap } from "./map.ts";
 import { FLOW_MOVES } from "./move/flow-moves.ts";
 import {
   Allowance,
@@ -548,7 +548,7 @@ test("a parked car is solid to the skin of its body: either model, any angle, on
     return { world, place: new Place(world, map, things, undefined, null) };
   };
   // a 6 × 6 floor with flat land all round it
-  const map: MapDef = {
+  const map: TileMap = {
     key: "t",
     name: "t",
     width: 6,

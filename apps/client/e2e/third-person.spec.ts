@@ -312,7 +312,7 @@ test("third person: build mode places, picks up and moves a thing in 3D", async 
     await expect.poll(async () => (await build()).carrying).toBe(0);
     if (shots) await page.screenshot({ path: `${shots}/live-ana-build-placed.png` });
 
-    // the Walls tool: a wall about to go on the edge under the pointer, drawn in 3D
+    // the Walls tool: where a wall would start under the pointer (the snap's mark), drawn in 3D
     await page.evaluate(() => {
       const h = (window as any).__hud;
       h.set({ build: { ...h.get().build, tool: "walls", wallMode: "build", brush: "w:p", selected: [] } });
@@ -322,7 +322,7 @@ test("third person: build mode places, picks up and moves a thing in 3D", async 
     await page.mouse.move(pe.x - 5, pe.y);
     await page.mouse.move(pe.x, pe.y);
     await expect
-      .poll(() => page.evaluate(() => (window as any).__yutopia.model.buildLook().edges.length))
+      .poll(() => page.evaluate(() => (window as any).__yutopia.model.buildLook().marks.length))
       .toBeGreaterThan(0);
     await expect
       .poll(() => page.evaluate(() => (window as any).__yutopia.tp.builder.cues.children.length))

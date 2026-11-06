@@ -34,6 +34,25 @@ async function at(page: Page, x: number, y: number, z = 0) {
     [x, y, z],
   );
 }
+// a plaster wall along x from (x, y), `n` m long (whole metres: it reads back as the cells'
+// edges), and the walls it put up (by id, to take down after: the structure's walls go by id)
+async function wallRun(page: Page, x: number, y: number, n: number): Promise<string[]> {
+  const had = (await page.evaluate(() => (window as any).__yutopia.structure.walls.map((q: any) => q.id))) as string[];
+  await page.evaluate(
+    (q) =>
+      (window as any).__yutopia.send("struct:walls", { add: [{ a: [q.x, q.y], b: [q.x + q.n, q.y], front: "p" }] }),
+    { x, y, n },
+  );
+  await expect
+    .poll(() => page.evaluate((q) => (window as any).__yutopia.rows().hWalls[q.y][q.x + q.n - 1], { x, y, n }))
+    .toBe("p");
+  return page.evaluate(
+    (h) => (window as any).__yutopia.structure.walls.filter((q: any) => !h.includes(q.id)).map((q: any) => q.id),
+    had,
+  );
+}
+const takeDown = (page: Page, ids: string[]) =>
+  page.evaluate((r) => r.length && (window as any).__yutopia.send("struct:walls", { remove: r }), ids);
 const newIds = (page: Page, had: string[]) =>
   page.evaluate(
     (h) => [...(window as any).__yutopia.room.state.objects.keys()].filter((k: string) => !h.includes(k)),
@@ -47,7 +66,7 @@ test("doors and windows go into a wall from the catalog; the wall stays, a door 
   // wall meeting it and nothing on it or in it near
   const spot = await page.evaluate(() => {
     const w = (window as any).__yutopia;
-    const m = w.map;
+    const m = w.rows(); // (the floor as rows, asked of the structure)
     const solid = (ch: string | undefined) => !!ch && "pwfbk".includes(ch);
     const floor = (x: number, y: number) => !!w.grid?.ok?.(x, y);
     const things = [...w.floorObjects()].filter(
@@ -60,7 +79,7 @@ test("doors and windows go into a wall from the catalog; the wall stays, a door 
     const near = (x: number, y: number) => things.some((o: any) => Math.abs(o.x - x) < 6 && Math.abs(o.y - y) < 3);
     // (not the building's core: its stairs and elevators' walls)
     const core = (x: number, y: number) =>
-      m.areas.some(
+      w.map.areas.some(
         (a: any) => a.key.startsWith("core-") && x >= a.x - 5 && x <= a.x + a.w && y >= a.y - 2 && y <= a.y + a.h + 1,
       );
     const v = (x: number, y: number) => m.vWalls[y]?.[x] ?? ".";
@@ -108,7 +127,7 @@ test("doors and windows go into a wall from the catalog; the wall stays, a door 
     const d = await obj(page, doorId);
     expect([d?.kind, d?.x, d?.y, d?.rot, d?.props.state]).toEqual(["door", x, y, 0, "open"]);
     // the wall is still there, in its material
-    expect(await page.evaluate((q) => (window as any).__yutopia.map.hWalls[q.y][q.x], { x, y })).toBe(ch);
+    expect(await page.evaluate((q) => (window as any).__yutopia.rows().hWalls[q.y][q.x], { x, y })).toBe(ch);
 
     // a wide window and a tall one further along (through the server's rules)
     const wide = `e2e-win-wide-${Date.now().toString(36)}`;
@@ -163,7 +182,7 @@ test("doors and windows: review shots", async ({ page }) => {
   // open floor 7 tiles wide and 6 deep, nothing on it: a plaster wall across it
   const spot = await page.evaluate(() => {
     const w = (window as any).__yutopia;
-    const m = w.map;
+    const m = w.rows(); // (the floor as rows, asked of the structure)
     const floor = (x: number, y: number) => !!w.grid?.ok?.(x, y);
     const busy = [...w.floorObjects()];
     const near = (x: number, y: number) => busy.some((o: any) => o.x >= x - 2 && o.x <= x + 8 && Math.abs(o.y - y) < 4);
@@ -181,9 +200,7 @@ test("doors and windows: review shots", async ({ page }) => {
   });
   expect(spot, "open floor in the Lab").not.toBeNull();
   const { x, y } = spot as { x: number; y: number };
-  const run = (ch: string) => Array.from({ length: 7 }, (_, d) => ({ x: x + d, y, dir: "h", ch }));
-  await page.evaluate((e) => (window as any).__yutopia.send("map:walls", { edges: e }), run("p"));
-  await expect.poll(() => page.evaluate((q) => (window as any).__yutopia.map.hWalls[q.y][q.x + 6], { x, y })).toBe("p");
+  const walls = await wallRun(page, x, y, 7);
   const s = Date.now().toString(36);
   const ids = { a: `e2e-door-a-${s}`, g: `e2e-door-g-${s}`, w: `e2e-win-${s}`, ww: `e2e-ww-${s}`, wt: `e2e-wt-${s}` };
   const shot = (name: string) => page.screenshot({ path: `${dir}/${name}.png` });
@@ -233,7 +250,7 @@ test("doors and windows: review shots", async ({ page }) => {
   } finally {
     for (const id of Object.values(ids)) await remove(page, id);
     await page.waitForTimeout(500);
-    await page.evaluate((e) => (window as any).__yutopia.send("map:walls", { edges: e }), run("."));
+    await takeDown(page, walls);
   }
 });
 
@@ -247,7 +264,7 @@ test("door kinds: review shots", async ({ page }) => {
   const W = 11;
   const spot = await page.evaluate((len) => {
     const w = (window as any).__yutopia;
-    const m = w.map;
+    const m = w.rows(); // (the floor as rows, asked of the structure)
     const floor = (x: number, y: number) => !!w.grid?.ok?.(x, y);
     const busy = [...w.floorObjects()];
     const near = (x: number, y: number) =>
@@ -266,11 +283,7 @@ test("door kinds: review shots", async ({ page }) => {
   }, W);
   expect(spot, "open floor in the Lab").not.toBeNull();
   const { x, y } = spot as { x: number; y: number };
-  const run = (ch: string) => Array.from({ length: W }, (_, d) => ({ x: x + d, y, dir: "h", ch }));
-  await page.evaluate((e) => (window as any).__yutopia.send("map:walls", { edges: e }), run("p"));
-  await expect
-    .poll(() => page.evaluate((q) => (window as any).__yutopia.map.hWalls[q.y][q.x + 10], { x, y }))
-    .toBe("p");
+  const walls = await wallRun(page, x, y, W);
   const s = Date.now().toString(36);
   const doors: [string, number, Record<string, unknown>][] = [
     ["door", 0, {}],
@@ -345,7 +358,7 @@ test("door kinds: review shots", async ({ page }) => {
     await set(0, "open").catch(() => {});
     for (const id of ids) await remove(page, id);
     await page.waitForTimeout(500);
-    await page.evaluate((e) => (window as any).__yutopia.send("map:walls", { edges: e }), run("."));
+    await takeDown(page, walls);
   }
 });
 
@@ -359,7 +372,7 @@ test("window kinds: review shots", async ({ page }) => {
   const W = 13;
   const spot = await page.evaluate((len) => {
     const w = (window as any).__yutopia;
-    const m = w.map;
+    const m = w.rows(); // (the floor as rows, asked of the structure)
     const floor = (x: number, y: number) => !!w.grid?.ok?.(x, y);
     const busy = [...w.floorObjects()];
     const near = (x: number, y: number) =>
@@ -378,11 +391,7 @@ test("window kinds: review shots", async ({ page }) => {
   }, W);
   expect(spot, "open floor in the Lab").not.toBeNull();
   const { x, y } = spot as { x: number; y: number };
-  const run = (ch: string) => Array.from({ length: W }, (_, d) => ({ x: x + d, y, dir: "h", ch }));
-  await page.evaluate((e) => (window as any).__yutopia.send("map:walls", { edges: e }), run("p"));
-  await expect
-    .poll(() => page.evaluate((q) => (window as any).__yutopia.map.hWalls[q.y][q.x + 12], { x, y }))
-    .toBe("p");
+  const walls = await wallRun(page, x, y, W);
   const s = Date.now().toString(36);
   const wins: [string, number][] = [
     ["window", 0],
@@ -455,6 +464,6 @@ test("window kinds: review shots", async ({ page }) => {
   } finally {
     for (const id of ids) await remove(page, id);
     await page.waitForTimeout(500);
-    await page.evaluate((e) => (window as any).__yutopia.send("map:walls", { edges: e }), run("."));
+    await takeDown(page, walls);
   }
 });

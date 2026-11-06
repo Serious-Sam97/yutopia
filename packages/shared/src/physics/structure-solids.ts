@@ -46,7 +46,7 @@ export function alongWall(w: Wall, u0: number, u1: number, y0: number, y1: numbe
   const len = Math.hypot(dx, dz) || 1;
   const ux = dx / len;
   const uz = dz / len;
-  const t = WALL_T / 2;
+  const t = (w.thick ?? WALL_T) / 2;
   const p = (u: number): [number, number] => [w.a[0] + ux * u, w.a[1] + uz * u];
   const [x0, z0] = p(u0);
   const [x1, z1] = p(u1);

@@ -3,6 +3,7 @@ import {
   Box3,
   type BufferGeometry,
   type Camera,
+  type InstancedMesh,
   LinearSRGBColorSpace,
   LineSegments,
   type Material,
@@ -160,7 +161,7 @@ export class Warmup {
   // buffers and each texture go up to the GPU behind the screen — else the first look
   // round put them up then, tens of MB in a second or two
   drawAll() {
-    const box = new Box3().setFromObject(this.c.scene);
+    const box = sceneBox(this.c.scene);
     if (box.isEmpty()) return;
     const c = this.c.warmCam;
     const r = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) / 2 + 2;
@@ -334,3 +335,30 @@ export class Warmup {
 
 // the lamps lit at a tier (the pool's first n)
 const lampsFor = (q: Quality) => (q === "high" ? LAMPS : q === "medium" ? 6 : q === "low" ? 3 : 2);
+
+/** All of a scene's things in one box, each thing's own box left out when it isn't finite: an
+ *  instanced pool hides a block's trees with all-zero matrices (grounds-stream.ts), which three's box
+ *  maths divides by (w = 0) into NaN — Box3.setFromObject on the whole scene came out NaN, and the
+ *  warm-up drew from a NaN camera (its clipping plane threw "firstElem.toArray is not a function"). */
+function sceneBox(scene: Scene): Box3 {
+  scene.updateMatrixWorld();
+  const box = new Box3();
+  const one = new Box3();
+  scene.traverse((o) => {
+    const m = o as Mesh;
+    if (!m.geometry) return;
+    const im = o as InstancedMesh;
+    if (im.isInstancedMesh) {
+      if (im.boundingBox === null) im.computeBoundingBox();
+      one.copy(im.boundingBox as Box3);
+    } else {
+      if (m.geometry.boundingBox === null) m.geometry.computeBoundingBox();
+      one.copy(m.geometry.boundingBox as Box3);
+    }
+    if (one.isEmpty()) return;
+    one.applyMatrix4(o.matrixWorld);
+    const v = [one.min.x, one.min.y, one.min.z, one.max.x, one.max.y, one.max.z];
+    if (v.every(Number.isFinite)) box.union(one);
+  });
+  return box;
+}

@@ -3,7 +3,8 @@ import { quarterOf } from "./catalog.ts";
 import type { Point } from "./iso.ts";
 import { across, elevOf, floorOf, floorsOf, levelMap, objLevel } from "./levels.ts";
 import { liftShafts, shaftHoles } from "./lift.ts";
-import { type Edge, isFloor, type MapDef, tileAt } from "./map.ts";
+import { type Edge, isFloor, type MapDef } from "./map.ts";
+import { cellOf } from "./structure/query.ts";
 import { STOREY } from "./units.ts";
 
 // A staircase (the catalog's `stairs`): a switchback in a 4 × 6 well from its
@@ -183,7 +184,7 @@ export function floorAt(
     const q = across(m, level, l, p);
     if (slab) return slab(l, q);
     const lm = levelMap(m, l);
-    return !!lm && isFloor(tileAt(lm, Math.floor(q.x), Math.floor(q.y)));
+    return !!lm && isFloor(cellOf(lm, Math.floor(q.x), Math.floor(q.y)));
   };
   const outdoors = () =>
     level === 0 || !floors.includes(0) ? null : { level: 0, dz: elevOf(level) - elevOf(0), at: across(m, level, 0, p) };

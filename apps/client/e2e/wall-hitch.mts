@@ -1,9 +1,9 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: reads the world's window test hooks */
 // What placing a wall costs: an offline world-server of its own (the dev world untouched), the game
 // as Cai (a builder there), a wall put on an open edge near Cai the way the Walls tool sends it
-// (`map:walls`), then taken away again. Per edit: the browser's frames for 4 s after (worst, the
-// gaps over 50 ms), a CPU profile of those 4 s (top self time, and the inclusive time of the
-// functions named in FOCUS), and the server's time on the message and its event-loop's worst.
+// (`struct:walls`), then taken away again (by its id). Per edit: the browser's frames for 4 s after
+// (worst, the gaps over 50 ms), a CPU profile of those 4 s (top self time, and the inclusive time of
+// the functions named in FOCUS), and the server's time on the message and its event-loop's worst.
 //   node --experimental-strip-types e2e/wall-hitch.mts
 //   QUALITY=high|medium|low (high); PORT=2672; EDITS=2; FOCUS="update,keepUp,World3,applyMapFromState"
 import { type ChildProcess, spawn } from "node:child_process";
@@ -113,7 +113,8 @@ try {
     // that floor, at its middle's nearest floor tile
     await page.evaluate((level) => {
       const c = (window as any).__yutopia;
-      const l = c.building.levels?.find((v: any) => v.index === level) ?? c.building;
+      // (the floor as rows from its corner, asked of the structure; none such: the home floor)
+      const l = c.rows(level) ?? c.rows(c.structure.home);
       const ox = l.ox ?? 0;
       const oy = l.oy ?? 0;
       let best: [number, number] | null = null;
@@ -200,10 +201,11 @@ try {
   // an open edge near me on my floor (floor on both sides, no wall), and the commonest wall there
   const pick = await page.evaluate(() => {
     const c = (window as any).__yutopia;
-    const m = c.map;
+    // (the floor as rows from its corner, asked of the structure: me in its cells)
+    const m = c.rows();
     const me = c.me ?? null;
-    const px = Math.floor(me?.x ?? c.tp?.focus?.x ?? m.width / 2);
-    const py = Math.floor(me?.y ?? c.tp?.focus?.y ?? m.height / 2);
+    const px = Math.floor((me?.x ?? c.tp?.focus?.x ?? m.width / 2 + m.ox) - m.ox);
+    const py = Math.floor((me?.y ?? c.tp?.focus?.y ?? m.height / 2 + m.oy) - m.oy);
     const count = new Map<string, number>();
     for (const row of m.hWalls)
       for (const ch of row) if (ch !== "." && /[a-z]/.test(ch)) count.set(ch, (count.get(ch) ?? 0) + 1);
@@ -221,7 +223,9 @@ try {
         if (d < 2) continue;
         if (!best || d < best.d) best = { x, y, d };
       }
-    return { level: c.level, ch, edge: best, at: [px, py], size: [m.width, m.height] };
+    // (the edge's ends in world metres: the cells' from the floor's corner)
+    const ends = best && { a: [best.x + m.ox, best.y + m.oy], b: [best.x + 1 + m.ox, best.y + m.oy] };
+    return { level: c.level, ch, edge: best, ends, at: [px, py], size: [m.width, m.height] };
   });
   console.log("edit:", JSON.stringify(pick));
   if (!pick.edge) throw new Error("no open edge found");
@@ -356,14 +360,26 @@ try {
         return out;
       };
       const set = (row: string, x: number, ch: string) => row.slice(0, x) + ch + row.slice(x + 1);
+      // (the maps carry no rows now, plan 72 phase 11: the floor's rows asked of the structure, laid
+      // on its map without the structure — a map of rows is read by them, shared structure/query.ts)
+      const r = c.rows(c.level);
+      const rowsMap = {
+        ...mine.map,
+        st: undefined,
+        tiles: r.tiles,
+        hWalls: r.hWalls,
+        vWalls: r.vWalls,
+        hBacks: r.hBacks,
+        vBacks: r.vBacks,
+      };
       const wallChars = new Set<string>();
-      for (const r of [...mine.map.hWalls, ...mine.map.vWalls]) for (const ch of r) if (ch !== ".") wallChars.add(ch);
+      for (const q of [...rowsMap.hWalls, ...rowsMap.vWalls]) for (const ch of q) if (ch !== ".") wallChars.add(ch);
       const chars = [...wallChars];
       const report: string[] = [];
       let bad = 0;
-      // (the edits here are the map's, not the structure's: the floor put on its map's own walls, slabs
-      // and tiles first, and baked whole — as a fresh build from the map is)
-      mine.relayout(mine.map, mine.objects);
+      // (the edits here are the rows', not the structure's: the floor put on those rows' own walls,
+      // slabs and tiles first, and baked whole — as a fresh build from them is)
+      mine.relayout(rowsMap, mine.objects);
       mine.flushSoon?.();
       mine.rebakeFloor?.();
       {
@@ -626,10 +642,20 @@ try {
         const t = performance.now();
         (window as any).__calls = [];
         (window as any).__callsOn = true;
-        c.room.send("map:walls", {
-          level: p.level,
-          edges: [{ x: p.edge.x, y: p.edge.y, dir: "h", ch: on ? p.ch : "." }],
-        });
+        // (put: a wall one edge long, on whole metres — it reads back as that edge; taken: the wall
+        // standing on those ends, by its id)
+        const same = (u: number[], v: number[]) => Math.abs(u[0] - v[0]) < 1e-6 && Math.abs(u[1] - v[1]) < 1e-6;
+        const there = c.structure.walls.find(
+          (w: any) =>
+            w.floor === p.level &&
+            ((same(w.a, p.ends.a) && same(w.b, p.ends.b)) || (same(w.a, p.ends.b) && same(w.b, p.ends.a))),
+        );
+        c.room.send(
+          "struct:walls",
+          on
+            ? { level: p.level, add: [{ a: p.ends.a, b: p.ends.b, front: p.ch }] }
+            : { level: p.level, remove: there ? [there.id] : [] },
+        );
         return t;
       },
       [pick, put] as const,
@@ -640,7 +666,7 @@ try {
         new Promise<number>((done) => {
           const c = (window as any).__yutopia;
           const t = setInterval(() => {
-            const v = c.map.hWalls[p.edge.y]?.[p.edge.x] ?? ".";
+            const v = c.rows(p.level)?.hWalls[p.edge.y]?.[p.edge.x] ?? ".";
             if ((on && v !== ".") || (!on && v === ".")) {
               clearInterval(t);
               done(performance.now() - t0);
@@ -699,7 +725,7 @@ try {
           .join(" · ")}`,
       );
     const after = await metrics();
-    const msgMax = Object.entries(after).filter(([k]) => k.includes("map:walls") && k.startsWith("message_ms_max"));
+    const msgMax = Object.entries(after).filter(([k]) => k.includes("struct:walls") && k.startsWith("message_ms_max"));
     const loopMax = after.event_loop_delay_ms_max;
     const stallMax = after.stall_ms_max;
     const sorted = [...gaps].sort((a, b) => b - a);
@@ -734,7 +760,7 @@ try {
         console.log(`    +${(k.t - sent).toFixed(0).padStart(5)} ${"  ".repeat(k.d)}${k.n} ${k.ms.toFixed(1)}`);
     }
     console.log(
-      `  server: map:walls max ${JSON.stringify(msgMax)}, loop max ${loopMax} (before ${before.event_loop_delay_ms_max}), stall max ${stallMax}`,
+      `  server: struct:walls max ${JSON.stringify(msgMax)}, loop max ${loopMax} (before ${before.event_loop_delay_ms_max}), stall max ${stallMax}`,
     );
     // the profile: self time by function, and the inclusive time of the FOCUS functions
     const nodes = new Map<number, any>();

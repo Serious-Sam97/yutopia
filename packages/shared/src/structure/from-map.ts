@@ -1,9 +1,9 @@
 // Today's tile maps as a structure (docs/plan/72-the-3d-core.md, phase 6): every floor of the
 // building in world metres (each floor's tiles moved by its corner, the home floor's at 0, 0 —
 // the land's own frame), its walls joined along their runs, its tiles traced into slabs, its areas
-// as rooms (with the outline their walls make: faces.ts). to-map.ts gives the same maps back.
+// as rooms (with the outline their walls make: faces.ts). query.ts answers what they said (the same cells and edges).
 import { elevOf, floorsOf, homeOf, levelMap } from "../levels.ts";
-import { backAt, HALF_WALL, hWall, isFloor, type MapDef, NO_WALL, vWall } from "../map.ts";
+import { backAt, HALF_WALL, hWall, isFloor, NO_WALL, type TileMap, vWall } from "../map.ts";
 import { HALF_WALL_H, WALL_H } from "../units.ts";
 import { roomsFromWalls } from "./faces.ts";
 import { foldMap } from "./fold.ts";
@@ -13,7 +13,7 @@ import { type Floor, type Room, type Slab, STRUCTURE_VERSION, type Structure, ty
 const heightOf = (ch: string): number => (ch === HALF_WALL ? HALF_WALL_H : WALL_H);
 
 /** (An older map is folded into the world's frame first: fold.ts.) */
-export function structureFromMap(map0: MapDef): Structure {
+export function structureFromMap(map0: TileMap): Structure {
   const map = foldMap(map0);
   const home = homeOf(map);
   const floors: Floor[] = [];
@@ -80,7 +80,8 @@ export function structureFromMap(map0: MapDef): Structure {
     for (let x = 0; x <= lm.width; x++) run("v", x, lm.height);
     // the rooms: each area's rectangle, the rest of it as it was
     for (const area of lm.areas) {
-      const { key, x, y, w, h, ...props } = area;
+      // (its outline isn't a prop: the structure's room has its own — a stale copy kept would win)
+      const { key, x, y, w, h, outline: _outline, ...props } = area;
       const [x0, y0, x1, y1] = [x, y, x + w, y + h];
       rooms.push({ key, floor: index, outline: [], rect: [x0, y0, x1, y1], props });
     }

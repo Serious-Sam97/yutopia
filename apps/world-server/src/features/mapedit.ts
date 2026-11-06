@@ -1,7 +1,4 @@
 import {
-  addRoom,
-  applyEdges,
-  applyPaint,
   areaAt,
   atLevel,
   blankLevel,
@@ -10,45 +7,54 @@ import {
   doorLockable,
   doorRoom,
   doorStartState,
-  type EdgeEdit,
-  edgeAt,
-  edgeBlocker,
+  emptyEdges,
   entry,
   floorsOf,
-  hungOnEdge,
   isDressing,
-  isFacedWall,
+  isOpening,
   levelMap,
-  lockedEdge,
   MAP_MAX,
   MAP_MIN,
   type MapDef,
   mayLockDoor,
   objLevel,
   onLevel,
-  openingBlocker,
-  paintBlocker,
-  quarterOf,
-  quarterYaw,
   ROOM_KINDS,
-  resizeMap,
   roomKey,
-  setRoomWalls,
-  spanOf,
-  tileAt,
-  WALL_MATS,
-  type WallMat,
+  type TileMap,
   type WorldObjectDef,
-  withLevel,
   worldZ,
 } from "@yutopia/shared";
+import {
+  applyOps,
+  floorPieces,
+  footprintRows,
+  movedOn,
+  NEW_ROOM,
+  onOf,
+  type PaintStretch,
+  roofsEdit,
+  roomStretches,
+  roomsAfterWalls,
+  SLABS_AT_ONCE,
+  type Structure,
+  slabsEdit,
+  viewOf,
+  WALLS_AT_ONCE,
+  wallsEdit,
+  wallsPaint,
+  wallsSet,
+  withFloor,
+  withoutFloor,
+} from "@yutopia/shared/structure";
 import { api } from "../api.ts";
 import { config } from "../config.ts";
 import { fromSchema, safeJson, toSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
-// Builders edit the map itself: paint floors (tiles) and walls (tile edges), draw rooms (with an owner),
-// resize or start blank, move the arrival point, assign desks. Doors: anyone
+// Builders edit the building (the structure — docs/plan/72 phase 11: walls, floors and roofs drawn
+// free; rooms found as walls close round them, named, given an owner), start the home floor blank,
+// add a floor on top or take it away, move the arrival point, assign desks. Doors: anyone
 // opens/closes; the room's owner locks (an admin, rooms with no owner), and
 // while it's locked nobody else changes that room (room.lockBreak). The shared
 // rules (packages/shared/src/map-edit.ts) decide what's allowed.
@@ -60,6 +66,10 @@ const isLamp = (o: WorldObjectDef) =>
   o.kind === "panel_light" ||
   entry(o.kind).interact === "lamp" ||
   (o.kind === "tabletop" && o.props?.d === "desklamp");
+
+// (a new wall's id: unique enough in one world, sorted by when it was drawn)
+let wallSeq = 0;
+const newWallId = () => `w${Date.now().toString(36)}${(wallSeq++ % 1296).toString(36).padStart(2, "0")}`;
 
 registerFeature((room: WorldRoom) => {
   const builder = (c: WorldClient) => room.state.players.get(c.sessionId)?.builder === true;
@@ -73,10 +83,6 @@ registerFeature((room: WorldRoom) => {
   };
   const at = (level: number) => room.levelMap(level);
   const things = (level: number) => onLevel(objects(), at(level));
-  const bodies = (level = room.home) =>
-    [...room.state.players.values()].filter((p) => p.level === level).map((p) => ({ x: p.x, y: p.y }));
-  // a floor changed: the building with it
-  const commit = (lm: MapDef) => room.commitMap(withLevel(room.map, lm));
 
   const save = async (o: WorldObjectDef) => {
     const saved = config.offline ? o : (await api.putObject(o).catch(() => ({ object: o }))).object;
@@ -93,115 +99,210 @@ registerFeature((room: WorldRoom) => {
     if (why) warn(c, `${why}.`);
     return !!why;
   };
-  const mat = (m: unknown): WallMat | undefined =>
-    typeof m === "string" && Object.hasOwn(WALL_MATS, m) ? (m as WallMat) : undefined;
 
-  room.on("map:paint", (client, m) => {
-    const level = floor(m);
-    if (!builder(client) || !Array.isArray(m.cells) || level === null) return;
-    const lm = at(level);
-    const objs = things(level);
-    const ok: { x: number; y: number; ch: string }[] = [];
-    let reason: string | null = null;
-    for (const c of m.cells.slice(0, 600)) {
-      const x = Math.floor(Number(c?.x));
-      const y = Math.floor(Number(c?.y));
-      const ch = String(c?.ch ?? "");
-      if (tileAt(lm, x, y) === ch) continue;
-      const why = paintBlocker(lm, objs, bodies(level), x, y, ch);
-      if (why) reason ??= why;
-      else ok.push({ x, y, ch });
-    }
-    if (ok.length) {
-      commit(applyPaint(lm, ok));
-      room.rescue();
-    }
-    if (reason) warn(client, `Skipped a tile: ${reason}.`);
-  });
+  // Walls drawn free (docs/plan/72 phase 11): put in and taken away as the structure's operation — at
+  // any angle, any length, on whatever floor it's sent for. Checked as the browser's ghost is (shared
+  // structure/edit.ts); not through someone else's locked room. The ids it gave back to the sender.
+  // found rooms' keys, one edit's: none a room on any floor has, nor one handed out already
+  const roomKeys = () => {
+    const used = new Set(room.structure.rooms.map((r) => r.key));
+    const base = roomKey(NEW_ROOM);
+    return () => {
+      let key = base;
+      for (let i = 2; used.has(key); i++) key = `${base}-${i}`;
+      used.add(key);
+      return key;
+    };
+  };
 
-  room.on("map:walls", (client, m) => {
+  room.on("struct:walls", (client, m) => {
     const level = floor(m);
-    if (!builder(client) || !Array.isArray(m.edges) || level === null) return;
-    const objs = things(level);
-    const uid = room.state.players.get(client.sessionId)?.uid ?? null;
-    const lockedHere = (e: EdgeEdit) => lockedEdge(at(level), objs, e, uid);
-    const ok: EdgeEdit[] = [];
-    let reason: string | null = null;
-    let next = at(level);
-    for (const e of m.edges.slice(0, 600)) {
-      const edge: EdgeEdit = {
-        x: Math.floor(Number(e?.x)),
-        y: Math.floor(Number(e?.y)),
-        dir: e?.dir === "v" ? ("v" as const) : ("h" as const),
-        ch: String(e?.ch ?? ""),
-        side: e?.side === 1 || e?.side === -1 ? e.side : undefined,
-      };
-      const why = edgeBlocker(next, objs, edge, edge.ch) ?? lockedHere(edge);
-      if (why) reason ??= why;
-      else {
-        ok.push(edge);
-        next = applyEdges(next, [edge]); // windows check the walls painted just before
+    const p = room.state.players.get(client.sessionId);
+    if (!builder(client) || level === null || !p) return;
+    const add = (Array.isArray(m?.add) ? m.add : []).slice(0, WALLS_AT_ONCE).map((d: Record<string, unknown>) => ({
+      a: d?.a as [number, number],
+      b: d?.b as [number, number],
+      front: String(d?.front ?? "p"),
+      height: d?.height == null ? undefined : Number(d.height),
+      bow: d?.bow == null ? undefined : Number(d.bow),
+      thick: d?.thick == null ? undefined : Number(d.thick),
+      over: d?.over == null ? undefined : Number(d.over),
+    }));
+    const set = (Array.isArray(m?.set) ? m.set : []).slice(0, WALLS_AT_ONCE).map((c: Record<string, unknown>) => ({
+      id: String(c?.id ?? ""),
+      height: c?.height == null ? undefined : Number(c.height),
+      thick: c?.thick == null ? undefined : Number(c.thick),
+      front: c?.front == null ? undefined : String(c.front),
+      back: c?.back == null ? undefined : String(c.back),
+    }));
+    const remove = (Array.isArray(m?.remove) ? m.remove : []).slice(0, WALLS_AT_ONCE).map(String);
+    if (!add.length && !remove.length && !set.length) return;
+    // (a wall with things hung on it stays: they'd be left on nothing — its doors and windows go with
+    // it, below)
+    if (remove.length) {
+      const gone = new Set(remove);
+      const hung = objects().find((o) => !isOpening(o.kind) && gone.has(String(onOf(o)?.wall ?? "")));
+      if (hung) return warn(client, `That wall stays: a ${entry(hung.kind).label.toLowerCase()} hangs on that wall.`);
+    }
+    // (walls that are there changed — their height, their thickness — or walls drawn and taken away)
+    const r = set.length
+      ? wallsSet(room.structure, level, set)
+      : wallsEdit(room.structure, level, add, remove, newWallId);
+    if ("why" in r) return warn(client, `That wall can't go: ${r.why}.`);
+    // (the rooms its walls close round now: found, split — phase 11.5)
+    const walled = applyOps(room.structure, [r.op]);
+    const rooms = roomsAfterWalls(room.structure, walled, level, roomKeys());
+    const ops = rooms ? [r.op, rooms.op] : [r.op];
+    const why = room.lockBreak(p, viewOf(rooms ? applyOps(walled, [rooms.op]) : walled), [], level);
+    if (why) return warn(client, `${why}.`);
+    room.applyStruct(ops);
+    // (the doors and windows in walls taken away go with them — phase 11.6; undone, back)
+    if (r.op.op === "walls") {
+      const back = new Set(r.op.add.map((w) => w.id));
+      const gone = new Set(r.op.remove.filter((id) => !back.has(id)));
+      for (const o of [...room.state.objects.values()]) {
+        const d = fromSchema(o);
+        const on = isOpening(d.kind) ? onOf(d) : null;
+        if (!on || !gone.has(on.wall)) continue;
+        if (!config.offline) void api.deleteObject(d.id).catch(() => {});
+        room.state.objects.delete(d.id);
+        room.state.holds.delete(d.id);
       }
     }
-    if (ok.length) {
-      commit(next);
-      room.rescue();
-    }
-    if (reason) warn(client, `Skipped a wall: ${reason}.`);
-  });
-
-  // Paint faces: only walls that have two faces, only the material
-  room.on("map:faces", (client, m) => {
-    const w = mat(m.mat);
-    const level = floor(m);
-    if (!builder(client) || !w || w === "g" || !Array.isArray(m.faces) || level === null) return;
-    const lm = at(level);
-    const edits: EdgeEdit[] = [];
-    for (const f of m.faces.slice(0, 1200)) {
-      const e = {
-        x: Math.floor(Number(f?.x)),
-        y: Math.floor(Number(f?.y)),
-        dir: f?.dir === "v" ? ("v" as const) : ("h" as const),
-      };
-      if (!isFacedWall(edgeAt(lm, e))) continue;
-      edits.push({ ...e, ch: w, side: f?.side === -1 ? -1 : 1 });
-    }
-    if (edits.length) commit(applyEdges(lm, edits));
-  });
-
-  room.on("map:room:walls", (client, m) => {
-    const w = mat(m.wall);
-    const level = floor(m);
-    if (!builder(client) || !w || level === null) return;
-    const next = setRoomWalls(at(level), String(m.key), w, things(level));
-    if (!blocked(client, next, level)) commit(next);
-  });
-
-  room.on("map:resize", (client, m) => {
-    if (!builder(client)) return;
-    const next = resizeMap(room.map, Number(m.width), Number(m.height));
-    if (blocked(client, next)) return;
-    const sp = spanOf(next);
-    for (const o of things(room.home)) if (o.x >= sp.x1 || o.y >= sp.y1) void drop(o.id);
-    room.commitMap(next);
     room.rescue();
-    room.broadcastMsg("toast", { text: `The studio is now ${next.width}×${next.height}.` });
+    room.send(client, "struct:walls:ok", {
+      n: m?.n ?? null,
+      ids: "added" in r ? (r.added as { id: string }[]).map((w) => w.id) : [],
+      ...(rooms?.found.length ? { found: rooms.found } : {}),
+    });
   });
 
+  // wall faces painted (plan 72 phase 11: the tile tools' Paint retired): stretches of faces, or every
+  // face round a room — the walls split where a stretch starts and ends; what's on them goes onto
+  // the piece it's on
+  room.on("struct:paint", (client, m) => {
+    let level = floor(m);
+    if (!builder(client) || level === null) return;
+    const mat = String(m?.mat ?? "");
+    let stretches: PaintStretch[];
+    if (typeof m?.room === "string") {
+      const r = room.structure.rooms.find((q) => q.key === m.room);
+      if (!r) return;
+      level = r.floor;
+      stretches = roomStretches(room.structure, r.key, mat);
+    } else
+      stretches = (Array.isArray(m?.stretches) ? m.stretches : []).slice(0, 400).map((q: Record<string, unknown>) => ({
+        id: String(q?.id ?? ""),
+        side: q?.side === -1 ? (-1 as const) : (1 as const),
+        from: Number(q?.from),
+        to: Number(q?.to),
+        mat: String(q?.mat ?? ""),
+      }));
+    stretches = stretches.filter((q) => Number.isFinite(q.from) && Number.isFinite(q.to));
+    if (!stretches.length) return;
+    const r = wallsPaint(room.structure, level, stretches, newWallId);
+    if ("why" in r) return r.why === "as it is" ? undefined : warn(client, `Can't paint that: ${r.why}.`);
+    room.applyStruct([r.op]);
+    for (const o of objects()) {
+      const on = onOf(o);
+      const to = on && movedOn(r.moves, on);
+      if (!on || !to) continue;
+      void save({ ...o, props: { ...(o.props ?? {}), on: { ...on, ...to } } });
+    }
+    room.rebuildGrid();
+  });
+
+  // floors drawn free (plan 72 phase 11.7): slabs put in and taken away as the structure's operation
+  let slabSeq = 0;
+  const newSlabId = () => `f${Date.now().toString(36)}${(slabSeq++).toString(36)}`;
+  room.on("struct:slabs", (client, m) => {
+    const level = floor(m);
+    const p = room.state.players.get(client.sessionId);
+    if (!builder(client) || level === null || !p) return;
+    const add = (Array.isArray(m?.add) ? m.add : []).slice(0, SLABS_AT_ONCE).map((d: Record<string, unknown>) => ({
+      outline: (Array.isArray(d?.outline) ? d.outline : [])
+        .slice(0, 256)
+        .map((q: unknown) =>
+          Array.isArray(q)
+            ? ([Number(q[0]), Number(q[1])] as [number, number])
+            : ([Number.NaN, Number.NaN] as [number, number]),
+        ),
+      holes: (Array.isArray(d?.holes) ? d.holes : [])
+        .slice(0, 64)
+        .map((h: unknown) =>
+          (Array.isArray(h) ? h : [])
+            .slice(0, 256)
+            .map((q: unknown) =>
+              Array.isArray(q)
+                ? ([Number(q[0]), Number(q[1])] as [number, number])
+                : ([Number.NaN, Number.NaN] as [number, number]),
+            ),
+        ),
+      top: String(d?.top ?? "."),
+      over: d?.over == null ? 0 : Number(d.over),
+    }));
+    const remove = (Array.isArray(m?.remove) ? m.remove : []).slice(0, SLABS_AT_ONCE).map(String);
+    const r = slabsEdit(room.structure, level, add, remove, newSlabId);
+    if ("why" in r) return warn(client, `That floor can't go: ${r.why}.`);
+    const why = room.lockBreak(p, viewOf(applyOps(room.structure, [r.op])), [], level);
+    if (why) return warn(client, `${why}.`);
+    room.applyStruct([r.op]);
+    room.rescue();
+    room.send(client, "struct:slabs:ok", { n: m?.n ?? null, ids: r.added.map((q) => q.id) });
+  });
+
+  // roofs (plan 72 phase 11.7): put on a closed set of walls, taken off
+  let roofSeq = 0;
+  room.on("struct:roofs", (client, m) => {
+    const level = floor(m);
+    const p = room.state.players.get(client.sessionId);
+    if (!builder(client) || level === null || !p) return;
+    const add = (Array.isArray(m?.add) ? m.add : []).slice(0, 16).map((d: Record<string, unknown>) => ({
+      outline: (Array.isArray(d?.outline) ? d.outline : [])
+        .slice(0, 256)
+        .map((q: unknown) =>
+          Array.isArray(q)
+            ? ([Number(q[0]), Number(q[1])] as [number, number])
+            : ([Number.NaN, Number.NaN] as [number, number]),
+        ),
+      kind: (["flat", "gable", "hip"].includes(String(d?.kind)) ? d.kind : "flat") as "flat" | "gable" | "hip",
+      pitch: d?.pitch == null ? undefined : Number(d.pitch),
+      ridge: d?.ridge === 1 ? (1 as const) : (0 as const),
+    }));
+    const remove = (Array.isArray(m?.remove) ? m.remove : []).slice(0, 16).map(String);
+    const r = roofsEdit(
+      room.structure,
+      level,
+      add,
+      remove,
+      () => `r${Date.now().toString(36)}${(roofSeq++).toString(36)}`,
+    );
+    if ("why" in r) return warn(client, `That roof can't go: ${r.why}.`);
+    room.applyStruct([r.op]);
+  });
+
+  // a blank home floor: the generator's, put in place of the one there (the other floors stay)
   room.on("map:new", (client, m) => {
     if (!builder(client)) return;
     const w = Math.max(MAP_MIN, Math.min(MAP_MAX, Math.floor(Number(m.width) || 32)));
     const h = Math.max(MAP_MIN, Math.min(MAP_MAX, Math.floor(Number(m.height) || 24)));
-    // (the home floor: the building's other floors stay)
-    const next = { ...blankMap(room.map.key, room.map.name, w, h), floor: room.map.floor, levels: room.map.levels };
-    if (blocked(client, next)) return;
-    for (const o of things(room.home)) void drop(o.id);
-    room.commitMap(next);
+    const home = room.home;
+    const blank = { ...blankMap(room.map.key, room.map.name, w, h), floor: home };
+    const hf = room.structure.floors.find((f) => f.index === home);
+    const pieces = floorPieces(blank, home, [hf?.grid.x0 ?? 0, hf?.grid.y0 ?? 0]);
+    if (!pieces) return;
+    const next = {
+      ...withFloor(room.structure, pieces),
+      spawn: [pieces.floor.grid.x0 + blank.spawn.x, pieces.floor.grid.y0 + blank.spawn.y] as [number, number],
+    };
+    if (blocked(client, viewOf(next))) return;
+    for (const o of things(home)) void drop(o.id);
+    room.commitStructure(next);
     for (const c of room.clients) {
       const p = room.state.players.get(c.sessionId);
-      if (!p || p.level !== room.home) continue;
-      p.x = next.spawn.x + (Math.random() - 0.5) * 3;
-      p.y = next.spawn.y + (Math.random() - 0.5);
+      if (!p || p.level !== home) continue;
+      p.x = next.spawn[0] + (Math.random() - 0.5) * 3;
+      p.y = next.spawn[1] + (Math.random() - 0.5);
       p.desk = "";
       p.z = worldZ(p.level, 0);
       room.send(c, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
@@ -214,94 +315,48 @@ registerFeature((room: WorldRoom) => {
     const x = Math.floor(Number(m.x));
     const y = Math.floor(Number(m.y));
     if (!room.grid.ok(x, y)) return warn(client, "Pick an open floor tile.");
-    room.commitMap({ ...room.map, spawn: { x: x + 0.5, y: y + 0.5 } });
+    room.commitStructure({ ...room.structure, spawn: [x + 0.5, y + 0.5] });
     room.send(client, "toast", { text: "Arrival point set — everyone who comes in arrives here." });
   });
 
-  room.on("map:room", (client, m) => {
-    const level = floor(m);
-    if (!builder(client) || level === null) return;
-    const lm = at(level);
-    const name =
-      String(m.name ?? "")
-        .trim()
-        .slice(0, 40) || "Room";
-    const kind = ROOM_KINDS.includes(m.kind as never) ? (m.kind as (typeof ROOM_KINDS)[number]) : "private";
-    let key = roomKey(name);
-    // (a key no room on any floor has)
-    for (let i = 2; room.areaByKey(key); i++) key = `${roomKey(name)}-${i}`;
-    const ownerId = Number.isInteger(m.ownerId) && (m.ownerId as number) > 0 ? (m.ownerId as number) : null;
-    const res = addRoom(lm, things(level), bodies(level), {
-      key,
-      name,
-      kind,
-      x: Math.floor(Number(m.x)),
-      y: Math.floor(Number(m.y)),
-      w: Math.floor(Number(m.w)),
-      h: Math.floor(Number(m.h)),
-      ownerId,
-      ownerName: ownerId ? String(m.ownerName ?? "").slice(0, 120) || null : null,
-      walls: !!m.walls,
-      floor: typeof m.floor === "string" ? m.floor : undefined,
-      wall: mat(m.wall),
-    });
-    if (typeof res === "string") return warn(client, `Couldn't make the room: ${res}.`);
-    if (blocked(client, res.map, level)) return;
-    commit(res.map);
-    room.rescue();
-    const door =
-      res.door &&
-      atLevel(
-        {
-          id: `door-${key}`,
-          kind: "door",
-          x: res.door.x,
-          y: res.door.y,
-          yaw: quarterYaw(quarterOf(res.door)),
-          props: { state: "open", roomKey: key },
-        },
-        level,
-        room.map,
-      );
-    // its door, in the wall it just got (if it fits there: floor both sides)
-    const here = things(level);
-    if (door && !openingBlocker(res.map, here, door, hungOnEdge(here))) void save(door).then(() => room.rebuildGrid());
-  });
+  // a room's own (its name, kind, owner, dressing): the structure's room as it is, its props changed
+  const roomOn = (level: number, key: unknown) =>
+    room.structure.rooms.find((r) => r.floor === level && r.key === String(key)) ?? null;
+  const withRooms = (rooms: Structure["rooms"]) => ({ ...room.structure, rooms });
 
   room.on("map:room:update", (client, m) => {
     const level = floor(m);
     if (!builder(client) || level === null) return;
-    const lm = at(level);
     const p = room.state.players.get(client.sessionId);
-    const was = lm.areas.find((a) => a.key === m.key);
+    const r = roomOn(level, m.key);
+    if (!r) return;
+    const was = r.props as { name?: string; ownerId?: number | null; ownerName?: string | null };
     // someone's room: only they (or an admin) give it to someone else
-    if (m.ownerId !== undefined && was?.ownerId && was.ownerId !== p?.uid && !p?.admin)
+    if (m.ownerId !== undefined && was.ownerId && was.ownerId !== p?.uid && !p?.admin)
       return warn(client, `Only ${was.ownerName ?? "its owner"} or an admin can give ${was.name} to someone else.`);
-    const areas = lm.areas.map((a) => {
-      if (a.key !== m.key) return a;
-      const next = { ...a };
-      if (typeof m.name === "string" && m.name.trim()) next.name = m.name.trim().slice(0, 40);
-      if (ROOM_KINDS.includes(m.kind as never)) next.kind = m.kind as (typeof ROOM_KINDS)[number];
-      if (m.dressing !== undefined) next.dressing = isDressing(m.dressing) ? m.dressing : null;
-      if (m.ownerId !== undefined) {
-        next.ownerId = Number.isInteger(m.ownerId) && (m.ownerId as number) > 0 ? (m.ownerId as number) : null;
-        next.ownerName = next.ownerId ? String(m.ownerName ?? "").slice(0, 120) || null : null;
-      }
-      return next;
-    });
-    if (!blocked(client, { ...lm, areas }, level)) commit({ ...lm, areas });
+    const props = { ...r.props };
+    if (typeof m.name === "string" && m.name.trim()) props.name = m.name.trim().slice(0, 40);
+    if (ROOM_KINDS.includes(m.kind as never)) props.kind = m.kind as (typeof ROOM_KINDS)[number];
+    if (m.dressing !== undefined) props.dressing = isDressing(m.dressing) ? m.dressing : null;
+    if (m.ownerId !== undefined) {
+      props.ownerId = Number.isInteger(m.ownerId) && (m.ownerId as number) > 0 ? (m.ownerId as number) : null;
+      props.ownerName = props.ownerId ? String(m.ownerName ?? "").slice(0, 120) || null : null;
+    }
+    const next = withRooms(room.structure.rooms.map((q) => (q === r ? { ...r, props } : q)));
+    if (!blocked(client, viewOf(next), level)) room.commitStructure(next);
   });
 
   room.on("map:room:remove", (client, m) => {
     const level = floor(m);
     if (!builder(client) || level === null) return;
-    const lm = at(level);
     const p = room.state.players.get(client.sessionId);
-    const was = lm.areas.find((a) => a.key === m.key);
-    if (was?.ownerId && was.ownerId !== p?.uid && !p?.admin)
+    const r = roomOn(level, m.key);
+    if (!r) return;
+    const was = r.props as { name?: string; ownerId?: number | null; ownerName?: string | null };
+    if (was.ownerId && was.ownerId !== p?.uid && !p?.admin)
       return warn(client, `Only ${was.ownerName ?? "its owner"} or an admin can take ${was.name} away.`);
-    const next = { ...lm, areas: lm.areas.filter((a) => a.key !== m.key) };
-    if (!blocked(client, next, level)) commit(next);
+    const next = withRooms(room.structure.rooms.filter((q) => q !== r));
+    if (!blocked(client, viewOf(next), level)) room.commitStructure(next);
   });
 
   // ── floors: a blank one on top (the home floor's footprint, the core), the
@@ -312,13 +367,33 @@ registerFeature((room: WorldRoom) => {
     const top = floors[floors.length - 1];
     if (floors.length >= 12) return warn(client, "That's as tall as the building goes.");
     const index = top + 1;
-    const made = blankLevel(room.map, index);
+    // (the generator draws it in tiles from the home floor's footprint and the core: put in as the
+    // structure's pieces)
+    const home = room.home;
+    const hf = room.structure.floors.find((f) => f.index === home);
+    const at: [number, number] = [hf?.grid.x0 ?? 0, hf?.grid.y0 ?? 0];
+    const foot = footprintRows(room.structure, home);
+    const core = room.map.core ? { x: room.map.core.x - at[0], y: room.map.core.y - at[1] } : undefined;
+    const base: TileMap = {
+      key: room.map.key,
+      name: room.map.name,
+      ...foot,
+      ...emptyEdges(foot.width, foot.height),
+      areas: [],
+      spawn: room.map.spawn,
+      objects: [],
+      floor: home,
+      ...(core ? { core } : {}),
+    };
+    const made = blankLevel(base, index);
+    const pieces = floorPieces({ ...base, levels: [made.level] }, index, at);
+    if (!pieces) return;
+    const shift = (o: WorldObjectDef) => ({ ...o, x: o.x + at[0], y: o.y + at[1] });
     // (its stairs go nowhere yet: none; the floor below gets the stairs up)
-    const add = made.objects.filter((o) => o.kind !== "stairs");
-    const below = blankLevel(room.map, top).objects.find((o) => o.kind === "stairs");
-    if (below && !things(top).some((o) => o.kind === "stairs")) add.push(atLevel(below, top, room.map));
-    const next = { ...room.map, levels: [...(room.map.levels ?? []), made.level].sort((a, b) => a.index - b.index) };
-    room.commitMap(next);
+    const add = made.objects.filter((o) => o.kind !== "stairs").map(shift);
+    const below = blankLevel(base, top).objects.find((o) => o.kind === "stairs");
+    if (below && !things(top).some((o) => o.kind === "stairs")) add.push(atLevel(shift(below), top, room.map));
+    room.commitStructure(withFloor(room.structure, pieces));
     for (const o of add) await save(o);
     room.rebuildGrid();
     room.broadcastMsg("toast", { text: `A new floor on top: ${made.level.name}. Time to build.` });
@@ -333,7 +408,7 @@ registerFeature((room: WorldRoom) => {
     for (const o of things(level)) await drop(o.id);
     // the stairs up to it go too
     for (const o of things(level - 1)) if (o.kind === "stairs") await drop(o.id);
-    room.commitMap({ ...room.map, levels: (room.map.levels ?? []).filter((l) => l.index !== level) });
+    room.commitStructure(withoutFloor(room.structure, level));
     room.rescue();
     room.rebuildGrid();
     room.broadcastMsg("toast", { text: `Floor ${level} is gone.` });

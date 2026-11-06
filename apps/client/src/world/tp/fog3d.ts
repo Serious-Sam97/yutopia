@@ -298,28 +298,29 @@ export function flatLight(wall: number): { sun: number; fill: number } {
   return { sun: (1 - w) * (1 - w), fill: 1 + 0.6 * w };
 }
 
-/** The room I'm in, round tile (x, y) of a floor: its indoor tiles' bounds, or null on the open
- *  sky (`open`: a tile that's out — the lot's asphalt and concrete — or none at all). */
+/** The room I'm in, round cell (x, y) of a floor: its indoor cells' bounds, or null on the open
+ *  sky (`open`: a cell that's out — the lot's asphalt and concrete — or none at all). `cell`: what a
+ *  cell is (a floor char; the structure's — plan 72 phase 11), within the floor's extent [x0, x1). */
 export function roomBounds(
-  tiles: readonly string[],
+  cell: (x: number, y: number) => string | undefined,
+  ext: { x0: number; y0: number; x1: number; y1: number },
   x: number,
   y: number,
   open: (ch: string | undefined) => boolean,
 ): { x0: number; y0: number; x1: number; y1: number } | null {
-  const at = (tx: number, ty: number) => tiles[ty]?.[tx];
-  if (open(at(x, y))) return null;
+  const inside = (tx: number, ty: number) => tx >= ext.x0 && ty >= ext.y0 && tx < ext.x1 && ty < ext.y1;
+  if (!inside(x, y) || open(cell(x, y))) return null;
   let x0 = x;
   let x1 = x;
   let y0 = y;
   let y1 = y;
-  const w = Math.max(...tiles.map((r) => r.length), 1);
-  const seen = new Uint8Array(w * tiles.length);
-  const todo = [x + y * w];
-  seen[todo[0]] = 1;
+  const w = ext.x1 - ext.x0;
+  const seen = new Uint8Array(w * (ext.y1 - ext.y0));
+  const idx = (tx: number, ty: number) => tx - ext.x0 + (ty - ext.y0) * w;
+  const todo: [number, number][] = [[x, y]];
+  seen[idx(x, y)] = 1;
   while (todo.length) {
-    const i = todo.pop() as number;
-    const tx = i % w;
-    const ty = (i - tx) / w;
+    const [tx, ty] = todo.pop() as [number, number];
     if (tx < x0) x0 = tx;
     if (tx > x1) x1 = tx;
     if (ty < y0) y0 = ty;
@@ -330,11 +331,11 @@ export function roomBounds(
       [tx, ty + 1],
       [tx, ty - 1],
     ]) {
-      if (nx < 0 || ny < 0 || nx >= w || ny >= tiles.length) continue;
-      const j = nx + ny * w;
-      if (seen[j] || open(at(nx, ny))) continue;
+      if (!inside(nx, ny)) continue;
+      const j = idx(nx, ny);
+      if (seen[j] || open(cell(nx, ny))) continue;
       seen[j] = 1;
-      todo.push(j);
+      todo.push([nx, ny]);
     }
   }
   return { x0, y0, x1: x1 + 1, y1: y1 + 1 };

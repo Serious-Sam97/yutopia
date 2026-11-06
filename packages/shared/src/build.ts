@@ -6,9 +6,10 @@ import { chairAt, outdoorsOf } from "./ground.ts";
 import { hangEdges, hangFits, hangOf } from "./hang.ts";
 import type { Point } from "./iso.ts";
 import { onLevel } from "./levels.ts";
-import { liftHere } from "./lift.ts";
-import { type Edge, isFloor, type MapDef, tileAt, wallBetween } from "./map.ts";
+import { liftHere, stopOver } from "./lift.ts";
+import { type Edge, isFloor, type MapDef } from "./map.ts";
 import { isOpening, openingBlocker } from "./openings.ts";
+import { cellOf, wallBetweenOf } from "./structure/query.ts";
 import { fitsOnSurface, splitAll } from "./tops.ts";
 
 // One placement rule for client (ghost preview) and server (authority).
@@ -32,14 +33,14 @@ export function canPlace(map: MapDef, others: WorldObjectDef[], o: WorldObjectDe
     for (let dx = 0; dx < w; dx++) {
       const tx = o.x + dx;
       const ty = o.y + dy;
-      const floor = isFloor(tileAt(map, tx, ty));
+      const floor = isFloor(cellOf(map, tx, ty));
       if (!floor && !out?.walkable(tx, ty)) return false;
       // (parkour's out of doors: on the land, never a floor)
       if (e.outdoor && floor) return false;
       if (e.solid && (base.solid.has(`${tx},${ty}`) || base.boxOn(tx, ty))) return false;
       // never straddling a wall
-      if (dx > 0 && wallBetween(map, tx - 1, ty, tx, ty) !== ".") return false;
-      if (dy > 0 && wallBetween(map, tx, ty - 1, tx, ty) !== ".") return false;
+      if (dx > 0 && wallBetweenOf(map, tx - 1, ty, tx, ty) !== ".") return false;
+      if (dy > 0 && wallBetweenOf(map, tx, ty - 1, tx, ty) !== ".") return false;
       if (!e.solid && !e.seat) continue;
       // seats and solids can't share a tile with another seat
       if (base.seats.has(`${tx},${ty}`)) return false;
@@ -62,7 +63,8 @@ function taken(map: MapDef, things: readonly WorldObjectDef[]) {
       for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) f(o.x + dx, o.y + dy);
     };
     if (o.kind === "elevator") {
-      if (!liftHere(o, map)) each((x, y) => solid.add(`${x},${y}`));
+      // (the floor's grid is its floor's: a stop up on a mezzanine isn't on it — plan 72 phase 11)
+      if (!stopOver(o) && !liftHere(o, map)) each((x, y) => solid.add(`${x},${y}`));
       continue;
     }
     if (e.seat) each((x, y) => seats.add(`${x},${y}`));

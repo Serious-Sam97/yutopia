@@ -8,10 +8,12 @@ import {
   liftCarBody,
   liftFront,
   liftShafts,
-  objLevel,
   rideAt,
   STOREY,
+  sameStation,
   shaftAt,
+  stationOf,
+  stopOver,
   type WorldObjectDef,
 } from "@yutopia/shared";
 import type { Player } from "../schema.ts";
@@ -35,6 +37,8 @@ import { registerFeature } from "./index.ts";
 // (docs/plan/72 phase 8: lifts as moving platforms — features/physics.ts; the browser's too, where
 // it carries its rider standing on it): the riders are held in it here, so a rider whose page has
 // stopped drawing (a hidden tab) still arrives with it; at the stop they're where it is, not told.
+// Where a car is and goes is a station (shared lift.ts stationOf): a stop's floor and how high up it
+// it stands — a mezzanine's stop between floors (docs/plan/72 phase 11).
 
 const OPEN_MS = 7000; // doors stay open this long with nobody coming or going
 const CLOSE_MS = 1300; // the doors closing (drawn eased over this)
@@ -48,9 +52,9 @@ const REACH = 2.2; // how near the doors a call is made (tiles from the spot in 
 type Phase = "open" | "shut" | "closing" | "moving" | "opening";
 interface Car {
   shaft: string;
-  at: number; // the floor it's at (or left from)
+  at: number; // the station it's at (or left from)
   to: number | null; // where it's going
-  queue: number[]; // floors it's been called or sent to, in order
+  queue: number[]; // stations it's been called or sent to, in order
   phase: Phase;
   until: number; // when this phase ends (open: when the doors close by themselves)
   since: number; // when this phase began (a ride's start)
@@ -64,12 +68,16 @@ registerFeature((room: WorldRoom) => {
       .filter((o) => o.kind === "elevator")
       .map(fromSchema)
       .filter((o) => String(o.props?.shaft ?? o.id) === shaft);
-  const stopOn = (shaft: string, level: number) => stops(shaft).find((o) => objLevel(o, room.map) === level);
+  const stopOn = (shaft: string, st: number) => stops(shaft).find((o) => sameStation(stationOf(o, room.map), st));
+  const floorOfStation = (st: number) => Math.floor(st + 1e-3);
+  // (someone at a station: on its floor, at its height — a mezzanine's up there, its floor's down here)
+  const atStation = (p: { level: number; z: number }, st: number) =>
+    p.level === floorOfStation(st) && Math.abs(p.z - carElev(st)) < 1.2;
   const shaftOf = (o: WorldObjectDef) => String(o.props?.shaft ?? o.id);
   const car = (shaft: string): Car => {
     let c = cars.get(shaft);
     if (!c) {
-      const floors = stops(shaft).map((o) => objLevel(o, room.map));
+      const floors = stops(shaft).map((o) => stationOf(o, room.map));
       const at = floors.includes(room.home) ? room.home : (floors.sort((a, b) => a - b)[0] ?? room.home);
       c = { shaft, at, to: null, queue: [], phase: "shut", until: 0, since: 0, riders: [] };
       cars.set(shaft, c);
@@ -80,13 +88,13 @@ registerFeature((room: WorldRoom) => {
   const warn = (c: WorldClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
 
   // in the car where it is; in its doorway (the doors wait for them)
-  const people = (shaft: string, level: number) => {
-    const o = stopOn(shaft, level);
-    return o ? [...room.state.players.values()].filter((p) => p.level === level && inLift(o, p)) : [];
+  const people = (shaft: string, st: number) => {
+    const o = stopOn(shaft, st);
+    return o ? [...room.state.players.values()].filter((p) => atStation(p, st) && inLift(o, p)) : [];
   };
   const doorway = (c: Car) => {
     const o = stopOn(c.shaft, c.at);
-    return !!o && [...room.state.players.values()].some((p) => p.level === c.at && inLiftDoorway(o, p, BODY_R));
+    return !!o && [...room.state.players.values()].some((p) => atStation(p, c.at) && inLiftDoorway(o, p, BODY_R));
   };
 
   // what every stop shows: open doors where the car stands open, the floor it's
@@ -99,8 +107,8 @@ registerFeature((room: WorldRoom) => {
     const len = timed ? Math.max(0, c.until - Date.now()) : 0;
     let changed = false;
     for (const o of stops(c.shaft)) {
-      const level = objLevel(o, room.map);
-      const door = level === c.at && (c.phase === "open" || c.phase === "closing") ? "open" : "closed";
+      const st = stationOf(o, room.map);
+      const door = sameStation(st, c.at) && (c.phase === "open" || c.phase === "closing") ? "open" : "closed";
       const props = { ...(o.props ?? {}), door, at: c.at, dir, ph: c.phase, len, to: c.to ?? c.at };
       if (JSON.stringify(props) === JSON.stringify(o.props ?? {})) continue;
       // (the walls only move with the doors or the car)
@@ -112,7 +120,7 @@ registerFeature((room: WorldRoom) => {
 
   const go = (c: Car, level: number) => {
     if (!stopOn(c.shaft, level)) return;
-    if (c.phase !== "moving" && c.at === level && c.queue.length === 0) {
+    if (c.phase !== "moving" && sameStation(c.at, level) && c.queue.length === 0) {
       // here already: the doors open (again)
       if (c.phase === "shut" || c.phase === "closing") {
         c.phase = "opening";
@@ -121,7 +129,8 @@ registerFeature((room: WorldRoom) => {
       show(c);
       return;
     }
-    if (!c.queue.includes(level) && c.to !== level) c.queue.push(level);
+    if (!c.queue.some((q) => sameStation(q, level)) && !(c.to !== null && sameStation(c.to, level)))
+      c.queue.push(level);
     if (c.phase === "open") c.until = Math.min(c.until, Date.now() + 1500); // (a moment to step in)
   };
 
@@ -131,23 +140,29 @@ registerFeature((room: WorldRoom) => {
     if (!p || !o || o.kind !== "elevator") return;
     const def = fromSchema(o);
     const front = liftFront(def);
-    if (objLevel(def, room.map) !== p.level) return;
+    const st = stationOf(def, room.map);
+    if (!atStation(p, st)) return;
     if (!inLift(def, p) && room.reach3(p, def, Math.hypot(p.x - front.x, p.y - front.y), front) > REACH) return;
-    go(car(shaftOf(def)), p.level);
+    go(car(shaftOf(def)), st);
   });
 
   room.on("lift:go", (client, m) => {
     const p = room.state.players.get(client.sessionId);
     const o = room.state.objects.get(String(m?.id ?? ""));
-    const level = Number(m?.level);
-    if (!p || !o || o.kind !== "elevator" || !Number.isInteger(level)) return;
+    const sent = Number(m?.level);
+    if (!p || !o || o.kind !== "elevator" || !Number.isFinite(sent)) return;
     const def = fromSchema(o);
     const c = car(shaftOf(def));
-    if (objLevel(def, room.map) !== p.level || c.at !== p.level || !inLift(def, p)) return;
-    if (!stopOn(c.shaft, level)) return warn(client, "This elevator doesn't stop there.");
-    if (people(c.shaft, p.level).length > MAX_RIDERS) return warn(client, `Four at most — someone step out.`);
-    if (level === p.level) return go(c, level);
-    c.queue = [level, ...c.queue.filter((l) => l !== level)];
+    // (the stop I'm in: the one of this shaft at my height — a floor's, or its mezzanine's)
+    const mine = stops(c.shaft).find((s) => inLift(s, p) && atStation(p, stationOf(s, room.map)));
+    const here = mine ? stationOf(mine, room.map) : Number.NaN;
+    if (!mine || !sameStation(c.at, here)) return;
+    const to = stopOn(c.shaft, sent);
+    if (!to) return warn(client, "This elevator doesn't stop there.");
+    const level = stationOf(to, room.map);
+    if (people(c.shaft, here).length > MAX_RIDERS) return warn(client, `Four at most — someone step out.`);
+    if (sameStation(level, here)) return go(c, level);
+    c.queue = [level, ...c.queue.filter((l) => !sameStation(l, level))];
     if (c.phase === "open" || c.phase === "opening") {
       c.phase = "closing";
       c.until = Date.now() + CLOSE_MS;
@@ -163,7 +178,7 @@ registerFeature((room: WorldRoom) => {
     if (!p || !o || o.kind !== "elevator") return;
     const def = fromSchema(o);
     const c = car(shaftOf(def));
-    if (objLevel(def, room.map) !== p.level || c.at !== p.level || !inLift(def, p)) return;
+    if (!inLift(def, p) || !atStation(p, c.at)) return;
     if (c.phase === "open" && !doorway(c)) {
       c.phase = "closing";
       c.until = Date.now() + CLOSE_MS;
@@ -195,7 +210,7 @@ registerFeature((room: WorldRoom) => {
       const p = room.state.players.get(r.sid) as Player | undefined;
       const client = room.clients.getById(r.sid) as WorldClient | undefined;
       if (!p || !client) continue;
-      const here = across(room.map, c.at, p.level, { x: from.x + r.dx, y: from.y + r.dy });
+      const here = across(room.map, floorOfStation(c.at), p.level, { x: from.x + r.dx, y: from.y + r.dy });
       const z = (car - p.level) * STOREY;
       const ch = floorAt(room.map, p.level, here, z, room.slabUnder ?? undefined);
       const at = ch?.at ?? here;
@@ -225,7 +240,12 @@ registerFeature((room: WorldRoom) => {
         if (!p || !client) continue;
         // (still in it: nobody walks out of a moving car — not told: their own car under them has
         // brought them here, standing where they stand in it)
-        room.moveTo(client, p, { x: stop.x + r.dx, y: stop.y + r.dy, level: to }, { carried: true });
+        room.moveTo(
+          client,
+          p,
+          { x: stop.x + r.dx, y: stop.y + r.dy, level: floorOfStation(to) },
+          { carried: true, z: stopOver(stop) },
+        );
       }
     c.riders = [];
   };
@@ -276,7 +296,7 @@ registerFeature((room: WorldRoom) => {
         } else if (c.phase === "moving") arrive(c, now);
         if (c.phase === "shut" && c.queue.length) {
           const next = c.queue.shift() as number;
-          if (next === c.at) {
+          if (sameStation(next, c.at)) {
             c.phase = "opening";
             c.until = now + OPEN_DOORS_MS;
           } else {

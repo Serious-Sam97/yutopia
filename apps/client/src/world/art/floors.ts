@@ -1,7 +1,6 @@
 import {
   entry,
   footprint,
-  hWall,
   isDoorKind,
   isFloor,
   isWallEdge,
@@ -9,10 +8,9 @@ import {
   lotStripes,
   type MapDef,
   quarterOf,
-  tileAt,
-  vWall,
   type WorldObjectDef,
 } from "@yutopia/shared";
+import { cellOf, hWallOf, vWallOf } from "@yutopia/shared/structure";
 
 // Floors, baked: each material is a seamless top-down texture (4×4 tiles, generated once), painted
 // over the floor's slabs in their own space — the plan, seen from straight above (docs/plan/72-the-3d-
@@ -359,7 +357,7 @@ export function aoCanvas(
   const W = map.width;
   const H = map.height;
   const occ = new Float32Array(W * H); // 0..1 occluder strength per tile
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!isFloor(tileAt(map, x, y))) occ[y * W + x] = 1;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!isFloor(cellOf(map, x, y))) occ[y * W + x] = 1;
   const boxes: { x0: number; y0: number; x1: number; y1: number }[] = [];
   for (const o of objects) {
     const e = entry(o.kind);
@@ -381,9 +379,9 @@ export function aoCanvas(
   const hAt = (X: number, Y: number) => (X < -1 || Y < -1 || X > W || Y > H + 1 ? 0 : hE[(Y + 1) * (W + 2) + X + 1]);
   const vAt = (X: number, Y: number) => (X < -1 || Y < -1 || X > W + 1 || Y > H ? 0 : vE[(Y + 1) * (W + 3) + X + 1]);
   for (let Y = -1; Y <= H + 1; Y++)
-    for (let X = -1; X <= W; X++) if (isWallEdge(hWall(map, X, Y))) hE[(Y + 1) * (W + 2) + X + 1] = 1;
+    for (let X = -1; X <= W; X++) if (isWallEdge(hWallOf(map, X, Y))) hE[(Y + 1) * (W + 2) + X + 1] = 1;
   for (let Y = -1; Y <= H; Y++)
-    for (let X = -1; X <= W + 1; X++) if (isWallEdge(vWall(map, X, Y))) vE[(Y + 1) * (W + 3) + X + 1] = 1;
+    for (let X = -1; X <= W + 1; X++) if (isWallEdge(vWallOf(map, X, Y))) vE[(Y + 1) * (W + 3) + X + 1] = 1;
   const quiet = (tx: number, ty: number) => {
     for (let dy = -1; dy <= 1; dy++)
       for (let dx = -1; dx <= 1; dx++) {
@@ -509,9 +507,9 @@ export class FloorBake {
     const matAt = slabs
       ? (x: number, y: number) => {
           for (const sl of slabs) if (inRings(sl.rings, x + 0.5, y + 0.5)) return sl.top;
-          return tileAt(map, -1, -1);
+          return cellOf(map, -1, -1);
         }
-      : (x: number, y: number) => tileAt(map, x, y);
+      : (x: number, y: number) => cellOf(map, x, y);
     for (let y = 0; y < H; y++)
       for (let x = 0; x < W; x++) {
         const ch = matAt(x, y);

@@ -11,7 +11,7 @@ import { homeOf, objLevel, offsetOf } from "../levels.ts";
 import type { AreaDef, MapDef } from "../map.ts";
 
 /** An older map in the world's frame (a world map as it is). */
-export function foldMap(m: MapDef): MapDef {
+export function foldMap<T extends MapDef>(m: T): T {
   if (m.world) return m;
   // (a room's dressing taken away is kept by its pieces' ids, which said where they stood on the
   // floor's tiles; now where in the room, from its corner: dressing.ts)
@@ -28,8 +28,7 @@ export function foldMap(m: MapDef): MapDef {
     ...(l.spawn ? { spawn: { x: l.spawn.x + l.ox, y: l.spawn.y + l.oy } } : {}),
   }));
   const areas = m.areas.map((a) => ({ ...a, ...dress(a) }));
-  const out: MapDef = { ...m, areas, world: true, ox: 0, oy: 0, ...(levels ? { levels } : {}) };
-  return out;
+  return { ...m, areas, world: true, ox: 0, oy: 0, ...(levels ? { levels } : {}) } as T;
 }
 
 /** An older dressing piece's id (`d-{room}-{kind}-{x}-{y}`, a frame `d-{room}-f{x}-{y}`: its tile
@@ -54,12 +53,12 @@ export const foldThings = (m: MapDef, objects: readonly WorldObjectDef[]): World
 /** A world map's floor as an older map: its places its own tiles' (from its corner), not the
  *  world's — for the browser's per-floor drawing, built in a floor's own frame and placed at its
  *  corner (tp/build.ts and the light maps; phase 8 draws the structure instead and this goes). */
-export function localView(lm: MapDef): MapDef {
+export function localView<T extends MapDef>(lm: T): T {
   if (!lm.world) return lm;
   const ox = lm.ox ?? 0;
   const oy = lm.oy ?? 0;
   const { world: _w, ...rest } = lm;
-  if (!ox && !oy) return rest;
+  if (!ox && !oy) return rest as T;
   return {
     ...rest,
     areas: lm.areas.map((a) => ({
@@ -70,7 +69,7 @@ export function localView(lm: MapDef): MapDef {
     })),
     spawn: { x: lm.spawn.x - ox, y: lm.spawn.y - oy },
     ...(lm.core ? { core: { x: lm.core.x - ox, y: lm.core.y - oy } } : {}),
-  };
+  } as T;
 }
 
 /** A thing on a world map's floor in that floor's own frame (localView's). */

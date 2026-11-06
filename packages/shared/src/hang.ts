@@ -1,19 +1,8 @@
 import { entry, footprint, quarterOf, quarterYaw, rotOf, type WorldObjectDef } from "./catalog.ts";
 import { FAM_HANGS } from "./fam/index.ts";
-import {
-  type Edge,
-  type EdgeDir,
-  edgeAt,
-  holdsItems,
-  hWall,
-  isFloor,
-  isWallEdge,
-  type MapDef,
-  spanOf,
-  tileAt,
-  vWall,
-} from "./map.ts";
+import { type Edge, type EdgeDir, holdsItems, isFloor, isWallEdge, type MapDef, spanOf } from "./map.ts";
 import { edgeKey, isDoorKind, wallCuts } from "./openings.ts";
+import { cellOf, hWallOf, vWallOf, wallOf } from "./structure/query.ts";
 import { WALL_H } from "./units.ts";
 
 // Things on walls, Sims-style — like things on a desk's top (tops.ts): a board,
@@ -268,15 +257,15 @@ export function hangBlocker(map: MapDef, others: WorldObjectDef[], o: WorldObjec
   const h = hangOf(o);
   if (h.z0 < HANG_LOW - 1e-6 || h.z1 > HANG_HIGH + 1e-6) return "off the wall";
   for (const e of hangEdges(h)) {
-    if (!holdsItems(edgeAt(map, e))) return "no wall to hang it on";
+    if (!holdsItems(wallOf(map, e))) return "no wall to hang it on";
     const [tx, ty] = frontTile(h, h.dir === "h" ? e.x : e.y);
-    if (!isFloor(tileAt(map, tx, ty))) return "no floor in front";
+    if (!isFloor(cellOf(map, tx, ty))) return "no floor in front";
   }
   // a wall meeting this face somewhere along it (a corner it would cut through)
   const back = h.side > 0 ? h.line : h.line - 1;
   for (let p = Math.ceil(h.u0 / WQ); p * WQ < h.u1; p++) {
     if (p * WQ <= h.u0) continue;
-    const across = h.dir === "h" ? vWall(map, p, back) : hWall(map, back, p);
+    const across = h.dir === "h" ? vWallOf(map, p, back) : hWallOf(map, back, p);
     if (isWallEdge(across)) return "a wall is in the way";
   }
   if (hungOver(others, h, o.id)) return "something hangs there";
@@ -311,7 +300,7 @@ export function faceHit(
 ): { face: Face; along: number; z: number; t: number } | null {
   let best: { face: Face; along: number; z: number; t: number } | null = null;
   const test = (dir: EdgeDir, x: number, y: number) => {
-    const ch = dir === "h" ? hWall(map, x, y) : vWall(map, x, y);
+    const ch = dir === "h" ? hWallOf(map, x, y) : vWallOf(map, x, y);
     if (!isWallEdge(ch)) return;
     const e: Edge = { dir, x, y };
     if (skip?.(e)) return;
@@ -344,7 +333,7 @@ export function faceNear(
 ): { face: Face; along: number } | null {
   const tx = Math.floor(x);
   const ty = Math.floor(y);
-  if (!isFloor(tileAt(map, tx, ty))) return null;
+  if (!isFloor(cellOf(map, tx, ty))) return null;
   const fx = x - tx;
   const fy = y - ty;
   const cands: [number, Face, number][] = [
@@ -356,7 +345,7 @@ export function faceNear(
   cands.sort((a, b) => a[0] - b[0]);
   for (const [, f, along] of cands) {
     const e: Edge = f.dir === "h" ? { dir: "h", x: tx, y: f.line } : { dir: "v", x: f.line, y: ty };
-    if (takes(edgeAt(map, e))) return { face: f, along };
+    if (takes(wallOf(map, e))) return { face: f, along };
   }
   return null;
 }

@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { getMap } from "../index.ts";
-import type { MapDef } from "../map.ts";
+import type { TileMap } from "../map.ts";
 import { WALL_H } from "../units.ts";
 import { doorways, floorFaces, roomOutline, wallFaces } from "./faces.ts";
 import { structureFromMap } from "./from-map.ts";
 import { applyOps, diffStructures, invertOps } from "./ops.ts";
 import { area2, cellsOf, inRing, traceRegion } from "./rings.ts";
 import { mapDiff, roundTrip } from "./roundtrip.ts";
-import { mapFromStructure } from "./to-map.ts";
 import type { Wall } from "./types.ts";
+import { viewOf } from "./view.ts";
 
 // Plan 72 phase 6: the structure (walls as segments, floors as slabs, rooms as polygons, in world
 // metres) holds everything the tile maps did — they come back from it the same.
@@ -74,7 +74,7 @@ test("random maps of several floors come back the same, faces, windows, half wal
   for (let i = 0; i < 40; i++) {
     const g = randomGrid(4 + Math.floor(rnd() * 9), 3 + Math.floor(rnd() * 9));
     const other = randomGrid(3 + Math.floor(rnd() * 7), 3 + Math.floor(rnd() * 7));
-    const m: MapDef = {
+    const m: TileMap = {
       key: "t",
       name: "Test",
       ...g,
@@ -96,7 +96,7 @@ test("random maps of several floors come back the same, faces, windows, half wal
       ],
       core: { x: 1, y: 1 },
     };
-    const back = mapFromStructure(structureFromMap(m));
+    const back = viewOf(structureFromMap(m));
     assert.deepEqual(mapDiff(m, back), [], `map ${i}`);
   }
 });
@@ -123,10 +123,10 @@ test("edits as operations: what turns one into the other, applied, read the same
     });
     const ops = diffStructures(a, b);
     const c = applyOps(a, ops);
-    assert.deepEqual(mapDiff(mapFromStructure(b), mapFromStructure(c)), [], `edit ${i}`);
+    assert.deepEqual(mapDiff(viewOf(b), viewOf(c)), [], `edit ${i}`);
     assert.deepEqual(diffStructures(c, b), [], "nothing left between them");
     const undo = invertOps(a, ops);
-    assert.deepEqual(mapDiff(mapFromStructure(a), mapFromStructure(applyOps(c, undo))), [], `undo ${i}`);
+    assert.deepEqual(mapDiff(viewOf(a), viewOf(applyOps(c, undo))), [], `undo ${i}`);
   }
   // a wall taken away that isn't there, or put in twice: refused
   const s = structureFromMap(studio);
@@ -243,7 +243,7 @@ test("the one frame: an older map's floors, rooms and things in the world's — 
     const g = randomGrid(4 + Math.floor(rnd() * 6), 3 + Math.floor(rnd() * 6));
     const other = randomGrid(3 + Math.floor(rnd() * 6), 3 + Math.floor(rnd() * 6));
     const [ox, oy] = [-7 + Math.floor(rnd() * 14), -4 + Math.floor(rnd() * 8)];
-    const old: MapDef = {
+    const old: TileMap = {
       key: "t",
       name: "Test",
       ...g,
@@ -277,7 +277,7 @@ test("the one frame: an older map's floors, rooms and things in the world's — 
       y: 1,
       yaw: 0,
     });
-    const g0 = levelMap(w, 0) as MapDef;
+    const g0 = levelMap(w, 0) as TileMap;
     assert.deepEqual(offsetOf(w, 0), { x: ox, y: oy });
     assert.deepEqual([g0.areas[0].x, g0.areas[0].y], [1 + ox, 1 + oy], "a room: the world's");
     assert.deepEqual(g0.areas[0].dressOff, ["d-b-plant-1-1", "d-b-f0-0"], "its dressing kept from its own corner");
@@ -286,7 +286,7 @@ test("the one frame: an older map's floors, rooms and things in the world's — 
     const lv = localView(g0);
     assert.deepEqual(lv.areas[0], { ...old.levels?.[0].areas[0], dressOff: g0.areas[0].dressOff });
     // the floor asked at world places answers as the older one did at its own: its tiles and walls
-    const go = levelMap(old, 0) as MapDef;
+    const go = levelMap(old, 0) as TileMap;
     for (let y = -1; y <= other.height; y++)
       for (let x = -1; x <= other.width; x++) {
         assert.equal(tileAt(g0, x + ox, y + oy), tileAt(go, x, y), `tile ${x},${y}`);
@@ -294,7 +294,7 @@ test("the one frame: an older map's floors, rooms and things in the world's — 
         assert.equal(vWall(g0, x + ox, y + oy), vWall(go, x, y), `v wall ${x},${y}`);
       }
     // and back through a structure
-    assert.deepEqual(mapDiff(w, mapFromStructure(structureFromMap(w))), []);
+    assert.deepEqual(mapDiff(w, viewOf(structureFromMap(w))), []);
   }
 });
 

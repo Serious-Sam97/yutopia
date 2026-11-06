@@ -62,11 +62,27 @@ export function inLift(o: Stop, p: Point): boolean {
   return p.x >= o.x && p.x < o.x + w && p.y >= o.y && p.y < o.y + h;
 }
 
+// ── stations (plan 72 phase 11: lifts stopping at mezzanines) ──
+// A stop stands on its floor or up on one of its mezzanines (props.deck: how high over the floor,
+// m). Where a car is, and where it's sent, is a station: the stop's floor and its height over it in
+// storeys (a mezzanine 2.5 m up the ground floor: 0.714). On whole floors, as it always was.
+
+/** How high over its floor a stop stands (a mezzanine's, m; 0 on the floor). */
+export const stopOver = (o: { props?: Record<string, unknown> | null }): number => {
+  const v = Number(o.props?.deck);
+  return Number.isFinite(v) && v > 0 && v < STOREY ? v : 0;
+};
+/** A stop's station: its floor, and up its height over it in storeys. */
+export const stationOf = (o: Stop, m: { floor?: number; home?: number }): number =>
+  Math.round((objLevel(o, m) + stopOver(o) / STOREY) * 1e4) / 1e4;
+/** The same station (a car's `at` against a stop's). */
+export const sameStation = (a: number, b: number): boolean => Math.abs(a - b) < 1e-3;
+
 /** Is the car at this stop (its inside floor)? Before the server has said where
  *  it is, every stop counts as having it (the doors are shut anyway). */
 export function liftHere(o: Stop, m: { floor?: number; home?: number }): boolean {
   const at = o.props?.at;
-  return typeof at !== "number" || at === objLevel(o, m);
+  return typeof at !== "number" || sameStation(at, stationOf(o, m));
 }
 
 /** Is a body (radius r) in its doorway — across the door line, or touching it? */
@@ -126,18 +142,24 @@ export function liftMotion(o: { props?: Record<string, unknown> | null }, level:
   const to = typeof p.to === "number" ? p.to : at;
   const k = since / len;
   let doors = 0;
-  if (at === level) {
+  const here = sameStation(at, level);
+  if (here) {
     if (phase === "open") doors = 1;
     else if (phase === "opening") doors = doorEase(k);
     else if (phase === "closing") doors = 1 - doorEase(k);
   }
   const car = phase === "moving" ? rideAt(at, to, since, len) : at;
   const dir = (to === at ? 0 : Math.sign(to - at)) as -1 | 0 | 1;
-  return { doors, car, here: at === level, dir, to, phase };
+  return { doors, car, here, dir, to, phase };
 }
 
-/** A floor's short name on a display: G for the ground, else its number. */
-export const liftFloorName = (level: number): string => (level === 0 ? "G" : String(level));
+/** A station's short name on a display: G for the ground, else its number; a mezzanine's its
+ *  floor's and M (GM, 1M). */
+export const liftFloorName = (level: number): string => {
+  const f = Math.floor(level + 1e-3);
+  const name = f === 0 ? "G" : String(f);
+  return level - f > 1e-3 ? `${name}M` : name;
+};
 
 // ── the shaft (docs/plan/72-the-3d-core.md, phase 8: lifts as moving platforms) ─────────────────
 // A shaft is open from its lowest stop to its highest: every floor's slab between has a hole its
@@ -151,7 +173,8 @@ type ShaftStop = Stop & { id: string };
 /** A stop's shaft (its props.shaft; a lone stop is its own). */
 export const shaftOf = (o: ShaftStop): string => String(o.props?.shaft ?? o.id);
 
-/** The building's shafts (a world map's things: world x, y): each one's stops, lowest floor first. */
+/** The building's shafts (a world map's things: world x, y): each one's stops by station (`level`),
+ *  lowest first. */
 export function liftShafts<T extends ShaftStop>(
   objects: Iterable<T & { kind: string }>,
   m: { floor?: number; home?: number },
@@ -161,7 +184,7 @@ export function liftShafts<T extends ShaftStop>(
     if (o.kind !== "elevator") continue;
     const k = shaftOf(o);
     const list = out.get(k) ?? [];
-    list.push({ level: objLevel(o, m), o });
+    list.push({ level: stationOf(o, m), o });
     out.set(k, list);
   }
   for (const list of out.values()) list.sort((a, b) => a.level - b.level);
@@ -175,7 +198,9 @@ export function liftRect(o: Stop): [number, number, number, number] {
 }
 
 /** Where floor `level` is open to the one below for a lift's shaft (it goes on down from there) or to
- *  the one above (`up`: it goes on up): the shafts' footprints, world. */
+ *  the one above (`up`: it goes on up): the shafts' footprints, world. A slab is open where the car
+ *  passes it: over its lowest stop and under the top of its car at its highest (a mezzanine's car
+ *  reaching up through the floor over it). */
 export function shaftHoles(
   shafts: Map<string, { level: number; o: Stop }[]>,
   level: number,
@@ -186,7 +211,8 @@ export function shaftHoles(
     const lo = list[0]?.level;
     const hi = list[list.length - 1]?.level;
     if (lo === undefined || hi === undefined) continue;
-    if (up ? level >= lo && level < hi : level > lo && level <= hi) out.push(liftRect(list[0].o));
+    const z = (up ? level + 1 : level) * STOREY;
+    if (z > lo * STOREY + 1e-3 && z < hi * STOREY + CAR_H + 0.1) out.push(liftRect(list[0].o));
   }
   return out;
 }
@@ -197,7 +223,7 @@ export function shaftHoles(
 export function shaftAt(shafts: Map<string, { level: number; o: Stop }[]>): (level: number, p: Point) => boolean {
   const spans = [...shafts.values()]
     .filter((l) => l.length)
-    .map((l) => ({ lo: l[0].level, hi: l[l.length - 1].level, r: liftRect(l[0].o) }));
+    .map((l) => ({ lo: Math.floor(l[0].level + 1e-3), hi: l[l.length - 1].level, r: liftRect(l[0].o) }));
   return (level, p) =>
     spans.some((s) => level >= s.lo && level <= s.hi && p.x >= s.r[0] && p.x < s.r[2] && p.y >= s.r[1] && p.y < s.r[3]);
 }

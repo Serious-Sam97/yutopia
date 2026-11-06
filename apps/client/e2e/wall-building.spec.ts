@@ -3,10 +3,10 @@ import { expect, type Page } from "@playwright/test";
 import { ANA, enter, holdCamera, test, token, useWorld } from "./helpers";
 
 // The Walls tool, Sims-style (docs/plan/11-wall-building.md), in the Lab on a
-// patch of open floor (everything built is taken down after): Build draws a
-// run corner to corner with a preview and a count, skips walls that are there,
-// ⌘/Ctrl-drag takes them away; Paint shows the face under the pointer (which
-// side, the room, now → the brush) and paints one face, Shift-click the room,
+// patch of open floor (everything built is taken down after): Build draws walls
+// free, corner after corner, with a preview (plan 72 phase 11), skips walls that
+// are there, ⌘/Ctrl takes them away; Paint shows the face under the pointer (which
+// side, the room, now → the brush) and paints a face (a drag: one metre of it), Shift-click the room,
 // Tab the other side, E samples; Select opens the inspector (swap, remove);
 // [ ] the walls' view.
 
@@ -17,10 +17,11 @@ const setBuild = (page: Page, b: Record<string, unknown>) =>
   }, b);
 const build = (page: Page) => page.evaluate(() => (window as any).__hud.get().build);
 const look = (page: Page) => page.evaluate(() => (window as any).__yutopia.model.buildLook());
+// (the floor as rows from its corner, asked of the structure: plan 72 phase 11)
 const edge = (page: Page, dir: "h" | "v", x: number, y: number) =>
   page.evaluate(
     ([d, ex, ey]) => {
-      const m = (window as any).__yutopia.map;
+      const m = (window as any).__yutopia.rows();
       return (d === "h" ? m.hWalls[ey]?.[ex] : m.vWalls[ey]?.[ex]) ?? ".";
     },
     [dir, x, y] as const,
@@ -28,7 +29,7 @@ const edge = (page: Page, dir: "h" | "v", x: number, y: number) =>
 const back = (page: Page, dir: "h" | "v", x: number, y: number) =>
   page.evaluate(
     ([d, ex, ey]) => {
-      const m = (window as any).__yutopia.map;
+      const m = (window as any).__yutopia.rows();
       return ((d === "h" ? m.hBacks : m.vBacks)?.[ey]?.[ex] as string | undefined) ?? ".";
     },
     [dir, x, y] as const,
@@ -63,6 +64,35 @@ const gesture = (page: Page, from: [number, number], moves: [number, number][]) 
     },
     [from, moves] as const,
   );
+// the structure's walls by id (what a test put up is taken down by id after)
+const wallIds = (page: Page) =>
+  page.evaluate(() => (window as any).__yutopia.structure.walls.map((q: any) => q.id) as string[]);
+// the wall standing on a cell edge of my floor (straight, on whole metres), or null
+const wallOn = (page: Page, dir: "h" | "v", x: number, y: number) =>
+  page.evaluate(
+    ([d, ex, ey]) => {
+      const w = (window as any).__yutopia;
+      const at = [ex, ey];
+      const [k, u] = d === "h" ? [1, 0] : [0, 1]; // (k: the line it stands on, u: along it)
+      const q = w.structure.walls.find(
+        (q: any) =>
+          q.floor === w.level &&
+          !q.bow &&
+          q.a[k] === at[k] &&
+          q.b[k] === at[k] &&
+          Math.min(q.a[u], q.b[u]) <= at[u] &&
+          Math.max(q.a[u], q.b[u]) >= at[u] + 1,
+      );
+      return q
+        ? {
+            id: q.id as string,
+            back: (q.back ?? q.front) as string,
+            len: Math.hypot(q.b[0] - q.a[0], q.b[1] - q.a[1]),
+          }
+        : null;
+    },
+    [dir, x, y] as const,
+  );
 
 test("the Walls tool, Sims-style: runs, paint with indicators, the inspector, the view", async ({ page }) => {
   test.setTimeout(180_000);
@@ -71,7 +101,7 @@ test("the Walls tool, Sims-style: runs, paint with indicators, the inspector, th
   // an 8 × 6 patch of open floor, no walls on its edges, nothing on it
   const spot = await page.evaluate(() => {
     const w = (window as any).__yutopia;
-    const m = w.map;
+    const m = w.rows();
     const open = (x: number, y: number) => !!w.grid?.ok?.(x, y);
     const none = (s: string | undefined) => !s || s === ".";
     for (let y = 2; y < m.height - 8; y++)
@@ -91,6 +121,7 @@ test("the Walls tool, Sims-style: runs, paint with indicators, the inspector, th
   // the room: x+1..x+4 (4 wide), y+1..y+3 (3 deep)
   const X0 = x + 1;
   const Y0 = y + 1;
+  const had = await wallIds(page);
   try {
     // in the room-to-be, the camera held over it (from the south-east: it sees the walls' +y faces)
     await page.evaluate((p) => (window as any).__yutopia.teleport({ x: p.x + 2.5, y: p.y + 3.5 }), { x, y });
@@ -99,85 +130,102 @@ test("the Walls tool, Sims-style: runs, paint with indicators, the inspector, th
     await setBuild(page, { on: true, tool: "walls", wallMode: "build", brush: "w:p", paintMode: "line" });
     await page.waitForFunction(() => !!(window as any).__yutopia.build, null, { timeout: 15_000 });
 
-    // ── Build: a run, corner to corner, shown before it's built ──
+    // ── Build: walls drawn free (plan 72 phase 11): a corner, the pointer out, shown before it's in ──
     await page.evaluate(
       ([a, b]) => {
         const bc = (window as any).__yutopia.build;
         bc.down(a, b);
-        bc.hover(a + 3.9, b + 0.3);
+        bc.hover(a + 3.9, b + 0.1);
       },
       [X0 + 0.1, Y0 + 0.1],
     );
     const during = await look(page);
-    expect(during.edges.length).toBe(4);
-    expect((await build(page)).wallTag).toMatchObject({ kind: "run", n: 4, remove: false });
-    await page.evaluate(([a, b]) => (window as any).__yutopia.build.up(a + 3.9, b + 0.3), [X0 + 0.1, Y0 + 0.1]);
+    expect(during.segs).toHaveLength(1);
+    expect(during.segs[0]).toMatchObject({ a: [X0, Y0], b: [X0 + 4, Y0], ok: true });
+    expect((await build(page)).wallTag).toMatchObject({ kind: "draw", len: 4, snap: "angle", remove: false, n: 0 });
+    await page.evaluate(([a, b]) => (window as any).__yutopia.build.up(a + 3.9, b + 0.1), [X0 + 0.1, Y0 + 0.1]);
     await expect.poll(() => edge(page, "h", X0 + 3, Y0)).toBe("p");
+    // the run goes on from there: the next corner's ghost, and Esc ends it
+    await page.evaluate(([a, b]) => (window as any).__yutopia.build.hover(a, b), [X0 + 4, Y0 + 2.2]);
+    expect((await look(page)).segs[0]).toMatchObject({ a: [X0 + 4, Y0], b: [X0 + 4, Y0 + 2] });
+    await page.keyboard.press("Escape");
+    expect((await look(page)).segs).toHaveLength(0);
     // a box round the room: the north wall that's there is skipped (counted), the rest goes up
     await setBuild(page, { paintMode: "box" });
     await page.evaluate(
       ([a, b]) => {
         const bc = (window as any).__yutopia.build;
-        bc.down(a + 0.5, b + 0.5);
-        bc.hover(a + 3.5, b + 2.5);
+        bc.down(a + 0.1, b + 0.1);
+        bc.hover(a + 3.9, b + 2.9);
       },
       [X0, Y0],
     );
-    expect((await build(page)).wallTag).toMatchObject({ kind: "run", n: 10, skipped: 4, w: 4, h: 3 });
-    await page.evaluate(([a, b]) => (window as any).__yutopia.build.up(a + 3.5, b + 2.5), [X0, Y0]);
+    expect((await build(page)).wallTag).toMatchObject({ kind: "run", n: 3, skipped: 1, w: 4, h: 3 });
+    await page.evaluate(([a, b]) => (window as any).__yutopia.build.up(a + 3.9, b + 2.9), [X0, Y0]);
     await expect.poll(() => edge(page, "v", X0 + 4, Y0 + 2)).toBe("p");
     expect(await edge(page, "h", X0 + 1, Y0 + 3)).toBe("p");
-    // a run over walls that are there, with brick: nothing repainted (that's Paint)
+    // a run over walls that are there, with brick: nothing repainted (that's Paint), told why
     await setBuild(page, { paintMode: "line", brush: "w:b" });
-    await gesture(page, [X0 + 0.1, Y0 + 0.1], [[X0 + 3.9, Y0 + 0.2]]);
+    await gesture(page, [X0 + 0.1, Y0 + 0.1], [[X0 + 3.9, Y0 + 0.1]]);
+    await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
     expect(await edge(page, "h", X0 + 1, Y0)).toBe("p");
-    // ⌘/Ctrl-drag takes walls away: a run along a line outside the room, built then removed
+    // ⌘/Ctrl takes walls away: a wall outside the room, drawn, then crossed out and gone
     await setBuild(page, { brush: "w:p" });
     await gesture(page, [x + 0.1, y + 5.9], [[x + 2.9, y + 6.1]]);
+    await page.keyboard.press("Escape");
     await expect.poll(() => edge(page, "h", x + 1, y + 6)).toBe("p");
     await page.keyboard.down("ControlOrMeta");
     await page.evaluate(
       ([a, b]) => {
         const bc = (window as any).__yutopia.build;
+        bc.hover(a, b);
         bc.down(a, b);
-        bc.hover(a + 2.8, b + 0.1);
       },
-      [x + 0.1, y + 5.9],
+      [x + 1.5, y + 6.1],
     );
-    expect((await build(page)).wallTag).toMatchObject({ kind: "run", n: 3, remove: true });
-    expect((await look(page)).edges.every((g: any) => g.remove)).toBe(true);
-    await page.evaluate(([a, b]) => (window as any).__yutopia.build.up(a + 2.8, b + 0.1), [x + 0.1, y + 5.9]);
+    expect((await build(page)).wallTag).toMatchObject({ kind: "draw", n: 1, remove: true });
+    expect((await look(page)).segs.every((g: any) => g.remove)).toBe(true);
+    await page.evaluate(([a, b]) => (window as any).__yutopia.build.up(a, b), [x + 1.5, y + 6.1]);
     await page.keyboard.up("ControlOrMeta");
     await expect.poll(() => edge(page, "h", x + 1, y + 6)).toBe(".");
 
-    // ── Paint: the face under the pointer, before you click ──
+    // ── Paint: the face under the pointer, before you click (plan 72 phase 11: a face of any wall —
+    // the stretch of it between the walls meeting it, a drag from press to release) ──
     await setBuild(page, { wallMode: "paint", paint: "b" });
     // the room's north wall, inside (its +y face, which the camera sees)
     const p = await pointAt(page, X0 + 1.5, Y0 + 0.1, 1.53);
     await expect
       .poll(async () => (await build(page)).wallTag)
       .toMatchObject({ kind: "face", far: false, from: "p", to: "b", n: 1 });
+    // (all of it: no wall meets it but at its ends)
     const f = await look(page);
-    expect(f.faces).toHaveLength(1);
-    expect(f.faces[0]).toMatchObject({ p: { dir: "h", x: X0 + 1, y: Y0, side: 1 }, mat: "b", ok: true });
+    expect(f.segs).toHaveLength(1);
+    expect(f.segs[0]).toMatchObject({ a: [X0, Y0], b: [X0 + 4, Y0], mat: "b", ok: true });
     await page.screenshot({ path: test.info().outputPath("paint-hover.png") });
-    // Tab: the same panel's other side (outside the room), and back
+    // Tab: the same wall's other side (outside the room), and back
     await page.keyboard.press("Tab");
-    await expect.poll(async () => (await look(page)).faces[0]?.p.side).toBe(-1);
+    await expect.poll(async () => (await build(page)).wallTag?.far).toBe(true);
     await page.screenshot({ path: test.info().outputPath("paint-far.png") });
     await page.keyboard.press("Tab");
-    await expect.poll(async () => (await look(page)).faces[0]?.p.side).toBe(1);
-    // a click paints that one face
-    await page.mouse.click(p.x, p.y);
+    await expect.poll(async () => (await build(page)).wallTag?.far).toBe(false);
+    // a drag along it paints from press to release (on the cells' edges: to whole metres) — one face
+    const d0 = await at(page, X0 + 1.1, Y0 + 0.1, 1.53);
+    const d1 = await at(page, X0 + 1.9, Y0 + 0.1, 1.53);
+    await page.mouse.move(d0.x, d0.y, { steps: 3 });
+    await page.mouse.down();
+    await page.mouse.move(d1.x, d1.y, { steps: 6 });
+    await page.mouse.up();
     await expect.poll(() => edge(page, "h", X0 + 1, Y0)).toBe("b");
     expect(await back(page, "h", X0 + 1, Y0)).toBe("p"); // the outside stays plaster
     expect(await edge(page, "h", X0 + 2, Y0)).toBe("p");
+    expect(await edge(page, "h", X0, Y0)).toBe("p");
     // Shift-click: the whole room inside, in cork
     await setBuild(page, { paint: "k" });
     await page.keyboard.down("Shift");
     await pointAt(page, X0 + 2.5, Y0 + 0.1, 1.53);
-    await expect.poll(async () => (await build(page)).wallTag?.n).toBe(14);
+    // (its walls' stretches round it: the north wall in three now — the drag split it — the rest whole)
+    await expect.poll(async () => (await build(page)).wallTag?.n).toBe(6);
     await page.mouse.click(p.x + 1, p.y);
     await page.keyboard.up("Shift");
     await expect.poll(() => back(page, "h", X0 + 2, Y0 + 3)).toBe("k"); // the south wall's inner (−y) face
@@ -190,11 +238,11 @@ test("the Walls tool, Sims-style: runs, paint with indicators, the inspector, th
     await page.keyboard.press("e");
     await expect.poll(async () => (await build(page)).paint).toBe("k");
 
-    // ── Select: the inspector ──
+    // ── Select: the inspector (a whole wall: the north wall's metre the drag split off) ──
     await setBuild(page, { wallMode: "select" });
     const s = await pointAt(page, X0 + 1.5, Y0 + 0.1, 1.53);
     await page.mouse.click(s.x, s.y);
-    const card = page.getByTestId("wall-inspector");
+    const card = page.getByTestId("free-wall-inspector");
     await expect(card).toBeVisible();
     await expect(card).toContainText("Cork");
     await expect(card).toContainText("Plaster");
@@ -218,26 +266,19 @@ test("the Walls tool, Sims-style: runs, paint with indicators, the inspector, th
     await page.keyboard.press("]");
     await expect.poll(async () => (await build(page)).wallView).toBe("cut");
   } finally {
-    // every edge of the patch back to no wall
-    await page.evaluate(
-      ([px, py]) => {
-        const edges: { x: number; y: number; dir: "h" | "v"; ch: string }[] = [];
-        for (let dy = 0; dy <= 7; dy++)
-          for (let dx = 0; dx <= 8; dx++) {
-            edges.push({ x: px + dx, y: py + dy, dir: "h", ch: "." });
-            edges.push({ x: px + dx, y: py + dy, dir: "v", ch: "." });
-          }
-        (window as any).__yutopia.send("map:walls", { edges });
-      },
-      [x, y],
-    );
+    // every wall put up on the patch taken down again (the structure's walls go by id)
+    await page.evaluate((h) => {
+      const w = (window as any).__yutopia;
+      const ids = w.structure.walls.filter((q: any) => q.floor === w.level && !h.includes(q.id)).map((q: any) => q.id);
+      if (ids.length) w.send("struct:walls", { level: w.level, remove: ids });
+    }, had);
     await setBuild(page, {
       on: false,
       wallMode: "build",
       paintMode: "line",
       brush: "w:p",
       wallView: "cut",
-      wallSel: [],
+      freeSel: null,
     });
   }
   await expect.poll(() => edge(page, "h", X0 + 2, Y0 + 3)).toBe(".");
@@ -257,7 +298,7 @@ test("close up: Paint shows the face under the pointer", async ({ page }) => {
   // a solid north wall with open floor in front
   const spot = await page.evaluate(() => {
     const w = (window as any).__yutopia;
-    const m = w.map;
+    const m = w.rows();
     const open = (x: number, y: number) => !!w.grid?.ok?.(x, y);
     // (no door or window in it: shared openings.ts)
     const cut = new Set(
@@ -270,7 +311,7 @@ test("close up: Paint shows the face under the pointer", async ({ page }) => {
     );
     // (not the building's core: its stairs and elevators' walls)
     const core = (x: number, y: number) =>
-      m.areas.some(
+      w.map.areas.some(
         (a: any) => a.key.startsWith("core-") && x >= a.x - 1 && x <= a.x + a.w && y >= a.y - 4 && y <= a.y + a.h,
       );
     for (let y = 1; y < m.height - 5; y++)
@@ -287,7 +328,7 @@ test("close up: Paint shows the face under the pointer", async ({ page }) => {
   });
   expect(spot).not.toBeNull();
   const { x, y } = spot as { x: number; y: number };
-  let farWas: string | null = null;
+  let farWas: { id: string; back: string; len: number } | null = null;
   try {
     await page.evaluate((p) => (window as any).__yutopia.teleport({ x: p.x + 0.5, y: p.y + 3 }), { x, y });
     await page.waitForTimeout(800);
@@ -312,40 +353,47 @@ test("close up: Paint shows the face under the pointer", async ({ page }) => {
     await page.mouse.move(at.x, at.y, { steps: 3 });
     await expect.poll(async () => (await build(page)).wallTag).toMatchObject({ kind: "face", far: false, to: "w" });
     const f = await look(page);
-    expect(f.faces[0]).toMatchObject({ p: { dir: "h", x, y, side: 1 }, mat: "w" });
+    // (the stretch it'd paint, shown on that wall: along its line, over the cell the pointer's at)
+    expect(f.segs[0]).toMatchObject({ mat: "w" });
+    const sg = f.segs[0] as { a: [number, number]; b: [number, number] };
+    expect([sg.a[1], sg.b[1]]).toEqual([y, y]);
+    expect(Math.min(sg.a[0], sg.b[0])).toBeLessThanOrEqual(x);
+    expect(Math.max(sg.a[0], sg.b[0])).toBeGreaterThanOrEqual(x + 1);
     await page.waitForTimeout(500);
     await page.screenshot({ path: test.info().outputPath("3p-paint.png") });
-    // painting only a wall's far side rebuilds the 3D walls (it changes
+    // painting only a wall's far side redraws the 3D walls (it changes
     // nothing but the back faces: they weren't redrawn until a front changed)
-    // (a material that isn't on that far side now)
-    const was = await page.evaluate((s) => {
-      const m = (window as any).__yutopia.map;
-      const b = m.hBacks?.[s.y]?.[s.x];
-      return b && b !== "." ? b : m.hWalls[s.y][s.x].toLowerCase();
-    }, spot);
-    farWas = was;
+    // (the whole wall's back, so it isn't split and goes back as it was after, in a material that
+    // isn't on that far side now)
+    const wall = await wallOn(page, "h", x, y);
+    expect(wall, "the wall on that edge").not.toBeNull();
+    farWas = wall as { id: string; back: string; len: number };
+    const was = farWas.back;
     const other = ["b", "k", "f", "w"].find((m) => m !== was) as string;
-    await page.evaluate(() => {
-      (window as any).__yutopia.tp.world.__before = true;
-    });
     await page.evaluate(
-      ([s, m]) =>
-        (window as any).__yutopia.send("map:faces", {
-          faces: [{ dir: "h", x: (s as any).x, y: (s as any).y, side: -1 }],
-          mat: m,
+      ([q, m]) =>
+        (window as any).__yutopia.send("struct:paint", {
+          level: (window as any).__yutopia.level,
+          stretches: [{ id: q.id, side: -1, from: 0, to: q.len, mat: m }],
         }),
-      [spot, other] as const,
+      [farWas, other] as const,
     );
-    await expect.poll(() => page.evaluate(() => !(window as any).__yutopia.tp.world.__before)).toBe(true);
+    // (the floor drawn again with it: its walls' edges as drawn have the new back — a relayout, the
+    // floor kept)
+    await expect
+      .poll(() =>
+        page.evaluate((s) => (window as any).__yutopia.tp.world.edges.back({ dir: "h", x: s.x, y: s.y }), { x, y }),
+      )
+      .toBe(other);
   } finally {
     if (farWas)
       await page.evaluate(
-        ([s, m]) =>
-          (window as any).__yutopia.send("map:faces", {
-            faces: [{ dir: "h", x: (s as any).x, y: (s as any).y, side: -1 }],
-            mat: m,
+        (q) =>
+          (window as any).__yutopia.send("struct:paint", {
+            level: (window as any).__yutopia.level,
+            stretches: [{ id: q.id, side: -1, from: 0, to: q.len, mat: q.back }],
           }),
-        [spot, farWas] as const,
+        farWas,
       );
     await setBuild(page, { on: false, wallMode: "build" });
     await page.evaluate(() => {

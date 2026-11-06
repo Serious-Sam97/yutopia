@@ -445,6 +445,9 @@ export const CATALOG = {
   // names the shaft; the world-server runs the car), and outside the lot's cars
   // and lamp posts
   stairs: { label: "Staircase", w: 4, h: 7, solid: false, buildable: true },
+  // (plan 72 phase 11.8: a straight flight up to a mezzanine — how high in props.rise, shapes.ts
+  // flightParts)
+  flight: { label: "Steps", w: 1, h: 3, solid: false, buildable: true },
   elevator: { label: "Elevator", w: 2, h: 2, solid: false, interact: "lift", buildable: true },
   car: { label: "Car", w: 5, h: 2, solid: true, buildable: true, variants: 9, paint: true },
   // someone's own bay of the lot (docs/plan/43-the-spot.md, shared spot.ts): the board with their

@@ -1,7 +1,8 @@
-import { isFloor, rimeAt, STOREY, spDay, tileAt } from "@yutopia/shared";
+import { isFloor, originOf, rimeAt, STOREY, spDay } from "@yutopia/shared";
 import { beamAt } from "@yutopia/shared/beam";
 import { waterAt } from "@yutopia/shared/grounds";
 import { LONG_ROAD } from "@yutopia/shared/longroad";
+import { cellOf } from "@yutopia/shared/structure";
 import { type Color, type Fog, MeshLambertMaterial, Vector3 } from "three";
 import { Bubbles } from "../bubbles3d";
 import { GROUND } from "../campus";
@@ -206,8 +207,12 @@ export class Mood {
       this.c.roomAt = key;
       this.c.roomMap = this.c.map;
       const ground = this.c.level === 0;
+      // (the floor's cells asked of the structure, within its extent: plan 72 phase 11)
+      const m = this.c.map;
+      const o = originOf(m);
       this.c.room = roomBounds(
-        this.c.map.tiles,
+        (x, y) => cellOf(m, x, y),
+        { x0: o.x, y0: o.y, x1: o.x + m.width, y1: o.y + m.height },
         tx,
         ty,
         (ch) => !ch || ch === " " || (ground && (ch === "a" || ch === "c")),
@@ -362,14 +367,14 @@ export class Mood {
   underSky(x: number, y: number): boolean {
     if (this.c.level !== 0) return false;
     if (this.onLand(x, y)) return true;
-    const ch = tileAt(this.c.map, Math.floor(x), Math.floor(y));
+    const ch = cellOf(this.c.map, Math.floor(x), Math.floor(y));
     return ch === "a" || ch === "c";
   }
 
   // out on the land (the ground floor's frame, off its own tiles)
   onLand(x: number, y: number): boolean {
     if (this.c.level !== 0 || !this.c.around.grounds) return false;
-    return !isFloor(tileAt(this.c.map, Math.floor(x), Math.floor(y)));
+    return !isFloor(cellOf(this.c.map, Math.floor(x), Math.floor(y)));
   }
 
   // the light on someone out on the land: the hour's, the lamps' near, a beam's (`skip`: not

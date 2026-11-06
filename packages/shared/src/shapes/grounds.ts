@@ -1134,6 +1134,24 @@ function things(out: GroundSolid[]) {
         }
         break;
       }
+      case "gwall": {
+        // a wall along its line (plan 72 phase 11.10): 0.3 thick, 2.4 over the land, a box a run of
+        // 4 m at most (the land rolls under it) — a wall Flowmotion runs up, as a building's
+        const pts = t.pts ?? [];
+        for (let i = 1; i < pts.length; i++) {
+          const [ax, az] = pts[i - 1];
+          const [bx, bz] = pts[i];
+          const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 4));
+          for (let k = 0; k < n; k++) {
+            const p0 = [ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n];
+            const p1 = [ax + ((bx - ax) * (k + 1)) / n, az + ((bz - az) * (k + 1)) / n];
+            const y0 = Math.min(on(p0[0], p0[1]), on(p1[0], p1[1])) - 0.3;
+            const y1 = Math.max(on(p0[0], p0[1]), on(p1[0], p1[1]));
+            out.push({ what: "building_wall", s: along(p0[0], p0[1], p1[0], p1[1], 0.3, y0, y1 + (t.h ?? 2.4)) });
+          }
+        }
+        break;
+      }
       // parkour (tp/town3d.ts draws them; Flowmotion grinds, runs and swings by their `what`)
       case "pk_rail":
       case "pk_rail_long": {

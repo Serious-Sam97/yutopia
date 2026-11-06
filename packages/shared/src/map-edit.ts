@@ -18,8 +18,8 @@ import {
   isFloor,
   isWallEdge,
   isWindow,
-  type LevelDef,
-  type MapDef,
+  type TileLevel,
+  type TileMap,
   NO_WALL,
   originOf,
   setBack,
@@ -50,7 +50,7 @@ export interface Layout {
   spawn: Point;
   // the building (levels.ts): this map's floor and the others
   floor?: number;
-  levels?: LevelDef[];
+  levels?: TileLevel[];
   core?: Point;
 }
 
@@ -67,7 +67,7 @@ export const MAP_SIZES = [
 export const PAINT_CHARS = [VOID, ...Object.keys(FLOORS)] as const;
 export const ROOM_KINDS: AreaKind[] = ["private", "open", "booth"];
 
-export function layoutFromMap(map: MapDef): Layout {
+export function layoutFromMap(map: TileMap): Layout {
   return {
     version: 3,
     width: map.width,
@@ -83,16 +83,16 @@ export function layoutFromMap(map: MapDef): Layout {
   };
 }
 
-const levelDefCopy = (l: LevelDef): LevelDef => JSON.parse(JSON.stringify(l));
+const levelDefCopy = (l: TileLevel): TileLevel => JSON.parse(JSON.stringify(l));
 
 // a floor's size can be bigger than the home floor's (the ground floor takes the lot in)
 export const LEVEL_MAX = 160;
 export const LEVELS_MAX = 12;
 
 // Shape check for a stored floor (levels.ts).
-export function validLevel(l: unknown): l is LevelDef {
+export function validLevel(l: unknown): l is TileLevel {
   if (!l || typeof l !== "object") return false;
-  const x = l as LevelDef;
+  const x = l as TileLevel;
   if (!Number.isInteger(x.index) || x.index < 0 || x.index > LEVELS_MAX) return false;
   if (typeof x.name !== "string" || x.name.length > 60) return false;
   if (!Number.isInteger(x.ox) || !Number.isInteger(x.oy) || Math.abs(x.ox) > 400 || Math.abs(x.oy) > 400) return false;
@@ -142,7 +142,7 @@ function backRows(map: { hWalls: string[]; vWalls: string[]; hBacks?: string[]; 
 }
 
 // A v2 layout as a map (v1 layouts go through convertV1 first).
-export function mapFromLayout(key: string, name: string, l: Layout): MapDef {
+export function mapFromLayout(key: string, name: string, l: Layout): TileMap {
   const edges = l.hWalls && l.vWalls ? { hWalls: [...l.hWalls], vWalls: [...l.vWalls] } : emptyEdges(l.width, l.height);
   const backs = l.hWalls && l.vWalls && (l.hBacks || l.vBacks) ? backRows({ ...edges, ...l }) : {};
   return {
@@ -197,7 +197,7 @@ function setTile(tiles: string[], x: number, y: number, ch: string) {
 // floor away (VOID) may not leave furniture, people, the arrival point or a
 // wall item in mid-air.
 export function paintBlocker(
-  map: MapDef,
+  map: TileMap,
   objects: WorldObjectDef[],
   bodies: Point[],
   x: number,
@@ -227,7 +227,7 @@ export function paintBlocker(
   return null;
 }
 
-export function applyPaint(map: MapDef, cells: { x: number; y: number; ch: string }[]): MapDef {
+export function applyPaint(map: TileMap, cells: { x: number; y: number; ch: string }[]): TileMap {
   const tiles = [...map.tiles];
   const o = originOf(map);
   for (const c of cells) setTile(tiles, c.x - o.x, c.y - o.y, c.ch);
@@ -259,7 +259,7 @@ function covers(o: WorldObjectDef, x: number, y: number): boolean {
 // piece of furniture, never away from under a hanging board or from round a
 // door or window (repainting it is fine, if the new wall takes it); no
 // windows painted on (older saves' were; openings.ts turns them into things).
-export function edgeBlocker(map: MapDef, objects: WorldObjectDef[], e: Edge, ch: string): string | null {
+export function edgeBlocker(map: TileMap, objects: WorldObjectDef[], e: Edge, ch: string): string | null {
   if (!inMap(map, e)) return "outside the map";
   if (!(EDGE_CHARS as readonly string[]).includes(ch)) return "unknown wall";
   const [a, b] = edgeSides(e);
@@ -297,7 +297,7 @@ function hangCrosses(o: WorldObjectDef, e: Edge): boolean {
 // that's there): paint only that face (+1: its +y / +x face, −1 the other).
 export type EdgeEdit = Edge & { ch: string; side?: number };
 
-export function applyEdges(map: MapDef, edges: EdgeEdit[]): MapDef {
+export function applyEdges(map: TileMap, edges: EdgeEdit[]): TileMap {
   const next = {
     ...map,
     hWalls: [...map.hWalls],
@@ -332,7 +332,7 @@ export function applyEdges(map: MapDef, edges: EdgeEdit[]): MapDef {
 // ── size ───────────────────────────────────────────────────────────────────
 // Resize anchored at the top-left: new space is empty (void, no walls),
 // anything outside is cut. Areas are clipped or dropped; the spawn moves inside.
-export function resizeMap(map: MapDef, width: number, height: number): MapDef {
+export function resizeMap(map: TileMap, width: number, height: number): TileMap {
   const w = Math.max(MAP_MIN, Math.min(MAP_MAX, Math.floor(width)));
   const h = Math.max(MAP_MIN, Math.min(MAP_MAX, Math.floor(height)));
   const fit = (rows: string[], n: number, len: number) =>
@@ -345,7 +345,7 @@ export function resizeMap(map: MapDef, width: number, height: number): MapDef {
   const areas = map.areas
     .map((a) => ({ ...a, w: Math.min(a.w, X1 - a.x), h: Math.min(a.h, Y1 - a.y) }))
     .filter((a) => a.w > 0 && a.h > 0 && a.x < X1 && a.y < Y1);
-  const next: MapDef = {
+  const next: TileMap = {
     ...map,
     width: w,
     height: h,
@@ -361,7 +361,7 @@ export function resizeMap(map: MapDef, width: number, height: number): MapDef {
   return next;
 }
 
-export function firstFloor(map: MapDef): Point | null {
+export function firstFloor(map: TileMap): Point | null {
   const sp = spanOf(map);
   const cx = (sp.x0 + sp.x1) / 2;
   const cy = (sp.y0 + sp.y1) / 2;
@@ -389,10 +389,10 @@ function ring(x: number, y: number, w: number, h: number): (Edge & { side: 1 | -
 }
 
 // A fresh, empty studio: one big room, walls along the map's border.
-export function blankMap(key: string, name: string, width: number, height: number): MapDef {
+export function blankMap(key: string, name: string, width: number, height: number): TileMap {
   const w = Math.max(MAP_MIN, Math.min(MAP_MAX, Math.floor(width)));
   const h = Math.max(MAP_MIN, Math.min(MAP_MAX, Math.floor(height)));
-  const map: MapDef = {
+  const map: TileMap = {
     key,
     name,
     width: w,
@@ -426,11 +426,11 @@ export interface RoomSpec {
 // in the middle of the bottom wall (the top one at the map's edge). Returns
 // where the door goes: the edge, as a door object's x, y, yaw.
 export function addRoom(
-  map: MapDef,
+  map: TileMap,
   objects: WorldObjectDef[],
   _bodies: Point[],
   r: RoomSpec,
-): { map: MapDef; door: { x: number; y: number; yaw: number } | null } | string {
+): { map: TileMap; door: { x: number; y: number; yaw: number } | null } | string {
   if (r.w < 2 || r.h < 2) return "rooms need at least 2×2 tiles";
   const sp = spanOf(map);
   if (r.x < sp.x0 || r.y < sp.y0 || r.x + r.w > sp.x1 || r.y + r.h > sp.y1) return "the room doesn't fit in the map";
@@ -486,7 +486,7 @@ export function addRoom(
 // Repaint the walls around a room in another material: the faces looking into
 // it (the room next door keeps its side), windows kept. Glass is the whole wall
 // (not where a window is: those walls keep theirs).
-export function setRoomWalls(map: MapDef, key: string, mat: WallMat, objects: WorldObjectDef[] = []): MapDef {
+export function setRoomWalls(map: TileMap, key: string, mat: WallMat, objects: WorldObjectDef[] = []): TileMap {
   const a = map.areas.find((x) => x.key === key);
   if (!a) return map;
   const cuts = wallCuts(objects);

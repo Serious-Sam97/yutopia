@@ -1,18 +1,8 @@
 import type { WorldObjectDef } from "./catalog.ts";
 import { faceHit, type Ray } from "./hang.ts";
-import {
-  type Edge,
-  type EdgeDir,
-  edgeAt,
-  isFacedWall,
-  isFloor,
-  isWallEdge,
-  type MapDef,
-  nearestEdge,
-  spanOf,
-  tileAt,
-} from "./map.ts";
+import { type Edge, type EdgeDir, isFacedWall, isFloor, isWallEdge, type MapDef, nearestEdge, spanOf } from "./map.ts";
 import { isDoorKind, openingEdges } from "./openings.ts";
+import { cellOf, wallOf } from "./structure/query.ts";
 
 // Wall building, Sims-style (docs/plan/11-wall-building.md): a **panel** is one
 // face of one wall edge — what a paint stroke paints, what the pointer points
@@ -48,7 +38,7 @@ export function panelAt(
   }
   if (!floor) return null;
   const e = nearestEdge(floor.x, floor.y);
-  if (!isWallEdge(edgeAt(map, e))) return null;
+  if (!isWallEdge(wallOf(map, e))) return null;
   const side = (e.dir === "h" ? floor.y >= e.y : floor.x >= e.x) ? 1 : -1;
   return { ...e, side };
 }
@@ -62,14 +52,14 @@ export function joinedFaces(map: MapDef, objects: WorldObjectDef[], p: Panel, ca
   const doors = new Set(
     objects.filter((o) => isDoorKind(o.kind)).flatMap((o) => openingEdges(o).map((d) => `${d.dir}${d.x},${d.y}`)),
   );
-  const closed = (e: Edge) => isWallEdge(edgeAt(map, e)) || doors.has(`${e.dir}${e.x},${e.y}`);
+  const closed = (e: Edge) => isWallEdge(wallOf(map, e)) || doors.has(`${e.dir}${e.x},${e.y}`);
   const [sx, sy] = panelTile(p);
-  if (!isFloor(tileAt(map, sx, sy))) return [p];
+  if (!isFloor(cellOf(map, sx, sy))) return [p];
   const seen = new Set<string>([`${sx},${sy}`]);
   const queue: [number, number][] = [[sx, sy]];
   const out: Panel[] = [];
   const face = (e: Edge, side: 1 | -1) => {
-    if (isFacedWall(edgeAt(map, e))) out.push({ ...e, side });
+    if (isFacedWall(wallOf(map, e))) out.push({ ...e, side });
   };
   while (queue.length && seen.size <= cap) {
     const [x, y] = queue.shift() as [number, number];
@@ -84,7 +74,7 @@ export function joinedFaces(map: MapDef, objects: WorldObjectDef[], p: Panel, ca
         face(e, side);
         continue;
       }
-      if (!isFloor(tileAt(map, nx, ny))) continue;
+      if (!isFloor(cellOf(map, nx, ny))) continue;
       const k = `${nx},${ny}`;
       if (seen.has(k)) continue;
       seen.add(k);

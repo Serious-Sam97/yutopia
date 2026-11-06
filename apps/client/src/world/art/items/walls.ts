@@ -55,9 +55,9 @@ type Face2 = {
 // `capFrom`: boxes ending below it have another band on top (their top is hidden).
 // `half`: only the front half of its thickness (a two-faced wall, drawn a face
 // at a time; the 3D view turns the sketch round for the back one).
-function runFor(s: Sketch, dir: "h" | "v", capFrom = WALL_Z - 3, half = false): Run {
+function runFor(s: Sketch, dir: "h" | "v", capFrom = WALL_Z - 3, half = false, t = T): Run {
   return {
-    box(a0, a1, z0, z1, mat, d, line, depth = 2 * T, op) {
+    box(a0, a1, z0, z1, mat, d, line, depth = 2 * t, op) {
       // full-length boxes run half a tile past the edge and are cut by the
       // slice, so straight walls join with no seam; ends get a post
       const full = a0 === 0 && a1 === 1;
@@ -101,12 +101,14 @@ export function wall(
   part: WallPart,
   face?: "front" | "back",
   cut?: readonly [number, number] | null,
+  // (a wall of its own height or thickness — plan 72 phase 11.4: `top` px up, `t` half its thickness)
+  shape?: { top?: number; t?: number },
 ) {
   const half = ch === "h";
-  const r = runFor(s, dir, (half ? HALF_Z : WALL_Z) - 3, !!face);
+  const top = shape?.top ?? (half ? HALF_Z : WALL_Z);
+  const r = runFor(s, dir, top - 3, !!face, shape?.t ?? T);
   const mat = half ? "p" : ch.toLowerCase();
   const window = !half && ch !== mat && !cut; // upper case
-  const top = half ? HALF_Z : WALL_Z;
   const [z0, z1] = part === "low" ? [0, LOW_Z] : [LOW_Z, top];
   // the wall body, in horizontal bands so a window or door can cut through
   const hole = cut ?? (window ? ([WIN0, WIN1] as const) : null);
@@ -263,12 +265,12 @@ function windowFrame(r: Run) {
 
 // A post where walls turn, meet or end: fills the joint, in the material of a
 // wall it joins (its skirting and cap like every wall's).
-export function post(s: Sketch, height: number, part: WallPart, ch: string) {
+export function post(s: Sketch, height: number, part: WallPart, ch: string, t = T) {
   const [z0, z1] = part === "low" ? [0, LOW_Z] : [LOW_Z, height];
   const box = (a: number, b: number, mat: Mat) => {
     const lo = Math.max(z0, a);
     const hi = Math.min(z1, b);
-    if (hi > lo) s.box({ x: -T, y: -T, w: 2 * T, d: 2 * T, z: lo, h: hi - lo, mat, line: 1 });
+    if (hi > lo) s.box({ x: -t, y: -t, w: 2 * t, d: 2 * t, z: lo, h: hi - lo, mat, line: 1 });
   };
   const m = ch === "h" ? "p" : ch.toLowerCase();
   box(0, 5, { c: K.walnutDark, top: "#5a3a26" });

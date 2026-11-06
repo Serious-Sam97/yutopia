@@ -1057,3 +1057,464 @@ the code reads are made from it. Still to come in this phase: listed at the end.
   owner, lock), the smaller a new room, unnamed; the level — the floors at their heights, a slab
   between them (a mezzanine) under its floor, PgUp/PgDn through them, a height of its own for any;
   snaps on by default (Shift: free; 0.5 m grid, 15°; things turn 15° on R).
+
+### Phase 11 — started 2026-11-05 (the user: "Commit, then phase 11")
+- **The steps** (each its own check, in this order):
+  - 11.1 edits as operations;
+  - 11.2 the free Line tool (snaps, a length typed, the 3D ghost, Erase by wall, Box as four walls);
+  - 11.3 arcs;
+  - 11.4 a wall's height and thickness;
+  - 11.5 rooms found as a run closes, and the split rule;
+  - 11.6 openings slid along any wall;
+  - 11.7 slabs, the level HUD, flat and pitched roofs;
+  - 11.8 stairs and lifts;
+  - 11.9 things placed free;
+  - 11.10 the same tool in god mode outdoors;
+  - 11.11 the minimap and GPS from the structure, then the adapter deleted.
+- **11.1 — built.**
+  - `structure/edit.ts`:
+    - `wallWhy` is the one check the browser and the server both run: the floor, the length
+      (0.25–120 m), the material, the height, on the floor's ground.
+    - `wallsEdit` turns walls drawn and ids taken away into one `walls` operation. Each new wall
+      sits at its floor's height and is kept to the mm.
+    - `uncovered`: a wall drawn over one that's there goes in only where there's none; all of it
+      there is refused ("there already").
+  - `structure/snap.ts` `snapPoint` snaps, in this order:
+    - another wall's end, then its middle;
+    - from the corner, in angle steps counted from the wall that corner is on (a quarter turn
+      off it is "square"), with grid lengths;
+    - another wall's line carried on past its end;
+    - with no corner yet, the grid. Points are kept to the mm.
+  - The message `struct:walls {level, add, remove, n}` is for builders only. The server answers
+    `struct:walls:ok {n, ids}` and warns why when a wall can't go.
+  - A step holding a free-wall edit carries its `walls` operations both ways (`diffStructures`).
+    - Undo and redo apply them, and refuse when someone else has changed it since.
+    - A map edit's step is unchanged: it undoes tile by tile and keeps others' later edits.
+      Recording every step's operations would replace a floor's whole slab list on undo; the
+      "per person" undo test caught that.
+  - **The adapter's limit:** a wall off the tile lines has no tile edge.
+    - `onTiles` decides which walls the tile map can hold, and the adapter skips the others.
+    - `WorldRoom.commitMap` (every map-based edit) keeps them. Before this, the next old-style
+      edit would have taken every free wall away.
+- **11.2 — built.** Build's Line, Box and Erase are `world/build/freewalls.ts`. The old tile-edge
+  run code is gone from `build/controller.ts`.
+  - **Line:**
+    - Click corner after corner, or drag for one wall.
+    - Type a length (digits, `.`), then Enter. Backspace takes the last wall back, by its id.
+    - Enter with nothing typed, Esc, a double click, or closing on the first corner ends the run.
+  - **Box:** a drag makes four walls. A side along walls that are there is skipped and counted.
+  - **Erase** (or ⌘/Ctrl): whole walls, every one the drag passes.
+  - **Snaps:** Grid (0.5 m, 1 m, off) and Angles (15°, 45°, off) rows under the materials.
+    Shift turns them all off.
+  - **In 3D:** the ghost is a see-through wall in the material's colour, rimmed, on a strip of
+    its thickness. The snap is a dot, with a dashed guide for a line carried on or for square.
+  - **The chip:** length, angle, the snap, and walls drawn. Erase shows "this wall goes".
+  - The ghost is redrawn when an edit's operations come in.
+- **Checks:**
+  - Shared structure: 16/16.
+  - Client unit tests: 289/289.
+  - Page budget: 458.4 KB, raised 457 → 459 with a note (the snap rows, the chip, their strings).
+  - World-server: 206/207 in the full run. The loot test fails only under the suite's load and
+    passes on its own. The free-walls test covers:
+    - a 45° wall to everyone;
+    - members refused;
+    - why it can't go;
+    - undo and redo;
+    - a map edit keeping it;
+    - "there already".
+  - In the browser, as Bia on floor 3 with real mouse and keys (`e2e/free-walls.mts`):
+    - a run at 30°;
+    - a typed 1.5 m;
+    - Backspace;
+    - a Box of 4;
+    - Erase of 1;
+    - everything undone back to the start.
+  - The e2e specs for the old Build were rewritten for free walls: `wall-building`'s Build part,
+    `wall-faces`' drag on its line, and `third-person`'s mark under the pointer.
+    - All 3 pass with the Metal flags (`--use-angle=metal --enable-gpu --ignore-gpu-blocklist`).
+    - With `playwright.config.ts` as it is (the software GPU) they time out. Every
+      `page.evaluate` takes 1–8 s and the build chunk misses its 15 s wait. This is the slow
+      software render, not the tool: the config probably wants the Metal flags.
+    - The specs swap the dev world to the Lab (`useWorld`). It was restored from a backup and
+      checked identical.
+- **Fixed after 11.2:** the release of the press that begins a run was read as a second corner when
+  the start had snapped to a wall's end nearby (the 0.3 m between rounded up to the 0.5 m grid). It
+  is now only a click, unless dragged 0.25 m or more.
+- **11.3 — arcs, built** (the user: "Continue").
+  - **The model:** `Wall.bow` is how far an arc's middle stands off the line a–b, to its left; half
+    the chord at most (a half circle). `structure/arc.ts` holds the geometry:
+    - `arcCircle`, `wallPoint`, `wallLength`;
+    - `wallPoints`: its corners, chords ≤ 0.5 m and ≤ 7.5° each;
+    - `chordsOf`: as straight walls, ids `<id>~<n>`;
+    - `nearOnWall`;
+    - `bowThrough`: 0.25 m steps, snapped to a half circle within a step of one.
+  - **Readers:** everything that reads walls as straight lines reads an arc as its chords.
+    - Jolt's solids (`physics/build.ts`), and so the navmesh.
+    - Rooms (`floorFaces`).
+  - **Left out on purpose:**
+    - Things on walls skip arcs (`attachOf`; doors and windows in arcs are 11.6).
+    - The tile adapter skips them (`onTiles` false), and `commitMap` keeps them.
+    - `uncovered` ignores them.
+  - **Checks:** `wallWhy` says "bows too far", and "off the floor" covers the whole curve.
+    `wallsEdit` refuses the same arc drawn again (either way round) as "there already". A straight
+    wall along its chord isn't covered by it.
+  - **Snaps:** an arc's ends; its middle is the top of its bow; square off it uses its tangent;
+    lines aren't carried on from arcs.
+  - **Drawing:** `walls3d.ts` gives World3 an arc as one free wall with its points (`FreeWall.pts`).
+    It is drawn piece by piece along them, with posts only at its two ends, each square to its own
+    end chord.
+  - **The tool's Arc mode:** click the start, click the end (snapped as a straight wall's), then
+    move out to bow it and click.
+    - 0.25 m steps, a half circle at most; Shift free; a number typed sets the bow.
+    - Enter puts it in; Backspace unpicks the end. The next arc goes on from its end.
+    - The ghost runs along the curve with one rim, with a mark at the top of the bow and a guide
+      from the chord's middle. The chip shows its length and "bows 1.25 m" or "half circle".
+  - **Checks:**
+    - Shared: 624/624, including 6 arc tests (the geometry, the bow, the edit, a room closed by an
+      arc whose face runs round its bow, snaps, Jolt's boxes along the bow and none on the chord).
+    - Client: 289/289.
+    - World-server: 208/208 (a new arc test: in with its bow, kept by a map edit, "bows too far").
+    - The three wall e2e specs pass with the Metal flags; the dev world was restored after.
+    - In the browser as Bia (`e2e/free-walls.mts`, now with an arc): arcs drawn and undone.
+      Stills from above and the side show smooth curves in walnut, plaster (with its skirting) and
+      brick, with no gaps at the joints.
+    - Page 459.6 KB, budget 459 → 461 with a note.
+- **Left for later in phase 11:**
+  - The light's occlusion still comes from the tile map, so free walls and arcs don't cast the
+    room light's shadows yet (phase 9's leftover).
+  - Free walls aren't checked against things in their way (the old tool's `edgeBlocker`).
+  - Rooms aren't found as a run closes (11.5).
+- **11.4 — a wall's height and thickness, built** (the user: "Continue").
+  - **The model:**
+    - `Wall.thick` is set only when it isn't WALL_T. `WALL_THICKS` = 0.1, 0.2, 0.3 (the user's three).
+    - Heights run from `WALL_LOWEST` 0.5 m to the ceiling; `WALL_HEIGHTS` names ceiling, rail
+      (1.1) and low (0.6).
+    - `wallWhy` checks both. `wallsSet` changes walls that are there (height, thickness): each
+      keeps its id, so what hangs on it stays, and it undoes through the history as operations.
+    - The message `struct:walls {set: [{id, height?, thick?}]}`.
+  - **The adapter:** `onTiles` is false for a wall of its own height or thickness, so the tile map
+    skips it. Without that, a rail on whole metres would come back full height beside itself after
+    the next map edit.
+  - **Jolt:** its boxes are as thick as the wall.
+  - **Drawing:** the wall art takes a height and a thickness (`wall(…, shape)`, `post(…, t)`), so
+    the skirting, the material and the cap stay true to the wall. Such a wall is drawn as a free wall.
+  - **The tool:**
+    - Height (Ceiling, Rail, Low) and Thick (0.1, 0.2, 0.3 m) rows set what new walls are.
+    - **Adjust** mode: press on a wall and drag its top. The height follows the pointer: its ray
+      meets the wall's upright plane (an arc's at its tangent there). It snaps to ceiling, rail or
+      low within 0.12 m, else to 0.1 m; Shift to the mm.
+    - A click gives the wall the panel's height and thickness. A number typed then Enter sets the
+      height of the wall under the pointer.
+    - The ghost is drawn at the new height, with a handle on top and a guide from its old top. The
+      chip shows "2.40 m high · 0.1 m thick".
+- **Fixed, older than this phase: the warm-up's NaN camera.**
+  - The streamed tree pools (`grounds-stream.ts`) hide a block's trees with all-zero matrices.
+    Three's box maths divides by their w (0) into NaN, so `Box3.setFromObject(scene)` came out NaN.
+  - The warm-up then drew from a NaN camera, and with the floor cut on (below the home floor) its
+    clipping plane threw "firstElem.toArray is not a function". That happened in about half the
+    loads as Bia on floor 3.
+  - `Warmup.drawAll` now builds its box from each thing's own, leaving out any that isn't finite:
+    no error in 8 loads. The pools aren't frustum-culled, so nothing was ever missing on screen.
+- **Checks:**
+  - Shared: 625/625 (a new height and thickness test, covering what's kept, the tile map, Jolt's
+    0.1 box and `wallsSet`).
+  - Client: 289/289.
+  - World-server: 209/209 (a new test: a rail 0.1 thick, raised to 2.4 and 0.3 as the same wall,
+    undone).
+  - The wall e2e specs: 3/3 with the Metal flags; the dev world was restored, identical.
+  - As Bia (`e2e/free-walls.mts`): a rail 1.1 m high and 0.1 m thick drawn; its top dragged to
+    exactly 2.40; a click made it 3.266 and 0.3; all undone.
+  - Page 460.2 of 461 KB.
+- **11.5 — rooms found and split as walls go up, built** (the user: "Continue").
+  - **`structure/rooms.ts` `roomsAfterWalls(before, after, floor, newKey)`:** the floor's faces read
+    again after a wall edit.
+    - **A room a new wall cuts:** the biggest part keeps it (name, owner, lock — the user's rule);
+      the other new parts are new rooms. When what's left of it outside the new closed faces is
+      the biggest, it keeps its outline and those faces become rooms inside it, a priority higher
+      (a closet in a hall).
+    - **A new closed face in no room:** a new room, except the biggest piece of the open face it
+      came from (that's the open floor going on).
+    - **Rooms never grow by themselves:** a wall taken away leaves both sides as they were.
+    - New rooms are private, called "New room", their rectangle the outline's bounds.
+  - **The server:** `struct:walls` applies the rooms operation with the walls and answers
+    `found: [keys]`. The history keeps both, so undo puts the rooms back exactly.
+  - **The client:** a "A ROOM · Name it (Enter)" prompt above the hint bar. It doesn't take the
+    keys (a length typed mid-run went into it at first); you click in it. ✕ leaves the name as is.
+    The Rooms panel's cards gained a Name field.
+  - **Fixed — map edits clobbered the new model:**
+    - A rename or any other map-based edit rebuilt every wall from the tiles, so a free wall on
+      whole metres came back with another id. That broke undo of "drew walls" ("Changed since by
+      someone else"), and would break Backspace and things hung by wall id.
+    - `commitMap` now keeps the structure's walls when the edit leaves every floor's wall edges as
+      they were, and keeps a room's outline when the map gives it back with the same key and
+      rectangle (else a rename squared off a room shaped by free walls).
+    - `from-map` no longer copies an area's `outline` into the room's props, where a stale copy
+      would win.
+  - **Checks:**
+    - Shared: 630/630, including 5 room tests (split, closet, a corner found, an erase, a room
+      whose walls don't close).
+    - Client: 289/289.
+    - World-server: 209/210 in the full run. The nest "crouched at 12" test is the known timing
+      flake and passes alone. A new test closes a triangle into a room, renames it (still a
+      triangle), and undoes both.
+    - The wall e2e specs: 3/3 with the Metal flags; the dev world was restored, identical.
+    - As Bia (`e2e/free-walls.mts`): the run and arc closed one room, the Box another, named "Nook"
+      at the prompt; ten undos took it all back. Walls and slabs identical to the backup; the
+      rooms the same, only floor 3's listed last.
+    - Page 460.3 of 461 KB.
+- **11.6 — doors and windows on any wall, built** (the user: "Continue until you finish phase 11").
+  - **The model:** an opening in a wall drawn free has `props.free` and `props.on {wall, at}` (the
+    wall's id; how far along it its middle is). Its x, y are where it starts along the wall and its
+    yaw is the wall's heading, so its model is laid along the wall as the tile tool's always were
+    (0 and π/2 are those openings' own).
+  - **Shared `structure/free-openings.ts`:** `placeOnWall`, `freeOpeningWhy` (no wall, an arc
+    "not yet", a wall that takes no door or window, off its end, too low, another there),
+    `freeCuts`, `openingAlong` (0.25 m steps). The tile-edge code passes these by
+    (`openingEdges` gives them none).
+    - `openingCentre`, `doorCentre` and `doorRoom` (the room ±0.5 m across its heading) read their
+      yaw.
+    - `withOn` keeps their `on`. Jolt cuts their walls by `on` as it already did, and a locked one
+      is a box along its wall.
+  - **The server** places them from their wall (whatever x, y and yaw were sent), checks them there,
+    and takes them away with their wall (back on undo).
+  - **The client:**
+    - The build hand aims at walls drawn free by the pointer's ray (the nearer of those and the
+      tile walls).
+    - World3 cuts their holes in free walls (pieces split at the holes) and draws their models at
+      any angle (`openingInto`, the live group, the older art through `turnOut`).
+    - The doorway check for opening a door works along and across the door.
+  - **Fixed on the way:** the client's `objFromState` snapped every thing's yaw to a quarter, which
+    put a door at 59° back to 90°. Free openings keep theirs; things in general are 11.9's.
+  - **Not yet:** openings in arcs.
+- **11.7 — floors, the working height and roofs, built.**
+  - **Floors (`structure/slab-edit.ts`):** a slab is a polygon (holes allowed) of a material at its
+    floor's height or a mezzanine's over it (1.0–2.5 m: headroom both ways).
+    - `slabWhy`, `slabsEdit`, `slabAt` (the last drawn on top), `workingHeights`.
+    - Slabs may overlap: a floor is the union of its slabs, and Jolt, the ceiling and the floor
+      mask read each slab on its own instead of all rings even-odd.
+    - A mezzanine is no part of the tile map. Jolt holds it at its height under its floor's key
+      (you're on that floor up there). World3 draws it as an extruded slab of its material, inked.
+    - Walls drawn at a mezzanine's height stand on it (`over`; their top under the ceiling) and are
+      drawn lifted (`turnOut`'s lift).
+    - The message `struct:slabs` (`:ok` with ids).
+  - **The Floors tab is now the free tool:** Line (corners clicked, snapping as walls do, closed on
+    the first corner or Enter), Box, Fill room (the face under the pointer, its holes too), Erase
+    (or "No floor"). The old tile paint and fill are gone from the client.
+  - **The working height:** an "Up" row (Floor, the floor's mezzanines, and in Floors new ones at
+    +1.25, +1.75, +2.25). PgUp/PgDn step through them before the floors. The pointer is read where
+    its ray meets that height, and the tool's cues are drawn up there.
+  - **Roofs (`structure/roof.ts`, `Structure.roofs`, a `roofs` operation):** flat, gable or hip,
+    10–60°, over a closed face, at the top of the walls on its outline.
+    - A gable needs a rectangle any way turned (`rectOf`); R turns its ridge.
+    - A hip goes on a rectangle (a ridge, or a point on a square) or on any convex face (to a point).
+    - `roofFaces` gives slopes, gables and a flat lid with its edge: the drawing's (World3, slate and
+      plaster, inked, hidden while you stand under it). Jolt's is a lid at the eaves, with over it
+      out of doors.
+    - The Roof tab: Kind, Pitch; click a room to roof it, ⌘/Ctrl-click to take one off.
+  - **commitMap keeps them:** the slabs when the tiles are as they were, mezzanines always, roofs
+    always (the tiles have none).
+  - **Checks (11.6–11.7):**
+    - Shared tests: free openings 4, floors 4, roofs 3.
+    - World-server tests: a door at 45°; floors and roofs with a map edit and undo.
+    - As Bia: `e2e/free-openings.mts` (a door and a window in a walnut wall at 59°, holes cut,
+      frames square to it, from both sides) and `e2e/free-floors.mts` (a five-cornered carpet
+      floor, a mezzanine at +1.75 m floating with its shadow, a box of brick walls with a gable on
+      it). Everything undone.
+    - Three world-server tests fail on HEAD too at this hour (snow plough, far land, physics
+      chunks): checked in a HEAD worktree.
+- **11.8 — steps up to a mezzanine, built.**
+  - A new catalog kind, `flight` ("Steps", 1 × 3): a straight flight whose rise is its own
+    (`props.rise`, 0.5–2.5 m). Its steps are under 0.2 m each, blocks down to the one before
+    (`flight.ts flightParts`). They are Jolt's (kindSolids) and the drawing's (the box art).
+  - It's walked on as stairs are: Jolt's floor layer, and the "what floor am I on" check in the
+    browser and on the server.
+  - It's a connector joining its floor to the mezzanine over it (`connectors.ts`, kind `flight`).
+  - Put down, it rises to the working height, else to the floor's highest mezzanine, else 1.75 m.
+    The server keeps the rise in reason.
+  - **Not done:**
+    - Lifts stop at floors only (a mezzanine stop would change the cars' heights model).
+    - The switchback staircase still goes floor to floor.
+- **11.9 — things placed free, built.**
+  - A thing that stands on the floor (not on a surface, on a wall, in one, nor the building's own)
+    is kept with `props.free`: its x, y the middle of its footprint, its yaw any turn
+    (`free-things.ts`).
+  - R turns a thing in hand 15°. Once it's off the quarters (or with Shift held), its middle
+    follows the pointer on the grid (the Walls panel's; Shift near free). At a quarter turn
+    without Shift it goes on the tile under the pointer as things always did. Put on whole tiles at
+    a quarter turn, it's kept as things always were (`placeFree`).
+    - The third-person spec caught the first version, which snapped every move to the grid and left
+      a plant between tiles.
+  - `freeFits` checks it: on the floor's slabs, no wall through it, no solid thing's footprint
+    overlapping (separating axes).
+  - Jolt's boxes are its parts laid out from its middle and turned. World3 draws it at no turn
+    round its middle, then turns it (`turnOut`); its live parts are turned the same way.
+  - `objFromState` keeps a free thing's yaw.
+  - **Not done:** seats still face by the nearest quarter, and the tile code that reads things
+    (dressing, the seat index, desks) reads a free one at its middle.
+- **11.10 — walls out of doors in god mode, built.**
+  - A new Grounds thing, `gwall` ("Wall"): brick, 2.4 m over the land and down into it where it
+    falls away, 0.3 thick, a coping and snow on top. It's drawn along a line of corners the way
+    the fence is, with god mode's line tool, and is Jolt's building walls (Flowmotion runs up
+    them).
+  - Checked as an edit like the fence (`checkEdits`), drawn in `town3d.ts`, with icon and names in
+    the god HUD.
+  - **Not done:** the Build tab's own wall tool (snaps, arcs, heights) isn't god mode's. Out of
+    doors it's this line tool.
+- **11.11 — the minimap from the structure, built; the adapter not deleted.**
+  - The minimap draws the floor from the structure: slabs as polygons in their material's colour
+    (the last on top, mezzanines over them), walls as they stand (any angle, arcs by their chords,
+    rails and half walls lighter, as thick as they are), room labels and my room's outline from
+    the rooms. Who's out on the lot after dark comes from the slab under them.
+  - GPS never read the tile maps (it draws the Grounds).
+  - **The adapter (`mapFromStructure`) is still there.** About 575 lines in 82 files read tile
+    maps (the survey, 2026-11-06):
+    - the tile build tools (Paint and Select on tile panels, the Rooms tool's rectangles, the Map
+      panel's resize, `map-edit.ts`) and the generators and migrations (`building.ts`,
+      `convert.ts`);
+    - the light's occlusion (`art/light.ts`, from the tiles and edges, so walls drawn free and
+      arcs cast no room-light shadow);
+    - `Place`'s floor tests; room membership through `areaAt` in about 20 features; dressing,
+      Christmas and footsteps;
+    - the floor bake's tile sampling, the ceiling and open-sky masks.
+  - Deleting it means porting each of those to the structure and retiring the tile tools for
+    free-wall ones (painting a free wall's faces, selecting one). That is a plan's worth on its
+    own, not a step.
+- **Phase 11 checks, last run (2026-11-06):**
+  - Shared: 648/648. Client: 290/290 (the bounds test learnt the outdoor wall's line; the minimap's
+    colours went to `world/art/minimap.ts`).
+  - World-server: 208/213 in the full run, the five known: loot and the nest (load flakes, both
+    pass alone), and the snow plough, far land and physics chunks (red on HEAD too at this hour).
+  - The three wall e2e specs pass with the Metal flags. The probes as Bia pass:
+    `free-walls`, `free-openings`, `free-floors`, `free-things`.
+  - The dev world was restored after each and checked identical.
+  - Page 465.8 KB, budget 461 → 467 with a note.
+- **After 11.11 (the user: "Continue"): the gaps free walls had through the tile model, closed.**
+  - **The light:** walls drawn free and arcs cast the room light's shadows. `LightMap` takes the
+    floor's free walls (the drawing's FreeWall list: `LightWall`) and blocks a ray that crosses one.
+    - A rail or low wall (under 1.5 m), glass and half walls let the light by.
+    - So does an open door or a window in a free wall; a shut door doesn't.
+    - A window in a free wall to the outside gives its pool of light, as the tile walls' do.
+    - The light's key carries those walls and openings.
+  - **Paint on a free wall:** the face the pointer's ray meets (its front is its left, a to b),
+    painted on the click (`struct:walls set {front | back}`, `wallsSet`, `FACE_PAINTS`).
+    - Painting one face keeps the other's (a wall's `back` is kept only when it differs).
+    - Glass and half walls have no sides to paint.
+  - **Select on a free wall:** picked (`build.freeSel`), outlined, with an inspector card over it:
+    what it is, how long, high and thick, both faces, and Same both sides, Swap sides, Remove wall.
+  - **Checks:**
+    - A light test: the shadow, a rail, an open and a shut door.
+    - A shared test: painting the back, then the front, refused on glass.
+    - As Bia (`e2e/free-paint.mts`): a brick face painted from where she stood, the inspector,
+      swapped, taken away; all undone.
+  - **The adapter is still there** (11.11's list above). `Place` tells floor from land on the
+    ground floor by the tiles: a free floor's edge is off by half a tile at most until it goes.
+- **The rest of phase 11 (the user: "ok finish the rest of phase 11", 2026-11-06).**
+  - **Doors and windows in arcs.** A free opening goes into an arc too: placed as a chord across
+    its curve (`placeOnWall`), its middle where the pointer meets the arc (`openingAlong` by
+    `nearOnWall`), refused only where the curve is too tight for it (the chord's sagitta over
+    0.12 m, or wider than the circle). Jolt cuts each chord it crosses (`physics/build.ts`), the
+    drawing cuts the arc's pieces (`walls3d.piecesOf` takes the marks per chord), the build tool
+    aims at an arc by its chords (`freeWallHit`).
+  - **Chairs at any angle.** A seat placed free is sat on facing its own way, not the nearest
+    quarter (`Seat.front`, `seatDir`, `seatYaw`, `seatByte`), at its middle (a sofa: along its seat,
+    nearest the tile — `Seat.spot`); the tiles it covers are its seats (`seatsOf`). The server's
+    teleport, the client's sit and the actions' walk-to read it.
+  - **God-mode walls: snaps, arcs and heights.** The outdoor wall (`gwall`) keeps its own height
+    (`h`, 0.6–6 m, `GWALL_HEIGHT`; the panel's Height row, on a picked one too), drawn and solid as
+    high. The line tool snaps a run to 15° or 45° steps (Angle: Any, 15°, 45°), its length to the
+    grid's, and its point onto another line's corner or its own first (closing it). Arc: a run's
+    end, then a click it bows through (shared `bowThrough`, `wallPoints`), 64 points at most.
+  - **Lifts stopping at mezzanines.** A stop can stand up on a mezzanine (`props.deck`, m; put at
+    the working height, all of its footprint on that deck — `stopOnDeckWhy`). Where a car is and
+    is sent is a *station* (`stationOf`: the stop's floor and its height up it in storeys); the
+    server's cars, the panel, the car's buttons (GM, 1M), the landing's display and the 3D stops
+    all go by station. The shaft opens a floor's slab where its car passes (up to its car's top at
+    its highest stop: a mezzanine's car reaches through the floor over it), and a deck's where
+    the shaft goes through it. The tile grid leaves a mezzanine's stop out (it isn't on the floor).
+  - **Checks:** shared `free-things` (a chair at 30°, a sofa along its seat), `lift-station`
+    (stations, names, holes), `grounds-things` (a wall a metre high, a bad height refused); the
+    world-server's "a lift stopping at a mezzanine" (a stop on the deck joins the shaft, the car
+    rides there and back, one off the deck refused).
+  - **A seat put down wasn't one till something else changed (found by the browser pass).** The
+    controller made its grid when a thing arrived, from the 3D view's things — which didn't have it
+    yet that frame — and kept it. `WorldController.grid` now asks the physics each time (its places
+    cached till the building or its things change).
+  - **As Bia (`e2e/lift-mezz.mts`):** a mezzanine 2.5 m up, a stop under it and one on it (one
+    shaft), called, ridden up (her height 13.0 on floor 3: 10.5 + 2.5) and back; a chair put at 30°
+    and sat on facing its way (85). Everything undone; the dev world as it was (the weather aside).
+  - **The adapter, surveyed (2026-11-06):** about 150 reads in 34 runtime files, most through a
+    dozen entry points (`tileAt` 38, `edgeAt` 16, `hWall`/`vWall` 21, `faceMat` 5, `spanOf`,
+    `levelMap` 18). The adapter is already a read-only index of the structure, kept per floor and
+    made again only for the floor an edit touches; taking it out as it stands means writing the
+    same index again as queries. What changes anything: the floor under you from the exact slab
+    (the half tile at a free floor's edge), things hung and dressing on free walls, and the tile
+    tools retired so walls are edited one way.
+- **The tile-map adapter deleted (the user: "Rewrite every reader", 2026-11-06).**
+  - **The queries (`structure/query.ts`).** What a floor is, asked of the structure: the slab under a
+    point (`slabUnder`, `topAt` — exact, by its polygon, not a cell's middle), a cell's floor
+    (`cellTop`), the wall's faces on a cell's edge (`edgeFront`, `edgeBack`, the walls on whole
+    metres of their floor's height and kind — `onTiles`, here now), a floor's walled edges, its
+    extent and its signature. Kept per structure and floor (an edit makes a new structure: asked
+    again, made again, a floor at a time). Proven equal to the generator's own rows on every cell
+    and edge of every floor of the world (`query.test.ts`).
+  - **The map is a view (`structure/view.ts viewOf`).** The world's map is the home floor with the
+    others in `levels` — extents, rooms (`roomsOf`), spawns, the core — and `st`, the structure;
+    no tile rows. `MapDef` lost them; `TileMap` (and `TileLevel`) keeps them for what's drawn in
+    tiles: the generators (`building.ts`, `map-edit.ts blankMap`), the built-in maps, the old saves'
+    migration (`from-map`, `convert`, `fold`, `finish`). The compiler named every reader: each asks
+    through `cellOf`, `floorAtPoint`, `wallOf`, `backOf`, `hWallOf`/`vWallOf`, `faceOf`,
+    `wallBetweenOf`, `layoutSig`, `floorsSig` — a world's map by its structure, a generator's tile
+    map by its rows (the same rules for both). `levelMap` keeps rows on a tile map, `st` on a view.
+  - **What reads differently:** `Place.onLand` is the exact slab now (a free floor's edge where it
+    is, not half a tile off); the fog's room box floods the floor's cells within its extent (a
+    floor whose corner isn't the world's 0, 0 right too); the lock check compares a room's walls on
+    its own floor (it read the home floor's).
+  - **The tile tools retired.** `map:paint`, `map:walls`, `map:faces`, `map:room` (the Rooms
+    rectangle and its dialog), `map:room:walls`, `map:resize` and `WorldRoom.commitMap` are gone;
+    so are the history's tile steps (cells, whole maps, areas, spawn, levels): a step is its things
+    and the structure's operations both ways, recorded for the messages that edit the building.
+    - What stayed moved onto the structure: a room's name, kind, owner and dressing
+      (`map:room:update`, `map:room:remove`, the Furnish panel's dressing taken away — rooms'
+      props), the arrival point (`map:spawn`), a blank home floor (`map:new`: the generator's
+      floor as the structure's pieces, `structure/floors-edit.ts`), a floor added on top and the
+      top one taken away (`level:add`, `level:remove`: the generator's floor from the home floor's
+      footprint read off the structure).
+    - **Paint on any wall** (`struct:paint`, `structure/paint.ts`): a click paints the stretch of the
+      face between the walls meeting it, a drag from where it started, Shift every face round the
+      room it looks into (the Rooms card's walls too). The wall's split where a stretch starts and
+      ends (a wall on the cells' edges at whole metres: its pieces stay on them), what's on it —
+      a door, a picture — moved onto its piece. Glass and half walls have no sides.
+    - **Select picks any wall** (the card of 11.11); the panels' inspector is gone.
+    - **Which side is a wall's front** is one rule now (`frontNormal`, as it's drawn): on the cells'
+      edges by the tile rule (along x: +y, along y: +x), else its left (a to b). The free tools
+      took walls on the cells' edges for the first time; along y the two rules disagree.
+    - **Walls keep what's on them:** one with a thing hung on it isn't taken away (the tile tool's
+      rule, lost to free walls till now); its doors and windows — free or on the cells' edges — go
+      with it, back on undo.
+  - `to-map.ts` (`mapFromStructure`, `floorGrid`) deleted. The e2e specs read a floor's rows through
+    the controller's test hook `rows(level)` (asked of the structure) and build with the struct
+    messages.
+  - **Fixed on the way:** `[`/`]` in build mode were taken by the focus's cycling when anything was
+    in reach (the walls' view never turned); Paint's aim skips a wall the view looks through (cut
+    away, faded — `BuildPick.throughAt`), as the tile panels' aim did.
+  - **Checks (2026-11-06):**
+    - Shared 656/656 (the pool's Vortex test red once beside the server's run, green alone).
+      Client 291/291. World-server 214/214 (six load-bound tests red in the full run — the computer,
+      loot, ping-pong, slot cars, the phone, the stairs — each green alone). New tests: `query`
+      (every cell and edge of every floor as the generator's rows; walls drawn free and an arc),
+      `paint` (a stretch split, whole faces, a room's faces facing in); the server's tests on the
+      struct messages (walls and floors drawn, two-faced walls, undo per wall, rooms found and
+      named, a hung thing keeps its wall, a lift at a mezzanine).
+    - GPU e2e (Metal), the specs ported (`rows()`, the struct messages): wall-building 2/2,
+      build-tools, map-edit, third-person 3/3, wall-sofa-menu 3/3, wall-faces 2/3.
+      - Red, not from this: wall-faces "both faces" (the clock's target above the viewport — known
+        since phase 5), doors-windows (the Doors tab — known), footing (on floor 4 Jolt's
+        `underfoot` finds the roof's lid 3.5 m up at a desk and the land 7 m down at the rug: the
+        browser physics' frame on the top floor, untouched here — to look into).
+      - map-edit passes on a fresh world server; run again on the same one, its first walk after
+        "start blank" finds no way (the server's navmesh across runs; a floor made again from the
+        same solids is fine alone — `nav` kept meshes give the same ways). To look into.
+    - As Bia: free-walls, free-openings, free-floors, free-things, free-paint, lift-mezz — all
+      pass, nothing left over. The dev world restored from its backup after the lab runs and
+      checked identical (the weather aside).
+    - Page 467.2 KB, budget 467 → 469 with a note (the queries and the wall painting on the page).

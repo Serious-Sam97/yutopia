@@ -1,6 +1,6 @@
 "use client";
 
-import { emptyEdges, type MapDef, quarterYaw, setEdge, type WorldObjectDef } from "@yutopia/shared";
+import { emptyEdges, quarterYaw, setEdge, type TileMap, type WorldObjectDef } from "@yutopia/shared";
 import { notFound } from "next/navigation";
 import { useEffect, useState } from "react";
 import { FloorBake, T } from "@/world/art/floors";
@@ -36,11 +36,11 @@ const NIGHT = "rgb(163,156,177)";
 
 // row 0 and column 0 are outside; thin walls run along y = 1 and x = 1, with a
 // doorway at x = 3
-function testRoom(ch: string): { map: MapDef; objects: WorldObjectDef[] } {
+function testRoom(ch: string): { map: TileMap; objects: WorldObjectDef[] } {
   const nb = NEXT[ch];
   const tiles = [" ".repeat(W)];
   for (let y = 1; y < H; y++) tiles.push(` ${ch.repeat(4)}${nb.repeat(2)}`);
-  const map: MapDef = {
+  const map: TileMap = {
     key: "t",
     name: "t",
     width: W,

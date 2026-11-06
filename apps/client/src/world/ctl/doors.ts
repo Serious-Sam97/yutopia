@@ -142,10 +142,15 @@ export class Doors {
       const half = entry(o.kind).w / 2;
       // (plan 68: the automatic doors open from further off)
       const reach = doorReach(o.kind);
+      // (in a wall drawn free: along and across its heading — phase 11.6)
+      const yaw = o.yaw ?? 0;
+      const [ux, uy] = [Math.cos(yaw), Math.sin(yaw)];
       const on = (x: number, y: number) =>
-        quarterOf(o) % 2 === 0
-          ? Math.abs(x - c.x) < half && Math.abs(y - c.y) < reach
-          : Math.abs(y - c.y) < half && Math.abs(x - c.x) < reach;
+        o.props?.free === true
+          ? Math.abs((x - c.x) * ux + (y - c.y) * uy) < half && Math.abs((x - c.x) * -uy + (y - c.y) * ux) < reach
+          : quarterOf(o) % 2 === 0
+            ? Math.abs(x - c.x) < half && Math.abs(y - c.y) < reach
+            : Math.abs(y - c.y) < half && Math.abs(x - c.x) < reach;
       // (a locked door swings only for its room's owner, the one who can go
       // through it: anyone else at it finds it shut)
       const locked = o.props?.state === "locked";

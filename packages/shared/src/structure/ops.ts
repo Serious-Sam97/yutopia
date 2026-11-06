@@ -6,7 +6,7 @@
 // The build tool still edits tile maps (phase 11 replaces it): the server checks an edit by the old
 // rules, then `diffStructures` turns its result into these operations. The verbs a free tool needs
 // (move a wall's end, split it, join two) are made of the same: walls taken away and put in.
-import type { Floor, Room, Slab, Structure, Wall, XY } from "./types.ts";
+import type { Floor, Roof, Room, Slab, Structure, Wall, XY } from "./types.ts";
 
 export type StructOp =
   /** walls taken away (by id), then walls put in */
@@ -15,6 +15,8 @@ export type StructOp =
   | { op: "slabs"; floor: number; slabs: Slab[] }
   /** a floor's rooms, in order (an earlier one wins where they overlap at the same priority) */
   | { op: "rooms"; floor: number; rooms: Room[] }
+  /** a floor's roofs, all of them (phase 11.7) */
+  | { op: "roofs"; floor: number; roofs: Roof[] }
   /** the floors (their places, names, sizes), in order */
   | { op: "floors"; floors: Floor[] }
   /** the world's own: where people arrive, the core, the home floor */
@@ -28,6 +30,7 @@ export function applyOps(s: Structure, ops: StructOp[]): Structure {
   let walls = s.walls;
   let slabs = s.slabs;
   let rooms = s.rooms;
+  let roofs = s.roofs ?? [];
   let floors = s.floors;
   let meta: Partial<Structure> = {};
   for (const o of ops) {
@@ -46,6 +49,8 @@ export function applyOps(s: Structure, ops: StructOp[]): Structure {
       slabs = [...slabs.filter((x) => x.floor !== o.floor), ...o.slabs.map((x) => ({ ...x, floor: o.floor }))];
     } else if (o.op === "rooms") {
       rooms = [...rooms.filter((r) => r.floor !== o.floor), ...o.rooms.map((r) => ({ ...r, floor: o.floor }))];
+    } else if (o.op === "roofs") {
+      roofs = [...roofs.filter((r) => r.floor !== o.floor), ...o.roofs.map((r) => ({ ...r, floor: o.floor }))];
     } else if (o.op === "floors") {
       floors = o.floors;
       const have = new Set(floors.map((f) => f.index));
@@ -53,12 +58,13 @@ export function applyOps(s: Structure, ops: StructOp[]): Structure {
       walls = walls.filter((w) => have.has(w.floor));
       slabs = slabs.filter((x) => have.has(x.floor));
       rooms = rooms.filter((r) => have.has(r.floor));
+      roofs = roofs.filter((r) => have.has(r.floor));
     } else if (o.op === "meta") {
       const { op: _op, core, ...rest } = o;
       meta = { ...meta, ...rest, ...(core !== undefined ? { core: core ?? undefined } : {}) };
     }
   }
-  const out: Structure = { ...s, ...meta, walls, slabs, rooms, floors };
+  const out: Structure = { ...s, ...meta, walls, slabs, rooms, floors, ...(roofs.length || s.roofs ? { roofs } : {}) };
   if (out.core === undefined) delete out.core;
   return out;
 }
@@ -74,6 +80,8 @@ export function invertOps(s: Structure, ops: StructOp[]): StructOp[] {
       back.push({ op: "slabs", floor: o.floor, slabs: at.slabs.filter((x) => x.floor === o.floor) });
     else if (o.op === "rooms")
       back.push({ op: "rooms", floor: o.floor, rooms: at.rooms.filter((r) => r.floor === o.floor) });
+    else if (o.op === "roofs")
+      back.push({ op: "roofs", floor: o.floor, roofs: (at.roofs ?? []).filter((r) => r.floor === o.floor) });
     else if (o.op === "floors") {
       // (a floor taken away takes what stood on it: all of that back too)
       back.push({ op: "floors", floors: at.floors });
@@ -83,6 +91,7 @@ export function invertOps(s: Structure, ops: StructOp[]): StructOp[] {
         for (const i of gone) {
           back.push({ op: "slabs", floor: i, slabs: at.slabs.filter((x) => x.floor === i) });
           back.push({ op: "rooms", floor: i, rooms: at.rooms.filter((r) => r.floor === i) });
+          back.push({ op: "roofs", floor: i, roofs: (at.roofs ?? []).filter((r) => r.floor === i) });
         }
       }
     } else if (o.op === "meta")
@@ -116,6 +125,9 @@ export function diffStructures(a: Structure, b: Structure): StructOp[] {
     const ra = a.rooms.filter((r) => r.floor === f.index);
     const rb = b.rooms.filter((r) => r.floor === f.index);
     if (!same(ra, rb)) ops.push({ op: "rooms", floor: f.index, rooms: rb });
+    const oa = (a.roofs ?? []).filter((r) => r.floor === f.index);
+    const ob = (b.roofs ?? []).filter((r) => r.floor === f.index);
+    if (!same(oa, ob)) ops.push({ op: "roofs", floor: f.index, roofs: ob });
   }
   const meta: StructOp & { op: "meta" } = { op: "meta" };
   if (!same(a.spawn, b.spawn)) meta.spawn = b.spawn;

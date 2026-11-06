@@ -1,4 +1,5 @@
-import { type MapDef, STOREY, tileAt, type WorldObjectDef } from "@yutopia/shared";
+import { type MapDef, STOREY, type WorldObjectDef } from "@yutopia/shared";
+import { cellOf, layoutSig } from "@yutopia/shared/structure";
 import {
   Color,
   Data3DTexture,
@@ -12,7 +13,15 @@ import {
   Vector2,
 } from "three";
 import { daylight, litCap, outAmbient } from "../art/daylight";
-import { headlights, type LightMap, type LightSource, lightMapFor, lightSig, lightSources } from "../art/light";
+import {
+  headlights,
+  type LightMap,
+  type LightSource,
+  type LightWall,
+  lightMapFor,
+  lightSig,
+  lightSources,
+} from "../art/light";
 import { LAYERS, LightVolume } from "../art/light-volume";
 import { type Piece, type Shader, yuLit } from "../look/yulit";
 import { skyLeft } from "./sky-left";
@@ -231,7 +240,7 @@ export class Light3 {
 
   // the floor's open tiles (the lot's asphalt and concrete: no ceiling over them)
   private openSky(map: MapDef) {
-    const sig = `${map.width}x${map.height}|${map.tiles.join("")}`;
+    const sig = `${map.width}x${map.height}|${map.ox ?? 0},${map.oy ?? 0}|${layoutSig(map)}`;
     if (sig === this.skySig) return;
     this.skySig = sig;
     const W = map.width;
@@ -239,7 +248,7 @@ export class Light3 {
     const d = new Uint8Array(W * H * 4);
     for (let y = 0; y < H; y++)
       for (let x = 0; x < W; x++) {
-        const ch = tileAt(map, x, y);
+        const ch = cellOf(map, x, y);
         d[(y * W + x) * 4] = ch === "a" || ch === "c" ? 255 : 0;
       }
     this.sky.dispose();
@@ -251,15 +260,15 @@ export class Light3 {
   }
 
   // Bake again when what gives or blocks light changed (cheap to call often).
-  update(map: MapDef, objects: WorldObjectDef[]) {
-    const bake = lightSig(map, objects);
+  update(map: MapDef, objects: WorldObjectDef[], free: readonly LightWall[] = []) {
+    const bake = lightSig(map, objects, free);
     // (the cars too: their headlights' beams are drawn here, not baked)
     const sig = `${bake}|${JSON.stringify(headlights(objects))}`;
     if (sig === this.sig) return;
     this.sig = sig;
     // (each floor's kept: art/light.ts; its volume made from the one before on the same floor —
     // only what an edit touched again)
-    this.lm = lightMapFor(map, objects, bake);
+    this.lm = lightMapFor(map, objects, bake, free);
     const before = this.vol?.lm.map.key === map.key && this.vol.lm.map.floor === map.floor ? this.vol : null;
     this.uniforms.lmSize.value.set(map.width, map.height);
     // (the floor's volume: this light's own, made again only when what lights it changed — from the

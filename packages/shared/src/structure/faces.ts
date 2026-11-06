@@ -5,6 +5,7 @@
 // The faces are walked with the region on the walker's left, y down (rings.ts's outlines: a
 // negative shoelace sum); a face with walls standing inside it (a wall poking in, a pillar's
 // box) keeps them as holes only when they close round something.
+import { chordsOf } from "./arc.ts";
 import { area2, inRing } from "./rings.ts";
 import type { Ring, Room, Structure, Wall, XY } from "./types.ts";
 
@@ -220,7 +221,8 @@ export function doorways(walls: readonly { a: XY; b: XY }[]): { a: XY; b: XY }[]
 /** The faces a floor's walls enclose (every wall, half walls and glass too: a room is what they
  *  close round), closed across their doorways. */
 export function floorFaces(s: Pick<Structure, "walls">, floor: number) {
-  const walls = s.walls.filter((w: Wall) => w.floor === floor);
+  // (an arc as its chords)
+  const walls = s.walls.filter((w: Wall) => w.floor === floor).flatMap(chordsOf);
   return wallFaces([...walls, ...doorways(walls)]);
 }
 

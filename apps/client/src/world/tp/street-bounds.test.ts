@@ -32,7 +32,7 @@ for (const [kind, ry] of KINDS.flatMap((k) =>
       x: AT.x,
       z: AT.z,
       ry,
-      ...(kind === "fence" && {
+      ...((kind === "fence" || kind === "gwall") && {
         pts: [
           [AT.x, AT.z],
           [AT.x + 7, AT.z],
@@ -48,7 +48,14 @@ for (const [kind, ry] of KINDS.flatMap((k) =>
     const cz = Math.floor(AT.z / CHUNK);
     const solids = [-1, 0, 1]
       .flatMap((dx) => [-1, 0, 1].flatMap((dz) => groundSolidsIn(cx + dx, cz + dz)))
-      .filter((g) => g.what === "street" || g.what === "street_pole" || g.what.startsWith("pk_"))
+      .filter(
+        (g) =>
+          g.what === "street" ||
+          g.what === "street_pole" ||
+          g.what.startsWith("pk_") ||
+          // (an outdoor wall's runs are walls — plan 72 phase 11.10)
+          (kind === "gwall" && g.what === "building_wall"),
+      )
       .map((g) => solidBox(g.s))
       .filter(near);
     applyEdits(NO_EDITS);

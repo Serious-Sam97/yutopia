@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { doorRoom } from "../doors.ts";
 import { hearingGain } from "../hearing.ts";
-import { type AreaDef, areaAt, inArea, type MapDef } from "../map.ts";
+import { type AreaDef, areaAt, inArea, type TileMap } from "../map.ts";
 import { applyEdges, blankMap } from "../map-edit.ts";
 import { structureFromMap } from "./from-map.ts";
-import { mapFromStructure } from "./to-map.ts";
+import { viewOf } from "./view.ts";
 
 // Rooms as polygons (docs/plan/72-the-3d-core.md, phase 10): a room is the face its walls close round,
 // not the rectangle it was drawn as — what's in it (areaAt), its doors' edges (whose they are), who
@@ -13,7 +13,7 @@ import { mapFromStructure } from "./to-map.ts";
 
 // An L of walls, its rectangle only the top arm (x 2–10, y 2–5); the arm down (x 2–5, y 5–10) is the
 // same room by its walls. A door in the arm down's west wall.
-function lRoom(): MapDef {
+function lRoom(): TileMap {
   let m = blankMap("l", "L", 20, 16);
   const W = "p";
   const edges: { dir: "h" | "v"; x: number; y: number; ch: string }[] = [];
@@ -33,7 +33,7 @@ test("an L-shaped room: the face its walls close round, its arm down in it thoug
   const room = s.rooms.find((r) => r.key === "office");
   assert.ok(room);
   assert.equal(room.outline.length, 6, "six corners: the L");
-  const map = mapFromStructure(s);
+  const map = viewOf(s);
   const a = map.areas.find((q) => q.key === "office");
   assert.ok(a?.outline, "its area carries the outline");
   assert.deepEqual([a.x, a.y, a.w, a.h], [2, 2, 8, 3], "its rectangle kept as drawn");
@@ -46,7 +46,7 @@ test("an L-shaped room: the face its walls close round, its arm down in it thoug
 });
 
 test("its door's edge is the office's, and in it a private room's walls hold the voices", () => {
-  const map = mapFromStructure(structureFromMap(lRoom()));
+  const map = viewOf(structureFromMap(lRoom()));
   // a door on the arm down's west wall (the edge x 2, y 7): the office's
   const door = { kind: "door", x: 2, y: 7, yaw: Math.PI / 2 } as Parameters<typeof doorRoom>[1];
   assert.equal(doorRoom(map, door)?.key, "office");

@@ -1,7 +1,7 @@
 import type { WorldObjectDef } from "../catalog.ts";
 import { quarterYaw } from "../catalog.ts";
 import { convertV1 } from "../convert.ts";
-import { type AreaDef, entryWallItem, hWall, MapBuilder, type MapDef, setEdge, vWall, type WallMat } from "../map.ts";
+import { type AreaDef, entryWallItem, hWall, MapBuilder, type TileMap, setEdge, vWall, type WallMat } from "../map.ts";
 
 // "The Studio Building" — a 1984 recording studio that's a bit too big inside.
 // Rooms are written as wall-inclusive rectangles; see docs/plan/04-world-and-art.md.
@@ -192,7 +192,7 @@ add("vortex-terminal", "crt_terminal", 46, 31);
 
 // The Studio as it was first written: walls as tiles (map v1). Spaces seeded
 // before map v2 are converted from it (convert.ts).
-export const studioV1: MapDef = {
+export const studioV1: TileMap = {
   key: "studio",
   name: "The Studio Building",
   width: 48,
@@ -216,7 +216,7 @@ const MATS: Record<string, WallMat> = {
   "booth-3": "f",
 };
 
-function withWindows(m: MapDef): MapDef {
+function withWindows(m: TileMap): TileMap {
   // windows in the outer back walls (north and west), every few tiles, never
   // where something hangs on the wall
   const hung = new Set<string>();
@@ -233,6 +233,6 @@ function withWindows(m: MapDef): MapDef {
   return m;
 }
 
-export const studio: MapDef = withWindows(
+export const studio: TileMap = withWindows(
   convertV1(studioV1, studioV1.objects, (a) => (a ? (MATS[a.key] ?? (a.kind === "booth" ? "f" : "p")) : "p")).map,
 );

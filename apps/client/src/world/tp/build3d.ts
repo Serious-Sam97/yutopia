@@ -5,10 +5,10 @@ import {
   type MapDef,
   placedFootprint,
   spanOf,
-  tileAt,
   WALL_H,
   type WorldObjectDef,
 } from "@yutopia/shared";
+import { cellOf } from "@yutopia/shared/structure";
 import {
   BoxGeometry,
   BufferGeometry,
@@ -18,13 +18,17 @@ import {
   Float32BufferAttribute,
   Group,
   LineBasicMaterial,
+  LineDashedMaterial,
   LineSegments,
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
   type Object3D,
   PlaneGeometry,
+  Shape,
+  ShapeGeometry,
   SphereGeometry,
+  Vector2,
   Vector3,
 } from "three";
 import { cardTexture, type Pick3, type World3 } from "./build";
@@ -48,6 +52,28 @@ export interface BuildLook {
     ok: boolean;
     sel?: boolean;
   }[];
+  // walls drawn free (plan 72 phase 11) and where the pointer snapped
+  segs: {
+    a: [number, number];
+    b: [number, number];
+    h: number;
+    ok: boolean;
+    remove?: boolean;
+    mat?: string;
+    pts?: [number, number][];
+    t?: number;
+  }[];
+  marks: { p: [number, number]; kind: string; from?: [number, number]; z?: number; fromZ?: number }[];
+  // floors drawn free (phase 11.7) and the working height the cues stand at
+  polys: {
+    pts: [number, number][];
+    holes?: [number, number][][];
+    ok: boolean;
+    closed: boolean;
+    remove?: boolean;
+    top?: string;
+  }[];
+  over: number;
   wallView: "up" | "cut" | "down" | null;
   rect: { x: number; y: number; w: number; h: number; ok: boolean } | null;
   spawn: { at: { x: number; y: number }; pick: { x: number; y: number; ok: boolean } | null } | null;
@@ -65,6 +91,16 @@ const AMBER = 0xffa630;
 const CREAM = 0xefe4cc;
 // a wall material's face colour (the Walls tool's preview)
 const MAT_COLOR: Record<string, number> = { p: 0xefe4cc, w: 0x6b4430, f: 0x9e4a36, b: 0x9a4a30, k: 0xc49a6c };
+
+// a floor material's colour (the floors' swatches): a floor drawn free's preview
+const FLOOR_COLOR: Record<string, number> = {
+  ".": 0x8f6038,
+  ",": 0x6b6a3a,
+  _: 0xe6dcc4,
+  ":": 0x7a3b2e,
+  "~": 0x2f2620,
+  x: 0x4a4740,
+};
 
 const cue = (color: number, opacity: number) =>
   new MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, toneMapped: false, side: DoubleSide });
@@ -172,12 +208,26 @@ export class BuildLayer {
   // ── edges, rooms, the arrival pin, outlines ────────────────────────────────
   private setCues(look: BuildLook | null, world: World3) {
     const sig = look
-      ? JSON.stringify([look.edges, look.faces, look.rect, look.spawn, look.mine, look.outlines, world.picks.length])
+      ? JSON.stringify([
+          look.edges,
+          look.segs,
+          look.marks,
+          look.polys,
+          look.over,
+          look.faces,
+          look.rect,
+          look.spawn,
+          look.mine,
+          look.outlines,
+          world.picks.length,
+        ])
       : "";
     if (sig === this.cueSig) return;
     this.cueSig = sig;
     clear(this.cues);
     if (!look) return;
+    // (at the working height: a mezzanine's — phase 11.7)
+    this.cues.position.y = look.over ?? 0;
     const ok = (b: boolean) => (b ? OK : BAD);
     for (const g of look.edges) {
       const { e } = g;
@@ -217,6 +267,123 @@ export class BuildLayer {
         x.position.copy(face.position);
         x.rotation.copy(face.rotation);
         this.cues.add(x);
+      }
+    }
+    // walls drawn free: a see-through wall (the material's colour) on a strip of its thickness,
+    // rimmed; one about to go crossed out
+    for (const g of look.segs) {
+      const pts = g.pts ?? [g.a, g.b];
+      const good = g.ok && !g.remove;
+      const col = ok(good);
+      const faceMat = cue(
+        good && g.mat ? (MAT_COLOR[g.mat] ?? AMBER) : col,
+        g.remove ? 0.12 : good && g.mat ? 0.5 : 0.25,
+      );
+      const stripMat = cue(col, 0.6);
+      const rimMat = new LineBasicMaterial({ color: good ? VFD : BAD });
+      let mid: Mesh | null = null;
+      for (let i = 1; i < pts.length; i++) {
+        const [ax, ay] = pts[i - 1];
+        const [bx, by] = pts[i];
+        const len = Math.hypot(bx - ax, by - ay);
+        if (len < 1e-3) continue;
+        const yaw = -Math.atan2(by - ay, bx - ax);
+        const [cx, cy] = [(ax + bx) / 2, (ay + by) / 2];
+        const th = g.t ?? 0.2;
+        const strip = new Mesh(new PlaneGeometry(len, th).rotateX(-Math.PI / 2), stripMat);
+        strip.position.set(cx, 0.016, cy);
+        strip.rotation.y = yaw;
+        const face = new Mesh(new BoxGeometry(len, g.h, th), faceMat);
+        face.position.set(cx, g.h / 2, cy);
+        face.rotation.y = yaw;
+        this.cues.add(strip, face);
+        if (i === Math.ceil(pts.length / 2)) mid = face;
+        if (!g.pts) {
+          // a straight wall: its box's edges
+          const rim = new LineSegments(new EdgesGeometry(face.geometry), rimMat);
+          rim.position.copy(face.position);
+          rim.rotation.copy(face.rotation);
+          this.cues.add(rim);
+        }
+      }
+      if (g.pts) {
+        // an arc: one rim along its top and its foot, and up its two ends
+        const line: Vector3[] = [];
+        for (let i = 1; i < pts.length; i++)
+          for (const y of [0.02, g.h])
+            line.push(new Vector3(pts[i - 1][0], y, pts[i - 1][1]), new Vector3(pts[i][0], y, pts[i][1]));
+        for (const p of [pts[0], pts[pts.length - 1]])
+          line.push(new Vector3(p[0], 0.02, p[1]), new Vector3(p[0], g.h, p[1]));
+        this.cues.add(new LineSegments(new BufferGeometry().setFromPoints(line), rimMat));
+      }
+      if (g.remove && mid) {
+        const c = 0.5;
+        const x = new LineSegments(
+          new BufferGeometry().setFromPoints([
+            new Vector3(-c, -c, 0.12),
+            new Vector3(c, c, 0.12),
+            new Vector3(c, -c, 0.12),
+            new Vector3(-c, c, 0.12),
+            new Vector3(-c, -c, -0.12),
+            new Vector3(c, c, -0.12),
+            new Vector3(c, -c, -0.12),
+            new Vector3(-c, c, -0.12),
+          ]),
+          new LineBasicMaterial({ color: BAD }),
+        );
+        x.position.copy(mid.position);
+        x.rotation.copy(mid.rotation);
+        this.cues.add(x);
+      }
+    }
+    // floors drawn free: their outline (amber; rust when they don't fit, crossed when they go) and,
+    // closed, a see-through fill in their material's colour
+    for (const g of look.polys) {
+      const good = g.ok && !g.remove;
+      const col = good ? VFD : BAD;
+      const line: Vector3[] = [];
+      for (const r of [g.pts, ...(g.holes ?? [])]) {
+        const n = r.length;
+        for (let i = 0; i < n - (g.closed || r !== g.pts ? 0 : 1); i++)
+          line.push(new Vector3(r[i][0], 0.03, r[i][1]), new Vector3(r[(i + 1) % n][0], 0.03, r[(i + 1) % n][1]));
+      }
+      this.cues.add(new LineSegments(new BufferGeometry().setFromPoints(line), new LineBasicMaterial({ color: col })));
+      if (g.closed && g.pts.length >= 3) {
+        const shape = new Shape(g.pts.map(([x, y]) => new Vector2(x, -y)));
+        for (const h of g.holes ?? []) shape.holes.push(new Shape(h.map(([x, y]) => new Vector2(x, -y))));
+        const fill = new Mesh(
+          new ShapeGeometry(shape).rotateX(-Math.PI / 2),
+          cue(g.remove ? BAD : good ? (FLOOR_COLOR[g.top ?? ""] ?? OK) : BAD, g.remove ? 0.25 : 0.45),
+        );
+        fill.position.y = 0.02;
+        this.cues.add(fill);
+      }
+      for (const p of g.pts) {
+        const dot = new Mesh(new CylinderGeometry(0.07, 0.07, 0.02, 12), cue(col, 0.9));
+        dot.position.set(p[0], 0.035, p[1]);
+        this.cues.add(dot);
+      }
+    }
+    // the snap: a dot where it snapped (amber; an end or a middle cream), and for a line carried on
+    // or square, a dashed guide back to where it's in line with
+    for (const m of look.marks) {
+      const col = m.kind === "end" || m.kind === "middle" ? CREAM : AMBER;
+      const dot = new Mesh(new CylinderGeometry(0.12, 0.12, 0.02, 20), cue(col, 0.95));
+      dot.position.set(m.p[0], (m.z ?? 0) + 0.03, m.p[1]);
+      const ring = new Mesh(new CylinderGeometry(0.22, 0.22, 0.01, 28, 1, true), cue(col, 0.6));
+      ring.position.copy(dot.position);
+      this.cues.add(dot, ring);
+      if (m.from || m.fromZ !== undefined) {
+        const f = m.from ?? m.p;
+        const line = new LineSegments(
+          new BufferGeometry().setFromPoints([
+            new Vector3(f[0], (m.fromZ ?? 0) + 0.04, f[1]),
+            new Vector3(m.p[0], (m.z ?? 0) + 0.04, m.p[1]),
+          ]),
+          new LineDashedMaterial({ color: col, dashSize: 0.25, gapSize: 0.15 }),
+        );
+        line.computeLineDistances();
+        this.cues.add(line);
       }
     }
     // wall faces: on the face (just off it), the material's colour as a preview,
@@ -316,10 +483,10 @@ export class BuildLayer {
     const sp = spanOf(m);
     for (let y = sp.y0; y < sp.y1; y++)
       for (let x = sp.x0; x < sp.x1; x++) {
-        if (!isFloor(tileAt(m, x, y))) continue;
+        if (!isFloor(cellOf(m, x, y))) continue;
         pts.push(x, 0.012, y, x + 1, 0.012, y, x, 0.012, y, x, 0.012, y + 1);
-        if (!isFloor(tileAt(m, x + 1, y))) pts.push(x + 1, 0.012, y, x + 1, 0.012, y + 1);
-        if (!isFloor(tileAt(m, x, y + 1))) pts.push(x, 0.012, y + 1, x + 1, 0.012, y + 1);
+        if (!isFloor(cellOf(m, x + 1, y))) pts.push(x + 1, 0.012, y, x + 1, 0.012, y + 1);
+        if (!isFloor(cellOf(m, x, y + 1))) pts.push(x, 0.012, y + 1, x + 1, 0.012, y + 1);
       }
     const g = new BufferGeometry();
     g.setAttribute("position", new Float32BufferAttribute(pts, 3));

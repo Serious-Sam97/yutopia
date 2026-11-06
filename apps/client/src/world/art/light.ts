@@ -5,7 +5,6 @@ import {
   type Edge,
   entry,
   hangOf,
-  hWall,
   isFloor,
   isOpening,
   isWindow,
@@ -14,12 +13,11 @@ import {
   openingEdges,
   quarterOf,
   rotOf,
-  tileAt,
   topCentre,
   variantOf,
-  vWall,
   type WorldObjectDef,
 } from "@yutopia/shared";
+import { cellOf, hWallOf, layoutSig, vWallOf } from "@yutopia/shared/structure";
 import { seedOf } from "./seed";
 
 // What lights a floor and what stands in its way (docs/plan/72-the-3d-core.md, phase 9: the light itself
@@ -223,8 +221,21 @@ export function headlights(objects: WorldObjectDef[]): { x: number; y: number; d
 export type Rect = { x0: number; y0: number; x1: number; y1: number };
 const meets = (a: Rect, b: Rect) => a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1;
 
+/** A wall the tile map can't hold (drawn free, an arc: plan 72 phase 11 — the drawing's FreeWall, its
+ *  floor's frame): its points, what it's made of, how high. */
+export interface LightWall {
+  id: string;
+  pts: [number, number][];
+  ch: string;
+  height?: number;
+}
+const FREE_WALL_LOW = 1.5; // a wall lower than this (a rail, a low wall): light goes over it (m)
+
 /** A floor's light sources and what blocks them (its tiles, its walls, its doors). */
 export class LightMap {
+  // walls drawn free (phase 11): their pieces that block light (x0, y0, x1, y1), less the open doors
+  // and windows in them
+  private segs: number[] = [];
   private block: Uint8Array; // per tile: 1 = blocks light (no floor)
   private hBlk: Uint8Array; // walls on north edges that block light (glass and half walls don't)
   private vBlk: Uint8Array; // … on west edges
@@ -237,20 +248,21 @@ export class LightMap {
   constructor(
     readonly map: MapDef,
     objects: WorldObjectDef[],
+    free: readonly LightWall[] = [],
   ) {
     const W = map.width;
     const H = map.height;
     this.block = new Uint8Array(W * H);
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!isFloor(tileAt(map, x, y))) this.block[y * W + x] = 1;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!isFloor(cellOf(map, x, y))) this.block[y * W + x] = 1;
     this.hBlk = new Uint8Array((H + 1) * W);
     this.vBlk = new Uint8Array(H * (W + 1));
     for (let y = 0; y <= H; y++)
-      for (let x = 0; x < W; x++) if (blocksLight(hWall(map, x, y))) this.hBlk[y * W + x] = 1;
+      for (let x = 0; x < W; x++) if (blocksLight(hWallOf(map, x, y))) this.hBlk[y * W + x] = 1;
     for (let y = 0; y < H; y++)
-      for (let x = 0; x <= W; x++) if (blocksLight(vWall(map, x, y))) this.vBlk[y * (W + 1) + x] = 1;
+      for (let x = 0; x <= W; x++) if (blocksLight(vWallOf(map, x, y))) this.vBlk[y * (W + 1) + x] = 1;
     // doors and windows in walls (shared openings.ts): an open door and a
     // window's glass let light through, a shut door doesn't
-    const floor = (x: number, y: number) => isFloor(tileAt(map, x, y));
+    const floor = (x: number, y: number) => isFloor(cellOf(map, x, y));
     const glazed: Edge[] = [];
     for (const o of objects) {
       if (!isOpening(o.kind)) continue;
@@ -261,9 +273,49 @@ export class LightMap {
         if (isWindowKind(o.kind)) glazed.push(e);
       }
     }
-    for (const s of lightSources(objects)) this.srcs.push({ s, win: false });
     // windows to the outside: a soft pool of light just inside each pane
     const pool = (x: number, y: number) => ({ x, y, color: 0xffffff, radius: 4.2, intensity: 0.9 });
+    // walls drawn free: the pieces that block light, cut where a door's open or a window's glass is
+    // (shut doors block); a window to the outside gives its pool as the tile walls' do
+    for (const w of free) {
+      if (!blocksLight(w.ch) || (w.height ?? 3) < FREE_WALL_LOW) continue;
+      const holes = objects.flatMap((o) => {
+        const on = o.props?.free === true && isOpening(o.kind) ? (o.props.on as { wall?: string; at?: number }) : null;
+        if (!on || on.wall !== w.id || !Number.isFinite(on.at)) return [];
+        const n = Math.max(1, entry(o.kind).w) / 2;
+        if (isWindowKind(o.kind)) {
+          // (its pool, a little inside: on the side with floor, when the other has none)
+          const [a, b] = [w.pts[0], w.pts[w.pts.length - 1]];
+          const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+          const [ux, uy] = [(b[0] - a[0]) / L, (b[1] - a[1]) / L];
+          const m = [a[0] + ux * (on.at as number), a[1] + uy * (on.at as number)];
+          const [nx, ny] = [-uy * 0.45, ux * 0.45];
+          const [p, q] = [floor(m[0] + nx, m[1] + ny), floor(m[0] - nx, m[1] - ny)];
+          if (p !== q) this.srcs.push({ s: pool(p ? m[0] + nx : m[0] - nx, p ? m[1] + ny : m[1] - ny), win: true });
+        }
+        return doorBlocksLight(o) ? [] : [[(on.at as number) - n, (on.at as number) + n] as [number, number]];
+      });
+      let u = 0;
+      for (let i = 1; i < w.pts.length; i++) {
+        const [a, b] = [w.pts[i - 1], w.pts[i]];
+        const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (L < 1e-6) continue;
+        // (this piece less the holes along it)
+        let t0 = 0;
+        const cuts = holes
+          .map(([h0, h1]) => [Math.max(0, h0 - u), Math.min(L, h1 - u)] as [number, number])
+          .filter(([h0, h1]) => h1 > h0)
+          .sort((p, q) => p[0] - q[0]);
+        const at = (t: number) => [a[0] + ((b[0] - a[0]) * t) / L, a[1] + ((b[1] - a[1]) * t) / L];
+        for (const [h0, h1] of [...cuts, [L, L] as [number, number]]) {
+          if (h0 > t0) this.segs.push(...at(t0), ...at(h0));
+          t0 = Math.max(t0, h1);
+        }
+        u += L;
+      }
+    }
+    for (const s of lightSources(objects)) this.srcs.push({ s, win: false });
+    // windows to the outside: a soft pool of light just inside each pane
     for (const e of glazed) {
       const [a, b] = e.dir === "h" ? [floor(e.x, e.y - 1), floor(e.x, e.y)] : [floor(e.x - 1, e.y), floor(e.x, e.y)];
       if (a === b) continue; // between two rooms: no daylight of its own
@@ -273,11 +325,11 @@ export class LightMap {
     }
     for (let y = 0; y <= H; y++)
       for (let x = 0; x < W; x++)
-        if (isWindow(hWall(map, x, y)))
+        if (isWindow(hWallOf(map, x, y)))
           this.srcs.push({ s: pool(x + 0.5, floor(x, y) ? y + 0.45 : y - 0.45), win: true });
     for (let y = 0; y < H; y++)
       for (let x = 0; x <= W; x++)
-        if (isWindow(vWall(map, x, y)))
+        if (isWindow(vWallOf(map, x, y)))
           this.srcs.push({ s: pool(floor(x, y) ? x + 0.45 : x - 0.45, y + 0.5), win: true });
   }
 
@@ -355,6 +407,18 @@ export class LightMap {
         ty = ny;
       }
     }
+    // (and no wall drawn free across the line — the end on it is lit: its own face)
+    const g = this.segs;
+    for (let i = 0; i < g.length; i += 4) {
+      const [ax, ay, bx, by] = [g[i], g[i + 1], g[i + 2], g[i + 3]];
+      const ex = bx - ax;
+      const ey = by - ay;
+      const den = dx * ey - dy * ex;
+      if (Math.abs(den) < 1e-12) continue;
+      const t = ((ax - s.x) * ey - (ay - s.y) * ex) / den;
+      const u = ((ax - s.x) * dy - (ay - s.y) * dx) / den;
+      if (t > 1e-4 && t < 1 - 1e-4 && u >= 0 && u <= 1) return false;
+    }
     return true;
   }
 
@@ -379,21 +443,31 @@ export function affectsLight(o: WorldObjectDef): boolean {
 // A floor's light sources and what stands in their way, kept (a few): going back to a floor finds its
 // light volume (made from it) again. Keyed by everything that lights it or stands in the light's way.
 const baked = new Map<string, LightMap>();
-export function lightSig(map: MapDef, objects: WorldObjectDef[]): string {
+export function lightSig(map: MapDef, objects: WorldObjectDef[], free: readonly LightWall[] = []): string {
   const doors = objects
     .filter((o) => isOpening(o.kind))
     .map((o) => `${o.kind},${o.x},${o.y},${quarterOf(o)},${o.props?.state ?? ""}`)
     .join(";");
-  return `${map.key}|${map.floor ?? ""}|${map.width}x${map.height}|${map.tiles.join("")}|${map.hWalls.join("")}|${map.vWalls.join("")}|${JSON.stringify(lightSources(objects))}|${doors}`;
+  // (doors and windows in walls drawn free by their wall and spot; those walls as they stand)
+  const free2 = objects
+    .filter((o) => o.props?.free === true && isOpening(o.kind))
+    .map((o) => `${o.kind},${JSON.stringify(o.props?.on)},${o.props?.state ?? ""}`)
+    .join(";");
+  return `${map.key}|${map.floor ?? ""}|${map.width}x${map.height}|${map.ox ?? 0},${map.oy ?? 0}|${layoutSig(map)}|${JSON.stringify(lightSources(objects))}|${doors}|${free2}|${JSON.stringify(free)}`;
 }
-export function lightMapFor(map: MapDef, objects: WorldObjectDef[], sig = lightSig(map, objects)): LightMap {
+export function lightMapFor(
+  map: MapDef,
+  objects: WorldObjectDef[],
+  sig = lightSig(map, objects),
+  free: readonly LightWall[] = [],
+): LightMap {
   let lm = baked.get(sig);
   if (lm) {
     baked.delete(sig);
     baked.set(sig, lm);
     return lm;
   }
-  lm = new LightMap(map, objects);
+  lm = new LightMap(map, objects, free);
   baked.set(sig, lm);
   if (baked.size > 8) baked.delete(baked.keys().next().value as string);
   return lm;

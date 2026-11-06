@@ -13,7 +13,7 @@ import { entry, quarterYaw, type WorldObjectDef } from "./catalog.ts";
 import { hearingGain } from "./hearing.ts";
 import { across, floorsOf, levelMap, objLevel } from "./levels.ts";
 import { carElev, liftCarBody, liftFront, liftMotion } from "./lift.ts";
-import { areaAt, type MapDef } from "./map.ts";
+import { areaAt, type TileMap } from "./map.ts";
 import { blankMap, layoutFromMap, mapFromLayout, validLayout } from "./map-edit.ts";
 import { studio } from "./maps/studio.ts";
 import { openingsIntoWalls } from "./openings.ts";
@@ -33,7 +33,7 @@ function world() {
 }
 // …on Jolt, in the world's frame (structure/fold.ts: the home floor's frame is the world's; a point
 // of another floor's gets there across to the home floor)
-async function onJolt(map: MapDef, objects: WorldObjectDef[]) {
+async function onJolt(map: TileMap, objects: WorldObjectDef[]) {
   const w = await testWorld(foldMap(map), foldThings(map, objects));
   const W = (level: number, p: { x: number; y: number }) => across(map, level, CAMPUS_HOME, p);
   return { w, W };
@@ -61,7 +61,7 @@ test("the building: five floors, the studio on top, things on their floors", () 
 
 test("the ground floor: in through the glass doors, out to the lot", async () => {
   const { map, objects } = world();
-  const g = levelMap(map, 0) as MapDef;
+  const g = levelMap(map, 0) as TileMap;
   const { w, W } = await onJolt(map, objects);
   const grid = w.place(0);
   const lobby = g.spawn;
@@ -273,7 +273,7 @@ test("a building with the first core (6 deep) is brought up to today's: a row no
   const { map, objects } = world();
   const c = map.core as { x: number; y: number };
   // as it was made before: the core a row south and 6 deep, its stops and stairs with it
-  const was: MapDef = {
+  const was: TileMap = {
     ...map,
     core: { x: c.x, y: c.y + 1 },
     areas: map.areas.map((a) => (a.key.startsWith("core-") ? { ...a, y: a.y + 1, h: 6 } : a)),

@@ -28,8 +28,9 @@ import {
   placedFootprint,
   SEAT_SPEC,
   STOREY,
+  stationOf,
+  stopOver,
   surfaceAt,
-  tileAt,
   topCentre,
   type WorldObjectDef,
   wallCuts,
@@ -38,6 +39,7 @@ import {
 import { BEAM, type Beam, beamOf } from "@yutopia/shared/beam";
 import { type StreetThing, terrainAt } from "@yutopia/shared/grounds";
 import { ALOFT, KH_MOVE, MV_AIM } from "@yutopia/shared/move";
+import { cellOf, layoutSig as floorLayoutSig } from "@yutopia/shared/structure";
 import { localThing, localView } from "@yutopia/shared/structure/fold";
 import {
   AdditiveBlending,
@@ -90,6 +92,7 @@ import { tr } from "@/lib/i18n";
 import type { Quality } from "@/lib/prefs";
 import { chars, loadChars } from "../art/chars-load";
 import { daylight } from "../art/daylight";
+import type { LightWall } from "../art/light";
 import type { people } from "../art/people-load";
 import { loadPets, pets as petsArt } from "../art/pets-load";
 import type { PetModel } from "../art/pets3d";
@@ -332,15 +335,20 @@ function drawnFloor(lm: MapDef, here: WorldObjectDef[], all: WorldObjectDef[], s
         )
       : set;
   // (its walls from the structure — walls3d.ts: phase 8 — or, with none, the map's edges)
-  const edges = structure ? edgesOfWalls(structure.walls, floorOf(lm), corner) : edgesOfMap(map);
+  // (the floor's height: its slabs there are what's walked on; one over it a mezzanine — phase 11.7)
+  const fz = structure?.floors.find((f) => f.index === floorOf(lm))?.z ?? 0;
+  const own = (sl: { z: number }) => Math.abs(sl.z - fz) < 1e-3;
+  const edges = structure ? edgesOfWalls(structure.walls, floorOf(lm), corner, fz) : edgesOfMap(map);
   // (its indoor slabs' rings — the lot's asphalt and concrete are open sky: no ceiling — for the
   // ceiling over them)
+  // (a slab's together: each read even-odd, the floor any of them — they may overlap)
   const ringsOf = (keep: (top: string) => boolean) =>
     structure
       ? structure.slabs
-          .filter((sl) => sl.floor === floorOf(lm) && keep(sl.top))
-          .flatMap((sl) => [sl.outline, ...sl.holes])
-          .map((r) => r.map(([x, y]): [number, number] => [x - corner.x, y - corner.y]))
+          .filter((sl) => sl.floor === floorOf(lm) && own(sl) && keep(sl.top))
+          .map((sl) =>
+            [sl.outline, ...sl.holes].map((r) => r.map(([x, y]): [number, number] => [x - corner.x, y - corner.y])),
+          )
       : null;
   const rings = ringsOf((t) => t !== "a" && t !== "c");
   // (and all of them: what's floor at all — below-cull's)
@@ -348,7 +356,7 @@ function drawnFloor(lm: MapDef, here: WorldObjectDef[], all: WorldObjectDef[], s
   // (each with its material: the floor's look painted per slab — art/floors.ts, phase 9)
   const slabs = structure
     ? structure.slabs
-        .filter((sl) => sl.floor === floorOf(lm))
+        .filter((sl) => sl.floor === floorOf(lm) && own(sl))
         .map((sl) => ({
           top: sl.top,
           rings: [sl.outline, ...sl.holes].map((r) =>
@@ -365,7 +373,44 @@ function drawnFloor(lm: MapDef, here: WorldObjectDef[], all: WorldObjectDef[], s
     rings,
     floorRings,
     slabs,
+    // (its roofs: their eaves over the floor — World3's roofs)
+    roofs: structure
+      ? (structure.roofs ?? [])
+          .filter((r) => r.floor === floorOf(lm))
+          .map((r) => ({
+            ...r,
+            outline: r.outline.map(([x, y]): [number, number] => [x - corner.x, y - corner.y]),
+            z: Math.round((r.z - fz) * 1000) / 1000,
+          }))
+      : null,
+    // (its mezzanines: drawn at their height — World3's decks)
+    decks: structure
+      ? structure.slabs
+          .filter((sl) => sl.floor === floorOf(lm) && !own(sl))
+          .map((sl) => ({
+            top: sl.top,
+            over: Math.round((sl.z - fz) * 1000) / 1000,
+            rings: [sl.outline, ...sl.holes].map((r) =>
+              r.map(([x, y]): [number, number] => [x - corner.x, y - corner.y]),
+            ),
+          }))
+      : null,
   };
+}
+/** A floor's walls drawn free as the light reads them (art/light.ts LightWall: they cast its shadows). */
+function lightWalls(e: WallEdges): LightWall[] {
+  return e.free.map((w) => ({
+    id: w.id,
+    pts: w.pts ?? [w.a, w.b],
+    ch: w.ch,
+    ...(w.height !== undefined ? { height: w.height } : {}),
+  }));
+}
+
+/** What a floor's slabs are as drawn (phase 11.7: a floor drawn free, a mezzanine — the tiles
+ *  needn't change): its key in a floor's signature. */
+function slabSig(d: { rings: unknown; decks: unknown; roofs?: unknown }): string {
+  return JSON.stringify([d.rings, d.decks, d.roofs]);
 }
 /** The home floor's outline from the structure, in the home map's own frame (campus.ts Outline: the
  *  campus's outside drawn from it — docs/plan/72 phase 8), made when it's asked for, and a key for
@@ -1491,7 +1536,7 @@ void main() {
     const wellSig = wellsKey(wells);
     // my floor: kept from before (every floor is built once and kept — going
     // up or down only moves and shows them), built again when its layout changed
-    const sig = `${layoutSig(map)}|${wellSig}|${freeSig(drawn.edges)}`;
+    const sig = `${layoutSig(map)}|${wellSig}|${freeSig(drawn.edges)}|${slabSig(drawn)}`;
     let mine = this.floors.get(level);
     // (a wall built or a tile laid: the floor kept, its walls and floor made again — World3.relayout;
     // another size or other stairwells: built anew)
@@ -1500,7 +1545,7 @@ void main() {
     // things it touched; docs/plan/72 phase 8, an edit's cost)
     const lightNow = () => {
       this.lightLater = null;
-      this.light.update(drawn.map, drawn.objects);
+      this.light.update(drawn.map, drawn.objects, lightWalls(drawn.edges));
     };
     if (relay && !moved && mine?.world === this.world) {
       this.lightLater = lightNow;
@@ -1514,7 +1559,16 @@ void main() {
     const winSig = `${cutsSig(home)}|${this.outline().key}`;
     let relaid = false;
     if (mine && relay) {
-      mine.world.relayout(drawn.map, noLifts(drawn.objects), drawn.edges, drawn.rings, drawn.floorRings, drawn.slabs);
+      mine.world.relayout(
+        drawn.map,
+        noLifts(drawn.objects),
+        drawn.edges,
+        drawn.rings,
+        drawn.floorRings,
+        drawn.slabs,
+        drawn.decks,
+        drawn.roofs,
+      );
       mine.sig = sig;
       mine.wells = wellSig;
       relaid = true;
@@ -1535,6 +1589,8 @@ void main() {
         drawn.rings,
         drawn.floorRings,
         drawn.slabs,
+        drawn.decks,
+        drawn.roofs,
       );
       mine = { world, sig, lit: this.light, wells: wellSig };
       this.floors.set(level, mine);
@@ -1639,12 +1695,12 @@ void main() {
       const wlm = levelMap(this.building, f);
       if (!wlm) continue;
       const drawn = drawnFloor(wlm, onLevel(all, wlm), all, this.structure);
-      const { map: lm, objects: objs, wells, edges, rings, floorRings, slabs } = drawn;
+      const { map: lm, objects: objs, wells, edges, rings, floorRings, slabs, decks, roofs } = drawn;
       const wk = wellsKey(wells);
-      const sig = `${layoutSig(lm)}|${wk}|${freeSig(edges)}`;
+      const sig = `${layoutSig(lm)}|${wk}|${freeSig(edges)}|${slabSig(drawn)}`;
       let relaid = false;
       if (b && b.sig !== sig && sameShape(b, lm, wk)) {
-        b.world.relayout(lm, noLifts(objs), edges, rings, floorRings, slabs);
+        b.world.relayout(lm, noLifts(objs), edges, rings, floorRings, slabs, decks, roofs);
         b.sig = sig;
         b.wells = wk;
         relaid = true;
@@ -1654,7 +1710,7 @@ void main() {
         b = undefined;
       }
       const o = this.cornerTo(f);
-      const lit = this.belowLight(f, lm, objs);
+      const lit = this.belowLight(f, lm, objs, edges);
       lit.setOffset(o.x, o.y, o.h);
       if (!b) {
         const world = new World3(
@@ -1668,6 +1724,8 @@ void main() {
           rings,
           floorRings,
           slabs,
+          decks,
+          roofs,
         );
         b = { world, sig, lit, wells: wk };
         this.floors.set(f, b);
@@ -1687,14 +1745,14 @@ void main() {
   }
 
   // A floor below mine's light: baked from its own lamps and windows, at the hour.
-  private belowLight(f: number, lm: MapDef, objs: WorldObjectDef[]): Light3 {
+  private belowLight(f: number, lm: MapDef, objs: WorldObjectDef[], edges?: WallEdges): Light3 {
     let l = this.below.get(f);
     if (!l) {
       l = new Light3();
       l.setHour(this.hour); // (before the bake: it's composited at this hour)
       this.below.set(f, l);
     }
-    l.update(lm, objs);
+    l.update(lm, objs, edges ? lightWalls(edges) : []);
     return l;
   }
 
@@ -1716,20 +1774,22 @@ void main() {
     const shafts = new Map<string, number[]>();
     for (const o of this.liftObjs) {
       const sh = String(o.props?.shaft ?? o.id);
-      shafts.set(sh, [...(shafts.get(sh) ?? []), objLevel(o, this.building)]);
+      shafts.set(sh, [...(shafts.get(sh) ?? []), stationOf(o, this.building)]);
     }
     const stops: LiftStop3[] = [];
     for (const o of this.liftObjs) {
       const level = objLevel(o, this.building);
+      // (a stop by its station: a mezzanine's up its floor — plan 72 phase 11)
+      const st = stationOf(o, this.building);
       const floors = [...(shafts.get(String(o.props?.shaft ?? o.id)) ?? [])].sort((a, b) => b - a).map(liftFloorName);
       const since = (now - (this.liftSince.get(o.id) ?? now)) / 1000;
-      const motion = liftMotion(o, level, since);
+      const motion = liftMotion(o, st, since);
       stops.push({
         o,
-        off: { x: 0, y: 0, h: this.upTo(level) },
+        off: { x: 0, y: 0, h: this.upTo(level) + stopOver(o) },
         motion,
         floors,
-        floor: liftFloorName(level),
+        floor: liftFloorName(st),
         mine: level === this.level,
         shown: level <= this.level, // (the floors above aren't drawn — kept, hidden)
         inside: level === this.level && o.id === this.liftIn,
@@ -1892,9 +1952,11 @@ void main() {
       rings,
       floorRings,
       slabs,
+      decks,
+      roofs,
     } = drawnFloor(wlm, onLevel(all, wlm), all, this.structure);
     const o = this.cornerTo(f);
-    const lit = this.belowLight(f, lm, objs);
+    const lit = this.belowLight(f, lm, objs, edges);
     lit.setOffset(o.x, o.y, o.h);
     const world = new World3(
       this.items,
@@ -1907,9 +1969,16 @@ void main() {
       rings,
       floorRings,
       slabs,
+      decks,
+      roofs,
     );
     const wk = wellsKey(wells);
-    this.floors.set(f, { world, sig: `${layoutSig(lm)}|${wk}|${freeSig(edges)}`, lit, wells: wk });
+    this.floors.set(f, {
+      world,
+      sig: `${layoutSig(lm)}|${wk}|${freeSig(edges)}|${slabSig({ rings, decks, roofs })}`,
+      lit,
+      wells: wk,
+    });
     this.scene.add(world.root);
     world.root.position.set(o.x, o.h, o.y);
     world.root.updateMatrix();
@@ -1955,7 +2024,7 @@ void main() {
     const home = homeOf(this.building);
     if (!me || this.level >= home) return false;
     const h = across(this.building, this.level, home, me);
-    return isFloor(tileAt(this.building, Math.floor(h.x), Math.floor(h.y)));
+    return isFloor(cellOf(this.building, Math.floor(h.x), Math.floor(h.y)));
   }
 
   // The campus is built in the home floor's coords, its ground STOREYs below it.
@@ -3087,6 +3156,8 @@ void main() {
   private fadeWalls(dt: number) {
     const cam = this.camera.position;
     const t = this.target;
+    // (a roof over me on my floor: not drawn while I'm under it — phase 11.7)
+    this.world.roofsFor(t.x - this.world.root.position.x, t.z - this.world.root.position.z);
     // (first person: the camera is you — nothing stands between)
     const inside = this.mode === "first";
     for (const f of this.world.fades) {
@@ -3392,7 +3463,7 @@ void main() {
       y >= 0 &&
       x < this.map.width &&
       y < this.map.height &&
-      isFloor(tileAt(this.map, Math.floor(x), Math.floor(y)))
+      isFloor(cellOf(this.map, Math.floor(x), Math.floor(y)))
     )
       return null;
     return { x, y };
@@ -3684,6 +3755,6 @@ function applyFade(f: FadeGroup, shared: World3["materials"]) {
   }
 }
 
-// (the walls' back faces too: painting only a far side changes nothing else here)
-const layoutSig = (m: MapDef) =>
-  `${m.width}x${m.height}|${m.tiles.join("")}|${m.hWalls.join("")}|${m.vWalls.join("")}|${(m.hBacks ?? []).join("")}|${(m.vBacks ?? []).join("")}`;
+// (the walls' back faces too: painting only a far side changes nothing else here; the floor's
+// layout asked of its structure — plan 72 phase 11)
+const layoutSig = (m: MapDef) => `${m.width}x${m.height}|${m.ox ?? 0},${m.oy ?? 0}|${floorLayoutSig(m)}`;

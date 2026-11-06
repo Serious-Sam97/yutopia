@@ -29,6 +29,8 @@ export { HALF_WALL_H, SLAB, WALL_H, WALL_T };
 export type { BoxPart, CylPart, KindShape, Part } from "../fam/units.ts";
 
 import type { KindShape, Part } from "../fam/units.ts";
+import { FLIGHT_RISE, flightParts, flightRise } from "../flight.ts";
+import { isFreeThing } from "../free-things.ts";
 
 /** What a body does with it: walks into it (solid), sits on it (seat: walked onto, then sat),
  *  or nothing (it's under foot, on a wall, on a table: reach and the view only). */
@@ -286,6 +288,10 @@ export const SHAPES: Record<ObjectKind, KindShape> = {
     ],
     odd: "drawn by Stairs3 (canvases), not measured; the well's walls are edges (stairs.ts); phase 6 decides",
   },
+  flight: {
+    parts: flightParts(FLIGHT_RISE),
+    odd: "its rise is its own (props.rise, a mezzanine's height — plan 72 phase 11.8): kindSolids makes its treads from it",
+  },
   elevator: {
     parts: [box(0.06, 0, 1.94, 1.94, 0, 0.1)],
     odd: "a moving platform (lift3d, the server's car): its floor here; the shaft's walls are edges (lift.ts); phase 6",
@@ -442,7 +448,36 @@ const DECOR_PARTS: Record<string, Part[]> = {
 };
 export function kindSolids(o: WorldObjectDef, elev = 0): Solid3[] {
   const f = frameOf(o);
-  const parts = (o.kind === "decor" && DECOR_PARTS[String(o.props?.d)]) || shapeOf(o.kind).parts;
+  const parts =
+    (o.kind === "decor" && DECOR_PARTS[String(o.props?.d)]) ||
+    (o.kind === "flight" && flightParts(flightRise(o))) ||
+    shapeOf(o.kind).parts;
+  // (placed free — plan 72 phase 11.9: its parts laid out from its middle and turned by its yaw)
+  if (isFreeThing(o)) {
+    const e = entry(o.kind);
+    const [c, s] = [Math.cos(o.yaw ?? 0), Math.sin(o.yaw ?? 0)];
+    const at = (u: number, v: number) => {
+      const [du, dv] = [u - e.w / 2, v - e.h / 2];
+      return { x: o.x + du * c - dv * s, z: o.y + du * s + dv * c };
+    };
+    return parts.map((p): Solid3 => {
+      if (p.t === "cyl") {
+        const q = at(p.u, p.v);
+        return { t: "cyl", x: q.x, z: q.z, r: p.r, y0: elev + p.y0, y1: elev + p.y1 };
+      }
+      const q = at((p.u0 + p.u1) / 2, (p.v0 + p.v1) / 2);
+      return {
+        t: "box",
+        x: q.x,
+        y: elev + (p.y0 + p.y1) / 2,
+        z: q.z,
+        hx: Math.abs(p.u1 - p.u0) / 2,
+        hy: (p.y1 - p.y0) / 2,
+        hz: Math.abs(p.v1 - p.v0) / 2,
+        a: -(o.yaw ?? 0),
+      };
+    });
+  }
   return parts.map((p) => {
     if (p.t === "cyl") {
       const c = turnPoint(f, f.w, f.h, p.u, p.v);

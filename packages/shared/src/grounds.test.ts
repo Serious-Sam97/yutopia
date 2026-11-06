@@ -8,7 +8,7 @@ import { GATE, groundsAreaAt, groundsOutdoors, heightAt, INSIDES, walkableTile, 
 import { hearingGain } from "./hearing.ts";
 import { type Height, stepHeight } from "./jump.ts";
 import { levelMap } from "./levels.ts";
-import { areaAt, edgeAt, type LevelDef, type MapDef, setAreasBeyond, setEdge, tileAt } from "./map.ts";
+import { areaAt, edgeAt, type TileLevel, type TileMap, setAreasBeyond, setEdge, tileAt } from "./map.ts";
 import { studio } from "./maps/studio.ts";
 import { openingsIntoWalls } from "./openings.ts";
 import type { Place } from "./physics/place.ts";
@@ -25,7 +25,7 @@ function ground() {
   assert.ok(b);
   const moved = new Map(b.moved.map((o) => [o.id, o]));
   const objects = [...into.objects.map((o) => moved.get(o.id) ?? o), ...b.add];
-  const g0 = levelMap(b.map, 0) as MapDef;
+  const g0 = levelMap(b.map, 0) as TileMap;
   return { g0, map: b.map, objects };
 }
 // …on Jolt in the world's frame (the building's coords: structure/fold.ts), the land built round
@@ -48,8 +48,8 @@ after(() => {
 });
 
 // the floor's coords → the building's (its corner at ox, oy)
-const B = (g0: MapDef, p: { x: number; y: number }) => ({ x: p.x + (g0.ox ?? 0), y: p.y + (g0.oy ?? 0) });
-const L = (g0: MapDef, x: number, y: number) => ({ x: x - (g0.ox ?? 0), y: y - (g0.oy ?? 0) });
+const B = (g0: TileMap, p: { x: number; y: number }) => ({ x: p.x + (g0.ox ?? 0), y: p.y + (g0.oy ?? 0) });
+const L = (g0: TileMap, x: number, y: number) => ({ x: x - (g0.ox ?? 0), y: y - (g0.oy ?? 0) });
 
 /** Walk a found way from `from` to `to` (the building's coords: the world's), feet on the ground. */
 async function walk(
@@ -158,7 +158,7 @@ test("the courtyard's blocks: their ground floors are the ground floor's own, an
 
 test("the blocks moved out of a bigger studio's way: a stored floor's old ones go, what was in them goes with them", () => {
   const { map } = ground();
-  const l0 = map.levels?.find((l) => l.index === 0) as LevelDef;
+  const l0 = map.levels?.find((l) => l.index === 0) as TileLevel;
   const ox = l0.ox;
   const oy = l0.oy;
   // as a world from before: the blocks where they first stood (east x 60, south y 48)
@@ -185,7 +185,7 @@ test("the blocks moved out of a bigger studio's way: a stored floor's old ones g
     const o = OLD[a.key];
     return o ? { ...a, x: o.x0 - ox, y: o.y0 - oy } : a;
   });
-  const old: MapDef = {
+  const old: TileMap = {
     ...map,
     levels: (map.levels ?? []).map((l) =>
       l.index === 0 ? { ...l, tiles: tiles.map((r) => r.join("")), ...walls, areas } : l,
@@ -203,7 +203,7 @@ test("the blocks moved out of a bigger studio's way: a stored floor's old ones g
   const r = moveBlocks(old, [desk]);
   assert.ok(r, "moved");
   assert.equal(moveBlocks(r.map, r.objects), null, "once");
-  const g = levelMap(r.map, 0) as MapDef;
+  const g = levelMap(r.map, 0) as TileMap;
   for (const b of BLOCKS) {
     const a = g.areas.find((x) => x.key === b.key);
     assert.deepEqual([a?.x, a?.y], [b.x0 - ox, b.y0 - oy], `${b.name} where it stands now`);

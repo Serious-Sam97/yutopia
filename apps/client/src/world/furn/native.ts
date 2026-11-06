@@ -1,6 +1,7 @@
 import {
   CATALOG,
   entry,
+  isFreeThing,
   isKind,
   isOpening,
   quarterOf,
@@ -588,11 +589,25 @@ export function liveInto(o: WorldObjectDef, lit: Material, glow: Material, glass
   if (isOpening(o.kind)) {
     // (in its wall: along it from its first edge, turned for a west one — as openingInto places it)
     g.position.set(o.x, 0, o.y);
-    g.rotation.y = quarterOf(o) % 2 === 1 ? -Math.PI / 2 : 0;
+    // (in a wall drawn free: turned by its heading — phase 11.6)
+    g.rotation.y = o.props?.free === true ? -(o.yaw ?? 0) : quarterOf(o) % 2 === 1 ? -Math.PI / 2 : 0;
     return g;
   }
-  const f = frameOf(o);
+  // (placed free — plan 72 phase 11.9: where it'd be at no turn with its middle at the origin, turned
+  // by its yaw and set at its middle)
+  const free = isFreeThing(o);
+  const at = free
+    ? { ...o, x: -entry(o.kind).w / 2, y: -entry(o.kind).h / 2, yaw: 0, props: { ...o.props, free: false } }
+    : o;
+  const f = frameOf(at);
   const [tx, tz] = frameTurn(f)(0, Number(o.props?.pull) || 0, false);
+  if (free) {
+    const [lx, lz] = [f.x + tx, f.y + tz];
+    const [c, s] = [Math.cos(o.yaw ?? 0), Math.sin(o.yaw ?? 0)];
+    g.position.set(o.x + lx * c - lz * s, f.lift, o.y + lx * s + lz * c);
+    g.rotation.y = -(o.yaw ?? 0);
+    return g;
+  }
   g.position.set(f.x + tx, f.lift, f.y + tz);
   g.rotation.y = -(f.rot & 3) * (Math.PI / 2);
   return g;
@@ -611,9 +626,13 @@ export function openingInto(out: Out, o: WorldObjectDef, a0: number, a1: number)
     openings.set(key, g);
   }
   const west = quarterOf(o) % 2 === 1;
+  // (in a wall drawn free — phase 11.6: along its heading, any angle; the tile lines' two as they were)
+  const free = o.props?.free === true;
+  const [c, s] = free ? [Math.cos(o.yaw ?? 0), Math.sin(o.yaw ?? 0)] : [1, 0];
   const at = (x: number, y: number, z: number): [number, number, number] =>
-    west ? [o.x - z, y, o.y + x] : [o.x + x, y, o.y + z];
-  const nor = (x: number, z: number): [number, number] => (west ? [-z, x] : [x, z]);
+    free ? [o.x + x * c - z * s, y, o.y + x * s + z * c] : west ? [o.x - z, y, o.y + x] : [o.x + x, y, o.y + z];
+  const nor = (x: number, z: number): [number, number] =>
+    free ? [x * c - z * s, x * s + z * c] : west ? [-z, x] : [x, z];
   for (const [geo, buf, a] of [
     [g, out.lit, CEL_ALPHA],
     [g.userData.glow as BufferGeometry | null, out.glow, 1],

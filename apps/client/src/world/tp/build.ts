@@ -14,6 +14,7 @@ import {
   hasActions,
   isDoorKind,
   isFloor,
+  isFreeThing,
   isOpening,
   isWallEdge,
   isWindow,
@@ -24,7 +25,6 @@ import {
   placedFootprint,
   quarterOf,
   rotOf,
-  tileAt,
   topCentre,
   WALL_H,
   type WallCut,
@@ -32,8 +32,8 @@ import {
   wallCuts,
 } from "@yutopia/shared";
 import { crossings, slabBoxes } from "@yutopia/shared/physics/structure-solids";
-import type { Ring } from "@yutopia/shared/structure";
-import { ART_PX, artPx } from "@yutopia/shared/units";
+import { cellOf, floorsSig, freeCuts, inRing, type Ring, type Roof, roofFaces } from "@yutopia/shared/structure";
+import { ART_PX, artPx, SLAB, WALL_T } from "@yutopia/shared/units";
 import {
   BackSide,
   Box3,
@@ -41,6 +41,8 @@ import {
   CanvasTexture,
   DataTexture,
   DoubleSide,
+  EdgesGeometry,
+  ExtrudeGeometry,
   Float32BufferAttribute,
   FrontSide,
   type Frustum,
@@ -55,9 +57,12 @@ import {
   type Object3D,
   PlaneGeometry,
   RedFormat,
+  Shape,
+  ShapeUtils,
   SRGBColorSpace,
   Texture,
   UnsignedByteType,
+  Vector2,
 } from "three";
 import { FloorBake, type FloorSlab } from "../art/floors";
 import { piece, WALL_H as WALL_PX } from "../art/furniture";
@@ -234,14 +239,19 @@ export class World3 {
     // up, no ceiling over this floor's own
     private wells: { floor: Set<string>; ceiling: Set<string> } = { floor: new Set(), ceiling: new Set() },
     edges?: WallEdges,
-    /** the floor's indoor slabs' rings (its own frame, read even-odd: the structure's — the ceiling
-     *  over them); none: its tiles */
-    private rings: Ring[] | null = null,
+    /** the floor's indoor slabs' rings, a slab's together (its own frame, each read even-odd; the
+     *  floor is any of them — they may overlap, phase 11.7: the structure's — the ceiling over
+     *  them); none: its tiles */
+    private rings: Ring[][] | null = null,
     /** all its slabs' rings (the lot's too: what's floor at all — below-cull's slab and shell) */
-    private floorRings: Ring[] | null = null,
+    private floorRings: Ring[][] | null = null,
     /** its slabs each with its material (its own frame): the floor's look painted per slab
      *  (art/floors.ts FloorBake); none: its tiles */
     private slabs: FloorSlab[] | null = null,
+    /** its mezzanines (phase 11.7): slabs over its height — their rings, material, how high */
+    private decks: Deck[] | null = null,
+    /** its roofs (phase 11.7), in its own frame, their eaves over its floor */
+    private roofs: Roof[] | null = null,
   ) {
     const t0 = performance.now();
     this.edges = edges ?? edgesOfMap(map);
@@ -262,6 +272,8 @@ export class World3 {
     this.cuts = wallCuts(objects);
     this.cutSig = cutsSig(objects);
     this.buildWalls();
+    this.buildDecks();
+    this.buildRoofs();
     this.update(objects);
     this.stats.ms = performance.now() - t0;
   }
@@ -413,9 +425,17 @@ export class World3 {
     runs: Map<string, { out: Out; x0: number; y0: number; x1: number; y1: number; top: number }>,
     sketch: (o: Opts3) => MeshSketch,
   ) {
-    const { post, wall, WALL_HALF_T } = this.items;
-    const pieces = piecesOf(fw);
-    const top = fw.ch === HALF_WALL ? 34 : WALL_PX;
+    const { post, wall } = this.items;
+    // (its doors' and windows' holes: the pieces split where they start and end — phase 11.6)
+    const holes = freeCuts(this.objects, fw.id);
+    const pieces = piecesOf(
+      fw,
+      holes.flatMap((c) => [c.u0, c.u1]),
+    );
+    // (its own height and thickness — phase 11.4 — else its kind's)
+    const top = fw.height !== undefined ? artPx(fw.height) : fw.ch === HALF_WALL ? 34 : WALL_PX;
+    const WALL_HALF_T = (fw.thick ?? WALL_T) / 2;
+    const shape = { top, t: WALL_HALF_T };
     const ends = [fw.a, fw.b].map((p) => `${p[0]},${p[1]}`);
     const postAt = ends.map((k) => !posts.has(k));
     const lowOut = lowOf(fw.id);
@@ -424,6 +444,10 @@ export class World3 {
       const a1 = i === pieces.length - 1 && postAt[1] ? p.len - WALL_HALF_T : p.len;
       const clip = { x0: a0, x1: a1, y0: -1, y1: 1 };
       const bclip = { x0: a0, x1: a1, y0: 0, y1: 2 };
+      // (a door's or window's hole through this piece: the art's px up)
+      const mid = p.u + p.len / 2;
+      const h = holes.find((c) => c.u0 < mid && mid < c.u1);
+      const cut = h ? ([artPx(h.z0), artPx(h.z1)] as const) : null;
       const lo = new Out();
       const hi = new Out();
       for (const [part, out] of [
@@ -437,14 +461,23 @@ export class World3 {
             fw.ch,
             part,
             undefined,
-            null,
+            cut,
+            shape,
           );
         } else {
           const bch = isWindow(fw.ch) ? fw.back.toUpperCase() : fw.back;
-          wall(sketch({ w: 1, h: 1, seed: 0.37, clip, at: [0, 0], out }), "h", fw.ch, part, "front", null);
-          wall(sketch({ w: 1, h: 1, seed: 0.37, clip: bclip, at: [0, -1], rot: 2, out }), "h", bch, part, "back", null);
+          wall(sketch({ w: 1, h: 1, seed: 0.37, clip, at: [0, 0], out }), "h", fw.ch, part, "front", cut, shape);
+          wall(
+            sketch({ w: 1, h: 1, seed: 0.37, clip: bclip, at: [0, -1], rot: 2, out }),
+            "h",
+            bch,
+            part,
+            "back",
+            cut,
+            shape,
+          );
         }
-        turnOut(out, p.angle, p.at[0], p.at[1]);
+        turnOut(out, p.angle, p.at[0], p.at[1], fw.base ?? 0);
       }
       appendOut(lowOut, lo);
       const k = `${FREE}|${fw.id}|${Math.floor(i / RUN)}`;
@@ -458,9 +491,10 @@ export class World3 {
       }
       r.top = Math.max(r.top, zt(top));
     });
-    // its posts: square to the wall, at each end not already one of the lattice's
-    const angle = pieces[0]?.angle ?? 0;
+    // its posts: square to the wall (an arc: to its first or last chord), at each end not already
+    // one of the lattice's
     [fw.a, fw.b].forEach((at, i) => {
+      const angle = (i === 0 ? pieces[0] : pieces.at(-1))?.angle ?? 0;
       // (two walls off the lattice meeting: one post)
       if (!postAt[i] || !pieces.length || freeEnds.has(ends[i])) return;
       freeEnds.add(ends[i]);
@@ -479,8 +513,8 @@ export class World3 {
         ],
       ] as const) {
         const o = new Out();
-        post(sketch({ w: 1, h: 1, at: [0, 0], out: o }), top, part, fw.ch);
-        turnOut(o, angle, at[0], at[1]);
+        post(sketch({ w: 1, h: 1, at: [0, 0], out: o }), top, part, fw.ch, WALL_HALF_T);
+        turnOut(o, angle, at[0], at[1], fw.base ?? 0);
         appendOut(out, o);
       }
     });
@@ -500,6 +534,114 @@ export class World3 {
     this.wallFades = parts.flatMap((p) => (p.fade ? [p.fade] : []));
   }
 
+  // Mezzanines (phase 11.7): each a slab of its floor's material at its height — its top, its edge
+  // and its underside, inked round, lit as the room is.
+  private deckRoot: Group | null = null;
+  private dropDecks() {
+    if (!this.deckRoot) return;
+    this.deckRoot.traverse((o) => {
+      const m = o as Mesh;
+      m.geometry?.dispose();
+      for (const x of Array.isArray(m.material) ? m.material : m.material ? [m.material] : []) x.dispose();
+    });
+    this.deckRoot.removeFromParent();
+    this.deckRoot = null;
+  }
+  private buildDecks() {
+    this.dropDecks();
+    if (!this.decks?.length) return;
+    const g = new Group();
+    for (const d of this.decks) {
+      // (a shape in x and −y, extruded up its thickness and laid in the floor's plane: x, up, y)
+      const shape = new Shape(d.rings[0].map(([x, y]) => new Vector2(x, -y)));
+      for (const h of d.rings.slice(1)) shape.holes.push(new Shape(h.map(([x, y]) => new Vector2(x, -y))));
+      const geo = new ExtrudeGeometry(shape, { depth: SLAB, bevelEnabled: false });
+      geo.rotateX(-Math.PI / 2);
+      geo.translate(0, d.over - SLAB, 0);
+      const mat = new MeshLambertMaterial({ color: DECK_COLOR[d.top] ?? 0x8f6038 });
+      this.light(mat);
+      const mesh = new Mesh(geo, mat);
+      mesh.receiveShadow = true;
+      mesh.castShadow = true;
+      const ink = new LineSegments(new EdgesGeometry(geo, 30), new LineBasicMaterial({ color: 0x1e1712 }));
+      g.add(mesh, ink);
+    }
+    this.root.add(g);
+    this.deckRoot = g;
+  }
+
+  // Roofs (phase 11.7): each face of each (shared roof.ts roofFaces: slopes, gables, a flat lid and
+  // its edge) a mesh, inked round; hidden while I'm under one (roofsFor).
+  private roofRoot: Group | null = null;
+  private roofGroups: { outline: [number, number][]; g: Group }[] = [];
+  private dropRoofs() {
+    if (!this.roofRoot) return;
+    this.roofRoot.traverse((o) => {
+      const m = o as Mesh;
+      m.geometry?.dispose();
+      for (const x of Array.isArray(m.material) ? m.material : m.material ? [m.material] : []) x.dispose();
+    });
+    this.roofRoot.removeFromParent();
+    this.roofRoot = null;
+    this.roofGroups = [];
+  }
+  private buildRoofs() {
+    this.dropRoofs();
+    if (!this.roofs?.length) return;
+    const root = new Group();
+    const mats = {
+      slope: new MeshLambertMaterial({ color: 0x585e66, side: DoubleSide }),
+      gable: new MeshLambertMaterial({ color: 0xefe4cc, side: DoubleSide }),
+      flat: new MeshLambertMaterial({ color: 0x6f6a62, side: DoubleSide }),
+      edge: new MeshLambertMaterial({ color: 0x3b3029, side: DoubleSide }),
+    };
+    const ink = new LineBasicMaterial({ color: 0x1e1712 });
+    for (const r of this.roofs) {
+      const g = new Group();
+      for (const f of roofFaces(r)) {
+        // (a face is flat: a flat roof's may be any shape — triangulated in its own x, y)
+        const pts = f.pts;
+        const tris =
+          pts.length === 3
+            ? [[0, 1, 2]]
+            : pts.length === 4
+              ? [
+                  [0, 1, 2],
+                  [0, 2, 3],
+                ]
+              : ShapeUtils.triangulateShape(
+                  pts.map(([x, y]) => new Vector2(x, y)),
+                  [],
+                );
+        const pos: number[] = [];
+        for (const [a, b, c] of tris) for (const i of [a, b, c]) pos.push(pts[i][0], pts[i][2], pts[i][1]);
+        const geo = new BufferGeometry();
+        geo.setAttribute("position", new Float32BufferAttribute(pos, 3));
+        geo.computeVertexNormals();
+        const mesh = new Mesh(geo, mats[f.part]);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        g.add(mesh);
+        const loop: number[] = [];
+        for (let i = 0; i < pts.length; i++) {
+          const [p, q] = [pts[i], pts[(i + 1) % pts.length]];
+          loop.push(p[0], p[2], p[1], q[0], q[2], q[1]);
+        }
+        const lg = new BufferGeometry();
+        lg.setAttribute("position", new Float32BufferAttribute(loop, 3));
+        g.add(new LineSegments(lg, ink));
+      }
+      root.add(g);
+      this.roofGroups.push({ outline: r.outline, g });
+    }
+    this.root.add(root);
+    this.roofRoot = root;
+  }
+  /** The roofs over this floor shown but the one over (x, y) — this floor's own frame (I'm under it). */
+  roofsFor(x: number, y: number) {
+    for (const { outline, g } of this.roofGroups) g.visible = !inRing(outline, x, y);
+  }
+
   // Ceilings over every floor tile at the walls' height, facing down: seen
   // from below only (a low free camera, eye level), never from above.
   private buildCeiling() {
@@ -513,14 +655,14 @@ export class World3 {
         const [x, y] = k.split(",").map(Number);
         return [x, y, x + 1, y + 1];
       });
-      for (const b of slabBoxes(this.rings, holes, 0)) {
+      for (const b of this.rings.flatMap((r) => slabBoxes(r, holes, 0))) {
         const [x0, x1, y0, y1] = [b.x - b.hx, b.x + b.hx, b.z - b.hz, b.z + b.hz];
         pos.push(x0, z, y0, x1, z, y0, x1, z, y1, x0, z, y0, x1, z, y1, x0, z, y1);
       }
     }
     // (none outdoors — the lot is open sky — nor over a stairwell)
     const under = (x: number, y: number) => {
-      const ch = tileAt(map, x, y);
+      const ch = cellOf(map, x, y);
       return isFloor(ch) && ch !== "a" && ch !== "c" && !this.wells.ceiling.has(`${x},${y}`);
     };
     if (!this.rings)
@@ -588,9 +730,11 @@ export class World3 {
     map: MapDef,
     objects: WorldObjectDef[],
     edges?: WallEdges,
-    rings?: Ring[] | null,
-    floorRings?: Ring[] | null,
+    rings?: Ring[][] | null,
+    floorRings?: Ring[][] | null,
     slabs?: FloorSlab[] | null,
+    decks?: Deck[] | null,
+    roofs?: Roof[] | null,
   ) {
     // (an edit before this one not yet done: now, at once)
     this.flushSoon();
@@ -600,16 +744,23 @@ export class World3 {
     const floorWas = this.floor;
     this.map = map;
     this.edges = edges ?? edgesOfMap(map);
+    const ringsWas = this.rings;
     this.rings = rings ?? null;
     this.floorRings = floorRings ?? null;
     this.slabs = slabs ?? null;
+    const decksWas = JSON.stringify(this.decks);
+    this.decks = decks ?? null;
+    if (JSON.stringify(this.decks) !== decksWas) this.buildDecks();
+    const roofsWas = JSON.stringify(this.roofs);
+    this.roofs = roofs ?? null;
+    if (JSON.stringify(this.roofs) !== roofsWas) this.buildRoofs();
     const touched = touchedWalls(old, map, oldEdges, this.edges);
     this.buildWalls(touched.keys);
     // where the floor's bake changes: round the edges that changed (the AO reaches ~2 tiles),
     // and the doors and windows drawn again below; all of it if the tiles changed
     let near: TileRect | null = touched.box && grow(touched.box, FLOOR_REACH);
     // (the ceiling covers the floor tiles: again only if they changed)
-    if (old.tiles.join("\n") !== map.tiles.join("\n")) {
+    if (floorsSig(old) !== floorsSig(map) || JSON.stringify(ringsWas) !== JSON.stringify(this.rings)) {
       this.buildCeiling();
       this.listWalls();
       near = { x0: 0, y0: 0, x1: map.width, y1: map.height };
@@ -813,22 +964,25 @@ export class World3 {
   /** Tile (x, y) of this floor is floor (its slabs' — the structure's, read even-odd at its middle —
    *  or, with none, its tiles). */
   private isFloorAt(x: number, y: number): boolean {
-    if (!this.floorRings) return isFloor(tileAt(this.map, x, y));
+    if (!this.floorRings) return isFloor(cellOf(this.map, x, y));
     const m = this.floorMask();
     return x >= 0 && y >= 0 && x < m.w && y < m.h && m.bits[y * m.w + x] === 1;
   }
   // (the slabs read once a row, kept till they change: the cull asks every tile several times)
-  private mask: { rings: Ring[]; w: number; h: number; bits: Uint8Array } | null = null;
+  private mask: { rings: Ring[][]; w: number; h: number; bits: Uint8Array } | null = null;
   private floorMask() {
-    const rings = this.floorRings as Ring[];
-    if (this.mask?.rings === rings) return this.mask;
+    const groups = this.floorRings as Ring[][];
+    if (this.mask?.rings === groups) return this.mask;
     const { width: w, height: h } = this.map;
     const bits = new Uint8Array(w * h);
-    for (let y = 0; y < h; y++) {
-      const xs = crossings(rings, y + 0.5);
-      for (let k = 0; k + 1 < xs.length; k += 2)
-        for (let x = Math.max(0, Math.ceil(xs[k] - 0.5)); x < w && x + 0.5 < xs[k + 1]; x++) bits[y * w + x] = 1;
-    }
+    // (any slab's: they may overlap)
+    for (const rings of groups)
+      for (let y = 0; y < h; y++) {
+        const xs = crossings(rings, y + 0.5);
+        for (let k = 0; k + 1 < xs.length; k += 2)
+          for (let x = Math.max(0, Math.ceil(xs[k] - 0.5)); x < w && x + 0.5 < xs[k + 1]; x++) bits[y * w + x] = 1;
+      }
+    const rings = groups;
     this.mask = { rings, w, h, bits };
     return this.mask;
   }
@@ -1158,11 +1312,33 @@ export class World3 {
   }
 
   // one thing drawn on its own (also build mode's ghosts)
-  drawObject(o: WorldObjectDef): { out: Out; top: number; tall: boolean; pick: Pick3 | null } {
+  drawObject(o0: WorldObjectDef): { out: Out; top: number; tall: boolean; pick: Pick3 | null } {
     const { drawItem, hasItemArt, itemSketchOpts } = this.items;
-    const e = entry(o.kind);
+    const e = entry(o0.kind);
+    // (placed free — plan 72 phase 11.9: drawn as if at no turn with its middle at the origin, then
+    // turned by its yaw and set at its middle)
+    const freeTurn = isFreeThing(o0) ? { yaw: o0.yaw ?? 0, x: o0.x, y: o0.y } : null;
+    const o: WorldObjectDef = freeTurn
+      ? { ...o0, x: -e.w / 2, y: -e.h / 2, yaw: 0, props: { ...(o0.props ?? {}), free: false } }
+      : o0;
     const out = new Out();
-    if (isOpening(o.kind)) {
+    if (isOpening(o.kind) && o.props?.free === true) {
+      // in a wall drawn free (phase 11.6): its model along that wall from where it starts, turned by
+      // the wall's heading (its yaw); the older art drawn along x and turned the same
+      const n = Math.max(1, e.w);
+      if (isNative(o.kind)) openingInto(out, o, 0, n);
+      else {
+        const leaves = isDoorKind(o.kind) && doorLeaves(o.kind) > 0 && (!doorShut(o) || doorSlides(o.kind));
+        for (const part of leaves ? ["edge", "leaf"] : ["edge"]) {
+          const own = new Out();
+          const s = new MeshSketch({ rot: 0, w: n, h: 1, at: [0, 0], out: own });
+          drawItem(s, { kind: o.kind, id: o.id, rot: 0, props: { ...(o.props ?? {}), _part: part } });
+          s.end();
+          turnOut(own, o.yaw ?? 0, o.x, o.y);
+          appendOut(out, own);
+        }
+      }
+    } else if (isOpening(o.kind)) {
       // a door or window in its wall (rot 3 on west edges)
       const rot = quarterOf(o) % 2 === 1 ? 3 : 0;
       // open leaves (and a barn door, always: it rolls along the face) are drawn whole
@@ -1221,6 +1397,7 @@ export class World3 {
           });
       }
     }
+    if (freeTurn) turnOut(out, freeTurn.yaw, freeTurn.x, freeTurn.y);
     const top = topOf(out);
     // what clicks reach: in the live world (as iso) things to use, or with
     // something to do — a chair, my desk; in build mode, everything
@@ -1638,6 +1815,8 @@ export class World3 {
   dispose() {
     this.soon = null;
     this.later = null;
+    this.dropDecks();
+    this.dropRoofs();
     this.glassMat?.dispose();
     this.chess?.dispose();
     for (const b of this.walls) this.unmount(b);
@@ -1715,6 +1894,23 @@ function softShadows(
  *  the world's). */
 const cellKey = (x: number, y: number, c: { x: number; y: number }) =>
   `${Math.floor((x + c.x) / CELL)},${Math.floor((y + c.y) / CELL)}`;
+/** A mezzanine as World3 draws it (its floor's own frame): its rings (outline, then holes), its
+ *  material, how far over the floor its top is (m). */
+export interface Deck {
+  rings: [number, number][][];
+  top: string;
+  over: number;
+}
+// (a mezzanine's colour by its material: the floors' swatches)
+const DECK_COLOR: Record<string, number> = {
+  ".": 0x8f6038,
+  ",": 0x6b6a3a,
+  _: 0xe6dcc4,
+  ":": 0x7a3b2e,
+  "~": 0x2f2620,
+  x: 0x4a4740,
+};
+
 /** The wall parts of walls off the lattice (World3.freeWall): `free|<wall>|<run>`; as a key of
  *  `buildWalls(only)`, all of them again. */
 const FREE = "free";

@@ -162,10 +162,19 @@ registerFeature((room: WorldRoom) => {
     if (!piece) return;
     const area = areaAt(room.map, piece.x, piece.kind === "frame" ? piece.y + 0.25 : piece.y);
     if (!area) return;
-    const areas = room.map.areas.map((a) =>
-      a.key === area.key ? { ...a, dressOff: [...new Set([...(a.dressOff ?? []), piece.id])].slice(-400) } : a,
+    // (its room's own: the structure's room, its props' dressOff — docs/plan/72 phase 11)
+    const rooms = room.structure.rooms.map((r) =>
+      r.key === area.key
+        ? {
+            ...r,
+            props: {
+              ...r.props,
+              dressOff: [...new Set([...((r.props.dressOff as string[] | undefined) ?? []), piece.id])].slice(-400),
+            },
+          }
+        : r,
     );
-    room.commitMap({ ...room.map, areas });
+    room.commitStructure({ ...room.structure, rooms });
     if (!take) return;
     const kind = piece.kind === "frame" ? "frame" : "decor";
     const x = Math.floor(piece.x);

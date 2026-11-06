@@ -16,7 +16,15 @@ import {
   takenId,
 } from "@yutopia/shared";
 import { newCar, SLOT_GRIP, SLOT_LAP, SLOT_VMAX, slotCurve, slotLap, stepCar } from "@yutopia/shared/slotcar";
-import { applyOps, mapFromStructure, type StructOp, type Structure } from "@yutopia/shared/structure";
+import {
+  applyOps,
+  cellTop,
+  edgeBack,
+  edgeFront,
+  type StructOp,
+  type Structure,
+  viewOf,
+} from "@yutopia/shared/structure";
 import { Client, type Room } from "colyseus.js";
 import type { WorldRoom } from "./WorldRoom.ts";
 
@@ -49,7 +57,45 @@ interface Person {
   rev?: number;
 }
 // the home floor's map (the others in `levels`) as this person's structure gives it
-const home = (p: Person): MapDef => mapFromStructure(p.struct as Structure);
+const home = (p: Person): MapDef => viewOf(p.struct as Structure);
+// the building as this person has it, asked of their structure (plan 72 phase 11: no tile rows)
+const st = (p: Person) => p.struct as Structure;
+const cellAt = (p: Person, x: number, y: number, floor = st(p).home) => cellTop(st(p), floor, x, y);
+const edgeAt = (p: Person, e: { dir: "h" | "v"; x: number; y: number }, floor = st(p).home) =>
+  edgeFront(st(p), floor, e);
+const backAt = (p: Person, e: { dir: "h" | "v"; x: number; y: number }, floor = st(p).home) =>
+  edgeBack(st(p), floor, e);
+// a room made as the build tool makes one (plan 72 phase 11): its walls drawn round it (the room
+// found as they close), named and given its owner, a door in its south wall — its key
+async function makeRoom(
+  owner: Person,
+  r: { x: number; y: number; w: number; h: number; name: string; kind: string; ownerId: number; ownerName: string },
+): Promise<string> {
+  const ok = owner.msgs["struct:walls:ok"]?.length ?? 0;
+  const [x0, y0, x1, y1] = [r.x, r.y, r.x + r.w, r.y + r.h];
+  const c: [number, number][] = [
+    [x0, y0],
+    [x1, y0],
+    [x1, y1],
+    [x0, y1],
+  ];
+  owner.room.send("struct:walls", { add: c.map((a, i) => ({ a, b: c[(i + 1) % 4], front: "p" })), n: 1 });
+  await waitFor(() => (owner.msgs["struct:walls:ok"]?.length ?? 0) > ok);
+  const key = (owner.msgs["struct:walls:ok"]?.at(-1) as { found?: string[] }).found?.[0];
+  assert.ok(key, "a room found");
+  owner.room.send("map:room:update", { key, name: r.name, kind: r.kind, ownerId: r.ownerId, ownerName: r.ownerName });
+  await waitFor(() => home(owner).areas.some((a) => a.key === key && a.name === r.name));
+  owner.room.send("obj:put", {
+    id: `door-${key}`,
+    kind: "door",
+    x: r.x + 2,
+    y: y1,
+    yaw: 0,
+    props: { state: "open", roomKey: key },
+  });
+  await waitFor(() => !!owner.room.state.objects.get(`door-${key}`));
+  return key;
+}
 
 async function person(id: number, sandbox: number, roles = "member"): Promise<Person> {
   const room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
@@ -70,6 +116,9 @@ async function person(id: number, sandbox: number, roles = "member"): Promise<Pe
     "wb:op",
     "arcade:scores",
     "build:history",
+    "struct:ops",
+    "struct:walls:ok",
+    "struct:slabs:ok",
     "piano:note",
     "game:tv",
     "game:pad",
@@ -755,53 +804,365 @@ test("moderation: admins mute, lock rooms and remove people; builders and member
   await assert.rejects(() => person(26, s));
 });
 
-test("map editing: builders paint floors and walls on edges, members can't; nobody's moved by a wall", async () => {
+test("building: builders draw walls and floors, members can't; nobody's moved by a wall", async () => {
   const s = ++space;
   const member = await person(27, s);
   const owner = await person(28, s, "member,builder");
-  const tiles = () => [...home(member).tiles] as string[];
-  const hw = () => [...home(member).hWalls] as string[];
-  const vw = () => [...home(member).vWalls] as string[];
-  member.room.send("map:walls", { edges: [{ x: 10, y: 3, dir: "h", ch: "p" }] });
-  member.room.send("map:paint", { cells: [{ x: 11, y: 3, ch: "," }] });
+  const square = (x: number, y: number): [number, number][] => [
+    [x, y],
+    [x + 1, y],
+    [x + 1, y + 1],
+    [x, y + 1],
+  ];
+  member.room.send("struct:walls", { add: [{ a: [10, 3], b: [11, 3], front: "p" }] });
+  member.room.send("struct:slabs", { add: [{ outline: square(11, 3), top: "," }] });
   await sleep(250);
-  assert.equal(hw()[3][10], ".", "members can't build walls");
-  assert.equal(tiles()[3][11], ".", "…or paint floors");
-  owner.room.send("map:paint", { cells: [{ x: 11, y: 3, ch: "," }] });
-  owner.room.send("map:walls", {
-    edges: [
-      { x: 10, y: 3, dir: "h", ch: "b" },
-      { x: 4, y: 6, dir: "v", ch: "p" }, // through a desk
-    ],
-  });
-  await waitFor(() => hw()[3][10] === "b" && tiles()[3][11] === ",");
-  assert.equal(vw()[6][4], ".", "not through the desk");
-  await waitFor(() => (owner.msgs.toast?.length ?? 0) > 0);
+  assert.equal(edgeAt(member, { dir: "h", x: 10, y: 3 }), ".", "members can't build walls");
+  assert.equal(cellAt(member, 11, 3), ".", "…or lay floors");
+  owner.room.send("struct:slabs", { add: [{ outline: square(11, 3), top: "," }] });
+  owner.room.send("struct:walls", { add: [{ a: [10, 3], b: [11, 3], front: "b" }] });
+  await waitFor(() => edgeAt(member, { dir: "h", x: 10, y: 3 }) === "b" && cellAt(member, 11, 3) === ",");
   // a wall built right through someone: the server doesn't move them (their own browser's physics
   // steps them out of it — no put-backs, the user's call 2026-10-28)
   await walk(member, { x: 10.5, y: 6.2 });
   assert.ok(Math.abs(me(member).y - 6.2) < 0.05, "standing just past the y = 6 line");
   const snaps = member.msgs.snap?.length ?? 0;
-  owner.room.send("map:walls", { edges: [{ x: 10, y: 6, dir: "h", ch: "p" }] });
-  await waitFor(() => hw()[6][10] === "p");
+  owner.room.send("struct:walls", { add: [{ a: [10, 6], b: [11, 6], front: "p" }] });
+  await waitFor(() => edgeAt(member, { dir: "h", x: 10, y: 6 }) === "p");
   await sleep(250);
   assert.equal(member.msgs.snap?.length ?? 0, snaps, "not put anywhere");
+});
+
+test("walls drawn free: a builder's wall at 45° goes in for everyone; undone it goes, redone it's back", async () => {
+  const s = ++space;
+  const member = await person(30, s);
+  const owner = await person(31, s, "member,builder");
+  const ops = (who: Person) =>
+    (who.msgs["struct:ops"] ?? []) as {
+      ops: { op: string; add?: { id: string; a: number[]; b: number[] }[]; remove?: string[] }[];
+    }[];
+  const wall = { a: [12, 8] as [number, number], b: [15, 11] as [number, number], front: "b" };
+  // a member: nothing
+  member.room.send("struct:walls", { add: [wall], n: 1 });
+  await sleep(300);
+  assert.equal(ops(member).length, 0, "members can't draw walls");
+  // a builder: its operation, to everyone; the id back to them
+  owner.room.send("struct:walls", { add: [wall], n: 7 });
+  await waitFor(() => ops(member).length === 1);
+  const added = ops(member)[0].ops[0].add ?? [];
+  assert.equal(added.length, 1);
+  assert.deepEqual([added[0].a, added[0].b], [wall.a, wall.b], "at 45°, where it was drawn");
+  await waitFor(() => (owner.msgs["struct:walls:ok"]?.length ?? 0) === 1);
+  assert.deepEqual(owner.msgs["struct:walls:ok"]?.[0], { n: 7, ids: [added[0].id] });
+  // one that can't go: off the floor — told why, nothing sent
+  owner.room.send("struct:walls", { add: [{ a: [-50, 8], b: [-40, 8], front: "p" }] });
+  await waitFor(() =>
+    (owner.msgs.toast ?? []).some((t) => String((t as { text: string }).text).includes("off the floor")),
+  );
+  // undone (once the step's closed): taken away; redone: back
+  await sleep(800);
+  owner.room.send("build:undo", {});
+  await waitFor(() => ops(member).length === 2);
+  assert.deepEqual(ops(member)[1].ops[0].remove, [added[0].id], "undone: gone");
+  owner.room.send("build:redo", {});
+  await waitFor(() => ops(member).length === 3);
+  assert.equal(ops(member)[2].ops[0].add?.[0]?.id, added[0].id, "redone: back, the same wall");
+  // drawn along it again: there already, nothing sent
+  owner.room.send("struct:walls", { add: [wall] });
+  await waitFor(() =>
+    (owner.msgs.toast ?? []).some((t) => String((t as { text: string }).text).includes("there already")),
+  );
+  await sleep(200);
+  assert.equal(ops(member).length, 3);
+});
+
+test("an arc drawn: in for everyone with its bow, too deep a bow refused", async () => {
+  const s = ++space;
+  const member = await person(32, s);
+  const owner = await person(33, s, "member,builder");
+  type Ops = { ops: { op: string; add?: { id: string; bow?: number }[]; remove?: string[] }[] }[];
+  const ops = () => (member.msgs["struct:ops"] ?? []) as Ops;
+  owner.room.send("struct:walls", { add: [{ a: [12, 8], b: [16, 8], front: "w", bow: 1.25 }] });
+  await waitFor(() => ops().length === 1);
+  const arc = ops()[0].ops[0].add?.[0];
+  assert.equal(arc?.bow, 1.25, "its bow, as drawn");
+  owner.room.send("struct:walls", { add: [{ a: [12, 12], b: [16, 12], front: "w", bow: 2.5 }] });
+  await waitFor(() =>
+    (owner.msgs.toast ?? []).some((t) => String((t as { text: string }).text).includes("bows too far")),
+  );
+});
+
+test("a wall's height and thickness: drawn a rail 0.1 thick, raised later as the same wall, undone", async () => {
+  const s = ++space;
+  const member = await person(34, s);
+  const owner = await person(35, s, "member,builder");
+  type Ops = { ops: { op: string; add?: { id: string; height: number; thick?: number }[]; remove?: string[] }[] }[];
+  const ops = () => (member.msgs["struct:ops"] ?? []) as Ops;
+  owner.room.send("struct:walls", { add: [{ a: [12, 8], b: [16, 8], front: "p", height: 1.1, thick: 0.1 }] });
+  await waitFor(() => ops().length === 1);
+  const rail = ops()[0].ops[0].add?.[0];
+  assert.deepEqual([rail?.height, rail?.thick], [1.1, 0.1]);
+  await sleep(800);
+  owner.room.send("struct:walls", { set: [{ id: rail?.id ?? "", height: 2.4, thick: 0.3 }] });
+  await waitFor(() => ops().length === 2);
+  const o = ops()[1].ops[0];
+  assert.deepEqual([o.remove, o.add?.[0].id, o.add?.[0].height, o.add?.[0].thick], [[rail?.id], rail?.id, 2.4, 0.3]);
+  await sleep(800);
+  owner.room.send("build:undo", {});
+  await waitFor(() => ops().length === 3);
+  assert.deepEqual(
+    [ops()[2].ops[0].add?.[0].height, ops()[2].ops[0].add?.[0].thick],
+    [1.1, 0.1],
+    "undone: a rail again",
+  );
+});
+
+test("a room found as walls close round it: a triangle, named (its outline kept), undone", async () => {
+  const s = ++space;
+  const owner = await person(36, s, "member,builder");
+  type R = { key: string; outline: number[][]; props: { name: string } };
+  const rooms = () =>
+    ((owner.msgs["struct:ops"] ?? []) as { ops: { op: string; rooms?: R[] }[] }[]).flatMap((m) =>
+      m.ops.filter((o) => o.op === "rooms").map((o) => o.rooms ?? []),
+    );
+  owner.room.send("struct:walls", {
+    n: 3,
+    add: [
+      { a: [12, 8], b: [18, 8], front: "p" },
+      { a: [18, 8], b: [12, 14], front: "p" },
+      { a: [12, 14], b: [12, 8], front: "p" },
+    ],
+  });
+  await waitFor(() => (owner.msgs["struct:walls:ok"]?.length ?? 0) === 1);
+  const ok = owner.msgs["struct:walls:ok"]?.[0] as { found?: string[] };
+  assert.equal(ok.found?.length, 1, "a room found");
+  const key = ok.found?.[0] ?? "";
+  const tri = rooms()
+    .at(-1)
+    ?.find((r) => r.key === key);
+  assert.equal(tri?.props.name, "New room");
+  assert.equal(tri?.outline.length, 3, "its outline the triangle");
+  // named (an edit made on the map): its outline kept, not its rectangle
+  await sleep(800);
+  owner.room.send("map:room:update", { key, name: "Nook" });
+  await waitFor(() => rooms().some((l) => l.some((r) => r.key === key && r.props.name === "Nook")));
+  const named = rooms()
+    .at(-1)
+    ?.find((r) => r.key === key);
+  assert.equal(named?.outline.length, 3, "still the triangle");
+  // undone twice (the name, the walls): the room gone with them
+  await sleep(800);
+  owner.room.send("build:undo", {});
+  await sleep(500);
+  owner.room.send("build:undo", {});
+  await waitFor(() => !(rooms().at(-1) ?? []).some((r) => r.key === key));
+});
+
+test("a door in a wall at 45°: placed from its wall, refused off its end, gone with its wall, back on undo", async () => {
+  const s = ++space;
+  const owner = await person(37, s, "member,builder");
+  owner.room.send("struct:walls", { n: 1, add: [{ a: [12, 8], b: [18, 14], front: "p" }] });
+  await waitFor(() => (owner.msgs["struct:walls:ok"]?.length ?? 0) === 1);
+  const wall = (owner.msgs["struct:walls:ok"]?.[0] as { ids: string[] }).ids[0];
+  const L = Math.hypot(6, 6);
+  await sleep(800);
+  // off its end: refused
+  owner.room.send("obj:put", {
+    id: "fd-bad",
+    kind: "door",
+    x: 0,
+    y: 0,
+    yaw: 0,
+    props: { free: true, on: { wall, at: 0.1 } },
+  });
+  await waitFor(() =>
+    (owner.msgs.toast ?? []).some((t) => String((t as { text: string }).text).includes("off the end")),
+  );
+  assert.equal(owner.room.state.objects.get("fd-bad"), undefined);
+  // in the middle: the server places it from the wall (what was sent for x, y, yaw is ignored)
+  owner.room.send("obj:put", {
+    id: "fd",
+    kind: "door",
+    x: 0,
+    y: 0,
+    yaw: 0,
+    props: { free: true, on: { wall, at: L / 2 } },
+  });
+  await waitFor(() => !!owner.room.state.objects.get("fd"));
+  const d = owner.room.state.objects.get("fd");
+  assert.ok(Math.abs((d?.yaw ?? 0) - Math.PI / 4) < 1e-4, `yaw ${d?.yaw}`);
+  assert.ok(Math.abs((d?.x ?? 0) - (15 - (Math.SQRT1_2 / 2) * 1)) < 0.01, `x ${d?.x}`);
+  const props = JSON.parse(d?.props ?? "{}");
+  assert.equal(props.free, true);
+  assert.equal(props.on.wall, wall);
+  // the wall taken away: the door goes with it; undone: both back
+  await sleep(800);
+  owner.room.send("struct:walls", { remove: [wall] });
+  await waitFor(() => !owner.room.state.objects.get("fd"));
+  await sleep(800);
+  owner.room.send("build:undo", {});
+  await waitFor(() => !!owner.room.state.objects.get("fd"));
+});
+
+test("floors and roofs: a mezzanine with a rail on it, a gable over a box, undone", async () => {
+  const s = ++space;
+  const owner = await person(38, s, "member,builder");
+  type Ops = {
+    ops: {
+      op: string;
+      slabs?: { id: string; z: number }[];
+      roofs?: { id: string; kind: string }[];
+      add?: { base: number }[];
+    }[];
+  }[];
+  const ops = () => (owner.msgs["struct:ops"] ?? []) as Ops;
+  const last = (op: string) =>
+    ops()
+      .flatMap((m) => m.ops)
+      .filter((o) => o.op === op)
+      .at(-1);
+  owner.room.send("struct:slabs", {
+    n: 1,
+    add: [
+      {
+        outline: [
+          [12, 8],
+          [18, 8],
+          [18, 12],
+          [12, 12],
+        ],
+        top: ".",
+        over: 1.75,
+      },
+    ],
+  });
+  await waitFor(() => (owner.msgs["struct:slabs:ok"]?.length ?? 0) === 1);
+  const deck = (owner.msgs["struct:slabs:ok"]?.[0] as { ids: string[] }).ids[0];
+  const z = last("slabs")?.slabs?.find((x) => x.id === deck)?.z ?? 0;
+  await sleep(800);
+  owner.room.send("struct:walls", { add: [{ a: [12, 12], b: [18, 12], front: "p", height: 1.1, over: 1.75 }] });
+  await waitFor(() =>
+    ops().some((m) => m.ops.some((o) => o.op === "walls" && o.add?.some((w) => Math.abs(w.base - z) < 1e-6))),
+  );
+  await sleep(800);
+  // a box of walls, a gable on it
+  owner.room.send("struct:walls", {
+    add: [
+      { a: [20, 8], b: [26, 8], front: "p" },
+      { a: [26, 8], b: [26, 12], front: "p" },
+      { a: [26, 12], b: [20, 12], front: "p" },
+      { a: [20, 12], b: [20, 8], front: "p" },
+    ],
+  });
+  await sleep(800);
+  owner.room.send("struct:roofs", {
+    add: [
+      {
+        outline: [
+          [20, 8],
+          [26, 8],
+          [26, 12],
+          [20, 12],
+        ],
+        kind: "gable",
+        pitch: 30,
+      },
+    ],
+  });
+  await waitFor(() => (last("roofs")?.roofs ?? []).length === 1);
+  // undone: no roof
+  await sleep(800);
+  owner.room.send("build:undo", {});
+  await waitFor(() => (last("roofs")?.roofs ?? [1]).length === 0);
+});
+
+test("a lift stopping at a mezzanine: a stop up on it joins the shaft, the car rides there; off it, refused", async () => {
+  const s = ++space;
+  const owner = await person(40, s, "member,builder");
+  owner.room.send("struct:slabs", {
+    n: 1,
+    add: [
+      {
+        outline: [
+          [12, 8],
+          [18, 8],
+          [18, 12],
+          [12, 12],
+        ],
+        top: ".",
+        over: 2.5,
+      },
+    ],
+  });
+  await waitFor(() => (owner.msgs["struct:slabs:ok"]?.length ?? 0) === 1);
+  await sleep(600);
+  // a stop on the floor, one up on the mezzanine over it: the same shaft
+  owner.room.send("obj:put", { id: "lg", kind: "elevator", x: 13, y: 9, yaw: 0, props: {} });
+  await waitFor(() => !!owner.room.state.objects.get("lg"));
+  owner.room.send("obj:put", { id: "lm", kind: "elevator", x: 13, y: 9, yaw: 0, props: { deck: 2.5 } });
+  await waitFor(() => !!owner.room.state.objects.get("lm"));
+  const props = (id: string) => JSON.parse(owner.room.state.objects.get(id)?.props ?? "{}");
+  assert.equal(props("lm").deck, 2.5);
+  assert.equal(props("lm").shaft, props("lg").shaft, "one shaft");
+  // off the mezzanine: refused
+  owner.room.send("obj:put", { id: "lx", kind: "elevator", x: 30, y: 20, yaw: 0, props: { deck: 2.5 } });
+  await waitFor(() =>
+    (owner.msgs.toast ?? []).some((t) => String((t as { text: string }).text).includes("on the mezzanine")),
+  );
+  assert.equal(owner.room.state.objects.get("lx"), undefined);
+  // in the car on the floor: called, sent up to the mezzanine — out there at its height
+  const level = me(owner).level;
+  await stepTo(owner, [
+    { x: 14, y: 10, z: 0, l: level },
+    { x: 14, y: 10.1, z: 0, l: level },
+  ]);
+  owner.room.send("lift:call", { id: "lg" });
+  await waitFor(() => props("lg").door === "open", 5000);
+  const up = Math.round((level + 2.5 / STOREY) * 1e4) / 1e4;
+  owner.room.send("lift:go", { id: "lg", level: up });
+  await waitFor(() => props("lm").door === "open", 12000);
+  assert.equal(me(owner).level, level);
+  assert.ok(Math.abs(me(owner).z - (level * STOREY + 2.5)) < 0.05, `up on it: ${me(owner).z}`);
+  // and back down
+  owner.room.send("lift:go", { id: "lm", level });
+  await waitFor(() => props("lg").door === "open", 12000);
+  assert.ok(Math.abs(me(owner).z - level * STOREY) < 0.05, `down: ${me(owner).z}`);
+});
+
+test("a desk placed free at 30°: kept with its middle and turn; where a wall runs through, refused", async () => {
+  const s = ++space;
+  const owner = await person(39, s, "member,builder");
+  owner.room.send("obj:put", { id: "fdesk", kind: "desk", x: 14, y: 6.5, yaw: Math.PI / 6, props: { free: true } });
+  await waitFor(() => !!owner.room.state.objects.get("fdesk"));
+  const d = owner.room.state.objects.get("fdesk");
+  assert.deepEqual([d?.x, d?.y], [14, 6.5]);
+  assert.ok(Math.abs((d?.yaw ?? 0) - Math.PI / 6) < 1e-4);
+  assert.equal(JSON.parse(d?.props ?? "{}").free, true);
+  // a wall through where a second would go: refused
+  owner.room.send("struct:walls", { add: [{ a: [16, 9], b: [20, 9], front: "p" }] });
+  await sleep(600);
+  owner.room.send("obj:put", { id: "fdesk2", kind: "desk", x: 18, y: 9, yaw: Math.PI / 6, props: { free: true } });
+  await waitFor(() =>
+    (owner.msgs.toast ?? []).some((t) => String((t as { text: string }).text).includes("a wall's in the way")),
+  );
+  assert.equal(owner.room.state.objects.get("fdesk2"), undefined);
 });
 
 test("two-faced walls: each face its own material; wall items hang on either face, anywhere on it", async () => {
   const s = ++space;
   const owner = await person(29, s, "member,builder");
-  const hw = () => [...home(owner).hWalls] as string[];
-  const hb = () => [...(home(owner).hBacks ?? [])] as string[];
+  const hw = (x: number) => edgeAt(owner, { dir: "h", x, y: 3 });
   const obj = (id: string) => owner.room.state.objects.get(id);
-  owner.room.send("map:walls", {
-    edges: [10, 11, 12].map((x) => ({ x, y: 3, dir: "h" as const, ch: "p" })),
+  owner.room.send("struct:walls", {
+    add: [10, 11, 12].map((x) => ({ a: [x, 3], b: [x + 1, 3], front: "p" })),
+    n: 1,
   });
-  await waitFor(() => hw()[3].slice(10, 13) === "ppp");
+  await waitFor(() => [10, 11, 12].map(hw).join("") === "ppp");
+  const mid = (owner.msgs["struct:walls:ok"]?.at(-1) as { ids: string[] }).ids[1];
   // the back face (−y) cork, the front stays plaster
-  owner.room.send("map:walls", { edges: [{ x: 11, y: 3, dir: "h", ch: "k", side: -1 }] });
-  await waitFor(() => hb()[3]?.[11] === "k");
-  assert.equal(hw()[3][11], "p");
+  owner.room.send("struct:walls", { set: [{ id: mid, back: "k" }] });
+  await waitFor(() => backAt(owner, { dir: "h", x: 11, y: 3 }) === "k");
+  assert.equal(hw(11), "p");
   // a whiteboard on the back face, half a tile along and raised three steps
   owner.room.send("obj:put", { id: "wb-back", kind: "whiteboard", x: 10, y: 2, yaw: Math.PI, props: { wu: 2, wz: 3 } });
   await waitFor(() => !!obj("wb-back"));
@@ -820,41 +1181,41 @@ test("two-faced walls: each face its own material; wall items hang on either fac
   await waitFor(() => !!obj("wb-front"));
   assert.equal(JSON.parse(obj("wb-front")?.props ?? "{}").wz, 6, "as high as it goes, not off the wall");
   // the wall can't go from under them
-  owner.room.send("map:walls", { edges: [{ x: 11, y: 3, dir: "h", ch: "." }] });
-  await sleep(250);
-  assert.equal(hw()[3][11], "p");
+  owner.room.send("struct:walls", { remove: [mid] });
+  await waitFor(() =>
+    (owner.msgs.toast ?? []).some((t) => String((t as { text: string }).text).includes("hangs on that wall")),
+  );
+  assert.equal(hw(11), "p");
 });
 
 test("build undo/redo: per person, a drag is one step, others' later edits are kept", async () => {
   const s = ++space;
   const ana = await person(40, s, "member,builder");
   const bia = await person(41, s, "member,builder");
-  const tiles = () => [...home(ana).tiles] as string[];
-  const orig = tiles()[3][10];
+  const hw = (x: number) => edgeAt(ana, { dir: "h", x, y: 3 });
   const hist = (p: Person) => p.msgs["build:history"]?.at(-1) as { undo: number; redo: number } | undefined;
   // a drag arrives as several batches: one step
-  ana.room.send("map:paint", { cells: [{ x: 10, y: 3, ch: "," }] });
+  ana.room.send("struct:walls", { add: [{ a: [10, 3], b: [11, 3], front: "b" }] });
   await sleep(100);
-  ana.room.send("map:paint", { cells: [{ x: 11, y: 3, ch: "," }] });
-  ana.room.send("obj:put", { id: "u-plant", kind: "plant", x: 12, y: 3, yaw: 0 });
+  ana.room.send("struct:walls", { add: [{ a: [11, 3], b: [12, 3], front: "b" }] });
+  ana.room.send("obj:put", { id: "u-plant", kind: "plant", x: 12, y: 4, yaw: 0 });
   await waitFor(() => hist(ana)?.undo === 1, 4000);
-  // Bia repaints one of Ana's tiles
-  bia.room.send("map:paint", { cells: [{ x: 11, y: 3, ch: "_" }] });
+  // Bia draws a wall of her own next to them
+  bia.room.send("struct:walls", { add: [{ a: [12, 3], b: [13, 3], front: "w" }] });
   await waitFor(() => hist(bia)?.undo === 1, 4000);
   assert.equal(hist(ana)?.undo, 1, "Bia's edit isn't on Ana's stack");
   ana.room.send("build:undo", {});
-  // (the tiles come as the structure's operations, at once; the plant with the next patch)
-  await waitFor(() => tiles()[3][10] === orig && !ana.room.state.objects.get("u-plant"));
-  assert.equal(tiles()[3][11], "_", "Bia's tile stays");
-  assert.equal(ana.room.state.objects.get("u-plant"), undefined, "the plant is gone");
+  // (the walls come as the structure's operations, at once; the plant with the next patch)
+  await waitFor(() => hw(10) === "." && hw(11) === "." && !ana.room.state.objects.get("u-plant"));
+  assert.equal(hw(12), "w", "Bia's wall stays");
   await waitFor(() => hist(ana)?.redo === 1 && hist(ana)?.undo === 0);
   ana.room.send("build:redo", {});
-  await waitFor(() => tiles()[3][10] === "," && !!ana.room.state.objects.get("u-plant"));
+  await waitFor(() => hw(10) === "b" && hw(11) === "b" && !!ana.room.state.objects.get("u-plant"));
   // members can't undo anything
   const member = await person(42, s);
   member.room.send("build:undo", {});
   await sleep(200);
-  assert.equal(tiles()[3][10], ",");
+  assert.equal(hw(10), "b");
 });
 
 test("rooms + doors: an owned room with walls, locked so only its owner gets in or out", async () => {
@@ -864,7 +1225,7 @@ test("rooms + doors: an owned room with walls, locked so only its owner gets in 
   const bia = await person(31, s);
   owner.room.send("map:new", { width: 32, height: 24 });
   await waitFor(() => home(owner).width === 32);
-  owner.room.send("map:room", {
+  const key = await makeRoom(owner, {
     name: "Ana's office",
     kind: "private",
     x: 4,
@@ -873,21 +1234,19 @@ test("rooms + doors: an owned room with walls, locked so only its owner gets in 
     h: 4,
     ownerId: 30,
     ownerName: "P30",
-    walls: true,
-    floor: ",",
   });
-  await waitFor(() => !!owner.room.state.objects.get("door-room-ana-s-office"));
+  const DOOR = `door-${key}`;
   const areas = home(owner).areas;
-  assert.equal(areas.find((a: { key: string }) => a.key === "room-ana-s-office")?.ownerId, 30);
+  assert.equal(areas.find((a: { key: string }) => a.key === key)?.ownerId, 30);
   // bia can open/close but not lock
   await walk(bia, { x: 6.5, y: 10.5 });
-  bia.room.send("door:set", { id: "door-room-ana-s-office", state: "locked" });
+  bia.room.send("door:set", { id: DOOR, state: "locked" });
   await waitFor(() => (bia.msgs.toast?.length ?? 0) > 0);
-  assert.equal(JSON.parse(owner.room.state.objects.get("door-room-ana-s-office").props).state, "open");
+  assert.equal(JSON.parse(owner.room.state.objects.get(DOOR).props).state, "open");
   // ana walks in and locks it
   await walk(ana, { x: 6.5, y: 5.5 });
-  ana.room.send("door:set", { id: "door-room-ana-s-office", state: "locked" });
-  await waitFor(() => JSON.parse(ana.room.state.objects.get("door-room-ana-s-office").props).state === "locked");
+  ana.room.send("door:set", { id: DOOR, state: "locked" });
+  await waitFor(() => JSON.parse(ana.room.state.objects.get(DOOR).props).state === "locked");
   await sleep(200);
   // bia can't walk in, can't teleport to ana
   await walk(bia, { x: 6.5, y: 5.5 });
@@ -901,30 +1260,31 @@ test("rooms + doors: an owned room with walls, locked so only its owner gets in 
   await walk(ana, { x: 6.5, y: 11.5 });
   assert.ok(me(ana).y > 9, "the owner walks out");
   // an owner's lock is theirs: not even an admin opens it, nor builds a way round it
-  const door = () => owner.room.state.objects.get("door-room-ana-s-office");
+  const door = () => owner.room.state.objects.get(DOOR);
   const toasts = owner.msgs.toast?.length ?? 0;
-  owner.room.send("door:set", { id: "door-room-ana-s-office", state: "open" });
+  owner.room.send("door:set", { id: DOOR, state: "open" });
   await waitFor(() => (owner.msgs.toast?.length ?? 0) > toasts);
   assert.equal(JSON.parse(door().props).state, "locked", "the admin can't unlock it");
-  owner.room.send("map:walls", { edges: [{ x: 4, y: 5, dir: "v", ch: "." }] });
-  owner.room.send("obj:remove", { id: "door-room-ana-s-office" });
-  owner.room.send("map:room:remove", { key: "room-ana-s-office" });
+  const west = st(owner).walls.find((w) => w.a[0] === 4 && w.b[0] === 4 && Math.min(w.a[1], w.b[1]) <= 5)?.id ?? "";
+  owner.room.send("struct:walls", { remove: [west] });
+  owner.room.send("obj:remove", { id: DOOR });
+  owner.room.send("map:room:remove", { key: key });
   await sleep(400);
-  assert.notEqual(home(owner).vWalls[5][4], ".", "its walls stay");
+  assert.notEqual(edgeAt(owner, { dir: "v", x: 4, y: 5 }), ".", "its walls stay");
   assert.ok(door(), "its door stays");
-  assert.ok(home(owner).areas.some((a: { key: string }) => a.key === "room-ana-s-office"));
+  assert.ok(home(owner).areas.some((a: { key: string }) => a.key === key));
   // a wall elsewhere is fine
-  owner.room.send("map:walls", { edges: [{ x: 20, y: 5, dir: "v", ch: "p" }] });
-  await waitFor(() => home(owner).vWalls[5][20] === "p");
+  owner.room.send("struct:walls", { add: [{ a: [20, 5], b: [20, 6], front: "p" }] });
+  await waitFor(() => edgeAt(owner, { dir: "v", x: 20, y: 5 }) === "p");
   // ana unlocks it (from anywhere): bia walks in
-  ana.room.send("door:set", { id: "door-room-ana-s-office", state: "open" });
+  ana.room.send("door:set", { id: DOOR, state: "open" });
   await waitFor(() => JSON.parse(door().props).state === "open");
   await sleep(200);
   await walk(bia, { x: 6.5, y: 5.5 });
   assert.ok(me(bia).y < 8, "open again: bia walks in");
 });
 
-test("desks for a person, and resizing the map", async () => {
+test("desks for a person", async () => {
   const s = ++space;
   const owner = await person(32, s, "member,builder");
   owner.room.send("desk:assign", { id: "seat-3-5-a", ownerId: 33, ownerName: "P33" });
@@ -932,15 +1292,6 @@ test("desks for a person, and resizing the map", async () => {
   owner.room.send("desk:assign", { id: "seat-7-5-a", ownerId: 33, ownerName: "P33" });
   await waitFor(() => JSON.parse(owner.room.state.objects.get("seat-7-5-a").props).ownerId === 33);
   await waitFor(() => JSON.parse(owner.room.state.objects.get("seat-3-5-a").props).ownerId === undefined, 2000);
-  owner.room.send("map:resize", { width: 64, height: 48 });
-  await waitFor(() => home(owner).width === 64 && home(owner).tiles.length === 48);
-  owner.room.send("map:resize", { width: 20, height: 16 });
-  await waitFor(() => home(owner).width === 20);
-  // (on the studio's floor: the floors below aren't resized)
-  const left = [...owner.room.state.objects.values()]
-    .filter((o: { props: string }) => JSON.parse(o.props).level === undefined)
-    .every((o: { x: number; y: number }) => o.x < 20 && o.y < 16);
-  assert.ok(left, "furniture outside the new size is removed");
 });
 
 test("build hand: one builder holds a thing at a time; group moves are all or nothing", async () => {
@@ -1641,7 +1992,7 @@ test("your own booth: you arrive at your spot in it with someone talking in it, 
   const gabe = await person(60, s);
   owner.room.send("map:new", { width: 32, height: 24 });
   await waitFor(() => home(owner).width === 32);
-  owner.room.send("map:room", {
+  const key = await makeRoom(owner, {
     name: "Sam's office",
     kind: "booth",
     x: 4,
@@ -1650,22 +2001,19 @@ test("your own booth: you arrive at your spot in it with someone talking in it, 
     h: 4,
     ownerId: 59,
     ownerName: "P59",
-    walls: true,
-    floor: ",",
   });
-  await waitFor(() => !!owner.room.state.objects.get("door-room-sam-s-office"));
   const mine = (p: Person) =>
     (p.msgs["spawn:mine"] ?? []).at(-1) as { at: { x: number; y: number } | null } | undefined;
   await walk(sam, { x: 6.5, y: 5.5 });
-  assert.equal(me(sam).area, "room-sam-s-office");
+  assert.equal(me(sam).area, key);
   sam.room.send("spawn:mine", { at: { x: me(sam).x, y: me(sam).y } });
   await waitFor(() => mine(sam)?.at != null);
   const spot = mine(sam)?.at as { x: number; y: number };
   // Gabe is let in and stays for a call; Sam steps out and comes back in: his own room
-  sam.room.send("admit", { userId: 60, area: "room-sam-s-office" });
+  sam.room.send("admit", { userId: 60, area: key });
   await waitFor(() => (gabe.msgs.admitted?.length ?? 0) > 0);
   await walk(gabe, { x: 5.5, y: 5.5 });
-  assert.equal(me(gabe).area, "room-sam-s-office");
+  assert.equal(me(gabe).area, key);
   await sam.room.leave(true);
   let again = await person(59, s);
   assert.ok(Math.hypot(me(again).x - spot.x, me(again).y - spot.y) < 0.01, "the owner arrives in his own booth");

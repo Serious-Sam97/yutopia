@@ -551,7 +551,7 @@ async function setState(p: Page, s: State, hour: number, land: { data: string; x
         U.wxOff.value = [e[12], e[14]];
         // the floor's open tiles (the lot: asphalt, concrete, open)
         {
-          const map = tp.map;
+          const map = w.rows(); // (the floor I'm on as rows from its corner, asked of the structure)
           const H = map.tiles.length;
           const W = Math.max(...map.tiles.map((r: string) => r.length));
           const c = canvas(1);

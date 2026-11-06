@@ -128,6 +128,24 @@ function RoomCard({
       </button>
       {open && (
         <div className="px-2.5 pb-2.5 space-y-2.5">
+          <Row label={t("buildRoomName")}>
+            <input
+              key={room.name}
+              className="field flex-1 min-w-0"
+              style={{ padding: "4px 10px", fontSize: 13, borderRadius: 999 }}
+              defaultValue={room.name}
+              maxLength={40}
+              aria-label={`${t("buildRoomName")}: ${room.name}`}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              }}
+              onBlur={(e) => {
+                const n = e.target.value.trim();
+                if (n && n !== room.name) w?.send("map:room:update", { key: room.key, name: n });
+              }}
+            />
+          </Row>
           <Row label={t("buildOwner")}>
             <select
               className="field"
@@ -189,7 +207,7 @@ function RoomCard({
                   aria-label={`${t("buildWalls")}: ${m.label}`}
                   className="w-5 h-5 rounded hover:outline hover:outline-2 hover:outline-[var(--vfd)] outline-offset-1"
                   style={{ background: m.color, border: "1px solid #0008" }}
-                  onClick={() => w?.send("map:room:walls", { key: room.key, wall: m.key })}
+                  onClick={() => w?.send("struct:paint", { room: room.key, mat: m.key })}
                 />
               ))}
             </div>

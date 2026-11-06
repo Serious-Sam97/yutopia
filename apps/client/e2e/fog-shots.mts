@@ -269,7 +269,7 @@ async function setFog(p: Page, f: Fog) {
       // none inside the room I'm in: the tiles round me, not the open sky's (the lot's asphalt, concrete)
       U.mfBox.value = 0;
       if (f.box) {
-        const map = tp.map;
+        const map = w.rows(); // (the floor I'm on as rows from its corner, asked of the structure)
         const me = w.room.state.players.get(w.room.sessionId);
         const open = (x: number, y: number) => {
           const c = map.tiles[y]?.[x];

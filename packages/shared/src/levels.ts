@@ -1,6 +1,7 @@
 import type { WorldObjectDef } from "./catalog.ts";
 import type { Point } from "./iso.ts";
-import { isFloor, type LevelDef, type MapDef } from "./map.ts";
+import { isFloor, type LevelDef, type MapDef, type TileLevel, type TileMap } from "./map.ts";
+import { cellTop } from "./structure/query.ts";
 import { STOREY } from "./units.ts";
 
 // The building: floors stacked STOREY tiles apart (docs/plan/25-building-floors.md).
@@ -52,24 +53,31 @@ export function across(m: MapDef, from: number, to: number, p: Point): Point {
 }
 
 /** One floor as a map of its own (the home floor: the map itself). Call it on
- *  the home map, or on a view (views carry the floors list). */
+ *  the home map, or on a view (views carry the floors list). A tile map's floor has its rows; a
+ *  world's (MapDef.st) is asked of its structure. */
+export function levelMap(m: TileMap, level: number): TileMap | null;
+export function levelMap(m: MapDef, level: number): MapDef | null;
 export function levelMap(m: MapDef, level: number): MapDef | null {
   const home = homeOf(m);
   if (level === home && m.home === undefined) return m;
   const l = m.levels?.find((v) => v.index === level);
   if (!l) return level === floorOf(m) ? m : null;
+  const rows = "tiles" in l ? (l as TileLevel) : null;
   return {
     key: m.key,
     name: l.name,
     width: l.width,
     height: l.height,
-    tiles: l.tiles,
-    hWalls: l.hWalls,
-    vWalls: l.vWalls,
-    hBacks: l.hBacks,
-    vBacks: l.vBacks,
+    ...(rows && {
+      tiles: rows.tiles,
+      hWalls: rows.hWalls,
+      vWalls: rows.vWalls,
+      hBacks: rows.hBacks,
+      vBacks: rows.vBacks,
+    }),
+    ...(m.st && { st: m.st }),
     areas: l.areas,
-    spawn: l.spawn ?? centreOf(l, m.world ? l.ox : 0, m.world ? l.oy : 0),
+    spawn: l.spawn ?? centreOf(m, l, m.world ? l.ox : 0, m.world ? l.oy : 0),
     objects: [],
     floor: l.index,
     ox: l.ox,
@@ -82,7 +90,7 @@ export function levelMap(m: MapDef, level: number): MapDef | null {
 }
 
 /** The home map with floor `lm` (a level view, edited) written back. */
-export function withLevel(root: MapDef, lm: MapDef): MapDef {
+export function withLevel(root: TileMap, lm: TileMap): TileMap {
   const level = floorOf(lm);
   if (level === homeOf(root)) {
     const { home: _h, ox: _x, oy: _y, outdoor: _o, ...rest } = lm;
@@ -97,7 +105,7 @@ export function withLevel(root: MapDef, lm: MapDef): MapDef {
 }
 
 /** A level view as a LevelDef (the stored shape). */
-export function levelDefOf(lm: MapDef, was?: LevelDef): LevelDef {
+export function levelDefOf(lm: TileMap, was?: TileLevel): TileLevel {
   return {
     index: floorOf(lm),
     name: was?.name ?? lm.name,
@@ -116,7 +124,12 @@ export function levelDefOf(lm: MapDef, was?: LevelDef): LevelDef {
   };
 }
 
-function centreOf(l: { width: number; height: number; tiles: string[] }, ox: number, oy: number): Point {
+function centreOf(m: MapDef, l: LevelDef, ox: number, oy: number): Point {
+  // (a world's floor: asked of its structure — its cells by their middles, world)
+  const tiles = (l as Partial<TileLevel>).tiles;
+  const st = m.st;
+  const floorHere = (x: number, y: number): boolean =>
+    tiles ? isFloor(tiles[y]?.[x] ?? " ") : !!st && isFloor(cellTop(st, l.index, x + l.ox, y + l.oy));
   // the floor tile nearest the middle (a floor's own arrival point)
   const cx = l.width / 2;
   const cy = l.height / 2;
@@ -124,7 +137,7 @@ function centreOf(l: { width: number; height: number; tiles: string[] }, ox: num
   let bd = Number.POSITIVE_INFINITY;
   for (let y = 0; y < l.height; y++)
     for (let x = 0; x < l.width; x++) {
-      if (!isFloor(l.tiles[y]?.[x] ?? " ")) continue;
+      if (!floorHere(x, y)) continue;
       const d = (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2;
       if (d < bd) {
         bd = d;

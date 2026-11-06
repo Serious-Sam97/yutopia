@@ -28,7 +28,7 @@ test("wall things hang on a west wall", async ({ page }) => {
   // north wall within reach: where a whiteboard goes and comes back from
   const spot = await page.evaluate(() => {
     const w = (window as any).__yutopia;
-    const m = w.map;
+    const m = w.rows(); // (the floor as rows, asked of the structure)
     const solid = (ch: string | undefined) => !!ch && "pwfbk".includes(ch);
     const floor = (x: number, y: number) => {
       const ch = m.tiles[y]?.[x];

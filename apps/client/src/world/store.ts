@@ -4,6 +4,7 @@ import type { BuildingKind, WayKind } from "@yutopia/shared/grounds";
 import type { LandMode, Paint, TreePick } from "@yutopia/shared/grounds-brush";
 import type { GrowBiome, ThingKind } from "@yutopia/shared/grounds-edits";
 import type { BattleEvent, Needs, PetLook, PetOutfit, Species } from "@yutopia/shared/pets";
+import { WALL_H } from "@yutopia/shared/units";
 import { useRef, useSyncExternalStore } from "react";
 import type { Setup } from "@/lib/api";
 
@@ -191,7 +192,7 @@ export interface GameView {
 }
 
 export type BuildTool = "furniture" | "walls" | "rooms" | "desks" | "map";
-export type PaintMode = "line" | "box" | "fill" | "erase";
+export type PaintMode = "line" | "arc" | "box" | "adjust" | "fill" | "erase";
 /** God mode's tools (the bottom bar): Select, then each kind of edit (phases 6–9 of plan 53; Grow,
  *  plan 69's phase 10). */
 export const GOD_TOOLS = ["select", "land", "paint", "roads", "nature", "things", "buildings", "grow"] as const;
@@ -264,6 +265,12 @@ export interface GodHud {
     ry: number;
     s: number;
     text: string;
+    /** an outdoor wall's height (m) — plan 72 phase 11: god-mode walls with heights */
+    h: number;
+    /** a line's runs turned to steps of this (°; 0: any way) — and their ends onto other lines' */
+    snapA: 0 | 15 | 45;
+    /** a line's runs bent (an arc: from the last point to the next, bowed through a third click) */
+    curve: boolean;
     sel: { key: string; kind: ThingKind; locked: string | null } | null;
     blocked: string | null;
     drawing: { n: number; m: number } | null;
@@ -318,7 +325,7 @@ export interface GodHud {
 
 // The Walls tool, Sims-style (docs/plan/11-wall-building.md): build walls and
 // openings, paint wall faces, paint floors, or select walls (the inspector).
-export type WallMode = "build" | "paint" | "floors" | "select";
+export type WallMode = "build" | "paint" | "floors" | "roof" | "select";
 // how walls show while building: all up, cut away round what you point at, all down
 export type WallView = "up" | "cut" | "down";
 // The chip by the pointer in the Walls tool: the face it's on (which side, the
@@ -333,7 +340,24 @@ export type WallTag =
       why: string | null;
       n: number;
     }
-  | { kind: "run"; n: number; w?: number; h?: number; remove: boolean; skipped: number; why: string | null };
+  | { kind: "run"; n: number; w?: number; h?: number; remove: boolean; skipped: number; why: string | null }
+  // a wall drawn free (plan 72 phase 11): its length and angle, what it snapped to, the length typed
+  | {
+      kind: "draw";
+      len: number;
+      ang: number;
+      snap: string;
+      typed: string | null;
+      remove: boolean;
+      n: number;
+      why: string | null;
+      /** an arc being bowed: how far (m) and whether it's a half circle */
+      bow?: number | null;
+      half?: boolean;
+      /** a wall's height and thickness (Adjust: the one under the pointer, as it's dragged) */
+      height?: number;
+      thick?: number;
+    };
 export interface WallPanel {
   dir: "h" | "v";
   x: number;
@@ -430,13 +454,28 @@ export interface HudState {
     catalogTab: string; // the catalog's tab (the Walls panel sends you to Doors or Windows)
     paintMode: PaintMode;
     wallMode: WallMode;
+    // walls drawn free snap to this grid (m) and these angle steps (°); 0: off (Shift: all off)
+    snapGrid: number;
+    snapAngle: number;
+    // how high and thick new walls are (m; plan 72 phase 11.4)
+    wallHeight: number;
+    wallThick: number;
+    // a room the walls just closed round (its key): to be named (plan 72 phase 11.5)
+    foundRoom: string | null;
+    // a wall drawn free picked in Select (its id; plan 72 phase 11.11): the inspector's
+    freeSel: string | null;
+    // the working height: m over the floor walls and floors are drawn at (0: the floor; a
+    // mezzanine's — plan 72 phase 11.7)
+    over: number;
+    // the Roof tool's (plan 72 phase 11.7): what kind, how steep (°), a gable's ridge turned
+    roofKind: "flat" | "gable" | "hip";
+    roofPitch: number;
+    roofRidge: 0 | 1;
     paint: string; // the material Paint puts on faces (p w f b k)
     wallView: WallView;
     wallTag: WallTag | null;
-    wallSel: WallPanel[]; // walls selected (Select): the inspector's
     props: Record<string, unknown> | null; // what new furniture copies (C)
     fits: boolean; // the ghost under the pointer fits
-    roomDraft: { x: number; y: number; w: number; h: number } | null;
     deskDraft: string | null;
     pickSpawn: boolean;
     history: { undo: number; redo: number; undoLabel: string | null; redoLabel: string | null };
@@ -456,6 +495,8 @@ export interface HudState {
   lift: {
     id: string;
     floors: { level: number; name: string }[];
+    /** the station of the stop I'm in (a mezzanine's up its floor — plan 72 phase 11) */
+    here: number;
     at: number;
     to: number;
     phase: string;
@@ -544,13 +585,21 @@ const initial: HudState = {
     catalogTab: "seating",
     paintMode: "line",
     wallMode: "build",
+    snapGrid: 0.5,
+    snapAngle: 15,
+    wallHeight: WALL_H,
+    wallThick: 0.2,
+    foundRoom: null,
+    freeSel: null,
+    over: 0,
+    roofKind: "gable",
+    roofPitch: 30,
+    roofRidge: 0,
     paint: "b",
     wallView: "cut",
     wallTag: null,
-    wallSel: [],
     props: null,
     fits: true,
-    roomDraft: null,
     deskDraft: null,
     pickSpawn: false,
     history: { undo: 0, redo: 0, undoLabel: null, redoLabel: null },
@@ -572,7 +621,19 @@ const initial: HudState = {
     issues: [],
     roads: { mode: "draw", kind: "road", w: 7, pave: false, lamps: true, drawing: null, sel: null },
     nature: { mode: "plant", pick: "mix", thick: 55, size: 24 },
-    things: { mode: "place", kind: "bench", ry: 0, s: 1, text: "", sel: null, blocked: null, drawing: null },
+    things: {
+      mode: "place",
+      kind: "bench",
+      ry: 0,
+      s: 1,
+      text: "",
+      h: 2.4,
+      snapA: 15,
+      curve: false,
+      sel: null,
+      blocked: null,
+      drawing: null,
+    },
     buildings: {
       kind: "house",
       w: 12,

@@ -5,7 +5,7 @@ import { parkedPose } from "./car/park.ts";
 import type { WorldObjectDef } from "./catalog.ts";
 import { quarterOf, quarterYaw } from "./catalog.ts";
 import { LOT, lotLayout } from "./lot.ts";
-import type { LevelDef, MapDef } from "./map.ts";
+import type { TileLevel, TileMap } from "./map.ts";
 import { studio } from "./maps/studio.ts";
 import { openingsIntoWalls } from "./openings.ts";
 import { splitAll } from "./tops.ts";
@@ -25,10 +25,10 @@ function world() {
   const map = upgradeGround(b.map) ?? b.map;
   return { map, objects };
 }
-const ground = (map: MapDef) => map.levels?.find((l) => l.index === 0) as LevelDef;
+const ground = (map: TileMap) => map.levels?.find((l) => l.index === 0) as TileLevel;
 // the building's coords → the ground floor's, and a car's middle back
-const F = (l0: LevelDef, x: number, z: number) => ({ x: Math.floor(x - l0.ox), y: Math.floor(z - l0.oy) });
-const mid = (l0: LevelDef, o: WorldObjectDef) => {
+const F = (l0: TileLevel, x: number, z: number) => ({ x: Math.floor(x - l0.ox), y: Math.floor(z - l0.oy) });
+const mid = (l0: TileLevel, o: WorldObjectDef) => {
   const p = parkedPose(o);
   return { x: p.x + l0.ox, z: p.y + l0.oy };
 };
@@ -40,7 +40,7 @@ function before(deep: 48 | 60) {
   const rows = l0.tiles.map((r) => [...r]);
   for (let z = LOT.z0; z < LOT.z1; z++)
     for (let x = LOT.x0; x < LOT.x1; x++) rows[z - l0.oy][x - l0.ox] = z < deep ? "a" : " ";
-  const level: LevelDef = {
+  const level: TileLevel = {
     ...l0,
     tiles: rows.map((r) => r.join("")),
     areas: l0.areas.map((a) => (a.key === "lot" ? { ...a, h: deep + 8 } : a)),

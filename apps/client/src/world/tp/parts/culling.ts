@@ -1,4 +1,5 @@
-import { isFloor, STAIRS_D, STOREY, tileAt } from "@yutopia/shared";
+import { isFloor, STAIRS_D, STOREY } from "@yutopia/shared";
+import { cellOf } from "@yutopia/shared/structure";
 import { Box3, Frustum, Matrix4, type Mesh, type Object3D, type Sphere, Vector3 } from "three";
 import { BelowCull, boxInParent, HIDDEN_LAYER } from "../below-cull";
 import type { World3 } from "../build";
@@ -63,7 +64,7 @@ export class Culling {
     // (and its walls: solid ones hide what's outside below their top — not while faded)
     const shell = this.c.world.shell();
     const map = this.c.world.map;
-    this.below3.setShell(shell, shell.key, (x, y) => !isFloor(tileAt(map, x, y)));
+    this.below3.setShell(shell, shell.key, (x, y) => !isFloor(cellOf(map, x, y)));
     this.below3.faded = this.c.world.fades.filter((f) => f.alpha < 0.999 && (!f.item || f.wall));
     const units = this.cullUnits;
     let n = 0;

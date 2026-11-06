@@ -1,7 +1,8 @@
 import { quarterOf, quarterYaw, type WorldObjectDef } from "./catalog.ts";
 import type { Point } from "./iso.ts";
-import { type AreaDef, type Edge, edgeAt, inArea, isFloor, type MapDef, tileAt } from "./map.ts";
+import { type AreaDef, type Edge, inArea, isFloor, type MapDef } from "./map.ts";
 import { doorLockable, openingCentre, ringOf, wallTakes } from "./openings.ts";
+import { cellOf, wallOf } from "./structure/query.ts";
 
 // ── doors ──────────────────────────────────────────────────────────────────
 // A door sits on a tile edge: rot even = the north edge of its tile (in a wall
@@ -11,15 +12,23 @@ export function doorEdge(o: { x: number; y: number; yaw?: number }): Edge {
 }
 
 // The middle of a door (tile coords; a double door spans two edges).
-export function doorCentre(o: { kind?: string; x: number; y: number; yaw?: number }): Point {
+export function doorCentre(o: {
+  kind?: string;
+  x: number;
+  y: number;
+  yaw?: number;
+  props?: Record<string, unknown> | null;
+}): Point {
+  if (o.props?.free === true)
+    return openingCentre({ kind: o.kind ?? "door", x: o.x, y: o.y, yaw: o.yaw, props: o.props });
   return openingCentre({ kind: o.kind ?? "door", x: o.x, y: o.y, yaw: quarterYaw(quarterOf(o)) });
 }
 
 // Can a door go on this edge? In a wall that takes one (openings.ts), with
 // floor on both sides. (Where exactly, with what's around: openingBlocker.)
 export function doorFits(map: MapDef, e: Edge): boolean {
-  const floor = (x: number, y: number) => isFloor(tileAt(map, x, y));
-  if (!wallTakes("door", edgeAt(map, e))) return false;
+  const floor = (x: number, y: number) => isFloor(cellOf(map, x, y));
+  if (!wallTakes("door", wallOf(map, e))) return false;
   return e.dir === "h" ? floor(e.x, e.y - 1) && floor(e.x, e.y) : floor(e.x - 1, e.y) && floor(e.x, e.y);
 }
 
@@ -33,6 +42,14 @@ export function doorRoom(
   if (typeof key === "string") {
     const a = map.areas.find((x) => x.key === key);
     if (a) return a;
+  }
+  // (in a wall drawn free: the rooms one side of its middle and not the other, half a metre out)
+  if (door.props?.free === true) {
+    const c = doorCentre({ ...door, kind: String((door as { kind?: string }).kind ?? "door") });
+    const yaw = door.yaw ?? 0;
+    const [nx, ny] = [-Math.sin(yaw) * 0.5, Math.cos(yaw) * 0.5];
+    const rings = map.areas.filter((a) => inArea(a, c.x + nx, c.y + ny) !== inArea(a, c.x - nx, c.y - ny));
+    return rings.find((a) => a.ownerId) ?? rings[0] ?? null;
   }
   const e = doorEdge(door);
   // (the rooms whose edge it's on: the room one side of it, not the other — its outline's, phase 10)

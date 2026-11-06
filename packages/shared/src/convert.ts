@@ -4,7 +4,7 @@ import {
   emptyEdges,
   hWall,
   isFloor,
-  type MapDef,
+  type TileMap,
   NO_WALL,
   setEdge,
   tileAt,
@@ -24,7 +24,7 @@ import {
 // wall items move onto the wall they hung on; doors move onto the edge.
 
 export interface Converted {
-  map: MapDef;
+  map: TileMap;
   objects: WorldObjectDef[]; // every object, positions updated
   changed: WorldObjectDef[]; // the ones that moved (to persist)
 }
@@ -35,7 +35,7 @@ export function isV2(m: { hWalls?: unknown; vWalls?: unknown }): boolean {
 
 // v1 doorway: a gap of 1–3 floor tiles in a wall line, floor on both sides
 // (0 = the wall runs along x).
-function doorwayRot(map: MapDef, x: number, y: number): 0 | 1 | null {
+function doorwayRot(map: TileMap, x: number, y: number): 0 | 1 | null {
   const floor = (tx: number, ty: number) => isFloor(tileAt(map, tx, ty));
   const wall = (tx: number, ty: number) => tileAt(map, tx, ty) === WALL;
   if (!floor(x, y)) return null;
@@ -55,7 +55,7 @@ function doorwayRot(map: MapDef, x: number, y: number): 0 | 1 | null {
 }
 
 export function convertV1(
-  v1: MapDef,
+  v1: TileMap,
   objects: WorldObjectDef[] = v1.objects,
   mats?: (a: AreaDef | null) => WallMat,
 ): Converted {
@@ -154,7 +154,7 @@ export function convertV1(
   });
 
   // walls on the edges between tiles that weren't connected
-  const map: MapDef = { ...v1, tiles, areas, ...emptyEdges(W, H), objects: [] };
+  const map: TileMap = { ...v1, tiles, areas, ...emptyEdges(W, H), objects: [] };
   // two anchors are connected if they're the same floor, side by side, or two
   // apart with a floor tile next to both (a corner or a straight line of floor)
   const floorAt = (x: number, y: number) => isFloor(tileAt(v1, x, y));

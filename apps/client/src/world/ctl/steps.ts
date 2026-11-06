@@ -1,5 +1,6 @@
-import { areaAt, footprint, hearingGain, onLevel, parseAvatar, quarterOf, tileAt } from "@yutopia/shared";
+import { areaAt, footprint, hearingGain, onLevel, parseAvatar, quarterOf } from "@yutopia/shared";
 import { keyFooting, MATS, TILE_FOOTING } from "@yutopia/shared/footing";
+import { cellOf } from "@yutopia/shared/structure";
 import { mixer } from "../audio";
 import type { WorldController } from "../controller";
 import { type Floor, sound } from "../sound";
@@ -49,7 +50,7 @@ export class Steps {
       : null;
     if (f) return f;
     if (this.c.grid.onLand(x, y)) return land(on === "land");
-    const t = this.matAt(x, y) ?? TILE_FOOTING[tileAt(this.c.map, Math.floor(x), Math.floor(y))] ?? "wood";
+    const t = this.matAt(x, y) ?? TILE_FOOTING[cellOf(this.c.map, Math.floor(x), Math.floor(y))] ?? "wood";
     // (the lot's asphalt, open to the sky, wet in the rain as the roads are: docs/plan/65)
     return t === "asphalt" && this.c.level === 0 && (this.c.G?.underfoot().wet ?? 0) > 0.4 ? "wet" : t;
   }
@@ -108,7 +109,7 @@ export class Steps {
    *  windows' rain below. */
   hearAround(dt: number) {
     const land = this.c.level === 0 && this.c.grid.onLand(this.c.me.x, this.c.me.y);
-    const t = tileAt(this.c.map, Math.floor(this.c.me.x), Math.floor(this.c.me.y));
+    const t = cellOf(this.c.map, Math.floor(this.c.me.x), Math.floor(this.c.me.y));
     // (the top: the office's own floor too — the building's levels list the floors under it)
     const top = Math.max(this.c.building.floor ?? 0, ...(this.c.building.levels ?? []).map((l) => l.index));
     this.c.life?.hear(

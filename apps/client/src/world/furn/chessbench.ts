@@ -1,4 +1,4 @@
-import { avatarFromSeed, emptyEdges, type MapDef, quarterYaw, setEdge, type WorldObjectDef } from "@yutopia/shared";
+import { avatarFromSeed, emptyEdges, quarterYaw, setEdge, type TileMap, type WorldObjectDef } from "@yutopia/shared";
 import { parseFen, START } from "@yutopia/shared/games68/chess";
 import { ART_PX } from "@yutopia/shared/units";
 import * as T from "three";
@@ -423,7 +423,7 @@ export async function runChess(el: HTMLElement, o: ChessOpts): Promise<() => voi
   // ── the room ──
   const W = 9;
   const H = 9;
-  const map: MapDef = {
+  const map: TileMap = {
     key: "chess",
     name: "chess",
     width: W,

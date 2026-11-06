@@ -4,7 +4,7 @@ import { canPlace } from "./build.ts";
 import { quarterOf, quarterYaw } from "./catalog.ts";
 import { convertV1 } from "./convert.ts";
 import { doorEdge, doorFits } from "./doors.ts";
-import { areaAt, holdsItems, hWall, isFloor, MapBuilder, type MapDef, tileAt, WALL } from "./map.ts";
+import { areaAt, holdsItems, hWall, isFloor, MapBuilder, type TileMap, tileAt, WALL } from "./map.ts";
 import { layoutFromMap, validLayout } from "./map-edit.ts";
 import { studio, studioV1 } from "./maps/studio.ts";
 import { openingsIntoWalls } from "./openings.ts";
@@ -12,7 +12,7 @@ import { testWorld, wayOn } from "./physics/testing.ts";
 
 // Connected components of walkable tiles: v1 by tile adjacency, v2 by steps
 // (which also respect walls on edges).
-function components(map: MapDef, step: ((x: number, y: number, nx: number, ny: number) => boolean) | null): Int32Array {
+function components(map: TileMap, step: ((x: number, y: number, nx: number, ny: number) => boolean) | null): Int32Array {
   const W = map.width;
   const comp = new Int32Array(W * map.height).fill(-1);
   let n = 0;
@@ -95,7 +95,7 @@ test("conversion moves boards onto their wall and doors onto their edge", async 
     for (let x = 4; x <= 10; x++) grid[y][x] = x === 4 || x === 10 || y === 4 || y === 9 ? WALL : ",";
   grid[9][7] = ",";
   const tiles = grid.map((r) => r.join(""));
-  const v1: MapDef = {
+  const v1: TileMap = {
     key: "t",
     name: "T",
     width: 20,

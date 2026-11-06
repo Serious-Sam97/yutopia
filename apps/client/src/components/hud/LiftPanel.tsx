@@ -81,7 +81,7 @@ export function LiftPanel() {
     >
       <div className="vfd-window flex items-center justify-between px-3 h-14 mb-2">
         <span className="lcd text-[40px] leading-none">
-          {floorLabel(lift.phase === "moving" ? lift.at : floor)}
+          {floorLabel(lift.phase === "moving" ? lift.at : lift.here)}
           <span className="text-[24px] align-top ml-1">{arrow}</span>
         </span>
         <span className="mono text-[11px] text-right leading-tight" style={{ color: "var(--cream-dim)" }}>
@@ -98,7 +98,7 @@ export function LiftPanel() {
       </p>
       <div className="flex flex-col gap-1.5">
         {lift.floors.map((f) => {
-          const here = f.level === floor && !going;
+          const here = f.level === lift.here && !going;
           const lit = f.level === dest;
           return (
             <button
@@ -106,7 +106,7 @@ export function LiftPanel() {
               type="button"
               className="flex items-center gap-3 text-left rounded-full pr-2 hover:bg-white/15"
               onClick={() => w.send("lift:go", { id: lift.id, level: f.level })}
-              aria-current={f.level === floor ? "true" : undefined}
+              aria-current={f.level === lift.here ? "true" : undefined}
               aria-pressed={lit}
               data-floor={f.level}
               // (chosen on a pad)
@@ -143,7 +143,7 @@ export function LiftPanel() {
       <div className="flex gap-2 mt-3 pt-3" style={{ borderTop: "1px solid rgba(0,0,0,.25)" }}>
         {(
           [
-            ["◀▶", "liftOpen", () => w.send("lift:go", { id: lift.id, level: floor })],
+            ["◀▶", "liftOpen", () => w.send("lift:go", { id: lift.id, level: lift.here })],
             ["▶◀", "liftClose", () => w.send("lift:close", { id: lift.id })],
           ] as const
         ).map(([icon, key, act]) => (

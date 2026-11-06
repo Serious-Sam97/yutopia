@@ -1,4 +1,5 @@
 import { entry, footprint, type WorldObjectDef } from "./catalog.ts";
+import type { Structure } from "./structure/types.ts";
 
 // How many tiles of wall a wall item's drawing is (0 = not a wall item).
 export function entryWallItem(kind: string): number {
@@ -108,17 +109,17 @@ export function inArea(a: AreaDef, x: number, y: number): boolean {
   return n % 2 === 1;
 }
 
+/** A building's floors as the world has them (structure/view.ts: made from the structure, docs/plan/72
+ *  phase 11 — its floors and walls asked of `st`, structure/query.ts) or as a tile map has them
+ *  (`TileMap`: the generators', the old saves' — read only to be turned into a structure). */
 export interface MapDef {
   key: string;
   name: string;
+  /** its extent in cells (a floor's: the cells it was laid out on), from its corner (ox, oy) */
   width: number;
   height: number;
-  tiles: string[]; // floor chars or VOID (v1 maps also had WALL tiles)
-  hWalls: string[]; // height + 1 rows of width chars
-  vWalls: string[]; // height rows of width + 1 chars
-  // the other face's material where it differs (two faces, above); absent = none
-  hBacks?: string[];
-  vBacks?: string[];
+  /** the structure it was made from (a world's: every floor and wall asked of it) */
+  st?: Structure;
   spawn: { x: number; y: number };
   areas: AreaDef[];
   objects: WorldObjectDef[];
@@ -129,7 +130,7 @@ export interface MapDef {
   floor?: number;
   ox?: number;
   oy?: number;
-  /** its places are the world's (plan 72 phase 6: every map the structure gives, structure/to-map):
+  /** its places are the world's (plan 72 phase 6: every map the structure gives, structure/view.ts):
    *  areas, spawn and every x, y asked of it in world metres, its tile rows starting at (ox, oy).
    *  Absent: an older map, its places its own tiles' (a floor's corner at ox, oy in the
    *  building's: levels.ts) — the built-in maps and the old boot's conversions (structure/finish). */
@@ -142,8 +143,24 @@ export interface MapDef {
   core?: { x: number; y: number };
 }
 
+/** The tile rows a tile map's floor is: its floor chars, the walls on its cells' edges. */
+export interface TileRows {
+  tiles: string[]; // floor chars or VOID (v1 maps also had WALL tiles)
+  hWalls: string[]; // height + 1 rows of width chars
+  vWalls: string[]; // height rows of width + 1 chars
+  // the other face's material where it differs (two faces, above); absent = none
+  hBacks?: string[];
+  vBacks?: string[];
+}
+
+/** A map drawn in tiles (the generators', the built-in maps', the old saves'): turned into a
+ *  structure (structure/from-map.ts) before the world reads it. */
+export interface TileMap extends MapDef, TileRows {
+  levels?: TileLevel[];
+}
+
 // One floor of the building other than the home one (levels.ts): a map of its
-// own (tiles, walls, rooms), placed by its corner in the home floor's coords.
+// own (rooms; a tile map's: its tiles and walls), placed by its corner in the home floor's coords.
 export interface LevelDef {
   index: number;
   name: string;
@@ -152,14 +169,11 @@ export interface LevelDef {
   outdoor?: boolean; // open sky (the parking lot): no ceiling, snow falls
   width: number;
   height: number;
-  tiles: string[];
-  hWalls: string[];
-  vWalls: string[];
-  hBacks?: string[];
-  vBacks?: string[];
   areas: AreaDef[];
   spawn?: { x: number; y: number };
 }
+/** A tile map's other floor: its rows too. */
+export interface TileLevel extends LevelDef, TileRows {}
 
 /** Where a map's tile rows start, in the coordinates its places are in: a world map's corner
  *  (MapDef.world), an older map's own 0, 0. */
@@ -196,7 +210,7 @@ export function tileInMap(
 }
 
 // The wall on the north edge of (x, y) / the west edge of (x, y).
-export function hWall(map: MapDef, x: number, y: number): string {
+export function hWall(map: TileMap, x: number, y: number): string {
   if (map.world) {
     x -= map.ox ?? 0;
     y -= map.oy ?? 0;
@@ -204,7 +218,7 @@ export function hWall(map: MapDef, x: number, y: number): string {
   if (x < 0 || x >= map.width || y < 0 || y > map.height) return NO_WALL;
   return map.hWalls[y]?.[x] ?? NO_WALL;
 }
-export function vWall(map: MapDef, x: number, y: number): string {
+export function vWall(map: TileMap, x: number, y: number): string {
   if (map.world) {
     x -= map.ox ?? 0;
     y -= map.oy ?? 0;
@@ -212,27 +226,27 @@ export function vWall(map: MapDef, x: number, y: number): string {
   if (y < 0 || y >= map.height || x < 0 || x > map.width) return NO_WALL;
   return map.vWalls[y]?.[x] ?? NO_WALL;
 }
-export function edgeAt(map: MapDef, e: Edge): string {
+export function edgeAt(map: TileMap, e: Edge): string {
   return e.dir === "h" ? hWall(map, e.x, e.y) : vWall(map, e.x, e.y);
 }
 
 // The material of one face of a wall (side +1: its +y / +x face), or null when
 // it isn't a two-faced wall.
-export function faceMat(map: MapDef, e: Edge, side: number): WallMat | null {
+export function faceMat(map: TileMap, e: Edge, side: number): WallMat | null {
   const ch = edgeAt(map, e);
   if (!isFacedWall(ch)) return null;
   if (side > 0) return ch.toLowerCase() as WallMat;
   const b = backAt(map, e);
   return b !== NO_WALL ? (b as WallMat) : (ch.toLowerCase() as WallMat);
 }
-export function backAt(map: MapDef, e: Edge): string {
+export function backAt(map: TileMap, e: Edge): string {
   const o = originOf(map);
   const b = (e.dir === "h" ? map.hBacks : map.vBacks)?.[e.y - o.y]?.[e.x - o.x];
   return b && FACE_MATS.includes(b) ? b : NO_WALL;
 }
 
 // Is there a wall between two side-by-side tiles?
-export function wallBetween(map: MapDef, x: number, y: number, nx: number, ny: number): string {
+export function wallBetween(map: TileMap, x: number, y: number, nx: number, ny: number): string {
   if (nx === x + 1 && ny === y) return vWall(map, nx, y);
   if (nx === x - 1 && ny === y) return vWall(map, x, y);
   if (ny === y + 1 && nx === x) return hWall(map, x, ny);
@@ -241,7 +255,7 @@ export function wallBetween(map: MapDef, x: number, y: number, nx: number, ny: n
 }
 
 // An edge on the outside of the building (floor on one side only).
-export function isOuterEdge(map: MapDef, e: Edge): boolean {
+export function isOuterEdge(map: TileMap, e: Edge): boolean {
   const a = e.dir === "h" ? tileAt(map, e.x, e.y - 1) : tileAt(map, e.x - 1, e.y);
   const b = tileAt(map, e.x, e.y);
   return isFloor(a) !== isFloor(b);
@@ -312,7 +326,7 @@ export function setBack(
 export const hasBacks = (map: { hBacks?: string[]; vBacks?: string[] }): boolean =>
   [...(map.hBacks ?? []), ...(map.vBacks ?? [])].some((r) => /[^.]/.test(r));
 
-export function tileAt(map: MapDef, x: number, y: number): string {
+export function tileAt(map: TileMap, x: number, y: number): string {
   if (map.world) {
     x -= map.ox ?? 0;
     y -= map.oy ?? 0;

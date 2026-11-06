@@ -9,6 +9,9 @@ import {
   objLevel,
   quarterOf,
   STOREY,
+  sameStation,
+  stationOf,
+  stopOver,
   type WorldObjectDef,
 } from "@yutopia/shared";
 import type { WorldController } from "../controller";
@@ -55,7 +58,8 @@ export class Lifts {
     const p = o.props ?? {};
     const ph = String(p.ph ?? "");
     const len = (Number(p.len) || 0) / 1000;
-    const here = p.at === this.c.level;
+    // (at this stop: its station — a mezzanine's up its floor, plan 72 phase 11)
+    const here = typeof p.at === "number" && sameStation(p.at, stationOf(o, this.c.building));
     const c = { x: o.x + 1, y: o.y + 1 };
     const inside = inLift(o, this.c.me);
     const gain = inside ? 1 : nearGain(Math.hypot(c.x - this.c.me.x, c.y - this.c.me.y));
@@ -80,17 +84,23 @@ export class Lifts {
   liftDrawn(o: WorldObjectDef): WorldObjectDef {
     if (o.kind !== "elevator") return o;
     const now = performance.now();
-    const m = liftMotion(o, objLevel(o, this.c.building), (now - (this.liftSince.get(o.id) ?? now)) / 1000);
+    const m = liftMotion(o, stationOf(o, this.c.building), (now - (this.liftSince.get(o.id) ?? now)) / 1000);
     return { ...o, props: { ...(o.props ?? {}), anim: Math.round(m.doors * 5) / 5, here: m.here } };
   }
 
   /** The car I'm standing in on my floor (and its motion), if I am. */
   myLift(now: number): { o: WorldObjectDef; m: LiftMotion } | null {
+    // (of a shaft's stops on my floor, the one at my height: its floor's, or its mezzanine's)
+    let best: WorldObjectDef | null = null;
+    let bd = Number.POSITIVE_INFINITY;
     for (const o of this.c.objs.values()) {
       if (o.kind !== "elevator" || objLevel(o, this.c.building) !== this.c.level || !inLift(o, this.c.me)) continue;
-      return { o, m: liftMotion(o, this.c.level, (now - (this.liftSince.get(o.id) ?? now)) / 1000) };
+      const d = Math.abs(this.c.height.z - stopOver(o));
+      if (d < bd) [best, bd] = [o, d];
     }
-    return null;
+    if (!best) return null;
+    const st = stationOf(best, this.c.building);
+    return { o: best, m: liftMotion(best, st, (now - (this.liftSince.get(best.id) ?? now)) / 1000) };
   }
 
   /** Each shaft's car where it is now, as Jolt has it (docs/plan/72 phase 8: lifts as moving

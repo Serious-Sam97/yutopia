@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { floorsOf, getMap, levelMap, spanOf } from "@yutopia/shared";
-import { structureFromMap } from "@yutopia/shared/structure";
+import { cellOf, structureFromMap } from "@yutopia/shared/structure";
 import { finishWorld } from "@yutopia/shared/structure/finish";
 import { localView } from "@yutopia/shared/structure/fold";
 import { Out } from "./kit3d";
@@ -66,7 +66,7 @@ test("a wall at 45°: off the lattice, a metre at a time along it, each piece tu
 
 test("the campus: the ceiling over the structure's indoor slabs covers the tiles the old one did, every floor", async () => {
   const { slabBoxes } = await import("@yutopia/shared/physics/structure-solids");
-  const { isFloor, tileAt, wellsOf } = await import("@yutopia/shared");
+  const { isFloor, wellsOf } = await import("@yutopia/shared");
   const studio = getMap("studio");
   const done = finishWorld(studio, studio.objects, { fresh: true, building: true });
   const s = structureFromMap(done.map);
@@ -94,7 +94,7 @@ test("the campus: the ceiling over the structure's indoor slabs covers the tiles
     const differ: string[] = [];
     for (let y = 0; y < local.height; y++)
       for (let x = 0; x < local.width; x++) {
-        const ch = tileAt(local, x, y);
+        const ch = cellOf(local, x, y);
         const old = isFloor(ch) && ch !== "a" && ch !== "c" && !wells.has(`${x},${y}`);
         if (covered(x + 0.5, y + 0.5) !== old) differ.push(`${x},${y}`);
       }
@@ -104,7 +104,7 @@ test("the campus: the ceiling over the structure's indoor slabs covers the tiles
 
 test("the campus: what's floor by the structure's slabs (below-cull's) is what the tiles said, every floor", async () => {
   const { crossings } = await import("@yutopia/shared/physics/structure-solids");
-  const { isFloor, tileAt } = await import("@yutopia/shared");
+  const { isFloor } = await import("@yutopia/shared");
   const studio = getMap("studio");
   const done = finishWorld(studio, studio.objects, { fresh: true, building: true });
   const s = structureFromMap(done.map);
@@ -121,7 +121,7 @@ test("the campus: what's floor by the structure's slabs (below-cull's) is what t
     for (let y = -1; y <= local.height; y++)
       for (let x = -1; x <= local.width; x++) {
         const bySlab = crossings(rings, y + 0.5).filter((c) => c < x + 0.5).length % 2 === 1;
-        if (bySlab !== isFloor(tileAt(local, x, y))) differ.push(`${x},${y}`);
+        if (bySlab !== isFloor(cellOf(local, x, y))) differ.push(`${x},${y}`);
       }
     assert.deepEqual(differ, [], `floor ${level}`);
   }

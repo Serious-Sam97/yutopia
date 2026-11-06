@@ -27,15 +27,6 @@ async function clickTile(page: Page, x: number, y: number) {
   await page.waitForTimeout(120);
   await page.mouse.click(p.x, p.y);
 }
-async function dragTiles(page: Page, from: [number, number], to: [number, number]) {
-  await look(page, (from[0] + to[0]) / 2 + 0.5, (from[1] + to[1]) / 2 + 0.5);
-  const a = await screen(page, ...from);
-  const b = await screen(page, ...to);
-  await page.mouse.move(a.x, a.y);
-  await page.mouse.down();
-  for (let i = 1; i <= 12; i++) await page.mouse.move(a.x + ((b.x - a.x) * i) / 12, a.y + ((b.y - a.y) * i) / 12);
-  await page.mouse.up();
-}
 // drag along world points (walls go on the lines between tiles)
 async function dragWorld(page: Page, from: [number, number], to: [number, number]) {
   await look(page, (from[0] + to[0]) / 2, (from[1] + to[1]) / 2);
@@ -57,6 +48,12 @@ async function dragWorld(page: Page, from: [number, number], to: [number, number
   await page.mouse.up();
 }
 const st = (page: Page, fn: (s: any) => unknown) => page.evaluate(fn as never, null as never);
+// (the home floor as rows from its corner, asked of the structure: plan 72 phase 11)
+const home = (page: Page) =>
+  page.evaluate(() => {
+    const w = (window as any).__yutopia;
+    return w.rows(w.structure.home);
+  });
 
 test("build: blank map, a room with an owner, walls, a desk, and a locked door", async ({ browser }) => {
   // a whole map built by two people (and screenshots of it): more than the default
@@ -86,33 +83,81 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
   await ana.waitForTimeout(600);
   await build(true, "rooms");
 
-  // 2 · a room for Ana, with walls and a door
-  await dragTiles(ana, [4, 4], [8, 7]);
-  await ana.getByPlaceholder("Ana's office").fill("Ana's office");
-  await ana.getByLabel("Owner (can lock its doors)").selectOption({ label: "Ana Demo" });
-  await ana.getByRole("button", { name: "Create room" }).click();
+  // 2 · a room for Ana, with walls and a door (plan 72 phase 11: walls closed round it find it, as
+  // "New room"; named, given an owner in Rooms; its door a thing put into its south wall)
+  // (build mode's own code in: the prompt that names a room found comes from it)
+  await ana.waitForFunction(() => !!(window as any).__yutopia.build, null, { timeout: 15_000 });
+  await ana.evaluate(() =>
+    (window as any).__yutopia.send("struct:walls", {
+      add: [
+        { a: [4, 4], b: [9, 4], front: "p" },
+        { a: [9, 4], b: [9, 8], front: "p" },
+        { a: [9, 8], b: [4, 8], front: "p" },
+        { a: [4, 8], b: [4, 4], front: "p" },
+      ],
+    }),
+  );
+  const found = () =>
+    st(
+      ana,
+      () =>
+        (window as any).__yutopia.structure.rooms.find(
+          (r: any) =>
+            r.props?.name === "New room" && r.rect[0] <= 6.5 && r.rect[2] >= 6.5 && r.rect[1] <= 6 && r.rect[3] >= 6,
+        )?.key ?? null,
+    );
+  await expect.poll(found).not.toBeNull();
+  const roomKey = (await found()) as string;
+  // (named in the prompt the walls closing round it bring up; its owner in its card in Rooms)
+  const prompt = ana.getByTestId("found-room");
+  await prompt.getByRole("textbox").fill("Ana's office");
+  await prompt.getByRole("textbox").press("Enter");
+  const props = () =>
+    ana.evaluate(
+      (k) => (window as any).__yutopia.structure.rooms.find((r: any) => r.key === k)?.props ?? {},
+      roomKey,
+    ) as Promise<{ name?: string; ownerName?: string }>;
+  await expect.poll(async () => (await props()).name).toBe("Ana's office");
+  await ana.getByRole("button", { name: /ANA'S OFFICE/ }).click();
+  await ana.getByLabel("Owner: Ana's office").selectOption({ label: "Ana Demo" });
+  await expect.poll(async () => (await props()).ownerName).toBe("Ana Demo");
+  await ana.evaluate(
+    (k) =>
+      (window as any).__yutopia.send("obj:put", {
+        id: "door-room-ana-s-office",
+        kind: "door",
+        x: 6,
+        y: 8,
+        yaw: 0,
+        props: { state: "open", roomKey: k },
+      }),
+    roomKey,
+  );
   await expect
     .poll(() => st(ana, () => !!(window as any).__yutopia.room.state.objects.get("door-room-ana-s-office")))
     .toBe(true);
 
-  // 1 · walls go on tile edges: drag along the line x = 16 for a brick wall
+  // 1 · walls drawn free (plan 72 phase 11): drag along the line x = 16 for a brick wall, corner
+  // to corner on whole metres (it reads back as the cells' edges); Esc ends the run
   await ana.getByRole("tab", { name: /Walls/ }).click();
+  await ana.getByRole("button", { name: "Build", exact: true }).click();
+  await ana.getByRole("button", { name: "Line", exact: true }).click();
   await ana.getByRole("button", { name: "Brick", exact: true }).click();
-  await dragWorld(ana, [16, 3.5], [16, 12.5]);
-  await expect.poll(() => st(ana, () => (window as any).__yutopia.building.vWalls[8][16])).toBe("b");
-  expect(await st(ana, () => (window as any).__yutopia.building.tiles[8][16])).toBe("."); // no floor lost
-  // one straight line: nothing painted across it where the pointer passed corners
-  const across = (await st(ana, () =>
-    [4, 5, 6, 7, 8, 9, 10, 11, 12].map((y) => (window as any).__yutopia.building.hWalls[y].slice(15, 17)).join(""),
-  )) as string;
+  await dragWorld(ana, [16, 4], [16, 12]);
+  await ana.keyboard.press("Escape");
+  await expect.poll(async () => (await home(ana)).vWalls[8][16]).toBe("b");
+  expect((await home(ana)).tiles[8][16]).toBe("."); // no floor lost
+  // one straight line: nothing drawn across it where the pointer passed corners
+  const rows = await home(ana);
+  const across = [4, 5, 6, 7, 8, 9, 10, 11, 12].map((y) => rows.hWalls[y].slice(15, 17)).join("");
   expect(across).toBe(".".repeat(18));
 
   // 2 · a desk for Ana inside her room
   await ana.getByRole("tab", { name: /Furnish/ }).click();
-  await ana.getByRole("tab", { name: "Desks & tables", exact: true }).click();
+  await ana.getByRole("tab", { name: /^Desks & tables/ }).click();
   await ana.getByRole("button", { name: "Desk", exact: true }).click();
   await clickTile(ana, 5, 5);
-  await ana.getByRole("tab", { name: "Seating" }).click();
+  await ana.getByRole("tab", { name: /^Seating/ }).click();
   await ana.getByRole("button", { name: "Chair", exact: true }).click();
   await clickTile(ana, 5, 4);
   await expect
@@ -169,12 +214,5 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
   // Ana (the owner) walks out through her locked door
   await walkTo(ana, 6.5, 11.5, 20_000);
 
-  // 4 · resize keeps the content
-  await ana.evaluate(() =>
-    (window as any).__hud.set({ build: { ...(window as any).__hud.get().build, on: true, tool: "map" } }),
-  );
-  await ana.getByRole("spinbutton").first().fill("40");
-  await ana.getByRole("button", { name: /^Resize to/ }).click();
-  await expect.poll(() => st(ana, () => (window as any).__yutopia.building.width)).toBe(40);
-  expect(await st(ana, () => (window as any).__yutopia.building.vWalls[8][16])).toBe("b");
+  // (4 · resize: gone — floors are drawn now, not resized; the Map panel's "Resize to" retired)
 });

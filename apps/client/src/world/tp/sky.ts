@@ -1,5 +1,6 @@
-import { isFloor, levelMap, type MapDef, tileAt, type WallCut } from "@yutopia/shared";
+import { isFloor, levelMap, type MapDef, type WallCut } from "@yutopia/shared";
 import { iceHolesNow } from "@yutopia/shared/grounds";
+import { cellOf } from "@yutopia/shared/structure";
 import { skyAt, strikeFar, strikeIn } from "@yutopia/shared/weather";
 import {
   BackSide,
@@ -198,7 +199,7 @@ export class Surroundings {
     // the pass above: it patches its own materials, the trees' with more.)
     const g0 = map.levels?.some((l) => l.index === 0) ? levelMap(map, 0) : null;
     if (g0) {
-      const covered = (bx: number, bz: number) => isFloor(tileAt(g0, Math.floor(bx), Math.floor(bz)));
+      const covered = (bx: number, bz: number) => isFloor(cellOf(g0, Math.floor(bx), Math.floor(bz)));
       // (what lies on the ground floor — the lot's snow — lit as the floor is: `floorLit`, view.ts)
       this.grounds = new GroundsStream(
         T,

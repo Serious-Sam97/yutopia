@@ -1,4 +1,5 @@
 import { groundAt, pavedAt, type StreetThing } from "@yutopia/shared/grounds";
+import { gwallH } from "@yutopia/shared/grounds-things";
 import {
   BoxGeometry,
   type BufferGeometry,
@@ -224,6 +225,43 @@ function fence(t: StreetThing): BufferGeometry[] {
   }
   return out;
 }
+// A wall along a line out of doors (plan 72 phase 11.10: the build tool's walls, in god mode): brick,
+// 0.3 thick and 2.4 over the land (down into it where it falls away), a stone coping and snow on top
+// — a box a run of 2.5 m at most, following the land as the fence does.
+function gardenWall(t: StreetThing): BufferGeometry[] {
+  const out: BufferGeometry[] = [];
+  const pts = t.pts ?? [];
+  const brick = 0x8c4a32;
+  const coping = 0x6e675d;
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, az] = pts[i - 1];
+    const [bx, bz] = pts[i];
+    const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 2.5));
+    const a = Math.atan2(bz - az, bx - ax);
+    for (let k = 0; k < n; k++) {
+      const x0 = ax + ((bx - ax) * k) / n;
+      const z0 = az + ((bz - az) * k) / n;
+      const x1 = ax + ((bx - ax) * (k + 1)) / n;
+      const z1 = az + ((bz - az) * (k + 1)) / n;
+      const lo = Math.min(standAt(x0, z0), standAt(x1, z1)) - 0.3;
+      const hi = Math.max(standAt(x0, z0), standAt(x1, z1)) + gwallH(t);
+      const l = Math.hypot(x1 - x0, z1 - z0) + (k === n - 1 ? 0.15 : 0) + (k === 0 ? 0.15 : 0);
+      const mid = [(x0 + x1) / 2, (z0 + z1) / 2];
+      for (const [y0, y1, d, c] of [
+        [lo, hi - 0.08, 0.3, brick],
+        [hi - 0.08, hi, 0.38, coping],
+        [hi, hi + 0.04, 0.34, SNOW],
+      ] as const) {
+        const g = new BoxGeometry(l, y1 - y0, d);
+        g.rotateY(-a);
+        g.translate(mid[0], (y0 + y1) / 2, mid[1]);
+        out.push(tinted(g, c));
+      }
+    }
+  }
+  return out;
+}
+
 // ── parkour (god mode's; shapes/grounds.ts their solids: the bar, the wall, the pole) ──
 const STEEL = 0x8d949b;
 const STEEL_DARK = 0x5d636a;
@@ -295,6 +333,7 @@ const MAKE: Record<StreetThing["kind"], () => BufferGeometry[]> = {
   planter,
   sign,
   fence: () => [], // (along its line: fence())
+  gwall: () => [], // (along its line: gardenWall())
   pk_rail: () => rail(2),
   pk_rail_long: () => rail(4),
   pk_wall: () => pkWall(3.2),
@@ -314,6 +353,10 @@ export function streetGeometry(things: StreetThing[]): BufferGeometry[] {
     const [cx, cz] = t.kind === "bench" ? [t.x + 1, t.z + 0.5] : [t.x, t.z];
     if (t.kind === "fence") {
       out.push(...fence(t));
+      continue;
+    }
+    if (t.kind === "gwall") {
+      out.push(...gardenWall(t));
       continue;
     }
     const parts = [...MAKE[t.kind](), ...(t.kind === "pole" && i % 3 === 1 ? transformer() : [])];

@@ -1,4 +1,5 @@
-import { CLOTH_COLORS } from "@yutopia/shared";
+import { CLOTH_COLORS, flightParts, flightRise } from "@yutopia/shared";
+import { artPx } from "@yutopia/shared/units";
 import type { Box } from "./iso";
 import { C, hash2, hex, shade } from "./palette";
 
@@ -40,6 +41,28 @@ export function piece(kind: string, props: Props, id = ""): Piece {
   // the Grounds' things: their drawings only (no boxes while they load)
   if (kind.startsWith("gr_")) return { boxes: [] };
   switch (kind) {
+    case "flight": {
+      // a flight of steps up to a mezzanine (plan 72 phase 11.8): its steps as Jolt has them (shared
+      // flightParts), walnut
+      const rise = flightRise({ props });
+      const parts = flightParts(rise);
+      return {
+        boxes: [
+          ...parts.map((b) => {
+            return {
+              x: b.u0,
+              y: b.v0,
+              w: b.u1 - b.u0,
+              d: b.v1 - b.v0,
+              z: artPx(b.y0),
+              h: artPx(b.y1 - b.y0),
+              color: C.walnut,
+              top: 0x8a5a3c,
+            };
+          }),
+        ],
+      };
+    }
     case "desk":
       return {
         boxes: [

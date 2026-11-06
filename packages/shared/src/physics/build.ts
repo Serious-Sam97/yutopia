@@ -17,7 +17,7 @@
 //   door:id         a locked door, its way shut (layer door: its owner passes — passKeys)
 // Parked cars are vehicles (kinematic: the car sim moves them): car:id.
 import { parkedBody } from "../car/park.ts";
-import { standHeight, type WorldObjectDef } from "../catalog.ts";
+import { entry, standHeight, type WorldObjectDef } from "../catalog.ts";
 import { doorOwner } from "../doors.ts";
 import { dressItems } from "../dressing.ts";
 import {
@@ -39,18 +39,31 @@ import {
 import { grownLakeR, grownLevel, grownNow, lakeBowl } from "../grow.ts";
 import { landVersion } from "../land.ts";
 import { across, levelMap, objLevel, onLevel } from "../levels.ts";
-import { CAR_FLOOR, liftDoorEdges, liftHere, liftRect, liftShafts, liftWallEdges, shaftHoles } from "../lift.ts";
+import {
+  CAR_FLOOR,
+  liftDoorEdges,
+  liftHere,
+  liftRect,
+  liftShafts,
+  liftWallEdges,
+  shaftHoles,
+  stopOver,
+} from "../lift.ts";
 import { LAKE, LONG_ROAD, lakeR } from "../longroad.ts";
-import { type Edge, isFloor, type MapDef, tileAt, worldShift } from "../map.ts";
+import { type Edge, isFloor, type MapDef, type TileMap, worldShift } from "../map.ts";
 import { doorLockable, isOpening, openingEdges } from "../openings.ts";
 import { type GroundSolid, type GroundWhat, groundSolidAt, groundSolidsIn } from "../shapes/grounds.ts";
 import { blocksOf, box3, kindSolids, openingHole, type Solid3, type SolidBox3, WALL_T } from "../shapes/index.ts";
 import { stairsTopRail, stairsWell } from "../stairs.ts";
+import { chordsOf } from "../structure/arc.ts";
+import { onOf } from "../structure/attach.ts";
 import { foldMap, foldThings } from "../structure/fold.ts";
 import { structureFromMap } from "../structure/from-map.ts";
+import { cellOf } from "../structure/query.ts";
+import { ROOF_THICK } from "../structure/roof.ts";
 import type { Structure } from "../structure/types.ts";
 import { STOREY } from "../units.ts";
-import { crossings, cutsOf, slabBoxes, wallPieces } from "./structure-solids.ts";
+import { alongWall, crossings, cutsOf, slabBoxes, wallPieces } from "./structure-solids.ts";
 import type { Land, Layer, PhysicsWorld } from "./world.ts";
 
 const LAT = 2; // the chunks' height samples a metre (grounds.ts)
@@ -73,7 +86,7 @@ function moved(s: Solid3, dx: number, dy: number, dz: number): Solid3 {
 
 /** The ground under a stored floor's thing (its outdoor tiles stand on the land). */
 function baseOf(lm: MapDef, level: number, x: number, y: number): number {
-  if (level !== 0 || isFloor(tileAt(lm, Math.floor(x), Math.floor(y)))) return 0;
+  if (level !== 0 || isFloor(cellOf(lm, Math.floor(x), Math.floor(y)))) return 0;
   const o = worldShift(lm);
   return heightAt(o.x + x, o.y + y);
 }
@@ -105,11 +118,11 @@ const RAIL_H = 1.1; // a stairwell's rail with nothing going up from it (m)
 
 /** Every floor of the building as solids: its walls and slabs from its structure (made from `map`
  *  when none is given — the tests' older maps), its things, clutter, stairs and lifts from `map`
- *  (a world map: the adapter's — structure/to-map.ts) and `objects`. */
+ *  (a world map: the structure's view — structure/view.ts) and `objects`. */
 export function buildingSolids(map0: MapDef, objects: Iterable<WorldObjectDef>, structure?: Structure): BuildingSolids {
   const map = foldMap(map0);
   const all = foldThings(map0, [...objects]);
-  const st = structure ?? structureFromMap(map);
+  const st = structure ?? map0.st ?? structureFromMap(map as TileMap);
   const out: BuildingSolids = { statics: new Map(), cars: new Map(), locked: new Map(), flow: [], liftFloors: [] };
   const shafts = liftShafts(all, map);
   const add = (k: string, layer: Layer, s: Solid3) => {
@@ -127,13 +140,30 @@ export function buildingSolids(map0: MapDef, objects: Iterable<WorldObjectDef>, 
     const ox = 0;
     const oz = 0;
     const elev = f.z;
-    // the floor's own: its slabs' rings (what's floor, read even-odd)
-    const rings = st.slabs.filter((x) => x.floor === level).flatMap((x) => [x.outline, ...x.holes]);
-    const indoors = (x: number, y: number) => crossings(rings, y).filter((c) => c < x).length % 2 === 1;
+    // the floor's own: its slabs at its height (what's floor: any of them — they may overlap, phase
+    // 11.7 — each its outline less its holes), and its mezzanines over it at theirs
+    const mine = st.slabs.filter((x) => x.floor === level);
+    const own = mine.filter((x) => Math.abs(x.z - f.z) < 1e-3).map((x) => [x.outline, ...x.holes]);
+    const decks = mine.filter((x) => Math.abs(x.z - f.z) >= 1e-3);
+    const indoors = (x: number, y: number) =>
+      own.some((rings) => crossings(rings, y).filter((c) => c < x).length % 2 === 1);
     // the walls, cut by their doors and windows (out of doors on a side: Flowmotion's runs too)
     const cuts = cutsOf(st, here, level);
-    for (const w of st.walls) {
-      if (w.floor !== level) continue;
+    // (an arc as its chords: phase 11 — its doors' and windows' holes, along its curve, cut from the
+    // chords they cross)
+    const pieces = st.walls.flatMap((q) => {
+      if (q.floor !== level) return [];
+      let off = 0;
+      return chordsOf(q).map((w) => {
+        const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
+        const own = (cuts.get(q.id) ?? [])
+          .map((c) => ({ ...c, u0: c.u0 - off, u1: c.u1 - off }))
+          .filter((c) => c.u1 > 0 && c.u0 < len);
+        off += len;
+        return { w, own };
+      });
+    });
+    for (const { w, own } of pieces) {
       const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]) || 1;
       const [nx, ny] = [-(w.b[1] - w.a[1]) / len, (w.b[0] - w.a[0]) / len];
       const outside = (u: number) => {
@@ -141,7 +171,7 @@ export function buildingSolids(map0: MapDef, objects: Iterable<WorldObjectDef>, 
         const y = w.a[1] + ((w.b[1] - w.a[1]) / len) * u;
         return !indoors(x + nx * 0.5, y + ny * 0.5) || !indoors(x - nx * 0.5, y - ny * 0.5);
       };
-      const pcs = wallPieces(w, cuts.get(w.id) ?? [], outside);
+      const pcs = wallPieces(w, own, outside);
       for (const s of [...pcs.solids, ...pcs.panes]) put(level, s);
       for (const s of pcs.flow) out.flow.push({ what: "building_wall", s });
     }
@@ -152,11 +182,30 @@ export function buildingSolids(map0: MapDef, objects: Iterable<WorldObjectDef>, 
         for (const [x, y] of stairsWell(o)) wells.push([x, y, x + 1, y + 1]);
     // (and a lift's shaft going on down from here: open — its car's floor is its own)
     wells.push(...shaftHoles(shafts, level));
-    for (const slab of slabBoxes(rings, wells, elev)) add(`slab:${level}:${at(slab)}`, "floor", slab);
+    for (const rings of own)
+      for (const slab of slabBoxes(rings, wells, elev)) add(`slab:${level}:${at(slab)}`, "floor", slab);
+    // its roofs (phase 11.7): a lid at the eaves (a flat one's top), over it out of doors
+    for (const r of (st.roofs ?? []).filter((q) => q.floor === level))
+      for (const lid of slabBoxes([r.outline], [], r.kind === "flat" ? r.z + ROOF_THICK : r.z))
+        add(`roof:${level}:${at(lid)}`, "floor", lid);
+    // (a mezzanine: its floor's too — you're on that floor up there)
+    // (open where a lift's car passes it, as a floor's slab is — plan 72 phase 11)
+    for (const d of decks) {
+      const shaftsThrough: [number, number, number, number][] = [];
+      for (const list of shafts.values()) {
+        const lo = list[0]?.level;
+        const hi = list[list.length - 1]?.level;
+        if (lo !== undefined && hi !== undefined && d.z > lo * STOREY + 1e-3 && d.z < hi * STOREY + 2.6)
+          shaftsThrough.push(liftRect(list[0].o));
+      }
+      for (const slab of slabBoxes([d.outline, ...d.holes], shaftsThrough, d.z))
+        add(`slab:${level}:${at(slab)}`, "floor", slab);
+    }
     // the top floor's roof: a slab over all of it, where the next floor's would be (one building,
     // docs/plan/50 D: flown up to from inside, it stops you; landed on from outside, it holds you)
     if (!floors.includes(level + 1))
-      for (const slab of slabBoxes(rings, [], elev + STOREY)) add(`roof:${level}:${at(slab)}`, "floor", slab);
+      for (const rings of own)
+        for (const slab of slabBoxes(rings, [], elev + STOREY)) add(`roof:${level}:${at(slab)}`, "floor", slab);
     // the rooms' clutter (dressing.ts): what blocks walking, as the table's decor (furniture: sight
     // goes past it)
     for (const d of dressItems(lm, here)) {
@@ -184,7 +233,13 @@ export function buildingSolids(map0: MapDef, objects: Iterable<WorldObjectDef>, 
       if (doorLockable(o.kind) && o.props?.state === "locked") {
         const [y0, y1] = openingHole(o.kind);
         const k = `door:${o.id}`;
-        for (const e of openingEdges(o)) add(k, "door", moved(edgeBox(e, y0, y1), ox, elev, oz));
+        // (in a wall drawn free: a box along that wall where it is — phase 11.6)
+        const on = o.props?.free === true ? onOf(o) : null;
+        const fw = on ? st.walls.find((w) => w.id === on.wall) : null;
+        if (on && fw) {
+          const n = Math.max(1, entry(o.kind).w) / 2;
+          add(k, "door", alongWall(fw, on.at - n, on.at + n, fw.base + y0, fw.base + y1));
+        } else for (const e of openingEdges(o)) add(k, "door", moved(edgeBox(e, y0, y1), ox, elev, oz));
         out.locked.set(k, doorOwner(lm, o));
         continue;
       }
@@ -195,11 +250,13 @@ export function buildingSolids(map0: MapDef, objects: Iterable<WorldObjectDef>, 
         // the wall on up
         const k = `lift:${o.id}`;
         const open = liftHere(o, lm) && o.props?.door === "open";
-        for (const e of liftWallEdges(o)) add(k, "wall", moved(edgeBox(e, 0, STOREY), ox, elev, oz));
+        // (one on a mezzanine — plan 72 phase 11: from up there)
+        const up = elev + stopOver(o);
+        for (const e of liftWallEdges(o)) add(k, "wall", moved(edgeBox(e, 0, STOREY), ox, up, oz));
         for (const e of liftDoorEdges(o))
-          add(k, "wall", moved(edgeBox(e, open ? LIFT_DOOR_TOP : 0, STOREY), ox, elev, oz));
+          add(k, "wall", moved(edgeBox(e, open ? LIFT_DOOR_TOP : 0, STOREY), ox, up, oz));
         const [x0, y0, x1, y1] = liftRect(o);
-        out.liftFloors.push({ level, s: box3(ox + x0, oz + y0, ox + x1, oz + y1, elev - CAR_FLOOR, elev) });
+        out.liftFloors.push({ level, s: box3(ox + x0, oz + y0, ox + x1, oz + y1, up - CAR_FLOOR, up) });
         continue;
       }
       if (o.kind === "car") {
@@ -214,7 +271,8 @@ export function buildingSolids(map0: MapDef, objects: Iterable<WorldObjectDef>, 
       }
       // (only what stops a body — seats are sat in, walked into — and the stairs, stood on; the rest
       // is reach's, phase 5)
-      const stairs = o.kind === "stairs";
+      // (and a flight of steps up to a mezzanine — phase 11.8)
+      const stairs = o.kind === "stairs" || o.kind === "flight";
       if (!stairs && blocksOf(o.kind) !== "solid") continue;
       const base = baseOf(lm, level, o.x + 0.5, o.y + 0.5);
       const flow = level === 0 && !indoors(o.x + 0.5, o.y + 0.5) ? PARKOUR[o.kind] : undefined;

@@ -5,9 +5,11 @@
 // and a thing is attached again wherever a wall's id changed).
 //
 // Kept in the thing's props (`props.on`), world metres.
+
 import { entry, type WorldObjectDef } from "../catalog.ts";
 import { hangOf, WQ } from "../hang.ts";
 import { isOpening, openingEdges } from "../openings.ts";
+import { isArc } from "./arc.ts";
 import type { Structure, Wall, XY } from "./types.ts";
 
 export interface On {
@@ -27,6 +29,7 @@ export const attachable = (kind: string): boolean => isOpening(kind) || !!entry(
 function middleOf(o: WorldObjectDef): { p: XY; dir: "h" | "v"; side?: 1 | -1 } | null {
   if (isOpening(o.kind)) {
     const edges = openingEdges(o);
+    if (!edges.length) return null;
     const first = edges[0];
     const last = edges[edges.length - 1];
     const p: XY = first.dir === "h" ? [(first.x + last.x + 1) / 2, first.y] : [first.x, (first.y + last.y + 1) / 2];
@@ -57,7 +60,7 @@ export function attachOf(s: Pick<Structure, "walls">, o: WorldObjectDef, floor: 
   const m = middleOf(o);
   if (!m) return null;
   for (const w of s.walls) {
-    if (w.floor !== floor) continue;
+    if (w.floor !== floor || isArc(w)) continue; // (doors and windows in arcs: phase 11.6)
     const along = (w.a[1] === w.b[1] ? "h" : w.a[0] === w.b[0] ? "v" : "") === m.dir ? alongWall(w, m.p) : null;
     if (along === null) continue;
     return { wall: w.id, at: Math.round(along * 1e4) / 1e4, ...(m.side ? { side: m.side } : {}) };
@@ -83,6 +86,8 @@ export function onOf(o: { props?: Record<string, unknown> | null }): On | null {
 /** The thing with its `on` as it should be now (the same object when nothing changed). */
 export function withOn(s: Pick<Structure, "walls">, o: WorldObjectDef, floor: number): WorldObjectDef {
   if (!attachable(o.kind)) return o;
+  // (one in a wall drawn free is kept by its `on`: that's where it is)
+  if (o.props?.free === true) return o;
   const on = attachOf(s, o, floor);
   const had = onOf(o);
   if (JSON.stringify(had) === JSON.stringify(on)) return o;

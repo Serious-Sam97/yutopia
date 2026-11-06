@@ -1,6 +1,11 @@
 import { anchoredAt, LAMPS, type P, SNOW_POLES, STREET, THING_SPAN, thingEnds } from "./grounds.ts";
 import type { GroundsEdits, ThingDef, ThingKind } from "./grounds-edits.ts";
 
+/** An outdoor wall's height (m): a garden wall, over your head (plan 72 phase 11.10). */
+export const GWALL_H = 2.4;
+/** An outdoor wall's own height, or the usual. */
+export const gwallH = (t: { h?: number }): number => t.h ?? GWALL_H;
+
 // God mode's things (docs/plan/53-the-god-mode.md, phase 8): what stands on the land — a lamp, a
 // piece of street furniture, a snow pole, a boulder, a planter, a sign with words, a fence along a
 // line — put down, moved, turned, sized, taken away, as the draft's edits (a new one added; the
@@ -28,6 +33,8 @@ export const THINGS: CatalogThing[] = [
   { kind: "postbox", name: "Postbox", foot: [-0.26, -0.25, 0.26, 0.25, 1.31] },
   { kind: "sign", name: "Sign", foot: [-0.8, -0.06, 0.8, 0.06, 2.05], text: true },
   { kind: "fence", name: "Fence", foot: [-0.06, -0.06, 0.06, 0.06, 1.1], line: true },
+  // (plan 72 phase 11.10: a brick wall along a line, drawn as the build tool draws walls)
+  { kind: "gwall", name: "Wall", foot: [-0.15, -0.15, 0.15, 0.15, GWALL_H], line: true },
   { kind: "snowpole", name: "Snow pole", foot: [-0.04, -0.04, 0.04, 0.04, 1.74] },
   { kind: "boulder", name: "Boulder", foot: [-0.72, -0.72, 0.72, 0.72, 1.05], sized: true },
   { kind: "planter", name: "Planter", foot: [-0.6, -0.6, 0.6, 0.6, 2.3], sized: true },
@@ -61,6 +68,7 @@ export function thingDefOf(key: string): ThingDef | null {
     ...(t.s !== undefined && { s: t.s }),
     ...(t.text !== undefined && { text: t.text }),
     ...(t.pts && { pts: t.pts.map((q) => [q[0], q[1]] as P) }),
+    ...(t.h !== undefined && { h: t.h }),
   };
 }
 /** Where a thing stands (a bench: its middle, not the corner it's kept by). */

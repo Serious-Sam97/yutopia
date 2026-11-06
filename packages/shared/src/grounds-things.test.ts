@@ -248,3 +248,47 @@ test("the forest brush: pines planted in the field, the woods cleared and back; 
   assert.ok(!treesIn(cx, cz).some((t) => t.kind === "birch" && Math.hypot(t.x - FIELD.x, t.z - FIELD.z) < 3.3));
   applyEdits(NO_EDITS);
 });
+
+test("a wall drawn out of doors (plan 72 phase 11.10): along its line, a wall in Jolt, by the rules", () => {
+  applyEdits(NO_EDITS);
+  let e: GroundsEdits = NO_EDITS;
+  const pts: [number, number][] = [
+    [FIELD.x - 8, FIELD.z - 8],
+    [FIELD.x + 8, FIELD.z - 8],
+    [FIELD.x + 8, FIELD.z + 2],
+  ];
+  e = addThing(e, thing({ key: "god-wall-1", kind: "gwall", x: pts[0][0], z: pts[0][1], pts }));
+  assert.deepEqual(checkEdits(e), []);
+  applyEdits(e);
+  const near = groundSolidsIn(Math.floor(FIELD.x / CHUNK), Math.floor((FIELD.z - 8) / CHUNK)).filter(
+    (g) => g.what === "building_wall",
+  );
+  assert.ok(near.length > 0, "its runs: walls");
+  const tall = near.some((g) => {
+    const s = g.s as unknown as { y?: number; hy?: number };
+    return (s.y ?? 0) + (s.hy ?? 0) > groundAt(FIELD.x, FIELD.z - 8) + 2.3;
+  });
+  assert.ok(tall, "over your head");
+  assert.equal(thingAt(FIELD.x, FIELD.z - 7.95), "god-wall-1", "by its line");
+  // a line of one point: refused
+  const bad = addThing(NO_EDITS, thing({ key: "god-wall-2", kind: "gwall", pts: [[FIELD.x, FIELD.z]] }));
+  assert.ok(checkEdits(bad).length > 0);
+  // its own height (plan 72 phase 11: god-mode walls with heights): a low one, its solid as low;
+  // too high, or a height on what isn't a wall, refused
+  const low = changeThing(e, "god-wall-1", { h: 1 });
+  assert.deepEqual(checkEdits(low), []);
+  applyEdits(low);
+  const top = Math.max(
+    ...groundSolidsIn(Math.floor(FIELD.x / CHUNK), Math.floor((FIELD.z - 8) / CHUNK))
+      .filter((g) => g.what === "building_wall" && Math.abs(g.s.z - (FIELD.z - 8)) < 0.5)
+      .map((g) => {
+        const s = g.s as unknown as { x: number; y?: number; hy?: number };
+        return (s.y ?? 0) + (s.hy ?? 0) - groundAt(s.x, FIELD.z - 8);
+      }),
+  );
+  assert.ok(top > 0.9 && top < 1.4, `a metre over the land: ${top}`);
+  assert.ok(checkEdits(changeThing(e, "god-wall-1", { h: 9 })).length > 0, "too high");
+  const bench = addThing(NO_EDITS, thing({ key: "god-b-1", kind: "bench", h: 2 }));
+  assert.ok(checkEdits(bench).length > 0, "a bench has no height");
+  applyEdits(NO_EDITS);
+});

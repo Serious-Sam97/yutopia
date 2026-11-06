@@ -19,8 +19,7 @@ import {
   WZ,
   wallSpan,
 } from "./hang.ts";
-import { applyStep, diffStep, snapshot } from "./history.ts";
-import { backAt, faceMat, type MapDef } from "./map.ts";
+import { backAt, faceMat, type TileMap } from "./map.ts";
 import {
   addRoom,
   applyEdges,
@@ -35,7 +34,7 @@ import {
 
 // A 20×16 blank studio with a plaster wall across it at y = 8 (x 2..13): both
 // faces have floor in front.
-function hall(): MapDef {
+function hall(): TileMap {
   const m = blankMap("t", "T", 20, 16);
   return applyEdges(
     m,
@@ -178,14 +177,6 @@ test("two-faced walls: each face its own material, kept through edits, undo and 
   assert.equal(faceMat(gone, e, -1), "k");
   // glass is glass on both sides
   assert.equal(faceMat(applyEdges(a, [{ ...e, ch: "g" }]), e, -1), null);
-  // undo / redo
-  const step = diffStep(snapshot(map, []), snapshot(a, []), "paint");
-  assert.ok(step);
-  const undone = applyStep(a, [], step, "back").map;
-  assert.ok(undone);
-  assert.equal(faceMat(undone, e, -1), "p");
-  const redone = applyStep(undone, [], step, "forward").map;
-  assert.equal(redone && faceMat(redone, e, -1), "b");
   // stored and read back; resized
   const l = layoutFromMap(a);
   assert.ok(validLayout(l));

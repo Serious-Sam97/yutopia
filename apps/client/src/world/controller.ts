@@ -28,6 +28,7 @@ import {
   JumpTrack,
   jumpTimes,
   levelMap,
+  liftFloorName,
   liftFront,
   type MapDef,
   objLevel,
@@ -43,10 +44,12 @@ import {
   type ServerMessages,
   SOCIAL_MS,
   STEP_LABELS,
-  seatFront,
+  seatDir,
+  seatYaw,
   setAreasBeyond,
   setOutdoors,
   spHour,
+  stationOf,
   stereoPan,
   TICK_HZ,
   type WorldObjectDef,
@@ -56,7 +59,7 @@ import { isGameTv } from "@yutopia/shared/games";
 import { isRadio, type RadioState, radioOf } from "@yutopia/shared/media";
 import { type Species, toyAt } from "@yutopia/shared/pets";
 import { Place } from "@yutopia/shared/physics/place";
-import { applyOps, mapFromStructure, type Structure } from "@yutopia/shared/structure";
+import { applyOps, cellTop, edgeBack, edgeFront, type Structure, viewOf } from "@yutopia/shared/structure";
 import type { Npc, Player, WorldObject, WorldState } from "@yutopia/state";
 import { Client, getStateCallbacks, type Room } from "colyseus.js";
 import { ApiError, type Session, yutopia } from "@/lib/api";
@@ -179,8 +182,17 @@ export class WorldController {
   media: Media;
   session: Session | null = null;
   map!: MapDef; // the floor I'm on (shared levels.ts)
-  /** My place on my floor (shared physics Place): Jolt's once it's in — till then the floor's map. */
-  grid!: Place;
+  /** My place on my floor (shared physics Place): Jolt's once it's in — till then the floor's map.
+   *  Asked of the physics each time (its places cached till the building or its things change): one
+   *  kept from when a thing arrived could be from before the view had it — a chair just put down
+   *  not yet a seat (plan 72 phase 11's check). */
+  get grid(): Place {
+    return this.tp?.body.placeFor(this.myUid() || null, this.level) ?? this.ownGrid;
+  }
+  set grid(p: Place) {
+    this.ownGrid = p;
+  }
+  private ownGrid!: Place;
   // the building: its home map with every floor, the floor I'm on, and the
   // things on every floor (the model only has my floor's)
   building!: MapDef;
@@ -609,6 +621,7 @@ export class WorldController {
       this.structRev = m.rev;
       this.mapDirty = true;
     });
+    room.onMessage("struct:walls:ok", (m: ServerMessages["struct:walls:ok"]) => this.build?.wallsOk(m));
     room.onMessage("struct:ops", (m: ServerMessages["struct:ops"]) => {
       // (behind, or not here yet: it whole again)
       if (!this.structure || m.rev !== this.structRev + 1) {
@@ -618,6 +631,7 @@ export class WorldController {
       this.structure = applyOps(this.structure, m.ops);
       this.structRev = m.rev;
       this.mapDirty = true;
+      this.build?.structChanged();
     });
     room.send("struct:get", {});
     // god mode's edits to the Grounds (docs/plan/53-the-god-mode.md): the revision live, laid here
@@ -1809,9 +1823,10 @@ export class WorldController {
         w.shift(at.x - this.me.x, at.y - this.me.y, 0);
         this.me.x = at.x;
         this.me.y = at.y;
-        this.me.yaw = byteFace(SEAT_FACE[seat.rot & 3]); // away from the seat's back (server `seatFacing`)
+        // away from the seat's back (server `seatFacing`); a free one turned its own way (plan 72 11.9)
+        this.me.yaw = seat.front ? seatYaw(seat) : byteFace(SEAT_FACE[seat.rot & 3]);
         // (the body's own yaw too: else it's still the way I walked onto it, and sends me back round)
-        const [fx, fy] = seatFront(seat.rot);
+        const [fx, fy] = seatDir(seat);
         w.faceYaw(Math.atan2(fy, fx));
         this.meAngle = Math.atan2(fy, fx);
       }
@@ -2241,6 +2256,7 @@ export class WorldController {
         floorAt: (cx, cy, z) => v.buildPick.floorAt(cx, cy, z),
         rayAt: (cx, cy) => v.buildPick.rayAt(cx, cy),
         lookedThrough: () => v.buildPick.lookedThrough(),
+        throughAt: (x, y) => v.buildPick.throughAt(x, y),
         puff: (x, y, kind, lift, hard) => v.puff(x, y, kind, lift, hard),
       };
       v.mount(host);
@@ -2393,8 +2409,7 @@ export class WorldController {
   rebuildGrid() {
     if (!this.model) return;
     // (every floor's things: the stairs up from the floor below count here)
-    this.grid =
-      this.tp?.body.placeFor(this.myUid() || null, this.level) ?? new Place(null, this.map, [...this.objs.values()]);
+    this.grid = new Place(null, this.map, [...this.objs.values()]);
   }
 
   // Standing in an elevator's car: its panel (the floors it goes to). The car's
@@ -2416,16 +2431,25 @@ export class WorldController {
       return;
     }
     const shaft = String(at.props?.shaft ?? at.id);
+    // (by station: a stop up on a mezzanine between its floor and the next — plan 72 phase 11)
     const floors = [...this.objs.values()]
       .filter((o) => o.kind === "elevator" && String(o.props?.shaft ?? o.id) === shaft)
-      .map((o) => objLevel(o, this.building))
+      .map((o) => stationOf(o, this.building))
       .sort((a, b) => b - a);
+    const mine = this.lifts.myLift(performance.now())?.o ?? at;
+    const here = stationOf(mine, this.building);
     // (from the stop's props: the car's phase and floors, as the server says)
     const live = this.objs.get(at.id)?.props ?? pr;
     hud.set({
       lift: {
         id: at.id,
-        floors: floors.map((level) => ({ level, name: this.floorName(level) })),
+        floors: floors.map((level) => ({
+          level,
+          name: Number.isInteger(level)
+            ? this.floorName(level)
+            : `${this.floorName(Math.floor(level + 1e-3))} · ${tr("mezzanine")}`,
+        })),
+        here,
         // (on the way, the floor it's passing: mine, as it carries me)
         at: live.ph !== "moving" && typeof live.at === "number" ? live.at : this.level,
         to: typeof live.to === "number" ? live.to : this.level,
@@ -2440,10 +2464,19 @@ export class WorldController {
   }
 
   private pressLiftButton(id: string, label: string) {
-    if (label === "◀▶") return this.send("lift:go", { id, level: this.level });
+    const o = this.objs.get(id);
+    const here = o ? stationOf(this.lifts.myLift(performance.now())?.o ?? o, this.building) : this.level;
+    if (label === "◀▶") return this.send("lift:go", { id, level: here });
     if (label === "▶◀") return this.send("lift:close", { id });
-    const level = label === "G" ? 0 : Number(label);
-    if (Number.isInteger(level)) this.send("lift:go", { id, level });
+    // (the button's station: the shaft's stop of that name — a mezzanine's GM, 1M)
+    const shaft = String(o?.props?.shaft ?? id);
+    const to = [...this.objs.values()].find(
+      (s) =>
+        s.kind === "elevator" &&
+        String(s.props?.shaft ?? s.id) === shaft &&
+        liftFloorName(stationOf(s, this.building)) === label,
+    );
+    if (to) this.send("lift:go", { id, level: stationOf(to, this.building) });
   }
 
   /** Esc in the car: out of it — at once if its doors are open, else they open first. */
@@ -2455,8 +2488,47 @@ export class WorldController {
     if (o.props?.ph === "open" || o.props?.door === "open") this.walkTo(liftFront(o, 0.9));
     else {
       this.liftOut = o.id;
-      this.send("lift:go", { id: o.id, level: this.level });
+      this.send("lift:go", { id: o.id, level: l.here });
     }
+  }
+
+  /** A floor as rows of cells and edges from its corner, asked of the structure (e2e reads these —
+   *  plan 72 phase 11: the world's maps carry no tile rows). */
+  rows(level = this.level): {
+    width: number;
+    height: number;
+    ox: number;
+    oy: number;
+    tiles: string[];
+    hWalls: string[];
+    vWalls: string[];
+    hBacks: string[];
+    vBacks: string[];
+  } | null {
+    const st = this.structure;
+    const f = st?.floors.find((q) => q.index === level);
+    if (!st || !f) return null;
+    const { x0, y0, w, h } = f.grid;
+    const line = (n: number, fn: (i: number) => string) => Array.from({ length: n }, (_, i) => fn(i)).join("");
+    return {
+      width: w,
+      height: h,
+      ox: x0,
+      oy: y0,
+      tiles: Array.from({ length: h }, (_, y) => line(w, (x) => cellTop(st, level, x0 + x, y0 + y))),
+      hWalls: Array.from({ length: h + 1 }, (_, y) =>
+        line(w, (x) => edgeFront(st, level, { dir: "h", x: x0 + x, y: y0 + y })),
+      ),
+      vWalls: Array.from({ length: h }, (_, y) =>
+        line(w + 1, (x) => edgeFront(st, level, { dir: "v", x: x0 + x, y: y0 + y })),
+      ),
+      hBacks: Array.from({ length: h + 1 }, (_, y) =>
+        line(w, (x) => edgeBack(st, level, { dir: "h", x: x0 + x, y: y0 + y })),
+      ),
+      vBacks: Array.from({ length: h }, (_, y) =>
+        line(w + 1, (x) => edgeBack(st, level, { dir: "v", x: x0 + x, y: y0 + y })),
+      ),
+    };
   }
 
   /** The room's things as the server has them, on my floor (e2e reads these). */
@@ -2512,7 +2584,7 @@ export class WorldController {
     const st = this.structure;
     if (!st || !this.model) return;
     // the tile maps the code not yet ported reads, made from the structure (plan 72 phase 6)
-    this.building = { ...mapFromStructure(st), objects: [] };
+    this.building = { ...viewOf(st), objects: [] };
     // the floor I'm on (gone: the home one)
     const lm = levelMap(this.building, this.level);
     if (!lm) this.level = floorOf(this.building);
@@ -2800,7 +2872,9 @@ function objFromState(o: WorldObject): WorldObjectDef {
   try {
     props = JSON.parse(o.props || "{}");
   } catch {}
-  return { id: o.id, kind: o.kind, x: o.x, y: o.y, yaw: quarterYaw(quarterOf(o)), refId: o.refId || null, props };
+  // (a door or window in a wall drawn free keeps its wall's heading — plan 72 phase 11.6)
+  const yaw = props.free === true ? o.yaw : quarterYaw(quarterOf(o));
+  return { id: o.id, kind: o.kind, x: o.x, y: o.y, yaw, refId: o.refId || null, props };
 }
 
 // where someone was at `at` (between the samples round it; past the last, on the way they were

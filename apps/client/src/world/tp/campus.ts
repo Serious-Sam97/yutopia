@@ -1,7 +1,6 @@
 import {
   edgeKey,
   entranceZOf,
-  hWall,
   isFloor,
   isWindow,
   isWindowKind,
@@ -10,13 +9,12 @@ import {
   type MapDef,
   openingCut,
   STOREY,
-  tileAt,
-  vWall,
   WALL_H,
   type WallCut,
 } from "@yutopia/shared";
 import { crossings } from "@yutopia/shared/physics/structure-solids";
 import type { Ring } from "@yutopia/shared/structure";
+import { cellOf, hWallOf, vWallOf } from "@yutopia/shared/structure";
 import {
   AdditiveBlending,
   type Box3,
@@ -281,7 +279,7 @@ export function facadeRuns(map: MapDef, outline?: Outline | null): Run[] {
   const H = map.height;
   const floor = outline
     ? ringFloor(outline.rings)
-    : (x: number, z: number) => x >= 0 && z >= 0 && x < W && z < H && isFloor(tileAt(map, x, z));
+    : (x: number, z: number) => x >= 0 && z >= 0 && x < W && z < H && isFloor(cellOf(map, x, z));
   return runs(floor, -1, -1, W + 1, H + 1);
 }
 
@@ -1432,8 +1430,8 @@ export class Campus {
           ? outline.edges.h(e.x, e.y)
           : outline.edges.v(e.x, e.y)
         : e.dir === "h"
-          ? hWall(map, e.x, e.y)
-          : vWall(map, e.x, e.y);
+          ? hWallOf(map, e.x, e.y)
+          : vWallOf(map, e.x, e.y);
     // a window in the studio's wall there (shared openings.ts; older saves' painted ones): its hole, tiles up
     const win = (r: Run, i: number): [number, number] | null => {
       const e = r.nz !== 0 ? { dir: "h" as const, x: r.x0 + i, y: r.z0 } : { dir: "v" as const, x: r.x0, y: r.z0 + i };

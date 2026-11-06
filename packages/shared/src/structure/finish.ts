@@ -6,13 +6,13 @@
 import { campusBuilding, clearCoreFronts, moveBlocks, upgradeCore, upgradeGround, upgradeLot } from "../building.ts";
 import type { WorldObjectDef } from "../catalog.ts";
 import { monitorsToComputers } from "../computer.ts";
-import type { MapDef } from "../map.ts";
+import type { TileMap } from "../map.ts";
 import { openingsIntoWalls } from "../openings.ts";
 import { splitAll, topsOnHosts } from "../tops.ts";
 import { foldMap, foldThings } from "./fold.ts";
 
 export interface Finished {
-  map: MapDef;
+  map: TileMap;
   objects: WorldObjectDef[];
   /** things changed or made (by id): what to store */
   changed: Map<string, WorldObjectDef>;
@@ -23,7 +23,7 @@ export interface Finished {
 /** `fresh`: a world not seeded yet (the studio's own things go with its map); `building`: the
  *  building's floors (the world-server's YUTOPIA_BUILDING, on unless a test turns it off). */
 export function finishWorld(
-  map0: MapDef,
+  map0: TileMap,
   objects0: WorldObjectDef[],
   opts: { fresh: boolean; building: boolean },
 ): Finished {

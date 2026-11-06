@@ -35,7 +35,17 @@ import { gzipSync } from "node:zlib";
 // structure's ops and Place, the floor's questions on Jolt, in place of the tile grid and its A*: 452.5 → 455.7)
 // (raised to 457 on 2026-11-05, the user's standing call on budgets: plan 72 phase 8 — an edit spread over frames,
 // the lifts' cars as bodies in Jolt each frame and the shafts' floors: 455.7 → 456.6)
-const BUDGETS = { "/page": 457, "/login/page": 160 }; // KB gzip
+// (raised to 459 on 2026-11-05, the user's standing call on budgets: plan 72 phase 11.2 — walls drawn
+//  free: the Walls panel's snap rows, the chip's drawing tag, their strings in both languages; 458.4)
+// (raised to 461 on 2026-11-05, the same call: plan 72 phase 11.3 — arcs: their geometry for the
+//  drawing (structure/arc.ts), the Arc mode's strings, the chip's bow, the ghost along a curve; 459.6)
+// (raised to 467 on 2026-11-06, the same call: plan 72 phases 11.6–11.11 — doors and windows at any
+//  angle, floors drawn free and mezzanines, roofs (their faces drawn: structure/roof.ts), steps, things
+//  placed free, the minimap drawn from the structure, the panels' new rows and their strings; 465.8)
+// (raised to 469 on 2026-11-06, the same call: plan 72 phase 11's rest — the tile-map adapter deleted,
+// every reader asking the structure: its queries and the wall painting's stretches on the page —
+// 465.8 → 467.2)
+const BUDGETS = { "/page": 469, "/login/page": 160 }; // KB gzip
 // (/page raised from 451 on 2026-11-04 under the same call: plan 72's phase 4 — the controller split
 // into 17 feature modules (world/ctl), the same code: what the minifier can't shorten — `this.c.x`,
 // `this.<feature>.x`, the forwarders for what's read from outside — 449.7 → 451.2; the lazy chunks

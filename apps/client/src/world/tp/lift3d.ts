@@ -722,7 +722,9 @@ export class Lifts3 {
       v.outer.visible = s.shown || this.warming;
       v.outer.position.set(o.x + 1 + off.x, off.h, o.y + 1 + off.y);
       v.outer.rotation.y = -((o.rot ?? 0) & 3) * (Math.PI / 2);
-      const shown = `${liftFloorName(Math.round(motion.car))}${motion.dir > 0 ? "▲" : motion.dir < 0 ? "▼" : ""}`;
+      // (on the way the floor it's passing; stood, its station's — a mezzanine's GM, 1M)
+      const passing = motion.phase === "moving" ? Math.round(motion.car) : motion.car;
+      const shown = `${liftFloorName(passing)}${motion.dir > 0 ? "▲" : motion.dir < 0 ? "▼" : ""}`;
       v.landing.setDoors(motion.doors);
       v.landing.display.set(shown);
       v.landing.setLantern(motion.dir, motion.here && motion.doors > 0.02);
@@ -732,9 +734,7 @@ export class Lifts3 {
       v.car.root.position.y = here ? s.sway + s.rise : 0;
       v.car.setDoors(motion.doors);
       v.car.display.set(shown);
-      v.car.setLit(
-        motion.phase === "moving" || motion.phase === "closing" ? [liftFloorName(Math.round(motion.to))] : [],
-      );
+      v.car.setLit(motion.phase === "moving" || motion.phase === "closing" ? [liftFloorName(motion.to)] : []);
       if (here && s.mine) {
         v.outer.updateMatrixWorld(true);
         const r = 0.04;

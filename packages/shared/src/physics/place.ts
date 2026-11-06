@@ -12,11 +12,13 @@
 // can be stood on, at its height.
 import { entry, footprint, quarterOf, type WorldObjectDef } from "../catalog.ts";
 import { FAM_CHAIRS } from "../fam/index.ts";
+import { isFreeThing, thingCorners } from "../free-things.ts";
 import { BODY_R, chairAt, DESK_PULL, type Outdoors, outdoorsOf, type Seat, STEP, seatFront } from "../ground.ts";
 import type { Point } from "../iso.ts";
 import { across, elevOf, floorOf, objLevel, onLevel } from "../levels.ts";
-import { isFloor, type MapDef, tileAt, tileInMap } from "../map.ts";
+import { isFloor, type MapDef, tileInMap } from "../map.ts";
 import { inRamp, type Ramp, rampHeight, type SlabUnder, stairsRamps, stairsWell } from "../stairs.ts";
+import { cellOf, floorAtPoint } from "../structure/query.ts";
 import { STOREY } from "../units.ts";
 import type { Through } from "./body.ts";
 import { BODY } from "./size.ts";
@@ -39,6 +41,28 @@ export function seatsOf(things: readonly WorldObjectDef[]): Map<string, Seat> {
     const { w, h } = footprint(o.kind, quarterOf(o));
     if (e.surface && !e.onSurface)
       for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) tops.add(`${o.x + dx},${o.y + dy}`);
+    // (a free seat, turned any way — plan 72 phase 11.9: the tiles whose middles it covers and the
+    // one its middle's on, each sat on its seat's line nearest it, facing away from its back)
+    if (e.seat && isFreeThing(o)) {
+      const yaw = o.yaw ?? 0;
+      const [ax, ay] = [Math.cos(yaw), Math.sin(yaw)];
+      const front: [number, number] = [-ay, ax];
+      const reach = Math.max(0, e.w / 2 - 0.5);
+      const rot = Math.round(yaw / (Math.PI / 2)) & 3;
+      const corners = thingCorners(o);
+      const tiles = new Set([`${Math.floor(o.x)},${Math.floor(o.y)}`]);
+      const xs = corners.map((c) => c[0]);
+      const ys = corners.map((c) => c[1]);
+      for (let ty = Math.floor(Math.min(...ys)); ty <= Math.floor(Math.max(...ys)); ty++)
+        for (let tx = Math.floor(Math.min(...xs)); tx <= Math.floor(Math.max(...xs)); tx++)
+          if (inPoly(corners, tx + 0.5, ty + 0.5)) tiles.add(`${tx},${ty}`);
+      for (const k of tiles) {
+        const [tx, ty] = k.split(",").map(Number);
+        const u = Math.max(-reach, Math.min(reach, (tx + 0.5 - o.x) * ax + (ty + 0.5 - o.y) * ay));
+        out.set(k, { id: o.id, rot, kind: o.kind, pull: 0, front, spot: { x: o.x + ax * u, y: o.y + ay * u } });
+      }
+      continue;
+    }
     if (e.seat)
       for (let dy = 0; dy < h; dy++)
         for (let dx = 0; dx < w; dx++)
@@ -49,12 +73,23 @@ export function seatsOf(things: readonly WorldObjectDef[]): Map<string, Seat> {
     }
   }
   for (const [k, s] of out) {
-    if (s.kind !== "chair") continue;
+    if (s.kind !== "chair" || s.spot) continue;
     const [x, y] = k.split(",").map(Number);
     const [fx, fy] = seatFront(s.rot);
     if (tops.has(`${x + fx},${y + fy}`)) s.pull = DESK_PULL;
   }
   return out;
+}
+
+// (a point inside a convex polygon's ring, either way round)
+function inPoly(r: readonly [number, number][], x: number, y: number): boolean {
+  let k = false;
+  for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+    const [xi, yi] = r[i];
+    const [xj, yj] = r[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) k = !k;
+  }
+  return k;
 }
 
 export class Place {
@@ -106,7 +141,7 @@ export class Place {
     const tx = Math.floor(x);
     const ty = Math.floor(y);
     if (this.onLand(x, y)) return !!this.outside?.walkable(tx, ty);
-    return isFloor(tileAt(this.map, tx, ty));
+    return isFloor(cellOf(this.map, tx, ty));
   }
   // (the land is ground whatever its height — the grid's word: a height asked under it, out on it,
   // is asked from it; a body's feet are never under the land)
@@ -118,9 +153,10 @@ export class Place {
   }
 
   // ── what's underfoot (the floor's map, the land, the stairs) ──
-  /** Out on the land (no floor of the building under it): the feet follow the ground. */
+  /** Out on the land (no floor of the building under it — its slab, exactly: plan 72 phase 11): the
+   *  feet follow the ground. */
   onLand(x: number, y: number): boolean {
-    return !!this.outside && !isFloor(tileAt(this.map, Math.floor(x), Math.floor(y)));
+    return !!this.outside && !isFloor(floorAtPoint(this.map, x, y));
   }
   /** On a staircase's treads (their tiles: the well). */
   onRamp(x: number, y: number): boolean {
@@ -244,6 +280,7 @@ export class Place {
     const tx = Math.floor(x);
     const ty = Math.floor(y);
     const s = this.seatAt(x, y);
+    if (s?.spot) return { ...s.spot };
     const [fx, fy] = s ? seatFront(s.rot) : [0, 0];
     const k = s?.pull ?? 0;
     return { x: tx + 0.5 + fx * k, y: ty + 0.5 + fy * k };

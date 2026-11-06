@@ -1,4 +1,4 @@
-import { ANIM, chillOf, levelMap, objLevel, tempUp, tileAt, type WorldObjectDef } from "@yutopia/shared";
+import { ANIM, chillOf, levelMap, objLevel, tempUp, type WorldObjectDef } from "@yutopia/shared";
 import { hasPower } from "@yutopia/shared/admin";
 import {
   addItem,
@@ -59,6 +59,7 @@ import { grownTemp } from "@yutopia/shared/grow";
 import { GAITS, KH_MOVE, MV_AIM } from "@yutopia/shared/move";
 import { between } from "@yutopia/shared/reach";
 import { frameOf, turnPoint } from "@yutopia/shared/shapes";
+import { cellOf } from "@yutopia/shared/structure";
 import { api, type SurvivorRecord } from "../api.ts";
 import { config } from "../config.ts";
 import { Cache as CacheWire, Drop, type Player } from "../schema.ts";
@@ -833,7 +834,7 @@ registerFeature((room: WorldRoom) => {
         s.fastSince = fast ? s.fastSince || now : 0;
         const sprinting = land && ((p.mv & 7) === SPRINT || (s.fastSince > 0 && now - s.fastSince > 1000));
         const b = toB(p.x, p.y);
-        const onLot = !land && p.level === 0 && !!g && tileAt(g, Math.floor(p.x), Math.floor(p.y)) === "a";
+        const onLot = !land && p.level === 0 && !!g && cellOf(g, Math.floor(p.x), Math.floor(p.y)) === "a";
         const warm =
           riding ||
           (!land && !onLot) ||

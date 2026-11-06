@@ -230,7 +230,7 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
     key: "building",
     label: "catBuilding",
     icon: "stairs",
-    items: ["stairs", "elevator", "car", "lamp_post"].map(it),
+    items: ["stairs", "flight", "elevator", "car", "lamp_post"].map(it),
   },
   {
     key: "pets",

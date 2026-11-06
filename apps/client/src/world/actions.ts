@@ -14,7 +14,7 @@ import {
   reachOf,
   SOCIAL_MS,
   SOCIAL_REACH,
-  seatFront,
+  seatDir,
   type WorldObjectDef,
 } from "@yutopia/shared";
 import { COMPUTER_REACH, computerAway } from "@yutopia/shared/computer";
@@ -475,7 +475,7 @@ function seatFor(grid: Place, o: WorldObjectDef, me: Point): Point | null {
       const seat = grid.seatAt(x + 0.5, y + 0.5);
       if (!seat) continue;
       // (its front: the way a sitter faces — server `seatFacing`)
-      const [fx, fy] = seatFront(seat.rot);
+      const [fx, fy] = seatDir(seat);
       // (a desk's chair has the desk there: its middle, then)
       const front = { x: x + 0.5 + fx * SEAT_FRONT, y: y + 0.5 + fy * SEAT_FRONT };
       const at = grid.fits(front.x, front.y) ? front : { x: x + 0.5, y: y + 0.5 };
