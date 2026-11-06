@@ -8,7 +8,7 @@
 //      own counts (sizesFor: ×2 headroom); every add checked first — past the limit it's refused
 //      and logged, never handed to Jolt (whose temp allocator, run out, aborts the process). And
 //      its memory: our build's heap (packages/jolt: the published one's is a fixed 128 MB) starts
-//      at 128 MB and grows to HEAP_MAX (a world ~14 MB empty, the whole game's ~34 MB, ~15 MB a
+//      at 16 MB and grows to HEAP_MAX (a world ~14 MB empty, the whole game's ~34 MB, ~15 MB a
 //      room with the land round one person — plan 72 phase 7); running out aborts Jolt for good —
 //      so a world isn't made, nor an add made, without MIN_FREE left of HEAP_MAX.
 //   2. Continuous collision on everything that moves by itself: a thing (addThing) is always

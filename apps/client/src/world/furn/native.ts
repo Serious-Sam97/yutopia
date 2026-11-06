@@ -598,9 +598,81 @@ export function modelOf(o: WorldObjectDef): BufferGeometry {
   let g = cache.get(key);
   if (!g) {
     g = k.make(o);
+    if (!STATEFUL.has(o.kind)) g = once(g);
     cache.set(key, g);
   }
   return g;
+}
+
+// Looks that come out the same kept once (plan 72 phase 13's memory pass): a look's key has its seed,
+// and most kinds draw no differently for it — an office's chairs and desks were 20 models a kind, the
+// same numbers each (~45 MB of a page's ~1 GB). By what's in them, exactly; those with live parts
+// (their own state) each their own.
+const sameAs = new Map<number, BufferGeometry[]>();
+function once(g: BufferGeometry): BufferGeometry {
+  const u = g.userData as { glow?: BufferGeometry | null; clear?: BufferGeometry | null; live?: unknown[] };
+  const plain = Object.keys(u).every((k) => k === "glow" || k === "clear" || k === "live") && !u.live?.length;
+  if (!plain) return g;
+  const h = hashOf([g, u.glow ?? null, u.clear ?? null]);
+  const list = sameAs.get(h) ?? [];
+  for (const c of list) {
+    const cu = c.userData as typeof u;
+    if (sameGeo(c, g) && sameGeo(cu.glow ?? null, u.glow ?? null) && sameGeo(cu.clear ?? null, u.clear ?? null)) {
+      g.dispose();
+      u.glow?.dispose();
+      u.clear?.dispose();
+      return c;
+    }
+  }
+  list.push(g);
+  sameAs.set(h, list);
+  return g;
+}
+/** The arrays of each attribute (by name) and the index, as their raw bytes (in words where they
+ *  divide): the same bytes, the same. */
+function wordsOfGeo(g: BufferGeometry): [string, number, Uint32Array | Uint8Array][] {
+  const raw = (v: ArrayBufferView) =>
+    v.byteLength % 4 === 0 && v.byteOffset % 4 === 0
+      ? new Uint32Array(v.buffer, v.byteOffset, v.byteLength / 4)
+      : new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
+  const out: [string, number, Uint32Array | Uint8Array][] = [];
+  for (const name of Object.keys(g.attributes).sort()) {
+    const a = g.attributes[name] as unknown as { array: ArrayBufferView; itemSize: number };
+    out.push([name, a.itemSize, raw(a.array)]);
+  }
+  if (g.index)
+    out.push([
+      "index",
+      (g.index.array as unknown as Uint32Array).BYTES_PER_ELEMENT,
+      raw(g.index.array as unknown as ArrayBufferView),
+    ]);
+  return out;
+}
+function hashOf(gs: (BufferGeometry | null)[]): number {
+  let h = 2166136261;
+  for (const g of gs) {
+    h = Math.imul(h ^ (g ? 1 : 0), 16777619);
+    if (!g) continue;
+    for (const [name, size, w] of wordsOfGeo(g)) {
+      h = Math.imul(h ^ (name.length * 31 + size + w.length * 7), 16777619);
+      for (let i = 0; i < w.length; i++) h = Math.imul(h ^ w[i], 16777619);
+    }
+  }
+  return h >>> 0;
+}
+function sameGeo(a: BufferGeometry | null, b: BufferGeometry | null): boolean {
+  if (!a || !b) return a === b;
+  if (Object.keys(a.morphAttributes).length || Object.keys(b.morphAttributes).length) return false;
+  const wa = wordsOfGeo(a);
+  const wb = wordsOfGeo(b);
+  if (wa.length !== wb.length) return false;
+  for (let i = 0; i < wa.length; i++) {
+    const [na, sa, xa] = wa[i];
+    const [nb, sb, xb] = wb[i];
+    if (na !== nb || sa !== sb || xa.length !== xb.length) return false;
+    for (let j = 0; j < xa.length; j++) if (xa[j] !== xb[j]) return false;
+  }
+  return true;
 }
 
 /** Draw a placed thing into `out`: its model turned onto its frame as the physics' shapes are

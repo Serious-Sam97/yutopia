@@ -68,10 +68,60 @@ export interface Kart {
 const geos: BufferGeometry[] = [];
 const mats: Material[] = [];
 const keep = <T extends BufferGeometry | Material>(g: T): T => {
+  if ((g as BufferGeometry).isBufferGeometry) return (shaping ? shapeOf(g as BufferGeometry) : kept(g)) as T;
+  mats.push(g as Material);
+  return g;
+};
+const kept = <T extends BufferGeometry | Material>(g: T): T => {
   if ((g as BufferGeometry).isBufferGeometry) geos.push(g as BufferGeometry);
   else mats.push(g as Material);
   return g;
 };
+
+// A kart's shapes are the same whatever its colours and number (those are its materials'): the
+// first kart's kept for the rest, one set for all (plan 72 phase 13's memory pass: the park's ten
+// karts were ~28 MB, the same numbers ten times over). Taken in the order a kart makes them, each
+// only if it's exactly the same; its pennant (it waves: each its own) and anything else not the same
+// stay the kart's own. Freed with disposeKarts.
+const shapes: BufferGeometry[] = [];
+let shaping: { i: number } | null = null;
+function shapeOf(g: BufferGeometry): BufferGeometry {
+  const at = shaping as { i: number };
+  const i = at.i++;
+  const s = shapes[i];
+  if (!s) {
+    shapes[i] = g;
+    return g;
+  }
+  if (s !== g && sameGeometry(s, g)) {
+    g.dispose();
+    return s;
+  }
+  return kept(g);
+}
+/** Exactly the same attributes and index (raw bytes), no morphs. */
+function sameGeometry(a: BufferGeometry, b: BufferGeometry): boolean {
+  if (Object.keys(a.morphAttributes).length || Object.keys(b.morphAttributes).length) return false;
+  const na = Object.keys(a.attributes).sort();
+  const nb = Object.keys(b.attributes).sort();
+  if (na.join() !== nb.join() || !!a.index !== !!b.index) return false;
+  const pairs: [ArrayBufferView, ArrayBufferView][] = [];
+  for (const n of na) {
+    const x = a.attributes[n] as { array: ArrayBufferView; itemSize: number };
+    const y = b.attributes[n] as { array: ArrayBufferView; itemSize: number };
+    if (x.itemSize !== y.itemSize) return false;
+    pairs.push([x.array, y.array]);
+  }
+  if (a.index && b.index)
+    pairs.push([a.index.array as unknown as ArrayBufferView, b.index.array as unknown as ArrayBufferView]);
+  for (const [x, y] of pairs) {
+    if (x.byteLength !== y.byteLength || x.constructor !== y.constructor) return false;
+    const u = new Uint8Array(x.buffer, x.byteOffset, x.byteLength);
+    const v = new Uint8Array(y.buffer, y.byteOffset, y.byteLength);
+    for (let k = 0; k < u.length; k++) if (u[k] !== v[k]) return false;
+  }
+  return a.groups.length === b.groups.length;
+}
 
 /** The geometry the ink is drawn from: the same shape welded smooth (the flat facets' split
  *  normals would crack the line at every edge), every vertex at line weight `k`. */
@@ -265,7 +315,15 @@ function treads(): { tread: CanvasTexture; wall: CanvasTexture } {
 }
 
 export function buildKart(o: KartOpts, ink: Material): Kart {
-  // (what this kart makes, freed with it: the game's karts come and go)
+  shaping = { i: 0 };
+  try {
+    return makeKart(o, ink);
+  } finally {
+    shaping = null;
+  }
+}
+function makeKart(o: KartOpts, ink: Material): Kart {
+  // (what this kart makes, freed with it: the game's karts come and go — its shapes the karts' own)
   const g0 = geos.length;
   const m0 = mats.length;
   const root = new Group();
@@ -623,7 +681,7 @@ export function buildKart(o: KartOpts, ink: Material): Kart {
   const penBase = Float32Array.from(penGeo.attributes.position.array);
   {
     const m = new Mesh(
-      keep(penGeo),
+      kept(penGeo),
       keep(new MeshStandardMaterial({ color: o.colour, side: 2, flatShading: true, roughness: 0.6 })),
     );
     m.position.x = -0.17;
@@ -837,6 +895,8 @@ export function buildHelmet(colour: string, r: number, ink: Material): Group {
 
 export function disposeKarts() {
   for (const g of geos) g.dispose();
+  for (const g of shapes) g.dispose();
+  shapes.length = 0;
   for (const m of mats) m.dispose();
   geos.length = 0;
   mats.length = 0;

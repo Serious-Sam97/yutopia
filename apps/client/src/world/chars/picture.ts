@@ -9,7 +9,10 @@ import type { Euler3, Pose } from "./rig";
 // its own — a live turntable (the look editor, the profile), portraits, the look's option thumbs. (It
 // drew the iso view's sprites too; that went with iso — docs/plan/72-the-3d-core.md, phase 12.)
 
-const LOOKS = 40; // models kept
+// models kept (the live turntable's and a few more: the portraits and the editor's thumbs are kept by
+// the HUD as pictures, each drawn once — 40 kept here were ~3 MB a person seen, plan 72 phase 13's
+// memory pass)
+const LOOKS = 6;
 const SIZE = 256; // the renderer's own canvas between pictures
 
 /** A pose for the HUD's pictures (a Motion3's output). */
@@ -42,7 +45,7 @@ class Pictures {
   private failed = false;
   private scene = new Scene();
   private persp = new PerspectiveCamera(28, 1, 0.05, 20);
-  private factory = new CharFactory(20_000, 12);
+  private factory = new CharFactory(20_000, 2);
   private looks = new Map<string, Look>();
   private mounted: Look | null = null;
 

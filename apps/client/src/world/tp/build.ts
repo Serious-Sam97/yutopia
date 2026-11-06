@@ -32,6 +32,7 @@ import { SLAB, WALL_T } from "@yutopia/shared/units";
 import {
   BackSide,
   Box3,
+  BufferAttribute,
   BufferGeometry,
   CanvasTexture,
   DataTexture,
@@ -1223,13 +1224,20 @@ export class World3 {
         if (!lines) nor.set((geo.getAttribute("normal").array as Float32Array).subarray(0, c * 3), at * 3);
         col.set((geo.getAttribute("color").array as Float32Array).subarray(0, c * 4), at * 4);
         fade.fill(this.fadeOfMesh.get(m)?.index ?? 0, at, at + c);
+        // (the piece's own points from now on its stretch of the merged ones — the same numbers, so
+        // the floor's held once, not twice: plan 72 phase 13's memory pass; drawn faded, it uploads
+        // its stretch, and merged again it's read from here)
+        share(geo, "position", pos, at * 3, c * 3);
+        if (!lines) share(geo, "normal", nor, at * 3, c * 3);
+        share(geo, "color", col, at * 4, c * 4);
         at += c;
       }
+      // (the arrays themselves, not copies — Float32BufferAttribute copies — the pieces' views are of them)
       const geo = new BufferGeometry();
-      geo.setAttribute("position", new Float32BufferAttribute(pos, 3));
-      if (!lines) geo.setAttribute("normal", new Float32BufferAttribute(nor, 3));
-      geo.setAttribute("color", new Float32BufferAttribute(col, 4));
-      geo.setAttribute("aFade", new Float32BufferAttribute(fade, 1));
+      geo.setAttribute("position", new BufferAttribute(pos, 3));
+      if (!lines) geo.setAttribute("normal", new BufferAttribute(nor, 3));
+      geo.setAttribute("color", new BufferAttribute(col, 4));
+      geo.setAttribute("aFade", new BufferAttribute(fade, 1));
       geo.computeBoundingSphere();
       const first = g[0];
       const base = (first.userData.base as Material | undefined) ?? (first.material as Material);
@@ -2029,6 +2037,13 @@ function twoSided(geo: BufferGeometry, mat: Material | [Material, Material]): Me
   const back = new Mesh(geo, mat[0]);
   const front = new Mesh(geo, mat[1]);
   return [back, front];
+}
+
+/** A piece's attribute `name` made a view of `n` numbers of `into` from `at` (what it was copied to:
+ *  World3.merge) — its own array let go. */
+function share(geo: BufferGeometry, name: string, into: Float32Array, at: number, n: number) {
+  const a = geo.getAttribute(name) as BufferAttribute;
+  if (a.array.length === n) a.array = into.subarray(at, at + n);
 }
 
 // A mesh that won't move: its matrix made now, not again every frame.
