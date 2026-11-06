@@ -1590,3 +1590,53 @@ the code reads are made from it. Still to come in this phase: listed at the end.
   - **Checks:** shared 655, client 284, the world-server compiles; production build and budgets ok
     (page 466.7/469 KB); as Bia floors 4 and 0 and the kart park load with no page errors.
   - **Phase 12 done.**
+
+## Phase 13 — checks (started 2026-11-06, the user: "go")
+- **The e2e pass** (committed 8f32b8d). Reds fixed directly and run in batches (the full suite is
+  over an hour; never two runs against the one world). **Seven real bugs:** a fresh page's things
+  sorted by floor before the structure came (consoles, computers, desks unseen by menus); parked
+  cars not solid (the physics now takes every thing, `tp.update`'s `solids`); a held thing standing
+  free ignored the arrow nudges; a same-floor teleport from the land into the building refused (a
+  way from where you stand, or from the floor's way in); the lot's lamps dark at night (measured in
+  the floor's frame: `Light3.offset`); the stand-ins' and Vortex's shaders linked on first sight
+  (warmed); the e2e `enter` with no world inherited the last spec's fixture. Bricks and cork flecks
+  drawn as front faces (floor 4's walls 225k → 119k triangles). ~30 specs brought to the 3D core.
+  **Still red:** night-perf (+1 program: a look with one more morph target, first seen at the lot),
+  shades (the beam's sight blocked at its pond spot), pets-lost-two (flaky), and the older known ones
+  (wall-faces, weak-machine roof, move mantle, move-others).
+- **Prod's world, dry run.** world-v4 `--file` on the 24 Oct prod copy: all 798 things kept, the
+  round trip clean (5 floors, 132 walls, 28 rooms, 303 things on walls); 133 tops rise ~0.19 m, 111
+  things move > 10 m (the frame and the lot). Played offline (`e2e/zz-prod-play.mts`, temporary:
+  an offline world-server from the file, the session rerouted): 806 objects, every floor p95
+  16.8 ms, one 67 ms frame on floor 1, no page or server errors (two console 404s from the uid
+  mismatch). Stills in `design/prod-dry-run/`.
+- **The bench against phase 11** (the wall hitch, prod's floor 4; d952c6f in a worktree on :3107):
+  view.frame 7.55 vs 7.58 ms, gl.render 4.75 vs 4.58 ms, edits 26–45 vs 24–43 ms, idle worst
+  32–45 ms, none over 50 ms. Phase 12's native kit costs ~0.2 ms of drawing; the worst frames are
+  noise. Phase 0's wall freeze stays fixed.
+- **The memory checker** (`apps/client/e2e/memcheck.mts`):
+  `node --experimental-strip-types e2e/memcheck.mts [cycles=4] [out.json]` (env `PORT`=2674,
+  `BOTS`=12, `IDLE`=20 s, `WORLD`, `NO_ROAD`). Its own offline world-server (`--expose-gc`), bots
+  (colyseus.js, dev tokens) moving, a third of them leaving and others joining each cycle; Cai's
+  page (Metal) rerouted to it. A cycle: floors 0–4, the lot, the long road's middle and end, home,
+  six plants put and taken away, the bots churned, idle. After each: the page GC'd (CDP) and read
+  (JS heap, three's geometries/textures/programs, Jolt's heap and bodies, the drawn blocks, the
+  land's chunks, people), the server read from `/metrics?gc=1` (a forced GC, offline only; new
+  gauges `room_places/waiting/removed/spawns/handlers` from `WorldRoom.memoryCounts()`). Each count
+  has an allowance (a share, or absolute) — failing if it ends over it or creeps every cycle by more
+  than a fifth of it; the land caches by their caps (1500 page, 4000 server); the server's Jolt and
+  bodies follow where people are (trend only). A heap snapshot's top kinds at cycle 1 and, past the
+  page's budget, the kinds that grew. Exits 1 on a fail.
+  - **Run 2026-11-06, 4 cycles (the long road walked to its end): ok.** Page heap 1151 → 1164 →
+    1223 → 1153 MB; programs 287 flat, geometries ~4.66k, textures 556 → 565, Jolt 14.3 → 14.4 MB,
+    bodies 269 → 285; chunks 128 → 269 (cap 1500). Server heap 147 → 163 MB (+16 of +20: it rides
+    the land cache, 701 → 1734 chunks of its 4000 cap — a longer run should see it level off),
+    places 14 → 18 then flat, handlers 227 flat.
+  - **Nothing leaks; the page is just big: ~1.1–1.2 GB of JS heap**, ~80 % ArrayBuffers. Owners
+    (`e2e/zz-heapown.mts`, temporary): Jolt's wasm heap 134 MB; geometry arrays ~450 MB, of which
+    ~180 MB is in the scene at once (the rest kept by caches — kit models, people's LODs and morph
+    targets, floors not drawn); 84 MB of buffers held only by buffers (likely grown wasm memory's
+    old views); textures' data ~26 MB; strings 276 MB. The 4 GB seen 2026-11-04 is likely this heap plus
+    the GPU process (not measured here). Shrinking it (CPU copies of static geometry after upload, the caches'
+    sizes) is its own work.
+- **Left:** the soak (hours), the independent review, the memory checker in CI, the reds above.

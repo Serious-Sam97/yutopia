@@ -202,6 +202,14 @@ const TICK_FAILS = 100;
 // a failed layout save tried again after these (the last one repeats)
 const LAYOUT_RETRY_MS = [2_000, 5_000, 15_000, 30_000, 60_000];
 
+// What the room keeps per person, for the memory checker (docs/plan/72-the-3d-core.md, phase 13): a
+// count that only grows over hours of people coming and going is a leak.
+metrics.gauge("room_places", () => WorldRoom.current?.memoryCounts().places ?? 0);
+metrics.gauge("room_waiting", () => WorldRoom.current?.memoryCounts().waiting ?? 0);
+metrics.gauge("room_removed", () => WorldRoom.current?.memoryCounts().removed ?? 0);
+metrics.gauge("room_spawns", () => WorldRoom.current?.memoryCounts().spawns ?? 0);
+metrics.gauge("room_handlers", () => WorldRoom.current?.memoryCounts().handlers ?? 0);
+
 export class WorldRoom extends Room<WorldState> {
   // the most people in at once; past it a join is refused (Colyseus would
   // otherwise open a second copy of the world at maxClients)
@@ -1491,6 +1499,18 @@ export class WorldRoom extends Room<WorldState> {
   // each person's place on a floor (their own locked doors open), made as it's asked; let go on
   // every rebuild (and when the physics world's in)
   private places = new Map<string, Place>();
+  /** The per-person maps' sizes (the memory checker's: `room_*` on /metrics). */
+  memoryCounts(): { places: number; waiting: number; removed: number; spawns: number; handlers: number } {
+    let handlers = 0;
+    for (const h of this.handlers.values()) handlers += h.length;
+    return {
+      places: this.places.size,
+      waiting: this.waiting.size,
+      removed: this.removedUntil.size,
+      spawns: this.mySpawns.size,
+      handlers,
+    };
+  }
   private things: WorldObjectDef[] = [];
   private layoutTimer: ReturnType<typeof setTimeout> | null = null;
 

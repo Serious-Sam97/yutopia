@@ -86,7 +86,11 @@ async function handleHold(req: IncomingMessage, res: ServerResponse) {
 
 export async function startWorldServer(port: number): Promise<Server> {
   const http = createServer(async (req, res) => {
-    if (req.url === "/metrics") {
+    if (req.url === "/metrics" || req.url === "/metrics?gc=1") {
+      // (an offline server run with --expose-gc collects first: the memory checker's heap after GC —
+      // never online, where anyone could make it stall)
+      const gc = (globalThis as { gc?: () => void }).gc;
+      if (req.url.endsWith("?gc=1") && config.offline && gc) gc();
       const rooms = await matchMaker.query({ name: ROOM_NAME });
       metrics.gauge("rooms", () => rooms.length);
       metrics.gauge("clients", () => rooms.reduce((n, r) => n + r.clients, 0));
