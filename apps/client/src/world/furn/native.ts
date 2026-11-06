@@ -13,8 +13,19 @@ import {
 import { cleanText } from "@yutopia/shared/glyphs";
 import { frameOf } from "@yutopia/shared/shapes";
 import { slotTrackOf } from "@yutopia/shared/slotcar";
-import { type BufferGeometry, Euler, Float32BufferAttribute, type Group, type Material, Matrix4, Vector3 } from "three";
-import type { Out } from "../tp/kit3d";
+import { BufferGeometry, Euler, Float32BufferAttribute, type Group, type Material, Matrix4, Vector3 } from "three";
+import { Out } from "../tp/kit3d";
+import { poolTable3 } from "../tp/pooltable3d";
+import {
+  bayBoardLook,
+  bayBoardModel,
+  carLook,
+  carModel,
+  elevatorLook,
+  elevatorModel,
+  flightModel,
+  stairsModel,
+} from "./building-native";
 import {
   bowl,
   column,
@@ -36,7 +47,6 @@ import {
 } from "./decor";
 import { coffeeMachine, computer, DESK_THINGS, DESKTOP_LOOKS, LAVA_LOOKS, lavaLamp, radio, turntable } from "./desktop";
 import { FAM_DRAW, FAM_LOOKS } from "./fam";
-import { FURN } from "./flag";
 import { type LivePart, type Look, Model } from "./kit";
 import { liveAt, liveGroup } from "./liveparts";
 import { CEL_ALPHA } from "./look";
@@ -232,7 +242,61 @@ const opening = (_kind: string): Kind => {
   return { signed: true, look: (o) => JSON.stringify(L(o)), make: (o) => openingModel(L(o)) };
 };
 
+/** A model from what something draws into an Out (its lit faces, what glows): the kit's frame. */
+function outModel(draw: (out: Out) => void): BufferGeometry {
+  const out = new Out();
+  draw(out);
+  const geo = (g: Out["lit"]) => {
+    const b = new BufferGeometry();
+    b.setAttribute("position", new Float32BufferAttribute(g.pos, 3));
+    b.setAttribute("normal", new Float32BufferAttribute(g.nor, 3));
+    const c = new Float32Array((g.col.length / 4) * 3);
+    for (let i = 0, j = 0; i < g.col.length; i += 4, j += 3) c.set([g.col[i], g.col[i + 1], g.col[i + 2]], j);
+    b.setAttribute("color", new Float32BufferAttribute(c, 3));
+    b.computeBoundingBox();
+    b.computeBoundingSphere();
+    return b;
+  };
+  const g = geo(out.lit);
+  g.userData.glow = out.glow.empty ? null : geo(out.glow);
+  g.userData.clear = null;
+  g.userData.live = [];
+  return g;
+}
+
+/** A kind built from its props (plan 72 phase 12: the sketches' last kinds). */
+const propKind = (look: (o: WorldObjectDef) => string, draw: (m: Model, o: WorldObjectDef) => void): Kind => ({
+  signed: true,
+  look,
+  make: (o) => {
+    const m = new Model(2);
+    draw(m, o);
+    return m.geometry();
+  },
+});
+
 const KINDS: Record<string, Kind> = {
+  // plan 72 phase 12: the sketches' last kinds (signed off 2026-11-06)
+  stairs: propKind(
+    () => "",
+    (m) => stairsModel(m),
+  ),
+  elevator: propKind(elevatorLook, (m, o) => elevatorModel(m, o.props ?? {})),
+  car: propKind(
+    (o) => `${carLook(o)}|${lookOf(o).look}`,
+    (m, o) => carModel(m, o.props ?? {}, lookOf(o).look),
+  ),
+  flight: propKind(
+    (o) => String(o.props?.rise ?? ""),
+    (m, o) => flightModel(m, o.props ?? {}),
+  ),
+  bayboard: propKind(bayBoardLook, (m, o) => bayBoardModel(m, o.props ?? {})),
+  // (the pool table's own model, tp/pooltable3d.ts, as a kit model: its pictures)
+  pool_table: {
+    signed: true,
+    look: (o) => String(Math.floor(lookOf(o).seed * 4)),
+    make: (o) => outModel((out) => poolTable3(out, { x: 0, y: 0 }, 0, lookOf(o).seed)),
+  },
   // plan 68 phase 13: the doors and windows (drawn in their walls by openingInto)
   ...Object.fromEntries(
     Object.keys(CATALOG)
@@ -509,10 +573,10 @@ function thing(d: string, seed: number, on: boolean): BufferGeometry {
   return m.geometry();
 }
 
-/** Does the kit draw this kind here (signed off, or ?furn=new; never with ?furn=old)? */
+/** Does the kit draw this kind here (signed off; plan 72 phase 12: the old art's switch gone)? */
 export function isNative(kind: string): boolean {
   const k = KINDS[kind];
-  return !!k && FURN !== "old" && (k.signed || !!k.fresh || FURN === "new");
+  return !!k && (k.signed || !!k.fresh);
 }
 
 const cache = new Map<string, BufferGeometry>();

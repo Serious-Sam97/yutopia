@@ -2,32 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { entry, footprint, quarterOf, quarterYaw } from "./catalog.ts";
 import { moveStep } from "./ground.ts";
-import { hearingGain, stereoPan } from "./hearing.ts";
-import { dirFromDelta, screenInputToWorld, toScreen, toWorld } from "./iso.ts";
+import { hearingGain } from "./hearing.ts";
 import { areaAt, holdsItems, hWall, isFloor, tileAt } from "./map.ts";
 import { studio } from "./maps/studio.ts";
 import { testWorld } from "./physics/testing.ts";
-
-test("iso projection round-trips", () => {
-  for (const [x, y] of [
-    [0, 0],
-    [3.25, 7.5],
-    [47, 35],
-  ]) {
-    const s = toScreen(x, y);
-    const w = toWorld(s.x, s.y);
-    assert.ok(Math.abs(w.x - x) < 1e-9 && Math.abs(w.y - y) < 1e-9);
-  }
-});
-
-test("facings match the screen", () => {
-  assert.equal(dirFromDelta(1, 1), 0); // screen-down = S
-  assert.equal(dirFromDelta(-1, -1), 4); // screen-up = N
-  assert.equal(dirFromDelta(1, -1), 6); // screen-right = E
-  assert.equal(dirFromDelta(-1, 1), 2); // screen-left = W
-  const up = screenInputToWorld(0, -1);
-  assert.equal(dirFromDelta(up.x, up.y), 4);
-});
 
 test("studio map is rectangular and every object sits on floor without overlaps", () => {
   assert.equal(studio.tiles.length, studio.height);
@@ -116,7 +94,6 @@ test("hearing: proximity, private rooms, booths and the stage", () => {
   // hysteresis keeps a fading voice a bit longer
   assert.equal(hearingGain(studio, { x: 3, y: 3 }, { x: 9.5, y: 3 }), 0);
   assert.ok(hearingGain(studio, { x: 3, y: 3 }, { x: 9.5, y: 3 }, true) > 0);
-  assert.ok(stereoPan({ x: 5, y: 5 }, { x: 8, y: 2 }) > 0);
 });
 
 test("templates fit their room without overlaps", async () => {

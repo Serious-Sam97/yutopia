@@ -36,8 +36,8 @@ export const ANIM_CHUNK = "yutopia-anim";
 
 // ── plan 58, phase 0: the hero animations keyed again (docs/plan/58-the-animation.md) ─────────
 // Kingdom Hearts 3 where you play, Alan Wake 2 where you live; `tension` (0..1: the mood — night,
-// the dark) moves them toward Alan Wake 2. Beside the old ones until they're signed off
-// (`Motion3.v2`, `Locomotion.v2`); then they're the only ones.
+// the dark) moves them toward Alan Wake 2. The only ones (the old beside them retired, plan 72
+// phase 12).
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const lerpCh = (a: Ch, b: Ch, t: number): Ch => {

@@ -4,7 +4,7 @@ import { MV_WINDED } from "@yutopia/shared/move";
 import { Group, PerspectiveCamera as Lens, Matrix4, type PerspectiveCamera, Quaternion, Scene, Vector3 } from "three";
 import type { chars } from "../art/chars-load";
 import type { GunFx } from "./guns3d";
-import type { PersonIn } from "./people3d";
+import type { PersonIn } from "./person-in";
 import { type Mats, Person3D } from "./person3d";
 
 type Chars = NonNullable<ReturnType<typeof chars>>;

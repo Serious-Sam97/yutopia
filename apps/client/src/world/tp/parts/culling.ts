@@ -1,6 +1,6 @@
 import { isFloor, STAIRS_D, STOREY } from "@yutopia/shared";
 import { cellOf } from "@yutopia/shared/structure";
-import { Box3, Frustum, Matrix4, type Mesh, type Object3D, type Sphere, Vector3 } from "three";
+import { Box3, Frustum, Matrix4, type Mesh, type Object3D, type Vector3 } from "three";
 import { BelowCull, boxInParent, HIDDEN_LAYER } from "../below-cull";
 import type { World3 } from "../build";
 import { type Gather, lazyMatrices, seal } from "../lazy-matrices";
@@ -22,8 +22,6 @@ export class Culling {
   cullUnits: { obj: Object3D; box: Box3 }[] = [];
 
   belowBoxes = new WeakMap<Object3D, { at: Vector3; box: Box3 }>();
-
-  eyeAt = new Vector3();
 
   /** (tests: nothing left out — the same picture, the long way) */
   noCull = false;
@@ -118,7 +116,6 @@ export class Culling {
       if (top.userData.cullKids) for (const o of top.children) if (o.userData.still && o.visible) still(o);
     // (the campus mesh by mesh: its groups move inside it — with my floor — so a group's box
     // can't be kept by its own place; each mesh's can, by its own world matrix)
-    const eye = this.c.camera.getWorldPosition(this.eyeAt);
     const got = this.gathered;
     if (got)
       // (gathered by the matrices' pass: those low enough to be under my floor)
@@ -137,22 +134,6 @@ export class Culling {
     for (const o of this.c.lifts3?.root.children ?? []) around(o, 2, STOREY + 0.5);
     units.length = n;
     this.below3.begin(this.c.camera, units);
-    // my floor's cards: a card is flat, so only one side of it faces the camera — with its
-    // front toward the camera, its back mesh draws nothing (left out: a draw fewer each)
-    for (const c of this.c.world.cards) {
-      if (!c.userData.cardBack || !c.visible) continue;
-      const g = (c as Mesh).geometry;
-      if (!g.boundingSphere) g.computeBoundingSphere();
-      const p0 = (g.boundingSphere as Sphere).center;
-      const ry = c.rotation.y;
-      const sn = Math.sin(ry);
-      const cs = Math.cos(ry);
-      const at = this.c.world.root.position;
-      const px = at.x + c.position.x + p0.x * cs + p0.z * sn;
-      const pz = at.z + c.position.z - p0.x * sn + p0.z * cs;
-      // (its front's normal: +z turned about y; the eye on that side of its plane)
-      if (sn * (eye.x - px) + cs * (eye.z - pz) > 1e-6 && !c.rotation.x && !c.rotation.z) this.below3.hideAlso(c);
-    }
   }
 
   /** A model that stands still from now on (a parked car: nothing on it moves): the pieces at

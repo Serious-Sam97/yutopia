@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { byteFace, face8, faceByte, faceStep, SEAT_FACE } from "./facing.ts";
-import { dirFromDelta } from "./iso.ts";
 import { byteToYaw, yawToByte } from "./move/spec.ts";
 
 // Plan 72 phase 5: people face by a yaw, not one of the 8 iso screen ways `d` — the same 8 angles
@@ -19,7 +18,6 @@ const D_VEC: [number, number][] = [
 
 test("the 8 ways: each old facing's own direction gives its angle, as a byte and in radians", () => {
   for (const [d, [x, y]] of D_VEC.entries()) {
-    assert.equal(dirFromDelta(x, y), d, "(the old way judged it so)");
     const b = faceByte(x, y);
     assert.equal(b, ((d + 1) % 8) * 32, `d ${d}`);
     assert.ok(Math.abs(Math.sin((byteToYaw(b) - Math.atan2(y, x)) / 2)) < 1e-9);

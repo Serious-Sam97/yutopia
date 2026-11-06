@@ -1,7 +1,8 @@
-import { overFloor, toScreen } from "@yutopia/shared";
+import { overFloor } from "@yutopia/shared";
 import { aimPitch, flightAt, heldBall, type Launch, PBALL, SETTLE, settleAt } from "@yutopia/shared/pool-throw";
 import type { Player, PoolBallOut } from "@yutopia/state";
 import { lang } from "@/lib/i18n";
+import { panOf } from "../ear";
 import { hud, toast } from "../store";
 import type { TableScene3 } from "../tp/tables3d";
 import type { Q } from "./ballart";
@@ -226,9 +227,8 @@ export class PoolBallsOut {
     const x = kind === "fire" ? b.x0 : b.x1;
     const y = kind === "fire" ? b.y0 : b.y1;
     const gain = Math.max(0, 1 - Math.hypot(x - me.x, y - me.y) / 14) * 0.9;
-    const a = toScreen(x, y);
-    const c = toScreen(me.x, me.y);
-    const pan = Math.max(-0.8, Math.min(0.8, (a.x - c.x) / 300));
+    // (left or right of me as the camera faces: world/ear.ts)
+    const pan = Math.max(-0.8, Math.min(0.8, panOf(me, { x, y })));
     if (gain <= 0.01) return;
     if (kind === "fire") cueTip(2.2, gain, pan, false);
     else if (kind === "hit") clack(3.2, gain, pan);

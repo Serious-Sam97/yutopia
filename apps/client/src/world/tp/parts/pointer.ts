@@ -1,5 +1,6 @@
 import { AIM_BLADE, beamOf } from "@yutopia/shared/beam";
 import { type Object3D, Vector2 } from "three";
+import { Vortex3 } from "../stand3d";
 import type { Body3, ThirdPersonView } from "../view";
 import { segBox } from "./common";
 
@@ -345,11 +346,22 @@ export class Pointer {
       if (t !== null && (!best || t < best.t)) best = { id, t };
     }
     if (best) return best.id;
-    const planes: Object3D[] = [];
-    for (const p of this.c.people.values()) if (p.plane.visible && p.root.visible) planes.push(p.plane);
-    for (const hit of this.c.ray.intersectObjects(planes, false)) {
-      const found = [...this.c.people].find(([, p]) => p.plane === hit.object);
-      if (found && hit.uv && found[1].opaqueAt(hit.uv.x, hit.uv.y)) return found[0];
+    // (the stand-ins: Vortex's drawing where it isn't clear; a low figure by its shapes — stand3d.ts)
+    const shown = [...this.c.people].filter(([, p]) => p.root.visible && p.shown);
+    for (const hit of this.c.ray.intersectObjects(
+      shown.map(([, p]) => p.root),
+      true,
+    )) {
+      const found = shown.find(([, p]) => {
+        let o: Object3D | null = hit.object;
+        while (o && o !== p.root) o = o.parent;
+        return !!o;
+      });
+      if (!found) continue;
+      const [id, p] = found;
+      if (p instanceof Vortex3) {
+        if (hit.object === p.plane && hit.uv && p.opaqueAt(hit.uv.x, hit.uv.y)) return id;
+      } else if (hit.object.name !== "shadow") return id;
     }
     // pets: their meshes
     const roots: Object3D[] = [...this.c.pets3.values()].map((e) => e.model.root);

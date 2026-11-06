@@ -1,4 +1,4 @@
-import type { Box } from "./avatar-rig";
+import type { Box } from "./svgdoc";
 
 // What people carry, drawn in board units around its grip (0, 0): the hand
 // holds it there and the rig moves it. A mug: its colour is the person's own

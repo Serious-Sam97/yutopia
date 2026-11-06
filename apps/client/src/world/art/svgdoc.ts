@@ -1,4 +1,5 @@
-import type { Box } from "./avatar-rig";
+/** A drawing's frame: [x, y, w, h] (its viewBox). */
+export type Box = [number, number, number, number];
 
 // An SVG fragment drawn in board units as its own document: the box it's
 // cropped to, at `px` texture pixels per unit.

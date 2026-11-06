@@ -1,7 +1,7 @@
 import type { WorldObjectDef } from "../catalog.ts";
 import { quarterYaw } from "../catalog.ts";
 import { convertV1 } from "../convert.ts";
-import { type AreaDef, entryWallItem, hWall, MapBuilder, type TileMap, setEdge, vWall, type WallMat } from "../map.ts";
+import { type AreaDef, entryWallItem, hWall, MapBuilder, setEdge, type TileMap, vWall, type WallMat } from "../map.ts";
 
 // "The Studio Building" — a 1984 recording studio that's a bit too big inside.
 // Rooms are written as wall-inclusive rectangles; see docs/plan/04-world-and-art.md.

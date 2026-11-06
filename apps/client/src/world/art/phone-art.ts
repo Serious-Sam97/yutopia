@@ -1,5 +1,5 @@
 import { CASES, isCase } from "@yutopia/shared/phone";
-import type { Box } from "./avatar-rig";
+import type { Box } from "./svgdoc";
 
 const INK = "#2a1430";
 

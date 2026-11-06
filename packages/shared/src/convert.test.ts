@@ -12,7 +12,10 @@ import { testWorld, wayOn } from "./physics/testing.ts";
 
 // Connected components of walkable tiles: v1 by tile adjacency, v2 by steps
 // (which also respect walls on edges).
-function components(map: TileMap, step: ((x: number, y: number, nx: number, ny: number) => boolean) | null): Int32Array {
+function components(
+  map: TileMap,
+  step: ((x: number, y: number, nx: number, ny: number) => boolean) | null,
+): Int32Array {
   const W = map.width;
   const comp = new Int32Array(W * map.height).fill(-1);
   let n = 0;

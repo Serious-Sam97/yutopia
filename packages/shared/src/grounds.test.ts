@@ -8,7 +8,7 @@ import { GATE, groundsAreaAt, groundsOutdoors, heightAt, INSIDES, walkableTile, 
 import { hearingGain } from "./hearing.ts";
 import { type Height, stepHeight } from "./jump.ts";
 import { levelMap } from "./levels.ts";
-import { areaAt, edgeAt, type TileLevel, type TileMap, setAreasBeyond, setEdge, tileAt } from "./map.ts";
+import { areaAt, edgeAt, setAreasBeyond, setEdge, type TileLevel, type TileMap, tileAt } from "./map.ts";
 import { studio } from "./maps/studio.ts";
 import { openingsIntoWalls } from "./openings.ts";
 import type { Place } from "./physics/place.ts";

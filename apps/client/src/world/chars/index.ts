@@ -5,18 +5,6 @@ export const CHARS_CHUNK = "yutopia-chars";
 export { bake } from "./bake";
 export { buildPerson } from "./build";
 export { INK, inkMaterial, inkResolution } from "./ink";
-export {
-  ISO,
-  type IsoIn,
-  type IsoMem,
-  type IsoSprite,
-  type IsoState,
-  isoPeople,
-  isoPose,
-  isoState,
-  type PictureMotion,
-  verbAt,
-} from "./iso";
 export type { Anchor } from "./kit";
 export {
   actsNow,
@@ -68,5 +56,6 @@ export {
   verbRoot,
 } from "./moves";
 export { BASE, LODS, type Lod, type Params, paramsFor } from "./params";
+export { type PictureMotion, pictures, verbAt } from "./picture";
 export { buildProp, inHand, keepUpright, type PropKind, pointAlong } from "./props";
 export { HANDS, type HandShape, handPose, JOINTS, type JointName, type Pose, REST } from "./rig";

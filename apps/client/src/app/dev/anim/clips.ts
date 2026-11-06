@@ -856,9 +856,10 @@ export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: bo
   if (clip.swim) return which === "after" ? swimTable(x, clip, rate) : null;
   if (clip.motion) return everyday(x, clip, which, rate);
   if (!clip.live) return null;
+  // (plan 58 off was a driven clip's "before": retired with the old, plan 72 phase 12 — none now)
+  if (which === "before") return null;
   // driven: as the sandbox drives it — the body's speed, its change and its turn; Locomotion's layers
   const loco = new x.C.Locomotion(KH_FEEL);
-  loco.v2 = which === "after";
   loco.tension = clip.mood ?? x.T;
   loco.seed = 3;
   loco.gait = clip.gait ?? x.gait ?? "calm";
@@ -943,7 +944,7 @@ export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: bo
           G(px + lx * Math.cos(ry) + lz * Math.sin(ry), pz - lx * Math.sin(ry) + lz * Math.cos(ry)) - under
       : undefined;
     const st = d.slide !== undefined ? (t - d.slide) / x.C.VERB_LEN.slide : -1;
-    const standing = loco.v2 ? x.H.idle2Pose(t, x.T, 3, true, loco.life()) : undefined;
+    const standing = x.H.idle2Pose(t, x.T, 3, true, loco.life());
     const m = loco.update(
       dt,
       {
@@ -1091,11 +1092,12 @@ export function limp(
 
 /** (6) A clip of the everyday, through Motion3 as the world drives it: "before" plan 58 off, or the
  *  other one of a pair facing her. The seat's drop as the world's view lays it on. */
-function everyday(x: Ctx, clip: Clip, which: "after" | "before", rate: number): Frame[] {
+function everyday(x: Ctx, clip: Clip, which: "after" | "before", rate: number): Frame[] | null {
   const n = Math.round(clip.len * rate) + 1;
   const pair = which === "before" && clip.pair;
+  // (a "before" is the other one of a pair; plan 58 off, the rest's, is retired — plan 72 phase 12)
+  if (which === "before" && !pair) return null;
   const m3 = new x.C.Motion3(pair ? 0.71 : 0.3);
-  m3.v2 = which === "after" || !!pair;
   m3.tension = x.T;
   m3.gait = x.gait ?? "calm";
   const out: Frame[] = [];
@@ -1114,8 +1116,8 @@ function everyday(x: Ctx, clip: Clip, which: "after" | "before", rate: number): 
     };
     if (pair && inp.act) inp.act = { ...inp.act, what: clip.pair?.act ?? inp.act.what };
     const o = m3.update(1 / rate, inp);
-    // (the view's: down by the seat's drop as it settles — the old's by its own ease either way)
-    const k = m3.v2 ? o.settle : inp.sit ? o.settle : 1 - o.settle;
+    // (the view's: down by the seat's drop as it settles)
+    const k = o.settle;
     const drop = clip.props && (inp.sit || o.settle < 1) ? (inp.seat?.drop ?? -0.34) * k : 0;
     out.push({
       pose: o.pose,

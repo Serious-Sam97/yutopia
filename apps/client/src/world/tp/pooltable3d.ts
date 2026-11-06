@@ -2,9 +2,8 @@ import { TABLES } from "@yutopia/shared/tables";
 import { Color, ShapeUtils, Vector2 } from "three";
 import type { Out } from "./kit3d";
 
-// The pool table in 3D, its own model (the iso view draws the item's sketch,
-// art/items/gametables.ts; this is the same table, built for being looked at
-// from any side and from right over it while you play):
+// The pool table in 3D, its own model (the kit draws it from here: furn/native.ts — built for
+// being looked at from any side and from right over it while you play; the world inks it):
 //   · the six pockets are real holes — the cloth, the cushions and the rails
 //     bitten round each one, a leather throat going down into the dark and a
 //     cup at the bottom, so a ball going down is seen going down (tables/pool.ts
@@ -275,12 +274,6 @@ export function poolTable3(out: Out, at: { x: number; y: number }, rot: number, 
     tri(a, b, c, ca, cb, cc, n);
     tri(a, c, d, ca, cc, cd, n);
   };
-  const ink = col("#2a1a12", 1, 0.5);
-  const line = (a: V3, b: V3, alpha = 0.5) => {
-    out.lines.push(...wp(a[0], a[1], a[2]), ...wp(b[0], b[1], b[2]));
-    const k: C4 = [ink[0], ink[1], ink[2], alpha];
-    out.lineCol.push(...k, ...k);
-  };
   // a flat polygon at height z (facing up or down)
   const flat = (poly: P2[], z: number, c: C4, up = true, holes: P2[][] = []) => {
     for (const t of triangulate(poly, holes))
@@ -295,7 +288,7 @@ export function poolTable3(out: Out, at: { x: number; y: number }, rot: number, 
     z0: number,
     z1: number,
     c: C4,
-    o: { top?: C4; noTop?: boolean; noBottom?: boolean; inked?: boolean } = {},
+    o: { top?: C4; noTop?: boolean; noBottom?: boolean } = {},
   ) => {
     const t = o.top ?? c;
     const side = (k: number): C4 => [c[0] * k, c[1] * k, c[2] * k, c[3]];
@@ -305,21 +298,6 @@ export function poolTable3(out: Out, at: { x: number; y: number }, rot: number, 
     quad([x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1], [0, 1, 0], side(0.97));
     quad([x0, y0, z0], [x0, y1, z0], [x0, y1, z1], [x0, y0, z1], [-1, 0, 0], side(0.92));
     quad([x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1], [1, 0, 0], side(0.9));
-    if (o.inked) {
-      const c4: P2[] = [
-        [x0, y0],
-        [x1, y0],
-        [x1, y1],
-        [x0, y1],
-      ];
-      for (let i = 0; i < 4; i++) {
-        const [ax, ay] = c4[i];
-        const [bx, by] = c4[(i + 1) % 4];
-        line([ax, ay, z1], [bx, by, z1], 0.45);
-        line([ax, ay, z0], [bx, by, z0], 0.45);
-        line([ax, ay, z0], [ax, ay, z1], 0.35);
-      }
-    }
   };
 
   const cloth = col(look.cloth);
@@ -427,7 +405,6 @@ export function poolTable3(out: Out, at: { x: number; y: number }, rot: number, 
       const mid: P2 = [(A.p[0] + B.p[0]) / 2 + n[0] * 1e-3, (A.p[1] + B.p[1]) / 2 + n[1] * 1e-3];
       if (inPoly(mid, c.poly)) n = [-ey, ex, 0];
       quad([A.p[0], A.p[1], ZC], [B.p[0], B.p[1], ZC], [B.p[0], B.p[1], zb], [A.p[0], A.p[1], za], norm(n), face);
-      line([A.p[0], A.p[1], za], [B.p[0], B.p[1], zb], 0.4);
     }
   }
 
@@ -468,7 +445,6 @@ export function poolTable3(out: Out, at: { x: number; y: number }, rot: number, 
       norm(n),
       col(look.wood, 0.75),
     );
-    line([A.p[0], A.p[1], ZR], [B.p[0], B.p[1], ZR], 0.4);
   }
   // the outer edge: rounded over, then straight down to the underside
   const AI = 0.045; // the apron, in from the rail's outside
@@ -502,11 +478,6 @@ export function poolTable3(out: Out, at: { x: number; y: number }, rot: number, 
       );
     }
   }
-  for (const k of [0, 3, 5])
-    for (let s = 0; s < 4; s++) {
-      const a = outer(prof[k][0]);
-      line([a[s][0], a[s][1], prof[k][1]], [a[(s + 1) % 4][0], a[(s + 1) % 4][1], prof[k][1]], k === 0 ? 0.35 : 0.5);
-    }
 
   // the sights: mother-of-pearl diamonds, three a side between the pockets, three on each end
   const zs = ZR + 0.0012;
@@ -556,7 +527,6 @@ export function poolTable3(out: Out, at: { x: number; y: number }, rot: number, 
       if (o0 <= i0 + 1e-4 || o1 <= i1 + 1e-4) continue;
       const P = (a: number, t: number): V3 => [h.x + Math.cos(a) * t, h.y + Math.sin(a) * t, zcap];
       quad(P(a0, i0), P(a1, i1), P(a1, o1), P(a0, o0), [0, 0, 1], capC);
-      line(P(a0, o0), P(a1, o1), 0.4);
     }
     // the throat: the hole's wall, from what's round it (rail, cushion, the
     // cloth at the mouth) down into the dark; leather, darker as it goes down
@@ -587,8 +557,7 @@ export function poolTable3(out: Out, at: { x: number; y: number }, rot: number, 
           lip,
           lip,
         );
-        line([A.p[0], A.p[1], A.top], [B.p[0], B.p[1], B.top], 0.45);
-      } else line([A.p[0], A.p[1], ZC + 0.001], [B.p[0], B.p[1], ZC + 0.001], 0.55);
+      }
       quad(
         [A.p[0], A.p[1], zMid],
         [B.p[0], B.p[1], zMid],
@@ -622,10 +591,6 @@ export function poolTable3(out: Out, at: { x: number; y: number }, rot: number, 
   const ay0 = OY0 + AI;
   const ay1 = OY1 - AI;
   box(ax0, ay0, ax1, ay1, ZP, ZA, wood, { noTop: true });
-  line([ax0, ay0, ZP], [ax1, ay0, ZP]);
-  line([ax1, ay0, ZP], [ax1, ay1, ZP]);
-  line([ax1, ay1, ZP], [ax0, ay1, ZP]);
-  line([ax0, ay1, ZP], [ax0, ay0, ZP]);
   {
     const lo = ZP + 0.028;
     const hi = ZA - 0.03;
@@ -636,12 +601,12 @@ export function poolTable3(out: Out, at: { x: number; y: number }, rot: number, 
       [ax0 + 0.18, CX - 0.12],
       [CX + 0.12, ax1 - 0.18],
     ]) {
-      box(u0, ay0 - pd, u1, ay0, lo, hi, raised, { inked: true });
-      box(u0, ay1, u1, ay1 + pd, lo, hi, raised, { inked: true });
+      box(u0, ay0 - pd, u1, ay0, lo, hi, raised);
+      box(u0, ay1, u1, ay1 + pd, lo, hi, raised);
     }
     // the ends
-    box(ax0 - pd, ay0 + 0.16, ax0, ay1 - 0.16, lo, hi, raised, { inked: true });
-    box(ax1, ay0 + 0.16, ax1 + pd, ay1 - 0.16, lo + 0.05, hi, raised, { inked: true });
+    box(ax0 - pd, ay0 + 0.16, ax0, ay1 - 0.16, lo, hi, raised);
+    box(ax1, ay0 + 0.16, ax1 + pd, ay1 - 0.16, lo + 0.05, hi, raised);
     // brass plates on the corners
     for (const [x, y] of [
       [ax0, ay0],
@@ -711,7 +676,7 @@ export function poolTable3(out: Out, at: { x: number; y: number }, rot: number, 
         );
       }
     }
-    box(lx - 0.1, ly - 0.1, lx + 0.1, ly + 0.1, 0.3343, ZP, wood, { inked: true, noTop: true });
+    box(lx - 0.1, ly - 0.1, lx + 0.1, ly + 0.1, 0.3343, ZP, wood, { noTop: true });
   }
 
   // ── the ball return: a trough along the foot end, the potted balls lie in it ──
@@ -723,11 +688,11 @@ export function poolTable3(out: Out, at: { x: number; y: number }, rot: number, 
     const ty1 = 1.99;
     const zf = 0.4951; // its floor
     const zl = zf + 0.026;
-    box(tx0, ty0, tx1, ty1, zf - 0.035, zf, woodDark, { top: col("#2a1a12"), inked: true });
+    box(tx0, ty0, tx1, ty1, zf - 0.035, zf, woodDark, { top: col("#2a1a12") });
     // its lips round the floor
-    box(tx1 - 0.014, ty0, tx1, ty1, zf, zl, wood, { inked: true });
-    box(tx0, ty0, tx1, ty0 + 0.014, zf, zl, wood, { inked: true });
-    box(tx0, ty1 - 0.014, tx1, ty1, zf, zl, wood, { inked: true });
+    box(tx1 - 0.014, ty0, tx1, ty1, zf, zl, wood);
+    box(tx0, ty0, tx1, ty0 + 0.014, zf, zl, wood);
+    box(tx0, ty1 - 0.014, tx1, ty1, zf, zl, wood);
     // two brackets holding it under the apron
     for (const y of [ty0 + 0.1, ty1 - 0.1]) box(tx0, y - 0.02, tx1 - 0.02, y + 0.02, zf - 0.09, zf - 0.035, woodDark);
   }
@@ -736,6 +701,6 @@ export function poolTable3(out: Out, at: { x: number; y: number }, rot: number, 
   {
     const x = X1 - 0.42;
     const y = BY1 + RAIL / 2 - 0.03;
-    box(x, y, x + 0.06, y + 0.06, ZR, ZR + 0.046, col("#3d6fa8"), { top: col("#2a4f7d"), inked: true });
+    box(x, y, x + 0.06, y + 0.06, ZR, ZR + 0.046, col("#3d6fa8"), { top: col("#2a4f7d") });
   }
 }

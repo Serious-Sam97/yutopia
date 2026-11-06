@@ -26,8 +26,7 @@ import { drawFlaps, drawTicker, FLAPS_PX, TICKER_PX } from "./words";
 // phase 9): one offscreen renderer for them all, lazily made — the cel as the people's, the post's
 // ink and grain as in the world, on nothing. A picture's made once a kind, look and paint and kept
 // for the session (as data URLs); the held piece's turntable draws into its own 2D canvas each frame
-// through the same renderer. Kinds the kit doesn't draw (doors, windows, the cars…) get none here:
-// the panel shows their drawings.
+// through the same renderer. (Every kind is the kit's: plan 72 phase 12.)
 
 let r: {
   renderer: WebGLRenderer;

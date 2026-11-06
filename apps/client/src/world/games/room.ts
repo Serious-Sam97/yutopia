@@ -3,7 +3,6 @@ import {
   hearingGain,
   quarterOf,
   type ServerMessages,
-  stereoPan,
   variantOf,
   type WorldObjectDef,
 } from "@yutopia/shared";
@@ -25,6 +24,7 @@ import { displaySpot, GLASS, glassCorners, tvInput, tvVolume } from "@yutopia/sh
 import type { GameConsole, WorldState } from "@yutopia/state";
 import { prefs } from "@/lib/prefs";
 import type { WorldController } from "../controller";
+import { panOf } from "../ear";
 import { type GameView, hud, toast } from "../store";
 import type { GameScene3 } from "../tp/games3d";
 import { biosFiles, library, listBios, loadSave, putSave, romOf } from "./api";
@@ -613,7 +613,7 @@ export class GameRoom {
         this.w.media.setVoice(
           `tv-${shows.id}`,
           hearingGain(this.w.map, ear, spot, true) * 0.9 * prefs().vol.tv * tvVolume(tv),
-          stereoPan(ear, spot),
+          panOf(ear, spot),
         );
       }
       if (src !== v.source) {

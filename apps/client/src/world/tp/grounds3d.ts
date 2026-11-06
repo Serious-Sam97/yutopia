@@ -4714,7 +4714,7 @@ export class Grounds3 {
   private parkMod: {
     m: typeof import("./karts3d");
     T3: typeof import("three");
-    items: typeof import("../art/items");
+    native: typeof import("../furn/native");
   } | null = null;
   private parkLoading = false;
   private kartParkLamps() {
@@ -4738,23 +4738,23 @@ export class Grounds3 {
     if (!this.parkMod) {
       if (!this.parkLoading) {
         this.parkLoading = true;
-        // (and the item art: the fire's benches are the office's — kart/park3d.ts)
-        void Promise.all([loadKarts(), import("three"), import("../art/items")]).then(([m, T3, items]) => {
-          this.parkMod = { m, T3, items };
+        // (and the kit: the fire's benches are the office's — kart/park3d.ts)
+        void Promise.all([loadKarts(), import("three"), import("../furn/native")]).then(([m, T3, native]) => {
+          this.parkMod = { m, T3, native };
         });
       }
       this.pending.push(() => this.kartPark());
       this.waiting = true;
       return;
     }
-    const { m, T3, items } = this.parkMod;
+    const { m, T3, native } = this.parkMod;
     const g = new Group();
     const park = m.stageKarts(
       T3,
       g,
       // (the stands' painted crowd: their seats; the rest are for people: shared kartSeats)
       { karts: [], rack: true, crowd: KART_CROWD, lap: "—", order: [], noCrates: true, circuit: false },
-      { night: 0, lit: false, cam: new Vector3(KART_PARK.x, 0, KART_PARK.z), items },
+      { night: 0, lit: false, cam: new Vector3(KART_PARK.x, 0, KART_PARK.z), native },
     );
     for (const x of park.glows) this.glows(x.m, x.on);
     this.root.add(g);

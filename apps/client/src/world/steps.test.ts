@@ -100,7 +100,6 @@ test("the foot lock: a step for each foot put down after it was lifted, in turn,
 test("walking: the body's steps come at its stride's pace — two a stride, the feet in turn", async () => {
   const H = await loadHero();
   const l = new Locomotion(KH_FEEL);
-  l.v2 = true;
   const base = {
     pitch: 0,
     yaw: 0,

@@ -1,5 +1,5 @@
 import type { WorldObjectDef } from "./catalog.ts";
-import type { Point } from "./iso.ts";
+import type { Point } from "./geom.ts";
 import { isFloor, type LevelDef, type MapDef, type TileLevel, type TileMap } from "./map.ts";
 import { cellTop } from "./structure/query.ts";
 import { STOREY } from "./units.ts";

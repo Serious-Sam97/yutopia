@@ -13,8 +13,8 @@
 import { entry, footprint, quarterOf, type WorldObjectDef } from "../catalog.ts";
 import { FAM_CHAIRS } from "../fam/index.ts";
 import { isFreeThing, thingCorners } from "../free-things.ts";
+import type { Point } from "../geom.ts";
 import { BODY_R, chairAt, DESK_PULL, type Outdoors, outdoorsOf, type Seat, STEP, seatFront } from "../ground.ts";
-import type { Point } from "../iso.ts";
 import { across, elevOf, floorOf, objLevel, onLevel } from "../levels.ts";
 import { isFloor, type MapDef, tileInMap } from "../map.ts";
 import { inRamp, type Ramp, rampHeight, type SlabUnder, stairsRamps, stairsWell } from "../stairs.ts";

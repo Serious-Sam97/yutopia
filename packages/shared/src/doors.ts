@@ -1,5 +1,5 @@
 import { quarterOf, quarterYaw, type WorldObjectDef } from "./catalog.ts";
-import type { Point } from "./iso.ts";
+import type { Point } from "./geom.ts";
 import { type AreaDef, type Edge, inArea, isFloor, type MapDef } from "./map.ts";
 import { doorLockable, openingCentre, ringOf, wallTakes } from "./openings.ts";
 import { cellOf, wallOf } from "./structure/query.ts";

@@ -1,6 +1,6 @@
 import { entry, placedFootprint, type WorldObjectDef } from "./catalog.ts";
+import type { Point } from "./geom.ts";
 import { hangOf, hangTiles, WQ, wallSpan } from "./hang.ts";
-import type { Point } from "./iso.ts";
 import {
   type AreaDef,
   type AreaKind,
@@ -18,13 +18,13 @@ import {
   isFloor,
   isWallEdge,
   isWindow,
-  type TileLevel,
-  type TileMap,
   NO_WALL,
   originOf,
   setBack,
   setEdge,
   spanOf,
+  type TileLevel,
+  type TileMap,
   tileAt,
   tileInMap,
   VOID,

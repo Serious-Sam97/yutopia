@@ -24,7 +24,7 @@ test("the feet's footing: each floor's tile, a desk's top, a rug", async ({ page
   await page.waitForFunction(
     () => {
       const w = (window as any).__yutopia;
-      return !!w?.tp?.underfoot(w.grid, w.level, w.me.x, w.me.y, 0)?.on;
+      return !!w?.tp?.underfoot(w.level, w.me.x, w.me.y, 0)?.on;
     },
     null,
     { timeout: 30_000 },
@@ -34,7 +34,7 @@ test("the feet's footing: each floor's tile, a desk's top, a rug", async ({ page
     const level = w.level;
     const map = w.rows(); // (the floor as rows, asked of the structure)
     const under = (x: number, y: number, z: number) => ({
-      on: w.tp.underfoot(w.grid, level, x, y, z)?.on,
+      on: w.tp.underfoot(level, x, y, z)?.on,
       footing: w.footingAt(x, y, z),
     });
     // (a thing with no level is the home floor's: test each against Jolt, which knows)

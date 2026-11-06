@@ -635,8 +635,7 @@ export class Motion3 {
   private settleT = 1;
   /** (its feet's steps: loco.lock.down, docs/plan/63) */
   loco: Locomotion | null = null;
-  /** plan 58's animations (phase 0: beside the old till signed off), the mood (0 day … 1 dark) */
-  v2 = false;
+  /** the mood (0 day … 1 dark) — plan 58's animations, the only ones */
   tension = 0;
   /** plan 58 4e: how they walk (their look's) */
   gait = "calm";
@@ -682,7 +681,7 @@ export class Motion3 {
 
     // (plan 58 phase 6: the everyday again, once its chunk's in — sitting down and getting up its own
     // 0.9 s, the hands put on things)
-    const A = this.v2 && !m.reduced ? actsNow() : null;
+    const A = !m.reduced ? actsNow() : null;
     let hands: Hands | null = null;
     const handed = (h: Hands | null | undefined, w: number) => {
       if (!h || w <= 0) return;
@@ -701,8 +700,8 @@ export class Motion3 {
     // ── standing / seated, and idle life
     let p = m.sit ? seatedPose(m.typing) : standPose();
     // plan 58: the new idle — its weight, breath, glances and mood all its own (once it's in)
-    const H = this.v2 ? heroNow() : null;
-    if (this.v2 && !H) void loadHero();
+    const H = heroNow();
+    if (!H) void loadHero();
     const idle2 = !!H && !m.sit && !m.reduced;
     if (H && idle2) {
       // (gazed: the head's turned by the gaze, its eyes leading — Locomotion's)
@@ -763,7 +762,6 @@ export class Motion3 {
     if (m.loco && !m.sit && (!sat || rising)) {
       // the move: standing (as above), walking, jogging, sprinting, crouched, aiming, in the air
       this.loco ??= new Locomotion();
-      this.loco.v2 = this.v2;
       this.loco.tension = this.tension;
       this.loco.seed = this.seed * 10;
       this.loco.gait = this.gait;
@@ -929,7 +927,7 @@ export class Motion3 {
       blink,
       talk,
       // (plan 58: the seat's drop — none stood; the old one's settle its progress either way)
-      settle: sat ? (sat.settle ?? 1) * (1 - riseW) : this.v2 ? (m.sit ? 1 : 0) : ease(this.settleT),
+      settle: sat ? (sat.settle ?? 1) * (1 - riseW) : m.sit ? 1 : 0,
       sip,
       reach,
       eyes: gz?.eyes,

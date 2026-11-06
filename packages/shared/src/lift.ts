@@ -1,5 +1,5 @@
 import { footprint, quarterOf } from "./catalog.ts";
-import type { Point } from "./iso.ts";
+import type { Point } from "./geom.ts";
 import { objLevel } from "./levels.ts";
 import type { Edge } from "./map.ts";
 import type { Solid3 } from "./shapes/index.ts";

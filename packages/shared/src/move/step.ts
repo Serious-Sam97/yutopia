@@ -1,5 +1,5 @@
+import type { Point } from "../geom.ts";
 import { moveStep } from "../ground.ts";
-import type { Point } from "../iso.ts";
 import { type Height, JUMP_G, type JumpKind, stepHeight } from "../jump.ts";
 import type { FlowKind, FlowNow, FlowWorld } from "./flow.ts";
 import { type Gait, MOVE, type MoveSpec, STEP_DT } from "./spec.ts";

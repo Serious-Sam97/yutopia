@@ -29,7 +29,7 @@ const puffDir = new Vector3();
 
 import { cueModel, type GunFx, type GunKind, type GunModel, gunModel, poseGun, shellGeometry } from "./guns3d";
 import { levelHands } from "./level3d";
-import type { PersonIn } from "./people3d";
+import type { PersonIn } from "./person-in";
 import { ANKLE_M, legOf, SEATS, seatFit, seatShape } from "./seats3d";
 
 type Chars = NonNullable<ReturnType<typeof chars>>;
@@ -92,8 +92,6 @@ export interface Seen {
   /** (plan 63) limp on the ragdoll, it hit something (`hard` 0..1: by how much it was stopped) */
   thud?: (id: string, hard: number) => void;
 }
-// (plan 58 is the world's: `?anim=old` puts the old animations back, to compare)
-const ANIM_OLD = typeof location !== "undefined" && new URLSearchParams(location.search).get("anim") === "old";
 // (the speed a gait goes for: the body with weight's — walker.ts)
 function goalOf(mv: number): number | undefined {
   const g = unpackMv(mv).gait;
@@ -422,9 +420,7 @@ export class Person3D {
     // (how they walk is their look's: plan 58 4e)
     // (plan 58 8: the shadowed limp, heavy)
     this.motion.gait = p.shade ? "heavy" : (p.avatar.gait ?? "calm");
-    // (plan 58, the world's since the switch — `?anim=old` for the old ones; the mood the hour's dark
-    // and the dark's own, a shade's the dark itself)
-    this.motion.v2 = !ANIM_OLD;
+    // (plan 58's animations; the mood the hour's dark and the dark's own, a shade's the dark itself)
     // (eased: in and out of a door, a shade coming on — over a second or two, not at a step)
     const mood = p.shade ? 1 : (seen.mood ?? 0);
     this.mood =
@@ -453,8 +449,8 @@ export class Person3D {
     const ground = sitting ? h : Math.min(h, p.ground ?? 0);
     // (plan 62) sat where the seat has her — the knees at its front, the back to its back —, gone
     // there from where she stood as the hips go down (and back off it getting up)
-    const v2sit = this.motion.v2 && !p.reduced;
-    const k = v2sit ? this.settled : w;
+    const liveSit = !p.reduced; // (plan 58's sitting: settled into; reduced motion: as it was)
+    const k = liveSit ? this.settled : w;
     if (sitting) {
       if (!this.wasSitting) this.sat = null;
       const fit = this.seatOf(p, h, seen);
@@ -532,7 +528,7 @@ export class Person3D {
     // (mine as it is; someone's from its byte, timed from when it shows here)
     const flow =
       p.flow ?? (p.flowCode ? flowOfCode(p.flowCode, (performance.now() - (p.flowAt ?? 0)) / 1000, KH_MOVE) : null);
-    const LF = this.motion.v2 && !p.reduced ? this.C.lifeNow() : null;
+    const LF = !p.reduced ? this.C.lifeNow() : null;
     const mo =
       given ??
       this.motion.update(step, {
@@ -613,7 +609,7 @@ export class Person3D {
     // one of the shadowed: its own arms, back and head over the walk
     let pose = mo.pose;
     let lift = mo.lift;
-    const SN = p.shade && this.motion.v2 && !p.reduced ? this.C.nightNow() : null;
+    const SN = p.shade && !p.reduced ? this.C.nightNow() : null;
     const dying = p.shade?.state === "dissolve" && p.shade.killed ? p.shade.t : -1;
     if (p.shade && SN) {
       // (plan 58 8: their own — hunched, lolling, clawed, twitching, their time catching; stood to
@@ -661,7 +657,7 @@ export class Person3D {
       this.crawlPh = (this.crawlPh + dist / 0.45) % 1;
       // (plan 58 7: the hands and knees set on the ground and held as she goes over them; kneeling, a
       // hand on their back)
-      const N = this.motion.v2 && !p.reduced ? this.C.nightNow() : null;
+      const N = !p.reduced ? this.C.nightNow() : null;
       const now = performance.now() / 1000;
       const r = N ? (p.down === "down" ? N.crawl2(this.crawlPh, now, dist > 1e-4) : N.kneel2(now, 1)) : null;
       downHands = r?.hands ?? null;
@@ -675,7 +671,7 @@ export class Person3D {
     // the stroke by the water covered, the crawl at a sprint, under by the way it's going
     let swimHands: SwimHands | null = null;
     this.swimW = 0;
-    const SW = this.motion.v2 && !p.reduced && !sitting ? this.C.swimNow() : null;
+    const SW = !p.reduced && !sitting ? this.C.swimNow() : null;
     const over = p.waterOver ?? 0;
     if (SW && over > 0.3) {
       const wd = SW.wade2({ pose, lift }, over);
@@ -721,7 +717,7 @@ export class Person3D {
       L?: { at: [number, number, number]; w: number };
       R?: { at: [number, number, number]; w: number };
     } | null = null;
-    const RS = this.motion.v2 && !p.reduced && this.part === "all" && d < 30 && seen.rag ? seen.rag() : null;
+    const RS = !p.reduced && this.part === "all" && d < 30 && seen.rag ? seen.rag() : null;
     const AR = RS ? this.C.airNow() : null;
     const hz = p.z ?? 0;
     // (a fall's height by the body's own, over what's under it — not the jump's stages: a fall's
@@ -787,11 +783,11 @@ export class Person3D {
       this.limpYaw = null;
     }
     // (plan 58 6a: the new sitting lowers the hips by its own settle, its legs solved for it)
-    const drop = this.model.sitDrop(seatShape(p.seat).top) * (v2sit ? mo.settle : w);
+    const drop = this.model.sitDrop(seatShape(p.seat).top) * (liveSit ? mo.settle : w);
     this.settled = mo.settle;
     // (one of the shadowed under plan 58: its arms its own — no hands put on things, no reach: the
     // wind-up's cocked arm was pulled onto whoever it struck)
-    const own = !!p.shade && this.motion.v2 && !p.reduced;
+    const own = !!p.shade && !p.reduced;
     this.model.setPose(pose, [lift[0], lift[1] + drop, lift[2]], own ? undefined : mo.reach);
     // (getting up off the ragdoll: nothing of the legs under the ground — the get-up's keyed for a
     // body lying flat; off its side, its knees and feet went half a metre through the snow)
@@ -817,7 +813,7 @@ export class Person3D {
     this.gunHands(p, step);
     // (the springs — hair, a skirt, a scarf, a pack: near only, and not with reduced motion)
     this.model.step(step, d > 12 || !!p.reduced || this.part !== "all", seen.sway);
-    this.swayD = this.motion.v2 && !p.reduced && this.part === "all" ? d : Number.POSITIVE_INFINITY;
+    this.swayD = !p.reduced && this.part === "all" ? d : Number.POSITIVE_INFINITY;
     // (plan 58 9: the breath a puff in the cold air — near only; the air's own cold: none over 8 °C,
     // docs/plan/65 W9)
     const cold = LF && this.part === "all" && d < 12 ? LF.coldOf(p.wm ?? 100) * Person3D.airCold : 0;

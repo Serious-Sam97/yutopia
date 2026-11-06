@@ -1,5 +1,6 @@
 import { crossings } from "@yutopia/shared/physics/structure-solids";
 import type { Structure } from "@yutopia/shared/structure";
+import { panOf, setEarYaw } from "../ear";
 // (first: the fog chunks swapped before anything below makes a material — fog3d.ts)
 import "./fog3d";
 import {
@@ -93,14 +94,13 @@ import type { Quality } from "@/lib/prefs";
 import { chars, loadChars } from "../art/chars-load";
 import { daylight } from "../art/daylight";
 import type { LightWall } from "../art/light";
-import type { people } from "../art/people-load";
 import { loadPets, pets as petsArt } from "../art/pets-load";
 import type { PetModel } from "../art/pets3d";
 import type { PuffKind } from "../model";
 import { activePad } from "../pads";
 import { Arms3 } from "./arms3d";
 import { HIDDEN_LAYER } from "./below-cull";
-import { type FadeGroup, type Items, World3 } from "./build";
+import { type FadeGroup, World3 } from "./build";
 import { BuildLayer } from "./build3d";
 import type { Outline } from "./campus";
 import { FogBanks } from "./fog-banks";
@@ -116,7 +116,7 @@ import { type Live, LiveFeed, type LiveSources, LiveSurfaces } from "./live";
 import { PROXIED } from "./merge-static";
 import { Body } from "./parts/body";
 import { BuildPick } from "./parts/buildpick";
-import { FOV, GROUND_POOL, hashId, LAMPS, LIMITS, segBox } from "./parts/common";
+import { FOV, GROUND_POOL, LAMPS, LIMITS, segBox } from "./parts/common";
 import { Culling } from "./parts/culling";
 import { Eyes } from "./parts/eyes";
 import { Guns } from "./parts/guns";
@@ -130,18 +130,17 @@ import { Sun } from "./parts/sun";
 import { Tags } from "./parts/tags";
 import { Vehicles } from "./parts/vehicles";
 import { Warmup } from "./parts/warmup";
-import { type Keys, Person3, type PersonIn } from "./people3d";
+import type { Keys, PersonIn } from "./person-in";
 import { type Mats as CharMats, Person3D } from "./person3d";
 import type { Post3 } from "./post3d";
 import { Shroud3 } from "./shroud3d";
 import { fogFor, type Ground, Surroundings, type Themes } from "./sky";
 import { type StairStop3, Stairs3, stairMats } from "./stairs3d";
+import { Proxy3, Vortex3 } from "./stand3d";
 import { heldPoolBall, type TableScene3, TablesIn3D } from "./tables3d";
 import { streetGeometry } from "./town3d";
 import { edgesOfMap, edgesOfWalls, type WallEdges } from "./walls3d";
 import { wx } from "./wx3d";
-
-type People = NonNullable<ReturnType<typeof people>>;
 
 // The third-person view: the world (build.ts) and its people (people3d.ts)
 // seen by a camera behind and above you. Two cameras:
@@ -502,7 +501,8 @@ export class ThirdPersonView {
   // the floors drawn below mine: each its own light map, so they take the hour too
   private below = new Map<number, Light3>();
   private wellSig = "";
-  people = new Map<string, Person3>();
+  /** who's drawn while their 3D person isn't (a low figure), and Vortex (his drawing): stand3d.ts */
+  people = new Map<string, Proxy3 | Vortex3>();
   // the 3D people (world/chars): a model each, built a few a frame; the
   // drawing above stands in until a person's model is ready (and for Vortex)
   people3 = new Map<string, Person3D>();
@@ -732,14 +732,11 @@ export class ThirdPersonView {
   private frustum = new Frustum();
   private projView = new Matrix4();
   private sphere = new Sphere(new Vector3(), 1.1);
-  private tick = 0;
   private night = false;
 
   constructor(
     building: MapDef,
     objects: WorldObjectDef[],
-    private P: People,
-    private items: Items,
     private opts: ViewOpts,
   ) {
     this.building = building;
@@ -827,7 +824,6 @@ export class ThirdPersonView {
     this.light.update(map, objects);
     this.seats.indexSeats(map, objects);
     this.world = new World3(
-      items,
       map,
       noLifts(objects),
       this.renderer.capabilities.getMaxAnisotropy(),
@@ -1579,7 +1575,6 @@ void main() {
     }
     if (!mine) {
       const world = new World3(
-        this.items,
         drawn.map,
         noLifts(drawn.objects),
         this.renderer.capabilities.getMaxAnisotropy(),
@@ -1714,7 +1709,6 @@ void main() {
       lit.setOffset(o.x, o.y, o.h);
       if (!b) {
         const world = new World3(
-          this.items,
           lm,
           noLifts(objs),
           this.renderer.capabilities.getMaxAnisotropy(),
@@ -1959,7 +1953,6 @@ void main() {
     const lit = this.belowLight(f, lm, objs, edges);
     lit.setOffset(o.x, o.y, o.h);
     const world = new World3(
-      this.items,
       lm,
       noLifts(objs),
       this.renderer.capabilities.getMaxAnisotropy(),
@@ -2260,9 +2253,8 @@ void main() {
   }
 
   pan(ear: Point, src: Point): number {
-    const rx = -Math.sin(this.yaw);
-    const ry = Math.cos(this.yaw);
-    return Math.max(-1, Math.min(1, ((src.x - ear.x) * rx + (src.y - ear.y) * ry) / 6));
+    setEarYaw(this.yaw);
+    return panOf(ear, src);
   }
 
   // One frame: people from the world's bodies (`me` = whose camera this is).
@@ -2539,17 +2531,14 @@ void main() {
     this.mood.weatherFrame(dt, me);
     if (!me?.reduced) this.vehicles.breathe(bodies);
 
-    // cards and people face back along the camera's view (all the same way)
+    // people face back along the camera's view (all the same way)
     const face = this.yaw + Math.PI;
-    for (const c of this.world.cards) c.rotation.y = Math.PI / 2 - face;
-    for (const c of this.buildPick.builder.ghostCards) c.rotation.y = Math.PI / 2 - face;
 
     // people (drawn again each frame only when on screen; far ones every third frame)
     this.camera.updateMatrixWorld();
     this.frustum.setFromProjectionMatrix(
       this.projView.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse),
     );
-    this.tick++;
     const seen = new Set<string>();
     const seenPets = new Set<string>();
     let mySeat: string | undefined;
@@ -2667,7 +2656,7 @@ void main() {
       }
       let p = this.people.get(b.id);
       if (!p) {
-        p = new Person3(b.id, this.P);
+        p = b.npc ? new Vortex3(b.id) : new Proxy3(b.id);
         this.people.set(b.id, p);
         this.scene.add(p.root);
       }
@@ -2681,23 +2670,8 @@ void main() {
       const hidden =
         ((first || (this.gameCam !== null && this.gcMix > 0.5 && !this.gameCam.showMe)) && b.id === meId) || byLens;
       p.root.visible = !hidden;
-      const onScreen = !hidden && this.frustum.intersectsSphere(this.sphere);
-      const near = Math.hypot(cam.x - b.x, cam.z - b.y) < 12;
-      const redraw = onScreen && (near || (this.tick + hashId(b.id)) % 3 === 0);
-      const seat = b.a === 2 ? this.seats.seatKinds.get(Math.floor(b.y) * this.map.width + Math.floor(b.x)) : undefined;
-      p.update(
-        { ...b, angle, seat },
-        dt,
-        cam.x,
-        cam.z,
-        this.pitch,
-        first ? 0 : this.lean, // (at eye level nobody tips back)
-        this.personTint,
-        this.night,
-        face,
-        redraw,
-        cam,
-      );
+      if (p instanceof Vortex3) p.update({ ...b, angle }, face, this.pitch, first ? 0 : this.lean, this.personTint);
+      else p.update({ ...b, angle }, this.personTint);
     }
     for (const [id, p] of this.people)
       if (!seen.has(id)) {
@@ -3019,8 +2993,7 @@ void main() {
     const p3 = this.people3.get(id);
     if (p3?.ready) return { x: p3.root.position.x, y: p3.root.position.z, shown: p3.root.visible, model: true };
     const p = this.people.get(id);
-    if (p)
-      return { x: p.root.position.x, y: p.root.position.z, shown: p.root.visible && p.plane.visible, model: false };
+    if (p) return { x: p.root.position.x, y: p.root.position.z, shown: p.root.visible && p.shown, model: false };
     return null;
   }
 

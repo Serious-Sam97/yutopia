@@ -1,7 +1,7 @@
 import { canPlace } from "./build.ts";
 import { entry, placedFootprint, quarterYaw, type WorldObjectDef } from "./catalog.ts";
+import type { Point } from "./geom.ts";
 import { hangEdges, hangOf } from "./hang.ts";
-import type { Point } from "./iso.ts";
 import { atLevel, floorOf, onLevel } from "./levels.ts";
 import { type AreaDef, inArea, type MapDef } from "./map.ts";
 import { isOpening } from "./openings.ts";

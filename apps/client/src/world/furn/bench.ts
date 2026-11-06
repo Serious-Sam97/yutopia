@@ -5,7 +5,6 @@ import {
   emptyEdges,
   entry,
   quarterYaw,
-  SEAT_NEXT,
   SEAT_SPEC,
   SURFACE,
   SURFACE_NEXT,
@@ -13,12 +12,10 @@ import {
   type TileMap,
   type WorldObjectDef,
 } from "@yutopia/shared";
-import { ART_PX as ISO } from "@yutopia/shared/units";
 import * as T from "three";
 import { Out } from "../tp/kit3d";
 import { Post3 } from "../tp/post3d";
 import { legOf, SEATS, type SeatShape, seatFit } from "../tp/seats3d";
-import { useFurn } from "./flag";
 import { DESK_TOP, type Hero, heroModel, SEAT } from "./heroes";
 import { lambert, type Tier, toon } from "./kit";
 import { animateLive, liveGroup } from "./liveparts";
@@ -68,19 +65,6 @@ export interface BenchOpts {
   h: number;
 }
 
-/** Today's seats and desk top, as the iso art had them (the bench's "Today" column is drawn as it
- *  was: useFurn("old")) — before plan 67 put them at true scale (shared furniture.ts). */
-const TODAY_SEATS: Record<string, SeatShape> = {
-  chair: { top: 14 / ISO, front: 0.3, back: -0.32, lean: [0, 0.15] },
-  armchair: { top: 13.5 / ISO, front: 0.4, back: -0.21, lean: [0.1, 0.3], solid: true, arms: 19 / ISO },
-  sofa: { top: 16.6 / ISO, front: 0.42, back: -0.1, lean: [0.2, 0.3], solid: true },
-  beanbag: { top: 11 / ISO, front: 0.36, back: null, lean: [0.4, 0.4], solid: true },
-  bench: { top: 11.2 / ISO, front: 0.32, back: null, lean: [0, 0] },
-};
-const TODAY_DESK = 0.638; // (m: the desks before plan 67, 25 of the old art's px)
-/** …and the tops of today's tables things stood on (m). */
-const OLD_TOPS: Record<string, number> = { side_table: 0.3573, cupboard: 0.6635, coffee_table: 0.3317 };
-
 /** Where things stand on the bench's desks (cells of its two tiles; the desk turned to face us). */
 const ON_DESK: { kind: string; d?: string; tile: number; c: [number, number] }[] = [
   { kind: "computer", tile: 0, c: [1, 0] },
@@ -116,10 +100,7 @@ function outGeo(out: Out): T.BufferGeometry {
 }
 
 export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => void> {
-  // (today's as today's; the new ones are drawn straight from the kit)
-  useFurn("old");
   if (o.scene === "desk") o = { ...o, kind: "desk" };
-  const items = await import("../art/items");
   const { World3 } = await import("../tp/build");
   const C = await import("../chars");
   await C.loadHero();
@@ -150,21 +131,14 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
     label: string;
     geo: T.BufferGeometry | null; // (null: today's, by World3)
     seat: SeatShape | null;
-    /** today's things in this column (World3 draws them) */
-    old?: WorldObjectDef[];
     /** its geometry's in the world's own coords already (a scene: several things at once) */
     placed?: boolean;
     /** (placed) the thing itself, for its live parts where the world puts them */
     def?: WorldObjectDef;
   }
-  const isSeat = (k: string) => k in SEATS;
-  const next = (k: string): SeatShape | null => SEAT_NEXT[k] ?? SEAT_SPEC[k] ?? null;
-  // (a kind new since plan 68 has no "Today": nothing drew it before)
-  const fresh = !o.scene && !!o.kind && !items.hasItemArt(o.kind);
-  const cols: Col[] =
-    o.scene === "hosts" || fresh
-      ? []
-      : [{ label: "Today", geo: null, seat: isSeat(subject) ? (TODAY_SEATS[subject] ?? SEATS[subject]) : null }];
+  const next = (k: string): SeatShape | null => SEAT_SPEC[k] ?? null;
+  // (every kind is the kit's now — plan 72 phase 12: the old art's "Today" column is gone)
+  const cols: Col[] = [];
   if (o.scene === "hosts")
     // (each thing on its table: today's, then the new — the new drawn where it stands)
     ON_HOSTS.forEach(([host, thing, c], k) => {
@@ -173,7 +147,6 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
         { id: `h${i}`, kind: host, x: at(i), y: ROW0, yaw: quarterYaw(0) },
         { id: `t${i}`, kind: thing, x: at(i), y: ROW0, yaw: quarterYaw(0), props: { c, z } },
       ];
-      cols.push({ label: "Today", geo: null, seat: null, old: put(2 * k, OLD_TOPS[host]) });
       const out = new Out();
       for (const x of put(2 * k + 1, entry(host).surface ?? 0)) nativeInto(out, x);
       cols.push({ label: LOOK_NAMES[thing][0], geo: outGeo(out), seat: null, placed: true });
@@ -246,24 +219,10 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
   };
   for (let x = 1; x < W; x++) setEdge(map, { x, y: 1, dir: "h" }, "p");
   for (let y = 1; y < H; y++) setEdge(map, { x: 1, y, dir: "v" }, "p");
-  // today's: as the world places it (the desk turned to face us, its user's side south)
+  // (the room alone: the new pieces are drawn a column each, below)
   const rot = subject === "desk" ? 2 : 0;
-  const objects: WorldObjectDef[] =
-    o.scene === "hosts"
-      ? cols.flatMap((c) => c.old ?? [])
-      : fresh
-        ? []
-        : [
-            {
-              id: `old-${subject}`,
-              kind: subject,
-              x: X0,
-              y: entry(subject).wall ? 1 : ROW,
-              yaw: quarterYaw(rot),
-              props: { variant: 0 },
-            },
-          ];
-  // (a dressed desk: today's things on today's desk at its height, the new on the new)
+  const objects: WorldObjectDef[] = [];
+  // (a dressed desk: the new things on the new desk at its height)
   const dressed = (x: number, z: number): WorldObjectDef[] =>
     ON_DESK.map((t, i) => ({
       id: `top${x}-${i}`,
@@ -273,19 +232,8 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
       rot: 2,
       props: { ...(t.d ? { d: t.d, seed: 0.37 } : {}), c: t.c, z },
     }));
-  if (o.scene === "desk") objects.push(...dressed(X0, TODAY_DESK));
-  // (a desk: its chair in front on the sitter's side, pulled in and sat on, someone typing at it)
   const atDesk = subject === "desk";
-  if (atDesk)
-    objects.push({
-      id: "old-chair",
-      kind: "chair",
-      x: X0,
-      y: ROW + 1,
-      yaw: quarterYaw(2),
-      props: { pull: DESK_PULL, occupied: true },
-    });
-  const world = new World3(items, map, objects, 8);
+  const world = new World3(map, objects, 8);
   scene.add(world.root);
   world.root.updateMatrixWorld(true);
 
@@ -410,18 +358,12 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
     cols.forEach((c, i) => {
       const who = [0, 7, 11, 5, 9, 2][i % 6];
       if (atDesk) {
-        // sat at the desk, typing: today's chair at today's desk, the new at the new
-        const top = c.geo ? (SURFACE_NEXT.desk ?? SURFACE.desk) : TODAY_DESK;
-        add(
-          who,
-          [X0 + i * S + 0.5, ROW + 1.5 - DESK_PULL],
-          c.geo ? (SEAT_NEXT.chair ?? SEATS.chair) : TODAY_SEATS.chair,
-          Math.PI,
-          {
-            top,
-            kbZ: ROW + 0.76,
-          },
-        );
+        // sat at the desk, typing: the new chair at the new desk
+        const top = SURFACE_NEXT.desk ?? SURFACE.desk;
+        add(who, [X0 + i * S + 0.5, ROW + 1.5 - DESK_PULL], SEAT_SPEC.chair ?? SEATS.chair, Math.PI, {
+          top,
+          kbZ: ROW + 0.76,
+        });
       } else if (c.seat) add(who, [X0 + i * S + fw / 2, ROW + fh / 2], c.seat);
     });
   if (o.col === null) add(3, [X0 + n * S + 0.4, ROW + 0.5], null, -0.5);
@@ -492,7 +434,6 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
   let stop = false;
   let frames = 0;
   const v = new T.Vector3();
-  const fwd = new T.Vector3();
   const pose = (p: Who) => {
     const m = p.m;
     if (!m.ready) return false;
@@ -524,7 +465,6 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
       ahead: p.seat.solid ? p.seat.front - along + 0.06 : 0,
       arms: p.seat.arms ?? null,
     };
-    p.mo.v2 = true;
     // (facing +z at yaw 0; at a desk, the keys in her own space: ahead of her root, at the top)
     const fx = Math.sin(p.yaw);
     const fz = Math.cos(p.yaw);
@@ -564,9 +504,6 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
     const now = o.t ?? performance.now() / 1000;
     for (const g of lives) animateLive(g, now);
     camera.updateMatrixWorld();
-    camera.getWorldDirection(fwd);
-    const face = Math.atan2(-fwd.x, -fwd.z);
-    for (const c of world.cards) c.rotation.y = face;
     post.render(false);
     for (const l of labels) {
       v.copy(l.at).project(camera);

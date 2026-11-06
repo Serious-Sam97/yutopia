@@ -52,9 +52,3 @@ export function hearingGain(map: MapDef, listener: Ear, speaker: Ear, wasHearing
   // smooth falloff, never fully silent while still "in range"
   return Math.max(0.04, 1 - t * t * (3 - 2 * t));
 }
-
-// Stereo position in [-1, 1] from where the speaker is on screen relative to me.
-export function stereoPan(listener: Ear, speaker: Ear): number {
-  const sx = speaker.x - speaker.y - (listener.x - listener.y);
-  return Math.max(-1, Math.min(1, sx / 6));
-}

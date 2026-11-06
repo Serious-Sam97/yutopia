@@ -254,7 +254,7 @@ function OptionThumb({ look, focus }: { look: AvatarLayers; focus: Focus }) {
     if (!C || thumbs.has(key)) return setSrc(thumbs.get(key) ?? null);
     let live = true;
     waiting.push(() => {
-      if (!thumbs.has(key)) thumbs.set(key, C.isoPeople().canDraw() ? C.isoPeople().thumb(look, focus, 96) : null);
+      if (!thumbs.has(key)) thumbs.set(key, C.pictures().canDraw() ? C.pictures().thumb(look, focus, 96) : null);
       if (live) setSrc(thumbs.get(key) ?? null);
     });
     pump();

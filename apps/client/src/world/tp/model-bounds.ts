@@ -16,7 +16,6 @@ export interface Bounds3 {
   y1: number;
   z1: number;
 }
-type Items = typeof import("../art/items");
 
 /** The box round what's drawn (solid and glass; not the free-hand cards: a plant's leaves). */
 export function outBounds(o: Out): Bounds3 | null {
@@ -36,8 +35,8 @@ export function outBounds(o: Out): Bounds3 | null {
 const anyMat = new MeshBasicMaterial();
 /** One thing's model as the 3D view draws it, measured — its live parts at rest too (plan 68: a lava
  *  lamp's glass, a snow globe's). */
-export function modelBounds(items: Items, o: WorldObjectDef): Bounds3 | null {
-  const draw = World3.prototype.drawObject.call({ items, posts: new Set<string>() } as unknown as World3, o);
+export function modelBounds(o: WorldObjectDef): Bounds3 | null {
+  const draw = World3.prototype.drawObject.call({ posts: new Set<string>() } as unknown as World3, o);
   const b = outBounds(draw.out);
   const live = liveInto(o, anyMat, anyMat, anyMat);
   if (!live) return b;
@@ -57,10 +56,10 @@ export function modelBounds(items: Items, o: WorldObjectDef): Bounds3 | null {
 }
 
 /** Every look of a catalog kind at rot 0 at the origin: the box round all of them. */
-export function kindBounds(items: Items, kind: ObjectKind, props: Record<string, unknown> = {}): Bounds3 | null {
+export function kindBounds(kind: ObjectKind, props: Record<string, unknown> = {}): Bounds3 | null {
   let all: Bounds3 | null = null;
   for (let v = 0; v < (entry(kind).variants ?? 1); v++) {
-    const b = modelBounds(items, {
+    const b = modelBounds({
       id: `${kind}-${v}`,
       kind,
       x: 0,

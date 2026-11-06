@@ -21,10 +21,9 @@ import {
   standAisles,
   standRoof,
 } from "@yutopia/shared/kart";
-import { artPx } from "@yutopia/shared/units";
 import type * as THREE_NS from "three";
 import { drawBoardFace } from "../../kart/track-map";
-import { MeshSketch, Out } from "../kit3d";
+import { Out } from "../kit3d";
 
 // The Kart Park round its circuit (docs/plan/46-the-karts.md, "the way in"): the paddock (its
 // painted concrete, the rack's shed, race control's hut behind the desk, the lap records, the
@@ -44,8 +43,8 @@ export interface ParkEnv {
   glows: { m: THREE_NS.MeshStandardMaterial; on: number }[];
   night: number;
   padY: (x: number, z: number) => number;
-  /** the item art, when the game has it already (else fetched: the stills) */
-  items?: typeof import("../../art/items");
+  /** the kit, when the game has it already (else fetched: the stills) */
+  native?: typeof import("../../furn/native");
 }
 
 const WALNUT = "#4a3324";
@@ -604,52 +603,36 @@ export function paddock3d(e: ParkEnv) {
   b.done();
 }
 
-/** The fire's benches: the office's (catalog `bench`, art/items/seating.ts), drawn by the item kit
- *  as the office's are in 3D (tp/build.ts): lit faces and ink, from the item art's chunk. */
+/** The fire's benches: the office's (catalog `bench`), drawn by the kit as the office's are
+ *  (furn/native.ts), each on the ground where it stands. */
 function benches(e: ParkEnv) {
   const { T3 } = e;
-  const draw = ({ drawItem }: typeof import("../../art/items")) => {
+  const draw = ({ nativeInto }: typeof import("../../furn/native")) => {
     const out = new Out();
     for (const [i, t] of KART_THINGS.entries()) {
       if (t.kind !== "bench") continue;
-      const lift = artPx(e.padY(t.x, t.z)); // (the item art's px)
-      const s = new MeshSketch({
-        rot: t.hz > t.hx ? 1 : 0,
-        w: 3,
-        h: 1,
-        seed: 0.5,
-        at: [t.x - t.hx, t.z - t.hz],
-        lift,
-        out,
-      });
-      drawItem(s, { kind: "bench", id: `kart-bench-${i}`, rot: t.hz > t.hx ? 1 : 0 });
-      s.end();
+      const one = new Out();
+      const rot = t.hz > t.hx ? 1 : 0;
+      nativeInto(one, { id: `kart-bench-${i}`, kind: "bench", x: t.x - t.hx, y: t.z - t.hz, yaw: (rot * Math.PI) / 2 });
+      const y = e.padY(t.x, t.z);
+      for (let k = 1; k < one.lit.pos.length; k += 3) one.lit.pos[k] += y;
+      out.lit.pos.push(...one.lit.pos);
+      out.lit.nor.push(...one.lit.nor);
+      out.lit.col.push(...one.lit.col);
     }
-    if (!out.lit.empty) {
-      const g = e.keep(new T3.BufferGeometry());
-      g.setAttribute("position", new T3.Float32BufferAttribute(out.lit.pos, 3));
-      g.setAttribute("normal", new T3.Float32BufferAttribute(out.lit.nor, 3));
-      g.setAttribute("color", new T3.Float32BufferAttribute(out.lit.col, 4));
-      const m = new T3.Mesh(g, e.keep(new T3.MeshLambertMaterial({ vertexColors: true })));
-      m.castShadow = true;
-      m.receiveShadow = true;
-      e.root.add(m);
-    }
-    if (out.lines.length) {
-      const g = e.keep(new T3.BufferGeometry());
-      g.setAttribute("position", new T3.Float32BufferAttribute(out.lines, 3));
-      g.setAttribute("color", new T3.Float32BufferAttribute(out.lineCol, 4));
-      e.root.add(
-        new T3.LineSegments(
-          g,
-          e.keep(new T3.LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false })),
-        ),
-      );
-    }
+    if (out.lit.empty) return;
+    const g = e.keep(new T3.BufferGeometry());
+    g.setAttribute("position", new T3.Float32BufferAttribute(out.lit.pos, 3));
+    g.setAttribute("normal", new T3.Float32BufferAttribute(out.lit.nor, 3));
+    g.setAttribute("color", new T3.Float32BufferAttribute(out.lit.col, 4));
+    const m = new T3.Mesh(g, e.keep(new T3.MeshLambertMaterial({ vertexColors: true })));
+    m.castShadow = true;
+    m.receiveShadow = true;
+    e.root.add(m);
   };
   // (the game's: built with the rest of the park, so the Grounds' light is put on it with it)
-  if (e.items) draw(e.items);
-  else void import("../../art/items").then(draw);
+  if (e.native) draw(e.native);
+  else void import("../../furn/native").then(draw);
 }
 
 /** Race control: a green clapboard hut behind the desk, its serving window over it (lit), its

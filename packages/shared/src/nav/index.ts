@@ -19,8 +19,8 @@ import {
   type TileCache,
 } from "recast-navigation";
 import { getBoundingBox } from "recast-navigation/generators";
+import type { Point } from "../geom.ts";
 import { CHUNK, layoutVersion } from "../grounds.ts";
-import type { Point } from "../iso.ts";
 import { elevOf } from "../levels.ts";
 import type { BuildingSolids } from "../physics/build.ts";
 import { landOf } from "../physics/build.ts";

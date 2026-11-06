@@ -3,7 +3,6 @@ import { studio } from "@yutopia/shared/maps/studio";
 import { furnishedIn, furnishRoom, isRoomPlan, planFor } from "@yutopia/shared/office";
 import * as T from "three";
 import { Post3 } from "../tp/post3d";
-import { useFurn } from "./flag";
 
 // The Office's plans on the bench (docs/plan/67-the-furniture.md, phase 10): the studio as the
 // world draws it (World3: its floors, walls, doors and every thing), one of its rooms furnished by
@@ -13,8 +12,6 @@ export async function runPlan(
   el: HTMLElement,
   o: { plan: string | null; room: string; night: boolean; w: number; h: number },
 ): Promise<() => void> {
-  useFurn("new");
-  const items = await import("../art/items");
   const { World3 } = await import("../tp/build");
   const map = studio;
   const a = map.areas.find((x) => x.key === o.room) ?? map.areas[0];
@@ -32,7 +29,7 @@ export async function runPlan(
   el.appendChild(renderer.domElement);
   const scene = new T.Scene();
   scene.background = new T.Color(o.night ? "#14161c" : "#cfc8bb");
-  const world = new World3(items, map, objects, 8);
+  const world = new World3(map, objects, 8);
   scene.add(world.root);
   scene.add(new T.HemisphereLight("#f3efe6", "#6c5f50", o.night ? 0.15 : 0.9));
   const key = new T.DirectionalLight("#fff3e0", o.night ? 0.1 : 1.4);

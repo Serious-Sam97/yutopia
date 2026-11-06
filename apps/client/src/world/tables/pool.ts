@@ -1,4 +1,4 @@
-import { quarterOf, toScreen, type WorldObjectDef } from "@yutopia/shared";
+import { quarterOf, type WorldObjectDef } from "@yutopia/shared";
 import { BALL_R, POOL_L, POOL_W, type PoolBall, type PoolShot, PoolSim, placeOk } from "@yutopia/shared/pool";
 import { aimGuide, onTheEight, POOL_POCKETS, type PoolGame, unpackBalls, unpackGame } from "@yutopia/shared/pool-game";
 import { OFF_TABLE } from "@yutopia/shared/pool-throw";
@@ -15,6 +15,7 @@ import {
   toWorld,
 } from "@yutopia/shared/tables";
 import type { PoolTable, WorldState } from "@yutopia/state";
+import { panOf } from "../ear";
 import type { WorldModel } from "../model";
 import { hud, toast } from "../store";
 import type { TableScene3 } from "../tp/tables3d";
@@ -715,10 +716,8 @@ export class PoolTables {
   }
 
   private panOf(v: View, me: Pt) {
-    const c = tableCentre(v.def);
-    const a = toScreen(c.x, c.y);
-    const b = toScreen(me.x, me.y);
-    return Math.max(-0.8, Math.min(0.8, (a.x - b.x) / 300));
+    // (left or right of me as the camera faces: world/ear.ts)
+    return Math.max(-0.8, Math.min(0.8, panOf(me, tableCentre(v.def))));
   }
 
   // where the cue ball was hit from (the replay's start)

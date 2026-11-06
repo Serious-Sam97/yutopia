@@ -256,9 +256,8 @@ export class Locomotion {
   private flowT = 1;
   private last: Moved | null = null;
 
-  /** plan 58's animations (docs/plan/58-the-animation.md, phase 0): the new walk, run and jump,
-   *  beside the old till they're signed off; `tension` the mood (0 day … 1 the dark) */
-  v2 = false;
+  /** the mood (0 day … 1 the dark) — plan 58's animations, the only ones (docs/plan/58; the old
+   *  beside them retired, plan 72 phase 12) */
   tension = 0;
   // plan 58 G (the feel): one phase for the walk and the run (they meet on the same foot); the
   // trunk's inertia (a pitch and a roll, each a spring); a skid; a stop's settle; steps turning
@@ -331,10 +330,10 @@ export class Locomotion {
   /** This frame's pose; `standing`: the pose they'd have standing still (Motion3's, with its
    *  breathing and glances), else a plain stand. */
   update(dt: number, m: LocoIn, standing?: Moved): Moved {
-    if (this.v2 && !hero) void loadHero();
+    if (!hero) void loadHero();
     this.upAgo = m.up ? 0 : this.upAgo + dt;
     const out = this.compose(dt, m, standing);
-    if (!this.v2 || !hero || m.reduced) {
+    if (!hero || m.reduced) {
       this.gazeOut = null;
       return out;
     }
@@ -730,8 +729,8 @@ export class Locomotion {
 
   private compose(dt: number, m: LocoIn, standing?: Moved): Moved {
     this.handsOut = null;
-    // (plan 58's, when they're on and in)
-    const H = this.v2 ? hero : null;
+    // (plan 58's, once they're in)
+    const H = hero;
     const S = this.spec;
     this.t += dt;
     // the breath: quicker in the dark, and winded after a run (a sprint most)

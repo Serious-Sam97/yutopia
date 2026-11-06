@@ -2,9 +2,8 @@
 
 import type { AvatarLayers } from "@yutopia/shared";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { View } from "@/world/art/avatar-svg";
+import { flatFigure } from "./flatFigure";
 import { useChars } from "./useChars";
-import { usePeople } from "./usePeople";
 
 // Turntable preview of an avatar (lobby, editor, person card): the same 3D
 // model the world shows (world/chars), turning slowly on its stand and alive —
@@ -31,14 +30,13 @@ export function AvatarCanvas({
   useEffect(() => {
     const c = ref.current;
     if (!C || !c || !gl) return;
-    if (!C.isoPeople().canDraw()) return setGl(false);
+    if (!C.pictures().canDraw()) return setGl(false);
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     const motion = new C.Motion3(0.37);
     // (plan 58: the new animations, so the look's walk — 4e — is the one shown, at the walk's pace)
-    motion.v2 = true;
     motion.gait = a.gait ?? "calm";
     const pace = 1.5;
-    const iso = C.isoPeople();
+    const pics = C.pictures();
     let raf = 0;
     const t0 = performance.now();
     let last = t0 - 1000;
@@ -75,7 +73,7 @@ export function AvatarCanvas({
       });
       // a three-quarter view, turning slowly
       const yaw = 0.55 + (spin && !reduced ? t * 0.55 : 0);
-      if (!iso.turntable(c, a, yaw, mo)) {
+      if (!pics.turntable(c, a, yaw, mo)) {
         cancelAnimationFrame(raf);
         setGl(false);
       }
@@ -123,60 +121,13 @@ export function AvatarCanvas({
   );
 }
 
-// The vector drawing on a turntable (8 views, mirrored), as people were drawn before 3D.
-const TURN: [View, boolean][] = [
-  ["S", false],
-  ["SW", false],
-  ["W", false],
-  ["NW", false],
-  ["N", false],
-  ["NW", true],
-  ["W", true],
-  ["SW", true],
-];
-
-function AvatarDrawing({
-  avatar,
-  size,
-  spin,
-  walk,
-}: {
-  avatar: AvatarLayers;
-  size: number;
-  spin: boolean;
-  walk: boolean;
-}) {
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    if (!spin && !walk) return;
-    const reduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (reduced) return;
-    const i = setInterval(() => setTick((t) => t + 1), walk ? 70 : 1200);
-    return () => clearInterval(i);
-  }, [spin, walk]);
-  // walking: the rig's walk, 8 steps a cycle (1–8; 0 is standing still)
-  const dir = spin ? (walk ? Math.floor(tick / 16) : tick) % 8 : 0;
-  const frame = walk ? 1 + (tick % 8) : 0;
-  const [view, mirror] = TURN[dir];
-  // the drawing loads with the people chunk (only the stand shows until then)
-  const P = usePeople();
-  const src = useMemo(
-    () =>
-      P ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(P.avatarSvg(avatar, view, frame, false, 2))}` : "",
-    [P, avatar, view, frame],
-  );
+// Without WebGL: them drawn flat in their colours (flatFigure; the paper people retired, plan 72
+// phase 12) — standing still, whatever the turntable would do.
+function AvatarDrawing({ avatar, size }: { avatar: AvatarLayers; size: number; spin: boolean; walk: boolean }) {
+  const src = useMemo(() => flatFigure(avatar), [avatar]);
   const w = (size * 64) / 100;
-  return src ? (
+  return (
     // biome-ignore lint/performance/noImgElement: generated SVG data URI, nothing for next/image to optimise
-    <img
-      src={src}
-      alt=""
-      width={w * 0.94}
-      height={size * 0.94}
-      style={{ position: "relative", transform: mirror ? "scaleX(-1)" : undefined, imageRendering: "auto" }}
-      draggable={false}
-    />
-  ) : (
-    <span style={{ width: w * 0.94, height: size * 0.94 }} />
+    <img src={src} alt="" width={w * 0.94} height={size * 0.94} style={{ position: "relative" }} draggable={false} />
   );
 }

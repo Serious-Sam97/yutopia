@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { DEFAULT_AVATAR, EMOTES, SOCIAL, USES } from "@yutopia/shared";
 import { Quaternion, Vector3 } from "three";
 import { solveArm } from "./ik";
+import { loadHero } from "./locomotion";
 import { CharFactory, PersonModel } from "./model";
 import { Motion3, type MotionIn } from "./motion";
 import { JOINTS } from "./rig";
@@ -110,7 +111,10 @@ test("a hand sent to the ear, the mouth, the chin gets there on the model", () =
   f.dispose();
 });
 
-test("the torch on: the left forearm out ahead; aiming, the aim's own; the phone out, the phone's", () => {
+test("the torch on: the left hand out ahead along the look; aiming, the aim's own; the phone out, the phone's", async () => {
+  // (plan 58's, the world's — its clips in, as in play: the hand put out where the beam goes, by IK;
+  // the old pose's forearm retired, plan 72 phase 12)
+  await loadHero();
   const loco = (torch: boolean, aim = false) => ({
     ahead: 0,
     left: 0,
@@ -125,11 +129,14 @@ test("the torch on: the left forearm out ahead; aiming, the aim's own; the phone
     up: false,
     verb: null,
   });
-  const off = run({ loco: loco(false) }, 1).pose.shoulderL?.[0] ?? 0;
-  const lit = run({ loco: loco(true) }, 1).pose.shoulderL?.[0] ?? 0;
-  assert.ok(lit < off - 0.3, `the left arm raised ahead (${off.toFixed(2)} → ${lit.toFixed(2)})`);
-  const aim = run({ loco: loco(true, true) }, 1).pose.shoulderL?.[0] ?? 0;
-  assert.ok(aim < lit - 0.5, "aiming: held right out along the look");
+  const off = run({ loco: loco(false) }, 1).hands?.L;
+  const lit = run({ loco: loco(true) }, 1).hands?.L;
+  assert.ok(lit, "the torch on: the left hand put somewhere");
+  assert.ok(!off || JSON.stringify(off) !== JSON.stringify(lit), "…not where it is with the torch off");
+  // (ahead of her: z, the body's own space)
+  assert.ok((lit?.at[2] ?? 0) > 0.2, `out ahead: ${JSON.stringify(lit?.at)}`);
+  const aim = run({ loco: loco(true, true) }, 1);
+  assert.notDeepEqual(aim.hands?.L, lit, "aiming: the aim's own");
   // the earbud is no phone in the hand: nothing at the ear
   const bud = run({ loco: loco(false) }, 1);
   const call = run({ loco: loco(false), phone: { state: "call", pose: "", ringing: false } }, 1);

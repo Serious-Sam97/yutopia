@@ -50,7 +50,6 @@ import {
   setOutdoors,
   spHour,
   stationOf,
-  stereoPan,
   TICK_HZ,
   type WorldObjectDef,
   worldZ,
@@ -68,8 +67,6 @@ import { lang, tr } from "@/lib/i18n";
 import { deviceQuality, prefs, subscribePrefs } from "@/lib/prefs";
 import { ActionQueue } from "./actions";
 import { loadChars } from "./art/chars-load";
-import { loadItemArt } from "./art/items-load";
-import { loadPeople } from "./art/people-load";
 import { loadPets, pets as petsArt } from "./art/pets-load";
 import { loadThemes } from "./art/themes-load";
 import { mixer } from "./audio";
@@ -91,6 +88,7 @@ import { QualityWatch } from "./ctl/quality";
 import { Steps } from "./ctl/steps";
 import { Tables } from "./ctl/tables";
 import { Water } from "./ctl/water";
+import { panOf } from "./ear";
 import { fanfare, pianoNote, socialSound } from "./foley";
 import type { GameRoom } from "./games/room";
 import type { GodController } from "./god/controller";
@@ -1413,7 +1411,7 @@ export class WorldController {
         this.media.setVoice(
           String(p.uid),
           Math.max(0.05, hearingGain(this.building, ear, src, true) * duck),
-          tp ? tp.pan(ear, src) : stereoPan(ear, src),
+          tp ? tp.pan(ear, src) : panOf(ear, src),
         );
       } else this.media.setVoice(String(p.uid), 0, 0);
     }
@@ -1608,7 +1606,7 @@ export class WorldController {
         loud = { o: box, r };
         pan = this.tp
           ? this.tp.pan(this.me, { x: box.x + 0.5, y: box.y + 0.5 })
-          : stereoPan(this.me, { x: box.x + 0.5, y: box.y + 0.5 });
+          : panOf(this.me, { x: box.x + 0.5, y: box.y + 0.5 });
       }
     }
     if (loud) {
@@ -2196,18 +2194,13 @@ export class WorldController {
     if (this.tp || this.tpLoading) return;
     this.tpLoading = true;
     try {
-      const [{ ThirdPersonView }, P, items, themes] = await Promise.all([
-        import("./tp/game-view"),
-        loadPeople(),
-        loadItemArt() as Promise<typeof import("./art/items")>,
-        loadThemes(),
-      ]);
+      const [{ ThirdPersonView }, themes] = await Promise.all([import("./tp/game-view"), loadThemes()]);
       const model = this.model;
       if (this.stopped || this.viewNow !== "3d" || !model) return;
       const host = document.createElement("div");
       host.style.cssText = "position:absolute;inset:0";
       this.host.appendChild(host);
-      const v = new ThirdPersonView(this.building, [...this.objs.values()], P, items, {
+      const v = new ThirdPersonView(this.building, [...this.objs.values()], {
         keys: false,
         themes,
         level: this.level,

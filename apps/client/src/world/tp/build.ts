@@ -1,10 +1,6 @@
 import {
   cutsSig,
   type DressItem,
-  type DressKind,
-  doorLeaves,
-  doorShut,
-  doorSlides,
   dressItems,
   edgeKey,
   entry,
@@ -24,7 +20,6 @@ import {
   openingEdges,
   placedFootprint,
   quarterOf,
-  rotOf,
   topCentre,
   WALL_H,
   type WallCut,
@@ -33,7 +28,7 @@ import {
 } from "@yutopia/shared";
 import { crossings, slabBoxes } from "@yutopia/shared/physics/structure-solids";
 import { cellOf, floorsSig, freeCuts, inRing, type Ring, type Roof, roofFaces } from "@yutopia/shared/structure";
-import { ART_PX, artPx, SLAB, WALL_T } from "@yutopia/shared/units";
+import { SLAB, WALL_T } from "@yutopia/shared/units";
 import {
   BackSide,
   Box3,
@@ -55,7 +50,6 @@ import {
   MeshLambertMaterial,
   NearestFilter,
   type Object3D,
-  PlaneGeometry,
   RedFormat,
   Shape,
   ShapeUtils,
@@ -65,28 +59,25 @@ import {
   Vector2,
 } from "three";
 import { FloorBake, type FloorSlab } from "../art/floors";
-import { piece, WALL_H as WALL_PX } from "../art/furniture";
-import { INK } from "../art/items/kit";
 import { type LightSource, lightSources } from "../art/light";
+import { bayBoardWords } from "../furn/building-native";
 import { ChessMen3, isBoard } from "../furn/chessmen3d";
 import { animateLive } from "../furn/liveparts";
 import { isNative, isNativeDress, liveInto, nativeDressInto, nativeInto, openingInto } from "../furn/native";
+import { N_HALF, N_WALL, nativePost, nativeWall } from "../furn/walls-native";
 import { CEL, fadePiece, type Piece, yuLit } from "../look/yulit";
 import { boxInParent, type Slab } from "./below-cull";
-import { type Geo, MeshSketch, type Opts3, Out } from "./kit3d";
+import { type Geo, Out } from "./kit3d";
 import { edgesOfMap, type FreeWall, piecesOf, turnOut, type WallEdges } from "./walls3d";
 
 // (the walls and posts are still the item art's drawings, measured in its px: phase 8 redraws them)
-const zt = (px: number) => px / ART_PX;
-
-import { poolTable3 } from "./pooltable3d";
-
-// the item drawings: the same lazy chunk the iso engine loads (art/scene.ts)
-export type Items = typeof import("../art/items");
-
-// The Studio as a three.js scene, from the same data the iso engine draws:
-// the floor bake (seen from above), walls on tile edges, every item drawn by
-// its own sketch (in 3D), the rooms' clutter.
+// a wall's half thickness (m): a post is twice it square
+const WALL_HALF_T = WALL_T / 2;
+// the ink of the floor's drawn contact shadows
+const INK = "#2a1a12";
+// The building as a three.js scene (docs/plan/72-the-3d-core.md): the floor bake (seen from
+// above), the walls and their posts from the structure (furn/walls-native.ts), every thing drawn by
+// the kit (furn/native.ts), the rooms' clutter — in metres, inked by the world.
 //   walls  — built once per layout (and again when a door or window comes,
 //            goes or moves: they cut the walls); the upper part of each wall
 //            run (4 edges) is its own group, to turn see-through when it hides you
@@ -146,10 +137,9 @@ export interface Pick3 {
   z1: number;
 }
 
-// One built piece: its meshes, cards, contact shadows and clickable bounds.
+// One built piece: its meshes, contact shadows and clickable bounds.
 interface Built {
   objs: Object3D[];
-  cards: Object3D[];
   soft: Out["soft"];
   picks: Pick3[];
   dispose: { dispose(): void }[];
@@ -182,9 +172,8 @@ export class World3 {
   private cellOf(x: number, y: number): string {
     return cellKey(x, y, this.corner);
   }
-  cards: Object3D[] = []; // turned to the camera every frame
   lights: LightSource[] = [];
-  stats = { triangles: 0, meshes: 0, cards: 0, ms: 0, areas: 0 };
+  stats = { triangles: 0, meshes: 0, ms: 0, areas: 0 };
 
   private walls: Built[] = [];
   private wallFades: FadeGroup[] = [];
@@ -194,7 +183,6 @@ export class World3 {
   private tallIds = new Set<string>(); // things known to stand tall (drawn on their own)
   private floor: { meshes: Mesh[]; chunks: Map<string, Mesh>; sig: string } | null = null;
   private objects: WorldObjectDef[] = [];
-  private cardN = 0;
   private posts = new Set<string>(); // "x,y" of every wall post (doors stop at them too)
   private cuts = new Map<string, WallCut>(); // doors' and windows' holes, by edge
   /** the floor's walls as drawn (the structure's: walls3d.ts; a map's edges where there's none) */
@@ -230,7 +218,6 @@ export class World3 {
   // `light`: the room's light, as a part of a lit material (tp/light3d.ts Light3.piece; none: three's
   // lights alone)
   constructor(
-    private items: Items,
     public map: MapDef,
     objects: WorldObjectDef[],
     private anisotropy = 4,
@@ -284,7 +271,6 @@ export class World3 {
   // time (`run|h|<y>|<n>`, each fading as one), and the ceiling. `only`: build just these
   // pieces (World3.relayout — what an edit touched), the rest kept as they are.
   private buildWalls(only?: Set<string>) {
-    const { post, wall, WALL_HALF_T } = this.items;
     const map = this.map;
     const E = this.edges;
     const want = (k: string) => !only || only.has(k);
@@ -302,7 +288,6 @@ export class World3 {
       r.top = Math.max(r.top, top);
       return r;
     };
-    const sketch = (o: Opts3) => new MeshSketch(o);
     // posts where walls turn, meet or end (a straight run of one height has none)
     const half = (c: string) => c === HALF_WALL;
     const posts = new Map<string, { height: number; ch: string; e: string; w: string; s: string }>();
@@ -318,7 +303,7 @@ export class World3 {
           (isWallEdge(w) && isWallEdge(e) && !isWallEdge(n) && !isWallEdge(s) && half(w) === half(e)) ||
           (isWallEdge(n) && isWallEdge(s) && !isWallEdge(w) && !isWallEdge(e) && half(n) === half(s));
         if (straight) continue;
-        const height = touching.every(half) ? 34 : WALL_PX;
+        const height = touching.every(half) ? N_HALF : N_WALL;
         posts.set(`${X},${Y}`, { height, ch: touching.find((c) => !half(c)) ?? touching[0], e, w, s });
       }
     const addWall = (dir: "h" | "v", x: number, y: number, ch: string) => {
@@ -330,30 +315,24 @@ export class World3 {
       const [ax, ay, bx, by] = dir === "h" ? [x, y, x + 1, y] : [x, y, x, y + 1];
       const a0 = posts.has(`${ax},${ay}`) ? WALL_HALF_T : 0;
       const a1 = posts.has(`${bx},${by}`) ? 1 - WALL_HALF_T : 1;
-      const clip = dir === "h" ? { x0: a0, x1: a1, y0: -1, y1: 1 } : { x0: -1, x1: 1, y0: a0, y1: a1 };
-      const top = ch === HALF_WALL ? 34 : WALL_PX;
-      const run = wantRun ? runOf(dir, x, y, zt(top)) : null;
+      const top = ch === HALF_WALL ? N_HALF : N_WALL;
+      const run = wantRun ? runOf(dir, x, y, top) : null;
       const back = E.back({ dir, x, y });
       const c = this.cuts.get(edgeKey({ dir, x, y }));
-      const cut = c ? ([artPx(c.z0), artPx(c.z1)] as const) : null; // (the art's px)
-      if (back === NO_WALL) {
-        // one material through and through: drawn once, its face mirrored onto the other side
-        const at = { w: 1, h: 1, seed: 0.37, clip, at: [x, y] as [number, number], mirror: true };
-        if (wantLow) wall(sketch({ ...at, out: lowOf(x, y) }), dir, ch, "low", undefined, cut);
-        if (run) wall(sketch({ ...at, out: run.out }), dir, ch, "high", undefined, cut);
-        return;
-      }
-      // two faces: the front half as it is, the back half drawn as the front of
-      // the sketch turned round from the tile behind (its +y / +x face lands on −y / −x)
-      const bch = isWindow(ch) ? back.toUpperCase() : back;
-      const behind: [number, number] = dir === "h" ? [x, y - 1] : [x - 1, y];
-      const bclip = dir === "h" ? { x0: a0, x1: a1, y0: 0, y1: 2 } : { x0: 0, x1: 2, y0: a0, y1: a1 };
+      const f = { dir, x, y };
+      const cut = c ? ([c.z0, c.z1] as const) : null;
+      // (its patterns run on along the whole line: from the line's own start)
+      const along = dir === "h" ? x : y;
       const parts: ["low" | "high", Out][] = [];
       if (wantLow) parts.push(["low", lowOf(x, y)]);
       if (run) parts.push(["high", run.out]);
       for (const [part, out] of parts) {
-        wall(sketch({ w: 1, h: 1, seed: 0.37, clip, at: [x, y], out }), dir, ch, part, "front", cut);
-        wall(sketch({ w: 1, h: 1, seed: 0.37, clip: bclip, at: behind, rot: 2, out }), dir, bch, part, "back", cut);
+        // one material through and through, or each face its own (a window painted on both)
+        if (back === NO_WALL) nativeWall(out, f, { ch, part, a0, a1, side: "both", cut, along });
+        else {
+          nativeWall(out, f, { ch, part, a0, a1, side: "front", cut, along });
+          nativeWall(out, f, { ch: isWindow(ch) ? back.toUpperCase() : back, part, a0, a1, side: "back", cut, along });
+        }
       }
     };
     for (let y = 0; y <= map.height; y++)
@@ -371,16 +350,16 @@ export class World3 {
     const freeEnds = new Set<string>();
     if (!only || only.has(FREE))
       for (const fw of E.free)
-        this.freeWall(fw, posts, freeEnds, (id) => getOr(low, `${FREE}|${id}`, () => new Out()), runs, sketch);
+        this.freeWall(fw, posts, freeEnds, (id) => getOr(low, `${FREE}|${id}`, () => new Out()), runs);
     this.posts = new Set(posts.keys());
     for (const [key, { height, ch, e, w, s }] of posts) {
       const [X, Y] = key.split(",").map(Number);
-      if (want(`low|${this.cellOf(X, Y)}`))
-        post(sketch({ w: 1, h: 1, at: [X, Y], out: lowOf(X, Y) }), height, "low", ch);
+      if (want(`low|${this.cellOf(X, Y)}`)) nativePost(lowOf(X, Y), X, Y, height, "low", ch);
       // the upper part fades with the run it belongs to most (h first)
       const [dir, rx, ry] = postRun(X, Y, e, w, s);
-      if (want(`run|${runKey(dir, rx, ry)}`))
-        post(sketch({ w: 1, h: 1, at: [X, Y], out: runOf(dir, rx, ry, zt(height)).out }), height, "high", ch);
+      if (want(`run|${runKey(dir, rx, ry)}`)) {
+        nativePost(runOf(dir, rx, ry, height).out, X, Y, height, "high", ch);
+      }
     }
     // (each piece built replaces the one it was; one of `only` that has no walls now goes)
     const made = new Set<string>();
@@ -423,9 +402,7 @@ export class World3 {
     freeEnds: Set<string>,
     lowOf: (id: string) => Out,
     runs: Map<string, { out: Out; x0: number; y0: number; x1: number; y1: number; top: number }>,
-    sketch: (o: Opts3) => MeshSketch,
   ) {
-    const { post, wall } = this.items;
     // (its doors' and windows' holes: the pieces split where they start and end — phase 11.6)
     const holes = freeCuts(this.objects, fw.id);
     const pieces = piecesOf(
@@ -433,49 +410,30 @@ export class World3 {
       holes.flatMap((c) => [c.u0, c.u1]),
     );
     // (its own height and thickness — phase 11.4 — else its kind's)
-    const top = fw.height !== undefined ? artPx(fw.height) : fw.ch === HALF_WALL ? 34 : WALL_PX;
-    const WALL_HALF_T = (fw.thick ?? WALL_T) / 2;
-    const shape = { top, t: WALL_HALF_T };
+    const top = fw.height ?? (fw.ch === HALF_WALL ? N_HALF : N_WALL);
+    const halfT = (fw.thick ?? WALL_T) / 2;
     const ends = [fw.a, fw.b].map((p) => `${p[0]},${p[1]}`);
     const postAt = ends.map((k) => !posts.has(k));
     const lowOut = lowOf(fw.id);
     pieces.forEach((p, i) => {
-      const a0 = i === 0 && postAt[0] ? WALL_HALF_T : 0;
-      const a1 = i === pieces.length - 1 && postAt[1] ? p.len - WALL_HALF_T : p.len;
-      const clip = { x0: a0, x1: a1, y0: -1, y1: 1 };
-      const bclip = { x0: a0, x1: a1, y0: 0, y1: 2 };
-      // (a door's or window's hole through this piece: the art's px up)
+      const a0 = i === 0 && postAt[0] ? halfT : 0;
+      const a1 = i === pieces.length - 1 && postAt[1] ? p.len - halfT : p.len;
+      // (a door's or window's hole through this piece, m up)
       const mid = p.u + p.len / 2;
       const h = holes.find((c) => c.u0 < mid && mid < c.u1);
-      const cut = h ? ([artPx(h.z0), artPx(h.z1)] as const) : null;
       const lo = new Out();
       const hi = new Out();
       for (const [part, out] of [
         ["low", lo],
         ["high", hi],
       ] as const) {
-        if (fw.back === NO_WALL) {
-          wall(
-            sketch({ w: 1, h: 1, seed: 0.37, clip, at: [0, 0], mirror: true, out }),
-            "h",
-            fw.ch,
-            part,
-            undefined,
-            cut,
-            shape,
-          );
-        } else {
-          const bch = isWindow(fw.ch) ? fw.back.toUpperCase() : fw.back;
-          wall(sketch({ w: 1, h: 1, seed: 0.37, clip, at: [0, 0], out }), "h", fw.ch, part, "front", cut, shape);
-          wall(
-            sketch({ w: 1, h: 1, seed: 0.37, clip: bclip, at: [0, -1], rot: 2, out }),
-            "h",
-            bch,
-            part,
-            "back",
-            cut,
-            shape,
-          );
+        // (drawn along +x from the origin, its patterns run on from the wall's start, then turned)
+        const f = { dir: "h" as const, x: 0, y: 0 };
+        const d = { part, a0, a1, cut: h ? ([h.z0, h.z1] as const) : null, top, t: halfT, along: p.u };
+        if (fw.back === NO_WALL) nativeWall(out, f, { ...d, ch: fw.ch, side: "both" });
+        else {
+          nativeWall(out, f, { ...d, ch: fw.ch, side: "front" });
+          nativeWall(out, f, { ...d, ch: isWindow(fw.ch) ? fw.back.toUpperCase() : fw.back, side: "back" });
         }
         turnOut(out, p.angle, p.at[0], p.at[1], fw.base ?? 0);
       }
@@ -489,7 +447,7 @@ export class World3 {
         r.x1 = Math.max(r.x1, x + 0.1);
         r.y1 = Math.max(r.y1, y + 0.1);
       }
-      r.top = Math.max(r.top, zt(top));
+      r.top = Math.max(r.top, top);
     });
     // its posts: square to the wall (an arc: to its first or last chord), at each end not already
     // one of the lattice's
@@ -508,12 +466,12 @@ export class World3 {
             y0: at[1] - 0.1,
             x1: at[0] + 0.1,
             y1: at[1] + 0.1,
-            top: zt(top),
+            top,
           })).out,
         ],
       ] as const) {
         const o = new Out();
-        post(sketch({ w: 1, h: 1, at: [0, 0], out: o }), top, part, fw.ch, WALL_HALF_T);
+        nativePost(o, 0, 0, top, part, fw.ch, halfT);
         turnOut(o, angle, at[0], at[1], fw.base ?? 0);
         appendOut(out, o);
       }
@@ -694,7 +652,7 @@ export class World3 {
     this.root.add(mesh);
     still(mesh);
     this.setWallPart("ceiling", {
-      built: { objs: [mesh], cards: [], soft: { rects: [], dots: [] }, picks: [], dispose: [geo, mat] },
+      built: { objs: [mesh], soft: { rects: [], dots: [] }, picks: [], dispose: [geo, mat] },
     });
   }
 
@@ -1292,7 +1250,7 @@ export class World3 {
   // (the fade flags as a part of the shared materials: look/yulit.ts)
   private readonly fade = fadePiece(this.flagsU, FLAG_W);
 
-  // what clicks, fades, cards and lights see: everything built, gathered
+  // what clicks, fades and lights see: everything built, gathered
   private collect() {
     const all = [
       ...this.walls,
@@ -1305,7 +1263,6 @@ export class World3 {
     this.picks = all
       .flatMap((b) => b.picks)
       .map((p) => ({ ...p, x0: p.x0 + c.x, y0: p.y0 + c.y, x1: p.x1 + c.x, y1: p.y1 + c.y }));
-    this.cards = all.flatMap((b) => b.cards);
     this.fades = [...this.wallFades, ...[...this.tall.values()].map((t) => t.fade)];
     this.lights = lightSources(this.objects);
     this.stats.areas = this.areas.size;
@@ -1313,7 +1270,6 @@ export class World3 {
 
   // one thing drawn on its own (also build mode's ghosts)
   drawObject(o0: WorldObjectDef): { out: Out; top: number; tall: boolean; pick: Pick3 | null } {
-    const { drawItem, hasItemArt, itemSketchOpts } = this.items;
     const e = entry(o0.kind);
     // (placed free — plan 72 phase 11.9: drawn as if at no turn with its middle at the origin, then
     // turned by its yaw and set at its middle)
@@ -1322,80 +1278,31 @@ export class World3 {
       ? { ...o0, x: -e.w / 2, y: -e.h / 2, yaw: 0, props: { ...(o0.props ?? {}), free: false } }
       : o0;
     const out = new Out();
-    if (isOpening(o.kind) && o.props?.free === true) {
+    // (every kind is the kit's — docs/plan/67-the-furniture.md, world/furn/native.ts; plan 72 phase
+    // 12: the sketches' last kinds too)
+    if (!isNative(o.kind)) {
+      // (a kind the kit doesn't know — a client's newer than this one: nothing drawn)
+    } else if (isOpening(o.kind) && o.props?.free === true) {
       // in a wall drawn free (phase 11.6): its model along that wall from where it starts, turned by
-      // the wall's heading (its yaw); the older art drawn along x and turned the same
-      const n = Math.max(1, e.w);
-      if (isNative(o.kind)) openingInto(out, o, 0, n);
-      else {
-        const leaves = isDoorKind(o.kind) && doorLeaves(o.kind) > 0 && (!doorShut(o) || doorSlides(o.kind));
-        for (const part of leaves ? ["edge", "leaf"] : ["edge"]) {
-          const own = new Out();
-          const s = new MeshSketch({ rot: 0, w: n, h: 1, at: [0, 0], out: own });
-          drawItem(s, { kind: o.kind, id: o.id, rot: 0, props: { ...(o.props ?? {}), _part: part } });
-          s.end();
-          turnOut(own, o.yaw ?? 0, o.x, o.y);
-          appendOut(out, own);
-        }
-      }
+      // the wall's heading (its yaw)
+      openingInto(out, o, 0, Math.max(1, e.w));
     } else if (isOpening(o.kind)) {
-      // a door or window in its wall (rot 3 on west edges)
-      const rot = quarterOf(o) % 2 === 1 ? 3 : 0;
-      // open leaves (and a barn door, always: it rolls along the face) are drawn whole
-      const leaves = isDoorKind(o.kind) && doorLeaves(o.kind) > 0 && (!doorShut(o) || doorSlides(o.kind));
-      // the frame stops at a post at either end (the wall beside it ends in one),
-      // or its faces would lie in the post's and flicker
+      // a door or window in its wall (plan 68 phase 13: world/furn/openings.ts): its frame stops at a
+      // post at either end (the wall beside it ends in one), or its faces would lie in the post's
+      // and flicker
       const edges = openingEdges(o);
       const first = edges[0];
       const last = edges[edges.length - 1];
       const n = edges.length;
-      const T = this.items.WALL_HALF_T;
-      const a0 = this.posts.has(`${first.x},${first.y}`) ? T : 0;
-      const a1 = this.posts.has(first.dir === "h" ? `${last.x + 1},${last.y}` : `${last.x},${last.y + 1}`) ? n - T : n;
-      const clip = first.dir === "h" ? { x0: a0, x1: a1, y0: -1, y1: 1 } : { x0: -1, x1: 1, y0: a0, y1: a1 };
-      if (isNative(o.kind))
-        // (plan 68 phase 13: redrawn by the kit — world/furn/openings.ts)
-        openingInto(out, o, a0, a1);
-      else
-        for (const part of leaves ? ["edge", "leaf"] : ["edge"]) {
-          const s = new MeshSketch({ rot, w: n, h: 1, at: [o.x, o.y], out, clip: part === "edge" ? clip : null });
-          drawItem(s, { kind: o.kind, id: o.id, rot, props: { ...(o.props ?? {}), _part: part } });
-          s.end();
-        }
+      const a0 = this.posts.has(`${first.x},${first.y}`) ? WALL_HALF_T : 0;
+      const a1 = this.posts.has(first.dir === "h" ? `${last.x + 1},${last.y}` : `${last.x},${last.y + 1}`)
+        ? n - WALL_HALF_T
+        : n;
+      openingInto(out, o, a0, a1);
     } else {
-      const rot = rotOf(o);
-      const ref = { kind: o.kind, id: o.id, rot, props: o.props };
-      const at = anchorOf(o);
-      // (the item art's px: its drawings are lifted in them)
-      const lift = artPx(e.onSurface ? Number(o.props?.z) || 0 : e.wall ? hangOf(o).lift : 0);
-      if (isNative(o.kind)) {
-        // redrawn by the kit (docs/plan/67-the-furniture.md: world/furn/native.ts)
-        nativeInto(out, o);
-      } else if (o.kind === "pool_table") {
-        // its own model in 3D: real pockets to drop the balls into (tp/pooltable3d.ts)
-        poolTable3(out, { x: o.x, y: o.y }, rot, itemSketchOpts(ref).seed);
-      } else if (hasItemArt(o.kind)) {
-        // things on a surface are drawn around the middle of a 1×1 tile
-        const s = new MeshSketch({ ...itemSketchOpts(ref), ...(e.onSurface ? { w: 1, h: 1 } : {}), at, lift, out });
-        drawItem(s, ref);
-        s.end();
-      } else {
-        // no drawing yet: the old box art
-        const p = piece(o.kind, o.props ?? {}, o.id);
-        const s = new MeshSketch({ rot, w: e.w, h: e.h, at, lift, out });
-        for (const b of p.boxes)
-          s.box({
-            x: b.x,
-            y: b.y,
-            w: b.w,
-            d: b.d,
-            z: b.z,
-            h: b.h,
-            glow: b.glow,
-            mat: { c: hexStr(b.color), top: b.top !== undefined ? hexStr(b.top) : undefined },
-            line: b.outline === false ? 0 : 1,
-          });
-      }
+      nativeInto(out, o);
+      // (a bay's board: the owner's name and the bay's number painted on)
+      if (o.kind === "bayboard") bayBoardWords(out, o);
     }
     if (freeTurn) turnOut(out, freeTurn.yaw, freeTurn.x, freeTurn.y);
     const top = topOf(out);
@@ -1416,17 +1323,13 @@ export class World3 {
 
   private drawDress(d: DressItem, out: Out) {
     // (the kit's, as the same thing put down by hand: docs/plan/67-the-furniture.md)
-    if (isNativeDress(d.kind)) return nativeDressInto(out, { ...d, ...xyOf(dressAt(d)) });
-    const seed = bucket(d.seed);
-    const s = new MeshSketch({ w: 1, h: 1, seed, at: dressAt(d), out });
-    this.items.dressing(s, d.kind as DressKind, artPx(d.z), seed);
-    s.end();
+    if (isNativeDress(d.kind)) nativeDressInto(out, { ...d, ...xyOf(dressAt(d)) });
   }
 
   // ── meshes ─────────────────────────────────────────────────────────────────
   private mount(out: Out, chunk?: string): Built {
-    const { lit, glow, clearBack, clearFront, ink } = this.materials;
-    const built: Built = { objs: [], cards: [], soft: out.soft, picks: [], dispose: [] };
+    const { lit, glow, clearBack, clearFront } = this.materials;
+    const built: Built = { objs: [], soft: out.soft, picks: [], dispose: [] };
     const tri = (g: Geo, mat: Material | [Material, Material], shadow: boolean) => {
       if (g.empty) return;
       const geo = new BufferGeometry();
@@ -1445,14 +1348,6 @@ export class World3 {
     tri(out.lit, lit, true);
     tri(out.glow, glow, false);
     tri(out.clear, [clearBack, clearFront], false);
-    if (out.lines.length) {
-      const geo = new BufferGeometry();
-      geo.setAttribute("position", new Float32BufferAttribute(out.lines, 3));
-      geo.setAttribute("color", new Float32BufferAttribute(out.lineCol, 4));
-      geo.computeBoundingSphere();
-      built.dispose.push(geo);
-      built.objs.push(new LineSegments(geo, ink));
-    }
     // decals: free-hand drawing on faces, stuck to them
     for (const dc of out.decals) {
       const geo = new BufferGeometry();
@@ -1482,52 +1377,9 @@ export class World3 {
         m.visible = true;
       });
     }
-    // cards: free-hand drawing, turned to the camera
-    for (const c of out.cards) {
-      const geo = new PlaneGeometry(c.u1 - c.u0, c.v1 - c.v0);
-      // cards all turn the same way: neighbours in a row would share one plane
-      // when you look along it, so each stands a hair nearer or further
-      geo.translate((c.u0 + c.u1) / 2, (c.v0 + c.v1) / 2, (this.cardN++ % 8) * 0.0015);
-      // (a glow card stands where its lit card does: drawn a hair nearer, or the two flicker)
-      const card = (side: typeof BackSide | typeof FrontSide) => {
-        const mat = c.glow
-          ? new MeshBasicMaterial({
-              transparent: true,
-              depthWrite: false,
-              toneMapped: false,
-              side,
-              polygonOffset: true,
-              polygonOffsetFactor: -1,
-              polygonOffsetUnits: -4,
-            })
-          : new MeshLambertMaterial({ transparent: true, alphaTest: 0.04, side });
-        if (!c.glow) this.light(mat);
-        return mat;
-      };
-      // (two-sided and see-through: its back faces, then its front faces — twoSided)
-      const mats = [card(BackSide), card(FrontSide)];
-      built.dispose.push(geo, ...mats);
-      const meshes = twoSided(geo, [mats[0], mats[1]]);
-      meshes[0].userData.cardBack = true; // (the 3D view leaves it out while the card's front faces it)
-      for (const m of meshes) {
-        m.position.set(c.x, c.z, c.y);
-        m.visible = false;
-        m.renderOrder = c.glow ? 2 : 1;
-        built.cards.push(m);
-        built.objs.push(m);
-      }
-      cardTexture(c.svg).then((t) => {
-        if (!t || !built.objs.length) return;
-        for (const mat of mats) {
-          mat.map = t;
-          mat.needsUpdate = true;
-        }
-        for (const m of meshes) m.visible = true;
-      });
-    }
     for (const m of built.objs) {
-      // (nothing built here moves but the cards, turned to the camera: their matrices made once)
-      if (!built.cards.includes(m)) still(m);
+      // (nothing built here moves: its matrices made once)
+      still(m);
       const kind = chunk ? this.kindOf(m) : null;
       if (chunk && kind) {
         // drawn merged with its area's (rechunk), held out of the scene meanwhile — glass and
@@ -1551,7 +1403,6 @@ export class World3 {
     }
     this.stats.triangles += built.objs.reduce((n, m) => n + ((m.userData.tris as number) ?? 0), 0);
     this.stats.meshes += built.objs.length;
-    this.stats.cards += built.cards.length;
     return built;
   }
 
@@ -1584,7 +1435,6 @@ export class World3 {
       }
     }
     this.stats.meshes -= b.objs.length;
-    this.stats.cards -= b.cards.length;
     for (const d of b.dispose) d.dispose();
     b.objs = [];
   }
@@ -1921,9 +1771,6 @@ function appendOut(to: Out, from: Out): void {
     to[k].nor.push(...from[k].nor);
     to[k].col.push(...from[k].col);
   }
-  to.lines.push(...from.lines);
-  to.lineCol.push(...from.lineCol);
-  to.cards.push(...from.cards);
   to.decals.push(...from.decals);
   to.soft.rects.push(...from.soft.rects);
   to.soft.dots.push(...from.soft.dots);
@@ -2125,16 +1972,6 @@ function boundsOf(o: Out): Omit<Pick3, "id" | "use" | "dress"> | null {
       if (h < z0) z0 = h;
       if (h > z1) z1 = h;
     }
-  // free-hand cards (leaves, shades) count too: a box round each, as wide as it turns
-  for (const c of o.cards) {
-    const r = Math.max(Math.abs(c.u0), Math.abs(c.u1)) * 0.75;
-    x0 = Math.min(x0, c.x - r);
-    x1 = Math.max(x1, c.x + r);
-    y0 = Math.min(y0, c.y - r);
-    y1 = Math.max(y1, c.y + r);
-    z0 = Math.min(z0, c.z + c.v0);
-    z1 = Math.max(z1, c.z + c.v1);
-  }
   if (x1 < x0) return null;
   const p = 0.04;
   return { x0: x0 - p, y0: y0 - p, z0: z0 - p, x1: x1 + p, y1: y1 + p, z1: z1 + p };
@@ -2150,15 +1987,10 @@ function append(dst: Out, src: Out) {
     cat(dst[k].nor, src[k].nor);
     cat(dst[k].col, src[k].col);
   }
-  cat(dst.lines, src.lines);
-  cat(dst.lineCol, src.lineCol);
-  dst.cards.push(...src.cards);
   dst.decals.push(...src.decals);
   dst.soft.rects.push(...src.soft.rects);
   dst.soft.dots.push(...src.soft.dots);
 }
-
-const hexStr = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
 
 // SVG → texture, shared between equal drawings (never disposed: other pieces may use it)
 const cardCache = new Map<string, Promise<Texture | null>>();

@@ -117,11 +117,9 @@ export default function ThirdPersonDemo() {
     let raf = 0;
     const cleanup: (() => void)[] = [];
     void (async () => {
-      const [{ ThirdPersonView }, { DemoWorld }, P, items, themes] = await Promise.all([
+      const [{ ThirdPersonView }, { DemoWorld }, themes] = await Promise.all([
         import("@/world/tp/view") as Promise<Tp>,
         import("@/world/tp/demo") as Promise<Demo>,
-        import("@/world/art/people-load").then((m) => m.loadPeople()),
-        import("@/world/art/items-load").then((m) => m.loadItemArt()),
         import("@/world/art/themes-load").then((m) => m.loadThemes()),
       ]);
       if (stop || !tpHost.current) return;
@@ -154,7 +152,7 @@ export default function ThirdPersonDemo() {
                           torch: q.get("torch") === "1",
                         }
                       : null;
-      const view = new ThirdPersonView(map, objects, P, items, { themes });
+      const view = new ThirdPersonView(map, objects, { themes });
       // (the bots and you on Jolt's world once the view's is in)
       demo.placeOf = () => view.body.placeFor(null, floorOf(map));
       view.mount(tpHost.current);
@@ -171,7 +169,7 @@ export default function ThirdPersonDemo() {
         fps: 0,
         calls: 0,
         tris: 0,
-        build: `${Math.round(st.triangles / 1000)}k tris · ${st.meshes} meshes · ${st.cards} cards · ${Math.round(st.ms)} ms`,
+        build: `${Math.round(st.triangles / 1000)}k tris · ${st.meshes} meshes · ${Math.round(st.ms)} ms`,
         ready: true,
       };
       const push = () => setHud({ ...state });

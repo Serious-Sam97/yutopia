@@ -1,7 +1,7 @@
 import { canPlace } from "./build.ts";
 import { entry, placedFootprint, quarterYaw, type WorldObjectDef } from "./catalog.ts";
 import { convertV1 } from "./convert.ts";
-import type { Point } from "./iso.ts";
+import type { Point } from "./geom.ts";
 import { floorOf, floorsOf, levelMap, objLevel, offsetOf } from "./levels.ts";
 import { LOT, lotLayout } from "./lot.ts";
 import {

@@ -1508,9 +1508,11 @@ the code reads are made from it. Still to come in this phase: listed at the end.
     - GPU e2e (Metal), the specs ported (`rows()`, the struct messages): wall-building 2/2,
       build-tools, map-edit, third-person 3/3, wall-sofa-menu 3/3, wall-faces 2/3.
       - Red, not from this: wall-faces "both faces" (the clock's target above the viewport — known
-        since phase 5), doors-windows (the Doors tab — known), footing (on floor 4 Jolt's
-        `underfoot` finds the roof's lid 3.5 m up at a desk and the land 7 m down at the rug: the
-        browser physics' frame on the top floor, untouched here — to look into).
+        since phase 5), doors-windows (the Doors tab — known), footing — **looked into after: the
+        spec's own, not the physics.** It called `tp.underfoot(grid, level, x, y, z)`, the view's
+        old signature; since phase 7 it's `(level, x, y, z)`, so the grid went in as the level and
+        Jolt was asked at no height at all. Called right, it's green: each floor char on its slab,
+        the desk's top, the rug.
       - map-edit passes on a fresh world server; run again on the same one, its first walk after
         "start blank" finds no way (the server's navmesh across runs; a floor made again from the
         same solids is fine alone — `nav` kept meshes give the same ways). To look into.
@@ -1518,3 +1520,53 @@ the code reads are made from it. Still to come in this phase: listed at the end.
       pass, nothing left over. The dev world restored from its backup after the lab runs and
       checked identical (the weather aside).
     - Page 467.2 KB, budget 467 → 469 with a note (the queries and the wall painting on the page).
+
+## Phase 12 — retire the iso leftovers (started 2026-11-06, the user: "ok do it")
+- **First, the footing spec (from phase 11's open list): the spec's own.** See phase 11's checks.
+- **The survey (2026-11-06).** What was left of iso, in six parts: dead paths (`?furn=old`,
+  `?anim=old`, the `v2` flag), the three `iso.ts` modules, the paper people, the item art drawn
+  through sketches (5 catalog kinds — stairs, elevator, car, bayboard, flight — and the walls and
+  posts, the rooms' dressing, the kart park's benches, the catalog's SVG thumbs), the old art's px
+  edge (`ART_PX`), the e2e helpers' tile words, and ~50 files of comments.
+- **Done:**
+  - **The dead paths.** `?furn=old` (`furn/flag.ts`: every kind is the kit's, `SEAT_NEXT` was
+    empty), `?anim=old` and the `v2` flag: plan 58's animations are the only ones; the loading and
+    reduced-motion fallbacks (no hero chunk yet, `reduced`) kept. The furniture bench's "Today"
+    column (the old art beside the new) gone; the anim bench's "before" for driven and everyday
+    clips was plan 58 off — none now (a pair's partner stays); the sandbox's old/new toggle gone.
+    The torch test asks plan 58's way: the left hand put out ahead along the beam by IK.
+  - **`shared/iso.ts`** deleted: `Point` in `geom.ts`; the projection, its 8 screen facings and
+    their tests gone. **Every sound pans by where the camera faces** (`world/ear.ts panOf`, the
+    view telling it its yaw): the tables' clacks and the TV, the phone and the voices — the iso
+    screen's x, `stereoPan`, retired.
+  - **`art/iso.ts`** deleted (the box art's `Box` and `rotateBoxes` with `piece()` in
+    `art/furniture.ts`, till it goes). **`chars/iso.ts`** deleted with its sprite pipeline and the
+    dev sheet: the HUD's pictures — the turntable, portraits, the look's thumbs — in
+    `chars/picture.ts` (`pictures()`), `verbAt` with them.
+  - **The paper people** (the avatar rig, its SVG drawing, its motion, the wardrobe's drawings, the
+    views, `usePeople`) deleted. Someone whose 3D person isn't built yet is a low figure in their
+    own colours (`tp/stand3d.ts Proxy3`: legs, a body in their top's, a head in their skin's, their
+    hair) — picked by its shapes; Vortex is his drawing, as always (`Vortex3`, the same 1.378 m).
+    Where WebGL can't draw, the HUD's portraits and turntable draw them flat in their colours
+    (`components/flatFigure.ts`).
+- **Checks so far:** shared 655, client 284 (the iso and paper-people tests went with them), the
+  world-server compiles; as Bia the world loads with no page errors, Vortex drawn, her 3D self.
+  - **The sketch art retired** (the user chose "stills first", then signed the sheet off 2026-11-06,
+    see-through glass with it). Before/after stills in `design/native-draft/`.
+    - **Walls and posts** (`furn/walls-native.ts`, from `tp/build.ts` for tile edges and free walls,
+      heights in metres): every layer where it was; each material's relief as geometry — brick at
+      true size (225 × 65 mm, 75 mm courses, stretcher bond), walnut panels, foam blocks 35 mm proud,
+      cork flecks, smoked glass you see through (55 %) with a mullion each metre and one face's
+      streaks; a painted window's frame, sill and bars. Patterns run on from piece to piece (`along`).
+    - **The building's things** (`furn/building-native.ts`, kit kinds in `furn/native.ts`): the
+      staircase and an elevator's stop (build mode's ghost and the catalog: the world's own are
+      `stairs3d`/`lift3d`), a car before the cars' chunk (round wheels, where the drawing's were — the
+      shapes test holds it), the flight of steps (it had no picture), a bay's name board (its name and
+      number as decals: `bayBoardWords`), the pool table from its own model (`outModel`: its ink lines
+      gone, the world inks it). The rooms' dressing was all native already. The kart park's benches
+      are the office's (`park3d.ts`, the kit loaded with the park).
+    - **Deleted:** `art/items/*` (the item art and its kit), `art/items-load.ts`, `art/furniture.ts`
+      (`piece()` and the box art), `MeshSketch` — `tp/kit3d.ts` is now only the buffers (`Geo`, `Out`,
+      decals, contact shadows): no cards, no ink lines, no `Layers`; the build view, the benches,
+      `model-bounds` and the view take no `items`; the catalog's SVG thumb fallback (none where WebGL
+      can't draw); `/dev/items`, `/dev/rooms` (the iso sheets).

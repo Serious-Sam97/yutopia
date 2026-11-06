@@ -1,6 +1,6 @@
 import type { WorldObjectDef } from "./catalog.ts";
 import { quarterOf } from "./catalog.ts";
-import type { Point } from "./iso.ts";
+import type { Point } from "./geom.ts";
 import { across, elevOf, floorOf, floorsOf, levelMap, objLevel } from "./levels.ts";
 import { liftShafts, shaftHoles } from "./lift.ts";
 import { type Edge, isFloor, type MapDef } from "./map.ts";

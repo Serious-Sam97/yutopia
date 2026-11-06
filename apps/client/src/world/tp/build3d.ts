@@ -31,7 +31,7 @@ import {
   Vector2,
   Vector3,
 } from "three";
-import { cardTexture, type Pick3, type World3 } from "./build";
+import type { Pick3, World3 } from "./build";
 
 // Build mode in 3D: what it shows (the model's buildLook) — the things in your
 // hand as see-through ghosts (green where they fit, red where not, lifted with a
@@ -145,7 +145,6 @@ export class BuildLayer {
     const sig = look ? JSON.stringify(look.ghosts) : "";
     if (sig === this.ghostSig) return;
     this.ghostSig = sig;
-    this.ghostCards = [];
     clear(this.ghosts);
     for (const m of this.ghostFloor) disposeTree(m);
     this.ghostFloor = [];
@@ -168,29 +167,6 @@ export class BuildLayer {
         geo.setAttribute("color", new Float32BufferAttribute(col, 4));
         this.ghosts.add(new Mesh(geo, mat));
       }
-      // its free-hand parts (leaves, a shade) as cards, see-through like the rest
-      for (const c of out.cards) {
-        const geo = new PlaneGeometry(c.u1 - c.u0, c.v1 - c.v0);
-        geo.translate((c.u0 + c.u1) / 2, (c.v0 + c.v1) / 2, 0);
-        const cm = new MeshBasicMaterial({
-          transparent: true,
-          opacity: g.ok ? 0.9 : 0.6,
-          color: g.ok ? 0xffffff : 0xff9a80,
-          depthWrite: false,
-          side: DoubleSide,
-        });
-        const card = new Mesh(geo, cm);
-        card.position.set(c.x, c.z, c.y);
-        card.visible = false;
-        this.ghosts.add(card);
-        this.ghostCards.push(card);
-        void cardTexture(c.svg).then((t) => {
-          if (!t) return;
-          cm.map = t;
-          cm.needsUpdate = true;
-          card.visible = true;
-        });
-      }
       // its spot on the floor (at floor level, not lifted): a strip along the wall for wall things
       const e = entry(g.def.kind);
       const { w, h } = placedFootprint(g.def);
@@ -203,7 +179,6 @@ export class BuildLayer {
     }
   }
   private ghostFloor: Mesh[] = [];
-  ghostCards: Mesh[] = []; // turned to the camera with the room's cards
 
   // ── edges, rooms, the arrival pin, outlines ────────────────────────────────
   private setCues(look: BuildLook | null, world: World3) {

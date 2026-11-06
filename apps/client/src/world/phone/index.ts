@@ -1,10 +1,11 @@
 "use client";
 
-import { hearingGain, stereoPan } from "@yutopia/shared";
+import { hearingGain } from "@yutopia/shared";
 import { type PhoneSettings, type PhoneState, parsePhoneSettings, type Ringtone } from "@yutopia/shared/phone";
 import { addStrings, tr } from "@/lib/i18n";
 import { PHONE_STRINGS } from "@/lib/i18n-phone";
 import type { WorldController } from "../controller";
+import { panOf } from "../ear";
 import { hud } from "../store";
 import { Calls } from "./call";
 import { Camera } from "./camera";
@@ -633,7 +634,7 @@ export class Phone {
           const d = Math.hypot(p.x - meP.x, p.y - meP.y);
           const gain = Math.max(g, d < 2 ? 0.6 : 0) * 0.55;
           // (left or right as the 3D camera looks — docs/plan/72 phase 10; the plan's turn without it)
-          const pan = this.ctl.tp ? this.ctl.tp.pan(meP, p) : stereoPan(meP, p);
+          const pan = this.ctl.tp ? this.ctl.tp.pan(meP, p) : panOf(meP, p);
           let r = this.ringers.get(sid);
           if (!r || r.tone !== p.tone) {
             r?.stop();

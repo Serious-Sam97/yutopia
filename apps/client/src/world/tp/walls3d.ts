@@ -178,15 +178,8 @@ export function turnOut(out: Out, angle: number, x: number, z: number, lift = 0)
     for (let i = 0; i < g.pos.length; i += 3) pt(g.pos, i, true);
     for (let i = 0; i < g.nor.length; i += 3) pt(g.nor, i, false);
   }
-  for (let i = 0; i < out.lines.length; i += 3) pt(out.lines, i, true);
   for (const d of out.decals) {
     for (let i = 0; i < d.pos.length; i += 3) pt(d.pos, i, true);
     for (let i = 0; i < d.nor.length; i += 3) pt(d.nor, i, false);
-  }
-  for (const k of out.cards) {
-    const [px, pz] = [k.x, k.y];
-    k.x = px * c - pz * s + x;
-    k.y = px * s + pz * c + z;
-    if (lift) k.z += lift;
   }
 }

@@ -3,11 +3,10 @@
 import { useEffect, useState } from "react";
 
 // Catalog pictures: rendered from the 3D models the world draws (docs/plan/67-the-furniture.md,
-// phase 9: world/furn/pictures.ts, lazy); for what the kit doesn't draw (doors, windows, cars) the
-// item art's drawing. As data URLs, made once a kind and look and kept for the session.
-type Items = typeof import("@/world/art/items");
+// phase 9: world/furn/pictures.ts, lazy) — every kind's (plan 72 phase 12: the item art's drawings,
+// their fallback, gone). As data URLs, made once a kind and look and kept for the session; none where
+// WebGL can't draw.
 type Pictures = typeof import("@/world/furn/pictures");
-let items: Promise<Items> | null = null;
 let pictures: Promise<Pictures> | null = null;
 export const loadPictures = (): Promise<Pictures> => {
   pictures ??= import("@/world/furn/pictures");
@@ -53,19 +52,13 @@ async function make(
   wanted: () => boolean = () => true,
 ): Promise<string | null> {
   const p = await loadPictures();
-  if (p.drawsKind(kind)) {
-    try {
-      return await inTurn(() => p.pictureOf(kind, props ?? {}), wanted, SKIPPED);
-    } catch {
-      // (no WebGL here: the drawing instead)
-    }
+  if (!p.drawsKind(kind)) return null;
+  try {
+    return await inTurn(() => p.pictureOf(kind, props ?? {}), wanted, SKIPPED);
+  } catch {
+    // (no WebGL here: no picture)
+    return null;
   }
-  items ??= import("@/world/art/items");
-  const m = await items;
-  if (!m.hasItemArt(kind)) return null;
-  // a picture: things drawn live in the world (the clock's hands) are drawn in
-  const art = m.itemArt({ kind, id: "catalog", rot: 0, props: { ...props, _thumb: true } }, null, "all", 2);
-  return art ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(art.svg)}` : null;
 }
 
 export function useThumb(kind: string, props?: Record<string, unknown>): string | null {

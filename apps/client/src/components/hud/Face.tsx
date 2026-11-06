@@ -2,36 +2,21 @@
 
 import { parseAvatar } from "@yutopia/shared";
 import { useMemo } from "react";
+import { flatFigure } from "../flatFigure";
 import { useChars } from "../useChars";
-import { usePeople } from "../usePeople";
 
-type People = NonNullable<ReturnType<typeof usePeople>>;
 type Chars = NonNullable<ReturnType<typeof useChars>>;
 
 // A person's portrait: their 3D model's head and shoulders, a little turned
-// (world/chars, rendered once per look and kept as a picture); the head of
-// their vector drawing where WebGL can't draw.
+// (world/chars, rendered once per look and kept as a picture); where WebGL can't draw, their head
+// drawn flat in their colours (flatFigure).
 const portraits = new Map<string, string | null>();
 function portrait3d(C: Chars, seed: string): string | null {
-  const iso = C.isoPeople();
-  if (!iso.canDraw()) return null; // (no GPU: the drawing)
-  if (!portraits.has(seed)) portraits.set(seed, iso.portrait(parseAvatar(seed), 128));
+  const pics = C.pictures();
+  if (!pics.canDraw()) return null; // (no GPU: the drawing)
+  if (!portraits.has(seed)) portraits.set(seed, pics.portrait(parseAvatar(seed), 128));
   return portraits.get(seed) ?? null;
 }
-const cache = new Map<string, string>();
-function portrait(P: People, seed: string): string {
-  let url = cache.get(seed);
-  if (!url) {
-    const svg = P.avatarSvg(parseAvatar(seed), "S", 0, false, 1).replace(
-      'viewBox="0 0 64 100"',
-      'viewBox="20 5 24 24"',
-    );
-    url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-    cache.set(seed, url);
-  }
-  return url;
-}
-
 export const STATUS_COLOR: Record<string, string> = { online: "var(--good)", dnd: "var(--rust)", away: "var(--muted)" };
 
 export function Face({
@@ -47,11 +32,10 @@ export function Face({
   status?: string;
   ring?: string; // e.g. the speaking glow
 }) {
-  // (a plain disc while the 3D people load; the drawing only without WebGL)
+  // (a plain disc while the 3D people load; flat in their colours without WebGL)
   const C = useChars();
   const pic = useMemo(() => (C ? portrait3d(C, avatar) : ""), [C, avatar]);
-  const P = usePeople(pic === null);
-  const src = useMemo(() => pic || (pic === null && P ? portrait(P, avatar) : ""), [pic, P, avatar]);
+  const src = useMemo(() => pic || (pic === null ? flatFigure(parseAvatar(avatar), true) : ""), [pic, avatar]);
   return (
     <span
       className="relative inline-block shrink-0 rounded-full"

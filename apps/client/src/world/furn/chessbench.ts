@@ -400,7 +400,6 @@ const rnd = (s: number) => {
 };
 
 export async function runChess(el: HTMLElement, o: ChessOpts): Promise<() => void> {
-  const items = await import("../art/items");
   const { World3 } = await import("../tp/build");
   const C = await import("../chars");
   await C.loadHero();
@@ -458,7 +457,7 @@ export async function runChess(el: HTMLElement, o: ChessOpts): Promise<() => voi
         },
       ]
     : [];
-  const world = new World3(items, map, placed, 8);
+  const world = new World3(map, placed, 8);
   scene.add(world.root);
   (window as unknown as { __world?: unknown }).__world = world;
 
@@ -761,7 +760,6 @@ export async function runChess(el: HTMLElement, o: ChessOpts): Promise<() => voi
     const { along, recline } = seatFit(SEAT, leg.thigh);
     const drop = m.sitDrop(SEAT.top);
     const fit = { drop, stand: leg.hipY, floor: 0, recline, ahead: 0, arms: null };
-    p.mo.v2 = true;
     const fx = Math.sin(p.yaw);
     const fz = Math.cos(p.yaw);
     const inp = {

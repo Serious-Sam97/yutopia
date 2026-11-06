@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { entry, isOpening, type ObjectKind, quarterYaw } from "@yutopia/shared";
 import { kindSolids, openingHole, type Solid3 } from "@yutopia/shared/shapes";
-import * as items from "../art/items";
 import { type Bounds3, KINDS, modelBounds } from "./model-bounds";
 
 // The drawing and the physics never drift apart (docs/plan/50-the-volume.md, A): each kind's 3D
@@ -70,7 +69,7 @@ test("every kind's shapes fit its 3D model, at every turn", () => {
       const o = { id: `${kind}-t`, kind, x: 3, y: 5, rot, props: {} as Record<string, unknown> };
       let model: Bounds3 | null = null;
       for (let v = 0; v < (entry(kind).variants ?? 1); v++)
-        model = union(model, modelBounds(items, { ...o, id: `${kind}-${v}`, props: { variant: v } }));
+        model = union(model, modelBounds({ ...o, id: `${kind}-${v}`, props: { variant: v } }));
       const shape = solidsBounds(kindSolids(o));
       assert.ok(model && shape, `${kind}: drawn and shaped`);
       // (a thing on the floor reaches it: legs drawn as ink lines aren't in the model's box)
@@ -92,7 +91,7 @@ test("every kind's shapes fit its 3D model, at every turn", () => {
 test("doors and windows: the model frames its wall's cut", () => {
   const bad: string[] = [];
   for (const kind of KINDS.filter(isOpening) as ObjectKind[]) {
-    const m = modelBounds(items, { id: `${kind}-t`, kind, x: 3, y: 5, yaw: quarterYaw(0) });
+    const m = modelBounds({ id: `${kind}-t`, kind, x: 3, y: 5, yaw: quarterYaw(0) });
     assert.ok(m, kind);
     const [h0, h1] = openingHole(kind);
     // (the frame round the hole: a little under a window's sill, over a door's head; a door's

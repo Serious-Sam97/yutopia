@@ -591,7 +591,6 @@ function Sheet({ q }: { q: URLSearchParams }) {
       const acts = mode.kind === "anim" ? ANIMS[mode.group] : [];
       const motions = acts.map((a, i) => {
         const m = new C.Motion3(i * 0.137 + 0.05);
-        m.v2 = !!a.v2;
         m.tension = a.tension ?? 0;
         return m;
       });
@@ -760,7 +759,6 @@ function Sheet({ q }: { q: URLSearchParams }) {
             let st = feels.get(i);
             if (!st) {
               const loco = new C.Locomotion(KH_FEEL);
-              loco.v2 = true;
               loco.seed = 2;
               st = { t: 0, v: 0, acc: 0, yaw: 0, loco, last: null };
               feels.set(i, st);

@@ -7,7 +7,6 @@ import {
   edgeAt,
   edgeInMap,
   HALF_WALL,
-  hWall,
   isFloor,
   isWallEdge,
   isWindow,
@@ -17,8 +16,6 @@ import {
   setEdge,
   spanOf,
   type TileMap,
-  tileAt,
-  vWall,
 } from "./map.ts";
 import { cellOf, hWallOf, vWallOf, wallOf } from "./structure/query.ts";
 

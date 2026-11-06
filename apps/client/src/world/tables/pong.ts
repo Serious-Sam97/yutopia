@@ -1,4 +1,4 @@
-import { quarterOf, toScreen, type WorldObjectDef } from "@yutopia/shared";
+import { quarterOf, type WorldObjectDef } from "@yutopia/shared";
 import {
   ballAt,
   flightEvents,
@@ -16,6 +16,7 @@ import {
 } from "@yutopia/shared/pong";
 import { TABLES, tableAway, tableCentre, tableHeading, tableZ, toTable, toWorld } from "@yutopia/shared/tables";
 import type { PongTable } from "@yutopia/state";
+import { panOf } from "../ear";
 import { hud } from "../store";
 import type { TableScene3 } from "../tp/tables3d";
 import type { TableHost } from "./pool";
@@ -777,8 +778,8 @@ export class PongTables {
     return Math.max(0, 1 - tableAway(v.def, me.x, me.y) / HEAR) * 0.9;
   }
   private pan(v: PView, me: Pt) {
-    const c = tableCentre(v.def);
-    return Math.max(-0.8, Math.min(0.8, (toScreen(c.x, c.y).x - toScreen(me.x, me.y).x) / 300));
+    // (left or right of me as the camera faces: world/ear.ts)
+    return Math.max(-0.8, Math.min(0.8, panOf(me, tableCentre(v.def))));
   }
 
   // a seat's racket now: mine, streamed, Vortex's (going for his shot), or at rest

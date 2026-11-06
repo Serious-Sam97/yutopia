@@ -112,8 +112,8 @@ interface Ctx {
   bodyMat?: THREE_NS.Material;
   flatMat?: THREE_NS.Material;
   cam: THREE_NS.Vector3;
-  /** the item art (the fire's benches are the office's): the game's, loaded with the park */
-  items?: typeof import("../art/items");
+  /** the kit (the fire's benches are the office's): the game's, loaded with the park */
+  native?: typeof import("../furn/native");
 }
 
 const H = TRACK_W / 2;
@@ -1027,7 +1027,7 @@ export function stageKarts(T3: THREE, scene: THREE_NS.Object3D, k: KartScene, ct
 
   // ── the paddock, the car park, the billboard on the county road (kart/park3d.ts); the lobby's desk ──
   {
-    const env = { T3, root, keep, tex, std, canvas, glows, night, padY, items: ctx.items };
+    const env = { T3, root, keep, tex, std, canvas, glows, night, padY, native: ctx.native };
     paddock3d(env);
     // the stands and their crowd (kart/park3d.ts, kart/crowd3d.ts)
     stands3d(env);

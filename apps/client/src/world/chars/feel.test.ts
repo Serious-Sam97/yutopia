@@ -27,7 +27,6 @@ const move = (o: Partial<Parameters<Locomotion["update"]>[1]> = {}) => ({
 });
 const running = (turn: number) => {
   const l = new Locomotion(KH_FEEL);
-  l.v2 = true;
   let p = l.update(1 / 60, move());
   for (let i = 0; i < 40; i++) p = l.update(1 / 60, move({ dist: 6 / 60, speed: 6, ahead: 6, turn }));
   return p.pose;
@@ -46,7 +45,6 @@ test("the feel: running round to the right she leans right and looks right; to t
 test("the feel: braking hard from a sprint, a skid; driving up from still, short quick steps", async () => {
   await loadHero();
   const l = new Locomotion(KH_FEEL);
-  l.v2 = true;
   for (let i = 0; i < 60; i++) l.update(1 / 60, move({ dist: 8.2 / 60, speed: 8.2, ahead: 8.2 }));
   let v = 8.2;
   for (let i = 0; i < 12; i++) {
@@ -55,7 +53,6 @@ test("the feel: braking hard from a sprint, a skid; driving up from still, short
   }
   assert.ok((l as unknown as { skidW: number }).skidW > 0.5, "skidding");
   const s = new Locomotion(KH_FEEL);
-  s.v2 = true;
   s.update(1 / 60, move());
   for (let i = 0; i < 6; i++) s.update(1 / 60, move({ dist: 2 / 60, speed: 2, ahead: 2, accel: 28 }));
   assert.ok((s as unknown as { driveW: number }).driveW > 0.5, "driving");
@@ -67,7 +64,6 @@ test("the feet on the ground: a step up under one foot raises just it; a step do
   // standing a second over ground `g` (x to the left): the last pose
   const stand = (g?: (x: number, z: number) => number) => {
     const l = new Locomotion(KH_FEEL);
-    l.v2 = true;
     let out = l.update(1 / 60, move({ ground: g }), H.idle2Pose(0, 0, 0, true));
     for (let i = 0; i < 60; i++) out = l.update(1 / 60, move({ ground: g }), H.idle2Pose(i / 60, 0, 0, true));
     return out;

@@ -1,5 +1,5 @@
 import { entry, quarterOf } from "./catalog.ts";
-import type { Point } from "./iso.ts";
+import type { Point } from "./geom.ts";
 import type { MapDef } from "./map.ts";
 
 // A body's size and pace, the land round a floor, and the seats things have (docs/plan/72 phase 7:
