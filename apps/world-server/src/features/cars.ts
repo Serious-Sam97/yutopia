@@ -214,6 +214,8 @@ registerFeature((room: WorldRoom) => {
     if (seat === 0) {
       l.last = null; // (a new driver: their first state is believed where the car is)
       l.lastAt = Date.now();
+      // (their sim clock starts again from 0: everyone else starts its playback again)
+      l.veh.jump = (l.veh.jump + 1) & 255;
     }
   });
 
@@ -256,6 +258,9 @@ registerFeature((room: WorldRoom) => {
       seq,
       at: now,
     });
+    // (its sim clock: a whole number of ms, or 0 from a client from before it)
+    const st = Number(m.st);
+    v.st = Number.isFinite(st) && st >= 0 ? Math.min(st, 0xffffffff) >>> 0 : 0;
     const f = forward(v);
     v.a = Math.atan2(f.z, f.x);
     v.v = v.vx * Math.cos(v.a) + v.vz * Math.sin(v.a);
@@ -379,6 +384,7 @@ registerFeature((room: WorldRoom) => {
       v: 0,
       at: now,
     });
+    v.jump = (v.jump + 1) & 255; // (drawn there at once by everyone)
     // (its driver's next state is believed from here)
     l.last = null;
     l.lastAt = now;
@@ -1028,6 +1034,9 @@ registerFeature((room: WorldRoom) => {
             v.y = heightAt(v.x, v.z) + l.spec.cog;
             v.v = v.vx * Math.cos(v.a) + v.vz * Math.sin(v.a);
             v.at = now;
+            // (a new state for everyone watching it roll: on its clock, as a driver's would be)
+            v.seq = (v.seq + 1) >>> 0;
+            v.st = (v.st + Math.round(dt * 1000)) >>> 0;
           } else {
             v.vx = v.vz = v.vy = v.v = 0;
             v.rpm = l.seats.some(Boolean) ? v.rpm : 0;

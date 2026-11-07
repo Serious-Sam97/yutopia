@@ -457,6 +457,10 @@ export class Vehicle extends Schema {
   @type("uint8") colour = 0;
   @type("uint32") seq = 0;
   @type("float64") at = 0; // when this state came in (server ms)
+  // the driver's sim clock (ms: shared car/net.ts CarWire.st) — everyone else plays the car back on it;
+  // a jump: the server put it somewhere (pulled out, a new driver) — drawn there at once, not eased to
+  @type("uint32") st = 0;
+  @type("uint8") jump = 0;
   // what it carries from drive to drive (saved on its object): the tank (0..1), the dirt on it
   // (0..1), its dents ("front,rear,left,right", each 0..1); being filled at a pump
   @type("float32") fuel = 0.7;

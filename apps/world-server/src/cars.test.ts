@@ -122,7 +122,11 @@ test("into a lot car, driven, a passenger beside, out — and it's parked where 
     fl: 1024,
     slip: 0,
     fuel: 40,
+    st: seq * 50 + 1, // (the driver's sim clock)
   });
+  // a new driver: everyone watching starts its playback again (client car/playback.ts)
+  assert.ok(v().jump >= 1, "a new driver is a jump");
+  const jumped = v().jump;
   for (let i = 1; i <= 40; i++) {
     x += ca * 0.25;
     z += sa * 0.25;
@@ -131,6 +135,8 @@ test("into a lot car, driven, a passenger beside, out — and it's parked where 
   }
   await waitFor(() => v().seq === 40);
   assert.ok(Math.hypot(v().x - x, v().z - z) < 0.01, "it is where the driver says");
+  assert.equal(v().st, 40 * 50 + 1, "on the driver's clock");
+  assert.equal(v().jump, jumped, "a passenger getting in isn't a jump");
   assert.ok(Math.abs(me(a).x - x) < 2.5, "the driver is carried in it");
   // faster than any car goes: believed all the same (no put-backs — the user's call, 2026-10-28);
   // only a state that isn't numbers is let go
@@ -297,6 +303,7 @@ test("stuck: pulled out to a clear spot near by (the server's pick), not again s
   // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
   const v = (): any => r.state.vehicles.get(vid);
   const from = { x: v().x, z: v().z };
+  const jumped = v().jump;
   let snap: { x: number; z: number } | null = null;
   let why = "";
   r.onMessage("car:snap", (m: { x: number; z: number }) => {
@@ -311,6 +318,7 @@ test("stuck: pulled out to a clear spot near by (the server's pick), not again s
   const d = Math.hypot(to.x - from.x, to.z - from.z);
   assert.ok(d > 2.9 && d <= 30, `pulled ${d.toFixed(1)} m`);
   await waitFor(() => Math.hypot(v().x - to.x, v().z - to.z) < 0.01); // (the car there for everyone)
+  assert.equal(v().jump, (jumped + 1) & 255, "drawn there at once by everyone (a jump), not eased to");
   r.send("car:unstick", {});
   await waitFor(() => why === "soon");
   r.send("car:leave", {});
