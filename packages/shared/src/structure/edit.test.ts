@@ -172,6 +172,22 @@ test("a wall's height and thickness: drawn with them, changed later keeping its 
   assert.deepEqual(wallsSet(after, 3, [{ id: "t0", height: 1.1 }]), { why: "as it is" });
   assert.deepEqual(wallsSet(after, 3, [{ id: "nope", height: 2 }]), { why: "no such wall" });
   assert.deepEqual(wallsSet(after, 3, [{ id: "t0", height: 9 }]), { why: "not a wall's height" });
+  // (a door in it, 2.1 m up: no lower than that — higher's fine)
+  const door = (id: string) => (id === "t0" ? 2.1 : 0);
+  const tall = applyOps(after, [set.op]);
+  assert.deepEqual(wallsSet(tall, 3, [{ id: "t0", height: 1.1 }], door), { why: "lower than what's set in it" });
+  assert.ok("op" in wallsSet(tall, 3, [{ id: "t0", height: 2.4 }], door));
+  // (on a mezzanine 1.5 up: its top under the ceiling)
+  const mezz = { ...after, walls: after.walls.map((q) => (q.id === "t0" ? { ...q, base: q.base + 1.5 } : q)) };
+  assert.deepEqual(wallsSet(mezz, 3, [{ id: "t0", height: WALL_H }]), { why: "too high up there" });
+  // (a low wall on the floor under that rail, on its line: not there already — the rail's up above)
+  const under = wallsEdit(mezz, 3, [{ a: [20, 10], b: [24, 10], front: "p", height: 1.1 }], [], () => "low");
+  assert.ok("op" in under && under.added.length === 1, JSON.stringify(under));
+  // (and on the floor where one stands already: there already)
+  assert.deepEqual(
+    wallsEdit(after, 3, [{ a: [20, 10], b: [24, 10], front: "p", height: 1.1 }], [], () => "x"),
+    { why: "there already" },
+  );
 });
 
 test("a face painted: the back alone, then the front keeping the back; glass has no sides", async () => {

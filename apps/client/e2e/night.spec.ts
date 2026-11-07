@@ -58,10 +58,18 @@ test("the mood: the same storm for both at once; A's flashlight in B's view at n
     await goTo(a, G(-155, 1));
     await walkTo(a, G(-154, 2).x, G(-154, 2).y, 20_000);
     for (const p of [a, b]) await holdHour(p, 23);
+    // (a torch is kept on between visits: left on by an earlier run, off first)
+    for (const p of [a, b])
+      await p.evaluate(() => {
+        const w = (window as any).__yutopia;
+        if (w.room.state.players.get(w.room.sessionId)?.torch) w.toggleTorch();
+      });
+    await b.waitForTimeout(800);
     const beamInB = () =>
       b.evaluate(() => {
         const c = (window as any).__yutopia;
-        return c.tp.torch3.some((t: any) => t.on && t.who !== c.room.sessionId);
+        // (someone's: the night guard's torch, an NPC's, isn't)
+        return c.tp.torch3.some((t: any) => t.on && t.who !== c.room.sessionId && c.room.state.players.has(t.who));
       });
     expect(await beamInB(), "no torch on yet").toBe(false);
     await a.evaluate(() => (window as any).__yutopia.toggleTorch());

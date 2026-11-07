@@ -55,6 +55,11 @@ test("Rex lost: Bia sees him wander, Ana's told she saw him, Ana finds him", asy
   await enter(ana, await token(ANA));
   await enter(bia, await token(BIA));
   await ana.waitForFunction(() => !!(window as any).__yutopia.cars, null, { timeout: 60_000 });
+  // (Bia's own walker up before she's sent anywhere: one made after a teleport stands where she
+  // arrived and says so, and the server takes it)
+  await bia.waitForFunction(() => !!(window as any).__yutopia?.tp && !!(window as any).__yutopia?.walker, null, {
+    timeout: 60_000,
+  });
   await watchToasts(ana);
   try {
     await release(ana);
@@ -90,6 +95,11 @@ test("Rex lost: Bia sees him wander, Ana's told she saw him, Ana finds him", asy
         return Math.hypot(a.x - b.x, a.y - b.y);
       })
       .toBeLessThan(4);
+    await bia.waitForTimeout(2000);
+    {
+      const [a, b] = [await me(ana), await me(bia)];
+      expect(Math.hypot(a.x - b.x, a.y - b.y), "Bia stays where she was sent").toBeLessThan(4);
+    }
     // Ana off to the far end of the world, into a car, and calls him: he's lost
     const r0 = (await petOf(ana, id)) as { x: number; y: number };
     const far = await ana.evaluate((at) => {
@@ -112,6 +122,18 @@ test("Rex lost: Bia sees him wander, Ana's told she saw him, Ana finds him", asy
     await expect.poll(async () => (await me(ana)).busy, { timeout: 10_000 }).toMatch(/^drive:car:/);
     await call(ana, id, "follow");
     await expect.poll(async () => (await petOf(bia, id))?.mode, { timeout: 40_000 }).toBe("lost");
+    // (he ran after her car till he was lost, ~130 m on: Bia out to where he is — she's a builder,
+    // "Go there" — near enough to see him)
+    {
+      const r = (await petOf(bia, id)) as { x: number; y: number };
+      await bia.evaluate((p) => (window as any).__yutopia.teleport({ x: p.x + 4, y: p.y, level: 0 }), r);
+      await expect
+        .poll(async () => {
+          const [b, q] = [await me(bia), (await petOf(bia, id)) as { x: number; y: number }];
+          return Math.hypot(b.x - q.x, b.y - q.y);
+        })
+        .toBeLessThan(12);
+    }
     // Bia sees him wander off (his tag still Ana's dog's), and Ana's told she saw him
     const seenAt = (await petOf(bia, id)) as { x: number; y: number };
     await expect

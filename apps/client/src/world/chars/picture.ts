@@ -79,7 +79,12 @@ class Pictures {
   private look(avatar: AvatarLayers, lk: string, lod: 0 | 1 = 1): Look {
     const k = lod === 1 ? lk : `${lk}|L${lod}`;
     let l = this.looks.get(k);
-    if (!l) {
+    if (l) {
+      // (the last used last: the one let go is the longest unused — a turntable drawn every frame
+      // outlives a run of the look's option thumbs)
+      this.looks.delete(k);
+      this.looks.set(k, l);
+    } else {
       l = { model: new PersonModel(this.factory, avatar, lod) };
       this.looks.set(k, l);
       if (this.looks.size > LOOKS) {

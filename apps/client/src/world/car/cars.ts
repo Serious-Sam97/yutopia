@@ -50,6 +50,7 @@ import {
   type Texture,
   type Group as TGroup,
   Vector3,
+  type WebGLRenderTarget,
 } from "three";
 import { DealerPanel } from "@/components/hud/DealerPanel";
 import { extraPanels } from "@/components/hud/panels";
@@ -368,6 +369,7 @@ export class Cars {
   private live = new Map<string, LiveView>();
   private farMats = new Map<number, Material>();
   private env: Texture | null = null;
+  private envTarget: WebGLRenderTarget | null = null;
   // (kept from one renewal to the next: a new generator and dome each time linked
   // their shaders again, a hitch every 20 s)
   private envMake: { pm: PMREMGenerator; for: ThirdPersonView["renderer"]; scene: Scene; dome: Mesh } | null = null;
@@ -1057,8 +1059,12 @@ export class Cars {
     u.low.value.set("#dfe5ea").lerp(new Color("#0b1016"), n);
     // (in the pitch dark, nothing up there to shine in the paint)
     for (const c of [u.top.value, u.hor.value, u.low.value]) c.multiplyScalar(1 - 0.92 * dark);
-    const next = pm.fromScene(scene, 0.04, 0.1, 100).texture;
-    const old = this.env;
+    // (the render target it's drawn into let go whole with it — its texture alone left the target on
+    // the GPU, one every 20 s: the memory checker's soak, plan 72 phase 13)
+    const rt = pm.fromScene(scene, 0.04, 0.1, 100);
+    const next = rt.texture;
+    const old = this.envTarget;
+    this.envTarget = rt;
     this.env = next;
     for (const p of this.parked.values()) p.full?.setEnv(next);
     for (const l of this.live.values()) l.model.setEnv(next);
@@ -2399,7 +2405,8 @@ export class Cars {
     for (const b of this.air) b.mat.dispose(); // (their cone's the flashlight's: not ours to drop)
     this.radio.stop();
     this.root.removeFromParent();
-    this.env?.dispose();
+    this.envTarget?.dispose();
+    this.envTarget = null;
     this.dropEnvMake();
     this.hideHud();
   }

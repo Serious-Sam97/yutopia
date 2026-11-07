@@ -62,6 +62,34 @@ test("a click paints the stretch between the walls meeting it; a drag, from wher
   assert.deepEqual(moved, { wall: east?.id, at: 2 });
 });
 
+test("a stretch ending in a door: cut at the door's nearer edge, the door kept in one piece", () => {
+  // (a free wall — off the cells' edges: its ends aren't rounded — 9 m long, a door from 2.5 to 3.5
+  // along it; painted 0–3.2: the cut moves to 3.5, the door's nearer edge)
+  const f = { ...s, walls: [W("f", [0.5, 0.5], [9.5, 0.5])] };
+  const door = () => [[2.5, 3.5]] as const;
+  const r = wallsPaint(f, 0, [{ id: "f", side: 1, from: 0, to: 3.2, mat: "w" }], id, door);
+  assert.ok("op" in r);
+  const ps = r.moves.get("f") ?? [];
+  assert.deepEqual(
+    ps.map((p) => [p.from, p.to]),
+    [
+      [0, 3.5],
+      [3.5, 9],
+    ],
+  );
+  assert.deepEqual(movedOn(r.moves, { wall: "f", at: 3 }), { wall: ps[0].id, at: 3 }, "the door on the first piece");
+  // (from 2.7: nearer its start, the cut at 2.5)
+  const r2 = wallsPaint(f, 0, [{ id: "f", side: 1, from: 2.7, to: 9, mat: "w" }], id, door);
+  assert.ok("op" in r2);
+  assert.deepEqual(
+    (r2.moves.get("f") ?? []).map((p) => [p.from, p.to]),
+    [
+      [0, 2.5],
+      [2.5, 9],
+    ],
+  );
+});
+
 test("all of a face: the wall kept whole; painted as it is: nothing; glass: no sides", () => {
   const r = wallsPaint(s, 0, [{ id: "west", side: -1, from: 0, to: 6, mat: "k" }], id);
   assert.ok("op" in r);

@@ -10,8 +10,9 @@ import { ANA, enter, test, token } from "./helpers";
 const GPU = process.env.YUTOPIA_GPU === "1";
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 const G = (x: number, y: number) => ({ x, y });
-// the driveway's lamp at 100 m (shared grounds.ts LAMPS: nothing else within 4 m, the land flat)
-const LAMP = { x: -19.44, z: -102.99 };
+// the driveway's lamp at 100 m (shared grounds.ts LAMPS: nothing else within 4 m, the land flat) —
+// where the Grounds have it now (god mode may have moved it)
+const LAMP_KEY = "lamp:driveway:100";
 // the company's fence along z −360, 1.2 m
 const FENCE_Z = -360;
 
@@ -55,6 +56,10 @@ test("Flowmotion: a lamp post swung round (the camera still), the fence ground a
     const r = (window as any).__yutopia.room;
     for (const k of ["fly", "clip", "fast", "hidden"]) r.send("mod:power", { power: k, on: false });
   });
+  const LAMP: { x: number; z: number } = await page.evaluate((key) => {
+    const l = (window as any).__yutopia.G.LAMPS.find((q: any) => q.key === key);
+    return { x: l.x, z: l.z };
+  }, LAMP_KEY);
   await page.evaluate((p) => (window as any).__yutopia.teleport({ ...p, level: 0 }), G(LAMP.x - 3, LAMP.z));
   await page.waitForTimeout(4000);
   await page.waitForFunction(

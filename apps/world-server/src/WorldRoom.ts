@@ -18,7 +18,6 @@ import {
   DECOR,
   doorStartState,
   EMOTES,
-  edgeAt,
   edgeKey,
   entry,
   FOG_KINDS,

@@ -88,10 +88,26 @@ test("the shadowed: out of the dark, at you, burnt under a focused torch", async
       const w = (window as any).__yutopia;
       const me = w.walker.where();
       let best: any = null;
+      // (kept on one: the most burnt, then the nearest — three circling at arm's length, the nearest
+      // changes every moment, and the burn starts again on each)
+      const rank = (s: any) => s.sh * 10 + Math.hypot(s.x - me.x, s.y - me.y);
       w.room.state.shadows?.forEach((s: any) => {
-        if (!best || Math.hypot(s.x - me.x, s.y - me.y) < Math.hypot(best.x - me.x, best.y - me.y)) best = s;
+        if (s.s !== 9 && (!best || rank(s) < rank(best))) best = s;
       });
-      if (best) w.tp.yaw = Math.atan2(best.y - me.y, best.x - me.x);
+      // (the camera's forward turned onto it, and tipped to its chest: the body faces where the
+      // camera looks — plan 56 — and the aimed beam follows the look up and down)
+      if (best) {
+        const cam = w.tp.camera;
+        const e = cam.matrixWorld.elements;
+        const fwd = Math.atan2(-e[10], -e[8]);
+        const want = Math.atan2(best.y - cam.position.z, best.x - cam.position.x);
+        w.tp.yaw += Math.atan2(Math.sin(want - fwd), Math.cos(want - fwd));
+        // (the look's pitch is the beam's, from the lens in the hand — shared beam.ts BEAM.held —
+        // not the camera's: at arm's length the camera's angle down at the chest misses low)
+        const dist = Math.hypot(best.x - me.x, best.y - me.y);
+        const elev = Math.asin(Math.max(-1, Math.min(1, -e[9])));
+        w.tp.pitch -= Math.atan2(1 - 1.05, dist) - elev;
+      }
       const p = w.room.state.players.get(w.room.sessionId);
       return best
         ? {
@@ -104,7 +120,7 @@ test("the shadowed: out of the dark, at you, burnt under a focused torch", async
         : null;
     });
   let burnt = false;
-  for (let i = 0; i < 80 && !burnt; i++) {
+  for (let i = 0; i < 200 && !burnt; i++) {
     // (kept on her feet: the others strike while she burns this one)
     if (i % 10 === 0) await page.evaluate(() => (window as any).__yutopia.room.send("mod:refill", {}));
     const s = await aim();

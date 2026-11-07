@@ -13,6 +13,11 @@
 //   node --experimental-strip-types e2e/memcheck.mts [cycles=4] [out.json]
 //   PORT=2674; BOTS=12 (people at once; a third of them leave and come back each cycle); IDLE=20 (s);
 //   WORLD=<world.json[.gz]> (e.g. prod's); NO_ROAD=1 (skip the long road)
+//   SERVER_DIFF=1: the world-server's heap diffed even when it's within its budget; SERVER_FROM=n:
+//   from cycle n (default 1); YUTOPIA_CHUNK_CAP=n: its land cache that small (full early)
+//   MEM_FAKE_API=1: no API — answered as the smoke e2e's (e2e/ci/api.ts), the page on Low (CI's
+//   software GL): the nightly job (.github/workflows/memory.yml) against the built page — run by tsx
+//   (the fake API reads the shared package's index, past what node's type stripping takes)
 // (The dev stack's own `next dev` leaks on its own — memory note — and isn't measured: only the page.)
 import { type ChildProcess, spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -39,20 +44,26 @@ if (process.env.WORLD) {
   worldFile = join(mkdtempSync(join(tmpdir(), "yutopia-mem-")), "world.json");
   writeFileSync(worldFile, process.env.WORLD.endsWith(".gz") ? gunzipSync(raw) : raw);
 }
-const server: ChildProcess = spawn("npx", ["tsx", "src/index.ts"], {
-  cwd: resolve(import.meta.dirname, "../../world-server"),
-  env: {
-    ...process.env,
-    ...(worldFile ? { YUTOPIA_WORLD_FILE: worldFile } : {}),
-    NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --expose-gc`.trim(),
-    PORT: String(port),
-    YUTOPIA_OFFLINE: "1",
-    YUTOPIA_WORLD_SECRET: "mem",
-    YUTOPIA_INTERNAL_SECRET: "mem",
-    YUTOPIA_WEATHER: "winter",
+// (node itself, tsx as its loader — one process: its inspector, on port + 1000, is the server's own,
+// for heap snapshots)
+const inspect = port + 1000;
+const server: ChildProcess = spawn(
+  process.execPath,
+  ["--expose-gc", `--inspect=127.0.0.1:${inspect}`, "--import", "tsx", "src/index.ts"],
+  {
+    cwd: resolve(import.meta.dirname, "../../world-server"),
+    env: {
+      ...process.env,
+      ...(worldFile ? { YUTOPIA_WORLD_FILE: worldFile } : {}),
+      PORT: String(port),
+      YUTOPIA_OFFLINE: "1",
+      YUTOPIA_WORLD_SECRET: "mem",
+      YUTOPIA_INTERNAL_SECRET: "mem",
+      YUTOPIA_WEATHER: "winter",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
   },
-  stdio: ["ignore", "pipe", "pipe"],
-});
+);
 await new Promise<void>((done, fail) => {
   const t = setTimeout(() => fail(new Error("the world-server didn't start")), 90_000);
   server.stdout?.on("data", (b: Buffer) => {
@@ -61,7 +72,9 @@ await new Promise<void>((done, fail) => {
       done();
     }
   });
-  server.stderr?.on("data", (b: Buffer) => process.stderr.write(`  [server] ${b}`));
+  server.stderr?.on("data", (b: Buffer) => {
+    if (!/Debugger listening|For help, see/.test(b.toString())) process.stderr.write(`  [server] ${b}`);
+  });
 });
 console.log(`world-server on :${port}`);
 const serverCounts = async (): Promise<Record<string, number>> => {
@@ -80,6 +93,43 @@ const serverCounts = async (): Promise<Record<string, number>> => {
     handlers: m.room_handlers ?? 0,
   };
 };
+
+/** The world-server's heap, by kind (its inspector: a snapshot, after a GC). */
+async function serverSnapshot(): Promise<Map<string, { n: number; size: number }>> {
+  const [t] = (await (await fetch(`http://127.0.0.1:${inspect}/json/list`)).json()) as {
+    webSocketDebuggerUrl: string;
+  }[];
+  const ws = new WebSocket(t.webSocketDebuggerUrl);
+  await new Promise((r, f) => {
+    ws.onopen = r;
+    ws.onerror = f;
+  });
+  const chunks: string[] = [];
+  let id = 0;
+  const call = (method: string) =>
+    new Promise<void>((done) => {
+      const my = ++id;
+      ws.onmessage = (e) => {
+        const m = JSON.parse(String(e.data));
+        if (m.method === "HeapProfiler.addHeapSnapshotChunk") chunks.push(m.params.chunk);
+        else if (m.id === my) done();
+      };
+      ws.send(JSON.stringify({ id: my, method }));
+    });
+  await call("HeapProfiler.enable");
+  await call("HeapProfiler.collectGarbage");
+  await call("HeapProfiler.takeHeapSnapshot");
+  ws.close();
+  return summarize(JSON.parse(chunks.join("")));
+}
+/** What grew between two heap summaries, the most first. */
+function grewOf(a: Map<string, { n: number; size: number }>, b: Map<string, { n: number; size: number }>) {
+  return [...b]
+    .map(([k, v]) => ({ k, dn: v.n - (a.get(k)?.n ?? 0), ds: v.size - (a.get(k)?.size ?? 0) }))
+    .filter((d) => d.ds > 0)
+    .sort((p, q) => q.ds - p.ds)
+    .slice(0, 20);
+}
 
 // ── people coming and going: plain clients walking about near where they arrive ──
 interface Bot {
@@ -122,31 +172,42 @@ let browser: Awaited<ReturnType<typeof chromium.launch>> | null = null;
 let failed = false;
 try {
   for (let i = 0; i < bots; i++) await arrive();
-  const ctx = await request.newContext();
-  const tok = (
-    await (
-      await ctx.post(`${api}/api/login`, {
-        data: { email: "cai@yutopia.test", password: pass },
-        headers: { Accept: "application/json" },
-      })
-    ).json()
-  ).token;
+  // (on a Mac the GPU through Metal; elsewhere — CI — the browser's own software GL)
   browser = await chromium.launch({
-    args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", "--enable-precise-memory-info"],
+    args: [
+      ...(process.platform === "darwin" ? ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] : []),
+      "--enable-precise-memory-info",
+    ],
   });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   page.on("pageerror", (e) => console.log("  page error:", e.message));
-  await page.route("**/api/session", async (route) => {
-    const res = await route.fetch();
-    const j = await res.json();
-    j.worldUrl = `ws://localhost:${port}`;
-    j.worldToken = "dev:912:Cai:member,builder,admin";
-    await route.fulfill({ response: res, json: j });
-  });
-  await page.addInitScript((t) => {
-    localStorage.setItem("yutopia:token", t);
-    localStorage.setItem("yutopia:prefs", JSON.stringify({ quality: "high" }));
-  }, tok);
+  if (process.env.MEM_FAKE_API) {
+    // (the smoke's fake API, its session into our world-server)
+    process.env.SMOKE_WORLD_PORT = String(port);
+    const { fakeApi } = await import("./ci/api.ts");
+    await fakeApi(page, { id: 912, name: "Cai", roles: "member,builder,admin" });
+  } else {
+    const ctx = await request.newContext();
+    const tok = (
+      await (
+        await ctx.post(`${api}/api/login`, {
+          data: { email: "cai@yutopia.test", password: pass },
+          headers: { Accept: "application/json" },
+        })
+      ).json()
+    ).token;
+    await page.route("**/api/session", async (route) => {
+      const res = await route.fetch();
+      const j = await res.json();
+      j.worldUrl = `ws://localhost:${port}`;
+      j.worldToken = "dev:912:Cai:member,builder,admin";
+      await route.fulfill({ response: res, json: j });
+    });
+    await page.addInitScript((t) => {
+      localStorage.setItem("yutopia:token", t);
+      localStorage.setItem("yutopia:prefs", JSON.stringify({ quality: "high" }));
+    }, tok);
+  }
   await page.goto(`${base}/`);
   await page.waitForFunction(
     () => {
@@ -197,6 +258,7 @@ try {
     return { ...w.meAt(), level: w.level };
   });
   let first: Map<string, { n: number; size: number }> | null = null;
+  let serverFirst: Map<string, { n: number; size: number }> | null = null;
   for (let c = 1; c <= cycles; c++) {
     // up and down the floors
     for (const level of [0, 1, 2, 3, 4]) await go({ ...home, level }, 2500);
@@ -224,6 +286,7 @@ try {
     const row = { cycle: c, browser: await browserCounts(), server: await serverCounts() };
     rows.push(row);
     console.log(JSON.stringify(row, (_, v) => (typeof v === "number" ? Math.round(v * 10) / 10 : v)));
+    if (c === Number(process.env.SERVER_FROM ?? 1)) serverFirst = await serverSnapshot();
     if (c === 1) {
       first = await snapshot();
       // (what the page's heap is, the biggest kinds)
@@ -281,14 +344,13 @@ try {
   }
   failed = crossed.length > 0;
   if (crossed.includes("browser.heapMB") && first) {
-    const last = await snapshot();
     console.log("what grew in the page's heap (by kind, first cycle → last):");
-    const grew = [...last]
-      .map(([k, v]) => ({ k, dn: v.n - (first?.get(k)?.n ?? 0), ds: v.size - (first?.get(k)?.size ?? 0) }))
-      .filter((d) => d.ds > 0)
-      .sort((p, q) => q.ds - p.ds)
-      .slice(0, 20);
-    for (const d of grew) console.log(`  +${(d.ds / 1e6).toFixed(2)} MB  +${d.dn}  ${d.k}`);
+    for (const d of grewOf(first, await snapshot())) console.log(`  +${(d.ds / 1e6).toFixed(2)} MB  +${d.dn}  ${d.k}`);
+  }
+  if ((crossed.includes("server.heapMB") || process.env.SERVER_DIFF) && serverFirst) {
+    console.log("what grew in the world-server's heap (by kind, first cycle → last):");
+    for (const d of grewOf(serverFirst, await serverSnapshot()))
+      console.log(`  +${(d.ds / 1e6).toFixed(2)} MB  +${d.dn}  ${d.k}`);
   }
   if (outFile) writeFileSync(outFile, JSON.stringify({ rows, crossed }, null, 1));
   console.log(failed ? `memcheck: OVER — ${crossed.join(", ")}` : "memcheck: ok");

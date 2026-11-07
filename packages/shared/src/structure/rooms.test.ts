@@ -85,6 +85,20 @@ test("a box closed in the open floor's corner: a room found there, the rest stay
   assert.equal(roomsAfterWalls(s, after(s, [wall("z", [2, 2], [3, 3])]), 0, key), null);
 });
 
+test("a closet closed on an open floor with a wall-less room in it: the closet's still a room", () => {
+  // (the open floor 20 × 10, a room with no walls of its own in its middle — where the floor's own
+  // sample point falls — and a closet walled off in the corner)
+  const s = st(box("o", 0, 0, 20, 10), [room("zone", ring(8, 3, 12, 7))]);
+  const a = after(s, [wall("p", [4, 0], [4, 4]), wall("q", [4, 4], [0, 4])]);
+  const r = roomsAfterWalls(s, a, 0, key);
+  assert.ok(r, "a room found");
+  assert.equal(r.found.length, 1);
+  const rooms = applyOps(a, [r.op]).rooms;
+  const closet = rooms.find((q) => q.key === r.found[0]);
+  assert.equal(closet && area(closet.outline), 16, "the 4 × 4 corner");
+  assert.deepEqual(rooms.find((q) => q.key === "zone")?.outline, ring(8, 3, 12, 7), "the zone as it was");
+});
+
 test("a wall taken away between two rooms: both stay as they were", () => {
   const walls = [...box("o", 0, 0, 10, 6), wall("x", [4, 0], [4, 6])];
   const s = st(walls, [room("A", ring(0, 0, 4, 6)), room("B", ring(4, 0, 10, 6))]);

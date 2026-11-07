@@ -164,6 +164,9 @@ test("both faces of a wall: a material each, things on either, anywhere on it", 
       wallView: "up",
     });
     await page.waitForFunction(() => !!(window as any).__yutopia.build, null, { timeout: 15_000 });
+    // (build mode takes the camera back to me: held again, low and back, the wall's high spot in view)
+    await holdCamera(page, { at: { x: x + 1, y: y + 1.5 }, pitch: 0.45, dist: 6 });
+    await page.waitForTimeout(900);
     const before = new Set(await page.evaluate(() => [...(window as any).__yutopia.room.state.objects.keys()]));
     const p = await at(page, x + 0.75, y + 0.1, 2.45);
     await page.mouse.move(p.x - 30, p.y - 30);

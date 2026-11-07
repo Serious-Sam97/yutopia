@@ -1533,13 +1533,11 @@ export class WorldController {
           const every = [...this.objs.values()].map((o) => model.getObject(o.id) ?? o);
           const all = every.filter((o) => !this.cars || o.kind !== "car");
           tp.structure = this.structure;
-          // (the parked cars still solid: the physics has every thing — tp/physics3d.ts)
-          tp.update(
-            this.building,
-            look?.hidden.size ? all.filter((o) => !look.hidden.has(o.id)) : all,
-            this.level,
-            every.filter(notDriven),
-          );
+          // (the parked cars still solid: the physics has every thing — tp/physics3d.ts — but what's in
+          // my hand in build mode, neither drawn nor solid where it was)
+          const out = (list: WorldObjectDef[]) =>
+            look?.hidden.size ? list.filter((o) => !look.hidden.has(o.id)) : list;
+          tp.update(this.building, out(all), this.level, out(every.filter(notDriven)));
         }
       }
       lap = perf.lap("tp.update", lap);

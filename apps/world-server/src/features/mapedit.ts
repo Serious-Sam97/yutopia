@@ -29,6 +29,7 @@ import {
   applyOps,
   floorPieces,
   footprintRows,
+  freeCuts,
   movedOn,
   NEW_ROOM,
   onOf,
@@ -146,7 +147,7 @@ registerFeature((room: WorldRoom) => {
     }
     // (walls that are there changed — their height, their thickness — or walls drawn and taken away)
     const r = set.length
-      ? wallsSet(room.structure, level, set)
+      ? wallsSet(room.structure, level, set, (id) => Math.max(0, ...freeCuts(objects(), id).map((c) => c.z1)))
       : wallsEdit(room.structure, level, add, remove, newWallId);
     if ("why" in r) return warn(client, `That wall can't go: ${r.why}.`);
     // (the rooms its walls close round now: found, split — phase 11.5)
@@ -200,7 +201,11 @@ registerFeature((room: WorldRoom) => {
       }));
     stretches = stretches.filter((q) => Number.isFinite(q.from) && Number.isFinite(q.to));
     if (!stretches.length) return;
-    const r = wallsPaint(room.structure, level, stretches, newWallId);
+    // (its openings kept whole: a stretch's end in a door is moved to the door's edge)
+    const things = [...objects()];
+    const r = wallsPaint(room.structure, level, stretches, newWallId, (id) =>
+      freeCuts(things, id).map((c) => [c.u0, c.u1] as const),
+    );
     if ("why" in r) return r.why === "as it is" ? undefined : warn(client, `Can't paint that: ${r.why}.`);
     room.applyStruct([r.op]);
     for (const o of objects()) {

@@ -141,7 +141,12 @@ export function wallsEdit(
       isArc(w) &&
       ((near(w.a, d.a) && near(w.b, d.b) && Math.abs((w.bow ?? 0) - bow) < 0.01) ||
         (near(w.a, d.b) && near(w.b, d.a) && Math.abs((w.bow ?? 0) + bow) < 0.01));
-    const parts: [XY, XY][] = bow ? (standing.some(same) ? [] : [[d.a, d.b]]) : uncovered(standing, d.a, d.b);
+    // (only walls up where it is stand in its way: a low wall under a mezzanine's rail on its line isn't
+    // "there already")
+    const z0 = f.z + (d.over ?? 0);
+    const z1 = z0 + (d.height ?? WALL_H);
+    const there = standing.filter((w) => w.base < z1 - 1e-3 && w.base + w.height > z0 + 1e-3);
+    const parts: [XY, XY][] = bow ? (there.some(same) ? [] : [[d.a, d.b]]) : uncovered(there, d.a, d.b);
     for (const [a, b] of parts) {
       const w: Wall = {
         id: newId(),
@@ -164,7 +169,13 @@ export function wallsEdit(
 
 /** The operation that changes walls that are there (their height, their thickness; each keeps its
  *  id, so what hangs on it stays), or why not. */
-export function wallsSet(s: Structure, floor: number, set: readonly WallSet[]): { op: StructOp } | { why: string } {
+export function wallsSet(
+  s: Structure,
+  floor: number,
+  set: readonly WallSet[],
+  /** the top of the tallest opening in a wall (m; free-openings.ts freeCuts' z1): none lower */
+  openingTop: (wall: string) => number = () => 0,
+): { op: StructOp } | { why: string } {
   if (!set.length) return { why: "nothing to change" };
   if (set.length > WALLS_AT_ONCE) return { why: "too many at once" };
   const r = (v: number) => Math.round(v * 1000) / 1000;
@@ -176,6 +187,11 @@ export function wallsSet(s: Structure, floor: number, set: readonly WallSet[]): 
     const height = c.height === undefined ? w.height : r(c.height);
     const why = heightWhy(height) ?? thickWhy(c.thick);
     if (why) return { why };
+    // (as drawing one: on a mezzanine its top under the ceiling; and never lower than a door or a
+    // window in it)
+    const over = w.base - (s.floors.find((q) => q.index === floor)?.z ?? w.base);
+    if (over + height > WALL_H + 1e-3) return { why: "too high up there" };
+    if (height < w.height && height + 1e-3 < openingTop(w.id)) return { why: "lower than what's set in it" };
     // (a face painted: glass and half walls have no sides to; painting one face keeps the other's)
     const paint = (m: string | undefined) => m === undefined || (FACE_PAINTS as readonly string[]).includes(m);
     if (!paint(c.front) || !paint(c.back)) return { why: "not a wall's paint" };

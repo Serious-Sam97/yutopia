@@ -105,8 +105,6 @@ export class Doors {
 
   // Doors swing open while someone walks through them; chairs show who sits
   // in them; the radio's display lights while it plays.
-  passing = new Map<string, boolean>();
-
   updateDoors() {
     const model = this.c.model;
     const room = this.c.room;
@@ -164,10 +162,10 @@ export class Doors {
         room.state.npcs.forEach((n) => {
           if (on(n.x, n.y)) occupied = true;
         });
-      if ((this.passing.get(o.id) ?? false) !== occupied) {
-        this.passing.set(o.id, occupied);
+      // (against the model's own, as the seats are: its things are made again from the server's copies
+      // — a floor changed, the structure edited, a door's state — and a kept answer never re-said it)
+      if (!!o.props?.passing !== occupied)
         model.upsertObject({ ...o, props: { ...(o.props ?? {}), passing: occupied } });
-      }
     }
   }
 }

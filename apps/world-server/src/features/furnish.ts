@@ -6,10 +6,12 @@ import {
   canPlace,
   dressItems,
   entry,
+  floorsOf,
   isKind,
   isOpening,
   levelMap,
   objLevel,
+  onLevel,
   quarterOf,
   quarterYaw,
   takenId,
@@ -158,9 +160,24 @@ registerFeature((room: WorldRoom) => {
   const fromDressing = (client: WorldClient, pieceId: string, take: boolean) => {
     const p = builder(client);
     if (!p) return;
-    const piece = dressItems(room.map, objects()).find((d) => d.id === pieceId);
+    // (the clutter of every floor, each made from its own floor's map and things — as the 3D view
+    // and the physics make it: the building's whole map has none of the upper floors')
+    const all0 = objects();
+    let piece: ReturnType<typeof dressItems>[number] | undefined;
+    let lm = room.map;
+    let at = floorsOf(room.map)[0] ?? 0;
+    for (const level of floorsOf(room.map)) {
+      const m = levelMap(room.map, level);
+      if (!m) continue;
+      piece = dressItems(m, onLevel(all0, m)).find((d) => d.id === pieceId);
+      if (piece) {
+        lm = m;
+        at = level;
+        break;
+      }
+    }
     if (!piece) return;
-    const area = areaAt(room.map, piece.x, piece.kind === "frame" ? piece.y + 0.25 : piece.y);
+    const area = areaAt(lm, piece.x, piece.kind === "frame" ? piece.y + 0.25 : piece.y);
     if (!area) return;
     // (its room's own: the structure's room, its props' dressOff — docs/plan/72 phase 11)
     const rooms = room.structure.rooms.map((r) =>
@@ -179,15 +196,20 @@ registerFeature((room: WorldRoom) => {
     const kind = piece.kind === "frame" ? "frame" : "decor";
     const x = Math.floor(piece.x);
     const y = piece.kind === "frame" ? Math.round(piece.y) : Math.floor(piece.y);
-    const all = objects();
-    const def: WorldObjectDef = {
-      id: takenId(piece.id),
-      kind,
-      x,
-      y,
-      yaw: quarterYaw(0),
-      props: cleanProps(kind, { d: piece.kind, seed: piece.seed }, all, x, y),
-    };
+    const all = onLevel(objects(), lm);
+    // (on the floor it was dressing)
+    const def: WorldObjectDef = atLevel(
+      {
+        id: takenId(piece.id),
+        kind,
+        x,
+        y,
+        yaw: quarterYaw(0),
+        props: cleanProps(kind, { d: piece.kind, seed: piece.seed }, all, x, y),
+      },
+      at,
+      room.map,
+    );
     room.state.objects.set(def.id, toSchema(def));
     room.state.holds.set(def.id, `${p.uid}|${p.name}`);
     heldAt.set(def.id, Date.now());

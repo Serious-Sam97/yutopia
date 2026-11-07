@@ -1639,4 +1639,64 @@ the code reads are made from it. Still to come in this phase: listed at the end.
     old views); textures' data ~26 MB; strings 276 MB. The 4 GB seen 2026-11-04 is likely this heap plus
     the GPU process (not measured here). Shrinking it (CPU copies of static geometry after upload, the caches'
     sizes) is its own work.
-- **Left:** the soak (hours), the independent review, the memory checker in CI, the reds above.
+- **The page's heap a third smaller** (80d735d, from its own session): ~640–680 MB on a production
+  build after the checker's cycles, not ~950–1000 (the 1.1–1.2 GB above was partly `next dev`'s own
+  sources). Jolt built to start at 16 MB (not 128; it grows as before); World3's pieces views into
+  the merged arrays; identical furniture models kept once; the HUD's picture renderer keeps 6
+  people models; the kart park's karts share their shapes. Frame times, stills and the physics
+  hashes as before. Left: parked cars' geometry (~31 MB), floors 1–3 drawing the same merged meshes
+  (~24 MB), three's CPU copy of each person's morph texture.
+- **The reds, finished** (the user: "finish all"):
+  - **A real one:** the focused torch's burn saw the shade at the torch's own height — a shade on
+    the bank of a hollow, someone on the pond below, never burnt (`features/dark.ts`: seen at each
+    of the body's heights in the cone).
+  - **Stale specs:** shades aimed the camera, not the torch, at a shade at arm's length (the aimed
+    beam's pitch is the look's, from the hand) and kept on one; pets-lost-two sent Bia before her
+    walker was up (it stood where she arrived and said so), and Rex runs after Ana's car ~130 m
+    before he's lost — Bia goes out to him; wall-faces held the camera before build mode took it
+    back; weak-machine held the run on past the roof and off its far side; move.spec mantled onto
+    an arcade, a real 1.8 m cabinet now (past a mantle's 1.5) — a filing cabinet, half a step
+    closer; flowmotion's lamp read from the live Grounds (god mode moved it); night counted the
+    night guard's torch as someone's. night-perf passes; move-others passes twice running (one red
+    run, under load).
+- **The independent review** (a fresh reader over the plan's commits; the heap shrink, the
+  teleport, the light's offset, ops and undo found sound). Fixed:
+  - doors drawn shut on whoever's in them after any structure edit or floor change: the model's
+    things are made again from the server's copies, and the doors kept their own answer — now
+    against the model's, as the seats are (`ctl/doors.ts`);
+  - a stretch painted ending inside a free door cut the wall through it (solid wall in the doorway):
+    cut at the opening's nearer edge (`wallsPaint`'s `keepWhole`, the server passing `freeCuts`);
+  - a closet walled off on an open floor wasn't found when a room with no walls sat where the floor's
+    sample point fell: a room smaller than the face isn't what the face is part of (`rooms.ts`);
+  - a wall's height changed past the checks drawing makes: on a mezzanine under the ceiling, never
+    lower than a door or window in it (`wallsSet`'s `openingTop`); and a low wall under a mezzanine's
+    rail on its line isn't "there already" (only walls up where it is cover it);
+  - what's in hand in build mode was hidden but still solid where it was (8f32b8d's solids);
+  - the HUD's picture models let go least recently used (6 now), not first made;
+  - the kart park's teardown kept the shared kart shapes (their GPU copies let go).
+  Also found on the way: **generated clutter on any floor but the home one couldn't be taken** —
+  the server made the clutter from the whole building's map, which has only the home floor's: now
+  each floor's from its own map, and the thing made on that floor (`features/furnish.ts`).
+- **The soak** (the checker, 24 cycles, a minute still in each, the long road walked: ~70 min).
+  Two counts crept, both real leaks, both fixed:
+  - **The page's textures**, ~5 a cycle (554 → 677): the cars' reflection map, made again every
+    20 s, gave up its texture but not the render target it was drawn into (`car/cars.ts`: the
+    target kept and let go whole). After: flat (550 → 557 over 10 cycles).
+  - **The world-server's heap**, ~2 MB a cycle past the land cache's cap (199 → 229 MB): Jolt's JS
+    keeps every wrapper it hands out (a body, its id, a shape, a compound's parts, a heightfield's
+    samples) in a cache by address until it's destroyed — made and dropped as the land streams
+    round people, they piled up for good (`physics/world.ts` `forget`/`letGo`: the wrappers let go
+    when their objects are; the bench's hashes unchanged). The same in the page's physics.
+  - Found with the checker's new **server heap diff** (the world-server under node's inspector, a
+    snapshot at cycle `SERVER_FROM`, diffed when its budget's crossed or `SERVER_DIFF=1`) and a dev
+    knob, `YUTOPIA_CHUNK_CAP`, to fill the land cache early. The rest of the server's growth over a
+    session is that cache filling toward its cap (~20 KB a chunk, 4000: ~80 MB), as designed.
+  - People coming and going, things put down and taken away, the floors, the lot and the road each
+    alone: flat.
+- **The memory checker in CI:** `.github/workflows/memory.yml`, nightly and on demand — the built
+  page, `MEM_FAKE_API=1` (the smoke's fake API, run by tsx), 6 people, no long road, software GL.
+  Locally in that mode: ok (page 817 → 828 MB on Low).
+- **Checks:** shared 657, client 284, the world-server's wall/room/paint/clutter tests and dark 7,
+  the physics bench's hashes unchanged, budgets ok (page 466.8/469 KB); lint clean but the other
+  session's `zz-load.spec.ts` (`biome.json`: every `dist` left out — Jolt's built typings were linted).
+- **Phase 13 done — plan 72 done** (2026-11-06).

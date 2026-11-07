@@ -1,0 +1,49 @@
+name: Memory
+
+# The memory checker (docs/plan/72-the-3d-core.md, phase 13; apps/client/e2e/memcheck.mts): the
+# built page, its own offline world-server (collectable), people coming and going, the game going
+# round the floors in cycles — every count after each cycle against a budget and a flat trend. CI's
+# browser draws in software: fewer people, shorter stills, no long road. Nightly and on demand.
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+    inputs:
+      cycles:
+        description: "cycles"
+        default: "3"
+
+jobs:
+  memory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @yutopia/client exec playwright install --with-deps chromium
+      - run: NEXT_DIST_DIR=.next-prod pnpm --filter @yutopia/client build
+      - name: memcheck
+        working-directory: apps/client
+        env:
+          NEXT_DIST_DIR: .next-prod
+          MEM_FAKE_API: "1"
+          YUTOPIA_E2E_URL: http://localhost:3198
+          BOTS: "6"
+          IDLE: "8"
+          NO_ROAD: "1"
+        run: |
+          ./node_modules/.bin/next start -p 3198 &
+          for i in $(seq 1 90); do curl -sf http://localhost:3198/login > /dev/null && break; sleep 2; done
+          ../../node_modules/.bin/tsx e2e/memcheck.mts "${{ github.event.inputs.cycles || '3' }}" memcheck.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: memcheck
+          path: apps/client/memcheck.json
+          if-no-files-found: ignore

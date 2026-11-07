@@ -588,13 +588,15 @@ registerFeature((room: WorldRoom) => {
         r.z = heightAt(b.x, b.z);
         let burn = 0;
         for (const beam of beams) {
-          // (anywhere on the body: low, the chest, the head — point-blank the cone meets it low)
-          const k = Math.max(
-            beamAt(beam, s.x, s.y, r.z + 0.4),
-            beamAt(beam, s.x, s.y, r.z + 0.9),
-            beamAt(beam, s.x, s.y, r.z + 1.4),
-          );
-          if (k > 0 && seen(beam, { x: s.x, y: s.y, z: beam.z })) burn += 0.6 + 0.4 * Math.min(1, k * 3); // (in the cone at all: 27/s at least, 45 close in — shared fsm.ts SHADE.burn)
+          // (anywhere on the body: low, the chest, the head — point-blank the cone meets it low; seen
+          // there, at that height: a line at the torch's own height ran into the bank of a hollow,
+          // a shade on the slope above someone on the pond never burnt)
+          let k = 0;
+          for (const h of [0.4, 0.9, 1.4]) {
+            const at = beamAt(beam, s.x, s.y, r.z + h);
+            if (at > k && seen(beam, { x: s.x, y: s.y, z: r.z + h })) k = at;
+          }
+          if (k > 0) burn += 0.6 + 0.4 * Math.min(1, k * 3); // (in the cone at all: 27/s at least, 45 close in — shared fsm.ts SHADE.burn)
         }
         const light = lampAt(s.x, s.y, night, dark);
         const sense: ShadeSense = {

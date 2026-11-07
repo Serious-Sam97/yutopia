@@ -3,8 +3,8 @@ import { expect, type Page } from "@playwright/test";
 import { ANA, enter, test, token, useWorld } from "./helpers";
 
 // The verbs in the world (docs/plan/29-the-move.md, phase 4): running at a
-// desk across its short side and jumping vaults it; at an arcade cabinet
-// (1.38 up), climbs onto it; Q rolls; C crouches (and sprinting, slides) — the
+// desk across its short side and jumping vaults it; at a filing cabinet
+// (1.32 up), climbs onto it; Q rolls; C crouches (and sprinting, slides) — the
 // server takes all of it (never puts me back) and everyone sees what I did
 // (Player.jump, Player.mv). 3D: run it with the GPU (YUTOPIA_GPU=1).
 
@@ -31,7 +31,7 @@ const server = (page: Page) =>
     };
   });
 
-test("the verbs: a vault over a desk, onto an arcade, a roll, crouching and a slide", async ({ page }) => {
+test("the verbs: a vault over a desk, onto a cabinet, a roll, crouching and a slide", async ({ page }) => {
   test.skip(!GPU, "needs the GPU: YUTOPIA_GPU=1");
   test.setTimeout(180_000);
   const lab = await useWorld("lab");
@@ -114,12 +114,12 @@ test("the verbs: a vault over a desk, onto an arcade, a roll, crouching and a sl
     await page.evaluate(() => {
       (window as any).__snaps = [];
     });
-    // the desk across the way (its short side ahead), the arcade three tiles past it
+    // the desk across the way (its short side ahead), a filing cabinet three tiles past it
     await page.evaluate(
       ([d, a, sp]) => {
         const w = (window as any).__yutopia;
         w.send("obj:put", { id: d, kind: "desk", x: sp.x, y: sp.y + 2, yaw: 0 });
-        w.send("obj:put", { id: a, kind: "arcade", x: sp.x, y: sp.y + 6, yaw: 0 });
+        w.send("obj:put", { id: a, kind: "filing_cabinet", x: sp.x, y: sp.y + 6, yaw: 0 });
       },
       [ids.desk, ids.arcade, s] as const,
     );
@@ -148,14 +148,15 @@ test("the verbs: a vault over a desk, onto an arcade, a roll, crouching and a sl
     );
     expect((await me(page)).z, "down beyond the desk").toBeLessThan(0.05);
 
-    // onto the arcade: on at the same jog, a jump a step short of it
-    await page.waitForFunction((y) => (window as any).__yutopia.walker.body.y >= y, s.y + 5.05, { polling: "raf" });
+    // onto a filing cabinet (1.32 m: the arcade's a real cabinet now, 1.8 m, past a mantle's 1.5):
+    // on at the same jog, a jump half a step short of it
+    await page.waitForFunction((y) => (window as any).__yutopia.walker.body.y >= y, s.y + 5.3, { polling: "raf" });
     await page.keyboard.press(" ");
     await expect.poll(() => page.evaluate(() => (window as any).__started.join(","))).toContain("mantle");
     await page.keyboard.up("w");
     await expect.poll(async () => (await me(page)).verb ?? "", { timeout: 4000 }).toBe("");
     const onTop = await me(page);
-    expect(onTop.z, "standing on the arcade").toBeGreaterThan(1.3);
+    expect(onTop.z, "standing on the cabinet").toBeGreaterThan(1.3);
     await expect.poll(async () => (await server(page)).z).toBeGreaterThan(1.3);
     // (and down off it, back the way I came: a fall)
     await page.keyboard.down("s");

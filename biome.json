@@ -11,7 +11,7 @@
       "**",
       "!node_modules",
       "!.next",
-      "!dist",
+      "!**/dist",
       "!build",
       "!**/.next",
       "!**/next-env.d.ts",

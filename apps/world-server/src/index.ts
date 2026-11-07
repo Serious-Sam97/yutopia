@@ -1,7 +1,11 @@
 import { spHour } from "@yutopia/shared";
+import { setChunkCap } from "@yutopia/shared/grounds";
 import { config } from "./config.ts";
 import { metrics } from "./metrics.ts";
 import { startWorldServer } from "./server.ts";
+
+// (the land's cache kept smaller — the memory checker's: full early, what grows past it is what's left)
+if (process.env.YUTOPIA_CHUNK_CAP) setChunkCap(Number(process.env.YUTOPIA_CHUNK_CAP));
 
 const server = await startWorldServer(config.port);
 console.log(`[yutopia] world-server on :${config.port}${config.offline ? " (offline)" : ""}`);

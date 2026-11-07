@@ -44,12 +44,15 @@ function painted(w: Wall, side: 1 | -1, mat: string): Wall {
 export type PaintMoves = Map<string, { id: string; from: number; to: number }[]>;
 
 /** Stretches painted, as the structure's operation (null: nothing changes), and where each split
- *  wall's pieces start (what's on it — a door, a picture — goes onto the piece it's on). */
+ *  wall's pieces start (what's on it — a door, a picture — goes onto the piece it's on). `whole`:
+ *  the spans along a wall not to be cut (its openings, m from its `a` — free-openings.ts freeCuts): a
+ *  stretch starting or ending inside one is cut at its nearer edge, the opening kept in one piece. */
 export function wallsPaint(
   s: Structure,
   floor: number,
   stretches: readonly PaintStretch[],
   newId: () => string,
+  keepWhole: (wall: string) => readonly (readonly [number, number])[] = () => [],
 ): { op: StructOp; moves: PaintMoves } | { why: string } {
   const byWall = new Map<string, PaintStretch[]>();
   for (const p of stretches) {
@@ -77,11 +80,19 @@ export function wallsPaint(
             to: whole(Math.min(L, Math.max(p.from, p.to))),
           },
     );
-    // its pieces: cut where a stretch starts or ends (not at its own ends)
+    // its pieces: cut where a stretch starts or ends (not at its own ends, nor through an opening:
+    // there, at its nearer edge)
+    const keep = keepWhole(w.id);
+    const clear = (t: number) => {
+      for (const [u0, u1] of keep) if (t > u0 + EPS && t < u1 - EPS) return t - u0 < u1 - t ? u0 : u1;
+      return t;
+    };
     const cuts = [0, L];
     for (const p of spans)
-      for (const t of [p.from, p.to])
+      for (const t0 of [p.from, p.to]) {
+        const t = clear(t0);
         if (t > EPS && t < L - EPS && !cuts.some((c) => Math.abs(c - t) < EPS)) cuts.push(t);
+      }
     cuts.sort((a, b) => a - b);
     const all = cuts.length === 2;
     const pieces: { id: string; from: number; to: number; wall: Wall }[] = [];

@@ -100,7 +100,17 @@ test("a weak machine: the Lowest tier, and frames it can live with", async ({ pa
   const z0 = await page.evaluate(() => (window as any).__yutopia.walker.body.z as number);
   await page.keyboard.down("Shift");
   await page.keyboard.down("w");
-  out["Flowmotion: up and over"] = await frames(page, 3);
+  out["Flowmotion: up and over"] = await frames(page, 1.5);
+  // (let go once she's up and done climbing — held on, she runs over the roof and off its far side; a
+  // frame's time is capped at 0.1 s, so a slow machine's run takes longer to watch)
+  for (let i = 0; i < 80; i++) {
+    const b = await page.evaluate(() => {
+      const w = (window as any).__yutopia.walker.body;
+      return { z: w.z as number, flow: !!w.flow };
+    });
+    if (b.z - z0 > 4 && !b.flow) break;
+    await page.waitForTimeout(100);
+  }
   await page.keyboard.up("w");
   await page.keyboard.up("Shift");
   await page.waitForTimeout(1500);

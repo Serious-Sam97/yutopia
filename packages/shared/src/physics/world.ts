@@ -358,6 +358,24 @@ export class PhysicsWorld {
     return shape;
   }
 
+  /** A wrapper let go of (its C++ object freed or held elsewhere): Jolt's JS keeps every one it hands
+   *  out in a cache by address, till destroyed — a body, its id, a shape, a compound's parts, made
+   *  and dropped as the land streams round people, piled up there for good (the memory checker's
+   *  soak, plan 72 phase 13). */
+  private forget(...os: (object | null | undefined)[]): void {
+    const J = this.J as unknown as {
+      getCache(c: unknown): Record<number, unknown>;
+      getClass(o: unknown): unknown;
+      getPointer(o: unknown): number;
+    };
+    for (const o of os) if (o) delete J.getCache(J.getClass(o))[J.getPointer(o)];
+  }
+  /** A shape we made given up (a body holds its own), its wrapper with it. */
+  private letGo(shape: Jolt.Shape): void {
+    shape.Release();
+    this.forget(shape);
+  }
+
   private solidSettings(s: Solid3): Jolt.ShapeSettings | null {
     const J = this.J;
     if (s.t === "box") {
@@ -398,6 +416,7 @@ export class PhysicsWorld {
   private drop(o: Owned) {
     this.bodies.RemoveBody(o.id);
     this.bodies.DestroyBody(o.id);
+    this.forget(o.body, o.id);
   }
 
   /** Statics under a key (a chunk's Grounds, a floor's walls, a thing in the building): one body,
@@ -417,6 +436,7 @@ export class PhysicsWorld {
       const [x, y, z] = this.middle(s);
       this.v.Set(x - ox, y - oy, z - oz);
       cs.AddShape(this.v, this.turn(s.t === "box" ? s.a : 0), st, 0);
+      this.forget(st); // (the compound holds it now)
       n++;
     }
     if (!n) {
@@ -426,7 +446,7 @@ export class PhysicsWorld {
     const shape = this.shape(cs);
     if (!shape) return false;
     this.keep(key, this.make(this.settings(shape, ox, oy, oz, 0, J.EMotionType_Static, LAYER[layer]), false));
-    shape.Release();
+    this.letGo(shape);
     return true;
   }
 
@@ -444,15 +464,18 @@ export class PhysicsWorld {
     hs.mScale = this.v;
     hs.mSampleCount = n;
     hs.mBlockSize = BLOCK;
-    hs.mHeightSamples.resize(n * n);
+    const samples = hs.mHeightSamples;
+    samples.resize(n * n);
     const hole = J.HeightFieldShapeConstantValues.prototype.cNoCollisionValue;
-    const out = new Float32Array(J.HEAPF32.buffer, J.getPointer(hs.mHeightSamples.data()), n * n);
+    const at = samples.data();
+    const out = new Float32Array(J.HEAPF32.buffer, J.getPointer(at), n * n);
+    this.forget(samples, at); // (the settings' own: gone with them)
     for (let j = 0; j < n; j++)
       for (let i = 0; i < n; i++) out[j * n + i] = i < land.n && j < land.n ? land.h[j * land.n + i] : hole;
     const shape = this.shape(hs);
     if (!shape) return false;
     this.keep(key, this.make(this.settings(shape, 0, 0, 0, 0, J.EMotionType_Static, LAYER.land), false));
-    shape.Release();
+    this.letGo(shape);
     return true;
   }
   private keep(key: string, o: Owned): void {
@@ -506,7 +529,7 @@ export class PhysicsWorld {
     if (t.kind === "ball") bcs.mRestitution = 0.3;
     const id = this.nextThing++;
     this.things.set(id, this.make(bcs, true));
-    shape.Release();
+    this.letGo(shape);
     return id;
   }
 
@@ -579,7 +602,7 @@ export class PhysicsWorld {
       bcs.mCollisionGroup = g;
       J.destroy(g);
       const o = this.make(bcs, true);
-      shape.Release();
+      this.letGo(shape);
       this.v.Set(vel[0], vel[1], vel[2]);
       this.bodies.SetLinearVelocity(o.id, this.v);
       owned.push(o);
@@ -705,7 +728,7 @@ export class PhysicsWorld {
       J.destroy(g);
       bcs.mFriction = 0.6;
       parts.push(this.make(bcs, true));
-      shape.Release();
+      this.letGo(shape);
     });
     this.proxies.set(id, { parts, filter, n: caps.length + room });
     return id;
@@ -790,7 +813,7 @@ export class PhysicsWorld {
         J.destroy(g);
       }
       const o = this.make(bcs, true);
-      shape.Release();
+      this.letGo(shape);
       owned.push(o);
       const from = p.parent >= 0 ? owned[p.parent].body : a.body;
       // its joint to what it hangs from (six ways, Jolt's: its x the way it hangs, up — the twist —
@@ -856,7 +879,7 @@ export class PhysicsWorld {
       this.system.AddConstraint(c);
       joints.push(c);
     }
-    shapeA.Release();
+    this.letGo(shapeA);
     const id = this.nextDangle++;
     this.dangles.set(id, {
       anchor: a,
@@ -979,7 +1002,7 @@ export class PhysicsWorld {
     const shape = this.shape(st);
     if (!shape) return false;
     const o = this.make(this.settings(shape, box.x, box.y, box.z, box.a, J.EMotionType_Kinematic, MOVING), false);
-    shape.Release();
+    this.letGo(shape);
     this.vehicles.set(id, { ...o, box });
     this.named.set(o.id.GetIndexAndSequenceNumber(), id);
     return true;
@@ -1022,11 +1045,12 @@ export class PhysicsWorld {
       const [sx, sy, sz] = this.middle(s);
       this.v.Set(sx, sy, sz);
       cs.AddShape(this.v, this.turn(s.t === "box" ? s.a : 0), st, 0);
+      this.forget(st); // (the compound holds it now)
     }
     const shape = this.shape(cs);
     if (!shape) return false;
     const o = this.make(this.settings(shape, x, y, z, 0, J.EMotionType_Kinematic, LAYER.floor), false);
-    shape.Release();
+    this.letGo(shape);
     this.carriers.set(key, { ...o, sig, at: [x, y, z] });
     this.named.set(o.id.GetIndexAndSequenceNumber(), key);
     return true;

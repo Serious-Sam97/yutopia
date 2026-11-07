@@ -895,8 +895,9 @@ export function buildHelmet(colour: string, r: number, ink: Material): Group {
 
 export function disposeKarts() {
   for (const g of geos) g.dispose();
+  // (the shared shapes' GPU copies let go, the shapes kept: a game's karts made from them may still
+  // be out — three uploads them again when they're drawn — and the next karts made share them too)
   for (const g of shapes) g.dispose();
-  shapes.length = 0;
   for (const m of mats) m.dispose();
   geos.length = 0;
   mats.length = 0;

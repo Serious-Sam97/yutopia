@@ -94,9 +94,12 @@ export function roomsAfterWalls(
   for (const f of fa) {
     const p = pointIn(f);
     if (!p) continue;
+    // (a room no bigger than the face isn't what it's part of: a room with no walls of its own out on
+    // an open floor, the floor's sample point in it — the floor goes on, not into the room)
+    const area = faceArea(f);
     const room =
       rooms
-        .filter((r) => r.outline.length > 2 && inRing(r.outline, p[0], p[1]))
+        .filter((r) => r.outline.length > 2 && inRing(r.outline, p[0], p[1]) && ringArea(r.outline) + EPS_AREA >= area)
         .sort((a, b) => prio(b) - prio(a) || ringArea(a.outline) - ringArea(b.outline))[0] ?? null;
     const old = room ? null : (fb.filter((o) => inFace(o, p)).sort((a, b) => faceArea(a) - faceArea(b))[0] ?? null);
     const k = room ?? old;
