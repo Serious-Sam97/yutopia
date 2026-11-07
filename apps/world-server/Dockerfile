@@ -6,6 +6,8 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@12.6.0 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json packages/shared/
+# Jolt built here (packages/jolt: pnpm-workspace.yaml links `jolt-physics` to it — plan 72)
+COPY packages/jolt packages/jolt
 COPY apps/world-server/package.json apps/world-server/
 RUN pnpm install --frozen-lockfile --filter @yutopia/world-server...
 COPY packages/shared packages/shared

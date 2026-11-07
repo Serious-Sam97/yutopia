@@ -5,6 +5,8 @@
 **/.next
 **/.next-*
 **/dist
+# (but Jolt's own build: the one jolt-physics there is — packages/jolt)
+!packages/jolt/dist
 **/test-results
 **/playwright-report
 **/*.log

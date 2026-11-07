@@ -15,6 +15,8 @@ ARG NEXT_PUBLIC_API=""
 ARG NEXT_PUBLIC_VORTEXOS_URL
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json packages/shared/
+# Jolt built here (packages/jolt: pnpm-workspace.yaml links `jolt-physics` to it — plan 72)
+COPY packages/jolt packages/jolt
 COPY apps/client/package.json apps/client/
 RUN pnpm install --frozen-lockfile --filter @yutopia/client...
 COPY packages/shared packages/shared
@@ -25,7 +27,9 @@ COPY tools/emu-assets.mjs tools/emu-cores.json tools/emu-games.json tools/
 RUN apk add --no-cache libarchive-tools && node tools/emu-assets.mjs && node tools/emu-assets.mjs --check
 # (git reads the version off .git, mounted for the build only: it never lands in the image)
 RUN apk add --no-cache git && git config --global --add safe.directory /app
-RUN --mount=type=bind,from=git,target=/app/.git pnpm --filter @yutopia/client build
+# (the types are CI's to check — `pnpm typecheck` over the whole repo: the world-server's schema
+# the client's types read isn't in this image)
+RUN --mount=type=bind,from=git,target=/app/.git YUTOPIA_SKIP_TYPECHECK=1 pnpm --filter @yutopia/client build
 
 FROM node:24-alpine
 COPY --from=build /app /app

@@ -67,6 +67,10 @@ const nextConfig = (phase: string): NextConfig => ({
   allowedDevOrigins: ["yutopia.yondra.net"],
   // production builds go to their own folder so they never clobber `next dev`
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
+  // the production image (apps/client/Dockerfile) has the client and the shared package only: the
+  // world-server's schema the client's types read (`@yutopia/state`, tsconfig paths) isn't there —
+  // its build leaves the types to CI's and the stack's own `pnpm typecheck`, which sees them all
+  typescript: { ignoreBuildErrors: process.env.YUTOPIA_SKIP_TYPECHECK === "1" },
   webpack(config, { dev, isServer, webpack }) {
     // Jolt (jolt-physics, docs/plan/50-the-volume.md) reaches for `node:module` only when it runs
     // under Node; webpack (the docker stack's `next dev`) can't read `node:` at all — Turbopack
