@@ -4,11 +4,13 @@ import type { WorldObjectDef } from "../catalog.ts";
 import { doorCentre, doorRoom } from "../doors.ts";
 import { getMap } from "../index.ts";
 import { openingCentre, openingEdges } from "../openings.ts";
+import { wallLength } from "./arc.ts";
 import { wallsEdit } from "./edit.ts";
 import { finishWorld } from "./finish.ts";
 import { freeCuts, freeOpeningWhy, headingOf, openingAlong, placeOnWall } from "./free-openings.ts";
 import { structureFromMap } from "./from-map.ts";
 import { applyOps } from "./ops.ts";
+import { onTiles } from "./query.ts";
 import type { Wall } from "./types.ts";
 import { viewOf } from "./view.ts";
 
@@ -62,6 +64,13 @@ test("what it won't take: off the end, another there, a wall too low, an arc, a 
     { op: "walls", remove: [wall.id], add: [{ ...wall, b: [21.2, 10], bow: 0.6 } as typeof wall] },
   ]);
   assert.equal(freeOpeningWhy(tight, 3, "door", { wall: wall.id, at: 0.94 }, []), "too tight a curve");
+  // a wall on the tile lines takes the tile tool's (by its edges: drawn edge by edge, a free one's hole
+  // would never be cut in it)
+  const f3 = s.floors.find((f) => f.index === 3);
+  const tiled = s.walls.find((w) => w.floor === 3 && f3 && onTiles(w, f3) && w.front === "p" && wallLength(w) >= 2);
+  assert.ok(tiled);
+  const why2 = freeOpeningWhy(s, 3, "door", { wall: tiled.id, at: 1 }, []);
+  assert.equal(why2, "that wall takes doors and windows by its tiles");
 });
 
 test("its hole: in the wall's cuts (drawn and in Jolt) where it is along the wall", async () => {

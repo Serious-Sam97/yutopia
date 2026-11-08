@@ -48,6 +48,9 @@ export function edgesOfWalls(
   corner: { x: number; y: number },
   /** the floor's height (world): a wall standing higher (on a mezzanine) is drawn up there */
   z0?: number,
+  /** walls holding a door or window placed free (free-openings.ts): drawn as free walls, split
+   *  round its hole, though they're on the lattice (whose edges only know the tile tool's holes) */
+  holed?: ReadonlySet<string>,
 ): WallEdges {
   const h = new Map<string, string>();
   const v = new Map<string, string>();
@@ -69,7 +72,7 @@ export function edgesOfWalls(
       free.push({ id: w.id, a, b, ch: w.front, back, pts, ...shape });
       continue;
     }
-    if (shape.height !== undefined || shape.thick !== undefined || lift) {
+    if (shape.height !== undefined || shape.thick !== undefined || lift || holed?.has(w.id)) {
       // (its own height or thickness: drawn as a free wall, along its line)
       free.push({ id: w.id, a, b, ch: w.front, back, ...shape });
       continue;

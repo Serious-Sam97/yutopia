@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { floorsOf, getMap, levelMap, spanOf } from "@yutopia/shared";
+import { floorsOf, getMap, levelMap, spanOf, WALL_H } from "@yutopia/shared";
 import { cellOf, structureFromMap } from "@yutopia/shared/structure";
 import { finishWorld } from "@yutopia/shared/structure/finish";
 import { localView } from "@yutopia/shared/structure/fold";
@@ -62,6 +62,24 @@ test("a wall at 45°: off the lattice, a metre at a time along it, each piece tu
   assert.equal(o.lit.pos[4], 2, "its height kept");
   // its face's normal turned with it (out of +z to a quarter turn on from the line)
   assert.ok(Math.abs(o.lit.nor[0] + Math.SQRT1_2) < 1e-9 && Math.abs(o.lit.nor[2] - Math.SQRT1_2) < 1e-9);
+});
+
+test("a wall on the lattice holding a door placed free: drawn free, so its hole is cut", () => {
+  const w = {
+    id: "w",
+    floor: 0,
+    a: [2, 2] as [number, number],
+    b: [6, 2] as [number, number],
+    base: 0,
+    height: WALL_H,
+    front: "p",
+  };
+  const plain = edgesOfWalls([w], 0, { x: 0, y: 0 });
+  assert.equal(plain.free.length, 0);
+  assert.equal(plain.h(3, 2), "p");
+  const holed = edgesOfWalls([w], 0, { x: 0, y: 0 }, undefined, new Set(["w"]));
+  assert.equal(holed.free.length, 1, "drawn free, split round its hole");
+  assert.equal(holed.h(3, 2), ".", "not on the lattice's edges too");
 });
 
 test("the campus: the ceiling over the structure's indoor slabs covers the tiles the old one did, every floor", async () => {

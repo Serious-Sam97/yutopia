@@ -40,7 +40,7 @@ import {
 import { BEAM, type Beam, beamOf } from "@yutopia/shared/beam";
 import { type StreetThing, terrainAt } from "@yutopia/shared/grounds";
 import { ALOFT, KH_MOVE, MV_AIM } from "@yutopia/shared/move";
-import { cellOf, layoutSig as floorLayoutSig } from "@yutopia/shared/structure";
+import { cellOf, layoutSig as floorLayoutSig, isFreeOpening, onOf } from "@yutopia/shared/structure";
 import { localThing, localView } from "@yutopia/shared/structure/fold";
 import {
   AdditiveBlending,
@@ -337,7 +337,9 @@ function drawnFloor(lm: MapDef, here: WorldObjectDef[], all: WorldObjectDef[], s
   // (the floor's height: its slabs there are what's walked on; one over it a mezzanine — phase 11.7)
   const fz = structure?.floors.find((f) => f.index === floorOf(lm))?.z ?? 0;
   const own = (sl: { z: number }) => Math.abs(sl.z - fz) < 1e-3;
-  const edges = structure ? edgesOfWalls(structure.walls, floorOf(lm), corner, fz) : edgesOfMap(map);
+  // (a wall with a door or window placed free in it: drawn free, round its hole)
+  const holed = new Set(here.flatMap((o) => (isFreeOpening(o) ? [onOf(o)?.wall ?? ""] : [])));
+  const edges = structure ? edgesOfWalls(structure.walls, floorOf(lm), corner, fz, holed) : edgesOfMap(map);
   // (its indoor slabs' rings — the lot's asphalt and concrete are open sky: no ceiling — for the
   // ceiling over them)
   // (a slab's together: each read even-odd, the floor any of them — they may overlap)

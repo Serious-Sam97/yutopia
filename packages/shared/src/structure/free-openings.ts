@@ -9,6 +9,7 @@ import { entry, type WorldObjectDef } from "../catalog.ts";
 import { isDoorKind, isOpening, openingCut, wallTakes } from "../openings.ts";
 import { arcCircle, isArc, nearOnWall, wallLength, wallPoint } from "./arc.ts";
 import { type On, onOf } from "./attach.ts";
+import { onTiles } from "./query.ts";
 import type { Structure, Wall, XY } from "./types.ts";
 
 /** An opening in a wall drawn free (by its wall and how far along it). */
@@ -73,7 +74,7 @@ export function freeCuts(
  *  the tile lines takes the tile tool's), straight, that takes this kind; the opening on it whole,
  *  under its top, clear of the others in it. */
 export function freeOpeningWhy(
-  s: Pick<Structure, "walls">,
+  s: Pick<Structure, "walls"> & { floors?: Structure["floors"] },
   floor: number,
   kind: string,
   on: On,
@@ -82,6 +83,10 @@ export function freeOpeningWhy(
 ): string | null {
   const w = s.walls.find((q) => q.id === on.wall && q.floor === floor);
   if (!w) return "no wall there";
+  // (one on the tile lines takes the tile tool's, by its edges: it's drawn edge by edge, and a free
+  // one's hole would never be cut in it)
+  const f = s.floors?.find((q) => q.index === floor);
+  if (f && onTiles(w, f)) return "that wall takes doors and windows by its tiles";
   // (in an arc: no tighter than its frame covers — the curve no more than 12 cm off its chord)
   const k = arcCircle(w);
   if (k) {

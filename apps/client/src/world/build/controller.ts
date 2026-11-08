@@ -315,7 +315,14 @@ export class BuildController {
         const { wall, p } = this.aim.free;
         const on = { wall: wall.id, at: openingAlong(wall, p, def.kind) };
         def = { ...def, ...placeOnWall(wall, on.at, def.kind), props: { ...(def.props ?? {}), free: true, on } };
-        freeWhy = freeOpeningWhy({ walls: this.free.wallsHere() }, this.w.level, def.kind, on, rest, h.origin?.id);
+        freeWhy = freeOpeningWhy(
+          { walls: this.free.wallsHere(), floors: this.w.structure?.floors },
+          this.w.level,
+          def.kind,
+          on,
+          rest,
+          h.origin?.id,
+        );
       } else if (this.slotting() && this.aim) {
         def = openingNear(def, this.aim.face, this.aim.along);
         if (def.props?.free) def = { ...def, props: { ...def.props, free: false } };
@@ -407,6 +414,9 @@ export class BuildController {
   private freeWallHit(ray: Ray): { wall: Wall; p: [number, number]; t: number } | null {
     let best: { wall: Wall; p: [number, number]; t: number } | null = null;
     for (const w of this.free.wallsHere()) {
+      // (one on the tile lines takes the tile tool's openings, by edges: drawn edge by edge, a free
+      // one's hole would never be cut in it)
+      if (this.free.onTilesHere(w)) continue;
       // (an arc by its chords — 11.11: doors and windows in arcs too)
       const pts = wallPoints(w);
       for (let i = 1; i < pts.length; i++) {
