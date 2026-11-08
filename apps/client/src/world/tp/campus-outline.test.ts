@@ -78,3 +78,59 @@ test("an L-shaped floor round a courtyard, windows painted on its outside: the s
   }
   assert.equal(windows, 10, "every painted window on the outline");
 });
+
+test("the facade's windows: every floor's, where their walls hold them, at their floor's height", async () => {
+  const { facadeWindows } = await import("./campus");
+  const { openingCut } = await import("@yutopia/shared");
+  const wall = (id: string, floor: number, a: [number, number], b: [number, number], front = "p") => ({
+    id,
+    floor,
+    a,
+    b,
+    base: floor * 3.5,
+    height: 3.266,
+    front,
+  });
+  const s = {
+    home: 1,
+    floors: [
+      { index: 0, name: "G", z: 0, grid: { x0: 0, y0: 0, w: 10, h: 10 } },
+      { index: 1, name: "1", z: 3.5, grid: { x0: 0, y0: 0, w: 10, h: 10 } },
+    ],
+    walls: [
+      wall("g-n", 0, [0, 0], [10, 0]),
+      wall("g-s", 0, [0, 10], [10, 10], "g"),
+      wall("h-n", 1, [0, 0], [10, 0]),
+      wall("h-e", 1, [10, 0], [10, 10], "W"),
+    ],
+  };
+  const win = (id: string, kind: string, on: string, at: number) => ({
+    id,
+    kind,
+    x: 0,
+    y: 0,
+    props: { on: { wall: on, at } },
+  });
+  const ws = facadeWindows(
+    s,
+    [win("a", "window", "g-n", 2.5), win("b", "window_wide", "h-n", 6), win("c", "plant", "h-n", 1)],
+    { x: 0, y: 0 },
+  );
+  const [c0, c1] = openingCut("window");
+  // the ground floor's window: a metre wide round 2.5 along, a storey under the studio's floor
+  assert.deepEqual(ws[0], { a: [2, 0], b: [3, 0], y0: c0 - 3.5, y1: c1 - 3.5 });
+  // the studio's wide one: two metres round 6
+  assert.deepEqual(
+    [ws[1].a, ws[1].b],
+    [
+      [5, 0],
+      [7, 0],
+    ],
+  );
+  assert.ok(Math.abs(ws[1].y0 - openingCut("window_wide")[0]) < 1e-9);
+  // the glass wall, floor to its top; the wall painted as windows, one a metre
+  const glass = ws.filter((w) => w.glass);
+  assert.deepEqual(glass, [{ a: [0, 10], b: [10, 10], y0: -3.5, y1: -3.5 + 3.266, glass: true }]);
+  assert.equal(ws.filter((w) => !w.glass && w.a[0] === 10).length, 10);
+  assert.equal(ws.length, 2 + 1 + 10);
+});

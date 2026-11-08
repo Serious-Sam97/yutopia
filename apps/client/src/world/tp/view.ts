@@ -16,6 +16,7 @@ import {
   hostWorld,
   isFloor,
   isWindow,
+  isWindowKind,
   KEYBOARD_TOP,
   levelMap,
   liftFloorName,
@@ -102,7 +103,7 @@ import { Arms3 } from "./arms3d";
 import { HIDDEN_LAYER } from "./below-cull";
 import { type FadeGroup, World3 } from "./build";
 import { BuildLayer } from "./build3d";
-import type { Outline } from "./campus";
+import { facadeWindows, type Outline } from "./campus";
 import { FogBanks } from "./fog-banks";
 import { flatLight } from "./fog3d";
 import { FollowCam } from "./follow-cam";
@@ -417,7 +418,11 @@ function slabSig(d: { rings: unknown; decks: unknown; roofs?: unknown }): string
  *  campus's outside drawn from it — docs/plan/72 phase 8), made when it's asked for, and a key for
  *  what of it the facade draws: its slabs' rings and its windows' walls (an edit elsewhere leaves
  *  it). None without a structure (the map's, then). */
-function outlineOf(building: MapDef, structure: Structure | null): { outline: () => Outline | null; key: string } {
+function outlineOf(
+  building: MapDef,
+  structure: Structure | null,
+  windows: WorldObjectDef[] = [],
+): { outline: () => Outline | null; key: string } {
   if (!structure) return { outline: () => null, key: "" };
   const f = floorOf(building);
   const corner = building.world ? { x: building.ox ?? 0, y: building.oy ?? 0 } : { x: 0, y: 0 };
@@ -440,12 +445,33 @@ function outlineOf(building: MapDef, structure: Structure | null): { outline: ()
   let made: Outline | null = null;
   return {
     outline: () => {
-      made ??= { rings, edges: edgesOfWalls(structure.walls, f, corner) };
+      made ??= {
+        rings,
+        edges: edgesOfWalls(structure.walls, f, corner),
+        // (every floor's windows: the facade shows them where they are)
+        windows: facadeWindows(structure, windows, corner),
+      };
       return made;
     },
-    key: `${JSON.stringify(rings)}|${wins.join(";")}`,
+    key: `${JSON.stringify(rings)}|${wins.join(";")}|${windowsSig(windows)}|${glassSig(structure)}`,
   };
 }
+
+/** The building's window things as the facade draws them (where each is set: its wall, how far along). */
+const windowsSig = (ws: WorldObjectDef[]) =>
+  ws
+    .map((o) => {
+      const on = onOf(o);
+      return `${o.kind}@${on?.wall}:${on?.at}`;
+    })
+    .sort()
+    .join(";");
+/** (and its glass walls) */
+const glassSig = (s: Structure) =>
+  s.walls
+    .filter((w) => w.front === "g" || w.back === "g")
+    .map((w) => `${w.a}:${w.b}:${w.base}`)
+    .join(";");
 
 /** (what the layout signature can't see: the walls off the lattice) */
 const freeSig = (e: WallEdges) => (e.free.length ? JSON.stringify(e.free) : "");
@@ -1060,6 +1086,7 @@ void main() {
     // what the studio stands in (clouds / city / snow), the sky by the hour
     const home = onLevel(all, building);
     this.structure = opts.structure ?? null;
+    this.windowThings = all.filter((o) => isWindowKind(o.kind));
     const out = this.outline();
     this.winSig = `${cutsSig(home)}|${out.key}`;
     this.around = new Surroundings(building, opts.themes, wallCuts(home), out.outline());
@@ -1557,6 +1584,7 @@ void main() {
     const home = onLevel(all, building);
     // (the campus's outside: again when the studio's windows changed, or its outline from the
     // structure — its slabs' edge, its window walls)
+    this.windowThings = all.filter((o) => isWindowKind(o.kind));
     const winSig = `${cutsSig(home)}|${this.outline().key}`;
     let relaid = false;
     if (mine && relay) {
@@ -1623,15 +1651,29 @@ void main() {
   // what the studio stands in, again (a new layout, or the windows changed)
   private winSig = "";
   // (the home floor's outline, kept while the structure's the same)
-  private outlined: { of: Structure | null; building: MapDef | null; at: ReturnType<typeof outlineOf> } = {
+  private outlined: {
+    of: Structure | null;
+    building: MapDef | null;
+    wins: string;
+    at: ReturnType<typeof outlineOf>;
+  } = {
     of: null,
     building: null,
+    wins: "",
     at: { outline: () => null, key: "" },
   };
+  // (every floor's window things: the facade's — kept as the layout hands them over)
+  private windowThings: WorldObjectDef[] = [];
   private outline(): ReturnType<typeof outlineOf> {
     const o = this.outlined;
-    if (o.of !== this.structure || o.building !== this.building) {
-      this.outlined = { of: this.structure, building: this.building, at: outlineOf(this.building, this.structure) };
+    const wins = windowsSig(this.windowThings);
+    if (o.of !== this.structure || o.building !== this.building || o.wins !== wins) {
+      this.outlined = {
+        of: this.structure,
+        building: this.building,
+        wins,
+        at: outlineOf(this.building, this.structure, this.windowThings),
+      };
     }
     return this.outlined.at;
   }

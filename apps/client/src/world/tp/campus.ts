@@ -11,10 +11,11 @@ import {
   STOREY,
   WALL_H,
   type WallCut,
+  type WorldObjectDef,
 } from "@yutopia/shared";
 import { crossings } from "@yutopia/shared/physics/structure-solids";
-import type { Ring } from "@yutopia/shared/structure";
-import { cellOf, hWallOf, vWallOf } from "@yutopia/shared/structure";
+import type { Ring, Structure } from "@yutopia/shared/structure";
+import { cellOf, hWallOf, isArc, onOf, openingSpan, vWallOf, wallLength, wallPoint } from "@yutopia/shared/structure";
 import {
   AdditiveBlending,
   type Box3,
@@ -254,6 +255,64 @@ const runLen = (r: Run) => Math.abs(r.x1 - r.x0) + Math.abs(r.z1 - r.z0);
 export interface Outline {
   rings: Ring[];
   edges: WallEdges;
+  /** every floor's windows and glass walls (facadeWindows): the facade shows them where they are */
+  windows?: FacadeWindow[];
+}
+
+/** A window (or a run of glass wall) on one of the building's floors, as the facade draws it: its
+ *  ends on its wall's line (the home map's frame: x, z), its bottom and top (campus y: the studio's
+ *  floor at 0), and whether it's a glass wall (floor to ceiling, no trim). */
+export interface FacadeWindow {
+  a: [number, number];
+  b: [number, number];
+  y0: number;
+  y1: number;
+  glass?: boolean;
+}
+
+/** The building's windows on every floor (its window things, by the wall each is set in, and the
+ *  walls painted as windows or made of glass), for the facade (`Outline.windows`): `corner` the home
+ *  map's corner in the world. The facade keeps those on its own lines; the rest are inside. */
+export function facadeWindows(
+  s: Pick<Structure, "home" | "floors" | "walls">,
+  objects: Iterable<WorldObjectDef>,
+  corner: { x: number; y: number },
+): FacadeWindow[] {
+  const home = s.floors.find((f) => f.index === s.home)?.z ?? 0;
+  const walls = new Map(s.walls.map((w) => [w.id, w]));
+  const at = (p: [number, number]): [number, number] => [p[0] - corner.x, p[1] - corner.y];
+  const out: FacadeWindow[] = [];
+  for (const o of objects) {
+    if (!isWindowKind(o.kind)) continue;
+    const on = onOf(o);
+    const w = on ? walls.get(on.wall) : undefined;
+    if (!on || !w || isArc(w)) continue;
+    const L = wallLength(w) || 1;
+    const n = openingSpan(o.kind) / 2;
+    const [z0, z1] = openingCut(o.kind);
+    out.push({
+      a: at(wallPoint(w, (on.at - n) / L)),
+      b: at(wallPoint(w, (on.at + n) / L)),
+      y0: w.base - home + z0,
+      y1: w.base - home + z1,
+    });
+  }
+  for (const w of s.walls) {
+    if (isArc(w)) continue;
+    const L = wallLength(w);
+    if (w.front === "g" || w.back === "g")
+      out.push({ a: at(w.a), b: at(w.b), y0: w.base - home, y1: w.base - home + w.height, glass: true });
+    else if (isWindow(w.front))
+      // (a wall painted as windows: one a metre)
+      for (let i = 0; i + 0.5 < L; i++)
+        out.push({
+          a: at(wallPoint(w, i / L)),
+          b: at(wallPoint(w, Math.min(L, i + 1) / L)),
+          y0: w.base - home + WIN0,
+          y1: w.base - home + WIN1,
+        });
+  }
+  return out;
 }
 
 /** What's floor at a tile by the rings (even-odd at its middle): a row's crossings each, once. */
@@ -362,6 +421,140 @@ export function facadeCanvases(T: Themes) {
     return t;
   };
   return { map: tex(body.c), lit: tex(lit.c), ledge: tex(ledge.c) };
+}
+
+// The main block's own wall, where its floors' real windows are punched in (Campus.cladRun): one
+// storey of clad panels CLAD_U wide, its slab's band across each floor's line (snow on its ledge),
+// world up = canvas up (v from the ground's floor line, a storey to one).
+const CLAD_U = 8;
+export function cladCanvases(T: Themes) {
+  const PX = 64;
+  const W = CLAD_U * PX;
+  const H = STOREY * PX;
+  const body = T.canvas(W, H);
+  const ledge = T.canvas(W, H);
+  ledge.g.fillStyle = "#000";
+  ledge.g.fillRect(0, 0, W, H);
+  const g = body.g;
+  const r = T.rng(73);
+  const row = (h: number) => H - h * PX; // a height up the storey → its canvas row
+  // the panels
+  g.fillStyle = "#c3bdb2";
+  g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 900; i++) {
+    g.fillStyle = r() < 0.5 ? "rgba(255,255,255,0.05)" : "rgba(60,50,40,0.05)";
+    g.fillRect(r() * W, r() * H, 2 + r() * 10, 2 + r() * 6);
+  }
+  // their joints: one every 2 m, one across at sill height
+  g.fillStyle = "#958f85";
+  for (let x = 0; x < W; x += 2 * PX) g.fillRect(x, 0, 3, H);
+  g.fillRect(0, row(0.75), W, 3);
+  // the slab's band, across the floor line (the top of the storey below, the foot of this one)
+  const band = (y0: number, y1: number) => g.fillRect(0, row(y1), W, row(y0) - row(y1));
+  g.fillStyle = "#d9d5cc";
+  band(0, 0.24);
+  band(STOREY - 0.3, STOREY);
+  // (rain's streaks down from under it, its shadow line)
+  for (let x = 0; x < W; x += 3) {
+    g.fillStyle = `rgba(70,62,52,${0.03 + r() * 0.05})`;
+    g.fillRect(x, row(STOREY - 0.3), 3, (0.25 + r() * 0.9) * PX);
+  }
+  g.fillStyle = "#8a857c";
+  g.fillRect(0, row(STOREY - 0.3), W, 3);
+  g.fillStyle = "#e9e5dd";
+  g.fillRect(0, row(0.24), W, 2);
+  // snow on the band's ledge, a ragged line (in the mask: the weather's)
+  ledge.g.fillStyle = "#ffffff";
+  ledge.g.beginPath();
+  ledge.g.moveTo(0, row(0.24));
+  for (let x = 0; x <= W; x += 6) ledge.g.lineTo(x, row(0.24) + 5 + r() * 6);
+  ledge.g.lineTo(W, row(0.24));
+  ledge.g.fill();
+  const tex = (c: HTMLCanvasElement) => {
+    const t = new CanvasTexture(c);
+    t.colorSpace = SRGBColorSpace;
+    t.wrapS = RepeatWrapping;
+    t.wrapT = RepeatWrapping;
+    t.anisotropy = 8;
+    return t;
+  };
+  return { map: tex(body.c), ledge: tex(ledge.c) };
+}
+
+// The windows set in it, as seen from outside: an atlas of PANES cells — a window (white frame,
+// a mullion and a transom, the sky in its glass) dark, lit cold, lit warm; a glass wall's panel dark
+// and lit. The lit map is the night's (emissive): the rooms' light in the glass.
+export const PANES = 5;
+export function paneCanvases(T: Themes) {
+  const CW = 128;
+  const CH = 176;
+  const body = T.canvas(CW * PANES, CH);
+  const lit = T.canvas(CW * PANES, CH);
+  const g = body.g;
+  lit.g.fillStyle = "#000";
+  lit.g.fillRect(0, 0, CW * PANES, CH);
+  for (let c = 0; c < PANES; c++) {
+    const x0 = c * CW;
+    const wall = c >= 3; // a glass wall's panel
+    const F = wall ? 5 : 10; // the frame
+    // the glass: the sky reflected, lighter up top, a streak of brighter sky across
+    const grd = g.createLinearGradient(0, 0, 0, CH);
+    grd.addColorStop(0, "#8796a1");
+    grd.addColorStop(0.45, "#4d5b65");
+    grd.addColorStop(1, "#262e35");
+    g.fillStyle = grd;
+    g.fillRect(x0, 0, CW, CH);
+    g.save();
+    g.beginPath();
+    g.rect(x0, 0, CW, CH);
+    g.clip();
+    g.fillStyle = "rgba(200,214,224,0.13)";
+    g.beginPath();
+    g.moveTo(x0 + CW * 0.15, CH);
+    g.lineTo(x0 + CW * 0.55, CH);
+    g.lineTo(x0 + CW * 1.05, 0);
+    g.lineTo(x0 + CW * 0.65, 0);
+    g.fill();
+    g.restore();
+    // the lit rooms behind (the night's)
+    const on = c === 1 || c === 2 || c === 4;
+    if (on) {
+      const lg = lit.g.createLinearGradient(0, 0, 0, CH);
+      const [top, foot] = c === 1 ? ["#a8bccc", "#6d7f8e"] : ["#f0cf8e", "#a98a52"];
+      lg.addColorStop(0, top);
+      lg.addColorStop(1, foot);
+      lit.g.fillStyle = lg;
+      lit.g.fillRect(x0 + F, F, CW - 2 * F, CH - 2 * F);
+    }
+    // the frame, a mullion, a transom (the lit map dark there)
+    const frame = wall ? "#2b3238" : "#ebe7df";
+    const inner = wall ? "#1c2126" : "#b9b4aa";
+    const bars: [number, number, number, number][] = [
+      [x0, 0, CW, F],
+      [x0, CH - F, CW, F],
+      [x0, 0, F, CH],
+      [x0 + CW - F, 0, F, CH],
+    ];
+    if (wall) bars.push([x0, Math.round(CH * 0.22), CW, 4]);
+    else bars.push([x0 + CW / 2 - 3, 0, 6, CH], [x0, Math.round(CH * 0.42), CW, 6]);
+    for (const [x, y, w, h] of bars) {
+      g.fillStyle = frame;
+      g.fillRect(x, y, w, h);
+      lit.g.fillStyle = "#000";
+      lit.g.fillRect(x, y, w, h);
+    }
+    // (the frame's inner edge in shadow: the glass set back in it)
+    g.fillStyle = inner;
+    g.fillRect(x0 + F, F, CW - 2 * F, 2);
+    g.fillRect(x0 + F, F, 2, CH - 2 * F);
+  }
+  const tex = (c: HTMLCanvasElement) => {
+    const t = new CanvasTexture(c);
+    t.colorSpace = SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+  };
+  return { map: tex(body.c), lit: tex(lit.c) };
 }
 
 // Snow: a soft tileable field with drifts and blue hollows.
@@ -1377,10 +1570,28 @@ export class Campus {
     });
     // (the ledges' snow by its mask, as the snow lies: light3d.ts patchOutdoors — set after the clone:
     // a material's clone copies its userData through JSON, the texture made a PNG on the way)
-    this.mainFacade = this.facade.clone();
+    // the main block's: its floors' real windows in a clad wall when they're known (the structure's),
+    // else the blocks' curtain wall
+    const windows = outline?.windows ?? null;
     this.facade.userData.wxLedge = ledge;
-    this.mainFacade.userData.wxLedge = ledge;
-    this.disposables.push(facadeMap, lit, ledge, this.facade, this.mainFacade);
+    this.disposables.push(facadeMap, lit, ledge, this.facade);
+    if (windows) {
+      const clad = cladCanvases(T);
+      this.mainFacade = this.lambert(0xffffff, clad.map);
+      this.mainFacade.userData.wxLedge = clad.ledge;
+      const pane = paneCanvases(T);
+      this.panes = new MeshLambertMaterial({
+        map: pane.map,
+        emissive: 0xffffff,
+        emissiveMap: pane.lit,
+        emissiveIntensity: 0,
+      });
+      this.disposables.push(clad.map, clad.ledge, pane.map, pane.lit, this.panes);
+    } else {
+      this.mainFacade = this.facade.clone();
+      this.mainFacade.userData.wxLedge = ledge;
+      this.disposables.push(this.mainFacade);
+    }
     const concrete = this.lambert(0xcfcbc2);
     // (the parapets' caps: their stone — the snow on them is the dusting's, wx3d.ts)
     const white = this.lambert(0xdcd8d0);
@@ -1439,21 +1650,58 @@ export class Campus {
       if (c && isWindowKind(c.kind)) return [c.z0, c.z1];
       return isWindow(wallAt(e)) ? [WIN0, WIN1] : null;
     };
-    for (const r of mainRuns) this.facadeRun(skin, cap, coping, r, 0, (i) => win(r, i), topSkin);
     const mainWhite = this.lambert(0xdcd8d0);
     const mainConcrete = this.lambert(0xcfcbc2);
     this.mainCut = [this.mainFacade, mainWhite, mainConcrete];
+    // (punched: the glass in the windows and their trims, the top storey's apart — see topSkin)
+    const panes = new G();
+    const topPanes = new G();
+    const trims = new G();
+    const topTrims = new G();
+    const lights: { r: Run; u0: number; u1: number; y: number; k: number }[] = [];
+    if (windows) {
+      for (const r of mainRuns) {
+        const on = this.cladRun(skin, topSkin, panes, topPanes, trims, topTrims, r, windows);
+        lights.push(...on.map((l) => ({ r, ...l })));
+        this.parapet(cap, coping, r, true);
+      }
+    } else for (const r of mainRuns) this.facadeRun(skin, cap, coping, r, 0, (i) => win(r, i), topSkin);
     this.add(skin.build(), this.mainFacade);
     // the top storey's skin would stand between a camera just outside the
     // building and you (walls fade, this wouldn't): only from further away
     this.topSkin = this.add(topSkin.build(), this.mainFacade);
     this.add(cap.build(), mainWhite);
     this.add(coping.build(), mainConcrete);
+    if (this.panes) {
+      this.mainCut.push(this.panes);
+      if (!panes.empty) this.add(panes.build(), this.panes);
+      if (!trims.empty) this.add(trims.build(), mainWhite);
+      // (the studio's own windows are its to draw when it is: these only when it isn't — you're below it)
+      this.topPanes = topPanes.empty ? null : this.add(topPanes.build(), this.panes);
+      this.topTrims = topTrims.empty ? null : this.add(topTrims.build(), mainWhite);
+    }
     // ── the windows' light on the snow under them at night (docs/plan/44-the-night.md N2):
     // a soft fan out from the facade a tile at a time, as the offices above are lit or not
     // (hashed: some dark, the rest brighter or dimmer) ──
     const spill = new G();
-    for (const r of mainRuns)
+    // (punched: under the lit windows, the brighter the lower)
+    for (const { r, u0, u1, y, k } of lights) {
+      const kk = k * Math.max(0.3, 1 - (y - GROUND) / 16);
+      const P = (u: number): [number, number] => (r.nz !== 0 ? [r.x0 + u, r.z0] : [r.x0, r.z0 + u]);
+      const [ax, az] = P(u0);
+      const [bx, bz] = P(u1);
+      const [ox, oz] = [r.nx * 3.4, r.nz * 3.4];
+      const yy = (x: number, z: number) => ground(x, z) + 0.19;
+      spill.color(new Color(kk, kk, kk).getHex());
+      spill.quad(
+        [ax, yy(ax, az), az],
+        [bx, yy(bx, bz), bz],
+        [bx + ox, yy(bx + ox, bz + oz), bz + oz],
+        [ax + ox, yy(ax + ox, az + oz), az + oz],
+        [0, 1, 0],
+      );
+    }
+    for (const r of windows ? [] : mainRuns)
       for (let i = 0; i < runLen(r); i++) {
         const [ax, az] = r.nz !== 0 ? [r.x0 + i, r.z0] : [r.x0, r.z0 + i];
         const h = (((Math.sin(ax * 12.9898 + az * 78.233) * 43758.5453) % 1) + 1) % 1;
@@ -2235,6 +2483,10 @@ export class Campus {
   }
   private headMat: MeshBasicMaterial;
   private topSkin: Mesh;
+  // the punched facade's glass (its windows'), and the studio's storey's own (shown when it isn't drawn)
+  private panes: MeshLambertMaterial | null = null;
+  private topPanes: Mesh | null = null;
+  private topTrims: Mesh | null = null;
 
   // One run of facade: the glass skin down to the ground, a parapet with a
   // snowy cap. The main block's top storey is the studio itself: its skin goes
@@ -2307,7 +2559,21 @@ export class Campus {
         } else band(x0, z0, x1, z1, u0, u1, 0, WALL, g);
       }
     }
-    // the parapet: outer face, snowy cap, inner face (the blocks' roofs end at it)
+    this.parapet(cap, coping, r, studio, top);
+  }
+
+  // A run's parapet: outer face, snowy cap, inner face (the blocks' roofs end at it); the main
+  // block's (`studio`) on the studio's walls.
+  private parapet(cap: G, coping: G, r: Run, studio: boolean, top = 0) {
+    const nx = r.nx;
+    const nz = r.nz;
+    const dx = nx === 0 ? 1 : 0;
+    const dz = nz === 0 ? 1 : 0;
+    const ax = r.x0 + nx * SKIN - dx * SKIN;
+    const az = r.z0 + nz * SKIN - dz * SKIN;
+    const bx = r.x1 + nx * SKIN + dx * SKIN;
+    const bz = r.z1 + nz * SKIN + dz * SKIN;
+    const n: V = [nx, 0, nz];
     const base = studio ? WALL - 0.02 : top;
     const inX = studio ? nx * 0.1 : -nx * 0.4;
     const inZ = studio ? nz * 0.1 : -nz * 0.4;
@@ -2327,6 +2593,122 @@ export class Campus {
         [r.x0 + inX, PARAPET, r.z0 + inZ],
         [-nx, 0, -nz],
       );
+  }
+
+  // One run of the main block's wall with its floors' real windows punched in (`wins`: those of
+  // every floor, the run keeps the ones on its line): the clad wall from the ground to the studio's
+  // floor (`skin`) and the studio's storey (`top`), each open where a window is, the doors' too;
+  // in each window its glass (`panes`, the studio's `topPanes`) and round it a trim, a sill under
+  // (`trims`, `topTrims`). Gives the lit ones (along the run, from its first tile), for their light
+  // on the snow.
+  private cladRun(
+    skin: G,
+    top: G,
+    panes: G,
+    topPanes: G,
+    trims: G,
+    topTrims: G,
+    r: Run,
+    wins: FacadeWindow[],
+  ): { u0: number; u1: number; y: number; k: number }[] {
+    const { nx, nz } = r;
+    const n: V = [nx, 0, nz];
+    const along = nz !== 0; // the run lies along x (its line z = r.z0), else along z (x = r.x0)
+    const line = along ? r.z0 : r.x0;
+    const t0 = along ? r.x0 : r.z0;
+    const len = runLen(r);
+    // a point of the run: u along it from its first tile, `off` out from its line
+    const P = (u: number, y: number, off: number): V =>
+      along ? [t0 + u, y, line + nz * off] : [line + nx * off, y, t0 + u];
+    type Hole = { u0: number; u1: number; y0: number; y1: number; glass?: boolean; door?: boolean };
+    const holes: Hole[] = [];
+    for (const w of wins) {
+      const [pa, pb] = along ? [w.a[1], w.b[1]] : [w.a[0], w.b[0]];
+      if (Math.abs(pa - line) > 0.3 || Math.abs(pb - line) > 0.3) continue;
+      const [qa, qb] = along ? [w.a[0], w.b[0]] : [w.a[1], w.b[1]];
+      const u0 = Math.max(0, Math.min(qa, qb) - t0);
+      const u1 = Math.min(len, Math.max(qa, qb) - t0);
+      if (u1 - u0 < 0.05) continue;
+      holes.push({ u0, u1, y0: w.y0, y1: w.y1, glass: w.glass });
+    }
+    const door = this.door;
+    if (door && nx === -1 && r.x0 === 0 && door.z0 > r.z0 && door.z1 < r.z1)
+      holes.push({ u0: door.z0 - t0, u1: door.z1 - t0, y0: GROUND, y1: GROUND + WALL, door: true });
+    // the wall from y0 to y1, open at the holes in it: cut into columns at their sides, each column
+    // the wall between the holes in it (u from −SKIN to len + SKIN: the corners closed)
+    const wall = (into: G, y0: number, y1: number, hs: Hole[]) => {
+      const cuts = [-SKIN, len + SKIN];
+      for (const h of hs) cuts.push(h.u0, h.u1);
+      const us = [...new Set(cuts)].sort((a, b) => a - b);
+      const uv = (u: number, y: number): [number, number] => [(u + SKIN) / CLAD_U, (y - GROUND) / STOREY];
+      const quad = (ua: number, ub: number, ya: number, yb: number) =>
+        into.quad(P(ua, yb, SKIN), P(ub, yb, SKIN), P(ub, ya, SKIN), P(ua, ya, SKIN), n, [
+          uv(ua, yb),
+          uv(ub, yb),
+          uv(ub, ya),
+          uv(ua, ya),
+        ]);
+      for (let i = 0; i + 1 < us.length; i++) {
+        const [ua, ub] = [us[i], us[i + 1]];
+        if (ub - ua < 1e-4) continue;
+        const mid = (ua + ub) / 2;
+        let y = y0;
+        for (const h of hs.filter((h) => h.u0 < mid && h.u1 > mid).sort((a, b) => a.y0 - b.y0)) {
+          const [ha, hb] = [Math.max(y0, h.y0), Math.min(y1, h.y1)];
+          if (hb <= ha) continue;
+          if (ha > y) quad(ua, ub, y, ha);
+          y = Math.max(y, hb);
+        }
+        if (y < y1) quad(ua, ub, y, y1);
+      }
+    };
+    const low = holes.filter((h) => h.y1 <= 0.05);
+    const high = holes.filter((h) => h.y0 >= -0.05 && !h.door);
+    wall(skin, GROUND, 0, low);
+    wall(top, 0, WALL, high);
+    // the glass, a hair outside the floor's own wall (and its window), the trims round it
+    const lit: { u0: number; u1: number; y: number; k: number }[] = [];
+    const box = (g: G, ua: number, ub: number, ya: number, yb: number, oa: number, ob: number) => {
+      const p = P(ua, ya, oa);
+      const q = P(ub, yb, ob);
+      g.box(Math.min(p[0], q[0]), ya, Math.min(p[2], q[2]), Math.max(p[0], q[0]), yb, Math.max(p[2], q[2]));
+    };
+    const pane = (g: G, ua: number, ub: number, ya: number, yb: number, c: number) => {
+      const [c0, c1] = [c / PANES + 0.002, (c + 1) / PANES - 0.002];
+      const o = SKIN - 0.006;
+      g.quad(P(ua, yb, o), P(ub, yb, o), P(ub, ya, o), P(ua, ya, o), n, [
+        [c0, 1],
+        [c1, 1],
+        [c1, 0],
+        [c0, 0],
+      ]);
+    };
+    for (const h of [...low, ...high]) {
+      if (h.door) continue;
+      const studio = h.y0 >= -0.05;
+      const [pg, tg] = studio ? [topPanes, topTrims] : [panes, trims];
+      // (lit at night or not: by where it is — some dark, the rest cold or warm; a glass wall's
+      // the lobby's, lit)
+      const hash = (((Math.sin((t0 + h.u0) * 12.9898 + line * 78.233 + h.y0 * 3.7) * 43758.5453) % 1) + 1) % 1;
+      if (h.glass) {
+        // floor to ceiling: panels about a metre and a half wide, a dark frame each
+        const k = Math.max(1, Math.round((h.u1 - h.u0) / 1.5));
+        const w = (h.u1 - h.u0) / k;
+        for (let i = 0; i < k; i++) pane(pg, h.u0 + i * w, h.u0 + (i + 1) * w, h.y0, h.y1, 4);
+        if (!studio) lit.push({ u0: h.u0, u1: h.u1, y: h.y0, k: 0.8 });
+        continue;
+      }
+      const c = hash < 0.4 ? 0 : hash < 0.8 ? 1 : 2;
+      pane(pg, h.u0, h.u1, h.y0, h.y1, c);
+      if (c && !studio) lit.push({ u0: h.u0, u1: h.u1, y: h.y0, k: c === 2 ? 0.9 : 0.6 });
+      // the trim round it (standing a little out of the wall), the sill under it deeper
+      const T = 0.07;
+      box(tg, h.u0 - T, h.u0, h.y0, h.y1, SKIN - 0.01, SKIN + 0.04);
+      box(tg, h.u1, h.u1 + T, h.y0, h.y1, SKIN - 0.01, SKIN + 0.04);
+      box(tg, h.u0 - T, h.u1 + T, h.y1, h.y1 + T, SKIN - 0.01, SKIN + 0.05);
+      box(tg, h.u0 - T - 0.04, h.u1 + T + 0.04, h.y0 - 0.08, h.y0, SKIN - 0.01, SKIN + 0.1);
+    }
+    return lit;
   }
 
   private lambert(hex: number, map?: CanvasTexture, vertex = false): MeshLambertMaterial {
@@ -2380,8 +2762,14 @@ export class Campus {
       .multiplyScalar(0.75 + 0.35 * (1 - d.night))
       .multiplyScalar(k);
     this.facade.emissiveIntensity = Math.max(0, d.night * 0.55 - 0.03);
-    this.mainFacade.color.copy(this.facade.color);
-    this.mainFacade.emissiveIntensity = this.facade.emissiveIntensity;
+    if (this.panes) {
+      // (the clad wall's tinted as the rest; the glass in it as the blocks' is, lit brighter)
+      this.panes.color.copy(this.facade.color);
+      this.panes.emissiveIntensity = Math.max(0, d.night * 0.85 - 0.05);
+    } else {
+      this.mainFacade.color.copy(this.facade.color);
+      this.mainFacade.emissiveIntensity = this.facade.emissiveIntensity;
+    }
     const on = Math.min(1, Math.max(0, d.night * 1.3 - 0.1));
     this.lamps.opacity = on * 0.85;
     this.headMat.opacity = on;
@@ -2424,6 +2812,8 @@ export class Campus {
     const outX = Math.max(0, this.fx0 + 0.5 - cam.x, cam.x - this.fx1 + 0.5);
     const outZ = Math.max(0, this.fz0 + 0.5 - cam.z, cam.z - this.fz1 + 0.5);
     this.topSkin.visible = this.skinAlways || Math.hypot(outX, outZ) > 14.5;
+    if (this.topPanes) this.topPanes.visible = this.skinAlways;
+    if (this.topTrims) this.topTrims.visible = this.topSkin.visible;
     for (const t of this.trees) t.rotation.y = Math.atan2(cam.x - t.position.x, cam.z - t.position.z);
     // the tower's beacon blinks at night
     this.beacon.opacity = this.night > 0.1 ? (Math.sin(this.t * 2.2) > 0.3 ? this.night : 0.08) : 0;
