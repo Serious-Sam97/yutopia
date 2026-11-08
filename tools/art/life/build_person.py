@@ -880,6 +880,7 @@ bpy.ops.export_scene.gltf(
     export_morph_normal=False,
     export_vertex_color="ACTIVE",
     export_image_format="AUTO",
+    export_meshopt_compression_enable=True,
     export_apply=False,
 )
 h = (max(posed["body"][:, 1]) - lowest) * UNIT

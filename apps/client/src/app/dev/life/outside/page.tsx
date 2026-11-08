@@ -34,7 +34,7 @@ export default function LifeOutside() {
       const { RenderPass } = await import("three/addons/postprocessing/RenderPass.js");
       const { GTAOPass } = await import("three/addons/postprocessing/GTAOPass.js");
       const { OutputPass } = await import("three/addons/postprocessing/OutputPass.js");
-      const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+      const A = await import("@/world/look/life-assets");
       const C = await import("@/world/chars");
       await C.loadHero();
       const L = await import("@/world/look/life-person");
@@ -64,7 +64,7 @@ export default function LifeOutside() {
       const M = K.lifeMats();
       scene.add(O.lifeFacade(M, W, hour));
       scene.add(O.lifeGround(W));
-      const tree = (await new GLTFLoader().loadAsync("/life/tree-leafy.glb")).scene;
+      const tree = (await A.loadLifeGLTF(renderer, "/life/tree-leafy.glb")).scene;
       for (const [x, z, s, ry] of [
         [-12.5, 2.6, 1.3, 0.3],
         [13, 2.8, 1.2, 2.1],
@@ -151,8 +151,8 @@ export default function LifeOutside() {
       });
 
       // the people: he stands on the pavement, she sits on the bench
-      const man = await L.loadLifePerson("/life/person-man-painted.glb");
-      const woman = await L.loadLifePerson("/life/person-woman-painted.glb");
+      const man = await L.loadLifePerson("/life/person-man-painted.glb", renderer);
+      const woman = await L.loadLifePerson("/life/person-woman-painted.glb", renderer);
       for (const p of [man, woman]) {
         p.root.traverse((o) => {
           o.castShadow = true;

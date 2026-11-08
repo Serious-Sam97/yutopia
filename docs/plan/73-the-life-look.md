@@ -4,7 +4,8 @@ Ask (2026-11-08), after the mature-look study (four colour and light takes on th
 https://claude.ai/artifact/48wUvPTpm4u3or1FQroBZQ): "I'm thinking more of the mature look of The
 Sims 3. Not only the colour, but the design and model of all."
 
-Status: **phase 0 (mocks 0a–0d) built and signed off 2026-11-08; phase 1 next.** The game itself is
+Status: **phase 0 signed off and committed (98aee21); phase 1 (the pipeline) built 2026-11-08, phase 2
+next.** The game itself is
 unchanged: the mocks are dev pages and a dev-only probe.
 
 Decided with the user (2026-11-08): F1 **authored base mesh** for people · F2 **upgrade the code
@@ -193,6 +194,28 @@ geometry and KTX2 (Basis) textures. Loaders (GLTF + KTX2 + meshopt) in a lazy ch
 download budget, a GPU-memory budget, and a load order (near first). Tests that each asset loads,
 fits its budget and has its skin weights on our joints.
 
+
+**Built 2026-11-08.** KTX2 chosen by the user. The encoder is Basis Universal v2.50 (`basisu`, Apache-2.0),
+built from source in `../yutopia-art-src/tools/basis_universal` (KTX-Software isn't in Homebrew; the
+sandbox won't clone or build outside code, so the user ran that build). The pieces:
+- Blender exports with meshopt geometry (`export_meshopt_compression_enable`, EXT_meshopt_compression)
+  and PNG textures; `tools/art/life/pack_glb.py` (plain Python) encodes each texture to KTX2 — ETC1S
+  for flat painted colour, UASTC (RDO) for the skin's gradients — marks KHR_texture_basisu and lays
+  the binary chunk out again; `tools/art/life/build_all.sh` builds and packs everything.
+- `tools/decoders.mjs` copies three's Basis transcoder into `public/decoders/basis/` (gitignored; run
+  by the client's build, like the emulator cores); meshopt's decoder is bundled from three's addons.
+- `src/world/look/life-assets.ts`: `lifeLoader(renderer)` (one GLTFLoader with KTX2 + meshopt, in a
+  lazy chunk) and `AssetQueue` (priority — the nearest first — a few at a time, each url once, held
+  while used, unheld freed oldest-first past a byte budget; `life-assets.test.ts`, 6 tests).
+- `src/world/look/life-budget.test.ts`: every built asset against its budget — download, textures on the
+  GPU (from the KTX2 headers, ~1 byte a pixel with mips), triangles, required extensions, a person's
+  31 joints and four weights a vertex (skipped when not built).
+Measured: a person 5.6 → 1.9 MB to download, textures ~7.7 MB on the GPU (~39 uncompressed), 41k /
+32k triangles; the plant and the tree ~0.1 MB each. Budgets: person 2.2 MB / 9.5 MB GPU / 46k tris;
+plant 0.3 / 1.5 / 12k; tree 0.4 / 2 / 12k. The benches load the packed files with no loss to see.
+Left for the integration phases: the queue wired to the world's people (by distance), a lower level of
+detail for far people, a CDN path.
+
 ### 2 — The renderer
 
 A tone curve. Standard materials joining the `yulit` family (light map, fade and fog kept; cel
@@ -261,12 +284,18 @@ The `.glb` files in `apps/client/public/life/` are not in git; the scripts make 
      makehuman/data LICENSE.md LICENSE.ASSETS.md`)
    - `sysassets/sys/` — the system asset pack, unzipped
      (`files.makehumancommunity.org/asset_packs/makehuman_system_assets/makehuman_system_assets_cc0.zip`)
-2. Blender 5.2, headless, from the repo root:
+2. The KTX2 encoder: Basis Universal v2_50 built from source into
+   `../yutopia-art-src/tools/basis_universal/bin/basisu` (`git clone --depth 1 --branch v2_50
+   https://github.com/BinomialLLC/basis_universal.git …`, then `cmake -S … -B …/build -G Ninja
+   -DCMAKE_BUILD_TYPE=Release && cmake --build …/build`).
+3. Everything at once: `sh tools/art/life/build_all.sh` (builds, then packs with `pack_glb.py`). Or one by
+   one, Blender 5.2, headless, from the repo root:
    - `blender -b --factory-startup -P tools/art/life/build_person.py -- --who man --paint` (and
      `--who woman`; without `--paint` the photo textures, `--preview DIR` flat renders)
    - `blender -b --factory-startup -P tools/art/life/build_plant.py`
    - `blender -b --factory-startup -P tools/art/life/build_tree.py`
-3. The benches: `/dev/life` (people), `/dev/life/room`, `/dev/life/outside`; stills by
+4. `node tools/decoders.mjs` (the Basis transcoder into `public/decoders`; the client's build runs it).
+5. The benches: `/dev/life` (people), `/dev/life/room`, `/dev/life/outside`; stills by
    `node --experimental-strip-types e2e/life-bench.mts [out]` (SHOTS=…); the 0a probe's by
    `e2e/life-shots.mts`, the colour study's by `e2e/mature-shots.mts`.
 

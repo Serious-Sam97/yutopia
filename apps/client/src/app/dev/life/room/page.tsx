@@ -73,7 +73,7 @@ export default function LifeRoom() {
       const { RenderPass } = await import("three/addons/postprocessing/RenderPass.js");
       const { GTAOPass } = await import("three/addons/postprocessing/GTAOPass.js");
       const { OutputPass } = await import("three/addons/postprocessing/OutputPass.js");
-      const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+      const A = await import("@/world/look/life-assets");
       const { RoundedBoxGeometry } = await import("three/addons/geometries/RoundedBoxGeometry.js");
       const C = await import("@/world/chars");
       await C.loadHero();
@@ -252,7 +252,7 @@ export default function LifeRoom() {
           });
           scene.add(pic);
         }
-        const plant = (await new GLTFLoader().loadAsync("/life/plant-rubber.glb")).scene;
+        const plant = (await A.loadLifeGLTF(renderer, "/life/plant-rubber.glb")).scene;
         plant.traverse((o) => {
           const m = (o as InstanceType<typeof T.Mesh>).material as
             | InstanceType<typeof T.MeshStandardMaterial>
@@ -353,7 +353,7 @@ export default function LifeRoom() {
             drop: 0,
           };
         } else {
-          const lp = await L.loadLifePerson(`/life/person-${g}-painted.glb`);
+          const lp = await L.loadLifePerson(`/life/person-${g}-painted.glb`, renderer);
           people[g] = {
             root: lp.root,
             pose: (p, lift) => lp.setPose(p as never, lift),

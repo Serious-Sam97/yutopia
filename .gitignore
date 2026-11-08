@@ -23,3 +23,5 @@ docker/livekit.local.yaml
 # docs/plan/73-the-life-look.md, "Rebuilding the assets") — not kept in git
 apps/client/public/life/
 __pycache__/
+# the decoders three loads at run time, copied by tools/decoders.mjs
+apps/client/public/decoders/

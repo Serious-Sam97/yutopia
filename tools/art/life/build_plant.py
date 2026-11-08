@@ -202,5 +202,5 @@ leaf_mat.use_backface_culling = False
 
 os.makedirs(OUT, exist_ok=True)
 path = os.path.abspath(os.path.join(OUT, "plant-rubber.glb"))
-bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", export_yup=True, export_image_format="AUTO")
+bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", export_yup=True, export_image_format="AUTO", export_meshopt_compression_enable=True)
 print(f"wrote {path} ({os.path.getsize(path) / 1e3:.0f} KB), {len(leaf_f)} leaf quads")

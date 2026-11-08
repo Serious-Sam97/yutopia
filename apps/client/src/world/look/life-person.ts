@@ -21,9 +21,10 @@ import {
   SkinnedMesh,
   Uint16BufferAttribute,
   Vector3,
+  type WebGLRenderer,
 } from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { type Euler3, JOINTS, type JointName, PARENT, type Pose, REST } from "../chars/rig";
+import { loadLifeGLTF } from "./life-assets";
 
 // (the file's arms hang this far out from straight down — build_person.py ARM_OUT: all the way down
 // pushed its shoulders up into pads — so each pose's shoulder takes it back first)
@@ -133,8 +134,9 @@ function finish(name: string, mat: MeshStandardMaterial, hasColour: boolean): Me
   return mat;
 }
 
-export async function loadLifePerson(url: string): Promise<LifePerson> {
-  const gltf = await new GLTFLoader().loadAsync(url);
+export async function loadLifePerson(url: string, renderer: WebGLRenderer): Promise<LifePerson> {
+  // (KTX2 textures, meshopt geometry: the life loader, life-assets.ts)
+  const gltf = await loadLifeGLTF(renderer, url);
   const scene = gltf.scene;
   scene.updateMatrixWorld(true);
   const person = new LifePerson();

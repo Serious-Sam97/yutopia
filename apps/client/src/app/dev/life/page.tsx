@@ -176,7 +176,7 @@ export default function LifeBench() {
           });
         }
         for (const v of style === "both" ? ["", "-painted"] : style === "painted" ? ["-painted"] : [""]) {
-          const lp = await L.loadLifePerson(`/life/person-${g}${v}.glb`);
+          const lp = await L.loadLifePerson(`/life/person-${g}${v}.glb`, renderer);
           shown.push({
             root: lp.root,
             setPose: (p, lift) => lp.setPose(p as never, lift),
