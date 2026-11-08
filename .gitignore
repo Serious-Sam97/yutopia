@@ -19,3 +19,7 @@ apps/client/public/emu/games
 docker/livekit.local.yaml
 # our own Jolt build (packages/jolt: built with Docker by build.sh, nothing else builds it — kept)
 !packages/jolt/dist
+# plan 73's life-look assets (.glb): built by tools/art/life/*.py from the CC0 MakeHuman data (see
+# docs/plan/73-the-life-look.md, "Rebuilding the assets") — not kept in git
+apps/client/public/life/
+__pycache__/

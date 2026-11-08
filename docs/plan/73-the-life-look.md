@@ -1,0 +1,289 @@
+# 73 — The life look
+
+Ask (2026-11-08), after the mature-look study (four colour and light takes on the live game,
+https://claude.ai/artifact/48wUvPTpm4u3or1FQroBZQ): "I'm thinking more of the mature look of The
+Sims 3. Not only the colour, but the design and model of all."
+
+Status: **phase 0 (mocks 0a–0d) built and signed off 2026-11-08; phase 1 next.** The game itself is
+unchanged: the mocks are dev pages and a dev-only probe.
+
+Decided with the user (2026-11-08): F1 **authored base mesh** for people · F2 **upgrade the code
+kit** for furniture and buildings (organic things from Blender scripts) · F4 **drop ink and cel**
+· people **slightly idealised** (near-real proportions, a touch of polish, slightly larger eyes).
+F3 (Standard materials) and F5 (tiers) go with the recommendation as technical defaults, to be
+confirmed by phase 0's numbers.
+
+Texture style decided 2026-11-08, after 0b's photo-vs-painted mock (`build_person.py --paint`, a
+Kuwahara repaint of MakeHuman's textures): **painted**. Smooth, airbrushed skin; fabric as flat,
+slightly rich patches of colour with clean patterns; no photo grain. Phase 3's library and phase 5's
+clothes are made for this style, not filtered from photos (the filter was only the mock).
+
+## What this changes
+
+On 2026-10-22 the world went **stylized**: flat facets, an ink line, the cool cel shade, flat
+colour, no textures. The reason then was that a realistic world made the ligne-claire people look
+pasted on. That reason goes away here, because **the people change too**. This plan replaces the
+stylized direction everywhere: people, furniture, buildings, the Grounds, pets and the pictures
+of them in the UI.
+
+The reference is a **quality**, not a source. We take what makes that era of life-sim art feel
+grown-up and warm, and we make every model, texture and character ourselves. No assets, characters,
+UI, logos or names come from the game.
+
+## What the look is made of
+
+Looking at that style, what it has and we don't:
+
+1. **Soft, believable light.** A warm sun and a cool sky fill, soft shadows, darkening where
+   things meet (ambient occlusion: under a sofa, in room corners, between fingers), a gentle
+   bloom, and a tone curve that holds highlights. Skin, wood, glass and metal each catch light
+   their own way. **No outlines and no cel bands.**
+2. **Rounded forms.** Every edge is bevelled and cushions sag and bulge. Silhouettes are smooth.
+   It's mid-poly with care spent where the eye goes.
+3. **Painted surfaces.** Wood grain, fabric weave, leather, plaster, carpet, tile and brick, with
+   colour variation and a little baked shading in the texture. Fabrics carry patterns. Our plan 60
+   pattern system is the nearest thing we already have.
+4. **People.** Believable, slightly idealised proportions. Smooth skin with soft shading, real
+   eyes, brows, lashes and lips, hair as layered textured strands, and clothes with folds and
+   seams in their texture.
+5. **A warm, natural palette.** Rich but not loud: green lawns, warm wood interiors, a blue sky.
+   Saturated where it's lit and calm in the shade.
+6. **Living nature.** Leafy trees with real canopies, bushes, flowers and grass tufts on the
+   lawn edges.
+
+## Where we are (audit, 2026-11-08)
+
+- **Everything is made by code.** No model or texture file is loaded anywhere: no GLTFLoader,
+  KTX2 or Draco. People take ~7.9k lines (lathes, extrusions and swept tubes in
+  `chars/shapes.ts`, a 29-joint rig, 133 wardrobe options in recipes). Furniture takes ~37k lines
+  (`furn/`, 168+ pieces in `fam/` files). Buildings come from structure (plan 72) and the woods are
+  instanced procedural trees. Textures are the ~75 canvas-drawn ones.
+- **The look** is Lambert plus the `look/yulit.ts` family (light map, cel, fade), the fog over
+  everything (`tp/fog3d.ts`), then the ink pass, bloom (High only) and the finish grade in
+  `tp/post3d.ts`. There's no tone mapping in the game: linear goes straight to sRGB.
+- **Tied to the body.** Animation (plan 58: 29 joints, foot lock, IK, ragdoll, Flowmotion), sway
+  (61: worn things on Jolt), touch (62: seats, desks, drinks, cars), wardrobe (60), swim (66) and
+  the hit/shadowed acts all read the body's params (`chars/params.ts`, `moves.ts` THIGH/SHIN).
+- **Tools here:** Blender 5.2.3 is installed, so models, UVs and texture bakes can be scripted
+  headless (`blender -b -P script.py`) and kept in the repo.
+- **Budgets:** page 430 KB, chars chunk 58 KB. Budgets can be raised as needed. Model and texture
+  files aren't code, so they don't count against these, but they need a download and GPU-memory
+  budget of their own (new).
+
+## The forks (the user's call)
+
+| | Fork | Options | My recommendation |
+|---|---|---|---|
+| F1 | **How people are made** | (a) **Authored base mesh**: a CC0-licensed human base (the MakeHuman/MPFB lineage; licence verified in phase 0), reshaped in Blender into our own person. It's skinned to **our** 29-joint rig, with body and face sliders as morph targets, fitted clothing meshes, hair strand cards, and painted/baked textures. (b) **Push the procedural people further**: there's a ceiling, with no texture-quality skin, hair or cloth. | **(a)**. Keep the rig, animation, recipes and Jolt hooks, and replace the geometry. |
+| F2 | **How things are made** | (a) **Keep the procedural builders and upgrade the kit**: bevels and rounds everywhere, real UVs, and a shared library of generated textures. The 168 pieces' forms already exist. (b) **Re-author in Blender**: no artist, and scripting 168 pieces there is the same work as code but worse to edit. | **(a)** for furniture and buildings; **Blender scripts** for organic things (plants, trees, food, cushions' sag). |
+| F3 | **The light model** | (a) three's **Standard (PBR-lite)** materials with light from the sky (an environment map per hour). (b) Keep Lambert and add our own specular. | **(a)**: one model for skin, wood, glass and metal, measured per tier. |
+| F4 | **What's left of the cartoon** | Ink and cel go entirely, as in the reference. The "game-ness" left is idealised proportions and the warm palette. | Drop ink and cel. Revisit only if the mocks feel too plain. |
+| F5 | **The weakest machine** | Textures, AO and soft shadows cost GPU. Low could keep baked AO only, at reduced texture size. | Low: baked AO + half-size textures. Medium: + soft shadows. High: + screen-space AO + bloom. |
+
+## Phases
+
+### 0 — Mocks (image-first: nothing rolls out before sign-off)
+
+- **0a The light alone.** In the live game with today's models: ink and cel off, Standard
+  materials, a tone curve, soft shadows and AO. This shows how much is light and how much is
+  models.
+  **Built 2026-11-08, awaiting sign-off.** `src/world/look/life-probe.ts` (dev only, `window.__lifeProbe`
+  from `WorldView.tsx` behind `NODE_ENV`), stills by `e2e/life-shots.mts` into `design/screens/life/0a/`
+  (14 frames × today/life), page https://claude.ai/artifact/D29Vne4zjZRXCgZTAUCHAs. Learned:
+  - The `yulit` pieces (light map, fade, fog, snow) only touch chunks Standard shares with Lambert:
+    swapping 178 materials in place kept all of them. Phase 2 can change the material model without
+    rewriting the lighting.
+  - ACES's toe crushes the game's night (values near zero). A shoulder-only curve (Khronos PBR
+    Neutral without its toe) plus a gentle S keeps today's darks.
+  - The sky environment goes on lit materials only (as `scene.environment` it reached Basic ones:
+    signs' clear parts went black) and is scaled by `lmSkyLeft` and the night, or the lot glows at
+    midnight.
+  - GTAO must read the frame's own depth (`setGBuffer` with the composer's depth texture); its own
+    depth pass drew things the view hides and left a black square in the sky.
+  - Not measured: frame time and GPU cost. Phase 2 measures them per tier.
+- **0b One person.** The base mesh made into our person, one outfit and one hairstyle, skinned to
+  the rig, idle and walk, on `/dev/chars` beside today's. Two body types and two skin tones.
+  **Built 2026-11-08, awaiting sign-off.** Source data: MakeHuman's `makehuman/data` (sparse clone) and
+  the system asset pack, both CC0 1.0 (repo LICENSE.md §C; every pack entry `license: CC0`), kept
+  outside the repo in `../yutopia-art-src/`. `tools/art/life/build_person.py` (Blender 5.2, reads the
+  data formats itself, no MakeHuman code): macro targets → fitted proxies (clothes, shoes, hair, brows,
+  eyes, lashes; skin under clothes deleted) → arms down by LBS with MakeHuman's weights (6° left out,
+  taken back at the shoulder by the loader: full rotation pushed the shoulders into pads) → legs
+  straight → 163 bones folded onto our 31 → `apps/client/public/life/person-{man,woman}.glb` (6.9 / 6.1
+  MB, 41k / 32k tris; untracked). `src/world/look/life-person.ts` rebuilds unturned bones from the
+  file's joint places and renumbers skin joints, so Locomotion's poses drive it unchanged.
+  `/dev/life` bench (today's people beside, one Locomotion for all, 0a light), stills + loops by
+  `e2e/life-bench.mts` → `design/screens/life/0b/`; page https://claude.ai/artifact/6ZQqtecZgUyJr3NuEdgqe8.
+  Open: faces stock MakeHuman (need our idealising), no blink/look-at, peaked shoulders, hairline
+  edge, heavy lashes on the man, socks under all shoes, skirt not on its spring, size. Texture style:
+  painted (decided 2026-11-08, see the top).
+  **Faces pass (2026-11-08, the user's "faces first"):** `build_person.py` takes a face recipe of
+  MakeHuman's face targets — `IDEAL` (eyes a little larger and more open, no bags, outer corners
+  lifted; a finer nose; fuller lips, cupid's bow, corners up; higher cheekbones; oval head, less fat,
+  younger; no double chin; smaller ears) plus `MAN_FACE` (firmer chin and jaw, less slimming: the
+  shared slimming left him gaunt) and `WOMAN_FACE` (softer narrower chin, finer nose, fuller lips,
+  arched brows; eyes back to 0.36 — larger they stared). Brows and lashes recoloured to each person
+  (their files are near black) with their faint alpha lifted ×2.4; brows drawn truly see-through,
+  lashes by alpha to coverage (see-through, they vanished). Man eyebrow004 + eyelashes01, woman
+  eyebrow006 + eyelashes02. Stills `design/screens/life/0b-faces/` (before/after, front/profile).
+  **People polish (2026-11-08, "polish the people, more life-sim inspired"; faces and builds kept as
+  they are):** the face's shapes from MakeHuman's expression units by ethnic mix — blink (both lids;
+  the lashes, fitted on the shaped body + delta, close with them), talk, smile — exported as glTF
+  morphs; two eye bones (eyeL/eyeR under the head, life-person.ts EXTRA) turned by the gaze
+  (setEyes ±0.38 rad across, ±0.22 up/down); the bench drives blink and look from Locomotion's
+  gazeOut like today's people. Hair recoloured to the person (`hair_rgb`, the file's shading kept:
+  the ponytail's light roots read pink); scalp and hairline in the hair's colour and a little cheek
+  blush as body vertex colours; skin a MeshPhysical with a warm sheen, eyes wet (roughness 0.04),
+  hair with a soft shine. Eyes: man bluegreen, woman brownlight; woman brows eyebrow002 (006 drew as
+  an outline once its alpha was lifted). Stills `design/screens/life/0b-polish/`. Open: the man's
+  boxy shoulders, socks under every shoe, the hair cap's cut edge, skirt spring.
+  **His shoulders (2026-11-08, the user: "the shoulders of the man are too big"):** the full
+  shoulder-width and deltoid targets, less upper arm; the arms left 9° out in the file (6° before:
+  less of the lowering turn, less bunching; life-person.ts ARM_OUT follows), the turn shared further
+  into the shoulder (0.7) and collarbone (0.32); his collarbones lowered 7° (`shoulder_slope`: a
+  square, high line read broad); his head ~5% larger (head-scale targets 0.18), the life-sim
+  proportion. The muscle slider alone barely moved him. Stills `design/screens/life/shoulders-*`.
+- **0c Three things.** Sofa, desk + office chair and a potted plant, rebuilt with the upgraded
+  kit and texture library v0, on the furniture bench at noon and at night.
+  **Built 2026-11-08.** `src/world/look/life-kit.ts`: the painted texture library v0 drawn on
+  canvases in code (wood, fabric, floorboards, plaster), every part a rounded box or a stuffed
+  cushion (RoundedBoxGeometry, swollen and sagged) with UVs by the world (grain and weave at true
+  size), fabric a MeshPhysical with sheen, wood with a light clearcoat; `lifeSofa` (2.1 m, rolled arms,
+  three seat and back cushions, two throw pillows), `lifeDesk` (oak, a drawer pedestal, tapered legs,
+  laptop, mug, notebook), `lifeChair` (padded, curved back, armrests, five-star base). The plant by
+  `tools/art/life/build_plant.py` (a rubber tree: cream pot, three stems, ~33 glossy leaves shaped in
+  the mesh, painted midrib; 222 KB). `/dev/life/room` (a corner room: floorboards, plaster, skirting,
+  rug; the new woman seated on the sofa by the base motion's sit + `LifePerson.sitDrop`, the man by the
+  desk; `?kit=today` the same room with today's models and people; `?hour=22` a floor lamp, a
+  ceiling light and the laptop's glow). Stills `design/screens/life/0c/`. Fixed on the way: a negative
+  fraction painted whole floorboards black. **Refined 2026-11-08** (the user's "refine the room
+  first"): a coffee table (plan-rounded slab, tapered legs, book and mug), a low bookcase of seeded
+  books, two painted landscapes in oak frames, a floor lamp standing by day and lit at night, the
+  chair's back channel-stitched with a shell behind, a fuller rubber tree (four stems, ~56 leaves);
+  the skirt's weights below the hips shared by both thighs and taken off the knees. Stills
+  `design/screens/life/0c-refined/`. Open: sat, her thighs still poke through the skirt's hem (needs
+  the cloth's collision — phase 5's skirt).
+  **More (2026-11-08, "more on the room"):** a window over the desk (the back wall a ShapeGeometry with
+  the hole, a thick reveal so the sun comes through a box; painted white frame, glazing bars, oak sill,
+  faint glass), the sun moved behind the wall by day so a patch of it falls through the window onto
+  the floor (the room in a warmer, stronger sky fill), a painted view outside (sky, treeline, lawn;
+  night: deep blue and stars; set low, as the high camera's sight lines land), linen curtains on a rod,
+  a round side table with a teal ceramic table lamp (lit at night), tulips in a glass vase on the
+  coffee table; the floor lamp to the left corner. Stills `design/screens/life/0c-more/`.
+- **0d A corner of the world.** The lobby, the lot, the lawn and one leafy tree, at noon, 17h and
+  22h, from the same cameras as the mature study.
+  **Built 2026-11-08.** `src/world/look/life-outdoor.ts` (painted asphalt, paving, lawn, plaster; the
+  facade: banded plaster, stone plinth, cornice, framed windows with sills — at night some rooms lit —
+  no window over the entrance where the name hangs, a glass front with frames under a canopy on two
+  columns, the name on a dark board; the ground: lawn either side of the path, short tufts (tall read
+  as a meadow) and a flower bed under the windows as instanced crossed cards, smooth bushes (an
+  icosphere welded first, or faceted), pavement with joints, a kerb, the lot's bays; lamp posts lit at
+  night with short-reach pools; a park bench; a painted sky dome by the hour — clouds, the sun's glow,
+  stars). The tree by `tools/art/life/build_tree.py` (trunk, two levels of branches, ~330 leaf cards,
+  266 KB). `/dev/life/outside` (`?hour=noon|dusk|night`, `?view=close`; the new man standing, the new
+  woman on the bench). Compared with the mature study's `lot-*-today` stills. Stills
+  `design/screens/life/0d/`.
+- **Sign-off per mock**, then the numbers that set the budgets: download size, GPU memory, frame
+  time on High/Medium/Low.
+
+### 1 — The pipeline
+
+`tools/art/` Blender scripts (build, UV, bake AO, export) kept in the repo. glTF with meshopt
+geometry and KTX2 (Basis) textures. Loaders (GLTF + KTX2 + meshopt) in a lazy chunk. A cache, a
+download budget, a GPU-memory budget, and a load order (near first). Tests that each asset loads,
+fits its budget and has its skin weights on our joints.
+
+### 2 — The renderer
+
+A tone curve. Standard materials joining the `yulit` family (light map, fade and fog kept; cel
+out). An environment map from the sky per hour, cached and disposed (the car PMREM leak from plan
+72 is the warning). Soft shadows, AO per tier, bloom kept subtle by day. The ink pass and finish
+grade are reworked: the grade stays, the ink goes. Night keeps the lamps' pools and lit windows.
+
+### 3 — The material library
+
+Generated, tiling, tintable textures, so furniture colour picks and wardrobe colours still work:
+woods (×6), fabric weaves (×6), leather, metals, plaster, wallpaper, tile, carpet, brick,
+concrete, asphalt, grass, dirt, bark and leaves. Each comes with a little colour variation and a
+roughness map.
+
+### 4 — People I: body and face
+
+Base mesh and morphs mapped from `params.ts` BODY/GENDER. A skin shader (soft wrap light, a hint
+of subsurface warmth). Eyes with a wet highlight, brows, lashes, teeth and lips. A blink and the
+look-at kept. The plan 58 rig retargeted, and foot lock, IK, ragdoll and Flowmotion grips checked
+on the new proportions.
+
+### 5 — People II: hair and clothes
+
+Hair card sets per style. Clothing meshes per wardrobe category (tops, bottoms, shoes, outerwear,
+hats). Plan 60 patterns and second colours become texture overlays. Layering, sway (61), touch fits
+(62), swim (66), and the wardrobe picture editor re-pointed.
+
+### 6 — Things
+
+The kit upgrade (bevel, UV, materials) rolled through `fam/` by family: seating, tables, storage,
+screens, decor, play, chess, Christmas. Before/after stills for each family.
+
+### 7 — Buildings
+
+Walls with skirting and trim, window frames with depth and sills, doors with panels and handles,
+plaster/brick/siding outside, roofs with tiles, and floors in wood/tile/carpet. The campus facade,
+lifts and stairs too.
+
+### 8 — Outdoors
+
+Blended terrain textures (grass, dirt, the plan 65 snow layer kept), leafy trees and pines
+remodelled, bushes, flowers, grass tufts, textured roads and sidewalks, cars and the plough/bus
+remodelled, and the long road (plan 69).
+
+### 9 — Pets
+
+Plan 51's pets in the same look.
+
+### 10 — Pictures
+
+Furnish thumbnails, wardrobe and character pictures, and the minimap's art redrawn from the new
+models.
+
+### 11 — Checks
+
+Frame times, draws, heap, GPU memory, load time and download size per tier. Memcheck nightly.
+e2e. Before/after stills of every area.
+
+## Rebuilding the assets
+
+The `.glb` files in `apps/client/public/life/` are not in git; the scripts make them again.
+
+1. The source data (CC0 1.0), outside the repo in `../yutopia-art-src/`:
+   - `mh/` — a sparse clone of `github.com/makehumancommunity/makehuman`, `makehuman/data` only
+     (`git clone --depth 1 --filter=blob:none --sparse …`, then `git sparse-checkout set --skip-checks
+     makehuman/data LICENSE.md LICENSE.ASSETS.md`)
+   - `sysassets/sys/` — the system asset pack, unzipped
+     (`files.makehumancommunity.org/asset_packs/makehuman_system_assets/makehuman_system_assets_cc0.zip`)
+2. Blender 5.2, headless, from the repo root:
+   - `blender -b --factory-startup -P tools/art/life/build_person.py -- --who man --paint` (and
+     `--who woman`; without `--paint` the photo textures, `--preview DIR` flat renders)
+   - `blender -b --factory-startup -P tools/art/life/build_plant.py`
+   - `blender -b --factory-startup -P tools/art/life/build_tree.py`
+3. The benches: `/dev/life` (people), `/dev/life/room`, `/dev/life/outside`; stills by
+   `node --experimental-strip-types e2e/life-bench.mts [out]` (SHOTS=…); the 0a probe's by
+   `e2e/life-shots.mts`, the colour study's by `e2e/mature-shots.mts`.
+
+## Risks
+
+- **The largest plan yet.** It touches nearly every visual file. The rig, animation, physics,
+  recipes and data stay, so the game keeps working while the art changes area by area.
+- **Download and memory.** Textures are the new cost. KTX2, shared tiling textures and per-tier
+  sizes keep it in check; the budgets are set from phase 0's numbers.
+- **Weak GPUs.** Low must stay playable: baked AO, no screen-space passes.
+- **Program count and compile hitches** (plan 38/71): Standard materials are heavier programs.
+  Keep them compiled ahead, as today.
+- **Mixed looks during rollout.** A world half old and half new looks broken. Roll out behind a
+  dev flag (`?look=life`) until people, things and buildings are all in.
+
+## Open questions
+
+1. Can the night stay as dark as today, now that there's no ink to hold shapes? (Answered by 0d.)
+2. Does the HUD (plan 45, walnut and ink) stay as it is? It was made to sit over the stylized
+   world.

@@ -104,6 +104,13 @@ export function WorldView({ to }: { to?: string | null }) {
     void c.start();
     // handy for debugging and the e2e/perf tools
     Object.assign(window as object, { __yutopia: c, __hud: hud, __audio: { mixer, radio, sound } });
+    // (plan 73, phase 0a: the life look's light on today's models, for the mock stills — dev only)
+    if (process.env.NODE_ENV !== "production") {
+      Object.assign(window as object, {
+        __lifeProbe: (on: boolean, o?: object) =>
+          import("@/world/look/life-probe").then((m) => m.lifeProbe(c.tp, on, o)),
+      });
+    }
     // the frame's stages in a corner, while Settings → Graphics → Show frame stats is on
     let offPerf: (() => void) | null = null;
     let gone = false;
