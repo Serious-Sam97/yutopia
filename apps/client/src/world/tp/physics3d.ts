@@ -219,8 +219,9 @@ export class BrowserPhysics {
   }
 
   /** Floor `level` has a floor under (x, y): its slab, the stairs' treads up into its well, or a
-   *  lift's shaft it goes through (shared physics slabsOf — the floor from the slab under you). */
-  slabUnder(level: number, x: number, y: number): boolean {
+   *  lift's shaft it goes through (shared physics slabsOf — the floor from the slab under you);
+   *  `z` the feet's height in its frame (up a flight over the well: the treads under them). */
+  slabUnder(level: number, x: number, y: number, z?: number): boolean {
     this.keepUp();
     if (this.slabsFor !== this.seen) {
       const { building } = this.src.world();
@@ -232,7 +233,7 @@ export class BrowserPhysics {
       );
       this.slabsFor = seen;
     }
-    return this.slabs?.(level, { x, y }) ?? false;
+    return this.slabs?.(level, { x, y }, z) ?? false;
   }
   private slabs: ReturnType<typeof slabsOf> | null = null;
   private slabsFor: unknown = null;

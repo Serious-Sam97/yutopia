@@ -290,18 +290,22 @@ export class Place {
 /** floorAt's question asked of Jolt's world (stairs.ts SlabUnder — docs/plan/72 phase 7: the floor
  *  from the slab under you): floor `l` has its slab under `p`, or a staircase's treads coming up
  *  into it through its well (`isStairs`: a thing's id is a staircase), looked for from just over
- *  the floor's height. */
+ *  the floor's height — or over the feet, when they're higher (up its own flight: the treads there
+ *  stand over the well of the stairs below, no slab under them) — down to a little under the floor
+ *  or the feet, whichever's lower. */
 export function slabsOf(
   world: PhysicsWorld,
   isStairs: (id: string) => boolean,
   /** in a lift's shaft (lift.ts shaftAt): every floor it goes through has a floor there — the car's */
   shaft?: (l: number, p: { x: number; y: number }) => boolean,
 ): SlabUnder {
-  return (l, p) => {
+  return (l, p, z = 0) => {
     if (shaft?.(l, p)) return true;
     // (what holds a body up through walls — the floors' slabs, the stairs' treads, the land: not
     // what stands on them, a plant, a parked car)
-    if (world.groundUnder(p.x, elevOf(l) + 0.3, p.y, 0.05, 0.9, "clip") === null) return false;
+    const top = Math.max(z, 0) + 0.3;
+    const bottom = Math.min(z, 0) - 0.6;
+    if (world.groundUnder(p.x, elevOf(l) + top, p.y, 0.05, top - bottom, "clip") === null) return false;
     const k = world.underKey() ?? "";
     if (k.startsWith(`slab:${l}:`)) return true;
     return k.startsWith("thing:") && isStairs(k.slice(6));

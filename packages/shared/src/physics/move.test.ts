@@ -278,15 +278,15 @@ async function hq() {
   return { map, objects, world: pw, frame };
 }
 
-test("up a flight of the HQ's stairs to the floor above, the floor changed on the way as the game does", async () => {
+test("up and down every flight of the HQ's stairs, the floor changed on the way as the game does", async () => {
   const { across, floorsOf, levelMap, objLevel } = await import("../levels.ts");
   const { floorAt, stairsPoint } = await import("../stairs.ts");
   const { map, objects, world, frame } = await hq();
   const floors = floorsOf(map);
-  const stairs = objects.find((o) => o.kind === "stairs" && floors.includes(objLevel(o, map) + 1));
-  assert.ok(stairs, "a flight with a floor above it");
-  let level = objLevel(stairs, map);
-  const start = level;
+  const flights = objects.filter((o) => o.kind === "stairs" && floors.includes(objLevel(o, map) + 1));
+  assert.ok(flights.length > 1, "flights with a floor above them, more than the ground floor's");
+  const { slabsOf } = await import("./place.ts");
+  const slabs = slabsOf(world, (id) => objects.some((o) => o.id === id && o.kind === "stairs"));
   const places = new Map<number, Place>();
   const placeOf = (l: number) => {
     let g = places.get(l);
@@ -296,43 +296,61 @@ test("up a flight of the HQ's stairs to the floor above, the floor changed on th
     }
     return g;
   };
+  let level = 0;
   const mover = new CharacterMover(world, () => frame(level));
-  const { slabsOf } = await import("./place.ts");
-  const slabs = slabsOf(world, (id) => objects.some((o) => o.id === id && o.kind === "stairs"));
-  // the way up, in the stairs' own frame: flight A (u 3), the half landing, flight B (u 1) back
-  let way = [
-    [3, 6],
-    [1, 6],
-    [1, 0.6],
-  ].map(([u, v]) => stairsPoint(stairs, u, v));
-  const s = stairsPoint(stairs, 3, 1);
-  const b = newBody(s.x, s.y, 0);
-  let airborne = 0;
-  for (let i = 0; i < 20 / STEP_DT && way.length; i++) {
-    const env: MoveEnv = { grid: placeOf(level), mover, footing: () => "floor" };
-    const [w] = way;
-    const d = Math.hypot(w.x - b.x, w.y - b.y);
-    if (d < 0.3) {
-      way.shift();
-      continue;
-    }
-    stepBody(b, go({ x: (w.x - b.x) / d, y: (w.y - b.y) / d }), env);
-    if (b.up) airborne++;
-    // past a storey's band: the next floor's frame (the controller's floorAt)
-    // (the floor from the slab under the feet: Jolt's, as the game asks it)
-    const ch = floorAt(map, level, b, b.z, slabs);
-    if (ch) {
-      way = way.map((p) => across(map, level, ch.level, p));
-      b.x = ch.at.x;
-      b.y = ch.at.y;
-      b.z += ch.dz;
-      level = ch.level;
-    }
+  for (const stairs of flights) {
+    const start = objLevel(stairs, map);
+    level = start;
+    const s = stairsPoint(stairs, 3, 1);
+    const b = newBody(s.x, s.y, 0);
+    // a way in the stairs' own frame (floor `start`'s coords), walked as the game walks it
+    const walk = (uv: number[][]) => {
+      let way = uv.map(([u, v]) => across(map, start, level, stairsPoint(stairs, u, v)));
+      let airborne = 0;
+      for (let i = 0; i < 20 / STEP_DT && way.length; i++) {
+        const env: MoveEnv = { grid: placeOf(level), mover, footing: () => "floor" };
+        const [w] = way;
+        const d = Math.hypot(w.x - b.x, w.y - b.y);
+        if (d < 0.3) {
+          way.shift();
+          continue;
+        }
+        stepBody(b, go({ x: (w.x - b.x) / d, y: (w.y - b.y) / d }), env);
+        if (b.up) airborne++;
+        // past a storey's band: the next floor's frame (the controller's floorAt)
+        // (the floor from the slab under the feet: Jolt's, as the game asks it)
+        const ch = floorAt(map, level, b, b.z, slabs);
+        if (ch) {
+          way = way.map((p) => across(map, level, ch.level, p));
+          b.x = ch.at.x;
+          b.y = ch.at.y;
+          b.z += ch.dz;
+          level = ch.level;
+          // (mid-flight it's one floor or the other — never out to the ground floor's: that hid
+          // the whole building over it, a frame or a few at a time)
+          assert.ok(level === start || level === start + 1, `flight from ${start}: on floor ${level} at z ${b.z}`);
+        }
+      }
+      assert.equal(way.length, 0, `walked the whole way (left: ${way.length}, at ${b.x.toFixed(2)}, ${b.y.toFixed(2)})`);
+      assert.ok(airborne < 0.2 / STEP_DT, `walked, not hopped: ${(airborne * STEP_DT).toFixed(2)} s off the treads`);
+    };
+    // up: flight A (u 3), the half landing, flight B (u 1) back
+    walk([
+      [3, 6],
+      [1, 6],
+      [1, 0.6],
+    ]);
+    assert.equal(level, start + 1, `from ${start}: on the floor above`);
+    assert.ok(Math.abs(b.z) < 0.05, `on its floor: z ${b.z.toFixed(3)}`);
+    // and down again the same way
+    walk([
+      [1, 6],
+      [3, 6],
+      [3, 1],
+    ]);
+    assert.equal(level, start, `from ${start + 1}: back on the floor below`);
+    assert.ok(Math.abs(b.z) < 0.05, `on its floor: z ${b.z.toFixed(3)}`);
   }
-  assert.equal(way.length, 0, `walked the whole way (left: ${way.length}, at ${b.x.toFixed(2)}, ${b.y.toFixed(2)})`);
-  assert.equal(level, start + 1, "on the floor above");
-  assert.ok(Math.abs(b.z) < 0.05, `on its floor: z ${b.z.toFixed(3)}`);
-  assert.ok(airborne < 0.2 / STEP_DT, `walked, not hopped: ${(airborne * STEP_DT).toFixed(2)} s off the treads`);
 });
 
 test("one building: a flier stops at the ceiling; through walls, up through it onto the floors above; the roof over the top", async () => {

@@ -162,8 +162,11 @@ export function floorChange(z: number, level: number, floors: number[]): { level
 }
 
 /** Whether floor `l` has a floor under `p` (in its own coords): the browser asks Jolt's slabs
- *  (docs/plan/72 phase 7: the floor from the slab under you); without one, the floor's tiles. */
-export type SlabUnder = (l: number, p: Point) => boolean;
+ *  (docs/plan/72 phase 7: the floor from the slab under you); without one, the floor's tiles.
+ *  `z`: the feet's height in floor `l`'s frame — looked for from there too, so a body up a flight
+ *  over its well (the treads well over the floor's height, the hole of the stairs below under
+ *  them) is still on it. */
+export type SlabUnder = (l: number, p: Point, z?: number) => boolean;
 
 /** The floor a body's feet are on, from their height, anywhere in the building (docs/plan/50 D:
  *  one building — the stairs, a flier through a ceiling): past a storey's band, the next floor up
@@ -179,25 +182,26 @@ export function floorAt(
   slab?: SlabUnder,
 ): { level: number; dz: number; at: Point } | null {
   const floors = floorsOf(m);
-  const has = (l: number) => {
+  // (`zl`: the feet's height in floor l's frame)
+  const has = (l: number, zl: number) => {
     if (!floors.includes(l)) return false;
     const q = across(m, level, l, p);
-    if (slab) return slab(l, q);
+    if (slab) return slab(l, q, zl);
     const lm = levelMap(m, l);
     return !!lm && isFloor(cellOf(lm, Math.floor(q.x), Math.floor(q.y)));
   };
   const outdoors = () =>
     level === 0 || !floors.includes(0) ? null : { level: 0, dz: elevOf(level) - elevOf(0), at: across(m, level, 0, p) };
   // (up a floor with none under me — out through its wall: outdoors)
-  if (level !== 0 && !has(level)) return outdoors();
+  if (level !== 0 && !has(level, z)) return outdoors();
   if (z <= FLOOR_BAND[1] && z >= FLOOR_BAND[0]) return null;
   let l = level;
   let dz = 0;
-  while (z + dz > FLOOR_BAND[1] && has(l + 1)) {
+  while (z + dz > FLOOR_BAND[1] && has(l + 1, z + dz - STOREY)) {
     l++;
     dz -= STOREY;
   }
-  while (z + dz < FLOOR_BAND[0] && has(l - 1)) {
+  while (z + dz < FLOOR_BAND[0] && has(l - 1, z + dz + STOREY)) {
     l--;
     dz += STOREY;
   }

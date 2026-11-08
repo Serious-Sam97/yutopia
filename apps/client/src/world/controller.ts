@@ -1783,7 +1783,7 @@ export class WorldController {
       this.level,
       this.me,
       hgt.z,
-      phys ? (l, q) => phys.slabUnder(l, q.x, q.y) : undefined,
+      phys ? (l, q, z) => phys.slabUnder(l, q.x, q.y, z) : undefined,
     );
     if (change) {
       const from = this.level;
