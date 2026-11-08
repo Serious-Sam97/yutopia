@@ -529,11 +529,15 @@ export class WorldController {
         void room.leave(true);
         return;
       }
-      this.room = room;
       this.wireMessages(room);
-      // nested schema callbacks need the first full state
+      // nested schema callbacks need the first full state; the room becomes
+      // this.room only once it has one (every frame reads room.state.players)
       if (!room.state?.players) await new Promise<void>((res) => room.onStateChange.once(() => res()));
-      if (this.stopped) return;
+      if (this.stopped) {
+        void room.leave(true);
+        return;
+      }
+      this.room = room;
       this.wireRoom(room);
       hud.set({ phase: "ready" });
       void this.syncLook();

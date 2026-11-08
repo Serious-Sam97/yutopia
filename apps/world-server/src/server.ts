@@ -146,7 +146,9 @@ export async function startWorldServer(port: number): Promise<Server> {
     res.writeHead(404).end();
   });
   const server = new Server({
-    transport: new WebSocketTransport({ server: http, pingInterval: 5000, pingMaxRetries: 3 }),
+    // maxPayload: Colyseus's 4 KB default drops the socket on a saved playlist's
+    // media:play (MAX_QUEUE items, titles and all: ~40 KB at worst, multibyte)
+    transport: new WebSocketTransport({ server: http, pingInterval: 5000, pingMaxRetries: 3, maxPayload: 64 * 1024 }),
     greet: false,
   });
   // one world: no filter, so every join lands in the same room (WorldRoom.CAPACITY).
