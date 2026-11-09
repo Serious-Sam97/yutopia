@@ -29,6 +29,8 @@ export function setKitRenderer(r: WebGLRenderer | null): void {
     void (grass.userData.loaded as Promise<unknown>).then(() => {
       wx.wxGrass.value = grass.map;
       wx.wxGrassMean.value = GRASS_MEAN;
+      wx.wxGrassK.value = 0.45;
+      wx.wxGrassM.value = LIBRARY.grass.metres;
     });
   }
 }

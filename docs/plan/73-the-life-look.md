@@ -1079,6 +1079,26 @@ plough and bus smoothed in clearcoat paint, chrome and glass. `?out=old`: the ou
   - **The green** (the snow's layer, `wx3d.ts`): its detail the library's grass (`wxGrass`), over its
     own mean (`wxGrassMean`, 0.12 for the library's; the canvas's 0.82).
   - **Left:** the land's own relief (under the snow most of the year); the lot's cover and the banks.
+  - **Found in 8.1:** the snow's grain reads the green's detail — the library's blades, deeper than the
+    canvas's, came through the snow as dark specks: their light and dark at 0.45 (`wxGrassK`); and at the
+    canvas's 14 m a repeat they smeared into streaks: the library's own 2 m (`wxGrassM`).
+- **8.1 Trees.** Built 2026-11-09 (`tp/life-trees.ts`).
+  - **The woods' material keeps its pools, wind, fade, rime and snow**: an atlas on it (`treeAtlas`:
+    its left half white, a leaf cluster, a needle spray, grey — their colour the vertices'), cut out by
+    alpha, both sides; what isn't a card reads the white (`solidUV` on every pool's geometry but the
+    cards'); the cards' shadows cut out too (`lifeTreeDepth`, the snow's press kept).
+  - **A leafy tree** (`lifeLeafyGeometry`) in the birch's and the bare tree's places (one bare snag in
+    three kept): a trunk curving up in five pieces, five to seven limbs, two twigs each, a dark core
+    and 22 leaf cards round every tip, lit as the crown's outside (their normals out from its middle),
+    lighter up top; ~1.3–1.7k triangles.
+  - **A pine** (`lifePineGeometry`): today's tiers, cones and snow, with drooping boughs of needles
+    round each tier's rim — the silhouette ragged.
+  - **The campus's own woods** (its ring of conifers, the groves, the lawn's trees) the same, through
+    the hooks (`lifeDress.trees`: life-trees registers as it loads, with the Grounds' stream).
+  - Stills: `e2e/life-cam.mts` (a free camera held at given spots; `BARE=1` holds the snow off);
+    `life-shots.mts` spots `woods`, `edge`.
+  - **Left:** the far trees (the long road's hundred thousand) keep their cheap shapes; the woods'
+    floor (shrubs, logs, stones) as it was.
 
 ### 9 — Pets
 

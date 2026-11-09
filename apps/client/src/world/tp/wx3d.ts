@@ -78,6 +78,11 @@ export const wx = {
   // (its mean brightness: the detail is the picture over it — the life look's grass is the library's,
   // plan 73 phase 8)
   wxGrassMean: { value: 0.82 },
+  // (and how much of its light and dark: the library's blades are deeper than the canvas's — under the
+  // snow its dark ones came through as specks)
+  wxGrassK: { value: 1 },
+  // (and how many metres a repeat: the canvas's 14, the library's its own)
+  wxGrassM: { value: 14 },
   // under a roof stays dry: the nearest roofs round the camera, two vec4 each — (x0, z0, x1, z1)
   // and (its underside's height, …) — in the Grounds' coords (sky.ts fills them)
   wxRoofs: { value: Array.from({ length: ROOFS * 2 }, () => new Vector4()) },
@@ -245,7 +250,7 @@ uniform float wxSnow; uniform float wxMelt; uniform float wxWet; uniform vec3 wx
 uniform vec3 wxSky; uniform float wxPud; uniform float wxRain; uniform float wxT; uniform float wxIce;
 uniform vec4 wxHoles[8];
 uniform vec4 wxSun; uniform vec4 wxSwim[8]; uniform vec3 wxUwCol;
-uniform sampler2D wxTex; uniform float wxTexOn; uniform sampler2D wxGrass; uniform float wxGrassMean;
+uniform sampler2D wxTex; uniform float wxTexOn; uniform sampler2D wxGrass; uniform float wxGrassMean; uniform float wxGrassK; uniform float wxGrassM;
 uniform vec4 wxRoofs[${ROOFS * 2}]; uniform int wxRoofN;
 uniform vec4 wxDry[${DRY}]; uniform int wxDryN;
 // (an integer hash: a float one goes regular a few hundred metres out — the town, the karts — where
@@ -308,7 +313,7 @@ const FRAG = `
     float near = 0.0;
     // (the pictures read here, outside the branches: their mip level's by the pixel's neighbours,
     // which a branch taken by some and not others leaves undefined — sparkles along an edge)
-    vec3 wxGrassT = texture2D(wxGrass, wxW.xz / 14.0).rgb;
+    vec3 wxGrassT = texture2D(wxGrass, wxW.xz / wxGrassM).rgb;
   #ifdef USE_MAP
     vec3 wxMapT = texture2D(map, vMapUv).rgb;
   #endif
@@ -338,7 +343,7 @@ const FRAG = `
     }
   #endif
     if (green > 0.001) {
-      wxDetail = dot(wxGrassT, vec3(0.3, 0.55, 0.15)) / wxGrassMean;
+      wxDetail = 1.0 + (dot(wxGrassT, vec3(0.3, 0.55, 0.15)) / wxGrassMean - 1.0) * wxGrassK;
       float n1 = wxF(wxW.xz * 0.07);
       float n2 = wxF(wxW.xz * 0.31 + 5.0);
       // three greens by a world noise (no repeat), drier on the slopes and by the ways

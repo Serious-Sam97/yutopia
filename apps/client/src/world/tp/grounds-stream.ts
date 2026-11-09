@@ -55,6 +55,8 @@ import {
 } from "./grounds3d";
 import { type BlockData, blockData, TREE_KINDS } from "./land-block";
 import { landPool } from "./land-pool";
+import { lifeDress } from "./life-dress";
+import { lifeLeafyGeometry, lifePineGeometry, lifeTreeDepth, lifeTreeMaterial, solidUV } from "./life-trees";
 import type { Themes } from "./sky";
 import { boulderGeometry, logGeometry, shrubGeometry, stoneGeometry, stumpGeometry } from "./woods3d";
 import { snowShadow, wx } from "./wx3d";
@@ -174,6 +176,9 @@ export class GroundsStream {
     const r = T.rng(9);
     const treeMat = litMaterial({ vertexColors: true });
     treeMat.userData.wx = "tree";
+    // (the life look: new shapes, their leaves and needles cards on the atlas — plan 73 phase 8.1)
+    const life = !!lifeDress.out;
+    if (life) lifeTreeMaterial(treeMat);
     patch(treeMat);
     // a tree between the camera and you goes (as walls fade): its instance
     // folded to a point in the vertex shader; its shadow (the casters) stays
@@ -251,15 +256,21 @@ if (vFade < 0.999) {
         );
     };
     treeMat.customProgramCacheKey = () => "yutopia-outdoors-trees";
+    const pine = life ? lifePineGeometry : pineGeometry;
+    // (the life look: leafy trees in the birch's and the bare tree's places, a bare snag kept)
+    const leafy = (i: number, col: [number, number, number], H: number) =>
+      lifeLeafyGeometry(r, { col, H: H + i * 0.9, spread: 0.9 + i * 0.12, bark: i === 1 ? 0x6a5d50 : 0x564638 });
     const geos: BufferGeometry[] = [
       // spruces: three of the usual, then a young one, a tall thin one, an old broad one heavy with snow
-      ...[0, 1, 2].map(() => pineGeometry(r)),
-      pineGeometry(r, { tiers: 5, H: 6.5, width: 0.82, snow: 0.55 }),
-      pineGeometry(r, { tiers: 9, H: 13.5, width: 0.72, snow: 0.45 }),
-      pineGeometry(r, { tiers: 7, H: 11, width: 1.22, snow: 0.68 }),
+      ...[0, 1, 2].map(() => pine(r)),
+      pine(r, { tiers: 5, H: 6.5, width: 0.82, snow: 0.55 }),
+      pine(r, { tiers: 9, H: 13.5, width: 0.72, snow: 0.45 }),
+      pine(r, { tiers: 7, H: 11, width: 1.22, snow: 0.68 }),
       // (in leaf — docs/plan/65, W3 — but for one bare snag in three)
-      ...[0, 1, 2].map(() => crowned(birchGeometry(r), ...BIRCH_LEAVES)),
-      ...[0, 1, 2].map((i) => (i < 2 ? crowned(bareTree3(r), ...BARE_LEAVES) : bareTree3(r))),
+      ...[0, 1, 2].map((i) => (life ? leafy(i, [0.48, 0.62, 0.27], 8.5) : crowned(birchGeometry(r), ...BIRCH_LEAVES))),
+      ...[0, 1, 2].map((i) =>
+        life && i < 2 ? leafy(i, [0.42, 0.56, 0.24], 7) : i < 2 ? crowned(bareTree3(r), ...BARE_LEAVES) : bareTree3(r),
+      ),
       farPineGeometry(),
       // (finer than it was: faceted, a coarse one was a heap of shards)
       // (the weather's: each its own, wx3d.ts gives an instance its own threshold round this)
@@ -275,6 +286,8 @@ if (vFade < 0.999) {
     ];
     // (the near trees and the boulders cast the sun's shadow; the far ones, the mounds, the rest don't)
     this.casting = new Set([...TREE_KINDS.pine, ...TREE_KINDS.birch, ...TREE_KINDS.bare, TREE_KINDS.cover.boulder]);
+    // (the life look: what isn't a card reads the atlas's white — its own UVs would read the leaves)
+    if (life) for (const [i, g] of geos.entries()) if (!g.userData.cards) geos[i] = solidUV(g);
     for (const [i, g] of geos.entries()) {
       const p = new Pool(g, treeMat, false);
       this.pools.push(p);
@@ -787,6 +800,7 @@ if (vFade < 0.999) {
       else {
         const pool = this.pools[t.pool].mesh;
         const im = snowShadow(new InstancedMesh(pool.geometry, pool.material, 0));
+        if (pool.customDepthMaterial) im.customDepthMaterial = pool.customDepthMaterial;
         im.instanceMatrix = new InstancedBufferAttribute(t.m, 16);
         im.count = t.m.length / 16;
         im.visible = mesh.visible;
@@ -872,6 +886,8 @@ class Pool {
   private make(cap: number): InstancedMesh {
     this.cap = cap;
     const m = snowShadow(new InstancedMesh(this.geo, this.mat, cap));
+    // (the life look's woods: their cards cut out of their shadows too)
+    if (lifeDress.out && (this.mat as { alphaTest?: number }).alphaTest) m.customDepthMaterial = lifeTreeDepth();
     m.instanceMatrix.setUsage(StaticDrawUsage as unknown as typeof DynamicDrawUsage);
     m.count = 0;
     m.frustumCulled = false;

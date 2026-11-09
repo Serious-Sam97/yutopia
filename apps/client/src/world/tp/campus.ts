@@ -2304,11 +2304,23 @@ export class Campus {
     this.dropFake(fake);
     fake = this.root.children.length;
     // ── the horizon: conifers all round, groves nearer; bare trees in 3D near, as drawings far ──
-    const conifer = coniferGeometry();
+    // (the life look: its own pines and leafy trees, their cards on the atlas — plan 73 phase 8.1,
+    // tp/life-trees.ts through the hooks)
+    const lt = lifeDress.out ? lifeDress.trees : undefined;
+    const treeMat = () => {
+      const m = this.lambert(0xffffff, undefined, true);
+      lt?.material(m);
+      return m;
+    };
+    const lifeTree = <M extends InstancedMesh>(m: M): M => {
+      if (lt) m.customDepthMaterial = lt.depth();
+      return m;
+    };
+    const conifer = lt ? lt.pine(T.rng(76), { tiers: 5, H: 10.5, width: 0.95, snow: 0.5 }) : coniferGeometry();
     this.disposables.push(conifer);
     const rt = T.rng(77);
     const plant3 = (n: number, where: () => [number, number], scale: () => number) => {
-      const mesh = new InstancedMesh(conifer, this.lambert(0xffffff, undefined, true), n);
+      const mesh = lifeTree(new InstancedMesh(conifer, treeMat(), n));
       const m = new Matrix4();
       const tint = new Color();
       for (let i = 0; i < n; i++) {
@@ -2352,6 +2364,7 @@ export class Campus {
     // bare trees in 3D on the lawn, by the lot and along the drive
     // (two in leaf, one a bare snag: docs/plan/65, W3)
     const treeKinds = [41, 42, 43].map((seed, i) => {
+      if (lt && i < 2) return lt.leafy(T.rng(seed), { col: [0.46, 0.6, 0.26], H: 7.5 + i, spread: 1 + i * 0.1 });
       const g = bareTree3(T.rng(seed));
       return i < 2 ? crowned(g, ...BARE_LEAVES) : g;
     });
@@ -2367,9 +2380,15 @@ export class Campus {
       spots.push([p.x - p.tz * side * off, p.z + p.tx * side * off]);
     }
     for (let i = 0; i < 6; i++) spots.push([tx - 20 + rb2() * 40, tz + 14 + rb2() * 20]);
-    const treeMeshes = treeKinds.map(
-      (k) => new InstancedMesh(k, this.lambert(0xffffff, undefined, true), Math.ceil(spots.length / 3)),
-    );
+    // (the bare snag keeps its own material and shadow: its UVs aren't the atlas's)
+    const treeMeshes = treeKinds.map((k, i) => {
+      const m = new InstancedMesh(
+        k,
+        lt && i < 2 ? treeMat() : this.lambert(0xffffff, undefined, true),
+        Math.ceil(spots.length / 3),
+      );
+      return i < 2 ? lifeTree(m) : m;
+    });
     const counts = [0, 0, 0];
     const tm = new Matrix4();
     spots.forEach(([x, z], i) => {

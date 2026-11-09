@@ -1,0 +1,306 @@
+import {
+  BufferGeometry,
+  CanvasTexture,
+  Color,
+  CylinderGeometry,
+  Float32BufferAttribute,
+  IcosahedronGeometry,
+  type Material,
+  MeshDepthMaterial,
+  Quaternion,
+  RGBADepthPacking,
+  SRGBColorSpace,
+  Vector3,
+} from "three";
+import { tinted } from "./campus";
+import { pineGeometry } from "./grounds3d";
+import { lifeDress } from "./life-dress";
+import { mergeGeometries, pressShader } from "./wx3d";
+
+// Plan 73 phase 8.1 — the woods in the life look: the same pools and the one material (grounds-stream.ts),
+// new shapes. A leafy tree (a curving trunk, limbs, a crown of leaf cards round a dark core) and a pine
+// whose tiers' edges are drooping boughs of needles. The cards' pictures are a small atlas on the woods'
+// material: its left half white (what isn't a card reads there — a trunk, a stone, a snow cap: their UVs
+// set to it, `solidUV`), a leaf cluster, a needle spray; grey, their colour the vertices' (the season's
+// is the snow layer's, wx3d.ts), cut out by alpha.
+
+/** Where in the atlas: the solid white, the leaves, the needles (u ranges). */
+const SOLID: [number, number] = [0.12, 0.5];
+const LEAF: [number, number] = [0.5, 0.75];
+const NEEDLE: [number, number] = [0.75, 1];
+
+let atlas: CanvasTexture | null = null;
+/** The cards' atlas (made once). */
+export function treeAtlas(): CanvasTexture {
+  if (atlas) return atlas;
+  const W = 512;
+  const H = 256;
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const g = c.getContext("2d") as CanvasRenderingContext2D;
+  let seed = 9;
+  const r = () => {
+    seed = (seed * 16807) % 2147483647;
+    return seed / 2147483647;
+  };
+  g.fillStyle = "#ffffff";
+  g.fillRect(0, 0, W / 2, H);
+  // the leaves: a cluster of small ovals, each its own tone and turn, a vein's line
+  const lx = W / 2;
+  const lw = W / 4;
+  for (let i = 0; i < 90; i++) {
+    const x = lx + 10 + r() * (lw - 20);
+    const y = 12 + r() * (H - 24);
+    // (rounder towards the middle: a cluster, not a square)
+    const dx = (x - lx - lw / 2) / (lw / 2);
+    const dy = (y - H / 2) / (H / 2);
+    if (dx * dx + dy * dy > 1) continue;
+    const v = 205 + Math.floor(r() * 50);
+    g.save();
+    g.translate(x, y);
+    g.rotate(r() * Math.PI * 2);
+    g.fillStyle = `rgb(${v},${v},${v})`;
+    g.beginPath();
+    g.ellipse(0, 0, 5 + r() * 4, 10 + r() * 6, 0, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = `rgba(0,0,0,0.18)`;
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(0, -10);
+    g.lineTo(0, 10);
+    g.stroke();
+    g.restore();
+  }
+  // the needles: a spray along the card (v up it), thin strokes out from its spine, fewer at its tip
+  const nx = (W * 3) / 4;
+  const nw = W / 4;
+  g.lineCap = "round";
+  for (let i = 0; i < 260; i++) {
+    const t = r();
+    const y = H - 6 - t * (H - 12);
+    const half = (nw / 2 - 6) * (1 - t * 0.55);
+    const side = r() < 0.5 ? -1 : 1;
+    const len = half * (0.55 + r() * 0.45);
+    const v = 175 + Math.floor(r() * 80);
+    g.strokeStyle = `rgb(${v},${v},${v})`;
+    g.lineWidth = 1.6 + r() * 1.2;
+    g.beginPath();
+    g.moveTo(nx + nw / 2, y);
+    g.lineTo(nx + nw / 2 + side * len, y - len * 0.45);
+    g.stroke();
+  }
+  g.strokeStyle = "rgb(120,120,120)";
+  g.lineWidth = 3;
+  g.beginPath();
+  g.moveTo(nx + nw / 2, H - 4);
+  g.lineTo(nx + nw / 2, 6);
+  g.stroke();
+  atlas = new CanvasTexture(c);
+  atlas.colorSpace = SRGBColorSpace;
+  atlas.anisotropy = 4;
+  return atlas;
+}
+
+/** The woods' material in the life look: the atlas on it, its cards cut out, both sides of them. */
+export function lifeTreeMaterial<M extends Material & { map: unknown; alphaTest: number }>(m: M): M {
+  m.map = treeAtlas();
+  m.alphaTest = 0.5;
+  m.side = 2; // DoubleSide
+  return m;
+}
+let depth: MeshDepthMaterial | null = null;
+/** The woods' shadows: the cards cut out in them too (and the snow's press, as wx3d's). */
+export function lifeTreeDepth(): MeshDepthMaterial {
+  if (!depth) {
+    depth = new MeshDepthMaterial({ depthPacking: RGBADepthPacking, map: treeAtlas(), alphaTest: 0.5 });
+    depth.onBeforeCompile = (sh) => pressShader(sh);
+    depth.customProgramCacheKey = () => "life-tree-depth";
+  }
+  return depth;
+}
+
+/** A geometry's UVs all at the atlas's solid white (what isn't a card). */
+export function solidUV<G extends BufferGeometry>(g: G): G {
+  const n = g.getAttribute("position").count;
+  const uv = new Float32Array(n * 2);
+  for (let i = 0; i < n; i++) uv.set(SOLID, i * 2);
+  g.setAttribute("uv", new Float32BufferAttribute(uv, 2));
+  return g;
+}
+
+type V3 = [number, number, number];
+const lin = (v: number) => v ** 2.2;
+/** Cards: quads (centre, two half-axes), each its own normal and colour; UVs across `u` of the atlas. */
+class Cards {
+  pos: number[] = [];
+  nor: number[] = [];
+  col: number[] = [];
+  uv: number[] = [];
+  quad(c: Vector3, a: Vector3, b: Vector3, n: Vector3, rgb: V3, u: [number, number], flip = false) {
+    const P = [c.clone().sub(a).sub(b), c.clone().add(a).sub(b), c.clone().add(a).add(b), c.clone().sub(a).add(b)];
+    const U: [number, number][] = [
+      [u[0], 0],
+      [u[1], 0],
+      [u[1], 1],
+      [u[0], 1],
+    ];
+    if (flip) U.reverse();
+    for (const i of [0, 1, 2, 0, 2, 3]) {
+      this.pos.push(P[i].x, P[i].y, P[i].z);
+      this.nor.push(n.x, n.y, n.z);
+      this.col.push(...rgb);
+      this.uv.push(U[i][0], U[i][1]);
+    }
+  }
+  build(): BufferGeometry {
+    const g = new BufferGeometry();
+    g.setAttribute("position", new Float32BufferAttribute(this.pos, 3));
+    g.setAttribute("normal", new Float32BufferAttribute(this.nor, 3));
+    g.setAttribute("color", new Float32BufferAttribute(this.col, 3));
+    g.setAttribute("uv", new Float32BufferAttribute(this.uv, 2));
+    return g;
+  }
+}
+const UP = new Vector3(0, 1, 0);
+/** A tapered tube between two points (its sides only), its bark colour. */
+function limb(a: Vector3, b: Vector3, r0: number, r1: number, hex: number, seg = 7): BufferGeometry {
+  const d = b.clone().sub(a);
+  const g = new CylinderGeometry(r1, r0, d.length(), seg, 1, true).translate(0, d.length() / 2, 0);
+  g.applyQuaternion(new Quaternion().setFromUnitVectors(UP, d.normalize()));
+  g.translate(a.x, a.y, a.z);
+  return solidUV(tinted(g, hex));
+}
+
+/** A leafy tree: a trunk curving a little up to its crown, limbs out and up from it, twigs off each;
+ *  a crown of leaf cards round their tips over a dark core. `col` its leaves' green (sRGB 0–1); `H` its
+ *  height; `spread` how broad its crown. */
+export function lifeLeafyGeometry(
+  r: () => number,
+  o: { col: V3; H?: number; spread?: number; bark?: number } = { col: [0.36, 0.5, 0.22] },
+): BufferGeometry {
+  const H = o.H ?? 8;
+  const spread = o.spread ?? 1;
+  const bark = o.bark ?? 0x5a4a3c;
+  const parts: BufferGeometry[] = [];
+  // the trunk: five pieces up a gentle bend
+  const ph = r() * Math.PI * 2;
+  const top = H * 0.55;
+  const spine: Vector3[] = [];
+  for (let i = 0; i <= 5; i++) {
+    const t = i / 5;
+    spine.push(new Vector3(Math.sin(ph) * 0.25 * t * t, t * top, Math.cos(ph) * 0.25 * t * t));
+  }
+  for (let i = 0; i < 5; i++) parts.push(limb(spine[i], spine[i + 1], 0.26 - i * 0.03, 0.23 - i * 0.03, bark, 9));
+  // the limbs and their twigs; their ends the crown's clusters
+  const tips: Vector3[] = [];
+  const n = 5 + Math.floor(r() * 3);
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + r() * 0.6;
+    const at = spine[3 + Math.floor(r() * 2.99)].clone();
+    const dir = new Vector3(Math.cos(a), 0.7 + r() * 0.6, Math.sin(a)).normalize();
+    const len = H * (0.22 + r() * 0.1) * spread;
+    const end = at.clone().add(dir.clone().multiplyScalar(len));
+    parts.push(limb(at, end, 0.1, 0.05, bark));
+    tips.push(end);
+    for (let k = 0; k < 2; k++) {
+      const d2 = dir
+        .clone()
+        .add(new Vector3((r() - 0.5) * 1.2, 0.2 + r() * 0.4, (r() - 0.5) * 1.2))
+        .normalize();
+      const e2 = end.clone().add(d2.multiplyScalar(len * 0.55));
+      parts.push(limb(end, e2, 0.045, 0.02, bark, 5));
+      tips.push(e2);
+    }
+  }
+  tips.push(spine[5].clone().add(new Vector3(0, H * 0.12, 0)));
+  // the crown's middle and size: round the tips
+  const mid = tips.reduce((s, t) => s.add(t), new Vector3()).multiplyScalar(1 / tips.length);
+  const c = new Color();
+  const tone = (k: number): V3 => {
+    c.setRGB(lin(o.col[0] * k), lin(o.col[1] * k), lin(o.col[2] * k));
+    return [c.r, c.g, c.b];
+  };
+  // a dark core under the cards: no sky through the crown's middle
+  for (const t of tips.filter((_, i) => i % 3 === 0)) {
+    const core = new IcosahedronGeometry(H * 0.1 * spread, 1).toNonIndexed();
+    core.translate(t.x * 0.8 + mid.x * 0.2, t.y * 0.8 + mid.y * 0.2 - 0.2, t.z * 0.8 + mid.z * 0.2);
+    const cc = tone(0.7);
+    parts.push(solidUV(tinted(core, new Color(cc[0], cc[1], cc[2]).getHex())));
+  }
+  // the cards: a cluster round each tip, turned every way, lit as the crown's outside is
+  const cards = new Cards();
+  for (const t of tips)
+    for (let i = 0; i < 22; i++) {
+      const p = t
+        .clone()
+        .add(new Vector3((r() - 0.5) * 2, (r() - 0.5) * 1.4, (r() - 0.5) * 2).multiplyScalar(0.8 * spread));
+      const out = p.clone().sub(mid).normalize();
+      const s = (0.65 + r() * 0.35) * spread;
+      const q = new Quaternion().setFromAxisAngle(
+        new Vector3(r() - 0.5, r() - 0.5, r() - 0.5).normalize(),
+        r() * Math.PI,
+      );
+      const a = new Vector3(s, 0, 0).applyQuaternion(q);
+      const b = new Vector3(0, s, 0).applyQuaternion(q);
+      // (lighter to the top and the outside, darker under)
+      const k = 0.78 + 0.28 * Math.max(0, out.y) + (r() - 0.5) * 0.16;
+      cards.quad(p, a, b, out, tone(k), LEAF);
+    }
+  parts.push(cards.build());
+  const m = mergeGeometries(parts, false);
+  for (const g of parts) g.dispose();
+  m.userData.cards = true;
+  return m;
+}
+
+/** A spruce: today's tiers (their cones, their snow) with drooping boughs of needles round each tier's
+ *  edge — its silhouette ragged and soft, as the cones alone were hard. `o` as pineGeometry's. */
+export function lifePineGeometry(
+  r: () => number,
+  o: { tiers?: number; H?: number; width?: number; snow?: number } = {},
+): BufferGeometry {
+  const base = solidUV(pineGeometry(r, o));
+  const tiers = o.tiers ?? 7;
+  const H = o.H ?? 10.5;
+  const wide = o.width ?? 1;
+  const cards = new Cards();
+  const c = new Color();
+  for (let t = 0; t < tiers; t++) {
+    const k = t / (tiers - 1);
+    const y0 = 1.1 + k * (H - 2.6);
+    const rad = 2.7 * wide * (1 - k * 0.82);
+    const h = (2.6 - k * 0.9) * (H / 10.5) ** 0.5;
+    const n = Math.max(6, Math.round(rad * 5));
+    for (let j = 0; j < n; j++) {
+      const a = (j / n) * Math.PI * 2 + r() * 0.4;
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      // from in on the tier to just past its rim, drooping
+      const reach = rad * (1.02 + r() * 0.16);
+      const from = new Vector3(ca * rad * 0.35, y0 + h * 0.55, sa * rad * 0.35);
+      const to = new Vector3(ca * reach, y0 - 0.05 - r() * 0.25, sa * reach);
+      const along = to.clone().sub(from);
+      const mid = from.clone().add(to).multiplyScalar(0.5);
+      const side = new Vector3(-sa, 0, ca).multiplyScalar(0.32 + rad * 0.12);
+      const nrm = new Vector3(ca * 0.45, 1, sa * 0.45).normalize();
+      const v = 0.85 + r() * 0.3;
+      c.setRGB(lin(0.15 * v), lin(0.22 * v), lin(0.18 * v));
+      cards.quad(mid, side, along.multiplyScalar(0.5), nrm, [c.r, c.g, c.b], NEEDLE);
+    }
+  }
+  const m = mergeGeometries([base, cards.build()], false);
+  base.dispose();
+  m.userData.cards = true;
+  return m;
+}
+
+// (the campus's woods reach these through the hooks: its module doesn't import this one)
+lifeDress.trees = {
+  leafy: lifeLeafyGeometry,
+  pine: lifePineGeometry,
+  material: (m) => {
+    lifeTreeMaterial(m as Material & { map: unknown; alphaTest: number });
+  },
+  depth: lifeTreeDepth,
+};

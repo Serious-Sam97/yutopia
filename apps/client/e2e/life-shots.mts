@@ -44,7 +44,19 @@ const SPOTS: Spot[] = [
   { name: "tracking", at: { x: 17.5, y: 14.5 }, level: 4, to: { x: 17.5, y: 24 }, pitch: 0.3, dist: 4, hours: [12] },
   // (plan 73 phase 7.2: the lifts' lobby on the ground floor, the stairwell's foot)
   { name: "lifts", at: { x: 7, y: 25 }, level: 0, to: { x: 7, y: 30 }, pitch: 0.08, dist: 3.2, hours: [12] },
-  { name: "stairs", at: { x: 11, y: 30.4 }, level: 0, to: { x: 13, y: 33.5 }, pitch: 0.1, dist: 0.6, lift: 1.6, hours: [12] },
+  {
+    name: "stairs",
+    at: { x: 11, y: 30.4 },
+    level: 0,
+    to: { x: 13, y: 33.5 },
+    pitch: 0.1,
+    dist: 0.6,
+    lift: 1.6,
+    hours: [12],
+  },
+  // (plan 73 phase 8: in among the woods north of the campus, and their edge from the field)
+  { name: "woods", at: { x: 10, y: -40 }, level: 0, to: { x: 14, y: -70 }, pitch: 0.06, dist: 5, hours: [12] },
+  { name: "edge", at: { x: 30, y: -20 }, level: 0, to: { x: 30, y: -60 }, pitch: 0.12, dist: 7, hours: [12] },
   { name: "grounds", at: { x: 5, y: 6 }, level: 4, to: { x: 5, y: -5 }, pitch: 0.1, dist: 4, hours: [12, 17] },
 ];
 

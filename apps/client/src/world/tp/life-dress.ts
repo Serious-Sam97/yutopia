@@ -1,4 +1,4 @@
-import type { Color, Material } from "three";
+import type { BufferGeometry, Color, Material } from "three";
 
 // Plan 73 phase 7 — the library's dressing for what's drawn outside the floors' own (the campus, the
 // stairwell, the Grounds' buildings), through hooks tp/kit-mats.ts fills as it loads (the game's view
@@ -22,6 +22,17 @@ export const lifeDress: {
   /** (phase 8) the library's `id` relief and roughness laid on a ground's up-facing faces by where they
    *  are (their own UVs are their painting's): through the Grounds' per-material hook (`userData.grounds`) */
   ground?: (m: Material, id: string) => void;
+  /** (phase 8.1) the life look's trees (tp/life-trees.ts, which fills this as it loads — with the
+   *  Grounds' stream, before the campus is built) */
+  trees?: {
+    leafy: (
+      r: () => number,
+      o: { col: [number, number, number]; H?: number; spread?: number; bark?: number },
+    ) => BufferGeometry;
+    pine: (r: () => number, o?: { tiers?: number; H?: number; width?: number; snow?: number }) => BufferGeometry;
+    material: (m: Material) => void;
+    depth: () => Material;
+  };
   /** a plain surface of the library's `id` (UVs in metres), its colour `tint` */
   surface?: (id: string, tint: number) => Material;
 } = {};
