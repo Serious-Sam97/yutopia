@@ -427,7 +427,8 @@ export class Light3 {
   // Make a material take this light (Lambert: its lit colour is multiplied) — one of the family with
   // only this light (look/yulit.ts).
   patch(m: Material) {
-    yuLit(m, { light: this.piece(m) });
+    // (its own piece first, where it has one: a life pet's fur — plan 73 phase 9)
+    yuLit(m, { base: (m.userData.base as Piece | undefined) ?? null, light: this.piece(m) });
   }
 
   /** This light as a part of a material of the family (look/yulit.ts): the light map, the day's

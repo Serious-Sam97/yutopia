@@ -1,5 +1,13 @@
 import type { PetLook, PetOutfit, Species } from "@yutopia/shared/pets";
-import { DirectionalLight, HemisphereLight, PerspectiveCamera, Scene, SRGBColorSpace, WebGLRenderer } from "three";
+import {
+  DirectionalLight,
+  HemisphereLight,
+  type Material,
+  PerspectiveCamera,
+  Scene,
+  SRGBColorSpace,
+  WebGLRenderer,
+} from "three";
 import { type BodyMood, type Face3, PetModel, type PoseKind, plainMat } from "./pets3d";
 
 // The HUD's pictures of pets (pets3d.ts's models): the turntable the panel shows and small portraits,
@@ -41,7 +49,19 @@ class PetPictures {
     const key = `${species}|${JSON.stringify(look)}|${JSON.stringify(outfit)}|${name}`;
     let m = this.models.get(key);
     if (!m) {
-      m = new PetModel(species, look, outfit, plainMat, name);
+      // (the life look's materials take the game's sky in them — its renderer's: not this one's, so none
+      // here; plan 73 phase 9)
+      m = new PetModel(
+        species,
+        look,
+        outfit,
+        (c, o) => {
+          const x = plainMat(c, o) as Material & { envMap?: unknown };
+          if (x.envMap) x.envMap = null;
+          return x;
+        },
+        name,
+      );
       this.models.set(key, m);
       if (this.models.size > 24) {
         const [oldKey, old] = this.models.entries().next().value as [string, PetModel];

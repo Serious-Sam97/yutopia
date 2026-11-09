@@ -17,6 +17,8 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
+  MeshPhysicalMaterial,
+  MeshStandardMaterial,
   MeshToonMaterial,
   NearestFilter,
   type Object3D,
@@ -30,6 +32,9 @@ import {
   Vector3,
 } from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { adoptLife } from "../look/lit";
+import { isLifePets } from "../look/look-mode";
+import { type Piece, yuLit } from "../look/yulit";
 
 // Pets as 3D models (docs/plan/14-pets-v2.md): every species built from soft
 // primitives — an ellipsoid body, a sphere head, capsule legs, a tube tail,
@@ -316,7 +321,10 @@ function mix(hex: string, other: number, t: number): Color {
   return new Color(hex).lerp(new Color(other), t);
 }
 
-export type MatFactory = (color: Color | number | string, o?: { flat?: boolean; glow?: boolean }) => Material;
+export type MatFactory = (
+  color: Color | number | string,
+  o?: { flat?: boolean; glow?: boolean; fur?: number },
+) => Material;
 export const plainMat: MatFactory = (color, o) => petMaterial(color, o);
 
 // ── geometry helpers (shared, never disposed) ───────────────────────────────
@@ -429,6 +437,8 @@ const RIM = `
   outgoingLight += vec3( 1.0, 0.86, 0.62 ) * rim * 0.22 * diffuseColor.rgb * 2.2;
 `;
 export function rimPatch(m: Material) {
+  // (the life look: the fur's sheen is its rim — plan 73 phase 9)
+  if (LIFE_PETS) return;
   const prev = m.onBeforeCompile;
   const prevKey = m.customProgramCacheKey;
   m.onBeforeCompile = (shader, renderer) => {
@@ -442,11 +452,89 @@ export function rimPatch(m: Material) {
   m.needsUpdate = true;
 }
 // A pet's material: toon-ramped, rim-lit (the room's light map is patched in by the view).
-export function petMaterial(color: Color | number | string, o?: { glow?: boolean }): Material {
+export function petMaterial(color: Color | number | string, o?: { glow?: boolean; fur?: number }): Material {
+  if (LIFE_PETS) return lifePetMaterial(color, o);
   const m = new MeshToonMaterial({ color, gradientMap: ramp(), emissive: o?.glow ? color : 0 });
   rimPatch(m);
   return m;
 }
+// (plan 73 phase 9) The life look's pets: no ink, no bands — soft fur, its sheen a paler version of its
+// colour (a coat catches the light along its edge); the dark of the eyes, nose and mouth wet (clearcoat).
+const LIFE_PETS = isLifePets();
+function lifePetMaterial(color: Color | number | string, o?: { glow?: boolean; fur?: number }): Material {
+  const c = new Color(color);
+  const wet = c.getHex() === INK;
+  const m = new MeshPhysicalMaterial({
+    color: c,
+    roughness: wet ? 0.28 : 0.86,
+    metalness: 0,
+    sheen: wet ? 0 : 0.7,
+    sheenRoughness: 0.55,
+    sheenColor: c.clone().lerp(new Color(0xffffff), 0.4),
+    clearcoat: wet ? 1 : 0,
+    clearcoatRoughness: 0.12,
+    emissive: o?.glow ? c : new Color(0),
+  });
+  adoptLife(m);
+  if (!wet && (o?.fur ?? 0) > 0) {
+    // (its fur: the piece the view's light keeps first — light3d.ts patch — and on by itself elsewhere)
+    const fur = furPiece(o?.fur ?? 0);
+    m.userData.base = fur;
+    yuLit(m, { base: fur });
+  }
+  return m;
+}
+/** A coat's grain: a fine bump and tone from noise in the part's own space (it moves with the pet), `k`
+ *  as furry as the species is (its outline's fuzz: a platypus sleek, a parrot's feathers soft) — gone
+ *  where it's finer than a pixel (it glittered on the small parts). */
+const furs = new Map<number, Piece>();
+function furPiece(k0: number): Piece {
+  const k = Math.round(Math.max(0, Math.min(1.3, k0)) * 10) / 10;
+  let p = furs.get(k);
+  if (!p) {
+    p = furOf(k);
+    furs.set(k, p);
+  }
+  return p;
+}
+const furOf = (k: number): Piece => ({
+  key: `pet-fur-${k}`,
+  patch(sh) {
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vFur;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvFur = position;");
+    sh.fragmentShader = sh.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+varying vec3 vFur;
+float furH(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+float furN(vec3 p) {
+  vec3 i = floor(p); vec3 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(furH(i), furH(i + vec3(1, 0, 0)), f.x), mix(furH(i + vec3(0, 1, 0)), furH(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(furH(i + vec3(0, 0, 1)), furH(i + vec3(1, 0, 1)), f.x), mix(furH(i + vec3(0, 1, 1)), furH(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}`,
+      )
+      .replace(
+        "#include <normal_fragment_maps>",
+        `#include <normal_fragment_maps>
+{
+  // (strands: stretched along the part's length, two scales)
+  vec3 q = vFur * vec3(44.0, 15.0, 44.0);
+  float h = 0.65 * furN(q) + 0.35 * furN(q * 2.7 + 5.0);
+  float fine = clamp(1.6 - length(fwidth(q)) * 1.2, 0.0, 1.0) * ${k.toFixed(2)};
+  vec2 dh = vec2(dFdx(h), dFdy(h)) * 0.4 * fine;
+  vec3 sx = dFdx(-vViewPosition);
+  vec3 sy = dFdy(-vViewPosition);
+  vec3 r1 = cross(sy, normal);
+  vec3 r2 = cross(normal, sx);
+  float det = dot(sx, r1);
+  normal = normalize(abs(det) * normal - sign(det) * (dh.x * r1 + dh.y * r2));
+  diffuseColor.rgb *= 1.0 + (0.14 * h - 0.08) * fine;
+}`,
+      );
+  },
+});
 
 // An ink line round every part: a copy drawn with its back faces, pushed out
 // by `INK_T` tiles on each axis — and fuzzed along the normal by noise for a
@@ -489,6 +577,8 @@ function outlineMat(fuzz: number): MeshBasicMaterial {
   return m;
 }
 export function outline(root: Object3D, fuzz = 0) {
+  // (the life look: no ink — plan 73 phase 9)
+  if (LIFE_PETS) return;
   const mat = outlineMat(fuzz);
   const targets: Mesh[] = [];
   root.traverse((o) => {
@@ -763,8 +853,8 @@ export class PetModel {
   private wings: Mesh[] = [];
   private pr: Profile & { breed: Breed };
   private mats: Material[] = [];
-  private bodyMats: (MeshLambertMaterial | MeshToonMaterial)[] = [];
-  private baseColors = new Map<MeshLambertMaterial | MeshToonMaterial, Color>();
+  private bodyMats: (MeshLambertMaterial | MeshToonMaterial | MeshStandardMaterial)[] = [];
+  private baseColors = new Map<MeshLambertMaterial | MeshToonMaterial | MeshStandardMaterial, Color>();
   private looked = 0;
   // weight (M2): how it's moving, lagging ears and tail, a landing squash, and
   // a cross-fade from the last pose kind
@@ -796,10 +886,12 @@ export class PetModel {
     const pr = breedProfile(species, look.breed);
     this.pr = pr;
     this.tailKind = pr.tail;
+    // (the life look's fur, as furry as its outline was: plan 73 phase 9)
+    const fur = species === "parrot" ? 0.35 : pr.fuzz / 0.008;
     const M = (c: Color | number | string, o?: { flat?: boolean; glow?: boolean }) => {
-      const m = mat(c, o);
+      const m = mat(c, { ...o, fur });
       this.mats.push(m);
-      if (m instanceof MeshLambertMaterial || m instanceof MeshToonMaterial) {
+      if (m instanceof MeshLambertMaterial || m instanceof MeshToonMaterial || m instanceof MeshStandardMaterial) {
         this.bodyMats.push(m);
         this.baseColors.set(m, m.color.clone());
       }

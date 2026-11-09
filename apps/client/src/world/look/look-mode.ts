@@ -50,6 +50,16 @@ export const isLifeOut = (): boolean => {
   }
 };
 
+/** The life look's pets (plan 73 phase 9: soft fur, wet eyes, no ink) — `?pets=old` as they were. */
+export const isLifePets = (): boolean => {
+  if (!isLife()) return false;
+  try {
+    return new URLSearchParams(window.location.search).get("pets") !== "old";
+  } catch {
+    return true;
+  }
+};
+
 /** (tests only) set the look. */
 export function setLookModeForTest(m: LookMode | null) {
   mode = m;

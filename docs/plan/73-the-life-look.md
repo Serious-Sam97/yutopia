@@ -1143,6 +1143,25 @@ plough and bus smoothed in clearcoat paint, chrome and glass. `?out=old`: the ou
 
 Plan 51's pets in the same look.
 
+Built 2026-11-09 (the whole phase without sign-offs; `look-mode.ts isLifePets`, `?pets=old` as they were).
+- **No ink, no bands** (`art/pets3d.ts`): in the life look a pet's parts are a physical material —
+  rough (0.86), a sheen a paler version of its colour along its edges (the coat's rim, in place of the
+  toon ramp's and the rim light's); the dark of its eyes, nose and mouth wet (clearcoat 1, roughness
+  0.28). No outlines (`outline` drawn nothing), no rim patch.
+- **Fur** (`furPiece`): a fine bump and a little tone from noise in each part's own space (it moves with
+  the pet: in the world's it slid across a walking one), stretched along the part; as furry as the
+  species' outline fuzz was (a rabbit most, a platypus sleek, a parrot's feathers 0.35); gone where it's
+  finer than a pixel (it glittered on a parrot's head). Kept through the room's light: `Light3.patch`
+  puts a material's own piece (`userData.base`) first, as World3's floors do.
+- **The HUD's pictures** (`art/pets-render.ts`) draw with a renderer of their own: the game's sky isn't
+  theirs to sample — none there.
+- Stills: `e2e/life-pets.mts` (every species adopted three at a time as Ana in the lobby, framed, let go).
+- **Checks:** the pets' chunk 26.3 → 27.1 KB (budget 40); the page unchanged. e2e in the life look:
+  pets-wheel, pets-stay, pets-explore, pets-car passed; pets passed on its second run (its first: the
+  panel's element not found in time). Client tests 315, tsc clean.
+- **Left:** their shapes (plan 14's soft primitives) as they were; the panel's turntable and the HUD's
+  pictures redrawn in phase 10.
+
 ### 10 — Pictures
 
 Furnish thumbnails, wardrobe and character pictures, and the minimap's art redrawn from the new
