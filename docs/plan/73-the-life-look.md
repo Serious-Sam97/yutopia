@@ -1121,6 +1121,11 @@ plough and bus smoothed in clearcoat paint, chrome and glass. `?out=old`: the ou
   - Stills: `e2e/life-vehicles.mts` (the camera on each vehicle as it drives).
   - **Left:** the far cars' and the visitors' shapes (the campus's `carGeometry`, bevelled already) as
     they were.
+- **8.4 The long road.** Checked 2026-11-09: its districts are the Grounds' (their ways, woods,
+  buildings and gardens draw as 8.0–8.3 made them) — the shed by the road at x 4175 among leafy trees and
+  bough pines, Silver Lake's boathouse in its slate. `e2e/life-cam.mts` takes its targets' heights over
+  where I stand now (the road climbs to Hawk Pass). No code of its own.
+  - **Left:** the far land (`tp/far3d.ts`: the hundred thousand far trees, the mountains' faces) as it was.
 
 ### 9 — Pets
 

@@ -1,7 +1,7 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: reads the world's window test hooks */
 // Plan 73 phase 8 (dev only) — stills from a free camera held where you say, as Ana: teleported to (x, y)
 // on the ground floor, the Grounds streamed in, noon (or the hour), then each shot's target, its yaw, pitch
-// and distance — in the look given (`life`, `life&out=old`, …). BARE=1 holds the snow off.
+// and distance (its height over where I stand) — in the look given (`life`, `life&out=old`, …). BARE=1 holds the snow off.
 //   SHOTS='[["name", tx, ty, tz, yaw, pitch, dist], …]' AT='x,y' \
 //     node --experimental-strip-types e2e/life-cam.mts <out dir> [look] [hour]
 import { mkdirSync } from "node:fs";
@@ -55,7 +55,13 @@ if (bare)
     if (L.wx.wxWet) L.wx.wxWet.value = 0;
   });
 await page.waitForTimeout(2500);
-for (const [name, tx, ty, tz, yaw, pitch, dist] of shots) {
+// (the targets' heights over where I stand: the long road climbs)
+const ground = (await page.evaluate(() => {
+  const w = (window as any).__yutopia;
+  return w.room.state.players.get(w.room.sessionId)?.z ?? 0;
+})) as number;
+for (const [name, tx, ty0, tz, yaw, pitch, dist] of shots) {
+  const ty = ty0 + ground;
   await page.evaluate(
     ([at, yaw, pitch, dist]) => {
       const tp = (window as any).__yutopia.tp;
