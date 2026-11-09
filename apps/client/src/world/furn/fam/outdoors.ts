@@ -71,9 +71,33 @@ const O = {
   rust: 0x7a3e22,
   galv: 0xa7adb2,
 };
-// (plan 73 phase 6.1, the log seat: its cut face in the life look — its bark stays its paint: the
-// library's bark, laid along a log, read as camouflage — the rest at 6.8)
-finishes([[O.cut, "pine"]]);
+// (plan 73 phases 6.1, 6.8: what the outdoors' finishes are in the life look — the logs' bark stays its
+// paint: the library's bark, laid along a log, read as camouflage)
+finishes([
+  [O.cut, "pine"],
+  [O.heart, "oak"],
+  [O.bark, "plain"],
+  [O.barkDark, "plain"],
+  [0x6e4a30, "plain"],
+  [O.snow, "matte"],
+  [O.snowShade, "matte"],
+  [O.stone, "matte"],
+  [O.stoneDark, "matte"],
+  [O.stoneLight, "matte"],
+  [O.earth, "matte"],
+  [O.ash, "matte"],
+  [O.char, "matte"],
+  [O.coal, "matte"],
+  [O.birch, "plain"],
+  [O.red, "plain"],
+  [O.green, "plain"],
+  [O.blue, "plain"],
+  [O.carrot, "plain"],
+  [O.glass, "gloss"],
+  [O.brick, "matte"],
+  [O.rust, "matte"],
+  [O.galv, "metal-brushed"],
+]);
 
 const rnd = (a: number, b: number, s: number) => {
   const x = Math.sin(a * 127.1 + b * 311.7 + s * 74.7) * 43758.5453;

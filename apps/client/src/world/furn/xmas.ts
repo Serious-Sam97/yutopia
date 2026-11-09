@@ -16,6 +16,7 @@ import {
   tube,
   type V3,
 } from "./kit";
+import { finishes } from "./life-mats";
 import { P, shade } from "./palette";
 
 // Christmas (docs/plan/68-more-furniture.md, phase 2): the tree and its little one on a table,
@@ -70,6 +71,26 @@ const X = {
   skin: 0xe8c4a0,
   glass: 0xcfe6ff,
 };
+// (plan 73 phase 6.8: what Christmas's finishes are in the life look — painted and papered, the baubles
+// polished)
+finishes([
+  [X.red, "plain"],
+  [X.redDark, "plain"],
+  [X.green, "plain"],
+  [X.fir, "plain"],
+  [X.firDark, "plain"],
+  [X.firLight, "plain"],
+  [X.frost, "plain"],
+  [X.gold, "metal-polished"],
+  [X.silver, "metal-polished"],
+  [X.snow, "matte"],
+  [X.berry, "gloss"],
+  [X.kraft, "matte"],
+  [X.twine, "matte"],
+  [X.ginger, "matte"],
+  [X.icing, "matte"],
+  [X.glass, "gloss"],
+]);
 const WARM = 0xffd28a;
 const COOL = 0xdcecff;
 const MULTI = [0xff4a4a, 0x4ad06a, 0x4a8cff, 0xffc24a];
@@ -431,6 +452,8 @@ export function presents(m: Model, o: Look) {
 
 /** A stocking (red, green or knitted) on its hook, its cuff with a name on it (props.text). */
 export function stocking(m: Model, o: Look, name: string, full = false) {
+  // (the life look: knitted)
+  m.only("boucle");
   const body = [X.red, X.green, X.icing][o.look] ?? X.red;
   const cuff = o.look === 2 ? X.red : X.snow;
   const sock: [number, number][] = [

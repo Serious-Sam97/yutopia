@@ -7,6 +7,7 @@ import {
   SphereGeometry,
 } from "three";
 import { ball, box, cyl, extrude, type Look, lathe, type Model, merged, ring, tube, type V3 } from "../kit";
+import { finishes } from "../life-mats";
 import { P, shade } from "../palette";
 
 // Plan 68 phase 20 (docs/plan/68-more-furniture.md): Other seasons — pumpkins (a heap, heirlooms, or on
@@ -48,6 +49,27 @@ const S = {
   cap: 0x6b4a2a,
   wheat: 0xd9b860,
 };
+// (plan 73 phase 6.8: what the seasons' finishes are in the life look — the leaves, the gourds and the
+// flags paint, not the velvet and linen their colours are elsewhere)
+finishes([
+  [S.pumpkin, "plain"],
+  [S.pumpkinDeep, "plain"],
+  [S.white, "plain"],
+  [S.slate, "plain"],
+  [S.stem, "plain"],
+  [S.vine, "plain"],
+  [S.straw, "matte"],
+  [S.strawDark, "matte"],
+  [S.wheat, "matte"],
+  [S.twine, "matte"],
+  [S.red, "plain"],
+  [S.orange, "plain"],
+  [S.gold, "plain"],
+  [S.rust, "plain"],
+  [S.brown, "plain"],
+  [S.acorn, "matte"],
+  [S.cap, "matte"],
+]);
 const RAINBOW = [0xe8444a, 0xf59a3a, 0xf6d84a, 0x5ac06a, 0x4a8ae0, 0xa05ad0];
 const PASTEL = [0xf6b4c4, 0xb4ead4, 0xf8e4a4, 0xb4d4f6, 0xdcc4f4];
 const METAL = [0xe8b84a, 0xdde2e8, 0xf4d47c, 0xc4ccd4];

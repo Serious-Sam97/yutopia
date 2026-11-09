@@ -32,6 +32,7 @@ import {
   matOfPaint,
   refsOf,
   SELF_COLOURED,
+  woodTone,
 } from "./life-mats";
 
 // The furniture kit (docs/plan/67-the-furniture.md, phase 0's mock; phase 1 grows it): things
@@ -230,7 +231,9 @@ export class Model {
     if (this.onlyMat && !o.mat) by = { mat: this.onlyMat, k: 1 };
     else if (this.noCloth && !o.mat && CLOTHS.has(by.mat)) by = { mat: "matte", k: 1 };
     // (a wood's texture is its colour: its paint only lightens or darkens it)
-    if (SELF_COLOURED.has(by.mat)) C.setScalar(Math.min(1.3, by.k * (o.tone ?? 1)));
+    // (as light as its paint — a stain's tone where a finish says one: black ash)
+    if (SELF_COLOURED.has(by.mat))
+      C.setScalar(Math.min(1.5, ("stain" in by ? (by.stain as number) : woodTone(by.mat, color)) * (o.tone ?? 1)));
     else C.set(color).multiplyScalar(o.tone ?? 1);
     const col = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) col.set([C.r, C.g, C.b], i * 3);

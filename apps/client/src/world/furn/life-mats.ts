@@ -115,6 +115,25 @@ const EXTRA: FinishRef[] = [];
 export function finishes(list: Finish[]): void {
   EXTRA.push(...refsOf(list));
 }
+// (each wood's texture's mean colour, near enough: a wood part is drawn as light as its paint)
+const WOOD_MEAN: Partial<Record<KitMat, number>> = {
+  oak: 0xb98a5a,
+  walnut: 0x6b4128,
+  cherry: 0x8a5a36,
+  pine: 0xd8b98a,
+  birch: 0xd9b98a,
+  ash: 0xbdb8ae,
+};
+const lum = (c: number) => {
+  const [r, g, b] = rgb(c);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+/** How light a self-coloured material (a wood) is drawn for a paint: its luminance over the texture's. */
+export function woodTone(mat: KitMat, paint: number): number {
+  const m = WOOD_MEAN[mat];
+  return m ? Math.max(0.3, Math.min(1.5, lum(paint) / lum(m))) : 1;
+}
+
 /** What a cushion is made of when its paint is no finish of cloth or leather (the kit's `cushion`). */
 export const CLOTHS = new Set<KitMat>(["linen", "twill", "velvet", "boucle", "tweed", "herringbone", "leather"]);
 
@@ -126,9 +145,9 @@ export function matOfPaint(
   fabric: number | null = null,
   cloth: KitMat = "linen",
   local: FinishRef[] = [],
-): { mat: KitMat; k: number } {
+): { mat: KitMat; k: number; stain?: number } {
   const c = rgb(color);
-  let best: { mat: KitMat; k: number } = { mat: "plain", k: 1 };
+  let best: { mat: KitMat; k: number; stain?: number } = { mat: "plain", k: 1 };
   let err = 6; // (sRGB steps: a shade rounds each channel)
   const test = (mat: KitMat, r: [number, number, number], tone?: number) => {
     const n = r[0] + r[1] + r[2];
@@ -136,12 +155,15 @@ export function matOfPaint(
     // the scale that best takes the finish to this colour, and how far off it is then
     const k = (c[0] * r[0] + c[1] * r[1] + c[2] * r[2]) / (r[0] * r[0] + r[1] * r[1] + r[2] * r[2]);
     if (k < 0.45 || k > 1.6) return;
+    // (a metal is only its own colour, near enough: a white or a pale grey a little lighter than
+    // aluminium is paint, glass or snow, not brushed metal)
+    if (mat.startsWith("metal") && (k < 0.8 || k > 1.2)) return;
     const e = Math.max(Math.abs(c[0] - r[0] * k), Math.abs(c[1] - r[1] * k), Math.abs(c[2] - r[2] * k));
     // (the finish itself beats a shade of another that comes as close)
     const e2 = e + Math.abs(1 - k) * 2;
     if (e2 < err) {
       err = e2;
-      best = { mat, k: tone ?? k };
+      best = tone !== undefined ? { mat, k, stain: tone } : { mat, k };
     }
   };
   // (a model's own first, then the look's picked colour, a family's, the palette's)

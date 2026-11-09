@@ -892,9 +892,24 @@ draws grow by the materials in it, not by its things).
     and green walls had taken cloth).
   - **Left:** the pool table draws from its own model (`tp/pooltable3d.ts`), not the kit: its felt is as
     it was; the card tables' felt reads as velvet.
-- **6.8 Christmas, seasons, outdoors** — each family's materials checked and fixed
-  by hand (a part the paint guessed wrong), its forms rounded where the kit's defaults don't reach
-  (cushions' sag, turned legs), before/after stills of every look.
+- **6.8 Christmas, seasons, outdoors.** Built 2026-11-09 (stills `design/screens/life/p68`:
+  `pair-<kind>`, today's above the new; `sheet-1…13`). 37 kinds: the pumpkins, the jack-o'-lantern,
+  the leaf garland, bunting and paper chains; the fire pit, log seat, picnic table, bike rack, bus
+  shelter, mailbox, street sign, flag pole, ski rack, snowman, bird feeder and patio heater; the
+  Christmas trees, presents, stockings, wreath, garland, mistletoe, cocoa station, gingerbread house,
+  village, nutcracker, candle arch, poinsettia, advent calendar, wrapping table, candy cane, reindeer,
+  sleigh, inflatable snowman and snow globe.
+  - **Their colours** (`fam/seasons.ts`, `fam/outdoors.ts`, `xmas.ts` `finishes`): the gourds, leaves,
+    flags and the sleighs' paint plain (their reds and oranges were velvet and linen elsewhere), straw,
+    twine, snow, stone, ash, kraft paper and gingerbread matte, the baubles' gold and silver polished,
+    galvanised steel brushed, the logs' bark its paint, their hearts oak; the stockings knitted
+    (`only("boucle")`).
+  - **A metal matches only its own colour** (a scale of 0.8–1.2 of it): snow, white paint and pale
+    glass a little lighter than aluminium had read as brushed metal (the snowmen went grey).
+  - **A wood is drawn as light as its paint** (`woodTone`: the paint's luminance over the texture's
+    mean): a dark-brown part matched to a lighter wood came out lighter than it was painted (a log
+    seat's bark through another family's timber). The signed-off families' woods are as they were, to
+    the eye (the sample's desk and table checked side by side).
 - **6.9 Checks.** Draws and triangles a room, frame times by tier, memory, budgets, e2e, stills.
 
 ### 7 — Buildings
