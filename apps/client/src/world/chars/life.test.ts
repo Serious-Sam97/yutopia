@@ -47,6 +47,7 @@ function fakeBase(): M.LifeBase {
     height: k.p.height,
     wear: {},
     wearLm: {},
+    wearFiles: [],
     outfits: new Map(),
   };
 }

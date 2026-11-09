@@ -1173,6 +1173,10 @@ if WEAR:
     # under what's worn by them, as wear.covers does)
     EXTRAS["wear"] = {g: sp for g, sp in WR.GARMENTS.items() if g in names or "cc0" in sp}
     EXTRAS["wear_lm"] = {k: [round(float(x), 4) for x in LM[k]] for k in ("hip", "waist", "crotch", "neck", "knee", "ankle", "brow")}
+    # (the garments made, a file each: the game asks only for what's worn)
+    EXTRAS["wear_files"] = sorted(
+        {k for k in WR.GARMENTS if "alias" not in WR.GARMENTS[k]} | {n[5:] for n in HAIR_NAMES if not n.endswith(("-cards", "-bun", "-tails"))}
+    )
 FAR_PARTS = ("body", "clothes", "shoes", "hair")
 FAR_RATIO = float(arg("--far-ratio", "0.12"))
 far = []
@@ -1192,6 +1196,16 @@ for name, pos, uv, faces, w, tex in parts:
                 li += 1
     for p in me.polygons:
         p.use_smooth = True
+    if WEAR and name.startswith("wear-") and name in SRC and WR.GARMENTS.get(name[5:].removesuffix("-tie"), {}).get("helper") == "tights" or (
+        WEAR and name.startswith("wear-") and name in SRC and WR.GARMENTS.get(name[5:], {}).get("helper") == "skirt"
+    ):
+        # (a made garment says what each vertex is too — its source's zones on the body: a layer over it
+        # hides it where it's covered, as the skin — 5.4, the skirt through a coat)
+        zs = [np.asarray(z)[SRC[name]][used] for z in ZONES]
+        za = me.attributes.new("_wear", "FLOAT_VECTOR", "POINT")
+        za.data.foreach_set("vector", np.stack([zs[0], zs[1], zs[2]], 1).astype(np.float32).ravel())
+        fa = me.attributes.new("_neck", "FLOAT_VECTOR", "POINT")
+        fa.data.foreach_set("vector", np.stack([zs[3], zs[4], zs[5]], 1).astype(np.float32).ravel())
     if name == "body" and WEAR:
         # what each vertex is, for hiding the skin under what's worn (wear.py's zones; +8 the kind: under
         # the person's own outfit, MakeHuman's delete list)
@@ -1318,26 +1332,47 @@ bpy.ops.export_scene.gltf(
     export_attributes=bool(WEAR),
 )
 
-# ---- the garments (plan 73 phase 5): the wear-* parts and the rig, their own file
+# ---- the garments (plan 73 phase 5): each its own small file, the rig and its parts (5.4: a person loads
+# only what they wear — all of them in one file grew to 8 MB) — public/life/wear-<who>/<name>.glb
 if WEAR:
-    active("wear")
-    wpath = os.path.abspath(os.path.join(OUT, f"person-{WHO}-wear.glb"))
-    bpy.ops.export_scene.gltf(
-        filepath=wpath,
-        use_active_collection=True,
-        export_format="GLB",
-        export_yup=True,
-        export_skins=True,
-        export_animations=False,
-        export_morph=True,
-        export_morph_normal=False,
-        export_vertex_color="ACTIVE",
-        export_image_format="AUTO",
-        export_meshopt_compression_enable=True,
-        export_apply=False,
-        export_extras=True,
-    )
-    print(f"wrote wear {wpath} ({os.path.getsize(wpath) / 1e6:.2f} MB)")
+    wdir = os.path.abspath(os.path.join(OUT, f"wear-{WHO}"))
+    os.makedirs(wdir, exist_ok=True)
+    for f in os.listdir(wdir):
+        if f.endswith(".glb"):
+            os.remove(os.path.join(wdir, f))
+    wear_obs = [o for o in COLS["wear"].objects if o.name.startswith("wear-")] if "wear" in COLS else []
+    keys = sorted({k for k in WR.GARMENTS if "alias" not in WR.GARMENTS[k]} | {n[5:] for n in HAIR_NAMES if not n.endswith(("-cards", "-bun", "-tails"))})
+    total = 0
+    for key in keys:
+        mine = [o for o in wear_obs if o.name == f"wear-{key}" or o.name.startswith(f"wear-{key}-")]
+        if not mine:
+            continue
+        cg = bpy.data.collections.new(f"g-{key}")
+        bpy.context.scene.collection.children.link(cg)
+        cg.objects.link(arm)
+        for o in mine:
+            cg.objects.link(o)
+        bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection.children[cg.name]
+        gpath = os.path.join(wdir, f"{key}.glb")
+        bpy.ops.export_scene.gltf(
+            filepath=gpath,
+            use_active_collection=True,
+            export_format="GLB",
+            export_yup=True,
+            export_skins=True,
+            export_animations=False,
+            export_morph=True,
+            export_morph_normal=False,
+            export_vertex_color="ACTIVE",
+            export_image_format="AUTO",
+            export_meshopt_compression_enable=True,
+            export_apply=False,
+            export_extras=True,
+            export_attributes=True,
+        )
+        total += os.path.getsize(gpath)
+        bpy.context.scene.collection.children.unlink(cg)
+    print(f"wrote wear {wdir} ({len(os.listdir(wdir))} files, {total / 1e6:.2f} MB)")
 bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection
 
 # ---- the far person (made after the full one is written: its own file, the same rig)

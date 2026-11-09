@@ -649,7 +649,19 @@ of them in batches).
   topknot's spheres, and tubes let fall — a high ponytail, pigtails (falling free: laid on the head they
   zigzagged), 44 locs combed back. The 7 beards are parts of the full beard's density (moustache,
   goatee — the chin and round the mouth —, chinstrap, muttonchops), boxed shorter, stubble faint.
-- **5.4** The avatar's wardrobe (plan 60's options, second colours, patterns) → what's worn.
+- **5.4** The avatar's wardrobe (plan 60's options, second colours, patterns) → what's worn. Built
+  2026-11-09. `life-wear.ts wornNames(avatar)`: a slot each — top, bottom (none under a dress but
+  leggings), outer, shoes, the accessory if it's a hat, hair (bald: none, the file's own dropped), beard
+  — the nearest when an option has no garment; `patternOf` the wardrobe's patterns (stripes, plaid,
+  check, dots, tweed; trim plain for now) per slot in its second colour. **A file per garment**
+  (`public/life/wear-<who>/<name>.glb`, 87 a person, the largest ~0.4 MB; all in one file it grew to
+  8 MB): `lifeWornNow(base, avatar)` loads only those worn (once, shared), and PersonModel makes the
+  life person once they're in (`base.wearFiles` empty: a file from before phase 5, its own outfit).
+  **Layers**: a garment says what each vertex is too (its source's zones), and one under another is
+  hidden where that covers it — a bottom under a top or a coat, a top under a coat — further inside the
+  covering edge than the skin (0.7 dm: at the skin's 0.35 a gap opened at a tee's hem). The HUD's
+  portraits and the editor's option thumbs wait for an avatar's clothes (`pictures().whenReady`) rather
+  than keep a picture that couldn't draw.
 - **5.5** Sway (61), touch (62), swim (66) with the garments; first person's sleeves.
 - **5.6** The wardrobe picture editor re-pointed; the far person in the outfit's colours.
 - **5.7** Checks: budgets, frame times of a crowd, e2e, stills.

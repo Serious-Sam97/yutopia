@@ -14,8 +14,9 @@
 //   lifeGender(avatar, seed)     who they are drawn as: masculine the man, feminine the woman, neutral
 //                                one of the two by a seed from their name (decided 2026-11-08)
 //   lifeArms(part)               a part cut to the arms (first person's hands)
-//   lifeWear(gender, renderer)   the garments and hair made for that person (phase 5: person-<who>-wear.glb),
-//                                loaded once; lifeBody's `worn` dresses them, the skin under them hidden
+//   lifeWornNow(base, avatar, r) what an avatar wears (phase 5.4: their wardrobe's slots), its garments'
+//                                files loaded (a file each, only those worn; null till they're in) —
+//                                lifeBody's `worn` dresses them, the skin under them hidden
 import type { AvatarLayers } from "@yutopia/shared";
 import {
   type BufferAttribute,
@@ -37,7 +38,17 @@ import { JOINTS, type JointName, PARENT } from "../chars/rig";
 import { loadLifeGLTF } from "./life-assets";
 import { libMaterial } from "./life-matlib";
 import { LIBRARY, type MatId } from "./life-matlib-list";
-import { bodyIndex, isHair, patternPiece, roleOf, type WearLm, type WearPattern, type WearSpec } from "./life-wear";
+import {
+  bodyIndex,
+  isHair,
+  patternOf,
+  patternPiece,
+  roleOf,
+  type WearLm,
+  type WearPattern,
+  type WearSpec,
+  wornNames,
+} from "./life-wear";
 import type { Piece, Shader } from "./yulit";
 
 /** Bones beyond chars/rig.ts's 31: each eye, under the head, turned by the gaze. */
@@ -82,6 +93,8 @@ export interface LifeBase {
    *  vertices is, so what's worn hides the skin under it */
   wear: Record<string, WearSpec>;
   wearLm: WearLm;
+  /** the garments made, a file each (public/life/wear-<who>/<name>.glb) */
+  wearFiles: string[];
   /** the body's geometry per outfit (the skin under it dropped), shared by everyone in it */
   outfits: Map<string, BufferGeometry>;
 }
@@ -297,6 +310,7 @@ export async function loadLifeBase(url: string, renderer: WebGLRenderer, gender:
     bodies?: LifeBase["bodies"];
     wear?: Record<string, WearSpec>;
     wear_lm?: WearLm;
+    wear_files?: string[];
   } = {};
   scene.traverse((o: Object3D) => {
     const life = (o.userData as { life?: string }).life;
@@ -355,6 +369,7 @@ export async function loadLifeBase(url: string, renderer: WebGLRenderer, gender:
     height: top,
     wear: extras.wear ?? {},
     wearLm: extras.wear_lm ?? {},
+    wearFiles: extras.wear_files ?? [],
     outfits: new Map(),
   };
 }
@@ -426,35 +441,85 @@ export function lifeFar(gender: LifeGender, renderer: WebGLRenderer): Promise<Li
   return p;
 }
 
-const wears = new Map<string, Promise<LifeBase>>();
-const wearsIn = new Map<string, LifeBase>();
-/** The garments and hair made for that person (plan 73 phase 5), loaded once: a base of `wear-*` parts. */
-export function lifeWear(gender: LifeGender, renderer: WebGLRenderer): Promise<LifeBase> {
-  let p = wears.get(gender);
+// (each garment's file, loaded once a gender: its parts, or null if it didn't load)
+const garments = new Map<string, Promise<LifePart[] | null>>();
+const garmentsIn = new Map<string, LifePart[] | null>();
+function garment(gender: LifeGender, name: string, renderer: WebGLRenderer): Promise<LifePart[] | null> {
+  const key = `${gender}/${name}`;
+  let p = garments.get(key);
   if (!p) {
-    p = loadLifeBase(`/life/person-${gender}-wear.glb`, renderer, gender);
-    wears.set(gender, p);
-    p.then(
-      (b) => wearsIn.set(gender, b),
-      () => wears.delete(gender),
+    p = loadLifeBase(`/life/wear-${gender}/${name}.glb`, renderer, gender).then(
+      (b) => b.parts,
+      (e) => {
+        console.warn(`life wear: ${key} didn't load`, e);
+        return null;
+      },
     );
+    garments.set(key, p);
+    p.then((parts) => garmentsIn.set(key, parts));
   }
   return p;
 }
-/** The garments' file if it's in (null meanwhile: asked for). */
-export function lifeWearNow(gender: LifeGender, renderer: WebGLRenderer): LifeBase | null {
-  void lifeWear(gender, renderer);
-  return wearsIn.get(gender) ?? null;
-}
 
-/** What someone wears (phase 5): the garments' and hair's names (wear.py GARMENTS, hair.py — "tee",
- *  "jeans", "sneakers", "hair-crop", "beard-beard"), off that person's garments file; a top's pattern. */
+/** What someone wears (phase 5): the garments' and hair's names (wear.py GARMENTS, hair.py — "top-tee",
+ *  "bottom-jeans", "shoes-sneakers", "hair-long", "beard-full"), their parts (each one's file); each
+ *  slot's pattern and its second colour; the renderer that draws them in the library's cloth. */
 export interface LifeWorn {
   names: string[];
-  wear: LifeBase;
+  parts: LifePart[];
+  patterns?: Partial<Record<"top" | "bottom" | "outer", { kind: WearPattern; color2: string }>>;
+  /** (the benches) one pattern on every top */
   pattern?: WearPattern;
-  /** (to draw the garments in the material library's cloth — without it, plain) */
   renderer?: WebGLRenderer;
+}
+
+/** The files `names` need (an alias's its source's). */
+const filesOf = (base: LifeBase, names: string[]) =>
+  [...new Set(names.map((n) => base.wear[n]?.alias ?? n))].filter((n) => base.wearFiles.includes(n));
+
+/** What an avatar wears, once each of its garments' files is in (null meanwhile: asked for). */
+export function lifeWornNow(base: LifeBase, a: AvatarLayers, renderer: WebGLRenderer): LifeWorn | null {
+  const names = wornNames(a, base.wear, base.wearFiles);
+  const parts: LifePart[] = [];
+  let waiting = false;
+  for (const f of filesOf(base, names)) {
+    void garment(base.gender, f, renderer);
+    const got = garmentsIn.get(`${base.gender}/${f}`);
+    if (got === undefined) waiting = true;
+    else if (got) parts.push(...got);
+  }
+  if (waiting) return null;
+  const pat = (k: string | undefined, c2: string | undefined) => ({ kind: patternOf(k), color2: c2 ?? "#2a2420" });
+  return {
+    names,
+    parts,
+    renderer,
+    patterns: {
+      top: pat(a.topPattern, a.topColor2),
+      bottom: pat(a.bottomPattern, a.bottomColor2),
+      outer: pat(a.outerPattern, a.outerColor2),
+    },
+  };
+}
+
+/** What an avatar wears (the benches: lifeWornNow, waited for). */
+export async function lifeWorn(base: LifeBase, a: AvatarLayers, renderer: WebGLRenderer): Promise<LifeWorn | null> {
+  if (!base.wearFiles.length) return null;
+  await Promise.all(
+    filesOf(base, wornNames(a, base.wear, base.wearFiles)).map((f) => garment(base.gender, f, renderer)),
+  );
+  return lifeWornNow(base, a, renderer);
+}
+
+/** `names` worn (the benches), once their files are in. */
+export async function lifeWornOf(
+  base: LifeBase,
+  names: string[],
+  renderer: WebGLRenderer,
+  pattern?: WearPattern,
+): Promise<LifeWorn> {
+  const loaded = await Promise.all(filesOf(base, names).map((f) => garment(base.gender, f, renderer)));
+  return { names, parts: loaded.flatMap((p) => p ?? []), renderer, pattern };
 }
 
 /** The body's geometry for an outfit: its own attributes, its index without the skin under it (and,
@@ -467,6 +532,27 @@ function bodyFor(base: LifeBase, body: LifePart, names: string[]): BufferGeometr
   const g = body.geometry;
   const specs = names.map((n) => base.wear[n]).filter((x): x is WearSpec => !!x);
   const index = bodyIndex(g, specs, base.wearLm, own);
+  if (!index) return g;
+  const out = new BufferGeometry();
+  for (const [k, a] of Object.entries(g.attributes)) out.setAttribute(k, a);
+  out.morphAttributes = g.morphAttributes;
+  out.morphTargetsRelative = g.morphTargetsRelative;
+  out.setIndex(index);
+  out.boundingBox = g.boundingBox;
+  out.boundingSphere = g.boundingSphere;
+  base.outfits.set(key, out);
+  return out;
+}
+
+/** A garment's geometry under `covering` (garment names): its own attributes, its index without what
+ *  they cover — cached on the base, per garment and what's over it. */
+function layered(base: LifeBase, part: LifePart, covering: string[]): BufferGeometry {
+  const key = `${part.name}<${[...covering].sort().join(",")}`;
+  const had = base.outfits.get(key);
+  if (had) return had;
+  const g = part.geometry;
+  const specs = covering.map((n) => base.wear[n]).filter((x): x is WearSpec => !!x);
+  const index = bodyIndex(g, specs, base.wearLm, false, 0.3, 0.7);
   if (!index) return g;
   const out = new BufferGeometry();
   for (const [k, a] of Object.entries(g.attributes)) out.setAttribute(k, a);
@@ -615,13 +701,16 @@ export function lifeBody(base: LifeBase, a: AvatarLayers | null, worn: LifeWorn 
   if (has("shoes")) dropped.add("shoes");
   if (has("hair") && names.some((n) => n.startsWith("hair-"))) dropped.add("hair");
   // (a garment drawn as another's mesh — the wardrobe's high-tops as the sneakers — by its `alias`)
-  const drawn = names.map((n) => worn?.wear.wear[n]?.alias ?? n);
-  const wornParts = worn
-    ? worn.wear.parts.filter((p) => drawn.some((n) => p.name === `wear-${n}` || p.name.startsWith(`wear-${n}-`)))
-    : [];
+  const wornParts = worn?.parts ?? [];
   const all = [...base.parts.filter((p) => !dropped.has(p.name)), ...wornParts];
+  // (a layer under another hidden where that one covers it, as the skin is: a bottom under a top or a
+  // coat, a top under a coat — 5.4: a skirt came through a coat at the hips)
+  const over = (r: string) =>
+    names.filter((n) => (r === "bottom" ? ["top", "outer"] : r === "top" ? ["outer"] : []).includes(roleOf(n)));
   const parts = all.map((p) => {
     if (p.name === "body") p = { ...p, geometry: bodyFor(base, p, names) };
+    else if (p.name.startsWith("wear-") && over(roleOf(p.name)).length)
+      p = { ...p, geometry: layered(base, p, over(roleOf(p.name))) };
     if (!a && p.name !== "body" && !p.name.startsWith("wear-")) return p;
     let material = p.material;
     const tint = (c: Color) => {
@@ -661,7 +750,7 @@ export function lifeBody(base: LifeBase, a: AvatarLayers | null, worn: LifeWorn 
       }[r];
       // (a piece of its own on a garment — a shirt's tie — in that garment's second colour)
       const second = p.name.endsWith("-tie") ? (a.topColor2 ?? "#2a2420") : null;
-      const fabric = worn?.wear.wear[p.name.replace(/^wear-/, "")]?.fabric as MatId | undefined;
+      const fabric = base.wear[p.name.replace(/^wear-/, "")]?.fabric as MatId | undefined;
       if (fabric && worn?.renderer && fabric in LIBRARY) {
         // (in the library's cloth — its weave by the garment's UVs in metres — in their colour)
         material = libMaterial(fabric, worn.renderer, { color: new Color(hex).multiplyScalar(0.85) });
@@ -671,12 +760,20 @@ export function lifeBody(base: LifeBase, a: AvatarLayers | null, worn: LifeWorn 
         // (the CC0 shoes are textured: their file's colour × the avatar's, as the file's own shoes)
         tint(new Color(second ?? hex).multiplyScalar(r === "shoes" ? 1 : 0.85));
       }
-      if (r === "top" && worn?.pattern && worn.pattern !== "plain") {
-        givePiece(
-          material,
-          patternPiece(worn.pattern, new Color(1, 1, 1), new Color(a.bottomColor).multiplyScalar(1.1)),
-        );
-        (material as MeshStandardMaterial).color.copy(new Color(hex));
+      // (its slot's pattern, in its colour and its second — the benches': one on every top)
+      const pat =
+        r === "top" || r === "bottom" || r === "outer"
+          ? worn?.pattern && r === "top"
+            ? { kind: worn.pattern, color2: a.bottomColor }
+            : worn?.patterns?.[r]
+          : undefined;
+      if (pat && pat.kind !== "plain" && !second) {
+        if (!mine.includes(material)) {
+          material = own(material);
+          mine.push(material);
+        }
+        givePiece(material, patternPiece(pat.kind, new Color(1, 1, 1), new Color(pat.color2).multiplyScalar(1.1)));
+        (material as MeshStandardMaterial).color.copy(new Color(hex).multiplyScalar(0.85));
       }
     } else if (p.name === "clothes") {
       material = own(p.material);

@@ -12,6 +12,7 @@
 //                              person's own outfit too)
 //   patternPiece(kind, a, b)   a garment's pattern (none, stripes, plaid), off its rest place (it has no
 //                              UVs): its own part of its material
+import type { AvatarLayers } from "@yutopia/shared";
 import type { BufferGeometry } from "three";
 import type { Piece, Shader } from "./yulit";
 
@@ -117,7 +118,16 @@ export function covers(
 
 /** The body's triangles that still show under `specs` (and under the person's own outfit, `own`) — null
  *  if the body doesn't say what its vertices are (a file from before phase 5). */
-export function bodyIndex(g: BufferGeometry, specs: WearSpec[], lm: WearLm, own: boolean): number[] | null {
+export function bodyIndex(
+  g: BufferGeometry,
+  specs: WearSpec[],
+  lm: WearLm,
+  own: boolean,
+  /** how far inside a covering garment's edges (along a limb; dm): a garment under another, further in —
+   *  at the default a gap opened at a tee's hem over the jeans */
+  mt = M_T,
+  my = M_Y,
+): number[] | null {
   const w = g.getAttribute("_wear");
   const n = g.getAttribute("_neck");
   const index = g.getIndex();
@@ -137,7 +147,7 @@ export function bodyIndex(g: BufferGeometry, specs: WearSpec[], lm: WearLm, own:
     const rad = n.getY(i);
     const dx = n.itemSize > 2 ? n.getZ(i) : 0;
     for (const s of specs)
-      if (covers(s, kind, t, y, front, rad, dx, lm)) {
+      if (covers(s, kind, t, y, front, rad, dx, lm, mt, my)) {
         hidden[i] = 1;
         break;
       }
@@ -167,7 +177,7 @@ export const isHair = (name: string): boolean => name === "hair" || /^wear-(hair
 
 /** A garment's pattern: its two colours in bands off its rest place (metres; it has no UVs) — stripes
  *  across, or a plaid's two ways round. Its own part of its material (the room's light after it). */
-export type WearPattern = "plain" | "stripes" | "plaid";
+export type WearPattern = "plain" | "stripes" | "plaid" | "check" | "dots" | "tweed";
 export function patternPiece(
   kind: WearPattern,
   a: { r: number; g: number; b: number },
@@ -180,8 +190,20 @@ export function patternPiece(
   const band =
     kind === "stripes"
       ? "float k = smoothstep( 0.46, 0.54, abs( fract( vLifeRest.y * 12.0 ) - 0.5 ) * 2.0 );"
-      : // (a plaid: bands up and round, where they cross the darker; a thin line through each)
-        `vec2 q = vec2( vLifeRest.y * 7.0, ( vLifeRest.x + vLifeRest.z ) * 7.0 );
+      : kind === "check"
+        ? // (gingham: small even bands both ways, their crossings the darkest)
+          `vec2 g = step( 0.5, fract( vec2( vLifeRest.y, vLifeRest.x + vLifeRest.z ) * 16.0 ) );
+	float k = ( g.x + g.y ) * 0.5;`
+        : kind === "dots"
+          ? `vec2 c = fract( vec2( vLifeRest.y, vLifeRest.x + vLifeRest.z ) * 14.0 ) - 0.5;
+	float k = 1.0 - smoothstep( 0.17, 0.22, length( c ) );`
+          : kind === "tweed"
+            ? // (a flecked weave: the two colours in a fine broken noise)
+              `vec3 q = vLifeRest * 90.0;
+	float n = fract( sin( dot( floor( q ), vec3( 12.9898, 78.233, 37.719 ) ) ) * 43758.5453 );
+	float k = step( 0.62, n ) * 0.8;`
+            : // (a plaid: bands up and round, where they cross the darker; a thin line through each)
+              `vec2 q = vec2( vLifeRest.y * 7.0, ( vLifeRest.x + vLifeRest.z ) * 7.0 );
 	vec2 f = abs( fract( q ) - 0.5 ) * 2.0;
 	vec2 s = smoothstep( 0.55, 0.62, f );
 	vec2 l = 1.0 - smoothstep( 0.04, 0.08, abs( fract( q * 2.0 + 0.25 ) - 0.5 ) );
@@ -209,4 +231,30 @@ export function patternPiece(
         );
     },
   };
+}
+
+/** What an avatar wears, by the wardrobe's slots (shared/avatar.ts): the garments' names as the files have
+ *  them — `files` the ones made, `specs` their rules (an alias drawn as another). A dress stands for the
+ *  bottom too (but leggings); bald is no hair (the file's own dropped); none, nothing. */
+export function wornNames(a: AvatarLayers, specs: Record<string, WearSpec>, files: readonly string[]): string[] {
+  const has = (n: string) => files.includes(n) || !!specs[n]?.alias;
+  const out: string[] = [];
+  const top = has(`top-${a.top}`) ? `top-${a.top}` : "top-tee";
+  out.push(top);
+  if (top !== "top-dress" || a.bottom === "leggings")
+    out.push(has(`bottom-${a.bottom}`) ? `bottom-${a.bottom}` : "bottom-jeans");
+  if (a.outer && a.outer !== "none" && has(`outer-${a.outer}`)) out.push(`outer-${a.outer}`);
+  out.push(has(`shoes-${a.shoes}`) ? `shoes-${a.shoes}` : "shoes-sneakers");
+  if (a.accessory && has(`hat-${a.accessory}`)) out.push(`hat-${a.accessory}`);
+  if (a.hair === "bald") out.push("hair-bald");
+  else if (has(`hair-${a.hair}`)) out.push(`hair-${a.hair}`);
+  if (a.beard && a.beard !== "none" && has(`beard-${a.beard}`)) out.push(`beard-${a.beard}`);
+  return out;
+}
+
+/** The wardrobe's pattern names as the patterns drawn ("trim", "none": plain). */
+export function patternOf(name: string | undefined): WearPattern {
+  return name === "stripes" || name === "plaid" || name === "check" || name === "dots" || name === "tweed"
+    ? name
+    : "plain";
 }

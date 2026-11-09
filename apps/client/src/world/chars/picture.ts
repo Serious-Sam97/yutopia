@@ -127,6 +127,22 @@ class Pictures {
     return this.readyP;
   }
 
+  /** In the life look (a picture there can wait for someone's clothes: whenReady). */
+  lifeLook(): boolean {
+    return isLife();
+  }
+
+  /** Ready to draw this avatar (the life look: its person file and its garments' files in, 5.4 — a
+   *  picture of someone whose clothes are still coming can't be drawn yet). */
+  async whenReady(avatar: AvatarLayers, name?: string): Promise<void> {
+    await this.ready();
+    const gl = this.gl();
+    if (!isLife() || !gl) return;
+    const M = await import("../look/life-people");
+    const base = await M.lifeBase(M.lifeGender(avatar, name ? nameSeed(name) : 0), gl);
+    await M.lifeWorn(base, avatar, gl).catch(() => null);
+  }
+
   private look(avatar: AvatarLayers, lk: string, lod: 0 | 1 = 1, seed = 0): Look {
     const k = `${lod === 1 ? lk : `${lk}|L${lod}`}|${seed}`;
     let l = this.looks.get(k);

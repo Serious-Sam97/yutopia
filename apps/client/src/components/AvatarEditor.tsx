@@ -253,10 +253,22 @@ function OptionThumb({ look, focus }: { look: AvatarLayers; focus: Focus }) {
   useEffect(() => {
     if (!C || thumbs.has(key)) return setSrc(thumbs.get(key) ?? null);
     let live = true;
-    waiting.push(() => {
-      if (!thumbs.has(key)) thumbs.set(key, C.pictures().canDraw() ? C.pictures().thumb(look, focus, 96) : null);
-      if (live) setSrc(thumbs.get(key) ?? null);
-    });
+    const draw = (again: boolean) => {
+      if (thumbs.has(key)) return live && setSrc(thumbs.get(key) ?? null);
+      const pics = C.pictures();
+      const got = pics.canDraw() ? pics.thumb(look, focus, 96) : null;
+      // (the life look: its clothes' files not in yet — drawn again once they are, not kept as nothing)
+      if (got === null && pics.lifeLook() && pics.canDraw() && !again) {
+        void pics.whenReady(look).then(() => {
+          waiting.push(() => draw(true));
+          pump();
+        });
+        return;
+      }
+      thumbs.set(key, got);
+      if (live) setSrc(got);
+    };
+    waiting.push(() => draw(false));
     pump();
     return () => {
       live = false;

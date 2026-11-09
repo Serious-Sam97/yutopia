@@ -171,7 +171,8 @@ export default function LifeBench() {
         for (let i = 1; i <= crowd; i++) {
           const a = avatarFromSeed(i * 7 + Number(q.get("seed") ?? 0));
           const base = await LP.lifeBase(LP.lifeGender(a, i), renderer);
-          const lp = new L.LifePerson(base, a);
+          // (phase 5.4: in their own wardrobe, as the game dresses them)
+          const lp = new L.LifePerson(base, a, await LP.lifeWorn(base, a, renderer));
           shown.push({
             root: lp.root,
             setPose: (p, lift) => lp.setPose(p as never, lift),
@@ -181,7 +182,7 @@ export default function LifeBench() {
             who: `crowd-${i}`,
           });
           console.log(
-            `life crowd ${i}: ${a.gender} → ${base.gender}, ${a.body}, skin ${a.skin}, hair ${a.hairColor}, ${a.topColor}/${a.bottomColor}/${a.shoesColor}`,
+            `life crowd ${i}: ${a.gender} → ${base.gender}, ${a.body}, ${a.top}/${a.bottom}/${a.outer}/${a.shoes}/${a.accessory}/${a.hair}/${a.beard}`,
           );
         }
       }

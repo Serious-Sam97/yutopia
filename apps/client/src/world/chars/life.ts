@@ -252,6 +252,8 @@ export class LifeLook {
     private h: LifeHost,
     /** the seed from their name (their eyes' colour) */
     seed = 0,
+    /** (phase 5.4) what they wear: their wardrobe's garments, made — none, the file's own outfit */
+    worn: import("../look/life-people").LifeWorn | null = null,
   ) {
     this.u = {
       lifeTint: { value: new Color(1, 1, 1) },
@@ -261,7 +263,7 @@ export class LifeLook {
     this.M = M;
     this.gender = base.gender;
     this.eyeTurn = [M.EYE_YAW, M.EYE_PITCH];
-    const b = M.lifeBody(base, avatar);
+    const b = M.lifeBody(base, avatar, worn);
     this.body = b;
     // the arms straight down, as the rig's hang: each upper arm turned down about its shoulder, then each
     // forearm about its elbow (measured, each arm: the file's don't hang at one angle — a fixed 9° left

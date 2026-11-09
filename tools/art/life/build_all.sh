@@ -16,8 +16,8 @@ for who in man woman; do
   done
   $B -P tools/art/life/build_person.py -- --who "$who" --paint --wear "$WEAR" --morphs "slim=$TMP/$who-slim.npz,broad=$TMP/$who-broad.npz" | grep -E "wrote|shoulders"
   python3 -I tools/art/life/pack_glb.py "$OUT/person-$who-painted.glb" "$OUT/person-$who-painted.glb"
-  # (its garments and hair, phase 5: their own file)
-  python3 -I tools/art/life/pack_glb.py "$OUT/person-$who-wear.glb" "$OUT/person-$who-wear.glb"
+  # (its garments and hair, phase 5: a file each — 5.4, a person loads only what they wear)
+  for g in "$OUT/wear-$who"/*.glb; do python3 -I tools/art/life/pack_glb.py "$g" "$g" > /dev/null; done
   # (its far person, plan 73 4.5: one coarse mesh, no textures)
   python3 -I tools/art/life/pack_glb.py "$OUT/person-$who-far.glb" "$OUT/person-$who-far.glb"
 done

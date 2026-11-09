@@ -19,7 +19,7 @@ import {
   type LifeGender,
   type LifeWorn,
   lifeBody,
-  lifeWear,
+  lifeWornOf,
   loadLifeBase,
   parentOf,
 } from "./life-people";
@@ -135,11 +135,12 @@ export async function loadLifePerson(
   url: string,
   renderer: WebGLRenderer,
   avatar: AvatarLayers | null = null,
-  worn: Omit<LifeWorn, "wear"> | null = null,
+  worn: Pick<LifeWorn, "names" | "pattern"> | null = null,
 ): Promise<LifePerson> {
   const gender: LifeGender = /woman/.test(url) ? "woman" : "man";
-  const w = worn ? { ...worn, wear: await lifeWear(gender, renderer), renderer } : null;
-  return new LifePerson(await loadLifeBase(url, renderer, gender), avatar, w);
+  const base = await loadLifeBase(url, renderer, gender);
+  const w = worn ? await lifeWornOf(base, worn.names, renderer, worn.pattern) : null;
+  return new LifePerson(base, avatar, w);
 }
 
 /** Every mesh of a three object (for counting what the person costs). */

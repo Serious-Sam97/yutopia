@@ -511,7 +511,11 @@ export class PersonModel {
     if (key === this.lifeKey) return !!this.life;
     const base = lifeBaseNow(g, host);
     if (!base) return !!this.life;
-    const look = new LifeLook(M, base, this.avatar, this.part, host, this.seed);
+    // (phase 5.4) what their wardrobe says, its garments' files in (a file each, loaded once; a file from
+    // before phase 5 has none: the file's own outfit)
+    const worn = base.wearFiles.length ? M.lifeWornNow(base, this.avatar, host.renderer) : null;
+    if (base.wearFiles.length && !worn) return !!this.life;
+    const look = new LifeLook(M, base, this.avatar, this.part, host, this.seed, worn);
     this.life?.dispose();
     this.life = look;
     this.lifeKey = key;

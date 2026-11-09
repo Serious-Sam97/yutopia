@@ -123,6 +123,46 @@ for (const f of shipped) {
   });
 }
 
+// ── the garments (phase 5.4: a file each, public/life/wear-<who>/<name>.glb — a person loads only what
+// they wear: an outfit ~7 of them) ─────────────────────────────────────────────────────────────────
+
+/** A garment's file: small (the largest, the CC0 pack's hairs, ~0.4 MB), packed, readable, our rig. */
+const GARMENT = { mb: 0.6, gpuMb: 3, tris: 12000 };
+for (const who of ["man", "woman"]) {
+  const dir = join(DIR, `wear-${who}`);
+  const glbs = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".glb")) : [];
+  test(
+    `life garments wear-${who}: each within its budget, packed, readable`,
+    { skip: !glbs.length && "not built" },
+    () => {
+      for (const f of glbs) {
+        const path = join(dir, f);
+        const size = readFileSync(path).length;
+        const { json, bin } = readGlb(path);
+        assert.ok(size <= GARMENT.mb * 1e6, `${who}/${f}: ${(size / 1e6).toFixed(2)} MB > ${GARMENT.mb} MB`);
+        let gpu = 0;
+        for (const img of json.images ?? []) {
+          assert.equal(img.mimeType, "image/ktx2", `${who}/${f}: an image not packed (pack_glb.py)`);
+          const v = json.bufferViews[img.bufferView as number];
+          gpu += ktx2Bytes(bin.subarray(v.byteOffset ?? 0, (v.byteOffset ?? 0) + v.byteLength));
+        }
+        assert.ok(gpu <= GARMENT.gpuMb * 1e6, `${who}/${f}: textures ~${(gpu / 1e6).toFixed(1)} MB > ${GARMENT.gpuMb}`);
+        let tris = 0;
+        for (const m of json.meshes)
+          for (const p of m.primitives)
+            tris +=
+              p.indices !== undefined
+                ? json.accessors[p.indices].count / 3
+                : json.accessors[p.attributes.POSITION].count / 3;
+        assert.ok(tris <= GARMENT.tris, `${who}/${f}: ${tris} triangles > ${GARMENT.tris}`);
+        for (const e of json.extensionsRequired ?? []) assert.ok(SUPPORTED.has(e), `${who}/${f}: needs ${e}`);
+        const names = new Set((json.skins?.[0]?.joints ?? []).map((j) => json.nodes[j].name));
+        for (const j of JOINTS) assert.ok(names.has(j), `${who}/${f}: no joint ${j}`);
+      }
+    },
+  );
+}
+
 // ── the material library (phase 3: tools/art/life/materials.mts → public/life/mat) ──────────────
 
 const MAT_DIR = join(DIR, "mat");
