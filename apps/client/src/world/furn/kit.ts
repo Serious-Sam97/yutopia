@@ -318,10 +318,17 @@ export interface Look {
 /** A box `size` big; `bevel` m off its edges, cut in `seg` facets (1: a chamfer). */
 export function box(size: V3, bevel = 0, seg = 1): BufferGeometry {
   const [w, h, d] = size;
-  // (the life look: every box's edges rounded — a chamfer or none, a little round)
+  // (the life look: a box's edges rounded by its size — one that asked for none rounded only if it's 15 cm
+  // or more and 4 cm through (one segment, 108 triangles; two, 300, from 30 cm), so a book, a brick, a
+  // record's sleeve and a button stay boxes; one that asked for a bevel two segments from 30 cm. Rounding
+  // every box made a furnished room 2.5 times today's triangles: a fireplace's bricks 34k, books 20k)
   if (life()) {
-    if (bevel <= 0) bevel = Math.min(LIFE_BEVEL, Math.min(w, h, d) * 0.25);
-    seg = Math.max(seg, 2);
+    const big = Math.max(w, h, d);
+    const thin = Math.min(w, h, d);
+    if (bevel <= 0 && big >= 0.15 && thin >= 0.04) {
+      bevel = Math.min(LIFE_BEVEL, thin * 0.25);
+      seg = big < 0.3 ? 1 : 2;
+    } else if (bevel > 0 && big >= 0.3) seg = Math.max(seg, 2);
   }
   const r = Math.min(bevel, w / 2 - 1e-4, h / 2 - 1e-4, d / 2 - 1e-4);
   return r > 0.0005 ? new RoundedBoxGeometry(w, h, d, seg, r) : new BoxGeometry(w, h, d);

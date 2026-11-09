@@ -157,11 +157,14 @@ export class BuildLayer {
         opacity: g.ok ? 0.9 : 0.6,
         depthWrite: false,
       });
-      if (!out.lit.empty || !out.glow.empty || !out.clear.empty) {
+      // (every bucket — the life look's things are in their materials', plan 73 phase 6: one see-through
+      // ghost of them all)
+      const geos = out.geos;
+      if (geos.some((x) => !x.empty)) {
         const geo = new BufferGeometry();
-        const pos = [...out.lit.pos, ...out.glow.pos, ...out.clear.pos];
-        const nor = [...out.lit.nor, ...out.glow.nor, ...out.clear.nor];
-        const col = [...out.lit.col, ...out.glow.col, ...out.clear.col];
+        const pos = geos.flatMap((x) => x.pos);
+        const nor = geos.flatMap((x) => x.nor);
+        const col = geos.flatMap((x) => x.col);
         geo.setAttribute("position", new Float32BufferAttribute(pos, 3));
         geo.setAttribute("normal", new Float32BufferAttribute(nor, 3));
         geo.setAttribute("color", new Float32BufferAttribute(col, 4));

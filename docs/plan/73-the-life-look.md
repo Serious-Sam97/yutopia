@@ -911,6 +911,40 @@ draws grow by the materials in it, not by its things).
     seat's bark through another family's timber). The signed-off families' woods are as they were, to
     the eye (the sample's desk and table checked side by side).
 - **6.9 Checks.** Draws and triangles a room, frame times by tier, memory, budgets, e2e, stills.
+  Built 2026-11-09 (stills `design/screens/life/p69`: the furnished room, life and classic, High and Low).
+  - **A furnished room** (`e2e/life-things-room.mts`): 40 of the kit's things across every family put
+    on Floor 1 as Ana, the scene's own render counted (its shadows in it), its frames timed over 240,
+    then taken away; `EMPTY=1` the room as it is. The things' own share, High:
+
+    | | classic | life (first) | life (now) |
+    | --- | --- | --- | --- |
+    | draws | +56 | +140 | +140 |
+    | triangles | +0.30M | +0.92M | +0.34M |
+
+    The whole view: life 2530 draws, 3.91M triangles, 16.7 ms frames (classic 2430, 3.75M, 16.7); Low
+    2394 draws, 2.60M. Every run held 60 fps on this Mac (the frame is the display's, not the scene's).
+    Memory: 512 textures (classic 441: the library's maps), 308 programs (259), the JS heap ~1.0 GB
+    (classic ~0.9; the dev server's).
+  - **Fixed: rounding by size.** Rounding every box (two segments, 300 triangles where a box is 12)
+    made the room's things three times today's triangles; the 40 models 299k against classic's 122k (a
+    fireplace's bricks 34k, a crate's record sleeves 34k, a bookcase's books 20k). Now a box that asked
+    for no rounding is rounded only when it's 15 cm or more and 4 cm through (one segment to 30 cm, two
+    past it); one that asked for a bevel takes two segments from 30 cm. The 40 models 182k (1.5× classic),
+    the room's things +0.34M (classic +0.30M). Books and bricks stay crisp boxes; the sample unchanged to
+    the eye.
+  - **The draws:** a thing's parts are a draw a material in its area (merged), so a room of mixed
+    things draws ~2.5× today's for its things (+140 against +56 here); the scene's total +4%.
+  - **Budgets:** the page 480.7 KB (unchanged), every lazy chunk within its own, every chunk together
+    5633 KB gzip in 278 files.
+  - **e2e** in the life look (`playwright.life.config.ts`, `YUTOPIA_GPU=1`): use things 2, third person
+    3, build 1 (+1 skipped, as classic), build tools 1, the wall sofa's menu 3, games 5 — all passed.
+    `pets-home` fails in classic too (the pets' known flakiness: not this phase).
+  - **Fixed: build mode's ghost** (`tp/build3d.ts`) drew only the lit bucket — empty in the life look,
+    where the things are in their materials' — so nothing showed where a thing would go (third
+    person's "build mode places, picks up and moves" failed): it draws every bucket now.
+  - **Left:** the draws (merging a room's materials across areas, or an atlas, would bring them down);
+    moving parts and the pool table keep their paint; the Kart Park's own pieces (`tp/kart/park3d.ts`, its own
+    Out) draw smooth but untextured.
 
 ### 7 — Buildings
 
