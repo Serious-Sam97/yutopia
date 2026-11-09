@@ -16,7 +16,6 @@ import {
 import { crossings } from "@yutopia/shared/physics/structure-solids";
 import type { Ring, Structure } from "@yutopia/shared/structure";
 import { cellOf, hWallOf, isArc, onOf, openingSpan, vWallOf, wallLength, wallPoint } from "@yutopia/shared/structure";
-import type { MeshStandardMaterial } from "three";
 import {
   AdditiveBlending,
   type Box3,
@@ -53,8 +52,7 @@ import {
 } from "three";
 import type { Daylight } from "../art/daylight";
 import { litMaterial } from "../look/lit";
-import { isLifeBuild } from "../look/look-mode";
-import { libDress, libRelief } from "./kit-mats";
+import { lifeDress } from "./life-dress";
 import type { Themes } from "./sky";
 import { driftAlong, flatSnow, snowBox } from "./snow3d";
 import type { WallEdges } from "./walls3d";
@@ -1601,8 +1599,7 @@ export class Campus {
       this.mainFacade.userData.wxLedge = clad.ledge;
       // (the life look: the concrete's relief and roughness over its painting — plan 73 phase 7; its UVs
       // a storey up and CLAD_U along)
-      if (isLifeBuild())
-        libRelief(this.mainFacade as unknown as MeshStandardMaterial, "concrete", [CLAD_U / 2, STOREY / 2]);
+      if (lifeDress.on) lifeDress.relief?.(this.mainFacade, "concrete", [CLAD_U, STOREY]);
       const pane = paneCanvases(T);
       this.panes = litMaterial({
         map: pane.map,
@@ -1657,7 +1654,7 @@ export class Campus {
     const topSkin = new G();
     // (the life look: the stone in the library's concrete, its UVs in metres — plan 73 phase 7.3)
     const dressed = (...gs: G[]) => {
-      for (const g of gs) g.metres = isLifeBuild();
+      for (const g of gs) g.metres = !!lifeDress.on;
     };
     const cap = new G();
     const coping = new G();
@@ -1681,9 +1678,9 @@ export class Campus {
     };
     const mainWhite = this.lambert(0xdcd8d0);
     const mainConcrete = this.lambert(0xcfcbc2);
-    if (isLifeBuild())
+    if (lifeDress.on)
       for (const m of [mainWhite, mainConcrete, white, concrete]) {
-        libDress(m as unknown as MeshStandardMaterial, "concrete");
+        lifeDress.dress?.(m, "concrete", {});
         // (its colour the hour's base: setDay tints from it)
         const t = this.tinted.find(([x]) => x === m);
         if (t) t[1].copy(m.color);

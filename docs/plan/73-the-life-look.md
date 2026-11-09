@@ -1034,6 +1034,24 @@ doors and windows are the kit's (`furn/openings.ts`): phase 6 gave them their ma
   - **Left:** the barn's gable ends' siding has 0–1 UVs (stretched relief, faint); the bridge, the
     canopy, gates and posts as they were; the siding's relief is faint by nature (its boards are painted).
 - **7.4 Checks.** Draws, triangles and memory by floor, frame times, budgets, e2e, stills.
+  - **Done 2026-11-09.**
+    - **Cost** (`e2e/life-build-cost.mts`, High, noon, the camera held; life against `build=old`, both
+      under the life light, a shower falling): draws +10 (lobby), +36 (Floor 1), +68 (studio), +61 (lot),
+      +21 (town); triangles within ±5% (the studio 4.63M against 4.83M: brick's course plates gone);
+      textures +15…19, geometries +190, programs +4. Frame times the same within the noise (both
+      ~21–28 ms with the shower's; Floor 1 life 16.9 against 28.6 old in that run).
+    - **Budgets:** the page 480.7 KB, unchanged (over its 469 since before phase 4). The Grounds' marker
+      chunk went 92.1 → 214.0 KB (over 205) with phase 7: the campus (7.0), the stairwell (7.2) and the
+      Grounds (7.3) importing `tp/kit-mats.ts` moved light3d out of its own 14 KB chunk into the two
+      chunks the stairwell is in (the game's view's and the bench's), the land's blocks with it — every
+      chunk together +53 KB. **Fixed:** they reach the library through hooks kit-mats fills as it loads
+      (`tp/life-dress.ts`, its `on` the look) and import none of it: 196.2 KB, every chunk together +30 KB
+      (light3d still in the stairwell's two chunks — the bundler's, whatever they import; one a page).
+      Measured against `1dd3cab`'s build in a worktree.
+    - **e2e** in the life look (`playwright.life.config.ts`, `YUTOPIA_GPU=1`): build 1 (+1 skipped),
+      build tools 1, wall building 2, wall faces 3, doors and windows 1 (+3 skipped), map edit 1, one
+      building 3, the town 1, the weather 2 — all passed. Client tests 197, tsc clean.
+    - Stills after the hooks: the town's slate and brick, the stairwell's concrete, as signed off.
 
 ### 8 — Outdoors
 

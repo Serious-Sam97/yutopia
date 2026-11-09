@@ -10,7 +10,9 @@ import { PLAIN_ROUGH } from "../furn/life-mats";
 import { libMaterial } from "../look/life-matlib";
 import { LIBRARY, type MatId } from "../look/life-matlib-list";
 import { adoptLife, litMaterial } from "../look/lit";
+import { isLifeBuild } from "../look/look-mode";
 import type { Piece } from "../look/yulit";
+import { lifeDress } from "./life-dress";
 
 // Plan 73 phase 6 — the kit's materials in the life look (furn/life-mats.ts KIT_MATS): a library
 // material (its textures; the parts' colours multiplied through it) or a plain finish of its own
@@ -145,3 +147,16 @@ export function kitMaterial(name: string): Material {
   m.userData.kitMat = name;
   return m;
 }
+
+// (plan 73 phase 7) the campus, the stairwell and the Grounds' buildings dressed through these
+// (tp/life-dress.ts: they don't import this module)
+lifeDress.on = isLifeBuild();
+lifeDress.relief = (m, id, k) => {
+  const [a, b] = typeof k === "number" ? [k, k] : k;
+  const metres = LIBRARY[id as MatId].metres;
+  libRelief(m as MeshStandardMaterial, id as MatId, [a / metres, b / metres]);
+};
+lifeDress.surface = (id, tint) => surfaceMaterial(id as MatId, tint);
+lifeDress.dress = (m, id, o) => libDress(m as MeshStandardMaterial, id as MatId, o);
+lifeDress.tintOver = (id, hex) => tintOver(id as MatId, hex);
+lifeDress.material = kitMaterial;

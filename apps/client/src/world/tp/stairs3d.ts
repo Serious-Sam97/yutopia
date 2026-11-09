@@ -19,8 +19,7 @@ import {
   TubeGeometry,
   Vector3,
 } from "three";
-import { isLifeBuild } from "../look/look-mode";
-import { surfaceMaterial } from "./kit-mats";
+import { lifeDress } from "./life-dress";
 import { mergeStatic } from "./merge-static";
 
 // The stairwell, made properly (docs/plan/26-floor-transitions.md, phase 0):
@@ -149,14 +148,16 @@ let mats: StairMats | null = null;
 export function stairMats(): StairMats {
   if (mats) return mats;
   // (the life look: the library's concrete, its UVs in metres — `box`, `slopedSlab`; plan 73 phase 7.2)
-  const life = isLifeBuild();
+  const life = !!lifeDress.on;
   mats = {
-    concrete: life
-      ? (surfaceMaterial("concrete", 0xd2cfc9) as MeshStandardMaterial)
-      : new MeshStandardMaterial({ map: concrete("#b9b6b0", 4), roughness: 0.82 }),
-    soffit: life
-      ? (surfaceMaterial("concrete", 0xe0ddd7) as MeshStandardMaterial)
-      : new MeshStandardMaterial({ map: concrete("#c9c6c0", 8), roughness: 0.9 }),
+    concrete:
+      lifeDress.surface && life
+        ? (lifeDress.surface("concrete", 0xd2cfc9) as MeshStandardMaterial)
+        : new MeshStandardMaterial({ map: concrete("#b9b6b0", 4), roughness: 0.82 }),
+    soffit:
+      lifeDress.surface && life
+        ? (lifeDress.surface("concrete", 0xe0ddd7) as MeshStandardMaterial)
+        : new MeshStandardMaterial({ map: concrete("#c9c6c0", 8), roughness: 0.9 }),
     nosing: new MeshStandardMaterial({ color: "#2b2d2f", roughness: 0.65, metalness: 0.3 }),
     rail: new MeshStandardMaterial({ color: "#26292c", roughness: 0.35, metalness: 0.7 }),
     wall: new MeshStandardMaterial({ map: blocks(), roughness: 0.85 }),

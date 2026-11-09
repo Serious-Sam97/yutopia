@@ -108,9 +108,7 @@ import {
   Vector3,
 } from "three";
 import { hexOf, houseLook, shopLook } from "../grounds-look";
-import { LIBRARY, type MatId } from "../look/life-matlib-list";
 import { litMaterial } from "../look/lit";
-import { isLifeBuild } from "../look/look-mode";
 import {
   BARE_LEAVES,
   BIRCH_LEAVES,
@@ -127,9 +125,9 @@ import {
   tinted,
   type V,
 } from "./campus";
-import { kitMaterial, libDress, libRelief, tintOver } from "./kit-mats";
 import { landAround, SURF } from "./land-block";
 import { beam, railing, truss } from "./landmarks3d";
+import { lifeDress } from "./life-dress";
 import { lotDressing, lotPaintCanvas, lotSignCanvas } from "./lot3d";
 import {
   asphaltCanvas,
@@ -2772,14 +2770,16 @@ export class Grounds3 {
     const [v0, v1, vm] = alongX ? [z0, z1, zm] : [x0, x1, xm];
     // (the life look: the slopes in the library's slate, their own mesh — UVs along the eave and up the
     // slope in metres, the roof's colour its tone; plan 73 phase 7.3)
-    const slates = isLifeBuild() ? new G() : null;
+    const slates = !!lifeDress.on && lifeDress.material ? new G() : null;
     for (const [va, vw, s] of [
       [v0 - over, v0, -1],
       [v1 + over, v1, 1],
     ] as const) {
       const out: V = P(0, 0, s);
       g.color(roof);
-      const sl = (slates ?? g).color(slates ? tintOver("roof-slate", roof).getHex() : roof);
+      const sl = (slates ?? g).color(
+        slates && lifeDress.tintOver ? lifeDress.tintOver("roof-slate", roof).getHex() : roof,
+      );
       const top = Math.hypot(rise, Math.abs(vm - va));
       face(
         sl,
@@ -2836,18 +2836,17 @@ export class Grounds3 {
   private slate: Material | null = null;
   private slateMat(): Material {
     if (!this.slate) {
-      this.slate = kitMaterial("roof-slate");
+      this.slate = lifeDress.material?.("roof-slate") ?? this.lambert(0x3a3f45);
       this.keep(this.slate);
     }
     return this.slate;
   }
   /** (plan 73 phase 7.3) A wall's painting (siding, brick, corrugated metal) with the library's `id` relief
    *  and sheen over it, its UVs `k` metres a repeat — once a material (they're shared). */
-  private relief<M extends Material>(m: M, id: MatId, k: number): M {
-    if (!isLifeBuild() || m.userData.relief) return m;
+  private relief<M extends Material>(m: M, id: string, k: number): M {
+    if (!lifeDress.on || m.userData.relief || !lifeDress.relief) return m;
     m.userData.relief = true;
-    const r = k / LIBRARY[id].metres;
-    libRelief(m as unknown as Parameters<typeof libRelief>[0], id, [r, r]);
+    lifeDress.relief(m, id, k);
     return m;
   }
   private litWindow(
@@ -3959,9 +3958,9 @@ export class Grounds3 {
     // (brick: the library's in its painted colour — the painting's courses can't meet the library's relief;
     // as the building's walls, plan 73 phase 7.0)
     const wm = this.lambert(0xffffff, wall, false);
-    if (brick && isLifeBuild() && !wm.userData.relief) {
+    if (brick && !!lifeDress.on && !wm.userData.relief && lifeDress.dress) {
       wm.userData.relief = true;
-      libDress(wm as unknown as Parameters<typeof libDress>[0], "brick", {
+      lifeDress.dress(wm, "brick", {
         tint: new Color(b.tint ?? L.wall).getHex(),
         k: 4,
       });
