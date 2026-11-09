@@ -3,7 +3,7 @@
 // (as Bia, High, the dev stack) in today's look and with the probe on (src/world/look/life-probe.ts,
 // `__lifeProbe` — dev builds only), back to back.
 //   node --experimental-strip-types e2e/life-shots.mts [out dir]
-//   SPOTS=lot,…  TAKES=today,life,…
+//   SPOTS=lot,…  TAKES=today,life,…  LOOK=life (the game's own life look; with TAKES=today)
 import { mkdirSync } from "node:fs";
 import { chromium, type Page, request } from "@playwright/test";
 
@@ -81,11 +81,15 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 page.on("pageerror", (e) => console.log("  page:", e.message));
 // (QUALITY=medium|low: another tier)
 const quality = process.env.QUALITY ?? "high";
-await page.addInitScript(([t, q]) => {
-  localStorage.setItem("yutopia:token", t);
-  localStorage.setItem("yutopia:prefs", JSON.stringify({ quality: q }));
-}, [tok, quality] as const);
-await page.goto(base);
+await page.addInitScript(
+  ([t, q]) => {
+    localStorage.setItem("yutopia:token", t);
+    localStorage.setItem("yutopia:prefs", JSON.stringify({ quality: q }));
+  },
+  [tok, quality] as const,
+);
+// (LOOK=life: the game's own life look, `?look=` — plan 73 phase 2 on; with TAKES=today, the probe off)
+await page.goto(process.env.LOOK ? `${base}/?look=${process.env.LOOK}` : base);
 await ready(page);
 await page.evaluate(() => (window as any).__yutopia.room.send("mod:dark", { mode: "peaceful" }));
 

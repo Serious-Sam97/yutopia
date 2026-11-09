@@ -1398,6 +1398,8 @@ export class Cars {
           undefined,
           cockpit ? "arms" : "all",
         );
+        // (the life look: who a neutral avatar is drawn as, by their name — as out of the car)
+        m.seed = C.nameSeed(p.name || sid);
         m.root.position.set(l.model.seats[i].hip.x, 0, l.model.seats[i].hip.z);
         m.root.rotation.y = -Math.PI / 2;
         // (plan 62: full size in a car whose cabin is drawn to fit — its pedals known —, else as before)

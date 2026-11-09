@@ -155,6 +155,15 @@ function Bench({ q }: { q: URLSearchParams }) {
       water.visible = false;
       scene.add(water);
 
+      // (&look=life, plan 73 4.6: the life look's people — their legs fitted to the rig's — under a sky's
+      // light as well as the sun, so their lit sides read)
+      if (q.get("look") === "life") {
+        const { yuLit } = await import("@/world/look/yulit");
+        const { setLifeTone } = await import("@/world/look/life-tone");
+        C.setLifeHost({ renderer, lit: (m, base) => yuLit(m, { base }) });
+        setLifeTone(renderer);
+        scene.add(new T.HemisphereLight("#dfe8f5", "#8a7563", 1.4));
+      }
       const f = new C.CharFactory();
       const after = new C.PersonModel(f, look, 0);
       // (61: the sway's own world — the land, the clip's things — and the driver on her)
@@ -249,6 +258,17 @@ function Bench({ q }: { q: URLSearchParams }) {
         // each foot's two contacts, frame by frame: the ankle (its heel down) and the ball (the toe's
         // joint: up on its toes — a sprinter's ankle never comes down), over the ground
         const pts: number[][] = [];
+        // (the life look's people: their soles' contacts — their joints sit well over the sole, the toe's
+        // 4.5 cm: rolled onto the ball, the joint swung on while the sole stayed — plan 73 4.6)
+        const sole = after.lifeSole();
+        const fq = new T.Quaternion();
+        const at = (an: InstanceType<typeof T.Bone>, toe: InstanceType<typeof T.Bone>, heel: boolean) => {
+          if (!sole) return (heel ? an : toe).getWorldPosition(v);
+          an.getWorldQuaternion(fq);
+          return an
+            .getWorldPosition(v)
+            .add(new T.Vector3(0, -sole.ankleY, heel ? sole.heel : sole.ball).applyQuaternion(fq));
+        };
         for (const fr of frames) {
           place(after, fr, 0);
           after.root.updateMatrixWorld(true);
@@ -257,11 +277,11 @@ function Bench({ q }: { q: URLSearchParams }) {
             const toe = after.bone(`toe${S}`);
             if (!an || !toe) return { down: [], slide: [], trail: [], sunk: 0 };
             // (over the ground under each: the clip's own, else the body's)
-            an.getWorldPosition(v);
+            at(an, toe, true);
             const ax = v.x;
             const ay = v.y - (G ? G(v.x, v.z) : fr.root.y);
             const az = v.z;
-            toe.getWorldPosition(v);
+            at(an, toe, false);
             pts.push([ax, ay, az, v.x, v.y - (G ? G(v.x, v.z) : fr.root.y), v.z]);
           }
         }
@@ -274,9 +294,11 @@ function Bench({ q }: { q: URLSearchParams }) {
           0,
         );
         after.root.updateMatrixWorld(true);
-        after.bone("ankleL")?.getWorldPosition(v);
+        const anL = after.bone("ankleL");
+        const toeL = after.bone("toeL");
+        if (anL && toeL) at(anL, toeL, true);
         const lowAnkle = v.y;
-        after.bone("toeL")?.getWorldPosition(v);
+        if (anL && toeL) at(anL, toeL, false);
         const lowBall = v.y;
         let sunk = 0;
         const down: [boolean, boolean][] = [];

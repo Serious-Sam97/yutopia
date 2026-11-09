@@ -11,11 +11,13 @@ type Chars = NonNullable<ReturnType<typeof useChars>>;
 // (world/chars, rendered once per look and kept as a picture); where WebGL can't draw, their head
 // drawn flat in their colours (flatFigure).
 const portraits = new Map<string, string | null>();
-function portrait3d(C: Chars, seed: string): string | null {
+function portrait3d(C: Chars, seed: string, name: string): string | null {
   const pics = C.pictures();
   if (!pics.canDraw()) return null; // (no GPU: the drawing)
-  if (!portraits.has(seed)) portraits.set(seed, pics.portrait(parseAvatar(seed), 128));
-  return portraits.get(seed) ?? null;
+  // (by name too: the life look draws a neutral avatar as the man or the woman by it)
+  const key = `${seed}|${name}`;
+  if (!portraits.has(key)) portraits.set(key, pics.portrait(parseAvatar(seed), 128, name));
+  return portraits.get(key) ?? null;
 }
 export const STATUS_COLOR: Record<string, string> = { online: "var(--good)", dnd: "var(--rust)", away: "var(--muted)" };
 
@@ -34,7 +36,7 @@ export function Face({
 }) {
   // (a plain disc while the 3D people load; flat in their colours without WebGL)
   const C = useChars();
-  const pic = useMemo(() => (C ? portrait3d(C, avatar) : ""), [C, avatar]);
+  const pic = useMemo(() => (C ? portrait3d(C, avatar, name) : ""), [C, avatar, name]);
   const src = useMemo(() => pic || (pic === null ? flatFigure(parseAvatar(avatar), true) : ""), [pic, avatar]);
   return (
     <span

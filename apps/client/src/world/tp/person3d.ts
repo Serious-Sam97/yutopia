@@ -382,9 +382,10 @@ export class Person3D {
       factory,
       p.avatar,
       part === "arms" ? 0 : 1,
-      { body: mats.body, ink: mats.ink },
+      { body: mats.body, ink: mats.ink, away: mats.bodyAway },
       part,
     );
+    this.model.seed = C.nameSeed(p.name || id);
     this.motion = new C.Motion3(hashSeed(p.name || id));
     this.root.add(this.model.root);
     this.shadow = new Mesh(
@@ -788,6 +789,8 @@ export class Person3D {
     // (one of the shadowed under plan 58: its arms its own — no hands put on things, no reach: the
     // wind-up's cocked arm was pulled onto whoever it struck)
     const own = !!p.shade && !p.reduced;
+    // (limp on the ragdoll: its pose read off the bones as they lie, the life legs already their own)
+    this.model.fitLegs = !this.limp?.rig.on;
     this.model.setPose(pose, [lift[0], lift[1] + drop, lift[2]], own ? undefined : mo.reach);
     // (getting up off the ragdoll: nothing of the legs under the ground — the get-up's keyed for a
     // body lying flat; off its side, its knees and feet went half a metre through the snow)
@@ -1458,14 +1461,21 @@ export class Person3D {
   setWater(over: number | null) {
     if (over === null) {
       this.waterU.value = -1e6;
+      if (this.model.isLife) this.model.setWater(null);
       return;
     }
     this.waterU.value = this.root.getWorldPosition(this.waterAt).y + over;
+    if (this.model.isLife) this.model.setWater(this.waterU.value);
   }
   private readonly waterU = { value: -1e6 };
   private readonly waterAt = new Vector3();
 
   setTint(c: Color | null) {
+    // (the life look: their materials are their own already — the tint a uniform of theirs, chars/life.ts)
+    if (this.model.isLife) {
+      this.model.setTint(c);
+      return;
+    }
     if (!c && !this.own.size) return;
     const swap = new Map<Material, Material>();
     for (const shared of [this.mats.body, this.mats.bodyAway]) {

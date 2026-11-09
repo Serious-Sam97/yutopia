@@ -44,6 +44,9 @@ const SHOTS: [string, string][] = [
   ["pp-woman-look", "face=woman&style=painted&t=2.4&spin=-12&blink=0&eyes=-0.8,0.1"],
   ["pp-woman-blink", "face=woman&style=painted&t=2.4&spin=-12&blink=1"],
   ["pp-woman-smile", "face=woman&style=painted&t=2.4&spin=-12&blink=0&smile=0.8"],
+  // (4.4: the teeth and the tongue, talking)
+  ["pp-man-talk", "face=man&style=painted&t=2.4&spin=12&blink=0&talk=0.9"],
+  ["pp-woman-talk", "face=woman&style=painted&t=2.4&spin=-12&blink=0&talk=0.9"],
   ["pp-both", "style=painted&today=0&t=2.4&spin=25"],
   // phase 0c: a corner of a room, the life kit and today's, by day and by night
   ["room-life", "room:t=3"],
@@ -61,6 +64,12 @@ const SHOTS: [string, string][] = [
   ["out-night", "out:hour=night&t=3"],
   ["out-close", "out:view=close&t=3"],
   ["out-close-night", "out:view=close&hour=night&t=3"],
+  // phase 4: the three bodies (slim, regular, broad) of each, front and ¾
+  ["bodies-front", "style=painted&today=0&bodies=1&t=2.4&spin=0"],
+  ["bodies-threeq", "style=painted&today=0&bodies=1&t=2.4&spin=35"],
+  // phase 4.2: avatars as the game makes them, in their own bodies and colours
+  ["crowd-front", "today=0&crowd=8&t=2.4&spin=10"],
+  ["crowd-front-b", "today=0&crowd=8&seed=3&t=2.4&spin=-10"],
   // phase 3: the material library's board — all, each family nearer, the tintables in picked colours,
   // a few close, night, Low's half-size set
   ["mat-all", "mat:"],

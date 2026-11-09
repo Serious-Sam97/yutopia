@@ -12,7 +12,10 @@ const DIR = join(import.meta.dirname, "../../../public/life");
 /** What each kind may cost: the download, its textures on the GPU (transcoded at ~1 byte a pixel, BC7 /
  *  ASTC 4×4, with their mips), its triangles. */
 const BUDGETS: Record<string, { mb: number; gpuMb: number; tris: number }> = {
-  person: { mb: 2.2, gpuMb: 9.5, tris: 46000 },
+  // (2.2 → 2.6 MB with the slim and broad bodies as morph targets on every part: phase 4, +0.3 MB)
+  // (46k → 50k tris with the teeth and the tongue: phase 4.4, +7.6k — the teeth are MakeHuman's, 3.6k quads,
+  // and a part with the mouth's shapes can't be decimated in Blender; the far level, 4.5, has no mouth)
+  person: { mb: 2.6, gpuMb: 9.5, tris: 50000 },
   plant: { mb: 0.3, gpuMb: 1.5, tris: 12000 },
   tree: { mb: 0.4, gpuMb: 2, tris: 12000 },
 };

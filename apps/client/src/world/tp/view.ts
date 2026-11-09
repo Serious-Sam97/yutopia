@@ -102,6 +102,7 @@ import { LifeSky } from "../look/life-sky";
 import { setLifeTone } from "../look/life-tone";
 import { litMaterial } from "../look/lit";
 import { isLife } from "../look/look-mode";
+import { yuLit } from "../look/yulit";
 import type { PuffKind } from "../model";
 import { activePad } from "../pads";
 import { Arms3 } from "./arms3d";
@@ -2826,6 +2827,8 @@ void main() {
       }
       this.hands ??= new Hands1P(C3, this.charF, this.charMats, { ...me, angle });
       this.hands.gunFx = this.guns.myGun;
+      // (the life look: lit materials — the hands' picture takes the room's sky and sun, plan 73 4.5)
+      if (isLife()) this.hands.lightAs(this.scene, this.hemi, this.sun, this.mood.onLand(me.x, me.y));
       this.hands.update(
         { ...me, angle, seat: mySeat },
         this.people3.get(me.id)?.motionOut ?? null,
@@ -2922,10 +2925,13 @@ void main() {
     }
     if (!this.charF) {
       this.charsChunk = C.CHARS_CHUNK;
-      this.charF = new C.CharFactory();
       // (the life look: bodies lit by the scene's sun, sky and lamps as everything else is, no cel bands, no
-      // ink line round them — docs/plan/73 phase 2.4; today's people until phase 4's)
+      // ink line round them — docs/plan/73 phase 2.4; its own people since phase 4.3: each part of them
+      // their own material, the room's light on it after its own part — chars/life.ts)
       const life = isLife();
+      if (life)
+        C.setLifeHost({ renderer: this.renderer, lit: (m, base) => yuLit(m, { base, light: this.light.piece(m) }) });
+      this.charF = new C.CharFactory();
       const body: Material = life ? litMaterial({ vertexColors: true }) : new MeshBasicMaterial({ vertexColors: true });
       this.light.patch(body);
       const bodyAway: Material = life
@@ -2967,7 +2973,8 @@ void main() {
         body,
         bodyAway,
         // (the shadowed: near black, the clothes' colours only hinted)
-        shade: new MeshBasicMaterial({ vertexColors: true, color: 0x24262e }),
+        // (the life look's have no colours in their vertices: the outfit's are a mask)
+        shade: new MeshBasicMaterial({ vertexColors: !life, color: 0x24262e }),
         shadeInk: life ? NO_LINE : C.inkMaterial("#050506"),
         ink: life ? NO_LINE : C.inkMaterial(),
         inkAway: life ? NO_LINE : C.inkMaterial("#151515", 0.55),

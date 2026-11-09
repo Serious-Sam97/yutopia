@@ -1,6 +1,19 @@
 import type { AvatarLayers } from "@yutopia/shared";
-import { PerspectiveCamera, Scene, SRGBColorSpace, WebGLRenderer } from "three";
+import {
+  Color,
+  DirectionalLight,
+  HemisphereLight,
+  PerspectiveCamera,
+  PMREMGenerator,
+  Scene,
+  SRGBColorSpace,
+  WebGLRenderer,
+} from "three";
+import { setLifeTone } from "../look/life-tone";
+import { isLife } from "../look/look-mode";
+import { yuLit } from "../look/yulit";
 import { INK } from "./ink";
+import { lifeMod, nameSeed } from "./life";
 import { CharFactory, lookKey, PersonModel, type Reach } from "./model";
 import { VERB_LEN, type Verb } from "./moves";
 import type { Euler3, Pose } from "./rig";
@@ -45,7 +58,9 @@ class Pictures {
   private failed = false;
   private scene = new Scene();
   private persp = new PerspectiveCamera(28, 1, 0.05, 20);
-  private factory = new CharFactory(20_000, 2);
+  // (the life look's: its host this renderer, lit by a light of its own — made with the renderer)
+  private factory = new CharFactory(20_000, 2, null);
+  private readyP: Promise<void> | null = null;
   private looks = new Map<string, Look>();
   private mounted: Look | null = null;
 
@@ -70,14 +85,50 @@ class Pictures {
       const info = g.getExtension("WEBGL_debug_renderer_info");
       const name = String(info ? g.getParameter(info.UNMASKED_RENDERER_WEBGL) : "");
       this.software = /swiftshader|llvmpipe|software|basic render/i.test(name);
+      if (isLife()) this.lifeLight(r);
     } catch {
       this.failed = true; // (no WebGL: the HUD's own faces stay)
     }
     return this.renderer;
   }
 
-  private look(avatar: AvatarLayers, lk: string, lod: 0 | 1 = 1): Look {
-    const k = lod === 1 ? lk : `${lk}|L${lod}`;
+  // (plan 73 4.5) the life look's people in the pictures: their materials lit by three's own lights here
+  // (no room's), a soft studio light — a sky over, the ground's warmth under, a key from the front left —
+  // and the sky in the eyes and the sheen
+  private lifeLight(r: WebGLRenderer) {
+    this.factory.dispose();
+    this.factory = new CharFactory(20_000, 2, { renderer: r, lit: (m, base) => yuLit(m, { base }) });
+    setLifeTone(r);
+    this.scene.add(new HemisphereLight(0xdfe8f5, 0x8a7563, 1.5));
+    const key = new DirectionalLight(0xfff1e0, 2.2);
+    key.position.set(-1.5, 2.5, 3);
+    this.scene.add(key);
+    const pm = new PMREMGenerator(r);
+    const sky = new Scene();
+    sky.background = new Color(0xb7c4d4);
+    this.scene.environment = pm.fromScene(sky, 0.04).texture;
+    this.scene.environmentIntensity = 0.5;
+    pm.dispose();
+  }
+
+  /** Ready to draw people (the life look: once both person files are in — the HUD keeps a picture that
+   *  failed as "can't draw", so it asks after this). */
+  ready(): Promise<void> {
+    if (!isLife()) return Promise.resolve();
+    this.readyP ??= (async () => {
+      const gl = this.gl();
+      if (!gl) return;
+      lifeMod();
+      const M = await import("../look/life-people");
+      await Promise.all([M.lifeBase("man", gl), M.lifeBase("woman", gl)]);
+      // (the life half's module, as chars/life.ts holds it)
+      for (let i = 0; i < 50 && !lifeMod(); i++) await new Promise((r) => setTimeout(r, 20));
+    })().catch(() => {});
+    return this.readyP;
+  }
+
+  private look(avatar: AvatarLayers, lk: string, lod: 0 | 1 = 1, seed = 0): Look {
+    const k = `${lod === 1 ? lk : `${lk}|L${lod}`}|${seed}`;
     let l = this.looks.get(k);
     if (l) {
       // (the last used last: the one let go is the longest unused — a turntable drawn every frame
@@ -86,6 +137,7 @@ class Pictures {
       this.looks.set(k, l);
     } else {
       l = { model: new PersonModel(this.factory, avatar, lod) };
+      l.model.seed = seed;
       this.looks.set(k, l);
       if (this.looks.size > LOOKS) {
         const [oldKey, old] = this.looks.entries().next().value as [string, Look];
@@ -106,10 +158,17 @@ class Pictures {
 
   // A picture of someone for the HUD: the model at `lod`, built now if it must be,
   // posed (rest when no pose), with the line sized for `px` (the canvas's px).
-  private picture(avatar: AvatarLayers, lod: 0 | 1, yaw: number, px: number, mo?: PictureMotion | null): Look | null {
+  private picture(
+    avatar: AvatarLayers,
+    lod: 0 | 1,
+    yaw: number,
+    px: number,
+    mo?: PictureMotion | null,
+    seed = 0,
+  ): Look | null {
     const gl = this.gl();
     if (!gl) return null;
-    const l = this.look(avatar, lookKey(avatar), lod);
+    const l = this.look(avatar, lookKey(avatar), lod, seed);
     for (let i = 0; i < 4 && !l.model.update(2); i++) this.factory.pump(100);
     if (!l.model.ready) return null;
     this.mount(l);
@@ -153,10 +212,18 @@ class Pictures {
   }
 
   /** Head and shoulders, facing you a little turned, as a data URL (null without WebGL). */
-  portrait(avatar: AvatarLayers, px = 128): string | null {
-    return this.still(avatar, 0.32, px, (l) => {
-      const head = l.model.jointPosition("head");
+  portrait(avatar: AvatarLayers, px = 128, name?: string): string | null {
+    // (the life look: a neutral avatar drawn as the man or the woman by their name, as in the world)
+    return this.still(avatar, 0.32, px, name ? nameSeed(name) : 0, (l) => {
       const hh = l.model.height / 5;
+      if (l.model.isLife) {
+        // (the life look's head joint sits at the skull's base: framed on the eyes)
+        const eye = l.model.eyePosition();
+        this.persp.position.set(0, eye.y + 0.03, hh * 3.2);
+        this.persp.lookAt(0, eye.y - 0.07, 0);
+        return;
+      }
+      const head = l.model.jointPosition("head");
       this.persp.position.set(0, head.y + hh * 0.62, hh * 3.9);
       this.persp.lookAt(0, head.y + hh * 0.4, 0);
     });
@@ -165,7 +232,7 @@ class Pictures {
   /** One option of the look, framed on the part it's about (the avatar editor's buttons, docs/plan/60):
    *  the head, the chest, the legs or the feet, three-quarter on, as a data URL (null without WebGL). */
   thumb(avatar: AvatarLayers, focus: "head" | "chest" | "legs" | "feet", px = 96): string | null {
-    return this.still(avatar, 0.5, px, (l) => {
+    return this.still(avatar, 0.5, px, 0, (l) => {
       const h = l.model.height;
       // (the point to look at, up the figure, and how far back to frame it)
       const [y, d] = { head: [0.88, 0.62], chest: [0.66, 0.85], legs: [0.3, 1.05], feet: [0.05, 0.6] }[focus];
@@ -175,10 +242,10 @@ class Pictures {
   }
 
   // a picture as a data URL: posed at rest turned `yaw`, the camera framed by `frame`
-  private still(avatar: AvatarLayers, yaw: number, px: number, frame: (l: Look) => void): string | null {
+  private still(avatar: AvatarLayers, yaw: number, px: number, seed: number, frame: (l: Look) => void): string | null {
     const res = INK.res.value.clone();
     const ipx = INK.px.value;
-    const l = this.picture(avatar, 1, yaw, px, null);
+    const l = this.picture(avatar, 1, yaw, px, null, seed);
     const gl = this.renderer;
     let url: string | null = null;
     if (l && gl) {

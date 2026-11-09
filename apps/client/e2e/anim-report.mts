@@ -1,6 +1,7 @@
 // /dev/anim's report for clips, in full (docs/plan/58-the-animation.md, phase 4c): pops by time and
 // joint, each foot's worst slide and its share on the ground (the dev client on :3100, the GPU).
-//   node --experimental-strip-types e2e/anim-report.mts "jog, turn back" … (TENSION=1 for the dark)
+//   node --experimental-strip-types e2e/anim-report.mts "jog, turn back" … (TENSION=1 for the dark; LOOK=life
+//   for the life look's people, plan 73 4.6)
 import { chromium } from "@playwright/test";
 
 const b = await chromium.launch({
@@ -11,7 +12,7 @@ const p = await b.newPage({ viewport: { width: 1200, height: 700 } });
 p.on("pageerror", (e) => console.log("  error:", e.message));
 for (const clip of process.argv.slice(2)) {
   await p.goto(
-    `http://localhost:3100/dev/anim?clip=${encodeURIComponent(clip)}&live=1&play=0&tension=${process.env.TENSION ?? 0}`,
+    `http://localhost:3100/dev/anim?clip=${encodeURIComponent(clip)}&live=1&play=0&tension=${process.env.TENSION ?? 0}${process.env.LOOK ? `&look=${process.env.LOOK}` : ""}`,
   );
   await p.waitForFunction(() => (window as unknown as { __anim?: { ready: boolean } }).__anim?.ready === true, null, {
     timeout: 120_000,

@@ -1,7 +1,17 @@
 import { isDrink, isHeld } from "@yutopia/shared";
 import { AIM_BLADE } from "@yutopia/shared/beam";
 import { MV_WINDED } from "@yutopia/shared/move";
-import { Group, PerspectiveCamera as Lens, Matrix4, type PerspectiveCamera, Quaternion, Scene, Vector3 } from "three";
+import {
+  DirectionalLight,
+  Group,
+  HemisphereLight,
+  PerspectiveCamera as Lens,
+  Matrix4,
+  type PerspectiveCamera,
+  Quaternion,
+  Scene,
+  Vector3,
+} from "three";
 import type { chars } from "../art/chars-load";
 import type { GunFx } from "./guns3d";
 import type { PersonIn } from "./person-in";
@@ -106,6 +116,28 @@ export class Hands1P {
   private lagReady = false;
   private adsK = 0; // down the sights: 0..1
   private breath = 0; // s: a gun's sway
+
+  private lights: { hemi: HemisphereLight; sun: DirectionalLight } | null = null;
+
+  /** (plan 73 4.5, the life look) My hands lit as I am: the room's sky light and — out on the land only:
+   *  this picture has no shadows, indoors it lit them through the ceiling — its sun copied in, and the
+   *  room's environment. (Today's take the room's light map alone, flat.) */
+  lightAs(room: Scene, hemi: HemisphereLight, sun: DirectionalLight, outside: boolean): void {
+    if (!this.lights) {
+      this.lights = { hemi: new HemisphereLight(), sun: new DirectionalLight() };
+      this.scene.add(this.lights.hemi, this.lights.sun, this.lights.sun.target);
+    }
+    const { hemi: h, sun: s } = this.lights;
+    h.color.copy(hemi.color);
+    h.groundColor.copy(hemi.groundColor);
+    h.intensity = hemi.intensity;
+    s.color.copy(sun.color);
+    s.intensity = outside ? sun.intensity : 0;
+    s.position.copy(sun.position).sub(sun.target.position);
+    s.target.position.set(0, 0, 0);
+    this.scene.environment = room.environment;
+    this.scene.environmentIntensity = room.environmentIntensity;
+  }
 
   constructor(C: Chars, factory: InstanceType<Chars["CharFactory"]>, mats: Mats, p: PersonIn) {
     this.person = new Person3D("hands1p", C, factory, mats, p, "arms");

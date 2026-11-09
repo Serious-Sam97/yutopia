@@ -158,7 +158,30 @@ export default function LifeBench() {
         who: string;
       };
       const shown: Shown[] = [];
-      const genders = whoQ ? [whoQ] : face ? [face] : ["man", "woman"];
+      // (?crowd=N: N avatars as the game makes them — avatarFromSeed — each the life person they're drawn
+      // as, in their own body, skin, hair and outfit colours: plan 73 phase 4.2)
+      const crowd = Number(q.get("crowd") ?? 0);
+      if (crowd > 0) {
+        const { avatarFromSeed } = await import("@yutopia/shared");
+        const LP = await import("@/world/look/life-people");
+        for (let i = 1; i <= crowd; i++) {
+          const a = avatarFromSeed(i * 7 + Number(q.get("seed") ?? 0));
+          const base = await LP.lifeBase(LP.lifeGender(a, i), renderer);
+          const lp = new L.LifePerson(base, a);
+          shown.push({
+            root: lp.root,
+            setPose: (p, lift) => lp.setPose(p as never, lift),
+            face: (b, t, sm) => lp.setFace(b, t, sm),
+            eyes: (x, y) => lp.setEyes(x, y),
+            h: lp.height,
+            who: `crowd-${i}`,
+          });
+          console.log(
+            `life crowd ${i}: ${a.gender} → ${base.gender}, ${a.body}, skin ${a.skin}, hair ${a.hairColor}, ${a.topColor}/${a.bottomColor}/${a.shoesColor}`,
+          );
+        }
+      }
+      const genders = crowd > 0 ? [] : whoQ ? [whoQ] : face ? [face] : ["man", "woman"];
       const f = new C.CharFactory();
       // (today's are baked by their factory, a little each frame: drawn once ready)
       const todays: InstanceType<typeof C.PersonModel>[] = [];
@@ -175,15 +198,25 @@ export default function LifeBench() {
             who: `today-${g}`,
           });
         }
-        for (const v of style === "both" ? ["", "-painted"] : style === "painted" ? ["-painted"] : [""]) {
+        // (?bodies=1: each painted person slim, regular and broad — plan 73 phase 4)
+        const bodies = q.get("bodies") === "1" ? ["slim", "regular", "broad"] : [""];
+        for (const v of bodies[0]
+          ? bodies.map(() => "-painted")
+          : style === "both"
+            ? ["", "-painted"]
+            : style === "painted"
+              ? ["-painted"]
+              : [""]) {
           const lp = await L.loadLifePerson(`/life/person-${g}${v}.glb`, renderer);
+          const body = bodies.shift() ?? "";
+          if (body) lp.setBody(body);
           shown.push({
             root: lp.root,
             setPose: (p, lift) => lp.setPose(p as never, lift),
             face: (b, t, sm) => lp.setFace(b, t, sm),
             eyes: (x, y) => lp.setEyes(x, y),
             h: lp.height,
-            who: g + v,
+            who: g + v + (body ? `-${body}` : ""),
           });
           console.log(`life ${g}${v}: ${lp.height.toFixed(2)} m, ${L.trisOf(lp)} tris`);
         }

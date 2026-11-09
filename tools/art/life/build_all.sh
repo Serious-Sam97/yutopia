@@ -6,9 +6,16 @@ set -e
 cd "$(dirname "$0")/../../.."
 OUT=apps/client/public/life
 B="blender -b --factory-startup"
+TMP=$(mktemp -d)
 for who in man woman; do
-  $B -P tools/art/life/build_person.py -- --who "$who" --paint | grep -E "wrote|shoulders"
+  # (the slim and broad bodies first, dumped; the regular build takes them as its morphs — plan 73 phase 4)
+  for body in slim broad; do
+    $B -P tools/art/life/build_person.py -- --who "$who" --body "$body" --dump "$TMP/$who-$body.npz" | grep dumped
+  done
+  $B -P tools/art/life/build_person.py -- --who "$who" --paint --morphs "slim=$TMP/$who-slim.npz,broad=$TMP/$who-broad.npz" | grep -E "wrote|shoulders"
   python3 -I tools/art/life/pack_glb.py "$OUT/person-$who-painted.glb" "$OUT/person-$who-painted.glb"
+  # (its far person, plan 73 4.5: one coarse mesh, no textures)
+  python3 -I tools/art/life/pack_glb.py "$OUT/person-$who-far.glb" "$OUT/person-$who-far.glb"
 done
 $B -P tools/art/life/build_plant.py | grep wrote
 python3 -I tools/art/life/pack_glb.py "$OUT/plant-rubber.glb" "$OUT/plant-rubber.glb"

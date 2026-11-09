@@ -1,6 +1,7 @@
 import type { AvatarLayers } from "@yutopia/shared";
 import {
   Bone,
+  type Color,
   Group,
   type Material,
   Matrix4,
@@ -16,6 +17,8 @@ import { buildPerson } from "./build";
 import { solveArm } from "./ik";
 import { inkMaterial } from "./ink";
 import type { Anchor, HangSpec, SpringSpec } from "./kit";
+import { type LifeHost, LifeLook, type LifeState, lifeBaseNow, lifeHost, lifeMod } from "./life";
+import { ANKLE, BALL, HEEL, HIP_H, SHIN, THIGH } from "./moves";
 import type { Lod } from "./params";
 import { JOINTS, type JointName, PARENT, type Pose, REST, type RestPose, type SpringName } from "./rig";
 
@@ -180,6 +183,9 @@ export class CharFactory {
   constructor(
     private keepMs = 20_000,
     private keep = 24,
+    /** (plan 73 4.3) the life look's people: by default the view's, if it set them up before this
+     *  factory was made; the HUD's pictures give their own (their renderer, their light) */
+    readonly life: LifeHost | null = lifeHost(),
   ) {}
 
   private key(a: AvatarLayers, lod: Lod) {
@@ -307,6 +313,92 @@ const target = new Vector3();
 const pole = new Vector3();
 const handAt = new Vector3();
 
+// ── (plan 73 4.6) the life look's legs fitted to the rig's ─────────────────────────────────────────
+// The rig poses one leg: thigh and shin THIGH and SHIN long, the ankle ANKLE over the sole, the hips HIP_H
+// up (moves.ts) — its crouches, steps, seat fits and foot plants are all worked out for it. A life body's
+// legs are their own (the man's hips 7.5 cm higher, the woman's thigh shorter than her shin). So each
+// life leg is solved to put the ball of its foot where the rig's is, turned as the rig's foot is, the knee
+// bending the rig's way: the feet plant, lock and sit where the rig means them to. (The ball, not the
+// point under the ankle: the life foot's ball is 3 cm further on — rolled onto it, the foot went into
+// the floor and dragged. Flat, the ball's a fixed step from the ankle; pushing off, the pivot itself.)
+const LG = {
+  hipsInv: new Quaternion(),
+  tk: new Quaternion(),
+  foot: new Quaternion(),
+  q1: new Quaternion(),
+  tw: new Quaternion(),
+  kq: new Quaternion(),
+  t: new Vector3(),
+  v: new Vector3(),
+  a0: new Vector3(),
+  k0: new Vector3(),
+  r0: new Vector3(),
+  ax: new Vector3(),
+  ra: new Vector3(),
+  X: new Vector3(1, 0, 0),
+};
+
+export function fitLeg(
+  hips: Bone,
+  thigh: Bone,
+  knee: Bone,
+  ankle: Bone,
+  rest: { knee: [number, number, number]; ankle: [number, number, number]; ball: number },
+  hipY: number,
+  ankleY: number,
+): void {
+  const L = LG;
+  L.hipsInv.copy(hips.quaternion).invert();
+  L.tk.copy(thigh.quaternion).multiply(knee.quaternion);
+  L.foot.copy(L.tk).multiply(ankle.quaternion);
+  // where the life ankle goes, from the life thigh joint (the hips' space): the rig's ankle — its leg,
+  // its thigh joint HIP_H − hipY off ours (straight up, the root's) —, then the life foot's ball under
+  // the rig's
+  const T = L.t.set(0, -THIGH, 0).applyQuaternion(thigh.quaternion);
+  T.add(L.v.set(0, -SHIN, 0).applyQuaternion(L.tk));
+  T.add(L.v.set(0, HIP_H - hipY, 0).applyQuaternion(L.hipsInv));
+  T.add(L.v.set(0, ankleY - ANKLE, BALL - rest.ball).applyQuaternion(L.foot));
+  // the life leg at rest: thigh to knee, knee to ankle, and how bent it stands
+  const k0 = L.k0.set(...rest.knee);
+  const a0 = L.a0.set(...rest.ankle);
+  const a = k0.length();
+  const b = a0.length();
+  const D = Math.min(a + b - 1e-4, Math.max(Math.abs(a - b) + 1e-3, T.length()));
+  // the knee: turned about its own axis (x) till thigh and shin together reach D — exactly, the life
+  // leg's knee and ankle a little off one plane: |k0 + Rx(θ)·a0|² = D², i.e. P cos θ + Q sin θ = m
+  const m = (D * D - a * a - b * b) / 2 - k0.x * a0.x;
+  const P = k0.y * a0.y + k0.z * a0.z;
+  const Q = k0.z * a0.y - k0.y * a0.z;
+  const phi = Math.atan2(Q, P);
+  const th = phi + Math.acos(Math.max(-1, Math.min(1, m / Math.max(1e-9, Math.hypot(P, Q)))));
+  L.kq.setFromAxisAngle(L.X, th);
+  // the thigh: the ankle swung onto the target, then turned about it so the knee bends the rig's way
+  const A = L.r0.copy(a0).applyQuaternion(L.kq).add(k0).normalize();
+  const Tn = L.v.copy(T).normalize();
+  L.q1.setFromUnitVectors(A, Tn);
+  const ours = L.ax.copy(L.X).applyQuaternion(L.q1);
+  const theirs = L.ra.copy(L.X).applyQuaternion(thigh.quaternion);
+  ours.addScaledVector(Tn, -ours.dot(Tn));
+  theirs.addScaledVector(Tn, -theirs.dot(Tn));
+  if (ours.lengthSq() > 1e-8 && theirs.lengthSq() > 1e-8) {
+    ours.normalize();
+    theirs.normalize();
+    const ang = Math.atan2(L.r0.copy(ours).cross(theirs).dot(Tn), ours.dot(theirs));
+    L.tw.setFromAxisAngle(Tn, ang);
+    L.q1.premultiply(L.tw);
+  }
+  thigh.quaternion.copy(L.q1);
+  knee.quaternion.copy(L.kq);
+  // the foot turned as the rig's (in the hips' space)
+  ankle.quaternion.copy(L.tk.copy(L.q1).multiply(L.kq).invert().multiply(L.foot));
+}
+
+/** What reaches, seats and the eyes need of a body: today's bake, or the life look's (chars/life.ts). */
+type Fit = Pick<
+  Baked,
+  "rest" | "anchors" | "arm" | "eye" | "ear" | "springs" | "collide" | "hangs" | "height" | "hipY" | "thighR"
+>;
+
 /** One person: shows the best ready level of their look, posed by joint. */
 export class PersonModel {
   readonly root = new Group();
@@ -324,24 +416,73 @@ export class PersonModel {
   private eyes: [number, number] = [0, 0];
   private held: { a: AvatarLayers; lod: Lod } | null = null;
   private springs: SpringRun[] = [];
+  /** (plan 73 4.3) a seed from their name: who a neutral avatar is drawn as in the life look */
+  seed = 0;
+  private life: LifeLook | null = null;
+  private lifeKey = "";
+  private lifeState: LifeState = "own";
+  private lifeTint: Color | null = null;
+  private lifeWater = -1e6;
+  /** (plan 73 4.6) the life look's legs fitted to the rig's (off: a ragdoll's pose, read off the bones
+   *  as they lie — already the body's own) */
+  fitLegs = true;
+  private ownMat: Material;
+  private awayMat: Material | null;
 
   constructor(
     private f: CharFactory,
     public avatar: AvatarLayers,
     public lod: Lod = 1,
-    private mats: { body: Material; ink: Material } = { body: bodyMaterial(), ink: inkMaterial() },
+    private mats: { body: Material; ink: Material; away?: Material } = { body: bodyMaterial(), ink: inkMaterial() },
     /** "arms": only shoulder to fingertips (my own, seen from my eyes in first person) */
     readonly part: "all" | "arms" = "all",
   ) {
     this.root.name = "person";
+    this.ownMat = mats.body;
+    this.awayMat = mats.away ?? null;
   }
 
-  /** Draw with other materials (faded while away, lit by the room). */
+  /** Draw with other materials (faded while away, lit by the room). In the life look by role: the
+   *  first given its own, `away`'s its own faded, any other one material over all of it. */
   setMaterials(body: Material, ink: Material) {
+    if (this.f.life) {
+      this.lifeState = body === this.ownMat ? "own" : body === this.awayMat ? "away" : body;
+      this.life?.setState(this.lifeState);
+      return;
+    }
     if (this.mats.body === body && this.mats.ink === ink) return;
     this.mats = { body, ink };
     if (this.bodyMesh) this.bodyMesh.material = body;
     if (this.inkMesh) this.inkMesh.material = ink;
+  }
+
+  /** (the life look) The light on them out on the land, as a tint (null: none). */
+  setTint(c: Color | null) {
+    this.lifeTint = c;
+    this.life?.setTint(c);
+  }
+  /** (the life look) Wading: the water's line, world y (null: none). */
+  setWater(y: number | null) {
+    this.lifeWater = y ?? -1e6;
+    this.life?.setWater(this.lifeWater);
+  }
+  /** (plan 73) drawn as the life look's people */
+  get isLife(): boolean {
+    return !!this.f.life;
+  }
+
+  /** (the life look) Where its soles touch, in the ankle's space: the ball under the toe joint and the heel
+   *  the rig's heel lands on (fitLeg): the ankle `ankleY` over them — for the benches, which measure
+   *  contacts (a life foot's joints sit well over its sole: its toe joint 4.5 cm). Null in today's. */
+  lifeSole(): { ankleY: number; ball: number; heel: number } | null {
+    const L = this.life;
+    if (!L) return null;
+    const ball = (L.rest.toeL[2] + L.rest.toeR[2]) / 2;
+    return { ankleY: L.ankleY, ball, heel: ball - BALL - HEEL };
+  }
+
+  private get fit(): Fit | null {
+    return this.life ?? this.shown?.baked ?? null;
   }
 
   /** Change look or detail; the old model stays until the new one is ready. */
@@ -352,19 +493,50 @@ export class PersonModel {
 
   /** Swap in whatever is newly ready. Call every frame (cheap when nothing changed). */
   update(prio = 0): boolean {
+    if (this.f.life) return this.updateLife();
     const got = this.f.best(this.avatar, this.lod, prio);
     if (got && got.baked !== this.shown?.baked) this.show(got.baked, got.lod);
     return !!this.shown;
   }
 
+  // the life look: their body once its file's in, made again when their look changes
+  private updateLife(): boolean {
+    const M = lifeMod();
+    const host = this.f.life;
+    if (!M || !host) return !!this.life;
+    const g = M.lifeGender(this.avatar, this.seed);
+    const key = `${g}|${lookKey(this.avatar)}|${this.part}`;
+    // (far off — the coarsest level — the far person: one coarse mesh, plan 73 4.5)
+    this.life?.setFar(this.lod === 2);
+    if (key === this.lifeKey) return !!this.life;
+    const base = lifeBaseNow(g, host);
+    if (!base) return !!this.life;
+    const look = new LifeLook(M, base, this.avatar, this.part, host, this.seed);
+    this.life?.dispose();
+    this.life = look;
+    this.lifeKey = key;
+    const restKey = JSON.stringify([look.rest, look.eyesRest]);
+    if (restKey !== this.restKey) this.makeSkeleton(look.rest, restKey, look);
+    look.eyeBones = [this.root.getObjectByName("eyeL") as Bone, this.root.getObjectByName("eyeR") as Bone];
+    look.bind(this.skeleton as Skeleton, this.root);
+    look.setState(this.lifeState);
+    look.setTint(this.lifeTint);
+    look.setWater(this.lifeWater);
+    look.setFar(this.lod === 2);
+    this.setFace(this.face[0], this.face[1]);
+    this.setEyes(this.eyes[0], this.eyes[1]);
+    return true;
+  }
+
   get ready() {
-    return !!this.shown;
+    return !!this.shown || !!this.life;
   }
   get height() {
-    return this.shown?.baked.height ?? 1.7;
+    return this.fit?.height ?? 1.7;
   }
   /** How far the top of the head (its hair or hat) is above the head joint, standing. */
   get crown(): number {
+    if (this.life) return this.life.crown;
     const b = this.shown?.baked;
     if (!b) return 0.3;
     const r = b.rest;
@@ -372,14 +544,15 @@ export class PersonModel {
   }
   /** How far to lower the person so a seated pose rests on a seat `seatY` high. */
   sitDrop(seatY: number): number {
-    const b = this.shown?.baked;
+    const b = this.fit;
     if (!b) return 0;
     return seatY - (b.hipY - b.thighR * 0.92);
   }
   get tris() {
-    return this.shown?.baked.tris ?? 0;
+    return this.life?.tris ?? this.shown?.baked.tris ?? 0;
   }
   get shownLod(): Lod | null {
+    if (this.life) return 0;
     return this.shown?.lod ?? null;
   }
 
@@ -414,7 +587,9 @@ export class PersonModel {
     this.setEyes(this.eyes[0], this.eyes[1]);
   }
 
-  private makeSkeleton(rest: RestPose, key: string) {
+  /** The bones from a rest pose (with the life look's: its two eyes under the head, after the joints,
+   *  and bound as its file stands — its shoulders turned out, chars/life.ts). */
+  private makeSkeleton(rest: RestPose, key: string, life?: LifeLook) {
     this.skeleton?.dispose();
     for (const j of JOINTS) this.bones[j]?.removeFromParent();
     this.restHips = [...rest.hips];
@@ -426,8 +601,19 @@ export class PersonModel {
       const parent = PARENT[j];
       if (parent) this.bones[parent].add(b);
     }
+    const all = JOINTS.map((j) => this.bones[j]);
+    if (life) {
+      for (const [i, e] of (["eyeL", "eyeR"] as const).entries()) {
+        const b = new Bone();
+        b.name = e;
+        b.position.copy(life.eyesRest[i]);
+        this.bones.head.add(b);
+        all.push(b);
+      }
+      for (const [j, q] of Object.entries(life.bindTurn)) this.bones[j as JointName].quaternion.copy(q);
+    }
     this.bones.hips.updateMatrixWorld(true);
-    this.skeleton = new Skeleton(JOINTS.map((j) => this.bones[j]));
+    this.skeleton = new Skeleton(all);
     this.root.add(this.bones.hips);
     this.restKey = key;
     this.setPose(this.pose);
@@ -446,7 +632,19 @@ export class PersonModel {
     }
     const h = this.restHips;
     this.bones.hips.position.set(h[0] + this.lift[0], h[1] + this.lift[1], h[2] + this.lift[2]);
-    const b = this.shown?.baked;
+    const L = this.life;
+    if (L && this.fitLegs)
+      for (const S of ["L", "R"] as const)
+        fitLeg(
+          this.bones.hips,
+          this.bones[`thigh${S}`],
+          this.bones[`knee${S}`],
+          this.bones[`ankle${S}`],
+          { knee: L.rest[`knee${S}`], ankle: L.rest[`ankle${S}`], ball: L.rest[`toe${S}`][2] },
+          L.hipY,
+          L.ankleY,
+        );
+    const b = this.fit;
     if (!reach || !b) return;
     for (const side of ["L", "R"] as const) {
       const r = reach[side];
@@ -475,7 +673,7 @@ export class PersonModel {
    *  from the posed shoulder, the elbow pointing down and out by `pole` (the chest's space,
    *  the right arm's; the left mirrors x). */
   reachTo(side: "L" | "R", world: Vector3, w = 1, poleR: [number, number, number] = [-0.6, -1, -0.45]) {
-    const b = this.shown?.baked;
+    const b = this.fit;
     if (!b || !this.skeleton || w <= 0) return;
     const chest = this.bones.chest;
     chest.updateWorldMatrix(true, false);
@@ -511,7 +709,7 @@ export class PersonModel {
 
   /** What's worn that swings on Jolt near (docs/plan/61), once it's shown. */
   worn(): readonly HangSpec[] | null {
-    const b = this.shown?.baked;
+    const b = this.fit;
     return b && this.skeleton ? b.hangs : null;
   }
 
@@ -519,7 +717,7 @@ export class PersonModel {
    *  motion, far off) and starts them there next time; those in `skip` left as they are (swung on
    *  Jolt, docs/plan/61). */
   step(dt: number, rest = false, skip?: ReadonlySet<JointName>) {
-    const b = this.shown?.baked;
+    const b = this.fit;
     if (!b || !this.skeleton || !this.springs.length) return;
     this.root.updateMatrixWorld(true);
     const L = SP.a;
@@ -592,6 +790,10 @@ export class PersonModel {
   /** The face: eyes closed (0..1) and mouth open (0..1). */
   setFace(blink: number, talk: number) {
     this.face = [blink, talk];
+    if (this.life) {
+      this.life.setFace(blink, talk);
+      return;
+    }
     const m = this.bodyMesh?.morphTargetInfluences;
     if (m) {
       m[0] = blink;
@@ -603,6 +805,10 @@ export class PersonModel {
   /** Where the eyes look (plan 58 G.D): x + to the person's left, y + up; −1..1 each. */
   setEyes(x: number, y: number) {
     this.eyes = [x, y];
+    if (this.life) {
+      this.life.setEyes(x, y);
+      return;
+    }
     const m = this.bodyMesh?.morphTargetInfluences;
     if (m && m.length > 3) {
       m[2] = x;
@@ -621,7 +827,7 @@ export class PersonModel {
 
   /** Where the eyes are right now, in the model's own space (first person looks from here). */
   eyePosition(out = new Vector3()): Vector3 {
-    const e = this.shown?.baked.eye;
+    const e = this.fit?.eye;
     const head = this.bones.head;
     if (!e || !head) return out.set(0, this.height * 0.92, 0.08);
     this.root.updateMatrixWorld(true);
@@ -631,7 +837,7 @@ export class PersonModel {
 
   /** The right ear in the head bone's space (an earbud hangs there), or null before it's shown. */
   earPoint(): [number, number, number] | null {
-    return this.shown?.baked.ear ?? null;
+    return this.fit?.ear ?? null;
   }
 
   /** The bone to hang things on (a mug in the right hand, a phone). */
@@ -642,6 +848,8 @@ export class PersonModel {
   dispose() {
     if (this.held) this.f.release(this.held.a, this.held.lod);
     this.held = null;
+    this.life?.dispose();
+    this.life = null;
     this.skeleton?.dispose();
     this.root.removeFromParent();
     this.root.clear();

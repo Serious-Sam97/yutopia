@@ -360,6 +360,190 @@ of subsurface warmth). Eyes with a wet highlight, brows, lashes, teeth and lips.
 look-at kept. The plan 58 rig retargeted, and foot lock, IK, ragdoll and Flowmotion grips checked
 on the new proportions.
 
+**Decided with the user (2026-11-08):**
+- A **neutral** avatar is drawn as the man or the woman, chosen once from their name. There's no
+  third, in-between model.
+- Until phase 5's clothes, everyone wears their gender's base outfit (0b's) in **their own** top,
+  bottom and shoe colours. Hats, glasses, beards and the rest wait for phase 5.
+
+**Steps (planned 2026-11-08):**
+- **4.1 The bodies.** `build_person.py --body slim|broad --dump` writes the posed parts and joints of
+  each build. The regular build takes them as morph targets `slim` and `broad` on every part, and
+  each joint's offset for them goes in the file's extras. Also in the extras: the skin texture's mean
+  colour, so the avatar's skin colour can replace it. The outfit's texture is made near white, with a
+  top/bottom mask as vertex colour (by what each vertex is weighted to), so their colours tint
+  through.
+  **4.1 built 2026-11-08.**
+  - `build_person.py --body slim|broad --dump F.npz` writes another build's posed parts and joints.
+    `--morphs slim=…,broad=…` adds them to the regular build as morph targets on every part.
+    `build_all.sh` runs all three for each person.
+  - MakeHuman's weight moves a figure little near the average, so the two ends are used: slim
+    weight 0.08, broad 0.95, and muscle moved with it. The joints move only a few millimetres; the
+    builds differ in girth.
+  - The rig node's extras (`life`, JSON) hold `skin_mean` (the skin texture's mean where the body's
+    UVs fall) and each body's joint offsets.
+  - The outfit and shoes are whitened, their shading kept. The outfit's vertex colour is a top/bottom
+    mask: R 1 for the top, by **texture island**. Each garment's pattern piece goes whole to the legs
+    or not, even where the mesh is welded. Two other splits failed: weights vertex by vertex sent a
+    shirt's tail to the legs, and the texture's brightness sent a dark shirt to the jeans.
+  - Man 2.25 MB, woman 2.14 MB packed. The person budget is raised 2.2 → 2.6 MB for the morphs.
+  - `/dev/life?bodies=1` shows each person slim, regular and broad (stills
+    `design/screens/life/p4/bodies-*`).
+- **4.2 The people.** `look/life-people.ts` loads the man and the woman once, through the asset
+  queue. Per avatar it gives a ready body:
+  - morph weights from `body`, and the rest joints with their offsets;
+  - skin by `skin`, hair by `hairColor`;
+  - the outfit's top, bottom and shoes in their colours (shared attributes, only the colour its own);
+  - an arms-only cut for first person.
+  **4.2 built 2026-11-08.**
+  - `look/life-people.ts` has `lifeBase` (each file loaded once, its parts renumbered to our bones,
+    materials finished), `lifeBody(base, avatar)`, `lifeGender` (neutral by a seed) and `lifeArms`.
+    `LifePerson` (the benches) is built on it.
+  - Geometry and textures are shared by everyone. Each avatar owns only its materials: skin, hair,
+    brows, shoes, and the outfit with an `outfitPiece`. The piece takes the top's and bottom's
+    colours by the mask in the shader, so the room's light can go on after it as yulit's `base`.
+  - **Skin:** each file's skin texture is now evened out to grey (`build_person.py even_skin`): its
+    brightness over its local average, counting the skin's own pixels only. Both people start from a
+    light texture.
+    - Dividing by the texture's colour mean had failed twice. The woman's dark texture needed ×6–16
+      a channel and clamped wrong. Regional hue carried through: a face less red than the body read
+      greenish once tinted.
+    - The atlas's dark ground, blurred in, lifted the island edges to white.
+    - The avatar's skin colour is darkened and saturated a little to read right under the life light
+      (more so the lighter it is). Those colours were chosen for today's unlit people.
+  - Hair and brows are recoloured by the file's own colours (`hair_rgb`, `brow_rgb` in the extras).
+  - Without an avatar, each person keeps 0b's tone.
+  - `/dev/life?crowd=8&seed=N` shows `avatarFromSeed` avatars as the game would draw them (stills
+    `design/screens/life/p4/crowd-*`).
+- **4.3 In the world.** In the life look, `PersonModel` shows a life body on its own bones, the eyes'
+  two bones under the head:
+  - height, crown, hip height, sit drop, the eye and ear points all from it;
+  - `setFace` / `setEyes` drive its shapes and eyes;
+  - the view's material states by role: its own when lit, its own faded when away, and one material
+    over all of it when shadowed or burning;
+  - lit by the room's light (`light.patch`), and neutral → man or woman by a seed from the name.
+  **4.3 built 2026-11-09.**
+  - `chars/life.ts`: the view sets a life host (`setLifeHost`: its renderer, and how people are lit —
+    yulit's `base` the person's own piece, then the room's light) before it makes its `CharFactory`;
+    every factory made after draws life people. The life half of the people (`look/life-people.ts`
+    and its loaders) loads on first use, out of the chars chunk.
+  - `PersonModel` shows a `LifeLook` in the life look: the body's rest joints, the two eye bones under
+    the head, and what reaches, seats and first person read (as today's `Baked` gives them). Height,
+    crown, hip height, sit drop and the eye are the body's own. The anchors (a hand to the ear, the
+    mouth, the chest) are today's person's of the same gender and build, scaled to this one's height
+    off the head or the chest: 4.6 checks them on the bench.
+  - **The arms:** the file's hang 9° out. The bones are made with the arms turned straight down and the
+    parts bound with the shoulders turned back out, so a shoulder at rest holds its arm straight down:
+    the clips, the reaches' IK, the ragdoll and Flowmotion need no change (`chars/life.test.ts`).
+  - **Materials by role:** each person's parts their own (the tint out on the land and the wading
+    line a piece of theirs, as `Person3D.setTint`'s copies give today's people); away, their own
+    faded; the shadowed and the burning one material over all, the hair cut by its alpha, the lashes
+    and brows hidden. Faded (away, burning), the solid parts go to the depth first: the skin under
+    the shirt showed through it.
+  - People take no snow layer or a way's wet (the light's default for a solid material): the rain on
+    them is the view's.
+  - Fixed on the way: the man's hair was `hair_1` in the file (the exporter's duplicate name), so his
+    hair colour never applied; the socks are cut off over the trousers' hem (they poked through at the
+    shin in the shoes' colour); a skirt keeps them.
+  - People in cars get the same name seed. Karts and the car stage's people still draw neutral as
+    the man (seed 0): no name there yet.
+  - Stills `design/screens/life/p4w/`: the lot, faces close, walking, seated, away, shadowed, burning.
+- **4.4 Skin and face.** Skin with a soft wrap of light and a warm hint of light through it (a skin-only
+  change to the physical model's light), wet eyes, teeth for talking and smiling, lips.
+  **4.4 built 2026-11-09.**
+  - **Skin light** (`look/life-people.ts` `SKIN_PIECE`): the skin's own direct light, its diffuse wrapped
+    past where the light falls off, the red the farthest (0.46 / 0.22 / 0.15): the shadow side warm,
+    not grey. The highlight and sheen are the physical model's; the lamps' diffuse-only light wraps
+    too. A skin-only replacement of `RE_Direct` (and `RE_Direct_Lamp`) after three's physical chunk.
+  - **Lips and cheeks:** the skin texture keeps its hue relative to its surroundings
+    (`build_person.py even_skin`, `SKIN_HUE`): the lips redder than the face round them, no region's
+    tone (the 4.2 trap) — the local hue average divided out as the light's is.
+  - **Eyes:** a clear coat over a softer eye (wet, a sharp glint; the whole eye a mirror had read
+    glassy). The irises are made grey at build time (`grey_iris`: found as the atlas's two dark discs,
+    their place in the file's extras) and tinted each person's colour by the seed from their name
+    (dark brown, brown, hazel, green, blue, grey, amber, as common as they are: the avatar has no eye
+    colour). The bench's are brown.
+  - **Teeth and tongue:** MakeHuman's, fitted to the base's own mouth helpers, moved by the mouth's
+    shapes; ivory, little of the sky's light, darker the farther back (`mouthPiece`). No shadows cast;
+    hidden under the one material (shadowed, burning). +7.6k triangles (the man 48.6k): the person
+    budget 46k → 50k (`life-budget.test.ts`); the far level (4.5) has no mouth.
+  - Stills `design/screens/life/p44/`.
+- **4.5 Detail and cost.** A lighter level of detail per gender (decimated, one material) for far
+  people. Draws and triangles for a crowd measured. Portraits (`picture.ts`) and the first-person
+  hands.
+  **4.5 built 2026-11-09.**
+  - **The far person** (`build_person.py`, after the full one: `person-{man,woman}-far.glb`): the body,
+    clothes, shoes and hair as one mesh, simplified by Blender (ratio 0.12): the man 4.6k
+    triangles (the full one 48.6k), the woman 3.6k, ~140 KB, no textures. Each vertex's colour says
+    what it is (R the clothes, 0.5 the bottom and 1 the top; G the shoes; B the hair, on the skin
+    the hairline's share); `farPiece` colours it by the avatar. The slim and broad bodies carried
+    over from the nearest full vertex. Shown at the game's coarsest level (past 11 m).
+  - **Crowd cost** (`/dev/life/crowd`, the game's `PersonModel` path, walking, the sun's shadows; the
+    render timed with the GPU waited for, this Mac):
+
+    | people | all near | near to 11 m, far past |
+    | --- | --- | --- |
+    | 40 | 541 draws, 3.0M tris, 9.0 ms | 253 draws, 1.3M tris, 6.2–6.5 ms |
+    | 80 | 1101 draws, 6.2M tris, 15.9 ms | 333 draws, 1.7M tris, 7.4 ms |
+
+    (all far: 40 people 79 draws, 4.5–4.9 ms.) The frame stayed at 60 fps in every run.
+  - **Fixed on the way:** the near hair's colour was capped channel by channel (×6), so ginger
+    and blonde went grey (since 4.2); it's capped as a whole now (×16).
+  - **Portraits:** the HUD's pictures draw the life person in the life look, through a host of
+    their own (their renderer, a studio light: a sky, a key, the sky in the eyes) and framed on
+    the eyes. The HUD's people hook waits for both person files, since a picture that failed is
+    kept as "can't draw". `Face` passes the name, so a neutral avatar's portrait is the same man
+    or woman as in the world.
+  - **First-person hands:** their own picture had no lights (today's are flat, lit by the light
+    map alone): in the life look it takes the room's sky light and its environment, and the sun
+    only out on the land (no shadows in it: indoors it lit them through the ceiling).
+  - `CharFactory` takes its life host (the view's by default). The life files can be read
+    synchronously once in (`lifeBaseNow` / `lifeFarNow`).
+  - The people's chunk 57.4 → 58.6 KB (budget 58.5 → 60). The page is 480.6 KB, over its 469 before
+    this phase too (none of the life code is on it).
+  - Stills `design/screens/life/p45/`.
+- **4.6 The rig on the new proportions.** Foot lock, IK reaches, sit drops, the ragdoll, Flowmotion
+  grips and the touch fits (seats, desks, drinks) checked: `/dev/anim`, and the people e2e under
+  `playwright.life.config.ts`.
+  **4.6 built 2026-11-09.**
+  - **The legs.** The rig poses one leg (`moves.ts`): thigh = shin = 40.1 cm, the ankle 6.1 cm over the
+    sole, the hips 86.3 cm up. Its crouches, steps, seat fits and foot plants are worked out for it.
+    The life legs differ: the man's thigh 41.6, shin 43.1, ankle 9.3, hips 93.8 cm; the woman's
+    37.3 / 42.8 / 9.2 / 89.1. Threading per-person lengths through the rig (107 uses in 11 files)
+    was too wide, so `chars/model.ts fitLeg` fits each life leg after the pose: two-bone IK putting
+    the life foot's ball (at the sole) where the rig's is, the foot turned as the rig's, the knee in
+    the rig's plane (the knee's angle solved exactly: its joints sit a little off one plane).
+    Anchoring under the ankle first sank and dragged the feet: the life ball is 3 cm further on, and
+    rolled onto, it dipped. On the ball, flat is a fixed step and push-off the pivot itself; at heel
+    strike the heels differ by under a centimetre. Off while limp on the ragdoll (its pose is read off
+    the bones). `fitleg.test.ts`.
+  - **Checked** on `/dev/anim?look=life` (the bench in the life look; for life people it measures the
+    soles' contacts — their joints sit well over the sole, the toe's 4.5 cm) with
+    `e2e/life-legs.mts`: over walk, jog, run, crouch, stairs down, sit and get up, kneeling, and
+    a jump, for the man and the woman, the life ball is on the rig's in every frame. The only miss
+    is 5 mm, mid-air in one of the woman's jump frames. The feet slide only where the rig's do.
+  - **The arms** hang straight at rest as the rig's do, each measured: the upper arm turned down
+    about the shoulder, the forearm about the elbow, bound back as the file has them. The fixed
+    9° (`ARM_OUT`) had left them 7° in, and a phone held to the ear stopped 5 cm short of it.
+  - **Reaches** off the face's own landmarks: the mouth and chin off the eyes, the ear off the life
+    head's own ear (the widest point of the head on its right, a little under and behind the eyes:
+    `lifeEar`). Off the head joint, a sip put the hand over the eye. The IK now lands the wrist on
+    the anchor exactly, as today's does.
+  - **The people e2e under `playwright.life.config.ts`** (down, first person, third person, use
+    things, flowmotion, footing, phone, sway, people 3D): 14 passed and 7 skipped; one failure in the
+    long run (sitting on a sofa by Use, `third-person.spec.ts:113`) passed alone, and its whole spec
+    passed again (3/3). Classic, with the same Metal flags, passes it too.
+  - The people's chunk 59.4 KB (60).
+  - Stills `design/screens/life/p46/`: the reaches, the desk, the hang, the climb, kneeling, a fall.
+- **4.7 Stills** of people in the world (lobby, studio, lot, faces at talking distance) for sign-off.
+  **4.7 built 2026-11-09** — `e2e/life-people-shots.mts` (Bia in the life look, Ana and Cai joining from
+  browsers of their own, stood as a three facing in): the lot, the lobby and upstairs (off the spawn:
+  floor-4 coordinates are the old roof now) at noon and 22:00, and each face at talking distance (the
+  game's renderer, a camera of our own). Stills `design/screens/life/p47/`. Known, for phase 5:
+  everyone's in the base hair and outfit; the woman's socks show under her skirt; the hairline's cut
+  is ragged at the forehead. The lot by night varies run to run (lit lavender, or dark with lamp pools)
+  in both looks: the world's, not the people's.
+
 ### 5 — People II: hair and clothes
 
 Hair card sets per style. Clothing meshes per wardrobe category (tops, bottoms, shoes, outerwear,

@@ -131,7 +131,7 @@ PEOPLE = {
         "height": 0.5,
         "proportions": 1.0,
         "race": {"african": 0.75, "caucasian": 0.15, "asian": 0.1},
-        "skin": "skins/young_african_female/young_darkskinned_female_diffuse.png",
+        "skin": "skins/young_caucasian_female/young_lightskinned_female_diffuse.png",
         "parts": [
             ("clothes", "clothes/female_elegantsuit01/female_elegantsuit01"),
             ("shoes", "clothes/shoes04/shoes04"),
@@ -148,9 +148,27 @@ PEOPLE = {
     },
 }
 P = PEOPLE[WHO]
+# The three bodies (the avatar's `body`, plan 73 phase 4): slim and broad are the macro sliders moved
+# from the regular build. Each is built with --dump (its posed parts and joints), then the regular
+# build takes them with --morphs as morph targets of the same names, its joints' offsets in the extras.
+BODY = arg("--body", "regular")
+BODIES = {
+    # (MakeHuman's weight moves a figure little near the average: the ends of it, so the three read apart
+    # as today's do)
+    "man": {"slim": {"weight": 0.08, "muscle": 0.38}, "broad": {"weight": 0.95, "muscle": 0.85}},
+    "woman": {"slim": {"weight": 0.08, "muscle": 0.32}, "broad": {"weight": 0.95, "muscle": 0.62}},
+}
+if BODY != "regular":
+    P.update(BODIES[WHO][BODY])
+DUMP = arg("--dump", "")
+MORPHS = arg("--morphs", "")  # slim=PATH,broad=PATH
 if MUSCLE:
     P["muscle"] = float(MUSCLE)
-COMMON = [("eyes", "eyes/high-poly/high-poly")]
+# (plan 73 4.4: the teeth and the tongue, fitted to the base's own helpers in the mouth — seen talking
+# and smiling; the mouth's shapes move them as they move the lips)
+COMMON = [("eyes", "eyes/high-poly/high-poly"), ("teeth", "teeth/teeth_base/teeth_base"), ("tongue", "tongue/tongue01/tongue01")]
+# (small things in the mouth: their textures small)
+SMALL_TEX = {"teeth": 256, "tongue": 256}
 EYE_TEX = "eyes/materials/brown_eye.png"
 
 # Two more of ours beyond chars/rig.ts's: the eyes, each its own bone under the head (the gaze turns
@@ -594,6 +612,17 @@ for name, pos, uv, faces, w, tex in parts:
 lowest = min(posed[n][:, 1].min() for n in posed if n in ("body", "shoes"))
 shift = np.array([0.0, -lowest, 0.0])  # feet on the ground (y 0)
 
+if DUMP:
+    # (another body's build: its posed parts and joints, feet on the ground, for the regular build's
+    # morphs — nothing exported)
+    np.savez(DUMP, joints=np.stack([ours[j] + shift for j in ALL]), **{f"part_{n}": posed[n] + shift for n in posed})
+    print(f"dumped {WHO} {BODY} to {DUMP}")
+    sys.exit(0)
+BODY_MORPHS = {}
+for kv in MORPHS.split(",") if MORPHS else []:
+    k, path_ = kv.split("=")
+    BODY_MORPHS[k] = np.load(path_)
+
 arm_data = bpy.data.armatures.new("rig")
 arm = bpy.data.objects.new("rig", arm_data)
 bpy.context.collection.objects.link(arm)
@@ -740,6 +769,133 @@ def recolour(img, rgb):
     img.save()
 
 
+def whiten(img, name):
+    """The outfit and the shoes near white, their shading kept (plan 73 phase 4: the avatar's own colours
+    multiply through — top, bottom, shoes — until phase 5's clothes)."""
+    w, h = img.size
+    px = np.empty(w * h * 4, dtype=np.float32)
+    img.pixels.foreach_get(px)
+    a = px.reshape(h, w, 4).astype(np.float64)
+    lum = a[..., :3] @ np.array([0.2126, 0.7152, 0.0722])
+    k = lum / max(1e-6, float(np.average(lum, weights=a[..., 3] + 1e-6)))
+    # (a gentler shading than the file's: a light suit's folds and a dark one's both read in any colour)
+    v = np.clip(0.86 * (0.4 + 0.6 * k), 0, 1)
+    a[..., 0] = a[..., 1] = a[..., 2] = v
+    img.pixels.foreach_set(a.astype(np.float32).ravel())
+    tmp = os.path.join(bpy.app.tempdir or "/tmp", f"white-{WHO}-{name}.png")
+    img.filepath_raw = tmp
+    img.file_format = "PNG"
+    img.save()
+
+
+def outfit_mask(faces, used, legs):
+    """The outfit's top and bottom by its texture's islands (each a garment's own pattern piece, even where
+    the mesh is welded: a shirt's tail is the shirt's): an island whose vertices mostly go with the legs
+    is the bottom's. (By weights vertex by vertex, a shirt's tail went with the legs; by the texture's
+    brightness, a dark shirt went with the jeans.)"""
+    remap = {v: i for i, v in enumerate(used)}
+    parent = {}
+
+    def find(x):
+        parent.setdefault(x, x)
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    vt = {}
+    for f in faces:
+        ts = [t for t in f[1] if t >= 0]
+        for t in ts[1:]:
+            parent[find(t)] = find(ts[0])
+        for v, t in zip(f[0], f[1]):
+            if t >= 0:
+                vt.setdefault(remap[v], t)
+    island = np.array([find(vt[i]) if i in vt else -1 for i in range(len(used))])
+    out = np.zeros(len(used), np.float32)
+    for isl in np.unique(island):
+        idx = np.where(island == isl)[0]
+        out[idx] = 0.0 if (legs[idx] > 0.5).mean() > 0.5 else 1.0
+    print(f"  outfit: {len(np.unique(island))} islands, {int(out.sum())} of {len(used)} vertices the top's")
+    return out
+
+
+def even_skin(img, mean):
+    """Only the skin's painted light and shade left, in grey: its brightness over its own local average
+    (a wide blur), so neither its hue nor a region's tone (a face paler than the body read greenish once
+    tinted) carries into the avatar's colour. Lips and the cheeks' warmth are the face's (vertex colours)."""
+    w, h = img.size
+    px = np.empty(w * h * 4, dtype=np.float32)
+    img.pixels.foreach_get(px)
+    a = px.reshape(h, w, 4)
+    lum = a[..., :3] @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    # (the local average over the skin's own pixels only: the atlas's dark ground between its islands,
+    # blurred in, lifted the face's edges to white)
+    on = (lum > 0.04).astype(np.float32)
+    sig = max(4.0, w / 48)
+    num = blur(np.repeat((lum * on)[..., None], 4, axis=2), sig)[..., 0]
+    den = blur(np.repeat(on[..., None], 4, axis=2), sig)[..., 0]
+    local = num / np.maximum(den, 1e-3)
+    v = np.clip(SKIN_GREY * lum / np.maximum(local, 1e-3), 0, 1)
+    # (plan 73 4.4) its hue over its own surroundings' kept: the lips redder than the face round them, the
+    # cheeks' warmth — but no region's tone (the hue's local average is divided out, as the light's is)
+    ch = a[..., :3] / np.maximum(lum, 1e-3)[..., None]
+    chl = blur(np.concatenate([ch * on[..., None], on[..., None]], 2), sig)[..., :3] / np.maximum(den, 1e-3)[..., None]
+    rel = np.clip(ch / np.maximum(chl, 1e-3), 0.6, 1.6) ** SKIN_HUE
+    rel /= np.maximum(rel @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32), 1e-3)[..., None]  # (its light kept)
+    for c in range(3):
+        a[..., c] = np.clip(v * np.where(on > 0, rel[..., c], 1), 0, 1)
+    img.pixels.foreach_set(a.ravel())
+    # (YUTOPIA_SKIN_OUT=DIR keeps it there, to look at)
+    tmp = os.path.join(os.environ.get("YUTOPIA_SKIN_OUT") or bpy.app.tempdir or "/tmp", f"skin-{WHO}.png")
+    img.filepath_raw = tmp
+    img.file_format = "PNG"
+    img.save()
+
+
+def grey_iris(img):
+    """The irises made grey, their own detail kept (the game tints them each person's eye colour, plan 73
+    4.4): the two dark discs — iris and pupil — on the light eyeballs, one in each half of the atlas.
+    Returns where they are for the game: [u1, v1, u2, v2, r] in glTF's UVs (v from the top)."""
+    w, h = img.size
+    px = np.empty(w * h * 4, dtype=np.float32)
+    img.pixels.foreach_get(px)
+    a = px.reshape(h, w, 4)
+    rgb = a[..., :3]
+    lum = rgb @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    sat = rgb.max(-1) - rgb.min(-1)
+    ys, xs = np.mgrid[0:h, 0:w]
+    out = []
+    radius = []
+    for half in (xs + ys < (w + h) / 2, xs + ys >= (w + h) / 2):
+        dark = half & ((lum < 0.36) | (sat > 0.2)) & (a[..., 3] > 0.5)
+        cy, cx = ys[dark].mean(), xs[dark].mean()
+        # (strays — a vein — off the disc: again from the pixels near the first guess)
+        near = dark & ((xs - cx) ** 2 + (ys - cy) ** 2 < (0.15 * w) ** 2)
+        cy, cx = ys[near].mean(), xs[near].mean()
+        r = math.sqrt(near.sum() / math.pi)
+        disc = (xs - cx) ** 2 + (ys - cy) ** 2 < (1.1 * r) ** 2
+        g = np.clip(lum / max(1e-3, lum[disc].mean()) * 0.45, 0, 1)
+        k = disc[..., None]
+        a[..., :3] = np.where(k, g[..., None], rgb)
+        out += [cx / w, 1 - cy / h]
+        radius.append(r / w)
+    img.pixels.foreach_set(a.ravel())
+    print(f"  irises at {[round(x, 3) for x in out]}, r {[round(x, 4) for x in radius]}")
+    return [round(float(x), 4) for x in out] + [round(float(np.mean(radius)), 4)]
+
+
+def tex_mean(img, uvs):
+    """An image's mean colour (as stored: sRGB) where these UVs fall."""
+    w, h = img.size
+    px = np.empty(w * h * 4, dtype=np.float32)
+    img.pixels.foreach_get(px)
+    a = px.reshape(h, w, 4)
+    x = np.clip((uvs[:, 0] % 1) * w, 0, w - 1).astype(int)
+    y = np.clip((uvs[:, 1] % 1) * h, 0, h - 1).astype(int)
+    return a[y, x, :3].mean(0)
+
+
 def skin_colours(posed_body, posed_hair, used):
     """The body's colour over its skin texture (multiplied in): the scalp and the hairline in the hair's
     colour, fading out onto the forehead (no hard edge where the hair's cut-out ends); a little blush on
@@ -757,6 +913,8 @@ def skin_colours(posed_body, posed_hair, used):
         near[idx] = d
     t = np.clip((0.45 - near) / (0.45 - 0.12), 0, 1)
     t = t * t * (3 - 2 * t)
+    global HAIRLINE
+    HAIRLINE = t  # (the far person's scalp in the hair's colour: plan 73 4.5)
     hair = np.array(P["hair_rgb"]) / np.array(P.get("skin_mean", (0.55, 0.4, 0.33)))
     col = col * (1 - 0.9 * t[:, None]) + np.clip(hair, 0, 1)[None] * 0.9 * t[:, None]
     # blush: on each cheek, below and out from the eye
@@ -797,14 +955,19 @@ def material(name, tex, alpha):
     bsdf.inputs["Roughness"].default_value = 0.55 if name == "skin" else 0.8
     if tex and os.path.exists(tex):
         img = bpy.data.images.load(tex)
-        if max(img.size) > TEX:
-            img.scale(TEX, TEX)
+        cap = SMALL_TEX.get(name, TEX)
+        if max(img.size) > cap:
+            img.scale(cap, cap)
+        if name == "eyes":
+            EXTRAS["iris"] = grey_iris(img)
         if PAINT:
             paint_image(img, name)
         if name in ("brows", "lashes"):
             tint(img, P["brow_rgb"], 1.0 if name == "brows" else P["lash_alpha"])
         if name == "hair":
             recolour(img, P["hair_rgb"])
+        if name in ("clothes", "shoes"):
+            whiten(img, name)
         n = nt.nodes.new("ShaderNodeTexImage")
         n.image = img
         nt.links.new(n.outputs["Color"], bsdf.inputs["Base Color"])
@@ -816,6 +979,27 @@ def material(name, tex, alpha):
 
 
 ALPHA = {"hair", "brows", "lashes", "eyes"}  # (the eyes: the cornea is cut out by the alpha)
+# The skin made even: its texture divided by its own mean and set to this grey, so only its painted
+# detail is left (lips, cheeks, the shading in its folds) — the game multiplies the avatar's skin colour
+# through it (plan 73 phase 4.2: a dark texture lifted to a light skin needed ×6…16 a channel). Both
+# people start from a light skin's texture for its range.
+SKIN_GREY = 0.72
+SKIN_HUE = 1.0  # how much of the painted hue's local differences stay (0: grey; 4.4: the lips)
+P["skin_mean"] = (SKIN_GREY, SKIN_GREY, SKIN_GREY)  # (the hairline's colours are worked out against it)
+# what the game reads from the file beyond the meshes (the rig's extras, life-people.ts): the skin's mean,
+# each other body's joint offsets (glTF's axes, metres)
+EXTRAS = {"bodies": {}, "hair_rgb": list(P["hair_rgb"]), "brow_rgb": list(P["brow_rgb"])}
+for bname, data in BODY_MORPHS.items():
+    EXTRAS["bodies"][bname] = {
+        j: [round(float(x), 5) for x in (data["joints"][i] - (ours[j] + shift)) * UNIT] for i, j in enumerate(ALL)
+    }
+# The far person (plan 73 4.5): the body, the clothes, the shoes and the hair as one mesh, made coarse —
+# no textures, no face; its vertex colour says what each vertex is (R the clothes: 0.5 the bottom, 1 the
+# top; G the shoes; B the hair, on the skin the hairline's share), the game colours it by the avatar.
+FAR_PARTS = ("body", "clothes", "shoes", "hair")
+FAR_RATIO = float(arg("--far-ratio", "0.12"))
+far = []
+HAIRLINE = None
 for name, pos, uv, faces, w, tex in parts:
     P3 = to_bl(posed[name] + shift)
     used = sorted({v for f in faces for v in f[0]})
@@ -839,11 +1023,30 @@ for name, pos, uv, faces, w, tex in parts:
         me.color_attributes.active_color = ca
     ob = bpy.data.objects.new(name, me)
     bpy.context.collection.objects.link(ob)
-    ob.data.materials.append(material("skin" if name == "body" else name, tex, name in ALPHA))
+    mat = material("skin" if name == "body" else name, tex, name in ALPHA)
+    ob.data.materials.append(mat)
+    if name == "body":
+        # (the skin texture's mean where the body's UVs fall: the game swaps it for the avatar's skin)
+        timg = next((n.image for n in mat.node_tree.nodes if n.type == "TEX_IMAGE"), None)
+        if timg is not None:
+            ts = sorted({t for f in faces for t in f[1] if t >= 0})
+            even_skin(timg, tex_mean(timg, np.asarray(uv)[ts]))
+            EXTRAS["skin_mean"] = [round(float(x), 4) for x in tex_mean(timg, np.asarray(uv)[ts])]
     # weights onto ours: the top four
     ow = (w @ fold)[used]
     if name == "clothes" and P.get("skirt"):
         ow = skirt_weights(ow, pos[used])
+    if name == "clothes":
+        # the outfit's top and bottom (R 1 the top's colour, 0 the bottom's), by the file's own colours:
+        # its tops are light over dark trousers and skirts. A piece (a shell of the mesh) clearly one or
+        # the other goes whole; else vertex by vertex, smoothed over its neighbours (weights failed: a
+        # shirt's tail went with the legs, a skirt's top with the hips)
+        legs = sum(ow[:, ALL.index(j)] for j in ("thighL", "thighR", "kneeL", "kneeR", "ankleL", "ankleR", "toeL", "toeR"))
+        topm = outfit_mask(faces, used, legs)
+        ca = me.color_attributes.new("Col", "FLOAT_COLOR", "POINT")
+        rgba = np.stack([topm, topm, topm, np.ones_like(topm)], 1)
+        ca.data.foreach_set("color", rgba.ravel())
+        me.color_attributes.active_color = ca
     groups = {j: ob.vertex_groups.new(name=j) for j in ALL}
     top = np.argsort(-ow, 1)[:, :4]
     for i in range(len(used)):
@@ -863,11 +1066,40 @@ for name, pos, uv, faces, w, tex in parts:
         k = ob.shape_key_add(name=shp)
         k.data.foreach_set("co", to_bl(sp[used] + shift).astype(np.float32).ravel())
         keys += 1
+    # the other bodies (--morphs): this part as each of them
+    for bname, data in BODY_MORPHS.items():
+        other = data[f"part_{name}"]
+        assert other.shape == posed[name].shape, f"{bname} {name}: {other.shape} vs {posed[name].shape}"
+        if not me.shape_keys:
+            ob.shape_key_add(name="Basis")
+        k = ob.shape_key_add(name=bname)
+        k.data.foreach_set("co", to_bl(other[used]).astype(np.float32).ravel())
+        keys += 1
     ob.parent = arm
     mod = ob.modifiers.new("rig", "ARMATURE")
     mod.object = arm
     print(f"  mesh {name}: {len(used)} verts, {keys} shapes")
+    if name in FAR_PARTS and BODY_MORPHS:
+        code = np.zeros((len(used), 3))
+        if name == "clothes":
+            code[:, 0] = 0.5 + 0.5 * topm
+        elif name == "shoes":
+            code[:, 1] = 1
+        elif name == "hair":
+            code[:, 2] = 1
+        elif HAIRLINE is not None:
+            code[:, 2] = np.clip(HAIRLINE * 1.1, 0, 1)
+        far.append(
+            {
+                "P": P3[used],
+                "faces": [[remap[v] for v in f[0]] for f in faces],
+                "code": code,
+                "ow": ow,
+                "morphs": {b: to_bl(d[f"part_{name}"][used]) for b, d in BODY_MORPHS.items()},
+            }
+        )
 
+arm["life"] = json.dumps(EXTRAS)
 os.makedirs(OUT, exist_ok=True)
 path = os.path.abspath(os.path.join(OUT, f"person-{WHO}{'-painted' if PAINT else ''}.glb"))
 bpy.ops.export_scene.gltf(
@@ -882,7 +1114,81 @@ bpy.ops.export_scene.gltf(
     export_image_format="AUTO",
     export_meshopt_compression_enable=True,
     export_apply=False,
+    export_extras=True,
 )
+
+# ---- the far person (made after the full one is written: its own file, the same rig)
+if far:
+    from mathutils import kdtree
+
+    V = np.concatenate([f["P"] for f in far])
+    off = np.cumsum([0] + [len(f["P"]) for f in far])
+    Fs = [[v + off[i] for v in face] for i, f in enumerate(far) for face in f["faces"]]
+    me = bpy.data.meshes.new("far")
+    me.from_pydata(V.tolist(), [], Fs)
+    for p in me.polygons:
+        p.use_smooth = True
+    code = np.concatenate([f["code"] for f in far])
+    ca = me.color_attributes.new("Col", "FLOAT_COLOR", "POINT")
+    ca.data.foreach_set("color", np.concatenate([code, np.ones((len(V), 1))], 1).astype(np.float32).ravel())
+    me.color_attributes.active_color = ca
+    fob = bpy.data.objects.new("far", me)
+    bpy.context.collection.objects.link(fob)
+    fob.data.materials.append(material("far", None, False))
+    OW = np.concatenate([f["ow"] for f in far])
+    groups = {j: fob.vertex_groups.new(name=j) for j in ALL}
+    top = np.argsort(-OW, 1)[:, :4]
+    for i in range(len(V)):
+        ws = OW[i, top[i]]
+        tot = ws.sum()
+        for k in range(4):
+            if ws[k] > 1e-4:
+                groups[ALL[top[i, k]]].add([i], float(ws[k] / tot), "REPLACE")
+    n0 = len(me.polygons)
+    dec = fob.modifiers.new("dec", "DECIMATE")
+    dec.ratio = FAR_RATIO
+    for o in bpy.context.view_layer.objects:
+        o.select_set(False)
+    bpy.context.view_layer.objects.active = fob
+    fob.select_set(True)
+    bpy.ops.object.modifier_apply(modifier="dec")
+    # the other bodies: each coarse vertex moved as the nearest of the full mesh's moves
+    kd = kdtree.KDTree(len(V))
+    for i, v in enumerate(V):
+        kd.insert(v.tolist(), i)
+    kd.balance()
+    co = np.empty(len(me.vertices) * 3, dtype=np.float64)
+    me.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    near = np.array([kd.find(c.tolist())[1] for c in co])
+    fob.shape_key_add(name="Basis")
+    for b in BODY_MORPHS:
+        M = np.concatenate([f["morphs"][b] for f in far])
+        k = fob.shape_key_add(name=b)
+        k.data.foreach_set("co", (co + (M[near] - V[near])).astype(np.float32).ravel())
+    fob.parent = arm
+    mod = fob.modifiers.new("rig", "ARMATURE")
+    mod.object = arm
+    for o in bpy.context.view_layer.objects:
+        o.select_set(o in (arm, fob))
+    tris = sum(len(p.vertices) - 2 for p in me.polygons)
+    fpath = os.path.abspath(os.path.join(OUT, f"person-{WHO}-far.glb"))
+    bpy.ops.export_scene.gltf(
+        filepath=fpath,
+        export_format="GLB",
+        use_selection=True,
+        export_yup=True,
+        export_skins=True,
+        export_animations=False,
+        export_morph=True,
+        export_morph_normal=False,
+        export_vertex_color="ACTIVE",
+        export_meshopt_compression_enable=True,
+        export_apply=False,
+        export_extras=True,
+    )
+    print(f"wrote far {fpath} ({os.path.getsize(fpath) / 1e3:.0f} KB): {n0} faces → {tris} tris, {len(me.vertices)} verts")
+
 h = (max(posed["body"][:, 1]) - lowest) * UNIT
 # (how broad: the clothes' widest at the shoulders' height, and the shoulder joints apart)
 _sy = ours["shoulderL"][1]

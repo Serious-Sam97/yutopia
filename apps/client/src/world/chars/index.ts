@@ -6,6 +6,7 @@ export { bake } from "./bake";
 export { buildPerson } from "./build";
 export { INK, inkMaterial, inkResolution } from "./ink";
 export type { Anchor } from "./kit";
+export { type LifeHost, nameSeed, setLifeHost } from "./life";
 export {
   actsNow,
   airNow,
