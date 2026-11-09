@@ -1099,6 +1099,17 @@ plough and bus smoothed in clearcoat paint, chrome and glass. `?out=old`: the ou
     `life-shots.mts` spots `woods`, `edge`.
   - **Left:** the far trees (the long road's hundred thousand) keep their cheap shapes; the woods'
     floor (shrubs, logs, stones) as it was.
+- **8.2 Bushes, tufts, flowers.** Built 2026-11-09.
+  - **The atlas** a grass sprite more (blades fanning up from the foot, no spine: the needles' spray
+    made tufts read as little firs): white, leaves, needles, grass.
+  - **The woods' floor**: its shrubs bushes (`lifeBushGeometry`: today's lumps under 46 leaf cards).
+  - **The town's gardens** (`grounds3d.ts housePlants`, through the hooks): a flower bed of two rows
+    along each side of every house in one of five colours, a bush at each front corner, tufts along the
+    back and about the yard (`lifePlantsGeometry`: crossed cards, a ball of them for a bush). Their
+    material (`plantMaterial`) the atlas's, no snow dusted on them: each vertex knows its plant's foot
+    (`foot`) and they lie down into it as the snow comes (`wxSnow` 0.2–0.55) — gone under it in winter.
+  - **Left:** the campus's lawns and the Grounds' wider meadows unplanted (their land is the layer's
+    green); the shops' planters.
 
 ### 9 — Pets
 

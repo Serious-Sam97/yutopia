@@ -32,6 +32,12 @@ export const lifeDress: {
     pine: (r: () => number, o?: { tiers?: number; H?: number; width?: number; snow?: number }) => BufferGeometry;
     material: (m: Material) => void;
     depth: () => Material;
+    /** (phase 8.2) plants by a house: tufts, flower clumps, bushes, as one geometry */
+    plants: (
+      items: { kind: "tuft" | "flower" | "bush"; x: number; y: number; z: number; hex?: number; s?: number }[],
+      r: () => number,
+    ) => BufferGeometry;
+    plantMaterial: (m: Material) => void;
   };
   /** a plain surface of the library's `id` (UVs in metres), its colour `tint` */
   surface?: (id: string, tint: number) => Material;

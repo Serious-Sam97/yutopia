@@ -15,7 +15,8 @@ import {
 import { tinted } from "./campus";
 import { pineGeometry } from "./grounds3d";
 import { lifeDress } from "./life-dress";
-import { mergeGeometries, pressShader } from "./wx3d";
+import { shrubGeometry } from "./woods3d";
+import { mergeGeometries, pressShader, wx } from "./wx3d";
 
 // Plan 73 phase 8.1 — the woods in the life look: the same pools and the one material (grounds-stream.ts),
 // new shapes. A leafy tree (a curving trunk, limbs, a crown of leaf cards round a dark core) and a pine
@@ -25,15 +26,16 @@ import { mergeGeometries, pressShader } from "./wx3d";
 // is the snow layer's, wx3d.ts), cut out by alpha.
 
 /** Where in the atlas: the solid white, the leaves, the needles (u ranges). */
-const SOLID: [number, number] = [0.12, 0.5];
-const LEAF: [number, number] = [0.5, 0.75];
-const NEEDLE: [number, number] = [0.75, 1];
+const SOLID: [number, number] = [0.1, 0.4];
+const LEAF: [number, number] = [0.4, 0.6];
+const NEEDLE: [number, number] = [0.6, 0.8];
+const GRASS: [number, number] = [0.8, 1];
 
 let atlas: CanvasTexture | null = null;
 /** The cards' atlas (made once). */
 export function treeAtlas(): CanvasTexture {
   if (atlas) return atlas;
-  const W = 512;
+  const W = 640;
   const H = 256;
   const c = document.createElement("canvas");
   c.width = W;
@@ -45,10 +47,10 @@ export function treeAtlas(): CanvasTexture {
     return seed / 2147483647;
   };
   g.fillStyle = "#ffffff";
-  g.fillRect(0, 0, W / 2, H);
+  g.fillRect(0, 0, 256, H);
   // the leaves: a cluster of small ovals, each its own tone and turn, a vein's line
-  const lx = W / 2;
-  const lw = W / 4;
+  const lx = 256;
+  const lw = 128;
   for (let i = 0; i < 90; i++) {
     const x = lx + 10 + r() * (lw - 20);
     const y = 12 + r() * (H - 24);
@@ -73,8 +75,8 @@ export function treeAtlas(): CanvasTexture {
     g.restore();
   }
   // the needles: a spray along the card (v up it), thin strokes out from its spine, fewer at its tip
-  const nx = (W * 3) / 4;
-  const nw = W / 4;
+  const nx = 384;
+  const nw = 128;
   g.lineCap = "round";
   for (let i = 0; i < 260; i++) {
     const t = r();
@@ -96,6 +98,21 @@ export function treeAtlas(): CanvasTexture {
   g.moveTo(nx + nw / 2, H - 4);
   g.lineTo(nx + nw / 2, 6);
   g.stroke();
+  // the grass: blades fanning up from the foot, curving, of all lengths (no spine: a tuft, not a frond)
+  const gx = 512;
+  const gw = 128;
+  for (let i = 0; i < 70; i++) {
+    const foot = gx + gw / 2 + (r() - 0.5) * 30;
+    const lean = (r() - 0.5) * 1.4;
+    const len = (0.45 + r() * 0.55) * (H - 10);
+    const v = 160 + Math.floor(r() * 95);
+    g.strokeStyle = `rgb(${v},${v},${v})`;
+    g.lineWidth = 2 + r() * 2.5;
+    g.beginPath();
+    g.moveTo(foot, H - 2);
+    g.quadraticCurveTo(foot + lean * len * 0.25, H - len * 0.6, foot + lean * len * 0.6, H - len);
+    g.stroke();
+  }
   atlas = new CanvasTexture(c);
   atlas.colorSpace = SRGBColorSpace;
   atlas.anisotropy = 4;
@@ -295,6 +312,127 @@ export function lifePineGeometry(
   return m;
 }
 
+/** A bush on the woods' floor: today's shrub's lumps under a coat of leaf cards. */
+export function lifeBushGeometry(r: () => number): BufferGeometry {
+  const core = solidUV(shrubGeometry(r));
+  const cards = new Cards();
+  const c = new Color();
+  const mid = new Vector3(0, 0.5, 0);
+  for (let i = 0; i < 46; i++) {
+    const a = r() * Math.PI * 2;
+    const e = (r() - 0.3) * 1.2;
+    const out = new Vector3(Math.cos(a) * Math.cos(e), Math.sin(e) * 0.8 + 0.2, Math.sin(a) * Math.cos(e)).normalize();
+    const p = mid.clone().add(new Vector3(out.x * 0.62, out.y * 0.42, out.z * 0.62));
+    const s = 0.22 + r() * 0.14;
+    const q = new Quaternion().setFromAxisAngle(
+      new Vector3(r() - 0.5, r() - 0.5, r() - 0.5).normalize(),
+      r() * Math.PI,
+    );
+    const k = 0.75 + 0.3 * Math.max(0, out.y) + (r() - 0.5) * 0.15;
+    c.setRGB(lin(0.3 * k), lin(0.42 * k), lin(0.19 * k));
+    cards.quad(
+      p,
+      new Vector3(s, 0, 0).applyQuaternion(q),
+      new Vector3(0, s, 0).applyQuaternion(q),
+      out,
+      [c.r, c.g, c.b],
+      LEAF,
+    );
+  }
+  const m = mergeGeometries([core, cards.build()], false);
+  core.dispose();
+  m.userData.cards = true;
+  return m;
+}
+
+/** A plant by a house (phase 8.2): a tuft of grass, a flower clump, a bush. */
+export interface Plant {
+  kind: "tuft" | "flower" | "bush";
+  x: number;
+  y: number;
+  z: number;
+  /** a flower's colour (sRGB hex) */
+  hex?: number;
+  s?: number;
+}
+/** Plants as one geometry of cards (crossed for a tuft or a flower, a ball of them for a bush) — each
+ *  vertex its plant's foot height (`foot`: they lie flat into it as the snow comes, `plantMaterial`). */
+export function lifePlantsGeometry(items: Plant[], r: () => number): BufferGeometry {
+  const cards = new Cards();
+  const foot: number[] = [];
+  const c = new Color();
+  const ofs = (n: number, y: number) => {
+    for (let i = 0; i < n * 6; i++) foot.push(y);
+  };
+  for (const p of items) {
+    const s = p.s ?? 1;
+    if (p.kind === "bush") {
+      const mid = new Vector3(p.x, p.y + 0.45 * s, p.z);
+      for (let i = 0; i < 34; i++) {
+        const a = r() * Math.PI * 2;
+        const e = (r() - 0.25) * 1.3;
+        const out = new Vector3(Math.cos(a) * Math.cos(e), Math.sin(e), Math.sin(a) * Math.cos(e)).normalize();
+        const at = mid.clone().add(new Vector3(out.x * 0.5 * s, out.y * 0.4 * s, out.z * 0.5 * s));
+        const q = new Quaternion().setFromAxisAngle(
+          new Vector3(r() - 0.5, r() - 0.5, r() - 0.5).normalize(),
+          r() * Math.PI,
+        );
+        const z = (0.2 + r() * 0.12) * s;
+        const k = 0.72 + 0.32 * Math.max(0, out.y) + (r() - 0.5) * 0.15;
+        c.setRGB(lin(0.28 * k), lin(0.42 * k), lin(0.18 * k));
+        cards.quad(
+          at,
+          new Vector3(z, 0, 0).applyQuaternion(q),
+          new Vector3(0, z, 0).applyQuaternion(q),
+          out,
+          [c.r, c.g, c.b],
+          LEAF,
+        );
+      }
+      ofs(34, p.y);
+      continue;
+    }
+    const tuft = p.kind === "tuft";
+    const h = (tuft ? 0.22 + r() * 0.14 : 0.18 + r() * 0.08) * s;
+    const w = (tuft ? 0.22 : 0.2) * s;
+    const a0 = r() * Math.PI;
+    if (tuft) {
+      const k = 0.85 + r() * 0.3;
+      c.setRGB(lin(0.36 * k), lin(0.5 * k), lin(0.22 * k));
+    } else c.setHex(p.hex ?? 0xe7c25a);
+    for (let j = 0; j < 2; j++) {
+      const a = a0 + (j * Math.PI) / 2;
+      const across = new Vector3(Math.cos(a) * w, 0, Math.sin(a) * w);
+      const up = new Vector3(0, h, 0);
+      const at = new Vector3(p.x, p.y + h, p.z);
+      cards.quad(at, across, up, new Vector3(0, 1, 0), [c.r, c.g, c.b], tuft ? GRASS : LEAF);
+    }
+    ofs(2, p.y);
+  }
+  const g = cards.build();
+  g.setAttribute("foot", new Float32BufferAttribute(foot, 1));
+  return g;
+}
+/** The plants' material: the atlas, cut out; no snow dusted on them — they lie down into their foot as
+ *  it comes (wxSnow), gone under it. Through the Grounds' hook (`userData.grounds`). */
+export function plantMaterial<M extends Material & { map: unknown; alphaTest: number }>(m: M): M {
+  lifeTreeMaterial(m);
+  m.userData.wx = "none";
+  m.userData.grounds = {
+    key: "-plants",
+    patch(sh: { uniforms: Record<string, unknown>; vertexShader: string }) {
+      sh.uniforms.plSnow = wx.wxSnow;
+      sh.vertexShader = sh.vertexShader
+        .replace("#include <common>", "#include <common>\nattribute float foot;\nuniform float plSnow;")
+        .replace(
+          "#include <begin_vertex>",
+          "#include <begin_vertex>\ntransformed.y = mix(transformed.y, foot - 0.05, smoothstep(0.2, 0.55, plSnow));",
+        );
+    },
+  };
+  return m;
+}
+
 // (the campus's woods reach these through the hooks: its module doesn't import this one)
 lifeDress.trees = {
   leafy: lifeLeafyGeometry,
@@ -303,4 +441,8 @@ lifeDress.trees = {
     lifeTreeMaterial(m as Material & { map: unknown; alphaTest: number });
   },
   depth: lifeTreeDepth,
+  plants: lifePlantsGeometry,
+  plantMaterial: (m) => {
+    plantMaterial(m as Material & { map: unknown; alphaTest: number });
+  },
 };

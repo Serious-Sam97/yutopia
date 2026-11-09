@@ -56,7 +56,14 @@ import {
 import { type BlockData, blockData, TREE_KINDS } from "./land-block";
 import { landPool } from "./land-pool";
 import { lifeDress } from "./life-dress";
-import { lifeLeafyGeometry, lifePineGeometry, lifeTreeDepth, lifeTreeMaterial, solidUV } from "./life-trees";
+import {
+  lifeBushGeometry,
+  lifeLeafyGeometry,
+  lifePineGeometry,
+  lifeTreeDepth,
+  lifeTreeMaterial,
+  solidUV,
+} from "./life-trees";
 import type { Themes } from "./sky";
 import { boulderGeometry, logGeometry, shrubGeometry, stoneGeometry, stumpGeometry } from "./woods3d";
 import { snowShadow, wx } from "./wx3d";
@@ -278,7 +285,7 @@ if (vFade < 0.999) {
       crowned(farBirchGeometry(), [0.38, 0.48, 0.25], 0.62, 0.26, true),
       crowned(farBareGeometry(), [0.3, 0.39, 0.2], 0.6, 0.3, true),
       // the woods' floor (woods3d.ts)
-      shrubGeometry(r),
+      life ? lifeBushGeometry(r) : shrubGeometry(r),
       stumpGeometry(r),
       logGeometry(r),
       stoneGeometry(r),

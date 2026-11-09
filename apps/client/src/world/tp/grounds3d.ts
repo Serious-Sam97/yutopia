@@ -2846,6 +2846,46 @@ export class Grounds3 {
     }
     return this.slate;
   }
+  /** (plan 73 phase 8.2, the life look) A house's garden: a flower bed along each side in one of a few
+   *  colours, a bush at each front corner, tufts along the back and about the yard (tp/life-trees.ts
+   *  through the hooks; they lie down into the ground as the snow comes). */
+  private housePlants(b: Building) {
+    const lt = lifeDress.out ? lifeDress.trees : undefined;
+    if (!lt) return;
+    const r = groundsRng(b.x0 * 13 + b.z0 * 7 + 5);
+    const FLOWERS = [0xe7c25a, 0xd9667a, 0xf2efe6, 0x9b6fc4, 0xe58c4a];
+    const bed = FLOWERS[Math.floor(r() * FLOWERS.length)];
+    const bed2 = FLOWERS[Math.floor(r() * FLOWERS.length)];
+    const items: Parameters<typeof lt.plants>[0] = [];
+    const put = (kind: "tuft" | "flower" | "bush", x: number, z: number, hex?: number, sc?: number) =>
+      items.push({ kind, x, y: groundAt(x, z), z, hex, s: sc });
+    const { x0, z0, x1, z1 } = b;
+    const nx = b.face === "e" ? 1 : -1;
+    const fx = b.face === "e" ? x1 : x0;
+    const back = b.face === "e" ? x0 : x1;
+    for (const [z, out] of [
+      [z0, -1],
+      [z1, 1],
+    ] as const) {
+      for (let x = x0 + 0.7; x < x1 - 0.7; x += 0.3)
+        for (const row of [0, 1]) put("flower", x + row * 0.15, z + out * (0.35 + row * 0.25), row ? bed2 : bed);
+      put("bush", fx + nx * 0.8, z + out * 0.8, undefined, 1 + r() * 0.3);
+    }
+    for (let z = z0; z < z1; z += 0.6) put("tuft", back - nx * (0.35 + r() * 0.3), z + r() * 0.3);
+    for (let i = 0; i < 26; i++) {
+      const a = r() * Math.PI * 2;
+      const d = 1.6 + r() * 3.5;
+      const x = (x0 + x1) / 2 + Math.cos(a) * ((x1 - x0) / 2 + d);
+      const z = (z0 + z1) / 2 + Math.sin(a) * ((z1 - z0) / 2 + d);
+      put("tuft", x, z, undefined, 0.8 + r() * 0.5);
+    }
+    if (!this.plantMat) {
+      this.plantMat = this.keep(litMaterial({ vertexColors: true }));
+      lt.plantMaterial(this.plantMat);
+    }
+    this.add(this.keep(lt.plants(items, r)), this.plantMat, "receive");
+  }
+  private plantMat: Material | null = null;
   /** (plan 73 phase 8) A way's painting with the library's `id` underfoot (its relief and roughness by
    *  where it is: tp/kit-mats.ts groundRelief) — once a material (they're shared). */
   private worn<M extends Material>(m: M, id: string): M {
@@ -4451,6 +4491,7 @@ export class Grounds3 {
     const g = new G();
     this.wallsUV(g, b, y0, H, 3);
     this.add(g.build(), this.relief(this.lambert(0xffffff, siding, false), "pine", 3));
+    this.housePlants(b);
     const r = new G();
     const wallHex = new Color(hex).getHex();
     // the roof: along the street (a side gable) or end on to it (a front gable)
