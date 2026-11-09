@@ -13,6 +13,7 @@ import { useEffect, useRef } from "react";
 //   ?kit=old                      today's models (flat, one colour a part) under the same light
 //   ?set=sofa,chair:2,…           kinds (and looks) of your own; ?kind=chair  every look of a kind
 //   ?hour=22                      night: the lamps lit, the sun out
+//   ?near=1                       low and close (small things: the desktop's)
 //   ?col=3                        close on one of the row      ?spin=0.6  the row turned (radians)
 // window.__life.ready once drawn and the textures in (e2e/life-bench.mts `things:`).
 const SAMPLE = ["sofa:0", "armchair:1", "chair:0", "dining_table:0", "desk:0", "bookcase:0", "lamp:0", "plant:3"];
@@ -190,6 +191,11 @@ export default function LifeThings() {
         const d = Math.max(c.w, 0.9) * 1.25 + 0.7;
         cam.position.set(cx + d * 0.38, 1.45, c.h / 2 + d);
         cam.lookAt(cx, 0.5, c.h / 2);
+      } else if (q.get("near") === "1") {
+        // (small things — the desktop's — low and close)
+        const d = span * 0.6 + 0.7;
+        cam.position.set(span / 2 + 0.3, 0.8, d);
+        cam.lookAt(span / 2, 0.1, 0.4);
       } else {
         const d = span * 0.95 + 2;
         cam.position.set(span / 2 + 0.6, 2.3, d);

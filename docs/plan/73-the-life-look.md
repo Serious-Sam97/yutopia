@@ -835,8 +835,18 @@ draws grow by the materials in it, not by its things).
     keep the cloth their colours guess: book cloth.
   - **Left:** glass doors and shelves stay as they were (the kit's glass); a locker's and a safe's
     paint is plain, with no steel under it.
-- **6.4 Screens and the desktop** ·
-  **6.5 Decor, lights and plants** · **6.6 Kitchen, music, office** · **6.7 Play: games, chess,
+- **6.4 Screens and the desktop.** Built 2026-11-09 (stills `design/screens/life/p64`: `pair-<kind>`,
+  today's above the new; `sheet-1…12`, three kinds a sheet). 37 kinds: the TVs (CRT, console, portable,
+  wall, HD, giant), projectors, screens and the cinema's, the video wall, the security monitors, the
+  outdoor cinema, the radio-TV cabinet, the four consoles, the computer, radio, turntable and coffee
+  machine, and the desktop's fifteen (Newton's cradle, globe, fan, snow globe, aquarium, typewriter,
+  headphone stand, film camera, walkman, rolodex, pencil cup, hourglass, bonsai, Rubik's cube, the
+  Vortex figurine). Mostly plastic, glass and paint: the paint's guesses held, nothing to refine — the
+  cabinets' walnut and oak, the turntable's plinth, the radio's case take their grain, the rest is
+  smoothed and rounded. The bench's `?near=1` puts the camera low and close for the desktop's.
+  - **Left:** the screens' faces are as they were (their pictures, glows); the ceiling projector hangs
+    out of the bench's view.
+- **6.5 Decor, lights and plants** · **6.6 Kitchen, music, office** · **6.7 Play: games, chess,
   parkour, pets** · **6.8 Christmas, seasons, outdoors** — each family's materials checked and fixed
   by hand (a part the paint guessed wrong), its forms rounded where the kit's defaults don't reach
   (cushions' sag, turned legs), before/after stills of every look.
