@@ -9,7 +9,7 @@ import {
   Float32BufferAttribute,
   LatheGeometry,
   Matrix4,
-  MeshLambertMaterial,
+  type MeshLambertMaterial,
   Quaternion,
   Shape,
   SphereGeometry,
@@ -21,6 +21,7 @@ import {
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { celBands } from "../cel";
+import { litMaterial } from "../look/lit";
 
 // The furniture kit (docs/plan/67-the-furniture.md, phase 0's mock; phase 1 grows it): things
 // built in metres from real shapes — bevelled boxes, lathed profiles, tubes, extrusions, puffed
@@ -384,13 +385,13 @@ const lerp3 = (a: V3, b: V3, k: number): V3 => [
 
 /** Soft Lambert, as the world's things are lit today. */
 export function lambert(): MeshLambertMaterial {
-  return new MeshLambertMaterial({ vertexColors: true });
+  return litMaterial({ vertexColors: true });
 }
 
 /** Cel, as the people are shaded (world/cel.ts, their bands), or (`strong`) the bench's bolder one —
  *  a deeper, harder shadow and a third band — over Lambert. */
 export function toon(strong = false): MeshLambertMaterial {
-  const m = new MeshLambertMaterial({ vertexColors: true });
+  const m = litMaterial({ vertexColors: true });
   const bands = strong
     ? `  vec3 n = normalize(vCelN);
   float l = dot(n, normalize(vec3(-0.6, 0.5, 0.62)));

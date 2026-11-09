@@ -48,7 +48,7 @@ import {
   type Material,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
+  type MeshLambertMaterial,
   NearestFilter,
   type Object3D,
   RedFormat,
@@ -66,6 +66,7 @@ import { ChessMen3, isBoard } from "../furn/chessmen3d";
 import { animateLive } from "../furn/liveparts";
 import { isNative, isNativeDress, liveInto, nativeDressInto, nativeInto, openingInto } from "../furn/native";
 import { N_HALF, N_WALL, nativePost, nativeWall } from "../furn/walls-native";
+import { litMaterial } from "../look/lit";
 import { CEL, fadePiece, type Piece, yuLit } from "../look/yulit";
 import { boxInParent, type Slab } from "./below-cull";
 import { type Geo, Out } from "./kit3d";
@@ -152,12 +153,12 @@ const LIVE_MAX = 64;
 export class World3 {
   readonly root = new Group();
   readonly materials = {
-    lit: new MeshLambertMaterial({ vertexColors: true }),
+    lit: litMaterial({ vertexColors: true }),
     glow: new MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
-    clear: new MeshLambertMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: DoubleSide }),
+    clear: litMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: DoubleSide }),
     // the glass as two meshes, its back faces then its front faces (twoSided, below)
-    clearBack: new MeshLambertMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: BackSide }),
-    clearFront: new MeshLambertMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: FrontSide }),
+    clearBack: litMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: BackSide }),
+    clearFront: litMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: FrontSide }),
     ink: new LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }),
   };
   picks: Pick3[] = [];
@@ -516,7 +517,7 @@ export class World3 {
       const geo = new ExtrudeGeometry(shape, { depth: SLAB, bevelEnabled: false });
       geo.rotateX(-Math.PI / 2);
       geo.translate(0, d.over - SLAB, 0);
-      const mat = new MeshLambertMaterial({ color: DECK_COLOR[d.top] ?? 0x8f6038 });
+      const mat = litMaterial({ color: DECK_COLOR[d.top] ?? 0x8f6038 });
       this.light(mat);
       const mesh = new Mesh(geo, mat);
       mesh.receiveShadow = true;
@@ -548,10 +549,10 @@ export class World3 {
     if (!this.roofs?.length) return;
     const root = new Group();
     const mats = {
-      slope: new MeshLambertMaterial({ color: 0x585e66, side: DoubleSide }),
-      gable: new MeshLambertMaterial({ color: 0xefe4cc, side: DoubleSide }),
-      flat: new MeshLambertMaterial({ color: 0x6f6a62, side: DoubleSide }),
-      edge: new MeshLambertMaterial({ color: 0x3b3029, side: DoubleSide }),
+      slope: litMaterial({ color: 0x585e66, side: DoubleSide }),
+      gable: litMaterial({ color: 0xefe4cc, side: DoubleSide }),
+      flat: litMaterial({ color: 0x6f6a62, side: DoubleSide }),
+      edge: litMaterial({ color: 0x3b3029, side: DoubleSide }),
     };
     const ink = new LineBasicMaterial({ color: 0x1e1712 });
     for (const r of this.roofs) {
@@ -645,7 +646,7 @@ export class World3 {
     const geo = new BufferGeometry();
     geo.setAttribute("position", new Float32BufferAttribute(pos, 3));
     geo.computeVertexNormals();
-    const mat = new MeshLambertMaterial({ color: 0xd9ccb0 });
+    const mat = litMaterial({ color: 0xd9ccb0 });
     this.light(mat);
     const mesh = new Mesh(geo, mat);
     mesh.name = "ceiling";
@@ -1370,7 +1371,7 @@ export class World3 {
         polygonOffsetFactor: -1,
         polygonOffsetUnits: -1,
       };
-      const mat = dc.glow ? new MeshBasicMaterial({ ...common, toneMapped: false }) : new MeshLambertMaterial(common);
+      const mat = dc.glow ? new MeshBasicMaterial({ ...common, toneMapped: false }) : litMaterial(common);
       if (!dc.glow) this.light(mat);
       built.dispose.push(geo, mat);
       const m = new Mesh(geo, mat);
@@ -1540,7 +1541,7 @@ export class World3 {
         const tex = new CanvasTexture(plan);
         tex.colorSpace = SRGBColorSpace;
         tex.anisotropy = this.anisotropy;
-        const mat = new MeshLambertMaterial({ map: tex });
+        const mat = litMaterial({ map: tex });
         this.light(mat);
         const geo = new BufferGeometry();
         geo.setAttribute("position", new Float32BufferAttribute(pos, 3));
@@ -1596,7 +1597,7 @@ export class World3 {
       if (had?.sig === sig) continue;
       if (had) this.liveRoot.remove(had.group);
       if (!this.glassMat) {
-        this.glassMat = new MeshLambertMaterial({
+        this.glassMat = litMaterial({
           vertexColors: true,
           transparent: true,
           opacity: 0.42,

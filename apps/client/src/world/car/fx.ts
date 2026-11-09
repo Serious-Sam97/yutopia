@@ -14,7 +14,7 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
+  type MeshLambertMaterial,
   MeshStandardMaterial,
   MultiplyBlending,
   Object3D,
@@ -33,6 +33,7 @@ import {
   type WebGLRenderer,
   WebGLRenderTarget,
 } from "three";
+import { litMaterial } from "../look/lit";
 import type { Sedan } from "../tp/car/sedan";
 import { windscreenRain, windscreenSnow } from "../tp/car/textures";
 import { patchGrounds } from "../tp/light3d";
@@ -625,7 +626,7 @@ export class BaySnow {
   private key = "";
   private lot = lotLayout();
   constructor() {
-    const m = new MeshLambertMaterial({ vertexColors: true });
+    const m = litMaterial({ vertexColors: true });
     patchGrounds(m);
     // (a geometry from the first: an empty one, no position, is a GL error every draw)
     this.mesh = new Mesh(baySnow(this.lot, []), m);

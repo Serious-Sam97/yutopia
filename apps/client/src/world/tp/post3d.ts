@@ -3,9 +3,11 @@ import {
   CustomBlending,
   DepthTexture,
   HalfFloatType,
+  Mesh,
   OneFactor,
   type PerspectiveCamera,
-  type Scene,
+  PlaneGeometry,
+  Scene,
   Vector2,
   type WebGLRenderer,
   WebGLRenderTarget,
@@ -16,6 +18,8 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { litCap } from "../art/daylight";
+import { lifeShoulder } from "../look/life-tone";
+import { isLife } from "../look/look-mode";
 import { InkPass } from "./ink3d";
 
 // High quality's finish: screens, lamps and
@@ -62,6 +66,39 @@ const FINISH = {
     }`,
 };
 
+// The life look's finish (docs/plan/73, phase 2.3; tried by phase 0a's probe): a tone curve — the
+// shoulder of Khronos PBR Neutral (three's NeutralToneMapping) without its toe, which put out the
+// night's faint moonlit asphalt — and a gentle S for depth; the grade milder (a touch warm in the
+// light, a touch cool in the shade), a little more colour, a lighter vignette, a whisper of grain.
+const LIFE_FINISH = {
+  uniforms: {
+    tDiffuse: { value: null },
+    frame: { value: 0 },
+    grain: { value: 0.006 },
+    res: { value: new Vector2(1, 1) },
+  },
+  vertexShader: FINISH.vertexShader,
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform float frame; uniform float grain; uniform vec2 res; varying vec2 vUv;
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    ${lifeShoulder("lifeShoulder")}
+    void main() {
+      vec4 s = texture2D(tDiffuse, vUv);
+      vec4 c = sRGBTransferOETF(vec4(clamp(lifeShoulder(max(s.rgb, 0.0)), 0.0, 1.0), s.a));
+      float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+      c.rgb *= mix(vec3(0.97, 0.99, 1.03), vec3(1.02, 1.0, 0.97), smoothstep(0.15, 0.75, l));
+      c.rgb = mix(vec3(l), c.rgb, 1.12);
+      c.rgb = mix(c.rgb, c.rgb * c.rgb * (3.0 - 2.0 * c.rgb), 0.22);
+      float d = distance(vUv, vec2(0.5)) / 0.7071;
+      float v = smoothstep(0.45, 1.0, d) * 0.16;
+      c.rgb = mix(c.rgb, vec3(0.08, 0.06, 0.05), v);
+      c.a = mix(c.a, 1.0, v);
+      float n = hash(floor(vUv * res) + frame) - 0.5;
+      c.rgb += n * grain * c.a;
+      gl_FragColor = c;
+    }`,
+};
+
 export class Post3 {
   private composer: EffectComposer;
   private bloom: UnrealBloomPass;
@@ -70,6 +107,9 @@ export class Post3 {
   private over: RenderPass | null = null; // first person's hands, over the room (its depth cleared)
 
   private ink: InkPass;
+  /** the life look's ground-truth AO on High (loaded on its own: the classic look never pays for it) */
+  private ao: { setSize(w: number, h: number): void; dispose(): void; enabled: boolean } | null = null;
+  private readonly life = isLife();
 
   constructor(
     renderer: WebGLRenderer,
@@ -85,6 +125,8 @@ export class Post3 {
     this.composer.addPass(new RenderPass(scene, camera));
     this.ink = new InkPass(camera);
     this.composer.addPass(this.ink);
+    // (the life look draws no ink: docs/plan/73, F4)
+    this.ink.enabled = !this.life;
     this.bloom = new UnrealBloomPass(new Vector2(256, 256), 0, 0.62, 0.72);
     // (a stray NaN pixel — a degenerate normal somewhere — blurred out by the
     // bloom blacked out the whole frame after dark: the bloom never takes one in)
@@ -102,12 +144,54 @@ export class Post3 {
     bm.blendSrcAlpha = ZeroFactor;
     bm.blendDstAlpha = OneFactor;
     this.composer.addPass(this.bloom);
-    this.finish = new ShaderPass(FINISH);
+    this.finish = new ShaderPass(this.life ? LIFE_FINISH : FINISH);
     if (lite) this.finish.uniforms.grain.value = 0;
     this.composer.addPass(this.finish);
+    if (this.life && !lite) void this.addAO(scene, camera, renderer);
   }
 
+  /** The life look's AO (High): three's GTAO, fed the frame's own depth — the one the ink reads; its own
+   *  depth pass drew what the view hides around its render, a black square in the sky (phase 0a). */
+  private async addAO(scene: Scene, camera: PerspectiveCamera, renderer: WebGLRenderer) {
+    const { GTAOPass } = await import("three/addons/postprocessing/GTAOPass.js");
+    if (this.disposed) return;
+    const size = renderer.getDrawingBufferSize(new Vector2());
+    const ao = new GTAOPass(scene, camera, size.x, size.y);
+    ao.blendIntensity = 1;
+    ao.updateGtaoMaterial({ radius: 1.4, distanceFallOff: 1, thickness: 2, scale: 1.6, samples: 16 });
+    ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 10, rings: 3, samples: 16 });
+    // (pointed at the frame's depth now, and its shaders compiled while it loads: no recompile and no
+    // hitch on its first frame in play)
+    const rt = this.composer.renderTarget1;
+    if (rt.depthTexture) ao.setGBuffer(rt.depthTexture);
+    const warm = new Scene();
+    const quad = new PlaneGeometry(2, 2);
+    for (const m of [ao.gtaoMaterial, ao.pdMaterial, ao.blendMaterial]) if (m) warm.add(new Mesh(quad, m));
+    await renderer.compileAsync(warm, camera).catch(() => {});
+    quad.dispose();
+    if (this.disposed) {
+      ao.dispose();
+      return;
+    }
+    const render = ao.render.bind(ao);
+    let depth: unknown = rt.depthTexture;
+    ao.render = (r, w, rb, ...rest) => {
+      // (the composer's two targets take turns frame to frame: only the depth's uniform follows them,
+      // its shaders the same for either)
+      if (rb.depthTexture && rb.depthTexture !== depth) {
+        depth = rb.depthTexture;
+        ao.setGBuffer(rb.depthTexture);
+      }
+      render(r, w, rb, ...rest);
+    };
+    // (right after the scene's pass: before the bloom and the finish)
+    this.composer.insertPass(ao, 1);
+    this.ao = ao;
+  }
+  private disposed = false;
+
   setSize(w: number, h: number, ratio: number) {
+    this.ao?.setSize(w * ratio, h * ratio);
     this.composer.setPixelRatio(ratio);
     this.composer.setSize(w, h);
     // bloom at half size is plenty (and cheap)
@@ -135,7 +219,8 @@ export class Post3 {
       this.over = new RenderPass(over.scene, over.camera);
       this.over.clear = false;
       this.over.clearDepth = true;
-      this.composer.insertPass(this.over, 2); // (after the ink: the hands get none)
+      // (after the ink — and the AO, in the life look: the hands get neither)
+      this.composer.insertPass(this.over, this.composer.passes.indexOf(this.ink) + 1);
     }
     if (this.over) {
       this.over.enabled = !!over;
@@ -150,6 +235,8 @@ export class Post3 {
   }
 
   dispose() {
+    this.disposed = true;
+    this.ao?.dispose();
     this.over?.dispose();
     this.composer.dispose();
     this.bloom.dispose();

@@ -6,13 +6,14 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
+  type MeshLambertMaterial,
   type PlaneGeometry,
   Sprite,
   SpriteMaterial,
   Vector3,
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { litMaterial } from "../../look/lit";
 import { carGeometry } from "../campus";
 import { landLight, patchGrounds } from "../light3d";
 import { Person3D } from "../person3d";
@@ -123,7 +124,7 @@ export class Vehicles {
 
   vehicleMat(): MeshLambertMaterial {
     if (!this.vehMat) {
-      this.vehMat = new MeshLambertMaterial({ vertexColors: true });
+      this.vehMat = litMaterial({ vertexColors: true });
       patchGrounds(this.vehMat);
     }
     return this.vehMat;

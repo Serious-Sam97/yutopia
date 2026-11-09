@@ -7,9 +7,9 @@ import {
   LineBasicMaterial,
   LineSegments,
   Mesh,
-  MeshLambertMaterial,
   type Scene,
 } from "three";
+import { litMaterial } from "../look/lit";
 
 // A thing as god mode's things tool shows it (docs/plan/53-the-god-mode.md, phase 8; the mock
 // 06-things): the box it takes up, on the land, turned; green where it can go, red where it
@@ -26,7 +26,7 @@ export class ThingGhost {
   private model: Group | null = null;
   private modelKey = "";
   // (over everything, as the box: what's held is seen through the trees it'd stand among)
-  private readonly modelMat = new MeshLambertMaterial({
+  private readonly modelMat = litMaterial({
     vertexColors: true,
     transparent: true,
     opacity: 0.9,

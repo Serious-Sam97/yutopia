@@ -3,7 +3,8 @@ import { beamAt } from "@yutopia/shared/beam";
 import { waterAt } from "@yutopia/shared/grounds";
 import { LONG_ROAD } from "@yutopia/shared/longroad";
 import { cellOf } from "@yutopia/shared/structure";
-import { type Color, type Fog, MeshLambertMaterial, Vector3 } from "three";
+import { type Color, type Fog, Vector3 } from "three";
+import { litMaterial } from "../../look/lit";
 import { Bubbles } from "../bubbles3d";
 import { GROUND } from "../campus";
 import { FogBanks } from "../fog-banks";
@@ -335,7 +336,7 @@ export class Mood {
 
   snowFall(b: Body3, p3: Person3D, dt: number, hidden: boolean) {
     if (!Person3D.snowMat) {
-      Person3D.snowMat = new MeshLambertMaterial({ color: 0xf2f5f8 });
+      Person3D.snowMat = litMaterial({ color: 0xf2f5f8 });
       Person3D.snowMat.userData.wx = "none"; // (it is snow: no dusting on it — wx3d.ts)
       patchGrounds(Person3D.snowMat);
     }

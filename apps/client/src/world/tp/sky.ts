@@ -253,6 +253,13 @@ export class Surroundings {
   // (the land's light as the hour has it: a lightning's flash is laid over it — update)
   private landBase = new Color(1, 1, 1);
 
+  /** The dome's colours as drawn now (by the hour, the weather and the fog; linear): the life look's
+   *  sky light is made from them (look/life-sky.ts). */
+  domeColours(): { top: Color; mid: Color; bot: Color } {
+    const u = this.domeMat.uniforms;
+    return { top: u.top.value as Color, mid: u.mid.value as Color, bot: u.bot.value as Color };
+  }
+
   // the sky by the hour (setDay), before the morning fog whites it out (fogSky)
   private sky = { top: new Color(), mid: new Color(), bot: new Color(), stars: 0 };
   private fog = { k: 0, wall: 0, col: new Color() };

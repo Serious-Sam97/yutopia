@@ -40,6 +40,7 @@ import {
   StaticDrawUsage,
   Vector3,
 } from "three";
+import { litMaterial } from "../look/lit";
 import { BARE_LEAVES, BIRCH_LEAVES, bareTree3, crowned, snowCanvas, tinted } from "./campus";
 import { FarLand } from "./far3d";
 import {
@@ -163,7 +164,7 @@ export class GroundsStream {
     this.snowTex.wrapS = RepeatWrapping;
     this.snowTex.wrapT = RepeatWrapping;
     this.snowTex.anisotropy = 8;
-    this.landMat = new MeshLambertMaterial({ map: this.snowTex, vertexColors: true });
+    this.landMat = litMaterial({ map: this.snowTex, vertexColors: true });
     // (the land to the snow's layer: its snow is the snow; its picture the dusting's grain — wx3d.ts)
     this.landMat.userData.wx = "land";
     wx.wxTex.value = this.snowTex;
@@ -171,7 +172,7 @@ export class GroundsStream {
     patch(this.landMat);
     // the trees' kinds, one pool each (and its shadow casters)
     const r = T.rng(9);
-    const treeMat = new MeshLambertMaterial({ vertexColors: true });
+    const treeMat = litMaterial({ vertexColors: true });
     treeMat.userData.wx = "tree";
     patch(treeMat);
     // a tree between the camera and you goes (as walls fade): its instance

@@ -7,12 +7,13 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
+  type MeshLambertMaterial,
   type Object3D,
   SphereGeometry,
   TubeGeometry,
   Vector3,
 } from "three";
+import { litMaterial } from "../look/lit";
 import { mergeWith } from "./merge-static";
 import { type PadLook, ps1Pad } from "./pads3d";
 
@@ -62,7 +63,7 @@ export class GamesIn3D {
   private dark: MeshLambertMaterial;
   private red = new MeshBasicMaterial({ color: 0xff4a2a, toneMapped: false });
   private green = new MeshBasicMaterial({ color: 0x7dff7a, toneMapped: false });
-  private ledOff = new MeshLambertMaterial({ color: 0x4a1d18 });
+  private ledOff = litMaterial({ color: 0x4a1d18 });
   private padLook: PadLook | null = null; // the disc console's pad's materials
   private padMats = new Map<string, MeshLambertMaterial>();
   private tubes: Tube[] = [];
@@ -85,7 +86,7 @@ export class GamesIn3D {
   }
 
   private lit(color: number): MeshLambertMaterial {
-    const m = new MeshLambertMaterial({ color });
+    const m = litMaterial({ color });
     this.patch(m);
     return m;
   }

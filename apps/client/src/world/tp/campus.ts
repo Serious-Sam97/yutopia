@@ -34,7 +34,7 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
+  type MeshLambertMaterial,
   MultiplyBlending,
   Plane,
   PlaneGeometry,
@@ -51,6 +51,7 @@ import {
   Vector3,
 } from "three";
 import type { Daylight } from "../art/daylight";
+import { litMaterial } from "../look/lit";
 import type { Themes } from "./sky";
 import { driftAlong, flatSnow, snowBox } from "./snow3d";
 import type { WallEdges } from "./walls3d";
@@ -1562,7 +1563,7 @@ export class Campus {
     this.fx1 = W + 0.5;
     this.fz1 = H + 0.5;
     const { map: facadeMap, lit, ledge } = facadeCanvases(T);
-    this.facade = new MeshLambertMaterial({
+    this.facade = litMaterial({
       map: facadeMap,
       emissive: 0xffffff,
       emissiveMap: lit,
@@ -1580,7 +1581,7 @@ export class Campus {
       this.mainFacade = this.lambert(0xffffff, clad.map);
       this.mainFacade.userData.wxLedge = clad.ledge;
       const pane = paneCanvases(T);
-      this.panes = new MeshLambertMaterial({
+      this.panes = litMaterial({
         map: pane.map,
         emissive: 0xffffff,
         emissiveMap: pane.lit,
@@ -1851,7 +1852,7 @@ export class Campus {
       [W + SKIN, 2.9, bz + 1.55],
       [0, 0, 1],
     );
-    const bgMat = new MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.55, side: DoubleSide });
+    const bgMat = litMaterial({ vertexColors: true, transparent: true, opacity: 0.55, side: DoubleSide });
     this.add(bridgeGlass.build(), bgMat);
     this.tinted.push([bgMat, new Color(1, 1, 1)]);
 
@@ -1912,7 +1913,7 @@ export class Campus {
     const carMat = this.lambert(0xffffff, undefined, true);
     if (solids.length) this.add(mergeGeometries(solids, false), carMat);
     for (const s of solids) s.dispose();
-    const carGlass = new MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.92 });
+    const carGlass = litMaterial({ vertexColors: true, transparent: true, opacity: 0.92 });
     if (glasses.length) this.add(mergeGeometries(glasses, false), carGlass);
     this.tinted.push([carGlass, new Color(1, 1, 1)]);
     for (const s of glasses) s.dispose();
@@ -2043,7 +2044,7 @@ export class Campus {
         [ex - 1.1, GROUND + 3.3, ez + 4],
         [0, 0, 1],
       );
-      const vm = new MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.45, side: DoubleSide });
+      const vm = litMaterial({ vertexColors: true, transparent: true, opacity: 0.45, side: DoubleSide });
       this.add(vest.build(), vm);
       this.tinted.push([vm, new Color(1, 1, 1)]);
       // warm light inside the vestibule at night
@@ -2102,7 +2103,7 @@ export class Campus {
       const slushTex = new CanvasTexture(slushCanvas(T));
       slushTex.colorSpace = SRGBColorSpace;
       this.disposables.push(slushTex);
-      const slushMat = new MeshLambertMaterial({ map: slushTex, transparent: true, depthWrite: false });
+      const slushMat = litMaterial({ map: slushTex, transparent: true, depthWrite: false });
       // (trodden snow: there as the snow lies — docs/plan/65)
       this.slushMat = slushMat;
       this.tinted.push([slushMat, new Color(1, 1, 1)]);
@@ -2712,7 +2713,7 @@ export class Campus {
   }
 
   private lambert(hex: number, map?: CanvasTexture, vertex = false): MeshLambertMaterial {
-    const m = new MeshLambertMaterial({ color: hex, map: map ?? null, vertexColors: vertex });
+    const m = litMaterial({ color: hex, map: map ?? null, vertexColors: vertex });
     this.disposables.push(m);
     this.tinted.push([m, new Color(hex)]);
     return m;

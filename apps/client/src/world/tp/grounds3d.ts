@@ -93,7 +93,7 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
+  type MeshLambertMaterial,
   MeshStandardMaterial,
   Object3D,
   Quaternion,
@@ -108,6 +108,7 @@ import {
   Vector3,
 } from "three";
 import { hexOf, houseLook, shopLook } from "../grounds-look";
+import { litMaterial } from "../look/lit";
 import {
   BARE_LEAVES,
   BIRCH_LEAVES,
@@ -672,7 +673,7 @@ export class Grounds3 {
   private paintMat(kind: string): MeshLambertMaterial {
     let m = this.sh.paint.get(kind);
     if (!m) {
-      m = new MeshLambertMaterial({ vertexColors: true });
+      m = litMaterial({ vertexColors: true });
       this.sh.disp.push(m);
       paintCover(m, kind);
       this.sh.paint.set(kind, m);
@@ -921,7 +922,7 @@ export class Grounds3 {
     const cache = shared ? this.sh.lambert : this.ownLambert;
     let m = cache.get(key);
     if (!m) {
-      m = new MeshLambertMaterial({ color: hex, map: map ?? null, vertexColors: vertex });
+      m = litMaterial({ color: hex, map: map ?? null, vertexColors: vertex });
       if (wx) m.userData.wx = wx;
       if (shared) this.sh.disp.push(m);
       else this.keep(m);
@@ -1179,7 +1180,7 @@ export class Grounds3 {
         this.ribbon(w, w.w, 0, 0.05, 9, ag, span?.[0], span?.[1], w.flare ? (i) => 2 * wayHalf(w, i) : undefined);
         if (!ag.empty) {
           // (its own, as its picture is: with the way's step — wayStep)
-          const am = this.keep(new MeshLambertMaterial({ map: this.asphalt(w), vertexColors: true }));
+          const am = this.keep(litMaterial({ map: this.asphalt(w), vertexColors: true }));
           roadCover(am, w);
           this.add(ag.build(), am, "receive");
         }
@@ -1340,9 +1341,9 @@ export class Grounds3 {
     ice.polygonOffsetFactor = -1;
     ice.polygonOffsetUnits = -4;
     // (the water: see-through where it's shallow, faceted by its waves — wx3d.ts WX_WATER: plan 66 S7)
-    const wet = this.keep(new MeshLambertMaterial({ color: 0xffffff, transparent: true, flatShading: true }));
+    const wet = this.keep(litMaterial({ color: 0xffffff, transparent: true, flatShading: true }));
     wet.userData.wx = "water";
-    const under = this.keep(new MeshLambertMaterial({ color: 0x000000, side: BackSide }));
+    const under = this.keep(litMaterial({ color: 0x000000, side: BackSide }));
     under.userData.wx = "under";
     // the ice and, a little under it, the water: each vertex how far from its shore (wxSide: 0 the
     // middle, 1 a shore — signed across a ribbon, so its middle comes out between)
@@ -1540,7 +1541,7 @@ export class Grounds3 {
         g.setAttribute("position", new Float32BufferAttribute(p, 3));
         g.setAttribute("color", new Float32BufferAttribute(c, 3));
         g.computeVertexNormals();
-        this.add(g, this.keep(new MeshLambertMaterial({ vertexColors: true, side: DoubleSide })), "none");
+        this.add(g, this.keep(litMaterial({ vertexColors: true, side: DoubleSide })), "none");
       }
       const L1 = RIVER.line;
       const rw1 = riverWater();
@@ -1615,7 +1616,7 @@ export class Grounds3 {
         g.setAttribute("position", new Float32BufferAttribute(p, 3));
         g.setAttribute("color", new Float32BufferAttribute(c, 3));
         g.computeVertexNormals();
-        const m = this.keep(new MeshLambertMaterial({ vertexColors: true, side: DoubleSide }));
+        const m = this.keep(litMaterial({ vertexColors: true, side: DoubleSide }));
         this.add(g, m, "none");
       }
     }
@@ -1951,7 +1952,7 @@ export class Grounds3 {
       // kerbs cover it)
       const [z0, z1] = [l.z0 - 0.4, l.z1 + 0.4];
       c.quad([x0, 0.12, z0], [x1, 0.12, z0], [x1, 0.12, z1], [x0, 0.12, z1], [0, 1, 0]);
-      const m = this.keep(new MeshLambertMaterial({ color: 0xffffff }));
+      const m = this.keep(litMaterial({ color: 0xffffff }));
       // (it lies on the ground floor's asphalt: lit as that is, by its light map — its lamps' pools
       // — not the land's: the game's view sees to it, sky.ts)
       m.userData.onFloor = true;
@@ -2092,7 +2093,7 @@ export class Grounds3 {
       this.keep(this.facade.ledge);
     }
     const m = this.keep(
-      new MeshLambertMaterial({
+      litMaterial({
         map: this.facade.map,
         emissive: 0xffffff,
         emissiveMap: this.facade.lit,
@@ -2461,7 +2462,7 @@ export class Grounds3 {
       const gg = new G();
       for (const [ax, ay, az, bx, by, bz, c] of glow) gg.color(c).box(ax, ay, az, bx, by, bz);
       const m = this.glows(
-        this.keep(new MeshLambertMaterial({ vertexColors: true, emissive: 0xffffff, emissiveIntensity: 0 })),
+        this.keep(litMaterial({ vertexColors: true, emissive: 0xffffff, emissiveIntensity: 0 })),
         0.8,
         "windows",
       );
@@ -2680,7 +2681,7 @@ export class Grounds3 {
         tz * s,
       ]);
     const gm = this.keep(
-      new MeshLambertMaterial({
+      litMaterial({
         color: 0x6f8798,
         emissive: 0xffe2b0,
         emissiveIntensity: 0,
@@ -2728,7 +2729,7 @@ export class Grounds3 {
     gl.quad([a, y, 16.45], [b, y, 16.45], [b, y + 2.9, 16.45], [a, y + 2.9, 16.45], [0, 0, -1]);
     gl.quad([a, y, 19.55], [b, y, 19.55], [b, y + 2.9, 19.55], [a, y + 2.9, 19.55], [0, 0, 1]);
     const m = this.keep(
-      new MeshLambertMaterial({
+      litMaterial({
         vertexColors: true,
         transparent: true,
         opacity: 0.6,
@@ -2869,7 +2870,7 @@ export class Grounds3 {
       if (!m) {
         const [warm, on] = k.split("|");
         m = this.keep(
-          new MeshLambertMaterial({
+          litMaterial({
             color: 0x2c3540,
             emissive: warm === "true" ? 0xffc87a : 0xbcd2ea,
             emissiveIntensity: 0,
@@ -2939,7 +2940,7 @@ export class Grounds3 {
     gl.quad([b.x0, yb, b.z0], [b.x0, yb, b.z1], [b.x0, yt, b.z1], [b.x0, yt, b.z0], [-1, 0, 0]);
     gl.quad([b.x1, yb, b.z0], [b.x1, yb, b.z1], [b.x1, yt, b.z1], [b.x1, yt, b.z0], [1, 0, 0]);
     const m = this.keep(
-      new MeshLambertMaterial({
+      litMaterial({
         color: 0x51606b,
         emissive: 0xffcf8a,
         emissiveIntensity: 0,
@@ -2985,11 +2986,7 @@ export class Grounds3 {
     wl.box(px - 0.1, py + 1.15, pz - 0.1, px + 0.1, py + 1.3, pz + 0.1);
     this.add(
       wl.build(),
-      this.glows(
-        this.keep(new MeshLambertMaterial({ color: 0x5a1a14, emissive: 0xff3a1a, emissiveIntensity: 0 })),
-        1.2,
-        "lamp",
-      ),
+      this.glows(this.keep(litMaterial({ color: 0x5a1a14, emissive: 0xff3a1a, emissiveIntensity: 0 })), 1.2, "lamp"),
       "none",
     );
     // the sign by the road
@@ -3023,11 +3020,11 @@ export class Grounds3 {
     const t = this.keep(tex(c, false));
     const m = lit
       ? this.glows(
-          this.keep(new MeshLambertMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0 })),
+          this.keep(litMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0 })),
           0.6,
           "sign",
         )
-      : this.keep(new MeshLambertMaterial({ map: t }));
+      : this.keep(litMaterial({ map: t }));
     const board = new Mesh(this.keep(new BoxGeometry(w, h, 0.08)), [
       this.lambert(0x2a2e33, undefined, false),
       this.lambert(0x2a2e33, undefined, false),
@@ -3668,7 +3665,7 @@ export class Grounds3 {
           );
       }
     // (its own material, both sides of the cards — the cached ones are shared; one for the field)
-    this.cornMat ??= this.keep(new MeshLambertMaterial({ vertexColors: true, side: DoubleSide }));
+    this.cornMat ??= this.keep(litMaterial({ vertexColors: true, side: DoubleSide }));
     this.add(corn.build(), this.cornMat);
   }
   private cornMat: MeshLambertMaterial | null = null;
@@ -3859,9 +3856,7 @@ export class Grounds3 {
       [b.x1, y0 + 2.4, b.z0],
       [1, 0, 0],
     );
-    const m = this.keep(
-      new MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.45, side: DoubleSide }),
-    );
+    const m = this.keep(litMaterial({ vertexColors: true, transparent: true, opacity: 0.45, side: DoubleSide }));
     this.add(gl.build(), m, "none");
     this.signBoard("BUS STOP", b.x1 + 1.2, b.z1 + 0.6, 0, 1.1, 0.5, 2.1, "#1d4a7a", "#f2f2f2");
   }
@@ -4037,7 +4032,7 @@ export class Grounds3 {
     const wt = this.keep(tex(shopWindowCanvas(this.T, b.x0, tone), false));
     const win = this.glows(
       this.keep(
-        new MeshLambertMaterial({
+        litMaterial({
           map: wt,
           color: 0x404850,
           emissive: 0xffffff,
@@ -4165,7 +4160,7 @@ export class Grounds3 {
       this.add(
         ug.build(),
         this.glows(
-          this.keep(new MeshLambertMaterial({ color: 0x5a5040, emissive: 0xffd9a0, emissiveIntensity: 0 })),
+          this.keep(litMaterial({ color: 0x5a5040, emissive: 0xffd9a0, emissiveIntensity: 0 })),
           1.1,
           "windows",
         ),
@@ -4189,7 +4184,7 @@ export class Grounds3 {
         ),
       );
       const sm = this.glows(
-        this.keep(new MeshLambertMaterial({ map: st, emissive: 0xffffff, emissiveMap: st, emissiveIntensity: 0 })),
+        this.keep(litMaterial({ map: st, emissive: 0xffffff, emissiveMap: st, emissiveIntensity: 0 })),
         b.sign === "BAR" || diner ? 1.4 : 0.7,
         "sign",
       );
@@ -4680,11 +4675,7 @@ export class Grounds3 {
     this.add(g.build(), this.lambert());
     this.add(
       dials.build(),
-      this.glows(
-        this.keep(new MeshLambertMaterial({ color: 0x1d2a22, emissive: 0x9ff0b0, emissiveIntensity: 0 })),
-        0.9,
-        "sign",
-      ),
+      this.glows(this.keep(litMaterial({ color: 0x1d2a22, emissive: 0x9ff0b0, emissiveIntensity: 0 })), 0.9, "sign"),
       "none",
     );
     // the canopy's lit underside
@@ -4697,7 +4688,7 @@ export class Grounds3 {
       [0, -1, 0],
     );
     const m = this.glows(
-      this.keep(new MeshLambertMaterial({ color: 0xcfd2d4, emissive: 0xf4f8ff, emissiveIntensity: 0 })),
+      this.keep(litMaterial({ color: 0xcfd2d4, emissive: 0xf4f8ff, emissiveIntensity: 0 })),
       1.0,
       "windows",
     );
@@ -5238,9 +5229,7 @@ export class Grounds3 {
     }
     if (!posts.empty) this.add(posts.build(), this.lambert());
     if (!mesh.empty) {
-      const m = this.keep(
-        new MeshLambertMaterial({ map: chain, transparent: true, alphaTest: 0.35, side: DoubleSide }),
-      );
+      const m = this.keep(litMaterial({ map: chain, transparent: true, alphaTest: 0.35, side: DoubleSide }));
       this.add(mesh.build(), m, "cast");
     }
   }
@@ -5396,7 +5385,7 @@ export class Grounds3 {
       this.add(posts.build(), this.lambert());
       this.add(
         mesh.build(),
-        this.keep(new MeshLambertMaterial({ map: chain, transparent: true, alphaTest: 0.35, side: DoubleSide })),
+        this.keep(litMaterial({ map: chain, transparent: true, alphaTest: 0.35, side: DoubleSide })),
         "cast",
       );
       this.signBoard("DANGER\nNO CLIMBING", tx + 2.2, tz + 9.15, 0, 1.2, 0.7, 0.9, "#e9e6dc", "#8b2a22", false, false);
@@ -5511,11 +5500,7 @@ export class Grounds3 {
         lamps.box(X - 0.27, y + 1.47, zc + 1.72, X - 0.08, y + 1.62, zc + 1.88);
       this.add(
         lamps.build(),
-        this.glows(
-          this.keep(new MeshLambertMaterial({ color: 0x5a4014, emissive: 0xffb02a, emissiveIntensity: 0 })),
-          1.2,
-          "lamp",
-        ),
+        this.glows(this.keep(litMaterial({ color: 0x5a4014, emissive: 0xffb02a, emissiveIntensity: 0 })), 1.2, "lamp"),
         "none",
       );
       const drift = tinted(
@@ -5657,7 +5642,7 @@ export class Grounds3 {
       if (t.kind !== "sign" || !t.text || !this.near(t.x, t.z, 10)) continue;
       const faces = signFaces(t);
       const m = this.keep(
-        new MeshLambertMaterial({
+        litMaterial({
           map: this.keep(tex(signCanvas(this.T, t.text, 512, 205, "#3e2f24", "#efe7d4"), false)),
         }),
       );

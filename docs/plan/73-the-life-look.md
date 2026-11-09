@@ -223,6 +223,76 @@ out). An environment map from the sky per hour, cached and disposed (the car PMR
 72 is the warning). Soft shadows, AO per tier, bloom kept subtle by day. The ink pass and finish
 grade are reworked: the grade stays, the ink goes. Night keeps the lamps' pools and lit windows.
 
+**Steps (planned 2026-11-08, from the 0a probe's lessons):**
+- **2.1 One switch, one factory.** `look/look-mode.ts`: the look (`classic` | `life`), read once at
+  start from `?look=life` or `localStorage["yutopia:look"]` (no UI; a reload to change). `look/lit.ts`:
+  `litMaterial(params)` — exactly today's MeshLambertMaterial in classic, a MeshStandardMaterial
+  (rough, not metal; glass smooth) in life — replacing the 106 `new MeshLambertMaterial(` in the world's
+  code in one mechanical pass. Classic must stay pixel-identical (A/B stills).
+  **Built 2026-11-08:** `look/look-mode.ts`, `look/lit.ts` (`litMaterial`, `lifeMaterials`, `isLit`);
+  90 constructors in 22 files replaced (the game's own: grounds3d, build, campus, spot3d, view,
+  vehicles3d, tables3d, far3d, grounds-stream, games3d, build3d, arms3d, furn/kit, chessmen3d,
+  stand3d, parts/vehicles, parts/mood, god/thing-ghost, furn/pictures, car/fx, car/cars, kart/park3d;
+  the stills', sandboxes' and dev pads' left as they are). Classic builds the very same Lambert
+  (identical by construction); the world loads in both looks with no page errors; 303/303 tests.
+- **2.2 The sky's light.** An environment from the hour's sky (PMREM, made again as the hour moves,
+  cached by the hour), on the life materials only (as `scene.environment` it reached unlit ones), its
+  strength a shared uniform in the yulit family — lmSkyLeft × the night — so the dark keeps dark.
+  **Built 2026-11-08:** `look/life-sky.ts` (LifeSky: a small gradient sky from `Surroundings.domeColours()`
+  — the dome as drawn, by the hour, the weather and the fog — PMREM'd again when its colours move, at
+  most twice a second; made with the renderer, before any material draws); `lit.ts setLifeEnv` puts it
+  on every life material (made ones and those to come) with strength 0.35 × lmSkyLeft × (1 − 0.9·night).
+  The view updates it each frame before its render. Noon picks up the sky's fill and sheen; 22h stays as
+  dark as classic; unlit signs and windows untouched; no page errors.
+- **2.3 The finish.** Post3 in life: the Neutral shoulder + a gentle S, the grade milder, no ink pass;
+  GTAO on the frame's own depth on High; bloom as today at night. Medium: the curve, no AO. Low (no
+  post): the renderer's own NeutralToneMapping.
+  **Built 2026-11-08:** `tp/post3d.ts` in the life look: the ink pass off, `LIFE_FINISH` (the Neutral
+  shoulder without its toe, an S of 0.22, colour 1.12, a milder grade and vignette, grain 0.006), and on
+  High three's GTAO loaded on its own (`addAO`: the classic look never fetches it) and fed the frame's
+  depth; the hands' overlay pass goes after the ink wherever it is. Low and Lowest (no post): the
+  renderer's own NeutralToneMapping (set by the view in the life look). Stills on High and Low, no
+  page errors. Found: the canopy's name board was only ever the ink's outline round the letters —
+  without ink the letters stand alone; the board is phase 7's (buildings).
+- **2.4 No cel, no ink on people.** The CEL piece and celShade skipped in life; the people's line meshes
+  hidden; their bodies through the factory (today's people, until phase 4's).
+  **2.4 built 2026-11-08:** in `view.ts chars()`, the life look's bodies (and the faded ones) are
+  `litMaterial` Standard ones on the room's light, lit by the sun, the sky and the lamps; no far-leg
+  darkening; `celShade(…, 0)` — the hook stays, as it draws the clothes' patterns, its bands and rim at
+  nothing; the line materials (ink, inkAway, shadeInk) a hidden one. Stills of a person at noon and 22h.
+- **2.5 Shadows.** The sun's soft (PCF radius) on High and Medium.
+  **2.5 built 2026-11-08:** the sun's shadow radius 4 (12 samples) in the life look.
+- **2.6 Warm-up and cost.** The warm-up compiles the life programs too; program count, link time and
+  frame time per tier measured (tools/frame-cost.mjs), page budget.
+  **2.6 measured 2026-11-08** (`e2e/life-cost.mts`, this machine's GPU, the frame stepped with the GPU
+  waited on, median ms — run to run the same look varies ±1–2 ms and ±100 draws as people and land
+  stream): High studio 9.7 classic / 9.4 life (8.8 without AO), lot 10.9 / 10.8 (10.2); Medium and Low
+  within the noise of classic. Programs +2…+10 a tier. GTAO adds exactly 4 draws (its own passes; it
+  never renders a depth pass of its own) and ~0.6 ms; its shaders now compile while it loads, already
+  on the frame's depth (they were made again each frame the composer's targets swapped). Page 467.2 KB
+  (469; unchanged): the life look's code is all in lazy chunks; the probe isn't in the production build.
+  Open: the worst frame in the first 4 s after ready is ~30 ms longer in the life look — to trace in 2.7.
+- **2.7 Checks.** Classic A/B identical; life stills of the 0a spots; e2e lighting / fog / weather under
+  `?look=life`.
+  **2.7 checked 2026-11-08.** The first-seconds hitch, traced: with the clock running, a Standard
+  material works out GGX for every lamp on every pixel — ~19 lamps in an office put the life frame at
+  ~40 ms against classic's ~25. `look/life-lamps.ts` (installed by the view in the life look, before
+  anything compiles) has point and spot lamps light diffusely in the physical model (`RE_Direct_Lamp`;
+  the sun and the sky keep their sheen; other models unchanged) → life ~20–28 ms against classic ~22–23;
+  `life-lamps.test.ts` guards the chunk surgery against a three upgrade. Stills of the 0a spots in both
+  looks (`design/screens/life/p2-classic`, `p2-life`, side by side in `p2-compare`): noon, dusk and the
+  lobby and studio at night read as classic with the life light — no ink, softer shadows, AO, the
+  finish. A trap for later checks: the lot at 22h after the script's jump from noon comes out
+  lavender-lit in one run and dark with the lamps' pools in the next, in **either** look (the world's
+  pitch-dark state) — compare looks within one run, never across runs. e2e in classic: lighting,
+  weather, fog, night, people-3d green but fog.spec:87 (red on the pre-phase-2 code too) and
+  night.spec:36 (flaky, green again). In the life look (`playwright.life.config.ts`: localStorage
+  `yutopia:look`, on the Metal GPU — Chrome's software GPU stalled the walks past their timeouts): all
+  green but fog.spec:87, after one fix — night.spec:144 found the torch's beam on the snow at 0.03 (≥ 0.06
+  wanted): drawn straight to the screen, three's NeutralToneMapping put its toe back on the night. So on
+  Low and Lowest (no post) too. `look/life-tone.ts`: the finish's toe-less shoulder is now also the
+  renderer's (CustomToneMapping, `life-tone.test.ts`), one curve both ways to the screen. 305/305 tests.
+
 ### 3 — The material library
 
 Generated, tiling, tintable textures, so furniture colour picks and wardrobe colours still work:

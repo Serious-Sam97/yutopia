@@ -23,6 +23,7 @@ import {
 } from "@yutopia/shared/kart";
 import type * as THREE_NS from "three";
 import { drawBoardFace } from "../../kart/track-map";
+import { litMaterial } from "../../look/lit";
 import { Out } from "../kit3d";
 
 // The Kart Park round its circuit (docs/plan/46-the-karts.md, "the way in"): the paddock (its
@@ -625,7 +626,7 @@ function benches(e: ParkEnv) {
     g.setAttribute("position", new T3.Float32BufferAttribute(out.lit.pos, 3));
     g.setAttribute("normal", new T3.Float32BufferAttribute(out.lit.nor, 3));
     g.setAttribute("color", new T3.Float32BufferAttribute(out.lit.col, 4));
-    const m = new T3.Mesh(g, e.keep(new T3.MeshLambertMaterial({ vertexColors: true })));
+    const m = new T3.Mesh(g, e.keep(litMaterial({ vertexColors: true })));
     m.castShadow = true;
     m.receiveShadow = true;
     e.root.add(m);

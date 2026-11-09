@@ -12,13 +12,13 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
   MeshPhongMaterial,
   RingGeometry,
   SphereGeometry,
   SRGBColorSpace,
   Vector3,
 } from "three";
+import { litMaterial } from "../look/lit";
 import { paintSphere, type Q } from "../tables/ballart";
 
 // The game tables in 3D (world/tables runs them): the pool balls
@@ -373,7 +373,7 @@ export class TablesIn3D {
   // The billiard lamp: three green glass shades on a walnut bar, chains up.
   private lamp(len: number): Group {
     const g = new Group();
-    const wood = new MeshLambertMaterial({ color: 0x5b3a26 });
+    const wood = litMaterial({ color: 0x5b3a26 });
     const brass = new MeshPhongMaterial({ color: 0xc39a4a, shininess: 80 });
     const shade = new MeshPhongMaterial({ color: 0x2f6a4c, shininess: 60, side: DoubleSide });
     const inside = new MeshBasicMaterial({ color: 0xffe3b0, side: DoubleSide, toneMapped: false });
@@ -412,9 +412,9 @@ export class TablesIn3D {
     const g = new Group();
     const s = 1.26;
     const blade = 0.075 * s;
-    const red = new MeshLambertMaterial({ color: rubber || 0xb3261e });
-    const black = new MeshLambertMaterial({ color: 0x1c1a17 });
-    const wood = new MeshLambertMaterial({ color: 0xd8b07a });
+    const red = litMaterial({ color: rubber || 0xb3261e });
+    const black = litMaterial({ color: 0x1c1a17 });
+    const wood = litMaterial({ color: 0xd8b07a });
     for (const m of [red, black, wood]) this.patch(m);
     const face = (mat: Material, z: number) => {
       const m = new Mesh(new CylinderGeometry(blade, blade, 0.003 * s, 28), mat);

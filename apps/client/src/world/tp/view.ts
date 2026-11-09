@@ -66,7 +66,7 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
+  type MeshLambertMaterial,
   MeshStandardMaterial,
   type Object3D,
   OrthographicCamera,
@@ -97,6 +97,11 @@ import { daylight } from "../art/daylight";
 import type { LightWall } from "../art/light";
 import { loadPets, pets as petsArt } from "../art/pets-load";
 import type { PetModel } from "../art/pets3d";
+import { installLifeLamps } from "../look/life-lamps";
+import { LifeSky } from "../look/life-sky";
+import { setLifeTone } from "../look/life-tone";
+import { litMaterial } from "../look/lit";
+import { isLife } from "../look/look-mode";
 import type { PuffKind } from "../model";
 import { activePad } from "../pads";
 import { Arms3 } from "./arms3d";
@@ -476,6 +481,9 @@ const glassSig = (s: Structure) =>
 /** (what the layout signature can't see: the walls off the lattice) */
 const freeSig = (e: WallEdges) => (e.free.length ? JSON.stringify(e.free) : "");
 
+/** The life look's people have no ink line (plan 73 F4): their line meshes drawn with nothing. */
+const NO_LINE = new MeshBasicMaterial({ visible: false });
+
 export class ThirdPersonView {
   readonly warmup: Warmup = new Warmup(this);
 
@@ -555,6 +563,8 @@ export class ThirdPersonView {
   live = new LiveSurfaces();
   light = new Light3();
   post: Post3 | null = null;
+  /** the life look's sky light (plan 73 phase 2.2; null in the classic look) */
+  lifeSky: LifeSky | null = null;
   quality: Quality = "high";
   lamps = LAMPS;
   nightLevel = 0;
@@ -783,6 +793,15 @@ export class ThirdPersonView {
       alpha: true,
     });
     this.renderer.setClearAlpha(1);
+    // (the life look's sky light, made before any material is drawn: plan 73 phase 2.2)
+    if (isLife()) {
+      // (the lamps light diffusely: their GGX on every pixel was the life look's cost — phase 2.7)
+      installLifeLamps();
+      this.lifeSky = new LifeSky(this.renderer);
+      // (Low and Lowest draw straight to the screen: the finish's own curve as the renderer's — High
+      // and Medium draw into the post's target, where it isn't applied, and their finish has it)
+      setLifeTone(this.renderer);
+    }
     // every render of the scene (mine, a car's mirror, the warm-up's): each floor's loose
     // pieces left out an area at a time when out of that camera's view (World3.cullLoose)
     this.scene.onBeforeRender = (_r, _s, cam) => {
@@ -876,6 +895,11 @@ export class ThirdPersonView {
     const s = this.sun;
     s.castShadow = true;
     s.shadow.mapSize.set(2048, 2048);
+    // (the life look's soft sun shadows: PCF's radius — plan 73 phase 2.5)
+    if (isLife()) {
+      s.shadow.radius = 4;
+      s.shadow.blurSamples = 12;
+    }
     s.shadow.camera.left = -14;
     s.shadow.camera.right = 14;
     s.shadow.camera.top = 14;
@@ -1300,7 +1324,7 @@ void main() {
       return;
     }
     if (!this.cable) {
-      const mat = new MeshLambertMaterial({ color: 0x15120f });
+      const mat = litMaterial({ color: 0x15120f });
       this.light.patch(mat);
       this.cable = new Mesh(new BufferGeometry(), mat);
       this.cable.castShadow = true;
@@ -1400,9 +1424,9 @@ void main() {
   setCars(list: { x: number; y: number; z: number; h: number; color: number; tilt: number }[]) {
     while (this.cars.length < list.length) {
       const g = new Group();
-      const body = new MeshLambertMaterial({ color: 0xc4402b });
+      const body = litMaterial({ color: 0xc4402b });
       this.light.patch(body);
-      const dark = new MeshLambertMaterial({ color: 0x1c1a17 });
+      const dark = litMaterial({ color: 0x1c1a17 });
       const part = (w: number, h: number, d: number, x: number, y: number, m: Material) => {
         const mesh = new Mesh(new BoxGeometry(w, h, d), m);
         mesh.position.set(x, y + h / 2, 0);
@@ -2863,6 +2887,7 @@ void main() {
         // (what my floor hides from this camera left out of this one render: below-cull.ts)
         this.culling.cullBelow(slab);
         this.live.holes(this.camera, this.pageRect);
+        this.lifeSky?.update(this.around.domeColours(), this.nightLevel);
         if (this.post) this.post.render(dt > 0 && !me?.reduced, hands);
         else {
           this.renderer.render(this.scene, this.camera);
@@ -2898,16 +2923,25 @@ void main() {
     if (!this.charF) {
       this.charsChunk = C.CHARS_CHUNK;
       this.charF = new C.CharFactory();
-      const body = new MeshBasicMaterial({ vertexColors: true });
+      // (the life look: bodies lit by the scene's sun, sky and lamps as everything else is, no cel bands, no
+      // ink line round them — docs/plan/73 phase 2.4; today's people until phase 4's)
+      const life = isLife();
+      const body: Material = life ? litMaterial({ vertexColors: true }) : new MeshBasicMaterial({ vertexColors: true });
       this.light.patch(body);
-      const bodyAway = new MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55 });
+      const bodyAway: Material = life
+        ? litMaterial({ vertexColors: true, transparent: true, opacity: 0.55 })
+        : new MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55 });
       this.light.patch(bodyAway);
       // (the far leg a shade darker, after the light; each form's turned side in shade, with a rim
-      // of light on the lit one: chars/model.ts — the room's light multiplies all of it, after)
-      C.legShade(body);
-      C.legShade(bodyAway);
-      C.celShade(body);
-      C.celShade(bodyAway);
+      // of light on the lit one: chars/model.ts — the room's light multiplies all of it, after; in the
+      // life look the light gives them their shape, and the cel hook stays at 0 for the clothes'
+      // patterns it draws)
+      if (!life) {
+        C.legShade(body);
+        C.legShade(bodyAway);
+      }
+      C.celShade(body, life ? 0 : 1);
+      C.celShade(bodyAway, life ? 0 : 1);
       const prop = (color: string) => {
         let m = this.propMats.get(color);
         if (!m) {
@@ -2934,9 +2968,9 @@ void main() {
         bodyAway,
         // (the shadowed: near black, the clothes' colours only hinted)
         shade: new MeshBasicMaterial({ vertexColors: true, color: 0x24262e }),
-        shadeInk: C.inkMaterial("#050506"),
-        ink: C.inkMaterial(),
-        inkAway: C.inkMaterial("#151515", 0.55),
+        shadeInk: life ? NO_LINE : C.inkMaterial("#050506"),
+        ink: life ? NO_LINE : C.inkMaterial(),
+        inkAway: life ? NO_LINE : C.inkMaterial("#151515", 0.55),
         prop,
         toy: (kind) => {
           const P = petsArt();
@@ -3504,7 +3538,7 @@ void main() {
         const root = new Group();
         root.userData.toyId = t.id;
         const m = P.toyMesh(t.kind, (c, o) => {
-          const mat = new MeshLambertMaterial({ color: c, emissive: o?.glow ? c : 0 });
+          const mat = litMaterial({ color: c, emissive: o?.glow ? c : 0 });
           this.light.patch(mat);
           return mat;
         });
@@ -3588,6 +3622,7 @@ void main() {
     this.buildPick.builder.dispose();
     for (const f of this.fx) (f.s.material as SpriteMaterial).dispose();
     this.post?.dispose();
+    this.lifeSky?.dispose();
     this.light.dispose();
     for (const l of this.below.values()) l.dispose();
     for (const p of this.people.values()) p.dispose();

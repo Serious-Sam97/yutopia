@@ -8,13 +8,14 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
+  type MeshLambertMaterial,
   PlaneGeometry,
   RingGeometry,
   SphereGeometry,
   SRGBColorSpace,
 } from "three";
 import { type VortexMood, vortexSvg } from "../art/vortex/vortexArt";
+import { litMaterial } from "../look/lit";
 
 // Who's drawn while their 3D person isn't (docs/plan/72-the-3d-core.md, phase 12: the paper people
 // retired): a low figure in their own colours — legs, a body in their top's colour, a head in their
@@ -87,7 +88,7 @@ export class Proxy3 {
     for (const x of this.mats) x.m.dispose();
     this.mats = [];
     const mat = (c: string) => {
-      const m = new MeshLambertMaterial({ color: c });
+      const m = litMaterial({ color: c });
       this.mats.push({ m, base: c });
       return m;
     };

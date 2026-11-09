@@ -22,12 +22,12 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
   type Object3D,
   PlaneGeometry,
   SRGBColorSpace,
   Vector3,
 } from "three";
+import { litMaterial } from "../look/lit";
 import {
   crownGeometry,
   type ManKind,
@@ -264,7 +264,7 @@ export class ChessMen3 {
   private runeTex: CanvasTexture | null = null;
   private runeMats = new Map<string, MeshBasicMaterial>();
   private runeGeos = new Map<number, PlaneGeometry>();
-  private dustMat = new MeshLambertMaterial({ color: 0xd8d0c0, transparent: true, opacity: 0.5, depthWrite: false });
+  private dustMat = litMaterial({ color: 0xd8d0c0, transparent: true, opacity: 0.5, depthWrite: false });
   private shardMats = new Map<number, Material>();
   private pool = new Map<string, Rig[]>();
   constructor(private readonly mat: Material) {
@@ -798,7 +798,7 @@ export class ChessMen3 {
   private shardMat(col: number): Material {
     let m = this.shardMats.get(col);
     if (!m) {
-      m = new MeshLambertMaterial({ color: col });
+      m = litMaterial({ color: col });
       this.shardMats.set(col, m);
     }
     return m;

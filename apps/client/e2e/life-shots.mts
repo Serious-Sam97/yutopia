@@ -79,10 +79,12 @@ const browser = await chromium.launch({
 const tok = await token("bia@yutopia.test");
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 page.on("pageerror", (e) => console.log("  page:", e.message));
-await page.addInitScript((t) => {
+// (QUALITY=medium|low: another tier)
+const quality = process.env.QUALITY ?? "high";
+await page.addInitScript(([t, q]) => {
   localStorage.setItem("yutopia:token", t);
-  localStorage.setItem("yutopia:prefs", JSON.stringify({ quality: "high" }));
-}, tok);
+  localStorage.setItem("yutopia:prefs", JSON.stringify({ quality: q }));
+}, [tok, quality] as const);
 await page.goto(base);
 await ready(page);
 await page.evaluate(() => (window as any).__yutopia.room.send("mod:dark", { mode: "peaceful" }));

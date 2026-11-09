@@ -9,7 +9,7 @@ import {
   LineSegments,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
+  type MeshLambertMaterial,
   Points,
   PointsMaterial,
   type Scene,
@@ -17,6 +17,7 @@ import {
   SpriteMaterial,
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { litMaterial } from "../look/lit";
 import { tinted } from "./campus";
 import { itemModel } from "./items3d";
 
@@ -318,7 +319,7 @@ export class Arms3 {
       let o = this.dropped.get(d.id);
       if (!o) {
         // its model (tp/items3d.ts), lit as the snow is; turned as it fell
-        this.itemMat ??= new MeshLambertMaterial({ vertexColors: true });
+        this.itemMat ??= litMaterial({ vertexColors: true });
         const mesh = new Mesh(itemModel(d.item), this.itemMat);
         mesh.rotation.y = ((d.id.length * 1.7 + d.x * 3.1) % (Math.PI * 2)) - Math.PI;
         const glint = new Sprite(
@@ -443,7 +444,7 @@ export class Arms3 {
   /** Spent brass out of a gun at (x, y, z) — the revolver's cases (one a round loaded), the
    *  double-barrel's shells (the fired ones, broken open) — thrown aside of `yaw`, down to `ground`. */
   eject(x: number, y: number, z: number, yaw: number, kind: "case" | "shell", n: number, ground: number): void {
-    this.itemMat ??= new MeshLambertMaterial({ vertexColors: true });
+    this.itemMat ??= litMaterial({ vertexColors: true });
     this.brassGeo ??= {
       case: tinted(new CylinderGeometry(0.0055, 0.0055, 0.03, 8).rotateZ(Math.PI / 2), 0xc9a24a),
       shell: mergeGeometries([

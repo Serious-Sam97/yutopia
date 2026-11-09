@@ -7,7 +7,6 @@ import {
   HemisphereLight,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
   PerspectiveCamera,
   PlaneGeometry,
   Scene,
@@ -15,6 +14,7 @@ import {
   SRGBColorSpace,
   WebGLRenderer,
 } from "three";
+import { litMaterial } from "../look/lit";
 import { Post3 } from "../tp/post3d";
 import { LOOKS as DESK2_LOOKS } from "./fam/desktop2";
 import { toon } from "./kit";
@@ -37,7 +37,7 @@ let r: {
 } | null = null;
 const mat = toon();
 const glowMat = new MeshBasicMaterial({ vertexColors: true, toneMapped: false });
-const glassMat = new MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.42, depthWrite: false });
+const glassMat = litMaterial({ vertexColors: true, transparent: true, opacity: 0.42, depthWrite: false });
 const urls = new Map<string, string>();
 
 function rig(w: number, h: number) {

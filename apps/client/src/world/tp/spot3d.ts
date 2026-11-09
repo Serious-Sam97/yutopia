@@ -4,11 +4,12 @@ import {
   CanvasTexture,
   Group,
   Mesh,
-  MeshLambertMaterial,
+  type MeshLambertMaterial,
   SphereGeometry,
   SRGBColorSpace,
   Vector3,
 } from "three";
+import { litMaterial } from "../look/lit";
 import { G, place, tinted } from "./campus";
 import type { Themes } from "./sky";
 import { SNOW, snowBox } from "./snow3d";
@@ -193,13 +194,13 @@ export function boards(T: Themes, list: BoardIn[]): Group {
     const t = new CanvasTexture(boardCanvas(T, b.name, b.label));
     t.colorSpace = SRGBColorSpace;
     t.anisotropy = 8;
-    const m = new Mesh(place(face, b.x, b.y ?? 0, b.z, b.ry), new MeshLambertMaterial({ map: t }));
+    const m = new Mesh(place(face, b.x, b.y ?? 0, b.z, b.ry), litMaterial({ map: t }));
     m.castShadow = true;
     m.receiveShadow = true;
     root.add(m);
   }
   if (solids.length) {
-    const m = new Mesh(mergeGeometries(solids, false), new MeshLambertMaterial({ vertexColors: true }));
+    const m = new Mesh(mergeGeometries(solids, false), litMaterial({ vertexColors: true }));
     m.castShadow = true;
     m.receiveShadow = true;
     root.add(m);
@@ -327,7 +328,7 @@ export function motorsForecourt(T: Themes, y0: number): Motors {
     s.color(0x2a2e33).box(hx - 0.32, y0 + 5.35, hz - 0.22, hx + 0.32, y0 + 5.7, hz + 0.22);
     floods.push(new Vector3(hx, y0 + 5.3, hz));
   }
-  const solid = new Mesh(s.build(), new MeshLambertMaterial({ vertexColors: true }));
+  const solid = new Mesh(s.build(), litMaterial({ vertexColors: true }));
   solid.receiveShadow = true;
   solid.castShadow = true;
   root.add(solid);
@@ -335,7 +336,7 @@ export function motorsForecourt(T: Themes, y0: number): Motors {
   {
     const gl = new G().color(0xfff4dc);
     for (const p of floods) gl.box(p.x - 0.28, p.y - 0.02, p.z - 0.18, p.x + 0.28, p.y + 0.02, p.z + 0.18);
-    const m = new MeshLambertMaterial({ vertexColors: true, emissive: 0xfff1d6, emissiveIntensity: 0 });
+    const m = litMaterial({ vertexColors: true, emissive: 0xfff1d6, emissiveIntensity: 0 });
     lit.push(m);
     root.add(new Mesh(gl.build(), m));
   }
@@ -344,7 +345,7 @@ export function motorsForecourt(T: Themes, y0: number): Motors {
     const t = new CanvasTexture(c);
     t.colorSpace = SRGBColorSpace;
     t.anisotropy = 8;
-    const m = new MeshLambertMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0 });
+    const m = litMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0 });
     if (glow) lit.push(m);
     return m;
   };
@@ -432,7 +433,7 @@ export function motorsForecourt(T: Themes, y0: number): Motors {
     string(signTop, top(poles[3], 5.5), 0.35, 1);
     string(top(poles[0], 5.5), top(poles[1], 5.5), 0.5, 3);
     string(top(poles[1], 5.5), top(poles[2], 5.5), 0.5, 0);
-    const m = new Mesh(b.build(), new MeshLambertMaterial({ vertexColors: true, side: 2 }));
+    const m = new Mesh(b.build(), litMaterial({ vertexColors: true, side: 2 }));
     m.castShadow = true;
     root.add(m);
   }
@@ -445,7 +446,7 @@ export function motorsForecourt(T: Themes, y0: number): Motors {
     ].map(([x, z, k]) =>
       place(tinted(new SphereGeometry(1, 9, 6).scale(k * 1.3, k * 0.5, k), SNOW, atOf("bank", x, z)), x, y0, z),
     );
-    const m = new Mesh(mergeGeometries(parts, false), new MeshLambertMaterial({ vertexColors: true }));
+    const m = new Mesh(mergeGeometries(parts, false), litMaterial({ vertexColors: true }));
     m.receiveShadow = true;
     root.add(m);
   }

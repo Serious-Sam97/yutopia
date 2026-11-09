@@ -9,7 +9,7 @@ import {
   InstancedMesh,
   Matrix4,
   Mesh,
-  MeshLambertMaterial,
+  type MeshLambertMaterial,
   PerspectiveCamera,
   Quaternion,
   Vector3,
@@ -17,6 +17,7 @@ import {
   type WebGLRenderer,
 } from "three";
 import type { Quality } from "@/lib/prefs";
+import { litMaterial } from "../look/lit";
 import type { FarAsk, FarLandData } from "./far-land.worker";
 
 // The far land (docs/plan/69-the-long-road.md L5, L6): past the near land (grounds-stream.ts, 440 m),
@@ -95,8 +96,8 @@ export class FarLand {
     private readonly treeGeo: BufferGeometry | null,
     private readonly edits: () => GroundsEdits | null,
   ) {
-    this.mat = this.patch(new MeshLambertMaterial({ vertexColors: true }), "far-land");
-    this.treeMat = this.patch(new MeshLambertMaterial({ vertexColors: true }), "far-trees");
+    this.mat = this.patch(litMaterial({ vertexColors: true }), "far-land");
+    this.treeMat = this.patch(litMaterial({ vertexColors: true }), "far-trees");
     // (its depth cleared once it's drawn: the near scene in front of it, its own depth)
     const clear = new Mesh(new BufferGeometry(), this.mat);
     clear.geometry.setAttribute("position", new Float32BufferAttribute([0, 0, 0, 0, 0, 0, 0, 0, 0], 3));
@@ -152,7 +153,7 @@ export class FarLand {
     this.rings = RINGS[q].map((spec) => {
       // (the land not drawn: the inner ring's square, x0 z0 x1 z1 — none: x0 > x1)
       const hole = { value: new Vector4(1, 0, 0, 0) };
-      const mat = this.patch(new MeshLambertMaterial({ vertexColors: true }), "far-land", hole);
+      const mat = this.patch(litMaterial({ vertexColors: true }), "far-land", hole);
       return { spec, mesh: null, at: null, asked: false, v: -1, mat, hole };
     });
     this.dropTrees();

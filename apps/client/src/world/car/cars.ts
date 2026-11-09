@@ -38,7 +38,6 @@ import {
   Group,
   type Material,
   Mesh,
-  MeshLambertMaterial,
   PerspectiveCamera,
   PMREMGenerator,
   Quaternion,
@@ -59,6 +58,7 @@ import { prefs, type Quality } from "@/lib/prefs";
 import { chars as charsMod } from "../art/chars-load";
 import { pets as petsMod } from "../art/pets-load";
 import { mixer } from "../audio";
+import { litMaterial } from "../look/lit";
 import { activePad } from "../pads";
 import { Radio } from "../sound";
 import { hud, toast } from "../store";
@@ -1191,7 +1191,7 @@ export class Cars {
   private farMat(hex: number): Material {
     let m = this.farMats.get(hex);
     if (!m) {
-      m = new MeshLambertMaterial({ vertexColors: true, color: hex });
+      m = litMaterial({ vertexColors: true, color: hex });
       this.farMats.set(hex, m);
     }
     return m;

@@ -7,9 +7,9 @@ import {
   type Material,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
   RingGeometry,
 } from "three";
+import { litMaterial } from "../look/lit";
 import { G, tinted } from "./campus";
 import { flatSnow } from "./snow3d";
 import { mergeGeometries } from "./wx3d";
@@ -79,7 +79,7 @@ export function ploughModel(body: Material): Plough {
     new Mesh(new CylinderGeometry(0.13, 0.15, 0.22, 10).translate(-2.0, 2.66, 0), beacon),
   );
   const wheels: Group[] = [];
-  const tyre = new MeshLambertMaterial({ color: 0x1b1d20 });
+  const tyre = litMaterial({ color: 0x1b1d20 });
   for (const x of [-2.2, 1.0, 2.4])
     for (const s of [1, -1]) {
       const w = new Group();
@@ -179,7 +179,7 @@ export function busModel(body: Material): Bus {
       [part(0.04, 1.0, 2.3, -5.0, 2.02, 0, 0x2a3a44), part(9.5, 0.85, 2.36, -0.25, 2.02, 0, 0x2a3a44)],
       false,
     ),
-    new MeshLambertMaterial({
+    litMaterial({
       vertexColors: true,
       transparent: true,
       opacity: 0.45,
@@ -213,8 +213,8 @@ export function busModel(body: Material): Bus {
   );
   // the wheels, each its own (they turn)
   const wheels: Group[] = [];
-  const tyre = new MeshLambertMaterial({ color: 0x1b1d20 });
-  const hub = new MeshLambertMaterial({ color: 0xb9bec4 });
+  const tyre = litMaterial({ color: 0x1b1d20 });
+  const hub = litMaterial({ color: 0xb9bec4 });
   for (const x of [-3.1, 3.1])
     for (const s of [1, -1]) {
       const w = new Group();

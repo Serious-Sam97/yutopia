@@ -22,7 +22,6 @@ import {
   LineSegments,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
   type Object3D,
   PlaneGeometry,
   Shape,
@@ -31,6 +30,7 @@ import {
   Vector2,
   Vector3,
 } from "three";
+import { litMaterial } from "../look/lit";
 import type { Pick3, World3 } from "./build";
 
 // Build mode in 3D: what it shows (the model's buildLook) — the things in your
@@ -150,7 +150,7 @@ export class BuildLayer {
     this.ghostFloor = [];
     for (const g of look?.ghosts ?? []) {
       const out = world.drawObject(g.def).out;
-      const mat = new MeshLambertMaterial({
+      const mat = litMaterial({
         vertexColors: true,
         color: g.ok ? 0xffffff : 0xff9a80,
         transparent: true,
@@ -407,7 +407,7 @@ export class BuildLayer {
     };
     // a pin on a tile: a pole and a head
     const pin = (x: number, y: number, color: number) => {
-      const pole = new Mesh(new CylinderGeometry(0.025, 0.025, 0.8, 8), new MeshLambertMaterial({ color: 0x2a1a12 }));
+      const pole = new Mesh(new CylinderGeometry(0.025, 0.025, 0.8, 8), litMaterial({ color: 0x2a1a12 }));
       pole.position.set(Math.floor(x) + 0.5, 0.4, Math.floor(y) + 0.5);
       const head = new Mesh(new SphereGeometry(0.16, 16, 12), new MeshBasicMaterial({ color, toneMapped: false }));
       head.position.set(pole.position.x, 0.92, pole.position.z);
