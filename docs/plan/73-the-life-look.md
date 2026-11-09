@@ -821,7 +821,21 @@ draws grow by the materials in it, not by its things).
     across the part than along it takes its grain that way (one slat of a wide, merged slatted front).
   - **Left:** the counters' stone and the marble have no material of their own (gloss, plain); the
     sink's steel reads dark.
-- **6.3 Storage** · **6.4 Screens and the desktop** ·
+- **6.3 Storage.** Built 2026-11-09 (stills `design/screens/life/p63`: `pair-<kind>`, today's beside
+  the new). 19 kinds, 31 looks: bookcase, library with its ladder, open shelving, wall shelf, cupboard,
+  display cabinet, locker, filing cabinet, plan chest, safe, mail cubbies, tape shelf, cassette rack,
+  cartridge shelf, disc tower, record crates, shoe rack, umbrella stand and coat rack. Storage paints
+  from the shared palette almost wholly, so the paint mapped most of it as it was.
+  - **Painted steel is paint:** the filing cabinet's and the cubbies' grey (`0x8d9296`) is plain. As
+    brushed metal it went near black.
+  - **The kit's metals are 0.4 metal** (from 0.55): brass reads gold, chrome its grey, in a room's dim
+    sky. Every family's metal changes with it (the sample's lamp pole lighter).
+  - **Cases are plastic:** a tape shelf's, a disc tower's and a cassette rack's spines are gloss. Their
+    colours are cloth elsewhere (rust velvet, olive linen), and a weave on a CD case read wrong. Books
+    keep the cloth their colours guess: book cloth.
+  - **Left:** glass doors and shelves stay as they were (the kit's glass); a locker's and a safe's
+    paint is plain, with no steel under it.
+- **6.4 Screens and the desktop** ·
   **6.5 Decor, lights and plants** · **6.6 Kitchen, music, office** · **6.7 Play: games, chess,
   parkour, pets** · **6.8 Christmas, seasons, outdoors** — each family's materials checked and fixed
   by hand (a part the paint guessed wrong), its forms rounded where the kit's defaults don't reach

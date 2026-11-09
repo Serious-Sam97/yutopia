@@ -17,6 +17,7 @@ import {
   tube,
   type V3,
 } from "../kit";
+import { finishes } from "../life-mats";
 import { P, shade } from "../palette";
 
 // Plan 68 phase 5 (docs/plan/68-more-furniture.md): Storage — the new kinds' models, in the kit's frame
@@ -43,6 +44,9 @@ export const LOOKS: Record<string, readonly string[]> = {
 
 /** A look the weather can wet (a hook: the world would set it from the room's weather). */
 export type WetLook = Look & { wet?: boolean };
+
+// (plan 73 phase 6.3: what the finishes are in the life look — the grey steel is painted, not bare)
+finishes([[0x8d9296, "plain"]]);
 
 const FACE = 0.1; // a wall's face
 const SPINES = [0x8a2f2a, 0xc9a24a, 0x3f5f8a, 0x5f7a3a, 0xe6dcc4, 0x6a4a7a, 0xb5562f, 0x2b2a28, 0xd6c9a6, 0x3d7f8a];
@@ -1100,6 +1104,8 @@ export function umbrellaStand(m: Model, o: WetLook) {
  *  (their J-cards' colours, a label on some, a few slots empty, one pulled out) — by the seed; on
  *  its top ledge a personal stereo and its headphones, or a little cactus. Walnut or black. */
 export function cassetteRack(m: Model, o: Look) {
+  // (the life look: the cassettes' cases are plastic, not cloth)
+  m.finishes([...SPINES, ...ALBUM].map((c): [number, "gloss"] => [c, "gloss"]));
   const wood = o.look === 1 ? P.ash : P.walnut;
   const [x0, x1, y0, y1] = [0.14, 0.86, 1.04, 1.88];
   const D = 0.09;

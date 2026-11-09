@@ -138,6 +138,8 @@ export function bookcase(m: Model, o: Look) {
 // ── the tape shelf (2×1) ──────────────────────────────────────────────────────────────────────────
 /** A low unit to 1.12 m, three shelves of cassettes standing in their cases. Three finishes. */
 export function tapeShelf(m: Model, o: Look) {
+  // (the life look: the cases' spines are plastic, not the cloth their colours are elsewhere)
+  m.finishes(SPINES.map((c): [number, "gloss"] => [c, "gloss"]));
   const wood = [P.walnut, P.oakLight, P.ash][o.look] ?? P.walnut;
   const H = 1.12;
   const z0 = 0.31;
@@ -203,6 +205,8 @@ export function cartShelf(m: Model, o: Look) {
 /** A tower of CD cases to 1.38 m: its sides windowed, the cases' spines out front in their colours.
  *  Black or walnut. */
 export function discRack(m: Model, o: Look) {
+  // (the life look: the cases' spines are plastic, not the cloth their colours are elsewhere)
+  m.finishes(SPINES.map((c): [number, "gloss"] => [c, "gloss"]));
   const frame = o.look === 1 ? P.walnut : P.ash;
   const H = 1.38;
   const x0 = 0.27;

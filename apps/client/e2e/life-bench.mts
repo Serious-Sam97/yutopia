@@ -542,6 +542,31 @@ const SHOTS: [string, string][] = [
     [`p62-${k}-old`, `things:kind=${k}&kit=old`],
   ]),
   ["p62-reception-close", "things:kind=reception&col=0"],
+  // (plan 73 6.3: every storage piece's every look, today's and the new)
+  ...[
+    "bookcase",
+    "ladder_bookcase",
+    "shelving",
+    "wall_shelf",
+    "cupboard",
+    "display_cabinet",
+    "locker",
+    "filing_cabinet",
+    "plan_chest",
+    "office_safe",
+    "mail_cubbies",
+    "tape_shelf",
+    "cassette_rack",
+    "cart_shelf",
+    "disc_rack",
+    "record_crates",
+    "shoe_rack",
+    "umbrella_stand",
+    "coat_rack",
+  ].flatMap((k): [string, string][] => [
+    [`p63-${k}`, `things:kind=${k}`],
+    [`p63-${k}-old`, `things:kind=${k}&kit=old`],
+  ]),
   // (the glasses and the extras, props.py)
   [
     "w57-eyewear-man-1",
