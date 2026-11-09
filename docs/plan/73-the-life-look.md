@@ -4,9 +4,9 @@ Ask (2026-11-08), after the mature-look study (four colour and light takes on th
 https://claude.ai/artifact/48wUvPTpm4u3or1FQroBZQ): "I'm thinking more of the mature look of The
 Sims 3. Not only the colour, but the design and model of all."
 
-Status: **phase 0 signed off and committed (98aee21); phase 1 (the pipeline) built 2026-11-08, phase 2
-next.** The game itself is
-unchanged: the mocks are dev pages and a dev-only probe.
+Status: **phases 0–2 committed (98aee21, 7528023, 8ca77a1); phase 3 (the material library) signed off and
+committed 2026-11-08.** The game draws as before unless `?look=life`; the library and the
+mocks are dev pages so far.
 
 Decided with the user (2026-11-08): F1 **authored base mesh** for people · F2 **upgrade the code
 kit** for furniture and buildings (organic things from Blender scripts) · F4 **drop ink and cel**
@@ -299,6 +299,59 @@ Generated, tiling, tintable textures, so furniture colour picks and wardrobe col
 woods (×6), fabric weaves (×6), leather, metals, plaster, wallpaper, tile, carpet, brick,
 concrete, asphalt, grass, dirt, bark and leaves. Each comes with a little colour variation and a
 roughness map.
+
+**Steps (planned 2026-11-08):**
+- **3.1 The list.** `look/life-matlib-list.ts` (data only, shared by the game and the generator): 31
+  materials — woods ×6 (oak, walnut, pine, cherry, birch, grey ash) and floorboards ×2, fabrics ×6
+  (linen, twill, velvet, bouclé, tweed, herringbone), leather, metals ×3 (brushed, cast, polished),
+  plaster, wallpaper ×2 (stripe, damask), tile ×2 (floor, wall), carpet, brick, concrete, asphalt,
+  paving, grass, dirt, bark, foliage. Each: metres a repeat, pixels, tintable or not, its default
+  colour, roughness, metalness, normal strength, sheen (fabrics) or clearcoat (varnish).
+- **3.2 The generator.** `tools/art/life/materials.mts` (Node, no packages): painted, seamlessly
+  tiling patterns from periodic noise, cells, bands and bricks — each gives a colour, a height and a
+  roughness; from them three maps: **albedo** (sRGB; tintables painted near white so the colour pick
+  multiplies through, as today's furniture and wardrobe colours do), **orm** (R crevice shade, G
+  roughness, B metal; linear) and **normal** (from the height). PNG → `basisu` → KTX2 (albedo and orm
+  ETC1S, normal UASTC), full size and half (Low), into `public/life/mat/` (gitignored; `build_all.sh`).
+- **3.3 The runtime.** `look/life-matlib.ts`: `libMaterial(id, { color })` — a Standard material
+  (Physical for sheen and clearcoat), its maps 1×1 stand-ins at first so the program never changes
+  when the real ones arrive through the asset queue (each texture set loaded once, shared between
+  materials; repeat per material from its metres). Tests: every id generated, budgets (download,
+  GPU) per texture and for the library.
+- **3.4 The swatch board.** `/dev/life/materials`: every material on a sphere, a rounded box and a
+  floor tile under the life light, noon and night; a tint row (the tintables in four picked colours).
+  Stills by `e2e/life-bench.mts`.
+- **3.5 The room again.** `/dev/life/room` dressed from the library instead of phase 0c's canvases —
+  the kit and the library together. Sign-off on 3.4–3.5.
+
+**3.1–3.5 built and signed off 2026-11-08.** 32 materials (the list above plus `floor-walnut`).
+- The generator paints the whole library in ~10 s and encodes it in ~35 s. It needs no packages:
+  it writes its own PNGs and calls `basisu`.
+- **Download:** 5.3 MB for the full set (albedo 1.5, orm 0.8, normal 3.1) and 1.5 MB for Low's
+  half set.
+- **GPU:** ~27 MB with everything loaded. A material loads only when used.
+- The normal maps are half the albedo's size. At full size they were four fifths of the download
+  (9.7 MB), and the painted relief is soft.
+- `life-budget.test.ts` checks every file: built, KTX2, the right size, and within the library's
+  budget (6 MB to download, 2 for Low, 64 MB on the GPU).
+- `life-assets.ts lifeKTX2` is the one KTX2 loader, shared with the .glb files.
+- `libMaterial(id, renderer, { color, half, priority })`: Standard, or Physical for sheen and clear
+  coat. It starts on 1×1 stand-ins, so the textures swap in without a recompile. Each id's set loads
+  once through the queue and is shared, with its repeat set from `metres`. `userData.loaded` resolves
+  when the set is in.
+- `/dev/life/materials` (`?family= ?id= ?tint=1 ?hour=22 ?half=1`) puts each material on a ball, a
+  rounded block and a tile, with labels. Its stills are in `design/screens/life/p3/` (`e2e/life-bench.mts`,
+  `mat-*`).
+- The room now draws from the library by default: linen sofa, velvet cushions, tweed chair, oak and
+  walnut, brushed steel, the oak floor, plaster and a carpet rug. `?lib=0` gives 0c's canvases.
+  Comparisons are in `design/screens/life/p3-compare/`.
+- The kit's fabric UVs are now in metres, with v0's cloth at repeat 2, so v0 is unchanged.
+- **Tuned on the way:**
+  - Woods: grain flatter and finer, pores in two octaves (one octave drew the lattice's blocks,
+    embossed like stone), normals 0.2 and floors 0.3.
+  - Velvet's sheen keeps more of its own colour; it looked dusty.
+  - Leather and cast metal no longer look like camouflage, and tweed's flecks are softer.
+  - Plaster's normal is 0.12; at 0.25 the walls looked blotchy from across the room.
 
 ### 4 — People I: body and face
 

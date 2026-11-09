@@ -61,6 +61,24 @@ const SHOTS: [string, string][] = [
   ["out-night", "out:hour=night&t=3"],
   ["out-close", "out:view=close&t=3"],
   ["out-close-night", "out:view=close&hour=night&t=3"],
+  // phase 3: the material library's board — all, each family nearer, the tintables in picked colours,
+  // a few close, night, Low's half-size set
+  ["mat-all", "mat:"],
+  ["mat-all-night", "mat:hour=22"],
+  ["mat-wood", "mat:family=wood"],
+  ["mat-floor", "mat:family=floor"],
+  ["mat-fabric", "mat:family=fabric"],
+  ["mat-fabric-tint", "mat:family=fabric&tint=1"],
+  ["mat-metal-tint", "mat:family=metal&tint=1"],
+  ["mat-wall-tint", "mat:family=wall&tint=1"],
+  ["mat-tile-tint", "mat:family=tile&tint=1"],
+  ["mat-leather-tint", "mat:family=leather&tint=1"],
+  ["mat-ground", "mat:family=ground"],
+  ["mat-plant", "mat:family=plant"],
+  ["mat-brick", "mat:id=brick"],
+  ["mat-velvet", "mat:id=velvet"],
+  ["mat-floor-oak", "mat:id=floor-oak"],
+  ["mat-all-half", "mat:half=1"],
 ];
 
 const browser = await chromium.launch({ args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
@@ -74,7 +92,9 @@ async function shot(p: Page, query: string, file: string) {
     ? ["/dev/life/room", query.slice(5)]
     : query.startsWith("out:")
       ? ["/dev/life/outside", query.slice(4)]
-      : ["/dev/life", query];
+      : query.startsWith("mat:")
+        ? ["/dev/life/materials", query.slice(4)]
+        : ["/dev/life", query];
   await p.goto(`${base}${path}?${qs}`);
   await p.waitForFunction(() => (window as unknown as { __life?: { ready: boolean } }).__life?.ready, null, {
     timeout: 120_000,

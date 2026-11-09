@@ -94,21 +94,45 @@ export default function LifeRoom() {
       const scene = new T.Scene();
       scene.background = new T.Color(night ? 0x0b0d14 : 0xd6dde4);
 
-      // the room: floorboards, plaster walls with a skirting board, a rug
-      const M = K.lifeMats();
-      const floorTex = today ? null : K.floorTex(0xc79a68, 0x8d6240);
+      // the room: floorboards, plaster walls with a skirting board, a rug — from the material library
+      // (phase 3; ?lib=0 the 0c canvases)
+      const lib = !today && q.get("lib") !== "0";
+      const ML = lib ? await import("@/world/look/life-matlib") : null;
+      const libWait: Promise<unknown>[] = [];
+      const libMat = (...a: Parameters<NonNullable<typeof ML>["libMaterial"]>) => {
+        const m = (ML as NonNullable<typeof ML>).libMaterial(...a);
+        libWait.push(m.userData.loaded);
+        return m;
+      };
+      // (a plane's UVs in metres, as the library's textures want them)
+      const inMetres = <G extends InstanceType<typeof T.PlaneGeometry>>(g: G, sx: number, sy: number): G => {
+        const uv = g.getAttribute("uv") as InstanceType<typeof T.BufferAttribute>;
+        for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * sx, uv.getY(i) * sy);
+        return g;
+      };
+      const M = lib ? K.lifeLibMats(renderer) : K.lifeMats();
+      if (lib) for (const m of Object.values(M)) if (m.userData.loaded) libWait.push(m.userData.loaded);
+      const floorTex = today || lib ? null : K.floorTex(0xc79a68, 0x8d6240);
       floorTex?.repeat.set(4, 4);
       const floor = new T.Mesh(
-        new T.PlaneGeometry(8, 8).rotateX(-Math.PI / 2),
-        new T.MeshStandardMaterial(floorTex ? { map: floorTex, roughness: 0.55 } : { color: 0xa87b52, roughness: 0.8 }),
+        lib
+          ? inMetres(new T.PlaneGeometry(8, 8), 8, 8).rotateX(-Math.PI / 2)
+          : new T.PlaneGeometry(8, 8).rotateX(-Math.PI / 2),
+        lib
+          ? libMat("floor-oak", renderer)
+          : new T.MeshStandardMaterial(
+              floorTex ? { map: floorTex, roughness: 0.55 } : { color: 0xa87b52, roughness: 0.8 },
+            ),
       );
       floor.position.set(0, 0, 2.75);
       floor.receiveShadow = true;
       scene.add(floor);
-      const wallTex = today ? null : K.plasterTex(0xe9dcc6);
-      const wallMat = new T.MeshStandardMaterial(
-        wallTex ? { map: wallTex, roughness: 0.92 } : { color: 0xe6d8c0, roughness: 0.95 },
-      );
+      const wallTex = today || lib ? null : K.plasterTex(0xe9dcc6);
+      const wallMat = lib
+        ? libMat("plaster", renderer, { color: 0xe9dcc6 })
+        : new T.MeshStandardMaterial(
+            wallTex ? { map: wallTex, roughness: 0.92 } : { color: 0xe6d8c0, roughness: 0.95 },
+          );
       // (the back wall, a window cut in it over the desk: the life kit's)
       const wallShape = new T.Shape();
       wallShape.moveTo(-3.3, 0);
@@ -130,7 +154,10 @@ export default function LifeRoom() {
       back.position.set(0, 0, -1.25);
       back.castShadow = true;
       back.receiveShadow = true;
-      const side = new T.Mesh(new T.PlaneGeometry(8, 3.2), wallMat);
+      const side = new T.Mesh(
+        lib ? inMetres(new T.PlaneGeometry(8, 3.2), 8, 3.2) : new T.PlaneGeometry(8, 3.2),
+        wallMat,
+      );
       side.rotation.y = Math.PI / 2;
       side.position.set(-3.3, 1.6, 2.75);
       side.receiveShadow = true;
@@ -150,7 +177,10 @@ export default function LifeRoom() {
           r.castShadow = r.receiveShadow = true;
           scene.add(r);
         }
-        const out = new T.Mesh(new T.PlaneGeometry(30, 14), wallMat);
+        const out = new T.Mesh(
+          lib ? inMetres(new T.PlaneGeometry(30, 14), 30, 14) : new T.PlaneGeometry(30, 14),
+          wallMat,
+        );
         out.position.set(0.7, 1.6, -1.25 - T_);
         out.rotation.y = Math.PI;
         out.castShadow = true;
@@ -183,13 +213,17 @@ export default function LifeRoom() {
         sb.receiveShadow = ss.receiveShadow = true;
         scene.add(sb, ss);
         const rug = new T.Mesh(
-          new RoundedBoxGeometry(2.3, 0.012, 1.5, 2, 0.005),
-          new T.MeshPhysicalMaterial({
-            map: K.fabricTex(0xb6614a, 11),
-            roughness: 1,
-            sheen: 0.8,
-            sheenColor: new T.Color(0xf0c0a0),
-          }),
+          lib
+            ? K.worldUV(new RoundedBoxGeometry(2.3, 0.012, 1.5, 2, 0.005))
+            : new RoundedBoxGeometry(2.3, 0.012, 1.5, 2, 0.005),
+          lib
+            ? libMat("carpet", renderer, { color: 0xb6614a })
+            : new T.MeshPhysicalMaterial({
+                map: K.fabricTex(0xb6614a, 11),
+                roughness: 1,
+                sheen: 0.8,
+                sheenColor: new T.Color(0xf0c0a0),
+              }),
         );
         rug.position.set(SOFA.x, 0.006, SOFA.z + 1.0);
         rug.receiveShadow = true;
@@ -445,6 +479,10 @@ export default function LifeRoom() {
       };
       if (frozen !== null) while (t < frozen) step();
       let drawn = 0;
+      let libIn = libWait.length === 0;
+      Promise.all(libWait).then(() => {
+        libIn = true;
+      });
       const frame = () => {
         if (gone) return;
         f.pump(1000);
@@ -453,7 +491,7 @@ export default function LifeRoom() {
         if (frozen === null || drawn < 3) step();
         composer.render();
         drawn++;
-        if (drawn > 30 && ready) (window as unknown as { __life: object }).__life = { ready: true, t };
+        if (drawn > 30 && ready && libIn) (window as unknown as { __life: object }).__life = { ready: true, t };
         raf = requestAnimationFrame(frame);
       };
       frame();

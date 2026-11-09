@@ -11,20 +11,31 @@
 // go — so it's tested on its own (life-assets.test.ts).
 import type { WebGLRenderer } from "three";
 import type { GLTF, GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import type { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
 
 // ── the loader ─────────────────────────────────────────────────────────────────────────────────
 
 let shared: Promise<GLTFLoader> | null = null;
+let sharedKtx2: Promise<KTX2Loader> | null = null;
+
+/** The one KTX2 loader (Basis Universal, its transcoder served from /decoders/basis/): the .glb files'
+ *  textures and the material library's (life-matlib.ts). */
+export function lifeKTX2(renderer: WebGLRenderer): Promise<KTX2Loader> {
+  sharedKtx2 ??= (async () => {
+    const { KTX2Loader } = await import("three/addons/loaders/KTX2Loader.js");
+    return new KTX2Loader().setTranscoderPath("/decoders/basis/").detectSupport(renderer);
+  })();
+  return sharedKtx2;
+}
 
 /** The one GLTFLoader for the life look's files (KTX2 + meshopt), made the first time it's asked for. */
 export function lifeLoader(renderer: WebGLRenderer): Promise<GLTFLoader> {
   shared ??= (async () => {
-    const [{ GLTFLoader }, { KTX2Loader }, { MeshoptDecoder }] = await Promise.all([
+    const [{ GLTFLoader }, ktx2, { MeshoptDecoder }] = await Promise.all([
       import("three/addons/loaders/GLTFLoader.js"),
-      import("three/addons/loaders/KTX2Loader.js"),
+      lifeKTX2(renderer),
       import("three/addons/libs/meshopt_decoder.module.js"),
     ]);
-    const ktx2 = new KTX2Loader().setTranscoderPath("/decoders/basis/").detectSupport(renderer);
     await MeshoptDecoder.ready;
     return new GLTFLoader().setKTX2Loader(ktx2).setMeshoptDecoder(MeshoptDecoder);
   })();

@@ -14,3 +14,5 @@ $B -P tools/art/life/build_plant.py | grep wrote
 python3 -I tools/art/life/pack_glb.py "$OUT/plant-rubber.glb" "$OUT/plant-rubber.glb"
 $B -P tools/art/life/build_tree.py | grep wrote
 python3 -I tools/art/life/pack_glb.py "$OUT/tree-leafy.glb" "$OUT/tree-leafy.glb"
+# the material library (phase 3): painted by code, KTX2 into public/life/mat
+node --experimental-strip-types tools/art/life/materials.mts | tail -1

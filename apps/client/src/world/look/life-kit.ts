@@ -28,8 +28,10 @@ import {
   type Texture,
   Vector2,
   Vector3,
+  type WebGLRenderer,
 } from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { libMaterial } from "./life-matlib";
 
 // ── the painted texture library v0 ──────────────────────────────────────────────────────────────
 
@@ -160,6 +162,11 @@ export function plasterTex(base: number, seed = 4): Texture {
 
 // ── the materials ───────────────────────────────────────────────────────────────────────────────
 
+const withRepeat = (t: Texture, k: number) => {
+  t.repeat.set(k, k);
+  return t;
+};
+
 export interface LifeMats {
   fabric: Material;
   accent: Material;
@@ -175,7 +182,8 @@ export interface LifeMats {
 export function lifeMats(): LifeMats {
   const cloth = (hex: number, seed: number) =>
     new MeshPhysicalMaterial({
-      map: fabricTex(hex, seed),
+      // (its half-metre canvas twice a metre: the kit's UVs are in metres, as the library's — phase 3)
+      map: withRepeat(fabricTex(hex, seed), 2),
       roughness: 0.92,
       sheen: 0.6,
       sheenColor: new Color(hex).lerp(new Color(1, 1, 1), 0.45),
@@ -198,6 +206,21 @@ export function lifeMats(): LifeMats {
     plastic: new MeshStandardMaterial({ color: 0x26282c, roughness: 0.55 }),
     white: new MeshStandardMaterial({ color: 0xf1ece2, roughness: 0.4 }),
     screen: new MeshStandardMaterial({ color: 0x1a2430, roughness: 0.15, emissive: 0x3b5a78, emissiveIntensity: 0.35 }),
+  };
+}
+
+/** The same parts in the material library's materials (phase 3: look/life-matlib.ts) — the sofa linen,
+ *  the cushions velvet, the chair tweed, oak and walnut, brushed steel. */
+export function lifeLibMats(renderer: WebGLRenderer): LifeMats {
+  const v0 = lifeMats();
+  return {
+    ...v0,
+    fabric: libMaterial("linen", renderer, { color: 0x5f8290 }),
+    accent: libMaterial("velvet", renderer, { color: 0xd9a44c }),
+    chairFabric: libMaterial("tweed", renderer, { color: 0x41454d }),
+    wood: libMaterial("oak", renderer),
+    darkWood: libMaterial("walnut", renderer),
+    metal: libMaterial("metal-brushed", renderer, { color: 0x3a3d42 }),
   };
 }
 
@@ -267,7 +290,7 @@ export function cushion(
     p.setXYZ(i, v.x, v.y, v.z);
   }
   g.computeVertexNormals();
-  return worldUV(g, 2);
+  return worldUV(g, 1);
 }
 
 export function put(
@@ -306,14 +329,14 @@ export function lifeSofa(M: LifeMats): Group {
   for (const sx of [-1, 1])
     for (const sz of [-1, 1])
       put(g, leg(0.09, 0.022, 0.015), M.darkWood, sx * (W / 2 - 0.12), 0.045, sz * (D / 2 - 0.1));
-  put(g, rbox(W, 0.22, D - 0.04, 0.05, 4, 2), M.fabric, 0, 0.09 + 0.11, 0);
+  put(g, rbox(W, 0.22, D - 0.04, 0.05, 4), M.fabric, 0, 0.09 + 0.11, 0);
   // the back, and the arms (rolled: a rounded box and a bolster along its top)
-  put(g, rbox(W, 0.5, 0.2, 0.07, 4, 2), M.fabric, 0, 0.31 + 0.25, -D / 2 + 0.1);
+  put(g, rbox(W, 0.5, 0.2, 0.07, 4), M.fabric, 0, 0.31 + 0.25, -D / 2 + 0.1);
   for (const sx of [-1, 1]) {
-    put(g, rbox(0.2, 0.32, D - 0.02, 0.07, 4, 2), M.fabric, sx * (W / 2 - 0.1), 0.31 + 0.16, 0);
+    put(g, rbox(0.2, 0.32, D - 0.02, 0.07, 4), M.fabric, sx * (W / 2 - 0.1), 0.31 + 0.16, 0);
     put(
       g,
-      worldUV(new CylinderGeometry(0.115, 0.115, D - 0.02, 24, 1), 2, true),
+      worldUV(new CylinderGeometry(0.115, 0.115, D - 0.02, 24, 1), 1, true),
       M.fabric,
       sx * (W / 2 - 0.1),
       0.31 + 0.32,

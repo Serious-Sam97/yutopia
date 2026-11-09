@@ -106,3 +106,43 @@ for (const f of shipped) {
     }
   });
 }
+
+// ── the material library (phase 3: tools/art/life/materials.mts → public/life/mat) ──────────────
+
+const MAT_DIR = join(DIR, "mat");
+/** The whole library's budget: what it costs to download all of it (each material loads only when
+ *  used), and on the GPU with everything in. Low's half-size set a quarter of it. */
+const LIB_BUDGET = { mb: 6, gpuMb: 64 };
+
+test(
+  "material library: every material's three maps, full and half, within budget",
+  {
+    skip: !existsSync(MAT_DIR) && "not built (tools/art/life/materials.mts)",
+  },
+  async () => {
+    const { LIBRARY, MAPS, MAT_IDS, matFile } = await import("./life-matlib-list");
+    let mb = 0;
+    let gpu = 0;
+    let halfMb = 0;
+    for (const id of MAT_IDS)
+      for (const m of MAPS)
+        for (const half of [false, true]) {
+          const f = join(MAT_DIR, matFile(id, m, half));
+          assert.ok(existsSync(f), `${matFile(id, m, half)} not built`);
+          const b = readFileSync(f);
+          assert.equal(b.subarray(1, 7).toString("latin1"), "KTX 20", `${f}: not KTX2`);
+          const w = b.readUInt32LE(20);
+          // (the albedo and orm at the library's size, the normal at half of it; Low's all half again)
+          const want = LIBRARY[id].px / (m === "normal" ? 2 : 1) / (half ? 2 : 1);
+          assert.equal(w, want, `${matFile(id, m, half)}: ${w} px, not ${want}`);
+          if (half) halfMb += b.length / 1e6;
+          else {
+            mb += b.length / 1e6;
+            gpu += ktx2Bytes(b) / 1e6;
+          }
+        }
+    assert.ok(mb <= LIB_BUDGET.mb, `the library: ${mb.toFixed(1)} MB to download > ${LIB_BUDGET.mb}`);
+    assert.ok(halfMb <= LIB_BUDGET.mb / 3, `Low's library: ${halfMb.toFixed(1)} MB > ${LIB_BUDGET.mb / 3}`);
+    assert.ok(gpu <= LIB_BUDGET.gpuMb, `the library: ~${gpu.toFixed(0)} MB on the GPU > ${LIB_BUDGET.gpuMb}`);
+  },
+);
