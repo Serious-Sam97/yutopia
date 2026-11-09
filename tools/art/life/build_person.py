@@ -761,10 +761,14 @@ if WEAR:
     for pkind, pnames in (("eyewear", list(PR.EYEWEAR)), ("extra", PR.EXTRAS)):
         for k in pnames:
             MADE_KEYS.add(f"{pkind}-{k}")
+            # (the same made over a coat: its `coat` shape — the game sets it by the clothes' thickness)
+            coat = {c[0]: c[1] for c in PR.make_prop(pkind, k, V, F0, ZONES, LM, over=PR.COAT)}
             for suffix, PP, PF, src, _dark in PR.make_prop(pkind, k, V, F0, ZONES, LM):
                 pname = f"wear-{pkind}-{k}{'-' + suffix if suffix else ''}"
                 parts.append((pname, PP, np.zeros((0, 2)), [(f, f, "wear") for f in PF], W[src], None))
                 part_shapes[pname] = {kk: PP + d[src] for kk, d in DV.items()}
+                if pkind == "extra" and np.abs(coat[suffix] - PP).max() > 1e-4:
+                    part_shapes[pname]["coat"] = coat[suffix]
                 SRC[pname] = src
                 PROP_NAMES.append(pname)
                 print(f"  {pname}: {len(PF)} faces")
@@ -1265,6 +1269,12 @@ for name, pos, uv, faces, w, tex in parts:
             k = np.clip((head("upperleg01.L")[1] - 0.2 - ys) / 2.5, 0, 1) * 0.4
             ow = ow * (1 - k)[:, None]
             ow[:, ALL.index("skirt")] += k
+    if WEAR and name.startswith("wear-extra-") and name.endswith("-bag"):
+        # (a bag — props.py's `-bag` piece — a share on the pack's joint: it swings as they walk, a hip
+        # bag more than a backpack)
+        k = 0.35 if "backpack" in name else 0.75
+        ow = ow * (1 - k)
+        ow[:, ALL.index("pack")] += k
     if WEAR and (name == "hair" or name.startswith("wear-hair-")):
         # (5.5) hair hanging below the nape on the hair's joint, more the lower: a ponytail, long hair,
         # braids, locs swing — short hair has nothing that low

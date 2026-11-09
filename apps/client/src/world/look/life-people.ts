@@ -605,8 +605,8 @@ export interface LifeBody {
   /** where each joint stands at rest (metres, feet at 0) */
   at: Record<BoneName, Vector3>;
   parts: LifePart[];
-  /** the slim and broad morphs' weights */
-  morph: { slim: number; broad: number };
+  /** the slim and broad morphs' weights; `coat` the extras' shape over thick clothes (props.py COAT) */
+  morph: { slim: number; broad: number; coat: number };
   height: number;
   /** the hip joints' height, standing */
   hipY: number;
@@ -619,6 +619,17 @@ export interface LifeBody {
 const HAIR_GAIN = 16;
 const SKIN_LIT = 0.84;
 const SKIN_RICH = 1.1;
+
+/** How far out the extras (a bag's straps, a lanyard) sit by the thickest top or coat worn: their file's
+ *  `coat` shape's weight (props.py: OVER 0.2 dm off the tights at 0, COAT 0.45 at 1 — 5.7: a backpack's
+ *  straps came through a parka). */
+export function coatOf(base: { wear: Record<string, WearSpec> }, names: readonly string[]): number {
+  let t = 0;
+  for (const n of names)
+    if (roleOf(n) === "top" || roleOf(n) === "outer") t = Math.max(t, Number(base.wear[n]?.thick ?? 0));
+  // (none to a sweater's 0.14; a coat's collar and shoulders stand out past its thickness: more there)
+  return Math.min(1.6, Math.max(0, ((t - 0.14) / 0.25) * 1.6));
+}
 
 const LENS = "#1a1d22"; // (a glasses' dark lenses — props.py's `-lens` parts)
 const own = (m: Material) => {
@@ -806,7 +817,7 @@ export function lifeBody(base: LifeBase, a: AvatarLayers | null, worn: LifeWorn 
     rest,
     at,
     parts,
-    morph: { slim: build === "slim" ? 1 : 0, broad: build === "broad" ? 1 : 0 },
+    morph: { slim: build === "slim" ? 1 : 0, broad: build === "broad" ? 1 : 0, coat: coatOf(base, names) },
     height: base.height,
     hipY,
     dispose() {

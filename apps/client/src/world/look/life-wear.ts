@@ -41,6 +41,8 @@ export interface WearSpec {
   alias?: string;
   /** the material library's cloth it's drawn in (its UVs in metres) */
   fabric?: string;
+  /** how far off the body it stands (dm): the extras sit over the thickest worn (coatOf) */
+  thick?: number;
   /** a CC0 hair: hides no skin */
   hair?: boolean;
   /** a second piece off the skirt's cone (a dress's, a coat's) */

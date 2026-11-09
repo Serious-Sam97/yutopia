@@ -370,6 +370,8 @@ export class LifeLook {
     const swings = (j: string) => b.parts.some((p) => hangsOn(p.geometry, M.ALL_BONES.indexOf(j as never)));
     if (swings("skirt")) this.springs.push({ joint: "skirt", tip: [0, -0.45, 0], hz: 2.2, damp: 0.5, limit: 0.3 });
     if (swings("hair")) this.springs.push({ joint: "hair", tip: [0, -0.32, -0.1], hz: 1.8, damp: 0.4, limit: 0.55 });
+    // (5.7) a bag on the pack's joint (props.py's `-bag` pieces): it swings as they walk
+    if (swings("pack")) this.springs.push({ joint: "pack", tip: [0, -0.4, -0.15], hz: 1.6, damp: 0.45, limit: 0.35 });
     if (this.springs.length)
       this.collide.push(
         { joint: "head", at: [0, 0.09, 0.02], r: 0.105 },
@@ -407,7 +409,7 @@ export class LifeLook {
     sm.bind(b.skeleton, new Matrix4());
     b.root.add(sm);
     this.meshes[i] = sm;
-    for (const k of ["slim", "broad"] as const) {
+    for (const k of ["slim", "broad", "coat"] as const) {
       const at = sm.morphTargetDictionary[k];
       if (at !== undefined && sm.morphTargetInfluences) sm.morphTargetInfluences[at] = this.body.morph[k];
     }

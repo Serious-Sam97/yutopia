@@ -694,7 +694,43 @@ of them in batches).
   its name ends in `-bun`, as its bun piece's does, so the export skipped it; files are now keyed by
   style. Left: bags are rounded boxes (no seams or buckles beyond a flap), a tote's handles go through a
   hanging arm, mittens are smooth eggs (no thumb), and the far person doesn't draw any of them.
-- **5.7** Checks: budgets, frame times of a crowd, e2e, stills.
+- **5.7** Checks: budgets, frame times of a crowd, e2e, stills. Built 2026-11-09 (stills
+  `design/screens/life/p57w`).
+  - **Budgets.** Every garment, hair and prop file within its own (life-budget.test.ts; 109 files a body,
+    ~22 MB on disk for the whole wardrobe, a person loads only what they wear). The people's chunk
+    59.4 → 59.8 KB (budget 60 → 62, the standing call). The page 480.7 KB, the same as before phase 5
+    (none of the life code is on it; over its 469 since before this plan's phase 4).
+  - **Crowd cost** (`/dev/life/crowd`, everyone dressed from `avatarFromSeed`, as 4.5 measured them):
+
+    | people | all near | near to 11 m, far past |
+    | --- | --- | --- |
+    | 40 | 859 draws, 2.7M tris, 10.1 ms (4.5: 541, 3.0M, 9.0) | 364 draws, 1.2M tris, 6.2 ms (253, 1.3M, 6.2–6.5) |
+    | 80 | 1766 draws, 5.5M tris, 17.9 ms (1101, 6.2M, 15.9) | 444 draws, 1.6M tris, 8.0 ms (333, 1.7M, 7.4) |
+
+    (all far: 40 people 79 draws, 4.5 ms.) A garment is a draw of its own (and its shadow's), so draws
+    are up ~45–60%; triangles are down (only what's worn). The game's path (near to 11 m) holds 60 fps
+    at 80 people; 80 everyone near drops to ~52 fps (19.2 ms frames), past what the game draws.
+  - **e2e** in the life look (`playwright.life.config.ts`, `YUTOPIA_GPU=1` for the ones that need it):
+    avatar 2, down 1, first person 1, third person 3, use things 2, Flowmotion 3, footing 1, phone 7,
+    sway 1, people 3D 1, water 2 — all passed (first person and phone skip one each, as in classic).
+    Water's ice step failed once after a failed sway run and passed alone.
+  - **Fixed on the way:**
+    - Bags didn't swing in the life look. Its people aren't hung on Jolt, and 5.5's springs were hair
+      and skirts only. A bag's body is now its own `-bag` piece with a share on the rig's `pack` joint
+      (a backpack 0.35, a hip bag 0.75) and a spring on it (`life.ts`). `sway.spec` now expects that in
+      the life look, the springs instead of Jolt's hangs, and it passes in both looks.
+    - A backpack's or crossbody's straps came through a coat. The extras that lie on the clothes have a
+      `coat` shape, the same made 0.45 dm off the tights instead of 0.2 (`props.py COAT`). The game
+      weighs it by the thickest top or coat worn (`coatOf`: none to a sweater, a parka ~0.9, a puffer
+      1.4).
+  - **Stills.** `e2e/life-people-shots.mts DRESS=1` puts Ana, Bia and Cai in the wardrobe for the shots
+    and gives them their own looks back after: a blazer in tweed, cat-eyes and a necklace; a parka over a
+    hoodie, a beanie, glasses and a backpack; a coat over a long skirt, sunglasses and a crossbody. At the
+    lot, the lobby and upstairs, at noon and 22:00, with each face up close.
+  - **Left:** hats sit high (a beanie like a bowl); a parka's hood stands so far off at the shoulders
+    that a backpack's straps go under it there; a long coat lets a raised knee through; the bags don't
+    take the coat's swing; the near crowd's draws (merging a person's garments by material is the next
+    lever).
 
 ### 6 — Things
 

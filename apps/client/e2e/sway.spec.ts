@@ -58,9 +58,15 @@ test("a bag and a ponytail swing on Jolt, on her screen and on someone's near", 
       await p.waitForFunction(() => !!(window as any).__yutopia.tp && !!(window as any).__yutopia.walker, null, {
         timeout: 60_000,
       });
-    // both see her bag and hair swung on Jolt (the hub up, her pack and hair joints left to it)
-    for (const p of [page, bia])
-      await expect.poll(async () => (await swung(p, ana)).skip, { timeout: 60_000 }).toEqual(["hair", "pack"]);
+    // both see her bag and hair swung on Jolt (the hub up, her pack and hair joints left to it) — in the
+    // life look (playwright.life.config.ts: her own page) on springs instead, the bag's and the hair's
+    // joints, none left to Jolt (plan 73 5.5, 5.7)
+    for (const p of [page, bia]) {
+      const life = await p.evaluate(() => localStorage.getItem("yutopia:look") === "life");
+      await expect
+        .poll(async () => (await swung(p, ana)).skip, { timeout: 60_000 })
+        .toEqual(life ? [] : ["hair", "pack"]);
+    }
     // she runs: on each screen, her bag's and hair's turns change as she goes, and none is NaN
     const watch = (p: Page) =>
       p.evaluate((id) => {

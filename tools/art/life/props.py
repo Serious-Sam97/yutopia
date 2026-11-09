@@ -29,6 +29,7 @@ EXTRAS = [
     "mittens", "bracelets", "tie", "lanyard", "tote", "fannypack", "satchel",
 ]  # fmt: skip
 OVER = 0.2  # how far off the tights a thing lies over the clothes (a sweater's 0.15)
+COAT = 0.45  # …and over a coat: the build's `coat` shape (the game sets it by what's worn's thickness)
 
 
 def _tube(pts, radii, sides=6, closed=False):
@@ -151,9 +152,10 @@ def _merge(pieces):
     return np.vstack(P), F
 
 
-def make_prop(kind, name, V, F0, Z, J):
+def make_prop(kind, name, V, F0, Z, J, over=OVER):
     """A prop's pieces: [(suffix, positions, faces, each vertex's source on the body, dark)] — `dark` a
-    glasses' lenses (the game draws them dark, not in the wearer's colour)."""
+    glasses' lenses (the game draws them dark, not in the wearer's colour). `over`: how far off the tights
+    what lies on the clothes sits (OVER; the build's `coat` shape, the same made over a coat — COAT)."""
     kind_v, t = Z[0], Z[1]
     body = np.zeros(len(V), dtype=bool)
     body[sorted({v for f in F0 if f[2] == "body" for v in f[0]})] = True
@@ -310,7 +312,7 @@ def make_prop(kind, name, V, F0, Z, J):
         tt = np.where(tights)[0]
         m = tt[np.abs(V[tt, 0] - sx) < 0.06]
         top = m[np.argmax(V[m, 1])]
-        shoulder[S] = np.array([sx, V[top, 1] + OVER, V[top, 2]])
+        shoulder[S] = np.array([sx, V[top, 1] + over, V[top, 2]])
     import os
 
     if os.environ.get("PROPS_DEBUG") and name == "scarf":
@@ -341,6 +343,13 @@ def make_prop(kind, name, V, F0, Z, J):
         u = np.array([sg, 0, 0.0]) - ax * ax[0] * sg
         u /= np.linalg.norm(u)
         return c, ax, u, np.cross(ax, u), r
+
+    def bagged(parts, n):
+        """A bag's own piece (its first `n` parts, `-bag`: it swings on the pack's joint) and its straps."""
+        P, F = _merge(parts[n:])
+        piece("", P, F)
+        P, F = _merge(parts[:n])
+        piece("bag", P, F)
 
     def ring_band(c, r, u, v, ax, width, thick, seg=20):
         """A flat band round a limb (a watch's strap, a mitten's cuff)."""
@@ -393,7 +402,7 @@ def make_prop(kind, name, V, F0, Z, J):
         # a loop round the neck's base, falling on the chest, a pendant (the lanyard: a card) at its low
         y0 = neck_y + 0.15
         drop = 1.1 if name == "necklace" else 2.4
-        gap = 0.08 if name == "necklace" else OVER
+        gap = 0.08 if name == "necklace" else over
         pts = []
         for k in range(48):
             th = 2 * np.pi * k / 48 - np.pi  # (from the back round)
@@ -419,7 +428,7 @@ def make_prop(kind, name, V, F0, Z, J):
             parts.append(_tube(pts, [0.2] * 32, 8, closed=True))
         for th0, ln, dx in ((0.4, 3.4, 0.0), (0.18, 2.7, 0.0)):
             n_ = int(ln / 0.35) + 1
-            pts = [on(th0 - 0.04 * i, chin_y - 0.75 - 0.35 * i, OVER + 0.12) for i in range(n_)]
+            pts = [on(th0 - 0.04 * i, chin_y - 0.75 - 0.35 * i, over + 0.12) for i in range(n_)]
             # (flat on the chest: a band)
             parts.append(_band(pts, [normal(p) for p in pts], 0.62, 0.12))
         P, F = _merge(parts)
@@ -444,7 +453,7 @@ def make_prop(kind, name, V, F0, Z, J):
         piece("", P, F)
     elif name == "backpack":
         yc = chest_y - 0.35
-        bz = on(np.pi, yc, OVER)[2]
+        bz = on(np.pi, yc, over)[2]
         half = (1.35, 1.9, 0.6)
         c = np.array([x0, yc, bz - half[2] + 0.05])
         parts = [_box(c, half, round_=0.7, taper=0.12)]
@@ -454,12 +463,11 @@ def make_prop(kind, name, V, F0, Z, J):
             top = shoulder[S]
             pts = [c + np.array([sg * 0.6, half[1] * 0.8, half[2] * 0.95]), top + np.array([0, -0.05, -0.38]), top + np.array([0, 0.03, 0]), top + np.array([0, -0.05, 0.38])]
             for y, a in ((neck_y - 1.0, 0.5), (chest_y, 0.62), (chest_y - 0.7, 0.95)):
-                pts.append(on(sg * a, y, OVER))
-            pts.append(on(sg * 1.45, yc - half[1] * 0.75, OVER))
+                pts.append(on(sg * a, y, over))
+            pts.append(on(sg * 1.45, yc - half[1] * 0.75, over))
             pts.append(c + np.array([sg * half[0] * 0.9, -half[1] * 0.8, half[2] * 0.8]))
             parts.append(strap(pts, 0.42, 0.06))
-        P, F = _merge(parts)
-        piece("", P, F)
+        bagged(parts, 3)
     elif name in ("crossbody", "satchel"):
         # a strap from one shoulder (the crossbody the right, the satchel the left) across the chest to a
         # bag at the other hip, and round the back from the shoulder to it
@@ -467,7 +475,7 @@ def make_prop(kind, name, V, F0, Z, J):
         S, sg = ("R", -1) if name == "crossbody" else ("L", 1)
         hip_y = J["hip"][1] + (0.35 if name == "crossbody" else 0.0)
         th_bag = -sg * (1.2 if name == "crossbody" else 1.5)
-        c = on(th_bag, hip_y, OVER + half[2])
+        c = on(th_bag, hip_y, over + half[2])
         tb = np.array([np.cos(th_bag), 0, -np.sin(th_bag)])  # (along the bag, round the body)
         nb = np.array([np.sin(th_bag), 0, np.cos(th_bag)])  # (out of it)
         parts = [_box(c, half, ex=tb, ey=(0, 1, 0), round_=0.3)]
@@ -481,24 +489,23 @@ def make_prop(kind, name, V, F0, Z, J):
         far_end = c + np.array([0, half[1], 0]) - fwd * half[0] * 0.85
         pts = [near_end]
         for u in np.linspace(0.2, 0.85, 5):
-            pts.append(on(th_bag + (sg * 0.55 - th_bag) * u, hip_y + half[1] + (sy - hip_y - half[1]) * u, OVER))
+            pts.append(on(th_bag + (sg * 0.55 - th_bag) * u, hip_y + half[1] + (sy - hip_y - half[1]) * u, over))
         pts += [shoulder[S] + np.array([0, -0.02, 0.3]), shoulder[S] + np.array([0, 0.02, 0]), shoulder[S] + np.array([0, -0.02, -0.3])]
         # (round the back: from behind the shoulder across it to the bag's back side)
         a0, a1 = sg * (np.pi - 0.55), th_bag - sg * 0.5
         a1 += 2 * np.pi * sg
         for u in np.linspace(0.15, 0.85, 7):
-            pts.append(on(a0 + (a1 - a0) * u, sy + (hip_y + half[1] - sy) * u, OVER))
+            pts.append(on(a0 + (a1 - a0) * u, sy + (hip_y + half[1] - sy) * u, over))
         pts.append(far_end)
         parts.append(strap(pts, 0.3, 0.045))
-        P, F = _merge(parts)
-        piece("", P, F)
+        bagged(parts, 3)
     elif name == "tote":
         # on the right shoulder, hung at that side
         half = (1.7, 1.85, 0.4)
         th = -np.pi * 0.6
         nb = np.array([np.sin(th), 0, np.cos(th)])
         tb = np.array([np.cos(th), 0, -np.sin(th)])
-        c = on(th, J["waist"][1] - 0.9, OVER + half[2] + 0.15)
+        c = on(th, J["waist"][1] - 0.9, over + half[2] + 0.15)
         parts = [_box(c, half, ex=tb, ey=(0, 1, 0), round_=0.15)]
         for dz in (-0.75, 0.75):
             for side in (-1, 1):
@@ -506,14 +513,13 @@ def make_prop(kind, name, V, F0, Z, J):
                 top = shoulder["R"] + tb * dz * 0.25 + np.array([0, 0.02, 0])
                 mid = (a + top) / 2 + nb * 0.08
                 parts.append(_band([a, mid, top] if side < 0 else [a, mid, top], [nb, nb, np.array([0, 1.0, 0])], 0.24, 0.04))
-        P, F = _merge(parts)
-        piece("", P, F)
+        bagged(parts, 1)
     elif name == "fannypack":
         y = waist_y
-        pts = [on(2 * np.pi * i / 36, y, OVER - 0.02) for i in range(37)]
+        pts = [on(2 * np.pi * i / 36, y, over - 0.02) for i in range(37)]
         parts = [_band(pts, [normal(p) for p in pts], 0.3, 0.04)]
-        parts.append(_box(on(0.0, y - 0.1, OVER + 0.34), (1.2, 0.55, 0.32), round_=0.9, taper=-0.1))
-        parts.append(_tube([on(-0.3, y - 0.02, OVER + 0.76), on(0.0, y + 0.05, OVER + 0.75), on(0.3, y - 0.02, OVER + 0.76)], [0.025] * 3, 4))  # (its zip)
+        parts.append(_box(on(0.0, y - 0.1, over + 0.34), (1.2, 0.55, 0.32), round_=0.9, taper=-0.1))
+        parts.append(_tube([on(-0.3, y - 0.02, over + 0.76), on(0.0, y + 0.05, over + 0.75), on(0.3, y - 0.02, over + 0.76)], [0.025] * 3, 4))  # (its zip)
         P, F = _merge(parts)
         piece("", P, F)
     elif name == "walkman":
@@ -521,13 +527,13 @@ def make_prop(kind, name, V, F0, Z, J):
         y = waist_y - 0.1
         n_ = np.array([np.sin(th), 0, np.cos(th)])
         t_ = np.array([np.cos(th), 0, -np.sin(th)])
-        c = on(th, y, OVER + 0.18)
+        c = on(th, y, over + 0.18)
         parts = [_box(c, (0.42, 0.58, 0.15), ex=t_, ey=(0, 1, 0), round_=0.25)]
         parts.append(_box(c + n_ * 0.15 + np.array([0, 0.1, 0]), (0.3, 0.2, 0.02), ex=t_, ey=(0, 1, 0), round_=0.2, n=2))  # (its window)
         # its wire up the chest to under the chin, forked to the earphones
         wire = [c + np.array([0, 0.58, 0])]
         for u in np.linspace(0.2, 1.0, 6):
-            wire.append(on(th * (1 - u) + 0.15 * u, y + 0.6 + (chin_y - 1.0 - y - 0.6) * u, OVER + 0.02))
+            wire.append(on(th * (1 - u) + 0.15 * u, y + 0.6 + (chin_y - 1.0 - y - 0.6) * u, over + 0.02))
         fork = on(0.12, chin_y - 0.55, 0.06)
         wire.append(fork)
         parts.append(_tube(wire, [0.018] * len(wire), 4))
