@@ -952,6 +952,43 @@ Walls with skirting and trim, window frames with depth and sills, doors with pan
 plaster/brick/siding outside, roofs with tiles, and floors in wood/tile/carpet. The campus facade,
 lifts and stairs too.
 
+Decided 2026-11-09 (the questions): walls take the **library's textures on today's shapes, the trims
+kept** (skirting, dado rail, cap as geometry; brick's modelled courses become the brick texture and its
+relief map); floors are **the library's materials under today's baked shading** (the ambient occlusion,
+thresholds and strips the bake paints, over oak and walnut boards, tile, carpet, concrete, asphalt);
+**the first sample takes in the outside** (the campus facade's cladding, the pitched roofs' tiles). The
+doors and windows are the kit's (`furn/openings.ts`): phase 6 gave them their materials already.
+
+**Steps (planned 2026-11-09):**
+- **7.0 The sample.** Walls of each material, the floors of each, the campus facade and a roof, in the
+  game, the life look; `?build=old` the buildings as they were under the same light. Stills, sign-off.
+  - **Built 2026-11-09** (`look-mode.ts isLifeBuild`: the life look and no `build=old`).
+    - **Walls** (`furn/walls-native.ts`): walnut trims and panels → walnut, the creams and mortar → plaster,
+      brick → brick (its courses no longer plates: the texture and its relief), foam and cork → matte; a
+      wood's and a brick's paint only lightens or darkens the texture (`tone`), the others tint it. Faces
+      into `Out.mat` buckets with UVs in metres (`Geo.quadUV`); a walnut face's grain along its longer side
+      (a panel's boards stand up). `walls3d.ts turnOut` runs a piece's UVs on from where it sits along its
+      line — drawn each from its own start, a plaster wall showed the same stain every piece, a seam
+      between.
+    - **Floors** (`build.ts bakeFloor`): oak `.`, walnut `~`, carpet `,` `:`, tile `_` the library's, under
+      the bake: it bakes a flat fill (`FloorBake` `fill`) and the material multiplies it in through its own
+      UVs (`kit-mats.ts floorMaterial`, a `bakeUv` piece); a chunk's runs split by material into groups.
+      The lot's asphalt and concrete stay painted (their snow and wet), the grate `x` too.
+    - **Roofs**: slate (`roof-slate`, new in the library: eight courses of four, half bond) on the slopes,
+      plaster on the gables, concrete on a flat one; UVs along the eaves and up the slope.
+    - **The campus facade**: the clad wall's painting kept, the concrete's relief and roughness over it
+      (`kit-mats.ts libRelief`) once its textures are in.
+    - **Found and fixed:** the snow's layer (`wx3d.ts`) took "facing up" from the normal-mapped normal — a
+      plaster wall's relief turned pixels past it, a camouflage of frost on an outdoor wall; it reads the
+      surface's own now (`nonPerturbedNormal`).
+    - **Left:** the `_` floor's painted checker shows under the tile's grout; the plaster's own mottling
+      reads as soft stains on a big plain wall; the facade's relief is faint past a few metres.
+    - Stills: `e2e/life-shots.mts` (`LOOK=life` / `LOOK=life&build=old`, lobby, studio, corner) and
+      `e2e/life-hut.mts` (a hut of brick, plaster and walnut under a gable on the lot, taken away after).
+- **7.1 Walls** · **7.2 Floors, mezzanines, stairs, lifts** · **7.3 Outside: facades, roofs, the
+  campus** — each finished across the world, before/after stills.
+- **7.4 Checks.** Draws, triangles and memory by floor, frame times, budgets, e2e, stills.
+
 ### 8 — Outdoors
 
 Blended terrain textures (grass, dirt, the plan 65 snow layer kept), leafy trees and pines

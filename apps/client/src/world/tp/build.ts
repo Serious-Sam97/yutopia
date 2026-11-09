@@ -35,6 +35,7 @@ import {
   BufferAttribute,
   BufferGeometry,
   CanvasTexture,
+  Color,
   DataTexture,
   DoubleSide,
   EdgesGeometry,
@@ -58,6 +59,7 @@ import {
   Texture,
   UnsignedByteType,
   Vector2,
+  Vector3,
 } from "three";
 import { FloorBake, type FloorSlab } from "../art/floors";
 import { type LightSource, lightSources } from "../art/light";
@@ -66,11 +68,12 @@ import { ChessMen3, isBoard } from "../furn/chessmen3d";
 import { animateLive } from "../furn/liveparts";
 import { isNative, isNativeDress, liveInto, nativeDressInto, nativeInto, openingInto } from "../furn/native";
 import { N_HALF, N_WALL, nativePost, nativeWall } from "../furn/walls-native";
+import type { MatId } from "../look/life-matlib-list";
 import { litMaterial } from "../look/lit";
-import { isLife } from "../look/look-mode";
+import { isLife, isLifeBuild } from "../look/look-mode";
 import { CEL, fadePiece, type Piece, yuLit } from "../look/yulit";
 import { boxInParent, type Slab } from "./below-cull";
-import { kitMaterial } from "./kit-mats";
+import { floorMaterial, kitMaterial } from "./kit-mats";
 import { type Geo, Out } from "./kit3d";
 import { edgesOfMap, type FreeWall, piecesOf, turnOut, type WallEdges } from "./walls3d";
 
@@ -151,6 +154,20 @@ interface Built {
 /** Live parts are moved within this many tiles of the camera's target, at most this many a frame. */
 // (plan 73 phase 6: the life look's things drawn in their materials' buckets)
 const TEXTURED = isLife();
+// (plan 73 phase 7: the walls', the floors' — `?build=old` as they were)
+const BUILD_TEX = isLifeBuild();
+// the floors drawn with the library's (plan 73 phase 7): a material's char → the library's floor and its
+// tint; the bake paints it a flat tone (`FLOOR_FILL`: its light and colour, multiplied over the library's)
+// or, the cream checker, its own pattern — the lot's asphalt and concrete stay painted (their snow,
+// their wet are the bake's)
+const FLOOR_LIB: Record<string, [MatId, number]> = {
+  ".": ["floor-oak", 0xffffff],
+  "~": ["floor-walnut", 0xffffff],
+  ",": ["carpet", 0xffffff],
+  ":": ["carpet", 0xffffff],
+  _: ["tile-floor", 0xffffff],
+};
+const FLOOR_FILL: Record<string, string> = { ".": "#ffffff", "~": "#6e6e6e", ",": "#6b6a3a", ":": "#7a3b2e" };
 const LIVE_NEAR = 18;
 const LIVE_MAX = 64;
 
@@ -280,11 +297,11 @@ export class World3 {
     const E = this.edges;
     const want = (k: string) => !only || only.has(k);
     const low = new Map<string, Out>();
-    const lowOf = (x: number, y: number) => getOr(low, this.cellOf(x, y), () => new Out());
+    const lowOf = (x: number, y: number) => getOr(low, this.cellOf(x, y), () => new Out(BUILD_TEX));
     const runs = new Map<string, { out: Out; x0: number; y0: number; x1: number; y1: number; top: number }>();
     const runOf = (dir: "h" | "v", x: number, y: number, top: number) => {
       const k = runKey(dir, x, y);
-      const r = getOr(runs, k, () => ({ out: new Out(), x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9, top: 0 }));
+      const r = getOr(runs, k, () => ({ out: new Out(BUILD_TEX), x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9, top: 0 }));
       const [ax, ay, bx, by] = dir === "h" ? [x, y - 0.1, x + 1, y + 0.1] : [x - 0.1, y, x + 0.1, y + 1];
       r.x0 = Math.min(r.x0, ax);
       r.y0 = Math.min(r.y0, ay);
@@ -355,7 +372,7 @@ export class World3 {
     const freeEnds = new Set<string>();
     if (!only || only.has(FREE))
       for (const fw of E.free)
-        this.freeWall(fw, posts, freeEnds, (id) => getOr(low, `${FREE}|${id}`, () => new Out()), runs);
+        this.freeWall(fw, posts, freeEnds, (id) => getOr(low, `${FREE}|${id}`, () => new Out(BUILD_TEX)), runs);
     this.posts = new Set(posts.keys());
     for (const [key, { height, ch, e, w, s }] of posts) {
       const [X, Y] = key.split(",").map(Number);
@@ -426,8 +443,8 @@ export class World3 {
       // (a door's or window's hole through this piece, m up)
       const mid = p.u + p.len / 2;
       const h = holes.find((c) => c.u0 < mid && mid < c.u1);
-      const lo = new Out();
-      const hi = new Out();
+      const lo = new Out(BUILD_TEX);
+      const hi = new Out(BUILD_TEX);
       for (const [part, out] of [
         ["low", lo],
         ["high", hi],
@@ -444,7 +461,7 @@ export class World3 {
       }
       appendOut(lowOut, lo);
       const k = `${FREE}|${fw.id}|${Math.floor(i / RUN)}`;
-      const r = getOr(runs, k, () => ({ out: new Out(), x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9, top: 0 }));
+      const r = getOr(runs, k, () => ({ out: new Out(BUILD_TEX), x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9, top: 0 }));
       appendOut(r.out, hi);
       for (const [x, y] of [p.at, [p.at[0] + Math.cos(p.angle) * p.len, p.at[1] + Math.sin(p.angle) * p.len]]) {
         r.x0 = Math.min(r.x0, x - 0.1);
@@ -466,7 +483,7 @@ export class World3 {
         [
           "high",
           getOr(runs, `${FREE}|${fw.id}|${i === 0 ? 0 : Math.floor((pieces.length - 1) / RUN)}`, () => ({
-            out: new Out(),
+            out: new Out(BUILD_TEX),
             x0: at[0] - 0.1,
             y0: at[1] - 0.1,
             x1: at[0] + 0.1,
@@ -475,7 +492,7 @@ export class World3 {
           })).out,
         ],
       ] as const) {
-        const o = new Out();
+        const o = new Out(BUILD_TEX);
         nativePost(o, 0, 0, top, part, fw.ch, halfT);
         turnOut(o, angle, at[0], at[1], fw.base ?? 0);
         appendOut(out, o);
@@ -552,12 +569,29 @@ export class World3 {
     this.dropRoofs();
     if (!this.roofs?.length) return;
     const root = new Group();
-    const mats = {
-      slope: litMaterial({ color: 0x585e66, side: DoubleSide }),
-      gable: litMaterial({ color: 0xefe4cc, side: DoubleSide }),
-      flat: litMaterial({ color: 0x6f6a62, side: DoubleSide }),
-      edge: litMaterial({ color: 0x3b3029, side: DoubleSide }),
+    // (the life look: slates on the slopes, plaster on the gables, concrete on a flat roof — the library's,
+    // plan 73 phase 7; each face's colour in its vertices, its UVs in metres along the eaves and up)
+    const lib = BUILD_TEX;
+    const libMat = (name: string) => {
+      const m = kitMaterial(name);
+      m.side = DoubleSide;
+      this.light(m);
+      return m;
     };
+    const mats = lib
+      ? {
+          slope: libMat("roof-slate"),
+          gable: libMat("plaster"),
+          flat: libMat("concrete"),
+          edge: libMat("plain"),
+        }
+      : {
+          slope: litMaterial({ color: 0x585e66, side: DoubleSide }),
+          gable: litMaterial({ color: 0xefe4cc, side: DoubleSide }),
+          flat: litMaterial({ color: 0x6f6a62, side: DoubleSide }),
+          edge: litMaterial({ color: 0x3b3029, side: DoubleSide }),
+        };
+    const tint: Record<string, number> = { slope: 0xffffff, gable: 0xefe4cc, flat: 0xffffff, edge: 0x3b3029 };
     const ink = new LineBasicMaterial({ color: 0x1e1712 });
     for (const r of this.roofs) {
       const g = new Group();
@@ -581,6 +615,23 @@ export class World3 {
         const geo = new BufferGeometry();
         geo.setAttribute("position", new Float32BufferAttribute(pos, 3));
         geo.computeVertexNormals();
+        if (lib) {
+          // (along the eaves: the face's level direction; up: across it in its plane)
+          const n = new Vector3().fromBufferAttribute(geo.getAttribute("normal") as BufferAttribute, 0);
+          const along = Math.abs(n.y) > 0.99 ? new Vector3(1, 0, 0) : new Vector3(0, 1, 0).cross(n).normalize();
+          const up = n.clone().cross(along).normalize();
+          const p = new Vector3();
+          const uv: number[] = [];
+          const col: number[] = [];
+          const c = new Color(tint[f.part] ?? 0xffffff);
+          for (let i = 0; i < pos.length; i += 3) {
+            p.set(pos[i], pos[i + 1], pos[i + 2]);
+            uv.push(p.dot(along), p.dot(up));
+            col.push(c.r, c.g, c.b, 1);
+          }
+          geo.setAttribute("uv", new Float32BufferAttribute(uv, 2));
+          geo.setAttribute("color", new Float32BufferAttribute(col, 4));
+        }
         const mesh = new Mesh(geo, mats[f.part]);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
@@ -1504,7 +1555,8 @@ export class World3 {
             : { x0: cx - 1, y0: cy - 1, x1: cx + w + 1, y1: cy + h + 1 };
         }
     if (kept && !aoOnly) return; // (nothing of the floor's within reach)
-    const bake = new FloorBake(map, this.objects, this.wells.floor, aoOnly, this.slabs);
+    // (the life look: the library's floors under the bake — plan 73 phase 7)
+    const bake = new FloorBake(map, this.objects, this.wells.floor, aoOnly, this.slabs, BUILD_TEX ? FLOOR_FILL : null);
     // (what's floor: the slabs' — the structure's — or the tiles'; less the wells)
     const floorAt = (x: number, y: number) => this.isFloorAt(x, y) && !this.wells.floor.has(`${x},${y}`);
     const softs = [...this.areas.values(), ...this.tall.values()].map((a) => a.built.soft);
@@ -1523,10 +1575,10 @@ export class World3 {
         const was = kept?.get(key);
         if (was) dropFloorMesh(this.root, was);
         // one quad per run of floor tiles (the void outside is cut by the
-        // shape, never by the texture's alpha: a lost canvas can't take the floor away)
-        const pos: number[] = [];
-        const nor: number[] = [];
-        const uv: number[] = [];
+        // shape, never by the texture's alpha: a lost canvas can't take the floor away) — in the life
+        // look a run of one material, each the library's own (`FLOOR_LIB`) in a group of its own
+        const groups = new Map<string, { pos: number[]; nor: number[]; uv: number[]; buv: number[] }>();
+        const libOf = (x: number, y: number) => (BUILD_TEX && FLOOR_LIB[bake.matAt(x, y)] ? bake.matAt(x, y) : "");
         for (let y = cy; y < cy + h; y++) {
           let x = cx;
           while (x < cx + w) {
@@ -1534,33 +1586,57 @@ export class World3 {
               x++;
               continue;
             }
+            const lib = libOf(x, y);
             let x1 = x;
-            while (x1 < cx + w && floorAt(x1, y)) x1++;
+            while (x1 < cx + w && floorAt(x1, y) && libOf(x1, y) === lib) x1++;
             // (u along x, v down from the chunk's top row, as the canvas is laid)
             const u0 = (x - cx) / w;
             const u1 = (x1 - cx) / w;
             const v0 = 1 - (y - cy) / h;
             const v1 = 1 - (y + 1 - cy) / h;
-            pos.push(x, 0, y, x, 0, y + 1, x1, 0, y + 1, x, 0, y, x1, 0, y + 1, x1, 0, y);
-            uv.push(u0, v0, u0, v1, u1, v1, u0, v0, u1, v1, u1, v0);
-            for (let i = 0; i < 6; i++) nor.push(0, 1, 0);
+            const g = getOr(groups, lib, () => ({ pos: [], nor: [], uv: [], buv: [] }));
+            g.pos.push(x, 0, y, x, 0, y + 1, x1, 0, y + 1, x, 0, y, x1, 0, y + 1, x1, 0, y);
+            const cuv = [u0, v0, u0, v1, u1, v1, u0, v0, u1, v1, u1, v0];
+            if (lib) {
+              // (the library's: metres across the plan; the bake's: the chunk's canvas)
+              g.uv.push(x, y, x, y + 1, x1, y + 1, x, y, x1, y + 1, x1, y);
+              g.buv.push(...cuv);
+            } else g.uv.push(...cuv);
+            for (let i = 0; i < 6; i++) g.nor.push(0, 1, 0);
             x = x1;
           }
         }
-        if (!pos.length) continue;
+        if (!groups.size) continue;
         const plan = bake.drawPlan(px, cx, cy, w, h);
         softShadows(plan, px, cx, cy, w, h, softs);
         const tex = new CanvasTexture(plan);
         tex.colorSpace = SRGBColorSpace;
         tex.anisotropy = this.anisotropy;
-        const mat = litMaterial({ map: tex });
-        this.light(mat);
+        const pos: number[] = [];
+        const nor: number[] = [];
+        const uv: number[] = [];
+        const buv: number[] = [];
+        const mats: Material[] = [];
         const geo = new BufferGeometry();
+        for (const [lib, g] of groups) {
+          const at = pos.length / 3;
+          pos.push(...g.pos);
+          nor.push(...g.nor);
+          uv.push(...g.uv);
+          buv.push(...(lib ? g.buv : g.uv));
+          const spec = lib ? FLOOR_LIB[lib] : null;
+          const m = spec ? floorMaterial(spec[0], tex, spec[1]) : litMaterial({ map: tex });
+          this.light(m);
+          geo.addGroup(at, g.pos.length / 3, mats.length);
+          mats.push(m);
+        }
         geo.setAttribute("position", new Float32BufferAttribute(pos, 3));
         geo.setAttribute("normal", new Float32BufferAttribute(nor, 3));
         geo.setAttribute("uv", new Float32BufferAttribute(uv, 2));
+        if (BUILD_TEX) geo.setAttribute("bakeUv", new Float32BufferAttribute(buv, 2));
         geo.computeBoundingSphere();
-        const mesh = new Mesh(geo, mat);
+        const mesh = new Mesh(geo, mats.length === 1 ? mats[0] : mats);
+        mesh.userData.bake = tex;
         mesh.receiveShadow = true;
         mesh.name = "floor";
         this.root.add(mesh);
@@ -1597,6 +1673,8 @@ export class World3 {
   private light(m: Material) {
     this.litMats.add(m);
     yuLit(m, {
+      // (its own piece first, where it has one: a life floor's bake — plan 73 phase 7)
+      base: (m.userData.base as Piece | undefined) ?? null,
       light: this.lightFn?.(m) ?? null,
       cel: m.userData.cel ? CEL : null,
       fade: m.userData.fade ? this.fade : null,
@@ -1805,6 +1883,11 @@ function appendOut(to: Out, from: Out): void {
     to[k].nor.push(...from[k].nor);
     to[k].col.push(...from[k].col);
   }
+  // (the life look's material buckets, plan 73 phase 7)
+  for (const [name, g] of from.mats) {
+    const d = to.mat(name);
+    for (const k of ["pos", "nor", "col", "uv"] as const) for (const x of g[k]) d[k].push(x);
+  }
   to.decals.push(...from.decals);
   to.soft.rects.push(...from.soft.rects);
   to.soft.dots.push(...from.soft.dots);
@@ -1923,9 +2006,12 @@ const SOFT_REACH = 2;
 function dropFloorMesh(root: Object3D, m: Mesh) {
   root.remove(m);
   m.geometry.dispose();
-  const mat = m.material as MeshLambertMaterial;
-  mat.map?.dispose();
-  mat.dispose();
+  // (its bake, and its materials: the library's maps are the library's, shared — not ours to drop)
+  (m.userData.bake as Texture | undefined)?.dispose();
+  for (const mat of (Array.isArray(m.material) ? m.material : [m.material]) as MeshLambertMaterial[]) {
+    if (!mat.userData.lib) mat.map?.dispose();
+    mat.dispose();
+  }
 }
 
 function getOr<K, V>(m: Map<K, V>, k: K, make: () => V): V {

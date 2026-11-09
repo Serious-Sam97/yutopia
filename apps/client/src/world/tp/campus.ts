@@ -16,6 +16,7 @@ import {
 import { crossings } from "@yutopia/shared/physics/structure-solids";
 import type { Ring, Structure } from "@yutopia/shared/structure";
 import { cellOf, hWallOf, isArc, onOf, openingSpan, vWallOf, wallLength, wallPoint } from "@yutopia/shared/structure";
+import type { MeshStandardMaterial } from "three";
 import {
   AdditiveBlending,
   type Box3,
@@ -52,6 +53,8 @@ import {
 } from "three";
 import type { Daylight } from "../art/daylight";
 import { litMaterial } from "../look/lit";
+import { isLifeBuild } from "../look/look-mode";
+import { libRelief } from "./kit-mats";
 import type { Themes } from "./sky";
 import { driftAlong, flatSnow, snowBox } from "./snow3d";
 import type { WallEdges } from "./walls3d";
@@ -1580,6 +1583,10 @@ export class Campus {
       const clad = cladCanvases(T);
       this.mainFacade = this.lambert(0xffffff, clad.map);
       this.mainFacade.userData.wxLedge = clad.ledge;
+      // (the life look: the concrete's relief and roughness over its painting — plan 73 phase 7; its UVs
+      // a storey up and CLAD_U along)
+      if (isLifeBuild())
+        libRelief(this.mainFacade as unknown as MeshStandardMaterial, "concrete", [CLAD_U / 2, STOREY / 2]);
       const pane = paneCanvases(T);
       this.panes = litMaterial({
         map: pane.map,

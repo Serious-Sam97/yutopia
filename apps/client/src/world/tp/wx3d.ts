@@ -282,7 +282,9 @@ const FRAG = `
     float d = min(min(wxW.x - r.x, r.z - wxW.x), min(wxW.z - r.y, r.w - wxW.z));
     wxSnowH *= 1.0 - smoothstep(0.0, 100.0, d);
   }
-  vec3 wxNw = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
+  // (the surface's own way up, not its relief's: a library material's normal map on a wall turned some of
+  // its pixels up past the snow's threshold — plan 73 phase 7)
+  vec3 wxNw = normalize((vec4(nonPerturbedNormal, 0.0) * viewMatrix).xyz);
   float wxUp = clamp(wxNw.y, 0.0, 1.0);
   float wxDetail = 1.0;
 #ifdef USE_MAP

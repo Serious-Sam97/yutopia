@@ -28,6 +28,17 @@ export function lookMode(): LookMode {
 /** Drawn in the life look. */
 export const isLife = () => lookMode() === "life";
 
+/** The life look's buildings (plan 73 phase 7: walls, floors, the outside in the library's materials) —
+ *  `?build=old` the buildings as they were under the life light, to compare. */
+export const isLifeBuild = (): boolean => {
+  if (!isLife()) return false;
+  try {
+    return new URLSearchParams(window.location.search).get("build") !== "old";
+  } catch {
+    return true;
+  }
+};
+
 /** (tests only) set the look. */
 export function setLookModeForTest(m: LookMode | null) {
   mode = m;

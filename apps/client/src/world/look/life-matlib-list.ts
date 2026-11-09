@@ -210,6 +210,18 @@ export const LIBRARY = {
     metalness: 0,
     normal: 0.8,
   },
+  // (plan 73 phase 7) a pitched roof's slates: courses of 15 cm, four slates a course a 1.2 m repeat,
+  // u along the eaves, v up the slope
+  "roof-slate": {
+    family: "masonry",
+    metres: 1.2,
+    px: 1024,
+    tint: false,
+    color: 0xffffff,
+    roughness: 0.82,
+    metalness: 0,
+    normal: 0.9,
+  },
   concrete: ground(2, 0.9, 0.35, 512),
   asphalt: ground(2, 0.95, 0.5),
   paving: ground(2.4, 0.85, 0.6),

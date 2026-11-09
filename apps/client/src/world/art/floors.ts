@@ -484,6 +484,8 @@ function inRings(rings: [number, number][][], x: number, y: number): boolean {
 }
 
 export class FloorBake {
+  /** What a tile's floor is (its slab's material, or its tile's). */
+  readonly matAt: (x: number, y: number) => string;
   private ao: HTMLCanvasElement;
   private byMat = new Map<string, [number, number][]>();
   private edges: [number, number, number, number][] = []; // plan rects (tiles) for strips
@@ -500,6 +502,9 @@ export class FloorBake {
     // the AO worked out only in these tiles (aoCanvas): for a bake of only the chunks in them
     aoOnly?: { x0: number; y0: number; x1: number; y1: number },
     private slabs: FloorSlab[] | null = null,
+    /** (plan 73 phase 7, the life look) materials painted a flat tone in place of their pattern — the
+     *  library's floor drawn under the bake, its shading and strips over it: the tone the material's */
+    private fill: Record<string, string> | null = null,
   ) {
     const W = map.width;
     const H = map.height;
@@ -510,6 +515,7 @@ export class FloorBake {
           return cellOf(map, -1, -1);
         }
       : (x: number, y: number) => cellOf(map, x, y);
+    this.matAt = matAt;
     for (let y = 0; y < H; y++)
       for (let x = 0; x < W; x++) {
         const ch = matAt(x, y);
@@ -558,7 +564,9 @@ export class FloorBake {
   private paint(g: CanvasRenderingContext2D, res: number, visible: (x: number, y: number) => boolean) {
     const ms = Math.round(T * res);
     const e = 0.6 / res; // overlap so materials meet without hairline gaps
-    const pattern = (ch: string) => {
+    const pattern = (ch: string): string | CanvasPattern | null => {
+      const flat = this.fill?.[ch];
+      if (flat) return flat;
       const tex = materialCanvas(ch, ms);
       const pat = tex && g.createPattern(tex, "repeat");
       pat?.setTransform(new DOMMatrix().scale(T / ms));

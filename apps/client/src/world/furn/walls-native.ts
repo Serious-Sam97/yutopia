@@ -35,11 +35,49 @@ const SMOKE = "#3a4a4a";
 const PANE = "#a9c2d0";
 
 const c = new Color();
-const rgba = (hex: string, a = CEL_ALPHA): number[] => {
-  c.setStyle(hex);
-  return [c.r, c.g, c.b, a];
+// (plan 73 phase 7) what each paint is in the life look: the library's material, and the base it's a tone
+// of — a wood's and a brick's texture is their colour, the paint only lightens or darkens it
+const BASE = new Map<string, string>();
+const MAT: Record<string, string> = {
+  [WALNUT]: "walnut",
+  [WALNUT_DARK]: "walnut",
+  [CREAM]: "plaster",
+  [MORTAR]: "plaster",
+  "#d8c9a2": "plaster",
+  [BRICK]: "brick",
+  [FOAM]: "matte",
+  "#9e4a36": "matte",
+  "#7d3a2c": "matte",
+  [CORK]: "matte",
+  "#9c754c": "matte",
 };
-const tone = (hex: string, k: number): string => `#${new Color(hex).multiplyScalar(k).getHexString()}`;
+const SELF: Record<string, string> = { walnut: WALNUT, brick: BRICK };
+/** A paint's colour — and for the life look its material (`mat`) and its colour drawn in it (`tex`: a
+ *  wood's or a brick's as light as its paint against the material's own). */
+type Paint = number[] & { mat?: string; tex?: number[] };
+const rgba = (hex: string, a = CEL_ALPHA): Paint => {
+  c.setStyle(hex);
+  const out: Paint = [c.r, c.g, c.b, a];
+  const mat = MAT[BASE.get(hex) ?? hex];
+  if (mat) {
+    out.mat = mat;
+    const self = SELF[mat];
+    if (self) {
+      const k = Math.max(0.3, Math.min(1.5, lum(hex) / lum(self)));
+      out.tex = [k, k, k, a];
+    }
+  }
+  return out;
+};
+const lum = (hex: string) => {
+  const k = new Color(hex);
+  return 0.2126 * k.r + 0.7152 * k.g + 0.0722 * k.b;
+};
+const tone = (hex: string, k: number): string => {
+  const t = `#${new Color(hex).multiplyScalar(k).getHexString()}`;
+  BASE.set(t, BASE.get(hex) ?? hex);
+  return t;
+};
 
 /** Where a wall piece is: on the cells' edge north of (x, y) along x ("h") or west of it along y
  *  ("v") — or a free wall's piece in its own frame (x, y 0, "h", turned into place after). */
@@ -54,12 +92,26 @@ const P = (f: WallFrame, u: number, v: number, z: number): V3 =>
 const N = (f: WallFrame, nu: number, nv: number, nz: number): V3 => (f.dir === "h" ? [nu, nz, nv] : [nv, nz, nu]);
 
 /** A box along u0..u1, across v0..v1, up z0..z1 (its underside left out). */
-function box(out: Out, f: WallFrame, u: [number, number], v: [number, number], z: [number, number], col: number[]) {
+function box(out: Out, f: WallFrame, u: [number, number], v: [number, number], z: [number, number], col: Paint) {
   const [u0, u1] = u;
   const [v0, v1] = v;
   const [z0, z1] = z;
   if (u1 - u0 < 1e-5 || v1 - v0 < 1e-5 || z1 - z0 < 1e-5) return;
-  const g = col[3] < CEL_ALPHA - 1e-3 ? out.clear : out.lit;
+  // (the life look: in its material's bucket, UVs in metres — see-through stays as it was)
+  const clear = col[3] < CEL_ALPHA - 1e-3;
+  if (out.textured && col.mat && !clear) {
+    const m = out.mat(col.mat);
+    const k = col.tex ?? col;
+    // (a wood's grain along each face's longer side: a board stood up, up it)
+    const g = col.mat === "walnut";
+    m.quadUV(P(f, u0, v1, z0), P(f, u1, v1, z0), P(f, u1, v1, z1), P(f, u0, v1, z1), N(f, 0, 1, 0), k, g);
+    m.quadUV(P(f, u0, v0, z0), P(f, u0, v0, z1), P(f, u1, v0, z1), P(f, u1, v0, z0), N(f, 0, -1, 0), k, g);
+    m.quadUV(P(f, u1, v0, z0), P(f, u1, v0, z1), P(f, u1, v1, z1), P(f, u1, v1, z0), N(f, 1, 0, 0), k, g);
+    m.quadUV(P(f, u0, v0, z0), P(f, u0, v1, z0), P(f, u0, v1, z1), P(f, u0, v0, z1), N(f, -1, 0, 0), k, g);
+    m.quadUV(P(f, u0, v0, z1), P(f, u0, v1, z1), P(f, u1, v1, z1), P(f, u1, v0, z1), N(f, 0, 0, 1), k, g);
+    return;
+  }
+  const g = clear ? out.clear : out.lit;
   // (front and back: the faces across it; the ends; the top)
   g.quad(P(f, u0, v1, z0), P(f, u1, v1, z0), P(f, u1, v1, z1), P(f, u0, v1, z1), N(f, 0, 1, 0), col);
   g.quad(P(f, u0, v0, z0), P(f, u0, v0, z1), P(f, u1, v0, z1), P(f, u1, v0, z0), N(f, 0, -1, 0), col);
@@ -165,13 +217,15 @@ function body(
     if (!s || !a) return;
     const v = side * (T + p);
     const c = rgba(col);
-    out.lit.quad(
+    const tex = out.textured && c.mat;
+    (tex ? out.mat(c.mat as string) : out.lit)[tex ? "quadUV" : "quad"](
       P(f, a[0], v, s[0]),
       P(f, a[1], v, s[0]),
       P(f, a[1], v, s[1]),
       P(f, a[0], v, s[1]),
       N(f, 0, side, 0),
-      c,
+      tex ? (c.tex ?? c) : c,
+      c.mat === "walnut",
     );
   };
   // (a pattern's places along the piece: whole steps from the wall's own start, run on from the
@@ -205,6 +259,11 @@ function body(
       return;
     }
     case "b": {
+      // (the life look: the library's brick, its courses and relief in its maps — no plate a brick)
+      if (out.textured) {
+        lay(SKIRT, top - CAP, BRICK);
+        return;
+      }
       // brick at true size: courses of 75 mm (65 and the mortar), bricks of 225, stretcher bond
       lay(SKIRT, top - CAP, MORTAR);
       const course = 0.075;

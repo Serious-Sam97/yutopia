@@ -36,6 +36,32 @@ export class Geo {
       this.col.push(rgba[k * 4], rgba[k * 4 + 1], rgba[k * 4 + 2], rgba[k * 4 + 3]);
     }
   }
+  // (the life look's buildings) a, b, c, d — as `quad` — with UVs in metres along the face's most-facing
+  // axis (a wall's: along it and up; a floor's: across the plan)
+  // (`long`: a wood's grain along the face's longer side — a board stood up runs its grain up it)
+  quadUV(a: V3, b: V3, c: V3, d: V3, n: V3, rgba: number[], long = false) {
+    const ax = Math.abs(n[0]);
+    const ay = Math.abs(n[1]);
+    const az = Math.abs(n[2]);
+    const flat = (p: V3): [number, number] =>
+      ay >= ax && ay >= az ? [p[0], p[2]] : ax >= az ? [p[2], p[1]] : [p[0], p[1]];
+    const span = (i: 0 | 1) =>
+      Math.max(flat(a)[i], flat(b)[i], flat(c)[i], flat(d)[i]) -
+      Math.min(flat(a)[i], flat(b)[i], flat(c)[i], flat(d)[i]);
+    const turn = long && span(1) > span(0);
+    const uvOf = (p: V3): [number, number] => {
+      const [u, v] = flat(p);
+      return turn ? [v, u] : [u, v];
+    };
+    const ok = dot(cross(sub(b, a), sub(c, a)), n) >= 0;
+    const C4 = [...rgba, ...rgba, ...rgba];
+    const tri = (p: V3, q: V3, r: V3) => {
+      const [t0, t1, t2] = ok ? [p, q, r] : [p, r, q];
+      this.tri3([...t0, ...t1, ...t2], [...n, ...n, ...n], [...uvOf(t0), ...uvOf(t1), ...uvOf(t2)], C4);
+    };
+    tri(a, b, c);
+    tri(a, c, d);
+  }
   // a, b, c, d counter-clockwise seen from the side `n` points to
   quad(a: V3, b: V3, c: V3, d: V3, n: V3, rgba: number[]) {
     this.tri(a, b, c, n, rgba);

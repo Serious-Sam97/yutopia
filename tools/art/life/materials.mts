@@ -473,6 +473,32 @@ const brick: Pattern = (u, v) => {
     r: mix(1, 0.85, inB),
   };
 };
+// (plan 73 phase 7) slates: 8 courses up a 1.2 m repeat (15 cm showing), 4 slates a course, a half bond;
+// each course's foot laid over the one below — its lip a dark line, the slate thickening up to it
+const SLATE_COLOURS = [0x4f555c, 0x5a6068, 0x474c53, 0x60666d, 0x535960, 0x4a5058].map(hex);
+const roofSlate: Pattern = (u, v) => {
+  const COURSES = 8;
+  const PER = 4;
+  const cy = v * COURSES;
+  const row = Math.floor(cy);
+  const fy = cy - row;
+  const cx = u * PER + (row % 2) * 0.5;
+  const b = Math.floor(cx);
+  const fx = cx - b;
+  const id = mod(b, PER) + row * PER;
+  // (the joint between two slates; the foot of the course, where it lies over the one below)
+  const joint = smooth(0.0, 0.025, Math.min(fx, 1 - fx));
+  const foot = smooth(0.0, 0.07, fy);
+  const base = SLATE_COLOURS[Math.floor(hash(id, 0, 121) * SLATE_COLOURS.length)];
+  const grain = (fbm(u, v, 18, 5, 3, 122) - 0.5) * 0.14;
+  const chip = hash(id, 2, 124) < 0.15 ? smooth(0.05, 0.0, Math.min(fx, 1 - fx)) * 0.15 : 0;
+  const k = (1 + grain + (hash(id, 1, 123) - 0.5) * 0.12 - chip) * (0.55 + 0.45 * foot) * (0.65 + 0.35 * joint);
+  return {
+    c: mul3(base, k),
+    h: clamp((0.25 + 0.55 * (1 - fy)) * joint + grain * 0.5),
+    r: mix(0.95, 0.78, joint * foot),
+  };
+};
 const concrete: Pattern = (u, v) => {
   const m = fbm(u, v, 3, 3, 5, 111);
   const pore = cells(u, v, 70, 112, 0.95);
@@ -614,6 +640,7 @@ const PATTERNS: Record<MatId, Pattern> = {
   "tile-wall": tiles(4, 0.02, 0.35, 182),
   carpet,
   brick,
+  "roof-slate": roofSlate,
   concrete,
   asphalt,
   paving,

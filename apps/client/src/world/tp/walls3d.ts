@@ -177,7 +177,24 @@ export function turnOut(out: Out, angle: number, x: number, z: number, lift = 0)
     arr[i + 2] = px * s + pz * c + (move ? z : 0);
     if (move && lift) arr[i + 1] += lift;
   };
-  for (const g of [out.lit, out.glow, out.clear]) {
+  // (the life look's textured faces: their UVs, metres from the piece's own start, run on from where it
+  // sits along its line and across it — a wall's plaster no longer starting again each piece, plan 73
+  // phase 7; a face's UVs by its normal's main axis, as Geo.quadUV drew them, turned where they were)
+  const along = x * c + z * s;
+  const across = -x * s + z * c;
+  for (const g of out.mats.values())
+    for (let k = 0, j = 0; k < g.uv.length; k += 2, j += 3) {
+      const [px, py, pz] = [g.pos[j], g.pos[j + 1], g.pos[j + 2]];
+      const [ax, ay, az] = [Math.abs(g.nor[j]), Math.abs(g.nor[j + 1]), Math.abs(g.nor[j + 2])];
+      const top = ay >= ax && ay >= az;
+      const end = !top && ax >= az;
+      const flat = top ? [px, pz] : end ? [pz, py] : [px, py];
+      const by = top ? [along, across] : end ? [across, 0] : [along, 0];
+      const turned = Math.abs(g.uv[k] - flat[0]) + Math.abs(g.uv[k + 1] - flat[1]) > 1e-4;
+      g.uv[k] += turned ? by[1] : by[0];
+      g.uv[k + 1] += turned ? by[0] : by[1];
+    }
+  for (const g of out.geos) {
     for (let i = 0; i < g.pos.length; i += 3) pt(g.pos, i, true);
     for (let i = 0; i < g.nor.length; i += 3) pt(g.nor, i, false);
   }
