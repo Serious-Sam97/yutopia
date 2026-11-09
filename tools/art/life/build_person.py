@@ -1446,9 +1446,9 @@ if PREVIEW:
             "f": ["outer-parka", "bottom-jeans", "shoes-boots", "hat-beanie"],
             "g": ["top-tee", "bottom-longskirt", "shoes-sneakers"],
             # the hair (heads only)
-            "h": ["top-sweater", "hair-short04", "beard-beard"],
+            "h": ["top-sweater", "hair-slick", "beard-full"],
             "i": ["top-sweater", "hair-long"],
-            "j": ["top-sweater", "hair-bob02"],
+            "j": ["top-sweater", "hair-wavy"],
             "k": ["top-sweater", "hair-bun"],
         }
         if WEAR

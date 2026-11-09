@@ -26,7 +26,9 @@ const BUDGETS: Record<string, { mb: number; gpuMb: number; tris: number }> = {
   // loads only what's worn)
   // (16 → 24 MB of textures with the CC0 pack's six shoes, batch 3: ~18.9 MB were all of them on the GPU —
   // only what's worn is)
-  wear: { mb: 7, gpuMb: 24, tris: 160000 },
+  // (7 → 9 MB and 240k tris in the file with every hair and beard, 5.3: 7.96 MB, 207.9k the man's — one
+  // person draws only what they wear)
+  wear: { mb: 9, gpuMb: 24, tris: 240000 },
   plant: { mb: 0.3, gpuMb: 1.5, tris: 12000 },
   tree: { mb: 0.4, gpuMb: 2, tris: 12000 },
 };

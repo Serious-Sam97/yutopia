@@ -92,286 +92,391 @@ const SHOTS: [string, string][] = [
   // the patterns; close on the hair
   [
     "w5-man-front",
-    "who=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short04|top-shirt,bottom-shorts,shoes-sneakers,hair-short04,beard-beard|top-sweater,bottom-leggings,shoes-boots,hair-long|outer-parka,bottom-jeans,shoes-boots,hat-beanie&t=2.4&spin=8",
+    "who=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-slick|top-shirt,bottom-shorts,shoes-sneakers,hair-slick,beard-full|top-sweater,bottom-leggings,shoes-boots,hair-long|outer-parka,bottom-jeans,shoes-boots,hat-beanie&t=2.4&spin=8",
   ],
   [
     "w5-man-threeq",
-    "who=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short04|top-shirt,bottom-shorts,shoes-sneakers,hair-short04,beard-beard|top-sweater,bottom-leggings,shoes-boots,hair-long|outer-parka,bottom-jeans,shoes-boots,hat-beanie&t=2.4&spin=40",
+    "who=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-slick|top-shirt,bottom-shorts,shoes-sneakers,hair-slick,beard-full|top-sweater,bottom-leggings,shoes-boots,hair-long|outer-parka,bottom-jeans,shoes-boots,hat-beanie&t=2.4&spin=40",
   ],
   [
     "w5-man-back",
-    "who=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short04|top-shirt,bottom-shorts,shoes-sneakers,hair-short04,beard-beard|top-sweater,bottom-leggings,shoes-boots,hair-long|outer-parka,bottom-jeans,shoes-boots,hat-beanie&t=2.4&spin=180",
+    "who=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-slick|top-shirt,bottom-shorts,shoes-sneakers,hair-slick,beard-full|top-sweater,bottom-leggings,shoes-boots,hair-long|outer-parka,bottom-jeans,shoes-boots,hat-beanie&t=2.4&spin=180",
   ],
   [
     "w5-man-walk",
-    "who=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short04|top-shirt,bottom-shorts,shoes-sneakers,hair-short04,beard-beard|top-sweater,bottom-leggings,shoes-boots,hair-long|outer-parka,bottom-jeans,shoes-boots,hat-beanie&act=walk&t=3.15&spin=60",
+    "who=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-slick|top-shirt,bottom-shorts,shoes-sneakers,hair-slick,beard-full|top-sweater,bottom-leggings,shoes-boots,hair-long|outer-parka,bottom-jeans,shoes-boots,hat-beanie&act=walk&t=3.15&spin=60",
   ],
   [
     "w5-woman-front",
-    "who=woman&wear=top-tank,bottom-skirt,shoes-sneakers,hair-long|top-dress,shoes-boots,hair-bun|top-tee,bottom-longskirt,shoes-sneakers,hair-braid|top-sweater,bottom-jeans,shoes-boots,hair-short04&t=2.4&spin=-8",
+    "who=woman&wear=top-tank,bottom-skirt,shoes-sneakers,hair-long|top-dress,shoes-boots,hair-bun|top-tee,bottom-longskirt,shoes-sneakers,hair-braids|top-sweater,bottom-jeans,shoes-boots,hair-slick&t=2.4&spin=-8",
   ],
   [
     "w5-woman-threeq",
-    "who=woman&wear=top-tank,bottom-skirt,shoes-sneakers,hair-long|top-dress,shoes-boots,hair-bun|top-tee,bottom-longskirt,shoes-sneakers,hair-braid|top-sweater,bottom-jeans,shoes-boots,hair-short04&t=2.4&spin=-40",
+    "who=woman&wear=top-tank,bottom-skirt,shoes-sneakers,hair-long|top-dress,shoes-boots,hair-bun|top-tee,bottom-longskirt,shoes-sneakers,hair-braids|top-sweater,bottom-jeans,shoes-boots,hair-slick&t=2.4&spin=-40",
   ],
   [
     "w5-woman-back",
-    "who=woman&wear=top-tank,bottom-skirt,shoes-sneakers,hair-long|top-dress,shoes-boots,hair-bun|top-tee,bottom-longskirt,shoes-sneakers,hair-braid|top-sweater,bottom-jeans,shoes-boots,hair-short04&t=2.4&spin=180",
+    "who=woman&wear=top-tank,bottom-skirt,shoes-sneakers,hair-long|top-dress,shoes-boots,hair-bun|top-tee,bottom-longskirt,shoes-sneakers,hair-braids|top-sweater,bottom-jeans,shoes-boots,hair-slick&t=2.4&spin=180",
   ],
   [
     "w5-woman-walk",
-    "who=woman&wear=top-tank,bottom-skirt,shoes-sneakers,hair-long|top-dress,shoes-boots,hair-bun|top-tee,bottom-longskirt,shoes-sneakers,hair-braid|top-sweater,bottom-jeans,shoes-boots,hair-short04&act=walk&t=3.15&spin=-60",
+    "who=woman&wear=top-tank,bottom-skirt,shoes-sneakers,hair-long|top-dress,shoes-boots,hair-bun|top-tee,bottom-longskirt,shoes-sneakers,hair-braids|top-sweater,bottom-jeans,shoes-boots,hair-slick&act=walk&t=3.15&spin=-60",
   ],
   [
     "w5-plaid",
-    "wear=top-shirt,bottom-jeans,shoes-sneakers,hair-short04|top-tee,bottom-jeans,shoes-sneakers,hair-long&pattern=plaid&t=2.4&spin=15",
+    "wear=top-shirt,bottom-jeans,shoes-sneakers,hair-slick|top-tee,bottom-jeans,shoes-sneakers,hair-long&pattern=plaid&t=2.4&spin=15",
   ],
   [
     "w5-stripes",
-    "wear=top-sweater,bottom-jeans,shoes-boots,hair-short04|top-tee,bottom-skirt,shoes-sneakers,hair-bun&pattern=stripes&t=2.4&spin=15",
+    "wear=top-sweater,bottom-jeans,shoes-boots,hair-slick|top-tee,bottom-skirt,shoes-sneakers,hair-bun&pattern=stripes&t=2.4&spin=15",
   ],
   // (the CC0 pack's hairs, each on both: heads and shoulders in a row)
   [
     "w5-hairs-man",
-    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short01|top-tee,bottom-jeans,shoes-sneakers,hair-short03|top-tee,bottom-jeans,shoes-sneakers,hair-short04|top-tee,bottom-jeans,shoes-sneakers,hair-bob01&t=2.4&spin=20",
+    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-spiky|top-tee,bottom-jeans,shoes-sneakers,hair-pixie|top-tee,bottom-jeans,shoes-sneakers,hair-slick|top-tee,bottom-jeans,shoes-sneakers,hair-bob&t=2.4&spin=20",
   ],
   [
     "w5-hairs-man-b",
-    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob02|top-tee,bottom-jeans,shoes-sneakers,hair-braid|top-tee,bottom-jeans,shoes-sneakers,hair-bob02|top-tee,bottom-jeans,shoes-sneakers,hair-long&t=2.4&spin=20",
+    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-wavy|top-tee,bottom-jeans,shoes-sneakers,hair-braids|top-tee,bottom-jeans,shoes-sneakers,hair-wavy|top-tee,bottom-jeans,shoes-sneakers,hair-long&t=2.4&spin=20",
   ],
   [
     "w5-hairs-woman",
-    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short01|top-tee,bottom-jeans,shoes-sneakers,hair-short03|top-tee,bottom-jeans,shoes-sneakers,hair-short04|top-tee,bottom-jeans,shoes-sneakers,hair-bob01&t=2.4&spin=-20",
+    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-spiky|top-tee,bottom-jeans,shoes-sneakers,hair-pixie|top-tee,bottom-jeans,shoes-sneakers,hair-slick|top-tee,bottom-jeans,shoes-sneakers,hair-bob&t=2.4&spin=-20",
   ],
   [
     "w5-hairs-woman-b",
-    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob02|top-tee,bottom-jeans,shoes-sneakers,hair-braid|top-tee,bottom-jeans,shoes-sneakers,hair-bob02|top-tee,bottom-jeans,shoes-sneakers,hair-bun&t=2.4&spin=-20",
+    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-wavy|top-tee,bottom-jeans,shoes-sneakers,hair-braids|top-tee,bottom-jeans,shoes-sneakers,hair-wavy|top-tee,bottom-jeans,shoes-sneakers,hair-bun&t=2.4&spin=-20",
   ],
   // (5.1: the cloth close — the library's weave on the made garments; the necklines)
   [
     "w51-cloth-man",
-    "who=man&near=1&wear=top-sweater,bottom-jeans,shoes-boots,hair-short04|top-shirt,bottom-jeans,shoes-sneakers,hair-short01&t=2.4&spin=20",
+    "who=man&near=1&wear=top-sweater,bottom-jeans,shoes-boots,hair-slick|top-shirt,bottom-jeans,shoes-sneakers,hair-spiky&t=2.4&spin=20",
   ],
   [
     "w51-cloth-woman",
-    "who=woman&near=1&wear=top-tank,bottom-skirt,shoes-sneakers,hair-bob01|top-dress,shoes-boots,hair-long&t=2.4&spin=-20",
+    "who=woman&near=1&wear=top-tank,bottom-skirt,shoes-sneakers,hair-bob|top-dress,shoes-boots,hair-long&t=2.4&spin=-20",
   ],
   // (5.2 batch 1: every top, five at a time, front and back)
   [
     "w52-tops-man-1",
-    "who=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short04|top-longtee,bottom-jeans,shoes-sneakers,hair-short04|top-henley,bottom-jeans,shoes-sneakers,hair-short04|top-crop,bottom-jeans,shoes-sneakers,hair-short04|top-polo,bottom-jeans,shoes-sneakers,hair-short04&t=2.4&spin=15",
+    "who=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-slick|top-longtee,bottom-jeans,shoes-sneakers,hair-slick|top-henley,bottom-jeans,shoes-sneakers,hair-slick|top-crop,bottom-jeans,shoes-sneakers,hair-slick|top-polo,bottom-jeans,shoes-sneakers,hair-slick&t=2.4&spin=15",
   ],
   [
     "w52-tops-man-1-back",
-    "who=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short04|top-longtee,bottom-jeans,shoes-sneakers,hair-short04|top-henley,bottom-jeans,shoes-sneakers,hair-short04|top-crop,bottom-jeans,shoes-sneakers,hair-short04|top-polo,bottom-jeans,shoes-sneakers,hair-short04&t=2.4&spin=165",
+    "who=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-slick|top-longtee,bottom-jeans,shoes-sneakers,hair-slick|top-henley,bottom-jeans,shoes-sneakers,hair-slick|top-crop,bottom-jeans,shoes-sneakers,hair-slick|top-polo,bottom-jeans,shoes-sneakers,hair-slick&t=2.4&spin=165",
   ],
   [
     "w52-tops-man-2",
-    "who=man&wear=top-tank,bottom-jeans,shoes-sneakers,hair-short04|top-shirt,bottom-jeans,shoes-sneakers,hair-short04|top-flannel,bottom-jeans,shoes-sneakers,hair-short04|top-shirttie,bottom-jeans,shoes-sneakers,hair-short04|top-sweater,bottom-jeans,shoes-sneakers,hair-short04&t=2.4&spin=15",
+    "who=man&wear=top-tank,bottom-jeans,shoes-sneakers,hair-slick|top-shirt,bottom-jeans,shoes-sneakers,hair-slick|top-flannel,bottom-jeans,shoes-sneakers,hair-slick|top-shirttie,bottom-jeans,shoes-sneakers,hair-slick|top-sweater,bottom-jeans,shoes-sneakers,hair-slick&t=2.4&spin=15",
   ],
   [
     "w52-tops-man-2-back",
-    "who=man&wear=top-tank,bottom-jeans,shoes-sneakers,hair-short04|top-shirt,bottom-jeans,shoes-sneakers,hair-short04|top-flannel,bottom-jeans,shoes-sneakers,hair-short04|top-shirttie,bottom-jeans,shoes-sneakers,hair-short04|top-sweater,bottom-jeans,shoes-sneakers,hair-short04&t=2.4&spin=165",
+    "who=man&wear=top-tank,bottom-jeans,shoes-sneakers,hair-slick|top-shirt,bottom-jeans,shoes-sneakers,hair-slick|top-flannel,bottom-jeans,shoes-sneakers,hair-slick|top-shirttie,bottom-jeans,shoes-sneakers,hair-slick|top-sweater,bottom-jeans,shoes-sneakers,hair-slick&t=2.4&spin=165",
   ],
   [
     "w52-tops-man-3",
-    "who=man&wear=top-turtleneck,bottom-jeans,shoes-sneakers,hair-short04|top-sweatshirt,bottom-jeans,shoes-sneakers,hair-short04|top-hoodie,bottom-jeans,shoes-sneakers,hair-short04|top-fleece,bottom-jeans,shoes-sneakers,hair-short04|top-cardigan,bottom-jeans,shoes-sneakers,hair-short04&t=2.4&spin=15",
+    "who=man&wear=top-turtleneck,bottom-jeans,shoes-sneakers,hair-slick|top-sweatshirt,bottom-jeans,shoes-sneakers,hair-slick|top-hoodie,bottom-jeans,shoes-sneakers,hair-slick|top-fleece,bottom-jeans,shoes-sneakers,hair-slick|top-cardigan,bottom-jeans,shoes-sneakers,hair-slick&t=2.4&spin=15",
   ],
   [
     "w52-tops-man-3-back",
-    "who=man&wear=top-turtleneck,bottom-jeans,shoes-sneakers,hair-short04|top-sweatshirt,bottom-jeans,shoes-sneakers,hair-short04|top-hoodie,bottom-jeans,shoes-sneakers,hair-short04|top-fleece,bottom-jeans,shoes-sneakers,hair-short04|top-cardigan,bottom-jeans,shoes-sneakers,hair-short04&t=2.4&spin=165",
+    "who=man&wear=top-turtleneck,bottom-jeans,shoes-sneakers,hair-slick|top-sweatshirt,bottom-jeans,shoes-sneakers,hair-slick|top-hoodie,bottom-jeans,shoes-sneakers,hair-slick|top-fleece,bottom-jeans,shoes-sneakers,hair-slick|top-cardigan,bottom-jeans,shoes-sneakers,hair-slick&t=2.4&spin=165",
   ],
   [
     "w52-tops-man-4",
-    "who=man&wear=top-blazer,bottom-jeans,shoes-sneakers,hair-short04|top-jacket,bottom-jeans,shoes-sneakers,hair-short04|top-puffer,bottom-jeans,shoes-sneakers,hair-short04|top-dress,bottom-jeans,shoes-sneakers,hair-short04&t=2.4&spin=15",
+    "who=man&wear=top-blazer,bottom-jeans,shoes-sneakers,hair-slick|top-jacket,bottom-jeans,shoes-sneakers,hair-slick|top-puffer,bottom-jeans,shoes-sneakers,hair-slick|top-dress,bottom-jeans,shoes-sneakers,hair-slick&t=2.4&spin=15",
   ],
   [
     "w52-tops-man-4-back",
-    "who=man&wear=top-blazer,bottom-jeans,shoes-sneakers,hair-short04|top-jacket,bottom-jeans,shoes-sneakers,hair-short04|top-puffer,bottom-jeans,shoes-sneakers,hair-short04|top-dress,bottom-jeans,shoes-sneakers,hair-short04&t=2.4&spin=165",
+    "who=man&wear=top-blazer,bottom-jeans,shoes-sneakers,hair-slick|top-jacket,bottom-jeans,shoes-sneakers,hair-slick|top-puffer,bottom-jeans,shoes-sneakers,hair-slick|top-dress,bottom-jeans,shoes-sneakers,hair-slick&t=2.4&spin=165",
   ],
   [
     "w52-tops-woman-1",
-    "who=woman&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob01|top-longtee,bottom-jeans,shoes-sneakers,hair-bob01|top-henley,bottom-jeans,shoes-sneakers,hair-bob01|top-crop,bottom-jeans,shoes-sneakers,hair-bob01|top-polo,bottom-jeans,shoes-sneakers,hair-bob01&t=2.4&spin=15",
+    "who=woman&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob|top-longtee,bottom-jeans,shoes-sneakers,hair-bob|top-henley,bottom-jeans,shoes-sneakers,hair-bob|top-crop,bottom-jeans,shoes-sneakers,hair-bob|top-polo,bottom-jeans,shoes-sneakers,hair-bob&t=2.4&spin=15",
   ],
   [
     "w52-tops-woman-1-back",
-    "who=woman&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob01|top-longtee,bottom-jeans,shoes-sneakers,hair-bob01|top-henley,bottom-jeans,shoes-sneakers,hair-bob01|top-crop,bottom-jeans,shoes-sneakers,hair-bob01|top-polo,bottom-jeans,shoes-sneakers,hair-bob01&t=2.4&spin=165",
+    "who=woman&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob|top-longtee,bottom-jeans,shoes-sneakers,hair-bob|top-henley,bottom-jeans,shoes-sneakers,hair-bob|top-crop,bottom-jeans,shoes-sneakers,hair-bob|top-polo,bottom-jeans,shoes-sneakers,hair-bob&t=2.4&spin=165",
   ],
   [
     "w52-tops-woman-2",
-    "who=woman&wear=top-tank,bottom-jeans,shoes-sneakers,hair-bob01|top-shirt,bottom-jeans,shoes-sneakers,hair-bob01|top-flannel,bottom-jeans,shoes-sneakers,hair-bob01|top-shirttie,bottom-jeans,shoes-sneakers,hair-bob01|top-sweater,bottom-jeans,shoes-sneakers,hair-bob01&t=2.4&spin=15",
+    "who=woman&wear=top-tank,bottom-jeans,shoes-sneakers,hair-bob|top-shirt,bottom-jeans,shoes-sneakers,hair-bob|top-flannel,bottom-jeans,shoes-sneakers,hair-bob|top-shirttie,bottom-jeans,shoes-sneakers,hair-bob|top-sweater,bottom-jeans,shoes-sneakers,hair-bob&t=2.4&spin=15",
   ],
   [
     "w52-tops-woman-2-back",
-    "who=woman&wear=top-tank,bottom-jeans,shoes-sneakers,hair-bob01|top-shirt,bottom-jeans,shoes-sneakers,hair-bob01|top-flannel,bottom-jeans,shoes-sneakers,hair-bob01|top-shirttie,bottom-jeans,shoes-sneakers,hair-bob01|top-sweater,bottom-jeans,shoes-sneakers,hair-bob01&t=2.4&spin=165",
+    "who=woman&wear=top-tank,bottom-jeans,shoes-sneakers,hair-bob|top-shirt,bottom-jeans,shoes-sneakers,hair-bob|top-flannel,bottom-jeans,shoes-sneakers,hair-bob|top-shirttie,bottom-jeans,shoes-sneakers,hair-bob|top-sweater,bottom-jeans,shoes-sneakers,hair-bob&t=2.4&spin=165",
   ],
   [
     "w52-tops-woman-3",
-    "who=woman&wear=top-turtleneck,bottom-jeans,shoes-sneakers,hair-bob01|top-sweatshirt,bottom-jeans,shoes-sneakers,hair-bob01|top-hoodie,bottom-jeans,shoes-sneakers,hair-bob01|top-fleece,bottom-jeans,shoes-sneakers,hair-bob01|top-cardigan,bottom-jeans,shoes-sneakers,hair-bob01&t=2.4&spin=15",
+    "who=woman&wear=top-turtleneck,bottom-jeans,shoes-sneakers,hair-bob|top-sweatshirt,bottom-jeans,shoes-sneakers,hair-bob|top-hoodie,bottom-jeans,shoes-sneakers,hair-bob|top-fleece,bottom-jeans,shoes-sneakers,hair-bob|top-cardigan,bottom-jeans,shoes-sneakers,hair-bob&t=2.4&spin=15",
   ],
   [
     "w52-tops-woman-3-back",
-    "who=woman&wear=top-turtleneck,bottom-jeans,shoes-sneakers,hair-bob01|top-sweatshirt,bottom-jeans,shoes-sneakers,hair-bob01|top-hoodie,bottom-jeans,shoes-sneakers,hair-bob01|top-fleece,bottom-jeans,shoes-sneakers,hair-bob01|top-cardigan,bottom-jeans,shoes-sneakers,hair-bob01&t=2.4&spin=165",
+    "who=woman&wear=top-turtleneck,bottom-jeans,shoes-sneakers,hair-bob|top-sweatshirt,bottom-jeans,shoes-sneakers,hair-bob|top-hoodie,bottom-jeans,shoes-sneakers,hair-bob|top-fleece,bottom-jeans,shoes-sneakers,hair-bob|top-cardigan,bottom-jeans,shoes-sneakers,hair-bob&t=2.4&spin=165",
   ],
   [
     "w52-tops-woman-4",
-    "who=woman&wear=top-blazer,bottom-jeans,shoes-sneakers,hair-bob01|top-jacket,bottom-jeans,shoes-sneakers,hair-bob01|top-puffer,bottom-jeans,shoes-sneakers,hair-bob01|top-dress,bottom-jeans,shoes-sneakers,hair-bob01&t=2.4&spin=15",
+    "who=woman&wear=top-blazer,bottom-jeans,shoes-sneakers,hair-bob|top-jacket,bottom-jeans,shoes-sneakers,hair-bob|top-puffer,bottom-jeans,shoes-sneakers,hair-bob|top-dress,bottom-jeans,shoes-sneakers,hair-bob&t=2.4&spin=15",
   ],
   [
     "w52-tops-woman-4-back",
-    "who=woman&wear=top-blazer,bottom-jeans,shoes-sneakers,hair-bob01|top-jacket,bottom-jeans,shoes-sneakers,hair-bob01|top-puffer,bottom-jeans,shoes-sneakers,hair-bob01|top-dress,bottom-jeans,shoes-sneakers,hair-bob01&t=2.4&spin=165",
+    "who=woman&wear=top-blazer,bottom-jeans,shoes-sneakers,hair-bob|top-jacket,bottom-jeans,shoes-sneakers,hair-bob|top-puffer,bottom-jeans,shoes-sneakers,hair-bob|top-dress,bottom-jeans,shoes-sneakers,hair-bob&t=2.4&spin=165",
   ],
   // (5.2 batch 2: every bottom)
   [
     "w52-bottoms-man-1",
-    "who=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short04|top-tee,bottom-trousers,shoes-sneakers,hair-short04|top-tee,bottom-chinos,shoes-sneakers,hair-short04|top-tee,bottom-suit,shoes-sneakers,hair-short04|top-tee,bottom-cargo,shoes-sneakers,hair-short04&t=2.4&spin=15",
+    "who=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-slick|top-tee,bottom-trousers,shoes-sneakers,hair-slick|top-tee,bottom-chinos,shoes-sneakers,hair-slick|top-tee,bottom-suit,shoes-sneakers,hair-slick|top-tee,bottom-cargo,shoes-sneakers,hair-slick&t=2.4&spin=15",
   ],
   [
     "w52-bottoms-man-1-back",
-    "who=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short04|top-tee,bottom-trousers,shoes-sneakers,hair-short04|top-tee,bottom-chinos,shoes-sneakers,hair-short04|top-tee,bottom-suit,shoes-sneakers,hair-short04|top-tee,bottom-cargo,shoes-sneakers,hair-short04&t=2.4&spin=165",
+    "who=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-slick|top-tee,bottom-trousers,shoes-sneakers,hair-slick|top-tee,bottom-chinos,shoes-sneakers,hair-slick|top-tee,bottom-suit,shoes-sneakers,hair-slick|top-tee,bottom-cargo,shoes-sneakers,hair-slick&t=2.4&spin=165",
   ],
   [
     "w52-bottoms-man-2",
-    "who=man&wear=top-tee,bottom-joggers,shoes-sneakers,hair-short04|top-tee,bottom-wide,shoes-sneakers,hair-short04|top-tee,bottom-snowpants,shoes-sneakers,hair-short04|top-longtee,bottom-overalls,shoes-boots,hair-short04|top-tee,bottom-shorts,shoes-sneakers,hair-short04&t=2.4&spin=15",
+    "who=man&wear=top-tee,bottom-joggers,shoes-sneakers,hair-slick|top-tee,bottom-wide,shoes-sneakers,hair-slick|top-tee,bottom-snowpants,shoes-sneakers,hair-slick|top-longtee,bottom-overalls,shoes-boots,hair-slick|top-tee,bottom-shorts,shoes-sneakers,hair-slick&t=2.4&spin=15",
   ],
   [
     "w52-bottoms-man-2-back",
-    "who=man&wear=top-tee,bottom-joggers,shoes-sneakers,hair-short04|top-tee,bottom-wide,shoes-sneakers,hair-short04|top-tee,bottom-snowpants,shoes-sneakers,hair-short04|top-longtee,bottom-overalls,shoes-boots,hair-short04|top-tee,bottom-shorts,shoes-sneakers,hair-short04&t=2.4&spin=165",
+    "who=man&wear=top-tee,bottom-joggers,shoes-sneakers,hair-slick|top-tee,bottom-wide,shoes-sneakers,hair-slick|top-tee,bottom-snowpants,shoes-sneakers,hair-slick|top-longtee,bottom-overalls,shoes-boots,hair-slick|top-tee,bottom-shorts,shoes-sneakers,hair-slick&t=2.4&spin=165",
   ],
   [
     "w52-bottoms-man-3",
-    "who=man&wear=top-tee,bottom-leggings,shoes-sneakers,hair-short04|top-tee,bottom-skirt,shoes-sneakers,hair-short04|top-tee,bottom-pleated,shoes-sneakers,hair-short04|top-tee,bottom-longskirt,shoes-sneakers,hair-short04&t=2.4&spin=15",
+    "who=man&wear=top-tee,bottom-leggings,shoes-sneakers,hair-slick|top-tee,bottom-skirt,shoes-sneakers,hair-slick|top-tee,bottom-pleated,shoes-sneakers,hair-slick|top-tee,bottom-longskirt,shoes-sneakers,hair-slick&t=2.4&spin=15",
   ],
   [
     "w52-bottoms-man-3-back",
-    "who=man&wear=top-tee,bottom-leggings,shoes-sneakers,hair-short04|top-tee,bottom-skirt,shoes-sneakers,hair-short04|top-tee,bottom-pleated,shoes-sneakers,hair-short04|top-tee,bottom-longskirt,shoes-sneakers,hair-short04&t=2.4&spin=165",
+    "who=man&wear=top-tee,bottom-leggings,shoes-sneakers,hair-slick|top-tee,bottom-skirt,shoes-sneakers,hair-slick|top-tee,bottom-pleated,shoes-sneakers,hair-slick|top-tee,bottom-longskirt,shoes-sneakers,hair-slick&t=2.4&spin=165",
   ],
   [
     "w52-bottoms-woman-1",
-    "who=woman&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob01|top-tee,bottom-trousers,shoes-sneakers,hair-bob01|top-tee,bottom-chinos,shoes-sneakers,hair-bob01|top-tee,bottom-suit,shoes-sneakers,hair-bob01|top-tee,bottom-cargo,shoes-sneakers,hair-bob01&t=2.4&spin=15",
+    "who=woman&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob|top-tee,bottom-trousers,shoes-sneakers,hair-bob|top-tee,bottom-chinos,shoes-sneakers,hair-bob|top-tee,bottom-suit,shoes-sneakers,hair-bob|top-tee,bottom-cargo,shoes-sneakers,hair-bob&t=2.4&spin=15",
   ],
   [
     "w52-bottoms-woman-1-back",
-    "who=woman&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob01|top-tee,bottom-trousers,shoes-sneakers,hair-bob01|top-tee,bottom-chinos,shoes-sneakers,hair-bob01|top-tee,bottom-suit,shoes-sneakers,hair-bob01|top-tee,bottom-cargo,shoes-sneakers,hair-bob01&t=2.4&spin=165",
+    "who=woman&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob|top-tee,bottom-trousers,shoes-sneakers,hair-bob|top-tee,bottom-chinos,shoes-sneakers,hair-bob|top-tee,bottom-suit,shoes-sneakers,hair-bob|top-tee,bottom-cargo,shoes-sneakers,hair-bob&t=2.4&spin=165",
   ],
   [
     "w52-bottoms-woman-2",
-    "who=woman&wear=top-tee,bottom-joggers,shoes-sneakers,hair-bob01|top-tee,bottom-wide,shoes-sneakers,hair-bob01|top-tee,bottom-snowpants,shoes-sneakers,hair-bob01|top-longtee,bottom-overalls,shoes-boots,hair-bob01|top-tee,bottom-shorts,shoes-sneakers,hair-bob01&t=2.4&spin=15",
+    "who=woman&wear=top-tee,bottom-joggers,shoes-sneakers,hair-bob|top-tee,bottom-wide,shoes-sneakers,hair-bob|top-tee,bottom-snowpants,shoes-sneakers,hair-bob|top-longtee,bottom-overalls,shoes-boots,hair-bob|top-tee,bottom-shorts,shoes-sneakers,hair-bob&t=2.4&spin=15",
   ],
   [
     "w52-bottoms-woman-2-back",
-    "who=woman&wear=top-tee,bottom-joggers,shoes-sneakers,hair-bob01|top-tee,bottom-wide,shoes-sneakers,hair-bob01|top-tee,bottom-snowpants,shoes-sneakers,hair-bob01|top-longtee,bottom-overalls,shoes-boots,hair-bob01|top-tee,bottom-shorts,shoes-sneakers,hair-bob01&t=2.4&spin=165",
+    "who=woman&wear=top-tee,bottom-joggers,shoes-sneakers,hair-bob|top-tee,bottom-wide,shoes-sneakers,hair-bob|top-tee,bottom-snowpants,shoes-sneakers,hair-bob|top-longtee,bottom-overalls,shoes-boots,hair-bob|top-tee,bottom-shorts,shoes-sneakers,hair-bob&t=2.4&spin=165",
   ],
   [
     "w52-bottoms-woman-3",
-    "who=woman&wear=top-tee,bottom-leggings,shoes-sneakers,hair-bob01|top-tee,bottom-skirt,shoes-sneakers,hair-bob01|top-tee,bottom-pleated,shoes-sneakers,hair-bob01|top-tee,bottom-longskirt,shoes-sneakers,hair-bob01&t=2.4&spin=15",
+    "who=woman&wear=top-tee,bottom-leggings,shoes-sneakers,hair-bob|top-tee,bottom-skirt,shoes-sneakers,hair-bob|top-tee,bottom-pleated,shoes-sneakers,hair-bob|top-tee,bottom-longskirt,shoes-sneakers,hair-bob&t=2.4&spin=15",
   ],
   [
     "w52-bottoms-woman-3-back",
-    "who=woman&wear=top-tee,bottom-leggings,shoes-sneakers,hair-bob01|top-tee,bottom-skirt,shoes-sneakers,hair-bob01|top-tee,bottom-pleated,shoes-sneakers,hair-bob01|top-tee,bottom-longskirt,shoes-sneakers,hair-bob01&t=2.4&spin=165",
+    "who=woman&wear=top-tee,bottom-leggings,shoes-sneakers,hair-bob|top-tee,bottom-skirt,shoes-sneakers,hair-bob|top-tee,bottom-pleated,shoes-sneakers,hair-bob|top-tee,bottom-longskirt,shoes-sneakers,hair-bob&t=2.4&spin=165",
   ],
-  ["w52-hip-woman-tee", "who=woman&face=woman&bust=1&at=0.95&wear=top-tee,shoes-sneakers,hair-bob01&t=2.4&spin=-30"],
+  ["w52-hip-woman-tee", "who=woman&face=woman&bust=1&at=0.95&wear=top-tee,shoes-sneakers,hair-bob&t=2.4&spin=-30"],
   [
     "w52-hip-woman-jeans",
-    "who=woman&face=woman&bust=1&at=0.95&wear=bottom-jeans,shoes-sneakers,hair-bob01&t=2.4&spin=-30",
+    "who=woman&face=woman&bust=1&at=0.95&wear=bottom-jeans,shoes-sneakers,hair-bob&t=2.4&spin=-30",
   ],
   [
     "w52-hip-woman",
-    "who=woman&face=woman&bust=1&at=0.95&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob01&t=2.4&spin=-30",
+    "who=woman&face=woman&bust=1&at=0.95&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob&t=2.4&spin=-30",
   ],
   // (5.2 batch 3: the outer layers, the shoes, what's on the head)
   [
     "w52-outer-man-1",
-    "who=man&wear=top-sweater,outer-parka,bottom-jeans,shoes-boots,hair-short04|top-sweater,outer-coat,bottom-jeans,shoes-boots,hair-short04|top-sweater,outer-raincoat,bottom-jeans,shoes-boots,hair-short04|top-sweater,outer-puffer,bottom-jeans,shoes-boots,hair-short04&t=2.4&spin=15",
+    "who=man&wear=top-sweater,outer-parka,bottom-jeans,shoes-boots,hair-slick|top-sweater,outer-coat,bottom-jeans,shoes-boots,hair-slick|top-sweater,outer-raincoat,bottom-jeans,shoes-boots,hair-slick|top-sweater,outer-puffer,bottom-jeans,shoes-boots,hair-slick&t=2.4&spin=15",
   ],
   [
     "w52-outer-man-1-back",
-    "who=man&wear=top-sweater,outer-parka,bottom-jeans,shoes-boots,hair-short04|top-sweater,outer-coat,bottom-jeans,shoes-boots,hair-short04|top-sweater,outer-raincoat,bottom-jeans,shoes-boots,hair-short04|top-sweater,outer-puffer,bottom-jeans,shoes-boots,hair-short04&t=2.4&spin=165",
+    "who=man&wear=top-sweater,outer-parka,bottom-jeans,shoes-boots,hair-slick|top-sweater,outer-coat,bottom-jeans,shoes-boots,hair-slick|top-sweater,outer-raincoat,bottom-jeans,shoes-boots,hair-slick|top-sweater,outer-puffer,bottom-jeans,shoes-boots,hair-slick&t=2.4&spin=165",
   ],
   [
     "w52-outer-man-2",
-    "who=man&wear=top-sweater,outer-denim,bottom-jeans,shoes-boots,hair-short04|top-sweater,outer-sportcoat,bottom-jeans,shoes-boots,hair-short04|top-sweater,outer-vest,bottom-jeans,shoes-boots,hair-short04&t=2.4&spin=15",
+    "who=man&wear=top-sweater,outer-denim,bottom-jeans,shoes-boots,hair-slick|top-sweater,outer-sportcoat,bottom-jeans,shoes-boots,hair-slick|top-sweater,outer-vest,bottom-jeans,shoes-boots,hair-slick&t=2.4&spin=15",
   ],
   [
     "w52-outer-man-2-back",
-    "who=man&wear=top-sweater,outer-denim,bottom-jeans,shoes-boots,hair-short04|top-sweater,outer-sportcoat,bottom-jeans,shoes-boots,hair-short04|top-sweater,outer-vest,bottom-jeans,shoes-boots,hair-short04&t=2.4&spin=165",
+    "who=man&wear=top-sweater,outer-denim,bottom-jeans,shoes-boots,hair-slick|top-sweater,outer-sportcoat,bottom-jeans,shoes-boots,hair-slick|top-sweater,outer-vest,bottom-jeans,shoes-boots,hair-slick&t=2.4&spin=165",
   ],
   [
     "w52-shoes-man-1",
-    "who=man&feet=1&wear=top-tee,bottom-shorts,shoes-sneakers,hair-short04|top-tee,bottom-shorts,shoes-hightops,hair-short04|top-tee,bottom-shorts,shoes-runners,hair-short04|top-tee,bottom-shorts,shoes-slipons,hair-short04|top-tee,bottom-shorts,shoes-loafers,hair-short04|top-tee,bottom-shorts,shoes-flats,hair-short04&t=2.4&spin=25",
+    "who=man&feet=1&wear=top-tee,bottom-shorts,shoes-sneakers,hair-slick|top-tee,bottom-shorts,shoes-hightops,hair-slick|top-tee,bottom-shorts,shoes-runners,hair-slick|top-tee,bottom-shorts,shoes-slipons,hair-slick|top-tee,bottom-shorts,shoes-loafers,hair-slick|top-tee,bottom-shorts,shoes-flats,hair-slick&t=2.4&spin=25",
   ],
   [
     "w52-shoes-man-2",
-    "who=man&feet=1&wear=top-tee,bottom-shorts,shoes-sandals,hair-short04|top-tee,bottom-shorts,shoes-laceboots,hair-short04|top-tee,bottom-shorts,shoes-boots,hair-short04|top-tee,bottom-shorts,shoes-chelsea,hair-short04|top-tee,bottom-shorts,shoes-snowboots,hair-short04&t=2.4&spin=25",
+    "who=man&feet=1&wear=top-tee,bottom-shorts,shoes-sandals,hair-slick|top-tee,bottom-shorts,shoes-laceboots,hair-slick|top-tee,bottom-shorts,shoes-boots,hair-slick|top-tee,bottom-shorts,shoes-chelsea,hair-slick|top-tee,bottom-shorts,shoes-snowboots,hair-slick&t=2.4&spin=25",
   ],
   [
     "w52-hats-man-1",
-    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short04,hat-beanie|top-tee,bottom-jeans,shoes-sneakers,hair-short04,hat-pompom|top-tee,bottom-jeans,shoes-sneakers,hair-short04,hat-trapper|top-tee,bottom-jeans,shoes-sneakers,hair-short04,hat-cap|top-tee,bottom-jeans,shoes-sneakers,hair-short04,hat-visor&t=2.4&spin=25",
+    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-slick,hat-beanie|top-tee,bottom-jeans,shoes-sneakers,hair-slick,hat-pompom|top-tee,bottom-jeans,shoes-sneakers,hair-slick,hat-trapper|top-tee,bottom-jeans,shoes-sneakers,hair-slick,hat-cap|top-tee,bottom-jeans,shoes-sneakers,hair-slick,hat-visor&t=2.4&spin=25",
   ],
   [
     "w52-hats-man-2",
-    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short04,hat-bucket|top-tee,bottom-jeans,shoes-sneakers,hair-short04,hat-flatcap|top-tee,bottom-jeans,shoes-sneakers,hair-short04,hat-beret|top-tee,bottom-jeans,shoes-sneakers,hair-short04,hat-bandana|top-tee,bottom-jeans,shoes-sneakers,hair-short04,hat-headband&t=2.4&spin=25",
+    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-slick,hat-bucket|top-tee,bottom-jeans,shoes-sneakers,hair-slick,hat-flatcap|top-tee,bottom-jeans,shoes-sneakers,hair-slick,hat-beret|top-tee,bottom-jeans,shoes-sneakers,hair-slick,hat-bandana|top-tee,bottom-jeans,shoes-sneakers,hair-slick,hat-headband&t=2.4&spin=25",
   ],
   [
     "w52-hats-man-3",
-    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short04,hat-earmuffs|top-tee,bottom-jeans,shoes-sneakers,hair-short04,hat-headphones|top-tee,bottom-jeans,shoes-sneakers,hair-short04,hat-hairclip&t=2.4&spin=25",
+    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-slick,hat-earmuffs|top-tee,bottom-jeans,shoes-sneakers,hair-slick,hat-headphones|top-tee,bottom-jeans,shoes-sneakers,hair-slick,hat-hairclip&t=2.4&spin=25",
   ],
   [
     "w52-outer-woman-1",
-    "who=woman&wear=top-sweater,outer-parka,bottom-jeans,shoes-boots,hair-bob01|top-sweater,outer-coat,bottom-jeans,shoes-boots,hair-bob01|top-sweater,outer-raincoat,bottom-jeans,shoes-boots,hair-bob01|top-sweater,outer-puffer,bottom-jeans,shoes-boots,hair-bob01&t=2.4&spin=15",
+    "who=woman&wear=top-sweater,outer-parka,bottom-jeans,shoes-boots,hair-bob|top-sweater,outer-coat,bottom-jeans,shoes-boots,hair-bob|top-sweater,outer-raincoat,bottom-jeans,shoes-boots,hair-bob|top-sweater,outer-puffer,bottom-jeans,shoes-boots,hair-bob&t=2.4&spin=15",
   ],
   [
     "w52-outer-woman-1-back",
-    "who=woman&wear=top-sweater,outer-parka,bottom-jeans,shoes-boots,hair-bob01|top-sweater,outer-coat,bottom-jeans,shoes-boots,hair-bob01|top-sweater,outer-raincoat,bottom-jeans,shoes-boots,hair-bob01|top-sweater,outer-puffer,bottom-jeans,shoes-boots,hair-bob01&t=2.4&spin=165",
+    "who=woman&wear=top-sweater,outer-parka,bottom-jeans,shoes-boots,hair-bob|top-sweater,outer-coat,bottom-jeans,shoes-boots,hair-bob|top-sweater,outer-raincoat,bottom-jeans,shoes-boots,hair-bob|top-sweater,outer-puffer,bottom-jeans,shoes-boots,hair-bob&t=2.4&spin=165",
   ],
   [
     "w52-outer-woman-2",
-    "who=woman&wear=top-sweater,outer-denim,bottom-jeans,shoes-boots,hair-bob01|top-sweater,outer-sportcoat,bottom-jeans,shoes-boots,hair-bob01|top-sweater,outer-vest,bottom-jeans,shoes-boots,hair-bob01&t=2.4&spin=15",
+    "who=woman&wear=top-sweater,outer-denim,bottom-jeans,shoes-boots,hair-bob|top-sweater,outer-sportcoat,bottom-jeans,shoes-boots,hair-bob|top-sweater,outer-vest,bottom-jeans,shoes-boots,hair-bob&t=2.4&spin=15",
   ],
   [
     "w52-outer-woman-2-back",
-    "who=woman&wear=top-sweater,outer-denim,bottom-jeans,shoes-boots,hair-bob01|top-sweater,outer-sportcoat,bottom-jeans,shoes-boots,hair-bob01|top-sweater,outer-vest,bottom-jeans,shoes-boots,hair-bob01&t=2.4&spin=165",
+    "who=woman&wear=top-sweater,outer-denim,bottom-jeans,shoes-boots,hair-bob|top-sweater,outer-sportcoat,bottom-jeans,shoes-boots,hair-bob|top-sweater,outer-vest,bottom-jeans,shoes-boots,hair-bob&t=2.4&spin=165",
   ],
   [
     "w52-shoes-woman-1",
-    "who=woman&feet=1&wear=top-tee,bottom-shorts,shoes-sneakers,hair-bob01|top-tee,bottom-shorts,shoes-hightops,hair-bob01|top-tee,bottom-shorts,shoes-runners,hair-bob01|top-tee,bottom-shorts,shoes-slipons,hair-bob01|top-tee,bottom-shorts,shoes-loafers,hair-bob01|top-tee,bottom-shorts,shoes-flats,hair-bob01&t=2.4&spin=25",
+    "who=woman&feet=1&wear=top-tee,bottom-shorts,shoes-sneakers,hair-bob|top-tee,bottom-shorts,shoes-hightops,hair-bob|top-tee,bottom-shorts,shoes-runners,hair-bob|top-tee,bottom-shorts,shoes-slipons,hair-bob|top-tee,bottom-shorts,shoes-loafers,hair-bob|top-tee,bottom-shorts,shoes-flats,hair-bob&t=2.4&spin=25",
   ],
   [
     "w52-shoes-woman-2",
-    "who=woman&feet=1&wear=top-tee,bottom-shorts,shoes-sandals,hair-bob01|top-tee,bottom-shorts,shoes-laceboots,hair-bob01|top-tee,bottom-shorts,shoes-boots,hair-bob01|top-tee,bottom-shorts,shoes-chelsea,hair-bob01|top-tee,bottom-shorts,shoes-snowboots,hair-bob01&t=2.4&spin=25",
+    "who=woman&feet=1&wear=top-tee,bottom-shorts,shoes-sandals,hair-bob|top-tee,bottom-shorts,shoes-laceboots,hair-bob|top-tee,bottom-shorts,shoes-boots,hair-bob|top-tee,bottom-shorts,shoes-chelsea,hair-bob|top-tee,bottom-shorts,shoes-snowboots,hair-bob&t=2.4&spin=25",
   ],
   [
     "w52-hats-woman-1",
-    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob01,hat-beanie|top-tee,bottom-jeans,shoes-sneakers,hair-bob01,hat-pompom|top-tee,bottom-jeans,shoes-sneakers,hair-bob01,hat-trapper|top-tee,bottom-jeans,shoes-sneakers,hair-bob01,hat-cap|top-tee,bottom-jeans,shoes-sneakers,hair-bob01,hat-visor&t=2.4&spin=25",
+    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob,hat-beanie|top-tee,bottom-jeans,shoes-sneakers,hair-bob,hat-pompom|top-tee,bottom-jeans,shoes-sneakers,hair-bob,hat-trapper|top-tee,bottom-jeans,shoes-sneakers,hair-bob,hat-cap|top-tee,bottom-jeans,shoes-sneakers,hair-bob,hat-visor&t=2.4&spin=25",
   ],
   [
     "w52-hats-woman-2",
-    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob01,hat-bucket|top-tee,bottom-jeans,shoes-sneakers,hair-bob01,hat-flatcap|top-tee,bottom-jeans,shoes-sneakers,hair-bob01,hat-beret|top-tee,bottom-jeans,shoes-sneakers,hair-bob01,hat-bandana|top-tee,bottom-jeans,shoes-sneakers,hair-bob01,hat-headband&t=2.4&spin=25",
+    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob,hat-bucket|top-tee,bottom-jeans,shoes-sneakers,hair-bob,hat-flatcap|top-tee,bottom-jeans,shoes-sneakers,hair-bob,hat-beret|top-tee,bottom-jeans,shoes-sneakers,hair-bob,hat-bandana|top-tee,bottom-jeans,shoes-sneakers,hair-bob,hat-headband&t=2.4&spin=25",
   ],
   [
     "w52-hats-woman-3",
-    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob01,hat-earmuffs|top-tee,bottom-jeans,shoes-sneakers,hair-bob01,hat-headphones|top-tee,bottom-jeans,shoes-sneakers,hair-bob01,hat-hairclip&t=2.4&spin=25",
+    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob,hat-earmuffs|top-tee,bottom-jeans,shoes-sneakers,hair-bob,hat-headphones|top-tee,bottom-jeans,shoes-sneakers,hair-bob,hat-hairclip&t=2.4&spin=25",
+  ],
+  // (5.3: every hair, five at a time, front and back; the beards)
+  [
+    "w53-hair-man-1",
+    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short|top-tee,bottom-jeans,shoes-sneakers,hair-long|top-tee,bottom-jeans,shoes-sneakers,hair-curly|top-tee,bottom-jeans,shoes-sneakers,hair-bun|top-tee,bottom-jeans,shoes-sneakers,hair-afro&t=2.4&spin=25",
+  ],
+  [
+    "w53-hair-man-1-back",
+    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short|top-tee,bottom-jeans,shoes-sneakers,hair-long|top-tee,bottom-jeans,shoes-sneakers,hair-curly|top-tee,bottom-jeans,shoes-sneakers,hair-bun|top-tee,bottom-jeans,shoes-sneakers,hair-afro&t=2.4&spin=160",
+  ],
+  [
+    "w53-hair-man-2",
+    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob|top-tee,bottom-jeans,shoes-sneakers,hair-mohawk|top-tee,bottom-jeans,shoes-sneakers,hair-bald|top-tee,bottom-jeans,shoes-sneakers,hair-ponytail|top-tee,bottom-jeans,shoes-sneakers,hair-buzz&t=2.4&spin=25",
+  ],
+  [
+    "w53-hair-man-2-back",
+    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob|top-tee,bottom-jeans,shoes-sneakers,hair-mohawk|top-tee,bottom-jeans,shoes-sneakers,hair-bald|top-tee,bottom-jeans,shoes-sneakers,hair-ponytail|top-tee,bottom-jeans,shoes-sneakers,hair-buzz&t=2.4&spin=160",
+  ],
+  [
+    "w53-hair-man-3",
+    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-crew|top-tee,bottom-jeans,shoes-sneakers,hair-slick|top-tee,bottom-jeans,shoes-sneakers,hair-spiky|top-tee,bottom-jeans,shoes-sneakers,hair-braids|top-tee,bottom-jeans,shoes-sneakers,hair-pixie&t=2.4&spin=25",
+  ],
+  [
+    "w53-hair-man-3-back",
+    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-crew|top-tee,bottom-jeans,shoes-sneakers,hair-slick|top-tee,bottom-jeans,shoes-sneakers,hair-spiky|top-tee,bottom-jeans,shoes-sneakers,hair-braids|top-tee,bottom-jeans,shoes-sneakers,hair-pixie&t=2.4&spin=160",
+  ],
+  [
+    "w53-hair-man-4",
+    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-wavy|top-tee,bottom-jeans,shoes-sneakers,hair-curtain|top-tee,bottom-jeans,shoes-sneakers,hair-locs|top-tee,bottom-jeans,shoes-sneakers,hair-topknot|top-tee,bottom-jeans,shoes-sneakers,hair-undercut&t=2.4&spin=25",
+  ],
+  [
+    "w53-hair-man-4-back",
+    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-wavy|top-tee,bottom-jeans,shoes-sneakers,hair-curtain|top-tee,bottom-jeans,shoes-sneakers,hair-locs|top-tee,bottom-jeans,shoes-sneakers,hair-topknot|top-tee,bottom-jeans,shoes-sneakers,hair-undercut&t=2.4&spin=160",
+  ],
+  [
+    "w53-hair-man-5",
+    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-fade|top-tee,bottom-jeans,shoes-sneakers,hair-pigtails|top-tee,bottom-jeans,shoes-sneakers,hair-highpony|top-tee,bottom-jeans,shoes-sneakers,hair-cornrows|top-tee,bottom-jeans,shoes-sneakers,hair-swept&t=2.4&spin=25",
+  ],
+  [
+    "w53-hair-man-5-back",
+    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-fade|top-tee,bottom-jeans,shoes-sneakers,hair-pigtails|top-tee,bottom-jeans,shoes-sneakers,hair-highpony|top-tee,bottom-jeans,shoes-sneakers,hair-cornrows|top-tee,bottom-jeans,shoes-sneakers,hair-swept&t=2.4&spin=160",
+  ],
+  [
+    "w53-hair-woman-1",
+    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short|top-tee,bottom-jeans,shoes-sneakers,hair-long|top-tee,bottom-jeans,shoes-sneakers,hair-curly|top-tee,bottom-jeans,shoes-sneakers,hair-bun|top-tee,bottom-jeans,shoes-sneakers,hair-afro&t=2.4&spin=25",
+  ],
+  [
+    "w53-hair-woman-1-back",
+    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short|top-tee,bottom-jeans,shoes-sneakers,hair-long|top-tee,bottom-jeans,shoes-sneakers,hair-curly|top-tee,bottom-jeans,shoes-sneakers,hair-bun|top-tee,bottom-jeans,shoes-sneakers,hair-afro&t=2.4&spin=160",
+  ],
+  [
+    "w53-hair-woman-2",
+    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob|top-tee,bottom-jeans,shoes-sneakers,hair-mohawk|top-tee,bottom-jeans,shoes-sneakers,hair-bald|top-tee,bottom-jeans,shoes-sneakers,hair-ponytail|top-tee,bottom-jeans,shoes-sneakers,hair-buzz&t=2.4&spin=25",
+  ],
+  [
+    "w53-hair-woman-2-back",
+    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-bob|top-tee,bottom-jeans,shoes-sneakers,hair-mohawk|top-tee,bottom-jeans,shoes-sneakers,hair-bald|top-tee,bottom-jeans,shoes-sneakers,hair-ponytail|top-tee,bottom-jeans,shoes-sneakers,hair-buzz&t=2.4&spin=160",
+  ],
+  [
+    "w53-hair-woman-3",
+    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-crew|top-tee,bottom-jeans,shoes-sneakers,hair-slick|top-tee,bottom-jeans,shoes-sneakers,hair-spiky|top-tee,bottom-jeans,shoes-sneakers,hair-braids|top-tee,bottom-jeans,shoes-sneakers,hair-pixie&t=2.4&spin=25",
+  ],
+  [
+    "w53-hair-woman-3-back",
+    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-crew|top-tee,bottom-jeans,shoes-sneakers,hair-slick|top-tee,bottom-jeans,shoes-sneakers,hair-spiky|top-tee,bottom-jeans,shoes-sneakers,hair-braids|top-tee,bottom-jeans,shoes-sneakers,hair-pixie&t=2.4&spin=160",
+  ],
+  [
+    "w53-hair-woman-4",
+    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-wavy|top-tee,bottom-jeans,shoes-sneakers,hair-curtain|top-tee,bottom-jeans,shoes-sneakers,hair-locs|top-tee,bottom-jeans,shoes-sneakers,hair-topknot|top-tee,bottom-jeans,shoes-sneakers,hair-undercut&t=2.4&spin=25",
+  ],
+  [
+    "w53-hair-woman-4-back",
+    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-wavy|top-tee,bottom-jeans,shoes-sneakers,hair-curtain|top-tee,bottom-jeans,shoes-sneakers,hair-locs|top-tee,bottom-jeans,shoes-sneakers,hair-topknot|top-tee,bottom-jeans,shoes-sneakers,hair-undercut&t=2.4&spin=160",
+  ],
+  [
+    "w53-hair-woman-5",
+    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-fade|top-tee,bottom-jeans,shoes-sneakers,hair-pigtails|top-tee,bottom-jeans,shoes-sneakers,hair-highpony|top-tee,bottom-jeans,shoes-sneakers,hair-cornrows|top-tee,bottom-jeans,shoes-sneakers,hair-swept&t=2.4&spin=25",
+  ],
+  [
+    "w53-hair-woman-5-back",
+    "who=woman&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-fade|top-tee,bottom-jeans,shoes-sneakers,hair-pigtails|top-tee,bottom-jeans,shoes-sneakers,hair-highpony|top-tee,bottom-jeans,shoes-sneakers,hair-cornrows|top-tee,bottom-jeans,shoes-sneakers,hair-swept&t=2.4&spin=160",
+  ],
+  [
+    "w53-beard-1",
+    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short,beard-full|top-tee,bottom-jeans,shoes-sneakers,hair-short,beard-boxed|top-tee,bottom-jeans,shoes-sneakers,hair-short,beard-stubble|top-tee,bottom-jeans,shoes-sneakers,hair-short,beard-mustache&t=2.4&spin=20",
+  ],
+  [
+    "w53-beard-2",
+    "who=man&near=1&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short,beard-goatee|top-tee,bottom-jeans,shoes-sneakers,hair-short,beard-chinstrap|top-tee,bottom-jeans,shoes-sneakers,hair-short,beard-muttonchops&t=2.4&spin=20",
+  ],
+  ["w53-beard-full", "who=man&face=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short,beard-full&t=2.4&spin=30"],
+  ["w53-beard-boxed", "who=man&face=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short,beard-boxed&t=2.4&spin=30"],
+  [
+    "w53-beard-stubble",
+    "who=man&face=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short,beard-stubble&t=2.4&spin=30",
+  ],
+  [
+    "w53-beard-mustache",
+    "who=man&face=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short,beard-mustache&t=2.4&spin=30",
+  ],
+  [
+    "w53-beard-goatee",
+    "who=man&face=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short,beard-goatee&t=2.4&spin=30",
+  ],
+  [
+    "w53-beard-chinstrap",
+    "who=man&face=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short,beard-chinstrap&t=2.4&spin=30",
+  ],
+  [
+    "w53-beard-muttonchops",
+    "who=man&face=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short,beard-muttonchops&t=2.4&spin=30",
   ],
   // (the beard and the long hair, close)
-  ["w5-beard", "who=man&face=man&wear=top-shirt,bottom-jeans,shoes-sneakers,hair-short04,beard-beard&t=2.4&spin=15"],
+  ["w5-beard", "who=man&face=man&wear=top-shirt,bottom-jeans,shoes-sneakers,hair-slick,beard-full&t=2.4&spin=15"],
   [
     "w5-beard-threeq",
-    "who=man&face=man&wear=top-shirt,bottom-jeans,shoes-sneakers,hair-short04,beard-beard&t=2.4&spin=45",
+    "who=man&face=man&wear=top-shirt,bottom-jeans,shoes-sneakers,hair-slick,beard-full&t=2.4&spin=45",
   ],
-  [
-    "w5-beard-front",
-    "who=man&face=man&wear=top-shirt,bottom-jeans,shoes-sneakers,hair-short04,beard-beard&t=2.4&spin=0",
-  ],
-  [
-    "w5-beard-side",
-    "who=man&face=man&wear=top-shirt,bottom-jeans,shoes-sneakers,hair-short04,beard-beard&t=2.4&spin=70",
-  ],
+  ["w5-beard-front", "who=man&face=man&wear=top-shirt,bottom-jeans,shoes-sneakers,hair-slick,beard-full&t=2.4&spin=0"],
+  ["w5-beard-side", "who=man&face=man&wear=top-shirt,bottom-jeans,shoes-sneakers,hair-slick,beard-full&t=2.4&spin=70"],
   ["w5-long-man", "who=man&face=man&bust=1&wear=top-sweater,bottom-jeans,shoes-boots,hair-long&t=2.4&spin=20"],
   ["w5-long-woman", "who=woman&face=woman&bust=1&wear=top-tank,bottom-skirt,shoes-sneakers,hair-long&t=2.4&spin=-20"],
   ["w5-long-back", "who=woman&face=woman&bust=1&wear=top-tank,bottom-skirt,shoes-sneakers,hair-long&t=2.4&spin=160"],
   [
     "w5-night",
-    "wear=top-tee,bottom-jeans,shoes-sneakers,hair-short04|top-dress,shoes-boots,hair-bun&t=2.4&spin=20&hour=22",
+    "wear=top-tee,bottom-jeans,shoes-sneakers,hair-slick|top-dress,shoes-boots,hair-bun&t=2.4&spin=20&hour=22",
   ],
 ];
 

@@ -116,15 +116,19 @@ GARMENTS = {
     "shoes-sandals": {"alias": "shoes-loafers", "below": ("ankle", 0.15)},
     "shoes-chelsea": {"alias": "shoes-boots", "below": ("ankle", 1.5)},
     "shoes-snowboots": {"alias": "shoes-boots", "below": ("ankle", 1.5)},
-    # the CC0 pack's authored hairs, where a script's fell short (decided 2026-11-09: the script's long
-    # hair read as ribbons)
+    # the hairs (5.3): the CC0 pack's ten authored ones under the wardrobe's names (hair.py makes the
+    # rest); curtain and swept the nearest of them
+    "hair-short": {"cc0": "hair/short02/short02", "hair": True},
     "hair-long": {"cc0": "hair/long01/long01", "hair": True},
-    "hair-short01": {"cc0": "hair/short01/short01", "hair": True},
-    "hair-short03": {"cc0": "hair/short03/short03", "hair": True},
-    "hair-short04": {"cc0": "hair/short04/short04", "hair": True},
-    "hair-bob01": {"cc0": "hair/bob01/bob01", "hair": True},
-    "hair-bob02": {"cc0": "hair/bob02/bob02", "hair": True},
-    "hair-braid": {"cc0": "hair/braid01/braid01", "hair": True},
+    "hair-bob": {"cc0": "hair/bob01/bob01", "hair": True},
+    "hair-wavy": {"cc0": "hair/bob02/bob02", "hair": True},
+    "hair-ponytail": {"cc0": "hair/ponytail01/ponytail01", "hair": True},
+    "hair-braids": {"cc0": "hair/braid01/braid01", "hair": True},
+    "hair-pixie": {"cc0": "hair/short03/short03", "hair": True},
+    "hair-slick": {"cc0": "hair/short04/short04", "hair": True},
+    "hair-spiky": {"cc0": "hair/short01/short01", "hair": True},
+    "hair-curtain": {"alias": "hair-bob", "hair": True},
+    "hair-swept": {"alias": "hair-slick", "hair": True},
 }  # fmt: skip
 
 # what each body vertex is, for hiding the skin under what's worn — the build writes it on the body

@@ -638,7 +638,17 @@ of them in batches).
   file's own — past the fullest it floated). Ears found over the neck (the skull's back is widest).
   Left: hats sit high (over the fullest hair); the clip doesn't show; the headphones' band mostly under
   the hair; the shoes' socks take the shoes' colour; sandals are closed shoes for now. 6.27 MB the file.
-- **5.3** All the hairs and beards, in batches.
+- **5.3** All the hairs and beards, in batches. Built 2026-11-09 (stills `design/screens/life/p53`,
+  `SHOTS=w53-…`). The 25 hairs: nine the CC0 pack's authored ones under the wardrobe's names (short
+  short02, long long01, bob bob01, wavy bob02, ponytail ponytail01, braids braid01, pixie short03, slick
+  short04, spiky short01; curtain and swept aliases of bob and slick; its afro01 read as a woven cap),
+  bald none, and twelve made by `hair.py` with no strand cards: shells whose volume differs over the
+  crown and the sides (buzz, crew, fade, an undercut's sharp step), a mohawk's fin down a strip, cornrow
+  ridges, curly's bumps, an afro rounded about the scalp's own middle (about the head's mean — low and
+  forward — it bulged over the forehead; still a fold there, the hairline highest in front), a bun and a
+  topknot's spheres, and tubes let fall — a high ponytail, pigtails (falling free: laid on the head they
+  zigzagged), 44 locs combed back. The 7 beards are parts of the full beard's density (moustache,
+  goatee — the chin and round the mouth —, chinstrap, muttonchops), boxed shorter, stubble faint.
 - **5.4** The avatar's wardrobe (plan 60's options, second colours, patterns) → what's worn.
 - **5.5** Sway (61), touch (62), swim (66) with the garments; first person's sleeves.
 - **5.6** The wardrobe picture editor re-pointed; the far person in the outfit's colours.

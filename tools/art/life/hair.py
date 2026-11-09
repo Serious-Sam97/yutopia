@@ -12,17 +12,39 @@ from wear import HEAD, TORSO, boundary, normals
 # `line`: the hairline over the brow (dm) by how far round from the front (radians: 0 the forehead, π/2
 # over the ear, π the nape); `vol` the shell off the scalp; `curl` its bumps; cards: how many, how long,
 # `fall` how hard they're pulled down, `out` how much they stand off the scalp, `seg` their segments
+LINE = [(0, 0.5), (0.9, 0.35), (1.35, 0.12), (1.8, 0.05), (2.4, -0.55), (np.pi, -0.85)]
+# The made styles (5.3: the wardrobe's hairs the CC0 pack hasn't — wear.py has its ten). No strand cards
+# (they read as planks): a shell off the scalp, its `vol` — `top` more over the crown (a crew, a fade,
+# an undercut's sharp: `sharp`); `strip` only down the middle (a mohawk, `fin` its height); `rows`
+# (period, depth) cornrows; `sphere` (up, back, radius) an afro's round; a `bun` (x, over the brow, back,
+# radius); `tails` hanging tubes [(x, over the brow, back, length, radius)]; `locs` (count, length, radius)
 HAIR = {
-    "bun": {"line": [(0, 0.5), (0.9, 0.35), (1.35, 0.12), (1.8, 0.05), (2.4, -0.55), (np.pi, -0.85)],
-            "vol": 0.08, "cards": 0, "len": 0.7, "fall": 0.0, "to_bun": 1.0, "out": 0.02, "seg": 4, "width": 0.3,
-            "bare": 0.3,
-            "bun": (0.0, 1.05, -0.95, 0.42)},  # (x, over the brow, back of the brow, radius)
-}  # fmt: skip
+    "bun": {"line": LINE, "vol": 0.08, "bun": (0.0, 1.05, -0.95, 0.42)},
+    "topknot": {"line": LINE, "vol": 0.07, "bun": (0.0, 1.5, -0.45, 0.36)},
+    "buzz": {"line": LINE, "vol": 0.02},
+    "crew": {"line": LINE, "vol": 0.04, "top": 0.13},
+    "fade": {"line": LINE, "vol": 0.01, "top": 0.08},
+    "undercut": {"line": LINE, "vol": 0.008, "top": 0.24, "sharp": True},
+    "mohawk": {"line": LINE, "vol": 0.06, "strip": 0.3, "fin": 0.55},
+    "cornrows": {"line": LINE, "vol": 0.02, "rows": (0.3, 0.08)},
+    "afro": {"line": LINE, "vol": 0.1, "curl": 0.015, "sphere": (0.15, -0.1, 1.75)},
+    "curly": {"line": LINE, "vol": 0.16, "top": 0.24, "curl": 0.07},
+    "highpony": {"line": LINE, "vol": 0.06, "tails": [(0.0, 1.05, -1.15, 3.0, 0.27)]},
+    "pigtails": {"line": LINE, "vol": 0.07, "tails": [(0.95, 0.15, -0.55, 2.0, 0.2), (-0.95, 0.15, -0.55, 2.0, 0.2)]},
+    "locs": {"line": LINE, "vol": 0.1, "locs": (44, 3.0, 0.075)},
+}
+FULL_TOP = [(0, 0.105), (0.2, 0.12), (0.4, 0.2), (0.7, 0.3), (1.0, 0.44), (1.2, 0.6), (1.45, 0.75)]
 BEARD = {
-    # the beard's upper edge by how far round (0 the chin, 1.45 the sideburn), over the mouth
-    "beard": {"top": [(0, 0.105), (0.2, 0.12), (0.4, 0.2), (0.7, 0.3), (1.0, 0.44), (1.2, 0.6), (1.45, 0.75)],
-              "back": 1.42, "vol": 0.035, "soft": 3,
-              "strokes": 16000, "stroke_px": (10, 22)},
+    # the beard's upper edge by how far round (0 the chin, 1.45 the sideburn), over the mouth; `only` a
+    # part of the full beard's ground (the moustache, the chin, the jaw's line, the cheeks); `faint` its
+    # most (stubble); its strokes' length (px)
+    "full": {"top": FULL_TOP, "back": 1.42, "vol": 0.035, "strokes": 16000, "stroke_px": (10, 22)},
+    "boxed": {"top": FULL_TOP, "back": 1.42, "vol": 0.02, "strokes": 18000, "stroke_px": (6, 12)},
+    "stubble": {"top": FULL_TOP, "back": 1.42, "vol": 0.004, "strokes": 26000, "stroke_px": (3, 6), "faint": 0.5},
+    "mustache": {"top": FULL_TOP, "back": 1.42, "vol": 0.03, "strokes": 9000, "stroke_px": (8, 16), "only": "mustache"},
+    "goatee": {"top": FULL_TOP, "back": 1.42, "vol": 0.03, "strokes": 12000, "stroke_px": (8, 18), "only": "goatee"},
+    "chinstrap": {"top": FULL_TOP, "back": 1.42, "vol": 0.02, "strokes": 12000, "stroke_px": (6, 12), "only": "chinstrap"},
+    "muttonchops": {"top": FULL_TOP, "back": 1.42, "vol": 0.03, "strokes": 14000, "stroke_px": (8, 18), "only": "muttonchops"},
 }  # fmt: skip
 
 
@@ -195,64 +217,127 @@ def _shell_uv(V, c):
     return np.stack([u, V[:, 1] / 0.8], 1)
 
 
+def _tube(pts, radii, sides=7):
+    """A tube along a polyline: (positions, uvs, quads), capped at its end."""
+    pts = np.asarray(pts)
+    P, UV, F = [], [], []
+    up = np.array([0, 1.0, 0])
+    for i, (p, r) in enumerate(zip(pts, radii, strict=True)):
+        d = pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]
+        d /= max(np.linalg.norm(d), 1e-9)
+        e1 = np.cross(d, up if abs(d @ up) < 0.9 else np.array([1.0, 0, 0]))
+        e1 /= np.linalg.norm(e1)
+        e2 = np.cross(d, e1)
+        for k in range(sides):
+            a = 2 * np.pi * k / sides
+            P.append(p + (np.cos(a) * e1 + np.sin(a) * e2) * r)
+            UV.append((k / sides, i * 0.6))
+    for i in range(len(pts) - 1):
+        for k in range(sides):
+            a, b = i * sides + k, i * sides + (k + 1) % sides
+            F.append([a, b, b + sides, a + sides])
+    tip = len(P)
+    P.append(pts[-1] + (pts[-1] - pts[-2]) / max(np.linalg.norm(pts[-1] - pts[-2]), 1e-9) * radii[-1] * 0.5)
+    UV.append((0.5, len(pts) * 0.6))
+    base = (len(pts) - 1) * sides
+    F += [[base + k, base + (k + 1) % sides, tip] for k in range(sides)]
+    return np.array(P), np.array(UV), F
+
+
+def _hang(p0, d0, length, n, hull, fall=0.8, hug=0.4):
+    """A line let fall from `p0` along `d0`, kept off the hull (laid on the head and the back)."""
+    pts = [p0]
+    d = d0 / np.linalg.norm(d0)
+    p = p0.copy()
+    for k in range(n):
+        d = d + np.array([0, -fall, 0]) * 0.6 * min(1.0, (k + 1) / 2)
+        d /= np.linalg.norm(d)
+        q = hull.push(p + d * length / n, 0.06, hug if p[2] < hull.c[2] or p[1] > hull.neck else 0.0)
+        d = (q - p) / max(np.linalg.norm(q - p), 1e-9)
+        p = q
+        pts.append(p)
+    return pts
+
+
 def make_hair(name, V, F0, Z, J, seed=7):
-    """A hairstyle's pieces: [(suffix, positions, uvs, faces as vertex lists, each vertex's source on the
-    body, alpha)] — the shell, the cards (and a bun)."""
+    """A made hairstyle's pieces: [(suffix, positions, uvs, faces as vertex lists, each vertex's source on
+    the body, alpha)] — the shell, and its bun, its tails or its locs."""
     spec = HAIR[name]
     kind, y = Z[0], Z[2]
     c, _ = landmarks_head(V, Z, J, F0)
     az = np.abs(np.arctan2(V[:, 0] - c[0], V[:, 2] - c[2]))
+    dxc = np.abs(V[:, 0] - c[0])
     line = J["brow"][1] + _interp(spec["line"], az)
     keep = (kind == HEAD) & (y >= line)
-    # (the edge of the scalp: snapped straight, as a garment's)
-    Q, N, faces, used = _shell(V, F0, keep, spec["vol"], line, spec.get("curl", 0.0), seed, spec.get("dome", 0.0))
+    if spec.get("strip"):
+        keep &= dxc < spec["strip"]
+    Q, N, faces, used = _shell(V, F0, keep, spec["vol"], line, spec.get("curl", 0.0), seed)
+    over_brow = y - J["brow"][1]
+    if spec.get("top"):
+        # (more over the crown than at the sides: a crew, a fade — an undercut's step sharp)
+        k = np.clip((over_brow - 0.55) / (0.08 if spec.get("sharp") else 0.6), 0, 1)
+        Q += N * ((spec["top"] - spec["vol"]) * k)[:, None]
+    if spec.get("fin"):
+        # (a mohawk: tallest down the middle, risen from the forehead)
+        k = np.clip(1 - (dxc / spec["strip"]) ** 2, 0, 1) * np.clip((over_brow - 0.2) / 0.5, 0, 1)
+        Q += N * (spec["fin"] * k)[:, None]
+    if spec.get("rows"):
+        # (cornrows: ridges front to back)
+        period, depth = spec["rows"]
+        Q += N * (depth * (0.5 + 0.5 * np.cos(2 * np.pi * dxc / period)))[:, None]
+    if spec.get("sphere"):
+        # (an afro: out to a round about the scalp's own middle — the head's mean sat low and forward —
+        # eased from the hairline, less over the forehead than round the sides and back)
+        upb, back, R = spec["sphere"]
+        cc = V[used].mean(0) + np.array([0, upb, back])
+        d = V - cc
+        r = np.linalg.norm(d, axis=1)
+        u = d / np.maximum(r[:, None], 1e-9)
+        target = cc + u * (R * np.where(u[:, 1] < 0, 0.9, 1.0))[:, None]
+        ease = np.clip((y - line) / 0.7, 0, 1) * (0.75 + 0.25 * np.clip(az / 1.3, 0, 1))
+        farther = np.linalg.norm(target - cc, axis=1) > np.linalg.norm(Q - cc, axis=1)
+        k = np.where(farther, ease, 0.0)
+        Q = Q + (target - Q) * k[:, None]
     out = [("", Q, _shell_uv(V, c), faces, np.arange(len(V)), False)]
-    # cards: rooted a little inside the shell (their roots hidden), combed from the crown
     rng = _rng(seed)
-    if not spec["cards"]:
-        # (no cards: the shell alone — and a bun's sphere — the cards read as planks up close)
-        if "bun" in spec:
-            bx, by, bz, br = spec["bun"]
-            pull = np.array([bx, J["brow"][1] + by, J["brow"][2] + bz])
-            BP, BF = _sphere(pull, br, rng)
-            near = used[np.argmin(np.linalg.norm(V[used] - pull, axis=1))]
-            out.append(("bun", BP, _shell_uv(BP, pull), BF, np.full(len(BP), near), False))
-        return out
-    # (none rooted just over the hairline in front: they hung over the face)
-    near_line = y[used] < line[used] + spec.get("bare", 0)
-    rootable = used[~(near_line & ((az[used] < 1.3) | spec.get("bare_all", False)))]
-    # (`face`: none rooted round the front at all — long hair hung over the face; the shell's combed back)
-    if "face" in spec:
-        rootable = rootable[az[rootable] >= spec["face"]]
-    pick = rng.choice(rootable, size=min(spec["cards"], len(rootable)), replace=False)
-    roots = Q[pick] - N[pick] * spec["vol"] * 0.4
-    # combed away from the face: out round the head (its forward part dropped: to the sides), back, down
-    flow = roots - c
-    flow[:, 1] = 0
-    flow[:, 2] = np.minimum(flow[:, 2], 0)
-    zero = np.linalg.norm(flow, axis=1) < 0.2
-    flow[zero, 0] = np.where(np.arange(len(pick))[zero] % 2 == 0, 1.0, -1.0)
-    flow /= np.linalg.norm(flow, axis=1)[:, None]
-    # (a parting: those over the face's front swept harder to the sides)
-    front = az[pick] < 1.0
-    flow[front, 0] *= spec.get("part", 1.0)
-    flow += np.array([0, -spec["fall"] * 0.3, -spec.get("back", 0)])
-    flow -= N[pick] * np.einsum("ij,ij->i", flow, N[pick])[:, None]
-    dirs = flow + N[pick] * spec.get("out", 0.15)
-    pull = None
-    if "bun" in spec:
-        bx, by, bz, _ = spec["bun"]
-        pull = np.array([bx, J["brow"][1] + by, J["brow"][2] + bz])
     body = (kind == HEAD) | (kind == TORSO)
-    shell_pts = Q[used]
-    hull = Hull(np.concatenate([V[body], shell_pts]), np.array([c[0], 0, c[2]]))
+    hull = Hull(np.concatenate([V[body], Q[used]]), np.array([c[0], 0, c[2]]))
     hull.neck = J["neck"][1]
-    CP, CUV, CF, csrc = _grow(roots, dirs, N[pick], spec, hull, rng, pull)
-    out.append(("cards", CP, CUV, CF, pick[csrc], True))
     if "bun" in spec:
-        BP, BF = _sphere(pull, spec["bun"][3], rng)
+        bx, by, bz, br = spec["bun"]
+        pull = np.array([bx, J["brow"][1] + by, J["brow"][2] + bz])
+        BP, BF = _sphere(pull, br, rng)
         near = used[np.argmin(np.linalg.norm(V[used] - pull, axis=1))]
         out.append(("bun", BP, _shell_uv(BP, pull), BF, np.full(len(BP), near), False))
+    tubes = []
+    for tx, ty, tz, length, r in spec.get("tails", []):
+        p0 = np.array([c[0] + tx, J["brow"][1] + ty, J["brow"][2] + tz])
+        d0 = np.array([np.sign(tx) * 0.6, -0.2, -1.0])
+        # (falling free — laid on the head they zigzagged)
+        pts = _hang(p0, d0, length, 9, hull, 1.0, 0.0)
+        tubes.append((pts, [r * (1.0 - 0.55 * k / 9) for k in range(10)], p0))
+    if spec.get("locs"):
+        count, length, r = spec["locs"]
+        rootable = used[(y[used] > line[used] + 0.25) | (az[used] > 1.3)]
+        pick = rng.choice(rootable, size=min(count, len(rootable)), replace=False)
+        for v in pick:
+            p0 = Q[v] - N[v] * 0.03
+            flow = np.array([(Q[v, 0] - c[0]) * 0.6, 0, min(Q[v, 2] - c[2], 0) - 0.6])
+            if np.linalg.norm(flow) < 0.2:
+                flow = np.array([rng.choice([-1.0, 1.0]), 0, -0.3])
+            pts = _hang(p0, flow / np.linalg.norm(flow) + N[v] * 0.3, length * rng.uniform(0.85, 1.1), 8, hull, 0.9, 0.6)
+            tubes.append((pts, [r * (1.0 - 0.25 * k / 8) for k in range(9)], p0))
+    if tubes:
+        TP, TUV, TF, TS = [], [], [], []
+        for pts, radii, p0 in tubes:
+            P, UV, F = _tube(pts, radii)
+            base = sum(len(x) for x in TP)
+            TF += [[base + i for i in f] for f in F]
+            TP.append(P)
+            TUV.append(UV)
+            near = used[np.argmin(np.linalg.norm(V[used] - p0, axis=1))]
+            TS.append(np.full(len(P), near))
+        out.append(("tails", np.vstack(TP), np.vstack(TUV), TF, np.concatenate(TS), False))
     return out
 
 
@@ -311,6 +396,21 @@ def make_beard(name, V, F0, VT, Z, J, size=512, seed=11):
     d *= np.where((dy > 0.1) & (V[:, 2] > mouth[2] + 0.19), 0.0, 1.0)
     # down the neck, fading out
     d *= _smooth(-0.78, -0.58, dy)
+    only = spec.get("only")
+    xm = np.abs(V[:, 0] - mouth[0])
+    if only == "mustache":
+        d *= _smooth(0.4, 0.3, xm) * _smooth(-0.05, 0.0, dy) * _smooth(0.16, 0.11, dy)
+    elif only == "goatee":
+        # (the moustache, round the mouth's corners and the chin)
+        d *= _smooth(0.36, 0.26, xm) * _smooth(0.16, 0.11, dy)
+    elif only == "chinstrap":
+        # (the jaw's line: under the chin and up the sides, the cheeks and the moustache bare)
+        d *= np.maximum(_smooth(-0.32, -0.45, dy), _smooth(0.95, 1.1, az) * _smooth(0.2, 0.1, dy + 0.0 * az))
+    elif only == "muttonchops":
+        # (the sideburns down the cheeks, the chin bare)
+        d *= _smooth(0.65, 0.85, az) * _smooth(-0.6, -0.45, dy)
+    if spec.get("faint"):
+        d = np.minimum(d, spec["faint"])
     near = ((kind == HEAD) | (kind == TORSO)) & (az < spec["back"] + 0.1) & (dy > -1.0)
     d = np.where(near, d, 0.0)
     faces = [f[0] for f in F0 if f[2] == "body" and all(near[v] for v in f[0]) and max(d[v] for v in f[0]) > 0.02]
