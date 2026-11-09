@@ -21,7 +21,7 @@ import { useEffect, useRef } from "react";
 //   ?wear=tee,jeans,sneakers,hair-crop|dress,boots   (phase 5) each painted person once per outfit, in the
 //                                made garments and hair (wear.py, hair.py), coloured as an avatar
 //   ?pattern=stripes|plaid       the tops' pattern
-//   ?near=1                      heads and shoulders (the hair)
+//   ?near=1                      heads and shoulders (the hair)    ?feet=1  the shoes
 // window.__life.ready once drawn (for e2e/life-bench.mts).
 const TODAY: Record<string, AvatarLayers> = {
   man: {
@@ -272,13 +272,18 @@ export default function LifeBench() {
         const s = shown.find((x) => x.who === face + (style === "painted" ? "-painted" : "")) ?? shown[0];
         // (?bust=1: the head and shoulders — long hair)
         const bust = q.get("bust") === "1";
-        const y = s.h - (bust ? 0.3 : 0.13);
+        // (?at=0.9: the camera's height on them, metres — the hips, the knees)
+        const y = q.get("at") !== null ? Number(q.get("at")) : s.h - (bust ? 0.3 : 0.13);
         cam.position.set(s.root.position.x, y, bust ? 1.75 : 0.95);
         cam.lookAt(s.root.position.x, y - 0.01, 0);
       } else {
         const span = Math.max(1.6, shown.length * gap);
         // (?near=1: heads and shoulders, the row filling the frame)
-        if (q.get("near") === "1") {
+        if (q.get("feet") === "1") {
+          // (?feet=1: the shoes, low and close)
+          cam.position.set(0, 0.5, span * 0.8 + 0.6);
+          cam.lookAt(0, 0.12, 0);
+        } else if (q.get("near") === "1") {
           cam.position.set(0, 1.5, span * 0.95 + 0.9);
           cam.lookAt(0, 1.42, 0);
         } else {

@@ -614,6 +614,30 @@ of them in batches).
   at the back of the waist; its small step at the back stays. Left: the bun is a plain shell; two dots
   of the jeans through the shirt's back.
 - **5.2** All the wardrobe's tops, bottoms, outerwear, shoes and hats, in batches (stills each).
+  Keys by the wardrobe's slot (`top-`, `bottom-`, `outer-`, `shoes-`, `hat-`; the game's colour by it —
+  the avatar's top, bottom, outer, shoes or accessory colour). Batch 1, the 19 tops, and batch 2, the 14
+  bottoms, built 2026-11-09 (stills `design/screens/life/p52`, `SHOTS=w52-…`). A garment's own pieces
+  after its shell, each new vertex going with the body's it grows from: a collar (standing, or standing
+  then turned down — down a deep V lying flat on the chest as lapels; only near the neck: where a wide
+  neckline crosses the shoulders, spikes), a hood lying on the back, a tie (its own part: the top's second
+  colour), a puffer's quilting. V necks by the distance across (`vee`; the body file's `_neck` carries it
+  for the skin). Bottoms: `loose`, `cuff`, `pockets`, an overall's `bib`, a skirt's `pleats`.
+  **The cut is a slice**: each garment's edge one smooth function on the body (`wear.py signed`: hem,
+  waistband, neckline with its hole, sleeves, legs, bib), its helper's faces sliced where it crosses 0, a
+  new vertex on each crossing edge, on the surface. Snapping the old edge vertices up or down — then
+  scaling them by the body's width — left a hem inside a widening hip (the jeans through the tee on the
+  woman's hips), a waistband standing off a narrowing waist, and castellated teeth.
+  Budget: the garment file 7 MB (4.81 MB with these; every garment in one file until 5.4 loads what's worn).
+  Batch 3 built 2026-11-09: the 7 outer layers (over a top, thicker than any: the parka's hood, the
+  coat's and raincoat's skirts to the knee, the puffer quilted, the vest sleeveless), the 11 shoes (the
+  CC0 pack's six — lace-ups, casuals, boots, dress shoes, sneakers, runners — whitened for the avatar's
+  colour; the others an `alias` of the nearest: high-tops the sneakers, flats and sandals the dress
+  shoes, Chelsea and snow boots the boots), the 13 head items (the scalp's shell cut to a cap or a
+  band, `strip` over the top, `flaps` over the ears; a `brim`, a `pom`, ear `cups`, a `clip`; `flat`,
+  `puff`), kept over any of the hairs (the file's own and the pack's; a band over the top only the
+  file's own — past the fullest it floated). Ears found over the neck (the skull's back is widest).
+  Left: hats sit high (over the fullest hair); the clip doesn't show; the headphones' band mostly under
+  the hair; the shoes' socks take the shoes' colour; sandals are closed shoes for now. 6.27 MB the file.
 - **5.3** All the hairs and beards, in batches.
 - **5.4** The avatar's wardrobe (plan 60's options, second colours, patterns) → what's worn.
 - **5.5** Sway (61), touch (62), swim (66) with the garments; first person's sleeves.

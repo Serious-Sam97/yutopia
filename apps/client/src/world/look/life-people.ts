@@ -460,7 +460,7 @@ export interface LifeWorn {
 /** The body's geometry for an outfit: its own attributes, its index without the skin under it (and,
  *  wearing none of the made garments, under the file's own outfit). Cached on the base. */
 function bodyFor(base: LifeBase, body: LifePart, names: string[]): BufferGeometry {
-  const own = !names.some((n) => roleOf(n) === "top" || roleOf(n) === "bottom");
+  const own = !names.some((n) => ["top", "bottom", "outer"].includes(roleOf(n)));
   const key = `${own ? "own|" : ""}${[...names].sort().join(",")}`;
   const had = base.outfits.get(key);
   if (had) return had;
@@ -611,11 +611,13 @@ export function lifeBody(base: LifeBase, a: AvatarLayers | null, worn: LifeWorn 
   const names = worn?.names ?? [];
   const has = (r: string) => names.some((n) => roleOf(n) === r);
   const dropped = new Set<string>();
-  if (has("top") || has("bottom")) dropped.add("clothes");
+  if (has("top") || has("bottom") || has("outer")) dropped.add("clothes");
   if (has("shoes")) dropped.add("shoes");
   if (has("hair") && names.some((n) => n.startsWith("hair-"))) dropped.add("hair");
+  // (a garment drawn as another's mesh — the wardrobe's high-tops as the sneakers — by its `alias`)
+  const drawn = names.map((n) => worn?.wear.wear[n]?.alias ?? n);
   const wornParts = worn
-    ? worn.wear.parts.filter((p) => names.some((n) => p.name === `wear-${n}` || p.name.startsWith(`wear-${n}-`)))
+    ? worn.wear.parts.filter((p) => drawn.some((n) => p.name === `wear-${n}` || p.name.startsWith(`wear-${n}-`)))
     : [];
   const all = [...base.parts.filter((p) => !dropped.has(p.name)), ...wornParts];
   const parts = all.map((p) => {
@@ -649,7 +651,16 @@ export function lifeBody(base: LifeBase, a: AvatarLayers | null, worn: LifeWorn 
     else if (p.name.startsWith("wear-")) {
       // (a made garment: the avatar's colour for what it is; a top's pattern in it and the bottom's)
       const r = roleOf(p.name);
-      const hex = r === "top" ? a.topColor : r === "shoes" ? a.shoesColor : a.bottomColor;
+      const hex = {
+        top: a.topColor,
+        bottom: a.bottomColor,
+        outer: a.outerColor ?? a.topColor,
+        shoes: a.shoesColor,
+        hat: a.accessoryColor ?? a.topColor,
+        hair: a.hairColor,
+      }[r];
+      // (a piece of its own on a garment — a shirt's tie — in that garment's second colour)
+      const second = p.name.endsWith("-tie") ? (a.topColor2 ?? "#2a2420") : null;
       const fabric = worn?.wear.wear[p.name.replace(/^wear-/, "")]?.fabric as MatId | undefined;
       if (fabric && worn?.renderer && fabric in LIBRARY) {
         // (in the library's cloth — its weave by the garment's UVs in metres — in their colour)
@@ -658,7 +669,7 @@ export function lifeBody(base: LifeBase, a: AvatarLayers | null, worn: LifeWorn 
         mine.push(material);
       } else {
         // (the CC0 shoes are textured: their file's colour × the avatar's, as the file's own shoes)
-        tint(new Color(hex).multiplyScalar(r === "shoes" ? 1 : 0.85));
+        tint(new Color(second ?? hex).multiplyScalar(r === "shoes" ? 1 : 0.85));
       }
       if (r === "top" && worn?.pattern && worn.pattern !== "plain") {
         givePiece(

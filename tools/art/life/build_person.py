@@ -648,24 +648,68 @@ if WEAR:
     ZONES = WR.zones(V, OW, ALL, LM)
     # (the CC0 hairs: cut out by their alpha, like the file's own)
     ALPHA_WEAR.update(f"wear-{g}" for g, sp in WR.GARMENTS.items() if sp.get("hair"))
-    hair_pos = next(pp[1] for pp in parts if pp[0] == "hair")
+    # (a hat goes over any hair: the file's own and every one of the pack's — the fuller ones hid a
+    # headphones' band)
+    hair_pos = np.vstack([pp[1] for pp in parts if pp[0] == "hair" or (pp[0].startswith("wear-hair-") and pp[0][5:] in WR.GARMENTS)])
+    hair_base = next(pp[1] for pp in parts if pp[0] == "hair")
     names = list(WR.GARMENTS) if WEAR in ("sample", "all") else WEAR.split(",")
     for g in names:
         spec = WR.GARMENTS[g]
-        if "cc0" in spec:
+        if "cc0" in spec or "alias" in spec:
             continue
-        Q, kept = WR.make(spec, V, F0, OW, ALL, LM, outward, ZONES, hair_pos)
+        # (a band over the top — headphones, earmuffs — close over the file's own hair: past the fullest
+        # it floated wide of the head)
+        Q, kept, gsrc = WR.make(spec, V, F0, OW, ALL, LM, outward, ZONES, hair_base if spec.get("strip") else hair_pos)
         if "skirt" in spec:
-            Q2, kept2 = WR.make(spec["skirt"], V, F0, OW, ALL, LM, outward, ZONES)
-            low = sorted({v for f in kept2 for v in f})
+            # (its skirt's piece: its own helper's vertices, its own sliced ones after this one's)
+            Q2, kept2, src2 = WR.make(spec["skirt"], V, F0, OW, ALL, LM, outward, ZONES)
+            n = len(V)
+            off = len(Q) - n
+            low = sorted({v for f in kept2 for v in f if v < n})
             Q[low] = Q2[low]
-            kept = kept + kept2
+            Q = np.vstack([Q, Q2[n:]])
+            gsrc = np.concatenate([gsrc, src2[n:]])
+            kept = kept + [[v if v < n else v + off for v in f] for f in kept2]
         # (UVs in metres: the cloth's weave, the material library's — wear.py uv_metres)
-        GUV, gts = WR.uv_metres(Q, kept, ZONES, LM)
-        parts.append((f"wear-{g}", Q, GUV, [(f, ft, "wear") for f, ft in zip(kept, gts, strict=True)], W, None))
+        GUV, gts = WR.uv_metres(Q, kept, ZONES[0][gsrc], LM)
+        parts.append((f"wear-{g}", Q, GUV, [(f, ft, "wear") for f, ft in zip(kept, gts, strict=True)], W[gsrc], None))
         part_shapes[f"wear-{g}"] = {}
-        SRC[f"wear-{g}"] = np.arange(len(V))
+        SRC[f"wear-{g}"] = gsrc
+        if spec.get("tie"):
+            # (its own piece: the game colours it in the top's second colour)
+            TP, TF, tsrc = WR.tie(Q, kept, ZONES, LM)
+            TUV, tts = WR.uv_metres(TP, TF, ZONES[0][tsrc], LM)
+            tname = f"wear-{g}-tie"
+            parts.append((tname, TP, TUV, [(f, ft, "wear") for f, ft in zip(TF, tts, strict=True)], W[tsrc], None))
+            part_shapes[tname] = {}
+            SRC[tname] = tsrc
         print(f"  wear-{g}: {len(kept)} faces")
+    if os.environ.get("WEAR_DEBUG"):
+        # (the hips' side: each garment's offset there and what kind its vertices are)
+        cx = (LM["hipL"][0] + LM["hipR"][0]) / 2
+        tv = np.zeros(len(V), dtype=bool)
+        tv[sorted({v for f in F0 if f[2] == "helper-tights" for v in f[0]})] = True
+        side = np.where(tv & np.isin(ZONES[0], [0, 3]) & (V[:, 0] - cx > 1.0) & (np.abs(V[:, 1] - LM["hip"][1] - 0.2) < 0.5))[0]
+        for pn, pq, *_ in parts:
+            if pn == "wear-top-tee":
+                tq = pq[: len(V)]
+            if pn == "wear-bottom-jeans":
+                jq = pq[: len(V)]
+        # (the jeans' top edge: how far off the body at its height, round the axis)
+        jtop = WR.level(LM, WR.GARMENTS["bottom-jeans"]["top"])
+        edge = np.where(tv & (np.abs(jq[:, 1] - jtop) < 0.02) & (np.abs(V[:, 0] - cx) > 0.9))[0]
+        print("WD jeans top edge n", len(edge), "x off body", np.round(np.percentile(np.abs(jq[edge, 0] - cx) - np.abs(V[edge, 0] - cx), [5, 50, 95]), 3) if len(edge) else "-")
+        rt = np.hypot(tq[side, 0] - cx, tq[side, 2]) - np.hypot(jq[side, 0] - cx, jq[side, 2])
+        bad = side[rt < 0]
+        print("WD tee-minus-jeans radial", np.round(np.percentile(rt, [1, 5, 50]), 3), "inside", len(bad), "of", len(side))
+        if len(bad):
+            print("WD bad kinds", np.bincount(ZONES[0][bad].astype(int), minlength=6), "dy", np.round(V[bad, 1] - LM["hip"][1], 2)[:12], "t", np.round(ZONES[1][bad], 2)[:12])
+        for pn, pq, *_ in parts:
+            if pn in ("wear-top-tee", "wear-bottom-jeans"):
+                d = np.linalg.norm(pq[: len(V)][side] - V[side], axis=1)
+                print("WD", pn, "kinds", np.bincount(ZONES[0][side].astype(int), minlength=6), "off", np.round(np.percentile(d, [5, 50, 95]), 3))
+                tee_like = pq[: len(V)][side]
+                print("WD", pn, "x", np.round(np.percentile(tee_like[:, 0] - cx, [5, 50, 95]), 3))
     # the hair and the beards (hair.py): a shell and strand cards each, with the weights and the face's
     # shapes of the skin they grow from; their two grey textures written next to the files
     import hair as HR
@@ -1094,7 +1138,7 @@ def material(name, tex, alpha):
             tint(img, P["brow_rgb"], 1.0 if name == "brows" else P["lash_alpha"])
         if name == "hair" or name.startswith(("wear-hair", "wear-beard")):
             recolour(img, P["hair_rgb"])
-        if name in ("clothes", "shoes"):
+        if name in ("clothes", "shoes") or name.startswith("wear-shoes"):
             whiten(img, name)
         n = nt.nodes.new("ShaderNodeTexImage")
         n.image = img
@@ -1151,12 +1195,12 @@ for name, pos, uv, faces, w, tex in parts:
     if name == "body" and WEAR:
         # what each vertex is, for hiding the skin under what's worn (wear.py's zones; +8 the kind: under
         # the person's own outfit, MakeHuman's delete list)
-        kind, tz, yz, fz, rz = (np.asarray(a)[used] for a in ZONES)
+        kind, tz, yz, fz, rz, xz = (np.asarray(a)[used] for a in ZONES)
         base = np.array([v in deleted for v in used], dtype=float)
         za = me.attributes.new("_wear", "FLOAT_VECTOR", "POINT")
         za.data.foreach_set("vector", np.stack([kind + 8 * base, tz, yz], 1).astype(np.float32).ravel())
-        fa = me.attributes.new("_neck", "FLOAT2", "POINT")
-        fa.data.foreach_set("vector", np.stack([fz, rz], 1).astype(np.float32).ravel())
+        fa = me.attributes.new("_neck", "FLOAT_VECTOR", "POINT")
+        fa.data.foreach_set("vector", np.stack([fz, rz, xz], 1).astype(np.float32).ravel())
     if name == "body":
         cols = skin_colours(posed["body"] + shift, posed["hair"] + shift, used)
         ca = me.color_attributes.new("Col", "FLOAT_COLOR", "POINT")
@@ -1394,18 +1438,18 @@ if PREVIEW:
     # (with garments: each sample outfit on its own, the base outfit and shoes hidden)
     OUTFITS = (
         {
-            "a": ["tee", "jeans", "sneakers"],
-            "b": ["shirt", "shorts", "sneakers"],
-            "c": ["sweater", "leggings", "boots"],
-            "d": ["tank", "skirt", "sneakers"],
-            "e": ["dress", "boots"],
-            "f": ["parka", "jeans", "boots", "beanie"],
-            "g": ["tee", "longskirt", "sneakers"],
+            "a": ["top-tee", "bottom-jeans", "shoes-sneakers"],
+            "b": ["top-shirt", "bottom-shorts", "shoes-sneakers"],
+            "c": ["top-sweater", "bottom-leggings", "shoes-boots"],
+            "d": ["top-tank", "bottom-skirt", "shoes-sneakers"],
+            "e": ["top-dress", "shoes-boots"],
+            "f": ["outer-parka", "bottom-jeans", "shoes-boots", "hat-beanie"],
+            "g": ["top-tee", "bottom-longskirt", "shoes-sneakers"],
             # the hair (heads only)
-            "h": ["sweater", "hair-short04", "beard-beard"],
-            "i": ["sweater", "hair-long"],
-            "j": ["sweater", "hair-bob02"],
-            "k": ["sweater", "hair-bun"],
+            "h": ["top-sweater", "hair-short04", "beard-beard"],
+            "i": ["top-sweater", "hair-long"],
+            "j": ["top-sweater", "hair-bob02"],
+            "k": ["top-sweater", "hair-bun"],
         }
         if WEAR
         else {"": None}

@@ -22,7 +22,11 @@ const BUDGETS: Record<string, { mb: number; gpuMb: number; tris: number }> = {
   person: { mb: 3.2, gpuMb: 9.5, tris: 62000 },
   // (phase 5: a person's made garments and hair, every one in the wardrobe in one file — only the worn
   // ones reach the GPU; 3.1 MB and ~13.3 MB of textures if all were, with the CC0 pack's seven hairs)
-  wear: { mb: 3.6, gpuMb: 16, tris: 80000 },
+  // (3.6 → 7 MB with the wardrobe's tops and bottoms, 5.2: 4.81 MB the man's — every one in one file; 5.4
+  // loads only what's worn)
+  // (16 → 24 MB of textures with the CC0 pack's six shoes, batch 3: ~18.9 MB were all of them on the GPU —
+  // only what's worn is)
+  wear: { mb: 7, gpuMb: 24, tris: 160000 },
   plant: { mb: 0.3, gpuMb: 1.5, tris: 12000 },
   tree: { mb: 0.4, gpuMb: 2, tris: 12000 },
 };

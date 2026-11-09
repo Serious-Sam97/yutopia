@@ -25,10 +25,19 @@ export interface WearSpec {
   top?: [string, number];
   neck?: number;
   scoop?: number;
-  collar?: number;
+  /** how far round the neck its neckline reaches (dm) */
+  hole?: number;
+  /** an overall's bib in front, a panel behind, the straps over the shoulders */
+  bib?: boolean;
+  /** a V neck: how far across (dm) its sides reach */
+  vee?: number;
+  /** a collar of its own (built in the file: here only for the record) */
+  collar?: [string, number];
   above?: number;
   below?: [string, number];
   cc0?: string;
+  /** drawn as that garment's mesh (the wardrobe's shoes the CC0 pack's nearest) */
+  alias?: string;
   /** the material library's cloth it's drawn in (its UVs in metres) */
   fabric?: string;
   /** a CC0 hair: hides no skin */
@@ -52,8 +61,9 @@ const NECK_RISE = 0.6;
 
 const level = (lm: WearLm, l: [string, number]) => (lm[l[0]]?.[1] ?? 0) + l[1];
 
-/** Whether `spec` covers a vertex of kind `kind`, `t` along its limb, at height `y` (`front`, `rad`: off
- *  the neck) — `mt`, `my` in from its edges (0: its cut). As wear.py `covers`. */
+/** Whether `spec` covers a vertex of kind `kind`, `t` along its limb, at height `y` (`front`, `rad`, `dx`:
+ *  off the neck — in front, round its axis, across) — `mt`, `my` in from its edges (0: its cut). As
+ *  wear.py `covers`. */
 export function covers(
   spec: WearSpec,
   kind: number,
@@ -61,12 +71,13 @@ export function covers(
   y: number,
   front: number,
   rad: number,
+  dx: number,
   lm: WearLm,
   mt = M_T,
   my = M_Y,
 ): boolean {
-  if (spec.cc0 && !spec.below) return false;
-  if (spec.skirt && covers(spec.skirt, kind, t, y, front, rad, lm, mt, my)) return true;
+  if ((spec.cc0 || spec.alias) && !spec.below) return false;
+  if (spec.skirt && covers(spec.skirt, kind, t, y, front, rad, dx, lm, mt, my)) return true;
   const arm = kind === ARM_L || kind === ARM_R;
   const leg = kind === LEG_L || kind === LEG_R;
   if (spec.below) return leg && y <= level(lm, spec.below) - my;
@@ -74,17 +85,25 @@ export function covers(
   const hem = spec.hem ? level(lm, spec.hem) : -1e9;
   const top = spec.top ? level(lm, spec.top) : 1e9;
   if (spec.helper === "skirt") return kind === TORSO && y >= hem + my && y <= top - my;
+  if (kind === TORSO && spec.bib) {
+    // (as wear.py: the bib, the back panel, the straps)
+    const ny = lm.neck?.[1] ?? 0;
+    const bib = front > 0.3 && dx < 0.75 - my && y <= ny - 1.3 - my;
+    const back = front < -0.3 && dx < 0.6 - my && y <= (lm.waist?.[1] ?? 0) + 0.7 - my;
+    const straps = Math.abs(dx - 0.62) < 0.13 - my * 0.3 && y <= ny - 0.3 - my;
+    if (bib || back || straps) return y >= hem + my;
+  }
   if (kind === TORSO) {
     if (y < hem + my || y > top - my) return false;
     if (spec.neck !== undefined) {
       // (a U: rising away from the neck's axis, wear.py neckline)
-      const k = Math.min(1, Math.max(0, (rad - 0.55) / ((spec.collar ?? COLLAR) - 0.55)));
+      const k = Math.min(1, Math.max(0, (rad - 0.55) / ((spec.hole ?? COLLAR) - 0.55)));
       const ny = lm.neck?.[1] ?? 0;
-      const line = Math.min(
-        ny - spec.neck - (spec.scoop ?? 0) * Math.min(1, Math.max(0, front)) + NECK_RISE * k * k,
-        ny - 0.1,
-      );
-      if (y > line - my && rad < (spec.collar ?? COLLAR) + my) return false;
+      let dip = Math.min(1, Math.max(0, front));
+      // (a V: as deep as the scoop at the middle, straight up its sides)
+      if (spec.vee) dip *= Math.min(1, Math.max(0, 1 - dx / spec.vee));
+      const line = Math.min(ny - spec.neck - (spec.scoop ?? 0) * dip + NECK_RISE * k * k, ny - 0.1);
+      if (y > line - my && rad < (spec.hole ?? COLLAR) + my) return false;
     }
     return true;
   }
@@ -116,8 +135,9 @@ export function bodyIndex(g: BufferGeometry, specs: WearSpec[], lm: WearLm, own:
     const y = w.getZ(i);
     const front = n.getX(i);
     const rad = n.getY(i);
+    const dx = n.itemSize > 2 ? n.getZ(i) : 0;
     for (const s of specs)
-      if (covers(s, kind, t, y, front, rad, lm)) {
+      if (covers(s, kind, t, y, front, rad, dx, lm)) {
         hidden[i] = 1;
         break;
       }
@@ -132,16 +152,14 @@ export function bodyIndex(g: BufferGeometry, specs: WearSpec[], lm: WearLm, own:
   return out;
 }
 
-/** What a worn piece is coloured as: the avatar's top, bottom or shoes colour, or their hair's. */
-export type WearRole = "top" | "bottom" | "shoes" | "hair" | "hat";
-const BOTTOMS = /^(jeans|shorts|leggings|skirt|longskirt|trousers|chinos|pencil)/;
+/** What a worn piece is coloured as — by its slot (the keys: top-, bottom-, outer-, shoes-, hat-, hair-,
+ *  beard-, as the wardrobe's own slots): the avatar's colour for that slot, or their hair's. */
+export type WearRole = "top" | "bottom" | "outer" | "shoes" | "hat" | "hair";
 export function roleOf(name: string): WearRole {
   const n = name.replace(/^wear-/, "");
   if (/^(hair|beard)-/.test(n)) return "hair";
-  if (/^(sneakers|boots|shoes|heels|sandals|loafers)/.test(n)) return "shoes";
-  if (/^(beanie|cap|hat)/.test(n)) return "hat";
-  if (BOTTOMS.test(n)) return "bottom";
-  return "top";
+  const slot = n.split("-")[0];
+  return slot === "bottom" || slot === "outer" || slot === "shoes" || slot === "hat" ? slot : "top";
 }
 
 /** Hair or a beard (their material is the hair's: cut out by its alpha, both sides). */
