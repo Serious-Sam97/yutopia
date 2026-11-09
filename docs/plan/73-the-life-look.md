@@ -550,6 +550,65 @@ Hair card sets per style. Clothing meshes per wardrobe category (tops, bottoms, 
 hats). Plan 60 patterns and second colours become texture overlays. Layering, sway (61), touch fits
 (62), swim (66), and the wardrobe picture editor re-pointed.
 
+Decided 2026-11-09 (the questions): garments **made by script, CC0 where it fits** (MakeHuman's shoes);
+hair **a shell plus strand cards**; rollout **a sample first** (a handful mocked and signed off, then all
+of them in batches).
+
+- **5.0 The sample** (built 2026-11-09, for sign-off). Twelve garments — tee, shirt, sweater, tank,
+  jeans, shorts, leggings, skirt, long skirt, dress, parka, beanie — the CC0 sneakers and boots, four
+  hairs (crop, long, afro, bun) and a beard, the stripes and the plaid. Stills: `e2e/life-bench.mts`
+  `SHOTS=w5-…` (`/dev/life?wear=tee,jeans,sneakers,hair-crop|…&pattern=plaid`).
+  - **Garments** (`tools/art/life/wear.py`): cut out of MakeHuman's own clothing helpers in the base
+    mesh — `helper-tights` (a body suit) and `helper-skirt` (a cone) — shaped by the same sliders,
+    weighted to the same bones. A cut is by the body's landmarks: a sleeve's or a leg's length along
+    the limb (0 the shoulder or hip, 1 the elbow or knee, 2 the wrist or ankle), a hem or a waistband by
+    height, a neckline as a hole round the neck's axis (`neck` below the neck joint, `scoop` lower in
+    front) — its edges snapped straight, the shell set off the body by `thick` (`loose` more down the
+    legs). A top is thicker than a bottom, so it lies over the waistband; a skirt over a top's hem
+    (tucked). A skirt hangs off the hips' own shape round the figure's axis (the tights' outer hull) and
+    flares below their widest by `aline`. A hat is the scalp's shell pushed out past the hair.
+  - **The skin under them** (`look/life-wear.ts`): the body comes whole; each vertex says what it is
+    (`_wear`: kind, along its limb, height; +8 under the file's own outfit; `_neck`), the cut rules ride
+    in the extras, and the body's index drops what a worn garment covers (a little inside its edges) —
+    one index per outfit, shared. Without the made garments the file's own outfit hides its skin as
+    MakeHuman's delete lists did.
+  - **Hair, reworked 2026-11-09** (the user: the beard and the long hairs "damn ugly"): the strand cards
+    read as planks and ribbons up close. Every style the CC0 pack has is now its authored mesh, fitted
+    as the file's own hair is (`wear.py` `hair-long` long01, `hair-short01/03/04`, `hair-bob01/02`,
+    `hair-braid`); its afro (a woven cap in the game) left out. The bun stays made — a shell and its
+    sphere, no cards. **The beard** is painted, as a life-sim's are: a thin shell over the jaw with its
+    own UVs round the face (the body's split the jaw across islands), its texture thousands of strokes
+    combed down the face, solid inside, wisps to the edge, blended over the skin (cut out, its soft edge
+    went hard without multisampling). Where it grows is a smooth density on the face, not a cut on the
+    mesh (its stair-steps showed): under the cheek line, up the sideburn to the brow, back to just before
+    the ear (measured round the ears' line — round the head's mean, "before the ear" fell mid-cheek and
+    the beard didn't meet the sideburns), round the lips (the moustache over the upper lip), fading under
+    the jaw. Lines measured off the man's profile: the lip line at the front teeth, the upper lip's skin
+    to +0.085 dm, the nose 0.19 dm in front of the teeth.
+  - **Hair, as first made** (`tools/art/life/hair.py`): the scalp above a hairline (by how far round the head) set
+    off by the volume (a `dome` for the afro), its edge snapped to the line; strand cards rooted inside
+    it, combed back and to the sides (none over the face), let fall, laid on the head and the back (not
+    down the front); a bun's sphere pulled to. A beard: the jaw below the mouth's line, the lips left,
+    eased to nothing at its edge. Both take the weights and the face's shapes of the skin they grow
+    from. Two grey textures (shell streaks; strand clumps cut out by the alpha) the game colours.
+  - **The files**: `person-<who>-wear.glb` beside the person (the rig and every `wear-*` part); the
+    person's file has the whole body. The other bodies (slim, broad) of a made part are the body's own
+    moves at each vertex's source (the dumps' cards would be rooted elsewhere). Exports by collection —
+    Blender 5.2's took a rig's children along by selection or visibility alike.
+  - **The game**: `lifeBody(base, avatar, worn)`; the garments in the avatar's top, bottom and shoes
+    colours, the hair in theirs; a top's pattern (`patternPiece`: off its rest place, it has no UVs).
+    Not yet from the avatar: the bench's `?wear=` only (the wardrobe's mapping is 5.5).
+  - Known, for after sign-off: from behind a skirt's top is a hard shelf and a long skirt opens at the
+    back; a sweater's hem lets the jeans' waistband through at the back; the cloth is flat (no weave yet); the hands
+    sink into a flared skirt (the arms hang straight).
+- **5.1** The garment pipeline from the sign-off's notes; a cloth weave (the material library's fabric).
+- **5.2** All the wardrobe's tops, bottoms, outerwear, shoes and hats, in batches (stills each).
+- **5.3** All the hairs and beards, in batches.
+- **5.4** The avatar's wardrobe (plan 60's options, second colours, patterns) → what's worn.
+- **5.5** Sway (61), touch (62), swim (66) with the garments; first person's sleeves.
+- **5.6** The wardrobe picture editor re-pointed; the far person in the outfit's colours.
+- **5.7** Checks: budgets, frame times of a crowd, e2e, stills.
+
 ### 6 — Things
 
 The kit upgrade (bevel, UV, materials) rolled through `fam/` by family: seating, tables, storage,

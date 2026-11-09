@@ -88,6 +88,68 @@ const SHOTS: [string, string][] = [
   ["mat-velvet", "mat:id=velvet"],
   ["mat-floor-oak", "mat:id=floor-oak"],
   ["mat-all-half", "mat:half=1"],
+  // phase 5.0: the made garments and hair, the sample — four outfits each, front, ¾, back, walking;
+  // the patterns; close on the hair
+  [
+    "w5-man-front",
+    "who=man&wear=tee,jeans,sneakers,hair-short04|shirt,shorts,sneakers,hair-short04,beard-beard|sweater,leggings,boots,hair-long|parka,jeans,boots,beanie&t=2.4&spin=8",
+  ],
+  [
+    "w5-man-threeq",
+    "who=man&wear=tee,jeans,sneakers,hair-short04|shirt,shorts,sneakers,hair-short04,beard-beard|sweater,leggings,boots,hair-long|parka,jeans,boots,beanie&t=2.4&spin=40",
+  ],
+  [
+    "w5-man-back",
+    "who=man&wear=tee,jeans,sneakers,hair-short04|shirt,shorts,sneakers,hair-short04,beard-beard|sweater,leggings,boots,hair-long|parka,jeans,boots,beanie&t=2.4&spin=180",
+  ],
+  [
+    "w5-man-walk",
+    "who=man&wear=tee,jeans,sneakers,hair-short04|shirt,shorts,sneakers,hair-short04,beard-beard|sweater,leggings,boots,hair-long|parka,jeans,boots,beanie&act=walk&t=3.15&spin=60",
+  ],
+  [
+    "w5-woman-front",
+    "who=woman&wear=tank,skirt,sneakers,hair-long|dress,boots,hair-bun|tee,longskirt,sneakers,hair-braid|sweater,jeans,boots,hair-short04&t=2.4&spin=-8",
+  ],
+  [
+    "w5-woman-threeq",
+    "who=woman&wear=tank,skirt,sneakers,hair-long|dress,boots,hair-bun|tee,longskirt,sneakers,hair-braid|sweater,jeans,boots,hair-short04&t=2.4&spin=-40",
+  ],
+  [
+    "w5-woman-back",
+    "who=woman&wear=tank,skirt,sneakers,hair-long|dress,boots,hair-bun|tee,longskirt,sneakers,hair-braid|sweater,jeans,boots,hair-short04&t=2.4&spin=180",
+  ],
+  [
+    "w5-woman-walk",
+    "who=woman&wear=tank,skirt,sneakers,hair-long|dress,boots,hair-bun|tee,longskirt,sneakers,hair-braid|sweater,jeans,boots,hair-short04&act=walk&t=3.15&spin=-60",
+  ],
+  ["w5-plaid", "wear=shirt,jeans,sneakers,hair-short04|tee,jeans,sneakers,hair-long&pattern=plaid&t=2.4&spin=15"],
+  ["w5-stripes", "wear=sweater,jeans,boots,hair-short04|tee,skirt,sneakers,hair-bun&pattern=stripes&t=2.4&spin=15"],
+  // (the CC0 pack's hairs, each on both: heads and shoulders in a row)
+  [
+    "w5-hairs-man",
+    "who=man&near=1&wear=tee,jeans,sneakers,hair-short01|tee,jeans,sneakers,hair-short03|tee,jeans,sneakers,hair-short04|tee,jeans,sneakers,hair-bob01&t=2.4&spin=20",
+  ],
+  [
+    "w5-hairs-man-b",
+    "who=man&near=1&wear=tee,jeans,sneakers,hair-bob02|tee,jeans,sneakers,hair-braid|tee,jeans,sneakers,hair-bob02|tee,jeans,sneakers,hair-long&t=2.4&spin=20",
+  ],
+  [
+    "w5-hairs-woman",
+    "who=woman&near=1&wear=tee,jeans,sneakers,hair-short01|tee,jeans,sneakers,hair-short03|tee,jeans,sneakers,hair-short04|tee,jeans,sneakers,hair-bob01&t=2.4&spin=-20",
+  ],
+  [
+    "w5-hairs-woman-b",
+    "who=woman&near=1&wear=tee,jeans,sneakers,hair-bob02|tee,jeans,sneakers,hair-braid|tee,jeans,sneakers,hair-bob02|tee,jeans,sneakers,hair-bun&t=2.4&spin=-20",
+  ],
+  // (the beard and the long hair, close)
+  ["w5-beard", "who=man&face=man&wear=shirt,jeans,sneakers,hair-short04,beard-beard&t=2.4&spin=15"],
+  ["w5-beard-threeq", "who=man&face=man&wear=shirt,jeans,sneakers,hair-short04,beard-beard&t=2.4&spin=45"],
+  ["w5-beard-front", "who=man&face=man&wear=shirt,jeans,sneakers,hair-short04,beard-beard&t=2.4&spin=0"],
+  ["w5-beard-side", "who=man&face=man&wear=shirt,jeans,sneakers,hair-short04,beard-beard&t=2.4&spin=70"],
+  ["w5-long-man", "who=man&face=man&bust=1&wear=sweater,jeans,boots,hair-long&t=2.4&spin=20"],
+  ["w5-long-woman", "who=woman&face=woman&bust=1&wear=tank,skirt,sneakers,hair-long&t=2.4&spin=-20"],
+  ["w5-long-back", "who=woman&face=woman&bust=1&wear=tank,skirt,sneakers,hair-long&t=2.4&spin=160"],
+  ["w5-night", "wear=tee,jeans,sneakers,hair-short04|dress,boots,hair-bun&t=2.4&spin=20&hour=22"],
 ];
 
 const browser = await chromium.launch({ args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });

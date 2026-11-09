@@ -45,6 +45,9 @@ function fakeBase(): M.LifeBase {
     browRgb: new Color(0.2, 0.1, 0.05),
     parts: [],
     height: k.p.height,
+    wear: {},
+    wearLm: {},
+    outfits: new Map(),
   };
 }
 

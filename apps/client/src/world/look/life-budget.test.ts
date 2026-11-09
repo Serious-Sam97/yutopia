@@ -15,11 +15,18 @@ const BUDGETS: Record<string, { mb: number; gpuMb: number; tris: number }> = {
   // (2.2 → 2.6 MB with the slim and broad bodies as morph targets on every part: phase 4, +0.3 MB)
   // (46k → 50k tris with the teeth and the tongue: phase 4.4, +7.6k — the teeth are MakeHuman's, 3.6k quads,
   // and a part with the mouth's shapes can't be decimated in Blender; the far level, 4.5, has no mouth)
-  person: { mb: 2.6, gpuMb: 9.5, tris: 50000 },
+  // (2.6 → 3.2 MB with the body whole and what each vertex is on it — the skin under what's worn hidden by
+  // the game: phase 5, 2.96 MB measured; person-<who>-wear.glb, every made garment and hair, is 1.33 MB)
+  // (50k → 62k tris in the file, the same phase: its whole body — drawn, the skin under the clothes is
+  // dropped from the index: 36–42k measured on the bench in the sample's outfits, 60.0k the man's file)
+  person: { mb: 3.2, gpuMb: 9.5, tris: 62000 },
+  // (phase 5: a person's made garments and hair, every one in the wardrobe in one file — only the worn
+  // ones reach the GPU; 3.1 MB and ~13.3 MB of textures if all were, with the CC0 pack's seven hairs)
+  wear: { mb: 3.6, gpuMb: 16, tris: 80000 },
   plant: { mb: 0.3, gpuMb: 1.5, tris: 12000 },
   tree: { mb: 0.4, gpuMb: 2, tris: 12000 },
 };
-const kindOf = (f: string) => f.split("-")[0];
+const kindOf = (f: string) => (f.endsWith("-wear.glb") ? "wear" : f.split("-")[0]);
 // (the extensions the life loader reads: life-assets.ts lifeLoader)
 const SUPPORTED = new Set(["KHR_texture_basisu", "EXT_meshopt_compression", "KHR_materials_emissive_strength"]);
 

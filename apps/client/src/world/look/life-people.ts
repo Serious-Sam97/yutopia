@@ -14,6 +14,8 @@
 //   lifeGender(avatar, seed)     who they are drawn as: masculine the man, feminine the woman, neutral
 //                                one of the two by a seed from their name (decided 2026-11-08)
 //   lifeArms(part)               a part cut to the arms (first person's hands)
+//   lifeWear(gender, renderer)   the garments and hair made for that person (phase 5: person-<who>-wear.glb),
+//                                loaded once; lifeBody's `worn` dresses them, the skin under them hidden
 import type { AvatarLayers } from "@yutopia/shared";
 import {
   type BufferAttribute,
@@ -33,6 +35,7 @@ import {
 } from "three";
 import { JOINTS, type JointName, PARENT } from "../chars/rig";
 import { loadLifeGLTF } from "./life-assets";
+import { bodyIndex, isHair, patternPiece, roleOf, type WearLm, type WearPattern, type WearSpec } from "./life-wear";
 import type { Piece, Shader } from "./yulit";
 
 /** Bones beyond chars/rig.ts's 31: each eye, under the head, turned by the gaze. */
@@ -73,6 +76,12 @@ export interface LifeBase {
   browRgb: Color;
   parts: LifePart[];
   height: number;
+  /** (phase 5) the garments' cut rules and the landmarks they're cut by — the body says what each of its
+   *  vertices is, so what's worn hides the skin under it */
+  wear: Record<string, WearSpec>;
+  wearLm: WearLm;
+  /** the body's geometry per outfit (the skin under it dropped), shared by everyone in it */
+  outfits: Map<string, BufferGeometry>;
 }
 
 // ── the skin's light and the eyes' colour (plan 73 4.4) ──────────────────────────────────────────
@@ -205,7 +214,7 @@ function finish(name: string, mat: MeshStandardMaterial, hasColour: boolean, iri
     });
     mat.dispose();
     givePiece(out, SKIN_PIECE);
-  } else if (name === "hair") {
+  } else if (isHair(name)) {
     out = new MeshPhysicalMaterial({
       map: mat.map,
       roughness: 0.48,
@@ -239,7 +248,14 @@ function finish(name: string, mat: MeshStandardMaterial, hasColour: boolean, iri
   } else if (!/lashes|brows/.test(name)) mat.roughness = Math.max(mat.roughness, 0.75);
   // hair and the eyes' corneas: cut out by their alpha, softly (alpha to coverage on the antialiased
   // frame: no sorting, no flicker on strands); the lashes too. Brows: truly see-through, drawn last.
-  if (/hair|eyes|lashes/.test(name)) {
+  if (/beard/.test(name)) {
+    // a beard: one layer of painted hair over the skin, blended — cut out, its soft edge went hard and
+    // jagged without multisampling (the composer's frame)
+    out.transparent = true;
+    out.alphaTest = 0;
+    out.depthWrite = false;
+    out.side = DoubleSide;
+  } else if (/hair|eyes|lashes/.test(name)) {
     out.transparent = false;
     out.alphaToCoverage = true;
     out.alphaTest = 0.02;
@@ -277,6 +293,8 @@ export async function loadLifeBase(url: string, renderer: WebGLRenderer, gender:
     brow_rgb?: number[];
     iris?: number[];
     bodies?: LifeBase["bodies"];
+    wear?: Record<string, WearSpec>;
+    wear_lm?: WearLm;
   } = {};
   scene.traverse((o: Object3D) => {
     const life = (o.userData as { life?: string }).life;
@@ -333,6 +351,9 @@ export async function loadLifeBase(url: string, renderer: WebGLRenderer, gender:
     browRgb: srgb(extras.brow_rgb, [0.2, 0.13, 0.08]),
     parts,
     height: top,
+    wear: extras.wear ?? {},
+    wearLm: extras.wear_lm ?? {},
+    outfits: new Map(),
   };
 }
 
@@ -401,6 +422,57 @@ export function lifeFar(gender: LifeGender, renderer: WebGLRenderer): Promise<Li
     );
   }
   return p;
+}
+
+const wears = new Map<string, Promise<LifeBase>>();
+const wearsIn = new Map<string, LifeBase>();
+/** The garments and hair made for that person (plan 73 phase 5), loaded once: a base of `wear-*` parts. */
+export function lifeWear(gender: LifeGender, renderer: WebGLRenderer): Promise<LifeBase> {
+  let p = wears.get(gender);
+  if (!p) {
+    p = loadLifeBase(`/life/person-${gender}-wear.glb`, renderer, gender);
+    wears.set(gender, p);
+    p.then(
+      (b) => wearsIn.set(gender, b),
+      () => wears.delete(gender),
+    );
+  }
+  return p;
+}
+/** The garments' file if it's in (null meanwhile: asked for). */
+export function lifeWearNow(gender: LifeGender, renderer: WebGLRenderer): LifeBase | null {
+  void lifeWear(gender, renderer);
+  return wearsIn.get(gender) ?? null;
+}
+
+/** What someone wears (phase 5): the garments' and hair's names (wear.py GARMENTS, hair.py — "tee",
+ *  "jeans", "sneakers", "hair-crop", "beard-beard"), off that person's garments file; a top's pattern. */
+export interface LifeWorn {
+  names: string[];
+  wear: LifeBase;
+  pattern?: WearPattern;
+}
+
+/** The body's geometry for an outfit: its own attributes, its index without the skin under it (and,
+ *  wearing none of the made garments, under the file's own outfit). Cached on the base. */
+function bodyFor(base: LifeBase, body: LifePart, names: string[]): BufferGeometry {
+  const own = !names.some((n) => roleOf(n) === "top" || roleOf(n) === "bottom");
+  const key = `${own ? "own|" : ""}${[...names].sort().join(",")}`;
+  const had = base.outfits.get(key);
+  if (had) return had;
+  const g = body.geometry;
+  const specs = names.map((n) => base.wear[n]).filter((x): x is WearSpec => !!x);
+  const index = bodyIndex(g, specs, base.wearLm, own);
+  if (!index) return g;
+  const out = new BufferGeometry();
+  for (const [k, a] of Object.entries(g.attributes)) out.setAttribute(k, a);
+  out.morphAttributes = g.morphAttributes;
+  out.morphTargetsRelative = g.morphTargetsRelative;
+  out.setIndex(index);
+  out.boundingBox = g.boundingBox;
+  out.boundingSphere = g.boundingSphere;
+  base.outfits.set(key, out);
+  return out;
 }
 
 // ── who an avatar is drawn as ───────────────────────────────────────────────────────────────────
@@ -513,8 +585,8 @@ export function farPiece(a: AvatarLayers | null, gender: LifeGender): Piece {
   };
 }
 
-/** The base as this avatar (or as the file is, without one). */
-export function lifeBody(base: LifeBase, a: AvatarLayers | null): LifeBody {
+/** The base as this avatar (or as the file is, without one); `worn`: in the made garments (phase 5). */
+export function lifeBody(base: LifeBase, a: AvatarLayers | null, worn: LifeWorn | null = null): LifeBody {
   const build = a ? lifeBuild(a) : "regular";
   const off = build === "regular" ? {} : (base.bodies[build] ?? {});
   const at = {} as Record<BoneName, Vector3>;
@@ -531,8 +603,20 @@ export function lifeBody(base: LifeBase, a: AvatarLayers | null): LifeBody {
   const mine: Material[] = [];
   // (without an avatar — the benches — each person's own tone from phase 0b: the file's skin is grey)
   const skinHex = a?.skin ?? (base.gender === "man" ? "#e2b996" : "#5b3a27");
-  const parts = base.parts.map((p) => {
-    if (!a && p.name !== "body") return p;
+  // what's worn: the made garments in place of the file's own outfit (its shoes, its hair, as worn)
+  const names = worn?.names ?? [];
+  const has = (r: string) => names.some((n) => roleOf(n) === r);
+  const dropped = new Set<string>();
+  if (has("top") || has("bottom")) dropped.add("clothes");
+  if (has("shoes")) dropped.add("shoes");
+  if (has("hair") && names.some((n) => n.startsWith("hair-"))) dropped.add("hair");
+  const wornParts = worn
+    ? worn.wear.parts.filter((p) => names.some((n) => p.name === `wear-${n}` || p.name.startsWith(`wear-${n}-`)))
+    : [];
+  const all = [...base.parts.filter((p) => !dropped.has(p.name)), ...wornParts];
+  const parts = all.map((p) => {
+    if (p.name === "body") p = { ...p, geometry: bodyFor(base, p, names) };
+    if (!a && p.name !== "body" && !p.name.startsWith("wear-")) return p;
     let material = p.material;
     const tint = (c: Color) => {
       material = own(p.material);
@@ -546,18 +630,32 @@ export function lifeBody(base: LifeBase, a: AvatarLayers | null): LifeBody {
       const m = base.skinMean;
       tint(new Color(Math.min(3, s.r / m.r), Math.min(3, s.g / m.g), Math.min(3, s.b / m.b)));
     } else if (!a) {
-      // (none: as the file is)
-    } else if (p.name === "hair" || p.name === "brows") {
+      // (none: as the file is — the made garments a plain cloth's grey)
+      if (p.name.startsWith("wear-") && !isHair(p.name)) tint(new Color(0.55, 0.55, 0.55));
+    } else if (isHair(p.name) || p.name === "brows") {
       // (their colour over the file's: the file's hair is dark, so a light colour asks a lot of each
       // channel — capped as a whole, not channel by channel, or ginger and blonde went grey: 4.5)
       const h = new Color(a.hairColor);
-      const m = p.name === "hair" ? base.hairRgb : base.browRgb;
+      const m = isHair(p.name) ? base.hairRgb : base.browRgb;
       const k = new Color(h.r / m.r, h.g / m.g, h.b / m.b);
       const most = Math.max(k.r, k.g, k.b);
       if (most > HAIR_GAIN) k.multiplyScalar(HAIR_GAIN / most);
       tint(k);
     } else if (p.name === "shoes") tint(new Color(a.shoesColor));
-    else if (p.name === "clothes") {
+    else if (p.name.startsWith("wear-")) {
+      // (a made garment: the avatar's colour for what it is; a top's pattern in it and the bottom's)
+      const r = roleOf(p.name);
+      const hex = r === "top" ? a.topColor : r === "shoes" ? a.shoesColor : a.bottomColor;
+      // (the CC0 shoes are textured: their file's colour × the avatar's, as the file's own shoes)
+      tint(new Color(hex).multiplyScalar(r === "shoes" ? 1 : 0.85));
+      if (r === "top" && worn?.pattern && worn.pattern !== "plain") {
+        givePiece(
+          material,
+          patternPiece(worn.pattern, new Color(1, 1, 1), new Color(a.bottomColor).multiplyScalar(1.1)),
+        );
+        (material as MeshStandardMaterial).color.copy(new Color(hex));
+      }
+    } else if (p.name === "clothes") {
       material = own(p.material);
       givePiece(material, outfitPiece(new Color(a.topColor), new Color(a.bottomColor)));
       mine.push(material);

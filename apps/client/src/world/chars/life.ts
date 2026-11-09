@@ -199,6 +199,8 @@ const DEPTH = new MeshBasicMaterial({
   polygonOffsetUnits: 1,
 });
 const SOLID = new Set(["body", "clothes", "shoes", "far"]);
+// (and the made garments, phase 5: the hair's and the beards' are cut out, not solid)
+const solid = (name: string) => SOLID.has(name) || (name.startsWith("wear-") && !/^wear-(hair|beard)-/.test(name));
 
 /** How the view draws them: their own materials, those faded (away), or one material over all. */
 export type LifeState = "own" | "away" | Material;
@@ -365,7 +367,7 @@ export class LifeLook {
     // (culled by a sphere round the whole figure, generous enough for any pose — as today's)
     sm.frustumCulled = this.part !== "arms";
     sm.boundingSphere = new Sphere(new Vector3(0, this.height * 0.5, 0), this.height * 0.75);
-    if (part.name === "brows") sm.renderOrder = 2;
+    if (part.name === "brows" || /beard/.test(part.name)) sm.renderOrder = 2;
     sm.updateMorphTargets();
     sm.morphTargetDictionary = { ...part.morphs };
     sm.bindMode = "attached";
@@ -452,7 +454,7 @@ export class LifeLook {
     const faded = s === "away" || (typeof s !== "string" && s.transparent);
     if (faded)
       this.meshes.forEach((sm, i) => {
-        if (this.depth.has(i) || !SOLID.has(this.parts[i].part.name) || !sm.skeleton) return;
+        if (this.depth.has(i) || !solid(this.parts[i].part.name) || !sm.skeleton) return;
         const d = new SkinnedMesh(sm.geometry, DEPTH);
         d.name = `${sm.name}-depth`;
         d.renderOrder = -1;

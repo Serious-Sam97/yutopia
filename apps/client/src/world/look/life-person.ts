@@ -17,7 +17,9 @@ import {
   type LifeBase,
   type LifeBody,
   type LifeGender,
+  type LifeWorn,
   lifeBody,
+  lifeWear,
   loadLifeBase,
   parentOf,
 } from "./life-people";
@@ -42,8 +44,9 @@ export class LifePerson {
   constructor(
     readonly base: LifeBase,
     avatar: AvatarLayers | null = null,
+    worn: LifeWorn | null = null,
   ) {
-    this.body = lifeBody(base, avatar);
+    this.body = lifeBody(base, avatar, worn);
     const b = this.body;
     for (const j of ALL_BONES) {
       const bone = new Bone();
@@ -65,7 +68,7 @@ export class LifePerson {
       sm.castShadow = true;
       sm.receiveShadow = true;
       sm.frustumCulled = false;
-      if (p.name === "brows") sm.renderOrder = 2;
+      if (p.name === "brows" || /beard/.test(p.name)) sm.renderOrder = 2;
       sm.updateMorphTargets();
       sm.morphTargetDictionary = { ...p.morphs };
       sm.bind(skeleton, new Matrix4());
@@ -132,9 +135,11 @@ export async function loadLifePerson(
   url: string,
   renderer: WebGLRenderer,
   avatar: AvatarLayers | null = null,
+  worn: Omit<LifeWorn, "wear"> | null = null,
 ): Promise<LifePerson> {
   const gender: LifeGender = /woman/.test(url) ? "woman" : "man";
-  return new LifePerson(await loadLifeBase(url, renderer, gender), avatar);
+  const w = worn ? { ...worn, wear: await lifeWear(gender, renderer) } : null;
+  return new LifePerson(await loadLifeBase(url, renderer, gender), avatar, w);
 }
 
 /** Every mesh of a three object (for counting what the person costs). */

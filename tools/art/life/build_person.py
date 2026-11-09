@@ -161,6 +161,9 @@ BODIES = {
 if BODY != "regular":
     P.update(BODIES[WHO][BODY])
 DUMP = arg("--dump", "")
+# (plan 73 phase 5: the garments made by script — wear.py — and the CC0 shoes, into their own file:
+# person-<who>-wear.glb; "sample" the sample of phase 5.0)
+WEAR = arg("--wear", "")
 MORPHS = arg("--morphs", "")  # slim=PATH,broad=PATH
 if MUSCLE:
     P["muscle"] = float(MUSCLE)
@@ -426,7 +429,11 @@ parts = []  # (name, positions, uvs, faces, weights over BONES, texture)
 part_shapes = {}  # name → {shape: positions}
 skin_tex = os.path.join(SYS, P["skin"])
 deleted = set()
-for name, rel in P["parts"] + COMMON:
+if WEAR:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import wear as WR
+WEAR_CC0 = [(f"wear-{g}", sp["cc0"]) for g, sp in WR.GARMENTS.items() if "cc0" in sp] if WEAR else []
+for name, rel in P["parts"] + COMMON + WEAR_CC0:
     clo = read_mhclo(os.path.join(SYS, rel + ".mhclo"))
     base_dir = os.path.dirname(os.path.join(SYS, rel))
     pv, pt, pf = read_obj(os.path.join(base_dir, clo["obj"]))
@@ -435,7 +442,8 @@ for name, rel in P["parts"] + COMMON:
     if len(pos) != len(pv):
         print(f"  ({name}: {len(pos)} refs for {len(pv)} vertices)")
     pw = (W[refs] * w[:, :, None]).sum(1)
-    deleted.update(clo["delete"])
+    if not name.startswith("wear-"):  # (worn over: what they'd cover stays — another garment may not)
+        deleted.update(clo["delete"])
     # its texture: the mhmat's diffuse
     tex = None
     for f in os.listdir(base_dir):
@@ -452,7 +460,9 @@ for name, rel in P["parts"] + COMMON:
 # the body: only its own faces, less what the clothes cover
 body_faces = [f for f in F0 if f[2] == "body" and not any(v in deleted for v in f[0])]
 print(f"  body: {len(body_faces)} faces ({len(deleted)} vertices under clothes)")
-parts.insert(0, ("body", V, VT0, body_faces, W, skin_tex))
+# (with garments, plan 73 phase 5: the body whole — what's under the clothes is hidden by the game, by
+# what's worn: each vertex's zone on it, `_wear`; the far person keeps the cut body)
+parts.insert(0, ("body", V, VT0, [f for f in F0 if f[2] == "body"] if WEAR else body_faces, W, skin_tex))
 part_shapes["body"] = {k: V + d for k, d in DV.items()}
 
 # ---- the arms brought down (MakeHuman stands in an A-pose; ours hang straight)
@@ -604,6 +614,96 @@ def to_bl(p):
     return np.stack([p[..., 0], -p[..., 2], p[..., 1]], -1)
 
 
+# ---- the garments made by script (plan 73 phase 5: wear.py), off the body's own clothing helpers
+ALPHA_WEAR = set()
+# (each made part's vertices' source on the body: its other bodies are the body's moves there — the
+# dumps' cards would be rooted elsewhere)
+SRC = {}
+if WEAR:
+    OW = W @ fold
+    hips_y = np.mean([head(f"upperleg01.{S}")[1] for S in "LR"])
+    LM = {
+        "hip": np.array([0, hips_y, 0]),
+        "waist": head("spine03"),
+        "crotch": np.array([0, hips_y - 0.9, 0]),
+        "neck": head("neck01"),
+        "knee": np.mean([head(f"lowerleg01.{S}") for S in "LR"], 0),
+        "ankle": np.mean([head(f"foot.{S}") for S in "LR"], 0),
+        "brow": np.mean([head(f"eye.{S}") for S in "LR"], 0),
+    }
+    for S in "LR":
+        LM[f"shoulder{S}"] = head(f"upperarm01.{S}")
+        LM[f"elbow{S}"] = head(f"lowerarm01.{S}")
+        LM[f"wrist{S}"] = head(f"wrist.{S}")
+        LM[f"hip{S}"] = head(f"upperleg01.{S}")
+        LM[f"knee{S}"] = head(f"lowerleg01.{S}")
+        LM[f"ankle{S}"] = head(f"foot.{S}")
+    centre = np.mean(V, 0)
+
+    def outward(Q, N):
+        # (one winding for the whole shell: turned so that most normals point away from the figure's axis)
+        d = Q - np.stack([np.full(len(Q), centre[0]), Q[:, 1], np.full(len(Q), centre[2])], 1)
+        return N if np.sum(np.einsum("ij,ij->i", N, d)) >= 0 else -N
+
+    ZONES = WR.zones(V, OW, ALL, LM)
+    # (the CC0 hairs: cut out by their alpha, like the file's own)
+    ALPHA_WEAR.update(f"wear-{g}" for g, sp in WR.GARMENTS.items() if sp.get("hair"))
+    hair_pos = next(pp[1] for pp in parts if pp[0] == "hair")
+    names = list(WR.GARMENTS) if WEAR in ("sample", "all") else WEAR.split(",")
+    for g in names:
+        spec = WR.GARMENTS[g]
+        if "cc0" in spec:
+            continue
+        Q, kept = WR.make(spec, V, F0, OW, ALL, LM, outward, ZONES, hair_pos)
+        if "skirt" in spec:
+            Q2, kept2 = WR.make(spec["skirt"], V, F0, OW, ALL, LM, outward, ZONES)
+            low = sorted({v for f in kept2 for v in f})
+            Q[low] = Q2[low]
+            kept = kept + kept2
+        parts.append((f"wear-{g}", Q, np.zeros((len(V), 2)), [(f, f, "wear") for f in kept], W, None))
+        part_shapes[f"wear-{g}"] = {}
+        SRC[f"wear-{g}"] = np.arange(len(V))
+        print(f"  wear-{g}: {len(kept)} faces")
+    # the hair and the beards (hair.py): a shell and strand cards each, with the weights and the face's
+    # shapes of the skin they grow from; their two grey textures written next to the files
+    import hair as HR
+
+    HAIR_TEX = {}
+    for tname, arr in zip(("shell", "cards"), HR.textures(), strict=True):
+        img = bpy.data.images.new(f"hair-{tname}", arr.shape[1], arr.shape[0], alpha=True)
+        img.pixels.foreach_set(arr[::-1].astype(np.float32).ravel())
+        HAIR_TEX[tname] = os.path.join(bpy.app.tempdir or "/tmp", f"hair-{WHO}-{tname}.png")
+        img.filepath_raw = HAIR_TEX[tname]
+        img.file_format = "PNG"
+        img.save()
+    HAIR_NAMES = []
+    styles = [(f"hair-{k}", HR.make_hair(k, V, F0, ZONES, LM)) for k in HR.HAIR]
+    styles += [(f"beard-{k}", HR.make_beard(k, V, F0, VT0, ZONES, LM)) for k in HR.BEARD]
+    for sname, pieces in styles:
+        for piece in pieces:
+            suffix, HP, HUV, HF, src, alpha = piece[:6]
+            pname = f"wear-{sname}{'-' + suffix if suffix else ''}"
+            tex = HAIR_TEX["cards" if alpha else "shell"]
+            if len(piece) > 6:
+                # (its own texture — a beard's painted hair — and its faces with their own UVs)
+                arr = piece[6]
+                img = bpy.data.images.new(pname, arr.shape[1], arr.shape[0], alpha=True)
+                img.pixels.foreach_set(arr[::-1].astype(np.float32).ravel())
+                tex = os.path.join(bpy.app.tempdir or "/tmp", f"{WHO}-{pname}.png")
+                img.filepath_raw = tex
+                img.file_format = "PNG"
+                img.save()
+                HF = [(f[0], f[1], "wear") for f in HF]
+            else:
+                HF = [(f, f, "wear") for f in HF]
+            parts.append((pname, HP, HUV, HF, W[src], tex))
+            part_shapes[pname] = {k: HP + d[src] for k, d in DV.items()}
+            SRC[pname] = src
+            if alpha:
+                ALPHA_WEAR.add(pname)
+            HAIR_NAMES.append(pname)
+            print(f"  {pname}: {len(HF)} faces")
+
 posed = {}
 posed_shapes = {}
 for name, pos, uv, faces, w, tex in parts:
@@ -626,6 +726,20 @@ for kv in MORPHS.split(",") if MORPHS else []:
 arm_data = bpy.data.armatures.new("rig")
 arm = bpy.data.objects.new("rig", arm_data)
 bpy.context.collection.objects.link(arm)
+# (the person and the garments each a collection of their own, the rig in both: each file is its
+# collection — Blender 5.2's exporter took a rig's children along by selection or visibility alike)
+COLS = {}
+
+
+def col(name):
+    if name not in COLS:
+        c = bpy.data.collections.new(name)
+        bpy.context.scene.collection.children.link(c)
+        c.objects.link(arm)
+        COLS[name] = c
+    return COLS[name]
+
+
 bpy.context.view_layer.objects.active = arm
 bpy.ops.object.mode_set(mode="EDIT")
 eb = {}
@@ -763,7 +877,7 @@ def recolour(img, rgb):
     k = lum / max(1e-6, float(np.average(lum, weights=a[..., 3] + 1e-6)))
     a[..., :3] = np.clip(np.array(rgb)[None, None] * (0.45 + 0.75 * k[..., None]), 0, 1)
     img.pixels.foreach_set(a.astype(np.float32).ravel())
-    tmp = os.path.join(bpy.app.tempdir or "/tmp", f"hair-{WHO}.png")
+    tmp = os.path.join(bpy.app.tempdir or "/tmp", f"hair-{WHO}-{img.name}.png")
     img.filepath_raw = tmp
     img.file_format = "PNG"
     img.save()
@@ -947,14 +1061,26 @@ def skirt_weights(ow, unposed):
     return ow
 
 
+IMG_DONE = {}
+
+
 def material(name, tex, alpha):
     m = bpy.data.materials.new(name)
     m.use_nodes = True
     nt = m.node_tree
     bsdf = nt.nodes["Principled BSDF"]
     bsdf.inputs["Roughness"].default_value = 0.55 if name == "skin" else 0.8
-    if tex and os.path.exists(tex):
+    if tex and (tex, name.startswith("wear-")) in IMG_DONE:
+        # (one image for every part that shares a texture: the hair's — else each its own copy, recoloured)
+        n = nt.nodes.new("ShaderNodeTexImage")
+        n.image = IMG_DONE[(tex, True)]
+        nt.links.new(n.outputs["Color"], bsdf.inputs["Base Color"])
+        if alpha:
+            nt.links.new(n.outputs["Alpha"], bsdf.inputs["Alpha"])
+    elif tex and os.path.exists(tex):
         img = bpy.data.images.load(tex)
+        if name.startswith("wear-"):
+            IMG_DONE[(tex, True)] = img
         cap = SMALL_TEX.get(name, TEX)
         if max(img.size) > cap:
             img.scale(cap, cap)
@@ -964,7 +1090,7 @@ def material(name, tex, alpha):
             paint_image(img, name)
         if name in ("brows", "lashes"):
             tint(img, P["brow_rgb"], 1.0 if name == "brows" else P["lash_alpha"])
-        if name == "hair":
+        if name == "hair" or name.startswith(("wear-hair", "wear-beard")):
             recolour(img, P["hair_rgb"])
         if name in ("clothes", "shoes"):
             whiten(img, name)
@@ -996,6 +1122,11 @@ for bname, data in BODY_MORPHS.items():
 # The far person (plan 73 4.5): the body, the clothes, the shoes and the hair as one mesh, made coarse —
 # no textures, no face; its vertex colour says what each vertex is (R the clothes: 0.5 the bottom, 1 the
 # top; G the shoes; B the hair, on the skin the hairline's share), the game colours it by the avatar.
+if WEAR:
+    # (the garments' rules and the landmarks they're cut by, MakeHuman's units: the game hides the skin
+    # under what's worn by them, as wear.covers does)
+    EXTRAS["wear"] = {g: sp for g, sp in WR.GARMENTS.items() if g in names or "cc0" in sp}
+    EXTRAS["wear_lm"] = {k: [round(float(x), 4) for x in LM[k]] for k in ("hip", "waist", "crotch", "neck", "knee", "ankle", "brow")}
 FAR_PARTS = ("body", "clothes", "shoes", "hair")
 FAR_RATIO = float(arg("--far-ratio", "0.12"))
 far = []
@@ -1015,6 +1146,15 @@ for name, pos, uv, faces, w, tex in parts:
                 li += 1
     for p in me.polygons:
         p.use_smooth = True
+    if name == "body" and WEAR:
+        # what each vertex is, for hiding the skin under what's worn (wear.py's zones; +8 the kind: under
+        # the person's own outfit, MakeHuman's delete list)
+        kind, tz, yz, fz, rz = (np.asarray(a)[used] for a in ZONES)
+        base = np.array([v in deleted for v in used], dtype=float)
+        za = me.attributes.new("_wear", "FLOAT_VECTOR", "POINT")
+        za.data.foreach_set("vector", np.stack([kind + 8 * base, tz, yz], 1).astype(np.float32).ravel())
+        fa = me.attributes.new("_neck", "FLOAT2", "POINT")
+        fa.data.foreach_set("vector", np.stack([fz, rz], 1).astype(np.float32).ravel())
     if name == "body":
         cols = skin_colours(posed["body"] + shift, posed["hair"] + shift, used)
         ca = me.color_attributes.new("Col", "FLOAT_COLOR", "POINT")
@@ -1022,8 +1162,8 @@ for name, pos, uv, faces, w, tex in parts:
         ca.data.foreach_set("color", rgba.ravel())
         me.color_attributes.active_color = ca
     ob = bpy.data.objects.new(name, me)
-    bpy.context.collection.objects.link(ob)
-    mat = material("skin" if name == "body" else name, tex, name in ALPHA)
+    col("wear" if name.startswith("wear-") else "person").objects.link(ob)
+    mat = material("skin" if name == "body" else name, tex, name in ALPHA or name in ALPHA_WEAR)
     ob.data.materials.append(mat)
     if name == "body":
         # (the skin texture's mean where the body's UVs fall: the game swaps it for the avatar's skin)
@@ -1036,6 +1176,10 @@ for name, pos, uv, faces, w, tex in parts:
     ow = (w @ fold)[used]
     if name == "clothes" and P.get("skirt"):
         ow = skirt_weights(ow, pos[used])
+    if name.startswith("wear-") and WEAR:
+        spec = WR.GARMENTS.get(name[5:], {})
+        if spec.get("helper") == "skirt" or "skirt" in spec:
+            ow = skirt_weights(ow, pos[used])
     if name == "clothes":
         # the outfit's top and bottom (R 1 the top's colour, 0 the bottom's), by the file's own colours:
         # its tops are light over dark trousers and skirts. A piece (a shell of the mesh) clearly one or
@@ -1068,7 +1212,10 @@ for name, pos, uv, faces, w, tex in parts:
         keys += 1
     # the other bodies (--morphs): this part as each of them
     for bname, data in BODY_MORPHS.items():
-        other = data[f"part_{name}"]
+        if name in SRC:
+            other = posed[name] + shift + (data["part_body"] - (posed["body"] + shift))[SRC[name]]
+        else:
+            other = data[f"part_{name}"]
         assert other.shape == posed[name].shape, f"{bname} {name}: {other.shape} vs {posed[name].shape}"
         if not me.shape_keys:
             ob.shape_key_add(name="Basis")
@@ -1092,7 +1239,7 @@ for name, pos, uv, faces, w, tex in parts:
         far.append(
             {
                 "P": P3[used],
-                "faces": [[remap[v] for v in f[0]] for f in faces],
+                "faces": [[remap[v] for v in f[0]] for f in (body_faces if name == "body" else faces)],
                 "code": code,
                 "ow": ow,
                 "morphs": {b: to_bl(d[f"part_{name}"][used]) for b, d in BODY_MORPHS.items()},
@@ -1102,8 +1249,15 @@ for name, pos, uv, faces, w, tex in parts:
 arm["life"] = json.dumps(EXTRAS)
 os.makedirs(OUT, exist_ok=True)
 path = os.path.abspath(os.path.join(OUT, f"person-{WHO}{'-painted' if PAINT else ''}.glb"))
+# (the person alone — its collection; the garments into a file of their own, below)
+def active(name):
+    bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection.children[name]
+
+
+active("person")
 bpy.ops.export_scene.gltf(
     filepath=path,
+    use_active_collection=True,
     export_format="GLB",
     export_yup=True,
     export_skins=True,
@@ -1115,7 +1269,30 @@ bpy.ops.export_scene.gltf(
     export_meshopt_compression_enable=True,
     export_apply=False,
     export_extras=True,
+    export_attributes=bool(WEAR),
 )
+
+# ---- the garments (plan 73 phase 5): the wear-* parts and the rig, their own file
+if WEAR:
+    active("wear")
+    wpath = os.path.abspath(os.path.join(OUT, f"person-{WHO}-wear.glb"))
+    bpy.ops.export_scene.gltf(
+        filepath=wpath,
+        use_active_collection=True,
+        export_format="GLB",
+        export_yup=True,
+        export_skins=True,
+        export_animations=False,
+        export_morph=True,
+        export_morph_normal=False,
+        export_vertex_color="ACTIVE",
+        export_image_format="AUTO",
+        export_meshopt_compression_enable=True,
+        export_apply=False,
+        export_extras=True,
+    )
+    print(f"wrote wear {wpath} ({os.path.getsize(wpath) / 1e6:.2f} MB)")
+bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection
 
 # ---- the far person (made after the full one is written: its own file, the same rig)
 if far:
@@ -1212,14 +1389,74 @@ if PREVIEW:
     bpy.context.collection.objects.link(cam)
     sc.camera = cam
     cam.data.type = "ORTHO"
-    for tag, loc, rot, ortho in (
-        ("front", (0, -6, h / 2), (math.pi / 2, 0, 0), h * 1.1),
-        ("side", (6, 0, h / 2), (math.pi / 2, 0, math.pi / 2), h * 1.1),
-        ("face", (0, -6, h - 0.13), (math.pi / 2, 0, 0), 0.38),
-    ):
-        cam.location = loc
-        cam.rotation_euler = rot
-        cam.data.ortho_scale = ortho
-        sc.render.filepath = os.path.join(PREVIEW, f"{WHO}-{tag}.png")
-        bpy.ops.render.render(write_still=True)
+    # (with garments: each sample outfit on its own, the base outfit and shoes hidden)
+    OUTFITS = (
+        {
+            "a": ["tee", "jeans", "sneakers"],
+            "b": ["shirt", "shorts", "sneakers"],
+            "c": ["sweater", "leggings", "boots"],
+            "d": ["tank", "skirt", "sneakers"],
+            "e": ["dress", "boots"],
+            "f": ["parka", "jeans", "boots", "beanie"],
+            "g": ["tee", "longskirt", "sneakers"],
+            # the hair (heads only)
+            "h": ["sweater", "hair-short04", "beard-beard"],
+            "i": ["sweater", "hair-long"],
+            "j": ["sweater", "hair-bob02"],
+            "k": ["sweater", "hair-bun"],
+        }
+        if WEAR
+        else {"": None}
+    )
+    body_ob = bpy.data.objects["body"]
+    if WEAR:
+        # (the skin under each outfit hidden as the game hides it: a mask per outfit)
+        bused = sorted({v for f in parts[0][3] for v in f[0]})
+        for oname, outfit in OUTFITS.items():
+            cov = np.zeros(len(V), dtype=bool)
+            for g in outfit:
+                if g in WR.GARMENTS:
+                    cov |= WR.covers(WR.GARMENTS[g], ZONES, LM)
+            vg = body_ob.vertex_groups.new(name=f"show-{oname}")
+            vg.add([i for i, v in enumerate(bused) if not cov[v]], 1.0, "REPLACE")
+            mk = body_ob.modifiers.new(f"mask-{oname}", "MASK")
+            mk.vertex_group = vg.name
+            mk.show_render = False
+    for oname, outfit in OUTFITS.items():
+        if WEAR:
+            for mk in body_ob.modifiers:
+                if mk.type == "MASK":
+                    mk.show_render = mk.name == f"mask-{oname}"
+        for o in bpy.context.view_layer.objects:
+            if o.type != "MESH":
+                continue
+            if outfit is None:
+                o.hide_render = o.name.startswith("wear-")
+            elif o.name.startswith("wear-"):
+                o.hide_render = not any(o.name[5:] == g or o.name[5:].startswith(g + "-") for g in outfit)
+            else:
+                hides = ("clothes", "shoes") + (("hair",) if any(g.startswith("hair-") for g in outfit) else ())
+                o.hide_render = o.name in hides
+        for tag, loc, rot, ortho in (
+            ("front", (0, -6, h / 2), (math.pi / 2, 0, 0), h * 1.1),
+            ("side", (6, 0, h / 2), (math.pi / 2, 0, math.pi / 2), h * 1.1),
+            ("face", (0, -6, h - 0.13), (math.pi / 2, 0, 0), 0.38),
+        ):
+            heads = outfit is not None and any(g.startswith(("hair-", "beard-")) for g in outfit)
+            if outfit is not None and tag == "face":
+                continue
+            if heads:
+                # (the hair: the head and shoulders, front, side and back)
+                loc = {"front": (0, -6, h - 0.32), "side": (6, 0, h - 0.32)}[tag]
+                ortho = 0.95
+            cam.location = loc
+            cam.rotation_euler = rot
+            cam.data.ortho_scale = ortho
+            sc.render.filepath = os.path.join(PREVIEW, f"{WHO}-{tag}{'-' + oname if oname else ''}.png")
+            bpy.ops.render.render(write_still=True)
+            if heads and tag == "side":
+                cam.location = (0, 6, h - 0.32)
+                cam.rotation_euler = (math.pi / 2, 0, math.pi)
+                sc.render.filepath = os.path.join(PREVIEW, f"{WHO}-back-{oname}.png")
+                bpy.ops.render.render(write_still=True)
     print("preview in", PREVIEW)

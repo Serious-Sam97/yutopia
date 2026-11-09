@@ -7,13 +7,17 @@ cd "$(dirname "$0")/../../.."
 OUT=apps/client/public/life
 B="blender -b --factory-startup"
 TMP=$(mktemp -d)
+# (the garments and hair made by script, plan 73 phase 5: "sample" the sign-off's handful)
+WEAR=${WEAR:-sample}
 for who in man woman; do
   # (the slim and broad bodies first, dumped; the regular build takes them as its morphs — plan 73 phase 4)
   for body in slim broad; do
-    $B -P tools/art/life/build_person.py -- --who "$who" --body "$body" --dump "$TMP/$who-$body.npz" | grep dumped
+    $B -P tools/art/life/build_person.py -- --who "$who" --body "$body" --wear "$WEAR" --dump "$TMP/$who-$body.npz" | grep dumped
   done
-  $B -P tools/art/life/build_person.py -- --who "$who" --paint --morphs "slim=$TMP/$who-slim.npz,broad=$TMP/$who-broad.npz" | grep -E "wrote|shoulders"
+  $B -P tools/art/life/build_person.py -- --who "$who" --paint --wear "$WEAR" --morphs "slim=$TMP/$who-slim.npz,broad=$TMP/$who-broad.npz" | grep -E "wrote|shoulders"
   python3 -I tools/art/life/pack_glb.py "$OUT/person-$who-painted.glb" "$OUT/person-$who-painted.glb"
+  # (its garments and hair, phase 5: their own file)
+  python3 -I tools/art/life/pack_glb.py "$OUT/person-$who-wear.glb" "$OUT/person-$who-wear.glb"
   # (its far person, plan 73 4.5: one coarse mesh, no textures)
   python3 -I tools/art/life/pack_glb.py "$OUT/person-$who-far.glb" "$OUT/person-$who-far.glb"
 done

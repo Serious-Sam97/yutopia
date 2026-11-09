@@ -18,6 +18,10 @@ import { useEffect, useRef } from "react";
 //   ?hour=22                     night: the sun out, a lamp over them
 //   ?style=painted|both          the repainted textures; both: photo and painted side by side
 //   ?blink=1  ?smile=0.6  ?talk=0.5  ?eyes=0.6,0.2   the face held (else the walker's gaze: blinks, looks)
+//   ?wear=tee,jeans,sneakers,hair-crop|dress,boots   (phase 5) each painted person once per outfit, in the
+//                                made garments and hair (wear.py, hair.py), coloured as an avatar
+//   ?pattern=stripes|plaid       the tops' pattern
+//   ?near=1                      heads and shoulders (the hair)
 // window.__life.ready once drawn (for e2e/life-bench.mts).
 const TODAY: Record<string, AvatarLayers> = {
   man: {
@@ -181,7 +185,38 @@ export default function LifeBench() {
           );
         }
       }
-      const genders = crowd > 0 ? [] : whoQ ? [whoQ] : face ? [face] : ["man", "woman"];
+      // (?wear: the made garments, one person per outfit — their colours a few avatars' own)
+      const outfits =
+        q
+          .get("wear")
+          ?.split("|")
+          .map((o) => o.split(",").filter(Boolean)) ?? [];
+      const COLOURS = [
+        ["#2c3d5e", "#3d4f6e", "#dedad2", "#3a2a1e"],
+        ["#7a2e2e", "#2a2c30", "#1c1c1c", "#1c1410"],
+        ["#c9b48a", "#4a5a3a", "#5a3c26", "#8a5a2a"],
+        ["#3f6a5a", "#22324a", "#e8e4dc", "#c8a060"],
+        ["#e6e0d4", "#6a4a3a", "#2a2420", "#4a3020"],
+      ];
+      if (outfits.length && crowd === 0) {
+        const pattern = (q.get("pattern") ?? "plain") as "plain" | "stripes" | "plaid";
+        for (const g of whoQ ? [whoQ] : ["man", "woman"])
+          for (const [i, names] of outfits.entries()) {
+            const [topColor, bottomColor, shoesColor, hairColor] = COLOURS[i % COLOURS.length];
+            const a = { ...TODAY[g], topColor, bottomColor, shoesColor, hairColor };
+            const lp = await L.loadLifePerson(`/life/person-${g}-painted.glb`, renderer, a, { names, pattern });
+            shown.push({
+              root: lp.root,
+              setPose: (p, lift) => lp.setPose(p as never, lift),
+              face: (b, t, sm) => lp.setFace(b, t, sm),
+              eyes: (x, y) => lp.setEyes(x, y),
+              h: lp.height,
+              who: `${g}-${names.join("+")}`,
+            });
+            console.log(`life ${g} in ${names.join(", ")}: ${L.trisOf(lp)} tris`);
+          }
+      }
+      const genders = crowd > 0 || outfits.length ? [] : whoQ ? [whoQ] : face ? [face] : ["man", "woman"];
       const f = new C.CharFactory();
       // (today's are baked by their factory, a little each frame: drawn once ready)
       const todays: InstanceType<typeof C.PersonModel>[] = [];
@@ -235,13 +270,21 @@ export default function LifeBench() {
       const cam = new T.PerspectiveCamera(face ? 22 : 30, w / h, 0.05, 60);
       if (face) {
         const s = shown.find((x) => x.who === face + (style === "painted" ? "-painted" : "")) ?? shown[0];
-        const y = s.h - 0.13;
-        cam.position.set(s.root.position.x, y, 0.95);
+        // (?bust=1: the head and shoulders — long hair)
+        const bust = q.get("bust") === "1";
+        const y = s.h - (bust ? 0.3 : 0.13);
+        cam.position.set(s.root.position.x, y, bust ? 1.75 : 0.95);
         cam.lookAt(s.root.position.x, y - 0.01, 0);
       } else {
         const span = Math.max(1.6, shown.length * gap);
-        cam.position.set(0, 1.05, span * 1.55 + 1.6);
-        cam.lookAt(0, 0.92, 0);
+        // (?near=1: heads and shoulders, the row filling the frame)
+        if (q.get("near") === "1") {
+          cam.position.set(0, 1.5, span * 0.95 + 0.9);
+          cam.lookAt(0, 1.42, 0);
+        } else {
+          cam.position.set(0, 1.05, span * 1.55 + 1.6);
+          cam.lookAt(0, 0.92, 0);
+        }
       }
 
       const composer = new EffectComposer(renderer);
