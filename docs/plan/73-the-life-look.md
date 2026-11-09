@@ -1110,6 +1110,17 @@ plough and bus smoothed in clearcoat paint, chrome and glass. `?out=old`: the ou
     (`foot`) and they lie down into it as the snow comes (`wxSnow` 0.2–0.55) — gone under it in winter.
   - **Left:** the campus's lawns and the Grounds' wider meadows unplanted (their land is the layer's
     green); the shops' planters.
+- **8.3 Cars, the plough, the bus.** Built 2026-11-09.
+  - The drivable sedan (`tp/car/sedan.ts`) was already the look's: clearcoat paint, chrome, glass,
+    cloth and carpet — kept.
+  - **Paint** (`look/lit.ts paintMaterial`): the bus's, the plough's and the visitors' cars' one body
+    material and the parked cars' far models' a clearcoat (0.6) over a satin base (0.42), the sky in it;
+    smooth (the Grounds' faceting off for them).
+  - **The bus and the plough** (`tp/vehicles3d.ts`): every panel a rounded box (`RoundedBoxGeometry`, its
+    radius by its size); their wheels, hubs and the bus's rails round (28, 20, 16 sides).
+  - Stills: `e2e/life-vehicles.mts` (the camera on each vehicle as it drives).
+  - **Left:** the far cars' and the visitors' shapes (the campus's `carGeometry`, bevelled already) as
+    they were.
 
 ### 9 — Pets
 

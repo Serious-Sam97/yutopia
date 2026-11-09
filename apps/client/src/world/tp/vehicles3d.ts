@@ -9,7 +9,9 @@ import {
   MeshBasicMaterial,
   RingGeometry,
 } from "three";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { litMaterial } from "../look/lit";
+import { isLifeOut } from "../look/look-mode";
 import { G, tinted } from "./campus";
 import { flatSnow } from "./snow3d";
 import { mergeGeometries } from "./wx3d";
@@ -84,7 +86,7 @@ export function ploughModel(body: Material): Plough {
     for (const s of [1, -1]) {
       const w = new Group();
       w.position.set(x, 0.55, s * 1.08);
-      w.add(new Mesh(new CylinderGeometry(0.55, 0.55, 0.4, 14).rotateX(Math.PI / 2), tyre));
+      w.add(new Mesh(new CylinderGeometry(0.55, 0.55, 0.4, ROUND ? 28 : 14).rotateX(Math.PI / 2), tyre));
       w.add(new Mesh(new BoxGeometry(0.46, 0.06, 0.42), tyre));
       root.add(w);
       wheels.push(w);
@@ -101,8 +103,16 @@ const CREAM = 0xe6dccb;
 const RUST = 0xa8432c;
 const DARK = 0x1f2326;
 
+// (the life look: its panels' edges rounded — plan 73 phase 8.3)
+const ROUND = isLifeOut();
 const part = (w: number, h: number, d: number, x: number, y: number, z: number, c: number) =>
-  tinted(new BoxGeometry(w, h, d).translate(x, y, z), c);
+  tinted(
+    (ROUND
+      ? new RoundedBoxGeometry(w, h, d, 2, Math.min(0.09, Math.min(w, h, d) * 0.3))
+      : new BoxGeometry(w, h, d)
+    ).translate(x, y, z),
+    c,
+  );
 
 export interface Bus {
   root: Group;
@@ -130,8 +140,8 @@ export function busModel(body: Material): Bus {
     part(0.3, 0.95, 2.4, 4.85, 2.02, 0, CREAM), // the back, solid
     // the roof, its rounded edges, a vent
     part(10, 0.28, 2.2, 0, 2.7, 0, CREAM),
-    tinted(new CylinderGeometry(0.14, 0.14, 10, 8).rotateZ(Math.PI / 2).translate(0, 2.63, 1.1), CREAM),
-    tinted(new CylinderGeometry(0.14, 0.14, 10, 8).rotateZ(Math.PI / 2).translate(0, 2.63, -1.1), CREAM),
+    tinted(new CylinderGeometry(0.14, 0.14, 10, ROUND ? 16 : 8).rotateZ(Math.PI / 2).translate(0, 2.63, 1.1), CREAM),
+    tinted(new CylinderGeometry(0.14, 0.14, 10, ROUND ? 16 : 8).rotateZ(Math.PI / 2).translate(0, 2.63, -1.1), CREAM),
     part(1, 0.12, 0.8, 1.5, 2.9, 0, 0xcfc6b4),
     // the front: bumper, grille, the sign's box over the windscreen, the wipers
     part(0.2, 0.3, 2.5, -5.05, 0.6, 0, DARK),
@@ -219,8 +229,8 @@ export function busModel(body: Material): Bus {
     for (const s of [1, -1]) {
       const w = new Group();
       w.position.set(x, 0.5, s * 1.07);
-      w.add(new Mesh(new CylinderGeometry(0.5, 0.5, 0.32, 14).rotateX(Math.PI / 2), tyre));
-      const h = new Mesh(new CylinderGeometry(0.26, 0.26, 0.34, 6).rotateX(Math.PI / 2), hub);
+      w.add(new Mesh(new CylinderGeometry(0.5, 0.5, 0.32, ROUND ? 28 : 14).rotateX(Math.PI / 2), tyre));
+      const h = new Mesh(new CylinderGeometry(0.26, 0.26, 0.34, ROUND ? 20 : 6).rotateX(Math.PI / 2), hub);
       w.add(h);
       // (a spoke you can see turn)
       w.add(new Mesh(new BoxGeometry(0.42, 0.06, 0.35), hub));

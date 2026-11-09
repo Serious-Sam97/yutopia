@@ -7,11 +7,13 @@ import {
   type Material,
   MeshLambertMaterial,
   type MeshLambertMaterialParameters,
+  MeshPhysicalMaterial,
+  type MeshPhysicalMaterialParameters,
   MeshStandardMaterial,
   type MeshStandardMaterialParameters,
   type Texture,
 } from "three";
-import { isLife } from "./look-mode";
+import { isLife, isLifeOut } from "./look-mode";
 
 /** What a lit material may say beyond Lambert's: how rough or metallic it is in the life look (ignored in
  *  the classic one). */
@@ -40,6 +42,31 @@ export function setLifeEnv(texture: Texture | null, k: number) {
 
 /** A lit material of the world: today's Lambert, or in the life look a Standard one. Typed as Lambert so
  *  every caller reads it as before (color, map, emissive… both have them). */
+/** (plan 73 phase 8.3) A vehicle's paint: in the life look's outdoors a clearcoat over a satin base (the
+ *  sky in it), its colours the vertices' or `color`; else today's lit material. */
+export function paintMaterial(params: LitParameters = {}): MeshLambertMaterial {
+  if (!isLifeOut()) return litMaterial(params);
+  const {
+    roughness: _r,
+    metalness: _m,
+    flatShading: _f,
+    ...rest
+  } = params as LitParameters & {
+    flatShading?: boolean;
+  };
+  const m = new MeshPhysicalMaterial({
+    ...(rest as MeshPhysicalMaterialParameters),
+    roughness: 0.42,
+    metalness: 0.08,
+    clearcoat: 0.6,
+    clearcoatRoughness: 0.18,
+    envMap: env.texture,
+    envMapIntensity: env.k,
+  });
+  lifeMaterials.add(m);
+  m.addEventListener("dispose", () => lifeMaterials.delete(m));
+  return m as unknown as MeshLambertMaterial;
+}
 export function litMaterial(params: LitParameters = {}): MeshLambertMaterial {
   const { roughness, metalness, ...lambert } = params;
   if (!isLife()) return new MeshLambertMaterial(lambert);

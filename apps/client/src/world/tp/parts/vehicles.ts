@@ -13,7 +13,8 @@ import {
   Vector3,
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { litMaterial } from "../../look/lit";
+import { paintMaterial } from "../../look/lit";
+import { isLifeOut } from "../../look/look-mode";
 import { carGeometry } from "../campus";
 import { landLight, patchGrounds } from "../light3d";
 import { Person3D } from "../person3d";
@@ -124,8 +125,10 @@ export class Vehicles {
 
   vehicleMat(): MeshLambertMaterial {
     if (!this.vehMat) {
-      this.vehMat = litMaterial({ vertexColors: true });
+      // (the life look: paint, clearcoated — plan 73 phase 8.3; smooth, not the Grounds' faces)
+      this.vehMat = paintMaterial({ vertexColors: true });
       patchGrounds(this.vehMat);
+      if (isLifeOut()) this.vehMat.flatShading = false;
     }
     return this.vehMat;
   }

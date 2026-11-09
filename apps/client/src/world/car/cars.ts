@@ -58,7 +58,7 @@ import { prefs, type Quality } from "@/lib/prefs";
 import { chars as charsMod } from "../art/chars-load";
 import { pets as petsMod } from "../art/pets-load";
 import { mixer } from "../audio";
-import { litMaterial } from "../look/lit";
+import { paintMaterial } from "../look/lit";
 import { activePad } from "../pads";
 import { Radio } from "../sound";
 import { hud, toast } from "../store";
@@ -1191,7 +1191,8 @@ export class Cars {
   private farMat(hex: number): Material {
     let m = this.farMats.get(hex);
     if (!m) {
-      m = litMaterial({ vertexColors: true, color: hex });
+      // (the life look: paint, clearcoated — plan 73 phase 8.3; the glass's too, as glossy)
+      m = paintMaterial({ vertexColors: true, color: hex });
       this.farMats.set(hex, m);
     }
     return m;
