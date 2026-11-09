@@ -160,14 +160,22 @@ const BUILD_TEX = isLifeBuild();
 // tint; the bake paints it a flat tone (`FLOOR_FILL`: its light and colour, multiplied over the library's)
 // or, the cream checker, its own pattern — the lot's asphalt and concrete stay painted (their snow,
 // their wet are the bake's)
-const FLOOR_LIB: Record<string, [MatId, number]> = {
-  ".": ["floor-oak", 0xffffff],
-  "~": ["floor-walnut", 0xffffff],
-  ",": ["carpet", 0xffffff],
-  ":": ["carpet", 0xffffff],
-  _: ["tile-floor", 0xffffff],
+// (its UVs scaled by the third: the tile's own tiles a metre, on the checker's squares)
+const FLOOR_LIB: Record<string, [MatId, number, number]> = {
+  ".": ["floor-oak", 0xffffff, 1],
+  "~": ["floor-walnut", 0xffffff, 1],
+  ",": ["carpet", 0xffffff, 1],
+  ":": ["carpet", 0xffffff, 1],
+  _: ["tile-floor", 0xffffff, 0.6],
 };
-const FLOOR_FILL: Record<string, string> = { ".": "#ffffff", "~": "#6e6e6e", ",": "#6b6a3a", ":": "#7a3b2e" };
+// (the cream checker: its two tones flat, a tile each — plan 73 phase 7.2; its grout the library's)
+const FLOOR_FILL: Record<string, string | readonly [string, string]> = {
+  ".": "#ffffff",
+  "~": "#6e6e6e",
+  ",": "#6b6a3a",
+  ":": "#7a3b2e",
+  _: ["#f6eedb", "#ddd1b4"],
+};
 const LIVE_NEAR = 18;
 const LIVE_MAX = 64;
 
@@ -538,7 +546,17 @@ export class World3 {
       const geo = new ExtrudeGeometry(shape, { depth: SLAB, bevelEnabled: false });
       geo.rotateX(-Math.PI / 2);
       geo.translate(0, d.over - SLAB, 0);
-      const mat = litMaterial({ color: DECK_COLOR[d.top] ?? 0x8f6038 });
+      // (the life look: its floor's library material, UVs in metres — the extrusion's own, the shape's
+      // plan metres on its top and up its edge — tinted the floor's tone; plan 73 phase 7.2)
+      const lib = BUILD_TEX ? FLOOR_LIB[d.top] : undefined;
+      if (lib && lib[2] !== 1) {
+        const uv = geo.getAttribute("uv");
+        for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * lib[2], uv.getY(i) * lib[2]);
+      }
+      const fill = FLOOR_FILL[d.top];
+      const mat = lib
+        ? surfaceMaterial(lib[0], new Color(typeof fill === "string" ? fill : (fill?.[0] ?? "#ffffff")).getHex())
+        : litMaterial({ color: DECK_COLOR[d.top] ?? 0x8f6038 });
       this.light(mat);
       const mesh = new Mesh(geo, mat);
       mesh.receiveShadow = true;
@@ -1605,7 +1623,8 @@ export class World3 {
             const cuv = [u0, v0, u0, v1, u1, v1, u0, v0, u1, v1, u1, v0];
             if (lib) {
               // (the library's: metres across the plan; the bake's: the chunk's canvas)
-              g.uv.push(x, y, x, y + 1, x1, y + 1, x, y, x1, y + 1, x1, y);
+              const k = FLOOR_LIB[lib][2];
+              g.uv.push(...[x, y, x, y + 1, x1, y + 1, x, y, x1, y + 1, x1, y].map((q) => q * k));
               g.buv.push(...cuv);
             } else g.uv.push(...cuv);
             for (let i = 0; i < 6; i++) g.nor.push(0, 1, 0);

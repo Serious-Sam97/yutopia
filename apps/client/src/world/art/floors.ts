@@ -503,8 +503,9 @@ export class FloorBake {
     aoOnly?: { x0: number; y0: number; x1: number; y1: number },
     private slabs: FloorSlab[] | null = null,
     /** (plan 73 phase 7, the life look) materials painted a flat tone in place of their pattern — the
-     *  library's floor drawn under the bake, its shading and strips over it: the tone the material's */
-    private fill: Record<string, string> | null = null,
+     *  library's floor drawn under the bake, its shading and strips over it: the tone the material's; two
+     *  tones a checker of the tiles (a tile each, as the pattern's: no grout, the library's is) */
+    private fill: Record<string, string | readonly [string, string]> | null = null,
   ) {
     const W = map.width;
     const H = map.height;
@@ -566,7 +567,20 @@ export class FloorBake {
     const e = 0.6 / res; // overlap so materials meet without hairline gaps
     const pattern = (ch: string): string | CanvasPattern | null => {
       const flat = this.fill?.[ch];
-      if (flat) return flat;
+      if (typeof flat === "string") return flat;
+      if (flat) {
+        // (a checker: two tiles each way, laid from the plan's origin as the pattern is)
+        const c = canvas(2 * ms, 2 * ms);
+        const cg = c.getContext("2d") as CanvasRenderingContext2D;
+        for (let y = 0; y < 2; y++)
+          for (let x = 0; x < 2; x++) {
+            cg.fillStyle = flat[(x + y) % 2];
+            cg.fillRect(x * ms, y * ms, ms, ms);
+          }
+        const pat = g.createPattern(c, "repeat");
+        pat?.setTransform(new DOMMatrix().scale(T / ms));
+        return pat || null;
+      }
       const tex = materialCanvas(ch, ms);
       const pat = tex && g.createPattern(tex, "repeat");
       pat?.setTransform(new DOMMatrix().scale(T / ms));

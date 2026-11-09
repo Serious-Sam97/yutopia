@@ -999,7 +999,22 @@ doors and windows are the kit's (`furn/openings.ts`): phase 6 gave them their ma
       life look and `build=old`, taken away after; the lobby, studio and live room by `life-shots.mts`.
   - **Left:** a bowed wall's pieces show thin seams of light between them (as they did before); the `_`
     floor's checker under the tile's grout (7.2).
-- **7.2 Floors, mezzanines, stairs, lifts** · **7.3 Outside: facades, roofs, the
+- **7.2 Floors, mezzanines, stairs, lifts.**
+  - **Built 2026-11-09.**
+    - **The cream tile `_`**: the bake paints its checker as two flat tones a tile each (`FloorBake`
+      `fill` takes a pair), and the library's tile is a metre (its UVs × 0.6: `FLOOR_LIB`'s third), its
+      grout on the checker's squares — the painted grout and veins under the library's had made a plaid.
+    - **Mezzanines** (`build.ts buildDecks`): their floor's library material, tinted its fill, through the
+      extrusion's own UVs (plan metres on the top, up the edge).
+    - **The stairwell** (`stairs3d.ts`): its flights, landings and soffits the library's concrete; a box's
+      UVs in metres, each face its own size — a tall step's side had stretched the painted concrete up it.
+    - **The lifts** stay as they were: their veined stone, brushed steel and mirror are their own painted
+      PBR (the library has no stone), their walnut a thin rail.
+    - Stills: `e2e/life-decks.mts` (a mezzanine of each floor's material on Floor 1, taken away after);
+      `life-shots.mts` spots `lifts` and `stairs`.
+  - **Left:** the grate `x` floor and the lot's asphalt and concrete painted (7.3, 8); a tile mezzanine
+    one tone (no checker); the lift cars untouched.
+- **7.3 Outside: facades, roofs, the
   campus** — each finished across the world, before/after stills.
 - **7.4 Checks.** Draws, triangles and memory by floor, frame times, budgets, e2e, stills.
 

@@ -19,6 +19,8 @@ import {
   TubeGeometry,
   Vector3,
 } from "three";
+import { isLifeBuild } from "../look/look-mode";
+import { surfaceMaterial } from "./kit-mats";
 import { mergeStatic } from "./merge-static";
 
 // The stairwell, made properly (docs/plan/26-floor-transitions.md, phase 0):
@@ -146,9 +148,15 @@ export interface StairMats {
 let mats: StairMats | null = null;
 export function stairMats(): StairMats {
   if (mats) return mats;
+  // (the life look: the library's concrete, its UVs in metres — `box`, `slopedSlab`; plan 73 phase 7.2)
+  const life = isLifeBuild();
   mats = {
-    concrete: new MeshStandardMaterial({ map: concrete("#b9b6b0", 4), roughness: 0.82 }),
-    soffit: new MeshStandardMaterial({ map: concrete("#c9c6c0", 8), roughness: 0.9 }),
+    concrete: life
+      ? (surfaceMaterial("concrete", 0xd2cfc9) as MeshStandardMaterial)
+      : new MeshStandardMaterial({ map: concrete("#b9b6b0", 4), roughness: 0.82 }),
+    soffit: life
+      ? (surfaceMaterial("concrete", 0xe0ddd7) as MeshStandardMaterial)
+      : new MeshStandardMaterial({ map: concrete("#c9c6c0", 8), roughness: 0.9 }),
     nosing: new MeshStandardMaterial({ color: "#2b2d2f", roughness: 0.65, metalness: 0.3 }),
     rail: new MeshStandardMaterial({ color: "#26292c", roughness: 0.35, metalness: 0.7 }),
     wall: new MeshStandardMaterial({ map: blocks(), roughness: 0.85 }),
@@ -161,7 +169,25 @@ export function stairMats(): StairMats {
 }
 
 const box = (w: number, h: number, d: number, mat: Material, x: number, y: number, z: number) => {
-  const m = new Mesh(new BoxGeometry(w, h, d), mat);
+  const geo = new BoxGeometry(w, h, d);
+  // (a library material's UVs in metres, each face its own size: a tall step's side stretched the
+  // concrete up it — BoxGeometry's faces ±x, ±y, ±z, four corners each)
+  if (mat.userData.lib) {
+    const uv = geo.getAttribute("uv");
+    const size: [number, number][] = [
+      [d, h],
+      [d, h],
+      [w, d],
+      [w, d],
+      [w, h],
+      [w, h],
+    ];
+    for (let i = 0; i < uv.count; i++) {
+      const [su, sv] = size[Math.floor(i / 4)];
+      uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
+    }
+  }
+  const m = new Mesh(geo, mat);
   m.position.set(x, y, z);
   m.castShadow = true;
   m.receiveShadow = true;
@@ -191,7 +217,7 @@ function slopedSlab(x0: number, x1: number, z0: number, y0: number, z1: number, 
   for (const [a, b, c, d] of quads)
     for (const i of [a, b, c, a, c, d]) {
       pos.push(...P[i]);
-      uv.push(P[i][0] * 0.5, (P[i][2] + P[i][1]) * 0.5);
+      uv.push(P[i][0] * (mat.userData.lib ? 1 : 0.5), (P[i][2] + P[i][1]) * (mat.userData.lib ? 1 : 0.5));
     }
   g.setAttribute("position", new Float32BufferAttribute(pos, 3));
   g.setAttribute("uv", new Float32BufferAttribute(uv, 2));
