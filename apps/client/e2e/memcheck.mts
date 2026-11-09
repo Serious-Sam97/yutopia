@@ -12,7 +12,7 @@
 // either fails it, and the browser's heap crossing it diffs two heap snapshots (what grew, by kind).
 //   node --experimental-strip-types e2e/memcheck.mts [cycles=4] [out.json]
 //   PORT=2674; BOTS=12 (people at once; a third of them leave and come back each cycle); IDLE=20 (s);
-//   WORLD=<world.json[.gz]> (e.g. prod's); NO_ROAD=1 (skip the long road)
+//   WORLD=<world.json[.gz]> (e.g. prod's); NO_ROAD=1 (skip the long road); LOOK=life (plan 73's look: run here — its files, public/life, aren't in git, so not in CI's nightly)
 //   SERVER_DIFF=1: the world-server's heap diffed even when it's within its budget; SERVER_FROM=n:
 //   from cycle n (default 1); YUTOPIA_CHUNK_CAP=n: its land cache that small (full early)
 //   MEM_FAKE_API=1: no API — answered as the smoke e2e's (e2e/ci/api.ts), the page on Low (CI's
@@ -208,7 +208,8 @@ try {
       localStorage.setItem("yutopia:prefs", JSON.stringify({ quality: "high" }));
     }, tok);
   }
-  await page.goto(`${base}/`);
+  await page.goto(process.env.LOOK ? `${base}/?look=${process.env.LOOK}` : `${base}/`);
+  if (process.env.TEX_WHO) await page.evaluate(() => ((window as any).__texWho = true));
   await page.waitForFunction(
     () => {
       const h = (window as any).__hud?.get();
@@ -231,10 +232,41 @@ try {
       const info = tp.renderer.info;
       const ph = tp.physics?.counts?.() ?? {};
       const g = tp.around?.grounds?.stats?.() ?? {};
+      // (the life look's garment cache: a file a garment, loaded the first time someone wears it and kept —
+      // it fills as new people come, to the wardrobe's size: counted apart, as the land's chunks are)
+      const held = (window as any).__lifeHeld?.() ?? { files: 0, textures: 0, MB: 0 };
+      // (the textures the scene uses, by uuid — what's new since the last cycle described, to find a
+      // texture's kind when they grow: TEX_WHO=1)
+      const used = new Map<string, string>();
+      tp.scene.traverse((o: any) => {
+        const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+        for (const m of ms) {
+          // (no named helpers in here: tsx's __name isn't the page's)
+          for (const [k, v] of [
+            ...Object.entries(m),
+            ...Object.entries(m.uniforms ?? {}).map(([k, u]) => [k, (u as any)?.value] as [string, any]),
+          ]) {
+            if (!(v as any)?.isTexture || used.has((v as any).uuid)) continue;
+            const img = (v as any).image ?? {};
+            used.set(
+              (v as any).uuid,
+              `${(v as any).constructor?.name ?? "?"} ${k} ${img.width ?? "?"}x${img.height ?? "?"} on ${m.type}${m.name ? ` ${m.name}` : ""} (${o.name || o.type})`,
+            );
+          }
+        }
+      });
+      const w2 = window as any;
+      const was: Set<string> = w2.__texWas ?? new Set();
+      const fresh = [...used].filter(([id]) => !was.has(id)).map(([, d]) => d);
+      w2.__texWas = new Set(used.keys());
       return {
-        heapMB: ((performance as any).memory?.usedJSHeapSize ?? 0) / 1e6,
+        heapMB: ((performance as any).memory?.usedJSHeapSize ?? 0) / 1e6 - held.MB,
         geometries: info.memory.geometries,
-        textures: info.memory.textures,
+        textures: info.memory.textures - held.textures,
+        wearFiles: held.files,
+        texUsed: used.size,
+        texFresh: fresh.length,
+        texWho: (window as any).__texWho ? fresh.slice(0, 40) : undefined,
         programs: info.programs?.length ?? 0,
         joltMB: (ph.heap ?? 0) / 1e6,
         bodies: ph.bodies ?? 0,
@@ -309,6 +341,8 @@ try {
     "browser.bodies": { pct: 10, abs: 50 },
     "browser.blocks": { pct: 20, abs: 4 },
     "browser.chunks": { pct: 0, abs: 0, cap: 1500 },
+    // (the life look: the wardrobe's files, two genders' — plan 73 phase 11)
+    "browser.wearFiles": { pct: 0, abs: 0, cap: 240 },
     "server.heapMB": { pct: 10, abs: 20 },
     "server.rssMB": { pct: 15, abs: 60 },
     "server.joltMB": { pct: 10, abs: 4, trend: true },
@@ -330,7 +364,11 @@ try {
     for (const [k, l] of Object.entries(LIMITS)) {
       const v0 = get(a, k);
       const v1 = get(z, k);
-      const allowed = Math.max((v0 * l.pct) / 100, l.abs);
+      // (the life look's textures: three more a garment file the cache took in — its maps and its cloth's,
+      // kept to the wardrobe's size; a visitor coming and going again adds none: plan 73 phase 11)
+      const wear =
+        k === "browser.textures" ? 3 * Math.max(0, get(z, "browser.wearFiles") - get(a, "browser.wearFiles")) : 0;
+      const allowed = Math.max((v0 * l.pct) / 100, l.abs) + wear;
       // (the trend: every cycle after the first higher than the one before, by more than a fifth of
       // what's allowed — creeping, even if not past the budget yet)
       const vs = rows.map((r) => get(r, k));

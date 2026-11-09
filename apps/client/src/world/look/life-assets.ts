@@ -132,12 +132,16 @@ export class AssetQueue<T> {
     let bytes = 0;
     let held = 0;
     let queued = 0;
+    let ready = 0;
     for (const e of this.items.values()) {
-      if (e.state === "ready") bytes += this.o.size(e.value as T);
+      if (e.state === "ready") {
+        bytes += this.o.size(e.value as T);
+        ready++;
+      }
       if (e.holds > 0) held++;
       if (e.state === "queued") queued++;
     }
-    return { bytes, held, queued, loading: this.running };
+    return { bytes, held, queued, ready, loading: this.running };
   }
 
   private pump() {

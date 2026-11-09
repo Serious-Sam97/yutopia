@@ -36,7 +36,7 @@ import {
 } from "three";
 import { JOINTS, type JointName, PARENT } from "../chars/rig";
 import { loadLifeGLTF } from "./life-assets";
-import { libMaterial } from "./life-matlib";
+import { libMaterial, libStats } from "./life-matlib";
 import { LIBRARY, type MatId } from "./life-matlib-list";
 import {
   bodyIndex,
@@ -460,6 +460,31 @@ function garment(gender: LifeGender, name: string, renderer: WebGLRenderer): Pro
   }
   return p;
 }
+
+/** (plan 73 phase 11) What the garment cache and the material library hold — every garment file loaded once a gender and kept
+ *  (bounded: the wardrobe's files): their count, the textures on their materials and their geometry's
+ *  bytes, for the memory checker (e2e/memcheck.mts) to tell a cache filling from a leak. */
+export function lifeHeld(): { files: number; textures: number; MB: number } {
+  const tex = new Set<string>();
+  let bytes = 0;
+  for (const parts of garmentsIn.values())
+    for (const p of parts ?? []) {
+      for (const v of Object.values(p.material as unknown as Record<string, unknown>))
+        if (v && typeof v === "object" && (v as { isTexture?: boolean }).isTexture)
+          tex.add((v as { uuid: string }).uuid);
+      for (const a of Object.values(p.geometry.attributes))
+        bytes += (a.array as ArrayLike<number> & { byteLength: number }).byteLength;
+      for (const list of Object.values(p.geometry.morphAttributes))
+        for (const a of list) bytes += (a.array as ArrayLike<number> & { byteLength: number }).byteLength;
+    }
+  // (and the material library's maps, three a set, kept to its byte budget — life-matlib.ts)
+  // (the game's renderer's: the memory checker counts that one's textures)
+  const lib = libStats(
+    (window as unknown as { __yutopia?: { tp?: { renderer?: WebGLRenderer } } }).__yutopia?.tp?.renderer,
+  );
+  return { files: garmentsIn.size, textures: tex.size + (lib?.ready ?? 0) * 3, MB: bytes / 1e6 };
+}
+if (typeof window !== "undefined") (window as unknown as { __lifeHeld?: typeof lifeHeld }).__lifeHeld = lifeHeld;
 
 /** What someone wears (phase 5): the garments' and hair's names (wear.py GARMENTS, hair.py — "top-tee",
  *  "bottom-jeans", "shoes-sneakers", "hair-long", "beard-full"), their parts (each one's file); each

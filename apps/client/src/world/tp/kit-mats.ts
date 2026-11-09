@@ -116,6 +116,21 @@ const bakePiece = (bake: Texture): Piece => ({
   },
 });
 
+/** A library map at its own repeat: one clone a map and repeat, shared and kept — made a material each,
+ *  they leaked as the Grounds' districts were drawn again (a material's dispose leaves its textures;
+ *  plan 73 phase 11's memcheck). */
+const clones = new Map<string, Texture>();
+function repeated(t: Texture | null, a: number, b: number): Texture | null {
+  if (!t) return null;
+  const key = `${t.uuid}|${a.toFixed(4)}|${b.toFixed(4)}`;
+  let c = clones.get(key);
+  if (!c) {
+    c = t.clone();
+    c.repeat.set(a, b);
+    clones.set(key, c);
+  }
+  return c;
+}
 /** (plan 73 phase 7) The library material's relief and roughness laid on a material of its own painting
  *  (the campus's clad wall: its canvas kept, its joints, its band, the snow's mask) — `repeat` how many
  *  of the library's repeats its UVs span. The library's maps are shared: clones, their own repeat. */
@@ -124,12 +139,7 @@ export function libRelief(m: MeshStandardMaterial, id: MatId, repeat: [number, n
   const lib = libMaterial(id, renderer);
   const def = LIBRARY[id];
   void (lib.userData.loaded as Promise<unknown>).then(() => {
-    const own = (t: Texture | null) => {
-      if (!t) return null;
-      const c = t.clone();
-      c.repeat.set(repeat[0], repeat[1]);
-      return c;
-    };
+    const own = (t: Texture | null) => repeated(t, repeat[0], repeat[1]);
     m.normalMap = own(lib.normalMap);
     m.normalScale.set(def.normal, def.normal);
     m.roughnessMap = own(lib.roughnessMap);
@@ -163,12 +173,7 @@ export function libDress(m: MeshStandardMaterial, id: MatId, o: { tint?: number;
   const r = (o.k ?? 1) / def.metres;
   m.color.copy(tintOver(id, o.tint ?? m.color.getHex()));
   void (lib.userData.loaded as Promise<unknown>).then(() => {
-    const own = (t: Texture | null) => {
-      if (!t) return null;
-      const c = t.clone();
-      c.repeat.set(r, r);
-      return c;
-    };
+    const own = (t: Texture | null) => repeated(t, r, r);
     m.map = own(lib.map);
     m.normalMap = own(lib.normalMap);
     m.normalScale.set(def.normal, def.normal);

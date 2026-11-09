@@ -3,7 +3,7 @@
 // on the lot and in the town, the scene's draws and triangles (its own render, not the post's), its
 // frames timed, its geometries, textures, programs and heap, in the look given (`life` or
 // `life&build=old`), at noon, the camera held.
-//   node --experimental-strip-types e2e/life-build-cost.mts [life|life&build=old] [high|medium|low]
+//   node --experimental-strip-types e2e/life-build-cost.mts [life|life&build=old|classic] [high|medium|low]
 import { chromium, request } from "@playwright/test";
 
 const base = process.env.YUTOPIA_E2E_URL ?? "http://localhost:3100";
@@ -37,7 +37,19 @@ await page.addInitScript(
   },
   [tok, quality] as const,
 );
-await page.goto(`${base}/?look=${look}`);
+// (the life look's files fetched — the people, their wear, the library's maps, the trees — and how long
+// till the game's ready: plan 73 phase 11)
+let lifeBytes = 0;
+let lifeFiles = 0;
+page.on("response", async (r) => {
+  if (!r.url().includes("/life/")) return;
+  try {
+    lifeBytes += (await r.body()).length;
+    lifeFiles++;
+  } catch {}
+});
+const t0 = Date.now();
+await page.goto(look === "classic" ? `${base}/` : `${base}/?look=${look}`);
 await page.waitForFunction(
   () => {
     const h = (window as any).__hud?.get();
@@ -46,6 +58,7 @@ await page.waitForFunction(
   null,
   { timeout: 180_000 },
 );
+console.log(look, quality, "load", JSON.stringify({ readyS: (Date.now() - t0) / 1000 }));
 for (const s of SPOTS) {
   await page.evaluate((s) => (window as any).__yutopia.teleport({ x: s.x, y: s.y, level: s.level }), s);
   await page.waitForTimeout(s.name === "town" ? 25000 : 12000);
@@ -105,4 +118,5 @@ for (const s of SPOTS) {
   );
   console.log(look, quality, s.name, JSON.stringify(m));
 }
+console.log(look, quality, "life files", JSON.stringify({ files: lifeFiles, MB: +(lifeBytes / 1e6).toFixed(2) }));
 await browser.close();

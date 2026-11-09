@@ -49,16 +49,18 @@ function stand(): MapSet {
 
 // ── the queue of texture sets ───────────────────────────────────────────────────────────────────
 
-let queue: AssetQueue<MapSet> | null = null;
-let queueRenderer: WebGLRenderer | null = null;
+// (one a renderer, kept: the game's and the pictures' — one swapped for the other each time they took
+// turns, every set was loaded again as new textures and the old ones never let go: plan 73 phase 11's
+// memcheck, a visitor's picture in the HUD a turn)
+const queues = new Map<WebGLRenderer, AssetQueue<MapSet>>();
 
 /** A set's key: `<id>` or `<id>/half`. */
 const keyOf = (id: MatId, half: boolean) => (half ? `${id}/half` : id);
 
 function queueFor(renderer: WebGLRenderer): AssetQueue<MapSet> {
-  if (queue && queueRenderer === renderer) return queue;
-  queueRenderer = renderer;
-  queue = new AssetQueue<MapSet>({
+  const had = queues.get(renderer);
+  if (had) return had;
+  const queue = new AssetQueue<MapSet>({
     concurrency: 3,
     // (what the library may keep loaded and unused: the rest is let go)
     budget: 96 * 1024 * 1024,
@@ -87,11 +89,24 @@ function queueFor(renderer: WebGLRenderer): AssetQueue<MapSet> {
       for (const m of MAPS) set[m].dispose();
     },
   });
+  queues.set(renderer, queue);
   return queue;
 }
 
-/** What the library holds now (loaded sets, bytes on the GPU — for the checks). */
-export const libStats = () => queue?.stats() ?? null;
+/** What the library holds now (loaded sets, bytes on the GPU — for the checks): `renderer`'s, or every
+ *  renderer's. */
+export const libStats = (renderer?: WebGLRenderer) => {
+  const qs = renderer ? [queues.get(renderer)].filter((q) => !!q) : [...queues.values()];
+  if (!qs.length) return null;
+  const all = qs.map((q) => (q as AssetQueue<MapSet>).stats());
+  return {
+    bytes: all.reduce((n, x) => n + x.bytes, 0),
+    held: all.reduce((n, x) => n + x.held, 0),
+    queued: all.reduce((n, x) => n + x.queued, 0),
+    ready: all.reduce((n, x) => n + x.ready, 0),
+    loading: all.reduce((n, x) => n + x.loading, 0),
+  };
+};
 
 // ── the materials ───────────────────────────────────────────────────────────────────────────────
 
