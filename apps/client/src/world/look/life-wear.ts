@@ -163,13 +163,20 @@ export function bodyIndex(
 }
 
 /** What a worn piece is coloured as — by its slot (the keys: top-, bottom-, outer-, shoes-, hat-, hair-,
- *  beard-, as the wardrobe's own slots): the avatar's colour for that slot, or their hair's. */
-export type WearRole = "top" | "bottom" | "outer" | "shoes" | "hat" | "hair";
+ *  beard-, eyewear-, extra-, as the wardrobe's own slots): the avatar's colour for that slot, or their hair's. */
+export type WearRole = "top" | "bottom" | "outer" | "shoes" | "hat" | "hair" | "eyewear" | "extra";
 export function roleOf(name: string): WearRole {
   const n = name.replace(/^wear-/, "");
   if (/^(hair|beard)-/.test(n)) return "hair";
   const slot = n.split("-")[0];
-  return slot === "bottom" || slot === "outer" || slot === "shoes" || slot === "hat" ? slot : "top";
+  return slot === "bottom" ||
+    slot === "outer" ||
+    slot === "shoes" ||
+    slot === "hat" ||
+    slot === "eyewear" ||
+    slot === "extra"
+    ? slot
+    : "top";
 }
 
 /** Hair or a beard (their material is the hair's: cut out by its alpha, both sides). */
@@ -249,6 +256,9 @@ export function wornNames(a: AvatarLayers, specs: Record<string, WearSpec>, file
   if (a.hair === "bald") out.push("hair-bald");
   else if (has(`hair-${a.hair}`)) out.push(`hair-${a.hair}`);
   if (a.beard && a.beard !== "none" && has(`beard-${a.beard}`)) out.push(`beard-${a.beard}`);
+  // (the glasses and the one more thing: props.py's, laid on the body — no skin hidden under them)
+  if (a.eyewear && a.eyewear !== "none" && has(`eyewear-${a.eyewear}`)) out.push(`eyewear-${a.eyewear}`);
+  if (a.extra && a.extra !== "none" && has(`extra-${a.extra}`)) out.push(`extra-${a.extra}`);
   return out;
 }
 

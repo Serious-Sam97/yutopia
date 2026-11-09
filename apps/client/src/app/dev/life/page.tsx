@@ -204,7 +204,10 @@ export default function LifeBench() {
         for (const g of whoQ ? [whoQ] : ["man", "woman"])
           for (const [i, names] of outfits.entries()) {
             const [topColor, bottomColor, shoesColor, hairColor] = COLOURS[i % COLOURS.length];
-            const a = { ...TODAY[g], topColor, bottomColor, shoesColor, hairColor };
+            // (the glasses' frames and the extras' colours a few too)
+            const eyewearColor = ["#2a2420", "#8a6a3a", "#1c1c1c", "#9a9ea4", "#6a2a2a"][i % 5];
+            const extraColor = ["#e8a33d", "#b5562f", "#4a5a73", "#2a2a2a", "#8a8f96"][i % 5];
+            const a = { ...TODAY[g], topColor, bottomColor, shoesColor, hairColor, eyewearColor, extraColor };
             const lp = await L.loadLifePerson(`/life/person-${g}-painted.glb`, renderer, a, { names, pattern });
             shown.push({
               root: lp.root,

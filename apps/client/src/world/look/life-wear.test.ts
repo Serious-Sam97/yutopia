@@ -1,8 +1,9 @@
 // Plan 73 phase 5 — the skin under what's worn: the cut rules as wear.py has them (its sample's numbers).
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { DEFAULT_AVATAR } from "@yutopia/shared";
 import { BufferAttribute, BufferGeometry } from "three";
-import { bodyIndex, covers, roleOf, type WearLm, type WearSpec } from "./life-wear";
+import { bodyIndex, covers, roleOf, type WearLm, type WearSpec, wornNames } from "./life-wear";
 
 // (MakeHuman's decimetres: a man's landmarks, near enough)
 const LM: WearLm = {
@@ -80,5 +81,24 @@ describe("roleOf", () => {
     assert.equal(roleOf("wear-hair-long"), "hair");
     assert.equal(roleOf("wear-beard-beard"), "hair");
     assert.equal(roleOf("hat-beanie"), "hat");
+    assert.equal(roleOf("wear-eyewear-aviators"), "eyewear");
+    assert.equal(roleOf("wear-eyewear-aviators-lens"), "eyewear");
+    assert.equal(roleOf("wear-extra-backpack"), "extra");
+  });
+});
+
+describe("wornNames", () => {
+  const files = ["top-tee", "bottom-jeans", "shoes-sneakers", "hair-bun", "eyewear-round", "extra-scarf"];
+  it("wears the glasses and the extra when their files are there", () => {
+    const a = { ...DEFAULT_AVATAR, top: "tee", bottom: "jeans", hair: "bun", eyewear: "round", extra: "scarf" };
+    const names = wornNames(a, {}, files);
+    assert.ok(names.includes("eyewear-round"));
+    assert.ok(names.includes("extra-scarf"));
+    assert.ok(names.includes("hair-bun"));
+  });
+  it("leaves out none and what has no file", () => {
+    const a = { ...DEFAULT_AVATAR, eyewear: "none", extra: "walkman" };
+    const names = wornNames(a, {}, files);
+    assert.ok(!names.some((n) => n.startsWith("eyewear-") || n.startsWith("extra-")));
   });
 });

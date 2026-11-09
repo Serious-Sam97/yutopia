@@ -638,6 +638,7 @@ if WEAR:
         LM[f"hip{S}"] = head(f"upperleg01.{S}")
         LM[f"knee{S}"] = head(f"lowerleg01.{S}")
         LM[f"ankle{S}"] = head(f"foot.{S}")
+        LM[f"eye{S}"] = head(f"eye.{S}")
     centre = np.mean(V, 0)
 
     def outward(Q, N):
@@ -723,9 +724,12 @@ if WEAR:
         img.file_format = "PNG"
         img.save()
     HAIR_NAMES = []
+    # (each style's key — its file: "hair-bun", its pieces "wear-hair-bun", "wear-hair-bun-bun")
+    MADE_KEYS = set()
     styles = [(f"hair-{k}", HR.make_hair(k, V, F0, ZONES, LM)) for k in HR.HAIR]
     styles += [(f"beard-{k}", HR.make_beard(k, V, F0, VT0, ZONES, LM)) for k in HR.BEARD]
     for sname, pieces in styles:
+        MADE_KEYS.add(sname)
         for piece in pieces:
             suffix, HP, HUV, HF, src, alpha = piece[:6]
             pname = f"wear-{sname}{'-' + suffix if suffix else ''}"
@@ -749,6 +753,21 @@ if WEAR:
                 ALPHA_WEAR.add(pname)
             HAIR_NAMES.append(pname)
             print(f"  {pname}: {len(HF)} faces")
+    # the glasses and the extras (props.py): tubes, boxes and rings off the body's landmarks, each vertex
+    # with the body vertex it sits by — its weights, the other bodies' moves
+    import props as PR
+
+    PROP_NAMES = []
+    for pkind, pnames in (("eyewear", list(PR.EYEWEAR)), ("extra", PR.EXTRAS)):
+        for k in pnames:
+            MADE_KEYS.add(f"{pkind}-{k}")
+            for suffix, PP, PF, src, _dark in PR.make_prop(pkind, k, V, F0, ZONES, LM):
+                pname = f"wear-{pkind}-{k}{'-' + suffix if suffix else ''}"
+                parts.append((pname, PP, np.zeros((0, 2)), [(f, f, "wear") for f in PF], W[src], None))
+                part_shapes[pname] = {kk: PP + d[src] for kk, d in DV.items()}
+                SRC[pname] = src
+                PROP_NAMES.append(pname)
+                print(f"  {pname}: {len(PF)} faces")
 
 posed = {}
 posed_shapes = {}
@@ -1175,7 +1194,7 @@ if WEAR:
     EXTRAS["wear_lm"] = {k: [round(float(x), 4) for x in LM[k]] for k in ("hip", "waist", "crotch", "neck", "knee", "ankle", "brow")}
     # (the garments made, a file each: the game asks only for what's worn)
     EXTRAS["wear_files"] = sorted(
-        {k for k in WR.GARMENTS if "alias" not in WR.GARMENTS[k]} | {n[5:] for n in HAIR_NAMES if not n.endswith(("-cards", "-bun", "-tails"))}
+        {k for k in WR.GARMENTS if "alias" not in WR.GARMENTS[k]} | MADE_KEYS
     )
 FAR_PARTS = ("body", "clothes", "shoes", "hair")
 FAR_RATIO = float(arg("--far-ratio", "0.12"))
@@ -1354,7 +1373,7 @@ if WEAR:
         if f.endswith(".glb"):
             os.remove(os.path.join(wdir, f))
     wear_obs = [o for o in COLS["wear"].objects if o.name.startswith("wear-")] if "wear" in COLS else []
-    keys = sorted({k for k in WR.GARMENTS if "alias" not in WR.GARMENTS[k]} | {n[5:] for n in HAIR_NAMES if not n.endswith(("-cards", "-bun", "-tails"))})
+    keys = sorted({k for k in WR.GARMENTS if "alias" not in WR.GARMENTS[k]} | MADE_KEYS)
     total = 0
     for key in keys:
         mine = [o for o in wear_obs if o.name == f"wear-{key}" or o.name.startswith(f"wear-{key}-")]

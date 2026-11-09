@@ -620,6 +620,7 @@ const HAIR_GAIN = 16;
 const SKIN_LIT = 0.84;
 const SKIN_RICH = 1.1;
 
+const LENS = "#1a1d22"; // (a glasses' dark lenses — props.py's `-lens` parts)
 const own = (m: Material) => {
   const c = m.clone();
   c.userData = { ...m.userData };
@@ -752,11 +753,22 @@ export function lifeBody(base: LifeBase, a: AvatarLayers | null, worn: LifeWorn 
         shoes: a.shoesColor,
         hat: a.accessoryColor ?? a.topColor,
         hair: a.hairColor,
+        eyewear: a.eyewearColor ?? "#2a2420",
+        extra: a.extraColor ?? "#8a8f96",
       }[r];
       // (a piece of its own on a garment — a shirt's tie — in that garment's second colour)
       const second = p.name.endsWith("-tie") ? (a.topColor2 ?? "#2a2420") : null;
       const fabric = base.wear[p.name.replace(/^wear-/, "")]?.fabric as MatId | undefined;
-      if (fabric && worn?.renderer && fabric in LIBRARY) {
+      if (p.name.endsWith("-lens")) {
+        // (a glasses' lenses: dark glass, glossy)
+        tint(new Color(LENS));
+        (material as MeshStandardMaterial).roughness = 0.12;
+        (material as MeshStandardMaterial).metalness = 0.2;
+      } else if (r === "eyewear" || r === "extra") {
+        // (a frame, a bag, a watch: their colour, a little smoother than cloth)
+        tint(new Color(hex).multiplyScalar(0.9));
+        (material as MeshStandardMaterial).roughness = r === "eyewear" ? 0.35 : 0.6;
+      } else if (fabric && worn?.renderer && fabric in LIBRARY) {
         // (in the library's cloth — its weave by the garment's UVs in metres — in their colour)
         material = libMaterial(fabric, worn.renderer, { color: new Color(hex).multiplyScalar(0.85) });
         material.name = p.name;

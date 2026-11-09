@@ -678,6 +678,22 @@ of them in batches).
   portraits wait as 5.4 made them. The far person: a coat's colour over the top, a dress's for the legs
   too, a bald head the skin. Not made yet (not in phase 5's list): eyewear and the extras (scarf, bags,
   earrings, necklace, watch, tie, lanyard, mittens…) — their options change nothing in the life look.
+- **5.6b** The glasses and the extras: all 7 eyewear and 14 extras, made by script
+  (`tools/art/life/props.py`) and worn in the game by their own slots. Built 2026-11-09 (stills
+  `design/screens/life/p57`). Each is tubes, flat straps and rounded boxes placed off the body's own
+  landmarks (the eyes, the ears, the neck's base, the shoulders' tops, the wrists, the hands, the waist)
+  and laid on its surface round the neck's axis where it rests on it (a strap across the chest, a
+  necklace down it, the clothes' thickness under it). Each vertex goes with the body vertex nearest it, so
+  a bag rides the back and a watch the wrist. The glasses and each earring go with one vertex whole (point
+  by point, the face's moves bent a hoop). Glasses: their fronts bend back round the face. Aviators are
+  a teardrop with a top bar; cat-eyes sweep up at the outer corner; half-rims have a top bar and a wire
+  below; snow goggles are one wide lens with a band round the head. The lenses are their own `-lens` part
+  and drawn dark and glossy. Colours: frames in `eyewearColor`, extras in `extraColor` (`roleOf` gained
+  `eyewear` and `extra`); nothing of the skin is hidden under them. A file each in `wear-<who>/` (21 more,
+  each well inside the per-garment budget). Fixed on the way: the bun hairstyle had no file since 5.4 —
+  its name ends in `-bun`, as its bun piece's does, so the export skipped it; files are now keyed by
+  style. Left: bags are rounded boxes (no seams or buckles beyond a flap), a tote's handles go through a
+  hanging arm, mittens are smooth eggs (no thumb), and the far person doesn't draw any of them.
 - **5.7** Checks: budgets, frame times of a crowd, e2e, stills.
 
 ### 6 — Things
