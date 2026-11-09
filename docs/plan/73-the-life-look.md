@@ -1126,6 +1126,18 @@ plough and bus smoothed in clearcoat paint, chrome and glass. `?out=old`: the ou
   bough pines, Silver Lake's boathouse in its slate. `e2e/life-cam.mts` takes its targets' heights over
   where I stand now (the road climbs to Hawk Pass). No code of its own.
   - **Left:** the far land (`tp/far3d.ts`: the hundred thousand far trees, the mountains' faces) as it was.
+- **8.5 Checks.** Done 2026-11-09.
+  - **Cost** (`e2e/life-build-cost.mts`, High, noon; life against `life&out=old`): outdoors the lot +176
+    draws and +0.61M triangles (the trees' and the gardens' cards; the campus's woods ring it), the town
+    +19 and +0.25M; frame times +2 ms (lot) and +4.5 ms (town) in that run, indoors the same within the
+    noise. Geometries, textures and programs within the run-to-run spread.
+  - **Budgets:** the page 480.7 KB, unchanged; every lazy chunk within its own (the Grounds' marker
+    171.1 KB); every chunk together +30 KB on phase 7 (the trees, the plants, the ground's relief, the
+    paint, RoundedBoxGeometry).
+  - **e2e** in the life look: the Grounds 4 (+1 skipped), the town 1, the weather 2, the day 2, the water
+    2 — passed; the car 1 of 3: "a lot car driven out" fails in the classic look too (known), "a parked car
+    knocked" passed alone (flaky under the two browsers' load after the one before it). Client tests and
+    tsc clean.
 
 ### 9 — Pets
 
