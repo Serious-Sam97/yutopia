@@ -299,7 +299,8 @@ if (vFade < 0.999) {
       const p = new Pool(g, treeMat, false);
       this.pools.push(p);
       this.root.add(p.mesh);
-      const c = new Pool(g, treeMat, this.casting.has(i));
+      // (the life look's cast their shadows from their solid parts: tp/life-trees.ts userData.shadow)
+      const c = new Pool((g.userData.shadow as BufferGeometry | undefined) ?? g, treeMat, this.casting.has(i));
       c.mesh.layers.set(CASTER_LAYER);
       this.casters.push(c);
       this.root.add(c.mesh);
@@ -806,8 +807,11 @@ if (vFade < 0.999) {
       if (tier === TIERS.length - 1) blk.trees.set(t.pool, t.m);
       else {
         const pool = this.pools[t.pool].mesh;
-        const im = snowShadow(new InstancedMesh(pool.geometry, pool.material, 0));
-        if (pool.customDepthMaterial) im.customDepthMaterial = pool.customDepthMaterial;
+        // (past 150 m the life look's trees without their cards — their solid parts and lumps: a card's
+        // cut-out there is a few pixels and costs the frame; plan 73 phase 11)
+        const far = (pool.geometry.userData.shadow as BufferGeometry | undefined) ?? pool.geometry;
+        const im = snowShadow(new InstancedMesh(far, pool.material, 0));
+        if (pool.customDepthMaterial && far === pool.geometry) im.customDepthMaterial = pool.customDepthMaterial;
         im.instanceMatrix = new InstancedBufferAttribute(t.m, 16);
         im.count = t.m.length / 16;
         im.visible = mesh.visible;
@@ -894,7 +898,8 @@ class Pool {
     this.cap = cap;
     const m = snowShadow(new InstancedMesh(this.geo, this.mat, cap));
     // (the life look's woods: their cards cut out of their shadows too)
-    if (lifeDress.out && (this.mat as { alphaTest?: number }).alphaTest) m.customDepthMaterial = lifeTreeDepth();
+    if (lifeDress.out && (this.mat as { alphaTest?: number }).alphaTest && this.geo.userData.cards)
+      m.customDepthMaterial = lifeTreeDepth();
     m.instanceMatrix.setUsage(StaticDrawUsage as unknown as typeof DynamicDrawUsage);
     m.count = 0;
     m.frustumCulled = false;

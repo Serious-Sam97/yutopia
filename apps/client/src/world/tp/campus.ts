@@ -2316,7 +2316,12 @@ export class Campus {
       if (lt) m.customDepthMaterial = lt.depth();
       return m;
     };
-    const conifer = lt ? lt.pine(T.rng(76), { tiers: 5, H: 10.5, width: 0.95, snow: 0.5 }) : coniferGeometry();
+    // (the ring and the groves are 200 m and more away: the life pine's tiers without their bough cards —
+    // they cost the frame on High there, unseen: plan 73 phase 11)
+    const conifer = lt
+      ? ((lt.pine(T.rng(76), { tiers: 5, H: 10.5, width: 0.95, snow: 0.5 }).userData.shadow as BufferGeometry) ??
+        coniferGeometry())
+      : coniferGeometry();
     this.disposables.push(conifer);
     const rt = T.rng(77);
     const plant3 = (n: number, where: () => [number, number], scale: () => number) => {

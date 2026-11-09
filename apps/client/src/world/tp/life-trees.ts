@@ -264,10 +264,20 @@ export function lifeLeafyGeometry(
       const k = 0.78 + 0.28 * Math.max(0, out.y) + (r() - 0.5) * 0.16;
       cards.quad(p, a, b, out, tone(k), LEAF);
     }
+  // (its shadow: the solid parts and a lump a tip where the leaves are — the shadow pass draws no cards,
+  // their cut-outs were High's cost out in the woods: plan 73 phase 11)
+  const solid = parts.map((g) => g.clone());
+  for (const t of tips) {
+    const lump = new IcosahedronGeometry(0.85 * spread, 0).toNonIndexed();
+    lump.translate(t.x, t.y, t.z);
+    solid.push(solidUV(tinted(lump, 0x2f4a26)));
+  }
   parts.push(cards.build());
   const m = mergeGeometries(parts, false);
   for (const g of parts) g.dispose();
   m.userData.cards = true;
+  m.userData.shadow = mergeGeometries(solid, false);
+  for (const g of solid) g.dispose();
   return m;
 }
 
@@ -307,7 +317,8 @@ export function lifePineGeometry(
     }
   }
   const m = mergeGeometries([base, cards.build()], false);
-  base.dispose();
+  // (its shadow its tiers' cones: no cards in the shadow pass)
+  m.userData.shadow = base;
   m.userData.cards = true;
   return m;
 }
@@ -340,7 +351,7 @@ export function lifeBushGeometry(r: () => number): BufferGeometry {
     );
   }
   const m = mergeGeometries([core, cards.build()], false);
-  core.dispose();
+  m.userData.shadow = core;
   m.userData.cards = true;
   return m;
 }

@@ -156,7 +156,12 @@ export class Post3 {
     const { GTAOPass } = await import("three/addons/postprocessing/GTAOPass.js");
     if (this.disposed) return;
     const size = renderer.getDrawingBufferSize(new Vector2());
-    const ao = new GTAOPass(scene, camera, size.x, size.y);
+    // (at half the frame's size — its shading is soft, and at full size it alone took High past 16.7 ms a
+    // frame in the lobby, the town: plan 73 phase 11)
+    const ao = new GTAOPass(scene, camera, size.x / 2, size.y / 2);
+    // (halved however it's sized: the composer sizes every pass to the frame's own)
+    const sized = ao.setSize.bind(ao);
+    ao.setSize = (w: number, h: number) => sized(Math.ceil(w / 2), Math.ceil(h / 2));
     ao.blendIntensity = 1;
     ao.updateGtaoMaterial({ radius: 1.4, distanceFallOff: 1, thickness: 2, scale: 1.6, samples: 16 });
     ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 10, rings: 3, samples: 16 });
