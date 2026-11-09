@@ -536,6 +536,8 @@ export function scratchPost(m: Model) {
 /** A little house (its walls the paint, olive unset): a pitched roof, walnut or rust tiles, a round
  *  door, a window on its side, a mat in front. */
 export function petHouse(m: Model, o: Look) {
+  // (the life look: painted wood, not the cloth its colours are elsewhere)
+  m.paint();
   const c = o.fabric ?? P.olive;
   const roof = o.look === 1 ? P.rust : P.walnutDark;
   m.add(box([0.8, 0.46, 0.76], 0.01), c, { at: [0.5, 0.23, 0.48] });

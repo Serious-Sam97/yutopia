@@ -16,6 +16,7 @@ import {
   tube,
   type V3,
 } from "../kit";
+import { finishes } from "../life-mats";
 import { P, shade } from "../palette";
 
 // Plan 68 phase 17 (docs/plan/68-more-furniture.md): Parkour — the new kinds' models, in the kit's frame
@@ -75,6 +76,30 @@ const C = {
   chips: 0x8a6440,
   sand: 0xb59a6a,
 };
+// (plan 73 phase 6.7: what the parkour's finishes are in the life look)
+finishes([
+  [C.beech, "birch"],
+  [C.beechDark, "oak"],
+  [C.leather, "leather"],
+  [C.foam, "matte"],
+  [C.foamTop, "matte"],
+  [C.concrete, "matte"],
+  [C.concreteDark, "matte"],
+  [C.galv, "metal-brushed"],
+  [C.galvDark, "metal-brushed"],
+  [C.timber, "oak"],
+  [C.timberDark, "oak"],
+  [C.sapwood, "pine"],
+  [C.ply, "birch"],
+  [C.plyDark, "birch"],
+  [C.panel, "plain"],
+  [C.mat, "matte"],
+  [C.rope, "matte"],
+  [C.ropeBlue, "matte"],
+  [C.ropeBlack, "matte"],
+  [C.rubber, "matte"],
+  [C.chips, "matte"],
+]);
 const BRIGHT = [0xe0402b, 0xf2c230, 0x2f7ad1, 0x3fa34a, 0x8a4fc4, 0xf08a2a, 0xe8e6df];
 const NEON = [0xff4fa0, 0xb8f23a, 0x3ae0f2, 0xff9a2a, 0xf2f23a];
 

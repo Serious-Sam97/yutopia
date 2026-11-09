@@ -878,8 +878,21 @@ draws grow by the materials in it, not by its things).
   - Music and the office paint from the shared palette and held: the pianos' walnut and black ash, the
     speaker's veneer, the steel fridge's brushed front.
   - **Left:** the glass of the drinks fridges and the freezer's lids is the kit's glass as it was.
-- **6.7 Play: games, chess,
-  parkour, pets** · **6.8 Christmas, seasons, outdoors** — each family's materials checked and fixed
+- **6.7 Play: games, chess, parkour, pets.** Built 2026-11-09 (stills `design/screens/life/p67`:
+  `pair-<kind>`, today's above the new; `sheet-1…16`). 47 kinds: the game room's air hockey, foosball,
+  dartboard, chess table, wizard chess, pinball, claw machine, jukebox, skee-ball, card table and
+  cornhole; the pool and ping-pong tables, the arcade cabinet, the slot-car track; the parkour's rails,
+  walls, poles, vault box, beam, monkey bars, climbing wall, trampoline, quarter pipe, zip line, cargo
+  net and tyre run; the pets' bed, bowls, scratching post, house, toy box, cat tree, agility jump,
+  tunnel and poles, ball launcher, litter box, pet door, feeder, bird cage, hamster wheel and sofa.
+  - **The parkour's colours** (`fam/parkour2.ts finishes`): beech birch, the vault box's leather, the
+    foam, concrete, mats, rope and rubber matte, galvanised steel brushed, the timbers oak, the ply
+    birch, the climbing wall's grey panels paint (as brushed metal they went dark).
+  - **The cat tree's carpet is carpet** (its sisal matte), and the pet house is paint (its orange roof
+    and green walls had taken cloth).
+  - **Left:** the pool table draws from its own model (`tp/pooltable3d.ts`), not the kit: its felt is as
+    it was; the card tables' felt reads as velvet.
+- **6.8 Christmas, seasons, outdoors** — each family's materials checked and fixed
   by hand (a part the paint guessed wrong), its forms rounded where the kit's defaults don't reach
   (cushions' sag, turned legs), before/after stills of every look.
 - **6.9 Checks.** Draws and triangles a room, frame times by tier, memory, budgets, e2e, stills.

@@ -55,6 +55,12 @@ function tennisBall(m: Model, at: V3, r = 0.033) {
 function catTree(m: Model, o: Look) {
   const look = o.look;
   const carpet = o.fabric ?? [0x8a8a90, 0xc9b89a, 0xd8d2c4][look] ?? 0x8a8a90;
+  // (the life look: its carpet is carpet, its sisal rope matte)
+  m.finishes([
+    [carpet, "carpet"],
+    [0xc9a46a, "matte"],
+    [0xa98252, "matte"],
+  ]);
   const wood = look === 2 ? P.oakLight : carpet;
   const sisal = 0xc9a46a;
   /** A sisal post from y0 to y1 at (x, z), its rope wound round it. */
