@@ -865,7 +865,20 @@ draws grow by the materials in it, not by its things).
   - The frosted-glass divider's panes are gloss: their pale grey read as brushed metal.
   - **Left:** the ceiling lights hang out of the bench's view; the plants' leaves stay plain (no leaf
     texture fits the kit's flat leaves); the lamp post's dark steel reads near black.
-- **6.6 Kitchen, music, office** · **6.7 Play: games, chess,
+- **6.6 Kitchen, music, office.** Built 2026-11-09 (stills `design/screens/life/p66`: `pair-<kind>`,
+  today's above the new; `sheet-1…13`). 39 kinds: the kitchen's island, stove, sink, dishwasher, café
+  counter, ice-cream freezer, fridge, microwave, fruit bowl, toaster and kettle; music's drum kit, amp,
+  DJ booth, synth, karaoke, gong, theremin, metronome, piano, mixing desk, speaker and mic stand; the
+  office's mobile whiteboard, punch clock, tube station, shredder, plotter, drinks fridge, security
+  desk, extinguisher, first-aid cabinet, sorting desk, printer, phone booth, water cooler, vending
+  machine, server rack and terminal.
+  - **The kitchen's colours** (`fam/kitchen.ts finishes`): the butcher block oak, steel brushed, copper
+    polished, marble, enamel, ceramic, tile and the cabinets' glass gloss, terrazzo and bread matte, the
+    shaker cabinets' paint plain.
+  - Music and the office paint from the shared palette and held: the pianos' walnut and black ash, the
+    speaker's veneer, the steel fridge's brushed front.
+  - **Left:** the glass of the drinks fridges and the freezer's lids is the kit's glass as it was.
+- **6.7 Play: games, chess,
   parkour, pets** · **6.8 Christmas, seasons, outdoors** — each family's materials checked and fixed
   by hand (a part the paint guessed wrong), its forms rounded where the kit's defaults don't reach
   (cushions' sag, turned legs), before/after stills of every look.

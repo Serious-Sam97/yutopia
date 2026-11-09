@@ -15,6 +15,7 @@ import {
   tube,
   type V3,
 } from "../kit";
+import { finishes } from "../life-mats";
 import { P, shade } from "../palette";
 
 // Plan 68 phase 18 (docs/plan/68-more-furniture.md): Kitchen & café — the new kinds' models, in the kit's frame
@@ -62,6 +63,26 @@ const K = {
   frost: 0xd6ecf5,
   glass: 0xcfe6ff,
 };
+// (plan 73 phase 6.6: what the kitchen's finishes are in the life look)
+finishes([
+  [K.marble, "gloss"],
+  [K.vein, "gloss"],
+  [K.block, "oak"],
+  [K.blockDark, "oak"],
+  [K.terrazzo, "matte"],
+  [K.enamel, "gloss"],
+  [K.steel, "metal-brushed"],
+  [K.steelDark, "metal-brushed"],
+  [K.ceramic, "gloss"],
+  [K.copper, "metal-polished"],
+  [K.copperDark, "metal-polished"],
+  [K.bread, "matte"],
+  [K.crust, "matte"],
+  [K.tile, "gloss"],
+  [K.frost, "gloss"],
+  [K.glass, "gloss"],
+  [K.shaker, "plain"],
+]);
 const SCOOPS = [0xf3e3b8, 0xf4a6b8, 0x6b3f2a, 0xb7d68a, 0xffc35a, 0x9fd6f0, 0xe9e6df, 0xd85a6a];
 
 const rnd = (a: number, b: number, s: number) => {
