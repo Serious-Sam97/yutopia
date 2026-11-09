@@ -334,6 +334,7 @@ const CITIES: [string, number][][] = [
 /** The zones' cities and offsets a world-time row shows (by its seed): for the live hook. */
 export const worldCities = (seed: number) => CITIES[seed < 0.5 ? 0 : 1];
 function worldClocks(m: Model, o: Look) {
+  m.paint();
   const L = o.look;
   const rim = [P.brass, 0x1c1c1e, P.walnutDark][L] ?? P.brass;
   const face = [P.cream, 0xf6f4ee, P.cream][L] ?? P.cream;
@@ -634,6 +635,7 @@ function thermostat(m: Model, o: Look) {
  *  where each member is, see the family's report), a red string between three, a compass rose, its
  *  plate. Natural paper in oak, a blueprint in black, or vintage parchment in walnut. */
 function membersMap(m: Model, o: Look) {
+  m.paint();
   const L = o.look;
   const frame = [P.oak, 0x1c1c1e, P.walnutDark][L] ?? P.oak;
   const land = [0xe8e2cc, 0x23466e, 0xd9c49a][L] ?? 0xe8e2cc;
@@ -1013,6 +1015,7 @@ function wallSkateboard(m: Model, o: Look) {
 /** Three records framed with their sleeves (the labels and the covers by its seed), or a gold and two
  *  platinum discs on black velvet with their plaques. */
 function framedRecords(m: Model, o: Look) {
+  m.paint();
   const L = o.look;
   const frame = [0x1a1a1c, P.oak, 0x1a1a1c][L] ?? 0x1a1a1c;
   const mat = [P.paperWhite, P.paperWhite, 0x141416][L] ?? P.paperWhite;

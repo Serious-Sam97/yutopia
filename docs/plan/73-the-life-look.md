@@ -846,7 +846,26 @@ draws grow by the materials in it, not by its things).
   smoothed and rounded. The bench's `?near=1` puts the camera low and close for the desktop's.
   - **Left:** the screens' faces are as they were (their pictures, glows); the ceiling projector hangs
     out of the bench's view.
-- **6.5 Decor, lights and plants** · **6.6 Kitchen, music, office** · **6.7 Play: games, chess,
+- **6.5 Decor, lights and plants.** Built 2026-11-09 (stills `design/screens/life/p65`: `pair-<kind>`,
+  today's above the new; `sheet-1…24`, three kinds a sheet). 70 kinds: plants and the indoor tree,
+  dividers, columns, vases, sculpture, terrarium, trophies, books, the hanging plant and the moss wall,
+  the aquarium, the stove, the fountains, the fireplace and the lava lamp; the lamps, the lamp post,
+  the ceiling lights, fairy and festoon lights, the chandelier, lanterns, the Edison cluster, the
+  banker's lamp, the salt lamp, candles, the uplighter, track lights, neon and the signs; the rugs,
+  the cowhide, the puzzle mat, the welcome mat, the dance floor, the stage's riser and steps, floor tape
+  and decals; the walls' boards, whiteboard, notice board, panels, clocks, posters, the switch,
+  frames, the cuckoo clock, the world clocks, calendar, thermostat, the members' map, the pegboard,
+  the skateboard, framed records, the tapestry, the mirror, the antlers, the exit sign, the fire alarm
+  and the guitar hooks.
+  - **A model of one material** (`Model.only`): the rugs and the welcome mat are carpet (the library's,
+    tinted by their colours: added to the kit's list), the cowhide and the foam mats matte. The hide's
+    brown had taken walnut.
+  - **A model of paint** (`Model.paint`): a frame's picture, a poster, the members' map, the framed
+    records, the world clocks — no part cloth by its colour (a painting's stripes had taken a weave).
+  - The frosted-glass divider's panes are gloss: their pale grey read as brushed metal.
+  - **Left:** the ceiling lights hang out of the bench's view; the plants' leaves stay plain (no leaf
+    texture fits the kit's flat leaves); the lamp post's dark steel reads near black.
+- **6.6 Kitchen, music, office** · **6.7 Play: games, chess,
   parkour, pets** · **6.8 Christmas, seasons, outdoors** — each family's materials checked and fixed
   by hand (a part the paint guessed wrong), its forms rounded where the kit's defaults don't reach
   (cushions' sag, turned legs), before/after stills of every look.

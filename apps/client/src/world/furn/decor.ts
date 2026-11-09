@@ -272,8 +272,16 @@ export function partition(m: Model, o: Look) {
   if (o.look === 2) {
     for (const x of [0.08, 1.92]) m.add(box([0.035, H - 0.06, 0.05], 0.004), P.alum, { at: [x, (H + 0.06) / 2, 0.5] });
     for (const y of [0.08, H - 0.0175]) m.add(box([1.88, 0.035, 0.05], 0.004), P.alum, { at: [1, y, 0.5] });
-    m.add(box([1.81, H - 0.16, 0.012]), 0xdfe9e9, { at: [1, (H + 0.1) / 2, 0.5] });
-    for (let i = 0; i < 4; i++) m.add(box([1.81, 0.012, 0.014]), 0xf0f5f5, { at: [1, 0.35 + i * 0.25, 0.5] });
+    m.add(box([1.81, H - 0.16, 0.012]), 0xdfe9e9, {
+      // (frosted glass: not the brushed metal its pale grey reads as)
+      mat: "gloss",
+      at: [1, (H + 0.1) / 2, 0.5],
+    });
+    for (let i = 0; i < 4; i++)
+      m.add(box([1.81, 0.012, 0.014]), 0xf0f5f5, {
+        mat: "gloss",
+        at: [1, 0.35 + i * 0.25, 0.5],
+      });
     return;
   }
   if (o.look === 1) {
@@ -348,6 +356,7 @@ export function column(m: Model, o: Look) {
 /** A rug flat on the floor (its field the paint, rust unset): a bordered medallion with cream
  *  fringe on its short ends, a flat-woven kilim in bands with diamonds, a deep shag. */
 export function rug(m: Model, o: Look) {
+  m.only("carpet");
   const field = o.fabric ?? P.rust;
   const flat = (x0: number, z0: number, x1: number, z1: number, y: number, c: number) =>
     m.add(box([x1 - x0, 0.002, z1 - z0]), c, { at: [(x0 + x1) / 2, y, (z0 + z1) / 2] });
@@ -405,6 +414,7 @@ export function rug(m: Model, o: Look) {
 // ── the standup ring (4×4) ────────────────────────────────────────────────────────────────────────
 /** A round felt mat with amber rings inlaid and twelve VFD dots that glow. */
 export function standupMat(m: Model) {
+  m.only("matte");
   m.add(cyl(1.85, 1.85, 0.012, 48), 0x3a2a20, { at: [2, 0, 2] });
   m.add(ring(1.6, 0.025, 3, 64), P.mustard, { at: [2, 0.012, 2], scale: [1, 0.2, 1] });
   m.add(ring(1.15, 0.012, 3, 48), shade(P.mustard, 0.7), { at: [2, 0.012, 2], scale: [1, 0.2, 1] });

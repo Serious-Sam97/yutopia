@@ -139,6 +139,18 @@ export class Model {
     this.local.push(...refsOf(list));
     return this;
   }
+  private onlyMat: KitMat | null = null;
+  private noCloth = false;
+  /** (the life look) every part of this model one material, whatever its paint (a rug's carpet). */
+  only(mat: KitMat): this {
+    this.onlyMat = mat;
+    return this;
+  }
+  /** (the life look) this model's paint is paint: no part of it cloth by its colour (a picture's). */
+  paint(): this {
+    this.noCloth = true;
+    return this;
+  }
 
   /** Add a part in the model's frame, its faces flat and in `color`. */
   add(g: BufferGeometry, color: number, o: PartOpts = {}): this {
@@ -212,8 +224,11 @@ export class Model {
     }
     geo.setAttribute("uv", new Float32BufferAttribute(uv, 2));
     let by = o.mat ? { mat: o.mat, k: 1 } : matOfPaint(color, this.fabric, this.cloth, this.local);
-    // (a cushion is cloth, whatever its paint, unless that's a cloth or leather already)
+    // (a cushion is cloth, whatever its paint, unless that's a cloth or leather already; a model of one
+    // material is it; a model of paint has no cloth)
     if (isCushion && !o.mat && !CLOTHS.has(by.mat)) by = { mat: this.cloth, k: 1 };
+    if (this.onlyMat && !o.mat) by = { mat: this.onlyMat, k: 1 };
+    else if (this.noCloth && !o.mat && CLOTHS.has(by.mat)) by = { mat: "matte", k: 1 };
     // (a wood's texture is its colour: its paint only lightens or darkens it)
     if (SELF_COLOURED.has(by.mat)) C.setScalar(Math.min(1.3, by.k * (o.tone ?? 1)));
     else C.set(color).multiplyScalar(o.tone ?? 1);

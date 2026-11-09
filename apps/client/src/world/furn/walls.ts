@@ -299,6 +299,7 @@ export function neon(m: Model, o: Look) {
 // ── the poster (1×1) ──────────────────────────────────────────────────────────────────────────────
 /** A framed print by `art`: a big cassette, a VU meter, a Yondra sunset; a strip of tape on a corner. */
 export function poster(m: Model, art: string) {
+  m.paint();
   const [x0, x1, _y0, _y1] = [0.16, 0.84, 0.8421, 1.6076];
   slab(m, 0.12, 0.88, 0.7655, 1.6842, 0.022, 0x2b2420);
   const F = FACE + 0.023;
@@ -366,6 +367,8 @@ export function lightSwitch(m: Model, o: Look) {
 /** A walnut frame, its width and its picture by its seed (`props.seed`): a landscape, bands of colour
  *  or a portrait, on a paper mount. */
 export function pictureFrame(m: Model, seed: number) {
+  // (the life look: the picture is paint, not the cloth its colours are elsewhere)
+  m.paint();
   const art = Math.floor(seed * 3);
   const w = 0.22 + ((seed * 10) % 1) * 0.12;
   const [y0, y1] = [1.0207, 1.5311];

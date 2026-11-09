@@ -60,6 +60,7 @@ const diamond = (m: Model, x: number, z: number, rx: number, rz: number, y: numb
 
 // ── the round rug (3×3) ────────────────────────────────────────────────────────────────────────────
 function roundRug(m: Model, o: Look) {
+  m.only("carpet");
   const [cx, cz] = [1.5, 1.5];
   const R = 1.4;
   if (o.look === 1) {
@@ -132,6 +133,7 @@ function roundRug(m: Model, o: Look) {
 
 // ── the runner (4×1) ───────────────────────────────────────────────────────────────────────────────
 function runnerRug(m: Model, o: Look) {
+  m.only("carpet");
   const [x0, x1, z0, z1] = [0.2, 3.8, 0.1, 0.9];
   const fringe = (c: number) => {
     for (let i = 0; i < 14; i++)
@@ -226,6 +228,8 @@ const HIDE: [number, number][] = [
 /** An outline (x, z) laid flat, `d` thick, its top at y. */
 const lay = (pts: [number, number][], d: number) => extrude(pts, d).rotateX(Math.PI / 2);
 function cowhide(m: Model, o: Look) {
+  // (the life look: hair on hide, not the walnut its brown would be)
+  m.only("matte");
   const [cx, cz] = [1, 1];
   const s = o.seed;
   const base = o.look === 2 ? 0xc49a6a : 0xf0ebe0;
@@ -282,6 +286,7 @@ function cowhide(m: Model, o: Look) {
 
 // ── the puzzle mat (2×2) ───────────────────────────────────────────────────────────────────────────
 function puzzleMat(m: Model, o: Look) {
+  m.only("matte");
   const n = 4;
   const T = 2 / n;
   const H = 0.012;
@@ -321,6 +326,7 @@ function puzzleMat(m: Model, o: Look) {
 
 // ── the welcome mat (1×1) ──────────────────────────────────────────────────────────────────────────
 function welcomeMat(m: Model, o: Look) {
+  m.only("carpet");
   const [w, d] = [0.86, 0.56];
   if (o.look === 1) {
     // rubber, ribbed, HELLO raised on it

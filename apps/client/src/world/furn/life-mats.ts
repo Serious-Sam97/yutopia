@@ -30,6 +30,7 @@ export const KIT_MATS = [
   "metal-cast",
   "metal-polished",
   "bark",
+  "carpet",
 ] as const;
 export type KitMat = (typeof KIT_MATS)[number];
 /** The plain finishes' roughness (no texture: the colour, a sheen). */
