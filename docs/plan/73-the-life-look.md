@@ -671,7 +671,13 @@ of them in batches).
   body under a sleeve is hidden. Swimming: every garment takes the water line as the body does. Left: a
   long coat's skirt lets a raised knee through; a light spot at a tank's armhole; Jolt's hangs (61's bag
   and ponytail) are today's people's — the life look's swing on springs.
-- **5.6** The wardrobe picture editor re-pointed; the far person in the outfit's colours.
+- **5.6** The wardrobe picture editor re-pointed; the far person in the outfit's colours. Built
+  2026-11-09 (stills `design/screens/life/p56`). The editor needed only to wait: its turntable gave up
+  for the flat drawing the first frame it couldn't draw — in the life look, before the clothes' files
+  were in — and now keeps trying there (the drawing only without WebGL); its option thumbs and the HUD's
+  portraits wait as 5.4 made them. The far person: a coat's colour over the top, a dress's for the legs
+  too, a bald head the skin. Not made yet (not in phase 5's list): eyewear and the extras (scarf, bags,
+  earrings, necklace, watch, tie, lanyard, mittens…) — their options change nothing in the life look.
 - **5.7** Checks: budgets, frame times of a crowd, e2e, stills.
 
 ### 6 — Things

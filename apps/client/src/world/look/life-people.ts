@@ -646,12 +646,17 @@ export function farPiece(a: AvatarLayers | null, gender: LifeGender): Piece {
   // (the near person's clothes and shoes are a near-white texture × their colour: about this much)
   const CLOTH = 0.72;
   const c = (hex: string, k = 1) => new Color(hex).multiplyScalar(k);
+  // (5.6: what's seen from far off — a coat over the top, a dress for the legs too, a bald head the
+  // skin)
+  const skin = skinOf(a?.skin ?? (gender === "man" ? "#e2b996" : "#5b3a27"));
+  const outer = a?.outer && a.outer !== "none" ? a.outerColor : null;
+  const dress = a?.top === "dress" && a.bottom !== "leggings";
   const u = {
-    lifeSkin: { value: skinOf(a?.skin ?? (gender === "man" ? "#e2b996" : "#5b3a27")) },
-    lifeTop: { value: c(a?.topColor ?? "#d8d4cc", CLOTH) },
-    lifeBottom: { value: c(a?.bottomColor ?? "#3d4a5c", CLOTH) },
+    lifeSkin: { value: skin },
+    lifeTop: { value: c(outer ?? a?.topColor ?? "#d8d4cc", CLOTH) },
+    lifeBottom: { value: c((dress ? a?.topColor : a?.bottomColor) ?? "#3d4a5c", CLOTH) },
     lifeShoes: { value: c(a?.shoesColor ?? "#2a2420", CLOTH) },
-    lifeHair: { value: c(a?.hairColor ?? "#3b2a20") },
+    lifeHair: { value: a?.hair === "bald" ? skin.clone() : c(a?.hairColor ?? "#3b2a20") },
   };
   return {
     key: "life-far",

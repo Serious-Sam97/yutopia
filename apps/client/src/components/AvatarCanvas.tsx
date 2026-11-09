@@ -74,6 +74,12 @@ export function AvatarCanvas({
       // a three-quarter view, turning slowly
       const yaw = 0.55 + (spin && !reduced ? t * 0.55 : 0);
       if (!pics.turntable(c, a, yaw, mo)) {
+        // (the life look: their clothes' files still coming — drawn once they're in, 5.6; only without
+        // WebGL the drawing instead)
+        if (pics.lifeLook() && pics.canDraw()) {
+          void pics.whenReady(a);
+          return;
+        }
         cancelAnimationFrame(raf);
         setGl(false);
       }
