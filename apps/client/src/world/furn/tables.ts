@@ -39,6 +39,13 @@ const DESKS: DeskFinish[] = [
 
 export function desk(m: Model, o: Look) {
   const f = DESKS[o.look] ?? DESKS[0];
+  // (the life look: the cream desk's rust panel is laminate, not cloth; the black ash stained dark)
+  if (o.look === 2) m.finishes([[P.rust, "plain"]]);
+  if (o.look === 3)
+    m.finishes([
+      [P.graphite, "ash", 0.32],
+      [P.ash, "ash", 0.22],
+    ]);
   const x0 = 0.03;
   const x1 = 1.97;
   const z0 = 0.06;

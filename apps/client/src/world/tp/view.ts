@@ -116,6 +116,7 @@ import { FollowCam } from "./follow-cam";
 import { type GameScene3, GamesIn3D, HAND_SIT, HAND_STAND } from "./games3d";
 import { CASTER_LAYER } from "./grounds-stream";
 import { Hands1P, handsDoing } from "./hands1p";
+import { setKitRenderer } from "./kit-mats";
 import { lazyMatrices } from "./lazy-matrices";
 import { type LiftStop3, Lifts3, liftMats } from "./lift3d";
 import { Light3, landLight, litBalance } from "./light3d";
@@ -798,6 +799,8 @@ export class ThirdPersonView {
     if (isLife()) {
       // (the lamps light diffusely: their GGX on every pixel was the life look's cost — phase 2.7)
       installLifeLamps();
+      // (the things' materials from the library, plan 73 phase 6: their textures through this renderer)
+      setKitRenderer(this.renderer);
       this.lifeSky = new LifeSky(this.renderer);
       // (Low and Lowest draw straight to the screen: the finish's own curve as the renderer's — High
       // and Medium draw into the post's target, where it isn't applied, and their finish has it)

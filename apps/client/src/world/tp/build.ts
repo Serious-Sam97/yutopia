@@ -67,8 +67,10 @@ import { animateLive } from "../furn/liveparts";
 import { isNative, isNativeDress, liveInto, nativeDressInto, nativeInto, openingInto } from "../furn/native";
 import { N_HALF, N_WALL, nativePost, nativeWall } from "../furn/walls-native";
 import { litMaterial } from "../look/lit";
+import { isLife } from "../look/look-mode";
 import { CEL, fadePiece, type Piece, yuLit } from "../look/yulit";
 import { boxInParent, type Slab } from "./below-cull";
+import { kitMaterial } from "./kit-mats";
 import { type Geo, Out } from "./kit3d";
 import { edgesOfMap, type FreeWall, piecesOf, turnOut, type WallEdges } from "./walls3d";
 
@@ -147,6 +149,8 @@ interface Built {
 }
 
 /** Live parts are moved within this many tiles of the camera's target, at most this many a frame. */
+// (plan 73 phase 6: the life look's things drawn in their materials' buckets)
+const TEXTURED = isLife();
 const LIVE_NEAR = 18;
 const LIVE_MAX = 64;
 
@@ -816,7 +820,7 @@ export class World3 {
       const had = this.areas.get(k);
       if (had?.sig === sig) continue;
       changed = true;
-      const out = new Out();
+      const out = new Out(TEXTURED);
       const picks: Pick3[] = [];
       for (const o of a.objs) {
         const one = this.drawObject(o);
@@ -830,7 +834,7 @@ export class World3 {
         append(out, one.out);
       }
       for (const d of a.dress) {
-        const one = new Out();
+        const one = new Out(TEXTURED);
         this.drawDress(d, one);
         const b = boundsOf(one);
         if (b) picks.push({ id: d.id, use: false, dress: { kind: d.kind }, ...b });
@@ -999,7 +1003,7 @@ export class World3 {
     const m = o as Mesh;
     const base = (m.userData.base as Material | undefined) ?? (m.material as Material);
     const M = this.materials;
-    if (m.isMesh && (base === M.lit || base === M.glow)) return "solid";
+    if (m.isMesh && (base === M.lit || base === M.glow || base.userData.kitMat !== undefined)) return "solid";
     if (
       (m.isMesh || (m as unknown as LineSegments).isLineSegments) &&
       (base === M.clearBack || base === M.clearFront || base === M.ink)
@@ -1216,6 +1220,8 @@ export class World3 {
       const pos = new Float32Array(n * 3);
       const nor = new Float32Array(lines ? 0 : n * 3);
       const col = new Float32Array(n * 4);
+      const hasUv = !lines && !!g[0].geometry.getAttribute("uv");
+      const uv = new Float32Array(hasUv ? n * 2 : 0);
       const fade = new Float32Array(n);
       let at = 0;
       for (const m of g) {
@@ -1224,6 +1230,7 @@ export class World3 {
         pos.set((geo.getAttribute("position").array as Float32Array).subarray(0, c * 3), at * 3);
         if (!lines) nor.set((geo.getAttribute("normal").array as Float32Array).subarray(0, c * 3), at * 3);
         col.set((geo.getAttribute("color").array as Float32Array).subarray(0, c * 4), at * 4);
+        if (hasUv) uv.set((geo.getAttribute("uv").array as Float32Array).subarray(0, c * 2), at * 2);
         fade.fill(this.fadeOfMesh.get(m)?.index ?? 0, at, at + c);
         // (the piece's own points from now on its stretch of the merged ones — the same numbers, so
         // the floor's held once, not twice: plan 72 phase 13's memory pass; drawn faded, it uploads
@@ -1231,6 +1238,7 @@ export class World3 {
         share(geo, "position", pos, at * 3, c * 3);
         if (!lines) share(geo, "normal", nor, at * 3, c * 3);
         share(geo, "color", col, at * 4, c * 4);
+        if (hasUv) share(geo, "uv", uv, at * 2, c * 2);
         at += c;
       }
       // (the arrays themselves, not copies — Float32BufferAttribute copies — the pieces' views are of them)
@@ -1238,6 +1246,7 @@ export class World3 {
       geo.setAttribute("position", new BufferAttribute(pos, 3));
       if (!lines) geo.setAttribute("normal", new BufferAttribute(nor, 3));
       geo.setAttribute("color", new BufferAttribute(col, 4));
+      if (hasUv) geo.setAttribute("uv", new BufferAttribute(uv, 2));
       geo.setAttribute("aFade", new BufferAttribute(fade, 1));
       geo.computeBoundingSphere();
       const first = g[0];
@@ -1285,7 +1294,7 @@ export class World3 {
     const o: WorldObjectDef = freeTurn
       ? { ...o0, x: -e.w / 2, y: -e.h / 2, yaw: 0, props: { ...(o0.props ?? {}), free: false } }
       : o0;
-    const out = new Out();
+    const out = new Out(TEXTURED);
     // (every kind is the kit's — docs/plan/67-the-furniture.md, world/furn/native.ts; plan 72 phase
     // 12: the sketches' last kinds too)
     if (!isNative(o.kind)) {
@@ -1344,6 +1353,7 @@ export class World3 {
       geo.setAttribute("position", new Float32BufferAttribute(g.pos, 3));
       geo.setAttribute("normal", new Float32BufferAttribute(g.nor, 3));
       geo.setAttribute("color", new Float32BufferAttribute(g.col, 4));
+      if (g.uv.length) geo.setAttribute("uv", new Float32BufferAttribute(g.uv, 2));
       geo.computeBoundingSphere();
       built.dispose.push(geo);
       for (const m of twoSided(geo, mat)) {
@@ -1354,6 +1364,8 @@ export class World3 {
       }
     };
     tri(out.lit, lit, true);
+    // (the life look's kit: a bucket a material, plan 73 phase 6)
+    for (const [name, g] of out.mats) tri(g, this.kitMat(name), true);
     tri(out.glow, glow, false);
     tri(out.clear, [clearBack, clearFront], false);
     // decals: free-hand drawing on faces, stuck to them
@@ -1563,6 +1575,19 @@ export class World3 {
     this.floor = null;
   }
 
+  // (plan 73 phase 6) the life look's kit materials, one a name, lit and faded as `lit` is
+  private kitMats = new Map<string, Material>();
+  private kitMat(name: string): Material {
+    let m = this.kitMats.get(name);
+    if (!m) {
+      m = kitMaterial(name);
+      m.userData.fade = true;
+      this.light(m);
+      this.kitMats.set(name, m);
+    }
+    return m;
+  }
+
   // The room's light on its lit materials: the floor I'm on takes the light
   // map, the others (kept built, below mine) don't (it's mine, in my floor's
   // coords). Switching only swaps the shader variant (both stay compiled).
@@ -1687,6 +1712,7 @@ export class World3 {
     this.chunks.clear();
     this.flagsU.value.dispose();
     for (const m of Object.values(this.materials)) m.dispose();
+    for (const m of this.kitMats.values()) m.dispose();
   }
 }
 
@@ -1955,8 +1981,7 @@ function objectSig(o: WorldObjectDef): string {
 // the highest point drawn (tiles)
 function topOf(o: Out): number {
   let top = 0;
-  for (const g of [o.lit, o.glow, o.clear])
-    for (let i = 1; i < g.pos.length; i += 3) if (g.pos[i] > top) top = g.pos[i];
+  for (const g of o.geos) for (let i = 1; i < g.pos.length; i += 3) if (g.pos[i] > top) top = g.pos[i];
   return top;
 }
 
@@ -1968,7 +1993,7 @@ function boundsOf(o: Out): Omit<Pick3, "id" | "use" | "dress"> | null {
   let x1 = -1e9;
   let y1 = -1e9;
   let z1 = -1e9;
-  for (const g of [o.lit, o.glow, o.clear])
+  for (const g of o.geos)
     for (let i = 0; i < g.pos.length; i += 3) {
       const x = g.pos[i];
       const h = g.pos[i + 1];
@@ -1994,6 +2019,14 @@ function append(dst: Out, src: Out) {
     cat(dst[k].pos, src[k].pos);
     cat(dst[k].nor, src[k].nor);
     cat(dst[k].col, src[k].col);
+  }
+  // (the life look's material buckets, with their UVs)
+  for (const [name, g] of src.mats) {
+    const d = dst.mat(name);
+    cat(d.pos, g.pos);
+    cat(d.nor, g.nor);
+    cat(d.col, g.col);
+    cat(d.uv, g.uv);
   }
   dst.decals.push(...src.decals);
   dst.soft.rects.push(...src.soft.rects);

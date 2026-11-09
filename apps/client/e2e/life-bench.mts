@@ -474,6 +474,74 @@ const SHOTS: [string, string][] = [
   ["w5-long-man", "who=man&face=man&bust=1&wear=top-sweater,bottom-jeans,shoes-boots,hair-long&t=2.4&spin=20"],
   ["w5-long-woman", "who=woman&face=woman&bust=1&wear=top-tank,bottom-skirt,shoes-sneakers,hair-long&t=2.4&spin=-20"],
   ["w5-long-back", "who=woman&face=woman&bust=1&wear=top-tank,bottom-skirt,shoes-sneakers,hair-long&t=2.4&spin=160"],
+  // (plan 73 phase 6: the kit's things — the sample, today's beside it, close on each)
+  ["p6-sample", "things:"],
+  ["p6-sample-old", "things:kit=old"],
+  ["p6-sample-night", "things:hour=22"],
+  ["p6-sample-turned", "things:spin=0.55"],
+  ["p6-col0", "things:col=0"],
+  ["p6-col0-old", "things:col=0&kit=old"],
+  ["p6-col1", "things:col=1"],
+  ["p6-col1-old", "things:col=1&kit=old"],
+  ["p6-col2", "things:col=2"],
+  ["p6-col2-old", "things:col=2&kit=old"],
+  ["p6-col3", "things:col=3"],
+  ["p6-col3-old", "things:col=3&kit=old"],
+  ["p6-col4", "things:col=4"],
+  ["p6-col4-old", "things:col=4&kit=old"],
+  ["p6-col5", "things:col=5"],
+  ["p6-col5-old", "things:col=5&kit=old"],
+  ["p6-col6", "things:col=6"],
+  ["p6-col6-old", "things:col=6&kit=old"],
+  ["p6-col7", "things:col=7"],
+  ["p6-col7-old", "things:col=7&kit=old"],
+  // (plan 73 6.1: every seat's every look, today's and the new)
+  ...[
+    "chair",
+    "armchair",
+    "sofa",
+    "loveseat",
+    "beanbag",
+    "bench",
+    "bar_stool",
+    "counter_stool",
+    "log_seat",
+    "egg_chair",
+    "rocking_chair",
+    "hanging_chair",
+    "gaming_chair",
+    "window_seat",
+    "corner_sofa",
+    "floor_cushions",
+    "bleachers",
+    "hammock",
+  ].flatMap((k): [string, string][] => [
+    [`p61-${k}`, `things:kind=${k}`],
+    [`p61-${k}-old`, `things:kind=${k}&kit=old`],
+  ]),
+  // (plan 73 6.2: every table's and desk's every look, today's and the new)
+  ...[
+    "desk",
+    "corner_desk",
+    "standing_desk",
+    "meeting_table",
+    "dining_table",
+    "round_table",
+    "coffee_table",
+    "side_table",
+    "bedside_table",
+    "nesting_tables",
+    "high_table",
+    "folding_table",
+    "drafting_table",
+    "workbench",
+    "reception",
+    "counter",
+  ].flatMap((k): [string, string][] => [
+    [`p62-${k}`, `things:kind=${k}`],
+    [`p62-${k}-old`, `things:kind=${k}&kit=old`],
+  ]),
+  ["p62-reception-close", "things:kind=reception&col=0"],
   // (the glasses and the extras, props.py)
   [
     "w57-eyewear-man-1",
@@ -590,7 +658,9 @@ async function shot(p: Page, query: string, file: string) {
       ? ["/dev/life/outside", query.slice(4)]
       : query.startsWith("mat:")
         ? ["/dev/life/materials", query.slice(4)]
-        : ["/dev/life", query];
+        : query.startsWith("things:")
+          ? ["/dev/life/things", query.slice(7)]
+          : ["/dev/life", query];
   await p.goto(`${base}${path}?${qs}`);
   await p.waitForFunction(() => (window as unknown as { __life?: { ready: boolean } }).__life?.ready, null, {
     timeout: 120_000,

@@ -13,6 +13,8 @@ export class Geo {
   pos: number[] = [];
   nor: number[] = [];
   col: number[] = [];
+  /** (the life look's material buckets: Out.mats) UVs in metres, a pair a point */
+  uv: number[] = [];
   get empty() {
     return this.pos.length === 0;
   }
@@ -23,6 +25,15 @@ export class Geo {
       this.pos.push(p[0], p[1], p[2]);
       this.nor.push(n[0], n[1], n[2]);
       this.col.push(rgba[0], rgba[1], rgba[2], rgba[3]);
+    }
+  }
+  // (the life look's kit) a triangle as it's wound, each corner its own normal and UVs
+  tri3(p: number[], n: number[], uv: number[], rgba: number[]) {
+    for (let k = 0; k < 3; k++) {
+      this.pos.push(p[k * 3], p[k * 3 + 1], p[k * 3 + 2]);
+      this.nor.push(n[k * 3], n[k * 3 + 1], n[k * 3 + 2]);
+      this.uv.push(uv[k * 2], uv[k * 2 + 1]);
+      this.col.push(rgba[k * 4], rgba[k * 4 + 1], rgba[k * 4 + 2], rgba[k * 4 + 3]);
     }
   }
   // a, b, c, d counter-clockwise seen from the side `n` points to
@@ -53,6 +64,22 @@ export class Out {
   clear = new Geo(); // see-through (glass)
   decals: Decal[] = [];
   soft: Soft = { rects: [], dots: [] };
+  /** (plan 73 phase 6) the life look's kit, a bucket a material (furn/life-mats.ts KIT_MATS' names) —
+   *  only for a drawer that asked for them (`textured`: the world's floors); else into `lit`, smooth */
+  mats = new Map<string, Geo>();
+  constructor(readonly textured = false) {}
+  /** A material's bucket. */
+  mat(name: string): Geo {
+    const had = this.mats.get(name);
+    if (had) return had;
+    const g = new Geo();
+    this.mats.set(name, g);
+    return g;
+  }
+  /** Every bucket of triangles (lit, glow, clear and the materials'). */
+  get geos(): Geo[] {
+    return [this.lit, this.glow, this.clear, ...this.mats.values()];
+  }
 }
 
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];

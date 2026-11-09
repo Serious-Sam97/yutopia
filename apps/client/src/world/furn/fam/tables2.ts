@@ -14,6 +14,7 @@ import {
   tube,
   type V3,
 } from "../kit";
+import { finishes } from "../life-mats";
 import { P, shade } from "../palette";
 import { Rig } from "./seating2";
 
@@ -50,6 +51,21 @@ const T = {
   white: 0xf1efe9,
   grey: 0x8b8f93,
 };
+// (plan 73 phase 6.2: what the finishes are in the life look)
+finishes([
+  [T.felt, "twill"],
+  [T.feltDark, "twill"],
+  [T.birch, "birch"],
+  [T.peg, "matte"],
+  [T.marble, "gloss"],
+  [T.marbleVein, "gloss"],
+  [T.blueprint, "matte"],
+  [T.grey, "metal-brushed"],
+  [0x8a9196, "metal-brushed"],
+  [0xc9a26a, "oak"],
+  [0xa98250, "oak"],
+  [0xc9b48e, "matte"],
+]);
 
 // ── the desks' finishes (as the desk's: world/furn/tables.ts) ───────────────────────────────────────
 interface Finish {
@@ -150,6 +166,13 @@ function snakePlant(m: Model, x: number, z: number, pot: number, seed: number) {
 // grows. The desks' four finishes, their own ends. Things stand on the −z run (its `top`).
 function cornerDesk(m: Model, o: Look) {
   const f = DESKS[o.look] ?? DESKS[0];
+  // (the life look: the cream desk's rust panel is laminate, not cloth; the black ash stained dark)
+  if (o.look === 2) m.finishes([[P.rust, "plain"]]);
+  if (o.look === 3)
+    m.finishes([
+      [P.graphite, "ash", 0.32],
+      [P.ash, "ash", 0.22],
+    ]);
   const th = 0.032;
   const D = 0.8; // each run's depth
   const x0 = 0.03;

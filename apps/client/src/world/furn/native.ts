@@ -48,6 +48,7 @@ import {
 import { coffeeMachine, computer, DESK_THINGS, DESKTOP_LOOKS, LAVA_LOOKS, lavaLamp, radio, turntable } from "./desktop";
 import { FAM_DRAW, FAM_LOOKS } from "./fam";
 import { type LivePart, type Look, Model } from "./kit";
+import { KIT_MATS } from "./life-mats";
 import { liveAt, liveGroup } from "./liveparts";
 import { CEL_ALPHA } from "./look";
 import { openingLook, openingModel } from "./openings";
@@ -228,7 +229,10 @@ const drawn = (draw: (m: Model, l: Look) => void, signed = false): Kind => ({
   look: (o) => JSON.stringify(lookOf(o)),
   make: (o) => {
     const m = new Model(2);
-    draw(m, lookOf(o));
+    const l = lookOf(o);
+    // (the life look: its picked colour's parts are cloth)
+    m.fabric = l.fabric;
+    draw(m, l);
     return m.geometry();
   },
 });
@@ -882,7 +886,43 @@ function into(
     [0, 0, 0],
     [0, 0, 0],
   ];
+  // (the life look's kit: a material a point, its own normal and UVs — into its material's bucket, or
+  // smooth into `lit` for a drawer that has none)
+  const matA = g.attributes.mat?.array as Float32Array | undefined;
+  const uvA = g.attributes.uv?.array as Float32Array | undefined;
+  const P9: number[] = new Array(9).fill(0);
+  const N9: number[] = new Array(9).fill(0);
+  const U6: number[] = new Array(6).fill(0);
+  const C12: number[] = new Array(12).fill(0);
   for (let t = 0; t < pos.length; t += 9) {
+    if (matA && uvA) {
+      const tv = t / 3;
+      for (let k = 0; k < 3; k++) {
+        const i = t + k * 3;
+        const [X, Y] = turn(pos[i], pos[i + 2] + pull, false);
+        P9[k * 3] = o.x + X;
+        P9[k * 3 + 1] = pos[i + 1] + lift;
+        P9[k * 3 + 2] = o.y + Y;
+        const [nx, nz] = turn(nor[i], nor[i + 2], true);
+        N9[k * 3] = nx;
+        N9[k * 3 + 1] = nor[i + 1];
+        N9[k * 3 + 2] = nz;
+        U6[k * 2] = uvA[(tv + k) * 2];
+        U6[k * 2 + 1] = uvA[(tv + k) * 2 + 1];
+        C12[k * 4] = col[i];
+        C12[k * 4 + 1] = col[i + 1];
+        C12[k * 4 + 2] = col[i + 2];
+        C12[k * 4 + 3] = CEL_ALPHA;
+        if (pos[i + 1] < 0.2) {
+          x0 = Math.min(x0, P9[k * 3]);
+          x1 = Math.max(x1, P9[k * 3]);
+          y0 = Math.min(y0, P9[k * 3 + 2]);
+          y1 = Math.max(y1, P9[k * 3 + 2]);
+        }
+      }
+      (out.textured ? out.mat(KIT_MATS[matA[tv]] ?? "plain") : out.lit).tri3(P9, N9, U6, C12);
+      continue;
+    }
     for (let k = 0; k < 3; k++) {
       const i = t + k * 3;
       const [X, Y] = turn(pos[i], pos[i + 2] + pull, false);

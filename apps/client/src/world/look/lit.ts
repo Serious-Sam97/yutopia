@@ -71,3 +71,12 @@ export function litMaterial(params: LitParameters = {}): MeshLambertMaterial {
 export function isLit(m: Material): boolean {
   return (m as MeshLambertMaterial).isMeshLambertMaterial === true || lifeMaterials.has(m as MeshStandardMaterial);
 }
+
+/** A life material made elsewhere (the library's: look/life-matlib.ts) given the sky's light as the
+ *  world's own are, now and when it changes (plan 73 phase 6: the kit's materials). */
+export function adoptLife(m: MeshStandardMaterial): void {
+  m.envMap = env.texture;
+  m.envMapIntensity = env.k;
+  lifeMaterials.add(m);
+  m.addEventListener("dispose", () => lifeMaterials.delete(m));
+}

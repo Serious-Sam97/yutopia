@@ -737,6 +737,97 @@ of them in batches).
 The kit upgrade (bevel, UV, materials) rolled through `fam/` by family: seating, tables, storage,
 screens, decor, play, chess, Christmas. Before/after stills for each family.
 
+Decided 2026-11-09 (the questions): a part's material **from its paint** (each palette finish maps to a
+library material: walnut → walnut, the weave → a fabric, steel → brushed metal), then refined per
+family by hand; **rounded and smooth now** (bevelled boxes, smooth shading, cushions that puff and sag),
+in the life look only — classic draws as today; **a sample across families first**.
+
+Today every thing is one vertex-coloured, flat-faceted geometry (the kit's `Model`), drawn into the
+floor's one triangle soup (`tp/kit3d.ts Out`) under one lit material, merged by area. In the life look
+the kit keeps each shape's own smooth normals, rounds its boxes, gives every vertex UVs in metres and its
+part's material, and the world draws one bucket a library material (merged by area as today: a room's
+draws grow by the materials in it, not by its things).
+
+**Steps (planned 2026-11-09):**
+- **6.0 The sample.** The kit in the life look, the world's material buckets, and eight pieces across
+  the families — sofa, armchair, task chair, dining table, desk, bookcase, floor lamp, a plant — on a
+  new bench `/dev/life/things` (the life light; `?kit=old` today's models under it), noon and night,
+  and in the game. Sign-off.
+  **6.0 built 2026-11-09** (stills `design/screens/life/p6`: `p6-pair*` today's beside the new, close;
+  `p6-sample*` the row by day, by night and turned; `world-*` the sample put on Floor 1 and drawn by the
+  game, in the life look and the classic one).
+  - **The kit** (`furn/kit.ts`): in the life look (`isLife()`, or `setLifeKit` on a bench) a part keeps
+    its shape's own shading, creased at 0.9 rad (`toCreasedNormals`: a cylinder's sides round, a box's
+    edges edges). Every box is rounded (8 mm where it asked for none, two segments where it asked for a
+    chamfer). Every point has UVs in metres, projected along its face's most-facing axis with u along
+    the part's longest way (a turned leg's grain up it, not round it). It also carries its part's
+    material (`mat`, an index into `KIT_MATS`). Glows, glass and live parts draw as before.
+  - **Materials from paint** (`furn/life-mats.ts`): each palette finish maps to a library material or a
+    plain finish (gloss, matte, plain: plastic, ceramic, rubber, paper, leaves). A colour that's a finish
+    made lighter or darker (`shade`) is that finish's; the look's picked colour (`Model.fabric`, from
+    `Look.fabric`) is cloth (`Model.cloth`, linen by default). A wood carries its own colour, so its paint
+    only lightens or darkens it; anything else takes its paint through the texture. A part says
+    otherwise with `PartOpts.mat`.
+  - **The world** (`tp/build.ts`, `tp/kit3d.ts`): the things' `Out` takes material buckets in the life
+    look (`Out(textured)`, a Geo with UVs a material), and `nativeInto` puts each triangle in its own,
+    its normals and UVs a corner. The floor makes one material a name (`tp/kit-mats.ts kitMaterial`: the
+    library's, vertex colours through it, given the sky's light by `lit.ts adoptLife`), lit and faded
+    as `lit` is, and the merge by area carries UVs. A room's draws grow by the materials in it (the
+    sample: walnut, oak, cherry, twill, leather, three metals, three plain finishes), not by its things.
+    Classic is unchanged (its stills identical by eye; the furniture and world tests pass, 159).
+  - **Tuned on the way:**
+    - A weave's sheen is a soft grey at 0.3 at most. Vertex colours don't reach it: white washed the
+      sofa out.
+    - The kit's metals are half metal. All metal, a brass lamp's pole went near black in a room's dim sky.
+  - **The bench** `/dev/life/things` (`?kit=old`, `?set=`, `?kind=`, `?hour=22`, `?col=`, `?spin=`), its
+    stills by `e2e/life-bench.mts` (`p6-…`). `e2e/life-things-world.mts` puts the sample on Floor 1 as
+    Ana (life or classic), shoots it and takes it away.
+  - **Size:** the page is unchanged (480.7 KB) and every lazy chunk is within its budget. Every chunk
+    together is +22 KB gzip (5640.8 → 5663.2, 273 → 281 files, measured against the last commit in a
+    worktree). The kit is already copied into ~15 chunks, and each copy now carries the life code
+    (~1.5 KB); the bench page adds the rest. A page loads one or two of those copies.
+  - **Left for the families:** books, a chair's mesh back and leaves stay plain (no texture fits); cushions
+    puff but don't sag yet; turned and lathed parts keep their facets past the crease (a ball of 8);
+    the bench's night lamps throw no shadows.
+- **6.1 Seating.** Built 2026-11-09 (stills `design/screens/life/p61`: `pair-<kind>`, today's above the
+  new, every look of the kind). 18 kinds, 40 looks: chair, armchair, sofa, loveseat, beanbag, bench, bar
+  stool, counter stool, log seat, egg chair, rocking chair, hanging chair, gaming chair, window seat,
+  corner sofa, floor cushions, bleachers and hammock.
+  - **A family's own colours** (`life-mats.ts finishes`): plan 68's files paint from palettes of their
+    own (a file's `C`), not the shared one, so they fell to plain. Each family now registers what its
+    colours are. Seating: the egg's teal twill, its shell gloss, macramé's cord bouclé, the gaming chairs'
+    red leather, galvanised steel brushed, planks pine, the window seat's cushions linen; the log seat's
+    cut face pine.
+  - **Cushions are cloth** (the kit's `cushion` marks its geometry): a cushion whose paint is no cloth
+    or leather is the look's cloth (a rocker's red pad, a window seat's bolsters).
+  - **Cushions sag** in the life look: the sat or leant-on face dips softly in the middle, a little toward
+    the front, its rim full (four more cuts across, for the dip to be round).
+  - **Moving parts** (a hanging chair, a hammock's cloth, a rocker) are smooth-shaded as the rest. The
+    bench draws them now (`liveInto`).
+  - Bark from the library, laid along a log seat, read as camouflage: its bark stays its paint.
+  - **Left:** moving parts keep their paint (one lit material, no library textures); rattan and wicker
+    have no material of their own (plain); books stay plain.
+- **6.2 Tables and desks.** Built 2026-11-09 (stills `design/screens/life/p62`: `pair-<kind>`, today's
+  above the new). 16 kinds, 31 looks: desk, corner desk, standing desk, meeting table, dining table,
+  round table, coffee table, side table, bedside table, nesting tables, high table, folding table,
+  drafting table, workbench, reception desk and counter.
+  - **A model's own finishes** (`Model.finishes`, first among the paint's guesses, with a tone for a
+    wood stained darker than its texture): the black-ash desks are ash stained dark (0.32 the top, 0.22
+    the frame), and the cream desk's rust panel is laminate, not the velvet rust is elsewhere.
+  - **The tables' colours** (`fam/tables2.ts finishes`): the drafting felt twill, birch, the marble
+    gloss, the blueprint paper matte, the steel workbench's grey brushed, the folding table's oak and
+    its frame's; the workbench's pegboard matte (in birch it took a grain).
+  - **Grain up a face that runs the other way:** a face whose own triangle is three times longer
+    across the part than along it takes its grain that way (one slat of a wide, merged slatted front).
+  - **Left:** the counters' stone and the marble have no material of their own (gloss, plain); the
+    sink's steel reads dark.
+- **6.3 Storage** · **6.4 Screens and the desktop** ·
+  **6.5 Decor, lights and plants** · **6.6 Kitchen, music, office** · **6.7 Play: games, chess,
+  parkour, pets** · **6.8 Christmas, seasons, outdoors** — each family's materials checked and fixed
+  by hand (a part the paint guessed wrong), its forms rounded where the kit's defaults don't reach
+  (cushions' sag, turned legs), before/after stills of every look.
+- **6.9 Checks.** Draws and triangles a room, frame times by tier, memory, budgets, e2e, stills.
+
 ### 7 — Buildings
 
 Walls with skirting and trim, window frames with depth and sills, doors with panels and handles,

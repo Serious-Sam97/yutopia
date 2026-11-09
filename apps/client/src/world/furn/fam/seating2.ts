@@ -29,6 +29,7 @@ import {
   type V3,
   wrap,
 } from "../kit";
+import { finishes } from "../life-mats";
 import { P, shade } from "../palette";
 
 // Plan 68 phase 3 (docs/plan/68-more-furniture.md): Seating — the new kinds' models, in the kit's frame
@@ -65,6 +66,22 @@ const C = {
   sage: 0x8fa58a,
   gold: 0xd8a640,
 };
+// (plan 73 phase 6.1: what the finishes are in the life look)
+finishes([
+  [C.teal, "twill"],
+  [C.shell, "gloss"],
+  [C.cord, "boucle"],
+  [C.cordDark, "boucle"],
+  [C.red, "leather"],
+  [C.redDark, "leather"],
+  [C.galv, "metal-brushed"],
+  [C.plank, "pine"],
+  [C.brick, "linen"],
+  [C.sage, "linen"],
+  [0xb07a46, "oak"],
+  [0xe4d7ba, "linen"],
+  [0x4f7f9a, "linen"],
+]);
 
 // ── helpers ─────────────────────────────────────────────────────────────────────────────────────
 

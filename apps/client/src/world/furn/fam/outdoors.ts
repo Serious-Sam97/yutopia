@@ -17,6 +17,7 @@ import {
   tube,
   type V3,
 } from "../kit";
+import { finishes } from "../life-mats";
 import { P, shade } from "../palette";
 
 // Plan 68 phase 19 (docs/plan/68-more-furniture.md): Outdoors — the snow campus's own: a fire pit (its
@@ -70,6 +71,9 @@ const O = {
   rust: 0x7a3e22,
   galv: 0xa7adb2,
 };
+// (plan 73 phase 6.1, the log seat: its cut face in the life look — its bark stays its paint: the
+// library's bark, laid along a log, read as camouflage — the rest at 6.8)
+finishes([[O.cut, "pine"]]);
 
 const rnd = (a: number, b: number, s: number) => {
   const x = Math.sin(a * 127.1 + b * 311.7 + s * 74.7) * 43758.5453;

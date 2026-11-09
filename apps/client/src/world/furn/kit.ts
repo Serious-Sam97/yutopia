@@ -19,9 +19,20 @@ import {
   Vector3,
 } from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { mergeGeometries, toCreasedNormals } from "three/addons/utils/BufferGeometryUtils.js";
 import { celBands } from "../cel";
 import { litMaterial } from "../look/lit";
+import { isLife } from "../look/look-mode";
+import {
+  CLOTHS,
+  type Finish,
+  type FinishRef,
+  KIT_MATS,
+  type KitMat,
+  matOfPaint,
+  refsOf,
+  SELF_COLOURED,
+} from "./life-mats";
 
 // The furniture kit (docs/plan/67-the-furniture.md, phase 0's mock; phase 1 grows it): things
 // built in metres from real shapes — bevelled boxes, lathed profiles, tubes, extrusions, puffed
@@ -30,6 +41,27 @@ import { litMaterial } from "../look/lit";
 // it faces +z (a seat's front, rot 0).
 
 export type V3 = [number, number, number];
+
+// ── the life look's kit (plan 73 phase 6) ────────────────────────────────────────────────────────
+// In the life look a part keeps its shape's own smooth shading (creased: hard past CREASE), its boxes
+// are rounded, and every point has UVs in metres (projected along its face's most-facing axis) and its
+// part's material (`mat`: KIT_MATS' index; life-mats.ts, from its paint) — the world draws each
+// material's parts as a bucket of their own (tp/build.ts). Classic draws as it always has.
+let LIFE: boolean | null = null;
+const life = (): boolean => {
+  if (LIFE === null) LIFE = isLife();
+  return LIFE;
+};
+/** The kit in the life look or not (the benches: today's models under the life light); unset, the
+ *  page's look. Models already built aren't redrawn. */
+export function setLifeKit(on: boolean | null): void {
+  LIFE = on;
+}
+export const isLifeKit = () => life();
+const CREASE = 0.9; // (radians: a cylinder's 10 sides shade round, a box's edges stay edges)
+/** A box's edges rounded this much (m) in the life look when it asked for none. */
+const LIFE_BEVEL = 0.008;
+
 /** How much is drawn: 0 clean (few facets), 1 crafted, 2 rich. */
 export type Tier = 0 | 1 | 2;
 
@@ -49,6 +81,8 @@ export interface PartOpts {
   glow?: boolean;
   /** see-through, this opaque (0..1): a window's pane, merged with the rest (not a live part) */
   glass?: number;
+  /** what it's made of in the life look (else by its paint: life-mats.ts) */
+  mat?: KitMat;
 }
 
 /** How a live part moves (docs/plan/68-more-furniture.md, live parts: world/furn/liveparts.ts). */
@@ -91,10 +125,24 @@ export class Model {
   /** turned round the frame's middle (0.5, 0.5) when it's done, radians: a thing drawn facing −z
    *  that faces the room (+z) instead */
   facing = 0;
+  /** drawn in the life look (smooth, UVs, materials): as the kit was when it was made */
+  readonly life = life();
+  /** the look's own picked colour (a sofa's fabric, `Look.fabric`): its parts are cloth, `cloth` */
+  fabric: number | null = null;
+  cloth: KitMat = "linen";
+  private local: FinishRef[] = [];
   constructor(readonly tier: Tier) {}
+
+  /** (the life look) this model's own finishes, first among the paint's guesses: a desk's black ash
+   *  stained dark, its laminate panel no cloth. */
+  finishes(list: Finish[]): this {
+    this.local.push(...refsOf(list));
+    return this;
+  }
 
   /** Add a part in the model's frame, its faces flat and in `color`. */
   add(g: BufferGeometry, color: number, o: PartOpts = {}): this {
+    if (this.life && !o.glow && o.glass === undefined) return this.addLife(g, color, o);
     const geo = g.index ? g.toNonIndexed() : g;
     if (geo !== g) g.dispose();
     for (const k of Object.keys(geo.attributes)) if (k !== "position") geo.deleteAttribute(k);
@@ -116,14 +164,80 @@ export class Model {
     return this;
   }
 
+  /** (the life look) a part smooth-shaded, its UVs in metres, its material and its colour on it */
+  private addLife(g: BufferGeometry, color: number, o: PartOpts): this {
+    const isCushion = g.userData.cushion === true;
+    for (const k of Object.keys(g.attributes)) if (k !== "position") g.deleteAttribute(k);
+    E.set(...(o.rot ?? [0, 0, 0]), "YXZ");
+    Q.setFromEuler(E);
+    M.compose(new Vector3(...(o.at ?? [0, 0, 0])), Q, o.scale ? new Vector3(...o.scale) : ONE);
+    g.applyMatrix4(M);
+    const geo = toCreasedNormals(g, CREASE);
+    if (geo !== g) g.dispose();
+    const pos = geo.attributes.position.array as Float32Array;
+    const n = geo.attributes.position.count;
+    // UVs in metres: each triangle projected along its face's most-facing axis (the grain and the weave
+    // at their true size, whichever way a face looks), u along the part's longest way where the face
+    // has it — a leg's grain up it, a top's along it
+    const uv = new Float32Array(n * 2);
+    geo.computeBoundingBox();
+    const bb = geo.boundingBox as NonNullable<typeof geo.boundingBox>;
+    const ext = [bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z];
+    for (let t = 0; t < n; t += 3) {
+      const a = t * 3;
+      const ux = pos[a + 3] - pos[a];
+      const uy = pos[a + 4] - pos[a + 1];
+      const uz = pos[a + 5] - pos[a + 2];
+      const vx = pos[a + 6] - pos[a];
+      const vy = pos[a + 7] - pos[a + 1];
+      const vz = pos[a + 8] - pos[a + 2];
+      const nx = Math.abs(uy * vz - uz * vy);
+      const ny = Math.abs(uz * vx - ux * vz);
+      const nz = Math.abs(ux * vy - uy * vx);
+      // (the face's two axes, the longer of the part's first: u)
+      const facing = ny >= nx && ny >= nz ? 1 : nx >= nz ? 0 : 2;
+      const [a0, a1] = facing === 1 ? [0, 2] : facing === 0 ? [2, 1] : [0, 1];
+      let [ua, va] = ext[a1] > ext[a0] * 1.15 ? [a1, a0] : [a0, a1];
+      // (unless the face itself runs strongly the other way: one slat of a slatted front, merged into a
+      // wide part, its grain up the slat)
+      const span = (ax: number) =>
+        Math.max(pos[a + ax], pos[a + 3 + ax], pos[a + 6 + ax]) -
+        Math.min(pos[a + ax], pos[a + 3 + ax], pos[a + 6 + ax]);
+      if (span(va) > span(ua) * 3) [ua, va] = [va, ua];
+      for (let k = 0; k < 3; k++) {
+        const i = (t + k) * 3;
+        uv[(t + k) * 2] = pos[i + ua];
+        uv[(t + k) * 2 + 1] = pos[i + va];
+      }
+    }
+    geo.setAttribute("uv", new Float32BufferAttribute(uv, 2));
+    let by = o.mat ? { mat: o.mat, k: 1 } : matOfPaint(color, this.fabric, this.cloth, this.local);
+    // (a cushion is cloth, whatever its paint, unless that's a cloth or leather already)
+    if (isCushion && !o.mat && !CLOTHS.has(by.mat)) by = { mat: this.cloth, k: 1 };
+    // (a wood's texture is its colour: its paint only lightens or darkens it)
+    if (SELF_COLOURED.has(by.mat)) C.setScalar(Math.min(1.3, by.k * (o.tone ?? 1)));
+    else C.set(color).multiplyScalar(o.tone ?? 1);
+    const col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) col.set([C.r, C.g, C.b], i * 3);
+    geo.setAttribute("color", new Float32BufferAttribute(col, 3));
+    geo.setAttribute("mat", new Float32BufferAttribute(new Float32Array(n).fill(KIT_MATS.indexOf(by.mat)), 1));
+    this.parts.push(geo);
+    return this;
+  }
+
   /** A part that moves (a lava lamp's blob, a flame): kept out of the merged model, built round
    *  its own origin and resting at `o.at`, moved each frame by `anim` (live parts: liveparts.ts). */
   live(g: BufferGeometry, color: number, anim: LiveAnim, o: Omit<PartOpts, "glass"> & { glass?: boolean } = {}): this {
-    const geo = g.index ? g.toNonIndexed() : g;
+    // (the life look: smooth, creased, as the rest of the kit's parts)
+    let geo = g.index && !this.life ? g.toNonIndexed() : g;
     if (geo !== g) g.dispose();
     for (const k of Object.keys(geo.attributes)) if (k !== "position") geo.deleteAttribute(k);
     if (o.scale) geo.scale(...o.scale);
-    geo.computeVertexNormals();
+    if (this.life) {
+      const c = toCreasedNormals(geo, CREASE);
+      if (c !== geo) geo.dispose();
+      geo = c;
+    } else geo.computeVertexNormals();
     C.set(color).multiplyScalar(o.tone ?? 1);
     const n = geo.attributes.position.count;
     const col = new Float32Array(n * 3);
@@ -186,6 +300,11 @@ export interface Look {
 /** A box `size` big; `bevel` m off its edges, cut in `seg` facets (1: a chamfer). */
 export function box(size: V3, bevel = 0, seg = 1): BufferGeometry {
   const [w, h, d] = size;
+  // (the life look: every box's edges rounded — a chamfer or none, a little round)
+  if (life()) {
+    if (bevel <= 0) bevel = Math.min(LIFE_BEVEL, Math.min(w, h, d) * 0.25);
+    seg = Math.max(seg, 2);
+  }
   const r = Math.min(bevel, w / 2 - 1e-4, h / 2 - 1e-4, d / 2 - 1e-4);
   return r > 0.0005 ? new RoundedBoxGeometry(w, h, d, seg, r) : new BoxGeometry(w, h, d);
 }
@@ -290,7 +409,9 @@ export function cushion(size: V3, puff: number, seg = 2): BufferGeometry {
   // a box cut in a grid (its faces' middles have points of their own to swell), its edges rounded by
   // pulling each point onto a ball of radius r round the box shrunk by r; `seg` more cuts as it grows
   const r = Math.min(h * 0.45, w / 4, d / 4);
-  const n = 2 + 2 * seg;
+  const sag = life();
+  // (the life look: more cuts across, for the sag's dip to be round)
+  const n = 2 + 2 * seg + (sag ? 4 : 0);
   const g = new BoxGeometry(w, h, d, n, Math.max(2, seg), n);
   const p = g.attributes.position;
   const v = new Vector3();
@@ -309,8 +430,17 @@ export function cushion(size: V3, puff: number, seg = 2): BufferGeometry {
     const x = (v.x / w) * 2;
     const z = (v.z / d) * 2;
     const k = Math.max(0, 1 - x * x) * Math.max(0, 1 - z * z);
-    p.setXYZ(i, v.x, v.y * (1 + puff * k), v.z);
+    let y = v.y * (1 + puff * k);
+    // (the life look: the face that's sat or leant on dips softly in the middle, a little toward the
+    // front — a cushion used, not a pillow; its rim stays full)
+    if (sag && v.y > 0) {
+      const sx = v.x / (w * 0.32);
+      const sz = (v.z - d * 0.08) / (d * 0.36);
+      y -= h * 0.16 * Math.exp(-(sx * sx + sz * sz));
+    }
+    p.setXYZ(i, v.x, y, v.z);
   }
+  g.userData.cushion = true;
   return g;
 }
 
