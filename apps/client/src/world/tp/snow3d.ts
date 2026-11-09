@@ -17,14 +17,14 @@ type Rng = () => number;
 type YAt = (x: number, z: number) => number;
 
 /** A face from four corners, its normal its own: turned up, or towards `out`. */
-export function face(g: G, a: V, b: V, c: V, d: V, out: V = [0, 1, 0]) {
+export function face(g: G, a: V, b: V, c: V, d: V, out: V = [0, 1, 0], uv?: [number, number][]) {
   const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
   const v = [d[0] - a[0], d[1] - a[1], d[2] - a[2]];
   let n: V = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
   const l = Math.hypot(...n) || 1;
   n = [n[0] / l, n[1] / l, n[2] / l];
   if (n[0] * out[0] + n[1] * out[1] + n[2] * out[2] < 0) n = [-n[0], -n[1], -n[2]];
-  g.quad(a, b, c, d, n);
+  g.quad(a, b, c, d, n, uv);
 }
 
 /** Smooth noise along a run, −1..1: random knots every `step`, eased between (mirrored before

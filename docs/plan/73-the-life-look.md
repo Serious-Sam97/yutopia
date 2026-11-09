@@ -1014,8 +1014,25 @@ doors and windows are the kit's (`furn/openings.ts`): phase 6 gave them their ma
       `life-shots.mts` spots `lifts` and `stairs`.
   - **Left:** the grate `x` floor and the lot's asphalt and concrete painted (7.3, 8); a tile mezzanine
     one tone (no checker); the lift cars untouched.
-- **7.3 Outside: facades, roofs, the
-  campus** — each finished across the world, before/after stills.
+- **7.3 Outside: facades, roofs, the campus.** Decided 2026-11-09: the campus and the Grounds' town both;
+  the town's paintings (siding, corrugated metal) kept, the library's relief and sheen over them, as the
+  facade in 7.0.
+  - **Built 2026-11-09.**
+    - **The campus's stone** (`campus.ts`): the main block's and the blocks' caps, coping and window trims
+      the library's concrete (`kit-mats.ts libDress`: albedo, relief, roughness; the colour a tone over
+      the material's own mean, `tintOver`/`LIB_MEAN`), their quads' UVs in metres on their own plane
+      (`G.metres`); the colour also the hour's base (`setDay` tints from `tinted`).
+    - **The town's walls** (`grounds3d.ts relief`): siding the wood's relief (pine, a repeat a building's UV
+      unit: 3 or 4 m), the shed's corrugated metal the brushed metal's. **Brick** the library's own in its
+      painted colour a shade down (`libDress` with `tint`) — the painting's 19 cm courses and 50 cm bricks
+      can't meet the library's relief (as 7.0's walls).
+    - **The town's roofs** (`pitched`): their slopes the library's slate, a mesh of their own a building,
+      UVs along the eave and up the slope; the roof's colour its tone (`tintOver`). Under the winter's
+      snow (its pieces on the slopes) only the eaves show; bare, the slates.
+    - Stills: `e2e/life-town.mts` (Main Street, the houses, the church, the barn, a brick front, the roofs;
+      `BARE=1` holds the snow off — `__wxLayer.hold`); `life-shots.mts` lot and corner.
+  - **Left:** the barn's gable ends' siding has 0–1 UVs (stretched relief, faint); the bridge, the
+    canopy, gates and posts as they were; the siding's relief is faint by nature (its boards are painted).
 - **7.4 Checks.** Draws, triangles and memory by floor, frame times, budgets, e2e, stills.
 
 ### 8 — Outdoors

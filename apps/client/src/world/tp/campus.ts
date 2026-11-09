@@ -54,7 +54,7 @@ import {
 import type { Daylight } from "../art/daylight";
 import { litMaterial } from "../look/lit";
 import { isLifeBuild } from "../look/look-mode";
-import { libRelief } from "./kit-mats";
+import { libDress, libRelief } from "./kit-mats";
 import type { Themes } from "./sky";
 import { driftAlong, flatSnow, snowBox } from "./snow3d";
 import type { WallEdges } from "./walls3d";
@@ -78,6 +78,18 @@ const BAY = 4; // one curtain-wall bay (tiles)
 const [WIN0, WIN1] = openingCut("window"); // the studio's windows, bottom and top
 
 // ── geometry builder: non-indexed triangles with position, normal, uv, colour ─
+/** A quad's corners' UVs in metres on its own plane (`G.metres`): u along an axis of the plane — the
+ *  world's x or z where it lies in the plane, so a wall's run on from quad to quad — v across. */
+function planeUV(P: V[], n: V): [number, number][] {
+  const l = Math.hypot(n[0], n[1], n[2]) || 1;
+  const N = [n[0] / l, n[1] / l, n[2] / l];
+  // (u: the world's horizontal in the plane — or, a floor or a cap's top, the world's x)
+  let u = Math.abs(N[1]) > 0.9 ? [1, 0, 0] : [-N[2], 0, N[0]];
+  const ul = Math.hypot(u[0], u[1], u[2]) || 1;
+  u = [u[0] / ul, u[1] / ul, u[2] / ul];
+  const v = [N[1] * u[2] - N[2] * u[1], N[2] * u[0] - N[0] * u[2], N[0] * u[1] - N[1] * u[0]];
+  return P.map((p) => [p[0] * u[0] + p[1] * u[1] + p[2] * u[2], p[0] * v[0] + p[1] * v[1] + p[2] * v[2]]);
+}
 export class G {
   pos: number[] = [];
   nor: number[] = [];
@@ -86,6 +98,9 @@ export class G {
   /** the snow's tags (wx3d.ts): (how far down it's pressed, −the snow it comes in at) a vertex */
   tag: number[] | null = null;
   private rgb = [1, 1, 1];
+  /** (plan 73 phase 7.3, the life look) its quads' UVs in metres on their own plane — along the quad's
+   *  first edge and across it, from the world's origin: a library material runs on from quad to quad */
+  metres = false;
   private snowAt: number | ((p: V) => number) = 0;
   private dropOf: ((p: V) => number) | null = null;
   /** What's made from here on is snow (docs/plan/65, W4): it comes in at `at` of the snow lying (or
@@ -126,6 +141,7 @@ export class G {
     const ok = cr[0] * n[0] + cr[1] * n[1] + cr[2] * n[2] >= 0;
     const order = ok ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2];
     const P = [a, b, c, d];
+    if (this.metres) uv = planeUV(P, n);
     for (const i of order) {
       this.pos.push(P[i][0], P[i][1], P[i][2]);
       this.nor.push(n[0], n[1], n[2]);
@@ -1639,8 +1655,13 @@ export class Campus {
     // ── the main block: the studio's floor on four storeys of glass ──
     const skin = new G();
     const topSkin = new G();
+    // (the life look: the stone in the library's concrete, its UVs in metres — plan 73 phase 7.3)
+    const dressed = (...gs: G[]) => {
+      for (const g of gs) g.metres = isLifeBuild();
+    };
     const cap = new G();
     const coping = new G();
+    dressed(cap, coping);
     // (its outline: the home floor's slabs; its walls, the structure's — or, with none, the map's)
     const mainRuns = facadeRuns(map, outline);
     const wallAt = (e: { dir: "h" | "v"; x: number; y: number }) =>
@@ -1660,12 +1681,20 @@ export class Campus {
     };
     const mainWhite = this.lambert(0xdcd8d0);
     const mainConcrete = this.lambert(0xcfcbc2);
+    if (isLifeBuild())
+      for (const m of [mainWhite, mainConcrete, white, concrete]) {
+        libDress(m as unknown as MeshStandardMaterial, "concrete");
+        // (its colour the hour's base: setDay tints from it)
+        const t = this.tinted.find(([x]) => x === m);
+        if (t) t[1].copy(m.color);
+      }
     this.mainCut = [this.mainFacade, mainWhite, mainConcrete];
     // (punched: the glass in the windows and their trims, the top storey's apart — see topSkin)
     const panes = new G();
     const topPanes = new G();
     const trims = new G();
     const topTrims = new G();
+    dressed(trims, topTrims);
     const lights: { r: Run; u0: number; u1: number; y: number; k: number }[] = [];
     if (windows) {
       for (const r of mainRuns) {
@@ -1749,6 +1778,7 @@ export class Campus {
     const bSkin = new G();
     const bCap = new G();
     const bCoping = new G();
+    dressed(bCap, bCoping);
     const roofs = new G();
     const plant = new G().color(0x8e9399);
     const r0 = T.rng(5);

@@ -1,4 +1,11 @@
-import type { Material, MeshPhysicalMaterial, MeshStandardMaterial, Texture, WebGLRenderer } from "three";
+import {
+  Color,
+  type Material,
+  type MeshPhysicalMaterial,
+  type MeshStandardMaterial,
+  type Texture,
+  type WebGLRenderer,
+} from "three";
 import { PLAIN_ROUGH } from "../furn/life-mats";
 import { libMaterial } from "../look/life-matlib";
 import { LIBRARY, type MatId } from "../look/life-matlib-list";
@@ -65,6 +72,46 @@ export function libRelief(m: MeshStandardMaterial, id: MatId, repeat: [number, n
       c.repeat.set(repeat[0], repeat[1]);
       return c;
     };
+    m.normalMap = own(lib.normalMap);
+    m.normalScale.set(def.normal, def.normal);
+    m.roughnessMap = own(lib.roughnessMap);
+    m.roughness = def.roughness;
+    m.needsUpdate = true;
+  });
+  m.addEventListener("dispose", () => lib.dispose());
+}
+
+/** (plan 73 phase 7.3) The mean colour of a self-coloured library material's albedo (sRGB, measured from
+ *  tools/art/life/materials.mts): a colour over it divided by this keeps its tone. */
+export const LIB_MEAN: Partial<Record<MatId, number>> = {
+  concrete: 0xa39f9a,
+  brick: 0x9e664f,
+  "roof-slate": 0x53585f,
+  pine: 0xd4ad74,
+};
+/** `hex` as a tint over the library material `id`: its colour against the material's own mean. */
+export function tintOver(id: MatId, hex: number): Color {
+  const c = new Color(hex);
+  const m = new Color(LIB_MEAN[id] ?? 0xffffff);
+  return c.setRGB(c.r / m.r, c.g / m.g, c.b / m.b);
+}
+/** (plan 73 phase 7.3) A plain-coloured material dressed in the library's `id` — its albedo, relief and
+ *  roughness — its colour kept as the tone (`tintOver`; or `o.tint`'s, a painting's own colour it
+ *  replaces); its UVs `o.k` metres a unit (1: in metres). */
+export function libDress(m: MeshStandardMaterial, id: MatId, o: { tint?: number; k?: number } = {}): void {
+  if (!renderer || !("roughness" in m)) return;
+  const lib = libMaterial(id, renderer);
+  const def = LIBRARY[id];
+  const r = (o.k ?? 1) / def.metres;
+  m.color.copy(tintOver(id, o.tint ?? m.color.getHex()));
+  void (lib.userData.loaded as Promise<unknown>).then(() => {
+    const own = (t: Texture | null) => {
+      if (!t) return null;
+      const c = t.clone();
+      c.repeat.set(r, r);
+      return c;
+    };
+    m.map = own(lib.map);
     m.normalMap = own(lib.normalMap);
     m.normalScale.set(def.normal, def.normal);
     m.roughnessMap = own(lib.roughnessMap);

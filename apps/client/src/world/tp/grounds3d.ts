@@ -108,7 +108,9 @@ import {
   Vector3,
 } from "three";
 import { hexOf, houseLook, shopLook } from "../grounds-look";
+import { LIBRARY, type MatId } from "../look/life-matlib-list";
 import { litMaterial } from "../look/lit";
+import { isLifeBuild } from "../look/look-mode";
 import {
   BARE_LEAVES,
   BIRCH_LEAVES,
@@ -125,6 +127,7 @@ import {
   tinted,
   type V,
 } from "./campus";
+import { kitMaterial, libDress, libRelief, tintOver } from "./kit-mats";
 import { landAround, SURF } from "./land-block";
 import { beam, railing, truss } from "./landmarks3d";
 import { lotDressing, lotPaintCanvas, lotSignCanvas } from "./lot3d";
@@ -2767,13 +2770,31 @@ export class Grounds3 {
     const P = (u: number, yy: number, v: number): V => (alongX ? [u, yy, v] : [v, yy, u]);
     const [u0, u1] = alongX ? [x0 - over, x1 + over] : [z0 - over, z1 + over];
     const [v0, v1, vm] = alongX ? [z0, z1, zm] : [x0, x1, xm];
+    // (the life look: the slopes in the library's slate, their own mesh — UVs along the eave and up the
+    // slope in metres, the roof's colour its tone; plan 73 phase 7.3)
+    const slates = isLifeBuild() ? new G() : null;
     for (const [va, vw, s] of [
       [v0 - over, v0, -1],
       [v1 + over, v1, 1],
     ] as const) {
       const out: V = P(0, 0, s);
       g.color(roof);
-      face(g, P(u0, y, va), P(u1, y, va), P(u1, y + rise, vm), P(u0, y + rise, vm), [out[0] * 0.6, 1, out[2] * 0.6]);
+      const sl = (slates ?? g).color(slates ? tintOver("roof-slate", roof).getHex() : roof);
+      const top = Math.hypot(rise, Math.abs(vm - va));
+      face(
+        sl,
+        P(u0, y, va),
+        P(u1, y, va),
+        P(u1, y + rise, vm),
+        P(u0, y + rise, vm),
+        [out[0] * 0.6, 1, out[2] * 0.6],
+        [
+          [u0, 0],
+          [u1, 0],
+          [u1, top],
+          [u0, top],
+        ],
+      );
       // the soffit under the overhang, the fascia board along the eave
       g.color(soffit);
       face(g, P(u0, y - 0.15, va), P(u1, y - 0.15, va), P(u1, y - 0.15, vw), P(u0, y - 0.15, vw), [0, -1, 0]);
@@ -2809,6 +2830,25 @@ export class Grounds3 {
       const k = u === (alongX ? x0 : z0) ? -1 : 1;
       face(g, P(u, y, v0), P(u, y, v1), P(u, y + rise, vm), P(u, y + rise, vm), P(k, 0, 0));
     }
+    if (slates) this.add(slates.build(), this.slateMat());
+  }
+  // (plan 73 phase 7.3) the town's roofs' slate, one material for all of them (their tones in their vertices)
+  private slate: Material | null = null;
+  private slateMat(): Material {
+    if (!this.slate) {
+      this.slate = kitMaterial("roof-slate");
+      this.keep(this.slate);
+    }
+    return this.slate;
+  }
+  /** (plan 73 phase 7.3) A wall's painting (siding, brick, corrugated metal) with the library's `id` relief
+   *  and sheen over it, its UVs `k` metres a repeat — once a material (they're shared). */
+  private relief<M extends Material>(m: M, id: MatId, k: number): M {
+    if (!isLifeBuild() || m.userData.relief) return m;
+    m.userData.relief = true;
+    const r = k / LIBRARY[id].metres;
+    libRelief(m as unknown as Parameters<typeof libRelief>[0], id, [r, r]);
+    return m;
   }
   private litWindow(
     x: number,
@@ -3089,7 +3129,7 @@ export class Grounds3 {
       );
     };
     box(b.x0, b.z0, b.x1, b.z1);
-    this.add(walls.build(), this.lambert(0xffffff, siding));
+    this.add(walls.build(), this.relief(this.lambert(0xffffff, siding), "pine", 3));
     const roof = new G();
     this.pitched(roof, b.x0, b.z0, b.x1, b.z1, y0 + H, 2.4, true, 0x3b3530, 0.5, 0x6e2a22);
     // the big doors to the water, white trim
@@ -3136,7 +3176,7 @@ export class Grounds3 {
       [1, 0, 0],
       [U(0, 0), U(b.z1 - b.z0, 0), U(b.z1 - b.z0, H), U(0, H)],
     );
-    this.add(g.build(), this.lambert(0xffffff, metal));
+    this.add(g.build(), this.relief(this.lambert(0xffffff, metal), "metal-brushed", 2));
     const r = new G();
     r.color(0x5d6267).box(b.x0 - 0.4, y0 + H - 0.05, b.z0 - 0.4, b.x1 + 0.4, y0 + H + 0.15, b.z1 + 0.4);
     flatSnow(r, b.x0 - 0.38, b.z0 - 0.38, b.x1 + 0.38, b.z1 + 0.38, y0 + H + 0.15, 0.4, groundsRng(b.x0 * 5 + 2));
@@ -3262,7 +3302,7 @@ export class Grounds3 {
         g.quad(k0, k1, r, r, n);
       }
     }
-    this.add(g.build(), this.lambert(0xffffff, siding, false));
+    this.add(g.build(), this.relief(this.lambert(0xffffff, siding, false), "pine", 3));
     const r = new G();
     // the stone foundation (the doorway's gap kept)
     r.color(0x8a8780);
@@ -3498,7 +3538,7 @@ export class Grounds3 {
       H - 0.45,
       door ? { face: "n", from: door.from + 0.3, to: door.to - 0.3, h: 2.0 } : undefined,
     );
-    this.add(g.build(), this.lambert(0xffffff, siding, false));
+    this.add(g.build(), this.relief(this.lambert(0xffffff, siding, false), "pine", 3));
     const r = new G();
     this.pitched(r, b.x0, b.z0, b.x1, b.z1, y0 + H, 3, true, 0x3a3f45, 0.55, 0xe3dccb);
     const t = 0xf2eee6;
@@ -3916,7 +3956,17 @@ export class Grounds3 {
     const Hf = falseFront ? H + 1.4 : H;
     const g = new G();
     this.wallsUV(g, b, y0, H, 4, falseFront ? { side: b.face, Hf } : undefined);
-    this.add(g.build(), this.lambert(0xffffff, wall, false));
+    // (brick: the library's in its painted colour — the painting's courses can't meet the library's relief;
+    // as the building's walls, plan 73 phase 7.0)
+    const wm = this.lambert(0xffffff, wall, false);
+    if (brick && isLifeBuild() && !wm.userData.relief) {
+      wm.userData.relief = true;
+      libDress(wm as unknown as Parameters<typeof libDress>[0], "brick", {
+        tint: new Color(b.tint ?? L.wall).getHex(),
+        k: 4,
+      });
+    }
+    this.add(g.build(), brick ? wm : this.relief(wm, "pine", 4));
     const c = new G();
     // the top: a cornice with dentils (brick), a capped false front with a raised middle (clapboard),
     // a plain coping (civic, the diner)
@@ -4388,7 +4438,7 @@ export class Grounds3 {
     const { x0, z0, x1, z1 } = b;
     const g = new G();
     this.wallsUV(g, b, y0, H, 3);
-    this.add(g.build(), this.lambert(0xffffff, siding, false));
+    this.add(g.build(), this.relief(this.lambert(0xffffff, siding, false), "pine", 3));
     const r = new G();
     const wallHex = new Color(hex).getHex();
     // the roof: along the street (a side gable) or end on to it (a front gable)
@@ -4582,7 +4632,7 @@ export class Grounds3 {
     const { x0, z0, x1, z1 } = b;
     const g = new G();
     this.wallsUV(g, b, y0, H, 3);
-    this.add(g.build(), this.lambert(0xffffff, siding, false));
+    this.add(g.build(), this.relief(this.lambert(0xffffff, siding, false), "pine", 3));
     const r = new G();
     this.pitched(r, x0, z0, x1, z1, y0 + H, 6, false, 0x2f343a, 0.5, 0xecebe5);
     const xm = (x0 + x1) / 2;
