@@ -27,7 +27,7 @@ describe("covers", () => {
     assert.equal(covers(TEE, ARM, 0.8, 11, 0, 4, LM), false);
     // (in the neck's hole — high and near its axis — and its front scoop)
     assert.equal(covers(TEE, TORSO, 0, 14.4, 0, 0.6, LM), false);
-    assert.equal(covers(TEE, TORSO, 0, 13.6, 1, 0.8, LM), false);
+    assert.equal(covers(TEE, TORSO, 0, 13.6, 1, 0.6, LM), false);
     // (out on the shoulders, as high: covered)
     assert.equal(covers(TEE, TORSO, 0, 14.4, 0, 1.8, LM), true);
     assert.equal(covers(TEE, HEAD, 0, 16, 0, 0.5, LM), false);

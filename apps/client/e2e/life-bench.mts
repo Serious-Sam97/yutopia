@@ -141,6 +141,12 @@ const SHOTS: [string, string][] = [
     "w5-hairs-woman-b",
     "who=woman&near=1&wear=tee,jeans,sneakers,hair-bob02|tee,jeans,sneakers,hair-braid|tee,jeans,sneakers,hair-bob02|tee,jeans,sneakers,hair-bun&t=2.4&spin=-20",
   ],
+  // (5.1: the cloth close — the library's weave on the made garments; the necklines)
+  [
+    "w51-cloth-man",
+    "who=man&near=1&wear=sweater,jeans,boots,hair-short04|shirt,jeans,sneakers,hair-short01&t=2.4&spin=20",
+  ],
+  ["w51-cloth-woman", "who=woman&near=1&wear=tank,skirt,sneakers,hair-bob01|dress,boots,hair-long&t=2.4&spin=-20"],
   // (the beard and the long hair, close)
   ["w5-beard", "who=man&face=man&wear=shirt,jeans,sneakers,hair-short04,beard-beard&t=2.4&spin=15"],
   ["w5-beard-threeq", "who=man&face=man&wear=shirt,jeans,sneakers,hair-short04,beard-beard&t=2.4&spin=45"],

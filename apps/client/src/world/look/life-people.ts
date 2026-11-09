@@ -35,6 +35,8 @@ import {
 } from "three";
 import { JOINTS, type JointName, PARENT } from "../chars/rig";
 import { loadLifeGLTF } from "./life-assets";
+import { libMaterial } from "./life-matlib";
+import { LIBRARY, type MatId } from "./life-matlib-list";
 import { bodyIndex, isHair, patternPiece, roleOf, type WearLm, type WearPattern, type WearSpec } from "./life-wear";
 import type { Piece, Shader } from "./yulit";
 
@@ -451,6 +453,8 @@ export interface LifeWorn {
   names: string[];
   wear: LifeBase;
   pattern?: WearPattern;
+  /** (to draw the garments in the material library's cloth — without it, plain) */
+  renderer?: WebGLRenderer;
 }
 
 /** The body's geometry for an outfit: its own attributes, its index without the skin under it (and,
@@ -646,8 +650,16 @@ export function lifeBody(base: LifeBase, a: AvatarLayers | null, worn: LifeWorn 
       // (a made garment: the avatar's colour for what it is; a top's pattern in it and the bottom's)
       const r = roleOf(p.name);
       const hex = r === "top" ? a.topColor : r === "shoes" ? a.shoesColor : a.bottomColor;
-      // (the CC0 shoes are textured: their file's colour × the avatar's, as the file's own shoes)
-      tint(new Color(hex).multiplyScalar(r === "shoes" ? 1 : 0.85));
+      const fabric = worn?.wear.wear[p.name.replace(/^wear-/, "")]?.fabric as MatId | undefined;
+      if (fabric && worn?.renderer && fabric in LIBRARY) {
+        // (in the library's cloth — its weave by the garment's UVs in metres — in their colour)
+        material = libMaterial(fabric, worn.renderer, { color: new Color(hex).multiplyScalar(0.85) });
+        material.name = p.name;
+        mine.push(material);
+      } else {
+        // (the CC0 shoes are textured: their file's colour × the avatar's, as the file's own shoes)
+        tint(new Color(hex).multiplyScalar(r === "shoes" ? 1 : 0.85));
+      }
       if (r === "top" && worn?.pattern && worn.pattern !== "plain") {
         givePiece(
           material,

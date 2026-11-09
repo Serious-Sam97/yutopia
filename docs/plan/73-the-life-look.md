@@ -602,6 +602,17 @@ of them in batches).
     back; a sweater's hem lets the jeans' waistband through at the back; the cloth is flat (no weave yet); the hands
     sink into a flared skirt (the arms hang straight).
 - **5.1** The garment pipeline from the sign-off's notes; a cloth weave (the material library's fabric).
+  Built 2026-11-09: each garment is drawn in a library cloth (`fabric`: linen, twill for denim and the
+  parka, boucle for the sweater and the beanie, tweed for the skirt) under the avatar's colour — its UVs
+  made in metres at build time (`wear.py uv_metres`: round each limb by along it, round the body by
+  height, a face across the wrap unwrapped), `lifeBody`'s `worn.renderer` taking `libMaterial`.
+  Necklines a U (rising 0.6 dm from the neck's axis out to the collar, capped 0.1 dm under the neck
+  joint — risen further, the cloth climbed the neck in spikes). A skirt's top off the body's own rows
+  (carried up, the seat's bulge stood the waistband off the back); the long skirt flared more (its
+  back opened walking). A bottom's waistband thin down past the seat (it came through the sweater at
+  the back). Tried and put back: the dress's top to the hips with its skirt from there — slits opened
+  at the back of the waist; its small step at the back stays. Left: the bun is a plain shell; two dots
+  of the jeans through the shirt's back.
 - **5.2** All the wardrobe's tops, bottoms, outerwear, shoes and hats, in batches (stills each).
 - **5.3** All the hairs and beards, in batches.
 - **5.4** The avatar's wardrobe (plan 60's options, second colours, patterns) → what's worn.

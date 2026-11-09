@@ -138,7 +138,7 @@ export async function loadLifePerson(
   worn: Omit<LifeWorn, "wear"> | null = null,
 ): Promise<LifePerson> {
   const gender: LifeGender = /woman/.test(url) ? "woman" : "man";
-  const w = worn ? { ...worn, wear: await lifeWear(gender, renderer) } : null;
+  const w = worn ? { ...worn, wear: await lifeWear(gender, renderer), renderer } : null;
   return new LifePerson(await loadLifeBase(url, renderer, gender), avatar, w);
 }
 

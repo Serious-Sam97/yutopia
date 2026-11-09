@@ -660,7 +660,9 @@ if WEAR:
             low = sorted({v for f in kept2 for v in f})
             Q[low] = Q2[low]
             kept = kept + kept2
-        parts.append((f"wear-{g}", Q, np.zeros((len(V), 2)), [(f, f, "wear") for f in kept], W, None))
+        # (UVs in metres: the cloth's weave, the material library's — wear.py uv_metres)
+        GUV, gts = WR.uv_metres(Q, kept, ZONES, LM)
+        parts.append((f"wear-{g}", Q, GUV, [(f, ft, "wear") for f, ft in zip(kept, gts, strict=True)], W, None))
         part_shapes[f"wear-{g}"] = {}
         SRC[f"wear-{g}"] = np.arange(len(V))
         print(f"  wear-{g}: {len(kept)} faces")

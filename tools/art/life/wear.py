@@ -16,28 +16,29 @@ import numpy as np
 # (landmarks: "hip", "waist", "crotch", "neck", "knee", "ankle"; plus an offset, dm); `neck` how far
 # below the neck joint the neckline sits at the back, `scoop` how much lower in front; `thick` off the
 # body (dm) — a top thicker than the bottoms it's worn over, so it lies over their waistband; a skirt
-# (`helper: skirt`) hangs off the hips' own shape, flared by `aline` (dm out per dm down)
+# (`helper: skirt`) hangs off the hips' own shape, flared by `aline` (dm out per dm down); `fabric` the
+# material library's cloth it's drawn in (look/life-matlib-list.ts), its UVs in metres round the body
 GARMENTS = {
     # tops
-    "tee": {"helper": "tights", "sleeve": 0.42, "hem": ("hip", -0.35), "neck": 0.45, "scoop": 0.35, "thick": 0.09},
-    "shirt": {"helper": "tights", "sleeve": 1.93, "hem": ("hip", -0.45), "neck": 0.3, "scoop": 0.55, "thick": 0.1},
-    "sweater": {"helper": "tights", "sleeve": 1.95, "hem": ("hip", -0.15), "neck": 0.3, "scoop": 0.2, "thick": 0.14},
-    "tank": {"helper": "tights", "sleeve": 0.02, "hem": ("hip", -0.3), "neck": 0.55, "scoop": 0.6, "thick": 0.08},
+    "tee": {"fabric": "linen", "helper": "tights", "sleeve": 0.42, "hem": ("hip", -0.35), "neck": 0.45, "scoop": 0.35, "thick": 0.09},
+    "shirt": {"fabric": "linen", "helper": "tights", "sleeve": 1.93, "hem": ("hip", -0.45), "neck": 0.3, "scoop": 0.55, "thick": 0.1},
+    "sweater": {"fabric": "boucle", "helper": "tights", "sleeve": 1.95, "hem": ("hip", -0.15), "neck": 0.3, "scoop": 0.2, "thick": 0.14},
+    "tank": {"fabric": "linen", "helper": "tights", "sleeve": 0.02, "hem": ("hip", -0.3), "neck": 0.55, "scoop": 0.6, "thick": 0.08},
     # bottoms
-    "jeans": {"helper": "tights", "legs": 1.96, "top": ("waist", -0.25), "thick": 0.06, "loose": 0.12},
-    "shorts": {"helper": "tights", "legs": 0.55, "top": ("waist", -0.25), "thick": 0.07},
-    "leggings": {"helper": "tights", "legs": 1.98, "top": ("waist", -0.15), "thick": 0.03},
+    "jeans": {"fabric": "twill", "helper": "tights", "legs": 1.96, "top": ("waist", -0.25), "thick": 0.06, "loose": 0.12},
+    "shorts": {"fabric": "twill", "helper": "tights", "legs": 0.55, "top": ("waist", -0.25), "thick": 0.07},
+    "leggings": {"fabric": "linen", "helper": "tights", "legs": 1.98, "top": ("waist", -0.15), "thick": 0.03},
     # skirts: off the hips, flared below them; over a top's hem (a top's tucked in: its thickness under)
-    "skirt": {"helper": "skirt", "hem": ("knee", 0.6), "top": ("waist", -0.25), "thick": 0.14, "aline": 0.12},
-    "longskirt": {"helper": "skirt", "hem": ("ankle", 1.2), "top": ("waist", -0.25), "thick": 0.14, "aline": 0.1},
+    "skirt": {"fabric": "tweed", "helper": "skirt", "hem": ("knee", 0.6), "top": ("waist", -0.25), "thick": 0.14, "aline": 0.12},
+    "longskirt": {"fabric": "linen", "helper": "skirt", "hem": ("ankle", 1.2), "top": ("waist", -0.25), "thick": 0.14, "aline": 0.16},
     # a dress: a top, and a skirt from the hips (`skirt`: a second piece off the skirt's cone)
-    "dress": {"helper": "tights", "sleeve": 0.22, "hem": ("hip", 0.25), "neck": 0.5, "scoop": 0.4, "thick": 0.08,
+    "dress": {"fabric": "linen", "helper": "tights", "sleeve": 0.22, "hem": ("hip", 0.25), "neck": 0.5, "scoop": 0.4, "thick": 0.08,
               "skirt": {"helper": "skirt", "top": ("hip", 0.5), "hem": ("knee", 0.35), "thick": 0.12, "aline": 0.14}},
     # the outer layer: over a top, thicker, its skirt to mid-thigh
-    "parka": {"helper": "tights", "sleeve": 1.98, "hem": ("hip", -0.1), "neck": 0.05, "scoop": 0.15, "thick": 0.28,
+    "parka": {"fabric": "twill", "helper": "tights", "sleeve": 1.98, "hem": ("hip", -0.1), "neck": 0.05, "scoop": 0.15, "thick": 0.28,
               "skirt": {"helper": "skirt", "top": ("hip", 0.5), "hem": ("knee", 1.4), "thick": 0.3, "aline": 0.2}},
     # on the head: the scalp's shell (the body's own head, above the brows), over the hair
-    "beanie": {"helper": "head", "above": 0.35, "thick": 0.1},
+    "beanie": {"fabric": "boucle", "helper": "head", "above": 0.35, "thick": 0.1},
     # the CC0 shoes (MakeHuman's own, fitted as any part): only what they hide
     "sneakers": {"cc0": "clothes/shoes05/shoes05", "below": ("ankle", 0.15)},
     "boots": {"cc0": "clothes/shoes03/shoes03", "below": ("ankle", 1.5)},
@@ -118,11 +119,16 @@ def level(J, name):
 
 
 COLLAR = 1.0  # the neck's hole: this far round the neck's axis (dm) at most — the shoulders stay
+NECK_RISE = 0.6  # how far the neckline rises (dm) from the neck's axis out to the collar: a U
 
 
-def neckline(spec, J, front):
-    """The neckline's height at each vertex: `neck` below the neck joint, `scoop` lower in front."""
-    return J["neck"][1] - spec.get("neck", 0) - spec.get("scoop", 0) * np.clip(front, 0, 1)
+def neckline(spec, J, front, rad):
+    """The neckline's height at each vertex: `neck` below the neck joint, `scoop` lower in front, rising
+    in a curve away from the neck's axis (a U, not a square hole cut round the neck)."""
+    k = np.clip((rad - 0.55) / (spec.get("collar", COLLAR) - 0.55), 0, 1)
+    line = J["neck"][1] - spec.get("neck", 0) - spec.get("scoop", 0) * np.clip(front, 0, 1) + NECK_RISE * k * k
+    # (never up the neck itself: risen further, the cloth climbed its sides in spikes)
+    return np.minimum(line, J["neck"][1] - 0.1)
 
 
 def covers(spec, Z, J, m_t=M_T, m_y=M_Y):
@@ -146,8 +152,7 @@ def covers(spec, Z, J, m_t=M_T, m_y=M_Y):
         return torso & (y >= hem + m_y) & (y <= top - m_y)
     out = torso & (y >= hem + m_y) & (y <= top - m_y)
     if "neck" in spec:
-        hole = (y > neckline(spec, J, front) - m_y) & (rad < spec.get("collar", COLLAR) + m_y)
-        out &= ~hole
+        out &= ~((y > neckline(spec, J, front, rad) - m_y) & (rad < spec.get("collar", COLLAR) + m_y))
     sleeve = spec.get("sleeve")
     if sleeve is not None:
         out |= arm & (t <= sleeve - m_t)
@@ -180,7 +185,7 @@ def make(spec, V, F0, ow, ALL, J, outward, Z, hair=None):
     Q = V.copy()
     hem = level(J, spec["hem"]) if "hem" in spec else None
     top = level(J, spec["top"]) if "top" in spec else None
-    neck = neckline(spec, J, front) if "neck" in spec else None
+    neck = neckline(spec, J, front, rad) if "neck" in spec else None
     for v in boundary(kept):
         k = kind[v]
         if spec["helper"] == "head":
@@ -210,6 +215,11 @@ def make(spec, V, F0, ow, ALL, J, outward, Z, hair=None):
     # aren't tights; most at the knee and below)
     N = outward(Q, normals(Q, kept))
     th = np.full(len(V), float(spec["thick"]))
+    # (a bottom's waistband thin: a top's hem lies over it — at the back it came through a sweater)
+    if spec.get("legs") is not None and "top" in spec:
+        # (down past the seat: a top's hem falls to it)
+        band = np.clip((level(J, spec["top"]) - y - 1.6) / 0.8, 0, 1)
+        th = np.minimum(th, 0.03 + (th - 0.03) * band)
     if spec.get("loose"):
         legv = (kind == LEG_L) | (kind == LEG_R)
         # (none at the hips: there a top's hem lies over it)
@@ -240,6 +250,7 @@ def aline(spec, S, V, F0, Z, J, faces):
     np.maximum.at(hull, (ab, yb), rad(T))
     # (neighbouring angles too: a bin the mesh's lines missed)
     hull = np.maximum(hull, np.maximum(np.roll(hull, 1, 0), np.roll(hull, -1, 0)) * 0.97)
+    raw = hull.copy()
     # (and heights: a row the mesh's lines missed let a top's hem through the skirt)
     for _ in range(2):
         up, down = np.roll(hull, 1, 1), np.roll(hull, -1, 1)
@@ -249,7 +260,9 @@ def aline(spec, S, V, F0, Z, J, faces):
     a = ang(S)
     sb = ((a + np.pi) / (2 * np.pi) * NB).astype(int) % NB
     syb = np.clip(((S[:, 1] - y0) / DY).astype(int), 0, nyb - 1)
-    r_body = hull[sb, syb]
+    # (near its top the body's own rows: carried up, the seat's bulge stood the waistband off the back)
+    near_top = np.clip((S[:, 1].max() - S[:, 1]) / 0.5, 0, 1)
+    r_body = raw[sb, syb] * (1 - near_top) + hull[sb, syb] * near_top
     # the hips' widest: the bin row (from the skirt's top down to the crotch) of the largest mean radius
     lo = int((J["crotch"][1] - y0) / DY)
     hi = int((S[:, 1].max() - y0) / DY)
@@ -289,3 +302,34 @@ def over(S, hair, gap=0.06):
     near = np.where(cos > np.cos(np.radians(12)), rh[None, :], 0).max(1)
     r = np.maximum(rs, near + gap)
     return c + u * r[:, None]
+
+
+def uv_metres(Q, faces, Z, J):
+    """A garment's UVs in metres (its cloth's weave the same size everywhere): round each limb by along
+    it, or round the body by height; per corner, a face across the wrap round unwrapped.
+    → (uvs, each face's uv indices)"""
+    kind = Z[0]
+    cx = (J["hipL"][0] + J["hipR"][0]) / 2
+    cz = (J["hipL"][2] + J["hipR"][2]) / 2
+    axes = {}
+    for k, (a, b) in {1: ("shoulderL", "wristL"), 2: ("shoulderR", "wristR"), 3: ("hipL", "ankleL"), 4: ("hipR", "ankleR")}.items():
+        A, B = np.asarray(J[a]), np.asarray(J[b])
+        ax = (B - A) / np.linalg.norm(B - A)
+        e1 = np.cross(ax, [0, 0, 1.0])
+        e1 /= np.linalg.norm(e1)
+        axes[k] = (A, ax, e1, np.cross(ax, e1), 0.45 if k <= 2 else 0.7)
+    uvs, fts = [], []
+    for f in faces:
+        ks = [int(kind[v]) for v in f]
+        k = max(set(ks), key=ks.count)
+        if k in axes:
+            A, ax, e1, e2, r = axes[k]
+            d = Q[f] - A
+            ang, v = np.arctan2(d @ e2, d @ e1), -(d @ ax)
+        else:
+            ang, v, r = np.arctan2(Q[f, 0] - cx, Q[f, 2] - cz), Q[f, 1], 1.4
+        u = np.unwrap(ang) * r
+        base = len(uvs)
+        uvs += [(u[i] * 0.1, v[i] * 0.1) for i in range(len(f))]
+        fts.append(list(range(base, base + len(f))))
+    return np.array(uvs), fts

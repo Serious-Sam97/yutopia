@@ -29,6 +29,8 @@ export interface WearSpec {
   above?: number;
   below?: [string, number];
   cc0?: string;
+  /** the material library's cloth it's drawn in (its UVs in metres) */
+  fabric?: string;
   /** a CC0 hair: hides no skin */
   hair?: boolean;
   /** a second piece off the skirt's cone (a dress's, a coat's) */
@@ -46,6 +48,7 @@ const HEAD = 5;
 const M_T = 0.15;
 const M_Y = 0.35;
 const COLLAR = 1.0;
+const NECK_RISE = 0.6;
 
 const level = (lm: WearLm, l: [string, number]) => (lm[l[0]]?.[1] ?? 0) + l[1];
 
@@ -74,7 +77,13 @@ export function covers(
   if (kind === TORSO) {
     if (y < hem + my || y > top - my) return false;
     if (spec.neck !== undefined) {
-      const line = (lm.neck?.[1] ?? 0) - spec.neck - (spec.scoop ?? 0) * Math.min(1, Math.max(0, front));
+      // (a U: rising away from the neck's axis, wear.py neckline)
+      const k = Math.min(1, Math.max(0, (rad - 0.55) / ((spec.collar ?? COLLAR) - 0.55)));
+      const ny = lm.neck?.[1] ?? 0;
+      const line = Math.min(
+        ny - spec.neck - (spec.scoop ?? 0) * Math.min(1, Math.max(0, front)) + NECK_RISE * k * k,
+        ny - 0.1,
+      );
       if (y > line - my && rad < (spec.collar ?? COLLAR) + my) return false;
     }
     return true;
