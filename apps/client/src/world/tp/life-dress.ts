@@ -17,6 +17,11 @@ export const lifeDress: {
   tintOver?: (id: string, hex: number) => Color;
   /** a kit material by its name: its vertex colours through it */
   material?: (name: string) => Material;
+  /** (phase 8) the life look's outdoors (look-mode.ts isLifeOut), as kit-mats saw it at load */
+  out?: boolean;
+  /** (phase 8) the library's `id` relief and roughness laid on a ground's up-facing faces by where they
+   *  are (their own UVs are their painting's): through the Grounds' per-material hook (`userData.grounds`) */
+  ground?: (m: Material, id: string) => void;
   /** a plain surface of the library's `id` (UVs in metres), its colour `tint` */
   surface?: (id: string, tint: number) => Material;
 } = {};

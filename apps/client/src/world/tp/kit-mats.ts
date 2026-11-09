@@ -10,9 +10,10 @@ import { PLAIN_ROUGH } from "../furn/life-mats";
 import { libMaterial } from "../look/life-matlib";
 import { LIBRARY, type MatId } from "../look/life-matlib-list";
 import { adoptLife, litMaterial } from "../look/lit";
-import { isLifeBuild } from "../look/look-mode";
+import { isLifeBuild, isLifeOut } from "../look/look-mode";
 import type { Piece } from "../look/yulit";
 import { lifeDress } from "./life-dress";
+import { wx } from "./wx3d";
 
 // Plan 73 phase 6 — the kit's materials in the life look (furn/life-mats.ts KIT_MATS): a library
 // material (its textures; the parts' colours multiplied through it) or a plain finish of its own
@@ -22,7 +23,60 @@ let renderer: WebGLRenderer | null = null;
 /** The renderer the library's textures load through (the view's, at start in the life look). */
 export function setKitRenderer(r: WebGLRenderer | null): void {
   renderer = r;
+  // (plan 73 phase 8: the land's green, its detail the library's grass — the snow's layer, wx3d.ts)
+  if (r && isLifeOut()) {
+    const grass = libMaterial("grass", r);
+    void (grass.userData.loaded as Promise<unknown>).then(() => {
+      wx.wxGrass.value = grass.map;
+      wx.wxGrassMean.value = GRASS_MEAN;
+    });
+  }
 }
+// (the library's grass's mean brightness as the layer reads it: its albedo's, linear — measured)
+const GRASS_MEAN = 0.12;
+
+/** (plan 73 phase 8) A ground's material (its painting kept: a road's verges and tracks, a pavement's
+ *  joints) with the library's `id` relief and roughness on its up-facing faces, by where they are — its
+ *  own UVs a quad each. Through the Grounds' hook (`userData.grounds`, light3d.ts patchGrounds and the
+ *  floor's light), after what it had. */
+export function groundRelief(m: Material, id: MatId): void {
+  if (!renderer || !("roughness" in m)) return;
+  const lib = libMaterial(id, renderer);
+  const def = LIBRARY[id];
+  const nmap = { value: lib.normalMap };
+  const orm = { value: lib.roughnessMap };
+  void (lib.userData.loaded as Promise<unknown>).then(() => {
+    nmap.value = lib.normalMap;
+    orm.value = lib.roughnessMap;
+  });
+  m.addEventListener("dispose", () => lib.dispose());
+  const prev = m.userData.grounds as { patch: (sh: Shader) => void; key: string } | undefined;
+  const at = `vec2 lrUv = ((vec4(-vViewPosition, 0.0) * viewMatrix).xyz + cameraPosition).xz / ${def.metres.toFixed(3)};
+  float lrUp = smoothstep(0.7, 0.95, (vec4(nonPerturbedNormal, 0.0) * viewMatrix).y);`;
+  m.userData.grounds = {
+    key: `${prev?.key ?? ""}-lr-${id}`,
+    patch(sh: Shader) {
+      prev?.patch(sh);
+      sh.uniforms.lrNormal = nmap;
+      sh.uniforms.lrOrm = orm;
+      sh.fragmentShader = sh.fragmentShader
+        .replace("#include <common>", "#include <common>\nuniform sampler2D lrNormal;\nuniform sampler2D lrOrm;")
+        .replace(
+          "#include <normal_fragment_maps>",
+          `#include <normal_fragment_maps>
+{
+  ${at}
+  vec3 tn = texture2D(lrNormal, lrUv).xyz * 2.0 - 1.0;
+  vec3 wn = normalize(vec3(tn.x * ${def.normal.toFixed(3)}, tn.z, tn.y * ${def.normal.toFixed(3)}));
+  normal = normalize(mix(normal, normalize((viewMatrix * vec4(wn, 0.0)).xyz), lrUp));
+  roughnessFactor = mix(roughnessFactor, texture2D(lrOrm, lrUv).g * ${(def.roughness / 0.8).toFixed(3)}, lrUp);
+}`,
+        );
+    },
+  };
+  m.needsUpdate = true;
+}
+type Shader = { uniforms: Record<string, unknown>; fragmentShader: string };
 
 /** (plan 73 phase 7) A floor's material: the library's (its UVs in metres, `uv`), its colour `tint`, the
  *  floor's bake (its shading, thresholds and strips: art/floors.ts) multiplied over it by `bakeUv` —
@@ -157,6 +211,8 @@ lifeDress.relief = (m, id, k) => {
   libRelief(m as MeshStandardMaterial, id as MatId, [a / metres, b / metres]);
 };
 lifeDress.surface = (id, tint) => surfaceMaterial(id as MatId, tint);
+lifeDress.out = isLifeOut();
+lifeDress.ground = (m, id) => groundRelief(m, id as MatId);
 lifeDress.dress = (m, id, o) => libDress(m as MeshStandardMaterial, id as MatId, o);
 lifeDress.tintOver = (id, hex) => tintOver(id as MatId, hex);
 lifeDress.material = kitMaterial;

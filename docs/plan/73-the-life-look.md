@@ -1059,6 +1059,27 @@ Blended terrain textures (grass, dirt, the plan 65 snow layer kept), leafy trees
 remodelled, bushes, flowers, grass tufts, textured roads and sidewalks, cars and the plough/bus
 remodelled, and the long road (plan 69).
 
+Decided 2026-11-09 (the user: the whole phase without sign-offs; the calls mine, on the decisions
+already made): the ground keeps its paintings (a road's verges and tracks, a pavement's joints, the
+snow's layer and its green) with the library's relief and roughness under them, laid by where they are
+(their own UVs are a quad each); the trees keep the woods' one material and pools — new shapes, their
+leaves and needles cards from a small atlas on it; bushes, tufts and flowers the 0d mock's; the cars,
+plough and bus smoothed in clearcoat paint, chrome and glass. `?out=old`: the outdoors as they were.
+
+**Steps:** 8.0 the ground · 8.1 trees · 8.2 bushes, tufts, flowers · 8.3 cars, the plough, the bus ·
+8.4 the long road · 8.5 checks.
+
+- **8.0 The ground.** Built 2026-11-09 (`look-mode.ts isLifeOut`).
+  - **Underfoot** (`kit-mats.ts groundRelief`, through the Grounds' per-material hook
+    `userData.grounds`, after a road's cover): the library's normal and roughness by world position on
+    up-facing faces (`nonPerturbedNormal`'s up: the snow's own test untouched). Each road's asphalt and
+    the lanes' road the library's asphalt; pavements and flags the concrete's (the paving's joints made a
+    second grid over the painted ones); trails the dirt's; the lot's `a` and `c` floors (World3's bake,
+    their own groups now) asphalt and concrete.
+  - **The green** (the snow's layer, `wx3d.ts`): its detail the library's grass (`wxGrass`), over its
+    own mean (`wxGrassMean`, 0.12 for the library's; the canvas's 0.82).
+  - **Left:** the land's own relief (under the snow most of the year); the lot's cover and the banks.
+
 ### 9 — Pets
 
 Plan 51's pets in the same look.

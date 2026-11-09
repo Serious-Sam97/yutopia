@@ -1183,6 +1183,8 @@ export class Grounds3 {
           // (its own, as its picture is: with the way's step — wayStep)
           const am = this.keep(litMaterial({ map: this.asphalt(w), vertexColors: true }));
           roadCover(am, w);
+          // (the life look: the library's asphalt underfoot, after its cover — plan 73 phase 8)
+          this.worn(am, "asphalt");
           this.add(ag.build(), am, "receive");
         }
         wayDressing(w, this.roadCtx, nearLine, paint, slabs, lines);
@@ -1209,11 +1211,14 @@ export class Grounds3 {
       }
     }
     this.roadCtx.span = undefined;
-    if (!road.empty) this.add(road.build(), this.lambert(0xffffff, this.ts.road), "receive");
+    if (!road.empty) this.add(road.build(), this.worn(this.lambert(0xffffff, this.ts.road), "asphalt"), "receive");
     if (!paint.empty) this.add(paint.build(), this.lambert(), "receive");
-    if (!slabs.empty) this.add(slabs.build(), this.lambert(0xffffff, this.ts.slabs, true, "way"), "receive");
-    if (!trail.empty) this.add(trail.build(), this.lambert(0xffffff, this.ts.trail, true, "trail"), "receive");
-    if (!walk.empty) this.add(walk.build(), this.lambert(0xffffff, this.ts.walk, true, "way"), "receive");
+    if (!slabs.empty)
+      this.add(slabs.build(), this.worn(this.lambert(0xffffff, this.ts.slabs, true, "way"), "concrete"), "receive");
+    if (!trail.empty)
+      this.add(trail.build(), this.worn(this.lambert(0xffffff, this.ts.trail, true, "trail"), "dirt"), "receive");
+    if (!walk.empty)
+      this.add(walk.build(), this.worn(this.lambert(0xffffff, this.ts.walk, true, "way"), "concrete"), "receive");
     // (they only take shadows: a long low ridge's own came out jagged on the road)
     if (!banks.empty) this.add(banks.build(), this.lambert(), "receive");
     if (!only) this.waysAll();
@@ -2840,6 +2845,14 @@ export class Grounds3 {
       this.keep(this.slate);
     }
     return this.slate;
+  }
+  /** (plan 73 phase 8) A way's painting with the library's `id` underfoot (its relief and roughness by
+   *  where it is: tp/kit-mats.ts groundRelief) — once a material (they're shared). */
+  private worn<M extends Material>(m: M, id: string): M {
+    if (!lifeDress.out || m.userData.worn || !lifeDress.ground) return m;
+    m.userData.worn = true;
+    lifeDress.ground(m, id);
+    return m;
   }
   /** (plan 73 phase 7.3) A wall's painting (siding, brick, corrugated metal) with the library's `id` relief
    *  and sheen over it, its UVs `k` metres a repeat — once a material (they're shared). */

@@ -70,10 +70,10 @@ import { isNative, isNativeDress, liveInto, nativeDressInto, nativeInto, opening
 import { N_HALF, N_WALL, nativePost, nativeWall } from "../furn/walls-native";
 import type { MatId } from "../look/life-matlib-list";
 import { litMaterial } from "../look/lit";
-import { isLife, isLifeBuild } from "../look/look-mode";
+import { isLife, isLifeBuild, isLifeOut } from "../look/look-mode";
 import { CEL, fadePiece, type Piece, yuLit } from "../look/yulit";
 import { boxInParent, type Slab } from "./below-cull";
-import { floorMaterial, kitMaterial, surfaceMaterial } from "./kit-mats";
+import { floorMaterial, groundRelief, kitMaterial, surfaceMaterial } from "./kit-mats";
 import { type Geo, Out } from "./kit3d";
 import { edgesOfMap, type FreeWall, piecesOf, turnOut, type WallEdges } from "./walls3d";
 
@@ -176,6 +176,9 @@ const FLOOR_FILL: Record<string, string | readonly [string, string]> = {
   ":": "#7a3b2e",
   _: ["#f6eedb", "#ddd1b4"],
 };
+// (plan 73 phase 8: the outdoors in the life look — the lot's floor the library's underfoot)
+const OUT_TEX = isLifeOut();
+const LOT_RELIEF: Record<string, MatId> = { a: "asphalt", c: "concrete" };
 const LIVE_NEAR = 18;
 const LIVE_MAX = 64;
 
@@ -1602,7 +1605,13 @@ export class World3 {
         // shape, never by the texture's alpha: a lost canvas can't take the floor away) — in the life
         // look a run of one material, each the library's own (`FLOOR_LIB`) in a group of its own
         const groups = new Map<string, { pos: number[]; nor: number[]; uv: number[]; buv: number[] }>();
-        const libOf = (x: number, y: number) => (BUILD_TEX && FLOOR_LIB[bake.matAt(x, y)] ? bake.matAt(x, y) : "");
+        // (the lot's asphalt and concrete: painted, with the library's underfoot — their own groups,
+        // "#a" "#c"; plan 73 phase 8)
+        const libOf = (x: number, y: number) => {
+          const ch = bake.matAt(x, y);
+          if (BUILD_TEX && FLOOR_LIB[ch]) return ch;
+          return OUT_TEX && LOT_RELIEF[ch] ? `#${ch}` : "";
+        };
         for (let y = cy; y < cy + h; y++) {
           let x = cx;
           while (x < cx + w) {
@@ -1621,7 +1630,7 @@ export class World3 {
             const g = getOr(groups, lib, () => ({ pos: [], nor: [], uv: [], buv: [] }));
             g.pos.push(x, 0, y, x, 0, y + 1, x1, 0, y + 1, x, 0, y, x1, 0, y + 1, x1, 0, y);
             const cuv = [u0, v0, u0, v1, u1, v1, u0, v0, u1, v1, u1, v0];
-            if (lib) {
+            if (FLOOR_LIB[lib]) {
               // (the library's: metres across the plan; the bake's: the chunk's canvas)
               const k = FLOOR_LIB[lib][2];
               g.uv.push(...[x, y, x, y + 1, x1, y + 1, x, y, x1, y + 1, x1, y].map((q) => q * k));
@@ -1648,9 +1657,11 @@ export class World3 {
           pos.push(...g.pos);
           nor.push(...g.nor);
           uv.push(...g.uv);
-          buv.push(...(lib ? g.buv : g.uv));
-          const spec = lib ? FLOOR_LIB[lib] : null;
+          const spec = FLOOR_LIB[lib] ?? null;
+          buv.push(...(spec ? g.buv : g.uv));
           const m = spec ? floorMaterial(spec[0], tex, spec[1]) : litMaterial({ map: tex });
+          const worn = LOT_RELIEF[lib.slice(1)];
+          if (!spec && worn) groundRelief(m, worn);
           this.light(m);
           geo.addGroup(at, g.pos.length / 3, mats.length);
           mats.push(m);
