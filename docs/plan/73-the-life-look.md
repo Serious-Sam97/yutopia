@@ -1167,6 +1167,25 @@ Built 2026-11-09 (the whole phase without sign-offs; `look-mode.ts isLifePets`, 
 Furnish thumbnails, wardrobe and character pictures, and the minimap's art redrawn from the new
 models.
 
+Built 2026-11-09 (the whole phase without sign-offs).
+- **The Furnish panel's pictures** (`furn/pictures.ts renderLife`): in the life look the kit's things
+  drawn as the world draws them — their buckets in the library's materials (`Out(true)`), the live parts,
+  a board's words — under Khronos PBR Neutral's curve, no ink post; a sky of the pictures' renderer's own
+  (`skyOf`: the game's is the game's renderer's) on one of each kit material (`lifeMat`, `ownSky`). A
+  picture's kept for the session, so they wait for the library's textures first (`ready()`, 8 s at
+  most: `components/hud/build/thumbs.tsx`).
+- **`look/lit.ts ownSky`**: a life material another renderer draws leaves the game's sky's registry (it'd
+  be given the game's sky back as the hour changed) — the pets' pictures too.
+- **The pets' pictures** (`art/pets-render.ts`): no sky and no fur (a picture that small only speckled
+  with it). And the fur in the world measured at each part's real size (`modelMatrix`'s scale): unscaled,
+  a big body's came out in blotches, a small head's glittered; gone sooner as it nears a pixel.
+- **The people's and the wardrobe's pictures** were the life look's already (phases 4.5 and 5).
+- **The minimap** stays the HUD's (plan 45's manuscript: its plan's flat colours by floor, its ink): the
+  HUD's own question (open question 2).
+- Stills: `e2e/life-thumbs.mts` (build mode's Furnish tab; `PETS=1` the pet panel).
+- **Checks:** budgets — the page unchanged, every lazy chunk within its own; e2e build tools passed in the
+  life look; client tests 315, tsc clean.
+
 ### 11 — Checks
 
 Frame times, draws, heap, GPU memory, load time and download size per tier. Memcheck nightly.

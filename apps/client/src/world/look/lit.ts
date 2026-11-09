@@ -99,6 +99,16 @@ export function isLit(m: Material): boolean {
   return (m as MeshLambertMaterial).isMeshLambertMaterial === true || lifeMaterials.has(m as MeshStandardMaterial);
 }
 
+/** (plan 73 phase 10) A life material drawn by another renderer (a picture's): its own sky, or none —
+ *  the game's is that renderer's, not this one's — and not the game's sky's to change. */
+export function ownSky(m: MeshStandardMaterial, texture: Texture | null, k = env.k): void {
+  lifeMaterials.delete(m);
+  const had = m.envMap !== null;
+  m.envMap = texture;
+  m.envMapIntensity = k;
+  if (had !== (texture !== null)) m.needsUpdate = true;
+}
+
 /** A life material made elsewhere (the library's: look/life-matlib.ts) given the sky's light as the
  *  world's own are, now and when it changes (plan 73 phase 6: the kit's materials). */
 export function adoptLife(m: MeshStandardMaterial): void {

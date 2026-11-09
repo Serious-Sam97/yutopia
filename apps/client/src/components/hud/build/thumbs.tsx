@@ -53,6 +53,8 @@ async function make(
 ): Promise<string | null> {
   const p = await loadPictures();
   if (!p.drawsKind(kind)) return null;
+  // (the life look: once the library's textures are in — plan 73 phase 10)
+  await p.ready();
   try {
     return await inTurn(() => p.pictureOf(kind, props ?? {}), wanted, SKIPPED);
   } catch {

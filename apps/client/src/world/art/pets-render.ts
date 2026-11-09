@@ -2,12 +2,13 @@ import type { PetLook, PetOutfit, Species } from "@yutopia/shared/pets";
 import {
   DirectionalLight,
   HemisphereLight,
-  type Material,
+  MeshStandardMaterial,
   PerspectiveCamera,
   Scene,
   SRGBColorSpace,
   WebGLRenderer,
 } from "three";
+import { ownSky } from "../look/lit";
 import { type BodyMood, type Face3, PetModel, type PoseKind, plainMat } from "./pets3d";
 
 // The HUD's pictures of pets (pets3d.ts's models): the turntable the panel shows and small portraits,
@@ -56,8 +57,9 @@ class PetPictures {
         look,
         outfit,
         (c, o) => {
-          const x = plainMat(c, o) as Material & { envMap?: unknown };
-          if (x.envMap) x.envMap = null;
+          // (and no fur: a picture this small only speckles with it)
+          const x = plainMat(c, { ...o, fur: 0 });
+          if (x instanceof MeshStandardMaterial) ownSky(x, null);
           return x;
         },
         name,

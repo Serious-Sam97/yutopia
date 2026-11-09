@@ -484,7 +484,8 @@ function lifePetMaterial(color: Color | number | string, o?: { glow?: boolean; f
   }
   return m;
 }
-/** A coat's grain: a fine bump and tone from noise in the part's own space (it moves with the pet), `k`
+/** A coat's grain: a fine bump and tone from noise in the part's own space at its real size (it moves with
+ *  the pet; unscaled, a big body's came out in blotches, a small head's glittered), `k`
  *  as furry as the species is (its outline's fuzz: a platypus sleek, a parrot's feathers soft) — gone
  *  where it's finer than a pixel (it glittered on the small parts). */
 const furs = new Map<number, Piece>();
@@ -502,7 +503,10 @@ const furOf = (k: number): Piece => ({
   patch(sh) {
     sh.vertexShader = sh.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec3 vFur;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvFur = position;");
+      .replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\nvFur = position * vec3(length(modelMatrix[0].xyz), length(modelMatrix[1].xyz), length(modelMatrix[2].xyz));",
+      );
     sh.fragmentShader = sh.fragmentShader
       .replace(
         "#include <common>",
@@ -520,9 +524,9 @@ float furN(vec3 p) {
         `#include <normal_fragment_maps>
 {
   // (strands: stretched along the part's length, two scales)
-  vec3 q = vFur * vec3(44.0, 15.0, 44.0);
+  vec3 q = vFur * vec3(110.0, 38.0, 110.0);
   float h = 0.65 * furN(q) + 0.35 * furN(q * 2.7 + 5.0);
-  float fine = clamp(1.6 - length(fwidth(q)) * 1.2, 0.0, 1.0) * ${k.toFixed(2)};
+  float fine = clamp(1.0 - length(fwidth(q)) * 1.6, 0.0, 1.0) * ${k.toFixed(2)};
   vec2 dh = vec2(dFdx(h), dFdy(h)) * 0.4 * fine;
   vec3 sx = dFdx(-vViewPosition);
   vec3 sy = dFdy(-vViewPosition);
@@ -530,7 +534,7 @@ float furN(vec3 p) {
   vec3 r2 = cross(normal, sx);
   float det = dot(sx, r1);
   normal = normalize(abs(det) * normal - sign(det) * (dh.x * r1 + dh.y * r2));
-  diffuseColor.rgb *= 1.0 + (0.14 * h - 0.08) * fine;
+  diffuseColor.rgb *= 1.0 + (0.1 * h - 0.05) * fine;
 }`,
       );
   },
