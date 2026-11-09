@@ -80,6 +80,27 @@ export function lifeFarNow(g: LifeGender, h: LifeHost): LifePart | null {
   return lifeMod()?.lifeFarNow(g, h.renderer) ?? null;
 }
 
+// (whether a part has anything weighted to a joint — a swing's: once a geometry)
+const hanging = new WeakMap<BufferGeometry, Map<number, boolean>>();
+function hangsOn(g: BufferGeometry, joint: number): boolean {
+  let m = hanging.get(g);
+  if (!m) hanging.set(g, (m = new Map()));
+  const had = m.get(joint);
+  if (had !== undefined) return had;
+  const si = g.getAttribute("skinIndex");
+  const sw = g.getAttribute("skinWeight");
+  let yes = false;
+  if (si && sw && joint >= 0)
+    for (let i = 0; i < si.count && !yes; i++)
+      for (let k = 0; k < 4; k++)
+        if (si.getComponent(i, k) === joint && sw.getComponent(i, k) > 0.2) {
+          yes = true;
+          break;
+        }
+  m.set(joint, yes);
+  return yes;
+}
+
 const trisOf = (g: BufferGeometry) => (g.getIndex()?.count ?? g.getAttribute("position").count) / 3;
 
 /** A seed from a name (who a neutral avatar is drawn as: the same wherever they're drawn). */
@@ -344,6 +365,16 @@ export class LifeLook {
       this.parts.push({ part: p, geometry, own, piece });
       this.nearTris += trisOf(geometry);
     }
+    // (5.5) what swings: a skirt's hang, hair below the nape — the file weights them to their joints
+    // (build_person.py); kept out of the head and the chest
+    const swings = (j: string) => b.parts.some((p) => hangsOn(p.geometry, M.ALL_BONES.indexOf(j as never)));
+    if (swings("skirt")) this.springs.push({ joint: "skirt", tip: [0, -0.45, 0], hz: 2.2, damp: 0.5, limit: 0.3 });
+    if (swings("hair")) this.springs.push({ joint: "hair", tip: [0, -0.32, -0.1], hz: 1.8, damp: 0.4, limit: 0.55 });
+    if (this.springs.length)
+      this.collide.push(
+        { joint: "head", at: [0, 0.09, 0.02], r: 0.105 },
+        { joint: "chest", at: [0, 0.06, 0.02], r: 0.15 },
+      );
   }
 
   /** The triangles drawn (near: every part; far: the one mesh). */

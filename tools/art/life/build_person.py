@@ -1240,6 +1240,19 @@ for name, pos, uv, faces, w, tex in parts:
         spec = WR.GARMENTS.get(name[5:], {})
         if spec.get("helper") == "skirt" or "skirt" in spec:
             ow = skirt_weights(ow, pos[used])
+            # (5.5) the skirt's hang on its own joint, more the lower: it swings as they walk — a share
+            # only, the thighs keep the rest (sat, it drapes over the lap as before)
+            ys = np.asarray(pos)[used][:, 1]
+            k = np.clip((head("upperleg01.L")[1] - 0.2 - ys) / 2.5, 0, 1) * 0.4
+            ow = ow * (1 - k)[:, None]
+            ow[:, ALL.index("skirt")] += k
+    if WEAR and (name == "hair" or name.startswith("wear-hair-")):
+        # (5.5) hair hanging below the nape on the hair's joint, more the lower: a ponytail, long hair,
+        # braids, locs swing — short hair has nothing that low
+        ys = np.asarray(pos)[used][:, 1]
+        k = np.clip((head("neck01")[1] + 0.35 - ys) / 1.4, 0, 1) * 0.85
+        ow = ow * (1 - k)[:, None]
+        ow[:, ALL.index("hair")] += k
     if name == "clothes":
         # the outfit's top and bottom (R 1 the top's colour, 0 the bottom's), by the file's own colours:
         # its tops are light over dark trousers and skirts. A piece (a shell of the mesh) clearly one or

@@ -523,6 +523,8 @@ export class PersonModel {
     if (restKey !== this.restKey) this.makeSkeleton(look.rest, restKey, look);
     look.eyeBones = [this.root.getObjectByName("eyeL") as Bone, this.root.getObjectByName("eyeR") as Bone];
     look.bind(this.skeleton as Skeleton, this.root);
+    // (5.5) its springs — a skirt's hang, long hair — swung by step() as today's are
+    this.springs = look.springs.map((spec) => ({ spec, p: new Vector3(), v: new Vector3(), on: false }));
     look.setState(this.lifeState);
     look.setTint(this.lifeTint);
     look.setWater(this.lifeWater);

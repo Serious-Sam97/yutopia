@@ -662,7 +662,15 @@ of them in batches).
   covering edge than the skin (0.7 dm: at the skin's 0.35 a gap opened at a tee's hem). The HUD's
   portraits and the editor's option thumbs wait for an avatar's clothes (`pictures().whenReady`) rather
   than keep a picture that couldn't draw.
-- **5.5** Sway (61), touch (62), swim (66) with the garments; first person's sleeves.
+- **5.5** Sway (61), touch (62), swim (66) with the garments; first person's sleeves. Built 2026-11-09
+  (stills `design/screens/life/p55`). The file weights a skirt's hang (a share, the lower the more, up to
+  0.4: the thighs keep the rest, so sat it still drapes over the lap) to the `skirt` joint and hair below
+  the nape (up to 0.85: short hair has none) to the `hair` joint; a life person declares a spring on
+  each its parts hang from (`hangsOn`) and PersonModel swings them as today's (out of the head and the
+  chest). First person's sleeves come with no change: `lifeArms` cuts every part to its arm, and the
+  body under a sleeve is hidden. Swimming: every garment takes the water line as the body does. Left: a
+  long coat's skirt lets a raised knee through; a light spot at a tank's armhole; Jolt's hangs (61's bag
+  and ponytail) are today's people's — the life look's swing on springs.
 - **5.6** The wardrobe picture editor re-pointed; the far person in the outfit's colours.
 - **5.7** Checks: budgets, frame times of a crowd, e2e, stills.
 
