@@ -102,8 +102,9 @@ function box(out: Out, f: WallFrame, u: [number, number], v: [number, number], z
   if (out.textured && col.mat && !clear) {
     const m = out.mat(col.mat);
     const k = col.tex ?? col;
-    // (a wood's grain along each face's longer side: a board stood up, up it)
-    const g = col.mat === "walnut";
+    // (a wood's grain along each face's longer side: a board stood up, up it — a tall one only: a bowed
+    // wall's narrow pieces of skirting and dado keep theirs along the wall, as a straight wall's)
+    const g = col.mat === "walnut" && z1 - z0 > 0.9;
     m.quadUV(P(f, u0, v1, z0), P(f, u1, v1, z0), P(f, u1, v1, z1), P(f, u0, v1, z1), N(f, 0, 1, 0), k, g);
     m.quadUV(P(f, u0, v0, z0), P(f, u0, v0, z1), P(f, u1, v0, z1), P(f, u1, v0, z0), N(f, 0, -1, 0), k, g);
     m.quadUV(P(f, u1, v0, z0), P(f, u1, v0, z1), P(f, u1, v1, z1), P(f, u1, v1, z0), N(f, 1, 0, 0), k, g);
@@ -225,7 +226,7 @@ function body(
       P(f, a[0], v, s[1]),
       N(f, 0, side, 0),
       tex ? (c.tex ?? c) : c,
-      c.mat === "walnut",
+      c.mat === "walnut" && s[1] - s[0] > 0.9,
     );
   };
   // (a pattern's places along the piece: whole steps from the wall's own start, run on from the

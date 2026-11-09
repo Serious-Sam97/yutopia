@@ -73,7 +73,7 @@ import { litMaterial } from "../look/lit";
 import { isLife, isLifeBuild } from "../look/look-mode";
 import { CEL, fadePiece, type Piece, yuLit } from "../look/yulit";
 import { boxInParent, type Slab } from "./below-cull";
-import { floorMaterial, kitMaterial } from "./kit-mats";
+import { floorMaterial, kitMaterial, surfaceMaterial } from "./kit-mats";
 import { type Geo, Out } from "./kit3d";
 import { edgesOfMap, type FreeWall, piecesOf, turnOut, type WallEdges } from "./walls3d";
 
@@ -701,7 +701,13 @@ export class World3 {
     const geo = new BufferGeometry();
     geo.setAttribute("position", new Float32BufferAttribute(pos, 3));
     geo.computeVertexNormals();
-    const mat = litMaterial({ color: 0xd9ccb0 });
+    // (the life look: the library's plaster, its UVs in metres across the floor — plan 73 phase 7)
+    if (BUILD_TEX) {
+      const uv: number[] = [];
+      for (let i = 0; i < pos.length; i += 3) uv.push(pos[i], pos[i + 2]);
+      geo.setAttribute("uv", new Float32BufferAttribute(uv, 2));
+    }
+    const mat = BUILD_TEX ? surfaceMaterial("plaster", 0xd9ccb0) : litMaterial({ color: 0xd9ccb0 });
     this.light(mat);
     const mesh = new Mesh(geo, mat);
     mesh.name = "ceiling";

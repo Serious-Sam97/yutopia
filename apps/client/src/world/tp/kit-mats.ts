@@ -26,6 +26,15 @@ export function floorMaterial(id: MatId, bake: Texture, tint: number): Material 
   m.userData.base = bakePiece(bake);
   return m;
 }
+/** (plan 73 phase 7) A plain surface of the library's (UVs in metres, `uv`), its colour `tint` — a
+ *  ceiling's plaster; lit by the room's light as the rest (World3's `light`). */
+export function surfaceMaterial(id: MatId, tint: number): Material {
+  if (!renderer) return litMaterial({ color: tint });
+  const m = libMaterial(id, renderer, { color: tint });
+  adoptLife(m as MeshStandardMaterial);
+  m.userData.lib = true;
+  return m;
+}
 const bakePiece = (bake: Texture): Piece => ({
   key: "floor-bake",
   patch(sh) {

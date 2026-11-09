@@ -985,7 +985,21 @@ doors and windows are the kit's (`furn/openings.ts`): phase 6 gave them their ma
       reads as soft stains on a big plain wall; the facade's relief is faint past a few metres.
     - Stills: `e2e/life-shots.mts` (`LOOK=life` / `LOOK=life&build=old`, lobby, studio, corner) and
       `e2e/life-hut.mts` (a hut of brick, plaster and walnut under a gable on the lot, taken away after).
-- **7.1 Walls** · **7.2 Floors, mezzanines, stairs, lifts** · **7.3 Outside: facades, roofs, the
+- **7.1 Walls.** Every kind across the world: plaster with its dado, walnut, foam, brick, cork, glass, a
+  half wall, a bowed one, posts, the ceiling.
+  - **Built 2026-11-09.** The walls' own materials were all mapped in 7.0 (foam and cork a matte finish:
+    the library has neither); what was left painted was the **ceiling** — the library's plaster now
+    (`kit-mats.ts surfaceMaterial`, its UVs in metres across the floor), tinted as it was.
+    - **The plaster calmed** (`tools/art/life/materials.mts`): its mottle and trowel sweeps ±3% in tone
+      read as stains over a whole wall and a ceiling; ±1% now, the sweeps' relief kept in the normal.
+      (Not the compression: the source had the same shapes; not the roughness either — tried.)
+    - **A walnut face's grain up it only when it's tall** (over 0.9 m): a bowed wall's narrow pieces of
+      skirting and dado had turned theirs up.
+    - Stills: `e2e/life-walls.mts` — a row of each kind on Floor 1 as Ana, by day and at 22:00, in the
+      life look and `build=old`, taken away after; the lobby, studio and live room by `life-shots.mts`.
+  - **Left:** a bowed wall's pieces show thin seams of light between them (as they did before); the `_`
+    floor's checker under the tile's grout (7.2).
+- **7.2 Floors, mezzanines, stairs, lifts** · **7.3 Outside: facades, roofs, the
   campus** — each finished across the world, before/after stills.
 - **7.4 Checks.** Draws, triangles and memory by floor, frame times, budgets, e2e, stills.
 

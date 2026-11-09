@@ -388,7 +388,9 @@ const plaster: Pattern = (u, v) => {
   const sweep = smooth(0.42, 0.58, trowel);
   const m = fbm(u, v, 2, 2, 3, 73);
   return {
-    c: grey(clamp(0.9 + (m - 0.5) * 0.06 + sweep * 0.02)),
+    // (its tone near even: a room's wall and ceiling of it, its mottle and sweeps read as stains — plan 73
+    // phase 7.1; the trowel's relief stays in the normal)
+    c: grey(clamp(0.9 + (m - 0.5) * 0.015 + sweep * 0.005)),
     h: 0.5 + sweep * 0.2 + (fbm(u, v, 24, 24, 2, 74) - 0.5) * 0.15,
     r: 0.95 - sweep * 0.08,
   };
