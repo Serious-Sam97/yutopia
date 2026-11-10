@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Brand } from "@/components/Brand";
-import { useTr } from "@/lib/i18n";
+import { useLang, useTr } from "@/lib/i18n";
 
 // The card the signed-out pages share: sign in, sign up, forgot, reset — framed, over the
 // campus (public/login-bg.webp, darkened at the edges: docs/plan/45-the-ui.md).
@@ -23,6 +23,7 @@ export function AuthCard({
   links?: { href: string; label: string }[];
 }) {
   const t = useTr();
+  const lang = useLang();
   return (
     <main className="auth relative min-h-full flex items-center justify-center p-4">
       <form
@@ -69,7 +70,10 @@ export function AuthCard({
         ) : null}
       </form>
       <p className="mono absolute bottom-5 inset-x-0 text-center text-xs" style={{ color: "rgba(236,230,218,.55)" }}>
-        Snow Campus
+        Snow Campus · {/* (plan 75: the credits, readable signed out) */}
+        <Link href="/credits" className="underline underline-offset-[3px]">
+          {lang === "pt" ? "Créditos" : "Credits"}
+        </Link>
       </p>
     </main>
   );

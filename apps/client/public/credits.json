@@ -1,0 +1,723 @@
+{
+ "hair": [
+  {
+   "key": "sfcurly",
+   "title": "Curly Hair 1 (Beatrice) - Character Hair (Free)",
+   "author": "CT Reed",
+   "author_url": "https://sketchfab.com/continuumreed",
+   "source": "https://sketchfab.com/3d-models/curly-hair-1-beatrice-character-hair-free-89ed2c07a0d9418d9d6b231bedf2772a",
+   "license": "CC BY 4.0",
+   "license_url": "https://creativecommons.org/licenses/by/4.0/",
+   "change": "Fitted to Yutopia's people and coloured by the player, with our fur scalp under it.",
+   "files": [
+    "hair-curly"
+   ]
+  },
+  {
+   "key": "sfcurly2",
+   "title": "Curly Hair 2 (Angel) - Character Hair (Free)",
+   "author": "CT Reed",
+   "author_url": "https://sketchfab.com/continuumreed",
+   "source": "https://sketchfab.com/3d-models/curly-hair-2-angel-character-hair-free-a0f33a6307934f789cfc6d9e831e5852",
+   "license": "CC BY 4.0",
+   "license_url": "https://creativecommons.org/licenses/by/4.0/",
+   "change": "Fitted to Yutopia's people and coloured by the player, with our fur scalp under it.",
+   "files": [
+    "hair-afro"
+   ]
+  },
+  {
+   "key": "sflong1",
+   "title": "Long Black Hair for Character",
+   "author": "Marc Sawyer",
+   "author_url": "https://sketchfab.com/whitewashstudio",
+   "source": "https://sketchfab.com/3d-models/long-black-hair-for-character-6c06611cf3454b978c01bb98368198b2",
+   "license": "CC BY 4.0",
+   "license_url": "https://creativecommons.org/licenses/by/4.0/",
+   "change": "Fitted to Yutopia's people and coloured by the player, with our fur scalp under it.",
+   "files": [
+    "hair-long"
+   ]
+  },
+  {
+   "key": "sfpony",
+   "title": "Ponytail Hair for Character",
+   "author": "Marc Sawyer",
+   "author_url": "https://sketchfab.com/whitewashstudio",
+   "source": "https://sketchfab.com/3d-models/ponytail-hair-for-character-8ddc5c1c6cda49bc80c9f3a675b0a6c4",
+   "license": "CC BY 4.0",
+   "license_url": "https://creativecommons.org/licenses/by/4.0/",
+   "change": "Fitted to Yutopia's people and coloured by the player, with our fur scalp under it.",
+   "files": [
+    "hair-ponytail"
+   ]
+  },
+  {
+   "key": "sfwavy",
+   "title": "Long reddish hair for game",
+   "author": "CarlosTorresVFX",
+   "author_url": "https://sketchfab.com/carlostorresvfx",
+   "source": "https://sketchfab.com/3d-models/long-reddish-hair-for-game-0664c544ecd149d48067e3c54a90a638",
+   "license": "CC BY 4.0",
+   "license_url": "https://creativecommons.org/licenses/by/4.0/",
+   "change": "Its wig stand left out; fitted to Yutopia's people and coloured by the player, with our fur scalp under it.",
+   "files": [
+    "hair-wavy"
+   ]
+  },
+  {
+   "key": "sfbun",
+   "title": "Messy Low Bun Female Hairstyle",
+   "author": "CliffUnderside",
+   "author_url": "https://sketchfab.com/CliffUnderside",
+   "source": "https://sketchfab.com/3d-models/messy-low-bun-female-hairstyle-db7a61ea9f2c45ddb0b7571972f9738f",
+   "license": "CC BY 4.0",
+   "license_url": "https://creativecommons.org/licenses/by/4.0/",
+   "change": "Its hair taken off the head it came on; fitted to Yutopia's people and coloured by the player, with our fur scalp under it.",
+   "files": [
+    "hair-bun"
+   ]
+  },
+  {
+   "key": "sfbob2",
+   "title": "Bobhair",
+   "author": "OksanaSun",
+   "author_url": "https://sketchfab.com/zabolotskikhoksana",
+   "source": "https://sketchfab.com/3d-models/bobhair-2149a717f39b42c9a37e04ad07e6230e",
+   "license": "CC BY 4.0",
+   "license_url": "https://creativecommons.org/licenses/by/4.0/",
+   "change": "Fitted to Yutopia's people and coloured by the player, with our fur scalp under it.",
+   "files": [
+    "hair-curtain"
+   ]
+  },
+  {
+   "key": "sfshort2",
+   "title": "Female Short Hairt Cards",
+   "author": "ebadraza225",
+   "author_url": "https://sketchfab.com/ebadraza225",
+   "source": "https://sketchfab.com/3d-models/female-short-hairt-cards-2daf1e54b13c4086847be90ded2dfeeb",
+   "license": "CC BY 4.0",
+   "license_url": "https://creativecommons.org/licenses/by/4.0/",
+   "change": "Its hair taken off the head it came on; fitted to Yutopia's people and coloured by the player, with our fur scalp under it.",
+   "files": [
+    "hair-bob"
+   ]
+  },
+  {
+   "key": "sfcorn",
+   "title": "Cornrow Braids Hairstyle",
+   "author": "OCBacon",
+   "author_url": "https://sketchfab.com/OCBacon",
+   "source": "https://sketchfab.com/3d-models/cornrow-braids-hairstyle-c8052613e7894027a272e5af04ca8da4",
+   "license": "CC BY 4.0",
+   "license_url": "https://creativecommons.org/licenses/by/4.0/",
+   "change": "Fitted to Yutopia's people and coloured by the player.",
+   "files": [
+    "hair-cornrows"
+   ]
+  },
+  {
+   "key": "sflong2",
+   "title": "Pocolov Hair 03",
+   "author": "pocolov",
+   "author_url": "https://sketchfab.com/pocolov",
+   "source": "https://sketchfab.com/3d-models/pocolov-hair-03-db01a2087ede4d7d997b988092c76300",
+   "license": "CC BY 4.0",
+   "license_url": "https://creativecommons.org/licenses/by/4.0/",
+   "change": "Its hair taken off the head it came on; fitted to Yutopia's people and coloured by the player, with our fur scalp under it.",
+   "files": [
+    "hair-swept"
+   ]
+  },
+  {
+   "key": "sfmshort",
+   "title": "Businessman (Rigged)",
+   "author": "jungle_jim",
+   "author_url": "https://sketchfab.com/jungle_jim",
+   "source": "https://sketchfab.com/3d-models/businessman-rigged-8933d61fcb1e46f3aead661227bb4fed",
+   "license": "CC BY 4.0",
+   "license_url": "https://creativecommons.org/licenses/by/4.0/",
+   "change": "His hair only, taken off the character; fitted to Yutopia's people and coloured by the player, with our buzz under it.",
+   "files": [
+    "hair-short"
+   ]
+  },
+  {
+   "key": "sfmshag",
+   "title": "\"Robert\", citizen of a future dystopia",
+   "author": "Automatrio",
+   "author_url": "https://sketchfab.com/automatrio",
+   "source": "https://sketchfab.com/3d-models/robert-citizen-of-a-future-dystopia-01966360b609405db6bde50fefd230cd",
+   "license": "CC BY 4.0",
+   "license_url": "https://creativecommons.org/licenses/by/4.0/",
+   "change": "His hair only, taken off the character; fitted to Yutopia's people and coloured by the player, re-textured with our own strands, with our buzz under it.",
+   "files": [
+    "hair-spiky"
+   ]
+  },
+  {
+   "key": "sfmbraid",
+   "title": "Free Mesh - Big Guy [High Poly]",
+   "author": "jérémy paladini",
+   "author_url": "https://sketchfab.com/paladini",
+   "source": "https://sketchfab.com/3d-models/free-mesh-big-guy-high-poly-baf398942e824702bec05f1743d8033f",
+   "license": "CC BY 4.0",
+   "license_url": "https://creativecommons.org/licenses/by/4.0/",
+   "change": "His hair only, taken off the character; fitted to Yutopia's people and coloured by the player, with our fade under it.",
+   "files": [
+    "hair-mohawk"
+   ]
+  },
+  {
+   "key": "sfbeard",
+   "title": "Bearded Man",
+   "author": "kand8998",
+   "author_url": "https://sketchfab.com/KaitlynAndrus",
+   "source": "https://sketchfab.com/3d-models/bearded-man-60947a1819a1407685cb4332e894e585",
+   "license": "CC BY 4.0",
+   "license_url": "https://creativecommons.org/licenses/by/4.0/",
+   "change": "His beard only, taken off the scan; fitted to Yutopia's people, cut and shortened into each of our beard styles, over our own fur, and coloured by the player.",
+   "files": [
+    "beard-full",
+    "beard-boxed",
+    "beard-mustache",
+    "beard-goatee",
+    "beard-chinstrap",
+    "beard-muttonchops"
+   ]
+  }
+ ],
+ "people": [
+  {
+   "title": "MakeHuman",
+   "author": "the MakeHuman team and community",
+   "author_url": "http://www.makehumancommunity.org/",
+   "source": "http://www.makehumancommunity.org/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "change": "The people's bodies, faces, skins, eyes and clothes helpers, and the hairs braids, crew, slick and pixie: shaped, re-skinned and fitted for Yutopia."
+  }
+ ],
+ "sounds": [
+  {
+   "title": "Wood Steps",
+   "author": "Phil25",
+   "source": "https://freesound.org/s/208104/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Footsteps on hollow wood",
+   "author": "florianreichelt",
+   "source": "https://freesound.org/s/459970/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "FootstepsCarpet",
+   "author": "MindlessTrails",
+   "source": "https://freesound.org/s/509534/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Footsteps on Tiles",
+   "author": "RutgerMuller",
+   "source": "https://freesound.org/s/50725/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Footsteps on concrete",
+   "author": "florianreichelt",
+   "source": "https://freesound.org/s/459964/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Stone Steps",
+   "author": "Phil25",
+   "source": "https://freesound.org/s/208103/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "footsteps shoes walk road asphalt hard",
+   "author": "kyles",
+   "source": "https://freesound.org/s/637556/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Walking_and_running_on_a_steel_floor (sound samples)",
+   "author": "SoundsofTheMachine",
+   "source": "https://freesound.org/s/809440/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Footsteps On Metal",
+   "author": "IENBA",
+   "source": "https://freesound.org/s/834029/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Footsteps_6_Dirt_shoe",
+   "author": "monte32",
+   "source": "https://freesound.org/s/353799/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "FOLEY_Footsteps_Carpet_001",
+   "author": "conleec",
+   "source": "https://freesound.org/s/148466/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Footsteps or Walking in Hard Crunchy Snow",
+   "author": "mshahen",
+   "source": "https://freesound.org/s/559459/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Snow shoe steps (41, via qubodup)",
+   "author": "Corsica_S",
+   "source": "https://opengameart.org/content/41-snow-shoe-steps",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Walking in snow (42 steps, via qubodup)",
+   "author": "Corsica_S",
+   "source": "https://opengameart.org/content/42-snow-and-gravel-footsteps",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Walking on Crunchy Ice (01/30/2014)",
+   "author": "courter",
+   "source": "https://freesound.org/s/447822/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Footsteps on slush",
+   "author": "xkeril",
+   "source": "https://freesound.org/s/611278/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "snd_footsteps_grass.wav",
+   "author": "drowsyprincess",
+   "source": "https://freesound.org/s/463854/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Footsteps_Mountain_Boots_Mud_Mono.wav",
+   "author": "Nox_Sound",
+   "source": "https://freesound.org/s/548384/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "WetFootsteps.wav",
+   "author": "sqeeeek",
+   "source": "https://freesound.org/s/326543/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "puddlewalk.wav",
+   "author": "j1987",
+   "source": "https://freesound.org/s/106395/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Light rain.wav",
+   "author": "Ryding",
+   "source": "https://freesound.org/s/96729/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Rain heavy 2 (rural)",
+   "author": "jmbphilmes",
+   "source": "https://freesound.org/s/200272/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Soft Rain in Forest Raindrops fall on leaves",
+   "author": "Borgory",
+   "source": "https://freesound.org/s/678435/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "January rain on a roof.aif",
+   "author": "mmorgaine",
+   "source": "https://freesound.org/s/333509/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Ambiance_Rain_Inside_Car_Close_Roof_Loop_Stereo.wav",
+   "author": "Nox_Sound",
+   "source": "https://freesound.org/s/535870/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Rain on pond",
+   "author": "Mjeno",
+   "source": "https://freesound.org/s/399281/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "SleetNovember2014.WAV",
+   "author": "kvgarlic",
+   "source": "https://freesound.org/s/255741/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Birds in the morning.wav",
+   "author": "Lord_Tarkus",
+   "source": "https://freesound.org/s/573283/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Water Stream 2",
+   "author": "sound368",
+   "source": "https://freesound.org/s/786172/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "gully with water drips",
+   "author": "launemax",
+   "source": "https://freesound.org/s/249927/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "thunder 5 dry.wav",
+   "author": "elmoustachio",
+   "source": "https://freesound.org/s/476739/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Thunder 07",
+   "author": "Emulius",
+   "source": "https://freesound.org/s/744722/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Thunder Clap OWB KY 441x16.wav",
+   "author": "Dave Welsh",
+   "source": "https://freesound.org/s/194364/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "peal of thunder - distant",
+   "author": "bastipictures",
+   "source": "https://freesound.org/s/243782/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Distant Thunder Clap_Gentle.wav",
+   "author": "mikala_oidua",
+   "source": "https://freesound.org/s/347562/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Distant thunder in suburban area",
+   "author": "csengeri",
+   "source": "https://freesound.org/s/238743/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Wading in Shallow Water.wav",
+   "author": "ryansitz",
+   "source": "https://freesound.org/s/342932/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "River Wading Fast.mp3",
+   "author": "paulprit",
+   "source": "https://freesound.org/s/563555/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Feet Squelch",
+   "author": "eqavox",
+   "source": "https://freesound.org/s/683520/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Underwater - seashore",
+   "author": "L.Finck",
+   "source": "https://freesound.org/s/815116/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Hydrophone underwater flow",
+   "author": "Salomé_Lubczanski",
+   "source": "https://freesound.org/s/733812/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Gentle lapping lake water waves cottage 24 96 180721.wav",
+   "author": "TRP",
+   "source": "https://freesound.org/s/573163/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "river rushing rapids close smooth liquidy detail.flac",
+   "author": "kyles",
+   "source": "https://freesound.org/s/454154/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Ambiance_Waterfall_Small_Close_Loop_Stereo.wav",
+   "author": "Nox_Sound",
+   "source": "https://freesound.org/s/698306/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "water movements swimming around various splashes random.flac",
+   "author": "kyles",
+   "source": "https://freesound.org/s/637958/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "dripping-laundry3.WAV",
+   "author": "maryannem",
+   "source": "https://freesound.org/s/528478/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "footsteps in a water puddle",
+   "author": "launemax",
+   "source": "https://freesound.org/s/249911/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Foley_Natural_Water_Jump_Mono.wav",
+   "author": "Nox_Sound",
+   "source": "https://freesound.org/s/585744/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "splash body dive into water pool.flac",
+   "author": "kyles",
+   "source": "https://freesound.org/s/637823/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "R23-45-Jumping Into Water.wav",
+   "author": "craigsmith",
+   "source": "https://freesound.org/s/480846/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "glug_glug_glug.wav",
+   "author": "noisymichael",
+   "source": "https://freesound.org/s/661609/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Breaking ice on frozen pond",
+   "author": "snds_good",
+   "source": "https://freesound.org/s/554856/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Creek Swimming.mp3",
+   "author": "JazzyBay",
+   "source": "https://freesound.org/s/435055/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "G54-26-Person Swimming.wav",
+   "author": "craigsmith",
+   "source": "https://freesound.org/s/438845/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Bubbles_01.wav",
+   "author": "cartoonrob",
+   "source": "https://freesound.org/s/588468/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Gasp Inhale",
+   "author": "u3190",
+   "source": "https://freesound.org/s/169931/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "female sharp inhale sounds",
+   "author": "marythewitch",
+   "source": "https://freesound.org/s/535243/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "heavy breathing.wav",
+   "author": "simone_ds",
+   "source": "https://freesound.org/s/366077/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "woman run and breath.wav",
+   "author": "MelvinJaepel",
+   "source": "https://freesound.org/s/435468/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "water movement body step out of pool splash drips.flac",
+   "author": "kyles",
+   "source": "https://freesound.org/s/637948/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Elevator Door",
+   "author": "PagDev",
+   "source": "https://opengameart.org/content/elevatordoor",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "The Dyno Sessions: 190E",
+   "author": "Chippy569",
+   "source": "https://freesound.org/people/Chippy569/packs/9658/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  }
+ ],
+ "code": [
+  {
+   "title": "colyseus.js",
+   "version": "0.16.22",
+   "license": "MIT",
+   "source": "https://github.com/colyseus/colyseus.js",
+   "text": "Copyright (c) 2015-2024 Endel Dreyer\n\nMIT License:\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE."
+  },
+  {
+   "title": "hls.js",
+   "version": "1.7.3",
+   "license": "Apache-2.0",
+   "source": "https://github.com/video-dev/hls.js",
+   "text": "Copyright (c) 2017 Dailymotion (http://www.dailymotion.com)\n\nLicensed under the Apache License, Version 2.0 (the \"License\");\nyou may not use this file except in compliance with the License.\nYou may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an \"AS IS\" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n\nsrc/remux/mp4-generator.js and src/demux/exp-golomb.ts implementation in this project\nare derived from the HLS library for video.js (https://github.com/videojs/videojs-contrib-hls)\n\nThat work is also covered by the Apache 2 License, following copyright:\nCopyright (c) 2013-2015 Brightcove\n\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE."
+  },
+  {
+   "title": "livekit-client",
+   "version": "2.22.3",
+   "license": "Apache-2.0",
+   "source": "https://github.com/livekit/client-sdk-js",
+   "text": "Apache License\n                           Version 2.0, January 2004\n                        http://www.apache.org/licenses/\n\n   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n\n   1. Definitions.\n\n      \"License\" shall mean the terms and conditions for use, reproduction,\n      and distribution as defined by Sections 1 through 9 of this document.\n\n      \"Licensor\" shall mean the copyright owner or entity authorized by\n      the copyright owner that is granting the License.\n\n      \"Legal Entity\" shall mean the union of the acting entity and all\n      other entities that control, are controlled by, or are under common\n      control with that entity. For the purposes of this definition,\n      \"control\" means (i) the power, direct or indirect, to cause the\n      direction or management of such entity, whether by contract or\n      otherwise, or (ii) ownership of fifty percent (50%) or more of the\n      outstanding shares, or (iii) beneficial ownership of such entity.\n\n      \"You\" (or \"Your\") shall mean an individual or Legal Entity\n      exercising permissions granted by this License.\n\n      \"Source\" form shall mean the preferred form for making modifications,\n      including but not limited to software source code, documentation\n      source, and configuration files.\n\n      \"Object\" form shall mean any form resulting from mechanical\n      transformation or translation of a Source form, including but\n      not limited to compiled object code, generated documentation,\n      and conversions to other media types.\n\n      \"Work\" shall mean the work of authorship, whether in Source or\n      Object form, made available under the License, as indicated by a\n      copyright notice that is included in or attached to the work\n      (an example is provided in the Appendix below).\n\n      \"Derivative Works\" shall mean any work, whether in Source or Object\n      form, that is based on (or derived from) the Work and for which the\n      editorial revisions, annotations, elaborations, or other modifications\n      represent, as a whole, an original work of authorship. For the purposes\n      of this License, Derivative Works shall not include works that remain\n      separable from, or merely link (or bind by name) to the interfaces of,\n      the Work and Derivative Works thereof.\n\n      \"Contribution\" shall mean any work of authorship, including\n      the original version of the Work and any modifications or additions\n      to that Work or Derivative Works thereof, that is intentionally\n      submitted to Licensor for inclusion in the Work by the copyright owner\n      or by an individual or Legal Entity authorized to submit on behalf of\n      the copyright owner. For the purposes of this definition, \"submitted\"\n      means any form of electronic, verbal, or written communication sent\n      to the Licensor or its representatives, including but not limited to\n      communication on electronic mailing lists, source code control systems,\n      and issue tracking systems that are managed by, or on behalf of, the\n      Licensor for the purpose of discussing and improving the Work, but\n      excluding communication that is conspicuously marked or otherwise\n      designated in writing by the copyright owner as \"Not a Contribution.\"\n\n      \"Contributor\" shall mean Licensor and any individual or Legal Entity\n      on behalf of whom a Contribution has been received by Licensor and\n      subsequently incorporated within the Work.\n\n   2. Grant of Copyright License. Subject to the terms and conditions of\n      this License, each Contributor hereby grants to You a perpetual,\n      worldwide, non-exclusive, no-charge, royalty-free, irrevocable\n      copyright license to reproduce, prepare Derivative Works of,\n      publicly display, publicly perform, sublicense, and distribute the\n      Work and such Derivative Works in Source or Object form.\n\n   3. Grant of Patent License. Subject to the terms and conditions of\n      this License, each Contributor hereby grants to You a perpetual,\n      worldwide, non-exclusive, no-charge, royalty-free, irrevocable\n      (except as stated in this section) patent license to make, have made,\n      use, offer to sell, sell, import, and otherwise transfer the Work,\n      where such license applies only to those patent claims licensable\n      by such Contributor that are necessarily infringed by their\n      Contribution(s) alone or by combination of their Contribution(s)\n      with the Work to which such Contribution(s) was submitted. If You\n      institute patent litigation against any entity (including a\n      cross-claim or counterclaim in a lawsuit) alleging that the Work\n      or a Contribution incorporated within the Work constitutes direct\n      or contributory patent infringement, then any patent licenses\n      granted to You under this License for that Work shall terminate\n      as of the date such litigation is filed.\n\n   4. Redistribution. You may reproduce and distribute copies of the\n      Work or Derivative Works thereof in any medium, with or without\n      modifications, and in Source or Object form, provided that You\n      meet the following conditions:\n\n      (a) You must give any other recipients of the Work or\n          Derivative Works a copy of this License; and\n\n      (b) You must cause any modified files to carry prominent notices\n          stating that You changed the files; and\n\n      (c) You must retain, in the Source form of any Derivative Works\n          that You distribute, all copyright, patent, trademark, and\n          attribution notices from the Source form of the Work,\n          excluding those notices that do not pertain to any part of\n          the Derivative Works; and\n\n      (d) If the Work includes a \"NOTICE\" text file as part of its\n          distribution, then any Derivative Works that You distribute must\n          include a readable copy of the attribution notices contained\n          within such NOTICE file, excluding those notices that do not\n          pertain to any part of the Derivative Works, in at least one\n          of the following places: within a NOTICE text file distributed\n          as part of the Derivative Works; within the Source form or\n          documentation, if provided along with the Derivative Works; or,\n          within a display generated by the Derivative Works, if and\n          wherever such third-party notices normally appear. The contents\n          of the NOTICE file are for informational purposes only and\n          do not modify the License. You may add Your own attribution\n          notices within Derivative Works that You distribute, alongside\n          or as an addendum to the NOTICE text from the Work, provided\n          that such additional attribution notices cannot be construed\n          as modifying the License.\n\n      You may add Your own copyright statement to Your modifications and\n      may provide additional or different license terms and conditions\n      for use, reproduction, or distribution of Your modifications, or\n      for any such Derivative Works as a whole, provided Your use,\n      reproduction, and distribution of the Work otherwise complies with\n      the conditions stated in this License.\n\n   5. Submission of Contributions. Unless You explicitly state otherwise,\n      any Contribution intentionally submitted for inclusion in the Work\n      by You to the Licensor shall be under the terms and conditions of\n      this License, without any additional terms or conditions.\n      Notwithstanding the above, nothing herein shall supersede or modify\n      the terms of any separate license agreement you may have executed\n      with Licensor regarding such Contributions.\n\n   6. Trademarks. This License does not grant permission to use the trade\n      names, trademarks, service marks, or product names of the Licensor,\n      except as required for reasonable and customary use in describing the\n      origin of the Work and reproducing the content of the NOTICE file.\n\n   7. Disclaimer of Warranty. Unless required by applicable law or\n      agreed to in writing, Licensor provides the Work (and each\n      Contributor provides its Contributions) on an \"AS IS\" BASIS,\n      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or\n      implied, including, without limitation, any warranties or conditions\n      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A\n      PARTICULAR PURPOSE. You are solely responsible for determining the\n      appropriateness of using or redistributing the Work and assume any\n      risks associated with Your exercise of permissions under this License.\n\n   8. Limitation of Liability. In no event and under no legal theory,\n      whether in tort (including negligence), contract, or otherwise,\n      unless required by applicable law (such as deliberate and grossly\n      negligent acts) or agreed to in writing, shall any Contributor be\n      liable to You for damages, including any direct, indirect, special,\n      incidental, or consequential damages of any character arising as a\n      result of this License or out of the use or inability to use the\n      Work (including but not limited to damages for loss of goodwill,\n      work stoppage, computer failure or malfunction, or any and all\n      other commercial damages or losses), even if such Contributor\n      has been advised of the possibility of such damages.\n\n   9. Accepting Warranty or Additional Liability. While redistributing\n      the Work or Derivative Works thereof, You may choose to offer,\n      and charge a fee for, acceptance of support, warranty, indemnity,\n      or other liability obligations and/or rights consistent with this\n      License. However, in accepting such obligations, You may act only\n      on Your own behalf and on Your sole responsibility, not on behalf\n      of any other Contributor, and only if You agree to indemnify,\n      defend, and hold each Contributor harmless for any liability\n      incurred by, or claims asserted against, such Contributor by reason\n      of your accepting any such warranty or additional liability."
+  },
+  {
+   "title": "next",
+   "version": "15.5.7",
+   "license": "MIT",
+   "source": "https://nextjs.org",
+   "text": "The MIT License (MIT)\n\nCopyright (c) 2025 Vercel, Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE."
+  },
+  {
+   "title": "nostalgist",
+   "version": "0.22.0",
+   "license": "MIT",
+   "source": "https://github.com/arianrhodsandlot/nostalgist",
+   "text": "MIT License\n\nCopyright (c) 2023 arianrhodsandlot\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE."
+  },
+  {
+   "title": "react",
+   "version": "19.1.0",
+   "license": "MIT",
+   "source": "https://react.dev/",
+   "text": "MIT License\n\nCopyright (c) Meta Platforms, Inc. and affiliates.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE."
+  },
+  {
+   "title": "react-dom",
+   "version": "19.1.0",
+   "license": "MIT",
+   "source": "https://react.dev/",
+   "text": "MIT License\n\nCopyright (c) Meta Platforms, Inc. and affiliates.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE."
+  },
+  {
+   "title": "three",
+   "version": "0.186.1",
+   "license": "MIT",
+   "source": "https://threejs.org/",
+   "text": "The MIT License\n\nCopyright © 2010-2026 three.js authors\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE."
+  },
+  {
+   "title": "JoltPhysics.js (Jolt Physics)",
+   "version": "1.1.1-grow.1",
+   "license": "MIT",
+   "source": "https://github.com/jrouwe/JoltPhysics.js",
+   "text": "MIT License\n\nCopyright (c) 2022-2024 Jorrit Rouwe\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE."
+  }
+ ],
+ "wardrobe": {
+  "hair-short": "sfmshort",
+  "hair-long": "sflong1",
+  "hair-curly": "sfcurly",
+  "hair-bun": "sfbun",
+  "hair-afro": "sfcurly2",
+  "hair-bob": "sfshort2",
+  "hair-mohawk": "sfmbraid",
+  "hair-ponytail": "sfpony",
+  "hair-spiky": "sfmshag",
+  "hair-wavy": "sfwavy",
+  "hair-cornrows": "sfcorn",
+  "hair-swept": "sflong2",
+  "hair-curtain": "sfbob2",
+  "hair-buzz": "fur",
+  "hair-fade": "fur",
+  "hair-crew": "makehuman",
+  "hair-slick": "makehuman",
+  "hair-pixie": "makehuman"
+ }
+}

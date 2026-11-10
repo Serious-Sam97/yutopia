@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Credits } from "@/components/Credits";
 import { LangSwitch } from "@/components/LangSwitch";
 import { setToken, yutopia } from "@/lib/api";
 import { type Key, useLang, useTr } from "@/lib/i18n";
@@ -28,10 +29,15 @@ const W = {
   setGraphicsSub: ["How it draws on this computer.", "Como ele desenha neste computador."],
   setControlsSub: ["Keys, pads and controllers.", "Teclas, pads e controles."],
   version: ["Version", "Versão"],
+  setCredits: ["Credits", "Créditos"],
+  setCreditsSub: [
+    "The work of others in Yutopia, and its licences.",
+    "O trabalho de outras pessoas no Yutopia, e suas licenças.",
+  ],
 } as const;
 type Word = keyof typeof W;
 
-type Page = "me" | "sound" | "camera" | "view" | "graphics" | "controls";
+type Page = "me" | "sound" | "camera" | "view" | "graphics" | "controls" | "credits";
 const PAGES: { id: Page; label: Key | Word; sub: Word; icon: IconName }[] = [
   { id: "me", label: "setMe", sub: "setMeSub", icon: "people" },
   { id: "sound", label: "setSound", sub: "setSoundSub", icon: "mic" },
@@ -39,6 +45,8 @@ const PAGES: { id: Page; label: Key | Word; sub: Word; icon: IconName }[] = [
   { id: "view", label: "view", sub: "setViewSub", icon: "follow" },
   { id: "graphics", label: "quality", sub: "setGraphicsSub", icon: "screen" },
   { id: "controls", label: "controls", sub: "setControlsSub", icon: "gamepad" },
+  // (plan 75: the works by others — their credits, the licences' terms)
+  { id: "credits", label: "setCredits", sub: "setCreditsSub", icon: "heart" },
 ];
 
 // a word of this panel's own, or the house's
@@ -97,6 +105,7 @@ export function SettingsPanel() {
             {at.id === "view" && <ViewPage />}
             {at.id === "graphics" && <GraphicsPage />}
             {at.id === "controls" && <ControlsPage />}
+            {at.id === "credits" && <Credits />}
           </div>
         </section>
       </div>

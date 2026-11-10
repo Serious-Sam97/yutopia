@@ -2,6 +2,8 @@
 # Plan 73 — every life-look asset built and packed for the web (docs/plan/73, "Rebuilding the assets"):
 # Blender writes each .glb (meshopt geometry, PNG textures), pack_glb.py encodes the textures to KTX2.
 #   sh tools/art/life/build_all.sh            (from the repo root)
+# The people need the works by others (plan 75) extracted, in $HAIR_IMPORTS (default
+# ../yutopia-art-src/sketchfab): `python3 tools/art/life/sources.py extract` and `… sheet`, once.
 set -e
 cd "$(dirname "$0")/../../.."
 OUT=apps/client/public/life
@@ -21,6 +23,9 @@ for who in man woman; do
   # (its far person, plan 73 4.5: one coarse mesh, no textures)
   python3 -I tools/art/life/pack_glb.py "$OUT/person-$who-far.glb" "$OUT/person-$who-far.glb"
 done
+# the credits (plan 75): the works by others in what was built → public/credits.json, each file stamped
+# with its own (after the packing: pack_glb rewrites the files)
+python3 tools/credits.py
 $B -P tools/art/life/build_plant.py | grep wrote
 python3 -I tools/art/life/pack_glb.py "$OUT/plant-rubber.glb" "$OUT/plant-rubber.glb"
 $B -P tools/art/life/build_tree.py | grep wrote

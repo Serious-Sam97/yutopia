@@ -43,7 +43,7 @@ export function setToken(token: string | null) {
 }
 
 // pages that work signed out (a 401 there doesn't send you to sign in)
-const OPEN_PAGES = ["/login", "/register", "/forgot", "/reset"];
+const OPEN_PAGES = ["/login", "/register", "/forgot", "/reset", "/credits"];
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();
