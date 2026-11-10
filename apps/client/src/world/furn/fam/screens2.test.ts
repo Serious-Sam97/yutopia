@@ -5,6 +5,7 @@ import { Box3, type BufferGeometry, Mesh, MeshBasicMaterial, Raycaster, Vector3 
 import type { LivePart } from "../kit";
 import { liveAt } from "../liveparts";
 import { modelOf } from "../native";
+import { MAX_TRIS } from "../tris-limit";
 import { LOOKS, OC, RTV, VW } from "./screens2";
 
 // Plan 68 phase 8 (docs/plan/68-more-furniture.md): Screens & TVs — every kind and look on its footprint
@@ -54,7 +55,7 @@ test("screens: every kind and look on its footprint, on the floor or its wall or
           b.min.x >= -0.005 && b.max.x <= e.w + 0.005 && b.min.z >= -0.005 && b.max.z <= e.h + 0.005,
           `${what}: on its footprint`,
         );
-        assert.ok(tris(g) < 8000, `${what}: under 8k tris (${tris(g)})`);
+        assert.ok(tris(g) < MAX_TRIS, `${what}: under 8k tris (${tris(g)})`);
         if (e.outdoor) assert.ok(b.max.y < 4.5, `${what}: its height`);
         else assert.ok(b.max.y <= 3.275, `${what}: under the ceiling (${b.max.y.toFixed(3)})`);
         if (kind === "ceiling_projector") assert.ok(Math.abs(b.max.y - 3.27) < 0.01, `${what}: hung from the ceiling`);

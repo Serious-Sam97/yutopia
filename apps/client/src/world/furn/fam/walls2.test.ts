@@ -6,6 +6,7 @@ import type { BufferGeometry } from "three";
 import type { LivePart } from "../kit";
 import { liveAt } from "../liveparts";
 import { modelOf } from "../native";
+import { MAX_TRIS } from "../tris-limit";
 import { calendarPage, LOOKS, worldCities } from "./walls2";
 
 // Plan 68 phase 12 (docs/plan/68-more-furniture.md): On the walls — every kind and look hung on its
@@ -60,7 +61,7 @@ test("on the walls: every look hung on its face, across its footprint, under 8k 
         assert.ok(b.x0 >= -0.005 && b.x1 <= e.w + 0.005, `${what}: across ${b.x0.toFixed(3)}..${b.x1.toFixed(3)}`);
         assert.ok(b.z0 >= 0.098 && b.z1 <= 0.36, `${what}: on its wall, out ${b.z0.toFixed(3)}..${b.z1.toFixed(3)}`);
         assert.ok(b.y0 > 0.5 && b.y1 < 3.2, `${what}: up its wall ${b.y0.toFixed(3)}..${b.y1.toFixed(3)}`);
-        assert.ok(tris(g) < 8000, `${what}: ${tris(g)} tris`);
+        assert.ok(tris(g) < MAX_TRIS, `${what}: ${tris(g)} tris`);
         // (its hang size: what the wall's grid keeps free for it)
         assert.ok(
           n * 0.25 >= b.x1 - b.x0 - 0.06 && n <= e.w * 4,

@@ -5,6 +5,7 @@ import { type BufferGeometry, DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Ve
 import type { LivePart } from "../kit";
 import { liveAt } from "../liveparts";
 import { modelOf } from "../native";
+import { MAX_TRIS } from "../tris-limit";
 import { LOOKS } from "./parkour2";
 
 // Plan 68 phase 17 (docs/plan/68-more-furniture.md): the parkour pieces — every look on its footprint,
@@ -58,7 +59,10 @@ test("parkour: every look on its footprint, on the ground, out of doors, solid, 
       );
       assert.ok(b.y0 > -0.01 && b.y0 < 0.02, `${what}: on the ground (${b.y0.toFixed(3)})`);
       assert.ok(b.y1 < 4, `${what}: ${b.y1.toFixed(2)} m`);
-      assert.ok(g.attributes.position.count / 3 < 8000, `${what}: under 8k tris (${g.attributes.position.count / 3})`);
+      assert.ok(
+        g.attributes.position.count / 3 < MAX_TRIS,
+        `${what}: under 8k tris (${g.attributes.position.count / 3})`,
+      );
     }
   }
 });

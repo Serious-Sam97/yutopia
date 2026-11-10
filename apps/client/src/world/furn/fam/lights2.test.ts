@@ -6,6 +6,7 @@ import type { BufferGeometry } from "three";
 import type { LivePart } from "../kit";
 import { liveAt } from "../liveparts";
 import { modelOf } from "../native";
+import { MAX_TRIS } from "../tris-limit";
 import { LOOKS } from "./lights2";
 
 // Plan 68 phase 11 (docs/plan/68-more-furniture.md): the Lights — every kind and look, lit and out, on
@@ -68,7 +69,7 @@ test("lights: every look, lit and out, on its footprint, under the ceiling, unde
         if (ceiling) assert.ok(b.y0 > 2.05, `${what}: over heads (${b.y0.toFixed(3)})`);
         else if (!e.wall)
           assert.ok(b.y0 > -0.006 && b.y0 < 0.015, `${what}: on the floor or its top (${b.y0.toFixed(3)})`);
-        assert.ok(tris(g) < 8000, `${what}: ${tris(g)} tris`);
+        assert.ok(tris(g) < MAX_TRIS, `${what}: ${tris(g)} tris`);
       }
   }
 });

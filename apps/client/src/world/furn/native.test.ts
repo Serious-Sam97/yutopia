@@ -27,6 +27,7 @@ import type { LivePart } from "./kit";
 import { animateLive, liveAt } from "./liveparts";
 import { CEL_ALPHA } from "./look";
 import { liveInto, modelOf, nativeDressInto, nativeInto, seatMotion, wordsOf } from "./native";
+import { MAX_TRIS, TRIS_X } from "./tris-limit";
 import { adventDay, XMAS_LOOKS } from "./xmas";
 
 // Plan 67 phase 1 (docs/plan/67-the-furniture.md): a kind the kit draws stays on its footprint,
@@ -117,7 +118,7 @@ test("every seat and look: on its footprint, on the floor, its seat at its spec,
           assert.ok(b.x0 >= -0.005 && b.x1 <= e[0] + 0.005, `${what}: across ${b.x0.toFixed(3)}..${b.x1.toFixed(3)}`);
           assert.ok(b.z0 >= -0.005 && b.z1 <= e[1] + 0.005, `${what}: down ${b.z0.toFixed(3)}..${b.z1.toFixed(3)}`);
           assert.ok(b.y0 > -0.006 && b.y0 < 0.012, `${what}: on the floor (${b.y0.toFixed(3)})`);
-          assert.ok(g.attributes.position.count / 3 < 8000, `${what}: ${g.attributes.position.count / 3} tris`);
+          assert.ok(g.attributes.position.count / 3 < MAX_TRIS, `${what}: ${g.attributes.position.count / 3} tris`);
           if (occupied) continue;
           // the seat's top over its middle (a sofa's or a bench's middle tile), what's sat on
           // (a few points: a bench's slats have gaps)
@@ -158,7 +159,7 @@ test("desks, tables, storage: on the footprint, the top at its spec under every 
         assert.ok(b.x0 >= -0.005 && b.x1 <= e.w + 0.005, `${what}: across ${b.x0.toFixed(3)}..${b.x1.toFixed(3)}`);
         assert.ok(b.z0 >= -0.005 && b.z1 <= e.h + 0.005, `${what}: down ${b.z0.toFixed(3)}..${b.z1.toFixed(3)}`);
         assert.ok(b.y0 > -0.006 && b.y0 < 0.012, `${what}: on the floor (${b.y0.toFixed(3)})`);
-        assert.ok(g.attributes.position.count / 3 < 8000, `${what}: ${g.attributes.position.count / 3} tris`);
+        assert.ok(g.attributes.position.count / 3 < MAX_TRIS, `${what}: ${g.attributes.position.count / 3} tris`);
         const want = SURF[kind];
         if (want === undefined) continue;
         for (let cy = top[1]; cy < top[3]; cy++)
@@ -344,7 +345,7 @@ test("play, tech, music, lights: on the footprint, the tops, keys and parts wher
         assert.ok(b.x0 >= ox0 - 0.005 && b.x1 <= ox1 + 0.005, `${what}: across ${b.x0.toFixed(3)}..${b.x1.toFixed(3)}`);
         assert.ok(b.z0 >= oz0 - 0.005 && b.z1 <= oz1 + 0.005, `${what}: down ${b.z0.toFixed(3)}..${b.z1.toFixed(3)}`);
         assert.ok(b.y0 > -0.006 && b.y0 < 0.012, `${what}: on the floor (${b.y0.toFixed(3)})`);
-        assert.ok(g.attributes.position.count / 3 < 12000, `${what}: ${g.attributes.position.count / 3} tris`);
+        assert.ok(g.attributes.position.count / 3 < 12000 * TRIS_X, `${what}: ${g.attributes.position.count / 3} tris`);
       }
   }
   // the tables' tops (the ping-pong top away from its lines and net; the slot board on its felt)
@@ -419,7 +420,7 @@ test("on the walls: hung on the face, the live pictures' surfaces just behind th
         assert.ok(b.x0 >= -0.005 && b.x1 <= e.w + 0.005, `${what}: along ${b.x0.toFixed(3)}..${b.x1.toFixed(3)}`);
         assert.ok(b.z0 >= 0.1 - 0.002 && b.z1 <= 0.32, `${what}: out ${b.z0.toFixed(3)}..${b.z1.toFixed(3)}`);
         assert.ok(b.y0 > 0.2, `${what}: up off the floor (${b.y0.toFixed(3)})`);
-        assert.ok(g.attributes.position.count / 3 < 8000, `${what}: ${g.attributes.position.count / 3} tris`);
+        assert.ok(g.attributes.position.count / 3 < MAX_TRIS, `${what}: ${g.attributes.position.count / 3} tris`);
       }
   }
   for (const [kind, x0, x1, z0, z1, plane] of [
@@ -496,7 +497,7 @@ test("decor, floor, pets, outside: on the footprint, on the floor, the bowls fil
         assert.ok(b.x0 >= ox0 - 0.005 && b.x1 <= ox1 + 0.005, `${what}: across ${b.x0.toFixed(3)}..${b.x1.toFixed(3)}`);
         assert.ok(b.z0 >= oz0 - 0.005 && b.z1 <= oz1 + 0.005, `${what}: down ${b.z0.toFixed(3)}..${b.z1.toFixed(3)}`);
         assert.ok(b.y0 > -0.006 && b.y0 < 0.012, `${what}: on the floor (${b.y0.toFixed(3)})`);
-        assert.ok(g.attributes.position.count / 3 < 8000, `${what}: ${g.attributes.position.count / 3} tris`);
+        assert.ok(g.attributes.position.count / 3 < MAX_TRIS, `${what}: ${g.attributes.position.count / 3} tris`);
       }
   }
   // what's left in a bowl shows
@@ -573,7 +574,7 @@ test("plan 68's heroes: on their footprints, at their spec; live parts apart and
         `${what}: on its footprint`,
       );
       assert.ok(b.y0 > -0.006 && b.y0 < 0.012, `${what}: on the floor`);
-      assert.ok(g.attributes.position.count / 3 < 8000, `${what}: under 8k tris`);
+      assert.ok(g.attributes.position.count / 3 < MAX_TRIS, `${what}: under 8k tris`);
     }
   for (let variant = 0; variant < 3; variant++) {
     const sofa = modelOf({ id: "s", kind: "loveseat", x: 0, y: 0, yaw: quarterYaw(0), props: { variant } });
@@ -677,7 +678,7 @@ test("Christmas: on their footprints, lit and moving, named and dated", () => {
       assert.ok(b.y1 <= 3.275, `${what}: under the ceiling (${b.y1.toFixed(3)})`);
       if (!e.wall && kind !== "mistletoe")
         assert.ok(b.y0 > -0.03 && b.y0 < 0.02, `${what}: on the floor (${b.y0.toFixed(3)})`);
-      assert.ok(g.attributes.position.count / 3 < 8000, `${what}: under 8k tris`);
+      assert.ok(g.attributes.position.count / 3 < MAX_TRIS, `${what}: under 8k tris`);
     }
   const live = (kind: string, props: Record<string, unknown> = {}) =>
     (modelOf({ id: "x", kind, x: 0, y: 0, yaw: quarterYaw(0), props }).userData.live as LivePart[]) ?? [];

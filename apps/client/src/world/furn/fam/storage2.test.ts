@@ -4,6 +4,7 @@ import { entry, quarterYaw, SURFACE } from "@yutopia/shared";
 import { type BufferGeometry, DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from "three";
 import { type LivePart, Model } from "../kit";
 import { modelOf } from "../native";
+import { MAX_TRIS } from "../tris-limit";
 import * as storage2 from "./storage2";
 
 // Plan 68 phase 5 (docs/plan/68-more-furniture.md): Storage — every kind and look on its footprint, on
@@ -56,7 +57,7 @@ test("storage: every kind and look on its footprint, on the floor or the wall, u
           const what = `${kind} ${variant} ${id}${on ? "" : " off"}`;
           assert.ok(b.x0 >= -0.005 && b.x1 <= e.w + 0.005, `${what}: across ${b.x0.toFixed(3)}..${b.x1.toFixed(3)}`);
           assert.ok(b.y1 <= 3.275, `${what}: under the ceiling (${b.y1.toFixed(3)})`);
-          assert.ok(tris(g) < 8000, `${what}: ${tris(g)} tris`);
+          assert.ok(tris(g) < MAX_TRIS, `${what}: ${tris(g)} tris`);
           if (e.wall) {
             assert.ok(
               b.z0 >= 0.098 && b.z1 <= 0.35,

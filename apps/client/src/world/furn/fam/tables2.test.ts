@@ -5,6 +5,7 @@ import { Box3, type BufferGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, 
 import type { LivePart } from "../kit";
 import { liveGroup } from "../liveparts";
 import { modelOf } from "../native";
+import { MAX_TRIS } from "../tris-limit";
 import { LOOKS } from "./tables2";
 
 // Plan 68 phase 4 (docs/plan/68-more-furniture.md): the new desks and tables — every kind and look on
@@ -57,7 +58,7 @@ test("desks & tables 2: every kind and look on its footprint, its top at its spe
         );
         assert.ok(b.min.y > -0.006 && b.min.y < 0.012, `${what}: on the floor (${b.min.y.toFixed(3)})`);
         assert.ok(b.max.y < 3.27, `${what}: under the ceiling`);
-        assert.ok(tris(g) < 8000, `${what}: ${tris(g)} tris`);
+        assert.ok(tris(g) < MAX_TRIS, `${what}: ${tris(g)} tris`);
         for (let cy = top[1]; cy < top[3]; cy++)
           for (let cx = top[0]; cx < top[2]; cx++) {
             const h = topAt(w, (cx + 0.5) / 4, (cy + 0.5) / 4, want + 0.3);

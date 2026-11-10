@@ -5,6 +5,7 @@ import { Box3, type BufferGeometry, Mesh, MeshBasicMaterial } from "three";
 import type { LivePart } from "../kit";
 import { liveAt } from "../liveparts";
 import { modelOf } from "../native";
+import { MAX_TRIS } from "../tris-limit";
 import { LOOKS } from "./desktop2";
 
 // Plan 68 phase 7 (docs/plan/68-more-furniture.md): On desks — every kind and look a thing on a surface
@@ -60,7 +61,7 @@ test("on desks: every kind and look in its frame, on the top it stands on, under
           );
           assert.ok(b.min.y > -0.004 && b.min.y < 0.012, `${what}: on its top (${b.min.y.toFixed(4)})`);
           assert.ok(b.max.y < 0.4, `${what}: low enough for a shelf (${b.max.y.toFixed(3)})`);
-          assert.ok(tris(g) < 8000, `${what}: under 8k tris (${tris(g)})`);
+          assert.ok(tris(g) < MAX_TRIS, `${what}: under 8k tris (${tris(g)})`);
         }
   }
 });

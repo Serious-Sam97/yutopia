@@ -5,6 +5,7 @@ import { type BufferGeometry, DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Ve
 import type { LivePart } from "../kit";
 import { liveAt } from "../liveparts";
 import { modelOf } from "../native";
+import { MAX_TRIS } from "../tris-limit";
 import { LOOKS } from "./kitchen";
 
 // Plan 68 phase 18 (docs/plan/68-more-furniture.md): the kitchen and café — every look on its footprint
@@ -61,7 +62,7 @@ test("kitchen: every look on its footprint, on the floor, under the ceiling and 
         assert.ok(b.y0 > -0.01 && b.y0 < 0.02, `${what}: on the floor (${b.y0.toFixed(3)})`);
         assert.ok(b.y1 < (e.onSurface ? 0.5 : 3.27), `${what}: ${b.y1.toFixed(2)} m`);
         assert.ok(
-          g.attributes.position.count / 3 < 8000,
+          g.attributes.position.count / 3 < MAX_TRIS,
           `${what}: under 8k tris (${g.attributes.position.count / 3})`,
         );
       }

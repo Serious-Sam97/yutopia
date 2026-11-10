@@ -4,6 +4,7 @@ import { entry, hangSize } from "@yutopia/shared";
 import { type BufferGeometry, Euler, Matrix4, Vector3 } from "three";
 import { type LivePart, Model } from "../kit";
 import { liveAt } from "../liveparts";
+import { MAX_TRIS } from "../tris-limit";
 import { DRAW, LOOKS } from "./seasons";
 
 // Plan 68 phase 20 (docs/plan/68-more-furniture.md): the other seasons — every kind and look on its
@@ -98,7 +99,7 @@ test("seasons: every look on its footprint, on the floor or its wall, under the 
         } else if (kind === "paper_chains") {
           if (b.y0 < 2.4) bad.push(`${what}: under heads (${b.y0.toFixed(2)})`);
         } else if (!(b.y0 > -0.02 && b.y0 < 0.02)) bad.push(`${what}: on the floor (${b.y0.toFixed(3)})`);
-        if (tris(g) >= 8000) bad.push(`${what}: ${tris(g)} tris`);
+        if (tris(g) >= MAX_TRIS) bad.push(`${what}: ${tris(g)} tris`);
       }
   }
   assert.deepEqual(bad, []);

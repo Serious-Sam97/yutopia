@@ -5,6 +5,7 @@ import { type BufferGeometry, DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Ve
 import type { LivePart } from "../kit";
 import { liveAt } from "../liveparts";
 import { modelOf } from "../native";
+import { MAX_TRIS } from "../tris-limit";
 import * as office2 from "./office2";
 
 // Plan 68 phase 6 (docs/plan/68-more-furniture.md): Office — every kind and look on its footprint, on the
@@ -57,7 +58,7 @@ test("office: every kind and look on its footprint, on the floor or the wall, un
           const what = `${kind} ${variant} ${id}${on ? "" : " off"}`;
           assert.ok(b.x0 >= -0.005 && b.x1 <= e.w + 0.005, `${what}: across ${b.x0.toFixed(3)}..${b.x1.toFixed(3)}`);
           assert.ok(b.y1 <= 3.275, `${what}: under the ceiling (${b.y1.toFixed(3)})`);
-          assert.ok(tris(g) < 8000, `${what}: ${tris(g)} tris`);
+          assert.ok(tris(g) < MAX_TRIS, `${what}: ${tris(g)} tris`);
           if (e.wall) {
             assert.ok(
               b.z0 >= 0.098 && b.z1 <= 0.35,

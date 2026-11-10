@@ -1235,6 +1235,15 @@ Done 2026-11-10 (the whole phase without sign-offs).
     the lot, studio and Floor 1, the town 17.4–17.8 and the lobby 16.8–18.3 a run (a slow frame among
     many: not the GPU's — its frame is 12 ms).
 
+## The default (2026-11-10)
+
+The life look is everyone's: `look/look-mode.ts` reads `life` unless the address says `?look=classic`
+or `localStorage["yutopia:look"]` is `"classic"` (and in Node too, so the unit tests build the life
+kit). The furniture tests' triangle limits are ×4 in the life kit (`furn/tris-limit.ts`: 27.9k the most,
+a ladder bookcase's rounded books; 17.3k a bus shelter; 14.2k a slot track); `tp/model-bounds.ts` reads
+the life kit's material buckets; a window seat's sagging back cushions may top out 0.1 m under their
+shape. The nightly memcheck opens `/`, so it runs the life look now (`LOOK=classic` for the old).
+
 ## Rebuilding the assets
 
 The files in `apps/client/public/life/` (`.glb` and `.ktx2`, ~37 MB) are in git since 2026-11-10: nothing

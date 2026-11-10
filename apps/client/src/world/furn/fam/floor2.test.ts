@@ -6,6 +6,7 @@ import { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from "three";
 import type { LivePart } from "../kit";
 import { liveAt } from "../liveparts";
 import { modelOf } from "../native";
+import { MAX_TRIS } from "../tris-limit";
 import { LOOKS } from "./floor2";
 
 // Plan 68 phase 15: Rugs & floor — every kind and look on its footprint, on the floor, under 8k tris;
@@ -61,7 +62,7 @@ test("rugs & floor: every look on its footprint, on the floor, under 8k tris; ru
             `${what}: on its footprint`,
           );
           assert.ok(b.y0 > -0.006 && b.y0 < 0.02, `${what}: on the floor (${b.y0.toFixed(3)})`);
-          assert.ok(tris(g) < 8000, `${what}: under 8k tris (${tris(g)})`);
+          assert.ok(tris(g) < MAX_TRIS, `${what}: under 8k tris (${tris(g)})`);
           if (!e.solid && kind !== "dance_floor") assert.ok(b.y1 < 0.06, `${what}: flat (${b.y1.toFixed(3)})`);
         }
   }

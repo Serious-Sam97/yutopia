@@ -5,6 +5,7 @@ import { type BufferGeometry, DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Ve
 import type { LivePart } from "../kit";
 import { liveAt } from "../liveparts";
 import { modelOf } from "../native";
+import { MAX_TRIS } from "../tris-limit";
 import { LOOKS, PLAY } from "./music";
 
 // Plan 68 phase 10 (docs/plan/68-more-furniture.md): play & music — every kind and look on its footprint
@@ -73,7 +74,7 @@ test(`play & music: every kind and look on its footprint, under the ceiling, on 
         assert.ok(b.y1 <= CEILING, `${what}: under the ceiling (${b.y1.toFixed(2)})`);
         if (e.wall) assert.ok(b.z0 >= 0.1 - 0.005, `${what}: out from the wall's face`);
         else assert.ok(b.y0 > -0.02 && b.y0 < 0.02, `${what}: on the floor (${b.y0.toFixed(3)})`);
-        assert.ok(tris(g) < 8000, `${what}: under 8k tris (${tris(g)})`);
+        assert.ok(tris(g) < MAX_TRIS, `${what}: under 8k tris (${tris(g)})`);
       }
   }
 });

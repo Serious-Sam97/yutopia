@@ -12,7 +12,7 @@
 // either fails it, and the browser's heap crossing it diffs two heap snapshots (what grew, by kind).
 //   node --experimental-strip-types e2e/memcheck.mts [cycles=4] [out.json]
 //   PORT=2674; BOTS=12 (people at once; a third of them leave and come back each cycle); IDLE=20 (s);
-//   WORLD=<world.json[.gz]> (e.g. prod's); NO_ROAD=1 (skip the long road); LOOK=life (plan 73's look: run here — its files, public/life, aren't in git, so not in CI's nightly)
+//   WORLD=<world.json[.gz]> (e.g. prod's); NO_ROAD=1 (skip the long road); LOOK=classic (the old look; the life look is the default since 2026-11-10, so CI's nightly runs it)
 //   SERVER_DIFF=1: the world-server's heap diffed even when it's within its budget; SERVER_FROM=n:
 //   from cycle n (default 1); YUTOPIA_CHUNK_CAP=n: its land cache that small (full early)
 //   MEM_FAKE_API=1: no API — answered as the smoke e2e's (e2e/ci/api.ts), the page on Low (CI's

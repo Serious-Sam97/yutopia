@@ -5,6 +5,7 @@ import { Box3, type BufferGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, 
 import type { LivePart } from "../kit";
 import { liveAt, liveGroup } from "../liveparts";
 import { modelOf } from "../native";
+import { MAX_TRIS } from "../tris-limit";
 import { LOOKS } from "./seating2";
 
 // Plan 68 phase 3 (docs/plan/68-more-furniture.md): the new seats — every kind and look, empty and sat
@@ -60,7 +61,7 @@ test("seating 2: every kind and look, empty and sat in — on its footprint, und
           assert.ok(b.max.y <= 3.275, `${what}: under the ceiling (${b.max.y.toFixed(3)})`);
           if (kind === "hanging_chair") assert.ok(b.min.y > 0.25 && b.max.y > 3.2, `${what}: hung from the ceiling`);
           else assert.ok(b.min.y > -0.006 && b.min.y < 0.012, `${what}: on the floor (${b.min.y.toFixed(3)})`);
-          assert.ok(tris(g) < 8000, `${what}: ${tris(g)} tris`);
+          assert.ok(tris(g) < MAX_TRIS, `${what}: ${tris(g)} tris`);
           if (occupied) continue;
           // the seat's top where she sits (the middle of a tile; the bleachers' front row)
           const s = SEAT_SPEC[kind];

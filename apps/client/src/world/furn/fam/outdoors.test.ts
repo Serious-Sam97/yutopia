@@ -4,6 +4,7 @@ import { entry, SEAT_SPEC, SURFACE } from "@yutopia/shared";
 import { type BufferGeometry, DoubleSide, Euler, Matrix4, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from "three";
 import { type LivePart, Model } from "../kit";
 import { liveAt } from "../liveparts";
+import { MAX_TRIS } from "../tris-limit";
 import { DRAW, LOOKS } from "./outdoors";
 
 // Plan 68 phase 19 (docs/plan/68-more-furniture.md): the Outdoors — every kind and look on its
@@ -96,7 +97,7 @@ test("outdoors: every look on its footprint, on the ground, under 8k tris, out o
         // (out of doors there's no ceiling: only the flag pole is taller than a room)
         if (b.y1 > (kind === "flag_pole" ? 4.6 : 3.0)) bad.push(`${what}: ${b.y1.toFixed(2)} high`);
         if (!(b.y0 > -0.02 && b.y0 < 0.02)) bad.push(`${what}: on the ground (${b.y0.toFixed(3)})`);
-        if (tris(g) >= 8000) bad.push(`${what}: ${tris(g)} tris`);
+        if (tris(g) >= MAX_TRIS) bad.push(`${what}: ${tris(g)} tris`);
       }
   }
   assert.deepEqual(bad, []);

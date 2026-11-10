@@ -20,7 +20,8 @@ export interface Bounds3 {
 /** The box round what's drawn (solid and glass; not the free-hand cards: a plant's leaves). */
 export function outBounds(o: Out): Bounds3 | null {
   const b = { x0: 1e9, y0: 1e9, z0: 1e9, x1: -1e9, y1: -1e9, z1: -1e9 };
-  for (const g of [o.lit, o.glow, o.clear])
+  // (every bucket: the life look's kit draws into its materials' — Out.mats)
+  for (const g of o.geos)
     for (let i = 0; i < g.pos.length; i += 3) {
       b.x0 = Math.min(b.x0, g.pos[i]);
       b.x1 = Math.max(b.x1, g.pos[i]);

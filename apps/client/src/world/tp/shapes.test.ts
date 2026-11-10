@@ -14,6 +14,9 @@ const TOL = 0.06; // m, any face
 const OWN = new Set<string>(["stairs", "elevator"]);
 // (a plant's leaves are walked through, plan 67: only its pot is solid — the shape inside the drawing)
 // (and an arc lamp's head over the next tile, a coat rack's coats: walked under, brushed past)
+// (the life look's cushions dip where they're sat or leant on, plan 73 phase 6: a window seat's back
+// cushions, leant back against the wall, top out a little under their shape)
+const SAGS = new Map<string, number>([["window_seat", 0.1]]);
 const SOFT = new Set<string>([
   "plant",
   "decor",
@@ -77,6 +80,7 @@ test("every kind's shapes fit its 3D model, at every turn", () => {
         (k) =>
           Math.abs(model[k] - shape[k]) > TOL &&
           !(k === "y0" && shape.y0 === 0 && model.y0 <= 0.1) &&
+          !(k === "y1" && SAGS.has(kind) && model.y1 < shape.y1 && model.y1 >= shape.y1 - (SAGS.get(kind) ?? 0)) &&
           !(SOFT.has(kind) && (k.endsWith("0") ? shape[k] >= model[k] - TOL : shape[k] <= model[k] + TOL)),
       );
       if (off.length)
