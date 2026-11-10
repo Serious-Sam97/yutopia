@@ -58,6 +58,7 @@ import { landPool } from "./land-pool";
 import { lifeDress } from "./life-dress";
 import {
   lifeBushGeometry,
+  lifeFarLeafyGeometry,
   lifeLeafyGeometry,
   lifePineGeometry,
   lifeTreeDepth,
@@ -282,8 +283,11 @@ if (vFade < 0.999) {
       // (finer than it was: faceted, a coarse one was a heap of shards)
       // (the weather's: each its own, wx3d.ts gives an instance its own threshold round this)
       tinted(new SphereGeometry(1, 16, 5, 0, Math.PI * 2, 0, Math.PI / 2), 0xf6f8fb, 0.62),
-      crowned(farBirchGeometry(), [0.38, 0.48, 0.25], 0.62, 0.26, true),
-      crowned(farBareGeometry(), [0.3, 0.39, 0.2], 0.6, 0.3, true),
+      // (the life look: its own far leafy shape, a third of the triangles — plan 73)
+      life
+        ? lifeFarLeafyGeometry([0.48, 0.62, 0.27], 8.5)
+        : crowned(farBirchGeometry(), [0.38, 0.48, 0.25], 0.62, 0.26, true),
+      life ? lifeFarLeafyGeometry([0.42, 0.56, 0.24], 7) : crowned(farBareGeometry(), [0.3, 0.39, 0.2], 0.6, 0.3, true),
       // the woods' floor (woods3d.ts)
       life ? lifeBushGeometry(r) : shrubGeometry(r),
       stumpGeometry(r),

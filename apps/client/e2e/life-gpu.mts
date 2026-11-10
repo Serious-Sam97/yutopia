@@ -1,8 +1,8 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: reads the world's window test hooks */
 // Plan 73 phase 11 (dev only) — where High's frame goes, as Ana on the dev stack at a spot and a held
-// camera: the scene's own render timed on the GPU (EXT_disjoint_timer_query_webgl2, 300 frames) and the
-// frames' gaps (rAF), then again with a thing switched off — the trees' and plants' cards (the atlas),
-// the AO. The look by LOOKQ (life, life&out=old, …).
+// camera: the whole frame's GPU time (the post's render, the scene and every pass: timer queries over 240
+// frames) and the frames' gaps (rAF); the far woods' triangles by shape; then again with a thing switched
+// off (the AO, the bloom, the woods). The look by LOOKQ (life, life&out=old, …).
 //   LOOKQ=life node --experimental-strip-types e2e/life-gpu.mts "x,y,yaw,pitch,dist"
 import { chromium, request } from "@playwright/test";
 
@@ -61,7 +61,8 @@ const gapsNow = () =>
   );
 const each = (fn: string) =>
   `(() => { window.__yutopia.tp.scene.traverse((o) => { const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : []; for (const m of ms) { ${fn} } }); })()`;
-// GPU time of the scene's render each frame, by the timer query, over 300 frames
+// GPU time a frame, by timer queries over 240 frames: the scene's render (its shadow pass in it) and the
+// whole frame's (the post's render: the scene and every pass after it)
 const gpu = () =>
   p.evaluate(
     () =>
@@ -70,46 +71,98 @@ const gpu = () =>
         const gl = tp.renderer.getContext() as WebGL2RenderingContext;
         const ext = gl.getExtension("EXT_disjoint_timer_query_webgl2");
         if (!ext) return done("no timer query");
-        const qs: WebGLQuery[] = [];
-        const out: number[] = [];
+        const qs: { q: WebGLQuery; kind: "scene" | "frame" }[] = [];
+        const got = { scene: [] as number[], frame: [] as number[] };
         const render = tp.renderer.render.bind(tp.renderer);
+        const post = tp.post;
+        const postRender = post?.render.bind(post);
         let n = 0;
+        let inFrame = false;
         tp.renderer.render = (s: any, c: any) => {
-          if (s === tp.scene && n < 300) {
+          if (s !== tp.scene || inFrame || n >= 240) return render(s, c);
+          const q = gl.createQuery() as WebGLQuery;
+          gl.beginQuery(ext.TIME_ELAPSED_EXT, q);
+          render(s, c);
+          gl.endQuery(ext.TIME_ELAPSED_EXT);
+          qs.push({ q, kind: "scene" });
+        };
+        if (post)
+          post.render = (...a: unknown[]) => {
+            if (n >= 240) return postRender(...a);
+            n++;
             const q = gl.createQuery() as WebGLQuery;
             gl.beginQuery(ext.TIME_ELAPSED_EXT, q);
-            render(s, c);
+            inFrame = true;
+            postRender(...a);
+            inFrame = false;
             gl.endQuery(ext.TIME_ELAPSED_EXT);
-            qs.push(q);
-            n++;
-          } else render(s, c);
-        };
+            qs.push({ q, kind: "frame" });
+          };
         const poll = () => {
           for (let i = qs.length - 1; i >= 0; i--) {
-            const q = qs[i];
-            if (gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) {
-              out.push(gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6);
-              gl.deleteQuery(q);
-              qs.splice(i, 1);
-            }
+            const e = qs[i];
+            if (!gl.getQueryParameter(e.q, gl.QUERY_RESULT_AVAILABLE)) continue;
+            got[e.kind].push(gl.getQueryParameter(e.q, gl.QUERY_RESULT) / 1e6);
+            gl.deleteQuery(e.q);
+            qs.splice(i, 1);
           }
-          if (n >= 300 && !qs.length) {
+          if (n >= 240 && !qs.length) {
             tp.renderer.render = render;
-            out.sort((a, b) => a - b);
-            done(
-              `scene gpu median ${out[out.length >> 1].toFixed(2)} ms p90 ${out[Math.floor(out.length * 0.9)].toFixed(2)} (${out.length})`,
-            );
+            if (post) post.render = postRender;
+            const med = (v: number[]) => (v.length ? v.sort((a, b) => a - b)[v.length >> 1].toFixed(2) : "-");
+            done(`gpu: scene ${med(got.scene)} ms, whole frame ${med(got.frame)} ms`);
           } else requestAnimationFrame(poll);
         };
         requestAnimationFrame(poll);
       }),
   );
+const tp = "window.__yutopia.tp";
+console.log(
+  await p.evaluate(() => {
+    const by = new Map<string, number[]>();
+    (window as any).__yutopia.tp.scene.traverse((o: any) => {
+      if (!o.isInstancedMesh || o.material?.userData?.wx !== "tree" || !o.count || o.geometry.userData.cards) return;
+      const g = o.geometry;
+      const t = (g.index ? g.index.count : g.attributes.position.count) / 3;
+      const k = `${t}${g.userData.shadow ? "s" : ""}`;
+      const v = by.get(k) ?? [0, 0];
+      v[0] += o.count;
+      v[1] += t * o.count;
+      by.set(k, v);
+    });
+    return [...by]
+      .sort((a, b) => b[1][1] - a[1][1])
+      .slice(0, 12)
+      .map(([k, [n, t]]) => `${k} tris: ${n} trees, ${(t / 1e6).toFixed(2)}M`)
+      .join(" | ");
+  }),
+);
 const steps: [string, string][] = [
   ["base", "0"],
-  ["- atlas cards", each("if (m.alphaTest > 0 && m.map?.image?.width === 640) m.visible = false;")],
-  ["+ atlas cards", each("if (m.alphaTest > 0 && m.map?.image?.width === 640) m.visible = true;")],
-  ["- AO", "(() => { const ao = window.__yutopia.tp.post?.ao; if (ao) ao.enabled = false; })()"],
+  ["- AO", `(() => { const ao = ${tp}.post?.ao; if (ao) ao.enabled = false; })()`],
+  ["- bloom", `(() => { const b = ${tp}.post?.bloom; if (b) b.enabled = false; })()`],
+  ["- woods", each("if (m.userData?.wx === 'tree') m.visible = false;")],
 ];
+// (the woods' share of the scene's triangles and instances)
+console.log(
+  await p.evaluate(() => {
+    const tp = (window as any).__yutopia.tp;
+    let inst = 0;
+    let tris = 0;
+    let solidTris = 0;
+    const kinds: string[] = [];
+    tp.scene.traverse((o: any) => {
+      if (!o.isInstancedMesh || o.material?.userData?.wx !== "tree" || !o.visible || !o.count) return;
+      const g = o.geometry;
+      const t = (g.index ? g.index.count : g.attributes.position.count) / 3;
+      inst += o.count;
+      tris += t * o.count;
+      if (!g.userData.cards) solidTris += t * o.count;
+      kinds.push(`${o.count}x${t}${g.userData.cards ? "c" : ""}`);
+    });
+    return JSON.stringify({ inst, tris, solidTris, kinds: kinds.slice(0, 40) });
+  }),
+);
 for (const [n, fn] of steps) {
   await p.evaluate(fn);
   await p.waitForTimeout(2000);

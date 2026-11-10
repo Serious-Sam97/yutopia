@@ -119,11 +119,11 @@ export function treeAtlas(): CanvasTexture {
   return atlas;
 }
 
-/** The woods' material in the life look: the atlas on it, its cards cut out, both sides of them. */
+/** The woods' material in the life look: the atlas on it, its cards cut out (each card's two faces its
+ *  own geometry: the material stays one-sided). */
 export function lifeTreeMaterial<M extends Material & { map: unknown; alphaTest: number }>(m: M): M {
   m.map = treeAtlas();
   m.alphaTest = 0.5;
-  m.side = 2; // DoubleSide
   return m;
 }
 let depth: MeshDepthMaterial | null = null;
@@ -163,7 +163,9 @@ class Cards {
       [u[0], 1],
     ];
     if (flip) U.reverse();
-    for (const i of [0, 1, 2, 0, 2, 3]) {
+    // (both faces, wound each way, lit alike: the material's one-sided — two-sided, every trunk's and
+    // cone's back was shaded too, 1.5 ms of High's town frame: plan 73)
+    for (const i of [0, 1, 2, 0, 2, 3, 0, 2, 1, 0, 3, 2]) {
       this.pos.push(P[i].x, P[i].y, P[i].z);
       this.nor.push(n.x, n.y, n.z);
       this.col.push(...rgb);
@@ -240,20 +242,22 @@ export function lifeLeafyGeometry(
   };
   // a dark core under the cards: no sky through the crown's middle
   for (const t of tips.filter((_, i) => i % 3 === 0)) {
-    const core = new IcosahedronGeometry(H * 0.1 * spread, 1).toNonIndexed();
+    const core = new IcosahedronGeometry(H * 0.1 * spread, 0).toNonIndexed();
     core.translate(t.x * 0.8 + mid.x * 0.2, t.y * 0.8 + mid.y * 0.2 - 0.2, t.z * 0.8 + mid.z * 0.2);
     const cc = tone(0.7);
     parts.push(solidUV(tinted(core, new Color(cc[0], cc[1], cc[2]).getHex())));
   }
   // the cards: a cluster round each tip, turned every way, lit as the crown's outside is
   const cards = new Cards();
+  // (fourteen, a little larger: the woods are drawn whole, every instance a frame — their triangles
+  // were High's cost; plan 73)
   for (const t of tips)
-    for (let i = 0; i < 22; i++) {
+    for (let i = 0; i < 14; i++) {
       const p = t
         .clone()
         .add(new Vector3((r() - 0.5) * 2, (r() - 0.5) * 1.4, (r() - 0.5) * 2).multiplyScalar(0.8 * spread));
       const out = p.clone().sub(mid).normalize();
-      const s = (0.65 + r() * 0.35) * spread;
+      const s = (0.8 + r() * 0.4) * spread;
       const q = new Quaternion().setFromAxisAngle(
         new Vector3(r() - 0.5, r() - 0.5, r() - 0.5).normalize(),
         r() * Math.PI,
@@ -323,6 +327,27 @@ export function lifePineGeometry(
   return m;
 }
 
+/** A far leafy tree (150 m and on): a trunk and three plain lumps of crown — ~70 triangles (the far birch's
+ *  crowned lumps were 212, ten thousand of them a frame on High: plan 73). `col` its green (sRGB 0–1). */
+export function lifeFarLeafyGeometry(col: V3, H = 8): BufferGeometry {
+  const parts: BufferGeometry[] = [
+    solidUV(tinted(new CylinderGeometry(0.12, 0.2, H * 0.6, 4, 1, true).translate(0, H * 0.3, 0), 0x564638)),
+  ];
+  const c = new Color();
+  for (const [x, y, z, r, k] of [
+    [0, 0.68, 0, 0.3, 1],
+    [0.18, 0.58, 0.1, 0.22, 0.85],
+    [-0.16, 0.6, -0.12, 0.22, 0.9],
+  ]) {
+    const g = new IcosahedronGeometry(H * r, 0).toNonIndexed().translate(H * x, H * y, H * z);
+    c.setRGB(lin(col[0] * k), lin(col[1] * k), lin(col[2] * k));
+    parts.push(solidUV(tinted(g, c.getHex())));
+  }
+  const m = mergeGeometries(parts, false);
+  for (const g of parts) g.dispose();
+  return m;
+}
+
 /** A bush on the woods' floor: today's shrub's lumps under a coat of leaf cards. */
 export function lifeBushGeometry(r: () => number): BufferGeometry {
   const core = solidUV(shrubGeometry(r));
@@ -373,7 +398,7 @@ export function lifePlantsGeometry(items: Plant[], r: () => number): BufferGeome
   const foot: number[] = [];
   const c = new Color();
   const ofs = (n: number, y: number) => {
-    for (let i = 0; i < n * 6; i++) foot.push(y);
+    for (let i = 0; i < n * 12; i++) foot.push(y);
   };
   for (const p of items) {
     const s = p.s ?? 1;

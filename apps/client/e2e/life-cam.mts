@@ -46,6 +46,12 @@ await page.evaluate((h) => {
   w.updateNight = () => {};
   w.tp.setHour(h);
 }, hour);
+// (CLEAR=1: the weather called clear first, now — the dev world's, as an admin; the e2e's own way)
+if (process.env.CLEAR === "1") {
+  await page.evaluate(() => (window as any).__yutopia.send("mod:weather", { to: "clear", now: true }));
+  await page.evaluate(() => (window as any).__yutopia.send("mod:fog", { fog: "clear", now: true }));
+  await page.waitForTimeout(4000);
+}
 const bare = process.env.BARE === "1";
 if (bare)
   await page.evaluate(() => {

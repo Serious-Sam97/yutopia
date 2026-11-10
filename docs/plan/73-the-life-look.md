@@ -1221,8 +1221,18 @@ Done 2026-11-10 (the whole phase without sign-offs).
   Flowmotion, physics, avatar, HUD, admin, use things, games, the wall sofa's menu, the dark, steps, spot,
   world, loading, god mode, lock-on — passed; inventory and sway passed on their second run (load);
   fog:87 and third-person:113 red in the classic look too (known).
-- **Left:** High in the woods' views (the lot, the town) runs ~50 fps on this Mac — the trees' shader
-  (the snow's layer on every card) and their overdraw: impostors or a cheaper card shader next.
+- **High in the woods' views, done 2026-11-10** (`e2e/life-gpu.mts`: the whole frame's GPU time by timer
+  queries, a thing switched off at a time). The town's frame was 14.0 ms of GPU — the woods 7.6 of it
+  (35,862 trees and 4.9M triangles drawn whole every frame: their pools aren't culled), the AO 1.8.
+  - **The woods one-sided**, each card its own two faces (`life-trees.ts Cards`): two-sided, every
+    trunk's and cone's back was shaded too (−1.5 ms).
+  - **A far leafy tree** (`lifeFarLeafyGeometry`, 150 m on): a trunk and three plain lumps, ~70 triangles
+    against the far birch's 212 — ten thousand of them (2.3M → 0.7M triangles).
+  - **The near leafy tree** leaner: 14 cards a tip, a little larger; its dark cores unsubdivided.
+  - **The AO**: eight samples and eight to smooth them (16 each took 1.8 ms at half size).
+  - After: the town's frame 12.9 ms of GPU, the lot's 10.6, the lobby's 12.0; High's frames 16.7 ms in
+    the lot, studio and Floor 1, the town 17.4–17.8 and the lobby 16.8–18.3 a run (a slow frame among
+    many: not the GPU's — its frame is 12 ms).
 
 ## Rebuilding the assets
 

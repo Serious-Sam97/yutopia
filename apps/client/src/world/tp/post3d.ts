@@ -163,8 +163,10 @@ export class Post3 {
     const sized = ao.setSize.bind(ao);
     ao.setSize = (w: number, h: number) => sized(Math.ceil(w / 2), Math.ceil(h / 2));
     ao.blendIntensity = 1;
-    ao.updateGtaoMaterial({ radius: 1.4, distanceFallOff: 1, thickness: 2, scale: 1.6, samples: 16 });
-    ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 10, rings: 3, samples: 16 });
+    // (eight samples and eight to smooth them: sixteen of each took ~1.8 ms of High's frame even at half
+    // size — plan 73)
+    ao.updateGtaoMaterial({ radius: 1.4, distanceFallOff: 1, thickness: 2, scale: 1.6, samples: 8 });
+    ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 8, rings: 2, samples: 8 });
     // (pointed at the frame's depth now, and its shaders compiled while it loads: no recompile and no
     // hitch on its first frame in play)
     const rt = this.composer.renderTarget1;
