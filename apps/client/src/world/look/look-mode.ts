@@ -1,22 +1,35 @@
 // Plan 73 — which look the world is drawn in: `life` (the grown-up look, everyone's since 2026-11-10) or
-// `classic` (the old one: flat, cel, ink — kept to compare). Read once, at start: `?look=classic` in the
-// address, or `localStorage["yutopia:look"]` — no UI; a reload changes it. Everything that differs by look
-// asks `lookMode()`.
+// `classic` (the old one: flat, cel, ink — kept to compare). Everything that differs by look asks
+// `lookMode()`, read once at start.
+// On live (the production build) there's one look: life — no address, no setting picks another (the
+// user, 2026-11-10: "we should have only one style on live"). In development `?look=classic` (and
+// `?build=old`, `?out=old`, `?pets=old`) still draw the old to compare. The look a browser once kept
+// (`localStorage["yutopia:look"]`, plan 73's comparisons) is forgotten everywhere.
 export type LookMode = "classic" | "life";
 
+/** The production build: the one look, no switches. */
+const LIVE = process.env.NODE_ENV === "production";
+
 let mode: LookMode | null = null;
+
+/** An address switch — only in development. */
+function asked(key: string, value: string): boolean {
+  if (LIVE || typeof window === "undefined") return false;
+  try {
+    return new URLSearchParams(window.location.search).get(key) === value;
+  } catch {
+    return false;
+  }
+}
 
 function read(): LookMode {
   if (typeof window === "undefined") return "life";
   try {
-    const q = new URLSearchParams(window.location.search).get("look");
-    if (q === "life" || q === "classic") return q;
-    const kept = window.localStorage.getItem("yutopia:look");
-    if (kept === "life" || kept === "classic") return kept;
+    window.localStorage.removeItem("yutopia:look");
   } catch {
-    // (no storage, an odd address: the default)
+    // (no storage: nothing kept)
   }
-  return "life";
+  return asked("look", "classic") ? "classic" : "life";
 }
 
 /** The look the world is drawn in (fixed for the page's life). */
@@ -29,36 +42,16 @@ export function lookMode(): LookMode {
 export const isLife = () => lookMode() === "life";
 
 /** The life look's buildings (plan 73 phase 7: walls, floors, the outside in the library's materials) —
- *  `?build=old` the buildings as they were under the life light, to compare. */
-export const isLifeBuild = (): boolean => {
-  if (!isLife()) return false;
-  try {
-    return new URLSearchParams(window.location.search).get("build") !== "old";
-  } catch {
-    return true;
-  }
-};
+ *  `?build=old` (development) the buildings as they were under the life light, to compare. */
+export const isLifeBuild = (): boolean => isLife() && !asked("build", "old");
 
 /** The life look's outdoors (plan 73 phase 8: the ground, the trees, the plants, the cars in the
- *  library's materials and new shapes) — `?out=old` the outdoors as they were under the life light. */
-export const isLifeOut = (): boolean => {
-  if (!isLife()) return false;
-  try {
-    return new URLSearchParams(window.location.search).get("out") !== "old";
-  } catch {
-    return true;
-  }
-};
+ *  library's materials and new shapes) — `?out=old` (development) as they were under the life light. */
+export const isLifeOut = (): boolean => isLife() && !asked("out", "old");
 
-/** The life look's pets (plan 73 phase 9: soft fur, wet eyes, no ink) — `?pets=old` as they were. */
-export const isLifePets = (): boolean => {
-  if (!isLife()) return false;
-  try {
-    return new URLSearchParams(window.location.search).get("pets") !== "old";
-  } catch {
-    return true;
-  }
-};
+/** The life look's pets (plan 73 phase 9: soft fur, wet eyes, no ink) — `?pets=old` (development) as
+ *  they were. */
+export const isLifePets = (): boolean => isLife() && !asked("pets", "old");
 
 /** (tests only) set the look. */
 export function setLookModeForTest(m: LookMode | null) {
