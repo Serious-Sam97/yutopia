@@ -1191,6 +1191,39 @@ Built 2026-11-09 (the whole phase without sign-offs).
 Frame times, draws, heap, GPU memory, load time and download size per tier. Memcheck nightly.
 e2e. Before/after stills of every area.
 
+Done 2026-11-10 (the whole phase without sign-offs).
+- **Memory** (`e2e/memcheck.mts LOOK=life`, the built page, its own world-server, 6 people coming and
+  going, 4 cycles): **found a leak** — the material library kept one texture cache and swapped it for a
+  new one whenever another renderer asked (the HUD's people pictures draw their clothes' cloth): every
+  swap loaded each set again as new textures and never let the old go, +35 textures a cycle. One cache a
+  renderer now (`look/life-matlib.ts`). Library map clones shared a map and repeat (`kit-mats.ts
+  repeated`). memcheck counts the life look's caches apart, as the land's chunks: the garment files
+  (`browser.wearFiles`, cap 240 — a file the first time someone wears it, kept) and the library's sets
+  (`look/life-people.ts lifeHeld`); a visitor coming again adds nothing (11 textures their first time,
+  none after). Textures may grow 3 a new garment file. After: heap 748 → 778 MB (allowed +75), textures
+  565 → 597 (allowed +70 with 14 new files), programs flat, every other count within. Classic's own run
+  has its programs +5 over 3 cycles (allowed +3) — as before this plan. `TEX_WHO=1` names a cycle's new
+  textures. The nightly CI stays classic: the life look's files (`public/life`) aren't in git.
+- **Frames by tier** (`e2e/life-build-cost.mts`, 1440×900, noon, the camera held; classic | life):
+  - **High**: the lobby, Floor 1 and the studio 16.7 | 16.7 ms; the lot 16.7 | 19.4, the town 16.7 |
+    21.4 (p95 33 — frames of two refreshes among one). **Found:** the AO at full size alone took the
+    lobby past the refresh — at half size now (`post3d.ts`, however the composer sizes it). The scene's
+    render on the GPU (`e2e/life-gpu.mts`, timer queries): the lobby 12.7 ms, the town 13.8; the trees
+    are ~5 ms of it in either look (the life trees +1.3 over the old). The woods cast their shadows from
+    their solid parts (no cards in the shadow pass), past 150 m draw without cards, the campus's far ring
+    its cones.
+  - **Medium** and **Low**: 16.7 ms in every spot, both looks.
+  - Draws +10…+150 a spot, triangles within ±15%, textures +30…+100, programs +40 (High), +10…+30
+    (Medium), +40 (Low).
+- **Load and download**: ready 9.2 s against 7.8 (High); the life look's files 4.5–5.2 MB on High's first
+  visit, 1.7–2.1 MB on Medium and Low (the half-size maps).
+- **e2e** in the life look, 25 more specs: lighting, night, people-3d, first person, move, jump,
+  Flowmotion, physics, avatar, HUD, admin, use things, games, the wall sofa's menu, the dark, steps, spot,
+  world, loading, god mode, lock-on — passed; inventory and sway passed on their second run (load);
+  fog:87 and third-person:113 red in the classic look too (known).
+- **Left:** High in the woods' views (the lot, the town) runs ~50 fps on this Mac — the trees' shader
+  (the snow's layer on every card) and their overdraw: impostors or a cheaper card shader next.
+
 ## Rebuilding the assets
 
 The `.glb` files in `apps/client/public/life/` are not in git; the scripts make them again.
