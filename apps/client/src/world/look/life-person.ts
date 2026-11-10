@@ -14,6 +14,7 @@ import {
   EXTRA,
   EYE_PITCH,
   EYE_YAW,
+  hasSoftEdge,
   type LifeBase,
   type LifeBody,
   type LifeGender,
@@ -22,6 +23,8 @@ import {
   lifeWornOf,
   loadLifeBase,
   parentOf,
+  softEdgeMaterial,
+  softEdgeMesh,
 } from "./life-people";
 
 // (the file's arms hang this far out from straight down — build_person.py ARM_OUT: all the way down
@@ -74,6 +77,8 @@ export class LifePerson {
       sm.bind(skeleton, new Matrix4());
       this.root.add(sm);
       this.meshes.push(sm);
+      // (plan 74 phase 1: hair and lashes, their soft edge a second draw)
+      if (hasSoftEdge(p.name)) softEdgeMesh(sm, softEdgeMaterial(p.material));
     }
     this.setMorph("slim", b.morph.slim);
     this.setMorph("broad", b.morph.broad);

@@ -1,0 +1,11 @@
+Model Information:
+* title:	Bobhair
+* source:	https://sketchfab.com/3d-models/bobhair-2149a717f39b42c9a37e04ad07e6230e
+* author:	OksanaSun (https://sketchfab.com/zabolotskikhoksana)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Bobhair" (https://sketchfab.com/3d-models/bobhair-2149a717f39b42c9a37e04ad07e6230e) by OksanaSun (https://sketchfab.com/zabolotskikhoksana) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

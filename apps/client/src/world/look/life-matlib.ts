@@ -117,6 +117,9 @@ export interface LibOpts {
   half?: boolean;
   /** load priority: lower sooner (a distance) */
   priority?: number;
+  /** (plan 74) its weave this many times finer: copies of the textures, the same images (one upload) —
+   *  a garment's knit at a tee's scale, the furniture's left as they are */
+  scale?: number;
 }
 
 export type LibMaterial = MeshStandardMaterial | MeshPhysicalMaterial;
@@ -155,18 +158,28 @@ export function libMaterial(id: MatId, renderer: WebGLRenderer, o: LibOpts = {})
   const q = queueFor(renderer);
   let gone = false;
   // (when its own textures are in: userData.loaded — the benches wait on it)
+  const finer: Texture[] = [];
+  const fine = (t: Texture): Texture => {
+    if (!o.scale || o.scale === 1) return t;
+    const c = t.clone();
+    c.repeat.multiplyScalar(o.scale);
+    finer.push(c);
+    return c;
+  };
   m.userData.loaded = q.get(key, o.priority ?? 0).then(
     (set) => {
       if (gone) return;
-      m.map = set.albedo;
-      m.roughnessMap = set.orm;
-      m.aoMap = set.orm;
-      m.normalMap = set.normal;
+      const orm = fine(set.orm);
+      m.map = fine(set.albedo);
+      m.roughnessMap = orm;
+      m.aoMap = orm;
+      m.normalMap = fine(set.normal);
     },
     (e) => console.warn(`life matlib: ${id} didn't load`, e),
   );
   m.addEventListener("dispose", () => {
     gone = true;
+    for (const t of finer) t.dispose();
     q.release(key);
   });
   return m;

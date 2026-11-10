@@ -128,6 +128,13 @@ for (const f of shipped) {
 
 /** A garment's file: small (the largest, the CC0 pack's hairs, ~0.4 MB), packed, readable, our rig. */
 const GARMENT = { mb: 0.6, gpuMb: 3, tris: 12000 };
+/** (plan 74 phase 4) a strand-card hair's: its cap and many fine cards — 12k → 28k triangles (curly's
+ *  ringlets ~26k), 0.6 → 1.4 MB */
+const HAIR_FILE = { ...GARMENT, mb: 1.4, tris: 28000 };
+/** (plan 75) a beard's: a fur of ours, layers on a coarse skin (~10k triangles a full beard), and the
+ *  Sketchfab strands over it (~4.7k) — measured 2026-11-10: full 15.6k, 0.77 MB → 16k, 0.8 MB */
+const BEARD_FILE = { ...GARMENT, mb: 0.8, tris: 16000 };
+const fileBudget = (f: string) => (f.startsWith("hair-") ? HAIR_FILE : f.startsWith("beard-") ? BEARD_FILE : GARMENT);
 for (const who of ["man", "woman"]) {
   const dir = join(DIR, `wear-${who}`);
   const glbs = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".glb")) : [];
@@ -139,7 +146,8 @@ for (const who of ["man", "woman"]) {
         const path = join(dir, f);
         const size = readFileSync(path).length;
         const { json, bin } = readGlb(path);
-        assert.ok(size <= GARMENT.mb * 1e6, `${who}/${f}: ${(size / 1e6).toFixed(2)} MB > ${GARMENT.mb} MB`);
+        const mb = fileBudget(f).mb;
+        assert.ok(size <= mb * 1e6, `${who}/${f}: ${(size / 1e6).toFixed(2)} MB > ${mb} MB`);
         let gpu = 0;
         for (const img of json.images ?? []) {
           assert.equal(img.mimeType, "image/ktx2", `${who}/${f}: an image not packed (pack_glb.py)`);
@@ -154,7 +162,8 @@ for (const who of ["man", "woman"]) {
               p.indices !== undefined
                 ? json.accessors[p.indices].count / 3
                 : json.accessors[p.attributes.POSITION].count / 3;
-        assert.ok(tris <= GARMENT.tris, `${who}/${f}: ${tris} triangles > ${GARMENT.tris}`);
+        const cap = fileBudget(f).tris;
+        assert.ok(tris <= cap, `${who}/${f}: ${tris} triangles > ${cap}`);
         for (const e of json.extensionsRequired ?? []) assert.ok(SUPPORTED.has(e), `${who}/${f}: needs ${e}`);
         const names = new Set((json.skins?.[0]?.joints ?? []).map((j) => json.nodes[j].name));
         for (const j of JOINTS) assert.ok(names.has(j), `${who}/${f}: no joint ${j}`);

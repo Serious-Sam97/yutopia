@@ -9,6 +9,8 @@
 #
 # Units are MakeHuman's (decimetres, y up, facing +z, the person's left +x), before the arms are brought
 # down: build_person.py poses a garment as it poses any part.
+import math
+
 import numpy as np
 
 # the garments of the sample (phase 5.0); `sleeve` / `legs` along the limb: 0 the shoulder or the hip
@@ -22,23 +24,24 @@ import numpy as np
 # Pieces of a garment's own (made after its shell, each new vertex going with the body's it grows from):
 # `collar` ("stand" | "fold", height dm) round its neckline — a fold lies out over the shoulders, a
 # lapel down a deep V; `tie` a strip down the front; `hood` a hood lying on the back (its thickness, dm);
-# `ribs` (period, depth dm) a puffer's quilting; `hole` how far round the neck its neckline reaches
-TOP = {"helper": "tights", "fabric": "linen"}
+# `ribs` (period, depth dm) a puffer's quilting; `hole` how far round the neck its neckline reaches;
+# `drape` (plan 74) how the cloth hangs off the body's widest — dm in per dm down it (None: skin-tight)
+TOP = {"helper": "tights", "fabric": "linen", "drape": 0.12}
 LONG = {**TOP, "sleeve": 1.95}
 TEE = {**TOP, "sleeve": 0.42, "hem": ("hip", -0.35), "neck": 0.45, "scoop": 0.35, "thick": 0.09}
 SHIRT = {**LONG, "sleeve": 1.93, "hem": ("hip", -0.45), "neck": 0.3, "scoop": 0.7, "vee": 0.6, "thick": 0.1, "collar": ("fold", 0.32)}
 SWEAT = {**LONG, "hem": ("hip", -0.2), "neck": 0.35, "scoop": 0.15, "thick": 0.15}
-OUTER = {"helper": "tights", "fabric": "twill", "sleeve": 1.98, "hem": ("hip", -0.1)}
+OUTER = {"helper": "tights", "fabric": "twill", "sleeve": 1.98, "hem": ("hip", -0.1), "drape": 0.06}
 HAT = {"helper": "head", "fabric": "boucle"}
-PANTS = {"helper": "tights", "fabric": "twill", "legs": 1.96, "top": ("waist", -0.25), "thick": 0.06}
+PANTS = {"helper": "tights", "fabric": "twill", "legs": 1.96, "top": ("waist", -0.25), "thick": 0.06, "drape": 0.1}
 GARMENTS = {
     # tops (batch 1, 5.2)
     "top-tee": TEE,
     "top-longtee": {**TEE, "sleeve": 1.9},
     "top-henley": {**TEE, "sleeve": 1.9, "scoop": 0.7, "vee": 0.5},
-    "top-crop": {**TEE, "hem": ("waist", 0.35), "thick": 0.08},
+    "top-crop": {**TEE, "hem": ("waist", 0.35), "thick": 0.08, "drape": 0.2},
     "top-polo": {**TEE, "sleeve": 0.45, "neck": 0.25, "scoop": 0.3, "collar": ("fold", 0.28)},
-    "top-tank": {**TOP, "sleeve": 0.02, "hem": ("hip", -0.3), "neck": 0.55, "scoop": 0.6, "thick": 0.08},
+    "top-tank": {**TOP, "drape": 0.25, "sleeve": 0.02, "hem": ("hip", -0.3), "neck": 0.55, "scoop": 0.6, "thick": 0.08},
     "top-shirt": SHIRT,
     "top-flannel": {**SHIRT, "fabric": "twill", "thick": 0.12},
     "top-shirttie": {**SHIRT, "tie": True},
@@ -53,7 +56,7 @@ GARMENTS = {
     "top-jacket": {**LONG, "fabric": "twill", "hem": ("hip", -0.05), "neck": 0.2, "scoop": 0.45, "thick": 0.22, "collar": ("stand", 0.4)},
     "top-puffer": {**LONG, "hem": ("hip", -0.1), "neck": 0.1, "scoop": 0.1, "thick": 0.3, "ribs": (0.9, 0.12), "collar": ("stand", 0.5)},
     # a dress: a top, and a skirt from the hips (`skirt`: a second piece off the skirt's cone)
-    "top-dress": {**TOP, "sleeve": 0.22, "hem": ("hip", 0.25), "neck": 0.5, "scoop": 0.4, "thick": 0.08,
+    "top-dress": {**TOP, "fit_hem": True, "sleeve": 0.22, "hem": ("hip", 0.25), "neck": 0.5, "scoop": 0.4, "thick": 0.08,
                   "skirt": {"helper": "skirt", "top": ("hip", 0.5), "hem": ("knee", 0.35), "thick": 0.12, "aline": 0.14}},
     # bottoms
     # bottoms (batch 2, 5.2): `loose` wider down the leg; `cuff` gathered at the ankle; `pockets` on the
@@ -68,7 +71,7 @@ GARMENTS = {
     "bottom-snowpants": {**PANTS, "thick": 0.18, "loose": 0.2, "ribs": (1.4, 0.05)},
     "bottom-overalls": {**PANTS, "thick": 0.08, "loose": 0.15, "bib": True},
     "bottom-shorts": {**PANTS, "legs": 0.55, "thick": 0.07},
-    "bottom-leggings": {**PANTS, "fabric": "linen", "legs": 1.98, "top": ("waist", -0.15), "thick": 0.03},
+    "bottom-leggings": {**PANTS, "fabric": "linen", "legs": 1.98, "top": ("waist", -0.15), "thick": 0.03, "drape": None},
     # skirts: off the hips, flared below them; over a top's hem (a top's tucked in: its thickness under)
     "bottom-skirt": {"fabric": "tweed", "helper": "skirt", "hem": ("knee", 0.6), "top": ("waist", -0.25), "thick": 0.14, "aline": 0.12},
     "bottom-pleated": {"fabric": "tweed", "helper": "skirt", "hem": ("knee", 0.3), "top": ("waist", -0.25), "thick": 0.14, "aline": 0.18,
@@ -76,11 +79,11 @@ GARMENTS = {
     "bottom-longskirt": {"fabric": "linen", "helper": "skirt", "hem": ("ankle", 1.2), "top": ("waist", -0.25), "thick": 0.14, "aline": 0.16},
     # outer layers (batch 3, 5.2): over a top — thicker than any top
     "outer-parka": {**OUTER, "neck": 0.05, "scoop": 0.15, "thick": 0.28, "collar": ("hood", 1.5),
-                    "skirt": {"helper": "skirt", "top": ("hip", 0.5), "hem": ("knee", 1.4), "thick": 0.3, "aline": 0.2}},
+                    "skirt": {"helper": "skirt", "over": 0.45, "top": ("hip", 0.5), "hem": ("knee", 1.4), "thick": 0.3, "aline": 0.2}},
     "outer-coat": {**OUTER, "fabric": "tweed", "neck": 0.3, "scoop": 1.3, "vee": 0.8, "hole": 1.4, "thick": 0.26, "collar": ("fold", 0.5),
-                   "skirt": {"helper": "skirt", "top": ("hip", 0.5), "hem": ("knee", 0.3), "thick": 0.3, "aline": 0.12}},
+                   "skirt": {"helper": "skirt", "over": 0.45, "top": ("hip", 0.5), "hem": ("knee", 0.3), "thick": 0.3, "aline": 0.12}},
     "outer-raincoat": {**OUTER, "fabric": "linen", "neck": 0.2, "scoop": 0.9, "vee": 0.6, "hole": 1.3, "thick": 0.25, "collar": ("fold", 0.45),
-                       "skirt": {"helper": "skirt", "top": ("hip", 0.5), "hem": ("knee", 0.6), "thick": 0.28, "aline": 0.16}},
+                       "skirt": {"helper": "skirt", "over": 0.45, "top": ("hip", 0.5), "hem": ("knee", 0.6), "thick": 0.28, "aline": 0.16}},
     "outer-puffer": {**OUTER, "hem": ("hip", -0.15), "neck": 0.1, "scoop": 0.1, "thick": 0.36, "ribs": (0.8, 0.14), "collar": ("stand", 0.55)},
     "outer-denim": {**OUTER, "hem": ("hip", 0.15), "neck": 0.25, "scoop": 0.9, "vee": 0.6, "hole": 1.3, "thick": 0.24, "collar": ("fold", 0.35)},
     "outer-sportcoat": {**OUTER, "fabric": "tweed", "hem": ("hip", -0.5), "neck": 0.3, "scoop": 1.8, "vee": 0.8, "hole": 1.6, "thick": 0.25,
@@ -116,19 +119,12 @@ GARMENTS = {
     "shoes-sandals": {"alias": "shoes-loafers", "below": ("ankle", 0.15)},
     "shoes-chelsea": {"alias": "shoes-boots", "below": ("ankle", 1.5)},
     "shoes-snowboots": {"alias": "shoes-boots", "below": ("ankle", 1.5)},
-    # the hairs (5.3): the CC0 pack's ten authored ones under the wardrobe's names (hair.py makes the
-    # rest); curtain and swept the nearest of them
-    "hair-short": {"cc0": "hair/short02/short02", "hair": True},
-    "hair-long": {"cc0": "hair/long01/long01", "hair": True},
-    "hair-bob": {"cc0": "hair/bob01/bob01", "hair": True},
-    "hair-wavy": {"cc0": "hair/bob02/bob02", "hair": True},
-    "hair-ponytail": {"cc0": "hair/ponytail01/ponytail01", "hair": True},
+    # the hairs (5.3): the CC0 pack's under the wardrobe's names — plan 75: braids, and the short ones the
+    # user kept (crew, slick, pixie); hair.py makes the rest, by WARDROBE_HAIR (works by others, our fur)
     "hair-braids": {"cc0": "hair/braid01/braid01", "hair": True},
-    "hair-pixie": {"cc0": "hair/short03/short03", "hair": True},
+    "hair-crew": {"cc0": "hair/short01/short01", "hair": True},
     "hair-slick": {"cc0": "hair/short04/short04", "hair": True},
-    "hair-spiky": {"cc0": "hair/short01/short01", "hair": True},
-    "hair-curtain": {"alias": "hair-bob", "hair": True},
-    "hair-swept": {"alias": "hair-slick", "hair": True},
+    "hair-pixie": {"cc0": "hair/short03/short03", "hair": True},
 }  # fmt: skip
 
 # what each body vertex is, for hiding the skin under what's worn — the build writes it on the body
@@ -325,6 +321,12 @@ def make(spec, V, F0, ow, ALL, J, outward, Z, hair=None):
     face out. `hair`: the hair's vertices (a hat goes over them)."""
     group = {"tights": "helper-tights", "skirt": "helper-skirt", "head": "body"}[spec["helper"]]
     faces = [f[0] for f in F0 if f[2] == group]
+    # (plan 74: a helper's seams welded — vertices in the same place made one: the skirt's cone is open
+    # down one side, and flared its two edges parted in a slit)
+    seen, weld = {}, {}
+    for v in sorted({v for f in faces for v in f}):
+        weld[v] = seen.setdefault(tuple(np.round(V[v] * 2e3).astype(int)), v)
+    faces = [w for w in ([weld[v] for v in f] for f in faces) if len(set(w)) >= 3]
     g = signed(spec, Z, J, V)
     newpos, newsrc, at = [], [], {}
 
@@ -368,9 +370,14 @@ def make(spec, V, F0, ow, ALL, J, outward, Z, hair=None):
     used = np.array(sorted({v for f in kept for v in f}))
     if spec["helper"] == "skirt":
         Q[used] = aline(spec, Q[used], V, F0, Z, J, [[int(np.searchsorted(used, v)) for v in f] for f in kept])
-        return Q, kept, src
+        # (plan 74: its hem turned back; its top too when it's a skirt of its own — a coat's or a dress's
+        # piece joins the top's hem there)
+        return finish(spec, Q, kept, src, J, outward, skirt_top="fabric" not in spec)
     # set off the body: along the shell's normals, by the thickness (`loose`: more down the legs — jeans
     # aren't tights; most at the knee and below)
+    # (plan 74 phase 3: hung off the body's widest first — see `hang`)
+    if spec.get("drape") is not None:
+        Q = hang({**spec, "_kind": kind, "_t": t}, Q, used, kept, V, F0, Z, J)
     N = outward(Q, normals(Q, kept))
     th = np.full(len(Q), float(spec["thick"]))
     # (a bottom's waistband thin: a top's hem lies over it — at the back it came through a sweater)
@@ -407,7 +414,11 @@ def make(spec, V, F0, ow, ALL, J, outward, Z, hair=None):
         Q[used] = over(Q[used], hair)
     if spec["helper"] == "head":
         Q, kept, src = _hat(Q, kept, src, spec, V, Z, J, hair)
-    if spec.get("collar"):
+    # (plan 74) the open edges finished: hems, cuffs, neckbands turned back; stand and fold collars swept
+    # along the neckline (a hood as before)
+    if spec["helper"] != "head":
+        Q, kept, src = finish(spec, Q, kept, src, J, outward)
+    if spec.get("collar") and spec["collar"][0] == "hood":
         Q, kept, src = _collar(Q, kept, src, spec["collar"], on_neck, J)
     return Q, kept, src
 
@@ -591,6 +602,10 @@ def aline(spec, S, V, F0, Z, J, faces):
     drop = np.maximum(0, (yh * DY + y0) - S[:, 1])
     # (above the hips' widest: the body's own; below: flared off the hips, never inside the legs)
     r = np.where(drop > 0, np.maximum(r_body, r_hip + spec.get("aline", 0.1) * drop), r_body) + spec["thick"]
+    # (plan 74: a coat's skirt over what hangs under it — trousers from mid-thigh, a top from the chest:
+    # off the body alone, the trousers came through near its hem and a sweater at its waist)
+    if spec.get("over"):
+        r += spec["over"]
     if spec.get("pleats"):
         # (folds round it, deeper down)
         n, depth = spec["pleats"]
@@ -633,21 +648,37 @@ def uv_metres(Q, faces, kind, J):
     → (uvs, each face's uv indices)"""
     cx = (J["hipL"][0] + J["hipR"][0]) / 2
     cz = (J["hipL"][2] + J["hipR"][2]) / 2
-    axes = {}
-    for k, (a, b) in {1: ("shoulderL", "wristL"), 2: ("shoulderR", "wristR"), 3: ("hipL", "ankleL"), 4: ("hipR", "ankleR")}.items():
-        A, B = np.asarray(J[a]), np.asarray(J[b])
+    # (plan 74: each limb round its two bones' own axes — shoulder to elbow, elbow to wrist: round the one
+    # line from the shoulder to the wrist, the bent forearm ran near it and its angle hardly turned there,
+    # the weave smeared into streaks)
+    def seg(A, B):
         ax = (B - A) / np.linalg.norm(B - A)
         e1 = np.cross(ax, [0, 0, 1.0])
         e1 /= np.linalg.norm(e1)
-        axes[k] = (A, ax, e1, np.cross(ax, e1), 0.45 if k <= 2 else 0.7)
+        return A, ax, e1, np.cross(ax, e1), float(np.linalg.norm(B - A))
+
+    axes = {}
+    for k, (a, m, b) in {1: ("shoulderL", "elbowL", "wristL"), 2: ("shoulderR", "elbowR", "wristR"),
+                         3: ("hipL", "kneeL", "ankleL"), 4: ("hipR", "kneeR", "ankleR")}.items():  # fmt: skip
+        A, M, B = (np.asarray(J[n], dtype=float) for n in (a, m, b))
+        axes[k] = (seg(A, M), seg(M, B), 0.45 if k <= 2 else 0.7)
     uvs, fts = [], []
     for f in faces:
         ks = [int(kind[v]) for v in f]
         k = max(set(ks), key=ks.count)
         if k in axes:
-            A, ax, e1, e2, r = axes[k]
-            d = Q[f] - A
-            ang, v = np.arctan2(d @ e2, d @ e1), -(d @ ax)
+            s1, s2, r = axes[k]
+            angs, vs = [], []
+            for p in Q[f]:
+                A, ax, e1, e2, L = s1
+                along = (p - A) @ ax
+                if along > L:
+                    A, ax, e1, e2, _ = s2
+                    along = L + (p - A) @ ax
+                d = p - A
+                angs.append(np.arctan2(d @ e2, d @ e1))
+                vs.append(-along)
+            ang, v = np.array(angs), np.array(vs)
         else:
             ang, v, r = np.arctan2(Q[f, 0] - cx, Q[f, 2] - cz), Q[f, 1], 1.4
         u = np.unwrap(ang) * r
@@ -732,3 +763,386 @@ def _hat(Q, kept, src, spec, V, Z, J, hair=None):
         kept = kept + [[base + i for i in f] for f in F]
         src = np.concatenate([src, np.full(len(P), near)])
     return Q, kept, src
+
+
+# ---- plan 74 phase 3: the cloth hangs off the body's widest, not round every muscle
+#
+# A garment was the tights helper set off by its thickness: the body's own shape a little bigger, every
+# pec, ab and quad in it, nothing hanging. `hang` moves its vertices out first, round an axis — the
+# figure's for the torso, each limb's own for sleeves and legs:
+#   1. the body's outer hull round that axis, a ring at a time (the most any of the tights reaches out
+#      at each angle), made convex across a ring — cloth spans the hollows (between the pecs, the spine's
+#      groove, the abs, the inside of the thigh);
+#   2. then hung down from the widest above: going down (along the limb), never narrower than the ring
+#      above less `drape` (dm in per dm down) — a tee falls from the chest past the waist, a sleeve
+#      from the deltoid, a trouser leg from the thigh past the knee, a back from the shoulder blades;
+#   3. each vertex out to that radius at its angle and height, blended in below where the garment hangs
+#      from (a sleeve's top, the armpits, a waistband stay on the body); the moves smoothed over the
+#      mesh's neighbours.
+# The thickness is then laid on as before, along the new surface's normals.
+
+HANG_NB = 64  # angle bins round an axis
+HANG_DY = 0.12  # the torso's rings (dm)
+HANG_NT = 48  # a limb's rings, over t 0…2
+
+
+def _convex_rings(r, span):
+    """Each ring made convex-ish: at each angle, at least what the chord to a neighbour within `span`
+    bins reaches (r·cos of the angle between)."""
+    nb = r.shape[0]
+    out = r.copy()
+    for j in range(1, span + 1):
+        c = math.cos(2 * math.pi * j / nb)
+        out = np.maximum(out, np.maximum(np.roll(r, j, 0), np.roll(r, -j, 0)) * c)
+    return out
+
+
+def _fill(r):
+    """Bins no vertex fell in, from their neighbours round the ring and along."""
+    out = r.copy()
+    for _ in range(4):
+        m = np.maximum(np.maximum(np.roll(out, 1, 0), np.roll(out, -1, 0)) * 0.97, out)
+        up, dn = np.roll(m, 1, 1), np.roll(m, -1, 1)
+        up[:, 0] = 0
+        dn[:, -1] = 0
+        out = np.where(out > 0, out, np.maximum(m, np.maximum(up, dn) * 0.97))
+    return out
+
+
+def _bilinear(grid, fa, fy):
+    nb, ny = grid.shape
+    a0 = np.floor(fa).astype(int)
+    y0 = np.clip(np.floor(fy).astype(int), 0, ny - 1)
+    y1 = np.clip(y0 + 1, 0, ny - 1)
+    ta, ty = fa - np.floor(fa), np.clip(fy - y0, 0, 1)
+    g = lambda i, j: grid[i % nb, j]  # noqa: E731
+    return (g(a0, y0) * (1 - ta) + g(a0 + 1, y0) * ta) * (1 - ty) + (g(a0, y1) * (1 - ta) + g(a0 + 1, y1) * ta) * ty
+
+
+def _limb_frame(P, a, b, c, t):
+    """Each point's place round its limb: (the axis point, the radial direction's angle, its radius).
+    The angle measured from the limb's front (the world's +z made square to the segment)."""
+    seg_a = np.where((t <= 1)[:, None], a, b)
+    seg_b = np.where((t <= 1)[:, None], b, c)
+    d = seg_b - seg_a
+    L = np.linalg.norm(d, axis=1, keepdims=True)
+    d = d / np.maximum(L, 1e-9)
+    u = np.clip(((P - seg_a) * d).sum(1, keepdims=True), 0, L)
+    A = seg_a + d * u
+    R = P - A
+    fwd = np.array([0.0, 0.0, 1.0])
+    ref = fwd - (d @ fwd)[:, None] * d
+    ref /= np.maximum(np.linalg.norm(ref, axis=1, keepdims=True), 1e-9)
+    ref2 = np.cross(d, ref)
+    ang = np.arctan2((R * ref2).sum(1), (R * ref).sum(1))
+    return A, ang, np.linalg.norm(R, axis=1), R
+
+
+def hang(spec, Q, used, faces, V, F0, Z, J):
+    """Garment vertices `Q[used]` moved out to hang off the body (see above). `faces` the kept faces
+    (indices into Q)."""
+    drape = spec.get("drape")
+    if drape is None or spec["helper"] != "tights":
+        return Q
+    kind = np.asarray(Z[0])
+    tights = np.array(sorted({v for f in F0 if f[2] == "helper-tights" for v in f[0]}))
+    T, Tk, Tt = V[tights], kind[tights], np.asarray(Z[1])[tights]
+    out = Q.copy()
+    U = np.asarray(used)
+    P = Q[U]
+    # the garment's own vertices' kinds and places along limbs: new (cut) ones are their source's — the
+    # caller passes `kinds`/`ts` over all of Q
+    gk, gt = spec["_kind"][U], spec["_t"][U]
+    # (the most it stands off the body anywhere, dm: past it a hem ballooned)
+    ease_max = spec.get("ease_max", 0.4)
+    move = np.zeros_like(P)
+    # -- the torso, round the figure's axis (a top's hips too — the thighs' vertices above its hem: on the
+    # body while the torso hung forward, they creased a V at the groin; the hull takes the thighs in, so
+    # it spans the front flat)
+    bottom = spec.get("legs") is not None
+    legk = (gk == LEG_L) | (gk == LEG_R)
+    # (not a coat's or a dress's: their skirt piece hangs from the hips, and the top's hips hung forward
+    # no longer met it — a hole at the side)
+    with_hips = not bottom and "skirt" not in spec
+    tm = (gk == TORSO) | (legk if with_hips else False)
+    if tm.any():
+        tlo = T[Tk == TORSO][:, 1].min()
+        hips = ((Tk == LEG_L) | (Tk == LEG_R)) & (T[:, 1] >= tlo) if with_hips else np.zeros(len(T), dtype=bool)
+        TT = T[(Tk == TORSO) | hips]
+        y0 = TT[:, 1].min()
+        ny = int((TT[:, 1].max() - y0) / HANG_DY) + 2
+        yb = np.clip(((TT[:, 1] - y0) / HANG_DY).astype(int), 0, ny - 1)
+        # the axis by height: each ring's middle (its extremes' midpoint), smoothed
+        cx = np.full(ny, np.nan)
+        cz = np.full(ny, np.nan)
+        for i in range(ny):
+            s = TT[yb == i]
+            if len(s):
+                cx[i] = (s[:, 0].min() + s[:, 0].max()) / 2
+                cz[i] = (s[:, 2].min() + s[:, 2].max()) / 2
+        ok = ~np.isnan(cx)
+        idx = np.arange(ny)
+        cx = np.interp(idx, idx[ok], cx[ok])
+        cz = np.interp(idx, idx[ok], cz[ok])
+        k = np.array([1, 2, 3, 2, 1], dtype=float)
+        k /= k.sum()
+        cx = np.convolve(np.pad(cx, 2, mode="edge"), k, "valid")
+        cz = np.convolve(np.pad(cz, 2, mode="edge"), k, "valid")
+        ang = lambda X, i: np.arctan2(X[:, 0] - cx[i], X[:, 2] - cz[i])  # noqa: E731
+        rad = lambda X, i: np.hypot(X[:, 0] - cx[i], X[:, 2] - cz[i])  # noqa: E731
+        hull = np.zeros((HANG_NB, ny))
+        ab = ((ang(TT, yb) + np.pi) / (2 * np.pi) * HANG_NB).astype(int) % HANG_NB
+        np.maximum.at(hull, (ab, yb), rad(TT, yb))
+        # (a top's rings wholly convex: near the crotch the thighs are two lobes too far apart for 90° — its
+        # hem lifted in a notch between them; a bottom's only bridged across 90°)
+        hull = _convex_rings(_fill(hull), HANG_NB // 4 if bottom else HANG_NB // 2)
+        # hung from the armpits down (a top); a bottom only bridged at the hips — jeans fit the seat and the
+        # hips (hung from the seat they stood out past a tee's hem: a leotard over them)
+        top = J["shoulderL"][1] - 0.9 if not bottom else -1e9
+        hung = hull.copy()
+        for i in range(ny - 2, -1, -1):
+            if y0 + (i + 1) * HANG_DY > top:
+                continue
+            hung[:, i] = np.maximum(hull[:, i], hung[:, i + 1] - drape * HANG_DY)
+        Pt = P[tm]
+        fy = np.clip((Pt[:, 1] - y0) / HANG_DY - 0.5, 0, ny - 1.001)
+        iy = np.clip(np.round(fy).astype(int), 0, ny - 1)
+        a = ang(Pt, iy)
+        fa = (a + np.pi) / (2 * np.pi) * HANG_NB - 0.5
+        want = _bilinear(hung, fa, fy)
+        have = rad(Pt, iy)
+        # (blended in under where it hangs from; a bottom's waistband on the body)
+        w = np.clip((top + 0.3 - Pt[:, 1]) / 0.6, 0, 1)
+        if bottom:
+            w = np.clip((level(J, spec["top"]) - Pt[:, 1] - 0.2) / 0.4, 0, 1) if "top" in spec else np.ones(len(Pt))
+        elif spec.get("fit_hem") and "hem" in spec:
+            # (a dress's top fitted toward its hem, where its skirt piece — off the body's hips — takes over:
+            # hung from the bust it stood out past the skirt. Not a coat's: what's under it hangs, and came
+            # through its pinched waist)
+            w = w * np.clip((Pt[:, 1] - level(J, spec["hem"]) - 0.2) / 1.0, 0, 1)
+        # (a top's front falls straight off the belly and the chest: more room than a limb's — capped at a
+        # limb's, a tee's hem wrapped into the lower belly, a leotard)
+        grow = np.minimum(np.maximum(want - have, 0), ease_max * (1 if bottom else 2.2)) * w
+        dirn = np.stack([np.sin(a), np.zeros_like(a), np.cos(a)], 1)
+        move[tm] = dirn * grow[:, None]
+    # -- the limbs, round each one's own axis
+    for kk, names in ((ARM_L, ("shoulderL", "elbowL", "wristL")), (ARM_R, ("shoulderR", "elbowR", "wristR")),
+                      (LEG_L, ("hipL", "kneeL", "ankleL")), (LEG_R, ("hipR", "kneeR", "ankleR"))):  # fmt: skip
+        lm = gk == kk
+        # (a top's hips — the legs' vertices above its hem — on the body: only a bottom's legs hang)
+        if not lm.any() or (kk in (LEG_L, LEG_R) and spec.get("legs") is None):
+            continue
+        a, b, c = (np.asarray(J[n], dtype=float) for n in names)
+        sel = Tk == kk
+        TL, tl = T[sel], Tt[sel]
+        n = len(TL)
+        _, tang, trad, _ = _limb_frame(TL, np.tile(a, (n, 1)), np.tile(b, (n, 1)), np.tile(c, (n, 1)), tl)
+        tb = np.clip((tl / 2 * HANG_NT).astype(int), 0, HANG_NT - 1)
+        ab = ((tang + np.pi) / (2 * np.pi) * HANG_NB).astype(int) % HANG_NB
+        hull = np.zeros((HANG_NB, HANG_NT))
+        np.maximum.at(hull, (ab, tb), trad)
+        hull = _convex_rings(_fill(hull), HANG_NB // 6)
+        # hung along the limb from where the garment starts hanging: past the shoulder's cap; a trouser leg
+        # from mid-thigh (above, it fits). Below the elbow or the knee it tapers in faster (the drape's
+        # half again): hung straight from the thigh, the hem stood out over the shoe in a bell
+        start = 0.25 if kk in (ARM_L, ARM_R) else 0.5
+        lower = np.arange(HANG_NT) >= HANG_NT / 2
+        lens = np.where(lower, np.linalg.norm(c - b) * 1.5, np.linalg.norm(b - a)) * (2 / HANG_NT)
+        hung = hull.copy()
+        for i in range(1, HANG_NT):
+            if (i + 0.5) * 2 / HANG_NT < start:
+                continue
+            # (past t 1.8 — the ankle, the wrist — tapering on from above only: its bones' bulge, the
+            # heel's, flared a trouser's hem out over the shoe)
+            if (i + 0.5) * 2 / HANG_NT > 1.8:
+                hung[:, i] = hung[:, i - 1] - drape * lens[i]
+            else:
+                hung[:, i] = np.maximum(hull[:, i], hung[:, i - 1] - drape * lens[i])
+        Pl, tlg = P[lm], gt[lm]
+        m = len(Pl)
+        _, pang, prad, R = _limb_frame(Pl, np.tile(a, (m, 1)), np.tile(b, (m, 1)), np.tile(c, (m, 1)), tlg)
+        want = _bilinear(hung, (pang + np.pi) / (2 * np.pi) * HANG_NB - 0.5, np.clip(tlg / 2 * HANG_NT - 0.5, 0, HANG_NT - 1.001))
+        w = np.clip((tlg - start) / 0.25, 0, 1)
+        if spec.get("cuff"):
+            w *= np.clip((1.85 - tlg) / 0.15, 0, 1)
+        grow = np.minimum(np.maximum(want - prad, 0), ease_max) * w
+        move[lm] = R / np.maximum(prad, 1e-9)[:, None] * grow[:, None]
+    # the moves smoothed over the garment's own neighbours (the bins' steps)
+    pos = {v: i for i, v in enumerate(U)}
+    nbr = [set() for _ in range(len(U))]
+    for f in faces:
+        for i in range(len(f)):
+            p, q = pos[f[i]], pos[f[(i + 1) % len(f)]]
+            nbr[p].add(q)
+            nbr[q].add(p)
+    nbl = [np.fromiter(s, int) if s else np.array([i]) for i, s in enumerate(nbr)]
+    for _ in range(spec.get("hang_smooth", 6)):
+        move = np.array([0.5 * move[i] + 0.5 * move[n].mean(0) for i, n in enumerate(nbl)])
+    out[U] = P + move
+    return out
+
+
+# ---- plan 74: the garments' edges finished
+#
+# A garment's open edges were a single paper-thin layer, ragged where the helper's faces were sliced,
+# and its collars were built a vertex at a time off an unordered edge — spikes. `finish` walks each open
+# edge as an ordered loop and
+#   - smooths it along itself (the slicing's notches out);
+#   - turns it back inside as a band (a hem, a cuff, a waistband, a neckband): from the edge in toward
+#     the body by the cloth's thickness and back up the garment — the cloth has a thickness at its edge;
+#   - round a neckline with a collar, sweeps the collar's profile along the smoothed loop: standing, or
+#     standing then folded down and out over itself; down a deep V, lapels lying out on the chest. Each
+#     fades to nothing where it ends (the front of a V), so there are no ends to spike.
+
+HEM_IN = 0.035  # the turned-back band: this far in toward the body (dm) …
+HEM_UP = 0.11  # … and this far back up the garment
+
+
+def _loops(faces):
+    """The open edges as ordered loops of vertices (each closed loop once), in their faces' winding."""
+    nxt = {}
+    for a, b in _open_edges(faces):
+        nxt.setdefault(a, []).append(b)
+    seen = set()
+    out = []
+    for start in list(nxt):
+        if start in seen:
+            continue
+        loop, v = [], start
+        while v is not None and v not in seen:
+            seen.add(v)
+            loop.append(v)
+            succ = [w for w in nxt.get(v, []) if w not in seen]
+            v = succ[0] if succ else None
+        if len(loop) >= 3:
+            out.append(loop)
+    return out
+
+
+def _smooth_loop(P, loop, it=6):
+    """A closed loop's points smoothed along it (moves only those points)."""
+    L = np.array(loop)
+    for _ in range(it):
+        p = P[L]
+        P[L] = 0.5 * p + 0.25 * (np.roll(p, 1, 0) + np.roll(p, -1, 0))
+    return P
+
+
+def _into(P, faces, loop):
+    """At each loop vertex, the direction from the edge back into the garment, along its surface: toward
+    its neighbours off the edge."""
+    on = set(loop)
+    nb = {v: [] for v in loop}
+    for f in faces:
+        for i in range(len(f)):
+            a, b = f[i], f[(i + 1) % len(f)]
+            if a in on and b not in on:
+                nb[a].append(b)
+            if b in on and a not in on:
+                nb[b].append(a)
+    d = np.zeros((len(loop), 3))
+    for i, v in enumerate(loop):
+        if nb[v]:
+            d[i] = P[nb[v]].mean(0) - P[v]
+    n = np.linalg.norm(d, axis=1, keepdims=True)
+    # (a vertex with no inner neighbour: its loop neighbours')
+    d = np.where(n > 1e-9, d / np.maximum(n, 1e-9), 0)
+    for _ in range(2):
+        d = np.where(np.linalg.norm(d, axis=1, keepdims=True) > 1e-9, d, 0.5 * (np.roll(d, 1, 0) + np.roll(d, -1, 0)))
+    return d / np.maximum(np.linalg.norm(d, axis=1, keepdims=True), 1e-9)
+
+
+def _strip(rows, closed=True):
+    """Quads between consecutive rows of vertex indices (each row along the loop)."""
+    faces = []
+    n = len(rows[0])
+    for r in range(len(rows) - 1):
+        a, b = rows[r], rows[r + 1]
+        for i in range(n if closed else n - 1):
+            j = (i + 1) % n
+            faces.append([a[i], a[j], b[j], b[i]])
+    return faces
+
+
+def _collar_rows(spec, P, loop, N, J):
+    """A collar's rows along the neckline loop (positions), and each loop vertex's weight (0: none)."""
+    style, h = spec["collar"]
+    nx, ny, nz = J["neck"]
+    up = np.array([0, 1.0, 0])
+    p = P[loop]
+    n = N[loop]
+    out = n * np.array([1, 0, 1])
+    out /= np.maximum(np.linalg.norm(out, axis=1, keepdims=True), 1e-9)
+    drop = ny - p[:, 1]  # how far under the neck joint
+    front = p[:, 2] - nz
+    # (round the neck and down a little; it fades out down a V's front — the lapels take over there)
+    w = np.clip((1.3 - drop) / 0.45, 0, 1)
+    deep = spec.get("hole", 0) >= 1.3
+    lap = np.clip((drop - 0.7) / 0.5, 0, 1) * (front > 0.25) * (1 if deep and style == "fold" else 0)
+    # (the lapels taper to nothing at the V's bottom)
+    vbottom = drop.max()
+    lap *= np.clip((vbottom - drop) / 1.0, 0, 1) ** 0.8
+    side = np.stack([np.sign(p[:, 0] - nx + 1e-9), np.zeros(len(p)), np.full(len(p), 0.12)], 1)
+    side /= np.linalg.norm(side, axis=1, keepdims=True)
+    W = w[:, None]
+    L = lap[:, None]
+    if style == "stand":
+        rows = [p + (up * 0.55 * h + out * 0.05 * h) * W, p + (up * 0.95 * h + out * 0.12 * h) * W]
+    else:
+        stand = p + (up * 0.5 * h + out * 0.05 * h) * W
+        rows = [
+            stand,
+            stand + (up * 0.06 * h + out * 0.2 * h) * W,
+            stand + (-up * 0.4 * h + out * 0.55 * h) * W,
+        ]
+        # (lapels: lying out on the chest from the V's edge, a little proud of it)
+        if lap.any():
+            lrows = [p + side * 0.45 * h + n * 0.05, p + side * 0.95 * h + n * 0.07 - up * 0.08 * h, p + side * 1.05 * h + n * 0.06 - up * 0.3 * h]
+            rows = [r * (1 - L) + lr * L for r, lr in zip(rows, lrows, strict=True)]
+    return rows, np.maximum(w, lap)
+
+
+def finish(spec, Q, kept, src, J, outward, skirt_top=False):
+    """A garment's open edges finished (see above). `skirt_top`: a skirt piece's top joins its top's hem —
+    left as it is. → (Q, faces, src)"""
+    loops = _loops(kept)
+    if not loops:
+        return Q, kept, src
+    P = Q.copy()
+    ny = J["neck"][1]
+    new, srcs, faces = [], [], []
+    # (the loop's own points smoothed first — then the normals of the smoothed surface)
+    kinds = []
+    for loop in loops:
+        ys = P[loop, 1]
+        # (round the neck's axis: a short sleeve's end is as high, but out at the shoulder)
+        rad = np.hypot(P[loop, 0] - J["neck"][0], P[loop, 2] - J["neck"][2]).mean()
+        is_neck = spec["helper"] == "tights" and spec.get("legs") is None and ys.max() > ny - 1.6 and rad < 1.9
+        top_of_skirt = spec["helper"] == "skirt" and ys.mean() > J["hip"][1] - 0.2
+        kinds.append("neck" if is_neck else "top" if top_of_skirt else "edge")
+        if not (top_of_skirt and skirt_top):
+            P = _smooth_loop(P, loop)
+    N = outward(P, normals(P, kept))
+
+    def add(pts, base):
+        idx = list(range(len(P) + len(new), len(P) + len(new) + len(pts)))
+        new.extend(pts)
+        srcs.extend(src[base])
+        return idx
+
+    for loop, k in zip(loops, kinds, strict=True):
+        if k == "top" and skirt_top:
+            continue
+        L = np.array(loop)
+        d = _into(P, kept, loop)
+        n = N[L]
+        # the turned-back band: the edge rolled a touch, then in and back up inside
+        roll = add(P[L] - n * HEM_IN * 0.5 - d * 0.012, L)
+        inner = add(P[L] - n * HEM_IN + d * HEM_UP, L)
+        faces += _both(_strip([list(L), roll, inner]))
+        if k == "neck" and spec.get("collar") and spec["collar"][0] in ("stand", "fold"):
+            rows, w = _collar_rows(spec, P, list(L), N, J)
+            if w.max() > 0.05:
+                rr = [add(r, L) for r in rows]
+                faces += _both(_strip([list(L)] + rr))
+    return np.vstack([P, np.array(new).reshape(-1, 3)]), kept + faces, np.concatenate([src, np.array(srcs, dtype=int)])

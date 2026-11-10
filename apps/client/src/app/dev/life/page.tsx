@@ -20,6 +20,7 @@ import { useEffect, useRef } from "react";
 //   ?blink=1  ?smile=0.6  ?talk=0.5  ?eyes=0.6,0.2   the face held (else the walker's gaze: blinks, looks)
 //   ?wear=tee,jeans,sneakers,hair-crop|dress,boots   (phase 5) each painted person once per outfit, in the
 //                                made garments and hair (wear.py, hair.py), coloured as an avatar
+//                                (plan 74: `body-slim` / `body-broad` in an outfit sets that person's body)
 //   ?pattern=stripes|plaid       the tops' pattern
 //   ?near=1                      heads and shoulders (the hair)    ?feet=1  the shoes
 // window.__life.ready once drawn (for e2e/life-bench.mts).
@@ -208,7 +209,11 @@ export default function LifeBench() {
             const eyewearColor = ["#2a2420", "#8a6a3a", "#1c1c1c", "#9a9ea4", "#6a2a2a"][i % 5];
             const extraColor = ["#e8a33d", "#b5562f", "#4a5a73", "#2a2a2a", "#8a8f96"][i % 5];
             const a = { ...TODAY[g], topColor, bottomColor, shoesColor, hairColor, eyewearColor, extraColor };
-            const lp = await L.loadLifePerson(`/life/person-${g}-painted.glb`, renderer, a, { names, pattern });
+            // (plan 74's line-up: a `body-slim` / `body-broad` token in an outfit sets that person's body)
+            const body = names.find((n) => n.startsWith("body-"))?.slice(5);
+            const worn = names.filter((n) => !n.startsWith("body-"));
+            const lp = await L.loadLifePerson(`/life/person-${g}-painted.glb`, renderer, a, { names: worn, pattern });
+            if (body) lp.setBody(body);
             shown.push({
               root: lp.root,
               setPose: (p, lift) => lp.setPose(p as never, lift),

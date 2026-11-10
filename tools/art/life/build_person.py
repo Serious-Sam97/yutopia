@@ -100,14 +100,36 @@ WOMAN_FACE = {
     "eyebrows/eyebrows-trans-up": 0.15,
 }
 
+# The body, everyday (plan 74, the user: "all models look like body builders"): the muscle groups that
+# read as trained eased off, a little softness at the stomach. On every build (slim and broad too).
+EVERYDAY = {
+    "torso/torso-vshape-decr": 0.3,
+    "torso/torso-muscle-dorsi-decr": 0.4,
+    "torso/torso-muscle-pectoral-decr": 0.3,
+    "stomach/stomach-tone-decr": 0.3,
+    "armslegs/{s}-upperleg-muscle-decr": 0.4,
+    "armslegs/{s}-lowerleg-muscle-decr": 0.3,
+    "armslegs/{s}-lowerarm-muscle-decr": 0.3,
+}
+EVERYDAY_MAN = {
+    "torso/torso-muscle-pectoral-decr": 0.45,
+    "neck/neck-scale-horiz-decr": 0.25,
+    # (0b's narrower shoulders were taken off a muscled build: less of them on an everyday one)
+    "measure/measure-shoulder-dist-decr": 0.6,
+    "armslegs/{s}-upperarm-shoulder-muscle-decr": 0.5,
+    "armslegs/{s}-upperarm-muscle-decr": 0.4,
+}
+
 # Who: the macro sliders (MakeHuman's 0…1, 0.5 the average) and what they wear.
 PEOPLE = {
     "man": {
         "gender": 1.0,
-        "muscle": 0.62,
-        "weight": 0.48,
+        # (plan 74: an everyday build — muscle at the average and ideal proportions a little of the way:
+        # 0.62 and the full proportions read as a bodybuilder)
+        "muscle": 0.47,
+        "weight": 0.52,
         "height": 0.45,
-        "proportions": 1.0,
+        "proportions": 0.4,
         "race": {"caucasian": 0.7, "african": 0.1, "asian": 0.2},
         "skin": "skins/young_caucasian_male/young_lightskinned_male_diffuse.png",
         "parts": [
@@ -122,14 +144,14 @@ PEOPLE = {
         "shoulder_slope": 7,
         "eye_tex": "eyes/materials/bluegreen_eye.png",
         "lash_alpha": 0.55,
-        "face": {**IDEAL, **MAN_FACE},
+        "face": {**IDEAL, **MAN_FACE, **EVERYDAY, **EVERYDAY_MAN},
     },
     "woman": {
         "gender": 0.0,
-        "muscle": 0.55,
-        "weight": 0.45,
+        "muscle": 0.42,
+        "weight": 0.5,
         "height": 0.5,
-        "proportions": 1.0,
+        "proportions": 0.4,
         "race": {"african": 0.75, "caucasian": 0.15, "asian": 0.1},
         "skin": "skins/young_caucasian_female/young_lightskinned_female_diffuse.png",
         "parts": [
@@ -144,7 +166,7 @@ PEOPLE = {
         "skirt": True,
         "eye_tex": "eyes/materials/brownlight_eye.png",
         "lash_alpha": 0.85,
-        "face": {**IDEAL, **WOMAN_FACE},
+        "face": {**IDEAL, **WOMAN_FACE, **EVERYDAY},
     },
 }
 P = PEOPLE[WHO]
@@ -155,8 +177,9 @@ BODY = arg("--body", "regular")
 BODIES = {
     # (MakeHuman's weight moves a figure little near the average: the ends of it, so the three read apart
     # as today's do)
-    "man": {"slim": {"weight": 0.08, "muscle": 0.38}, "broad": {"weight": 0.95, "muscle": 0.85}},
-    "woman": {"slim": {"weight": 0.08, "muscle": 0.32}, "broad": {"weight": 0.95, "muscle": 0.62}},
+    # (plan 74: slim a lean person and broad a heavier one — not a lifter: broad's muscle 0.85 was)
+    "man": {"slim": {"weight": 0.18, "muscle": 0.4}, "broad": {"weight": 0.9, "muscle": 0.48}},
+    "woman": {"slim": {"weight": 0.18, "muscle": 0.36}, "broad": {"weight": 0.9, "muscle": 0.42}},
 }
 if BODY != "regular":
     P.update(BODIES[WHO][BODY])
@@ -453,6 +476,11 @@ for name, rel in P["parts"] + COMMON + WEAR_CC0:
                     tex = os.path.join(base_dir, line.split()[1])
     if name == "eyes":
         tex = os.path.join(SYS, P.get("eye_tex", EYE_TEX))
+    if name.startswith("wear-shoes-") and WR.GARMENTS[name[5:]].get("below", ("", 9))[1] < 1:
+        # (plan 74: a low shoe's sock cut a little over the ankle — the pack's go up the shin, white under
+        # a skirt; a boot keeps its own)
+        ank = np.mean([head(f"foot.{S}")[1] for S in "LR"])
+        pf = [f for f in pf if min(pos[v][1] for v in f[0]) < ank + 0.45]
     parts.append((name, pos, pt, pf, pw, tex))
     part_shapes[name] = shapes
     print(f"  {name}: {len(pos)} verts, {len(pf)} faces, tex {tex and os.path.basename(tex)}")
@@ -647,6 +675,19 @@ if WEAR:
         return N if np.sum(np.einsum("ij,ij->i", N, d)) >= 0 else -N
 
     ZONES = WR.zones(V, OW, ALL, LM)
+    # (plan 74) a top's hem never under the crotch: past it, the top kept the inside of the thighs above
+    # its hem — a V down the front (the woman's everyday hips). The real crotch: the tights' lowest torso
+    # point on the midline (LM's "crotch" is the hips' joint less a fixed 0.9). The spec itself changed,
+    # so the game hides the skin by the same hem (the extras carry it)
+    tv = np.array(sorted({v for f in F0 if f[2] == "helper-tights" for v in f[0]}))
+    cxm = (LM["hipL"][0] + LM["hipR"][0]) / 2
+    mid = tv[(ZONES[0][tv] == WR.TORSO) & (np.abs(V[tv, 0] - cxm) < 0.25)]
+    crotch_y = float(V[mid, 1].min())
+    print(f"  crotch {crotch_y - hips_y:.3f} dm under the hips' joints; tee hem {WR.level(LM, WR.GARMENTS['top-tee']['hem']) - hips_y:.3f}, waist {LM['waist'][1] - hips_y:.3f}")
+    for g, sp in WR.GARMENTS.items():
+        if sp.get("helper") == "tights" and "hem" in sp and sp.get("legs") is None and "skirt" not in sp:
+            if WR.level(LM, sp["hem"]) < crotch_y + 0.15:
+                sp["hem"] = ("hip", round(crotch_y + 0.15 - hips_y, 3))
     # (the CC0 hairs: cut out by their alpha, like the file's own)
     ALPHA_WEAR.update(f"wear-{g}" for g, sp in WR.GARMENTS.items() if sp.get("hair"))
     # (a hat goes over any hair: the file's own and every one of the pack's — the fuller ones hid a
@@ -672,8 +713,22 @@ if WEAR:
             gsrc = np.concatenate([gsrc, src2[n:]])
             kept = kept + [[v if v < n else v + off for v in f] for f in kept2]
         # (UVs in metres: the cloth's weave, the material library's — wear.py uv_metres)
-        GUV, gts = WR.uv_metres(Q, kept, ZONES[0][gsrc], LM)
-        parts.append((f"wear-{g}", Q, GUV, [(f, ft, "wear") for f, ft in zip(kept, gts, strict=True)], W[gsrc], None))
+        # (plan 74: a top's hips — the thighs' vertices above its hem — unwrapped with its torso: by the
+        # legs' axes, their seam with the torso's ran down the groin in a V)
+        gkind = ZONES[0][gsrc].copy()
+        if spec.get("helper") == "tights" and spec.get("legs") is None and "skirt" not in spec:
+            gkind[(gkind == WR.LEG_L) | (gkind == WR.LEG_R)] = WR.TORSO
+        GUV, gts = WR.uv_metres(Q, kept, gkind, LM)
+        GW = W[gsrc].copy()
+        if spec.get("helper") == "tights" and spec.get("legs") is None:
+            # (plan 74) a top's cloth below the hip joints mostly follows the hips, as a hem hangs from them:
+            # with the thighs' weights, straightening the legs into our rest pulled its hem up into a notch
+            # between them
+            hb = int(np.argmax(fold[:, ALL.index("hips")]))
+            k = np.clip((hips_y + 0.3 - Q[:, 1]) / 0.6, 0, 0.75)[:, None]
+            GW = GW * (1 - k)
+            GW[:, hb] += k[:, 0]
+        parts.append((f"wear-{g}", Q, GUV, [(f, ft, "wear") for f, ft in zip(kept, gts, strict=True)], GW, None))
         part_shapes[f"wear-{g}"] = {}
         SRC[f"wear-{g}"] = gsrc
         if spec.get("tie"):
@@ -724,17 +779,36 @@ if WEAR:
         img.file_format = "PNG"
         img.save()
     HAIR_NAMES = []
+    PART_ATTRS = {}
     # (each style's key — its file: "hair-bun", its pieces "wear-hair-bun", "wear-hair-bun-bun")
     MADE_KEYS = set()
-    styles = [(f"hair-{k}", HR.make_hair(k, V, F0, ZONES, LM)) for k in HR.HAIR]
-    styles += [(f"beard-{k}", HR.make_beard(k, V, F0, VT0, ZONES, LM)) for k in HR.BEARD]
+    # (plan 75: a wardrobe hair claimed by a work, our fur or MakeHuman's — WARDROBE_HAIR — isn't made
+    # the plan 74 way too)
+    taken = set(HR.WARDROBE_HAIR)
+    styles = [(f"hair-{k}", HR.make_hair(k, V, F0, ZONES, LM)) for k in HR.HAIR if k not in taken]
+    # (plan 74: the strand-card styles — a cap and its cards)
+    styles += [(f"hair-{k}", HR.make_card_hair(k, V, F0, ZONES, LM)) for k in HR.CARDS if k not in taken]
+    # (plan 74, 11-10: every beard a fur cut to its style, the Sketchfab strands over it — make_beard_fur)
+    styles += [(f"beard-{k}", HR.make_beard_fur(k, V, F0, ZONES, LM)) for k in HR.BEARD]
+    # (plan 75: the wardrobe's hairs made from others' works (CC BY — their credits from sources.json)
+    # and from our fur; MakeHuman's come in as wear.py garments)
+    for wname, src in HR.WARDROBE_HAIR.items():
+        if src.startswith("fur:"):
+            styles.append((f"hair-{wname}", HR.make_fur(src[4:], V, F0, ZONES, LM)))
+        elif src != "mh":
+            styles.append((f"hair-{wname}", HR.make_imported(src, V, F0, ZONES, LM)))
     for sname, pieces in styles:
         MADE_KEYS.add(sname)
         for piece in pieces:
             suffix, HP, HUV, HF, src, alpha = piece[:6]
             pname = f"wear-{sname}{'-' + suffix if suffix else ''}"
             tex = HAIR_TEX["cards" if alpha else "shell"]
-            if len(piece) > 6:
+            if len(piece) > 7 and piece[7]:
+                # (plan 74: attributes of its own, per vertex — a fur shell's layer and density)
+                PART_ATTRS[pname] = piece[7]
+                if "_shell" in piece[7]:
+                    tex = None  # (a fur shell draws its strands in the shader: no texture — 214 KB a file)
+            if len(piece) > 6 and piece[6] is not None:
                 # (its own texture — a beard's painted hair — and its faces with their own UVs)
                 arr = piece[6]
                 img = bpy.data.images.new(pname, arr.shape[1], arr.shape[0], alpha=True)
@@ -743,6 +817,8 @@ if WEAR:
                 img.filepath_raw = tex
                 img.file_format = "PNG"
                 img.save()
+                HF = [(f[0], f[1], "wear") for f in HF]
+            elif len(piece) > 6:
                 HF = [(f[0], f[1], "wear") for f in HF]
             else:
                 HF = [(f, f, "wear") for f in HF]
@@ -1003,7 +1079,35 @@ def outfit_mask(faces, used, legs):
     return out
 
 
-def even_skin(img, mean):
+def keep_mask(img, uv, faces, w):
+    """Where the painted shading stays whole (plan 74): the face, the neck and the hands — by the body's
+    weights to them, splatted at its UVs and blurred into a soft mask over the atlas (1 keep, 0 soften)."""
+    W, H = img.size
+    ow = w @ fold
+    keepj = [ALL.index(j) for j in ALL if j in ("head", "neck", "earL", "earR", "eyeL", "eyeR")
+             or j.startswith(("wrist", "fingers", "index", "thumb"))]
+    k = np.clip(ow[:, keepj].sum(1), 0, 1)
+    acc = np.zeros((H, W, 4), dtype=np.float32)
+    for f in faces:
+        for v, t in zip(f[0], f[1]):
+            if t < 0:
+                continue
+            x = min(W - 1, max(0, int(uv[t][0] * W)))
+            y = min(H - 1, max(0, int(uv[t][1] * H)))
+            acc[y, x, 0] += k[v]
+            acc[y, x, 1] += 1
+    sig = max(3.0, W / 80)
+    num = blur(np.repeat(acc[..., 0:1], 4, axis=2), sig)[..., 0]
+    den = blur(np.repeat(acc[..., 1:2], 4, axis=2), sig)[..., 0]
+    return np.where(den > 1e-4, num / np.maximum(den, 1e-4), 1.0).astype(np.float32)
+
+
+# (plan 74) how much of the painted muscle definition stays off the face and hands: MakeHuman's young
+# skins have pecs, abs and limb lines painted in, and they read as a bodybuilder's
+SKIN_SOFT = 0.3
+
+
+def even_skin(img, mean, keep=None):
     """Only the skin's painted light and shade left, in grey: its brightness over its own local average
     (a wide blur), so neither its hue nor a region's tone (a face paler than the body read greenish once
     tinted) carries into the avatar's colour. Lips and the cheeks' warmth are the face's (vertex colours)."""
@@ -1019,7 +1123,16 @@ def even_skin(img, mean):
     num = blur(np.repeat((lum * on)[..., None], 4, axis=2), sig)[..., 0]
     den = blur(np.repeat(on[..., None], 4, axis=2), sig)[..., 0]
     local = num / np.maximum(den, 1e-3)
-    v = np.clip(SKIN_GREY * lum / np.maximum(local, 1e-3), 0, 1)
+    # (plan 74: the shading split — fine (pores, creases) over a small blur, and the broad forms (the
+    # muscles' painted light and shade) between it and the wide one; the broad eased off but where `keep`)
+    fs = max(2.0, w / 256)
+    fnum = blur(np.repeat((lum * on)[..., None], 4, axis=2), fs)[..., 0]
+    fden = blur(np.repeat(on[..., None], 4, axis=2), fs)[..., 0]
+    flocal = fnum / np.maximum(fden, 1e-3)
+    fine = lum / np.maximum(flocal, 1e-3)
+    broad = flocal / np.maximum(local, 1e-3)
+    k = 1.0 if keep is None else keep + (1 - keep) * SKIN_SOFT
+    v = np.clip(SKIN_GREY * fine * broad**k, 0, 1)
     # (plan 73 4.4) its hue over its own surroundings' kept: the lips redder than the face round them, the
     # cheeks' warmth — but no region's tone (the hue's local average is divided out, as the light's is)
     ch = a[..., :3] / np.maximum(lum, 1e-3)[..., None]
@@ -1210,6 +1323,9 @@ for name, pos, uv, faces, w, tex in parts:
     remap = {v: i for i, v in enumerate(used)}
     me = bpy.data.meshes.new(name)
     me.from_pydata(P3[used].tolist(), [], [[remap[v] for v in f[0]] for f in faces])
+    for an, arr in (PART_ATTRS.get(name, {}) if WEAR else {}).items():
+        pa = me.attributes.new(an, "FLOAT_VECTOR", "POINT")
+        pa.data.foreach_set("vector", np.asarray(arr)[used].astype(np.float32).ravel())
     if len(uv):
         lay = me.uv_layers.new(name="UVMap")
         li = 0
@@ -1238,6 +1354,15 @@ for name, pos, uv, faces, w, tex in parts:
         za.data.foreach_set("vector", np.stack([kind + 8 * base, tz, yz], 1).astype(np.float32).ravel())
         fa = me.attributes.new("_neck", "FLOAT_VECTOR", "POINT")
         fa.data.foreach_set("vector", np.stack([fz, rz, xz], 1).astype(np.float32).ravel())
+        # (plan 74 phase 5) every beard's density, painted on the skin by the game: full, boxed, stubble —
+        # moustache, goatee, chinstrap — muttonchops (three vectors: as `_wear`, they export)
+        import hair as HR
+
+        bd = [HR.beard_density(k, V, F0, ZONES, LM)[0][used] for k in ("full", "boxed", "stubble", "mustache", "goatee", "chinstrap", "muttonchops")]
+        z = np.zeros(len(used))
+        for an, cols in (("_beardA", bd[0:3]), ("_beardB", bd[3:6]), ("_beardC", [bd[6], z, z])):
+            ba = me.attributes.new(an, "FLOAT_VECTOR", "POINT")
+            ba.data.foreach_set("vector", np.stack(cols, 1).astype(np.float32).ravel())
     if name == "body":
         cols = skin_colours(posed["body"] + shift, posed["hair"] + shift, used)
         ca = me.color_attributes.new("Col", "FLOAT_COLOR", "POINT")
@@ -1253,7 +1378,7 @@ for name, pos, uv, faces, w, tex in parts:
         timg = next((n.image for n in mat.node_tree.nodes if n.type == "TEX_IMAGE"), None)
         if timg is not None:
             ts = sorted({t for f in faces for t in f[1] if t >= 0})
-            even_skin(timg, tex_mean(timg, np.asarray(uv)[ts]))
+            even_skin(timg, tex_mean(timg, np.asarray(uv)[ts]), keep_mask(timg, uv, faces, w))
             EXTRAS["skin_mean"] = [round(float(x), 4) for x in tex_mean(timg, np.asarray(uv)[ts])]
     # weights onto ours: the top four
     ow = (w @ fold)[used]

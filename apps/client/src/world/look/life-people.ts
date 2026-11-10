@@ -23,12 +23,13 @@ import {
   BufferGeometry,
   Color,
   DoubleSide,
+  FrontSide,
   type Material,
   Matrix3,
   MeshPhysicalMaterial,
   type MeshStandardMaterial,
   type Object3D,
-  type SkinnedMesh,
+  SkinnedMesh,
   SRGBColorSpace,
   Uint16BufferAttribute,
   Vector3,
@@ -40,10 +41,16 @@ import { libMaterial, libStats } from "./life-matlib";
 import { LIBRARY, type MatId } from "./life-matlib-list";
 import {
   bodyIndex,
+  DETAILS,
+  detailLevels,
+  FOLD_BY_FABRIC,
+  foldPiece,
   isHair,
   patternOf,
   patternPiece,
   roleOf,
+  WEAVE_BY_FABRIC,
+  WEAVE_DEPTH_BY_FABRIC,
   type WearLm,
   type WearPattern,
   type WearSpec,
@@ -134,6 +141,214 @@ export const SKIN_PIECE: Piece = {
     );
   },
 };
+
+// Hair (plan 74 phase 4): its light runs along the strands — a band across them, not a blob. Two shifted
+// lobes along the strand's direction (Kajiya-Kay, as hair cards are lit): a near-white one, and a wider
+// one in the hair's own colour, broken up strand to strand; the diffuse wrapped a little (light comes
+// through hair). The strand's direction: the texture's v (the cards' and the cap's run along it), from
+// the UVs' derivatives.
+const HAIR_GLSL = `
+vec3 lifeHairT = vec3( 0.0, 1.0, 0.0 );
+float lifeHairJit = 0.5;
+float lifeHairSpec( vec3 T, vec3 H, float e ) {
+	float th = dot( T, H );
+	return pow( sqrt( max( 0.0, 1.0 - th * th ) ), e );
+}
+void RE_Direct_Hair( const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight ) {
+	float nl = dot( geometryNormal, directLight.direction );
+	float wrap = saturate( ( nl + 0.35 ) / 1.35 );
+	reflectedLight.directDiffuse += wrap * directLight.color * BRDF_Lambert( material.diffuseContribution );
+	vec3 H = normalize( directLight.direction + geometryViewDir );
+	vec3 T1 = normalize( lifeHairT + geometryNormal * 0.12 );
+	vec3 T2 = normalize( lifeHairT - geometryNormal * 0.18 );
+	float lit = smoothstep( -0.1, 0.35, nl );
+	// (the near lobe warmed by the hair's colour too: white, it laid pale grey streaks over brown hair)
+	vec3 s1 = mix( vec3( 0.035 ), material.diffuseContribution * 0.18, 0.6 ) * lifeHairSpec( T1, H, 110.0 );
+	vec3 s2 = material.diffuseContribution * 0.45 * lifeHairSpec( T2, H, 24.0 ) * ( 0.6 + 0.8 * lifeHairJit );
+	reflectedLight.directSpecular += ( s1 + s2 ) * directLight.color * lit;
+}
+void RE_Direct_HairLamp( const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight ) {
+	float nl = dot( geometryNormal, directLight.direction );
+	reflectedLight.directDiffuse += saturate( ( nl + 0.35 ) / 1.35 ) * directLight.color * BRDF_Lambert( material.diffuseContribution );
+}
+#undef RE_Direct
+#define RE_Direct RE_Direct_Hair
+#define RE_Direct_Lamp RE_Direct_HairLamp
+`;
+// ── fur shells (plan 74, the technique samples) ─────────────────────────────────────────────────────
+
+/** A fur shell: one of a stack of layers over a beard or a scalp (hair.py `_make_shells`: each vertex's
+ *  `_shell` its layer 0…1 and the density there). Round strand sections cut out of it — thinner and fewer
+ *  the higher, leaning down the face (`lean`), a cell `density` strands a decimetre, `thick` across one
+ *  at the root — a little darker there, each strand its own shade (one flat colour read as felt). The
+ *  third of `_shell`: how tall the hair is there (a fade's sides short: the layers' strands end lower).
+ *  Grown wider as a strand gets smaller than a pixel (else they shimmered away at a distance). */
+function shellPiece(density: number, lean: number, thick = 0.4): Piece {
+  return {
+    key: `life-shell-${density}-${lean}-${thick}`,
+    patch(sh: Shader) {
+      sh.vertexShader = sh.vertexShader
+        .replace(
+          "#include <common>",
+          "#include <common>\nattribute vec3 _shell;\nvarying vec3 vShell;\nvarying vec2 vShellUv;",
+        )
+        .replace("#include <begin_vertex>", "#include <begin_vertex>\nvShell = _shell;\nvShellUv = uv;");
+      sh.fragmentShader = sh.fragmentShader
+        .replace(
+          "#include <common>",
+          `#include <common>
+varying vec3 vShell;
+varying vec2 vShellUv;
+float lifeSH( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }`,
+        )
+        // (lit as the head's hair is, along the strands — down the face, its v: flat, it read as felt)
+        .replace("#include <lights_physical_pars_fragment>", `#include <lights_physical_pars_fragment>\n${HAIR_GLSL}`)
+        .replace(
+          "#include <normal_fragment_maps>",
+          `#include <normal_fragment_maps>
+{
+	vec3 q0 = dFdx( - vViewPosition ), q1 = dFdy( - vViewPosition );
+	vec2 st0 = dFdx( vShellUv ), st1 = dFdy( vShellUv );
+	vec3 B = cross( q1, normal ) * st0.y + cross( normal, q0 ) * st1.y;
+	if ( dot( B, B ) > 1e-12 ) lifeHairT = normalize( B - normal * dot( B, normal ) );
+	lifeHairJit = lifeSH( floor( vShellUv * ${density.toFixed(1)} ) + 9.1 );
+}`,
+        )
+        .replace(
+          "#include <color_fragment>",
+          `#include <color_fragment>
+{
+	float t = vShell.x, dens = vShell.y;
+	vec2 g = vShellUv * ${density.toFixed(1)};
+	g.y += ${lean.toFixed(2)} * t;
+	vec2 cell = floor( g );
+	vec2 f = fract( g ) - 0.5 - ( vec2( lifeSH( cell ), lifeSH( cell + 7.1 ) ) - 0.5 ) * 0.5;
+	float len = 0.4 + 0.6 * lifeSH( cell + 5.7 );
+	float r = mix( ${thick.toFixed(2)}, 0.07, clamp( t / len, 0.0, 1.0 ) ) + 0.5 * clamp( fwidth( g.x ) - 0.35, 0.0, 1.0 );
+	if ( lifeSH( cell + 3.3 ) > dens * 1.15 || t > len || length( f * vec2( 1.0, 0.7 ) ) > r ) discard;
+	diffuseColor.rgb *= mix( 0.7, 1.2, t / len ) * ( 0.8 + 0.4 * lifeSH( cell + 9.1 ) );
+}`,
+        );
+    },
+  };
+}
+
+/** A made style's cap or shell (hair.py: the style file's part without a suffix — a card style's cap,
+ *  a locs shell); not MakeHuman's CC0 hairs, whole meshes under the wardrobe's names (plan 75: braids,
+ *  crew, slick, pixie) — strand-lit hair, not a cap. */
+const CARD_CAP = /^wear-hair-(?!(?:braids|crew|slick|pixie)$)[a-z]+$/;
+
+/** The hair's own part of its material: its light along the strands (above). */
+function hairPiece(cols: number, bend: number): Piece {
+  return {
+    key: `life-hair-${cols}-${bend}`,
+    patch(sh: Shader) {
+      sh.fragmentShader = sh.fragmentShader
+        .replace("#include <lights_physical_pars_fragment>", `#include <lights_physical_pars_fragment>\n${HAIR_GLSL}`)
+        .replace(
+          "#include <normal_fragment_maps>",
+          `#include <normal_fragment_maps>
+#ifdef USE_MAP
+{
+	// (the strand's direction: along the texture's v, by the UVs' own derivatives — three's tangent frame)
+	vec3 q0 = dFdx( - vViewPosition ), q1 = dFdy( - vViewPosition );
+	vec2 st0 = dFdx( vMapUv ), st1 = dFdy( vMapUv );
+	vec3 q1p = cross( q1, normal ), q0p = cross( normal, q0 );
+	vec3 B = q1p * st0.y + q0p * st1.y;
+	if ( dot( B, B ) > 1e-12 ) lifeHairT = normalize( B - normal * dot( B, normal ) );
+	lifeHairJit = fract( sin( floor( vMapUv.x * 512.0 ) * 12.9898 ) * 43758.5453 );
+	// (a card's normal bent across it, as round as a lock of hair — flat, each card caught one even
+	// highlight, and rows of them read as blocks; its column of the atlas is a quarter across)
+	vec3 side = normalize( cross( lifeHairT, normal ) );
+	normal = normalize( normal + side * ( fract( vMapUv.x * ${cols.toFixed(1)} ) - 0.5 ) * ${bend.toFixed(2)} );
+}
+#endif`,
+        );
+    },
+  };
+}
+/** Cards: the atlas four columns across. */
+export const HAIR_PIECE = hairPiece(4, 1.4);
+
+// ── a beard on the skin (plan 74 phase 5) ─────────────────────────────────────────────────────────
+
+/** The beards painted on the skin, in the order the body file carries their densities (`_bearda` full,
+ *  boxed, stubble; `_beardb` moustache, goatee, chinstrap; `_beardc` muttonchops — GLTFLoader lowercases
+ *  the file's `_BEARDA`…). */
+const BEARDS = ["full", "boxed", "stubble", "mustache", "goatee", "chinstrap", "muttonchops"];
+
+/** A beard painted on the skin: its density (the body's own, per vertex: soft at every edge) in strokes
+ *  of hair combed down (a noise long down the face and fine across, in the rest place), darker and
+ *  rougher where it grows; stubble a fainter, finer shadow. `then` the skin's own piece. */
+export function beardPiece(style: string, color: Color, then: Piece | null): Piece {
+  const i = BEARDS.indexOf(style);
+  const w = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+  if (i >= 0) w[i] = 1;
+  const u = {
+    lifeBeardW: { value: w },
+    lifeBeardC: { value: color },
+    lifeBeardK: { value: style === "stubble" ? 0.75 : 1.0 },
+  };
+  return {
+    key: `life-beard${then ? `+${then.key}` : ""}`,
+    patch(sh: Shader, r) {
+      Object.assign(sh.uniforms, u);
+      sh.vertexShader = sh.vertexShader
+        .replace(
+          "#include <common>",
+          `#include <common>
+attribute vec3 _bearda;
+attribute vec3 _beardb;
+attribute vec3 _beardc;
+uniform float lifeBeardW[ 9 ];
+varying float vBeardD;
+varying vec3 vBeardP;`,
+        )
+        .replace(
+          "#include <begin_vertex>",
+          `#include <begin_vertex>
+vBeardD = dot( _bearda, vec3( lifeBeardW[ 0 ], lifeBeardW[ 1 ], lifeBeardW[ 2 ] ) )
+	+ dot( _beardb, vec3( lifeBeardW[ 3 ], lifeBeardW[ 4 ], lifeBeardW[ 5 ] ) )
+	+ dot( _beardc, vec3( lifeBeardW[ 6 ], lifeBeardW[ 7 ], lifeBeardW[ 8 ] ) );
+vBeardP = position;`,
+        );
+      sh.fragmentShader = sh.fragmentShader
+        .replace(
+          "#include <common>",
+          `#include <common>
+uniform vec3 lifeBeardC;
+uniform float lifeBeardK;
+varying float vBeardD;
+varying vec3 vBeardP;
+float lifeBH( vec3 i ) { return fract( sin( dot( i, vec3( 127.1, 311.7, 74.7 ) ) ) * 43758.5453 ); }
+float lifeBN( vec3 p ) {
+	vec3 i = floor( p ), f = fract( p );
+	f = f * f * ( 3.0 - 2.0 * f );
+	return mix( mix( mix( lifeBH( i ), lifeBH( i + vec3( 1, 0, 0 ) ), f.x ), mix( lifeBH( i + vec3( 0, 1, 0 ) ), lifeBH( i + vec3( 1, 1, 0 ) ), f.x ), f.y ),
+		mix( mix( lifeBH( i + vec3( 0, 0, 1 ) ), lifeBH( i + vec3( 1, 0, 1 ) ), f.x ), mix( lifeBH( i + vec3( 0, 1, 1 ) ), lifeBH( i + vec3( 1, 1, 1 ) ), f.x ), f.y ), f.z );
+}
+float lifeBeardCover = 0.0;`,
+        )
+        .replace(
+          "#include <color_fragment>",
+          `#include <color_fragment>
+if ( vBeardD > 0.01 ) {
+	// strokes: long down the face, fine across (metres, the rest place); a finer grain over them
+	float st = lifeBN( vBeardP * vec3( 650.0, 150.0, 650.0 ) );
+	float gr = lifeBN( vBeardP * 1800.0 );
+	float c = smoothstep( 0.1, 0.65, vBeardD ) * ( 0.5 + 0.5 * st ) + vBeardD * 0.3 * gr;
+	lifeBeardCover = clamp( c * lifeBeardK, 0.0, 1.0 );
+	diffuseColor.rgb = mix( diffuseColor.rgb, lifeBeardC * ( 0.7 + 0.6 * st ), lifeBeardCover * 0.88 );
+}`,
+        )
+        .replace(
+          "#include <roughnessmap_fragment>",
+          "#include <roughnessmap_fragment>\nroughnessFactor = mix( roughnessFactor, 0.85, lifeBeardCover );",
+        );
+      then?.patch(sh, r);
+    },
+  };
+}
 
 /** Eye colours, as common as they are (a person's by the seed from their name: the avatar has none). */
 const IRISES: [number, string][] = [
@@ -232,13 +447,25 @@ function finish(name: string, mat: MeshStandardMaterial, hasColour: boolean, iri
   } else if (isHair(name)) {
     out = new MeshPhysicalMaterial({
       map: mat.map,
-      roughness: 0.48,
+      roughness: 0.6,
       metalness: 0,
-      sheen: 0.35,
+      sheen: 0.25,
       sheenColor: new Color(0.9, 0.8, 0.7),
-      sheenRoughness: 0.4,
+      sheenRoughness: 0.5,
     });
     mat.dispose();
+    // (plan 74: no sheen, little of the sky — at grazing angles and facing up they lit the strands in pale
+    // patches)
+    const hair = out as MeshPhysicalMaterial;
+    hair.sheen = 0;
+    hair.envMapIntensity = 0.25;
+    hair.specularIntensity = 0.35;
+    if (CARD_CAP.test(name)) {
+      // (a card style's cap: under the cards, plain and rough — lit along its strands too, it shone through
+      // them as a smooth band)
+      hair.roughness = 0.85;
+    } else if (!/-shell$/.test(name) && (!/beard/.test(name) || /-cards$/.test(name))) givePiece(out, HAIR_PIECE);
+    // (plan 74: lit along the strands; not a beard's — it's painted over the skin, and phase 5's)
   } else if (name === "eyes") {
     // wet: a clear coat over a softer eye (the whole eye a mirror read glassy), the light's glint on it
     out = new MeshPhysicalMaterial({
@@ -263,19 +490,42 @@ function finish(name: string, mat: MeshStandardMaterial, hasColour: boolean, iri
   } else if (!/lashes|brows/.test(name)) mat.roughness = Math.max(mat.roughness, 0.75);
   // hair and the eyes' corneas: cut out by their alpha, softly (alpha to coverage on the antialiased
   // frame: no sorting, no flicker on strands); the lashes too. Brows: truly see-through, drawn last.
-  if (/beard/.test(name)) {
-    // a beard: one layer of painted hair over the skin, blended — cut out, its soft edge went hard and
+  if (/-shell$/.test(name)) {
+    // (a fur shell: no texture, its strands cut out in the shader; solid, outward only)
+    out.map = null;
+    out.transparent = false;
+    out.alphaTest = 0;
+    out.depthWrite = true;
+    out.side = FrontSide;
+    givePiece(
+      out,
+      /stubble/.test(name)
+        ? shellPiece(320, 0.05, 0.15)
+        : /buzz|fade/.test(name)
+          ? shellPiece(140, 0.25)
+          : shellPiece(110, 0.6),
+    );
+  } else if (/beard/.test(name) && !/-cards$/.test(name)) {
+    // a beard: one layer of painted hair over the skin, blended (plan 73's; plan 74's are cards, below) — cut out, its soft edge went hard and
     // jagged without multisampling (the composer's frame)
     out.transparent = true;
     out.alphaTest = 0;
     out.depthWrite = false;
     out.side = DoubleSide;
-  } else if (/hair|eyes|lashes/.test(name)) {
+  } else if (/hair|lashes|beard/.test(name)) {
+    // (plan 74 phase 1) the core, cut at half: its soft fringe is a second, blended draw (softEdgeMesh).
+    // Alpha to coverage needed a multisampled frame, and High's and Medium's aren't (+4.6 ms in the lobby
+    // multisampled): there it fell back to a hard one-bit cut — the stair-stepped hairlines
+    out.transparent = false;
+    out.alphaToCoverage = false;
+    out.alphaTest = 0.5;
+    out.depthWrite = true;
+    out.side = DoubleSide;
+  } else if (/eyes/.test(name)) {
     out.transparent = false;
     out.alphaToCoverage = true;
     out.alphaTest = 0.02;
     out.depthWrite = true;
-    if (/hair|lashes/.test(name)) out.side = DoubleSide;
   } else if (name === "brows") {
     out.transparent = true;
     out.alphaTest = 0;
@@ -289,6 +539,45 @@ function finish(name: string, mat: MeshStandardMaterial, hasColour: boolean, iri
     out.roughness = 0.8;
   }
   return out;
+}
+
+// ── the hair's soft edge (plan 74 phase 1) ────────────────────────────────────────────────────────
+
+/** Parts drawn twice: the core cut at half its alpha (opaque, writing depth), then the soft edge. */
+export const hasSoftEdge = (name: string): boolean =>
+  name === "lashes" || (isHair(name) && !/-shell$/.test(name) && (!/beard/.test(name) || /-cards$/.test(name)));
+
+/** The soft edge's material: the core's, blended, writing no depth. Where it falls on the core it lays
+ *  the same colour over itself (no change); past it, the fringe fades into what's behind. The core's
+ *  shader pieces come along (`copy` leaves `onBeforeCompile` behind). */
+export function softEdgeMaterial(core: Material): Material {
+  const m = core.clone();
+  m.userData = { ...core.userData };
+  m.onBeforeCompile = core.onBeforeCompile;
+  m.customProgramCacheKey = core.customProgramCacheKey;
+  m.transparent = true;
+  m.depthWrite = false;
+  m.alphaTest = 0.01;
+  m.alphaToCoverage = false;
+  return m;
+}
+
+/** The soft edge's mesh beside `core`: the same geometry, bones and face shapes (the same influences'
+ *  array, so the face moves both), no shadow of its own. */
+export function softEdgeMesh(core: SkinnedMesh, material: Material): SkinnedMesh {
+  const e = new SkinnedMesh(core.geometry, material);
+  e.name = `${core.name}-edge`;
+  e.castShadow = false;
+  e.receiveShadow = core.receiveShadow;
+  e.frustumCulled = core.frustumCulled;
+  e.boundingSphere = core.boundingSphere;
+  e.renderOrder = core.renderOrder;
+  e.morphTargetDictionary = core.morphTargetDictionary;
+  e.morphTargetInfluences = core.morphTargetInfluences;
+  e.bindMode = core.bindMode;
+  e.bind(core.skeleton, core.bindMatrix);
+  core.parent?.add(e);
+  return e;
 }
 
 // ── the base: a file, once ──────────────────────────────────────────────────────────────────────
@@ -766,9 +1055,23 @@ export function lifeBody(base: LifeBase, a: AvatarLayers | null, worn: LifeWorn 
       const s = skinOf(skinHex);
       const m = base.skinMean;
       tint(new Color(Math.min(3, s.r / m.r), Math.min(3, s.g / m.g), Math.min(3, s.b / m.b)));
+      // (plan 74 phase 5) their beard painted on the skin, in their hair's colour a little darker
+      const beard = names
+        .find((n) => n.startsWith("beard-"))
+        ?.slice(6)
+        .replace(/fur$/, "");
+      if (beard && a)
+        givePiece(
+          material,
+          beardPiece(beard, new Color(a.hairColor).multiplyScalar(0.7), (material.userData.lifePiece as Piece) ?? null),
+        );
     } else if (!a) {
       // (none: as the file is — the made garments a plain cloth's grey)
       if (p.name.startsWith("wear-") && !isHair(p.name)) tint(new Color(0.55, 0.55, 0.55));
+    } else if (/-shell$/.test(p.name)) {
+      // (a fur shell has no texture to tint: their hair's colour itself — a beard's a little lighter:
+      // its layers shade each other, and it read near black under brown hair)
+      tint(new Color(a.hairColor).multiplyScalar(/^wear-beard-(?!stubble)/.test(p.name) ? 1.3 : 1));
     } else if (isHair(p.name) || p.name === "brows") {
       // (their colour over the file's: the file's hair is dark, so a light colour asks a lot of each
       // channel — capped as a whole, not channel by channel, or ginger and blonde went grey: 4.5)
@@ -806,7 +1109,11 @@ export function lifeBody(base: LifeBase, a: AvatarLayers | null, worn: LifeWorn 
         (material as MeshStandardMaterial).roughness = r === "eyewear" ? 0.35 : 0.6;
       } else if (fabric && worn?.renderer && fabric in LIBRARY) {
         // (in the library's cloth — its weave by the garment's UVs in metres — in their colour)
-        material = libMaterial(fabric, worn.renderer, { color: new Color(hex).multiplyScalar(0.85) });
+        material = libMaterial(fabric, worn.renderer, {
+          color: new Color(hex).multiplyScalar(0.85),
+          scale: WEAVE_BY_FABRIC[fabric] ?? 1,
+        });
+        (material as MeshStandardMaterial).normalScale.multiplyScalar(WEAVE_DEPTH_BY_FABRIC[fabric] ?? 1);
         material.name = p.name;
         mine.push(material);
       } else {
@@ -820,13 +1127,29 @@ export function lifeBody(base: LifeBase, a: AvatarLayers | null, worn: LifeWorn 
             ? { kind: worn.pattern, color2: a.bottomColor }
             : worn?.patterns?.[r]
           : undefined;
-      if (pat && pat.kind !== "plain" && !second) {
+      const patterned = !!pat && pat.kind !== "plain" && !second;
+      const pattern =
+        patterned && pat ? patternPiece(pat.kind, new Color(1, 1, 1), new Color(pat.color2).multiplyScalar(1.1)) : null;
+      // (plan 74 phase 3: the cloth's folds, by its fabric — before its pattern)
+      const fold = fabric && fabric in FOLD_BY_FABRIC && !second ? FOLD_BY_FABRIC[fabric] : 0;
+      if (pattern || fold > 0) {
         if (!mine.includes(material)) {
           material = own(material);
           mine.push(material);
         }
-        givePiece(material, patternPiece(pat.kind, new Color(1, 1, 1), new Color(pat.color2).multiplyScalar(1.1)));
-        (material as MeshStandardMaterial).color.copy(new Color(hex).multiplyScalar(0.85));
+        const gname = p.name.replace(/^wear-/, "");
+        const piece =
+          fold > 0
+            ? foldPiece(
+                fold,
+                pattern,
+                r === "top" || r === "outer",
+                DETAILS[gname],
+                detailLevels(base.wear[gname], base.wearLm),
+              )
+            : (pattern as Piece);
+        givePiece(material, piece);
+        if (pattern) (material as MeshStandardMaterial).color.copy(new Color(hex).multiplyScalar(0.85));
       }
     } else if (p.name === "clothes") {
       material = own(p.material);

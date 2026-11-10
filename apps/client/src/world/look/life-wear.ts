@@ -208,7 +208,7 @@ export function patternPiece(
 	float k = 1.0 - smoothstep( 0.17, 0.22, length( c ) );`
           : kind === "tweed"
             ? // (a flecked weave: the two colours in a fine broken noise)
-              `vec3 q = vLifeRest * 90.0;
+              `vec3 q = vLifeRest * 240.0; // (finer than at first: up close at 90 its flecks read as blocks — plan 74)
 	float n = fract( sin( dot( floor( q ), vec3( 12.9898, 78.233, 37.719 ) ) ) * 43758.5453 );
 	float k = step( 0.62, n ) * 0.8;`
             : // (a plaid: bands up and round, where they cross the darker; a thin line through each)
@@ -238,6 +238,365 @@ export function patternPiece(
 	diffuseColor.rgb *= mix( lifeA, lifeB, k );
 }`,
         );
+    },
+  };
+}
+
+/** How much a cloth folds (plan 74 phase 3): a soft knit most, denim's larger stiffer folds a little less,
+ *  a thick wool or tweed least. By the material library's fabric. */
+export const FOLD_BY_FABRIC: Record<string, number> = {
+  linen: 1,
+  twill: 0.85,
+  herringbone: 0.6,
+  boucle: 0.45,
+  tweed: 0.45,
+};
+
+/** How strong a garment's weave is in its normal against the library's cloth (plan 74): a coat's
+ *  herringbone read as a loud zigzag, a sweater's boucle as popcorn. */
+export const WEAVE_DEPTH_BY_FABRIC: Record<string, number> = {
+  linen: 1,
+  twill: 0.8,
+  herringbone: 0.45,
+  boucle: 0.4,
+  tweed: 0.6,
+};
+
+/** How much finer a garment's weave is than the library's cloth (plan 74 phase 3): at the library's scale
+ *  a tee's knit read as a chunky sweater's. */
+export const WEAVE_BY_FABRIC: Record<string, number> = {
+  linen: 3,
+  twill: 2,
+  herringbone: 2,
+  boucle: 1.4,
+  tweed: 1.6,
+};
+
+/** What a garment is made of, drawn by its cloth's shader (plan 74): a front placket and its buttons,
+ *  an open front, a chest pocket, ribbed hems and cuffs; a waistband and its belt loops, a fly, front
+ *  and back pockets; the seams, topstitched in a thread of their own (jeans'). By the garment's name. */
+export interface GarmentDetail {
+  /** 0 none, 1 a full placket (a shirt), 2 a short one (a polo, a henley), 3 an open front (a coat) */
+  placket?: 0 | 1 | 2 | 3;
+  buttons?: number;
+  chestPocket?: boolean;
+  rib?: boolean;
+  /** 1 a plain band, 2 with belt loops */
+  waistband?: 0 | 1 | 2;
+  fly?: boolean;
+  /** 1 jeans' scooped, 2 slanted */
+  frontPockets?: 0 | 1 | 2;
+  backPockets?: boolean;
+  /** the topstitching's thread (jeans'), linear rgb */
+  thread?: [number, number, number];
+  cuffs?: boolean;
+}
+
+const GOLD: [number, number, number] = [0.62, 0.42, 0.16];
+const TROUSERS: GarmentDetail = { waistband: 2, fly: true, frontPockets: 2 };
+const SWEATER: GarmentDetail = { rib: true, cuffs: true };
+export const DETAILS: Record<string, GarmentDetail> = {
+  "top-shirt": { placket: 1, buttons: 7, chestPocket: true, cuffs: true },
+  "top-flannel": { placket: 1, buttons: 7, chestPocket: true, cuffs: true },
+  "top-shirttie": { placket: 1, buttons: 7, cuffs: true },
+  "top-polo": { placket: 2, buttons: 2 },
+  "top-henley": { placket: 2, buttons: 3 },
+  "top-sweater": SWEATER,
+  "top-turtleneck": SWEATER,
+  "top-sweatshirt": SWEATER,
+  "top-hoodie": SWEATER,
+  "top-fleece": { rib: true },
+  "top-cardigan": { placket: 3, buttons: 5, rib: true, cuffs: true },
+  "top-blazer": { placket: 3, buttons: 2 },
+  "top-jacket": { placket: 3 },
+  "top-puffer": { placket: 3 },
+  "outer-coat": { placket: 3, buttons: 4 },
+  "outer-raincoat": { placket: 3, buttons: 4 },
+  "outer-sportcoat": { placket: 3, buttons: 2 },
+  "outer-denim": { placket: 3, buttons: 5, chestPocket: true, thread: GOLD },
+  "outer-parka": { placket: 3 },
+  "outer-puffer": { placket: 3 },
+  "outer-vest": { placket: 3 },
+  "bottom-jeans": { waistband: 2, fly: true, frontPockets: 1, backPockets: true, thread: GOLD },
+  "bottom-trousers": TROUSERS,
+  "bottom-chinos": TROUSERS,
+  "bottom-suit": TROUSERS,
+  "bottom-cargo": TROUSERS,
+  "bottom-shorts": TROUSERS,
+  "bottom-joggers": { waistband: 1 },
+  "bottom-wide": { waistband: 1 },
+  "bottom-snowpants": { waistband: 1 },
+  "bottom-leggings": { waistband: 1 },
+  "bottom-skirt": { waistband: 1 },
+  "bottom-pleated": { waistband: 1 },
+  "bottom-longskirt": { waistband: 1 },
+};
+
+/** Where a garment's details sit (metres up its torso's UVs, MakeHuman's rest): a bottom's top, a top's
+ *  hem, the neck joint; and a sleeve's end along the arm (0…2). */
+export function detailLevels(spec: WearSpec | undefined, lm: WearLm): [number, number, number, number] {
+  const at = (l?: [string, number]) => (l && lm[l[0]] ? (lm[l[0]][1] + l[1]) * 0.1 : -9);
+  return [at(spec?.top), at(spec?.hem), lm.neck ? lm.neck[1] * 0.1 : -9, spec?.sleeve ?? -9];
+}
+
+/** A garment's folds (plan 74 phase 3) and its details (plan 74, the clothes' second pass): the cloth
+ *  isn't a smooth shell — a height field over its UVs (in metres: round the limb or the body, and along
+ *  it) and what each vertex is (`_wear`: kind, along its limb), laid into its normal through the UVs'
+ *  own tangent frame, a little shade in the creases:
+ *  - at a bend (the elbow, the back of the knee) creases a couple of centimetres apart, in patches;
+ *  - down a limb, long soft folds; at a trouser's hem, the cloth stacked over the shoe;
+ *  - on the torso, the cloth's weight in soft folds falling, a few faint creases across;
+ *  - its details (GarmentDetail): grooves, raised bands and buttons in the height, the thread's colour.
+ *  The torso's UVs: u round it from the front (+ the wearer's left; the sides at ±0.22, the back at
+ *  ±0.44), v its height; a leg's u round it from its outside or inside (seams where sin(u/0.07) = 0); an
+ *  arm's from under it. `strength` by its fabric (FOLD_BY_FABRIC); `top`: a top's or a coat's hips as its
+ *  torso (wear.py unwraps them with it). One program for every garment: the rest are uniforms. */
+export function foldPiece(
+  strength: number,
+  then: Piece | null = null,
+  top = false,
+  detail: GarmentDetail = {},
+  levels: [number, number, number, number] = [-9, -9, -9, -9],
+): Piece {
+  const d = detail;
+  const u = {
+    lifeFold: { value: strength },
+    lifeTop: { value: top ? 1 : 0 },
+    lifeDetA: { value: [d.placket ?? 0, d.buttons ?? 0, d.chestPocket ? 1 : 0, d.rib ? 1 : 0] },
+    lifeDetB: { value: [d.waistband ?? 0, d.fly ? 1 : 0, d.frontPockets ?? 0, d.backPockets ? 1 : 0] },
+    lifeLv: { value: levels },
+    lifeThread: { value: d.thread ? [...d.thread, 1] : [0, 0, 0, 0] },
+    lifeCuff: { value: d.cuffs ? 1 : 0 },
+  };
+  return {
+    key: `life-fold${then ? `+${then.key}` : ""}`,
+    patch(sh: Shader, r) {
+      Object.assign(sh.uniforms, u);
+      sh.vertexShader = sh.vertexShader
+        .replace(
+          "#include <common>",
+          "#include <common>\nattribute vec3 _wear;\nvarying vec2 vLifeFoldUv;\nvarying vec2 vLifeWear;",
+        )
+        .replace(
+          "#include <begin_vertex>",
+          "#include <begin_vertex>\nvLifeFoldUv = vec2( uv.x, 1.0 - uv.y );\nvLifeWear = _wear.xy;",
+        );
+      sh.fragmentShader = sh.fragmentShader
+        .replace(
+          "#include <common>",
+          `#include <common>
+varying vec2 vLifeFoldUv;
+varying vec2 vLifeWear;
+uniform float lifeFold;
+uniform float lifeTop;
+uniform vec4 lifeDetA;
+uniform vec4 lifeDetB;
+uniform vec4 lifeLv;
+uniform vec4 lifeThread;
+uniform float lifeCuff;
+float lifeN( vec2 p ) {
+	vec2 i = floor( p ), f = fract( p );
+	f = f * f * ( 3.0 - 2.0 * f );
+	float a = fract( sin( dot( i, vec2( 127.1, 311.7 ) ) ) * 43758.5453 );
+	float b = fract( sin( dot( i + vec2( 1.0, 0.0 ), vec2( 127.1, 311.7 ) ) ) * 43758.5453 );
+	float c = fract( sin( dot( i + vec2( 0.0, 1.0 ), vec2( 127.1, 311.7 ) ) ) * 43758.5453 );
+	float d = fract( sin( dot( i + vec2( 1.0, 1.0 ), vec2( 127.1, 311.7 ) ) ) * 43758.5453 );
+	return mix( mix( a, b, f.x ), mix( c, d, f.x ), f.y );
+}
+float lifeKind( vec2 w ) {
+	float kind = floor( w.x + 0.5 );
+	if ( lifeTop > 0.5 && kind > 2.5 && kind < 4.5 ) kind = 0.0;
+	return kind;
+}
+// a line d away (metres), w wide
+float lifeLn( float d, float w ) { return 1.0 - smoothstep( 0.0, w, abs( d ) ); }
+// the cloth's height off its shell (metres): q its UVs (round, along — v up the torso: the file's are
+// flipped, glTF's), w its kind and place along a limb
+float lifeFoldH( vec2 q, vec2 w ) {
+	float kind = lifeKind( w );
+	float t = w.y;
+	float h = 0.0;
+	if ( kind > 0.5 && kind < 4.5 ) {
+		bool leg = kind > 2.5;
+		// creases at the bend: short broken ones a couple of centimetres apart, a little diagonal, in
+		// patches (regular rings read as an accordion)
+		float bend = exp( - pow( ( t - 1.0 ) / ( leg ? 0.17 : 0.13 ), 2.0 ) );
+		float spot = smoothstep( 0.35, 0.75, lifeN( q * vec2( 22.0, 9.0 ) ) );
+		h += bend * spot * 0.0016 * sin( q.y * 230.0 + q.x * 60.0 + 3.0 * lifeN( q * vec2( 12.0, 5.0 ) ) );
+		// long soft folds down the limb, a little twisted
+		h += 0.0042 * sin( q.x * 78.0 + q.y * 6.0 + 3.5 * lifeN( q * vec2( 4.0, 2.5 ) ) );
+		// a trouser's hem stacked over the shoe
+		if ( leg ) h += smoothstep( 1.6, 1.92, t ) * smoothstep( 0.3, 0.7, lifeN( q * vec2( 16.0, 8.0 ) ) ) * 0.0022 * sin( q.y * 179.5 + q.x * 40.0 + 4.0 * lifeN( q * vec2( 7.0, 5.0 ) ) );
+	} else if ( kind < 0.5 ) {
+		// the torso: the cloth's weight in soft folds falling, wandering; a few faint creases across, in
+		// patches (lit from above, creases across shade far more than folds down)
+		// (round the body by its angle, the noise off the circle: where its UVs wrap round at the back, a
+		// pattern by u jumped — a seam down the back)
+		float ang = q.x / 0.14;
+		vec2 c = vec2( cos( ang ), sin( ang ) );
+		h += 0.0065 * sin( ang * 7.0 + 4.0 * lifeN( c * 1.6 + vec2( q.y * 4.0, - q.y * 2.0 ) ) );
+		h += 0.0005 * sin( q.y * 140.0 + ang * 4.0 + 3.0 * lifeN( c * 3.0 + vec2( q.y * 6.0, q.y * 3.0 ) ) ) * smoothstep( 0.55, 0.85, lifeN( c * 2.5 + vec2( q.y * 7.0, 0.0 ) ) );
+	}
+	return h * lifeFold;
+}
+// (a rib a few millimetres apart fades out before it's smaller than the pixels: it shimmered in stripes)
+float lifeRibFade = 1.0;
+// its details: x the height (metres), y how much darker, z the thread's share
+vec3 lifeDetail( vec2 q, vec2 w ) {
+	float kind = lifeKind( w );
+	float a = q.x, v = q.y, t = w.y;
+	float h = 0.0, ink = 0.0, thr = 0.0;
+	float vTop = lifeLv.x, vHem = lifeLv.y, vNeck = lifeLv.z, sleeve = lifeLv.w;
+	if ( kind < 0.5 ) {
+		float aa = abs( a );
+		// the side seams (and a topstitch beside them)
+		float ss = aa - 0.22;
+		h -= 0.0007 * lifeLn( ss, 0.0022 );
+		thr += lifeThread.w * lifeLn( ss - 0.004, 0.0007 );
+		float pl = lifeDetA.x;
+		if ( pl > 0.5 ) {
+			bool open = pl > 2.5;
+			float top = vNeck - 0.02;
+			float bot = pl > 1.5 && pl < 2.5 ? vNeck - 0.24 : vHem;
+			if ( v < top && v > bot - 0.01 ) {
+				if ( ! open ) {
+					// a placket: a raised strip down the front, stitched each side
+					h += 0.0006 * ( 1.0 - smoothstep( 0.012, 0.015, aa ) );
+					h -= 0.0008 * lifeLn( aa - 0.0145, 0.0014 );
+				} else {
+					// an open front: its edge over the other side, a shadow under it
+					h -= 0.0016 * lifeLn( a - 0.006, 0.0024 );
+					ink += 0.3 * lifeLn( a - 0.003, 0.003 ) * step( a, 0.006 );
+					thr += lifeThread.w * lifeLn( a - 0.016, 0.0007 );
+				}
+			}
+			float n = lifeDetA.y;
+			if ( n > 0.5 ) {
+				float bx = open ? - 0.024 : 0.0;
+				float sp = open ? 0.11 : ( pl > 1.5 ? 0.06 : 0.085 );
+				float first = open ? vNeck - ( n > 2.5 ? 0.36 : 0.52 ) : vNeck - 0.06;
+				float k = clamp( floor( ( first - v ) / sp + 0.5 ), 0.0, n - 1.0 );
+				vec2 c = vec2( bx, first - k * sp );
+				if ( c.y > vHem + 0.025 ) {
+					float R = open ? 0.0095 : 0.0055;
+					float r = length( vec2( a, v ) - c );
+					float b = 1.0 - smoothstep( R * 0.85, R, r );
+					h += 0.0018 * b * sqrt( max( 0.0, 1.0 - r * r / ( R * R ) ) );
+					ink -= 0.1 * b;
+					// its holes
+					ink += 0.35 * b * ( 1.0 - smoothstep( 0.0007, 0.0012, min( length( vec2( a, v ) - c - vec2( R * 0.3, 0.0 ) ), length( vec2( a, v ) - c + vec2( R * 0.3, 0.0 ) ) ) ) );
+				}
+			}
+		}
+		// a chest pocket, the wearer's left
+		if ( lifeDetA.z > 0.5 ) {
+			float x0 = 0.035, x1 = 0.105, y0 = vNeck - 0.25, y1 = vNeck - 0.12;
+			if ( a > x0 - 0.003 && a < x1 + 0.003 && v > y0 - 0.003 && v < y1 + 0.003 ) {
+				float e = min( min( abs( a - x0 ), abs( a - x1 ) ), abs( v - y0 + 0.008 * ( 1.0 - abs( ( a - 0.07 ) / 0.035 ) ) ) );
+				h -= 0.0007 * lifeLn( e, 0.0014 );
+				ink += 0.18 * lifeLn( v - y1, 0.0025 );
+				h += 0.0004 * step( v, y1 ) * step( y0, v ) * step( x0, a ) * step( a, x1 );
+			}
+		}
+		// a ribbed hem
+		if ( lifeDetA.w > 0.5 && v < vHem + 0.055 ) {
+			h += 0.0005 * sin( a * 900.0 ) * lifeRibFade;
+			h -= 0.0007 * lifeLn( v - vHem - 0.055, 0.002 );
+		}
+		// a bottom's top: its waistband, belt loops, fly, pockets
+		float wb = lifeDetB.x;
+		if ( wb > 0.5 && v > vTop - 0.042 ) {
+			h += 0.0007;
+			h -= 0.0009 * lifeLn( v - vTop + 0.042, 0.0016 );
+			thr += lifeThread.w * ( lifeLn( v - vTop + 0.036, 0.0007 ) + lifeLn( v - vTop + 0.008, 0.0007 ) );
+		}
+		if ( wb > 1.5 && v > vTop - 0.05 ) {
+			float lp = min( min( abs( aa - 0.06 ), abs( aa - 0.19 ) ), min( abs( aa - 0.31 ), abs( aa - 0.44 ) ) );
+			h += 0.0016 * ( 1.0 - smoothstep( 0.004, 0.0055, lp ) );
+		}
+		if ( lifeDetB.y > 0.5 && v < vTop - 0.042 ) {
+			float cy = vTop - 0.165;
+			float d1 = v > cy ? abs( a - 0.024 ) : 1.0;
+			float d2 = v <= cy && a > 0.0 ? abs( length( vec2( a, v - cy ) ) - 0.024 ) : 1.0;
+			float fd = min( d1, d2 );
+			h -= 0.0008 * lifeLn( fd, 0.0016 );
+			thr += lifeThread.w * lifeLn( fd - 0.004, 0.0007 );
+			// the front's middle seam, down to the crotch
+			if ( v < vTop - 0.04 ) h -= 0.0006 * lifeLn( a, 0.002 ) * step( v, cy + 0.024 );
+		}
+		float fp = lifeDetB.z;
+		if ( fp > 0.5 && v < vTop - 0.04 && v > vTop - 0.17 ) {
+			float e;
+			if ( fp < 1.5 ) e = abs( length( vec2( ( aa - 0.135 ) / 0.075, ( v - vTop + 0.042 ) / 0.075 ) ) - 1.0 ) * 0.07;
+			else {
+				vec2 p0 = vec2( 0.08, vTop - 0.042 ), p1 = vec2( 0.135, vTop - 0.165 );
+				vec2 pa = vec2( aa, v ) - p0, ba = p1 - p0;
+				e = length( pa - ba * clamp( dot( pa, ba ) / dot( ba, ba ), 0.0, 1.0 ) );
+			}
+			if ( aa < 0.14 ) {
+				h -= 0.0009 * lifeLn( e, 0.0018 );
+				ink += 0.12 * lifeLn( e, 0.002 );
+				thr += lifeThread.w * lifeLn( e - 0.004, 0.0007 );
+			}
+		}
+		if ( lifeDetB.w > 0.5 ) {
+			// back pockets: either side of the back's middle, their bottoms pointed
+			float px = abs( aa - 0.33 );
+			float y1 = vTop - 0.075, y0 = vTop - 0.205 - 0.016 * ( 1.0 - px / 0.06 );
+			if ( px < 0.064 && v > y0 - 0.004 && v < y1 + 0.004 ) {
+				float e = min( abs( px - 0.06 ), min( abs( v - y0 ), abs( v - y1 ) ) );
+				h -= 0.0008 * lifeLn( e, 0.0016 );
+				h += 0.0004 * step( px, 0.06 ) * step( y0, v ) * step( v, y1 );
+				thr += lifeThread.w * ( lifeLn( e - 0.004, 0.0007 ) + lifeLn( e - 0.008, 0.0007 ) * step( 0.5, lifeThread.w ) );
+			}
+		}
+	} else if ( kind > 2.5 && kind < 4.5 ) {
+		// a leg's seams: outside and inside
+		float s = abs( sin( q.x / 0.07 ) ) * 0.07;
+		h -= 0.0007 * lifeLn( s, 0.0022 );
+		thr += lifeThread.w * lifeLn( s - 0.004, 0.0007 );
+	} else if ( kind > 0.5 && kind < 2.5 ) {
+		// a sleeve's seam, under the arm; a cuff at its end (ribbed on a sweater)
+		h -= 0.0006 * lifeLn( abs( sin( q.x / 0.09 ) ) * 0.09, 0.0022 );
+		if ( lifeCuff > 0.5 && sleeve > 1.5 && t > sleeve - 0.14 ) {
+			h -= 0.0008 * lifeLn( ( t - sleeve + 0.14 ) * 0.25, 0.0018 );
+			if ( lifeDetA.w > 0.5 ) h += 0.0005 * sin( q.x * 900.0 ) * lifeRibFade;
+		}
+	}
+	return vec3( h, ink, clamp( thr, 0.0, 1.0 ) );
+}`,
+        )
+        .replace(
+          "#include <color_fragment>",
+          `#include <color_fragment>
+lifeRibFade = 1.0 - smoothstep( 0.0025, 0.006, fwidth( vLifeFoldUv.x ) );
+vec3 lifeD = lifeDetail( vLifeFoldUv, vLifeWear );
+float lifeH = lifeFoldH( vLifeFoldUv, vLifeWear );
+diffuseColor.rgb *= 1.0 - 0.15 * smoothstep( 0.0, 0.006, - lifeH );
+diffuseColor.rgb *= clamp( 1.0 - lifeD.y, 0.4, 1.2 );
+diffuseColor.rgb = mix( diffuseColor.rgb, lifeThread.rgb, lifeD.z * 0.85 );
+lifeH += lifeD.x;`,
+        )
+        .replace(
+          "#include <normal_fragment_maps>",
+          `#include <normal_fragment_maps>
+{
+	// (the folds' and the details' slope, by a step either way along the UVs, through their own tangent
+	// frame — three's; a short step: a seam is a couple of millimetres across)
+	const float e = 0.0007;
+	float hu = ( lifeFoldH( vLifeFoldUv + vec2( e, 0.0 ), vLifeWear ) + lifeDetail( vLifeFoldUv + vec2( e, 0.0 ), vLifeWear ).x - lifeH ) / e;
+	float hv = ( lifeFoldH( vLifeFoldUv + vec2( 0.0, e ), vLifeWear ) + lifeDetail( vLifeFoldUv + vec2( 0.0, e ), vLifeWear ).x - lifeH ) / e;
+	vec3 q0 = dFdx( - vViewPosition ), q1 = dFdy( - vViewPosition );
+	vec2 st0 = dFdx( vLifeFoldUv ), st1 = dFdy( vLifeFoldUv );
+	vec3 q1p = cross( q1, normal ), q0p = cross( normal, q0 );
+	vec3 T = q1p * st0.x + q0p * st1.x;
+	vec3 B = q1p * st0.y + q0p * st1.y;
+	float det = max( dot( T, T ), dot( B, B ) );
+	float s = det == 0.0 ? 0.0 : inversesqrt( det );
+	normal = normalize( normal - ( hu * T + hv * B ) * s );
+}`,
+        );
+      then?.patch(sh, r);
     },
   };
 }

@@ -1,0 +1,226 @@
+{
+  "sfcurly": {
+    "dir": "curly",
+    "out": "hair.npz",
+    "extract": {
+      "THICK": "0.035",
+      "DECIMATE": "0.6"
+    },
+    "build": {},
+    "change": "Fitted to Yutopia's people and coloured by the player, with our fur scalp under it.",
+    "title": "Curly Hair 1 (Beatrice) - Character Hair (Free)",
+    "source": "https://sketchfab.com/3d-models/curly-hair-1-beatrice-character-hair-free-89ed2c07a0d9418d9d6b231bedf2772a",
+    "author": "CT Reed",
+    "author_url": "https://sketchfab.com/continuumreed",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "sfcurly2": {
+    "dir": "curly2",
+    "out": "hair.npz",
+    "extract": {
+      "THICK": "0.035"
+    },
+    "build": {},
+    "change": "Fitted to Yutopia's people and coloured by the player, with our fur scalp under it.",
+    "title": "Curly Hair 2 (Angel) - Character Hair (Free)",
+    "source": "https://sketchfab.com/3d-models/curly-hair-2-angel-character-hair-free-a0f33a6307934f789cfc6d9e831e5852",
+    "author": "CT Reed",
+    "author_url": "https://sketchfab.com/continuumreed",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "sflong1": {
+    "dir": "long1",
+    "out": "hair.npz",
+    "extract": {
+      "DECIMATE": "0.6"
+    },
+    "build": {},
+    "change": "Fitted to Yutopia's people and coloured by the player, with our fur scalp under it.",
+    "title": "Long Black Hair for Character",
+    "source": "https://sketchfab.com/3d-models/long-black-hair-for-character-6c06611cf3454b978c01bb98368198b2",
+    "author": "Marc Sawyer",
+    "author_url": "https://sketchfab.com/whitewashstudio",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "sfpony": {
+    "dir": "pony",
+    "out": "hair.npz",
+    "extract": {
+      "DECIMATE": "0.45"
+    },
+    "build": {},
+    "change": "Fitted to Yutopia's people and coloured by the player, with our fur scalp under it.",
+    "title": "Ponytail Hair for Character",
+    "source": "https://sketchfab.com/3d-models/ponytail-hair-for-character-8ddc5c1c6cda49bc80c9f3a675b0a6c4",
+    "author": "Marc Sawyer",
+    "author_url": "https://sketchfab.com/whitewashstudio",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "sfwavy": {
+    "dir": "wavy",
+    "out": "hair.npz",
+    "extract": {
+      "MATS": "^aiStandardSurface1SG$",
+      "DECIMATE": "0.9"
+    },
+    "build": {},
+    "change": "Its wig stand left out; fitted to Yutopia's people and coloured by the player, with our fur scalp under it.",
+    "title": "Long reddish hair for game",
+    "source": "https://sketchfab.com/3d-models/long-reddish-hair-for-game-0664c544ecd149d48067e3c54a90a638",
+    "author": "CarlosTorresVFX",
+    "author_url": "https://sketchfab.com/carlostorresvfx",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "sfbun": {
+    "dir": "bun",
+    "out": "hair.npz",
+    "extract": {
+      "MATS": "^M_Hair$"
+    },
+    "build": {},
+    "change": "Its hair taken off the head it came on; fitted to Yutopia's people and coloured by the player, with our fur scalp under it.",
+    "title": "Messy Low Bun Female Hairstyle",
+    "source": "https://sketchfab.com/3d-models/messy-low-bun-female-hairstyle-db7a61ea9f2c45ddb0b7571972f9738f",
+    "author": "CliffUnderside",
+    "author_url": "https://sketchfab.com/CliffUnderside",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "sfbob2": {
+    "dir": "bob",
+    "out": "hair.npz",
+    "extract": {
+      "DECIMATE": "0.45"
+    },
+    "build": {},
+    "change": "Fitted to Yutopia's people and coloured by the player, with our fur scalp under it.",
+    "title": "Bobhair",
+    "source": "https://sketchfab.com/3d-models/bobhair-2149a717f39b42c9a37e04ad07e6230e",
+    "author": "OksanaSun",
+    "author_url": "https://sketchfab.com/zabolotskikhoksana",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "sfshort2": {
+    "dir": "short",
+    "out": "hair.npz",
+    "extract": {
+      "MATS": "^material$"
+    },
+    "build": {},
+    "change": "Its hair taken off the head it came on; fitted to Yutopia's people and coloured by the player, with our fur scalp under it.",
+    "title": "Female Short Hairt Cards",
+    "source": "https://sketchfab.com/3d-models/female-short-hairt-cards-2daf1e54b13c4086847be90ded2dfeeb",
+    "author": "ebadraza225",
+    "author_url": "https://sketchfab.com/ebadraza225",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "sfcorn": {
+    "dir": "cornrows",
+    "out": "hair.npz",
+    "extract": {},
+    "build": {
+      "under": null
+    },
+    "change": "Fitted to Yutopia's people and coloured by the player.",
+    "title": "Cornrow Braids Hairstyle",
+    "source": "https://sketchfab.com/3d-models/cornrow-braids-hairstyle-c8052613e7894027a272e5af04ca8da4",
+    "author": "OCBacon",
+    "author_url": "https://sketchfab.com/OCBacon",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "sflong2": {
+    "dir": "long2",
+    "out": "hair.npz",
+    "extract": {
+      "MATS": "hair"
+    },
+    "build": {},
+    "change": "Its hair taken off the head it came on; fitted to Yutopia's people and coloured by the player, with our fur scalp under it.",
+    "title": "Pocolov Hair 03",
+    "source": "https://sketchfab.com/3d-models/pocolov-hair-03-db01a2087ede4d7d997b988092c76300",
+    "author": "pocolov",
+    "author_url": "https://sketchfab.com/pocolov",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "sfmshort": {
+    "dir": "business",
+    "out": "hair.npz",
+    "extract": {
+      "MATS": "^(Hair_01|Hair_Base)$"
+    },
+    "build": {
+      "under": "buzzfur"
+    },
+    "change": "His hair only, taken off the character; fitted to Yutopia's people and coloured by the player, with our buzz under it.",
+    "title": "Businessman (Rigged)",
+    "source": "https://sketchfab.com/3d-models/businessman-rigged-8933d61fcb1e46f3aead661227bb4fed",
+    "author": "jungle_jim",
+    "author_url": "https://sketchfab.com/jungle_jim",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "sfmshag": {
+    "dir": "robert",
+    "out": "hair.npz",
+    "extract": {
+      "MATS": "^Hair$"
+    },
+    "build": {
+      "tex": "atlas"
+    },
+    "change": "His hair only, taken off the character; fitted to Yutopia's people and coloured by the player, re-textured with our own strands, with our buzz under it.",
+    "title": "\"Robert\", citizen of a future dystopia",
+    "source": "https://sketchfab.com/3d-models/robert-citizen-of-a-future-dystopia-01966360b609405db6bde50fefd230cd",
+    "author": "Automatrio",
+    "author_url": "https://sketchfab.com/automatrio",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "sfmbraid": {
+    "dir": "bigguy",
+    "out": "hair.npz",
+    "extract": {
+      "MATS": "^CharGuyblinn9SG$",
+      "HEADMATS": "^CharGuyblinn1SG$"
+    },
+    "build": {
+      "under": "fadefur"
+    },
+    "change": "His hair only, taken off the character; fitted to Yutopia's people and coloured by the player, with our fade under it.",
+    "title": "Free Mesh - Big Guy [High Poly]",
+    "source": "https://sketchfab.com/3d-models/free-mesh-big-guy-high-poly-baf398942e824702bec05f1743d8033f",
+    "author": "jérémy paladini",
+    "author_url": "https://sketchfab.com/paladini",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "sfbeard": {
+    "dir": "bearded",
+    "out": "beard.npz",
+    "extract": {
+      "MATS": "^(Head_Hair_blinn1|Beard_Shader)$",
+      "HEADMATS": "^Head_Hair_Head_defaultMat1$"
+    },
+    "build": {
+      "beard": true,
+      "fit": "beard",
+      "source": true
+    },
+    "change": "His beard only, taken off the scan; fitted to Yutopia's people, cut and shortened into each of our beard styles, over our own fur, and coloured by the player.",
+    "title": "Bearded Man",
+    "source": "https://sketchfab.com/3d-models/bearded-man-60947a1819a1407685cb4332e894e585",
+    "author": "kand8998",
+    "author_url": "https://sketchfab.com/KaitlynAndrus",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/"
+  }
+}

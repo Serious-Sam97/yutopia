@@ -940,6 +940,76 @@ const SHOTS: [string, string][] = [
   ],
 ];
 
+// plan 74's line-up (SHOTS=p74-…): the same frames before and after each phase. Each outfit on the three
+// bodies (slim, regular, broad); six hairs and four beards at talking distance.
+{
+  const LOOKS: Record<string, Record<string, string>> = {
+    man: {
+      tee: "top-tee,bottom-jeans,shoes-sneakers,hair-short",
+      shirt: "top-shirt,bottom-chinos,shoes-loafers,hair-slick",
+      sweater: "top-sweater,bottom-trousers,shoes-boots,hair-short",
+    },
+    woman: {
+      tee: "top-tee,bottom-jeans,shoes-sneakers,hair-ponytail",
+      shirt: "top-shirt,bottom-chinos,shoes-loafers,hair-bob",
+      sweater: "top-sweater,bottom-skirt,shoes-boots,hair-long",
+    },
+  };
+  const VIEWS: [string, number][] = [
+    ["front", 0],
+    ["threeq", 35],
+    ["back", 180],
+  ];
+  for (const who of ["man", "woman"])
+    for (const [look, wear] of Object.entries(LOOKS[who]))
+      for (const [view, spin] of VIEWS) {
+        if (view === "back" && look !== "tee") continue;
+        const row = ["body-slim", "body-regular", "body-broad"].map((b) => `${b},${wear}`).join("|");
+        SHOTS.push([`p74-${look}-${who}-${view}`, `who=${who}&wear=${row}&t=2.4&spin=${who === "man" ? spin : -spin}`]);
+      }
+  const HAIRS = ["short", "slick", "long", "bob", "ponytail", "curly"];
+  const BEARDS = ["stubble", "boxed", "full", "mustache"];
+  for (const who of ["man", "woman"]) {
+    const s = who === "man" ? 1 : -1;
+    const hairs = HAIRS.map((h) => `top-tee,bottom-jeans,shoes-sneakers,hair-${h}`).join("|");
+    SHOTS.push([`p74-hair-${who}`, `who=${who}&near=1&wear=${hairs}&t=2.4&spin=${20 * s}`]);
+    SHOTS.push([`p74-hair-${who}-back`, `who=${who}&near=1&wear=${hairs}&t=2.4&spin=${160 * s}`]);
+    for (const h of ["short", "long"]) {
+      const q = `who=${who}&face=${who}&wear=top-tee,bottom-jeans,shoes-sneakers,hair-${h}&t=2.4&blink=0&eyes=0,0`;
+      SHOTS.push([`p74-face-${who}-${h}`, `${q}&spin=${12 * s}`]);
+      SHOTS.push([`p74-face-${who}-${h}-side`, `${q}&spin=${70 * s}`]);
+    }
+  }
+  const beards = BEARDS.map((b) => `top-tee,bottom-jeans,shoes-sneakers,hair-short,beard-${b}`).join("|");
+  SHOTS.push(["p74-beards", `who=man&near=1&wear=${beards}&t=2.4&spin=20`]);
+  for (const b of BEARDS) {
+    const q = `who=man&face=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short,beard-${b}&t=2.4&blink=0&eyes=0,0`;
+    SHOTS.push([`p74-beard-${b}`, `${q}&spin=12`]);
+    SHOTS.push([`p74-beard-${b}-side`, `${q}&spin=70`]);
+  }
+  // the clothes up close (p74-close-…): the chest, the hips and the hems, front and back
+  const CLOSE: [string, string, string][] = [
+    ["man-tee", "man", LOOKS.man.tee],
+    ["man-shirt", "man", LOOKS.man.shirt],
+    ["man-coat", "man", "top-sweater,outer-coat,bottom-trousers,shoes-boots,hair-short"],
+    ["woman-tee", "woman", LOOKS.woman.tee],
+    ["woman-sweater", "woman", LOOKS.woman.sweater],
+    ["woman-dress", "woman", "top-dress,shoes-loafers,hair-bob"],
+  ];
+  for (const [name, who, wear] of CLOSE) {
+    const s = who === "man" ? 1 : -1;
+    const q = `who=${who}&face=${who}&bust=1&wear=${wear}&t=2.4`;
+    SHOTS.push([`p74-close-${name}-chest`, `${q}&at=1.25&spin=${20 * s}`]);
+    SHOTS.push([`p74-close-${name}-hips`, `${q}&at=0.95&spin=${20 * s}`]);
+    SHOTS.push([`p74-close-${name}-hems`, `${q}&at=0.35&spin=${20 * s}`]);
+    SHOTS.push([`p74-close-${name}-back`, `${q}&at=1.1&spin=${170 * s}`]);
+  }
+  SHOTS.push([
+    "p74-beard-full-talk",
+    `who=man&face=man&wear=top-tee,bottom-jeans,shoes-sneakers,hair-short,beard-full&t=2.4&blink=0&talk=0.9&smile=0.4&spin=12`,
+  ]);
+}
+
 const browser = await chromium.launch({ args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 page.on("pageerror", (e) => console.log("  page:", e.message));

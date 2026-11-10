@@ -1,0 +1,11 @@
+Model Information:
+* title:	Businessman (Rigged)
+* source:	https://sketchfab.com/3d-models/businessman-rigged-8933d61fcb1e46f3aead661227bb4fed
+* author:	jungle_jim (https://sketchfab.com/jungle_jim)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Businessman (Rigged)" (https://sketchfab.com/3d-models/businessman-rigged-8933d61fcb1e46f3aead661227bb4fed) by jungle_jim (https://sketchfab.com/jungle_jim) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

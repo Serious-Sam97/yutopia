@@ -1,0 +1,11 @@
+Model Information:
+* title:	"Robert", citizen of a future dystopia
+* source:	https://sketchfab.com/3d-models/robert-citizen-of-a-future-dystopia-01966360b609405db6bde50fefd230cd
+* author:	Automatrio (https://sketchfab.com/automatrio)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on ""Robert", citizen of a future dystopia" (https://sketchfab.com/3d-models/robert-citizen-of-a-future-dystopia-01966360b609405db6bde50fefd230cd) by Automatrio (https://sketchfab.com/automatrio) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

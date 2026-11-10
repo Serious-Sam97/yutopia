@@ -257,6 +257,8 @@ export class LifeLook {
   private away: Material[] = [];
   private cut: MeshBasicMaterial | null = null;
   private depth = new Map<number, SkinnedMesh>();
+  /** (plan 74 phase 1) hair's and lashes' soft edge: a second, blended draw of each */
+  private edges = new Map<number, SkinnedMesh>();
   /** (plan 73 4.5) drawn as the far person: one coarse mesh (when it's loaded) */
   private farOn = false;
   private farAt = -1;
@@ -409,6 +411,12 @@ export class LifeLook {
     sm.bind(b.skeleton, new Matrix4());
     b.root.add(sm);
     this.meshes[i] = sm;
+    if (this.M.hasSoftEdge(part.name)) {
+      const m = this.M.softEdgeMaterial(own);
+      this.h.lit(m, this.parts[i].piece);
+      this.mine.push(m);
+      this.edges.set(i, this.M.softEdgeMesh(sm, m));
+    }
     for (const k of ["slim", "broad", "coat"] as const) {
       const at = sm.morphTargetDictionary[k];
       if (at !== undefined && sm.morphTargetInfluences) sm.morphTargetInfluences[at] = this.body.morph[k];
@@ -511,6 +519,9 @@ export class LifeLook {
       else sm.material = s === "away" && this.away[i] ? this.away[i] : own;
       const d = this.depth.get(i);
       if (d) d.visible = faded && sm.visible;
+      // (the soft edge with their own look only: away, or under the one material, the core alone)
+      const e = this.edges.get(i);
+      if (e) e.visible = sm.visible && !over && s !== "away";
     });
   }
 
@@ -530,7 +541,8 @@ export class LifeLook {
   }
 
   dispose(): void {
-    for (const sm of [...this.meshes, ...this.depth.values()]) sm.removeFromParent();
+    for (const sm of [...this.meshes, ...this.depth.values(), ...this.edges.values()]) sm.removeFromParent();
+    this.edges.clear();
     this.meshes.length = 0;
     this.depth.clear();
     for (const m of this.mine) m.dispose();
