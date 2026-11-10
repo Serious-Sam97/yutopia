@@ -25,6 +25,9 @@ COPY apps/client apps/client
 # fetched from their releases (bsdtar opens the 2600 core's 7z)
 COPY tools/emu-assets.mjs tools/emu-cores.json tools/emu-games.json tools/
 RUN apk add --no-cache libarchive-tools && node tools/emu-assets.mjs && node tools/emu-assets.mjs --check
+# the decoders three's loaders fetch at run time (the life look's KTX2 textures: docs/plan/73 phase 1),
+# copied out of three's package by the client's build — the build runs it, so it must be here
+COPY tools/decoders.mjs tools/
 # (git reads the version off .git, mounted for the build only: it never lands in the image)
 RUN apk add --no-cache git && git config --global --add safe.directory /app
 # (the types are CI's to check — `pnpm typecheck` over the whole repo: the world-server's schema

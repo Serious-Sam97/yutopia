@@ -19,3 +19,8 @@ design
 docs
 apps/client/public/emu/cores
 apps/client/public/emu/games
+# what's on a working copy but not in git (the client's build makes the decoders itself; the
+# photo-skinned people the game never loads): an image from here the same as one from a clean checkout
+apps/client/public/decoders
+apps/client/public/life/person-man.glb
+apps/client/public/life/person-woman.glb

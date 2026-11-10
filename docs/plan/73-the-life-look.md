@@ -312,7 +312,7 @@ roughness map.
   roughness; from them three maps: **albedo** (sRGB; tintables painted near white so the colour pick
   multiplies through, as today's furniture and wardrobe colours do), **orm** (R crevice shade, G
   roughness, B metal; linear) and **normal** (from the height). PNG → `basisu` → KTX2 (albedo and orm
-  ETC1S, normal UASTC), full size and half (Low), into `public/life/mat/` (gitignored; `build_all.sh`).
+  ETC1S, normal UASTC), full size and half (Low), into `public/life/mat/` (in git since 2026-11-10; `build_all.sh`).
 - **3.3 The runtime.** `look/life-matlib.ts`: `libMaterial(id, { color })` — a Standard material
   (Physical for sheen and clearcoat), its maps 1×1 stand-ins at first so the program never changes
   when the real ones arrive through the asset queue (each texture set loaded once, shared between
@@ -1203,7 +1203,8 @@ Done 2026-11-10 (the whole phase without sign-offs).
   none after). Textures may grow 3 a new garment file. After: heap 748 → 778 MB (allowed +75), textures
   565 → 597 (allowed +70 with 14 new files), programs flat, every other count within. Classic's own run
   has its programs +5 over 3 cycles (allowed +3) — as before this plan. `TEX_WHO=1` names a cycle's new
-  textures. The nightly CI stays classic: the life look's files (`public/life`) aren't in git.
+  textures. The nightly CI stays classic: the life look's files (`public/life`) weren't in git then (they are since
+  2026-11-10, so a life run could join it).
 - **Frames by tier** (`e2e/life-build-cost.mts`, 1440×900, noon, the camera held; classic | life):
   - **High**: the lobby, Floor 1 and the studio 16.7 | 16.7 ms; the lot 16.7 | 19.4, the town 16.7 |
     21.4 (p95 33 — frames of two refreshes among one). **Found:** the AO at full size alone took the
@@ -1236,7 +1237,10 @@ Done 2026-11-10 (the whole phase without sign-offs).
 
 ## Rebuilding the assets
 
-The `.glb` files in `apps/client/public/life/` are not in git; the scripts make them again.
+The files in `apps/client/public/life/` (`.glb` and `.ktx2`, ~37 MB) are in git since 2026-11-10: nothing
+in CI or the Docker images can build them, and the client image takes them from the checkout. The two
+photo-skinned people (`person-man.glb`, `person-woman.glb`, ~13 MB) stay out of git and out of the images
+(`.gitignore`, `.dockerignore`): the game never loads them. The scripts make all of them again.
 
 1. The source data (CC0 1.0), outside the repo in `../yutopia-art-src/`:
    - `mh/` — a sparse clone of `github.com/makehumancommunity/makehuman`, `makehuman/data` only
