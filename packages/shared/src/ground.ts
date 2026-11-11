@@ -99,8 +99,10 @@ export function chairAt(
   return { x, y, rot, pull: (x - Math.floor(x) - 0.5) * fx + (y - Math.floor(y) - 0.5) * fy };
 }
 /** How far a chair at a desk (and whoever's on it) comes in to it, tiles: the knees under its top,
- *  still on the chair's own tile (docs/plan/62-the-touch.md, phase 2). */
-export const DESK_PULL = 0.4;
+ *  still on the chair's own tile (docs/plan/62-the-touch.md, phase 2) — no further than the body's own
+ *  round can come to the desk's edge (at 0.4 the sitter stopped at 0.29 on the desk, the chair drawn
+ *  11 cm on, its back through them). */
+export const DESK_PULL = 0.5 - BODY_R - 0.005;
 /** The way a seat's sitter faces, as a step on the floor: away from its back (on −y at rot 0) —
  *  the world server's `seatFacing`. */
 export function seatFront(rot: number): [number, number] {

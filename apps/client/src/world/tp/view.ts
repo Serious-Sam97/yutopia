@@ -3231,7 +3231,11 @@ void main() {
       // (from your side: the sight line where it leaves the wall nearest you,
       // its lowest over it, and down to your feet — a thick wall close by,
       // the camera up over it, still hid your legs)
-      const hit = inside ? null : segBox(t.x, t.z, cam.x, cam.z, f.x0 - 0.06, f.y0 - 0.06, f.x1 + 0.06, f.y1 + 0.06);
+      // (a tall thing I'm in — the high-backed chair I'm sat in — never hides me: the sight line starts
+      // inside it, and it went see-through under me, the sitter left on nothing)
+      const mine = f.item && !f.wall && t.x > f.x0 && t.x < f.x1 && t.z > f.y0 && t.z < f.y1;
+      const hit =
+        inside || mine ? null : segBox(t.x, t.z, cam.x, cam.z, f.x0 - 0.06, f.y0 - 0.06, f.x1 + 0.06, f.y1 + 0.06);
       if (hit !== null) {
         const feet = t.y - EYE + 0.1;
         block = feet + (cam.y - feet) * hit < f.top + 0.1;

@@ -736,6 +736,8 @@ const SOFT_SNOW = new Set<Footing>(["snow", "deep", "packed", "slush"]);
 /** a fall heard from this high (m); a roll from this (locomotion's) */
 /** walked this long (s) with no step of their body's, it isn't stepping: steps by the way they go */
 const QUIET = 0.5;
+/** ms: a skid's stop comes this soon after the run (the speed's eased: a hard stop reads ~0.2 s late) */
+const SKID_MS = 600;
 const FALL = 0.3;
 const ROLL = 2.2;
 /** a body's step this slow (tiles/s) is setting off, stopping or turning on the spot: scuffed */
@@ -770,6 +772,8 @@ interface Heard {
   emoteT: number;
   down: string;
   skidAt: number;
+  /** (when it was last going at a run: a skid is a stop from one) */
+  fastAt: number;
   /** a slide's or a grind's sound, held while it lasts */
   loop: (() => void) | null;
 }
@@ -820,6 +824,7 @@ export class Footfalls {
           emoteT: 0,
           down: ears.down?.(w.id) ?? "",
           skidAt: 0,
+          fastAt: 0,
           loop: null,
         };
         this.heard.set(w.id, h);
@@ -1071,8 +1076,10 @@ export class Footfalls {
       else if (emote === "fire" && past(PUMP_DOWN))
         P.land(f(), 0.3, { gain: gain(), pan: pan(), shoe: shoeOf(w.avatar?.shoes), thud: false });
     }
-    // a skid: braking hard from a run, on their feet
-    if (h.was > 4 && (h.speed - h.was) / Math.max(dt, 1e-3) < -14 && !up && !verb && !flow && now - h.skidAt > 800) {
+    // a skid: braking hard from a run, on their feet — at a run a moment ago, all but stopped now (a
+    // frame's hitch read as one going 5 m/s: the speed's one frame's drop played it mid-run)
+    if (h.speed > 4) h.fastAt = now;
+    if (h.speed < 1.6 && now - h.fastAt < SKID_MS && !up && !verb && !flow && now - h.skidAt > 800) {
       h.skidAt = now;
       P.scrape(f(), gain(), pan(), 0.35);
     }

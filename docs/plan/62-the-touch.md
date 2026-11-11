@@ -431,3 +431,35 @@ Phases 2–5 are independent of each other.
   - Budgets: the page 421.0, yutopia-car 26.7 of 120, yutopia-karts 23.5 of 60, yutopia-acts 6.4.
   - `e2e/car.spec`: the passenger test is red on HEAD too, and "a parked car knocked" passes (red
     once, from the stills' runs leaving the lot moved).
+
+## Later fix (2026-11-11): the chair vanished under its sitter
+
+- **What the user saw:** sat at a desk, the character was pulled in to it, but the chair under them
+  had gone. They sat on nothing.
+- **Cause:** the executive chair (look 3) is 1.40 m tall, over `TALL` (1.25 tiles). Tall furniture is
+  drawn on its own and fades out when it stands between the camera and you (`tp/view.ts` `fadeWalls`).
+  The sight line starts at the sitter, inside the chair's own footprint, so it always "hid" them and
+  faded to nothing. The task chairs (1.13 m) and the bentwood (0.99 m) are under the line, so they
+  stayed.
+- **Fix:** tall furniture you're in (your point inside its footprint) never fades.
+- **Checked:** Bia sat in each of the four chair looks in the dev world, the look set on her screen
+  only (`design/screens/life/chair-sat-before.png`, `chair-sat-after.png`, `chair-sat-side.png`).
+  325 client tests pass.
+
+## Later fixes (2026-11-11): the lobby's seats, and the chair back through the sitter
+
+- **Lobby seats stopped sitting you down after a walk.**
+  - Cause: on the ground floor, Jolt leaves the feet ~3e-8 m above the floor after a few steps. The
+    controller only sat you down at `hgt.z > 0` false, so every seat there stopped working. Floor 4
+    stays at exactly 0, which is why it only happened in the lobby.
+  - Fix: feet within 1 cm of the floor (`SEAT_Z`) count as on it.
+  - Checked: Bia sat in the reception chair, both armchairs, the sofa and a bench in a row, with the
+    height at 2–5e-8.
+- **A desk's chair back went through its sitter.**
+  - Cause: `DESK_PULL` was 0.4. That pulls the sitter to 0.1 from the desk's edge, but the body's round
+    (`BODY_R` 0.22) stopped it at 0.29, so the chair was drawn 11 cm further in than its sitter. This
+    was already true at HEAD (394e2a5).
+  - Fix: `DESK_PULL = 0.5 − BODY_R − 0.005` (0.275). The chair, the sitter and the server agree. A shared
+    test keeps the pull within what the body can reach.
+  - Stills: `design/screens/life/chair-desk-pull.png` (left before, right after: the back now behind
+    her).

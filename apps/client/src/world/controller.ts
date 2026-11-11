@@ -133,6 +133,7 @@ const sampleOf = (
   yaw: p.yaw ?? 0,
 });
 
+const SEAT_Z = 0.01; // m: feet this near the floor are on it — a seat under them sits me down
 const MEDIA_SLEEP_MS = 5 * 60_000; // quiet this long: the voice line sleeps
 const MEDIA_NEAR = HEAR_RADIUS + 4; // someone this close (tiles) keeps it awake
 const LIVEKIT_TOKEN_FRESH_MS = 5 * 3600_000; // LiveKit tokens last 6 h (apps/api Tokens)
@@ -1800,7 +1801,9 @@ export class WorldController {
       moved = true;
     }
     // (up on something or in the air nobody sits down: a jump over a chair lands on its feet)
-    const seat = hgt.up || hgt.z > 0 || this.jumpTrack.kind ? null : this.grid.seatAt(this.me.x, this.me.y);
+    // (on the floor within a centimetre: Jolt's ground floor leaves the feet ~3e-8 m up after a walk, and
+    // a strict `> 0` sat nobody down in the lobby again)
+    const seat = hgt.up || hgt.z > SEAT_Z || this.jumpTrack.kind ? null : this.grid.seatAt(this.me.x, this.me.y);
     // (what's underfoot: on the land snow, the trail, the ice — or a floor's tile)
     const floor = this.steps.myFooting(hgt.z);
     // my steps (docs/plan/63-the-steps.md): never in the air, a verb or a move, nor down on hands and

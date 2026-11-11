@@ -541,3 +541,13 @@ Still open:
 5. **The chars budget**: if the footfall hook doesn't fit in `yutopia-chars` (58.0/58), raise it
    by up to 0.5 KB, or move something out of chars to make room. To be asked in phase 2, once
    the hook is measured.
+
+## Later fix (2026-11-11): a skid mid-run
+
+- **What the user heard:** a noise a second or two after they started walking or running.
+- **Cause:** the skid (braking hard from a run) fired on a single frame's drop in the eased speed. A frame
+  where the body barely moved (a hitch, a position arriving late) read as slamming on the brakes at
+  4–5 tiles/s, and played the scrape mid-run. It could do so again every 0.8 s.
+- **Fix:** a skid now needs a real stop. The walker must have been going over 4 tiles/s within the
+  last 0.6 s (`SKID_MS`) and be all but still now (under 1.6). Running into a wall still skids.
+- **Test:** `steps.test.ts`, "a hitch mid-run … is no skid". It fails on the old rule and passes now.

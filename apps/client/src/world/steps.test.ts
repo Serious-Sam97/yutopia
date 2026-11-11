@@ -396,6 +396,16 @@ test("a seat taken and given back, the tape's side steps, a skid from a run, a c
   assert.ok(w.filter((x) => x === "step").length >= 2, `crawling: ${w.join(" ")}`);
 });
 
+test("a hitch mid-run (two frames the body didn't move) is no skid", () => {
+  const m = moments();
+  m.run({ a: 0, x: 0 }, 1);
+  m.run({ a: 1, mv: 3, x: 0 }, 0.5, 7);
+  m.calls.length = 0;
+  m.run({ a: 1, mv: 3, x: 3.43 }, 2 / 60, 0);
+  m.run({ a: 1, mv: 3, x: 3.45 }, 0.5, 7);
+  assert.ok(!m.what().includes("scrape"), `no skid: ${m.what().join(" ")}`);
+});
+
 test("my own moments heard too (gain 1), but my steps left to the controller", () => {
   const m = moments();
   const mine = (w: Partial<Walker>, secs: number, v = 0) => {

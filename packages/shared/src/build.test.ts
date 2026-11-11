@@ -4,7 +4,7 @@ import { canPlace, TEMPLATES } from "./build.ts";
 import { entry, placedFootprint, quarterOf, quarterYaw, rotOf, variantOf, type WorldObjectDef } from "./catalog.ts";
 import { dressItems } from "./dressing.ts";
 import { CHAIRS } from "./fam/gameroom.ts";
-import { chairAt, DESK_PULL, seatFront } from "./ground.ts";
+import { BODY_R, chairAt, DESK_PULL, seatFront } from "./ground.ts";
 import { hungOn, wallSpan } from "./hang.ts";
 import { holdsItems, vWall } from "./map.ts";
 import { edgeBlocker } from "./map-edit.ts";
@@ -179,6 +179,9 @@ test("a chair at a desk pulls in to it, sat on; one with nothing before it stays
   assert.deepEqual(g.seatSpot(6.5, 7.5), { x: 6.5, y: 7.5 - DESK_PULL });
   // (still on the chair's own tile: it's still the seat you're on)
   assert.equal(g.seatAt(6.5, 7.5 - DESK_PULL)?.id, "c");
+  // (and no nearer the desk's edge than the body's round fits: else the sitter stops short of the drawn
+  // chair, its back through them)
+  assert.ok(0.5 - DESK_PULL >= BODY_R, `the sitter ${0.5 - DESK_PULL} off the desk, the body ${BODY_R} round`);
   assert.equal(g.seatAt(10.5, 7.5)?.pull, 0);
   assert.deepEqual(g.seatSpot(10.5, 7.5), { x: 10.5, y: 7.5 });
   // (turned away from the desk: not pulled)
