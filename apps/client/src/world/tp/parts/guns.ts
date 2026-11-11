@@ -72,9 +72,4 @@ export class Guns {
     f.trigger = since < 0.08 ? 1 : 0;
     return f;
   }
-
-  /** How far down the sights (0..1), first person. */
-  get ads(): number {
-    return this.c.hands?.ads ?? 0;
-  }
 }

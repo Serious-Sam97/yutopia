@@ -2161,7 +2161,8 @@ export class WorldController {
   camWanted(): CamMode {
     // the phone's camera: Photo is my eyes, Selfie a camera out in front of me
     if (this.photos.photo) return this.photos.photo.mode === "photo" ? "first" : "chase";
-    if (prefs().view === "1p") return hud.get().build.on ? "chase" : "first";
+    // (a gun out: over the shoulder, whatever the view — guns are third person, docs/plan/79 F3a)
+    if (prefs().view === "1p") return hud.get().build.on || this.tp?.armed ? "chase" : "first";
     // (one camera behind you: how it follows is its own setting — docs/plan/56-the-controls.md D)
     return "chase";
   }

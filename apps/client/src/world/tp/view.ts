@@ -304,7 +304,12 @@ const SWIM_LIFT = 0.3; // …afloat, this much more: my head, just out of the wa
 // first person: where your eyes are (the name tag sits at 2.0 / 1.45)
 const EYE_1P = 1.7;
 const EYE_1P_SEATED = 1.2;
-const VEIL_MS = 150; // into or out of first person: the dip to dark, and back (setMode)
+const VEIL_MS = 150;
+// the over-the-shoulder camera (docs/plan/79-the-guns.md F1a, the mocks signed off 2026-11-11): a gun out
+// (`ready`) and aiming (`aim`) — how far back at most, how far right, how far up over EYE; the aim's lens
+// a few degrees narrower (mostly by distance: big FOV swings make people sick)
+const CAM_READY = { back: 1.5, side: 0.5, up: 0.3 };
+const CAM_AIM = { back: 0.95, side: 0.45, up: 0.42, zoom: 4 }; // into or out of first person: the dip to dark, and back (setMode)
 const AIM_HELP = 0.12; // rad: aiming on a pad or keys, someone this near the reticle is helped onto
 
 // the stairwells' tiles as a signature (a floor rebuilt when they change)
@@ -638,7 +643,10 @@ export class ThirdPersonView {
   /** a gun in my hand (the right button aims, not a thing's menu; the left fires, not picks) */
   armed = false;
   shoulder = 1;
+  /** how long coming up to aim takes with the gun in my hand (s; shared ARMS' `aim`): the camera's ease */
+  aimSecs = 0.2;
   private aimK = 0;
+  private armK = 0; // a gun out: the camera over the shoulder (eased)
   /** where I aim, up from level (radians): from the flashlight in my hand to what the crosshair is
    *  on (aimFrame), else from the camera's pitch */
   get aimPitch(): number {
@@ -2509,7 +2517,10 @@ void main() {
       this.target.copy(this.god.at);
       this.targetReady = true;
     }
-    this.aimK += ((this.aim && !first ? 1 : 0) - this.aimK) * (1 - Math.exp(-dt * 10));
+    // (in as fast as the gun comes up — ~95% in its `aim` s; out a touch slower)
+    const aimRate = this.aim ? 3 / Math.max(0.08, this.aimSecs) : 10;
+    this.aimK += ((this.aim && !first ? 1 : 0) - this.aimK) * (1 - Math.exp(-dt * aimRate));
+    this.armK += ((this.armed && !first ? 1 : 0) - this.armK) * (1 - Math.exp(-dt * 6));
     // (into an aim the camera comes up to look ahead, near level — not at the ground at your feet)
     // (third person only: in first person the look is the look — it kept pulling it back level)
     if (this.aim && !first && this.aimK < 0.95 && this.time - this.dragged > 0.3)
@@ -2539,12 +2550,17 @@ void main() {
     } else {
       const v = this.camView(dt);
       const vc = Math.cos(v.pitch);
-      // aiming: closer, over a shoulder (our people's heads are big: 0.8 out), a little up
+      // a gun out: tight over the right shoulder (Alan Wake 2, RE5 — docs/plan/79-the-guns.md F1a);
+      // aiming: in closer still, at the head's height. The offset moves the camera and what it looks at
+      // alike (a shift in the picture's plane: you never leave the frame).
       const a = this.aimK;
-      const d = v.dist + (Math.min(v.dist, 2.6) - v.dist) * a;
-      const sx = -Math.sin(this.yaw) * 0.8 * this.shoulder * a;
-      const sz = Math.cos(this.yaw) * 0.8 * this.shoulder * a;
-      const up = 0.35 * a;
+      const r = Math.max(this.armK - a, 0);
+      const ready = Math.min(v.dist, CAM_READY.back);
+      const d = v.dist + (ready - v.dist) * r + (Math.min(v.dist, CAM_AIM.back) - v.dist) * a;
+      const side = (CAM_READY.side * r + CAM_AIM.side * a) * this.shoulder;
+      const sx = -Math.sin(this.yaw) * side;
+      const sz = Math.cos(this.yaw) * side;
+      const up = CAM_READY.up * r + CAM_AIM.up * a;
       cam.set(
         this.target.x - Math.cos(this.yaw) * d * vc + sx,
         this.target.y + up + Math.sin(v.pitch) * d,
@@ -2577,9 +2593,7 @@ void main() {
     }
     this.mood.underWater();
     // the lens: a game camera's own, or the photo zoom in first person
-    const fov =
-      gc?.fov ??
-      (first ? (this.lensPart.lensFov ?? this.lensPart.fov1p * (1 - 0.18 * this.guns.ads)) : FOV - 8 * this.aimK);
+    const fov = gc?.fov ?? (first ? (this.lensPart.lensFov ?? this.lensPart.fov1p) : FOV - CAM_AIM.zoom * this.aimK);
     if (Math.abs(this.camera.fov - fov) > 0.05) {
       this.camera.fov += (fov - this.camera.fov) * (1 - Math.exp(-dt * 10));
       this.camera.updateProjectionMatrix();
@@ -3744,10 +3758,6 @@ void main() {
   }
   set myGun(v) {
     this.guns.myGun = v;
-  }
-  /** (in Guns: read from outside) */
-  get ads() {
-    return this.guns.ads;
   }
   /** (in Body: read from outside) */
   get physics() {

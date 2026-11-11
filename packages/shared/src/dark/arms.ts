@@ -8,6 +8,8 @@ export const ARMS = {
     rate: 0.42,
     reload: 0.35,
     draw: 0.35,
+    /** s coming up to aim (the camera's ease in — docs/plan/79-the-guns.md) */
+    aim: 0.18,
     damage: 50,
     range: 40,
     pellets: 1,
@@ -27,6 +29,7 @@ export const ARMS = {
     rate: 0.95,
     reload: 0.45,
     draw: 0.35,
+    aim: 0.26,
     open: 0.3,
     shut: 0.25,
     snap: 0.2,

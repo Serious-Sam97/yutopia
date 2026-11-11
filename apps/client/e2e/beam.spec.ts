@@ -198,3 +198,48 @@ test("run out: the focus goes and stays off until 25%", async ({ page }) => {
   expect(seen.serverOn, "the server's focus never came back on meanwhile").toBe(0);
   await page.evaluate(() => (window as any).__yutopia.toggleTorch());
 });
+
+// The right button with the torch off (docs/plan/79-the-guns.md F8): it focuses only a torch
+// that's already on — no longer switching it on for the aim and off after.
+test("aiming with the torch off leaves it off", async ({ page }) => {
+  test.skip(!GPU, "needs the GPU: YUTOPIA_GPU=1");
+  test.setTimeout(120_000);
+  await prefs(page);
+  await enter(page, await token(ANA));
+  await page.waitForFunction(() => !!(window as any).__yutopia.tp && !!(window as any).__yutopia.walker, null, {
+    timeout: 60_000,
+  });
+  await page.evaluate((p) => (window as any).__yutopia.teleport({ ...p, level: 0 }), G(-250, -60));
+  await page.evaluate(() => (window as any).__yutopia.room.send("mod:refill", {}));
+  await page.waitForFunction(() => (window as any).__yutopia.walker.vitals.bat > 99, null, { timeout: 5000 });
+  const me = () =>
+    page.evaluate(() => {
+      const w = (window as any).__yutopia;
+      const p = w.room.state.players.get(w.room.sessionId);
+      return { torch: !!p.torch, focused: !!p.focused, gun: p.gun as string, aiming: !!w.walker.aiming };
+    });
+  await page.evaluate(() => {
+    const w = (window as any).__yutopia;
+    if (w.room.state.players.get(w.room.sessionId).torch) w.toggleTorch();
+  });
+  await expect.poll(async () => (await me()).torch, { timeout: 5000 }).toBe(false);
+  expect((await me()).gun, "no gun in her hand").toBe("");
+  // held a second: aiming, but the torch stays off and nothing's focused
+  await page.mouse.move(640, 400);
+  await page.mouse.down({ button: "right" });
+  await page.waitForTimeout(1200);
+  const held = await me();
+  expect(held.aiming, "the right button still aims (a held pool ball's throw)").toBe(true);
+  expect(held.torch, "the torch not switched on").toBe(false);
+  expect(held.focused, "nothing focused").toBe(false);
+  await page.mouse.up({ button: "right" });
+  // switched on (L): the right button focuses it, and letting go leaves it on
+  await page.evaluate(() => (window as any).__yutopia.toggleTorch());
+  await expect.poll(async () => (await me()).torch, { timeout: 5000 }).toBe(true);
+  await page.mouse.down({ button: "right" });
+  await expect.poll(async () => (await me()).focused, { timeout: 10_000 }).toBe(true);
+  await page.mouse.up({ button: "right" });
+  await expect.poll(async () => (await me()).focused, { timeout: 5000 }).toBe(false);
+  expect((await me()).torch, "still on after the aim").toBe(true);
+  await page.evaluate(() => (window as any).__yutopia.toggleTorch());
+});

@@ -5,9 +5,9 @@ import { ANA, enter, test, token } from "./helpers";
 // The guns' feel (docs/plan/32-the-arms.md, phase 2): Ana by day on the snow,
 // the revolver out and aimed — a shot kicks the look up and most of it settles
 // back by itself; shots fired fast open the crosshair's ticks; a click a moment
-// early still fires; in first person she looks down the sights (the world's
-// lens closes in, the crosshair gives way to them); a reload tips the gun up,
-// the gate open. Then the double-barrel. 3D: the GPU (YUTOPIA_GPU=1). Review
+// early still fires; in first person a gun out goes over her shoulder (guns are
+// third person: docs/plan/79-the-guns.md F3a), the camera tight there and closer
+// still aimed; a reload tips the gun up. Then the double-barrel. 3D: the GPU (YUTOPIA_GPU=1). Review
 // shots: YUTOPIA_SHOTS=<dir>.
 
 const GPU = process.env.YUTOPIA_GPU === "1";
@@ -35,7 +35,7 @@ const fire = async (page: Page) => {
   await page.mouse.up({ button: "left" });
 };
 
-test("the feel: kick and settle, the spread, an early click, down the sights, a reload", async ({ page }) => {
+test("the feel: kick and settle, the spread, an early click, over the shoulder, a reload", async ({ page }) => {
   test.skip(!GPU, "needs the GPU: YUTOPIA_GPU=1");
   test.setTimeout(180_000);
   await page.addInitScript(() => {
@@ -73,7 +73,8 @@ test("the feel: kick and settle, the spread, an early click, down the sights, a 
   await shot(page, "feel-3p-kick");
   await page.waitForTimeout(700);
   const p2 = (await w(page, (y) => y.tp.pitch)) as number;
-  expect(p0 - p1).toBeGreaterThan(0.01);
+  // (a small kick on the look since plan 79: the gun in the hands takes the most of it)
+  expect(p0 - p1).toBeGreaterThan(0.004);
   expect(p0 - p2).toBeGreaterThan(0);
   expect(p0 - p2).toBeLessThan((p0 - p1) * 0.6);
   await expect.poll(async () => (await me(page)).loaded).toBe(5);
@@ -96,16 +97,25 @@ test("the feel: kick and settle, the spread, an early click, down the sights, a 
   await fire(page);
   await expect.poll(async () => (await me(page)).loaded, { timeout: 3000 }).toBe(n0 - 2);
 
-  // first person: down the sights — the lens closes in, the crosshair gives way to the sights
-  // (Y: first person — let go of the aim first, Y aiming is the next weapon)
+  // first person (Y): a gun out stays over the shoulder — guns are third person (plan 79 F3a);
+  // the camera in tight, closer aimed (let go of the aim first: Y aiming is the next weapon)
   await page.mouse.up({ button: "right" });
+  await page.waitForTimeout(600);
+  const camTo = () =>
+    w(page, (y) => {
+      const c = y.tp.camera.position;
+      const t = y.walker.where();
+      return Math.hypot(c.x - t.x, c.z - t.y);
+    }) as Promise<number>;
+  const ready = await camTo();
+  expect(ready, "a gun out: the camera tight over the shoulder").toBeLessThan(2.1);
   await page.keyboard.press("KeyY");
-  await expect.poll(() => w(page, (y) => y.tp.mode)).toBe("first");
+  await page.waitForTimeout(400);
+  expect(await w(page, (y) => y.tp.mode)).toBe("chase");
   await page.mouse.down({ button: "right" });
-  await expect.poll(() => w(page, (y) => y.tp.ads), { timeout: 5000 }).toBeGreaterThan(0.9);
-  await expect(page.locator(".dk-cross")).toBeHidden();
-  expect((await w(page, (y) => y.tp.camera.fov)) as number).toBeLessThan(46);
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(600);
+  expect(await camTo(), "aimed: closer still").toBeLessThan(ready - 0.3);
+  await expect(page.locator(".dk-cross")).toBeVisible();
   await shot(page, "feel-1p-sights");
   await fire(page);
   await page.waitForTimeout(50);
@@ -123,19 +133,21 @@ test("the feel: kick and settle, the spread, an early click, down the sights, a 
   await page.keyboard.press("Digit2");
   await expect.poll(async () => (await me(page)).gun).toBe("shotgun");
   await page.mouse.down({ button: "right" });
-  await expect.poll(() => w(page, (y) => y.tp.ads), { timeout: 5000 }).toBeGreaterThan(0.9);
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(600);
   await shot(page, "feel-1p-shotgun");
   const s0 = (await w(page, (y) => y.tp.pitch)) as number;
   await fire(page);
   await page.waitForTimeout(60);
-  expect(s0 - ((await w(page, (y) => y.tp.pitch)) as number)).toBeGreaterThan(0.04);
+  // (the look takes a smaller share of the kick since plan 79 — the gun in the hands the rest)
+  expect(s0 - ((await w(page, (y) => y.tp.pitch)) as number)).toBeGreaterThan(0.03);
   await page.mouse.up({ button: "right" });
   await page.keyboard.press("KeyR");
   await page.waitForTimeout(450);
   await shot(page, "feel-1p-shotgun-open");
 
-  // (put away; the clock back)
+  // (put away: first person again; the view back to third; the clock back)
   await page.keyboard.press("Digit2");
+  await expect.poll(() => w(page, (y) => y.tp.mode), { timeout: 5000 }).toBe("first");
+  await page.keyboard.press("KeyY");
   await w(page, (y) => y.room.send("mod:hour", { h: null }));
 });

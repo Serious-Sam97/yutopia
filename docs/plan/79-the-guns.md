@@ -1,0 +1,329 @@
+# 79 — The guns
+
+Ask (2026-11-11): "The weapons mechanic is poor … Redo the animations (the animations are horrible, the
+weapon sight is shit and misplaced). Rethink the position of the weapon and camera (we probably gonna go
+Alan Wake 2 style). Create the weapons' models using Blender to replace ours. Add more weapons (AK-47,
+sniper and BFG). Fix one thing: right mouse click only focuses with the lantern if we have it equipped, if
+not, don't anymore." References: Alan Wake 2 and Resident Evil 5.
+
+Status: **planned 2026-11-11**. Forks decided 2026-11-11: the recommendations, all ten — F1a the AW2
+shoulder camera whenever a gun is out (no swap key), F2a walk while aiming, F3a guns third-person only
+(the sniper's scope the one first-person view), F4a scripted Blender models, F5a keyed clips on the bench
+with a recoil layer, F6a the torch held with the gun, F7 **the Daybreak**, F8a the right button focuses
+only a torch already on, F9a the AK in the lockers / the sniper in the hunting bag / the Daybreak from
+Spawn, F10a four quick slots. Phase 1 (the right button) built; phase 0 mocks delivered (second round: the camera closer, the guns
+detailed; the revolver and the double-barrel redesigned after AW2's), signed off 2026-11-11 (the long guns held where the arms reach); phase 2 (the camera, the reticle) built 2026-11-11; F11a (the speedloader) and F12a (both shells out) decided 2026-11-11. Follows plan 32 (the arms: the
+rules, kick, bloom, falloff, heads), plan 30 (the dark: light is the weapon), plans 58/77/78 (the body,
+its moves, its hands) and plan 73 (the life look).
+
+## Where we are — read from the code
+
+- **Two guns** (`shared/dark/arms.ts` `ARMS`, `shared/inventory.ts` `WEAPONS`): the revolver (6 rounds,
+  50 a hit, 40 tiles, 0.42 s a shot, a loading gate: a round at a time) and the double-barrel (2 shells,
+  8 pellets × 18, 14 tiles, broken open to load). The shadowed have 250 hp behind a 100 shield a focused
+  beam burns at 60/s (`dark/fsm.ts` `SHADE`): ~1.7 s of light, then five revolver shots (three to the head).
+  The server checks the rate, the hand, the muzzle (`MUZZLE_REACH`), rewinds the targets, casts the
+  pellets from a shared seed (`world-server/features/arms.ts`). This part is good and stays.
+- **The models** (`tp/guns3d.ts`, plan 32): drawn in code — extruded side profiles, turned barrels,
+  vertex colours tuned for the old Lambert/stylized light. **Plan 73 never reached them**: in a life-look
+  hand they're the last things in the world still in the old look.
+- **The hold** (`chars/moves.ts` `aimPose`, `chars/anim/night.ts` `aim2`, `reload2`):
+  - aiming with a gun lifts both arms by `ADS_UP` "so its sights come to the eye" — a first-person idea
+    used in third person: **the gun sits in front of the face**, over the line the camera looks down, and
+    the hands' IK target is a fixed point 1.42 m up, 0.5 m out, whatever the gun;
+  - not aiming, the gun hangs in the right fist like a phone — there's no ready stance;
+  - **one reload for both guns** (the left hand to the hip pocket and back, in a 0.95 s loop) — the
+    revolver's gate and the double-barrel's break are only in the gun's own parts;
+  - drawing is a time on the server (0.35 s), not a move: the gun pops into the hand; no holster, no
+    sprint-with-a-gun, no dry fire, no hit or dodge holding it;
+  - the torch's left hand and the gun's fore-end share one grip (`hL`), so with the torch on and a
+    double-barrel, the light points nowhere the gun does.
+- **The camera** (`tp/view.ts`): centred behind you until you aim; aiming pulls it to
+  `min(dist, 2.6)` m, 0.8 m over the shoulder, 0.35 m up, FOV 50 → 42 — the same for every gun. Only the
+  move sandbox can swap the shoulder (`tp/move/sandbox.ts`); in the world it's always the right (Y swaps
+  first/third person). A shot kicks the camera's pitch and yaw. **First person** has its own gun: down the sights
+  (`tp/hands1p.ts`, FOV × 0.82).
+- **The crosshair**: four CSS ticks that open with the spread (`dk-cross`), hidden down the sights.
+- **The right button** (`dark/arms.ts:455–466`): with no gun, held a quarter second, it **switches the
+  phone's torch on** and focuses it, off again when let go — whether you'd switched it on or not. With a
+  gun it aims, and the torch focuses only if it's on (`beamOf` while `MV_AIM`). There's no lantern item:
+  plan 56 said the lantern would become a pocket item "in plan 57", which was never written; it's L.
+
+## The idea
+
+**The gun and the light are one tool, held like a person would hold them.** Alan Wake 2's way: the camera
+sits over the right shoulder whenever a gun is out, the body on the left third of the screen, the gun low
+and ready; aiming brings the camera in and the gun up to the shoulder's line (never in front of the face),
+the torch along it, focused by the same button. Every gun is a real object, made in Blender in the life
+look's materials, with parts that move; every thing you do with it is its own move — draw, ready, aim,
+fire, its own reload, sprint carrying it, put it away.
+
+## Forks — all decided 2026-11-11 (the recommended column)
+
+| # | Question | Options | Recommended |
+| --- | --- | --- | --- |
+| F1 | The camera | **a)** AW2: tight over the right shoulder whenever a gun is out, in closer on aim (AW2 has no shoulder swap) · **b)** RE5: centred till you aim, then to the shoulder · **c)** keep today's, retuned | **a**; a shoulder-swap key as an extra, if you want one |
+| F2 | Moving while aiming | **a)** AW2: walk while aiming (about half speed), no sprint · **b)** RE5: the feet planted to aim (Capcom's choice, for tension) | **a** (the walker already mixes aim with the legs) |
+| F3 | First person and guns | **a)** guns are third-person: a gun drawn in first person goes over the shoulder; the sniper's scope is the one first-person view; plan 32's down-the-sights goes · **b)** keep down-the-sights in first person too, rebuilt on the new models and clips | **a** (half the work and AW2 has none) |
+| F4 | The models | **a)** scripted in Blender (`bpy`, like `tools/art/life/build_plant.py`): ours, rebuilt by one command, life-look materials, the moving parts named the way the moves need · **b)** CC0 / CC-BY downloads, rigged by us (the plan 75 credits list) | **a** |
+| F5 | The animations | **a)** keyed clips on our rig on the bench (`/dev/anim`, as plans 58/77/78), the hands on each gun's own grip points from its model, a procedural recoil layer on top · **b)** motion capture / Mixamo, retargeted — no pipeline, and our rig's joints aren't Mixamo's | **a** |
+| F6 | The light with a gun | **a)** AW2: the torch in the left hand under the handgun (the wrists crossed, back to back); with a long gun the left hand holds the fore-end and the torch along it · **b)** a light mounted on every gun | **a** |
+| F7 | The big gun | It can't be Doom's BFG (the name and the look are id Software's). **Ours:** a light cannon — the dark's own rule, light is the weapon: it charges ~1 s and fires a slow ball of light that **burns every shield it passes** and bursts where it lands. A name: **the Daybreak** · the Sunburst · the Lighthouse · yours | **the Daybreak** |
+| F8 | The right button with no lantern | **a)** "equipped" = the torch switched on (L): the right button focuses it; switched off, it **no longer switches it on** — with no gun and no light, it does nothing in the dark · **b)** the lantern becomes a real item (plan 56's promise): in a hand slot to focus, L goes · **c)** AW2's way: aiming never focuses, a button of its own does (AW2: RB / the mouse wheel) | **a** now (phase 1, small); **b** or **c** later if you want them |
+| F9 | Where the new guns come from | **a)** the AK in the supply lockers (rare), the sniper in the hunting bag (rare), the Daybreak only from the admins' Spawn at first · **b)** all three in the caches · **c)** Spawn only | **a** |
+| F10 | Quick slots (4; weapons go only there) with 5 guns | **a)** keep 4: you choose what you carry · **b)** 5 | **a** |
+| F11 | The revolver's reload, now it's a double-action with a swing-out cylinder (the redesign, after AW2's) — **decided 2026-11-11: a** | **a)** AW2's: swing out, dump all six, a speedloader (all six in, ~1.6 s; the live rounds dumped go back to the pockets) · **b)** today's rule: swing out, a round at a time (0.35 s each, a shot stops it) | **a** |
+| F12 | The double-barrel's reload — **decided 2026-11-11: a** | **a)** AW2's: both shells come out, even the live one (it goes back to the pockets) · **b)** plan 32's: only the fired ones | **a** |
+
+## The guns
+
+Numbers are a first proposal, set against the shadowed's 250 hp behind a 100 shield; tuned on the bench and
+in the dark (phase 8).
+
+| | Revolver | Double-barrel | AK-47 | Sniper | Daybreak |
+| --- | --- | --- | --- | --- | --- |
+| Holds | 6 | 2 | 30 (a magazine) | 5 | 3 cells |
+| Fires | 0.42 s, single | 0.95 s, a barrel a pull | **full auto**, 0.1 s (600 a min) | bolt: 1.3 s between | charge 1.0 s, 2.5 s between |
+| Damage | 50 | 8 × 18, falling off past 5 | 22 | 170 (×1.5 head: 255, a kill once the shield's gone) | burst 300 in 3 m, to 0 at 6 m; burns shields within 5 m of its path |
+| Range (tiles) | 40 | 14 | 50 | 120 | flies 40, 14 tiles/s |
+| Spread | tight, blooms | wide | tight first round, climbs fast | huge from the hip, ~0 scoped and still | — |
+| Reload | swing out, dump all six, a speedloader (~1.6 s; the live rounds back to the pockets) | break, both shells out (the live one back to the pockets), a shell at a time, shut | the magazine out and in (2.2 s); empty, the charging handle too (2.8 s) | the bolt back, a round at a time, the bolt home | a cell out, a cell in (2.0 s) |
+| Ammo | `r38` (stack 24) | `shell` (12) | **`r762`** (60) | **`r308`** (15) | **`cell`** (3) |
+| Look | after AW2's (redesigned 2026-11-11): a double-action .357, 4-inch — vent rib, full underlug, red-insert ramp sight; worn nickel, walnut target grips | after AW2's: a hammerless side-by-side boxlock — round-bodied engraved silver action, blued barrels, semi-beavertail fore-end, semi-pistol walnut stock, thick rubber pad | stamped receiver, wood furniture, curved steel magazine | bolt-action, synthetic stock, a scope | ours: a heavy lamp of a gun — a glass core, cooling fins, warm white glow |
+
+The rules (shared + server), on top of plan 32's:
+
+- **Full auto**: each round is still its own `arms:fire` (the server's rate check, bloom and rewind work
+  as they are); the shooter holds the button, the client sends at the gun's rate. The kick climbs and
+  walks a little sideways (seeded), the bloom grows per round.
+- **The bolt and the magazine**: `ARM` gets `bolt` (the sniper's cycle: no shot till it's home) and
+  `mag` (the AK's magazine out); a magazine reload is all-or-nothing (cut short, nothing's in), the
+  rounds left in the old magazine come back to the pockets.
+- **The scope**: `Stance` gets `scope` (near-zero spread, still and scoped); the server knows it from the
+  `mv` bits as it knows aiming. Holding breath (Shift, scoped) steadies the sway for 3 s, then it's worse.
+- **The Daybreak's ball** is a projectile on the server, like a flare (`flareFlight`): a straight flight
+  from the muzzle, stopped by walls and trunks, a `state.orbs` entry everyone draws; it burns the
+  shadowed it passes (as a focused beam, ×3) and its burst does the damage. Against one of us: plan 30's
+  half (`PVP`).
+
+## The camera and the screen (F1–F3)
+
+- **A gun out, not aiming**: the camera tight over the right shoulder (~0.5 m right, ~1.5 m back — the
+  user's call 2026-11-11, closer, as AW2 and RE5), the body on the left, the look line clear of the head.
+  Put away, it eases back to centred.
+- **Aiming**: in to ~0.95 m, ~0.45 m right, at the head's height — the head and right shoulder big on the
+  left of the picture; mostly by distance, the FOV only a little (50 → 46:
+  big FOV swings make people sick); the ease per gun (revolver 0.18 s, shotgun 0.26 s, AK 0.24 s, sniper
+  0.3 s then the scope); the offset blended in the picture's plane so you never leave the frame.
+- **The sniper's scope**: first person through the glass, 4× and 8× (the wheel), a dark ring round it, the
+  sway in the picture; the reticle is the scope's. Working the bolt drops you out of the scope and back in
+  (RE5's S75 does this).
+- **The reticle**: AW2-like — a small dot, four short ticks opening with the real spread (`spreadOf`, the
+  same as the server's), shown only while aiming; a mark on a hit, a brighter one on a head.
+- **Where the shot really goes** (the misplaced sight): over the shoulder the muzzle isn't the camera, so
+  something just in front of the gun can stop a shot the crosshair says is clear. The shot goes from the
+  muzzle to the point the screen's centre meets; when the muzzle's line meets something first, **the
+  reticle moves to where it'll hit and shows it's blocked**. The server takes the ray as today.
+- **The kick** splits in two, as plan 32 meant: the camera's (small, mostly recovered) and the gun's own in
+  the hands (bigger, its own spring), per gun.
+
+## The hold and the moves (F5, F6)
+
+Every gun has its **grip** (the right hand), its **fore** (the left hand, or the torch), its **sights**, its
+**muzzle** and its **ejection port** as points in its model; the hands go to them (plan 78's hand library
+for the fingers: a pistol grip, a trigger finger on the guard or the trigger, a fore-end cup, the torch).
+
+| Move | Handguns | Long guns |
+| --- | --- | --- |
+| Ready (not aiming) | low ready, both hands, the muzzle ~40° down | AW2's: in the right hand alone, the stock under the arm, the muzzle down ahead — the left hand holding the torch |
+| Aim | arms out at the shoulder's line, the gun under the eye line (not in front of the face); with the torch: wrists back to back, the light along the barrel | the stock in the shoulder, the cheek on it, the left hand on the fore-end (with the torch) |
+| Draw / put away | from the hip, 0.35 s / 0.25 s | from the back, over the shoulder |
+| Fire | recoil per gun (the revolver's muzzle flip; the shotgun rocks the shoulders; the AK's climb; the sniper's push and the bolt) | |
+| Reload | revolver: the cylinder swung out, the rod punched (all six out), the speedloader in and twisted, the cylinder shut · Daybreak: a cell out, a cell in | double-barrel: break, both shells out, shells in, snap shut · AK: magazine out, the new one rocked in, the charging handle when empty · sniper: bolt back, rounds thumbed in, bolt home |
+| Moving | walking, aiming: the upper body held on the look, the legs walking under it | |
+| Sprint | the gun tucked to the chest | across the chest (port arms) |
+| Dodge, hit, fall | the gun kept in the hand through the roll, the stagger, the getting up | |
+| Dry fire | the click, a look at it | |
+
+Others see the same moves (`Player.arm` gets the new states; the clips play from it, as now).
+
+## The models (F4)
+
+- `tools/art/guns/build_guns.py` (`blender -b --factory-startup -P … -- --gun <id>`), seeded like the plant
+  and the people; writes `apps/client/public/life/guns/<id>.glb` and `<id>-far.glb`; a `build_all.sh`
+  entry.
+- Life-look materials (`tools/art/life/materials.mts`: blued and parkerized steel, colour-case, walnut,
+  polymer, brass, glass) — the same lit material as the rest of the world, not vertex colours.
+- Each model: named nodes for the moving parts (hammer, cylinder, gate, trigger · barrels, lever ·
+  magazine, bolt carrier, charging handle, safety · bolt, scope lens · cell, core, fins) and the sockets
+  (grip, fore, sights, muzzle, port); near ~6–12k triangles, far ~1–2k, merged for the snow.
+- Real types drawn ours: the single-action revolver, the side-by-side, the AK pattern, a bolt-action rifle
+  with a scope; the Daybreak designed from nothing.
+- `/dev/guns` redone: the sheet (side, three-quarter, open), in the hand, on the snow by day, under the
+  torch at night — set beside reference photos.
+- `tp/guns3d.ts`'s drawn guns and `items3d`'s lying ones go once the GLBs are in.
+
+## Sound
+
+Every gun's sounds are redone together, at the end (phase 9 — the user's call, 2026-11-11). Till then the
+new guns borrow placeholder sounds (the AK the revolver's shot, faster; the sniper the double-barrel's;
+the Daybreak the torch's focus hum and a flare's burst) so the phases before can be played.
+
+## Phases
+
+0. **Mocks** — the references beside our scene: three camera framings (F1), the hold (F6) for a handgun and a
+   long gun posed on the bench, first Blender blockouts of all five guns. Signed off before code.
+1. **The right button** (F8) — RMB focuses the torch only when it's on; no gun, no light: nothing. A test.
+   Small; can ship on its own.
+2. **The camera and the reticle** — F1/F2/F3, per-gun aim, the convergence and the blocked mark, the new
+   reticle, the kick split. First-person down-the-sights goes (if F3a).
+3. **The models, the two we have** — the Blender script, the GLB loading (fetched, not in a chunk; the
+   materials compiled behind the loading screen), sockets, the revolver and the double-barrel replacing
+   `guns3d.ts` in my hand, in others', on the snow. Stills.
+4. **The moves, the two we have** — ready, aim (with and without the torch), draw, put away, fire, both
+   reloads, sprint, walk aiming, dodge/hit/fall, dry fire; on the bench, then in the dark. **The feel
+   signed off.**
+5. **The AK-47** — the rules (full auto, the magazine), the model, its moves, a placeholder sound, the lockers.
+6. **The sniper** — the rules (the bolt, the scope, the breath), the model, the scope view, moves, a placeholder sound,
+   the hunting bag.
+7. **The Daybreak** — the ball on the server, the model, its light and burst, moves, a placeholder sound, Spawn.
+8. **Checks** — server tests per gun (rate, reload, magazine, bolt, the ball); e2e: draw, fire, reload,
+   switch, two players seeing each other's moves; frame cost on High and Low; page/chunk budgets measured
+   and noted; the tuning pass in the dark; stills.
+9. **The sounds — every gun, redone** (the user's call, 2026-11-11). All five guns, the old two included:
+   the shots (near, far, indoors, outdoors in the snow and its echo), the handling (draw, put away, dry
+   fire, each reload's every step, casings and shells on snow and on floors), the Daybreak's charge, ball
+   and burst, others' shots at a distance. **It starts with questions to the user** before anything is
+   made — at least:
+   - where the sounds come from: recorded CC0 / CC-BY picks (as plans 63, 65), made in `dark/synth.ts`, or
+     a mix;
+   - the character: heavy and realistic (AW2's) or punchier and more game-like;
+   - how far a shot carries, and how loud the guns are against the rest of the world;
+   - the Daybreak's voice (it has no real-world sound);
+   - whether you choose from candidates for each sound (3–4 each, as the steps were picked), or I pick and
+     you veto.
+   Then: the picks, the mix, the checks (the steps' level rule: plan 63), credits in `sources.json`.
+
+## Phase 2 — the camera and the reticle: built (2026-11-11)
+
+- **The camera** (`tp/view.ts` `CAM_READY`, `CAM_AIM`): a gun out (`armed`, eased `armK`), tight over the
+  right shoulder — at most 1.5 back, 0.5 right, 0.3 up over EYE; aiming, 0.95 back, 0.45 right, 0.42 up,
+  the lens 4° narrower. The offset moves the camera and what it looks at alike. The aim eases in at the
+  gun's own pace (shared `ARMS[gun].aim`: the revolver 0.18 s, the double-barrel 0.26; `tp.aimSecs`).
+- **Guns are third person** (F3a): `camWanted` gives the chase camera in first person while a gun is out;
+  `dark/arms.ts` re-asks it when the gun comes out or goes away. Plan 32's down-the-sights is gone
+  (`hands1p.ts` `downSights`, the `ads` getters, the lens's zoom with it).
+- **Shots converge** on what the crosshair is really on: one of the shadowed, one of us, else now a wall
+  or the ground (the view's `aimHit`, within its 16 tiles), else 30 tiles out.
+- **The reticle**: a dot and the four ticks (opening with the spread, as before). **Blocked**: when a wall
+  or the ground stands between the muzzle and that point, the reticle moves to where the shot would stop
+  and turns into a ring, the ticks dimmed (`blockedAt`: `rayStop` from the muzzle, `tp.project`). Built,
+  **not yet seen in the game** — the checks (phase 8) put a wall in front of the muzzle.
+- **The kick split**: the look takes 65% of a gun's kick and settles ≥ 80% of it back by itself; the gun
+  in the hands keeps its own (the body's `aim2`, unchanged).
+- Checks: `e2e/arms-feel.spec.ts` rewritten for it (a gun out: the camera under 2.1 tiles away; aimed,
+  0.3 nearer; Y keeps the chase camera with a gun out, first person back once it's away; the look's kick
+  smaller), green; `arms.spec.ts` (armed at night) and the torch test green; shared arms and inventory
+  tests green. Budgets not measured yet (phase 8).
+
+## Phase 1 — the right button: built (2026-11-11)
+
+`dark/arms.ts` no longer switches the torch on for an aim with no gun (and off after); the walker's focus
+already needed it on. The right button still aims with empty hands — a held pool ball's throw uses it.
+`e2e/beam.spec.ts` "aiming with the torch off leaves it off": red on the old code ("the torch not switched
+on": it was), green on the fix.
+
+## Phase 0 — mocks: delivered and signed off (2026-11-11)
+
+All in Blender, headless (Eevee), rebuilt by one command each:
+
+- `tools/art/guns/guns.py` — the five guns and the torch, life size, with their points (grip, fore, muzzle,
+  rear, front, butt) as empties. Second pass (the user, 2026-11-11: "improve a lot the models details"):
+  real parts — the revolver's fluted cylinder and chamber mouths, gate, screws, checkered hammer spur and
+  walnut panels; the double-barrel's fences, hinge pin, top lever, two triggers, splinter fore-end and
+  iron; the AK's stamped receiver with rivets, dimples and ejection port, ribbed dust cover, gas block,
+  hooded front sight, slant brake, cleaning rod, a swept ribbed magazine; the sniper's fluted barrel, ported
+  brake, slotted rail, bolt and shroud, cheek riser, bipod, and a full scope (turrets, power ring, coated
+  lenses, rings and screws); the Daybreak's Fresnel lens and cage, riveted bands, gauge, filament cell and
+  copper lines. Outlines smoothed and edges rounded; the materials drawn by nodes (wood grain, checkering,
+  colour-case hardening, worn bluing, stippled polymer) — for these renders; phase 3 bakes them to the
+  life look's textures. `sheet.py` renders them (`design/guns/0-blockouts-side.png` at one scale with a
+  10 cm bar; `0-blockout-<gun>.png` three-quarter).
+- `tools/art/guns/mock.py` — the life man posed by a two-bone solve onto each gun's points (the rig's bones
+  are joints, so Blender's own IK doesn't fit), at night with the torch's spot and fog, one of the shadowed
+  under the crosshair; through the plan's cameras (second pass, closer: ready 0.5 m right, 1.5 m back; aim
+  0.45 m right, 0.95 m back, FOV 46°) and from his side and front (`0-aw2-<gun>-<ready|aim>[-side|-front].png`),
+  and the sniper's scope at 4× (`0-aw2-sniper-scope.png`).
+- `apps/client/e2e/guns-today.mts` — today in the game, for beside them (`0-today-<gun>-<ready|aim>.png`).
+- `contact.py` → `design/guns/0-sheet.png` (today, then the mocks, two to a row) and `0-guns.png` (the five
+  three-quarter).
+
+What they showed:
+
+- **The arms are short for a long gun.** The life man's shoulder to wrist is 0.50 m; with the butt in his
+  shoulder his left hand falls 8 cm (double-barrel), 10 (Daybreak), 14 (sniper), 15 (AK) short of the
+  fore-end, so in the mocks it holds where it reaches (the AK's at the receiver's front). For phase 4:
+  **a)** hold where it reaches (the guns' `fore` points moved back), **b)** longer arms on the life rig (as
+  plan 59 lengthened the legs ×1.14), **c)** both, a little each. **Decided 2026-11-11: a** — the body stays;
+  each long gun's `fore` point moves back to where the left hand reaches.
+- The handgun hold works as drawn (arms out at the shoulder's line, the torch fist under the gun hand, the
+  beam along the barrel), and the gun is never in front of the face.
+- The scope's picture washes out under the focused torch at 8 m: the scope view wants the torch dimmed or
+  narrowed in it (phase 6).
+- **The revolver and the double-barrel redesigned after Alan Wake 2's** (the user, 2026-11-11). Per the
+  gun reference wiki (imfdb.org, "Alan Wake 2"), Alan's revolver is a 4-inch double-action .357 in nickel,
+  reloaded by a speedloader, and his double-barrel a hammerless side-by-side boxlock; long guns are held
+  in the right hand alone when not aimed, the left on the flashlight. Ours take that language — no
+  makers' names or marks: the revolver a nickel double-action with a ventilated rib, full underlug,
+  ramp sight with a red insert, fluted cylinder, swing-out crane and latch, checkered walnut target grips;
+  the double-barrel round-bodied, its action silver and engraved in scrolls, a semi-beavertail fore-end,
+  a semi-pistol stock with a grip cap, a white spacer and a thick pad. Their reloads went AW2's way too (F11a, F12a).
+- The models still want, in phase 3: the moving parts split and pivoted, the node materials baked to
+  textures, near/far detail levels, and a polish pass on the long guns' stocks (flat-sided seen square on).
+
+## Risks
+
+- **Lit materials compiled late stall a frame** — each gun's materials compiled before it's first drawn
+  (memory: a shadow light with no map breaks every lit draw on High — no new lights on guns; the
+  Daybreak's glow is emissive, its light borrows a flare's).
+- **Full auto on the wire**: 10 `arms:fire` a second per player — measured with the bots
+  (`tools/bots.mts`) at the dark's busiest.
+- **Removing first-person guns** touches `hands1p.ts` and the page budget (memory: page budget traps).
+- **Five guns, four slots, saved inventories**: the new ammo kinds and guns must pass `isWeapon` /
+  `isStack` everywhere and old saves load unchanged.
+- **Two-browser e2e** stall each other's frames (memory) — clip timing checked in one browser.
+
+## References
+
+Gathered 2026-11-11. The fandom wikis and IMFDB refused automated reads (402/403): the image pages from
+them below still need a look in a browser.
+
+- **AW2's camera**: "positioned tight over your shoulder" (blog.playstation.com/?p=384760); it stays over
+  one shoulder, unlike AW1's swap (newgamenetwork.com/article/2723); an FOV slider since the 2024-01-31
+  patch (alanwake.com/story/alan-wake-2-patch-notes). A reticle shows with the pistol; AW1 had none, the beam
+  was the aim (pcgamer.com: "the man has no reticle").
+- **AW2's light**: aim LT, boost RB — "hold R1 to burn away an enemy's protective shielding" (PlayStation
+  blog); boosting drains the battery and strips the shield so guns can hurt (gamepressure.com/alan-wake-2/
+  all-weapons/z7110a4); boosting during a reload cancels it (patch notes). Light, stagger, shoot
+  (gamedeveloper.com, "why Remedy revived Alan Wake").
+- **AW2's guns**: Saga's pistol (12), sawed-off, crossbow, hunting rifle (bolt, 5), pump shotgun (6); Alan's
+  revolver (6, "strong recoil"), flare gun, double-barrel (2) (gamepressure, gmtreks.com/alanwake2). The
+  rifle steadies the longer you hold aim; the pump's upgrade tightens it standing still.
+- **RE5**: over the shoulder, stop to aim, a laser sight (a reticle on PC); you can't run and shoot
+  (en.wikipedia.org/wiki/Resident_Evil_5); stop-to-aim was for tension (Takeuchi, engadget.com 2009-02-24).
+  The set: handguns, shotguns, machine guns (an AK-74 among them), rifles (S75 bolt, Dragunov, PSG-1),
+  magnums, launchers (gamewith.net/resident-evil-5/article/show/12336). The S75 leaves its scope to work
+  the bolt (evilresource.com/resident-evil-5/weaponry/s75).
+- **Recoil and cameras**: recoil as an additive layer over the base pose (CRYENGINE 3 docs); the kick in
+  three parts — the gun's move, a pattern, the camera's shake (kinemation recoil docs); blend the camera's
+  offset in the picture's plane, change distance rather than FOV (blog.littlepolygon.com/posts/cameras);
+  John Nesky's "50 Camera Mistakes" (GDC 2014); "A Second Shot: Improving Ranged Combat in The Last of Us
+  Part II" (GDC).
+- **What not to copy from Doom's BFG** (en.wikipedia.org/wiki/BFG_(weapon), doomwiki.org/wiki/BFG9000): the
+  three letters and the 9000s, the green plasma ball, the ball followed by a fan of rays. A slow, charged
+  gun that clears a room is a genre idea and ours to make.
+- **Pictures**: Saga with pistol and torch (en.wikipedia.org/wiki/File:Alan_Wake_2_screenshot.jpg); AW2 hero
+  shot (blog.playstation.com/tachyon/2023/09/f520e1eb00c0ffd0ac53994299e75b718376d6bc-scaled.jpg); AW2's
+  guns (gamepressure.com/alan-wake-2/gfx/word/1934375687.jpg pistol, …609 revolver, …625 pump, …703 torch);
+  RE5 (en.wikipedia.org/wiki/File:Resi5gameplay.jpg); not yet seen: alanwake.fandom.com/wiki/File:Revolvers.jpg,
+  imfdb.org/wiki/Alan_Wake_2, imfdb.org/wiki/Resident_Evil_5.

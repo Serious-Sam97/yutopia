@@ -40,7 +40,9 @@ const FEEL = {
   revolver: { up: 0.032, side: 0.01, settle: 0.7 },
   shotgun: { up: 0.085, side: 0.022, settle: 0.55 },
 } as const;
-const WINDED = 32; // (shared move.ts MV_WINDED: a copy — this chunk doesn't carry move.ts)
+const WINDED = 32;
+// the camera's share of a gun's kick, and how much of it settles back by itself at least (plan 79)
+const CAM_KICK = { share: 0.65, settle: 0.8 }; // (shared move.ts MV_WINDED: a copy — this chunk doesn't carry move.ts)
 
 export class Arms {
   private shotAt = 0;
@@ -56,8 +58,6 @@ export class Arms {
   private markUntil = 0;
   private markKind = "";
   private lastLoaded = new Map<string, number>(); // the gun's rounds as last seen (a reload's tick)
-  private liftAt = 0; // the flashlight raised (aiming with no gun) since (performance.now; 0: not)
-  private lent = false; // …and switched on for it: off again when it's let go
   // the gun's feel (docs/plan/32-the-arms.md)
   private bloom = 0; // rad: shots fired fast open the spread up; it settles
   private queued = false; // a click a moment early: fired when it's ready
@@ -84,7 +84,7 @@ export class Arms {
   ) {
     this.hud.className = "abs dk-arms";
     this.cross.className = "dk-cross";
-    this.cross.innerHTML = "<i></i><i></i><i></i><i></i>";
+    this.cross.innerHTML = "<i></i><i></i><i></i><i></i><b></b>";
     root.append(this.hud, this.cross);
     const room = ctl.room;
     if (!room) return;
@@ -256,6 +256,37 @@ export class Arms {
     return Math.asin(Math.max(-1, Math.min(1, d.z)));
   }
 
+  /** How far along the camera's line the crosshair meets a wall or the ground (the view's aim, within
+   *  its 16 tiles), or null: nothing that near. */
+  private crossHit(): number | null {
+    const tp = this.ctl.tp;
+    if (!tp?.aimOn) return null;
+    const t = tp.camera.position.distanceTo(tp.aimHit);
+    return t < 15.9 ? t : null;
+  }
+
+  /** Aiming a gun: where on the screen (px from the middle) a shot from the muzzle would be stopped
+   *  short of what the crosshair is on — a wall, the ground right by me — or null: it's clear. */
+  private blockedAt(): { x: number; y: number } | null {
+    const tp = this.ctl.tp;
+    if (!tp?.aimOn) return null;
+    const mz = tp.guns.muzzleOf(this.ctl.room?.sessionId ?? "");
+    if (!mz) return null;
+    const h = tp.aimHit;
+    const to = { x: h.x - mz.x, y: h.z - mz.y, z: h.y - mz.z };
+    const L = Math.hypot(to.x, to.y, to.z);
+    if (L < 0.6) return null;
+    const yaw = Math.atan2(to.y, to.x);
+    const pitch = Math.atan2(to.z, Math.hypot(to.x, to.y));
+    const stop = tp.pointerPart.rayStop(mz.x, mz.y, mz.z, yaw, pitch, L - 0.35);
+    if (!stop) return null;
+    const k = stop.t / L;
+    const p = tp.project(mz.x + to.x * k, mz.y + to.y * k, mz.z + to.z * k);
+    if (!p) return null;
+    const c = tp.renderer.domElement;
+    return { x: p.x - c.clientWidth / 2, y: p.y - c.clientHeight / 2 };
+  }
+
   private fire() {
     const g = this.gun();
     const tp = this.ctl.tp;
@@ -313,6 +344,13 @@ export class Arms {
       t = them + 0.2;
       onBody = true;
     }
+    // (or a wall, the ground: the shot goes from the muzzle to what the crosshair is really on — over
+    // the shoulder the muzzle isn't the camera, docs/plan/79-the-guns.md)
+    const wall = this.crossHit();
+    if (wall !== null && wall < t) {
+      t = wall;
+      onBody = false;
+    }
     const aim = { x: camRay.x + d.x * t, y: camRay.y + d.y * t, z: camRay.z + d.z * t };
     // from the gun in the right hand (the body faces where the camera looks)
     const me = this.walker.where();
@@ -340,9 +378,15 @@ export class Arms {
       me.z,
     );
     tp.heard(mz.x, mz.y);
-    // the kick: on my look (most of it settles back), in my hands
+    // the kick, split (docs/plan/79-the-guns.md): a smaller one on my look, most of it settling back by
+    // itself; the gun's own, bigger, in my hands (gunFx's kick, the body's aim2)
     const feel = FEEL[g.id];
-    tp.guns.kick(feel.up * (0.85 + Math.random() * 0.3), feel.side * (Math.random() * 2 - 1), feel.settle);
+    const look = CAM_KICK.share;
+    tp.guns.kick(
+      feel.up * look * (0.85 + Math.random() * 0.3),
+      feel.side * look * (Math.random() * 2 - 1),
+      Math.max(feel.settle, CAM_KICK.settle),
+    );
     this.kickAt = now / 1000;
     if (g.id === "revolver") {
       this.cock = 0; // (the hammer falls; the thumb cocks it again, the cylinder turning a notch)
@@ -451,20 +495,16 @@ export class Arms {
     // a gun in my hand (3D): the right button aims anywhere, and the view's clicks don't pick
     const armed = !!ctl.tp && !!this.me()?.gun;
     this.walker.armed = armed;
-    if (ctl.tp) ctl.tp.armed = armed;
-    // no gun: the right button held raises the flashlight along the look and focuses it — on while
-    // it's held, if it was off (a quick click, a thing's menu, doesn't: a quarter second first)
-    const lift = this.walker.aiming && !!ctl.tp && !armed;
-    if (!lift) this.liftAt = 0;
-    else if (!this.liftAt) this.liftAt = now;
-    if (lift && !this.lent && now - this.liftAt >= 250 && !hud.get().torch) {
-      room?.send("phone:torch", { on: true });
-      this.lent = true;
+    const held = this.gun();
+    if (ctl.tp) ctl.tp.aimSecs = held ? ARMS[held.id].aim : 0.2;
+    if (ctl.tp && ctl.tp.armed !== armed) {
+      ctl.tp.armed = armed;
+      // (guns are third person: a gun out in first person goes over the shoulder, and back —
+      // docs/plan/79-the-guns.md F3a)
+      ctl.tp.setMode(ctl.camWanted());
     }
-    if (!lift && this.lent) {
-      room?.send("phone:torch", { on: false });
-      this.lent = false;
-    }
+    // (the right button focuses the torch only when it's on — L: it no longer switches it on for
+    // the aim and off after, docs/plan/79-the-guns.md F8; the walker's focus needs it on)
     if (room && now - this.pingAt > 3000) {
       this.pingAt = now;
       room.send("arms:ping", { t: now });
@@ -492,13 +532,16 @@ export class Arms {
     const inv = this.inv();
     const g = this.gun();
     // the crosshair, aiming (3D); a mark on it when a shot met one
-    // (down the sights in first person, the sights are the crosshair)
     const tp = this.ctl.tp;
-    const aiming = this.walker.aiming && !!tp && tp.guns.ads < 0.6;
+    const aiming = this.walker.aiming && !!tp;
     this.cross.style.display = aiming ? "block" : "none";
     if (aiming && tp) {
       const marked = performance.now() < this.markUntil;
-      this.cross.className = `dk-cross${marked ? ` hit ${this.markKind}` : ""}${g ? "" : " bare"}`;
+      // where the shot will really go: something between the muzzle and what the crosshair is on
+      // takes it — the reticle moves there and says so (docs/plan/79-the-guns.md)
+      const block = g ? this.blockedAt() : null;
+      this.cross.className = `dk-cross${marked ? ` hit ${this.markKind}` : ""}${g ? "" : " bare"}${block ? " blocked" : ""}`;
+      this.cross.style.transform = block ? `translate(${Math.round(block.x)}px, ${Math.round(block.y)}px)` : "";
       // the ticks as far out as the spread: where a shot may go, on the screen
       const half = Math.tan((tp.camera.fov * Math.PI) / 360);
       const px = g ? (Math.tan(this.spread(g.id)) / half) * (window.innerHeight / 2) : 0;
@@ -639,7 +682,12 @@ export const ARMS_CSS = `
 .dk-cross i:nth-child(2){left:var(--gap)}
 .dk-cross i:nth-child(3){bottom:var(--gap)}
 .dk-cross i:nth-child(4){top:var(--gap)}
+.dk-cross b{position:absolute;width:3px;height:3px;left:-1.5px;top:-1.5px;border-radius:50%;background:var(--c);box-shadow:0 0 2px rgba(0,0,0,.7)}
 .dk-cross.bare i{width:4px;height:4px;border-radius:50%;left:-2px;top:-2px;right:auto;bottom:auto}
+.dk-cross.bare b{display:none}
+.dk-cross.blocked{--c:rgba(255,150,120,.95)}
+.dk-cross.blocked i{opacity:.3}
+.dk-cross.blocked b{width:10px;height:10px;left:-6px;top:-6px;background:none;border:2px solid var(--c)}
 .dk-cross.hit{--c:#fff}
 .dk-cross.hit i{transform:scale(1.3)}
 .dk-cross.hit.spark{--c:#9ec5ff}
