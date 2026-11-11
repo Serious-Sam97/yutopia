@@ -221,8 +221,12 @@ left hand holding the torch out below it.
   the shoulder joint (in its pocket), the left hand at the moved-back `fore` (where it reaches): now the
   torch hand under the action, the stock in the shoulder. Its ready carry already reads as AW2's (the
   right hand on it, the torch free in the left).
-- `arms-feel.spec`, `arms.spec` green.
-- **Still to do in phase 4**: the revolver's low ready (both hands, AW2), the cheek down on the stock, the
+- **The revolver's low ready** (AW2's): out and not aimed, both hands bring it before the waist — the right
+  fist under the shoulder, 0.34 ahead (level, the body's own forward), 0.12 in, 0.17 down; the muzzle ~35°
+  down and a little left (running: tucked nearer, steeper); the torch hand beside it. Reloading lets it go.
+- `arms-feel.spec`, `arms.spec` green. (Both time out at their teleport when Ana starts on floor 4 — the
+  dev world's spawn after a restart — and pass once she's at the pond: the tests' start, not the guns.)
+- **Still to do in phase 4**: the cheek down on the stock, the
   draw and put-away, the speedloader reload (F11a) and the double-barrel's both-shells reload (F12a), sprint,
   walking aimed, dodge / hit / fall with a gun, dry fire; a gun tab on the bench; the feel signed off.
 

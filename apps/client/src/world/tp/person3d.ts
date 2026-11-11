@@ -1171,7 +1171,9 @@ export class Person3D {
     // (the pool cue: held as the double-barrel is, in both hands)
     const shotgun = p.gun === "shotgun" || p.gun === "cue";
     const loading = p.gun === "shotgun" && !aiming && (this.gunFx?.reload ?? 0) > 0.3;
-    const want = gun && (shotgun || aiming) && !p.down && p.fell === undefined ? 1 : 0;
+    // (plan 79: a life revolver held at the low ready too, not aimed — both hands, AW2's)
+    const ready = !!gun?.inHand && !shotgun && !aiming && (this.gunFx?.reload ?? 0) < 0.3;
+    const want = gun && (shotgun || aiming || ready) && !p.down && p.fell === undefined ? 1 : 0;
     this.gunHandsW += (want - this.gunHandsW) * (1 - Math.exp(-dt * 14));
     const w = this.gunHandsW;
     this.loadT = loading ? this.loadT + dt : 0;
@@ -1191,7 +1193,10 @@ export class Person3D {
             // the muzzle ahead and to the left, a little down (and the gun turned further left in the
             // hands: gunWay.turn); running, a touch closer in
             { L: 0.7 - 0.1 * run, P: -0.22 + 0.06 * run, drop: 0.13 - 0.03 * run, fwd: -0.05, in: 0.03 }
-          : { L: 0, P: 0, drop: 0, fwd: 0, in: 0 };
+          : ready
+            ? // the low ready: the muzzle ahead and down ~40° (running: tucked closer, steeper)
+              { L: 0.12, P: -0.6 - 0.25 * run, drop: 0, fwd: 0, in: 0 }
+            : { L: 0, P: 0, drop: 0, fwd: 0, in: 0 };
     const k = 1 - Math.exp(-dt * 10);
     const gw = this.gunWay;
     gw.L += (to.L - gw.L) * k;
@@ -1244,7 +1249,15 @@ export class Person3D {
     }
     const wrist = this.model.bone("wristR");
     if (!wrist) return;
-    wrist.getWorldPosition(hp);
+    if (ready) {
+      // (the right fist before the chest, low: under the shoulder, ahead of it, a little in — running,
+      // nearer the chest)
+      this.model.bone("shoulderR")?.getWorldPosition(hp);
+      hp
+        .addScaledVector(hv.set(0, 0, 1).applyQuaternion(tq), (0.34 - 0.08 * run) * body)
+        .addScaledVector(hv.set(1, 0, 0).applyQuaternion(tq), 0.12 * body).y -= 0.17 * body;
+      this.model.reachTo("R", hp, w, [-0.6, -1, -0.3]);
+    } else wrist.getWorldPosition(hp);
     if (p.torch && !p.phone) {
       // (the left wrist under the right, back to back)
       ht.copy(hp)
