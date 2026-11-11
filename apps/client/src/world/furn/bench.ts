@@ -15,7 +15,7 @@ import {
 import * as T from "three";
 import { Out } from "../tp/kit3d";
 import { Post3 } from "../tp/post3d";
-import { legOf, SEATS, type SeatShape, seatFit } from "../tp/seats3d";
+import { SEATS, type SeatShape, seatFit } from "../tp/seats3d";
 import { DESK_TOP, type Hero, heroModel, SEAT } from "./heroes";
 import { lambert, type Tier, toon } from "./kit";
 import { animateLive, liveGroup } from "./liveparts";
@@ -454,12 +454,13 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
       return true;
     }
     // sat as the world sits them (person3d.ts seatOf): the hips along the seat, the lean, the drop
-    const leg = legOf((j) => m.bone(j));
+    const leg = m.leg();
     const { along, recline } = seatFit(p.seat, leg.thigh);
     const drop = m.sitDrop(p.seat.top);
     const fit = {
       drop,
       stand: leg.hipY,
+      thigh: leg.thigh,
       floor: 0,
       recline,
       ahead: p.seat.solid ? p.seat.front - along + 0.06 : 0,

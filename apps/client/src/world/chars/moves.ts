@@ -39,6 +39,16 @@ export const ANKLE = 0.061; // the ankle over the sole
 export const TOE = 0.19; // the shoe ahead of the ankle
 /** The ball of the foot ahead of the ankle, where the toes bend (the toe joint: build/shoes.ts). */
 export const BALL = 0.114;
+/** (plan 77) how far the toes bend up at most: a shoe's flex. Past it the toes' tip leaves the ground
+ *  (bent 0.9, and more in the air as a push-off's let go, the life shoe folded at the ankle) */
+export const TOE_FLEX = 0.6;
+/** (plan 77 phase 8) a toe's bend for a foot tipped `f`, eased into TOE_FLEX over its last 0.1 rad: a hard
+ *  `min` kinked the toes' speed where it met it, a pop at every push-off */
+export function toeBend(f: number): number {
+  const k = 0.1;
+  const h = Math.min(1, Math.max(0, 0.5 + (0.5 * (TOE_FLEX - f)) / k));
+  return Math.max(0, TOE_FLEX + (f - TOE_FLEX) * h - k * h * (1 - h));
+}
 export const HEEL = 0.082; // and behind it
 const KNEE_CAP = 0.04;
 /** The hip joint over the ground, standing. */
@@ -201,7 +211,8 @@ export function body(c: Ch): Moved {
     const ball = HIP_H + up + v(c, "air") - ankle - (ANKLE * Math.cos(f) + BALL * Math.sin(f));
     // (how far past flat the toes would go into the ground; eased in from nothing)
     const into = f - Math.asin(clamp01(ball / (TOE - BALL)));
-    const bend = Math.min(0.9, into * smoother(clamp01(into / 0.12)));
+    // (plan 77: to TOE_FLEX at most — past it the toes' tip leaves the ground, as a foot's does)
+    const bend = Math.min(TOE_FLEX, into * smoother(clamp01(into / 0.12)));
     p[`toe${S}`] = [-bend, 0, 0];
   }
   return { pose: p, lift: [v(c, "x"), up + v(c, "air"), v(c, "fw")] };

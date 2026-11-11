@@ -92,7 +92,7 @@ export interface HandShape {
 }
 export const HANDS = {
   open: { fingers: 0.05, index: 0.05, thumb: 0 },
-  relaxed: { fingers: 0.45, index: 0.35, thumb: 0.25 },
+  relaxed: { fingers: 0.45, index: 0.35, thumb: 0.7 }, // (plan 77: the thumb in by the index — at 0.25 it stood off, a C)
   loose: { fingers: 0.85, index: 0.75, thumb: 0.45 },
   grip: { fingers: 1.15, index: 1.05, thumb: 0.65 },
   fist: { fingers: 1.5, index: 1.5, thumb: 0.95 },

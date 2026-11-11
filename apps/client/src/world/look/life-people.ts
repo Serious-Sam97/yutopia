@@ -59,11 +59,42 @@ import {
 import type { Piece, Shader } from "./yulit";
 
 /** Bones beyond chars/rig.ts's 31: each eye, under the head, turned by the gaze. */
-export const EXTRA = ["eyeL", "eyeR"] as const;
+/** (plan 77 phase 6) each hand bone's knuckles — the middle and the tip of the fingers, the index and the
+ *  thumb (build_person.py KNUCKLES): a curl shared down them (chars/model.ts setPose) */
+export const KNUCKLES = [
+  ...(["L", "R"] as const).flatMap((S) =>
+    (["fingers", "index", "thumb"] as const).flatMap((j) => [`${j}2${S}`, `${j}3${S}`] as const),
+  ),
+  // (plan 78 phase 2) five fingers: "fingers" the middle alone, the ring and the little their own three
+  // bones each, off the wrist (build_person.py KNUCKLES: the same order)
+  ...(["L", "R"] as const).flatMap((S) =>
+    (["ring", "little"] as const).flatMap((j) => [`${j}${S}`, `${j}2${S}`, `${j}3${S}`] as const),
+  ),
+  // (plan 78 phase 3) and each forearm's twist, half way down it, off the elbow: a palm turned by the
+  // forearm, shared along it (chars/model.ts shareTwist)
+  "forearmL" as const,
+  "forearmR" as const,
+];
+export type Knuckle = (typeof KNUCKLES)[number];
+export const EXTRA = ["eyeL", "eyeR", ...KNUCKLES] as const;
 export type BoneName = JointName | (typeof EXTRA)[number];
 export const ALL_BONES: readonly BoneName[] = [...JOINTS, ...EXTRA];
+/** A knuckle's parent: the middle's the hand bone's, the tip's the middle; the ring's and the little's
+ *  base the wrist; a forearm's twist the elbow. */
+export const knuckleParent = (k: Knuckle): JointName | Knuckle => extraParent(k) as JointName | Knuckle;
+/** (the same, by name: chars/model.ts builds the bones without this module) */
+export function extraParent(k: string): string {
+  if (k.startsWith("forearm")) return `elbow${k.slice(-1)}`;
+  if (k.includes("3")) return k.replace("3", "2");
+  if (k.includes("2")) return k.replace("2", "");
+  return `wrist${k.slice(-1)}`;
+}
 export const parentOf = (b: BoneName): BoneName | null =>
-  b === "eyeL" || b === "eyeR" ? "head" : PARENT[b as JointName];
+  b === "eyeL" || b === "eyeR"
+    ? "head"
+    : (KNUCKLES as readonly string[]).includes(b)
+      ? knuckleParent(b as Knuckle)
+      : PARENT[b as JointName];
 
 /** How far the file's arms hang out from straight down (build_person.py ARM_OUT: the two must agree). */
 export const ARM_OUT = (9 * Math.PI) / 180;
@@ -614,7 +645,9 @@ export async function loadLifeBase(url: string, renderer: WebGLRenderer, gender:
   for (const b of (found as SkinnedMesh).skeleton.bones)
     if ((ALL_BONES as readonly string[]).includes(b.name)) at[b.name as BoneName] = b.getWorldPosition(new Vector3());
   for (const j of JOINTS) if (!at[j]) throw new Error(`${url}: no joint ${j}`);
-  for (const e of EXTRA) at[e] ??= at.head.clone();
+  for (const e of ["eyeL", "eyeR"] as const) at[e] ??= at.head.clone();
+  // (a file from before the knuckles: each at its hand bone — weighted nothing, it bends nothing)
+  for (const k of KNUCKLES) at[k] ??= at[knuckleParent(k)].clone();
   const parts: LifePart[] = [];
   let top = 0;
   scene.traverse((o: Object3D) => {
@@ -1013,7 +1046,8 @@ export function lifeBody(base: LifeBase, a: AvatarLayers | null, worn: LifeWorn 
   const at = {} as Record<BoneName, Vector3>;
   for (const b of ALL_BONES) {
     const o = off[b];
-    at[b] = base.at[b].clone();
+    // (a base without the knuckles — before plan 77's, a made-up one — has each at its parent)
+    at[b] = (base.at[b] ?? at[parentOf(b) as BoneName]).clone();
     if (o) at[b].add(new Vector3(...o));
   }
   const rest = {} as Record<BoneName, Vector3>;
@@ -1202,12 +1236,13 @@ export function lifeEar(base: LifeBase): Vector3 {
 
 // ── first person's arms ─────────────────────────────────────────────────────────────────────────
 
-const ARM = new Set(
-  (["shoulder", "elbow", "wrist", "fingers", "index", "thumb"] as const).flatMap((j) => [
+const ARM = new Set([
+  ...(["shoulder", "elbow", "wrist", "fingers", "index", "thumb"] as const).flatMap((j) => [
     ALL_BONES.indexOf(`${j}L` as BoneName),
     ALL_BONES.indexOf(`${j}R` as BoneName),
   ]),
-);
+  ...KNUCKLES.map((k) => ALL_BONES.indexOf(k)),
+]);
 const armCuts = new WeakMap<BufferGeometry, BufferGeometry | null>();
 
 /** A part cut to the triangles that go with the arms (shoulder to fingertips): null if it has none. */

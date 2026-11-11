@@ -24,6 +24,8 @@ import { type SwimScript, swimClips, swimTable } from "./swim";
 
 type Chars = typeof import("@/world/chars");
 type Hero = NonNullable<ReturnType<Chars["heroNow"]>>;
+/** (plan 77) the bench chair's seat, its top (m) */
+export const BENCH_SEAT = 0.45;
 export interface Ctx {
   C: Chars;
   H: Hero;
@@ -31,6 +33,9 @@ export interface Ctx {
   T: number;
   /** the walk's style (plan 58 4e) */
   gait?: string;
+  /** (plan 77) how the body on the bench sits on its chair (as the world's person3d fits a seat to
+   *  the body: its drop, its legs in the rig's frame) — else the old fixed drop */
+  sitFit?: () => import("@/world/chars/anim/acts").SitFit;
 }
 /** Where the body is, in the scene (three's: it faces +z at yaw 0, its left +x), and turned (rad,
  *  + to its left: three's rotation.y). */
@@ -484,7 +489,8 @@ export function clipList(): Clip[] {
   flowClip("run along a wall", 1.1, (t) => ({ speed: 0, flow: { kind: "wallside", t, side: 1, speed: 8.5 } }));
   flowClip("grind a rail", 1.2, (t) => ({ speed: 0, flow: { kind: "grind", t, side: 1, speed: 7 } }));
   // ── 6: the everyday, through Motion3 (sitting, the hands and the phone, busy, together, the emotes)
-  const seat = [box3(-0.24, -0.3, 0.24, 0.16, 0, 0.36), box3(-0.24, -0.34, 0.24, -0.28, 0.36, 0.95)];
+  // (plan 77: the seat's top 0.45 m, a chair's — the body fitted to it as the world fits one: BENCH_SEAT)
+  const seat = [box3(-0.24, -0.3, 0.24, 0.16, 0, BENCH_SEAT), box3(-0.24, -0.34, 0.24, -0.28, BENCH_SEAT, 0.95)];
   const desk = [...seat, box3(-0.6, 0.38, 0.6, 0.98, 0.69, 0.73)];
   const every = (
     name: string,
@@ -1104,6 +1110,7 @@ function everyday(x: Ctx, clip: Clip, which: "after" | "before", rate: number): 
   for (let i = 0; i < n; i++) {
     const t = i / rate;
     const inp: MotionIn = {
+      seat: x.sitFit?.(),
       dist: 0,
       walking: false,
       speed: 0,

@@ -1,6 +1,5 @@
 import type { Bone, Vector3 } from "three";
 import type { CarFit } from "../../chars/anim/acts";
-import { legOf } from "../seats3d";
 
 // (plan 62, docs/plan/62-the-touch.md phase 5) Someone sat in a vehicle, fitted to it: the hips onto
 // its seat, the back against the seat's back, each foot where it goes — the driver's right on the
@@ -10,6 +9,8 @@ import { legOf } from "../seats3d";
 interface Sat {
   bone(j: "kneeL" | "ankleL"): Bone | null;
   sitDrop(seatY: number): number;
+  /** (plan 77) the legs in the rig's frame: PersonModel.leg */
+  leg(): { thigh: number; hipY: number };
 }
 /** the vehicle: its pedals (clutch, brake, throttle — a kart's brake, throttle) and footwell floor */
 interface Cabin {
@@ -29,7 +30,7 @@ export function carFit(
   kart = false,
 ): CarFit {
   const hip = seat.hip;
-  const leg = legOf((j) => m.bone(j));
+  const leg = m.leg();
   const drop = m.sitDrop((hip.y + 0.02) / s);
   // (a point of the vehicle in their own space: out to the left, up, ahead)
   const own = (p: Vector3) => ({

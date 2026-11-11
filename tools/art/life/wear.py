@@ -174,7 +174,9 @@ def zones(V, ow, ALL, J):
     kind = np.full(len(V), TORSO)
     t = np.zeros(len(V))
     for k, S in ((ARM_L, "L"), (ARM_R, "R")):
-        m = (side([f"shoulder{S}", f"elbow{S}", f"wrist{S}", f"fingers{S}", f"index{S}", f"thumb{S}"]) > 0.5) & (kind == TORSO)
+        hand = [f"{j}{n}{S}" for j in ("fingers", "index", "thumb", "ring", "little") for n in ("", "2", "3") if f"{j}{n}{S}" in W]
+        fore = [f"forearm{S}"] if f"forearm{S}" in W else []
+        m = (side([f"shoulder{S}", f"elbow{S}", *fore, f"wrist{S}", *hand]) > 0.5) & (kind == TORSO)
         kind[m] = k
         t[m] = chain_t(V[m], J[f"shoulder{S}"], J[f"elbow{S}"], J[f"wrist{S}"])
     for k, S in ((LEG_L, "L"), (LEG_R, "R")):

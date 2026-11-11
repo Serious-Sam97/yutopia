@@ -1,9 +1,9 @@
 "use client";
 
-import { DEFAULT_AVATAR } from "@yutopia/shared";
+import { DEFAULT_AVATAR, drinkAs, isDrink } from "@yutopia/shared";
 import { notFound } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { type Ctx, clipList, type Frame, limp, POP_RATE, pops, RATE, tabulate } from "./clips";
+import { BENCH_SEAT, type Ctx, clipList, type Frame, limp, POP_RATE, pops, RATE, tabulate } from "./clips";
 
 // Dev-only: the animation bench (docs/plan/58-the-animation.md, phase 2). Any animation by name,
 // scrubbed, slowed, looped and onion-skinned; before and after side by side; on a ground grid,
@@ -245,6 +245,125 @@ function Bench({ q }: { q: URLSearchParams }) {
         land.receiveShadow = true;
         scene.add(land);
       };
+      // (plan 78 phase 5) what the clip's hands hold, drawn as the game draws it (chars/props.ts, person3d's
+      // props/toolFrame/torchFrame): a drink or the phone in the right hand, the torch in the left, a pad
+      // between the two — so a grip's judged against its thing, not by the hand alone
+      let heldNow: { key: string; root: InstanceType<typeof T.Object3D>; drink: string; dispose: () => void } | null =
+        null;
+      const heldOf = (clip: (typeof clips)[number], t: number) => {
+        const mi = clip.motion?.(t);
+        if (mi?.held && isDrink(mi.held.kind)) return drinkAs(mi.held.kind);
+        // (texting: in both hands — plan 78 phase 5)
+        if (mi?.phone) return mi.phone.state === "text" ? "phone2" : mi.phone.state === "photo" ? "photo2" : "phone";
+        if (mi?.busy === "gamepad" || mi?.busy === "slotcar") return "pad";
+        if (clip.live?.(t).torch) return "torch";
+        return "";
+      };
+      // (&oldgrip=1: as before plan 78 phase 5 — the mitten's places, the hands not closed on it: to compare)
+      const oldGrip = q.get("oldgrip") === "1";
+      const handOf = (S: "L" | "R") => (oldGrip ? null : after.handFrame(S));
+      const heldMat = (c: string) => new T.MeshLambertMaterial({ color: c });
+      const showHeld = (clip: (typeof clips)[number], t: number, fr: Frame) => {
+        const key = heldOf(clip, t);
+        if ((heldNow?.key ?? "") !== key) {
+          heldNow?.root.removeFromParent();
+          heldNow?.dispose();
+          heldNow = null;
+          after.hold("L", null);
+          after.hold("R", null);
+          after.holdTwo(null);
+          const hand = after.bone(key === "torch" ? "wristL" : "wristR");
+          if (key === "pad") {
+            // (plan 78 phase 5: a pad as one's held — its handles in the fists; &oldgrip=1 the box before)
+            const pad = oldGrip
+              ? (() => {
+                  const m = new T.Mesh(new T.BoxGeometry(0.15, 0.03, 0.07), heldMat("#2b2a28"));
+                  return { root: m, dispose: () => m.geometry.dispose() };
+                })()
+              : C.buildPad(heldMat);
+            after.root.add(pad.root);
+            heldNow = { key, root: pad.root, drink: "", dispose: pad.dispose };
+            if (!oldGrip) after.holdTwo("pad");
+          } else if ((key === "phone2" || key === "photo2") && !oldGrip) {
+            // (in both hands: where the model's two-handed hold puts it, in her root's space)
+            const b = C.buildProp("phone", "#5a4632", heldMat);
+            after.root.add(b.root);
+            heldNow = { key, root: b.root, drink: "", dispose: () => b.dispose() };
+            after.holdTwo(key === "photo2" ? "photo" : "phone");
+          } else if (key && hand) {
+            const kind = (key === "phone2" || key === "photo2" ? "phone" : key) as
+              | "mug"
+              | "cup"
+              | "soda"
+              | "phone"
+              | "torch";
+            const b = C.buildProp(
+              kind,
+              kind === "phone" ? "#5a4632" : kind === "torch" ? "#2b2e33" : "#c4402b",
+              heldMat,
+            );
+            C.inHand(b.root, kind, handOf(key === "torch" ? "L" : "R"));
+            hand.add(b.root);
+            heldNow = {
+              key,
+              root: b.root,
+              drink: kind === "phone" || kind === "torch" ? "" : kind,
+              dispose: () => b.dispose(),
+            };
+          }
+        }
+        if (!heldNow) return;
+        if (heldNow.drink)
+          C.keepUpright(
+            heldNow.root,
+            heldNow.drink as "mug",
+            after.root,
+            (fr.reach?.R?.at === "mouth" ? fr.reach.R.w : 0) * 1.05,
+            handOf("R"),
+          );
+        else if (heldNow.key === "phone") C.inHand(heldNow.root as never, "phone", handOf("R"));
+        else if (
+          (heldNow.key === "phone2" || heldNow.key === "photo2" || heldNow.key === "pad") &&
+          after.twoPlace.on &&
+          !oldGrip
+        ) {
+          // (the thumbs tapping by turns: the next pose's; a photo's still)
+          after.holdTwo(
+            heldNow.key === "pad" ? "pad" : heldNow.key === "photo2" ? "photo" : "phone",
+            heldNow.key === "photo2" ? 0 : Math.sin(t * (heldNow.key === "pad" ? 7 : 11)),
+          );
+          heldNow.root.position.copy(after.twoPlace.pos);
+          heldNow.root.quaternion.copy(after.twoPlace.quat);
+          return;
+        } else if (heldNow.key === "torch") {
+          // (the game's torch: ahead along her facing, tipped a little at the ground)
+          const ahead = new T.Vector3(0, -0.25, 1).normalize().applyQuaternion(after.root.quaternion);
+          // (plan 78 phase 5: the hand turned at the wrist to aim it — the torch across the palm, its
+          // barrel in the fist — and only what the wrist can't, turned in the hand)
+          const fr2 = handOf("L");
+          if (fr2) after.aimHand("L", C.gripLine("torch", fr2, new T.Vector3()), ahead);
+          C.pointAlong(heldNow.root, ahead, fr2, "torch");
+        }
+        if (heldNow.key === "pad" && oldGrip) {
+          // (as the game: between the wrists, a little ahead)
+          after.root.updateMatrixWorld(true);
+          const l = after.bone("wristL")?.getWorldPosition(new T.Vector3());
+          const r = after.bone("wristR")?.getWorldPosition(new T.Vector3());
+          if (l && r) {
+            const m = after.root.worldToLocal(l.add(r).multiplyScalar(0.5));
+            heldNow.root.position.set(m.x, m.y - 0.01, m.z + 0.05);
+          }
+        }
+        // (the hands closed on it, as it sits now: the next pose's)
+        if (heldNow.key === "phone2" || heldNow.key === "photo2") return;
+        const shape = C.HELD_SHAPE[heldNow.key as keyof typeof C.HELD_SHAPE];
+        const where = { shape, pos: heldNow.root.position, quat: heldNow.root.quaternion, kind: heldNow.key };
+        if (oldGrip) return;
+        if (heldNow.key === "pad") {
+          after.hold("L", { ...where, root: true });
+          after.hold("R", { ...where, root: true });
+        } else after.hold(heldNow.key === "torch" ? "L" : "R", where);
+      };
       const propMeshes: InstanceType<typeof T.Mesh>[] = [];
       const propMat = new T.MeshLambertMaterial({ color: "#a39a88" });
       // (5c: a clip's pole, swung round)
@@ -338,12 +457,24 @@ function Bench({ q }: { q: URLSearchParams }) {
       };
 
       // (&gait=bouncy: the walk's style, plan 58 4e)
-      const x: Ctx = { C, H, T: 0, gait: q.get("gait") ?? undefined };
+      // (plan 77: sat on the bench's chair as the world sits a body: tp/person3d.ts seatOf)
+      const x: Ctx = {
+        C,
+        H,
+        T: 0,
+        gait: q.get("gait") ?? undefined,
+        sitFit: () => {
+          const leg = after.leg();
+          return { drop: after.sitDrop(BENCH_SEAT), stand: leg.hipY, thigh: leg.thigh, floor: 0, recline: 0 };
+        },
+      };
       bench.current.x = x;
       bench.current.redo = () => {
         const s = st.current;
         x.T = s.tension;
-        const key = `${s.clip.name}|${s.live}|${s.tension}`;
+        // (plan 77: and the body's seat drop — the life body loads after the first frames, and a sit's
+        // drop and legs are its own)
+        const key = `${s.clip.name}|${s.live}|${s.tension}|${after.isLife}|${after.sitDrop(BENCH_SEAT).toFixed(3)}`;
         if (bench.current.key === key) return;
         bench.current.key = key;
         bench.current.after = tabulate(x, s.clip, "after", s.live);
@@ -446,6 +577,7 @@ function Bench({ q }: { q: URLSearchParams }) {
           // (6d: a pair's other one where they stand, facing her — not beside her)
           const two = !!s.clip.pair;
           place(after, A[i], two ? 0 : ax, two ? 0 : az);
+          showHeld(s.clip, s.t, A[i]);
           before.root.visible = !!((s.compare || two) && B);
           if (B && (s.compare || two)) place(before, B[Math.min(B.length - 1, i)], two ? 0 : -ax, two ? 0 : -az);
           // (the springs swing as it plays; scrubbed, they hold)
@@ -515,6 +647,35 @@ function Bench({ q }: { q: URLSearchParams }) {
           bench: bench.current,
           // (61: the sway's driver and world, to look into)
           sway: () => ({ sway, world: swayWorld, after }),
+          // (plan 77: a close still of a bone — a hand — through a camera of its own: from `from` (m, off
+          // the bone, the scene's axes), as a PNG data URL)
+          /** (plan 78 phase 5) what the hands hold now, drawn (e2e/hand-report.mts measures the hand on it) */
+          held: () => {
+            const h = heldNow;
+            if (!h) return null;
+            const shape =
+              C.HELD_SHAPE[(h.key === "phone2" || h.key === "photo2" ? "phone" : h.key) as keyof typeof C.HELD_SHAPE];
+            // (how far a point in the world is outside it: the shape the hands close on)
+            const gap = (w: InstanceType<typeof T.Vector3>) => {
+              h.root.updateWorldMatrix(true, false);
+              return C.heldDistance(shape, h.root.worldToLocal(w.clone()));
+            };
+            return { key: h.key, root: h.root, gap };
+          },
+          closeUp: (bone: string, from: [number, number, number], fov = 30, look?: "held") => {
+            const b = after.bone(bone as never);
+            if (!b) return null;
+            after.root.updateMatrixWorld(true);
+            const at = b.getWorldPosition(new T.Vector3());
+            const c = new T.PerspectiveCamera(fov, renderer.domElement.width / renderer.domElement.height, 0.01, 50);
+            c.position.set(at.x + from[0], at.y + from[1], at.z + from[2]);
+            // (from the bone toward the thing held: an eye's view of it)
+            c.lookAt(look === "held" && heldNow?.root ? heldNow.root.getWorldPosition(new T.Vector3()) : at);
+            renderer.render(scene, c);
+            const url = renderer.domElement.toDataURL("image/png");
+            renderer.render(scene, cam);
+            return url;
+          },
           // (a still at a moment: e2e/anim-strip.mts)
           seek: (to: number) => {
             st.current.t = to;

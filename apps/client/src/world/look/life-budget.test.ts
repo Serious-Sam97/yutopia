@@ -6,6 +6,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { JOINTS } from "../chars/rig";
+import { KNUCKLES } from "./life-people";
 
 const DIR = join(import.meta.dirname, "../../../public/life");
 
@@ -117,6 +118,8 @@ for (const f of shipped) {
     if (kindOf(f) === "person") {
       const names = new Set((json.skins?.[0]?.joints ?? []).map((j) => json.nodes[j].name));
       for (const j of JOINTS) assert.ok(names.has(j), `${f}: no joint ${j}`);
+      // (plan 77 phase 6: and the knuckles — the near person's; the far one's hands are one lump)
+      if (!f.includes("-far")) for (const k of KNUCKLES) assert.ok(names.has(k), `${f}: no knuckle ${k}`);
       for (const m of json.meshes)
         for (const p of m.primitives) assert.ok(!("JOINTS_1" in p.attributes), `${f}: ${m.name} has a fifth weight`);
     }

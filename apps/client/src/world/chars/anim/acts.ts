@@ -24,8 +24,23 @@ export interface Hand {
   pole?: [number, number, number];
   /** (plan 62) the hand turned at the wrist to point this far from level (rad, − down) */
   level?: number;
+  /** (plan 78 phase 7) which way its palm faces, and its fingers point (the body's own space): a life hand
+   *  turned so, within a wrist's reach (PersonModel.handsTo) */
+  palm?: [number, number, number];
+  point?: [number, number, number];
+  /** (plan 78 phase 7) where its thumb's pad aims (the body's space): a hand heart's point */
+  thumb?: [number, number, number];
 }
 export type Hands = { L?: Hand; R?: Hand };
+/** (plan 78 phase 7) each wrist off the middle at a clap: the palms just meet */
+const CLAP_MEET = 0.03;
+/** (plan 78 phase 7) each wrist off the middle making a heart */
+const HEART_W = 0.089;
+/** (…the heart's middle: its height off the feet, how far ahead) */
+const HEART_Y = 1.3;
+const HEART_Z = 0.22;
+/** (…the elbows low and in, the forearms rising to the hands: the wrists no further over than a real one's) */
+const HEART_ELBOW: [number, number, number] = [-0.35, -1, -0.5];
 export interface Act {
   pose: Pose;
   lift?: [number, number, number];
@@ -80,11 +95,14 @@ function leg(dz: number, dy: number): [number, number] {
 }
 // where each foot is sat (ahead, out): both flat, one out ahead, the ankles crossed, one tucked
 // (plan 62: ahead as the thigh's length — plan 59's legs are 14% longer)
+// (plan 77: nearer — on a real body's legs 1.14–1.59 thighs out had the knees at 25–50°, the feet 20–30
+// cm past the knees, the legs slid out down the seat; a person sat easy has the feet under the knees or
+// a little past, the knees ~80–100°)
 const FEET: [number, number, number, number][] = [
-  [1.14, 0.11, 1.14, 0.11],
-  [1.48, 0.12, 1.08, 0.1],
-  [1.59, -0.03, 1.59, 0.04],
-  [1.02, 0.13, 1.36, 0.13],
+  [1.0, 0.11, 1.0, 0.11],
+  [1.3, 0.12, 0.95, 0.1],
+  [1.42, -0.03, 1.42, 0.04],
+  [0.92, 0.13, 1.2, 0.13],
 ];
 
 /** Where she sits (plan 62, docs/plan/62-the-touch.md), in the body's own space (m): the hips' drop
@@ -95,6 +113,8 @@ const FEET: [number, number, number, number][] = [
 export interface SitFit {
   drop: number;
   stand?: number;
+  /** (plan 77) her thigh's length (m): where the feet go sat is reckoned in it (else the rig's) */
+  thigh?: number;
   floor?: number;
   recline?: number;
   ahead?: number;
@@ -294,7 +314,8 @@ export function sit2(
   const out = rising ? 1 - smoother(clamp01((1 - u - 0.45) / 0.45)) : smoother(clamp01((u - 0.05) / 0.5));
   // (ahead in thighs; clear of a seat's solid front)
   const least = seat.ahead ?? 0;
-  const fz = [Math.max(F[0] * THIGH, least) * out, Math.max(F[2] * THIGH, least) * out];
+  const th = seat.thigh ?? THIGH;
+  const fz = [Math.max(F[0] * th, least) * out, Math.max(F[2] * th, least) * out];
   const fx = [lerp(0.09, F[1], out), lerp(0.09, F[3], out)];
   // (each foot lifted as it moves: on the way in and out, and moving between the ways it sits)
   const step = (k: number) => 0.035 * Math.sin(Math.PI * clamp01(k));
@@ -532,8 +553,8 @@ export function phone2(state: string, pose: string, t: number, talking: boolean,
       Object.assign(c, { dx: 0.02, sx: -0.03 });
       const click = bump(t * 1.6) ** 8;
       hands = {
-        L: { at: [0.08, 1.48, 0.33], w: 1, pole: ELBOW_OUT },
-        R: { at: [-0.08, 1.48, 0.33], w: 1, pole: ELBOW_OUT },
+        L: { at: [0.08, 1.56, 0.5], w: 1, pole: ELBOW_OUT },
+        R: { at: [-0.08, 1.56, 0.5], w: 1, pole: ELBOW_OUT },
       };
       const p = upper(c);
       Object.assign(p, shape(1, PHONE_GRIP), shape(-1, { ...PHONE_GRIP, index: 0.6 + 0.6 * click }));
@@ -751,9 +772,10 @@ export function busy2(
     case "gamepad": {
       // the pad held in front in both, the thumbs going, leant into the corners
       const lean = Math.sin(t * 0.8 + seed);
+      // (plan 77: the wrists 20 cm apart, a pad's grips — 14 had the life hands over each other)
       hands = {
-        L: { at: [0.07, 1.08, 0.3], w: 1, pole: ELBOW_DOWN },
-        R: { at: [-0.07, 1.08, 0.3], w: 1, pole: ELBOW_DOWN },
+        L: { at: [0.1, 1.08, 0.3], w: 1, pole: ELBOW_DOWN },
+        R: { at: [-0.1, 1.08, 0.3], w: 1, pole: ELBOW_DOWN },
       };
       Object.assign(c, { sx: 0.08, sz: 0.1 * lean, dz: 0.06 * lean, dx: 0.28 });
       hs[0] = { ...HANDS.grip, thumb: 0.2 + 0.4 * bump(t * 6) };
@@ -954,7 +976,12 @@ export function together2(what: string, k: number, contact: number, w: [number, 
   Object.assign(p, shape(-1, hand));
   if (what === "highfive") p.wristR = [0.25, 0, 0];
   // (on the line between them, each hand a palm's thickness short of the middle: they touch)
-  const at: [number, number, number] = [mx, y + (what === "highfive" ? 0.04 * Math.sin(into * Math.PI) : 0), mz - 0.03];
+  // (plan 77: a fist's wrist 14 cm short — its knuckles, turned down a little, are that far on; at 3 the two met through each other)
+  const at: [number, number, number] = [
+    mx,
+    y + (what === "highfive" ? 0.04 * Math.sin(into * Math.PI) : 0),
+    mz - (what === "fistbump" ? 0.14 : 0.03),
+  ];
   // (a cheers after the clink: the drink back up to the mouth — the body's own reach does it)
   return {
     pose: p,
@@ -992,10 +1019,27 @@ export function emote2(e: string, t: number): Act & { legs: boolean } {
       // the hands meeting in front of the chest, a bounce in the knees to each
       legs = true;
       const cl = bump(t * 9) ** 2;
-      const y = 1.32 + 0.03 * Math.sin(t * 9);
+      // (plan 78 phase 7: before the lower chest, as photos of a clap — at the chin it read as a prayer)
+      const y = 1.17 + 0.03 * Math.sin(t * 9);
+      // (plan 77: the wrists 9 cm apart as the palms meet, not 4 — a real hand's palm is thick, and the
+      // life hands met through each other, the fingers interlaced)
+      // (plan 78 phase 7: the palms turned to each other, the fingers up and on — a clap's — and the
+      // wrists brought in till the palms just meet: they'd crossed, the palms 37° off each other)
       hands = {
-        L: { at: [0.02 + 0.09 * (1 - cl), y, 0.3], w: 1, pole: ELBOW_DOWN },
-        R: { at: [-0.02 - 0.09 * (1 - cl), y, 0.3], w: 1, pole: ELBOW_DOWN },
+        L: {
+          at: [CLAP_MEET + 0.09 * (1 - cl), y, 0.3],
+          w: 1,
+          pole: ELBOW_DOWN,
+          palm: [-1, 0, 0],
+          point: [0, 0.6, 0.8],
+        },
+        R: {
+          at: [-CLAP_MEET - 0.09 * (1 - cl), y, 0.3],
+          w: 1,
+          pole: ELBOW_DOWN,
+          palm: [1, 0, 0],
+          point: [0, 0.6, 0.8],
+        },
       };
       Object.assign(c, { tL: -0.12, kL: 0.2 + 0.08 * cl, tR: -0.12, kR: 0.2 + 0.08 * cl, sx: 0.05, dx: -0.05 });
       hs[0] = HANDS.open;
@@ -1027,13 +1071,34 @@ export function emote2(e: string, t: number): Act & { legs: boolean } {
     }
     case "heart": {
       // the hands making a heart in front of the chest, the head on one side, the eyes shut
+      // (plan 78 phase 7: as a hand heart's made, close photos of one — each hand a C, the two facing: the
+      // wrists low and out, each hand rising up and in, its back out and its palm to the chest and the other
+      // hand; the fingers arched over and down till the index tips meet at the top's dip, the thumbs down
+      // and in till their pads meet at the point — the hole between them the heart. Fingers straight up and
+      // steepled read as a prayer.)
       hands = {
-        L: { at: [0.03, 1.36, 0.3], w: 1, pole: ELBOW_OUT },
-        R: { at: [-0.03, 1.36, 0.3], w: 1, pole: ELBOW_OUT },
+        L: {
+          at: [HEART_W, HEART_Y - 0.06, HEART_Z - 0.01],
+          w: 1,
+          pole: HEART_ELBOW,
+          palm: [-0.9, -0.2, -0.3],
+          point: [-0.3, 0.9, 0.3],
+          thumb: [0.013, HEART_Y - 0.07, HEART_Z],
+        },
+        R: {
+          at: [-HEART_W, HEART_Y - 0.06, HEART_Z - 0.01],
+          w: 1,
+          pole: HEART_ELBOW,
+          palm: [0.9, -0.2, -0.3],
+          point: [0.3, 0.9, 0.3],
+          thumb: [-0.013, HEART_Y - 0.07, HEART_Z],
+        },
       };
       Object.assign(c, { dz: 0.18 + 0.04 * Math.sin(t * 2), dx: 0.05, sz: 0.04 });
-      hs[0] = { fingers: 1.0, index: 1.1, thumb: -0.3 };
-      hs[1] = { fingers: 1.0, index: 1.1, thumb: -0.3 };
+      // (the index arched over to the other's, the others tucked a little tighter behind it — at its curl the
+      // middle fingers met through each other; the thumbs straight)
+      hs[0] = { fingers: 1.25, index: 1.0, thumb: -0.35 };
+      hs[1] = { fingers: 1.25, index: 1.0, thumb: -0.35 };
       blink = 1;
       break;
     }

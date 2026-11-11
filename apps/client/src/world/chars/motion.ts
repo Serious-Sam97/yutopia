@@ -15,6 +15,10 @@ import { type Euler3, HANDS, handPose, JOINTS, type JointName, type Pose, REST }
 // x > 0 bends, elbow x < 0 bends, head x > 0 looks down, head y > 0 turns to
 // their left. Layers blend by quaternion slerp per joint.
 
+/** (plan 77) a call's elbow: down and a little forward — the forearm up to the ear, the hand stood along the
+ *  head (out and back, the forearm came in level from behind the head and the hand lay over the face) */
+const CALL_POLE: [number, number, number] = [-0.25, -1, 0.55];
+
 export interface MotionIn {
   dist: number; // tiles moved this frame
   walking: boolean;
@@ -830,11 +834,11 @@ export class Motion3 {
       p = blend(p, f.pose, ease(this.phoneW));
       handed(f.hands, ease(this.phoneW));
       phoneTalk = (f.talk ?? 0) * ease(this.phoneW) * (m.speaking ? 1 : 0);
-      if (this.phoneWhat === "call") reaching({ R: { at: "ear", w: 1 } }, ease(this.phoneW));
+      if (this.phoneWhat === "call") reaching({ R: { at: "ear", w: 1, pole: CALL_POLE } }, ease(this.phoneW));
     } else if (this.phoneW > 0 && this.phoneWhat) {
       p = blend(p, phonePose(this.phoneWhat, m.phone?.pose ?? "", t, m.speaking), ease(this.phoneW));
       // on a call the phone is at the ear
-      if (this.phoneWhat === "call") reaching({ R: { at: "ear", w: 1 } }, ease(this.phoneW));
+      if (this.phoneWhat === "call") reaching({ R: { at: "ear", w: 1, pole: CALL_POLE } }, ease(this.phoneW));
     }
     // ringing in the pocket: a buzz at the hip
     if (m.phone?.ringing && !ph && !m.reduced) lift[0] += 0.004 * Math.sin(t * 46) * (Math.sin(t * 2.6) > 0 ? 1 : 0);

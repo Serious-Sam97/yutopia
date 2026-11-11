@@ -58,5 +58,15 @@ export {
 } from "./moves";
 export { BASE, LODS, type Lod, type Params, paramsFor } from "./params";
 export { type PictureMotion, pictures, verbAt } from "./picture";
-export { buildProp, inHand, keepUpright, type PropKind, pointAlong } from "./props";
+export {
+  buildPad,
+  buildProp,
+  gripLine,
+  HELD_SHAPE,
+  heldDistance,
+  inHand,
+  keepUpright,
+  type PropKind,
+  pointAlong,
+} from "./props";
 export { HANDS, type HandShape, handPose, JOINTS, type JointName, type Pose, REST } from "./rig";

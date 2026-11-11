@@ -3,7 +3,6 @@ import { AIM_BLADE, BEAM } from "@yutopia/shared/beam";
 import { flowOfCode, KH_FEEL, KH_MOVE, unpackMv } from "@yutopia/shared/move";
 import type { PhysicsWorld } from "@yutopia/shared/physics";
 import {
-  BoxGeometry,
   CircleGeometry,
   Color,
   CylinderGeometry,
@@ -30,7 +29,7 @@ const puffDir = new Vector3();
 import { cueModel, type GunFx, type GunKind, type GunModel, gunModel, poseGun, shellGeometry } from "./guns3d";
 import { levelHands } from "./level3d";
 import type { PersonIn } from "./person-in";
-import { ANKLE_M, legOf, SEATS, seatFit, seatShape } from "./seats3d";
+import { ANKLE_M, SEATS, seatFit, seatShape } from "./seats3d";
 
 type Chars = NonNullable<ReturnType<typeof chars>>;
 type SwimM = NonNullable<ReturnType<Chars["swimNow"]>>;
@@ -288,7 +287,7 @@ export class Person3D {
     const m = this.model;
     if (this.sat?.seat === kind && m.ready) return this.sat;
     const s = seatShape(p.seat);
-    const leg = legOf((j) => m.bone(j));
+    const leg = m.leg();
     const { along, recline } = seatFit(s, leg.thigh);
     const drop = m.sitDrop(s.top);
     const hip = leg.hipY + drop;
@@ -313,6 +312,7 @@ export class Person3D {
     const fit = {
       drop,
       stand: leg.hipY,
+      thigh: leg.thigh,
       floor,
       recline,
       ahead: s.solid ? s.front - along + 0.06 : 0,
@@ -899,7 +899,7 @@ export class Person3D {
                     : "#efe4cc";
           const as = drinkAs(kind);
           const prop = this.C.buildProp(as, color, this.mats.prop);
-          this.C.inHand(prop.root, as);
+          this.C.inHand(prop.root, as, this.model.handFrame("R"));
           hand.add(prop.root);
           this.held = { key, kind, prop, toy: null };
         } else {
@@ -915,21 +915,34 @@ export class Person3D {
     if (held && this.held?.prop) {
       this.held.prop.setLevel?.(heldState(held.kind, held.since).level);
       // upright, however the wrist turns; tipped to the mouth for a sip
-      this.C.keepUpright(this.held.prop.root, drinkAs(this.held.kind), this.root, sip * 1.05);
+      this.C.keepUpright(
+        this.held.prop.root,
+        drinkAs(this.held.kind),
+        this.root,
+        sip * 1.05,
+        this.model.handFrame("R"),
+      );
     }
     // the phone in its case
-    const phoneKey = p.phone ? `${p.phoneCase ?? "walnut"}` : "";
+    // (plan 78 phase 5: texting, in both of a life body's hands — the body's root holds it, where the model's
+    // two-handed hold puts it)
+    const both = (p.phone === "text" || p.phone === "photo") && !!this.model.handFrame("R");
+    const phoneKey = p.phone ? `${p.phoneCase ?? "walnut"}${both ? "|both" : ""}` : "";
     if ((this.phone?.key ?? "") !== phoneKey) {
       this.dropPhone();
       if (phoneKey && hand) {
         const prop = this.C.buildProp("phone", phoneColors(p.phoneCase)[0], this.mats.prop);
         this.C.inHand(prop.root, "phone");
-        hand.add(prop.root);
+        (both ? this.root : hand).add(prop.root);
         this.phone = { key: phoneKey, prop };
       }
     }
+    // (in one life hand: along its palm — its frame known once the body's loaded)
+    const phoneFrame = this.phone && !both ? this.model.handFrame("R") : null;
+    if (this.phone && phoneFrame) this.C.inHand(this.phone.prop.root, "phone", phoneFrame);
     this.gunFrame(p, hand);
     this.toolFrame(p);
+    this.twoFrame(both ? (p.phone === "photo" ? "photo" : "phone") : this.tool?.key === "pad" ? "pad" : null);
     this.ballFrame(p, hand);
     // aiming: the gun along the look too, whatever the wrist is doing (its barrel's −y)
     // (held in both hands — the hands placed by gunHands: the gun along the way it set)
@@ -940,6 +953,7 @@ export class Person3D {
     this.gripOnFore();
     this.budFrame(p);
     this.torchFrame(p);
+    this.holdFrame();
     if (this.phone?.prop.rec)
       this.phone.prop.rec.visible = !!p.recording && Math.floor(performance.now() / 500) % 2 === 0;
   }
@@ -957,6 +971,43 @@ export class Person3D {
     this.C.inHand(o as Group, "toy");
     hand.add(o);
     this.ball = { n, o };
+  }
+
+  /** (plan 78 phase 5) What each hand holds, told the model: a life hand's fingers close on it (and a reach
+   *  goes by it — the phone's speaker to the ear, a drink's rim to the lips). As it sits now: the next pose's. */
+  /** (plan 78 phase 5) A thing in both of a life body's hands — the phone texting, a pad: the model holds
+   *  it (its thumbs tapping by turns) and the thing's drawn where it is (the body's root space) */
+  private twoKind: "phone" | "photo" | "pad" | null = null;
+  private twoFrame(kind: "phone" | "photo" | "pad" | null) {
+    if (!this.model.handFrame("R")) kind = null;
+    if (this.twoKind !== kind) {
+      this.twoKind = kind;
+      if (!kind) this.model.holdTwo(null);
+    }
+    if (!kind) return;
+    const t = performance.now() / 1000;
+    this.model.holdTwo(kind, kind === "photo" ? 0 : Math.sin(t * (kind === "pad" ? 7 : 11)));
+    const place = this.model.twoPlace;
+    const thing = kind === "pad" ? this.tool?.mesh : this.phone?.prop.root;
+    if (thing && place.on) {
+      thing.position.copy(place.pos);
+      thing.quaternion.copy(place.quat);
+    }
+  }
+
+  private holdFrame() {
+    const m = this.model;
+    const shapes = this.C.HELD_SHAPE;
+    const R = this.held?.prop
+      ? { root: this.held.prop.root, kind: drinkAs(this.held.kind) as keyof typeof shapes }
+      : this.phone
+        ? { root: this.phone.prop.root, kind: "phone" as const }
+        : null;
+    // (two-handed — the phone texting, a pad: the model's own hold, twoFrame)
+    if (this.twoKind) return;
+    m.hold("R", R ? { shape: shapes[R.kind], pos: R.root.position, quat: R.root.quaternion, kind: R.kind } : null);
+    const T = this.torch;
+    m.hold("L", T ? { shape: shapes.torch, pos: T.root.position, quat: T.root.quaternion, kind: "torch" } : null);
   }
 
   private dropHeld() {
@@ -1271,7 +1322,12 @@ export class Person3D {
     if (!this.torch) return;
     // along the beam (shared beam.ts): ahead, tipped at the ground — or up as they aim — whatever
     // the wrist is doing, so the light comes out of it where it points
-    this.C.pointAlong(this.torch.root, this.lookDir(p, tv));
+    // (plan 78 phase 5: a life hand turned at its wrist to aim it — the torch across the palm, its barrel in
+    // the fist — and only what the wrist can't, turned in the hand)
+    const look = this.lookDir(p, tv);
+    const frame = this.model.handFrame("L");
+    if (frame) this.model.aimHand("L", this.C.gripLine("torch", frame, tv2), look);
+    this.C.pointAlong(this.torch.root, look, frame, "torch");
   }
   /** Where the beam goes, in the world (unit): ahead and tipped at the ground — or, aiming, along the
    *  look (bladed: AIM_BLADE left of the body's facing) and up as they aim. */
@@ -1343,20 +1399,24 @@ export class Person3D {
 
   // (plan 62) What a use puts in the hands: a marker at the whiteboard (its tip ahead of the right
   // hand, along it), a pad in both for a game or the slot cars (between them, flat ahead)
-  private tool: { key: string; mesh: Mesh } | null = null;
+  private tool: { key: string; mesh: Object3D; dispose: () => void } | null = null;
   private toolFrame(p: PersonIn) {
     const busy = p.busy ?? "";
     const key = busy === "whiteboard" ? "marker" : busy === "gamepad" || busy === "slotcar" ? "pad" : "";
     if ((this.tool?.key ?? "") !== key) {
       this.dropTool();
       if (key) {
-        const geo =
-          key === "marker"
-            ? new CylinderGeometry(0.009, 0.009, 0.13, 8).rotateX(Math.PI / 2)
-            : new BoxGeometry(0.15, 0.03, 0.07);
-        const mesh = new Mesh(geo, this.mats.prop(key === "marker" ? "#2f5fb3" : "#2b2a28"));
-        this.root.add(mesh);
-        this.tool = { key, mesh };
+        if (key === "marker") {
+          const geo = new CylinderGeometry(0.009, 0.009, 0.13, 8).rotateX(Math.PI / 2);
+          const mesh = new Mesh(geo, this.mats.prop("#2f5fb3"));
+          this.root.add(mesh);
+          this.tool = { key, mesh, dispose: () => geo.dispose() };
+        } else {
+          // (plan 78 phase 5: a pad as one's held — its handles in the fists)
+          const pad = this.C.buildPad(this.mats.prop);
+          this.root.add(pad.root);
+          this.tool = { key, mesh: pad.root, dispose: pad.dispose };
+        }
       }
     }
     const t = this.tool;
@@ -1386,7 +1446,7 @@ export class Person3D {
   private dropTool() {
     if (!this.tool) return;
     this.tool.mesh.removeFromParent();
-    this.tool.mesh.geometry.dispose();
+    this.tool.dispose();
     this.tool = null;
   }
 

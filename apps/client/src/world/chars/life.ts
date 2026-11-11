@@ -32,10 +32,12 @@ import {
   Vector3,
   type WebGLRenderer,
 } from "three";
-import type { LifeBase, LifeBody, LifeGender, LifePart } from "../look/life-people";
+import type { Knuckle, LifeBase, LifeBody, LifeGender, LifePart } from "../look/life-people";
 import type { Piece, Shader } from "../look/yulit";
 import { buildPerson } from "./build";
+import { fingerAt } from "./hands";
 import type { Anchor, HangSpec, Kit, SpringSpec } from "./kit";
+import type { HandFrame } from "./props";
 import { JOINTS, type JointName, PARENT, type RestPose } from "./rig";
 
 type LifeMod = typeof import("../look/life-people");
@@ -84,7 +86,10 @@ export function lifeFarNow(g: LifeGender, h: LifeHost): LifePart | null {
 const hanging = new WeakMap<BufferGeometry, Map<number, boolean>>();
 function hangsOn(g: BufferGeometry, joint: number): boolean {
   let m = hanging.get(g);
-  if (!m) hanging.set(g, (m = new Map()));
+  if (!m) {
+    m = new Map();
+    hanging.set(g, m);
+  }
   const had = m.get(joint);
   if (had !== undefined) return had;
   const si = g.getAttribute("skinIndex");
@@ -229,6 +234,9 @@ export type LifeState = "own" | "away" | Material;
 const AWAY = 0.55;
 
 /** One person in the life look (PersonModel's, while the look is life). */
+/** (plan 78 phase 5) the index's and the middle finger's curl round a mug's handle (the rig's curl) */
+export const HOOK_CURL = 1.25;
+
 export class LifeLook {
   readonly body: LifeBody;
   readonly gender: LifeGender;
@@ -236,6 +244,21 @@ export class LifeLook {
   readonly rest: RestPose;
   /** the eyes' bones, from the head */
   readonly eyesRest: [Vector3, Vector3];
+  /** (plan 77 phase 6) each knuckle where it sits off its parent at rest (the arms turned down) */
+  readonly knuckleRest: Record<Knuckle, Vector3>;
+  /** (plan 78 phase 1) each finger bone's hinge, in the frame its bone keeps at rest (none is turned):
+   *  a curl turns about it, toward the palm (chars/model.ts setPose) */
+  readonly hinge: Record<string, Vector3>;
+  /** (plan 78 phase 2) each finger's fan off the middle's line, about the palm's normal (rad) */
+  readonly fan: Record<string, number>;
+  /** (plan 78 phase 4) each finger's own bend at rest (rad): its knuckle (the base's line out of the palm's
+   *  plane) and its middle joint — the file's hand is a little curled; a library angle is turned to less it */
+  readonly restBend: Record<string, { mcp: number; pip: number }> = {};
+  /** (plan 78 phase 5) each hand's frame, in its wrist's space (chars/props.ts HandFrame): where a held
+   *  thing sits */
+  readonly grip: Partial<Record<"L" | "R", HandFrame>> = {};
+  /** the palm's normal, toward its inside, each hand */
+  readonly palm: Record<"L" | "R", Vector3> = { L: new Vector3(), R: new Vector3() };
   /** the shoulders as the file has them, for binding */
   readonly bindTurn: Partial<Record<JointName, Quaternion>>;
   readonly height: number;
@@ -295,6 +318,8 @@ export class LifeLook {
     const turns: Partial<Record<JointName, Quaternion>> = {};
     const at = {} as Record<JointName, Vector3>;
     for (const j of JOINTS) at[j] = b.at[j].clone();
+    const kAt = {} as Record<Knuckle, Vector3>;
+    for (const k of M.KNUCKLES) kAt[k] = b.at[k].clone();
     const under = (j: JointName, top: JointName) => {
       for (let p = PARENT[j]; p; p = PARENT[p]) if (p === top) return true;
       return false;
@@ -309,6 +334,8 @@ export class LifeLook {
       turns[top] = q;
       const o = at[top];
       for (const j of JOINTS) if (under(j, top)) at[j].sub(o).applyQuaternion(q).add(o);
+      // (the knuckles with their hand: under this shoulder or elbow if they're its side's)
+      for (const k of M.KNUCKLES) if (k.endsWith(top.slice(-1))) kAt[k].sub(o).applyQuaternion(q).add(o);
     }
     const rest = {} as RestPose;
     for (const j of JOINTS) {
@@ -322,6 +349,99 @@ export class LifeLook {
     this.bindTurn = {};
     for (const [j, q] of Object.entries(turns)) this.bindTurn[j as JointName] = (q as Quaternion).clone().invert();
     this.eyesRest = [b.rest.eyeL.clone(), b.rest.eyeR.clone()];
+    this.knuckleRest = {} as Record<Knuckle, Vector3>;
+    for (const k of M.KNUCKLES) {
+      const p = M.knuckleParent(k);
+      this.knuckleRest[k] = kAt[k].clone().sub((kAt as Record<string, Vector3>)[p] ?? at[p as JointName]);
+    }
+    // (plan 78 phase 1) each finger bone's hinge: across its line, in the palm's plane (the wrist, the
+    // middle finger's base and the index's), so a curl takes it toward the palm and never sideways — the
+    // forearm's z, the axis before, took the fingers up to 8° off it. The thumb's: across its line,
+    // toward the palm's middle. (phase 2) And each finger's fan off the middle's line, in the palm's plane:
+    // closed as it curls (a fist's fingers together).
+    this.hinge = {};
+    this.fan = {};
+    for (const S of ["L", "R"] as const) {
+      const P = (j: string) => (kAt as Record<string, Vector3>)[j] ?? at[j as JointName];
+      const wr = at[`wrist${S}`];
+      const fi = at[`fingers${S}`];
+      const ix = at[`index${S}`];
+      const sign = S === "R" ? 1 : -1;
+      const z = new Vector3(0, 0, sign); // (the axis a curl turned about before, its sign the curl's)
+      const n = fi.clone().sub(wr).cross(ix.clone().sub(fi)).normalize();
+      // (the palm's side: where a curl about z took the middle fingers)
+      const toward = z.clone().cross(P(`fingers2${S}`).clone().sub(fi));
+      if (n.dot(toward) < 0) n.negate();
+      const across = (from: Vector3, to: Vector3, c: Vector3) => {
+        const d = to.clone().sub(from);
+        if (d.lengthSq() < 1e-10) return z.clone();
+        d.normalize();
+        const a = d.clone().cross(c.clone().sub(d.clone().multiplyScalar(c.dot(d))));
+        return a.lengthSq() < 1e-10 ? z.clone() : a.normalize();
+      };
+      this.palm[S] = n;
+      const flat = (j: string) => {
+        const d = P(`${j}2${S}`)
+          .clone()
+          .sub(P(`${j}${S}`));
+        return d.sub(n.clone().multiplyScalar(d.dot(n))).normalize();
+      };
+      const dm = flat("fingers");
+      for (const j of ["fingers", "index", "ring", "little"]) {
+        const [a, b2, c3] = [P(`${j}${S}`), P(`${j}2${S}`), P(`${j}3${S}`)];
+        this.hinge[`${j}${S}`] = across(a, b2, n);
+        this.hinge[`${j}2${S}`] = across(b2, c3, n);
+        this.hinge[`${j}3${S}`] = across(b2, c3, n);
+        const d = flat(j);
+        this.fan[`${j}${S}`] = Number.isFinite(d.x) ? Math.atan2(dm.clone().cross(d).dot(n), dm.dot(d)) : 0;
+        const p1 = b2.clone().sub(a);
+        const p2 = c3.clone().sub(b2);
+        const elev = (v: Vector3) => Math.atan2(v.dot(n), v.dot(d));
+        this.restBend[`${j}${S}`] =
+          Number.isFinite(d.x) && p1.lengthSq() > 1e-10 && p2.lengthSq() > 1e-10
+            ? { mcp: elev(p1), pip: elev(p2) - elev(p1) }
+            : { mcp: 0, pip: 0 };
+      }
+      {
+        const along = fi.clone().sub(wr).normalize();
+        const across = ix.clone().sub(fi);
+        across.addScaledVector(along, -across.dot(along)).normalize();
+        // (plan 78 phase 5) the hook a mug's handle sits in: the index and the middle finger curled HOOK_CURL
+        // (the library's way, their fans shut as model.ts closeHands turns them) — the middle of each one's
+        // curl (its knuckle, middle and tip joints), the two's halfway
+        const hook = new Vector3();
+        const a = fingerAt(HOOK_CURL);
+        const shut = Math.min(1, HOOK_CURL / 1.3) * 0.8;
+        for (const j of ["index", "fingers"]) {
+          const rest = this.restBend[`${j}${S}`];
+          const q1 = new Quaternion()
+            .setFromAxisAngle(n, -(this.fan[`${j}${S}`] ?? 0) * shut)
+            .multiply(new Quaternion().setFromAxisAngle(this.hinge[`${j}${S}`], (a.mcp * Math.PI) / 180 - rest.mcp));
+          const q2 = q1
+            .clone()
+            .multiply(new Quaternion().setFromAxisAngle(this.hinge[`${j}2${S}`], (a.pip * Math.PI) / 180 - rest.pip));
+          const p1 = P(`${j}${S}`).clone().sub(wr);
+          const p2 = P(`${j}2${S}`)
+            .clone()
+            .sub(P(`${j}${S}`))
+            .applyQuaternion(q1)
+            .add(p1);
+          const p3 = P(`${j}3${S}`)
+            .clone()
+            .sub(P(`${j}2${S}`))
+            .applyQuaternion(q2)
+            .add(p2);
+          hook.add(p1).add(p2).add(p3);
+        }
+        hook.multiplyScalar(1 / 6);
+        this.grip[S] = { mid: fi.clone().sub(wr), along, across, n: n.clone(), hook };
+      }
+      const mid = wr.clone().lerp(fi, 0.6).addScaledVector(n, 0.015);
+      const [t1, t2, t3] = [P(`thumb${S}`), P(`thumb2${S}`), P(`thumb3${S}`)];
+      this.hinge[`thumb2${S}`] = across(t2, t3, mid.clone().sub(t2));
+      this.hinge[`thumb3${S}`] = across(t2, t3, mid.clone().sub(t3));
+      void t1;
+    }
     this.height = b.height;
     this.hipY = b.hipY;
     this.ankleY = (b.at.ankleL.y + b.at.ankleR.y) / 2;
@@ -341,7 +461,11 @@ export class LifeLook {
     const ear = M.lifeEar(base);
     const eyesAt = A.eyeL.clone().add(A.eyeR).multiplyScalar(0.5);
     this.anchors = {
-      ear: off(ref.anchors.ear, ref.ear, ear),
+      // (plan 77: 4.5 cm lower, 2 ahead, 1 out — the wrist under the jaw's corner, the hand up over the ear: at the old person's spot the
+      // life hand, bigger, lay over the cheek and the eye)
+      ear: ((a) => [a[0] - 0.01, a[1] - 0.045, a[2] + 0.02] as [number, number, number])(
+        off(ref.anchors.ear, ref.ear, ear),
+      ),
       mouth: off(ref.anchors.mouth, ref.eyes, eyesAt),
       chin: off(ref.anchors.chin, ref.eyes, eyesAt),
       chest: off(ref.anchors.chest, ref.chest, A.chest),

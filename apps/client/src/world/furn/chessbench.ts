@@ -2,7 +2,7 @@ import { avatarFromSeed, emptyEdges, quarterYaw, setEdge, type TileMap, type Wor
 import { parseFen, START } from "@yutopia/shared/games68/chess";
 import * as T from "three";
 import { Post3 } from "../tp/post3d";
-import { legOf, type SeatShape, seatFit } from "../tp/seats3d";
+import { type SeatShape, seatFit } from "../tp/seats3d";
 import {
   type ChessSet,
   KINDS,
@@ -755,10 +755,10 @@ export async function runChess(el: HTMLElement, o: ChessOpts): Promise<() => voi
   const sit = (p: Who) => {
     const m = p.m;
     if (!m.ready) return false;
-    const leg = legOf((j) => m.bone(j));
+    const leg = m.leg();
     const { along, recline } = seatFit(SEAT, leg.thigh);
     const drop = m.sitDrop(SEAT.top);
-    const fit = { drop, stand: leg.hipY, floor: 0, recline, ahead: 0, arms: null };
+    const fit = { drop, stand: leg.hipY, thigh: leg.thigh, floor: 0, recline, ahead: 0, arms: null };
     const fx = Math.sin(p.yaw);
     const fz = Math.cos(p.yaw);
     const inp = {

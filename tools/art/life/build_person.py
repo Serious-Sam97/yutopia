@@ -200,6 +200,16 @@ EYE_TEX = "eyes/materials/brown_eye.png"
 # Two more of ours beyond chars/rig.ts's: the eyes, each its own bone under the head (the gaze turns
 # them; life-person.ts EXTRA)
 EYES = ["eyeL", "eyeR"]
+# (plan 77 phase 6) each hand bone's knuckles: the middle and the tip of the fingers (the three together),
+# the index and the thumb — a curl shared down them, not bent at the base alone (life-person.ts KNUCKLES)
+KNUCKLES = [f"{j}{n}{S}" for S in ("L", "R") for j in ("fingers", "index", "thumb") for n in ("2", "3")]
+# (plan 78 phase 2) five fingers: "fingers" the middle alone now, the ring and the little their own three
+# bones each, off the wrist (life-people.ts KNUCKLES: the same order)
+KNUCKLES += [f"{j}{n}{S}" for S in ("L", "R") for j in ("ring", "little") for n in ("", "2", "3")]
+# (plan 78 phase 3) and each forearm's twist, half way down it (MakeHuman's lowerarm02, the elbow's before):
+# a palm turned by the forearm, shared along it, not wrung at the wrist (with the knuckles in the list: the
+# game's extra bones, life-people.ts KNUCKLES)
+KNUCKLES += ["forearmL", "forearmR"]
 
 # MakeHuman's bones onto ours (chars/rig.ts JOINTS). The face's own bones all go with the head.
 OURS = [
@@ -219,6 +229,12 @@ PARENT = {
     "thighR": "hips", "kneeR": "thighR", "ankleR": "kneeR", "toeR": "ankleR",
     "hair": "head", "skirt": "hips", "scarf": "chest", "pack": "chest", "earL": "head", "earR": "head",
     "eyeL": "head", "eyeR": "head",
+    **{f"{j}2{S}": f"{j}{S}" for S in ("L", "R") for j in ("fingers", "index", "thumb")},
+    **{f"{j}3{S}": f"{j}2{S}" for S in ("L", "R") for j in ("fingers", "index", "thumb")},
+    **{f"{j}{S}": f"wrist{S}" for S in ("L", "R") for j in ("ring", "little")},
+    "forearmL": "elbowL", "forearmR": "elbowR",
+    **{f"{j}2{S}": f"{j}{S}" for S in ("L", "R") for j in ("ring", "little")},
+    **{f"{j}3{S}": f"{j}2{S}" for S in ("L", "R") for j in ("ring", "little")},
 }  # fmt: skip
 
 
@@ -227,26 +243,38 @@ def ours_of(bone):
     b = bone[:-2] if s else bone
     if b == "eye":
         return "eye" + s
-    if b in ("root", "spine05", "pelvis"):
+    # (plan 76) the trunk's joints where the rig's sit (its clips bend there): the spine at the waist
+    # (spine02), the chest mid-chest (spine01), the neck's halfway up it (neck02) — each vertex with the
+    # joint it sits over
+    if b in ("root", "spine05", "pelvis", "spine04", "spine03"):
         return "hips"
-    if b in ("spine04", "spine03"):
+    if b == "spine02":
         return "spine"
-    if b in ("spine02", "spine01", "clavicle", "breast"):
+    if b in ("spine01", "clavicle", "breast", "neck01"):
         return "chest"
-    if b in ("neck01", "neck02", "neck03"):
+    if b in ("neck02", "neck03"):
         return "neck"
     if b in ("shoulder01", "upperarm01", "upperarm02"):
         return "shoulder" + s
-    if b in ("lowerarm01", "lowerarm02"):
+    if b == "lowerarm01":
         return "elbow" + s
+    if b == "lowerarm02":
+        return "forearm" + s
     if b == "wrist" or b.startswith("metacarpal"):
         return "wrist" + s
-    if b.startswith("finger1-"):
-        return "thumb" + s
-    if b.startswith("finger2-"):
-        return "index" + s
+    # (plan 77: the knuckles their own — finger<n>-1 the base, -2 the middle, -3 the tip)
     if b.startswith("finger"):
-        return "fingers" + s
+        k = {"1": "", "2": "2", "3": "3"}[b.split("-")[1]]
+        if b.startswith("finger1-"):
+            return "thumb" + k + s
+        if b.startswith("finger2-"):
+            return "index" + k + s
+        # (plan 78 phase 2: the middle, the ring and the little each their own)
+        if b.startswith("finger4-"):
+            return "ring" + k + s
+        if b.startswith("finger5-"):
+            return "little" + k + s
+        return "fingers" + k + s
     if b in ("upperleg01", "upperleg02"):
         return "thigh" + s
     if b in ("lowerleg01", "lowerleg02"):
@@ -577,6 +605,44 @@ for S in ("L", "R"):
     turn({f"pelvis.{S}"}, R, hip, 0.3)
     print(f"  leg {S}: {math.degrees(math.acos(np.dot((ank - hip) / np.linalg.norm(ank - hip), DOWN))):.1f}° in")
 
+# (plan 77) the fingers closed: MakeHuman's stand splayed, and every hand pose started from a claw.
+# In the palm's plane each finger turned to lie a few degrees off the middle one (index in a little,
+# ring and little a little fanned), and the thumb half way in toward the index, along the palm's edge
+def posed(b):
+    return apply_pt(b, head(b))
+
+
+def axis_turn(axis, ang):
+    axis = axis / np.linalg.norm(axis)
+    K = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
+    return np.eye(3) + math.sin(ang) * K + (1 - math.cos(ang)) * K @ K
+
+
+def in_plane(v, n):
+    w = v - n * np.dot(v, n)
+    return w / np.linalg.norm(w)
+
+
+FINGER_SPREAD = {2: math.radians(4), 4: math.radians(-4), 5: math.radians(-9)}  # off the middle, + toward the thumb
+for S in ("L", "R"):
+    wr = posed(f"wrist.{S}")
+    n = np.cross(posed(f"finger2-1.{S}") - wr, posed(f"finger5-1.{S}") - wr)
+    n = n / np.linalg.norm(n)
+    dm = in_plane(posed(f"finger3-2.{S}") - posed(f"finger3-1.{S}"), n)
+    side = np.sign(np.dot(np.cross(dm, in_plane(posed(f"finger2-1.{S}") - posed(f"finger3-1.{S}"), n)), n))
+    for f, want in FINGER_SPREAD.items():
+        b1 = posed(f"finger{f}-1.{S}")
+        d = in_plane(posed(f"finger{f}-2.{S}") - b1, n)
+        have = math.atan2(np.dot(np.cross(dm, d), n), np.dot(dm, d)) * side
+        turn(sub(f"finger{f}-1.{S}"), axis_turn(n, (want - have) * side), b1)
+    # the thumb: half its angle off the index taken in, about its base
+    t1 = posed(f"finger1-1.{S}")
+    dt = in_plane(posed(f"finger1-2.{S}") - t1, n)
+    di = in_plane(posed(f"finger2-2.{S}") - posed(f"finger2-1.{S}"), n)
+    off = math.atan2(np.dot(np.cross(di, dt), n), np.dot(di, dt))
+    turn(sub(f"finger1-1.{S}"), axis_turn(n, -0.5 * off), t1)
+    print(f"  fingers {S}: thumb {math.degrees(off):.0f}° off the index, taken in half")
+
 Ms = np.stack([xf[b][0] for b in BONES])  # (B,3,3)
 Ts = np.stack([xf[b][1] for b in BONES])  # (B,3)
 
@@ -598,16 +664,26 @@ def mean(*bs):
 
 ours = {
     "hips": JP["root"],
-    "spine": JP["spine04"],
-    "chest": JP["spine02"],
-    "neck": JP["neck01"],
+    # (plan 76: spine04, spine02 and neck01 before — the bends a hunch at the belly, the head far out)
+    "spine": JP["spine02"],
+    "chest": JP["spine01"],
+    "neck": JP["neck02"],
     "head": JP["head"],
 }
 for S in ("L", "R"):
     ours["shoulder" + S] = JP[f"upperarm01.{S}"]
     ours["elbow" + S] = JP[f"lowerarm01.{S}"]
+    ours["forearm" + S] = JP[f"lowerarm02.{S}"]
     ours["wrist" + S] = JP[f"wrist.{S}"]
-    ours["fingers" + S] = mean(f"finger3-1.{S}", f"finger4-1.{S}", f"finger5-1.{S}")
+    # (plan 78 phase 2: the middle finger's, the ring's and the little's own — the three averaged before)
+    ours["fingers" + S] = JP[f"finger3-1.{S}"]
+    for n, k in (("1", ""), ("2", "2"), ("3", "3")):
+        ours[f"ring{k}{S}"] = JP[f"finger4-{n}.{S}"]
+        ours[f"little{k}{S}"] = JP[f"finger5-{n}.{S}"]
+    for n in ("2", "3"):
+        ours[f"fingers{n}{S}"] = JP[f"finger3-{n}.{S}"]
+        ours[f"index{n}{S}"] = JP[f"finger2-{n}.{S}"]
+        ours[f"thumb{n}{S}"] = JP[f"finger1-{n}.{S}"]
     ours["index" + S] = JP[f"finger2-1.{S}"]
     ours["thumb" + S] = JP[f"finger1-1.{S}"]
     ours["thigh" + S] = JP[f"upperleg01.{S}"]
@@ -617,12 +693,13 @@ for S in ("L", "R"):
 headtop = JPt["head"]
 ours["hair"] = ours["head"] + (headtop - ours["head"]) * 0.6
 ours["skirt"] = ours["hips"].copy()
-ours["scarf"] = ours["chest"] + np.array([0, 0.6, 0.6])
-ours["pack"] = ours["chest"] + np.array([0, 0.3, -1.2])
+# (the scarf's and the pack's springs where they were, off the old chest: plan 76 moved the chest up)
+ours["scarf"] = JP["spine02"] + np.array([0, 0.6, 0.6])
+ours["pack"] = JP["spine02"] + np.array([0, 0.3, -1.2])
 for S, sx in (("L", 1), ("R", -1)):
     ours["ear" + S] = ours["head"] + np.array([sx * 0.72, 0.05, 0.05])
     ours["eye" + S] = JP[f"eye.{S}"]
-ALL = OURS + EYES
+ALL = OURS + EYES + KNUCKLES
 
 # fold MakeHuman's bones onto ours
 fold = np.zeros((len(BONES), len(ALL)))
@@ -1085,8 +1162,9 @@ def keep_mask(img, uv, faces, w):
     W, H = img.size
     ow = w @ fold
     keepj = [ALL.index(j) for j in ALL if j in ("head", "neck", "earL", "earR", "eyeL", "eyeR")
-             or j.startswith(("wrist", "fingers", "index", "thumb"))]
-    k = np.clip(ow[:, keepj].sum(1), 0, 1)
+             or j.startswith(("wrist", "fingers", "index", "thumb", "ring", "little"))]
+    # (the neck's base by MakeHuman's own bone: plan 76 folds it into the chest)
+    k = np.clip(ow[:, keepj].sum(1) + w[:, bi["neck01"]], 0, 1)
     acc = np.zeros((H, W, 4), dtype=np.float32)
     for f in faces:
         for v, t in zip(f[0], f[1]):
