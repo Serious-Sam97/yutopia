@@ -49,6 +49,8 @@ export interface LocoIn {
   torch?: boolean;
   /** reloading the gun, not aiming (docs/plan/32-the-arms.md): it's brought up before the chest */
   reload?: boolean;
+  /** …by a speedloader (the revolver's, plan 79 F11a): the left hand's one trip to the pocket, not a loop */
+  speedloader?: boolean;
   /** (plan 58 7) a shot's kick, 0..1 as it goes off and fades: the arms thrown up */
   kick?: number;
   /** (plan 58 7) struck — or startled, a small `k` — from `from` (rad off the facing: 0 ahead, + to
@@ -972,7 +974,7 @@ export class Locomotion {
     if (this.torchW <= 0.5) this.torchLook = null;
     // reloading: the gun up before the chest, both hands at it; plan 58: the left to the pocket and back
     if (N && this.reloadW > 0.01) {
-      const rl = N.reload2(this.reloadT, fear);
+      const rl = N.reload2(this.reloadT, fear, !!m.speedloader);
       body = { pose: blend(body.pose, { ...reloadPose(breath), ...rl.pose }, ease(this.reloadW)), lift: body.lift };
       this.hand(rl.hands, ease(this.reloadW));
     } else if (this.reloadW > 0.01)

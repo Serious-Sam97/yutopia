@@ -4,9 +4,16 @@
 
 export const ARMS = {
   revolver: {
-    /** s between shots; s a round to reload (one at a time, a shot stops it); s to draw it */
+    /** s between shots; s to draw it. Its reload (docs/plan/79-the-guns.md F11a, after AW2's): the
+     *  cylinder swung out and every round dumped (`open` s — the live ones back to the pockets), a
+     *  speedloader's six in at once (`speed` s), shut (`shut` s); a shot while it's out snaps it shut
+     *  (`snap` s) if a round's in. `reload` (s a round) is kept for the old one at a time's readers. */
     rate: 0.42,
     reload: 0.35,
+    open: 0.45,
+    speed: 0.8,
+    shut: 0.3,
+    snap: 0.2,
     draw: 0.35,
     /** s coming up to aim (the camera's ease in — docs/plan/79-the-guns.md) */
     aim: 0.18,
@@ -23,8 +30,9 @@ export const ARMS = {
     near: 40,
     far: 1,
   },
-  // the double-barrel (plan 32): broken open (`open` s), a shell at a time (`reload` s), shut
-  // (`shut` s); a shot while it's open snaps it shut first (`snap` s)
+  // the double-barrel (plan 32): broken open (`open` s — both shells out, the live one back to the
+  // pockets: plan 79 F12a, AW2's), a shell at a time (`reload` s), shut (`shut` s); a shot while it's
+  // open snaps it shut first (`snap` s)
   shotgun: {
     rate: 0.95,
     reload: 0.45,

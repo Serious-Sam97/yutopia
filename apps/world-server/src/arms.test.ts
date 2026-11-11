@@ -5,14 +5,14 @@ import { ROOM_NAME, STOREY } from "@yutopia/shared";
 import { AIM_BLADE } from "@yutopia/shared/beam";
 import { ARM, ARMS, BODY, damageAt, FLARE, pvpDamage, SHADE_STATES } from "@yutopia/shared/dark";
 import { heightAt } from "@yutopia/shared/grounds";
-import type { Inventory } from "@yutopia/shared/inventory";
+import { count, type Inventory } from "@yutopia/shared/inventory";
 import { MV_AIM, packMv, yawToByte } from "@yutopia/shared/move";
 import { Client, type Room } from "colyseus.js";
 
 // Guns and flares (docs/plan/30-the-dark.md, phase 5): A exposes one with a
 // focused torch, B shoots it down; an honest late shot (at where B saw it a
 // moment ago) counts, a ray from somewhere B isn't doesn't; a shielded one
-// throws a spark; a reload is a round at a time out of the pockets; a flare
+// throws a spark; a reload (AW2's): out, the live rounds back, a speedloader; a flare
 // thrown lands ahead, lit, and keeps them out. And the office armed: one of us
 // shot takes half (the lobby, the studio); a shotgun's pellets each; not one
 // who's down, not one on another floor, not through a wall; a flare indoors.
@@ -219,33 +219,38 @@ test("the rewind: a late shot at where B saw it counts; a ray from somewhere B i
   assert.ok(moved > 0.3, `it had moved on (${moved.toFixed(2)} tiles): the hit was where B saw it`);
 });
 
-test("a reload: a round at a time out of the pockets, till full; a shot stops it", async () => {
+test("the revolver's reload (AW2's): out, every round dumped (the live ones back), a speedloader, shut; a shot while out snaps it", async () => {
   const { b } = await setup(63);
   const aimAway = () => aim(b, me(b.room).x + 20, me(b.room).y);
+  const spare = () => (b.inv ? count(b.inv, "r38") : 0);
   for (let i = 0; i < 3; i++) {
     aimAway();
     await sleep(ARMS.revolver.rate * 1000 + 50);
     fire(b, me(b.room).x + 20, me(b.room).y);
   }
   await waitFor(() => loaded0(b) === 3);
-  const spare = b.inv?.pockets.find((s) => s?.id === "r38")?.n ?? 0;
+  const before = spare();
   b.room.send("arms:reload", {});
-  await sleep(ARMS.revolver.reload * 1000 + 120);
-  assert.equal(loaded0(b), 4, "one round after 0.35 s");
-  await waitFor(() => loaded0(b) === 6, 2000);
-  assert.equal(b.inv?.pockets.find((s) => s?.id === "r38")?.n, spare - 3, "out of the pockets");
-  // a shot in the middle of a reload stops it
+  await waitFor(() => me(b.room).arm === ARM.open, 1000);
+  // (out: the three live ones back in the pockets, the cylinder empty)
+  await waitFor(() => loaded0(b) === 0, 1500);
+  assert.equal(spare(), before + 3, "the live rounds back to the pockets");
+  // (the speedloader: all six at once, then shut)
+  const t0 = Date.now();
+  await waitFor(() => loaded0(b) === 6, 2500);
+  assert.ok(Date.now() - t0 > ARMS.revolver.speed * 1000 - 200, "the speedloader's six after its time");
+  assert.equal(spare(), before - 3, "six out of the pockets for three spent");
+  await waitFor(() => me(b.room).arm === ARM.idle, 1500);
+  // a shot while it's out (rounds in it): shut, nothing fired, nothing dumped
   aimAway();
   await sleep(ARMS.revolver.rate * 1000 + 50);
   fire(b, me(b.room).x + 20, me(b.room).y);
   await waitFor(() => loaded0(b) === 5);
   b.room.send("arms:reload", {});
-  await sleep(100);
+  await waitFor(() => me(b.room).arm === ARM.open, 1000);
   fire(b, me(b.room).x + 20, me(b.room).y);
-  await sleep(ARMS.revolver.rate * 1000 + 600);
-  fire(b, me(b.room).x + 20, me(b.room).y);
-  await sleep(1000);
-  assert.ok((loaded0(b) ?? 9) < 6, "the reload stopped at the shot");
+  await waitFor(() => me(b.room).arm === ARM.idle, 1500);
+  assert.equal(loaded0(b), 5, "snapped shut: nothing dumped, nothing fired");
 });
 
 test("a flare thrown lands ahead, lit for 12 s: nobody comes into it", async () => {
@@ -447,7 +452,7 @@ test("the double-barrel at 10 tiles: each pellet that meets A takes less than at
   await waitFor(() => me(a.room).hp === Math.max(0, 100 - want));
 });
 
-test("the double-barrel's reload: broken open, a shell at a time, shut; a shot while open snaps it shut", async () => {
+test("the double-barrel's reload: broken open (both out: the live shell back), a shell at a time, shut; a shot while open snaps it shut", async () => {
   const { b } = await indoors(73, 0, 13.5, 17.5, 3.5, 17.5);
   b.room.send("arms:draw", { slot: 1 });
   await waitFor(() => me(b.room).gun === "shotgun");
@@ -478,7 +483,15 @@ test("the double-barrel's reload: broken open, a shell at a time, shut; a shot w
   shootAt(b, me(b.room).x - 20, me(b.room).y, 11);
   await waitFor(() => me(b.room).arm === ARM.idle, 1500);
   assert.equal(loaded1(), 1, "snapped shut: nothing loaded, nothing fired");
+  // opened again and let be: both out (the live one back to the pockets), then two in
+  const shells = () => (b.inv ? count(b.inv, "shell") : 0);
+  const had = shells();
+  b.room.send("arms:reload", {});
+  await waitFor(() => loaded1() === 0, 1500);
+  assert.equal(shells(), had + 1, "the live shell back to the pockets");
+  await waitFor(() => loaded1() === 2, 2500);
+  await waitFor(() => me(b.room).arm === ARM.idle, 1500);
   await sleep(ARMS.shotgun.rate * 1000);
   away();
-  await waitFor(() => loaded1() === 0, 2000);
+  await waitFor(() => loaded1() === 1, 2000);
 });

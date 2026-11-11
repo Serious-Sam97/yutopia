@@ -609,6 +609,7 @@ export class Person3D {
           aim: (mv & 16) !== 0,
           gun: !!p.gun,
           reload: (this.gunFx?.reload ?? 0) > 0.3,
+          speedloader: p.gun === "revolver",
           kick: this.gunFx?.kick ?? 0,
           hurt: p.shade ? 0.7 : p.hp !== undefined ? Math.max(0, 1 - p.hp / 100) : undefined,
           // (plan 58 4c: the gait it's going for — its first step's keyed by it; 4f: the ground under

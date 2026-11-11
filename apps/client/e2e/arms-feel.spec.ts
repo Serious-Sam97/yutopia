@@ -138,8 +138,9 @@ test("the feel: kick and settle, the spread, an early click, over the shoulder, 
   const s0 = (await w(page, (y) => y.tp.pitch)) as number;
   await fire(page);
   await page.waitForTimeout(60);
-  // (the look takes a smaller share of the kick since plan 79 — the gun in the hands the rest)
-  expect(s0 - ((await w(page, (y) => y.tp.pitch)) as number)).toBeGreaterThan(0.03);
+  // (the look takes a smaller share of the kick since plan 79 — the gun in the hands the rest: ~0.03–0.04
+  // rad left 60 ms on, by its random part; the revolver's ~0.01)
+  expect(s0 - ((await w(page, (y) => y.tp.pitch)) as number)).toBeGreaterThan(0.02);
   await page.mouse.up({ button: "right" });
   await page.keyboard.press("KeyR");
   await page.waitForTimeout(450);

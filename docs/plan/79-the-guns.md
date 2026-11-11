@@ -224,10 +224,25 @@ left hand holding the torch out below it.
 - **The revolver's low ready** (AW2's): out and not aimed, both hands bring it before the waist — the right
   fist under the shoulder, 0.34 ahead (level, the body's own forward), 0.12 in, 0.17 down; the muzzle ~35°
   down and a little left (running: tucked nearer, steeper); the torch hand beside it. Reloading lets it go.
+- **The reloads, AW2's (F11a, F12a)** — the rules (shared `ARMS`, `world-server/features/arms.ts`): both
+  guns open first and everything comes out, the live rounds back to the pockets (what fits; the rest stays
+  in); then the revolver's speedloader (every round it needs at once) or the double-barrel's shells one at
+  a time; shut. Revolver: open 0.45 s, speedloader 0.8 s, shut 0.3 s (1.55 s in all); a shot while it's
+  out snaps it shut (0.2 s) if a round's in, nothing dumped. Player.arm says `open` for both. Server tests
+  rewritten (`arms.test.ts`: the dump, the live rounds back, the six at once after its time, the snap; the
+  double-barrel's live shell back) — 13/13 green. My side: the cylinder swings out (poseGun's crane) and
+  its spent cases fall as it opens; one click for the speedloader. Seen in the game (`guns-hold.mts`'s
+  reload pass): the revolver's window empty, its cylinder out to the left, two cases tumbling; the
+  double-barrel broken, its fired shells kicked out. **The body's speedloader trip**: the revolver's
+  reload is one trip now (`night.ts` `reload2(t, fear, once)`, `LocoIn.speedloader`) — at the gun while
+  it swings out and dumps (to 0.35 s), the left hand down to the pocket by 0.6, back at the cylinder by
+  1.05, at the gun while it shuts; frames through it in the game (`guns-hold.mts` reload pass, five
+  frames): out and away at 0.85 s, back at the gun at 1.45 s (plan 32's loop would be at the pocket
+  again). The double-barrel keeps its shell-at-a-time trips.
 - `arms-feel.spec`, `arms.spec` green. (Both time out at their teleport when Ana starts on floor 4 — the
   dev world's spawn after a restart — and pass once she's at the pond: the tests' start, not the guns.)
 - **Still to do in phase 4**: the cheek down on the stock, the
-  draw and put-away, the speedloader reload (F11a) and the double-barrel's both-shells reload (F12a), sprint,
+  draw and put-away, sprint,
   walking aimed, dodge / hit / fall with a gun, dry fire; a gun tab on the bench; the feel signed off.
 
 ## Phase 3 — the models, the two we have: built (2026-11-11)

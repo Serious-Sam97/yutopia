@@ -117,11 +117,19 @@ export function aim2(
 }
 
 /** Reloading (not aiming), `t` s into it: the gun up before the chest tipped open, the head down at
- *  it, the left hand to the pocket at the hip for rounds and back to the gun, again and again. */
-export function reload2(t: number, fear: number): { pose: Pose; hands: Hands } {
+ *  it, the left hand to the pocket at the hip for rounds and back to the gun, again and again — or, a
+ *  speedloader's (`once`, the revolver's: docs/plan/79-the-guns.md F11a), once: at the gun while the
+ *  cylinder swings out and dumps, down to the pocket for the speedloader and back up to the cylinder,
+ *  then at the gun while it shuts. */
+export function reload2(t: number, fear: number, once = false): { pose: Pose; hands: Hands } {
   const u = (t % 0.95) / 0.95;
   // (at the gun 0–0.25, down to the pocket by 0.5, in it, back up by 0.9)
-  const away = smoother((u - 0.2) / 0.25) * (1 - smoother((u - 0.65) / 0.25));
+  // (once: at the gun to 0.35 s — the swing-out and the dump, the server's 0.45 less the reload's ease in
+  // — down by 0.6, in the pocket, back at the cylinder by 1.05, the speedloader in; then at the gun)
+  const away = once
+    ? smoother((t - 0.35) / 0.25) * (1 - smoother((t - 0.75) / 0.3))
+    : smoother((u - 0.2) / 0.25) * (1 - smoother((u - 0.65) / 0.25));
+  const look = once ? t > 0.45 && t < 1.0 : u > 0.4;
   const gun: [number, number, number] = [-0.04, 1.12, 0.3];
   const pocket: [number, number, number] = [0.19, 0.92, 0.04];
   const at: [number, number, number] = [
@@ -129,7 +137,7 @@ export function reload2(t: number, fear: number): { pose: Pose; hands: Hands } {
     lerp(gun[1] + 0.02, pocket[1], away),
     lerp(gun[2], pocket[2], away),
   ];
-  const c: Ch = { dx: 0.35 - 0.15 * away, nx: 0.12, sx: 0.06 + 0.04 * fear, dy: 0.25 * away * (u > 0.4 ? 1 : 0) };
+  const c: Ch = { dx: 0.35 - 0.15 * away, nx: 0.12, sx: 0.06 + 0.04 * fear, dy: 0.25 * away * (look ? 1 : 0) };
   const m = body(steady(c));
   const pose: Pose = {};
   for (const j of ["spine", "chest", "neck", "head"] as JointName[]) if (m.pose[j]) pose[j] = m.pose[j];

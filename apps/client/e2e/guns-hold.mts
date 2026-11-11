@@ -104,7 +104,22 @@ for (const [key, id] of [
   await view(page, `${out}/${name}-${id}-aim-right.png`, 1);
   await view(page, `${out}/${name}-${id}-aim-left.png`, -1);
   await view(page, `${out}/${name}-${id}-aim-front.png`, 0, 2.2);
+  // (two shots, then R: the reload seen opening and loading — plan 79 F11a, F12a)
+  for (let i = 0; i < 2; i++) {
+    await page.mouse.down({ button: "left" });
+    await page.mouse.up({ button: "left" });
+    await page.waitForTimeout(1000);
+  }
   await page.mouse.up({ button: "right" });
+  await page.waitForTimeout(300);
+  await page.keyboard.press("KeyR");
+  // (frames through it: the revolver's one speedloader trip, ~1.55 s; the double-barrel's opening)
+  const t0 = Date.now();
+  for (const at of id === "revolver" ? [250, 600, 850, 1100, 1450] : [350, 850]) {
+    await page.waitForTimeout(Math.max(0, at - (Date.now() - t0)));
+    await view(page, `${out}/${name}-${id}-reload-${at}.png`, 1, 1.4);
+  }
+  await page.waitForTimeout(2500);
   console.log("  wrote", id);
 }
 await browser.close();

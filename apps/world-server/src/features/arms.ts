@@ -21,7 +21,7 @@ import {
   spreadOf,
 } from "@yutopia/shared/dark";
 import { heightAt, inDeepWater } from "@yutopia/shared/grounds";
-import { count, isWeapon, QUICK, takeStack, WEAPONS, weaponIn } from "@yutopia/shared/inventory";
+import { addStack, count, isWeapon, QUICK, takeStack, WEAPONS, weaponIn } from "@yutopia/shared/inventory";
 import { MV_AIM, MV_WINDED, unpackMv } from "@yutopia/shared/move";
 import type { Player } from "../schema.ts";
 import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
@@ -35,15 +35,17 @@ import { registerFeature } from "./index.ts";
 // were) — only an exposed one is hurt, a shielded one throws a spark — and
 // against the others on your floor where you saw them (a second of where they
 // were, kept here): one of us hit takes half what the shadowed would (shared
-// pvpDamage); a wall on the way stops it. A reload is a round at a time out of
-// the pockets (a shot stops it). A flare is thrown on an arc and lit where it
+// pvpDamage); a wall on the way stops it. A reload (docs/plan/79-the-guns.md,
+// AW2's): opened, everything in it out (the live rounds back to the pockets),
+// the revolver's speedloader in, or the double-barrel's shells one at a time;
+// shut. A flare is thrown on an arc and lit where it
 // lands: a pool the shadowed can't come into for 12 s.
 // The feel's rules (docs/plan/32-the-arms.md): a gun's up only after its draw;
 // shots go out with the spread the server works out (shared spreadOf — its own
 // shot times' bloom, how they stand and move), and that's what the others'
 // tracers use; a pellet's damage falls off with range (the double-barrel's) and
-// the head takes more. The double-barrel's reload: broken open, a shell at a
-// time, shut; a shot while it's open snaps it shut instead. Player.arm says
+// the head takes more. A shot while a gun's open snaps it shut instead (a round
+// in it). Player.arm says
 // what the hand's doing, for everyone's screens.
 
 const HEARD = 60; // tiles: who's told of a shot (its tracer, its flash) or a throw
@@ -169,11 +171,9 @@ registerFeature((room: WorldRoom) => {
     if (!p || !h || h.w.loaded >= WEAPONS[h.w.id].mag || count(h.inv, WEAPONS[h.w.id].ammo) < 1) return;
     const hd = hand(client.sessionId);
     if (hd.reloadAt) return;
-    // (the double-barrel broken open first; the revolver's gate, a round at a time)
-    if (h.w.id === "shotgun") {
-      hd.step = "open";
-      hd.reloadAt = Date.now() + ARMS.shotgun.open * 1000;
-    } else hd.reloadAt = Date.now() + ARMS[h.w.id].reload * 1000;
+    // (opened first — the revolver's cylinder swung out, the double-barrel broken: plan 79 F11a, F12a)
+    hd.step = "open";
+    hd.reloadAt = Date.now() + ARMS[h.w.id].open * 1000;
   });
 
   room.on("arms:fire", (client, m) => {
@@ -185,11 +185,12 @@ registerFeature((room: WorldRoom) => {
     const gun = ARMS[h.w.id];
     const hd = hand(client.sessionId);
     if (now < hd.drawnAt - 30) return;
-    // the double-barrel open: a shot snaps it shut instead (a shell in it), and the next one fires
+    // open (the cylinder out, the barrels broken): a shot snaps it shut instead (a round in it), and the
+    // next one fires
     if (hd.step) {
       if (hd.step !== "shut" && h.w.loaded > 0) {
         hd.step = "shut";
-        hd.reloadAt = now + ARMS.shotgun.snap * 1000;
+        hd.reloadAt = now + gun.snap * 1000;
       }
       return;
     }
@@ -313,8 +314,9 @@ registerFeature((room: WorldRoom) => {
           if (f.level === 0 && inDeepWater(f.x, f.y)) continue;
           room.dark?.light(f.x, f.y, f.z, f.level, now);
         }
-      // reloads: a round at a time out of the pockets, till full or out (the double-barrel opened
-      // first and shut after)
+      // reloads (plan 79 F11a, F12a — AW2's): opened, and what's in it out — the live rounds back to the
+      // pockets, what fits; then the revolver's speedloader (every round it needs at once), the
+      // double-barrel's shells one at a time, till full or out of them; shut
       for (const [sid, hd] of hands) {
         if (!hd.reloadAt || now < hd.reloadAt) continue;
         const p = room.state.players.get(sid);
@@ -325,29 +327,30 @@ registerFeature((room: WorldRoom) => {
           continue;
         }
         const ammo = WEAPONS[h.w.id].ammo;
-        if (hd.step) {
-          const sg = ARMS.shotgun;
-          if (hd.step === "shut") {
-            hd.step = "";
-            hd.reloadAt = 0;
-            continue;
-          }
-          // (open: the fired shells out; then a shell at a time)
-          if (hd.step === "load" && h.w.loaded < WEAPONS[h.w.id].mag && takeStack(h.inv, ammo, 1) === 1) {
-            h.w.loaded++;
-            room.survival?.changed(sid);
-          }
-          hd.step = h.w.loaded < WEAPONS[h.w.id].mag && count(h.inv, ammo) > 0 ? "load" : "shut";
-          hd.reloadAt = now + (hd.step === "load" ? sg.reload : sg.shut) * 1000;
-          continue;
-        }
-        if (h.w.loaded >= WEAPONS[h.w.id].mag || takeStack(h.inv, ammo, 1) < 1) {
+        const mag = WEAPONS[h.w.id].mag;
+        const speedloader = h.w.id === "revolver";
+        if (hd.step === "shut" || !hd.step) {
+          hd.step = "";
           hd.reloadAt = 0;
           continue;
         }
-        h.w.loaded++;
-        room.survival?.changed(sid);
-        hd.reloadAt = h.w.loaded < WEAPONS[h.w.id].mag ? now + ARMS[h.w.id].reload * 1000 : 0;
+        if (hd.step === "open" && h.w.loaded > 0) {
+          // (all of it out: the live ones back where they fit — the rest stay in)
+          h.w.loaded -= addStack(h.inv, ammo, h.w.loaded);
+          room.survival?.changed(sid);
+        }
+        if (hd.step === "load") {
+          const got = takeStack(h.inv, ammo, speedloader ? mag - h.w.loaded : 1);
+          if (got > 0) {
+            h.w.loaded += got;
+            room.survival?.changed(sid);
+          }
+        }
+        // (the speedloader once; the shells till full or none left)
+        const more = h.w.loaded < mag && count(h.inv, ammo) > 0 && (!speedloader || hd.step === "open");
+        hd.step = more ? "load" : "shut";
+        const g = ARMS[h.w.id];
+        hd.reloadAt = now + (more ? (speedloader ? ARMS.revolver.speed : g.reload) : g.shut) * 1000;
       }
       // what each hand's doing, for everyone's screens
       for (const p of room.state.players.values()) {

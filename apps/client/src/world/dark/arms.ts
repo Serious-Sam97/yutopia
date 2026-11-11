@@ -555,16 +555,11 @@ export class Arms {
     if (!show || !inv) return;
     if (this.reloading && (!g || g.loaded >= WEAPONS[g.id].mag)) this.reloading = false;
     const loading = this.loadingNow();
-    // a round in (a reload's tick, a spent case out of the gate; the double-barrel's shell pushed in)
+    // a round in: the double-barrel's shell pushed in; the revolver's speedloader, all at once (plan 79
+    // F11a — its spent cases fell as it swung out: armSounds)
     if (g) {
       const was = this.lastLoaded.get(g.id);
-      if (was !== undefined && g.loaded > was) {
-        this.voices.play(g.id === "shotgun" ? "shotgun-shell" : "revolver-load");
-        if (g.id === "revolver") {
-          this.turnTo += 1;
-          this.brass("case", 1);
-        }
-      }
+      if (was !== undefined && g.loaded > was) this.voices.play(g.id === "shotgun" ? "shotgun-shell" : "revolver-load");
       this.lastLoaded.set(g.id, g.loaded);
     }
     const key = `${g?.id}|${g?.loaded}|${flares}|${loading}|${[...inv.pockets, ...inv.quick].map((s) => (s ? `${s.id}${"n" in s ? s.n : ""}` : "")).join()}`;
@@ -625,13 +620,22 @@ export class Arms {
         else if (!p.gun && was.gun) this.voices.play("gun-holster", at, 15);
         if (arm === was.arm || !p.gun) return;
         if (p.gun === "revolver") {
-          if (arm === ARM.reload) this.voices.play("revolver-gate", at, 15);
-          else if (was.arm === ARM.reload) this.voices.play("revolver-gate", at, 15, 0.8, 0.92);
+          // (plan 79 F11a: the cylinder swung out — its spent cases dumped, the live ones to the pockets —
+          // and shut after the speedloader; `reload`, the old gate, heard the same)
+          const opened = arm === ARM.open || arm === ARM.reload;
+          if (opened && was.arm !== ARM.open && was.arm !== ARM.reload) {
+            this.voices.play("revolver-gate", at, 15);
+            const g = me ? this.gun() : null;
+            const spent = g ? WEAPONS.revolver.mag - g.loaded : 0;
+            if (me) setTimeout(() => this.brass("case", spent), 250);
+          } else if (!opened && (was.arm === ARM.open || was.arm === ARM.reload))
+            this.voices.play("revolver-gate", at, 15, 0.8, 0.92);
           return;
         }
         if (arm === ARM.open) {
           this.voices.play("shotgun-break", at, 20);
-          // (the fired ones out: mine, as many as are spent; anyone's, both)
+          // (both out — plan 79 F12a: the fired ones kicked out to the ground, mine as many as are spent,
+          // anyone's both; a live one back to the pocket)
           const g = me ? this.gun() : null;
           const spent = g ? WEAPONS.shotgun.mag - g.loaded : 2;
           if (spent > 0) setTimeout(() => this.voices.play("shotgun-eject", at, 15), 110);
