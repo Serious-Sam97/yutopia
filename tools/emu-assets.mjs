@@ -4,6 +4,7 @@
 // static files, not in git).
 //   node tools/emu-assets.mjs          fetch what's missing (cached in node_modules/.cache)
 //   node tools/emu-assets.mjs --check  fail if something is missing
+// A file whose host a build may not reach has a pinned copy in tools/emu-vendor, used if downloading fails.
 // The 2600 core comes from EmulatorJS (a 7z inside an npm tarball): its loader is
 // renamed so Nostalgist loads it like the others.
 import { execFileSync } from "node:child_process";
@@ -62,10 +63,23 @@ async function download(name, url, tries = 3) {
   }
 }
 
+// A copy kept in the repo (tools/emu-vendor/<file>) for a file whose host a build can't always reach:
+// used only when every try at its url has failed, and pinned all the same. (slackware.uk timed out from
+// the deploy's build three times running, and stopped the whole client build.)
+const vendor = join(root, "tools/emu-vendor");
+
 async function fetchPinned(c) {
   const file = join(cache, `${c.core ?? c.file}-${c.sha256.slice(0, 12)}`);
   let buf = existsSync(file) ? readFileSync(file) : null;
-  if (!buf) buf = await download(c.core ?? c.file, c.url);
+  if (!buf)
+    try {
+      buf = await download(c.core ?? c.file, c.url);
+    } catch (e) {
+      const kept = c.file ? join(vendor, c.file) : null;
+      if (!kept || !existsSync(kept)) throw e;
+      console.warn(`[emu] ${c.file}: its host unreachable — the repo's copy (tools/emu-vendor)`);
+      buf = readFileSync(kept);
+    }
   const got = sha256(buf);
   if (got !== c.sha256) throw new Error(`${c.core ?? c.file}: sha256 ${got} ≠ pinned ${c.sha256} — refusing it`);
   writeFileSync(file, buf);
