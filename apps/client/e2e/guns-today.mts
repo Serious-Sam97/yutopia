@@ -2,7 +2,8 @@
 // Phase 0 of docs/plan/79-the-guns.md: today's guns in the game, the "before" beside the mocks — Ana on
 // the pond at night, the torch on, one of the shadowed called up ahead: the revolver out, then aimed;
 // the double-barrel aimed. The dev stack (:3100, :8100), the machine's GPU.
-//   node --experimental-strip-types e2e/guns-today.mts [out dir]
+//   node --experimental-strip-types e2e/guns-today.mts [out dir]   (HOUR=13: by day; NAME=x: the files'
+//   prefix, "today" by default)
 import { chromium, type Page, request } from "@playwright/test";
 
 const out = process.argv[2] ?? "../../design/guns";
@@ -10,6 +11,7 @@ const base = process.env.YUTOPIA_E2E_URL ?? "http://localhost:3100";
 const api = process.env.YUTOPIA_E2E_API ?? "http://localhost:8100";
 const pass = process.env.YUTOPIA_DEMO_PASSWORD ?? "yutopia-demo";
 const G = (x: number, y: number) => ({ x, y });
+const name = process.env.NAME ?? "today";
 
 async function token(email: string): Promise<string> {
   const ctx = await request.newContext();
@@ -38,7 +40,10 @@ const tok = await token("ana@yutopia.test");
 await page.addInitScript((t) => {
   localStorage.setItem("yutopia:token", t);
   const p = JSON.parse(localStorage.getItem("yutopia:prefs") ?? "{}");
-  localStorage.setItem("yutopia:prefs", JSON.stringify({ ...p, view: "3p", cam3p: "chase", reducedMotion: false, quality: "high" }));
+  localStorage.setItem(
+    "yutopia:prefs",
+    JSON.stringify({ ...p, view: "3p", cam3p: "chase", reducedMotion: false, quality: "high" }),
+  );
 }, tok);
 await page.goto(base);
 await page.waitForFunction(
@@ -51,8 +56,8 @@ await page.waitForFunction(
 );
 await page.evaluate((p) => (window as any).__yutopia.teleport({ ...p, level: 0 }), G(-250, -60));
 await page.waitForFunction(() => !!document.querySelector(".dk"), null, { timeout: 30_000 });
+await page.evaluate((h) => (window as any).__yutopia.room.send("mod:hour", { h }), Number(process.env.HOUR ?? 23));
 await w(page, (y) => {
-  y.room.send("mod:hour", { h: 23 });
   y.room.send("mod:storm", { storm: 0, now: true });
   y.room.send("mod:refill", { kit: true });
   y.room.send("mod:dark", { mode: "normal", spawn: 1 });
@@ -75,10 +80,13 @@ for (const [key, id] of [
     continue;
   }
   await page.waitForTimeout(1200);
-  await page.screenshot({ path: `${out}/0-today-${id}-ready.png` });
+  // (which model's in the hand: the life look's, plan 79 phase 3 — its points are nodes — or the drawn one)
+  const life = await w(page, (y) => !!y.tp.scene.getObjectByName("pt_muzzle"));
+  console.log(`  ${id}: ${life ? "the life model" : "the drawn model"}`);
+  await page.screenshot({ path: `${out}/0-${name}-${id}-ready.png` });
   await page.mouse.down({ button: "right" });
   await page.waitForTimeout(1500);
-  await page.screenshot({ path: `${out}/0-today-${id}-aim.png` });
+  await page.screenshot({ path: `${out}/0-${name}-${id}-aim.png` });
   await page.mouse.up({ button: "right" });
   console.log("  wrote", id);
 }

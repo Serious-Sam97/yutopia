@@ -12,6 +12,7 @@ import {
   type Material,
   Mesh,
   MeshBasicMaterial,
+  type Object3D,
   Path,
   Shape,
   SphereGeometry,
@@ -46,6 +47,9 @@ export interface GunModel {
   muzzle: [number, number, number];
   /** where the right fist holds it, and the grip's slope (rad back from upright) */
   grip: { at: [number, number, number]; rake: number };
+  /** made in Blender for the life look (lifeGunModel): life size, its geometry and materials shared
+   *  by every copy (not to be disposed with one) */
+  life?: boolean;
 }
 
 type P = BufferGeometry;
@@ -715,7 +719,10 @@ export function poseGun(
   if (kind === "revolver") {
     g.parts.hammer.rotation.z = 0.52 * (s.cock ?? 0);
     g.parts.cylinder.rotation.x = ((s.turn ?? 0) * Math.PI) / 3;
-    g.parts.gate.rotation.x = 1.5 * open;
+    // (the double-action's cylinder swings out on its crane, to the left — plan 79; the single-action's
+    // loading gate opens)
+    if (g.parts.crane) g.parts.crane.rotation.x = -1.3 * open;
+    else g.parts.gate.rotation.x = 1.5 * open;
     g.parts.trigger.rotation.z = 0.25 * (s.trigger ?? 0);
   } else {
     g.parts.barrels.rotation.z = -0.52 * open;
@@ -725,6 +732,40 @@ export function poseGun(
   g.rounds.forEach((m, i) => {
     m.visible = i < (s.loaded ?? g.rounds.length);
   });
+}
+
+/** A gun from its life-look scene (docs/plan/79-the-guns.md: tools/art/guns/build_guns.py →
+ *  public/life/guns/<kind>.glb) — the same parts and points as the drawn ones (poseGun, the hands):
+ *  the pivots by name, `round<i>`, the points `pt_<name>`. A copy: its geometry and materials shared. */
+export function lifeGunModel(kind: GunKind, scene: Object3D): GunModel {
+  const root = new Group();
+  const gun = (scene.getObjectByName(kind) ?? scene).clone(true);
+  gun.position.set(0, 0, 0);
+  root.add(gun);
+  const parts: Record<string, Group> = {};
+  for (const n of ["hammer", "trigger", "crane", "cylinder", "barrels", "lever", "triggers"]) {
+    const o = gun.getObjectByName(n);
+    if (o) parts[n] = o as Group;
+  }
+  const rounds: Mesh[] = [];
+  for (let i = 0; ; i++) {
+    const o = gun.getObjectByName(`round${i}`);
+    if (!o) break;
+    rounds.push(o as Mesh);
+  }
+  const at = (n: string): [number, number, number] => {
+    const o = gun.getObjectByName(`pt_${n}`);
+    return o ? [o.position.x, o.position.y, o.position.z] : [0, 0, 0];
+  };
+  return {
+    root,
+    parts,
+    rounds,
+    sight: { rear: at("rear"), front: at("front") },
+    muzzle: at("muzzle"),
+    grip: { at: at("grip"), rake: 0 },
+    life: true,
+  };
 }
 
 /** A 12-gauge shell — the red hull, the brass head — lying along x, its head at −x (one in the hand,

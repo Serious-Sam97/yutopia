@@ -175,6 +175,42 @@ for (const who of ["man", "woman"]) {
   );
 }
 
+// ── the guns (plan 79 phase 3: tools/art/guns/build_guns.py → public/life/guns/<kind>.glb) ─────────
+
+/** A gun's file: no textures (plain materials till they're baked), meshopt geometry. Measured
+ *  2026-11-11: the revolver 0.14 MB, 15.1k triangles; the double-barrel 0.10 MB, 10.5k. */
+const GUN = { mb: 0.25, tris: 20000 };
+/** What the game looks for in each (tp/guns3d.ts lifeGunModel, poseGun): the pivots, the rounds, the points. */
+const GUN_NODES: Record<string, string[]> = {
+  revolver: ["hammer", "trigger", "crane", "cylinder", "round0", "round5"],
+  shotgun: ["barrels", "lever", "triggers", "round0", "round1"],
+};
+const GUN_DIR = join(DIR, "guns");
+for (const kind of Object.keys(GUN_NODES)) {
+  const path = join(GUN_DIR, `${kind}.glb`);
+  test(
+    `life gun ${kind}: within its budget, readable, its parts and points named`,
+    { skip: !existsSync(path) && "not built" },
+    () => {
+      const size = readFileSync(path).length;
+      assert.ok(size <= GUN.mb * 1e6, `${kind}: ${(size / 1e6).toFixed(2)} MB > ${GUN.mb} MB`);
+      const { json } = readGlb(path);
+      let tris = 0;
+      for (const m of json.meshes)
+        for (const p of m.primitives)
+          tris +=
+            p.indices !== undefined
+              ? json.accessors[p.indices].count / 3
+              : json.accessors[p.attributes.POSITION].count / 3;
+      assert.ok(tris <= GUN.tris, `${kind}: ${tris} triangles > ${GUN.tris}`);
+      for (const e of json.extensionsRequired ?? []) assert.ok(SUPPORTED.has(e), `${kind}: needs ${e}`);
+      const names = new Set(json.nodes.map((n) => n.name));
+      for (const n of [kind, ...GUN_NODES[kind], "pt_grip", "pt_muzzle", "pt_rear", "pt_front"])
+        assert.ok(names.has(n), `${kind}: no node ${n}`);
+    },
+  );
+}
+
 // ── the material library (phase 3: tools/art/life/materials.mts → public/life/mat) ──────────────
 
 const MAT_DIR = join(DIR, "mat");

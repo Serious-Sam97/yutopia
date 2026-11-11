@@ -26,7 +26,16 @@ import type { JointName, Pose } from "../chars/rig";
 const puffAt = new Vector3();
 const puffDir = new Vector3();
 
-import { cueModel, type GunFx, type GunKind, type GunModel, gunModel, poseGun, shellGeometry } from "./guns3d";
+import {
+  cueModel,
+  type GunFx,
+  type GunKind,
+  type GunModel,
+  gunModel,
+  lifeGunModel,
+  poseGun,
+  shellGeometry,
+} from "./guns3d";
 import { levelHands } from "./level3d";
 import type { PersonIn } from "./person-in";
 import { ANKLE_M, SEATS, seatFit, seatShape } from "./seats3d";
@@ -54,6 +63,7 @@ type MotionOut = ReturnType<InstanceType<Chars["Motion3"]>["update"]>;
 const SIT_IN = 0.3; // s: sitting down / getting up
 const STAND_RISER = 0.45; // m: a stand's row over the one before (shared/kart/park.ts kartSeats)
 const PICK_R = 0.26; // tiles: how wide a person is to a click
+const LIFE_GUN_SCALE = 1; // the life look's guns in the hand (plan 79: life size, as the life people are)
 
 export interface Mats {
   body: Material;
@@ -66,6 +76,9 @@ export interface Mats {
   toy?: (kind: string) => Object3D | null;
   /** a pool ball in the hand (shared/pool-throw.ts held "pball:<n>") */
   pball?: (n: number) => Object3D;
+  /** a gun's life-look model (plan 79: public/life/guns/<kind>.glb), once the view has it — till then
+   *  null (the drawn one stands in) */
+  gun?: (kind: string) => Object3D | null;
   /** the shadowed, wrapped in the dark (docs/plan/30-the-dark.md D5) */
   shade?: Material;
   shadeInk?: Material;
@@ -1023,16 +1036,22 @@ export class Person3D {
   private gun: { key: string; root: Group; model: GunModel } | null = null;
   private gunFrame(p: PersonIn, hand: Object3D | null) {
     const key = p.gun ?? "";
-    if ((this.gun?.key ?? "") === key) return;
+    const kind: GunKind = key === "shotgun" ? "shotgun" : "revolver";
+    const cue = key === "cue";
+    // (the life look's model once the view has it — plan 79; the drawn one till then, swapped when it comes)
+    const tpl = key && !cue ? (this.mats.gun?.(kind) ?? null) : null;
+    if ((this.gun?.key ?? "") === key && !!this.gun?.model.life === !!tpl) return;
     this.dropGun();
     if (!key || !hand) return;
     const root = new Group();
-    const kind: GunKind = key === "shotgun" ? "shotgun" : "revolver";
     // (in front of my eyes: every bevel; anyone else's, a few thousand triangles)
     // (the pool cue taken down: a gun that fires the balls — carried and shouldered like the double-barrel)
     const detail = this.part === "arms" ? "near" : "far";
-    const cue = key === "cue";
-    const model = cue ? cueModel(this.mats.prop("vertex"), detail) : gunModel(kind, this.mats.prop("vertex"), detail);
+    const model = cue
+      ? cueModel(this.mats.prop("vertex"), detail)
+      : tpl
+        ? lifeGunModel(kind, tpl)
+        : gunModel(kind, this.mats.prop("vertex"), detail);
     if (!cue) poseGun(model, kind, { cock: 1 });
     const inner = model.root;
     inner.quaternion.setFromRotationMatrix(GUN_IN_WRIST);
@@ -1043,8 +1062,8 @@ export class Person3D {
     inner.position.z += 0.01;
     root.add(inner);
     root.position.set(0, -0.05, 0);
-    // (a little larger than life, as our people's hands are)
-    root.scale.setScalar(kind === "shotgun" || cue ? 1.2 : 1.4);
+    // (the drawn ones a little larger than life, as the old people's hands were; the life look's life size)
+    root.scale.setScalar(model.life ? LIFE_GUN_SCALE : kind === "shotgun" || cue ? 1.2 : 1.4);
     hand.add(root);
     this.gun = { key, root, model };
   }
@@ -1278,7 +1297,8 @@ export class Person3D {
     this.shellInHand = null;
     if (!this.gun) return;
     this.gun.root.removeFromParent();
-    this.gun.root.traverse((o) => (o as Mesh).geometry?.dispose());
+    // (a life-look gun's geometry is every copy's: kept)
+    if (!this.gun.model.life) this.gun.root.traverse((o) => (o as Mesh).geometry?.dispose());
     this.gun = null;
   }
 

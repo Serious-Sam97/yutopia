@@ -457,7 +457,8 @@ def revolver():
             tube(bm, (0.054, math.cos(b) * 0.0133, CZ + math.sin(b) * 0.0133), (0.07, math.cos(b) * 0.0133, CZ + math.sin(b) * 0.0133), 0.0049, seg=16)
 
     g.part("cylinder", cyl, "nickel", 0.0006, cut=flutes_chambers)
-    g.part("rounds", lambda bm: [sphere(bm, (0.0555, math.cos(i / 6 * math.tau) * 0.0133, CZ + math.sin(i / 6 * math.tau) * 0.0133), 0.0044, 12) for i in range(6)], "lead")
+    for i in range(6):
+        g.part(f"round{i}", lambda bm, i=i: sphere(bm, (0.0555, math.cos(i / 6 * math.tau) * 0.0133, CZ + math.sin(i / 6 * math.tau) * 0.0133), 0.0044, 12), "lead")
     g.part("crane", lambda bm: (box(bm, 0.061, 0.068, 0.038, 0.05, 0.022), tube(bm, (0.061, 0, CZ), (0.068, 0, CZ), 0.006, seg=16)), "nickel", 0.0008)
     g.part("latch", lambda bm: prism(bm, smooth([(0.0, 0.056, 1), (0.014, 0.057, 1), (0.016, 0.063), (0.002, 0.065, 1)], 1), 0.004, y=0.0165), "nickel", 0.0007, check=(-1, 1, -1, 1))
     # the rear sight on the top strap (a notched blade, its screws); the hammer, its spur checkered;
@@ -498,6 +499,9 @@ def shotgun():
                cut=lambda bm, s=s: tube(bm, (B0 + 0.68, s * 0.0118, BZ), (B0 + 0.75, s * 0.0118, BZ), 0.0092, seg=24))
     g.part("rib", lambda bm: (prism(bm, [(B0, BZ + 0.007), (B0 + 0.708, BZ + 0.005), (B0 + 0.708, BZ + 0.0125), (B0, BZ + 0.0145)], 0.0095), box(bm, B0 + 0.01, B0 + 0.7, BZ - 0.013, BZ - 0.006, 0.011)), "parker", 0.0006)
     g.part("bead", lambda bm: sphere(bm, (B0 + 0.702, 0, BZ + 0.0148), 0.0021, 12), "brass")
+    # (the shells in the chambers: their brass heads at the breech, seen when it's broken open)
+    for i, s in enumerate((1, -1)):
+        g.part(f"round{i}", lambda bm, s=s: lathe(bm, [(0, 0), (0, 0.0108), (0.0016, 0.0108), (0.0016, 0.0094), (0.012, 0.0094), (0.012, 0)], (B0 + 0.0005, s * 0.0118, BZ), X, 20), "brass")
     # the action: round-bodied, its bottom rounded into the guard's tang; the fences scalloped
     act = smooth([(0.018, 0.024, 1), (0.1, 0.022), (B0 - 0.004, 0.03), (B0 + 0.001, 0.042, 1), (B0 + 0.001, BZ + 0.013, 1), (B0 - 0.012, BZ + 0.019), (0.03, BZ + 0.012), (-0.012, 0.074), (-0.022, 0.066, 1)], 3)
     g.part("action", lambda bm: prism(bm, act, 0.05), "engraved", 0.007, 4)

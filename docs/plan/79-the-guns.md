@@ -12,7 +12,7 @@ shoulder camera whenever a gun is out (no swap key), F2a walk while aiming, F3a 
 with a recoil layer, F6a the torch held with the gun, F7 **the Daybreak**, F8a the right button focuses
 only a torch already on, F9a the AK in the lockers / the sniper in the hunting bag / the Daybreak from
 Spawn, F10a four quick slots. Phase 1 (the right button) built; phase 0 mocks delivered (second round: the camera closer, the guns
-detailed; the revolver and the double-barrel redesigned after AW2's), signed off 2026-11-11 (the long guns held where the arms reach); phase 2 (the camera, the reticle) built 2026-11-11; F11a (the speedloader) and F12a (both shells out) decided 2026-11-11. Follows plan 32 (the arms: the
+detailed; the revolver and the double-barrel redesigned after AW2's), signed off 2026-11-11 (the long guns held where the arms reach); phase 2 (the camera, the reticle) and phase 3 (the two guns' models in the game) built 2026-11-11; F11a (the speedloader) and F12a (both shells out) decided 2026-11-11. Follows plan 32 (the arms: the
 rules, kick, bloom, falloff, heads), plan 30 (the dark: light is the weapon), plans 58/77/78 (the body,
 its moves, its hands) and plan 73 (the life look).
 
@@ -203,6 +203,32 @@ the Daybreak the torch's focus hum and a flare's burst) so the phases before can
    - whether you choose from candidates for each sound (3–4 each, as the steps were picked), or I pick and
      you veto.
    Then: the picks, the mix, the checks (the steps' level rule: plan 63), credits in `sources.json`.
+
+## Phase 3 — the models, the two we have: built (2026-11-11)
+
+- `tools/art/guns/build_guns.py` writes `apps/client/public/life/guns/revolver.glb` (0.14 MB, 15.1k
+  triangles) and `shotgun.glb` (0.10 MB, 10.5k): every boolean and bevel applied, each moving group's
+  parts merged by material and hung on a pivot at its hinge (the revolver's hammer, trigger, crane › cylinder;
+  the double-barrel's barrels with the fore-end, lever, triggers), the rounds (`round<i>`: the revolver's six,
+  the double-barrel's two shells' heads) and the points (`pt_grip`, `pt_muzzle`, `pt_rear`, `pt_front`,
+  `pt_fore`, `pt_butt`) as nodes; meshopt geometry; plain PBR materials by kind.
+- The game: the view loads a gun's file the first time a hand asks for it (`lifeGun`: the life loader, the
+  room's light patched in, the shaders compiled before the first draw) and hands it to the people through
+  their materials (`Mats.gun`, as the pets' toys and the pool balls come); `person3d` builds the model from
+  it (`guns3d.ts` `lifeGunModel`: the same `GunModel` — parts, rounds, sight, muzzle, grip — so `poseGun`,
+  the hands and the muzzle flash work unchanged), life size, swapped in when it arrives (the drawn gun till
+  then, or if it fails); a life gun's shared geometry isn't disposed with one copy. `poseGun` swings the
+  double-action's crane out to the left as it opens (F11a's reload).
+- Checks: by day and at night in the game (`e2e/guns-today.mts`, now `HOUR=` and `NAME=`, which reports
+  which model's in the hand): both life models in Ana's hands; `look/life-budget.test.ts` has the guns
+  (≤ 0.25 MB, ≤ 20k triangles, every pivot, round and point named) — green; `arms-feel.spec.ts` and
+  `arms.spec.ts` green (the feel spec failed once, on the first run after the swap, green twice since).
+- **Left for later**:
+  - the guns lying on the snow (`items3d.ts` `gunLying`) are still the drawn ones — that path paints by
+    vertex colour, which the files don't carry;
+  - no far level yet (one file for every hand: 10–15k triangles a gun);
+  - the node materials' wood grain, checkering and engraving aren't baked into textures yet (plain colours);
+  - the revolver still sits upright in the fist (the old hold): phase 4.
 
 ## Phase 2 — the camera and the reticle: built (2026-11-11)
 

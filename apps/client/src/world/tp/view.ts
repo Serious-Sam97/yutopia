@@ -3001,6 +3001,7 @@ void main() {
           return P ? P.toyMesh(kind, (c) => prop(`#${new Color(c).getHexString()}`)) : null;
         },
         pball: (n) => heldPoolBall(n, (m) => this.light.patch(m)),
+        gun: life ? (kind) => this.lifeGun(kind) : undefined,
       };
       const r = this.renderer.domElement.getBoundingClientRect();
       C.inkResolution(r.width || 1, r.height || 1);
@@ -3457,6 +3458,30 @@ void main() {
       // (not my own in first person: it's in my hands' own picture, hands1p.ts)
       tc.glare.visible = !(b.id === meId && this.mode === "first");
     }
+  }
+
+  // The life look's guns (docs/plan/79-the-guns.md: tools/art/guns/build_guns.py → /life/guns/<kind>.glb):
+  // loaded the first time anyone's hand asks for one, lit by the room's light (patched), their shaders
+  // compiled before they're first drawn; null till then (the drawn gun stands in) or if it failed.
+  private lifeGuns = new Map<string, Object3D | "loading" | "failed">();
+  private lifeGun(kind: string): Object3D | null {
+    const have = this.lifeGuns.get(kind);
+    if (have === undefined) {
+      this.lifeGuns.set(kind, "loading");
+      void import("../look/life-assets")
+        .then((A) => A.loadLifeGLTF(this.renderer, `/life/guns/${kind}.glb`))
+        .then(async (gltf) => {
+          gltf.scene.traverse((o) => {
+            const m = (o as Mesh).material;
+            if (m && !Array.isArray(m)) this.light.patch(m);
+          });
+          await this.renderer.compileAsync(gltf.scene, this.camera, this.scene).catch(() => undefined);
+          this.lifeGuns.set(kind, gltf.scene);
+        })
+        .catch(() => this.lifeGuns.set(kind, "failed"));
+      return null;
+    }
+    return typeof have === "string" ? null : have;
   }
 
   // screen position of a world point (tiles, h = height in tiles), or null behind the camera
