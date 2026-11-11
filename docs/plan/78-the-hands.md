@@ -409,7 +409,21 @@ the phone photo from four sides: `p78-phase7-photo.png`). What changed:
 
 Phase 7 signed off by the user 2026-11-11 ("Approved"): plan 78 is done. Next: plan 77's phase 8 checks.
 
-## References
+### After the sign-off (2026-11-11): the known issues
+
+- **The heart's wrists**: a little forward lean (`point` [∓0.3, 0.8, 0.52]), wrists 3 mm wider apart
+  (`HEART_W` 0.092), and no side lean of the chest (it turned one wrist 31°). The sideways bend is now
+  19°/23° (man) and 8°/12° (woman), within a real wrist's −25…+35°. The index tips meet pressing 1.4–1.6
+  cm in the report's capsules. Tucking the back fingers tighter (1.4) bunched them into a fist under the
+  index, so 1.25 is kept. Stills `design/screens/life/p78-heart-wrists.png`.
+- **The survey again** (816 hands): no wrist past its side-to-side range anywhere (the hang, crawling, the
+  ledge catch, the shadowed's lunges were in phase 7's list).
+  - The thumb "into its own hand" count rose to 61. The rest are contacts on the fingers, not the palm:
+    a loose hand's thumb pad on the index's middle bone at a jog's start (0.9 cm), a grip's thumb on the
+    ring finger round a bar (0.9), a fist's index tip against the thumb's side at a sprint (0.6–0.7).
+  - A full pad-width offset for a half-aimed thumb and a fist thumb 4–12 mm further out both left these
+    as they were (and would float the approved fist's thumb), so they're unchanged.
+
 
 - Lee & Jung, resting hand posture (MCP ~45–90°, PIP 0–20°, DIP 0–10°; PIP the largest flexion of the
   fingers): [yadda.icm.edu.pl](https://yadda.icm.edu.pl/baztech/element/bwmeta1.element.baztech-785f4b91-56ad-477b-8b98-36d5dc7e344c/c/Lee.pdf)

@@ -35,6 +35,11 @@ interface Chain {
   el: HTMLMediaElement;
 }
 
+/** how many more times a call's line is tried when getting on it fails */
+const LINE_TRIES = 3;
+/** ms between looks at the far voices: each one subscribed and heard */
+const MEND_MS = 3000;
+
 export class Calls {
   private room: Room | null = null;
   private ringer: Ringer | null = null;
@@ -218,7 +223,7 @@ export class Calls {
     });
   }
 
-  async onJoin(m: ServerMessages["call:join"]) {
+  async onJoin(m: ServerMessages["call:join"], tries = 0) {
     const c = phone.get().call;
     const s = this.ph.ctl.session;
     if (!c || c.id !== m.id || !s || !m.token) return;
@@ -264,12 +269,40 @@ export class Calls {
       } else track = await createLocalAudioTrack({ echoCancellation: true, noiseSuppression: true });
       if (this.room !== room) return void track.stop(); // (hung up meanwhile)
       await room.localParticipant.publishTrack(track, { source: Track.Source.Microphone });
+      this.mendVoices(room);
       if (c.muted) await room.localParticipant.setMicrophoneEnabled(false);
       if (phone.get().call?.camOn) await this.publishCam(true);
     } catch (e) {
       console.warn("[phone] call line", e);
+      // (off the line again, so its join is taken again: kept, a connect that timed out — three worlds
+      // loading at once — left me off a live call for good, every later join "the same line")
+      if (this.room === room) {
+        this.room = null;
+        this.line = "";
+        await room.disconnect().catch(() => {});
+      }
+      // (and tried again while the call's still on: the token's good for its line)
+      if (tries < LINE_TRIES && phone.get().call?.id === m.id && !this.line) {
+        setTimeout(() => void this.onJoin(m, tries + 1), 1500 * (tries + 1));
+        return;
+      }
       this.ph.note(tr("phNoLine"), 3500);
     }
+  }
+
+  /** While I'm on `room`: every few seconds each far voice subscribed and playing — a subscription
+   *  that failed under load (three worlds loading at once) left one person unheard for the whole call,
+   *  nothing asking for it again. */
+  private mendVoices(room: Room) {
+    const t = setInterval(() => {
+      if (this.room !== room || room.state === "disconnected") return clearInterval(t);
+      for (const p of room.remoteParticipants.values())
+        for (const pub of p.trackPublications.values()) {
+          if (pub.source !== Track.Source.Microphone) continue;
+          if (!pub.isSubscribed) pub.setSubscribed(true);
+          else if (pub.track && this.chains.get(p.identity)?.track !== pub.track) this.attach(pub.track, pub, p);
+        }
+    }, MEND_MS);
   }
 
   // ── the far voices ───────────────────────────────────────────────────────

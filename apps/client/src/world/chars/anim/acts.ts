@@ -35,7 +35,7 @@ export type Hands = { L?: Hand; R?: Hand };
 /** (plan 78 phase 7) each wrist off the middle at a clap: the palms just meet */
 const CLAP_MEET = 0.03;
 /** (plan 78 phase 7) each wrist off the middle making a heart */
-const HEART_W = 0.089;
+const HEART_W = 0.092;
 /** (…the heart's middle: its height off the feet, how far ahead) */
 const HEART_Y = 1.3;
 const HEART_Z = 0.22;
@@ -1082,7 +1082,7 @@ export function emote2(e: string, t: number): Act & { legs: boolean } {
           w: 1,
           pole: HEART_ELBOW,
           palm: [-0.9, -0.2, -0.3],
-          point: [-0.3, 0.9, 0.3],
+          point: [-0.3, 0.8, 0.52],
           thumb: [0.013, HEART_Y - 0.07, HEART_Z],
         },
         R: {
@@ -1090,13 +1090,15 @@ export function emote2(e: string, t: number): Act & { legs: boolean } {
           w: 1,
           pole: HEART_ELBOW,
           palm: [0.9, -0.2, -0.3],
-          point: [0.3, 0.9, 0.3],
+          point: [0.3, 0.8, 0.52],
           thumb: [-0.013, HEART_Y - 0.07, HEART_Z],
         },
       };
-      Object.assign(c, { dz: 0.18 + 0.04 * Math.sin(t * 2), dx: 0.05, sz: 0.04 });
-      // (the index arched over to the other's, the others tucked a little tighter behind it — at its curl the
-      // middle fingers met through each other; the thumbs straight)
+      // (no lean of the chest to the side: it turned one wrist 31° over to keep its hand on the heart — a
+      // real one goes ~25; the head's tilt kept)
+      Object.assign(c, { dz: 0.18 + 0.04 * Math.sin(t * 2), dx: 0.05 });
+      // (the index arched over to the other's, the others tucked a little tighter behind it — tighter still,
+      // they bunched into a fist under it; the thumbs straight)
       hs[0] = { fingers: 1.25, index: 1.0, thumb: -0.35 };
       hs[1] = { fingers: 1.25, index: 1.0, thumb: -0.35 };
       blink = 1;

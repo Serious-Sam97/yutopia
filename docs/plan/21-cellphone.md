@@ -282,3 +282,17 @@ more.
     it clears at the hang-up.
   - **client**: on the earbud, the iso state has no phone and no hand at the
     ear.
+
+## Later fix (2026-11-11): a call of three left someone off the line
+
+- **Seen:** `phone.spec` "a call of three" failed on HEAD (394e2a5) and after it. One person was never on
+  the line (`on: false`, no mic), or was on but never heard one of the others. Three worlds loading at once
+  in one machine's browsers made the LiveKit connect and subscribe slow.
+- **Cause 1:** a failed `room.connect` kept `line` set to that room. Every later `call:join` for it was then
+  ignored as "already on this line", and nothing tried again, so that person stayed off the call.
+- **Fix 1:** a failed connect clears the line and the room and tries again, up to 3 times
+  (`call.ts LINE_TRIES`).
+- **Cause 2:** a far voice whose subscription failed was never asked for again.
+- **Fix 2:** while on a call, every 3 s each person's mic is subscribed and attached to its audio chain
+  (`mendVoices`, `MEND_MS`).
+- **Checked:** the test passed 3/3 after both fixes (it had failed in all 3 runs before).

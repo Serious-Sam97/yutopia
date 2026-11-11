@@ -1206,7 +1206,7 @@ const SPRINT: Gait = {
   heel: 0.4,
   rollAt: 0.55,
   // (the hips a centimetre higher: the knee on the ground bent to 54° — a sprinter's ~45°)
-  hips: (ph, T) => hipAt(0.658) - 0.02 * K * Math.cos(2 * TAU * (ph - 0.075)) - 0.03 * T,
+  hips: (ph, T) => hipAt(0.652) - 0.02 * K * Math.cos(2 * TAU * (ph - 0.075)) - 0.03 * T,
   turn: (ph, T, e) => jogHipsTurn(ph, e, T, 0),
   // (plan 77: each key's foot pitch from the ankle a sprinter has there — the ankle is f − t − k: with
   // the heel at the seat the old keys pulled the toes up to the shin 70–80°, the instep folded, and
@@ -1215,9 +1215,9 @@ const SPRINT: Gait = {
     // the heel kicked up behind (not the leg flung out there: 29° back, a sprinter's 10–20°)
     { at: 0.28, t: 0.3, k: 1.6, f: 2.25 },
     // to the seat as it passes under
-    { at: 0.42, t: -0.1, k: 2.3, f: 2.4 },
+    { at: 0.42, t: -0.1, k: 2.42, f: 2.52 },
     // the knee driven high (~70°)
-    { at: 0.6, t: -1.2, k: 1.95, f: 0.8 },
+    { at: 0.6, t: -1.16, k: 1.95, f: 0.84 },
     // the shin out, the foot clawing back to land under the hip
     { at: 0.8, t: -0.9, k: 0.85, f: 0.3 },
     // (plan 77: reaching out ahead and sweeping back onto the ground at its speed, as the sprint did
@@ -1550,6 +1550,23 @@ export function idleFeet(seed: number, gait?: string): Record<Side, { at: V3; ya
 export function footAngles(f: Foot): { pitch: number; yaw: number } {
   const d = sub3(f.ball, f.heel);
   return { pitch: Math.atan2(-d[1], Math.hypot(d[0], d[2])), yaw: Math.atan2(d[0], d[2]) };
+}
+/** (plan 77 phase 8) Each foot out of the floor where it's been pushed into it — its heel or ball under
+ *  the ground, the leg reached up till it's on it, its pitch and its way kept. For poses laid over each
+ *  other by their joints (a skid over the run): their angles mixed don't keep a foot on the ground, and
+ *  the skid's hips drop — a jog's straight leg went 9 cm into the floor as it began. On `ground` (her
+ *  own space's) where it's given. */
+export function feetOnFloor(m: Moved, ground?: ((x: number, z: number) => number) | null): void {
+  for (const S of ["L", "R"] as const) {
+    const f = footOf(m, S);
+    // (from the ground under each, where it's given — a stair, a slope: else the flat she stands on)
+    const g = (q: V3) => q[1] - (ground ? ground(q[0], q[2]) : 0);
+    const low = Math.min(g(f.heel), g(f.ball));
+    if (low >= -0.002) continue;
+    const was = footAngles(f);
+    reachTo(m, S, [f.ankle[0], f.ankle[1] - low, f.ankle[2]], 1);
+    footTo(m, S, was.pitch, was.yaw);
+  }
 }
 /** Turn `S`'s foot to `pitch` and `yaw` (the model's space), whatever the leg above it is doing. */
 function footTo(m: Moved, S: Side, pitch: number, yaw: number, roll = 0): void {

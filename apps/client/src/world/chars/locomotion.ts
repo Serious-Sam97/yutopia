@@ -361,6 +361,10 @@ export class Locomotion {
     const done = this.lock.apply({ pose, lift: out.lift }, dt, moved, off, this.base);
     // 4f: last, the feet on the ground under them
     this.grounded(hero, done, off ? null : (m.ground ?? null), dt);
+    // (…and with the lock and the ground let go of for a skid or a turn round on her feet, none pushed
+    // through it: their legs mixed by the joints went 4–9 cm into the floor — plan 77 phase 8)
+    if (!m.up && !m.verb && !m.flow && this.downFrom?.kind !== "roll" && (this.aboutBusy || this.skidW > 0.3))
+      hero.feetOnFloor(done, m.ground);
     this.shown = { L: hero.footOf(done, "L").ankle, R: hero.footOf(done, "R").ankle };
     return done;
   }
@@ -927,8 +931,12 @@ export class Locomotion {
       // down as she slid on, they were stretched out straight. On the foot that was ahead as it began)
       if (this.skidFrom && this.skidW < 0.02)
         this.skidLead = H.footOf(body, "L").ankle[2] > H.footOf(body, "R").ankle[2] ? "L" : "R";
-      if (this.skidW > 0.01)
+      if (this.skidW > 0.01) {
         body = mix(body, H.skid2Pose(this.skidW, this.t, this.skidLead), ease(clamp(this.skidW * 1.3, 0, 1)));
+        // (the run's legs and the skid's mixed by their joints, the hips dropping: a foot pushed into the
+        // floor is lifted back onto it — plan 77 phase 8)
+        H.feetOnFloor(body, m.ground);
+      }
       body = this.stepper(H, dt, m, body, T, strideNow);
       // (the user's: a sprint one way and then the other — turning round as a move of its own, out of
       // the skid: low over the braced foot, the head and chest round first, driven off into the run)

@@ -313,3 +313,25 @@ them"). Seen close (`/dev/anim`'s `__anim.closeUp(bone, from)`: a still through 
 - **Stills**: `design/screens/life/p77/gaits-phase8.png` (one cycle each of walk, jog, run and sprint,
   side, the life man).
 - Client tests 326/326, shared 657/657.
+
+**After phase 8 (2026-11-11): the known issues** (the user: "push then fix the known issues").
+- **Feet through the floor at a stop and a turn back.** A skid mixes the run's legs with its own by their
+  joints and drops the hips, and the foot lock and the ground step are let go of while it lasts. So a jog's
+  straight leg went 9.3 cm into the floor as it began braking, and a turn back 4–5 cm.
+  - `hero.ts feetOnFloor` lifts a heel or ball under the ground back onto it with the leg's IK, keeping the
+    foot's pitch. It runs after the skid's mix, and at the end of the frame while a skid or a turn round is
+    on (on the world's ground where it's given).
+  - The deepest foot is now 0.2–0.3 cm under (start/jog/stop, jog and sprint turn back, jog round).
+  - Stills: `design/screens/life/p77/jog-stop-floor.png` (before over after).
+- **The woman's sprint**: the swing knee at the seat 2.3 → 2.42, the knee drive's thigh −1.2 → −1.16, the
+  hips a touch lower (`hipAt` 0.658 → 0.652). Both bodies are now in range on every count: man 26.5° /
+  116.8° / 69.2°, woman 19.0° / 113.5° / 74.1°. The run is in range on both too.
+- **Tried and put back**:
+  - **The jog's toe pops.** The toes bend ~20 rad/s as the heel comes up and reverse at lift-off.
+    Starting the let-go at that speed (from the stance's formula, then from the real stance) made the
+    census worse: walk 0 → 12, sprint 61 → 81. It's a real reversal the pop test reads as a kink.
+  - **The walk's heel strike and thigh forward.** A 10% shorter step and a smaller hip dip left both
+    where they were (21° and 35°), dropped the hips' top 1.6 cm and pushed the cadence to 146. They're the
+    rig's 0.80 m leg's (phase 1); the signed-off walk is kept.
+- Census 0 worse; client tests 326/326.
+
