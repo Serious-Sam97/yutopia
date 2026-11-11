@@ -21,6 +21,7 @@ import {
 import type { chars } from "../art/chars-load";
 import { COCOA_MUG, ICE_TUB, MUG_COLORS } from "../art/held";
 import { phoneColors } from "../art/phone-art";
+import type { HandFrame } from "../chars/props";
 import type { JointName, Pose } from "../chars/rig";
 
 const puffAt = new Vector3();
@@ -127,6 +128,39 @@ const gz = new Vector3();
 const gm = new Matrix4();
 // the gun's frame (x along the barrel, y up, z right) into the wrist's (the barrel −y, up +z)
 const GUN_IN_WRIST = new Matrix4().makeBasis(new Vector3(0, -1, 0), new Vector3(0, 0, 1), new Vector3(-1, 0, 0));
+// (plan 79 phase 4) a life gun in its hand: the grip across the palm, raked forward this much going up (rad,
+// the models' own: tools/art/guns), its middle (the gun's frame) at the fingers' roots, out of the palm by
+// its half thickness; the palm on its right side, the barrel along the knuckles
+const GUN_RAKE = 0.38;
+const GUN_GRIP_MID = new Vector3(-0.012, -0.012, 0);
+const GUN_GRIP_R = 0.017;
+const GUN_GRIP_SHAPE = { round: true as const, r: GUN_GRIP_R, y0: 0, hy: 0.045 };
+const gA = new Vector3();
+const gB = new Vector3();
+const gC = new Vector3();
+const gG = new Matrix4();
+const gT = new Matrix4();
+const UP_GRIP = new Vector3(Math.sin(GUN_RAKE), Math.cos(GUN_RAKE), 0);
+function gunInHand(_kind: GunKind, f: HandFrame, q: Quaternion, p: Vector3) {
+  const A = gA.copy(f.across).addScaledVector(f.n, -f.across.dot(f.n)).normalize();
+  const C = gC.copy(f.n).normalize().negate();
+  const B = gB.crossVectors(A, C);
+  gG.makeBasis(tv4.crossVectors(UP_GRIP, Z3), UP_GRIP, Z3);
+  gT.makeBasis(B, A, C);
+  q.setFromRotationMatrix(gT.multiply(gG.transpose()));
+  p.copy(f.mid)
+    .multiplyScalar(0.9)
+    .addScaledVector(f.n, 0.013 + GUN_GRIP_R)
+    .sub(tv4.copy(GUN_GRIP_MID).applyQuaternion(q));
+}
+/** The grip's shape for the fingers (its +y up the grip), in the wrist's space, the gun placed q, p. */
+function gripShapeAt(q: Quaternion, p: Vector3, pos: Vector3, quat: Quaternion) {
+  pos.copy(GUN_GRIP_MID).applyQuaternion(q).add(p);
+  quat.setFromUnitVectors(Y3, UP_GRIP).premultiply(q);
+}
+const Z3 = new Vector3(0, 0, 1);
+const Y3 = new Vector3(0, 1, 0);
+const tv4 = new Vector3();
 
 function hashSeed(s: string): number {
   let h = 2166136261;
@@ -146,8 +180,10 @@ const ramp = (x: number, a: number, b: number) => {
 };
 
 const tq = new Quaternion();
+const tq2 = new Quaternion();
 const tv = new Vector3();
 const tv2 = new Vector3();
+const tv3 = new Vector3();
 
 /** (plan 62) Playing the piano: sat on its stool, facing its keys, the hands on them (wide, along
  *  them) — as sat at a desk typing. Its parts (tp/view.ts): the keys, then the stool. */
@@ -959,7 +995,12 @@ export class Person3D {
     this.ballFrame(p, hand);
     // aiming: the gun along the look too, whatever the wrist is doing (its barrel's −y)
     // (held in both hands — the hands placed by gunHands: the gun along the way it set)
-    if (this.gun && this.gunDirOn && this.gunHandsW > 0.3) this.aimGun(this.gun.root, this.gunDir);
+    // (in a life hand, plan 79: the wrist turned so the barrel goes along it — within a wrist's reach)
+    if (this.gun?.inHand) {
+      this.gun.root.quaternion.identity();
+      const dir = this.gunDirOn && this.gunHandsW > 0.3 ? this.gunDir : (p.mv ?? 0) & 16 ? this.lookDir(p, tv2) : null;
+      if (dir) this.model.aimHand("R", tv3.set(1, 0, 0).applyQuaternion(this.gun.model.root.quaternion), dir, 1.4);
+    } else if (this.gun && this.gunDirOn && this.gunHandsW > 0.3) this.aimGun(this.gun.root, this.gunDir);
     else if (this.gun && ((p.mv ?? 0) & 16) !== 0) this.aimGun(this.gun.root, this.lookDir(p, tv2));
     else this.gun?.root.quaternion.identity();
     if (this.gun) this.gunMoves(this.gun);
@@ -1018,7 +1059,14 @@ export class Person3D {
         : null;
     // (two-handed — the phone texting, a pad: the model's own hold, twoFrame)
     if (this.twoKind) return;
-    m.hold("R", R ? { shape: shapes[R.kind], pos: R.root.position, quat: R.root.quaternion, kind: R.kind } : null);
+    const G = !R && this.gun?.inHand ? this.gun : null;
+    if (G) {
+      // (plan 79: the revolver's grip, for the fingers to close round — in the wrist's space)
+      const inner = G.model.root;
+      gripShapeAt(inner.quaternion, inner.position, tv3, tq2);
+      m.hold("R", { shape: GUN_GRIP_SHAPE, pos: tv3, quat: tq2, kind: "gun" });
+    } else
+      m.hold("R", R ? { shape: shapes[R.kind], pos: R.root.position, quat: R.root.quaternion, kind: R.kind } : null);
     const T = this.torch;
     m.hold("L", T ? { shape: shapes.torch, pos: T.root.position, quat: T.root.quaternion, kind: "torch" } : null);
   }
@@ -1033,14 +1081,16 @@ export class Person3D {
   // the gun in the right hand (docs/plan/32-the-arms.md): its model (tp/guns3d.ts) turned into the
   // wrist's frame — the barrel along the hand's way out of the fist (−y), its top to the back of
   // the hand (+z) — the grip in the fist
-  private gun: { key: string; root: Group; model: GunModel } | null = null;
+  private gun: { key: string; root: Group; model: GunModel; inHand: boolean } | null = null;
   private gunFrame(p: PersonIn, hand: Object3D | null) {
     const key = p.gun ?? "";
     const kind: GunKind = key === "shotgun" ? "shotgun" : "revolver";
     const cue = key === "cue";
     // (the life look's model once the view has it — plan 79; the drawn one till then, swapped when it comes)
     const tpl = key && !cue ? (this.mats.gun?.(kind) ?? null) : null;
-    if ((this.gun?.key ?? "") === key && !!this.gun?.model.life === !!tpl) return;
+    // (plan 79 phase 4: the life look's revolver held by its hand's own frame — known once the body's loaded)
+    const frame = tpl && kind === "revolver" ? this.model.handFrame("R") : null;
+    if ((this.gun?.key ?? "") === key && !!this.gun?.model.life === !!tpl && !!this.gun?.inHand === !!frame) return;
     this.dropGun();
     if (!key || !hand) return;
     const root = new Group();
@@ -1054,28 +1104,33 @@ export class Person3D {
         : gunModel(kind, this.mats.prop("vertex"), detail);
     if (!cue) poseGun(model, kind, { cock: 1 });
     const inner = model.root;
-    inner.quaternion.setFromRotationMatrix(GUN_IN_WRIST);
-    inner.position
-      .set(...model.grip.at)
-      .applyQuaternion(inner.quaternion)
-      .negate();
-    inner.position.z += 0.01;
+    if (frame) gunInHand(kind, frame, inner.quaternion, inner.position);
+    else {
+      inner.quaternion.setFromRotationMatrix(GUN_IN_WRIST);
+      inner.position
+        .set(...model.grip.at)
+        .applyQuaternion(inner.quaternion)
+        .negate();
+      inner.position.z += 0.01;
+    }
     root.add(inner);
-    root.position.set(0, -0.05, 0);
+    root.position.set(0, frame ? 0 : -0.05, 0);
     // (the drawn ones a little larger than life, as the old people's hands were; the life look's life size)
     root.scale.setScalar(model.life ? LIFE_GUN_SCALE : kind === "shotgun" || cue ? 1.2 : 1.4);
     hand.add(root);
-    this.gun = { key, root, model };
+    this.gun = { key, root, model, inHand: !!frame };
   }
 
   /** What the gun's doing (docs/plan/32-the-arms.md), mine as Arms says (`gunFx`): the hammer,
    *  the cylinder, the gate or the barrels, the rounds; a shot's kick back along the arm and up;
    *  reloading, tipped up and turned in. Without it, at rest — cocked while aiming. */
   gunFx: GunFx | null = null;
-  private gunMoves(gun: { key: string; root: Group; model: GunModel }) {
+  private gunMoves(gun: { key: string; root: Group; model: GunModel; inHand: boolean }) {
     const kind: GunKind = gun.key === "shotgun" || gun.key === "cue" ? "shotgun" : "revolver";
     const fx = this.gunFx;
     if (gun.key !== "cue") poseGun(gun.model, kind, fx ?? { cock: 1 });
+    // (in a life hand: the hand carries it — its kick is the arms', its turn the wrist's)
+    if (gun.inHand) return;
     gun.root.position.set(0, -0.05, 0);
     if (!fx) return;
     if (fx.kick > 0) {
@@ -1159,7 +1214,9 @@ export class Person3D {
     up.normalize();
     // (sizes: the gun's model metres times the hand's scale; the body's, the person's own)
     const gs = gun.root.getWorldScale(hs).x;
-    const body = gs / (shotgun ? 1.2 : 1.4);
+    // (the life look's guns are life size, at the person's own scale; the drawn ones were 1.2 / 1.4 of it)
+    const life = gun.model.life ? gun.model : null;
+    const body = life ? gs : gs / (shotgun ? 1.2 : 1.4);
     if (shotgun) {
       // the butt: in the right shoulder's pocket, dropped below it as carried
       this.model.bone("shoulderR")?.getWorldPosition(hp);
@@ -1167,10 +1224,15 @@ export class Person3D {
         .addScaledVector(d, 0.02 * gs)
         .addScaledVector(hv.set(0, 0, 1).applyQuaternion(tq), gw.fwd * body)
         .addScaledVector(hv.set(1, 0, 0).applyQuaternion(tq), gw.in * body).y -= gw.drop * body;
+      // (a life gun's butt in the shoulder's pocket — under the joint, not on top of it: plan 79)
+      if (life) hp.y -= 0.05 * body;
       // from the butt: the grip 0.30 along and 0.045 up, the fore-end's underside 0.535 along, 0.07 up
+      // (a life gun's: from its own points)
+      const ga = life?.butt ? life.grip.at[0] - life.butt[0] : 0.301 - 0.05;
+      const gu = life?.butt ? life.grip.at[1] - life.butt[1] : 0.045;
       ht.copy(hp)
-        .addScaledVector(d, (0.301 - 0.05) * gs)
-        .addScaledVector(up, 0.045 * gs);
+        .addScaledVector(d, ga * gs)
+        .addScaledVector(up, gu * gs);
       this.model.reachTo("R", ht, w, [-1, -0.25, -0.15]);
       // the left: reloading, to the pocket and the breech; else under the fore-end — of the gun as
       // it ends up turned in the hand, so once it's turned (gripOnFore, after aimGun)
@@ -1206,7 +1268,10 @@ export class Person3D {
     const g = this.gun?.model;
     if (this.foreW < 0.01 || !g) return;
     g.root.updateWorldMatrix(true, false);
-    hf.set(0.15, -0.045, 0).applyMatrix4(g.root.matrixWorld);
+    // (a life gun's own fore point, plan 79 — moved back to where the arm reaches)
+    if (g.fore) hf.set(g.fore[0], g.fore[1] - 0.045, g.fore[2]);
+    else hf.set(0.15, -0.045, 0);
+    hf.applyMatrix4(g.root.matrixWorld);
     this.model.reachTo("L", hf, this.foreW, [-0.5, -1, 0.2]);
   }
 

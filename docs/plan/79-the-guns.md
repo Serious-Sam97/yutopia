@@ -12,7 +12,7 @@ shoulder camera whenever a gun is out (no swap key), F2a walk while aiming, F3a 
 with a recoil layer, F6a the torch held with the gun, F7 **the Daybreak**, F8a the right button focuses
 only a torch already on, F9a the AK in the lockers / the sniper in the hunting bag / the Daybreak from
 Spawn, F10a four quick slots. Phase 1 (the right button) built; phase 0 mocks delivered (second round: the camera closer, the guns
-detailed; the revolver and the double-barrel redesigned after AW2's), signed off 2026-11-11 (the long guns held where the arms reach); phase 2 (the camera, the reticle) and phase 3 (the two guns' models in the game) built 2026-11-11; F11a (the speedloader) and F12a (both shells out) decided 2026-11-11. Follows plan 32 (the arms: the
+detailed; the revolver and the double-barrel redesigned after AW2's), signed off 2026-11-11 (the long guns held where the arms reach); phase 2 (the camera, the reticle) and phase 3 (the two guns' models in the game) built 2026-11-11; phase 4 started; F11a (the speedloader) and F12a (both shells out) decided 2026-11-11. Follows plan 32 (the arms: the
 rules, kick, bloom, falloff, heads), plan 30 (the dark: light is the weapon), plans 58/77/78 (the body,
 its moves, its hands) and plan 73 (the life look).
 
@@ -203,6 +203,28 @@ the Daybreak the torch's focus hum and a flare's burst) so the phases before can
    - whether you choose from candidates for each sound (3–4 each, as the steps were picked), or I pick and
      you veto.
    Then: the picks, the mix, the checks (the steps' level rule: plan 63), credits in `sources.json`.
+
+## Phase 4 — the moves, the two we have: started (2026-11-11)
+
+Seen close in the game with `e2e/guns-hold.mts` (each gun ready and aimed, drawn again by the game's
+renderer from her right, her left and ahead of her — the player's camera, which her aim follows, untouched).
+Before: the revolver floated above an open right hand; the double-barrel sat on top of the shoulder, the
+left hand holding the torch out below it.
+
+- **The revolver in a life hand** (`person3d` `gunInHand`): seated by the hand's own frame (plan 78's
+  `HandFrame`) — the grip across the palm, raked forward 0.38 rad as the model's is, its middle at the
+  fingers' roots out of the palm by its half thickness, the palm on its right side, the barrel along the
+  knuckles; the fingers closed round a grip-shaped cylinder (`hold`, `GUN_GRIP_SHAPE`); aimed by **turning
+  the wrist** (`aimHand`, within a wrist's reach) instead of the gun in it; its kick the arms'. Now: in the
+  fist, along the aim, the torch hand under it.
+- **The double-barrel** from the model's own points (butt, grip, fore) at life size, the butt 5 cm under
+  the shoulder joint (in its pocket), the left hand at the moved-back `fore` (where it reaches): now the
+  torch hand under the action, the stock in the shoulder. Its ready carry already reads as AW2's (the
+  right hand on it, the torch free in the left).
+- `arms-feel.spec`, `arms.spec` green.
+- **Still to do in phase 4**: the revolver's low ready (both hands, AW2), the cheek down on the stock, the
+  draw and put-away, the speedloader reload (F11a) and the double-barrel's both-shells reload (F12a), sprint,
+  walking aimed, dodge / hit / fall with a gun, dry fire; a gun tab on the bench; the feel signed off.
 
 ## Phase 3 — the models, the two we have: built (2026-11-11)
 

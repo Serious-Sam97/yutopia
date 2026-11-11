@@ -50,6 +50,9 @@ export interface GunModel {
   /** made in Blender for the life look (lifeGunModel): life size, its geometry and materials shared
    *  by every copy (not to be disposed with one) */
   life?: boolean;
+  /** (life) where the left hand holds a long gun, and the butt's middle — in the gun's frame */
+  fore?: [number, number, number];
+  butt?: [number, number, number];
 }
 
 type P = BufferGeometry;
@@ -765,6 +768,8 @@ export function lifeGunModel(kind: GunKind, scene: Object3D): GunModel {
     muzzle: at("muzzle"),
     grip: { at: at("grip"), rake: 0 },
     life: true,
+    fore: at("fore"),
+    butt: at("butt"),
   };
 }
 
