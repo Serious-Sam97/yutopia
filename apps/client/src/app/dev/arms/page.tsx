@@ -255,7 +255,7 @@ function Bench({ q }: { q: URLSearchParams }) {
       };
       const GAIT = ["still", "walk", "jog", "sprint"] as const;
       const SPEED = [0, 1.4, 3.2, 5.4];
-      const P3 = person as unknown as { drawT: number; holsterT: number; revLoadT: number };
+      const P3 = person as unknown as { drawT: number; holsterT: number; revLoadT: number; sgLoadT: number };
       const apply = (dt: number) => {
         const s = live.current;
         const aim = s.pose === "aim";
@@ -286,14 +286,17 @@ function Bench({ q }: { q: URLSearchParams }) {
         else if (s.draw < 1) P3.drawT = Math.max(0, s.draw * DRAW - dt);
         p.pitch = aim ? s.pitch : 0;
         p.torch = s.torch;
-        // (the reload: the server's step open — Player.arm — its timeline scrubbed through its 2.2 s)
+        // (the reload: the server's step open — Player.arm — its timeline scrubbed through its 2.2 s; the
+        // double-barrel's 2.3, its shutting its own: ARM.shut — plan 81)
         const t = s.t;
         const reload = s.pose === "reload";
-        (p as { arm?: number }).arm = reload ? 3 : 0;
-        if (reload) P3.revLoadT = Math.max(0, t * 2.2 - dt);
+        const sgT = t * 2.3;
+        (p as { arm?: number }).arm = !reload ? 0 : GUN === "shotgun" && sgT >= 1.95 ? 6 : 3;
+        if (reload && GUN === "shotgun") P3.sgLoadT = Math.max(0, sgT - dt);
+        else if (reload) P3.revLoadT = Math.max(0, t * 2.2 - dt);
         fx.reload = reload ? 1 : 0;
         fx.open = reload ? (t < 0.3 ? t / 0.3 : t < 0.8 ? 1 : 1 - (t - 0.8) / 0.2) : 0;
-        fx.loaded = reload && t < 0.55 ? 0 : 6;
+        fx.loaded = GUN === "shotgun" ? 2 : reload && t < 0.55 ? 0 : 6;
         // (a shot: fired by the button, its kick fading as Arms fades it — or held where the sliders are)
         const since = (performance.now() - fired) / 1000;
         const shot = since < 0.4 ? Math.max(0, 1 - since / 0.25) : 0;

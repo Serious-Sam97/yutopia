@@ -541,7 +541,10 @@ registerFeature((room: WorldRoom) => {
           : now < hd.drawnAt
             ? ARM.draw
             : hd.step
-              ? ARM.open
+              ? // (the double-barrel's closing its own — plan 81: everyone's screen shuts it then; the others' as ever)
+                hd.step === "shut" && p.gun === "shotgun"
+                ? ARM.shut
+                : ARM.open
               : hd.reloadAt
                 ? ARM.reload
                 : now >= hd.boltFrom && now < hd.boltTill

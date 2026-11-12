@@ -35,14 +35,17 @@ export const ARMS = {
   // the double-barrel (plan 32): broken open (`open` s — both shells out, the live one back to the
   // pockets: plan 79 F12a, AW2's), a shell at a time (`reload` s), shut (`shut` s); a shot while it's
   // open snaps it shut first (`snap` s)
+  // (plan 81 F4b: the real one, a shell at a time, ~2.3 s for two — broken open 0.45: the lever, the barrels
+  // dropped, both out; a shell 0.75: fetched from the carrier on the right hip, pushed home; shut 0.35: the
+  // stock lifted to the barrels. Everyone sees the closing: Player.arm ARM.shut)
   shotgun: {
     rate: 0.95,
-    reload: 0.45,
+    reload: 0.75,
     // (plan 81 F6a: off the back, over the right shoulder — 0.35 was a hand's rise from the side)
     draw: 0.6,
     aim: 0.26,
-    open: 0.3,
-    shut: 0.25,
+    open: 0.45,
+    shut: 0.35,
     snap: 0.2,
     damage: 18,
     range: 14,
@@ -233,7 +236,7 @@ export const damageAt = (gun: GunId, base: number, t: number, head: boolean) =>
 /** What a hand's doing with its gun (Player.arm): nothing, drawing it, reloading the revolver
  *  (the gate open), working the bolt after a shot (the sniper's), charging (the Daybreak's), opened to load — the revolver's cylinder out, the double-barrel broken open, the
  *  AK's magazine out (plan 79: its whole reload, the charging handle too, is `open`). */
-export const ARM = { idle: 0, draw: 1, reload: 2, open: 3, bolt: 4, charge: 5 } as const;
+export const ARM = { idle: 0, draw: 1, reload: 2, open: 3, bolt: 4, charge: 5, shut: 6 } as const;
 
 /** One of us hit by another's shot (the HQ armed, plan 30): half what the shadowed take. */
 export const PVP = 0.5;

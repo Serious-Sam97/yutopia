@@ -480,7 +480,9 @@ test("the double-barrel's reload: broken open (both out: the live shell back), a
   await waitFor(() => loaded1() === 1, 2000);
   const first = Date.now() - t0;
   assert.ok(first > (ARMS.shotgun.open + ARMS.shotgun.reload) * 1000 - 150, `the first shell after ${first} ms`);
-  await waitFor(() => loaded1() === 2, 2000);
+  // (plan 81: the closing everyone sees — Player.arm ARM.shut — once the second's in)
+  await waitFor(() => me(b.room).arm === ARM.shut, 2000);
+  await waitFor(() => loaded1() === 2, 1000);
   await waitFor(() => me(b.room).arm === ARM.idle, 2000);
   // spend one; open it again; a shot while it's open (a shell in): shut, nothing fired
   away();
@@ -488,6 +490,7 @@ test("the double-barrel's reload: broken open (both out: the live shell back), a
   b.room.send("arms:reload", {});
   await waitFor(() => me(b.room).arm === ARM.open, 1000);
   shootAt(b, me(b.room).x - 20, me(b.room).y, 11);
+  await waitFor(() => me(b.room).arm === ARM.shut, 1000);
   await waitFor(() => me(b.room).arm === ARM.idle, 1500);
   assert.equal(loaded1(), 1, "snapped shut: nothing loaded, nothing fired");
   // opened again and let be: both out (the live one back to the pockets), then two in

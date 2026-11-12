@@ -258,7 +258,7 @@ export class Arms {
     const now = performance.now();
     if (now - this.shotAt < ARMS[g.id].rate * 1000 - 30) return;
     const arm = this.me()?.arm ?? ARM.idle;
-    if (arm === ARM.draw || arm === ARM.open || arm === ARM.reload) return;
+    if (arm === ARM.draw || arm === ARM.open || arm === ARM.reload || arm === ARM.shut) return;
     if (g.loaded <= 0) {
       this.voices.gun("rifle-dry");
       this.dryAt = now / 1000;
@@ -419,7 +419,8 @@ export class Arms {
     // (not up yet: held till it is; the double-barrel open with a shell in: the click snaps it shut —
     // the server's — and the shot goes when it's shut)
     const arm = this.me()?.arm ?? ARM.idle;
-    if (arm === ARM.draw) {
+    // (being drawn — or the double-barrel shutting, plan 81: the shot goes when it's shut)
+    if (arm === ARM.draw || arm === ARM.shut) {
       this.queued = true;
       return;
     }
@@ -622,7 +623,8 @@ export class Arms {
     // (reloading as the server has it — the gate open, the barrels broken open till they're shut —
     // or as I've just asked)
     const arm = this.me()?.arm ?? ARM.idle;
-    if (this.reloading && (arm === ARM.reload || arm === ARM.open || now - this.reloadAt > 600)) this.reloading = false;
+    if (this.reloading && (arm === ARM.reload || arm === ARM.open || arm === ARM.shut || now - this.reloadAt > 600))
+      this.reloading = false;
     const loading = this.loadingNow();
     this.open = ease(this.open, loading ? 1 : 0, loading ? 10 : 14);
     this.reloadK = ease(this.reloadK, loading && !this.walker.aiming ? 1 : 0, 8);
@@ -676,8 +678,9 @@ export class Arms {
     }
     // (full auto: held, it fires at its rate; let go — or not aiming — the burst's over)
     const pulled = this.triggerDown || this.walker.controls.pad.rt > 0.6;
-    if (g0 && isAuto(g0.id) && pulled && this.walker.aiming && armNow !== ARM.draw && armNow !== ARM.open) this.fire();
-    else if (this.queued && this.walker.aiming && g0 && armNow !== ARM.draw && armNow !== ARM.open) this.fire();
+    const busy = armNow === ARM.draw || armNow === ARM.open || armNow === ARM.shut;
+    if (g0 && isAuto(g0.id) && pulled && this.walker.aiming && !busy) this.fire();
+    else if (this.queued && this.walker.aiming && g0 && !busy) this.fire();
     else if (!this.walker.aiming) this.queued = false;
     if (!pulled && this.burst > 0) this.triggerUp();
     this.gunFx(dt, now);
@@ -939,17 +942,34 @@ export class Arms {
         if (arm === ARM.open) {
           this.voices.gun("shotgun-break", at, 20);
           // (both out — plan 79 F12a: the fired ones kicked out to the ground, mine as many as are spent,
-          // anyone's both; a live one back to the pocket)
+          // anyone's both; a live one back to the pocket — as the barrels come down, plan 81's 0.36 s in)
           const spent = g ? WEAPONS.shotgun.mag - g.loaded : 2;
-          setTimeout(() => this.voices.gun("shotgun-eject", at, 15), 160);
-          if (me) this.brass("shell", spent);
+          const EJECT = 360;
+          setTimeout(() => this.voices.gun("shotgun-eject", at, 15), EJECT);
+          if (me) setTimeout(() => this.brass("shell", spent), EJECT);
           else if (tp && spent > 0) {
             const yaw = (((p.yaw ?? 0) & 255) / 256) * 2 * Math.PI;
-            tp.arms().eject(p.x + Math.cos(yaw) * 0.3, p.y + Math.sin(yaw) * 0.3, p.z + 1.2, yaw, "shell", spent, p.z);
-            setTimeout(() => this.voices.gun(this.walker.outside ? "shell-snow" : "shell-floor", at, 12), 520);
+            setTimeout(
+              () =>
+                tp
+                  .arms()
+                  .eject(p.x + Math.cos(yaw) * 0.3, p.y + Math.sin(yaw) * 0.3, p.z + 1.2, yaw, "shell", spent, p.z),
+              EJECT,
+            );
+            setTimeout(() => this.voices.gun(this.walker.outside ? "shell-snow" : "shell-floor", at, 12), EJECT + 360);
           }
-          loadIn("shotgun");
-        } else if (was.arm === ARM.open) this.voices.gun("shotgun-close", at, 20);
+          // (someone else's shells going in: one a step, while it's still open — plan 81 F4b; mine as the
+          // server counts them)
+          if (!me)
+            for (const k of [1, 2])
+              setTimeout(
+                () => {
+                  if (this.arms.get(p.sid)?.arm === ARM.open) this.voices.gun(LOAD_SOUND.shotgun, at, 15);
+                },
+                (ARMS.shotgun.open + ARMS.shotgun.reload * k) * 1000,
+              );
+          // (plan 81: shut — the stock lifted to the barrels a moment into it)
+        } else if (was.arm === ARM.open) setTimeout(() => this.voices.gun("shotgun-close", at, 20), 180);
       },
     );
     for (const sid of this.arms.keys()) if (!room.state.players.has(sid)) this.arms.delete(sid);

@@ -39,9 +39,15 @@ const POSES: [string, Record<string, unknown>][] = [
   ["aim-torch-up", { pose: "aim", torch: true, pitch: 0.5 }],
   // (the reload's moments, s into its 2.2: in close, the cylinder out; muzzle up; the rod struck; muzzle down,
   // to the pouch; the loader up; in; twisted; let go; shut; up)
-  ...[0.25, 0.45, 0.62, 0.9, 1.04, 1.35, 1.6, 1.74, 1.9, 2.1].map(
-    (s) => [`reload-${s.toFixed(2)}`, { pose: "reload", t: s / 2.2 }] as [string, Record<string, unknown>],
-  ),
+  // (the double-barrel's, s into its 2.3 — plan 81 phase 4: the lever and the barrels down; to the carrier, a
+  // shell drawn; at the left chamber, pushed home; the second; shut; up)
+  ...(process.env.GUN === "shotgun"
+    ? [0.2, 0.42, 0.73, 0.95, 1.15, 1.48, 1.7, 1.9, 2.1, 2.25].map(
+        (s) => [`reload-${s.toFixed(2)}`, { pose: "reload", t: s / 2.3 }] as [string, Record<string, unknown>],
+      )
+    : [0.25, 0.45, 0.62, 0.9, 1.04, 1.35, 1.6, 1.74, 1.9, 2.1].map(
+        (s) => [`reload-${s.toFixed(2)}`, { pose: "reload", t: s / 2.2 }] as [string, Record<string, unknown>],
+      )),
 ];
 
 const browser = await chromium.launch({ args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });

@@ -161,3 +161,104 @@ export const STRAP: { bone: "shoulderR" | "chest" | "hips"; at: [number, number,
 export const STRAP_ENDS = { swivel: new Vector3(-0.26, -0.09, 0), barrels: new Vector3(0.45, 0.03, 0) };
 /** (on a feminine body the chest's point this much further out) */
 export const STRAP_BUST = 0.005;
+
+// ── the reload (plan 81 phase 4: F4b, F5a) ───────────────────────────────────────────────────────────
+// One timeline, s from the server's step opening it (Player.arm ARM.open — its closing ARM.shut: everyone
+// sees both), in time with shared ARMS.shotgun (open 0.45, a shell 0.75, shut 0.35):
+//   0–0.45     the gun down under the right arm (the stock along the forearm, against the ribs), the right thumb
+//              across the top lever, the left hand drops the barrels — the fired shells kicked out (0.36)
+//   0.45–1.95  a shell at a time: the right hand off the wrist down to the carrier on the right hip, a shell
+//              drawn up by its brass, into the left chamber and pushed home (the server counts it at the
+//              step's end); the next into the right
+//   1.95–2.3   the right hand back on the wrist lifts the stock up to the barrels the left holds — shut — and
+//              up to the ready
+// A shot while it's open (the server snaps it shut) or the steps ending early: on from the closing.
+export const SG_LOAD = { open: 0.45, shell: 0.75, shut: 0.35 };
+export const SG_LOAD_CLOSE = SG_LOAD.open + 2 * SG_LOAD.shell;
+export const SG_LOAD_LEN = SG_LOAD_CLOSE + SG_LOAD.shut;
+/** The gun held for loading (her frame from her shoulders' middle: x her left, y up, z ahead; the mocks'):
+ *  its grip, its barrels' way (down, ahead, a little left), its top (rolled a little right) */
+export const SG_LOAD_GUN = {
+  at: [-0.06, -0.27, 0.2] as [number, number, number],
+  f: [0.22, -0.58, 0.81] as [number, number, number],
+  u: [-0.45, 1, 0] as [number, number, number],
+};
+/** Her trunk turned this far right while loading (the mocks' — the hold's is SG_BLADE) */
+export const SG_LOAD_BLADE = 0.3;
+/** The gun's legs: the hold → down for loading → the hold (s) */
+export const SG_LOAD_GUN_LEGS: [string, string, number, number][] = [
+  ["hold", "load", 0, 0.3],
+  ["load", "load", 0.3, 2.1],
+  ["load", "hold", 2.1, SG_LOAD_LEN],
+];
+/** The right hand's legs: the stock's wrist (its thumb on the lever, opening it), each shell's loop on the
+ *  carrier, the chamber's mouth (the shell half in), pushed home — the left chamber, then the right */
+export const SG_LOAD_RIGHT: [string, string, number, number][] = (() => {
+  const legs: [string, string, number, number][] = [["grip", "grip", 0, SG_LOAD.open]];
+  for (const i of [0, 1]) {
+    const s = SG_LOAD.open + i * SG_LOAD.shell;
+    const e = SG_LOAD.shell;
+    legs.push(
+      [i ? "home0" : "grip", `loop${i}`, s, s + 0.26 * e],
+      [`loop${i}`, `loop${i}`, s + 0.26 * e, s + 0.36 * e],
+      [`loop${i}`, `mouth${i}`, s + 0.36 * e, s + 0.78 * e],
+      [`mouth${i}`, `home${i}`, s + 0.78 * e, s + e],
+    );
+  }
+  legs.push(
+    ["home1", "grip", SG_LOAD_CLOSE, SG_LOAD_CLOSE + 0.14],
+    ["grip", "grip", SG_LOAD_CLOSE + 0.14, SG_LOAD_LEN],
+  );
+  return legs;
+})();
+const smooth = (a: number, b: number, t: number) => {
+  const c = Math.max(0, Math.min(1, (t - a) / (b - a)));
+  return c * c * (3 - 2 * c);
+};
+/** The gun's moving parts and the hands' at `t`: the barrels dropped (0..1 — lifted shut by the stock from
+ *  SG_LOAD_CLOSE), the shells out of it yet, how many pushed home since, the shell in the right hand (its
+ *  chamber, −1: none), how many drawn from the carrier */
+export function sgLoadAt(t: number) {
+  const s0 = SG_LOAD.open;
+  const e = SG_LOAD.shell;
+  const home = (t >= s0 + e ? 1 : 0) + (t >= s0 + 2 * e ? 1 : 0);
+  const inHand = t >= s0 + 0.32 * e && t < s0 + e ? 0 : t >= s0 + e + 0.32 * e && t < s0 + 2 * e ? 1 : -1;
+  return {
+    open: smooth(0.16, 0.4, t) * (1 - smooth(SG_LOAD_CLOSE + 0.06, SG_LOAD_CLOSE + 0.22, t)),
+    ejected: t >= 0.36,
+    home,
+    inHand,
+    drawn: (t >= s0 + 0.32 * e ? 1 : 0) + (t >= s0 + e + 0.32 * e ? 1 : 0),
+    /** the right thumb across the top lever (0..1) */
+    lever: smooth(0.04, 0.14, t) * (1 - smooth(0.34, 0.44, t)),
+  };
+}
+/** (the gun's frame) A chamber's mouth — the barrels' breech face (0 the left, 1 the right) */
+export const CHAMBER = (i: number, out: Vector3) => out.set(0.142, 0.066, i === 0 ? -0.0118 : 0.0118);
+/** The shell (guns3d shellGeometry: +x its hull's way, its rim 1 cm behind its origin) at a chamber's mouth,
+ *  half in: its origin this far behind the mouth; pushed home, this far in */
+export const SHELL_MOUTH = { out: 0.024, home: -0.0094 };
+/** The right hand pushing it — the shell pinched by its brass in the fingertips and the thumb, its hull out
+ *  ahead of them: the palm's middle this far behind the shell's rim, along the bore */
+export const SHELL_PALM = 0.055;
+/** (the gun's frame) The top lever, where the right thumb goes across it */
+export const LEVER_THUMB = new Vector3(0.0, 0.083, 0.012);
+
+/** The shell carrier on the belt at her right hip's side (F5a; the hips' own space: x her left, y up, z
+ *  ahead): its strip's middle, its turn (its x along the belt toward her front, its y up, its z out from
+ *  her), four shells upright in its loops, their brass up — the hand takes the front two */
+export const CARRIER = {
+  at: new Vector3(-0.19, -0.04, 0.11),
+  turn: new Quaternion().setFromRotationMatrix(
+    new Matrix4().makeBasis(
+      new Vector3(0.3, 0, 0.95).normalize(),
+      new Vector3(0, 1, 0),
+      new Vector3(-0.95, 0, 0.3).normalize(),
+    ),
+  ),
+  loops: [-0.03, -0.01, 0.01, 0.03],
+  /** the shells' axis out from the strip; their origin's height (their rim 1 cm over it) */
+  out: 0.0166,
+  y: 0.022,
+  take: [3, 2],
+};

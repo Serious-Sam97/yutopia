@@ -181,6 +181,31 @@ Plan 80's machinery, for a long gun:
 4. **The reload** (F4, F5) — the timeline: the lever, the barrels dropped by the left hand, the ejectors (the
    shells out as now), the right hand to the carrier and back with two (or one), in, the stock lifted to
    close, the grip retaken; a shot mid-way snaps it shut; the server's steps retimed; everyone sees it.
+   **Built 2026-11-12:**
+   - **The server's steps retimed** (F4b, shared `ARMS.shotgun`): broken open 0.45 s (was 0.3), a shell 0.75
+     s (was 0.45), shut 0.35 s (was 0.25) — 2.3 s for two. **Its closing everyone's** (`ARM.shut`, Player.arm
+     6 — the double-barrel's only, the others' as they were): the clients shut it when the server does, so a
+     shot mid-way (it snaps shut) or a single shell left shuts it on time. Mine: a shot asked while it's
+     shutting waits for it (queued, as while it's drawn).
+   - **One timeline** (`tp/shotgun-hold.ts` `SG_LOAD*`, `Person3D.longHands` + `sgRight`), from the server's
+     step opening it: the gun down under the right arm (the stock along the forearm against the ribs, her
+     trunk turned less), the right thumb across the top lever, the left hand drops the barrels (it holds
+     them the whole reload, under the fore-end by the hinge); the fired shells kicked out at 0.36 s (the
+     sound and the brass with them — were at the break); then for each chamber, the left then the right, the
+     right hand off the wrist down to the carrier, a shell drawn up by its brass, into the chamber and pushed
+     home — the chamber's shell showing the moment the server counts it; then the right hand back on the wrist
+     lifts **the stock up to the barrels** (they stay where the left hand has them) — shut — and up to the
+     ready. Her eyes on the breech while loading.
+   - **The shell carrier** (F5a): a leather strip on the belt at her right hip's side, four shells upright
+     in its loops, their brass up — drawn whenever she carries the double-barrel (slung or out); the two she
+     draws gone from it till the gun's shut. **The shell pinched** by its brass in the fingertips and the
+     thumb, its hull out ahead of them, so it shows going in.
+   - **The sounds in time**: the eject at 0.36 s; someone else's shells going in, one a step while it's still
+     open; the close as the stock comes up (0.18 s into the shut).
+   - The bench scrubs it (`/dev/arms?gun=shotgun`, pose reload: its 2.3 s); its capture keys the moments.
+   - **Checks**: both hands on their places through it (the left on the barrels, the right at the carrier, the
+     chamber, home); the shell into the chamber's mouth (under 1 cm off it pushing home); the server's
+     arms tests (16 — the steps' times, ARM.shut, the snap).
 5. **Everything else held** — plan 80's: let go in a roll, a vault, sat, a hit's flinch; the far people's
    cheaper hold.
 6. **Checks** — the bench spec (as plan 80's), the two-of-us world spec (holstered → slung, drawn, aimed,
