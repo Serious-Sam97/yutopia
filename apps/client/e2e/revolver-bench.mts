@@ -36,6 +36,10 @@ const POSES: [string, Record<string, unknown>][] = [
   ["hit-0.1", { pose: "aim", act: "hit", actT: 0.1 }],
   ["hit-0.5", { pose: "aim", act: "hit", actT: 0.5 }],
   ["roll-0.4", { pose: "ready", act: "roll", actT: 0.4 }],
+  // (plan 81 phase 5: a vault, a slide, sat — the double-barrel pulled in across her chest, or let go sat)
+  ["vault-0.4", { pose: "ready", act: "vault", actT: 0.4 }],
+  ["slide-0.4", { pose: "ready", act: "slide", actT: 0.4 }],
+  ["sit", { pose: "ready", act: "sit" }],
   ["aim-torch-up", { pose: "aim", torch: true, pitch: 0.5 }],
   // (the reload's moments, s into its 2.2: in close, the cylinder out; muzzle up; the rod struck; muzzle down,
   // to the pouch; the loader up; in; twisted; let go; shut; up)
@@ -85,7 +89,13 @@ const report = (name: string, c: any) => {
     typeof c.arms === "number" && c.arms < -0.005 && "an arm through the gun",
     c.L && c.L.short > 0.015 && "the left short",
   ].filter(Boolean);
-  if (!/^(reload|hit|roll)/.test(name) && !name.startsWith("draw") && !name.startsWith("away") && fails.length) bad++;
+  if (
+    !/^(reload|hit|roll|vault|slide|sit)/.test(name) &&
+    !name.startsWith("draw") &&
+    !name.startsWith("away") &&
+    fails.length
+  )
+    bad++;
   console.log(
     `${name.padEnd(12)} ${JSON.stringify(line)}${fails.length ? `  ✗ ${fails.join(", ")} (nearest: ${c.where})` : ""}`,
   );

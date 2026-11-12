@@ -208,6 +208,20 @@ Plan 80's machinery, for a long gun:
      arms tests (16 — the steps' times, ARM.shut, the snap).
 5. **Everything else held** — plan 80's: let go in a roll, a vault, sat, a hit's flinch; the far people's
    cheaper hold.
+   **Built 2026-11-12:**
+   - **Let go, as the revolver's** (plan 80), in one hand, it hung from the fist along the fingers — a 1.1 m
+     gun: thrown up by a hit's flinch it stood straight up before her face, in a vault it went through her
+     leg and the floor, at the end of a roll it stood up through her knees. So **in a roll, a vault, a slide,
+     Flowmotion, and struck, it's kept — pulled in across her chest** (port arms, `SG_PORT`): both hands on
+     (the right on the stock's wrist by her right hip's front, the left up the fore-end), the barrels up past
+     her left shoulder, its top in toward her — in her chest's own frame, so it goes round with her through
+     a roll; eased in and out (0.08 s). Not mid-reload (the reload's hands have it).
+   - **Let go as before** sat (on her lap, along her thighs), swimming, busy at something, a mantle (her
+     hands on the ledge), the ragdoll — the gun in her right hand, eased back on after.
+   - **The far people's cheaper hold** (plan 80's: past 11 m no elbow search, no fingers, thumb, trigger
+     finger or head) holds for it, the reload's too: 0.22–0.35 ms a person near, 0.04–0.05 ms far (the
+     revolver's 0.29 / 0.04).
+   - The bench takes a vault, a slide and sat (`act`), and its capture keys them.
 6. **Checks** — the bench spec (as plan 80's), the two-of-us world spec (holstered → slung, drawn, aimed,
    fired, reloaded), stills in the world.
 

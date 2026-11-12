@@ -262,3 +262,20 @@ export const CARRIER = {
   y: 0.022,
   take: [3, 2],
 };
+
+// ── everything else (plan 81 phase 5) ─────────────────────────────────────────────────────────────────
+/** In a whole-body move — a roll, a vault, a slide, Flowmotion — or struck: the gun pulled in across her chest
+ *  (port arms), both hands on, in her chest's own frame (x her left, y up, z ahead) so it goes round with her:
+ *  the right hand on the stock's wrist by her right hip's front, the barrels up past her left shoulder, its
+ *  top out ahead — a long gun let go of in one hand swung through her legs, the floor, her face */
+export const SG_PORT = {
+  at: new Vector3(-0.08, -0.24, 0.3),
+  turn: gunQuat(
+    new Vector3(0.45, 0.82, 0.36).normalize(),
+    new Vector3(0, 0, -1).addScaledVector(
+      new Vector3(0.45, 0.82, 0.36).normalize(),
+      0.36 / Math.hypot(0.45, 0.82, 0.36),
+    ),
+    new Quaternion(),
+  ),
+};

@@ -96,6 +96,7 @@ import {
   SG_LOAD_GUN_LEGS,
   SG_LOAD_LEN,
   SG_LOAD_RIGHT,
+  SG_PORT,
   SG_TORCH,
   SG_TORCH_HELD,
   SG_WRIST_SHAPE,
@@ -799,6 +800,9 @@ export class Person3D {
     // (plan 80 phase 5: a whole-body move — a vault, a mantle, a roll, a slide, Flowmotion, sat, swimming,
     // busy at something: the hands are the move's, the revolver's two-handed hold lets go of them)
     this.bodyBusy = !!verb || !!flow || sitting || (p.swim ?? 0) > 0 || !!p.busy;
+    // (plan 81 phase 5: …of them the ones the double-barrel's kept through, pulled in across the chest — all but
+    // a mantle's, its hands on the ledge)
+    this.portMove = (!!verb && verb.kind !== "mantle") || !!flow;
     const mo =
       given ??
       this.motion.update(step, {
@@ -1538,15 +1542,21 @@ export class Person3D {
         else if (this.sgLoadT >= SG_LOAD_LEN) this.sgLoadT = -1;
       }
       const reloading = this.sgLoadT >= 0;
-      const hold = !p.down && p.fell === undefined && !this.bodyBusy && !this.limp?.on;
+      // (plan 81 phase 5: let go — sat, swimming, busy, a mantle, the ragdoll; a roll, a vault, a slide,
+      // Flowmotion, struck: kept, pulled in across her chest — both hands on)
+      const hold = !p.down && p.fell === undefined && (!this.bodyBusy || this.portMove) && !this.limp?.on;
       this.revW += ((hold ? 1 : 0) - this.revW) * (1 - Math.exp(-dt * 14));
       const run = Math.max(0, Math.min(1, (this.spd - 2.8) / 2));
       const hitT = p.hit?.t ?? 9;
       const struck = hitT < 0.7 ? 1 - (hitT / 0.7) ** 2 : 0;
+      const port = this.portMove || struck > 0.2 ? 1 : 0;
+      this.lgPortW += (port - this.lgPortW) * (1 - Math.exp(-dt * 12));
       // (drawn off her back, put back on it: the draw's path — plan 81 phase 2)
       const draw = away ? Math.max(0, 1 - this.holsterT / SG_AWAY_S) : drawn;
-      const sw = this.revW * (1 - 0.8 * struck);
-      if (sw > 0.01) this.longHands(p, sw, aiming && !loading && !away && !reloading, run, dt, draw);
+      const sw = this.revW;
+      const ported = this.lgPortW > 0.5;
+      if (sw > 0.01)
+        this.longHands(p, sw, aiming && !loading && !away && !reloading && !ported, run, dt, draw, this.lgPortW);
       if (!this.revFree) {
         gun.root.position.set(0, 0, 0);
         gun.root.scale.setScalar(LIFE_GUN_SCALE);
@@ -1675,6 +1685,9 @@ export class Person3D {
   private farHold = false;
   /** (plan 80 phase 5) this frame the body's in a whole-body move: the hold lets go */
   private bodyBusy = false;
+  private portMove = false;
+  /** (plan 81 phase 5) the double-barrel pulled in across her chest, this much */
+  private lgPortW = 0;
   private revHolster = { grip: new Vector3(), f: new Vector3(), u: new Vector3() };
   private revolverHands(p: PersonIn, w: number, aiming: boolean, run: number, draw: number, dt: number) {
     const m = this.model;
@@ -2146,7 +2159,7 @@ export class Person3D {
    *  butt in her right shoulder's pocket (the low ready, or aimed), eased between them in its own time; the
    *  right wrist put where the gun — held in the fist by the stock's wrist — comes to that place; the left palm
    *  up under the fore-end as far out as her arm reaches, its fingers closed round it */
-  private longHands(p: PersonIn, w: number, aiming: boolean, run: number, dt: number, draw = 1) {
+  private longHands(p: PersonIn, w: number, aiming: boolean, run: number, dt: number, draw = 1, port = 0) {
     const m = this.model;
     const gun = this.gun;
     const sL = m.bone("shoulderL");
@@ -2161,6 +2174,8 @@ export class Person3D {
     const L = LT >= 0 ? sgLoadAt(LT) : null;
     const gLeg = L ? legAt(SG_LOAD_GUN_LEGS, LT) : null;
     const kLoad = !gLeg ? 0 : gLeg.a === "load" ? (gLeg.b === "load" ? 1 : 1 - gLeg.k) : gLeg.k;
+    // (pulled in across her chest — not mid-reload: the reload's hands have it)
+    const pw = L ? 0 : port;
     // her trunk turned right of the gun's way: square, her left arm couldn't reach the fore-end (loading, less)
     m.root.updateMatrixWorld(true);
     sR.getWorldPosition(rv1).sub(sL.getWorldPosition(rv2));
@@ -2182,8 +2197,8 @@ export class Person3D {
       const b = m.bone(j);
       if (!b?.parent) continue;
       b.parent.getWorldQuaternion(rq1);
-      rq2.setFromAxisAngle(Y3, turn * k * w * Math.min(1, draw * 1.5));
-      if (lean) rq2.premultiply(rq3.setFromAxisAngle(rv5, lean * k));
+      rq2.setFromAxisAngle(Y3, turn * k * w * Math.min(1, draw * 1.5) * (1 - pw));
+      if (lean) rq2.premultiply(rq3.setFromAxisAngle(rv5, lean * k * (1 - pw)));
       b.quaternion.premultiply(rq2.premultiply(rTurn.copy(rq1).invert()).multiply(rq1));
     }
     const B = this.revFrame(p, aiming);
@@ -2214,6 +2229,22 @@ export class Person3D {
       H.grip.sub(butt).applyQuaternion(rq2).add(butt);
       H.q.premultiply(rq2);
       H.grip.addScaledVector(rv2.set(1, 0, 0).applyQuaternion(H.q), -SG_KICK.back * B.k * kick);
+    }
+    // a whole-body move or struck: pulled in across her chest (port arms — her chest's frame: it goes round with
+    // her), both hands on
+    if (pw > 0.001) {
+      const chest = m.bone("chest");
+      if (chest) {
+        chest.updateWorldMatrix(true, false);
+        rM.compose(SG_PORT.at, SG_PORT.turn, rs2.set(1, 1, 1))
+          .premultiply(chest.matrixWorld)
+          .decompose(rgA, rqA, rs1);
+        H.grip.lerp(rgA, pw);
+        H.q.slerp(rqA, pw);
+        // (the hold's ease follows it, so it eases back from here)
+        E.pos.copy(H.grip).applyMatrix4(rM.copy(RW).invert());
+        E.quat.copy(this.root.getWorldQuaternion(rqRoot)).invert().multiply(H.q);
+      }
     }
     // reloading: the gun between the hold and down under the right arm for loading — shut by the stock lifted
     // about the hinge up to the barrels (they stay where the left hand has them)

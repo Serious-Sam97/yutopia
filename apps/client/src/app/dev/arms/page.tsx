@@ -33,7 +33,7 @@ interface State {
   kick: number;
   trigger: number;
   /** (phase 5) a hit taken (`actT` s since) or a roll (`actT` of the way through it) — the hold lets go */
-  act: "" | "hit" | "roll" | "heard";
+  act: "" | "hit" | "roll" | "heard" | "vault" | "slide" | "sit";
   actT: number;
   /** (phase 6) her facing turned from +z (rad): the hold at any turn */
   yaw: number;
@@ -271,7 +271,10 @@ function Bench({ q }: { q: URLSearchParams }) {
         p.angle = Math.PI / 2 + s.yaw;
         const P = p as { hit?: { t: number; yaw: number }; verb?: { kind: string; t: number } };
         P.hit = s.act === "hit" ? { t: s.actT, yaw: 0.6 } : undefined;
-        P.verb = s.act === "roll" ? { kind: "roll", t: s.actT } : undefined;
+        P.verb = s.act === "roll" || s.act === "vault" || s.act === "slide" ? { kind: s.act, t: s.actT } : undefined;
+        // (sat on a chair — plan 81 phase 5: the hold let go of, the gun in the hand)
+        (p as { a?: number; seat?: string }).a = s.act === "sit" ? 2 : 0;
+        (p as { a?: number; seat?: string }).seat = s.act === "sit" ? "chair" : undefined;
         // (a shot heard 4 m off, 30° to her left of the way she faces, `actT` s ago)
         const ha = p.angle + 1.2;
         (p as { heard?: unknown }).heard =
