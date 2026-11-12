@@ -1,0 +1,160 @@
+// Plans 81–82 — a long gun held as a person holds one, the same for each: the gun the anchor, placed by its
+// butt in the right shoulder's pocket (aimed) or carried as that gun is; the right hand on its grip by a frame
+// of its own (the gun fixed in the fist); the left palm on the gun's fore part as far out as the arm reaches.
+// What differs gun to gun — its sockets, its carry, its blades, its kick, its checks — is its LongSpec
+// (tp/shotgun-hold.ts SG_LONG, tp/ak-hold.ts AK_LONG). The gun's own frame: x along the bore, y its top, z its
+// right; m.
+import { Matrix4, type Quaternion, Vector3 } from "three";
+import type { HandFrame, HeldShape } from "../chars/props";
+import { at, type BodyFrame, bodyDir, gunQuat } from "./revolver-hold";
+
+export interface LongSpec {
+  key: string;
+  /** The right hand on the gun's grip: its palm's middle, the fingers' way, its index side */
+  wrist: { palm: Vector3; along: Vector3; index: Vector3 };
+  /** …what its fingers close round (the shape's y along `axis`) */
+  wristShape: { at: Vector3; axis: Vector3; shape: HeldShape };
+  /** The left palm on the fore part: on `part` of the gun (null: the gun itself) — its origin the gun's point
+   *  `pivot` — the palm's middle this high, from `x[0]` out to `x[1]` along, the fingers' way, the index side;
+   *  what the fingers close round (a box along the gun, its middle this high); the thumb's place (ahead of
+   *  the palm's middle, its height, across) */
+  fore: {
+    part: string | null;
+    pivot: Vector3;
+    y: number;
+    x: [number, number];
+    along: Vector3;
+    index: Vector3;
+    shape: { y: number; shape: HeldShape };
+    thumb: [number, number, number];
+  };
+  /** The torch in the left fist along the bore under the fore part: its axis this high, its middle this far
+   *  ahead of the palm's, the palm's middle then this high; what the fingers close round; the thumb's place */
+  torch: { y: number; ahead: number; palm: number; held: HeldShape; thumb: [number, number, number] };
+  /** The butt pad's middle */
+  butt: Vector3;
+  /** Carried, not aimed: `side` — in the right hand alone at her side, the grip at `at` in her frame (x left,
+   *  y up, z ahead from her shoulders' middle), the bore's way `f`, its top's `u`; `ready` — the low ready,
+   *  both hands on, the butt at the shoulder's front (the pocket `pocket` from the shoulder's joint: left, up,
+   *  ahead — on a fuller chest further ahead, as aimed), the muzzle `down` rad under level and `across` to
+   *  her left; running, the muzzle `run` steeper */
+  carry:
+    | {
+        kind: "side";
+        at: [number, number, number];
+        f: [number, number, number];
+        u: [number, number, number];
+        run: number;
+      }
+    | { kind: "ready"; pocket: [number, number, number]; down: number; across: number; run: number };
+  /** Aimed: the pocket this far up (the butt's heel at the shoulder's top), the trunk bent with the pitch this
+   *  much of it, on a fuller chest the pocket this much further ahead */
+  aim: { up: number; trunk: number; bust: number };
+  /** Her trunk turned this far right of the gun's way: carried, aimed (rad) */
+  blade: { ready: number; aim: number };
+  /** Her left shoulder brought forward this far with her left hand on it (m) */
+  protract: number;
+  /** A shot's kick aimed (gunFx.kick 0..1): the muzzle up about the butt (rad), back into the shoulder (m),
+   *  her trunk rocked back (rad) */
+  kick: { flip: number; back: number; rock: number };
+  /** Up from the carry to the aim (s; shared ARMS' aim) */
+  aimS: number;
+  /** The left hand on the gun carried too (else free till she aims) */
+  leftCarried: boolean;
+  /** The right forearm kept out of the stock — a rod from `a` to `b` (x, y), `r` round — carried; null: never */
+  avoid: { a: [number, number]; b: [number, number]; r: number } | null;
+  /** The bench's checks: the left fingers against boxes on the gun (its middle x, y and half-sizes), the
+   *  forearms against rods on it (a → b, x and y, `r` round), each in the gun's frame or (`fore`) the fore
+   *  part's (less its pivot); the stock's side profile (its top and bottom lines by x, from `x[0]` to `x[1]`,
+   *  `z` either side of its middle) for what of it is inside her */
+  check: {
+    boxes: { c: [number, number]; h: [number, number, number]; fore: boolean }[];
+    rods: { a: [number, number]; b: [number, number]; r: number; fore: boolean }[];
+    stock: { x: [number, number]; top: [number, number][]; bot: [number, number][]; z: number };
+  };
+}
+
+/** The gun's turn (the world's) and its grip point, for its butt in the right shoulder's pocket (aimed, or at
+ *  the low ready) — or carried at her side */
+export function longHold(
+  LS: LongSpec,
+  B: BodyFrame,
+  shoulderR: Vector3,
+  s: { aiming: boolean; pitch: number; run: number; bust?: number },
+  out: { grip: Vector3; f: Vector3; u: Vector3; q: Quaternion },
+): void {
+  const { up, ahead, left } = B;
+  const K = LS.carry;
+  if (!s.aiming && K.kind === "side") {
+    // carried at her side; running, the muzzle steeper
+    const d = Math.atan2(-K.f[1], K.f[2]) + K.run * s.run;
+    bodyDir(B, [K.f[0], -Math.sin(d), Math.cos(d)], out.f);
+    bodyDir(B, K.u, out.u);
+    out.u.addScaledVector(out.f, -out.u.dot(out.f)).normalize();
+    gunQuat(out.f, out.u, out.q);
+    at(B, K.at[0], K.at[1], K.at[2], out.grip);
+    return;
+  }
+  const pocket = _p.copy(shoulderR);
+  if (!s.aiming && K.kind === "ready") {
+    // the low ready: the butt at the shoulder's front, the muzzle down and a little across her
+    const d = K.down + K.run * s.run;
+    bodyDir(B, [K.across, -Math.sin(d), Math.cos(d)], out.f);
+    out.u.copy(up).addScaledVector(out.f, -up.dot(out.f)).normalize();
+    pocket
+      .addScaledVector(left, K.pocket[0] * B.k)
+      .addScaledVector(up, K.pocket[1] * B.k)
+      .addScaledVector(ahead, (K.pocket[2] + LS.aim.bust * (s.bust ?? 0)) * B.k);
+  } else {
+    const c = Math.cos(s.pitch);
+    const sn = Math.sin(s.pitch);
+    out.f.copy(ahead).multiplyScalar(c).addScaledVector(up, sn);
+    out.u.copy(up).multiplyScalar(c).addScaledVector(ahead, -sn);
+    pocket
+      .addScaledVector(left, 0.06 * B.k)
+      .addScaledVector(ahead, (0.07 + LS.aim.bust * (s.bust ?? 0)) * B.k)
+      .addScaledVector(up, (LS.aim.up - 0.025) * B.k);
+  }
+  gunQuat(out.f, out.u, out.q);
+  // (the grip point: the pocket less the butt's place in the gun)
+  out.grip.copy(pocket).sub(_b.copy(LS.butt).multiplyScalar(B.k).applyQuaternion(out.q));
+}
+
+/** The gun's frame under the right wrist (its wrist's space): held so the hand's own frame meets the grip's
+ *  socket — into q, p */
+export function longInHand(LS: LongSpec, F: HandFrame, q: Quaternion, p: Vector3) {
+  const a = _a.copy(F.along).normalize();
+  const b = _c.copy(F.across).addScaledVector(a, -F.across.dot(a)).normalize();
+  _m1.makeBasis(a, b, _d.crossVectors(a, b));
+  const W = LS.wrist;
+  const ga = _a2.copy(W.along);
+  const gb = _c2.copy(W.index).addScaledVector(ga, -W.index.dot(ga)).normalize();
+  _m2.makeBasis(ga, gb, _d2.crossVectors(ga, gb));
+  q.setFromRotationMatrix(_m1.multiply(_m2.transpose()));
+  // (the palm's middle — 0.55 of the way to the middle knuckle, 2.2 cm out of the palm — on the socket)
+  const palm = _p.copy(F.mid).multiplyScalar(0.55).addScaledVector(_d.copy(F.n).normalize(), 0.022);
+  p.copy(palm).sub(_b.copy(W.palm).applyQuaternion(q));
+}
+
+const _p = new Vector3();
+const _b = new Vector3();
+const _a = new Vector3();
+const _c = new Vector3();
+const _d = new Vector3();
+const _a2 = new Vector3();
+const _c2 = new Vector3();
+const _d2 = new Vector3();
+const _m1 = new Matrix4();
+const _m2 = new Matrix4();
+
+/** A piecewise line's y at x (held level past its ends) — the stock's profile */
+export function lineAt(pts: [number, number][], x: number): number {
+  if (x >= pts[0][0]) return pts[0][1];
+  for (let i = 1; i < pts.length; i++)
+    if (x >= pts[i][0]) {
+      const [x0, y0] = pts[i - 1];
+      const [x1, y1] = pts[i];
+      return y0 + ((x - x0) / (x1 - x0)) * (y1 - y0);
+    }
+  return pts[pts.length - 1][1];
+}

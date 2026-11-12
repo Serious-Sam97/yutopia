@@ -59,7 +59,7 @@ const page = await browser.newPage({ viewport: { width: 1100, height: 760 } });
 page.on("pageerror", (e) => console.log("  page:", e.message));
 // (GUN=shotgun: the double-barrel's — plan 81)
 const gun = process.env.GUN ?? "revolver";
-await page.goto(`${base}/dev/arms?gun=${gun}&view=side`);
+await page.goto(`${base}/dev/arms?gun=${gun}&view=side${process.env.Q ?? ""}`);
 await page.waitForFunction(() => (window as any).__revolver?.ready, null, { timeout: 120_000 });
 const set = (s: Record<string, unknown>) => page.evaluate((s) => (window as any).__revolver.set(s), s);
 const check = () => page.evaluate(() => (window as any).__revolver.check());

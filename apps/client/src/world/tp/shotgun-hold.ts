@@ -6,8 +6,9 @@
 // side, as far out as the arm reaches. The numbers the phase 0 mocks' (tools/art/guns/mock81.py, signed off
 // 2026-11-12) — in the gun's own frame here (x along the barrels, y its top, z its right; m).
 import { Matrix4, Quaternion, Vector3 } from "three";
-import type { HandFrame, HeldShape } from "../chars/props";
-import { at, type BodyFrame, bodyDir, gunQuat } from "./revolver-hold";
+import type { HeldShape } from "../chars/props";
+import type { LongSpec } from "./long-hold";
+import { gunQuat } from "./revolver-hold";
 
 /** The right hand on the stock's wrist: its palm's middle (its skin on the wrist's right side), the fingers'
  *  way (forward and down round the wrist's front), its index side (forward and up) */
@@ -87,65 +88,58 @@ export const SG_PROTRACT = 0.065;
  *  action — curled under it, it looked folded away, the wood showing through it: 2026-11-12's feedback) */
 export const SG_BLADE = 0.5;
 
-/** The gun's turn (the world's) and its grip point, for its butt in the right shoulder's pocket: the pocket
- *  in from the shoulder's joint, ahead of it, a little under (`up` higher) */
-export function longHold(
-  B: BodyFrame,
-  shoulderR: Vector3,
-  s: { aiming: boolean; pitch: number; run: number; bust?: number },
-  out: { grip: Vector3; f: Vector3; u: Vector3; q: Quaternion },
-): void {
-  const { up, ahead, left } = B;
-  if (!s.aiming) {
-    // carried at her side (SG_CARRY); running, the muzzle steeper
-    const K = SG_CARRY;
-    const d = Math.atan2(-K.f[1], K.f[2]) + K.run * s.run;
-    bodyDir(B, [K.f[0], -Math.sin(d), Math.cos(d)], out.f);
-    bodyDir(B, K.u, out.u);
-    out.u.addScaledVector(out.f, -out.u.dot(out.f)).normalize();
-    gunQuat(out.f, out.u, out.q);
-    at(B, K.at[0], K.at[1], K.at[2], out.grip);
-    return;
-  }
-  const c = Math.cos(s.pitch);
-  const sn = Math.sin(s.pitch);
-  out.f.copy(ahead).multiplyScalar(c).addScaledVector(up, sn);
-  out.u.copy(up).multiplyScalar(c).addScaledVector(ahead, -sn);
-  gunQuat(out.f, out.u, out.q);
-  const pocket = _p
-    .copy(shoulderR)
-    .addScaledVector(left, 0.06 * B.k)
-    .addScaledVector(ahead, (0.07 + SG_AIM.bust * (s.bust ?? 0)) * B.k)
-    .addScaledVector(up, (SG_AIM.up - 0.025) * B.k);
-  // (the grip point: the pocket less the butt's place in the gun)
-  out.grip.copy(pocket).sub(_b.copy(SG_BUTT).multiplyScalar(B.k).applyQuaternion(out.q));
-}
+/** (the shared ARMS.shotgun.aim, s) up from the carry to the aim */
+export const SG_AIM_S = 0.26;
 
-/** The gun's frame under the right wrist (its wrist's space): held so the hand's own frame meets the
- *  stock's wrist socket — into q, p */
-export function longInHand(F: HandFrame, q: Quaternion, p: Vector3) {
-  const a = _a.copy(F.along).normalize();
-  const b = _c.copy(F.across).addScaledVector(a, -F.across.dot(a)).normalize();
-  _m1.makeBasis(a, b, _d.crossVectors(a, b));
-  const ga = _a2.copy(SG_WRIST.along);
-  const gb = _c2.copy(SG_WRIST.index).addScaledVector(ga, -SG_WRIST.index.dot(ga)).normalize();
-  _m2.makeBasis(ga, gb, _d2.crossVectors(ga, gb));
-  q.setFromRotationMatrix(_m1.multiply(_m2.transpose()));
-  // (the palm's middle — 0.55 of the way to the middle knuckle, 2.2 cm out of the palm — on the socket)
-  const palm = _p.copy(F.mid).multiplyScalar(0.55).addScaledVector(_d.copy(F.n).normalize(), 0.022);
-  p.copy(palm).sub(_b.copy(SG_WRIST.palm).applyQuaternion(q));
-}
-
-const _p = new Vector3();
-const _b = new Vector3();
-const _a = new Vector3();
-const _c = new Vector3();
-const _d = new Vector3();
-const _a2 = new Vector3();
-const _c2 = new Vector3();
-const _d2 = new Vector3();
-const _m1 = new Matrix4();
-const _m2 = new Matrix4();
+/** The double-barrel as tp/long-hold.ts holds a long gun */
+export const SG_LONG: LongSpec = {
+  key: "shotgun",
+  wrist: SG_WRIST,
+  wristShape: SG_WRIST_SHAPE,
+  fore: {
+    part: "barrels",
+    pivot: SG_HINGE,
+    y: SG_FORE.y,
+    x: FORE_X,
+    along: SG_FORE.along,
+    index: SG_FORE.index,
+    shape: SG_FORE_SHAPE,
+    // (laid along the fore-end's left side, ahead — closed round the box it went into it)
+    thumb: [0.09, 0.036, -0.037],
+  },
+  torch: { ...SG_TORCH, held: SG_TORCH_HELD, thumb: [0.075, SG_TORCH.y + 0.004, -0.02] },
+  butt: SG_BUTT,
+  carry: { kind: "side", ...SG_CARRY },
+  aim: SG_AIM,
+  blade: { ready: SG_READY.blade, aim: SG_BLADE },
+  protract: SG_PROTRACT,
+  kick: SG_KICK,
+  aimS: SG_AIM_S,
+  leftCarried: false,
+  avoid: { a: [-0.37, -0.03], b: [-0.12, -0.005], r: 0.045 },
+  check: {
+    // (the fore-end a box on the barrels: 0.16–0.42 along, 3.4 cm tall round 0.043, 5.4 wide)
+    boxes: [{ c: [0.29, 0.043], h: [0.13, 0.017, 0.027], fore: true }],
+    // (the stock; the barrels past the fore-end)
+    rods: [
+      { a: [-0.02, -0.01], b: [-0.38, -0.03], r: 0.022, fore: false },
+      { a: [0.43, 0.055], b: [0.85, 0.066], r: 0.02, fore: true },
+    ],
+    // (tools/art/guns/guns.py's stock)
+    stock: {
+      x: [-0.395, -0.1],
+      top: [
+        [-0.09, 0.064],
+        [-0.365, 0.036],
+      ],
+      bot: [
+        [-0.14, -0.042],
+        [-0.37, -0.1],
+      ],
+      z: 0.016,
+    },
+  },
+};
 
 // ── slung, drawn, put away (plan 81 phase 2, F6a) ──────────────────────────────────────────────────────
 /** (shared ARMS.shotgun.draw) off her back and over the right shoulder, s; put back, s */

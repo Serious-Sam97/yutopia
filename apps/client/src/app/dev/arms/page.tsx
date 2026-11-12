@@ -93,6 +93,10 @@ function Bench({ q }: { q: URLSearchParams }) {
       const { setLifeTone } = await import("@/world/look/life-tone");
       const { loadLifeGLTF } = await import("@/world/look/life-assets");
       const { Person3D } = await import("@/world/tp/person3d");
+      // (plans 81–82: each long gun's own numbers — its stock's profile for what of it is inside her)
+      const { SG_LONG } = await import("@/world/tp/shotgun-hold");
+      const { AK_LONG } = await import("@/world/tp/ak-hold");
+      const { lineAt, longInHand } = await import("@/world/tp/long-hold");
       const C = await loadChars();
       // (which gun: the revolver, plan 80's; the double-barrel, plan 81's…)
       const GUN = q.get("gun") ?? "revolver";
@@ -326,7 +330,7 @@ function Bench({ q }: { q: URLSearchParams }) {
             c
               ? [
                   `upright: ${deg(c.cant)}° off · barrel off the look: ${deg(c.off)}°`,
-                  `left fingers to the right hand: ${cm(c.hands)} · to the ${GUN === "shotgun" ? "fore-end" : "grip"}: ${cm(c.grip)}`,
+                  `left fingers to the right hand: ${cm(c.hands)} · to the ${GUN === "shotgun" ? "fore-end" : GUN === "ak47" ? "receiver" : "grip"}: ${cm(c.grip)}`,
                   ...(c.arms !== null ? [`the forearms to the gun: ${cm(c.arms)}`] : []),
                   `right wrist: ${cm(c.R.short)} short, ${deg(c.R.over)}° past · left: ${c.L ? `${cm(c.L.short)} short, ${deg(c.L.over)}° past` : "not on the gun"}`,
                   c.held ? "the hold: plan 80" : "the hold: off (the old hands)",
@@ -362,18 +366,17 @@ function Bench({ q }: { q: URLSearchParams }) {
           );
           const rc = new T.Raycaster();
           // (the stock's side profile, its top and bottom lines by x — tools/art/guns/guns.py)
-          const top = (x: number) =>
-            x > -0.09 ? 0.064 : x < -0.365 ? 0.034 : 0.064 + ((x + 0.09) / (-0.365 + 0.09)) * (0.036 - 0.064);
-          const bot = (x: number) =>
-            x > -0.14 ? -0.04 : x < -0.37 ? -0.1 : -0.042 + ((x + 0.14) / (-0.37 + 0.14)) * (-0.1 + 0.042);
+          const S = (GUN === "ak47" ? AK_LONG : SG_LONG).check.stock;
+          const top = (x: number) => lineAt(S.top, x);
+          const bot = (x: number) => lineAt(S.bot, x);
           let n = 0;
           let inside = 0;
           let deep = 0;
           const where: Record<string, number> = {};
           const pts: string[] = [];
-          for (let x = -0.395; x <= -0.1; x += 0.03)
+          for (let x = S.x[0]; x <= S.x[1]; x += 0.03)
             for (const k of [0.15, 0.5, 0.85])
-              for (const z of [-0.016, 0, 0.016]) {
+              for (const z of [-S.z, 0, S.z]) {
                 const pt = new T.Vector3(x, bot(x) + (top(x) - bot(x)) * k, z).applyMatrix4(root.matrixWorld);
                 n++;
                 rc.set(pt, ahead);
@@ -394,6 +397,15 @@ function Bench({ q }: { q: URLSearchParams }) {
         },
         person,
         p,
+        // (the long guns' numbers, to try others live — refit() puts the gun in the hand by them again)
+        long: { SG_LONG, AK_LONG },
+        refit: () => {
+          const g = (person as unknown as { gun: { key: string; model: { root: import("three").Object3D } } | null })
+            .gun;
+          const F = person.model.handFrame("R");
+          const LS = g?.key === "ak47" ? AK_LONG : g?.key === "shotgun" ? SG_LONG : null;
+          if (g && F && LS) longInHand(LS, F, g.model.root.quaternion, g.model.root.position);
+        },
         set: (s: Partial<State>) => {
           live.current = { ...live.current, ...s };
           setSt(live.current);
