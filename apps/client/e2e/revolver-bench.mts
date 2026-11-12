@@ -32,6 +32,10 @@ const POSES: [string, Record<string, unknown>][] = [
   ["aim-down", { pose: "aim", torch: false, pitch: -0.5 }],
   ["aim-torch", { pose: "aim", torch: true, pitch: 0 }],
   ["aim-kick", { pose: "aim", torch: false, pitch: 0, kick: 0.8, trigger: 1 }],
+  // (phase 5: a hit taken aiming — the flinch, then back on; a roll with it out)
+  ["hit-0.1", { pose: "aim", act: "hit", actT: 0.1 }],
+  ["hit-0.5", { pose: "aim", act: "hit", actT: 0.5 }],
+  ["roll-0.4", { pose: "ready", act: "roll", actT: 0.4 }],
   ["aim-torch-up", { pose: "aim", torch: true, pitch: 0.5 }],
   // (the reload's moments, s into its 2.2: in close, the cylinder out; muzzle up; the rod struck; muzzle down,
   // to the pouch; the loader up; in; twisted; let go; shut; up)
@@ -71,14 +75,14 @@ const report = (name: string, c: any) => {
     c.R.short > 0.015 && "the right short",
     c.L && c.L.short > 0.015 && "the left short",
   ].filter(Boolean);
-  if (!name.startsWith("reload") && !name.startsWith("draw") && !name.startsWith("away") && fails.length) bad++;
+  if (!/^(reload|hit|roll)/.test(name) && !name.startsWith("draw") && !name.startsWith("away") && fails.length) bad++;
   console.log(
     `${name.padEnd(12)} ${JSON.stringify(line)}${fails.length ? `  ✗ ${fails.join(", ")} (nearest: ${c.where})` : ""}`,
   );
 };
 for (const [name, s] of POSES) {
   if (only && !only.includes(name)) continue;
-  await set({ pitch: 0, move: 0, draw: 1, away: false, torch: false, kick: 0, trigger: 0, ...s });
+  await set({ pitch: 0, move: 0, draw: 1, away: false, torch: false, kick: 0, trigger: 0, act: "", actT: 0, ...s });
   await settle();
   const c = await check();
   if (c) report(name, c);

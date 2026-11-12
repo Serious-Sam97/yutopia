@@ -1158,7 +1158,14 @@ export class PersonModel {
   /** Put a hand on a point in the world (a steering wheel's rim), after `setPose`: two-bone IK
    *  from the posed shoulder, the elbow pointing down and out by `pole` (the chest's space,
    *  the right arm's; the left mirrors x). */
-  reachTo(side: "L" | "R", world: Vector3, w = 1, poleR: [number, number, number] = [-0.6, -1, -0.45]) {
+  reachTo(
+    side: "L" | "R",
+    world: Vector3,
+    w = 1,
+    poleR: [number, number, number] = [-0.6, -1, -0.45],
+    /** (plan 80) close the fingers on what's held (gripTo closes its own hand once, after) */
+    close = true,
+  ) {
     const b = this.fit;
     if (!b || !this.skeleton || w <= 0) return;
     const chest = this.bones.chest;
@@ -1176,7 +1183,7 @@ export class PersonModel {
     shoulder.quaternion.slerp(ik.shoulder, k);
     const el = this.bones[`elbow${side}`];
     el.rotation.set(el.rotation.x + (ik.elbow - el.rotation.x) * k, el.rotation.y * (1 - k), el.rotation.z * (1 - k));
-    this.closeHands();
+    if (close) this.closeHands();
     this.shareTwist();
   }
   /** (plan 80) A wrist's own turn `q` (its parent's frame — the forearm's) as a real wrist's three: the twist
@@ -1287,7 +1294,15 @@ export class PersonModel {
    *  where the wrist is left least past a real one's reach (and the elbow not up by the ear) — the turn it
    *  then takes is exactly `q`, whatever: what's held in it keeps its way (a gun never canted). The twist
    *  shared down the forearm; the fingers closed on what the hand holds. `w` blends it in. After setPose. */
-  gripTo(S: "L" | "R", at: Vector3, q: Quaternion, w = 1, poleR: [number, number, number] = [-0.6, -1, -0.45]) {
+  gripTo(
+    S: "L" | "R",
+    at: Vector3,
+    q: Quaternion,
+    w = 1,
+    poleR: [number, number, number] = [-0.6, -1, -0.45],
+    /** (far off: the elbow where the pole has it, no search; the fingers left as they are) */
+    cheap = false,
+  ) {
     if (!this.fit || !this.skeleton || w <= 0) return;
     const sh = this.bones[`shoulder${S}`];
     const el = this.bones[`elbow${S}`];
@@ -1296,7 +1311,7 @@ export class PersonModel {
     _g0s.copy(sh.quaternion);
     _g0e.copy(el.quaternion);
     _g0w.copy(wr.quaternion);
-    this.reachTo(S, at, 1, poleR);
+    this.reachTo(S, at, 1, poleR, false);
     sh.updateWorldMatrix(true, true);
     const s0 = sh.getWorldPosition(_gs);
     const wp = wr.getWorldPosition(_gw);
@@ -1308,7 +1323,7 @@ export class PersonModel {
     // height or in across the chest after; then the least swing off the pole's)
     let best = 0;
     let bestCost = Number.POSITIVE_INFINITY;
-    for (let i = -10; i <= 10; i++) {
+    for (let i = cheap ? 0 : -10; i <= (cheap ? 0 : 10); i++) {
       const th = i * 0.14;
       _gr.setFromAxisAngle(axis, th);
       _gl.copy(_gr).multiply(P).invert().multiply(q);
@@ -1341,7 +1356,7 @@ export class PersonModel {
       wr.quaternion.copy(_g0w).slerp(_g1s, w);
     }
     this.shareTwist();
-    this.closeHands();
+    if (!cheap) this.closeHands(S);
   }
 
   /** (plan 78 phase 5) A life finger at a curl of the library's (closeHands' way, its fan shut with it) */
@@ -1934,11 +1949,12 @@ export class PersonModel {
   /** (plan 78 phase 5) A life hand closed on what it holds: each finger curled (the library's way, its fan
    *  closing) till its bones meet the thing's surface, not past it; the thumb's pad turned to the thing's
    *  nearest side. After every pose and reach (twice is once). */
-  private closeHands() {
+  private closeHands(only?: "L" | "R") {
     const kn = this.knuckles;
     const life = this.life;
     if (!kn || !life) return;
     for (const S of ["L", "R"] as const) {
+      if (only && S !== only) continue;
       const h = this.grips[S];
       if (!h) continue;
       const wrist = this.bones[`wrist${S}`];

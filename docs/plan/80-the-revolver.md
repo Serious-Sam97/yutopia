@@ -17,7 +17,8 @@ F6a keyed on a `/dev/revolver` bench, F7a third person only. Phase 0 (the mocks)
 `design/guns/p80/sheet-80-hold.png` and `sheet-80-reload.png` — signed off 2026-11-12 ("Start phase 1").
 **Phase 1 built 2026-11-12** (below), committed 53c06b6. **Phase 2 built 2026-11-12**, committed dc0fee0; its
 holster (the user's ask) committed 752cfec. **Phase 3 built 2026-11-12**, committed 937fecd. **Phase 4 built
-2026-11-12** — stills `design/guns/p80/sheet-80-phase4-reload-a.png`, `-b.png`; awaiting review. Follows plan 79 (the guns:
+2026-11-12**, committed 70f644d. **Phase 5 built 2026-11-12** — stills `design/guns/p80/sheet-80-phase5.png`;
+awaiting review. Follows plan 79 (the guns:
 the shoulder camera, the Blender revolver, the speedloader rule F11a) and plans 58/77/78 (the body, its
 moves, its hands).
 
@@ -232,6 +233,19 @@ cylinder, the ejector rod, the cases, a speedloader, in time with the server's s
      (`pose=reload&t=`); `e2e/arms-feel.spec.ts` passes.
 5. **Everything else held** — dodge, hit, fall, sit-to-stand with it out; the far people's cheaper hold;
    the revolver's sounds (plan 79 phase 9) on the new timeline's moments.
+   **Built 2026-11-12:**
+   - **The hold lets go** in a whole-body move — a vault, a mantle, a roll, a slide, Flowmotion, sat,
+     swimming, busy at something, the ragdoll — the hands the move's, the gun in the right hand as the move
+     has it; eased back on after (sat to stood too). Mid-reload, the gun back at rest in the hand and the
+     loader gone.
+   - **Struck**: the hold eased off a moment (0.7 s) so the body's own flinch throws the arms up, the gun
+     in the right hand; back on after.
+   - **The cost**: the hold was 0.9 ms a person a frame — the fingers closed on what's held four times
+     over, both hands each time. Now each hand closes once, after its own reach (`reachTo` `close`,
+     `closeHands(only)`): 0.29 ms near. **Far off** (past 11 m, the bodies' far detail): no elbow search,
+     no fingers, thumb, trigger finger or head — 0.04 ms (`FAR_HOLD`, `gripTo` `cheap`).
+   - **The sounds**: on the reload's moments since phase 4 (the rod's, the loader's, the shut).
+   - The bench takes a hit and a roll (`act`, `actT`); every pose and pitch, the rise, arms-feel pass.
 6. **Checks** — the bench's checks (no hand through a hand or the gun, the gun upright aimed at any
    pitch and turn, the reload's every key), e2e (draw, aim, fire, reload, two of us seeing it), stills
    beside the references.

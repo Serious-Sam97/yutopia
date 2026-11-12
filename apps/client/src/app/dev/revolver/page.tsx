@@ -31,6 +31,9 @@ interface State {
   /** a shot's kick (0..1, as it goes off and fades) and the trigger's pull, held where they are */
   kick: number;
   trigger: number;
+  /** (phase 5) a hit taken (`actT` s since) or a roll (`actT` of the way through it) — the hold lets go */
+  act: "" | "hit" | "roll";
+  actT: number;
   /** the reload scrubbed, 0..1 (the server's three steps: open, load, shut) */
   t: number;
   view: View;
@@ -61,6 +64,8 @@ function Bench({ q }: { q: URLSearchParams }) {
     away: q.get("away") === "1",
     kick: Number(q.get("kick") ?? 0),
     trigger: Number(q.get("trigger") ?? 0),
+    act: (q.get("act") as State["act"]) ?? "",
+    actT: Number(q.get("actT") ?? 0),
     t: Number(q.get("t") ?? 0.5),
     view: (q.get("view") as View) ?? "side",
   });
@@ -252,6 +257,9 @@ function Bench({ q }: { q: URLSearchParams }) {
         seen.camZ = p.y + 2;
         // (the draw: its clock set where the slider has it — the put-away's, the gun gone from her state)
         p.gun = s.away ? "" : "revolver";
+        const P = p as { hit?: { t: number; yaw: number }; verb?: { kind: string; t: number } };
+        P.hit = s.act === "hit" ? { t: s.actT, yaw: 0.6 } : undefined;
+        P.verb = s.act === "roll" ? { kind: "roll", t: s.actT } : undefined;
         // (put all the way away: in the holster, the hand let go)
         if (s.away) P3.holsterT = s.draw <= 0 ? 1 : Math.max(0, (1 - s.draw) * 0.25 - dt);
         else if (s.draw < 1) P3.drawT = Math.max(0, s.draw * 0.35 - dt);
@@ -308,6 +316,7 @@ function Bench({ q }: { q: URLSearchParams }) {
         },
         check: () => person.revolverCheck(p as never),
         person,
+        p,
         set: (s: Partial<State>) => {
           live.current = { ...live.current, ...s };
           setSt(live.current);

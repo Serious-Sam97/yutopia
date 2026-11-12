@@ -99,6 +99,8 @@ const LIFE_GUN_SCALE = 1;
 /** (shared ARMS.revolver.aim: the revolver up from the ready, s) */
 const AIM_S = 0.18;
 const ARM_BOLT = 4;
+/** (plan 80) past this (m from the camera) the revolver's hold is a cheaper one: the bodies' far detail */
+const FAR_HOLD = 11;
 /** (shared ARM.reload, ARM.open: the gun being reloaded, opened — Player.arm) */
 const ARM_RELOAD = 2;
 const ARM_OPEN = 3; // (shared ARM.bolt: the sniper's bolt worked — Player.arm)
@@ -628,6 +630,9 @@ export class Person3D {
     // detail by distance (low quality never builds the closest level)
     const d = Math.hypot(seen.camX - p.x, seen.camZ - p.y);
     let lod: 0 | 1 | 2 = d < 3.5 ? 0 : d < 11 ? 1 : 2;
+    // (plan 80: far off, the revolver's hold a cheaper one — the elbows where the poles put them, the fingers
+    // as they are)
+    this.farHold = d > FAR_HOLD;
     if (seen.lowQuality && lod === 0) lod = 1;
     if (this.model.avatar !== p.avatar || this.model.lod !== lod) this.model.set(p.avatar, lod);
     this.model.update(d);
@@ -743,6 +748,9 @@ export class Person3D {
     const flow =
       p.flow ?? (p.flowCode ? flowOfCode(p.flowCode, (performance.now() - (p.flowAt ?? 0)) / 1000, KH_MOVE) : null);
     const LF = !p.reduced ? this.C.lifeNow() : null;
+    // (plan 80 phase 5: a whole-body move — a vault, a mantle, a roll, a slide, Flowmotion, sat, swimming,
+    // busy at something: the hands are the move's, the revolver's two-handed hold lets go of them)
+    this.bodyBusy = !!verb || !!flow || sitting || (p.swim ?? 0) > 0 || !!p.busy;
     const mo =
       given ??
       this.motion.update(step, {
@@ -1420,13 +1428,25 @@ export class Person3D {
       this.revFree = false;
       // (the gun back at rest under the wrist — a reload's left it off it)
       if (this.revLoadT < 0) gun.root.position.set(0, 0, 0);
-      const hold = (aiming || ready || away || this.revLoadT >= 0) && !p.down && p.fell === undefined;
+      const hold =
+        (aiming || ready || away || this.revLoadT >= 0) &&
+        !p.down &&
+        p.fell === undefined &&
+        !this.bodyBusy &&
+        !this.limp?.on;
       this.revW += ((hold ? 1 : 0) - this.revW) * (1 - Math.exp(-dt * 14));
+      // (struck: the hands thrown off it a moment — the body's own flinch — and back on)
+      const hitT = p.hit?.t ?? 9;
+      const struck = hitT < 0.7 ? 1 - (hitT / 0.7) ** 2 : 0;
       // (running: tucked in, from a jog on)
       const run = Math.max(0, Math.min(1, (this.spd - 2.8) / 2));
       const draw = away ? Math.max(0, 1 - this.holsterT / HOLSTER_S) : drawn;
-      if (this.revW > 0.01 && this.revLoadT >= 0) this.revolverReload(p, this.revW, this.revLoadT);
-      else if (this.revW > 0.01) this.revolverHands(p, this.revW, aiming && !away, run, draw, dt);
+      const rw = this.revW * (1 - 0.8 * struck);
+      if (rw > 0.01 && this.revLoadT >= 0) this.revolverReload(p, rw, this.revLoadT);
+      else if (rw > 0.01) this.revolverHands(p, rw, aiming && !away, run, draw, dt);
+      // (let go mid-reload: the gun back at rest in the hand, the loader gone)
+      if (!this.revFree) gun.root.position.set(0, 0, 0);
+      if (!(rw > 0.01 && this.revLoadT >= 0) && this.revLoaderState === "hand") this.revLoaderAt("none", 0, false);
       this.loaderFrame(dt);
       return;
     }
@@ -1548,6 +1568,10 @@ export class Person3D {
    *  doing; the right wrist put where the gun — held as it is in the hand — comes to that place, turned so;
    *  the left on the gun in the support grip, its fingers closed round the right fist (or holding the torch). */
   private revW = 0;
+  /** (plan 80 phase 5) far off: the hold's cheaper one */
+  private farHold = false;
+  /** (plan 80 phase 5) this frame the body's in a whole-body move: the hold lets go */
+  private bodyBusy = false;
   private revHolster = { grip: new Vector3(), f: new Vector3(), u: new Vector3() };
   private revolverHands(p: PersonIn, w: number, aiming: boolean, run: number, draw: number, dt: number) {
     const m = this.model;
@@ -1678,7 +1702,8 @@ export class Person3D {
     }
     rM.compose(H.grip, rq2, rs2.setScalar(gs)).multiply(rL);
     rM.decompose(rAt, rTurn, rs1);
-    m.gripTo("R", rAt, rTurn, w, H.poleR);
+    const cheap = this.farHold;
+    m.gripTo("R", rAt, rTurn, w, H.poleR, cheap);
     if (H.left === "support" && lw > 0.01) {
       // the left on the gun where it now is: its palm on the grip's left panel, over the right's fingers
       inner.updateWorldMatrix(true, false);
@@ -1696,8 +1721,8 @@ export class Person3D {
         rv2.copy(FIST.at).applyMatrix4(rM);
         rq2.setFromUnitVectors(Y3, UP_GRIP).premultiply(rq1);
         m.hold("L", { shape: FIST_SHAPE, pos: rv2, quat: rq2, kind: "support" });
-        m.gripTo("L", rAt, rTurn, lw, H.poleL);
-        if (lw > 0.5) m.thumbTo("L", rv1.copy(SUPPORT_THUMB).applyMatrix4(G));
+        m.gripTo("L", rAt, rTurn, lw, H.poleL, cheap);
+        if (lw > 0.5 && !cheap) m.thumbTo("L", rv1.copy(SUPPORT_THUMB).applyMatrix4(G));
       }
     } else if (H.left === "torch" && aiming) {
       // Harries: the left fist crossed under the right wrist, the back of the hand up against it, the torch
@@ -1710,16 +1735,17 @@ export class Person3D {
         .addScaledVector(f, HARRIES.ahead * B.k)
         .addScaledVector(rv4.crossVectors(f, u), HARRIES.right * B.k);
       if (Ft && m.wristTo("L", rv1, this.C.gripLine("torch", Ft, rv4), f, Ft.n, rv5.copy(u).negate(), rLAt, rq1)) {
-        m.gripTo("L", rLAt, rq1, lw, H.poleL);
+        m.gripTo("L", rLAt, rq1, lw, H.poleL, cheap);
         this.revHarries = true;
       }
     } else if (H.left === "torch") m.reachTo("L", H.torchAt, lw, H.poleL);
     // the trigger finger: straight along the frame at the ready, on the trigger aimed — curled on with a pull
     this.revAimK += ((aiming ? 1 : 0) - this.revAimK) * (1 - Math.exp(-dt / (AIM_S / 3)));
     const aimK = this.revAimK;
-    m.indexTo("R", INDEX.ready + (INDEX.aim - INDEX.ready) * aimK + INDEX.pull * (this.gunFx?.trigger ?? 0));
+    if (!cheap)
+      m.indexTo("R", INDEX.ready + (INDEX.aim - INDEX.ready) * aimK + INDEX.pull * (this.gunFx?.trigger ?? 0));
     // aimed, the head down onto the sights
-    if (aimK > 0.01) this.headToSights(p, aimK * w);
+    if (aimK > 0.01 && !cheap) this.headToSights(p, aimK * w);
     this.revHeld = true;
   }
   private revEase = { on: false, pos: new Vector3(), quat: new Quaternion() };
@@ -1913,12 +1939,13 @@ export class Person3D {
       rq1.setFromRotationMatrix(rLh).multiply(rq2.setFromUnitVectors(Y3, X3));
       m.hold("R", { shape: LOADER_SHAPE, pos: rv1, quat: rq1, kind: "loader" });
     } else m.hold("R", null);
-    m.gripTo("R", rAt, rTurn, w, [-0.8, -1, -0.4]);
-    m.gripTo("L", rLAt, rq3, w, [-0.8, -1, -0.4]);
-    if (lNow === "support" && hl.k > 0.5) m.thumbTo("L", rv1.copy(SUPPORT_THUMB).applyMatrix4(rMg));
+    const cheap = this.farHold;
+    m.gripTo("R", rAt, rTurn, w, [-0.8, -1, -0.4], cheap);
+    m.gripTo("L", rLAt, rq3, w, [-0.8, -1, -0.4], cheap);
+    if (lNow === "support" && hl.k > 0.5 && !cheap) m.thumbTo("L", rv1.copy(SUPPORT_THUMB).applyMatrix4(rMg));
     // the fingers: along the frame on the grip, flat on the rod
-    if (rNow === "grip") m.indexTo("R", INDEX.ready);
-    else if (rNow === "rod") m.fingersTo("R", 0.1);
+    if (rNow === "grip" && !cheap) m.indexTo("R", INDEX.ready);
+    else if (rNow === "rod" && !cheap) m.fingersTo("R", 0.1);
     // the gun: on the grip, held by it at rest; off it, where the timeline has it
     if (rNow === "grip" && hr.a === hr.b) {
       g.position.set(0, 0, 0);
