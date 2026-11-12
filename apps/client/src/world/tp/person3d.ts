@@ -77,12 +77,17 @@ import {
   FORE_X,
   longHold,
   longInHand,
+  SG_AIM,
   SG_AWAY_S,
   SG_BLADE,
+  SG_BUTT,
   SG_DRAW_S,
   SG_FORE,
   SG_FORE_SHAPE,
   SG_HINGE,
+  SG_KICK,
+  SG_TORCH,
+  SG_TORCH_HELD,
   SG_WRIST_SHAPE,
   SLUNG_AT,
   SLUNG_TURN,
@@ -1501,6 +1506,7 @@ export class Person3D {
       // (off its grip only this frame's say: the draw's start sets it)
       this.revFree = false;
       this.revPose = null;
+      this.lgTorchX = -1;
       const hold = !p.down && p.fell === undefined && !this.bodyBusy && !this.limp?.on;
       this.revW += ((hold ? 1 : 0) - this.revW) * (1 - Math.exp(-dt * 14));
       const run = Math.max(0, Math.min(1, (this.spd - 2.8) / 2));
@@ -2127,6 +2133,12 @@ export class Person3D {
     const way = aiming ? Math.atan2(rv3.x, rv3.z) : Math.atan2(...this.facingXZ());
     let turn = way - SG_BLADE - front;
     turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+    // (aimed, the trunk takes the pitch: a long gun's raised and lowered by the body bending at the waist —
+    // the gun, the shoulders and the head one piece, the arms as they are level)
+    // (a shot's kick, aimed: her trunk rocked back by it — the gun with it, below)
+    const kick = aiming ? (this.gunFx?.kick ?? 0) : 0;
+    const lean = (-SG_AIM.trunk * (p.pitch ?? 0) * this.lgAimK - SG_KICK.rock * kick) * w;
+    rv5.set(rv3.z, 0, -rv3.x).normalize();
     for (const [j, k] of [
       ["spine", 0.4],
       ["chest", 0.6],
@@ -2135,6 +2147,7 @@ export class Person3D {
       if (!b?.parent) continue;
       b.parent.getWorldQuaternion(rq1);
       rq2.setFromAxisAngle(Y3, turn * k * w * Math.min(1, draw * 1.5));
+      if (lean) rq2.premultiply(rq3.setFromAxisAngle(rv5, lean * k));
       b.quaternion.premultiply(rq2.premultiply(rTurn.copy(rq1).invert()).multiply(rq1));
     }
     const B = this.revFrame(p, aiming);
@@ -2158,6 +2171,14 @@ export class Person3D {
     }
     H.grip.copy(E.pos).applyMatrix4(RW);
     H.q.copy(rq1).multiply(E.quat);
+    // a shot's kick (past the ease — it's quicker): the muzzle up about the butt, the gun back into the shoulder
+    if (kick > 0) {
+      const butt = rv1.copy(SG_BUTT).multiplyScalar(B.k).applyQuaternion(H.q).add(H.grip);
+      rq2.setFromAxisAngle(rv2.set(0, 0, 1).applyQuaternion(H.q), SG_KICK.flip * kick);
+      H.grip.sub(butt).applyQuaternion(rq2).add(butt);
+      H.q.premultiply(rq2);
+      H.grip.addScaledVector(rv2.set(1, 0, 0).applyQuaternion(H.q), -SG_KICK.back * B.k * kick);
+    }
     // (drawn off her back or put back on it: along the draw's keys — the right hand on it from the start, the
     // left meeting it at the end)
     let lw = w;
@@ -2229,7 +2250,14 @@ export class Person3D {
       rv1.set(x, SG_FORE.y, 0).sub(SG_HINGE).applyMatrix4(BW);
       if (rv1.distanceTo(rv4) <= reach) break;
     }
-    rv1.set(x, SG_FORE.y, 0).sub(SG_HINGE).applyMatrix4(BW);
+    // (the torch on: held under the fore-end in the same fist — the palm under it, F3a)
+    const T = this.torch;
+    const torch = !!T && lw > 0.5;
+    this.lgTorchX = torch ? x : -1;
+    rv1
+      .set(x, torch ? SG_TORCH.palm : SG_FORE.y, 0)
+      .sub(SG_HINGE)
+      .applyMatrix4(BW);
     rv2.copy(SG_FORE.along).applyQuaternion(rq2);
     rv3.copy(SG_FORE.index).applyQuaternion(rq2);
     if (m.wristFor("L", rv1, rv2, rv3, rLAt, rq3)) {
@@ -2240,14 +2268,14 @@ export class Person3D {
       rM.decompose(rv4, rq1, rs1);
       rv2.set(x, SG_FORE_SHAPE.y, 0).sub(SG_HINGE).applyMatrix4(rM);
       rq2.setFromUnitVectors(Y3, X3).premultiply(rq1);
-      m.hold("L", { shape: SG_FORE_SHAPE.shape, pos: rv2, quat: rq2, kind: "fore" });
+      m.hold("L", { shape: torch ? SG_TORCH_HELD : SG_FORE_SHAPE.shape, pos: rv2, quat: rq2, kind: "fore" });
       if (lw > 0.01) m.gripTo("L", rLAt, rq3, lw, [-0.6, -1, -0.2], cheap);
-      // (the thumb laid along the fore-end's left side, ahead — closed round the box it went into it)
+      // (the thumb laid along the fore-end's left side, ahead — closed round the box it went into it; the torch
+      // in the fist, along the torch's)
       if (!cheap && w > 0.5)
         m.thumbTo(
           "L",
-          rv1
-            .set(x + 0.09, 0.036, -0.037)
+          (torch ? rv1.set(x + 0.075, SG_TORCH.y + 0.004, -0.02) : rv1.set(x + 0.09, 0.036, -0.037))
             .sub(SG_HINGE)
             .applyMatrix4(BW),
         );
@@ -2257,10 +2285,13 @@ export class Person3D {
     this.lgAimK += ((aiming ? 1 : 0) - this.lgAimK) * (1 - Math.exp(-dt / (SG_AIM_S / 3)));
     if (this.lgAimK > 0.01 && !cheap) this.headToSights(p, this.lgAimK * w);
     this.revHeld = true;
-    // (the torch the left hand's — on the fore-end now; its own hold there is phase 3's)
+    // (the torch the left hand's — under the fore-end in it, placed there by torchFrame)
     this.revHarries = !!this.torch;
   }
   private lgAimK = 0;
+  /** (F3a) this frame the torch is under the fore-end in the left fist, the palm this far along (the barrels'
+   *  frame; −1: in the hand as ever) */
+  private lgTorchX = -1;
   /** her facing's way on the floor (x, z) */
   private facingXZ(): [number, number] {
     this.root.getWorldQuaternion(rq1);
@@ -2819,6 +2850,23 @@ export class Person3D {
     // the wrist is doing, so the light comes out of it where it points
     // (plan 78 phase 5: a life hand turned at its wrist to aim it — the torch across the palm, its barrel in
     // the fist — and only what the wrist can't, turned in the hand)
+    // (plan 81 F3a: under the double-barrel's fore-end in the left fist, along the barrels, its lens ahead)
+    const barrels = this.lgTorchX >= 0 ? this.gun?.model.parts.barrels : null;
+    if (barrels) {
+      barrels.updateWorldMatrix(true, false);
+      barrels.matrixWorld.decompose(tv, tq, tv2);
+      const at = tv3
+        .set(this.lgTorchX + SG_TORCH.ahead, SG_TORCH.y, 0)
+        .sub(SG_HINGE)
+        .applyMatrix4(barrels.matrixWorld);
+      tq.multiply(tq2.setFromUnitVectors(Y3, X3));
+      hand?.updateWorldMatrix(true, false);
+      hand?.worldToLocal(this.torch.root.position.copy(at));
+      hand?.getWorldQuaternion(tq2);
+      this.torch.root.quaternion.copy(tq2.invert().multiply(tq));
+      this.lgTorchX = -1;
+      return;
+    }
     const look = this.lookDir(p, tv);
     const frame = this.model.handFrame("L");
     // (plan 80: held Harries under the revolver, the hold turned the hand already)

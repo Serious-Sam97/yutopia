@@ -153,6 +153,31 @@ Plan 80's machinery, for a long gun:
 3. **The aim** (F2, F3) — the butt in the pocket at every pitch, the cheek on the comb, the head down; the
    torch's hold; the kick into the shoulder (the body rocked back, the muzzle up); dry fire on the front
    trigger; carry ↔ aim in the gun's own 0.26 s.
+   **Built 2026-11-12:**
+   - **The aim at every pitch: the trunk takes it** — a long gun's raised and lowered by the body bending at
+     the waist, the gun, the shoulders and the head one piece: aimed, her spine and chest bend with the aim's
+     pitch (`SG_AIM.trunk` 0.8 of it, on top of the aim pose's own). Aimed steeply the left hand had fallen
+     2.5–7 cm short of the fore-end; now on it at every pitch, −0.9 … +0.9, with and without the torch.
+   - **The torch under the fore-end** (F3a): along the barrels in the same left fist, its lens ahead, its
+     body 6 mm under the fore-end's underside (its head clear of the wood where the fore-end rises at its
+     front); the palm under it, the fingers round both (`SG_TORCH_HELD`: the fore-end's box and the torch's
+     body), the thumb along the torch. It no longer goes through the fore-end. The beam is still the look's
+     (the shared beam's — at the ready it's tipped at the ground ahead, a little above the muzzle's way).
+   - **The kick into the shoulder**: a shot, aimed, turns the gun's muzzle up 0.22 rad about the butt, puts
+     it 3.5 cm back into the shoulder, and rocks her trunk back 0.1 rad — the butt in the pocket throughout;
+     at the arms' own kick curve (up in 35 ms, settling in ~0.1 s).
+   - **Dry fire** as phase 1 left it: the trigger finger curls on in the guard as the triggers move (the arms'
+     `trigger` — a shot, or pulled on empty); carry → aim in the gun's 0.26 s (22° off the look 50 ms in, on
+     it by 320 ms).
+   - **Checks** (`GUN=shotgun CHECK=1`): every pitch −0.9 … +0.9 with and without the torch, the ready,
+     walking, sprinting, the torch's ready and walk, the kick — **none past the limits** (the hands 5–15 cm
+     apart, the forearms 1.1–1.8 cm clear of the gun, each wrist at its place). The revolver's sweep and spec
+     unchanged.
+   - **Left as it was**: the right wrist turned past a real wrist's ease by 14° (aimed up) to 54° (aimed
+     steeply down) — sideways toward the little finger, the forearm coming up to the stock's wrist. The
+     mocks' hand on the stock was kept (tilting it, the thumb over the top, or the knuckles along the bore
+     moved the numbers less than they spoiled the look); it isn't one of the checks' limits.
+   - Stills: `design/guns/p81/sheet-81-phase3-{aim,torch,kick}.png`.
 4. **The reload** (F4, F5) — the timeline: the lever, the barrels dropped by the left hand, the ejectors (the
    shells out as now), the right hand to the carrier and back with two (or one), in, the stock lifted to
    close, the grip retaken; a shot mid-way snaps it shut; the server's steps retimed; everyone sees it.

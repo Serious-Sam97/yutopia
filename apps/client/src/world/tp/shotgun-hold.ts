@@ -6,7 +6,7 @@
 // side, as far out as the arm reaches. The numbers the phase 0 mocks' (tools/art/guns/mock81.py, signed off
 // 2026-11-12) — in the gun's own frame here (x along the barrels, y its top, z its right; m).
 import { Matrix4, Quaternion, Vector3 } from "three";
-import type { HandFrame } from "../chars/props";
+import type { HandFrame, HeldShape } from "../chars/props";
 import { type BodyFrame, bodyDir, gunQuat } from "./revolver-hold";
 
 /** The right hand on the stock's wrist: its palm's middle (its skin on the wrist's right side), the fingers'
@@ -42,14 +42,29 @@ export const SG_FORE_SHAPE = {
   y: 0.043,
   shape: { round: false as const, half: [0.017, 0.07, 0.027] as [number, number, number], cz: 0 },
 };
+/** (F3a) The torch held under the fore-end in the same left fist, along the barrels, its lens ahead (the
+ *  barrels' frame): its axis this high — its body 6 mm under the fore-end's underside, its head clear of it
+ *  where the fore-end rises at its front — its middle this far ahead of the palm's (its knurled grip in the
+ *  fist); the palm's middle under it, 9 mm inside its underside, as under the fore-end */
+export const SG_TORCH = { y: 0.004, ahead: 0.07, palm: 0.004 - 0.016 + 0.009 };
+/** …what the left fingers close round then: the fore-end's box and the torch's body under it (the box's own
+ *  frame: x down, y along the barrels) */
+export const SG_TORCH_HELD: HeldShape = {
+  parts: [SG_FORE_SHAPE.shape, { round: true, r: 0.016, y0: 0.012, hy: 0.04, x0: SG_FORE_SHAPE.y - SG_TORCH.y }],
+};
 /** The butt pad's middle (its frame) */
 export const SG_BUTT = new Vector3(-0.392, -0.035, 0);
 /** The barrels' hinge (their group's pivot — the fore-end's on them, it drops with them) */
 export const SG_HINGE = new Vector3(0.144, 0.033, 0);
 /** The low ready (F1a): the muzzle this far down (rad), a little left; the butt this far under the pocket */
 export const SG_READY = { down: 0.6, left: 0.08, drop: 0 };
-/** Aimed (F2a): the butt's heel at the top of the shoulder — the pocket this far up (m, the mocks' man's) */
-export const SG_AIM = { up: 0.05 };
+/** Aimed (F2a): the butt's heel at the top of the shoulder — the pocket this far up (m, the mocks' man's);
+ *  the trunk bent with the aim's pitch this much of it (the rest the aim pose's own) */
+export const SG_AIM = { up: 0.05, trunk: 0.8 };
+/** A shot's kick, aimed (the 12-gauge's, at its height — shared arms' gunFx.kick, 0..1): the muzzle up this
+ *  far about the butt (rad), the gun back into the shoulder this far (m), her trunk rocked back this far
+ *  (rad) — the butt in the pocket throughout */
+export const SG_KICK = { flip: 0.22, back: 0.035, rock: 0.1 };
 /** Her trunk turned this far right of the gun's way (rad, the mocks': square, her left arm couldn't reach the
  *  fore-end — 16 cm short) */
 export const SG_BLADE = 0.5;
