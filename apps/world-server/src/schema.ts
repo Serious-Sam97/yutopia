@@ -70,7 +70,7 @@ export class Player extends Schema {
   @type("uint8") wm = 100;
   // the torch focused (D4): on, aiming, battery left, out on the land — narrow, far, burning
   @type("boolean") focused = false;
-  // the weapon in the hand (docs/plan/30-the-dark.md D6): "", "revolver", "shotgun"
+  // the weapon in the hand (docs/plan/30-the-dark.md D6): "", "revolver", "shotgun", "ak47" (plan 79)
   @type("string") gun = "";
   // what the hand's doing with it (docs/plan/32-the-arms.md), for everyone to see: ARM
   @type("uint8") arm = 0;

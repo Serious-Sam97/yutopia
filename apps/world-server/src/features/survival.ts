@@ -31,6 +31,7 @@ import {
   LOCKER_KIT,
   LOOT_REACH,
   type LootItem,
+  lockerAk,
   lockerFront,
   lootSpot,
   moveSlot,
@@ -149,6 +150,8 @@ export interface SurvivalHooks {
 const offlineSurvivors = new Map<number, SurvivorRecord>();
 /** The lobby locker's clock, ahead by `shift` ms (the tests' next day). */
 export const kitClock = { shift: 0 };
+/** The supply locker's dice for its rare AK (plan 79 F9a) — the tests fix them. */
+export const lockerDice = { roll: Math.random };
 
 // (plan 68: by a fire — within 3 m of a lit fireplace's hearth — warmed three times as fast)
 const HEARTH_M = 3;
@@ -436,6 +439,8 @@ registerFeature((room: WorldRoom) => {
       const kit: LootItem[] = [
         ...(gun ? [{ id: "revolver" as const, n: 1, loaded: s.issued ? 0 : WEAPONS.revolver.mag }] : []),
         ...LOCKER_KIT,
+        // (some days the AK, or its rounds: plan 79 F9a)
+        ...lockerAk(() => lockerDice.roll(), hasWeapon(s.inv, "ak47")),
       ];
       const { got, left } = take(s, kit);
       if (!got.length) return found(s, client.sessionId, id, [], true);
@@ -611,20 +616,22 @@ registerFeature((room: WorldRoom) => {
     const lvl = (x: unknown) => Math.max(1, Math.min(100, Number(x)));
     if (m?.hp !== undefined && Number.isFinite(Number(m.hp))) s.v.hp = lvl(m.hp);
     if (m?.wm !== undefined && Number.isFinite(Number(m.wm))) s.v.wm = lvl(m.wm);
-    // `kit`: armed for trying the fight — both guns loaded (quick 1 and 2; what was there put
-    // away), rounds, shells, flares, first aid, a battery
+    // `kit`: armed for trying the fight — both guns loaded (quick 1 and 2; what was there put away),
+    // rounds, shells, flares, first aid, a battery; `ak` too: the AK in quick 3, its rounds in a pocket
+    // (plan 79 phase 5)
     if (m?.kit) {
       const was = s.inv.quick.filter((it): it is Stack => !!it && isStack(it.id));
       s.inv.quick = [
         { id: "revolver", loaded: WEAPONS.revolver.mag },
         { id: "shotgun", loaded: WEAPONS.shotgun.mag },
-        null,
+        m.ak ? { id: "ak47", loaded: WEAPONS.ak47.mag } : null,
         null,
       ];
       for (const it of was) addStack(s.inv, it.id, it.n);
       for (const [id, n] of [
         ["r38", 24],
         ["shell", 12],
+        ...(m.ak ? ([["r762", 60]] as const) : []),
         ["flare", 3],
         ["aid", 1],
         ["battery", 1],

@@ -607,7 +607,7 @@ def ak47():
     g.part("mag-ribs", lambda bm: [sweep(bm, spine[2:-1], lambda i, s=s: [(-0.014 + u, s * 0.0137 + v) for u, v in rect_section(0.006, 0.002, 0.0006)], up=(0, 1, 0)) for s in (1, -1)], "parker")
     end = spine[-1]
     g.part("floor", lambda bm: box(bm, end.x - 0.036, end.x + 0.036, end.z - 0.006, end.z + 0.003, 0.03, M=Matrix.Translation(end) @ Matrix.Rotation(-0.6, 4, "Y") @ Matrix.Translation(-end)), "parker", 0.0015)
-    g.part("round", lambda bm: (tube(bm, (0.08, 0, 0.024), (0.12, 0, 0.024), 0.0055, seg=12)), "brass")
+    g.part("round0", lambda bm: (tube(bm, (0.08, 0, 0.024), (0.12, 0, 0.024), 0.0055, seg=12)), "brass")
     # the stock: birch, its butt plate (steel, the trap door), a sling loop
     stk = smooth([(-0.04, 0.028, 1), (-0.04, 0.078, 1), (-0.1, 0.07), (-0.4, 0.046, 1), (-0.405, -0.075, 1), (-0.36, -0.072), (-0.1, 0.012)], 2)
     g.part("stock", lambda bm: prism(bm, stk, 0.038), "birch", 0.012, 5)

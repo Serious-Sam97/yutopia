@@ -495,3 +495,58 @@ test("the double-barrel's reload: broken open (both out: the live shell back), a
   away();
   await waitFor(() => loaded1() === 1, 2000);
 });
+
+test("the AK (plan 79 phase 5): full auto at its rate through the line's jitter, never faster; the magazine out (its rounds back), a new one in, the charging handle when it ran dry", async () => {
+  const { b } = await setup(75);
+  b.room.send("mod:refill", { kit: true, ak: true });
+  await waitFor(() => b.inv?.quick[2]?.id === "ak47");
+  b.room.send("arms:draw", { slot: 2 });
+  await waitFor(() => me(b.room).gun === "ak47");
+  await sleep(ARMS.ak47.draw * 1000 + 50);
+  const loaded2 = () => (b.inv?.quick[2] as { loaded?: number } | null | undefined)?.loaded;
+  const spare = () => (b.inv ? count(b.inv, "r762") : 0);
+  const away = () => {
+    aim(b, me(b.room).x + 20, me(b.room).y);
+    fire(b, me(b.room).x + 20, me(b.room).y);
+  };
+  assert.equal(loaded2(), 30);
+  // held: a round every 0.1 s — one late and the next early on its heels still both go
+  for (let i = 0; i < 4; i++) {
+    away();
+    await sleep(ARMS.ak47.rate * 1000);
+  }
+  await sleep(ARMS.ak47.rate * 1000);
+  away();
+  away();
+  await waitFor(() => loaded2() === 24, 1500);
+  // …but never faster than its rate over time: twenty sent at once, two at most
+  await sleep(400);
+  for (let i = 0; i < 20; i++) away();
+  await sleep(300);
+  assert.ok((loaded2() ?? 0) >= 22, `a burst sent at once: ${24 - (loaded2() ?? 0)} fired`);
+  // the magazine out: every round left in it back to the pockets; the new one, all thirty at once
+  const left = loaded2() ?? 0;
+  const before = spare();
+  b.room.send("arms:reload", {});
+  await waitFor(() => me(b.room).arm === ARM.open, 1000);
+  await waitFor(() => loaded2() === 0, 1500);
+  assert.equal(spare(), before + left, "the old magazine's rounds back");
+  const t0 = Date.now();
+  await waitFor(() => loaded2() === 30, 2500);
+  assert.ok(Date.now() - t0 > ARMS.ak47.speed * 1000 - 200, "the new magazine after its time");
+  const t1 = Date.now();
+  await waitFor(() => me(b.room).arm === ARM.idle, 2000);
+  const shut = Date.now() - t1;
+  assert.ok(shut < ARMS.ak47.charge * 1000 - 200, `not run dry: no charging handle (${shut} ms)`);
+  // run dry: the same, and the charging handle racked after
+  for (let i = 0; i < 30; i++) {
+    away();
+    await sleep(ARMS.ak47.rate * 1000 + 5);
+  }
+  await waitFor(() => loaded2() === 0, 2000);
+  b.room.send("arms:reload", {});
+  await waitFor(() => loaded2() === 30, 4000);
+  const t2 = Date.now();
+  await waitFor(() => me(b.room).arm === ARM.idle, 2500);
+  assert.ok(Date.now() - t2 > ARMS.ak47.charge * 1000 - 250, "run dry: the charging handle racked");
+});

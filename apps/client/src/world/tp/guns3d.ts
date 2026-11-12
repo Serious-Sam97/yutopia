@@ -30,7 +30,9 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 // lighter, so they read as steel and walnut under the world's Lambert light.
 // The moving parts are their own meshes under a pivot each.
 
-export type GunKind = "revolver" | "shotgun";
+export type GunKind = "revolver" | "shotgun" | "ak47";
+/** Held in both hands, the stock in the shoulder (plan 79): the double-barrel, the AK. */
+export const isLongGun = (k: string) => k === "shotgun" || k === "ak47";
 export type Detail = "near" | "far";
 
 export interface GunModel {
@@ -640,7 +642,9 @@ function shotgun(mat: Material, detail: Detail): GunModel {
 /** A gun as a model: its parts and where it's held. `mat` is the world's vertex-coloured
  *  Lambert (one material for all of it). */
 export function gunModel(kind: GunKind, mat: Material, detail: Detail = "near"): GunModel {
-  return kind === "shotgun" ? shotgun(mat, detail) : revolver(mat, detail);
+  // (the AK has no drawn model — it's the life look's (plan 79 phase 5): the double-barrel stands in for
+  // it in the classic look and on the snow)
+  return kind === "revolver" ? revolver(mat, detail) : shotgun(mat, detail);
 }
 
 /** The pool cue off a table, held as a gun (features/pballs.ts on the server: it fires the balls;
@@ -697,6 +701,9 @@ export function cueModel(mat: Material, detail: Detail = "near"): GunModel {
   };
 }
 
+/** How far the AK's carrier runs back along the bore (m). */
+const AK_CARRIER = { travel: 0.075 };
+
 /** What a gun in the hand is doing this moment (docs/plan/32-the-arms.md): poseGun's parts, and
  *  `kick` (0..1: a shot's jolt, back and up, settling) and `reload` (0..1: tipped up and turned in
  *  to load it). */
@@ -708,6 +715,8 @@ export interface GunFx {
   loaded: number;
   trigger: number;
   reload: number;
+  /** (the AK) the carrier racked back by the charging handle, 0..1 */
+  bolt?: number;
 }
 
 /** Pose the moving parts. `cock` 0..1 (the revolver's hammer back); `turn` the cylinder in
@@ -716,10 +725,18 @@ export interface GunFx {
 export function poseGun(
   g: GunModel,
   kind: GunKind,
-  s: { cock?: number; turn?: number; open?: number; loaded?: number; trigger?: number },
+  s: { cock?: number; turn?: number; open?: number; loaded?: number; trigger?: number; bolt?: number },
 ): void {
   const open = s.open ?? 0;
-  if (kind === "revolver") {
+  if (kind === "ak47" && g.parts.carrier) {
+    // (the AK's: the trigger; the carrier back with each shot — or racked by the hand (`bolt`, 0..1);
+    // the magazine its reload's to pose — the hands', person3d; the selector down on fire)
+    g.parts.trigger.rotation.z = 0.25 * (s.trigger ?? 0);
+    const c = g.parts.carrier;
+    c.userData.x0 ??= c.position.x;
+    c.position.x = c.userData.x0 - AK_CARRIER.travel * Math.max(s.bolt ?? 0, (s.trigger ?? 0) * 0.85);
+    g.parts.selector.rotation.z = -0.35;
+  } else if (kind === "revolver") {
     g.parts.hammer.rotation.z = 0.52 * (s.cock ?? 0);
     g.parts.cylinder.rotation.x = ((s.turn ?? 0) * Math.PI) / 3;
     // (the double-action's cylinder swings out on its crane, to the left — plan 79; the single-action's
@@ -746,7 +763,18 @@ export function lifeGunModel(kind: GunKind, scene: Object3D): GunModel {
   gun.position.set(0, 0, 0);
   root.add(gun);
   const parts: Record<string, Group> = {};
-  for (const n of ["hammer", "trigger", "crane", "cylinder", "barrels", "lever", "triggers"]) {
+  for (const n of [
+    "hammer",
+    "trigger",
+    "crane",
+    "cylinder",
+    "barrels",
+    "lever",
+    "triggers",
+    "magazine",
+    "carrier",
+    "selector",
+  ]) {
     const o = gun.getObjectByName(n);
     if (o) parts[n] = o as Group;
   }

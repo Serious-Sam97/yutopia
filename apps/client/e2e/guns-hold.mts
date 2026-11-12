@@ -2,7 +2,8 @@
 // Plan 79 phase 4: the holds seen close — Ana by day on the pond, each gun out (ready) and aimed, drawn
 // again by the game's own renderer from cameras of our own (her right side, her left, ahead of her) so the
 // player's camera — which her aim follows — stays where it is. The dev stack (:3100, :8100), the GPU.
-//   node --experimental-strip-types e2e/guns-hold.mts [out dir]   (NAME=x: the files' prefix)
+//   node --experimental-strip-types e2e/guns-hold.mts [out dir]   (NAME=x: the files' prefix; ONLY=ak47: one gun;
+//   DEBUG=1: each step's state)
 import { writeFileSync } from "node:fs";
 import { chromium, type Page, request } from "@playwright/test";
 
@@ -28,7 +29,25 @@ const state = (page: Page, at: string) =>
     const inv = (window as any).__dark?.inv;
     const g = inv?.quick?.find((it: any) => it?.id === p.gun);
     const f = y.tp.guns.myGun;
-    return { gun: p.gun, arm: p.arm, loaded: g?.loaded, open: f ? Math.round(f.open * 100) / 100 : null };
+    // (the AK's reload, as my body has it: its clock, the magazine in the hand, where it and the hand are)
+    const me = y.tp.people3?.get(y.tp.meId);
+    const r2 = (v: any) => (v ? [v.x, v.y, v.z].map((n: number) => Math.round(n * 100) / 100) : null);
+    const mag = me?.gun?.model.parts.magazine;
+    const wp = (o: any) => (o ? o.getWorldPosition(new o.position.constructor()) : null);
+    const ak = me
+      ? {
+          loadT: Math.round(me.loadT * 100) / 100,
+          inHand: me.magInHand,
+          tilt: me.magTilt,
+          w: Math.round(me.gunHandsW * 100) / 100,
+          // (in her own frame: x her left, y up, z ahead)
+          mag: r2(mag && me.root.worldToLocal(wp(mag))),
+          handL: r2(me.root.worldToLocal(wp(me.model.bone("wristL")))),
+          handR: r2(me.root.worldToLocal(wp(me.model.bone("wristR")))),
+          torch: me.torch ? r2(me.root.worldToLocal(wp(me.torch.root))) : null,
+        }
+      : null;
+    return { gun: p.gun, arm: p.arm, loaded: g?.loaded, open: f ? Math.round(f.open * 100) / 100 : null, ak };
   }).then((s) => process.env.DEBUG && console.log(`  ${at}`, JSON.stringify(s)));
 const gun = (page: Page) => w(page, (y) => y.room.state.players.get(y.room.sessionId).gun as string);
 
@@ -88,7 +107,7 @@ await page.waitForFunction(() => !!document.querySelector(".dk"), null, { timeou
 await w(page, (y) => {
   y.room.send("mod:hour", { h: 13 });
   y.room.send("mod:storm", { storm: 0, now: true });
-  y.room.send("mod:refill", { kit: true });
+  y.room.send("mod:refill", { kit: true, ak: true });
   y.room.send("mod:dark", { mode: "peaceful" });
   if (!y.room.state.players.get(y.room.sessionId).torch) y.toggleTorch();
   y.tp.yaw = 0;
@@ -99,7 +118,16 @@ await page.mouse.move(640, 400);
 for (const [key, id] of [
   ["Digit1", "revolver"],
   ["Digit2", "shotgun"],
+  ["Digit3", "ak47"],
 ] as const) {
+  if (process.env.ONLY && process.env.ONLY !== id) continue;
+  // (back to the start for each — the moves pass walks and sprints her ahead, toward the water)
+  await page.evaluate(() => (window as any).__yutopia.teleport({ x: -250, y: -60, level: 0 }));
+  await w(page, (y) => {
+    y.tp.yaw = 0;
+    y.tp.pitch = 0.1;
+  });
+  await page.waitForTimeout(800);
   await page.keyboard.press(key);
   const end = Date.now() + 15_000;
   while ((await gun(page)) !== id && Date.now() < end) await page.waitForTimeout(50);
@@ -116,23 +144,49 @@ for (const [key, id] of [
   await view(page, `${out}/${name}-${id}-aim-right.png`, 1);
   await view(page, `${out}/${name}-${id}-aim-left.png`, -1);
   await view(page, `${out}/${name}-${id}-aim-front.png`, 0, 2.2);
-  // (two shots, then R: the reload seen opening and loading — plan 79 F11a, F12a)
-  for (let i = 0; i < 2; i++) {
+  // (two shots, then R: the reload seen opening and loading — plan 79 F11a, F12a; the AK held down till
+  // it's dry, a frame mid-burst, so its reload racks the charging handle — phase 5)
+  if (id === "ak47") {
     await page.mouse.down({ button: "left" });
+    await page.waitForTimeout(700);
+    await view(page, `${out}/${name}-${id}-burst.png`, 1);
+    // (dry at ~3.1 s: its click starts the reload — the frames from there, the aim let go at once)
+    await page.waitForTimeout(2700);
     await page.mouse.up({ button: "left" });
-    await page.waitForTimeout(1000);
-  }
+    await page.mouse.up({ button: "right" });
+    await state(page, `${id} emptied`);
+    const t0 = Date.now();
+    for (const at of [150, 450, 750, 1050, 1350, 1650, 1950]) {
+      await page.waitForTimeout(Math.max(0, at - (Date.now() - t0)));
+      await view(page, `${out}/${name}-${id}-reload-${at}.png`, 1, 1.4);
+      await view(page, `${out}/${name}-${id}-reload-${at}-left.png`, -1, 1.4);
+      await state(page, `${id} reload ${at}`);
+    }
+  } else
+    for (let i = 0; i < 2; i++) {
+      await page.mouse.down({ button: "left" });
+      await page.mouse.up({ button: "left" });
+      await page.waitForTimeout(1000);
+    }
   await page.mouse.up({ button: "right" });
   await page.waitForTimeout(300);
-  await page.keyboard.press("KeyR");
+  if (id !== "ak47") await page.keyboard.press("KeyR");
   // (frames through it: the revolver's one speedloader trip, ~1.55 s; the double-barrel's opening)
   const t0 = Date.now();
-  for (const at of id === "revolver" ? [250, 600, 850, 1100, 1450] : [350, 850]) {
+  const frames = { revolver: [250, 600, 850, 1100, 1450], shotgun: [350, 850], ak47: [] as number[] };
+  for (const at of frames[id]) {
     await page.waitForTimeout(Math.max(0, at - (Date.now() - t0)));
     await view(page, `${out}/${name}-${id}-reload-${at}.png`, 1, 1.4);
   }
+  await state(page, `${id} reloaded`);
   await page.waitForTimeout(2500);
-  // (on the move — plan 79 phase 4: walking aimed, sprinting, a dodge)
+  // (on the move — plan 79 phase 4: walking aimed, sprinting, a dodge — away from the pond, open water
+  // out of the winter)
+  await page.evaluate(() => (window as any).__yutopia.teleport({ x: -250, y: -60, level: 0 }));
+  await w(page, (y) => {
+    y.tp.yaw = Math.PI;
+  });
+  await page.waitForTimeout(600);
   await page.mouse.down({ button: "right" });
   await page.keyboard.down("KeyW");
   await page.waitForTimeout(900);

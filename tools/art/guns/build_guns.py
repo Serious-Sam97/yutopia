@@ -5,7 +5,8 @@
 # calls a gun) and hung under a pivot at its hinge — the names tp/guns3d.ts's poseGun moves:
 #   revolver   hammer · trigger · crane (the swing-out, along the bore below the cylinder) › cylinder
 #   shotgun    barrels (at the hinge pin, the fore-end with them) · lever · triggers
-# and `round<i>` (the revolver's six, the double-barrel's two shells' heads), shown by how many are
+#   ak47       magazine (on its front lug) · carrier (the charging handle on it) · trigger · selector
+# and `round<i>` (the revolver's six, the double-barrel's two shells' heads, the AK's top round), shown by how many are
 # loaded. The gun's points are empty nodes `pt_<name>` (grip, muzzle, rear, front, fore, butt).
 # Materials: plain PBR factors by kind (the node materials' look, flattened; their wood grain,
 # checkering and engraving are for the renders — baking them is a later step).
@@ -27,7 +28,7 @@ import guns  # noqa: E402
 ROOT = os.path.join(os.path.dirname(__file__), "../../..")
 argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
 OUT = argv[argv.index("--out") + 1] if "--out" in argv else os.path.join(ROOT, "apps/client/public/life/guns")
-ONLY = argv[argv.index("--only") + 1].split(",") if "--only" in argv else ["revolver", "shotgun"]
+ONLY = argv[argv.index("--only") + 1].split(",") if "--only" in argv else ["revolver", "shotgun", "ak47"]
 os.makedirs(OUT, exist_ok=True)
 
 # the kinds, flattened: base colour, metal, roughness (and an emission)
@@ -86,6 +87,14 @@ GROUPS = {
         "barrels": {"parts": ["barrelL", "barrelR", "rib", "bead", "fore-end", "fore-iron", "latch", "round0", "round1"], "at": (0.144, 0, 0.033)},
         "lever": {"parts": ["lever"], "at": (0.026, 0, 0.079)},
         "triggers": {"parts": ["trigger0", "trigger1"], "at": (0.052, 0, 0.026)},
+    },
+    # (plan 79 phase 5) the magazine rocks out on its front lug; the carrier (the charging handle on it)
+    # runs back along the bore; the selector turns on its pivot
+    "ak47": {
+        "magazine": {"parts": ["magazine", "mag-ribs", "floor", "round0"], "at": (0.124, 0, 0.026)},
+        "carrier": {"parts": ["carrier"], "at": (0.17, 0, 0.073)},
+        "trigger": {"parts": ["trigger"], "at": (0.022, 0, 0.02)},
+        "selector": {"parts": ["selector"], "at": (0.045, -0.0258, 0.066)},
     },
 }
 

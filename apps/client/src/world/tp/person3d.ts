@@ -33,6 +33,7 @@ import {
   type GunKind,
   type GunModel,
   gunModel,
+  isLongGun,
   lifeGunModel,
   poseGun,
   shellGeometry,
@@ -65,6 +66,27 @@ const SIT_IN = 0.3; // s: sitting down / getting up
 const STAND_RISER = 0.45; // m: a stand's row over the one before (shared/kart/park.ts kartSeats)
 const PICK_R = 0.26; // tiles: how wide a person is to a click
 const LIFE_GUN_SCALE = 1;
+/** The model a gun's id draws (the pool cue's carried as the double-barrel is). */
+const gunKind = (key: string): GunKind =>
+  key === "shotgun" || key === "cue" ? "shotgun" : key === "ak47" ? "ak47" : "revolver";
+/** The AK's reload, the left hand's times (s from its start — plan 79 phase 5, in time with shared
+ *  ARMS.ak47's steps: the magazine out by 0.8, the new one in by 1.8, racked by 2.8) and the magazine's
+ *  rock on its lug (rad). */
+const AK_LOAD = {
+  reach: 0.25,
+  out: 0.45,
+  down: 0.8,
+  at: 0.95,
+  up: 1.45,
+  in: 1.75,
+  done: 1.8,
+  over: 2.1,
+  pull: 2.3,
+  let: 2.4,
+  back: 2.8,
+  tilt: 0.35,
+  pouch: [0.24, 0.98, 0.34],
+};
 // (plan 79 phase 4) a gun's draw — the hands up from the side (shared ARMS' draw) — and its put-away (s)
 const DRAW_S = 0.35;
 const HOLSTER_S = 0.25; // the life look's guns in the hand (plan 79: life size, as the life people are)
@@ -125,6 +147,9 @@ const hv = new Vector3();
 const hx = new Vector3();
 const hw = new Vector3();
 const hf = new Vector3();
+const hz = new Vector3();
+const tm = new Matrix4();
+const tq3 = new Quaternion();
 const gx = new Vector3();
 const gy = new Vector3();
 const gz = new Vector3();
@@ -613,7 +638,7 @@ export class Person3D {
           gun: !!p.gun,
           reload: (this.gunFx?.reload ?? 0) > 0.3,
           speedloader: p.gun === "revolver",
-          longGun: p.gun === "shotgun",
+          longGun: isLongGun(p.gun ?? ""),
           kick: this.gunFx?.kick ?? 0,
           hurt: p.shade ? 0.7 : p.hp !== undefined ? Math.max(0, 1 - p.hp / 100) : undefined,
           // (plan 58 4c: the gait it's going for — its first step's keyed by it; 4f: the ground under
@@ -1010,6 +1035,7 @@ export class Person3D {
     else this.gun?.root.quaternion.identity();
     if (this.gun) this.gunMoves(this.gun);
     this.gripOnFore();
+    this.magFrame();
     this.budFrame(p);
     this.torchFrame(p);
     this.holdFrame();
@@ -1089,7 +1115,7 @@ export class Person3D {
   private gun: { key: string; root: Group; model: GunModel; inHand: boolean } | null = null;
   private gunFrame(p: PersonIn, hand: Object3D | null) {
     const key = p.gun ?? "";
-    const kind: GunKind = key === "shotgun" ? "shotgun" : "revolver";
+    const kind = gunKind(key);
     const cue = key === "cue";
     // (the life look's model once the view has it — plan 79; the drawn one till then, swapped when it comes)
     const tpl = key && !cue ? (this.mats.gun?.(kind) ?? null) : null;
@@ -1129,7 +1155,7 @@ export class Person3D {
     root.add(inner);
     root.position.set(0, frame ? 0 : -0.05, 0);
     // (the drawn ones a little larger than life, as the old people's hands were; the life look's life size)
-    root.scale.setScalar(model.life ? LIFE_GUN_SCALE : kind === "shotgun" || cue ? 1.2 : 1.4);
+    root.scale.setScalar(model.life ? LIFE_GUN_SCALE : kind !== "revolver" || cue ? 1.2 : 1.4);
     hand.add(root);
     this.gun = { key, root, model, inHand: !!frame };
   }
@@ -1139,8 +1165,9 @@ export class Person3D {
    *  reloading, tipped up and turned in. Without it, at rest — cocked while aiming. */
   gunFx: GunFx | null = null;
   private gunMoves(gun: { key: string; root: Group; model: GunModel; inHand: boolean }) {
-    const kind: GunKind = gun.key === "shotgun" || gun.key === "cue" ? "shotgun" : "revolver";
+    const kind = gunKind(gun.key);
     const fx = this.gunFx;
+    if (fx) fx.bolt = this.akBolt;
     if (gun.key !== "cue") poseGun(gun.model, kind, fx ?? { cock: 1 });
     // (in a life hand: the hand carries it — its kick is the arms', its turn the wrist's)
     if (gun.inHand) return;
@@ -1149,9 +1176,11 @@ export class Person3D {
     if (fx.kick > 0) {
       // (back: the root's +y; up: the barrel's −y turned toward its top, +z)
       gun.root.position.add(
-        tv2.set(0, fx.kick * (kind === "shotgun" ? 0.06 : 0.035), 0).applyQuaternion(gun.root.quaternion),
+        tv2
+          .set(0, fx.kick * (kind === "shotgun" ? 0.06 : kind === "ak47" ? 0.03 : 0.035), 0)
+          .applyQuaternion(gun.root.quaternion),
       );
-      gun.root.rotateX(-fx.kick * (kind === "shotgun" ? 0.22 : 0.3));
+      gun.root.rotateX(-fx.kick * (kind === "shotgun" ? 0.22 : kind === "ak47" ? 0.09 : 0.3));
     }
     // reloading: the muzzle up and the gun rolled in, its side (the gate, the breech) to me
     // (the double-barrel's reload is the hands' — gunHands)
@@ -1183,9 +1212,13 @@ export class Person3D {
   private gunHands(p: PersonIn, dt: number) {
     const gun = this.gun;
     const aiming = !!p.gun && ((p.mv ?? 0) & 16) !== 0;
-    // (the pool cue: held as the double-barrel is, in both hands)
-    const shotgun = p.gun === "shotgun" || p.gun === "cue";
-    const loading = p.gun === "shotgun" && !aiming && (this.gunFx?.reload ?? 0) > 0.3;
+    // (the pool cue: held as the double-barrel is, in both hands; the AK too — plan 79 phase 5)
+    const shotgun = isLongGun(p.gun ?? "") || p.gun === "cue";
+    const ak = p.gun === "ak47";
+    // (the AK's reload keeps the server's time from its start — opened while still aiming, the hands
+    // join it where it's got to once the gun comes down)
+    const akOpen = ak && (this.gunFx?.open ?? 0) > 0.3;
+    const loading = (p.gun === "shotgun" || ak) && !aiming && (ak ? akOpen : (this.gunFx?.reload ?? 0) > 0.3);
     // (plan 79: a life revolver held at the low ready too, not aimed — both hands, AW2's)
     const ready = !!gun?.inHand && !shotgun && !aiming && (this.gunFx?.reload ?? 0) < 0.3;
     // (put away: the hands down to the side first — gunFrame drops it after HOLSTER_S)
@@ -1197,7 +1230,14 @@ export class Person3D {
     this.drawT += dt;
     const drawn = Math.min(1, this.drawT / DRAW_S);
     const w = Math.min(this.gunHandsW, drawn * drawn * (3 - 2 * drawn));
-    this.loadT = loading ? this.loadT + dt : 0;
+    // (the AK's reload begun with it empty: the charging handle racked at the end — mine only: the others'
+    // rounds aren't known)
+    const timing = ak ? akOpen : loading;
+    if (timing && this.loadT === 0) this.akDry = ak && (this.gunFx?.loaded ?? 1) <= 0;
+    this.loadT = timing ? this.loadT + dt : 0;
+    this.magInHand = false;
+    this.magTilt = 0;
+    this.akBolt = 0;
     if (this.shellInHand) this.shellInHand.visible = false;
     this.gunDirOn = false;
     this.foreW = 0;
@@ -1207,17 +1247,21 @@ export class Person3D {
     // (`fwd`, `in`: the butt that far ahead of the shoulder, and in toward the chest)
     const to = aiming
       ? { L: AIM_BLADE, P: p.pitch ?? 0, drop: 0, fwd: 0, in: 0 }
-      : loading
-        ? { L: 0.45, P: -0.3, drop: 0.22, fwd: 0, in: 0 }
-        : shotgun
-          ? // carried, heavy: the butt against the right side of the chest, the gun across the body —
-            // the muzzle ahead and to the left, a little down (and the gun turned further left in the
-            // hands: gunWay.turn); running, a touch closer in
-            { L: 0.7 - 0.1 * run, P: -0.22 + 0.06 * run, drop: 0.13 - 0.03 * run, fwd: -0.05, in: 0.03 }
-          : ready
-            ? // the low ready: the muzzle ahead and down ~40° (running: tucked closer, steeper)
-              { L: 0.12, P: -0.6 - 0.25 * run, drop: 0, fwd: 0, in: 0 }
-            : { L: 0, P: 0, drop: 0, fwd: 0, in: 0 };
+      : loading && ak
+        ? // (the AK: kept up at the shoulder, the muzzle lowered and turned a little left — the magazine
+          // well to the left hand)
+          { L: 0.32, P: -0.2, drop: 0.1, fwd: 0.03, in: 0.02 }
+        : loading
+          ? { L: 0.45, P: -0.3, drop: 0.22, fwd: 0, in: 0 }
+          : shotgun
+            ? // carried, heavy: the butt against the right side of the chest, the gun across the body —
+              // the muzzle ahead and to the left, a little down (and the gun turned further left in the
+              // hands: gunWay.turn); running, a touch closer in
+              { L: 0.7 - 0.1 * run, P: -0.22 + 0.06 * run, drop: 0.13 - 0.03 * run, fwd: -0.05, in: 0.03 }
+            : ready
+              ? // the low ready: the muzzle ahead and down ~40° (running: tucked closer, steeper)
+                { L: 0.12, P: -0.6 - 0.25 * run, drop: 0, fwd: 0, in: 0 }
+              : { L: 0, P: 0, drop: 0, fwd: 0, in: 0 };
     const k = 1 - Math.exp(-dt * 10);
     const gw = this.gunWay;
     gw.L += (to.L - gw.L) * k;
@@ -1262,8 +1306,9 @@ export class Person3D {
       this.model.reachTo("R", ht, w, [-1, -0.25, -0.15]);
       // the left: reloading, to the pocket and the breech; else under the fore-end — of the gun as
       // it ends up turned in the hand, so once it's turned (gripOnFore, after aimGun)
-      if (this.loadT > 0) {
-        this.loadHand(hp, d, up, gs, body, tq);
+      if (this.loadT > 0 && loading) {
+        if (ak) this.magHand(gs, body, tq);
+        else this.loadHand(hp, d, up, gs, body, tq);
         this.model.reachTo("L", ht, w, [-0.5, -1, 0.2]);
       } else this.foreW = w;
       return;
@@ -1350,6 +1395,103 @@ export class Person3D {
       if (this.shellInHand.parent !== hand) hand.add(this.shellInHand);
       this.shellInHand.visible = true;
     }
+  }
+
+  // Reloading the AK (plan 79 phase 5): the left hand's way (into `ht`) off the fore-end to the magazine,
+  // rocking it out on its front lug, down to the left hip's pocket with it and back with another, rocked
+  // in; then — run dry — over the top to the charging handle on the right, racked; back to the fore-end.
+  // In time with the server's steps (shared ARMS.ak47: out 0.8, in 1.0, shut 0.4 or racked 1.0). The
+  // magazine follows the hand while it's off the gun (magFrame).
+  private akDry = false;
+  private magInHand = false;
+  private magTilt = 0; // rad: rocked on its lug (the bottom forward)
+  private akBolt = 0; // the carrier racked back, 0..1
+  private magHand(gs: number, body: number, q: Quaternion) {
+    const g = this.gun?.model;
+    if (!g) return;
+    g.root.updateWorldMatrix(true, false);
+    const W = g.root.matrixWorld;
+    const t = this.loadT;
+    const ease = (x: number) => {
+      const c = Math.max(0, Math.min(1, x));
+      return c * c * (3 - 2 * c);
+    };
+    // (the points, in the gun's frame: the fore-end; the magazine's middle, the hand at its left side;
+    // the charging handle, the hand over the top to it)
+    const fore = g.fore ?? [0.34, 0.03, 0];
+    hb.set(fore[0], fore[1] - 0.045, fore[2]).applyMatrix4(W);
+    hf.set(0.13, -0.075, -0.03).applyMatrix4(W);
+    // the magazine pouch: at the belt, front left — out in front of the coat, the magazine seen going in
+    // and out (in her own frame: x her left, y up, z ahead)
+    this.root.updateWorldMatrix(true, false);
+    this.root.localToWorld(hq.set(AK_LOAD.pouch[0], AK_LOAD.pouch[1], AK_LOAD.pouch[2]));
+    void q;
+    void body;
+    const T = AK_LOAD;
+    if (t < T.reach) ht.copy(hb).lerp(hf, ease(t / T.reach));
+    else if (t < T.out) {
+      ht.copy(hf);
+      this.magTilt = AK_LOAD.tilt * ease((t - T.reach) / (T.out - T.reach));
+    } else if (t < T.down) {
+      this.magInHand = true;
+      ht.copy(hf).lerp(hq, ease((t - T.out) / (T.down - T.out)));
+    } else if (t < T.at) {
+      this.magInHand = true;
+      ht.copy(hq);
+    } else if (t < T.up) {
+      this.magInHand = true;
+      ht.copy(hq).lerp(hf, ease((t - T.at) / (T.up - T.at)));
+    } else if (t < T.in) {
+      ht.copy(hf);
+      this.magTilt = AK_LOAD.tilt * (1 - ease((t - T.up) / (T.in - T.up)));
+    } else if (!this.akDry) ht.copy(hf).lerp(hb, ease((t - T.done) / 0.35));
+    else {
+      // (run dry: over the top to the charging handle, racked back and let go, back to the fore-end)
+      const h0 = hx.set(0.21, 0.1, 0.05).applyMatrix4(W);
+      const h1 = hz.set(0.21 - 0.075, 0.1, 0.05).applyMatrix4(W);
+      if (t < T.over) ht.copy(hf).lerp(h0, ease((t - T.done) / (T.over - T.done)));
+      else if (t < T.pull) {
+        const k = ease((t - T.over) / (T.pull - T.over));
+        ht.copy(h0).lerp(h1, k);
+        this.akBolt = k;
+      } else if (t < T.let) {
+        ht.copy(h1);
+        this.akBolt = 1 - (t - T.pull) / (T.let - T.pull);
+      } else ht.copy(h1).lerp(hb, ease((t - T.let) / (T.back - T.let)));
+    }
+    void gs;
+  }
+
+  /** The AK's magazine: on its lug (rocked `magTilt`), or in the left hand while it's off the gun. */
+  private magFrame() {
+    const mag = this.gun?.model.parts.magazine;
+    if (!mag) return;
+    mag.userData.p0 ??= mag.position.clone();
+    const hand = this.magInHand ? this.model.bone("wristL") : null;
+    if (!hand || !mag.parent) {
+      mag.position.copy(mag.userData.p0);
+      mag.rotation.set(0, 0, this.magTilt);
+      return;
+    }
+    // (held at its middle: its lug ~9 cm over the hand, upright as the gun is, still rocked)
+    const root = this.gun?.model.root;
+    if (!root) return;
+    root.updateWorldMatrix(true, false);
+    root.getWorldQuaternion(gq);
+    hand.getWorldPosition(hx);
+    const gsc = root.getWorldScale(hs).x;
+    hx.addScaledVector(hz.set(0, 1, 0).applyQuaternion(gq), 0.09 * gsc).addScaledVector(
+      hz.set(0, 0, 1).applyQuaternion(gq),
+      0.03 * gsc,
+    );
+    mag.parent.updateWorldMatrix(true, false);
+    mag.position.copy(hx).applyMatrix4(tm.copy(mag.parent.matrixWorld).invert());
+    mag.parent.getWorldQuaternion(tq2);
+    mag.quaternion
+      .copy(tq2)
+      .invert()
+      .multiply(gq)
+      .multiply(tq3.setFromAxisAngle(hz.set(0, 0, 1), AK_LOAD.tilt));
   }
 
   /** Aiming: the barrel (the root's −y) along `dir` (world, unit), its top (+z) up — level, not

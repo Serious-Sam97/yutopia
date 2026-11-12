@@ -3,6 +3,8 @@
 export const STRINGS: Record<string, readonly [string, string]> = {
   dark_item_revolver: ["Revolver", "Revólver"],
   dark_item_shotgun: ["Shotgun", "Espingarda"],
+  dark_item_ak47: ["AK-47", "AK-47"],
+  dark_item_r762: ["7.62 rounds", "Balas 7.62"],
   dark_item_r38: [".38 rounds", "Balas .38"],
   dark_item_shell: ["Shells", "Cartuchos"],
   dark_item_flare: ["Flare", "Sinalizador"],
@@ -102,7 +104,15 @@ export const STRINGS: Record<string, readonly [string, string]> = {
     "Eight pellets, up close. Only hurts one already exposed by the light.",
     "Oito chumbos de perto. Só ferem um sombrio já exposto pela luz.",
   ],
-  dark_desc_r38: ["Rounds for the revolver, loaded one at a time (R).", "Balas do revólver, uma de cada vez (R)."],
+  dark_desc_ak47: [
+    "Thirty rounds, fires while you hold it. Climbs fast: short bursts. Only hurts one already exposed by the light.",
+    "Trinta balas, dispara enquanto segura. Sobe rápido: rajadas curtas. Só fere um sombrio já exposto pela luz.",
+  ],
+  dark_desc_r38: [
+    "Rounds for the revolver: a speedloader at a time (R).",
+    "Balas do revólver: um carregador rápido de cada vez (R).",
+  ],
+  dark_desc_r762: ["Rounds for the AK: a magazine at a time (R).", "Balas da AK: um carregador de cada vez (R)."],
   dark_desc_shell: ["Shells for the shotgun.", "Cartuchos da espingarda."],
   dark_desc_flare: [
     "Throw it (G): it burns red, and they keep out of its light.",

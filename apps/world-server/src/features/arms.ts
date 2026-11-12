@@ -10,6 +10,8 @@ import {
   FLARE,
   flareFlight,
   type GunId,
+  isAuto,
+  isWhole,
   MUZZLE_REACH,
   pastAt,
   pellets,
@@ -37,8 +39,9 @@ import { registerFeature } from "./index.ts";
 // were, kept here): one of us hit takes half what the shadowed would (shared
 // pvpDamage); a wall on the way stops it. A reload (docs/plan/79-the-guns.md,
 // AW2's): opened, everything in it out (the live rounds back to the pockets),
-// the revolver's speedloader in, or the double-barrel's shells one at a time;
-// shut. A flare is thrown on an arc and lit where it
+// the revolver's speedloader in, the AK's new magazine (its charging handle
+// racked after, if it ran dry), or the double-barrel's shells one at a time;
+// shut. The AK fires while its trigger's held: each round its own shot. A flare is thrown on an arc and lit where it
 // lands: a pool the shadowed can't come into for 12 s.
 // The feel's rules (docs/plan/32-the-arms.md): a gun's up only after its draw;
 // shots go out with the spread the server works out (shared spreadOf — its own
@@ -67,6 +70,8 @@ interface Hand {
    *  `step`: open, a shell in, shut */
   reloadAt: number;
   step: "" | "open" | "load" | "shut";
+  /** the reload began with it empty (the AK's charging handle racked at the end) */
+  dry: boolean;
   /** the gun's up at (server ms) */
   drawnAt: number;
   /** the spread's bloom (rad) as of `bloomAt` (server ms) */
@@ -77,7 +82,7 @@ interface Hand {
 registerFeature((room: WorldRoom) => {
   const hands = new Map<string, Hand>();
   const hand = (sid: string) => {
-    const h = hands.get(sid) ?? { shotAt: 0, reloadAt: 0, step: "", drawnAt: 0, bloom: 0, bloomAt: 0 };
+    const h = hands.get(sid) ?? { shotAt: 0, reloadAt: 0, step: "", dry: false, drawnAt: 0, bloom: 0, bloomAt: 0 };
     hands.set(sid, h);
     return h;
   };
@@ -173,6 +178,7 @@ registerFeature((room: WorldRoom) => {
     if (hd.reloadAt) return;
     // (opened first — the revolver's cylinder swung out, the double-barrel broken: plan 79 F11a, F12a)
     hd.step = "open";
+    hd.dry = h.w.loaded <= 0;
     hd.reloadAt = Date.now() + ARMS[h.w.id].open * 1000;
   });
 
@@ -195,7 +201,10 @@ registerFeature((room: WorldRoom) => {
       return;
     }
     if (h.w.loaded <= 0) return;
-    if (now - hd.shotAt < gun.rate * 1000 - 30) return;
+    // (full auto — the AK's: a round's slot each `rate`, a shot late on the line may take the one it
+    // missed, so a held trigger's rate holds through the line's jitter; never faster than it over time)
+    const rateMs = gun.rate * 1000;
+    if (now - hd.shotAt < rateMs - 30) return;
     const ox = Number(m?.ox);
     const oy = Number(m?.oy);
     const oz = Number(m?.oz);
@@ -210,7 +219,7 @@ registerFeature((room: WorldRoom) => {
     const floor = floorAt(room.gridFor(p.uid, p.level), p.x, p.y);
     const feet = Math.min(pz, floor);
     if (Math.hypot(ox - p.x, oy - p.y) > MUZZLE_REACH || oz < feet || oz > Math.max(pz, floor) + 2.4) return;
-    hd.shotAt = now;
+    hd.shotAt = isAuto(h.w.id) ? Math.max(now - rateMs, hd.shotAt + rateMs) : now;
     hd.reloadAt = 0;
     h.w.loaded--;
     room.survival?.changed(client.sessionId);
@@ -328,7 +337,8 @@ registerFeature((room: WorldRoom) => {
         }
         const ammo = WEAPONS[h.w.id].ammo;
         const mag = WEAPONS[h.w.id].mag;
-        const speedloader = h.w.id === "revolver";
+        // (the revolver's speedloader, the AK's magazine: all at once; the double-barrel's shells one by one)
+        const whole = isWhole(h.w.id);
         if (hd.step === "shut" || !hd.step) {
           hd.step = "";
           hd.reloadAt = 0;
@@ -340,17 +350,19 @@ registerFeature((room: WorldRoom) => {
           room.survival?.changed(sid);
         }
         if (hd.step === "load") {
-          const got = takeStack(h.inv, ammo, speedloader ? mag - h.w.loaded : 1);
+          const got = takeStack(h.inv, ammo, whole ? mag - h.w.loaded : 1);
           if (got > 0) {
             h.w.loaded += got;
             room.survival?.changed(sid);
           }
         }
-        // (the speedloader once; the shells till full or none left)
-        const more = h.w.loaded < mag && count(h.inv, ammo) > 0 && (!speedloader || hd.step === "open");
+        // (the speedloader or the magazine once; the shells till full or none left)
+        const more = h.w.loaded < mag && count(h.inv, ammo) > 0 && (!whole || hd.step === "open");
         hd.step = more ? "load" : "shut";
         const g = ARMS[h.w.id];
-        hd.reloadAt = now + (more ? (speedloader ? ARMS.revolver.speed : g.reload) : g.shut) * 1000;
+        // (shut: the AK run dry has its charging handle racked — longer)
+        const shut = "charge" in g && hd.dry && h.w.loaded > 0 ? g.charge : g.shut;
+        hd.reloadAt = now + (more ? ("speed" in g ? g.speed : g.reload) : shut) * 1000;
       }
       // what each hand's doing, for everyone's screens
       for (const p of room.state.players.values()) {

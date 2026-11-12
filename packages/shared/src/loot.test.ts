@@ -3,8 +3,10 @@ import { test } from "node:test";
 import { quarterYaw } from "./catalog.ts";
 import {
   LOCKER,
+  LOCKER_AK,
   LOCKER_KIT,
   LOOT,
+  lockerAk,
   lockerFront,
   nightBudget,
   nightOf,
@@ -58,4 +60,19 @@ test("the lobby locker's kit fits a pocket each; its front is out the way it fac
   assert.deepEqual(lockerFront({ x: 4, y: 4, yaw: quarterYaw(0) }), { x: 4.5, y: 5.4 });
   assert.deepEqual(lockerFront({ x: 4, y: 4, yaw: quarterYaw(2) }), { x: 4.5, y: 3.6 });
   assert.ok(lockerFront({ x: 4, y: 4, yaw: quarterYaw(1) }).x < 4.5, "turned once: −x, as a seat");
+});
+
+test("the supply locker's rare AK (plan 79 F9a): some days, empty, with a magazine's rounds; carried, some days its rounds", () => {
+  const seq = (...v: number[]) => {
+    let i = 0;
+    return () => v[i++ % v.length];
+  };
+  assert.deepEqual(lockerAk(seq(0.05), false), [
+    { id: "ak47", n: 1, loaded: 0 },
+    { id: "r762", n: LOCKER_AK.n },
+  ]);
+  assert.deepEqual(lockerAk(seq(LOCKER_AK.gun + 0.01), false), []);
+  assert.deepEqual(lockerAk(seq(0.2), true), [{ id: "r762", n: LOCKER_AK.n }]);
+  assert.deepEqual(lockerAk(seq(LOCKER_AK.rounds + 0.01), true), []);
+  assert.ok(LOCKER_AK.n <= STACKS.r762);
 });

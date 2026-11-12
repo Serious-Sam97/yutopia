@@ -12,7 +12,7 @@ shoulder camera whenever a gun is out (no swap key), F2a walk while aiming, F3a 
 with a recoil layer, F6a the torch held with the gun, F7 **the Daybreak**, F8a the right button focuses
 only a torch already on, F9a the AK in the lockers / the sniper in the hunting bag / the Daybreak from
 Spawn, F10a four quick slots. Phase 1 (the right button) built; phase 0 mocks delivered (second round: the camera closer, the guns
-detailed; the revolver and the double-barrel redesigned after AW2's), signed off 2026-11-11 (the long guns held where the arms reach); phase 2 (the camera, the reticle) and phase 3 (the two guns' models in the game) built 2026-11-11; phase 4 built and signed off 2026-11-12 ("look fine for now"); F11a (the speedloader) and F12a (both shells out) decided 2026-11-11. Follows plan 32 (the arms: the
+detailed; the revolver and the double-barrel redesigned after AW2's), signed off 2026-11-11 (the long guns held where the arms reach); phase 2 (the camera, the reticle) and phase 3 (the two guns' models in the game) built 2026-11-11; phase 4 built and signed off 2026-11-12 ("look fine for now"); phase 5 (the AK-47) built and signed off 2026-11-12; F11a (the speedloader) and F12a (both shells out) decided 2026-11-11. Follows plan 32 (the arms: the
 rules, kick, bloom, falloff, heads), plan 30 (the dark: light is the weapon), plans 58/77/78 (the body,
 its moves, its hands) and plan 73 (the life look).
 
@@ -203,6 +203,50 @@ the Daybreak the torch's focus hum and a flare's burst) so the phases before can
    - whether you choose from candidates for each sound (3–4 each, as the steps were picked), or I pick and
      you veto.
    Then: the picks, the mix, the checks (the steps' level rule: plan 63), credits in `sources.json`.
+
+## Phase 5 — the AK-47: built, signed off (2026-11-12)
+
+- **The rules** (shared `ARMS.ak47`, `WEAPONS.ak47`, `STACKS.r762` 60): full auto at 0.1 s, 22 a hit
+  (full to 30 tiles, 0.7 of it at 50), tight first round (0.004) blooming 0.011 a round to 0.07, calming
+  fast (3.2/s); drawn in 0.45 s, aimed in 0.24 s. `isAuto`, `isWhole` (loaded all at once: the
+  speedloader, the magazine).
+- **The server** (`features/arms.ts`): each round its own `arms:fire`, the rate kept in slots — a shot
+  late on the line may take the slot it missed (so a held trigger keeps 600 a minute through jitter),
+  never faster over time. The magazine reload on the revolver's step machine: open 0.8 s (the magazine
+  out, every round left in it back to the pockets), load 1.0 s (thirty at once), shut 0.4 s — or, begun
+  empty, the charging handle racked, 1.0 s (2.2 s / 2.8 s, as the table). **Plan change:** no `ARM.mag`
+  — the AK's whole reload is `ARM.open`, as the others' opened guns are (the clients time it from there).
+  A test: rate through jitter, a burst sent at once, the magazine's rounds back, the dry rack.
+- **Where it comes from** (F9a): the supply locker's kit, some days (12%) an empty AK and 30 rounds for
+  one who carries none; carrying one, some days (35%) its 30 rounds (shared `lockerAk`, `LOCKER_AK`; the
+  dice settable for tests: `lockerDice`). The admins' kit (`mod:refill { kit, ak }`, Spawn's "Arm me"):
+  the AK in quick 3, 60 rounds — opt-in, so the older kit's free pocket and quick slot stay free.
+- **The model**: phase 0's Blender AK, built for the game (`build_guns.py --only ak47`): 0.11 MB, 11.2k
+  triangles; pivots `magazine` (on its front lug), `carrier` (the charging handle on it), `trigger`,
+  `selector`; `round0` the top round; points with `pt_fore`, `pt_butt`. In the budget test.
+- **In the hands** (`tp/person3d.ts`): a long gun as the double-barrel is (`isLongGun`) — carried across
+  the body, shouldered aimed, the cheek on the stock. The carrier jumps back with each round (poseGun).
+  **Its reload** (`magHand`, `magFrame`, `AK_LOAD`): the gun kept at the shoulder, muzzle lowered; the
+  left hand off the fore-end to the magazine, rocked out, down to a pouch at the belt's front left (out
+  of the coat, seen), back with it, rocked in; run dry, over the top to the charging handle, racked, let
+  go; back to the fore-end — timed from the server's opening, so a reload begun aiming joins where it's
+  got to once the gun comes down. The magazine follows the hand while it's off the gun.
+- **The feel** (`dark/arms.ts`): the left button (RT) held fires at the beat (the next round's slot from
+  the last, not the frame); a round's camera kick small and mostly kept — it climbs — walking aside the
+  same way each burst; the dry click once a pull; shots counted ahead of the server's count (so a burst
+  doesn't fire past empty on the line's delay). A case out of the port a round. The HUD: a magazine bar
+  with its count, "+N 7.62".
+- **Placeholder sounds** (phase 9 redoes them): the shot the revolver's, quicker (×1.22) and quieter;
+  the magazine out the double-barrel's break, higher; in, the revolver's load; shut/racked its cock,
+  lower.
+- Seen with `e2e/guns-hold.mts` (now all three; `ONLY=ak47`, a burst frame, the reload from both sides,
+  its state in her own frame with `DEBUG=1`; back to the start for each gun, the moves facing away from
+  the pond — open water out of the winter, it swam): hold, aim, the burst, the reload, walking aimed,
+  sprint, dodge, put away. `arms-feel.spec.ts` has the AK: a second held ≈ ten rounds, the climb, let go
+  no more, R thirty. Server tests 14/14, survival + down 17/17, shared loot (the locker's AK).
+- **Left for phase 8**: the AK on the snow is the double-barrel's drawn model (no drawn AK; the life
+  model on the snow is phase 8's) — and the classic look's AK too; the guns' metals read near black by day
+  (the flat placeholder materials: the baked textures).
 
 ## Phase 4 — the moves, the two we have: built, signed off (2026-11-12)
 

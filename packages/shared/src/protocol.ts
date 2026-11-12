@@ -530,7 +530,7 @@ export interface ClientMessages {
   "dark:use": { slot: number };
   "dark:drop": { slot: number };
   // an admin's own vitals full again (health, stamina, warmth, the battery): for trying things out
-  "mod:refill": { kit?: boolean; hp?: number; wm?: number };
+  "mod:refill": { kit?: boolean; ak?: boolean; hp?: number; wm?: number };
   // the shadowed (features/dark.ts), admins: off ("peaceful") or on ("normal"); `spawn`: that
   // many out of the dark near me, to try the fight
   "mod:dark": { mode?: "peaceful" | "normal" | "called"; spawn?: number };

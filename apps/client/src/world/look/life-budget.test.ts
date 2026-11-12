@@ -178,12 +178,14 @@ for (const who of ["man", "woman"]) {
 // ── the guns (plan 79 phase 3: tools/art/guns/build_guns.py → public/life/guns/<kind>.glb) ─────────
 
 /** A gun's file: no textures (plain materials till they're baked), meshopt geometry. Measured
- *  2026-11-11: the revolver 0.14 MB, 15.1k triangles; the double-barrel 0.10 MB, 10.5k. */
+ *  2026-11-11: the revolver 0.14 MB, 15.1k triangles; the double-barrel 0.10 MB, 10.5k; 2026-11-12
+ *  the AK 0.11 MB, 11.2k. */
 const GUN = { mb: 0.25, tris: 20000 };
 /** What the game looks for in each (tp/guns3d.ts lifeGunModel, poseGun): the pivots, the rounds, the points. */
 const GUN_NODES: Record<string, string[]> = {
   revolver: ["hammer", "trigger", "crane", "cylinder", "round0", "round5"],
   shotgun: ["barrels", "lever", "triggers", "round0", "round1"],
+  ak47: ["magazine", "carrier", "trigger", "selector", "round0", "pt_fore", "pt_butt"],
 };
 const GUN_DIR = join(DIR, "guns");
 for (const kind of Object.keys(GUN_NODES)) {

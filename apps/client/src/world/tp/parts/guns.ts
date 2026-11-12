@@ -64,7 +64,10 @@ export class Guns {
     const since = this.c.time - (this.gunKicks.get(b.id) ?? -9);
     const aiming = ((b.mv ?? 0) & MV_AIM) !== 0;
     const loading = b.arm === 2 || b.arm === 3;
-    f.kick = since < 0.035 ? since / 0.035 : Math.exp(-(since - 0.035) * (b.gun === "shotgun" ? 9 : 13));
+    f.kick =
+      since < 0.035
+        ? since / 0.035
+        : Math.exp(-(since - 0.035) * (b.gun === "shotgun" ? 9 : b.gun === "ak47" ? 18 : 13));
     f.cock = ease(f.cock, aiming && since > 0.12 ? 1 : 0, 18);
     f.turn = ease(f.turn, f.turnTo, 14);
     f.open = ease(f.open, loading ? 1 : 0, 12);

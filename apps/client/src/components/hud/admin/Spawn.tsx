@@ -26,8 +26,8 @@ const W = {
   drop: ["Drop here", "Largar aqui"],
   arm: ["Arm me", "Me armar"],
   armS: [
-    "Both guns loaded, rounds, shells, flares, first aid, a battery.",
-    "As duas armas carregadas, balas, cartuchos, sinalizadores, curativo, bateria.",
+    "Every gun loaded, rounds, shells, flares, first aid, a battery.",
+    "Todas as armas carregadas, balas, cartuchos, sinalizadores, curativo, bateria.",
   ],
   dark: ["Out of the dark", "Do escuro"],
   one: ["1 shade near me", "1 sombra perto de mim"],
@@ -61,8 +61,10 @@ const W = {
   laser: ["Laser pointer", "Laser"],
   revolver: ["Revolver", "Revólver"],
   shotgun: ["Shotgun", "Espingarda"],
+  ak47: ["AK-47", "AK-47"],
   r38: ["Rounds", "Balas"],
   shell: ["Shells", "Cartuchos"],
+  r762: ["7.62 rounds", "Balas 7.62"],
   flare: ["Flares", "Sinalizadores"],
   battery: ["Batteries", "Baterias"],
   aid: ["First aid", "Curativos"],
@@ -71,7 +73,7 @@ const W = {
 type Word = keyof typeof W;
 
 const HELD = ["mug", "cup", "soda", "ball", "frisbee", "rope", "feather", "laser"] as const;
-const POCKET = ["revolver", "shotgun", "r38", "shell", "flare", "battery", "aid", "fuse"] as const;
+const POCKET = ["revolver", "shotgun", "ak47", "r38", "shell", "r762", "flare", "battery", "aid", "fuse"] as const;
 const hex = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
 
 export function Spawn() {
@@ -186,7 +188,7 @@ export function Spawn() {
               type="button"
               className="deck-btn"
               title={t("armS")}
-              onClick={() => send?.("mod:refill", { kit: true })}
+              onClick={() => send?.("mod:refill", { kit: true, ak: true })}
             >
               {t("arm")}
             </button>

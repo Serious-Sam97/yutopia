@@ -345,7 +345,9 @@ test("indoors: dropped on the studio's floor, there; picked up on that floor onl
 });
 
 test("a supply locker, built: a kit a day — what fits; tomorrow another; kept across a rejoin", async () => {
-  const { kitClock } = await import("./features/survival.ts");
+  const { kitClock, lockerDice } = await import("./features/survival.ts");
+  // (the rare AK not rolled: plan 79 F9a — its own test in shared loot.test.ts)
+  lockerDice.roll = () => 0.99;
   const a = await person(381);
   // built in the studio (level 4), by the reception
   a.room.send("obj:put", { id: "kit-locker", kind: "locker", x: 8, y: 23, yaw: 0, props: { level: 4 } });

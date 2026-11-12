@@ -184,7 +184,11 @@ const MODELS: Record<string, () => Part[]> = {
   // (the guns: their own models, the ones in the hand — tp/guns3d.ts)
   revolver: () => [gunLying("revolver")],
   shotgun: () => [gunLying("shotgun")],
+  // (the AK has no drawn model yet — the double-barrel lies in for it: plan 79 phase 8 brings the life
+  // look's to the snow)
+  ak47: () => [gunLying("ak47")],
   r38,
+  r762: r38,
   shell: shells,
   flare,
   battery,
@@ -201,7 +205,9 @@ const MODELS: Record<string, () => Part[]> = {
 const SCALE: Record<string, number> = {
   revolver: 1.8,
   shotgun: 1, // (a life-size double-barrel is long enough to read)
+  ak47: 1,
   r38: 1.8,
+  r762: 1.8,
   shell: 2,
   flare: 1.6,
   battery: 1.8,

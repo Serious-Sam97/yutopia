@@ -51,8 +51,39 @@ export const ARMS = {
     near: 5,
     far: 0.4,
   },
+  // the AK-47 (docs/plan/79-the-guns.md phase 5): full auto — the trigger held, a round every `rate`
+  // (each its own shot on the server); a magazine (all or nothing): the old one out (`open` s — the
+  // rounds left in it back to the pockets), a new one in (`speed` s: every round it needs at once),
+  // and the charging handle racked if it ran dry (`charge` s), else just shouldered again (`shut` s).
+  // Tight the first round, climbing fast held down; it calms quickly between bursts.
+  ak47: {
+    auto: true,
+    rate: 0.1,
+    reload: 0.35,
+    open: 0.8,
+    speed: 1.0,
+    shut: 0.4,
+    charge: 1.0,
+    snap: 0.2,
+    draw: 0.45,
+    aim: 0.24,
+    damage: 22,
+    range: 50,
+    pellets: 1,
+    spread: 0.004,
+    bloom: 0.011,
+    bloomMax: 0.07,
+    calm: 3.2,
+    near: 30,
+    far: 0.7,
+  },
 } as const;
 export type GunId = keyof typeof ARMS;
+/** Fires while the trigger's held (the AK). */
+export const isAuto = (gun: GunId) => "auto" in ARMS[gun] && ARMS[gun].auto === true;
+/** Loaded all at once by its reload (the revolver's speedloader, the AK's magazine) — else a round at
+ *  a time (the double-barrel's shells). */
+export const isWhole = (gun: GunId) => gun === "revolver" || gun === "ak47";
 
 /** How a body takes it, the spread's parts (plan 32): moving (rad per tile / s, to a jog; past it,
  *  a sprint's), crouched, from the hip (not aimed), winded. */
@@ -103,7 +134,8 @@ export const damageAt = (gun: GunId, base: number, t: number, head: boolean) =>
   Math.max(1, Math.round(base * falloff(gun, t) * (head ? HEAD.mult : 1)));
 
 /** What a hand's doing with its gun (Player.arm): nothing, drawing it, reloading the revolver
- *  (the gate open), the double-barrel broken open. */
+ *  (the gate open), opened to load — the revolver's cylinder out, the double-barrel broken open, the
+ *  AK's magazine out (plan 79: its whole reload, the charging handle too, is `open`). */
 export const ARM = { idle: 0, draw: 1, reload: 2, open: 3 } as const;
 
 /** One of us hit by another's shot (the HQ armed, plan 30): half what the shadowed take. */

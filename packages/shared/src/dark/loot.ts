@@ -139,6 +139,18 @@ export const LOCKER_KIT: LootItem[] = [
   { id: "battery", n: 1 },
   { id: "flare", n: 2 },
 ];
+/** The supply locker's rare one (docs/plan/79-the-guns.md F9a): some days an AK-47 (empty) and a
+ *  magazine's worth of 7.62 for anyone who carries none; for one who does, some days its rounds. */
+export const LOCKER_AK = { gun: 0.12, rounds: 0.35, n: 30 } as const;
+export function lockerAk(rng: () => number, carries: boolean): LootItem[] {
+  if (carries) return rng() < LOCKER_AK.rounds ? [{ id: "r762", n: LOCKER_AK.n }] : [];
+  return rng() < LOCKER_AK.gun
+    ? [
+        { id: "ak47", n: 1, loaded: 0 },
+        { id: "r762", n: LOCKER_AK.n },
+      ]
+    : [];
+}
 /** Where you open a thing from (its floor's coords): its tile's middle, a little out the way its
  *  front faces (drawn on +y; turned clockwise: rot 1 −x, 2 −y, 3 +x — as a seat faces). */
 export function lockerFront(o: { x: number; y: number; yaw?: number }): { x: number; y: number } {

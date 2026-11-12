@@ -5,6 +5,7 @@ import {
   bloomCalm,
   bloomShot,
   type GunId,
+  isAuto,
   pellets,
   type Ray,
   rayMeets,
@@ -39,6 +40,9 @@ const EARLY_MS = 120; // a click this early is held till the gun's ready
 const FEEL = {
   revolver: { up: 0.032, side: 0.01, settle: 0.7 },
   shotgun: { up: 0.085, side: 0.022, settle: 0.55 },
+  // (the AK, plan 79 phase 5: a small kick a round that mostly stays — held down, it climbs, and walks
+  // aside a little, the same way each burst)
+  ak47: { up: 0.016, side: 0.007, settle: 0.3 },
 } as const;
 const WINDED = 32;
 // the camera's share of a gun's kick, and how much of it settles back by itself at least (plan 79)
@@ -62,6 +66,11 @@ export class Arms {
   private bloom = 0; // rad: shots fired fast open the spread up; it settles
   private queued = false; // a click a moment early: fired when it's ready
   private kickAt = -9; // s (performance.now / 1000): the last shot
+  private triggerDown = false; // the left button held (full auto: the AK fires while it is)
+  private burst = 0; // rounds into this burst (its climb walks aside by it)
+  private dryPulled = false; // a dry click this pull (held, it isn't clicked again)
+  private ahead = 0; // shots sent that the server's count hasn't taken off yet (full auto outruns the line)
+  private aheadLoaded = -1;
   private dryAt = -9; // s: the last pull on an empty chamber (the trigger goes, the hammer falls on nothing)
   private turn = 0; // the cylinder, in chambers (eased to turnTo)
   private turnTo = 0;
@@ -87,6 +96,15 @@ export class Arms {
     this.cross.className = "dk-cross";
     this.cross.innerHTML = "<i></i><i></i><i></i><i></i><b></b>";
     root.append(this.hud, this.cross);
+    const up = (e: MouseEvent) => {
+      if (e.button === 0) this.triggerUp();
+    };
+    window.addEventListener("mouseup", up, true);
+    window.addEventListener("blur", up as () => void);
+    this.offs.push(() => {
+      window.removeEventListener("mouseup", up, true);
+      window.removeEventListener("blur", up as () => void);
+    });
     const room = ctl.room;
     if (!room) return;
     const on = <K extends keyof ServerMessages>(type: K, fn: (m: ServerMessages[K]) => void) =>
@@ -119,7 +137,8 @@ export class Arms {
       // (far off: dulled, heard further; near: as the place I'm in sounds)
       const me = this.walker.where();
       const far = Math.hypot(m.ox - me.x, m.oy - me.y) > 22;
-      this.voices.play(this.shotSound(gun, far), { x: m.ox, y: m.oy }, far ? 90 : 60);
+      const v = this.shotSound(gun, far);
+      this.voices.play(v.name, { x: m.ox, y: m.oy }, far ? 90 : 60, v.volume, v.rate);
     });
     on("arms:throw", (m) => {
       this.ctl.tp?.arms().throwFlare(m.x0, m.y0, m.z0, m.x, m.y, m.z, m.secs);
@@ -153,12 +172,19 @@ export class Arms {
     }
     return false;
   }
-  /** The left button: fires while aiming with a gun out (else the world's click). */
+  /** The left button: fires while aiming with a gun out (else the world's click) — the AK while it's held. */
   click(e: MouseEvent): boolean {
     if (e.button !== 0 || !this.walker.aiming || !this.gun()) return false;
+    this.triggerDown = true;
     this.fire();
     return true;
   }
+  private triggerUp() {
+    this.triggerDown = false;
+    this.burst = 0;
+    this.dryPulled = false;
+  }
+  private readonly offs: (() => void)[] = [];
   /** The pad: Y while aiming is the next weapon in the quick slots (not the camera); X with
    *  a gun out and nothing to use, a reload. */
   presses(p: Set<Press>, aiming: boolean): void {
@@ -313,13 +339,20 @@ export class Arms {
       this.queued = true;
       return;
     }
-    if (g.loaded <= 0) {
+    // (the rounds left as I've fired them — the server's count comes a moment after)
+    if (g.loaded - this.ahead <= 0) {
+      // (held down, the dry click once a pull)
+      if (this.dryPulled) return;
+      this.dryPulled = this.triggerDown;
       this.voices.play(g.id === "shotgun" ? "shotgun-dry" : "revolver-dry");
       this.dryAt = now / 1000;
       this.reload(); // (empty: a click, and the reload starts)
       return;
     }
-    this.shotAt = now;
+    // (full auto keeps its beat: the next round's slot from this one's, not from the frame it fell in)
+    const rateMs = ARMS[g.id].rate * 1000;
+    this.shotAt = isAuto(g.id) && now - this.shotAt < rateMs * 1.5 ? this.shotAt + rateMs : now;
+    this.ahead++;
     this.reloading = false;
     // through the crosshair: what it's on (one of them, else 30 tiles out)
     const cam = tp.camera.position;
@@ -384,20 +417,28 @@ export class Arms {
     // itself; the gun's own, bigger, in my hands (gunFx's kick, the body's aim2)
     const feel = FEEL[g.id];
     const look = CAM_KICK.share;
+    // (full auto: it climbs — most of each round's kick stays — and walks aside the same way each burst)
+    const auto = isAuto(g.id);
+    const side = auto ? 0.7 * Math.sin(this.burst * 0.8 + 0.6) + 0.3 * (Math.random() * 2 - 1) : Math.random() * 2 - 1;
     tp.guns.kick(
       feel.up * look * (0.85 + Math.random() * 0.3),
-      feel.side * look * (Math.random() * 2 - 1),
-      Math.max(feel.settle, CAM_KICK.settle),
+      feel.side * look * side,
+      auto ? feel.settle : Math.max(feel.settle, CAM_KICK.settle),
     );
+    this.burst++;
     this.kickAt = now / 1000;
     if (g.id === "revolver") {
       this.cock = 0; // (the hammer falls; the thumb cocks it again, the cylinder turning a notch)
       this.turnTo += 1;
     }
-    // (a sharp crack in the hands for the revolver; a long shove for the double-barrel)
+    // (a sharp crack in the hands for the revolver; a long shove for the double-barrel; the AK's quick
+    // jolts — and its brass out of the port, a case a round)
     if (g.id === "shotgun") this.walker.controls.pad.rumble(1, 0.8, 170);
+    else if (auto) this.walker.controls.pad.rumble(0.4, 0.2, 45);
     else this.walker.controls.pad.rumble(0.55, 0.25, 70);
-    this.voices.play(this.shotSound(g.id, false));
+    if (g.id === "ak47") this.brass("case", 1);
+    const v = this.shotSound(g.id, false);
+    this.voices.play(v.name, undefined, 40, v.volume, v.rate);
   }
 
   /** Reloading now: as the server has it, or just asked for (and not full). */
@@ -411,8 +452,14 @@ export class Arms {
    *  or far off. */
   private shotSound(gun: GunId, far: boolean) {
     const k = gun === "shotgun" ? "shotgun" : "revolver";
-    if (far) return `${k}-shot-far` as const;
-    return this.walker.outside ? (`${k}-shot` as const) : (`${k}-shot-in` as const);
+    const name = far
+      ? (`${k}-shot-far` as const)
+      : this.walker.outside
+        ? (`${k}-shot` as const)
+        : (`${k}-shot-in` as const);
+    // (the AK borrows the revolver's, quicker and a little lower in the mix — a placeholder till plan 79
+    // phase 9's sounds)
+    return gun === "ak47" ? { name, volume: 0.75, rate: 1.22 } : { name, volume: 1, rate: 1 };
   }
 
   /** A pellet's flight from (x, y, z) its way: as far as the gun reaches (and `most`), stopped by a
@@ -446,7 +493,11 @@ export class Arms {
     const ease = (v: number, to: number, rate: number) => v + (to - v) * (1 - Math.exp(-dt * rate));
     const since = now / 1000 - this.kickAt;
     const kick =
-      since < 0 ? 0 : since < 0.035 ? since / 0.035 : Math.exp(-(since - 0.035) * (g.id === "shotgun" ? 9 : 13));
+      since < 0
+        ? 0
+        : since < 0.035
+          ? since / 0.035
+          : Math.exp(-(since - 0.035) * (g.id === "shotgun" ? 9 : g.id === "ak47" ? 18 : 13));
     // the hammer: back while aiming (a moment after a shot: thumbed back again), down otherwise
     // (dry: the trigger pulled, the hammer down on nothing for a moment — plan 79)
     const dry = now / 1000 - this.dryAt < 0.14;
@@ -492,8 +543,20 @@ export class Arms {
     const dt = this.was ? Math.min(0.1, (now - this.was.t) / 1000) : 0;
     this.was = { x: at.x, y: at.y, t: now };
     const armNow = this.me()?.arm ?? ARM.idle;
-    if (this.queued && this.walker.aiming && this.gun() && armNow !== ARM.draw && armNow !== ARM.open) this.fire();
+    // (the server's count catching up with the shots I've sent; a reload, another gun: none ahead)
+    const g0 = this.gun();
+    if (g0) {
+      if (g0.loaded < this.aheadLoaded) this.ahead = Math.max(0, this.ahead - (this.aheadLoaded - g0.loaded));
+      else if (g0.loaded > this.aheadLoaded) this.ahead = 0;
+      this.aheadLoaded = g0.loaded;
+      if (now - this.shotAt > 1000) this.ahead = 0;
+    }
+    // (full auto: held, it fires at its rate; let go — or not aiming — the burst's over)
+    const pulled = this.triggerDown || this.walker.controls.pad.rt > 0.6;
+    if (g0 && isAuto(g0.id) && pulled && this.walker.aiming && armNow !== ARM.draw && armNow !== ARM.open) this.fire();
+    else if (this.queued && this.walker.aiming && g0 && armNow !== ARM.draw && armNow !== ARM.open) this.fire();
     else if (!this.walker.aiming) this.queued = false;
+    if (!pulled && this.burst > 0) this.triggerUp();
     this.gunFx(dt, now);
     this.armSounds();
     // a gun in my hand (3D): the right button aims anywhere, and the view's clicks don't pick
@@ -583,10 +646,13 @@ export class Arms {
           return `<i style="left:${x}px;top:${y}px;${full ? "background:radial-gradient(#8a6c22 30%,#d8b04e 34%,#b88f33 70%)" : "background:#0b0c0f;border:1.5px solid #555"}"></i>`;
         }).join("");
         gunHtml = `<div class="cyl${loading ? " re" : ""}">${holes}</div>`;
+      } else if (g.id === "ak47") {
+        // (the magazine: its rounds as a bar, the count on it)
+        gunHtml = `<div class="mag${loading ? " re" : ""}"><i style="height:${Math.round((g.loaded / mag) * 100)}%"></i><span>${g.loaded}</span></div>`;
       } else {
         gunHtml = `<div class="shells${loading ? " re" : ""}">${Array.from({ length: mag }, (_, i) => `<b class="${i < g.loaded ? "on" : ""}"></b>`).join("")}</div>`;
       }
-      gunHtml = `<div class="gun">${gunHtml}<div class="spare${spare > 0 ? "" : " out"}">+${spare}<small>${ammo === "r38" ? ".38" : "12"}</small></div></div>`;
+      gunHtml = `<div class="gun">${gunHtml}<div class="spare${spare > 0 ? "" : " out"}">+${spare}<small>${ammo === "r38" ? ".38" : ammo === "r762" ? "7.62" : "12"}</small></div></div>`;
     }
     const tubes = Array.from({ length: STACKS.flare }, (_, i) => `<b class="${i < flares ? "on" : ""}"></b>`).join("");
     this.hud.innerHTML = `<div class="fl"><div class="tubes">${tubes}</div><div class="n">${flares}</div></div>${gunHtml}`;
@@ -636,6 +702,13 @@ export class Arms {
             this.voices.play("revolver-gate", at, 15, 0.8, 0.92);
           return;
         }
+        if (p.gun === "ak47") {
+          // (the magazine out — a placeholder: the double-barrel's break, higher — and in; shouldered again,
+          // or the charging handle racked: plan 79 phase 9 has the real ones)
+          if (arm === ARM.open) this.voices.play("shotgun-break", at, 15, 0.7, 1.35);
+          else if (was.arm === ARM.open) this.voices.play("revolver-cock", at, 15, 0.8, 0.75);
+          return;
+        }
         if (arm === ARM.open) {
           this.voices.play("shotgun-break", at, 20);
           // (both out — plan 79 F12a: the fired ones kicked out to the ground, mine as many as are spent,
@@ -656,6 +729,7 @@ export class Arms {
   }
 
   dispose(): void {
+    for (const off of this.offs) off();
     this.hud.remove();
     this.cross.remove();
   }
@@ -672,6 +746,11 @@ export const ARMS_CSS = `
 @keyframes dkpulse{to{background:rgba(233,163,58,.45)}}
 @keyframes dkspin{to{transform:rotate(60deg)}}
 .dk-arms .shells{display:flex;gap:6px;padding:8px}
+.dk-arms .mag{position:relative;width:26px;height:64px;margin:8px 0;border-radius:4px 4px 8px 4px;background:rgba(20,22,28,.75);border:2px solid rgba(220,224,230,.55);overflow:hidden;transform:skewY(-8deg)}
+.dk-arms .mag i{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(#d8b04e,#9e7d34)}
+.dk-arms .mag span{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%) skewY(8deg);text-align:center;font-weight:700;font-size:13px;text-shadow:0 1px 3px #000}
+.dk-arms .mag.re{border-color:${AMBER}}
+.dk-arms .mag.re i{animation:dkpulse .6s ease-in-out infinite alternate}
 .dk-arms .shells b{width:14px;height:40px;border-radius:3px;background:rgba(255,255,255,.12)}
 .dk-arms .shells b.on{background:linear-gradient(#b3302b 0 70%,#c9a24a 70%)}
 .dk-arms .spare{font-weight:700;font-size:15px;text-align:center;text-shadow:0 1px 3px #000}
