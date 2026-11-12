@@ -64,7 +64,10 @@ type MotionOut = ReturnType<InstanceType<Chars["Motion3"]>["update"]>;
 const SIT_IN = 0.3; // s: sitting down / getting up
 const STAND_RISER = 0.45; // m: a stand's row over the one before (shared/kart/park.ts kartSeats)
 const PICK_R = 0.26; // tiles: how wide a person is to a click
-const LIFE_GUN_SCALE = 1; // the life look's guns in the hand (plan 79: life size, as the life people are)
+const LIFE_GUN_SCALE = 1;
+// (plan 79 phase 4) a gun's draw — the hands up from the side (shared ARMS' draw) — and its put-away (s)
+const DRAW_S = 0.35;
+const HOLSTER_S = 0.25; // the life look's guns in the hand (plan 79: life size, as the life people are)
 
 export interface Mats {
   body: Material;
@@ -610,6 +613,7 @@ export class Person3D {
           gun: !!p.gun,
           reload: (this.gunFx?.reload ?? 0) > 0.3,
           speedloader: p.gun === "revolver",
+          longGun: p.gun === "shotgun",
           kick: this.gunFx?.kick ?? 0,
           hurt: p.shade ? 0.7 : p.hp !== undefined ? Math.max(0, 1 - p.hp / 100) : undefined,
           // (plan 58 4c: the gait it's going for — its first step's keyed by it; 4f: the ground under
@@ -1091,7 +1095,15 @@ export class Person3D {
     const tpl = key && !cue ? (this.mats.gun?.(kind) ?? null) : null;
     // (plan 79 phase 4: the life look's revolver held by its hand's own frame — known once the body's loaded)
     const frame = tpl && kind === "revolver" ? this.model.handFrame("R") : null;
+    // (plan 79: put away — a life gun kept in the hand while the hands go down to the side, then gone)
+    if (!key && this.gun?.model.life && this.gun.key !== "cue") {
+      if (this.holsterT < 0) this.holsterT = 0;
+      if (this.holsterT < HOLSTER_S) return;
+    }
+    this.holsterT = -1;
     if ((this.gun?.key ?? "") === key && !!this.gun?.model.life === !!tpl && !!this.gun?.inHand === !!frame) return;
+    // (a gun taken out — not one swapped for its life look's model: its draw's rise starts)
+    if (key && !this.gun) this.drawT = 0;
     this.dropGun();
     if (!key || !hand) return;
     const root = new Group();
@@ -1160,6 +1172,8 @@ export class Person3D {
   // shoulder are eased between them.
   private fellW = 0;
   private gunHandsW = 0;
+  private drawT = 9; // s since a gun was taken out (its draw's rise)
+  private holsterT = -1; // s into putting one away (-1: not)
   private gunWay = { L: 0, P: 0, drop: 0, fwd: 0, in: 0, turn: 0 };
   private gunDir = new Vector3();
   private gunDirOn = false;
@@ -1174,9 +1188,15 @@ export class Person3D {
     const loading = p.gun === "shotgun" && !aiming && (this.gunFx?.reload ?? 0) > 0.3;
     // (plan 79: a life revolver held at the low ready too, not aimed — both hands, AW2's)
     const ready = !!gun?.inHand && !shotgun && !aiming && (this.gunFx?.reload ?? 0) < 0.3;
-    const want = gun && (shotgun || aiming || ready) && !p.down && p.fell === undefined ? 1 : 0;
-    this.gunHandsW += (want - this.gunHandsW) * (1 - Math.exp(-dt * 14));
-    const w = this.gunHandsW;
+    // (put away: the hands down to the side first — gunFrame drops it after HOLSTER_S)
+    const away = this.holsterT >= 0;
+    if (away) this.holsterT += dt;
+    const want = gun && !away && (shotgun || aiming || ready) && !p.down && p.fell === undefined ? 1 : 0;
+    this.gunHandsW += (want - this.gunHandsW) * (1 - Math.exp(-dt * (away ? 10 : 14)));
+    // (taken out: the hands rise from the side at the gun's own draw — shared ARMS' 0.35 s)
+    this.drawT += dt;
+    const drawn = Math.min(1, this.drawT / DRAW_S);
+    const w = Math.min(this.gunHandsW, drawn * drawn * (3 - 2 * drawn));
     this.loadT = loading ? this.loadT + dt : 0;
     if (this.shellInHand) this.shellInHand.visible = false;
     this.gunDirOn = false;

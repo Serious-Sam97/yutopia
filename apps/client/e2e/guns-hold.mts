@@ -22,6 +22,14 @@ async function token(email: string): Promise<string> {
 }
 const w = (page: Page, fn: (y: any) => unknown) =>
   page.evaluate((src) => new Function("y", `return (${src})(y)`)((window as any).__yutopia), fn.toString());
+const state = (page: Page, at: string) =>
+  w(page, (y) => {
+    const p = y.room.state.players.get(y.room.sessionId);
+    const inv = (window as any).__dark?.inv;
+    const g = inv?.quick?.find((it: any) => it?.id === p.gun);
+    const f = y.tp.guns.myGun;
+    return { gun: p.gun, arm: p.arm, loaded: g?.loaded, open: f ? Math.round(f.open * 100) / 100 : null };
+  }).then((s) => process.env.DEBUG && console.log(`  ${at}`, JSON.stringify(s)));
 const gun = (page: Page) => w(page, (y) => y.room.state.players.get(y.room.sessionId).gun as string);
 
 /** Draw the scene from beside her: `side` +1 her right, −1 her left, 0 ahead of her; at `h` up, `d` out. */
@@ -94,7 +102,11 @@ for (const [key, id] of [
 ] as const) {
   await page.keyboard.press(key);
   const end = Date.now() + 15_000;
-  while ((await gun(page)) !== id && Date.now() < end) await page.waitForTimeout(200);
+  while ((await gun(page)) !== id && Date.now() < end) await page.waitForTimeout(50);
+  // (its draw: the hands rising from the side — plan 79 phase 4)
+  await page.waitForTimeout(120);
+  await state(page, `${id} drawn`);
+  await view(page, `${out}/${name}-${id}-draw-120.png`, 1, 1.6);
   await page.waitForTimeout(1500);
   await view(page, `${out}/${name}-${id}-ready-right.png`, 1);
   await view(page, `${out}/${name}-${id}-ready-front.png`, 0, 2.2);
@@ -120,6 +132,32 @@ for (const [key, id] of [
     await view(page, `${out}/${name}-${id}-reload-${at}.png`, 1, 1.4);
   }
   await page.waitForTimeout(2500);
+  // (on the move — plan 79 phase 4: walking aimed, sprinting, a dodge)
+  await page.mouse.down({ button: "right" });
+  await page.keyboard.down("KeyW");
+  await page.waitForTimeout(900);
+  await state(page, `${id} walking aimed`);
+  await view(page, `${out}/${name}-${id}-walkaim.png`, 1, 1.8);
+  await page.keyboard.up("KeyW");
+  await page.mouse.up({ button: "right" });
+  await page.waitForTimeout(400);
+  await page.keyboard.down("KeyW");
+  await page.keyboard.down("ShiftLeft");
+  await page.waitForTimeout(1300);
+  await view(page, `${out}/${name}-${id}-sprint.png`, 1, 2.2);
+  await view(page, `${out}/${name}-${id}-sprint-front.png`, 0, 2.6);
+  await page.keyboard.up("ShiftLeft");
+  await page.keyboard.up("KeyW");
+  await page.waitForTimeout(700);
+  await page.keyboard.press("KeyQ");
+  await page.waitForTimeout(220);
+  await view(page, `${out}/${name}-${id}-dodge.png`, 1, 2.2);
+  await page.waitForTimeout(1200);
+  // (put away: the hands down to the side, then it's gone)
+  await page.keyboard.press(key);
+  await page.waitForTimeout(150);
+  await view(page, `${out}/${name}-${id}-away-150.png`, 1, 1.6);
+  await page.waitForTimeout(600);
   console.log("  wrote", id);
 }
 await browser.close();

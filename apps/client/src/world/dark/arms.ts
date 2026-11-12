@@ -62,6 +62,7 @@ export class Arms {
   private bloom = 0; // rad: shots fired fast open the spread up; it settles
   private queued = false; // a click a moment early: fired when it's ready
   private kickAt = -9; // s (performance.now / 1000): the last shot
+  private dryAt = -9; // s: the last pull on an empty chamber (the trigger goes, the hammer falls on nothing)
   private turn = 0; // the cylinder, in chambers (eased to turnTo)
   private turnTo = 0;
   private cock = 0; // the hammer back (0..1)
@@ -314,6 +315,7 @@ export class Arms {
     }
     if (g.loaded <= 0) {
       this.voices.play(g.id === "shotgun" ? "shotgun-dry" : "revolver-dry");
+      this.dryAt = now / 1000;
       this.reload(); // (empty: a click, and the reload starts)
       return;
     }
@@ -446,7 +448,9 @@ export class Arms {
     const kick =
       since < 0 ? 0 : since < 0.035 ? since / 0.035 : Math.exp(-(since - 0.035) * (g.id === "shotgun" ? 9 : 13));
     // the hammer: back while aiming (a moment after a shot: thumbed back again), down otherwise
-    const cockTo = this.walker.aiming && since > 0.12 ? 1 : 0;
+    // (dry: the trigger pulled, the hammer down on nothing for a moment — plan 79)
+    const dry = now / 1000 - this.dryAt < 0.14;
+    const cockTo = this.walker.aiming && since > 0.12 && !dry ? 1 : 0;
     // (the revolver's hammer thumbed back: click-click — coming up to aim, and again after a shot)
     if (g.id === "revolver" && cockTo === 1 && this.cockTo === 0) this.voices.play("revolver-cock", undefined, 40, 0.7);
     this.cockTo = cockTo;
@@ -467,7 +471,7 @@ export class Arms {
       turn: this.turn,
       open: this.open,
       loaded: g.loaded,
-      trigger: since < 0.08 ? 1 : 0,
+      trigger: since < 0.08 || dry ? 1 : 0,
       reload: this.reloadK,
     });
     tp.guns.myGun = this.fx;

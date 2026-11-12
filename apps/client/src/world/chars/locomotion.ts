@@ -51,6 +51,8 @@ export interface LocoIn {
   reload?: boolean;
   /** …by a speedloader (the revolver's, plan 79 F11a): the left hand's one trip to the pocket, not a loop */
   speedloader?: boolean;
+  /** a long gun (plan 79): aimed, the cheek down on its stock */
+  longGun?: boolean;
   /** (plan 58 7) a shot's kick, 0..1 as it goes off and fades: the arms thrown up */
   kick?: number;
   /** (plan 58 7) struck — or startled, a small `k` — from `from` (rad off the facing: 0 ahead, + to
@@ -229,6 +231,9 @@ const seeded = (n: number, s: number) => {
   const x = Math.sin(n * 127.1 + s * 311.7) * 43758.5453;
   return x - Math.floor(x);
 };
+
+// (plan 79) a long gun aimed: the head's turn down onto the stock and over to the right (rad)
+const CHEEK = { down: 0.2, over: 0.12 };
 
 export class Locomotion {
   private walkPh = 0;
@@ -1043,6 +1048,13 @@ export class Locomotion {
       const a2 = N ? N.aim2(top0.pose, this.t, fear, m.kick ?? 0, breath, this.pitch) : null;
       if (a2 && m.gun) this.hand(a2.hands, ease(this.aimW));
       const top = a2 ? { pose: a2.pose, lift: top0.lift } : top0;
+      // (plan 79: a long gun shouldered — the head down and over onto its stock, the cheek on the comb)
+      if (m.gun && m.longGun) {
+        const head = top.pose.head ?? [0, 0, 0];
+        const neck = top.pose.neck ?? [0, 0, 0];
+        top.pose.head = [head[0] + CHEEK.down, head[1], head[2] + CHEEK.over];
+        top.pose.neck = [neck[0] + CHEEK.down * 0.4, neck[1], neck[2] + CHEEK.over * 0.4];
+      }
       const both: Moved = { pose: { ...legs.pose }, lift: legs.lift };
       for (const j of UPPER) if (top.pose[j]) both.pose[j] = top.pose[j];
       body = mix(body, both, ease(this.aimW));

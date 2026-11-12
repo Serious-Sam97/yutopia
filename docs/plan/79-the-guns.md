@@ -12,7 +12,7 @@ shoulder camera whenever a gun is out (no swap key), F2a walk while aiming, F3a 
 with a recoil layer, F6a the torch held with the gun, F7 **the Daybreak**, F8a the right button focuses
 only a torch already on, F9a the AK in the lockers / the sniper in the hunting bag / the Daybreak from
 Spawn, F10a four quick slots. Phase 1 (the right button) built; phase 0 mocks delivered (second round: the camera closer, the guns
-detailed; the revolver and the double-barrel redesigned after AW2's), signed off 2026-11-11 (the long guns held where the arms reach); phase 2 (the camera, the reticle) and phase 3 (the two guns' models in the game) built 2026-11-11; phase 4 started; F11a (the speedloader) and F12a (both shells out) decided 2026-11-11. Follows plan 32 (the arms: the
+detailed; the revolver and the double-barrel redesigned after AW2's), signed off 2026-11-11 (the long guns held where the arms reach); phase 2 (the camera, the reticle) and phase 3 (the two guns' models in the game) built 2026-11-11; phase 4 built and signed off 2026-11-12 ("look fine for now"); F11a (the speedloader) and F12a (both shells out) decided 2026-11-11. Follows plan 32 (the arms: the
 rules, kick, bloom, falloff, heads), plan 30 (the dark: light is the weapon), plans 58/77/78 (the body,
 its moves, its hands) and plan 73 (the life look).
 
@@ -204,7 +204,7 @@ the Daybreak the torch's focus hum and a flare's burst) so the phases before can
      you veto.
    Then: the picks, the mix, the checks (the steps' level rule: plan 63), credits in `sources.json`.
 
-## Phase 4 — the moves, the two we have: started (2026-11-11)
+## Phase 4 — the moves, the two we have: built, signed off (2026-11-12)
 
 Seen close in the game with `e2e/guns-hold.mts` (each gun ready and aimed, drawn again by the game's
 renderer from her right, her left and ahead of her — the player's camera, which her aim follows, untouched).
@@ -241,9 +241,33 @@ left hand holding the torch out below it.
   again). The double-barrel keeps its shell-at-a-time trips.
 - `arms-feel.spec`, `arms.spec` green. (Both time out at their teleport when Ana starts on floor 4 — the
   dev world's spawn after a restart — and pass once she's at the pond: the tests' start, not the guns.)
-- **Still to do in phase 4**: the cheek down on the stock, the
-  draw and put-away, sprint,
-  walking aimed, dodge / hit / fall with a gun, dry fire; a gun tab on the bench; the feel signed off.
+- **The draw and the put-away** (`person3d`): a gun taken out, the hands rise from the side at its draw
+  (0.35 s — shared ARMS' — not the old snap); put away, a life gun stays in the hand while they go down to
+  the side (0.25 s), then it's gone. Seen: at 0.15 s into the put-away the revolver still in both hands,
+  lowering.
+- **The cheek on the stock**: a long gun aimed, the head down 0.2 rad and over 0.12 to the right (the neck
+  0.4 of it; `locomotion` `CHEEK`, `LocoIn.longGun`). Measured on the head bone in the game (its axes, with
+  and without): the face 0.27 rad lower, rolled to the right — the roll's sign was wrong at first (to the
+  left) and was flipped.
+- **On the move** — seen in the game (`guns-hold.mts`'s moves pass: W with the right button, W+Shift, Q):
+  walking aimed, both guns up on the aim, the legs walking under it; sprinting, the revolver tucked to the
+  chest in both hands, the double-barrel carried across the body, the torch free; a dodge, the gun kept in
+  the hand through the roll. Hit and fall (read in `person3d`, not staged): the two-hand hold lets go when
+  down or falling (`gunHands` want 0) and the gun stays on the right wrist, going down with it.
+- **Dry fire**: an empty pull moves the trigger and drops the hammer on nothing for a moment (`dark/arms.ts`
+  `dryAt`), with the click as before, then the reload starts. Measured: 40 ms after, trigger 1, hammer 0.27;
+  re-cocked by 0.44 s. (Mine only: the others don't hear a dry pull.)
+- **The gun bench is `e2e/guns-hold.mts`, not a tab on `/dev/anim`** (a change to this plan, 2026-11-11):
+  the holds live in `person3d` (the hand's frame, the two-hand reach, the wrist's aim, the fingers' close),
+  which the bench doesn't run — a tab would copy them. The script is the bench: in the game, from three
+  sides, ready, aimed, the draw, a reload's frames, the moves, the put-away; `DEBUG=1` prints each step's
+  state (the gun, Player.arm, the rounds, the open).
+- A dev-world gotcha found on the way: the world server's watch restarted on a first edit to
+  `features/arms.ts` and missed the next (an import), so the dev room ran a reload that threw; after 100
+  throws it switched the arms tick off (reloads stuck open, Player.arm 3). `docker restart yutopia-world`
+  fixed it; the code and its tests were right.
+- **Signed off** by the user 2026-11-12 ("look fine for now"): the feel may be tuned again in phase 8's pass in
+  the dark.
 
 ## Phase 3 — the models, the two we have: built (2026-11-11)
 
