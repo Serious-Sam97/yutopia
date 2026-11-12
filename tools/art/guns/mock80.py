@@ -303,55 +303,57 @@ def tone(rig):
                 b.inputs["Roughness"].default_value = TONES[m.name][1]
 
 
-bpy.ops.wm.read_factory_settings(use_empty=True)
-scene = bpy.context.scene
-studio(scene)
-rig = man()
-tone(rig)
-P = Pose(rig)
-g = guns.revolver()
-t = guns.torch()
-lo = guns.speedloader()
-for o in [*g.root.children, *t.root.children, *lo.root.children]:
-    if o.name.endswith(".cut"):
-        o.hide_render = True
-CAMS = {
-    "side": camera("side", (-2.2, -0.45, 1.3), (0, -0.35, 1.18), 34),
-    "front": camera("front", (-0.55, -2.1, 1.6), (-0.03, -0.35, 1.2), 30),
-    "shoulder": camera("shoulder", (-0.5, 1.5, 1.95), (-0.5, -2.5, 1.5), 46),
-}
-hands = camera("hands", (0, 0, 0), (0, -1, 0), 32)
-hands_l = camera("hands-left", (0, 0, 0), (0, -1, 0), 32)
-for name, fn, kw in POSES:
-    if ONLY and name not in ONLY:
-        continue
-    P.reset()
-    cylinder_out(g, 0)
-    torch_on = kw.get("torch", False)
-    for o in t.root.children:
-        o.hide_render = not torch_on or o.name.endswith(".cut")
-    loader_on = name in ("reload-3-fetch", "reload-4-load")
-    for o in lo.root.children:
-        o.hide_render = not loader_on or o.name.endswith(".cut")
-    fn(P, g, t, lo, **kw)
-    # (close on the hands: from ahead, a little to his right and above, at the gun)
-    G = g.root.matrix_world.translation
-    hands.location = G + Vector((-0.45, -0.6, 0.22))
-    hands.rotation_euler = (G - hands.location).to_track_quat("-Z", "Y").to_euler()
-    hands_l.location = G + Vector((0.48, -0.55, 0.2))
-    hands_l.rotation_euler = (G - hands_l.location).to_track_quat("-Z", "Y").to_euler()
-    # (the game's camera: from his head, 0.5 m to his right, 1.5 m back, 0.3 m up — looking ahead, as
-    # plan 79's ready camera does)
-    head = rig.matrix_world @ P.p["head"].head
-    sh = CAMS["shoulder"]
-    sh.location = head + RIGHT * 0.5 - FWD * 1.5 + UP * 0.3
-    sh.rotation_euler = (FWD * 10 - UP * 1.2).to_track_quat("-Z", "Y").to_euler()
-    for cname, cam in [*CAMS.items(), ("hands", hands), ("hands-left", hands_l)]:
-        if CAMS_ONLY and cname not in CAMS_ONLY:
+# (its run — imported by mock81.py for its scene's pieces, nothing runs)
+if __name__ == "__main__":
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    scene = bpy.context.scene
+    studio(scene)
+    rig = man()
+    tone(rig)
+    P = Pose(rig)
+    g = guns.revolver()
+    t = guns.torch()
+    lo = guns.speedloader()
+    for o in [*g.root.children, *t.root.children, *lo.root.children]:
+        if o.name.endswith(".cut"):
+            o.hide_render = True
+    CAMS = {
+        "side": camera("side", (-2.2, -0.45, 1.3), (0, -0.35, 1.18), 34),
+        "front": camera("front", (-0.55, -2.1, 1.6), (-0.03, -0.35, 1.2), 30),
+        "shoulder": camera("shoulder", (-0.5, 1.5, 1.95), (-0.5, -2.5, 1.5), 46),
+    }
+    hands = camera("hands", (0, 0, 0), (0, -1, 0), 32)
+    hands_l = camera("hands-left", (0, 0, 0), (0, -1, 0), 32)
+    for name, fn, kw in POSES:
+        if ONLY and name not in ONLY:
             continue
-        scene.camera = cam
-        # (the game's camera: its own wide picture; the rest square)
-        scene.render.resolution_x, scene.render.resolution_y = (1280, 720) if cname == "shoulder" else (960, 960)
-        scene.render.filepath = os.path.join(OUT, f"{name}-{cname}.png")
-        bpy.ops.render.render(write_still=True)
-    print("wrote", name)
+        P.reset()
+        cylinder_out(g, 0)
+        torch_on = kw.get("torch", False)
+        for o in t.root.children:
+            o.hide_render = not torch_on or o.name.endswith(".cut")
+        loader_on = name in ("reload-3-fetch", "reload-4-load")
+        for o in lo.root.children:
+            o.hide_render = not loader_on or o.name.endswith(".cut")
+        fn(P, g, t, lo, **kw)
+        # (close on the hands: from ahead, a little to his right and above, at the gun)
+        G = g.root.matrix_world.translation
+        hands.location = G + Vector((-0.45, -0.6, 0.22))
+        hands.rotation_euler = (G - hands.location).to_track_quat("-Z", "Y").to_euler()
+        hands_l.location = G + Vector((0.48, -0.55, 0.2))
+        hands_l.rotation_euler = (G - hands_l.location).to_track_quat("-Z", "Y").to_euler()
+        # (the game's camera: from his head, 0.5 m to his right, 1.5 m back, 0.3 m up — looking ahead, as
+        # plan 79's ready camera does)
+        head = rig.matrix_world @ P.p["head"].head
+        sh = CAMS["shoulder"]
+        sh.location = head + RIGHT * 0.5 - FWD * 1.5 + UP * 0.3
+        sh.rotation_euler = (FWD * 10 - UP * 1.2).to_track_quat("-Z", "Y").to_euler()
+        for cname, cam in [*CAMS.items(), ("hands", hands), ("hands-left", hands_l)]:
+            if CAMS_ONLY and cname not in CAMS_ONLY:
+                continue
+            scene.camera = cam
+            # (the game's camera: its own wide picture; the rest square)
+            scene.render.resolution_x, scene.render.resolution_y = (1280, 720) if cname == "shoulder" else (960, 960)
+            scene.render.filepath = os.path.join(OUT, f"{name}-{cname}.png")
+            bpy.ops.render.render(write_still=True)
+        print("wrote", name)

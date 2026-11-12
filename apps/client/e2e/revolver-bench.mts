@@ -47,7 +47,9 @@ const POSES: [string, Record<string, unknown>][] = [
 const browser = await chromium.launch({ args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
 const page = await browser.newPage({ viewport: { width: 1100, height: 760 } });
 page.on("pageerror", (e) => console.log("  page:", e.message));
-await page.goto(`${base}/dev/revolver?view=side`);
+// (GUN=shotgun: the double-barrel's — plan 81)
+const gun = process.env.GUN ?? "revolver";
+await page.goto(`${base}/dev/arms?gun=${gun}&view=side`);
 await page.waitForFunction(() => (window as any).__revolver?.ready, null, { timeout: 120_000 });
 const set = (s: Record<string, unknown>) => page.evaluate((s) => (window as any).__revolver.set(s), s);
 const check = () => page.evaluate(() => (window as any).__revolver.check());
@@ -62,6 +64,7 @@ const report = (name: string, c: any) => {
     hands: r(c.hands, 100),
     grip: r(c.grip, 100),
     R: [r(c.R.short, 100), r(c.R.over, DEG)],
+    ...(c.arms !== null && c.arms !== undefined ? { arms: r(c.arms, 100) } : {}),
     L: c.L ? [r(c.L.short, 100), r(c.L.over, DEG)] : null,
   };
   // (the limits: upright within 2°, on the look within 2°, nothing through a hand or the grip by more than
@@ -73,6 +76,7 @@ const report = (name: string, c: any) => {
     !name.includes("torch") && c.hands !== null && c.hands < -0.003 && "a hand through a hand",
     !name.includes("torch") && c.grip !== null && c.grip < -0.003 && "fingers through the grip",
     c.R.short > 0.015 && "the right short",
+    typeof c.arms === "number" && c.arms < -0.005 && "an arm through the gun",
     c.L && c.L.short > 0.015 && "the left short",
   ].filter(Boolean);
   if (!/^(reload|hit|roll)/.test(name) && !name.startsWith("draw") && !name.startsWith("away") && fails.length) bad++;
