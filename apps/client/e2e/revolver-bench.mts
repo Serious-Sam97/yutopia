@@ -1,0 +1,91 @@
+/* biome-ignore-all lint/suspicious/noExplicitAny: reads the bench's window hooks */
+// Plan 80: the revolver's bench (/dev/revolver) through its poses and views — stills of each, and the hold's
+// checks for each (the gun upright, the barrel on the look, no hand through a hand or the grip, each wrist
+// at its place and within its reach). The dev stack's client (:3100), the GPU.
+//   node --experimental-strip-types e2e/revolver-bench.mts [out dir]   (ONLY=aim,aim-torch: those poses;
+//   VIEWS=side,hands: those views; CHECK=1: the checks only, every pitch — fails past the limits)
+import { mkdirSync } from "node:fs";
+import { chromium } from "@playwright/test";
+
+const out = process.argv[2] ?? "../../design/guns/p80/bench";
+const base = process.env.YUTOPIA_E2E_URL ?? "http://localhost:3100";
+const only = process.env.ONLY?.split(",");
+const views = process.env.VIEWS?.split(",") ?? ["side", "front", "hands", "hands-left", "shoulder"];
+const checkOnly = process.env.CHECK === "1";
+mkdirSync(out, { recursive: true });
+
+const POSES: [string, Record<string, unknown>][] = [
+  ["ready", { pose: "ready", torch: false, run: 0 }],
+  ["ready-torch", { pose: "ready", torch: true, run: 0 }],
+  ["aim", { pose: "aim", torch: false, pitch: 0 }],
+  ["aim-up", { pose: "aim", torch: false, pitch: 0.5 }],
+  ["aim-down", { pose: "aim", torch: false, pitch: -0.5 }],
+  ["aim-torch", { pose: "aim", torch: true, pitch: 0 }],
+  ["reload-open", { pose: "reload", t: 0.5 }],
+];
+
+const browser = await chromium.launch({ args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
+const page = await browser.newPage({ viewport: { width: 1100, height: 760 } });
+page.on("pageerror", (e) => console.log("  page:", e.message));
+await page.goto(`${base}/dev/revolver?view=side`);
+await page.waitForFunction(() => (window as any).__revolver?.ready, null, { timeout: 120_000 });
+const set = (s: Record<string, unknown>) => page.evaluate((s) => (window as any).__revolver.set(s), s);
+const check = () => page.evaluate(() => (window as any).__revolver.check());
+const settle = () => page.waitForTimeout(700);
+const r = (x: number | null, k = 1) => (x === null ? null : Math.round(x * k * 10) / 10);
+const DEG = 180 / Math.PI;
+let bad = 0;
+const report = (name: string, c: any) => {
+  const line = {
+    cant: r(c.cant, DEG),
+    off: r(c.off, DEG),
+    hands: r(c.hands, 100),
+    grip: r(c.grip, 100),
+    R: [r(c.R.short, 100), r(c.R.over, DEG)],
+    L: [r(c.L.short, 100), r(c.L.over, DEG)],
+  };
+  // (the limits: upright within 2°, on the look within 2°, nothing through a hand or the grip by more than
+  // 3 mm — skin gives —, each wrist within 1.5 cm of its place)
+  const aiming = name.startsWith("aim");
+  const fails = [
+    aiming && c.cant > 2 / DEG && "canted",
+    aiming && c.off > 2 / DEG && "off the look",
+    !name.includes("torch") && c.hands !== null && c.hands < -0.003 && "a hand through a hand",
+    !name.includes("torch") && c.grip !== null && c.grip < -0.003 && "fingers through the grip",
+    c.R.short > 0.015 && "the right short",
+    !name.includes("torch") && c.L.short > 0.015 && "the left short",
+  ].filter(Boolean);
+  if (!name.startsWith("reload") && fails.length) bad++;
+  console.log(
+    `${name.padEnd(12)} ${JSON.stringify(line)}${fails.length ? `  ✗ ${fails.join(", ")} (nearest: ${c.where})` : ""}`,
+  );
+};
+for (const [name, s] of POSES) {
+  if (only && !only.includes(name)) continue;
+  await set({ pitch: 0, run: 0, torch: false, ...s });
+  await settle();
+  const c = await check();
+  if (c) report(name, c);
+  if (checkOnly) continue;
+  for (const v of views) {
+    await set({ view: v });
+    await settle();
+    const cv = await page.$("canvas");
+    await cv?.screenshot({ path: `${out}/${name}-${v}.png` });
+  }
+}
+if (checkOnly) {
+  // every pitch aimed, with and without the torch
+  for (const torch of [false, true])
+    for (let pitch = -0.9; pitch <= 0.91; pitch += 0.3) {
+      await set({ pose: "aim", torch, pitch });
+      await settle();
+      const c = await check();
+      if (c) report(`aim${torch ? "-torch" : ""} ${pitch.toFixed(1)}`, c);
+    }
+}
+await browser.close();
+if (bad) {
+  console.log(`${bad} past the limits`);
+  process.exit(1);
+}

@@ -445,6 +445,32 @@ const SP = {
 const DOWN = new Vector3(0, -1, 0);
 const target = new Vector3();
 const pole = new Vector3();
+// (plan 80: gripTo, wristFor, wristOver)
+const _gs = new Vector3();
+const _ga = new Vector3();
+const _ge = new Vector3();
+const _gw = new Vector3();
+const _gp = new Quaternion();
+const _gpp = new Quaternion();
+const _gr = new Quaternion();
+const _gl = new Quaternion();
+const _gsw = new Quaternion();
+const _g0s = new Quaternion();
+const _g0e = new Quaternion();
+const _g0w = new Quaternion();
+const _g1s = new Quaternion();
+const _g1e = new Quaternion();
+const _wo = new Vector3();
+const _wo2 = new Vector3();
+const _wo3 = new Vector3();
+const _wp = { twist: 0, bend: 0, side: 0 };
+const _woq = new Quaternion();
+const _wfA = new Vector3();
+const _wfB = new Vector3();
+const _wfC = new Vector3();
+const _wfM = new Matrix4();
+const _wfN = new Matrix4();
+const _wfS = new Vector3();
 const handAt = new Vector3();
 
 // ── (plan 73 4.6) the life look's legs fitted to the rig's ─────────────────────────────────────────
@@ -1153,6 +1179,141 @@ export class PersonModel {
     this.closeHands();
     this.shareTwist();
   }
+  /** (plan 80) A wrist's own turn `q` (its parent's frame — the forearm's) as a real wrist's three: the twist
+   *  about the forearm (shared down it), the bend up or down (about the palm's across) and side to side (about
+   *  its normal) — rad, into `out`. */
+  wristParts(S: "L" | "R", q: Quaternion, out = { twist: 0, bend: 0, side: 0 }) {
+    out.twist = out.bend = out.side = 0;
+    const wr = this.bones[`wrist${S}`];
+    if (!wr) return out;
+    const a = _wo.copy(wr.position).normalize();
+    // (q and −q are one turn: read it from the one with w ≥ 0 — else a small twist reads as nearly a whole one)
+    const sg = q.w < 0 ? -1 : 1;
+    out.twist = 2 * Math.atan2(sg * (q.x * a.x + q.y * a.y + q.z * a.z), sg * q.w);
+    const F = this.life?.grip[S];
+    if (!F) return out;
+    _woq.setFromAxisAngle(a, -out.twist).premultiply(q);
+    const sw = 2 * Math.acos(Math.min(1, Math.abs(_woq.w)));
+    if (sw > 1e-5) {
+      const ax = _wo2
+        .set(_woq.x, _woq.y, _woq.z)
+        .normalize()
+        .multiplyScalar(Math.sign(_woq.w) || 1);
+      // (the bend's and the side's axes as the hand has them once twisted — read against the untwisted hand,
+      // a twisted one's bend read as side)
+      _woq.setFromAxisAngle(a, out.twist);
+      out.bend = sw * ax.dot(_wo3.copy(F.across).applyQuaternion(_woq));
+      out.side = sw * ax.dot(_wo3.copy(F.n).applyQuaternion(_woq));
+    }
+    return out;
+  }
+
+  /** (plan 80) How far a wrist's own turn `q` goes past a real wrist's reach, summed (rad; 0 within it): the
+   *  twist past ±80°, the bend up or down past ±60°, side to side past −25° … +35° (thumb-ward the less). As
+   *  aimHand clamps. */
+  wristOver(S: "L" | "R", q: Quaternion): number {
+    const w = this.wristParts(S, q, _wp);
+    const lo = S === "R" ? -0.44 : -0.61;
+    const hi = S === "R" ? 0.61 : 0.44;
+    return (
+      Math.max(0, Math.abs(w.twist) - 1.4) +
+      Math.max(0, Math.abs(w.bend) - 1.05) +
+      Math.max(0, lo - w.side, w.side - hi)
+    );
+  }
+
+  /** (plan 80) Where a life hand's wrist goes (the world's), and its turn, for the hand's own frame to be
+   *  at a place: the palm's middle at `palm`, the fingers along `along`, the index's side (toward the
+   *  thumb) toward `index`. False on a body without life hands. */
+  wristFor(S: "L" | "R", palm: Vector3, along: Vector3, index: Vector3, at: Vector3, q: Quaternion): boolean {
+    const F = this.life?.grip[S];
+    const wr = this.bones[`wrist${S}`];
+    if (!F || !wr) return false;
+    const A = _wfA.copy(along).normalize();
+    const B = _wfB.copy(index).addScaledVector(A, -index.dot(A)).normalize();
+    _wfM.makeBasis(A, B, _wfC.crossVectors(A, B));
+    const a = _wfA.copy(F.along).normalize();
+    const b = _wfB.copy(F.across).addScaledVector(a, -F.across.dot(a)).normalize();
+    _wfN.makeBasis(a, b, _wfC.crossVectors(a, b));
+    q.setFromRotationMatrix(_wfM.multiply(_wfN.transpose()));
+    // (the palm's middle from the wrist: 0.55 of the way to the middle knuckle, 2.2 cm out of the palm — the
+    // mocks' own, tools/art/guns/pose.py hand_rest)
+    const k = wr.getWorldScale(_wfS).x;
+    at.copy(F.mid)
+      .multiplyScalar(0.55)
+      .addScaledVector(_wfC.copy(F.n).normalize(), 0.022)
+      .multiplyScalar(k)
+      .applyQuaternion(q);
+    at.subVectors(palm, at);
+    return true;
+  }
+
+  /** (plan 80) What gripTo last left each hand: how far its wrist fell short of the place (m), and how far
+   *  past a real wrist's reach it's turned (rad, wristOver) */
+  readonly gripLeft = { L: { short: 0, over: 0 }, R: { short: 0, over: 0 } };
+
+  /** (plan 80) Put a hand at a place, turned: the wrist at `at` (the world's), its world turn `q`. The arm's
+   *  two-bone IK (reachTo, its elbow toward `pole`), then the elbow swung round the shoulder→wrist line to
+   *  where the wrist is left least past a real one's reach (and the elbow not up by the ear) — the turn it
+   *  then takes is exactly `q`, whatever: what's held in it keeps its way (a gun never canted). The twist
+   *  shared down the forearm; the fingers closed on what the hand holds. `w` blends it in. After setPose. */
+  gripTo(S: "L" | "R", at: Vector3, q: Quaternion, w = 1, poleR: [number, number, number] = [-0.6, -1, -0.45]) {
+    if (!this.fit || !this.skeleton || w <= 0) return;
+    const sh = this.bones[`shoulder${S}`];
+    const el = this.bones[`elbow${S}`];
+    const wr = this.bones[`wrist${S}`];
+    if (!sh.parent || !wr.parent) return;
+    _g0s.copy(sh.quaternion);
+    _g0e.copy(el.quaternion);
+    _g0w.copy(wr.quaternion);
+    this.reachTo(S, at, 1, poleR);
+    sh.updateWorldMatrix(true, true);
+    const s0 = sh.getWorldPosition(_gs);
+    const wp = wr.getWorldPosition(_gw);
+    const E = el.getWorldPosition(_ge).sub(s0);
+    const axis = _ga.copy(wp).sub(s0).normalize();
+    const P = (wr.parent as Bone).getWorldQuaternion(_gp);
+    const k = sh.getWorldScale(_wfS).x || 1;
+    // (each swing tried: what the wrist's left to do, past its reach, first; the elbow up past the shoulder's
+    // height or in across the chest after; then the least swing off the pole's)
+    let best = 0;
+    let bestCost = Number.POSITIVE_INFINITY;
+    for (let i = -10; i <= 10; i++) {
+      const th = i * 0.14;
+      _gr.setFromAxisAngle(axis, th);
+      _gl.copy(_gr).multiply(P).invert().multiply(q);
+      const e = _wo.copy(E).applyQuaternion(_gr);
+      const up = Math.max(0, e.y / k);
+      // (past a wrist's reach, hard; then a forearm twisted off its neutral and a wrist bent, as a person minds
+      // them — at ease, a little; a palm turned up by the forearm or a wrist bent double, a lot)
+      const over = this.wristOver(S, _gl);
+      const pt = _wp;
+      const cost =
+        4 * over + 0.35 * Math.abs(pt.twist) + 0.25 * Math.hypot(pt.bend, pt.side) + 2 * up + 0.04 * Math.abs(th);
+      if (cost < bestCost - 1e-6) {
+        bestCost = cost;
+        best = th;
+      }
+    }
+    // the swing given to the shoulder (in its parent's frame), the wrist turned to `q` under it
+    _gr.setFromAxisAngle(axis, best);
+    (sh.parent as Bone).getWorldQuaternion(_gpp);
+    sh.quaternion.premultiply(_gsw.copy(_gpp).invert().multiply(_gr).multiply(_gpp));
+    wr.quaternion.copy(_gr).multiply(P).invert().multiply(q);
+    this.gripLeft[S].over = this.wristOver(S, wr.quaternion);
+    this.gripLeft[S].short = wp.distanceTo(at) / k;
+    if (w < 1) {
+      _g1s.copy(sh.quaternion);
+      _g1e.copy(el.quaternion);
+      sh.quaternion.copy(_g0s).slerp(_g1s, w);
+      el.quaternion.copy(_g0e).slerp(_g1e, w);
+      _g1s.copy(wr.quaternion);
+      wr.quaternion.copy(_g0w).slerp(_g1s, w);
+    }
+    this.shareTwist();
+    this.closeHands();
+  }
+
   /** (plan 78 phase 5) A life finger at a curl of the library's (closeHands' way, its fan shut with it) */
   private poseFinger(S: "L" | "R", j: string, c: number) {
     const life = this.life;
@@ -1182,8 +1343,48 @@ export class PersonModel {
     return out.copy(p3).sub(p2).normalize().multiplyScalar(0.022).add(p3);
   }
 
+  /** (plan 80) A life hand's fingers as points (the world's), for checks — a hand through a hand, through a
+   *  gun: each finger's knuckle, middle joint, last joint and tip, thumb first. Empty without life hands. */
+  fingerPoints(S: "L" | "R"): Vector3[][] {
+    const kn = this.knuckles;
+    if (!kn || !this.life) return [];
+    this.bones[`wrist${S}`].updateWorldMatrix(true, true);
+    const out: Vector3[][] = [];
+    for (const j of ["thumb", "index", "fingers", "ring", "little"]) {
+      const base = j === "ring" || j === "little" ? kn[`${j}${S}`] : this.bones[`${j}${S}` as JointName];
+      const k2 = kn[`${j}2${S}`];
+      const k3 = kn[`${j}3${S}`];
+      if (!base || !k2 || !k3) continue;
+      const p1 = base.getWorldPosition(new Vector3());
+      const p2 = k2.getWorldPosition(new Vector3());
+      const p3 = k3.getWorldPosition(new Vector3());
+      const tip = p3
+        .clone()
+        .sub(p2)
+        .normalize()
+        .multiplyScalar(j === "thumb" ? THUMB_TIP : 0.022)
+        .add(p3);
+      out.push([p1, p2, p3, tip]);
+    }
+    return out;
+  }
+
   /** (bothHands: the thumbs' tap, −1 … 1: + the right one up, − the left) */
   private tap = 0;
+
+  /** (plan 80) A life thumb laid straight and its pad turned to a point (the world's): a handgun's support
+   *  thumb along the frame, thumbs forward. After gripTo. */
+  thumbTo(S: "L" | "R", target: Vector3) {
+    const kn = this.knuckles;
+    const life = this.life;
+    const tb = this.bones[`thumb${S}`];
+    if (!kn || !life || !tb) return;
+    const H = life.hinge;
+    const th = thumbAt(-0.2);
+    kn[`thumb2${S}`]?.quaternion.setFromAxisAngle(H[`thumb2${S}`], th.mcp * DEG);
+    kn[`thumb3${S}`]?.quaternion.setFromAxisAngle(H[`thumb3${S}`], th.ip * DEG);
+    this.aimThumb(S, tb, target);
+  }
 
   /** (plan 78 phase 4/5) Turn a life thumb at its base so its pad comes to a point (the world's) */
   private aimThumb(S: "L" | "R", tb: Bone, target: Vector3) {
@@ -1875,7 +2076,10 @@ export class PersonModel {
       let tlo = -0.35;
       let thi = 1.2;
       let t = thi;
-      if (thumbClear(tlo) <= 0) t = tlo;
+      // (plan 80: a handgun's support hand, thumbs forward — its thumb laid straight along the frame, not
+      // folded round onto the gun hand's trigger finger)
+      if (h.kind === "support") t = -0.2;
+      else if (thumbClear(tlo) <= 0) t = tlo;
       else if (thumbClear(thi) > 0) t = sign * tb.rotation.y;
       else {
         for (let i = 0; i < 10; i++) {

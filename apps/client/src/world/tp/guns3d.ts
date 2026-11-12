@@ -763,7 +763,8 @@ export function poseGun(
     g.parts.cylinder.rotation.x = ((s.turn ?? 0) * Math.PI) / 3;
     // (the double-action's cylinder swings out on its crane, to the left — plan 79; the single-action's
     // loading gate opens)
-    if (g.parts.crane) g.parts.crane.rotation.x = -1.3 * open;
+    // (plan 80: on its hinge low and left of the cylinder, 1.5 rad — out clear of the frame)
+    if (g.parts.crane) g.parts.crane.rotation.x = -1.5 * open;
     else g.parts.gate.rotation.x = 1.5 * open;
     g.parts.trigger.rotation.z = 0.25 * (s.trigger ?? 0);
   } else {
@@ -790,6 +791,10 @@ export function lifeGunModel(kind: GunKind, scene: Object3D): GunModel {
     "trigger",
     "crane",
     "cylinder",
+    "rod",
+    "latch",
+    "knob",
+    "rounds",
     "barrels",
     "lever",
     "triggers",

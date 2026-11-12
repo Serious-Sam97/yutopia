@@ -460,6 +460,10 @@ def revolver():
     for i in range(6):
         g.part(f"round{i}", lambda bm, i=i: sphere(bm, (0.0555, math.cos(i / 6 * math.tau) * 0.0133, CZ + math.sin(i / 6 * math.tau) * 0.0133), 0.0044, 12), "lead")
     g.part("crane", lambda bm: (box(bm, 0.061, 0.068, 0.038, 0.05, 0.022), tube(bm, (0.061, 0, CZ), (0.068, 0, CZ), 0.006, seg=16)), "nickel", 0.0008)
+    # the ejector rod along the cylinder's axis under the barrel — in the underlug shut, out with the
+    # cylinder, struck to dump the empties (plan 80); its head knurled
+    g.part("rod", lambda bm: (tube(bm, (0.0625, 0, CZ), (0.123, 0, CZ), 0.0024, seg=12),
+                              lathe(bm, [(0, 0), (0, 0.0034), (0.0062, 0.0034), (0.007, 0)], (0.123, 0, CZ), Vector((1, 0, 0)), 16)), "nickel")
     g.part("latch", lambda bm: prism(bm, smooth([(0.0, 0.056, 1), (0.014, 0.057, 1), (0.016, 0.063), (0.002, 0.065, 1)], 1), 0.004, y=0.0165), "nickel", 0.0007, check=(-1, 1, -1, 1))
     # the rear sight on the top strap (a notched blade, its screws); the hammer, its spur checkered;
     # the trigger, smooth and wide
@@ -749,6 +753,24 @@ def daybreak():
     return g
 
 
+# ── a speedloader (plan 80: the revolver's reload): six rounds held in a black body by their rims, a
+# knurled knob behind it — turned, it lets them go. Along +x (the rounds' noses), its knob at −x ───────
+def speedloader():
+    g = Gun("speedloader")
+    X = Vector((1, 0, 0))
+    g.part("body", lambda bm: lathe(bm, [(0, 0), (0, 0.0205), (0.002, 0.0215), (0.016, 0.0215), (0.018, 0.0195), (0.018, 0)], (-0.018, 0, 0), X, 36), "polymer", 0.0008)
+    g.part("knob", lambda bm: lathe(bm, [(0, 0), (0, 0.0085), (0.011, 0.0085), (0.0125, 0.006), (0.0125, 0)], (-0.0305, 0, 0), X, 24), "steel", check=(-1, 1, -1, 1))
+    g.part("stem", lambda bm: tube(bm, (-0.031, 0, 0), (-0.017, 0, 0), 0.0035, seg=12), "steel")
+    for i in range(6):
+        a = i / 6 * math.tau
+        c = (0.0, math.cos(a) * 0.0133, math.sin(a) * 0.0133)
+        g.part(f"round{i}", lambda bm, c=c: lathe(bm, [(0, 0), (0, 0.0048), (0.001, 0.0048), (0.001, 0.0045), (0.033, 0.0045), (0.033, 0)], Vector(c), X, 14), "brass")
+        g.part(f"nose{i}", lambda bm, c=c: lathe(bm, [(0, 0.0044), (0.004, 0.0043), (0.009, 0.0025), (0.011, 0)], Vector(c) + Vector((0.033, 0, 0)), X, 14, cap=False), "lead")
+    g.point("grip", (-0.024, 0, 0))
+    g.point("front", (0.044, 0, 0))
+    return g
+
+
 # ── the torch (the left hand's, F6): an aluminium flashlight, knurled ────────────────────────────
 def torch():
     g = Gun("torch")
@@ -761,5 +783,5 @@ def torch():
     return g
 
 
-BUILD = {"revolver": revolver, "shotgun": shotgun, "ak47": ak47, "sniper": sniper, "daybreak": daybreak}
+BUILD = {"revolver": revolver, "shotgun": shotgun, "ak47": ak47, "sniper": sniper, "daybreak": daybreak, "speedloader": speedloader}
 LONG = {"shotgun", "ak47", "sniper", "daybreak"}

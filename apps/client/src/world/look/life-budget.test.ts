@@ -185,7 +185,9 @@ const GUN = { mb: 0.25, tris: 20000 };
 const GUN_TRIS: Record<string, number> = { daybreak: 26000 };
 /** What the game looks for in each (tp/guns3d.ts lifeGunModel, poseGun): the pivots, the rounds, the points. */
 const GUN_NODES: Record<string, string[]> = {
-  revolver: ["hammer", "trigger", "crane", "cylinder", "round0", "round5"],
+  revolver: ["hammer", "trigger", "crane", "cylinder", "rod", "latch", "round0", "round5"],
+  // (plan 80) the revolver's speedloader
+  speedloader: ["knob", "rounds", "round0", "round5", "pt_grip", "pt_front"],
   shotgun: ["barrels", "lever", "triggers", "round0", "round1"],
   ak47: ["magazine", "carrier", "trigger", "selector", "round0", "pt_fore", "pt_butt"],
   sniper: ["bolt", "trigger", "pt_fore", "pt_butt"],
@@ -212,8 +214,9 @@ for (const kind of Object.keys(GUN_NODES)) {
       assert.ok(tris <= most, `${kind}: ${tris} triangles > ${most}`);
       for (const e of json.extensionsRequired ?? []) assert.ok(SUPPORTED.has(e), `${kind}: needs ${e}`);
       const names = new Set(json.nodes.map((n) => n.name));
-      for (const n of [kind, ...GUN_NODES[kind], "pt_grip", "pt_muzzle", "pt_rear", "pt_front"])
-        assert.ok(names.has(n), `${kind}: no node ${n}`);
+      // (a gun's sights and muzzle; the speedloader's only its own)
+      const sights = kind === "speedloader" ? [] : ["pt_grip", "pt_muzzle", "pt_rear", "pt_front"];
+      for (const n of [kind, ...GUN_NODES[kind], ...sights]) assert.ok(names.has(n), `${kind}: no node ${n}`);
     },
   );
 }

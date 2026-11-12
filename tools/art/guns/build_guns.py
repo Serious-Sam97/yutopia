@@ -3,7 +3,8 @@
 #
 # Every part's booleans and bevels applied; each moving group's parts merged by material (a few draw
 # calls a gun) and hung under a pivot at its hinge — the names tp/guns3d.ts's poseGun moves:
-#   revolver   hammer · trigger · crane (the swing-out, along the bore below the cylinder) › cylinder
+#   revolver   hammer · trigger · latch · crane (the swing-out, hinged low left of the cylinder) › cylinder › rod
+#   speedloader  knob · rounds (its six, let go together)
 #   shotgun    barrels (at the hinge pin, the fore-end with them) · lever · triggers
 #   ak47       magazine (on its front lug) · carrier (the charging handle on it) · trigger · selector
 #   sniper     bolt (on the bore: turned up, run back) · trigger
@@ -91,8 +92,19 @@ GROUPS = {
     "revolver": {
         "hammer": {"parts": ["hammer", "spur"], "at": (-0.012, 0, 0.062)},
         "trigger": {"parts": ["trigger"], "at": (0.023, 0, 0.031)},
-        "crane": {"parts": ["crane"], "at": (0.0, 0, 0.0385)},
+        # (plan 80: the crane's hinge low and to the left of the cylinder, as a real one's — on the bore's line
+        # the cylinder moved 2 cm and never cleared the frame's window; swung 1.5 rad it does)
+        "crane": {"parts": ["crane"], "at": (0.0, 0.017, 0.037)},
         "cylinder": {"parts": ["cylinder", *[f"round{i}" for i in range(6)]], "at": (0.0, 0, 0.0585), "in": "crane"},
+        # (plan 80) the ejector rod on the cylinder's axis, struck back to dump the empties; the latch the
+        # right thumb pushes forward to open it
+        "rod": {"parts": ["rod"], "at": (0.0625, 0, 0.0585), "in": "cylinder"},
+        "latch": {"parts": ["latch"], "at": (0.008, 0.0165, 0.06)},
+    },
+    # (plan 80) the speedloader: its six rounds let go together when its knob's turned
+    "speedloader": {
+        "knob": {"parts": ["knob"], "at": (-0.0305, 0, 0)},
+        "rounds": {"parts": [*[f"round{i}" for i in range(6)], *[f"nose{i}" for i in range(6)]], "at": (0, 0, 0)},
     },
     "shotgun": {
         "barrels": {"parts": ["barrelL", "barrelR", "rib", "bead", "fore-end", "fore-iron", "latch", "round0", "round1"], "at": (0.144, 0, 0.033)},
