@@ -40,6 +40,27 @@ it('keeps someone\'s pockets: saved, then read back as they were (a restart lose
     expect(internalCall($this, 'GET', "/api/internal/survivors/{$ana->id}")->json('survivor.inventory.pockets.0.n'))->toBe(24);
 });
 
+it('keeps the plan-79 guns and their rounds: the AK, the sniper, the Daybreak', function () {
+    $ana = User::factory()->create();
+    $quick = [['id' => 'ak47', 'loaded' => 30], ['id' => 'sniper', 'loaded' => 5], ['id' => 'daybreak', 'loaded' => 3], ['id' => 'cell', 'n' => 3]];
+    $pockets = [['id' => 'r762', 'n' => 60], ['id' => 'r308', 'n' => 15], ['id' => 'cell', 'n' => 1], null, null, null];
+    $body = pockets();
+    $body['inventory'] = ['quick' => $quick, 'pockets' => $pockets];
+    internalCall($this, 'PUT', "/api/internal/survivors/{$ana->id}", $body)->assertOk();
+    $back = internalCall($this, 'GET', "/api/internal/survivors/{$ana->id}")->assertOk()->json('survivor.inventory');
+    expect($back['quick'])->toBe($quick);
+    expect($back['pockets'])->toBe($pockets);
+
+    // past their caps, still refused
+    $put = fn (array $body) => internalCall($this, 'PUT', "/api/internal/survivors/{$ana->id}", $body);
+    $put(pockets(['inventory' => ['quick' => [0 => ['id' => 'ak47', 'loaded' => 31]]]]))->assertUnprocessable();
+    $put(pockets(['inventory' => ['quick' => [0 => ['id' => 'sniper', 'loaded' => 6]]]]))->assertUnprocessable();
+    $put(pockets(['inventory' => ['quick' => [0 => ['id' => 'daybreak', 'loaded' => 4]]]]))->assertUnprocessable();
+    $put(pockets(['inventory' => ['pockets' => [0 => ['id' => 'r762', 'n' => 61]]]]))->assertUnprocessable();
+    $put(pockets(['inventory' => ['pockets' => [0 => ['id' => 'r308', 'n' => 16]]]]))->assertUnprocessable();
+    $put(pockets(['inventory' => ['pockets' => [0 => ['id' => 'cell', 'n' => 4]]]]))->assertUnprocessable();
+});
+
 it('refuses what nobody could carry', function () {
     $ana = User::factory()->create();
     $put = fn (array $body) => internalCall($this, 'PUT', "/api/internal/survivors/{$ana->id}", $body);
