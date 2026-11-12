@@ -22,6 +22,8 @@ const POSES: [string, Record<string, unknown>][] = [
   ["draw-0.4", { pose: "ready", draw: 0.4 }],
   ["draw-0.7", { pose: "ready", draw: 0.7 }],
   ["away-0.5", { pose: "ready", draw: 0.5, away: true }],
+  ["holstered", { pose: "ready", draw: 0, away: true }],
+  ["holstered-walk", { pose: "ready", draw: 0, away: true, move: 1 }],
   ["ready-torch", { pose: "ready", torch: true }],
   ["ready-torch-walk", { pose: "ready", torch: true, move: 1 }],
   ["aim", { pose: "aim", torch: false, pitch: 0 }],

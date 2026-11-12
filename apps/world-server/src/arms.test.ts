@@ -402,6 +402,10 @@ test("a gun's up only after its draw: a shot before it isn't; Player.arm says dr
   const { a, b, at } = await indoors(70, 0, 13.5, 17.5, 3.5, 17.5);
   b.room.send("arms:draw", { slot: -1 });
   await waitFor(() => me(b.room).gun === "");
+  // (plan 80) the revolver carried: its holster on the hip for everyone, put away or not; A carries none
+  await waitFor(() => me(b.room).holster, 1500);
+  assert.equal(a.room.state.players.get(b.room.sessionId)?.holster, true);
+  assert.equal(me(a.room).holster, false);
   b.room.send("arms:draw", { slot: 0 });
   await waitFor(() => me(b.room).gun === "revolver");
   await waitFor(() => me(b.room).arm === ARM.draw, 300);

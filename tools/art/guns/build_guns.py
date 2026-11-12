@@ -101,6 +101,8 @@ GROUPS = {
         "rod": {"parts": ["rod"], "at": (0.0625, 0, 0.0585), "in": "cylinder"},
         "latch": {"parts": ["latch"], "at": (0.008, 0.0165, 0.06)},
     },
+    # (plan 80) the holster: nothing moves
+    "holster": {},
     # (plan 80) the speedloader: its six rounds let go together when its knob's turned
     "speedloader": {
         "knob": {"parts": ["knob"], "at": (-0.0305, 0, 0)},

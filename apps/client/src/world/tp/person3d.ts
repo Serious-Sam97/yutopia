@@ -248,6 +248,16 @@ const rq1 = new Quaternion();
 const rq2 = new Quaternion();
 const rTurn = new Quaternion();
 const rL = new Matrix4();
+// (plan 80) the holster on the hips (their own space: x her left, y up, z ahead): on her right hip at the
+// belt, the gun in it muzzle down (a touch forward), its left side against her
+const HOLSTER_AT = new Vector3(-0.2, 0.03, -0.02);
+const HOLSTER_TURN = new Quaternion().setFromRotationMatrix(
+  new Matrix4().makeBasis(
+    new Vector3(0, -1, 0.12).normalize(),
+    new Vector3(0, 0.12, 1).normalize(),
+    new Vector3(-1, 0, 0),
+  ),
+);
 const rM = new Matrix4();
 const sgD = new Vector3();
 const sgP = new Vector3();
@@ -1110,6 +1120,7 @@ export class Person3D {
     this.magFrame();
     this.budFrame(p);
     this.torchFrame(p);
+    this.holsterFrame(p);
     this.holdFrame();
     if (this.phone?.prop.rec)
       this.phone.prop.rec.visible = !!p.recording && Math.floor(performance.now() / 500) % 2 === 0;
@@ -1555,7 +1566,14 @@ export class Person3D {
         const c = Math.max(0, Math.min(1, x));
         return c * c * (3 - 2 * c);
       };
-      const hol = holsterHold(B, this.revHolster);
+      // (from the holster on her hip where she wears one; else where it would be)
+      const hol = this.revHolster;
+      if (this.holster) {
+        this.holster.root.updateWorldMatrix(true, false);
+        this.holster.root.matrixWorld.decompose(hol.grip, rq1, rs1);
+        hol.f.set(1, 0, 0).applyQuaternion(rq1);
+        hol.u.set(0, 1, 0).applyQuaternion(rq1);
+      } else holsterHold(B, hol);
       const turn = ease((draw - DRAW_LIFT) / (1 - DRAW_LIFT));
       gunQuat(H.f, H.u, rq1);
       gunQuat(hol.f, hol.u, rq2).slerp(rq1, turn);
@@ -1901,6 +1919,41 @@ export class Person3D {
     this.gun = null;
   }
 
+  /** (plan 80) The revolver's holster on her right hip while she carries one (Player.holster) — the gun in
+   *  it when it isn't in her hand. On the hips (it goes with them walking); its frame is the holstered
+   *  gun's, where the draw starts and the put-away ends. */
+  private holster: { root: Group; gun: GunModel | null } | null = null;
+  private holsterFrame(p: PersonIn) {
+    const hips = this.model.bone("hips");
+    const tpl = this.mats.gun?.("holster") ?? null;
+    if (!p.holster || !hips || !tpl || this.part !== "all") {
+      this.dropHolster();
+      return;
+    }
+    if (!this.holster) {
+      const root = new Group();
+      root.add((tpl.getObjectByName("holster") ?? tpl).clone(true));
+      root.position.copy(HOLSTER_AT);
+      root.quaternion.copy(HOLSTER_TURN);
+      hips.add(root);
+      this.holster = { root, gun: null };
+    }
+    // the gun in it, while it isn't in her hand
+    const out = !!this.gun && gunKind(this.gun.key) === "revolver";
+    const gtpl = this.mats.gun?.("revolver") ?? null;
+    if (!this.holster.gun && gtpl) {
+      const g = lifeGunModel("revolver", gtpl);
+      poseGun(g, "revolver", {});
+      this.holster.root.add(g.root);
+      this.holster.gun = g;
+    }
+    if (this.holster.gun) this.holster.gun.root.visible = !out;
+  }
+  private dropHolster() {
+    this.holster?.root.removeFromParent();
+    this.holster = null;
+  }
+
   // on a call with the phone put away: an earbud in the right ear (the head's own space)
   private bud: Prop | null = null;
   private budFrame(p: PersonIn) {
@@ -2203,6 +2256,7 @@ export class Person3D {
     this.dropHeld();
     this.dropPhone();
     this.dropGun();
+    this.dropHolster();
     this.dropBud();
     this.dropTorch();
     this.dropTool();

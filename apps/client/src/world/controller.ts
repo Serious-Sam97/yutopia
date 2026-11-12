@@ -2738,6 +2738,7 @@ export class WorldController {
       torch: p.torch,
       focused: p.focused,
       gun: p.gun,
+      holster: p.holster || undefined,
       arm: p.arm,
       fellAt: p.fellAt,
       fellYaw: p.fellYaw,

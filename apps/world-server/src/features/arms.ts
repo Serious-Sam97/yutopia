@@ -554,12 +554,14 @@ registerFeature((room: WorldRoom) => {
       // a weapon dropped (or never had) isn't in the hand
       if (now - checkedAt > 500) {
         checkedAt = now;
-        for (const p of room.state.players.values())
-          if (p.gun && p.gun !== "cue") {
-            // (the cue's off a pool table, not out of the pockets: features/pballs.ts)
-            const inv = room.survival?.inventory(p.sid);
-            if (inv && !weaponIn(inv, p.gun)) p.gun = "";
-          }
+        for (const p of room.state.players.values()) {
+          const inv = room.survival?.inventory(p.sid);
+          // (the cue's off a pool table, not out of the pockets: features/pballs.ts)
+          if (p.gun && p.gun !== "cue" && inv && !weaponIn(inv, p.gun)) p.gun = "";
+          // (plan 80) the revolver carried: its holster on the hip, for everyone to see
+          const holster = !!inv && !!weaponIn(inv, "revolver");
+          if (p.holster !== holster) p.holster = holster;
+        }
       }
     },
   };

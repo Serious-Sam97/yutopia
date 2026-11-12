@@ -161,6 +161,7 @@ function Bench({ q }: { q: URLSearchParams }) {
         angle: Math.PI / 2, // (facing +z)
         a: 0,
         gun: "revolver",
+        holster: true,
         mv: packMv("still"),
         pitch: 0,
         torch: false,
@@ -241,7 +242,8 @@ function Bench({ q }: { q: URLSearchParams }) {
         seen.camZ = p.y + 2;
         // (the draw: its clock set where the slider has it — the put-away's, the gun gone from her state)
         p.gun = s.away ? "" : "revolver";
-        if (s.away) P3.holsterT = Math.max(0, (1 - s.draw) * 0.25 - dt);
+        // (put all the way away: in the holster, the hand let go)
+        if (s.away) P3.holsterT = s.draw <= 0 ? 1 : Math.max(0, (1 - s.draw) * 0.25 - dt);
         else if (s.draw < 1) P3.drawT = Math.max(0, s.draw * 0.35 - dt);
         p.pitch = aim ? s.pitch : 0;
         p.torch = s.torch;

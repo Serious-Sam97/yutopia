@@ -188,6 +188,8 @@ const GUN_NODES: Record<string, string[]> = {
   revolver: ["hammer", "trigger", "crane", "cylinder", "rod", "latch", "round0", "round5"],
   // (plan 80) the revolver's speedloader
   speedloader: ["knob", "rounds", "round0", "round5", "pt_grip", "pt_front"],
+  // (plan 80) the revolver's holster
+  holster: ["pt_grip"],
   shotgun: ["barrels", "lever", "triggers", "round0", "round1"],
   ak47: ["magazine", "carrier", "trigger", "selector", "round0", "pt_fore", "pt_butt"],
   sniper: ["bolt", "trigger", "pt_fore", "pt_butt"],
@@ -215,7 +217,8 @@ for (const kind of Object.keys(GUN_NODES)) {
       for (const e of json.extensionsRequired ?? []) assert.ok(SUPPORTED.has(e), `${kind}: needs ${e}`);
       const names = new Set(json.nodes.map((n) => n.name));
       // (a gun's sights and muzzle; the speedloader's only its own)
-      const sights = kind === "speedloader" ? [] : ["pt_grip", "pt_muzzle", "pt_rear", "pt_front"];
+      const sights =
+        kind === "speedloader" || kind === "holster" ? [] : ["pt_grip", "pt_muzzle", "pt_rear", "pt_front"];
       for (const n of [kind, ...GUN_NODES[kind], ...sights]) assert.ok(names.has(n), `${kind}: no node ${n}`);
     },
   );

@@ -72,6 +72,8 @@ export class Player extends Schema {
   @type("boolean") focused = false;
   // the weapon in the hand (docs/plan/30-the-dark.md D6): "", "revolver", "shotgun", "ak47" (plan 79)
   @type("string") gun = "";
+  // carrying the revolver (plan 80): its holster on the right hip, the gun in it when it's not in the hand
+  @type("boolean") holster = false;
   // what the hand's doing with it (docs/plan/32-the-arms.md), for everyone to see: ARM
   @type("uint8") arm = 0;
   // down (D7): since when (server ms; 0: on their feet), and who's getting them up, since when

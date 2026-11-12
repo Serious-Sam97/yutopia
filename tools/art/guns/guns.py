@@ -771,6 +771,30 @@ def speedloader():
     return g
 
 
+# ── the revolver's holster (plan 80 phase 2): an open-top leather pouch for the right hip, moulded to the
+# 4-inch .357 — its barrel, underlug, cylinder and trigger guard inside, the grip and the hammer out —, a
+# backing panel against the hip with a belt loop over the top, a seam along its edge. In the revolver's
+# own frame (+x the barrel, +y its left, +z up): the gun sits in it as it is, its grip point at the
+# origin ─────────────────────────────────────────────────────────────────────────────────────────────
+def holster():
+    g = Gun("holster")
+    # moulded to it: round the cylinder and the guard (5 cm across: the mouth, cut down at the back for the
+    # grip), then the barrel's section (3.4 cm), past the muzzle and over the front sight
+    cyl = smooth([(-0.004, 0.044, 1), (0.004, 0.012, 1), (0.05, 0.01), (0.082, 0.03, 1), (0.082, 0.097, 1), (0.024, 0.098), (0.006, 0.084, 1)], 2)
+    g.part("pouch", lambda bm: prism(bm, cyl, 0.05), "leather", 0.008, 4)
+    bar = smooth([(0.07, 0.034, 1), (0.182, 0.036, 1), (0.19, 0.06), (0.184, 0.104, 1), (0.13, 0.102), (0.07, 0.099, 1)], 2)
+    g.part("sleeve", lambda bm: prism(bm, bar, 0.034), "leather", 0.007, 4)
+    # the seam's welt along the bottom edge
+    welt = smooth([(0.006, 0.013, 1), (0.05, 0.011), (0.08, 0.03), (0.18, 0.036, 1), (0.186, 0.042, 1), (0.08, 0.036), (0.05, 0.018), (0.01, 0.02, 1)], 1)
+    g.part("welt", lambda bm: prism(bm, welt, 0.03, y=0.006), "leather", 0.002, 2)
+    # the backing panel against the hip, up past the mouth to the belt, and the loop the belt runs through
+    back = smooth([(-0.03, 0.03, 1), (0.12, 0.03, 1), (0.12, 0.112, 1), (0.03, 0.15, 1), (-0.03, 0.15, 1)], 2)
+    g.part("back", lambda bm: prism(bm, back, 0.006, y=0.03), "leather", 0.002, 2)
+    g.part("loop", lambda bm: (box(bm, -0.025, 0.035, 0.1, 0.152, 0.006, y=0.039), box(bm, -0.025, 0.035, 0.146, 0.152, 0.018, y=0.033)), "leather", 0.0015, 2)
+    g.point("grip", (0, 0, 0))
+    return g
+
+
 # ── the torch (the left hand's, F6): an aluminium flashlight, knurled ────────────────────────────
 def torch():
     g = Gun("torch")
@@ -783,5 +807,5 @@ def torch():
     return g
 
 
-BUILD = {"revolver": revolver, "shotgun": shotgun, "ak47": ak47, "sniper": sniper, "daybreak": daybreak, "speedloader": speedloader}
+BUILD = {"revolver": revolver, "shotgun": shotgun, "ak47": ak47, "sniper": sniper, "daybreak": daybreak, "speedloader": speedloader, "holster": holster}
 LONG = {"shotgun", "ak47", "sniper", "daybreak"}

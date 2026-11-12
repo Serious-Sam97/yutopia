@@ -15,8 +15,8 @@ the ready), F4a the real speedloader reload ~2.2 s (the server retimed), F5a the
 F6a keyed on a `/dev/revolver` bench, F7a third person only. Phase 0 (the mocks) rendered 2026-11-12:
 `tools/art/guns/mock80.py` (Blender, the life man, the gun's support/shooting hands placed on it) →
 `design/guns/p80/sheet-80-hold.png` and `sheet-80-reload.png` — signed off 2026-11-12 ("Start phase 1").
-**Phase 1 built 2026-11-12** (below), committed 53c06b6. **Phase 2 built 2026-11-12** — stills
-`design/guns/p80/sheet-80-phase2-move.png`, `sheet-80-phase2-draw.png`; awaiting the user's review. Follows plan 79 (the guns:
+**Phase 1 built 2026-11-12** (below), committed 53c06b6. **Phase 2 built 2026-11-12**, committed dc0fee0; its
+holster (the user's ask) built after — stills `design/guns/p80/sheet-80-phase2-draw.png`; awaiting review. Follows plan 79 (the guns:
 the shoulder camera, the Blender revolver, the speedloader rule F11a) and plans 58/77/78 (the body, its
 moves, its hands).
 
@@ -175,8 +175,13 @@ cylinder, the ejector rod, the cases, a speedloader, in time with the server's s
    - **The checks**: every pose and pitch within the limits (CHECK=1); `e2e/arms-feel.spec.ts` passes.
      Mid-draw the wrists go 7–24° past a wrist's reach for the moment it lasts; sprinting 18–24° (the tuck
      bends them): phase 6 looks at both.
-   - No holster is drawn on her yet (the gun comes out of where one would be) — a model for one is a
-     question for the user.
+   - **The holster** (asked for by the user, 2026-11-12): a moulded leather pouch for the right hip, the
+     grip and hammer out, a backing panel and belt loop (`tools/art/guns/guns.py holster()` →
+     `public/life/guns/holster.glb`, 14 KB, 1.5k triangles), made in the revolver's own frame so the gun
+     sits in it as it is. Worn while she carries a revolver — **`Player.holster`**, set by the server in
+     the half-second check that already watched the gun in the hand (`features/arms.ts`), so everyone sees
+     it — on her hips bone (it goes with them), the revolver in it whenever it isn't in her hand. The draw
+     starts, and the put-away ends, at the holster's own place.
 3. **The aim** (F2, F3) — the pose keyed whole; the wrist's turn setting the barrel and its top (no cant,
    ever); the arms' reach; the head over the sights; the torch's Harries; the shot's recoil on the new
    hold (the muzzle's flip, the wrists giving); dry fire; the low ready ↔ aim in the gun's own 0.18 s.
