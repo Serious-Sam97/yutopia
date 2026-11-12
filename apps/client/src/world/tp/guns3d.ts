@@ -30,9 +30,10 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 // lighter, so they read as steel and walnut under the world's Lambert light.
 // The moving parts are their own meshes under a pivot each.
 
-export type GunKind = "revolver" | "shotgun" | "ak47" | "sniper";
-/** Held in both hands, the stock in the shoulder (plan 79): the double-barrel, the AK, the sniper. */
-export const isLongGun = (k: string) => k === "shotgun" || k === "ak47" || k === "sniper";
+export type GunKind = "revolver" | "shotgun" | "ak47" | "sniper" | "daybreak";
+/** Held in both hands, the stock in the shoulder (plan 79): the double-barrel, the AK, the sniper, the
+ *  Daybreak. */
+export const isLongGun = (k: string) => k === "shotgun" || k === "ak47" || k === "sniper" || k === "daybreak";
 export type Detail = "near" | "far";
 
 export interface GunModel {
@@ -642,8 +643,8 @@ function shotgun(mat: Material, detail: Detail): GunModel {
 /** A gun as a model: its parts and where it's held. `mat` is the world's vertex-coloured
  *  Lambert (one material for all of it). */
 export function gunModel(kind: GunKind, mat: Material, detail: Detail = "near"): GunModel {
-  // (the AK and the sniper have no drawn model — theirs are the life look's (plan 79 phases 5, 6): the
-  // double-barrel stands in for them in the classic look and on the snow)
+  // (the AK, the sniper and the Daybreak have no drawn model — theirs are the life look's (plan 79
+  // phases 5–7): the double-barrel stands in for them in the classic look and on the snow)
   return kind === "revolver" ? revolver(mat, detail) : shotgun(mat, detail);
 }
 
@@ -717,6 +718,8 @@ export interface GunFx {
   reload: number;
   /** (the AK) the carrier racked back by the charging handle, 0..1 */
   bolt?: number;
+  /** (the Daybreak) charged, 0..1: its core's glow, its gauge */
+  charge?: number;
 }
 
 /** Pose the moving parts. `cock` 0..1 (the revolver's hammer back); `turn` the cylinder in
@@ -725,9 +728,19 @@ export interface GunFx {
 export function poseGun(
   g: GunModel,
   kind: GunKind,
-  s: { cock?: number; turn?: number; open?: number; loaded?: number; trigger?: number; bolt?: number },
+  s: { cock?: number; turn?: number; open?: number; loaded?: number; trigger?: number; bolt?: number; charge?: number },
 ): void {
   const open = s.open ?? 0;
+  if (kind === "daybreak" && g.parts.core) {
+    // (the Daybreak's, plan 79 phase 7: the core swells as it charges; the gauge's needle swings over;
+    // the cell — the hands' to take out (person3d) — and the trigger)
+    const c = s.charge ?? 0;
+    g.parts.core.scale.setScalar(1 + 0.45 * c + 0.06 * c * Math.sin(performance.now() / 40));
+    g.parts.needle.rotation.y = -1.9 * c;
+    g.parts.trigger.rotation.z = 0.2 * (s.trigger ?? 0);
+    g.parts.cell.visible = (s.loaded ?? 1) > 0 || open > 0.2;
+    return;
+  }
   if (kind === "sniper" && g.parts.bolt) {
     // (the sniper's, plan 79 phase 6: the bolt turned up on the bore (`bolt` 0–0.35), then run back
     // (–1): worked after a shot, open to load; the trigger)
@@ -784,6 +797,9 @@ export function lifeGunModel(kind: GunKind, scene: Object3D): GunModel {
     "carrier",
     "selector",
     "bolt",
+    "cell",
+    "core",
+    "needle",
   ]) {
     const o = gun.getObjectByName(n);
     if (o) parts[n] = o as Group;

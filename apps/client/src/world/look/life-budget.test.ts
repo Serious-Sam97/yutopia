@@ -179,14 +179,17 @@ for (const who of ["man", "woman"]) {
 
 /** A gun's file: no textures (plain materials till they're baked), meshopt geometry. Measured
  *  2026-11-11: the revolver 0.14 MB, 15.1k triangles; the double-barrel 0.10 MB, 10.5k; 2026-11-12
- *  the AK 0.11 MB, 11.2k; the sniper 0.15 MB, 17.8k. */
+ *  the AK 0.11 MB, 11.2k; the sniper 0.15 MB, 17.8k; the Daybreak 0.22 MB, 25.4k (its lens, cage, fins and
+ *  filament — raised for it alone, 2026-11-12). */
 const GUN = { mb: 0.25, tris: 20000 };
+const GUN_TRIS: Record<string, number> = { daybreak: 26000 };
 /** What the game looks for in each (tp/guns3d.ts lifeGunModel, poseGun): the pivots, the rounds, the points. */
 const GUN_NODES: Record<string, string[]> = {
   revolver: ["hammer", "trigger", "crane", "cylinder", "round0", "round5"],
   shotgun: ["barrels", "lever", "triggers", "round0", "round1"],
   ak47: ["magazine", "carrier", "trigger", "selector", "round0", "pt_fore", "pt_butt"],
   sniper: ["bolt", "trigger", "pt_fore", "pt_butt"],
+  daybreak: ["cell", "core", "needle", "trigger", "pt_fore", "pt_butt"],
 };
 const GUN_DIR = join(DIR, "guns");
 for (const kind of Object.keys(GUN_NODES)) {
@@ -205,7 +208,8 @@ for (const kind of Object.keys(GUN_NODES)) {
             p.indices !== undefined
               ? json.accessors[p.indices].count / 3
               : json.accessors[p.attributes.POSITION].count / 3;
-      assert.ok(tris <= GUN.tris, `${kind}: ${tris} triangles > ${GUN.tris}`);
+      const most = GUN_TRIS[kind] ?? GUN.tris;
+      assert.ok(tris <= most, `${kind}: ${tris} triangles > ${most}`);
       for (const e of json.extensionsRequired ?? []) assert.ok(SUPPORTED.has(e), `${kind}: needs ${e}`);
       const names = new Set(json.nodes.map((n) => n.name));
       for (const n of [kind, ...GUN_NODES[kind], "pt_grip", "pt_muzzle", "pt_rear", "pt_front"])

@@ -7,6 +7,7 @@
 #   shotgun    barrels (at the hinge pin, the fore-end with them) · lever · triggers
 #   ak47       magazine (on its front lug) · carrier (the charging handle on it) · trigger · selector
 #   sniper     bolt (on the bore: turned up, run back) · trigger
+#   daybreak   cell (out underneath) · core (its glow) · needle (the gauge) · trigger
 # and `round<i>` (the revolver's six, the double-barrel's two shells' heads, the AK's top round), shown by how many are
 # loaded. The gun's points are empty nodes `pt_<name>` (grip, muzzle, rear, front, fore, butt).
 # Materials: plain PBR factors by kind (the node materials' look, flattened; their wood grain,
@@ -29,7 +30,7 @@ import guns  # noqa: E402
 ROOT = os.path.join(os.path.dirname(__file__), "../../..")
 argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
 OUT = argv[argv.index("--out") + 1] if "--out" in argv else os.path.join(ROOT, "apps/client/public/life/guns")
-ONLY = argv[argv.index("--only") + 1].split(",") if "--only" in argv else ["revolver", "shotgun", "ak47", "sniper"]
+ONLY = argv[argv.index("--only") + 1].split(",") if "--only" in argv else ["revolver", "shotgun", "ak47", "sniper", "daybreak"]
 os.makedirs(OUT, exist_ok=True)
 
 # the kinds, flattened: base colour, metal, roughness (and an emission)
@@ -52,6 +53,11 @@ FLAT = {
     "dark": ((0.004, 0.004, 0.004), 0.0, 0.9),
     "insert": ((0.8, 0.06, 0.03), 0.0, 0.5),
     "coated": ((0.015, 0.04, 0.05), 0.4, 0.06),
+    # (the Daybreak's: navy enamel; its lens and cell glass, pale; the core's warm white — its glow the
+    # game's to drive, by the charge)
+    "enamel": ((0.03, 0.05, 0.12), 0.15, 0.32),
+    "glass": ((0.55, 0.6, 0.62), 0.0, 0.05),
+    "glow": ((1.0, 0.9, 0.7), 0.0, 0.4),
 }
 FLAT_MATS = {}
 
@@ -65,9 +71,9 @@ def flat(kind):
         b.inputs["Base Color"].default_value = (*c, 1)
         b.inputs["Metallic"].default_value = metal
         b.inputs["Roughness"].default_value = rough
-        if kind == "insert":
+        if kind in ("insert", "glow"):
             b.inputs["Emission Color"].default_value = (*c, 1)
-            b.inputs["Emission Strength"].default_value = 0.6
+            b.inputs["Emission Strength"].default_value = 0.6 if kind == "insert" else 2.0
         FLAT_MATS[kind] = m
     return FLAT_MATS[kind]
 
@@ -102,6 +108,14 @@ GROUPS = {
     "sniper": {
         "bolt": {"parts": ["bolt", "bolt-arm", "bolt-knob"], "at": (0.0, 0, 0.066)},
         "trigger": {"parts": ["trigger"], "at": (0.03, 0, 0.006)},
+    },
+    # (plan 79 phase 7) the cell drops out underneath (and in); the core glows by the charge; the gauge's
+    # needle swings with it; the trigger
+    "daybreak": {
+        "cell": {"parts": ["cell", "cell-glass", "filament"], "at": (0.135, 0, 0.04)},
+        "core": {"parts": ["core"], "at": (0.45, 0, 0.115)},
+        "needle": {"parts": ["needle"], "at": (0.31, 0, 0.17)},
+        "trigger": {"parts": ["trigger"], "at": (0.028, 0, 0.04)},
     },
 }
 

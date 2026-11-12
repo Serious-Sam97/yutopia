@@ -109,6 +109,13 @@ async function view(page: Page, file: string, side: number, d = 1.6, h = 1.35) {
 const browser = await chromium.launch({ args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 page.on("pageerror", (e) => console.log("  page:", e.message));
+await page.addInitScript(
+  ([only, hour]) => {
+    (window as any).__gunsOnly = only;
+    (window as any).__gunsHour = hour;
+  },
+  [process.env.ONLY ?? "", process.env.HOUR ?? "13"],
+);
 if (process.env.DEBUG) {
   page.on("console", (m) => m.text().startsWith("view:") && console.log("  ", m.text()));
   await page.addInitScript(() => {
@@ -133,12 +140,14 @@ await page.waitForFunction(
   null,
   { timeout: 120_000 },
 );
-await page.evaluate(() => (window as any).__yutopia.teleport({ x: -250, y: -60, level: 0 }));
+await page.evaluate(() => (window as any).__yutopia.teleport({ x: -240, y: -18, level: 0 }));
 await page.waitForFunction(() => !!document.querySelector(".dk"), null, { timeout: 30_000 });
 await w(page, (y) => {
-  y.room.send("mod:hour", { h: 13 });
+  y.room.send("mod:hour", { h: Number((window as any).__gunsHour ?? 13) });
   y.room.send("mod:storm", { storm: 0, now: true });
-  y.room.send("mod:refill", { kit: true, ak: true, sniper: true });
+  // (the fourth slot: the sniper, or the Daybreak when it's the one asked for — plan 79 phase 7)
+  const db = (window as any).__gunsOnly === "daybreak";
+  y.room.send("mod:refill", { kit: true, ak: true, sniper: !db, daybreak: db });
   y.room.send("mod:dark", { mode: "peaceful" });
   if (!y.room.state.players.get(y.room.sessionId).torch) y.toggleTorch();
   y.tp.yaw = 0;
@@ -151,10 +160,11 @@ for (const [key, id] of [
   ["Digit2", "shotgun"],
   ["Digit3", "ak47"],
   ["Digit4", "sniper"],
+  ["Digit4", "daybreak"],
 ] as const) {
   if (process.env.ONLY && process.env.ONLY !== id) continue;
   // (back to the start for each — the moves pass walks and sprints her ahead, toward the water)
-  await page.evaluate(() => (window as any).__yutopia.teleport({ x: -250, y: -60, level: 0 }));
+  await page.evaluate(() => (window as any).__yutopia.teleport({ x: -240, y: -18, level: 0 }));
   await w(page, (y) => {
     y.tp.yaw = 0;
     y.tp.pitch = 0.1;
@@ -206,6 +216,33 @@ for (const [key, id] of [
       await view(page, `${out}/${name}-${id}-reload-${at}-left.png`, -1, 1.4);
       await state(page, `${id} reload ${at}`);
     }
+  } else if (id === "daybreak") {
+    // pressed, aimed near level (the ball flies its 40 tiles, ~2.9 s): its charge (a frame halfway), the
+    // ball off a second on and flying (the game's view), its burst
+    // (on the pond's north shore, facing out over it: open ground for the ball's light)
+    await page.mouse.up({ button: "right" });
+    await page.evaluate(() => (window as any).__yutopia.teleport({ x: -240, y: -23, level: 0 }));
+    await w(page, (y) => {
+      y.tp.yaw = -Math.PI / 2;
+      if (!y.room.state.players.get(y.room.sessionId).torch) y.toggleTorch();
+    });
+    await page.waitForTimeout(800);
+    await page.mouse.down({ button: "right" });
+    await page.waitForTimeout(900);
+    await w(page, (y) => {
+      y.tp.pitch = 0.02;
+    });
+    await page.waitForTimeout(200);
+    await page.mouse.down({ button: "left" });
+    await page.mouse.up({ button: "left" });
+    const t0 = Date.now();
+    for (const at of [500, 1150, 1500, 2000, 2600, 3300, 4100]) {
+      await page.waitForTimeout(Math.max(0, at - (Date.now() - t0)));
+      if (at === 500 || at === 1150) await view(page, `${out}/${name}-${id}-charge-${at}.png`, 1, 1.6);
+      await page.screenshot({ path: `${out}/${name}-${id}-ball-${at}.png` });
+      await state(page, `${id} ball ${at}`);
+    }
+    await page.waitForTimeout(1500);
   } else if (id === "sniper") {
     // a shot down the scope; the bolt worked out of it (frames), back in; another
     await page.mouse.down({ button: "left" });
@@ -238,16 +275,18 @@ for (const [key, id] of [
     shotgun: [350, 850],
     ak47: [] as number[],
     sniper: [250, 600, 900, 1200],
+    daybreak: [250, 600, 900, 1300, 1700],
   };
   for (const at of frames[id]) {
     await page.waitForTimeout(Math.max(0, at - (Date.now() - t0)));
     await view(page, `${out}/${name}-${id}-reload-${at}.png`, 1, 1.4);
+    if (id === "daybreak") await view(page, `${out}/${name}-${id}-reload-${at}-left.png`, -1, 1.4);
   }
   await state(page, `${id} reloaded`);
   await page.waitForTimeout(2500);
   // (on the move — plan 79 phase 4: walking aimed, sprinting, a dodge — away from the pond, open water
   // out of the winter)
-  await page.evaluate(() => (window as any).__yutopia.teleport({ x: -250, y: -60, level: 0 }));
+  await page.evaluate(() => (window as any).__yutopia.teleport({ x: -240, y: -18, level: 0 }));
   await w(page, (y) => {
     y.tp.yaw = Math.PI;
   });

@@ -188,9 +188,11 @@ const MODELS: Record<string, () => Part[]> = {
   // look's to the snow)
   ak47: () => [gunLying("ak47")],
   sniper: () => [gunLying("sniper")],
+  daybreak: () => [gunLying("daybreak")],
   r38,
   r762: r38,
   r308: r38,
+  cell: r38,
   shell: shells,
   flare,
   battery,
@@ -209,9 +211,11 @@ const SCALE: Record<string, number> = {
   shotgun: 1, // (a life-size double-barrel is long enough to read)
   ak47: 1,
   sniper: 1,
+  daybreak: 1,
   r38: 1.8,
   r762: 1.8,
   r308: 1.8,
+  cell: 1.8,
   shell: 2,
   flare: 1.6,
   battery: 1.8,

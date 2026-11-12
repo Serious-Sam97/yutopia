@@ -12,7 +12,7 @@ shoulder camera whenever a gun is out (no swap key), F2a walk while aiming, F3a 
 with a recoil layer, F6a the torch held with the gun, F7 **the Daybreak**, F8a the right button focuses
 only a torch already on, F9a the AK in the lockers / the sniper in the hunting bag / the Daybreak from
 Spawn, F10a four quick slots. Phase 1 (the right button) built; phase 0 mocks delivered (second round: the camera closer, the guns
-detailed; the revolver and the double-barrel redesigned after AW2's), signed off 2026-11-11 (the long guns held where the arms reach); phase 2 (the camera, the reticle) and phase 3 (the two guns' models in the game) built 2026-11-11; phase 4 built and signed off 2026-11-12 ("look fine for now"); phase 5 (the AK-47) built and signed off 2026-11-12; phase 6 (the sniper) built and signed off 2026-11-12; F11a (the speedloader) and F12a (both shells out) decided 2026-11-11. Follows plan 32 (the arms: the
+detailed; the revolver and the double-barrel redesigned after AW2's), signed off 2026-11-11 (the long guns held where the arms reach); phase 2 (the camera, the reticle) and phase 3 (the two guns' models in the game) built 2026-11-11; phase 4 built and signed off 2026-11-12 ("look fine for now"); phase 5 (the AK-47) built and signed off 2026-11-12; phase 6 (the sniper) built and signed off 2026-11-12; phase 7 (the Daybreak) built and signed off 2026-11-12; F11a (the speedloader) and F12a (both shells out) decided 2026-11-11. Follows plan 32 (the arms: the
 rules, kick, bloom, falloff, heads), plan 30 (the dark: light is the weapon), plans 58/77/78 (the body,
 its moves, its hands) and plan 73 (the life look).
 
@@ -203,6 +203,52 @@ the Daybreak the torch's focus hum and a flare's burst) so the phases before can
    - whether you choose from candidates for each sound (3–4 each, as the steps were picked), or I pick and
      you veto.
    Then: the picks, the mix, the checks (the steps' level rule: plan 63), credits in `sources.json`.
+
+## Phase 7 — the Daybreak: built, signed off (2026-11-12)
+
+- **The rules** (shared `ARMS.daybreak`, `WEAPONS.daybreak` 3 of `cell`, `STACKS.cell` 3; `ORB`, `burstAt`,
+  `orbFlight`, `isCharged`, `ARM.charge` 5): pressed, it charges 1.0 s (`arms:charge` — the server's own
+  clock: a fire before it's charged isn't one; let go of the aim, `{ stop }`); then a ball of light, 14
+  tiles/s, at most 40; 2.5 s between. Its burst: 300 to 3 tiles, falling to nothing at 6 (one of us: half,
+  `pvpDamage`, not through a wall); passing, it burns the shields within 5 tiles as 3 focused beams would.
+  Its reload: the spent cells out (the live back to the pockets), three in at once (0.7 + 0.9 + 0.4 s).
+- **The server**: the ball isn't a ray — `features/arms.ts` flies it each tick from the muzzle (where it
+  stops at the latest from `orbFlight`: the ground), against walls and trunks by Jolt's sight (the grid's
+  "can't stand there" stopped it at the pond's edge — open water isn't a wall), against the others on its
+  floor and the shadowed (`dark.near`); bursting there. The dark (`features/dark.ts`) got `sear` (the
+  burn as it passes) and `blast` (every shield in reach gone at once, the damage on them 0.3 s on — exposed
+  by then — told back as `arms:hit`). The flight and the burst go to everyone near as `arms:orb` and
+  `arms:burst` messages (as a flare's throw is), no schema change. **Plan change:** messages, not a
+  `state.orbs` — someone joining mid-flight misses a ball (2.9 s at most). A test: no charge no shot; the
+  charge seen; one of the shadowed burnt bare by the passing ball and put down by its burst in one.
+- **Where it comes from** (F9a): the admins' Spawn only (its list; the kit's `daybreak`, in quick 4 in
+  the sniper's place — "Arm me" stays the four).
+- **The model**: phase 0's Blender Daybreak: 0.22 MB, 25.4k triangles — over the guns' 20k, **its own budget
+  raised to 26k** (the lens, the cage, the fins, the filament; the user's standing rule: budgets raised as
+  needed, measured, noted). Pivots `cell` (slides out underneath), `core` (glows by the charge: it swells),
+  `needle` (the gauge swings with it), `trigger`; flat materials `enamel` (navy), `glass`, `glow` (emissive).
+- **In the world** (`tp/arms3d.ts` `orb`/`burst`/`lights`, `parts/sun.ts` ORB_LAMP, `view.orbLights`): the
+  ball a hot core in a wide glow (not fogged — at night the fog's blue drowned it), its light carried with
+  it through the lamp pool; the burst a flash, a ring of light on the ground, sparks every way, its light
+  bright and gone in a second. Tuned down once: at the muzzle the first lamp blew her out white.
+- **In the hands**: a long gun (`isLongGun`). The reload is the AK's hands (`magHand`/`magFrame`, now by a
+  load spec: `AK_LOAD`, `CELL_LOAD`) — the cell slides out underneath, to the belt's pouch, back, in; never
+  racked. Others see the charge (Player.arm: the core swells on their gun too).
+- **The feel** (`dark/arms.ts`): the left button charges (`charge()`), the ball goes on its own once
+  charged if still aimed; empty, the click and the reload. The HUD three glowing cells, "+N cells". A shove
+  on firing. Placeholder sounds: the charge the torch's focus, deeper; the shot a flare's strike, low; the
+  burst the double-barrel's far shot, slowed, and a strike; the cell out/in the break and the cock.
+- **A bug on the way**: the AK's rack time was named `charge` — `isCharged` took the AK for a charged gun
+  (its shots refused on the server, its click a charge on the client). Renamed `rack`; caught by the AK's
+  server test.
+- Seen with `e2e/guns-hold.mts` (`ONLY=daybreak HOUR=22`: on the pond's north shore at night facing out
+  over the water, the ball flying out, lighting the reeds and the water, bursting on the far side; by day
+  the hold and the reload). `e2e/daybreak.spec.ts`: charging (no ball, none spent), the ball's light, a
+  cell spent, its burst (`burstsShown`), let go mid-charge nothing, R three again. Server 16/16, dark,
+  down; survival's loot-spot test flaked once while the dev world restarted (passes alone, twice).
+- The capture's start moved off the pond (open water out of the winter: she stood in it): (−240, −18).
+- **Left for phase 8**: the Daybreak on the snow and in the classic look is the double-barrel's drawn
+  model; a ball in flight isn't seen by someone joining mid-flight.
 
 ## Phase 6 — the sniper: built, signed off (2026-11-12)
 

@@ -7,6 +7,8 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_item_r762: ["7.62 rounds", "Balas 7.62"],
   dark_item_sniper: ["Sniper rifle", "Rifle de precisão"],
   dark_item_r308: [".308 rounds", "Balas .308"],
+  dark_item_daybreak: ["The Daybreak", "A Aurora"],
+  dark_item_cell: ["Light cells", "Células de luz"],
   dark_item_r38: [".38 rounds", "Balas .38"],
   dark_item_shell: ["Shells", "Cartuchos"],
   dark_item_flare: ["Flare", "Sinalizador"],
@@ -119,6 +121,11 @@ export const STRINGS: Record<string, readonly [string, string]> = {
     "Five rounds, a bolt worked after each. Aim and wait: the scope (the wheel: 4× or 8×; Shift holds your breath). Only hurts one already exposed by the light.",
     "Cinco balas, o ferrolho manejado após cada uma. Mire e espere: a luneta (roda: 4× ou 8×; Shift prende a respiração). Só fere um sombrio já exposto pela luz.",
   ],
+  dark_desc_daybreak: [
+    "A lamp made a gun. Press to charge it, a second; a ball of light flies, burns every shield it passes and bursts where it lands. Three cells.",
+    "Uma lâmpada feita arma. Aperte para carregar, um segundo; uma bola de luz voa, queima todo escudo por onde passa e explode onde cai. Três células.",
+  ],
+  dark_desc_cell: ["Cells for the Daybreak: three at a time (R).", "Células da Aurora: três de cada vez (R)."],
   dark_desc_r308: [
     "Rounds for the sniper rifle: one at a time (R).",
     "Balas do rifle de precisão: uma de cada vez (R).",

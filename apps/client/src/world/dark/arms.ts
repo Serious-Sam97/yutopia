@@ -6,6 +6,7 @@ import {
   bloomShot,
   type GunId,
   isAuto,
+  isCharged,
   isScoped,
   pellets,
   type Ray,
@@ -46,6 +47,8 @@ const FEEL = {
   ak47: { up: 0.016, side: 0.007, settle: 0.3 },
   // (the sniper, phase 6: a hard push up, most of it back as the bolt's worked)
   sniper: { up: 0.07, side: 0.012, settle: 0.75 },
+  // (the Daybreak, phase 7: a heavy shove as the ball leaves)
+  daybreak: { up: 0.05, side: 0.008, settle: 0.8 },
 } as const;
 // the scope (plan 79 phase 6): its sway on the look (rad, still and stood), and the breath held (Shift):
 // steady for `hold` s, then worse till let go, getting back over `back` s
@@ -84,6 +87,8 @@ export class Arms {
   private breathT = 0;
   private spent = 0;
   private boltTill = 0;
+  // the Daybreak's charge (plan 79 phase 7): pressed at (performance ms; 0 not charging)
+  private chargeFrom = 0;
   private readonly scopeEl = document.createElement("div");
   private aheadLoaded = -1;
   private dryAt = -9; // s: the last pull on an empty chamber (the trigger goes, the hammer falls on nothing)
@@ -95,7 +100,7 @@ export class Arms {
   private reloadK = 0; // tipped up to load (0..1)
   private was: { x: number; y: number; t: number } | null = null;
   private speed = 0; // tiles / s, smoothed
-  private fx = { kick: 0, cock: 0, turn: 0, open: 0, loaded: 0, trigger: 0, reload: 0 };
+  private fx = { kick: 0, cock: 0, turn: 0, open: 0, loaded: 0, trigger: 0, reload: 0, charge: 0 };
   /** a quick slot's key pressed (0–3), and whether it did anything (the quick HUD shows it) */
   onQuick: ((n: number, ok: boolean) => void) | null = null;
 
@@ -175,6 +180,23 @@ export class Arms {
       const v = this.shotSound(gun, far);
       this.voices.play(v.name, { x: m.ox, y: m.oy }, far ? 90 : 60, v.volume, v.rate);
     });
+    // the Daybreak's ball, anyone's (mine too: the server's word), and its burst — light, heard far
+    on("arms:orb", (m) => {
+      if (m.level !== this.ctl.level) return;
+      this.ctl.tp?.arms().orb(m.id, m.x0, m.y0, m.z0, m.x, m.y, m.z, m.secs);
+      if (m.sid !== this.ctl.room?.sessionId) {
+        this.ctl.tp?.guns.gunShot(m.sid);
+        this.voices.play("flare-strike", { x: m.x0, y: m.y0 }, 40, 1, 0.7);
+      }
+    });
+    on("arms:burst", (m) => {
+      if (m.level !== this.ctl.level) return;
+      this.ctl.tp?.arms().burst(m.id, m.x, m.y, m.z);
+      this.ctl.tp?.heard(m.x, m.y);
+      // (placeholders, plan 79 phase 9: a deep boom and a flare's strike)
+      this.voices.play("shotgun-shot-far", { x: m.x, y: m.y }, 90, 1, 0.55);
+      this.voices.play("flare-strike", { x: m.x, y: m.y }, 40, 0.8, 0.6);
+    });
     on("arms:throw", (m) => {
       this.ctl.tp?.arms().throwFlare(m.x0, m.y0, m.z0, m.x, m.y, m.z, m.secs);
       this.voices.play("flare-strike", { x: m.x0, y: m.y0 }, 30);
@@ -211,8 +233,29 @@ export class Arms {
   click(e: MouseEvent): boolean {
     if (e.button !== 0 || !this.walker.aiming || !this.gun()) return false;
     this.triggerDown = true;
-    this.fire();
+    const g = this.gun();
+    if (g && isCharged(g.id)) this.charge();
+    else this.fire();
     return true;
+  }
+  /** The Daybreak pressed (plan 79 phase 7): charging — the ball goes once it's charged (frame), as long
+   *  as it's aimed; empty, the click and a reload. */
+  private charge() {
+    const g = this.gun();
+    if (!g || this.chargeFrom) return;
+    const now = performance.now();
+    if (now - this.shotAt < ARMS[g.id].rate * 1000 - 30) return;
+    const arm = this.me()?.arm ?? ARM.idle;
+    if (arm === ARM.draw || arm === ARM.open || arm === ARM.reload) return;
+    if (g.loaded <= 0) {
+      this.voices.play("revolver-dry");
+      this.dryAt = now / 1000;
+      this.reload();
+      return;
+    }
+    this.chargeFrom = now;
+    this.ctl.room?.send("arms:charge", {});
+    this.voices.play("focus-on", undefined, 0, 0.9, 0.7);
   }
   private triggerUp() {
     this.triggerDown = false;
@@ -375,6 +418,9 @@ export class Arms {
       return;
     }
     // (the rounds left as I've fired them — the server's count comes a moment after)
+    // (the Daybreak's charge: fire() only from frame, once it's charged)
+    if (isCharged(g.id) && !this.chargeFrom) return;
+    this.chargeFrom = 0;
     if (g.loaded - this.ahead <= 0) {
       // (held down, the dry click once a pull)
       if (this.dryPulled) return;
@@ -457,14 +503,16 @@ export class Arms {
     const most = onBody && (g.id === "revolver" || scoped) ? toAim : reach;
     // (out of the muzzle as it's drawn, where there's one)
     const mz = tp.guns.muzzleOf(this.ctl.room?.sessionId ?? "") ?? o;
-    tp.arms().shot(
-      mz.x,
-      mz.y,
-      mz.z,
-      pellets(g.id, yaw, pitch, seed, spread).map((p) => this.flight(mz.x, mz.y, mz.z, p, most)),
-      g.id,
-      me.z,
-    );
+    // (the Daybreak's ball is the server's: it's drawn when its word comes — arms:orb)
+    if (!isCharged(g.id))
+      tp.arms().shot(
+        mz.x,
+        mz.y,
+        mz.z,
+        pellets(g.id, yaw, pitch, seed, spread).map((p) => this.flight(mz.x, mz.y, mz.z, p, most)),
+        g.id,
+        me.z,
+      );
     tp.heard(mz.x, mz.y);
     // the kick, split (docs/plan/79-the-guns.md): a smaller one on my look, most of it settling back by
     // itself; the gun's own, bigger, in my hands (gunFx's kick, the body's aim2)
@@ -490,6 +538,10 @@ export class Arms {
     else if (auto) this.walker.controls.pad.rumble(0.4, 0.2, 45);
     else this.walker.controls.pad.rumble(0.55, 0.25, 70);
     if (g.id === "ak47") this.brass("case", 1);
+    if (g.id === "daybreak") {
+      this.voices.play("flare-strike", undefined, 40, 1, 0.7);
+      return;
+    }
     const v = this.shotSound(g.id, false);
     this.voices.play(v.name, undefined, 40, v.volume, v.rate);
   }
@@ -585,6 +637,10 @@ export class Arms {
       loaded: g.loaded,
       trigger: since < 0.08 || dry ? 1 : 0,
       reload: this.reloadK,
+      // (the Daybreak's glow and gauge: charging; just fired, still hot)
+      charge: this.chargeFrom
+        ? Math.min(1, (now - this.chargeFrom) / (ARMS.daybreak.charge * 1000))
+        : Math.max(0, 1 - since * 2),
     });
     tp.guns.myGun = this.fx;
   }
@@ -611,6 +667,14 @@ export class Arms {
       else if (g0.loaded > this.aheadLoaded) this.ahead = 0;
       this.aheadLoaded = g0.loaded;
       if (now - this.shotAt > 1000) this.ahead = 0;
+    }
+    // (the Daybreak charging: let the aim go and it stops; charged, the ball goes)
+    if (this.chargeFrom) {
+      const g = this.gun();
+      if (!g || !isCharged(g.id) || !this.walker.aiming) {
+        this.chargeFrom = 0;
+        this.ctl.room?.send("arms:charge", { stop: true });
+      } else if (now - this.chargeFrom >= ARMS.daybreak.charge * 1000) this.fire();
     }
     // (full auto: held, it fires at its rate; let go — or not aiming — the burst's over)
     const pulled = this.triggerDown || this.walker.controls.pad.rt > 0.6;
@@ -750,6 +814,9 @@ export class Arms {
           return `<i style="left:${x}px;top:${y}px;${full ? "background:radial-gradient(#8a6c22 30%,#d8b04e 34%,#b88f33 70%)" : "background:#0b0c0f;border:1.5px solid #555"}"></i>`;
         }).join("");
         gunHtml = `<div class="cyl${loading ? " re" : ""}">${holes}</div>`;
+      } else if (g.id === "daybreak") {
+        // (its three cells, glowing while they're full)
+        gunHtml = `<div class="shells cells${loading ? " re" : ""}">${Array.from({ length: mag }, (_, i) => `<b class="${i < g.loaded ? "on" : ""}"></b>`).join("")}</div>`;
       } else if (g.id === "sniper") {
         // (its five: brass, in a row)
         gunHtml = `<div class="shells clip${loading ? " re" : ""}">${Array.from({ length: mag }, (_, i) => `<b class="${i < g.loaded ? "on" : ""}"></b>`).join("")}</div>`;
@@ -759,7 +826,7 @@ export class Arms {
       } else {
         gunHtml = `<div class="shells${loading ? " re" : ""}">${Array.from({ length: mag }, (_, i) => `<b class="${i < g.loaded ? "on" : ""}"></b>`).join("")}</div>`;
       }
-      gunHtml = `<div class="gun">${gunHtml}<div class="spare${spare > 0 ? "" : " out"}">+${spare}<small>${ammo === "r38" ? ".38" : ammo === "r762" ? "7.62" : ammo === "r308" ? ".308" : "12"}</small></div></div>`;
+      gunHtml = `<div class="gun">${gunHtml}<div class="spare${spare > 0 ? "" : " out"}">+${spare}<small>${ammo === "r38" ? ".38" : ammo === "r762" ? "7.62" : ammo === "r308" ? ".308" : ammo === "cell" ? "cells" : "12"}</small></div></div>`;
     }
     const tubes = Array.from({ length: STACKS.flare }, (_, i) => `<b class="${i < flares ? "on" : ""}"></b>`).join("");
     this.hud.innerHTML = `<div class="fl"><div class="tubes">${tubes}</div><div class="n">${flares}</div></div>${gunHtml}`;
@@ -807,6 +874,13 @@ export class Arms {
             if (me) setTimeout(() => this.brass("case", spent), 250);
           } else if (!opened && (was.arm === ARM.open || was.arm === ARM.reload))
             this.voices.play("revolver-gate", at, 15, 0.8, 0.92);
+          return;
+        }
+        if (p.gun === "daybreak") {
+          // (placeholders, plan 79 phase 9: someone's charging — the torch's focus, deeper; the cell out, in)
+          if (arm === ARM.charge && !me) this.voices.play("focus-on", at, 25, 0.8, 0.7);
+          else if (arm === ARM.open) this.voices.play("shotgun-break", at, 15, 0.7, 0.8);
+          else if (was.arm === ARM.open) this.voices.play("revolver-cock", at, 15, 0.8, 0.6);
           return;
         }
         if (p.gun === "sniper") {
@@ -866,6 +940,8 @@ export const ARMS_CSS = `
 @keyframes dkpulse{to{background:rgba(233,163,58,.45)}}
 @keyframes dkspin{to{transform:rotate(60deg)}}
 .dk-arms .shells{display:flex;gap:6px;padding:8px}
+.dk-arms .shells.cells b{width:16px;height:30px;border-radius:5px}
+.dk-arms .shells.cells b.on{background:radial-gradient(#fff6e2 0 30%,#f2c46a 60%,#7a5a22);box-shadow:0 0 8px rgba(255,220,150,.7)}
 .dk-arms .shells.clip b{width:8px;height:36px;border-radius:4px 4px 2px 2px}
 .dk-arms .shells.clip b.on{background:linear-gradient(#b8763e 0 22%,#d8b04e 22%)}
 .dk-scope{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity 90ms;background:radial-gradient(circle at 50% 50%,transparent 0 41vmin,rgba(0,0,0,.55) 42vmin,#000 44vmin)}

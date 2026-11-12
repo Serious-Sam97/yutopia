@@ -6,14 +6,18 @@ import {
   BODY,
   bloomCalm,
   bloomShot,
+  burstAt,
   damageAt,
   dumpsOnOpen,
   FLARE,
   flareFlight,
   type GunId,
   isAuto,
+  isCharged,
   isWhole,
   MUZZLE_REACH,
+  ORB,
+  orbFlight,
   pastAt,
   pellets,
   pvpDamage,
@@ -78,6 +82,8 @@ interface Hand {
   /** the bolt worked after a shot (the sniper's), from / till (server ms) */
   boltFrom: number;
   boltTill: number;
+  /** charging since (the Daybreak's: server ms, 0 not) */
+  chargeAt: number;
   /** the gun's up at (server ms) */
   drawnAt: number;
   /** the spread's bloom (rad) as of `bloomAt` (server ms) */
@@ -95,6 +101,7 @@ registerFeature((room: WorldRoom) => {
       dry: false,
       boltFrom: 0,
       boltTill: 0,
+      chargeAt: 0,
       drawnAt: 0,
       bloom: 0,
       bloomAt: 0,
@@ -198,6 +205,21 @@ registerFeature((room: WorldRoom) => {
     hd.reloadAt = Date.now() + ARMS[h.w.id].open * 1000;
   });
 
+  // the Daybreak pressed: charging (plan 79 phase 7) — up, loaded, not open, not too soon; let go, not
+  room.on("arms:charge", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const h = p && inHand(client.sessionId, p);
+    const hd = hand(client.sessionId);
+    if (m?.stop || !p || !h || !isCharged(h.w.id)) {
+      hd.chargeAt = 0;
+      return;
+    }
+    const now = Date.now();
+    if (!free(p) || (p.mv & MV_AIM) === 0 || now < hd.drawnAt || hd.step || h.w.loaded <= 0) return;
+    if (now - hd.shotAt < ARMS[h.w.id].rate * 1000 - 30) return;
+    hd.chargeAt = now;
+  });
+
   room.on("arms:fire", (client, m) => {
     const p = room.state.players.get(client.sessionId);
     const now = Date.now();
@@ -217,6 +239,10 @@ registerFeature((room: WorldRoom) => {
       return;
     }
     if (h.w.loaded <= 0) return;
+    // (charged first — the Daybreak's: its time up since arms:charge, a little early for the line)
+    const charged = isCharged(h.w.id);
+    if (charged && (!hd.chargeAt || now - hd.chargeAt < ARMS.daybreak.charge * 1000 - 150)) return;
+    hd.chargeAt = 0;
     // (full auto — the AK's: a round's slot each `rate`, a shot late on the line may take the one it
     // missed, so a held trigger's rate holds through the line's jitter; never faster than it over time)
     const rateMs = gun.rate * 1000;
@@ -263,6 +289,39 @@ registerFeature((room: WorldRoom) => {
     });
     hd.bloom = bloomShot(id, bloom);
     hd.bloomAt = now;
+    // the Daybreak: a ball of light off from the muzzle, flying (the tick), not a ray
+    if (charged) {
+      const g = room.gridFor(p.uid, p.level);
+      const pt = Math.max(-1.2, Math.min(1.2, pitch));
+      const end = orbFlight(
+        ox,
+        oy,
+        oz,
+        yaw,
+        pt,
+        (x, y) => floorAt(g, x, y),
+        // (the ground ends it here; walls and trunks as it flies — Jolt's sight, the tick: open water
+        // isn't a wall, the grid's "can't stand there" was)
+        () => false,
+      );
+      const o: Orb = {
+        id: `orb${(++orbSeq).toString(36)}`,
+        sid: client.sessionId,
+        level: p.level,
+        x0: ox,
+        y0: oy,
+        z0: oz,
+        d: rayDir(yaw, pt),
+        t0: now,
+        end,
+        last: { x: ox, y: oy, z: oz },
+      };
+      orbs.push(o);
+      const msg = { id: o.id, sid: o.sid, x0: ox, y0: oy, z0: oz, ...end, level: p.level };
+      room.send(client, "arms:orb", msg);
+      for (const c of near(p, ox, oy)) room.send(c, "arms:orb", msg);
+      return;
+    }
     const shadeDamage = (t: number, head: boolean) => damageAt(id, gun.damage, t, head);
     for (const dir of pellets(id, yaw, Math.max(-1.2, Math.min(1.2, pitch)), seed, spread)) {
       const ray = { x: ox, y: oy, z: oz, ...dir };
@@ -322,6 +381,59 @@ registerFeature((room: WorldRoom) => {
     pending.push({ at: now + to.secs * 1000, x: to.x, y: to.y, z: to.z, level });
   });
   const pending: { at: number; x: number; y: number; z: number; level: number }[] = [];
+  // the Daybreak's balls in the air (plan 79 phase 7): where from, which way, when; where they stop at
+  // the latest
+  interface Orb {
+    id: string;
+    sid: string;
+    level: number;
+    x0: number;
+    y0: number;
+    z0: number;
+    d: { x: number; y: number; z: number };
+    t0: number;
+    end: { x: number; y: number; z: number; secs: number };
+    /** where it was the last tick (a wall between that and now: it bursts there) */
+    last: { x: number; y: number; z: number };
+  }
+  const orbs: Orb[] = [];
+  let orbSeq = 0;
+  // a ball's burst: the shadowed (the dark's), the others in reach on its floor (half; past a wall:
+  // not), everyone near told
+  const burst = (o: Orb, x: number, y: number, z: number, now: number) => {
+    const shooter = room.state.players.get(o.sid);
+    const sc = (room.clients as WorldClient[]).find((c) => c.sessionId === o.sid);
+    room.dark?.blast(x, y, z, o.level, ARMS.daybreak.damage, now, (hit) => {
+      if (sc) room.send(sc, "arms:hit", hit);
+    });
+    for (const q of room.state.players.values()) {
+      if (shooter ? !target(shooter, q) : q.level !== o.level || q.sid === o.sid) continue;
+      const qz = overFloor(q.level, q.z);
+      const d = Math.hypot(q.x - x, q.y - y, Math.max(0, Math.abs(qz + 0.9 - z) - 0.9));
+      const n = burstAt(pvpDamage("daybreak"), d);
+      if (n <= 0) continue;
+      if (!(room.sight?.(o.level, { x, y, z: z + 0.3 }, { x: q.x, y: q.y, z: qz + 1.2 }) ?? true)) continue;
+      room.survival?.hurt(q.sid, n);
+      q.hitAt = now;
+      q.hitYaw = Math.atan2(y - q.y, x - q.x);
+      if (sc)
+        room.send(sc, "arms:hit", {
+          id: q.sid,
+          kind: q.downAt ? "downed" : "person",
+          head: false,
+          x: q.x,
+          y: q.y,
+          z: qz + 1,
+        });
+      const qc = (room.clients as WorldClient[]).find((c) => c.sessionId === q.sid);
+      if (qc) room.send(qc, "dark:hit", { id: o.sid, n, shot: true });
+    }
+    const msg = { id: o.id, x, y, z, level: o.level };
+    for (const c of room.clients as WorldClient[]) {
+      const cp = room.state.players.get(c.sessionId);
+      if (cp && cp.level === o.level && Math.hypot(cp.x - x, cp.y - y) <= HEARD) room.send(c, "arms:burst", msg);
+    }
+  };
 
   let checkedAt = 0;
   return {
@@ -346,6 +458,40 @@ registerFeature((room: WorldRoom) => {
           if (f.level === 0 && inDeepWater(f.x, f.y)) continue;
           room.dark?.light(f.x, f.y, f.z, f.level, now);
         }
+      // the Daybreak's balls flying: the shields they pass burn; on a body, or at their end, they burst
+      for (let i = orbs.length - 1; i >= 0; i--) {
+        const o = orbs[i];
+        const t = Math.min((now - o.t0) / 1000, o.end.secs);
+        const along = t * ORB.speed;
+        const x = o.x0 + o.d.x * along;
+        const y = o.y0 + o.d.y * along;
+        const z = o.z0 + o.d.z * along;
+        // (a wall or a trunk since the last tick: it bursts against it)
+        if (!(room.sight?.(o.level, o.last, { x, y, z }) ?? true)) {
+          orbs.splice(i, 1);
+          burst(o, o.last.x, o.last.y, o.last.z, now);
+          continue;
+        }
+        o.last = { x, y, z };
+        room.dark?.sear(x, y, o.level, now);
+        const shooter = room.state.players.get(o.sid);
+        let on = t >= o.end.secs;
+        // (one of us in its way — not the one who fired it)
+        if (!on)
+          for (const q of room.state.players.values()) {
+            if (shooter ? !target(shooter, q) : q.level !== o.level || q.sid === o.sid) continue;
+            const qz = overFloor(q.level, q.z);
+            if (Math.hypot(q.x - x, q.y - y) < ORB.hit && z > qz - 0.2 && z < qz + BODY.h + 0.2) {
+              on = true;
+              break;
+            }
+          }
+        // (one of the shadowed: where they are now)
+        if (!on && o.level === 0 && room.dark?.near?.(x, y, z, ORB.hit)) on = true;
+        if (!on) continue;
+        orbs.splice(i, 1);
+        burst(o, x, y, z, now);
+      }
       // reloads (plan 79 F11a, F12a — AW2's): opened, and what's in it out — the live rounds back to the
       // pockets, what fits; then the revolver's speedloader (every round it needs at once), the
       // double-barrel's shells one at a time, till full or out of them; shut
@@ -384,7 +530,7 @@ registerFeature((room: WorldRoom) => {
         hd.step = more ? "load" : "shut";
         const g = ARMS[h.w.id];
         // (shut: the AK run dry has its charging handle racked — longer)
-        const shut = "charge" in g && hd.dry && h.w.loaded > 0 ? g.charge : g.shut;
+        const shut = "rack" in g && hd.dry && h.w.loaded > 0 ? g.rack : g.shut;
         hd.reloadAt = now + (more ? ("speed" in g ? g.speed : g.reload) : shut) * 1000;
       }
       // what each hand's doing, for everyone's screens
@@ -400,7 +546,9 @@ registerFeature((room: WorldRoom) => {
                 ? ARM.reload
                 : now >= hd.boltFrom && now < hd.boltTill
                   ? ARM.bolt
-                  : ARM.idle;
+                  : hd.chargeAt && now - hd.chargeAt < ARMS.daybreak.charge * 1000 + 600
+                    ? ARM.charge
+                    : ARM.idle;
         if (p.arm !== arm) p.arm = arm;
       }
       // a weapon dropped (or never had) isn't in the hand

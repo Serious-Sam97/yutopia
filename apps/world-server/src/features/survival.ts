@@ -619,20 +619,25 @@ registerFeature((room: WorldRoom) => {
     // `kit`: armed for trying the fight — both guns loaded (quick 1 and 2; what was there put away),
     // rounds, shells, flares, first aid, a battery; `ak` too: the AK in quick 3, its rounds in a pocket
     // (plan 79 phase 5); `sniper`: the sniper in quick 4, its .308 (phase 6 — with both, the battery
-    // doesn't fit)
+    // doesn't fit); `daybreak`: the Daybreak there instead, three cells (phase 7: Spawn's only)
     if (m?.kit) {
       const was = s.inv.quick.filter((it): it is Stack => !!it && isStack(it.id));
       s.inv.quick = [
         { id: "revolver", loaded: WEAPONS.revolver.mag },
         { id: "shotgun", loaded: WEAPONS.shotgun.mag },
         m.ak ? { id: "ak47", loaded: WEAPONS.ak47.mag } : null,
-        m.sniper ? { id: "sniper", loaded: WEAPONS.sniper.mag } : null,
+        m.sniper
+          ? { id: "sniper", loaded: WEAPONS.sniper.mag }
+          : m.daybreak
+            ? { id: "daybreak", loaded: WEAPONS.daybreak.mag }
+            : null,
       ];
       const kit = [
         ["r38", 24],
         ["shell", 12],
         ...(m.ak ? ([["r762", 60]] as const) : []),
         ...(m.sniper ? ([["r308", 15]] as const) : []),
+        ...(m.daybreak ? ([["cell", 3]] as const) : []),
         ["flare", 3],
         ["aid", 1],
         ["battery", 1],

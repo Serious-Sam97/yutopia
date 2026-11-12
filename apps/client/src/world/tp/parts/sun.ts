@@ -19,6 +19,7 @@ export type SunHost = Pick<
   | "lamps"
   | "level"
   | "light"
+  | "orbLights"
   | "pool"
   | "quality"
   | "sun"
@@ -159,6 +160,21 @@ export class Sun {
           color: f.t < 0.2 ? 0xfff4e6 : 0xffd08a,
         });
     }
+    // the Daybreak's balls in the air and their bursts: warm white, the burst the brightest thing there
+    // (plan 79 phase 7)
+    for (const o of this.c.orbLights) {
+      const d = Math.hypot(o.x - this.c.target.x, o.y - this.c.target.z);
+      if (d < GROUND_REACH && o.k > 0.02)
+        near.push({
+          x: o.x,
+          y: o.y,
+          h: o.z,
+          c: { ...ORB_LAMP, intensity: ORB_LAMP.intensity * o.k },
+          d: -3,
+          flare: true,
+          color: 0xfff1d8,
+        });
+    }
     // flares first, day or night: red, ~6 over 11 tiles (the mocks' 02-hud-night), flickering
     // (my floor's: dark/arms.ts hands over only those)
     for (const f of this.c.flares) {
@@ -228,6 +244,7 @@ const FLARE_LAMP = { h: 0.5, radius: 8, intensity: 6 };
 
 // one of the shadowed shot down: the shot's flash through it, then the light it burns away in
 const DEATH_LAMP = { h: 1.1, radius: 9, intensity: 8 };
+const ORB_LAMP = { h: 0, radius: 10, intensity: 3.2 };
 
 const GROUND_REACH = 44;
 

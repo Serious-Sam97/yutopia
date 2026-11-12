@@ -57,7 +57,7 @@ export class Guns {
     }
     let f = this.gunFxs.get(b.id);
     if (!f) {
-      f = { kick: 0, cock: 0, turn: 0, turnTo: 0, open: 0, loaded: 6, trigger: 0, reload: 0 };
+      f = { kick: 0, cock: 0, turn: 0, turnTo: 0, open: 0, loaded: 6, trigger: 0, reload: 0, charge: 0 };
       this.gunFxs.set(b.id, f);
     }
     const ease = (v: number, to: number, rate: number) => v + (to - v) * (1 - Math.exp(-dt * rate));
@@ -73,6 +73,8 @@ export class Guns {
     f.open = ease(f.open, loading ? 1 : 0, 12);
     f.reload = ease(f.reload, loading && !aiming ? 1 : 0, 8);
     f.trigger = since < 0.08 ? 1 : 0;
+    // (the Daybreak charging: Player.arm — plan 79 phase 7; just fired, still hot)
+    f.charge = b.arm === 5 ? Math.min(1, (f.charge ?? 0) + dt) : Math.max(0, 1 - since * 2);
     return f;
   }
 }

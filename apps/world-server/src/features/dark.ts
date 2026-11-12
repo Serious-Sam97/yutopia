@@ -4,6 +4,7 @@ import { beamAt, beamOf } from "@yutopia/shared/beam";
 import {
   atHead,
   blackoutAt,
+  burstAt,
   dangerAt,
   dayNests,
   dayOf,
@@ -18,6 +19,7 @@ import {
   nestCount,
   newShade,
   nightness,
+  ORB,
   type Prey,
   pastAt,
   type Ray,
@@ -96,6 +98,14 @@ export interface DarkHooks {
   ): ShotHit | null;
   /** A flare lit at (x, y) on ground z on `level`, for FLARE.secs. */
   light(x: number, y: number, z: number, level: number, now: number): void;
+  /** The Daybreak's ball here now (plan 79 phase 7): the shields within ORB.burn burn as ORB.focus
+   *  focused beams would, this tick. */
+  sear(x: number, y: number, level: number, now: number): void;
+  /** Its burst: every shield within ORB.edge gone at once; a moment on (exposed by then), each takes
+   *  burstAt(base, its distance) — what that did, told to `told`. */
+  blast(x: number, y: number, z: number, level: number, base: number, now: number, told: (hit: ShotHit) => void): void;
+  /** One of the shadowed within `r` of (x, y, z) now (not dissolving): a ball bursts on it. */
+  near?(x: number, y: number, z: number, r: number): boolean;
   /** the dark switched off (mod:dark peaceful): no threat at all */
   readonly peaceful: boolean;
 }
@@ -160,6 +170,9 @@ registerFeature((room: WorldRoom) => {
   const nestOf = new Map<string, { n: NestRun; slot: number }>();
   // shots just fired (where from, the clock): those asleep near enough hear them
   const shots: { x: number; y: number; t: number }[] = [];
+  // the Daybreak's balls passing (their burn, this tick) and their bursts' wounds a moment on (plan 79)
+  const sears: { x: number; y: number; at: number }[] = [];
+  const blasts: { x: number; y: number; z: number; base: number; at: number; told: (hit: ShotHit) => void }[] = [];
 
   const spawn = (x: number, y: number, t: number, lurk = false, called = false) => {
     const id = `sh${(++seq).toString(36)}`;
@@ -458,6 +471,32 @@ registerFeature((room: WorldRoom) => {
       }
       return { id: best.r.wire.id, kind, head, ...hit };
     },
+    sear(x, y, level, now) {
+      if (level !== 0) return;
+      sears.push({ x, y, at: now });
+      if (sears.length > 64) sears.shift();
+    },
+    near(x, y, z, r) {
+      for (const run of shades.values()) {
+        if (run.shade.state === "dissolve") continue;
+        if (Math.hypot(run.shade.x - x, run.shade.y - y) < r + 0.38 && z > run.z - 0.2 && z < run.z + 2) return true;
+      }
+      return false;
+    },
+    blast(x, y, z, level, base, now, told) {
+      if (level !== 0) return;
+      // the light all at once: every shield in reach gone (exposed by its next thought), the burst's
+      // damage on them a moment on
+      for (const r of shades.values()) {
+        if (r.shade.state === "dissolve") continue;
+        if (Math.hypot(r.shade.x - x, r.shade.y - y) < ORB.edge) {
+          r.shade.shield = 0;
+          r.shade.burntAt = clock;
+        }
+      }
+      blasts.push({ x, y, z, base, at: now + 300, told });
+      shots.push({ x, y, t: clock });
+    },
     light(x, y, z, level, now) {
       const f = new Flare();
       f.id = `fl${(++flareSeq).toString(36)}`;
@@ -598,6 +637,8 @@ registerFeature((room: WorldRoom) => {
           }
           if (k > 0) burn += 0.6 + 0.4 * Math.min(1, k * 3); // (in the cone at all: 27/s at least, 45 close in — shared fsm.ts SHADE.burn)
         }
+        // (a Daybreak's ball going by: as ORB.focus focused beams — plan 79 phase 7)
+        for (const o of sears) if (now - o.at < 200 && Math.hypot(o.x - s.x, o.y - s.y) <= ORB.burn) burn += ORB.focus;
         const light = lampAt(s.x, s.y, night, dark);
         const sense: ShadeSense = {
           t,
@@ -659,6 +700,28 @@ registerFeature((room: WorldRoom) => {
           w.x = s.x;
           w.y = s.y;
           w.a = yawToByte(r.yaw);
+        }
+      }
+
+      // the bursts' wounds, on the shields they took (plan 79 phase 7); the balls' burn done
+      while (sears.length && now - sears[0].at > 200) sears.shift();
+      for (let i = blasts.length - 1; i >= 0; i--) {
+        const b = blasts[i];
+        if (now < b.at) continue;
+        blasts.splice(i, 1);
+        for (const r of shades.values()) {
+          const s = r.shade;
+          if (s.state === "dissolve") continue;
+          const n = burstAt(b.base, Math.hypot(s.x - b.x, s.y - b.y));
+          if (n <= 0) continue;
+          const kind = wound(s, n, clock);
+          if (kind === "killed") {
+            r.wire.k = true;
+            r.wire.s = shadeCode(s.state);
+            r.wire.at = now;
+            tension = Math.min(1, tension + 0.15);
+          }
+          b.told({ id: r.wire.id, kind, head: false, x: s.x, y: s.y, z: r.z + 1 });
         }
       }
 

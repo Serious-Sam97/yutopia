@@ -69,7 +69,11 @@ const LIFE_GUN_SCALE = 1;
 const ARM_BOLT = 4; // (shared ARM.bolt: the sniper's bolt worked — Player.arm)
 /** The model a gun's id draws (the pool cue's carried as the double-barrel is). */
 const gunKind = (key: string): GunKind =>
-  key === "shotgun" || key === "cue" ? "shotgun" : key === "ak47" || key === "sniper" ? key : "revolver";
+  key === "shotgun" || key === "cue"
+    ? "shotgun"
+    : key === "ak47" || key === "sniper" || key === "daybreak"
+      ? key
+      : "revolver";
 /** The sniper's bolt worked (plan 79 phase 6): its time (shared ARMS.sniper.bolt, the server's
  *  ARM.bolt), the knob in the bolt's own frame; its reload's rounds thumbed in at the port, one each
  *  `each` s after the bolt's back (`open`). */
@@ -90,6 +94,31 @@ const AK_LOAD = {
   let: 2.4,
   back: 2.8,
   tilt: 0.35,
+  slide: 0,
+  grab: [0.13, -0.075, -0.03],
+  lift: 0.09,
+  part: "magazine",
+  pouch: [0.24, 0.98, 0.34],
+};
+/** The Daybreak's (plan 79 phase 7): the cell out underneath by 0.7, the new one in by 1.6 (shared
+ *  ARMS.daybreak: 0.7, 0.9, 0.4) — it slides, it doesn't rock; never racked. */
+const CELL_LOAD: typeof AK_LOAD = {
+  reach: 0.2,
+  out: 0.4,
+  down: 0.7,
+  at: 0.8,
+  up: 1.25,
+  in: 1.5,
+  done: 1.6,
+  over: 9,
+  pull: 9,
+  let: 9,
+  back: 9,
+  tilt: 0,
+  slide: 0.07,
+  grab: [0.17, -0.02, -0.04],
+  lift: 0.03,
+  part: "cell",
   pouch: [0.24, 0.98, 0.34],
 };
 // (plan 79 phase 4) a gun's draw — the hands up from the side (shared ARMS' draw) — and its put-away (s)
@@ -1182,11 +1211,17 @@ export class Person3D {
       // (back: the root's +y; up: the barrel's −y turned toward its top, +z)
       gun.root.position.add(
         tv2
-          .set(0, fx.kick * (kind === "shotgun" || kind === "sniper" ? 0.06 : kind === "ak47" ? 0.03 : 0.035), 0)
+          .set(
+            0,
+            fx.kick *
+              (kind === "shotgun" || kind === "sniper" || kind === "daybreak" ? 0.06 : kind === "ak47" ? 0.03 : 0.035),
+            0,
+          )
           .applyQuaternion(gun.root.quaternion),
       );
       gun.root.rotateX(
-        -fx.kick * (kind === "shotgun" ? 0.22 : kind === "ak47" ? 0.09 : kind === "sniper" ? 0.16 : 0.3),
+        -fx.kick *
+          (kind === "shotgun" ? 0.22 : kind === "ak47" ? 0.09 : kind === "sniper" || kind === "daybreak" ? 0.16 : 0.3),
       );
     }
     // reloading: the muzzle up and the gun rolled in, its side (the gate, the breech) to me
@@ -1221,8 +1256,10 @@ export class Person3D {
     const aiming = !!p.gun && ((p.mv ?? 0) & 16) !== 0;
     // (the pool cue: held as the double-barrel is, in both hands; the AK too — plan 79 phase 5)
     const shotgun = isLongGun(p.gun ?? "") || p.gun === "cue";
-    const ak = p.gun === "ak47";
+    const ak = p.gun === "ak47" || p.gun === "daybreak";
     const sniper = p.gun === "sniper";
+    // (the AK's magazine and the Daybreak's cell: the same hands, their own times — plan 79 phases 5, 7)
+    this.loadSpec = p.gun === "daybreak" ? CELL_LOAD : AK_LOAD;
     // (the AK's and the sniper's reloads keep the server's time from their start — opened while still
     // aiming, the hands join it where it's got to once the gun comes down)
     const akOpen = (ak || sniper) && (this.gunFx?.open ?? 0) > 0.3;
@@ -1247,7 +1284,7 @@ export class Person3D {
     // (the AK's reload begun with it empty: the charging handle racked at the end — mine only: the others'
     // rounds aren't known)
     const timing = ak || sniper ? akOpen : loading;
-    if (timing && this.loadT === 0) this.akDry = ak && (this.gunFx?.loaded ?? 1) <= 0;
+    if (timing && this.loadT === 0) this.akDry = p.gun === "ak47" && (this.gunFx?.loaded ?? 1) <= 0;
     this.loadT = timing ? this.loadT + dt : 0;
     this.magInHand = false;
     this.magTilt = 0;
@@ -1421,8 +1458,9 @@ export class Person3D {
   // In time with the server's steps (shared ARMS.ak47: out 0.8, in 1.0, shut 0.4 or racked 1.0). The
   // magazine follows the hand while it's off the gun (magFrame).
   private akDry = false;
+  private loadSpec = AK_LOAD;
   private magInHand = false;
-  private magTilt = 0; // rad: rocked on its lug (the bottom forward)
+  private magTilt = 0; // 0..1: rocked on its lug (the bottom forward) — the cell, slid out
   private akBolt = 0; // the carrier racked back, 0..1
   private magHand(gs: number, body: number, q: Quaternion) {
     const g = this.gun?.model;
@@ -1438,18 +1476,19 @@ export class Person3D {
     // the charging handle, the hand over the top to it)
     const fore = g.fore ?? [0.34, 0.03, 0];
     hb.set(fore[0], fore[1] - 0.045, fore[2]).applyMatrix4(W);
-    hf.set(0.13, -0.075, -0.03).applyMatrix4(W);
+    const L = this.loadSpec;
+    hf.set(L.grab[0], L.grab[1], L.grab[2]).applyMatrix4(W);
     // the magazine pouch: at the belt, front left — out in front of the coat, the magazine seen going in
     // and out (in her own frame: x her left, y up, z ahead)
     this.root.updateWorldMatrix(true, false);
-    this.root.localToWorld(hq.set(AK_LOAD.pouch[0], AK_LOAD.pouch[1], AK_LOAD.pouch[2]));
+    this.root.localToWorld(hq.set(L.pouch[0], L.pouch[1], L.pouch[2]));
     void q;
     void body;
-    const T = AK_LOAD;
+    const T = L;
     if (t < T.reach) ht.copy(hb).lerp(hf, ease(t / T.reach));
     else if (t < T.out) {
       ht.copy(hf);
-      this.magTilt = AK_LOAD.tilt * ease((t - T.reach) / (T.out - T.reach));
+      this.magTilt = ease((t - T.reach) / (T.out - T.reach));
     } else if (t < T.down) {
       this.magInHand = true;
       ht.copy(hf).lerp(hq, ease((t - T.out) / (T.down - T.out)));
@@ -1461,7 +1500,7 @@ export class Person3D {
       ht.copy(hq).lerp(hf, ease((t - T.at) / (T.up - T.at)));
     } else if (t < T.in) {
       ht.copy(hf);
-      this.magTilt = AK_LOAD.tilt * (1 - ease((t - T.up) / (T.in - T.up)));
+      this.magTilt = 1 - ease((t - T.up) / (T.in - T.up));
     } else if (!this.akDry) ht.copy(hf).lerp(hb, ease((t - T.done) / 0.35));
     else {
       // (run dry: over the top to the charging handle, racked back and let go, back to the fore-end)
@@ -1532,13 +1571,15 @@ export class Person3D {
 
   /** The AK's magazine: on its lug (rocked `magTilt`), or in the left hand while it's off the gun. */
   private magFrame() {
-    const mag = this.gun?.model.parts.magazine;
+    const L = this.loadSpec;
+    const mag = this.gun?.model.parts[L.part];
     if (!mag) return;
     mag.userData.p0 ??= mag.position.clone();
     const hand = this.magInHand ? this.model.bone("wristL") : null;
     if (!hand || !mag.parent) {
       mag.position.copy(mag.userData.p0);
-      mag.rotation.set(0, 0, this.magTilt);
+      mag.position.y -= L.slide * this.magTilt;
+      mag.rotation.set(0, 0, L.tilt * this.magTilt);
       return;
     }
     // (held at its middle: its lug ~9 cm over the hand, upright as the gun is, still rocked)
@@ -1548,7 +1589,7 @@ export class Person3D {
     root.getWorldQuaternion(gq);
     hand.getWorldPosition(hx);
     const gsc = root.getWorldScale(hs).x;
-    hx.addScaledVector(hz.set(0, 1, 0).applyQuaternion(gq), 0.09 * gsc).addScaledVector(
+    hx.addScaledVector(hz.set(0, 1, 0).applyQuaternion(gq), L.lift * gsc).addScaledVector(
       hz.set(0, 0, 1).applyQuaternion(gq),
       0.03 * gsc,
     );
@@ -1559,7 +1600,7 @@ export class Person3D {
       .copy(tq2)
       .invert()
       .multiply(gq)
-      .multiply(tq3.setFromAxisAngle(hz.set(0, 0, 1), AK_LOAD.tilt));
+      .multiply(tq3.setFromAxisAngle(hz.set(0, 0, 1), L.tilt));
   }
 
   /** Aiming: the barrel (the root's −y) along `dir` (world, unit), its top (+z) up — level, not

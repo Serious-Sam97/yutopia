@@ -2368,6 +2368,8 @@ void main() {
   downed = new Map<string, "down" | "kneel">();
   /** Flares burning (world/dark gives them: the floor's coords, feet z, s lit): a red ground lamp each. */
   flares: { x: number; y: number; z: number; t: number }[] = [];
+  /** What the Daybreak's balls and bursts light (plan 79 phase 7: the arms' lights(), a frame behind). */
+  orbLights: { x: number; y: number; z: number; k: number }[] = [];
   deaths: { x: number; y: number; z: number; t: number }[] = [];
   private arms3: Arms3 | null = null;
   /** Shots, sparks, flares in the air and on the snow (tp/arms3d.ts), made when first wanted. */
@@ -2878,6 +2880,7 @@ void main() {
       );
     }
     if (this.arms3 || this.flares.length) this.arms().update(dt, this.flares);
+    this.orbLights = this.arms3 ? this.arms3.lights() : [];
     // first person: my hands, posed by my body's motion, framed in front of my eyes
     const C3 = this.chars();
     if (first && this.handsOn && me && !me.npc && C3 && this.charF && this.charMats && this.gcMix < 0.002) {

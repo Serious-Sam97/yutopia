@@ -54,7 +54,7 @@ export const ARMS = {
   // the AK-47 (docs/plan/79-the-guns.md phase 5): full auto — the trigger held, a round every `rate`
   // (each its own shot on the server); a magazine (all or nothing): the old one out (`open` s — the
   // rounds left in it back to the pockets), a new one in (`speed` s: every round it needs at once),
-  // and the charging handle racked if it ran dry (`charge` s), else just shouldered again (`shut` s).
+  // and the charging handle racked if it ran dry (`rack` s), else just shouldered again (`shut` s).
   // Tight the first round, climbing fast held down; it calms quickly between bursts.
   ak47: {
     auto: true,
@@ -63,7 +63,7 @@ export const ARMS = {
     open: 0.8,
     speed: 1.0,
     shut: 0.4,
-    charge: 1.0,
+    rack: 1.0,
     snap: 0.2,
     draw: 0.45,
     aim: 0.24,
@@ -102,13 +102,74 @@ export const ARMS = {
     near: 120,
     far: 1,
   },
+  // the Daybreak (plan 79 phase 7, F7 — ours, light as the weapon): three cells; pressed, it charges
+  // (`charge` s — the server's arms:charge, everyone sees it glow), then a slow ball of light flies
+  // (ORB) and bursts (its damage there, falling to nothing at ORB.edge); `rate` s between. Its reload:
+  // the spent cells out (the live ones back to the pockets), new ones in, all at once, shut.
+  daybreak: {
+    charge: 1.0,
+    rate: 2.5,
+    reload: 0.6,
+    open: 0.7,
+    speed: 0.9,
+    shut: 0.4,
+    snap: 0.3,
+    draw: 0.6,
+    aim: 0.3,
+    damage: 300,
+    range: 40,
+    pellets: 1,
+    spread: 0.004,
+    bloom: 0,
+    bloomMax: 0,
+    calm: 1,
+    near: 40,
+    far: 1,
+  },
 } as const;
+/** The Daybreak's ball (plan 79 phase 7): tiles / s, how far it flies, how near a body it bursts on;
+ *  the burst full to `full` tiles and nothing at `edge`; the shields it burns as it passes (within
+ *  `burn` tiles, as `focus` focused beams would). */
+export const ORB = { speed: 14, range: 40, hit: 0.55, full: 3, edge: 6, burn: 5, focus: 3, secs: 0.6 } as const;
+/** A burst's damage `d` tiles from it (`base`: the gun's, or one of us's half). */
+export const burstAt = (base: number, d: number) =>
+  d >= ORB.edge ? 0 : Math.round(base * (d <= ORB.full ? 1 : 1 - (d - ORB.full) / (ORB.edge - ORB.full)));
+/** Where the ball from (x, y, z) along yaw / pitch stops at the latest (a wall, a trunk, the ground —
+ *  `blocked`, `ground`), and how long it takes; the bodies on its way are the server's, as it flies. */
+export function orbFlight(
+  x: number,
+  y: number,
+  z: number,
+  yaw: number,
+  pitch: number,
+  ground: (x: number, y: number) => number,
+  blocked: (x: number, y: number) => boolean,
+): { x: number; y: number; z: number; secs: number } {
+  const d = rayDir(yaw, pitch);
+  const step = 0.1;
+  let px = x;
+  let py = y;
+  let pz = z;
+  for (let t = step; t <= ORB.range; t += step) {
+    const nx = x + d.x * t;
+    const ny = y + d.y * t;
+    const nz = z + d.z * t;
+    if (blocked(nx, ny) || nz <= ground(nx, ny))
+      return { x: px, y: py, z: Math.max(pz, ground(px, py)), secs: (t - step) / ORB.speed };
+    px = nx;
+    py = ny;
+    pz = nz;
+  }
+  return { x: px, y: py, z: pz, secs: ORB.range / ORB.speed };
+}
 export type GunId = keyof typeof ARMS;
 /** Fires while the trigger's held (the AK). */
 export const isAuto = (gun: GunId) => "auto" in ARMS[gun] && ARMS[gun].auto === true;
 /** Loaded all at once by its reload (the revolver's speedloader, the AK's magazine) — else a round at
  *  a time (the double-barrel's shells). */
-export const isWhole = (gun: GunId) => gun === "revolver" || gun === "ak47";
+export const isWhole = (gun: GunId) => gun === "revolver" || gun === "ak47" || gun === "daybreak";
+/** Charged before it fires (the Daybreak). */
+export const isCharged = (gun: GunId) => "charge" in ARMS[gun];
 /** Opened, what's in it comes out (the revolver's cylinder, the double-barrel, the AK's magazine) — not
  *  the bolt-action's: its rounds stay in the magazine under the bolt. */
 export const dumpsOnOpen = (gun: GunId) => gun !== "sniper";
@@ -167,9 +228,9 @@ export const damageAt = (gun: GunId, base: number, t: number, head: boolean) =>
   Math.max(1, Math.round(base * falloff(gun, t) * (head ? HEAD.mult : 1)));
 
 /** What a hand's doing with its gun (Player.arm): nothing, drawing it, reloading the revolver
- *  (the gate open), working the bolt after a shot (the sniper's), opened to load — the revolver's cylinder out, the double-barrel broken open, the
+ *  (the gate open), working the bolt after a shot (the sniper's), charging (the Daybreak's), opened to load — the revolver's cylinder out, the double-barrel broken open, the
  *  AK's magazine out (plan 79: its whole reload, the charging handle too, is `open`). */
-export const ARM = { idle: 0, draw: 1, reload: 2, open: 3, bolt: 4 } as const;
+export const ARM = { idle: 0, draw: 1, reload: 2, open: 3, bolt: 4, charge: 5 } as const;
 
 /** One of us hit by another's shot (the HQ armed, plan 30): half what the shadowed take. */
 export const PVP = 0.5;

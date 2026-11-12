@@ -537,7 +537,7 @@ test("the AK (plan 79 phase 5): full auto at its rate through the line's jitter,
   const t1 = Date.now();
   await waitFor(() => me(b.room).arm === ARM.idle, 2000);
   const shut = Date.now() - t1;
-  assert.ok(shut < ARMS.ak47.charge * 1000 - 200, `not run dry: no charging handle (${shut} ms)`);
+  assert.ok(shut < ARMS.ak47.rack * 1000 - 200, `not run dry: no charging handle (${shut} ms)`);
   // run dry: the same, and the charging handle racked after
   for (let i = 0; i < 30; i++) {
     away();
@@ -548,7 +548,7 @@ test("the AK (plan 79 phase 5): full auto at its rate through the line's jitter,
   await waitFor(() => loaded2() === 30, 4000);
   const t2 = Date.now();
   await waitFor(() => me(b.room).arm === ARM.idle, 2500);
-  assert.ok(Date.now() - t2 > ARMS.ak47.charge * 1000 - 250, "run dry: the charging handle racked");
+  assert.ok(Date.now() - t2 > ARMS.ak47.rack * 1000 - 250, "run dry: the charging handle racked");
 });
 
 test("the sniper (plan 79 phase 6): down its scope, the shot goes near dead on (wide, not); the bolt worked after each, no shot till it's home; its reload keeps the rounds in it, a round at a time", async () => {
@@ -588,4 +588,39 @@ test("the sniper (plan 79 phase 6): down its scope, the shot goes near dead on (
   assert.ok((loaded3() ?? 0) >= 3, "nothing dumped");
   await waitFor(() => loaded3() === 5, 2500);
   await waitFor(() => me(b.room).arm === ARM.idle, 1500);
+});
+
+test("the Daybreak (plan 79 phase 7): not charged, nothing; charged a second, a ball flies, burns one of them bare as it comes and bursts on it — put down in one", async () => {
+  const { a, b } = await setup(79);
+  b.room.send("mod:refill", { kit: true, daybreak: true });
+  await waitFor(() => b.inv?.quick[3]?.id === "daybreak");
+  b.room.send("arms:draw", { slot: 3 });
+  await waitFor(() => me(b.room).gun === "daybreak");
+  await sleep(ARMS.daybreak.draw * 1000 + 50);
+  const cells = () => (b.inv?.quick[3] as { loaded?: number } | null | undefined)?.loaded;
+  const orbs: { id: string }[] = [];
+  const bursts: { id: string }[] = [];
+  b.room.onMessage("arms:orb", (m: { id: string }) => orbs.push(m));
+  b.room.onMessage("arms:burst", (m: { id: string }) => bursts.push(m));
+  a.room.send("mod:dark", { spawn: 1 });
+  await waitFor(() => shadows(b).length === 1, 4000);
+  // not charged: nothing goes
+  aim(b, shadows(b)[0].x, shadows(b)[0].y);
+  await sleep(100);
+  fire(b, shadows(b)[0].x, shadows(b)[0].y);
+  await sleep(300);
+  assert.equal(cells(), 3, "no charge, no shot");
+  // charged: Player.arm says so; a second on, the ball
+  aim(b, shadows(b)[0].x, shadows(b)[0].y);
+  b.room.send("arms:charge", {});
+  await waitFor(() => me(b.room).arm === ARM.charge, 1000);
+  await sleep(ARMS.daybreak.charge * 1000 + 30);
+  await waitFor(() => offLine(a, b, shadows(b)[0].x, shadows(b)[0].y));
+  aim(b, shadows(b)[0].x, shadows(b)[0].y);
+  fire(b, shadows(b)[0].x, shadows(b)[0].y);
+  await waitFor(() => orbs.length === 1, 1000);
+  await waitFor(() => cells() === 2);
+  await waitFor(() => bursts.length === 1, 4000);
+  // (its shield burnt off on the way, the burst's light on it: 300, over its 250)
+  await waitFor(() => b.hits.some((h) => h.kind === "killed"), 2000);
 });

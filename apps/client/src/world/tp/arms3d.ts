@@ -293,6 +293,8 @@ export class Arms3 {
       ...this.sticks,
       ...this.stickHeads,
       this.flying,
+      ...this.orbList.flatMap((o) => [o.core, o.halo]),
+      ...this.bursts.map((b) => b.s),
       ...this.puffs.map((p) => p.s),
       ...this.brass.map((b) => b.m),
     ])
@@ -508,6 +510,67 @@ export class Arms3 {
       this.spark(x, y, z, Math.random() * Math.PI * 2, 1.5 + Math.random() * 3, kind === "spark");
   }
 
+  // The Daybreak's balls (plan 79 phase 7): from where they left toward where they stop at the latest
+  // (the server's word), a hot core in a wide glow; their bursts — a flash of light, a ring on the
+  // ground, sparks thrown every way. Both light the place (lights(): the sun part's lamps).
+  private orbList: {
+    id: string;
+    a: [number, number, number];
+    b: [number, number, number];
+    secs: number;
+    born: number;
+    core: Sprite;
+    halo: Sprite;
+  }[] = [];
+  private bursts: { x: number; y: number; z: number; born: number; s: Sprite }[] = [];
+  private glowSprite(color: number): Sprite {
+    // (light itself: not dimmed by the fog — at night the fog's dark blue drowned the ball)
+    const s = new Sprite(
+      new SpriteMaterial({
+        map: this.tex,
+        color,
+        blending: AdditiveBlending,
+        depthWrite: false,
+        transparent: true,
+        fog: false,
+      }),
+    );
+    this.scene.add(s);
+    return s;
+  }
+  /** A ball off from (x0, y0, z0) (the floor's coords, z up) toward (x, y, z), `secs` to get there. */
+  orb(id: string, x0: number, y0: number, z0: number, x: number, y: number, z: number, secs: number): void {
+    const core = this.glowSprite(0xfff8ee);
+    const halo = this.glowSprite(0xffd9a0);
+    this.orbList.push({ id, a: [x0, z0, y0], b: [x, z, y], secs: Math.max(0.05, secs), born: this.time, core, halo });
+  }
+  /** How many bursts have been shown (the tests'). */
+  burstsShown = 0;
+  /** Where a ball burst (or the one called `id`, gone). */
+  burst(id: string, x: number, y: number, z: number): void {
+    this.burstsShown++;
+    const i = this.orbList.findIndex((o) => o.id === id);
+    if (i >= 0) {
+      const [o] = this.orbList.splice(i, 1);
+      o.core.removeFromParent();
+      o.halo.removeFromParent();
+    }
+    const s = this.glowSprite(0xfff2dc);
+    s.position.set(x, z, y);
+    this.bursts.push({ x, y, z, born: this.time, s });
+    for (let k = 0; k < 40; k++) this.spark(x, y, z, Math.random() * Math.PI * 2, 2 + Math.random() * 6, true);
+    this.glowAt = this.time;
+    this.glowBig = 5;
+    this.glowDisc.position.set(x, z + 0.03, y);
+  }
+  /** What the balls and the bursts light (the floor's coords, z up; `k` 0..1): for the lamps. */
+  lights(): { x: number; y: number; z: number; k: number }[] {
+    const out: { x: number; y: number; z: number; k: number }[] = [];
+    for (const o of this.orbList) out.push({ x: o.core.position.x, y: o.core.position.z, z: o.core.position.y, k: 1 });
+    for (const b of this.bursts) out.push({ x: b.x, y: b.y, z: b.z, k: Math.exp(-(this.time - b.born) * 3.5) * 1.6 });
+    return out;
+  }
+
   /** A flare in the air: from the hand to where it lands, `secs` long. */
   throwFlare(x0: number, y0: number, z0: number, x: number, y: number, z: number, secs: number): void {
     this.flights.push({ x0, y0, z0, x, y, z, secs: Math.max(0.05, secs), born: this.time });
@@ -565,6 +628,37 @@ export class Arms3 {
     });
     this.lines.geometry.attributes.position.needsUpdate = true;
     this.lines.geometry.attributes.color.needsUpdate = true;
+    // the Daybreak's balls on their way (pulsing); gone past their end, in case the burst's word was lost
+    this.orbList = this.orbList.filter((o) => {
+      const age = now - o.born;
+      if (age > o.secs + 1) {
+        o.core.removeFromParent();
+        o.halo.removeFromParent();
+        return false;
+      }
+      const k = Math.min(1, age / o.secs);
+      const p: [number, number, number] = [0, 1, 2].map((j) => o.a[j] + (o.b[j] - o.a[j]) * k) as [
+        number,
+        number,
+        number,
+      ];
+      o.core.position.set(...p);
+      o.halo.position.set(...p);
+      const pulse = 1 + 0.12 * Math.sin(now * 31);
+      o.core.scale.setScalar(0.32 * pulse);
+      o.halo.scale.setScalar(1.7 * pulse);
+      return true;
+    });
+    this.bursts = this.bursts.filter((b) => {
+      const age = now - b.born;
+      if (age > 1.2) {
+        b.s.removeFromParent();
+        return false;
+      }
+      b.s.scale.setScalar(2 + age * 9);
+      (b.s.material as SpriteMaterial).opacity = Math.max(0, 1 - age / 0.6);
+      return true;
+    });
     // flashes: the glow and the star, a frame or three
     this.flashes.forEach((f, i) => {
       const age = now - this.flashAt[i];
@@ -579,11 +673,13 @@ export class Arms3 {
     });
     // the ground's glow
     const ga = now - this.glowAt;
-    this.glowDisc.visible = ga < 0.09;
+    // (a burst's ring of light lasts longer: plan 79 phase 7)
+    const glowFor = this.glowBig >= 5 ? 0.6 : 0.09;
+    this.glowDisc.visible = ga < glowFor;
     if (this.glowDisc.visible) {
       const r = 1.1 * this.glowBig;
       this.glowDisc.scale.set(r, 1, r);
-      (this.glowDisc.material as MeshBasicMaterial).opacity = 0.35 * (1 - ga / 0.09);
+      (this.glowDisc.material as MeshBasicMaterial).opacity = 0.35 * (1 - ga / glowFor);
     }
     // smoke drifting and spreading, thinning out
     for (const p of this.puffs) {

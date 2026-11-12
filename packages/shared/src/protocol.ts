@@ -530,7 +530,7 @@ export interface ClientMessages {
   "dark:use": { slot: number };
   "dark:drop": { slot: number };
   // an admin's own vitals full again (health, stamina, warmth, the battery): for trying things out
-  "mod:refill": { kit?: boolean; ak?: boolean; sniper?: boolean; hp?: number; wm?: number };
+  "mod:refill": { kit?: boolean; ak?: boolean; sniper?: boolean; daybreak?: boolean; hp?: number; wm?: number };
   // the shadowed (features/dark.ts), admins: off ("peaceful") or on ("normal"); `spawn`: that
   // many out of the dark near me, to try the fight
   "mod:dark": { mode?: "peaceful" | "normal" | "called"; spawn?: number };
@@ -551,6 +551,8 @@ export interface ClientMessages {
     scope?: boolean;
   };
   "arms:flare": { yaw: number; pitch: number };
+  // the Daybreak pressed: charging (plan 79 phase 7) — or let go before it fired
+  "arms:charge": { stop?: boolean };
   // the line's round trip, measured (its lag goes with a shot)
   "arms:ping": { t: number };
   // how the game runs for this player (docs/plan/39-the-telemetry.md): a 30 s window, every
@@ -697,6 +699,21 @@ export interface ServerMessages {
     spread: number;
   };
   "arms:throw": { sid: string; x0: number; y0: number; z0: number; x: number; y: number; z: number; secs: number };
+  // the Daybreak's ball (plan 79 phase 7): off from (x0, y0, z0) toward (x, y, z) — where it stops at the
+  // latest, `secs` on — on `level`; then where it burst (sooner, on a body)
+  "arms:orb": {
+    id: string;
+    sid: string;
+    x0: number;
+    y0: number;
+    z0: number;
+    x: number;
+    y: number;
+    z: number;
+    secs: number;
+    level: number;
+  };
+  "arms:burst": { id: string; x: number; y: number; z: number; level: number };
   "arms:pong": { t: number };
   "perf:pong": { t: number };
 }
