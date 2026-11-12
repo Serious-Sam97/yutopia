@@ -103,6 +103,7 @@ GROUPS = {
     },
     # (plan 80) the holster: nothing moves
     "holster": {},
+    "pouch": {},
     # (plan 80) the speedloader: its six rounds let go together when its knob's turned
     "speedloader": {
         "knob": {"parts": ["knob"], "at": (-0.0305, 0, 0)},

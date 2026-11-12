@@ -41,7 +41,10 @@ import {
 import { levelHands } from "./level3d";
 import type { PersonIn } from "./person-in";
 import {
+  at,
   type BodyFrame,
+  bodyDir,
+  CYL_PALM,
   cantOf,
   DRAW_LIFT,
   DRAW_MEET,
@@ -51,8 +54,18 @@ import {
   holsterHold,
   INDEX,
   KICK,
+  LOADER_IN_HAND,
+  LOADER_START,
+  legAt,
   MOCK_ARM,
   newHold,
+  RELOAD_CLOSE,
+  RELOAD_GUN,
+  RELOAD_KEYS,
+  RELOAD_LEFT,
+  RELOAD_LEN,
+  RELOAD_RIGHT,
+  reloadAt,
   revolverHold,
   SUPPORT,
   SUPPORT_THUMB,
@@ -85,7 +98,10 @@ const PICK_R = 0.26; // tiles: how wide a person is to a click
 const LIFE_GUN_SCALE = 1;
 /** (shared ARMS.revolver.aim: the revolver up from the ready, s) */
 const AIM_S = 0.18;
-const ARM_BOLT = 4; // (shared ARM.bolt: the sniper's bolt worked — Player.arm)
+const ARM_BOLT = 4;
+/** (shared ARM.reload, ARM.open: the gun being reloaded, opened — Player.arm) */
+const ARM_RELOAD = 2;
+const ARM_OPEN = 3; // (shared ARM.bolt: the sniper's bolt worked — Player.arm)
 /** The model a gun's id draws (the pool cue's carried as the double-barrel is). */
 const gunKind = (key: string): GunKind =>
   key === "shotgun" || key === "cue"
@@ -256,6 +272,38 @@ const rq3 = new Quaternion();
 const rv4 = new Vector3();
 const rv5 = new Vector3();
 const rL = new Matrix4();
+// (plan 80 phase 4: the reload's)
+const rL0 = new Matrix4();
+const rL1 = new Matrix4();
+const rLh = new Matrix4();
+const rMg = new Matrix4();
+const rgA = new Vector3();
+const rgB = new Vector3();
+const rqA = new Quaternion();
+const rqB = new Quaternion();
+const rqRoot = new Quaternion();
+const rhA = new Vector3();
+const rhB = new Vector3();
+const rhqA = new Quaternion();
+const rhqB = new Quaternion();
+const rh = new Vector3();
+const rx = new Vector3();
+const ry = new Vector3();
+const rn = new Vector3();
+const ra = new Vector3();
+const rc = new Vector3();
+const rp = new Vector3();
+const ZERO3 = new Vector3();
+const IDQ = new Quaternion();
+const X3 = new Vector3(1, 0, 0);
+/** the speedloader's body in the fingertips; the cylinder in the left hand (round, along their axes) */
+const LOADER_SHAPE = { round: true as const, r: 0.0215, y0: 0, hy: 0.009 };
+const CYL_SHAPE = { round: true as const, r: 0.023, y0: 0, hy: 0.021 };
+// (the pouch on the hips: at the belt on her right hip's front, its back to her)
+const POUCH_AT = new Vector3(-0.15, 0.0, 0.1);
+const POUCH_TURN = new Quaternion().setFromRotationMatrix(
+  new Matrix4().makeBasis(new Vector3(0.51, 0, 0.86), new Vector3(0, 1, 0), new Vector3(-0.86, 0, 0.51)),
+);
 // (plan 80) the holster on the hips (their own space: x her left, y up, z ahead): on her right hip at the
 // belt, the gun in it muzzle down (a touch forward), its left side against her
 const HOLSTER_AT = new Vector3(-0.2, 0.03, -0.02);
@@ -1115,7 +1163,7 @@ export class Person3D {
     // (held in both hands — the hands placed by gunHands: the gun along the way it set)
     // (in a life hand, plan 79: the wrist turned so the barrel goes along it — within a wrist's reach)
     if (this.gun?.inHand) {
-      this.gun.root.quaternion.identity();
+      if (!this.revFree) this.gun.root.quaternion.identity();
       const dir = this.gunDirOn && this.gunHandsW > 0.3 ? this.gunDir : (p.mv ?? 0) & 16 ? this.lookDir(p, tv2) : null;
       // (plan 80: the revolver's hold turned the wrist already — the gun upright, the left hand on it)
       if (dir && !this.revHeld)
@@ -1261,7 +1309,9 @@ export class Person3D {
     const kind = gunKind(gun.key);
     const fx = this.gunFx;
     if (fx) fx.bolt = kind === "sniper" ? this.boltCycle : this.akBolt;
-    if (gun.key !== "cue") poseGun(gun.model, kind, fx ?? { cock: 1 });
+    // (plan 80: the revolver reloading — its parts as the reload's timeline has them)
+    if (this.revPose) poseGun(gun.model, kind, { ...(fx ?? {}), cock: 0, ...this.revPose });
+    else if (gun.key !== "cue") poseGun(gun.model, kind, fx ?? { cock: 1 });
     // (in a life hand: the hand carries it — its kick is the arms', its turn the wrist's)
     if (gun.inHand) return;
     gun.root.position.set(0, -0.05, 0);
@@ -1356,12 +1406,28 @@ export class Person3D {
     // (plan 80: the life revolver's own — drawn out of the holster at her right hip into the hold and put back
     // the same way: the hold's own weight, not the hands' rise from the side)
     if (gun?.inHand && gunKind(gun.key) === "revolver" && this.model.handFrame("L")) {
-      const hold = (aiming || ready || away) && !p.down && p.fell === undefined;
+      // (plan 80 phase 4: the reload — the server's step open, Player.arm: everyone's — run as one timeline;
+      // ended early (a shot snapped it shut, the step done sooner): on from the closing)
+      const opening = p.arm === ARM_RELOAD || p.arm === ARM_OPEN;
+      if (opening && this.revLoadT < 0 && !away) this.revLoadT = 0;
+      if (this.revLoadT >= 0) {
+        this.revLoadT += dt;
+        if (!opening && this.revLoadT < RELOAD_CLOSE) this.revLoadT = RELOAD_CLOSE;
+        if (opening) this.revLoadT = Math.min(this.revLoadT, RELOAD_LEN - 0.02);
+        else if (this.revLoadT >= RELOAD_LEN) this.revLoadT = -1;
+      }
+      this.revPose = null;
+      this.revFree = false;
+      // (the gun back at rest under the wrist — a reload's left it off it)
+      if (this.revLoadT < 0) gun.root.position.set(0, 0, 0);
+      const hold = (aiming || ready || away || this.revLoadT >= 0) && !p.down && p.fell === undefined;
       this.revW += ((hold ? 1 : 0) - this.revW) * (1 - Math.exp(-dt * 14));
       // (running: tucked in, from a jog on)
       const run = Math.max(0, Math.min(1, (this.spd - 2.8) / 2));
       const draw = away ? Math.max(0, 1 - this.holsterT / HOLSTER_S) : drawn;
-      if (this.revW > 0.01) this.revolverHands(p, this.revW, aiming && !away, run, draw, dt);
+      if (this.revW > 0.01 && this.revLoadT >= 0) this.revolverReload(p, this.revW, this.revLoadT);
+      else if (this.revW > 0.01) this.revolverHands(p, this.revW, aiming && !away, run, draw, dt);
+      this.loaderFrame(dt);
       return;
     }
     if (w < 0.01 || !gun) return;
@@ -1515,17 +1581,7 @@ export class Person3D {
         b.quaternion.premultiply(rq2.premultiply(rTurn.copy(rq1).invert()).multiply(rq1));
       }
     }
-    m.root.updateMatrixWorld(true);
-    const B = this.revBody;
-    sL.getWorldPosition(B.mid);
-    B.mid.add(sR.getWorldPosition(rv1)).multiplyScalar(0.5);
-    B.k = ((el.position.length() + wr.position.length()) * sR.getWorldScale(rv1).x) / MOCK_ARM;
-    B.up.set(0, 1, 0);
-    if (aiming) {
-      this.lookDir(p, B.ahead).y = 0;
-      B.ahead.normalize();
-    } else B.ahead.set(0, 0, 1).applyQuaternion(this.root.getWorldQuaternion(rq1));
-    B.left.crossVectors(B.up, B.ahead).normalize();
+    const B = this.revFrame(p, aiming);
     const H = revolverHold(B, { aiming, pitch: p.pitch ?? 0, torch: !!p.torch && !p.phone, run }, this.revHold);
     // the right wrist: the gun's place less the gun's own place under the wrist (its root's and its model's)
     const g = gun.root;
@@ -1667,6 +1723,282 @@ export class Person3D {
     this.revHeld = true;
   }
   private revEase = { on: false, pos: new Vector3(), quat: new Quaternion() };
+  /** (plan 80) Her frame for the hold: her shoulders' middle, her size against the mocks' man, up, ahead
+   *  (the look's way aiming, else the way she faces) and her left */
+  private revFrame(p: PersonIn, aiming: boolean): BodyFrame {
+    const m = this.model;
+    const B = this.revBody;
+    const sL = m.bone("shoulderL");
+    const sR = m.bone("shoulderR");
+    const el = m.bone("elbowR");
+    const wr = m.bone("wristR");
+    m.root.updateMatrixWorld(true);
+    if (sL && sR && el && wr) {
+      sL.getWorldPosition(B.mid);
+      B.mid.add(sR.getWorldPosition(rv1)).multiplyScalar(0.5);
+      B.k = ((el.position.length() + wr.position.length()) * sR.getWorldScale(rv1).x) / MOCK_ARM;
+    }
+    B.up.set(0, 1, 0);
+    if (aiming) {
+      this.lookDir(p, B.ahead).y = 0;
+      B.ahead.normalize();
+    } else B.ahead.set(0, 0, 1).applyQuaternion(this.root.getWorldQuaternion(rq1));
+    B.left.crossVectors(B.up, B.ahead).normalize();
+    return B;
+  }
+
+  // ── the reload (plan 80 phase 4): the gun through its keys, both hands working it (tp/revolver-hold.ts) ──
+  /** s into the reload's timeline (-1: not reloading) */
+  private revLoadT = -1;
+  /** the gun's parts as the reload has them (gunMoves poses it so); null: as Arms says */
+  private revPose: { open: number; loaded: number; rod: number } | null = null;
+  /** this frame the gun's off the right hand's grip: placed where the reload has it (props leaves it be) */
+  private revFree = false;
+  private revLoader: { root: Group; model: GunModel; fall: number; v: number } | null = null;
+  private revLoaderHand = new Matrix4();
+  private revolverReload(p: PersonIn, w: number, t: number) {
+    const m = this.model;
+    const gun = this.gun;
+    const wr = m.bone("wristR");
+    const wl = m.bone("wristL");
+    const FR = m.handFrame("R");
+    const FL = m.handFrame("L");
+    if (!gun || !wr || !wl || !FR || !FL) return;
+    const B = this.revFrame(p, false);
+    const st = reloadAt(t);
+    const g = gun.root;
+    const inner = gun.model.root;
+    // the gun's place between its keys (the ready: the hold as she is now — the hold eases on from the end)
+    this.root.updateWorldMatrix(true, false);
+    const RW = this.root.matrixWorld;
+    this.root.getWorldQuaternion(rqRoot);
+    const E = this.revEase;
+    const H = revolverHold(B, { aiming: false, pitch: 0, torch: !!p.torch && !p.phone, run: 0 }, this.revHold);
+    const key = (name: string, pos: Vector3, quat: Quaternion) => {
+      if (name === "hold") {
+        pos.copy(H.grip);
+        gunQuat(H.f, H.u, quat);
+        return;
+      }
+      const K = RELOAD_KEYS[name];
+      at(B, K.at[0], K.at[1], K.at[2], pos);
+      gunQuat(bodyDir(B, K.f, rv1), bodyDir(B, K.u, rv2), quat);
+    };
+    const leg = legAt(RELOAD_GUN, t);
+    key(leg.a, rgA, rqA);
+    key(leg.b, rgB, rqB);
+    rgA.lerp(rgB, leg.k);
+    rqA.slerp(rqB, leg.k);
+    // its parts: the crane, the rod, the rounds (out once the rod's struck, in with the loader)
+    const loaded = this.gunFx?.loaded ?? 6;
+    this.revPose = {
+      open: st.crane,
+      loaded: st.rounds < 0 ? loaded : st.rounds > 0 ? Math.max(loaded, 6) : 0,
+      rod: st.rod,
+    };
+    poseGun(gun.model, "revolver", { cock: 0, ...this.revPose });
+    // the gun held as it is in the hand (its root at rest under the wrist), and placed there for now
+    inner.updateMatrix();
+    rL0.compose(ZERO3, IDQ, g.scale).multiply(inner.matrix);
+    rL0.decompose(rv1, rq1, rs1);
+    const gs = wr.getWorldScale(rs2).x * rs1.x;
+    rMg.compose(rgA, rqA, rs2.setScalar(gs));
+    this.placeGun(rMg);
+    inner.updateWorldMatrix(true, true);
+    const f = rv3.set(1, 0, 0).applyQuaternion(rqA);
+    const u = rv4.set(0, 1, 0).applyQuaternion(rqA);
+    // the loader in the right hand (its wrist's space): its rims behind the palm's middle, pointing out of it
+    const n = rn.copy(FR.n).normalize();
+    rLh.makeBasis(n, ra.copy(FR.along).addScaledVector(n, -FR.along.dot(n)).normalize(), rc.crossVectors(n, ra));
+    rLh.setPosition(
+      rp
+        .copy(FR.mid)
+        .multiplyScalar(0.55)
+        .addScaledVector(n, 0.022 + LOADER_IN_HAND),
+    );
+    this.revLoaderHand.copy(rLh);
+    // each hand's place and turn for a part of the timeline
+    const cyl = gun.model.parts.cylinder;
+    const place = (name: string, pos: Vector3, quat: Quaternion): boolean => {
+      if (name === "grip") {
+        rM.copy(rMg).multiply(rL1.copy(rL0).invert()).decompose(pos, quat, rs1);
+        return true;
+      }
+      if (name === "rod") {
+        // (the flat palm on the rod's head — struck down along the barrel)
+        const head = gun.model.parts.rod?.localToWorld(rh.set(0.065, 0, 0)) ?? rh.copy(rgA);
+        head.addScaledVector(f, 0.004);
+        // (the fingers across her, to her left and away — the forearm level over it, not the wrist bent back)
+        rx.copy(B.left).addScaledVector(u, -0.6).normalize();
+        return m.wristTo("R", head, FR.along, rx, FR.n, ry.copy(f).negate(), pos, quat);
+      }
+      if (name === "pouch") {
+        // (the fingers down into it, the palm in)
+        const top = this.pouch ? this.pouch.root.localToWorld(rh.set(0, 0.066, 0)) : at(B, -0.15, -0.5, 0.12, rh);
+        top.addScaledVector(B.up, 0.03 * B.k);
+        return m.wristTo("R", top, FR.along, rx.copy(B.up).negate(), FR.n, B.left, pos, quat);
+      }
+      if (name === "load" && cyl) {
+        // (the loader square to the chambers, short of them, pushed home; the knob turned — the hand with it)
+        cyl.updateWorldMatrix(true, false);
+        rM.copy(cyl.matrixWorld).multiply(rL1.makeTranslation(0.0175 - LOADER_START * (1 - st.push), 0, 0));
+        rM.multiply(rL1.makeRotationX(0.6 * st.twist));
+        rM.multiply(rL1.copy(rLh).invert()).decompose(pos, quat, rs1);
+        return true;
+      }
+      if (name === "support") {
+        rv1.copy(SUPPORT.palm).applyMatrix4(rMg);
+        return m.wristFor(
+          "L",
+          rv1,
+          rx.copy(SUPPORT.along).applyQuaternion(rqA),
+          ry.copy(SUPPORT.index).applyQuaternion(rqA),
+          pos,
+          quat,
+        );
+      }
+      if (name === "cyl" && cyl) {
+        // (the left hand round the cylinder like a can, from the side toward her left shoulder — its thumb up
+        // along it toward its rear, the fingers round its far side, the middle ones through the frame's
+        // window — however the gun's turned)
+        const c = cyl.localToWorld(rh.set(CYL_PALM.along, 0, 0));
+        const sh = m.bone("shoulderL")?.getWorldPosition(rx) ?? rx.copy(B.mid);
+        const d = sh.sub(c);
+        d.addScaledVector(f, -d.dot(f)).normalize();
+        c.addScaledVector(d, CYL_PALM.under * B.k);
+        return m.wristTo("L", c, FL.across, ry.copy(f).negate(), FL.n, d.negate(), pos, quat);
+      }
+      return false;
+    };
+    const blend = (legs: [string, string, number, number][]) => {
+      const h = legAt(legs, t);
+      if (!place(h.a, rhA, rhqA)) return h;
+      if (h.b !== h.a && h.k > 0 && place(h.b, rhB, rhqB)) {
+        rhA.lerp(rhB, h.k);
+        rhqA.slerp(rhqB, h.k);
+      }
+      return h;
+    };
+    // both hands' places first (the right's IK moves the gun with the wrist: read where it is before)
+    const hr = blend(RELOAD_RIGHT);
+    const rNow = hr.k < 0.5 ? hr.a : hr.b;
+    rAt.copy(rhA);
+    rTurn.copy(rhqA);
+    const hl = blend(RELOAD_LEFT);
+    const lNow = hl.k < 0.5 ? hl.a : hl.b;
+    rLAt.copy(rhA);
+    rq3.copy(rhqA);
+    // what the left's fingers close round — in its wrist's space as it'll be
+    rM.compose(rLAt, rq3, rs2.setScalar(wl.getWorldScale(rs1).x)).invert();
+    if (lNow === "support") {
+      rM.multiply(rMg);
+      rM.decompose(rv1, rq1, rs1);
+      rhB.copy(FIST.at).applyMatrix4(rM);
+      rhqB.setFromUnitVectors(Y3, UP_GRIP).premultiply(rq1);
+      m.hold("L", { shape: FIST_SHAPE, pos: rhB, quat: rhqB, kind: "support" });
+    } else if (cyl) {
+      rM.multiply(cyl.matrixWorld);
+      rM.decompose(rv1, rq1, rs1);
+      rhB.set(0.03, 0, 0).applyMatrix4(rM);
+      rhqB.setFromUnitVectors(Y3, X3).premultiply(rq1);
+      m.hold("L", { shape: CYL_SHAPE, pos: rhB, quat: rhqB, kind: "cyl" });
+    }
+    // …the right's
+    if (rNow === "grip") {
+      gripShapeAt(inner.quaternion, inner.position, rv1, rq1);
+      m.hold("R", { shape: GUN_GRIP_SHAPE, pos: rv1, quat: rq1, kind: "gun" });
+    } else if (rNow === "pouch" || rNow === "load") {
+      // (the loader's body in the fingertips)
+      rv1.set(-0.009, 0, 0).applyMatrix4(rLh);
+      rq1.setFromRotationMatrix(rLh).multiply(rq2.setFromUnitVectors(Y3, X3));
+      m.hold("R", { shape: LOADER_SHAPE, pos: rv1, quat: rq1, kind: "loader" });
+    } else m.hold("R", null);
+    m.gripTo("R", rAt, rTurn, w, [-0.8, -1, -0.4]);
+    m.gripTo("L", rLAt, rq3, w, [-0.8, -1, -0.4]);
+    if (lNow === "support" && hl.k > 0.5) m.thumbTo("L", rv1.copy(SUPPORT_THUMB).applyMatrix4(rMg));
+    // the fingers: along the frame on the grip, flat on the rod
+    if (rNow === "grip") m.indexTo("R", INDEX.ready);
+    else if (rNow === "rod") m.fingersTo("R", 0.1);
+    // the gun: on the grip, held by it at rest; off it, where the timeline has it
+    if (rNow === "grip" && hr.a === hr.b) {
+      g.position.set(0, 0, 0);
+      g.quaternion.identity();
+      g.scale.setScalar(rs1.set(1, 1, 1).x * LIFE_GUN_SCALE);
+    } else {
+      this.placeGun(rMg);
+      this.revFree = true;
+    }
+    // the loader: from the pouch in the hand, then into the chambers, let go
+    this.revLoaderAt(st.loader, st.twist, st.loaderRounds);
+    // (the hold's ease follows the gun, so it eases on from here when the reload's done)
+    E.pos.copy(rgA).applyMatrix4(rM.copy(RW).invert());
+    E.quat.copy(rqRoot).invert().multiply(rqA);
+    E.on = true;
+    this.revHeld = true;
+  }
+  /** (plan 80) The gun (its model's frame) at a place in the world, whatever the right wrist's doing: its root
+   *  set under the wrist so */
+  private placeGun(M: Matrix4) {
+    const g = this.gun;
+    const wr = this.model.bone("wristR");
+    if (!g || !wr) return;
+    wr.updateWorldMatrix(true, false);
+    g.model.root.updateMatrix();
+    rM.copy(wr.matrixWorld)
+      .invert()
+      .multiply(M)
+      .multiply(rL1.copy(g.model.root.matrix).invert())
+      .decompose(g.root.position, g.root.quaternion, g.root.scale);
+    g.root.updateMatrixWorld(true);
+  }
+  /** (plan 80) The speedloader: in the right hand (its fingertips) from the pouch to the chambers, its rounds in
+   *  it till they go in, its knob twisted; then let go — it falls to her feet and is gone */
+  private revLoaderState: "none" | "hand" | "fall" = "none";
+  private revLoaderAt(state: "none" | "hand" | "fall", twist: number, rounds: boolean) {
+    this.revLoaderState = state;
+    if (state === "none") {
+      if (this.revLoader) this.revLoader.root.visible = false;
+      return;
+    }
+    const tpl = this.mats.gun?.("speedloader") ?? null;
+    if (!this.revLoader && tpl) {
+      const model = lifeGunModel("speedloader" as GunKind, tpl);
+      const root = new Group();
+      root.add(model.root);
+      this.revLoader = { root, model, fall: -1, v: 0 };
+    }
+    const L = this.revLoader;
+    const wr = this.model.bone("wristR");
+    if (!L || !wr) return;
+    const parent = this.root.parent ?? this.root;
+    if (L.root.parent !== parent) parent.add(L.root);
+    L.root.visible = true;
+    if (L.model.parts.knob) L.model.parts.knob.rotation.x = 0.6 * twist;
+    for (const r of L.model.rounds) r.visible = rounds;
+    if (L.model.parts.rounds) L.model.parts.rounds.visible = rounds;
+    if (state === "hand") {
+      L.fall = -1;
+      L.v = 0;
+      wr.updateWorldMatrix(true, false);
+      parent.updateWorldMatrix(true, false);
+      rM.copy(parent.matrixWorld).invert().multiply(wr.matrixWorld).multiply(this.revLoaderHand);
+      rM.decompose(L.root.position, L.root.quaternion, L.root.scale);
+    } else if (L.fall < 0) L.fall = 0;
+  }
+  /** (…its fall, each frame: down to her feet, a moment there, gone) */
+  private loaderFrame(dt: number) {
+    const L = this.revLoader;
+    if (!L || L.fall < 0 || this.revLoaderState === "hand") return;
+    L.fall += dt;
+    L.v += 9.8 * dt;
+    const floor = (this.root.parent ? this.root.position.y : this.root.getWorldPosition(rv1).y) + 0.02;
+    L.root.position.y = Math.max(floor, L.root.position.y - L.v * dt);
+    if (L.fall > 0.9) {
+      L.root.visible = false;
+      L.fall = -1;
+    }
+  }
+
   private revAimK = 0;
   /** (plan 80) This frame the left hand is Harries' (torchFrame leaves its wrist be) */
   private revHarries = false;
@@ -2007,6 +2339,8 @@ export class Person3D {
    *  it when it isn't in her hand. On the hips (it goes with them walking); its frame is the holstered
    *  gun's, where the draw starts and the put-away ends. */
   private holster: { root: Group; gun: GunModel | null } | null = null;
+  /** (plan 80 F5a) the speedloader's pouch on the belt at her right hip's front, worn with the holster */
+  private pouch: { root: Group } | null = null;
   private holsterFrame(p: PersonIn) {
     const hips = this.model.bone("hips");
     const tpl = this.mats.gun?.("holster") ?? null;
@@ -2032,10 +2366,21 @@ export class Person3D {
       this.holster.gun = g;
     }
     if (this.holster.gun) this.holster.gun.root.visible = !out;
+    const ptpl = this.mats.gun?.("pouch") ?? null;
+    if (!this.pouch && ptpl) {
+      const root = new Group();
+      root.add((ptpl.getObjectByName("pouch") ?? ptpl).clone(true));
+      root.position.copy(POUCH_AT);
+      root.quaternion.copy(POUCH_TURN);
+      hips.add(root);
+      this.pouch = { root };
+    }
   }
   private dropHolster() {
     this.holster?.root.removeFromParent();
     this.holster = null;
+    this.pouch?.root.removeFromParent();
+    this.pouch = null;
   }
 
   // on a call with the phone put away: an earbud in the right ear (the head's own space)
@@ -2342,6 +2687,7 @@ export class Person3D {
     this.dropPhone();
     this.dropGun();
     this.dropHolster();
+    this.revLoader?.root.removeFromParent();
     this.dropBud();
     this.dropTorch();
     this.dropTool();

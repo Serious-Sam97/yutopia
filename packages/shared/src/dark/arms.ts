@@ -8,11 +8,13 @@ export const ARMS = {
      *  cylinder swung out and every round dumped (`open` s — the live ones back to the pockets), a
      *  speedloader's six in at once (`speed` s), shut (`shut` s); a shot while it's out snaps it shut
      *  (`snap` s) if a round's in. `reload` (s a round) is kept for the old one at a time's readers. */
+    // (plan 80 F4a: the real speedloader reload, ~2.2 s — open 0.7: the cylinder out, muzzle up, the rod
+    // struck; the loader 1.1: muzzle down, fetched from the hip, the rounds in, twisted, dropped; shut 0.4)
     rate: 0.42,
     reload: 0.35,
-    open: 0.45,
-    speed: 0.8,
-    shut: 0.3,
+    open: 0.7,
+    speed: 1.1,
+    shut: 0.4,
     snap: 0.2,
     draw: 0.35,
     /** s coming up to aim (the camera's ease in — docs/plan/79-the-guns.md) */

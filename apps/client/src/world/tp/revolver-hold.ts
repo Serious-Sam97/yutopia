@@ -82,7 +82,9 @@ const _v = new Vector3();
 const _a = new Vector3();
 const _u = new Vector3();
 const _m = new Matrix4();
-const at = (B: BodyFrame, x: number, y: number, z: number, out: Vector3) =>
+/** A point in her frame (from her shoulders' middle: x her left, y up, z ahead; the mocks' man's m), the
+ *  world's */
+export const at = (B: BodyFrame, x: number, y: number, z: number, out: Vector3) =>
   out
     .copy(B.mid)
     .addScaledVector(B.left, x * B.k)
@@ -190,4 +192,94 @@ export function gunQuat(f: Vector3, u: Vector3, out: Quaternion): Quaternion {
   const x = _v.copy(f).normalize();
   const y = _a.copy(u).addScaledVector(x, -u.dot(x)).normalize();
   return out.setFromRotationMatrix(_m.makeBasis(x, y, _u.crossVectors(x, y)));
+}
+
+// ── the reload (plan 80 phase 4: F4a, F5a) ───────────────────────────────────────────────────────────
+// The real speedloader reload as one timeline, s from the server's step opening it (Player.arm: everyone
+// sees it), in time with its steps (shared ARMS.revolver: open 0.7, speed 1.1, shut 0.4):
+//   0–0.3    in close, rolled left; the left fingers under the cylinder roll it out (the crane's swing)
+//   0.3–0.72 muzzle up, its top toward her; the right hand off the grip, its flat palm strikes the rod —
+//            the empties out (the server dumps them at 0.7)
+//   0.72–1.8 muzzle down at the belly, its top ahead; the right hand to the pouch on her hip and back with
+//            the speedloader, its rounds into the chambers, the knob twisted, let go — it falls (the
+//            server's rounds in at 1.8)
+//   1.8–2.2  the right hand on the grip again, the left thumb rolls the cylinder shut, up to the ready
+// A shot while it's out (the server snaps it shut) or the step ending early: on from the closing.
+export const RELOAD_LEN = 2.2;
+/** the closing's start: where a reload cut short goes on from */
+export const RELOAD_CLOSE = 1.86;
+/** The gun's keys in her frame (from her shoulders' middle: x her left, y up, z ahead; the mocks' man's m),
+ *  its barrel's way and its top's (her frame's) */
+export const RELOAD_KEYS: Record<
+  string,
+  { at: [number, number, number]; f: [number, number, number]; u: [number, number, number] }
+> = {
+  in: { at: [-0.04, -0.27, 0.27], f: [0.25, -0.3, 0.92], u: [0.45, 1, 0] },
+  up: { at: [0.0, -0.18, 0.22], f: [0.1, 1, 0.22], u: [0, 0.22, -1] },
+  down: { at: [0.03, -0.36, 0.24], f: [0, -1, 0.3], u: [0, 0.3, 1] },
+};
+/** The gun's legs: from a key to a key over [start, end] s ("hold": the ready as it was) */
+export const RELOAD_GUN: [string, string, number, number][] = [
+  ["hold", "in", 0, 0.28],
+  ["in", "up", 0.28, 0.44],
+  ["up", "up", 0.44, 0.72],
+  ["up", "down", 0.72, 0.92],
+  ["down", "down", 0.92, RELOAD_CLOSE],
+  ["down", "hold", RELOAD_CLOSE, RELOAD_LEN],
+];
+/** The right hand's: the grip, the rod (struck), the pouch, the loader at the cylinder */
+export const RELOAD_RIGHT: [string, string, number, number][] = [
+  ["grip", "grip", 0, 0.48],
+  ["grip", "rod", 0.48, 0.58],
+  ["rod", "rod", 0.58, 0.7],
+  ["rod", "pouch", 0.7, 0.98],
+  ["pouch", "pouch", 0.98, 1.08],
+  ["pouch", "load", 1.08, 1.5],
+  ["load", "load", 1.5, 1.8],
+  ["load", "grip", 1.8, 1.96],
+  ["grip", "grip", 1.96, RELOAD_LEN],
+];
+/** The left's: the support grip, under the cylinder */
+export const RELOAD_LEFT: [string, string, number, number][] = [
+  ["support", "support", 0, 0.1],
+  ["support", "cyl", 0.1, 0.3],
+  ["cyl", "cyl", 0.3, 2.0],
+  ["cyl", "support", 2.0, RELOAD_LEN],
+];
+const smooth01 = (a: number, b: number, t: number) => {
+  const c = Math.max(0, Math.min(1, (t - a) / (b - a)));
+  return c * c * (3 - 2 * c);
+};
+/** Where a timeline's legs have it at `t`: from, to, and how far between */
+export function legAt(legs: [string, string, number, number][], t: number) {
+  for (const [a, b, t0, t1] of legs) if (t < t1) return { a, b, k: smooth01(t0, t1, t) };
+  const [a, b] = legs[legs.length - 1];
+  return { a, b, k: 1 };
+}
+/** The gun's moving parts and the loader at `t`: the crane out (0..1), the rod pushed (0..1), the
+ *  rounds in the cylinder (-1: as loaded; else how many of a full one), the loader pushed in and its knob
+ *  twisted (0..1), the loader's own rounds still in it, where it is */
+export function reloadAt(t: number) {
+  return {
+    crane: smooth01(0.1, 0.3, t) * (1 - smooth01(2.02, 2.16, t)),
+    rod: smooth01(0.56, 0.62, t) * (1 - smooth01(0.7, 0.8, t)),
+    rounds: t < 0.62 ? -1 : t < 1.66 ? 0 : 1,
+    push: smooth01(1.5, 1.68, t),
+    twist: smooth01(1.68, 1.78, t),
+    loaderRounds: t < 1.66,
+    loader: t < 1.0 ? "none" : t < 1.8 ? "hand" : t < 2.5 ? "fall" : "none",
+  } as const;
+}
+/** (the gun's frame) The left hand round the cylinder: its palm's middle this far out from the cylinder's axis
+ *  (its radius and a little), and along it from its rear */
+export const CYL_PALM = { under: 0.024, along: 0.025 };
+/** (the speedloader's own frame: +x its rounds' noses) Held in the right fingertips by its body, its knob in
+ *  the palm: the palm's middle this far behind its rounds' rims */
+export const LOADER_IN_HAND = 0.043;
+/** The speedloader started this far short of the chambers, then pushed home */
+export const LOADER_START = 0.045;
+
+/** A way in her frame (x her left, y up, z ahead), the world's (unit) */
+export function bodyDir(B: BodyFrame, d: [number, number, number], out: Vector3): Vector3 {
+  return out.copy(B.left).multiplyScalar(d[0]).addScaledVector(B.up, d[1]).addScaledVector(B.ahead, d[2]).normalize();
 }

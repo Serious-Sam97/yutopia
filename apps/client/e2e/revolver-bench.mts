@@ -33,7 +33,11 @@ const POSES: [string, Record<string, unknown>][] = [
   ["aim-torch", { pose: "aim", torch: true, pitch: 0 }],
   ["aim-kick", { pose: "aim", torch: false, pitch: 0, kick: 0.8, trigger: 1 }],
   ["aim-torch-up", { pose: "aim", torch: true, pitch: 0.5 }],
-  ["reload-open", { pose: "reload", t: 0.5 }],
+  // (the reload's moments, s into its 2.2: in close, the cylinder out; muzzle up; the rod struck; muzzle down,
+  // to the pouch; the loader up; in; twisted; let go; shut; up)
+  ...[0.25, 0.45, 0.62, 0.9, 1.04, 1.35, 1.6, 1.74, 1.9, 2.1].map(
+    (s) => [`reload-${s.toFixed(2)}`, { pose: "reload", t: s / 2.2 }] as [string, Record<string, unknown>],
+  ),
 ];
 
 const browser = await chromium.launch({ args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });

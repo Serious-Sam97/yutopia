@@ -728,7 +728,17 @@ export interface GunFx {
 export function poseGun(
   g: GunModel,
   kind: GunKind,
-  s: { cock?: number; turn?: number; open?: number; loaded?: number; trigger?: number; bolt?: number; charge?: number },
+  s: {
+    cock?: number;
+    turn?: number;
+    open?: number;
+    loaded?: number;
+    trigger?: number;
+    bolt?: number;
+    charge?: number;
+    /** (plan 80) the revolver's ejector rod struck home, 0..1 */
+    rod?: number;
+  },
 ): void {
   const open = s.open ?? 0;
   if (kind === "daybreak" && g.parts.core) {
@@ -765,7 +775,12 @@ export function poseGun(
     // loading gate opens)
     // (plan 80: on its hinge low and left of the cylinder, 1.5 rad — out clear of the frame)
     if (g.parts.crane) g.parts.crane.rotation.x = -1.5 * open;
-    else g.parts.gate.rotation.x = 1.5 * open;
+    // (plan 80: the ejector rod struck back its 2.2 cm stroke — the empties out)
+    const rod = g.parts.rod;
+    if (rod) {
+      rod.userData.x0 ??= rod.position.x;
+      rod.position.x = rod.userData.x0 - 0.022 * (s.rod ?? 0);
+    } else g.parts.gate.rotation.x = 1.5 * open;
     g.parts.trigger.rotation.z = 0.25 * (s.trigger ?? 0);
   } else {
     g.parts.barrels.rotation.z = -0.52 * open;

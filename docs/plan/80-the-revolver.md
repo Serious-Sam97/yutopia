@@ -16,8 +16,8 @@ F6a keyed on a `/dev/revolver` bench, F7a third person only. Phase 0 (the mocks)
 `tools/art/guns/mock80.py` (Blender, the life man, the gun's support/shooting hands placed on it) →
 `design/guns/p80/sheet-80-hold.png` and `sheet-80-reload.png` — signed off 2026-11-12 ("Start phase 1").
 **Phase 1 built 2026-11-12** (below), committed 53c06b6. **Phase 2 built 2026-11-12**, committed dc0fee0; its
-holster (the user's ask) committed 752cfec. **Phase 3 built 2026-11-12** — stills
-`design/guns/p80/sheet-80-phase3-aim.png`; awaiting review. Follows plan 79 (the guns:
+holster (the user's ask) committed 752cfec. **Phase 3 built 2026-11-12**, committed 937fecd. **Phase 4 built
+2026-11-12** — stills `design/guns/p80/sheet-80-phase4-reload-a.png`, `-b.png`; awaiting review. Follows plan 79 (the guns:
 the shoulder camera, the Blender revolver, the speedloader rule F11a) and plans 58/77/78 (the body, its
 moves, its hands).
 
@@ -208,6 +208,28 @@ cylinder, the ejector rod, the cases, a speedloader, in time with the server's s
    down, the right hand to the pouch and back with the loader, two rounds started, squared, twisted, the
    loader dropped, the cylinder rolled shut, the grip retaken; a shot mid-way snaps it shut as now; the
    server's steps retimed; everyone sees it (Player.arm).
+   **Built 2026-11-12:**
+   - **The server retimed** (shared `ARMS.revolver`): open 0.45 → 0.7, the speedloader 0.8 → 1.1, shut
+     0.3 → 0.4 — 2.2 s, as F4a; the server's arms tests read the numbers and pass.
+   - **One timeline** (`tp/revolver-hold.ts` RELOAD_*, `Person3D.revolverReload`), started by the server's
+     step opening it (Player.arm — everyone's), its keys in her frame: in close and rolled left (the left
+     fingers round the cylinder roll it out on the crane), muzzle up (her top toward her: the right hand
+     off the grip, its flat palm strikes the rod — `poseGun` `rod`: 2.2 cm — the empties out with the
+     server's dump), muzzle down at the belly (the left hand holding it by the cylinder like a can, from
+     her left shoulder's side, thumb up along it), the right hand to **the pouch** on her right hip's front
+     (`pouch.glb`, worn with the holster) and back with **the speedloader** (`speedloader.glb`, in the
+     fingertips) — square to the chambers, pushed home, the knob twisted, let go: it falls to her feet;
+     the right hand on the grip again, the cylinder rolled shut, up to the low ready. While the right
+     hand's off the grip the gun is placed by the timeline, not the wrist (`placeGun`).
+   - **Cut short** (a shot snaps it shut, the step ends sooner): the timeline goes on from the closing.
+   - The reload's ready is the hold worked out as she is then (it began from a stale one right after a
+     draw), and the hold's ease follows the gun through it, so it eases on from where it ends.
+   - The sounds and the cases moved to the new moments: the rod's at 0.6 s, the loader's (others') at
+     1.65 s.
+   - **The checks**: the left wrist 29–41° past a wrist's reach holding the cylinder (75–80° palm-up under
+     it, as the mocks had it — the hand round the cylinder from her side instead); the right 0 striking the
+     rod (57° with the fingers pointing away); the hands touch ≤ 5 mm at the twist; the bench scrubs it
+     (`pose=reload&t=`); `e2e/arms-feel.spec.ts` passes.
 5. **Everything else held** — dodge, hit, fall, sit-to-stand with it out; the far people's cheaper hold;
    the revolver's sounds (plan 79 phase 9) on the new timeline's moments.
 6. **Checks** — the bench's checks (no hand through a hand or the gun, the gun upright aimed at any

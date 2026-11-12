@@ -239,7 +239,7 @@ function Bench({ q }: { q: URLSearchParams }) {
       };
       const GAIT = ["still", "walk", "jog", "sprint"] as const;
       const SPEED = [0, 1.4, 3.2, 5.4];
-      const P3 = person as unknown as { drawT: number; holsterT: number };
+      const P3 = person as unknown as { drawT: number; holsterT: number; revLoadT: number };
       const apply = (dt: number) => {
         const s = live.current;
         const aim = s.pose === "aim";
@@ -257,9 +257,11 @@ function Bench({ q }: { q: URLSearchParams }) {
         else if (s.draw < 1) P3.drawT = Math.max(0, s.draw * 0.35 - dt);
         p.pitch = aim ? s.pitch : 0;
         p.torch = s.torch;
-        // (the reload: open 0–0.3, the loader 0.3–0.8, shut 0.8–1 — the server's steps as F4a retimes them)
+        // (the reload: the server's step open — Player.arm — its timeline scrubbed through its 2.2 s)
         const t = s.t;
         const reload = s.pose === "reload";
+        (p as { arm?: number }).arm = reload ? 3 : 0;
+        if (reload) P3.revLoadT = Math.max(0, t * 2.2 - dt);
         fx.reload = reload ? 1 : 0;
         fx.open = reload ? (t < 0.3 ? t / 0.3 : t < 0.8 ? 1 : 1 - (t - 0.8) / 0.2) : 0;
         fx.loaded = reload && t < 0.55 ? 0 : 6;

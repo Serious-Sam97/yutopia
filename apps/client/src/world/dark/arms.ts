@@ -889,16 +889,19 @@ export class Arms {
         const g = me ? this.gun() : null;
         // (someone else's rounds going in aren't known: heard when the server's step would put them in)
         const loadIn = (gun: GunId) => {
-          if (!me) setTimeout(() => this.voices.gun(LOAD_SOUND[gun], at, 15), ARMS[gun].open * 1000 + 150);
+          // (the revolver's speedloader goes in near the end of its step — plan 80's reload: 0.85 of it)
+          const t = gun === "revolver" ? ARMS.revolver.open + ARMS.revolver.speed * 0.85 : ARMS[gun].open + 0.15;
+          if (!me) setTimeout(() => this.voices.gun(LOAD_SOUND[gun], at, 15), t * 1000);
         };
         if (p.gun === "revolver") {
           // (plan 79 F11a: the cylinder swung out, the rod punched — its spent cases dumped, the live ones
           // to the pockets — the speedloader (as the rounds go in: draws), shut)
           if (opened && !wasOpen) {
             this.voices.gun("revolver-open", at, 15);
-            setTimeout(() => this.voices.gun("revolver-eject", at, 15), 220);
+            // (plan 80: the rod struck muzzle up — RELOAD_ROD in tp/revolver-hold.ts — the cases out)
+            setTimeout(() => this.voices.gun("revolver-eject", at, 15), 600);
             const spent = g ? WEAPONS.revolver.mag - g.loaded : 0;
-            if (me) setTimeout(() => this.brass("case", spent), 250);
+            if (me) setTimeout(() => this.brass("case", spent), 640);
             loadIn("revolver");
           } else if (!opened && wasOpen) this.voices.gun("revolver-close", at, 15);
           return;

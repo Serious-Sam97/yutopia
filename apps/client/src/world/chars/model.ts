@@ -1269,6 +1269,14 @@ export class PersonModel {
   indexTo(S: "L" | "R", c: number) {
     this.poseFinger(S, "index", c);
   }
+  /** (plan 80) All four fingers of a life hand at a curl of the library's (the cascade's): a flat palm (a rod
+   *  struck), an open hand. After the grips. */
+  fingersTo(S: "L" | "R", c: number) {
+    this.poseFinger(S, "fingers", c);
+    this.poseFinger(S, "index", c);
+    this.poseFinger(S, "ring", c * CASCADE.ring);
+    this.poseFinger(S, "little", c * CASCADE.little);
+  }
 
   /** (plan 80) What gripTo last left each hand: how far its wrist fell short of the place (m), and how far
    *  past a real wrist's reach it's turned (rad, wristOver) */
