@@ -15,8 +15,8 @@ the ready), F4a the real speedloader reload ~2.2 s (the server retimed), F5a the
 F6a keyed on a `/dev/revolver` bench, F7a third person only. Phase 0 (the mocks) rendered 2026-11-12:
 `tools/art/guns/mock80.py` (Blender, the life man, the gun's support/shooting hands placed on it) →
 `design/guns/p80/sheet-80-hold.png` and `sheet-80-reload.png` — signed off 2026-11-12 ("Start phase 1").
-**Phase 1 built 2026-11-12** (below) — stills `design/guns/p80/sheet-80-phase1-hold.png`,
-`sheet-80-phase1-torch.png`; awaiting the user's review. Follows plan 79 (the guns:
+**Phase 1 built 2026-11-12** (below), committed 53c06b6. **Phase 2 built 2026-11-12** — stills
+`design/guns/p80/sheet-80-phase2-move.png`, `sheet-80-phase2-draw.png`; awaiting the user's review. Follows plan 79 (the guns:
 the shoulder camera, the Blender revolver, the speedloader rule F11a) and plans 58/77/78 (the body, its
 moves, its hands).
 
@@ -158,6 +158,25 @@ cylinder, the ejector rod, the cases, a speedloader, in time with the server's s
      of 469) as it was before this phase — the fix is on `claude/friendly-cerf-633790`, not merged.
 2. **The ready** (F1) — the pose keyed whole, both hands on; the draw from the holster (the right hip) into
    it and the put-away back; walking and sprinting with it (tucked closer running).
+   **Built 2026-11-12:**
+   - **The draw** (the server's 0.35 s): the gun along a path from **a holster at her right hip**
+     (`holsterHold`: the grip at the belt, muzzle down, its left side to the hip) — straight up out of it
+     (`DRAW_LIFT`, 13 cm), then turned muzzle-forward and out to the hold; the right hand on it all the way,
+     the left meeting it from `DRAW_MEET` (0.55). **The put-away** (0.25 s) is the same path back; the gun
+     goes when it's in the holster. The hold has its own weight now (`revW`), not the hands' rise from the
+     side. The holster first sat at the ribs (the elbow out at the shoulder's height): at the belt, the
+     elbow bends back below it as a real hip draw's.
+   - **Walking** keeps the low ready (the shoulders' frame rides the walk); **running** tucks it in from a
+     jog on (2.8 → 4.8 m/s): 0.35 rad steeper, the elbows bent to 0.73 of the reach — close at the belly,
+     muzzle down, both hands on.
+   - **The bench** moves her (still, walk, jog, sprint — the views go with her) and scrubs the draw and the
+     put-away (`draw`, `away`). The torch at the ready: its "11.6 cm short" was the check reading a left
+     hand that wasn't gripping the gun — the check now reads the left only when it's on the gun.
+   - **The checks**: every pose and pitch within the limits (CHECK=1); `e2e/arms-feel.spec.ts` passes.
+     Mid-draw the wrists go 7–24° past a wrist's reach for the moment it lasts; sprinting 18–24° (the tuck
+     bends them): phase 6 looks at both.
+   - No holster is drawn on her yet (the gun comes out of where one would be) — a model for one is a
+     question for the user.
 3. **The aim** (F2, F3) — the pose keyed whole; the wrist's turn setting the barrel and its top (no cant,
    ever); the arms' reach; the head over the sights; the torch's Harries; the shot's recoil on the new
    hold (the muzzle's flip, the wrists giving); dry fire; the low ready ↔ aim in the gun's own 0.18 s.

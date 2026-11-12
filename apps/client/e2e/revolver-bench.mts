@@ -15,9 +15,17 @@ const checkOnly = process.env.CHECK === "1";
 mkdirSync(out, { recursive: true });
 
 const POSES: [string, Record<string, unknown>][] = [
-  ["ready", { pose: "ready", torch: false, run: 0 }],
-  ["ready-torch", { pose: "ready", torch: true, run: 0 }],
+  ["ready", { pose: "ready", torch: false }],
+  ["ready-walk", { pose: "ready", torch: false, move: 1 }],
+  ["ready-sprint", { pose: "ready", torch: false, move: 3 }],
+  ["draw-0.15", { pose: "ready", draw: 0.15 }],
+  ["draw-0.4", { pose: "ready", draw: 0.4 }],
+  ["draw-0.7", { pose: "ready", draw: 0.7 }],
+  ["away-0.5", { pose: "ready", draw: 0.5, away: true }],
+  ["ready-torch", { pose: "ready", torch: true }],
+  ["ready-torch-walk", { pose: "ready", torch: true, move: 1 }],
   ["aim", { pose: "aim", torch: false, pitch: 0 }],
+  ["aim-walk", { pose: "aim", torch: false, pitch: 0, move: 1 }],
   ["aim-up", { pose: "aim", torch: false, pitch: 0.5 }],
   ["aim-down", { pose: "aim", torch: false, pitch: -0.5 }],
   ["aim-torch", { pose: "aim", torch: true, pitch: 0 }],
@@ -42,7 +50,7 @@ const report = (name: string, c: any) => {
     hands: r(c.hands, 100),
     grip: r(c.grip, 100),
     R: [r(c.R.short, 100), r(c.R.over, DEG)],
-    L: [r(c.L.short, 100), r(c.L.over, DEG)],
+    L: c.L ? [r(c.L.short, 100), r(c.L.over, DEG)] : null,
   };
   // (the limits: upright within 2°, on the look within 2°, nothing through a hand or the grip by more than
   // 3 mm — skin gives —, each wrist within 1.5 cm of its place)
@@ -53,16 +61,16 @@ const report = (name: string, c: any) => {
     !name.includes("torch") && c.hands !== null && c.hands < -0.003 && "a hand through a hand",
     !name.includes("torch") && c.grip !== null && c.grip < -0.003 && "fingers through the grip",
     c.R.short > 0.015 && "the right short",
-    !name.includes("torch") && c.L.short > 0.015 && "the left short",
+    c.L && c.L.short > 0.015 && "the left short",
   ].filter(Boolean);
-  if (!name.startsWith("reload") && fails.length) bad++;
+  if (!name.startsWith("reload") && !name.startsWith("draw") && !name.startsWith("away") && fails.length) bad++;
   console.log(
     `${name.padEnd(12)} ${JSON.stringify(line)}${fails.length ? `  ✗ ${fails.join(", ")} (nearest: ${c.where})` : ""}`,
   );
 };
 for (const [name, s] of POSES) {
   if (only && !only.includes(name)) continue;
-  await set({ pitch: 0, run: 0, torch: false, ...s });
+  await set({ pitch: 0, move: 0, draw: 1, away: false, torch: false, ...s });
   await settle();
   const c = await check();
   if (c) report(name, c);

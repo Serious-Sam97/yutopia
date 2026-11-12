@@ -43,8 +43,11 @@ import type { PersonIn } from "./person-in";
 import {
   type BodyFrame,
   cantOf,
+  DRAW_LIFT,
+  DRAW_MEET,
   FIST,
   gunQuat,
+  holsterHold,
   MOCK_ARM,
   newHold,
   revolverHold,
@@ -1330,6 +1333,17 @@ export class Person3D {
     this.gunDirOn = false;
     this.foreW = 0;
     this.revHeld = false;
+    // (plan 80: the life revolver's own — drawn out of the holster at her right hip into the hold and put back
+    // the same way: the hold's own weight, not the hands' rise from the side)
+    if (gun?.inHand && gunKind(gun.key) === "revolver" && this.model.handFrame("L")) {
+      const hold = (aiming || ready || away) && !p.down && p.fell === undefined;
+      this.revW += ((hold ? 1 : 0) - this.revW) * (1 - Math.exp(-dt * 14));
+      // (running: tucked in, from a jog on)
+      const run = Math.max(0, Math.min(1, (this.spd - 2.8) / 2));
+      const draw = away ? Math.max(0, 1 - this.holsterT / HOLSTER_S) : drawn;
+      if (this.revW > 0.01) this.revolverHands(p, this.revW, aiming && !away, run, draw);
+      return;
+    }
     if (w < 0.01 || !gun) return;
     // the gun's way and the butt's drop, by what's being done
     const run = Math.max(0, Math.min(1, (this.spd - 3.6) / 1.4));
@@ -1406,11 +1420,6 @@ export class Person3D {
       } else this.foreW = w;
       return;
     }
-    // (plan 80: a life revolver held as a person holds one — the gun placed, both hands put on it)
-    if (gun.inHand && gunKind(p.gun ?? "") === "revolver" && this.model.handFrame("L")) {
-      this.revolverHands(p, w, aiming, run);
-      return;
-    }
     const wrist = this.model.bone("wristR");
     if (!wrist) return;
     if (ready) {
@@ -1452,7 +1461,9 @@ export class Person3D {
   /** (plan 80) The revolver's hold (tp/revolver-hold.ts): the gun placed in front of her by what she's
    *  doing; the right wrist put where the gun — held as it is in the hand — comes to that place, turned so;
    *  the left on the gun in the support grip, its fingers closed round the right fist (or holding the torch). */
-  private revolverHands(p: PersonIn, w: number, aiming: boolean, run: number) {
+  private revW = 0;
+  private revHolster = { grip: new Vector3(), f: new Vector3(), u: new Vector3() };
+  private revolverHands(p: PersonIn, w: number, aiming: boolean, run: number, draw: number) {
     const m = this.model;
     const gun = this.gun;
     const sL = m.bone("shoulderL");
@@ -1536,8 +1547,27 @@ export class Person3D {
         rAt.addScaledVector(H.f, step);
       }
     }
+    // (drawn or put away: along the draw's path from the holster — the right hand on it all the way, the left
+    // meeting it late)
+    let lw = w;
+    if (draw < 1) {
+      const ease = (x: number) => {
+        const c = Math.max(0, Math.min(1, x));
+        return c * c * (3 - 2 * c);
+      };
+      const hol = holsterHold(B, this.revHolster);
+      const turn = ease((draw - DRAW_LIFT) / (1 - DRAW_LIFT));
+      gunQuat(H.f, H.u, rq1);
+      gunQuat(hol.f, hol.u, rq2).slerp(rq1, turn);
+      rv1.copy(hol.grip).addScaledVector(B.up, 0.13 * B.k * ease(draw / DRAW_LIFT));
+      H.grip.lerpVectors(rv1, H.grip, turn);
+      rM.compose(H.grip, rq2, rs2.setScalar(gs)).multiply(rL);
+      rM.decompose(rAt, rTurn, rs1);
+      lw = w * ease((draw - DRAW_MEET) / (1 - DRAW_MEET));
+      w *= ease(draw / 0.08);
+    }
     m.gripTo("R", rAt, rTurn, w, H.poleR);
-    if (H.left === "support") {
+    if (H.left === "support" && lw > 0.01) {
       // the left on the gun where it now is: its palm on the grip's left panel, over the right's fingers
       inner.updateWorldMatrix(true, false);
       const G = inner.matrixWorld;
@@ -1554,10 +1584,10 @@ export class Person3D {
         rv2.copy(FIST.at).applyMatrix4(rM);
         rq2.setFromUnitVectors(Y3, UP_GRIP).premultiply(rq1);
         m.hold("L", { shape: FIST_SHAPE, pos: rv2, quat: rq2, kind: "support" });
-        m.gripTo("L", rAt, rTurn, w, H.poleL);
-        if (w > 0.5) m.thumbTo("L", rv1.copy(SUPPORT_THUMB).applyMatrix4(G));
+        m.gripTo("L", rAt, rTurn, lw, H.poleL);
+        if (lw > 0.5) m.thumbTo("L", rv1.copy(SUPPORT_THUMB).applyMatrix4(G));
       }
-    } else m.reachTo("L", H.torchAt, w, H.poleL);
+    } else if (H.left === "torch") m.reachTo("L", H.torchAt, lw, H.poleL);
     this.revHeld = true;
   }
 
@@ -1608,7 +1638,8 @@ export class Person3D {
       hands: L.length && R.length ? hands : null,
       where,
       grip: L.length ? grip : null,
-      L: { ...this.model.gripLeft.L },
+      // (the left's only when it's on the gun)
+      L: this.revHold.left === "support" ? { ...this.model.gripLeft.L } : null,
       R: { ...this.model.gripLeft.R },
       held: this.revHeld,
     };

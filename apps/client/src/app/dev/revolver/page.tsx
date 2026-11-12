@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from "react";
 // hold's checks read out each frame (Person3D.revolverCheck): the gun's lean off upright, the barrel off
 // the look, the left fingers against the right hand and the grip, each wrist short of its place or past
 // its reach.
-//   /dev/revolver?pose=aim&pitch=0.3&torch=1&view=side&run=0&t=0.5&gender=masculine
+//   /dev/revolver?pose=aim&pitch=0.3&torch=1&view=side&move=0&draw=1&t=0.5&gender=masculine
 // Keys: 1–7 the views (side, left, front, back, shoulder, hands, hands-left) · A aim · T the torch
 // window.__revolver = { ready, check(), set({...}) } for the checks (e2e/revolver-bench.mts).
 
@@ -23,7 +23,11 @@ interface State {
   pose: Pose;
   pitch: number;
   torch: boolean;
-  run: number;
+  /** walking: 0 still, 1 walking, 2 jogging, 3 sprinting (she goes along, the views with her) */
+  move: number;
+  /** the draw scrubbed: 0 in the holster … 1 drawn (`away`: put away — the same path back) */
+  draw: number;
+  away: boolean;
   /** the reload scrubbed, 0..1 (the server's three steps: open, load, shut) */
   t: number;
   view: View;
@@ -49,7 +53,9 @@ function Bench({ q }: { q: URLSearchParams }) {
     pose: (q.get("pose") as Pose) ?? "ready",
     pitch: Number(q.get("pitch") ?? 0),
     torch: q.get("torch") === "1",
-    run: Number(q.get("run") ?? 0),
+    move: Number(q.get("move") ?? 0),
+    draw: Number(q.get("draw") ?? 1),
+    away: q.get("away") === "1",
     t: Number(q.get("t") ?? 0.5),
     view: (q.get("view") as View) ?? "side",
   });
@@ -190,8 +196,8 @@ function Bench({ q }: { q: URLSearchParams }) {
           h === 0 && g
             ? g.model.root.getWorldPosition(gunAt)
             : s.view === "shoulder"
-              ? gunAt.set(-0.62, 1.45, 3)
-              : gunAt.set(0, h, 0);
+              ? gunAt
+              : gunAt.set(person.root.position.x, h, person.root.position.z);
         // (the game's: over her right shoulder, looking ahead, its wider lens)
         const fov = s.view === "shoulder" ? 55 : 35;
         if (cam.fov !== fov) {
@@ -204,7 +210,8 @@ function Bench({ q }: { q: URLSearchParams }) {
           const ax = Math.sin(yaw);
           const az = Math.cos(yaw);
           // (her right: −x turned with it)
-          cam.position.set(-az * 0.62 - ax * 1.5, 1.72, ax * 0.62 - az * 1.5);
+          const r = person.root.position;
+          cam.position.set(r.x - az * 0.62 - ax * 1.5, 1.72, r.z + ax * 0.62 - az * 1.5);
           cam.lookAt(cam.position.x + ax * 5, 1.45, cam.position.z + az * 5);
           return;
         }
@@ -218,10 +225,24 @@ function Bench({ q }: { q: URLSearchParams }) {
 
       // the person as the state has her: aiming, its pitch, the torch, running, the reload scrubbed
       const fx = { kick: 0, cock: 1, turn: 0, open: 0, loaded: 6, trigger: 0, reload: 0 };
-      const apply = () => {
+      const seen = { camX: 0, camZ: 2, onScreen: true, lowQuality: false, mood: 0 };
+      const GAIT = ["still", "walk", "jog", "sprint"] as const;
+      const SPEED = [0, 1.4, 3.2, 5.4];
+      const P3 = person as unknown as { drawT: number; holsterT: number };
+      const apply = (dt: number) => {
         const s = live.current;
         const aim = s.pose === "aim";
-        p.mv = packMv(s.run > 0.5 ? "sprint" : s.run > 0 ? "jog" : aim ? "aim" : "still", false, aim);
+        const mv = Math.max(0, Math.min(3, Math.round(s.move)));
+        p.mv = packMv(mv ? GAIT[mv] : aim ? "aim" : "still", false, aim);
+        // (along the way she faces, +z; back round after 12 m)
+        p.y += SPEED[mv] * dt;
+        if (p.y > 12) p.y = -12;
+        seen.camX = p.x;
+        seen.camZ = p.y + 2;
+        // (the draw: its clock set where the slider has it — the put-away's, the gun gone from her state)
+        p.gun = s.away ? "" : "revolver";
+        if (s.away) P3.holsterT = Math.max(0, (1 - s.draw) * 0.25 - dt);
+        else if (s.draw < 1) P3.drawT = Math.max(0, s.draw * 0.35 - dt);
         p.pitch = aim ? s.pitch : 0;
         p.torch = s.torch;
         // (the reload: open 0–0.3, the loader 0.3–0.8, shut 0.8–1 — the server's steps as F4a retimes them)
@@ -232,7 +253,7 @@ function Bench({ q }: { q: URLSearchParams }) {
         fx.loaded = reload && t < 0.55 ? 0 : 6;
         (person as unknown as { gunFx: typeof fx | null }).gunFx = fx;
       };
-      const seen = { camX: 0, camZ: 2, onScreen: true, lowQuality: false, mood: 0 };
+
       let raf = 0;
       let last = performance.now();
       let n = 0;
@@ -241,7 +262,7 @@ function Bench({ q }: { q: URLSearchParams }) {
         const now = performance.now();
         const dt = Math.min(0.05, (now - last) / 1000);
         last = now;
-        apply();
+        apply(dt);
         person.update(p as never, dt, seen);
         place();
         renderer.render(scene, cam);
@@ -252,7 +273,7 @@ function Bench({ q }: { q: URLSearchParams }) {
               ? [
                   `upright: ${deg(c.cant)}° off · barrel off the look: ${deg(c.off)}°`,
                   `left fingers to the right hand: ${cm(c.hands)} · to the grip: ${cm(c.grip)}`,
-                  `right wrist: ${cm(c.R.short)} short, ${deg(c.R.over)}° past · left: ${cm(c.L.short)} short, ${deg(c.L.over)}° past`,
+                  `right wrist: ${cm(c.R.short)} short, ${deg(c.R.over)}° past · left: ${c.L ? `${cm(c.L.short)} short, ${deg(c.L.over)}° past` : "not on the gun"}`,
                   c.held ? "the hold: plan 80" : "the hold: off (the old hands)",
                 ].join("\n")
               : person.ready
@@ -367,16 +388,31 @@ function Bench({ q }: { q: URLSearchParams }) {
             onChange={(e) => set({ pitch: Number(e.target.value) })}
           />
         </label>
+        <div style={row}>
+          {["still", "walk", "jog", "sprint"].map((g, i) => (
+            <button
+              key={g}
+              type="button"
+              onClick={() => set({ move: i })}
+              style={{ fontWeight: st.move === i ? 700 : 400 }}
+            >
+              {g}
+            </button>
+          ))}
+        </div>
         <label style={row}>
-          running {st.run.toFixed(2)}
+          {st.away ? "put away" : "drawn"} {st.draw.toFixed(2)}
           <input
             type="range"
             min={0}
             max={1}
-            step={0.5}
-            value={st.run}
-            onChange={(e) => set({ run: Number(e.target.value) })}
+            step={0.01}
+            value={st.draw}
+            onChange={(e) => set({ draw: Number(e.target.value) })}
           />
+        </label>
+        <label style={row}>
+          <input type="checkbox" checked={st.away} onChange={(e) => set({ away: e.target.checked })} /> putting it away
         </label>
         <label style={row}>
           reload {st.t.toFixed(2)}

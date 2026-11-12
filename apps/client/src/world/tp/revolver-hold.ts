@@ -94,7 +94,7 @@ export function revolverHold(
     // straight: AIM_ARM), the sights under the eyes; the whole of it turned up about the shoulders as she aims
     // up. The low ready (RE4 Remake's): the same, lowered — the arms out and down READY_PITCH, the elbows
     // softer (READY_ARM), the muzzle at the ground a couple of metres ahead; running, tucked in and steeper.
-    const pitch = s.aiming ? s.pitch : READY_PITCH - 0.2 * r;
+    const pitch = s.aiming ? s.pitch : READY_PITCH - 0.35 * r;
     const c = Math.cos(pitch);
     const sn = Math.sin(pitch);
     const fwd = _a.copy(ahead).multiplyScalar(c).addScaledVector(up, sn);
@@ -106,7 +106,7 @@ export function revolverHold(
       .addScaledVector(fwd, AIM_REACH * B.k);
     out.f.copy(fwd);
     out.u.copy(top);
-    out.reach = s.aiming ? AIM_ARM : READY_ARM - 0.14 * r;
+    out.reach = s.aiming ? AIM_ARM : READY_ARM - 0.2 * r;
     out.poleR = [-1, -0.7, -0.2];
     out.poleL = [-1, -0.7, -0.2];
     if (s.torch) {
@@ -140,6 +140,19 @@ export function revolverHold(
   out.poleL = [-0.8, -1, -0.3];
   return out;
 }
+
+/** (plan 80 phase 2) The revolver in its holster at her right hip: the grip up at the belt, the muzzle down
+ *  (a touch forward), its left side against the hip — where the draw starts and the put-away ends. */
+export function holsterHold(B: BodyFrame, out: { grip: Vector3; f: Vector3; u: Vector3 }) {
+  at(B, -0.21, -0.47, -0.03, out.grip);
+  out.f.copy(B.up).negate().addScaledVector(B.ahead, 0.12).normalize();
+  out.u.copy(B.ahead).addScaledVector(out.f, -B.ahead.dot(out.f)).normalize();
+  return out;
+}
+/** The draw's path (0 in the holster … 1 at the hold): straight up out of it first (DRAW_LIFT of the way, 13
+ *  cm), then turned muzzle-forward and out to the hold; the support hand meets it from DRAW_MEET on */
+export const DRAW_LIFT = 0.3;
+export const DRAW_MEET = 0.55;
 
 export function newHold(): RevolverHold {
   return {
