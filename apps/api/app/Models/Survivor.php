@@ -8,9 +8,12 @@ use Illuminate\Database\Eloquent\Model;
 class Survivor extends Model
 {
     // what one pocket holds, what a gun's loaded with (shared/inventory.ts STACKS, WEAPONS)
-    public const STACKS = ['r38' => 24, 'shell' => 12, 'flare' => 3, 'battery' => 2, 'aid' => 2, 'fuse' => 4];
+    public const STACKS = [
+        'r38' => 24, 'shell' => 12, 'r762' => 60, 'r308' => 15, 'cell' => 3,
+        'flare' => 3, 'battery' => 2, 'aid' => 2, 'fuse' => 4,
+    ];
 
-    public const WEAPONS = ['revolver' => 6, 'shotgun' => 2];
+    public const WEAPONS = ['revolver' => 6, 'shotgun' => 2, 'ak47' => 30, 'sniper' => 5, 'daybreak' => 3];
 
     public const POCKETS = 6;
 
