@@ -1,0 +1,484 @@
+{
+  "revolver-near": [
+    {
+      "id": "683175",
+      "user": "Shark_Anthony",
+      "title": "357 Magnum Revolver Gunshot with Tail",
+      "url": "https://freesound.org/people/Shark_Anthony/sounds/683175/",
+      "files": [
+        "revolver-near-1.mp3"
+      ]
+    }
+  ],
+  "revolver-in": [
+    {
+      "id": "344143",
+      "user": "Brokenphono",
+      "title": "Gunshot_001.wav",
+      "url": "https://freesound.org/people/Brokenphono/sounds/344143/",
+      "files": [
+        "revolver-in-1.mp3"
+      ]
+    }
+  ],
+  "revolver-far": [
+    {
+      "id": "876005",
+      "user": "SignatureSoundsOrg",
+      "title": "Gun_Shot_86",
+      "url": "https://freesound.org/people/SignatureSoundsOrg/sounds/876005/",
+      "files": [
+        "revolver-far-1.mp3"
+      ]
+    }
+  ],
+  "shotgun-near": [
+    {
+      "id": "773873",
+      "user": "MrGungus",
+      "title": "shotgun shoot",
+      "url": "https://freesound.org/people/MrGungus/sounds/773873/",
+      "files": [
+        "shotgun-near-1.mp3"
+      ]
+    }
+  ],
+  "shotgun-in": [
+    {
+      "id": "159710",
+      "user": "AnthonyChan0",
+      "title": "Mossberg 500A - 1 shot and pump",
+      "url": "https://freesound.org/people/AnthonyChan0/sounds/159710/",
+      "files": [
+        "shotgun-in-1.mp3"
+      ]
+    }
+  ],
+  "shotgun-far": [
+    {
+      "id": "431828",
+      "user": "moosegravy",
+      "title": "Very distant shot.wav",
+      "url": "https://freesound.org/people/moosegravy/sounds/431828/",
+      "files": [
+        "shotgun-far-1.mp3"
+      ]
+    }
+  ],
+  "ak-near": [
+    {
+      "id": "414826",
+      "user": "SuperPhat",
+      "title": "Gun Version 2 without forward bolt",
+      "url": "https://freesound.org/people/SuperPhat/sounds/414826/",
+      "files": [
+        "ak-near-1.mp3"
+      ]
+    }
+  ],
+  "ak-in": [
+    {
+      "id": "815698",
+      "user": "modusmogulus",
+      "title": "AR15 Indoors (open windows)",
+      "url": "https://freesound.org/people/modusmogulus/sounds/815698/",
+      "files": [
+        "ak-in-1.mp3",
+        "ak-in-2.mp3",
+        "ak-in-3.mp3",
+        "ak-in-4.mp3",
+        "ak-in-5.mp3"
+      ]
+    }
+  ],
+  "ak-far": [
+    {
+      "id": "541164",
+      "user": "Resaural",
+      "title": "Distant Gunshot",
+      "url": "https://freesound.org/people/Resaural/sounds/541164/",
+      "files": [
+        "ak-far-1.mp3"
+      ]
+    }
+  ],
+  "sniper-near": [
+    {
+      "id": "855608",
+      "user": "qubodup",
+      "title": "Sniper Shot in Field 3 (M2010 Enhanced Sniper Rifle ESR)",
+      "url": "https://freesound.org/people/qubodup/sounds/855608/",
+      "files": [
+        "sniper-near-1.mp3"
+      ]
+    }
+  ],
+  "sniper-in": [
+    {
+      "id": "231248",
+      "user": "AugustSandberg",
+      "title": "Smith & Wesson 686 Plus 4 Inch Barrel .357 Mag",
+      "url": "https://freesound.org/people/AugustSandberg/sounds/231248/",
+      "files": [
+        "sniper-in-1.mp3"
+      ]
+    }
+  ],
+  "sniper-far": [
+    {
+      "id": "541164",
+      "user": "Resaural",
+      "title": "Distant Gunshot",
+      "url": "https://freesound.org/people/Resaural/sounds/541164/",
+      "files": [
+        "sniper-far-1.mp3"
+      ]
+    }
+  ],
+  "daybreak-charge": [
+    {
+      "id": "592573",
+      "user": "magnuswaker",
+      "title": "Laser Charge Up (Stronger)",
+      "url": "https://freesound.org/people/magnuswaker/sounds/592573/",
+      "files": [
+        "daybreak-charge-1.mp3"
+      ]
+    }
+  ],
+  "daybreak-fire": [
+    {
+      "id": "407251",
+      "user": "pointparkcinema",
+      "title": "laser blast.wav",
+      "url": "https://freesound.org/people/pointparkcinema/sounds/407251/",
+      "files": [
+        "daybreak-fire-1.mp3"
+      ]
+    }
+  ],
+  "daybreak-ball": [
+    {
+      "id": "452768",
+      "user": "Euphrosyyn",
+      "title": "Scifi_Generator_Lp",
+      "url": "https://freesound.org/people/Euphrosyyn/sounds/452768/",
+      "files": [
+        "daybreak-ball.mp3"
+      ]
+    }
+  ],
+  "daybreak-burst": [
+    {
+      "id": "814049",
+      "user": "qubodup",
+      "title": "Ion Cannon",
+      "url": "https://freesound.org/people/qubodup/sounds/814049/",
+      "files": [
+        "daybreak-burst-1.mp3"
+      ]
+    }
+  ],
+  "daybreak-burst-far": [
+    {
+      "id": "517747",
+      "user": "danlucaz",
+      "title": "Distant Explosion",
+      "url": "https://freesound.org/people/danlucaz/sounds/517747/",
+      "files": [
+        "daybreak-burst-far-1.mp3"
+      ]
+    }
+  ],
+  "draw": [
+    {
+      "id": "239959",
+      "user": "huddwink",
+      "title": "Gun draw holster.wav",
+      "url": "https://freesound.org/people/huddwink/sounds/239959/",
+      "files": [
+        "draw-1.mp3"
+      ]
+    }
+  ],
+  "holster": [
+    {
+      "id": "426314",
+      "user": "MTJohnson",
+      "title": "GUN HOLSTER.wav",
+      "url": "https://freesound.org/people/MTJohnson/sounds/426314/",
+      "files": [
+        "holster-1.mp3"
+      ]
+    }
+  ],
+  "revolver-dry": [
+    {
+      "id": "677159",
+      "user": "serøutōnin--deprivəd",
+      "title": "22lr revolver handling clicking foley",
+      "url": "https://freesound.org/people/serøutōnin--deprivəd/sounds/677159/",
+      "files": [
+        "revolver-dry-1.mp3"
+      ]
+    }
+  ],
+  "shotgun-dry": [
+    {
+      "id": "702662",
+      "user": "areniporgen",
+      "title": "Remington 870 pull up and dry fire",
+      "url": "https://freesound.org/people/areniporgen/sounds/702662/",
+      "files": [
+        "shotgun-dry-1.mp3"
+      ]
+    }
+  ],
+  "rifle-dry": [
+    {
+      "id": "725402",
+      "user": "serøutōnin--deprivəd",
+      "title": "A rifle being dry fired once",
+      "url": "https://freesound.org/people/serøutōnin--deprivəd/sounds/725402/",
+      "files": [
+        "rifle-dry-1.mp3"
+      ]
+    }
+  ],
+  "case-snow": [
+    {
+      "id": "620929",
+      "user": "Metrolynn",
+      "title": "empty shotgun shells/casings hitting ground bouncing",
+      "url": "https://freesound.org/people/Metrolynn/sounds/620929/",
+      "files": [
+        "case-snow-1.mp3"
+      ]
+    }
+  ],
+  "case-floor": [
+    {
+      "id": "460859",
+      "user": "MPierluissi",
+      "title": "BLLTShel_30CAL BULLET DROP_MP.wav",
+      "url": "https://freesound.org/people/MPierluissi/sounds/460859/",
+      "files": [
+        "case-floor-1.mp3"
+      ]
+    }
+  ],
+  "shell-snow": [
+    {
+      "id": "759624",
+      "user": "toadridingbike",
+      "title": "Shotgun shell hitting ground",
+      "url": "https://freesound.org/people/toadridingbike/sounds/759624/",
+      "files": [
+        "shell-snow-1.mp3"
+      ]
+    }
+  ],
+  "shell-floor": [
+    {
+      "id": "773860",
+      "user": "MrGungus",
+      "title": "12 guage shotgun shell drop",
+      "url": "https://freesound.org/people/MrGungus/sounds/773860/",
+      "files": [
+        "shell-floor-1.mp3"
+      ]
+    }
+  ],
+  "revolver-open": [
+    {
+      "id": "540065",
+      "user": "Nox_Sound",
+      "title": "Weapon_Revolver_Hammer_Mono.wav",
+      "url": "https://freesound.org/people/Nox_Sound/sounds/540065/",
+      "files": [
+        "revolver-open-1.mp3"
+      ]
+    }
+  ],
+  "revolver-eject": [
+    {
+      "id": "501562",
+      "user": "shelbyshark",
+      "title": "Double Action Revolver Empty Chamber.wav",
+      "url": "https://freesound.org/people/shelbyshark/sounds/501562/",
+      "files": [
+        "revolver-eject-1.mp3"
+      ]
+    }
+  ],
+  "revolver-speedloader": [
+    {
+      "id": "722902",
+      "user": "tkane0512",
+      "title": "Revolver Reload Break 2",
+      "url": "https://freesound.org/people/tkane0512/sounds/722902/",
+      "files": [
+        "revolver-speedloader-1.mp3"
+      ]
+    }
+  ],
+  "revolver-close": [
+    {
+      "id": "240698",
+      "user": "ajoyce86",
+      "title": "Revolver Cocking.wav",
+      "url": "https://freesound.org/people/ajoyce86/sounds/240698/",
+      "files": [
+        "revolver-close-1.mp3"
+      ]
+    }
+  ],
+  "revolver-cock": [
+    {
+      "id": "402790",
+      "user": "acidsnowflake",
+      "title": "Cocking a revolver",
+      "url": "https://freesound.org/people/acidsnowflake/sounds/402790/",
+      "files": [
+        "revolver-cock-1.mp3"
+      ]
+    }
+  ],
+  "shotgun-break": [
+    {
+      "id": "52202",
+      "user": "sentryx86",
+      "title": "Single Barreled Shotgun Loading.wav",
+      "url": "https://freesound.org/people/sentryx86/sounds/52202/",
+      "files": [
+        "shotgun-break-1.mp3"
+      ]
+    }
+  ],
+  "shotgun-eject": [
+    {
+      "id": "52202",
+      "user": "sentryx86",
+      "title": "Single Barreled Shotgun Loading.wav",
+      "url": "https://freesound.org/people/sentryx86/sounds/52202/",
+      "files": [
+        "shotgun-eject-1.mp3"
+      ]
+    }
+  ],
+  "shotgun-shell": [
+    {
+      "id": "500293",
+      "user": "Bratish",
+      "title": "Shotgun Shell Load",
+      "url": "https://freesound.org/people/Bratish/sounds/500293/",
+      "files": [
+        "shotgun-shell-1.mp3"
+      ]
+    }
+  ],
+  "shotgun-close": [
+    {
+      "id": "693507",
+      "user": "JumboSizedFish",
+      "title": "Toy Double Barrel Shotgun Reloading",
+      "url": "https://freesound.org/people/JumboSizedFish/sounds/693507/",
+      "files": [
+        "shotgun-close-1.mp3"
+      ]
+    }
+  ],
+  "ak-mag-out": [
+    {
+      "id": "618992",
+      "user": "mrrap4food",
+      "title": "Gun Ammunition Ejecting Thick.mp3",
+      "url": "https://freesound.org/people/mrrap4food/sounds/618992/",
+      "files": [
+        "ak-mag-out-1.mp3"
+      ]
+    }
+  ],
+  "ak-mag-in": [
+    {
+      "id": "815879",
+      "user": "qubodup",
+      "title": "Assault Rifle Reload",
+      "url": "https://freesound.org/people/qubodup/sounds/815879/",
+      "files": [
+        "ak-mag-in-1.mp3",
+        "ak-mag-in-2.mp3",
+        "ak-mag-in-3.mp3"
+      ]
+    }
+  ],
+  "ak-rack": [
+    {
+      "id": "171632",
+      "user": "Pjkasinski3",
+      "title": "Wasr RPK Charge Back1.mp3",
+      "url": "https://freesound.org/people/Pjkasinski3/sounds/171632/",
+      "files": [
+        "ak-rack-1.mp3"
+      ]
+    }
+  ],
+  "sniper-bolt-open": [
+    {
+      "id": "263459",
+      "user": "rammbostein",
+      "title": "Mosin Nagant Bolt.wav",
+      "url": "https://freesound.org/people/rammbostein/sounds/263459/",
+      "files": [
+        "sniper-bolt-open-1.mp3",
+        "sniper-bolt-open-2.mp3"
+      ]
+    }
+  ],
+  "sniper-bolt-close": [
+    {
+      "id": "508244",
+      "user": "shelbyshark",
+      "title": "Russian Mosin-Nagant Bolt.wav",
+      "url": "https://freesound.org/people/shelbyshark/sounds/508244/",
+      "files": [
+        "sniper-bolt-close-1.mp3",
+        "sniper-bolt-close-2.mp3",
+        "sniper-bolt-close-3.mp3"
+      ]
+    }
+  ],
+  "sniper-round": [
+    {
+      "id": "855580",
+      "user": "qubodup",
+      "title": "Pushing 50 Cal BMG Round into Magazine",
+      "url": "https://freesound.org/people/qubodup/sounds/855580/",
+      "files": [
+        "sniper-round-1.mp3"
+      ]
+    }
+  ],
+  "daybreak-cell-out": [
+    {
+      "id": "645778",
+      "user": "jackolous",
+      "title": "Arming a Sci-Fi Gun",
+      "url": "https://freesound.org/people/jackolous/sounds/645778/",
+      "files": [
+        "daybreak-cell-out-1.mp3"
+      ]
+    }
+  ],
+  "daybreak-cell-in": [
+    {
+      "id": "645778",
+      "user": "jackolous",
+      "title": "Arming a Sci-Fi Gun",
+      "url": "https://freesound.org/people/jackolous/sounds/645778/",
+      "files": [
+        "daybreak-cell-in-1.mp3"
+      ]
+    }
+  ]
+}

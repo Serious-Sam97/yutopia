@@ -28,25 +28,7 @@ const NAMES = [
   "dissolve",
   "heartbeat-70",
   "heartbeat-120",
-  "revolver-shot",
-  "revolver-shot-in",
-  "revolver-shot-far",
-  "revolver-cock",
-  "revolver-gate",
-  "revolver-load",
-  "revolver-dry",
-  "shotgun-shot",
-  "shotgun-shot-in",
-  "shotgun-shot-far",
-  "shotgun-dry",
-  "shotgun-break",
-  "shotgun-eject",
-  "shotgun-shell",
-  "shotgun-shut",
-  "gun-draw",
-  "gun-holster",
-  "brass",
-  "shell-drop",
+  // (the guns' own: recorded since plan 79 phase 9 — GUN_LEVEL, public/sfx/guns)
   "hit-tick",
   "hit-head",
   "hit-kill",
@@ -55,6 +37,60 @@ const NAMES = [
   "strike",
 ] as const;
 type Name = (typeof NAMES)[number];
+
+// The guns' recorded sounds (docs/plan/79-the-guns.md phase 9: CC0 recordings the user picked by ear on
+// /dev/gun-sound — public/sfx/guns, its manifest), each slot's level beside the others (every take is cut
+// to −3 dB peak: the handling sits well under a shot), and whether it's a shot (its takes at random,
+// each a touch different) or a moment of handling (its takes in turn).
+const GUN_LEVEL = {
+  "revolver-near": 1,
+  "revolver-in": 0.95,
+  "revolver-far": 0.85,
+  "shotgun-near": 1,
+  "shotgun-in": 0.95,
+  "shotgun-far": 0.85,
+  "ak-near": 0.82,
+  "ak-in": 0.8,
+  "ak-far": 0.75,
+  "sniper-near": 1,
+  "sniper-in": 0.95,
+  "sniper-far": 0.9,
+  "daybreak-charge": 0.7,
+  "daybreak-fire": 0.85,
+  "daybreak-ball": 0.45,
+  "daybreak-burst": 1,
+  "daybreak-burst-far": 0.85,
+  "revolver-cock": 0.4,
+  "revolver-dry": 0.45,
+  "revolver-open": 0.5,
+  "revolver-eject": 0.5,
+  "revolver-speedloader": 0.5,
+  "revolver-close": 0.5,
+  "shotgun-dry": 0.45,
+  "shotgun-break": 0.55,
+  "shotgun-eject": 0.5,
+  "shotgun-shell": 0.45,
+  "shotgun-close": 0.55,
+  "ak-mag-out": 0.5,
+  "ak-mag-in": 0.55,
+  "ak-rack": 0.55,
+  "sniper-bolt-open": 0.5,
+  "sniper-bolt-close": 0.5,
+  "sniper-round": 0.4,
+  "daybreak-cell-out": 0.5,
+  "daybreak-cell-in": 0.5,
+  draw: 0.4,
+  holster: 0.4,
+  "rifle-dry": 0.45,
+  "case-snow": 0.25,
+  "case-floor": 0.3,
+  "shell-snow": 0.3,
+  "shell-floor": 0.35,
+} as const;
+export type GunSound = keyof typeof GUN_LEVEL;
+const isShotSound = (s: GunSound) => /-(near|in|far|fire|burst|burst-far)$/.test(s);
+/** A shot heard out to this far (tiles); past the near reach, the far recording, dulling on. */
+export const SHOT_REACH = { near: 22, far: 90 };
 
 interface Loop {
   src: AudioBufferSourceNode;
@@ -93,6 +129,103 @@ export class DarkSound {
       this.ready();
     };
     for (const n of names) this.worker.postMessage(n);
+  }
+
+  // the guns' recordings, decoded once there's sound; the next take of each, for the handling
+  private recorded = new Map<string, AudioBuffer[]>();
+  private recordedAsked = false;
+  private takeAt = new Map<string, number>();
+  private loadRecorded(ctx: AudioContext) {
+    if (this.recordedAsked) return;
+    this.recordedAsked = true;
+    void fetch("/sfx/guns/manifest.json")
+      .then((r) => (r.ok ? r.json() : {}))
+      // (every slot at once: ~0.7 MB — a gun out, they're wanted in a moment)
+      .then((man: Record<string, { files: string[] }[]>) =>
+        Promise.all(
+          Object.entries(man).map(async ([slot, list]) => {
+            const bufs = await Promise.all(
+              (list[0]?.files ?? []).map((f) =>
+                fetch(`/sfx/guns/${f}`)
+                  .then((r) => r.arrayBuffer())
+                  .then((b) => ctx.decodeAudioData(b))
+                  .catch(() => null),
+              ),
+            );
+            const got = bufs.filter((b): b is AudioBuffer => !!b);
+            if (got.length) this.recorded.set(slot, got);
+          }),
+        ),
+      )
+      .catch(() => undefined);
+  }
+
+  /** A gun in a hand: its recordings fetched and decoded now, before the first shot wants them. */
+  warmGuns(): void {
+    const ctx = this.ctx();
+    if (ctx) this.loadRecorded(ctx);
+  }
+
+  /** A gun's recorded sound (plan 79 phase 9), from (x, y) or here: a shot's take at random, a handling
+   *  moment's next in turn, each a touch different; `range` tiles heard (a far shot dulling on past the
+   *  near reach); `volume` on its level. */
+  gun(slot: GunSound, at?: { x: number; y: number }, range = 40, volume = 1): void {
+    const ctx = this.ctx();
+    if (!ctx) return;
+    this.loadRecorded(ctx);
+    const takes = this.recorded.get(slot);
+    if (!takes?.length) return;
+    let gain = 1;
+    let pan = 0;
+    if (at) {
+      const pl = this.place(at.x, at.y, range);
+      pan = pl.pan;
+      // (a far shot: its recording is already far — heard on, gently, to the far reach)
+      const d = Math.hypot(at.x - this.walker.where().x, at.y - this.walker.where().y);
+      gain = /-far$/.test(slot) ? (d > range ? 0 : 0.6 / (1 + Math.max(0, d - SHOT_REACH.near) / 35)) : pl.gain;
+    }
+    if (gain <= 0.01) return;
+    const shot = isShotSound(slot);
+    const n = this.takeAt.get(slot) ?? 0;
+    const b = shot ? takes[Math.floor(Math.random() * takes.length)] : takes[n % takes.length];
+    this.takeAt.set(slot, n + 1);
+    const src = ctx.createBufferSource();
+    src.buffer = b;
+    // (each a touch different: a held trigger's rounds aren't one sample over and over)
+    src.playbackRate.value = 1 + (Math.random() * 2 - 1) * (shot ? 0.035 : 0.05);
+    const g = ctx.createGain();
+    g.gain.value = gain * volume * GUN_LEVEL[slot] * (0.92 + Math.random() * 0.16) * FX;
+    const p = ctx.createStereoPanner();
+    p.pan.value = pan;
+    src
+      .connect(g)
+      .connect(p)
+      .connect((this.mixer as Mixer).buses.effects);
+    src.start();
+  }
+
+  /** My own shot: the world's bed ducked a moment under it (plan 79 phase 9: mine sits over the world,
+   *  not drowning it for long). */
+  duck(depth = 0.55): void {
+    const ctx = this.ctx();
+    const bus = this.mixer?.buses.ambience;
+    if (!ctx || !bus) return;
+    const t = ctx.currentTime;
+    const g = bus.gain;
+    const was = g.value;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(was, t);
+    g.linearRampToValueAtTime(was * depth, t + 0.02);
+    g.setTargetAtTime(was, t + 0.12, 0.35);
+  }
+
+  /** The Daybreak's ball flying (plan 79 phase 9): its loop where the nearest is (null: let it go). */
+  ballAt(at: { x: number; y: number } | null): void {
+    if (!at && !this.loops.has("daybreak-ball")) return;
+    const ctx = this.ctx();
+    if (ctx) this.loadRecorded(ctx);
+    const { pan, gain } = at ? this.place(at.x, at.y, 60) : { pan: 0, gain: 0 };
+    this.loop("daybreak-ball", gain * GUN_LEVEL["daybreak-ball"] * FX, pan);
   }
 
   dispose(): void {
@@ -198,12 +331,12 @@ export class DarkSound {
   }
 
   // a loop's level (0: let it fade, and stop it once it's quiet)
-  private loop(name: Name, level: number, pan = 0, bus: "ambience" | "effects" = "effects", rate = 1) {
+  private loop(name: Name | GunSound, level: number, pan = 0, bus: "ambience" | "effects" = "effects", rate = 1) {
     const ctx = this.ctx();
     if (!ctx) return;
     let l = this.loops.get(name);
     if (!l && level > 0.005) {
-      const b = this.buffers.get(name);
+      const b = this.buffers.get(name) ?? this.recorded.get(name)?.[0];
       if (!b) return;
       const src = ctx.createBufferSource();
       src.buffer = b;

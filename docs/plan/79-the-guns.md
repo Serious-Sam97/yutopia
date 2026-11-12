@@ -12,7 +12,7 @@ shoulder camera whenever a gun is out (no swap key), F2a walk while aiming, F3a 
 with a recoil layer, F6a the torch held with the gun, F7 **the Daybreak**, F8a the right button focuses
 only a torch already on, F9a the AK in the lockers / the sniper in the hunting bag / the Daybreak from
 Spawn, F10a four quick slots. Phase 1 (the right button) built; phase 0 mocks delivered (second round: the camera closer, the guns
-detailed; the revolver and the double-barrel redesigned after AW2's), signed off 2026-11-11 (the long guns held where the arms reach); phase 2 (the camera, the reticle) and phase 3 (the two guns' models in the game) built 2026-11-11; phase 4 built and signed off 2026-11-12 ("look fine for now"); phase 5 (the AK-47) built and signed off 2026-11-12; phase 6 (the sniper) built and signed off 2026-11-12; phase 7 (the Daybreak) built and signed off 2026-11-12; phase 8 (checks) built and signed off 2026-11-12; F11a (the speedloader) and F12a (both shells out) decided 2026-11-11. Follows plan 32 (the arms: the
+detailed; the revolver and the double-barrel redesigned after AW2's), signed off 2026-11-11 (the long guns held where the arms reach); phase 2 (the camera, the reticle) and phase 3 (the two guns' models in the game) built 2026-11-11; phase 4 built and signed off 2026-11-12 ("look fine for now"); phase 5 (the AK-47) built and signed off 2026-11-12; phase 6 (the sniper) built and signed off 2026-11-12; phase 7 (the Daybreak) built and signed off 2026-11-12; phase 8 (checks) built and signed off 2026-11-12; phase 9 (the sounds) built and signed off 2026-11-12 — picked by the user's ear; **plan 79 done**; F11a (the speedloader) and F12a (both shells out) decided 2026-11-11. Follows plan 32 (the arms: the
 rules, kick, bloom, falloff, heads), plan 30 (the dark: light is the weapon), plans 58/77/78 (the body,
 its moves, its hands) and plan 73 (the life look).
 
@@ -203,6 +203,86 @@ the Daybreak the torch's focus hum and a flare's burst) so the phases before can
    - whether you choose from candidates for each sound (3–4 each, as the steps were picked), or I pick and
      you veto.
    Then: the picks, the mix, the checks (the steps' level rule: plan 63), credits in `sources.json`.
+
+## Phase 9 — the sounds: built, signed off (2026-11-12)
+
+**Decided by the user 2026-11-12** (the questions the phase began with):
+- **Sources**: recordings (CC0 — CC-BY only with its credit in `sources.json`) for everything a real gun
+  makes, layered and processed; made in code only where nothing real exists — the Daybreak.
+- **Character**: heavy and real, AW2's — weighty, dry, close shots with a long tail into the woods; the
+  reloads slow and mechanical. Frightening, not fun.
+- **Reach**: far but not deafening — others hear a shot to ~90 tiles, dulled with distance; mine sits
+  clearly over the world without drowning the steps and voices for long.
+- **The Daybreak's voice**: sci-fi energy — a whining charge, a zap as the ball leaves, a big electric
+  boom for its burst (not a lamp-and-storm, not quiet).
+- **Picking**: by the user's ear from 3–4 candidates a sound on `/dev/gun-sound` (as the steps and the
+  water were), then wired in.
+
+**The sounds** (slots — `tools/sfx-guns.json`, `public/sfx/guns/`):
+- shots, each near (outdoors, its tail into the land), in (a room), far (dulled): `revolver-*`,
+  `shotgun-*`, `ak-*`, `sniper-*` — 12;
+- the Daybreak (made in code, its candidates variants): `daybreak-charge`, `daybreak-fire`,
+  `daybreak-ball` (a loop as it flies), `daybreak-burst`, `daybreak-burst-far` — 5;
+- handling, every gun: `draw`, `holster`; dry `revolver-dry`, `shotgun-dry`, `rifle-dry` (the AK's and
+  the sniper's); the brass and the shells landing `case-snow`, `case-floor`, `shell-snow`, `shell-floor`;
+- the revolver: `revolver-open` (the cylinder out), `revolver-eject` (the rod: the cases dumped),
+  `revolver-speedloader`, `revolver-close`, `revolver-cock`;
+- the double-barrel: `shotgun-break`, `shotgun-eject`, `shotgun-shell` (one in), `shotgun-close`;
+- the AK: `ak-mag-out`, `ak-mag-in`, `ak-rack` (the charging handle);
+- the sniper: `sniper-bolt-open`, `sniper-bolt-close`, `sniper-round` (one thumbed in);
+- the Daybreak's cells: `daybreak-cell-out`, `daybreak-cell-in`.
+About 43 slots.
+
+**The candidates** (2026-11-12): `tools/sfx-guns-search.mjs` searched Freesound for each slot (CC0, the
+most downloaded first, read from its search page with plain curl 4 s apart — plan 63's rate limit), kept
+up to 4 of a fitting length (the thin ones searched again wider; a reload filed under shots, a CD case
+under brass, dropped by hand) → `tools/sfx-guns.json`, 159 candidates; `tools/sfx-weather.mjs`
+(`LIST=tools/sfx-guns.json DIR=guns`, the guns' own cut lengths: `hitLen`) fetched and cut them into
+347 takes, `public/sfx/guns/<slot>-<c><n>.mp3` + manifest (3.95 MB till the picks prune it). A full
+reload's recording serves several slots: its takes are its moments. The Daybreak's are recorded sci-fi
+sounds (charges, zaps, energy blasts — CC0), not made in code: there were real ones to pick from.
+**The bench**: `/dev/gun-sound` — each candidate's takes played in turn, ★ a pick; a handling sound's
+single take ★-able (a shot keeps all its takes: the game goes round them); each gun's moments "in order"
+with the picks (draw, shots, its reload, put away); "copy picks" → the tool's PICK (`[candidate, take]`
+for a take). **Waiting on the user's picks.**
+- `shotgun-in`: none of its recordings would do (the user, 2026-11-12) — searched wider (4 real shots
+  kept: a western blast with reverb, loud blasts, a Mossberg, one from the target's end) and **made** four
+  more (`tools/sfx-guns-rooms.mjs`): the outdoor double-barrel's candidates through a real garage's impulse
+  response (CC0, found by the same search), some of the dry shot kept for its punch — the same gun
+  indoors as out. Any `-in` slot can be made so. (The user picked a recorded one, the Mossberg's.)
+
+**The picks** (the user's, 2026-11-12, by ear): one candidate a slot, a handling moment's take where
+starred — `tools/sfx-guns.json` `pick`/`take` (the tool keeps only that take now), re-cut to 53 takes,
+714 KB in `public/sfx/guns`. Among them: the revolver Shark_Anthony's .357 with its tail; the
+double-barrel MrGungus' shot, a Mossberg indoors; the AK SuperPhat's, an AR15 indoors; the sniper
+qubodup's M2010; the Daybreak's charge a laser charge-up, a laser blast, a sci-fi generator's loop for the
+ball, qubodup's *Ion Cannon* for its burst.
+
+**Wired in** (`dark/voices.ts`, `dark/arms.ts`):
+- `DarkSound.gun(slot, at, range)`: the recordings decoded the moment a gun's out (`warmGuns`: every slot
+  at once — fetched one by one, the first shots were silent), a shot's take at random, a handling moment's
+  in turn, each a touch different (±3.5% / 5% pitch, ±8% level: a held AK's rounds aren't one sample over
+  and over); `GUN_LEVEL` each slot's level (the handling well under a shot, the brass quietest).
+- **Shots**: near (outdoors) / in (a room — where I am) / far by the shooter's distance (past
+  `SHOT_REACH.near` 22 tiles the far recording, dulling on to 90). **Mine ducks the world's bed** a moment
+  (`duck`: the ambience bus to 55% — 75% for the AK's rounds — back over ~0.4 s).
+- **Handling** by Player.arm, mine and everyone's: drawn, put away; the revolver's cylinder out, the rod's
+  dump (its brass on snow or a floor), the speedloader as the rounds go in, shut; the double-barrel's
+  break, eject, a shell a shell, shut; the AK's magazine out, in, the rack after a dry one (mine: the
+  others' emptiness isn't known); the sniper's bolt after a shot (open, close, its case), its reload's
+  rounds; the Daybreak's charge (mine pressed, others' by ARM.charge), its zap, **its ball's hum
+  following the ball** (the nearest in the air, `ballAt`), its burst near or far, its cells. Others'
+  rounds going in aren't known: heard when the server's step would put them in. Dry: the revolver's,
+  the double-barrel's, the rifles'.
+- **The synth's gun sounds retired** (`dark/synth.ts`: 19 recipes and their helpers gone; the hits, the
+  flares, the dark's own stay).
+- **Credits**: every pick in `public/sfx/CREDITS.md` (the guns' section) → `tools/credits.py` →
+  `public/credits.json` (102 sounds).
+- **Checks**: `arms-feel.spec.ts` — all 43 decoded before the first shot's over (the audio running), the
+  feel as before; `daybreak.spec.ts`; the credits test. Not checked by a test: how it sounds — the
+  user's ear, in the game. Then: the picks wired in (the shots' near/in/far by where
+the shooter is and how far; ~90 tiles), the mix (mine over the world, ducked briefly), the synth worker's
+gun sounds retired, credits (CC0: listed anyway, `sources.json`'s way), the checks.
 
 ## Phase 8 — checks: built, signed off (2026-11-12)
 

@@ -1,0 +1,1931 @@
+{
+  "_": "The guns' sound candidates (docs/plan/79-the-guns.md phase 9): CC0 on Freesound, the most downloaded of each slot's searches (tools/sfx-guns-search.mjs), fetched as their HQ previews and cut by tools/sfx-weather.mjs (LIST=tools/sfx-guns.json DIR=guns). The user picks by ear on /dev/gun-sound.",
+  "revolver-near": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "683175",
+        "user": "Shark_Anthony",
+        "title": "357 Magnum Revolver Gunshot with Tail",
+        "preview": "https://cdn.freesound.org/previews/683/683175_3692246-hq.mp3",
+        "url": "https://freesound.org/people/Shark_Anthony/sounds/683175/",
+        "dur": 2.8,
+        "downloads": 2125,
+        "note": "\"357 magnum gunshot\""
+      },
+      {
+        "id": "76885",
+        "user": "Jon285",
+        "title": "Marlin.wav",
+        "preview": "https://cdn.freesound.org/previews/76/76885_282197-hq.mp3",
+        "url": "https://freesound.org/people/Jon285/sounds/76885/",
+        "dur": 16.4,
+        "downloads": 823,
+        "note": "\"357 magnum gunshot\""
+      },
+      {
+        "id": "683186",
+        "user": "Shark_Anthony",
+        "title": "357 Magnum Revolver Gunshot",
+        "preview": "https://cdn.freesound.org/previews/683/683186_3692246-hq.mp3",
+        "url": "https://freesound.org/people/Shark_Anthony/sounds/683186/",
+        "dur": 0.9,
+        "downloads": 1858,
+        "note": "\"357 magnum gunshot\""
+      },
+      {
+        "id": "232868",
+        "user": "klangfabrik",
+        "title": "357 Magnum with 9mm mix EXT.wav",
+        "preview": "https://cdn.freesound.org/previews/232/232868_181941-hq.mp3",
+        "url": "https://freesound.org/people/klangfabrik/sounds/232868/",
+        "dur": 18.1,
+        "downloads": 406,
+        "note": "\"357 magnum gunshot\""
+      }
+    ],
+    "pick": 0
+  },
+  "revolver-in": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "803495",
+        "user": "mahecic",
+        "title": "Pocket Pistol gunshot 2 (indoor)",
+        "preview": "https://cdn.freesound.org/previews/803/803495_16571147-hq.mp3",
+        "url": "https://freesound.org/people/mahecic/sounds/803495/",
+        "dur": 2.6,
+        "downloads": 114,
+        "note": "\"pistol shot indoor\""
+      },
+      {
+        "id": "344143",
+        "user": "Brokenphono",
+        "title": "Gunshot_001.wav",
+        "preview": "https://cdn.freesound.org/previews/344/344143_6179115-hq.mp3",
+        "url": "https://freesound.org/people/Brokenphono/sounds/344143/",
+        "dur": 0.7,
+        "downloads": 1987,
+        "note": "\"pistol shot indoor\""
+      },
+      {
+        "id": "402789",
+        "user": "acidsnowflake",
+        "title": "Small pistol gunshot indoors",
+        "preview": "https://cdn.freesound.org/previews/402/402789_7111288-hq.mp3",
+        "url": "https://freesound.org/people/acidsnowflake/sounds/402789/",
+        "dur": 3,
+        "downloads": 6208,
+        "note": "\"pistol shot indoor\""
+      },
+      {
+        "id": "325157",
+        "user": "Lexana.uk",
+        "title": "BB Gas Hand Gun.mp3",
+        "preview": "https://cdn.freesound.org/previews/325/325157_582848-hq.mp3",
+        "url": "https://freesound.org/people/Lexana.uk/sounds/325157/",
+        "dur": 3.6,
+        "downloads": 236,
+        "note": "\"pistol shot indoor\""
+      }
+    ],
+    "pick": 1
+  },
+  "revolver-far": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "337242",
+        "user": "adrilahan",
+        "title": "Distant Three Round Burst",
+        "preview": "https://cdn.freesound.org/previews/337/337242_3221261-hq.mp3",
+        "url": "https://freesound.org/people/adrilahan/sounds/337242/",
+        "dur": 2.1,
+        "downloads": 233,
+        "note": "\"distant gunshot\""
+      },
+      {
+        "id": "876006",
+        "user": "SignatureSoundsOrg",
+        "title": "Gun_Shot_87",
+        "preview": "https://cdn.freesound.org/previews/876/876006_19205925-hq.mp3",
+        "url": "https://freesound.org/people/SignatureSoundsOrg/sounds/876006/",
+        "dur": 5.4,
+        "downloads": 22,
+        "note": "\"distant gunshot\""
+      },
+      {
+        "id": "876005",
+        "user": "SignatureSoundsOrg",
+        "title": "Gun_Shot_86",
+        "preview": "https://cdn.freesound.org/previews/876/876005_19205925-hq.mp3",
+        "url": "https://freesound.org/people/SignatureSoundsOrg/sounds/876005/",
+        "dur": 6.1,
+        "downloads": 20,
+        "note": "\"distant gunshot\""
+      },
+      {
+        "id": "876002",
+        "user": "SignatureSoundsOrg",
+        "title": "Gun_Shot_83",
+        "preview": "https://cdn.freesound.org/previews/876/876002_19205925-hq.mp3",
+        "url": "https://freesound.org/people/SignatureSoundsOrg/sounds/876002/",
+        "dur": 6.9,
+        "downloads": 34,
+        "note": "\"distant gunshot\""
+      }
+    ],
+    "pick": 2
+  },
+  "shotgun-near": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "418435",
+        "user": "CraftyIndividual",
+        "title": "shotgun with clink.mp3",
+        "preview": "https://cdn.freesound.org/previews/418/418435_6481539-hq.mp3",
+        "url": "https://freesound.org/people/CraftyIndividual/sounds/418435/",
+        "dur": 1,
+        "downloads": 785,
+        "note": "\"shotgun blast\""
+      },
+      {
+        "id": "773873",
+        "user": "MrGungus",
+        "title": "shotgun shoot",
+        "preview": "https://cdn.freesound.org/previews/773/773873_15468302-hq.mp3",
+        "url": "https://freesound.org/people/MrGungus/sounds/773873/",
+        "dur": 1.2,
+        "downloads": 1079,
+        "note": "\"shotgun blast\""
+      },
+      {
+        "id": "865991",
+        "user": "db465",
+        "title": "aa12_fire",
+        "preview": "https://cdn.freesound.org/previews/865/865991_19132311-hq.mp3",
+        "url": "https://freesound.org/people/db465/sounds/865991/",
+        "dur": 4.1,
+        "downloads": 30,
+        "note": "\"shotgun blast\""
+      },
+      {
+        "id": "876006",
+        "user": "SignatureSoundsOrg",
+        "title": "Gun_Shot_87",
+        "preview": "https://cdn.freesound.org/previews/876/876006_19205925-hq.mp3",
+        "url": "https://freesound.org/people/SignatureSoundsOrg/sounds/876006/",
+        "dur": 5.4,
+        "downloads": 22,
+        "note": "\"shotgun blast\""
+      }
+    ],
+    "pick": 1
+  },
+  "shotgun-far": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "431828",
+        "user": "moosegravy",
+        "title": "Very distant shot.wav",
+        "preview": "https://cdn.freesound.org/previews/431/431828_6138164-hq.mp3",
+        "url": "https://freesound.org/people/moosegravy/sounds/431828/",
+        "dur": 4.2,
+        "downloads": 197,
+        "note": "\"distant shotgun\""
+      },
+      {
+        "id": "435411",
+        "user": "moosegravy",
+        "title": "Side by side multiple shooters.wav",
+        "preview": "https://cdn.freesound.org/previews/435/435411_6138164-hq.mp3",
+        "url": "https://freesound.org/people/moosegravy/sounds/435411/",
+        "dur": 5.1,
+        "downloads": 337,
+        "note": "\"distant shotgun\""
+      },
+      {
+        "id": "876006",
+        "user": "SignatureSoundsOrg",
+        "title": "Gun_Shot_87",
+        "preview": "https://cdn.freesound.org/previews/876/876006_19205925-hq.mp3",
+        "url": "https://freesound.org/people/SignatureSoundsOrg/sounds/876006/",
+        "dur": 5.4,
+        "downloads": 22,
+        "note": "\"distant shotgun\""
+      },
+      {
+        "id": "876005",
+        "user": "SignatureSoundsOrg",
+        "title": "Gun_Shot_86",
+        "preview": "https://cdn.freesound.org/previews/876/876005_19205925-hq.mp3",
+        "url": "https://freesound.org/people/SignatureSoundsOrg/sounds/876005/",
+        "dur": 6.1,
+        "downloads": 20,
+        "note": "\"distant shotgun\""
+      }
+    ],
+    "pick": 0
+  },
+  "ak-near": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "578197",
+        "user": "jjcunning",
+        "title": "help identify weapon used ak47 long gun pistol",
+        "preview": "https://cdn.freesound.org/previews/578/578197_4074609-hq.mp3",
+        "url": "https://freesound.org/people/jjcunning/sounds/578197/",
+        "dur": 1.3,
+        "downloads": 114,
+        "note": "\"ak47 single shot\""
+      },
+      {
+        "id": "520934",
+        "user": "ninebilly",
+        "title": "ak 47 - single shot.mp3",
+        "preview": "https://cdn.freesound.org/previews/520/520934_773642-hq.mp3",
+        "url": "https://freesound.org/people/ninebilly/sounds/520934/",
+        "dur": 4.3,
+        "downloads": 2759,
+        "note": "\"ak47 single shot\""
+      },
+      {
+        "id": "414826",
+        "user": "SuperPhat",
+        "title": "Gun Version 2 without forward bolt",
+        "preview": "https://cdn.freesound.org/previews/414/414826_7542558-hq.mp3",
+        "url": "https://freesound.org/people/SuperPhat/sounds/414826/",
+        "dur": 5.9,
+        "downloads": 850,
+        "note": "\"ak47 single shot\""
+      },
+      {
+        "id": "865984",
+        "user": "db465",
+        "title": "ak74m_fire",
+        "preview": "https://cdn.freesound.org/previews/865/865984_19132311-hq.mp3",
+        "url": "https://freesound.org/people/db465/sounds/865984/",
+        "dur": 0.6,
+        "downloads": 18,
+        "note": "\"ak47 single shot\""
+      }
+    ],
+    "pick": 2
+  },
+  "ak-in": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "592264",
+        "user": "ikbenraar",
+        "title": "Shooting_inside.aif",
+        "preview": "https://cdn.freesound.org/previews/592/592264_754558-hq.mp3",
+        "url": "https://freesound.org/people/ikbenraar/sounds/592264/",
+        "dur": 5.8,
+        "downloads": 525,
+        "note": "\"rifle shot indoor\""
+      },
+      {
+        "id": "815698",
+        "user": "modusmogulus",
+        "title": "AR15 Indoors (open windows)",
+        "preview": "https://cdn.freesound.org/previews/815/815698_15956618-hq.mp3",
+        "url": "https://freesound.org/people/modusmogulus/sounds/815698/",
+        "dur": 17,
+        "downloads": 161,
+        "note": "\"rifle shot indoor\""
+      },
+      {
+        "id": "231246",
+        "user": "AugustSandberg",
+        "title": "PS 90",
+        "preview": "https://cdn.freesound.org/previews/231/231246_1934171-hq.mp3",
+        "url": "https://freesound.org/people/AugustSandberg/sounds/231246/",
+        "dur": 1.8,
+        "downloads": 120,
+        "note": "\"indoor shooting range rifle\""
+      },
+      {
+        "id": "399268",
+        "user": "morganpurkis",
+        "title": "Simple Gunshot Reverb Test.wav",
+        "preview": "https://cdn.freesound.org/previews/399/399268_5937039-hq.mp3",
+        "url": "https://freesound.org/people/morganpurkis/sounds/399268/",
+        "dur": 0.7,
+        "downloads": 528,
+        "note": "\"gunshot room reverb\""
+      }
+    ],
+    "pick": 1
+  },
+  "ak-far": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "854635",
+        "user": "qubodup",
+        "title": "Distant Machine Gun Firing",
+        "preview": "https://cdn.freesound.org/previews/854/854635_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/854635/",
+        "dur": 1.2,
+        "downloads": 58,
+        "note": "\"distant rifle fire\""
+      },
+      {
+        "id": "541164",
+        "user": "Resaural",
+        "title": "Distant Gunshot",
+        "preview": "https://cdn.freesound.org/previews/541/541164_9662992-hq.mp3",
+        "url": "https://freesound.org/people/Resaural/sounds/541164/",
+        "dur": 3.3,
+        "downloads": 1037,
+        "note": "\"distant rifle fire\""
+      },
+      {
+        "id": "569847",
+        "user": "danlucaz",
+        "title": "Gun Shot #1",
+        "preview": "https://cdn.freesound.org/previews/569/569847_9996727-hq.mp3",
+        "url": "https://freesound.org/people/danlucaz/sounds/569847/",
+        "dur": 1.9,
+        "downloads": 2692,
+        "note": "\"distant rifle fire\""
+      },
+      {
+        "id": "431835",
+        "user": "moosegravy",
+        "title": "Ruger rifle1.wav",
+        "preview": "https://cdn.freesound.org/previews/431/431835_6138164-hq.mp3",
+        "url": "https://freesound.org/people/moosegravy/sounds/431835/",
+        "dur": 7.5,
+        "downloads": 106,
+        "note": "\"distant rifle fire\""
+      }
+    ],
+    "pick": 1
+  },
+  "sniper-near": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "855608",
+        "user": "qubodup",
+        "title": "Sniper Shot in Field 3 (M2010 Enhanced Sniper Rifle ESR)",
+        "preview": "https://cdn.freesound.org/previews/855/855608_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/855608/",
+        "dur": 1.4,
+        "downloads": 122,
+        "note": "\"sniper rifle shot\""
+      },
+      {
+        "id": "524738",
+        "user": "LilMati",
+        "title": "Sniper Rifle Instant Kill Shots 02",
+        "preview": "https://cdn.freesound.org/previews/524/524738_6142149-hq.mp3",
+        "url": "https://freesound.org/people/LilMati/sounds/524738/",
+        "dur": 2,
+        "downloads": 1778,
+        "note": "\"sniper rifle shot\""
+      },
+      {
+        "id": "524739",
+        "user": "LilMati",
+        "title": "Sniper Rifle Instant Kill Shots 01",
+        "preview": "https://cdn.freesound.org/previews/524/524739_6142149-hq.mp3",
+        "url": "https://freesound.org/people/LilMati/sounds/524739/",
+        "dur": 1.7,
+        "downloads": 1306,
+        "note": "\"sniper rifle shot\""
+      },
+      {
+        "id": "149177",
+        "user": "deathnsorrow",
+        "title": "shot and reload",
+        "preview": "https://cdn.freesound.org/previews/149/149177_492298-hq.mp3",
+        "url": "https://freesound.org/people/deathnsorrow/sounds/149177/",
+        "dur": 1.5,
+        "downloads": 12954,
+        "note": "\"sniper rifle shot\""
+      }
+    ],
+    "pick": 0
+  },
+  "sniper-in": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "592264",
+        "user": "ikbenraar",
+        "title": "Shooting_inside.aif",
+        "preview": "https://cdn.freesound.org/previews/592/592264_754558-hq.mp3",
+        "url": "https://freesound.org/people/ikbenraar/sounds/592264/",
+        "dur": 5.8,
+        "downloads": 525,
+        "note": "\"rifle shot indoor\""
+      },
+      {
+        "id": "815698",
+        "user": "modusmogulus",
+        "title": "AR15 Indoors (open windows)",
+        "preview": "https://cdn.freesound.org/previews/815/815698_15956618-hq.mp3",
+        "url": "https://freesound.org/people/modusmogulus/sounds/815698/",
+        "dur": 17,
+        "downloads": 161,
+        "note": "\"rifle shot indoor\""
+      },
+      {
+        "id": "231248",
+        "user": "AugustSandberg",
+        "title": "Smith & Wesson 686 Plus 4 Inch Barrel .357 Mag",
+        "preview": "https://cdn.freesound.org/previews/231/231248_1934171-hq.mp3",
+        "url": "https://freesound.org/people/AugustSandberg/sounds/231248/",
+        "dur": 4,
+        "downloads": 1671,
+        "note": "\"indoor shooting range\""
+      },
+      {
+        "id": "399268",
+        "user": "morganpurkis",
+        "title": "Simple Gunshot Reverb Test.wav",
+        "preview": "https://cdn.freesound.org/previews/399/399268_5937039-hq.mp3",
+        "url": "https://freesound.org/people/morganpurkis/sounds/399268/",
+        "dur": 0.7,
+        "downloads": 528,
+        "note": "\"rifle gunshot reverb\""
+      }
+    ],
+    "pick": 2
+  },
+  "sniper-far": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "569847",
+        "user": "danlucaz",
+        "title": "Gun Shot #1",
+        "preview": "https://cdn.freesound.org/previews/569/569847_9996727-hq.mp3",
+        "url": "https://freesound.org/people/danlucaz/sounds/569847/",
+        "dur": 1.9,
+        "downloads": 2692,
+        "note": "\"distant rifle shot\""
+      },
+      {
+        "id": "337242",
+        "user": "adrilahan",
+        "title": "Distant Three Round Burst",
+        "preview": "https://cdn.freesound.org/previews/337/337242_3221261-hq.mp3",
+        "url": "https://freesound.org/people/adrilahan/sounds/337242/",
+        "dur": 2.1,
+        "downloads": 233,
+        "note": "\"distant rifle shot\""
+      },
+      {
+        "id": "854635",
+        "user": "qubodup",
+        "title": "Distant Machine Gun Firing",
+        "preview": "https://cdn.freesound.org/previews/854/854635_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/854635/",
+        "dur": 1.2,
+        "downloads": 58,
+        "note": "\"distant rifle shot\""
+      },
+      {
+        "id": "541164",
+        "user": "Resaural",
+        "title": "Distant Gunshot",
+        "preview": "https://cdn.freesound.org/previews/541/541164_9662992-hq.mp3",
+        "url": "https://freesound.org/people/Resaural/sounds/541164/",
+        "dur": 3.3,
+        "downloads": 1037,
+        "note": "\"distant rifle shot\""
+      }
+    ],
+    "pick": 3
+  },
+  "daybreak-charge": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "558679",
+        "user": "Hemplock",
+        "title": "Sci-Fi Charge Up.wav",
+        "preview": "https://cdn.freesound.org/previews/558/558679_6135165-hq.mp3",
+        "url": "https://freesound.org/people/Hemplock/sounds/558679/",
+        "dur": 1.2,
+        "downloads": 1187,
+        "note": "\"sci-fi charge up\""
+      },
+      {
+        "id": "592573",
+        "user": "magnuswaker",
+        "title": "Laser Charge Up (Stronger)",
+        "preview": "https://cdn.freesound.org/previews/592/592573_11537497-hq.mp3",
+        "url": "https://freesound.org/people/magnuswaker/sounds/592573/",
+        "dur": 1.1,
+        "downloads": 1517,
+        "note": "\"sci-fi charge up\""
+      },
+      {
+        "id": "610562",
+        "user": "BrickDeveloper171",
+        "title": "Charge up 2",
+        "preview": "https://cdn.freesound.org/previews/610/610562_11351035-hq.mp3",
+        "url": "https://freesound.org/people/BrickDeveloper171/sounds/610562/",
+        "dur": 2.4,
+        "downloads": 1400,
+        "note": "\"sci-fi charge up\""
+      },
+      {
+        "id": "407251",
+        "user": "pointparkcinema",
+        "title": "laser blast.wav",
+        "preview": "https://cdn.freesound.org/previews/407/407251_7237186-hq.mp3",
+        "url": "https://freesound.org/people/pointparkcinema/sounds/407251/",
+        "dur": 2.9,
+        "downloads": 156,
+        "note": "\"sci-fi charge up\""
+      }
+    ],
+    "pick": 1
+  },
+  "daybreak-fire": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "505235",
+        "user": "Daleonfire",
+        "title": "Laser2",
+        "preview": "https://cdn.freesound.org/previews/505/505235_150886-hq.mp3",
+        "url": "https://freesound.org/people/Daleonfire/sounds/505235/",
+        "dur": 0.6,
+        "downloads": 1423,
+        "note": "\"sci fi laser blast\""
+      },
+      {
+        "id": "868441",
+        "user": "randbsoundbites",
+        "title": "Spaceship laser burst",
+        "preview": "https://cdn.freesound.org/previews/868/868441_16968183-hq.mp3",
+        "url": "https://freesound.org/people/randbsoundbites/sounds/868441/",
+        "dur": 1.3,
+        "downloads": 29,
+        "note": "\"sci fi laser blast\""
+      },
+      {
+        "id": "783986",
+        "user": "SecureSubset",
+        "title": "Laser Beam Firing",
+        "preview": "https://cdn.freesound.org/previews/783/783986_16752880-hq.mp3",
+        "url": "https://freesound.org/people/SecureSubset/sounds/783986/",
+        "dur": 0.8,
+        "downloads": 152,
+        "note": "\"sci fi laser blast\""
+      },
+      {
+        "id": "407251",
+        "user": "pointparkcinema",
+        "title": "laser blast.wav",
+        "preview": "https://cdn.freesound.org/previews/407/407251_7237186-hq.mp3",
+        "url": "https://freesound.org/people/pointparkcinema/sounds/407251/",
+        "dur": 2.9,
+        "downloads": 156,
+        "note": "\"sci fi laser blast\""
+      }
+    ],
+    "pick": 3
+  },
+  "daybreak-ball": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "686992",
+        "user": "Zeraora",
+        "title": "Forcefield Hum Glitchified.wav",
+        "preview": "https://cdn.freesound.org/previews/686/686992_7347459-hq.mp3",
+        "url": "https://freesound.org/people/Zeraora/sounds/686992/",
+        "dur": 25,
+        "downloads": 81,
+        "note": "\"energy hum loop\""
+      },
+      {
+        "id": "812392",
+        "user": "Zeraora",
+        "title": "Forcefield Hum 2",
+        "preview": "https://cdn.freesound.org/previews/812/812392_7347459-hq.mp3",
+        "url": "https://freesound.org/people/Zeraora/sounds/812392/",
+        "dur": 25,
+        "downloads": 112,
+        "note": "\"energy hum loop\""
+      },
+      {
+        "id": "452768",
+        "user": "Euphrosyyn",
+        "title": "Scifi_Generator_Lp",
+        "preview": "https://cdn.freesound.org/previews/452/452768_5051822-hq.mp3",
+        "url": "https://freesound.org/people/Euphrosyyn/sounds/452768/",
+        "dur": 22.9,
+        "downloads": 1516,
+        "note": "\"energy hum loop\""
+      },
+      {
+        "id": "861431",
+        "user": "qubodup",
+        "title": "explorer star cruiser engine room background hum loop",
+        "preview": "https://cdn.freesound.org/previews/861/861431_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/861431/",
+        "dur": 41.1,
+        "downloads": 79,
+        "note": "\"energy hum loop\""
+      }
+    ],
+    "pick": 2
+  },
+  "daybreak-burst": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "413224",
+        "user": "ihitokage",
+        "title": "Energy impact 4",
+        "preview": "https://cdn.freesound.org/previews/413/413224_1675920-hq.mp3",
+        "url": "https://freesound.org/people/ihitokage/sounds/413224/",
+        "dur": 1.4,
+        "downloads": 215,
+        "note": "\"energy explosion\""
+      },
+      {
+        "id": "873747",
+        "user": "The_Elementus",
+        "title": "Low_Mid_End_Void_Energy_Blast_Punch_01",
+        "preview": "https://cdn.freesound.org/previews/873/873747_13191712-hq.mp3",
+        "url": "https://freesound.org/people/The_Elementus/sounds/873747/",
+        "dur": 0.8,
+        "downloads": 66,
+        "note": "\"energy explosion\""
+      },
+      {
+        "id": "814049",
+        "user": "qubodup",
+        "title": "Ion Cannon",
+        "preview": "https://cdn.freesound.org/previews/814/814049_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/814049/",
+        "dur": 6.5,
+        "downloads": 739,
+        "note": "\"energy explosion\""
+      },
+      {
+        "id": "814044",
+        "user": "qubodup",
+        "title": "Creation Magic Blast",
+        "preview": "https://cdn.freesound.org/previews/814/814044_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/814044/",
+        "dur": 7.2,
+        "downloads": 618,
+        "note": "\"energy explosion\""
+      }
+    ],
+    "pick": 2
+  },
+  "daybreak-burst-far": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "517747",
+        "user": "danlucaz",
+        "title": "Distant Explosion",
+        "preview": "https://cdn.freesound.org/previews/517/517747_9996727-hq.mp3",
+        "url": "https://freesound.org/people/danlucaz/sounds/517747/",
+        "dur": 1.7,
+        "downloads": 287,
+        "note": "\"distant explosion\""
+      },
+      {
+        "id": "324277",
+        "user": "Kostrava",
+        "title": "distant explosion",
+        "preview": "https://cdn.freesound.org/previews/324/324277_1134415-hq.mp3",
+        "url": "https://freesound.org/people/Kostrava/sounds/324277/",
+        "dur": 8.6,
+        "downloads": 1937,
+        "note": "\"distant explosion\""
+      },
+      {
+        "id": "372086",
+        "user": "Mr_KeybOred",
+        "title": "Distant Explosion",
+        "preview": "https://cdn.freesound.org/previews/372/372086_6417448-hq.mp3",
+        "url": "https://freesound.org/people/Mr_KeybOred/sounds/372086/",
+        "dur": 4.4,
+        "downloads": 4887,
+        "note": "\"distant explosion\""
+      },
+      {
+        "id": "255527",
+        "user": "Opticreep",
+        "title": "verydistantexplosion.wav",
+        "preview": "https://cdn.freesound.org/previews/255/255527_4731953-hq.mp3",
+        "url": "https://freesound.org/people/Opticreep/sounds/255527/",
+        "dur": 3.1,
+        "downloads": 874,
+        "note": "\"distant explosion\""
+      }
+    ],
+    "pick": 0
+  },
+  "draw": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "239959",
+        "user": "huddwink",
+        "title": "Gun draw holster.wav",
+        "preview": "https://cdn.freesound.org/previews/239/239959_1241452-hq.mp3",
+        "url": "https://freesound.org/people/huddwink/sounds/239959/",
+        "dur": 1.7,
+        "downloads": 1768,
+        "note": "\"gun draw holster\""
+      },
+      {
+        "id": "171617",
+        "user": "Pjkasinski3",
+        "title": "Draw 2.mp3",
+        "preview": "https://cdn.freesound.org/previews/171/171617_968159-hq.mp3",
+        "url": "https://freesound.org/people/Pjkasinski3/sounds/171617/",
+        "dur": 1.5,
+        "downloads": 649,
+        "note": "\"gun draw holster\""
+      },
+      {
+        "id": "128154",
+        "user": "killpineapple",
+        "title": "drawingGun.wav",
+        "preview": "https://cdn.freesound.org/previews/128/128154_855431-hq.mp3",
+        "url": "https://freesound.org/people/killpineapple/sounds/128154/",
+        "dur": 2.3,
+        "downloads": 1705,
+        "note": "\"gun draw holster\""
+      },
+      {
+        "id": "377145",
+        "user": "nioczkus",
+        "title": "Pistol Draw Unholster",
+        "preview": "https://cdn.freesound.org/previews/377/377145_932959-hq.mp3",
+        "url": "https://freesound.org/people/nioczkus/sounds/377145/",
+        "dur": 1.1,
+        "downloads": 1710,
+        "note": "\"pistol draw\""
+      }
+    ],
+    "pick": 0
+  },
+  "holster": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "426314",
+        "user": "MTJohnson",
+        "title": "GUN HOLSTER.wav",
+        "preview": "https://cdn.freesound.org/previews/426/426314_8522109-hq.mp3",
+        "url": "https://freesound.org/people/MTJohnson/sounds/426314/",
+        "dur": 2.2,
+        "downloads": 519,
+        "note": "\"holster gun\""
+      },
+      {
+        "id": "239959",
+        "user": "huddwink",
+        "title": "Gun draw holster.wav",
+        "preview": "https://cdn.freesound.org/previews/239/239959_1241452-hq.mp3",
+        "url": "https://freesound.org/people/huddwink/sounds/239959/",
+        "dur": 1.7,
+        "downloads": 1768,
+        "note": "\"holster gun\""
+      },
+      {
+        "id": "767312",
+        "user": "Hano_van_Dalen",
+        "title": "GUNHndl_Revolver Removal from Leather Holster_HvD_OwSFX",
+        "preview": "https://cdn.freesound.org/previews/767/767312_15758192-hq.mp3",
+        "url": "https://freesound.org/people/Hano_van_Dalen/sounds/767312/",
+        "dur": 7.5,
+        "downloads": 348,
+        "note": "\"holster gun\""
+      },
+      {
+        "id": "697619",
+        "user": "GrayEpic",
+        "title": "L & R GUN SPIN And HOLSTER.mp3",
+        "preview": "https://cdn.freesound.org/previews/697/697619_4501195-hq.mp3",
+        "url": "https://freesound.org/people/GrayEpic/sounds/697619/",
+        "dur": 2.8,
+        "downloads": 166,
+        "note": "\"holster gun\""
+      }
+    ],
+    "pick": 0
+  },
+  "revolver-dry": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "645316",
+        "user": "DarkShroom",
+        "title": "snub_nose_357_magnum_noisegate-17.80.wav",
+        "preview": "https://cdn.freesound.org/previews/645/645316_3139426-hq.mp3",
+        "url": "https://freesound.org/people/DarkShroom/sounds/645316/",
+        "dur": 0.3,
+        "downloads": 919,
+        "note": "\"revolver dry fire\""
+      },
+      {
+        "id": "540066",
+        "user": "Nox_Sound",
+        "title": "Weapon_Revolver_DryFire_Mono.wav",
+        "preview": "https://cdn.freesound.org/previews/540/540066_9250976-hq.mp3",
+        "url": "https://freesound.org/people/Nox_Sound/sounds/540066/",
+        "dur": 3.1,
+        "downloads": 653,
+        "note": "\"revolver dry fire\""
+      },
+      {
+        "id": "677159",
+        "user": "ser\u00f8ut\u014dnin--depriv\u0259d",
+        "title": "22lr revolver handling clicking foley",
+        "preview": "https://cdn.freesound.org/previews/677/677159_7157894-hq.mp3",
+        "url": "https://freesound.org/people/ser\u00f8ut\u014dnin--depriv\u0259d/sounds/677159/",
+        "dur": 1,
+        "downloads": 1556,
+        "note": "\"revolver hammer click\""
+      },
+      {
+        "id": "693124",
+        "user": "ser\u00f8ut\u014dnin--depriv\u0259d",
+        "title": "Makarov 9mm Handgun being reloaded while empty. Full sequence",
+        "preview": "https://cdn.freesound.org/previews/693/693124_7157894-hq.mp3",
+        "url": "https://freesound.org/people/ser\u00f8ut\u014dnin--depriv\u0259d/sounds/693124/",
+        "dur": 3.1,
+        "downloads": 768,
+        "note": "\"gun empty click\""
+      }
+    ],
+    "pick": 2
+  },
+  "shotgun-dry": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "645318",
+        "user": "DarkShroom",
+        "title": "M1014_shot_extracted.wav",
+        "preview": "https://cdn.freesound.org/previews/645/645318_3139426-hq.mp3",
+        "url": "https://freesound.org/people/DarkShroom/sounds/645318/",
+        "dur": 0.5,
+        "downloads": 373,
+        "note": "\"shotgun dry fire\""
+      },
+      {
+        "id": "702662",
+        "user": "areniporgen",
+        "title": "Remington 870 pull up and dry fire",
+        "preview": "https://cdn.freesound.org/previews/702/702662_15072041-hq.mp3",
+        "url": "https://freesound.org/people/areniporgen/sounds/702662/",
+        "dur": 0.9,
+        "downloads": 103,
+        "note": "\"shotgun dry fire\""
+      },
+      {
+        "id": "351226",
+        "user": "Pacifici",
+        "title": "shotgun_rack.wav",
+        "preview": "https://cdn.freesound.org/previews/351/351226_4978050-hq.mp3",
+        "url": "https://freesound.org/people/Pacifici/sounds/351226/",
+        "dur": 3.5,
+        "downloads": 877,
+        "note": "\"shotgun dry fire\""
+      },
+      {
+        "id": "741074",
+        "user": "FOSSarts",
+        "title": "Dry Fire of Diablo 12g pistol 6 inch, cock from halfway point and dry fire 1",
+        "preview": "https://cdn.freesound.org/previews/741/741074_14631530-hq.mp3",
+        "url": "https://freesound.org/people/FOSSarts/sounds/741074/",
+        "dur": 4.4,
+        "downloads": 95,
+        "note": "\"shotgun dry fire\""
+      }
+    ],
+    "pick": 1
+  },
+  "rifle-dry": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "725402",
+        "user": "ser\u00f8ut\u014dnin--depriv\u0259d",
+        "title": "A rifle being dry fired once",
+        "preview": "https://cdn.freesound.org/previews/725/725402_7157894-hq.mp3",
+        "url": "https://freesound.org/people/ser\u00f8ut\u014dnin--depriv\u0259d/sounds/725402/",
+        "dur": 0.5,
+        "downloads": 894,
+        "note": "\"rifle dry fire\""
+      },
+      {
+        "id": "460852",
+        "user": "MPierluissi",
+        "title": "GUNRif_M1 GARAND DRY FIRE_MP.wav",
+        "preview": "https://cdn.freesound.org/previews/460/460852_4986614-hq.mp3",
+        "url": "https://freesound.org/people/MPierluissi/sounds/460852/",
+        "dur": 3.1,
+        "downloads": 381,
+        "note": "\"rifle dry fire\""
+      },
+      {
+        "id": "516744",
+        "user": "ImAFoley",
+        "title": "Nerf Hammershot Empty Shot",
+        "preview": "https://cdn.freesound.org/previews/516/516744_7117640-hq.mp3",
+        "url": "https://freesound.org/people/ImAFoley/sounds/516744/",
+        "dur": 9,
+        "downloads": 112,
+        "note": "\"rifle dry fire\""
+      },
+      {
+        "id": "588733",
+        "user": "TampaJoey",
+        "title": "Dry_Fire.wav",
+        "preview": "https://cdn.freesound.org/previews/588/588733_10507437-hq.mp3",
+        "url": "https://freesound.org/people/TampaJoey/sounds/588733/",
+        "dur": 0.4,
+        "downloads": 253,
+        "note": "\"rifle dry fire\""
+      }
+    ],
+    "pick": 0
+  },
+  "case-snow": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "620929",
+        "user": "Metrolynn",
+        "title": "empty shotgun shells/casings hitting ground bouncing",
+        "preview": "https://cdn.freesound.org/previews/620/620929_6493174-hq.mp3",
+        "url": "https://freesound.org/people/Metrolynn/sounds/620929/",
+        "dur": 2.3,
+        "downloads": 487,
+        "note": "\"casing ground\""
+      },
+      {
+        "id": "233318",
+        "user": "ngphil22",
+        "title": "9mm.mp3",
+        "preview": "https://cdn.freesound.org/previews/233/233318_4216178-hq.mp3",
+        "url": "https://freesound.org/people/ngphil22/sounds/233318/",
+        "dur": 1.2,
+        "downloads": 1037,
+        "note": "\"casing ground\""
+      }
+    ],
+    "pick": 0
+  },
+  "case-floor": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "460859",
+        "user": "MPierluissi",
+        "title": "BLLTShel_30CAL BULLET DROP_MP.wav",
+        "preview": "https://cdn.freesound.org/previews/460/460859_4986614-hq.mp3",
+        "url": "https://freesound.org/people/MPierluissi/sounds/460859/",
+        "dur": 8.1,
+        "downloads": 891,
+        "note": "\"bullet casing drop\""
+      },
+      {
+        "id": "205126",
+        "user": "Danwardvs",
+        "title": ".30 Shell Bouncing",
+        "preview": "https://cdn.freesound.org/previews/205/205126_3310361-hq.mp3",
+        "url": "https://freesound.org/people/Danwardvs/sounds/205126/",
+        "dur": 10.1,
+        "downloads": 1984,
+        "note": "\"bullet casing drop\""
+      },
+      {
+        "id": "778028",
+        "user": "BlondPanda",
+        "title": "Small_Bullet_Very_Soft_Hit_07",
+        "preview": "https://cdn.freesound.org/previews/778/778028_8927049-hq.mp3",
+        "url": "https://freesound.org/people/BlondPanda/sounds/778028/",
+        "dur": 0.3,
+        "downloads": 170,
+        "note": "\"bullet casing drop\""
+      },
+      {
+        "id": "834236",
+        "user": "barryshamir",
+        "title": "Bullet casings falling",
+        "preview": "https://cdn.freesound.org/previews/834/834236_14047045-hq.mp3",
+        "url": "https://freesound.org/people/barryshamir/sounds/834236/",
+        "dur": 14.3,
+        "downloads": 53,
+        "note": "\"bullet casing drop\""
+      }
+    ],
+    "pick": 0,
+    "take": 0
+  },
+  "shell-snow": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "620929",
+        "user": "Metrolynn",
+        "title": "empty shotgun shells/casings hitting ground bouncing",
+        "preview": "https://cdn.freesound.org/previews/620/620929_6493174-hq.mp3",
+        "url": "https://freesound.org/people/Metrolynn/sounds/620929/",
+        "dur": 2.3,
+        "downloads": 487,
+        "note": "\"shotgun shell ground\""
+      },
+      {
+        "id": "759624",
+        "user": "toadridingbike",
+        "title": "Shotgun shell hitting ground",
+        "preview": "https://cdn.freesound.org/previews/759/759624_15355754-hq.mp3",
+        "url": "https://freesound.org/people/toadridingbike/sounds/759624/",
+        "dur": 1.6,
+        "downloads": 37,
+        "note": "\"shotgun shell ground\""
+      }
+    ],
+    "pick": 1
+  },
+  "shell-floor": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "773860",
+        "user": "MrGungus",
+        "title": "12 guage shotgun shell drop",
+        "preview": "https://cdn.freesound.org/previews/773/773860_15468302-hq.mp3",
+        "url": "https://freesound.org/people/MrGungus/sounds/773860/",
+        "dur": 1.1,
+        "downloads": 244,
+        "note": "\"shotgun shell drop\""
+      },
+      {
+        "id": "436074",
+        "user": "rammbostein",
+        "title": "Shotgun rack and shell drop",
+        "preview": "https://cdn.freesound.org/previews/436/436074_4174990-hq.mp3",
+        "url": "https://freesound.org/people/rammbostein/sounds/436074/",
+        "dur": 7.4,
+        "downloads": 356,
+        "note": "\"shotgun shell drop\""
+      },
+      {
+        "id": "436070",
+        "user": "rammbostein",
+        "title": "12 Gauge Shell drop",
+        "preview": "https://cdn.freesound.org/previews/436/436070_4174990-hq.mp3",
+        "url": "https://freesound.org/people/rammbostein/sounds/436070/",
+        "dur": 5.5,
+        "downloads": 384,
+        "note": "\"shotgun shell drop\""
+      },
+      {
+        "id": "523059",
+        "user": "magnuswaker",
+        "title": "Shell Bounce 1",
+        "preview": "https://cdn.freesound.org/previews/523/523059_11537497-hq.mp3",
+        "url": "https://freesound.org/people/magnuswaker/sounds/523059/",
+        "dur": 1.9,
+        "downloads": 202,
+        "note": "\"shotgun shell drop\""
+      }
+    ],
+    "pick": 0
+  },
+  "revolver-open": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "722902",
+        "user": "tkane0512",
+        "title": "Revolver Reload Break 2",
+        "preview": "https://cdn.freesound.org/previews/722/722902_15683404-hq.mp3",
+        "url": "https://freesound.org/people/tkane0512/sounds/722902/",
+        "dur": 2.6,
+        "downloads": 571,
+        "note": "\"revolver reload\""
+      },
+      {
+        "id": "177863",
+        "user": "Dredile",
+        "title": "Clean Revolver Reload",
+        "preview": "https://cdn.freesound.org/previews/177/177863_1046667-hq.mp3",
+        "url": "https://freesound.org/people/Dredile/sounds/177863/",
+        "dur": 3.4,
+        "downloads": 8404,
+        "note": "\"revolver reload\""
+      },
+      {
+        "id": "540065",
+        "user": "Nox_Sound",
+        "title": "Weapon_Revolver_Hammer_Mono.wav",
+        "preview": "https://cdn.freesound.org/previews/540/540065_9250976-hq.mp3",
+        "url": "https://freesound.org/people/Nox_Sound/sounds/540065/",
+        "dur": 3.1,
+        "downloads": 840,
+        "note": "\"revolver reload\""
+      },
+      {
+        "id": "693125",
+        "user": "ser\u00f8ut\u014dnin--depriv\u0259d",
+        "title": "22lr Revolver ejecting bullets from cylinder",
+        "preview": "https://cdn.freesound.org/previews/693/693125_7157894-hq.mp3",
+        "url": "https://freesound.org/people/ser\u00f8ut\u014dnin--depriv\u0259d/sounds/693125/",
+        "dur": 2.7,
+        "downloads": 913,
+        "note": "\"revolver reload\""
+      }
+    ],
+    "pick": 2,
+    "take": 0
+  },
+  "revolver-eject": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "501562",
+        "user": "shelbyshark",
+        "title": "Double Action Revolver Empty Chamber.wav",
+        "preview": "https://cdn.freesound.org/previews/501/501562_8644110-hq.mp3",
+        "url": "https://freesound.org/people/shelbyshark/sounds/501562/",
+        "dur": 19.3,
+        "downloads": 458,
+        "note": "\"revolver empty casings\""
+      },
+      {
+        "id": "693125",
+        "user": "ser\u00f8ut\u014dnin--depriv\u0259d",
+        "title": "22lr Revolver ejecting bullets from cylinder",
+        "preview": "https://cdn.freesound.org/previews/693/693125_7157894-hq.mp3",
+        "url": "https://freesound.org/people/ser\u00f8ut\u014dnin--depriv\u0259d/sounds/693125/",
+        "dur": 2.7,
+        "downloads": 913,
+        "note": "\"revolver unload\""
+      },
+      {
+        "id": "722902",
+        "user": "tkane0512",
+        "title": "Revolver Reload Break 2",
+        "preview": "https://cdn.freesound.org/previews/722/722902_15683404-hq.mp3",
+        "url": "https://freesound.org/people/tkane0512/sounds/722902/",
+        "dur": 2.6,
+        "downloads": 571,
+        "note": "\"revolver reload\""
+      },
+      {
+        "id": "177863",
+        "user": "Dredile",
+        "title": "Clean Revolver Reload",
+        "preview": "https://cdn.freesound.org/previews/177/177863_1046667-hq.mp3",
+        "url": "https://freesound.org/people/Dredile/sounds/177863/",
+        "dur": 3.4,
+        "downloads": 8404,
+        "note": "\"revolver reload\""
+      }
+    ],
+    "pick": 0,
+    "take": 0
+  },
+  "revolver-speedloader": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "722902",
+        "user": "tkane0512",
+        "title": "Revolver Reload Break 2",
+        "preview": "https://cdn.freesound.org/previews/722/722902_15683404-hq.mp3",
+        "url": "https://freesound.org/people/tkane0512/sounds/722902/",
+        "dur": 2.6,
+        "downloads": 571,
+        "note": "\"revolver speed loader\""
+      },
+      {
+        "id": "177863",
+        "user": "Dredile",
+        "title": "Clean Revolver Reload",
+        "preview": "https://cdn.freesound.org/previews/177/177863_1046667-hq.mp3",
+        "url": "https://freesound.org/people/Dredile/sounds/177863/",
+        "dur": 3.4,
+        "downloads": 8404,
+        "note": "\"revolver reload\""
+      },
+      {
+        "id": "540065",
+        "user": "Nox_Sound",
+        "title": "Weapon_Revolver_Hammer_Mono.wav",
+        "preview": "https://cdn.freesound.org/previews/540/540065_9250976-hq.mp3",
+        "url": "https://freesound.org/people/Nox_Sound/sounds/540065/",
+        "dur": 3.1,
+        "downloads": 840,
+        "note": "\"revolver reload\""
+      },
+      {
+        "id": "693125",
+        "user": "ser\u00f8ut\u014dnin--depriv\u0259d",
+        "title": "22lr Revolver ejecting bullets from cylinder",
+        "preview": "https://cdn.freesound.org/previews/693/693125_7157894-hq.mp3",
+        "url": "https://freesound.org/people/ser\u00f8ut\u014dnin--depriv\u0259d/sounds/693125/",
+        "dur": 2.7,
+        "downloads": 913,
+        "note": "\"revolver reload\""
+      }
+    ],
+    "pick": 0,
+    "take": 1
+  },
+  "revolver-close": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "240698",
+        "user": "ajoyce86",
+        "title": "Revolver Cocking.wav",
+        "preview": "https://cdn.freesound.org/previews/240/240698_3978825-hq.mp3",
+        "url": "https://freesound.org/people/ajoyce86/sounds/240698/",
+        "dur": 2.2,
+        "downloads": 3421,
+        "note": "\"revolver cylinder close\""
+      },
+      {
+        "id": "722902",
+        "user": "tkane0512",
+        "title": "Revolver Reload Break 2",
+        "preview": "https://cdn.freesound.org/previews/722/722902_15683404-hq.mp3",
+        "url": "https://freesound.org/people/tkane0512/sounds/722902/",
+        "dur": 2.6,
+        "downloads": 571,
+        "note": "\"revolver reload\""
+      },
+      {
+        "id": "177863",
+        "user": "Dredile",
+        "title": "Clean Revolver Reload",
+        "preview": "https://cdn.freesound.org/previews/177/177863_1046667-hq.mp3",
+        "url": "https://freesound.org/people/Dredile/sounds/177863/",
+        "dur": 3.4,
+        "downloads": 8404,
+        "note": "\"revolver reload\""
+      },
+      {
+        "id": "540065",
+        "user": "Nox_Sound",
+        "title": "Weapon_Revolver_Hammer_Mono.wav",
+        "preview": "https://cdn.freesound.org/previews/540/540065_9250976-hq.mp3",
+        "url": "https://freesound.org/people/Nox_Sound/sounds/540065/",
+        "dur": 3.1,
+        "downloads": 840,
+        "note": "\"revolver reload\""
+      }
+    ],
+    "pick": 0,
+    "take": 1
+  },
+  "revolver-cock": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "402790",
+        "user": "acidsnowflake",
+        "title": "Cocking a revolver",
+        "preview": "https://cdn.freesound.org/previews/402/402790_7111288-hq.mp3",
+        "url": "https://freesound.org/people/acidsnowflake/sounds/402790/",
+        "dur": 2.4,
+        "downloads": 7139,
+        "note": "\"revolver hammer cock\""
+      },
+      {
+        "id": "505197",
+        "user": "shelbyshark",
+        "title": "Double Action Revolver Being Cocked Manually2.wav",
+        "preview": "https://cdn.freesound.org/previews/505/505197_8644110-hq.mp3",
+        "url": "https://freesound.org/people/shelbyshark/sounds/505197/",
+        "dur": 5.3,
+        "downloads": 199,
+        "note": "\"revolver cocking\""
+      },
+      {
+        "id": "240698",
+        "user": "ajoyce86",
+        "title": "Revolver Cocking.wav",
+        "preview": "https://cdn.freesound.org/previews/240/240698_3978825-hq.mp3",
+        "url": "https://freesound.org/people/ajoyce86/sounds/240698/",
+        "dur": 2.2,
+        "downloads": 3421,
+        "note": "\"revolver cocking\""
+      },
+      {
+        "id": "693125",
+        "user": "ser\u00f8ut\u014dnin--depriv\u0259d",
+        "title": "22lr Revolver ejecting bullets from cylinder",
+        "preview": "https://cdn.freesound.org/previews/693/693125_7157894-hq.mp3",
+        "url": "https://freesound.org/people/ser\u00f8ut\u014dnin--depriv\u0259d/sounds/693125/",
+        "dur": 2.7,
+        "downloads": 913,
+        "note": "\"revolver cocking\""
+      }
+    ],
+    "pick": 0
+  },
+  "shotgun-break": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "52202",
+        "user": "sentryx86",
+        "title": "Single Barreled Shotgun Loading.wav",
+        "preview": "https://cdn.freesound.org/previews/52/52202_626508-hq.mp3",
+        "url": "https://freesound.org/people/sentryx86/sounds/52202/",
+        "dur": 15.4,
+        "downloads": 820,
+        "note": "\"break action shotgun open\""
+      },
+      {
+        "id": "108793",
+        "user": "CeebFrack",
+        "title": "shell load.ogg",
+        "preview": "https://cdn.freesound.org/previews/108/108793_1553758-hq.mp3",
+        "url": "https://freesound.org/people/CeebFrack/sounds/108793/",
+        "dur": 0.6,
+        "downloads": 2224,
+        "note": "\"shotgun break open\""
+      },
+      {
+        "id": "693507",
+        "user": "JumboSizedFish",
+        "title": "Toy Double Barrel Shotgun Reloading",
+        "preview": "https://cdn.freesound.org/previews/693/693507_14845144-hq.mp3",
+        "url": "https://freesound.org/people/JumboSizedFish/sounds/693507/",
+        "dur": 1.6,
+        "downloads": 398,
+        "note": "\"double barrel shotgun reload\""
+      }
+    ],
+    "pick": 0,
+    "take": 0
+  },
+  "shotgun-eject": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "52202",
+        "user": "sentryx86",
+        "title": "Single Barreled Shotgun Loading.wav",
+        "preview": "https://cdn.freesound.org/previews/52/52202_626508-hq.mp3",
+        "url": "https://freesound.org/people/sentryx86/sounds/52202/",
+        "dur": 15.4,
+        "downloads": 820,
+        "note": "\"shotgun shell eject\""
+      },
+      {
+        "id": "693507",
+        "user": "JumboSizedFish",
+        "title": "Toy Double Barrel Shotgun Reloading",
+        "preview": "https://cdn.freesound.org/previews/693/693507_14845144-hq.mp3",
+        "url": "https://freesound.org/people/JumboSizedFish/sounds/693507/",
+        "dur": 1.6,
+        "downloads": 398,
+        "note": "\"double barrel shotgun reload\""
+      },
+      {
+        "id": "386741",
+        "user": "ken788",
+        "title": "Shotgun_Reload.wav",
+        "preview": "https://cdn.freesound.org/previews/386/386741_5768130-hq.mp3",
+        "url": "https://freesound.org/people/ken788/sounds/386741/",
+        "dur": 1.7,
+        "downloads": 1560,
+        "note": "\"shotgun reload\""
+      },
+      {
+        "id": "500294",
+        "user": "Bratish",
+        "title": "Shotgun Reload",
+        "preview": "https://cdn.freesound.org/previews/500/500294_9995328-hq.mp3",
+        "url": "https://freesound.org/people/Bratish/sounds/500294/",
+        "dur": 1.2,
+        "downloads": 549,
+        "note": "\"shotgun reload\""
+      }
+    ],
+    "pick": 0,
+    "take": 1
+  },
+  "shotgun-shell": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "660975",
+        "user": "mchrpt",
+        "title": "load_gun_slow.ogg",
+        "preview": "https://cdn.freesound.org/previews/660/660975_14428325-hq.mp3",
+        "url": "https://freesound.org/people/mchrpt/sounds/660975/",
+        "dur": 5.9,
+        "downloads": 406,
+        "note": "\"shotgun shell insert\""
+      },
+      {
+        "id": "500293",
+        "user": "Bratish",
+        "title": "Shotgun Shell Load",
+        "preview": "https://cdn.freesound.org/previews/500/500293_9995328-hq.mp3",
+        "url": "https://freesound.org/people/Bratish/sounds/500293/",
+        "dur": 2.7,
+        "downloads": 634,
+        "note": "\"loading shotgun shell\""
+      },
+      {
+        "id": "673317",
+        "user": "Dentrabert",
+        "title": "Loading Shotgun.wav",
+        "preview": "https://cdn.freesound.org/previews/673/673317_14265036-hq.mp3",
+        "url": "https://freesound.org/people/Dentrabert/sounds/673317/",
+        "dur": 10.3,
+        "downloads": 263,
+        "note": "\"loading shotgun shell\""
+      },
+      {
+        "id": "435408",
+        "user": "moosegravy",
+        "title": "Shells in bag - Taking gun out of sleeve.wav",
+        "preview": "https://cdn.freesound.org/previews/435/435408_6138164-hq.mp3",
+        "url": "https://freesound.org/people/moosegravy/sounds/435408/",
+        "dur": 12.8,
+        "downloads": 163,
+        "note": "\"loading shotgun shell\""
+      }
+    ],
+    "pick": 1,
+    "take": 1
+  },
+  "shotgun-close": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "693507",
+        "user": "JumboSizedFish",
+        "title": "Toy Double Barrel Shotgun Reloading",
+        "preview": "https://cdn.freesound.org/previews/693/693507_14845144-hq.mp3",
+        "url": "https://freesound.org/people/JumboSizedFish/sounds/693507/",
+        "dur": 1.6,
+        "downloads": 398,
+        "note": "\"double barrel shotgun reload\""
+      },
+      {
+        "id": "52202",
+        "user": "sentryx86",
+        "title": "Single Barreled Shotgun Loading.wav",
+        "preview": "https://cdn.freesound.org/previews/52/52202_626508-hq.mp3",
+        "url": "https://freesound.org/people/sentryx86/sounds/52202/",
+        "dur": 15.4,
+        "downloads": 820,
+        "note": "\"break action shotgun\""
+      }
+    ],
+    "pick": 0,
+    "take": 1
+  },
+  "ak-mag-out": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "674742",
+        "user": "ser\u00f8ut\u014dnin--depriv\u0259d",
+        "title": "AK-47 Assault Rifle being unloaded and reloaded",
+        "preview": "https://cdn.freesound.org/previews/674/674742_7157894-hq.mp3",
+        "url": "https://freesound.org/people/ser\u00f8ut\u014dnin--depriv\u0259d/sounds/674742/",
+        "dur": 1.6,
+        "downloads": 2020,
+        "note": "\"ak47 magazine out\""
+      },
+      {
+        "id": "655763",
+        "user": "VIPERSTRONG",
+        "title": "Sniper Mag Released.mp3",
+        "preview": "https://cdn.freesound.org/previews/655/655763_13815154-hq.mp3",
+        "url": "https://freesound.org/people/VIPERSTRONG/sounds/655763/",
+        "dur": 1.4,
+        "downloads": 23,
+        "note": "\"rifle magazine release\""
+      },
+      {
+        "id": "460848",
+        "user": "MPierluissi",
+        "title": "GUNMech_M1 GARAND CLIP EJECT_MP.wav",
+        "preview": "https://cdn.freesound.org/previews/460/460848_4986614-hq.mp3",
+        "url": "https://freesound.org/people/MPierluissi/sounds/460848/",
+        "dur": 5.5,
+        "downloads": 259,
+        "note": "\"magazine eject rifle\""
+      },
+      {
+        "id": "618992",
+        "user": "mrrap4food",
+        "title": "Gun Ammunition Ejecting Thick.mp3",
+        "preview": "https://cdn.freesound.org/previews/618/618992_781461-hq.mp3",
+        "url": "https://freesound.org/people/mrrap4food/sounds/618992/",
+        "dur": 9,
+        "downloads": 117,
+        "note": "\"magazine eject rifle\""
+      }
+    ],
+    "pick": 3,
+    "take": 0
+  },
+  "ak-mag-in": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "725397",
+        "user": "ser\u00f8ut\u014dnin--depriv\u0259d",
+        "title": "An M16 Rifle being reloaded while empty; full sequence",
+        "preview": "https://cdn.freesound.org/previews/725/725397_7157894-hq.mp3",
+        "url": "https://freesound.org/people/ser\u00f8ut\u014dnin--depriv\u0259d/sounds/725397/",
+        "dur": 7.1,
+        "downloads": 914,
+        "note": "\"ak47 magazine insert\""
+      },
+      {
+        "id": "855580",
+        "user": "qubodup",
+        "title": "Pushing 50 Cal BMG Round into Magazine",
+        "preview": "https://cdn.freesound.org/previews/855/855580_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/855580/",
+        "dur": 0.3,
+        "downloads": 58,
+        "note": "\"rifle magazine insert\""
+      },
+      {
+        "id": "815879",
+        "user": "qubodup",
+        "title": "Assault Rifle Reload",
+        "preview": "https://cdn.freesound.org/previews/815/815879_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/815879/",
+        "dur": 1.9,
+        "downloads": 781,
+        "note": "\"rifle magazine insert\""
+      },
+      {
+        "id": "660976",
+        "user": "mchrpt",
+        "title": "chamber_2.ogg",
+        "preview": "https://cdn.freesound.org/previews/660/660976_14428325-hq.mp3",
+        "url": "https://freesound.org/people/mchrpt/sounds/660976/",
+        "dur": 6.9,
+        "downloads": 34,
+        "note": "\"rifle magazine insert\""
+      }
+    ],
+    "pick": 2
+  },
+  "ak-rack": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "171632",
+        "user": "Pjkasinski3",
+        "title": "Wasr RPK Charge Back1.mp3",
+        "preview": "https://cdn.freesound.org/previews/171/171632_968159-hq.mp3",
+        "url": "https://freesound.org/people/Pjkasinski3/sounds/171632/",
+        "dur": 3,
+        "downloads": 240,
+        "note": "\"ak47 charging handle\""
+      },
+      {
+        "id": "543483",
+        "user": "RossJuterbock",
+        "title": "200088_RossJuterbock_Spring Action Air Rifle Reload.wav",
+        "preview": "https://cdn.freesound.org/previews/543/543483_11181745-hq.mp3",
+        "url": "https://freesound.org/people/RossJuterbock/sounds/543483/",
+        "dur": 4,
+        "downloads": 94,
+        "note": "\"rifle cocking\""
+      },
+      {
+        "id": "406111",
+        "user": "Yin_Yang_Jake007",
+        "title": "Bolt-Action Cocking.wav",
+        "preview": "https://cdn.freesound.org/previews/406/406111_7919598-hq.mp3",
+        "url": "https://freesound.org/people/Yin_Yang_Jake007/sounds/406111/",
+        "dur": 9.4,
+        "downloads": 112,
+        "note": "\"rifle cocking\""
+      },
+      {
+        "id": "523402",
+        "user": "C-V",
+        "title": "Lever action cocking 2.wav",
+        "preview": "https://cdn.freesound.org/previews/523/523402_8956746-hq.mp3",
+        "url": "https://freesound.org/people/C-V/sounds/523402/",
+        "dur": 1.4,
+        "downloads": 478,
+        "note": "\"rifle cocking\""
+      }
+    ],
+    "pick": 0
+  },
+  "sniper-bolt-open": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "370345",
+        "user": "Zott820",
+        "title": "Mosin Nagant Bolt Action Cycle",
+        "preview": "https://cdn.freesound.org/previews/370/370345_2558531-hq.mp3",
+        "url": "https://freesound.org/people/Zott820/sounds/370345/",
+        "dur": 14.2,
+        "downloads": 1005,
+        "note": "\"bolt action rifle reload\""
+      },
+      {
+        "id": "267895",
+        "user": "rammbostein",
+        "title": "Mosin Nagant Bolt (fast).wav",
+        "preview": "https://cdn.freesound.org/previews/267/267895_4174990-hq.mp3",
+        "url": "https://freesound.org/people/rammbostein/sounds/267895/",
+        "dur": 4.3,
+        "downloads": 497,
+        "note": "\"bolt action rifle reload\""
+      },
+      {
+        "id": "263459",
+        "user": "rammbostein",
+        "title": "Mosin Nagant Bolt.wav",
+        "preview": "https://cdn.freesound.org/previews/263/263459_4174990-hq.mp3",
+        "url": "https://freesound.org/people/rammbostein/sounds/263459/",
+        "dur": 6.5,
+        "downloads": 552,
+        "note": "\"bolt action rifle reload\""
+      },
+      {
+        "id": "620928",
+        "user": "Metrolynn",
+        "title": "22 bolt action rifle cycle",
+        "preview": "https://cdn.freesound.org/previews/620/620928_6493174-hq.mp3",
+        "url": "https://freesound.org/people/Metrolynn/sounds/620928/",
+        "dur": 1.7,
+        "downloads": 177,
+        "note": "\"bolt action rifle reload\""
+      }
+    ],
+    "pick": 2
+  },
+  "sniper-bolt-close": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "725398",
+        "user": "ser\u00f8ut\u014dnin--depriv\u0259d",
+        "title": "An M1 Garand clip being ejected w/ ping",
+        "preview": "https://cdn.freesound.org/previews/725/725398_7157894-hq.mp3",
+        "url": "https://freesound.org/people/ser\u00f8ut\u014dnin--depriv\u0259d/sounds/725398/",
+        "dur": 1.2,
+        "downloads": 742,
+        "note": "\"rifle bolt close\""
+      },
+      {
+        "id": "370345",
+        "user": "Zott820",
+        "title": "Mosin Nagant Bolt Action Cycle",
+        "preview": "https://cdn.freesound.org/previews/370/370345_2558531-hq.mp3",
+        "url": "https://freesound.org/people/Zott820/sounds/370345/",
+        "dur": 14.2,
+        "downloads": 1005,
+        "note": "\"bolt action rifle cycle\""
+      },
+      {
+        "id": "620928",
+        "user": "Metrolynn",
+        "title": "22 bolt action rifle cycle",
+        "preview": "https://cdn.freesound.org/previews/620/620928_6493174-hq.mp3",
+        "url": "https://freesound.org/people/Metrolynn/sounds/620928/",
+        "dur": 1.7,
+        "downloads": 177,
+        "note": "\"bolt action rifle cycle\""
+      },
+      {
+        "id": "508244",
+        "user": "shelbyshark",
+        "title": "Russian Mosin-Nagant Bolt.wav",
+        "preview": "https://cdn.freesound.org/previews/508/508244_8644110-hq.mp3",
+        "url": "https://freesound.org/people/shelbyshark/sounds/508244/",
+        "dur": 15.5,
+        "downloads": 165,
+        "note": "\"mosin nagant bolt\""
+      }
+    ],
+    "pick": 3
+  },
+  "sniper-round": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "855580",
+        "user": "qubodup",
+        "title": "Pushing 50 Cal BMG Round into Magazine",
+        "preview": "https://cdn.freesound.org/previews/855/855580_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/855580/",
+        "dur": 0.3,
+        "downloads": 58,
+        "note": "\"rifle round insert\""
+      },
+      {
+        "id": "707794",
+        "user": "TheGreenEyedGhost",
+        "title": "Shotgun_shots_at_different_cartridge_loads_1",
+        "preview": "https://cdn.freesound.org/previews/707/707794_14713637-hq.mp3",
+        "url": "https://freesound.org/people/TheGreenEyedGhost/sounds/707794/",
+        "dur": 5.4,
+        "downloads": 97,
+        "note": "\"loading rifle cartridge\""
+      },
+      {
+        "id": "628640",
+        "user": "el_boss",
+        "title": "Bug-a-salt reload - Plastic Shotgun",
+        "preview": "https://cdn.freesound.org/previews/628/628640_9129912-hq.mp3",
+        "url": "https://freesound.org/people/el_boss/sounds/628640/",
+        "dur": 1.6,
+        "downloads": 698,
+        "note": "\"loading rifle cartridge\""
+      },
+      {
+        "id": "873155",
+        "user": "loganzsound",
+        "title": "9mm Snap Caps Load into Magazine",
+        "preview": "https://cdn.freesound.org/previews/873/873155_16682330-hq.mp3",
+        "url": "https://freesound.org/people/loganzsound/sounds/873155/",
+        "dur": 8.3,
+        "downloads": 9,
+        "note": "\"bullet load magazine\""
+      }
+    ],
+    "pick": 0
+  },
+  "daybreak-cell-out": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "517058",
+        "user": "Invisible_inks",
+        "title": "scifi_sniper_rifle.wav",
+        "preview": "https://cdn.freesound.org/previews/517/517058_8176613-hq.mp3",
+        "url": "https://freesound.org/people/Invisible_inks/sounds/517058/",
+        "dur": 3.5,
+        "downloads": 1744,
+        "note": "\"sci-fi reload\""
+      },
+      {
+        "id": "678458",
+        "user": "rubberduck9999",
+        "title": "tripod mechanical sound 04",
+        "preview": "https://cdn.freesound.org/previews/678/678458_14687392-hq.mp3",
+        "url": "https://freesound.org/people/rubberduck9999/sounds/678458/",
+        "dur": 0.9,
+        "downloads": 174,
+        "note": "\"sci-fi reload\""
+      },
+      {
+        "id": "645778",
+        "user": "jackolous",
+        "title": "Arming a Sci-Fi Gun",
+        "preview": "https://cdn.freesound.org/previews/645/645778_3371712-hq.mp3",
+        "url": "https://freesound.org/people/jackolous/sounds/645778/",
+        "dur": 1.4,
+        "downloads": 675,
+        "note": "\"sci-fi reload\""
+      },
+      {
+        "id": "162229",
+        "user": "qubodup",
+        "title": "Laser Gun Recharge",
+        "preview": "https://cdn.freesound.org/previews/162/162229_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/162229/",
+        "dur": 2.4,
+        "downloads": 1559,
+        "note": "\"sci-fi reload\""
+      }
+    ],
+    "pick": 2
+  },
+  "daybreak-cell-in": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "678458",
+        "user": "rubberduck9999",
+        "title": "tripod mechanical sound 04",
+        "preview": "https://cdn.freesound.org/previews/678/678458_14687392-hq.mp3",
+        "url": "https://freesound.org/people/rubberduck9999/sounds/678458/",
+        "dur": 0.9,
+        "downloads": 174,
+        "note": "\"sci-fi reload click\""
+      },
+      {
+        "id": "871541",
+        "user": "loganzsound",
+        "title": "Xbox One S Controller Battery Cover Manipulation 01",
+        "preview": "https://cdn.freesound.org/previews/871/871541_16682330-hq.mp3",
+        "url": "https://freesound.org/people/loganzsound/sounds/871541/",
+        "dur": 5.4,
+        "downloads": 14,
+        "note": "\"battery insert click\""
+      },
+      {
+        "id": "517058",
+        "user": "Invisible_inks",
+        "title": "scifi_sniper_rifle.wav",
+        "preview": "https://cdn.freesound.org/previews/517/517058_8176613-hq.mp3",
+        "url": "https://freesound.org/people/Invisible_inks/sounds/517058/",
+        "dur": 3.5,
+        "downloads": 1744,
+        "note": "\"sci-fi gun reload\""
+      },
+      {
+        "id": "645778",
+        "user": "jackolous",
+        "title": "Arming a Sci-Fi Gun",
+        "preview": "https://cdn.freesound.org/previews/645/645778_3371712-hq.mp3",
+        "url": "https://freesound.org/people/jackolous/sounds/645778/",
+        "dur": 1.4,
+        "downloads": 675,
+        "note": "\"sci-fi gun reload\""
+      }
+    ],
+    "pick": 3
+  },
+  "shotgun-in": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "675673",
+        "user": "craigsmith",
+        "title": "S19-13 Classic western shotgun blast with reverb.wav",
+        "preview": "https://cdn.freesound.org/previews/675/675673_2524442-hq.mp3",
+        "url": "https://freesound.org/people/craigsmith/sounds/675673/",
+        "dur": 14.3,
+        "downloads": 230,
+        "note": "\"shotgun blast reverb\""
+      },
+      {
+        "id": "486060",
+        "user": "craigsmith",
+        "title": "R11-58-Loud Shotgun Blasts.wav",
+        "preview": "https://cdn.freesound.org/previews/486/486060_2524442-hq.mp3",
+        "url": "https://freesound.org/people/craigsmith/sounds/486060/",
+        "dur": 9.8,
+        "downloads": 79,
+        "note": "\"shotgun blast reverb\""
+      },
+      {
+        "id": "159710",
+        "user": "AnthonyChan0",
+        "title": "Mossberg 500A - 1 shot and pump",
+        "preview": "https://cdn.freesound.org/previews/159/159710_2886479-hq.mp3",
+        "url": "https://freesound.org/people/AnthonyChan0/sounds/159710/",
+        "dur": 3.1,
+        "downloads": 1214,
+        "note": "\"12 gauge shot\""
+      },
+      {
+        "id": "148841",
+        "user": "cedarstudios",
+        "title": "shotgun targetside.mp3",
+        "preview": "https://cdn.freesound.org/previews/148/148841_2676248-hq.mp3",
+        "url": "https://freesound.org/people/cedarstudios/sounds/148841/",
+        "dur": 15.5,
+        "downloads": 2743,
+        "note": "\"12 gauge shot\""
+      }
+    ],
+    "ir": {
+      "id": "568095",
+      "user": "kirkpatrick.live",
+      "title": "IR_artisan_garage_B2_03_balloon_stereo",
+      "preview": "https://cdn.freesound.org/previews/568/568095_10730150-hq.mp3",
+      "url": "https://freesound.org/people/kirkpatrick.live/sounds/568095/",
+      "dur": 7.8,
+      "downloads": 98,
+      "note": "\"shotgun garage\""
+    },
+    "pick": 2
+  }
+}

@@ -86,3 +86,51 @@
   - `water/breathless-man-*`: *heavy breathing.wav* by simone_ds (Freesound 366077).
   - `water/breathless-woman-*`: *woman run and breath.wav* by MelvinJaepel (Freesound 435468).
   - `water/climb-out-*`: *water movement body step out of pool splash drips.flac* by kyles (Freesound 637948).
+- The guns' (docs/plan/79-the-guns.md, phase 9), picked by ear on `/dev/gun-sound` 2026-11-12 from
+  159 candidates. All CC0 from Freesound (its HQ previews), found by `tools/sfx-guns-search.mjs` and made
+  by `tools/sfx-weather.mjs` from `tools/sfx-guns.json` (`DIR=guns`): cut into takes by onset, each to
+  −3 dB peak, mono 80 kb/s (a reload's moment one take of a longer recording); the game sets their mix
+  (`world/dark/voices.ts` GUN_LEVEL).
+  - `guns/revolver-near-*`: *357 Magnum Revolver Gunshot with Tail* by Shark_Anthony (Freesound 683175).
+  - `guns/revolver-in-*`: *Gunshot_001.wav* by Brokenphono (Freesound 344143).
+  - `guns/revolver-far-*`: *Gun_Shot_86* by SignatureSoundsOrg (Freesound 876005).
+  - `guns/shotgun-near-*`: *shotgun shoot* by MrGungus (Freesound 773873).
+  - `guns/shotgun-in-*`: *Mossberg 500A - 1 shot and pump* by AnthonyChan0 (Freesound 159710).
+  - `guns/shotgun-far-*`: *Very distant shot.wav* by moosegravy (Freesound 431828).
+  - `guns/ak-near-*`: *Gun Version 2 without forward bolt* by SuperPhat (Freesound 414826).
+  - `guns/ak-in-*`: *AR15 Indoors (open windows)* by modusmogulus (Freesound 815698).
+  - `guns/ak-far-*`: *Distant Gunshot* by Resaural (Freesound 541164).
+  - `guns/sniper-near-*`: *Sniper Shot in Field 3 (M2010 Enhanced Sniper Rifle ESR)* by qubodup (Freesound 855608).
+  - `guns/sniper-in-*`: *Smith & Wesson 686 Plus 4 Inch Barrel .357 Mag* by AugustSandberg (Freesound 231248).
+  - `guns/sniper-far-*`: *Distant Gunshot* by Resaural (Freesound 541164).
+  - `guns/daybreak-charge-*`: *Laser Charge Up (Stronger)* by magnuswaker (Freesound 592573).
+  - `guns/daybreak-fire-*`: *laser blast.wav* by pointparkcinema (Freesound 407251).
+  - `guns/daybreak-ball-*`: *Scifi_Generator_Lp* by Euphrosyyn (Freesound 452768).
+  - `guns/daybreak-burst-*`: *Ion Cannon* by qubodup (Freesound 814049).
+  - `guns/daybreak-burst-far-*`: *Distant Explosion* by danlucaz (Freesound 517747).
+  - `guns/draw-*`: *Gun draw holster.wav* by huddwink (Freesound 239959).
+  - `guns/holster-*`: *GUN HOLSTER.wav* by MTJohnson (Freesound 426314).
+  - `guns/revolver-dry-*`: *22lr revolver handling clicking foley* by serøutōnin--deprivəd (Freesound 677159).
+  - `guns/shotgun-dry-*`: *Remington 870 pull up and dry fire* by areniporgen (Freesound 702662).
+  - `guns/rifle-dry-*`: *A rifle being dry fired once* by serøutōnin--deprivəd (Freesound 725402).
+  - `guns/case-snow-*`: *empty shotgun shells/casings hitting ground bouncing* by Metrolynn (Freesound 620929).
+  - `guns/case-floor-*`: *BLLTShel_30CAL BULLET DROP_MP.wav* by MPierluissi (Freesound 460859).
+  - `guns/shell-snow-*`: *Shotgun shell hitting ground* by toadridingbike (Freesound 759624).
+  - `guns/shell-floor-*`: *12 guage shotgun shell drop* by MrGungus (Freesound 773860).
+  - `guns/revolver-open-*`: *Weapon_Revolver_Hammer_Mono.wav* by Nox_Sound (Freesound 540065).
+  - `guns/revolver-eject-*`: *Double Action Revolver Empty Chamber.wav* by shelbyshark (Freesound 501562).
+  - `guns/revolver-speedloader-*`: *Revolver Reload Break 2* by tkane0512 (Freesound 722902).
+  - `guns/revolver-close-*`: *Revolver Cocking.wav* by ajoyce86 (Freesound 240698).
+  - `guns/revolver-cock-*`: *Cocking a revolver* by acidsnowflake (Freesound 402790).
+  - `guns/shotgun-break-*`: *Single Barreled Shotgun Loading.wav* by sentryx86 (Freesound 52202).
+  - `guns/shotgun-eject-*`: *Single Barreled Shotgun Loading.wav* by sentryx86 (Freesound 52202).
+  - `guns/shotgun-shell-*`: *Shotgun Shell Load* by Bratish (Freesound 500293).
+  - `guns/shotgun-close-*`: *Toy Double Barrel Shotgun Reloading* by JumboSizedFish (Freesound 693507).
+  - `guns/ak-mag-out-*`: *Gun Ammunition Ejecting Thick.mp3* by mrrap4food (Freesound 618992).
+  - `guns/ak-mag-in-*`: *Assault Rifle Reload* by qubodup (Freesound 815879).
+  - `guns/ak-rack-*`: *Wasr RPK Charge Back1.mp3* by Pjkasinski3 (Freesound 171632).
+  - `guns/sniper-bolt-open-*`: *Mosin Nagant Bolt.wav* by rammbostein (Freesound 263459).
+  - `guns/sniper-bolt-close-*`: *Russian Mosin-Nagant Bolt.wav* by shelbyshark (Freesound 508244).
+  - `guns/sniper-round-*`: *Pushing 50 Cal BMG Round into Magazine* by qubodup (Freesound 855580).
+  - `guns/daybreak-cell-out-*`: *Arming a Sci-Fi Gun* by jackolous (Freesound 645778).
+  - `guns/daybreak-cell-in-*`: *Arming a Sci-Fi Gun* by jackolous (Freesound 645778).

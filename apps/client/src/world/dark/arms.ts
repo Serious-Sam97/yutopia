@@ -19,7 +19,7 @@ import type { Press } from "../input/controls";
 import type { Walker } from "../input/walker";
 import { hud } from "../store";
 import type { Shades } from "./shades";
-import type { DarkSound } from "./voices";
+import { type DarkSound, type GunSound, SHOT_REACH } from "./voices";
 
 // Guns and flares on my side (docs/plan/30-the-dark.md D6), anywhere — the snow,
 // the office. 1–4 are the quick slots: a weapon there taken out (again: put it
@@ -39,6 +39,14 @@ const HAND = 1.35; // the gun's height in the hand, held out (shared beam.ts BEA
 const EARLY_MS = 120; // a click this early is held till the gun's ready
 // each gun's kick (docs/plan/32-the-arms.md; tuned in phase 5): on the look (rad, up and at most
 // aside) and how much of it settles back by itself (the spread is shared: spreadOf, the server's)
+// a round (or a shell, a magazine, a cell) gone in: its sound (plan 79 phase 9)
+const LOAD_SOUND: Record<GunId, GunSound> = {
+  revolver: "revolver-speedloader",
+  shotgun: "shotgun-shell",
+  ak47: "ak-mag-in",
+  sniper: "sniper-round",
+  daybreak: "daybreak-cell-in",
+};
 const FEEL = {
   revolver: { up: 0.032, side: 0.01, settle: 0.7 },
   shotgun: { up: 0.085, side: 0.022, settle: 0.55 },
@@ -89,6 +97,9 @@ export class Arms {
   private boltTill = 0;
   // the Daybreak's charge (plan 79 phase 7): pressed at (performance ms; 0 not charging)
   private chargeFrom = 0;
+  private akDryReload = false; // my AK's reload began empty: the charging handle racked at its end
+  // the Daybreak's balls flying (their sound follows them): from, to, how long, since (performance ms)
+  private balls = new Map<string, { x0: number; y0: number; x: number; y: number; secs: number; t0: number }>();
   private readonly scopeEl = document.createElement("div");
   private aheadLoaded = -1;
   private dryAt = -9; // s: the last pull on an empty chamber (the trigger goes, the hammer falls on nothing)
@@ -174,28 +185,29 @@ export class Arms {
       tp.arms().shot(o.x, o.y, o.z, rays, gun, m.oz - HAND);
       tp.guns.gunShot(m.sid);
       tp.heard(m.ox, m.oy);
-      // (far off: dulled, heard further; near: as the place I'm in sounds)
+      // (far off: its far recording, dulling on to SHOT_REACH.far; near: as the place I'm in sounds)
       const me = this.walker.where();
-      const far = Math.hypot(m.ox - me.x, m.oy - me.y) > 22;
-      const v = this.shotSound(gun, far);
-      this.voices.play(v.name, { x: m.ox, y: m.oy }, far ? 90 : 60, v.volume, v.rate);
+      const far = Math.hypot(m.ox - me.x, m.oy - me.y) > SHOT_REACH.near;
+      this.voices.gun(this.shotSound(gun, far), { x: m.ox, y: m.oy }, far ? SHOT_REACH.far : SHOT_REACH.near + 8);
     });
     // the Daybreak's ball, anyone's (mine too: the server's word), and its burst — light, heard far
     on("arms:orb", (m) => {
       if (m.level !== this.ctl.level) return;
       this.ctl.tp?.arms().orb(m.id, m.x0, m.y0, m.z0, m.x, m.y, m.z, m.secs);
+      this.balls.set(m.id, { x0: m.x0, y0: m.y0, x: m.x, y: m.y, secs: Math.max(0.05, m.secs), t0: performance.now() });
       if (m.sid !== this.ctl.room?.sessionId) {
         this.ctl.tp?.guns.gunShot(m.sid);
-        this.voices.play("flare-strike", { x: m.x0, y: m.y0 }, 40, 1, 0.7);
+        this.voices.gun("daybreak-fire", { x: m.x0, y: m.y0 }, 60);
       }
     });
     on("arms:burst", (m) => {
       if (m.level !== this.ctl.level) return;
       this.ctl.tp?.arms().burst(m.id, m.x, m.y, m.z);
       this.ctl.tp?.heard(m.x, m.y);
-      // (placeholders, plan 79 phase 9: a deep boom and a flare's strike)
-      this.voices.play("shotgun-shot-far", { x: m.x, y: m.y }, 90, 1, 0.55);
-      this.voices.play("flare-strike", { x: m.x, y: m.y }, 40, 0.8, 0.6);
+      this.balls.delete(m.id);
+      const me = this.walker.where();
+      const far = Math.hypot(m.x - me.x, m.y - me.y) > SHOT_REACH.near;
+      this.voices.gun(far ? "daybreak-burst-far" : "daybreak-burst", { x: m.x, y: m.y }, far ? SHOT_REACH.far : 40);
     });
     on("arms:throw", (m) => {
       this.ctl.tp?.arms().throwFlare(m.x0, m.y0, m.z0, m.x, m.y, m.z, m.secs);
@@ -248,14 +260,14 @@ export class Arms {
     const arm = this.me()?.arm ?? ARM.idle;
     if (arm === ARM.draw || arm === ARM.open || arm === ARM.reload) return;
     if (g.loaded <= 0) {
-      this.voices.play("revolver-dry");
+      this.voices.gun("rifle-dry");
       this.dryAt = now / 1000;
       this.reload();
       return;
     }
     this.chargeFrom = now;
     this.ctl.room?.send("arms:charge", {});
-    this.voices.play("focus-on", undefined, 0, 0.9, 0.7);
+    this.voices.gun("daybreak-charge");
   }
   private triggerUp() {
     this.triggerDown = false;
@@ -425,7 +437,7 @@ export class Arms {
       // (held down, the dry click once a pull)
       if (this.dryPulled) return;
       this.dryPulled = this.triggerDown;
-      this.voices.play(g.id === "shotgun" ? "shotgun-dry" : "revolver-dry");
+      this.voices.gun(g.id === "shotgun" ? "shotgun-dry" : g.id === "revolver" ? "revolver-dry" : "rifle-dry");
       this.dryAt = now / 1000;
       this.reload(); // (empty: a click, and the reload starts)
       return;
@@ -538,12 +550,13 @@ export class Arms {
     else if (auto) this.walker.controls.pad.rumble(0.4, 0.2, 45);
     else this.walker.controls.pad.rumble(0.55, 0.25, 70);
     if (g.id === "ak47") this.brass("case", 1);
+    // (mine: the world's bed ducked a moment under it)
+    this.voices.duck(auto ? 0.75 : 0.55);
     if (g.id === "daybreak") {
-      this.voices.play("flare-strike", undefined, 40, 1, 0.7);
+      this.voices.gun("daybreak-fire");
       return;
     }
-    const v = this.shotSound(g.id, false);
-    this.voices.play(v.name, undefined, 40, v.volume, v.rate);
+    this.voices.gun(this.shotSound(g.id, false));
   }
 
   /** Reloading now: as the server has it, or just asked for (and not full). */
@@ -555,24 +568,9 @@ export class Arms {
 
   /** A shot's sound: out on the land (the treeline, the woods' tail) or in a room — where I am —
    *  or far off. */
-  private shotSound(gun: GunId, far: boolean) {
-    const k = gun === "shotgun" ? "shotgun" : "revolver";
-    const name = far
-      ? (`${k}-shot-far` as const)
-      : this.walker.outside
-        ? (`${k}-shot` as const)
-        : (`${k}-shot-in` as const);
-    // (the AK borrows the revolver's, quicker and a little lower in the mix; the sniper the double-barrel's,
-    // deeper — placeholders till plan 79 phase 9's sounds)
-    if (gun === "sniper") {
-      const deep = far
-        ? ("shotgun-shot-far" as const)
-        : this.walker.outside
-          ? ("shotgun-shot" as const)
-          : ("shotgun-shot-in" as const);
-      return { name: deep, volume: 1, rate: 0.8 };
-    }
-    return gun === "ak47" ? { name, volume: 0.75, rate: 1.22 } : { name, volume: 1, rate: 1 };
+  private shotSound(gun: GunId, far: boolean): GunSound {
+    const k = gun === "ak47" ? "ak" : gun === "daybreak" ? "revolver" : gun;
+    return far ? `${k}-far` : this.walker.outside ? `${k}-near` : `${k}-in`;
   }
 
   /** A pellet's flight from (x, y, z) its way: as far as the gun reaches (and `most`), stopped by a
@@ -616,7 +614,7 @@ export class Arms {
     const dry = now / 1000 - this.dryAt < 0.14;
     const cockTo = this.walker.aiming && since > 0.12 && !dry ? 1 : 0;
     // (the revolver's hammer thumbed back: click-click — coming up to aim, and again after a shot)
-    if (g.id === "revolver" && cockTo === 1 && this.cockTo === 0) this.voices.play("revolver-cock", undefined, 40, 0.7);
+    if (g.id === "revolver" && cockTo === 1 && this.cockTo === 0) this.voices.gun("revolver-cock");
     this.cockTo = cockTo;
     this.cock = ease(this.cock, cockTo, 18);
     // (the cylinder turns as the hammer comes back; a round loaded, a notch too)
@@ -684,11 +682,14 @@ export class Arms {
     if (!pulled && this.burst > 0) this.triggerUp();
     this.gunFx(dt, now);
     this.scopeFrame(dt, now, armNow);
+    this.ballSound(now);
     this.armSounds();
     // a gun in my hand (3D): the right button aims anywhere, and the view's clicks don't pick
     const armed = !!ctl.tp && !!this.me()?.gun;
     this.walker.armed = armed;
     const held = this.gun();
+    // (a gun out: its sounds made ready before its first shot — plan 79 phase 9)
+    if (held) this.voices.warmGuns();
     if (ctl.tp) ctl.tp.aimSecs = held ? ARMS[held.id].aim : 0.2;
     // (the sniper's aim comes up near level — out to the distance, where its scope's for: plan 79 phase 6)
     if (ctl.tp) ctl.tp.aimRise = held && isScoped(held.id) ? 0.04 : 0.15;
@@ -720,6 +721,25 @@ export class Arms {
       tp.flares = flares;
     }
     this.draws();
+  }
+
+  /** The nearest Daybreak ball in the air: its hum where it is (plan 79 phase 9); none, let go. */
+  private ballSound(now: number) {
+    let best: { x: number; y: number; d: number } | null = null;
+    const me = this.walker.where();
+    for (const [id, b] of this.balls) {
+      const k = (now - b.t0) / 1000 / b.secs;
+      if (k > 1.3) {
+        this.balls.delete(id);
+        continue;
+      }
+      const t = Math.min(1, k);
+      const x = b.x0 + (b.x - b.x0) * t;
+      const y = b.y0 + (b.y - b.y0) * t;
+      const d = Math.hypot(x - me.x, y - me.y);
+      if (!best || d < best.d) best = { x, y, d };
+    }
+    this.voices.ballAt(best);
   }
 
   /** Down the scope (the sniper's, plan 79 phase 6): aimed its `aim` s, not working the bolt, not
@@ -794,7 +814,7 @@ export class Arms {
     // F11a — its spent cases fell as it swung out: armSounds)
     if (g) {
       const was = this.lastLoaded.get(g.id);
-      if (was !== undefined && g.loaded > was) this.voices.play(g.id === "shotgun" ? "shotgun-shell" : "revolver-load");
+      if (was !== undefined && g.loaded > was) this.voices.gun(LOAD_SOUND[g.id]);
       this.lastLoaded.set(g.id, g.loaded);
     }
     const key = `${g?.id}|${g?.loaded}|${flares}|${loading}|${[...inv.pockets, ...inv.quick].map((s) => (s ? `${s.id}${"n" in s ? s.n : ""}` : "")).join()}`;
@@ -840,7 +860,8 @@ export class Arms {
     const yaw = tp ? this.camYaw() : this.facing();
     tp.arms().eject(me.x + Math.cos(yaw) * 0.3, me.y + Math.sin(yaw) * 0.3, me.z + 1.2, yaw, kind, n, me.z);
     // (landing: brass tinkles, a shell's plastic tocks)
-    setTimeout(() => this.voices.play(kind === "case" ? "brass" : "shell-drop", { x: me.x, y: me.y }, 12, 0.7), 420);
+    const where = this.walker.outside ? "snow" : "floor";
+    setTimeout(() => this.voices.gun(`${kind}-${where}`, { x: me.x, y: me.y }, 12), 420);
   }
 
   // What every hand near me is doing with its gun (Player.arm), heard where they are (mine, here): a
@@ -860,61 +881,72 @@ export class Arms {
         if (p.level !== this.ctl.level) return;
         const me = p.sid === mine;
         const at = me ? undefined : { x: p.x, y: p.y };
-        if (arm === ARM.draw && was.arm !== ARM.draw) this.voices.play("gun-draw", at, 15);
-        else if (!p.gun && was.gun) this.voices.play("gun-holster", at, 15);
+        if (arm === ARM.draw && was.arm !== ARM.draw) this.voices.gun("draw", at, 15);
+        else if (!p.gun && was.gun) this.voices.gun("holster", at, 15);
         if (arm === was.arm || !p.gun) return;
+        const opened = arm === ARM.open || arm === ARM.reload;
+        const wasOpen = was.arm === ARM.open || was.arm === ARM.reload;
+        const g = me ? this.gun() : null;
+        // (someone else's rounds going in aren't known: heard when the server's step would put them in)
+        const loadIn = (gun: GunId) => {
+          if (!me) setTimeout(() => this.voices.gun(LOAD_SOUND[gun], at, 15), ARMS[gun].open * 1000 + 150);
+        };
         if (p.gun === "revolver") {
-          // (plan 79 F11a: the cylinder swung out — its spent cases dumped, the live ones to the pockets —
-          // and shut after the speedloader; `reload`, the old gate, heard the same)
-          const opened = arm === ARM.open || arm === ARM.reload;
-          if (opened && was.arm !== ARM.open && was.arm !== ARM.reload) {
-            this.voices.play("revolver-gate", at, 15);
-            const g = me ? this.gun() : null;
+          // (plan 79 F11a: the cylinder swung out, the rod punched — its spent cases dumped, the live ones
+          // to the pockets — the speedloader (as the rounds go in: draws), shut)
+          if (opened && !wasOpen) {
+            this.voices.gun("revolver-open", at, 15);
+            setTimeout(() => this.voices.gun("revolver-eject", at, 15), 220);
             const spent = g ? WEAPONS.revolver.mag - g.loaded : 0;
             if (me) setTimeout(() => this.brass("case", spent), 250);
-          } else if (!opened && (was.arm === ARM.open || was.arm === ARM.reload))
-            this.voices.play("revolver-gate", at, 15, 0.8, 0.92);
+            loadIn("revolver");
+          } else if (!opened && wasOpen) this.voices.gun("revolver-close", at, 15);
           return;
         }
         if (p.gun === "daybreak") {
-          // (placeholders, plan 79 phase 9: someone's charging — the torch's focus, deeper; the cell out, in)
-          if (arm === ARM.charge && !me) this.voices.play("focus-on", at, 25, 0.8, 0.7);
-          else if (arm === ARM.open) this.voices.play("shotgun-break", at, 15, 0.7, 0.8);
-          else if (was.arm === ARM.open) this.voices.play("revolver-cock", at, 15, 0.8, 0.6);
+          // (someone else charging — mine's its own, pressed; the cell out, the new one in, shut)
+          if (arm === ARM.charge && !me) this.voices.gun("daybreak-charge", at, 30);
+          else if (opened && !wasOpen) {
+            this.voices.gun("daybreak-cell-out", at, 15);
+            loadIn("daybreak");
+          }
           return;
         }
         if (p.gun === "sniper") {
-          // (placeholders, plan 79 phase 9: the bolt up and back — its case out — and home; opened to load,
-          // shut)
+          // (the bolt up and back — its case out — and home; opened to load, a round at a time, shut)
           if (arm === ARM.bolt) {
-            this.voices.play("revolver-cock", at, 15, 0.9, 0.6);
-            setTimeout(() => this.voices.play("revolver-cock", at, 15, 0.9, 0.75), 380);
+            this.voices.gun("sniper-bolt-open", at, 15);
+            setTimeout(() => this.voices.gun("sniper-bolt-close", at, 15), 420);
             if (me) setTimeout(() => this.brass("case", 1), 200);
-          } else if (arm === ARM.open) this.voices.play("revolver-gate", at, 15, 0.9, 0.8);
-          else if (was.arm === ARM.open) this.voices.play("revolver-cock", at, 15, 0.9, 0.7);
+          } else if (opened && !wasOpen) {
+            this.voices.gun("sniper-bolt-open", at, 15);
+            loadIn("sniper");
+          } else if (!opened && wasOpen) this.voices.gun("sniper-bolt-close", at, 15);
           return;
         }
         if (p.gun === "ak47") {
-          // (the magazine out — a placeholder: the double-barrel's break, higher — and in; shouldered again,
-          // or the charging handle racked: plan 79 phase 9 has the real ones)
-          if (arm === ARM.open) this.voices.play("shotgun-break", at, 15, 0.7, 1.35);
-          else if (was.arm === ARM.open) this.voices.play("revolver-cock", at, 15, 0.8, 0.75);
+          // (the magazine out — the new one in as its rounds go in — and, run dry, the charging handle racked)
+          if (opened && !wasOpen) {
+            this.voices.gun("ak-mag-out", at, 15);
+            if (me) this.akDryReload = (g?.loaded ?? 1) <= 0;
+            loadIn("ak47");
+          } else if (!opened && wasOpen && me && this.akDryReload) this.voices.gun("ak-rack", at, 15);
           return;
         }
         if (arm === ARM.open) {
-          this.voices.play("shotgun-break", at, 20);
+          this.voices.gun("shotgun-break", at, 20);
           // (both out — plan 79 F12a: the fired ones kicked out to the ground, mine as many as are spent,
           // anyone's both; a live one back to the pocket)
-          const g = me ? this.gun() : null;
           const spent = g ? WEAPONS.shotgun.mag - g.loaded : 2;
-          if (spent > 0) setTimeout(() => this.voices.play("shotgun-eject", at, 15), 110);
+          setTimeout(() => this.voices.gun("shotgun-eject", at, 15), 160);
           if (me) this.brass("shell", spent);
           else if (tp && spent > 0) {
             const yaw = (((p.yaw ?? 0) & 255) / 256) * 2 * Math.PI;
             tp.arms().eject(p.x + Math.cos(yaw) * 0.3, p.y + Math.sin(yaw) * 0.3, p.z + 1.2, yaw, "shell", spent, p.z);
-            setTimeout(() => this.voices.play("shell-drop", at, 12, 0.7), 520);
+            setTimeout(() => this.voices.gun(this.walker.outside ? "shell-snow" : "shell-floor", at, 12), 520);
           }
-        } else if (was.arm === ARM.open) this.voices.play("shotgun-shut", at, 20);
+          loadIn("shotgun");
+        } else if (was.arm === ARM.open) this.voices.gun("shotgun-close", at, 20);
       },
     );
     for (const sid of this.arms.keys()) if (!room.state.players.has(sid)) this.arms.delete(sid);

@@ -12,13 +12,15 @@
 //          its onset to where it's died away (≤ HIT_LEN's), peaking at −3 dB, mono 80 kb/s
 // The water's (docs/plan/66-the-water.md, phase 9) the same way into public/sfx/water:
 //   LIST=tools/sfx-water.json DIR=water node tools/sfx-weather.mjs
+// and the guns' (docs/plan/79-the-guns.md, phase 9: their own lengths, hitLen) into public/sfx/guns:
+//   LIST=tools/sfx-guns.json DIR=guns node tools/sfx-weather.mjs
 // and the manifests (public/sfx/steps/manifest.json's slots, public/sfx/weather/manifest.json) list
 // each slot's candidates in the json's order: the game plays the first; /dev/weather-sound all.
 //
 //   node tools/sfx-weather.mjs [cache dir]        all of them (fetched once into the cache)
 //   ONLY=grass,rain-light node tools/sfx-weather.mjs
 //   PICK='{"grass":1,…}' node tools/sfx-weather.mjs   each slot down to the one picked (0-based; the
-//   json's `pick` is the user's, used when PICK doesn't say)
+//   json's `pick` is the user's, used when PICK doesn't say; its `take`, one of the picked's takes alone)
 
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -277,6 +279,20 @@ const HIT_LEN = {
   "stroke-breast": 1.6,
   "stroke-crawl": 1.2,
 };
+/** (the guns', plan 79 phase 9: a shot's tail into the land, a far one's rolling; the handling short) */
+const hitLen = (slot) =>
+  HIT_LEN[slot] ??
+  (DIR !== "guns"
+    ? 3
+    : /-far$/.test(slot)
+      ? 5
+      : /-(near|burst)$/.test(slot)
+        ? 3.5
+        : /-in$/.test(slot)
+          ? 2.5
+          : /^daybreak-(charge|fire)$/.test(slot)
+            ? 3
+            : 1.6);
 /** a slot's events: where the loudness jumps after a quiet to where it's down a while (or the cap) —
  *  the six most alike; a recording with no quiet between its events, its loudest stretch */
 function hits(chans, maxLen) {
@@ -378,7 +394,9 @@ for (const [slot, s] of Object.entries(all)) {
         `${slot} ${tag || "·"} ${c.id}: ${(bed[0].length / SR).toFixed(1)} s, ${unevenness > 1e6 ? "the whole of it" : `unevenness ${unevenness.toFixed(2)}`}`,
       );
     } else if (!slot.startsWith("thunder")) {
-      hits(decode(src, 1), HIT_LEN[slot] ?? 3).forEach((one, i) => {
+      // (one take picked — a reload's moment, plan 79 phase 9: that one alone)
+      const takes = hits(decode(src, 1), hitLen(slot));
+      (s.take !== undefined && from.length === 1 ? [takes[s.take] ?? takes[0]] : takes).forEach((one, i) => {
         const name = `${slot}-${tag}${i + 1}.mp3`;
         encode(one, join(dir, name), 80);
         files.push(name);

@@ -81,6 +81,15 @@ test("the feel: kick and settle, the spread, an early click, over the shoulder, 
   });
   await expect(page.locator(".dk-cross.blocked")).toHaveCount(0, { timeout: 2000 });
 
+  // the guns' recorded sounds (plan 79 phase 9): all of them decoded once a gun's out — before its first
+  // shot is over
+  // (the page's audio is resumed by the clicks; the headless one may stay suspended — then it's said)
+  const sounds = () =>
+    page.evaluate(() => {
+      const v = (window as any).__dark?.voices;
+      return { n: v?.recorded?.size ?? -1, ctx: v?.mixer?.ctx?.state ?? "none" };
+    }) as Promise<{ n: number; ctx: string }>;
+
   // a shot: the look kicks up (pitch > 0 is down), then most of it comes back by itself
   const p0 = (await w(page, (y) => y.tp.pitch)) as number;
   await fire(page);
@@ -94,6 +103,10 @@ test("the feel: kick and settle, the spread, an early click, over the shoulder, 
   expect(p0 - p2).toBeGreaterThan(0);
   expect(p0 - p2).toBeLessThan((p0 - p1) * 0.6);
   await expect.poll(async () => (await me(page)).loaded).toBe(5);
+  await page.waitForTimeout(800);
+  const heard = await sounds();
+  if (heard.ctx === "running") expect(heard.n, "the guns' recordings decoded").toBe(43);
+  else console.log(`[arms-feel] audio ${heard.ctx}: the recordings not checked`);
 
   // fired fast, the ticks open; still, they close again
   const g0 = await gap(page);
