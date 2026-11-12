@@ -31,6 +31,8 @@ const POSES: [string, Record<string, unknown>][] = [
   ["aim-up", { pose: "aim", torch: false, pitch: 0.5 }],
   ["aim-down", { pose: "aim", torch: false, pitch: -0.5 }],
   ["aim-torch", { pose: "aim", torch: true, pitch: 0 }],
+  ["aim-kick", { pose: "aim", torch: false, pitch: 0, kick: 0.8, trigger: 1 }],
+  ["aim-torch-up", { pose: "aim", torch: true, pitch: 0.5 }],
   ["reload-open", { pose: "reload", t: 0.5 }],
 ];
 
@@ -59,7 +61,7 @@ const report = (name: string, c: any) => {
   const aiming = name.startsWith("aim");
   const fails = [
     aiming && c.cant > 2 / DEG && "canted",
-    aiming && c.off > 2 / DEG && "off the look",
+    aiming && !name.includes("kick") && c.off > 2 / DEG && "off the look",
     !name.includes("torch") && c.hands !== null && c.hands < -0.003 && "a hand through a hand",
     !name.includes("torch") && c.grip !== null && c.grip < -0.003 && "fingers through the grip",
     c.R.short > 0.015 && "the right short",
@@ -72,7 +74,7 @@ const report = (name: string, c: any) => {
 };
 for (const [name, s] of POSES) {
   if (only && !only.includes(name)) continue;
-  await set({ pitch: 0, move: 0, draw: 1, away: false, torch: false, ...s });
+  await set({ pitch: 0, move: 0, draw: 1, away: false, torch: false, kick: 0, trigger: 0, ...s });
   await settle();
   const c = await check();
   if (c) report(name, c);
@@ -85,6 +87,23 @@ for (const [name, s] of POSES) {
   }
 }
 if (checkOnly) {
+  // the ready to the aim in the gun's own 0.18 s (shared ARMS.revolver.aim): well off the look early in it,
+  // on it by its end
+  await set({ pose: "ready", torch: false, pitch: 0 });
+  await settle();
+  const t0 = Date.now();
+  await set({ pose: "aim" });
+  const offAt = async (ms: number) => {
+    await page.waitForTimeout(Math.max(0, ms - (Date.now() - t0)));
+    return ((await check())?.off ?? 0) * DEG;
+  };
+  const early = await offAt(50);
+  const late = await offAt(320);
+  const ok = early > 8 && late < 2;
+  if (!ok) bad++;
+  console.log(
+    `ready → aim: ${early.toFixed(1)}° off the look at 50 ms, ${late.toFixed(1)}° at 320 ms${ok ? "" : "  ✗"}`,
+  );
   // every pitch aimed, with and without the torch
   for (const torch of [false, true])
     for (let pitch = -0.9; pitch <= 0.91; pitch += 0.3) {

@@ -47,7 +47,10 @@ import {
   DRAW_MEET,
   FIST,
   gunQuat,
+  HARRIES,
   holsterHold,
+  INDEX,
+  KICK,
   MOCK_ARM,
   newHold,
   revolverHold,
@@ -80,6 +83,8 @@ const SIT_IN = 0.3; // s: sitting down / getting up
 const STAND_RISER = 0.45; // m: a stand's row over the one before (shared/kart/park.ts kartSeats)
 const PICK_R = 0.26; // tiles: how wide a person is to a click
 const LIFE_GUN_SCALE = 1;
+/** (shared ARMS.revolver.aim: the revolver up from the ready, s) */
+const AIM_S = 0.18;
 const ARM_BOLT = 4; // (shared ARM.bolt: the sniper's bolt worked — Player.arm)
 /** The model a gun's id draws (the pool cue's carried as the double-barrel is). */
 const gunKind = (key: string): GunKind =>
@@ -247,6 +252,9 @@ const rs2 = new Vector3();
 const rq1 = new Quaternion();
 const rq2 = new Quaternion();
 const rTurn = new Quaternion();
+const rq3 = new Quaternion();
+const rv4 = new Vector3();
+const rv5 = new Vector3();
 const rL = new Matrix4();
 // (plan 80) the holster on the hips (their own space: x her left, y up, z ahead): on her right hip at the
 // belt, the gun in it muzzle down (a touch forward), its left side against her
@@ -1344,6 +1352,7 @@ export class Person3D {
     this.gunDirOn = false;
     this.foreW = 0;
     this.revHeld = false;
+    this.revHarries = false;
     // (plan 80: the life revolver's own — drawn out of the holster at her right hip into the hold and put back
     // the same way: the hold's own weight, not the hands' rise from the side)
     if (gun?.inHand && gunKind(gun.key) === "revolver" && this.model.handFrame("L")) {
@@ -1352,7 +1361,7 @@ export class Person3D {
       // (running: tucked in, from a jog on)
       const run = Math.max(0, Math.min(1, (this.spd - 2.8) / 2));
       const draw = away ? Math.max(0, 1 - this.holsterT / HOLSTER_S) : drawn;
-      if (this.revW > 0.01) this.revolverHands(p, this.revW, aiming && !away, run, draw);
+      if (this.revW > 0.01) this.revolverHands(p, this.revW, aiming && !away, run, draw, dt);
       return;
     }
     if (w < 0.01 || !gun) return;
@@ -1474,7 +1483,7 @@ export class Person3D {
    *  the left on the gun in the support grip, its fingers closed round the right fist (or holding the torch). */
   private revW = 0;
   private revHolster = { grip: new Vector3(), f: new Vector3(), u: new Vector3() };
-  private revolverHands(p: PersonIn, w: number, aiming: boolean, run: number, draw: number) {
+  private revolverHands(p: PersonIn, w: number, aiming: boolean, run: number, draw: number, dt: number) {
     const m = this.model;
     const gun = this.gun;
     const sL = m.bone("shoulderL");
@@ -1558,6 +1567,8 @@ export class Person3D {
         rAt.addScaledVector(H.f, step);
       }
     }
+    // the gun's turn as the hold has it
+    gunQuat(H.f, H.u, rq2);
     // (drawn or put away: along the draw's path from the holster — the right hand on it all the way, the left
     // meeting it late)
     let lw = w;
@@ -1579,11 +1590,38 @@ export class Person3D {
       gunQuat(hol.f, hol.u, rq2).slerp(rq1, turn);
       rv1.copy(hol.grip).addScaledVector(B.up, 0.13 * B.k * ease(draw / DRAW_LIFT));
       H.grip.lerpVectors(rv1, H.grip, turn);
-      rM.compose(H.grip, rq2, rs2.setScalar(gs)).multiply(rL);
-      rM.decompose(rAt, rTurn, rs1);
       lw = w * ease((draw - DRAW_MEET) / (1 - DRAW_MEET));
       w *= ease(draw / 0.08);
     }
+    // (eased to it — the ready to the aim, and back, in the gun's own time, AIM_S; in her own frame, so
+    // walking doesn't leave it behind; the draw's path is its own)
+    this.root.updateWorldMatrix(true, false);
+    const RW = this.root.matrixWorld;
+    rv1.copy(H.grip).applyMatrix4(rM.copy(RW).invert());
+    this.root.getWorldQuaternion(rq1);
+    rq3.copy(rq1).invert().multiply(rq2);
+    const E = this.revEase;
+    if (!E.on || draw < 1 || p.reduced) {
+      E.pos.copy(rv1);
+      E.quat.copy(rq3);
+      E.on = true;
+    } else {
+      const k = 1 - Math.exp(-dt / (AIM_S / 3));
+      E.pos.lerp(rv1, k);
+      E.quat.slerp(rq3, k);
+    }
+    H.grip.copy(E.pos).applyMatrix4(RW);
+    rq2.copy(rq1).multiply(E.quat);
+    // a shot's kick on the new hold: the muzzle up, the gun back — the wrists giving
+    const kick = this.gunFx?.kick ?? 0;
+    if (kick > 0) {
+      H.grip
+        .addScaledVector(rv2.set(1, 0, 0).applyQuaternion(rq2), -KICK.back * B.k * kick)
+        .addScaledVector(rv3.set(0, 1, 0).applyQuaternion(rq2), KICK.up * B.k * kick);
+      rq2.multiply(rq3.setFromAxisAngle(Z3, KICK.flip * kick));
+    }
+    rM.compose(H.grip, rq2, rs2.setScalar(gs)).multiply(rL);
+    rM.decompose(rAt, rTurn, rs1);
     m.gripTo("R", rAt, rTurn, w, H.poleR);
     if (H.left === "support" && lw > 0.01) {
       // the left on the gun where it now is: its palm on the grip's left panel, over the right's fingers
@@ -1605,8 +1643,54 @@ export class Person3D {
         m.gripTo("L", rAt, rTurn, lw, H.poleL);
         if (lw > 0.5) m.thumbTo("L", rv1.copy(SUPPORT_THUMB).applyMatrix4(G));
       }
+    } else if (H.left === "torch" && aiming) {
+      // Harries: the left fist crossed under the right wrist, the back of the hand up against it, the torch
+      // held ice-pick — its own line ahead along the barrel (the lens out of the little finger's side)
+      const Ft = m.handFrame("L");
+      const f = rv2.set(1, 0, 0).applyQuaternion(rq2);
+      const u = rv3.set(0, 1, 0).applyQuaternion(rq2);
+      wr.getWorldPosition(rv1)
+        .addScaledVector(u, -HARRIES.under * B.k)
+        .addScaledVector(f, HARRIES.ahead * B.k)
+        .addScaledVector(rv4.crossVectors(f, u), HARRIES.right * B.k);
+      if (Ft && m.wristTo("L", rv1, this.C.gripLine("torch", Ft, rv4), f, Ft.n, rv5.copy(u).negate(), rLAt, rq1)) {
+        m.gripTo("L", rLAt, rq1, lw, H.poleL);
+        this.revHarries = true;
+      }
     } else if (H.left === "torch") m.reachTo("L", H.torchAt, lw, H.poleL);
+    // the trigger finger: straight along the frame at the ready, on the trigger aimed — curled on with a pull
+    this.revAimK += ((aiming ? 1 : 0) - this.revAimK) * (1 - Math.exp(-dt / (AIM_S / 3)));
+    const aimK = this.revAimK;
+    m.indexTo("R", INDEX.ready + (INDEX.aim - INDEX.ready) * aimK + INDEX.pull * (this.gunFx?.trigger ?? 0));
+    // aimed, the head down onto the sights
+    if (aimK > 0.01) this.headToSights(p, aimK * w);
     this.revHeld = true;
+  }
+  private revEase = { on: false, pos: new Vector3(), quat: new Quaternion() };
+  private revAimK = 0;
+  /** (plan 80) This frame the left hand is Harries' (torchFrame leaves its wrist be) */
+  private revHarries = false;
+
+  /** (plan 80 phase 3) Aimed: the neck and the head turned onto the sights — the look, a touch down to the
+   *  sight line under the eyes (`k` of the way) */
+  private headToSights(p: PersonIn, k: number) {
+    const m = this.model;
+    const head = m.bone("head");
+    const neck = m.bone("neck");
+    if (!head?.parent || !neck?.parent) return;
+    head.getWorldQuaternion(rq1);
+    rv1.set(0, 0, 1).applyQuaternion(rq1);
+    this.lookDir(p, rv2).y -= 0.12;
+    rv2.normalize();
+    rq2.setFromUnitVectors(rv1, rv2);
+    for (const [b, share] of [
+      [neck, 0.4],
+      [head, 0.6],
+    ] as const) {
+      (b.parent as Object3D).getWorldQuaternion(rq1);
+      rq3.identity().slerp(rq2, share * k);
+      b.quaternion.premultiply(rq3.premultiply(rTurn.copy(rq1).invert()).multiply(rq1));
+    }
   }
 
   /** (plan 80) The revolver hold's checks, as she is now: how far the gun leans off upright (rad), how far
@@ -1998,7 +2082,8 @@ export class Person3D {
     // the fist — and only what the wrist can't, turned in the hand)
     const look = this.lookDir(p, tv);
     const frame = this.model.handFrame("L");
-    if (frame) this.model.aimHand("L", this.C.gripLine("torch", frame, tv2), look);
+    // (plan 80: held Harries under the revolver, the hold turned the hand already)
+    if (frame && !this.revHarries) this.model.aimHand("L", this.C.gripLine("torch", frame, tv2), look);
     this.C.pointAlong(this.torch.root, look, frame, "torch");
   }
   /** Where the beam goes, in the world (unit): ahead and tipped at the ground — or, aiming, along the

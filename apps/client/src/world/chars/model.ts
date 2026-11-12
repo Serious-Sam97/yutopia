@@ -1227,14 +1227,30 @@ export class PersonModel {
    *  thumb) toward `index`. False on a body without life hands. */
   wristFor(S: "L" | "R", palm: Vector3, along: Vector3, index: Vector3, at: Vector3, q: Quaternion): boolean {
     const F = this.life?.grip[S];
+    return !!F && this.wristTo(S, palm, F.along, along, F.across, index, at, q);
+  }
+
+  /** (plan 80) The same for any two of the hand's own lines (its wrist's space): `a` along `aTo` (the world's),
+   *  `b` turned toward `bTo` — a held torch's line ahead, the back of the hand up. */
+  wristTo(
+    S: "L" | "R",
+    palm: Vector3,
+    a: Vector3,
+    aTo: Vector3,
+    b: Vector3,
+    bTo: Vector3,
+    at: Vector3,
+    q: Quaternion,
+  ): boolean {
+    const F = this.life?.grip[S];
     const wr = this.bones[`wrist${S}`];
     if (!F || !wr) return false;
-    const A = _wfA.copy(along).normalize();
-    const B = _wfB.copy(index).addScaledVector(A, -index.dot(A)).normalize();
+    const A = _wfA.copy(aTo).normalize();
+    const B = _wfB.copy(bTo).addScaledVector(A, -bTo.dot(A)).normalize();
     _wfM.makeBasis(A, B, _wfC.crossVectors(A, B));
-    const a = _wfA.copy(F.along).normalize();
-    const b = _wfB.copy(F.across).addScaledVector(a, -F.across.dot(a)).normalize();
-    _wfN.makeBasis(a, b, _wfC.crossVectors(a, b));
+    const a0 = _wfA.copy(a).normalize();
+    const b0 = _wfB.copy(b).addScaledVector(a0, -b.dot(a0)).normalize();
+    _wfN.makeBasis(a0, b0, _wfC.crossVectors(a0, b0));
     q.setFromRotationMatrix(_wfM.multiply(_wfN.transpose()));
     // (the palm's middle from the wrist: 0.55 of the way to the middle knuckle, 2.2 cm out of the palm — the
     // mocks' own, tools/art/guns/pose.py hand_rest)
@@ -1246,6 +1262,12 @@ export class PersonModel {
       .applyQuaternion(q);
     at.subVectors(palm, at);
     return true;
+  }
+
+  /** (plan 80) A life index finger at a curl of the library's — the trigger finger: straight along the frame,
+   *  or in the guard on the trigger. After the grips (they close it round what's held). */
+  indexTo(S: "L" | "R", c: number) {
+    this.poseFinger(S, "index", c);
   }
 
   /** (plan 80) What gripTo last left each hand: how far its wrist fell short of the place (m), and how far

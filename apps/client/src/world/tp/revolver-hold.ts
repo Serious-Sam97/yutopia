@@ -65,6 +65,15 @@ export const SUPPORT = {
 /** (the gun's frame) Where the support thumb's pad goes: along the frame's left side under the cylinder's
  *  front — thumbs forward */
 export const SUPPORT_THUMB = new Vector3(0.06, 0.036, -0.027);
+/** (plan 80 phase 3) Harries, aimed with the torch: the left fist under the right wrist (its palm's middle this
+ *  far under the wrist, m), the back of the hand up against it, the torch held ice-pick — its lens out of the
+ *  little finger's side, ahead along the barrel */
+export const HARRIES = { under: 0.072, ahead: 0.0, right: 0.01 };
+/** A shot's kick on the hold: the muzzle up (rad), the gun back and up (m) — the wrists giving */
+export const KICK = { flip: 0.32, back: 0.03, up: 0.012 };
+/** The trigger finger: straight along the frame at the ready, in the guard on the trigger aimed (and how much
+ *  further a pull curls it) — the library's curls */
+export const INDEX = { ready: 0.12, aim: 0.62, pull: 0.3 };
 /** (the gun's frame) What the support hand's fingers close round: the right fist on the grip — a round
  *  thing along the grip's rake, a little ahead of the grip's own middle (the right fingers round its front) */
 export const FIST = { at: new Vector3(-0.004, -0.024, 0), r: 0.037, hy: 0.045 };

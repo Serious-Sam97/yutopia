@@ -28,6 +28,9 @@ interface State {
   /** the draw scrubbed: 0 in the holster … 1 drawn (`away`: put away — the same path back) */
   draw: number;
   away: boolean;
+  /** a shot's kick (0..1, as it goes off and fades) and the trigger's pull, held where they are */
+  kick: number;
+  trigger: number;
   /** the reload scrubbed, 0..1 (the server's three steps: open, load, shut) */
   t: number;
   view: View;
@@ -56,12 +59,15 @@ function Bench({ q }: { q: URLSearchParams }) {
     move: Number(q.get("move") ?? 0),
     draw: Number(q.get("draw") ?? 1),
     away: q.get("away") === "1",
+    kick: Number(q.get("kick") ?? 0),
+    trigger: Number(q.get("trigger") ?? 0),
     t: Number(q.get("t") ?? 0.5),
     view: (q.get("view") as View) ?? "side",
   });
   const live = useRef(st);
   live.current = st;
   const orbit = useRef<{ yaw: number; pitch: number; dist: number } | null>(null);
+  const fire = useRef<() => void>(() => {});
   const [check, setCheck] = useState<string>("loading…");
 
   useEffect(() => {
@@ -227,6 +233,10 @@ function Bench({ q }: { q: URLSearchParams }) {
       // the person as the state has her: aiming, its pitch, the torch, running, the reload scrubbed
       const fx = { kick: 0, cock: 1, turn: 0, open: 0, loaded: 6, trigger: 0, reload: 0 };
       const seen = { camX: 0, camZ: 2, onScreen: true, lowQuality: false, mood: 0 };
+      let fired = -1e9;
+      fire.current = () => {
+        fired = performance.now();
+      };
       const GAIT = ["still", "walk", "jog", "sprint"] as const;
       const SPEED = [0, 1.4, 3.2, 5.4];
       const P3 = person as unknown as { drawT: number; holsterT: number };
@@ -253,6 +263,11 @@ function Bench({ q }: { q: URLSearchParams }) {
         fx.reload = reload ? 1 : 0;
         fx.open = reload ? (t < 0.3 ? t / 0.3 : t < 0.8 ? 1 : 1 - (t - 0.8) / 0.2) : 0;
         fx.loaded = reload && t < 0.55 ? 0 : 6;
+        // (a shot: fired by the button, its kick fading as Arms fades it — or held where the sliders are)
+        const since = (performance.now() - fired) / 1000;
+        const shot = since < 0.4 ? Math.max(0, 1 - since / 0.25) : 0;
+        fx.kick = Math.max(s.kick, shot);
+        fx.trigger = Math.max(s.trigger, since < 0.12 ? 1 : 0);
         (person as unknown as { gunFx: typeof fx | null }).gunFx = fx;
       };
 
@@ -413,6 +428,29 @@ function Bench({ q }: { q: URLSearchParams }) {
             onChange={(e) => set({ draw: Number(e.target.value) })}
           />
         </label>
+        <div style={row}>
+          <button type="button" onClick={() => fire.current()}>
+            fire
+          </button>
+          kick
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={st.kick}
+            onChange={(e) => set({ kick: Number(e.target.value) })}
+          />
+          trigger
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={st.trigger}
+            onChange={(e) => set({ trigger: Number(e.target.value) })}
+          />
+        </div>
         <label style={row}>
           <input type="checkbox" checked={st.away} onChange={(e) => set({ away: e.target.checked })} /> putting it away
         </label>

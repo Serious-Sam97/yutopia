@@ -16,7 +16,8 @@ F6a keyed on a `/dev/revolver` bench, F7a third person only. Phase 0 (the mocks)
 `tools/art/guns/mock80.py` (Blender, the life man, the gun's support/shooting hands placed on it) →
 `design/guns/p80/sheet-80-hold.png` and `sheet-80-reload.png` — signed off 2026-11-12 ("Start phase 1").
 **Phase 1 built 2026-11-12** (below), committed 53c06b6. **Phase 2 built 2026-11-12**, committed dc0fee0; its
-holster (the user's ask) built after — stills `design/guns/p80/sheet-80-phase2-draw.png`; awaiting review. Follows plan 79 (the guns:
+holster (the user's ask) committed 752cfec. **Phase 3 built 2026-11-12** — stills
+`design/guns/p80/sheet-80-phase3-aim.png`; awaiting review. Follows plan 79 (the guns:
 the shoulder camera, the Blender revolver, the speedloader rule F11a) and plans 58/77/78 (the body, its
 moves, its hands).
 
@@ -185,6 +186,23 @@ cylinder, the ejector rod, the cases, a speedloader, in time with the server's s
 3. **The aim** (F2, F3) — the pose keyed whole; the wrist's turn setting the barrel and its top (no cant,
    ever); the arms' reach; the head over the sights; the torch's Harries; the shot's recoil on the new
    hold (the muzzle's flip, the wrists giving); dry fire; the low ready ↔ aim in the gun's own 0.18 s.
+   **Built 2026-11-12** (much of the aim came with phase 1's hold — isosceles, square, upright at every
+   pitch, the arms' reach):
+   - **Up in the gun's own time**: the gun eased to each hold in her own frame (so walking doesn't leave it
+     behind) — the ready to the aim and back in `AIM_S` 0.18 s (shared ARMS.revolver.aim): 23° off the look
+     50 ms in, 0.2° by 320 ms (the bench's CHECK=1 holds it to that). Before, it snapped.
+   - **The shot's kick on the new hold** (`KICK`): the muzzle up 0.32 rad at a full kick, the gun 3 cm back
+     and 1.2 cm up, the wrists giving (the arms' IK follows) — the clip's thrown-up arms were overridden by
+     the hold, so it showed nothing.
+   - **The trigger finger** (`INDEX`, `PersonModel.indexTo`): straight along the frame at the ready, in the
+     guard on the trigger aimed, curled on by the pull (a shot, a dry click).
+   - **The head onto the sights**: aimed, the neck and head turned along the look and 0.12 down to the sight
+     line (`headToSights`).
+   - **Harries** (F3a): the left fist crossed under the right wrist, the back of the hand up against it, the
+     torch held ice-pick so its lens comes out of the little finger's side ahead along the barrel —
+     `PersonModel.wristTo` sets the hand by the torch's own line and the palm's way (the torch only turns
+     ~15° in a fist, so the hand must aim it). The left fingers within 2–4 mm of the right hand (skin).
+   - The bench fires (`fire`, `kick`, `trigger`); `e2e/arms-feel.spec.ts` passes.
 4. **The reload** (F4, F5) — the timeline, both hands: the latch, the cylinder rolled out by the left
    fingers, muzzle up and the rod struck by the right palm (the cases falling as they do now), muzzle
    down, the right hand to the pouch and back with the loader, two rounds started, squared, twisted, the
