@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { HQ_DOORS, onPathAt } from "./danger.ts";
 import { cacheItems, dayNests, dayOf, isDay, NESTS, nestCount, revive } from "./dark/nests.ts";
 import { BUILDINGS } from "./grounds.ts";
-import { STACKS } from "./inventory.ts";
+import { isStack, STACKS } from "./inventory.ts";
 
 // The day's nests (docs/plan/31-the-day.md, phase 2): seeded by the day, the
 // same for everyone; spread, never on a path or near the HQ; some at each named
@@ -82,7 +82,8 @@ test("the caches: most nests keep one, what fits the place, twice as much in a b
   for (const n of kept) {
     const c = n.cache as NonNullable<typeof n.cache>;
     assert.ok(Math.hypot(c.x - n.x, c.z - n.z) < 1.2, "among them");
-    for (const it of c.items) assert.ok(it.n >= 1 && it.n <= STACKS[it.id], `${c.kind}: ${it.n} ${it.id}`);
+    for (const it of c.items)
+      assert.ok(it.n >= 1 && it.n <= (isStack(it.id) ? STACKS[it.id] : 1), `${c.kind}: ${it.n} ${it.id}`);
   }
   let x = 0.3;
   const r = () => {
@@ -111,4 +112,27 @@ test("a killed one back 10 minutes after it fell — not while anyone's within 4
   assert.deepEqual(alive, [true, true, false]);
   assert.equal(revive(alive, deadAt, 5000 + NESTS.respawnMs, 50), 1);
   assert.deepEqual(alive, [true, true, true]);
+});
+
+test("the hunting bag's rare sniper (plan 79 F9a): on dice of its own — the day's nests laid out as before", () => {
+  const seq = (v: number) => () => v;
+  assert.deepEqual(
+    cacheItems("hunting", 1, seq(0), seq(0.05)).map((i) => i.id),
+    ["sniper", "r308", "shell"],
+  );
+  assert.deepEqual(
+    cacheItems("hunting", 1, seq(0), seq(0.2)).map((i) => i.id),
+    ["r308", "shell"],
+  );
+  assert.deepEqual(
+    cacheItems("hunting", 1, seq(0), seq(0.9)).map((i) => i.id),
+    ["shell"],
+  );
+  // (somewhere in a month of days, one turns up; the rifle comes empty)
+  const rifles = Array.from({ length: 30 }, (_, d) => dayNests(20_000 + d))
+    .flat()
+    .flatMap((n) => n.cache?.items ?? [])
+    .filter((i) => i.id === "sniper");
+  assert.ok(rifles.length > 0);
+  for (const r of rifles) assert.equal(r.loaded, 0);
 });

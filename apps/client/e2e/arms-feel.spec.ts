@@ -8,7 +8,7 @@ import { ANA, enter, test, token } from "./helpers";
 // early still fires; in first person a gun out goes over her shoulder (guns are
 // third person: docs/plan/79-the-guns.md F3a), the camera tight there and closer
 // still aimed; a reload tips the gun up. Then the double-barrel; the AK's burst and climb (plan 79 phase
-// 5). 3D: the GPU (YUTOPIA_GPU=1). Review
+// 5); the sniper's scope and bolt (phase 6). 3D: the GPU (YUTOPIA_GPU=1). Review
 // shots: YUTOPIA_SHOTS=<dir>.
 
 const GPU = process.env.YUTOPIA_GPU === "1";
@@ -54,7 +54,7 @@ test("the feel: kick and settle, the spread, an early click, over the shoulder, 
   await w(page, (y) => {
     y.room.send("mod:hour", { h: 13 });
     y.room.send("mod:storm", { storm: 0, now: true });
-    y.room.send("mod:refill", { kit: true, ak: true });
+    y.room.send("mod:refill", { kit: true, ak: true, sniper: true });
     y.tp.yaw = 0;
   });
   await page.waitForTimeout(2000);
@@ -169,7 +169,30 @@ test("the feel: kick and settle, the spread, an early click, over the shoulder, 
   await page.mouse.up({ button: "right" });
   await page.keyboard.press("KeyR");
   await expect.poll(async () => (await me(page)).loaded, { timeout: 5000 }).toBe(30);
-  await page.keyboard.press("Digit3");
+
+  // the sniper (plan 79 phase 6): aimed its moment, down the scope — the glass and its ring, the lens
+  // narrow; the wheel, 8×; a shot: out of it for the bolt, back in once it's home; R: a round at a time
+  await page.keyboard.press("Digit4");
+  await expect.poll(async () => (await me(page)).gun).toBe("sniper");
+  await page.waitForTimeout(800);
+  await page.mouse.down({ button: "right" });
+  await expect.poll(() => w(page, (y) => y.tp.scopeK), { timeout: 3000 }).toBeGreaterThan(0.9);
+  await expect(page.locator(".dk-scope.on")).toBeVisible();
+  await expect(page.locator(".dk-cross")).toBeHidden();
+  await page.waitForTimeout(300);
+  const fov4 = (await w(page, (y) => y.tp.camera.fov)) as number;
+  expect(fov4, "4×").toBeLessThan(15);
+  await page.mouse.wheel(0, -100);
+  await expect.poll(() => w(page, (y) => y.tp.camera.fov), { timeout: 2000 }).toBeLessThan(fov4 * 0.6);
+  await shot(page, "feel-sniper-scope");
+  await fire(page);
+  await expect.poll(async () => (await me(page)).loaded).toBe(4);
+  await expect.poll(() => w(page, (y) => y.tp.scopeK), { timeout: 1000 }).toBeLessThan(0.2);
+  await expect.poll(() => w(page, (y) => y.tp.scopeK), { timeout: 3000 }).toBeGreaterThan(0.9);
+  await page.mouse.up({ button: "right" });
+  await page.keyboard.press("KeyR");
+  await expect.poll(async () => (await me(page)).loaded, { timeout: 4000 }).toBe(5);
+  await page.keyboard.press("Digit4");
   await page.keyboard.press("Digit2");
   await expect.poll(async () => (await me(page)).gun).toBe("shotgun");
 

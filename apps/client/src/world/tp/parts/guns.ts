@@ -67,7 +67,7 @@ export class Guns {
     f.kick =
       since < 0.035
         ? since / 0.035
-        : Math.exp(-(since - 0.035) * (b.gun === "shotgun" ? 9 : b.gun === "ak47" ? 18 : 13));
+        : Math.exp(-(since - 0.035) * (b.gun === "shotgun" ? 9 : b.gun === "ak47" ? 18 : b.gun === "sniper" ? 7 : 13));
     f.cock = ease(f.cock, aiming && since > 0.12 ? 1 : 0, 18);
     f.turn = ease(f.turn, f.turnTo, 14);
     f.open = ease(f.open, loading ? 1 : 0, 12);

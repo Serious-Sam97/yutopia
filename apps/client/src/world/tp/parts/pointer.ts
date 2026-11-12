@@ -30,6 +30,7 @@ export type PointerHost = Pick<
   | "hidden"
   | "lifts3"
   | "lockAt"
+  | "lookScale"
   | "meId"
   | "mode"
   | "mood"
@@ -114,7 +115,9 @@ export class Pointer {
         const f = this.c.follow;
         f.yaw = this.c.yaw;
         f.pitch = this.c.pitch;
-        f.mouse(e.movementX, e.movementY, !!this.c.lockAt);
+        // (through a scope, slower: plan 79 phase 6)
+        const ls = this.c.lookScale;
+        f.mouse(e.movementX * ls, e.movementY * ls, !!this.c.lockAt);
         this.c.yaw = f.yaw;
         this.c.pitch = f.pitch;
         if (this.c.lockAt) this.c.flickX = this.c.flickX * 0.8 + e.movementX;

@@ -62,9 +62,11 @@ const W = {
   revolver: ["Revolver", "Revólver"],
   shotgun: ["Shotgun", "Espingarda"],
   ak47: ["AK-47", "AK-47"],
+  sniper: ["Sniper rifle", "Rifle de precisão"],
   r38: ["Rounds", "Balas"],
   shell: ["Shells", "Cartuchos"],
   r762: ["7.62 rounds", "Balas 7.62"],
+  r308: [".308 rounds", "Balas .308"],
   flare: ["Flares", "Sinalizadores"],
   battery: ["Batteries", "Baterias"],
   aid: ["First aid", "Curativos"],
@@ -73,7 +75,20 @@ const W = {
 type Word = keyof typeof W;
 
 const HELD = ["mug", "cup", "soda", "ball", "frisbee", "rope", "feather", "laser"] as const;
-const POCKET = ["revolver", "shotgun", "ak47", "r38", "shell", "r762", "flare", "battery", "aid", "fuse"] as const;
+const POCKET = [
+  "revolver",
+  "shotgun",
+  "ak47",
+  "sniper",
+  "r38",
+  "shell",
+  "r762",
+  "r308",
+  "flare",
+  "battery",
+  "aid",
+  "fuse",
+] as const;
 const hex = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
 
 export function Spawn() {
@@ -188,7 +203,7 @@ export function Spawn() {
               type="button"
               className="deck-btn"
               title={t("armS")}
-              onClick={() => send?.("mod:refill", { kit: true, ak: true })}
+              onClick={() => send?.("mod:refill", { kit: true, ak: true, sniper: true })}
             >
               {t("arm")}
             </button>

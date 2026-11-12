@@ -550,3 +550,42 @@ test("the AK (plan 79 phase 5): full auto at its rate through the line's jitter,
   await waitFor(() => me(b.room).arm === ARM.idle, 2500);
   assert.ok(Date.now() - t2 > ARMS.ak47.charge * 1000 - 250, "run dry: the charging handle racked");
 });
+
+test("the sniper (plan 79 phase 6): down its scope, the shot goes near dead on (wide, not); the bolt worked after each, no shot till it's home; its reload keeps the rounds in it, a round at a time", async () => {
+  const { a, b } = await setup(77);
+  b.room.send("mod:refill", { kit: true, sniper: true });
+  await waitFor(() => b.inv?.quick[3]?.id === "sniper");
+  b.room.send("arms:draw", { slot: 3 });
+  await waitFor(() => me(b.room).gun === "sniper");
+  await sleep(ARMS.sniper.draw * 1000 + 50);
+  const loaded3 = () => (b.inv?.quick[3] as { loaded?: number } | null | undefined)?.loaded;
+  const shoot = (scope: boolean) => {
+    const m = me(b.room);
+    aim(b, m.x + 30, m.y);
+    const oz = heightAt(m.x, m.y) + 1.35;
+    b.room.send("arms:fire", { ox: m.x, oy: m.y, oz, yaw: 0, pitch: 0, lag: 0, seed: 3, scope });
+  };
+  // scoped: the spread A is told the shot went out with — a fraction of the unscoped one's
+  shoot(true);
+  await waitFor(() => a.shots.length === 1);
+  await waitFor(() => me(b.room).arm === ARM.bolt, 1000);
+  // (the bolt not home: no shot)
+  shoot(true);
+  await sleep(300);
+  assert.equal(loaded3(), 4, "no shot while the bolt's worked");
+  await waitFor(() => me(b.room).arm === ARM.idle, 1500);
+  await sleep(ARMS.sniper.rate * 1000 - 600);
+  shoot(false);
+  await waitFor(() => a.shots.length === 2, 2000);
+  const [scoped, wide] = a.shots.map((s) => s.spread);
+  assert.ok(scoped < wide * 0.05, `scoped ${scoped} vs ${wide}`);
+  assert.equal(loaded3(), 3);
+  // the reload: the bolt back (the three stay in), a round at a time, home
+  await sleep(ARMS.sniper.rate * 1000 + 50);
+  b.room.send("arms:reload", {});
+  await waitFor(() => me(b.room).arm === ARM.open, 1000);
+  await sleep(ARMS.sniper.open * 1000 + 100);
+  assert.ok((loaded3() ?? 0) >= 3, "nothing dumped");
+  await waitFor(() => loaded3() === 5, 2500);
+  await waitFor(() => me(b.room).arm === ARM.idle, 1500);
+});

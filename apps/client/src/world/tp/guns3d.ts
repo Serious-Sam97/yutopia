@@ -30,9 +30,9 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 // lighter, so they read as steel and walnut under the world's Lambert light.
 // The moving parts are their own meshes under a pivot each.
 
-export type GunKind = "revolver" | "shotgun" | "ak47";
-/** Held in both hands, the stock in the shoulder (plan 79): the double-barrel, the AK. */
-export const isLongGun = (k: string) => k === "shotgun" || k === "ak47";
+export type GunKind = "revolver" | "shotgun" | "ak47" | "sniper";
+/** Held in both hands, the stock in the shoulder (plan 79): the double-barrel, the AK, the sniper. */
+export const isLongGun = (k: string) => k === "shotgun" || k === "ak47" || k === "sniper";
 export type Detail = "near" | "far";
 
 export interface GunModel {
@@ -642,8 +642,8 @@ function shotgun(mat: Material, detail: Detail): GunModel {
 /** A gun as a model: its parts and where it's held. `mat` is the world's vertex-coloured
  *  Lambert (one material for all of it). */
 export function gunModel(kind: GunKind, mat: Material, detail: Detail = "near"): GunModel {
-  // (the AK has no drawn model — it's the life look's (plan 79 phase 5): the double-barrel stands in for
-  // it in the classic look and on the snow)
+  // (the AK and the sniper have no drawn model — theirs are the life look's (plan 79 phases 5, 6): the
+  // double-barrel stands in for them in the classic look and on the snow)
   return kind === "revolver" ? revolver(mat, detail) : shotgun(mat, detail);
 }
 
@@ -728,7 +728,16 @@ export function poseGun(
   s: { cock?: number; turn?: number; open?: number; loaded?: number; trigger?: number; bolt?: number },
 ): void {
   const open = s.open ?? 0;
-  if (kind === "ak47" && g.parts.carrier) {
+  if (kind === "sniper" && g.parts.bolt) {
+    // (the sniper's, plan 79 phase 6: the bolt turned up on the bore (`bolt` 0–0.35), then run back
+    // (–1): worked after a shot, open to load; the trigger)
+    const b = Math.max(s.bolt ?? 0, open);
+    const bolt = g.parts.bolt;
+    bolt.userData.x0 ??= bolt.position.x;
+    bolt.rotation.x = -1.05 * Math.min(1, b / 0.35);
+    bolt.position.x = bolt.userData.x0 - 0.075 * Math.max(0, Math.min(1, (b - 0.35) / 0.65));
+    g.parts.trigger.rotation.z = 0.2 * (s.trigger ?? 0);
+  } else if (kind === "ak47" && g.parts.carrier) {
     // (the AK's: the trigger; the carrier back with each shot — or racked by the hand (`bolt`, 0..1);
     // the magazine its reload's to pose — the hands', person3d; the selector down on fire)
     g.parts.trigger.rotation.z = 0.25 * (s.trigger ?? 0);
@@ -774,6 +783,7 @@ export function lifeGunModel(kind: GunKind, scene: Object3D): GunModel {
     "magazine",
     "carrier",
     "selector",
+    "bolt",
   ]) {
     const o = gun.getObjectByName(n);
     if (o) parts[n] = o as Group;

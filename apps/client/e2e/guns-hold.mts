@@ -47,7 +47,25 @@ const state = (page: Page, at: string) =>
           torch: me.torch ? r2(me.root.worldToLocal(wp(me.torch.root))) : null,
         }
       : null;
-    return { gun: p.gun, arm: p.arm, loaded: g?.loaded, open: f ? Math.round(f.open * 100) / 100 : null, ak };
+    const pockets = inv?.pockets.map((s: any) => (s ? `${s.id}${s.n}` : "-")).join(" ");
+    const cd = y.tp.camera.getWorldDirection(y.tp.camera.position.clone());
+    const cam = {
+      dirY: Math.round(cd.y * 1000) / 1000,
+      pitch: Math.round(y.tp.pitch * 1000) / 1000,
+      camY: Math.round(y.tp.camera.position.y * 100) / 100,
+      fov: Math.round(y.tp.camera.fov),
+    };
+    return {
+      cam,
+      gun: p.gun,
+      arm: p.arm,
+      scopeK: Math.round(y.tp.scopeK * 100) / 100,
+      hidden: me ? !me.root.visible : null,
+      loaded: g?.loaded,
+      open: f ? Math.round(f.open * 100) / 100 : null,
+      pockets,
+      ak,
+    };
   }).then((s) => process.env.DEBUG && console.log(`  ${at}`, JSON.stringify(s)));
 const gun = (page: Page) => w(page, (y) => y.room.state.players.get(y.room.sessionId).gun as string);
 
@@ -74,6 +92,13 @@ async function view(page: Page, file: string, side: number, d = 1.6, h = 1.35) {
       cam.updateProjectionMatrix();
       cam.updateMatrixWorld();
       tp.renderer.render(tp.scene, cam);
+      const me3 = tp.people3?.get(tp.meId);
+      if ((window as any).__gunsDebug && me3) {
+        const v = me3.root.position;
+        console.log(
+          `view: visible ${me3.root.visible}, at ${[v.x, v.y, v.z].map((n: number) => n.toFixed(2))}, me ${[me.x, me.z ?? 0, me.y].map((n: number) => n.toFixed(2))}`,
+        );
+      }
       return tp.renderer.domElement.toDataURL("image/png");
     },
     [side, d, h],
@@ -84,6 +109,12 @@ async function view(page: Page, file: string, side: number, d = 1.6, h = 1.35) {
 const browser = await chromium.launch({ args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 page.on("pageerror", (e) => console.log("  page:", e.message));
+if (process.env.DEBUG) {
+  page.on("console", (m) => m.text().startsWith("view:") && console.log("  ", m.text()));
+  await page.addInitScript(() => {
+    (window as any).__gunsDebug = true;
+  });
+}
 const tok = await token("ana@yutopia.test");
 await page.addInitScript((t) => {
   localStorage.setItem("yutopia:token", t);
@@ -107,7 +138,7 @@ await page.waitForFunction(() => !!document.querySelector(".dk"), null, { timeou
 await w(page, (y) => {
   y.room.send("mod:hour", { h: 13 });
   y.room.send("mod:storm", { storm: 0, now: true });
-  y.room.send("mod:refill", { kit: true, ak: true });
+  y.room.send("mod:refill", { kit: true, ak: true, sniper: true });
   y.room.send("mod:dark", { mode: "peaceful" });
   if (!y.room.state.players.get(y.room.sessionId).torch) y.toggleTorch();
   y.tp.yaw = 0;
@@ -119,6 +150,7 @@ for (const [key, id] of [
   ["Digit1", "revolver"],
   ["Digit2", "shotgun"],
   ["Digit3", "ak47"],
+  ["Digit4", "sniper"],
 ] as const) {
   if (process.env.ONLY && process.env.ONLY !== id) continue;
   // (back to the start for each — the moves pass walks and sprints her ahead, toward the water)
@@ -139,11 +171,23 @@ for (const [key, id] of [
   await view(page, `${out}/${name}-${id}-ready-right.png`, 1);
   await view(page, `${out}/${name}-${id}-ready-front.png`, 0, 2.2);
   await page.mouse.down({ button: "right" });
-  await page.waitForTimeout(1500);
-  await page.screenshot({ path: `${out}/${name}-${id}-aim-game.png` });
+  // (the sniper's aim seen before its scope comes in — down it, her body's not drawn: plan 79 phase 6)
+  await page.waitForTimeout(id === "sniper" ? 240 : 1500);
+  if (id !== "sniper") await page.screenshot({ path: `${out}/${name}-${id}-aim-game.png` });
   await view(page, `${out}/${name}-${id}-aim-right.png`, 1);
   await view(page, `${out}/${name}-${id}-aim-left.png`, -1);
   await view(page, `${out}/${name}-${id}-aim-front.png`, 0, 2.2);
+  if (id === "sniper") {
+    await state(page, `${id} shoulder`);
+    // down the scope: 4×, then 8× (the wheel), the breath held (Shift)
+    await page.waitForTimeout(1200);
+    await page.screenshot({ path: `${out}/${name}-${id}-scope-4.png` });
+    await page.mouse.wheel(0, -100);
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: `${out}/${name}-${id}-scope-8.png` });
+    await page.mouse.wheel(0, 100);
+    await state(page, `${id} scoped`);
+  }
   // (two shots, then R: the reload seen opening and loading — plan 79 F11a, F12a; the AK held down till
   // it's dry, a frame mid-burst, so its reload racks the charging handle — phase 5)
   if (id === "ak47") {
@@ -162,6 +206,22 @@ for (const [key, id] of [
       await view(page, `${out}/${name}-${id}-reload-${at}-left.png`, -1, 1.4);
       await state(page, `${id} reload ${at}`);
     }
+  } else if (id === "sniper") {
+    // a shot down the scope; the bolt worked out of it (frames), back in; another
+    await page.mouse.down({ button: "left" });
+    await page.mouse.up({ button: "left" });
+    const t0 = Date.now();
+    for (const at of [300, 500, 700, 900]) {
+      await page.waitForTimeout(Math.max(0, at - (Date.now() - t0)));
+      await view(page, `${out}/${name}-${id}-bolt-${at}.png`, 1, 1.5);
+      await state(page, `${id} bolt ${at}`);
+      if (at === 500) await view(page, `${out}/${name}-${id}-bolt-${at}-left.png`, -1, 1.5);
+    }
+    await page.waitForTimeout(1200);
+    await page.screenshot({ path: `${out}/${name}-${id}-scope-again.png` });
+    await page.mouse.down({ button: "left" });
+    await page.mouse.up({ button: "left" });
+    await page.waitForTimeout(1500);
   } else
     for (let i = 0; i < 2; i++) {
       await page.mouse.down({ button: "left" });
@@ -173,7 +233,12 @@ for (const [key, id] of [
   if (id !== "ak47") await page.keyboard.press("KeyR");
   // (frames through it: the revolver's one speedloader trip, ~1.55 s; the double-barrel's opening)
   const t0 = Date.now();
-  const frames = { revolver: [250, 600, 850, 1100, 1450], shotgun: [350, 850], ak47: [] as number[] };
+  const frames = {
+    revolver: [250, 600, 850, 1100, 1450],
+    shotgun: [350, 850],
+    ak47: [] as number[],
+    sniper: [250, 600, 900, 1200],
+  };
   for (const at of frames[id]) {
     await page.waitForTimeout(Math.max(0, at - (Date.now() - t0)));
     await view(page, `${out}/${name}-${id}-reload-${at}.png`, 1, 1.4);

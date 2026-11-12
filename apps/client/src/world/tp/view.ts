@@ -309,7 +309,11 @@ const VEIL_MS = 150;
 // (`ready`) and aiming (`aim`) — how far back at most, how far right, how far up over EYE; the aim's lens
 // a few degrees narrower (mostly by distance: big FOV swings make people sick)
 const CAM_READY = { back: 1.5, side: 0.5, up: 0.3 };
-const CAM_AIM = { back: 0.95, side: 0.45, up: 0.42, zoom: 4 }; // into or out of first person: the dip to dark, and back (setMode)
+const CAM_AIM = { back: 0.95, side: 0.45, up: 0.42, zoom: 4 };
+// (the scope's camera: what it looks at, its way, the eye — plan 79 phase 6)
+const sv = new Vector3();
+const sd = new Vector3();
+const se = new Vector3(); // into or out of first person: the dip to dark, and back (setMode)
 const AIM_HELP = 0.12; // rad: aiming on a pad or keys, someone this near the reticle is helped onto
 
 // the stairwells' tiles as a signature (a floor rebuilt when they change)
@@ -645,6 +649,20 @@ export class ThirdPersonView {
   shoulder = 1;
   /** how long coming up to aim takes with the gun in my hand (s; shared ARMS' `aim`): the camera's ease */
   aimSecs = 0.2;
+  /** Where an aim pulls the look to as it comes up (pitch, down > 0): ahead on the ground — the sniper's
+   *  near level, out to the distance (plan 79 phase 6). arms sets it. */
+  aimRise = 0.15;
+  /** The scope (plan 79 phase 6: the sniper's): its power wanted — 0 not looking down it, else 4 or 8
+   *  (world/dark/arms.ts sets it) — eased in (`scopeK`); the sway on the look through it (rad: x the
+   *  yaw's, y the pitch's), arms' too. The camera goes to the eye, the lens narrows, the mouse slows. */
+  scope = 0;
+  scopeK = 0;
+  private scopePow = 4;
+  scopeSway = { x: 0, y: 0 };
+  /** The mouse's turn, scaled down through a scope. */
+  get lookScale(): number {
+    return 1 - this.scopeK * (1 - 1.4 / Math.max(1.4, this.scopePow));
+  }
   private aimK = 0;
   private armK = 0; // a gun out: the camera over the shoulder (eased)
   /** where I aim, up from level (radians): from the flashlight in my hand to what the crosshair is
@@ -2521,10 +2539,14 @@ void main() {
     const aimRate = this.aim ? 3 / Math.max(0.08, this.aimSecs) : 10;
     this.aimK += ((this.aim && !first ? 1 : 0) - this.aimK) * (1 - Math.exp(-dt * aimRate));
     this.armK += ((this.armed && !first ? 1 : 0) - this.armK) * (1 - Math.exp(-dt * 6));
+    // (down the scope: quickly in, quickly out — the bolt's worked out of it)
+    if (this.scope > 0) this.scopePow = this.scope;
+    this.scopeK += ((this.scope > 0 && !first ? 1 : 0) - this.scopeK) * (1 - Math.exp(-dt * 16));
+    if (this.scopeK < 0.002 && this.scope === 0) this.scopeK = 0;
     // (into an aim the camera comes up to look ahead, near level — not at the ground at your feet)
     // (third person only: in first person the look is the look — it kept pulling it back level)
     if (this.aim && !first && this.aimK < 0.95 && this.time - this.dragged > 0.3)
-      this.pitch += (0.15 - this.pitch) * (1 - Math.exp(-dt * 10));
+      this.pitch += (this.aimRise - this.pitch) * (1 - Math.exp(-dt * 10));
     // a shot's kick: up (pitch > 0 is down) and a little aside, fast; settling back slower
     const kin = 1 - Math.exp(-dt * 38);
     const kout = 1 - Math.exp(-dt * 7);
@@ -2570,7 +2592,23 @@ void main() {
       // the pond lies 1.7 down, and a floor-high limit there kept the camera from looking up)
       const floor = this.target.y - EYE;
       if (cam.y < floor + 0.25) cam.y = floor + 0.25;
-      this.camera.lookAt(this.target.x + sx, this.target.y + up, this.target.z + sz);
+      const look = sv.set(this.target.x + sx, this.target.y + up, this.target.z + sz);
+      // down the scope (plan 79 phase 6): the camera to the eye — on the stock, at the eyepiece — looking
+      // along the look and its sway
+      const k = this.scopeK;
+      if (k > 0) {
+        const yw = this.yaw + this.scopeSway.x;
+        // (the shoulder camera's own tilt — its look, carried on into the glass: no jump)
+        const pt = v.pitch + this.scopeSway.y;
+        const c2 = Math.cos(pt);
+        sd.set(Math.cos(yw) * c2, -Math.sin(pt), Math.sin(yw) * c2);
+        se.copy(this.target).addScaledVector(sd, 0.08);
+        se.x += -Math.sin(this.yaw) * 0.035;
+        se.z += Math.cos(this.yaw) * 0.035;
+        cam.lerp(se, k);
+        look.lerp(se.addScaledVector(sd, 10), k);
+      }
+      this.camera.lookAt(look);
     }
     this.pointerPart.aimFrame(dt, me);
     this.drawLock();
@@ -2593,7 +2631,12 @@ void main() {
     }
     this.mood.underWater();
     // the lens: a game camera's own, or the photo zoom in first person
-    const fov = gc?.fov ?? (first ? (this.lensPart.lensFov ?? this.lensPart.fov1p) : FOV - CAM_AIM.zoom * this.aimK);
+    const shoulderFov = FOV - CAM_AIM.zoom * this.aimK;
+    const fov =
+      gc?.fov ??
+      (first
+        ? (this.lensPart.lensFov ?? this.lensPart.fov1p)
+        : shoulderFov + (FOV / this.scopePow - shoulderFov) * this.scopeK);
     if (Math.abs(this.camera.fov - fov) > 0.05) {
       this.camera.fov += (fov - this.camera.fov) * (1 - Math.exp(-dt * 10));
       this.camera.updateProjectionMatrix();
@@ -2651,7 +2694,8 @@ void main() {
       const fell = ft !== undefined && b.pinned ? Math.min(ft, 1.4) : ft;
       const angle3 = fell !== undefined ? (b.fellYaw ?? 0) + Math.PI : (b.angle ?? b.yaw);
       const hidden3 =
-        ((first || (this.gameCam !== null && this.gcMix > 0.5 && !this.gameCam.showMe)) && b.id === meId) ||
+        ((first || this.scopeK > 0.6 || (this.gameCam !== null && this.gcMix > 0.5 && !this.gameCam.showMe)) &&
+          b.id === meId) ||
         this.byLens(b);
       // a person in 3D (not Vortex: he's his drawing, exactly as in Yondra)
       const C = b.npc ? null : this.chars();

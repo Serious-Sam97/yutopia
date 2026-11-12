@@ -15,7 +15,7 @@ import {
   treeDensity,
   wayClearance,
 } from "../grounds.ts";
-import type { StackId } from "../inventory.ts";
+import type { ItemId } from "../inventory.ts";
 
 // The day's shadowed (docs/plan/31-the-day.md): nobody comes out of the dark
 // by day — they're already out there, asleep in nests, a new layout each day
@@ -44,8 +44,8 @@ export interface Cache {
   kind: CacheKind;
   x: number;
   z: number;
-  /** what's in it */
-  items: { id: StackId; n: number }[];
+  /** what's in it (a hunting bag, rarely, the sniper: plan 79 F9a) */
+  items: { id: ItemId; n: number; loaded?: number }[];
 }
 export interface Nest {
   id: string;
@@ -217,8 +217,16 @@ const CACHES: Record<NestZone, CacheKind[]> = {
   river: ["flares", "hunting"],
   gate: ["briefcase", "toolbox"],
 };
+/** The hunting bag's rare ones (plan 79 F9a): the sniper (empty, a clip's .308 with it), else some
+ *  days its rounds — on dice of their own (`extra`: the day's nests laid out as before). */
+export const HUNTING_RIFLE = { gun: 0.12, rounds: 0.3 } as const;
 /** What a cache holds (a nest of 3–4 keeps twice as much). */
-export function cacheItems(kind: CacheKind, size: number, rand: () => number): { id: StackId; n: number }[] {
+export function cacheItems(
+  kind: CacheKind,
+  size: number,
+  rand: () => number,
+  extra: () => number = () => 1,
+): Cache["items"] {
   const k = size >= 3 ? 2 : 1;
   const between = (a: number, b: number) => a + Math.floor(rand() * (b - a + 1));
   switch (kind) {
@@ -233,8 +241,12 @@ export function cacheItems(kind: CacheKind, size: number, rand: () => number): {
             { id: "battery", n: 1 },
           ]
         : [{ id: "fuse", n: between(1, 2) * k }];
-    case "hunting":
-      return [{ id: "shell", n: between(3, 6) * k }];
+    case "hunting": {
+      const shells = { id: "shell" as const, n: between(3, 6) * k };
+      const x = extra();
+      if (x < HUNTING_RIFLE.gun) return [{ id: "sniper", n: 1, loaded: 0 }, { id: "r308", n: 5 }, shells];
+      return x < HUNTING_RIFLE.rounds ? [{ id: "r308", n: 5 }, shells] : [shells];
+    }
     case "flares":
       return [{ id: "flare", n: Math.min(3, between(1, 2) * k) }];
     case "torch":
@@ -268,7 +280,7 @@ export function dayNests(day: number): Nest[] {
               kind,
               x: x + (r() - 0.5) * 1.5,
               z: z + (r() - 0.5) * 1.5,
-              items: cacheItems(kind, n, r),
+              items: cacheItems(kind, n, r, groundsRng(day * 7919 + 1013 + out.length)),
             };
           })()
         : null;

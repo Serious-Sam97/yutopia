@@ -618,25 +618,31 @@ registerFeature((room: WorldRoom) => {
     if (m?.wm !== undefined && Number.isFinite(Number(m.wm))) s.v.wm = lvl(m.wm);
     // `kit`: armed for trying the fight — both guns loaded (quick 1 and 2; what was there put away),
     // rounds, shells, flares, first aid, a battery; `ak` too: the AK in quick 3, its rounds in a pocket
-    // (plan 79 phase 5)
+    // (plan 79 phase 5); `sniper`: the sniper in quick 4, its .308 (phase 6 — with both, the battery
+    // doesn't fit)
     if (m?.kit) {
       const was = s.inv.quick.filter((it): it is Stack => !!it && isStack(it.id));
       s.inv.quick = [
         { id: "revolver", loaded: WEAPONS.revolver.mag },
         { id: "shotgun", loaded: WEAPONS.shotgun.mag },
         m.ak ? { id: "ak47", loaded: WEAPONS.ak47.mag } : null,
-        null,
+        m.sniper ? { id: "sniper", loaded: WEAPONS.sniper.mag } : null,
       ];
-      for (const it of was) addStack(s.inv, it.id, it.n);
-      for (const [id, n] of [
+      const kit = [
         ["r38", 24],
         ["shell", 12],
         ...(m.ak ? ([["r762", 60]] as const) : []),
+        ...(m.sniper ? ([["r308", 15]] as const) : []),
         ["flare", 3],
         ["aid", 1],
         ["battery", 1],
-      ] as const)
-        addStack(s.inv, id, n - count(s.inv, id));
+      ] as const;
+      // (the kit's own kinds out of the pockets and laid in again, whole — a stray single shell mustn't
+      // keep the rifle's rounds out; what else is carried stays)
+      const ids = new Set<string>(kit.map(([id]) => id));
+      s.inv.pockets = s.inv.pockets.map((it) => (it && ids.has(it.id) ? null : it));
+      for (const it of was) if (!ids.has(it.id)) addStack(s.inv, it.id, it.n);
+      for (const [id, n] of kit) addStack(s.inv, id, n);
     }
     changed(s);
   });

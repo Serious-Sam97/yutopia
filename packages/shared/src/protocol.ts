@@ -530,7 +530,7 @@ export interface ClientMessages {
   "dark:use": { slot: number };
   "dark:drop": { slot: number };
   // an admin's own vitals full again (health, stamina, warmth, the battery): for trying things out
-  "mod:refill": { kit?: boolean; ak?: boolean; hp?: number; wm?: number };
+  "mod:refill": { kit?: boolean; ak?: boolean; sniper?: boolean; hp?: number; wm?: number };
   // the shadowed (features/dark.ts), admins: off ("peaceful") or on ("normal"); `spawn`: that
   // many out of the dark near me, to try the fight
   "mod:dark": { mode?: "peaceful" | "normal" | "called"; spawn?: number };
@@ -539,7 +539,17 @@ export interface ClientMessages {
   // it (ms) and the pellets' seed — and a flare thrown along the aim
   "arms:draw": { slot: number };
   "arms:reload": Record<string, never>;
-  "arms:fire": { ox: number; oy: number; oz: number; yaw: number; pitch: number; lag: number; seed: number };
+  "arms:fire": {
+    ox: number;
+    oy: number;
+    oz: number;
+    yaw: number;
+    pitch: number;
+    lag: number;
+    seed: number;
+    /** down a scope (the sniper's: plan 79 phase 6) */
+    scope?: boolean;
+  };
   "arms:flare": { yaw: number; pitch: number };
   // the line's round trip, measured (its lag goes with a shot)
   "arms:ping": { t: number };

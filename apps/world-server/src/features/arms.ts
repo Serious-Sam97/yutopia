@@ -7,6 +7,7 @@ import {
   bloomCalm,
   bloomShot,
   damageAt,
+  dumpsOnOpen,
   FLARE,
   flareFlight,
   type GunId,
@@ -41,7 +42,9 @@ import { registerFeature } from "./index.ts";
 // AW2's): opened, everything in it out (the live rounds back to the pockets),
 // the revolver's speedloader in, the AK's new magazine (its charging handle
 // racked after, if it ran dry), or the double-barrel's shells one at a time;
-// shut. The AK fires while its trigger's held: each round its own shot. A flare is thrown on an arc and lit where it
+// shut; the sniper's bolt back (its rounds stay), a round at a time, home. The AK
+// fires while its trigger's held: each round its own shot. The sniper's bolt is
+// worked after each (Player.arm); a shot down its scope goes almost dead on. A flare is thrown on an arc and lit where it
 // lands: a pool the shadowed can't come into for 12 s.
 // The feel's rules (docs/plan/32-the-arms.md): a gun's up only after its draw;
 // shots go out with the spread the server works out (shared spreadOf — its own
@@ -72,6 +75,9 @@ interface Hand {
   step: "" | "open" | "load" | "shut";
   /** the reload began with it empty (the AK's charging handle racked at the end) */
   dry: boolean;
+  /** the bolt worked after a shot (the sniper's), from / till (server ms) */
+  boltFrom: number;
+  boltTill: number;
   /** the gun's up at (server ms) */
   drawnAt: number;
   /** the spread's bloom (rad) as of `bloomAt` (server ms) */
@@ -82,7 +88,17 @@ interface Hand {
 registerFeature((room: WorldRoom) => {
   const hands = new Map<string, Hand>();
   const hand = (sid: string) => {
-    const h = hands.get(sid) ?? { shotAt: 0, reloadAt: 0, step: "", dry: false, drawnAt: 0, bloom: 0, bloomAt: 0 };
+    const h = hands.get(sid) ?? {
+      shotAt: 0,
+      reloadAt: 0,
+      step: "",
+      dry: false,
+      boltFrom: 0,
+      boltTill: 0,
+      drawnAt: 0,
+      bloom: 0,
+      bloomAt: 0,
+    };
     hands.set(sid, h);
     return h;
   };
@@ -222,6 +238,11 @@ registerFeature((room: WorldRoom) => {
     hd.shotAt = isAuto(h.w.id) ? Math.max(now - rateMs, hd.shotAt + rateMs) : now;
     hd.reloadAt = 0;
     h.w.loaded--;
+    // (the bolt worked after it — everyone sees it: Player.arm)
+    if ("bolt" in gun) {
+      hd.boltFrom = now + gun.boltAt * 1000;
+      hd.boltTill = hd.boltFrom + gun.bolt * 1000;
+    }
     room.survival?.changed(client.sessionId);
     // where they saw the shadowed: the playback's delay and their line's lag back
     const lag = Math.max(0, Math.min(REWIND.maxLag, Number(m?.lag) || 0));
@@ -237,6 +258,8 @@ registerFeature((room: WorldRoom) => {
       crouch: mv.crouch,
       aim: true,
       winded: (p.mv & MV_WINDED) !== 0,
+      // (down a scope: as the shooter says — plan 79 phase 6; taken at their word, as their moves are)
+      scope: m?.scope === true,
     });
     hd.bloom = bloomShot(id, bloom);
     hd.bloomAt = now;
@@ -344,7 +367,7 @@ registerFeature((room: WorldRoom) => {
           hd.reloadAt = 0;
           continue;
         }
-        if (hd.step === "open" && h.w.loaded > 0) {
+        if (hd.step === "open" && h.w.loaded > 0 && dumpsOnOpen(h.w.id)) {
           // (all of it out: the live ones back where they fit — the rest stay in)
           h.w.loaded -= addStack(h.inv, ammo, h.w.loaded);
           room.survival?.changed(sid);
@@ -375,7 +398,9 @@ registerFeature((room: WorldRoom) => {
               ? ARM.open
               : hd.reloadAt
                 ? ARM.reload
-                : ARM.idle;
+                : now >= hd.boltFrom && now < hd.boltTill
+                  ? ARM.bolt
+                  : ARM.idle;
         if (p.arm !== arm) p.arm = arm;
       }
       // a weapon dropped (or never had) isn't in the hand

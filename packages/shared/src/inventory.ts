@@ -8,11 +8,12 @@ export const WEAPONS = {
   revolver: { mag: 6, ammo: "r38" },
   shotgun: { mag: 2, ammo: "shell" },
   ak47: { mag: 30, ammo: "r762" },
+  sniper: { mag: 5, ammo: "r308" },
 } as const;
 export type WeaponId = keyof typeof WEAPONS;
 
 /** How many go in one pocket (or quick slot). */
-export const STACKS = { r38: 24, shell: 12, r762: 60, flare: 3, battery: 2, aid: 2, fuse: 4 } as const;
+export const STACKS = { r38: 24, shell: 12, r762: 60, r308: 15, flare: 3, battery: 2, aid: 2, fuse: 4 } as const;
 export type StackId = keyof typeof STACKS;
 export type ItemId = WeaponId | StackId;
 

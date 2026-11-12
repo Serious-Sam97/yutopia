@@ -77,6 +77,31 @@ export const ARMS = {
     near: 30,
     far: 0.7,
   },
+  // the sniper (plan 79 phase 6): a bolt-action, five rounds — a shot, then the bolt worked (`bolt` s,
+  // from `boltAt` s after it: no shot till it's home, `rate`); wide aimed over the shoulder, ~nothing
+  // scoped and still (SPREAD.scope). Its reload: the bolt back (`open`; nothing dumped — the rounds in
+  // the magazine stay), a round thumbed in at a time (`reload` s), the bolt home (`shut`).
+  sniper: {
+    scope: true,
+    rate: 1.3,
+    boltAt: 0.2,
+    bolt: 0.85,
+    reload: 0.5,
+    open: 0.35,
+    shut: 0.35,
+    snap: 0.3,
+    draw: 0.5,
+    aim: 0.3,
+    damage: 170,
+    range: 120,
+    pellets: 1,
+    spread: 0.05,
+    bloom: 0.02,
+    bloomMax: 0.06,
+    calm: 1.5,
+    near: 120,
+    far: 1,
+  },
 } as const;
 export type GunId = keyof typeof ARMS;
 /** Fires while the trigger's held (the AK). */
@@ -84,16 +109,23 @@ export const isAuto = (gun: GunId) => "auto" in ARMS[gun] && ARMS[gun].auto === 
 /** Loaded all at once by its reload (the revolver's speedloader, the AK's magazine) — else a round at
  *  a time (the double-barrel's shells). */
 export const isWhole = (gun: GunId) => gun === "revolver" || gun === "ak47";
+/** Opened, what's in it comes out (the revolver's cylinder, the double-barrel, the AK's magazine) — not
+ *  the bolt-action's: its rounds stay in the magazine under the bolt. */
+export const dumpsOnOpen = (gun: GunId) => gun !== "sniper";
+/** Has a scope (the sniper: plan 79 phase 6). */
+export const isScoped = (gun: GunId) => "scope" in ARMS[gun] && ARMS[gun].scope === true;
 
 /** How a body takes it, the spread's parts (plan 32): moving (rad per tile / s, to a jog; past it,
  *  a sprint's), crouched, from the hip (not aimed), winded. */
-export const SPREAD = { move: 0.006, sprint: 0.012, crouch: 0.7, hip: 1.6, winded: 1.3 };
+export const SPREAD = { move: 0.006, sprint: 0.012, crouch: 0.7, hip: 1.6, winded: 1.3, scope: 0.015 };
 export interface Stance {
   /** tiles / s */
   speed: number;
   crouch: boolean;
   aim: boolean;
   winded: boolean;
+  /** looking down a scope (plan 79 phase 6: the sniper's — a gun without one ignores it) */
+  scope?: boolean;
 }
 /** The spread (rad) a shot goes out with: the gun's own, its bloom, moving; less crouched, more
  *  from the hip or winded. The server's (from its own shot times and what it has of you) is the one
@@ -104,7 +136,8 @@ export function spreadOf(gun: GunId, bloom: number, s: Stance): number {
     (ARMS[gun].spread + bloom + move) *
     (s.crouch ? SPREAD.crouch : 1) *
     (s.aim ? 1 : SPREAD.hip) *
-    (s.winded ? SPREAD.winded : 1)
+    (s.winded ? SPREAD.winded : 1) *
+    (s.scope && isScoped(gun) ? SPREAD.scope : 1)
   );
 }
 /** The bloom `secs` after it was `bloom`: calming. */
@@ -134,9 +167,9 @@ export const damageAt = (gun: GunId, base: number, t: number, head: boolean) =>
   Math.max(1, Math.round(base * falloff(gun, t) * (head ? HEAD.mult : 1)));
 
 /** What a hand's doing with its gun (Player.arm): nothing, drawing it, reloading the revolver
- *  (the gate open), opened to load — the revolver's cylinder out, the double-barrel broken open, the
+ *  (the gate open), working the bolt after a shot (the sniper's), opened to load — the revolver's cylinder out, the double-barrel broken open, the
  *  AK's magazine out (plan 79: its whole reload, the charging handle too, is `open`). */
-export const ARM = { idle: 0, draw: 1, reload: 2, open: 3 } as const;
+export const ARM = { idle: 0, draw: 1, reload: 2, open: 3, bolt: 4 } as const;
 
 /** One of us hit by another's shot (the HQ armed, plan 30): half what the shadowed take. */
 export const PVP = 0.5;

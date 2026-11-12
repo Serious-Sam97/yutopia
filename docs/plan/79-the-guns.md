@@ -12,7 +12,7 @@ shoulder camera whenever a gun is out (no swap key), F2a walk while aiming, F3a 
 with a recoil layer, F6a the torch held with the gun, F7 **the Daybreak**, F8a the right button focuses
 only a torch already on, F9a the AK in the lockers / the sniper in the hunting bag / the Daybreak from
 Spawn, F10a four quick slots. Phase 1 (the right button) built; phase 0 mocks delivered (second round: the camera closer, the guns
-detailed; the revolver and the double-barrel redesigned after AW2's), signed off 2026-11-11 (the long guns held where the arms reach); phase 2 (the camera, the reticle) and phase 3 (the two guns' models in the game) built 2026-11-11; phase 4 built and signed off 2026-11-12 ("look fine for now"); phase 5 (the AK-47) built and signed off 2026-11-12; F11a (the speedloader) and F12a (both shells out) decided 2026-11-11. Follows plan 32 (the arms: the
+detailed; the revolver and the double-barrel redesigned after AW2's), signed off 2026-11-11 (the long guns held where the arms reach); phase 2 (the camera, the reticle) and phase 3 (the two guns' models in the game) built 2026-11-11; phase 4 built and signed off 2026-11-12 ("look fine for now"); phase 5 (the AK-47) built and signed off 2026-11-12; phase 6 (the sniper) built and signed off 2026-11-12; F11a (the speedloader) and F12a (both shells out) decided 2026-11-11. Follows plan 32 (the arms: the
 rules, kick, bloom, falloff, heads), plan 30 (the dark: light is the weapon), plans 58/77/78 (the body,
 its moves, its hands) and plan 73 (the life look).
 
@@ -203,6 +203,45 @@ the Daybreak the torch's focus hum and a flare's burst) so the phases before can
    - whether you choose from candidates for each sound (3–4 each, as the steps were picked), or I pick and
      you veto.
    Then: the picks, the mix, the checks (the steps' level rule: plan 63), credits in `sources.json`.
+
+## Phase 6 — the sniper: built, signed off (2026-11-12)
+
+- **The rules** (shared `ARMS.sniper`, `WEAPONS.sniper` 5 of `r308`, `STACKS.r308` 15): 170 a hit (255 at
+  the head), flat to 120 tiles; 1.3 s between shots — the bolt worked from 0.2 s after one for 0.85 s
+  (`ARM.bolt`, everyone sees it); wide aimed over the shoulder (0.05 rad), ×0.015 down the scope
+  (`SPREAD.scope`, `Stance.scope`, `isScoped`). Its reload: the bolt back (0.35 s; nothing dumped — the
+  rounds stay in the magazine: `dumpsOnOpen`), a round at a time (0.5 s), the bolt home (0.35 s).
+  **Plan change:** the scope is said in the shot itself (`arms:fire { scope }`), not an `mv` bit — taken at
+  the shooter's word, as the moves are (no anticheat for now). A server test: scoped vs wide, the bolt
+  (no shot till home), the reload keeping its rounds.
+- **Where it comes from** (F9a): the hunting bag, 12% the rifle (empty) with five .308, else 30% five
+  .308 (shared `cacheItems`' `extra` dice — their own, seeded per nest, so the day's nests lie as before;
+  `HUNTING_RIFLE`). The admins' kit: `sniper` (quick 4, 15 .308; "Arm me" asks for all four). The kit now
+  lays its own kinds of stack in fresh (a stray single shell had kept the rifle's rounds out of full
+  pockets); what else is carried stays.
+- **The model**: phase 0's Blender rifle for the game: 0.15 MB, 17.8k triangles; pivots `bolt` (on the
+  bore: turned up, run back), `trigger`; lens glass a `coated` flat material. In the budget test.
+- **The scope** (`tp/view.ts` `scope`/`scopeK`/`scopeSway`, `dark/arms.ts` `scopeFrame`): aimed its 0.3 s
+  over the shoulder, the camera goes to the eye (on the stock), the lens to 50/4 or 50/8 (the wheel, while
+  in it), the mouse slowed (`lookScale`), her body not drawn; a black ring and a post reticle (`.dk-scope`),
+  the crosshair gone. The sway on the look (and so the shot — it goes from the eye along it), steadied by
+  the breath held (Shift: ×0.12 for 3 s, then ×2.2 till let go, back over 2 s), more on the move, less
+  crouched. A shot drops you out of it for the bolt and back in once it's home (RE5's). The aim's pull
+  comes up near level for it (`aimRise` 0.04 — the others' 0.15, the ground ahead, would fill the glass).
+- **In the hands** (`person3d.ts`): a long gun (`isLongGun`). The bolt worked by the left hand — over the
+  top to the knob, with it up, back and home, back to the fore-end (`boltHand`, from Player.arm, so
+  everyone's); the gun stays shouldered in the right (it hangs from that hand: the right working the bolt
+  would carry the gun with it). The reload: the hand to the port, rounds from the belt pouch one at a
+  time (`roundHand`), timed from the server's opening.
+- **The feel**: a hard push (camera share of 0.07 up, mostly settling), the bolt's case out; the HUD five
+  brass rounds and "+N .308". Placeholder sounds: the double-barrel's shot, deeper (×0.8); the bolt the
+  revolver's cock, low, twice; open the gate, shut the cock.
+- Seen with `e2e/guns-hold.mts` (`ONLY=sniper`: its aim before the scope, the game's view at 4× and 8×,
+  the bolt from both sides, the reload; `DEBUG=1` prints the camera and the pockets too).
+  `arms-feel.spec.ts`: scoped in time, the glass on and the crosshair off, 8× narrower, out for the bolt
+  and back, R back to five. Server tests 15/15 + survival/down; shared nests (the bag's rifle).
+- **Left for phase 8**: the sniper on the snow and in the classic look is the double-barrel's drawn model;
+  the scope view's light (the night: the torch's beam along the barrel isn't in the glass's picture yet).
 
 ## Phase 5 — the AK-47: built, signed off (2026-11-12)
 

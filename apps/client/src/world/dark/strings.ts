@@ -5,6 +5,8 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_item_shotgun: ["Shotgun", "Espingarda"],
   dark_item_ak47: ["AK-47", "AK-47"],
   dark_item_r762: ["7.62 rounds", "Balas 7.62"],
+  dark_item_sniper: ["Sniper rifle", "Rifle de precisão"],
+  dark_item_r308: [".308 rounds", "Balas .308"],
   dark_item_r38: [".38 rounds", "Balas .38"],
   dark_item_shell: ["Shells", "Cartuchos"],
   dark_item_flare: ["Flare", "Sinalizador"],
@@ -113,6 +115,14 @@ export const STRINGS: Record<string, readonly [string, string]> = {
     "Balas do revólver: um carregador rápido de cada vez (R).",
   ],
   dark_desc_r762: ["Rounds for the AK: a magazine at a time (R).", "Balas da AK: um carregador de cada vez (R)."],
+  dark_desc_sniper: [
+    "Five rounds, a bolt worked after each. Aim and wait: the scope (the wheel: 4× or 8×; Shift holds your breath). Only hurts one already exposed by the light.",
+    "Cinco balas, o ferrolho manejado após cada uma. Mire e espere: a luneta (roda: 4× ou 8×; Shift prende a respiração). Só fere um sombrio já exposto pela luz.",
+  ],
+  dark_desc_r308: [
+    "Rounds for the sniper rifle: one at a time (R).",
+    "Balas do rifle de precisão: uma de cada vez (R).",
+  ],
   dark_desc_shell: ["Shells for the shotgun.", "Cartuchos da espingarda."],
   dark_desc_flare: [
     "Throw it (G): it burns red, and they keep out of its light.",

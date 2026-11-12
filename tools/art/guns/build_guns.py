@@ -6,6 +6,7 @@
 #   revolver   hammer · trigger · crane (the swing-out, along the bore below the cylinder) › cylinder
 #   shotgun    barrels (at the hinge pin, the fore-end with them) · lever · triggers
 #   ak47       magazine (on its front lug) · carrier (the charging handle on it) · trigger · selector
+#   sniper     bolt (on the bore: turned up, run back) · trigger
 # and `round<i>` (the revolver's six, the double-barrel's two shells' heads, the AK's top round), shown by how many are
 # loaded. The gun's points are empty nodes `pt_<name>` (grip, muzzle, rear, front, fore, butt).
 # Materials: plain PBR factors by kind (the node materials' look, flattened; their wood grain,
@@ -28,7 +29,7 @@ import guns  # noqa: E402
 ROOT = os.path.join(os.path.dirname(__file__), "../../..")
 argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
 OUT = argv[argv.index("--out") + 1] if "--out" in argv else os.path.join(ROOT, "apps/client/public/life/guns")
-ONLY = argv[argv.index("--only") + 1].split(",") if "--only" in argv else ["revolver", "shotgun", "ak47"]
+ONLY = argv[argv.index("--only") + 1].split(",") if "--only" in argv else ["revolver", "shotgun", "ak47", "sniper"]
 os.makedirs(OUT, exist_ok=True)
 
 # the kinds, flattened: base colour, metal, roughness (and an emission)
@@ -50,6 +51,7 @@ FLAT = {
     "dial": ((0.85, 0.8, 0.66), 0.0, 0.5),
     "dark": ((0.004, 0.004, 0.004), 0.0, 0.9),
     "insert": ((0.8, 0.06, 0.03), 0.0, 0.5),
+    "coated": ((0.015, 0.04, 0.05), 0.4, 0.06),
 }
 FLAT_MATS = {}
 
@@ -95,6 +97,11 @@ GROUPS = {
         "carrier": {"parts": ["carrier"], "at": (0.17, 0, 0.073)},
         "trigger": {"parts": ["trigger"], "at": (0.022, 0, 0.02)},
         "selector": {"parts": ["selector"], "at": (0.045, -0.0258, 0.066)},
+    },
+    # (plan 79 phase 6) the bolt turns up about the bore and runs back along it; the trigger
+    "sniper": {
+        "bolt": {"parts": ["bolt", "bolt-arm", "bolt-knob"], "at": (0.0, 0, 0.066)},
+        "trigger": {"parts": ["trigger"], "at": (0.03, 0, 0.006)},
     },
 }
 

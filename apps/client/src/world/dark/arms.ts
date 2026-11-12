@@ -6,6 +6,7 @@ import {
   bloomShot,
   type GunId,
   isAuto,
+  isScoped,
   pellets,
   type Ray,
   rayMeets,
@@ -43,7 +44,12 @@ const FEEL = {
   // (the AK, plan 79 phase 5: a small kick a round that mostly stays — held down, it climbs, and walks
   // aside a little, the same way each burst)
   ak47: { up: 0.016, side: 0.007, settle: 0.3 },
+  // (the sniper, phase 6: a hard push up, most of it back as the bolt's worked)
+  sniper: { up: 0.07, side: 0.012, settle: 0.75 },
 } as const;
+// the scope (plan 79 phase 6): its sway on the look (rad, still and stood), and the breath held (Shift):
+// steady for `hold` s, then worse till let go, getting back over `back` s
+const SCOPE = { sway: 0.0035, hold: 3, steady: 0.12, spent: 2.2, back: 2 };
 const WINDED = 32;
 // the camera's share of a gun's kick, and how much of it settles back by itself at least (plan 79)
 const CAM_KICK = { share: 0.65, settle: 0.8 }; // (shared move.ts MV_WINDED: a copy — this chunk doesn't carry move.ts)
@@ -70,6 +76,15 @@ export class Arms {
   private burst = 0; // rounds into this burst (its climb walks aside by it)
   private dryPulled = false; // a dry click this pull (held, it isn't clicked again)
   private ahead = 0; // shots sent that the server's count hasn't taken off yet (full auto outruns the line)
+  // the scope (the sniper's, plan 79 phase 6): its power (the wheel: 4, 8), aimed since (s), the
+  // breath held (Shift) and how long, spent after holding too long; out of it while the bolt's worked
+  private scopePow = 4;
+  private aimedAt = -1;
+  private shiftDown = false;
+  private breathT = 0;
+  private spent = 0;
+  private boltTill = 0;
+  private readonly scopeEl = document.createElement("div");
   private aheadLoaded = -1;
   private dryAt = -9; // s: the last pull on an empty chamber (the trigger goes, the hammer falls on nothing)
   private turn = 0; // the cylinder, in chambers (eased to turnTo)
@@ -95,15 +110,34 @@ export class Arms {
     this.hud.className = "abs dk-arms";
     this.cross.className = "dk-cross";
     this.cross.innerHTML = "<i></i><i></i><i></i><i></i><b></b>";
-    root.append(this.hud, this.cross);
+    this.scopeEl.className = "dk-scope";
+    this.scopeEl.innerHTML = "<i></i><i></i><i></i><i></i><b></b>";
+    root.append(this.hud, this.cross, this.scopeEl);
     const up = (e: MouseEvent) => {
       if (e.button === 0) this.triggerUp();
     };
+    // (the scope's power: the wheel, while looking down it — the camera's distance otherwise)
+    const wheel = (e: WheelEvent) => {
+      if (!this.ctl.tp?.scope) return;
+      this.scopePow = e.deltaY < 0 ? 8 : 4;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    };
+    // (Shift: the breath held, down the scope — aiming, it's no sprint: shared move step)
+    const shift = (e: KeyboardEvent) => {
+      if (e.code === "ShiftLeft" || e.code === "ShiftRight") this.shiftDown = e.type === "keydown";
+    };
     window.addEventListener("mouseup", up, true);
     window.addEventListener("blur", up as () => void);
+    window.addEventListener("wheel", wheel, { capture: true, passive: false });
+    window.addEventListener("keydown", shift, true);
+    window.addEventListener("keyup", shift, true);
     this.offs.push(() => {
       window.removeEventListener("mouseup", up, true);
       window.removeEventListener("blur", up as () => void);
+      window.removeEventListener("wheel", wheel, true);
+      window.removeEventListener("keydown", shift, true);
+      window.removeEventListener("keyup", shift, true);
     });
     const room = ctl.room;
     if (!room) return;
@@ -130,7 +164,8 @@ export class Arms {
       const tp = this.ctl.tp;
       if (!tp) return;
       const o = tp.guns.muzzleOf(m.sid) ?? { x: m.ox, y: m.oy, z: m.oz };
-      const rays = pellets(gun, m.yaw, m.pitch, m.seed, m.spread).map((d) => this.flight(o.x, o.y, o.z, d, 30));
+      const reach = isScoped(gun) ? ARMS[gun].range : 30;
+      const rays = pellets(gun, m.yaw, m.pitch, m.seed, m.spread).map((d) => this.flight(o.x, o.y, o.z, d, reach));
       tp.arms().shot(o.x, o.y, o.z, rays, gun, m.oz - HAND);
       tp.guns.gunShot(m.sid);
       tp.heard(m.ox, m.oy);
@@ -364,10 +399,12 @@ export class Arms {
       yaw: Math.atan2(d.y, d.x),
       pitch: Math.asin(Math.max(-1, Math.min(1, d.z))),
     };
-    let t = 30;
+    // (the sniper's reach: as far as it goes — the others', what's near)
+    const reach = isScoped(g.id) ? ARMS[g.id].range : 30;
+    let t = reach;
     let onBody = false;
     for (const s of this.shades.drawn()) {
-      const m = rayMeets(camRay, s.x, s.y, s.z, 60);
+      const m = rayMeets(camRay, s.x, s.y, s.z, Math.max(60, reach));
       if (m !== null && m < t) {
         t = m + 0.2;
         onBody = true;
@@ -390,18 +427,34 @@ export class Arms {
     // from the gun in the right hand (the body faces where the camera looks)
     const me = this.walker.where();
     const f = { x: Math.cos(camRay.yaw), y: Math.sin(camRay.yaw) };
-    const o = { x: me.x + f.x * 0.45 - f.y * 0.22, y: me.y + f.y * 0.45 + f.x * 0.22, z: me.z + HAND };
-    const yaw = Math.atan2(aim.y - o.y, aim.x - o.x);
-    const pitch = Math.atan2(aim.z - o.z, Math.hypot(aim.x - o.x, aim.y - o.y));
+    // (down a scope: from the eye along the look, exactly where the reticle is — plan 79 phase 6)
+    const scoped = tp.scopeK > 0.85;
+    const o = scoped
+      ? { x: camRay.x, y: camRay.y, z: camRay.z }
+      : { x: me.x + f.x * 0.45 - f.y * 0.22, y: me.y + f.y * 0.45 + f.x * 0.22, z: me.z + HAND };
+    const yaw = scoped ? camRay.yaw : Math.atan2(aim.y - o.y, aim.x - o.x);
+    const pitch = scoped ? camRay.pitch : Math.atan2(aim.z - o.z, Math.hypot(aim.x - o.x, aim.y - o.y));
     const seed = (Math.random() * 0xffffffff) >>> 0;
     // (the spread the server will shoot it with, as near as I can tell: its bloom, how I stand)
     const spread = this.spread(g.id);
     this.bloom = bloomShot(g.id, this.bloom);
-    this.ctl.room?.send("arms:fire", { ox: o.x, oy: o.y, oz: o.z, yaw, pitch, lag: Math.round(this.rtt), seed });
+    this.ctl.room?.send("arms:fire", {
+      ox: o.x,
+      oy: o.y,
+      oz: o.z,
+      yaw,
+      pitch,
+      lag: Math.round(this.rtt),
+      seed,
+      ...(scoped ? { scope: true } : {}),
+    });
+    // (the bolt worked after it: out of the scope till it's home — RE5's S75)
+    const gb = ARMS[g.id];
+    if ("bolt" in gb) this.boltTill = now + (gb.boltAt + gb.bolt) * 1000 + 120;
     // the flash, the tracers: at once — each as far as a wall or the ground (or, the revolver's,
     // the one the crosshair's on)
     const toAim = Math.hypot(aim.x - o.x, aim.y - o.y, aim.z - o.z);
-    const most = onBody && g.id === "revolver" ? toAim : 30;
+    const most = onBody && (g.id === "revolver" || scoped) ? toAim : reach;
     // (out of the muzzle as it's drawn, where there's one)
     const mz = tp.guns.muzzleOf(this.ctl.room?.sessionId ?? "") ?? o;
     tp.arms().shot(
@@ -433,7 +486,7 @@ export class Arms {
     }
     // (a sharp crack in the hands for the revolver; a long shove for the double-barrel; the AK's quick
     // jolts — and its brass out of the port, a case a round)
-    if (g.id === "shotgun") this.walker.controls.pad.rumble(1, 0.8, 170);
+    if (g.id === "shotgun" || g.id === "sniper") this.walker.controls.pad.rumble(1, 0.8, 170);
     else if (auto) this.walker.controls.pad.rumble(0.4, 0.2, 45);
     else this.walker.controls.pad.rumble(0.55, 0.25, 70);
     if (g.id === "ak47") this.brass("case", 1);
@@ -457,15 +510,23 @@ export class Arms {
       : this.walker.outside
         ? (`${k}-shot` as const)
         : (`${k}-shot-in` as const);
-    // (the AK borrows the revolver's, quicker and a little lower in the mix — a placeholder till plan 79
-    // phase 9's sounds)
+    // (the AK borrows the revolver's, quicker and a little lower in the mix; the sniper the double-barrel's,
+    // deeper — placeholders till plan 79 phase 9's sounds)
+    if (gun === "sniper") {
+      const deep = far
+        ? ("shotgun-shot-far" as const)
+        : this.walker.outside
+          ? ("shotgun-shot" as const)
+          : ("shotgun-shot-in" as const);
+      return { name: deep, volume: 1, rate: 0.8 };
+    }
     return gun === "ak47" ? { name, volume: 0.75, rate: 1.22 } : { name, volume: 1, rate: 1 };
   }
 
   /** A pellet's flight from (x, y, z) its way: as far as the gun reaches (and `most`), stopped by a
    *  wall or the ground (a puff there). */
   private flight(x: number, y: number, z: number, d: { yaw: number; pitch: number }, most: number) {
-    const gunMost = Math.min(most, 30);
+    const gunMost = Math.min(most, ARMS.sniper.range);
     const stop = this.ctl.tp?.pointerPart.rayStop(x, y, z, d.yaw, d.pitch, gunMost) ?? null;
     return { ...d, len: stop ? stop.t : gunMost, hit: stop?.what ?? null };
   }
@@ -497,7 +558,7 @@ export class Arms {
         ? 0
         : since < 0.035
           ? since / 0.035
-          : Math.exp(-(since - 0.035) * (g.id === "shotgun" ? 9 : g.id === "ak47" ? 18 : 13));
+          : Math.exp(-(since - 0.035) * (g.id === "shotgun" ? 9 : g.id === "ak47" ? 18 : g.id === "sniper" ? 7 : 13));
     // the hammer: back while aiming (a moment after a shot: thumbed back again), down otherwise
     // (dry: the trigger pulled, the hammer down on nothing for a moment — plan 79)
     const dry = now / 1000 - this.dryAt < 0.14;
@@ -558,12 +619,15 @@ export class Arms {
     else if (!this.walker.aiming) this.queued = false;
     if (!pulled && this.burst > 0) this.triggerUp();
     this.gunFx(dt, now);
+    this.scopeFrame(dt, now, armNow);
     this.armSounds();
     // a gun in my hand (3D): the right button aims anywhere, and the view's clicks don't pick
     const armed = !!ctl.tp && !!this.me()?.gun;
     this.walker.armed = armed;
     const held = this.gun();
     if (ctl.tp) ctl.tp.aimSecs = held ? ARMS[held.id].aim : 0.2;
+    // (the sniper's aim comes up near level — out to the distance, where its scope's for: plan 79 phase 6)
+    if (ctl.tp) ctl.tp.aimRise = held && isScoped(held.id) ? 0.04 : 0.15;
     if (ctl.tp && ctl.tp.armed !== armed) {
       ctl.tp.armed = armed;
       // (guns are third person: a gun out in first person goes over the shoulder, and back —
@@ -594,13 +658,53 @@ export class Arms {
     this.draws();
   }
 
+  /** Down the scope (the sniper's, plan 79 phase 6): aimed its `aim` s, not working the bolt, not
+   *  reloading — the view goes to the eye (tp.scope); the sway on it, steadied by the breath held. */
+  private scopeFrame(dt: number, now: number, arm: number) {
+    const tp = this.ctl.tp;
+    if (!tp) return;
+    const g = this.gun();
+    const aiming = this.walker.aiming && !!g && isScoped(g.id);
+    if (!aiming) this.aimedAt = -1;
+    else if (this.aimedAt < 0) this.aimedAt = now;
+    const on =
+      aiming &&
+      !!g &&
+      now - this.aimedAt > ARMS[g.id].aim * 1000 &&
+      now > this.boltTill &&
+      arm !== ARM.bolt &&
+      arm !== ARM.draw &&
+      !this.loadingNow();
+    tp.scope = on ? this.scopePow : 0;
+    // the breath: held (Shift, looking down it) steadies it, for a while; held too long, worse till let go
+    const holding = on && this.shiftDown && this.spent <= 0.01;
+    if (holding) this.breathT += dt;
+    else this.breathT = 0;
+    if (this.breathT > SCOPE.hold) {
+      this.spent = 1;
+      this.breathT = 0;
+    }
+    if (!this.shiftDown || !on) this.spent = Math.max(0, this.spent - dt / SCOPE.back);
+    const mv = this.me()?.mv ?? 0;
+    const k =
+      (holding ? SCOPE.steady : 1 + this.spent * (SCOPE.spent - 1)) *
+      (1 + Math.min(this.speed, 3) * 0.8) *
+      ((mv & 8) !== 0 ? 0.55 : 1);
+    const t = now / 1000;
+    const a = SCOPE.sway * k;
+    tp.scopeSway.x = a * (Math.sin(t * 0.9) + 0.5 * Math.sin(t * 2.3 + 1));
+    tp.scopeSway.y = a * (0.8 * Math.sin(t * 1.3 + 0.5) + 0.3 * Math.sin(t * 3.1));
+    // the glass: its ring and reticle, once the view's there
+    this.scopeEl.classList.toggle("on", tp.scopeK > 0.8);
+  }
+
   private draws() {
     const out = this.walker.outside;
     const inv = this.inv();
     const g = this.gun();
     // the crosshair, aiming (3D); a mark on it when a shot met one
     const tp = this.ctl.tp;
-    const aiming = this.walker.aiming && !!tp;
+    const aiming = this.walker.aiming && !!tp && tp.scopeK < 0.5;
     this.cross.style.display = aiming ? "block" : "none";
     if (aiming && tp) {
       const marked = performance.now() < this.markUntil;
@@ -646,13 +750,16 @@ export class Arms {
           return `<i style="left:${x}px;top:${y}px;${full ? "background:radial-gradient(#8a6c22 30%,#d8b04e 34%,#b88f33 70%)" : "background:#0b0c0f;border:1.5px solid #555"}"></i>`;
         }).join("");
         gunHtml = `<div class="cyl${loading ? " re" : ""}">${holes}</div>`;
+      } else if (g.id === "sniper") {
+        // (its five: brass, in a row)
+        gunHtml = `<div class="shells clip${loading ? " re" : ""}">${Array.from({ length: mag }, (_, i) => `<b class="${i < g.loaded ? "on" : ""}"></b>`).join("")}</div>`;
       } else if (g.id === "ak47") {
         // (the magazine: its rounds as a bar, the count on it)
         gunHtml = `<div class="mag${loading ? " re" : ""}"><i style="height:${Math.round((g.loaded / mag) * 100)}%"></i><span>${g.loaded}</span></div>`;
       } else {
         gunHtml = `<div class="shells${loading ? " re" : ""}">${Array.from({ length: mag }, (_, i) => `<b class="${i < g.loaded ? "on" : ""}"></b>`).join("")}</div>`;
       }
-      gunHtml = `<div class="gun">${gunHtml}<div class="spare${spare > 0 ? "" : " out"}">+${spare}<small>${ammo === "r38" ? ".38" : ammo === "r762" ? "7.62" : "12"}</small></div></div>`;
+      gunHtml = `<div class="gun">${gunHtml}<div class="spare${spare > 0 ? "" : " out"}">+${spare}<small>${ammo === "r38" ? ".38" : ammo === "r762" ? "7.62" : ammo === "r308" ? ".308" : "12"}</small></div></div>`;
     }
     const tubes = Array.from({ length: STACKS.flare }, (_, i) => `<b class="${i < flares ? "on" : ""}"></b>`).join("");
     this.hud.innerHTML = `<div class="fl"><div class="tubes">${tubes}</div><div class="n">${flares}</div></div>${gunHtml}`;
@@ -702,6 +809,17 @@ export class Arms {
             this.voices.play("revolver-gate", at, 15, 0.8, 0.92);
           return;
         }
+        if (p.gun === "sniper") {
+          // (placeholders, plan 79 phase 9: the bolt up and back — its case out — and home; opened to load,
+          // shut)
+          if (arm === ARM.bolt) {
+            this.voices.play("revolver-cock", at, 15, 0.9, 0.6);
+            setTimeout(() => this.voices.play("revolver-cock", at, 15, 0.9, 0.75), 380);
+            if (me) setTimeout(() => this.brass("case", 1), 200);
+          } else if (arm === ARM.open) this.voices.play("revolver-gate", at, 15, 0.9, 0.8);
+          else if (was.arm === ARM.open) this.voices.play("revolver-cock", at, 15, 0.9, 0.7);
+          return;
+        }
         if (p.gun === "ak47") {
           // (the magazine out — a placeholder: the double-barrel's break, higher — and in; shouldered again,
           // or the charging handle racked: plan 79 phase 9 has the real ones)
@@ -730,6 +848,8 @@ export class Arms {
 
   dispose(): void {
     for (const off of this.offs) off();
+    if (this.ctl.tp) this.ctl.tp.scope = 0;
+    this.scopeEl.remove();
     this.hud.remove();
     this.cross.remove();
   }
@@ -746,6 +866,21 @@ export const ARMS_CSS = `
 @keyframes dkpulse{to{background:rgba(233,163,58,.45)}}
 @keyframes dkspin{to{transform:rotate(60deg)}}
 .dk-arms .shells{display:flex;gap:6px;padding:8px}
+.dk-arms .shells.clip b{width:8px;height:36px;border-radius:4px 4px 2px 2px}
+.dk-arms .shells.clip b.on{background:linear-gradient(#b8763e 0 22%,#d8b04e 22%)}
+.dk-scope{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity 90ms;background:radial-gradient(circle at 50% 50%,transparent 0 41vmin,rgba(0,0,0,.55) 42vmin,#000 44vmin)}
+.dk-scope.on{opacity:1}
+.dk-scope::before,.dk-scope::after{content:"";position:absolute;background:#050505}
+.dk-scope::before{left:calc(50% - 44vmin);width:88vmin;top:50%;height:1px;margin-top:-.5px}
+.dk-scope::after{top:calc(50% - 44vmin);height:88vmin;left:50%;width:1px;margin-left:-.5px}
+.dk-scope i{position:absolute;background:#050505}
+.dk-scope i:nth-child(1),.dk-scope i:nth-child(2){top:50%;height:4px;margin-top:-2px;width:34vmin}
+.dk-scope i:nth-child(3),.dk-scope i:nth-child(4){left:50%;width:4px;margin-left:-2px;height:34vmin}
+.dk-scope i:nth-child(1){left:calc(50% - 44vmin)}
+.dk-scope i:nth-child(2){right:calc(50% - 44vmin)}
+.dk-scope i:nth-child(3){top:calc(50% - 44vmin)}
+.dk-scope i:nth-child(4){bottom:calc(50% - 44vmin)}
+.dk-scope b{position:absolute;left:50%;top:50%;width:3px;height:3px;margin:-1.5px;border-radius:50%;background:#c22}
 .dk-arms .mag{position:relative;width:26px;height:64px;margin:8px 0;border-radius:4px 4px 8px 4px;background:rgba(20,22,28,.75);border:2px solid rgba(220,224,230,.55);overflow:hidden;transform:skewY(-8deg)}
 .dk-arms .mag i{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(#d8b04e,#9e7d34)}
 .dk-arms .mag span{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%) skewY(8deg);text-align:center;font-weight:700;font-size:13px;text-shadow:0 1px 3px #000}
