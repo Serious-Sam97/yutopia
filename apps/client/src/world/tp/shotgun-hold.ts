@@ -7,7 +7,7 @@
 // 2026-11-12) — in the gun's own frame here (x along the barrels, y its top, z its right; m).
 import { Matrix4, Quaternion, Vector3 } from "three";
 import type { HandFrame, HeldShape } from "../chars/props";
-import { type BodyFrame, bodyDir, gunQuat } from "./revolver-hold";
+import { at, type BodyFrame, bodyDir, gunQuat } from "./revolver-hold";
 
 /** The right hand on the stock's wrist: its palm's middle (its skin on the wrist's right side), the fingers'
  *  way (forward and down round the wrist's front), its index side (forward and up) */
@@ -56,17 +56,35 @@ export const SG_TORCH_HELD: HeldShape = {
 export const SG_BUTT = new Vector3(-0.392, -0.035, 0);
 /** The barrels' hinge (their group's pivot — the fore-end's on them, it drops with them) */
 export const SG_HINGE = new Vector3(0.144, 0.033, 0);
-/** The low ready (F1a): the muzzle this far down (rad), a little left; the butt this far under the pocket */
-export const SG_READY = { down: 0.6, left: 0.08, drop: 0 };
+/** Carried, not aimed — at her side (the user's ask, 2026-11-12: the low ready across her front had her
+ *  shoulders side-on for her left hand to reach the fore-end, "just put it at her side, then the arm needn't
+ *  stretch"): in her right hand alone by the stock's wrist, down along her right side, the muzzle ahead and
+ *  down, the stock back past her hip; her shoulders square, her left hand free (on the gun only aimed,
+ *  reloading, or pulled in across her chest). Her frame from her shoulders' middle (x her left, y up, z
+ *  ahead; m): the grip, the barrels' way, its top's; running, the muzzle this much steeper (rad) */
+export const SG_CARRY = {
+  at: [-0.23, -0.51, 0.13] as [number, number, number],
+  f: [0.05, -0.32, 0.95] as [number, number, number],
+  u: [0, 1, 0] as [number, number, number],
+  run: 0.15,
+};
+/** …her trunk turned this far right of the gun's way carried (the aim's is SG_BLADE): square */
+export const SG_READY = { blade: 0 };
 /** Aimed (F2a): the butt's heel at the top of the shoulder — the pocket this far up (m, the mocks' man's);
- *  the trunk bent with the aim's pitch this much of it (the rest the aim pose's own) */
-export const SG_AIM = { up: 0.05, trunk: 0.8 };
+ *  the trunk bent with the aim's pitch this much of it (the rest the aim pose's own); on a fuller chest the
+ *  pocket this much further ahead (the butt's toe went into it) */
+export const SG_AIM = { up: 0.05, trunk: 0.8, bust: 0.0175 };
 /** A shot's kick, aimed (the 12-gauge's, at its height — shared arms' gunFx.kick, 0..1): the muzzle up this
  *  far about the butt (rad), the gun back into the shoulder this far (m), her trunk rocked back this far
  *  (rad) — the butt in the pocket throughout */
 export const SG_KICK = { flip: 0.22, back: 0.035, rock: 0.1 };
-/** Her trunk turned this far right of the gun's way (rad, the mocks': square, her left arm couldn't reach the
- *  fore-end — 16 cm short) */
+/** Her left shoulder brought forward this far holding it (m — the shoulder blade round her ribs as she reaches:
+ *  squared to the gun, her left hand fell short of the fore-end; turning her trunk further had her shoulders
+ *  side-on, 2026-11-12's second feedback) */
+export const SG_PROTRACT = 0.065;
+/** Her trunk turned this far right of the gun's way, aimed (rad; square, her left arm couldn't reach the
+ *  fore-end — 16 cm short; at the mocks' 0.5 her left hand only got to the fore-end's back end, under the
+ *  action — curled under it, it looked folded away, the wood showing through it: 2026-11-12's feedback) */
 export const SG_BLADE = 0.5;
 
 /** The gun's turn (the world's) and its grip point, for its butt in the right shoulder's pocket: the pocket
@@ -74,29 +92,31 @@ export const SG_BLADE = 0.5;
 export function longHold(
   B: BodyFrame,
   shoulderR: Vector3,
-  s: { aiming: boolean; pitch: number; run: number },
+  s: { aiming: boolean; pitch: number; run: number; bust?: number },
   out: { grip: Vector3; f: Vector3; u: Vector3; q: Quaternion },
 ): void {
   const { up, ahead, left } = B;
-  if (s.aiming) {
-    const c = Math.cos(s.pitch);
-    const sn = Math.sin(s.pitch);
-    out.f.copy(ahead).multiplyScalar(c).addScaledVector(up, sn);
-    out.u.copy(up).multiplyScalar(c).addScaledVector(ahead, -sn);
-  } else {
-    // (the low ready; running, a little steeper — more and the fore-end went out of the left arm's reach)
-    const d = SG_READY.down + 0.08 * s.run;
-    bodyDir(B, [SG_READY.left, -Math.sin(d), Math.cos(d)], out.f);
-    out.u.copy(up).addScaledVector(out.f, -up.dot(out.f)).normalize();
+  if (!s.aiming) {
+    // carried at her side (SG_CARRY); running, the muzzle steeper
+    const K = SG_CARRY;
+    const d = Math.atan2(-K.f[1], K.f[2]) + K.run * s.run;
+    bodyDir(B, [K.f[0], -Math.sin(d), Math.cos(d)], out.f);
+    bodyDir(B, K.u, out.u);
+    out.u.addScaledVector(out.f, -out.u.dot(out.f)).normalize();
+    gunQuat(out.f, out.u, out.q);
+    at(B, K.at[0], K.at[1], K.at[2], out.grip);
+    return;
   }
+  const c = Math.cos(s.pitch);
+  const sn = Math.sin(s.pitch);
+  out.f.copy(ahead).multiplyScalar(c).addScaledVector(up, sn);
+  out.u.copy(up).multiplyScalar(c).addScaledVector(ahead, -sn);
   gunQuat(out.f, out.u, out.q);
-  const lift = s.aiming ? SG_AIM.up : -SG_READY.drop;
   const pocket = _p
     .copy(shoulderR)
-    // (running, across her a little more — her left shoulder swings back with the run)
-    .addScaledVector(left, (0.06 + (s.aiming ? 0 : 0.04 * s.run)) * B.k)
-    .addScaledVector(ahead, 0.07 * B.k)
-    .addScaledVector(up, (lift - 0.025) * B.k);
+    .addScaledVector(left, 0.06 * B.k)
+    .addScaledVector(ahead, (0.07 + SG_AIM.bust * (s.bust ?? 0)) * B.k)
+    .addScaledVector(up, (SG_AIM.up - 0.025) * B.k);
   // (the grip point: the pocket less the butt's place in the gun)
   out.grip.copy(pocket).sub(_b.copy(SG_BUTT).multiplyScalar(B.k).applyQuaternion(out.q));
 }
@@ -176,11 +196,13 @@ export const STRAP_BUST = 0.005;
 export const SG_LOAD = { open: 0.45, shell: 0.75, shut: 0.35 };
 export const SG_LOAD_CLOSE = SG_LOAD.open + 2 * SG_LOAD.shell;
 export const SG_LOAD_LEN = SG_LOAD_CLOSE + SG_LOAD.shut;
-/** The gun held for loading (her frame from her shoulders' middle: x her left, y up, z ahead; the mocks'):
- *  its grip, its barrels' way (down, ahead, a little left), its top (rolled a little right) */
+/** The gun held for loading (her frame from her shoulders' middle: x her left, y up, z ahead): its grip
+ *  before her belly, its barrels' way (ahead, down, left — the stock back along her right side at the waist,
+ *  between her arm and her ribs: the mocks' steeper way had its butt up through her chest to the armpit), its
+ *  top (rolled a little right) */
 export const SG_LOAD_GUN = {
-  at: [-0.06, -0.27, 0.2] as [number, number, number],
-  f: [0.22, -0.58, 0.81] as [number, number, number],
+  at: [-0.1, -0.3, 0.22] as [number, number, number],
+  f: [0.35, -0.3, 0.89] as [number, number, number],
   u: [-0.45, 1, 0] as [number, number, number],
 };
 /** Her trunk turned this far right while loading (the mocks' — the hold's is SG_BLADE) */

@@ -97,6 +97,8 @@ import {
   SG_LOAD_LEN,
   SG_LOAD_RIGHT,
   SG_PORT,
+  SG_PROTRACT,
+  SG_READY,
   SG_TORCH,
   SG_TORCH_HELD,
   SG_WRIST_SHAPE,
@@ -145,6 +147,8 @@ const FAR_HOLD = 11;
 const ARM_RELOAD = 2;
 const hdTo = new Vector3();
 const ARM_OPEN = 3;
+/** (plan 81) the stock the right arm keeps out of, reloading */
+const sgAvoid = { a: new Vector3(), b: new Vector3(), r: 0.045 };
 /** (plan 81 phase 4) A shell's mesh, one for everyone */
 let SG_SHELL_GEO: BufferGeometry | null = null; // (shared ARM.bolt: the sniper's bolt worked — Player.arm)
 /** The model a gun's id draws (the pool cue's carried as the double-barrel is). */
@@ -1437,6 +1441,9 @@ export class Person3D {
   private shellInHand: Mesh | null = null;
   private gunHands(p: PersonIn, dt: number) {
     const gun = this.gun;
+    // (the left shoulder at rest — the double-barrel's hold brings it forward again, this frame's)
+    const sLb = this.model.bone("shoulderL");
+    if (sLb && this.sLRest.bone === sLb) sLb.position.copy(this.sLRest.pos);
     const aiming = !!p.gun && ((p.mv ?? 0) & 16) !== 0;
     // (the pool cue: held as the double-barrel is, in both hands; the AK too — plan 79 phase 5)
     const shotgun = isLongGun(p.gun ?? "") || p.gun === "cue";
@@ -1555,6 +1562,7 @@ export class Person3D {
       const draw = away ? Math.max(0, 1 - this.holsterT / SG_AWAY_S) : drawn;
       const sw = this.revW;
       const ported = this.lgPortW > 0.5;
+      if (sw <= 0.01) this.lgForeOn = false;
       if (sw > 0.01)
         this.longHands(p, sw, aiming && !loading && !away && !reloading && !ported, run, dt, draw, this.lgPortW);
       if (!this.revFree) {
@@ -2182,7 +2190,8 @@ export class Person3D {
     const front = Math.atan2(rv1.z, -rv1.x);
     this.lookDir(p, rv3);
     const way = aiming ? Math.atan2(rv3.x, rv3.z) : Math.atan2(...this.facingXZ());
-    let turn = way - (SG_BLADE + (SG_LOAD_BLADE - SG_BLADE) * kLoad) - front;
+    const blade = SG_READY.blade + (SG_BLADE - SG_READY.blade) * this.lgAimK;
+    let turn = way - (blade + (SG_LOAD_BLADE - blade) * kLoad) - front;
     turn = Math.atan2(Math.sin(turn), Math.cos(turn));
     // (aimed, the trunk takes the pitch: a long gun's raised and lowered by the body bending at the waist —
     // the gun, the shoulders and the head one piece, the arms as they are level)
@@ -2201,9 +2210,23 @@ export class Person3D {
       if (lean) rq2.premultiply(rq3.setFromAxisAngle(rv5, lean * k * (1 - pw)));
       b.quaternion.premultiply(rq2.premultiply(rTurn.copy(rq1).invert()).multiply(rq1));
     }
+    // her left shoulder forward, reaching for the fore-end (its rest put back each frame, gunHands)
+    if (this.sLRest.bone !== sL) {
+      this.sLRest.bone = sL;
+      this.sLRest.pos.copy(sL.position);
+    }
+    sL.position
+      .copy(this.sLRest.pos)
+      .addScaledVector(Z3, (SG_PROTRACT * w * this.lgLeftW * (1 - pw)) / (sL.parent?.getWorldScale(rv5).x || 1));
+    sL.updateMatrixWorld(true);
     const B = this.revFrame(p, aiming);
     const H = this.lgHold;
-    longHold(B, sR.getWorldPosition(rv4), { aiming, pitch: p.pitch ?? 0, run }, H);
+    longHold(
+      B,
+      sR.getWorldPosition(rv4),
+      { aiming, pitch: p.pitch ?? 0, run, bust: p.avatar.gender === "feminine" ? 1 : 0 },
+      H,
+    );
     // (eased to it in the gun's own time — ARMS.shotgun.aim — in her own frame)
     this.root.updateWorldMatrix(true, false);
     const RW = this.root.matrixWorld;
@@ -2280,7 +2303,12 @@ export class Person3D {
     }
     // (drawn off her back or put back on it: along the draw's keys — the right hand on it from the start, the
     // left meeting it at the end)
-    let lw = w;
+    // (her left hand on the gun aimed, reloading, or pulled in across her chest — carried at her side it's
+    // free: eased on and off)
+    // (reloading, on till the gun goes back to her side — then it lets go)
+    const leftOn = aiming || (!!L && LT < SG_LOAD_GUN_LEGS[SG_LOAD_GUN_LEGS.length - 1][2]) || pw > 0.5 ? 1 : 0;
+    this.lgLeftW = p.reduced ? leftOn : this.lgLeftW + (leftOn - this.lgLeftW) * (1 - Math.exp(-dt * 12));
+    let lw = w * this.lgLeftW;
     if (draw < 1) {
       E.on = false;
       const chest = m.bone("chest");
@@ -2317,7 +2345,7 @@ export class Person3D {
       keyAt(seg + 1, rv4, rq2);
       H.grip.copy(rgB).lerp(rv4, ease);
       H.q.copy(rqB).slerp(rq2, ease);
-      lw = w * Math.max(0, Math.min(1, (draw - 0.75) / 0.25));
+      lw *= Math.max(0, Math.min(1, (draw - 0.75) / 0.25));
     }
     // the right wrist: the gun's place less the gun's own under the wrist (its root at rest)
     const g = gun.root;
@@ -2343,7 +2371,17 @@ export class Person3D {
     } else this.sgShellIn = false;
     // (off the wrist, its fingers closed round nothing — a shell's pinched, below)
     if (L && rNow !== "grip") m.hold("R", null);
-    m.gripTo("R", rAt, rTurn, rw, [-1, -0.5, -0.5], cheap);
+    // (reloading, the stock's along her side under her arm: the arm kept out of it — the butt to behind the
+    // hand on the wrist)
+    let avoid: { a: Vector3; b: Vector3; r: number } | undefined;
+    // (…and carried at her side: the stock back under her forearm)
+    if (L || (!aiming && pw < 0.5)) {
+      sgAvoid.a.set(-0.37, -0.03, 0).applyMatrix4(rMg);
+      sgAvoid.b.set(-0.12, -0.005, 0).applyMatrix4(rMg);
+      sgAvoid.r = 0.045 * B.k;
+      avoid = sgAvoid;
+    }
+    m.gripTo("R", rAt, rTurn, rw, [-1, -0.5, -0.5], cheap, avoid);
     if (L) {
       this.placeGun(rMg);
       this.sgShellPlace();
@@ -2361,21 +2399,35 @@ export class Person3D {
     g.updateMatrixWorld(true);
     const BW = barrels.matrixWorld;
     BW.decompose(rv5, rq2, rs1);
-    const reach = (eL.position.length() + wl.position.length()) * sL.getWorldScale(rs2).x + 0.045 * B.k;
-    sL.getWorldPosition(rv4);
-    let x = FORE_X[1];
-    for (; x > FORE_X[0]; x -= 0.01) {
-      rv1.set(x, SG_FORE.y, 0).sub(SG_HINGE).applyMatrix4(BW);
-      if (rv1.distanceTo(rv4) <= reach) break;
-    }
     // (the torch on: held under the fore-end in the same fist — the palm under it, F3a)
     const T = this.torch;
     const torch = !!T && lw > 0.5;
+    const palmY = torch ? SG_TORCH.palm : SG_FORE.y;
+    // (as far out as the arm reaches: where along the fore-end the WRIST is exactly the arm's length from the
+    // shoulder — the hand's turn there is the fore-end's whatever the place, so the wrist is the palm less one
+    // offset; a palm's reach plus a slack fell 3 cm short palm up. Smoothly, then eased: stepped a centimetre
+    // at a time, walking, the hand flicked between two steps and the nearly straight arm threw the elbow 3 cm)
+    const reach = (eL.position.length() + wl.position.length()) * sL.getWorldScale(rs2).x - 0.004 * B.k;
+    rv2.copy(SG_FORE.along).applyQuaternion(rq2);
+    rv3.copy(SG_FORE.index).applyQuaternion(rq2);
+    rv1.set(0, palmY, 0).sub(SG_HINGE).applyMatrix4(BW);
+    const off = m.wristFor("L", rv1, rv2, rv3, rLAt, rq3) ? rgB.copy(rLAt).sub(rv1) : rgB.set(0, 0, 0);
+    sL.getWorldPosition(rv4);
+    const p0 = rv1.add(off).sub(rv4);
+    const dx = rv2.set(1, palmY, 0).sub(SG_HINGE).applyMatrix4(BW).add(off).sub(rv4).sub(p0);
+    const qa = dx.lengthSq();
+    const qb = 2 * p0.dot(dx);
+    const qc = p0.lengthSq() - reach * reach;
+    const disc = qb * qb - 4 * qa * qc;
+    const want = Math.max(
+      FORE_X[0],
+      Math.min(FORE_X[1], disc >= 0 && qa > 1e-9 ? (-qb + Math.sqrt(disc)) / (2 * qa) : FORE_X[0]),
+    );
+    this.lgForeX = this.lgForeOn && !p.reduced ? this.lgForeX + (want - this.lgForeX) * (1 - Math.exp(-dt * 18)) : want;
+    this.lgForeOn = true;
+    const x = this.lgForeX;
     this.lgTorchX = torch ? x : -1;
-    rv1
-      .set(x, torch ? SG_TORCH.palm : SG_FORE.y, 0)
-      .sub(SG_HINGE)
-      .applyMatrix4(BW);
+    rv1.set(x, palmY, 0).sub(SG_HINGE).applyMatrix4(BW);
     rv2.copy(SG_FORE.along).applyQuaternion(rq2);
     rv3.copy(SG_FORE.index).applyQuaternion(rq2);
     if (m.wristFor("L", rv1, rv2, rv3, rLAt, rq3)) {
@@ -2386,11 +2438,13 @@ export class Person3D {
       rM.decompose(rv4, rq1, rs1);
       rv2.set(x, SG_FORE_SHAPE.y, 0).sub(SG_HINGE).applyMatrix4(rM);
       rq2.setFromUnitVectors(Y3, X3).premultiply(rq1);
-      m.hold("L", { shape: torch ? SG_TORCH_HELD : SG_FORE_SHAPE.shape, pos: rv2, quat: rq2, kind: "fore" });
+      if (lw > 0.3)
+        m.hold("L", { shape: torch ? SG_TORCH_HELD : SG_FORE_SHAPE.shape, pos: rv2, quat: rq2, kind: "fore" });
+      else if (!T) m.hold("L", null);
       if (lw > 0.01) m.gripTo("L", rLAt, rq3, lw, [-0.6, -1, -0.2], cheap);
       // (the thumb laid along the fore-end's left side, ahead — closed round the box it went into it; the torch
       // in the fist, along the torch's)
-      if (!cheap && w > 0.5)
+      if (!cheap && lw > 0.5)
         m.thumbTo(
           "L",
           (torch ? rv1.set(x + 0.075, SG_TORCH.y + 0.004, -0.02) : rv1.set(x + 0.09, 0.036, -0.037))
@@ -2414,9 +2468,16 @@ export class Person3D {
     if (this.lgAimK > 0.01 && !cheap) this.headToSights(p, this.lgAimK * w);
     this.revHeld = true;
     // (the torch the left hand's — under the fore-end in it, placed there by torchFrame)
-    this.revHarries = !!this.torch;
+    this.revHarries = !!this.torch && lw > 0.5;
   }
   private lgAimK = 0;
+  /** (plan 81) her left hand on the gun, this much (eased) — carried at her side it's free */
+  private lgLeftW = 0;
+  /** (plan 81) the left shoulder's rest place, its bone's (longHands brings it forward holding the double-barrel) */
+  private sLRest: { bone: Object3D | null; pos: Vector3 } = { bone: null, pos: new Vector3() };
+  /** where along the fore-end the left hand is this frame (the barrels' frame, m), eased */
+  private lgForeX = 0;
+  private lgForeOn = false;
   /** (plan 81 phase 4) s into the double-barrel's reload (−1: not reloading) */
   private sgLoadT = -1;
   /** the shell in the right hand, loading (its place in the wrist's space this frame: sgShellAt) */
@@ -2640,7 +2701,8 @@ export class Person3D {
       where,
       grip: L.length ? grip : null,
       // (the left's only when it's on the gun)
-      L: sg || this.revHold.left === "support" ? { ...this.model.gripLeft.L } : null,
+      // (the double-barrel's left hand: on it aimed, reloading, across her chest — carried at her side it's free)
+      L: (sg && this.lgLeftW > 0.5) || (!sg && this.revHold.left === "support") ? { ...this.model.gripLeft.L } : null,
       R: { ...this.model.gripLeft.R },
       held: this.revHeld,
     };

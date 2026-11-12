@@ -224,6 +224,61 @@ Plan 80's machinery, for a long gun:
    - The bench takes a vault, a slide and sat (`act`), and its capture keys them.
 6. **Checks** — the bench spec (as plan 80's), the two-of-us world spec (holstered → slung, drawn, aimed,
    fired, reloaded), stills in the world.
+   **Done 2026-11-12:**
+   - **`e2e/shotgun-bench.spec.ts`** (the bench, GPU): aimed at four turns of her × four pitches (−0.9 …
+     +0.9), with and without the torch — upright and on the look within 2°, no hand through the other nor
+     the stock's wrist (3 mm), no arm through the gun (5 mm), each wrist within 1.5 cm of its place; the low
+     ready at four turns, still, walking, running, with the torch; up from it in the gun's 0.26 s (off the
+     look 50 ms in, on it by 420 ms); drawn from where it hangs slung (under 4 cm) out over her shoulder;
+     the reload's seven moments (the barrels dropped or shut, a shell in the right hand or not, the gun off the
+     right hand's grip, both hands at their places); kept across her chest through a roll, a vault, a slide,
+     struck (both hands on, no arm through it); let go sat.
+   - **`e2e/shotgun-two.spec.ts`** (the world, two of us): Bia given a double-barrel and twelve shells — on
+     both screens slung on her back with the carrier on her hip; drawn over her shoulder into the ready, both
+     hands on, her back empty; aimed upright; both barrels fired; the reload's timeline on both screens, a
+     shell in her hand, two in after; put away, slung again. `YUTOPIA_SHOTS=<dir>`: stills from her own
+     camera and from Ana's beside her (`design/guns/p81/sheet-81-phase6-world.png`).
+   - Both passed first time; the revolver's spec, arms-feel, arms-empty, arms-fx and the server's 16 arms
+     tests pass with them.
+   - **Plan 81 done.** Left as they are, said in their phases: the right wrist turned past a wrist's ease
+     aimed steeply down (phase 3); the beam the look's, not the torch's (phase 3); the reload's push a
+     claw, not a pinch (phase 4).
+
+## Feedback, 2026-11-12 (in the game)
+
+Five things: the left hand folded away, a hole where it should be; walking aimed, she flickered; walking
+carried, the right arm flicked; at the ready the stock's back end in her chest; loading, the stock in her chest
+too.
+
+- **The flicker** (both arms, walking — the revolver's too): measured frame to frame against her hips, the
+  wrists moved smoothly and **the elbows jumped up to 3.5 cm a frame**, several times in three seconds.
+  `gripTo` tried the elbow's swing round the shoulder→wrist line at 21 steps of 0.14 rad and took the best
+  afresh each frame — a tie flipping between two steps threw the elbow a step. Now the best step is refined
+  to the bottom of the parabola through it and its neighbours (the swing follows the pose smoothly), last
+  frame's is preferred a little, and the swing moves at most 0.07 rad a call (`chars/model.ts`). The left
+  had a second cause: its place on the fore-end was found a centimetre at a time, and walking it flicked
+  between 16 and 17 cm with the arm nearly straight — now solved exactly (where the fore-end's line is the
+  arm's reach from the shoulder) and eased. Walking, carried or aimed, and jogging: **no elbow moves more
+  than 1.5 cm a frame**, the wrists' own pace. (Sprinting the left elbow still takes the odd 2–3 cm step,
+  the hands themselves moving 1.5 cm a frame.)
+- **The left hand**: at the mocks' trunk turn (0.5 rad) her left arm only got to the fore-end's back end —
+  under the action, curled under it, from her right shoulder it looked folded away with the wood showing.
+  Her trunk's turned further — 0.7 aimed, 1.0 at the ready (`SG_BLADE`, `SG_READY.blade`) — and the reach's
+  slack trimmed (4.5 → 2.5 cm: the wrist fell short of where it was sent): **the left hand 4–11 cm out along
+  the fore-end** (0.19–0.27 m from the grip; was 0.16), on its place in every pose.
+- **The stock at the ready**: its butt sat 6 cm in from the shoulder toward her neck — on her chest by the
+  collarbone; on a fuller chest its toe, turned in by the muzzle's drop, 3.5 cm inside. Now the ready's
+  pocket is out at the shoulder and ahead (`SG_READY.pocket`), 3.5 cm further on a fuller chest
+  (`SG_READY.bust`): the butt's edge at most 1.7 cm into the shirt (its pad pressed into the shoulder), the
+  stock across her clear of it.
+- **The stock loading**: the mocks' steep way had its butt up through her chest to the armpit (9–15 cm into
+  the shirt). Now it lies back along her right side at the waist, between her arm and her ribs
+  (`SG_LOAD_GUN`): **nothing of it in her**, both bodies, every moment; and the right arm's elbow is kept out
+  of it (`gripTo`'s `avoid`: a rod the arm's search keeps out of) — the forearm now at most ~2 cm against the
+  stock where the hand's on its wrist (it was 5).
+- How it's measured (the bench's `stockIn()`): points through the stock's wood, each a ray along her chest's
+  forward — an odd count of the shirt's own crossings, inside it (the body mesh is open under the clothes:
+  only the shirt's count is trusted).
 
 ## Risks
 
@@ -232,3 +287,45 @@ Plan 80's machinery, for a long gun:
 - The stock's length against her arm: the right hand on the wrist with the butt in the pocket fixes the
   elbow's place more than the revolver's grip did — the elbow search (plan 80) may find less room.
 - The two shells between the fingers: two small props, the fingers' shape for them (plan 78's library).
+
+## Feedback, 2026-11-12 (second): it got worse
+
+Three things: holding it, her shoulders side-on — ugly; aimed, her right arm absurdly thin; loading, now and
+then her left arm thin.
+
+- **Side-on**: the left hand's reach had been bought by turning her trunk (0.7 aimed, 1.0 at the ready) —
+  undone, back to 0.5 both. **Her left shoulder brought forward instead** (`SG_PROTRACT`, 5 cm: the shoulder
+  blade round her ribs, reaching — the bone moved, put back each frame). For it to count, the arm's IK
+  (`reachTo`) now solves from the shoulder's place, not its rest's (identical but for this). And the hand's
+  place on the fore-end is solved by **the wrist's** reach, exactly (the hand's turn there is the
+  fore-end's, so the wrist is the palm less one offset) — a palm's reach plus a slack had the wrist 1–3 cm
+  short. The left hand on its place in every pose, aimed 0.20–0.27 m out along the fore-end, her shoulders
+  square.
+- **Thin arms** (the forearm twisted, the skin pinched toward the wrist): measured, the right forearm aimed
+  80–85° twisted on the feminine body; loading, the left one flipped to 133°. The first round's "keep last
+  frame's swing" held arms where another pose had left them — dropped (the parabola and the 0.07 rad a
+  frame still keep the flicker away). And `gripTo` minds the twist more: past 50° doubled (4 → 8), past 86°
+  a wall (20) — the 133° flip came of her elbow kept out of her deeper chest at any price. Now the right aimed
+  is twisted 46–56°, the left loading 67–70°; the wrist takes a little more side bend.
+
+
+## Feedback, 2026-11-12 (third): at her side
+
+"Her shoulders still side-on — just put the shotgun at her side instead of in front, then the arm needn't
+stretch"; and walking sideways aimed, now and then the arm went very thin.
+
+- **Carried at her side** (the user's call, replacing F1a's low ready across her front): in her right hand
+  alone by the stock's wrist, down along her right side, the muzzle ahead and down (`SG_CARRY`; steeper
+  running), the stock back past her hip; **her shoulders square** (`SG_READY.blade` 0) and **her left hand
+  free**, swinging with her walk — it goes to the fore-end (eased, `lgLeftW`) only aimed, reloading, or with
+  the gun pulled in across her chest; the shoulder brought forward only then. Coming up to aim the gun rises
+  from her hip to her shoulder in the gun's 0.26 s, the left hand meeting it. Her right forearm barely
+  twisted carried (1–36°).
+- **Thin, sideways aimed**: in the game, walking sideways aimed, the right elbow's two best swings were near
+  alike and it went back and forth between them every few frames, the forearm twisting 0–45° and back. A
+  light preference for last frame's swing again (0.15 — the twist's wall now keeps it from holding an arm
+  twisted, the first round's trouble): it follows her stride, no dithering.
+- Settled: the muzzle ~19° down carried (steeper, her forearm lay along the stock's top — 1 cm into it);
+  reloading, the left hand lets go as the gun goes back to her side (2.1 s on). Checks: the shotgun's sweep
+  none past the limits; the bench spec (carried: upright, the right on the stock's wrist, the left free, no
+  arm in the gun) and the two-of-us world spec pass; the revolver's spec and arms-feel too.

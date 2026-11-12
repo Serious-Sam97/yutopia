@@ -446,6 +446,23 @@ const DOWN = new Vector3(0, -1, 0);
 const target = new Vector3();
 const pole = new Vector3();
 // (plan 80: gripTo, wristFor, wristOver)
+/** (plan 81) gripTo's costs, a swing tried each; how far its swing may move in one call (rad) */
+const _gcost = new Float64Array(21);
+const _gav = new Vector3();
+const _gav2 = new Vector3();
+const _gsd = new Vector3();
+/** A point's distance from the segment a–b */
+function segDistance(p: Vector3, a: Vector3, b: Vector3): number {
+  const ab = _gsd.copy(b).sub(a);
+  const l2 = ab.lengthSq();
+  const t =
+    l2 > 1e-12 ? Math.max(0, Math.min(1, (p.x - a.x) * ab.x + (p.y - a.y) * ab.y + (p.z - a.z) * ab.z) / l2) : 0;
+  const x = a.x + ab.x * t - p.x;
+  const y = a.y + ab.y * t - p.y;
+  const z = a.z + ab.z * t - p.z;
+  return Math.sqrt(x * x + y * y + z * z);
+}
+const SWING_STEP = 0.07;
 const _gs = new Vector3();
 const _ga = new Vector3();
 const _ge = new Vector3();
@@ -1179,14 +1196,12 @@ export class PersonModel {
     chest.updateWorldMatrix(true, false);
     target.copy(world);
     chest.worldToLocal(target);
-    const sh = b.rest[`shoulder${side}`];
-    target.x -= sh[0];
-    target.y -= sh[1];
-    target.z -= sh[2];
+    // (from where the shoulder is — its rest, or brought forward reaching: plan 81)
+    const shoulder = this.bones[`shoulder${side}`];
+    target.sub(shoulder.position);
     pole.set(side === "L" ? -poleR[0] : poleR[0], poleR[1], poleR[2]);
     solveArm(target, b.arm[0], b.arm[1], pole, ik);
     const k = Math.min(1, w);
-    const shoulder = this.bones[`shoulder${side}`];
     shoulder.quaternion.slerp(ik.shoulder, k);
     const el = this.bones[`elbow${side}`];
     el.rotation.set(el.rotation.x + (ik.elbow - el.rotation.x) * k, el.rotation.y * (1 - k), el.rotation.z * (1 - k));
@@ -1295,6 +1310,9 @@ export class PersonModel {
   /** (plan 80) What gripTo last left each hand: how far its wrist fell short of the place (m), and how far
    *  past a real wrist's reach it's turned (rad, wristOver) */
   readonly gripLeft = { L: { short: 0, over: 0 }, R: { short: 0, over: 0 } };
+  /** (plan 81) each hand's elbow swing gripTo last chose (rad off the pole's), and when */
+  private gripSwing = { L: 0, R: 0 };
+  private gripSwingAt = { L: -1e9, R: -1e9 };
 
   /** (plan 80) Put a hand at a place, turned: the wrist at `at` (the world's), its world turn `q`. The arm's
    *  two-bone IK (reachTo, its elbow toward `pole`), then the elbow swung round the shoulder→wrist line to
@@ -1309,6 +1327,9 @@ export class PersonModel {
     poleR: [number, number, number] = [-0.6, -1, -0.45],
     /** (far off: the elbow where the pole has it, no search; the fingers left as they are) */
     cheap = false,
+    /** (plan 81) a rod the arm keeps out of — a held gun's stock along her side: from `a` to `b`, `r` round
+     *  (the world's) */
+    avoid?: { a: Vector3; b: Vector3; r: number },
   ) {
     if (!this.fit || !this.skeleton || w <= 0) return;
     const sh = this.bones[`shoulder${S}`];
@@ -1339,8 +1360,14 @@ export class PersonModel {
       return Math.max(0, 1 - r2);
     };
     // (each swing tried: what the wrist's left to do, past its reach, first; the elbow up past the shoulder's
-    // height or in across the chest after; then the least swing off the pole's)
+    // height or in across the chest after; then the least swing off the pole's — and a little, off last
+    // frame's: two swings near alike in cost, walking sideways aimed, the elbow went back and forth between
+    // them and the forearm twisted 0–45° and back, pinched thin as it went. Only a little: held harder, the arm
+    // stayed twisted where another pose had left it, 133° — the twist's wall keeps it from that now)
+    const now = performance.now();
+    const prev = now - this.gripSwingAt[S] < 250 ? this.gripSwing[S] : Number.NaN;
     let best = 0;
+    let bestI = 0;
     let bestCost = Number.POSITIVE_INFINITY;
     for (let i = cheap ? 0 : -10; i <= (cheap ? 0 : 10); i++) {
       const th = i * 0.14;
@@ -1354,6 +1381,16 @@ export class PersonModel {
         inBody(eW) +
         inBody(_gmv.copy(e).multiplyScalar(0.5).add(s0)) +
         inBody(_gmv.copy(eW).add(wp).multiplyScalar(0.5));
+      // (and out of the rod: the elbow, the upper arm's middle, the forearm's middle and its near quarter)
+      let rod = 0;
+      if (avoid)
+        for (const v of [
+          eW,
+          _gmv.copy(e).multiplyScalar(0.5).add(s0),
+          _gav.copy(eW).add(wp).multiplyScalar(0.5),
+          _gav2.copy(eW).lerp(wp, 0.25),
+        ])
+          rod += Math.max(0, avoid.r - segDistance(v, avoid.a, avoid.b)) / k;
       // (past a wrist's reach, hard; then a forearm twisted off its neutral and a wrist bent, as a person minds
       // them — at ease, a little; a palm turned up by the forearm or a wrist bent double, a lot)
       const over = this.wristOver(S, _gl);
@@ -1364,15 +1401,35 @@ export class PersonModel {
       const cost =
         4 * over +
         0.8 * tw +
-        4 * Math.max(0, tw - 0.87) +
+        8 * Math.max(0, tw - 0.87) +
+        20 * Math.max(0, tw - 1.5) +
         0.25 * Math.hypot(pt.bend, pt.side) +
         2 * up +
         12 * body +
-        0.04 * Math.abs(th);
+        30 * rod +
+        0.04 * Math.abs(th) +
+        (Number.isNaN(prev) ? 0 : 0.15 * Math.abs(th - prev));
+      _gcost[i + 10] = cost;
       if (cost < bestCost - 1e-6) {
         bestCost = cost;
         best = th;
+        bestI = i;
       }
+    }
+    // (between the swings tried: the bottom of the parabola through the best and its neighbours — the swing
+    // follows the pose smoothly, not a step at a time: a step a frame threw the elbow 3 cm, walking; and no
+    // further from last frame's than a little)
+    if (!cheap) {
+      if (bestI > -10 && bestI < 10) {
+        const a = _gcost[bestI + 9];
+        const b = _gcost[bestI + 10];
+        const c = _gcost[bestI + 11];
+        const d = a - 2 * b + c;
+        if (d > 1e-9) best += 0.14 * Math.max(-0.5, Math.min(0.5, (0.5 * (a - c)) / d));
+      }
+      if (!Number.isNaN(prev)) best = prev + Math.max(-SWING_STEP, Math.min(SWING_STEP, best - prev));
+      this.gripSwing[S] = best;
+      this.gripSwingAt[S] = now;
     }
     // the swing given to the shoulder (in its parent's frame), the wrist turned to `q` under it
     _gr.setFromAxisAngle(axis, best);

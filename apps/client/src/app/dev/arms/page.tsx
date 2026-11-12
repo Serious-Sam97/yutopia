@@ -343,6 +343,55 @@ function Bench({ q }: { q: URLSearchParams }) {
           return person.ready && !!person.revolverCheck(p as never);
         },
         check: () => person.revolverCheck(p as never),
+        // (plan 81: how much of the double-barrel's stock is inside her — points through its wood, each a ray
+        // ahead of her: an odd count of a mesh's own crossings, inside it; how far behind its front)
+        stockIn: () => {
+          const g = (person as unknown as { gun: { model: { root: import("three").Object3D } } | null }).gun;
+          if (!g) return null;
+          const root = g.model.root;
+          root.updateWorldMatrix(true, true);
+          const meshes: import("three").Mesh[] = [];
+          person.root.traverse((o) => {
+            const m = o as import("three").SkinnedMesh;
+            if (m.isSkinnedMesh && m.visible) meshes.push(m);
+          });
+          // (the way her chest faces — her trunk's turned with the gun: the root's way crossed her side)
+          const chest = person.model.bone("chest");
+          const ahead = new T.Vector3(0, 0, 1).applyQuaternion(
+            (chest ?? person.root).getWorldQuaternion(new T.Quaternion()),
+          );
+          const rc = new T.Raycaster();
+          // (the stock's side profile, its top and bottom lines by x — tools/art/guns/guns.py)
+          const top = (x: number) =>
+            x > -0.09 ? 0.064 : x < -0.365 ? 0.034 : 0.064 + ((x + 0.09) / (-0.365 + 0.09)) * (0.036 - 0.064);
+          const bot = (x: number) =>
+            x > -0.14 ? -0.04 : x < -0.37 ? -0.1 : -0.042 + ((x + 0.14) / (-0.37 + 0.14)) * (-0.1 + 0.042);
+          let n = 0;
+          let inside = 0;
+          let deep = 0;
+          const where: Record<string, number> = {};
+          const pts: string[] = [];
+          for (let x = -0.395; x <= -0.1; x += 0.03)
+            for (const k of [0.15, 0.5, 0.85])
+              for (const z of [-0.016, 0, 0.016]) {
+                const pt = new T.Vector3(x, bot(x) + (top(x) - bot(x)) * k, z).applyMatrix4(root.matrixWorld);
+                n++;
+                rc.set(pt, ahead);
+                for (const m of meshes) {
+                  const hits = rc.intersectObject(m, false);
+                  if (hits.length % 2 === 1) {
+                    inside++;
+                    deep = Math.max(deep, hits[0].distance);
+                    where[m.name || "body"] = (where[m.name || "body"] ?? 0) + 1;
+                    pts.push(
+                      `${(m.name || "body").slice(-4)} x${x.toFixed(2)} k${k} z${z} d${(hits[0].distance * 100).toFixed(1)}`,
+                    );
+                    break;
+                  }
+                }
+              }
+          return { n, inside, deep, where, pts };
+        },
         person,
         p,
         set: (s: Partial<State>) => {
