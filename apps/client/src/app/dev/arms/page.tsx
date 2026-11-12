@@ -179,6 +179,7 @@ function Bench({ q }: { q: URLSearchParams }) {
         a: 0,
         gun: GUN,
         holster: GUN === "revolver",
+        sling: GUN === "shotgun",
         mv: packMv("still"),
         pitch: 0,
         torch: false,
@@ -278,8 +279,11 @@ function Bench({ q }: { q: URLSearchParams }) {
             ? { t: s.actT, x: p.x + Math.cos(ha) * 4, y: p.y + Math.sin(ha) * 4, loud: true }
             : undefined;
         // (put all the way away: in the holster, the hand let go)
-        if (s.away) P3.holsterT = s.draw <= 0 ? 1 : Math.max(0, (1 - s.draw) * 0.25 - dt);
-        else if (s.draw < 1) P3.drawT = Math.max(0, s.draw * 0.35 - dt);
+        // (each gun's own times: the revolver's 0.35 s out of the holster, 0.25 back; the double-barrel's 0.6 off
+        // her back, 0.5 onto it — person3d's)
+        const [DRAW, AWAY] = GUN === "shotgun" ? [0.6, 0.5] : [0.35, 0.25];
+        if (s.away) P3.holsterT = s.draw <= 0 ? 1 : Math.max(0, (1 - s.draw) * AWAY - dt);
+        else if (s.draw < 1) P3.drawT = Math.max(0, s.draw * DRAW - dt);
         p.pitch = aim ? s.pitch : 0;
         p.torch = s.torch;
         // (the reload: the server's step open — Player.arm — its timeline scrubbed through its 2.2 s)

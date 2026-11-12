@@ -561,6 +561,9 @@ registerFeature((room: WorldRoom) => {
           // (plan 80) the revolver carried: its holster on the hip, for everyone to see
           const holster = !!inv && !!weaponIn(inv, "revolver");
           if (p.holster !== holster) p.holster = holster;
+          // (plan 81) the double-barrel carried: slung on the back
+          const sling = !!inv && !!weaponIn(inv, "shotgun");
+          if (p.sling !== sling) p.sling = sling;
         }
       }
     },

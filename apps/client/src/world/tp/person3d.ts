@@ -3,6 +3,7 @@ import { AIM_BLADE, BEAM } from "@yutopia/shared/beam";
 import { flowOfCode, KH_FEEL, KH_MOVE, unpackMv } from "@yutopia/shared/move";
 import type { PhysicsWorld } from "@yutopia/shared/physics";
 import {
+  BoxGeometry,
   CircleGeometry,
   Color,
   CylinderGeometry,
@@ -72,14 +73,22 @@ import {
 } from "./revolver-hold";
 import { ANKLE_M, SEATS, seatFit, seatShape } from "./seats3d";
 import {
+  DRAW_KEYS,
   FORE_X,
   longHold,
   longInHand,
+  SG_AWAY_S,
   SG_BLADE,
+  SG_DRAW_S,
   SG_FORE,
   SG_FORE_SHAPE,
   SG_HINGE,
   SG_WRIST_SHAPE,
+  SLUNG_AT,
+  SLUNG_TURN,
+  STRAP,
+  STRAP_BUST,
+  STRAP_ENDS,
 } from "./shotgun-hold";
 
 type Chars = NonNullable<ReturnType<typeof chars>>;
@@ -286,6 +295,9 @@ const rq3 = new Quaternion();
 const rv4 = new Vector3();
 const rv5 = new Vector3();
 const rL = new Matrix4();
+const rM2 = new Matrix4();
+/** (plan 81) one strap segment: a unit box, scaled to it */
+const STRAP_BOX = new BoxGeometry(1, 1, 1);
 // (plan 80 phase 4: the reload's)
 const rL0 = new Matrix4();
 const rL1 = new Matrix4();
@@ -1204,6 +1216,7 @@ export class Person3D {
     this.budFrame(p);
     this.torchFrame(p);
     this.holsterFrame(p);
+    this.slingFrame(p);
     this.holdFrame();
     if (this.phone?.prop.rec)
       this.phone.prop.rec.visible = !!p.recording && Math.floor(performance.now() / 500) % 2 === 0;
@@ -1300,7 +1313,7 @@ export class Person3D {
     // (plan 79: put away — a life gun kept in the hand while the hands go down to the side, then gone)
     if (!key && this.gun?.model.life && this.gun.key !== "cue") {
       if (this.holsterT < 0) this.holsterT = 0;
-      if (this.holsterT < HOLSTER_S) return;
+      if (this.holsterT < (this.gun.key === "shotgun" ? SG_AWAY_S : HOLSTER_S)) return;
     }
     this.holsterT = -1;
     if ((this.gun?.key ?? "") === key && !!this.gun?.model.life === !!tpl && !!this.gun?.inHand === !!frame) return;
@@ -1424,7 +1437,8 @@ export class Person3D {
     this.gunHandsW += (want - this.gunHandsW) * (1 - Math.exp(-dt * (away ? 10 : 14)));
     // (taken out: the hands rise from the side at the gun's own draw — shared ARMS' 0.35 s)
     this.drawT += dt;
-    const drawn = Math.min(1, this.drawT / DRAW_S);
+    // (plan 81: the double-barrel's own — off her back, over the shoulder)
+    const drawn = Math.min(1, this.drawT / (gun?.key === "shotgun" ? SG_DRAW_S : DRAW_S));
     const w = Math.min(this.gunHandsW, drawn * drawn * (3 - 2 * drawn));
     // (the AK's reload begun with it empty: the charging handle racked at the end — mine only: the others'
     // rounds aren't known)
@@ -1484,13 +1498,22 @@ export class Person3D {
     // (plan 81: the life double-barrel the same way — the gun placed by its butt in the shoulder's pocket, both
     // hands put on it; reloading, for now, as it's carried with the barrels dropped: phase 4's)
     if (gun?.inHand && gun.key === "shotgun" && this.model.handFrame("L")) {
-      const hold = !away && !p.down && p.fell === undefined && !this.bodyBusy && !this.limp?.on;
+      // (off its grip only this frame's say: the draw's start sets it)
+      this.revFree = false;
+      this.revPose = null;
+      const hold = !p.down && p.fell === undefined && !this.bodyBusy && !this.limp?.on;
       this.revW += ((hold ? 1 : 0) - this.revW) * (1 - Math.exp(-dt * 14));
       const run = Math.max(0, Math.min(1, (this.spd - 2.8) / 2));
       const hitT = p.hit?.t ?? 9;
       const struck = hitT < 0.7 ? 1 - (hitT / 0.7) ** 2 : 0;
-      const sw = Math.min(this.revW, drawn * drawn * (3 - 2 * drawn)) * (1 - 0.8 * struck);
-      if (sw > 0.01) this.longHands(p, sw, aiming && !loading, run, dt);
+      // (drawn off her back, put back on it: the draw's path — plan 81 phase 2)
+      const draw = away ? Math.max(0, 1 - this.holsterT / SG_AWAY_S) : drawn;
+      const sw = this.revW * (1 - 0.8 * struck);
+      if (sw > 0.01) this.longHands(p, sw, aiming && !loading && !away, run, dt, draw);
+      if (!this.revFree) {
+        gun.root.position.set(0, 0, 0);
+        gun.root.scale.setScalar(LIFE_GUN_SCALE);
+      }
       return;
     }
     if (w < 0.01 || !gun) return;
@@ -2086,7 +2109,7 @@ export class Person3D {
    *  butt in her right shoulder's pocket (the low ready, or aimed), eased between them in its own time; the
    *  right wrist put where the gun — held in the fist by the stock's wrist — comes to that place; the left palm
    *  up under the fore-end as far out as her arm reaches, its fingers closed round it */
-  private longHands(p: PersonIn, w: number, aiming: boolean, run: number, dt: number) {
+  private longHands(p: PersonIn, w: number, aiming: boolean, run: number, dt: number, draw = 1) {
     const m = this.model;
     const gun = this.gun;
     const sL = m.bone("shoulderL");
@@ -2111,7 +2134,7 @@ export class Person3D {
       const b = m.bone(j);
       if (!b?.parent) continue;
       b.parent.getWorldQuaternion(rq1);
-      rq2.setFromAxisAngle(Y3, turn * k * w);
+      rq2.setFromAxisAngle(Y3, turn * k * w * Math.min(1, draw * 1.5));
       b.quaternion.premultiply(rq2.premultiply(rTurn.copy(rq1).invert()).multiply(rq1));
     }
     const B = this.revFrame(p, aiming);
@@ -2135,6 +2158,47 @@ export class Person3D {
     }
     H.grip.copy(E.pos).applyMatrix4(RW);
     H.q.copy(rq1).multiply(E.quat);
+    // (drawn off her back or put back on it: along the draw's keys — the right hand on it from the start, the
+    // left meeting it at the end)
+    let lw = w;
+    if (draw < 1) {
+      E.on = false;
+      const chest = m.bone("chest");
+      if (chest) {
+        chest.updateWorldMatrix(true, false);
+        rM.compose(SLUNG_AT, SLUNG_TURN, rs2.set(1, 1, 1));
+        rM.premultiply(chest.matrixWorld).decompose(rgA, rqA, rs1);
+      } else {
+        rgA.copy(H.grip);
+        rqA.copy(H.q);
+      }
+      // (the keys: slung, lifted, over the shoulder, before the chest, the hold)
+      const n = DRAW_KEYS.length + 1;
+      const seg = Math.min(n - 1, Math.floor(draw * n));
+      const kk = draw * n - seg;
+      const ease = kk * kk * (3 - 2 * kk);
+      const keyAt = (i: number, pos: Vector3, quat: Quaternion) => {
+        if (i <= 0) {
+          pos.copy(rgA);
+          quat.copy(rqA);
+        } else if (i >= n) {
+          pos.copy(H.grip);
+          quat.copy(H.q);
+        } else {
+          const K = DRAW_KEYS[i - 1];
+          at(B, K.at[0], K.at[1], K.at[2], pos);
+          const f = bodyDir(B, K.f, rv1);
+          // (its top: the way it turns over — about her left-right line)
+          rv2.crossVectors(rv3.copy(B.left).negate(), f).normalize();
+          gunQuat(f, rv2, quat);
+        }
+      };
+      keyAt(seg, rgB, rqB);
+      keyAt(seg + 1, rv4, rq2);
+      H.grip.copy(rgB).lerp(rv4, ease);
+      H.q.copy(rqB).slerp(rq2, ease);
+      lw = w * Math.max(0, Math.min(1, (draw - 0.75) / 0.25));
+    }
     // the right wrist: the gun's place less the gun's own under the wrist (its root at rest)
     const g = gun.root;
     const inner = gun.model.root;
@@ -2146,7 +2210,14 @@ export class Person3D {
     rM.copy(rMg).multiply(rL.invert());
     rM.decompose(rAt, rTurn, rs1);
     const cheap = this.farHold;
-    m.gripTo("R", rAt, rTurn, w, [-1, -0.5, -0.5], cheap);
+    // (reaching back for it at the draw's start, putting it back at its end: the gun on its path, the hand
+    // coming to it)
+    const rw = draw < 1 ? w * Math.min(1, draw / 0.12) : w;
+    m.gripTo("R", rAt, rTurn, rw, [-1, -0.5, -0.5], cheap);
+    if (rw < w * 0.98) {
+      this.placeGun(rMg);
+      this.revFree = true;
+    }
     // the left under the fore-end, where the gun now is (the barrels' — dropped with them, opening)
     g.updateMatrixWorld(true);
     const BW = barrels.matrixWorld;
@@ -2170,7 +2241,7 @@ export class Person3D {
       rv2.set(x, SG_FORE_SHAPE.y, 0).sub(SG_HINGE).applyMatrix4(rM);
       rq2.setFromUnitVectors(Y3, X3).premultiply(rq1);
       m.hold("L", { shape: SG_FORE_SHAPE.shape, pos: rv2, quat: rq2, kind: "fore" });
-      m.gripTo("L", rLAt, rq3, w, [-0.6, -1, -0.2], cheap);
+      if (lw > 0.01) m.gripTo("L", rLAt, rq3, lw, [-0.6, -1, -0.2], cheap);
       // (the thumb laid along the fore-end's left side, ahead — closed round the box it went into it)
       if (!cheap && w > 0.5)
         m.thumbTo(
@@ -2617,6 +2688,85 @@ export class Person3D {
       this.pouch = { root };
     }
   }
+  /** (plan 81 F6a) The double-barrel slung on her back while she carries one (Player.sling) and it isn't in her
+   *  hands: on her chest bone, its strap over her right shoulder, across her chest to her left hip and round
+   *  to the barrels — the strap's points her bones', each frame */
+  private sling: { root: Group; gun: GunModel; strap: Mesh[] } | null = null;
+  private slingFrame(p: PersonIn) {
+    const chest = this.model.bone("chest");
+    const tpl = this.mats.gun?.("shotgun") ?? null;
+    if (!p.sling || !chest || !tpl || this.part !== "all") {
+      this.dropSling();
+      return;
+    }
+    if (!this.sling) {
+      const root = new Group();
+      const gun = lifeGunModel("shotgun", tpl);
+      poseGun(gun, "shotgun", {});
+      root.add(gun.root);
+      root.position.copy(SLUNG_AT);
+      root.quaternion.copy(SLUNG_TURN);
+      chest.add(root);
+      const mat = this.mats.prop("#3a2414");
+      const strap: Mesh[] = [];
+      for (let i = 0; i <= STRAP.length; i++) {
+        const sm = new Mesh(STRAP_BOX, mat);
+        sm.castShadow = false;
+        this.root.add(sm);
+        strap.push(sm);
+      }
+      this.sling = { root, gun, strap };
+    }
+    const S = this.sling;
+    const on = !(this.gun && this.gun.key === "shotgun");
+    S.root.visible = on;
+    for (const sm of S.strap) sm.visible = on;
+    if (!on) return;
+    // the strap: from the swivel, by her bones, to the barrels — in her root's space
+    this.root.updateMatrixWorld(true);
+    const B = this.revFrame(p, false);
+    const pts: Vector3[] = [S.gun.root.localToWorld(rv1.copy(STRAP_ENDS.swivel)).clone()];
+    for (const q of STRAP) {
+      const b = this.model.bone(q.bone);
+      if (!b) continue;
+      const o = b.getWorldPosition(new Vector3());
+      const out = q.bone === "chest" && p.avatar.gender === "feminine" ? STRAP_BUST : 0;
+      pts.push(
+        o
+          .addScaledVector(B.left, q.at[0] * B.k)
+          .addScaledVector(B.up, q.at[1] * B.k)
+          .addScaledVector(B.ahead, (q.at[2] + out) * B.k),
+      );
+    }
+    pts.push(S.gun.root.localToWorld(rv1.copy(STRAP_ENDS.barrels)).clone());
+    const inv = rM.copy(this.root.matrixWorld).invert();
+    const mid = chest.getWorldPosition(rv5);
+    for (let i = 0; i < S.strap.length; i++) {
+      const a = pts[i];
+      const b = pts[i + 1];
+      const sm = S.strap[i];
+      if (!a || !b) {
+        sm.visible = false;
+        continue;
+      }
+      // (flat on her: its width across the way it goes, its face out from her middle)
+      const x = rv2.subVectors(b, a);
+      const len = x.length();
+      x.normalize();
+      const out = rv3.copy(a).add(b).multiplyScalar(0.5).sub(mid);
+      out.addScaledVector(x, -out.dot(x)).normalize();
+      const y = rv4.crossVectors(out, x);
+      rM2.makeBasis(x, y, out).setPosition(a.clone().add(b).multiplyScalar(0.5));
+      rM2.premultiply(inv).decompose(sm.position, sm.quaternion, sm.scale);
+      sm.scale.set(len + 0.01, 0.032, 0.004);
+    }
+  }
+  private dropSling() {
+    if (!this.sling) return;
+    this.sling.root.removeFromParent();
+    for (const sm of this.sling.strap) sm.removeFromParent();
+    this.sling = null;
+  }
   private dropHolster() {
     this.holster?.root.removeFromParent();
     this.holster = null;
@@ -2931,6 +3081,7 @@ export class Person3D {
     this.dropPhone();
     this.dropGun();
     this.dropHolster();
+    this.dropSling();
     this.revLoader?.root.removeFromParent();
     this.dropBud();
     this.dropTorch();

@@ -38,7 +38,8 @@ export const ARMS = {
   shotgun: {
     rate: 0.95,
     reload: 0.45,
-    draw: 0.35,
+    // (plan 81 F6a: off the back, over the right shoulder — 0.35 was a hand's rise from the side)
+    draw: 0.6,
     aim: 0.26,
     open: 0.3,
     shut: 0.25,

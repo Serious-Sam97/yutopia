@@ -125,9 +125,31 @@ Plan 80's machinery, for a long gun:
      the fore-end and the right wrist goes 40–56° past its reach (phase 3, the aim at every pitch); the right
      wrist 22–28° past its reach level (the stock's place in the pocket fixes the elbow); the torch still
      the fist's own — through the fore-end (phase 3, F3a); the reload is the carry with the barrels dropped
-     (phase 4); put away it still just goes (phase 2, the sling).
+     (phase 4); put away it still just goes (done in phase 2: the sling).
 2. **The carry** (F1) — keyed whole; walking, running (tucked); the draw and the put-away (F6: from the sling
    over the right shoulder; the sling modelled).
+   **Built 2026-11-12:**
+   - **Slung on her back** (F6a; `slingFrame`): the gun under the chest bone (`SLUNG_AT`, `SLUNG_TURN`) — the
+     stock up behind the right shoulder, its butt under the shoulder's top (level with it, the stock filled the
+     game's camera beside her head), the barrels down to the left hip. Everyone's screen draws it from
+     `Player.sling` (the server: a shotgun in her things and not in her hands — the holster's 500 ms check).
+   - **The strap**: from the stock's swivel over the right shoulder, across the chest to the left hip and round
+     to the barrels — flat leather, its points from her bones each frame (it rides the walk), a touch further
+     out on a fuller chest (`STRAP_BUST`).
+   - **The draw, 0.6 s** — **shared `ARMS.shotgun.draw` 0.35 → 0.6, the server's too** (the first shot waits
+     for it; a game change — say if it's too slow): along five keys (`DRAW_KEYS`) — slung; lifted by the
+     stock over the right shoulder (the barrels hanging behind her); over it (the barrels back); before her
+     chest (the barrels up); the ready. The right hand on it from the start (reaching back to it the first
+     12%), the left meeting the fore-end the last quarter, the trunk turning in with it. **Put away, 0.5 s**,
+     the same way back.
+   - **Running**: the muzzle only 0.08 rad steeper (0.2 put the fore-end past the left arm's reach — 3 cm
+     short), the gun 4 cm further across her (her left shoulder swings back with the run).
+   - **Checks**: the ready, walking and sprinting, with and without the torch, within the limits (the hands
+     8–10 cm apart, the forearms 1.5–1.7 cm clear of the gun, each wrist at its place); the revolver's sweep
+     and spec unchanged; arms-feel; the server's arms tests (16, the sling flag with them). Aimed steeply
+     (±0.5 rad and past) still phase 3's.
+   - Stills: `design/guns/p81/sheet-81-phase2-{draw,sling,carry}.png` (bench in `p81/bench`, slung on both
+     bodies in `p81/p2`).
 3. **The aim** (F2, F3) — the butt in the pocket at every pitch, the cheek on the comb, the head down; the
    torch's hold; the kick into the shoulder (the body rocked back, the muzzle up); dry fire on the front
    trigger; carry ↔ aim in the gun's own 0.26 s.

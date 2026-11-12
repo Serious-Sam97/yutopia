@@ -5,7 +5,7 @@
 // gun held fixed in the fist, never turned in it); the left palm up under the fore-end, its fingers round its
 // side, as far out as the arm reaches. The numbers the phase 0 mocks' (tools/art/guns/mock81.py, signed off
 // 2026-11-12) — in the gun's own frame here (x along the barrels, y its top, z its right; m).
-import { Matrix4, type Quaternion, Vector3 } from "three";
+import { Matrix4, Quaternion, Vector3 } from "three";
 import type { HandFrame } from "../chars/props";
 import { type BodyFrame, bodyDir, gunQuat } from "./revolver-hold";
 
@@ -69,8 +69,8 @@ export function longHold(
     out.f.copy(ahead).multiplyScalar(c).addScaledVector(up, sn);
     out.u.copy(up).multiplyScalar(c).addScaledVector(ahead, -sn);
   } else {
-    // (the low ready; running, steeper)
-    const d = SG_READY.down + 0.2 * s.run;
+    // (the low ready; running, a little steeper — more and the fore-end went out of the left arm's reach)
+    const d = SG_READY.down + 0.08 * s.run;
     bodyDir(B, [SG_READY.left, -Math.sin(d), Math.cos(d)], out.f);
     out.u.copy(up).addScaledVector(out.f, -up.dot(out.f)).normalize();
   }
@@ -78,7 +78,8 @@ export function longHold(
   const lift = s.aiming ? SG_AIM.up : -SG_READY.drop;
   const pocket = _p
     .copy(shoulderR)
-    .addScaledVector(left, 0.06 * B.k)
+    // (running, across her a little more — her left shoulder swings back with the run)
+    .addScaledVector(left, (0.06 + (s.aiming ? 0 : 0.04 * s.run)) * B.k)
     .addScaledVector(ahead, 0.07 * B.k)
     .addScaledVector(up, (lift - 0.025) * B.k);
   // (the grip point: the pocket less the butt's place in the gun)
@@ -110,3 +111,38 @@ const _c2 = new Vector3();
 const _d2 = new Vector3();
 const _m1 = new Matrix4();
 const _m2 = new Matrix4();
+
+// ── slung, drawn, put away (plan 81 phase 2, F6a) ──────────────────────────────────────────────────────
+/** (shared ARMS.shotgun.draw) off her back and over the right shoulder, s; put back, s */
+export const SG_DRAW_S = 0.6;
+export const SG_AWAY_S = 0.5;
+/** Slung on her back (the chest bone's space: x her left, y up, z ahead): the stock up behind her right
+ *  shoulder — its butt about the shoulder's height, not over it (there it filled the game's camera beside her
+ *  head) — the barrels down to her left hip, its right side to her back — its grip point there, its turn */
+export const SLUNG_AT = new Vector3(-0.12, -0.07, -0.095);
+export const SLUNG_TURN = new Quaternion().setFromRotationMatrix(
+  new Matrix4().makeBasis(new Vector3(0.62, -0.78, 0), new Vector3(0.78, 0.62, 0), new Vector3(0, 0, 1)),
+);
+/** The draw's keys between the back and the hold (her frame from her shoulders' middle: x left, y up, z ahead;
+ *  the barrels' way): lifted by the stock over the right shoulder (the barrels hanging behind her), over it
+ *  (the barrels back), before her chest (the barrels up) — each under half a turn from the next, so the
+ *  slerp goes the way a person swings it */
+export const DRAW_KEYS: { at: [number, number, number]; f: [number, number, number] }[] = [
+  { at: [-0.16, 0.16, -0.06], f: [0.2, -0.9, -0.35] },
+  { at: [-0.17, 0.12, 0.12], f: [0, 0.2, -0.98] },
+  { at: [-0.1, -0.1, 0.22], f: [0, 0.9, 0.4] },
+];
+/** The strap's way over her (the slung gun's swivel → over the right shoulder → across the chest → the left
+ *  hip → round to the barrels): each point a bone's and an offset in her frame (x left, y up, z ahead; m) —
+ *  out on her front (a fuller chest: STRAP_BUST more) */
+export const STRAP: { bone: "shoulderR" | "chest" | "hips"; at: [number, number, number] }[] = [
+  { bone: "shoulderR", at: [0, 0.09, -0.03] },
+  { bone: "shoulderR", at: [0.05, 0.04, 0.09] },
+  { bone: "chest", at: [0.05, -0.1, 0.21] },
+  { bone: "hips", at: [0.17, 0.07, 0.19] },
+  { bone: "hips", at: [0.2, 0.03, 0.03] },
+];
+/** (the gun's frame) where the strap meets it: the stock's swivel, and on the barrels toward the muzzle */
+export const STRAP_ENDS = { swivel: new Vector3(-0.26, -0.09, 0), barrels: new Vector3(0.45, 0.03, 0) };
+/** (on a feminine body the chest's point this much further out) */
+export const STRAP_BUST = 0.005;

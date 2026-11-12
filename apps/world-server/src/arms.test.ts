@@ -406,6 +406,9 @@ test("a gun's up only after its draw: a shot before it isn't; Player.arm says dr
   await waitFor(() => me(b.room).holster, 1500);
   assert.equal(a.room.state.players.get(b.room.sessionId)?.holster, true);
   assert.equal(me(a.room).holster, false);
+  // (plan 81) the double-barrel carried too (the kit's): slung on her back
+  assert.equal(a.room.state.players.get(b.room.sessionId)?.sling, true);
+  assert.equal(me(a.room).sling, false);
   b.room.send("arms:draw", { slot: 0 });
   await waitFor(() => me(b.room).gun === "revolver");
   await waitFor(() => me(b.room).arm === ARM.draw, 300);
