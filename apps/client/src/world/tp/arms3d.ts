@@ -1,3 +1,4 @@
+import { isWeapon } from "@yutopia/shared/inventory";
 import {
   AdditiveBlending,
   BufferAttribute,
@@ -10,6 +11,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   type MeshLambertMaterial,
+  type Object3D,
   Points,
   PointsMaterial,
   type Scene,
@@ -19,7 +21,7 @@ import {
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { litMaterial } from "../look/lit";
 import { tinted } from "./campus";
-import { itemModel } from "./items3d";
+import { itemModel, lifeItemModel } from "./items3d";
 
 // Guns and flares on screen (docs/plan/30-the-dark.md D6): a shot's flash at the
 // muzzle and its tracers (the shotgun's eight), sparks where one meets a shield,
@@ -313,12 +315,22 @@ export class Arms3 {
     this.itemMat?.dispose();
   }
 
+  /** The life look's gun scenes (the view's, loaded the first time asked for): a gun dropped lies as
+   *  its own model once it's come (plan 79 phase 8). */
+  lifeGun: ((kind: string) => Object3D | null) | null = null;
+
   /** What's dropped on the snow (the floor's coords, ground z). */
   drops(list: { id: string; item: string; x: number; y: number; z: number }[]): void {
     const seen = new Set<string>();
     for (const d of list) {
       seen.add(d.id);
+      if (isWeapon(d.item)) {
+        const scene = this.lifeGun?.(d.item);
+        if (scene) lifeItemModel(d.item, scene);
+      }
       let o = this.dropped.get(d.id);
+      // (its life model come since it was laid: swapped in)
+      if (o && o.mesh.geometry !== itemModel(d.item)) o.mesh.geometry = itemModel(d.item);
       if (!o) {
         // its model (tp/items3d.ts), lit as the snow is; turned as it fell
         this.itemMat ??= litMaterial({ vertexColors: true });

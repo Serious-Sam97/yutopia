@@ -4,7 +4,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { ROOM_NAME } from "@yutopia/shared";
 import { LOCKER, LOOT, type LootItem, lockerFront } from "@yutopia/shared/dark";
 import { heightAt } from "@yutopia/shared/grounds";
-import type { Inventory } from "@yutopia/shared/inventory";
+import { count, type Inventory } from "@yutopia/shared/inventory";
 import { MOVE, MV_AIM, packMv } from "@yutopia/shared/move";
 import { Client, type Room } from "colyseus.js";
 
@@ -416,4 +416,20 @@ test("the torch focused indoors too: on, aiming, on the studio's floor", async (
   a.room.send("pos", { x: p.x, y: p.y, z: 0, yaw: 96, a: 0, seq: 0, mv: packMv("still") });
   await waitFor(() => me(a.room).focused === false);
   a.room.send("phone:torch", { on: false });
+});
+
+test("an admin gives someone a gun and its rounds: they have them, and are told (plan 79 phase 8: a give that fitted said it hadn't)", async () => {
+  // (its own people: 391 is the indoor torch's — the same person twice in the room hung the file's teardown)
+  const a = await person(395, "member,builder,admin");
+  const b = await person(396);
+  const bp = () => [...a.room.state.players.values()].find((p) => p.sid === b.room.sessionId);
+  await waitFor(() => !!bp() && !!b.inv);
+  const toasts: string[] = [];
+  a.room.onMessage("toast", (m: { text: string }) => toasts.push(m.text));
+  a.room.send("mod:give", { item: "ak47", userId: bp()?.uid });
+  a.room.send("mod:give", { item: "r762", n: 30, userId: bp()?.uid });
+  await waitFor(() => !!b.inv?.quick.some((it) => it?.id === "ak47") && count(b.inv as Inventory, "r762") === 30);
+  assert.equal((b.inv?.quick.find((it) => it?.id === "ak47") as { loaded?: number }).loaded, 30, "loaded");
+  await sleep(200);
+  assert.deepEqual(toasts, [], "no 'that didn't go'");
 });

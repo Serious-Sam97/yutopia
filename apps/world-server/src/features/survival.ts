@@ -685,8 +685,10 @@ registerFeature((room: WorldRoom) => {
         putDrop(item, many, loaded, p.x, p.y, Date.now(), undefined, p.level);
         return true;
       }
-      const left = addItem(s.inv, { id: item, n: many, loaded });
-      if (left === many) return false;
+      // (addItem says how many it took — 0: no room; it was read as how many were left, so a give that
+      // fitted said it hadn't and its owner was never told: plan 79 phase 8)
+      const took = addItem(s.inv, { id: item, n: many, loaded });
+      if (took <= 0) return false;
       changed(s);
       return true;
     },

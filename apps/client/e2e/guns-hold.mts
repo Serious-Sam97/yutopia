@@ -57,6 +57,7 @@ const state = (page: Page, at: string) =>
     };
     return {
       cam,
+      life: me?.gun?.model.life ?? null,
       gun: p.gun,
       arm: p.arm,
       scopeK: Math.round(y.tp.scopeK * 100) / 100,
@@ -140,7 +141,7 @@ await page.waitForFunction(
   null,
   { timeout: 120_000 },
 );
-await page.evaluate(() => (window as any).__yutopia.teleport({ x: -240, y: -18, level: 0 }));
+await page.evaluate(() => (window as any).__yutopia.teleport({ x: -240, y: -22, level: 0 }));
 await page.waitForFunction(() => !!document.querySelector(".dk"), null, { timeout: 30_000 });
 await w(page, (y) => {
   y.room.send("mod:hour", { h: Number((window as any).__gunsHour ?? 13) });
@@ -164,7 +165,7 @@ for (const [key, id] of [
 ] as const) {
   if (process.env.ONLY && process.env.ONLY !== id) continue;
   // (back to the start for each — the moves pass walks and sprints her ahead, toward the water)
-  await page.evaluate(() => (window as any).__yutopia.teleport({ x: -240, y: -18, level: 0 }));
+  await page.evaluate(() => (window as any).__yutopia.teleport({ x: -240, y: -22, level: 0 }));
   await w(page, (y) => {
     y.tp.yaw = 0;
     y.tp.pitch = 0.1;
@@ -286,7 +287,7 @@ for (const [key, id] of [
   await page.waitForTimeout(2500);
   // (on the move — plan 79 phase 4: walking aimed, sprinting, a dodge — away from the pond, open water
   // out of the winter)
-  await page.evaluate(() => (window as any).__yutopia.teleport({ x: -240, y: -18, level: 0 }));
+  await page.evaluate(() => (window as any).__yutopia.teleport({ x: -240, y: -22, level: 0 }));
   await w(page, (y) => {
     y.tp.yaw = Math.PI;
   });
@@ -317,5 +318,52 @@ for (const [key, id] of [
   await view(page, `${out}/${name}-${id}-away-150.png`, 1, 1.6);
   await page.waitForTimeout(600);
   console.log("  wrote", id);
+}
+// (DROPS=1: the guns dropped at her feet, as they lie on the snow — their life models: plan 79 phase 8)
+if (process.env.DROPS) {
+  await page.evaluate(() => (window as any).__yutopia.teleport({ x: -240, y: -22, level: 0 }));
+  for (const kit of [
+    { ak: true, sniper: true },
+    { ak: false, daybreak: true },
+  ]) {
+    await w(page, (y) => y.room.send("mod:refill", { kit: true, ...(window as any).__kit }));
+    await page.evaluate((k) => {
+      (window as any).__kit = k;
+      (window as any).__yutopia.room.send("mod:refill", { kit: true, ...k });
+    }, kit);
+    await page.waitForTimeout(800);
+    for (const slot of kit.ak ? [6, 7, 8, 9] : [9]) {
+      await w(page, (y) => y.tp.yaw);
+      await page.evaluate((s) => (window as any).__yutopia.room.send("dark:drop", { slot: s }), slot);
+      await page.waitForTimeout(300);
+      // (step aside a little so they don't pile up)
+      await page.keyboard.down("KeyD");
+      await page.waitForTimeout(260);
+      await page.keyboard.up("KeyD");
+    }
+  }
+  await page.waitForTimeout(2500);
+  // (from over them, a little to one side, looking down at where they lie)
+  const url = (await page.evaluate(() => {
+    const y = (window as any).__yutopia;
+    const tp = y.tp;
+    const ds = [...y.room.state.drops.values()].filter((d: any) =>
+      ["revolver", "shotgun", "ak47", "sniper", "daybreak"].includes(d.item),
+    );
+    const cx = ds.reduce((a: number, d: any) => a + d.x, 0) / ds.length;
+    const cy = ds.reduce((a: number, d: any) => a + d.y, 0) / ds.length;
+    // (drops keep no height: they lie where she stands)
+    const cz = y.walker.where().z ?? 0;
+    const cam = tp.camera.clone();
+    cam.fov = 40;
+    cam.position.set(cx + 0.6, cz + 2.3, cy + 1.4);
+    cam.lookAt(cx, cz, cy);
+    cam.updateProjectionMatrix();
+    cam.updateMatrixWorld();
+    tp.renderer.render(tp.scene, cam);
+    return tp.renderer.domElement.toDataURL("image/png");
+  })) as string;
+  writeFileSync(`${out}/${name}-drops.png`, Buffer.from(url.split(",")[1], "base64"));
+  console.log("  wrote drops");
 }
 await browser.close();

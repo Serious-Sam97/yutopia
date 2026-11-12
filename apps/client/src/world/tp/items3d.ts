@@ -1,4 +1,15 @@
-import { BoxGeometry, type BufferGeometry, ConeGeometry, CylinderGeometry, SphereGeometry, TorusGeometry } from "three";
+import {
+  type Box3,
+  BoxGeometry,
+  type BufferGeometry,
+  ConeGeometry,
+  CylinderGeometry,
+  type Mesh,
+  type MeshStandardMaterial,
+  type Object3D,
+  SphereGeometry,
+  TorusGeometry,
+} from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { tinted } from "./campus";
 import { gunLying } from "./guns3d";
@@ -224,6 +235,38 @@ const SCALE: Record<string, number> = {
 };
 
 const made = new Map<string, BufferGeometry>();
+// (the guns' life-look models, once they've loaded: plan 79 phase 8)
+const life = new Set<string>();
+/** A gun lying on the snow from its life-look scene (tools/art/guns/build_guns.py), once it's loaded: its
+ *  parts as they rest, coloured by their materials, on its left side — then what itemModel gives for it
+ *  (a drop already lying swaps to it: tp/arms3d.ts). */
+export function lifeItemModel(kind: string, scene: Object3D): BufferGeometry {
+  const had = made.get(kind);
+  if (life.has(kind) && had) return had;
+  const gun = (scene.getObjectByName(kind) ?? scene).clone(true);
+  gun.position.set(0, 0, 0);
+  gun.updateMatrixWorld(true);
+  const parts: BufferGeometry[] = [];
+  gun.traverse((o) => {
+    const m = o as Mesh;
+    if (!m.isMesh || !m.visible) return;
+    const g = m.geometry.clone().applyMatrix4(m.matrixWorld);
+    for (const a of Object.keys(g.attributes)) if (a !== "position" && a !== "normal") g.deleteAttribute(a);
+    const mat = m.material as MeshStandardMaterial;
+    parts.push(tinted(g, mat.color ? mat.color.getHex() : 0x777777));
+  });
+  const out = mergeGeometries(parts, false);
+  for (const p of parts) p.dispose();
+  out.rotateX(-Math.PI / 2);
+  out.scale(1.15, 1.15, 1.15);
+  out.computeBoundingBox();
+  const b = out.boundingBox as Box3;
+  out.translate(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2);
+  had?.dispose();
+  made.set(kind, out);
+  life.add(kind);
+  return out;
+}
 /** The model of `item` (an inventory item id, or "cache:<kind>"), made once and shared. */
 export function itemModel(item: string): BufferGeometry {
   let g = made.get(item);

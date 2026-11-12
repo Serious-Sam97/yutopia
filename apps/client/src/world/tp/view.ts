@@ -100,7 +100,7 @@ import type { PetModel } from "../art/pets3d";
 import { installLifeLamps } from "../look/life-lamps";
 import { LifeSky } from "../look/life-sky";
 import { setLifeTone } from "../look/life-tone";
-import { litMaterial } from "../look/lit";
+import { adoptLife, litMaterial } from "../look/lit";
 import { isLife } from "../look/look-mode";
 import { yuLit } from "../look/yulit";
 import type { PuffKind } from "../model";
@@ -2374,7 +2374,11 @@ void main() {
   private arms3: Arms3 | null = null;
   /** Shots, sparks, flares in the air and on the snow (tp/arms3d.ts), made when first wanted. */
   arms(): Arms3 {
-    this.arms3 ??= new Arms3(this.scene);
+    if (!this.arms3) {
+      this.arms3 = new Arms3(this.scene);
+      // (a gun dropped lies as its own life model, once loaded — plan 79 phase 8)
+      if (isLife()) this.arms3.lifeGun = (k) => this.lifeGun(k);
+    }
     return this.arms3;
   }
 
@@ -3520,7 +3524,11 @@ void main() {
         .then(async (gltf) => {
           gltf.scene.traverse((o) => {
             const m = (o as Mesh).material;
-            if (m && !Array.isArray(m)) this.light.patch(m);
+            if (!m || Array.isArray(m)) return;
+            this.light.patch(m);
+            // (the sky's reflection, as the world's life materials have it — without it the metal ones
+            // showed nothing and read black: plan 79 phase 8)
+            if ((m as MeshStandardMaterial).isMeshStandardMaterial) adoptLife(m as MeshStandardMaterial);
           });
           await this.renderer.compileAsync(gltf.scene, this.camera, this.scene).catch(() => undefined);
           this.lifeGuns.set(kind, gltf.scene);

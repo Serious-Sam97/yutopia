@@ -65,6 +65,21 @@ test("the feel: kick and settle, the spread, an early click, over the shoulder, 
   await expect(page.locator(".dk-cross")).toBeVisible();
   await page.waitForTimeout(800);
   await shot(page, "feel-3p-aim");
+  // the misplaced sight (plan 79): something between the muzzle and what the crosshair is on — the
+  // reticle goes there and says it's blocked (the muzzle's line made to stop a metre out); clear again
+  await page.evaluate(() => {
+    const pp = (window as any).__yutopia.tp.pointerPart;
+    pp.__rayStop = pp.rayStop;
+    pp.rayStop = (...a: unknown[]) => ((a[5] as number) > 1.2 ? { t: 1, what: "wall" } : pp.__rayStop(...a));
+  });
+  await expect(page.locator(".dk-cross.blocked")).toBeVisible({ timeout: 2000 });
+  const moved = await page.evaluate(() => (document.querySelector(".dk-cross") as HTMLElement).style.transform);
+  expect(moved, "the reticle moved to where it'd stop").toMatch(/translate\(/);
+  await page.evaluate(() => {
+    const pp = (window as any).__yutopia.tp.pointerPart;
+    pp.rayStop = pp.__rayStop;
+  });
+  await expect(page.locator(".dk-cross.blocked")).toHaveCount(0, { timeout: 2000 });
 
   // a shot: the look kicks up (pitch > 0 is down), then most of it comes back by itself
   const p0 = (await w(page, (y) => y.tp.pitch)) as number;

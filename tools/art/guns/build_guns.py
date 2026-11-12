@@ -36,14 +36,17 @@ os.makedirs(OUT, exist_ok=True)
 # the kinds, flattened: base colour, metal, roughness (and an emission)
 FLAT = {
     "nickel": ((0.66, 0.65, 0.62), 1.0, 0.2),
-    "blued": ((0.03, 0.035, 0.045), 1.0, 0.32),
-    "parker": ((0.055, 0.056, 0.054), 0.75, 0.62),
+    # (plan 79 phase 8: every gun read near black by day — the game never gave their materials the sky's
+    # reflection (tp/view.ts lifeGun: adoptLife now does); with it, blued a little lighter than it was and the
+    # phosphate a little less a mirror — dark grey-black, as they are)
+    "blued": ((0.05, 0.056, 0.07), 0.85, 0.32),
+    "parker": ((0.06, 0.061, 0.058), 0.5, 0.56),
     "steel": ((0.32, 0.33, 0.34), 1.0, 0.32),
     "engraved": ((0.5, 0.48, 0.45), 1.0, 0.26),
     "case": ((0.22, 0.2, 0.2), 1.0, 0.3),
     "walnut": ((0.075, 0.032, 0.013), 0.0, 0.42),
     "birch": ((0.18, 0.07, 0.025), 0.0, 0.48),
-    "polymer": ((0.03, 0.032, 0.03), 0.0, 0.68),
+    "polymer": ((0.05, 0.052, 0.05), 0.0, 0.62),
     "rubber": ((0.012, 0.012, 0.012), 0.0, 0.9),
     "leather": ((0.09, 0.045, 0.02), 0.0, 0.6),
     "brass": ((0.7, 0.5, 0.2), 1.0, 0.3),

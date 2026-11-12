@@ -12,7 +12,7 @@ shoulder camera whenever a gun is out (no swap key), F2a walk while aiming, F3a 
 with a recoil layer, F6a the torch held with the gun, F7 **the Daybreak**, F8a the right button focuses
 only a torch already on, F9a the AK in the lockers / the sniper in the hunting bag / the Daybreak from
 Spawn, F10a four quick slots. Phase 1 (the right button) built; phase 0 mocks delivered (second round: the camera closer, the guns
-detailed; the revolver and the double-barrel redesigned after AW2's), signed off 2026-11-11 (the long guns held where the arms reach); phase 2 (the camera, the reticle) and phase 3 (the two guns' models in the game) built 2026-11-11; phase 4 built and signed off 2026-11-12 ("look fine for now"); phase 5 (the AK-47) built and signed off 2026-11-12; phase 6 (the sniper) built and signed off 2026-11-12; phase 7 (the Daybreak) built and signed off 2026-11-12; F11a (the speedloader) and F12a (both shells out) decided 2026-11-11. Follows plan 32 (the arms: the
+detailed; the revolver and the double-barrel redesigned after AW2's), signed off 2026-11-11 (the long guns held where the arms reach); phase 2 (the camera, the reticle) and phase 3 (the two guns' models in the game) built 2026-11-11; phase 4 built and signed off 2026-11-12 ("look fine for now"); phase 5 (the AK-47) built and signed off 2026-11-12; phase 6 (the sniper) built and signed off 2026-11-12; phase 7 (the Daybreak) built and signed off 2026-11-12; phase 8 (checks) built and signed off 2026-11-12; F11a (the speedloader) and F12a (both shells out) decided 2026-11-11. Follows plan 32 (the arms: the
 rules, kick, bloom, falloff, heads), plan 30 (the dark: light is the weapon), plans 58/77/78 (the body,
 its moves, its hands) and plan 73 (the life look).
 
@@ -204,6 +204,60 @@ the Daybreak the torch's focus hum and a flare's burst) so the phases before can
      you veto.
    Then: the picks, the mix, the checks (the steps' level rule: plan 63), credits in `sources.json`.
 
+## Phase 8 — checks: built, signed off (2026-11-12)
+
+- **The metals**: every gun read near black by day — **the game never gave the guns' materials the
+  sky's reflection** (the life look gives it only to its own materials: look/lit.ts `adoptLife`; the
+  guns' come from their files), so a metal one showed nothing. `tp/view.ts` lifeGun adopts them now: the
+  revolver's nickel, the double-barrel's silver boxlock and blued barrels, the AK's dark phosphate, read.
+  The flat values tuned beside it (`build_guns.py` FLAT: blued 0.05–0.07 metal 0.85, phosphate 0.06 metal
+  0.5 rough 0.56, polymer a touch lighter; first tried much lighter before the cause was found — the AK
+  went aluminium grey); all five rebuilt (sizes and triangles as before). Stills: design/guns/p8.
+  **Baking the node materials' grain, checkering and engraving into textures is not done** (a Blender bake
+  per gun, UVs, the files' size) — the user's call.
+- **Dropped guns** (`items3d.ts` `lifeItemModel`, `arms3d.ts` `lifeGun`): a gun on the snow lies as its own
+  life model once its file has loaded (its parts merged, coloured by their materials, on its side), a
+  drop already lying swapped over — no more the double-barrel standing in for the AK, the sniper, the
+  Daybreak. (`guns-hold.mts DROPS=1`.) The classic look keeps the drawn stand-ins.
+- **Two of us** (`e2e/guns-two.spec.ts`): Ana sees Bia's guns — the AK in her hands as its own model, its
+  burst's shots, its magazine out in her left hand reloading; the sniper's bolt worked; the Daybreak's
+  core swelling as she charges, its ball and burst. On the way, **a bug: an admin's give** (`mod:give`,
+  survival's `give`) read addItem's "how many it took" as "how many were left" — a give that fitted said
+  "That didn't go" and its owner was never told (the server had it). Fixed; a survival test (fails
+  without the fix). (Two 3D pages share the GPU: the one behind runs a few frames a second — full auto
+  fires on its own frames, so the burst's count is checked as "more than one"; the rate is arms-feel's.)
+- **The blocked reticle** (`arms-feel.spec.ts`): the muzzle's line made to stop a metre out — the reticle
+  turns blocked and moves there; clear, it's back. (The wiring; a real wall in the way isn't staged.)
+- **Frame cost** (`e2e/guns-perf.spec.ts`, at night on the pond's shore, the torch on; against the same
+  view with no gun out, in the same run — the machine was loaded, the dark's own 60 fps check read 21.5):
+  | | High | Low |
+  | --- | --- | --- |
+  | no gun | 25.5 fps | 37.8 |
+  | aimed | 26.1 | 37.6 |
+  | the AK held down | 27.8 | 37.8 |
+  | the Daybreak's ball | 23.8 (+7% frame time, one 83 ms frame) | 37.5 |
+  The guns cost nothing measurable but the Daybreak's ball on High; the check: ≤ 15% more frame time.
+- **Page budgets** (a production build, `tools/budget.mjs`): **the page 480.8 KB of 469 and yutopia-chars
+  68.4 of 62 — over, but not by the guns**: no gun word is in any of the page's 18 files (`daybreak`,
+  `ak47`, `sniper`, `speedloader`…); the person's gun hands, the scope, the ball's light are all in the
+  3D view's lazy chunk (107 KB, no budget of its own), the gun controls in yutopia-dark (33.6 of 80);
+  yutopia-chars has none of the gun code. Both budgets were last measured 2026-11-06 / 11-09 — the 70
+  commits since (plans 73–78) grew them. Not raised here: what grew, and whether it's a split, is its own
+  look (offered to the user as a session).
+- **Survival's tests**: my give test first reused uid 391 — the indoor torch test's — and the same person
+  twice in the room hung the file's teardown (cancelled at the limit); its own people now (395, 396), the
+  file ends in 42 s. Its loot-spot test is **red on HEAD too** (the teleport to a house's door times out,
+  every run of the whole file; alone it passes) — not the guns'; left as it was.
+- **What a gun takes to put one of the shadowed down** (250 hp, once the light's burnt its shield off;
+  the head ×1.5) — for the tuning in the dark, the user's:
+  | | body | head | notes |
+  | --- | --- | --- | --- |
+  | revolver | 5 | 4 | 0.42 s apart: ~2 s |
+  | double-barrel | 2 (8 × 18 within 5 tiles) | — | falling off to 0.4 at 14 |
+  | AK-47 | 12 | 8 | ~1.2 s held; 0.7 of it at 50 tiles |
+  | sniper | 2 | 1 | 1.3 s between |
+  | Daybreak | 1 (300 in 3 tiles) | — | burns the shield itself as it passes: no torch needed |
+
 ## Phase 7 — the Daybreak: built, signed off (2026-11-12)
 
 - **The rules** (shared `ARMS.daybreak`, `WEAPONS.daybreak` 3 of `cell`, `STACKS.cell` 3; `ORB`, `burstAt`,
@@ -245,7 +299,7 @@ the Daybreak the torch's focus hum and a flare's burst) so the phases before can
   over the water, the ball flying out, lighting the reeds and the water, bursting on the far side; by day
   the hold and the reload). `e2e/daybreak.spec.ts`: charging (no ball, none spent), the ball's light, a
   cell spent, its burst (`burstsShown`), let go mid-charge nothing, R three again. Server 16/16, dark,
-  down; survival's loot-spot test flaked once while the dev world restarted (passes alone, twice).
+  down; survival's loot-spot test failed (red on HEAD too — see phase 8).
 - The capture's start moved off the pond (open water out of the winter: she stood in it): (−240, −18).
 - **Left for phase 8**: the Daybreak on the snow and in the classic look is the double-barrel's drawn
   model; a ball in flight isn't seen by someone joining mid-flight.
