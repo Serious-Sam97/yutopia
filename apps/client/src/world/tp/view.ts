@@ -1397,13 +1397,14 @@ void main() {
   // knocked down (shared/pool-throw.ts): when each fall was first seen here (performance.now)
   private falls = new Map<string, { at: number; t0: number }>();
   // a sound everyone near turns to (plan 58 9): the last shot, where and when
-  private sound: { x: number; y: number; at: number } | null = null;
-  heard(x: number, y: number) {
-    this.sound = { x, y, at: performance.now() };
+  private sound: { x: number; y: number; at: number; from?: string } | null = null;
+  /** `from`: whose it is (a shot's shooter) — they don't turn to their own */
+  heard(x: number, y: number, from?: string) {
+    this.sound = { x, y, at: performance.now(), from };
   }
   private heardBy(b: { x: number; y: number }): { t: number; x: number; y: number; loud: boolean } | undefined {
     const s = this.sound;
-    if (!s) return undefined;
+    if (!s || (s.from && s.from === (b as { id?: string }).id)) return undefined;
     const t = (performance.now() - s.at) / 1000;
     const d = Math.hypot(s.x - b.x, s.y - b.y);
     return t < 2.5 && d > 0.6 && d < 30 ? { t, x: s.x, y: s.y, loud: d < 8 } : undefined;

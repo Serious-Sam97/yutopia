@@ -1016,7 +1016,9 @@ export class Locomotion {
           const r = p[j] ?? [0, 0, 0];
           p[j] = [r[0] + d[0], r[1] + d[1], r[2] + d[2]];
         };
-        const past = Math.sign(hd.yaw) * Math.max(0, Math.min(1.4, Math.abs(hd.yaw) - 0.8));
+        // (only what's past the head's and the neck's own reach — the gaze turns them to it, up to 1.6 rad;
+        // from 0.8 it went on top of theirs and over-turned her)
+        const past = Math.sign(hd.yaw) * Math.max(0, Math.min(1.4, Math.abs(hd.yaw) - 1.5));
         const tw =
           smoother(clamp(hd.t / 0.35, 0, 1)) * (1 - smoother(clamp((hd.t - 1.7) / 0.6, 0, 1))) * (1 - this.aimW);
         add("spine", [0, 0.3 * past * tw, 0]);

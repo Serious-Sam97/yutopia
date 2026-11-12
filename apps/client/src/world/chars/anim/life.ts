@@ -308,14 +308,15 @@ export function startle(
   t: number,
 ): { add: Partial<Record<JointName, [number, number, number]>>; w: number; lift: number } {
   const k = smoother(t / 0.07) * (1 - smoother((t - 0.25) / 0.5));
-  const turn = smoother((t - 0.12) / 0.2) * (1 - smoother((t - 1.4) / 0.6));
-  const s = Math.max(-1.2, Math.min(1.2, from));
+  // (the flinch only: the turn to it is the gaze's — Locomotion's — added here too it went twice as far,
+  // the head round past the shoulder: the user's, 2026-11-12)
+  void from;
   return {
     add: {
-      chest: [0.14 * k, 0.3 * s * turn, 0],
-      spine: [0.06 * k, 0.15 * s * turn, 0],
-      neck: [0.18 * k, 0.2 * s * turn, 0],
-      head: [-0.05 * k, 0.4 * s * turn, 0],
+      chest: [0.14 * k, 0, 0],
+      spine: [0.06 * k, 0, 0],
+      neck: [0.18 * k, 0, 0],
+      head: [-0.05 * k, 0, 0],
       shoulderL: [-0.35 * k, 0, -0.15 * k],
       shoulderR: [-0.35 * k, 0, 0.15 * k],
       elbowL: [-0.9 * k, 0, 0],

@@ -184,7 +184,7 @@ export class Arms {
       const rays = pellets(gun, m.yaw, m.pitch, m.seed, m.spread).map((d) => this.flight(o.x, o.y, o.z, d, reach));
       tp.arms().shot(o.x, o.y, o.z, rays, gun, m.oz - HAND);
       tp.guns.gunShot(m.sid);
-      tp.heard(m.ox, m.oy);
+      tp.heard(m.ox, m.oy, m.sid);
       // (far off: its far recording, dulling on to SHOT_REACH.far; near: as the place I'm in sounds)
       const me = this.walker.where();
       const far = Math.hypot(m.ox - me.x, m.oy - me.y) > SHOT_REACH.near;
@@ -525,7 +525,7 @@ export class Arms {
         g.id,
         me.z,
       );
-    tp.heard(mz.x, mz.y);
+    tp.heard(mz.x, mz.y, this.ctl.room?.sessionId);
     // the kick, split (docs/plan/79-the-guns.md): a smaller one on my look, most of it settling back by
     // itself; the gun's own, bigger, in my hands (gunFx's kick, the body's aim2)
     const feel = FEEL[g.id];
