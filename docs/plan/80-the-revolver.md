@@ -17,8 +17,8 @@ F6a keyed on a `/dev/revolver` bench, F7a third person only. Phase 0 (the mocks)
 `design/guns/p80/sheet-80-hold.png` and `sheet-80-reload.png` — signed off 2026-11-12 ("Start phase 1").
 **Phase 1 built 2026-11-12** (below), committed 53c06b6. **Phase 2 built 2026-11-12**, committed dc0fee0; its
 holster (the user's ask) committed 752cfec. **Phase 3 built 2026-11-12**, committed 937fecd. **Phase 4 built
-2026-11-12**, committed 70f644d. **Phase 5 built 2026-11-12** — stills `design/guns/p80/sheet-80-phase5.png`;
-awaiting review. Follows plan 79 (the guns:
+2026-11-12**, committed 70f644d. **Phase 5 built 2026-11-12**, committed 9045ce2. **Phase 6 (the checks) done
+2026-11-12 — plan 80 built**; stills `design/guns/p80/sheet-80-phase6-world.png`; awaiting the user's review. Follows plan 79 (the guns:
 the shoulder camera, the Blender revolver, the speedloader rule F11a) and plans 58/77/78 (the body, its
 moves, its hands).
 
@@ -249,6 +249,48 @@ cylinder, the ejector rod, the cases, a speedloader, in time with the server's s
 6. **Checks** — the bench's checks (no hand through a hand or the gun, the gun upright aimed at any
    pitch and turn, the reload's every key), e2e (draw, aim, fire, reload, two of us seeing it), stills
    beside the references.
+
+   **Done 2026-11-12:**
+   - **`e2e/revolver-bench.spec.ts`** (the bench, GPU): aimed at four turns of her × four pitches, with and
+     without the torch — upright and on the look within 2°, no hand through the other (3 mm; Harries 5),
+     nor the grip, each wrist at its place; the low ready at three turns; up from the ready in 0.18 s; the
+     draw out of the holster; the reload's keys (the cylinder out, the loader in the hand, the gun off the
+     grip, both hands at their places).
+   - **`e2e/revolver-two.spec.ts`** (the world, two of us): Bia given a revolver — on both screens the
+     holster on her hip with it in; drawn into the ready with both hands on, the holster empty; aimed
+     upright; a shot; the reload's timeline with the speedloader, six in after; put away into the holster.
+   - **Found and fixed**: the draw's first frames had the gun jump into the hand where it hung, 11 cm from
+     the holster — now it rides its path out of the holster and the hand closes on it; with the torch on,
+     the reload had it through the gun in the left hand — it's out of the hand while the left works the
+     cylinder (its light still on).
+   - **Kept, noted**: the sprint's wrists 15–23° past a wrist's reach (the sprint clip's lean and swing — a
+     milder tuck barely moved it); mid-draw 17–25° for the moment it lasts; the support hand 7–14°.
+   - **The thin forearm** (the user, 2026-11-12, aiming in the world): the elbow's search had a forearm
+     twisted ~84° as cheap as a wrist bent past its reach — walking, the left flipped to it (46° on the
+     forearm's twist bone; standing, 1°) and the life body's skin pinched thin toward the wrist. The twist
+     costs more now, steeply past 50°: the forearm bones' twist at most 19° (the left's 3°) at every turn,
+     pitch and gait; the wrists bend more for it (up to 21° past their reach aimed, 25–33° sprinting) — which
+     reads as a bent wrist, not a broken arm. The bench has a close view behind the shoulder, as the aimed
+     camera (`over`), and `top=` for bare arms.
+   - **…which put the arms into her** (the user, the same day): saving the twist, the search tucked the
+     elbows in across her chest at the ready — nothing in it knew where her body is. Now it does: the elbow
+     and the middles of the upper arm and the forearm kept out of her torso (an upright elliptic cylinder in
+     her chest's space, as wide as her shoulders and an arm, `TORSO`), costing more than anything else. At
+     every turn, pitch and gait no elbow inside her; the forearm bones' twist at most 37–38° (at the ready
+     walking; the thin one was 46° aimed); the wrists back to the phase 1–5 numbers
+     (`design/guns/p80/sheet-80-forearms.png`).
+   - **A shot heard turning heads round** (the user, 2026-11-12, not the revolver's own): everyone 0.6–30 m
+     from a muzzle turned to it (plan 58 phase 9) — the shooter too (the muzzle's ~0.7 m ahead of them), by
+     three turns stacked (the gaze's, the startle's own, the chest's "past" twist from 46°): 148° for a
+     sound 69° off, the head round past the shoulder; and the way to it never wrapped, so at some facings
+     a sound just ahead read as nearly a whole turn. Now: the shooter doesn't turn to their own shot
+     (`View.heard`'s `from`); the way wrapped; the startle only flinches (the turn is the gaze's); the chest
+     twists only for what's past the head's and the neck's reach (1.5 rad); aiming, no reaction; a gun out,
+     a glance but no startle. 62° for the same sound, every facing (the bench's `act=heard`).
+   - `e2e/arms-feel.spec.ts` and plan 79's `e2e/guns-two.spec.ts` pass (the latter flaky once right after
+     the revolver one: Bia's quick slots).
+   - In the world (`e2e/guns-hold.mts ONLY=revolver`): the stills above. The references are linked
+     (`/dev/revolver`'s panel, the list above), not copied.
 
 ## Risks
 

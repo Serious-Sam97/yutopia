@@ -105,7 +105,7 @@ export function revolverHold(
     // straight: AIM_ARM), the sights under the eyes; the whole of it turned up about the shoulders as she aims
     // up. The low ready (RE4 Remake's): the same, lowered — the arms out and down READY_PITCH, the elbows
     // softer (READY_ARM), the muzzle at the ground a couple of metres ahead; running, tucked in and steeper.
-    const pitch = s.aiming ? s.pitch : READY_PITCH - 0.35 * r;
+    const pitch = s.aiming ? s.pitch : READY_PITCH - 0.22 * r;
     const c = Math.cos(pitch);
     const sn = Math.sin(pitch);
     const fwd = _a.copy(ahead).multiplyScalar(c).addScaledVector(up, sn);
@@ -117,7 +117,7 @@ export function revolverHold(
       .addScaledVector(fwd, AIM_REACH * B.k);
     out.f.copy(fwd);
     out.u.copy(top);
-    out.reach = s.aiming ? AIM_ARM : READY_ARM - 0.2 * r;
+    out.reach = s.aiming ? AIM_ARM : READY_ARM - 0.1 * r;
     out.poleR = [-1, -0.7, -0.2];
     out.poleL = [-1, -0.7, -0.2];
     if (s.torch) {

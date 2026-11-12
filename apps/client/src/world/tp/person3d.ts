@@ -328,6 +328,9 @@ function segGap(p: Vector3, a: Vector3, b: Vector3): number {
 const Y3 = new Vector3(0, 1, 0);
 const tv4 = new Vector3();
 
+/** an angle into −π…π */
+const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+
 function hashSeed(s: string): number {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
@@ -792,14 +795,18 @@ export class Person3D {
           // (plan 58 9: cold and spent by the vitals; a sound heard, from where it came)
           cold: LF ? LF.coldOf(p.wm ?? 100) : 0,
           spent: LF ? LF.spentOf(p.st ?? 100) : 0,
-          heard: p.heard
-            ? {
-                yaw: this.turned - Math.atan2(p.heard.y - p.y, p.heard.x - p.x),
-                pitch: 0,
-                t: p.heard.t,
-                loud: p.heard.loud,
-              }
-            : null,
+          // (its way off her facing, −π…π: unwrapped, a sound just ahead across the seam read as nearly a whole
+          // turn — the chest twisted round and the head looking back. Aiming, her eyes stay on what she aims at;
+          // a gun out, a glance but no startle)
+          heard:
+            p.heard && ((p.mv ?? 0) & 16) === 0
+              ? {
+                  yaw: wrapAngle(this.turned - Math.atan2(p.heard.y - p.y, p.heard.x - p.x)),
+                  pitch: 0,
+                  t: p.heard.t,
+                  loud: p.heard.loud && !p.gun,
+                }
+              : null,
           // (struck: thrown from where it came from — off the facing, + to the left)
           hit: p.hit ? { from: this.turned - p.hit.yaw, t: p.hit.t, k: 1 } : null,
           torch: !!p.torch && !p.phone && !p.shade,
@@ -1445,7 +1452,10 @@ export class Person3D {
       if (rw > 0.01 && this.revLoadT >= 0) this.revolverReload(p, rw, this.revLoadT);
       else if (rw > 0.01) this.revolverHands(p, rw, aiming && !away, run, draw, dt);
       // (let go mid-reload: the gun back at rest in the hand, the loader gone)
-      if (!this.revFree) gun.root.position.set(0, 0, 0);
+      if (!this.revFree) {
+        gun.root.position.set(0, 0, 0);
+        gun.root.scale.setScalar(LIFE_GUN_SCALE);
+      }
       if (!(rw > 0.01 && this.revLoadT >= 0) && this.revLoaderState === "hand") this.revLoaderAt("none", 0, false);
       this.loaderFrame(dt);
       return;
@@ -1610,9 +1620,9 @@ export class Person3D {
     // the right wrist: the gun's place less the gun's own place under the wrist (its root's and its model's)
     const g = gun.root;
     const inner = gun.model.root;
-    g.updateMatrix();
     inner.updateMatrix();
-    rL.multiplyMatrices(g.matrix, inner.matrix);
+    // (its root at rest under the wrist — the draw's start, a reload, may have left it off it)
+    rL.compose(ZERO3, IDQ, g.scale).multiply(inner.matrix);
     rL.decompose(rv1, rq1, rs1);
     const sw = wr.getWorldScale(rs2).x;
     rL.invert();
@@ -1700,10 +1710,16 @@ export class Person3D {
         .addScaledVector(rv3.set(0, 1, 0).applyQuaternion(rq2), KICK.up * B.k * kick);
       rq2.multiply(rq3.setFromAxisAngle(Z3, KICK.flip * kick));
     }
-    rM.compose(H.grip, rq2, rs2.setScalar(gs)).multiply(rL);
+    rMg.compose(H.grip, rq2, rs2.setScalar(gs));
+    rM.copy(rMg).multiply(rL);
     rM.decompose(rAt, rTurn, rs1);
     const cheap = this.farHold;
     m.gripTo("R", rAt, rTurn, w, H.poleR, cheap);
+    // (the draw's start, the put-away's end: the gun on its path — in the holster — the hand coming to it)
+    if (draw < 1 && w < this.revW * 0.98) {
+      this.placeGun(rMg);
+      this.revFree = true;
+    }
     if (H.left === "support" && lw > 0.01) {
       // the left on the gun where it now is: its palm on the grip's left panel, over the right's fingers
       inner.updateWorldMatrix(true, false);
@@ -2448,6 +2464,9 @@ export class Person3D {
       }
     }
     if (!this.torch) return;
+    // (plan 80: reloading the revolver, the left hand's on the cylinder — the torch out of it meanwhile, its
+    // light still on)
+    this.torch.root.visible = !(this.revLoadT > 0.08 && this.revLoadT < 2.05);
     // along the beam (shared beam.ts): ahead, tipped at the ground — or up as they aim — whatever
     // the wrist is doing, so the light comes out of it where it points
     // (plan 78 phase 5: a life hand turned at its wrist to aim it — the torch across the palm, its barrel in

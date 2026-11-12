@@ -471,6 +471,13 @@ const _wfC = new Vector3();
 const _wfM = new Matrix4();
 const _wfN = new Matrix4();
 const _wfS = new Vector3();
+const _gci = new Matrix4();
+const _gcv = new Vector3();
+const _gev = new Vector3();
+const _gmv = new Vector3();
+/** (plan 80) the torso the arms keep out of, in the chest's space: its middle this far ahead of the chest
+ *  joint (the spine's behind it), its half depth (m) — its half width the shoulders' and an arm's */
+const TORSO = { at: 0.04, depth: 0.15 };
 const handAt = new Vector3();
 
 // ── (plan 73 4.6) the life look's legs fitted to the rig's ─────────────────────────────────────────
@@ -1319,6 +1326,18 @@ export class PersonModel {
     const axis = _ga.copy(wp).sub(s0).normalize();
     const P = (wr.parent as Bone).getWorldQuaternion(_gp);
     const k = sh.getWorldScale(_wfS).x || 1;
+    // (her torso, in her chest's own space: an upright elliptic cylinder as wide as her shoulders and the
+    // arm's thickness, its front ahead of the spine — the arm kept out of it)
+    const chest = this.bones.chest;
+    chest.updateWorldMatrix(true, false);
+    _gci.copy(chest.matrixWorld).invert();
+    const half = Math.abs(this.fit.rest[`shoulder${S}`][0]) + 0.03;
+    const inBody = (v: Vector3) => {
+      const c = _gcv.copy(v).applyMatrix4(_gci);
+      if (c.y > 0.12 || c.y < -0.5) return 0;
+      const r2 = (c.x / half) ** 2 + ((c.z - TORSO.at) / TORSO.depth) ** 2;
+      return Math.max(0, 1 - r2);
+    };
     // (each swing tried: what the wrist's left to do, past its reach, first; the elbow up past the shoulder's
     // height or in across the chest after; then the least swing off the pole's)
     let best = 0;
@@ -1329,12 +1348,27 @@ export class PersonModel {
       _gl.copy(_gr).multiply(P).invert().multiply(q);
       const e = _wo.copy(E).applyQuaternion(_gr);
       const up = Math.max(0, e.y / k);
+      // (the elbow, the upper arm's middle, the forearm's: none inside her)
+      const eW = _gev.copy(e).add(s0);
+      const body =
+        inBody(eW) +
+        inBody(_gmv.copy(e).multiplyScalar(0.5).add(s0)) +
+        inBody(_gmv.copy(eW).add(wp).multiplyScalar(0.5));
       // (past a wrist's reach, hard; then a forearm twisted off its neutral and a wrist bent, as a person minds
       // them — at ease, a little; a palm turned up by the forearm or a wrist bent double, a lot)
       const over = this.wristOver(S, _gl);
       const pt = _wp;
+      // (a forearm twisted far is the worst of it on the life body: its skin pinches thin toward the wrist —
+      // past ~50° the twist costs as much as a wrist past its reach)
+      const tw = Math.abs(pt.twist);
       const cost =
-        4 * over + 0.35 * Math.abs(pt.twist) + 0.25 * Math.hypot(pt.bend, pt.side) + 2 * up + 0.04 * Math.abs(th);
+        4 * over +
+        0.8 * tw +
+        4 * Math.max(0, tw - 0.87) +
+        0.25 * Math.hypot(pt.bend, pt.side) +
+        2 * up +
+        12 * body +
+        0.04 * Math.abs(th);
       if (cost < bestCost - 1e-6) {
         bestCost = cost;
         best = th;

@@ -16,7 +16,7 @@ import { useEffect, useRef, useState } from "react";
 // Keys: 1–7 the views (side, left, front, back, shoulder, hands, hands-left) · A aim · T the torch
 // window.__revolver = { ready, check(), set({...}) } for the checks (e2e/revolver-bench.mts).
 
-const VIEWS = ["side", "left", "front", "back", "shoulder", "hands", "hands-left"] as const;
+const VIEWS = ["side", "left", "front", "back", "shoulder", "hands", "hands-left", "over"] as const;
 type View = (typeof VIEWS)[number];
 type Pose = "ready" | "aim" | "reload";
 interface State {
@@ -32,8 +32,10 @@ interface State {
   kick: number;
   trigger: number;
   /** (phase 5) a hit taken (`actT` s since) or a roll (`actT` of the way through it) — the hold lets go */
-  act: "" | "hit" | "roll";
+  act: "" | "hit" | "roll" | "heard";
   actT: number;
+  /** (phase 6) her facing turned from +z (rad): the hold at any turn */
+  yaw: number;
   /** the reload scrubbed, 0..1 (the server's three steps: open, load, shut) */
   t: number;
   view: View;
@@ -66,6 +68,7 @@ function Bench({ q }: { q: URLSearchParams }) {
     trigger: Number(q.get("trigger") ?? 0),
     act: (q.get("act") as State["act"]) ?? "",
     actT: Number(q.get("actT") ?? 0),
+    yaw: Number(q.get("yaw") ?? 0),
     t: Number(q.get("t") ?? 0.5),
     view: (q.get("view") as View) ?? "side",
   });
@@ -159,7 +162,7 @@ function Bench({ q }: { q: URLSearchParams }) {
         ...DEFAULT_AVATAR,
         gender,
         hair: gender === "masculine" ? "short" : "bob",
-        top: "coat",
+        top: q.get("top") ?? "coat",
         topColor: "#3d4a5c",
         bottom: "jeans",
         bottomColor: "#2a2f3a",
@@ -190,6 +193,8 @@ function Bench({ q }: { q: URLSearchParams }) {
         shoulder: [Math.PI, 0.18, 1.6, 1.5],
         hands: [-0.9, 0.25, 0.75, 0],
         "hands-left": [0.9, 0.25, 0.75, 0],
+        // (close behind her right shoulder, as the aimed game camera has her: her forearms)
+        over: [Math.PI + 0.35, 0.12, 0.85, 1.35],
       };
       const gunAt = new T.Vector3();
       let lastView: View | null = null;
@@ -211,19 +216,21 @@ function Bench({ q }: { q: URLSearchParams }) {
               ? gunAt
               : gunAt.set(person.root.position.x, h, person.root.position.z);
         // (the game's: over her right shoulder, looking ahead, its wider lens)
-        const fov = s.view === "shoulder" ? 55 : 35;
+        const fov = s.view === "shoulder" || s.view === "over" ? 55 : 35;
         if (cam.fov !== fov) {
           cam.fov = fov;
           cam.updateProjectionMatrix();
         }
-        if (s.view === "shoulder") {
-          // (it turns with her look: aiming, AIM_BLADE left of the way her feet face)
+        if (s.view === "shoulder" || s.view === "over") {
+          // (it turns with her look: aiming, AIM_BLADE left of the way her feet face; "over": closer in, as
+          // the aimed camera)
           const yaw = s.pose === "aim" ? AIM_BLADE : 0;
           const ax = Math.sin(yaw);
           const az = Math.cos(yaw);
           // (her right: −x turned with it)
           const r = person.root.position;
-          cam.position.set(r.x - az * 0.62 - ax * 1.5, 1.72, r.z + ax * 0.62 - az * 1.5);
+          const [side, back, up] = s.view === "over" ? [0.42, 0.75, 1.62] : [0.62, 1.5, 1.72];
+          cam.position.set(r.x - az * side - ax * back, up, r.z + ax * side - az * back);
           cam.lookAt(cam.position.x + ax * 5, 1.45, cam.position.z + az * 5);
           return;
         }
@@ -257,9 +264,16 @@ function Bench({ q }: { q: URLSearchParams }) {
         seen.camZ = p.y + 2;
         // (the draw: its clock set where the slider has it — the put-away's, the gun gone from her state)
         p.gun = s.away ? "" : "revolver";
+        p.angle = Math.PI / 2 + s.yaw;
         const P = p as { hit?: { t: number; yaw: number }; verb?: { kind: string; t: number } };
         P.hit = s.act === "hit" ? { t: s.actT, yaw: 0.6 } : undefined;
         P.verb = s.act === "roll" ? { kind: "roll", t: s.actT } : undefined;
+        // (a shot heard 4 m off, 30° to her left of the way she faces, `actT` s ago)
+        const ha = p.angle + 1.2;
+        (p as { heard?: unknown }).heard =
+          s.act === "heard"
+            ? { t: s.actT, x: p.x + Math.cos(ha) * 4, y: p.y + Math.sin(ha) * 4, loud: true }
+            : undefined;
         // (put all the way away: in the holster, the hand let go)
         if (s.away) P3.holsterT = s.draw <= 0 ? 1 : Math.max(0, (1 - s.draw) * 0.25 - dt);
         else if (s.draw < 1) P3.drawT = Math.max(0, s.draw * 0.35 - dt);
