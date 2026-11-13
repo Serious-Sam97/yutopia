@@ -18,7 +18,8 @@ signed off 2026-11-13** ("seguir assim"); **F6 decided again: on the AK's diagon
 down reached his calves). **Phase 1 (the grip) built 2026-11-13** — the sniper on the long hold (`tp/sniper-hold.ts`
 `SN_LONG`), the bench's `gun=sniper`; its stills `design/guns/p83/bench-1-hold.png`; committed 5178a55. **Phase 2 (put
 away, drawn) built 2026-11-13** — stills `design/guns/p83/bench-2-carry.png`; committed c9adbeb. **Phase 3 (the aim)
-built 2026-11-13** — stills `design/guns/p83/bench-3-aim.png`. Not committed.
+built 2026-11-13** — stills `design/guns/p83/bench-3-aim.png`; committed de08538. **Phase 4 (the bolt) built
+2026-11-13** — stills `design/guns/p83/bench-4-bolt.png`. Not committed.
 
 ## Where we are — read from the code and the bench
 
@@ -255,6 +256,19 @@ shut) whatever F3–F4.
 4. **The bolt** — the right hand's timeline on `ARM.bolt` (0.85 s): to the knob, the bolt turned up, run back
    (the case thrown out to the right — falling, its sound on the floor or the snow), forward, down, back to the
    grip; her cheek kept; seen by others; the bench drives `ARM.bolt`.
+   Done in phase 4:
+   - **One timeline** (`tp/sniper-hold.ts` `SN_BOLT`, `snBoltAt`) on `ARM.bolt`'s 0.85 s: her right hand off the
+     grip to the knob (0–0.13 s), the bolt turned up (–0.28), run back (–0.43), home (0.47–0.6), down (–0.7),
+     her hand back on the grip (–0.85); the bolt part posed by it (`poseGun`'s `bolt`, the hand's place taken
+     from the bolt's own frame as it turns and runs); played to its end if the server's step ends sooner. The
+     rifle stays at her shoulder, her cheek on it, her left hand on the fore-end; others see the same.
+   - **Her right hand on the knob** (`SN_KNOB_HAND`, in the bolt's frame): to its right, behind and under it,
+     the palm to the gun, the knob in the curl of her index and thumb. The mocks' turn bent her wrist 11–43°
+     past its reach through the cycle; a search of small turns of it (29° in, 29° up): within its reach at every
+     moment on both bodies, her forearm turned ≤34°, her hand ≤2 mm off the knob, no finger or arm in the gun,
+     her eye on the scope's axis throughout.
+   - Its sounds on the hand's moments (`dark/arms.ts`): the bolt open at 0.14 s, the case out at 0.4, shut at
+     0.56. The bench plays it: `act: "bolt"`, `actT` 0–1 of the 0.85 s.
 5. **The reload** — one timeline on the server's steps (`ARM.open`, the rounds, `ARM.shut`): raised (F4), the
    bolt back by the right hand, each round from F5 to the action and down into the magazine, the bolt home,
    back down; let go mid-reload; others see it.

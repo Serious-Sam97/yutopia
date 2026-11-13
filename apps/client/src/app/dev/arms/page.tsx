@@ -33,7 +33,7 @@ interface State {
   kick: number;
   trigger: number;
   /** (phase 5) a hit taken (`actT` s since) or a roll (`actT` of the way through it) — the hold lets go */
-  act: "" | "hit" | "roll" | "heard" | "vault" | "slide" | "sit";
+  act: "" | "hit" | "roll" | "heard" | "vault" | "slide" | "sit" | "bolt";
   actT: number;
   /** (phase 6) her facing turned from +z (rad): the hold at any turn */
   yaw: number;
@@ -103,7 +103,8 @@ function Bench({ q }: { q: URLSearchParams }) {
       const { SG_LONG } = await import("@/world/tp/shotgun-hold");
       const akHold = await import("@/world/tp/ak-hold");
       const { AK_LONG } = akHold;
-      const { SN_LONG } = await import("@/world/tp/sniper-hold");
+      const snHold = await import("@/world/tp/sniper-hold");
+      const { SN_LONG } = snHold;
       // (each long gun's hold, by its key)
       const LONGS: Record<string, typeof AK_LONG> = { shotgun: SG_LONG, ak47: AK_LONG, sniper: SN_LONG };
       const { lineAt, longInHand } = await import("@/world/tp/long-hold");
@@ -277,6 +278,7 @@ function Bench({ q }: { q: URLSearchParams }) {
       const GAIT = ["still", "walk", "jog", "sprint"] as const;
       const SPEED = [0, 1.4, 3.2, 5.4];
       const P3 = person as unknown as {
+        boltT: number;
         drawT: number;
         holsterT: number;
         revLoadT: number;
@@ -335,6 +337,11 @@ function Bench({ q }: { q: URLSearchParams }) {
                 ? 7
                 : 6
               : 3;
+        // (plan 83: the sniper's bolt worked after a shot — `act: "bolt"`, its 0.85 s scrubbed by `actT`)
+        if (s.act === "bolt") {
+          (p as { arm?: number }).arm = 4;
+          P3.boltT = Math.max(0, s.actT * 0.85 - dt);
+        }
         if (reload && GUN === "shotgun") P3.sgLoadT = Math.max(0, sgT - dt);
         else if (reload && GUN === "ak47") {
           // (live: its own clock — the empty let fall as it passes; scrubbed: set)
@@ -520,7 +527,7 @@ function Bench({ q }: { q: URLSearchParams }) {
           return { min, where };
         },
         // (the long guns' numbers, to try others live — refit() puts the gun in the hand by them again)
-        long: { SG_LONG, AK_LONG, SN_LONG, akHold },
+        long: { SG_LONG, AK_LONG, SN_LONG, akHold, snHold },
         refit: () => {
           const g = (person as unknown as { gun: { key: string; model: { root: import("three").Object3D } } | null })
             .gun;

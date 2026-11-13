@@ -146,3 +146,45 @@ export const SN_LONG: LongSpec = {
     },
   },
 };
+
+// ── the bolt (plan 83 phase 4, F3a) ─────────────────────────────────────────────────────────────────────
+// After a shot (Player.arm ARM.bolt, shared ARMS.sniper.bolt — 0.85 s, from 0.2 s after it; no shot till it's
+// home): her right hand off the grip to the knob, the bolt turned up, run back (the case out), run home and
+// turned down, her hand back to the grip — the rifle kept at her shoulder, her cheek on it, her left hand on
+// the fore-end (all three games, the real thing). s:
+//   0–0.13      her right hand from the grip to the knob
+//   0.13–0.28   the bolt turned up (poseGun's `bolt` 0 → 0.35)
+//   0.28–0.43   run back (0.35 → 1) — the case thrown out
+//   0.47–0.6    run home (1 → 0.35)
+//   0.6–0.7     turned down (0.35 → 0)
+//   0.7–0.85    her hand back to the grip
+export const SN_BOLT = { reach: 0.13, up: 0.28, back: 0.43, home: 0.6, down: 0.7, len: 0.85 };
+/** Her right hand on the bolt's knob (the bolt's own frame, its origin on the bore 6.6 cm over the grip — the
+ *  knob turns and runs with it): its palm's middle to the knob's right, under it and behind it, the palm to the
+ *  gun, the knob in the curl of her index and thumb; the fingers' way ahead, up and in over the bolt, the index
+ *  side up. (The mocks' — the fingers ahead and in, level — bent her wrist 11–43° past its reach through the
+ *  cycle; turned 29° in and 29° up, within it, her forearm turned ≤33°) */
+export const SN_KNOB_HAND = {
+  palm: new Vector3(-0.041, 0.022 - SN_BZ, 0.095),
+  along: new Vector3(0.834, 0.458, -0.309).normalize(),
+  index: new Vector3(-0.233, 0.964, -0.127).normalize(),
+};
+const sm = (a: number, b: number, t: number) => {
+  const k = Math.max(0, Math.min(1, (t - a) / (b - a)));
+  return k * k * (3 - 2 * k);
+};
+/** Where the bolt's timeline has the hand and the bolt `t` s in: her right hand off the grip toward the knob
+ *  (0 on the grip, 1 on the knob), the bolt (poseGun's `bolt`: 0–0.35 turned up, 0.35–1 run back) */
+export function snBoltAt(t: number): { hand: number; bolt: number } {
+  const T = SN_BOLT;
+  const hand = sm(0, T.reach, t) * (1 - sm(T.down, T.len, t));
+  const bolt =
+    t < T.up
+      ? 0.35 * sm(T.reach, T.up, t)
+      : t < T.home - 0.13
+        ? 0.35 + 0.65 * sm(T.up, T.back, t)
+        : t < T.home
+          ? 1 - 0.65 * sm(T.home - 0.13, T.home, t)
+          : 0.35 * (1 - sm(T.home, T.down, t));
+  return { hand, bolt };
+}

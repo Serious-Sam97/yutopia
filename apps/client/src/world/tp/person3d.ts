@@ -105,7 +105,7 @@ import {
   SHELL_PALM,
   sgLoadAt,
 } from "./shotgun-hold";
-import { SN_LONG } from "./sniper-hold";
+import { SN_BOLT, SN_KNOB_HAND, SN_LONG, snBoltAt } from "./sniper-hold";
 
 type Chars = NonNullable<ReturnType<typeof chars>>;
 type SwimM = NonNullable<ReturnType<Chars["swimNow"]>>;
@@ -1529,10 +1529,11 @@ export class Person3D {
     const loading =
       (p.gun === "shotgun" || ak || sniper) && !aiming && (ak || sniper ? akOpen : (this.gunFx?.reload ?? 0) > 0.3);
     // (the sniper's bolt worked after a shot — Player.arm: the left hand over to it, up, back, home)
-    this.boltT = sniper && p.arm === ARM_BOLT ? this.boltT + dt : 0;
+    // (plan 83 phase 4: its timeline played to its end — the hand back on the grip — if the server's step ends
+    // a little sooner)
+    this.boltT = sniper && (p.arm === ARM_BOLT || (this.boltT > 0 && this.boltT < SN_BOLT.len)) ? this.boltT + dt : 0;
     const cyc = Math.min(1, this.boltT / SNIPER.bolt);
-    const smooth = (x: number) => x * x * (3 - 2 * x);
-    this.boltCycle = this.boltT > 0 ? (cyc < 0.5 ? smooth(cyc / 0.5) : 1 - smooth((cyc - 0.5) / 0.5)) : 0;
+    this.boltCycle = this.boltT > 0 ? snBoltAt(this.boltT).bolt : 0;
     // (plan 79: a life revolver held at the low ready too, not aimed — both hands, AW2's)
     const ready = !!gun?.inHand && !shotgun && !aiming && (this.gunFx?.reload ?? 0) < 0.3;
     // (put away: the hands down to the side first — gunFrame drops it after HOLSTER_S)
@@ -2602,6 +2603,36 @@ export class Person3D {
       }
       m.hold("R", null);
     }
+    // (plan 83 phase 4: the sniper's bolt worked by her right hand — off the grip to the knob, with it as it's
+    // turned up, run back and home and turned down, back to the grip; the rifle where it is at her shoulder, her
+    // cheek on it)
+    const SB = LS === SN_LONG && this.boltT > 0 ? snBoltAt(this.boltT) : null;
+    const boltPart = SB && SB.hand > 0.001 ? gun.model.parts.bolt : undefined;
+    const bolting = !!boltPart;
+    if (SB && boltPart) {
+      this.placeGun(rMg);
+      this.revFree = true;
+      // (the bolt where the timeline has it now: its knob's where the hand goes)
+      poseGun(gun.model, "sniper", { ...(this.gunFx ?? {}), bolt: SB.bolt });
+      boltPart.updateWorldMatrix(true, false);
+      boltPart.matrixWorld.decompose(akV2, akQ1, akS);
+      akV1.copy(SN_KNOB_HAND.palm).applyMatrix4(boltPart.matrixWorld);
+      if (
+        m.wristFor(
+          "R",
+          akV1,
+          akV2.copy(SN_KNOB_HAND.along).applyQuaternion(akQ1),
+          akV3.copy(SN_KNOB_HAND.index).applyQuaternion(akQ1),
+          akAtB,
+          akQB,
+        )
+      ) {
+        rAt.lerp(akAtB, SB.hand);
+        rTurn.slerp(akQB, SB.hand);
+        if (SB.hand > 0.5) rNow = "knob";
+      }
+      if (SB.hand > 0.5) m.hold("R", null);
+    }
     // (off the wrist, its fingers closed round nothing — a shell's pinched, below)
     if (L && rNow !== "grip") m.hold("R", null);
     // (reloading, the stock's along her side under her arm: the arm kept out of it — the butt to behind the
@@ -2615,15 +2646,15 @@ export class Person3D {
       sgAvoid.r = A.r * B.k;
       avoid = sgAvoid;
     }
-    m.gripTo("R", rAt, rTurn, rw, [-1, -0.5, -0.5], cheap, avoid, racking || grabbing ? 0.25 : undefined);
+    m.gripTo("R", rAt, rTurn, rw, [-1, -0.5, -0.5], cheap, avoid, racking || grabbing || bolting ? 0.25 : undefined);
     // (racking: the gun where it was — the hand's gone off it; its fingers hooked over the knob)
     if (grabbing) {
       this.placeGun(rMg);
       if (!cheap && !GB?.hold) m.fingersTo("R", 1.0);
     }
-    if (racking) {
+    if (racking || bolting) {
       this.placeGun(rMg);
-      if (!cheap && rNow === "knob") m.fingersTo("R", 0.95);
+      if (!cheap && rNow === "knob") m.fingersTo("R", bolting ? 0.9 : 0.95);
     }
     if (L) {
       this.placeGun(rMg);

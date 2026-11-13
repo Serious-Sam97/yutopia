@@ -924,10 +924,12 @@ export class Arms {
         }
         if (p.gun === "sniper") {
           // (the bolt up and back — its case out — and home; opened to load, a round at a time, shut)
+          // (plan 83 phase 4: on the hand's moments — tp/sniper-hold.ts SN_BOLT: up and back from 0.13 s, the
+          // case out as it's back, home and down by 0.7)
           if (arm === ARM.bolt) {
-            this.voices.gun("sniper-bolt-open", at, 15);
-            setTimeout(() => this.voices.gun("sniper-bolt-close", at, 15), 420);
-            if (me) setTimeout(() => this.brass("case", 1), 200);
+            setTimeout(() => this.voices.gun("sniper-bolt-open", at, 15), 140);
+            setTimeout(() => this.voices.gun("sniper-bolt-close", at, 15), 560);
+            if (me) setTimeout(() => this.brass("case", 1), 400);
           } else if (opened && !wasOpen) {
             this.voices.gun("sniper-bolt-open", at, 15);
             loadIn("sniper");
