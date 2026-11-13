@@ -20,7 +20,8 @@ down reached his calves). **Phase 1 (the grip) built 2026-11-13** — the sniper
 away, drawn) built 2026-11-13** — stills `design/guns/p83/bench-2-carry.png`; committed c9adbeb. **Phase 3 (the aim)
 built 2026-11-13** — stills `design/guns/p83/bench-3-aim.png`; committed de08538. **Phase 4 (the bolt) built
 2026-11-13** — stills `design/guns/p83/bench-4-bolt.png`; committed 4c1680b. **Phase 5 (the reload) built
-2026-11-13** — stills `design/guns/p83/bench-5-reload.png`. Not committed.
+2026-11-13** — stills `design/guns/p83/bench-5-reload.png`; committed 8ad433d. **Phase 6 (everything else) built
+2026-11-13** — stills `design/guns/p83/bench-6-moves.png`. Not committed.
 
 ## Where we are — read from the code and the bench
 
@@ -302,6 +303,18 @@ shut) whatever F3–F4.
 6. **Everything else** — port arms in a roll, a vault, a slide, struck (1.27 m: the floor — plan 81's fourth
    feedback); sat, swimming, busy; the far people's cheaper hold. The Daybreak stays on the old path till its
    own plan.
+   Done in phase 6:
+   - **Its own port arms** (`SN_PORT_ARMS`, `LongSpec.port`): it had none — the double-barrel's (upright across
+     her chest) put her right wrist 67–78° past its reach, her left forearm turned 68–79°, and the rifle 24–35 cm
+     through the floor in a roll; the AK's (across her chest, the muzzle to her left) had the wrists within their
+     reach but the rifle 6–10 cm through the floor and her right forearm 3–5 cm into the stock's belly.
+     Searched about the AK's (72 tried): higher and nearer her, the muzzle down to her left ~21° and a little
+     ahead, her left hand over its top (palm down, the AK's): **over the floor all through a roll (1.9 cm at its
+     lowest on the feminine body, 8.7 on the masculine), the wrists within their reach, the forearms turned
+     ≤50°, nothing in the gun** (her right forearm 4 mm off the stock's belly at the roll's deepest) — in a
+     roll, a vault, a slide, struck.
+   - Sat, swimming, busy, down: let go of (plan 81's), in her right hand; the far people's cheaper hold (plan
+     81's).
 7. **Checks** — `e2e/sniper-bench.spec.ts` (the strict audit, both bodies: carried, aimed at the game's whole
    reach, the bolt's and the reload's moments, drawn, kept, sat), `e2e/sniper-two.spec.ts` (the world, two of
    us: carried, aimed, a shot and its bolt, reloaded, put away — on both screens), stills in the world; all the

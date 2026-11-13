@@ -6,7 +6,7 @@
 // eye on the scope's axis (F2a). The numbers the phase 0 mocks' (tools/art/guns/mock83.py, signed off 2026-11-13
 // — Blender's x, y, z → the game's x, z, −y), in the gun's own frame here (x along the bore, y its top, z its
 // right; m; its origin the top of the pistol grip — tools/art/guns/guns.py sniper()).
-import { Vector3 } from "three";
+import { Quaternion, Vector3 } from "three";
 import type { HeldShape } from "../chars/props";
 import { AK_SLING } from "./ak-hold";
 import type { LongSpec, SlingSpec } from "./long-hold";
@@ -75,6 +75,23 @@ export const SN_SLING: SlingSpec = {
   ],
 };
 
+// ── everything else (plan 83 phase 6) ─────────────────────────────────────────────────────────────────
+/** In a whole-body move — a roll, a vault, a slide, Flowmotion — or struck: held across her chest in its frame
+ *  (the grip's place, its turn — x her left, y up, z ahead), as the AK's (tp/ak-hold.ts AK_PORT) but higher and
+ *  nearer her, the muzzle down to her left (~21°) and a little ahead: its 1.27 m was through the floor at the
+ *  AK's (6–10 cm in a roll), at the double-barrel's 24–35 — here over it all the roll (1–9 cm), the stock's belly
+ *  off her right forearm; her left hand over its top (palm down — the AK's), the thumb along its left */
+export const SN_PORT_ARMS = {
+  at: new Vector3(0.07, 0.04, 0.3),
+  turn: new Quaternion(0.0092, -0.0491, -0.1837, 0.9817).normalize(),
+  fore: {
+    y: 0.075,
+    along: new Vector3(0.4, -0.35, 0.85).normalize(),
+    index: new Vector3(-1, 0, 0),
+    thumb: [0.01, 0.05, -0.04] as [number, number, number],
+  },
+};
+
 /** The sniper as tp/long-hold.ts holds a long gun */
 export const SN_LONG: LongSpec = {
   key: "sniper",
@@ -110,6 +127,7 @@ export const SN_LONG: LongSpec = {
   aimS: 0.3,
   leftCarried: true,
   sling: SN_SLING,
+  port: SN_PORT_ARMS,
   avoid: null,
   check: {
     boxes: [
