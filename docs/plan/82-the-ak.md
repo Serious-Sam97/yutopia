@@ -18,7 +18,8 @@ asked. **Phase 0 (the mocks) rendered 2026-11-12**: `tools/art/guns/mock82.py` �
 `sheet-82-reload.png`, `sheet-82-sling.png` — signed off 2026-11-12. **Phase 1 (the grip) built 2026-11-12** —
 plan 81's hold made per gun (`tp/long-hold.ts`), the AK on it (`tp/ak-hold.ts`); its stills
 `design/guns/p82/bench-1-hold.png`; committed 6bf13fb. **Phase 2 (the carry, the sling) built 2026-11-12** — stills
-`design/guns/p82/bench-2-carry.png`. Follows plan 81 (the double-barrel: the long gun the
+`design/guns/p82/bench-2-carry.png`; committed dda3bd5. **Phase 3 (the aim) built 2026-11-12** — stills
+`design/guns/p82/bench-3-aim.png`. Follows plan 81 (the double-barrel: the long gun the
 anchor, carried at her side, the left shoulder brought forward to reach, the forearms' twist minded, the
 stock kept out of her, port arms through whole-body moves, the reload as one timeline, `ARM.shut`), plan 80
 (the revolver: `PersonModel.gripTo`, the hand sockets, the bench) and plan 79 phase 5 (the Blender AK, its
@@ -179,6 +180,24 @@ Plan 81's machinery, for the AK:
 3. **The aim** (F2, F3) — the butt in the pocket at every pitch (her trunk bent with it), the cheek on the
    stock; the torch's hold; full auto's kick round after round (the muzzle climbing, the hands held on);
    dry fire.
+   Found in phase 3:
+   - **Her cheek on the stock** (`LongSpec.cheek`, the AK's; `Person3D.cheekTo`): aimed, her eye was 8 cm over
+     the sights and 4 cm left of them — her head upright beside the stock, the stock across the top of her
+     shoulder (the double-barrel's the same). Now her neck tips her head over and down onto the comb till her
+     right eye is on the sight line (a step at a time from the eye's own place, `PersonModel.eyeAt`) — at most
+     30°: the neck alone would have needed 50–70°; the rest the gun brought up and in to her face (up to 7 cm up,
+     6 cm in — a frame's share at a time, let back down while her neck can do it alone). Her eye on the sights
+     at every pitch (−0.9…0.9), both bodies.
+   - **The pocket goes with her trunk** (`aim.lean`): aiming up or down her trunk leans with the pitch, and the
+     butt's place stayed level from her shoulder's joint — the butt slid up or down her chest and her eye came off
+     the sights 4–7 cm. Her face turned up or down with the aim as her trunk does (0.8 of it), her eyes the rest.
+     The double-barrel's untouched (its `lean` 0, no cheek).
+   - **The torch** in the left fist under the receiver, along the bore (phase 1's socket): her wrist 41–47°
+     sideways aimed with it (6–12° past), ≤1 cm short walking.
+   - **Full auto**: a round every 0.1 s, its kick as Arms fades it (the bench's now the same: up in 35 ms,
+     away at 18/s) — the muzzle up 3° and back 1.2 cm a round, her trunk rocked; through a 3 s burst the hands
+     stay on (≤0.8 cm), no arm in the gun, the elbows moving less than the wrists (no flick). The climb is the
+     look's (Arms), the gun along it. Dry fire: the trigger finger pulls (unchanged).
 4. **The reload** (F4, F5) — one timeline; the magazines (the empty, the pouch); racked under when dry; a
    shot mid-way; the server's steps as decided; everyone sees it; the sounds on its moments.
 5. **Everything else held** — plan 81's: kept across her chest in a roll, a vault, a slide, struck; let go

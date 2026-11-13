@@ -48,8 +48,14 @@ export interface LongSpec {
       }
     | { kind: "ready"; pocket: [number, number, number]; down: number; across: number; run: number };
   /** Aimed: the pocket this far up (the butt's heel at the shoulder's top), the trunk bent with the pitch this
-   *  much of it, on a fuller chest the pocket this much further ahead */
-  aim: { up: number; trunk: number; bust: number };
+   *  much of it, on a fuller chest the pocket this much further ahead; the pocket turned with her trunk's lean
+   *  this much of it (it stays on her shoulder — 0: held level from her shoulder's joint, as the double-
+   *  barrel's) */
+  aim: { up: number; trunk: number; bust: number; lean?: number };
+  /** Aimed, her cheek down on the stock: her right eye brought onto the sight line — this high over the bore's
+   *  frame (its y) and this far across (its z) — by her neck and head tipped down and over (null: the head only
+   *  turned along the look) */
+  cheek: { y: number; z: number } | null;
   /** Her trunk turned this far right of the gun's way: carried, aimed (rad) */
   blade: { ready: number; aim: number };
   /** Her left shoulder brought forward this far with her left hand on it (m) */
@@ -103,7 +109,7 @@ export function longHold(
   LS: LongSpec,
   B: BodyFrame,
   shoulderR: Vector3,
-  s: { aiming: boolean; pitch: number; run: number; bust?: number },
+  s: { aiming: boolean; pitch: number; run: number; bust?: number; lean?: number },
   out: { grip: Vector3; f: Vector3; u: Vector3; q: Quaternion },
 ): void {
   const { up, ahead, left } = B;
@@ -133,10 +139,16 @@ export function longHold(
     const sn = Math.sin(s.pitch);
     out.f.copy(ahead).multiplyScalar(c).addScaledVector(up, sn);
     out.u.copy(up).multiplyScalar(c).addScaledVector(ahead, -sn);
+    // (turned with her trunk leaning back or forward with the aim: the butt stays where it is on her)
+    const L = (LS.aim.lean ?? 0) * (s.lean ?? 0);
+    const cl = Math.cos(L);
+    const sl = Math.sin(L);
+    const a = (0.07 + LS.aim.bust * (s.bust ?? 0)) * B.k;
+    const u = (LS.aim.up - 0.025) * B.k;
     pocket
       .addScaledVector(left, 0.06 * B.k)
-      .addScaledVector(ahead, (0.07 + LS.aim.bust * (s.bust ?? 0)) * B.k)
-      .addScaledVector(up, (LS.aim.up - 0.025) * B.k);
+      .addScaledVector(ahead, a * cl - u * sl)
+      .addScaledVector(up, a * sl + u * cl);
   }
   gunQuat(out.f, out.u, out.q);
   // (the grip point: the pocket less the butt's place in the gun)

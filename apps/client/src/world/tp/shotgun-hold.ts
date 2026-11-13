@@ -266,6 +266,7 @@ export const SG_LONG: LongSpec = {
   butt: SG_BUTT,
   carry: { kind: "side", ...SG_CARRY },
   aim: SG_AIM,
+  cheek: null,
   blade: { ready: SG_READY.blade, aim: SG_BLADE },
   protract: SG_PROTRACT,
   kick: SG_KICK,

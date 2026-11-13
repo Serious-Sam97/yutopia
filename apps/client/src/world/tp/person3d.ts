@@ -136,6 +136,20 @@ function slungAt(SL: SlingSpec, p: PersonIn, out: Vector3): Vector3 {
   return out;
 }
 const lgSlung = new Vector3();
+/** (plan 82) Aimed, a cheek on the stock: her neck turned at most this far (rad); the gun brought up and in
+ *  to her face the rest — at most this far (its up, its right: m), this much of what's left a frame */
+const CHEEK_NECK = 0.52;
+const CHEEK_GUN = { y: [-0.02, 0.07] as const, z: [-0.06, 0.02] as const, gain: 0.25, back: 0.03 };
+/** (plan 82) cheekTo's */
+const chP = new Vector3();
+const chQ = new Quaternion();
+const chS = new Vector3();
+const chX = new Vector3();
+const chY = new Vector3();
+const chZ = new Vector3();
+const chE = new Vector3();
+const chQ0 = new Quaternion();
+const chT = new Quaternion();
 /** (plan 82) the long gun's hold eased in this frame: her root's turn, from her right shoulder */
 const lgFW = new Matrix4();
 /** (plan 81) the stock the right arm keeps out of, reloading and carried */
@@ -2233,7 +2247,14 @@ export class Person3D {
       LS,
       B,
       sR.getWorldPosition(rv4),
-      { aiming, pitch: p.pitch ?? 0, run, bust: p.avatar.gender === "feminine" ? 1 : 0 },
+      {
+        aiming,
+        pitch: p.pitch ?? 0,
+        run,
+        bust: p.avatar.gender === "feminine" ? 1 : 0,
+        // (her trunk's lean back with the aim's pitch)
+        lean: LS.aim.trunk * (p.pitch ?? 0) * this.lgAimK,
+      },
       H,
     );
     // (eased to it in the gun's own time — ARMS.shotgun.aim — in her own frame, from her right shoulder: the
@@ -2256,6 +2277,12 @@ export class Person3D {
     }
     H.grip.copy(E.pos).applyMatrix4(RW);
     H.q.copy(rq1).multiply(E.quat);
+    // (aimed with a cheek on the stock: the gun up and in to her face as far as her neck didn't bring her eye
+    // down to the sights — cheekTo's)
+    if (LS.cheek && this.lgAimK > 0.01)
+      H.grip
+        .addScaledVector(rv1.set(0, 1, 0).applyQuaternion(H.q), this.lgCheek.y * this.lgAimK)
+        .addScaledVector(rv1.set(0, 0, 1).applyQuaternion(H.q), this.lgCheek.z * this.lgAimK);
     // a shot's kick (past the ease — it's quicker): the muzzle up about the butt, the gun back into the shoulder
     if (kick > 0) {
       const butt = rv1.copy(LS.butt).multiplyScalar(B.k).applyQuaternion(H.q).add(H.grip);
@@ -2485,7 +2512,11 @@ export class Person3D {
       }
     }
     this.lgAimK += ((aiming ? 1 : 0) - this.lgAimK) * (1 - Math.exp(-dt / (LS.aimS / 3)));
-    if (this.lgAimK > 0.01 && !cheap) this.headToSights(p, this.lgAimK * w);
+    if (this.lgAimK > 0.01 && !cheap) {
+      this.headToSights(p, this.lgAimK * w, LS.cheek ? 0.6 : 1);
+      // (plan 82: her cheek down on the stock, her eye on the sights)
+      this.cheekTo(LS, this.lgAimK * w);
+    }
     this.revHeld = true;
     // (the torch the left hand's — under the fore-end in it, placed there by torchFrame)
     this.revHarries = !!this.torch && lw > 0.5;
@@ -2604,10 +2635,89 @@ export class Person3D {
 
   /** (plan 80 phase 3) Aimed: the neck and the head turned onto the sights — the look, a touch down to the
    *  sight line under the eyes (`k` of the way) */
-  private headToSights(p: PersonIn, k: number) {
-    this.lookDir(p, hdTo).y -= 0.12;
+  private headToSights(p: PersonIn, k: number, pitchShare = 1) {
+    this.lookDir(p, hdTo);
+    // (plan 82: her cheek down on the stock — the face less far up or down with the aim than the look, her
+    // eyes the rest: turned all the way, the eye rose off the sights 4–7 cm aiming up)
+    if (pitchShare !== 1) {
+      const a = Math.asin(Math.max(-1, Math.min(1, hdTo.y))) * pitchShare;
+      const h = Math.hypot(hdTo.x, hdTo.z) || 1;
+      hdTo.set((hdTo.x / h) * Math.cos(a), Math.sin(a), (hdTo.z / h) * Math.cos(a));
+    }
+    hdTo.y -= 0.12;
     this.headToward(hdTo.normalize(), k);
   }
+  /** (plan 82) Aimed, her cheek down on the stock: her neck tipped over toward it (about the bore) and down
+   *  (about the gun's right) till her right eye is on its sight line (LongSpec.cheek, the gun's frame) — solved
+   *  a step at a time from where the eye is, each turn at most so far; `k` of the way */
+  private cheekTo(LS: LongSpec, k: number) {
+    const C = LS.cheek;
+    const m = this.model;
+    const neck = m.bone("neck");
+    const g = this.gun?.model.root;
+    if (!C || !neck?.parent || !g || k <= 0) return;
+    g.updateWorldMatrix(true, false);
+    g.matrixWorld.decompose(chP, chQ, chS);
+    const s = chS.x;
+    const ax = chX.set(1, 0, 0).applyQuaternion(chQ);
+    const ay = chY.set(0, 1, 0).applyQuaternion(chQ);
+    const az = chZ.set(0, 0, 1).applyQuaternion(chQ);
+    chQ0.copy(neck.quaternion);
+    chT.identity();
+    for (let it = 0; it < 3; it++) {
+      neck.updateWorldMatrix(true, true);
+      const eye = m.eyeAt("R", chE);
+      if (!eye) break;
+      const rel = rv1.copy(eye).sub(chP);
+      const dy = C.y * s - rel.dot(ay);
+      const dz = C.z * s - rel.dot(az);
+      const v = rv2.copy(eye).sub(neck.getWorldPosition(rv3));
+      // (a turn t about an axis moves the eye t × (axis × v): about the bore — over; about its right — down)
+      const j1 = rv4.crossVectors(ax, v);
+      const j2 = rv5.crossVectors(az, v);
+      const a11 = j1.dot(ay);
+      const a12 = j2.dot(ay);
+      const a21 = j1.dot(az);
+      const a22 = j2.dot(az);
+      const det = a11 * a22 - a12 * a21;
+      if (Math.abs(det) < 1e-6) break;
+      const t1 = Math.max(-0.3, Math.min(0.3, (dy * a22 - a12 * dz) / det));
+      const t2 = Math.max(-0.3, Math.min(0.3, (a11 * dz - a21 * dy) / det));
+      rq1.setFromAxisAngle(ax, t1).multiply(rq2.setFromAxisAngle(az, t2));
+      chT.premultiply(rq1);
+      neck.parent.getWorldQuaternion(rq2);
+      neck.quaternion.premultiply(rq3.copy(rq1).premultiply(rTurn.copy(rq2).invert()).multiply(rq2));
+    }
+    // (her neck at most ~30° all told — a cheek on a stock, not a head bent double; `k` of it)
+    const ang = 2 * Math.acos(Math.min(1, Math.abs(chT.w)));
+    this.cheekAng = ang;
+    const most = ang > CHEEK_NECK ? CHEEK_NECK / ang : 1;
+    rq1.identity().slerp(chT, k * most);
+    neck.quaternion.copy(chQ0);
+    neck.parent.getWorldQuaternion(rq2);
+    neck.quaternion.premultiply(rq1.premultiply(rTurn.copy(rq2).invert()).multiply(rq2));
+    // what her neck left: the gun brought up to her face the rest (the butt up and in on her shoulder) — the
+    // next frames', a little at a time (longHands); her neck short of its most, the gun let back down a little
+    // a frame — so her neck does what it can and the gun only the rest
+    if (k < 0.9) return;
+    const o = this.lgCheek;
+    if (most >= 1) {
+      o.multiplyScalar(1 - CHEEK_GUN.back);
+      return;
+    }
+    neck.updateWorldMatrix(true, true);
+    const eye = m.eyeAt("R", chE);
+    if (!eye) return;
+    const rel = rv1.copy(eye).sub(chP);
+    const dy = C.y * s - rel.dot(ay);
+    const dz = C.z * s - rel.dot(az);
+    o.y = Math.max(CHEEK_GUN.y[0], Math.min(CHEEK_GUN.y[1], o.y - dy * CHEEK_GUN.gain));
+    o.z = Math.max(CHEEK_GUN.z[0], Math.min(CHEEK_GUN.z[1], o.z - dz * CHEEK_GUN.gain));
+  }
+  /** (plan 82) how far the neck turned for the cheek this frame (rad); the gun brought to her face (its up, its
+   *  right — m) */
+  cheekAng = 0;
+  private lgCheek = new Vector3();
   /** The neck and the head turned toward a way (the world's, unit) — `k` of the way */
   private headToward(dir: Vector3, k: number) {
     const m = this.model;

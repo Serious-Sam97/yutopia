@@ -310,7 +310,9 @@ function Bench({ q }: { q: URLSearchParams }) {
         fx.loaded = GUN === "shotgun" ? 2 : reload && t < 0.55 ? 0 : 6;
         // (a shot: fired by the button, its kick fading as Arms fades it — or held where the sliders are)
         const since = (performance.now() - fired) / 1000;
-        const shot = since < 0.4 ? Math.max(0, 1 - since / 0.25) : 0;
+        // (as Arms has a shot's kick fade — dark/arms.ts: up in 35 ms, then away at the gun's own rate)
+        const fade = GUN === "shotgun" ? 9 : GUN === "ak47" ? 18 : GUN === "sniper" ? 7 : 13;
+        const shot = since < 0 ? 0 : since < 0.035 ? since / 0.035 : Math.exp(-(since - 0.035) * fade);
         fx.kick = Math.max(s.kick, shot);
         fx.trigger = Math.max(s.trigger, since < 0.12 ? 1 : 0);
         (person as unknown as { gunFx: typeof fx | null }).gunFx = fx;
@@ -351,6 +353,8 @@ function Bench({ q }: { q: URLSearchParams }) {
           return person.ready && !!person.revolverCheck(p as never);
         },
         check: () => person.revolverCheck(p as never),
+        // (a shot, as the button: its kick and the trigger — a burst is one every ARMS' rate)
+        fire: () => fire.current(),
         // (plan 81: how much of the double-barrel's stock is inside her — points through its wood, each a ray
         // ahead of her: an odd count of a mesh's own crossings, inside it; how far behind its front)
         stockIn: () => {

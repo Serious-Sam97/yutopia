@@ -1953,6 +1953,13 @@ export class PersonModel {
     return this.root.worldToLocal(out);
   }
 
+  /** (plan 82) A life eye's place in the world (its bone's — the matrices as they are), or null on any other
+   *  body */
+  eyeAt(S: "L" | "R", out: Vector3): Vector3 | null {
+    const e = this.life?.eyeBones?.[S === "L" ? 0 : 1];
+    return e ? e.getWorldPosition(out) : null;
+  }
+
   /** The right ear in the head bone's space (an earbud hangs there), or null before it's shown. */
   earPoint(): [number, number, number] | null {
     return this.fit?.ear ?? null;

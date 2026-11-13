@@ -117,8 +117,10 @@ export const AK_LONG: LongSpec = {
   // (F1b, the mocks': the butt out at the shoulder's front — in toward the neck, the stock's heel was in his
   // chest — the muzzle ~26° down and across him a little: so his left hand reaches with his shoulders square)
   carry: { kind: "ready", pocket: [0.03, -0.03, 0.07], down: 0.45, across: 0.28, run: 0.15 },
-  aim: { up: 0.05, trunk: 0.8, bust: 0.0175 },
+  aim: { up: 0.05, trunk: 0.8, bust: 0.0175, lean: 1 },
   // (near square: the mocks' 0.08 carried, 0.25 aimed — plan 81's 0.5 had her side-on)
+  // (the rear and front sights' tops ~10.4 cm over the grip's top: her eye a little over them)
+  cheek: { y: 0.106, z: 0 },
   blade: { ready: 0.08, aim: 0.25 },
   // (her left shoulder forward: at the double-barrel's 0.065 her left hand fell 1–3 cm short of the receiver)
   protract: 0.09,
