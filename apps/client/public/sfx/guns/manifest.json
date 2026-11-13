@@ -480,5 +480,92 @@
         "daybreak-cell-in-1.mp3"
       ]
     }
+  ],
+  "mag-floor": [
+    {
+      "id": "123010",
+      "user": "j1987",
+      "title": "magazinedrop.wav",
+      "url": "https://freesound.org/people/j1987/sounds/123010/",
+      "files": [
+        "mag-floor-a1.mp3",
+        "mag-floor-a2.mp3",
+        "mag-floor-a3.mp3",
+        "mag-floor-a4.mp3",
+        "mag-floor-a5.mp3",
+        "mag-floor-a6.mp3"
+      ]
+    },
+    {
+      "id": "444402",
+      "user": "MootMcnoodles",
+      "title": "Magazine Hitting Surface.wav",
+      "url": "https://freesound.org/people/MootMcnoodles/sounds/444402/",
+      "files": [
+        "mag-floor-b1.mp3"
+      ]
+    },
+    {
+      "id": "460853",
+      "user": "MPierluissi",
+      "title": "GUNRif_M1 GARAND CLIP DROP_MP.wav",
+      "url": "https://freesound.org/people/MPierluissi/sounds/460853/",
+      "files": [
+        "mag-floor-c1.mp3",
+        "mag-floor-c2.mp3",
+        "mag-floor-c3.mp3",
+        "mag-floor-c4.mp3"
+      ]
+    },
+    {
+      "id": "484906",
+      "user": "SpaceJoe",
+      "title": "Book Drop - 10",
+      "url": "https://freesound.org/people/SpaceJoe/sounds/484906/",
+      "files": [
+        "mag-floor-d1.mp3"
+      ]
+    },
+    {
+      "id": "483683",
+      "user": "SpaceJoe",
+      "title": "Moving Box of Objects - 1.wav",
+      "url": "https://freesound.org/people/SpaceJoe/sounds/483683/",
+      "files": [
+        "mag-floor-e1.mp3"
+      ]
+    }
+  ],
+  "mag-snow": [
+    {
+      "id": "640204",
+      "user": "7of9Designs",
+      "title": "Heavy Metal Thud on Ground",
+      "url": "https://freesound.org/people/7of9Designs/sounds/640204/",
+      "files": [
+        "mag-snow-a1.mp3"
+      ]
+    },
+    {
+      "id": "460853",
+      "user": "MPierluissi",
+      "title": "GUNRif_M1 GARAND CLIP DROP_MP.wav",
+      "url": "https://freesound.org/people/MPierluissi/sounds/460853/",
+      "files": [
+        "mag-snow-b1.mp3",
+        "mag-snow-b2.mp3",
+        "mag-snow-b3.mp3",
+        "mag-snow-b4.mp3"
+      ]
+    },
+    {
+      "id": "395224",
+      "user": "AGC66",
+      "title": "wireingrass1.wav",
+      "url": "https://freesound.org/people/AGC66/sounds/395224/",
+      "files": [
+        "mag-snow-c1.mp3"
+      ]
+    }
   ]
 }

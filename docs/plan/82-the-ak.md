@@ -269,6 +269,40 @@ Plan 81's machinery, for the AK:
    - Aimed nearly straight up (pitch 0.9) her left hand is up to 2 cm short of the receiver; in port arms her
      left forearm is turned up to 52° and her right wrist 11–33° past its reach (the best of the poses tried).
 
+   **Made perfect (2026-11-13, the user: "deixe perfeito").** A strict audit of every state on both bodies
+   found 67 (feminine) and 65 (masculine) flaws: wrists past their reach, forearms turned over 50°, fingers or
+   arms in the gun, hands short of their places. Now none:
+   - **Racked by the right hand** (`RACK_HAND`, `RACK_REACH`): the right hand leaves the grip, takes the handle
+     on the right of the receiver, pulls it and lets it go (from 0.22 s after the magazine clicks home), then
+     back to the grip; the gun freed meanwhile (the left hand holds it on the magazine); her right shoulder
+     brought 12 cm forward. The left hand over the top had her wrist 13–50° past its reach, her fingers in the
+     receiver and her forearm turned 55–59°; the right arm alone was 7 cm short.
+   - **Port arms across her chest** (`AK_PORT`, `LongSpec.port.fore`): the muzzle out to her left and down a
+     little, her left hand palm down over the handguard; her left shoulder kept forward. Pinned upright to her
+     chest the gun went 20–60 cm into the floor in a roll (the double-barrel still 21 cm); now it stays above
+     it, and no wrist or forearm past its limits.
+   - **Drawn by the stock first** (`SlingSpec.grab`): the right hand reaches back to the stock, brings the gun
+     round, and moves on to the grip from 0.12 to 0.22 of the draw. Taking the grip on her back had her wrist
+     17–56° past its reach however the gun lay.
+   - The grip turned 28° aslant and rolled out (`AK_GRIP`); the fore end's hand lower and turned (`AK_FORE`
+     y 0.027, along (0.8, 0, 0.6)); her left shoulder 10 cm forward aimed (1 cm short at 9 cm aiming up);
+     the magazine hand (`MAG_HAND`) and the pouch (`AK_POUCH`, canted 17°) refitted; `gripTo` takes a `step`
+     so her elbow follows a moving hand.
+   - The aim range is the game's (pitch −0.55…0.7: `view.ts` and the aiming camera's limits); ±0.9 can't be
+     reached and isn't checked.
+   - **The empty magazine heard landing**: `mag-floor` indoors, `mag-snow` outdoors, 0.4 s after the drop. They
+     are CC0 picks from Freesound (`tools/sfx-guns.json`, cut by `tools/sfx-weather.mjs`), the first of each
+     played. They are my defaults; the user can hear the others on `/dev/gun-sound` and choose.
+   - `e2e/ak-bench.spec.ts` rewritten strict, both bodies: held — no hand over 1 cm short, no wrist over 3°
+     past its reach, no forearm turned over 53°, no arm or finger in the gun; moving (draw, reload, rack) a
+     little looser (1.2 cm, 6°). Aimed at every turn × torch × pitch: her eye within 1.5 cm of the sights'
+     height. Also covers the draw's states, the reload's and the rack's moments, a burst, a roll, a vault, a
+     slide, a hit, the gun above the floor through the roll, and let go sat. Stills:
+     `design/guns/p82/bench-7-perfect.png`.
+   Still at the edge (inside the limits): aimed lowest (−0.55) the feminine left forearm turns 52°; the
+   reload's left thumb rests 3 mm into the skin's mark; a forearm grazes the gun by under 1 cm while the hand
+   moves.
+
 ## Risks
 
 - Full auto: ten rounds a second, each kicking the gun — the hands must ride it without the elbows

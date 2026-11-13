@@ -86,6 +86,9 @@ const GUN_LEVEL = {
   "case-floor": 0.3,
   "shell-snow": 0.3,
   "shell-floor": 0.35,
+  // (plan 82: the AK's empty magazine let fall)
+  "mag-snow": 0.4,
+  "mag-floor": 0.45,
 } as const;
 export type GunSound = keyof typeof GUN_LEVEL;
 const isShotSound = (s: GunSound) => /-(near|in|far|fire|burst|burst-far)$/.test(s);

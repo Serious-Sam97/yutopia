@@ -11,14 +11,15 @@ import type { HeldShape } from "../chars/props";
 import type { LongSpec, SlingSpec } from "./long-hold";
 
 /** The right hand round the pistol grip: its palm's middle on the grip's right side ~4 cm down it, the
- *  fingers' way, the index side — the hand round it a little aslant, its fingers' way 25° up from square to
- *  the grip (so 11° over the bore) and its index side back from up the grip as much: the AK's grip is near
- *  upright and her forearm comes up to it from below — the mocks' 52° down had the wrist bent 82° sideways in
- *  the game, square to the grip (as the revolver's) 45°; aslant it's 15–33°, within a wrist's reach */
+ *  fingers' way, the index side — the hand round it a little aslant, its fingers' way 28° up from square to
+ *  the grip (so 14° over the bore) and its index side back from up the grip as much, rolled a little out: the
+ *  AK's grip is near upright and her forearm comes up to it from below — the mocks' 52° down had the wrist bent
+ *  82° sideways in the game, square to the grip (as the revolver's) 45°; aslant it's within a wrist's reach, and
+ *  rolled out her forearm's turn stays under 50° (51–52 not) */
 export const AK_GRIP = {
   palm: new Vector3(-0.006, -0.042, 0.012),
-  along: new Vector3(0.98, 0.19, -0.05).normalize(),
-  index: new Vector3(-0.2, 0.98, 0).normalize(),
+  along: new Vector3(0.969, 0.244, -0.05).normalize(),
+  index: new Vector3(-0.25, 0.968, -0.15).normalize(),
 };
 /** …what the fingers close round: the grip, raked back ~13°, 4.6 cm front to back, 3.1 across — round,
  *  its middle 4.5 cm down */
@@ -91,23 +92,36 @@ export const AK_SLING: SlingSpec = {
   bust: 0.005,
   // (crossed over the double-barrel when she carries both: their middles met in her back)
   over: 0.085,
+  // (taken off her back by its stock by her right hip — as from a holster — then her hand on to the pistol grip
+  // as it hangs at her side: reaching back to the grip on her back, her wrist was bent 30–50° past its reach)
+  grab: {
+    palm: new Vector3(-0.22, 0.02, 0.035),
+    along: new Vector3(0, -0.3, 0.95).normalize(),
+    index: new Vector3(1, 0, 0),
+    // (on to the grip early, as it comes off her back: later, swung round her side, her forearm crossed the gun)
+    until: 0.12,
+    to: 0.22,
+  },
 };
 
 // ── everything else (plan 82 phase 5) ─────────────────────────────────────────────────────────────────
-/** In a whole-body move — a roll, a vault, a slide, Flowmotion — or struck: pulled in across her chest (port
- *  arms, her chest's frame: x her left, y up, z ahead — it goes round with her), both hands on: the grip by her
- *  right hip's front, the muzzle up, left and ahead — further ahead than the double-barrel's (SG_PORT, nearly
- *  upright): held so by its pistol grip her right wrist was bent 53–76° past its reach and her left forearm
- *  turned 65°; this way 11–28°, within 52° */
-const PORT_F = new Vector3(0.55, 0.5, 0.67).normalize();
+/** In a whole-body move — a roll, a vault, a slide, Flowmotion — or struck: held across her chest in its frame
+ *  (the grip's place, its turn), the muzzle to her left and a little up and ahead, so it goes round with her
+ *  and lies along her shoulders when she's upside down mid-roll — her left hand over the top of it, palm down
+ *  (its palm's middle this high on the gun, the fingers' way, the index side), the thumb along its left side.
+ *  Pulled across her chest as the double-barrel is (nearly upright, or further ahead), her right wrist on the
+ *  pistol grip was bent 10–47° past its reach; her low ready pinned to her chest put its muzzle 20–60 cm into
+ *  the floor through a roll (the double-barrel's 21) — across it, none */
 export const AK_PORT = {
-  at: new Vector3(-0.08, -0.24, 0.3),
-  turn: new Quaternion().setFromRotationMatrix(
-    (() => {
-      const u = new Vector3(0, 0, -1).addScaledVector(PORT_F, PORT_F.z).normalize();
-      return new Matrix4().makeBasis(PORT_F, u, new Vector3().crossVectors(PORT_F, u));
-    })(),
-  ),
+  at: new Vector3(0.07, -0.08, 0.36),
+  turn: new Quaternion(-0.0085, -0.098, -0.147, 0.9842).normalize(),
+  fore: {
+    y: 0.09,
+    along: new Vector3(0.4, -0.35, 0.85).normalize(),
+    index: new Vector3(-1, 0, 0),
+    // (high on its left side, ahead: lower its last joint went into the receiver)
+    thumb: [0.01, 0.06, -0.048] as [number, number, number],
+  },
 };
 
 /** The AK as tp/long-hold.ts holds a long gun */
@@ -120,11 +134,12 @@ export const AK_LONG: LongSpec = {
     pivot: new Vector3(),
     y: AK_FORE.y,
     x: AK_FORE.x,
-    // (the fingers' way across under it and ahead, the index side tipped up: square across, the palm flat up,
-    // her forearm was turned palm-up past 60° and the wrist bent 45–60° sideways — this way 33–46°, 28–41°; any
-    // more ahead or tipped and the index's joints went into the receiver, the little finger into the magazine)
-    along: new Vector3(0.65, 0, 0.76).normalize(),
-    index: new Vector3(1, 0.25, 0).normalize(),
+    // (the fingers' way ahead and across under it, the index side tipped up a little: square across, the palm
+    // flat up, her forearm was turned palm-up past 60° and the wrist bent 45–60° sideways; at (0.65, 0, 0.76)
+    // tipped 0.25 it was still 1–12° past its reach aimed — this way within it, the forearm ≤50°; tipped more
+    // and the index's joints went into the receiver, less and the wrist bent past again)
+    along: new Vector3(0.8, 0, 0.6).normalize(),
+    index: new Vector3(1, 0.15, 0).normalize(),
     shape: AK_FORE_SHAPE,
     // (along the left side, ahead)
     thumb: [0.08, 0.042, -0.034],
@@ -139,8 +154,9 @@ export const AK_LONG: LongSpec = {
   // (the rear and front sights' tops ~10.4 cm over the grip's top: her eye a little over them)
   cheek: { y: 0.106, z: 0 },
   blade: { ready: 0.08, aim: 0.25 },
-  // (her left shoulder forward: at the double-barrel's 0.065 her left hand fell 1–3 cm short of the receiver)
-  protract: 0.09,
+  // (her left shoulder forward: at the double-barrel's 0.065 her left hand fell 1–3 cm short of the receiver; at
+  // 0.09 aiming up, a centimetre)
+  protract: 0.1,
   // (a round's — full auto's ten a second: small, phase 3 tunes it)
   kick: { flip: 0.05, back: 0.012, rock: 0.025 },
   // (shared ARMS.ak47.aim)
@@ -213,21 +229,30 @@ export const MAG = { lug: AK_LUG, out: 0.42, hook: 0.3, clear: 0.06, hookDown: 0
  *  catch (the gun's frame) */
 export const MAG_HAND = {
   palm: new Vector3(0.13, -0.07, -0.034),
-  along: new Vector3(0.7, -0.7, -0.2).normalize(),
+  // (the fingers' way more ahead and round under: at (0.7, −0.7, −0.2) her wrist was bent 6–9° past its reach
+  // holding it)
+  along: new Vector3(0.75, -0.6, -0.35).normalize(),
   index: new Vector3(0.3, 1, 0).normalize(),
-  thumb: new Vector3(0.075, 0.008, -0.012),
+  // (on the catch, behind the magazine and under the receiver — at 7.5 cm along it was in the magazine)
+  thumb: new Vector3(0.055, 0, -0.012),
   shape: { round: false as const, half: [0.026, 0.06, 0.014] as [number, number, number], cz: 0 },
   /** the shape's middle on the magazine (its frame) */
   at: new Vector3(0.13, -0.07, 0),
 };
-/** The left hand on the charging handle run dry: over the top of the receiver, its palm down on the dust
- *  cover, its fingers down the right side to the knob — swept back with the carrier (the gun's frame, m). Under
- *  the rifle, palm up (the mocks', F4a's), with the gun in close her forearm was turned 90–140° and her wrist
- *  bent 80–120° past its reach; over the top, ~0° and within it */
+/** Run dry, the charging handle racked by her RIGHT hand — off the pistol grip forward along the gun's right side
+ *  to the knob, its fingers hooked over it, swept back with the carrier and let go, back to the grip; her left
+ *  hand holding the gun by the new magazine meanwhile (the gun off her right hand: placed where the timeline has
+ *  it). Racked by her left hand over the top, it had to go round the gun from the magazine and back (through it,
+ *  or her wrist bent 30–50° past its reach getting round); under the rifle, her forearm turned 90–140°. The right
+ *  palm's middle by the knob, the fingers' way ahead, the index side up (the gun's frame, m); how far back the
+ *  knob goes with the carrier (guns3d AK_CARRIER) */
+/** …her right shoulder brought forward for it (m — in close, the knob was 60 cm from it, her arm 46; the gun
+ *  drawn back in to her hand instead, her left wrist on the magazine was turned 70°) */
+export const RACK_REACH = 0.12;
 export const RACK_HAND = {
-  palm: new Vector3(0.17, 0.095, 0.012),
-  along: new Vector3(0, -0.35, 0.94).normalize(),
-  index: new Vector3(-1, 0, 0),
+  palm: new Vector3(0.155, 0.062, 0.07),
+  along: new Vector3(1, 0.1, 0).normalize(),
+  index: new Vector3(0, 1, 0),
   back: 0.075,
 };
 /** The pouch on her belt at her left hip's front (F5a; the hips' own space: x her left, y up, z ahead): its
@@ -238,13 +263,17 @@ export const RACK_HAND = {
  *  before it's carried off. Out on her hip's front (at 14 cm it was half in her) */
 export const AK_POUCH = {
   at: new Vector3(0.16, -0.13, 0.175),
-  turn: new Quaternion().setFromRotationMatrix(
-    new Matrix4().makeBasis(
-      new Vector3(0.75, 0, -0.66).normalize(),
-      new Vector3(0, 1, 0),
-      new Vector3(0.66, 0, 0.75).normalize(),
-    ),
-  ),
+  // (canted 17° on the belt, its bottom back: standing straight, her hand took one with her wrist bent 15–18° past
+  // its reach)
+  turn: new Quaternion()
+    .setFromRotationMatrix(
+      new Matrix4().makeBasis(
+        new Vector3(0.75, 0, -0.66).normalize(),
+        new Vector3(0, 1, 0),
+        new Vector3(0.66, 0, 0.75).normalize(),
+      ),
+    )
+    .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), 0.3)),
   box: [0.13, 0.2, 0.065] as [number, number, number],
   mags: [new Vector3(0.0075, 0.115, 0.0155), new Vector3(0.0075, 0.115, -0.0155)],
   magTurn: new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI),
@@ -285,15 +314,28 @@ export function akLoadAt(t: number, rack: boolean) {
   else if (t < AK_LOAD.drop) hand = { a: "mag", b: "mag", k: 0 };
   else if (t < 0.95) hand = { a: "let", b: "pouch", k: sm(AK_LOAD.drop, 0.95, t) };
   else if (t < AK_CLOSE) hand = { a: "mag", b: "mag", k: 0 };
-  else if (!rack) hand = { a: "mag", b: "fore", k: sm(AK_CLOSE, AK_CLOSE + 0.25, t) };
-  else if (t < AK_CLOSE + 0.3) hand = { a: "mag", b: "knob", k: sm(AK_CLOSE, AK_CLOSE + 0.3, t) };
-  else if (t < AK_CLOSE + 0.57) hand = { a: "knob", b: "knob", k: 0 };
-  else hand = { a: "knob", b: "fore", k: sm(AK_CLOSE + 0.57, AK_CLOSE + 0.8, t) };
+  // (shouldered: on the magazine till the gun's turned back up most of the way — back on the receiver of a gun
+  // still rolled for loading, her forearm turned 57°)
+  else if (!rack) hand = { a: "mag", b: "fore", k: sm(AK_CLOSE + 0.12, AK_CLOSE + 0.38, t) };
+  // (run dry: on the magazine while her right hand racks the handle, back on the receiver as the gun comes up)
+  else if (t < AK_CLOSE + 0.65) hand = { a: "mag", b: "mag", k: 0 };
+  else hand = { a: "mag", b: "fore", k: sm(AK_CLOSE + 0.72, AK_CLOSE + 1.0, t) };
+  // her right hand: on the grip — run dry, off it to the handle, racked, and back
+  const right =
+    !rack || t < AK_CLOSE
+      ? { a: "grip", b: "grip", k: 0 }
+      : t < AK_CLOSE + 0.2
+        ? { a: "grip", b: "knob", k: sm(AK_CLOSE, AK_CLOSE + 0.2, t) }
+        : t < AK_CLOSE + 0.47
+          ? { a: "knob", b: "knob", k: 0 }
+          : { a: "knob", b: "grip", k: sm(AK_CLOSE + 0.47, AK_CLOSE + 0.65, t) };
   // the carrier: swept back with the hand, let go (it slams home)
   const bolt = !rack
     ? 0
     : t < AK_CLOSE + AK_LOAD.pull
-      ? sm(AK_CLOSE + 0.3, AK_CLOSE + AK_LOAD.pull, t)
+      ? sm(AK_CLOSE + 0.22, AK_CLOSE + AK_LOAD.pull, t)
       : 1 - Math.max(0, Math.min(1, (t - AK_CLOSE - AK_LOAD.pull) / 0.05));
-  return { gun, mag, hand, bolt, end, look: sm(0, 0.3, t) * (1 - sm(AK_CLOSE, AK_CLOSE + 0.3, t)) };
+  // (her right shoulder forward while her hand's on the handle)
+  const rackIn = rack ? sm(AK_CLOSE, AK_CLOSE + 0.2, t) * (1 - sm(AK_CLOSE + 0.47, AK_CLOSE + 0.65, t)) : 0;
+  return { gun, mag, hand, right, bolt, end, rackIn, look: sm(0, 0.3, t) * (1 - sm(AK_CLOSE, AK_CLOSE + 0.3, t)) };
 }

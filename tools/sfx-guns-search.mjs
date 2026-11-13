@@ -95,6 +95,37 @@ const SLOTS = {
     4,
   ],
   "shell-floor": ["shot", ["shotgun shell drop", "shotgun shell falling floor"], [0.1, 20], 4],
+  // (plan 82: the AK's empty magazine let fall — on a floor, on snow or the ground)
+  "mag-floor": [
+    "shot",
+    [
+      "magazine drop",
+      "mag drop",
+      "ak magazine drop",
+      "magazine drop floor",
+      "rifle magazine drop",
+      "clip drop",
+      "magazine falling",
+      "empty magazine falls",
+      "metal magazine drop",
+    ],
+    [0.1, 20],
+    5,
+  ],
+  "mag-snow": [
+    "shot",
+    [
+      "magazine drop dirt",
+      "magazine drop ground",
+      "mag drop dirt",
+      "metal object drop dirt",
+      "metal object drop snow",
+      "drop into snow",
+      "metal drop grass",
+    ],
+    [0.1, 20],
+    5,
+  ],
   "revolver-open": ["shot", ["revolver cylinder open", "revolver cylinder swing out", "revolver reload"], [0.2, 15], 4],
   "revolver-eject": [
     "shot",

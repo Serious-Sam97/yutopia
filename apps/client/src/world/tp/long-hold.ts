@@ -74,7 +74,13 @@ export interface LongSpec {
   sling: SlingSpec | null;
   /** In a whole-body move or struck, pulled in across her chest (port arms — her chest's frame): its grip's
    *  place, its turn (none: the double-barrel's, tp/shotgun-hold.ts SG_PORT) */
-  port?: { at: Vector3; turn: Quaternion };
+  port?: {
+    at: Vector3;
+    turn: Quaternion;
+    /** its left hand's place on it there, if not as held (over the top: its palm's middle this high, the
+     *  fingers' way, the index side, the thumb's place) */
+    fore?: { y: number; along: Vector3; index: Vector3; thumb: [number, number, number] };
+  };
   /** The bench's checks: the left fingers against boxes on the gun (its middle x, y and half-sizes), the
    *  forearms against rods on it (a → b, x and y, `r` round), each in the gun's frame or (`fore`) the fore
    *  part's (less its pivot); the stock's side profile (its top and bottom lines by x, from `x[0]` to `x[1]`,
@@ -104,6 +110,9 @@ export interface SlingSpec {
   bust: number;
   /** with the other long gun slung too, this one over it — this much further out from her back (m) */
   over: number;
+  /** drawn by another place on it first (her right hand round it — its palm's middle, the fingers' way, the
+   *  index side; the gun's frame) till this much of the draw, then on to the grip by `to` */
+  grab?: { palm: Vector3; along: Vector3; index: Vector3; until: number; to: number };
 }
 
 /** The gun's turn (the world's) and its grip point, for its butt in the right shoulder's pocket (aimed, or at

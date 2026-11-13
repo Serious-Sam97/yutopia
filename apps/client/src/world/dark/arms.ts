@@ -940,9 +940,10 @@ export class Arms {
           if (opened && !wasOpen) {
             const still = () => this.arms.get(p.sid)?.arm === ARM.open;
             setTimeout(() => still() && this.voices.gun("ak-mag-out", at, 15), AK_RELOAD.out * 1000);
+            // (its empty landing at her feet — tp/ak-hold.ts DROP: let fall at `drop`, down in ~0.4 s)
             setTimeout(
-              () => still() && this.voices.gun(this.walker.outside ? "shell-snow" : "shell-floor", at, 12),
-              (AK_RELOAD.drop + 0.38) * 1000,
+              () => still() && this.voices.gun(this.walker.outside ? "mag-snow" : "mag-floor", at, 12),
+              (AK_RELOAD.drop + 0.4) * 1000,
             );
             setTimeout(() => still() && this.voices.gun("ak-mag-in", at, 15), AK_RELOAD.home * 1000);
           } else if (arm === ARM.rack) setTimeout(() => this.voices.gun("ak-rack", at, 15), AK_RELOAD.pull * 1000);

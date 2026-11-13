@@ -1927,5 +1927,95 @@
       "note": "\"shotgun garage\""
     },
     "pick": 2
+  },
+  "mag-floor": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "123010",
+        "user": "j1987",
+        "title": "magazinedrop.wav",
+        "preview": "https://cdn.freesound.org/previews/123/123010_367313-hq.mp3",
+        "url": "https://freesound.org/people/j1987/sounds/123010/",
+        "dur": 18.1,
+        "downloads": 1272,
+        "note": "\"magazine drop\""
+      },
+      {
+        "id": "444402",
+        "user": "MootMcnoodles",
+        "title": "Magazine Hitting Surface.wav",
+        "preview": "https://cdn.freesound.org/previews/444/444402_7231443-hq.mp3",
+        "url": "https://freesound.org/people/MootMcnoodles/sounds/444402/",
+        "dur": 0.3,
+        "downloads": 433,
+        "note": "\"magazine drop\""
+      },
+      {
+        "id": "460853",
+        "user": "MPierluissi",
+        "title": "GUNRif_M1 GARAND CLIP DROP_MP.wav",
+        "preview": "https://cdn.freesound.org/previews/460/460853_4986614-hq.mp3",
+        "url": "https://freesound.org/people/MPierluissi/sounds/460853/",
+        "dur": 10.1,
+        "downloads": 174,
+        "note": "\"magazine drop\""
+      },
+      {
+        "id": "484906",
+        "user": "SpaceJoe",
+        "title": "Book Drop - 10",
+        "preview": "https://cdn.freesound.org/previews/484/484906_6150892-hq.mp3",
+        "url": "https://freesound.org/people/SpaceJoe/sounds/484906/",
+        "dur": 0.8,
+        "downloads": 880,
+        "note": "\"magazine drop\""
+      },
+      {
+        "id": "483683",
+        "user": "SpaceJoe",
+        "title": "Moving Box of Objects - 1.wav",
+        "preview": "https://cdn.freesound.org/previews/483/483683_6150892-hq.mp3",
+        "url": "https://freesound.org/people/SpaceJoe/sounds/483683/",
+        "dur": 1.2,
+        "downloads": 149,
+        "note": "\"magazine drop\""
+      }
+    ]
+  },
+  "mag-snow": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "640204",
+        "user": "7of9Designs",
+        "title": "Heavy Metal Thud on Ground",
+        "preview": "https://cdn.freesound.org/previews/640/640204_12131847-hq.mp3",
+        "url": "https://freesound.org/people/7of9Designs/sounds/640204/",
+        "dur": 0.7,
+        "downloads": 1443,
+        "note": "\"metal object drop dirt\""
+      },
+      {
+        "id": "460853",
+        "user": "MPierluissi",
+        "title": "GUNRif_M1 GARAND CLIP DROP_MP.wav",
+        "preview": "https://cdn.freesound.org/previews/460/460853_4986614-hq.mp3",
+        "url": "https://freesound.org/people/MPierluissi/sounds/460853/",
+        "dur": 10.1,
+        "downloads": 174,
+        "note": "\"magazine drop ground\""
+      },
+      {
+        "id": "395224",
+        "user": "AGC66",
+        "title": "wireingrass1.wav",
+        "preview": "https://cdn.freesound.org/previews/395/395224_7366360-hq.mp3",
+        "url": "https://freesound.org/people/AGC66/sounds/395224/",
+        "dur": 3.4,
+        "downloads": 393,
+        "note": "\"metal drop grass\""
+      }
+    ]
   }
 }

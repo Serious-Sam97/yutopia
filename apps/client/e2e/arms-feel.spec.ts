@@ -105,7 +105,8 @@ test("the feel: kick and settle, the spread, an early click, over the shoulder, 
   await expect.poll(async () => (await me(page)).loaded).toBe(5);
   await page.waitForTimeout(800);
   const heard = await sounds();
-  if (heard.ctx === "running") expect(heard.n, "the guns' recordings decoded").toBe(43);
+  // (plan 82: and the AK's empty magazine landing, on a floor and on snow — 45)
+  if (heard.ctx === "running") expect(heard.n, "the guns' recordings decoded").toBe(45);
   else console.log(`[arms-feel] audio ${heard.ctx}: the recordings not checked`);
 
   // fired fast, the ticks open; still, they close again
