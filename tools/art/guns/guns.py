@@ -631,6 +631,9 @@ def sniper():
     g = Gun("sniper")
     BZ = 0.066
     SZ = 0.112  # the scope's axis
+    # (the scope 3 cm back on its rail, the rail 1.5 cm longer behind: at the eye's place on the stock, aimed,
+    # its eyepiece was 12–17 cm ahead of it — a real one's ~9 — plan 83 phase 3)
+    DX = -0.03
     X = Vector((1, 0, 0))
     g.part("receiver", lambda bm: lathe(bm, [(0, 0), (0, 0.016), (0.003, 0.0175), (0.226, 0.0175), (0.23, 0.016), (0.23, 0)], (-0.01, 0, BZ), X, 40), "blued", 0.0,
            cut=lambda bm: box(bm, 0.03, 0.1, BZ - 0.004, BZ + 0.024, 0.03, y=-0.015))
@@ -639,7 +642,7 @@ def sniper():
     g.part("bolt-arm", lambda bm: tube(bm, (0.005, -0.008, BZ), (-0.004, -0.058, BZ - 0.026), 0.0042, 0.0036, seg=14), "steel")
     g.part("bolt-knob", lambda bm: lathe(bm, [(0, 0), (0, 0.006), (0.004, 0.0105), (0.016, 0.0105), (0.02, 0.006), (0.02, 0)], (-0.004, -0.058, BZ - 0.026), Vector((-0.2, -0.6, -0.5)), 24), "polymer", check=(-1, 1, -1, 1))
     # the rail, slotted
-    g.part("rail", lambda bm: prism(bm, [(-0.02, BZ + 0.016), (0.225, BZ + 0.016), (0.225, BZ + 0.026), (-0.02, BZ + 0.026)], 0.021), "parker", 0.0008, cut=lambda bm: [box(bm, x, x + 0.0052, BZ + 0.021, BZ + 0.03, 0.03) for x in [-0.012 + 0.01 * i for i in range(23)]])
+    g.part("rail", lambda bm: prism(bm, [(-0.035, BZ + 0.016), (0.225, BZ + 0.016), (0.225, BZ + 0.026), (-0.035, BZ + 0.026)], 0.021), "parker", 0.0008, cut=lambda bm: [box(bm, x, x + 0.0052, BZ + 0.021, BZ + 0.03, 0.03) for x in [-0.027 + 0.01 * i for i in range(24)]])
     # the barrel: heavy, fluted; the brake, ported
     def flutes(bm):
         for i in range(6):
@@ -666,24 +669,24 @@ def sniper():
     # the scope: the eyepiece's rubber, the power ring (knurled), the tube, the saddle and its
     # turrets, the objective bell and the sunshade; the lenses; the rings on the rail
     def scope(bm):
-        lathe(bm, [(0, 0), (0, 0.0175), (0.004, 0.0195), (0.028, 0.0195), (0.034, 0.0172), (0.04, 0.0135), (0.29, 0.0127), (0.33, 0.016), (0.36, 0.0255), (0.44, 0.0255), (0.44, 0.0)], (-0.12, 0, SZ), X, 48)
+        lathe(bm, [(0, 0), (0, 0.0175), (0.004, 0.0195), (0.028, 0.0195), (0.034, 0.0172), (0.04, 0.0135), (0.29, 0.0127), (0.33, 0.016), (0.36, 0.0255), (0.44, 0.0255), (0.44, 0.0)], (-0.12 + DX, 0, SZ), X, 48)
 
     g.part("scope", scope, "blued", 0.0004)
-    g.part("eyecup", lambda bm: lathe(bm, [(0, 0.0185), (0, 0.021), (0.022, 0.021), (0.022, 0.0185)], (-0.124, 0, SZ), X, 40, cap=False), "rubber")
-    g.part("power", lambda bm: lathe(bm, [(0, 0.0165), (0, 0.0182), (0.02, 0.0182), (0.02, 0.0165)], (-0.09, 0, SZ), X, 40, cap=False), "parker", check=(-1, 1, -1, 1))
-    g.part("saddle", lambda bm: (prism(bm, smooth([(0.07, SZ - 0.016, 1), (0.13, SZ - 0.016, 1), (0.135, SZ), (0.13, SZ + 0.016, 1), (0.07, SZ + 0.016, 1), (0.065, SZ)], 1), 0.03)), "blued", 0.003)
-    for nm, at, d in (("turret-top", (0.1, 0, SZ + 0.014), (0, 0, 1)), ("turret-side", (0.1, -0.014, SZ), (0, -1, 0)), ("turret-left", (0.1, 0.014, SZ), (0, 1, 0))):
+    g.part("eyecup", lambda bm: lathe(bm, [(0, 0.0185), (0, 0.021), (0.022, 0.021), (0.022, 0.0185)], (-0.124 + DX, 0, SZ), X, 40, cap=False), "rubber")
+    g.part("power", lambda bm: lathe(bm, [(0, 0.0165), (0, 0.0182), (0.02, 0.0182), (0.02, 0.0165)], (-0.09 + DX, 0, SZ), X, 40, cap=False), "parker", check=(-1, 1, -1, 1))
+    g.part("saddle", lambda bm: (prism(bm, smooth([(0.07 + DX, SZ - 0.016, 1), (0.13 + DX, SZ - 0.016, 1), (0.135 + DX, SZ), (0.13 + DX, SZ + 0.016, 1), (0.07 + DX, SZ + 0.016, 1), (0.065 + DX, SZ)], 1), 0.03)), "blued", 0.003)
+    for nm, at, d in (("turret-top", (0.1 + DX, 0, SZ + 0.014), (0, 0, 1)), ("turret-side", (0.1 + DX, -0.014, SZ), (0, -1, 0)), ("turret-left", (0.1 + DX, 0.014, SZ), (0, 1, 0))):
         g.part(nm, lambda bm, at=at, d=d: lathe(bm, [(0, 0), (0, 0.0105), (0.008, 0.0105), (0.009, 0.0128), (0.022, 0.0128), (0.024, 0.0115), (0.024, 0)], at, d, 32), "parker", 0.0004, check=(-1, 1, -1, 1))
-    g.part("lens-front", lambda bm: lathe(bm, [(0, 0.0), (0.002, 0.0235), (0.0, 0.0235)], (0.317, 0, SZ), X, 40), "coated")
-    g.part("lens-rear", lambda bm: lathe(bm, [(0, 0.0), (-0.001, 0.0165), (0.0, 0.0165)], (-0.118, 0, SZ), X, 32), "coated")
-    for x in (0.0, 0.18):
+    g.part("lens-front", lambda bm: lathe(bm, [(0, 0.0), (0.002, 0.0235), (0.0, 0.0235)], (0.317 + DX, 0, SZ), X, 40), "coated")
+    g.part("lens-rear", lambda bm: lathe(bm, [(0, 0.0), (-0.001, 0.0165), (0.0, 0.0165)], (-0.118 + DX, 0, SZ), X, 32), "coated")
+    for x in (0.0 + DX, 0.18 + DX):
         g.part(f"ring{x}", lambda bm, x=x: (lathe(bm, [(0, 0.0127), (0, 0.017), (0.018, 0.017), (0.018, 0.0127)], (x, 0, SZ), X, 36, cap=False), box(bm, x, x + 0.018, BZ + 0.026, SZ - 0.012, 0.016)), "blued", 0.0008)
         for s in (1, -1):
             screw(g, f"ring-screw{x}{s}", (x + 0.009, s * 0.0085, SZ + 0.0115), 0.0018, (0, s * 0.5, 1))
     g.point("grip", (0, 0, 0))
     g.point("muzzle", (0.88, 0, BZ))
-    g.point("rear", (-0.124, 0, SZ))
-    g.point("front", (0.32, 0, SZ))
+    g.point("rear", (-0.124 + DX, 0, SZ))
+    g.point("front", (0.32 + DX, 0, SZ))
     g.point("fore", (0.36, 0, 0.03))
     g.point("butt", (-0.39, 0, -0.005))
     return g

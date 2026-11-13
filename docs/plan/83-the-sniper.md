@@ -17,7 +17,8 @@ shoulder) and F7a (the torch against the fore-end) as recommended, not asked. **
 signed off 2026-11-13** ("seguir assim"); **F6 decided again: on the AK's diagonal, over it** (upright, the muzzle
 down reached his calves). **Phase 1 (the grip) built 2026-11-13** — the sniper on the long hold (`tp/sniper-hold.ts`
 `SN_LONG`), the bench's `gun=sniper`; its stills `design/guns/p83/bench-1-hold.png`; committed 5178a55. **Phase 2 (put
-away, drawn) built 2026-11-13** — stills `design/guns/p83/bench-2-carry.png`. Not committed.
+away, drawn) built 2026-11-13** — stills `design/guns/p83/bench-2-carry.png`; committed c9adbeb. **Phase 3 (the aim)
+built 2026-11-13** — stills `design/guns/p83/bench-3-aim.png`. Not committed.
 
 ## Where we are — read from the code and the bench
 
@@ -238,6 +239,19 @@ shut) whatever F3–F4.
 3. **The aim** — the butt in the pocket, her cheek on the riser and her right eye on the scope's axis at its
    relief (plan 82's `cheekTo`, the scope's height for the sights'); the scope view taken from her eye, so its
    first frame doesn't jump; the torch (F7); the kick.
+   Done in phase 3:
+   - **The scope 3 cm back on the gun** (`tools/art/guns/guns.py` `sniper()`: the scope, its rings, turrets
+     and lenses, the `rear`/`front` points; the rail 1.5 cm longer behind; `sniper.glb` rebuilt — 154 KB,
+     18k triangles, within the budget): aimed, her eye was 12–17 cm behind the eyepiece (her cheek on the
+     riser, the butt in the pocket); now 9–14 (a real scope's ~9).
+   - The strict audit again, aimed at every turn × the game's whole pitch × the torch, carried still,
+     walking, running, turned: **none flawed on either body (35 states each)** — the masculine's 3° at one
+     side aim gone with it.
+   - **The kick** (`kick` flip 0.14, back 0.025, rock 0.06): the muzzle ~6° up 70 ms after the shot, back by
+     0.35 s; both hands on throughout, the wrists within their reach, nothing in the gun.
+   - **The scope's camera stays the view's own** (`tp/view.ts`: her head's place, ahead and right of it):
+     looking down the scope her own body isn't drawn — nor posed (off screen) — so the camera can't follow
+     her eye there; the glass's dark ring covers the few centimetres between.
 4. **The bolt** — the right hand's timeline on `ARM.bolt` (0.85 s): to the knob, the bolt turned up, run back
    (the case thrown out to the right — falling, its sound on the floor or the snow), forward, down, back to the
    grip; her cheek kept; seen by others; the bench drives `ARM.bolt`.
