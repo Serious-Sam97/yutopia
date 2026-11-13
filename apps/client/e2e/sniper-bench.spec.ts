@@ -8,7 +8,8 @@ import { test } from "./helpers";
 // eye on the scope's axis (her cheek on the riser); the low ready walking and running; up from it in the gun's
 // own time; drawn off her back (by the stock first); the bolt worked by her right hand, the rifle at her
 // shoulder; the reload raised, a round at a time out of the sleeve; kept across her chest through a roll, a
-// vault, a slide, struck — over the floor all through a roll; let go sat. Everywhere: each hand at its place,
+// vault, a slide — over the floor all through a roll; struck, kept at the ready through the flinch, her forearms
+// not wrung; let go sat. Everywhere: each hand at its place,
 // each wrist within its reach, each forearm turned no more than ~50° (pinched thin past it), no hand through the
 // other, no finger or arm in the gun. Known and left (docs/plan/83-the-sniper.md): mid-draw her right forearm
 // along the tall stock's belly (3–6 cm), and the reload's two changes of hold (~0.15 s each) — not held to it.
@@ -202,18 +203,51 @@ for (const gender of ["feminine", "masculine"])
     await settle(page, 600);
     expect((await load()).bolt, "the bolt home").toBeLessThan(0.05);
 
-    // kept through a roll, a vault, a slide, struck: across her chest, both hands on as held
+    // kept through a roll, a vault, a slide: across her chest, both hands on as held
     for (const [act, actT] of [
       ["roll", 0.2],
       ["roll", 0.5],
       ["vault", 0.4],
       ["slide", 0.4],
-      ["hit", 0.1],
     ] as const) {
       await set(page, { ...BASE, act, actT });
       await settle(page);
       await held(page, `${act} ${actT}`);
     }
+    // struck: kept at the ready, gone with her chest through the flinch — every frame of it, both hands on, each
+    // forearm turned no more than ~50° (pulled in across her chest and back out, the right was turned 48° all
+    // of it and the left spun 105° one way and 137° the other: the user's thin arm, 2026-11-13)
+    await set(page, { ...BASE });
+    await settle(page, 1200);
+    await page.evaluate(() => {
+      const W = window as any;
+      W.__hitLog = [];
+      W.__hitOn = true;
+      const tick = () => {
+        const m = W.__revolver.person.model;
+        const c = W.__revolver.check();
+        const tw = (S: string) => Math.abs(m.wristParts(S, m.bone(`wrist${S}`).quaternion).twist);
+        W.__hitLog.push([tw("R"), tw("L"), c ? c.R.short : 1, c?.L ? c.L.short : 1, c ? c.arms : -1]);
+        if (W.__hitOn) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    for (let i = 0; i <= 14; i++) {
+      await set(page, { ...BASE, act: "hit", actT: i * 0.06 });
+      await page.waitForTimeout(60);
+    }
+    await set(page, { ...BASE });
+    await settle(page, 800);
+    const hit: number[][] = await page.evaluate(() => {
+      (window as any).__hitOn = false;
+      return (window as any).__hitLog;
+    });
+    const most = (k: number) => Math.max(...hit.map((r) => r[k]));
+    expect(most(0), "struck: her right forearm not wrung").toBeLessThan(53 * DEG);
+    expect(most(1), "struck: her left forearm not wrung").toBeLessThan(53 * DEG);
+    expect(most(2), "struck: her right hand on").toBeLessThan(MOVING.short);
+    expect(most(3), "struck: her left hand on").toBeLessThan(MOVING.short);
+    expect(Math.min(...hit.map((r) => r[4])), "struck: no arm through the gun").toBeGreaterThan(MOVING.arms);
     // …and through a whole roll, never through the floor
     for (let i = 1; i < 20; i++) {
       await set(page, { ...BASE, act: "roll", actT: i / 20 });

@@ -1701,7 +1701,7 @@ export class Person3D {
       const run = Math.max(0, Math.min(1, (this.spd - 2.8) / 2));
       const hitT = p.hit?.t ?? 9;
       const struck = hitT < 0.7 ? 1 - (hitT / 0.7) ** 2 : 0;
-      const port = this.portMove || struck > 0.2 ? 1 : 0;
+      const port = this.portMove || (struck > 0.2 && LS.port?.struck !== false) ? 1 : 0;
       this.lgPortW += (port - this.lgPortW) * (1 - Math.exp(-dt * 12));
       // (drawn off her back, put back on it: the draw's path — plan 81 phase 2)
       const draw = !LS.sling ? 1 : away ? Math.max(0, 1 - this.holsterT / LS.sling.away) : drawn;
@@ -1846,6 +1846,8 @@ export class Person3D {
   private portMove = false;
   /** (plan 81 phase 5) the double-barrel pulled in across her chest, this much */
   private lgPortW = 0;
+  /** (plan 83) her chest's turn in her own frame before a hit: the flinch's turn of it from there */
+  private lgChest = new Quaternion();
   private revHolster = { grip: new Vector3(), f: new Vector3(), u: new Vector3() };
   private revolverHands(p: PersonIn, w: number, aiming: boolean, run: number, draw: number, dt: number) {
     const m = this.model;
@@ -2389,6 +2391,27 @@ export class Person3D {
       );
     sL.updateMatrixWorld(true);
     const B = this.revFrame(p, aiming);
+    // (struck, held at the ready — LongSpec.port.struck false: the gun goes as her chest goes through the flinch —
+    // bent over and thrown aside, ~12° and ~16° — from where it was before it; kept level it wrung her right
+    // forearm 44–54°)
+    const hitT = p.hit?.t ?? 9;
+    const flinch = LS.port?.struck === false && !aiming && hitT < 0.7 ? 1 - (hitT / 0.7) ** 2 : 0;
+    const chest = m.bone("chest");
+    if (chest) {
+      // (her chest's turn in her own frame)
+      this.root.getWorldQuaternion(rq1);
+      chest.getWorldQuaternion(rq2).premultiply(rq3.copy(rq1).invert());
+      if (flinch <= 0) this.lgChest.copy(rq2);
+      else {
+        // (its turn since, in the world's frame, as much as the flinch is)
+        rq2.multiply(rq3.copy(this.lgChest).invert());
+        rq3.identity().slerp(rq2, flinch);
+        rq2.copy(rq1).multiply(rq3).multiply(rq1.invert());
+        B.ahead.applyQuaternion(rq2);
+        B.left.applyQuaternion(rq2);
+        B.up.applyQuaternion(rq2);
+      }
+    }
     const H = this.lgHold;
     longHold(
       LS,

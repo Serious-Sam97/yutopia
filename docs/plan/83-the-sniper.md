@@ -347,6 +347,33 @@ shut) whatever F3–F4.
      `guns-two`, `ak-two`, `shotgun-two` (8 of 8); the world server's arms tests (16), the life look's budgets
      (18), tsc, biome. **Plan 83 done.**
 
+## Feedback, 2026-11-13: "braço direito fino aleatório"
+
+In the game, now and then her right arm thin — the sleeve pinched to a point at the wrist (the user's own look:
+a dark sportcoat over a shirt and tie, the neutral body, long hair, a beard).
+
+- **Not the hold itself**: at the low ready her body in the world is the bench's — the same bones (to 0.01),
+  the same meshes and morphs, the gun and the elbow within 1 cm — her right forearm turned 4–15°, and from
+  the game's cameras 98–100% of it in view (rays from six places round her right and back to its sleeve; the
+  tall stock hides none of it). In a red or white coat its sleeve is whole from the same camera; in the dark
+  one its lower half, in the rifle's shadow, goes into the coat behind it.
+- **Struck**: traced every frame in the world, she was hit (her health 60 → 45, at dusk) and the rifle went
+  across her chest and back out in the flinch's 0.7 s (port arms, plan 81 phase 5): her right forearm turned
+  48° all of it — its sleeve pinched thin — and her left spun from 105° one way to 137° the other as her hand
+  went from under the fore-end to over it and back (her left hand 1.2–1.6 cm off the gun). Random: whenever
+  something hits her.
+- **Now** (`LongSpec.port.struck`, false for the sniper): struck, she keeps it at the ready through the
+  flinch, and the gun goes as her chest goes (bent over ~12°, thrown aside ~16° — kept level, it wrung her
+  right forearm 44–54°): through a whole hit her right forearm 20–31° (masculine; 48 the feminine, her rest
+  36–41), her left 47–50 (her rest), both hands on, nothing through the gun. A roll, a vault, a slide still
+  pull it across her chest. The bench spec plays a hit through and holds every frame of it to that. Stills:
+  `design/guns/p83/golpe-antes.png`, `golpe-depois.png`.
+- The AK and the double-barrel still pull in when struck (the same wrung forearms): theirs is the same flag —
+  left as they are, the user's call ("só o sniper", 2026-11-13).
+- Tools: the bench takes someone's own look (`hair=`, `beard=`, `extra=`, `outerColor=`), the world camera's
+  distance for the body's detail (`far=`), and `__revolver.pin` (her state: `wm`, `st`, `hp`), `orbit()`,
+  `camAt()` (a camera put where the world's was, in her frame).
+
 ## Risks
 
 - **Its length** (1.27 m): through the floor in a roll whatever the port; the muzzle into walls carried; the

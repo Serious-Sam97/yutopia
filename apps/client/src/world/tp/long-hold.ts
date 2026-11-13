@@ -81,6 +81,9 @@ export interface LongSpec {
     /** its left hand's place on it there, if not as held (over the top: its palm's middle this high, the
      *  fingers' way, the index side, the thumb's place) */
     fore?: { y: number; along: Vector3; index: Vector3; thumb: [number, number, number] };
+    /** struck too (the default) — or held at the ready through the flinch: pulled in for its 0.7 s and back out,
+     *  her left hand turned palm up to palm down and back, her forearms wrung through it */
+    struck?: boolean;
   };
   /** The bench's checks: the left fingers against boxes on the gun (its middle x, y and half-sizes), the
    *  forearms against rods on it (a → b, x and y, `r` round), each in the gun's frame or (`fore`) the fore

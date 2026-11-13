@@ -82,6 +82,7 @@ function Bench({ q }: { q: URLSearchParams }) {
   const live = useRef(st);
   live.current = st;
   const orbit = useRef<{ yaw: number; pitch: number; dist: number } | null>(null);
+  const camFix = useRef<{ pos: [number, number, number]; dir: [number, number, number]; fov: number } | null>(null);
   const fire = useRef<() => void>(() => {});
   const [check, setCheck] = useState<string>("loading…");
 
@@ -175,6 +176,7 @@ function Bench({ q }: { q: URLSearchParams }) {
           return have === "loading" ? null : have;
         },
       };
+      const FAR = Number(q.get("far") ?? 2);
       const gender = q.get("gender") ?? "feminine";
       const avatar = {
         ...DEFAULT_AVATAR,
@@ -184,6 +186,11 @@ function Bench({ q }: { q: URLSearchParams }) {
         body: q.get("body") ?? DEFAULT_AVATAR.body,
         // (a layer over the top — a coat, a parka…)
         ...(q.get("outer") ? { outer: q.get("outer") } : {}),
+        // (someone's own look: their hair, beard, bag — `hair=swept&beard=boxed&extra=satchel`)
+        ...(q.get("hair") ? { hair: q.get("hair") } : {}),
+        ...(q.get("beard") ? { beard: q.get("beard") } : {}),
+        ...(q.get("extra") ? { extra: q.get("extra") } : {}),
+        ...(q.get("outerColor") ? { outerColor: `#${q.get("outerColor")}` } : {}),
         topColor: "#3d4a5c",
         bottom: "jeans",
         bottomColor: "#2a2f3a",
@@ -247,6 +254,23 @@ function Bench({ q }: { q: URLSearchParams }) {
           cam.fov = fov;
           cam.updateProjectionMatrix();
         }
+        // (a camera put where the world's was — her own frame: x her left, y up, z ahead — to see what it saw)
+        const CF = camFix.current;
+        if (CF) {
+          const r = person.root;
+          r.updateWorldMatrix(true, false);
+          if (cam.fov !== CF.fov) {
+            cam.fov = CF.fov;
+            cam.updateProjectionMatrix();
+          }
+          cam.position.set(...CF.pos).applyMatrix4(r.matrixWorld);
+          gunAt
+            .set(...CF.dir)
+            .transformDirection(r.matrixWorld)
+            .add(cam.position);
+          cam.lookAt(gunAt);
+          return;
+        }
         if (s.view === "shoulder" || s.view === "over") {
           // (it turns with her look: aiming, AIM_BLADE left of the way her feet face; "over": closer in, as
           // the aimed camera)
@@ -296,7 +320,9 @@ function Bench({ q }: { q: URLSearchParams }) {
         p.y += SPEED[mv] * dt;
         if (p.y > 12) p.y = -12;
         seen.camX = p.x;
-        seen.camZ = p.y + 2;
+        // (the world's camera this far off her for her detail — `far=5`: the middle level, past 3.5 m; past 11
+        // the far hold)
+        seen.camZ = p.y + FAR;
         // (the draw: its clock set where the slider has it — the put-away's, the gun gone from her state)
         p.gun = s.away ? "" : GUN;
         p.angle = Math.PI / 2 + s.yaw;
@@ -405,6 +431,16 @@ function Bench({ q }: { q: URLSearchParams }) {
           return person.ready && !!person.revolverCheck(p as never);
         },
         check: () => person.revolverCheck(p as never),
+        // (her state as the world sends it — set its vitals here: `wm` warmth, `st` stamina, `hp`)
+        pin: p,
+        // (the camera round her as a drag puts it — yaw 0 her front, −π/2 her right; its pitch up, its distance)
+        orbit: (o: { yaw: number; pitch: number; dist: number }) => {
+          orbit.current = o;
+        },
+        // (the world's camera, as read off it in her frame: its place, its look, its lens; null: the views again)
+        camAt: (c: { pos: [number, number, number]; dir: [number, number, number]; fov: number } | null) => {
+          camFix.current = c;
+        },
         // (a shot, as the button: its kick and the trigger — a burst is one every ARMS' rate)
         fire: () => fire.current(),
         // (plan 81: how much of the double-barrel's stock is inside her — points through its wood, each a ray

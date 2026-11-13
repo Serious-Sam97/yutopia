@@ -76,7 +76,7 @@ export const SN_SLING: SlingSpec = {
 };
 
 // ── everything else (plan 83 phase 6) ─────────────────────────────────────────────────────────────────
-/** In a whole-body move — a roll, a vault, a slide, Flowmotion — or struck: held across her chest in its frame
+/** In a whole-body move — a roll, a vault, a slide, Flowmotion: held across her chest in its frame
  *  (the grip's place, its turn — x her left, y up, z ahead), as the AK's (tp/ak-hold.ts AK_PORT) but higher and
  *  nearer her, the muzzle down to her left (~21°) and a little ahead: its 1.27 m was through the floor at the
  *  AK's (6–10 cm in a roll), at the double-barrel's 24–35 — here over it all the roll (1–9 cm), the stock's belly
@@ -90,6 +90,10 @@ export const SN_PORT_ARMS = {
     index: new Vector3(-1, 0, 0),
     thumb: [0.01, 0.05, -0.04] as [number, number, number],
   },
+  // (struck, held at the ready through the flinch: pulled in and back out in its 0.7 s her right forearm stayed
+  // turned 48° — its sleeve pinched thin at the wrist — and her left spun 105° one way and 137° the other as her
+  // hand went from under the fore-end to over it and back; the user's "braço direito fino", 2026-11-13)
+  struck: false,
 };
 
 /** The sniper as tp/long-hold.ts holds a long gun */
