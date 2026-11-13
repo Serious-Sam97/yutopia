@@ -292,7 +292,7 @@ export const SG_LONG: LongSpec = {
     strap: STRAP,
     ends: [STRAP_ENDS.swivel, STRAP_ENDS.barrels],
     bust: STRAP_BUST,
-    over: 0,
+    over: [],
     // (2026-11-13: drawn with the hand on the stock's wrist as plan 81 had it — the knuckles along the gun —
     // turned to the low ready's at the end: on the low ready's all the way, her forearm turned 63–84° lifting
     // it over her shoulder)

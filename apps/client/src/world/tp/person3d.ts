@@ -150,13 +150,13 @@ const ARM_RACK = 7;
  *  carries both */
 function slungAt(SL: SlingSpec, p: PersonIn, out: Vector3): Vector3 {
   out.copy(SL.at);
-  if (SL.over && p.sling && p.slingAk) out.z -= SL.over;
+  for (const o of SL.over) if (p[o.flag]) out.z -= o.out;
   return out;
 }
 /** …its turn there (the chest bone's space) */
 function slungTurn(SL: SlingSpec, p: PersonIn, out: Quaternion): Quaternion {
   out.copy(SL.turn);
-  const L = SL.lean ? (SL.over && p.sling && p.slingAk ? SL.lean.over : SL.lean.alone) : null;
+  const L = SL.lean ? (SL.over.some((o) => p[o.flag]) ? SL.lean.over : SL.lean.alone) : null;
   const a = L ? L[p.avatar.gender === "feminine" ? 0 : 1] : 0;
   if (a) out.premultiply(lgLean.setFromAxisAngle(X3, a));
   return out;

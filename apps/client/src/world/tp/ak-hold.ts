@@ -95,7 +95,7 @@ export const AK_SLING: SlingSpec = {
   bust: 0.005,
   // (crossed over the double-barrel when she carries both: resting on it where they cross — its top to her
   // back, it needed 8.5 cm; flat, at that it stood 6 cm off the double-barrel, the user's "floating")
-  over: 0.025,
+  over: [{ flag: "sling", out: 0.025 }],
   // (upright, its top stood 3–6 cm off a masculine body's shoulder blades — and over the double-barrel, 1.5–5.5
   // off either's: tilted, 0.1–2.3; further, its stock stood out from her hip)
   lean: { alone: [0, 0.12], over: [0.08, 0.2] },

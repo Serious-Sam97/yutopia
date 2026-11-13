@@ -197,8 +197,10 @@ function Bench({ q }: { q: URLSearchParams }) {
         gun: GUN,
         holster: GUN === "revolver",
         // (`both=1`: carrying both long guns — their slings crossed on her back)
-        sling: GUN === "shotgun" || q.get("both") === "1",
-        slingAk: GUN === "ak47" || q.get("both") === "1",
+        // (`all=1`: the sniper too — plan 83)
+        sling: GUN === "shotgun" || q.get("both") === "1" || q.get("all") === "1",
+        slingAk: GUN === "ak47" || q.get("both") === "1" || q.get("all") === "1",
+        slingSn: GUN === "sniper" || q.get("all") === "1",
         mv: packMv("still"),
         pitch: 0,
         torch: false,

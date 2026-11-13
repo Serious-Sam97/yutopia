@@ -16,7 +16,8 @@ crossed ones; F2a (square, her eye at the scope), F3a (the bolt by the right han
 shoulder) and F7a (the torch against the fore-end) as recommended, not asked. **Phase 0 (the mocks) rendered and
 signed off 2026-11-13** ("seguir assim"); **F6 decided again: on the AK's diagonal, over it** (upright, the muzzle
 down reached his calves). **Phase 1 (the grip) built 2026-11-13** — the sniper on the long hold (`tp/sniper-hold.ts`
-`SN_LONG`), the bench's `gun=sniper`; its stills `design/guns/p83/bench-1-hold.png`. Not committed.
+`SN_LONG`), the bench's `gun=sniper`; its stills `design/guns/p83/bench-1-hold.png`; committed 5178a55. **Phase 2 (put
+away, drawn) built 2026-11-13** — stills `design/guns/p83/bench-2-carry.png`. Not committed.
 
 ## Where we are — read from the code and the bench
 
@@ -217,6 +218,23 @@ shut) whatever F3–F4.
      reload are held at the hold till phases 4–5 (the bolt part still moves).
 2. **The carry and put away** — F1; drawn and put away (F6: its sling, its keys, its gap to her back — plan
    82's `slungGap`, crossed with the other two; or gone).
+   Done in phase 2:
+   - `Player.slingSn` (the server's schema and `features/arms.ts`: she carries a sniper; the client's model,
+     controller and person-in), as the AK's `slingAk`.
+   - `SN_SLING` (`tp/sniper-hold.ts`): the AK's place and turn (flat, its right side — the bolt — to her, its
+     top up toward her right shoulder), its keys and its draw by the stock (`grab`), 0.6 s off and 0.5 back
+     (shared `ARMS.sniper.draw` 0.5 → 0.6, as the AK's); its strap the AK's way 1.5 cm out over it; its studs.
+   - Stacked (`SlingSpec.over` now a list of the flags under it, each its own way out): the AK 2.5 cm out over
+     the double-barrel, the sniper 7 cm over the AK and 2.5 over the double-barrel (at 6 over the AK it touched
+     the AK's receiver). Measured by `slungGap` (slim, regular, broad; both genders; a tee or a coat; alone, with
+     the AK, with the double-barrel, all three): 0.2–2.8 cm to what's under it, nothing of it inside her.
+     The bench's `all=1` slings all three.
+   - Drawn, its wrist within its reach and its forearm ≤35° all the way (both bodies, alone and with all
+     three). **Left**: hanging at her right side mid-draw (0.2–0.75 of it, ~0.3 s), her right forearm on the
+     pistol grip lies along the tall stock and goes 3–6 cm into its belly — the grip's so near the belly that
+     the forearm follows the stock whichever way the rifle hangs (tried: tilted out, rolled, further out and
+     back, hanging forward; held by the stock longer bent her wrist 108–136° past its reach; the arm's
+     `avoid` rod made no difference).
 3. **The aim** — the butt in the pocket, her cheek on the riser and her right eye on the scope's axis at its
    relief (plan 82's `cheekTo`, the scope's height for the sights'); the scope view taken from her eye, so its
    first frame doesn't jump; the torch (F7); the kick.

@@ -99,8 +99,11 @@ export interface LongSpec {
  *  each under half a turn from the next; the draw's time and the put-away's (s); the strap's way over her
  *  (each point a bone's and an offset in her frame, out on her front — a fuller chest's `bust` more) between
  *  its two ends on the gun */
+/** The Player flags that say she carries a long gun slung (plans 81–83) */
+export type SlingFlag = "sling" | "slingAk" | "slingSn";
+
 export interface SlingSpec {
-  flag: "sling" | "slingAk";
+  flag: SlingFlag;
   at: Vector3;
   turn: Quaternion;
   keys: { at: [number, number, number]; f: [number, number, number]; u?: [number, number, number] }[];
@@ -109,10 +112,10 @@ export interface SlingSpec {
   strap: { bone: "shoulderR" | "shoulderL" | "chest" | "hips"; at: [number, number, number] }[];
   ends: [Vector3, Vector3];
   bust: number;
-  /** with the other long gun slung too, this one over it — this much further out from her back (m) */
-  over: number;
+  /** with others slung too, this one over them — this much further out from her back for each there (m) */
+  over: { flag: SlingFlag; out: number }[];
   /** tilted this far to her back about her left-right line (rad) — on a body with a bust, without (its back
-   *  straighter, further from its chest bone at the shoulders); `over`: with the other long gun under it, its
+   *  straighter, further from its chest bone at the shoulders); `over`: with another long gun under it, its
    *  top brought down to her back past where they cross — else its top stood off her shoulder blades */
   lean?: { alone: [number, number]; over: [number, number] };
   /** drawn by another place on it first (her right hand round it — its palm's middle, the fingers' way, the

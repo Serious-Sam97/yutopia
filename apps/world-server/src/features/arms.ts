@@ -579,6 +579,9 @@ registerFeature((room: WorldRoom) => {
           // (plan 82) the AK carried: slung on the back, mirrored
           const slingAk = !!inv && !!weaponIn(inv, "ak47");
           if (p.slingAk !== slingAk) p.slingAk = slingAk;
+          // (plan 83) the sniper carried: slung on the AK's diagonal, over it
+          const slingSn = !!inv && !!weaponIn(inv, "sniper");
+          if (p.slingSn !== slingSn) p.slingSn = slingSn;
         }
       }
     },

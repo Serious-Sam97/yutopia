@@ -97,7 +97,8 @@ export const ARMS = {
     open: 0.35,
     shut: 0.35,
     snap: 0.3,
-    draw: 0.5,
+    // (off her back round her right side, as the AK — plan 83)
+    draw: 0.6,
     aim: 0.3,
     damage: 170,
     range: 120,

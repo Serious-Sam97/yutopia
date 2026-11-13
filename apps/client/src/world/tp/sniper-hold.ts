@@ -8,7 +8,8 @@
 // right; m; its origin the top of the pistol grip — tools/art/guns/guns.py sniper()).
 import { Vector3 } from "three";
 import type { HeldShape } from "../chars/props";
-import type { LongSpec } from "./long-hold";
+import { AK_SLING } from "./ak-hold";
+import type { LongSpec, SlingSpec } from "./long-hold";
 
 /** The bore over the grip; the scope's axis */
 export const SN_BZ = 0.066;
@@ -48,6 +49,32 @@ const SN_TORCH_HELD: HeldShape = {
 /** The butt pad's middle */
 export const SN_BUTT = new Vector3(-0.39, -0.01, 0);
 
+// ── slung, drawn, put away (plan 83 phase 2, F6 — after phase 0: on the AK's diagonal, over it) ───────────
+/** Slung on her back on the AK's diagonal (tp/ak-hold.ts AK_SLUNG): its grip low behind her right side, the
+ *  muzzle up past her left shoulder, the stock down at her right hip, flat — its right side (the bolt) to her,
+ *  its top up toward her right shoulder; over the AK when she carries both, over the double-barrel where they
+ *  cross. Drawn and put back as the AK is: off her back by its stock round her right side. Its strap the AK's
+ *  way, a little out over it; its two studs */
+export const SN_SLING: SlingSpec = {
+  ...AK_SLING,
+  flag: "slingSn",
+  // (shared ARMS.sniper.draw)
+  draw: 0.6,
+  away: 0.5,
+  strap: [
+    { bone: "shoulderL", at: [0, 0.105, -0.03] },
+    { bone: "shoulderL", at: [-0.05, 0.055, 0.105] },
+    { bone: "chest", at: [-0.05, -0.1, 0.23] },
+    { bone: "hips", at: [-0.17, 0.07, 0.21] },
+    { bone: "hips", at: [-0.2, 0.03, 0.045] },
+  ],
+  ends: [new Vector3(0.59, 0.02, 0.002), new Vector3(-0.28, -0.098, 0.002)],
+  over: [
+    { flag: "slingAk", out: 0.07 },
+    { flag: "sling", out: 0.025 },
+  ],
+};
+
 /** The sniper as tp/long-hold.ts holds a long gun */
 export const SN_LONG: LongSpec = {
   key: "sniper",
@@ -82,7 +109,7 @@ export const SN_LONG: LongSpec = {
   // (shared ARMS.sniper.aim)
   aimS: 0.3,
   leftCarried: true,
-  sling: null,
+  sling: SN_SLING,
   avoid: null,
   check: {
     boxes: [
