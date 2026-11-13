@@ -547,6 +547,8 @@ test("the AK (plan 79 phase 5): full auto at its rate through the line's jitter,
   await waitFor(() => loaded2() === 30, 2500);
   assert.ok(Date.now() - t0 > ARMS.ak47.speed * 1000 - 200, "the new magazine after its time");
   const t1 = Date.now();
+  // (plan 82: the closing everyone sees — shouldered again, no charging handle)
+  await waitFor(() => me(b.room).arm === ARM.shut, 1000);
   await waitFor(() => me(b.room).arm === ARM.idle, 2000);
   const shut = Date.now() - t1;
   assert.ok(shut < ARMS.ak47.rack * 1000 - 200, `not run dry: no charging handle (${shut} ms)`);
@@ -558,6 +560,8 @@ test("the AK (plan 79 phase 5): full auto at its rate through the line's jitter,
   await waitFor(() => loaded2() === 0, 2000);
   b.room.send("arms:reload", {});
   await waitFor(() => loaded2() === 30, 4000);
+  // (plan 82: racked — everyone sees it)
+  await waitFor(() => me(b.room).arm === ARM.rack, 1000);
   const t2 = Date.now();
   await waitFor(() => me(b.room).arm === ARM.idle, 2500);
   assert.ok(Date.now() - t2 > ARMS.ak47.rack * 1000 - 250, "run dry: the charging handle racked");

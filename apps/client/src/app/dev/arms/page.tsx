@@ -39,6 +39,10 @@ interface State {
   yaw: number;
   /** the reload scrubbed, 0..1 (the server's three steps: open, load, shut) */
   t: number;
+  /** (plan 82) the AK's reload run dry — racked at its end; `play`: the reload run live from this moment
+   *  (performance.now, ms; 0: scrubbed by `t`) */
+  dry: boolean;
+  play: number;
   view: View;
 }
 
@@ -71,6 +75,8 @@ function Bench({ q }: { q: URLSearchParams }) {
     actT: Number(q.get("actT") ?? 0),
     yaw: Number(q.get("yaw") ?? 0),
     t: Number(q.get("t") ?? 0.5),
+    dry: q.get("dry") === "1",
+    play: 0,
     view: (q.get("view") as View) ?? "side",
   });
   const live = useRef(st);
@@ -95,7 +101,8 @@ function Bench({ q }: { q: URLSearchParams }) {
       const { Person3D } = await import("@/world/tp/person3d");
       // (plans 81–82: each long gun's own numbers — its stock's profile for what of it is inside her)
       const { SG_LONG } = await import("@/world/tp/shotgun-hold");
-      const { AK_LONG } = await import("@/world/tp/ak-hold");
+      const akHold = await import("@/world/tp/ak-hold");
+      const { AK_LONG } = akHold;
       const { lineAt, longInHand } = await import("@/world/tp/long-hold");
       const C = await loadChars();
       // (which gun: the revolver, plan 80's; the double-barrel, plan 81's…)
@@ -261,7 +268,13 @@ function Bench({ q }: { q: URLSearchParams }) {
       };
       const GAIT = ["still", "walk", "jog", "sprint"] as const;
       const SPEED = [0, 1.4, 3.2, 5.4];
-      const P3 = person as unknown as { drawT: number; holsterT: number; revLoadT: number; sgLoadT: number };
+      const P3 = person as unknown as {
+        drawT: number;
+        holsterT: number;
+        revLoadT: number;
+        sgLoadT: number;
+        akLoadT: number;
+      };
       const apply = (dt: number) => {
         const s = live.current;
         const aim = s.pose === "aim";
@@ -299,12 +312,26 @@ function Bench({ q }: { q: URLSearchParams }) {
         p.torch = s.torch;
         // (the reload: the server's step open — Player.arm — its timeline scrubbed through its 2.2 s; the
         // double-barrel's 2.3, its shutting its own: ARM.shut — plan 81)
-        const t = s.t;
+        // (the AK's 2.2 s, racked 2.8 — its closing its own: ARM.shut, ARM.rack — plan 82)
+        const akLen = s.dry ? 2.8 : 2.2;
+        const t = s.play > 0 ? Math.min(1, (performance.now() - s.play) / 1000 / (GUN === "ak47" ? akLen : 2.3)) : s.t;
         const reload = s.pose === "reload";
         const sgT = t * 2.3;
-        (p as { arm?: number }).arm = !reload ? 0 : GUN === "shotgun" && sgT >= 1.95 ? 6 : 3;
+        const akT = t * akLen;
+        (p as { arm?: number }).arm = !reload
+          ? 0
+          : GUN === "shotgun" && sgT >= 1.95
+            ? 6
+            : GUN === "ak47" && akT >= 1.8
+              ? s.dry
+                ? 7
+                : 6
+              : 3;
         if (reload && GUN === "shotgun") P3.sgLoadT = Math.max(0, sgT - dt);
-        else if (reload) P3.revLoadT = Math.max(0, t * 2.2 - dt);
+        else if (reload && GUN === "ak47") {
+          // (live: its own clock — the empty let fall as it passes; scrubbed: set)
+          if (s.play <= 0 || P3.akLoadT < 0) P3.akLoadT = Math.max(0, akT - dt);
+        } else if (reload) P3.revLoadT = Math.max(0, t * 2.2 - dt);
         fx.reload = reload ? 1 : 0;
         fx.open = reload ? (t < 0.3 ? t / 0.3 : t < 0.8 ? 1 : 1 - (t - 0.8) / 0.2) : 0;
         fx.loaded = GUN === "shotgun" ? 2 : reload && t < 0.55 ? 0 : 6;
@@ -449,7 +476,7 @@ function Bench({ q }: { q: URLSearchParams }) {
           return { n, inside, deep, pts };
         },
         // (the long guns' numbers, to try others live — refit() puts the gun in the hand by them again)
-        long: { SG_LONG, AK_LONG },
+        long: { SG_LONG, AK_LONG, akHold },
         refit: () => {
           const g = (person as unknown as { gun: { key: string; model: { root: import("three").Object3D } } | null })
             .gun;

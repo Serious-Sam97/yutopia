@@ -79,6 +79,8 @@ interface Hand {
   step: "" | "open" | "load" | "shut";
   /** the reload began with it empty (the AK's charging handle racked at the end) */
   dry: boolean;
+  /** (plan 82) this closing racks the AK's charging handle */
+  rack: boolean;
   /** the bolt worked after a shot (the sniper's), from / till (server ms) */
   boltFrom: number;
   boltTill: number;
@@ -99,6 +101,7 @@ registerFeature((room: WorldRoom) => {
       reloadAt: 0,
       step: "",
       dry: false,
+      rack: false,
       boltFrom: 0,
       boltTill: 0,
       chargeAt: 0,
@@ -202,6 +205,7 @@ registerFeature((room: WorldRoom) => {
     // (opened first — the revolver's cylinder swung out, the double-barrel broken: plan 79 F11a, F12a)
     hd.step = "open";
     hd.dry = h.w.loaded <= 0;
+    hd.rack = false;
     hd.reloadAt = Date.now() + ARMS[h.w.id].open * 1000;
   });
 
@@ -234,6 +238,7 @@ registerFeature((room: WorldRoom) => {
     if (hd.step) {
       if (hd.step !== "shut" && h.w.loaded > 0) {
         hd.step = "shut";
+        hd.rack = false;
         hd.reloadAt = now + gun.snap * 1000;
       }
       return;
@@ -530,7 +535,8 @@ registerFeature((room: WorldRoom) => {
         hd.step = more ? "load" : "shut";
         const g = ARMS[h.w.id];
         // (shut: the AK run dry has its charging handle racked — longer)
-        const shut = "rack" in g && hd.dry && h.w.loaded > 0 ? g.rack : g.shut;
+        hd.rack = "rack" in g && hd.dry && h.w.loaded > 0;
+        const shut = hd.rack && "rack" in g ? g.rack : g.shut;
         hd.reloadAt = now + (more ? ("speed" in g ? g.speed : g.reload) : shut) * 1000;
       }
       // what each hand's doing, for everyone's screens
@@ -541,9 +547,12 @@ registerFeature((room: WorldRoom) => {
           : now < hd.drawnAt
             ? ARM.draw
             : hd.step
-              ? // (the double-barrel's closing its own — plan 81: everyone's screen shuts it then; the others' as ever)
-                hd.step === "shut" && p.gun === "shotgun"
-                ? ARM.shut
+              ? // (the double-barrel's closing its own — plan 81: everyone's screen shuts it then; the AK's too, and
+                // whether its charging handle's racked — plan 82; the others' as ever)
+                hd.step === "shut" && (p.gun === "shotgun" || p.gun === "ak47")
+                ? hd.rack && p.gun === "ak47"
+                  ? ARM.rack
+                  : ARM.shut
                 : ARM.open
               : hd.reloadAt
                 ? ARM.reload

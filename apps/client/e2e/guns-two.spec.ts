@@ -54,6 +54,8 @@ const seen = (ana: Page, sid: string) =>
       life: !!g?.model.life,
       magInHand: !!p3?.magInHand,
       held: !!p3?.revHeld,
+      akT: (p3?.akLoadT ?? -1) as number,
+      magMoved: !!g?.model.parts.magazine?.userData.akMoved,
       boltT: (p3?.boltT ?? 0) as number,
       core: (g?.model.parts.core?.scale.x ?? 1) as number,
     };
@@ -129,12 +131,14 @@ test("two of us: Ana sees Bia's guns — held, fired, reloaded, the bolt, the Da
   // (more than one: a burst — its rate is arms-feel's and the server's; two 3D pages here run a few
   // frames a second, and full auto fires on its own page's frames)
   await expect.poll(() => page.evaluate(() => (window as any).__shots), { timeout: 5000 }).toBeGreaterThan(1);
-  // its reload: held at the low ready through it on Ana's screen (plan 82: its hands on the gun-as-anchor hold
-  // since phase 1 — the magazine out in her left hand again with phase 4's reload)
+  // its reload on Ana's screen: run as Bia's — the magazine out of the well into her left hand (plan 82 phase 4:
+  // one timeline from the server's steps, Player.arm), the gun kept in her hands
   await bia.mouse.up({ button: "right" });
   await bia.waitForTimeout(300);
   await bia.keyboard.press("KeyR");
+  await expect.poll(() => seen(page, biaSid).then((s) => s.akT), { timeout: 4000, intervals: [50] }).toBeGreaterThan(0);
   await expect.poll(() => seen(page, biaSid).then((s) => s.held), { timeout: 4000, intervals: [50] }).toBe(true);
+  await expect.poll(() => seen(page, biaSid).then((s) => s.magMoved), { timeout: 4000, intervals: [50] }).toBe(true);
   await bia.waitForTimeout(2500);
 
   // the sniper: a shot, then the bolt worked — on Ana's screen

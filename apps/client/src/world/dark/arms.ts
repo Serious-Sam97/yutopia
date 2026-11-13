@@ -1,5 +1,6 @@
 import type { ServerMessages } from "@yutopia/shared";
 import {
+  AK_RELOAD,
   ARM,
   ARMS,
   bloomCalm,
@@ -97,7 +98,6 @@ export class Arms {
   private boltTill = 0;
   // the Daybreak's charge (plan 79 phase 7): pressed at (performance ms; 0 not charging)
   private chargeFrom = 0;
-  private akDryReload = false; // my AK's reload began empty: the charging handle racked at its end
   // the Daybreak's balls flying (their sound follows them): from, to, how long, since (performance ms)
   private balls = new Map<string, { x0: number; y0: number; x: number; y: number; secs: number; t0: number }>();
   private readonly scopeEl = document.createElement("div");
@@ -258,7 +258,7 @@ export class Arms {
     const now = performance.now();
     if (now - this.shotAt < ARMS[g.id].rate * 1000 - 30) return;
     const arm = this.me()?.arm ?? ARM.idle;
-    if (arm === ARM.draw || arm === ARM.open || arm === ARM.reload || arm === ARM.shut) return;
+    if (arm === ARM.draw || arm === ARM.open || arm === ARM.reload || arm === ARM.shut || arm === ARM.rack) return;
     if (g.loaded <= 0) {
       this.voices.gun("rifle-dry");
       this.dryAt = now / 1000;
@@ -420,7 +420,7 @@ export class Arms {
     // the server's — and the shot goes when it's shut)
     const arm = this.me()?.arm ?? ARM.idle;
     // (being drawn — or the double-barrel shutting, plan 81: the shot goes when it's shut)
-    if (arm === ARM.draw || arm === ARM.shut) {
+    if (arm === ARM.draw || arm === ARM.shut || arm === ARM.rack) {
       this.queued = true;
       return;
     }
@@ -623,7 +623,10 @@ export class Arms {
     // (reloading as the server has it — the gate open, the barrels broken open till they're shut —
     // or as I've just asked)
     const arm = this.me()?.arm ?? ARM.idle;
-    if (this.reloading && (arm === ARM.reload || arm === ARM.open || arm === ARM.shut || now - this.reloadAt > 600))
+    if (
+      this.reloading &&
+      (arm === ARM.reload || arm === ARM.open || arm === ARM.shut || arm === ARM.rack || now - this.reloadAt > 600)
+    )
       this.reloading = false;
     const loading = this.loadingNow();
     this.open = ease(this.open, loading ? 1 : 0, loading ? 10 : 14);
@@ -678,7 +681,7 @@ export class Arms {
     }
     // (full auto: held, it fires at its rate; let go — or not aiming — the burst's over)
     const pulled = this.triggerDown || this.walker.controls.pad.rt > 0.6;
-    const busy = armNow === ARM.draw || armNow === ARM.open || armNow === ARM.shut;
+    const busy = armNow === ARM.draw || armNow === ARM.open || armNow === ARM.shut || armNow === ARM.rack;
     if (g0 && isAuto(g0.id) && pulled && this.walker.aiming && !busy) this.fire();
     else if (this.queued && this.walker.aiming && g0 && !busy) this.fire();
     else if (!this.walker.aiming) this.queued = false;
@@ -817,7 +820,8 @@ export class Arms {
     // F11a — its spent cases fell as it swung out: armSounds)
     if (g) {
       const was = this.lastLoaded.get(g.id);
-      if (was !== undefined && g.loaded > was) this.voices.gun(LOAD_SOUND[g.id]);
+      // (plan 82: the AK's new magazine heard as her hand clicks it home — armSounds)
+      if (was !== undefined && g.loaded > was && g.id !== "ak47") this.voices.gun(LOAD_SOUND[g.id]);
       this.lastLoaded.set(g.id, g.loaded);
     }
     const key = `${g?.id}|${g?.loaded}|${flares}|${loading}|${[...inv.pockets, ...inv.quick].map((s) => (s ? `${s.id}${"n" in s ? s.n : ""}` : "")).join()}`;
@@ -931,12 +935,17 @@ export class Arms {
           return;
         }
         if (p.gun === "ak47") {
-          // (the magazine out — the new one in as its rounds go in — and, run dry, the charging handle racked)
+          // (plan 82 phase 4: on its hands' moments, as everyone's screen plays it — tp/ak-hold.ts: the empty
+          // rocked out, let fall and landing at her feet, the new one clicked home; racked, the handle pulled)
           if (opened && !wasOpen) {
-            this.voices.gun("ak-mag-out", at, 15);
-            if (me) this.akDryReload = (g?.loaded ?? 1) <= 0;
-            loadIn("ak47");
-          } else if (!opened && wasOpen && me && this.akDryReload) this.voices.gun("ak-rack", at, 15);
+            const still = () => this.arms.get(p.sid)?.arm === ARM.open;
+            setTimeout(() => still() && this.voices.gun("ak-mag-out", at, 15), AK_RELOAD.out * 1000);
+            setTimeout(
+              () => still() && this.voices.gun(this.walker.outside ? "shell-snow" : "shell-floor", at, 12),
+              (AK_RELOAD.drop + 0.38) * 1000,
+            );
+            setTimeout(() => still() && this.voices.gun("ak-mag-in", at, 15), AK_RELOAD.home * 1000);
+          } else if (arm === ARM.rack) setTimeout(() => this.voices.gun("ak-rack", at, 15), AK_RELOAD.pull * 1000);
           return;
         }
         if (arm === ARM.open) {

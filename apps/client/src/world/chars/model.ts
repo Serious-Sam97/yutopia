@@ -1330,6 +1330,9 @@ export class PersonModel {
     /** (plan 81) a rod the arm keeps out of — a held gun's stock along her side: from `a` to `b`, `r` round
      *  (the world's) */
     avoid?: { a: Vector3; b: Vector3; r: number },
+    /** (plan 82) how far the swing may move this call (rad) — more while the hand's going somewhere else fast:
+     *  held to SWING_STEP, the elbow lagged and the forearm twisted 130° */
+    step = SWING_STEP,
   ) {
     if (!this.fit || !this.skeleton || w <= 0) return;
     const sh = this.bones[`shoulder${S}`];
@@ -1427,7 +1430,7 @@ export class PersonModel {
         const d = a - 2 * b + c;
         if (d > 1e-9) best += 0.14 * Math.max(-0.5, Math.min(0.5, (0.5 * (a - c)) / d));
       }
-      if (!Number.isNaN(prev)) best = prev + Math.max(-SWING_STEP, Math.min(SWING_STEP, best - prev));
+      if (!Number.isNaN(prev)) best = prev + Math.max(-step, Math.min(step, best - prev));
       this.gripSwing[S] = best;
       this.gripSwingAt[S] = now;
     }

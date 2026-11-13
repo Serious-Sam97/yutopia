@@ -19,7 +19,8 @@ asked. **Phase 0 (the mocks) rendered 2026-11-12**: `tools/art/guns/mock82.py` �
 plan 81's hold made per gun (`tp/long-hold.ts`), the AK on it (`tp/ak-hold.ts`); its stills
 `design/guns/p82/bench-1-hold.png`; committed 6bf13fb. **Phase 2 (the carry, the sling) built 2026-11-12** — stills
 `design/guns/p82/bench-2-carry.png`; committed dda3bd5. **Phase 3 (the aim) built 2026-11-12** — stills
-`design/guns/p82/bench-3-aim.png`. Follows plan 81 (the double-barrel: the long gun the
+`design/guns/p82/bench-3-aim.png`; committed 2ac49b8. **Phase 4 (the reload) built 2026-11-12** — stills
+`design/guns/p82/bench-4-reload.png`. Follows plan 81 (the double-barrel: the long gun the
 anchor, carried at her side, the left shoulder brought forward to reach, the forearms' twist minded, the
 stock kept out of her, port arms through whole-body moves, the reload as one timeline, `ARM.shut`), plan 80
 (the revolver: `PersonModel.gripTo`, the hand sockets, the bench) and plan 79 phase 5 (the Blender AK, its
@@ -200,6 +201,34 @@ Plan 81's machinery, for the AK:
      look's (Arms), the gun along it. Dry fire: the trigger finger pulls (unchanged).
 4. **The reload** (F4, F5) — one timeline; the magazines (the empty, the pouch); racked under when dry; a
    shot mid-way; the server's steps as decided; everyone sees it; the sounds on its moments.
+   Found in phase 4:
+   - **One timeline everyone plays** (`tp/ak-hold.ts` `akLoadAt`, `Person3D.akLeft`): from the server's step
+     opening it (Player.arm `open`); its closing now its own state too — `shut` shouldered, the new **`rack`**
+     run dry (shared `ARM.rack`, the server's `Hand.rack`) — so every screen knows when it closes and whether the
+     handle's racked. The server's times as they were (0.8 + 1.0 + 0.4, or 1.0 racked). A shot while the empty's
+     in still snaps it shut: on from the closing.
+   - **Rock and lock**: the gun in close (its butt under her right arm, rolled so the well faces her left hand —
+     the mocks'); her left hand to the magazine (the palm on its left side, the thumb on the catch), rocks it out on
+     its front lug, pulls it clear, **lets it fall** — a copy of it falls end over end and lies at her feet 2.5 s;
+     down to the pouch, takes the new one by its top half out of it, up to the well, hooks its lug, rocks it
+     home (heard as it clicks); her eyes on the well. The magazine follows where her hand really is.
+   - **The pouch** on her belt at her left hip's front (F5a), carrying the AK slung or in hand: a leather box, two
+     magazines standing in it, their curve along the belt and their left sides out — so her hand takes one palm
+     in, as a hand hangs (their curve out from her, it took it turned 78°); 14 cm out from her hip it was half in
+     her, now on her hip's front. The one she draws gone from it till the reload's done.
+   - **Racked over the top, not under** (a change from the mocks and F4a): under the rifle, palm up, with the
+     gun in close her forearm was turned 90–140° and her wrist bent 80–120° past its reach; over the receiver, her
+     palm on the dust cover and her fingers down to the knob, ~0° and within it. The carrier rides back with her
+     hand, everyone's.
+   - **Her elbow free to swing round between places** (`gripTo`'s new `step`, 0.25 rad a frame while her hand's
+     going somewhere else; plan 81's 0.07 otherwise): held to 0.07, her elbow lagged coming back from the handle
+     and her forearm twisted 130°. Run live, full and dry, both bodies: the twist ≤50°, no arm in the gun, her
+     left hand ≤1.2 cm short.
+   - **The sounds on its moments** (dark/arms.ts, shared `AK_RELOAD`): the magazine out as it rocks out (0.45 s),
+     the empty landing (the shell's floor or snow sound for now), the new one in as it clicks home (1.66 s — mine
+     too, not when the server counts it), the handle as it's pulled (0.42 s into `rack`).
+   - `e2e/guns-two.spec.ts` checks Bia's reload on Ana's screen again: run, the magazine out of the well, the gun
+     in her hands.
 5. **Everything else held** — plan 81's: kept across her chest in a roll, a vault, a slide, struck; let go
    sat, swimming, busy; the far people's cheaper hold.
 6. **Checks** — the bench spec, the two-of-us world spec (slung, drawn, aimed, a burst, reloaded dry and not),

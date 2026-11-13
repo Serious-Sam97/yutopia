@@ -236,8 +236,14 @@ export const damageAt = (gun: GunId, base: number, t: number, head: boolean) =>
 
 /** What a hand's doing with its gun (Player.arm): nothing, drawing it, reloading the revolver
  *  (the gate open), working the bolt after a shot (the sniper's), charging (the Daybreak's), opened to load — the revolver's cylinder out, the double-barrel broken open, the
- *  AK's magazine out (plan 79: its whole reload, the charging handle too, is `open`). */
-export const ARM = { idle: 0, draw: 1, reload: 2, open: 3, bolt: 4, charge: 5, shut: 6 } as const;
+ *  AK's magazine out and the new one in (plan 79); its closing (plans 81–82: the double-barrel shut, the AK
+ *  shouldered again — `shut`; the AK run dry, its charging handle racked first — `rack`). */
+export const ARM = { idle: 0, draw: 1, reload: 2, open: 3, bolt: 4, charge: 5, shut: 6, rack: 7 } as const;
+
+/** (plan 82 phase 4) The AK's reload as everyone's screen plays it (s from its opening — Player.arm `open`):
+ *  the empty rocked out, let fall, the new one clicked home; and from its racked closing (`rack`), the
+ *  charging handle pulled back and let go — the sounds on these */
+export const AK_RELOAD = { out: 0.45, drop: 0.7, home: 1.66, pull: 0.42 } as const;
 
 /** One of us hit by another's shot (the HQ armed, plan 30): half what the shadowed take. */
 export const PVP = 0.5;

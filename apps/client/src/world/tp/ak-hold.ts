@@ -161,3 +161,121 @@ export const AK_LONG: LongSpec = {
     },
   },
 };
+
+// ── the reload (plan 82 phase 4: F4a rock and lock, F5a the pouch) ─────────────────────────────────────
+// One timeline, s from the server's step opening it (Player.arm ARM.open; its closing ARM.shut, or ARM.rack
+// run dry — everyone sees which), in time with shared ARMS.ak47 (the magazine out 0.8, the new one in 1.0,
+// shouldered 0.4 or racked 1.0):
+//   0–0.3      the gun in close (the butt under her right arm, rolled so the well faces her left hand); her
+//              left hand off the receiver to the magazine, its thumb on the catch
+//   0.25–0.62  the empty rocked out on its front lug and pulled clear; let fall at 0.7
+//   0.7–1.1    her left hand down to the pouch at her left hip, a new one drawn up out of it
+//   1.1–1.66   up to the well, its front lug hooked, rocked back till it clicks
+//   1.8–2.2    shouldered: her left hand back to the receiver, the gun up to the hold — or, racked (to 2.8):
+//              her left hand over the receiver to the charging handle, swept back, let go, and back
+// A shot while the empty's still in (the server snaps it shut): on from the closing.
+/** (shared ARMS.ak47, AK_RELOAD) */
+export const AK_LOAD = { open: 0.8, speed: 1.0, shut: 0.4, rack: 1.0, out: 0.45, drop: 0.7, home: 1.66, pull: 0.42 };
+export const AK_CLOSE = AK_LOAD.open + AK_LOAD.speed;
+/** The gun held for loading (the mocks'): its butt under her right arm — from the right shoulder's joint
+ *  (her frame: x left, y up, z ahead) — the bore's way ahead, left and a little down, its top rolled left (the
+ *  well to her left hand) */
+export const AK_LOAD_GUN = {
+  butt: [0.02, -0.16, 0.04] as [number, number, number],
+  f: [0.55, -0.2, 0.8] as [number, number, number],
+  u: [0.45, 1, 0] as [number, number, number],
+};
+/** Her trunk turned this far right while loading (the mocks') */
+export const AK_LOAD_BLADE = 0.12;
+/** The magazine part's pivot (its front lug — tools/art/guns/build_guns.py) and how far it's rocked out (rad,
+ *  its bottom forward about the lug), hooked, slid out along itself (m) */
+export const MAG = { lug: AK_LUG, out: 0.42, hook: 0.3, clear: 0.06, hookDown: 0.015 };
+/** The left hand round the magazine (its own frame — the gun's as it hangs home, rocked with it): the palm on
+ *  its left side, the fingers round its front and down, the index side up; the thumb up behind it on the
+ *  catch (the gun's frame) */
+export const MAG_HAND = {
+  palm: new Vector3(0.13, -0.07, -0.034),
+  along: new Vector3(0.7, -0.7, -0.2).normalize(),
+  index: new Vector3(0.3, 1, 0).normalize(),
+  thumb: new Vector3(0.075, 0.008, -0.012),
+  shape: { round: false as const, half: [0.026, 0.06, 0.014] as [number, number, number], cz: 0 },
+  /** the shape's middle on the magazine (its frame) */
+  at: new Vector3(0.13, -0.07, 0),
+};
+/** The left hand on the charging handle run dry: over the top of the receiver, its palm down on the dust
+ *  cover, its fingers down the right side to the knob — swept back with the carrier (the gun's frame, m). Under
+ *  the rifle, palm up (the mocks', F4a's), with the gun in close her forearm was turned 90–140° and her wrist
+ *  bent 80–120° past its reach; over the top, ~0° and within it */
+export const RACK_HAND = {
+  palm: new Vector3(0.17, 0.095, 0.012),
+  along: new Vector3(0, -0.35, 0.94).normalize(),
+  index: new Vector3(-1, 0, 0),
+  back: 0.075,
+};
+/** The pouch on her belt at her left hip's front (F5a; the hips' own space: x her left, y up, z ahead): its
+ *  middle, its turn (x along the belt, y up, z out from her), its box's size (m — long along the belt for a
+ *  30-round magazine's curve), its two magazines' mouths (the box's frame, just over its top) and their turn in
+ *  it (their curve forward along the belt, their left sides out: her hand takes one palm in, as a hand hangs —
+ *  their curve out from her, it took it turned 78°) — the outer one drawn — and how far it's drawn up out of it
+ *  before it's carried off. Out on her hip's front (at 14 cm it was half in her) */
+export const AK_POUCH = {
+  at: new Vector3(0.16, -0.13, 0.175),
+  turn: new Quaternion().setFromRotationMatrix(
+    new Matrix4().makeBasis(
+      new Vector3(0.75, 0, -0.66).normalize(),
+      new Vector3(0, 1, 0),
+      new Vector3(0.66, 0, 0.75).normalize(),
+    ),
+  ),
+  box: [0.13, 0.2, 0.065] as [number, number, number],
+  mags: [new Vector3(0.0075, 0.115, 0.0155), new Vector3(0.0075, 0.115, -0.0155)],
+  magTurn: new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI),
+  take: 0,
+  draw: 0.12,
+  /** her hand meets it drawn this much of the way up (its palm over the pouch's mouth) */
+  grab: 0.5,
+};
+/** The empty let fall: its spin (rad/s about the gun's right and its bore), how long it lies (s) */
+export const DROP = { spin: [3.2, 1.4] as [number, number], lie: 2.5 };
+
+const sm = (a: number, b: number, t: number) => {
+  const c = Math.max(0, Math.min(1, (t - a) / (b - a)));
+  return c * c * (3 - 2 * c);
+};
+/** Where the reload is at `t` (s; `rack`: its closing racks the handle): the gun's legs (0 the hold … 1 in
+ *  close), the magazine's state, the left hand's, the carrier's travel back (0..1) */
+export function akLoadAt(t: number, rack: boolean) {
+  const end = AK_CLOSE + (rack ? AK_LOAD.rack : AK_LOAD.shut);
+  // the gun: down in close, kept there (racked: till the handle's let go), up to the hold
+  const upFrom = rack ? AK_CLOSE + 0.62 : AK_CLOSE + 0.05;
+  const gun = sm(0, 0.3, t) * (1 - sm(upFrom, end, t));
+  // the magazine: home; rocked out; slid clear (in her hand); fallen; drawn from the pouch; to the well;
+  // hooked; home
+  let mag: { at: "gun" | "hand" | "gone" | "pouch" | "carry"; rock: number; slide: number; k: number };
+  if (t < 0.25) mag = { at: "gun", rock: 0, slide: 0, k: 0 };
+  else if (t < 0.5) mag = { at: "gun", rock: MAG.out * sm(0.25, 0.5, t), slide: 0, k: 0 };
+  else if (t < AK_LOAD.drop) mag = { at: "hand", rock: MAG.out, slide: MAG.clear * sm(0.5, 0.62, t), k: 0 };
+  else if (t < 0.95) mag = { at: "gone", rock: 0, slide: 0, k: 0 };
+  // (her hand takes it by its top, half up out of the pouch — its palm over the pouch's mouth, not in it)
+  else if (t < 1.1) mag = { at: "pouch", rock: 0, slide: 0, k: AK_POUCH.grab + (1 - AK_POUCH.grab) * sm(0.95, 1.1, t) };
+  else if (t < 1.38) mag = { at: "carry", rock: MAG.hook, slide: MAG.hookDown, k: sm(1.1, 1.38, t) };
+  else if (t < 1.48) mag = { at: "gun", rock: MAG.hook, slide: MAG.hookDown * (1 - sm(1.38, 1.48, t)), k: 0 };
+  else mag = { at: "gun", rock: MAG.hook * (1 - sm(1.48, AK_LOAD.home, t)), slide: 0, k: 0 };
+  // the left hand: to the magazine, with it, to the pouch, with the new one; then back — or to the handle
+  let hand: { a: string; b: string; k: number };
+  if (t < 0.25) hand = { a: "fore", b: "mag", k: sm(0, 0.25, t) };
+  else if (t < AK_LOAD.drop) hand = { a: "mag", b: "mag", k: 0 };
+  else if (t < 0.95) hand = { a: "let", b: "pouch", k: sm(AK_LOAD.drop, 0.95, t) };
+  else if (t < AK_CLOSE) hand = { a: "mag", b: "mag", k: 0 };
+  else if (!rack) hand = { a: "mag", b: "fore", k: sm(AK_CLOSE, AK_CLOSE + 0.25, t) };
+  else if (t < AK_CLOSE + 0.3) hand = { a: "mag", b: "knob", k: sm(AK_CLOSE, AK_CLOSE + 0.3, t) };
+  else if (t < AK_CLOSE + 0.57) hand = { a: "knob", b: "knob", k: 0 };
+  else hand = { a: "knob", b: "fore", k: sm(AK_CLOSE + 0.57, AK_CLOSE + 0.8, t) };
+  // the carrier: swept back with the hand, let go (it slams home)
+  const bolt = !rack
+    ? 0
+    : t < AK_CLOSE + AK_LOAD.pull
+      ? sm(AK_CLOSE + 0.3, AK_CLOSE + AK_LOAD.pull, t)
+      : 1 - Math.max(0, Math.min(1, (t - AK_CLOSE - AK_LOAD.pull) / 0.05));
+  return { gun, mag, hand, bolt, end, look: sm(0, 0.3, t) * (1 - sm(AK_CLOSE, AK_CLOSE + 0.3, t)) };
+}
