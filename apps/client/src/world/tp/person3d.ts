@@ -1641,7 +1641,12 @@ export class Person3D {
       const draw = !LS.sling ? 1 : away ? Math.max(0, 1 - this.holsterT / LS.sling.away) : drawn;
       const sw = this.revW;
       const ported = this.lgPortW > 0.5;
-      if (sw <= 0.01) this.lgForeOn = false;
+      if (sw <= 0.01) {
+        this.lgForeOn = false;
+        // (plan 82: let go mid-reload — sat, the ragdoll — the AK's magazine back on it, its handle home)
+        this.akMagOwn = false;
+        if (!sg) this.akMagHome();
+      }
       if (sw > 0.01)
         this.longHands(p, sw, aiming && !loading && !away && !reloading && !ported, run, dt, draw, this.lgPortW);
       if (!this.revFree) {
@@ -2363,7 +2368,8 @@ export class Person3D {
       const chest = m.bone("chest");
       if (chest) {
         chest.updateWorldMatrix(true, false);
-        rM.compose(SG_PORT.at, SG_PORT.turn, rs2.set(1, 1, 1))
+        const PT = LS.port ?? SG_PORT;
+        rM.compose(PT.at, PT.turn, rs2.set(1, 1, 1))
           .premultiply(chest.matrixWorld)
           .decompose(rgA, rqA, rs1);
         H.grip.lerp(rgA, pw);
@@ -2941,7 +2947,11 @@ export class Person3D {
       grip: L.length ? grip : null,
       // (the left's only when it's on the gun)
       // (the double-barrel's left hand: on it aimed, reloading, across her chest — carried at her side it's free)
-      L: (sg && this.lgLeftW > 0.5) || (!sg && this.revHold.left === "support") ? { ...this.model.gripLeft.L } : null,
+      // (and only while the hold's on — sat, it's let go)
+      L:
+        (sg && this.lgLeftW > 0.5 && this.revW > 0.5) || (!sg && this.revHold.left === "support")
+          ? { ...this.model.gripLeft.L }
+          : null,
       R: { ...this.model.gripLeft.R },
       held: this.revHeld,
     };

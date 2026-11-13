@@ -20,7 +20,8 @@ plan 81's hold made per gun (`tp/long-hold.ts`), the AK on it (`tp/ak-hold.ts`);
 `design/guns/p82/bench-1-hold.png`; committed 6bf13fb. **Phase 2 (the carry, the sling) built 2026-11-12** — stills
 `design/guns/p82/bench-2-carry.png`; committed dda3bd5. **Phase 3 (the aim) built 2026-11-12** — stills
 `design/guns/p82/bench-3-aim.png`; committed 2ac49b8. **Phase 4 (the reload) built 2026-11-12** — stills
-`design/guns/p82/bench-4-reload.png`. Follows plan 81 (the double-barrel: the long gun the
+`design/guns/p82/bench-4-reload.png`; committed 3d5e45d. **Phase 5 (everything else) built 2026-11-12** — stills
+`design/guns/p82/bench-5-moves.png`. Follows plan 81 (the double-barrel: the long gun the
 anchor, carried at her side, the left shoulder brought forward to reach, the forearms' twist minded, the
 stock kept out of her, port arms through whole-body moves, the reload as one timeline, `ARM.shut`), plan 80
 (the revolver: `PersonModel.gripTo`, the hand sockets, the bench) and plan 79 phase 5 (the Blender AK, its
@@ -231,6 +232,16 @@ Plan 81's machinery, for the AK:
      in her hands.
 5. **Everything else held** — plan 81's: kept across her chest in a roll, a vault, a slide, struck; let go
    sat, swimming, busy; the far people's cheaper hold.
+   Found in phase 5:
+   - **Its own port arms** (`AK_PORT`, `LongSpec.port`): a roll, a vault, a slide, Flowmotion, struck — pulled in
+     across her chest in her chest's frame, both hands on. On the double-barrel's (the muzzle nearly straight
+     up) her right wrist on the pistol grip was bent 53–76° past its reach and her left forearm turned 65°; the
+     muzzle further ahead (up, left and ahead) it's 11–33° past, the forearm ≤52°; her left hand ≤1.6 cm short
+     (her left shoulder isn't brought forward across her chest: with it, her hand went further out along the
+     handguard and her forearm turned 55–70°; kept in by the magazine, worse still). No arm in the gun.
+   - **Let go sat** (and swimming, busy, down — plan 81's): in her right hand on her lap; let go mid-reload, the
+     magazine back on it and the handle home. The bench's check reports the left hand only while the hold's on.
+   - The far people's cheaper hold is plan 81's (no fingers, no cheek, the elbow where the pole has it).
 6. **Checks** — the bench spec, the two-of-us world spec (slung, drawn, aimed, a burst, reloaded dry and not),
    the steadiness and the stock tools, stills in the world.
 

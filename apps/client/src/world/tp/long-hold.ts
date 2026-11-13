@@ -72,6 +72,9 @@ export interface LongSpec {
   /** Slung on her back when it isn't in her hands (the Player flag that says she carries it), drawn and put
    *  back along its keys — null: none (it's gone when put away) */
   sling: SlingSpec | null;
+  /** In a whole-body move or struck, pulled in across her chest (port arms — her chest's frame): its grip's
+   *  place, its turn (none: the double-barrel's, tp/shotgun-hold.ts SG_PORT) */
+  port?: { at: Vector3; turn: Quaternion };
   /** The bench's checks: the left fingers against boxes on the gun (its middle x, y and half-sizes), the
    *  forearms against rods on it (a → b, x and y, `r` round), each in the gun's frame or (`fore`) the fore
    *  part's (less its pivot); the stock's side profile (its top and bottom lines by x, from `x[0]` to `x[1]`,

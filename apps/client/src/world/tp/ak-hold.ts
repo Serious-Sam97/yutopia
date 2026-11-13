@@ -93,6 +93,23 @@ export const AK_SLING: SlingSpec = {
   over: 0.085,
 };
 
+// ── everything else (plan 82 phase 5) ─────────────────────────────────────────────────────────────────
+/** In a whole-body move — a roll, a vault, a slide, Flowmotion — or struck: pulled in across her chest (port
+ *  arms, her chest's frame: x her left, y up, z ahead — it goes round with her), both hands on: the grip by her
+ *  right hip's front, the muzzle up, left and ahead — further ahead than the double-barrel's (SG_PORT, nearly
+ *  upright): held so by its pistol grip her right wrist was bent 53–76° past its reach and her left forearm
+ *  turned 65°; this way 11–28°, within 52° */
+const PORT_F = new Vector3(0.55, 0.5, 0.67).normalize();
+export const AK_PORT = {
+  at: new Vector3(-0.08, -0.24, 0.3),
+  turn: new Quaternion().setFromRotationMatrix(
+    (() => {
+      const u = new Vector3(0, 0, -1).addScaledVector(PORT_F, PORT_F.z).normalize();
+      return new Matrix4().makeBasis(PORT_F, u, new Vector3().crossVectors(PORT_F, u));
+    })(),
+  ),
+};
+
 /** The AK as tp/long-hold.ts holds a long gun */
 export const AK_LONG: LongSpec = {
   key: "ak47",
@@ -130,6 +147,7 @@ export const AK_LONG: LongSpec = {
   aimS: 0.24,
   leftCarried: true,
   sling: AK_SLING,
+  port: AK_PORT,
   avoid: null,
   check: {
     boxes: [
