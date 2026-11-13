@@ -279,6 +279,8 @@ function Bench({ q }: { q: URLSearchParams }) {
       const SPEED = [0, 1.4, 3.2, 5.4];
       const P3 = person as unknown as {
         boltT: number;
+        snLoadT: number;
+        snCloseAt: number;
         drawT: number;
         holsterT: number;
         revLoadT: number;
@@ -337,6 +339,14 @@ function Bench({ q }: { q: URLSearchParams }) {
                 ? 7
                 : 6
               : 3;
+        // (plan 83: the sniper's reload — opened, five rounds, closed and back: 3.5 s, its closing at 2.85 —
+        // ARM.open, then ARM.shut)
+        if (reload && GUN === "sniper") {
+          const snT = t * 3.5;
+          (p as { arm?: number }).arm = snT < 2.85 ? 3 : snT < 3.2 ? 6 : 0;
+          P3.snLoadT = Math.max(0, snT - dt);
+          P3.snCloseAt = snT >= 2.85 ? 2.85 : -1;
+        }
         // (plan 83: the sniper's bolt worked after a shot — `act: "bolt"`, its 0.85 s scrubbed by `actT`)
         if (s.act === "bolt") {
           (p as { arm?: number }).arm = 4;

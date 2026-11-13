@@ -603,6 +603,8 @@ test("the sniper (plan 79 phase 6): down its scope, the shot goes near dead on (
   await sleep(ARMS.sniper.open * 1000 + 100);
   assert.ok((loaded3() ?? 0) >= 3, "nothing dumped");
   await waitFor(() => loaded3() === 5, 2500);
+  // (plan 83: the bolt run home everyone sees — Player.arm ARM.shut — once the last's in)
+  await waitFor(() => me(b.room).arm === ARM.shut, 1000);
   await waitFor(() => me(b.room).arm === ARM.idle, 1500);
 });
 

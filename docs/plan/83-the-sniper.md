@@ -19,7 +19,8 @@ down reached his calves). **Phase 1 (the grip) built 2026-11-13** — the sniper
 `SN_LONG`), the bench's `gun=sniper`; its stills `design/guns/p83/bench-1-hold.png`; committed 5178a55. **Phase 2 (put
 away, drawn) built 2026-11-13** — stills `design/guns/p83/bench-2-carry.png`; committed c9adbeb. **Phase 3 (the aim)
 built 2026-11-13** — stills `design/guns/p83/bench-3-aim.png`; committed de08538. **Phase 4 (the bolt) built
-2026-11-13** — stills `design/guns/p83/bench-4-bolt.png`. Not committed.
+2026-11-13** — stills `design/guns/p83/bench-4-bolt.png`; committed 4c1680b. **Phase 5 (the reload) built
+2026-11-13** — stills `design/guns/p83/bench-5-reload.png`. Not committed.
 
 ## Where we are — read from the code and the bench
 
@@ -272,6 +273,32 @@ shut) whatever F3–F4.
 5. **The reload** — one timeline on the server's steps (`ARM.open`, the rounds, `ARM.shut`): raised (F4), the
    bolt back by the right hand, each round from F5 to the action and down into the magazine, the bolt home,
    back down; let go mid-reload; others see it.
+   Done in phase 5:
+   - **The sleeve on the gun** (`tools/art/guns/guns.py`: a leather band on the stock's right side, five .308
+     rounds standing in it — `round0–4`, shown by how many are left; `sniper.glb` 165 KB, 19k triangles, within
+     its budget). Shown five, less the ones taken this reload.
+   - **The server tells the closing** (`features/arms.ts`: `ARM.shut` for the sniper too, as the double-barrel's
+     and the AK's; its test waits for it): everyone's screen runs the bolt home then.
+   - **One timeline** (`tp/sniper-hold.ts` `SN_LOAD`, `snLoadAt`): her left hand over the fore-end's top (0–0.12
+     s), the rifle raised before her right chest (–0.3; `SN_LOAD_GUN`, the mocks' ~52°); her right hand to the
+     knob, the bolt up and back (–0.35); each round (0.5 s): down to the sleeve, one pinched out, up to the port,
+     laid in along the bore and thumbed down; closing (0.35): to the knob, the bolt home and down; back (0.3):
+     her hand to the grip, the rifle down, her left hand back under it. Her eyes on the port the while. The round
+     in her hand goes with her wrist (its place taken at the sleeve). Seen mid-way: on from the opening or the
+     closing.
+   - **Each hand's places searched** (small turns of a start, as before): her left over the fore-end's top
+     (`SN_LOAD_GUN.hand` — under it, raised, her forearm turned ~100°), her right on the knob raised
+     (`SN_LOAD_KNOB` — the shoulder's bent her wrist 85° past), at the sleeve (`SN_SLEEVE_HAND`) and at the
+     port (`SN_PORT_HAND`). From 0.3 s to 3.15 (all the loading): **none flawed on either body** — each wrist
+     within its reach, each forearm ≤41°, each hand ≤1.2 cm off its place, nothing in the gun.
+   - The bench plays it: `pose: "reload"`, `t` 0–1 of 3.5 s (opened, five rounds, closed at 2.85, back).
+   - Found and fixed on the way: the timeline's "not closing yet" as Infinity made its weights NaN — the left
+     arm's bones went NaN (nothing drawn of it).
+   **Left** — the two changes of hold, ~0.15 s each (raising: 0.05–0.25 s; lowering: the last 0.25): her left
+   wrist up to 38° past its reach as her hand turns from under the fore-end to over it, her left forearm 1.4–2
+   cm through the scope's front and her right forearm 5–6 cm through the stock's belly as her hand leaves the
+   grip for the knob, her left fingers 2 cm into the fore-end as it comes back under. Turning her left hand
+   after the raise instead was worse (her forearm turned 70–96°).
 6. **Everything else** — port arms in a roll, a vault, a slide, struck (1.27 m: the floor — plan 81's fourth
    feedback); sat, swimming, busy; the far people's cheaper hold. The Daybreak stays on the old path till its
    own plan.

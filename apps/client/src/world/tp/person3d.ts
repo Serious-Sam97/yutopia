@@ -52,6 +52,7 @@ import {
   isLongGun,
   lifeGunModel,
   poseGun,
+  roundGeometry,
   shellGeometry,
 } from "./guns3d";
 import { levelHands } from "./level3d";
@@ -105,7 +106,21 @@ import {
   SHELL_PALM,
   sgLoadAt,
 } from "./shotgun-hold";
-import { SN_BOLT, SN_KNOB_HAND, SN_LONG, snBoltAt } from "./sniper-hold";
+import {
+  SN_BOLT,
+  SN_KNOB_HAND,
+  SN_LOAD,
+  SN_LOAD_GUN,
+  SN_LOAD_KNOB,
+  SN_LONG,
+  SN_PORT,
+  SN_PORT_HAND,
+  SN_SLEEVE,
+  SN_SLEEVE_HAND,
+  type SnPlace,
+  snBoltAt,
+  snLoadAt,
+} from "./sniper-hold";
 
 type Chars = NonNullable<ReturnType<typeof chars>>;
 type SwimM = NonNullable<ReturnType<Chars["swimNow"]>>;
@@ -212,7 +227,15 @@ const lgFW = new Matrix4();
 /** (plan 81) the stock the right arm keeps out of, reloading and carried */
 const sgAvoid = { a: new Vector3(), b: new Vector3(), r: 0.045 };
 /** (plan 81 phase 4) A shell's mesh, one for everyone */
-let SG_SHELL_GEO: BufferGeometry | null = null; // (shared ARM.bolt: the sniper's bolt worked — Player.arm)
+let SG_SHELL_GEO: BufferGeometry | null = null;
+let SN_ROUND_GEO: BufferGeometry | null = null;
+const snGripP = new Vector3();
+const snGripQ = new Quaternion();
+const snAP = new Vector3();
+const snAQ = new Quaternion();
+const snBP = new Vector3();
+const snBQ = new Quaternion();
+const snRM = new Matrix4(); // (shared ARM.bolt: the sniper's bolt worked — Player.arm)
 /** The model a gun's id draws (the pool cue's carried as the double-barrel is). */
 const gunKind = (key: string): GunKind =>
   key === "shotgun" || key === "cue"
@@ -1459,6 +1482,9 @@ export class Person3D {
     // (plan 80: the revolver reloading — its parts as the reload's timeline has them)
     if (this.revPose) poseGun(gun.model, kind, { ...(fx ?? {}), cock: 0, ...this.revPose });
     // (plan 82: the AK's handle racked — everyone's, from the reload's timeline)
+    // (plan 83: the sniper's bolt and its sleeve's rounds — everyone's, from the bolt's and the reload's timelines)
+    else if (kind === "sniper")
+      poseGun(gun.model, kind, { ...(fx ?? { cock: 1 }), bolt: this.boltCycle, loaded: this.snSleeve });
     else if (gun.key !== "cue") poseGun(gun.model, kind, fx ?? { cock: 1, bolt: this.akBolt });
     // (in a life hand: the hand carries it — its kick is the arms', its turn the wrist's)
     if (gun.inHand) return;
@@ -1607,6 +1633,7 @@ export class Person3D {
     // (another gun out, or none: no double-barrel's reload going; no AK's)
     if (gun?.key !== "shotgun") this.sgLoadT = -1;
     if (gun?.key !== "ak47") this.akLoadT = -1;
+    if (gun?.key !== "sniper") this.snLoadT = -1;
     // (plan 82: the AK on the same hold, its own numbers — tp/ak-hold.ts; its draw, sling and reload for now
     // as it was: held at the ready through them)
     const LS = gun?.inHand ? LONG[gun.key] : undefined;
@@ -1648,7 +1675,23 @@ export class Person3D {
           if (!open && this.akLoadT >= AK_CLOSE + (this.akRack ? AK_RL.rack : AK_RL.shut)) this.akLoadT = -1;
         }
       }
-      const reloading = this.sgLoadT >= 0 || this.akLoadT >= 0;
+      // (plan 83 phase 5: the sniper's — opened (Player.arm ARM.open: the bolt back, then a round at a time; the
+      // server says nothing between), closed as everyone's told (ARM.shut: the bolt home); seen mid-way, on from
+      // the opening or the closing; cut short (a shot snapped it shut), on from its closing)
+      if (LS === SN_LONG) {
+        const open = p.arm === ARM_RELOAD || p.arm === ARM_OPEN;
+        const closing = p.arm === ARM_SHUT;
+        if ((open || closing) && this.snLoadT < 0 && !away) {
+          this.snLoadT = open ? 0 : SN_LOAD.open;
+          this.snCloseAt = open ? -1 : this.snLoadT;
+        }
+        if (this.snLoadT >= 0) {
+          this.snLoadT += dt;
+          if (!open && this.snCloseAt < 0) this.snCloseAt = Math.max(SN_LOAD.open, this.snLoadT);
+          if (this.snCloseAt >= 0 && this.snLoadT >= this.snCloseAt + SN_LOAD.shut + SN_LOAD.back) this.snLoadT = -1;
+        }
+      }
+      const reloading = this.sgLoadT >= 0 || this.akLoadT >= 0 || this.snLoadT >= 0;
       // (plan 81 phase 5: let go — sat, swimming, busy, a mantle, the ragdoll; a roll, a vault, a slide,
       // Flowmotion, struck: kept, pulled in across her chest — both hands on)
       // (one with no sling let go of as it's put away — it goes)
@@ -2294,11 +2337,16 @@ export class Person3D {
     const L = LT >= 0 && barrels ? sgLoadAt(LT) : null;
     // (plan 82 phase 4: the AK's reload — where its timeline has the gun, the magazine, the left hand)
     const AL = this.akLoadT >= 0 && LS === AK_LONG ? akLoadAt(this.akLoadT, this.akRack) : null;
+    // (plan 83 phase 5: the sniper's reload — the rifle raised, her right hand between the bolt, the sleeve and
+    // the port)
+    const SLd = this.snLoadT >= 0 && LS === SN_LONG ? snLoadAt(this.snLoadT, this.snCloseAt) : null;
+    this.snSleeve = SLd ? Math.max(0, SN_SLEEVE.n - SLd.taken) : SN_SLEEVE.n;
+    if (SLd) this.boltCycle = SLd.bolt;
     this.akMagOwn = !!AL;
     const gLeg = L ? legAt(SG_LOAD_GUN_LEGS, LT) : null;
     const kLoad = !gLeg ? 0 : gLeg.a === "load" ? (gLeg.b === "load" ? 1 : 1 - gLeg.k) : gLeg.k;
     // (pulled in across her chest — not mid-reload: the reload's hands have it)
-    const pw = L || AL ? 0 : port;
+    const pw = L || AL || SLd ? 0 : port;
     // her trunk turned right of the gun's way: square, her left arm couldn't reach the fore-end (loading, less)
     m.root.updateMatrixWorld(true);
     sR.getWorldPosition(rv1).sub(sL.getWorldPosition(rv2));
@@ -2451,6 +2499,21 @@ export class Person3D {
       akV1.sub(akV2.copy(LS.butt).multiplyScalar(B.k).applyQuaternion(akQ1));
       H.grip.lerp(akV1, AL.gun);
       H.q.slerp(akQ1, AL.gun);
+      E.pos.copy(H.grip).applyMatrix4(rM.copy(RW).invert());
+      E.quat.copy(this.root.getWorldQuaternion(rqRoot)).invert().multiply(H.q);
+      E.on = true;
+    }
+    // (plan 83 phase 5: the sniper raised for loading — nearly upright before her right chest, its port turned to
+    // her — and back down; the hold's ease follows it)
+    if (SLd && SLd.gun > 0.001) {
+      const K = SN_LOAD_GUN;
+      sR.getWorldPosition(akV1)
+        .addScaledVector(B.left, K.at[0] * B.k)
+        .addScaledVector(B.up, K.at[1] * B.k)
+        .addScaledVector(B.ahead, K.at[2] * B.k);
+      gunQuat(bodyDir(B, K.f, rv1), bodyDir(B, K.u, rv2), akQ1);
+      H.grip.lerp(akV1, SLd.gun);
+      H.q.slerp(akQ1, SLd.gun);
       E.pos.copy(H.grip).applyMatrix4(rM.copy(RW).invert());
       E.quat.copy(this.root.getWorldQuaternion(rqRoot)).invert().multiply(H.q);
       E.on = true;
@@ -2633,6 +2696,64 @@ export class Person3D {
       }
       if (SB.hand > 0.5) m.hold("R", null);
     }
+    // (plan 83 phase 5: loading the sniper — her right hand between the grip, the bolt's knob, the sleeve on the
+    // stock and the port, each its own place on the gun; the rifle where the reload has it)
+    const loadingSn = !!SLd && (SLd.a !== "grip" || SLd.b !== "grip");
+    if (SLd && loadingSn) {
+      this.placeGun(rMg);
+      this.revFree = true;
+      poseGun(gun.model, "sniper", { ...(this.gunFx ?? {}), bolt: SLd.bolt, loaded: this.snSleeve });
+      snGripP.copy(rAt);
+      snGripQ.copy(rTurn);
+      rMg.decompose(akV2, akQ1, akS);
+      // (the round she's going for: the last one in the sleeve)
+      const idx = Math.max(0, Math.min(SN_SLEEVE.n - 1, SN_SLEEVE.n - 1 - SLd.taken + (SLd.round ? 1 : 0)));
+      const place = (pl: SnPlace, outP: Vector3, outQ: Quaternion) => {
+        if (pl === "grip") {
+          outP.copy(snGripP);
+          outQ.copy(snGripQ);
+          return;
+        }
+        let M: Matrix4 = rMg;
+        let H3 = SN_PORT_HAND;
+        if (pl === "knob") {
+          const bp = gun.model.parts.bolt;
+          if (bp) {
+            bp.updateWorldMatrix(true, false);
+            M = bp.matrixWorld;
+          }
+          H3 = SN_LOAD_KNOB;
+          akV1.copy(H3.palm);
+        } else if (pl === "sleeve") {
+          H3 = SN_SLEEVE_HAND;
+          akV1
+            .copy(SN_SLEEVE.at)
+            .add(rv4.set(SN_SLEEVE.dx * idx, SN_SLEEVE.len / 2, 0))
+            .add(H3.palm);
+        } else akV1.copy(SN_PORT).add(H3.palm);
+        M.decompose(rv4, rq1, rs1);
+        akV1.applyMatrix4(M);
+        if (
+          !m.wristFor(
+            "R",
+            akV1,
+            rv4.copy(H3.along).applyQuaternion(rq1),
+            rv5.copy(H3.index).applyQuaternion(rq1),
+            outP,
+            outQ,
+          )
+        ) {
+          outP.copy(snGripP);
+          outQ.copy(snGripQ);
+        }
+      };
+      place(SLd.a, snAP, snAQ);
+      place(SLd.b, snBP, snBQ);
+      rAt.copy(snAP).lerp(snBP, SLd.k);
+      rTurn.copy(snAQ).slerp(snBQ, SLd.k);
+      rNow = (SLd.k < 0.5 ? SLd.a : SLd.b) === "grip" ? "grip" : "load";
+      if (rNow !== "grip") m.hold("R", null);
+    }
     // (off the wrist, its fingers closed round nothing — a shell's pinched, below)
     if (L && rNow !== "grip") m.hold("R", null);
     // (reloading, the stock's along her side under her arm: the arm kept out of it — the butt to behind the
@@ -2646,7 +2767,16 @@ export class Person3D {
       sgAvoid.r = A.r * B.k;
       avoid = sgAvoid;
     }
-    m.gripTo("R", rAt, rTurn, rw, [-1, -0.5, -0.5], cheap, avoid, racking || grabbing || bolting ? 0.25 : undefined);
+    m.gripTo(
+      "R",
+      rAt,
+      rTurn,
+      rw,
+      [-1, -0.5, -0.5],
+      cheap,
+      avoid,
+      racking || grabbing || bolting || loadingSn ? 0.25 : undefined,
+    );
     // (racking: the gun where it was — the hand's gone off it; its fingers hooked over the knob)
     if (grabbing) {
       this.placeGun(rMg);
@@ -2656,6 +2786,13 @@ export class Person3D {
       this.placeGun(rMg);
       if (!cheap && rNow === "knob") m.fingersTo("R", bolting ? 0.9 : 0.95);
     }
+    // (loading the sniper: the gun where it was; her fingers pinching — a round in them, out of the sleeve, laid in
+    // the port and thumbed down)
+    if (loadingSn && SLd) {
+      this.placeGun(rMg);
+      if (!cheap && rNow !== "grip") m.fingersTo("R", 0.75);
+      this.snRoundFrame(SLd, rMg);
+    } else this.snRoundFrame(null, rMg);
     if (L) {
       this.placeGun(rMg);
       this.sgShellPlace();
@@ -2678,8 +2815,10 @@ export class Person3D {
     const torch = !!T && lw > 0.5;
     const F = LS.fore;
     // (plan 82: in port arms the AK's left hand over the top of it, palm down — eased round its left side)
-    const PF = LS.port?.fore;
-    const pk = PF && !torch ? pw : 0;
+    // (plan 83: loading the sniper raised, her left hand round the fore-end from over its top — its own place,
+    // as port arms' is)
+    const PF = SLd ? SN_LOAD_GUN.hand : LS.port?.fore;
+    const pk = SLd ? SLd.left : PF && !torch ? pw : 0;
     const palmY = torch ? LS.torch.palm : pk > 0 && PF ? F.y + (PF.y - F.y) * pk : F.y;
     const fAlong = pk > 0 && PF ? lgFA.copy(F.along).lerp(PF.along, pk).normalize() : F.along;
     const fIndex = pk > 0 && PF ? lgFI.copy(F.index).lerp(PF.index, pk).normalize() : F.index;
@@ -2700,10 +2839,10 @@ export class Person3D {
     const qb = 2 * p0.dot(dx);
     const qc = p0.lengthSq() - reach * reach;
     const disc = qb * qb - 4 * qa * qc;
-    const want = Math.max(
-      F.x[0],
-      Math.min(F.x[1], disc >= 0 && qa > 1e-9 ? (-qb + Math.sqrt(disc)) / (2 * qa) : F.x[0]),
-    );
+    // (plan 83: loading the sniper, her left hand up the fore-end — the rifle raised before her)
+    const fx0 = SLd ? F.x[0] + (SN_LOAD_GUN.fore[0] - F.x[0]) * SLd.gun : F.x[0];
+    const fx1 = SLd ? F.x[1] + (SN_LOAD_GUN.fore[1] - F.x[1]) * SLd.gun : F.x[1];
+    const want = Math.max(fx0, Math.min(fx1, disc >= 0 && qa > 1e-9 ? (-qb + Math.sqrt(disc)) / (2 * qa) : fx0));
     this.lgForeX = this.lgForeOn && !p.reduced ? this.lgForeX + (want - this.lgForeX) * (1 - Math.exp(-dt * 18)) : want;
     this.lgForeOn = true;
     const x = this.lgForeX;
@@ -2750,6 +2889,14 @@ export class Person3D {
         this.headToward(rv1.sub(head.getWorldPosition(rv2)).normalize(), 0.7 * AL.look * w);
       }
     }
+    // (plan 83: loading the sniper, her eyes on the port)
+    if (SLd && SLd.look > 0.01 && !cheap) {
+      const head = m.bone("head");
+      if (head) {
+        rv1.copy(SN_PORT).applyMatrix4(gun.model.root.matrixWorld);
+        this.headToward(rv1.sub(head.getWorldPosition(rv2)).normalize(), 0.7 * SLd.look * w);
+      }
+    }
     // (the magazine put back home once it's done)
     if (!AL && LS === AK_LONG) this.akMagHome();
     // (loading, her eyes on the breech)
@@ -2784,6 +2931,48 @@ export class Person3D {
   private lgForeOn = false;
   /** (plan 81 phase 4) s into the double-barrel's reload (−1: not reloading) */
   private sgLoadT = -1;
+  /** (plan 83 phase 5) s into the sniper's reload (−1: not reloading); when its closing began (−1: not yet);
+   *  the rounds left in its sleeve; the round in her hand (its place in her wrist's space, taken at the sleeve) */
+  private snLoadT = -1;
+  private snCloseAt = -1;
+  private snSleeve = SN_SLEEVE.n;
+  private snRound: Mesh | null = null;
+  private snRoundRel = new Matrix4();
+  private snRoundHave = false;
+  /** (plan 83 phase 5) The round in her right hand: out of the sleeve it goes with her wrist; at the port it's
+   *  laid along the bore and pushed down into the magazine; else hidden */
+  private snRoundFrame(S: ReturnType<typeof snLoadAt> | null, gunM: Matrix4) {
+    const wr = this.model.bone("wristR");
+    if (!S || !S.round || !wr) {
+      if (this.snRound) this.snRound.visible = false;
+      this.snRoundHave = false;
+      return;
+    }
+    if (!this.snRound) {
+      SN_ROUND_GEO ??= roundGeometry();
+      this.snRound = new Mesh(SN_ROUND_GEO, this.mats.prop("vertex"));
+      this.snRound.castShadow = false;
+    }
+    if (this.snRound.parent !== wr) wr.add(this.snRound);
+    wr.updateWorldMatrix(true, false);
+    if (S.round === 1) {
+      if (!this.snRoundHave) {
+        // (taken out of the sleeve: its place standing in its loop, bullet up — now in her fingers)
+        const idx = Math.max(0, Math.min(SN_SLEEVE.n - 1, SN_SLEEVE.n - S.taken));
+        snRM.makeRotationZ(Math.PI / 2).setPosition(rv1.copy(SN_SLEEVE.at).add(rv2.set(SN_SLEEVE.dx * idx, 0, 0)));
+        this.snRoundRel.copy(wr.matrixWorld).invert().multiply(snRM.premultiply(gunM));
+        this.snRoundHave = true;
+      }
+      this.snRoundRel.decompose(this.snRound.position, this.snRound.quaternion, this.snRound.scale);
+    } else {
+      // (at the port: along the bore, bullet ahead, pushed down into the magazine)
+      snRM.makeTranslation(rv1.copy(SN_PORT).add(rv2.set(-0.035, -0.014 * S.push, 0))).premultiply(gunM);
+      rM.copy(wr.matrixWorld).invert().multiply(snRM);
+      rM.decompose(this.snRound.position, this.snRound.quaternion, this.snRound.scale);
+      this.snRoundHave = false;
+    }
+    this.snRound.visible = true;
+  }
   /** (plan 82 phase 4) s into the AK's reload (−1: not reloading), last frame's; its closing racks the handle */
   private akLoadT = -1;
   private akPrevT = -1;

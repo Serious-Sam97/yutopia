@@ -872,6 +872,37 @@ export function shellGeometry(): BufferGeometry {
   return g;
 }
 
+/** (plan 83) A .308 round — the brass case, the copper bullet — lying along x, its base at 0, the bullet's tip
+ *  ahead (one thumbed into the sniper). */
+export function roundGeometry(): BufferGeometry {
+  const parts = [
+    paint(
+      new CylinderGeometry(0.006, 0.006, 0.045, 14).rotateZ(-Math.PI / 2).translate(0.0225, 0, 0),
+      BRASS,
+      0,
+      0,
+      0.35,
+    ),
+    paint(
+      new CylinderGeometry(0.0046, 0.006, 0.006, 14).rotateZ(-Math.PI / 2).translate(0.048, 0, 0),
+      BRASS,
+      0,
+      0,
+      0.35,
+    ),
+    paint(
+      new CylinderGeometry(0.0008, 0.0039, 0.02, 12).rotateZ(-Math.PI / 2).translate(0.061, 0, 0),
+      0xb06a3c,
+      0,
+      0,
+      0.3,
+    ),
+  ];
+  const g = mergeGeometries(parts, false);
+  for (const q of parts) q.dispose();
+  return g;
+}
+
 /** A gun as one geometry, lying on its left side as it fell (the origin at the middle of
  *  where it touches the ground): what lies on the snow (tp/items3d.ts). */
 export function gunLying(kind: GunKind): BufferGeometry {

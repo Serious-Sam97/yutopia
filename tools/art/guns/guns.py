@@ -683,6 +683,11 @@ def sniper():
         g.part(f"ring{x}", lambda bm, x=x: (lathe(bm, [(0, 0.0127), (0, 0.017), (0.018, 0.017), (0.018, 0.0127)], (x, 0, SZ), X, 36, cap=False), box(bm, x, x + 0.018, BZ + 0.026, SZ - 0.012, 0.016)), "blued", 0.0008)
         for s in (1, -1):
             screw(g, f"ring-screw{x}{s}", (x + 0.009, s * 0.0085, SZ + 0.0115), 0.0018, (0, s * 0.5, 1))
+    # (plan 83 F5a) the cartridge sleeve on the stock's right side (off her cheek): a leather band and its five
+    # .308 rounds standing across the stock, bullets up — `round<i>`, shown by how many are still in it
+    g.part("sleeve", lambda bm: box(bm, -0.307, -0.203, -0.022, 0.022, 0.0035, y=-0.0285), "leather", 0.0012)
+    for i in range(5):
+        g.part(f"round{i}", lambda bm, i=i: lathe(bm, [(0, 0), (0, 0.006), (0.04, 0.006), (0.045, 0.0046), (0.051, 0.0046), (0.051, 0.0039), (0.062, 0.0032), (0.07, 0.0012), (0.071, 0)], (-0.289 + 0.017 * i, -0.037, -0.032), Vector((0, 0, 1)), 14), "brass")
     g.point("grip", (0, 0, 0))
     g.point("muzzle", (0.88, 0, BZ))
     g.point("rear", (-0.124 + DX, 0, SZ))
