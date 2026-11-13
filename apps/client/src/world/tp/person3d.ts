@@ -43,6 +43,7 @@ import {
   RACK_HAND,
   RACK_REACH,
 } from "./ak-hold";
+import { DB_LONG } from "./daybreak-hold";
 import {
   cueModel,
   type GunFx,
@@ -151,7 +152,8 @@ const AIM_S = 0.18;
 const ARM_BOLT = 4;
 /** (plans 81–82) The long guns on the gun-as-anchor hold (tp/long-hold.ts), by their key */
 // (plan 83: the sniper too — tp/sniper-hold.ts; its bolt and its reload for now held at the hold: phases 4–5)
-const LONG: Record<string, LongSpec> = { shotgun: SG_LONG, ak47: AK_LONG, sniper: SN_LONG };
+// (plan 84: the Daybreak too — tp/daybreak-hold.ts; its charge and its reload held at the hold till phases 3–4)
+const LONG: Record<string, LongSpec> = { shotgun: SG_LONG, ak47: AK_LONG, sniper: SN_LONG, daybreak: DB_LONG };
 /** (plan 80) past this (m from the camera) the revolver's hold is a cheaper one: the bodies' far detail */
 const FAR_HOLD = 11;
 /** (shared ARM.reload, ARM.open: the gun being reloaded, opened — Player.arm) */
@@ -2845,7 +2847,7 @@ export class Person3D {
     const palmY = torch ? LS.torch.palm : pk > 0 && PF ? F.y + (PF.y - F.y) * pk : F.y;
     const fAlong = pk > 0 && PF ? lgFA.copy(F.along).lerp(PF.along, pk).normalize() : F.along;
     const fIndex = pk > 0 && PF ? lgFI.copy(F.index).lerp(PF.index, pk).normalize() : F.index;
-    const palmZ = -0.07 * Math.sin(Math.PI * pk);
+    const palmZ = (F.z ?? 0) - 0.07 * Math.sin(Math.PI * pk);
     // (as far out as the arm reaches: where along the fore-end the WRIST is exactly the arm's length from the
     // shoulder — the hand's turn there is the fore-end's whatever the place, so the wrist is the palm less one
     // offset; a palm's reach plus a slack fell 3 cm short palm up. Smoothly, then eased: stepped a centimetre
@@ -2882,8 +2884,11 @@ export class Person3D {
         .invert()
         .multiply(BW);
       rM.decompose(rv4, rq1, rs1);
-      rv2.set(x, F.shape.y, 0).sub(pivot).applyMatrix4(rM);
-      rq2.setFromUnitVectors(Y3, X3).premultiply(rq1);
+      rv2
+        .set(x, F.shape.y, F.shape.z ?? 0)
+        .sub(pivot)
+        .applyMatrix4(rM);
+      rq2.setFromUnitVectors(Y3, F.shape.axis ?? X3).premultiply(rq1);
       if (lw > 0.3) m.hold("L", { shape: torch ? LS.torch.held : F.shape.shape, pos: rv2, quat: rq2, kind: "fore" });
       else if (!T) m.hold("L", null);
       if (lw > 0.01) m.gripTo("L", rLAt, rq3, lw, [-0.6, -1, -0.2], cheap);
@@ -3265,7 +3270,7 @@ export class Person3D {
       const lp = new Vector3();
       for (let li = 0; li < L.length; li++)
         for (let ai = 0; ai < L[li].length; ai++)
-          for (const bx of LS.check.boxes) {
+          for (const [bi, bx] of LS.check.boxes.entries()) {
             const a = L[li][ai];
             if (bx.fore) lp.copy(a).applyMatrix4(inv).add(piv);
             else lp.copy(a).applyMatrix4(invG);
@@ -3275,7 +3280,7 @@ export class Person3D {
             const d = Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qy, qz), 0);
             if (d * rs1.x - 0.0085 < grip) {
               grip = d * rs1.x - 0.0085;
-              whereGrip = `left ${FINGERS[li]}'s ${JOINT[ai]}`;
+              whereGrip = `left ${FINGERS[li]}'s ${JOINT[ai]} (box ${bi})`;
             }
           }
       const rods = LS.check.rods.map((r) => {

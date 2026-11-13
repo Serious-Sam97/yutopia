@@ -106,8 +106,15 @@ function Bench({ q }: { q: URLSearchParams }) {
       const { AK_LONG } = akHold;
       const snHold = await import("@/world/tp/sniper-hold");
       const { SN_LONG } = snHold;
+      const dbHold = await import("@/world/tp/daybreak-hold");
+      const { DB_LONG } = dbHold;
       // (each long gun's hold, by its key)
-      const LONGS: Record<string, typeof AK_LONG> = { shotgun: SG_LONG, ak47: AK_LONG, sniper: SN_LONG };
+      const LONGS: Record<string, typeof AK_LONG> = {
+        shotgun: SG_LONG,
+        ak47: AK_LONG,
+        sniper: SN_LONG,
+        daybreak: DB_LONG,
+      };
       const { lineAt, longInHand } = await import("@/world/tp/long-hold");
       const C = await loadChars();
       // (which gun: the revolver, plan 80's; the double-barrel, plan 81's…)
@@ -445,7 +452,10 @@ function Bench({ q }: { q: URLSearchParams }) {
         fire: () => fire.current(),
         // (plan 81: how much of the double-barrel's stock is inside her — points through its wood, each a ray
         // ahead of her: an odd count of a mesh's own crossings, inside it; how far behind its front)
-        stockIn: () => {
+        // (`six`: inside by most of six rays each way, not one ahead — plan 84: the skin under the shirt isn't drawn,
+        // so a ray ahead through her forearm crossed it once and read the Daybreak's pad, behind her arm aimed, as
+        // in her)
+        stockIn: (six = false) => {
           const g = (person as unknown as { gun: { model: { root: import("three").Object3D } } | null }).gun;
           if (!g) return null;
           const root = g.model.root;
@@ -461,6 +471,14 @@ function Bench({ q }: { q: URLSearchParams }) {
             (chest ?? person.root).getWorldQuaternion(new T.Quaternion()),
           );
           const rc = new T.Raycaster();
+          const SIX = [
+            [1, 0, 0],
+            [-1, 0, 0],
+            [0, 1, 0],
+            [0, -1, 0],
+            [0, 0, 1],
+            [0, 0, -1],
+          ].map(([x, y, z]) => new T.Vector3(x, y, z));
           // (the stock's side profile, its top and bottom lines by x — tools/art/guns/guns.py)
           const S = (LONGS[GUN] ?? SG_LONG).check.stock;
           const top = (x: number) => lineAt(S.top, x);
@@ -472,13 +490,22 @@ function Bench({ q }: { q: URLSearchParams }) {
           const pts: string[] = [];
           for (let x = S.x[0]; x <= S.x[1]; x += 0.03)
             for (const k of [0.15, 0.5, 0.85])
-              for (const z of [-S.z, 0, S.z]) {
+              for (const z of [-S.z, 0, S.z].map((v) => v + (S.cz ?? 0))) {
                 const pt = new T.Vector3(x, bot(x) + (top(x) - bot(x)) * k, z).applyMatrix4(root.matrixWorld);
                 n++;
-                rc.set(pt, ahead);
                 for (const m of meshes) {
-                  const hits = rc.intersectObject(m, false);
-                  if (hits.length % 2 === 1) {
+                  let odd = 0;
+                  let near = Number.POSITIVE_INFINITY;
+                  for (const d of six ? SIX : [ahead]) {
+                    rc.set(pt, d);
+                    const h = rc.intersectObject(m, false);
+                    if (h.length % 2 === 1) {
+                      odd++;
+                      near = Math.min(near, h[0].distance);
+                    }
+                  }
+                  const hits = [{ distance: near }];
+                  if (six ? odd >= 4 : odd === 1) {
                     inside++;
                     deep = Math.max(deep, hits[0].distance);
                     where[m.name || "body"] = (where[m.name || "body"] ?? 0) + 1;
@@ -573,7 +600,7 @@ function Bench({ q }: { q: URLSearchParams }) {
           return { min, where };
         },
         // (the long guns' numbers, to try others live — refit() puts the gun in the hand by them again)
-        long: { SG_LONG, AK_LONG, SN_LONG, akHold, snHold },
+        long: { SG_LONG, AK_LONG, SN_LONG, DB_LONG, akHold, snHold, dbHold },
         refit: () => {
           const g = (person as unknown as { gun: { key: string; model: { root: import("three").Object3D } } | null })
             .gun;

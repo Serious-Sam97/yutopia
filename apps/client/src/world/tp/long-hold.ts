@@ -15,17 +15,19 @@ export interface LongSpec {
   /** …what its fingers close round (the shape's y along `axis`) */
   wristShape: { at: Vector3; axis: Vector3; shape: HeldShape };
   /** The left palm on the fore part: on `part` of the gun (null: the gun itself) — its origin the gun's point
-   *  `pivot` — the palm's middle this high, from `x[0]` out to `x[1]` along, the fingers' way, the index side;
-   *  what the fingers close round (a box along the gun, its middle this high); the thumb's place (ahead of
+   *  `pivot` — the palm's middle this high, from `x[0]` out to `x[1]` along (and `z` across — its right +: a
+   *  vertical fore-grip's side, plan 84), the fingers' way, the index side; what the fingers close round (a
+   *  shape along the gun — or along `axis` — its middle this high and `z` across); the thumb's place (ahead of
    *  the palm's middle, its height, across) */
   fore: {
     part: string | null;
     pivot: Vector3;
     y: number;
     x: [number, number];
+    z?: number;
     along: Vector3;
     index: Vector3;
-    shape: { y: number; shape: HeldShape };
+    shape: { y: number; shape: HeldShape; axis?: Vector3; z?: number };
     thumb: [number, number, number];
   };
   /** The torch in the left fist along the bore under the fore part: its axis this high, its middle this far
@@ -92,7 +94,7 @@ export interface LongSpec {
   check: {
     boxes: { c: [number, number]; h: [number, number, number]; fore: boolean }[];
     rods: { a: [number, number]; b: [number, number]; r: number; fore: boolean }[];
-    stock: { x: [number, number]; top: [number, number][]; bot: [number, number][]; z: number };
+    stock: { x: [number, number]; top: [number, number][]; bot: [number, number][]; z: number; cz?: number };
   };
 }
 

@@ -727,17 +727,20 @@ def daybreak():
     # the fins, the spine behind them; the brace and its leather pad
     g.part("fins", lambda bm: [lathe(bm, [(0, 0.03), (0, 0.072), (0.0035, 0.072), (0.0035, 0.03)], (-0.03 - i * 0.016, 0, AZ), X, 40, cap=False) for i in range(7)], "brass", 0.0006)
     g.part("spine", lambda bm: tube(bm, (-0.16, 0, AZ), (-0.02, 0, AZ), 0.03, seg=32), "enamel")
-    brace = smooth([(-0.16, AZ - 0.03, 1), (-0.16, AZ + 0.03, 1), (-0.3, AZ + 0.012), (-0.335, AZ - 0.01, 1), (-0.335, AZ - 0.115, 1), (-0.3, AZ - 0.12), (-0.21, AZ - 0.075)], 2)
-    g.part("brace", lambda bm: prism(bm, brace, 0.044), "enamel", 0.008, 4)
-    g.part("brace-pad", lambda bm: prism(bm, smooth([(-0.334, AZ - 0.008, 1), (-0.356, AZ - 0.012), (-0.358, AZ - 0.114), (-0.334, AZ - 0.118, 1)], 2), 0.054), "leather", 0.008, 4)
+    # (plan 84: the pad dropped 14 cm under the lamp's axis and cast 3.5 cm to its right — in her shoulder's pocket,
+    # the ring's line comes to her eye with her head nearly upright; 5 cm shorter, her left hand reaches the
+    # fore-grip. A strut down from the spine to it, not a plate: a plate 14 cm tall went into her chest aimed)
+    brace = smooth([(-0.16, AZ + 0.03, 1), (-0.27, AZ - 0.088), (-0.292, AZ - 0.108, 1), (-0.292, AZ - 0.158, 1), (-0.25, AZ - 0.125), (-0.16, AZ - 0.03, 1)], 2)
+    g.part("brace", lambda bm: prism(bm, brace, 0.04, y=-0.018), "enamel", 0.008, 4)
+    g.part("brace-pad", lambda bm: prism(bm, smooth([(-0.29, AZ - 0.1, 1), (-0.31, AZ - 0.104), (-0.312, AZ - 0.176), (-0.29, AZ - 0.18, 1)], 2), 0.054, y=-0.035), "leather", 0.008, 4)
     # the cell: brass, a glass window round its middle, the filament coil inside, knurled ends
-    g.part("cell", lambda bm: (lathe(bm, [(0, 0), (0, 0.02), (0.004, 0.024), (0.07, 0.024), (0.07, 0.0)], (0.1, 0, 0.04), X, 32), lathe(bm, [(0, 0), (0, 0.024), (0.066, 0.024), (0.07, 0.02), (0.07, 0)], (0.23, 0, 0.04), X, 32)), "brass", 0.0006)
-    g.part("cell-glass", lambda bm: lathe(bm, [(0, 0.022), (0.06, 0.022)], (0.17, 0, 0.04), X, 32, cap=False), "glass")
-    g.part("filament", lambda bm: sweep(bm, [Vector((0.172 + 0.056 * t / 160, math.cos(t / 10) * 0.012, 0.04 + math.sin(t / 10) * 0.012)) for t in range(161)], ring_section(0.0012, 6), up=(1, 0, 0)), "glow")
-    g.part("cell-mount", lambda bm: prism(bm, smooth([(0.095, 0.05, 1), (0.305, 0.05, 1), (0.29, AZ - 0.045), (0.11, AZ - 0.045)], 1), 0.03), "enamel", 0.003)
+    g.part("cell", lambda bm: (lathe(bm, [(0, 0), (0, 0.02), (0.004, 0.024), (0.05, 0.024), (0.05, 0.0)], (0.1, 0, 0.04), X, 32), lathe(bm, [(0, 0), (0, 0.024), (0.046, 0.024), (0.05, 0.02), (0.05, 0)], (0.2, 0, 0.04), X, 32)), "brass", 0.0006)
+    g.part("cell-glass", lambda bm: lathe(bm, [(0, 0.022), (0.05, 0.022)], (0.15, 0, 0.04), X, 32, cap=False), "glass")
+    g.part("filament", lambda bm: sweep(bm, [Vector((0.152 + 0.046 * t / 160, math.cos(t / 10) * 0.012, 0.04 + math.sin(t / 10) * 0.012)) for t in range(161)], ring_section(0.0012, 6), up=(1, 0, 0)), "glow")
+    g.part("cell-mount", lambda bm: prism(bm, smooth([(0.095, 0.05, 1), (0.255, 0.05, 1), (0.24, AZ - 0.045), (0.11, AZ - 0.045)], 1), 0.03), "enamel", 0.003)
     # the copper lines, from the cell's ends to the collar
     for s in (1, -1):
-        g.part(f"line{s}", lambda bm, s=s: sweep(bm, spline([(0.3, s * 0.02, 0.05), (0.34, s * 0.04, 0.07), (0.38, s * 0.058, AZ - 0.02), (0.405, s * 0.06, AZ - 0.0)], 10), ring_section(0.0035), up=(0, 0, 1)), "copper")
+        g.part(f"line{s}", lambda bm, s=s: sweep(bm, spline([(0.25, s * 0.02, 0.05), (0.32, s * 0.04, 0.07), (0.38, s * 0.058, AZ - 0.02), (0.405, s * 0.06, AZ - 0.0)], 10), ring_section(0.0035), up=(0, 0, 1)), "copper")
     # the gauge on top: its bezel, its face, its needle, its glass
     gz = AZ + 0.055
     g.part("gauge", lambda bm: lathe(bm, [(0, 0), (0, 0.02), (0.012, 0.021), (0.014, 0.018), (0.014, 0)], (0.31, 0, gz - 0.002), (0, 0, 1), 32), "brass", 0.0004)
@@ -746,7 +749,7 @@ def daybreak():
     # the grips (walnut, the front one leather-wrapped), the guard, the trigger; the handle; the sight
     g.part("grip", lambda bm: prism(bm, smooth([(-0.012, 0.042, 1), (0.03, 0.042, 1), (0.02, -0.03), (0.012, -0.075), (-0.016, -0.08), (-0.03, -0.072), (-0.022, -0.03)], 2), 0.032), "walnut", 0.008, 4, check=(-0.04, 0.04, -0.08, 0.02))
     g.part("grip-mount", lambda bm: box(bm, -0.022, 0.044, 0.035, AZ - 0.045, 0.03), "enamel", 0.003)
-    g.part("fore-grip", lambda bm: prism(bm, smooth([(0.322, 0.062, 1), (0.37, 0.062, 1), (0.366, 0.0), (0.36, -0.032), (0.33, -0.034), (0.324, 0.0)], 2), 0.032), "leather", 0.009, 4)
+    g.part("fore-grip", lambda bm: prism(bm, smooth([(0.267, 0.062, 1), (0.315, 0.062, 1), (0.311, 0.0), (0.305, -0.032), (0.275, -0.034), (0.269, 0.0)], 2), 0.032), "leather", 0.009, 4)
     g.part("guard", lambda bm: prism(bm, smooth([(0.06, 0.04, 1), (0.06, 0.018), (0.046, 0.004), (0.016, 0.002), (0.0, 0.012), (-0.004, 0.04, 1)], 1), 0.01), "brass", 0.0012, cut=lambda bm: prism(bm, smooth([(0.053, 0.043, 1), (0.053, 0.02), (0.042, 0.01), (0.018, 0.008), (0.006, 0.016), (0.004, 0.043, 1)], 1), 0.03))
     g.part("trigger", lambda bm: prism(bm, smooth([(0.028, 0.04, 1), (0.034, 0.04, 1), (0.032, 0.026), (0.025, 0.016, 1), (0.024, 0.02)], 1), 0.006), "brass", 0.0005)
     g.part("handle", lambda bm: sweep(bm, spline([(0.13, 0, AZ + 0.05), (0.15, 0, AZ + 0.1), (0.25, 0, AZ + 0.1), (0.27, 0, AZ + 0.05)], 10), ring_section(0.0075, 12), up=(0, 1, 0)), "leather", 0.0)
@@ -756,8 +759,8 @@ def daybreak():
     g.point("muzzle", (0.535, 0, AZ))
     g.point("rear", (0.04, 0, AZ + 0.083))
     g.point("front", (0.12, 0, AZ + 0.088))
-    g.point("fore", (0.345, 0, 0.02))
-    g.point("butt", (-0.35, 0, AZ - 0.065))
+    g.point("fore", (0.29, 0, 0.02))
+    g.point("butt", (-0.3, -0.035, AZ - 0.14))
     return g
 
 
