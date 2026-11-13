@@ -4,6 +4,7 @@
 // forward, an odd count of the shirt's own crossings — the body mesh is open under clothes, only the shirt's
 // count is trusted), the deepest (cm), which; where the left hand is along the fore-end (m); each wrist short
 // of its place and the forearms' clearance of the gun (cm).
+//   (GUN=ak47: the AK's — plan 82)
 //   GENDERS=feminine,masculine TOP=tee POSES='[{"name":"ready"},{"name":"load","pose":"reload","t":0.18}]' \
 //   node --experimental-strip-types e2e/arms-stock.mts
 import { chromium } from "@playwright/test";
@@ -12,7 +13,9 @@ const browser = await chromium.launch({ args: ["--use-angle=metal", "--enable-gp
 const page = await browser.newPage({ viewport: { width: 900, height: 640 } });
 page.on("pageerror", (e) => console.log("  page:", e.message));
 for (const g of (process.env.GENDERS ?? "feminine,masculine").split(",")) {
-  await page.goto(`http://localhost:3100/dev/arms?gun=shotgun&view=side&top=${process.env.TOP ?? "tee"}&gender=${g}`);
+  await page.goto(
+    `http://localhost:3100/dev/arms?gun=${process.env.GUN ?? "shotgun"}&view=side&top=${process.env.TOP ?? "tee"}&gender=${g}`,
+  );
   await page.waitForFunction(() => (window as any).__revolver?.ready, null, { timeout: 120000 });
   await page.waitForTimeout(1500);
   for (const s of JSON.parse(process.env.POSES ?? "[]")) {

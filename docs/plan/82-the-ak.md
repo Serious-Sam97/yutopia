@@ -21,7 +21,8 @@ plan 81's hold made per gun (`tp/long-hold.ts`), the AK on it (`tp/ak-hold.ts`);
 `design/guns/p82/bench-2-carry.png`; committed dda3bd5. **Phase 3 (the aim) built 2026-11-12** — stills
 `design/guns/p82/bench-3-aim.png`; committed 2ac49b8. **Phase 4 (the reload) built 2026-11-12** — stills
 `design/guns/p82/bench-4-reload.png`; committed 3d5e45d. **Phase 5 (everything else) built 2026-11-12** — stills
-`design/guns/p82/bench-5-moves.png`. Follows plan 81 (the double-barrel: the long gun the
+`design/guns/p82/bench-5-moves.png`; committed 51efdc1. **Phase 6 (checks) done 2026-11-13 — PLAN 82 DONE**; the
+world's stills `design/guns/p82/world/`. Follows plan 81 (the double-barrel: the long gun the
 anchor, carried at her side, the left shoulder brought forward to reach, the forearms' twist minded, the
 stock kept out of her, port arms through whole-body moves, the reload as one timeline, `ARM.shut`), plan 80
 (the revolver: `PersonModel.gripTo`, the hand sockets, the bench) and plan 79 phase 5 (the Blender AK, its
@@ -244,6 +245,29 @@ Plan 81's machinery, for the AK:
    - The far people's cheaper hold is plan 81's (no fingers, no cheek, the elbow where the pole has it).
 6. **Checks** — the bench spec, the two-of-us world spec (slung, drawn, aimed, a burst, reloaded dry and not),
    the steadiness and the stock tools, stills in the world.
+
+   Done in phase 6:
+   - `e2e/ak-bench.spec.ts` (both bodies, a t-shirt): aimed at every pitch and turn, with and without the torch
+     — upright, on the look, her right eye on the sights (within 2.5 cm of their height, 2 over the bore), each
+     hand at its place (aimed nearly straight up her left 2 cm short: the gun's up to her face for the cheek), no
+     hand through the other, no finger or arm in the gun, both forearms within 55°; the low ready walking and
+     sprinting; up in 0.24 s; drawn off her back and slung again; the reload's moments (the magazine rocked out,
+     gone, in her left hand, rocked home; racked dry, the carrier back), her left forearm within 52°; a 2 s
+     burst, the hands kept on; kept through a roll, a vault, a slide, struck; let go sat.
+   - `e2e/ak-two.spec.ts` (the world, two of us): Bia's AK slung and its pouch on both screens; drawn, aimed
+     upright, a burst Ana hears; reloaded — its timeline and the magazine off the gun on both screens, not racked
+     — then run dry and reloaded, racked on both screens, the carrier back; put away, slung again. Stills of each
+     from her camera and Ana's (`design/guns/p82/world/`).
+   - `e2e/arms-stock.mts` takes `GUN=ak47`: only the butt pad touching her shirt at the low ready (≤1.1 cm, the
+     fuller body), nothing in her aimed or loading. `e2e/arms-steady.mts`: walking, jogging, sprinting, carried
+     or aimed — no elbow or wrist over 2 cm a frame (the most 1.6).
+   - All the guns' specs green: the AK's bench and world, the double-barrel's bench and world, the revolver's
+     bench, the feel, the guns two of us; the world server's arms tests (16).
+   Left:
+   - The empty magazine landing is heard with the shell's floor/snow sound — there's no magazine-drop sound yet
+     (a pick for the user, with the other gun sounds).
+   - Aimed nearly straight up (pitch 0.9) her left hand is up to 2 cm short of the receiver; in port arms her
+     left forearm is turned up to 52° and her right wrist 11–33° past its reach (the best of the poses tried).
 
 ## Risks
 
