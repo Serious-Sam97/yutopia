@@ -103,6 +103,9 @@ function Bench({ q }: { q: URLSearchParams }) {
       const { SG_LONG } = await import("@/world/tp/shotgun-hold");
       const akHold = await import("@/world/tp/ak-hold");
       const { AK_LONG } = akHold;
+      const { SN_LONG } = await import("@/world/tp/sniper-hold");
+      // (each long gun's hold, by its key)
+      const LONGS: Record<string, typeof AK_LONG> = { shotgun: SG_LONG, ak47: AK_LONG, sniper: SN_LONG };
       const { lineAt, longInHand } = await import("@/world/tp/long-hold");
       const C = await loadChars();
       // (which gun: the revolver, plan 80's; the double-barrel, plan 81's…)
@@ -307,7 +310,7 @@ function Bench({ q }: { q: URLSearchParams }) {
         // (each gun's own times: the revolver's 0.35 s out of the holster, 0.25 back; the double-barrel's 0.6 off
         // her back, 0.5 onto it — person3d's)
         // (the AK's 0.6 off her back round her right side, 0.5 back — plan 82)
-        const SL = (GUN === "ak47" ? AK_LONG : GUN === "shotgun" ? SG_LONG : null)?.sling;
+        const SL = LONGS[GUN]?.sling;
         const [DRAW, AWAY] = SL ? [SL.draw, SL.away] : [0.35, 0.25];
         if (s.away) P3.holsterT = s.draw <= 0 ? 1 : Math.max(0, (1 - s.draw) * AWAY - dt);
         else if (s.draw < 1) P3.drawT = Math.max(0, s.draw * DRAW - dt);
@@ -404,7 +407,7 @@ function Bench({ q }: { q: URLSearchParams }) {
           );
           const rc = new T.Raycaster();
           // (the stock's side profile, its top and bottom lines by x — tools/art/guns/guns.py)
-          const S = (GUN === "ak47" ? AK_LONG : SG_LONG).check.stock;
+          const S = (LONGS[GUN] ?? SG_LONG).check.stock;
           const top = (x: number) => lineAt(S.top, x);
           const bot = (x: number) => lineAt(S.bot, x);
           let n = 0;
@@ -515,12 +518,12 @@ function Bench({ q }: { q: URLSearchParams }) {
           return { min, where };
         },
         // (the long guns' numbers, to try others live — refit() puts the gun in the hand by them again)
-        long: { SG_LONG, AK_LONG, akHold },
+        long: { SG_LONG, AK_LONG, SN_LONG, akHold },
         refit: () => {
           const g = (person as unknown as { gun: { key: string; model: { root: import("three").Object3D } } | null })
             .gun;
           const F = person.model.handFrame("R");
-          const LS = g?.key === "ak47" ? AK_LONG : g?.key === "shotgun" ? SG_LONG : null;
+          const LS = g ? (LONGS[g.key] ?? null) : null;
           if (g && F && LS) longInHand(LS, F, g.model.root.quaternion, g.model.root.position);
         },
         set: (s: Partial<State>) => {

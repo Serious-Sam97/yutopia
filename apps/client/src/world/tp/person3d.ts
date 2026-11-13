@@ -105,6 +105,7 @@ import {
   SHELL_PALM,
   sgLoadAt,
 } from "./shotgun-hold";
+import { SN_LONG } from "./sniper-hold";
 
 type Chars = NonNullable<ReturnType<typeof chars>>;
 type SwimM = NonNullable<ReturnType<Chars["swimNow"]>>;
@@ -134,7 +135,8 @@ const LIFE_GUN_SCALE = 1;
 const AIM_S = 0.18;
 const ARM_BOLT = 4;
 /** (plans 81–82) The long guns on the gun-as-anchor hold (tp/long-hold.ts), by their key */
-const LONG: Record<string, LongSpec> = { shotgun: SG_LONG, ak47: AK_LONG };
+// (plan 83: the sniper too — tp/sniper-hold.ts; its bolt and its reload for now held at the hold: phases 4–5)
+const LONG: Record<string, LongSpec> = { shotgun: SG_LONG, ak47: AK_LONG, sniper: SN_LONG };
 /** (plan 80) past this (m from the camera) the revolver's hold is a cheaper one: the bodies' far detail */
 const FAR_HOLD = 11;
 /** (shared ARM.reload, ARM.open: the gun being reloaded, opened — Player.arm) */
@@ -1628,7 +1630,7 @@ export class Person3D {
       // (plan 82 phase 4: the AK's — opened (Player.arm ARM.open), its magazine out and the new one in, then
       // closed as everyone's told: shouldered (ARM.shut) or racked (ARM.rack); seen mid-way, on from its
       // closing; cut short (a shot snapped it shut, the steps done sooner), on from the closing too)
-      if (!sg) {
+      if (LS === AK_LONG) {
         const open = p.arm === ARM_RELOAD || p.arm === ARM_OPEN;
         const closing = p.arm === ARM_SHUT || p.arm === ARM_RACK;
         if ((open || closing) && this.akLoadT < 0 && !away) {
@@ -1665,7 +1667,7 @@ export class Person3D {
         this.lgForeOn = false;
         // (plan 82: let go mid-reload — sat, the ragdoll — the AK's magazine back on it, its handle home)
         this.akMagOwn = false;
-        if (!sg) this.akMagHome();
+        if (LS === AK_LONG) this.akMagHome();
       }
       if (sw > 0.01)
         this.longHands(p, sw, aiming && !loading && !away && !reloading && !ported, run, dt, draw, this.lgPortW);
