@@ -82,7 +82,7 @@ export const SN_SLING: SlingSpec = {
  *  AK's (6–10 cm in a roll), at the double-barrel's 24–35 — here over it all the roll (1–9 cm), the stock's belly
  *  off her right forearm; her left hand over its top (palm down — the AK's), the thumb along its left */
 export const SN_PORT_ARMS = {
-  at: new Vector3(0.07, 0.04, 0.3),
+  at: new Vector3(0.07, 0.04, 0.28),
   turn: new Quaternion(0.0092, -0.0491, -0.1837, 0.9817).normalize(),
   fore: {
     y: 0.075,
@@ -112,8 +112,10 @@ export const SN_LONG: LongSpec = {
   torch: { ...SN_TORCH, held: SN_TORCH_HELD, thumb: [0.075, SN_TORCH.y + 0.004, -0.02] },
   butt: SN_BUTT,
   // (F1a, the AK's low ready — the butt out at the shoulder and 1.5 cm further ahead (its tall stock's toe was
-  // 2.5–3.8 cm into the fuller chest's shirt), the muzzle a little more across her (her left hand to the fore-end)
-  carry: { kind: "ready", pocket: [0, -0.03, 0.085], down: 0.45, across: 0.32, run: 0.15 },
+  // 2.5–3.8 cm into the fuller chest's shirt), the muzzle a little more across her (her left hand to the fore-end);
+  // running, less steep than the AK's: at 0.32 across and 0.15 her left forearm turned 53–54° jogging and
+  // sprinting, her right forearm grazed the stock's belly)
+  carry: { kind: "ready", pocket: [0, -0.03, 0.085], down: 0.45, across: 0.3, run: 0.08 },
   aim: { up: 0.05, trunk: 0.8, bust: 0.0175, lean: 1 },
   // (her right eye on the scope's axis: 11.2 cm over the grip — the mocks' head down on the riser leaves it
   // 6 cm short, the gun comes up the rest: cheekTo)

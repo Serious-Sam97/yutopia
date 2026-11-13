@@ -21,7 +21,9 @@ away, drawn) built 2026-11-13** — stills `design/guns/p83/bench-2-carry.png`; 
 built 2026-11-13** — stills `design/guns/p83/bench-3-aim.png`; committed de08538. **Phase 4 (the bolt) built
 2026-11-13** — stills `design/guns/p83/bench-4-bolt.png`; committed 4c1680b. **Phase 5 (the reload) built
 2026-11-13** — stills `design/guns/p83/bench-5-reload.png`; committed 8ad433d. **Phase 6 (everything else) built
-2026-11-13** — stills `design/guns/p83/bench-6-moves.png`. Not committed.
+2026-11-13** — stills `design/guns/p83/bench-6-moves.png`; committed df3df6d. **Phase 7 (the checks) built
+2026-11-13** — `e2e/sniper-bench.spec.ts`, `e2e/sniper-two.spec.ts`, stills `design/guns/p83/world/`. Not
+committed.
 
 ## Where we are — read from the code and the bench
 
@@ -319,6 +321,31 @@ shut) whatever F3–F4.
    reach, the bolt's and the reload's moments, drawn, kept, sat), `e2e/sniper-two.spec.ts` (the world, two of
    us: carried, aimed, a shot and its bolt, reloaded, put away — on both screens), stills in the world; all the
    guns' specs green.
+   Done in phase 7:
+   - **`e2e/sniper-bench.spec.ts`** — the strict audit (plan 82's limits: held 1 cm / 3° / 53° / −3 mm;
+     moving 1.2 cm / 6° / 53° / −8 mm), both bodies: aimed at the game's whole reach (pitch −0.55…0.7, three
+     turns of her, with and without the torch) — upright, the butt in, her eye on the scope's axis and its
+     relief; the low ready standing, walked, jogged, run, turned, the torch on; up from it in the gun's 0.3 s;
+     drawn (eight moments) and slung again; the bolt's eleven moments (her right hand on the knob, the rifle at her shoulder, the bolt fully
+     back); the reload's ten (the bolt back from 0.35 s to the closing, a round in her hand, the sleeve's
+     rounds taken, the bolt home); port arms in a roll, a vault, a slide, struck, over the floor all through a
+     roll; let go of sat. Settled where the elbow's eased swing (plan 81) needs it: after the page's load, a
+     half-turn of her, a redraw.
+   - **What it found, fixed**: the low ready jogged put the masculine right forearm 3 mm into the stock and
+     run turned a feminine forearm to 53° — `SN_LONG.carry` across 0.32 → 0.3, run 0.15 → 0.08; port arms
+     had the feminine right forearm 4 mm into the stock's belly in every act — `SN_PORT_ARMS.at` 2 cm nearer
+     her (z 0.3 → 0.28: 1 mm in on her, within the 3, 7.6 off on him; still over the floor all the roll).
+   - **What it allows, named in it**: the lowest aim (pitch −0.55) turns the feminine left forearm to 54–55°
+     (51–54 by the way she came to it: 55° there only); mid-draw (0.1–0.8) the arms may pass the gun by 7 cm —
+     the right forearm through the stock's belly as it comes off her back (phase 2's "left").
+   - **`e2e/sniper-two.spec.ts`** — the world, two of us (Bia beside Ana on the pond's shore): slung on her
+     back on both screens; drawn into the low ready, both hands on; aimed — down the scope on hers, upright
+     on Ana's (≤2°); a shot heard, the bolt worked (back past half) on both; a second; reloaded — the bolt back,
+     a round in her hand, the closing, the bolt home, five in — on both; put away, slung again. Stills of each,
+     hers and Ana's: `design/guns/p83/world/`.
+   - Green with it: every gun's spec — the AK's, the double-barrel's and the revolver's benches, `arms-feel`,
+     `guns-two`, `ak-two`, `shotgun-two` (8 of 8); the world server's arms tests (16), the life look's budgets
+     (18), tsc, biome. **Plan 83 done.**
 
 ## Risks
 
