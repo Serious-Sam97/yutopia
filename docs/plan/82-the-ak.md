@@ -17,7 +17,8 @@ mirrored to the double-barrel's; F2a (square) and F3a (the torch against the han
 asked. **Phase 0 (the mocks) rendered 2026-11-12**: `tools/art/guns/mock82.py` → `design/guns/p82/sheet-82-hold.png`,
 `sheet-82-reload.png`, `sheet-82-sling.png` — signed off 2026-11-12. **Phase 1 (the grip) built 2026-11-12** —
 plan 81's hold made per gun (`tp/long-hold.ts`), the AK on it (`tp/ak-hold.ts`); its stills
-`design/guns/p82/bench-1-hold.png`. Follows plan 81 (the double-barrel: the long gun the
+`design/guns/p82/bench-1-hold.png`; committed 6bf13fb. **Phase 2 (the carry, the sling) built 2026-11-12** — stills
+`design/guns/p82/bench-2-carry.png`. Follows plan 81 (the double-barrel: the long gun the
 anchor, carried at her side, the left shoulder brought forward to reach, the forearms' twist minded, the
 stock kept out of her, port arms through whole-body moves, the reload as one timeline, `ARM.shut`), plan 80
 (the revolver: `PersonModel.gripTo`, the hand sockets, the bench) and plan 79 phase 5 (the Blender AK, its
@@ -157,6 +158,24 @@ Plan 81's machinery, for the AK:
      near-straight left arm threw its elbow 3–3.8 cm a frame; now ≤1.5 at a sprint (the double-barrel's
      unchanged: its aim ≤0.9).
 2. **The carry** (F1) — walking, running; the draw and the put-away (F6, the sling).
+   Found in phase 2:
+   - **Slung on her back** (`Player.slingAk`, the server's as `sling` is the double-barrel's — carried, it
+     isn't in her hands): the double-barrel's mirrored — the muzzle up behind her left shoulder, the stock down to
+     her right hip, its top to her back (the magazine out), the strap from the front swivel over her left
+     shoulder, across her chest to her right hip, round to the stock's loop. Carrying both, the straps cross on
+     her chest and the AK lies over the double-barrel (8.5 cm further out: their middles met in her back). The
+     sling made per gun (`SlingSpec`: the place, the turn, the draw's keys, the times, the strap) — the
+     double-barrel's the same numbers.
+   - **Drawn off her back, down her right side**: her right hand to the grip low on her back, the gun turned
+     down across her back (the muzzle past her left hip) to hang muzzle down at her right side, its top ahead,
+     the stock up behind her arm, then swung up ahead to the low ready, her left hand meeting it at the end.
+     Swung round her side upright first, its top to her, the grip was held fingers up — her wrist 57–97° past its
+     reach; this way within it after the first tenth (both bodies). Put away, the same way back.
+   - **The draw 0.6 s** (shared `ARMS.ak47.draw`, was 0.45 — the double-barrel's, off the back).
+   - **The low ready walking, jogging, sprinting**: both hands on, her shoulders square, no hand or arm through
+     it, its elbows ≤1.5 cm a frame (phase 1's).
+   - Till phase 4 the AK's reload is held at the low ready (no magazine out — `e2e/guns-two.spec.ts` checks that
+     she keeps it in her hands meanwhile).
 3. **The aim** (F2, F3) — the butt in the pocket at every pitch (her trunk bent with it), the cheek on the
    stock; the torch's hold; full auto's kick round after round (the muzzle climbing, the hands held on);
    dry fire.

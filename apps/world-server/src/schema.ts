@@ -76,6 +76,8 @@ export class Player extends Schema {
   @type("boolean") holster = false;
   // carrying the double-barrel (plan 81): slung on the back when it's not in the hand
   @type("boolean") sling = false;
+  // carrying the AK (plan 82): slung on the back too, crossed with the double-barrel's
+  @type("boolean") slingAk = false;
   // what the hand's doing with it (docs/plan/32-the-arms.md), for everyone to see: ARM
   @type("uint8") arm = 0;
   // down (D7): since when (server ms; 0: on their feet), and who's getting them up, since when

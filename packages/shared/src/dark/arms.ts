@@ -71,7 +71,8 @@ export const ARMS = {
     shut: 0.4,
     rack: 1.0,
     snap: 0.2,
-    draw: 0.45,
+    // (plan 82 phase 2: off her back, swung round her right side — the double-barrel's time)
+    draw: 0.6,
     aim: 0.24,
     damage: 22,
     range: 50,

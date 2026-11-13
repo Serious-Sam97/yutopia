@@ -36,8 +36,9 @@ const seen = (page: Page, sid: string) =>
       cant = Math.acos(Math.max(-1, Math.min(1, top.dot(want))));
     }
     return {
-      sling: !!p3?.sling,
-      slung: !!p3?.sling?.root.visible,
+      // (plan 82: each slung long gun's, by its key)
+      sling: !!p3?.slings?.get("shotgun"),
+      slung: !!p3?.slings?.get("shotgun")?.root.visible,
       carrier: !!p3?.carrier,
       key: (g?.key ?? "") as string,
       life: !!g?.model.life,

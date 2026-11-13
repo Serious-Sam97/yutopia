@@ -7,7 +7,7 @@
 // 2026-11-12) — in the gun's own frame here (x along the barrels, y its top, z its right; m).
 import { Matrix4, Quaternion, Vector3 } from "three";
 import type { HeldShape } from "../chars/props";
-import type { LongSpec } from "./long-hold";
+import type { LongSpec, SlingSpec } from "./long-hold";
 import { gunQuat } from "./revolver-hold";
 
 /** The right hand on the stock's wrist: its palm's middle (its skin on the wrist's right side), the fingers'
@@ -91,56 +91,6 @@ export const SG_BLADE = 0.5;
 /** (the shared ARMS.shotgun.aim, s) up from the carry to the aim */
 export const SG_AIM_S = 0.26;
 
-/** The double-barrel as tp/long-hold.ts holds a long gun */
-export const SG_LONG: LongSpec = {
-  key: "shotgun",
-  wrist: SG_WRIST,
-  wristShape: SG_WRIST_SHAPE,
-  fore: {
-    part: "barrels",
-    pivot: SG_HINGE,
-    y: SG_FORE.y,
-    x: FORE_X,
-    along: SG_FORE.along,
-    index: SG_FORE.index,
-    shape: SG_FORE_SHAPE,
-    // (laid along the fore-end's left side, ahead — closed round the box it went into it)
-    thumb: [0.09, 0.036, -0.037],
-  },
-  torch: { ...SG_TORCH, held: SG_TORCH_HELD, thumb: [0.075, SG_TORCH.y + 0.004, -0.02] },
-  butt: SG_BUTT,
-  carry: { kind: "side", ...SG_CARRY },
-  aim: SG_AIM,
-  blade: { ready: SG_READY.blade, aim: SG_BLADE },
-  protract: SG_PROTRACT,
-  kick: SG_KICK,
-  aimS: SG_AIM_S,
-  leftCarried: false,
-  avoid: { a: [-0.37, -0.03], b: [-0.12, -0.005], r: 0.045 },
-  check: {
-    // (the fore-end a box on the barrels: 0.16–0.42 along, 3.4 cm tall round 0.043, 5.4 wide)
-    boxes: [{ c: [0.29, 0.043], h: [0.13, 0.017, 0.027], fore: true }],
-    // (the stock; the barrels past the fore-end)
-    rods: [
-      { a: [-0.02, -0.01], b: [-0.38, -0.03], r: 0.022, fore: false },
-      { a: [0.43, 0.055], b: [0.85, 0.066], r: 0.02, fore: true },
-    ],
-    // (tools/art/guns/guns.py's stock)
-    stock: {
-      x: [-0.395, -0.1],
-      top: [
-        [-0.09, 0.064],
-        [-0.365, 0.036],
-      ],
-      bot: [
-        [-0.14, -0.042],
-        [-0.37, -0.1],
-      ],
-      z: 0.016,
-    },
-  },
-};
-
 // ── slung, drawn, put away (plan 81 phase 2, F6a) ──────────────────────────────────────────────────────
 /** (shared ARMS.shotgun.draw) off her back and over the right shoulder, s; put back, s */
 export const SG_DRAW_S = 0.6;
@@ -164,7 +114,7 @@ export const DRAW_KEYS: { at: [number, number, number]; f: [number, number, numb
 /** The strap's way over her (the slung gun's swivel → over the right shoulder → across the chest → the left
  *  hip → round to the barrels): each point a bone's and an offset in her frame (x left, y up, z ahead; m) —
  *  out on her front (a fuller chest: STRAP_BUST more) */
-export const STRAP: { bone: "shoulderR" | "chest" | "hips"; at: [number, number, number] }[] = [
+export const STRAP: SlingSpec["strap"] = [
   { bone: "shoulderR", at: [0, 0.09, -0.03] },
   { bone: "shoulderR", at: [0.05, 0.04, 0.09] },
   { bone: "chest", at: [0.05, -0.1, 0.21] },
@@ -294,4 +244,66 @@ export const SG_PORT = {
     ),
     new Quaternion(),
   ),
+};
+
+/** The double-barrel as tp/long-hold.ts holds a long gun */
+export const SG_LONG: LongSpec = {
+  key: "shotgun",
+  wrist: SG_WRIST,
+  wristShape: SG_WRIST_SHAPE,
+  fore: {
+    part: "barrels",
+    pivot: SG_HINGE,
+    y: SG_FORE.y,
+    x: FORE_X,
+    along: SG_FORE.along,
+    index: SG_FORE.index,
+    shape: SG_FORE_SHAPE,
+    // (laid along the fore-end's left side, ahead — closed round the box it went into it)
+    thumb: [0.09, 0.036, -0.037],
+  },
+  torch: { ...SG_TORCH, held: SG_TORCH_HELD, thumb: [0.075, SG_TORCH.y + 0.004, -0.02] },
+  butt: SG_BUTT,
+  carry: { kind: "side", ...SG_CARRY },
+  aim: SG_AIM,
+  blade: { ready: SG_READY.blade, aim: SG_BLADE },
+  protract: SG_PROTRACT,
+  kick: SG_KICK,
+  aimS: SG_AIM_S,
+  leftCarried: false,
+  sling: {
+    flag: "sling",
+    at: SLUNG_AT,
+    turn: SLUNG_TURN,
+    keys: DRAW_KEYS,
+    draw: SG_DRAW_S,
+    away: SG_AWAY_S,
+    strap: STRAP,
+    ends: [STRAP_ENDS.swivel, STRAP_ENDS.barrels],
+    bust: STRAP_BUST,
+    over: 0,
+  },
+  avoid: { a: [-0.37, -0.03], b: [-0.12, -0.005], r: 0.045 },
+  check: {
+    // (the fore-end a box on the barrels: 0.16–0.42 along, 3.4 cm tall round 0.043, 5.4 wide)
+    boxes: [{ c: [0.29, 0.043], h: [0.13, 0.017, 0.027], fore: true }],
+    // (the stock; the barrels past the fore-end)
+    rods: [
+      { a: [-0.02, -0.01], b: [-0.38, -0.03], r: 0.022, fore: false },
+      { a: [0.43, 0.055], b: [0.85, 0.066], r: 0.02, fore: true },
+    ],
+    // (tools/art/guns/guns.py's stock)
+    stock: {
+      x: [-0.395, -0.1],
+      top: [
+        [-0.09, 0.064],
+        [-0.365, 0.036],
+      ],
+      bot: [
+        [-0.14, -0.042],
+        [-0.37, -0.1],
+      ],
+      z: 0.016,
+    },
+  },
 };

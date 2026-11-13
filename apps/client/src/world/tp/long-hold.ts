@@ -63,6 +63,9 @@ export interface LongSpec {
   leftCarried: boolean;
   /** The right forearm kept out of the stock — a rod from `a` to `b` (x, y), `r` round — carried; null: never */
   avoid: { a: [number, number]; b: [number, number]; r: number } | null;
+  /** Slung on her back when it isn't in her hands (the Player flag that says she carries it), drawn and put
+   *  back along its keys — null: none (it's gone when put away) */
+  sling: SlingSpec | null;
   /** The bench's checks: the left fingers against boxes on the gun (its middle x, y and half-sizes), the
    *  forearms against rods on it (a → b, x and y, `r` round), each in the gun's frame or (`fore`) the fore
    *  part's (less its pivot); the stock's side profile (its top and bottom lines by x, from `x[0]` to `x[1]`,
@@ -72,6 +75,26 @@ export interface LongSpec {
     rods: { a: [number, number]; b: [number, number]; r: number; fore: boolean }[];
     stock: { x: [number, number]; top: [number, number][]; bot: [number, number][]; z: number };
   };
+}
+
+/** A long gun slung on her back: its grip's place and its turn in her chest bone's space (x her left, y up, z
+ *  ahead); the draw's keys between the back and the hold (her frame from her shoulders' middle: x left, y up,
+ *  z ahead — its grip, the bore's way, its top's: given, or the way it turns over about her left-right line),
+ *  each under half a turn from the next; the draw's time and the put-away's (s); the strap's way over her
+ *  (each point a bone's and an offset in her frame, out on her front — a fuller chest's `bust` more) between
+ *  its two ends on the gun */
+export interface SlingSpec {
+  flag: "sling" | "slingAk";
+  at: Vector3;
+  turn: Quaternion;
+  keys: { at: [number, number, number]; f: [number, number, number]; u?: [number, number, number] }[];
+  draw: number;
+  away: number;
+  strap: { bone: "shoulderR" | "shoulderL" | "chest" | "hips"; at: [number, number, number] }[];
+  ends: [Vector3, Vector3];
+  bust: number;
+  /** with the other long gun slung too, this one over it — this much further out from her back (m) */
+  over: number;
 }
 
 /** The gun's turn (the world's) and its grip point, for its butt in the right shoulder's pocket (aimed, or at

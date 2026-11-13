@@ -6,9 +6,9 @@
 // down; aimed square, the butt in the pocket (F2a). The numbers the phase 0 mocks' (tools/art/guns/mock82.py,
 // signed off 2026-11-12 — Blender's x, y, z → the game's x, z, −y), in the gun's own frame here (x along the
 // bore, y its top, z its right; m; its origin the top of the pistol grip — tools/art/guns/guns.py ak47()).
-import { Vector3 } from "three";
+import { Matrix4, Quaternion, Vector3 } from "three";
 import type { HeldShape } from "../chars/props";
-import type { LongSpec } from "./long-hold";
+import type { LongSpec, SlingSpec } from "./long-hold";
 
 /** The right hand round the pistol grip: its palm's middle on the grip's right side ~4 cm down it, the
  *  fingers' way, the index side — the hand round it a little aslant, its fingers' way 25° up from square to
@@ -51,6 +51,48 @@ export const AK_BUTT = new Vector3(-0.41, -0.013, 0);
 export const AK_LUG = new Vector3(0.124, 0.026, 0);
 export const AK_CHARGE = new Vector3(0.19, 0.073, 0.046);
 
+// ── slung, drawn, put away (plan 82 phase 2, F6a) ──────────────────────────────────────────────────
+/** Slung on her back, the double-barrel's mirrored so both fit, crossed (the chest bone's space: x her left, y
+ *  up, z ahead): its grip low behind her right side, the muzzle up past her left shoulder, the stock down to
+ *  her right hip, its top to her back (the magazine out from it) — the grip's place, its turn */
+const SLUNG_F = new Vector3(0.55, 0.83, 0).normalize();
+export const AK_SLUNG = {
+  at: new Vector3(-0.1, -0.13, -0.14),
+  turn: new Quaternion().setFromRotationMatrix(
+    new Matrix4().makeBasis(SLUNG_F, new Vector3(0, 0, 1), new Vector3().crossVectors(SLUNG_F, new Vector3(0, 0, 1))),
+  ),
+};
+/** The AK slung, drawn and put back (shared ARMS.ak47.draw: 0.6 — off her back, down her right side) */
+export const AK_SLING: SlingSpec = {
+  flag: "slingAk",
+  at: AK_SLUNG.at,
+  turn: AK_SLUNG.turn,
+  // (her right hand back to the grip low on her back, the gun turned down across her back — the muzzle sweeping
+  // down past her left hip — to hang muzzle down at her right side, its top ahead, the stock up behind her arm;
+  // swung up ahead to the hold. Her hand as a hand hangs all the way: swung round her side upright, its top to
+  // her, the grip held fingers up, her wrist was bent 57–97° past its reach)
+  keys: [
+    { at: [-0.14, -0.36, -0.2], f: [0.9, -0.42, 0], u: [0, 0, 1] },
+    { at: [-0.27, -0.36, -0.1], f: [0, -0.937, 0.35], u: [0, 0, 1] },
+    { at: [-0.26, -0.32, 0.12], f: [0.05, -0.6, 0.8], u: [0, 0.8, 0.6] },
+  ],
+  draw: 0.6,
+  away: 0.5,
+  // (from the front swivel up by her left shoulder, over it, across her chest — over the double-barrel's strap
+  // — to her right hip, round to the stock's loop)
+  strap: [
+    { bone: "shoulderL", at: [0, 0.09, -0.03] },
+    { bone: "shoulderL", at: [-0.05, 0.04, 0.09] },
+    { bone: "chest", at: [-0.05, -0.1, 0.215] },
+    { bone: "hips", at: [-0.17, 0.07, 0.195] },
+    { bone: "hips", at: [-0.2, 0.03, 0.03] },
+  ],
+  ends: [new Vector3(0.46, 0.03, 0), new Vector3(-0.35, 0, -0.021)],
+  bust: 0.005,
+  // (crossed over the double-barrel when she carries both: their middles met in her back)
+  over: 0.085,
+};
+
 /** The AK as tp/long-hold.ts holds a long gun */
 export const AK_LONG: LongSpec = {
   key: "ak47",
@@ -85,6 +127,7 @@ export const AK_LONG: LongSpec = {
   // (shared ARMS.ak47.aim)
   aimS: 0.24,
   leftCarried: true,
+  sling: AK_SLING,
   avoid: null,
   check: {
     boxes: [

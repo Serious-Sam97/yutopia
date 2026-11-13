@@ -512,6 +512,8 @@ test("the AK (plan 79 phase 5): full auto at its rate through the line's jitter,
   await waitFor(() => b.inv?.quick[2]?.id === "ak47");
   b.room.send("arms:draw", { slot: 2 });
   await waitFor(() => me(b.room).gun === "ak47");
+  // (plan 82) the AK carried: slung on her back when it isn't in her hands, for everyone
+  await waitFor(() => me(b.room).slingAk, 1500);
   await sleep(ARMS.ak47.draw * 1000 + 50);
   const loaded2 = () => (b.inv?.quick[2] as { loaded?: number } | null | undefined)?.loaded;
   const spare = () => (b.inv ? count(b.inv, "r762") : 0);

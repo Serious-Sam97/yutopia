@@ -50,6 +50,7 @@ export interface PersonIn {
   gun?: string; // the weapon in the hand (D6): "revolver", "shotgun", "ak47" (plan 79)
   holster?: boolean; // carrying the revolver (plan 80): its holster on the right hip, the gun in it
   sling?: boolean; // carrying the double-barrel (plan 81): slung on the back when it's not in the hand
+  slingAk?: boolean; // carrying the AK (plan 82): slung on the back, mirrored, when it's not in the hand
   arm?: number; // …what the hand's doing with it (shared ARM: drawing, reloading, broken open)
   down?: "down" | "kneel"; // down, crawling; kneeling by someone down (D7: world/dark says)
   fell?: number; // knocked down by a pool ball: s since (tp/view.ts times it from when it's seen)

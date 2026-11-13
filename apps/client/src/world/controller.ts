@@ -2740,6 +2740,7 @@ export class WorldController {
       gun: p.gun,
       holster: p.holster || undefined,
       sling: p.sling || undefined,
+      slingAk: p.slingAk || undefined,
       arm: p.arm,
       fellAt: p.fellAt,
       fellYaw: p.fellYaw,

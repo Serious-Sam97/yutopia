@@ -183,7 +183,9 @@ function Bench({ q }: { q: URLSearchParams }) {
         a: 0,
         gun: GUN,
         holster: GUN === "revolver",
-        sling: GUN === "shotgun",
+        // (`both=1`: carrying both long guns — their slings crossed on her back)
+        sling: GUN === "shotgun" || q.get("both") === "1",
+        slingAk: GUN === "ak47" || q.get("both") === "1",
         mv: packMv("still"),
         pitch: 0,
         torch: false,
@@ -288,7 +290,9 @@ function Bench({ q }: { q: URLSearchParams }) {
         // (put all the way away: in the holster, the hand let go)
         // (each gun's own times: the revolver's 0.35 s out of the holster, 0.25 back; the double-barrel's 0.6 off
         // her back, 0.5 onto it — person3d's)
-        const [DRAW, AWAY] = GUN === "shotgun" ? [0.6, 0.5] : [0.35, 0.25];
+        // (the AK's 0.6 off her back round her right side, 0.5 back — plan 82)
+        const SL = (GUN === "ak47" ? AK_LONG : GUN === "shotgun" ? SG_LONG : null)?.sling;
+        const [DRAW, AWAY] = SL ? [SL.draw, SL.away] : [0.35, 0.25];
         if (s.away) P3.holsterT = s.draw <= 0 ? 1 : Math.max(0, (1 - s.draw) * AWAY - dt);
         else if (s.draw < 1) P3.drawT = Math.max(0, s.draw * DRAW - dt);
         p.pitch = aim ? s.pitch : 0;
@@ -397,6 +401,49 @@ function Bench({ q }: { q: URLSearchParams }) {
         },
         person,
         p,
+        // (plan 82: how much of a slung gun is inside her — points through its body, each a ray back out of her
+        // chest: an odd count of a mesh's own crossings, inside it)
+        slungIn: (key: string) => {
+          const S = (
+            person as unknown as { slings: Map<string, { gun: { root: import("three").Object3D } }> }
+          ).slings.get(key);
+          if (!S) return null;
+          const root = S.gun.root;
+          root.updateWorldMatrix(true, true);
+          const meshes: import("three").Mesh[] = [];
+          person.root.traverse((o) => {
+            const m = o as import("three").SkinnedMesh;
+            if (m.isSkinnedMesh && m.visible) meshes.push(m);
+          });
+          const chest = person.model.bone("chest");
+          const back = new T.Vector3(0, 0, -1).applyQuaternion(
+            (chest ?? person.root).getWorldQuaternion(new T.Quaternion()),
+          );
+          const rc = new T.Raycaster();
+          let n = 0;
+          let inside = 0;
+          let deep = 0;
+          const pts: string[] = [];
+          for (let x = -0.38; x <= 0.62; x += 0.05)
+            for (const y of [0, 0.04, 0.08])
+              for (const z of [-0.015, 0.015]) {
+                const pt = new T.Vector3(x, y, z).applyMatrix4(root.matrixWorld);
+                n++;
+                rc.set(pt, back);
+                for (const m of meshes) {
+                  const hits = rc.intersectObject(m, false);
+                  if (hits.length % 2 === 1) {
+                    inside++;
+                    deep = Math.max(deep, hits[0].distance);
+                    pts.push(
+                      `${(m.name || "body").slice(-4)} x${x.toFixed(2)} y${y} d${(hits[0].distance * 100).toFixed(1)}`,
+                    );
+                    break;
+                  }
+                }
+              }
+          return { n, inside, deep, pts };
+        },
         // (the long guns' numbers, to try others live — refit() puts the gun in the hand by them again)
         long: { SG_LONG, AK_LONG },
         refit: () => {
