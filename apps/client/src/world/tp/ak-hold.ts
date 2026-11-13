@@ -55,12 +55,15 @@ export const AK_CHARGE = new Vector3(0.19, 0.073, 0.046);
 // ── slung, drawn, put away (plan 82 phase 2, F6a) ──────────────────────────────────────────────────
 /** Slung on her back, the double-barrel's mirrored so both fit, crossed (the chest bone's space: x her left, y
  *  up, z ahead): its grip low behind her right side, the muzzle up past her left shoulder, the stock down to
- *  her right hip, its top to her back (the magazine out from it) — the grip's place, its turn */
+ *  her right hip, flat on her back — its right side (the charging handle) to her, its top up toward her right
+ *  shoulder, the magazine lying along her back toward her left hip (2026-11-13, the user's: its top to her
+ *  back, the magazine stood 24 cm out from her) — the grip's place, its turn */
 const SLUNG_F = new Vector3(0.55, 0.83, 0).normalize();
+const SLUNG_U = new Vector3(-0.83, 0.55, 0).normalize();
 export const AK_SLUNG = {
-  at: new Vector3(-0.1, -0.13, -0.14),
+  at: new Vector3(-0.1, -0.13, -0.12),
   turn: new Quaternion().setFromRotationMatrix(
-    new Matrix4().makeBasis(SLUNG_F, new Vector3(0, 0, 1), new Vector3().crossVectors(SLUNG_F, new Vector3(0, 0, 1))),
+    new Matrix4().makeBasis(SLUNG_F, SLUNG_U, new Vector3().crossVectors(SLUNG_F, SLUNG_U)),
   ),
 };
 /** The AK slung, drawn and put back (shared ARMS.ak47.draw: 0.6 — off her back, down her right side) */
@@ -90,14 +93,20 @@ export const AK_SLING: SlingSpec = {
   ],
   ends: [new Vector3(0.46, 0.03, 0), new Vector3(-0.35, 0, -0.021)],
   bust: 0.005,
-  // (crossed over the double-barrel when she carries both: their middles met in her back)
-  over: 0.085,
+  // (crossed over the double-barrel when she carries both: resting on it where they cross — its top to her
+  // back, it needed 8.5 cm; flat, at that it stood 6 cm off the double-barrel, the user's "floating")
+  over: 0.025,
+  // (upright, its top stood 3–6 cm off a masculine body's shoulder blades — and over the double-barrel, 1.5–5.5
+  // off either's: tilted, 0.1–2.3; further, its stock stood out from her hip)
+  lean: { alone: [0, 0.12], over: [0.08, 0.2] },
   // (taken off her back by its stock by her right hip — as from a holster — then her hand on to the pistol grip
   // as it hangs at her side: reaching back to the grip on her back, her wrist was bent 30–50° past its reach)
+  // (flat on her back its right side's to her: her hand round the stock from that side, the fingers back and
+  // down round its belly — from its other side or under it, her wrist bent 28–127° past its reach)
   grab: {
     palm: new Vector3(-0.22, 0.02, 0.035),
-    along: new Vector3(0, -0.3, 0.95).normalize(),
-    index: new Vector3(1, 0, 0),
+    along: new Vector3(-1, -1, 0).normalize(),
+    index: new Vector3(1, -1, 0).normalize(),
     // (on to the grip early, as it comes off her back: later, swung round her side, her forearm crossed the gun)
     until: 0.12,
     to: 0.22,

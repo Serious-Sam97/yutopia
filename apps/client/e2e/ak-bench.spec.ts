@@ -138,7 +138,7 @@ for (const gender of ["feminine", "masculine"])
         if (!g || !chest) return 9;
         const V = g.position.constructor;
         // (tp/ak-hold.ts AK_SLUNG: the slung gun's grip in the chest bone's space)
-        return g.getWorldPosition(new V()).distanceTo(chest.localToWorld(new V(-0.1, -0.13, -0.14)));
+        return g.getWorldPosition(new V()).distanceTo(chest.localToWorld(new V(-0.1, -0.13, -0.12)));
       });
     await set(page, { ...BASE, draw: 0.02 });
     await settle(page);

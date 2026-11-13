@@ -67,7 +67,8 @@ export interface LongSpec {
   aimS: number;
   /** The left hand on the gun carried too (else free till she aims) */
   leftCarried: boolean;
-  /** The right forearm kept out of the stock — a rod from `a` to `b` (x, y), `r` round — carried; null: never */
+  /** The right forearm kept out of the stock — a rod from `a` to `b` (x, y), `r` round — reloading, and carried
+   *  at her side; null: never */
   avoid: { a: [number, number]; b: [number, number]; r: number } | null;
   /** Slung on her back when it isn't in her hands (the Player flag that says she carries it), drawn and put
    *  back along its keys — null: none (it's gone when put away) */
@@ -110,9 +111,14 @@ export interface SlingSpec {
   bust: number;
   /** with the other long gun slung too, this one over it — this much further out from her back (m) */
   over: number;
+  /** tilted this far to her back about her left-right line (rad) — on a body with a bust, without (its back
+   *  straighter, further from its chest bone at the shoulders); `over`: with the other long gun under it, its
+   *  top brought down to her back past where they cross — else its top stood off her shoulder blades */
+  lean?: { alone: [number, number]; over: [number, number] };
   /** drawn by another place on it first (her right hand round it — its palm's middle, the fingers' way, the
-   *  index side; the gun's frame) till this much of the draw, then on to the grip by `to` */
-  grab?: { palm: Vector3; along: Vector3; index: Vector3; until: number; to: number };
+   *  index side; the gun's frame) till this much of the draw, then on to the grip by `to`; `hold`: that place
+   *  is the grip itself, the hand turned another way on it (its fingers kept round it) */
+  grab?: { palm: Vector3; along: Vector3; index: Vector3; until: number; to: number; hold?: boolean };
 }
 
 /** The gun's turn (the world's) and its grip point, for its butt in the right shoulder's pocket (aimed, or at

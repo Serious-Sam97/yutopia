@@ -303,6 +303,34 @@ Plan 81's machinery, for the AK:
    reload's left thumb rests 3 mm into the skin's mark; a forearm grazes the gun by under 1 cm while the hand
    moves.
 
+   **Slung flat (2026-11-13, the user: "it could face sideways instead of half straight out").** On her back
+   its top was to her, so the magazine stood 24 cm out from her back. Now it lies flat (`AK_SLUNG`): its right
+   side (the charging handle) to her, its top up toward her right shoulder, the magazine along her back
+   toward her left hip; seen from behind, the AK's whole side, the same diagonal (the muzzle up past her left
+   shoulder, the stock at her right hip). 2 cm nearer her (z −0.12): no point of it — the receiver, the
+   magazine, the grip, the handle — inside her, both bodies, in a tee or a coat, alone or over the
+   double-barrel (5 cm clear of it). The draw takes the stock from that side now (`AK_SLING.grab`: the
+   fingers back and down round its belly; from its other side or under it, her wrist bent 28–127° past its
+   reach): her wrist within it, her forearm turned ≤26°. The bench's `slungIn(key, at?)` takes the points to
+   try (the magazine and grip too). Stills: `design/guns/p82/slung-flat.png` (before, after over the
+   double-barrel, alone, the bigger body; the draw by the stock).
+
+   **Against her back (2026-11-13, the user: "too far from his back, floating, not touching").** Seen from
+   the side on a broad masculine body in a coat, carrying both, it stood ~12 cm off. Measured by the bench's
+   new `slungGap(key, at)` (rays from points on its near side in toward her: the first of her, her clothes,
+   her hair or the other slung gun) on every body (slim, regular, broad), both genders, a tee or a coat
+   (`outer=`, new on the bench, with `body=`):
+   - over the double-barrel it was set 8.5 cm further out (for the magazine standing out) — flat, it stood 6
+     cm off the double-barrel where they cross; now `over` 0.025: 1–4 mm;
+   - upright, its top stood 3–6 cm off a masculine body's shoulder blades (1–1.5 on a feminine one: its back
+     further from the chest bone up there): `SlingSpec.lean` tilts it to her back about her left-right line —
+     alone 0.12 rad on a body without a bust, over the double-barrel 0.08 / 0.2 (its top past the crossing
+     brought down too; further, the stock stood out from her hip). The slung turn is set every frame now
+     (`slungTurn`), the same as the draw starts from.
+   Now, nearest point to what's under it: 0–2.3 cm everywhere, 0.4–0.5 cm on the broad masculine body in a
+   coat; nothing of it inside her; the draw from there clean (wrist within its reach, forearm ≤28°, no arm in
+   it). Stills: `design/guns/p82/slung-against.png`.
+
 ## Risks
 
 - Full auto: ten rounds a second, each kicking the gun — the hands must ride it without the elbows

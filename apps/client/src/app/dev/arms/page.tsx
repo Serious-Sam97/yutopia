@@ -177,6 +177,9 @@ function Bench({ q }: { q: URLSearchParams }) {
         gender,
         hair: gender === "masculine" ? "short" : "bob",
         top: q.get("top") ?? "coat",
+        body: q.get("body") ?? DEFAULT_AVATAR.body,
+        // (a layer over the top — a coat, a parka…)
+        ...(q.get("outer") ? { outer: q.get("outer") } : {}),
         topColor: "#3d4a5c",
         bottom: "jeans",
         bottomColor: "#2a2f3a",
@@ -434,7 +437,8 @@ function Bench({ q }: { q: URLSearchParams }) {
         p,
         // (plan 82: how much of a slung gun is inside her — points through its body, each a ray back out of her
         // chest: an odd count of a mesh's own crossings, inside it)
-        slungIn: (key: string) => {
+        // (at: the points on the gun to try, its frame — else along its bore and top)
+        slungIn: (key: string, at?: [number, number, number][]) => {
           const S = (
             person as unknown as { slings: Map<string, { gun: { root: import("three").Object3D } }> }
           ).slings.get(key);
@@ -455,25 +459,60 @@ function Bench({ q }: { q: URLSearchParams }) {
           let inside = 0;
           let deep = 0;
           const pts: string[] = [];
+          const grid: [number, number, number][] = [];
           for (let x = -0.38; x <= 0.62; x += 0.05)
-            for (const y of [0, 0.04, 0.08])
-              for (const z of [-0.015, 0.015]) {
-                const pt = new T.Vector3(x, y, z).applyMatrix4(root.matrixWorld);
-                n++;
-                rc.set(pt, back);
-                for (const m of meshes) {
-                  const hits = rc.intersectObject(m, false);
-                  if (hits.length % 2 === 1) {
-                    inside++;
-                    deep = Math.max(deep, hits[0].distance);
-                    pts.push(
-                      `${(m.name || "body").slice(-4)} x${x.toFixed(2)} y${y} d${(hits[0].distance * 100).toFixed(1)}`,
-                    );
-                    break;
-                  }
-                }
+            for (const y of [0, 0.04, 0.08]) for (const z of [-0.015, 0.015]) grid.push([x, y, z]);
+          for (const [x, y, z] of at ?? grid) {
+            const pt = new T.Vector3(x, y, z).applyMatrix4(root.matrixWorld);
+            n++;
+            rc.set(pt, back);
+            for (const m of meshes) {
+              const hits = rc.intersectObject(m, false);
+              if (hits.length % 2 === 1) {
+                inside++;
+                deep = Math.max(deep, hits[0].distance);
+                pts.push(
+                  `${(m.name || "body").slice(-4)} x${x.toFixed(2)} y${y} d${(hits[0].distance * 100).toFixed(1)}`,
+                );
+                break;
               }
+            }
+          }
           return { n, inside, deep, pts };
+        },
+        // (how far a slung gun stands off her — from points on it (its frame), each a ray in toward her chest:
+        // the first of her, her clothes, her hair or the other slung gun it meets; the least, m, and where)
+        slungGap: (key: string, at: [number, number, number][]) => {
+          const slings = (
+            person as unknown as {
+              slings: Map<string, { root: import("three").Object3D; gun: { root: import("three").Object3D } }>;
+            }
+          ).slings;
+          const S = slings.get(key);
+          if (!S) return null;
+          S.root.updateWorldMatrix(true, true);
+          const targets: import("three").Object3D[] = [];
+          person.root.traverse((o) => {
+            const m = o as import("three").SkinnedMesh;
+            if (m.isSkinnedMesh && m.visible) targets.push(m);
+          });
+          for (const [k, o] of slings) if (k !== key && o.root.visible) targets.push(o.root);
+          const chest = person.model.bone("chest");
+          const fwd = new T.Vector3(0, 0, 1).applyQuaternion(
+            (chest ?? person.root).getWorldQuaternion(new T.Quaternion()),
+          );
+          const rc = new T.Raycaster();
+          let min = Number.POSITIVE_INFINITY;
+          let where = "";
+          for (const [x, y, z] of at) {
+            rc.set(new T.Vector3(x, y, z).applyMatrix4(S.gun.root.matrixWorld), fwd);
+            const h = rc.intersectObjects(targets, true)[0];
+            if (h && h.distance < min) {
+              min = h.distance;
+              where = `${(h.object.name || "body").slice(-6)} x${x.toFixed(2)} y${y.toFixed(2)}`;
+            }
+          }
+          return { min, where };
         },
         // (the long guns' numbers, to try others live — refit() puts the gun in the hand by them again)
         long: { SG_LONG, AK_LONG, akHold },

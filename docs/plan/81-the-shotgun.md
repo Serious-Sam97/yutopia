@@ -329,3 +329,46 @@ stretch"; and walking sideways aimed, now and then the arm went very thin.
   reloading, the left hand lets go as the gun goes back to her side (2.1 s on). Checks: the shotgun's sweep
   none past the limits; the bench spec (carried: upright, the right on the stock's wrist, the left free, no
   arm in the gun) and the two-of-us world spec pass; the revolver's spec and arms-feel too.
+
+## Feedback, 2026-11-13 (fourth): held as the AK
+
+"The way we hold the shotgun one-handed when not aiming — make the character hold it the way he holds the
+AK-47, it turned out nice." After plan 82, the shotgun is carried at the AK's low ready, and its hands were
+refitted on the AK's strict audit (both bodies in a tee, every state: each hand at its place, each wrist
+within its reach, each forearm turned ≤53°, no finger or arm in the gun, the stock out of her shirt).
+
+- **The low ready in both hands** (`SG_CARRY`, `kind: "ready"`; `leftCarried`): the butt at the right
+  shoulder's front, out at the shoulder and 9 cm ahead (`pocket` [0, −0.03, 0.09] — the AK's 7 cm had the
+  stock's toe 2–5 cm into the fuller chest's shirt), the muzzle 0.4 rad down and 0.4 across to her left, her
+  shoulders near square (`SG_READY.blade` 0.08), the left shoulder forward (`SG_PROTRACT`). The third
+  feedback's carry at her side came of the low ready then having her shoulders side-on to reach the fore-end;
+  the AK showed that square shoulders reach it with the left hand cupped under its back end.
+- **The right hand on the stock's wrist** (`SG_WRIST`): plan 81's (the knuckles along the gun ~22° down, as
+  on a pistol grip) turned 43° left, 31° up and rolled 46° over the top. Plan 81's had the wrist bent
+  66–78° sideways at the ready and aimed (18–52° past its reach); now 8–35°, within it, the forearm
+  turned ≤35°. A search over any turn found lower numbers with the palm on the top of the wrist, the index
+  away from the trigger, so the search was kept to turns of plan 81's hand (the palm on the wrist's right).
+- **The left hand under the fore-end** (`SG_FORE`): cupped up under its left edge, the fingers forward along
+  it and round its right, the palm 1.2 cm under its underside — as the AK's. Across its underside (plan 81's)
+  her left forearm was turned 62–76° aimed and her wrist 16–23° past its reach; now ≤24° and ≤6°. Higher,
+  the bigger hand's index tip went 4 mm into the wood.
+- **Drawn** (`SlingSpec.grab` with `hold`): off her back and over the shoulder with plan 81's hand on the
+  wrist, turned to the low ready's from 0.6 to 0.85 of the draw, the fingers kept round the wrist where it is
+  on the gun. On the new hand all the way her forearm turned 63–84° lifting it.
+- The bench's check now names the forearm and the rod it's in (`whereArms`).
+- Stills: `design/guns/p81/feedback-4-low-ready.png` (both bodies: front, side, each hand, aimed).
+- `e2e/shotgun-bench.spec.ts`: carried, both hands on, each wrist within its reach, each forearm ≤53°, no
+  finger or arm in the gun; reloading, the left on throughout.
+
+Measured, plan 81's hold → now (strict audit, 58 states a body): 53 → 42 flawed (feminine), 53 → 24
+(masculine); every carried state clean on both.
+
+Left as they were (not part of this ask; each about as before):
+- **Port arms** (`SG_PORT`, the barrels up past her left shoulder): her right wrist 31–33° past its reach,
+  her left forearm turned 54–65°, and in a roll the gun 20–31 cm through the floor. The AK's across-the-chest
+  port was tried: with the muzzle ahead and the stock under her right arm both hands are clean, but the
+  double-barrel is 1.24 m and some moment of the roll always has it 7–25 cm in the floor.
+- **The reload**: the right wrist 8–24° past its reach and its forearm turned up to 68° fetching shells;
+  the forearms 1–2 cm against the gun moving.
+- **The draw's middle** (0.3–0.5): the right wrist 32–41° past its reach.
+- **Aimed**: the feminine left wrist 3–6° past its reach; the stock's toe 2–4 cm into the shirt at a few aims.

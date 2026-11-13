@@ -151,6 +151,16 @@ function slungAt(SL: SlingSpec, p: PersonIn, out: Vector3): Vector3 {
   if (SL.over && p.sling && p.slingAk) out.z -= SL.over;
   return out;
 }
+/** …its turn there (the chest bone's space) */
+function slungTurn(SL: SlingSpec, p: PersonIn, out: Quaternion): Quaternion {
+  out.copy(SL.turn);
+  const L = SL.lean ? (SL.over && p.sling && p.slingAk ? SL.lean.over : SL.lean.alone) : null;
+  const a = L ? L[p.avatar.gender === "feminine" ? 0 : 1] : 0;
+  if (a) out.premultiply(lgLean.setFromAxisAngle(X3, a));
+  return out;
+}
+const lgLean = new Quaternion();
+const lgSlungQ = new Quaternion();
 const lgSlung = new Vector3();
 const lgFA = new Vector3();
 const lgFI = new Vector3();
@@ -168,6 +178,10 @@ const akQ3 = new Quaternion();
 const akQ4 = new Quaternion();
 const akQA = new Quaternion();
 const akQB = new Quaternion();
+const sgHM = new Matrix4();
+const sgHP = new Vector3();
+const sgHQ = new Quaternion();
+const sgHQ2 = new Quaternion();
 const akAtA = new Vector3();
 const akAtB = new Vector3();
 const akForeAt = new Vector3();
@@ -2454,7 +2468,7 @@ export class Person3D {
       const chest = m.bone("chest");
       if (chest) {
         chest.updateWorldMatrix(true, false);
-        rM.compose(slungAt(SL, p, lgSlung), SL.turn, rs2.set(1, 1, 1));
+        rM.compose(slungAt(SL, p, lgSlung), slungTurn(SL, p, lgSlungQ), rs2.set(1, 1, 1));
         rM.premultiply(chest.matrixWorld).decompose(rgA, rqA, rs1);
       } else {
         rgA.copy(H.grip);
@@ -2527,7 +2541,18 @@ export class Person3D {
         grabbing = true;
         this.placeGun(rMg);
         this.revFree = true;
-        if (e > 0.5) m.hold("R", null);
+        if (GB.hold) {
+          // (the hand's another turn on the grip itself: its fingers kept round it — where it is on the gun)
+          const W = LS.wristShape;
+          sgHM
+            .compose(rAt, rTurn, sgHP.setScalar(wr.getWorldScale(rs1).x))
+            .invert()
+            .multiply(rMg);
+          sgHM.decompose(sgHP, sgHQ, rs1);
+          sgHP.copy(W.at).applyMatrix4(sgHM);
+          sgHQ.multiply(sgHQ2.setFromUnitVectors(Y3, W.axis));
+          m.hold("R", { shape: W.shape, pos: sgHP, quat: sgHQ, kind: "gun" });
+        } else if (e > 0.5) m.hold("R", null);
       }
     }
     // reloading: the gun off the right hand's grip (the left and the stock under the arm have it); the right
@@ -2582,7 +2607,7 @@ export class Person3D {
     let avoid: { a: Vector3; b: Vector3; r: number } | undefined;
     // (…and carried at her side: the stock back under her forearm)
     const A = LS.avoid;
-    if (A && (L || (!aiming && pw < 0.5))) {
+    if (A && (L || (!aiming && pw < 0.5 && LS.carry.kind === "side"))) {
       sgAvoid.a.set(A.a[0], A.a[1], 0).applyMatrix4(rMg);
       sgAvoid.b.set(A.b[0], A.b[1], 0).applyMatrix4(rMg);
       sgAvoid.r = A.r * B.k;
@@ -2592,7 +2617,7 @@ export class Person3D {
     // (racking: the gun where it was — the hand's gone off it; its fingers hooked over the knob)
     if (grabbing) {
       this.placeGun(rMg);
-      if (!cheap) m.fingersTo("R", 1.0);
+      if (!cheap && !GB?.hold) m.fingersTo("R", 1.0);
     }
     if (racking) {
       this.placeGun(rMg);
@@ -2980,6 +3005,7 @@ export class Person3D {
     const a1 = mid.clone().add(along);
     let grip = Number.POSITIVE_INFINITY;
     let whereGrip = "";
+    let whereArms = "";
     let arms: number | null = null;
     const bar = LS?.fore.part ? g.model.parts[LS.fore.part] : inner;
     if (LS && bar) {
@@ -3024,13 +3050,21 @@ export class Person3D {
         for (let i = 0; i <= 6; i++) {
           // (elbow to three quarters down the forearm; a forearm ~3.5 cm round)
           const q = e.clone().lerp(wv, (i / 6) * 0.75);
-          for (const r of rods) arms = Math.min(arms, segGap(q, r.a, r.b) - r.r * rs1.x - 0.035);
+          for (let k = 0; k < rods.length; k++) {
+            const r = rods[k];
+            const gap = segGap(q, r.a, r.b) - r.r * rs1.x - 0.035;
+            if (gap < arms) {
+              arms = gap;
+              whereArms = `${S === "L" ? "left" : "right"} forearm, rod ${k}`;
+            }
+          }
         }
       }
     } else
       for (const fl of L) for (const a of fl) grip = Math.min(grip, segGap(a, a0, a1) - GUN_GRIP_R * rs1.x - 0.0085);
     return {
       arms,
+      whereArms,
       whereGrip,
       cant: cantOf(f, u),
       off,
@@ -3370,7 +3404,6 @@ export class Person3D {
         poseGun(gun, gunKind(LS.key), {});
         root.add(gun.root);
         root.position.copy(SL.at);
-        root.quaternion.copy(SL.turn);
         chest.add(root);
         const mat = this.mats.prop("#3a2414");
         const strap: Mesh[] = [];
@@ -3385,6 +3418,7 @@ export class Person3D {
       }
       const on = !(this.gun && this.gun.key === LS.key);
       slungAt(SL, p, S.root.position);
+      slungTurn(SL, p, S.root.quaternion);
       S.root.visible = on;
       for (const sm of S.strap) sm.visible = on;
       if (!on) continue;

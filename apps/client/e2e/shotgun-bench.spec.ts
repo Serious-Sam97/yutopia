@@ -5,9 +5,9 @@ import { test } from "./helpers";
 // Plan 81 phase 6: the double-barrel's hold checked on its bench (/dev/arms?gun=shotgun — the game's own
 // person, the life double-barrel): aimed upright and on the look at every pitch and every turn of her, with
 // and without the torch under the fore-end; no hand through the other, the gun's wrist or the gun itself; each
-// wrist at its place; the low ready walking and running; up from it in the gun's own time; drawn off her back;
-// the reload's moments; kept across her chest through a roll, a vault, a slide, struck; let go sat. 3D: the
-// GPU (YUTOPIA_GPU=1).
+// wrist at its place; the low ready walking and running, both hands on (2026-11-13: as the AK's), each wrist
+// within its reach; up from it in the gun's own time; drawn off her back; the reload's moments; kept across her
+// chest through a roll, a vault, a slide, struck; let go sat. 3D: the GPU (YUTOPIA_GPU=1).
 const GPU = process.env.YUTOPIA_GPU === "1";
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 const DEG = Math.PI / 180;
@@ -15,6 +15,13 @@ const DEG = Math.PI / 180;
 const set = (page: Page, s: Record<string, unknown>) => page.evaluate((s) => (window as any).__revolver.set(s), s);
 const check = (page: Page) => page.evaluate(() => (window as any).__revolver.check());
 const settle = (page: Page, ms = 700) => page.waitForTimeout(ms);
+// each forearm's turn (rad — PersonModel.wristParts)
+const twists = (page: Page) =>
+  page.evaluate(() => {
+    const m = (window as any).__revolver.person.model;
+    const tw = (S: string) => Math.abs(m.wristParts(S, m.bone(`wrist${S}`).quaternion).twist);
+    return { L: tw("L"), R: tw("R") };
+  });
 const BASE = {
   pose: "ready",
   pitch: 0,
@@ -58,8 +65,8 @@ test("the double-barrel's hold on its bench: upright, on the look, no hand throu
         expect(c.arms, `${at}: an arm through the gun`).toBeGreaterThan(-0.005);
       }
 
-  // carried at her side, at every turn, walking and running, with the torch: upright, in her right hand, her
-  // left free (2026-11-12: the user's — shoulders square, no reaching)
+  // carried at the low ready in both hands, at every turn, walking and running, with the torch: upright, the
+  // right on the stock's wrist, the left under the fore-end (2026-11-13: the user's — held as the AK is)
   for (const [yaw, move, torch] of [
     [0, 0, false],
     [-1.6, 1, false],
@@ -73,7 +80,17 @@ test("the double-barrel's hold on its bench: upright, on the look, no hand throu
     expect(c.cant, `${at}: upright`).toBeLessThan(2 * DEG);
     expect(c.arms, `${at}: an arm through the gun`).toBeGreaterThan(-0.005);
     expect(c.R.short, `${at}: the right on the stock's wrist`).toBeLessThan(0.015);
-    expect(c.L, `${at}: the left free`).toBeNull();
+    expect(c.L, `${at}: the left on the gun`).not.toBeNull();
+    expect(c.L.short, `${at}: the left under the fore-end`).toBeLessThan(0.01);
+    expect(c.hands, `${at}: a hand through a hand (${c.where})`).toBeGreaterThan(-0.003);
+    expect(c.grip, `${at}: fingers in the gun (${c.whereGrip})`).toBeGreaterThan(-0.003);
+    expect(c.arms, `${at}: an arm through the gun (${c.whereArms})`).toBeGreaterThan(-0.003);
+    // (each wrist within its reach, each forearm turned no more than ~50° — pinched thin past it)
+    const tw = await twists(page);
+    expect(c.R.over, `${at}: the right wrist past its reach`).toBeLessThan(3 * DEG);
+    expect(c.L.over, `${at}: the left wrist past its reach`).toBeLessThan(3 * DEG);
+    expect(tw.R, `${at}: the right forearm turned`).toBeLessThan(53 * DEG);
+    expect(tw.L, `${at}: the left forearm turned`).toBeLessThan(53 * DEG);
   }
 
   // up from the ready in the gun's own 0.26 s (shared ARMS.shotgun.aim)
@@ -128,8 +145,7 @@ test("the double-barrel's hold on its bench: upright, on the look, no hand throu
     [1.9, { open: true, shell: true }],
     [2.28, { open: false, shell: false }],
   ] as const) {
-    // (shut and going back to her side, the left hand's let go of it — 2026-11-12, carried at her side)
-    const back = t > 2.1;
+    // (both hands on it throughout — carried at the low ready, the left stays on as it goes back up)
     await set(page, { ...BASE, pose: "reload", t: t / LOAD_LEN });
     await settle(page);
     const s = await state();
@@ -138,8 +154,8 @@ test("the double-barrel's hold on its bench: upright, on the look, no hand throu
     expect(s.shell, `${at}: a shell in the right hand`).toBe(want.shell);
     expect(s.free, `${at}: the gun off the right hand's grip`).toBe(true);
     expect(s.R, `${at}: the right at its place`).toBeLessThan(0.02);
-    if (back) expect(s.leftOn, `${at}: the left let go`).toBe(false);
-    else expect(s.L, `${at}: the left at its place`).toBeLessThan(0.02);
+    expect(s.leftOn, `${at}: the left on`).toBe(true);
+    expect(s.L, `${at}: the left at its place`).toBeLessThan(0.02);
   }
 
   // kept through a roll, a vault, a slide, struck: across her chest, both hands on, no arm through it

@@ -14,10 +14,12 @@ import { gunQuat } from "./revolver-hold";
  *  way (forward and down round the wrist's front), its index side (forward and up) */
 export const SG_WRIST = {
   palm: new Vector3(-0.046, -0.022, 0.012),
-  // (the knuckles nearly along the gun, ~22° down: a shotgun's wrist is shallow — the mocks' 40°, a pistol
-  // grip's, left the wrist bent 80° sideways)
-  along: new Vector3(0.92, -0.38, -0.1).normalize(),
-  index: new Vector3(0.3, 1, 0).normalize(),
+  // (2026-11-13, held at the low ready in both hands: the hand round the wrist from its right, the fingers
+  // forward, up and across to its left — plan 81's (the knuckles along the gun ~22° down, as on a pistol grip)
+  // turned 43° left, 31° up and rolled 46° over the top; that one had the wrist bent 66–78° sideways, at the
+  // ready and aimed, now 14–34°)
+  along: new Vector3(0.841, 0.194, -0.506).normalize(),
+  index: new Vector3(-0.544, 0.719, -0.432).normalize(),
 };
 /** …what its fingers close round: the stock's wrist, round, its axis across the fingers' way (back and down,
  *  ~50°) */
@@ -31,9 +33,13 @@ export const SG_WRIST_SHAPE = {
  *  the gun, from the fore-end's back end (`FORE_X[0]`, by the hinge) out to `FORE_X[1]` — as far out as the
  *  arm reaches */
 export const SG_FORE = {
-  y: 0.035,
-  along: new Vector3(0.45, 0, 0.85).normalize(),
-  index: new Vector3(1, 0, 0),
+  // (2026-11-13: the palm 1.2 cm under the fore-end's underside, the hand cupped up under its left edge, the
+  // fingers forward along it and round its right — as the AK's; across it (plan 81's, the fingers across
+  // its underside) her left forearm was turned 62–75°, now 13–22°; higher, the bigger hand's index tip went
+  // 4 mm into the wood)
+  y: 0.014,
+  along: new Vector3(0.849, -0.305, 0.432).normalize(),
+  index: new Vector3(0.505, 0.709, -0.492).normalize(),
 };
 export const FORE_X: [number, number] = [0.16, 0.33];
 /** …what its fingers close round: the fore-end, a box along the barrels (its own y; its x down, its z across
@@ -57,20 +63,24 @@ export const SG_TORCH_HELD: HeldShape = {
 export const SG_BUTT = new Vector3(-0.392, -0.035, 0);
 /** The barrels' hinge (their group's pivot — the fore-end's on them, it drops with them) */
 export const SG_HINGE = new Vector3(0.144, 0.033, 0);
-/** Carried, not aimed — at her side (the user's ask, 2026-11-12: the low ready across her front had her
- *  shoulders side-on for her left hand to reach the fore-end, "just put it at her side, then the arm needn't
- *  stretch"): in her right hand alone by the stock's wrist, down along her right side, the muzzle ahead and
- *  down, the stock back past her hip; her shoulders square, her left hand free (on the gun only aimed,
- *  reloading, or pulled in across her chest). Her frame from her shoulders' middle (x her left, y up, z
- *  ahead; m): the grip, the barrels' way, its top's; running, the muzzle this much steeper (rad) */
+/** Carried, not aimed — the low ready in both hands, as the AK's (the user's ask, 2026-11-13: "hold the shotgun
+ *  the way he holds the AK-47, it turned out nice"): the butt at the right shoulder's front (the pocket from
+ *  the shoulder's joint: left, up, ahead; on a fuller chest further ahead, as aimed), the muzzle down and
+ *  across to her left, the left hand under the fore-end, her shoulders square — the left shoulder brought
+ *  forward (SG_PROTRACT) for it. Plan 81's carry at her side (2026-11-12's third feedback, the right hand alone
+ *  on the stock's wrist) came of the low ready then having her shoulders side-on to reach the fore-end; the
+ *  AK's showed square shoulders reach it with the left hand cupped under its back end. Running, the muzzle
+ *  this much steeper (rad) */
 export const SG_CARRY = {
-  at: [-0.23, -0.51, 0.13] as [number, number, number],
-  f: [0.05, -0.32, 0.95] as [number, number, number],
-  u: [0, 1, 0] as [number, number, number],
+  // (the butt out at the shoulder and 2 cm further ahead than the AK's: its stock's drop put the toe 2–5 cm
+  // into the fuller chest's shirt)
+  pocket: [0, -0.03, 0.09] as [number, number, number],
+  down: 0.4,
+  across: 0.4,
   run: 0.15,
 };
-/** …her trunk turned this far right of the gun's way carried (the aim's is SG_BLADE): square */
-export const SG_READY = { blade: 0 };
+/** …her trunk turned this far right of the gun's way carried (the aim's is SG_BLADE): near square */
+export const SG_READY = { blade: 0.08 };
 /** Aimed (F2a): the butt's heel at the top of the shoulder — the pocket this far up (m, the mocks' man's);
  *  the trunk bent with the aim's pitch this much of it (the rest the aim pose's own); on a fuller chest the
  *  pocket this much further ahead (the butt's toe went into it) */
@@ -264,14 +274,14 @@ export const SG_LONG: LongSpec = {
   },
   torch: { ...SG_TORCH, held: SG_TORCH_HELD, thumb: [0.075, SG_TORCH.y + 0.004, -0.02] },
   butt: SG_BUTT,
-  carry: { kind: "side", ...SG_CARRY },
+  carry: { kind: "ready", ...SG_CARRY },
   aim: SG_AIM,
   cheek: null,
   blade: { ready: SG_READY.blade, aim: SG_BLADE },
   protract: SG_PROTRACT,
   kick: SG_KICK,
   aimS: SG_AIM_S,
-  leftCarried: false,
+  leftCarried: true,
   sling: {
     flag: "sling",
     at: SLUNG_AT,
@@ -283,7 +293,19 @@ export const SG_LONG: LongSpec = {
     ends: [STRAP_ENDS.swivel, STRAP_ENDS.barrels],
     bust: STRAP_BUST,
     over: 0,
+    // (2026-11-13: drawn with the hand on the stock's wrist as plan 81 had it — the knuckles along the gun —
+    // turned to the low ready's at the end: on the low ready's all the way, her forearm turned 63–84° lifting
+    // it over her shoulder)
+    grab: {
+      palm: SG_WRIST.palm,
+      along: new Vector3(0.92, -0.38, -0.1).normalize(),
+      index: new Vector3(0.3, 1, 0).normalize(),
+      until: 0.6,
+      to: 0.85,
+      hold: true,
+    },
   },
+  // (reloading, the stock along her side under her arm: the right forearm kept out of it)
   avoid: { a: [-0.37, -0.03], b: [-0.12, -0.005], r: 0.045 },
   check: {
     // (the fore-end a box on the barrels: 0.16–0.42 along, 3.4 cm tall round 0.043, 5.4 wide)
