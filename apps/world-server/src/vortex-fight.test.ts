@@ -402,3 +402,66 @@ test("the end and the grudge: scarred, the tape the last hitter's, back — afte
   await waitFor(() => vx(a.room).vscar === 0);
   await bye(a, b);
 });
+
+// (phase 6) the checks still open: his health scales with the shooters (a second one in the last 30 s, each hit
+// half as much); only those who shot him are his — C beside him through act III, untouched; beaten, he's on the
+// floor 8 s, then away in the server room till he's back
+test("scaling with the shooters, only shooters targeted, the fall's 8 s and away", async () => {
+  const a = await person(889);
+  const b = await person(890);
+  const c = await person(891);
+  const m = me(a.room);
+  const at = { x: m.x, y: m.y };
+  b.room.send("teleport", { to: { x: at.x - 1.5, y: at.y + 1.5, level: m.level } });
+  c.room.send("teleport", { to: { x: at.x + 1.2, y: at.y - 1.2, level: m.level } });
+  await waitFor(() => Math.hypot(me(b.room).x - (at.x - 1.5), me(b.room).y - (at.y + 1.5)) < 0.6);
+  await waitFor(() => Math.hypot(me(c.room).x - (at.x + 1.2), me(c.room).y - (at.y - 1.2)) < 0.8);
+  a.room.send("mod:vortex", { reset: true, forget: true, hold: true, at: { x: at.x + 2.5, y: at.y } });
+  await waitFor(() => Math.abs(vx(a.room).x - (at.x + 2.5)) < 0.01 && vx(a.room).vk === 1);
+  // A alone: a hit takes its share of one shooter
+  await armed(a);
+  shoot(a);
+  await waitFor(() => vx(a.room).vk < 1);
+  const one = 1 - vx(a.room).vk;
+  // B too (in the last 30 s: two shooters) — the same shot from as far takes half as much
+  await armed(b);
+  a.room.send("mod:vortex", { at: { x: at.x - 1.5, y: at.y + 4 } });
+  await waitFor(() => Math.abs(vx(b.room).y - (at.y + 4)) < 0.01);
+  const k0 = vx(a.room).vk;
+  shoot(b);
+  await waitFor(() => vx(a.room).vk < k0);
+  const two = k0 - vx(a.room).vk;
+  assert.ok(Math.abs(two - one / 2) < one * 0.1, `two shooting: half each (${two} of ${one})`);
+
+  // act III unheld, him beside C — only A and B are his: C never struck, never a move on her, untouched
+  const hpC = me(c.room).hp;
+  a.room.send("mod:vortex", { act: 3, hold: false, at: { x: me(c.room).x + 0.8, y: me(c.room).y } });
+  await waitFor(() => vx(a.room).vact === 3);
+  await sleep(12_000);
+  const sc = c.room.sessionId;
+  assert.equal(c.moves.filter((x) => x.to === sc || x.who?.includes(sc)).length, 0, "nothing on C");
+  assert.equal(me(c.room).hp, hpC, "C untouched");
+  assert.equal(me(c.room).downAt, 0);
+  assert.ok(
+    a.moves.some((x) => x.to === a.room.sessionId || x.to === b.room.sessionId),
+    "his moves were on A and B",
+  );
+
+  // beaten: on the floor 8 s (still there at 6), then away to the server room — back when an admin says
+  a.room.send("mod:vortex", { hold: true, beat: true });
+  await waitFor(() => vx(a.room).mood === "dead");
+  const fell = { x: vx(a.room).x, y: vx(a.room).y };
+  await sleep(6000);
+  assert.equal(vx(a.room).vgone, 0, "still on the floor");
+  await waitFor(() => vx(a.room).vgone > 0, 4000);
+  assert.ok(Math.hypot(vx(a.room).x - 45.5, vx(a.room).y - 32.5) < 3, "away in the server room");
+  assert.ok(Math.hypot(vx(a.room).x - fell.x, vx(a.room).y - fell.y) > 5);
+  // (nothing hits him away)
+  assert.equal(a.fight.at(-1)?.who.length, 0, "the fight over");
+  a.room.send("mod:vortex", { back: true });
+  await waitFor(() => vx(a.room).vgone === 0 && vx(a.room).mood === "seething");
+  a.room.send("mod:vortex", { reset: true, forget: true, hold: true });
+  a.room.send("mod:heal", {});
+  b.room.send("mod:heal", {});
+  await bye(a, b, c);
+});

@@ -8,7 +8,9 @@ Status: **talked through and decided by the user 2026-11-14** (all as recommende
 **F2** he can down people — co-op (a friend gets you up); **F3** anyone, any time — shoot him and it's on, only those
 who shot him get hit; **F4** all four kinds of moves — tape tricks, pranks, the dark, mind games; **F5** beaten: a
 cassette trophy, back later with a grudge; **F6** the grudge lasts a day; **F7** his health scales with the group;
-**F8** a plan and mocks first. **Phase 0 (the mocks) signed off 2026-11-14**, committed 3ac94702; **phase 1 (the rules) built 2026-11-14**.
+**F8** a plan and mocks first. **Phase 0 (the mocks) signed off 2026-11-14**, committed 3ac94702; phase 1 (the rules)
+5c647631; phase 2 (acts I–II) c33c896f; phase 3 (act III) 64b77458; phase 4 (the end and the grudge) 2cdb05ea; phase
+5 (the sound, picked by the user's ear) d61118e5; phase 6 (the checks) built 2026-11-14 — **plan 88 done**.
 
 ## What there is now
 
@@ -288,6 +290,26 @@ day, and **holds a grudge** (below).
 6. **Checks**: the server's tests (scaling, only shooters targeted, the acts, beaten and back, the grudge); a
    two-of-us fight in the browser (both screens: the acts, each move landing on the shooter, a friend getting the
    downed one up, the end); stills.
+   Done in phase 6 (2026-11-14):
+   - **The server**: `vortex-fight.test.ts` 5/5 — the new one: **his health scales with the shooters** (a second one
+     in the last 30 s, the same shot from as far takes half as much); **only those who shot him are his** (C beside
+     him through 12 s of act III unheld — never struck, never a move on her, untouched — his moves on A and B);
+     **beaten**: on the floor 8 s (still there at 6), then away in the server room, the fight over; back when an
+     admin says. (The grudge, the acts, each move: phases 1–4's four.)
+   - **Every suite the fight touched, one file at a time**: the world server's 34 files — green but the known reds
+     (pets-attack's two, rooms' slot cars, survival's spot loot and admin give, world's "back after a reload");
+     rooms' computer, two elevators and the phone red once in its 15-minute run, green alone (its timing); the
+     client's 334, shared's 670; the API's 97 of 100 (its three in what this plan didn't touch: an object's x as an
+     integer, the arrival point's bounds, the container's missing GD), the dev database untouched.
+   - **The browser** (YUTOPIA_GPU=1): `vortex-fight.spec.ts` 3/3 (acts I–II, act III, the end and the grudge — both
+     screens, each move on the shooter, Bia getting Ana up, the sounds), with `down`, `left-hand`, `arms`, `dark-hud`
+     green; **the frame cost** (`vortex-frames.spec.ts`, one page): no fight, act I and act III (the lights out, the
+     shadowed, two clones, the music) all at the screen's 60 fps — 16.6 ms, p95 16.7 — act III adds nothing measured.
+   - **Stills** `design/vortex-fight/6-*.png` (14: act I, the whip and Bia's knife, REW, PAUSE, the confiscation, the
+     radio, HR, act III in the dark, the clones, possessed, the glitch, down and got up, the end, the grudge).
+   - Polished: an item's name in a line keeps a name a name ("+1 Vortex's tape", "Pick up Vortex's tape").
+   - Left open: the shadowed he lets in are silent (the dark's sounds follow its outdoor shadowed only); the chair
+     prank unchecked by a test (a desk is only given at join, by the API).
 
 ## Risks
 

@@ -42,6 +42,8 @@ addStrings(STRINGS, DARK_CHUNK);
 const t = (key: string, vars: Record<string, string> = {}) =>
   (trMaybe(key) ?? key).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
 const itemName = (id: ItemId) => t(`dark_item_${id}`);
+// (in a sentence: lower case — but a name stays one: Vortex's tape, plan 88)
+const inLine = (name: string) => name.replace(/\S+/g, (w) => (/^Vortex/.test(w) ? w : w.toLowerCase()));
 const AMBER = "#e9a33a";
 const SLIP_MS = 3200; // a pick-up's slip, shown this long
 // (plan 87) the left hand's mark on the quick bar: a gloved hand, in the lamp's colour
@@ -496,7 +498,7 @@ class Dark implements DarkHooks {
       if (n <= 0) continue;
       const where = hand ? t("dark_slip_hand", { n: String(q + 2) }) : t("dark_slip_pack");
       const name = n > 1 ? (trMaybe(`dark_many_${id}`) ?? itemName(id)) : itemName(id);
-      this.slip(id, `${isWeapon(id) ? "+" : `+${n}`} ${name.toLowerCase()} · ${where}`);
+      this.slip(id, `${isWeapon(id) ? "+" : `+${n}`} ${inLine(name)} · ${where}`);
     }
   }
 
@@ -698,7 +700,7 @@ class Dark implements DarkHooks {
       lay(d.id, d.item, d.x, d.y, 30, () => ({
         kind: "drop",
         id: d.id,
-        label: t("dark_pick", { item: itemName(d.item as ItemId).toLowerCase() }),
+        label: t("dark_pick", { item: inLine(itemName(d.item as ItemId)) }),
         x: d.x,
         y: d.y,
         z: me.z,
