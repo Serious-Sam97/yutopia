@@ -65,6 +65,9 @@ export interface LongSpec {
   /** A shot's kick aimed (gunFx.kick 0..1): the muzzle up about the butt (rad), back into the shoulder (m),
    *  her trunk rocked back (rad) */
   kick: { flip: number; back: number; rock: number };
+  /** (plan 84) Charging it aimed (gunFx.charge 0..1): her trunk leant into it (rad), her left shoulder this much
+   *  further forward (m) */
+  charge?: { lean: number; protract: number };
   /** Up from the carry to the aim (s; shared ARMS' aim) */
   aimS: number;
   /** The left hand on the gun carried too (else free till she aims) */

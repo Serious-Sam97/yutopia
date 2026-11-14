@@ -17,7 +17,8 @@ over the three there; F2a (shouldered, her head upright behind the high sight), 
 sheets `design/guns/p84/sheet-84-{hold,charge,reload,slung}.png`; the model changed for them (below); **signed off
 2026-11-13** ("seguir assim"). **Phase 1 (the grip) built 2026-11-13** — `tp/daybreak-hold.ts` `DB_LONG`, the
 bench's `gun=daybreak`; stills `design/guns/p84/bench-1-hold.png`; committed 22bc3da (with phase 0). **Phase 2 (put
-away, drawn) built 2026-11-13** — stills `design/guns/p84/bench-2-carry.png`. Not committed.
+away, drawn) built 2026-11-13** — stills `design/guns/p84/bench-2-carry.png`; committed 172090b. **Phase 3 (the aim,
+the charge) built 2026-11-13** — stills `design/guns/p84/bench-3-aim.png`. Not committed.
 
 ## Where we are — read from the code and the bench
 
@@ -247,6 +248,20 @@ whatever F3–F4.
 3. **The aim and the charge** (F2–F3) — the pad in the pocket, her head upright and her eye on the sight's
    line at the game's whole reach of pitch and turn, upright, on the look; the charge's brace and the shot's
    shove; others see it.
+   Done in phase 3:
+   - **The aim** (phase 1's hold): audited at pitch −0.55, −0.3, 0, 0.3, 0.7, turned 0, 1.3, −2.4, with and
+     without the torch — **both hands on, each wrist within its reach, her right eye on the ring's line
+     everywhere** (her neck 7–31°, the gun never moved for it), upright (cant 0), on the look. Phase 1's
+     feminine edges gone (her right wrist 0.3–1.9° at the lowest aim with the torch). The pad presses her shirt
+     1.6–2.6 cm at 1–3 of its 45 points in some turns (the sniper's stock was held to 1.5) — left.
+   - **The charge** (F3a; `LongSpec.charge`, new — `gunFx.charge`, mine from Arms, the others' from `Player.arm`
+     — eased): **leant into it ~4°**. At the mocks' 6° and her left shoulder 2 cm further forward, a
+     masculine left wrist went 6° past its reach aimed high: now clean on both bodies at every pitch and turn.
+     The core swells by its own (plan 79).
+   - **The shot's shove** (`LongSpec.kick`, the mocks': the lens up ~4°, back 1.8 cm into her shoulder, her
+     trunk rocked): at its peak her left wrist at most 6.1° past its reach (a masculine body aimed highest — the
+     moving limit's 6).
+   - The bench takes `charge` (0..1) as it takes `kick`.
 4. **The reload** (F4–F5) — one timeline in the server's steps (`ARM.open` → the cells → `ARM.shut`): the cell
    out and dropped (it fades), the new one from F5's place, in, home; the pouch (F5a) modelled; others see it.
 5. **Everything else** — port arms for a roll, a vault, a slide (its 0.89 m over the floor all through a

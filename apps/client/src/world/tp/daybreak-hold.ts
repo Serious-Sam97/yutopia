@@ -164,6 +164,9 @@ export const DB_LONG: LongSpec = {
   protract: 0.1,
   // (the mocks' shove: 1.8 cm back into her shoulder, the lens up ~4° — phase 3 tunes it with the charge)
   kick: { flip: 0.07, back: 0.018, rock: 0.04 },
+  // (F3a: charging, leant into it ~4° — at the mocks' 6° and her left shoulder 2 cm further forward on the
+  // fore-grip, a masculine left wrist went 6° past its reach aimed high)
+  charge: { lean: 0.07, protract: 0 },
   // (shared ARMS.daybreak.aim)
   aimS: 0.3,
   leftCarried: true,

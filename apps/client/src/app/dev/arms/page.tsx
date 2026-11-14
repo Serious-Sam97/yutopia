@@ -31,6 +31,8 @@ interface State {
   away: boolean;
   /** a shot's kick (0..1, as it goes off and fades) and the trigger's pull, held where they are */
   kick: number;
+  /** (plan 84) the Daybreak charged, 0..1 */
+  charge: number;
   trigger: number;
   /** (phase 5) a hit taken (`actT` s since) or a roll (`actT` of the way through it) — the hold lets go */
   act: "" | "hit" | "roll" | "heard" | "vault" | "slide" | "sit" | "bolt";
@@ -70,6 +72,7 @@ function Bench({ q }: { q: URLSearchParams }) {
     draw: Number(q.get("draw") ?? 1),
     away: q.get("away") === "1",
     kick: Number(q.get("kick") ?? 0),
+    charge: Number(q.get("charge") ?? 0),
     trigger: Number(q.get("trigger") ?? 0),
     act: (q.get("act") as State["act"]) ?? "",
     actT: Number(q.get("actT") ?? 0),
@@ -302,7 +305,7 @@ function Bench({ q }: { q: URLSearchParams }) {
       };
 
       // the person as the state has her: aiming, its pitch, the torch, running, the reload scrubbed
-      const fx = { kick: 0, cock: 1, turn: 0, open: 0, loaded: 6, trigger: 0, reload: 0 };
+      const fx = { kick: 0, cock: 1, turn: 0, open: 0, loaded: 6, trigger: 0, reload: 0, charge: 0 };
       const seen = { camX: 0, camZ: 2, onScreen: true, lowQuality: false, mood: 0 };
       let fired = -1e9;
       fire.current = () => {
@@ -401,6 +404,7 @@ function Bench({ q }: { q: URLSearchParams }) {
         const fade = GUN === "shotgun" ? 9 : GUN === "ak47" ? 18 : GUN === "sniper" ? 7 : 13;
         const shot = since < 0 ? 0 : since < 0.035 ? since / 0.035 : Math.exp(-(since - 0.035) * fade);
         fx.kick = Math.max(s.kick, shot);
+        fx.charge = s.charge ?? 0;
         fx.trigger = Math.max(s.trigger, since < 0.12 ? 1 : 0);
         (person as unknown as { gunFx: typeof fx | null }).gunFx = fx;
       };

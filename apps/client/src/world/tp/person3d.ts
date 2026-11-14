@@ -1854,6 +1854,8 @@ export class Person3D {
   private lgPortW = 0;
   /** (plan 83) her chest's turn in her own frame before a hit: the flinch's turn of it from there */
   private lgChest = new Quaternion();
+  /** (plan 84) how far into the Daybreak's charge her body is (eased) */
+  private lgChargeK = 0;
   private revHolster = { grip: new Vector3(), f: new Vector3(), u: new Vector3() };
   private revolverHands(p: PersonIn, w: number, aiming: boolean, run: number, draw: number, dt: number) {
     const m = this.model;
@@ -2369,7 +2371,12 @@ export class Person3D {
     // the gun, the shoulders and the head one piece, the arms as they are level)
     // (a shot's kick, aimed: her trunk rocked back by it — the gun with it, below)
     const kick = aiming ? (this.gunFx?.kick ?? 0) : 0;
-    const lean = (-LS.aim.trunk * (p.pitch ?? 0) * this.lgAimK - LS.kick.rock * kick) * w;
+    // (plan 84: charging the Daybreak aimed, leant into it — eased in and out)
+    const chg = aiming && LS.charge ? (this.gunFx?.charge ?? 0) : 0;
+    this.lgChargeK = p.reduced ? chg : this.lgChargeK + (chg - this.lgChargeK) * (1 - Math.exp(-dt * 8));
+    const lean =
+      (-LS.aim.trunk * (p.pitch ?? 0) * this.lgAimK - LS.kick.rock * kick + (LS.charge?.lean ?? 0) * this.lgChargeK) *
+      w;
     rv5.set(rv3.z, 0, -rv3.x).normalize();
     for (const [j, k] of [
       ["spine", 0.4],
@@ -2392,7 +2399,10 @@ export class Person3D {
       // (the AK's port arms is its low ready pinned to her chest: her shoulder forward as at the ready)
       .addScaledVector(
         Z3,
-        (LS.protract * w * this.lgLeftW * (LS.port && LS.leftCarried ? 1 : 1 - pw)) /
+        ((LS.protract + (LS.charge?.protract ?? 0) * this.lgChargeK) *
+          w *
+          this.lgLeftW *
+          (LS.port && LS.leftCarried ? 1 : 1 - pw)) /
           (sL.parent?.getWorldScale(rv5).x || 1),
       );
     sL.updateMatrixWorld(true);
