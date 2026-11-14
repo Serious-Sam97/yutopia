@@ -69,8 +69,8 @@ await page.waitForTimeout(4000);
 await page.mouse.move(720, 405);
 
 for (const [key, id] of [
-  ["Digit1", "revolver"],
-  ["Digit2", "shotgun"],
+  ["Digit2", "revolver"],
+  ["Digit3", "shotgun"],
 ] as const) {
   await page.keyboard.press(key);
   try {

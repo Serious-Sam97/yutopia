@@ -7,7 +7,7 @@ longer by L. The new pack (plan 86, look B) adapted to it.
 Status: **investigated and proposed 2026-11-14; forks decided by the user 2026-11-14**: **F1a** the left hand's
 item out only while in use; **F2a** anything but a gun; **F3b** a flare there lit by 1 and held up as a light, G or
 1 again throws it; **F4a** everyone has a torch, it can be dropped, the lobby's locker gives one to whoever has none. **Phase 0 (the
-mock) signed off 2026-11-14**, committed cba1f89b; **phase 1 (the rules) built 2026-11-14**.
+mock) signed off 2026-11-14**, committed cba1f89b; **phase 1 (the rules) built 2026-11-14**, committed 3b48ff95; **phase 2 (the keys) built 2026-11-14**.
 
 ## What there is now
 
@@ -120,6 +120,29 @@ the pad's ↑ the left hand, LB + A B X Y the quick slots 2–5; a mock of the a
      red before this plan: the admin's give (survival), a spot's loot (flaky), back after a reload (world).
 2. **The keys**: 1 the left hand, 2–5 the quick slots (`arms.ts`), the emotes 6–9 (`ctl/input.ts`), L and the
    binding's `torch` gone (the controls' settings list too), the pad's ↑ and LB + A B X Y; 1 loads the dark's chunk.
+   Done in phase 2 (2026-11-14):
+   - **The keys**: 1 the left hand, 2–5 the quick slots (`dark/arms.ts` `QUICK_KEYS`), the emotes 6–9 (fire,
+     question, coffee, tape — `ctl/input.ts`; the rest on the wheel). Before the dark's chunk listens, 1–5 load it
+     and go through (`walker.slotKey`, as I does) — the torch works indoors from the start.
+   - **The left hand's key** (`dark/index.ts` `handKey`, the walker's `hand()` for the pad): the torch on or off
+     (`dark:hand`); a flare lit and held, or the held one thrown where I look; a first aid or a battery used (not
+     when full — said, as H and B); on foot only, not building, no menu, the pack shut (its own keys then: 1 is the
+     hand's there too, `InvActions.hand`). G throws the held flare too, with none left in the pack.
+   - **L gone**: the default keys' `torch` binding empty (a device that saved L as its default moves on — `retired`);
+     the "torch" action is the pad's ↑, now the left hand's (the walker's, not the controller's toggle); **the phone's
+     flashlight button gone** (moved here from phase 3) — the controller keeps `toggleTorch()` as the tests' and dev
+     pages' handle only (no key, no button; the server lights it only from the left hand).
+   - **The labels**: the HUD's quick bar and the pack's belt read 2–5; the menu's chips 2–5; the tag's keys and
+     notes, "At hand · 2–5", the slips' "at hand · n".
+   - **The specs**: every key press for a quick slot one up (41: the guns' two-player specs, `arms*`, `dark-hud`,
+     `daybreak`, `guns-perf`, the inventory's, the probes `controls-shots`, `guns-hold`, `guns-today`);
+     `inventory-tools`' HUD test: 1 lights the torch from the left hand and puts it out, L does nothing.
+   - Checked: the client's units 334 green; the browser specs that press the keys — `inventory-tools` (4 and the
+     phone), `inventory`, `inventory-pack`, `revolver-two`, `arms`, `dark`, `dark-hud`, `arms-empty`, `arms-feel`,
+     `daybreak`, `daybreak-two`, `guns-two`, `shotgun-two`, `sniper-two`, `ak-two` (its rack's fleeting check missed
+     once under the load, green alone) — green; `arms-fx` runs only for stills, `guns-perf` (a performance probe)
+     not run. `dark-hud` had been red since plan 79 phase 9 (it waited for 19 made sounds; the guns' went to
+     recordings, 17 are made): its count fixed.
 3. **The left hand in use**: 1 with the torch — out and lit, off and away (the holds as they are, first person
    too); with a first aid, a battery; **a flare lit and held up** (F3b — its own prop in the left hand, held where
    the torch is with each gun, its light and sparks, thrown by G or 1 from the hand, burnt out let fall); the rest a

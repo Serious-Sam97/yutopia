@@ -159,7 +159,7 @@ if (spots.includes("lot")) {
   await shot(ana, "lot-lock");
   await hour(ana, 21.5);
   await ana.waitForTimeout(2000);
-  await ana.keyboard.press("Digit1");
+  await ana.keyboard.press("Digit2");
   await ana.waitForTimeout(600);
   await ana.mouse.move(720, 450);
   await ana.mouse.down({ button: "right" });

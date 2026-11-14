@@ -135,7 +135,7 @@ test("two of us and the double-barrel: slung, drawn, aimed upright, fired, reloa
     (window as any).__dark.inv.quick.findIndex((it: any) => it?.id === "shotgun"),
   )) as number;
   await bia.bringToFront();
-  await bia.keyboard.press(`Digit${slot + 1}`);
+  await bia.keyboard.press(`Digit${slot + 2}`);
   for (const p of [bia, page]) {
     await expect.poll(() => seen(p, biaSid).then((s) => s.key), { timeout: 20_000 }).toBe("shotgun");
     await expect.poll(() => seen(p, biaSid).then((s) => s.life), { timeout: 20_000 }).toBe(true);

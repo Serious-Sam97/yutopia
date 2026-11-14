@@ -26,7 +26,6 @@ export type InputHost = Pick<
   | "toggleGod"
   | "toggleMic"
   | "togglePhone"
-  | "toggleTorch"
   | "tp"
   | "undo"
   | "walker"
@@ -133,10 +132,11 @@ export class Input {
     else if (key === "v") void this.c.toggleCam();
     else if (key === "y") this.c.focus.swapCamera();
     else if (key === "p" && !hud.get().build.on) void this.c.togglePhone();
-    // (the lantern on L till it's an item in the pockets: plan 57 — F focuses, the walker's)
-    else if (key === "l" && !hud.get().build.on) this.c.toggleTorch();
     else if (key === "o" && hud.get().isAdmin && !hud.get().build.on) void this.c.toggleGod();
-    else if (key >= "1" && key <= "8") this.c.emote(Number(key) - 1);
+    // (plan 87: 1 the left hand, 2–5 the quick slots — the dark's, loaded for them; the emotes on 6–9: the four that
+    // were on 5–8, the rest on the wheel)
+    else if (key >= "1" && key <= "5") this.c.walker?.slotKey(Number(key) - 1);
+    else if (key >= "6" && key <= "9") this.c.emote(Number(key) - 2);
     else if (key === "+" || key === "=") this.c.tp?.lensPart.zoomBy(1 / 1.15);
     else if (key === "-") this.c.tp?.lensPart.zoomBy(1.15);
   };

@@ -63,8 +63,8 @@ test("out of ammo: R does nothing, nothing spins for ever, the spare count red",
     .toBe(false);
 
   for (const [key, gun, shots, rate] of [
-    ["Digit1", "revolver", 3, 470],
-    ["Digit2", "shotgun", 2, 1000],
+    ["Digit2", "revolver", 3, 470],
+    ["Digit3", "shotgun", 2, 1000],
   ] as const) {
     await page.keyboard.press(key);
     await expect.poll(() => w(page, (y) => y.room.state.players.get(y.room.sessionId).gun)).toBe(gun);
@@ -93,5 +93,5 @@ test("out of ammo: R does nothing, nothing spins for ever, the spare count red",
     y.room.send("mod:refill", { kit: true });
     y.room.send("mod:hour", { h: null });
   });
-  await page.keyboard.press("Digit2");
+  await page.keyboard.press("Digit3");
 });

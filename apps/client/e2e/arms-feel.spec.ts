@@ -58,7 +58,7 @@ test("the feel: kick and settle, the spread, an early click, over the shoulder, 
     y.tp.yaw = 0;
   });
   await page.waitForTimeout(2000);
-  await page.keyboard.press("Digit1");
+  await page.keyboard.press("Digit2");
   await expect.poll(async () => (await me(page)).gun).toBe("revolver");
   await page.mouse.move(640, 400);
   await page.mouse.down({ button: "right" });
@@ -160,7 +160,7 @@ test("the feel: kick and settle, the spread, an early click, over the shoulder, 
   await expect.poll(async () => (await me(page)).loaded, { timeout: 8000 }).toBe(6);
 
   // the double-barrel, down its rib; a shot shoves harder
-  await page.keyboard.press("Digit2");
+  await page.keyboard.press("Digit3");
   await expect.poll(async () => (await me(page)).gun).toBe("shotgun");
   await page.mouse.down({ button: "right" });
   await page.waitForTimeout(600);
@@ -178,7 +178,7 @@ test("the feel: kick and settle, the spread, an early click, over the shoulder, 
 
   // the AK (plan 79 phase 5): held down, it fires at its rate (10 a second) and the look climbs — more
   // than one shot's kick, most of it staying; let go, a burst's over; dry, R: a magazine, thirty
-  await page.keyboard.press("Digit3");
+  await page.keyboard.press("Digit4");
   await expect.poll(async () => (await me(page)).gun).toBe("ak47");
   await page.waitForTimeout(700);
   await page.mouse.down({ button: "right" });
@@ -201,7 +201,7 @@ test("the feel: kick and settle, the spread, an early click, over the shoulder, 
 
   // the sniper (plan 79 phase 6): aimed its moment, down the scope — the glass and its ring, the lens
   // narrow; the wheel, 8×; a shot: out of it for the bolt, back in once it's home; R: a round at a time
-  await page.keyboard.press("Digit4");
+  await page.keyboard.press("Digit5");
   await expect.poll(async () => (await me(page)).gun).toBe("sniper");
   await page.waitForTimeout(800);
   await page.mouse.down({ button: "right" });
@@ -221,12 +221,12 @@ test("the feel: kick and settle, the spread, an early click, over the shoulder, 
   await page.mouse.up({ button: "right" });
   await page.keyboard.press("KeyR");
   await expect.poll(async () => (await me(page)).loaded, { timeout: 4000 }).toBe(5);
-  await page.keyboard.press("Digit4");
-  await page.keyboard.press("Digit2");
+  await page.keyboard.press("Digit5");
+  await page.keyboard.press("Digit3");
   await expect.poll(async () => (await me(page)).gun).toBe("shotgun");
 
   // (put away: first person again; the view back to third; the clock back)
-  await page.keyboard.press("Digit2");
+  await page.keyboard.press("Digit3");
   await expect.poll(() => w(page, (y) => y.tp.mode), { timeout: 5000 }).toBe("first");
   await page.keyboard.press("KeyY");
   await w(page, (y) => y.room.send("mod:hour", { h: null }));

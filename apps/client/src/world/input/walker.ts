@@ -216,6 +216,10 @@ export interface DarkHooks {
   aid(): void;
   /** the inventory opened or closed (I, the pad's Menu) */
   inventory(): void;
+  /** (plan 87) the left hand's use: key 1, the pad's ↑ — the torch on or off, a first aid, a battery, a flare */
+  hand(): void;
+  /** (plan 87) a number key 1–5 before the dark's own keys listen: 0 the left hand, 1–4 the quick slots */
+  slotKey(n: number): void;
   /** the inventory open: I stand still, and don't aim */
   frozen(): boolean;
   /** the frame's pad presses, before the world has them: taken ones are deleted (Y while aiming
@@ -390,6 +394,16 @@ export class Walker {
   /** The inventory opened or closed (I, the pad's Menu). */
   inventory(): void {
     this.loadDark(() => this.dark?.inventory());
+  }
+  /** (plan 87) The left hand (the pad's ↑; key 1): the dark's chunk loaded for it if it isn't yet — the torch works
+   *  anywhere, indoors from the start. */
+  hand(): void {
+    if (this.stepping) this.loadDark(() => this.dark?.hand());
+  }
+  /** (plan 87) A number key 1–5 before the dark's chunk listens (it's loaded for it): 0 the left hand, 1–4 the quick
+   *  slots — once it's in, its own listener takes them. */
+  slotKey(n: number): void {
+    if (this.stepping) this.loadDark(() => this.dark?.slotKey(n));
   }
   /** My 8-way facing (`me.yaw`, radians on 8 ways) and drawn angle (returned) after a frame. First person (`view`): I face where I look — turned some other
    *  way (a seat, someone high-fiving me) the view turns there — flipping 8-way only a
@@ -635,6 +649,8 @@ export class Walker {
       else go();
     }
     if (presses.has("inventory")) this.inventory();
+    // (plan 87: the pad's ↑ — the "torch" press — is the left hand's: the torch only from there)
+    if (presses.has("torch")) this.hand();
     if (presses.has("use") && this.dark?.use()) presses.delete("use");
     if (presses.has("aid")) this.dark?.aid();
     this.aiming = move.aim;

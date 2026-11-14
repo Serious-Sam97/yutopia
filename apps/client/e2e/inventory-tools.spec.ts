@@ -6,7 +6,7 @@ import { ANA, enter, test, token } from "./helpers";
 // The pack's hand tools (docs/plan/86-the-inventory.md phase 3, look B): Ana by the pond with the admin's kit (the
 // revolver and the double-barrel at hand; .38s, shells, flares, a first aid, a battery in the pack), hurt. The
 // mouse and the keys: right click, the menu — Drop 1, Drop all; T takes all back; Split from the menu and by a
-// Shift-drag; O organizes; hover + 4 puts the first aid at hand, Shift + click back in the pack, a double click uses
+// Shift-drag; O organizes; hover + 5 puts the first aid at hand (plan 87: the quick slots on 2–5), Shift + click back in the pack, a double click uses
 // it; the menu's To the pack and its chip 4; a drag off the pack drops; Esc closes the menu first. The pad: the
 // d-pad picks, Y the menu, X held drops, B closes. A phone (touch): tap picks, tap an empty pouch moves it there, a
 // touch held opens the menu, the tag's Drop only by a hold. YUTOPIA_SHOTS=<dir>: stills.
@@ -18,7 +18,7 @@ test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignor
 const shot = async (page: Page, name: string) => {
   if (dir) await page.screenshot({ path: `${dir}/${name}.png` });
 };
-type Inv = { pockets: ({ id: string; n?: number; loaded?: number } | null)[]; quick: any[] };
+type Inv = { pockets: ({ id: string; n?: number; loaded?: number } | null)[]; quick: any[]; hand?: any };
 const inv = (page: Page) => page.evaluate(() => (window as any).__dark.inv as Inv);
 const at = async (page: Page, id: string) => (await inv(page)).pockets.findIndex((s) => s?.id === id);
 const total = async (page: Page, id: string) => {
@@ -125,7 +125,7 @@ async function kitted(page: Page) {
   await expect.poll(() => hp(page)).toBe(40);
 }
 
-test("the pack's hand tools: the menu, Take all, split, organize, hover + 1–4, Shift + click, a double click, a drag off it", async ({
+test("the pack's hand tools: the menu, Take all, split, organize, hover + 2–5, Shift + click, a double click, a drag off it", async ({
   page,
 }) => {
   test.setTimeout(180_000);
@@ -185,9 +185,9 @@ test("the pack's hand tools: the menu, Take all, split, organize, hover + 1–4,
     .toEqual(["r38", "shell", "aid", "battery", "flare"]);
   expect((await inv(page)).pockets.slice(0, 5).every(Boolean), "no gaps").toBe(true);
 
-  // hover the first aid and press 4: at hand, in quick slot 4
+  // hover the first aid and press 5: at hand, in the fourth quick slot
   await slot(page, await at(page, "aid")).hover();
-  await page.keyboard.press("Digit4");
+  await page.keyboard.press("Digit5");
   await expect.poll(async () => (await inv(page)).quick[3]?.id).toBe("aid");
   // Shift + click: back in the pack
   await slot(page, QUICK_SLOT + 3).click({ modifiers: ["Shift"] });
@@ -293,7 +293,7 @@ test("the HUD: the quick slots captioned with the held gun's rounds; a slip for 
   expect(await slips.count()).toBeLessThanOrEqual(3);
   await expect(slips).toHaveCount(0, { timeout: 6000 });
   // the revolver drawn: its rounds in the caption — in it + spare
-  await page.keyboard.press("Digit1");
+  await page.keyboard.press("Digit2");
   await expect(cap.locator("b")).toHaveText(".38 · 6 + 24");
   // four shells dropped and taken back: one slip, typed
   const sh = await at(page, "shell");
@@ -321,6 +321,20 @@ test("the HUD: the quick slots captioned with the held gun's rounds; a slip for 
   await page.keyboard.press("KeyB");
   await expect(toast).toHaveText(/torch is full/i);
   expect(await total(page, "battery")).toBe(1);
+  // (plan 87) 1 is the left hand: the torch lit from it, and off; L no longer anything
+  const torch = () =>
+    page.evaluate(() => {
+      const y = (window as any).__yutopia;
+      return !!y.room.state.players.get(y.room.sessionId).torch;
+    });
+  expect((await inv(page)).hand?.id, "a torch in the left hand").toBe("torch");
+  await page.keyboard.press("Digit1");
+  await expect.poll(torch).toBe(true);
+  await page.keyboard.press("Digit1");
+  await expect.poll(torch).toBe(false);
+  await page.keyboard.press("KeyL");
+  await page.waitForTimeout(400);
+  expect(await torch(), "L is nothing now").toBe(false);
   await page.evaluate(() => (window as any).__yutopia.room.send("mod:hour", { h: null }));
   expect(errors).toEqual([]);
 });

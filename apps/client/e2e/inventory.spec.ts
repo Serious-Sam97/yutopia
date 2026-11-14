@@ -145,8 +145,8 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
   await drag(page, slot(page, empty), slot(page, QUICK_SLOT + 2));
   await expect.poll(async () => (await inv(page)).quick[2]?.id).toBe("flare");
 
-  // the weapons: 2 takes the shotgun out from here
-  await page.keyboard.press("Digit2");
+  // the weapons: 3 takes the shotgun out from here (plan 87: the quick slots on 2–5)
+  await page.keyboard.press("Digit3");
   await expect
     .poll(() =>
       page.evaluate(
@@ -155,13 +155,13 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
     )
     .toBe("shotgun");
 
-  // Esc closes; the quick HUD bottom right: four slots, the shotgun's lit; 3 throws a flare
+  // Esc closes; the quick HUD bottom right: four slots, the shotgun's lit; 4 throws a flare
   await page.keyboard.press("Escape");
   await expect(page.locator(".dk-quick .dk-q")).toHaveCount(4);
   await expect(page.locator(".dk-quick .dk-q.on")).toHaveCount(1);
   await shot(page, "inventory-quick");
   const nFlares = (await inv(page)).quick[2]?.n as number;
-  await page.keyboard.press("Digit3");
+  await page.keyboard.press("Digit4");
   await expect.poll(async () => (await inv(page)).quick[2]?.n ?? 0).toBe(nFlares - 1);
 
   await expect(page.locator(".dk-inv .panel")).toBeHidden();

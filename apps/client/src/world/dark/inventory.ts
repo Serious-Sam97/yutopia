@@ -50,8 +50,10 @@ export interface InvActions {
   /** (plan 86) the pack put in order */
   organize(): void;
   draw(slot: number): void;
-  /** a quick slot (0–3) as its key does: a weapon out or away, a use, a flare */
+  /** a quick slot (0–3) as its key does (2–5): a weapon out or away, a use, a flare */
   quick(n: number): void;
+  /** (plan 87) the left hand as its key does (1): the torch, a first aid, a battery, a flare */
+  hand(): void;
   reload(): void;
 }
 type Tr = (key: string, vars?: Record<string, string>) => string;
@@ -196,8 +198,8 @@ export class InventoryPanel {
       else if (e.code === "ArrowDown") this.menuStep(1);
       else if (e.code === "ArrowUp") this.menuStep(-1);
       else if (e.code === "Enter" || e.code === "KeyE") this.runMenu(m.items[m.focus].act);
-      else if (/^Digit[1-4]$/.test(e.code) && m.items.some((it) => it.chips))
-        this.runMenu("to", Number(e.code.slice(5)) - 1);
+      else if (/^Digit[2-5]$/.test(e.code) && m.items.some((it) => it.chips))
+        this.runMenu("to", Number(e.code.slice(5)) - 2);
       return true;
     }
     if (e.code === "Escape") {
@@ -207,10 +209,11 @@ export class InventoryPanel {
     if (e.repeat) return true;
     if (e.code === "KeyE") this.primary();
     else if (e.code === "KeyR") this.act.reload();
-    else if (/^Digit[1-4]$/.test(e.code)) {
-      // (hover something in the pack or on the ground and press 1–4: it goes there; else — and on the belt — as the
+    else if (e.code === "Digit1") this.act.hand();
+    else if (/^Digit[2-5]$/.test(e.code)) {
+      // (hover something in the pack or on the ground and press 2–5: it goes there; else — and on the belt — as the
       // key does in the world)
-      const n = Number(e.code.slice(5)) - 1;
+      const n = Number(e.code.slice(5)) - 2;
       const h = this.hover;
       if (h && !("slot" in h && h.slot >= QUICK_SLOT) && this.itemOf(h)) this.assign(h, n);
       else this.act.quick(n);
@@ -320,7 +323,7 @@ export class InventoryPanel {
     if (st && isUsable(st.id)) this.act.use(p.slot);
   }
   /** (plan 85 F5a) A weapon in the pack into the first empty quick slot — none empty, the tag says so (a drag onto
-   *  one, or 1–4 on it, swaps) */
+   *  one, or 2–5 on it, swaps) */
   private equip(p: Pick = this.sel) {
     const inv = this.inv();
     if (!p || !inv || "drop" in p || p.slot >= QUICK_SLOT) return;
@@ -399,11 +402,11 @@ export class InventoryPanel {
     if (isWeapon(id)) {
       if (q >= 0) {
         const inHand = this.gun() === id;
-        out.push({ act: "use", label: t(inHand ? "dark_inv_away" : "dark_inv_hold"), keys: kk(String(q + 1)) });
+        out.push({ act: "use", label: t(inHand ? "dark_inv_away" : "dark_inv_hold"), keys: kk(String(q + 2)) });
         if (inHand && this.canReload(inv, id)) out.push({ act: "reload", label: t("dark_inv_reload"), keys: kk("R") });
       }
-    } else if (isUsable(id)) out.push({ act: "use", label: t("dark_inv_use"), keys: kk(q >= 0 ? String(q + 1) : "E") });
-    else if (id === "flare" && q >= 0) out.push({ act: "use", label: t("dark_inv_throw"), keys: kk(String(q + 1)) });
+    } else if (isUsable(id)) out.push({ act: "use", label: t("dark_inv_use"), keys: kk(q >= 0 ? String(q + 2) : "E") });
+    else if (id === "flare" && q >= 0) out.push({ act: "use", label: t("dark_inv_throw"), keys: kk(String(q + 2)) });
     out.push({ act: "to", label: t(q >= 0 ? "dark_inv_move_to" : "dark_inv_equip_to"), chips: true, own: q });
     if (q >= 0 && inv.pockets.includes(null))
       out.push({ act: "pack", label: t("dark_inv_to_pack"), keys: kk(t("dark_inv_shift_click")) });
@@ -445,7 +448,7 @@ export class InventoryPanel {
               ? [0, 1, 2, 3]
                   .map(
                     (n) =>
-                      `<span class="kk${n === it.own ? " own" : ""}"${n === it.own ? "" : ` data-menu="to" data-n="${n}"`}>${n + 1}</span>`,
+                      `<span class="kk${n === it.own ? " own" : ""}"${n === it.own ? "" : ` data-menu="to" data-n="${n}"`}>${n + 2}</span>`,
                   )
                   .join("")
               : (it.keys ?? "")
@@ -664,7 +667,7 @@ export class InventoryPanel {
     if (inv) {
       inv.quick.forEach((it, i) => {
         const slot = QUICK_SLOT + i;
-        const k = `<span class="k">${i + 1}</span>`;
+        const k = `<span class="k">${i + 2}</span>`;
         if (!it) loops += `<div class="loop e${isSel({ slot })}" data-slot="${slot}">${k}</div>`;
         else if ("loaded" in it) {
           const hand = gun === it.id;
@@ -716,7 +719,7 @@ export class InventoryPanel {
       return `<span class="cap">${t("dark_inv_title")}</span><p class="what hint">${t("dark_inv_pick_hint")}</p><div class="sp keys">${
         this.coarse
           ? ""
-          : row(kk("1–4"), t("dark_inv_k_hover")) +
+          : row(kk("2–5"), t("dark_inv_k_hover")) +
             row(t("dark_inv_k_shift"), t("dark_inv_k_shift_do")) +
             row(t("dark_inv_k_dbl"), t("dark_inv_k_dbl_do")) +
             row(t("dark_inv_k_right"), t("dark_inv_k_right_do")) +
@@ -760,7 +763,7 @@ export class InventoryPanel {
         note = t(free ? (this.coarse ? "dark_inv_in_pack_touch" : "dark_inv_in_pack") : "dark_inv_quick_full");
         btns = btn("equip", t("dark_inv_equip"), kk("E"), true, !free) + dropBtn;
       } else {
-        const n = String(p.slot - QUICK_SLOT + 1);
+        const n = String(p.slot - QUICK_SLOT + 2);
         where = t(gun === id ? "dark_inv_in_hand_n" : "dark_inv_at_n", { n });
         btns =
           (gun === id ? btn("away", t("dark_inv_away"), kk(n)) : btn("hold", t("dark_inv_hold"), kk(n), true)) +
@@ -770,7 +773,7 @@ export class InventoryPanel {
     } else {
       const it = slotAt(inv, p.slot);
       const s = it && "n" in it ? it : null;
-      const q = p.slot >= QUICK_SLOT ? String(p.slot - QUICK_SLOT + 1) : "";
+      const q = p.slot >= QUICK_SLOT ? String(p.slot - QUICK_SLOT + 2) : "";
       where = q ? t("dark_inv_at_n", { n: q }) : t("dark_inv_in_pocket");
       stats = stat(t("dark_inv_how_many"), t("dark_inv_of", { n: String(s?.n ?? 0), m: String(STACKS[id]) }));
       if (id === "aid") stats += stat(t("dark_inv_health_now"), `${hp} → 100`);

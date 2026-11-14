@@ -169,11 +169,9 @@ export const plan29Bindings = (): Bindings => ({
 });
 
 // The world's (docs/plan/56-the-controls.md): the KH keys and pad — F focuses (the lock-on, the
-// user's call); the lantern on L (and the pad's ↑) till it's an item in the pockets (plan 57).
-export const DEFAULT_KEYS: KeyBindings = {
-  ...structuredClone(KH_KEYS),
-  torch: ["KeyL"],
-};
+// user's call). (plan 87: the torch is an item now, lit from the left hand — key 1, the pad's ↑ — so L is gone; the
+// "torch" action is the pad's ↑, the left hand's)
+export const DEFAULT_KEYS: KeyBindings = structuredClone(KH_KEYS);
 export const DEFAULT_PAD: PadBindings = { ...KH_PAD, torch: 12 };
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -181,7 +179,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 // defaults since given up (saved as they were, they move to today's: what you'd set yourself is
 // kept) — walk: Alt till 2026-10-30, then Ctrl for a few hours everywhere, now Ctrl on a Mac and
 // Alt elsewhere, so the other one's the given-up default there
-const retired = (): Partial<Record<Action, string[][]>> => ({ walk: [walkKeys(!isMac())] });
+const retired = (): Partial<Record<Action, string[][]>> => ({ walk: [walkKeys(!isMac())], torch: [["KeyL"]] });
 
 export function loadBindings(): Bindings {
   const base: Bindings = {

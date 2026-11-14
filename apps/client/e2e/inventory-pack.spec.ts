@@ -166,7 +166,7 @@ test("a weapon in the pack: put away and worn nowhere, on both screens; equipped
   expect(rev >= 0 && sg >= 0, "both in her quick slots").toBe(true);
   // the revolver drawn
   await bia.bringToFront();
-  await bia.keyboard.press(`Digit${rev + 1}`);
+  await bia.keyboard.press(`Digit${rev + 2}`);
   for (const p of [bia, page])
     await expect.poll(() => seen(p, biaSid).then((s) => s.gun), { timeout: 10_000 }).toBe("revolver");
   await bia.waitForTimeout(600);

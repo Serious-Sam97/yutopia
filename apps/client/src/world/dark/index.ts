@@ -1,7 +1,7 @@
 import type { ServerMessages } from "@yutopia/shared";
 import { KIT_SPOT, LOCKER, LOOT_REACH, type LootItem, lockerFront, lootNow, SEARCH_MS } from "@yutopia/shared/dark";
 import { heightAt } from "@yutopia/shared/grounds";
-import { count, findStack, type Inventory, type ItemId, isWeapon, WEAPONS } from "@yutopia/shared/inventory";
+import { count, findStack, type Inventory, type ItemId, isUsable, isWeapon, WEAPONS } from "@yutopia/shared/inventory";
 import { addStrings, trMaybe } from "@/lib/i18n";
 import type { WorldController } from "../controller";
 import { eyesOf, glareOf, stepEyes } from "../eyes";
@@ -208,6 +208,7 @@ class Dark implements DarkHooks {
         organize: () => ctl.room?.send("dark:organize", {}),
         draw: (slot) => this.arms.draw(slot),
         quick: (n) => this.arms.quick(n),
+        hand: () => this.handKey(),
         reload: () => this.arms.reload(),
       },
       t,
@@ -270,6 +271,12 @@ class Dark implements DarkHooks {
       // kept where it is)
       if (e.code === "Tab") {
         e.preventDefault();
+        return;
+      }
+      // (plan 87) 1 the left hand — the torch on or off, a first aid, a battery, a flare lit and held, or thrown
+      if (!e.repeat && e.code === "Digit1" && this.handKey()) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
         return;
       }
       // (plan 86) H a first aid, B a battery — from the quick slots or the pack, on foot
@@ -356,6 +363,34 @@ class Dark implements DarkHooks {
     const slot = this.inv ? findStack(this.inv, "aid") : -1;
     if (slot >= 0) this.ctl.room?.send("dark:use", { slot });
   }
+  // ── (plan 87) the left hand: key 1, the pad's ↑ ─────────────────────────────
+  hand(): void {
+    this.handKey();
+  }
+  slotKey(n: number): void {
+    if (n === 0) this.handKey();
+    else if (n >= 1 && n <= 4) this.arms.quick(n - 1);
+  }
+  /** The left hand's use, on foot (not building, no menu, the pack shut — its own keys then): the torch switched; a
+   *  first aid or a battery used (not when full: said); a flare lit and held up (F3b), or the one held thrown;
+   *  anything else, or nothing there: nothing. True if the key was taken. */
+  private handKey(): boolean {
+    const h = hud.get();
+    if (!this.inv || !this.walker.stepping || h.menu || h.build.on || this.panel.open) return false;
+    const room = this.ctl.room;
+    const lp = room?.state.players.get(room.sessionId);
+    if (lp?.downAt) return false;
+    const it = this.inv.hand;
+    if (it?.id === "torch") room?.send("dark:hand", { on: !lp?.torch });
+    // (one lit in the hand: thrown, where I look — else the hand's next one lit)
+    else if (this.arms.heldFlare()) this.arms.flare();
+    else if (it?.id === "flare") room?.send("dark:hand", {});
+    else if (it?.id === "aid" && ((lp?.hp as number) ?? 100) >= 100) this.toast(t("dark_full_aid"), ["aid"]);
+    else if (it?.id === "battery" && this.walker.vitals.bat >= 99.5) this.toast(t("dark_full_battery"), ["battery"]);
+    else if (it && isUsable(it.id)) room?.send("dark:hand", {});
+    return true;
+  }
+
   /** (plan 86) H, B: a first aid or a battery used from wherever it is — on foot only (in a car H is the horn, B
    *  looks back), not while building or a menu's up. True if the key was taken: used, or said why not. */
   private quickUse(id: "aid" | "battery"): boolean {
@@ -398,7 +433,7 @@ class Dark implements DarkHooks {
         hand = q >= 0 && atHand(inv) > atHand(was);
       }
       if (n <= 0) continue;
-      const where = hand ? t("dark_slip_hand", { n: String(q + 1) }) : t("dark_slip_pack");
+      const where = hand ? t("dark_slip_hand", { n: String(q + 2) }) : t("dark_slip_pack");
       const name = n > 1 ? (trMaybe(`dark_many_${id}`) ?? itemName(id)) : itemName(id);
       this.slip(id, `${isWeapon(id) ? "+" : `+${n}`} ${name.toLowerCase()} · ${where}`);
     }
@@ -473,7 +508,7 @@ class Dark implements DarkHooks {
       const on = !!it && it.id === gun;
       const go = pulse?.n === i ? (pulse.ok ? " go" : " no") : "";
       el.className = `dk-q${wide ? " w" : ""}${it ? "" : " empty"}${on ? " on" : ""}${go}`;
-      el.append(tag("span", "k", String(i + 1)));
+      el.append(tag("span", "k", String(i + 2)));
       if (it) {
         el.append(svg(itemArt(it.id)));
         el.append(tag("span", "n", "loaded" in it ? `${it.loaded}/${WEAPONS[it.id].mag}` : String(it.n)));

@@ -1745,7 +1745,6 @@ export class WorldController {
       if (mp.back) this.menu.closeMenu();
     }
     if (out.presses.has("camera")) this.focus.swapCamera();
-    if (out.presses.has("torch")) this.toggleTorch();
     let moved = out.moved;
     const went = Math.hypot(out.x - this.me.x, out.y - this.me.y);
     const turned = Math.abs(out.yaw - this.walkYaw) > 1e-4;
@@ -2700,7 +2699,8 @@ export class WorldController {
     };
   }
 
-  /** The phone's flashlight on or off (everyone sees its beam). */
+  /** The torch on or off — the tests' and the dev pages' handle (plan 87: no key nor button of its own now; key 1
+   *  and the pad's ↑ go through the left hand): the server lights it only from the left hand. */
   toggleTorch() {
     this.send("phone:torch", { on: !hud.get().torch });
   }

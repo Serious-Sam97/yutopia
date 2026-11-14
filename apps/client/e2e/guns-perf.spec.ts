@@ -67,20 +67,20 @@ for (const quality of ["high", "low"] as const)
     await page.mouse.move(640, 400);
     const out: Record<string, { mean: number; fps: number; p95: number; worst: number }> = {};
     // (each gun drawn once first: its model fetched and its shaders compiled — not what's measured)
-    for (const key of ["Digit4", "Digit3"]) {
+    for (const key of ["Digit5", "Digit4"]) {
       await page.keyboard.press(key);
       await page.waitForTimeout(2500);
     }
     await expect.poll(() => gun(page)).toBe("ak47");
     // (the same view, no gun out: what the rest costs)
-    await page.keyboard.press("Digit3");
+    await page.keyboard.press("Digit4");
     await expect.poll(() => gun(page)).toBe("");
     await page.waitForTimeout(1500);
     await w(page, (y) => {
       y.tp.pitch = 0.03;
     });
     out.bare = await frames(page, 4000);
-    await page.keyboard.press("Digit3");
+    await page.keyboard.press("Digit4");
     await expect.poll(() => gun(page)).toBe("ak47");
     await page.waitForTimeout(1000);
     await page.mouse.down({ button: "right" });
@@ -94,7 +94,7 @@ for (const quality of ["high", "low"] as const)
     await page.mouse.up({ button: "left" });
     await page.mouse.up({ button: "right" });
     await page.waitForTimeout(3500);
-    await page.keyboard.press("Digit4");
+    await page.keyboard.press("Digit5");
     await expect.poll(() => gun(page)).toBe("daybreak");
     await page.waitForTimeout(1000);
     await page.mouse.down({ button: "right" });

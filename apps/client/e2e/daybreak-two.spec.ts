@@ -137,7 +137,7 @@ test("two of us and the Daybreak: slung, drawn, aimed upright, charged and away,
     (window as any).__dark.inv.quick.findIndex((it: any) => it?.id === "daybreak"),
   )) as number;
   await bia.bringToFront();
-  await bia.keyboard.press(`Digit${slot + 1}`);
+  await bia.keyboard.press(`Digit${slot + 2}`);
   for (const p of [bia, page]) {
     await expect.poll(() => seen(p, biaSid).then((s) => s.key), { timeout: 20_000 }).toBe("daybreak");
     await expect.poll(() => seen(p, biaSid).then((s) => s.life), { timeout: 20_000 }).toBe(true);

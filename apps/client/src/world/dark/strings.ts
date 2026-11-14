@@ -65,7 +65,7 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   // the inventory (I)
   // (plan 86: the open pack — the four at hand loops on a belt, the pack's eight pouches, the picked one on a tag)
   dark_inv_title: ["The pack", "A mochila"],
-  dark_inv_at_hand: ["At hand · 1–4", "À mão · 1–4"],
+  dark_inv_at_hand: ["At hand · 2–5", "À mão · 2–5"],
   dark_inv_at_n: ["At hand · {n}", "À mão · {n}"],
   dark_inv_in_hand_n: ["In hand · {n}", "Na mão · {n}"],
   dark_inv_hand: ["In hand", "Na mão"],
@@ -97,8 +97,8 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_inv_hold_key: ["hold", "segure"],
   dark_inv_shift_click: ["⇧ click", "⇧ clique"],
   dark_inv_shift_drag: ["⇧ drag", "⇧ arrastar"],
-  dark_inv_in_pack: ["Equip it to hold it — or press 1–4 on it", "Equipe para segurar — ou aperte 1–4 sobre ela"],
-  dark_inv_in_pack_touch: ["Equip it to hold it — or drag it to 1–4", "Equipe para segurar — ou arraste para 1–4"],
+  dark_inv_in_pack: ["Equip it to hold it — or press 2–5 on it", "Equipe para segurar — ou aperte 2–5 sobre ela"],
+  dark_inv_in_pack_touch: ["Equip it to hold it — or drag it to 2–5", "Equipe para segurar — ou arraste para 2–5"],
   dark_inv_quick_full: [
     "The four at hand are full · drag it onto one to swap",
     "Os quatro à mão estão cheios · arraste sobre um para trocar",

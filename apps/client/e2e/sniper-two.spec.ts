@@ -136,7 +136,7 @@ test("two of us and the sniper: slung, drawn, aimed upright, a shot and the bolt
     (window as any).__dark.inv.quick.findIndex((it: any) => it?.id === "sniper"),
   )) as number;
   await bia.bringToFront();
-  await bia.keyboard.press(`Digit${slot + 1}`);
+  await bia.keyboard.press(`Digit${slot + 2}`);
   for (const p of [bia, page]) {
     await expect.poll(() => seen(p, biaSid).then((s) => s.key), { timeout: 20_000 }).toBe("sniper");
     await expect.poll(() => seen(p, biaSid).then((s) => s.life), { timeout: 20_000 }).toBe(true);

@@ -158,11 +158,11 @@ await w(page, (y) => {
 await page.waitForTimeout(3000);
 await page.mouse.move(640, 400);
 for (const [key, id] of [
-  ["Digit1", "revolver"],
-  ["Digit2", "shotgun"],
-  ["Digit3", "ak47"],
-  ["Digit4", "sniper"],
-  ["Digit4", "daybreak"],
+  ["Digit2", "revolver"],
+  ["Digit3", "shotgun"],
+  ["Digit4", "ak47"],
+  ["Digit5", "sniper"],
+  ["Digit5", "daybreak"],
 ] as const) {
   if (process.env.ONLY && process.env.ONLY !== id) continue;
   // (back to the start for each — the moves pass walks and sprints her ahead, toward the water)

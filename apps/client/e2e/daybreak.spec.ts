@@ -39,7 +39,7 @@ test("the Daybreak: charged, a ball of light flies and bursts; a cell spent, thr
     y.tp.yaw = -Math.PI / 2;
   });
   await page.waitForTimeout(2000);
-  await page.keyboard.press("Digit4");
+  await page.keyboard.press("Digit5");
   await expect.poll(async () => (await me(page)).gun).toBe("daybreak");
   await page.mouse.move(640, 400);
   await page.mouse.down({ button: "right" });
@@ -68,7 +68,7 @@ test("the Daybreak: charged, a ball of light flies and bursts; a cell spent, thr
   // R: the cells out, three in
   await page.keyboard.press("KeyR");
   await expect.poll(async () => (await me(page)).loaded, { timeout: 4000 }).toBe(3);
-  await page.keyboard.press("Digit4");
+  await page.keyboard.press("Digit5");
   await w(page, (y) => y.room.send("mod:hour", { h: null }));
 });
 const ARMS_RATE_MS = 2600;

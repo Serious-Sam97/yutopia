@@ -29,13 +29,14 @@ import { type DarkSound, type GunSound, SHOT_REACH } from "./voices";
 // fires: through the crosshair, from the hand — the server decides what it met
 // (features/arms.ts: the shadowed, one of us), the flash and the tracers show at
 // once. R (the pad's X with nothing to use) reloads a round at a time; G (RB)
-// throws a flare where you look; Y while aiming, the next weapon. 1–4 are always
-// the quick slots once the dark's loaded (the emotes keep 5–8); R and G only
+// throws a flare where you look (plan 87: the one lit in the left hand first); Y while aiming, the next weapon. 2–5
+// are always the quick slots once the dark's loaded (1 the left hand — the dark's index; the emotes 6–9); R and G only
 // when there's something to do with them. The cylinder or the shells and the flares, bottom right, as in
 // 02-hud-night.
 
 const AMBER = "#e9a33a";
-const QUICK_KEYS = ["Digit1", "Digit2", "Digit3", "Digit4"];
+// (plan 87: 1 is the left hand's, the quick slots 2–5)
+const QUICK_KEYS = ["Digit2", "Digit3", "Digit4", "Digit5"];
 const HAND = 1.35; // the gun's height in the hand, held out (shared beam.ts BEAM.held)
 const EARLY_MS = 120; // a click this early is held till the gun's ready
 // each gun's kick (docs/plan/32-the-arms.md; tuned in phase 5): on the look (rad, up and at most
@@ -235,7 +236,7 @@ export class Arms {
       this.reload();
       return true;
     }
-    if (e.code === "KeyG" && inv && count(inv, "flare") > 0) {
+    if (e.code === "KeyG" && inv && (count(inv, "flare") > 0 || this.heldFlare())) {
       this.flare();
       return true;
     }
@@ -308,7 +309,7 @@ export class Arms {
     return w && "loaded" in w ? { id: w.id as GunId, loaded: w.loaded, slot } : null;
   }
 
-  /** A quick slot (0–3, keys 1–4): a weapon taken out (again: away), first aid or a battery
+  /** A quick slot (0–3, keys 2–5): a weapon taken out (again: away), first aid or a battery
    *  used, a flare thrown. False (and nothing sent): nothing there to do. */
   quick(n: number): boolean {
     const it = this.inv()?.quick[n];
@@ -344,9 +345,19 @@ export class Arms {
     this.reloadAt = performance.now();
     this.ctl.room?.send("arms:reload", {});
   }
-  private flare(): boolean {
+  /** (plan 87 F3b) A flare lit in my left hand (a burning one the server keeps at my hand) */
+  heldFlare(): boolean {
+    const room = this.ctl.room;
+    let held = false;
+    room?.state.flares?.forEach((f: { held?: string }) => {
+      if (f.held && f.held === room.sessionId) held = true;
+    });
+    return held;
+  }
+  /** A flare thrown where I look — the one lit in my left hand first (plan 87), else one from what I carry. */
+  flare(): boolean {
     const inv = this.inv();
-    if (!inv || count(inv, "flare") <= 0) return false;
+    if (!inv || (count(inv, "flare") <= 0 && !this.heldFlare())) return false;
     const tp = this.ctl.tp;
     // where I look (3D), else where I face
     const yaw = tp ? this.camYaw() : this.facing();

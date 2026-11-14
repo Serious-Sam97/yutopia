@@ -57,12 +57,13 @@ test("the HUD at night, hurt and cold, focusing, armed; the dark's sounds", asyn
     if (!y.room.state.players.get(y.room.sessionId).torch) y.toggleTorch();
   });
   await page.keyboard.press("KeyG");
-  await page.keyboard.press("Digit1");
+  await page.keyboard.press("Digit2");
   await page.waitForTimeout(2500);
-  // every sound made (one at a time, while idle)
+  // every sound made (one at a time, while idle) — 17 since the guns' own went to recordings (plan 79 phase 9,
+  // public/sfx/guns: not made here)
   await expect
     .poll(() => page.evaluate(() => (window as any).__dark.voices.buffers.size as number), { timeout: 30_000 })
-    .toBeGreaterThanOrEqual(19);
+    .toBeGreaterThanOrEqual(17);
   // aiming at it: the focus
   await page.mouse.move(640, 400);
   await page.mouse.down({ button: "right" });

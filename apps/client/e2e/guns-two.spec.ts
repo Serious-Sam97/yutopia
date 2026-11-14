@@ -45,7 +45,7 @@ const drawOn = async (bia: Page, id: string) => {
     (g) => (window as any).__dark.inv.quick.findIndex((it: any) => it?.id === g),
     id,
   )) as number;
-  await bia.keyboard.press(`Digit${i + 1}`);
+  await bia.keyboard.press(`Digit${i + 2}`);
   await expect.poll(() => w(bia, (y) => y.room.state.players.get(y.room.sessionId).gun), { timeout: 10_000 }).toBe(id);
 };
 // what Ana's screen has of Bia's gun: its key, life model or not, its moving parts' state

@@ -45,7 +45,7 @@ test("the show: a flash, a tracer into the snow, smoke; the double-barrel's shel
     y.tp.yaw = 0;
   });
   await page.waitForTimeout(2500);
-  await page.keyboard.press("Digit1");
+  await page.keyboard.press("Digit2");
   await expect.poll(() => w(page, (y) => y.room.state.players.get(y.room.sessionId).gun)).toBe("revolver");
   await page.mouse.move(640, 400);
   await page.mouse.down({ button: "right" });
@@ -71,7 +71,7 @@ test("the show: a flash, a tracer into the snow, smoke; the double-barrel's shel
 
   // the double-barrel: one, then broken open
   await page.mouse.up({ button: "right" });
-  await page.keyboard.press("Digit2");
+  await page.keyboard.press("Digit3");
   await expect.poll(() => w(page, (y) => y.room.state.players.get(y.room.sessionId).gun)).toBe("shotgun");
   await page.mouse.down({ button: "right" });
   await page.waitForTimeout(900);
@@ -96,7 +96,7 @@ test("the show: a flash, a tracer into the snow, smoke; the double-barrel's shel
   await page.waitForTimeout(700);
   await shot(page, "fx-shotgun-brass");
   await page.waitForTimeout(2500);
-  await page.keyboard.press("Digit2");
+  await page.keyboard.press("Digit3");
   await w(page, (y) => {
     y.room.send("mod:hour", { h: null });
     y.room.send("mod:dark", { mode: "normal" });

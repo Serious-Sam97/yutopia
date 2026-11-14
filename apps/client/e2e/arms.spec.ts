@@ -56,7 +56,7 @@ test("armed at night: a flare, the revolver out, one burnt and shot down, a relo
   await shot(page, "arms-flare");
 
   // 1: the revolver out — in the hand for everyone, the cylinder bottom right
-  await page.keyboard.press("Digit1");
+  await page.keyboard.press("Digit2");
   await expect.poll(async () => (await pockets(page)).gun).toBe("revolver");
   await expect(page.locator(".dk-arms .cyl")).toBeVisible();
 
