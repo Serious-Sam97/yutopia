@@ -6,7 +6,8 @@ longer by L. The new pack (plan 86, look B) adapted to it.
 
 Status: **investigated and proposed 2026-11-14; forks decided by the user 2026-11-14**: **F1a** the left hand's
 item out only while in use; **F2a** anything but a gun; **F3b** a flare there lit by 1 and held up as a light, G or
-1 again throws it; **F4a** everyone has a torch, it can be dropped, the lobby's locker gives one to whoever has none.
+1 again throws it; **F4a** everyone has a torch, it can be dropped, the lobby's locker gives one to whoever has none. **Phase 0 (the
+mock) signed off 2026-11-14**, committed cba1f89b; **phase 1 (the rules) built 2026-11-14**.
 
 ## What there is now
 
@@ -36,7 +37,7 @@ item out only while in use; **F2a** anything but a gun; **F3b** a flare there li
   off and puts it away. In the pack it's carried, dark. **L goes, and so does the phone's flashlight button** (the
   user's "only this way, by 1"). The battery stays the torch's vital; the right button focuses it as now.
 - **Anything else in the left hand** (F2a: anything but a gun): 1 uses it — a first aid, a battery (as H and B do);
-  **a flare (F3b): 1 lights it and she holds it up** — a light in her left hand, burning its 60 s (`FLARE.secs`),
+  **a flare (F3b): 1 lights it and she holds it up** — a light in her left hand, burning its 12 s (`FLARE.secs`),
   held where the guns' holds hold the torch (Harries under the revolver, in the fist under the long guns' fore-ends),
   lighting round her and keeping the shadowed off as a thrown one does where it lands; G, or 1 again, throws it,
   still burning; burnt out in her hand, it's let fall. Rounds or a fuse there: 1 does nothing (the slot shakes
@@ -91,6 +92,32 @@ the pad's ↑ the left hand, LB + A B X Y the quick slots 2–5; a mock of the a
    flare (F3b)**: a `Player` field for a flare lit in her hand (when it was lit), seen by all, a light the shadowed
    keep off as from a thrown one's (`features/dark.ts`), thrown on as a burning one (its time left), burnt out let
    fall; tests.
+   Done in phase 1 (2026-11-14):
+   - **Shared** (`inventory.ts`): `hand` on the inventory, `HAND_SLOT` 12 after the quick slots (`slotAt`, `put`,
+     the slots every count, find, top-up and take goes through); `fits(slot, id)` — the left hand anything but a
+     weapon, a quick slot anything but the torch — kept by `moveSlot` (a swap both ways), `addItemTo`, `splitSlot`;
+     the `torch` a stack of one, `ONE_OF` (a second isn't taken); `addStack` never puts anything new in the left hand
+     but the torch, which goes there first, else the pack; `giveTorch`; `cleanInventory` reads the hand (no weapon
+     there; a torch in a quick slot to the hand or pack; one torch); Organize puts the torch after the weapons.
+   - **The API**: `inventory.hand` saved (a stack or nothing — a gun refused; the torch one of a kind across the
+     hand, quick slots and pockets); `Survivor::STACKS` the torch.
+   - **The server**: the save carries the hand; someone new, or a save from before (no `hand` in it), gets a torch
+     in the left hand (`giveTorch`) — one let go since stays let go (the hand saved as nothing); `phone:torch` lights
+     only from the left hand (once the pockets are known); `wear()` puts the light out when the torch leaves it;
+     **`dark:hand`** — the left hand's use: the torch on/off (`on`, else switched), a first aid or a battery used,
+     **a flare lit and held** (F3b): a burning `Flare` with `held` = her session — `features/dark.ts` keeps it at her
+     hand each tick (so the shadowed keep off it as off any flare, and it goes out in her hand at its time); down,
+     let fall burning where she is; gone, gone; **`arms:flare` throws the held one first**, its time going on where
+     it lands. The lobby's locker and the supply lockers give a torch to one who carries none; the admin's kit too;
+     a bot gets one when it joins (never saved — the world's tests join as bots and switch the light).
+   - **The client, only as much as the rules need**: the torch's name and words (both languages), its drawing and
+     its picture (`public/life/items/torch.webp`, 3.5 KB), a dropped torch drawn as the caches' torch.
+   - Checked: shared 489 green (three new tests: the hand's slot and what fits, picked up, a save cleaned); the API's
+     `SurvivorTest` 8 green (the hand kept, a gun or a second torch refused; the dev DB untouched); the server's two
+     new tests (a torch for someone new, lit only from the hand, dropped and kept dropped across a rejoin, the lobby's
+     locker; a flare lit and held, following her, thrown on with its time); the server's files that touch the light,
+     flares or the pockets, one at a time — `survival`, `arms`, `dark`, `down`, `nests`, `world` — green but three
+     red before this plan: the admin's give (survival), a spot's loot (flaky), back after a reload (world).
 2. **The keys**: 1 the left hand, 2–5 the quick slots (`arms.ts`), the emotes 6–9 (`ctl/input.ts`), L and the
    binding's `torch` gone (the controls' settings list too), the pad's ↑ and LB + A B X Y; 1 loads the dark's chunk.
 3. **The left hand in use**: 1 with the torch — out and lit, off and away (the holds as they are, first person

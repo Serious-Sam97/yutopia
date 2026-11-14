@@ -10,7 +10,10 @@ import {
   count,
   emptyInventory,
   findStack,
+  fits,
   freeQuick,
+  giveTorch,
+  HAND_SLOT,
   moveSlot,
   organize,
   POCKETS,
@@ -155,7 +158,7 @@ test("a drag: a swap, the same stack topped up to its cap, a weapon into a pocke
   // an empty one dragged: nothing; out of range
   assert.equal(moveSlot(inv, 3, 4), false);
   inv.quick[0] = { id: "revolver", loaded: 4 };
-  assert.equal(moveSlot(inv, 0, QUICK_SLOT + 4), false);
+  assert.equal(moveSlot(inv, 0, HAND_SLOT + 1), false);
   // (plan 85) a weapon into an empty pocket — carried, not equipped — and back
   assert.equal(moveSlot(inv, QUICK_SLOT, 3), true);
   assert.deepEqual(inv.pockets[3], { id: "revolver", loaded: 4 });
@@ -346,4 +349,86 @@ test("(plan 86) the pack organized: like stacks topped up, weapons first, then r
   assert.deepEqual(inv.quick[0], { id: "flare", n: 1 });
   assert.equal(organize(inv), false, "in order already");
   assert.equal(count(inv, "r38"), 30);
+});
+
+test("(plan 87) the left hand: slot 12 after the quick slots; anything but a weapon; the torch only there or in the pack", () => {
+  assert.equal(HAND_SLOT, 12);
+  const inv = emptyInventory();
+  assert.equal(inv.hand, null);
+  assert.equal(slotAt(inv, HAND_SLOT), null);
+  assert.equal(slotAt(inv, HAND_SLOT + 1), undefined);
+  assert.equal(fits(HAND_SLOT, "flare"), true);
+  assert.equal(fits(HAND_SLOT, "revolver"), false, "a weapon takes both hands");
+  assert.equal(fits(QUICK_SLOT, "torch"), false, "the torch lights only from the left hand");
+  assert.equal(fits(0, "torch"), true);
+  inv.pockets[0] = { id: "flare", n: 2 };
+  inv.quick[0] = { id: "revolver", loaded: 6 };
+  // the flares into the left hand, and back
+  assert.equal(moveSlot(inv, 0, HAND_SLOT), true);
+  assert.deepEqual(inv.hand, { id: "flare", n: 2 });
+  assert.equal(count(inv, "flare"), 2, "the left hand counts");
+  // a weapon won't go in; nor swap into it
+  assert.equal(moveSlot(inv, QUICK_SLOT, HAND_SLOT), false);
+  assert.equal(moveSlot(inv, HAND_SLOT, QUICK_SLOT), false, "a swap would put the revolver in the left hand");
+  assert.deepEqual(inv.quick[0], { id: "revolver", loaded: 6 });
+  // a torch: given into the left hand if it's free — here the pack's first free pocket — one only
+  assert.equal(giveTorch(inv), true);
+  assert.deepEqual(inv.pockets[0], { id: "torch", n: 1 });
+  assert.equal(giveTorch(inv), false, "one of a kind");
+  assert.equal(addStack(inv, "torch", 1), 0);
+  // into a quick slot: refused; into the left hand: swapped with the flares
+  assert.equal(moveSlot(inv, 0, QUICK_SLOT + 1), false);
+  assert.equal(moveSlot(inv, 0, HAND_SLOT), true);
+  assert.deepEqual(inv.hand, { id: "torch", n: 1 });
+  assert.deepEqual(inv.pockets[0], { id: "flare", n: 2 });
+  // the flares topped up in the pocket, not a new stack in the hand; nothing else lands in the left hand
+  inv.hand = null;
+  assert.equal(addStack(inv, "aid", 2), 2);
+  assert.equal(inv.hand, null);
+  assert.equal(findStack(inv, "aid") >= 0 && findStack(inv, "aid") < POCKETS, true);
+});
+
+test("(plan 87) picked up: the torch to the left hand first; asked into a quick slot, it goes where it fits", () => {
+  const inv = emptyInventory();
+  assert.equal(addItem(inv, { id: "torch", n: 1 }), 1);
+  assert.deepEqual(inv.hand, { id: "torch", n: 1 });
+  assert.equal(addItem(inv, { id: "torch", n: 1 }), 0, "a second: left lying");
+  const inv2 = emptyInventory();
+  inv2.hand = { id: "aid", n: 1 };
+  assert.equal(addItemTo(inv2, QUICK_SLOT + 2, { id: "torch", n: 1 }), 1);
+  assert.deepEqual(inv2.pockets[0], { id: "torch", n: 1 }, "the left hand busy: the pack");
+  assert.equal(inv2.quick[2], null);
+  // a weapon asked into the left hand: where a weapon goes
+  const inv3 = emptyInventory();
+  assert.equal(addItemTo(inv3, HAND_SLOT, { id: "ak47", n: 1, loaded: 10 }), 1);
+  assert.equal(inv3.hand, null);
+  assert.deepEqual(inv3.quick[0], { id: "ak47", loaded: 10 });
+  // a flare into the left hand, and used from there? (a flare's no use: consume takes aid and battery)
+  assert.equal(addItemTo(inv3, HAND_SLOT, { id: "aid", n: 1 }), 1);
+  assert.equal(consume(inv3, HAND_SLOT), "aid");
+  assert.equal(inv3.hand, null);
+});
+
+test("(plan 87) a save cleaned: the left hand kept, no weapon there, one torch, none in a quick slot", () => {
+  const inv = cleanInventory({
+    hand: { id: "torch", n: 1 },
+    quick: [
+      { id: "torch", n: 1 },
+      { id: "flare", n: 2 },
+    ],
+    pockets: [
+      { id: "torch", n: 1 },
+      { id: "aid", n: 1 },
+    ],
+  });
+  assert.deepEqual(inv.hand, { id: "torch", n: 1 });
+  assert.equal(count(inv, "torch"), 1);
+  assert.equal(inv.quick[0], null);
+  assert.deepEqual(inv.quick[1], { id: "flare", n: 2 });
+  assert.equal(inv.pockets[0], null);
+  assert.equal(cleanInventory({ hand: { id: "revolver", loaded: 6 } }).hand, null);
+  // a torch only in a quick slot: to the left hand
+  assert.deepEqual(cleanInventory({ quick: [{ id: "torch", n: 1 }] }).hand, { id: "torch", n: 1 });
+  // an old save (no hand): none
+  assert.equal(cleanInventory({ quick: [], pockets: [] }).hand, null);
 });

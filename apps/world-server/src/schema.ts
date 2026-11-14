@@ -150,6 +150,8 @@ export class Flare extends Schema {
   @type("float64") at = 0;
   @type("float64") until = 0;
   @type("uint8") level = 0;
+  // (plan 87 F3b) lit in someone's left hand: their session id — it goes where they go, till thrown or let fall
+  @type("string") held = "";
 }
 
 // A thing (plan 72 phase 5: metres and radians, floats end to end — still placed on whole tiles

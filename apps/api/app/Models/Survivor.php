@@ -11,7 +11,12 @@ class Survivor extends Model
     public const STACKS = [
         'r38' => 24, 'shell' => 12, 'r762' => 60, 'r308' => 15, 'cell' => 3,
         'flare' => 3, 'battery' => 2, 'aid' => 2, 'fuse' => 4,
+        // (plan 87) the torch: one of a kind, lit only from the left hand
+        'torch' => 1,
     ];
+
+    // (plan 87) carried one at a time (shared/inventory.ts ONE_OF)
+    public const ONE_OF = ['torch'];
 
     public const WEAPONS = ['revolver' => 6, 'shotgun' => 2, 'ak47' => 30, 'sniper' => 5, 'daybreak' => 3];
 

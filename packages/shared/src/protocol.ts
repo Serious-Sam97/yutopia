@@ -532,6 +532,9 @@ export interface ClientMessages {
   "dark:split": { from: number; to: number; n?: number }; // (plan 86) half (or `n`) of a stack into another slot
   "dark:organize": Record<string, never>; // (plan 86) the pack put in order (shared inventory.ts organize)
   "dark:takeAll": Record<string, never>; // (plan 86) everything on the ground in reach
+  // (plan 87) the left hand's use (key 1): the torch on or off (`on`, else switched), a first aid or a battery used, a
+  // flare lit and held up (thrown by arms:flare)
+  "dark:hand": { on?: boolean };
   // an admin's own vitals full again (health, stamina, warmth, the battery): for trying things out
   "mod:refill": { kit?: boolean; ak?: boolean; sniper?: boolean; daybreak?: boolean; hp?: number; wm?: number };
   // the shadowed (features/dark.ts), admins: off ("peaceful") or on ("normal"); `spawn`: that

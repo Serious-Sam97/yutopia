@@ -8,6 +8,8 @@ import type { Player } from "./schema.ts";
 export function wear(p: Player, inv: Inventory | null | undefined): void {
   // (the cue's off a pool table, not out of the pockets: features/pballs.ts)
   if (p.gun && p.gun !== "cue" && inv && !weaponIn(inv, p.gun)) p.gun = "";
+  // (plan 87) the torch lights only from her left hand: moved, dropped — out
+  if (p.torch && inv && inv.hand?.id !== "torch") p.torch = false;
   const on = (id: string) => !!inv && !!weaponIn(inv, id);
   // (plan 80) the revolver: its holster on the hip
   const holster = on("revolver");

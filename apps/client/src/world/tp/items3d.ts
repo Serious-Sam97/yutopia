@@ -215,6 +215,8 @@ const MODELS: Record<string, () => Part[]> = {
   "cache:hunting": hunting,
   "cache:flares": flareBag,
   "cache:torch": torch,
+  // (plan 87) the torch dropped: as a cache's
+  torch,
 };
 // (how much bigger than life, to read on the snow)
 const SCALE: Record<string, number> = {

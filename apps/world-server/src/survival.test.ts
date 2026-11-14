@@ -4,7 +4,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { ROOM_NAME } from "@yutopia/shared";
 import { LOCKER, LOOT, type LootItem, lockerFront } from "@yutopia/shared/dark";
 import { heightAt } from "@yutopia/shared/grounds";
-import { count, type Inventory, QUICK_SLOT } from "@yutopia/shared/inventory";
+import { count, HAND_SLOT, type Inventory, QUICK_SLOT } from "@yutopia/shared/inventory";
 import { MOVE, MV_AIM, packMv } from "@yutopia/shared/move";
 import { Client, type Room } from "colyseus.js";
 
@@ -360,6 +360,76 @@ test("(plan 86) the hand tools: a stack split, one of it dropped, the rest dropp
   await waitFor(() => inv().pockets[0]?.id === w);
   assert.equal(inv().pockets.slice(0, things).filter(Boolean).length, things, "no gaps");
   assert.equal(count(inv(), id as never), had, "nothing lost");
+});
+
+test("(plan 87) the left hand: a torch there for someone new; it lights only from there; dropped, kept dropped across a rejoin; the lobby's locker gives another", async () => {
+  const a = await person(387);
+  assert.deepEqual(a.inv?.hand, { id: "torch", n: 1 }, "someone new: a torch in the left hand");
+  // lit from the left hand (as L does today, and the hand's own key)
+  a.room.send("phone:torch", { on: true });
+  await waitFor(() => me(a.room).torch === true);
+  a.room.send("dark:hand", { on: false });
+  await waitFor(() => me(a.room).torch === false);
+  a.room.send("dark:hand", {});
+  await waitFor(() => me(a.room).torch === true);
+  // into the pack: out at once, and no lighting it from there
+  a.room.send("dark:move", { from: HAND_SLOT, to: 0 });
+  await waitFor(() => a.inv?.pockets[0]?.id === "torch" && me(a.room).torch === false);
+  a.room.send("phone:torch", { on: true });
+  await sleep(300);
+  assert.equal(me(a.room).torch, false, "only from the left hand");
+  // not into a quick slot
+  a.room.send("dark:move", { from: 0, to: QUICK_SLOT });
+  await sleep(300);
+  assert.equal(a.inv?.pockets[0]?.id, "torch");
+  // dropped out on the snow, then gone and back: none given again
+  await goTo(a, LOCKER.x - 8, LOCKER.z + 4);
+  a.room.send("dark:drop", { slot: 0 });
+  await waitFor(() => count(a.inv as Inventory, "torch") === 0);
+  rooms.splice(rooms.indexOf(a.room), 1);
+  await a.room.leave(true);
+  await sleep(300);
+  const a2 = await person(387);
+  assert.equal(count(a2.inv as Inventory, "torch"), 0, "let go is let go");
+  // the lobby's locker: a torch for one who carries none (into the left hand)
+  await goTo(a2, LOCKER.x, LOCKER.z);
+  a2.room.send("dark:loot", { spot: "locker" });
+  await waitFor(() => a2.found.length === 1);
+  assert.ok(a2.found[0].got.some((g) => g.id === "torch"));
+  await waitFor(() => a2.inv?.hand?.id === "torch");
+});
+
+test("(plan 87 F3b) a flare in the left hand: lit and held — it goes where she goes; thrown, it burns on with its time", async () => {
+  const a = await person(388, "member,builder,admin");
+  await goTo(a, -272, -60);
+  a.room.send("mod:refill", { kit: true });
+  await waitFor(() => !!a.inv?.pockets.some((s) => s?.id === "flare"));
+  // the flares into the left hand (the torch swapped out to their pocket)
+  const fl = (a.inv as Inventory).pockets.findIndex((s) => s?.id === "flare");
+  a.room.send("dark:move", { from: fl, to: HAND_SLOT });
+  await waitFor(() => a.inv?.hand?.id === "flare" && a.inv?.pockets[fl]?.id === "torch");
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const held = (): any => [...a.room.state.flares.values()].find((f: { held: string }) => f.held === a.room.sessionId);
+  a.room.send("dark:hand", {});
+  await waitFor(() => !!held());
+  assert.equal((a.inv?.hand as { n: number }).n, 2, "one lit from the hand");
+  const until = held().until;
+  // a second press with one lit: nothing more
+  a.room.send("dark:hand", {});
+  await sleep(300);
+  assert.equal((a.inv?.hand as { n: number }).n, 2);
+  // it goes where she goes
+  await goTo(a, -268, -60);
+  await waitFor(() => Math.hypot(held().x + 268, held().y + 60) < 0.5);
+  // thrown: the held one, not another from the hand — lit where it lands, its time going on
+  a.room.send("arms:flare", { yaw: 0, pitch: 0.3 });
+  await waitFor(() => !held() && a.room.state.flares.size > 0, 4000);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const lying: any = [...a.room.state.flares.values()].find(
+    (f: { held: string; until: number }) => !f.held && Math.abs(f.until - until) < 5,
+  );
+  assert.ok(lying, "the same flare's time");
+  assert.equal((a.inv?.hand as { n: number }).n, 2);
 });
 
 test("indoors: dropped on the studio's floor, there; picked up on that floor only", async () => {

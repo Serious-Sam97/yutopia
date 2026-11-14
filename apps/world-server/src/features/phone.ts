@@ -224,10 +224,13 @@ registerFeature((room: WorldRoom) => {
     const p = me(client);
     if (p && (PHOTO_POSES as readonly unknown[]).includes(m?.pose)) p.phonePose = m.pose;
   });
-  // the flashlight (the Grounds at night): on or off, seen by everyone
+  // the torch (the Grounds at night): on or off, seen by everyone — (plan 87) on only from her left hand, once her
+  // pockets are known (features/survival.ts; before, as asked)
   room.on("phone:torch", (client, m) => {
     const p = me(client);
-    if (p) p.torch = !!m?.on;
+    if (!p) return;
+    const inv = room.survival?.inventory(client.sessionId);
+    p.torch = !!m?.on && (!inv || inv.hand?.id === "torch");
   });
   room.on("phone:prefs", (client, m) => {
     const p = me(client);

@@ -1,5 +1,5 @@
 import { StateView } from "@colyseus/schema";
-import { across, levelMap, type Point } from "@yutopia/shared";
+import { across, levelMap, overFloor, type Point } from "@yutopia/shared";
 import { beamAt, beamOf } from "@yutopia/shared/beam";
 import {
   atHead,
@@ -96,8 +96,9 @@ export interface DarkHooks {
     damage: (t: number, head: boolean) => number,
     now: number,
   ): ShotHit | null;
-  /** A flare lit at (x, y) on ground z on `level`, for FLARE.secs. */
-  light(x: number, y: number, z: number, level: number, now: number): void;
+  /** A flare lit at (x, y) on ground z on `level`, for FLARE.secs — or held in someone's left hand (plan 87 F3b:
+   *  `held` their session id), or thrown on still burning (`until`: its time as it was). */
+  light(x: number, y: number, z: number, level: number, now: number, o?: { held?: string; until?: number }): void;
   /** The Daybreak's ball here now (plan 79 phase 7): the shields within ORB.burn burn as ORB.focus
    *  focused beams would, this tick. */
   sear(x: number, y: number, level: number, now: number): void;
@@ -497,7 +498,7 @@ registerFeature((room: WorldRoom) => {
       blasts.push({ x, y, z, base, at: now + 300, told });
       shots.push({ x, y, t: clock });
     },
-    light(x, y, z, level, now) {
+    light(x, y, z, level, now, o) {
       const f = new Flare();
       f.id = `fl${(++flareSeq).toString(36)}`;
       f.x = x;
@@ -505,7 +506,8 @@ registerFeature((room: WorldRoom) => {
       f.z = z;
       f.level = level;
       f.at = now;
-      f.until = now + FLARE.secs * 1000;
+      f.until = o?.until ?? now + FLARE.secs * 1000;
+      f.held = o?.held ?? "";
       room.state.flares.set(f.id, f);
     },
   };
@@ -725,7 +727,20 @@ registerFeature((room: WorldRoom) => {
         }
       }
 
-      // flares burnt out
+      // (plan 87 F3b) a flare held: where her left hand is — gone with her; down, let fall where she is, burning
+      for (const f of room.state.flares.values()) {
+        if (!f.held) continue;
+        const q = room.state.players.get(f.held);
+        if (!q) room.state.flares.delete(f.id);
+        else {
+          f.x = q.x;
+          f.y = q.y;
+          f.level = q.level;
+          f.z = overFloor(q.level, q.z) + (q.downAt ? 0 : FLARE.hand);
+          if (q.downAt) f.held = "";
+        }
+      }
+      // flares burnt out (one held too: it goes out in her hand)
       for (const f of [...room.state.flares.values()]) if (now >= f.until) room.state.flares.delete(f.id);
 
       // who sees which: everyone, indoors too (through the windows), those

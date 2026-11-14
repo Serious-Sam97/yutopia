@@ -15,6 +15,7 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_item_battery: ["Battery", "Bateria"],
   dark_item_aid: ["First aid kit", "Kit médico"],
   dark_item_fuse: ["Fuse", "Fusível"],
+  dark_item_torch: ["Torch", "Lanterna"],
   dark_place_house: ["Front door", "Porta da casa"],
   dark_place_boathouse: ["Boathouse", "Casa de barcos"],
   dark_place_shed: ["Shed", "Galpão"],
@@ -168,6 +169,10 @@ export const STRINGS: Record<string, readonly [string, string]> = {
     "Fecha as feridas: a saúde volta a 100. Caído, segure E 5 s para se levantar sozinho.",
   ],
   dark_desc_fuse: ["Keep it: some lamp out there needs one.", "Guarde: alguma luz lá fora precisa de um."],
+  dark_desc_torch: [
+    "Lights the way — only from the left hand: 1 takes it out and on, 1 again off and away.",
+    "Ilumina o caminho — só na mão esquerda: 1 tira e acende, 1 de novo apaga e guarda.",
+  ],
   dark_recharging: ["Recharging", "Recarregando"],
   dark_awake: ["You woke up at the office.", "Você acordou no escritório."],
   dark_down: ["Down", "Caído"],

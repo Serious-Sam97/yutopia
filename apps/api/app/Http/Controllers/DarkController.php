@@ -26,6 +26,8 @@ class DarkController extends Controller
             'inventory' => ['required', 'array'],
             'inventory.quick' => ['present', 'array', 'max:'.Survivor::QUICK],
             'inventory.pockets' => ['present', 'array', 'max:'.Survivor::POCKETS],
+            // (plan 87) the left hand: a stack or nothing — never a gun; an old save has none
+            'inventory.hand' => ['sometimes', 'nullable', 'array'],
             'vitals' => ['required', 'array'],
             'vitals.hp' => ['required', 'numeric', 'between:0,100'],
             'vitals.wm' => ['required', 'numeric', 'between:0,100'],
@@ -38,6 +40,7 @@ class DarkController extends Controller
         // (a gun one of a kind, the quick slots and the pockets together — plan 85)
         $seen = [];
         $inventory = [
+            'hand' => $this->hand($data['inventory']['hand'] ?? null, $seen),
             'quick' => $this->quick($data['inventory']['quick'], $seen),
             'pockets' => $this->pockets($data['inventory']['pockets'], $seen),
         ];
@@ -86,11 +89,33 @@ class DarkController extends Controller
         return array_pad($out, Survivor::POCKETS, null);
     }
 
+    // (plan 87) the left hand: a stack (the torch, a flare, a first aid…) or nothing — a gun takes both hands
+    private function hand(mixed $it, array &$seen): ?array
+    {
+        if ($it === null) {
+            return null;
+        }
+        $id = is_array($it) ? ($it['id'] ?? null) : null;
+        if (! is_string($id) || ! isset(Survivor::STACKS[$id])) {
+            throw ValidationException::withMessages(['inventory.hand' => 'the left hand holds no gun, nor anything we don\'t know']);
+        }
+
+        return $this->item($it, 'inventory.hand', $seen);
+    }
+
     // a stack (no more than its cap), or a gun — one of a kind (`seen`: the ones so far), loaded no more than it holds
     private function item(mixed $it, string $key, array &$seen): array
     {
         $id = is_array($it) ? ($it['id'] ?? null) : null;
         if (is_string($id) && isset(Survivor::STACKS[$id])) {
+            // (plan 87: the torch one of a kind too)
+            if (in_array($id, Survivor::ONE_OF, true)) {
+                if (isset($seen[$id])) {
+                    throw ValidationException::withMessages([$key => 'a second of its kind']);
+                }
+                $seen[$id] = true;
+            }
+
             return $this->stack($it, $key);
         }
         $loaded = is_array($it) ? ($it['loaded'] ?? null) : null;

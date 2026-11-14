@@ -1,9 +1,10 @@
 // What a survivor carries (docs/plan/30-the-dark.md, D3): four quick slots
-// (keys 1–4: a weapon or a stack, anything) and six pockets — the pack (plan 85:
-// a stack, or a weapon carried but not equipped: in a pocket it's in no hand and
-// worn nowhere on her); the pages apart (phase 7). The server owns it and sends it
-// only to its owner; it's saved through the API (`survivors`). Pure functions on
-// plain data: the same on the server, the client and in tests.
+// (a weapon or a stack, anything), eight pockets — the pack (plan 85: a stack, or a
+// weapon carried but not equipped: in a pocket it's in no hand and worn nowhere on
+// her) — and the left hand (plan 87: key 1, anything but a weapon; the torch lights
+// only from there); the pages apart (phase 7). The server owns it and sends it only
+// to its owner; it's saved through the API (`survivors`). Pure functions on plain
+// data: the same on the server, the client and in tests.
 
 export const WEAPONS = {
   revolver: { mag: 6, ammo: "r38" },
@@ -25,6 +26,8 @@ export const STACKS = {
   battery: 2,
   aid: 2,
   fuse: 4,
+  // (plan 87) the torch: an item, one of a kind — it lights only from the left hand
+  torch: 1,
 } as const;
 export type StackId = keyof typeof STACKS;
 export type ItemId = WeaponId | StackId;
@@ -33,8 +36,12 @@ export type ItemId = WeaponId | StackId;
 export const POCKETS = 8;
 export const QUICK = 4;
 export const PAGES_MAX = 200;
-/** drop / use / move slots: the pockets 0–7, then the quick slots 8–11 (keys 1–4) */
+/** drop / use / move slots: the pockets 0–7, then the quick slots 8–11, then the left hand 12 (plan 87) */
 export const QUICK_SLOT = POCKETS;
+/** (plan 87) the left hand's slot: key 1 — anything but a weapon (a weapon takes both hands) */
+export const HAND_SLOT = POCKETS + QUICK;
+/** (plan 87) carried one at a time: a second isn't taken */
+export const ONE_OF = ["torch"] as const satisfies readonly StackId[];
 /** what a use takes one of (the rest: ammo by a reload, flares thrown, fuses for later) */
 export const USABLE = ["aid", "battery"] as const satisfies readonly StackId[];
 
@@ -50,6 +57,7 @@ export type Item = Weapon | Stack;
 export interface Inventory {
   quick: (Item | null)[]; // QUICK: equipped — a weapon here is drawn by its key and worn (on her back, her hip)
   pockets: (Item | null)[]; // POCKETS: the pack — a weapon here is only carried (plan 85)
+  hand: Item | null; // (plan 87) the left hand, key 1: the torch lit from here, anything else used by 1
   pages: string[];
 }
 
@@ -59,34 +67,46 @@ export const isUsable = (id: unknown): id is (typeof USABLE)[number] => (USABLE 
 const stackOf = (it: Item | null | undefined): Stack | null => (it && isStack(it.id) ? (it as Stack) : null);
 const weaponOf = (it: Item | null | undefined): Weapon | null => (it && isWeapon(it.id) ? (it as Weapon) : null);
 const quickSlot = (i: number) => i >= QUICK_SLOT && i < QUICK_SLOT + QUICK;
+const oneOf = (id: unknown) => (ONE_OF as readonly unknown[]).includes(id);
 
 export const emptyInventory = (): Inventory => ({
   quick: Array.from({ length: QUICK }, () => null),
   pockets: Array.from({ length: POCKETS }, () => null),
+  hand: null,
   pages: [],
 });
 
-/** What's in a slot (pockets 0–5, quick 6–9): null empty, undefined no such slot. */
+/** What's in a slot (pockets 0–7, quick 8–11, the left hand 12): null empty, undefined no such slot. */
 export function slotAt(inv: Inventory, slot: number): Item | null | undefined {
   if (!Number.isInteger(slot)) return undefined;
   if (slot >= 0 && slot < POCKETS) return inv.pockets[slot];
   if (quickSlot(slot)) return inv.quick[slot - QUICK_SLOT];
+  if (slot === HAND_SLOT) return inv.hand ?? null;
   return undefined;
 }
 function put(inv: Inventory, slot: number, it: Item | null): void {
-  if (slot < POCKETS) inv.pockets[slot] = it;
+  if (slot === HAND_SLOT) inv.hand = it;
+  else if (slot < POCKETS) inv.pockets[slot] = it;
   else inv.quick[slot - QUICK_SLOT] = it;
 }
-/** Every slot, pockets first then the quick slots, with what's in it. */
+/** (plan 87) What a slot takes: the left hand anything but a weapon; a quick slot anything but the torch (it lights
+ *  only from the left hand); a pocket anything. */
+export function fits(slot: number, id: ItemId): boolean {
+  if (slot === HAND_SLOT) return !isWeapon(id);
+  if (quickSlot(slot)) return id !== "torch";
+  return slot >= 0 && slot < POCKETS;
+}
+/** Every slot, pockets first, then the quick slots, then the left hand, with what's in it. */
 const slots = (inv: Inventory) => [
   ...inv.pockets.map((it, i) => ({ it, i })),
   ...inv.quick.map((it, i) => ({ it, i: QUICK_SLOT + i })),
+  { it: inv.hand ?? null, i: HAND_SLOT },
 ];
 
 /** The first slot with a stack of `id` (pockets first), or -1. */
 export const findStack = (inv: Inventory, id: StackId): number => slots(inv).find((e) => e.it?.id === id)?.i ?? -1;
 
-/** How many of a stack are carried, pockets and quick slots together. */
+/** How many of a stack are carried, pockets, quick slots and the left hand together. */
 export function count(inv: Inventory, id: StackId): number {
   let n = 0;
   for (const { it } of slots(inv)) if (it?.id === id) n += (it as Stack).n;
@@ -104,9 +124,17 @@ export const freeQuick = (inv: Inventory): number => {
   return i < 0 ? -1 : QUICK_SLOT + i;
 };
 
-/** Put `n` of a stack away: topping up the ones there, then empty pockets, then
- *  empty quick slots. Returns how many went in (the rest stays where it was). */
+/** Put `n` of a stack away: topping up the ones there (the left hand's too), then empty pockets, then empty quick
+ *  slots — never the left hand, but the torch: the left hand first, then the pack, one only (plan 87). Returns how
+ *  many went in (the rest stays where it was). */
 export function addStack(inv: Inventory, id: StackId, n: number): number {
+  if (oneOf(id)) {
+    if (n < 1 || count(inv, id) > 0) return 0;
+    const at = inv.hand ? inv.pockets.indexOf(null) : HAND_SLOT;
+    if (at < 0) return 0;
+    put(inv, at, { id, n: 1 });
+    return 1;
+  }
   let left = Math.max(0, Math.floor(n));
   const cap = STACKS[id];
   for (const { it } of slots(inv)) {
@@ -119,7 +147,7 @@ export function addStack(inv: Inventory, id: StackId, n: number): number {
   }
   for (const { it, i } of slots(inv)) {
     if (!left) break;
-    if (it) continue;
+    if (it || i === HAND_SLOT) continue;
     const k = Math.min(left, cap);
     put(inv, i, { id, n: k });
     left -= k;
@@ -127,7 +155,7 @@ export function addStack(inv: Inventory, id: StackId, n: number): number {
   return Math.max(0, Math.floor(n)) - left;
 }
 
-/** Take up to `n` of a stack out (the fullest last, pockets or quick). Returns how many. */
+/** Take up to `n` of a stack out (the fullest last, pockets, quick or the left hand). Returns how many. */
 export function takeStack(inv: Inventory, id: StackId, n: number): number {
   let left = Math.max(0, Math.floor(n));
   const order = slots(inv)
@@ -181,6 +209,8 @@ export function moveSlot(inv: Inventory, from: number, to: number): boolean {
   const a = slotAt(inv, from);
   const b = slotAt(inv, to);
   if (!a || b === undefined) return false;
+  // (plan 87: each where it fits — no weapon into the left hand, no torch into a quick slot — a swap both ways)
+  if (!fits(to, a.id) || (b && !fits(from, b.id))) return false;
   const sa = stackOf(a);
   const sb = stackOf(b);
   if (sa && sb && sa.id === sb.id) {
@@ -201,6 +231,14 @@ export function moveSlot(inv: Inventory, from: number, to: number): boolean {
  *  `addItem` puts it. How much went in. */
 export function addItemTo(inv: Inventory, slot: number, it: { id: ItemId; n: number; loaded?: number }): number {
   const at = slotAt(inv, slot);
+  // (plan 87: not where it doesn't fit — as addItem puts it; one of a kind, as addStack takes it)
+  if (at === undefined || !fits(slot, it.id) || oneOf(it.id)) {
+    if (oneOf(it.id) && at === null && fits(slot, it.id) && count(inv, it.id as StackId) < 1) {
+      put(inv, slot, { id: it.id as StackId, n: 1 });
+      return 1;
+    }
+    return addItem(inv, it);
+  }
   if (isWeapon(it.id)) {
     if (at === null && !carries(inv, it.id)) {
       put(inv, slot, { id: it.id, loaded: Math.max(0, Math.min(WEAPONS[it.id].mag, Math.floor(it.loaded ?? 0))) });
@@ -251,7 +289,7 @@ export function splitSlot(inv: Inventory, from: number, to: number, n?: number):
   if (from === to) return 0;
   const s = stackOf(slotAt(inv, from));
   const at = slotAt(inv, to);
-  if (!s || at === undefined) return 0;
+  if (!s || at === undefined || !fits(to, s.id)) return 0;
   const want = Math.min(s.n, Math.floor(n ?? s.n / 2));
   if (!(want >= 1)) return 0;
   const there = stackOf(at);
@@ -274,6 +312,7 @@ export function splitSlot(inv: Inventory, from: number, to: number, n?: number):
  *  anything moved. */
 const ORDER: ItemId[] = [
   ...(Object.keys(WEAPONS) as WeaponId[]),
+  "torch",
   ...(Object.values(WEAPONS).map((w) => w.ammo) as StackId[]),
   "aid",
   "battery",
@@ -310,6 +349,9 @@ export function organize(inv: Inventory): boolean {
   return JSON.stringify(inv.pockets) !== before;
 }
 
+/** (plan 87 F4a) A torch for one who carries none — into the left hand if it's free, else the pack. True if given. */
+export const giveTorch = (inv: Inventory): boolean => addStack(inv, "torch", 1) === 1;
+
 /** Used up by a use: one of a stack in `slot` (aid, battery), or null. */
 export function consume(inv: Inventory, slot: number, usable: readonly StackId[] = USABLE): StackId | null {
   const s = stackOf(slotAt(inv, slot));
@@ -326,6 +368,13 @@ export function consume(inv: Inventory, slot: number, usable: readonly StackId[]
 export function cleanInventory(x: unknown): Inventory {
   const o = (x ?? {}) as Record<string, unknown>;
   const inv = emptyInventory();
+  // (plan 87) the left hand first: a stack (the torch), never a weapon
+  const h = o.hand as Record<string, unknown> | null | undefined;
+  if (h && isStack(h.id)) {
+    const n = Math.max(0, Math.min(STACKS[h.id], Math.floor(Number(h.n) || 0)));
+    if (n) inv.hand = { id: h.id, n };
+  }
+  const stray: StackId[] = [];
   const qs = Array.isArray(o.quick) ? o.quick : Array.isArray(o.weapons) ? o.weapons : [];
   for (let i = 0; i < QUICK; i++) {
     const it = qs[i] as Record<string, unknown> | null | undefined;
@@ -337,8 +386,10 @@ export function cleanInventory(x: unknown): Inventory {
         loaded: Math.max(0, Math.min(WEAPONS[it.id].mag, Math.floor(Number(it.loaded) || 0))),
       };
     } else if (isStack(it.id)) {
+      // (a torch in a quick slot: to the pack, after — it lights only from the left hand)
+      if (it.id === "torch") stray.push(it.id);
       const n = Math.max(0, Math.min(STACKS[it.id], Math.floor(Number(it.n) || 0)));
-      if (n) inv.quick[i] = { id: it.id, n };
+      if (n && it.id !== "torch") inv.quick[i] = { id: it.id, n };
     }
   }
   const ps = Array.isArray(o.pockets) ? o.pockets : [];
@@ -355,9 +406,11 @@ export function cleanInventory(x: unknown): Inventory {
       continue;
     }
     if (!isStack(s.id)) continue;
+    if (oneOf(s.id) && count(inv, s.id) > 0) continue;
     const n = Math.max(0, Math.min(STACKS[s.id], Math.floor(Number(s.n) || 0)));
     if (n) inv.pockets[i] = { id: s.id, n };
   }
+  for (const id of stray) addStack(inv, id, 1);
   const pages = Array.isArray(o.pages) ? o.pages : [];
   inv.pages = [
     ...new Set(pages.filter((p): p is string => typeof p === "string" && /^[a-z0-9-]{1,32}$/.test(p))),

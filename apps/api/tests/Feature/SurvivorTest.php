@@ -97,6 +97,29 @@ it('refuses what nobody could carry', function () {
     expect(Survivor::count())->toBe(0);
 });
 
+it('keeps the left hand — the torch there — and refuses a gun in it or a second torch (plan 87)', function () {
+    $ana = User::factory()->create();
+    $hand = fn (array $inventory) => ['inventory' => $inventory, 'vitals' => ['hp' => 100, 'wm' => 100, 'bat' => 100], 'pages' => []];
+    internalCall($this, 'PUT', "/api/internal/survivors/{$ana->id}", $hand([
+        'hand' => ['id' => 'torch', 'n' => 1],
+        'quick' => [['id' => 'revolver', 'loaded' => 6], null, null, null],
+        'pockets' => [['id' => 'flare', 'n' => 2]],
+    ]))->assertOk();
+    expect(internalCall($this, 'GET', "/api/internal/survivors/{$ana->id}")->json('survivor.inventory.hand'))
+        ->toBe(['id' => 'torch', 'n' => 1]);
+    // a gun in the left hand; two torches; a torch of two
+    foreach ([
+        ['hand' => ['id' => 'revolver', 'loaded' => 6], 'quick' => [], 'pockets' => []],
+        ['hand' => ['id' => 'torch', 'n' => 1], 'quick' => [], 'pockets' => [['id' => 'torch', 'n' => 1]]],
+        ['hand' => ['id' => 'torch', 'n' => 2], 'quick' => [], 'pockets' => []],
+    ] as $bad) {
+        internalCall($this, 'PUT', "/api/internal/survivors/{$ana->id}", $hand($bad))->assertStatus(422);
+    }
+    // an old save, no hand: read back with none (the world-server gives the torch)
+    internalCall($this, 'PUT', "/api/internal/survivors/{$ana->id}", $hand(['quick' => [], 'pockets' => []]))->assertOk();
+    expect(internalCall($this, 'GET', "/api/internal/survivors/{$ana->id}")->json('survivor.inventory.hand'))->toBeNull();
+});
+
 it('is the world-server\'s only, and goes with the person', function () {
     $ana = User::factory()->create();
     $this->getJson("/api/internal/survivors/{$ana->id}")->assertUnauthorized();

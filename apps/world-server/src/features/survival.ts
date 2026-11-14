@@ -20,6 +20,8 @@ import {
   emptyInventory,
   FULL_VITALS,
   freshClock,
+  giveTorch,
+  HAND_SLOT,
   hurt,
   type Inventory,
   type ItemId,
@@ -186,7 +188,7 @@ registerFeature((room: WorldRoom) => {
 
   // ── the people ─────────────────────────────────────────────────────────────
   const recordOf = (s: Survivor): SurvivorRecord => ({
-    inventory: { quick: s.inv.quick, pockets: s.inv.pockets },
+    inventory: { hand: s.inv.hand, quick: s.inv.quick, pockets: s.inv.pockets },
     vitals: { hp: s.v.hp, wm: s.v.wm, bat: s.v.bat },
     pages: s.inv.pages,
     issued: s.issued,
@@ -216,6 +218,9 @@ registerFeature((room: WorldRoom) => {
       s.issued = !!rec.issued;
       s.kitDay = Number.isInteger(rec.kitDay) ? Number(rec.kitDay) : -1;
     }
+    // (plan 87 F4a) a torch for everyone: someone new, or a save from before the left hand (no `hand` in it) — in the
+    // left hand if it's free; one let go since is let go (the lockers give another)
+    if ((!rec || rec.inventory?.hand === undefined) && giveTorch(s.inv)) s.dirty = true;
     s.loaded = true;
     sendPockets(s);
   };
@@ -445,6 +450,8 @@ registerFeature((room: WorldRoom) => {
       const gun = !carries(s.inv, "revolver");
       const kit: LootItem[] = [
         ...(gun ? [{ id: "revolver" as const, n: 1, loaded: s.issued ? 0 : WEAPONS.revolver.mag }] : []),
+        // (plan 87 F4a: a torch for one who carries none)
+        ...(count(s.inv, "torch") < 1 ? [{ id: "torch" as const, n: 1 }] : []),
         ...LOCKER_KIT,
         // (some days the AK, or its rounds: plan 79 F9a)
         ...lockerAk(() => lockerDice.roll(), carries(s.inv, "ak47")),
@@ -462,11 +469,17 @@ registerFeature((room: WorldRoom) => {
     if (p.level !== 0) return;
     if (id === "locker") {
       if (!near(p, LOCKER.x, LOCKER.z)) return;
-      if (carries(s.inv, "revolver")) return found(s, client.sessionId, id, [], false, true);
-      const gun: LootItem = { id: "revolver", n: 1, loaded: s.issued ? 0 : WEAPONS.revolver.mag };
-      const { got } = take(s, [gun]);
-      if (got.length) s.issued = true;
-      return found(s, client.sessionId, id, got, !got.length);
+      // (the revolver for one who carries none; plan 87 F4a: a torch too)
+      const kit: LootItem[] = [
+        ...(carries(s.inv, "revolver")
+          ? []
+          : [{ id: "revolver" as const, n: 1, loaded: s.issued ? 0 : WEAPONS.revolver.mag }]),
+        ...(count(s.inv, "torch") < 1 ? [{ id: "torch" as const, n: 1 }] : []),
+      ];
+      if (!kit.length) return found(s, client.sessionId, id, [], false, true);
+      const { got } = take(s, kit);
+      if (got.some((g) => g.id === "revolver")) s.issued = true;
+      return found(s, client.sessionId, id, got, got.length < kit.length);
     }
     // a cache in a day's nest: what's in it (or what's left), once
     if (id.startsWith("cache-")) {
@@ -587,6 +600,29 @@ registerFeature((room: WorldRoom) => {
     if (used === "battery") s.v.bat = 100;
     if (used) changed(s);
   });
+  // (plan 87) the left hand's use — key 1: the torch on or off (`on`, else switched); a first aid or a battery used;
+  // a flare lit and held up (F3b: one at a time — arms:flare throws it, still burning)
+  room.on("dark:hand", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const s = p && people.get(p.uid);
+    const it = s?.inv.hand;
+    if (!p || !s?.loaded || !it || p.downAt) return;
+    if (it.id === "torch") {
+      p.torch = typeof m?.on === "boolean" ? m.on : !p.torch;
+      return;
+    }
+    if (it.id === "flare") {
+      if ([...room.state.flares.values()].some((f) => f.held === client.sessionId)) return;
+      if (consume(s.inv, HAND_SLOT, ["flare"]) !== "flare") return;
+      room.dark?.light(p.x, p.y, 0, p.level, Date.now(), { held: client.sessionId });
+      changed(s);
+      return;
+    }
+    const used = consume(s.inv, HAND_SLOT, USABLE);
+    if (used === "aid") s.v.hp = 100;
+    if (used === "battery") s.v.bat = 100;
+    if (used) changed(s);
+  });
   // ── down, up, awake (D7) ─────────────────────────────────────────────────
   // down: crawling, bleeding out; the shadowed leave them alone (features/dark.ts: hp 0)
   function goDown(p: Player, s: Survivor) {
@@ -697,6 +733,8 @@ registerFeature((room: WorldRoom) => {
       s.inv.pockets = s.inv.pockets.map((it) => (it && ids.has(it.id) ? null : it));
       for (const it of was) if (!ids.has(it.id)) addStack(s.inv, it.id, it.n);
       for (const [id, n] of kit) addStack(s.inv, id, n);
+      // (plan 87: a torch, if none)
+      giveTorch(s.inv);
     }
     changed(s);
   });
@@ -816,6 +854,8 @@ registerFeature((room: WorldRoom) => {
         };
         people.set(p.uid, s);
         const me = s;
+        // (plan 87 F4a: a torch for everyone — a bot too, never saved)
+        if (p.bot) giveTorch(s.inv);
         if (!p.bot) {
           if (config.offline) adopt(me, offlineSurvivors.get(p.uid) ?? null);
           else

@@ -364,8 +364,11 @@ registerFeature((room: WorldRoom) => {
     const p = room.state.players.get(client.sessionId);
     const inv = room.survival?.inventory(client.sessionId);
     if (!p || !inv || !free(p)) return;
-    if (takeStack(inv, "flare", 1) < 1) return;
-    room.survival?.changed(client.sessionId);
+    // (plan 87 F3b: one lit in her left hand goes first — thrown on, still burning; else one from what she carries)
+    const held = [...room.state.flares.values()].find((f) => f.held === client.sessionId);
+    if (held) room.state.flares.delete(held.id);
+    else if (takeStack(inv, "flare", 1) < 1) return;
+    else room.survival?.changed(client.sessionId);
     const level = p.level;
     const g = room.gridFor(p.uid, level);
     const z0 = overFloor(level, p.z) + FLARE.hand;
@@ -384,9 +387,9 @@ registerFeature((room: WorldRoom) => {
     const throwOut = { sid: client.sessionId, x0: p.x, y0: p.y, z0, ...to };
     room.send(client, "arms:throw", throwOut);
     for (const c of near(p, p.x, p.y)) room.send(c, "arms:throw", throwOut);
-    pending.push({ at: now + to.secs * 1000, x: to.x, y: to.y, z: to.z, level });
+    pending.push({ at: now + to.secs * 1000, x: to.x, y: to.y, z: to.z, level, until: held?.until });
   });
-  const pending: { at: number; x: number; y: number; z: number; level: number }[] = [];
+  const pending: { at: number; x: number; y: number; z: number; level: number; until?: number }[] = [];
   // the Daybreak's balls in the air (plan 79 phase 7): where from, which way, when; where they stop at
   // the latest
   interface Orb {
@@ -460,9 +463,10 @@ registerFeature((room: WorldRoom) => {
         if (now >= pending[i].at) {
           const f = pending[i];
           pending.splice(i, 1);
-          // (into deep water: out — plan 66)
+          // (into deep water: out — plan 66; one thrown from her hand burnt out in the air: out)
           if (f.level === 0 && inDeepWater(f.x, f.y)) continue;
-          room.dark?.light(f.x, f.y, f.z, f.level, now);
+          if (f.until !== undefined && now >= f.until) continue;
+          room.dark?.light(f.x, f.y, f.z, f.level, now, f.until !== undefined ? { until: f.until } : undefined);
         }
       // the Daybreak's balls flying: the shields they pass burn; on a body, or at their end, they burst
       for (let i = orbs.length - 1; i >= 0; i--) {
