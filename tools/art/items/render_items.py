@@ -302,10 +302,29 @@ def item(name):
         box(0.004, 0.003, 0.05, (0, r * 1.12, -0.07), m=chrome, bevel=0.001)
         objs = list(bpy.data.objects)
         turn = (0, math.radians(58), math.radians(-14))
+    elif name == "vxtape":
+        # (plan 88) Vortex's cassette — the trophy: a black shell, his pink label, the two reel windows, the tape
+        # pulled out of it in a loop
+        shell = mat("shell", (0.025, 0.025, 0.03), 0.45)
+        pink = mat("label", (1.0, 0.12, 0.45), 0.5)
+        white = mat("hub", (0.85, 0.85, 0.85), 0.4)
+        tapem = mat("tape", (0.12, 0.07, 0.04), 0.3, 0.4)
+        glass = mat("window", (0.6, 0.65, 0.7), 0.1, 0.0, alpha=0.35, trans=0.8)
+        box(0.1, 0.012, 0.064, (0, 0, 0), m=shell, bevel=0.003)
+        box(0.084, 0.0125, 0.034, (0, -0.0002, 0.008), m=pink, bevel=0.001)
+        box(0.05, 0.0128, 0.012, (0, -0.0003, 0.006), m=glass)
+        for x in (-0.017, 0.017):
+            cyl(0.0055, 0.0132, (x, 0, 0.006), rot=(math.pi / 2, 0, 0), m=white)
+        box(0.05, 0.0125, 0.012, (0, 0, -0.026), m=shell, bevel=0.002)
+        # (the tape: a ribbon pulled out of the shell's foot, hanging)
+        box(0.006, 0.0012, 0.05, (0.006, 0.0, -0.055), m=tapem)
+        box(0.006, 0.0012, 0.03, (-0.004, 0.0, -0.088), m=tapem)
+        objs = list(bpy.data.objects)
+        turn = (math.radians(-12), 0, math.radians(-16))
     frame(objs, res, turn)
     render(name)
 
 
 for n in ("revolver", "shotgun", "ak47", "sniper", "daybreak", "r38", "shell", "r762", "r308", "cell", "flare",
-          "battery", "aid", "fuse", "torch"):
+          "battery", "aid", "fuse", "torch", "vxtape"):
     item(n)

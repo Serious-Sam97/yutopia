@@ -1,0 +1,146 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Yutopia — the fight with Vortex (plan 88 phase 0)</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&family=Inter:wght@400;500;600;700&family=Special+Elite&family=VT323&display=block" rel="stylesheet">
+<style>
+/* Plan 88 phase 0: the fight with Vortex, mocked over the studio as the game draws it (../bg, the game's own frames)
+   — ?s=act1|act2|pranks|act3|mind|end|grudge. His drawing is his own (../art: vortexArt.ts, the faces and the dark
+   transformation); the HUD in the game's look (plan 45: ink in walnut, Cormorant, Special Elite, the lamp) with his
+   pink. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1280px; height: 800px; overflow: hidden; background: #000; }
+:root {
+  --cream: #ece6da; --dim: #a7a094; --lamp: #f1d79a; --paper: #ece5d3; --pink: #ff2d95; --red: #e7907c;
+  --wood: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%27600%27%20height=%27240%27%3E%3Cfilter%20id=%27g%27%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.006%200.22%27%20numOctaves=%273%27%20seed=%277%27/%3E%3CfeColorMatrix%20values=%270%200%200%200%200.55%20%200%200%200%200%200.36%20%200%200%200%200%200.2%20%201.1%200%200%200%20-0.35%27/%3E%3C/filter%3E%3Crect%20width=%27600%27%20height=%27240%27%20fill=%27%234e301b%27/%3E%3Crect%20width=%27600%27%20height=%27240%27%20filter=%27url(%23g)%27/%3E%3C/svg%3E");
+  --head: "Cormorant Garamond", serif; --type: "Special Elite", monospace; --body: Inter, sans-serif; --vhs: VT323, monospace;
+}
+body { font-family: var(--body); color: var(--cream); position: relative; }
+.bg { position: absolute; inset: 0; background-size: cover; background-position: center; }
+.abs { position: absolute; }
+.vx { position: absolute; transform: translate(-50%, -50%); filter: drop-shadow(0 10px 14px rgba(0,0,0,.5)); }
+.vx img { width: 100%; height: 100%; display: block; }
+.cross { position: absolute; left: 640px; top: 400px; width: 22px; height: 22px; transform: translate(-50%,-50%); }
+.cross::before, .cross::after { content: ""; position: absolute; background: rgba(255,255,255,.85); }
+.cross::before { left: 10px; top: 0; width: 2px; height: 22px; } .cross::after { top: 10px; left: 0; height: 2px; width: 22px; }
+.hit { position: absolute; transform: translate(-50%,-50%) rotate(45deg); width: 26px; height: 26px; border: 2px solid var(--pink); border-left-color: transparent; border-right-color: transparent; }
+/* his bubble: ink, his pink edge, typed */
+.say { position: absolute; max-width: 300px; padding: 9px 13px; background: rgba(16,17,22,.92); border: 1.5px solid var(--pink); border-radius: 10px; font: 400 15px/1.35 var(--type); color: var(--cream); box-shadow: 0 8px 20px rgba(0,0,0,.45); }
+.say::after { content: ""; position: absolute; left: 22px; bottom: -8px; width: 14px; height: 14px; background: rgba(16,17,22,.92); border-right: 1.5px solid var(--pink); border-bottom: 1.5px solid var(--pink); transform: rotate(45deg); }
+.say b { color: var(--pink); font-weight: 400; }
+/* the fight's HUD: his health as a cassette — the tape wound off the left reel as he's hurt */
+.boss { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); width: 560px; padding: 10px 16px 12px; border: 5px solid transparent; border-radius: 6px; background: linear-gradient(#17181d, #17181d) padding-box, var(--wood) 0 0 / 600px 240px border-box; box-shadow: inset 0 0 0 1px rgba(0,0,0,.6), 0 10px 26px rgba(0,0,0,.5); }
+.boss .row { display: flex; align-items: baseline; justify-content: space-between; }
+.boss h1 { font: 600 24px/1 var(--head); letter-spacing: .26em; text-transform: uppercase; color: #fff0f7; text-shadow: 0 0 12px rgba(255,45,149,.45); }
+.boss .act { font: 400 11px/1 var(--type); letter-spacing: .16em; text-transform: uppercase; color: #d9c08a; }
+.tape { position: relative; height: 26px; margin-top: 9px; border-radius: 5px; background: #0c0c10; box-shadow: inset 0 0 0 1px rgba(255,45,149,.35); }
+.tape .reel { position: absolute; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: radial-gradient(circle, #ddd 0 3px, #2a2a30 3.5px 6px, #555 6.5px 7px, #2a2a30 7.5px); }
+.tape .reel.l { left: 6px; } .tape .reel.r { right: 6px; }
+.tape .wound { position: absolute; left: 32px; top: 8px; height: 10px; border-radius: 2px; background: linear-gradient(90deg, #ff2d95, #ff7ac8); box-shadow: 0 0 10px rgba(255,45,149,.6); }
+.tape .ticks { position: absolute; left: 32px; right: 32px; top: 8px; height: 10px; background: repeating-linear-gradient(90deg, transparent 0 calc(30% - 1px), rgba(255,255,255,.35) calc(30% - 1px) 30%); pointer-events: none; }
+.tape.dark { box-shadow: inset 0 0 0 1px rgba(160,0,40,.7), 0 0 18px rgba(160,0,40,.45); }
+.tape.dark .wound { background: linear-gradient(90deg, #8a0020, #e0244a); }
+.who { display: flex; gap: 14px; margin-top: 8px; font: 400 12px/1 var(--type); color: var(--dim); }
+.who b { color: var(--cream); font-weight: 400; }
+.who .me b { color: var(--lamp); }
+/* typed slips, the game's */
+.slip { position: absolute; padding: 9px 14px; background: var(--paper); color: #222; font: 400 14px/1.35 var(--type); box-shadow: 0 8px 18px rgba(0,0,0,.4); transform: rotate(-.6deg); max-width: 380px; }
+.slip b { font-weight: 400; color: #b0125e; }
+.key { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; margin: 0 3px; font: 400 11px/1 var(--type); color: var(--cream); border: 1px solid rgba(241,215,154,.5); border-radius: 3px; }
+.prompt { position: absolute; transform: translateX(-50%); padding: 7px 12px; background: rgba(16,17,22,.85); border-radius: 6px; font: 500 13px/1 var(--body); display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+.label { position: absolute; font: 400 12px/1 var(--type); letter-spacing: .14em; text-transform: uppercase; color: #d9c08a; text-shadow: 0 1px 3px #000; }
+.vhs { position: absolute; font: 400 44px/1 var(--vhs); color: #fff; text-shadow: 2px 0 rgba(255,0,80,.7), -2px 0 rgba(0,200,255,.7); letter-spacing: .04em; }
+.panel3 { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; background: #000; }
+.panel3 > div, .panel2 > div { position: relative; overflow: hidden; }
+.panel2 { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: #000; }
+.cap { position: absolute; left: 12px; top: 10px; font: 400 12px/1 var(--type); letter-spacing: .16em; text-transform: uppercase; color: #d9c08a; background: rgba(10,10,14,.75); padding: 6px 8px; z-index: 5; }
+.lightsout { position: absolute; inset: 0; background: radial-gradient(260px 200px at 640px 430px, rgba(255,240,200,.05), rgba(0,0,6,.88) 70%); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const S = q.get("s") || "act1";
+const BG = (n) => `../bg/${n}.png`;
+const VX = (n) => `../art/${n}.svg`;
+const vx = (n, x, y, w, extra = "") => `<div class="vx" style="left:${x}px;top:${y}px;width:${w}px;height:${w * 0.94}px;${extra}"><img src="${VX(n)}"></div>`;
+const boss = (act, k, fighters, dark = false) => `<div class="boss"><div class="row"><h1>Vortex</h1><span class="act">${act}</span></div>
+  <div class="tape${dark ? " dark" : ""}"><span class="reel l"></span><span class="wound" style="width:calc((100% - 64px) * ${k})"></span><span class="ticks"></span><span class="reel r"></span></div>
+  <div class="who">${fighters}</div></div>`;
+const app = document.getElementById("app");
+const views = {
+  // act I: the joke — shot, he complains; side-steps; the tape frays
+  act1: () => `<div class="bg" style="background-image:url(${BG("a2-day")})"></div>
+    ${vx("a1-ow", 700, 330, 150)}<div class="hit" style="left:712px;top:338px"></div>
+    <div class="say" style="left:770px;top:198px">ow. <b>that's workplace harassment.</b></div>
+    <div class="cross"></div>
+    ${boss("act I · the joke", 0.86, `<span class="me">Ana <b>3 hits</b></span><span>Bia <b>1</b></span>`)}
+    <div class="slip" style="right:24px;bottom:150px">He's not fighting back. <b>Yet.</b></div>`,
+  // act II: rewinding — the tape whip, PAUSE, REW
+  act2: () => `<div class="bg" style="background-image:url(${BG("a2-day")})"></div>
+    ${vx("a2-malicious", 820, 300, 170)}
+    <svg class="abs" style="left:0;top:0" width="1280" height="800"><path d="M800 340 C 720 420, 660 380, 600 470 S 470 520, 420 600" stroke="#3a2416" stroke-width="9" fill="none" stroke-linecap="round"/><path d="M800 340 C 720 420, 660 380, 600 470 S 470 520, 420 600" stroke="#6a4a30" stroke-width="3" fill="none" stroke-dasharray="14 10"/>
+      <g stroke="#3a2416" stroke-width="7" fill="none" opacity=".95"><path d="M300 560 q 120 -40 240 10"/><path d="M290 610 q 130 -30 250 20"/><path d="M300 660 q 120 -20 230 25"/></g></svg>
+    ${[0, 1, 2].map((i) => `<div class="abs" style="left:${700 + i * 26}px;top:${365 + i * 10}px;width:9px;height:9px;border-radius:50%;background:#d8b25a;box-shadow:-14px 0 0 -2px rgba(216,178,90,.35),0 0 8px #fff3"></div>`).join("")}
+    <div class="vhs" style="left:690px;top:396px;font-size:30px">II PAUSE</div>
+    <div class="vhs" style="left:36px;top:96px">◀◀ REW 0:05</div>
+    <div class="label" style="left:330px;top:540px">taped up · 4s</div>
+    <div class="prompt" style="left:420px;top:700px">Bia <span class="key">E</span> hold · cut her free</div>
+    ${boss("act II · rewinding", 0.58, `<span class="me">Ana <b>9</b></span><span>Bia <b>6</b></span>`)}
+    <div class="say" style="left:900px;top:170px">be kind. <b>rewind.</b></div>`,
+  // the pranks: the confiscation (a duck), the radio's blast, HR
+  pranks: () => `<div class="panel3">
+    <div><div class="bg" style="background-image:url(${BG("a0-day")});background-position:30% 50%"></div><span class="cap">The confiscation</span>
+      <svg class="abs" style="left:95px;top:395px;transform:rotate(-12deg)" width="150" height="125" viewBox="0 0 120 100"><ellipse cx="60" cy="70" rx="44" ry="26" fill="#ffd23a"/><circle cx="82" cy="38" r="20" fill="#ffd23a"/><path d="M98 38 l20 4 -20 6z" fill="#ff8a1e"/><circle cx="88" cy="33" r="3" fill="#222"/><path d="M30 66 q 20 -16 40 0" stroke="#e6b51c" stroke-width="4" fill="none"/></svg>
+      <div class="slip" style="left:20px;bottom:70px;max-width:380px">Vortex took your revolver. <b>It's on the roof.</b> Here, have a duck.</div></div>
+    <div><div class="bg" style="background-image:url(${BG("a1-day")});background-position:40% 50%"></div><span class="cap">The radio · full blast</span>
+      <div class="abs" style="left:110px;top:150px;font:400 64px/1 var(--head);color:#fff0f7;text-shadow:0 0 18px var(--pink)">♪ ♫ ♪</div>
+      <div class="label" style="left:120px;top:250px">everyone near · dancing · 3s</div>
+      ${vx("a2-hysterical", 300, 380, 130)}</div>
+    <div><div class="bg" style="background-image:url(${BG("b1-day")});background-position:50% 50%"></div><span class="cap">HR</span>
+      <div class="slip" style="left:24px;top:330px;max-width:360px;transform:rotate(1.4deg)">REPORTED TO HR.<br>Sit in reception and think about what you did. <b>2 minutes.</b></div>
+      ${vx("a1-smug", 300, 230, 110)}</div></div>`,
+  // act III: the dark — the transformation, the lights out (a torch's cone), clones, the shadowed; a friend down
+  act3: () => `<div class="bg" style="background-image:url(${BG("a3-night")})"></div><div class="lightsout"></div>
+    <div class="abs" style="left:520px;top:300px;width:330px;height:330px;border-radius:50%;background:radial-gradient(circle,rgba(255,236,190,.28),transparent 65%)"></div>
+    ${vx("a3-full", 650, 330, 230, "filter:drop-shadow(0 0 30px rgba(200,0,40,.6))")}
+    ${vx("a3-dark", 300, 300, 140, "opacity:.55;filter:blur(.6px) hue-rotate(-20deg)")}${vx("a3-dark", 1010, 290, 140, "opacity:.55;filter:blur(.6px) hue-rotate(-20deg)")}
+    <div class="label" style="left:250px;top:370px">a clone?</div><div class="label" style="left:960px;top:360px">a clone?</div>
+    ${[[160, 560], [1080, 540], [930, 620]].map(([x, y]) => `<div class="abs" style="left:${x}px;top:${y}px;width:80px;height:150px;border-radius:40px 40px 10px 10px;background:radial-gradient(ellipse at 50% 30%,rgba(8,8,12,.95),rgba(8,8,12,.4) 70%,transparent);filter:blur(2px)"></div>`).join("")}
+    <div class="prompt" style="left:640px;top:690px;background:rgba(80,10,20,.85)">Bia is down <span class="key">E</span> hold · get her up</div>
+    ${boss("act III · the dark", 0.22, `<span class="me">Ana <b>21</b></span><span>Bia <b>14</b> · down</span><span>Caio <b>8</b></span>`, true)}
+    <div class="say" style="left:760px;top:150px;border-color:#a00028">the lights were <b>never</b> yours.</div>`,
+  // the mind games: possession, the glitch
+  mind: () => `<div class="panel2">
+    <div><div class="bg" style="background-image:url(${BG("a2-day")});background-position:45% 50%"></div><span class="cap">Possession</span>
+      <div class="abs" style="inset:0;background:radial-gradient(ellipse at center,transparent 35%,rgba(120,0,90,.65) 100%)"></div>
+      <div class="abs" style="left:0;right:0;top:330px;text-align:center;font:600 34px/1.1 var(--head);letter-spacing:.2em;color:#ffd6ee;text-shadow:0 0 16px var(--pink)">VORTEX HAS YOUR LEGS</div>
+      <div class="vhs" style="left:290px;top:390px">3</div>
+      ${vx("a2-malicious", 470, 200, 110)}</div>
+    <div><div class="bg" style="background-image:url(${BG("a2-day")});background-position:45% 50%;filter:contrast(1.2)"></div>
+      <div class="bg" style="background-image:url(${BG("a2-day")});background-position:calc(45% + 8px) 50%;mix-blend-mode:screen;opacity:.45;filter:hue-rotate(160deg)"></div><span class="cap">The glitch</span>
+      <div class="abs" style="inset:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.28) 0 2px,transparent 2px 4px)"></div>
+      <div class="abs" style="left:0;right:0;top:260px;height:40px;background:rgba(255,255,255,.12);transform:translateX(30px)"></div>
+      <div class="vhs" style="left:24px;top:640px;font-size:30px">CONTROLS ⇆ INVERTED · 4</div>
+      <div class="vhs" style="left:330px;top:120px;font-size:56px">*kkzzt*</div></div></div>`,
+  // the end: the tape unspools, he's down, the cassette; the building's told
+  end: () => `<div class="bg" style="background-image:url(${BG("a2-day")})"></div>
+    ${vx("end-dead", 790, 470, 170, "transform:translate(-50%,-50%) rotate(-74deg)")}
+    <svg class="abs" style="left:0;top:0" width="1280" height="800"><path d="M830 500 c 60 30 30 90 90 80 s 70 -60 110 -20 s -10 90 60 70" stroke="#3a2416" stroke-width="6" fill="none"/><path d="M760 510 c -40 60 -120 40 -150 90" stroke="#3a2416" stroke-width="5" fill="none"/><path d="M820 440 c 40 -40 90 -20 120 -60" stroke="#3a2416" stroke-width="4" fill="none"/></svg>
+    <img class="abs" src="../../inventory/items/vxtape.png" style="left:600px;top:540px;width:120px;filter:drop-shadow(0 0 16px rgba(255,45,149,.6))">
+    <div class="prompt" style="left:660px;top:690px">Vortex's tape <span class="key">E</span> take</div>
+    <div class="slip" style="left:50%;top:22px;transform:translateX(-50%) rotate(-.4deg);font-size:16px">VORTEX IS DOWN. Last hit: <b>Bia</b>. 2:41.<br><span style="color:#666">He'll be back. He remembers.</span></div>
+    <div class="say" style="left:860px;top:330px">*kkzzt* … <b>rewind me.</b></div>`,
+  // the grudge: the next day, scarred, he remembers who shot him
+  grudge: () => `<div class="bg" style="background-image:url(${BG("a3-day")})"></div>
+    ${vx("grudge-sideeye", 760, 300, 160)}
+    <div class="say" style="left:820px;top:150px">you. <b>the .38.</b> i remember all fourteen.</div>
+    <div class="slip" style="right:24px;bottom:150px">Vortex holds a grudge · today<br>you shot him <b>14 times</b> · he's following you</div>
+    <div class="label" style="left:690px;top:400px">scarred · splice, stitch</div>`,
+};
+app.innerHTML = (views[S] || views.act1)();
+</script>
+</body>
+</html>
