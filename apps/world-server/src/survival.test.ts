@@ -291,7 +291,7 @@ test("the inventory: a pocket dragged to another; something on the snow taken in
   assert.ok(drop);
   a.room.send("dark:pick", { id: drop.id, slot: aid });
   await waitFor(() => a.inv?.pockets[aid]?.id === "flare");
-  assert.equal(a.inv?.pockets[aid]?.n, 3);
+  assert.equal((a.inv?.pockets[aid] as { n?: number } | null | undefined)?.n, 3);
   // quick slots swap
   const w0 = a.inv?.quick[0]?.id;
   a.room.send("dark:move", { from: 6, to: 7 });
@@ -301,9 +301,8 @@ test("the inventory: a pocket dragged to another; something on the snow taken in
   await waitFor(() => a.inv?.quick[3]?.id === "aid" && a.inv?.pockets[to] === null);
   a.room.send("arms:draw", { slot: 1 });
   await waitFor(() => me(a.room).gun === w0);
-  // a stack's quick slot draws nothing (the gun stays out); a weapon never goes into a pocket
+  // a stack's quick slot draws nothing (the gun stays out) — (plan 85: a weapon to a pocket, its own test)
   a.room.send("arms:draw", { slot: 3 });
-  a.room.send("dark:move", { from: 7, to });
   // used from the quick slot, which empties
   a.room.send("dark:use", { slot: 9 });
   await waitFor(() => a.inv?.quick[3] === null);
@@ -341,7 +340,7 @@ test("indoors: dropped on the studio's floor, there; picked up on that floor onl
   await stand(b, drop().x, drop().y, 4);
   b.room.send("dark:pick", { id: drop().id });
   await waitFor(() => !drop());
-  assert.equal(b.inv?.pockets.find((s) => s?.id === "flare")?.n, 3);
+  assert.equal((b.inv?.pockets.find((s) => s?.id === "flare") as { n?: number } | undefined)?.n, 3);
 });
 
 test("a supply locker, built: a kit a day — what fits; tomorrow another; kept across a rejoin", async () => {

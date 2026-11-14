@@ -117,8 +117,8 @@ test("their own first aid: 5 s held, up at 100, one kit used", async () => {
   const d = await person(721, 73);
   await standAt(d, POND.x, POND.z);
   d.room.send("mod:refill", { kit: true });
-  await waitFor(() => (d.inv?.pockets.find((s) => s?.id === "aid")?.n ?? 0) >= 1);
-  const kits = d.inv?.pockets.find((s) => s?.id === "aid")?.n ?? 0;
+  await waitFor(() => ((d.inv?.pockets.find((s) => s?.id === "aid") as { n?: number } | undefined)?.n ?? 0) >= 1);
+  const kits = (d.inv?.pockets.find((s) => s?.id === "aid") as { n?: number } | undefined)?.n ?? 0;
   // (the bleed is 3 s in this test's speed: the first aid's 5 s outlasts it — someone holds
   // by them meanwhile, which holds the bleeding, without getting them up in time)
   const e = await person(722, 73);
@@ -139,7 +139,9 @@ test("their own first aid: 5 s held, up at 100, one kit used", async () => {
   }
   assert.ok(Date.now() - t0 >= DOWN.selfAid * 1000 - 150, `${Date.now() - t0} ms`);
   assert.equal(me(d.room).hp, 100);
-  await waitFor(() => (d.inv?.pockets.find((s) => s?.id === "aid")?.n ?? 0) === kits - 1);
+  await waitFor(
+    () => ((d.inv?.pockets.find((s) => s?.id === "aid") as { n?: number } | undefined)?.n ?? 0) === kits - 1,
+  );
 });
 
 test("down: a crawl, no jog, no jump", async () => {

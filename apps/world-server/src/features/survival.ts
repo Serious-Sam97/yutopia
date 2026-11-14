@@ -9,6 +9,7 @@ import {
   blackoutAt,
   type Cache,
   canFocus,
+  carries,
   cleanInventory,
   consume,
   count,
@@ -19,7 +20,6 @@ import {
   emptyInventory,
   FULL_VITALS,
   freshClock,
-  hasWeapon,
   hurt,
   type Inventory,
   type ItemId,
@@ -40,7 +40,6 @@ import {
   nightBudget,
   nightness,
   nightOf,
-  QUICK_SLOT,
   REFILL_MIN,
   removeSlot,
   rollLoot,
@@ -435,12 +434,13 @@ registerFeature((room: WorldRoom) => {
       if (room.reach3(p, fromSchema(o), Math.hypot(p.x - f.x, p.y - f.y), f) > LOOT_REACH) return;
       const day = dayOf(now + kitClock.shift);
       if (s.kitDay === day) return found(s, client.sessionId, id, [], false, false, true);
-      const gun = !hasWeapon(s.inv, "revolver");
+      // (plan 85: one carried anywhere — equipped or in the pack — counts)
+      const gun = !carries(s.inv, "revolver");
       const kit: LootItem[] = [
         ...(gun ? [{ id: "revolver" as const, n: 1, loaded: s.issued ? 0 : WEAPONS.revolver.mag }] : []),
         ...LOCKER_KIT,
         // (some days the AK, or its rounds: plan 79 F9a)
-        ...lockerAk(() => lockerDice.roll(), hasWeapon(s.inv, "ak47")),
+        ...lockerAk(() => lockerDice.roll(), carries(s.inv, "ak47")),
       ];
       const { got, left } = take(s, kit);
       if (!got.length) return found(s, client.sessionId, id, [], true);
@@ -455,7 +455,7 @@ registerFeature((room: WorldRoom) => {
     if (p.level !== 0) return;
     if (id === "locker") {
       if (!near(p, LOCKER.x, LOCKER.z)) return;
-      if (hasWeapon(s.inv, "revolver")) return found(s, client.sessionId, id, [], false, true);
+      if (carries(s.inv, "revolver")) return found(s, client.sessionId, id, [], false, true);
       const gun: LootItem = { id: "revolver", n: 1, loaded: s.issued ? 0 : WEAPONS.revolver.mag };
       const { got } = take(s, [gun]);
       if (got.length) s.issued = true;
@@ -504,12 +504,11 @@ registerFeature((room: WorldRoom) => {
     if (!r || !d || d.level !== r.p.level) return;
     if (Math.hypot(r.p.x - d.x, r.p.y - d.y, room.upOff(r.p, d, 0.3)) > LOOT_REACH) return;
     const item = d.item as ItemId;
-    // (into the slot it was dragged to, if it was and it fits there: the inventory's)
+    // (into the slot it was dragged to, if it was and it fits there: the inventory's — a weapon into an empty quick
+    // slot or pocket, plan 85)
     const slot = Number(m?.slot);
     const at = slotAt(r.s.inv, slot);
-    const into =
-      at !== undefined &&
-      (isStack(item) || (isWeapon(item) && !hasWeapon(r.s.inv, item) && at === null && slot >= QUICK_SLOT));
+    const into = at !== undefined && (isStack(item) || (isWeapon(item) && !carries(r.s.inv, item) && at === null));
     let got: LootItem[];
     let left: LootItem[];
     if (into) {

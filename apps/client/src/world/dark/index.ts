@@ -5,6 +5,7 @@ import {
   count,
   findStack,
   type Inventory,
+  type Item,
   type ItemId,
   isUsable,
   isWeapon,
@@ -381,16 +382,19 @@ class Dark implements DarkHooks {
     if (!was) return this.render();
     // what's new: ringed in amber with how many, the strip up for a moment
     this.fresh.clear();
-    inv.pockets.forEach((s, i) => {
-      const before = was.pockets[i];
-      const gain = s ? s.n - (before?.id === s.id ? before.n : 0) : 0;
+    // (a weapon new only if it wasn't carried before at all — moved between the quick slots and the pack, it isn't)
+    const carried = (id: string) => [...was.quick, ...was.pockets].some((w) => w?.id === id);
+    const gained = (it: Item | null, before: Item | null | undefined) => {
+      if (!it) return 0;
+      if (!("n" in it)) return carried(it.id) ? 0 : 1;
+      return it.n - (before?.id === it.id && "n" in before ? before.n : 0);
+    };
+    inv.pockets.forEach((it, i) => {
+      const gain = gained(it, was.pockets[i]);
       if (gain > 0) this.fresh.set(i, `+${gain}`);
     });
     inv.quick.forEach((it, i) => {
-      const before = was.quick[i];
-      if (!it) return;
-      const had = before?.id === it.id ? before : null;
-      const gain = "n" in it ? it.n - (had && "n" in had ? had.n : 0) : had ? 0 : 1;
+      const gain = gained(it, was.quick[i]);
       if (gain > 0) this.fresh.set(QUICK_SLOT + i, `+${gain}`);
     });
     if (this.fresh.size) this.stripUntil = performance.now() + 3000;
@@ -469,8 +473,13 @@ class Dark implements DarkHooks {
         String(i + 1),
       );
     for (let i = 0; i < POCKETS; i++) {
-      const s = inv.pockets[i];
-      slot(i, s?.id ?? null, s ? String(s.n) : "", false);
+      const it = inv.pockets[i];
+      slot(
+        i,
+        it?.id ?? null,
+        !it ? "" : "loaded" in it ? `${it.loaded}/${WEAPONS[it.id].mag}` : String(it.n),
+        !!it && isWeapon(it.id),
+      );
     }
     if (this.tab) {
       const hint = tag("div", "dk-hint", "");

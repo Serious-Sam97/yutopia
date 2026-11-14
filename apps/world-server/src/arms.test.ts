@@ -265,7 +265,7 @@ test("a flare thrown lands ahead, lit for 12 s: nobody comes into it", async () 
   const d = Math.hypot(f.x - from.x, f.y - from.y);
   assert.ok(d > 4 && d < 10 && f.x > from.x, `ahead, ${d.toFixed(1)} tiles`);
   assert.ok(Math.abs(f.until - f.at - FLARE.secs * 1000) < 1);
-  assert.equal(b.inv?.pockets.find((s) => s?.id === "flare")?.n, 2, "one flare used");
+  assert.equal((b.inv?.pockets.find((s) => s?.id === "flare") as { n?: number } | undefined)?.n, 2, "one flare used");
   // B stands in its light; they're called up round it
   await standAt(b, f.x + 1, f.y);
   b.room.send("mod:dark", { mode: "normal", spawn: 4 });

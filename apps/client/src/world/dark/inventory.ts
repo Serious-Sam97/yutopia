@@ -319,10 +319,13 @@ export class InventoryPanel {
         } else
           quick += `<div class="slot q${isSel({ slot })}" data-slot="${slot}">${k}${ICON[it.id]}<span class="n">${it.n}<small>/${STACKS[it.id]}</small></span></div>`;
       });
-      inv.pockets.forEach((s, i) => {
-        pockets += s
-          ? `<div class="slot p${isSel({ slot: i })}" data-slot="${i}">${ICON[s.id]}<span class="n">${s.n}<small>/${STACKS[s.id]}</small></span></div>`
-          : `<div class="slot p empty${isSel({ slot: i })}" data-slot="${i}"></div>`;
+      inv.pockets.forEach((it, i) => {
+        // (plan 85: a weapon in the pack — carried, not equipped: its rounds in it and spare, no key)
+        if (!it) pockets += `<div class="slot p empty${isSel({ slot: i })}" data-slot="${i}"></div>`;
+        else if ("loaded" in it)
+          pockets += `<div class="slot p w${isSel({ slot: i })}" data-slot="${i}">${ICON[it.id]}<span class="sub">+${count(inv, WEAPONS[it.id].ammo)}</span><span class="n">${it.loaded}/${WEAPONS[it.id].mag}</span></div>`;
+        else
+          pockets += `<div class="slot p${isSel({ slot: i })}" data-slot="${i}">${ICON[it.id]}<span class="n">${it.n}<small>/${STACKS[it.id]}</small></span></div>`;
       });
     }
 
