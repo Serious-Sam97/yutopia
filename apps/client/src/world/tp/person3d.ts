@@ -43,7 +43,20 @@ import {
   RACK_HAND,
   RACK_REACH,
 } from "./ak-hold";
-import { DB_LONG } from "./daybreak-hold";
+import {
+  DB_CELL,
+  DB_CELL_HAND,
+  DB_CLOSE,
+  DB_DROP,
+  DB_LOAD,
+  DB_LOAD_BLADE,
+  DB_LOAD_GUN,
+  DB_LONG,
+  DB_POUCH,
+  DB_SPENT,
+  type DbCell,
+  dbLoadAt,
+} from "./daybreak-hold";
 import {
   cueModel,
   type GunFx,
@@ -152,7 +165,7 @@ const AIM_S = 0.18;
 const ARM_BOLT = 4;
 /** (plans 81–82) The long guns on the gun-as-anchor hold (tp/long-hold.ts), by their key */
 // (plan 83: the sniper too — tp/sniper-hold.ts; its bolt and its reload for now held at the hold: phases 4–5)
-// (plan 84: the Daybreak too — tp/daybreak-hold.ts; its charge and its reload held at the hold till phases 3–4)
+// (plan 84: the Daybreak too — tp/daybreak-hold.ts; its reload on its side, the cell from the pouch at her belt)
 const LONG: Record<string, LongSpec> = { shotgun: SG_LONG, ak47: AK_LONG, sniper: SN_LONG, daybreak: DB_LONG };
 /** (plan 80) past this (m from the camera) the revolver's hold is a cheaper one: the bodies' far detail */
 const FAR_HOLD = 11;
@@ -1189,6 +1202,7 @@ export class Person3D {
     if (swimHands && !limpHands) this.model.handsTo(swimHands);
     this.gunHands(p, step);
     this.akDropFrame(step);
+    this.dbDropFrame(step);
     // (the springs — hair, a skirt, a scarf, a pack: near only, and not with reduced motion)
     this.model.step(step, d > 12 || !!p.reduced || this.part !== "all", seen.sway);
     this.swayD = !p.reduced && this.part === "all" ? d : Number.POSITIVE_INFINITY;
@@ -1340,6 +1354,7 @@ export class Person3D {
     this.slingFrame(p);
     this.carrierFrame(p);
     this.akPouchFrame(p);
+    this.dbPouchFrame(p);
     this.holdFrame();
     if (this.phone?.prop.rec)
       this.phone.prop.rec.visible = !!p.recording && Math.floor(performance.now() / 500) % 2 === 0;
@@ -1492,6 +1507,8 @@ export class Person3D {
     else if (kind === "sniper")
       poseGun(gun.model, kind, { ...(fx ?? { cock: 1 }), bolt: this.boltCycle, loaded: this.snSleeve });
     else if (gun.key !== "cue") poseGun(gun.model, kind, fx ?? { cock: 1, bolt: this.akBolt });
+    // (plan 84: the Daybreak's cell the reload's to show — let fall, it's gone till the new one's drawn)
+    if (this.dbCellOwn && gun.model.parts.cell) gun.model.parts.cell.visible = this.dbCellVis;
     // (in a life hand: the hand carries it — its kick is the arms', its turn the wrist's)
     if (gun.inHand) return;
     gun.root.position.set(0, -0.05, 0);
@@ -1640,6 +1657,7 @@ export class Person3D {
     if (gun?.key !== "shotgun") this.sgLoadT = -1;
     if (gun?.key !== "ak47") this.akLoadT = -1;
     if (gun?.key !== "sniper") this.snLoadT = -1;
+    if (gun?.key !== "daybreak") this.dbLoadT = -1;
     // (plan 82: the AK on the same hold, its own numbers — tp/ak-hold.ts; its draw, sling and reload for now
     // as it was: held at the ready through them)
     const LS = gun?.inHand ? LONG[gun.key] : undefined;
@@ -1697,7 +1715,25 @@ export class Person3D {
           if (this.snCloseAt >= 0 && this.snLoadT >= this.snCloseAt + SN_LOAD.shut + SN_LOAD.back) this.snLoadT = -1;
         }
       }
-      const reloading = this.sgLoadT >= 0 || this.akLoadT >= 0 || this.snLoadT >= 0;
+      // (plan 84 phase 4: the Daybreak's — opened (Player.arm ARM.open: the cell out and a new one in), closed as
+      // everyone's told (ARM.shut: back up to the ready); seen mid-way, on from its closing; cut short (a shot
+      // snapped it shut), on from the closing too)
+      if (LS === DB_LONG) {
+        const open = p.arm === ARM_RELOAD || p.arm === ARM_OPEN;
+        const closing = p.arm === ARM_SHUT;
+        if ((open || closing) && this.dbLoadT < 0 && !away) {
+          this.dbLoadT = open ? 0 : DB_CLOSE;
+          this.dbPrevT = -1;
+        }
+        if (this.dbLoadT >= 0) {
+          this.dbPrevT = this.dbLoadT;
+          this.dbLoadT += dt;
+          if (open) this.dbLoadT = Math.min(this.dbLoadT, DB_CLOSE - 0.02);
+          else if (this.dbLoadT < DB_CLOSE) this.dbLoadT = DB_CLOSE;
+          if (!open && this.dbLoadT >= DB_CLOSE + DB_LOAD.shut) this.dbLoadT = -1;
+        }
+      }
+      const reloading = this.sgLoadT >= 0 || this.akLoadT >= 0 || this.snLoadT >= 0 || this.dbLoadT >= 0;
       // (plan 81 phase 5: let go — sat, swimming, busy, a mantle, the ragdoll; a roll, a vault, a slide,
       // Flowmotion, struck: kept, pulled in across her chest — both hands on)
       // (one with no sling let go of as it's put away — it goes)
@@ -1718,6 +1754,9 @@ export class Person3D {
         // (plan 82: let go mid-reload — sat, the ragdoll — the AK's magazine back on it, its handle home)
         this.akMagOwn = false;
         if (LS === AK_LONG) this.akMagHome();
+        // (plan 84: the Daybreak's cell back in it)
+        this.dbCellOwn = false;
+        if (LS === DB_LONG) this.dbCellHome();
       }
       if (sw > 0.01)
         this.longHands(p, sw, aiming && !loading && !away && !reloading && !ported, run, dt, draw, this.lgPortW);
@@ -2353,10 +2392,13 @@ export class Person3D {
     this.snSleeve = SLd ? Math.max(0, SN_SLEEVE.n - SLd.taken) : SN_SLEEVE.n;
     if (SLd) this.boltCycle = SLd.bolt;
     this.akMagOwn = !!AL;
+    // (plan 84 phase 4: the Daybreak's reload — the gun in close on its side, the cell out and the new one in)
+    const DL = this.dbLoadT >= 0 && LS === DB_LONG ? dbLoadAt(this.dbLoadT) : null;
+    this.dbCellOwn = !!DL;
     const gLeg = L ? legAt(SG_LOAD_GUN_LEGS, LT) : null;
     const kLoad = !gLeg ? 0 : gLeg.a === "load" ? (gLeg.b === "load" ? 1 : 1 - gLeg.k) : gLeg.k;
     // (pulled in across her chest — not mid-reload: the reload's hands have it)
-    const pw = L || AL || SLd ? 0 : port;
+    const pw = L || AL || SLd || DL ? 0 : port;
     // her trunk turned right of the gun's way: square, her left arm couldn't reach the fore-end (loading, less)
     m.root.updateMatrixWorld(true);
     sR.getWorldPosition(rv1).sub(sL.getWorldPosition(rv2));
@@ -2364,8 +2406,8 @@ export class Person3D {
     this.lookDir(p, rv3);
     const way = aiming ? Math.atan2(rv3.x, rv3.z) : Math.atan2(...this.facingXZ());
     const blade = LS.blade.ready + (LS.blade.aim - LS.blade.ready) * this.lgAimK;
-    const kL = AL ? AL.gun : kLoad;
-    let turn = way - (blade + ((AL ? AK_LOAD_BLADE : SG_LOAD_BLADE) - blade) * kL) - front;
+    const kL = AL ? AL.gun : DL ? DL.gun : kLoad;
+    let turn = way - (blade + ((AL ? AK_LOAD_BLADE : DL ? DB_LOAD_BLADE : SG_LOAD_BLADE) - blade) * kL) - front;
     turn = Math.atan2(Math.sin(turn), Math.cos(turn));
     // (aimed, the trunk takes the pitch: a long gun's raised and lowered by the body bending at the waist —
     // the gun, the shoulders and the head one piece, the arms as they are level)
@@ -2538,6 +2580,22 @@ export class Person3D {
       akV1.sub(akV2.copy(LS.butt).multiplyScalar(B.k).applyQuaternion(akQ1));
       H.grip.lerp(akV1, AL.gun);
       H.q.slerp(akQ1, AL.gun);
+      E.pos.copy(H.grip).applyMatrix4(rM.copy(RW).invert());
+      E.quat.copy(this.root.getWorldQuaternion(rqRoot)).invert().multiply(H.q);
+      E.on = true;
+    }
+    // (plan 84 phase 4: the Daybreak in close for loading — its pad under her right arm's front, rolled on its side
+    // so the cell faces her left hand — and back up; the hold's ease follows it)
+    if (DL && DL.gun > 0.001) {
+      const K = DB_LOAD_GUN;
+      sR.getWorldPosition(akV1)
+        .addScaledVector(B.left, K.butt[0] * B.k)
+        .addScaledVector(B.up, K.butt[1] * B.k)
+        .addScaledVector(B.ahead, K.butt[2] * B.k);
+      gunQuat(bodyDir(B, K.f, rv1), bodyDir(B, K.u, rv2), akQ1);
+      akV1.sub(akV2.copy(LS.butt).multiplyScalar(B.k).applyQuaternion(akQ1));
+      H.grip.lerp(akV1, DL.gun);
+      H.q.slerp(akQ1, DL.gun);
       E.pos.copy(H.grip).applyMatrix4(rM.copy(RW).invert());
       E.quat.copy(this.root.getWorldQuaternion(rqRoot)).invert().multiply(H.q);
       E.on = true;
@@ -2897,6 +2955,8 @@ export class Person3D {
     const foreOk = m.wristFor("L", rv1, rv2, rv3, rLAt, rq3);
     // (plan 82: the AK's reload — her left hand to the magazine, the pouch, the well, the charging handle)
     if (AL && foreOk) this.akLeft(AL, lw, cheap, F, x, pivot, BW);
+    // (plan 84: the Daybreak's — her left hand to the cell, the pouch, the cradle)
+    else if (DL && foreOk) this.dbLeft(DL, lw, cheap, F, x, pivot, BW);
     else if (foreOk) {
       // (its fingers closed round the fore-end — in the left wrist's space as it'll be)
       rM.compose(rLAt, rq3, rs2.setScalar(wl.getWorldScale(rs1).x))
@@ -2944,8 +3004,14 @@ export class Person3D {
         this.headToward(rv1.sub(head.getWorldPosition(rv2)).normalize(), 0.7 * SLd.look * w);
       }
     }
+    // (plan 84: loading the Daybreak, her eyes on the cell — on the pouch while she goes for a new one)
+    if (DL && DL.look > 0.01 && !cheap) {
+      const head = m.bone("head");
+      if (head) this.headToward(rv1.copy(this.dbLook).sub(head.getWorldPosition(rv2)).normalize(), 0.7 * DL.look * w);
+    }
     // (the magazine put back home once it's done)
     if (!AL && LS === AK_LONG) this.akMagHome();
+    if (!DL && LS === DB_LONG) this.dbCellHome();
     // (loading, her eyes on the breech)
     if (L && barrels && kLoad > 0.01 && !cheap) {
       const head = m.bone("head");
@@ -3287,11 +3353,27 @@ export class Person3D {
       const invG = new Matrix4().copy(inner.matrixWorld).invert();
       const piv = LS.fore.pivot;
       const lp = new Vector3();
+      // (a part that moves — the Daybreak's cell: where it is less where it sits home, in the world; hidden, none)
+      const moved = (name: string | undefined) => {
+        if (!name) return null;
+        const pt = g.model.parts[name];
+        if (!pt?.parent || !pt.visible) return undefined;
+        pt.updateWorldMatrix(true, false);
+        const p0 = (pt.userData.p0 as Vector3 | undefined) ?? pt.position;
+        const home = new Matrix4().compose(p0, IDQ, new Vector3(1, 1, 1)).premultiply(pt.parent.matrixWorld);
+        return new Matrix4().copy(pt.matrixWorld).multiply(home.invert());
+      };
+      const partInv = new Map<string, Matrix4 | undefined>();
+      for (const bx of LS.check.boxes)
+        if (bx.part && !partInv.has(bx.part)) partInv.set(bx.part, moved(bx.part)?.invert());
       for (let li = 0; li < L.length; li++)
         for (let ai = 0; ai < L[li].length; ai++)
           for (const [bi, bx] of LS.check.boxes.entries()) {
             const a = L[li][ai];
+            const PI = bx.part ? partInv.get(bx.part) : null;
+            if (PI === undefined) continue;
             if (bx.fore) lp.copy(a).applyMatrix4(inv).add(piv);
+            else if (PI) lp.copy(a).applyMatrix4(PI).applyMatrix4(invG);
             else lp.copy(a).applyMatrix4(invG);
             const qx = Math.abs(lp.x - bx.c[0]) - bx.h[0];
             const qy = Math.abs(lp.y - bx.c[1]) - bx.h[1];
@@ -3302,14 +3384,18 @@ export class Person3D {
               whereGrip = `left ${FINGERS[li]}'s ${JOINT[ai]} (box ${bi})`;
             }
           }
-      const rods = LS.check.rods.map((r) => {
+      const rods = LS.check.rods.flatMap((r) => {
         const M = r.fore ? BW : inner.matrixWorld;
         const sub = r.fore ? piv : ZERO3;
-        return {
-          a: new Vector3(r.a[0], r.a[1], 0).sub(sub).applyMatrix4(M),
-          b: new Vector3(r.b[0], r.b[1], 0).sub(sub).applyMatrix4(M),
-          r: r.r,
-        };
+        const D = moved(r.part);
+        if (D === undefined) return [];
+        const a = new Vector3(r.a[0], r.a[1], 0).sub(sub).applyMatrix4(M);
+        const b = new Vector3(r.b[0], r.b[1], 0).sub(sub).applyMatrix4(M);
+        if (D) {
+          a.applyMatrix4(D);
+          b.applyMatrix4(D);
+        }
+        return [{ a, b, r: r.r }];
       });
       arms = Number.POSITIVE_INFINITY;
       for (const S of ["L", "R"] as const) {
@@ -3730,6 +3816,295 @@ export class Person3D {
         sm.scale.set(len + 0.01, 0.032, 0.004);
       }
     }
+  }
+
+  // ── plan 84 phase 4: the Daybreak's reload (tp/daybreak-hold.ts) ─────────────────────────────────────────
+  /** s into the Daybreak's reload (−1: not reloading), last frame's */
+  private dbLoadT = -1;
+  private dbPrevT = -1;
+  /** this frame the cell is the reload's to place and show (dbCellHome puts it back) */
+  private dbCellOwn = false;
+  private dbCellVis = true;
+  /** where her eyes go loading: the cell, the pouch while her hand goes to it */
+  private dbLook = new Vector3();
+  /** The left hand through the Daybreak's reload: from the fore-grip (the hold's place, solved already: rLAt, rq3)
+   *  to the cell underneath and with it — drawn down out of its cradle, let fall — down to the pouch on her belt
+   *  and up with a new one, pressed up into the cradle; then back to the fore-grip. Its fingers round the cell.
+   *  The cell where the timeline has it — while it's in her hand, where her hand really is. */
+  private dbLeft(
+    D: ReturnType<typeof dbLoadAt>,
+    lw: number,
+    cheap: boolean,
+    F: LongSpec["fore"],
+    x: number,
+    pivot: Vector3,
+    BW: Matrix4,
+  ) {
+    const m = this.model;
+    const gun = this.gun;
+    const wl = m.bone("wristL");
+    const cell = gun?.model.parts.cell;
+    if (!gun || !wl || !cell?.parent) return;
+    cell.userData.p0 ??= cell.position.clone();
+    cell.userData.dbMoved = true;
+    cell.parent.updateWorldMatrix(true, false);
+    akForeAt.copy(rLAt);
+    akForeQ.copy(rq3);
+    // the cell (its part: its origin the pivot) where the timeline has it
+    this.dbCellWorld(D.cell, akMW);
+    // (the spent one let fall: from where it is in her hand)
+    if (this.dbPrevT < DB_LOAD.drop && this.dbLoadT >= DB_LOAD.drop) this.dbDropFrom(cell);
+    // the hand's places: the fore-grip; round the cell (as it is now, as it was let go, waiting in the pouch) —
+    // by its top third in the pouch and coming from it, by its middle on the gun
+    const top = (C: DbCell) => (C.at === "pouch" ? 1 : C.at === "carry" ? 1 - C.k : 0) * DB_CELL_HAND.top;
+    const place = (name: string, at: Vector3, q: Quaternion): boolean => {
+      if (name === "fore") {
+        at.copy(akForeAt);
+        q.copy(akForeQ);
+        return true;
+      }
+      const C: DbCell =
+        name === "cell"
+          ? D.cell
+          : name === "let"
+            ? { at: "gun", slide: DB_CELL.out, k: 0, lit: 0 }
+            : { at: "pouch", slide: 0, k: DB_POUCH.grab, lit: 1 };
+      const W = name === "cell" ? akMW : this.dbCellWorld(C, akM2);
+      W.decompose(akV3, akQ3, akS);
+      akV1.copy(DB_CELL_HAND.palm).sub(DB_CELL.pivot);
+      akV1.x += top(C);
+      akV1.applyMatrix4(W);
+      return m.wristFor(
+        "L",
+        akV1,
+        akV2.copy(DB_CELL_HAND.along).applyQuaternion(akQ3),
+        akV3.copy(DB_CELL_HAND.index).applyQuaternion(akQ3),
+        at,
+        q,
+      );
+    };
+    // (the thumb's place at each: over the fore-grip's top; along the cell)
+    const thumbAt = (name: string, out: Vector3) => {
+      if (name === "fore")
+        return out
+          .set(x + F.thumb[0], F.thumb[1], F.thumb[2])
+          .sub(pivot)
+          .applyMatrix4(BW);
+      const C: DbCell =
+        name === "cell"
+          ? D.cell
+          : name === "let"
+            ? { at: "gun", slide: DB_CELL.out, k: 0, lit: 0 }
+            : { at: "pouch", slide: 0, k: DB_POUCH.grab, lit: 1 };
+      const W = name === "cell" ? akMW : this.dbCellWorld(C, akM2);
+      out.copy(DB_CELL_HAND.thumb).sub(DB_CELL.pivot);
+      out.x += top(C);
+      return out.applyMatrix4(W);
+    };
+    const H = D.hand;
+    if (!place(H.a, akAtA, akQA) || !place(H.b, akAtB, akQB)) return;
+    const at = akAtA.lerp(akAtB, H.k);
+    const q = akQA.slerp(akQB, H.k);
+    // (between the cell and the fore-grip, round the gun's left side and under it — straight, its fingers went 1.5
+    // cm through the fore-grip's foot)
+    const arc = rv5.set(0, 0, 0);
+    if (H.a !== H.b && (H.a === "fore" || H.b === "fore"))
+      arc
+        .copy(DB_CELL_HAND.arcWay)
+        .applyQuaternion(gun.model.root.getWorldQuaternion(akQ1))
+        .multiplyScalar(DB_CELL_HAND.arc * Math.sin(Math.PI * H.k));
+    at.add(arc);
+    // its fingers round what it holds: the cell, the fore-grip
+    const on = H.k < 0.5 ? H.a : H.b;
+    const ws = wl.getWorldScale(akS).x;
+    akM1.compose(at, q, akS.setScalar(ws)).invert();
+    if (lw > 0.3 && (on === "cell" || on === "pouch") && D.cell.at !== "gone") {
+      // (round along the cell, its middle)
+      akV1.copy(DB_CELL.mid).sub(DB_CELL.pivot).applyMatrix4(akMW).applyMatrix4(akM1);
+      akMW.decompose(akV2, akQ2, akS);
+      akQ2.premultiply(akQ3.copy(q).invert()).multiply(akQ4.setFromUnitVectors(Y3, X3));
+      m.hold("L", { shape: DB_CELL_HAND.shape, pos: akV1, quat: akQ2, kind: "fore" });
+    } else if (lw > 0.3 && on === "fore") {
+      rM.copy(akM1).multiply(BW);
+      rM.decompose(rv4, rq1, rs1);
+      rv2
+        .set(x, F.shape.y, F.shape.z ?? 0)
+        .sub(pivot)
+        .applyMatrix4(rM);
+      rq2.setFromUnitVectors(Y3, F.shape.axis ?? X3).premultiply(rq1);
+      m.hold("L", { shape: F.shape.shape, pos: rv2, quat: rq2, kind: "fore" });
+    } else m.hold("L", null);
+    // (going from one place to the next, its elbow free to swing round as fast as it needs)
+    const going = H.a !== H.b && H.k > 0.05 && H.k < 0.95;
+    if (lw > 0.01) m.gripTo("L", at, q, lw, [-0.6, -1, -0.2], cheap, undefined, going ? 0.25 : undefined);
+    // (the thumb: over the fore-grip's top, along the cell — going between them, from the one place to the other
+    // with the hand: kept on the fore-grip's top as the hand left, it went into the lamp)
+    if (!cheap && lw > 0.5) m.thumbTo("L", thumbAt(H.a, akV3).lerp(thumbAt(H.b, akV4), H.k).add(arc));
+    // the cell: on the gun as slid, gone, or in her hand where it really is; dark once it's drawn
+    this.dbCellVis = D.cell.at !== "gone";
+    cell.visible = this.dbCellVis;
+    this.dbCellLit(cell, D.cell.lit > 0.5);
+    if (D.cell.at === "gun") {
+      cell.position.copy(cell.userData.p0).addScaledVector(Y3, -D.cell.slide);
+      cell.quaternion.identity();
+      cell.scale.set(1, 1, 1);
+    } else if (D.cell.at !== "gone") {
+      wl.updateWorldMatrix(true, false);
+      // (where her hand is less where it was to be, the cell's place in it kept)
+      akM2.copy(wl.matrixWorld).multiply(akM1).multiply(akMW);
+      akM2.premultiply(akM1.copy(cell.parent.matrixWorld).invert());
+      akM2.decompose(cell.position, cell.quaternion, cell.scale);
+    }
+    // (her eyes: on the cell — on the pouch while it's gone)
+    cell.updateWorldMatrix(true, false);
+    if (D.cell.at === "gone")
+      this.dbCellWorld({ at: "pouch", slide: 0, k: 0, lit: 1 }, akM2).multiply(
+        akM3.makeTranslation(akV1.copy(DB_CELL.mid).sub(DB_CELL.pivot)),
+      );
+    else akM2.copy(cell.matrixWorld).multiply(akM3.makeTranslation(akV1.copy(DB_CELL.mid).sub(DB_CELL.pivot)));
+    this.dbLook.setFromMatrixPosition(akM2);
+  }
+  /** The Daybreak's cell part (its origin its pivot) in the world, as the timeline's state has it: on the gun (slid
+   *  down out of its cradle), waiting in the pouch (drawn up `k`), carried between the pouch and just under the
+   *  cradle (`k`) — into `out` */
+  private dbCellWorld(C: DbCell, out: Matrix4): Matrix4 {
+    const cell = this.gun?.model.parts.cell;
+    const hips = this.model.bone("hips");
+    if (!cell?.parent) return out.identity();
+    const p0 = (cell.userData.p0 as Vector3 | undefined) ?? cell.position;
+    const onGun = (slide: number, o: Matrix4) =>
+      o
+        .compose(akV1.copy(p0).addScaledVector(Y3, -slide), akQ1.identity(), akS.set(1, 1, 1))
+        .premultiply(cell.parent?.matrixWorld ?? akM3.identity());
+    const inPouch = (k: number, o: Matrix4) => {
+      if (!hips) return o.identity();
+      hips.updateWorldMatrix(true, false);
+      // (standing in it, its length up)
+      return o
+        .compose(
+          akV1.copy(DB_POUCH.cells[DB_POUCH.take]).addScaledVector(Y3, DB_POUCH.draw * k),
+          akQ1.copy(DB_POUCH.cellTurn),
+          akS.set(1, 1, 1),
+        )
+        .premultiply(akM3.compose(DB_POUCH.at, DB_POUCH.turn, akS.set(1, 1, 1)))
+        .premultiply(hips.matrixWorld);
+    };
+    if (C.at === "pouch") return inPouch(C.k, out);
+    if (C.at === "carry") {
+      inPouch(1, akM4).decompose(akV3, akQ3, akS3);
+      onGun(C.slide, out).decompose(akV4, akQ4, akS4);
+      return out.compose(akV3.lerp(akV4, C.k), akQ3.slerp(akQ4, C.k), akS3.lerp(akS4, C.k));
+    }
+    return onGun(C.slide, out);
+  }
+  /** (the cell back home in the gun, lit, once the reload's done — or let go of) */
+  private dbCellHome() {
+    const cell = this.gun?.model.parts.cell;
+    if (!cell?.userData.dbMoved) return;
+    cell.position.copy(cell.userData.p0);
+    cell.quaternion.identity();
+    cell.scale.set(1, 1, 1);
+    this.dbCellLit(cell, true);
+    cell.userData.dbMoved = false;
+  }
+  /** The cell lit, or spent: its filament's glow and its window's pale glass their own materials, or dark ones
+   *  (the glass pale, a spent cell let fall read as a fresh one) */
+  private dbCellLit(cell: Object3D, lit: boolean) {
+    cell.traverse((o) => {
+      const me = o as Mesh;
+      if (!me.isMesh) return;
+      const own = (me.userData.dbLit as Material | undefined) ?? (me.material as Material);
+      const spent = /glow/i.test(own.name) ? DB_SPENT.glow : /glass/i.test(own.name) ? DB_SPENT.glass : null;
+      if (!spent) return;
+      me.userData.dbLit = own;
+      me.material = lit ? own : this.mats.prop(spent);
+    });
+  }
+  /** The spent cell let fall from her hand: a copy of it in the world, dark, falling and turning till it lies on
+   *  the floor at her feet a moment, then sinking away into it (DB_DROP) */
+  private dbDrop: { o: Object3D; v: Vector3; ax: Vector3; floor: number; t: number; down: boolean } | null = null;
+  private dbDropFrom(cell: Object3D) {
+    const into = this.root.parent;
+    if (!into || this.part !== "all") return;
+    this.dbDropGone();
+    cell.updateWorldMatrix(true, false);
+    const o = cell.clone(true);
+    o.visible = true;
+    this.dbCellLit(o, false);
+    into.updateWorldMatrix(true, false);
+    akM1.copy(into.matrixWorld).invert().multiply(cell.matrixWorld);
+    akM1.decompose(o.position, o.quaternion, o.scale);
+    into.add(o);
+    // (let go: falling, a little ahead, turning end over end)
+    cell.getWorldQuaternion(akQ1);
+    const ax = new Vector3(0, 0, 1).applyQuaternion(akQ1);
+    const v = new Vector3(1, 0, 0).applyQuaternion(akQ1).multiplyScalar(0.2);
+    v.y = -0.5;
+    this.root.updateWorldMatrix(true, false);
+    const floor = new Vector3().setFromMatrixPosition(this.root.matrixWorld).y;
+    this.dbDrop = { o, v, ax, floor: into.worldToLocal(akV1.set(0, floor, 0)).y, t: 0, down: false };
+  }
+  private dbDropFrame(dt: number) {
+    const D = this.dbDrop;
+    if (!D) return;
+    D.t += dt;
+    if (!D.down) {
+      D.v.y -= 9.8 * dt;
+      D.o.position.addScaledVector(D.v, dt);
+      D.o.quaternion.premultiply(akQ1.setFromAxisAngle(D.ax, DB_DROP.spin * dt));
+      if (D.o.position.y <= D.floor + 0.025) {
+        D.o.position.y = D.floor + 0.025;
+        // (lying on its side)
+        akV1.set(1, 0, 0).applyQuaternion(D.o.quaternion);
+        akV1.y = 0;
+        if (akV1.lengthSq() < 1e-6) akV1.set(1, 0, 0);
+        D.o.quaternion.setFromUnitVectors(X3, akV1.normalize());
+        D.down = true;
+        D.t = 0;
+      }
+    } else if (D.t > DB_DROP.lie + DB_DROP.sink) this.dbDropGone();
+    else if (D.t > DB_DROP.lie) D.o.position.y = D.floor + 0.025 - (0.06 * (D.t - DB_DROP.lie)) / DB_DROP.sink;
+  }
+  private dbDropGone() {
+    this.dbDrop?.o.removeFromParent();
+    this.dbDrop = null;
+  }
+  /** (plan 84 F5a) The cell pouch on her belt at her left front while she carries a Daybreak (slung or in her
+   *  hands): a leather box, two cells standing in it, their tops showing — the one she draws gone from it till
+   *  the reload's done */
+  private dbPouch: { root: Group; cells: Object3D[] } | null = null;
+  private dbPouchFrame(p: PersonIn) {
+    const hips = this.model.bone("hips");
+    const tpl = this.mats.gun?.("daybreak") ?? null;
+    const cellT = tpl?.getObjectByName("cell") ?? null;
+    if (!hips || !cellT || this.part !== "all" || !(p.slingDb || this.gun?.key === "daybreak")) {
+      this.dbPouch?.root.removeFromParent();
+      this.dbPouch = null;
+      return;
+    }
+    if (!this.dbPouch) {
+      const root = new Group();
+      const box = new Mesh(STRAP_BOX, this.mats.prop("#3a2414"));
+      box.scale.set(...DB_POUCH.box);
+      box.castShadow = false;
+      root.add(box);
+      const cells: Object3D[] = [];
+      for (const at of DB_POUCH.cells) {
+        const o = cellT.clone(true);
+        o.position.copy(at);
+        o.quaternion.copy(DB_POUCH.cellTurn);
+        root.add(o);
+        cells.push(o);
+      }
+      root.position.copy(DB_POUCH.at);
+      root.quaternion.copy(DB_POUCH.turn);
+      hips.add(root);
+      this.dbPouch = { root, cells };
+    }
+    const t = this.dbLoadT;
+    this.dbPouch.cells.forEach((o, i) => {
+      o.visible = !(i === DB_POUCH.take && t >= 0.84);
+    });
   }
 
   // ── plan 82 phase 4: the AK's reload (tp/ak-hold.ts) ──────────────────────────────────────────────────

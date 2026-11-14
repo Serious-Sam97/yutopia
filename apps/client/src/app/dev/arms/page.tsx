@@ -322,6 +322,7 @@ function Bench({ q }: { q: URLSearchParams }) {
         revLoadT: number;
         sgLoadT: number;
         akLoadT: number;
+        dbLoadT: number;
       };
       const apply = (dt: number) => {
         const s = live.current;
@@ -364,7 +365,9 @@ function Bench({ q }: { q: URLSearchParams }) {
         // double-barrel's 2.3, its shutting its own: ARM.shut — plan 81)
         // (the AK's 2.2 s, racked 2.8 — its closing its own: ARM.shut, ARM.rack — plan 82)
         const akLen = s.dry ? 2.8 : 2.2;
-        const t = s.play > 0 ? Math.min(1, (performance.now() - s.play) / 1000 / (GUN === "ak47" ? akLen : 2.3)) : s.t;
+        // (plan 84: the Daybreak's 2.0 s — its closing ARM.shut at 1.6)
+        const len = GUN === "ak47" ? akLen : GUN === "daybreak" ? 2.0 : 2.3;
+        const t = s.play > 0 ? Math.min(1, (performance.now() - s.play) / 1000 / len) : s.t;
         const reload = s.pose === "reload";
         const sgT = t * 2.3;
         const akT = t * akLen;
@@ -376,7 +379,9 @@ function Bench({ q }: { q: URLSearchParams }) {
               ? s.dry
                 ? 7
                 : 6
-              : 3;
+              : GUN === "daybreak" && t * 2 >= 1.6
+                ? 6
+                : 3;
         // (plan 83: the sniper's reload — opened, five rounds, closed and back: 3.5 s, its closing at 2.85 —
         // ARM.open, then ARM.shut)
         if (reload && GUN === "sniper") {
@@ -394,6 +399,8 @@ function Bench({ q }: { q: URLSearchParams }) {
         else if (reload && GUN === "ak47") {
           // (live: its own clock — the empty let fall as it passes; scrubbed: set)
           if (s.play <= 0 || P3.akLoadT < 0) P3.akLoadT = Math.max(0, akT - dt);
+        } else if (reload && GUN === "daybreak") {
+          if (s.play <= 0 || P3.dbLoadT < 0) P3.dbLoadT = Math.max(0, t * 2 - dt);
         } else if (reload) P3.revLoadT = Math.max(0, t * 2.2 - dt);
         fx.reload = reload ? 1 : 0;
         fx.open = reload ? (t < 0.3 ? t / 0.3 : t < 0.8 ? 1 : 1 - (t - 0.8) / 0.2) : 0;

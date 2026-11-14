@@ -94,9 +94,11 @@ export interface LongSpec {
    *  forearms against rods on it (a → b, x and y, `r` round), each in the gun's frame or (`fore`) the fore
    *  part's (less its pivot); the stock's side profile (its top and bottom lines by x, from `x[0]` to `x[1]`,
    *  `z` either side of its middle) for what of it is inside her */
+  // (`part`: on a part that moves — the Daybreak's cell — in the gun's frame as it sits home, going where the part
+  // goes; not checked while it's hidden)
   check: {
-    boxes: { c: [number, number]; h: [number, number, number]; fore: boolean }[];
-    rods: { a: [number, number]; b: [number, number]; r: number; fore: boolean }[];
+    boxes: { c: [number, number]; h: [number, number, number]; fore: boolean; part?: string }[];
+    rods: { a: [number, number]; b: [number, number]; r: number; fore: boolean; part?: string }[];
     stock: { x: [number, number]; top: [number, number][]; bot: [number, number][]; z: number; cz?: number };
   };
 }

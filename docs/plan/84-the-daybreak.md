@@ -18,7 +18,8 @@ sheets `design/guns/p84/sheet-84-{hold,charge,reload,slung}.png`; the model chan
 2026-11-13** ("seguir assim"). **Phase 1 (the grip) built 2026-11-13** — `tp/daybreak-hold.ts` `DB_LONG`, the
 bench's `gun=daybreak`; stills `design/guns/p84/bench-1-hold.png`; committed 22bc3da (with phase 0). **Phase 2 (put
 away, drawn) built 2026-11-13** — stills `design/guns/p84/bench-2-carry.png`; committed 172090b. **Phase 3 (the aim,
-the charge) built 2026-11-13** — stills `design/guns/p84/bench-3-aim.png`. Not committed.
+the charge) built 2026-11-13** — stills `design/guns/p84/bench-3-aim.png`; committed 04d9d81. **Phase 4 (the
+reload) built 2026-11-14** — stills `design/guns/p84/bench-4-reload.png`; committed (this commit).
 
 ## Where we are — read from the code and the bench
 
@@ -264,6 +265,31 @@ whatever F3–F4.
    - The bench takes `charge` (0..1) as it takes `kick`.
 4. **The reload** (F4–F5) — one timeline in the server's steps (`ARM.open` → the cells → `ARM.shut`): the cell
    out and dropped (it fades), the new one from F5's place, in, home; the pouch (F5a) modelled; others see it.
+   Done in phase 4:
+   - **One timeline** (`tp/daybreak-hold.ts` `dbLoadAt`, the AK's way — `DB_LOAD`, 2.0 s in the server's steps):
+     her left hand off the fore-grip as the gun begins to roll (kept on it rolling, her wrist went 8–10° past its
+     reach); the gun pulled in to her chest over the belt and rolled 62° top to her right (the mocks' 66° put a
+     feminine right wrist 3.2° past its reach held, a masculine left 5° pressing the cell home); the spent cell
+     drawn 5 cm down out of its cradle, going dark (its filament and its window — the pale glass read as a fresh
+     one), let fall at 0.55 s: it tumbles, lies on its side 2 s and sinks away; her hand down to the pouch, a new
+     one drawn up out of it by its top, carried up under the cradle and pressed home by 1.45 s; on the cell as the
+     gun rolls back, on to the fore-grip as it comes up. Her eyes on the cell, on the pouch while it's gone.
+   - **The cell hand** (`DB_CELL_HAND`): the palm under the cell, the fingers ahead and round its left side, the
+     thumb along it — searched by small turns, both bodies, standing and walking (across the cell, the wrist went
+     28–35° past its reach; walking, a masculine one 10° at the first turn kept). Between the cell and the
+     fore-grip the hand goes round the gun's left side and under it (straight, its fingers went 1.5 cm through the
+     fore-grip's foot), the thumb's place going with it (kept on the fore-grip's top, it went into the lamp).
+   - **The pouch** (F5a, `DB_POUCH`): a leather box on her belt's left front by the buckle, clear of the AK's
+     magazine pouch, two cells standing in it upside down, their tops showing (stood the other way up, her hand
+     took one with its fingers up — her wrist 140–180° past its reach); the one drawn gone from it till the
+     reload's done.
+   - **Everyone sees it**: the server's closing is `Player.arm` `ARM.shut` for the Daybreak too (was `ARM.open`),
+     tested in `arms.test.ts`; seen mid-way, on from where it is; cut short by a shot, on from the closing.
+   - The long hold's checks learnt `part` (a box or rod on a part that moves — the cell — going where it goes, not
+     checked while it's hidden). The bench scrubs the reload (2.0 s) and plays it live.
+   - Audited live frame by frame (both bodies; standing, walking, sprinting): the wrists within the moving limit
+     (≤5.9°), the right at most 1.5°; the fingers at most 0.3–0.6 cm into the gun at single frames as the hand
+     leaves and meets the fore-grip; the pad out of her shirt (≤0.1 cm).
 5. **Everything else** — port arms for a roll, a vault, a slide (its 0.89 m over the floor all through a
    roll); struck, kept at the ready (`port.struck: false`); sat, swimming, busy: let go; the far people's
    cheaper hold. **The old long-gun path goes** (the Daybreak was the last on it).

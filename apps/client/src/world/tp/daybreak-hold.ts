@@ -179,8 +179,8 @@ export const DB_LONG: LongSpec = {
       { c: [0.291, 0.044], h: [0.022, 0.014, 0.014], fore: false },
       { c: [0.29, -0.002], h: [0.016, 0.032, 0.014], fore: false },
       // (the cell under the body, between the guard and the fore-grip — round: two boxes across it)
-      { c: [0.175, 0.04], h: [0.075, 0.022, 0.012], fore: false },
-      { c: [0.175, 0.04], h: [0.075, 0.012, 0.022], fore: false },
+      { c: [0.175, 0.04], h: [0.075, 0.022, 0.012], fore: false, part: "cell" },
+      { c: [0.175, 0.04], h: [0.075, 0.012, 0.022], fore: false, part: "cell" },
       // (the lamp's body, 11 cm round — two boxes across it, its curve between)
       { c: [0.2, DB_AZ], h: [0.22, 0.055, 0.028], fore: false },
       { c: [0.2, DB_AZ], h: [0.22, 0.028, 0.055], fore: false },
@@ -194,7 +194,7 @@ export const DB_LONG: LongSpec = {
       { a: [-0.13, DB_AZ], b: [-0.03, DB_AZ], r: 0.072, fore: false },
       { a: [0.43, DB_AZ], b: [0.53, DB_AZ], r: 0.072, fore: false },
       // (the cell)
-      { a: [0.1, 0.04], b: [0.25, 0.04], r: 0.024, fore: false },
+      { a: [0.1, 0.04], b: [0.25, 0.04], r: 0.024, fore: false, part: "cell" },
     ],
     // (tools/art/guns/guns.py's brace — a strut down to its pad — cast to the lamp's right)
     stock: {
@@ -216,3 +216,122 @@ export const DB_LONG: LongSpec = {
     },
   },
 };
+
+// ── the reload (plan 84 phase 4: F4a at the ready, turned on its side; F5a the pouch) ───────────────────────
+// One timeline, s from the server's step opening it (Player.arm ARM.open; its closing ARM.shut — everyone sees
+// it), in time with shared ARMS.daybreak (opened 0.7 — the cells left in it out to the pockets —, the new ones in
+// 0.9, shut 0.4):
+//   0–0.3      the gun pulled in to her chest over the belt and rolled on its side, its top to her right — the
+//              cell underneath turned to her left hand and her eyes; her left hand off the fore-grip to the cell
+//   0.3–0.5    the spent cell drawn down out of its cradle, its filament going dark; let fall at 0.55
+//   0.55–1.0   her left hand down to the pouch on her belt's left front, a new one drawn up out of it
+//   1.0–1.45   up under the cradle, pressed up into it, home
+//   1.65–2.0   shut: her left hand back on the fore-grip, the gun rolled back up into the low ready
+// A shot while it's open (the server snaps it shut): on from the closing.
+/** (shared ARMS.daybreak) the steps; the cell drawn out by `out`, let fall at `drop`, home at `home` (s) */
+export const DB_LOAD = { open: 0.7, speed: 0.9, shut: 0.4, out: 0.5, drop: 0.55, home: 1.45 };
+export const DB_CLOSE = DB_LOAD.open + DB_LOAD.speed;
+/** The gun held for loading (the mocks'): its pad from the right shoulder's joint (her frame: x left, y up, z
+ *  ahead), the lens's way — ahead, down and across to her left — and its top, rolled 62° to her right (at the
+ *  mocks' 66°, a feminine right wrist 3.2° past its reach held, a masculine left 5° pressing the cell home) */
+const DB_LOAD_F = new Vector3(0.38, -0.3, 0.82).normalize();
+const DB_LOAD_U0 = new Vector3(0, 1, 0).addScaledVector(DB_LOAD_F, -DB_LOAD_F.y).normalize();
+const DB_LOAD_SIDE = new Vector3().crossVectors(DB_LOAD_U0, DB_LOAD_F);
+export const DB_LOAD_GUN = {
+  butt: [0.02, -0.11, 0.06] as [number, number, number],
+  f: DB_LOAD_F.toArray() as [number, number, number],
+  u: DB_LOAD_U0.clone()
+    .multiplyScalar(Math.cos(1.08))
+    .addScaledVector(DB_LOAD_SIDE, -Math.sin(1.08))
+    .normalize()
+    .toArray() as [number, number, number],
+};
+/** Her trunk turned this far right while loading (the mocks') */
+export const DB_LOAD_BLADE = 0.1;
+/** The cell (tools/art/guns/build_guns.py: its part's pivot; its middle, home — under the lamp between the guard
+ *  and the fore-grip, 15 cm along it, 4.8 round) and how far it's drawn down out of its cradle before it's let
+ *  fall (m — its top clear of the mount by 3.6 cm) */
+export const DB_CELL = { pivot: new Vector3(0.135, 0.04, 0), mid: new Vector3(0.175, 0.04, 0), out: 0.05 };
+/** The left hand round the cell (the gun's frame as the cell sits home — slid with it): its palm under it, the
+ *  fingers ahead and round its left side, the thumb along it toward the grip — searched by small turns, both
+ *  bodies, standing and walking, from taking it to pressing the new one home (across it, the wrist went 28–35°
+ *  past its reach; 14° less ahead, walking, a masculine one 10°); what the fingers close round (round along the
+ *  cell, its middle) */
+export const DB_CELL_HAND = {
+  palm: new Vector3(0.177, -0.003, -0.015),
+  along: new Vector3(0.87, -0.062, -0.488).normalize(),
+  index: new Vector3(-0.47, 0.189, -0.862).normalize(),
+  thumb: new Vector3(0.146, 0.031, -0.054),
+  shape: { round: true as const, r: 0.024, y0: 0, hy: 0.075 },
+  /** (taken out of the pouch, and carried from it, by its top end: this much further along it — upside down in
+   *  the pouch, toward its back end) */
+  top: -0.07,
+  /** (to it from the fore-grip and back, round the gun's left side and under it this far at the middle — m;
+   *  round its side alone, a masculine thumb grazed the lamp's) */
+  arc: 0.055,
+  arcWay: new Vector3(0, -0.5, -0.87).normalize(),
+};
+/** A spent cell's filament and its window (dark) */
+export const DB_SPENT = { glow: "#2a2420", glass: "#47443f" };
+/** The cell pouch on her belt at her left front, beside the AK's magazine pouch (F5a; the hips' own space: x her
+ *  left, y up, z ahead): its middle, its turn (x along the belt, y up, z out from her), its box's size (m), its
+ *  two cells' places standing in it (the cell part's pivot — the box's frame; their top 5 cm showing), their turn
+ *  (upside down, the lens's end down, and turned about themselves — searched: stood the other way up, her hand
+ *  took one with its fingers up and her wrist 140–180° past its reach), the one drawn, how far it's drawn up out
+ *  of it before it's carried off, and where her hand meets it on the way (round its top, as it stands) */
+export const DB_POUCH = {
+  at: new Vector3(0.06, -0.14, 0.2),
+  turn: new Quaternion().setFromRotationMatrix(
+    new Matrix4().makeBasis(
+      new Vector3(0.94, 0, -0.34).normalize(),
+      new Vector3(0, 1, 0),
+      new Vector3(0.34, 0, 0.94).normalize(),
+    ),
+  ),
+  box: [0.115, 0.12, 0.06] as [number, number, number],
+  cells: [new Vector3(-0.027, 0.075, 0), new Vector3(0.027, 0.075, 0)],
+  cellTurn: new Quaternion()
+    .setFromAxisAngle(new Vector3(0, 0, 1), -Math.PI / 2)
+    .multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -1)),
+  take: 0,
+  draw: 0.12,
+  grab: 0,
+};
+/** The spent cell let fall: its spin (rad/s), how long it lies (s), how long it takes to sink away (s) */
+export const DB_DROP = { spin: 4, lie: 2, sink: 0.6 };
+
+const sm = (a: number, b: number, t: number) => {
+  const c = Math.max(0, Math.min(1, (t - a) / (b - a)));
+  return c * c * (3 - 2 * c);
+};
+/** The cell's state: on the gun (slid down out of its cradle `slide` m), gone (let fall), waiting in the pouch
+ *  (drawn up `k`), carried from the pouch to just under its cradle (`k`) */
+export type DbCell = { at: "gun" | "gone" | "pouch" | "carry"; slide: number; k: number; lit: number };
+/** Where the reload is at `t` (s): the gun's legs (0 the hold … 1 in close, on its side), the cell's state, the
+ *  left hand's (from one place to the next — the fore-grip, round the cell, round it as let go, round the new one
+ *  in the pouch), her eyes on it */
+export function dbLoadAt(t: number) {
+  const end = DB_CLOSE + DB_LOAD.shut;
+  const gun = sm(0.05, 0.32, t) * (1 - sm(DB_CLOSE + 0.05, end, t));
+  const O = DB_CELL.out;
+  let cell: DbCell;
+  // (drawn out, going dark as it leaves the cradle; the new one lit — home)
+  if (t < 0.3) cell = { at: "gun", slide: 0, k: 0, lit: 1 };
+  else if (t < DB_LOAD.drop) cell = { at: "gun", slide: O * sm(0.3, DB_LOAD.out, t), k: 0, lit: 1 - sm(0.3, 0.45, t) };
+  else if (t < 0.85) cell = { at: "gone", slide: 0, k: 0, lit: 1 };
+  else if (t < 1.0) cell = { at: "pouch", slide: 0, k: DB_POUCH.grab + (1 - DB_POUCH.grab) * sm(0.85, 1.0, t), lit: 1 };
+  else if (t < 1.3) cell = { at: "carry", slide: O, k: sm(1.0, 1.3, t), lit: 1 };
+  else cell = { at: "gun", slide: O * (1 - sm(1.3, DB_LOAD.home, t)), k: 0, lit: 1 };
+  let hand: { a: string; b: string; k: number };
+  // (off the fore-grip as the gun begins to roll — kept on it rolling, her wrist went 8–10° past its reach)
+  if (t < 0.3) hand = { a: "fore", b: "cell", k: sm(0, 0.24, t) };
+  else if (t < DB_LOAD.drop) hand = { a: "cell", b: "cell", k: 0 };
+  else if (t < 0.85) hand = { a: "let", b: "pouch", k: sm(DB_LOAD.drop, 0.85, t) };
+  else if (t < DB_CLOSE + 0.05) hand = { a: "cell", b: "cell", k: 0 };
+  // (on the cell as the gun rolls back, on to the fore-grip as it comes up — there before it, her left wrist went
+  // 7° past its reach)
+  else hand = { a: "cell", b: "fore", k: sm(DB_CLOSE + 0.12, DB_CLOSE + 0.4, t) };
+  // (her eyes on the cell, on the pouch while she goes for a new one)
+  const look = sm(0, 0.3, t) * (1 - sm(DB_CLOSE, DB_CLOSE + 0.3, t));
+  return { gun, cell, hand, end, look };
+}

@@ -548,9 +548,10 @@ registerFeature((room: WorldRoom) => {
             ? ARM.draw
             : hd.step
               ? // (the double-barrel's closing its own — plan 81: everyone's screen shuts it then; the AK's too, and
-                // whether its charging handle's racked — plan 82; the sniper's bolt run home — plan 83; the others' as
-                // ever)
-                hd.step === "shut" && (p.gun === "shotgun" || p.gun === "ak47" || p.gun === "sniper")
+                // whether its charging handle's racked — plan 82; the sniper's bolt run home — plan 83; the
+                // Daybreak back up to the ready — plan 84; the revolver's as ever)
+                hd.step === "shut" &&
+                (p.gun === "shotgun" || p.gun === "ak47" || p.gun === "sniper" || p.gun === "daybreak")
                 ? hd.rack && p.gun === "ak47"
                   ? ARM.rack
                   : ARM.shut

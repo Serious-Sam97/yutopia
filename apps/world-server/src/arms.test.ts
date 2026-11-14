@@ -641,4 +641,12 @@ test("the Daybreak (plan 79 phase 7): not charged, nothing; charged a second, a 
   await waitFor(() => bursts.length === 1, 4000);
   // (its shield burnt off on the way, the burst's light on it: 300, over its 250)
   await waitFor(() => b.hits.some((h) => h.kind === "killed"), 2000);
+  // (plan 84 phase 4) its reload: opened (the cell left in it out), the new ones in, then the closing everyone sees —
+  // Player.arm ARM.shut, back up to the ready
+  await sleep(ARMS.daybreak.rate * 1000 + 50);
+  b.room.send("arms:reload", {});
+  await waitFor(() => me(b.room).arm === ARM.open, 1000);
+  await waitFor(() => cells() === 3, (ARMS.daybreak.open + ARMS.daybreak.speed) * 1000 + 500);
+  await waitFor(() => me(b.room).arm === ARM.shut, 1000);
+  await waitFor(() => me(b.room).arm === ARM.idle, ARMS.daybreak.shut * 1000 + 500);
 });
