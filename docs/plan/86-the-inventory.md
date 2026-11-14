@@ -8,7 +8,7 @@ mocked first, then chosen; **F2a** the items' pictures rendered from their own 3
 the pack, the pack bigger; **F4a** 8 pockets. The rest of the proposal (the menu, hover + 1–4, split, organize, take
 all, quick use, no strip) as recommended, not asked. **Phase 0 (the mocks) rendered 2026-11-14 — the user chose
 B · the open pack** (a canvas pack drawn open, stitched pouches, the four at hand as loops on a wooden belt, the
-picked one on a paper tag); committed a42710b7. **Phase 1 (the pictures) built 2026-11-14**, committed 186148c9. **Phase 2 (the rules: 8 pockets, split, organize, take all, drop some) built 2026-11-14**, committed 3ea7bc60. **Phase 3 (the panel in look B) built 2026-11-14**. Stills of today:
+picked one on a paper tag); committed a42710b7. **Phase 1 (the pictures) built 2026-11-14**, committed 186148c9. **Phase 2 (the rules: 8 pockets, split, organize, take all, drop some) built 2026-11-14**, committed 3ea7bc60. **Phase 3 (the panel in look B) built 2026-11-14**, committed 2ee8b279. **Phase 4 (the HUD) built 2026-11-14**. Stills of today:
 `design/inventory/now-panel.png`, `now-strip.png`, `now-strip-over-dock.png`.
 
 ## What there is now
@@ -191,6 +191,23 @@ pages yet), crafting, weight, item shapes (RE's Tetris).
      `3-phone.png`, `3-phone-menu.png`.
 4. **The HUD**: the quick bar with the held gun's rounds; the pick-up slip; the strip and its over-the-dock overlap
    gone; quick use (H, B).
+   Done in phase 4:
+   - **The quick bar** (`dark/index.ts` `quickHud`, design/inventory/0-hud): framed as before, now captioned — "At
+     hand", and on the right the held gun's rounds, in it + spare (".38 · 6 + 24", "shells · 2 + 12"); hurt (under 60)
+     with a first aid carried, the caption says so: "H first aid ×1". The slots a little larger (54, a gun 96). The
+     guns' own widgets under it stay (the cylinder, the shells, the magazine — plans 80–84).
+   - **The slips**: what she gains, typed on a paper slip above the quick bar for 3.2 s ("+4 shells · in the pack",
+     "+ revolver · at hand · 1", "+3 flares"), three at most — worked out by kind from the pockets' word, so a move,
+     a split or Organize shows none. The search's "Found …" toast gone (the slips say it); the toast stays for
+     nothing / searched / tomorrow / the pack full.
+   - **The strip gone** — and with it the 3 s pop-up after any change, Tab's peek at it, and its overlap with the dock.
+   - **Quick use**: H a first aid, B a battery, from the quick slots or the pack — on foot only (in a car H is the
+     horn, B looks back), not building, not with a menu or the pack open; none carried, or health / the torch full:
+     said, nothing wasted. The battery's gauge shows "B ×n" when one's carried; the pack's keys tag lists H and B.
+   - Checked: `inventory-tools.spec`'s HUD test (the caption's H and rounds, the kit's slips three at most, a slip for
+     four shells taken back and none for a move, H used then none left, B with the torch full), `dark.spec` (a search:
+     the slip or the word; the quick bar captioned, no strip), `inventory.spec`, `inventory-pack.spec` and the tools'
+     other three — green. Stills: `design/inventory/4-hud-slip.png`, `4-hud-shells.png`.
 5. **Checks**: `inventory.spec` and `inventory-pack.spec` grown (the menu, hover + 1–4, split, take all, 8 pockets);
    the guns' specs that empty or fill her (slots 0–11 now); a phone, the pad; stills.
 

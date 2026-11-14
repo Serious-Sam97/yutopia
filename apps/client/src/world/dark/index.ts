@@ -1,18 +1,7 @@
 import type { ServerMessages } from "@yutopia/shared";
 import { KIT_SPOT, LOCKER, LOOT_REACH, type LootItem, lockerFront, lootNow, SEARCH_MS } from "@yutopia/shared/dark";
 import { heightAt } from "@yutopia/shared/grounds";
-import {
-  count,
-  findStack,
-  type Inventory,
-  type Item,
-  type ItemId,
-  isUsable,
-  isWeapon,
-  POCKETS,
-  QUICK_SLOT,
-  WEAPONS,
-} from "@yutopia/shared/inventory";
+import { count, findStack, type Inventory, type ItemId, isWeapon, WEAPONS } from "@yutopia/shared/inventory";
 import { addStrings, trMaybe } from "@/lib/i18n";
 import type { WorldController } from "../controller";
 import { eyesOf, glareOf, stepEyes } from "../eyes";
@@ -32,10 +21,11 @@ import { DarkSound } from "./voices";
 // The dark (docs/plan/30-the-dark.md), on the client: its own chunk, loaded by
 // the walker the first time I'm out on the land. Phase 2: my stamina as an arc
 // by my body (amber, out of breath), the quick slots (keys 1–4) always bottom
-// right, all I carry (a strip there instead, for a moment after a pickup and
-// while Tab is held: click to use, right click to drop), searching a spot (E or the pad's X near it: a ring fills, then the
-// server says what was in it), what lies on the snow. As in
-// design/screens/dark/05a-loot and 05b-pockets.
+// right — framed, captioned with the held gun's rounds (plan 86) — and a typed slip
+// above them for what I gain (plan 86: the strip that was there gone), searching a
+// spot (E or the pad's X near it: a ring fills, then the server says what was in
+// it), what lies on the snow; H a first aid, B a battery from anywhere (plan 86).
+// As in design/screens/dark/05a-loot and design/inventory/0-hud.
 export const DARK_CHUNK = "yutopia-dark";
 addStrings(STRINGS, DARK_CHUNK);
 
@@ -43,7 +33,7 @@ const t = (key: string, vars: Record<string, string> = {}) =>
   (trMaybe(key) ?? key).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
 const itemName = (id: ItemId) => t(`dark_item_${id}`);
 const AMBER = "#e9a33a";
-const TAB_PEEK_MS = 250; // Tab held this long, with things in reach to go round: the pockets (the controller's TAB_TAP_MS)
+const SLIP_MS = 3200; // a pick-up's slip, shown this long
 
 type Target =
   | { kind: "spot"; id: string; label: string; x: number; y: number; z: number }
@@ -59,12 +49,15 @@ const CSS = `
 .dk-col{position:absolute;right:24px;bottom:18px;display:flex;flex-direction:column-reverse;align-items:flex-end;gap:14px}
 .dk-col>.abs{position:relative;right:auto;bottom:auto}
 @media (max-width:639px){.dk-col{right:12px;left:12px;bottom:92px;align-items:center}}
-.dk-strip{display:flex;gap:6px;align-items:flex-end;transition:opacity .25s}
 .dk-bat{width:170px}
-.dk-quick{display:flex;gap:5px;align-items:flex-end}
-.dk-quick{padding:7px;border:5px solid transparent;border-radius:6px;background:linear-gradient(var(--panel),var(--panel)) padding-box,var(--wood) 0 0/600px 240px border-box;box-shadow:inset 0 0 0 1px rgba(0,0,0,.6),0 0 0 1px rgba(0,0,0,.55),0 12px 30px rgba(0,0,0,.5)}
-.dk-q{position:relative;height:46px;width:46px;border-radius:6px;background:rgba(255,255,255,.04);border:1px solid color-mix(in srgb,var(--amber) 16%,transparent);transition:transform .12s ease-out,border-color .12s,box-shadow .12s}
-.dk-q.w{width:78px}
+.dk-quick{flex-direction:column;gap:7px}
+.dk-quick .cap{display:flex;justify-content:space-between;gap:18px;font:400 11px/1 var(--font-mono);letter-spacing:.16em;text-transform:uppercase;color:#d9c08a}
+.dk-quick .cap b{font-weight:400;color:var(--cream);letter-spacing:.06em;text-transform:none}
+.dk-quick .cap .hurt{color:#e7907c}
+.dk-qs{display:flex;gap:6px;align-items:flex-end}
+.dk-quick{padding:8px 10px 10px;border:5px solid transparent;border-radius:6px;background:linear-gradient(var(--panel),var(--panel)) padding-box,var(--wood) 0 0/600px 240px border-box;box-shadow:inset 0 0 0 1px rgba(0,0,0,.6),0 0 0 1px rgba(0,0,0,.55),0 12px 30px rgba(0,0,0,.5)}
+.dk-q{position:relative;height:54px;width:54px;border-radius:6px;background:rgba(255,255,255,.04);border:1px solid color-mix(in srgb,var(--amber) 16%,transparent);transition:transform .12s ease-out,border-color .12s,box-shadow .12s}
+.dk-q.w{width:96px}
 .dk-q svg,.dk-q img.art{position:absolute;inset:6px 5px 10px 5px;width:calc(100% - 10px);height:calc(100% - 16px)}
 .dk-q .k{position:absolute;left:4px;top:3px;font:400 10px/1 var(--font-mono);color:var(--cream-dim)}
 .dk-q .n{position:absolute;right:4px;bottom:1px;font-size:11px;font-weight:700;text-shadow:0 1px 2px #000}
@@ -77,20 +70,13 @@ const CSS = `
 .dk-bat .row{display:flex;justify-content:space-between;font:400 11.5px/1 var(--font-mono);letter-spacing:.04em}
 .dk-bat .bar{position:relative;height:4px;background:var(--track);border-radius:2px;margin-top:7px;overflow:hidden}
 .dk-bat .bar i{position:absolute;top:0;bottom:0;left:0}
-.dk-slot{position:relative;height:58px;width:58px;border-radius:7px;background:rgba(12,15,21,.66);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(3px)}
-.dk-slot.w{width:104px}
-.dk-slot svg,.dk-slot img.art{position:absolute;inset:6px 6px 10px 6px;width:calc(100% - 12px);height:calc(100% - 16px)}
-.dk-slot .k{position:absolute;left:5px;top:3px;font-size:10px;font-weight:700;color:rgba(233,236,239,.55)}
-.dk-slot .n{position:absolute;right:5px;bottom:2px;font-size:13px;font-weight:700;text-shadow:0 1px 2px #000}
-.dk-slot.empty{background:rgba(12,15,21,.38);border-style:dashed;border-color:rgba(255,255,255,.12)}
-.dk-slot.new{border:1.5px solid ${AMBER};box-shadow:0 0 12px rgba(233,163,58,.45)}
-.dk-slot .plus{position:absolute;left:50%;top:-20px;transform:translateX(-50%);font-size:12px;font-weight:800;color:${AMBER};text-shadow:0 1px 3px #000}
-.dk-slot:hover{border-color:#fff;background:rgba(40,46,56,.8)}
-.dk-tip{position:absolute;bottom:68px;left:50%;transform:translateX(-50%);white-space:nowrap;background:rgba(10,12,16,.9);border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:6px 9px;font-size:12px;display:none}
-.dk-slot:hover .dk-tip{display:block}
-.dk-tip b{display:block;font-size:13px;margin-bottom:3px}
-.dk-tip span{color:rgba(233,236,239,.7)}
-.dk-hint{position:absolute;right:0;bottom:-18px;white-space:nowrap;font-size:11px;color:rgba(233,236,239,.6)}
+.dk-bk{margin-right:10px;color:var(--cream-dim)}
+.dk-slips{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.dk-slip{display:flex;align-items:center;gap:10px;padding:8px 14px 8px 10px;background:var(--paper);color:#222;font:400 14px/1.3 var(--font-mono);box-shadow:0 8px 18px rgba(0,0,0,.4);transform:rotate(-.6deg);white-space:nowrap;transition:opacity .4s,transform .4s}
+.dk-slip:nth-child(2n){transform:rotate(.4deg)}
+.dk-slip svg,.dk-slip img.art{width:34px;height:30px;flex:none;filter:none}
+.dk-slip.w svg,.dk-slip.w img.art{width:56px}
+.dk-slip.gone{opacity:0;transform:translateY(-6px) rotate(-.6deg)}
 .dk-key{display:inline-block;min-width:16px;padding:0 4px;border:1px solid rgba(233,236,239,.5);border-radius:3px;font-size:10px;font-weight:700;text-align:center;line-height:14px;color:#e9ecef;margin:0 2px}
 .dk-prompt{background:rgba(10,12,16,.72);border-radius:6px;padding:6px 10px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;transform:translate(36px,-50%);white-space:nowrap}
 .dk-toast{left:50%;top:84px;transform:translateX(-50%);background:rgba(10,12,16,.72);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:9px 14px;font-size:14px;display:flex;gap:10px;align-items:center;transition:opacity .3s}
@@ -105,8 +91,8 @@ const CSS = `
 class Dark implements DarkHooks {
   private inv: Inventory | null = null;
   private readonly root = document.createElement("div");
-  private readonly strip = document.createElement("div");
-  private readonly col = document.createElement("div"); // bottom right, up from the guns: the quick slots or the strip, the battery
+  private readonly slips = document.createElement("div"); // (plan 86) above the quick slots: what I gained, typed
+  private readonly col = document.createElement("div"); // bottom right, up from the guns: the quick slots, the slips, the battery
   private readonly quickEl = document.createElement("div");
   private quickKey = "";
   private quickPulse: { n: number; ok: boolean; until: number } | null = null;
@@ -155,14 +141,6 @@ class Dark implements DarkHooks {
     this.lockers = out;
     return out;
   }
-  private stripUntil = 0;
-  private tab = false;
-  private tabWait: ReturnType<typeof setTimeout> | undefined;
-  private peek(on: boolean) {
-    this.tab = on;
-    this.render();
-  }
-  private fresh = new Map<number, string>(); // slot → "+n", for the strip's moment after a pickup
   private target: Target | null = null;
   private search: { target: Target; at: number } | null = null;
   private toastUntil = 0;
@@ -183,7 +161,7 @@ class Dark implements DarkHooks {
     style.textContent = CSS + ARMS_CSS + DOWN_CSS + VITALS_CSS + INV_CSS;
     this.root.className = "dk";
     this.root.append(style);
-    this.strip.className = "abs dk-strip";
+    this.slips.className = "abs dk-slips";
     this.prompt.className = "abs dk-prompt";
     this.toastEl.className = "abs dk-toast";
     this.arc.setAttribute("class", "abs");
@@ -197,7 +175,7 @@ class Dark implements DarkHooks {
       el.style.display = "none";
       this.root.append(el);
     }
-    for (const el of [this.quickEl, this.strip, this.bat, this.airEl]) el.style.display = "none";
+    for (const el of [this.quickEl, this.bat, this.airEl]) el.style.display = "none";
     this.root.append(this.col);
     this.hit.className = "dk-hit";
     this.awake.className = "dk-awake";
@@ -212,8 +190,8 @@ class Dark implements DarkHooks {
       this.quickPulse = { n, ok, until: performance.now() + (ok ? 160 : 280) };
       this.quickKey = "";
     };
-    // (the column, bottom up: the guns' cylinder and flares, the quick slots or the strip, the battery)
-    this.col.append(this.arms.hudEl, this.quickEl, this.strip, this.airEl, this.bat);
+    // (the column, bottom up: the guns' cylinder and flares, the quick slots, the slips, the battery)
+    this.col.append(this.arms.hudEl, this.quickEl, this.slips, this.airEl, this.bat);
     this.downs = new Down(ctl, walker, this.root, () => !!this.inv && count(this.inv, "aid") > 0, t);
     // the inventory (I, the pad's Menu): its asks go to the server, or to the guns
     this.panel = new InventoryPanel(
@@ -288,14 +266,20 @@ class Dark implements DarkHooks {
         e.stopImmediatePropagation();
         return;
       }
+      // (Tab: the walker's — the next thing in reach; plan 86: held, it no longer shows the strip — the page's focus
+      // kept where it is)
       if (e.code === "Tab") {
         e.preventDefault();
-        if (e.repeat) return;
-        // (with more than one thing in reach a tap is the prompt's — the next of them: the pockets
-        // wait to see it held)
-        clearTimeout(this.tabWait);
-        if ((this.walker.targets?.list.length ?? 0) > 1) this.tabWait = setTimeout(() => this.peek(true), TAB_PEEK_MS);
-        else this.peek(true);
+        return;
+      }
+      // (plan 86) H a first aid, B a battery — from the quick slots or the pack, on foot
+      if (
+        !e.repeat &&
+        (e.code === "KeyH" || e.code === "KeyB") &&
+        this.quickUse(e.code === "KeyH" ? "aid" : "battery")
+      ) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
         return;
       }
       if (!e.repeat && actionOf(this.walker.controls.b, e.code) === "use" && this.use()) {
@@ -306,13 +290,8 @@ class Dark implements DarkHooks {
     };
     const up = (e: KeyboardEvent) => {
       if (e.code === this.useKey) this.useKey = null;
-      if (e.code !== "Tab") return;
-      clearTimeout(this.tabWait);
-      this.peek(false);
     };
     const blur = () => {
-      clearTimeout(this.tabWait);
-      this.tab = false;
       this.useKey = null;
     };
     // the left button, aiming with a gun out: a shot (not the world's click). (mousedown: with
@@ -333,7 +312,6 @@ class Dark implements DarkHooks {
       window.removeEventListener("blur", blur);
       window.removeEventListener("mousedown", press, true);
     });
-    this.strip.addEventListener("contextmenu", (e) => e.preventDefault());
     const loop = () => {
       this.raf = requestAnimationFrame(loop);
       const t = performance.now();
@@ -378,6 +356,21 @@ class Dark implements DarkHooks {
     const slot = this.inv ? findStack(this.inv, "aid") : -1;
     if (slot >= 0) this.ctl.room?.send("dark:use", { slot });
   }
+  /** (plan 86) H, B: a first aid or a battery used from wherever it is — on foot only (in a car H is the horn, B
+   *  looks back), not while building or a menu's up. True if the key was taken: used, or said why not. */
+  private quickUse(id: "aid" | "battery"): boolean {
+    const h = hud.get();
+    if (!this.inv || !this.walker.stepping || h.menu || h.build.on || this.panel.open) return false;
+    const room = this.ctl.room;
+    const lp = room?.state.players.get(room.sessionId);
+    if (lp?.downAt) return false;
+    const slot = findStack(this.inv, id);
+    if (slot < 0) this.toast(t(`dark_none_${id}`), [id]);
+    else if (id === "aid" && ((lp?.hp as number) ?? 100) >= 100) this.toast(t("dark_full_aid"), [id]);
+    else if (id === "battery" && this.walker.vitals.bat >= 99.5) this.toast(t("dark_full_battery"), [id]);
+    else room?.send("dark:use", { slot });
+    return true;
+  }
 
   // ── the server's word ────────────────────────────────────────────────────
   private pockets(inv: Inventory, bat: number) {
@@ -385,40 +378,48 @@ class Dark implements DarkHooks {
     this.inv = inv;
     // (the walker counts my battery down as I focus; the server's word when they part)
     if (!was || Math.abs(this.walker.vitals.bat - bat) > 4) this.walker.vitals.bat = bat;
-    if (!was) return this.render();
-    // what's new: ringed in amber with how many, the strip up for a moment
-    this.fresh.clear();
-    // (a weapon new only if it wasn't carried before at all — moved between the quick slots and the pack, it isn't)
-    const carried = (id: string) => [...was.quick, ...was.pockets].some((w) => w?.id === id);
-    const gained = (it: Item | null, before: Item | null | undefined) => {
-      if (!it) return 0;
-      if (!("n" in it)) return carried(it.id) ? 0 : 1;
-      return it.n - (before?.id === it.id && "n" in before ? before.n : 0);
-    };
-    inv.pockets.forEach((it, i) => {
-      const gain = gained(it, was.pockets[i]);
-      if (gain > 0) this.fresh.set(i, `+${gain}`);
-    });
-    inv.quick.forEach((it, i) => {
-      const gain = gained(it, was.quick[i]);
-      if (gain > 0) this.fresh.set(QUICK_SLOT + i, `+${gain}`);
-    });
-    if (this.fresh.size) this.stripUntil = performance.now() + 3000;
-    this.render();
+    if (!was) return;
+    // (plan 86) what's new, by kind — a move, a split, organizing gain nothing: a slip each, typed, above the quick
+    // slots ("+4 shells · in the pack"); a weapon new only if it wasn't carried before at all
+    const all = (v: Inventory) => [...v.quick, ...v.pockets];
+    const kinds = new Set(all(inv).flatMap((it) => (it ? [it.id] : [])));
+    for (const id of kinds) {
+      const q = inv.quick.findIndex((it) => it?.id === id);
+      const atHand = (before: Inventory) =>
+        before.quick.reduce((a, it) => a + (it?.id === id ? ("n" in it ? it.n : 1) : 0), 0);
+      let n = 0;
+      let hand = false;
+      if (isWeapon(id)) {
+        if (all(was).some((it) => it?.id === id)) continue;
+        n = 1;
+        hand = q >= 0;
+      } else {
+        n = count(inv, id) - count(was, id);
+        hand = q >= 0 && atHand(inv) > atHand(was);
+      }
+      if (n <= 0) continue;
+      const where = hand ? t("dark_slip_hand", { n: String(q + 1) }) : t("dark_slip_pack");
+      const name = n > 1 ? (trMaybe(`dark_many_${id}`) ?? itemName(id)) : itemName(id);
+      this.slip(id, `${isWeapon(id) ? "+" : `+${n}`} ${name.toLowerCase()} · ${where}`);
+    }
+  }
+
+  /** (plan 86) A typed slip above the quick slots, for a moment — three at most, the oldest let go */
+  private slip(id: ItemId, text: string) {
+    const el = tag("div", `dk-slip${isWeapon(id) ? " w" : ""}`, "");
+    el.append(svg(itemArt(id)), tag("span", "", text));
+    this.slips.append(el);
+    while (this.slips.childElementCount > 3) this.slips.firstElementChild?.remove();
+    setTimeout(() => el.classList.add("gone"), SLIP_MS);
+    setTimeout(() => el.remove(), SLIP_MS + 450);
   }
 
   private found(got: LootItem[], full: boolean, gone: boolean, later = false) {
     this.search = null;
     if (!got.length)
       return this.toast(t(later ? "dark_tomorrow" : gone ? "dark_gone" : full ? "dark_full" : "dark_nothing"), []);
-    const parts = got.map((g) =>
-      WEAPONS[g.id as keyof typeof WEAPONS] ? itemName(g.id).toLowerCase() : `${g.n} ${itemName(g.id).toLowerCase()}`,
-    );
-    const what = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} ${t("dark_and")} ${parts.at(-1)}` : parts[0];
-    this.toast(
-      `${t("dark_found", { what })}${full ? ` · ${t("dark_full")}` : ""}`,
-      got.map((g) => g.id),
-    );
+    // (plan 86: what came, the slips say — the pockets' word; here only what didn't fit)
+    if (full) this.toast(t("dark_full"), []);
   }
 
   private toast(text: string, icons: ItemId[]) {
@@ -434,87 +435,38 @@ class Dark implements DarkHooks {
     this.toastUntil = performance.now() + 3200;
   }
 
-  // ── the strip ────────────────────────────────────────────────────────────
-  private render() {
-    const inv = this.inv;
-    const show = !!inv && (this.tab || performance.now() < this.stripUntil);
-    this.strip.style.display = show ? "flex" : "none";
-    this.strip.style.pointerEvents = show ? "auto" : "none";
-    if (!show || !inv) return;
-    this.strip.replaceChildren();
-    const slot = (i: number, id: ItemId | null, n: string, wide: boolean, key?: string) => {
-      const el = document.createElement("div");
-      el.className = `dk-slot${wide ? " w" : ""}${id ? "" : " empty"}${this.fresh.has(i) ? " new" : ""}`;
-      if (key) el.append(tag("span", "k", key));
-      if (id) {
-        el.append(svg(itemArt(id)));
-        el.append(tag("span", "n", n));
-        const tip = tag("div", "dk-tip", "");
-        tip.append(tag("b", "", itemName(id)));
-        if (isUsable(id)) {
-          tip.append(tag("span", "", `${t("dark_use")} (${t(`dark_use_${id}`)})`));
-          tip.append(document.createElement("br"));
-        }
-        tip.append(tag("span", "", t("dark_drop")));
-        el.append(tip);
-        el.addEventListener("click", () => {
-          if (i >= QUICK_SLOT) this.arms.quick(i - QUICK_SLOT);
-          else if (isUsable(id)) this.ctl.room?.send("dark:use", { slot: i });
-        });
-        el.addEventListener("contextmenu", (e) => {
-          e.preventDefault();
-          this.ctl.room?.send("dark:drop", { slot: i });
-        });
-      }
-      const plus = this.fresh.get(i);
-      if (plus && performance.now() < this.stripUntil) el.append(tag("span", "plus", plus));
-      this.strip.append(el);
-    };
-    for (const [i, it] of inv.quick.entries())
-      slot(
-        QUICK_SLOT + i,
-        it?.id ?? null,
-        !it ? "" : "loaded" in it ? `${it.loaded}/${WEAPONS[it.id].mag}` : String(it.n),
-        !!it && isWeapon(it.id),
-        String(i + 1),
-      );
-    for (let i = 0; i < POCKETS; i++) {
-      const it = inv.pockets[i];
-      slot(
-        i,
-        it?.id ?? null,
-        !it ? "" : "loaded" in it ? `${it.loaded}/${WEAPONS[it.id].mag}` : String(it.n),
-        !!it && isWeapon(it.id),
-      );
-    }
-    if (this.tab) {
-      const hint = tag("div", "dk-hint", "");
-      hint.append(
-        tag("span", "dk-key", "Tab"),
-        ` ${t("dark_pockets")} · `,
-        tag("span", "dk-key", "I"),
-        ` ${t("dark_inv_all")} · pad `,
-        tag("span", "dk-key", "↓"),
-        ` ${t("dark_aid_pad")}`,
-      );
-      this.strip.append(hint);
-    }
-  }
-
-  // ── the quick slots (1–4): always there, bottom right — but for the strip or the inventory ──
+  // ── the quick slots (1–4): always there, bottom right — but for the inventory ──
+  // (plan 86, design/inventory/0-hud: framed, captioned — "At hand", and the held gun's rounds: in it + spare; hurt,
+  // with a first aid carried, the caption says H)
   private quickHud(now: number) {
     const inv = this.inv;
-    const show = !!inv && !this.panel.open && this.strip.style.display === "none";
+    const show = !!inv && !this.panel.open;
     this.quickEl.style.display = show ? "flex" : "none";
     if (!show || !inv) return;
     const room = this.ctl.room;
-    const gun = (room?.state.players.get(room.sessionId)?.gun as string) || "";
+    const lp = room?.state.players.get(room.sessionId);
+    const gun = (lp?.gun as string) || "";
+    const hurt = ((lp?.hp as number) ?? 100) < 60 && count(inv, "aid") > 0 && !lp?.downAt;
+    const held = isWeapon(gun) ? inv.quick.find((it) => it?.id === gun) : null;
+    const rounds =
+      held && "loaded" in held
+        ? `${t(`dark_ammo_${WEAPONS[held.id].ammo}`)} · ${held.loaded} + ${count(inv, WEAPONS[held.id].ammo)}`
+        : "";
     const pulse = this.quickPulse && now < this.quickPulse.until ? this.quickPulse : null;
     if (!pulse) this.quickPulse = null;
-    const key = `${JSON.stringify(inv.quick)}|${gun}|${pulse ? `${pulse.n}${pulse.ok}` : ""}|${artVersion()}`;
+    const key = `${JSON.stringify(inv.quick)}|${gun}|${rounds}|${hurt}|${pulse ? `${pulse.n}${pulse.ok}` : ""}|${artVersion()}`;
     if (key === this.quickKey) return;
     this.quickKey = key;
     this.quickEl.replaceChildren();
+    const cap = tag("div", "cap", "");
+    if (hurt) {
+      const h = tag("span", "hurt", "");
+      h.append(tag("span", "dk-key", "H"), ` ${t("dark_aid_pad")} ×${count(inv, "aid")}`);
+      cap.append(h);
+    } else cap.append(tag("span", "", t("dark_at_hand")));
+    if (rounds) cap.append(tag("b", "", rounds));
+    const row = tag("div", "dk-qs", "");
+    this.quickEl.append(cap, row);
     for (const [i, it] of inv.quick.entries()) {
       const el = document.createElement("div");
       const wide = !!it && isWeapon(it.id);
@@ -526,7 +478,7 @@ class Dark implements DarkHooks {
         el.append(svg(itemArt(it.id)));
         el.append(tag("span", "n", "loaded" in it ? `${it.loaded}/${WEAPONS[it.id].mag}` : String(it.n)));
       }
-      this.quickEl.append(el);
+      row.append(el);
     }
   }
 
@@ -716,7 +668,10 @@ class Dark implements DarkHooks {
       const drained = this.walker.breath.drained;
       const label = drained ? t("dark_recharging") : t("dark_focus");
       const mark = drained ? `<i style="left:25%;width:2px;background:${AMBER}"></i>` : "";
-      this.bat.innerHTML = `<div class="row"><span style="color:var(--amber)">${label.toUpperCase()}</span><span style="color:${low ? "var(--error)" : "var(--cream)"}">${pct}%</span></div><div class="bar"><i style="width:${bat - eat}%;background:${fill}"></i><i style="left:${bat - eat}%;width:${eat}%;background:var(--amber);opacity:.4"></i>${mark}</div>`;
+      // (plan 86: a battery carried — B puts it in)
+      const spare = this.inv ? count(this.inv, "battery") : 0;
+      const b = spare ? `<span class="dk-bk"><span class="dk-key">B</span>×${spare}</span>` : "";
+      this.bat.innerHTML = `<div class="row"><span style="color:var(--amber)">${label.toUpperCase()}</span><span style="color:${low ? "var(--error)" : "var(--cream)"}">${b}${pct}%</span></div><div class="bar"><i style="width:${bat - eat}%;background:${fill}"></i><i style="left:${bat - eat}%;width:${eat}%;background:var(--amber);opacity:.4"></i>${mark}</div>`;
     }
     // the air under the water: under it, and a moment after it's full again
     const air = this.walker.airK;
@@ -728,12 +683,7 @@ class Dark implements DarkHooks {
       const pct = Math.round(air * 100);
       this.airEl.innerHTML = `<div class="row"><span style="color:#8fc9d6">${t("dark_breath").toUpperCase()}</span><span style="color:${low ? "var(--error)" : "var(--cream)"}">${pct}%</span></div><div class="bar"><i style="width:${pct}%;background:${low ? "var(--rust)" : "#5fa9bb"}"></i></div>`;
     }
-    // the strip's moment, the toast's
-    if (this.stripUntil && now > this.stripUntil) {
-      this.stripUntil = 0;
-      this.fresh.clear();
-      this.render();
-    }
+    // the toast's moment
     this.quickHud(now);
     // (the phone out sits where the column is: the guns, the quick slots, the battery go under it; plan 86: the pack
     // open too — its belt is the quick bar, its tag the gun's rounds)

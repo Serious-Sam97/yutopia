@@ -6,7 +6,8 @@ import { ANA, enter, test, token } from "./helpers";
 // stamina — mine (the walker's) and the server's together — until I'm out of
 // breath: the sprint becomes a jog, the arc by my body turns amber, and the
 // server never puts me back. Then a search at a townhouse's door says what was
-// there, and Tab shows the pockets. It needs only the
+// there — a typed slip above the quick slots for what came, or a word that there's
+// nothing (plan 86: no strip). It needs only the
 // building and the Grounds (every world has them), so no fixture is put back.
 
 // the ground floor's corner is at (-60, -10) in the building's coords
@@ -90,13 +91,10 @@ test("a sprint across the pond: out of breath, a jog; a search; the pockets", as
   await goTo(page, G(413, -444));
   await expect(page.locator(".dk-prompt", { hasText: /Front door|Porta da casa/ })).toBeVisible();
   await page.keyboard.press("KeyE");
-  await expect(page.locator(".dk-toast")).toBeVisible({ timeout: 5000 });
+  await expect(page.locator(".dk-toast:visible, .dk-slip").first()).toBeVisible({ timeout: 5000 });
   await shot(page, "dark-search");
-  // Tab: the pockets
-  await page.keyboard.down("Tab");
-  await expect(page.locator(".dk-strip")).toBeVisible();
-  await expect(page.locator(".dk-strip .dk-slot")).toHaveCount(10);
-  await shot(page, "dark-pockets");
-  await page.keyboard.up("Tab");
-  await expect(page.locator(".dk-strip")).toBeHidden();
+  // the quick slots bottom right, framed and captioned (plan 86: the strip, and Tab's peek at it, gone)
+  await expect(page.locator(".dk-quick .cap")).toBeVisible();
+  await expect(page.locator(".dk-quick .dk-q")).toHaveCount(4);
+  await expect(page.locator(".dk-strip")).toHaveCount(0);
 });

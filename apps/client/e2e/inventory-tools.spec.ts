@@ -275,6 +275,56 @@ test("the pack on the pad: the d-pad picks, Y the menu, X held drops, B closes",
   expect(errors).toEqual([]);
 });
 
+test("the HUD: the quick slots captioned with the held gun's rounds; a slip for what came, none for a move; H, B", async ({
+  page,
+}) => {
+  test.setTimeout(150_000);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await prefs(page);
+  await kitted(page);
+  await page.evaluate(() => (window as any).__yutopia.room.send("mod:hour", { h: 21 }));
+  const cap = page.locator(".dk-quick .cap");
+  const slips = page.locator(".dk-slip");
+  const toast = page.locator(".dk-toast");
+  // hurt, a first aid carried: the caption says H; the kit's things came as slips (three at most), then go
+  await expect(cap.locator(".hurt")).toContainText("H");
+  await expect.poll(() => slips.count()).toBeGreaterThan(0);
+  expect(await slips.count()).toBeLessThanOrEqual(3);
+  await expect(slips).toHaveCount(0, { timeout: 6000 });
+  // the revolver drawn: its rounds in the caption — in it + spare
+  await page.keyboard.press("Digit1");
+  await expect(cap.locator("b")).toHaveText(".38 · 6 + 24");
+  // four shells dropped and taken back: one slip, typed
+  const sh = await at(page, "shell");
+  await page.evaluate((slot) => (window as any).__yutopia.room.send("dark:drop", { slot, n: 4 }), sh);
+  await expect.poll(() => total(page, "shell")).toBe(8);
+  await page.evaluate(() => (window as any).__yutopia.room.send("dark:takeAll", {}));
+  await expect(slips).toHaveCount(1);
+  await expect(slips).toHaveText("+4 shells · in the pack");
+  await shot(page, "hud-slip");
+  await expect(slips).toHaveCount(0, { timeout: 6000 });
+  // a move in the pack: no slip
+  const free = (await inv(page)).pockets.indexOf(null);
+  await page.evaluate(([from, to]) => (window as any).__yutopia.room.send("dark:move", { from, to }), [sh, free]);
+  await expect.poll(async () => (await inv(page)).pockets[free]?.id).toBe("shell");
+  await page.waitForTimeout(500);
+  await expect(slips).toHaveCount(0);
+  // H: the first aid used from the pack — health 100, the caption's H gone; H again: none left, said
+  await page.keyboard.press("KeyH");
+  await expect.poll(() => hp(page)).toBe(100);
+  await expect.poll(() => at(page, "aid")).toBe(-1);
+  await expect(cap.locator(".hurt")).toHaveCount(0);
+  await page.keyboard.press("KeyH");
+  await expect(toast).toHaveText(/no first aid/i);
+  // B with the torch full: not wasted, said
+  await page.keyboard.press("KeyB");
+  await expect(toast).toHaveText(/torch is full/i);
+  expect(await total(page, "battery")).toBe(1);
+  await page.evaluate(() => (window as any).__yutopia.room.send("mod:hour", { h: null }));
+  expect(errors).toEqual([]);
+});
+
 test.describe("a phone", () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   test("the pack on a phone: tap picks, tap an empty pouch moves it, held the menu, Drop only by a hold", async ({

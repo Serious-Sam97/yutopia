@@ -721,6 +721,7 @@ export class InventoryPanel {
             row(t("dark_inv_k_dbl"), t("dark_inv_k_dbl_do")) +
             row(t("dark_inv_k_right"), t("dark_inv_k_right_do")) +
             row(t("dark_inv_k_drag"), t("dark_inv_k_drag_do")) +
+            row(`${kk("H")} ${kk("B")}`, t("dark_inv_k_hb")) +
             row(t("dark_inv_k_pad"), t("dark_inv_k_pad_do"))
       }</div>`;
     }
