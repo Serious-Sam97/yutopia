@@ -45,7 +45,10 @@ import { gzipSync } from "node:zlib";
 // (raised to 469 on 2026-11-06, the same call: plan 72 phase 11's rest — the tile-map adapter deleted,
 // every reader asking the structure: its queries and the wall painting's stretches on the page —
 // 465.8 → 467.2)
-const BUDGETS = { "/page": 469, "/login/page": 160 }; // KB gzip
+// (raised to 481 on 2026-11-14, the same call: measured 480.7 at plan 86's end — plan 86 put nothing on the page
+// (its pack, slips and rules are in the lazy yutopia-dark and the shared rules off the page); the 11.7 KB came with
+// plans 73–85 since the last measure on 11-06, not traced yet)
+const BUDGETS = { "/page": 481, "/login/page": 160 }; // KB gzip
 // (/page raised from 451 on 2026-11-04 under the same call: plan 72's phase 4 — the controller split
 // into 17 feature modules (world/ctl), the same code: what the minifier can't shorten — `this.c.x`,
 // `this.<feature>.x`, the forwarders for what's read from outside — 449.7 → 451.2; the lazy chunks

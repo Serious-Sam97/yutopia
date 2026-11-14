@@ -406,10 +406,10 @@ export class InventoryPanel {
     else if (id === "flare" && q >= 0) out.push({ act: "use", label: t("dark_inv_throw"), keys: kk(String(q + 1)) });
     out.push({ act: "to", label: t(q >= 0 ? "dark_inv_move_to" : "dark_inv_equip_to"), chips: true, own: q });
     if (q >= 0 && inv.pockets.includes(null))
-      out.push({ act: "pack", label: t("dark_inv_to_pack"), keys: kk("⇧ click") });
+      out.push({ act: "pack", label: t("dark_inv_to_pack"), keys: kk(t("dark_inv_shift_click")) });
     const n = "n" in it ? it.n : 1;
     if (!isWeapon(id) && n >= 2 && this.freeFor() >= 0)
-      out.push({ act: "split", label: t("dark_inv_split"), keys: kk("⇧ drag") });
+      out.push({ act: "split", label: t("dark_inv_split"), keys: kk(t("dark_inv_shift_drag")) });
     if (n >= 2) out.push({ act: "drop1", label: t("dark_inv_drop1"), line: true });
     out.push({
       act: "drop",

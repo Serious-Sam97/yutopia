@@ -94,6 +94,8 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_inv_drop1: ["Drop 1", "Largar 1"],
   dark_inv_drop_all: ["Drop all {n}", "Largar todos ({n})"],
   dark_inv_hold_key: ["hold", "segure"],
+  dark_inv_shift_click: ["⇧ click", "⇧ clique"],
+  dark_inv_shift_drag: ["⇧ drag", "⇧ arrastar"],
   dark_inv_in_pack: ["Equip it to hold it — or press 1–4 on it", "Equipe para segurar — ou aperte 1–4 sobre ela"],
   dark_inv_in_pack_touch: ["Equip it to hold it — or drag it to 1–4", "Equipe para segurar — ou arraste para 1–4"],
   dark_inv_quick_full: [

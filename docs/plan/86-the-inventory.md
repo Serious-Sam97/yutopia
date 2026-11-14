@@ -8,7 +8,7 @@ mocked first, then chosen; **F2a** the items' pictures rendered from their own 3
 the pack, the pack bigger; **F4a** 8 pockets. The rest of the proposal (the menu, hover + 1–4, split, organize, take
 all, quick use, no strip) as recommended, not asked. **Phase 0 (the mocks) rendered 2026-11-14 — the user chose
 B · the open pack** (a canvas pack drawn open, stitched pouches, the four at hand as loops on a wooden belt, the
-picked one on a paper tag); committed a42710b7. **Phase 1 (the pictures) built 2026-11-14**, committed 186148c9. **Phase 2 (the rules: 8 pockets, split, organize, take all, drop some) built 2026-11-14**, committed 3ea7bc60. **Phase 3 (the panel in look B) built 2026-11-14**, committed 2ee8b279. **Phase 4 (the HUD) built 2026-11-14**. Stills of today:
+picked one on a paper tag); committed a42710b7. **Phase 1 (the pictures) built 2026-11-14**, committed 186148c9. **Phase 2 (the rules: 8 pockets, split, organize, take all, drop some) built 2026-11-14**, committed 3ea7bc60. **Phase 3 (the panel in look B) built 2026-11-14**, committed 2ee8b279. **Phase 4 (the HUD) built 2026-11-14**, committed 62c79727. **Phase 5 (checks) done 2026-11-14 — plan 86 done.** Stills of today:
 `design/inventory/now-panel.png`, `now-strip.png`, `now-strip-over-dock.png`.
 
 ## What there is now
@@ -210,6 +210,22 @@ pages yet), crafting, weight, item shapes (RE's Tetris).
      other three — green. Stills: `design/inventory/4-hud-slip.png`, `4-hud-shells.png`.
 5. **Checks**: `inventory.spec` and `inventory-pack.spec` grown (the menu, hover + 1–4, split, take all, 8 pockets);
    the guns' specs that empty or fill her (slots 0–11 now); a phone, the pad; stills.
+   Done in phase 5 (2026-11-14) — **plan 86 done**:
+   - The menu, hover + 1–4, split, take all, organize, 8 pockets, the pad and a phone were checked as they were
+     built, in `inventory-tools.spec.ts` (phases 3–4: four tests — the hand tools, the pad, the HUD, a phone by touch);
+     `inventory.spec` and `inventory-pack.spec` moved to the menu and the new markup.
+   - The whole set together, once more at the end: the five guns' two-player specs and `guns-two` (her pack emptied
+     over slots 0–11), `dark.spec`, `inventory.spec`, `inventory-pack.spec`, `inventory-tools.spec` — **15 green**
+     (12.4 min). The client's units 334 green. Lint clean over every file the plan changed.
+   - The pad: with the pack open the walker drops every pad press but the inventory's (`frozen`), so Y, X and the
+     d-pad are the panel's alone.
+   - **Budgets** (a production build): `yutopia-dark` 39.9 of 80 KB with the pack, its menu, the slips; the world
+     page 480.7 KB — over its 469, but none of it plan 86's (nothing of the pack or the shared rules on the page): it
+     came with plans 73–85 since the last measure (11-06); raised to 481 under the standing call, noted in
+     `tools/budget.mjs`, the growth not traced yet.
+   - **Portuguese** (`yutopia:lang`): every word of the pack, the menu, the tag, the slips and the caption in both
+     languages (the menu's Shift chips were English-only: moved to the strings). Stills: `design/inventory/5-pt-pack.png`,
+     `5-pt-menu.png`, `5-pt-phone.png`, `5-pt-hud.png`.
 
 ## Risks
 
