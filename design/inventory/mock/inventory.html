@@ -1,0 +1,363 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Yutopia — the inventory, three directions (plan 86 phase 0)</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&family=Special+Elite&display=block" rel="stylesheet">
+<style>
+/* Plan 86 phase 0: one inventory, three looks — ?d=ledger|pack|quiet, ?s=desk|phone|hud. The HUD's look (plan 45:
+   ink, walnut frames, Cormorant caps, Special Elite labels, the one warm lamp); the items rendered from their own
+   models (../items, tools/art/items/render_items.py). */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+:root {
+  --ink: #15161b; --ink2: #101115; --cream: #ece6da; --dim: #a7a094; --lamp: #f1d79a; --label: #d9c08a; --red: #e7907c;
+  --hair: rgba(241,215,154,.14); --hair2: rgba(241,215,154,.26); --well: rgba(255,255,255,.035);
+  --wood: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%27600%27%20height=%27240%27%3E%3Cfilter%20id=%27g%27%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.006%200.22%27%20numOctaves=%273%27%20seed=%277%27/%3E%3CfeColorMatrix%20values=%270%200%200%200%200.55%20%200%200%200%200%200.36%20%200%200%200%200%200.2%20%201.1%200%200%200%20-0.35%27/%3E%3C/filter%3E%3Crect%20width=%27600%27%20height=%27240%27%20fill=%27%234e301b%27/%3E%3Crect%20width=%27600%27%20height=%27240%27%20filter=%27url(%23g)%27/%3E%3C/svg%3E");
+  --head: "Cormorant Garamond", serif; --type: "Special Elite", monospace; --body: Inter, sans-serif;
+}
+body { background: #0b0c10 url(../../ui/mock/bg-lot-night.png) center / cover no-repeat; color: var(--cream); font-family: var(--body); -webkit-font-smoothing: antialiased; position: relative; }
+.grade { position: absolute; inset: 0; background: radial-gradient(130% 100% at 50% 50%, transparent 40%, rgba(2,4,8,.7) 100%); }
+.scrim { position: absolute; inset: 0; background: rgba(6,8,12,.55); }
+.cap { font: 600 11px/1 var(--type); letter-spacing: .16em; text-transform: uppercase; color: var(--label); }
+.kk { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; font: 400 11px/1 var(--type); color: var(--dim); border: 1px solid var(--hair2); border-radius: 3px; }
+.zig { height: 8px; background: linear-gradient(135deg, transparent 33%, var(--hair2) 33% 50%, transparent 50% 83%, var(--hair2) 83%) 0 0 / 8px 8px; opacity: .7; }
+img.it { display: block; max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 6px 8px rgba(0,0,0,.55)); }
+.n { font: 400 13px/1 var(--type); color: var(--cream); text-shadow: 0 1px 2px #000; }
+.n small { color: var(--dim); font-size: 11px; }
+.lampbtn { height: 36px; padding: 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border-radius: 4px; background: var(--lamp); color: #1a1a1e; font: 600 13px/1 var(--body); box-shadow: 0 0 14px rgba(241,215,154,.35); }
+.lampbtn .kk { color: #1a1a1e; border-color: rgba(26,26,30,.4); }
+.btn { height: 36px; padding: 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border-radius: 4px; border: 1px solid var(--hair2); color: var(--cream); font: 600 13px/1 var(--body); background: rgba(255,255,255,.03); }
+.menu { position: absolute; z-index: 5; width: 196px; padding: 6px; border-radius: 4px; background: #1b1c22; border: 1px solid var(--hair2); box-shadow: 0 14px 30px rgba(0,0,0,.6); }
+.menu div { height: 30px; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; border-radius: 3px; font: 500 13px/1 var(--body); color: var(--cream); }
+.menu div.on { background: rgba(241,215,154,.12); color: var(--lamp); }
+.menu div.bad { color: var(--red); }
+.menu hr { border: 0; border-top: 1px solid var(--hair); margin: 4px 2px; }
+.menu .kk { height: 16px; font-size: 10px; }
+.slip { position: absolute; padding: 10px 16px 10px 14px; background: #ece5d3; color: #222; font: 400 14px/1.3 var(--type); box-shadow: 0 8px 18px rgba(0,0,0,.4); transform: rotate(-.6deg); display: flex; align-items: center; gap: 10px; }
+.slip img { width: 34px; height: 34px; object-fit: contain; filter: none; }
+.tag-in { font: 400 10px/1 var(--type); color: var(--lamp); letter-spacing: .1em; }
+
+/* ── A · the ledger: the HUD's own — a walnut-framed ink panel, a clean grid of wells, a typed card ── */
+.L { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 1180px; height: 780px; border: 6px solid transparent; border-radius: 7px;
+  background: linear-gradient(var(--ink), var(--ink)) padding-box, var(--wood) border-box; background-size: auto, 600px 240px;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.6), 0 0 0 1px rgba(0,0,0,.6), 0 30px 70px rgba(0,0,0,.6); display: grid; grid-template-columns: 1fr 380px; grid-template-rows: 74px 1fr 136px; }
+.L .hd { grid-column: 1 / -1; display: flex; align-items: center; gap: 18px; padding: 0 28px; border-bottom: 1px solid var(--hair); }
+.L .hd h1 { font: 600 30px/1 var(--head); letter-spacing: .2em; text-transform: uppercase; }
+.L .hd .sub { font: 400 13px/1 var(--type); color: var(--dim); }
+.L .hd .vit { margin-left: auto; display: flex; gap: 18px; font: 400 12px/1 var(--type); color: var(--dim); }
+.L .hd .vit b { color: var(--cream); font-weight: 400; } .L .hd .vit .lo b { color: var(--red); }
+.L .hd .x { margin-left: 18px; }
+.L .main { padding: 22px 28px; display: flex; flex-direction: column; gap: 14px; }
+.L .row { display: grid; gap: 12px; }
+.L .q { grid-template-columns: repeat(4, 1fr); }
+.L .p { grid-template-columns: repeat(4, 1fr); }
+.L .w { position: relative; height: 104px; border-radius: 4px; background: var(--well); border: 1px solid var(--hair); padding: 12px 12px 22px; display: flex; align-items: center; justify-content: center; }
+.L .w.e { background: transparent; border: 1px solid rgba(241,215,154,.07); }
+.L .w .k { position: absolute; left: 9px; top: 7px; font: 400 11px/1 var(--type); color: var(--dim); }
+.L .w .n { position: absolute; right: 9px; bottom: 7px; }
+.L .w .s { position: absolute; left: 9px; bottom: 7px; font: 400 11px/1 var(--type); color: var(--dim); }
+.L .w.hand { border-color: var(--lamp); box-shadow: 0 0 0 1px rgba(241,215,154,.35), 0 0 16px rgba(241,215,154,.25); }
+.L .w.hand .tag { position: absolute; right: 9px; top: 7px; }
+.L .w.sel { border-color: var(--lamp); background: rgba(241,215,154,.07); }
+.L .w.ovr { border-color: var(--hair2); background: rgba(241,215,154,.04); }
+.L .lbls { display: flex; justify-content: space-between; align-items: baseline; }
+.L .side { border-left: 1px solid var(--hair); padding: 22px 26px; display: flex; flex-direction: column; gap: 14px; background: linear-gradient(180deg, rgba(241,215,154,.035), transparent 50%); }
+.L .side .pic { height: 150px; display: flex; align-items: center; justify-content: center; background: radial-gradient(60% 70% at 50% 55%, rgba(241,215,154,.13), transparent 70%); }
+.L .side h2 { font: 600 30px/1 var(--head); letter-spacing: .04em; }
+.L .side .what { font: 400 13px/1.45 var(--body); color: var(--dim); }
+.L .card { background: #ece5d3; color: #222; padding: 10px 14px; font: 400 13px/1.7 var(--type); box-shadow: 0 8px 18px rgba(0,0,0,.35); transform: rotate(-.35deg); display: grid; grid-template-columns: 1fr auto; }
+.L .card b { font-weight: 400; text-align: right; }
+.L .card .note { grid-column: 1 / -1; color: #8a5a17; border-top: 1px dashed rgba(0,0,0,.2); margin-top: 4px; padding-top: 4px; }
+.L .btns { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
+.L .gr { grid-column: 1 / -1; border-top: 1px solid var(--hair); padding: 14px 28px; display: flex; flex-direction: column; gap: 10px; }
+.L .gl { display: flex; gap: 12px; align-items: center; }
+.L .g { height: 66px; width: 230px; border-radius: 4px; background: var(--well); border: 1px solid var(--hair); display: flex; align-items: center; gap: 12px; padding: 0 14px; }
+.L .g img { width: 54px; height: 54px; object-fit: contain; }
+.L .g b { display: block; font: 600 14px/1.2 var(--body); } .L .g span { font: 400 12px/1.4 var(--type); color: var(--dim); }
+.L .g .take { margin-left: auto; font: 400 11px/1 var(--type); color: var(--lamp); }
+.L .foot { margin-left: auto; font: 400 11px/1 var(--type); color: var(--dim); display: flex; gap: 8px; align-items: center; }
+
+/* ── B · the open pack: a canvas pack drawn open — stitched pouches, the quick slots loops on a leather belt, the
+      picked one on a paper tag on a string ── */
+.B { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 1200px; height: 720px; }
+.B .belt { position: absolute; left: 40px; top: 18px; width: 760px; height: 128px; border-radius: 10px;
+  background: linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.35)), var(--wood) 0 60px / 600px 240px; box-shadow: inset 0 0 0 1px rgba(255,220,170,.12), 0 14px 28px rgba(0,0,0,.55); padding: 12px 18px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.B .belt::before { content: ""; position: absolute; left: 8px; right: 8px; top: 6px; bottom: 6px; border: 1px dashed rgba(255,220,170,.28); border-radius: 7px; pointer-events: none; }
+.B .loop { position: relative; height: 100%; overflow: hidden; border-radius: 6px; background: rgba(20,12,6,.55); box-shadow: inset 0 2px 8px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,220,170,.1); display: flex; align-items: center; justify-content: center; padding: 10px 10px 20px; }
+.B .loop img.it { max-height: 62px; }
+.B .loop .k { position: absolute; left: 8px; top: 6px; font: 400 11px/1 var(--type); color: rgba(255,230,190,.7); }
+.B .loop .n { position: absolute; right: 8px; bottom: 6px; }
+.B .loop.hand { box-shadow: inset 0 2px 8px rgba(0,0,0,.6), 0 0 0 1px var(--lamp), 0 0 16px rgba(241,215,154,.35); }
+.B .loop.hand .tag { position: absolute; right: 8px; top: 6px; }
+.B .bag { position: absolute; left: 20px; top: 166px; width: 800px; height: 420px; border-radius: 26px 26px 18px 18px;
+  background: radial-gradient(120% 90% at 50% 0%, #4a4334 0%, #3a3428 45%, #2a251c 100%); box-shadow: inset 0 0 0 1px rgba(255,235,200,.1), inset 0 30px 60px rgba(0,0,0,.35), 0 26px 50px rgba(0,0,0,.6); padding: 54px 34px 30px; }
+.B .bag::before { content: ""; position: absolute; inset: 12px; border-radius: 18px 18px 12px 12px; border: 2px dashed rgba(255,235,200,.18); pointer-events: none; }
+.B .flap { position: absolute; left: 50%; top: -20px; transform: translateX(-50%); padding: 10px 26px; border-radius: 10px; background: var(--wood) 0 120px / 600px 240px; box-shadow: 0 6px 14px rgba(0,0,0,.5); font: 600 22px/1 var(--head); letter-spacing: .22em; text-transform: uppercase; color: #f3e3c4; }
+.B .pockets { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); gap: 18px; height: 100%; }
+.B .po { position: relative; overflow: hidden; border-radius: 10px 10px 16px 16px; background: linear-gradient(180deg, #2c271e, #241f17); box-shadow: inset 0 3px 10px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,235,200,.08); display: flex; align-items: center; justify-content: center; padding: 14px 12px 22px; }
+.B .po::after { content: ""; position: absolute; left: 8px; right: 8px; top: 6px; height: 0; border-top: 2px dashed rgba(255,235,200,.2); }
+.B .po img.it { max-height: 96px; }
+.B .po .n { position: absolute; right: 10px; bottom: 7px; }
+.B .po .s { position: absolute; left: 10px; bottom: 7px; font: 400 11px/1 var(--type); color: rgba(236,230,218,.6); }
+.B .po.sel { box-shadow: inset 0 3px 10px rgba(0,0,0,.55), 0 0 0 1px var(--lamp), 0 0 18px rgba(241,215,154,.3); }
+.B .po.e { opacity: .55; }
+.B .tag { }
+.B .paper { position: absolute; right: 22px; top: 70px; width: 330px; padding: 22px 22px 18px; background: #ece5d3; color: #222; box-shadow: 0 16px 34px rgba(0,0,0,.5); transform: rotate(1.2deg); }
+.B .paper::before { content: ""; position: absolute; left: 50%; top: 10px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: #2a2620; box-shadow: inset 0 0 0 3px #c8bea6; }
+/* (the tag's string: from the pack's corner ring to the tag's hole) */
+.B .string { position: absolute; left: 812px; top: 190px; width: 226px; height: 2px; background: linear-gradient(90deg, #6d5d42, #a08a62); transform: rotate(-27.4deg); transform-origin: left center; box-shadow: 0 2px 3px rgba(0,0,0,.45); }
+.B .ring { position: absolute; left: 802px; top: 180px; width: 20px; height: 20px; border-radius: 50%; border: 3px solid #b39566; box-shadow: 0 2px 4px rgba(0,0,0,.5); }
+.B .paper .pic { height: 120px; display: flex; align-items: center; justify-content: center; margin: 8px 0 6px; }
+.B .paper h2 { font: 600 30px/1 var(--head); }
+.B .paper .what { font: 400 13px/1.45 var(--body); color: #555; margin: 6px 0 10px; }
+.B .paper .sp { display: grid; grid-template-columns: 1fr auto; font: 400 13px/1.75 var(--type); }
+.B .paper .note { grid-column: 1 / -1; color: #8a5a17; border-top: 1px dashed rgba(0,0,0,.2); margin-top: 4px; padding-top: 4px; }
+.B .paper .btns { display: flex; gap: 8px; margin-top: 12px; }
+.B .paper .btns .btn { color: #222; border-color: rgba(0,0,0,.25); flex: 1; background: transparent; }
+.B .paper .btns .lampbtn { flex: 1.3; }
+.B .snow { position: absolute; left: 40px; bottom: 6px; display: flex; gap: 14px; align-items: center; }
+.B .stone { height: 70px; padding: 0 16px 0 10px; border-radius: 36px; background: rgba(236,240,245,.1); border: 1px solid rgba(236,240,245,.2); display: flex; align-items: center; gap: 10px; backdrop-filter: blur(3px); }
+.B .stone img { width: 50px; height: 50px; object-fit: contain; }
+.B .stone b { font: 600 14px/1.2 var(--body); display: block; } .B .stone span { font: 400 12px/1 var(--type); color: var(--dim); }
+.B .stone .take { margin-left: 8px; font: 400 11px/1 var(--type); color: var(--lamp); }
+.B .vit { position: absolute; right: 30px; bottom: 24px; display: flex; gap: 16px; font: 400 12px/1 var(--type); color: var(--dim); }
+.B .vit b { color: var(--cream); font-weight: 400; } .B .vit .lo b { color: var(--red); }
+
+/* B on a phone: the belt, the pack four across, the tag a sheet at the foot, the snow a line */
+.BP { position: absolute; inset: 0; padding: 14px 12px; display: flex; flex-direction: column; gap: 12px; background: rgba(8,10,14,.6); }
+.BP .belt { position: relative; height: 84px; border-radius: 8px; background: linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.35)), var(--wood) 0 60px / 600px 240px; box-shadow: inset 0 0 0 1px rgba(255,220,170,.12), 0 10px 20px rgba(0,0,0,.5); padding: 8px 10px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.BP .belt::before { content: ""; position: absolute; left: 5px; right: 5px; top: 4px; bottom: 4px; border: 1px dashed rgba(255,220,170,.28); border-radius: 6px; pointer-events: none; }
+.BP .loop { position: relative; overflow: hidden; border-radius: 5px; background: rgba(20,12,6,.55); box-shadow: inset 0 2px 6px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,220,170,.1); display: flex; align-items: center; justify-content: center; padding: 6px 4px 14px; }
+.BP .loop img.it { max-height: 40px; }
+.BP .loop .k { position: absolute; left: 5px; top: 4px; font: 400 9px/1 var(--type); color: rgba(255,230,190,.7); }
+.BP .loop .n { position: absolute; right: 5px; bottom: 3px; font-size: 10px; }
+.BP .loop.hand { box-shadow: inset 0 2px 6px rgba(0,0,0,.6), 0 0 0 1px var(--lamp), 0 0 10px rgba(241,215,154,.35); }
+.BP .bag { position: relative; border-radius: 18px 18px 12px 12px; background: radial-gradient(120% 90% at 50% 0%, #4a4334 0%, #3a3428 45%, #2a251c 100%); box-shadow: inset 0 0 0 1px rgba(255,235,200,.1), 0 16px 30px rgba(0,0,0,.6); padding: 30px 12px 14px; }
+.BP .bag::before { content: ""; position: absolute; inset: 7px; border-radius: 13px 13px 8px 8px; border: 2px dashed rgba(255,235,200,.18); pointer-events: none; }
+.BP .flap { position: absolute; left: 50%; top: -14px; transform: translateX(-50%); padding: 7px 18px; border-radius: 8px; background: var(--wood) 0 120px / 600px 240px; box-shadow: 0 4px 10px rgba(0,0,0,.5); font: 600 16px/1 var(--head); letter-spacing: .22em; text-transform: uppercase; color: #f3e3c4; white-space: nowrap; }
+.BP .pockets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.BP .po { position: relative; height: 76px; overflow: hidden; border-radius: 7px 7px 11px 11px; background: linear-gradient(180deg, #2c271e, #241f17); box-shadow: inset 0 3px 8px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,235,200,.08); display: flex; align-items: center; justify-content: center; padding: 8px 6px 16px; }
+.BP .po::after { content: ""; position: absolute; left: 6px; right: 6px; top: 4px; border-top: 2px dashed rgba(255,235,200,.2); }
+.BP .po img.it { max-height: 46px; }
+.BP .po .n { position: absolute; right: 5px; bottom: 4px; font-size: 10px; }
+.BP .po.sel { box-shadow: inset 0 3px 8px rgba(0,0,0,.55), 0 0 0 1px var(--lamp), 0 0 12px rgba(241,215,154,.3); }
+.BP .po.e { opacity: .55; }
+.BP .paper { position: relative; padding: 14px 16px 12px; background: #ece5d3; color: #222; box-shadow: 0 12px 26px rgba(0,0,0,.5); transform: rotate(.6deg); display: grid; grid-template-columns: 110px 1fr; gap: 4px 12px; }
+.BP .paper::before { content: ""; position: absolute; left: 50%; top: 6px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: #2a2620; box-shadow: inset 0 0 0 3px #c8bea6; }
+.BP .paper .pic { grid-row: 1 / 3; display: flex; align-items: center; justify-content: center; height: 64px; }
+.BP .paper .pic img { max-height: 56px; }
+.BP .paper h2 { font: 600 24px/1 var(--head); align-self: end; }
+.BP .paper .sp { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr auto; font: 400 12px/1.6 var(--type); margin-top: 6px; }
+.BP .paper .note { grid-column: 1 / -1; color: #8a5a17; border-top: 1px dashed rgba(0,0,0,.2); margin-top: 3px; padding-top: 3px; }
+.BP .paper .btns { grid-column: 1 / -1; display: flex; gap: 8px; margin-top: 8px; }
+.BP .paper .btns > div { flex: 1; }
+.BP .paper .btns .btn { color: #222; border-color: rgba(0,0,0,.25); background: transparent; }
+.BP .snow { display: flex; gap: 8px; align-items: center; }
+.BP .stone { flex: 1; height: 50px; padding: 0 10px 0 6px; border-radius: 26px; background: rgba(236,240,245,.1); border: 1px solid rgba(236,240,245,.2); display: flex; align-items: center; gap: 6px; }
+.BP .stone img { width: 36px; height: 36px; object-fit: contain; }
+.BP .stone b { font: 600 12px/1.2 var(--body); display: block; } .BP .stone span { font: 400 11px/1 var(--type); color: var(--dim); }
+.BP .top { display: flex; align-items: center; justify-content: space-between; }
+
+/* ── C · the quiet catalogue (AW2): no box — the world dimmed, the things laid out on it, the picked one large in
+      the lamp, its name big, a few typed lines ── */
+.C .scrim2 { position: absolute; inset: 0; backdrop-filter: blur(6px) saturate(.7); background: linear-gradient(90deg, rgba(6,8,12,.94) 0%, rgba(6,8,12,.86) 58%, rgba(6,8,12,.7) 100%); }
+.C .top { position: absolute; left: 70px; top: 54px; display: flex; align-items: baseline; gap: 22px; }
+.C .top h1 { font: 600 34px/1 var(--head); letter-spacing: .26em; text-transform: uppercase; }
+.C .top .sub { font: 400 13px/1 var(--type); color: var(--dim); }
+.C .tabs { position: absolute; left: 70px; top: 102px; display: flex; gap: 22px; font: 400 12px/1 var(--type); color: var(--dim); letter-spacing: .14em; text-transform: uppercase; }
+.C .tabs .on { color: var(--lamp); border-bottom: 1px solid var(--lamp); padding-bottom: 6px; }
+.C .grid { position: absolute; left: 60px; top: 150px; width: 760px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px 8px; }
+.C .lab2 { grid-column: 1 / -1; font: 400 11px/1 var(--type); color: var(--dim); letter-spacing: .16em; text-transform: uppercase; margin: 14px 10px 6px; display: flex; gap: 12px; align-items: center; }
+.C .lab2::after { content: ""; flex: 1; height: 1px; background: var(--hair); }
+.C .t { position: relative; height: 116px; display: flex; align-items: center; justify-content: center; padding: 16px 16px 26px; border-radius: 3px; }
+.C .t .k { position: absolute; left: 10px; top: 8px; font: 400 12px/1 var(--type); color: var(--dim); }
+.C .t .n { position: absolute; right: 12px; bottom: 8px; font-size: 14px; }
+.C .t .s { position: absolute; left: 12px; bottom: 8px; font: 400 11px/1 var(--type); color: var(--dim); }
+.C .t.e::before { content: ""; width: 26px; height: 1px; background: rgba(241,215,154,.18); }
+.C .t.hand::after { content: ""; position: absolute; left: 22%; right: 22%; bottom: 3px; height: 2px; background: var(--lamp); box-shadow: 0 0 10px var(--lamp); }
+.C .t.hand .tag { position: absolute; right: 12px; top: 8px; }
+.C .t.sel { background: radial-gradient(70% 80% at 50% 55%, rgba(241,215,154,.16), transparent 75%); }
+.C .t.sel::before { content: ""; position: absolute; inset: 0; border: 1px solid rgba(241,215,154,.4); border-radius: 3px; }
+.C .t.ovr { background: rgba(255,255,255,.03); }
+.C .big { position: absolute; right: 70px; top: 120px; width: 520px; }
+.C .big .pic { height: 230px; display: flex; align-items: center; justify-content: center; background: radial-gradient(55% 60% at 50% 55%, rgba(241,215,154,.2), transparent 72%); }
+.C .big .pic img { max-height: 200px; }
+.C .big h2 { font: 600 52px/1 var(--head); letter-spacing: .02em; margin-top: 10px; }
+.C .big .kind { font: 400 13px/1 var(--type); color: var(--label); letter-spacing: .14em; text-transform: uppercase; margin-top: 8px; }
+.C .big .what { font: 400 15px/1.5 var(--body); color: var(--dim); margin: 16px 0; max-width: 470px; }
+.C .big .sp { display: grid; grid-template-columns: 170px 1fr; font: 400 14px/1.9 var(--type); max-width: 380px; }
+.C .big .sp span { color: var(--dim); }
+.C .big .note { font: 400 13px/1 var(--type); color: var(--lamp); margin-top: 14px; }
+.C .big .acts { display: flex; gap: 26px; margin-top: 26px; font: 400 13px/1 var(--type); color: var(--cream); align-items: center; }
+.C .big .acts span { display: flex; gap: 8px; align-items: center; }
+.C .big .acts .main { color: var(--lamp); }
+.C .ground { position: absolute; left: 70px; bottom: 54px; display: flex; gap: 26px; align-items: center; }
+.C .ground .lab3 { font: 400 11px/1 var(--type); color: var(--dim); letter-spacing: .16em; text-transform: uppercase; }
+.C .ground .gi { display: flex; align-items: center; gap: 10px; font: 400 13px/1 var(--type); }
+.C .ground img { width: 46px; height: 46px; object-fit: contain; }
+.C .ground .take { color: var(--lamp); }
+.C .vit { position: absolute; right: 70px; bottom: 54px; display: flex; gap: 22px; font: 400 12px/1 var(--type); color: var(--dim); }
+.C .vit b { color: var(--cream); font-weight: 400; } .C .vit .lo b { color: var(--red); }
+
+/* ── the HUD (all three): the quick bar framed, the held gun's rounds beside it, a pick-up slip ── */
+.qb { position: absolute; right: 24px; bottom: 22px; border: 5px solid transparent; border-radius: 6px; background: linear-gradient(#17181d, #17181d) padding-box, var(--wood) border-box; background-size: auto, 600px 240px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.6), 0 0 0 1px rgba(0,0,0,.55), 0 10px 24px rgba(0,0,0,.5); padding: 10px 12px 12px; }
+.qb .cap { display: flex; justify-content: space-between; margin-bottom: 9px; }
+.qb .cap b { font-weight: 400; color: var(--cream); letter-spacing: .06em; }
+.qb .slots { display: flex; gap: 8px; }
+.qb .q { position: relative; width: 58px; height: 58px; border-radius: 4px; background: var(--well); border: 1px solid var(--hair); display: flex; align-items: center; justify-content: center; padding: 8px 6px 14px; }
+.qb .q.wide { width: 104px; }
+.qb .q.e { border-style: dashed; background: transparent; border-color: rgba(241,215,154,.12); }
+.qb .q .k { position: absolute; left: 5px; top: 3px; font: 400 10px/1 var(--type); color: var(--dim); }
+.qb .q .n { position: absolute; right: 5px; bottom: 3px; font-size: 11px; }
+.qb .q.hand { border-color: var(--lamp); box-shadow: 0 0 0 1px rgba(241,215,154,.35), 0 0 12px rgba(241,215,154,.3); }
+
+/* the phone: the grid four across, small; the picked one a sheet at the foot; the ground a line */
+.ph { position: absolute; left: 0; top: 0; width: 390px; height: 844px; }
+.ph .L { width: 100%; height: 100%; left: 0; top: 0; transform: none; border-radius: 0; border-width: 5px; display: flex; flex-direction: column; }
+.ph .L .hd { height: 54px; flex: none; padding: 0 14px; gap: 10px; }
+.ph .L .hd h1 { font-size: 22px; }
+.ph .L .hd .sub, .ph .L .hd .vit { display: none; }
+.ph .L .hd .x { margin-left: auto; }
+.ph .L .main { padding: 12px 12px 8px; gap: 8px; flex: none; }
+.ph .L .row { gap: 6px; }
+.ph .L .w { height: 70px; padding: 8px 6px 16px; }
+.ph .L .w .k, .ph .L .w .s { font-size: 9px; left: 5px; } .ph .L .w .n { font-size: 11px; right: 5px; bottom: 4px; }
+.ph .L .w .s { bottom: 4px; } .ph .L .w.hand .tag { display: none; }
+.ph .L .side { border-left: 0; border-top: 1px solid var(--hair); padding: 12px 14px; gap: 10px; flex: 1; display: grid; grid-template-columns: 120px 1fr; grid-template-rows: auto auto auto 1fr; align-content: start; }
+.ph .L .side .pic { height: 70px; grid-row: 1 / 3; }
+.ph .L .side .pic img { max-height: 60px !important; }
+.ph .L .side h2 { font-size: 24px; margin-top: 4px !important; }
+.ph .L .side .what { grid-column: 1 / -1; font-size: 12px; }
+.ph .L .side .card { grid-column: 1 / -1; font-size: 12px; }
+.ph .L .side .btns { grid-column: 1 / -1; flex-direction: row; margin-top: 4px; }
+.ph .L .side .btns > div { flex: 1; }
+.ph .L .gr { padding: 10px 14px; flex: none; }
+.ph .L .gr .g { width: auto; flex: 1; height: 54px; padding: 0 10px; gap: 8px; }
+.ph .L .gr .g img { width: 38px; height: 38px; } .ph .L .gr .g b { font-size: 12px; } .ph .L .gr .g .take { display: none; }
+.ph .L .gr .foot { display: none; }
+</style>
+</head>
+<body>
+<div class="grade"></div>
+<div id="app"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const D = q.get("d") || "ledger";
+const S = q.get("s") || "desk";
+const I = (id) => `../items/${id}.png`;
+const NAME = { revolver: "Revolver", shotgun: "Double-barrel", ak47: "AK-47", sniper: "Rifle", daybreak: "Daybreak", r38: ".38 rounds", shell: "Shells", r762: "7.62 rounds", r308: ".308 rounds", cell: "Cells", flare: "Flares", battery: "Battery", aid: "First aid", fuse: "Fuses" };
+const quick = [
+  { id: "revolver", n: "4/6", s: "+18", hand: true, wide: true },
+  { id: "shotgun", n: "1/2", s: "+6", wide: true },
+  { id: "aid", n: "2<small>/2</small>" },
+  null,
+];
+const pack = [
+  { id: "r38", n: "18<small>/24</small>" },
+  { id: "shell", n: "6<small>/12</small>", ovr: true },
+  { id: "ak47", n: "22/30", s: "+40", sel: true, wide: true },
+  { id: "r762", n: "40<small>/60</small>" },
+  { id: "flare", n: "2<small>/3</small>" },
+  { id: "battery", n: "1<small>/2</small>" },
+  { id: "fuse", n: "3<small>/4</small>" },
+  null,
+];
+const ground = [{ id: "shell", c: "×4" }, { id: "battery", c: "×1" }];
+const menu = (x, y) => `<div class="menu" style="left:${x}px;top:${y}px">
+  <div class="on">Equip to <span><span class="kk">1</span> <span class="kk">2</span> <span class="kk">3</span> <span class="kk">4</span></span></div>
+  <div>Split <span class="kk">Shift</span></div><hr><div>Drop 1</div><div class="bad">Drop all 6</div></div>`;
+const app = document.getElementById("app");
+
+function ledger(phone) {
+  const w = (it, i, q) => !it ? `<div class="w e">${q ? `<span class="k">${i + 1}</span>` : ""}</div>` :
+    `<div class="w${it.hand ? " hand" : ""}${it.sel ? " sel" : ""}${it.ovr ? " ovr" : ""}">${q ? `<span class="k">${i + 1}</span>` : ""}${it.hand ? `<span class="tag tag-in">IN HAND</span>` : ""}<img class="it" src="${I(it.id)}">${it.s ? `<span class="s">${it.s}</span>` : ""}<span class="n">${it.n}</span></div>`;
+  return `<div class="scrim"></div><div class="L">
+    <div class="hd"><h1>The pack</h1><span class="sub">4 at hand · 8 in the pack</span>
+      <span class="vit"><span class="lo">health <b>60</b></span><span>warmth <b>82</b></span><span>torch <b>71%</b></span></span><span class="kk x">Esc</span></div>
+    <div class="main">
+      <div class="lbls"><span class="cap">At hand · 1–4</span></div>
+      <div class="row q">${quick.map((it, i) => w(it, i, true)).join("")}</div>
+      <div class="zig"></div>
+      <div class="lbls"><span class="cap">In the pack</span><span class="kk" style="width:auto">Organize</span></div>
+      <div class="row p">${pack.map((it, i) => w(it, i, false)).join("")}</div>
+    </div>
+    <div class="side">
+      <div class="pic"><img class="it" src="${I("ak47")}" style="max-height:120px"></div>
+      <div><span class="cap">In the pack</span><h2 style="margin-top:8px">AK-47</h2></div>
+      <div class="what">Full auto, thirty to a magazine. It climbs if you hold it down.</div>
+      <div class="card"><span>Loaded</span><b>22 of 30</b><span>Spare 7.62</span><b>40</b><span>Damage · range</span><b>22 · 50 m</b><span class="note">Equip it to hold it — or press 1–4 on it</span></div>
+      <div class="btns"><div class="lampbtn">Equip <span class="kk">E</span></div><div class="btn">Drop <span class="kk">R-click</span></div></div>
+    </div>
+    <div class="gr"><div class="lbls"><span class="cap">On the ground · in reach</span><span class="kk" style="width:auto;color:var(--lamp)">Take all · T</span></div>
+      <div class="gl">${ground.map((g) => `<div class="g"><img src="${I(g.id)}"><div><b>${NAME[g.id]}</b><span>${g.c}</span></div><span class="take">TAKE</span></div>`).join("")}
+        <span class="foot"><span class="kk">I</span> close · <span class="kk">1–4</span> on an item · <span class="kk">E</span> use · right click: more</span></div></div>
+  </div>${phone ? "" : menu(470, 470)}`;
+}
+
+function packLook() {
+  const loop = (it, i) => !it ? `<div class="loop"><span class="k">${i + 1}</span></div>` :
+    `<div class="loop${it.hand ? " hand" : ""}"><span class="k">${i + 1}</span>${it.hand ? `<span class="tag tag-in">IN HAND</span>` : ""}<img class="it" src="${I(it.id)}"><span class="n">${it.n}</span></div>`;
+  const po = (it) => !it ? `<div class="po e"></div>` :
+    `<div class="po${it.sel ? " sel" : ""}"><img class="it" src="${I(it.id)}">${it.s ? `<span class="s">${it.s}</span>` : ""}<span class="n">${it.n}</span></div>`;
+  return `<div class="scrim"></div><div class="B">
+    <div class="belt">${quick.map(loop).join("")}</div>
+    <div class="bag"><div class="flap">The pack</div><div class="pockets">${pack.map(po).join("")}</div></div>
+    <div class="string"></div><div class="ring"></div>
+    <div class="paper"><span class="cap" style="color:#7a6a4a">In the pack</span><div class="pic"><img class="it" src="${I("ak47")}" style="max-height:100px"></div>
+      <h2>AK-47</h2><div class="what">Full auto, thirty to a magazine. It climbs if you hold it down.</div>
+      <div class="sp"><span>Loaded</span><b style="font-weight:400">22 of 30</b><span>Spare 7.62</span><b style="font-weight:400">40</b><span>Damage · range</span><b style="font-weight:400">22 · 50 m</b><span class="note">Equip it to hold it — or press 1–4 on it</span></div>
+      <div class="btns"><div class="lampbtn">Equip <span class="kk">E</span></div><div class="btn">Drop</div></div></div>
+    <div class="snow"><span class="cap" style="margin-right:4px">On the snow</span>${ground.map((g) => `<div class="stone"><img src="${I(g.id)}"><div><b>${NAME[g.id]}</b><span>${g.c}</span></div><span class="take">TAKE</span></div>`).join("")}<span class="kk" style="width:auto;color:var(--lamp)">Take all · T</span></div>
+    <div class="vit"><span class="lo">health <b>60</b></span><span>warmth <b>82</b></span><span>torch <b>71%</b></span></div>
+  </div>${menu(395, 455)}`;
+}
+
+function packPhone() {
+  const loop = (it, i) => !it ? `<div class="loop"><span class="k">${i + 1}</span></div>` :
+    `<div class="loop${it.hand ? " hand" : ""}"><span class="k">${i + 1}</span><img class="it" src="${I(it.id)}"><span class="n">${it.n.replace(/<small>.*<\/small>/, "")}</span></div>`;
+  const po = (it) => !it ? `<div class="po e"></div>` :
+    `<div class="po${it.sel ? " sel" : ""}"><img class="it" src="${I(it.id)}"><span class="n">${it.n.replace(/<small>.*<\/small>/, "")}</span></div>`;
+  return `<div class="BP">
+    <div class="top"><span class="cap">At hand · 1–4</span><span class="kk">✕</span></div>
+    <div class="belt">${quick.map(loop).join("")}</div>
+    <div class="bag" style="margin-top:12px"><div class="flap">The pack</div><div class="pockets">${pack.map(po).join("")}</div></div>
+    <div class="paper"><div class="pic"><img class="it" src="${I("ak47")}"></div><span class="cap" style="color:#7a6a4a;align-self:end">In the pack</span><h2>AK-47</h2>
+      <div class="sp"><span>Loaded</span><span>22 of 30</span><span>Spare 7.62</span><span>40</span><span>Damage · range</span><span>22 · 50 m</span><span class="note">Equip it to hold it — or drag it to 1–4</span></div>
+      <div class="btns"><div class="lampbtn">Equip</div><div class="btn">Drop <span class="kk" style="color:#555;border-color:rgba(0,0,0,.25)">hold</span></div></div></div>
+    <div class="snow">${ground.map((g) => `<div class="stone"><img src="${I(g.id)}"><div><b>${NAME[g.id]}</b><span>${g.c}</span></div></div>`).join("")}<span class="kk" style="width:auto;height:34px;padding:0 10px;color:var(--lamp)">Take all</span></div>
+  </div>`;
+}
+
+function quiet() {
+  const t = (it, i, q) => !it ? `<div class="t e">${q ? `<span class="k">${i + 1}</span>` : ""}</div>` :
+    `<div class="t${it.hand ? " hand" : ""}${it.sel ? " sel" : ""}${it.ovr ? " ovr" : ""}">${q ? `<span class="k">${i + 1}</span>` : ""}${it.hand ? `<span class="tag tag-in">IN HAND</span>` : ""}<img class="it" src="${I(it.id)}">${it.s ? `<span class="s">${it.s}</span>` : ""}<span class="n">${it.n}</span></div>`;
+  return `<div class="C"><div class="scrim2"></div>
+    <div class="top"><h1>The pack</h1><span class="sub">4 at hand · 8 in the pack</span></div>
+    <div class="tabs"><span class="on">Things</span><span>Notes · 0</span></div>
+    <div class="grid"><div class="lab2">At hand · 1–4</div>${quick.map((it, i) => t(it, i, true)).join("")}
+      <div class="lab2">In the pack <span class="kk" style="width:auto">Organize</span></div>${pack.map((it, i) => t(it, i, false)).join("")}</div>
+    <div class="big"><div class="pic"><img class="it" src="${I("ak47")}"></div>
+      <h2>AK-47</h2><div class="kind">In the pack · 7.62</div>
+      <div class="what">Full auto, thirty to a magazine. It climbs if you hold it down.</div>
+      <div class="sp"><span>Loaded</span><b style="font-weight:400">22 of 30</b><span>Spare</span><b style="font-weight:400">40</b><span>Damage · range</span><b style="font-weight:400">22 · 50 m</b></div>
+      <div class="note">Equip it to hold it — or press 1–4 on it</div>
+      <div class="acts"><span class="main"><span class="kk" style="color:var(--lamp);border-color:var(--lamp)">E</span> Equip</span><span><span class="kk">1–4</span> To a slot</span><span><span class="kk">R-click</span> More</span></div></div>
+    <div class="ground"><span class="lab3">On the snow</span>${ground.map((g) => `<span class="gi"><img src="${I(g.id)}">${NAME[g.id]} ${g.c} <span class="take">· take</span></span>`).join("")}<span class="kk" style="width:auto;color:var(--lamp)">Take all · T</span></div>
+    <div class="vit"><span class="lo">health <b>60</b></span><span>warmth <b>82</b></span><span>torch <b>71%</b></span></div>
+  </div>${menu(300, 420)}`;
+}
+
+function hud() {
+  const q = (it, i) => !it ? `<div class="q e"><span class="k">${i + 1}</span></div>` :
+    `<div class="q${it.wide ? " wide" : ""}${it.hand ? " hand" : ""}"><span class="k">${i + 1}</span><img class="it" src="${I(it.id)}"><span class="n">${it.n.replace(/<small>.*<\/small>/, "")}</span></div>`;
+  return `<div class="qb"><div class="cap"><span>At hand</span><b>.38 · 4 + 18</b></div><div class="slots">${quick.map(q).join("")}</div></div>
+    <div class="slip" style="right:40px;bottom:150px"><img src="${I("shell")}">+4 shells · in the pack</div>`;
+}
+
+if (S === "hud") app.innerHTML = hud();
+else if (S === "phone") { document.body.style.width = "390px"; app.innerHTML = `<div class="ph">${D === "pack" ? packPhone() : ledger(true)}</div>`; }
+else app.innerHTML = D === "pack" ? packLook() : D === "quiet" ? quiet() : ledger(false);
+</script>
+</body>
+</html>
