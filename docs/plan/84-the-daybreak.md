@@ -20,7 +20,8 @@ bench's `gun=daybreak`; stills `design/guns/p84/bench-1-hold.png`; committed 22b
 away, drawn) built 2026-11-13** — stills `design/guns/p84/bench-2-carry.png`; committed 172090b. **Phase 3 (the aim,
 the charge) built 2026-11-13** — stills `design/guns/p84/bench-3-aim.png`; committed 04d9d81. **Phase 4 (the
 reload) built 2026-11-14** — stills `design/guns/p84/bench-4-reload.png`; committed 503f672. **Phase 5 (everything
-else; the old path gone) built 2026-11-14** — stills `design/guns/p84/bench-5-moves.png`; committed (see git log).
+else; the old path gone) built 2026-11-14** — stills `design/guns/p84/bench-5-moves.png`; committed 050261e. **Phase 6 (the checks) built 2026-11-14** — the reload
+reworked by them (below); committed with it — **plan 84 done 2026-11-14**.
 
 ## Where we are — read from the code and the bench
 
@@ -290,7 +291,8 @@ whatever F3–F4.
      checked while it's hidden). The bench scrubs the reload (2.0 s) and plays it live.
    - Audited live frame by frame (both bodies; standing, walking, sprinting): the wrists within the moving limit
      (≤5.9°), the right at most 1.5°; the fingers at most 0.3–0.6 cm into the gun at single frames as the hand
-     leaves and meets the fore-grip; the pad out of her shirt (≤0.1 cm).
+     leaves and meets the fore-grip; the pad out of her shirt (≤0.1 cm). **Not measured: the forearms' turn — at
+     62° her right forearm was turned 72–82° all the reload (reworked in phase 6).**
 5. **Everything else** — port arms for a roll, a vault, a slide (its 0.89 m over the floor all through a
    roll); struck, kept at the ready (`port.struck: false`); sat, swimming, busy: let go; the far people's
    cheaper hold. **The old long-gun path goes** (the Daybreak was the last on it).
@@ -316,6 +318,37 @@ whatever F3–F4.
    `e2e/daybreak-two.spec.ts` (the world, two of us: slung, drawn, aimed upright, charged and the ball away,
    reloaded, put away — on both screens), stills in the world; `daybreak.spec.ts` and all the guns' specs
    green.
+   Done in phase 6:
+   - **The reload reworked** (found by the bench's frame-by-frame check of the forearms): rolled 62° with her
+     right hand on the walnut grip, her right forearm was turned 72–82° all through it — its sleeve pinched thin at
+     the wrist, the sniper's "braço direito fino" (plan 83). Her elbow out to her side didn't take the roll (the
+     arm's swing search already weighs the turn), nor did her right hand on the carry handle (out of its reach on
+     the rolled lamp, 17 cm). Now: **rolled 17°** (`DB_LOAD_GUN`, the lens a little less across), her right
+     forearm 48° feminine, 34° masculine (~38 and ~25 already at no roll); her left hand on **the cell's left side**
+     (`DB_CELL_HAND`: the palm on its side, the fingers ahead along it and round under it, the thumb laid along it —
+     under it, palm up, her left forearm was turned 50–70°; the thumb over it went into the lamp), the pouch's cells
+     turned to it (−0.4 rad about themselves); the new cell carried up **turning to the cradle in the second half
+     of the way** (`DB_CARRY`) over 0.4 s (was 0.3), home by 1.52 s; down to the pouch and up from it **the long
+     way round** (`slerpLong` — the short way twisted her forearm past 90° mid-way, her wrist 70° past its reach);
+     her elbow free to swing while her hand goes between places and carries the cell (held to the usual swing a
+     frame, it stayed where the pouch had it). Live, both bodies, standing and walking: the wrists ≤1°, the
+     forearms ≤49° (right) and ≤30° (left), no finger in the gun (≥ −0.1 cm).
+   - **The low ready**: the lens across to her left 0.36 (was 0.3) — a feminine left hand fell 1–1.6 cm short of
+     the fore-grip walking.
+   - **`e2e/daybreak-bench.spec.ts`** (both bodies, ~10 min each): aimed at the game's whole reach (−0.55…0.7) at
+     three turns of her, the torch on and off — upright, on the look, her eye on the ring's line, the pad out of her
+     (a few points pressing the shirt, known); charged and the shove at three pitches; the low ready walking and
+     running; up in 0.3 s; drawn (the change of hold at 0.62–0.85 loose — known); slung again; **the reload played
+     live and checked every frame, standing and walking** — the wrists, the forearms' turn, no finger or arm in the
+     gun, the spent cell let fall, a new one from the pouch, the cell home; port arms through a roll, a vault, a
+     slide; struck frame by frame; over the floor all through a roll (40 frames, the lamp and its cage round); sat,
+     let go. (The skin under her shirt isn't drawn: a point by her side can read as in her skin by rays leaving
+     through that gap — the strut 10 cm off his upper arm's bone read 12 cm in — so a skin reading past 5 cm is
+     set aside.)
+   - **`e2e/daybreak-two.spec.ts`** (the world, Bia beside Ana): slung, drawn, aimed upright, charged (she leans
+     into it on both screens) and the ball away, reloaded — the spent cell let fall and the pouch's drawn on both
+     screens, the cell home — put away, slung again. Stills `design/guns/p84/world-6-two.png` (Ana's above, hers
+     below).
 
 ## Risks
 

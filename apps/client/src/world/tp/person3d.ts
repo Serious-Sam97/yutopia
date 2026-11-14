@@ -44,6 +44,7 @@ import {
   RACK_REACH,
 } from "./ak-hold";
 import {
+  DB_CARRY,
   DB_CELL,
   DB_CELL_HAND,
   DB_CLOSE,
@@ -220,6 +221,27 @@ const sgHQ = new Quaternion();
 const sgHQ2 = new Quaternion();
 const akAtA = new Vector3();
 const akAtB = new Vector3();
+/** (plan 84) `a` turned toward `b` the long way round, `t` of it — into `a` */
+const slerpLong = (a: Quaternion, b: Quaternion, t: number) => {
+  let bx = b.x;
+  let by = b.y;
+  let bz = b.z;
+  let bw = b.w;
+  let c = a.x * bx + a.y * by + a.z * bz + a.w * bw;
+  if (c > 0) {
+    bx = -bx;
+    by = -by;
+    bz = -bz;
+    bw = -bw;
+    c = -c;
+  }
+  const th = Math.acos(Math.max(-1, Math.min(1, c)));
+  const sn = Math.sin(th);
+  if (sn < 1e-6) return a;
+  const ka = Math.sin((1 - t) * th) / sn;
+  const kb = Math.sin(t * th) / sn;
+  return a.set(a.x * ka + bx * kb, a.y * ka + by * kb, a.z * ka + bz * kb, a.w * ka + bw * kb).normalize();
+};
 const akForeAt = new Vector3();
 const akForeQ = new Quaternion();
 const akM1 = new Matrix4();
@@ -2789,6 +2811,7 @@ export class Person3D {
       sgAvoid.r = A.r * B.k;
       avoid = sgAvoid;
     }
+    // (plan 84: the Daybreak rolled to load, her right elbow free to swing as fast as it needs while it rolls)
     m.gripTo(
       "R",
       rAt,
@@ -2797,7 +2820,7 @@ export class Person3D {
       [-1, -0.5, -0.5],
       cheap,
       avoid,
-      racking || grabbing || bolting || loadingSn ? 0.25 : undefined,
+      racking || grabbing || bolting || loadingSn || (DL && DL.gun > 0.01 && DL.gun < 0.99) ? 0.25 : undefined,
     );
     // (racking: the gun where it was — the hand's gone off it; its fingers hooked over the knob)
     if (grabbing) {
@@ -3628,7 +3651,10 @@ export class Person3D {
     const H = D.hand;
     if (!place(H.a, akAtA, akQA) || !place(H.b, akAtB, akQB)) return;
     const at = akAtA.lerp(akAtB, H.k);
-    const q = akQA.slerp(akQB, H.k);
+    // (down to the pouch the long way round — the short way twisted her forearm past 90° mid-way; to and from the
+    // fore-grip the short way)
+    const longWay = DB_CELL_HAND.long.hand && H.a !== H.b && H.a !== "fore" && H.b !== "fore";
+    const q = longWay ? slerpLong(akQA, akQB, H.k) : akQA.slerp(akQB, H.k);
     // (between the cell and the fore-grip, round the gun's left side and under it — straight, its fingers went 1.5
     // cm through the fore-grip's foot)
     const arc = rv5.set(0, 0, 0);
@@ -3660,7 +3686,10 @@ export class Person3D {
     } else m.hold("L", null);
     // (going from one place to the next, its elbow free to swing round as fast as it needs)
     const going = H.a !== H.b && H.k > 0.05 && H.k < 0.95;
-    if (lw > 0.01) m.gripTo("L", at, q, lw, [-0.6, -1, -0.2], cheap, undefined, going ? 0.25 : undefined);
+    // (…and while it carries the cell up from the pouch: held to the usual swing a frame, her elbow stayed where the
+    // pouch had it and her wrist went 150° past its reach before the cell was home)
+    const swing = going || D.cell.at === "carry" || (D.cell.at === "gun" && D.cell.slide > 0.001);
+    if (lw > 0.01) m.gripTo("L", at, q, lw, [-0.6, -1, -0.2], cheap, undefined, swing ? DB_CELL_HAND.step : undefined);
     // (the thumb: over the fore-grip's top, along the cell — going between them, from the one place to the other
     // with the hand: kept on the fore-grip's top as the hand left, it went into the lamp)
     if (!cheap && lw > 0.5) m.thumbTo("L", thumbAt(H.a, akV3).lerp(thumbAt(H.b, akV4), H.k).add(arc));
@@ -3717,7 +3746,14 @@ export class Person3D {
     if (C.at === "carry") {
       inPouch(1, akM4).decompose(akV3, akQ3, akS3);
       onGun(C.slide, out).decompose(akV4, akQ4, akS4);
-      return out.compose(akV3.lerp(akV4, C.k), akQ3.slerp(akQ4, C.k), akS3.lerp(akS4, C.k));
+      const T = DB_CARRY.turn;
+      const kt = Math.max(0, Math.min(1, (C.k - T[0]) / (T[1] - T[0])));
+      const kk = kt * kt * (3 - 2 * kt);
+      return out.compose(
+        akV3.lerp(akV4, C.k),
+        DB_CELL_HAND.long.carry ? slerpLong(akQ3, akQ4, kk) : akQ3.slerp(akQ4, kk),
+        akS3.lerp(akS4, C.k),
+      );
     }
     return onGun(C.slide, out);
   }
