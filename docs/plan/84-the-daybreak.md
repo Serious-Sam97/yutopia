@@ -19,7 +19,8 @@ sheets `design/guns/p84/sheet-84-{hold,charge,reload,slung}.png`; the model chan
 bench's `gun=daybreak`; stills `design/guns/p84/bench-1-hold.png`; committed 22bc3da (with phase 0). **Phase 2 (put
 away, drawn) built 2026-11-13** — stills `design/guns/p84/bench-2-carry.png`; committed 172090b. **Phase 3 (the aim,
 the charge) built 2026-11-13** — stills `design/guns/p84/bench-3-aim.png`; committed 04d9d81. **Phase 4 (the
-reload) built 2026-11-14** — stills `design/guns/p84/bench-4-reload.png`; committed (this commit).
+reload) built 2026-11-14** — stills `design/guns/p84/bench-4-reload.png`; committed 503f672. **Phase 5 (everything
+else; the old path gone) built 2026-11-14** — stills `design/guns/p84/bench-5-moves.png`; committed (see git log).
 
 ## Where we are — read from the code and the bench
 
@@ -293,6 +294,23 @@ whatever F3–F4.
 5. **Everything else** — port arms for a roll, a vault, a slide (its 0.89 m over the floor all through a
    roll); struck, kept at the ready (`port.struck: false`); sat, swimming, busy: let go; the far people's
    cheaper hold. **The old long-gun path goes** (the Daybreak was the last on it).
+   Done in phase 5:
+   - **Port arms** (`DB_PORT`): the AK's across her chest (the lens to her left, a little ahead), its lens 8.6°
+     lower — at the AK's own, the lens's cage went 0.7 cm into the floor at a feminine roll's 0.37 (she's upside
+     down there: raised, deeper); now over the floor all through a roll (2.0 cm at its lowest feminine, 11.4
+     masculine, 40 frames of it), her left hand on the fore-grip as held, both hands on and every wrist in its
+     reach through a roll, a vault, a slide; the pad out of her.
+   - **Struck** (`port.struck: false`, the sniper's): kept at the ready, the gun going as her chest goes through
+     the flinch — every frame of it her right forearm turned at most 48° (feminine) and 32° (masculine), her left
+     1°, both hands on.
+   - **Sat, swimming, busy, a mantle, the ragdoll**: let go, the long hold's own (plan 81) — sat, in her right
+     hand on her lap. **Far off** (past 11 m): the long hold's cheaper one (plan 80's) — the wrists in their reach at the
+     ready and aimed; sprinting, a feminine left 6.5° past it (the moving limit's 6), left.
+   - **The old long-gun path gone**: the AK's, the sniper's, the double-barrel's and the Daybreak's old reload
+     hands (`magHand`, `roundHand`, `boltHand`, `loadHand`, `magFrame`, `CELL_LOAD`, the old `AK_LOAD`, `SNIPER`),
+     and the loading turns of the gun in the hand — every long gun's are the long hold's. What's left there, the
+     pool cue (`isLongGun || cue`) and a long gun's drawn stand-in till its life model's in, carried or aimed as
+     before (`pool-balls.spec` green).
 6. **Checks** — `e2e/daybreak-bench.spec.ts` (the strict audit, both bodies: carried, aimed at the game's
    whole reach, the charge, the reload's moments, drawn, kept, a hit frame by frame, sat),
    `e2e/daybreak-two.spec.ts` (the world, two of us: slung, drawn, aimed upright, charged and the ball away,

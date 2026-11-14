@@ -132,6 +132,20 @@ export const DB_SLING: SlingSpec = {
   },
 };
 
+// ── everything else (plan 84 phase 5) ─────────────────────────────────────────────────────────────────────
+/** In a whole-body move — a roll, a vault, a slide, Flowmotion: held across her chest in its frame (the grip's
+ *  place, its turn) — the AK's (tp/ak-hold.ts AK_PORT), its lens 8.6° lower: the lens to her left and a little
+ *  ahead, so it goes round with her and lies along her shoulders when she's upside down mid-roll — her left hand
+ *  on the fore-grip as held. Its 0.85 m over the floor all through a roll (at the AK's, the lens's cage 0.7 cm
+ *  into it at a feminine roll's 0.37; raised, deeper — she's upside down there). Struck, kept at the ready, going
+ *  as her chest goes through the flinch (the sniper's: pulled across her chest and back out, her forearms were
+ *  wrung) */
+export const DB_PORT = {
+  at: new Vector3(0.07, -0.08, 0.36),
+  turn: new Quaternion(-0.0011, -0.0984, -0.2203, 0.9705).normalize(),
+  struck: false,
+};
+
 /** The Daybreak as tp/long-hold.ts holds a long gun */
 export const DB_LONG: LongSpec = {
   key: "daybreak",
@@ -171,7 +185,7 @@ export const DB_LONG: LongSpec = {
   aimS: 0.3,
   leftCarried: true,
   sling: DB_SLING,
-  // (port arms, struck: phase 5)
+  port: DB_PORT,
   avoid: null,
   check: {
     boxes: [
