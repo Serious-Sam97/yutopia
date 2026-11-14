@@ -1,6 +1,7 @@
 import { ARMS, FLARE, LOOT_REACH } from "@yutopia/shared/dark";
 import {
   count,
+  freeQuick,
   type Inventory,
   type ItemId,
   isUsable,
@@ -24,7 +25,9 @@ import { ICON } from "./icons";
 // four quick slots (keys 1–4: a weapon or anything) and the six pockets. Right,
 // the one picked: what it is, use, hold, reload, drop. Below, what lies on the
 // snow in reach. Click to pick, right click to drop, drag to move between slots
-// (a weapon only into a quick slot; or from the snow into one); on the pad the d-pad moves, A uses or takes, X drops, B closes.
+// (a weapon into the pack too — plan 85: carried, not equipped, worn nowhere; or
+// from the snow into one); on the pad the d-pad moves, A uses, takes or equips,
+// X drops, B closes.
 
 const AMBER = "#e9a33a";
 const NEAR = 15; // tiles: one of the shadowed this near, the warning
@@ -192,7 +195,22 @@ export class InventoryPanel {
     if ("drop" in s) return this.act.pick(s.drop);
     if (s.slot >= QUICK_SLOT) return this.act.quick(s.slot - QUICK_SLOT);
     const st = inv.pockets[s.slot];
+    // (plan 85: a weapon in the pack — equipped)
+    if (st && isWeapon(st.id)) return this.equip();
     if (st && isUsable(st.id)) this.act.use(s.slot);
+  }
+  /** (plan 85 F5a) The weapon picked in the pack into the first empty quick slot — none empty, the details say so
+   *  (a drag onto one swaps) */
+  private equip() {
+    const s = this.sel;
+    const inv = this.inv();
+    if (!s || !inv || "drop" in s || s.slot >= QUICK_SLOT || !isWeapon(inv.pockets[s.slot]?.id)) return;
+    const to = freeQuick(inv);
+    if (to < 0) return;
+    this.act.move(s.slot, to);
+    this.sel = { slot: to };
+    this.shown = "";
+    this.render();
   }
   private dropSel() {
     const s = this.sel;
@@ -267,6 +285,7 @@ export class InventoryPanel {
     else if (act === "drop") this.dropSel();
     else if (act === "reload") this.act.reload();
     else if (act === "away") this.act.draw(-1);
+    else if (act === "equip") this.equip();
   }
   private itemOf(p: Pick): ItemId | null {
     const inv = this.inv();
@@ -377,13 +396,21 @@ export class InventoryPanel {
         stat(t("dark_inv_spare", { ammo: t(`dark_item_${ammo}`) }), String(count(inv, ammo))) +
         stat(t("dark_inv_damage"), a.pellets > 1 ? `${a.pellets} × ${a.damage}` : String(a.damage)) +
         stat(t("dark_inv_range"), `${a.range} m`);
-      const n = String(this.sel.slot - QUICK_SLOT + 1);
-      btns =
-        (gun === id ? btn("away", t("dark_inv_away"), k(n)) : btn("hold", t("dark_inv_hold"), k(n), true)) +
-        (gun === id && (w?.loaded ?? 0) < WEAPONS[id].mag && count(inv, ammo) > 0
-          ? btn("reload", t("dark_inv_reload"), k("R"))
-          : "") +
-        dropBtn;
+      if (this.sel.slot < QUICK_SLOT) {
+        // (plan 85: in the pack — carried, not equipped: equipped into the first empty quick slot, or dragged onto
+        // one to swap)
+        const free = freeQuick(inv) >= 0;
+        stats += `<span class="note">${t(free ? "dark_inv_in_pack" : "dark_inv_quick_full")}</span>`;
+        btns = btn("equip", t("dark_inv_equip"), `${k("E")} · ${t("dark_inv_drag")}`, true, !free) + dropBtn;
+      } else {
+        const n = String(this.sel.slot - QUICK_SLOT + 1);
+        btns =
+          (gun === id ? btn("away", t("dark_inv_away"), k(n)) : btn("hold", t("dark_inv_hold"), k(n), true)) +
+          (gun === id && (w?.loaded ?? 0) < WEAPONS[id].mag && count(inv, ammo) > 0
+            ? btn("reload", t("dark_inv_reload"), k("R"))
+            : "") +
+          dropBtn;
+      }
     } else {
       const it = slotAt(inv, this.sel.slot);
       const s = it && "n" in it ? it : null;
@@ -439,6 +466,7 @@ export const INV_CSS = `
 .dk-inv .slot.q{height:96px}
 .dk-inv .slot.q.w svg{inset:18px 8px 24px 8px;width:calc(100% - 16px);height:calc(100% - 42px)}
 .dk-inv .slot.p{height:100px}
+.dk-inv .slot.p.w svg{inset:16px 8px 26px 8px;width:calc(100% - 16px);height:calc(100% - 42px)}
 .dk-inv .slot svg{position:absolute;inset:12px 12px 22px 12px;width:calc(100% - 24px);height:calc(100% - 34px);pointer-events:none}
 .dk-inv .slot .k{position:absolute;left:8px;top:6px;font-size:11px;font-weight:800;color:rgba(233,236,239,.55)}
 .dk-inv .slot .n{position:absolute;right:8px;bottom:5px;font-size:15px;font-weight:800;text-shadow:0 1px 2px #000}
@@ -459,6 +487,7 @@ export const INV_CSS = `
 .dk-inv .det p{font-size:13px;line-height:1.45;color:rgba(233,236,239,.72);margin:8px 0 12px}
 .dk-inv .stats{display:grid;grid-template-columns:1fr auto;gap:5px 10px;font-size:12px;color:rgba(233,236,239,.6);margin-bottom:16px}
 .dk-inv .stats b{color:#e9ecef;font-weight:700;text-align:right}
+.dk-inv .stats .note{grid-column:1/-1;margin-top:4px;color:#e9a33a;font-weight:600}
 .dk-inv .btns{display:flex;flex-direction:column;gap:8px}
 .dk-inv .btn{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:7px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);font-size:13px;font-weight:700;cursor:pointer}
 .dk-inv .btn:hover{background:rgba(255,255,255,.12)}

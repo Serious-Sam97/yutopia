@@ -10,7 +10,8 @@ Status: **planned 2026-11-14; forks decided by the user 2026-11-14, all as recom
 free quick slot, else a free pocket; **F3a** the weapon in her hand moved to a pocket is put away at once; **F4a** the
 pockets named "Mochila" / "Pack" (the label only); **F5a** equipped by a drag or an Equip button; **F2a** (one of a
 kind across quick slots and pockets) as recommended, not asked. **Phase 1 (the rules) built 2026-11-14**,
-committed c81d8ec3. **Phase 2 (the server, the save) built 2026-11-14**, committed.
+committed c81d8ec3. **Phase 2 (the server, the save) built 2026-11-14**, committed 2c684b06. **Phase 3 (the panel) built 2026-11-14**,
+committed.
 
 ## What there is now
 
@@ -101,6 +102,16 @@ a pocket, it shows nowhere. The work is letting it in, everywhere the rule lives
 3. **The panel**: a weapon drawn in a pocket (its icon, loaded/mag, the spare rounds); its details — loaded,
    spare, damage, range, "in the pack: equip it to hold it" — with Equip (F5) and Drop; the drag's text; the
    labels (F4); English and Portuguese.
+   Done in phase 3:
+   - The six pockets are **the pack** (F4a): the panel's title "PACK" / "MOCHILA", "4 quick slots · 6 in the
+     pack" / "4 de acesso rápido · 6 na mochila", the section "Pack" / "Mochila", "Your pack is full" / "Sua mochila
+     está cheia", the strip's word; a weapon in the pack drawn as in a quick slot (its loaded/mag, its spare rounds),
+     without a key.
+   - **Its details**: loaded, spare, damage, range, and in amber "In the pack · equip it to hold it" / "Na mochila ·
+     equipe para segurar"; **Equip** / **Equipar** (F5a — E, the pad's A, or the button: into the first empty
+     quick slot); none empty, the button's off and the note says "The quick slots are full · drag it onto one to
+     swap" / "Atalhos cheios · arraste sobre um para trocar"; Drop. Its spare's label "Spare .38 rounds" /
+     "… de reserva" (counted from the quick slots too).
 4. **Checks**: `e2e/inventory.spec.ts` — a weapon dragged to a pocket: out of her hand, gone from her back and
    its pouch gone, on her screen and another's; dragged back: on her back again; equipped by the button; a save
    and a rejoin with it in a pocket. All the guns' specs and the inventory's green.
