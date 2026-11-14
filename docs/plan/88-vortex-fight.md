@@ -129,6 +129,48 @@ day, and **holds a grudge** (below).
 2. **Acts 1–2 — the joke and the rewinding**: side-steps and taunts (new line events for the API, both languages);
    the tape whip (a lash he throws; bound, and freed by a friend), REW, PAUSE; the confiscation (and the duck), the
    radio blast's dance, HR's corner — each on both screens; tests.
+   Done in phase 2 (2026-11-14):
+   - **His lines** (`apps/api` `Vortex`): new events — `hit`, `dodge`, `whip`, `rew`, `pause`, `steal`, `blast`
+     public (never naming anyone; judging when shot, malicious for his moves), `hr` personal (only to the one he
+     sends, by their first name). His lines stay his own English, as all of them are; what the screen says around
+     them (slips, prompts, the HUD) is in both languages. Offline the world server has one of each. In the fight
+     his face is the act's whatever the line's mood.
+   - **The server** (`features/vortex.ts`): shot in act I or later, now and then (30%) **a side-step** out of the
+     line, and a taunt (one every 5 s at most). **Act II**: a move every 6–9 s on one of those in the fight (on his
+     floor, within 16 m, up, not taped up, not in HR's timeout), whichever of the six can be:
+     - **the tape whip** — a lash (0.5 s in flight; out of reach by then: missed), then **taped up 4 s**: no shots
+       (`arms` asks `room.vortex.bound`), and the client stands still; **a friend beside them (1.8 m) holds use
+       0.8 s** and cuts them free (`vortex:free`). (Kept off the Player schema: it's at Colyseus's 64 fields.)
+     - **REW** — pulled back to where they stood 5 s ago (each fighter's last 6 s kept, four a second).
+     - **PAUSE** — 2.5 s in which shots that meet him are held, not counted; then **PLAY**: a fifth of each one's
+       held damage back at whoever fired it (40 at most), hurting, never downing (`survival.hurt(…, spare)`).
+     - **the confiscation** — the drawn gun out of their hand and quick slots, left lying (with its rounds) at the
+       far end of the building from them, by one of his places; three times in ten a duck in its place (on the
+       slip).
+     - **the radio's blast** — everyone in it near him (6 m) made to dance (the tape emote) 3 s, standing still.
+     - **HR** — sent to the lobby's far corner past reception, their shots not counted for 20 s, his personal line.
+     In a fight he goes after one of its people, not his rounds; no greetings. An admin's `mod:vortex` `move`
+     (on `to`, else on them) for trying each; held, he makes none by himself.
+   - **The client** (`world/dark/vortex.ts`, in the dark's chunk): **his cassette** at the top for everyone in it
+     or near — the tape wound off its reel as he's hurt (pink; dark red in act III), ticks at the acts, the act
+     typed, who's in it and their hits; act I's slip the first time I hit him ("He's not fighting back. Yet.");
+     the hit marker pink on him. His moves as everyone near sees them: the lash (a tape-brown curve flying from
+     him) and the tape round whoever's taped up, "taped up · 3s" at their feet and, by them, **hold E · cut them
+     free** with its ring; me taped up — my line, standing still; ◀◀ REW (mine: the tape's lines over the screen;
+     theirs: at their feet); ▮▮ PAUSE and ▶ PLAY for everyone near, my shots hanging where they met him till then,
+     and "Your shots came back. −n"; the confiscation's slip (mine with where it is, and the duck; theirs: whose);
+     the notes over the dancers; HR's slip (mine typed like the mock, theirs who); beaten — the building's slip
+     at the top ("VORTEX IS DOWN. Last hit: … He'll be back. He remembers.") and his cassette gone.
+     `controller.homeFloor()` so the chunk takes no values from the shared index.
+   - Checked: `vortex-fight.test.ts` (new second test: the whip on both, no shots while taped, a friend's knife;
+     REW back; PAUSE held then back at her — hurt, not down; the confiscation — gun gone, lying far off; the radio's
+     dance; HR's corner, her shots not counted; unheld in act II, a move by himself) — 2/2; the API's
+     `VortexFightTest` (the fight's pools, HR personal) with `VortexOSTest`, dev DB untouched (4 users); `arms` 16;
+     shared 492; **e2e `vortex-fight.spec.ts`** (YUTOPIA_GPU=1): Ana aims and fires at him in the lobby, his cassette
+     and act on both screens, her slip; act II and each move on her as both screens show it (the tape and Bia's
+     prompt, Bia holding E frees her, REW, PAUSE and her shot back, the revolver taken, the dance, HR), beaten —
+     both told. Stills `vx-*-{anas,bias}.png`. (A page behind the other draws no frames — the spec reads each
+     screen from the front.)
 3. **Act 3 — the dark**: the transformation on screen; **the studio's lights out** (new: a room-wide dark for the
    building's lights, eased in and out — the torch and flares what's left); the clones; the shadowed inside; fast;
    downs; possession and the glitch (the client's controls and screen, briefly); tests.

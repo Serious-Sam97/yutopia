@@ -15,7 +15,11 @@ use App\Models\User;
 */
 class Vortex
 {
-    public const EVENTS = ['ambient', 'radio', 'night', 'standup', 'sleep', 'greet', 'poke', 'vortexos'];
+    // (plan 88: the fight's — shot, a side-step, his moves; `hr` is personal, the rest public)
+    public const EVENTS = [
+        'ambient', 'radio', 'night', 'standup', 'sleep', 'greet', 'poke', 'vortexos',
+        'hit', 'dodge', 'whip', 'rew', 'pause', 'steal', 'blast', 'hr',
+    ];
 
     private const PUBLIC = [
         'ambient' => [
@@ -51,6 +55,45 @@ class Vortex
             'someone booted the old system. it still smells like tape in there.',
             'careful in there. the recycle bin is not empty. it was never empty.',
         ],
+        // the fight with him (docs/plan/88-vortex-fight.md): shot, he complains — never naming who
+        'hit' => [
+            'ow. that\'s workplace harassment.',
+            'i felt that in my b-side.',
+            'you know i\'m on the payroll, right? i\'m not. but still.',
+            'that\'s going in your performance review.',
+            'ow. ow. *kkzzt* ow, but in stereo.',
+            'rude. accurate, but rude.',
+        ],
+        'dodge' => [
+            'missed. i\'m a sprite. i have no hitbox. *kkzzt* i have a small hitbox.',
+            'too slow. i buffer faster than that.',
+            'nope. i was never there. check the tape.',
+        ],
+        'whip' => [
+            'hold still. this is a hug. with tape.',
+            'magnetic tape. very strong. very sticky. very you-problem.',
+            'wrapped. like a present nobody wanted.',
+        ],
+        'rew' => [
+            'let\'s try that again. from the top.',
+            'rewind. you were doing so well five seconds ago.',
+            '◀◀ that never happened.',
+        ],
+        'pause' => [
+            '▮▮ pause. nobody move. especially the bullets.',
+            'paused. the bullets are thinking it over.',
+            'hold that thought. i\'ll give it back. all of it.',
+        ],
+        'steal' => [
+            'confiscated. you\'ll get it back at the end of the term.',
+            'no guns in the office. house rules. my house.',
+            'i put it somewhere safe. safe for me.',
+        ],
+        'blast' => [
+            'this song slaps. so does the volume.',
+            'everybody dance. that\'s not a request.',
+            'max volume. your legs belong to the beat now.',
+        ],
     ];
 
     /** @return array{line: ?string, mood: string, personal: bool} */
@@ -59,7 +102,14 @@ class Vortex
         if ($userId === null || isset(self::PUBLIC[$event])) {
             $pool = self::PUBLIC[$event] ?? self::PUBLIC['ambient'];
 
-            return ['line' => $this->glitchy($pool[array_rand($pool)]), 'mood' => $event === 'radio' ? 'happy' : 'smug', 'personal' => false];
+            $mood = match ($event) {
+                'radio' => 'happy',
+                'hit', 'dodge' => 'judging',
+                'whip', 'rew', 'pause', 'steal', 'blast' => 'malicious',
+                default => 'smug',
+            };
+
+            return ['line' => $this->glitchy($pool[array_rand($pool)]), 'mood' => $mood, 'personal' => false];
         }
         $user = User::find($userId);
         if (! $user) {
@@ -84,6 +134,16 @@ class Vortex
         $options[] = ["stop poking me. i'm made of noise and spite. *kkzzt* mostly spite.", 'dizzy'];
         $options[] = ["what the {$hell} are you looking at. it's me. the only interesting thing in this building.", 'smug'];
         $options[] = ["you walk like a cursor with anxiety. it's {$damn} endearing. anyway.", 'curious'];
+        // HR (plan 88): sent to reception for shooting him — only to them
+        if ($event === 'hr') {
+            $hr = [
+                "reported to hr, {$nick}. sit in reception and think about what you did.",
+                "hr says hi, {$nick}. two minutes in the corner. i'll be counting.",
+                "that's a formal complaint, {$nick}. reception. now.",
+            ];
+
+            return [$hr[array_rand($hr)], 'judging'];
+        }
         if ($event === 'greet') {
             $options[] = ["you're here. great. now the room is 3% more predictable.", 'smug'];
         }

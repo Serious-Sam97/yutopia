@@ -139,7 +139,7 @@ export interface SurvivalHooks {
   /** the client says it's out of breath (its own count reached 0 a moment before ours) */
   breathless(sid: string): void;
   /** a strike (features/dark.ts): `n` off health; at nothing, they go down */
-  hurt(sid: string, n: number): void;
+  hurt(sid: string, n: number, spare?: boolean): void;
   /** down (D7): crawling, no jumps, no shots */
   down(sid: string): boolean;
   /** what they carry, to change in place (features/arms.ts: rounds, flares); null until loaded */
@@ -149,7 +149,7 @@ export interface SurvivalHooks {
   /** an admin's (docs/plan/48-the-admin.md): health, breath and battery full; up again if down */
   heal(sid: string): void;
   /** (plan 88) something left lying (Vortex's tape where he fell): on `level`'s floor at (x, y) */
-  drop(item: ItemId, n: number, x: number, y: number, level: number): void;
+  drop(item: ItemId, n: number, x: number, y: number, level: number, loaded?: number): void;
   /** an admin's: something into their pockets (or, `drop`, on the ground where they stand);
    *  false: nothing went (unknown, or no room) */
   give(sid: string, item: string, n: number, drop?: boolean): boolean;
@@ -768,8 +768,8 @@ registerFeature((room: WorldRoom) => {
       p.hp = vitalByte(s.v.hp);
       changed(s);
     },
-    drop(item, n, x, y, level) {
-      putDrop(item, n, 0, x, y, Date.now(), undefined, level);
+    drop(item, n, x, y, level, loaded = 0) {
+      putDrop(item, n, loaded, x, y, Date.now(), undefined, level);
     },
     give(sid, item, n, drop) {
       const p = room.state.players.get(sid);
@@ -802,11 +802,13 @@ registerFeature((room: WorldRoom) => {
       if (s.c.winded && !s.windedAt) s.windedAt = Date.now();
       return ok;
     },
-    hurt(sid, n) {
+    hurt(sid, n, spare) {
       const p = room.state.players.get(sid);
       const s = p && people.get(p.uid);
       // (an admin who's unhurt: nothing — docs/plan/48-the-admin.md)
       if (!p || !s || p.downAt || (p.admin && hasPower(p.powers, "unhurt"))) return;
+      // (plan 88: `spare` — hurt, never down: Vortex's act II)
+      if (spare) n = Math.min(n, Math.max(0, s.v.hp - 1));
       hurt(s.v, s.c, n);
       p.hp = vitalByte(s.v.hp);
       s.dirty = true;

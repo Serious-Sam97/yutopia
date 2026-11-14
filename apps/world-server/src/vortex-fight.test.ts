@@ -43,6 +43,7 @@ interface Person {
   hits: { id: string; kind: string }[];
   fight: { who: { sid: string; name: string; hits: number }[] }[];
   down: { by: string; secs: number }[];
+  moves: { kind: string; to?: string; who?: string[]; n?: number; item?: string; area?: string; ms?: number }[];
 }
 async function person(uid: number): Promise<Person> {
   const room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
@@ -50,18 +51,26 @@ async function person(uid: number): Promise<Person> {
     token: `dev:${uid}:P${uid}:member,builder,admin`,
   });
   rooms.push(room);
-  const who: Person = { room, inv: null, hits: [], fight: [], down: [] };
+  const who: Person = { room, inv: null, hits: [], fight: [], down: [], moves: [] };
   room.onMessage("dark:pockets", (m: { inv: Inventory }) => {
     who.inv = m.inv;
   });
   room.onMessage("arms:hit", (m: Person["hits"][number]) => who.hits.push(m));
   room.onMessage("vortex:fight", (m: Person["fight"][number]) => who.fight.push(m));
   room.onMessage("vortex:down", (m: Person["down"][number]) => who.down.push(m));
+  room.onMessage("vortex:move", (m: Person["moves"][number]) => who.moves.push(m));
   room.onMessage("*", () => {});
   await waitFor(() => !!room.state?.players?.get(room.sessionId) && !!vx(room));
   room.send("dark:hello", {});
   await waitFor(() => who.inv !== null);
   return who;
+}
+// gone (out of the next test's line: they all arrive on one spot) — once only (twice hangs the file)
+async function bye(...ps: Person[]) {
+  for (const p of ps) {
+    rooms.splice(rooms.indexOf(p.room), 1);
+    await p.room.leave(true).catch(() => {});
+  }
 }
 // a revolver drawn, aimed at him, a shot — from where they stand, at his middle
 async function armed(p: Person) {
@@ -133,4 +142,114 @@ test("shot, Vortex is hurt: his health, the acts, who's in it; two shooting; bea
   a.room.send("mod:vortex", { reset: true, hold: false });
   await waitFor(() => vx(a.room).vact === 0 && vx(a.room).vgone === 0 && vx(a.room).mood === "smug");
   await waitFor(() => a.fight.at(-1)?.who.length === 0);
+  await bye(a, b);
+});
+
+// (phase 2) his act II moves, each on both screens: the tape whip (bound — no shots — and a friend cuts her free),
+// REW (back where she stood), PAUSE (the shots held, then back at her — hurt, never down), the confiscation (her gun
+// gone, left far off with its rounds), the radio's blast (made to dance), HR (sent to reception; her shots not
+// counted); unheld in act II — one by himself
+test("act II: the whip and a friend's knife, REW, PAUSE, the confiscation, the radio, HR — and one by himself", async () => {
+  const a = await person(883);
+  const b = await person(884);
+  const m = me(a.room);
+  const sa = a.room.sessionId;
+  // (both arrive on the same spot: B out of A's line)
+  b.room.send("teleport", { to: { x: m.x - 1.5, y: m.y + 1.5, level: m.level } });
+  await waitFor(() => Math.hypot(me(b.room).x - (m.x - 1.5), me(b.room).y - (m.y + 1.5)) < 0.6);
+  a.room.send("mod:vortex", { reset: true, hold: true, at: { x: m.x + 2.5, y: m.y } });
+  await waitFor(() => Math.abs(vx(a.room).x - (m.x + 2.5)) < 0.01);
+  await armed(a);
+  shoot(a);
+  await waitFor(() => vx(a.room).vact === 1);
+  a.room.send("mod:vortex", { act: 2 });
+  await waitFor(() => vx(a.room).vact === 2);
+  const last = (p: Person, kind: string) => p.moves.filter((x) => x.kind === kind).at(-1);
+
+  // the whip: thrown, then she's taped up — on both screens; no shots while bound
+  a.room.send("mod:vortex", { move: "whip", to: sa });
+  await waitFor(() => last(b, "whip")?.to === sa);
+  await waitFor(() => last(a, "bound")?.to === sa && last(b, "bound")?.to === sa);
+  const k0 = vx(a.room).vk;
+  shoot(a);
+  await sleep(400);
+  assert.equal(vx(a.room).vk, k0, "bound: no shots");
+  // B beside her cuts her free
+  b.room.send("teleport", { to: { x: m.x - 0.8, y: m.y + 0.8, level: m.level } });
+  await waitFor(() => Math.hypot(me(b.room).x - me(a.room).x, me(b.room).y - me(a.room).y) < 1.6);
+  b.room.send("vortex:free", { sid: sa });
+  await waitFor(() => last(a, "free")?.to === sa);
+
+  // REW: a step away, then pulled back to where she was
+  const was = { x: me(a.room).x, y: me(a.room).y };
+  await sleep(600);
+  a.room.send("teleport", { to: { x: was.x, y: was.y - 2, level: m.level } });
+  await waitFor(() => Math.abs(me(a.room).y - (was.y - 2)) < 0.3);
+  await sleep(400);
+  a.room.send("mod:vortex", { move: "rew", to: sa });
+  await waitFor(() => last(b, "rew")?.to === sa);
+  await waitFor(() => Math.hypot(me(a.room).x - was.x, me(a.room).y - was.y) < 0.6);
+
+  // PAUSE: her shot held (his health as it was), then back at her — hurt, not down
+  a.room.send("mod:vortex", { at: { x: me(a.room).x + 2.5, y: me(a.room).y } });
+  await waitFor(() => Math.abs(vx(a.room).x - (me(a.room).x + 2.5)) < 0.01);
+  const hp0 = me(a.room).hp;
+  const k1 = vx(a.room).vk;
+  a.room.send("mod:vortex", { move: "pause" });
+  await waitFor(() => !!last(b, "pause"));
+  await sleep(250);
+  shoot(a);
+  await waitFor(() => a.hits.filter((h) => h.kind === "vortex").length >= 2);
+  assert.equal(vx(a.room).vk, k1, "paused: held in the air");
+  await waitFor(() => last(b, "play")?.to === sa, 5000);
+  assert.ok((last(b, "play")?.n ?? 0) > 0);
+  await waitFor(() => me(a.room).hp < hp0);
+  assert.equal(me(a.room).downAt, 0, "hurt, never down");
+
+  // the confiscation: her revolver gone from her hand and her quick slots, lying far off with its rounds
+  a.room.send("mod:vortex", { move: "steal", to: sa });
+  await waitFor(() => last(b, "steal")?.to === sa);
+  assert.equal(last(b, "steal")?.item, "revolver");
+  assert.ok(last(b, "steal")?.area);
+  await waitFor(() => me(a.room).gun === "" && !a.inv?.quick.some((it) => it?.id === "revolver"));
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const gun = [...a.room.state.drops.values()].find((d: any) => d.item === "revolver") as any;
+  assert.ok(gun, "left somewhere");
+  assert.ok(Math.hypot(gun.x - me(a.room).x, gun.y - me(a.room).y) > 5, "far off");
+
+  // the radio's blast: made to dance — on both screens
+  a.room.send("mod:vortex", { move: "radio", to: sa });
+  await waitFor(() => !!last(b, "radio")?.who?.includes(sa));
+  await waitFor(() => b.room.state.players.get(sa)?.emote === "tape");
+
+  // HR: sent to reception; her shots not counted a while
+  a.room.send("mod:vortex", { move: "hr", to: sa });
+  await waitFor(() => last(b, "hr")?.to === sa);
+  await waitFor(() => Math.hypot(me(a.room).x - 2.5, me(a.room).y - 23) < 1.2);
+  // (her shots not counted for 20 s wherever she is: back in the open, where a shot reaches him)
+  a.room.send("teleport", { to: { x: was.x, y: was.y, level: m.level } });
+  await waitFor(() => Math.hypot(me(a.room).x - was.x, me(a.room).y - was.y) < 0.6);
+  await armed(a);
+  a.room.send("mod:vortex", { at: { x: me(a.room).x + 2.5, y: me(a.room).y } });
+  await waitFor(() => Math.abs(vx(a.room).x - (me(a.room).x + 2.5)) < 0.01);
+  const k2 = vx(a.room).vk;
+  const n2 = a.hits.filter((h) => h.kind === "vortex").length;
+  shoot(a);
+  await waitFor(() => a.hits.filter((h) => h.kind === "vortex").length > n2);
+  await sleep(200);
+  assert.equal(vx(a.room).vk, k2, "in HR's corner: not counted");
+
+  // unheld, act II, B in it beside him: a move by himself within 6–9 s
+  b.room.send("teleport", { to: { x: was.x - 1.5, y: was.y + 1.5, level: m.level } });
+  await waitFor(() => Math.hypot(me(b.room).x - (was.x - 1.5), me(b.room).y - (was.y + 1.5)) < 0.6);
+  await armed(b);
+  // (in front of her as in the first test: away from A's line)
+  a.room.send("mod:vortex", { at: { x: was.x - 1.5, y: was.y + 4 } });
+  await waitFor(() => Math.abs(vx(b.room).y - (was.y + 4)) < 0.01);
+  shoot(b);
+  await waitFor(() => (a.fight.at(-1)?.who.length ?? 0) === 2);
+  const before = b.moves.length;
+  a.room.send("mod:vortex", { hold: false, act: 2 });
+  await waitFor(() => b.moves.slice(before).some((x) => x.kind !== "play" && x.kind !== "free"), 12_000);
+  a.room.send("mod:vortex", { reset: true, hold: true });
 });

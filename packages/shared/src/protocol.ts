@@ -428,7 +428,12 @@ export interface ClientMessages {
     reset?: boolean;
     at?: { x: number; y: number };
     hold?: boolean;
+    // (one of his moves, now, on `to` — a session)
+    move?: "whip" | "rew" | "pause" | "steal" | "radio" | "hr";
+    to?: string;
   };
+  // (plan 88) cutting a friend free of Vortex's tape (near them)
+  "vortex:free": { sid: string };
   // pets (shared/pets.ts): adopt one, let it go, its name / look / clothes, a
   // command, care by hand, a toy, a lesson, a bowl filled, a battle (the
   // challenge, the answer, a move each round)
@@ -644,6 +649,18 @@ export interface ServerMessages {
   // (plan 88) the fight with Vortex: who's in it and their hits (none: it's over); beaten — by whom, how long it took
   "vortex:fight": { who: { sid: string; name: string; hits: number }[] };
   "vortex:down": { by: string; secs: number };
+  // (plan 88) one of his moves, for everyone to see: on whom, from where, for how long (ms); what came of it
+  "vortex:move": {
+    kind: "whip" | "bound" | "missed" | "free" | "rew" | "pause" | "play" | "steal" | "radio" | "hr";
+    to?: string;
+    from?: { x: number; y: number };
+    ms?: number;
+    n?: number;
+    item?: string;
+    area?: string;
+    duck?: boolean;
+    who?: string[];
+  };
   kicked: { reason: string };
   // builders: what Undo/Redo would do, and whether the last change reached Yondra
   "build:history": { undo: number; redo: number; undoLabel: string | null; redoLabel: string | null };

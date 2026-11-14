@@ -2329,6 +2329,11 @@ export class WorldController {
     this.tp?.tags.say(id, text, ms);
   }
 
+  /** (plan 88) the studio's floor — Vortex's (the lazy chunks ask, so they needn't take the shared index's values) */
+  homeFloor(): number {
+    return this.building ? floorOf(this.building) : 0;
+  }
+
   // Where a world point is on screen (px from the world canvas's top-left; hostRect() for client
   // px). `z`: metres above the floor.
   clientAt(x: number, y: number, z: number): { x: number; y: number } {

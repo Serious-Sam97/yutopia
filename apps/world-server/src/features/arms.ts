@@ -118,7 +118,9 @@ registerFeature((room: WorldRoom) => {
     g.onLand(x, y) ? heightAt(x, y) : 0;
   // where everyone was, the last second or so (a shot is taken against where its shooter saw them)
   const trails = new Map<string, Was[]>();
-  const free = (p: Player) => !p.busy && !p.act && p.a !== ANIM.sit && p.hp > 0 && !p.fellAt;
+  // (plan 88: taped up by Vortex — not till a friend cuts them free)
+  const free = (p: Player) =>
+    !p.busy && !p.act && p.a !== ANIM.sit && p.hp > 0 && !p.fellAt && !room.vortex?.bound(p.sid);
   // the weapon in the hand: its slot in what they carry
   const inHand = (sid: string, p: Player) => {
     const inv = room.survival?.inventory(sid);

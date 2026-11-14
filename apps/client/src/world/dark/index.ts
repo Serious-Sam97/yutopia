@@ -26,6 +26,7 @@ import { Shades } from "./shades";
 import { STRINGS } from "./strings";
 import { VITALS_CSS, VitalsHud } from "./vitals-hud";
 import { DarkSound } from "./voices";
+import { VORTEX_CSS, VortexFight } from "./vortex";
 
 // The dark (docs/plan/30-the-dark.md), on the client: its own chunk, loaded by
 // the walker the first time I'm out on the land. Phase 2: my stamina as an arc
@@ -124,6 +125,7 @@ class Dark implements DarkHooks {
   private readonly shades: Shades;
   private readonly arms: Arms;
   private readonly downs: Down;
+  readonly vxf: VortexFight;
   private readonly voices: DarkSound;
   private readonly vitals: VitalsHud;
   private readonly panel: InventoryPanel;
@@ -176,7 +178,7 @@ class Dark implements DarkHooks {
     // (plan 86: the items' pictures, in before they're first shown)
     preloadArt();
     const style = document.createElement("style");
-    style.textContent = CSS + ARMS_CSS + DOWN_CSS + VITALS_CSS + INV_CSS;
+    style.textContent = CSS + ARMS_CSS + DOWN_CSS + VITALS_CSS + INV_CSS + VORTEX_CSS;
     this.root.className = "dk";
     this.root.append(style);
     this.slips.className = "abs dk-slips";
@@ -211,6 +213,8 @@ class Dark implements DarkHooks {
     // (the column, bottom up: the guns' cylinder and flares, the quick slots, the slips, the battery)
     this.col.append(this.arms.hudEl, this.quickEl, this.slips, this.airEl, this.bat);
     this.downs = new Down(ctl, walker, this.root, () => !!this.inv && count(this.inv, "aid") > 0, t);
+    // (plan 88) the fight with Vortex: his cassette, his moves on my screen
+    this.vxf = new VortexFight(ctl, walker, this.root, t);
     // the inventory (I, the pad's Menu): its asks go to the server, or to the guns
     this.panel = new InventoryPanel(
       ctl,
@@ -354,6 +358,7 @@ class Dark implements DarkHooks {
     this.arms.dispose();
     this.panel.dispose();
     this.downs.dispose();
+    this.vxf.dispose();
     this.voices.dispose();
     this.vitals.dispose();
     this.root.remove();
@@ -364,11 +369,13 @@ class Dark implements DarkHooks {
     this.panel.toggle();
   }
   frozen(): boolean {
-    return this.panel.open;
+    // (or taped up by Vortex, or made to dance)
+    return this.panel.open || this.vxf.frozen();
   }
   use(): boolean {
-    // someone down by me to get up, or my own first aid down: held
+    // someone down by me to get up, or my own first aid down: held; a friend taped up, cut free (held)
     if (this.downs.use()) return true;
+    if (this.vxf.use()) return true;
     if (!this.target || this.walker.down) return false;
     if (this.search?.target.id !== this.target.id) this.search = { target: this.target, at: performance.now() };
     return true;
@@ -613,7 +620,9 @@ class Dark implements DarkHooks {
     this.vitals.frame();
     // (the use held: the key, or the pad's button)
     const padUse = this.walker.controls.b.pad.use;
-    this.downs.frame(!!this.useKey || (padUse !== undefined && this.walker.controls.pad.held(padUse)));
+    const useHeld = !!this.useKey || (padUse !== undefined && this.walker.controls.pad.held(padUse));
+    this.downs.frame(useHeld);
+    this.vxf.frame(useHeld);
     const ctl = this.ctl;
     const now = performance.now();
     const out = ctl.level === 0 && !!ctl.room;

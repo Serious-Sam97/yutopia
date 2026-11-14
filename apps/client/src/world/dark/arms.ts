@@ -1077,6 +1077,7 @@ export const ARMS_CSS = `
 .dk-cross.hit.spark{--c:#9ec5ff}
 .dk-cross.hit.person{--c:#ffb02e}
 .dk-cross.hit.head{--c:#ffd54a}
+.dk-cross.hit.vortex{--c:#ff2d95}
 .dk-cross.hit.head i{transform:scale(1.45)}
 .dk-cross.hit.killed,.dk-cross.hit.downed{--c:#ff5a4a}
 .dk-cross.hit.killed i,.dk-cross.hit.downed i{transform:scale(1.6)}
