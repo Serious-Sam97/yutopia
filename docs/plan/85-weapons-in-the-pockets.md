@@ -10,7 +10,7 @@ Status: **planned 2026-11-14; forks decided by the user 2026-11-14, all as recom
 free quick slot, else a free pocket; **F3a** the weapon in her hand moved to a pocket is put away at once; **F4a** the
 pockets named "Mochila" / "Pack" (the label only); **F5a** equipped by a drag or an Equip button; **F2a** (one of a
 kind across quick slots and pockets) as recommended, not asked. **Phase 1 (the rules) built 2026-11-14**,
-committed.
+committed c81d8ec3. **Phase 2 (the server, the save) built 2026-11-14**, committed.
 
 ## What there is now
 
@@ -80,6 +80,24 @@ a pocket, it shows nowhere. The work is letting it in, everywhere the rule lives
    loaded no more than it holds). Tests: world-server (`survival.test.ts`: a weapon to a pocket — not in her
    hand, not worn — and back — worn again; the kit not giving a second revolver; a save and a rejoin with it in a
    pocket) and the API's (`SurvivorTest`; [[api-tests-dev-db]]: its database checked first).
+   Done in phase 2:
+   - **What she holds and wears, at once** (`apps/world-server/src/worn.ts` `wear(p, inv)`): the gun out of her hand
+     once it isn't in a quick slot, the revolver's holster, the four long guns' slings — from the quick slots
+     alone; called by survival's `changed` on every change of what she carries (a drag, a drop, a take, a use, a
+     search, a give), arms' half-second sweep kept as the backstop. So the weapon in her hand dragged to a pocket
+     is put away with the move (F3a: the client puts it away over her shoulder and it's gone — its sling's gone
+     too), off her hip or her back; dragged back, worn again.
+   - **The admin's kit** (`mod:refill kit`) takes its guns' kinds out of the pack as it lays them in the quick
+     slots (one of a kind).
+   - **The save**: the API's `DarkController` takes a gun in a pocket — one of a kind across the quick slots and
+     the pockets, loaded no more than it holds (`item()`, shared by both).
+   - Tests: `survival.test.ts` — the revolver in her hand dragged to a pocket, put away and off her hip within
+     150 ms of the move; the double-barrel swapped with a pocket's battery, off her back; an empty quick slot's
+     key draws nothing; back to a quick slot, on her hip, drawn; the kit again, one double-barrel. The API's
+     `SurvivorTest` (in memory — the dev database's 4 users before and after): a gun in a pocket kept; a second
+     revolver in a pocket, or one loaded past it, refused. `down.test.ts` green; in `arms.test.ts` the Daybreak's
+     test is flaky with or without this (the ball sometimes doesn't put the shadow down: 288 ms after the burst
+     when it does, 293 before), and `survival.test.ts`'s loot spot is flaky too; its admin-gives-a-gun red on HEAD.
 3. **The panel**: a weapon drawn in a pocket (its icon, loaded/mag, the spare rounds); its details — loaded,
    spare, damage, range, "in the pack: equip it to hold it" — with Equip (F5) and Drop; the drag's text; the
    labels (F4); English and Portuguese.

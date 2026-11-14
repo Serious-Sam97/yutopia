@@ -4,7 +4,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { ROOM_NAME } from "@yutopia/shared";
 import { LOCKER, LOOT, type LootItem, lockerFront } from "@yutopia/shared/dark";
 import { heightAt } from "@yutopia/shared/grounds";
-import { count, type Inventory } from "@yutopia/shared/inventory";
+import { count, type Inventory, QUICK_SLOT } from "@yutopia/shared/inventory";
 import { MOVE, MV_AIM, packMv } from "@yutopia/shared/move";
 import { Client, type Room } from "colyseus.js";
 
@@ -415,6 +415,49 @@ test("the torch focused indoors too: on, aiming, on the studio's floor", async (
   a.room.send("pos", { x: p.x, y: p.y, z: 0, yaw: 96, a: 0, seq: 0, mv: packMv("still") });
   await waitFor(() => me(a.room).focused === false);
   a.room.send("phone:torch", { on: false });
+});
+
+test("(plan 85) a weapon to a pocket: out of her hand at once, worn nowhere; back to a quick slot, worn again; one of a kind", async () => {
+  const a = await person(397, "member,builder,admin");
+  await goTo(a, -250, -60);
+  a.room.send("mod:refill", { kit: true });
+  await waitFor(() => !!a.inv?.quick.some((it) => it?.id === "revolver") && me(a.room).holster && me(a.room).sling);
+  const inv = () => a.inv as Inventory;
+  const rev = inv().quick.findIndex((it) => it?.id === "revolver");
+  const sg = inv().quick.findIndex((it) => it?.id === "shotgun");
+  a.room.send("arms:draw", { slot: rev });
+  await waitFor(() => me(a.room).gun === "revolver");
+  // the revolver in her hand, dragged to an empty pocket: put away and off her hip with the move — not on arms'
+  // half-second sweep
+  const to = inv().pockets.indexOf(null);
+  assert.ok(to >= 0);
+  a.room.send("dark:move", { from: QUICK_SLOT + rev, to });
+  await waitFor(() => inv().pockets[to]?.id === "revolver", 2000);
+  const t0 = Date.now();
+  await waitFor(() => me(a.room).gun === "" && !me(a.room).holster, 2000);
+  assert.ok(Date.now() - t0 < 150, `put away and off her hip with the move (${Date.now() - t0} ms after it)`);
+  assert.equal(inv().quick[rev], null);
+  // the double-barrel swapped with the battery's pocket (the pack's full — the kit's stacks): off her back, the
+  // battery up in its quick slot
+  const to2 = inv().pockets.findIndex((it) => it?.id === "battery");
+  assert.ok(to2 >= 0);
+  a.room.send("dark:move", { from: QUICK_SLOT + sg, to: to2 });
+  await waitFor(
+    () => inv().pockets[to2]?.id === "shotgun" && inv().quick[sg]?.id === "battery" && !me(a.room).sling,
+    2000,
+  );
+  // a quick slot's key on an empty slot draws nothing; the revolver back to a quick slot: on her hip again, drawn
+  a.room.send("arms:draw", { slot: rev });
+  await sleep(150);
+  assert.equal(me(a.room).gun, "");
+  a.room.send("dark:move", { from: to, to: QUICK_SLOT + rev });
+  await waitFor(() => inv().quick[rev]?.id === "revolver" && me(a.room).holster, 2000);
+  a.room.send("arms:draw", { slot: rev });
+  await waitFor(() => me(a.room).gun === "revolver");
+  // the kit again: no second double-barrel — the one in the pack goes back to its quick slot's kind
+  a.room.send("mod:refill", { kit: true });
+  await waitFor(() => inv().quick.some((it) => it?.id === "shotgun") && me(a.room).sling, 2000);
+  assert.equal([...inv().quick, ...inv().pockets].filter((it) => it?.id === "shotgun").length, 1, "one of a kind");
 });
 
 test("an admin gives someone a gun and its rounds: they have them, and are told (plan 79 phase 8: a give that fitted said it hadn't)", async () => {

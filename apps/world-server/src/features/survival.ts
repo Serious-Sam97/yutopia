@@ -64,6 +64,7 @@ import { api, type SurvivorRecord } from "../api.ts";
 import { config } from "../config.ts";
 import { Cache as CacheWire, Drop, type Player } from "../schema.ts";
 import { fromSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
+import { wear } from "../worn.ts";
 import { registerFeature } from "./index.ts";
 
 // Survival on the Grounds (docs/plan/30-the-dark.md, phase 2): everyone's
@@ -226,6 +227,9 @@ registerFeature((room: WorldRoom) => {
   const changed = (s: Survivor) => {
     s.dirty = true;
     sendPockets(s);
+    // (plan 85: what she holds and wears follows at once — a weapon moved to the pack is put away and off her back
+    // now, not on arms' next sweep)
+    for (const p of room.state.players.values()) if (p.uid === s.uid) wear(p, s.inv);
   };
 
   // ── the loot ───────────────────────────────────────────────────────────────
@@ -525,7 +529,8 @@ registerFeature((room: WorldRoom) => {
     lootDirty = true;
     found(r.s, client.sessionId, d.id, got, left.length > 0);
   });
-  // a drag in the inventory: any slot to any, a weapon only into a quick slot (shared moveSlot)
+  // a drag in the inventory: any slot to any — a weapon into a pocket too, put away if it was in her hand (plan 85:
+  // shared moveSlot; `changed` sets what she holds and wears)
   room.on("dark:move", (client, m) => {
     const s = of(client.sessionId);
     if (s?.loaded && moveSlot(s.inv, Number(m?.from), Number(m?.to))) changed(s);
@@ -642,8 +647,10 @@ registerFeature((room: WorldRoom) => {
         ["battery", 1],
       ] as const;
       // (the kit's own kinds out of the pockets and laid in again, whole — a stray single shell mustn't
-      // keep the rifle's rounds out; what else is carried stays)
+      // keep the rifle's rounds out; what else is carried stays; its guns out of the pack too — plan 85: one of
+      // a kind)
       const ids = new Set<string>(kit.map(([id]) => id));
+      for (const it of s.inv.quick) if (it) ids.add(it.id);
       s.inv.pockets = s.inv.pockets.map((it) => (it && ids.has(it.id) ? null : it));
       for (const it of was) if (!ids.has(it.id)) addStack(s.inv, it.id, it.n);
       for (const [id, n] of kit) addStack(s.inv, id, n);

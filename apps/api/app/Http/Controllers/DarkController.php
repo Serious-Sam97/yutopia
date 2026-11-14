@@ -35,9 +35,11 @@ class DarkController extends Controller
             'issued' => ['sometimes', 'boolean'],
             'kitDay' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:1000000'],
         ]);
+        // (a gun one of a kind, the quick slots and the pockets together — plan 85)
+        $seen = [];
         $inventory = [
-            'quick' => $this->quick($data['inventory']['quick']),
-            'pockets' => $this->pockets($data['inventory']['pockets']),
+            'quick' => $this->quick($data['inventory']['quick'], $seen),
+            'pockets' => $this->pockets($data['inventory']['pockets'], $seen),
         ];
         $survivor = Survivor::updateOrCreate(['user_id' => $userId], [
             'inventory' => $inventory,
@@ -62,50 +64,43 @@ class DarkController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    // four quick slots (keys 1–4), a gun, a stack or nothing in each; a gun one of a kind,
-    // loaded no more than it holds; no stack over its cap
-    private function quick(array $slots): array
+    // four quick slots (keys 1–4), a gun, a stack or nothing in each; no stack over its cap
+    private function quick(array $slots, array &$seen): array
     {
         $out = [];
-        $seen = [];
         foreach (array_values($slots) as $i => $it) {
-            if ($it === null) {
-                $out[] = null;
-
-                continue;
-            }
-            $id = is_array($it) ? ($it['id'] ?? null) : null;
-            if (is_string($id) && isset(Survivor::STACKS[$id])) {
-                $out[] = $this->stack($it, "inventory.quick.$i");
-
-                continue;
-            }
-            $loaded = is_array($it) ? ($it['loaded'] ?? null) : null;
-            if (! is_string($id) || ! isset(Survivor::WEAPONS[$id]) || isset($seen[$id])
-                || ! is_int($loaded) || $loaded < 0 || $loaded > Survivor::WEAPONS[$id]) {
-                throw ValidationException::withMessages(["inventory.quick.$i" => 'not an item we know, or loaded past its capacity']);
-            }
-            $seen[$id] = true;
-            $out[] = ['id' => $id, 'loaded' => $loaded];
+            $out[] = $it === null ? null : $this->item($it, "inventory.quick.$i", $seen);
         }
 
         return array_pad($out, Survivor::QUICK, null);
     }
 
-    // six pockets, a stack or nothing in each, no stack over its cap
-    private function pockets(array $slots): array
+    // six pockets — the pack: a stack, a gun carried but not equipped (plan 85), or nothing in each
+    private function pockets(array $slots, array &$seen): array
     {
         $out = [];
         foreach (array_values($slots) as $i => $s) {
-            if ($s === null) {
-                $out[] = null;
-
-                continue;
-            }
-            $out[] = $this->stack($s, "inventory.pockets.$i");
+            $out[] = $s === null ? null : $this->item($s, "inventory.pockets.$i", $seen);
         }
 
         return array_pad($out, Survivor::POCKETS, null);
+    }
+
+    // a stack (no more than its cap), or a gun — one of a kind (`seen`: the ones so far), loaded no more than it holds
+    private function item(mixed $it, string $key, array &$seen): array
+    {
+        $id = is_array($it) ? ($it['id'] ?? null) : null;
+        if (is_string($id) && isset(Survivor::STACKS[$id])) {
+            return $this->stack($it, $key);
+        }
+        $loaded = is_array($it) ? ($it['loaded'] ?? null) : null;
+        if (! is_string($id) || ! isset(Survivor::WEAPONS[$id]) || isset($seen[$id])
+            || ! is_int($loaded) || $loaded < 0 || $loaded > Survivor::WEAPONS[$id]) {
+            throw ValidationException::withMessages([$key => 'not an item we know, a second of its kind, or loaded past its capacity']);
+        }
+        $seen[$id] = true;
+
+        return ['id' => $id, 'loaded' => $loaded];
     }
 
     // a stack we know, 1 up to its cap

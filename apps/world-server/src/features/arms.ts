@@ -32,6 +32,7 @@ import { addStack, count, isWeapon, QUICK, takeStack, WEAPONS, weaponIn } from "
 import { MV_AIM, MV_WINDED, unpackMv } from "@yutopia/shared/move";
 import type { Player } from "../schema.ts";
 import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
+import { wear } from "../worn.ts";
 import { registerFeature } from "./index.ts";
 
 // Guns and flares (docs/plan/30-the-dark.md, D6), anywhere — the snow, the
@@ -568,26 +569,9 @@ registerFeature((room: WorldRoom) => {
       // a weapon dropped (or never had) isn't in the hand
       if (now - checkedAt > 500) {
         checkedAt = now;
-        for (const p of room.state.players.values()) {
-          const inv = room.survival?.inventory(p.sid);
-          // (the cue's off a pool table, not out of the pockets: features/pballs.ts)
-          if (p.gun && p.gun !== "cue" && inv && !weaponIn(inv, p.gun)) p.gun = "";
-          // (plan 80) the revolver carried: its holster on the hip, for everyone to see
-          const holster = !!inv && !!weaponIn(inv, "revolver");
-          if (p.holster !== holster) p.holster = holster;
-          // (plan 81) the double-barrel carried: slung on the back
-          const sling = !!inv && !!weaponIn(inv, "shotgun");
-          if (p.sling !== sling) p.sling = sling;
-          // (plan 82) the AK carried: slung on the back, mirrored
-          const slingAk = !!inv && !!weaponIn(inv, "ak47");
-          if (p.slingAk !== slingAk) p.slingAk = slingAk;
-          // (plan 83) the sniper carried: slung on the AK's diagonal, over it
-          const slingSn = !!inv && !!weaponIn(inv, "sniper");
-          if (p.slingSn !== slingSn) p.slingSn = slingSn;
-          // (plan 84) the Daybreak carried: upright down the back, the lens down, over the others
-          const slingDb = !!inv && !!weaponIn(inv, "daybreak");
-          if (p.slingDb !== slingDb) p.slingDb = slingDb;
-        }
+        // (what she holds and wears from her quick slots — set at once on every change of what she carries too:
+        // survival's `changed`; this the backstop)
+        for (const p of room.state.players.values()) wear(p, room.survival?.inventory(p.sid));
       }
     },
   };

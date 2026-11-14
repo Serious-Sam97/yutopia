@@ -61,6 +61,18 @@ it('keeps the plan-79 guns and their rounds: the AK, the sniper, the Daybreak', 
     $put(pockets(['inventory' => ['pockets' => [0 => ['id' => 'cell', 'n' => 4]]]]))->assertUnprocessable();
 });
 
+it('keeps a gun in a pocket — carried, not equipped (plan 85)', function () {
+    $ana = User::factory()->create();
+    $body = pockets();
+    $body['inventory']['pockets'][2] = ['id' => 'ak47', 'loaded' => 12];
+    $body['inventory']['pockets'][4] = ['id' => 'daybreak', 'loaded' => 0];
+    internalCall($this, 'PUT', "/api/internal/survivors/{$ana->id}", $body)->assertOk();
+    $back = internalCall($this, 'GET', "/api/internal/survivors/{$ana->id}")->assertOk()->json('survivor.inventory');
+    expect($back['pockets'][2])->toBe(['id' => 'ak47', 'loaded' => 12]);
+    expect($back['pockets'][4])->toBe(['id' => 'daybreak', 'loaded' => 0]);
+    expect($back['quick'][0])->toBe(['id' => 'revolver', 'loaded' => 4]);
+});
+
 it('refuses what nobody could carry', function () {
     $ana = User::factory()->create();
     $put = fn (array $body) => internalCall($this, 'PUT', "/api/internal/survivors/{$ana->id}", $body);
@@ -70,7 +82,8 @@ it('refuses what nobody could carry', function () {
     $put(pockets(['inventory' => ['quick' => [0 => ['id' => 'shotgun', 'loaded' => 3]]]]))->assertUnprocessable();
     $put(pockets(['inventory' => ['quick' => [1 => ['id' => 'revolver', 'loaded' => 1]]]]))->assertUnprocessable(); // two revolvers
     $put(pockets(['inventory' => ['quick' => [1 => ['id' => 'aid', 'n' => 3]]]]))->assertUnprocessable();
-    $put(pockets(['inventory' => ['pockets' => [0 => ['id' => 'revolver', 'loaded' => 1]]]]))->assertUnprocessable(); // a gun in a pocket
+    $put(pockets(['inventory' => ['pockets' => [0 => ['id' => 'revolver', 'loaded' => 1]]]]))->assertUnprocessable(); // a second revolver, in a pocket (plan 85: one of a kind across both)
+    $put(pockets(['inventory' => ['pockets' => [2 => ['id' => 'shotgun', 'loaded' => 3]]]]))->assertUnprocessable(); // a gun in a pocket loaded past its capacity
     $five = pockets();
     $five['inventory']['quick'] = array_fill(0, 5, null);
     $put($five)->assertUnprocessable();
