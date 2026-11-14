@@ -92,6 +92,55 @@ const GUN_LEVEL = {
 } as const;
 export type GunSound = keyof typeof GUN_LEVEL;
 const isShotSound = (s: GunSound) => /-(near|in|far|fire|burst|burst-far)$/.test(s);
+// The fight with Vortex's recorded sounds (docs/plan/88-vortex-fight.md phase 5: CC0, picked by the user by ear on
+// /dev/vortex-sound — public/sfx/vortex), each moment's level beside the others (every take cut to −3 dB peak)
+const VX_LEVEL = {
+  "vx-hit": 0.55,
+  "vx-hit-dark": 0.6,
+  "vx-babble": 0.5,
+  "vx-kkzzt": 0.45,
+  "vx-dodge": 0.45,
+  "vx-whip": 0.75,
+  "vx-bound": 0.6,
+  "vx-free": 0.7,
+  "vx-rew": 0.65,
+  "vx-pause": 0.7,
+  "vx-play": 0.7,
+  "vx-steal": 0.6,
+  "vx-duck": 0.6,
+  "vx-radio": 0.6,
+  "vx-hr": 0.6,
+  "vx-dark": 0.85,
+  "vx-flicker": 0.5,
+  "vx-music3": 0.4,
+  "vx-clones": 0.6,
+  "vx-pop": 0.55,
+  "vx-strike": 0.85,
+  "vx-possess": 0.75,
+  "vx-glitch": 0.6,
+  "vx-down": 0.7,
+  "vx-unspool": 0.6,
+  "vx-pickup": 0.6,
+  "vx-grudge": 0.55,
+} as const;
+export type VxSound = keyof typeof VX_LEVEL;
+// (his hits, his blow, his static: a take at random each time, a touch different; the rest a moment each)
+const isVxShot = (s: VxSound) => /^vx-(hit|hit-dark|strike|kkzzt|pop|dodge)$/.test(s);
+// his voice's pitch by his face (a babble a line: grains of tape chirps — plan 88 phase 5)
+const BABBLE_RATE: Record<string, number> = {
+  smug: 1,
+  judging: 0.92,
+  fury: 1.15,
+  possessed: 0.68,
+  happy: 1.25,
+  glitch: 1.3,
+  seething: 0.85,
+  dead: 0.6,
+  malicious: 0.95,
+  sideeye: 0.95,
+  paranoid: 1.1,
+};
+
 /** A shot heard out to this far (tiles); past the near reach, the far recording, dulling on. */
 export const SHOT_REACH = { near: 22, far: 90 };
 
@@ -134,14 +183,15 @@ export class DarkSound {
     for (const n of names) this.worker.postMessage(n);
   }
 
-  // the guns' recordings, decoded once there's sound; the next take of each, for the handling
+  // the guns' recordings (and Vortex's: plan 88), decoded once there's sound; the next take of each, for the
+  // handling
   private recorded = new Map<string, AudioBuffer[]>();
-  private recordedAsked = false;
+  private recordedAsked = new Set<string>();
   private takeAt = new Map<string, number>();
-  private loadRecorded(ctx: AudioContext) {
-    if (this.recordedAsked) return;
-    this.recordedAsked = true;
-    void fetch("/sfx/guns/manifest.json")
+  private loadRecorded(ctx: AudioContext, dir = "guns") {
+    if (this.recordedAsked.has(dir)) return;
+    this.recordedAsked.add(dir);
+    void fetch(`/sfx/${dir}/manifest.json`)
       .then((r) => (r.ok ? r.json() : {}))
       // (every slot at once: ~0.7 MB — a gun out, they're wanted in a moment)
       .then((man: Record<string, { files: string[] }[]>) =>
@@ -149,7 +199,7 @@ export class DarkSound {
           Object.entries(man).map(async ([slot, list]) => {
             const bufs = await Promise.all(
               (list[0]?.files ?? []).map((f) =>
-                fetch(`/sfx/guns/${f}`)
+                fetch(`/sfx/${dir}/${f}`)
                   .then((r) => r.arrayBuffer())
                   .then((b) => ctx.decodeAudioData(b))
                   .catch(() => null),
@@ -220,6 +270,103 @@ export class DarkSound {
     g.setValueAtTime(was, t);
     g.linearRampToValueAtTime(was * depth, t + 0.02);
     g.setTargetAtTime(was, t + 0.12, 0.35);
+  }
+
+  // ── (plan 88 phase 5) the fight with Vortex ──
+  /** His recordings fetched and decoded now (the fight on, or him near): ~0.8 MB. */
+  warmVortex(): void {
+    const ctx = this.ctx();
+    if (ctx) this.loadRecorded(ctx, "vortex");
+  }
+  /** One of the fight's sounds, from (x, y) (`range` tiles heard) or here — mine, close; `rate` its pitch. */
+  vx(slot: VxSound, at?: { x: number; y: number } | null, range = 24, volume = 1, rate = 1): void {
+    const ctx = this.ctx();
+    if (!ctx) return;
+    this.loadRecorded(ctx, "vortex");
+    const takes = this.recorded.get(slot);
+    if (!takes?.length) return;
+    const { pan, gain } = at ? this.place(at.x, at.y, range) : { pan: 0, gain: 1 };
+    if (gain <= 0.01) return;
+    const n = this.takeAt.get(slot) ?? 0;
+    const b = isVxShot(slot) ? takes[Math.floor(Math.random() * takes.length)] : takes[n % takes.length];
+    this.takeAt.set(slot, n + 1);
+    const src = ctx.createBufferSource();
+    src.buffer = b;
+    src.playbackRate.value = rate * (1 + (Math.random() * 2 - 1) * (isVxShot(slot) ? 0.06 : 0.02));
+    const g = ctx.createGain();
+    g.gain.value = gain * volume * VX_LEVEL[slot] * FX;
+    const p = ctx.createStereoPanner();
+    p.pan.value = pan;
+    src
+      .connect(g)
+      .connect(p)
+      .connect((this.mixer as Mixer).buses.effects);
+    src.start();
+  }
+  /** Act III's music (the lights out): its loop at `level` (0 … 1: eased; 0 lets it go) on the music bus. */
+  vxMusic(level: number): void {
+    if (level <= 0 && !this.loops.has("vx-music3")) return;
+    const ctx = this.ctx();
+    if (ctx) this.loadRecorded(ctx, "vortex");
+    this.loop("vx-music3", level * VX_LEVEL["vx-music3"], 0, "music");
+  }
+  /** His voice for a line (plan 88 phase 5): a babble of tape chirps, a syllable a grain — as many as the line
+   *  has, pitched by his face, a burst of static where he says *kkzzt*; from where he is (or here: a line to me). */
+  babble(text: string, mood: string, at?: { x: number; y: number } | null): void {
+    const ctx = this.ctx();
+    if (!ctx) return;
+    this.loadRecorded(ctx, "vortex");
+    const beds = this.recorded.get("vx-babble");
+    if (!beds?.length) return;
+    const { pan, gain } = at ? this.place(at.x, at.y, 16) : { pan: 0, gain: 1 };
+    if (gain <= 0.01) return;
+    const bus = (this.mixer as Mixer).buses.voices;
+    const out = ctx.createStereoPanner();
+    out.pan.value = pan;
+    out.connect(bus);
+    const base = BABBLE_RATE[mood.split("|")[0]] ?? 1;
+    // (his words: a syllable for about every three letters, at most a couple of seconds of it)
+    const words = text.split(/\s+/).filter(Boolean);
+    let t = ctx.currentTime + 0.03;
+    let syll = 0;
+    for (const w of words) {
+      if (syll > 26) break;
+      if (w.includes("kkzzt")) {
+        const kk = this.recorded.get("vx-kkzzt");
+        const b = kk?.[Math.floor(Math.random() * kk.length)];
+        if (b) {
+          const src = ctx.createBufferSource();
+          src.buffer = b;
+          const g = ctx.createGain();
+          g.gain.value = gain * VX_LEVEL["vx-kkzzt"] * FX;
+          src.connect(g).connect(out);
+          src.start(t);
+          t += Math.min(0.45, b.duration) + 0.05;
+        }
+        continue;
+      }
+      const n = Math.max(1, Math.min(4, Math.round(w.replace(/[^a-z]/gi, "").length / 3)));
+      for (let i = 0; i < n; i++, syll++) {
+        const b = beds[Math.floor(Math.random() * beds.length)];
+        const len = 0.06 + Math.random() * 0.06;
+        const from = Math.random() * Math.max(0.01, b.duration - len);
+        const src = ctx.createBufferSource();
+        src.buffer = b;
+        src.playbackRate.value = base * (0.88 + Math.random() * 0.26);
+        const g = ctx.createGain();
+        const v = gain * VX_LEVEL["vx-babble"] * FX;
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(v, t + 0.008);
+        g.gain.setValueAtTime(v, t + len - 0.012);
+        g.gain.linearRampToValueAtTime(0, t + len);
+        src.connect(g).connect(out);
+        src.start(t, from, len + 0.01);
+        t += len + 0.025 + Math.random() * 0.02;
+      }
+      // (a word's end: a breath of a gap; a full stop, a longer one)
+      t += /[.?!]$/.test(w) ? 0.16 : 0.05;
+    }
+    setTimeout(() => out.disconnect(), (t - ctx.currentTime + 0.5) * 1000);
   }
 
   /** The Daybreak's ball flying (plan 79 phase 9): its loop where the nearest is (null: let it go). */
@@ -334,7 +481,13 @@ export class DarkSound {
   }
 
   // a loop's level (0: let it fade, and stop it once it's quiet)
-  private loop(name: Name | GunSound, level: number, pan = 0, bus: "ambience" | "effects" = "effects", rate = 1) {
+  private loop(
+    name: Name | GunSound | VxSound,
+    level: number,
+    pan = 0,
+    bus: "ambience" | "effects" | "music" = "effects",
+    rate = 1,
+  ) {
     const ctx = this.ctx();
     if (!ctx) return;
     let l = this.loops.get(name);

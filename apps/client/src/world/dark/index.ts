@@ -214,7 +214,7 @@ class Dark implements DarkHooks {
     this.col.append(this.arms.hudEl, this.quickEl, this.slips, this.airEl, this.bat);
     this.downs = new Down(ctl, walker, this.root, () => !!this.inv && count(this.inv, "aid") > 0, t);
     // (plan 88) the fight with Vortex: his cassette, his moves on my screen
-    this.vxf = new VortexFight(ctl, walker, this.root, t);
+    this.vxf = new VortexFight(ctl, walker, this.root, t, this.voices);
     this.shades.more = this.vxf.shadeBodies;
     // the inventory (I, the pad's Menu): its asks go to the server, or to the guns
     this.panel = new InventoryPanel(

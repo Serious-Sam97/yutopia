@@ -719,6 +719,7 @@ registerFeature((room: WorldRoom) => {
         path = [];
         npc.x = x;
         npc.y = y;
+        toAll({ kind: "dodge", from: { x, y } });
         return true;
       }
     }

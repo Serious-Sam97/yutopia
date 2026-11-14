@@ -675,7 +675,9 @@ export interface ServerMessages {
       | "shades"
       | "strike"
       | "possess"
-      | "glitch";
+      | "glitch"
+      // (phase 5: a side-step — heard)
+      | "dodge";
     to?: string;
     from?: { x: number; y: number };
     ms?: number;

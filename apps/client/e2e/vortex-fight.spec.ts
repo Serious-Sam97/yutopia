@@ -92,8 +92,30 @@ async function two(page: Page, browser: Browser) {
     await bia.screenshot({ path: `${shots}/vx-${name}-bias.png` });
   };
 
+  // (phase 5) what each screen plays of the fight: its sound calls, kept
+  for (const p of [page, bia])
+    await p.evaluate(() => {
+      const v = (window as any).__dark.voices;
+      const heard: string[] = [];
+      (window as any).__vxheard = heard;
+      for (const k of ["vx", "babble", "vxMusic"]) {
+        const f = v[k].bind(v);
+        v[k] = (...a: any[]) => {
+          heard.push(k === "vx" ? a[0] : k === "babble" ? "babble" : a[0] > 0.5 ? "music" : "");
+          return f(...a);
+        };
+      }
+    });
   return { bia, ctx, home, anaSid, still };
 }
+
+// (phase 5) the fight's sounds a screen played (its calls), and whether his recordings are in and the sound's on
+const heard = (p: Page) => p.evaluate(() => [...new Set((window as any).__vxheard as string[])].filter(Boolean));
+const soundOn = (p: Page) =>
+  p.evaluate(() => {
+    const v = (window as any).__dark.voices;
+    return !!v.ctx() && !!v.recorded.get("vx-hit")?.length && !!v.recorded.get("vx-babble")?.length;
+  });
 
 test("the fight with Vortex, acts I–II: his cassette, each move on Ana — as both see it", async ({ page, browser }) => {
   test.skip(!GPU, "needs the GPU: YUTOPIA_GPU=1");
@@ -208,6 +230,23 @@ test("the fight with Vortex, acts I–II: his cassette, each move on Ana — as 
     .toContain("Ana Demo was reported");
   await page.waitForTimeout(500);
   await still("hr");
+  // (phase 5) the sounds: his hit, each move, on Ana's screen; Bia's heard them too; the recordings in
+  expect(await soundOn(page)).toBe(true);
+  const anaHeard = await heard(page);
+  for (const x of [
+    "vx-hit",
+    "vx-whip",
+    "vx-bound",
+    "vx-free",
+    "vx-rew",
+    "vx-pause",
+    "vx-play",
+    "vx-steal",
+    "vx-radio",
+    "vx-hr",
+  ])
+    expect(anaHeard, x).toContain(x);
+  expect(await heard(bia)).toEqual(expect.arrayContaining(["vx-whip", "vx-bound", "vx-radio"]));
 
   // beaten: the building's slip on both, the cassette gone
   await w(page, (y) => y.room.send("mod:vortex", { beat: true }));
@@ -313,6 +352,11 @@ test("the fight with Vortex, act III: the lights out, the shadowed, clones, the 
   expect(turned.x).toBe(-1);
   expect(turned.y).toBe(-0.5);
   await still("glitch");
+  // (phase 5) act III's: the lights going (their flicker, the breaker), the music, his clones, possessed, the glitch
+  const ana3 = await heard(page);
+  for (const x of ["vx-flicker", "vx-dark", "music", "vx-clones", "vx-possess", "vx-glitch"])
+    expect(ana3, x).toContain(x);
+  expect(await heard(bia)).toEqual(expect.arrayContaining(["vx-dark", "music"]));
 
   // unheld beside her: his blows (and theirs) till she's down; Bia by her holds E — up
   await page.evaluate(() => {
@@ -456,6 +500,9 @@ test("the fight with Vortex, the end and the grudge: the tape unspooled, the tro
   await expect.poll(near, { timeout: 20_000 }).toBeLessThan(3);
   await page.waitForTimeout(1200);
   await still("grudge");
+  // (phase 5) the end's: down, his tape spilling, the cassette taken, the grudge's sting — and his voice
+  const anaEnd = await heard(page);
+  for (const x of ["vx-down", "vx-unspool", "vx-pickup", "vx-grudge", "babble"]) expect(anaEnd, x).toContain(x);
   await w(page, (y) => y.room.send("mod:vortex", { reset: true, forget: true, hold: false }));
   await ctx.close();
 });

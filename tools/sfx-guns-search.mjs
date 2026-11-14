@@ -5,8 +5,7 @@
 // A slot already in the json keeps its `pick`.
 //   node tools/sfx-guns-search.mjs            every slot
 //   ONLY=revolver-near,ak-near node tools/sfx-guns-search.mjs
-import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { searchSlots } from "./sfx-search.mjs";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 const OUT = `${ROOT}tools/sfx-guns.json`;
@@ -203,64 +202,9 @@ const SLOTS = {
   ],
 };
 
-const attr = (block, name) => {
-  const m = block.match(new RegExp(`${name}="([^"]*)"`));
-  return m
-    ? m[1]
-        .replace(/&amp;/g, "&")
-        .replace(/&#x27;/g, "'")
-        .replace(/&quot;/g, '"')
-    : "";
-};
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function search(q) {
-  const url = `https://freesound.org/search/?q=${encodeURIComponent(q).replace(/%20/g, "+")}&f=license%3A%22Creative+Commons+0%22&s=Downloads+desc`;
-  const html = execFileSync("curl", ["-s", "-A", "yutopia-sfx/1.0", url], { maxBuffer: 1 << 26 }).toString();
-  return html
-    .split('class="bw-player"')
-    .slice(1)
-    .map((b) => {
-      const id = attr(b, "data-sound-id");
-      const uid = attr(b, "data-user-id");
-      return {
-        id,
-        user: attr(b, "data-username"),
-        title: attr(b, "data-title"),
-        preview: `https://cdn.freesound.org/previews/${Math.floor(Number(id) / 1000)}/${id}_${uid}-hq.mp3`,
-        url: `https://freesound.org/people/${attr(b, "data-username")}/sounds/${id}/`,
-        dur: Math.round(Number(attr(b, "data-duration")) * 10) / 10,
-        downloads: Number(attr(b, "data-num-downloads")) || 0,
-      };
-    })
-    .filter((r) => r.id);
-}
-
-const had = existsSync(OUT) ? JSON.parse(readFileSync(OUT, "utf8")) : {};
-const out = {
-  _: "The guns' sound candidates (docs/plan/79-the-guns.md phase 9): CC0 on Freesound, the most downloaded of each slot's searches (tools/sfx-guns-search.mjs), fetched as their HQ previews and cut by tools/sfx-weather.mjs (LIST=tools/sfx-guns.json DIR=guns). The user picks by ear on /dev/gun-sound.",
-  ...had,
-};
-for (const [slot, [kind, queries, [lo, hi], n]] of Object.entries(SLOTS)) {
-  if (only && !only.includes(slot)) continue;
-  const seen = new Set();
-  const from = [];
-  for (const q of queries) {
-    if (from.length >= n) break;
-    let rs = [];
-    try {
-      rs = await search(q);
-    } catch (e) {
-      console.log(`  ${slot}: "${q}" failed (${e.message})`);
-    }
-    await sleep(4000);
-    for (const r of rs) {
-      if (from.length >= n) break;
-      if (seen.has(r.id) || r.dur < lo || r.dur > hi) continue;
-      seen.add(r.id);
-      from.push({ ...r, note: `"${q}"` });
-    }
-  }
-  out[slot] = { kind, from, ...(had[slot]?.pick !== undefined ? { pick: had[slot].pick } : {}) };
-  console.log(`${slot}: ${from.length} — ${from.map((f) => `${f.title} (${f.dur}s)`).join(" · ")}`);
-  writeFileSync(OUT, `${JSON.stringify(out, null, 2)}\n`);
-}
+await searchSlots(
+  SLOTS,
+  OUT,
+  "The guns' sound candidates (docs/plan/79-the-guns.md phase 9): CC0 on Freesound, the most downloaded of each slot's searches (tools/sfx-guns-search.mjs), fetched as their HQ previews and cut by tools/sfx-weather.mjs (LIST=tools/sfx-guns.json DIR=guns). The user picks by ear on /dev/gun-sound.",
+  only,
+);

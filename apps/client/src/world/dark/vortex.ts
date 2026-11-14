@@ -5,6 +5,7 @@ import type { WorldController } from "../controller";
 import type { DarkHooks, Walker } from "../input/walker";
 import type { Body3 } from "../tp/view";
 import { officeLook } from "./shades";
+import type { DarkSound, VxSound } from "./voices";
 
 // The fight with Vortex on my screen (docs/plan/88-vortex-fight.md phase 2, as design/vortex-fight/mock): his health
 // as a cassette at the top — the tape wound off its left reel as he's hurt, ticks at the acts, who's in it and their
@@ -63,6 +64,7 @@ export class VortexFight {
   // (phase 3) the lights out as eased here (0 … 1) and when they began to go; the mind games on me, till then; who's
   // possessed (theirs: a mark); his clones' question marks, till then; popped ones; the shadowed as seen (smoothed)
   private outK = 0;
+  private saidAt = 0;
   private outFrom = 0;
   private lastFrame = performance.now();
   private possessUntil = 0;
@@ -85,6 +87,7 @@ export class VortexFight {
     private readonly walker: Walker,
     root: HTMLElement,
     private readonly tr: (key: string, vars?: Record<string, string>) => string,
+    private readonly sound: DarkSound,
   ) {
     this.el.className = "vxf";
     this.boss.className = "abs vxf-boss";
@@ -116,12 +119,24 @@ export class VortexFight {
       if (!m.who.length) this.yetShown = false;
       this.who = m.who;
     });
-    on("vortex:grudge", (m) =>
-      this.slip(this.tr(m.hits === 1 ? "vx_grudge1" : "vx_grudge", { n: String(m.hits) }), false, "hr"),
-    );
+    on("vortex:grudge", (m) => {
+      this.slip(this.tr(m.hits === 1 ? "vx_grudge1" : "vx_grudge", { n: String(m.hits) }), false, "hr");
+      this.sound.vx("vx-grudge");
+    });
+    // (phase 5) his voice: a line to me alone (a personal one) — babbled here, close
+    on("vortex:say", (m) => this.sound.babble(m.text, m.mood ?? this.vx()?.mood ?? "smug"));
+    // (his cassette taken: its click)
+    on("dark:found", (m) => {
+      if (m.got.some((g) => g.id === "vxtape")) this.sound.vx("vx-pickup");
+    });
     on("vortex:down", (m) => {
       const v = this.vx();
       if (v) this.fell = { x: v.x, y: v.y, at: performance.now() };
+      // (the tape stopping; then it spilling out of him)
+      if (v && this.onHisFloor()) {
+        this.sound.vx("vx-down", v, 30);
+        setTimeout(() => this.sound.vx("vx-unspool", v, 24), 350);
+      }
       this.notice.innerHTML = this.tr("vx_down", { by: esc(m.by), t: mmss(m.secs) });
       this.notice.style.display = "block";
       this.notice.classList.remove("gone");
@@ -132,6 +147,9 @@ export class VortexFight {
     });
     on("arms:hit", (m) => {
       if (m.kind === "vortex" && this.pauseUntil > performance.now()) this.held.push({ x: m.x, y: m.y, z: m.z });
+      // (phase 5) the hit: hollow plastic — act III's distorted; a clone's a pop of its own (the server's)
+      if (m.kind === "vortex" && (m.id === "vortex" || !m.id.startsWith("vortex:")))
+        this.sound.vx((this.vx()?.vact ?? 0) >= 3 ? "vx-hit-dark" : "vx-hit", m, 30);
       // (act I: the first time I hit him, a slip — he's not fighting back. Yet.)
       if (m.kind !== "vortex" || this.yetShown) return;
       this.yetShown = true;
@@ -144,6 +162,7 @@ export class VortexFight {
     for (const off of this.offs) off();
     this.el.remove();
     if (this.ctl.tp) this.ctl.tp.studioDark = 0;
+    this.sound.vxMusic(0);
     document.documentElement.classList.remove("vx-glitching");
   }
 
@@ -226,7 +245,77 @@ export class VortexFight {
   }
 
   // ── his moves, as they come ──────────────────────────────────────────────
+  // (phase 5) the sound of each of his moves: from where it happens — to me, close
+  private heard(m: Move): void {
+    if (!this.onHisFloor()) return;
+    const me = this.me();
+    const v = this.vx();
+    const him = v ? { x: v.x, y: v.y } : null;
+    const of = (sid?: string) => (sid === me ? null : (this.player(sid) ?? him));
+    const s = (slot: VxSound, at: { x: number; y: number } | null, range = 24, rate = 1) =>
+      this.sound.vx(slot, at, range, 1, rate);
+    switch (m.kind) {
+      case "whip":
+        s("vx-whip", him);
+        return;
+      case "bound":
+        s("vx-bound", of(m.to));
+        return;
+      case "free":
+        s("vx-free", of(m.to));
+        return;
+      case "rew":
+        s("vx-rew", of(m.to));
+        return;
+      case "pause":
+        s("vx-pause", him, 30);
+        return;
+      case "play":
+        s("vx-play", him, 30);
+        return;
+      case "steal":
+        s("vx-steal", of(m.to));
+        if (m.duck && m.to === me) setTimeout(() => s("vx-duck", null), 500);
+        return;
+      case "radio":
+        s("vx-radio", him, 30);
+        return;
+      case "hr":
+        s("vx-hr", of(m.to));
+        return;
+      case "dark":
+        s("vx-flicker", null);
+        setTimeout(() => s("vx-dark", null), 700);
+        return;
+      case "clones":
+        s("vx-clones", him);
+        return;
+      case "pop":
+        s("vx-pop", m.from ?? him);
+        return;
+      case "strike":
+        s("vx-strike", of(m.to), 20);
+        return;
+      case "possess":
+        s("vx-possess", of(m.to), 16);
+        return;
+      case "glitch":
+        if (m.to === me) {
+          s("vx-glitch", null);
+          s("vx-kkzzt", null);
+        }
+        return;
+      case "dodge":
+        s("vx-dodge", m.from ?? him, 20);
+        return;
+    }
+  }
+  private onHisFloor(): boolean {
+    return this.ctl.level === this.ctl.homeFloor();
+  }
+
   private moved(m: Move): void {
+    this.heard(m);
     const now = performance.now();
     const me = this.me();
     const ms = m.ms ?? 0;
@@ -310,6 +399,15 @@ export class VortexFight {
     const me = this.walker.where();
     const near = here && !!vx && Math.hypot(vx.x - me.x, vx.y - me.y) <= SEEN;
     this.act3(now, dt, here, vx, me);
+    // (phase 5) his public lines babbled where he is (as the bubble's: near him); his sounds in before they're wanted
+    if (here && vx) {
+      if (Math.hypot(vx.x - me.x, vx.y - me.y) < 30) this.sound.warmVortex();
+      if (vx.sayAt && vx.sayAt !== this.saidAt) {
+        if (this.saidAt && vx.say && Math.hypot(vx.x - me.x, vx.y - me.y) <= 8)
+          this.sound.babble(vx.say, vx.mood ?? "smug", { x: vx.x, y: vx.y });
+        this.saidAt = vx.sayAt;
+      }
+    }
     // (on screen: `h` metres over his floor — the studio's, indoors)
     const at = (x: number, y: number, h: number) => {
       const c = ctl.clientAt(x, y, h);
@@ -485,6 +583,8 @@ export class VortexFight {
     const flick = going && Math.sin((now - this.outFrom) * 0.045) * Math.sin((now - this.outFrom) * 0.017) > 0.2;
     const k = flick ? this.outK * 0.3 : this.outK;
     if (this.ctl.tp) this.ctl.tp.studioDark = k;
+    // (phase 5) the music's turn: its loop with the dark (eased with it, not its flicker)
+    this.sound.vxMusic(this.outK);
 
     // the shadowed: as sent, smoothed (sent a few times a second)
     const seen = new Set<string>();

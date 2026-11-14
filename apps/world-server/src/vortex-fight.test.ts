@@ -290,12 +290,23 @@ test("act III: the dark, the shadowed, his clones, the mind games, his blows —
   const hp0 = me(a.room).hp;
   await waitFor(() => last(b, "strike")?.to === sa, 15_000);
   await waitFor(() => me(a.room).hp < hp0);
-  // one shot: it dissolves, then it's gone
-  const sh = npcs(a, "vshade")[0];
-  const shId = sh.id as string;
+  // one shot: it dissolves, then it's gone (the nearest, aimed at again till one's met — they move, and one may be
+  // in another's way)
   a.room.send("mod:vortex", { at: { x: m.x + 6, y: m.y } }); // (him out of the way)
-  shoot(a, { x: sh.x, y: sh.y, z: 0.9 });
-  await waitFor(() => !a.room.state.npcs.get(shId) || a.room.state.npcs.get(shId).mood === "dissolve");
+  const gone = () => npcs(a, "vshade").find((n) => n.mood === "dissolve")?.id as string | undefined;
+  for (let i = 0; i < 5 && !gone(); i++) {
+    const sh = npcs(a, "vshade")
+      .filter((n) => n.mood !== "dissolve")
+      .sort(
+        (p, q) =>
+          Math.hypot(p.x - me(a.room).x, p.y - me(a.room).y) - Math.hypot(q.x - me(a.room).x, q.y - me(a.room).y),
+      )[0];
+    if (!sh) break;
+    shoot(a, { x: sh.x, y: sh.y, z: 0.9 });
+    await sleep(800);
+  }
+  const shId = gone() as string;
+  assert.ok(shId, "one shot down");
   await waitFor(() => !a.room.state.npcs.get(shId), 3000);
 
   // his clones: two of him — one shot pops, him none the worse

@@ -14,6 +14,8 @@
 //   LIST=tools/sfx-water.json DIR=water node tools/sfx-weather.mjs
 // and the guns' (docs/plan/79-the-guns.md, phase 9: their own lengths, hitLen) into public/sfx/guns:
 //   LIST=tools/sfx-guns.json DIR=guns node tools/sfx-weather.mjs
+// and the fight with Vortex's (docs/plan/88-vortex-fight.md, phase 5: VX_LEN) into public/sfx/vortex:
+//   LIST=tools/sfx-vortex.json DIR=vortex node tools/sfx-weather.mjs
 // and the manifests (public/sfx/steps/manifest.json's slots, public/sfx/weather/manifest.json) list
 // each slot's candidates in the json's order: the game plays the first; /dev/weather-sound all.
 //
@@ -279,20 +281,50 @@ const HIT_LEN = {
   "stroke-breast": 1.6,
   "stroke-crawl": 1.2,
 };
+// (the fight with Vortex's, plan 88 phase 5: a moment each — his babble a few seconds of chirps, the game's grains
+// cut from it as he talks; 2.5 s for any not here)
+const VX_LEN = {
+  "vx-hit": 0.8,
+  "vx-hit-dark": 1,
+  "vx-babble": 4,
+  "vx-kkzzt": 0.8,
+  "vx-dodge": 0.8,
+  "vx-whip": 1.2,
+  "vx-free": 1.5,
+  "vx-pause": 0.8,
+  "vx-play": 1,
+  "vx-steal": 1.2,
+  "vx-duck": 0.8,
+  "vx-radio": 3.2,
+  "vx-hr": 1.6,
+  "vx-dark": 3.5,
+  "vx-flicker": 3,
+  "vx-clones": 1.2,
+  "vx-pop": 0.6,
+  "vx-strike": 1,
+  "vx-possess": 3.5,
+  "vx-glitch": 2,
+  "vx-down": 3,
+  "vx-unspool": 3,
+  "vx-pickup": 1,
+  "vx-grudge": 3,
+};
 /** (the guns', plan 79 phase 9: a shot's tail into the land, a far one's rolling; the handling short) */
 const hitLen = (slot) =>
   HIT_LEN[slot] ??
-  (DIR !== "guns"
-    ? 3
-    : /-far$/.test(slot)
-      ? 5
-      : /-(near|burst)$/.test(slot)
-        ? 3.5
-        : /-in$/.test(slot)
-          ? 2.5
-          : /^daybreak-(charge|fire)$/.test(slot)
-            ? 3
-            : 1.6);
+  (DIR === "vortex"
+    ? (VX_LEN[slot] ?? 2.5)
+    : DIR !== "guns"
+      ? 3
+      : /-far$/.test(slot)
+        ? 5
+        : /-(near|burst)$/.test(slot)
+          ? 3.5
+          : /-in$/.test(slot)
+            ? 2.5
+            : /^daybreak-(charge|fire)$/.test(slot)
+              ? 3
+              : 1.6);
 /** a slot's events: where the loudness jumps after a quiet to where it's down a while (or the cap) —
  *  the six most alike; a recording with no quiet between its events, its loudest stretch */
 function hits(chans, maxLen) {

@@ -1,0 +1,1246 @@
+{
+  "_": "The fight with Vortex's sound candidates (docs/plan/88-vortex-fight.md phase 5): CC0 on Freesound, the most downloaded of each slot's searches (tools/sfx-vortex-search.mjs), fetched as their HQ previews and cut by tools/sfx-weather.mjs (LIST=tools/sfx-vortex.json DIR=vortex). The user picks by ear on /dev/vortex-sound.",
+  "vx-hit": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "199453",
+        "user": "martinimeniscus",
+        "title": "Water Bucket Hit FF206.aif",
+        "preview": "https://cdn.freesound.org/previews/199/199453_2320755-hq.mp3",
+        "url": "https://freesound.org/people/martinimeniscus/sounds/199453/",
+        "dur": 2.2,
+        "downloads": 611,
+        "note": "\"plastic hit hollow\""
+      },
+      {
+        "id": "662738",
+        "user": "adh.dreaming",
+        "title": "All Hollow Percs",
+        "preview": "https://cdn.freesound.org/previews/662/662738_12672694-hq.mp3",
+        "url": "https://freesound.org/people/adh.dreaming/sounds/662738/",
+        "dur": 5,
+        "downloads": 26,
+        "note": "\"plastic hit hollow\""
+      },
+      {
+        "id": "593441",
+        "user": "NoraMargot123",
+        "title": "buoy2.mp3",
+        "preview": "https://cdn.freesound.org/previews/593/593441_11978117-hq.mp3",
+        "url": "https://freesound.org/people/NoraMargot123/sounds/593441/",
+        "dur": 0.6,
+        "downloads": 37,
+        "note": "\"plastic hit hollow\""
+      },
+      {
+        "id": "825070",
+        "user": "Dreadwolf910",
+        "title": "Bucket 072",
+        "preview": "https://cdn.freesound.org/previews/825/825070_3004743-hq.mp3",
+        "url": "https://freesound.org/people/Dreadwolf910/sounds/825070/",
+        "dur": 0.1,
+        "downloads": 11,
+        "note": "\"plastic hit hollow\""
+      }
+    ],
+    "pick": 0
+  },
+  "vx-hit-dark": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "558238",
+        "user": "Rizzard",
+        "title": "Distorted Impact Short.wav",
+        "preview": "https://cdn.freesound.org/previews/558/558238_10825267-hq.mp3",
+        "url": "https://freesound.org/people/Rizzard/sounds/558238/",
+        "dur": 3,
+        "downloads": 587,
+        "note": "\"distorted impact\""
+      },
+      {
+        "id": "879269",
+        "user": "Qvantor",
+        "title": "Distorted Impact",
+        "preview": "https://cdn.freesound.org/previews/879/879269_19512113-hq.mp3",
+        "url": "https://freesound.org/people/Qvantor/sounds/879269/",
+        "dur": 5,
+        "downloads": 1,
+        "note": "\"distorted impact\""
+      },
+      {
+        "id": "275192",
+        "user": "rcarpo",
+        "title": "massive distorted impact.wav",
+        "preview": "https://cdn.freesound.org/previews/275/275192_4838986-hq.mp3",
+        "url": "https://freesound.org/people/rcarpo/sounds/275192/",
+        "dur": 6,
+        "downloads": 115,
+        "note": "\"distorted impact\""
+      },
+      {
+        "id": "869468",
+        "user": "SignatureSoundsOrg",
+        "title": "Experimental_Explosion_8",
+        "preview": "https://cdn.freesound.org/previews/869/869468_19205925-hq.mp3",
+        "url": "https://freesound.org/people/SignatureSoundsOrg/sounds/869468/",
+        "dur": 6.2,
+        "downloads": 639,
+        "note": "\"distorted impact\""
+      }
+    ],
+    "pick": 1
+  },
+  "vx-babble": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "815689",
+        "user": "LukaCafuka",
+        "title": "Tape audio rewinding 2",
+        "preview": "https://cdn.freesound.org/previews/815/815689_16236894-hq.mp3",
+        "url": "https://freesound.org/people/LukaCafuka/sounds/815689/",
+        "dur": 25.3,
+        "downloads": 1183,
+        "note": "\"cassette fast forward\""
+      },
+      {
+        "id": "786141",
+        "user": "synth2",
+        "title": "Tape Forward & Reverse",
+        "preview": "https://cdn.freesound.org/previews/786/786141_2381713-hq.mp3",
+        "url": "https://freesound.org/people/synth2/sounds/786141/",
+        "dur": 1.4,
+        "downloads": 507,
+        "note": "\"cassette fast forward\""
+      },
+      {
+        "id": "624631",
+        "user": "OneKellyOrdered",
+        "title": "Casio AS-51R Cassette Player Fast Forward Button",
+        "preview": "https://cdn.freesound.org/previews/624/624631_8687888-hq.mp3",
+        "url": "https://freesound.org/people/OneKellyOrdered/sounds/624631/",
+        "dur": 26.8,
+        "downloads": 227,
+        "note": "\"cassette fast forward\""
+      },
+      {
+        "id": "554523",
+        "user": "AviZiv",
+        "title": "GE microcassette dictaphone F FWD.wav",
+        "preview": "https://cdn.freesound.org/previews/554/554523_4354684-hq.mp3",
+        "url": "https://freesound.org/people/AviZiv/sounds/554523/",
+        "dur": 39.6,
+        "downloads": 53,
+        "note": "\"cassette fast forward\""
+      }
+    ],
+    "pick": 1
+  },
+  "vx-kkzzt": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "47646",
+        "user": "ReadeOnly",
+        "title": "End radio transmission",
+        "preview": "https://cdn.freesound.org/previews/47/47646_545448-hq.mp3",
+        "url": "https://freesound.org/people/ReadeOnly/sounds/47646/",
+        "dur": 0.4,
+        "downloads": 4456,
+        "note": "\"static burst\""
+      },
+      {
+        "id": "875404",
+        "user": "Assetsmith",
+        "title": "VHS Static Burst",
+        "preview": "https://cdn.freesound.org/previews/875/875404_19429311-hq.mp3",
+        "url": "https://freesound.org/people/Assetsmith/sounds/875404/",
+        "dur": 0.8,
+        "downloads": 26,
+        "note": "\"static burst\""
+      },
+      {
+        "id": "560012",
+        "user": "VonKrapFamily",
+        "title": "Remixed static.wav",
+        "preview": "https://cdn.freesound.org/previews/560/560012_4927274-hq.mp3",
+        "url": "https://freesound.org/people/VonKrapFamily/sounds/560012/",
+        "dur": 3,
+        "downloads": 976,
+        "note": "\"static burst\""
+      },
+      {
+        "id": "814052",
+        "user": "qubodup",
+        "title": "Retro Bit Explosion",
+        "preview": "https://cdn.freesound.org/previews/814/814052_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/814052/",
+        "dur": 3.5,
+        "downloads": 505,
+        "note": "\"static burst\""
+      }
+    ],
+    "pick": 1
+  },
+  "vx-dodge": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "683101",
+        "user": "florianreichelt",
+        "title": "quick woosh",
+        "preview": "https://cdn.freesound.org/previews/683/683101_6253486-hq.mp3",
+        "url": "https://freesound.org/people/florianreichelt/sounds/683101/",
+        "dur": 2.1,
+        "downloads": 24224,
+        "note": "\"quick whoosh\""
+      },
+      {
+        "id": "389590",
+        "user": "Jofae",
+        "title": "Swing Woosh",
+        "preview": "https://cdn.freesound.org/previews/389/389590_6512973-hq.mp3",
+        "url": "https://freesound.org/people/Jofae/sounds/389590/",
+        "dur": 0.3,
+        "downloads": 12037,
+        "note": "\"quick whoosh\""
+      },
+      {
+        "id": "742959",
+        "user": "Sadiquecat",
+        "title": "Woosh - Metal Skimmer 5",
+        "preview": "https://cdn.freesound.org/previews/742/742959_5287430-hq.mp3",
+        "url": "https://freesound.org/people/Sadiquecat/sounds/742959/",
+        "dur": 0.1,
+        "downloads": 468,
+        "note": "\"quick whoosh\""
+      },
+      {
+        "id": "807976",
+        "user": "Logicogonist",
+        "title": "bass rumble - deepwhoosh 1",
+        "preview": "https://cdn.freesound.org/previews/807/807976_3797507-hq.mp3",
+        "url": "https://freesound.org/people/Logicogonist/sounds/807976/",
+        "dur": 1.8,
+        "downloads": 1193,
+        "note": "\"quick whoosh\""
+      }
+    ],
+    "pick": 0
+  },
+  "vx-whip": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "615761",
+        "user": "JayRom01",
+        "title": "whip and crack sound",
+        "preview": "https://cdn.freesound.org/previews/615/615761_13658484-hq.mp3",
+        "url": "https://freesound.org/people/JayRom01/sounds/615761/",
+        "dur": 0.8,
+        "downloads": 2631,
+        "note": "\"whip crack\""
+      },
+      {
+        "id": "529925",
+        "user": "SciFiSounds",
+        "title": "Whip Crack.m4a",
+        "preview": "https://cdn.freesound.org/previews/529/529925_11751070-hq.mp3",
+        "url": "https://freesound.org/people/SciFiSounds/sounds/529925/",
+        "dur": 0.5,
+        "downloads": 10721,
+        "note": "\"whip crack\""
+      },
+      {
+        "id": "362782",
+        "user": "taure",
+        "title": "Pistol_Whip.wav",
+        "preview": "https://cdn.freesound.org/previews/362/362782_2940947-hq.mp3",
+        "url": "https://freesound.org/people/taure/sounds/362782/",
+        "dur": 4.1,
+        "downloads": 4538,
+        "note": "\"whip crack\""
+      },
+      {
+        "id": "399183",
+        "user": "janbezouska",
+        "title": "Major punch",
+        "preview": "https://cdn.freesound.org/previews/399/399183_3287894-hq.mp3",
+        "url": "https://freesound.org/people/janbezouska/sounds/399183/",
+        "dur": 1.4,
+        "downloads": 8442,
+        "note": "\"whip crack\""
+      }
+    ],
+    "pick": 0
+  },
+  "vx-bound": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "405586",
+        "user": "JohnLaVine333",
+        "title": "Peeling.wav",
+        "preview": "https://cdn.freesound.org/previews/405/405586_450294-hq.mp3",
+        "url": "https://freesound.org/people/JohnLaVine333/sounds/405586/",
+        "dur": 10,
+        "downloads": 222,
+        "note": "\"packing tape roll\""
+      },
+      {
+        "id": "652982",
+        "user": "mattfinarelli",
+        "title": "Paper Tear",
+        "preview": "https://cdn.freesound.org/previews/652/652982_7566729-hq.mp3",
+        "url": "https://freesound.org/people/mattfinarelli/sounds/652982/",
+        "dur": 1.7,
+        "downloads": 123,
+        "note": "\"packing tape roll\""
+      },
+      {
+        "id": "245199",
+        "user": "AlaskaRobotics",
+        "title": "duct tape unroll 6",
+        "preview": "https://cdn.freesound.org/previews/245/245199_1282865-hq.mp3",
+        "url": "https://freesound.org/people/AlaskaRobotics/sounds/245199/",
+        "dur": 1.5,
+        "downloads": 837,
+        "note": "\"duct tape\""
+      },
+      {
+        "id": "565269",
+        "user": "NinjaSharkStudios",
+        "title": "Duct Tape_Long_1.wav",
+        "preview": "https://cdn.freesound.org/previews/565/565269_4067-hq.mp3",
+        "url": "https://freesound.org/people/NinjaSharkStudios/sounds/565269/",
+        "dur": 4.7,
+        "downloads": 303,
+        "note": "\"duct tape\""
+      }
+    ],
+    "pick": 1
+  },
+  "vx-free": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "187338",
+        "user": "baidonovan",
+        "title": "Duct Tape Ripped Off.wav",
+        "preview": "https://cdn.freesound.org/previews/187/187338_3297044-hq.mp3",
+        "url": "https://freesound.org/people/baidonovan/sounds/187338/",
+        "dur": 0.5,
+        "downloads": 498,
+        "note": "\"duct tape rip\""
+      },
+      {
+        "id": "245199",
+        "user": "AlaskaRobotics",
+        "title": "duct tape unroll 6",
+        "preview": "https://cdn.freesound.org/previews/245/245199_1282865-hq.mp3",
+        "url": "https://freesound.org/people/AlaskaRobotics/sounds/245199/",
+        "dur": 1.5,
+        "downloads": 837,
+        "note": "\"duct tape rip\""
+      },
+      {
+        "id": "223375",
+        "user": "_natiKatz",
+        "title": "Duct Tape 1",
+        "preview": "https://cdn.freesound.org/previews/223/223375_1621161-hq.mp3",
+        "url": "https://freesound.org/people/_natiKatz/sounds/223375/",
+        "dur": 0.5,
+        "downloads": 2434,
+        "note": "\"duct tape rip\""
+      },
+      {
+        "id": "275522",
+        "user": "adharca",
+        "title": "duct tape.ogg",
+        "preview": "https://cdn.freesound.org/previews/275/275522_4366671-hq.mp3",
+        "url": "https://freesound.org/people/adharca/sounds/275522/",
+        "dur": 0.3,
+        "downloads": 377,
+        "note": "\"duct tape rip\""
+      }
+    ],
+    "pick": 0
+  },
+  "vx-rew": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "402451",
+        "user": "plasterbrain",
+        "title": "Fast Forward",
+        "preview": "https://cdn.freesound.org/previews/402/402451_4284968-hq.mp3",
+        "url": "https://freesound.org/people/plasterbrain/sounds/402451/",
+        "dur": 8.7,
+        "downloads": 14526,
+        "note": "\"vhs rewind\""
+      },
+      {
+        "id": "539928",
+        "user": "LuKaiX",
+        "title": "Rewind 2",
+        "preview": "https://cdn.freesound.org/previews/539/539928_11636259-hq.mp3",
+        "url": "https://freesound.org/people/LuKaiX/sounds/539928/",
+        "dur": 16.7,
+        "downloads": 8792,
+        "note": "\"vhs rewind\""
+      },
+      {
+        "id": "613354",
+        "user": "gear_clinkz",
+        "title": "15_REWIND START.wav",
+        "preview": "https://cdn.freesound.org/previews/613/613354_932556-hq.mp3",
+        "url": "https://freesound.org/people/gear_clinkz/sounds/613354/",
+        "dur": 5.8,
+        "downloads": 62,
+        "note": "\"vhs rewind\""
+      },
+      {
+        "id": "662965",
+        "user": "Solar01",
+        "title": "Cassette Tape Insert Rewind.WAV",
+        "preview": "https://cdn.freesound.org/previews/662/662965_14490715-hq.mp3",
+        "url": "https://freesound.org/people/Solar01/sounds/662965/",
+        "dur": 16,
+        "downloads": 910,
+        "note": "\"cassette rewind\""
+      }
+    ],
+    "pick": 0,
+    "take": 1
+  },
+  "vx-pause": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "407720",
+        "user": "airblock",
+        "title": "vcr_click.wav",
+        "preview": "https://cdn.freesound.org/previews/407/407720_4583584-hq.mp3",
+        "url": "https://freesound.org/people/airblock/sounds/407720/",
+        "dur": 0.3,
+        "downloads": 1322,
+        "note": "\"vcr button press\""
+      },
+      {
+        "id": "477685",
+        "user": "Joao_Janz",
+        "title": "Sony Vintage Casette Player Knob Snap 1_1",
+        "preview": "https://cdn.freesound.org/previews/477/477685_9961300-hq.mp3",
+        "url": "https://freesound.org/people/Joao_Janz/sounds/477685/",
+        "dur": 1.1,
+        "downloads": 252,
+        "note": "\"cassette player button\""
+      },
+      {
+        "id": "68996",
+        "user": "daatg",
+        "title": "tusss.aif",
+        "preview": "https://cdn.freesound.org/previews/68/68996_984769-hq.mp3",
+        "url": "https://freesound.org/people/daatg/sounds/68996/",
+        "dur": 0.4,
+        "downloads": 1214,
+        "note": "\"cassette player button\""
+      },
+      {
+        "id": "572138",
+        "user": "220bluebulb",
+        "title": "press button(Cassette player).wav",
+        "preview": "https://cdn.freesound.org/previews/572/572138_10864120-hq.mp3",
+        "url": "https://freesound.org/people/220bluebulb/sounds/572138/",
+        "dur": 4.4,
+        "downloads": 202,
+        "note": "\"cassette player button\""
+      }
+    ],
+    "pick": 0
+  },
+  "vx-play": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "572138",
+        "user": "220bluebulb",
+        "title": "press button(Cassette player).wav",
+        "preview": "https://cdn.freesound.org/previews/572/572138_10864120-hq.mp3",
+        "url": "https://freesound.org/people/220bluebulb/sounds/572138/",
+        "dur": 4.4,
+        "downloads": 202,
+        "note": "\"cassette play button\""
+      },
+      {
+        "id": "812371",
+        "user": "L0sts1gnal_404",
+        "title": "Tape Deck_StartNStop",
+        "preview": "https://cdn.freesound.org/previews/812/812371_4810858-hq.mp3",
+        "url": "https://freesound.org/people/L0sts1gnal_404/sounds/812371/",
+        "dur": 4.8,
+        "downloads": 141,
+        "note": "\"cassette play button\""
+      },
+      {
+        "id": "199527",
+        "user": "unfa",
+        "title": "Another whole CD in 5 seconds (sci-fi computer working)",
+        "preview": "https://cdn.freesound.org/previews/199/199527_1038806-hq.mp3",
+        "url": "https://freesound.org/people/unfa/sounds/199527/",
+        "dur": 5,
+        "downloads": 438,
+        "note": "\"tape deck play\""
+      },
+      {
+        "id": "407720",
+        "user": "airblock",
+        "title": "vcr_click.wav",
+        "preview": "https://cdn.freesound.org/previews/407/407720_4583584-hq.mp3",
+        "url": "https://freesound.org/people/airblock/sounds/407720/",
+        "dur": 0.3,
+        "downloads": 1322,
+        "note": "\"vcr play\""
+      }
+    ],
+    "pick": 3
+  },
+  "vx-steal": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "802697",
+        "user": "Vrymaa",
+        "title": "Rope - Quick snatch",
+        "preview": "https://cdn.freesound.org/previews/802/802697_13973196-hq.mp3",
+        "url": "https://freesound.org/people/Vrymaa/sounds/802697/",
+        "dur": 4.3,
+        "downloads": 475,
+        "note": "\"snatch whoosh\""
+      },
+      {
+        "id": "563879",
+        "user": "woutertenbrink",
+        "title": "Swoosh",
+        "preview": "https://cdn.freesound.org/previews/563/563879_11662117-hq.mp3",
+        "url": "https://freesound.org/people/woutertenbrink/sounds/563879/",
+        "dur": 0.3,
+        "downloads": 537,
+        "note": "\"snatch whoosh\""
+      },
+      {
+        "id": "877978",
+        "user": "Qvantor",
+        "title": "Whoosh Fast Pass-By",
+        "preview": "https://cdn.freesound.org/previews/877/877978_19512113-hq.mp3",
+        "url": "https://freesound.org/people/Qvantor/sounds/877978/",
+        "dur": 1.3,
+        "downloads": 44,
+        "note": "\"quick swipe whoosh\""
+      },
+      {
+        "id": "441849",
+        "user": "Yarmonics",
+        "title": "BB_1 quick metallic swipe.wav",
+        "preview": "https://cdn.freesound.org/previews/441/441849_9109395-hq.mp3",
+        "url": "https://freesound.org/people/Yarmonics/sounds/441849/",
+        "dur": 0.5,
+        "downloads": 129,
+        "note": "\"quick swipe whoosh\""
+      }
+    ],
+    "pick": 1
+  },
+  "vx-duck": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "827431",
+        "user": "qubodup",
+        "title": "Squeaky Toy Squeaks",
+        "preview": "https://cdn.freesound.org/previews/827/827431_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/827431/",
+        "dur": 5.7,
+        "downloads": 95,
+        "note": "\"rubber duck squeak\""
+      },
+      {
+        "id": "861826",
+        "user": "qubodup",
+        "title": "Squeaky Toy 8",
+        "preview": "https://cdn.freesound.org/previews/861/861826_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/861826/",
+        "dur": 0.3,
+        "downloads": 62,
+        "note": "\"squeaky toy\""
+      },
+      {
+        "id": "483921",
+        "user": "Breviceps",
+        "title": "Squeaky Toy #3",
+        "preview": "https://cdn.freesound.org/previews/483/483921_9159316-hq.mp3",
+        "url": "https://freesound.org/people/Breviceps/sounds/483921/",
+        "dur": 2.8,
+        "downloads": 820,
+        "note": "\"squeaky toy\""
+      },
+      {
+        "id": "483922",
+        "user": "Breviceps",
+        "title": "Squeaky Toy #4",
+        "preview": "https://cdn.freesound.org/previews/483/483922_9159316-hq.mp3",
+        "url": "https://freesound.org/people/Breviceps/sounds/483922/",
+        "dur": 1.3,
+        "downloads": 1081,
+        "note": "\"squeaky toy\""
+      }
+    ],
+    "pick": 1
+  },
+  "vx-radio": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "568335",
+        "user": "williamkitchener",
+        "title": "G#-Ab Minor Solo Synth Funk Loop 110bpm.wav",
+        "preview": "https://cdn.freesound.org/previews/568/568335_5743382-hq.mp3",
+        "url": "https://freesound.org/people/williamkitchener/sounds/568335/",
+        "dur": 8.7,
+        "downloads": 181,
+        "note": "\"funk loop\""
+      },
+      {
+        "id": "376416",
+        "user": "ehohnke",
+        "title": "Funk Lead Loop",
+        "preview": "https://cdn.freesound.org/previews/376/376416_1492908-hq.mp3",
+        "url": "https://freesound.org/people/ehohnke/sounds/376416/",
+        "dur": 20,
+        "downloads": 2540,
+        "note": "\"funk loop\""
+      },
+      {
+        "id": "513957",
+        "user": "danlucaz",
+        "title": "Groove Loop #1",
+        "preview": "https://cdn.freesound.org/previews/513/513957_9996727-hq.mp3",
+        "url": "https://freesound.org/people/danlucaz/sounds/513957/",
+        "dur": 10.1,
+        "downloads": 832,
+        "note": "\"funk loop\""
+      },
+      {
+        "id": "566905",
+        "user": "lennartgreen",
+        "title": "Think Beat 126 BpM Loop - HipHop",
+        "preview": "https://cdn.freesound.org/previews/566/566905_3661618-hq.mp3",
+        "url": "https://freesound.org/people/lennartgreen/sounds/566905/",
+        "dur": 15.2,
+        "downloads": 212,
+        "note": "\"funk loop\""
+      }
+    ],
+    "pick": 0
+  },
+  "vx-hr": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "791501",
+        "user": "Sadiquecat",
+        "title": "Bell 11.2 OS",
+        "preview": "https://cdn.freesound.org/previews/791/791501_5287430-hq.mp3",
+        "url": "https://freesound.org/people/Sadiquecat/sounds/791501/",
+        "dur": 4.2,
+        "downloads": 105,
+        "note": "\"service bell ding\""
+      },
+      {
+        "id": "116779",
+        "user": "domrodrig",
+        "title": "Ringing bell - happy.wav",
+        "preview": "https://cdn.freesound.org/previews/116/116779_1550701-hq.mp3",
+        "url": "https://freesound.org/people/domrodrig/sounds/116779/",
+        "dur": 2.9,
+        "downloads": 14363,
+        "note": "\"service bell ding\""
+      },
+      {
+        "id": "532751",
+        "user": "iwanPlays",
+        "title": "hotel bell",
+        "preview": "https://cdn.freesound.org/previews/532/532751_7108319-hq.mp3",
+        "url": "https://freesound.org/people/iwanPlays/sounds/532751/",
+        "dur": 4,
+        "downloads": 1292,
+        "note": "\"service bell ding\""
+      },
+      {
+        "id": "685111",
+        "user": "tonmayster",
+        "title": "desk bell center.mp3",
+        "preview": "https://cdn.freesound.org/previews/685/685111_13673198-hq.mp3",
+        "url": "https://freesound.org/people/tonmayster/sounds/685111/",
+        "dur": 2.7,
+        "downloads": 695,
+        "note": "\"service bell ding\""
+      }
+    ],
+    "pick": 0
+  },
+  "vx-dark": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "348250",
+        "user": "newagesoup",
+        "title": "power-down-03.wav",
+        "preview": "https://cdn.freesound.org/previews/348/348250_4067257-hq.mp3",
+        "url": "https://freesound.org/people/newagesoup/sounds/348250/",
+        "dur": 3.9,
+        "downloads": 1347,
+        "note": "\"power down\""
+      },
+      {
+        "id": "159399",
+        "user": "noirenex",
+        "title": "Power Down",
+        "preview": "https://cdn.freesound.org/previews/159/159399_1656228-hq.mp3",
+        "url": "https://freesound.org/people/noirenex/sounds/159399/",
+        "dur": 1.9,
+        "downloads": 8247,
+        "note": "\"power down\""
+      },
+      {
+        "id": "169994",
+        "user": "peepholecircus",
+        "title": "Power Down",
+        "preview": "https://cdn.freesound.org/previews/169/169994_2747497-hq.mp3",
+        "url": "https://freesound.org/people/peepholecircus/sounds/169994/",
+        "dur": 4.4,
+        "downloads": 16188,
+        "note": "\"power down\""
+      },
+      {
+        "id": "238373",
+        "user": "stewdio2003",
+        "title": "CP_Power_Down03_mid.aif",
+        "preview": "https://cdn.freesound.org/previews/238/238373_2874391-hq.mp3",
+        "url": "https://freesound.org/people/stewdio2003/sounds/238373/",
+        "dur": 6.5,
+        "downloads": 537,
+        "note": "\"power down\""
+      }
+    ],
+    "pick": 3
+  },
+  "vx-flicker": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "484157",
+        "user": "TemperMode",
+        "title": "fluorescent light flickering 1.wav",
+        "preview": "https://cdn.freesound.org/previews/484/484157_1655334-hq.mp3",
+        "url": "https://freesound.org/people/TemperMode/sounds/484157/",
+        "dur": 5.8,
+        "downloads": 7191,
+        "note": "\"fluorescent light flicker\""
+      },
+      {
+        "id": "232447",
+        "user": "mmaruska",
+        "title": "Lights Flicker On.wav",
+        "preview": "https://cdn.freesound.org/previews/232/232447_3046049-hq.mp3",
+        "url": "https://freesound.org/people/mmaruska/sounds/232447/",
+        "dur": 15,
+        "downloads": 41040,
+        "note": "\"fluorescent light flicker\""
+      },
+      {
+        "id": "777053",
+        "user": "kentspublicdomain",
+        "title": "Flickering Fluorescent Light with Background Hum (Seamless Loop, 44100 Hz Mono)",
+        "preview": "https://cdn.freesound.org/previews/777/777053_5583936-hq.mp3",
+        "url": "https://freesound.org/people/kentspublicdomain/sounds/777053/",
+        "dur": 9,
+        "downloads": 1103,
+        "note": "\"fluorescent light flicker\""
+      },
+      {
+        "id": "767055",
+        "user": "ThabzMalik",
+        "title": "Fluorescent lights turning on and off",
+        "preview": "https://cdn.freesound.org/previews/767/767055_15764451-hq.mp3",
+        "url": "https://freesound.org/people/ThabzMalik/sounds/767055/",
+        "dur": 8.4,
+        "downloads": 748,
+        "note": "\"fluorescent light flicker\""
+      }
+    ],
+    "pick": 1
+  },
+  "vx-music3": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "155139",
+        "user": "burning-mir",
+        "title": "Action music loop with dark ambient drones",
+        "preview": "https://cdn.freesound.org/previews/155/155139_2098884-hq.mp3",
+        "url": "https://freesound.org/people/burning-mir/sounds/155139/",
+        "dur": 29.1,
+        "downloads": 10682,
+        "note": "\"dark ambient drone loop\""
+      },
+      {
+        "id": "871594",
+        "user": "kkenny101",
+        "title": "Dark Voice Drone 01 - Loop",
+        "preview": "https://cdn.freesound.org/previews/871/871594_17997500-hq.mp3",
+        "url": "https://freesound.org/people/kkenny101/sounds/871594/",
+        "dur": 24.8,
+        "downloads": 275,
+        "note": "\"dark ambient drone loop\""
+      },
+      {
+        "id": "865550",
+        "user": "kkenny101",
+        "title": "Dark Atmospheric Drone (Time-Stretched, Seamless Loop)",
+        "preview": "https://cdn.freesound.org/previews/865/865550_17997500-hq.mp3",
+        "url": "https://freesound.org/people/kkenny101/sounds/865550/",
+        "dur": 158.4,
+        "downloads": 242,
+        "note": "\"dark ambient drone loop\""
+      },
+      {
+        "id": "874666",
+        "user": "kkenny101",
+        "title": "Dark Voice Drone 04 - Loop",
+        "preview": "https://cdn.freesound.org/previews/874/874666_17997500-hq.mp3",
+        "url": "https://freesound.org/people/kkenny101/sounds/874666/",
+        "dur": 117.3,
+        "downloads": 316,
+        "note": "\"dark ambient drone loop\""
+      }
+    ],
+    "pick": 2
+  },
+  "vx-clones": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "832726",
+        "user": "JW_Audio",
+        "title": "DSGNRythm_Glitch, Stutter, One-Shot, Pitched, Chaotic, Hard, Digital_19_JW Audio",
+        "preview": "https://cdn.freesound.org/previews/832/832726_13183432-hq.mp3",
+        "url": "https://freesound.org/people/JW_Audio/sounds/832726/",
+        "dur": 0.7,
+        "downloads": 336,
+        "note": "\"glitch stutter\""
+      },
+      {
+        "id": "832707",
+        "user": "JW_Audio",
+        "title": "DSGNRythm_Glitch, Stutter, One-Shot, Pitched, Chaotic, Hard, Digital. Mechanical_07_JW Audio",
+        "preview": "https://cdn.freesound.org/previews/832/832707_13183432-hq.mp3",
+        "url": "https://freesound.org/people/JW_Audio/sounds/832707/",
+        "dur": 3,
+        "downloads": 474,
+        "note": "\"glitch stutter\""
+      },
+      {
+        "id": "484477",
+        "user": "nowism",
+        "title": "autechre-stutter.wav",
+        "preview": "https://cdn.freesound.org/previews/484/484477_10388715-hq.mp3",
+        "url": "https://freesound.org/people/nowism/sounds/484477/",
+        "dur": 1.8,
+        "downloads": 199,
+        "note": "\"glitch stutter\""
+      },
+      {
+        "id": "440005",
+        "user": "DirtyArchives",
+        "title": "bREAKCORE MIXER 50BPM - Song jump_21.wav",
+        "preview": "https://cdn.freesound.org/previews/440/440005_9042192-hq.mp3",
+        "url": "https://freesound.org/people/DirtyArchives/sounds/440005/",
+        "dur": 4.8,
+        "downloads": 225,
+        "note": "\"glitch stutter\""
+      }
+    ],
+    "pick": 0
+  },
+  "vx-pop": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "676000",
+        "user": "craigsmith",
+        "title": "S24-24 Comedy cartoon cork pop.wav",
+        "preview": "https://cdn.freesound.org/previews/676/676000_2524442-hq.mp3",
+        "url": "https://freesound.org/people/craigsmith/sounds/676000/",
+        "dur": 1.1,
+        "downloads": 1437,
+        "note": "\"pop cartoon\""
+      },
+      {
+        "id": "245646",
+        "user": "unfa",
+        "title": "Cartoon Pop (Distorted)",
+        "preview": "https://cdn.freesound.org/previews/245/245646_1038806-hq.mp3",
+        "url": "https://freesound.org/people/unfa/sounds/245646/",
+        "dur": 0.2,
+        "downloads": 35304,
+        "note": "\"pop cartoon\""
+      },
+      {
+        "id": "741368",
+        "user": "Mish7913",
+        "title": "Cartoon Pop",
+        "preview": "https://cdn.freesound.org/previews/741/741368_16104671-hq.mp3",
+        "url": "https://freesound.org/people/Mish7913/sounds/741368/",
+        "dur": 0.5,
+        "downloads": 250,
+        "note": "\"pop cartoon\""
+      },
+      {
+        "id": "506546",
+        "user": "LilMati",
+        "title": "Pop 01",
+        "preview": "https://cdn.freesound.org/previews/506/506546_6142149-hq.mp3",
+        "url": "https://freesound.org/people/LilMati/sounds/506546/",
+        "dur": 0.1,
+        "downloads": 5920,
+        "note": "\"pop cartoon\""
+      }
+    ],
+    "pick": 0
+  },
+  "vx-strike": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "879268",
+        "user": "Qvantor",
+        "title": "Heavy Slam Impact",
+        "preview": "https://cdn.freesound.org/previews/879/879268_19512113-hq.mp3",
+        "url": "https://freesound.org/people/Qvantor/sounds/879268/",
+        "dur": 0.9,
+        "downloads": 4,
+        "note": "\"punch impact heavy\""
+      },
+      {
+        "id": "517744",
+        "user": "danlucaz",
+        "title": "Punch",
+        "preview": "https://cdn.freesound.org/previews/517/517744_9996727-hq.mp3",
+        "url": "https://freesound.org/people/danlucaz/sounds/517744/",
+        "dur": 1,
+        "downloads": 2079,
+        "note": "\"punch impact heavy\""
+      },
+      {
+        "id": "785800",
+        "user": "Alien_I_Trust",
+        "title": "Pressure Kick by Alien I Trust (125_Bpm)  (3)",
+        "preview": "https://cdn.freesound.org/previews/785/785800_16335323-hq.mp3",
+        "url": "https://freesound.org/people/Alien_I_Trust/sounds/785800/",
+        "dur": 3.8,
+        "downloads": 542,
+        "note": "\"punch impact heavy\""
+      },
+      {
+        "id": "244983",
+        "user": "ani_music",
+        "title": "ANI Big Pipe Hit",
+        "preview": "https://cdn.freesound.org/previews/244/244983_3008343-hq.mp3",
+        "url": "https://freesound.org/people/ani_music/sounds/244983/",
+        "dur": 1,
+        "downloads": 6992,
+        "note": "\"punch impact heavy\""
+      }
+    ],
+    "pick": 1
+  },
+  "vx-possess": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "438989",
+        "user": "Magnesus",
+        "title": "Demonic Whisper",
+        "preview": "https://cdn.freesound.org/previews/438/438989_2008500-hq.mp3",
+        "url": "https://freesound.org/people/Magnesus/sounds/438989/",
+        "dur": 4.2,
+        "downloads": 1910,
+        "note": "\"demonic whisper\""
+      },
+      {
+        "id": "171102",
+        "user": "BFMGames",
+        "title": "\"Ascend With Us\" creepy whisper",
+        "preview": "https://cdn.freesound.org/previews/171/171102_2121190-hq.mp3",
+        "url": "https://freesound.org/people/BFMGames/sounds/171102/",
+        "dur": 3.7,
+        "downloads": 1239,
+        "note": "\"demonic whisper\""
+      },
+      {
+        "id": "824559",
+        "user": "emma.emma.emma",
+        "title": "Arderas en el infierno - You will burn in hell (DEMON VOICE)",
+        "preview": "https://cdn.freesound.org/previews/824/824559_16857550-hq.mp3",
+        "url": "https://freesound.org/people/emma.emma.emma/sounds/824559/",
+        "dur": 5.3,
+        "downloads": 136,
+        "note": "\"demonic whisper\""
+      },
+      {
+        "id": "193818",
+        "user": "geoneo0",
+        "title": "Four_Voices_Whispering_6_wEcho.wav",
+        "preview": "https://cdn.freesound.org/previews/193/193818_2000738-hq.mp3",
+        "url": "https://freesound.org/people/geoneo0/sounds/193818/",
+        "dur": 13.6,
+        "downloads": 10834,
+        "note": "\"horror whisper\""
+      }
+    ],
+    "pick": 3
+  },
+  "vx-glitch": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "718747",
+        "user": "TheMinkman",
+        "title": "Glitch_numlaKuie",
+        "preview": "https://cdn.freesound.org/previews/718/718747_3491501-hq.mp3",
+        "url": "https://freesound.org/people/TheMinkman/sounds/718747/",
+        "dur": 7.3,
+        "downloads": 475,
+        "note": "\"data glitch noise\""
+      },
+      {
+        "id": "649678",
+        "user": "nlux",
+        "title": "YP 120bpm Plague Beat A11.wav",
+        "preview": "https://cdn.freesound.org/previews/649/649678_9047165-hq.mp3",
+        "url": "https://freesound.org/people/nlux/sounds/649678/",
+        "dur": 2,
+        "downloads": 117,
+        "note": "\"data glitch noise\""
+      },
+      {
+        "id": "346951",
+        "user": "rabidkiwi13",
+        "title": "cyber_drill.mp3",
+        "preview": "https://cdn.freesound.org/previews/346/346951_6319589-hq.mp3",
+        "url": "https://freesound.org/people/rabidkiwi13/sounds/346951/",
+        "dur": 1.4,
+        "downloads": 108,
+        "note": "\"data glitch noise\""
+      },
+      {
+        "id": "449494",
+        "user": "kenokenobingo",
+        "title": "JPEG Glitch",
+        "preview": "https://cdn.freesound.org/previews/449/449494_3596535-hq.mp3",
+        "url": "https://freesound.org/people/kenokenobingo/sounds/449494/",
+        "dur": 7.8,
+        "downloads": 128,
+        "note": "\"data glitch noise\""
+      }
+    ],
+    "pick": 3
+  },
+  "vx-down": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "635712",
+        "user": "kyles",
+        "title": "reel to reel tape machine start stop tape spin no motor noise.flac",
+        "preview": "https://cdn.freesound.org/previews/635/635712_612689-hq.mp3",
+        "url": "https://freesound.org/people/kyles/sounds/635712/",
+        "dur": 5.6,
+        "downloads": 219,
+        "note": "\"tape stop\""
+      },
+      {
+        "id": "842582",
+        "user": "loganzsound",
+        "title": "Vinyl Rewind Dark 01",
+        "preview": "https://cdn.freesound.org/previews/842/842582_16682330-hq.mp3",
+        "url": "https://freesound.org/people/loganzsound/sounds/842582/",
+        "dur": 0.5,
+        "downloads": 304,
+        "note": "\"tape stop\""
+      },
+      {
+        "id": "706680",
+        "user": "phylobates",
+        "title": "sign-off_sign-on.wav",
+        "preview": "https://cdn.freesound.org/previews/706/706680_9142988-hq.mp3",
+        "url": "https://freesound.org/people/phylobates/sounds/706680/",
+        "dur": 0.7,
+        "downloads": 38,
+        "note": "\"tape stop\""
+      },
+      {
+        "id": "812371",
+        "user": "L0sts1gnal_404",
+        "title": "Tape Deck_StartNStop",
+        "preview": "https://cdn.freesound.org/previews/812/812371_4810858-hq.mp3",
+        "url": "https://freesound.org/people/L0sts1gnal_404/sounds/812371/",
+        "dur": 4.8,
+        "downloads": 141,
+        "note": "\"tape stop\""
+      }
+    ],
+    "pick": 1
+  },
+  "vx-unspool": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "841896",
+        "user": "LukaCafuka",
+        "title": "U-matic VTR tape eject sound",
+        "preview": "https://cdn.freesound.org/previews/841/841896_16236894-hq.mp3",
+        "url": "https://freesound.org/people/LukaCafuka/sounds/841896/",
+        "dur": 7.1,
+        "downloads": 42,
+        "note": "\"cassette tape pulled out\""
+      },
+      {
+        "id": "177470",
+        "user": "unfa",
+        "title": "Tape Start",
+        "preview": "https://cdn.freesound.org/previews/177/177470_1038806-hq.mp3",
+        "url": "https://freesound.org/people/unfa/sounds/177470/",
+        "dur": 10.3,
+        "downloads": 1369,
+        "note": "\"magnetic tape\""
+      },
+      {
+        "id": "390146",
+        "user": "CuddleNucks",
+        "title": "skipping glitch tape 5.wav",
+        "preview": "https://cdn.freesound.org/previews/390/390146_4880868-hq.mp3",
+        "url": "https://freesound.org/people/CuddleNucks/sounds/390146/",
+        "dur": 3.2,
+        "downloads": 223,
+        "note": "\"magnetic tape\""
+      },
+      {
+        "id": "122751",
+        "user": "alienistcog",
+        "title": "tape_load_noise1.aif",
+        "preview": "https://cdn.freesound.org/previews/122/122751_296888-hq.mp3",
+        "url": "https://freesound.org/people/alienistcog/sounds/122751/",
+        "dur": 2.7,
+        "downloads": 290,
+        "note": "\"magnetic tape\""
+      }
+    ],
+    "pick": 2
+  },
+  "vx-pickup": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "811133",
+        "user": "danluxradium",
+        "title": "Tape Recorder Rustle",
+        "preview": "https://cdn.freesound.org/previews/811/811133_16156216-hq.mp3",
+        "url": "https://freesound.org/people/danluxradium/sounds/811133/",
+        "dur": 3.8,
+        "downloads": 70,
+        "note": "\"cassette tape handling\""
+      },
+      {
+        "id": "504153",
+        "user": "Joao_Janz",
+        "title": "Opening And Closing DVD Case 1_4",
+        "preview": "https://cdn.freesound.org/previews/504/504153_9961300-hq.mp3",
+        "url": "https://freesound.org/people/Joao_Janz/sounds/504153/",
+        "dur": 5,
+        "downloads": 81,
+        "note": "\"cassette case open close\""
+      },
+      {
+        "id": "613345",
+        "user": "gear_clinkz",
+        "title": "23_INSERTING VHS IN CASE.wav",
+        "preview": "https://cdn.freesound.org/previews/613/613345_932556-hq.mp3",
+        "url": "https://freesound.org/people/gear_clinkz/sounds/613345/",
+        "dur": 1.8,
+        "downloads": 56,
+        "note": "\"cassette insert\""
+      },
+      {
+        "id": "91994",
+        "user": "blaukreuz",
+        "title": "0109 DVW500_int_eject.wav",
+        "preview": "https://cdn.freesound.org/previews/91/91994_623488-hq.mp3",
+        "url": "https://freesound.org/people/blaukreuz/sounds/91994/",
+        "dur": 5.6,
+        "downloads": 685,
+        "note": "\"cassette insert\""
+      }
+    ],
+    "pick": 2
+  },
+  "vx-grudge": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "879279",
+        "user": "Qvantor",
+        "title": "Horror Sting",
+        "preview": "https://cdn.freesound.org/previews/879/879279_19512113-hq.mp3",
+        "url": "https://freesound.org/people/Qvantor/sounds/879279/",
+        "dur": 9.1,
+        "downloads": 8,
+        "note": "\"horror sting\""
+      },
+      {
+        "id": "846789",
+        "user": "hotpin7",
+        "title": "Sting/jumpscare",
+        "preview": "https://cdn.freesound.org/previews/846/846789_17707799-hq.mp3",
+        "url": "https://freesound.org/people/hotpin7/sounds/846789/",
+        "dur": 8.5,
+        "downloads": 865,
+        "note": "\"horror sting\""
+      },
+      {
+        "id": "578370",
+        "user": "nomiqbomi",
+        "title": "Spooky Sting",
+        "preview": "https://cdn.freesound.org/previews/578/578370_10522382-hq.mp3",
+        "url": "https://freesound.org/people/nomiqbomi/sounds/578370/",
+        "dur": 8.5,
+        "downloads": 475,
+        "note": "\"horror sting\""
+      },
+      {
+        "id": "840810",
+        "user": "OverlookHotelRecords",
+        "title": "Stingers and Stabs 004",
+        "preview": "https://cdn.freesound.org/previews/840/840810_4709749-hq.mp3",
+        "url": "https://freesound.org/people/OverlookHotelRecords/sounds/840810/",
+        "dur": 7.7,
+        "downloads": 1037,
+        "note": "\"horror sting\""
+      }
+    ],
+    "pick": 0
+  }
+}

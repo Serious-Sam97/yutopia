@@ -242,6 +242,49 @@ day, and **holds a grudge** (below).
      his hooks return nothing off his floor, the path unchanged outdoors); `survival` red only where it was.
 5. **The sound**: his voice for each moment, the hits on him (tape, plastic), the music's turn in act 3, the
    unspooling — picked by ear like the guns' and the steps' (the user picks).
+   **Decided by the user 2026-11-14** (asked first, as plan 79's sounds were — all as recommended):
+   - **Sources**: CC0 recordings (Freesound) — tape, VHS, plastic, static, electricity — processed and layered, as
+     the guns'; made in code only where nothing real fits.
+   - **His voice**: a **tape babble** a line — syllables cut from tape chirps (rewinding, fast-forwarding),
+     pitched by his mood, as long as the line; his *kkzzt* a burst of static.
+   - **Music only in act III**: a dark loop rising as the lights go out, fading when he falls; acts I–II none (his
+     effects only).
+   - **Picking**: 3–4 candidates a sound on `/dev/vortex-sound`, a star each, then wired in.
+   **The slots** (27 — `tools/sfx-vortex.json`, `public/sfx/vortex/`): his hits (`vx-hit`, act III's
+   `vx-hit-dark`), his voice (`vx-babble`, `vx-kkzzt`), a side-step (`vx-dodge`); act II's tape tricks (`vx-whip`,
+   `vx-bound`, `vx-free`, `vx-rew`, `vx-pause`, `vx-play`) and pranks (`vx-steal`, `vx-duck`, `vx-radio`,
+   `vx-hr`); act III (`vx-dark`, `vx-flicker`, the loop `vx-music3`, `vx-clones`, `vx-pop`, `vx-strike`,
+   `vx-possess`, `vx-glitch`); the end and the grudge (`vx-down`, `vx-unspool`, `vx-pickup`, `vx-grudge`). The
+   shadowed he lets in keep the dark's own sounds.
+   **The candidates** (2026-11-14): `tools/sfx-vortex-search.mjs` (the search itself now shared with the guns':
+   `tools/sfx-search.mjs`) → 4 a slot, 108 (the radio's and the unspooling's searched wider: crowd chatter and a
+   stun gun came first) → 208 takes, 3.5 MB till the picks prune it; cut by `tools/sfx-weather.mjs` (`LIST=tools/sfx-vortex.json
+   DIR=vortex`, its lengths `VX_LEN`: his babble a 4 s bed of chirps). **The bench**: `/dev/vortex-sound` — the
+   guns' bench made one for both (`app/dev/_bench/SoundBench.tsx`): each candidate's takes, ★ a pick (a moment's
+   take ★-able; his hits, blow, voice keep all their takes), each act "in order" with the picks, "copy picks" →
+   the tool's PICK.
+   **The picks** (the user's, 2026-11-14, by ear): one candidate a slot (REW's one take) — `tools/sfx-vortex.json`
+   `pick`/`take`, re-cut to 33 takes, 832 KB in `public/sfx/vortex`; credited in `public/sfx/CREDITS.md`. Among
+   them: a water bucket's hit for his plastic, a distorted impact in act III; *Tape Forward & Reverse* his voice;
+   a VHS static burst his *kkzzt*; a VCR's click his PAUSE and PLAY; a funk loop the radio's blast; a power-down
+   the lights out, a fluorescent catching as they go; a time-stretched dark drone act III's music; four voices
+   whispering his possession; a vinyl's dark rewind when he's down, a skipping tape his unspooling; a horror sting
+   the grudge.
+   **In the game** (`world/dark/voices.ts`: `vx`, `vxMusic`, `babble` — the guns' player, its recordings now by
+   directory; `VX_LEVEL` each moment's level; `world/dark/vortex.ts` plays them): a hit on him (the shooter's; act
+   III's distorted), each move from where it happens (his whip, the tape round them, its tearing, REW, the buttons,
+   the snatch and the duck to its owner, the radio, HR's bell; a side-step — the server now says so, `dodge`), act
+   III's lights going (their flicker, then the breaker) and **the music rising with the dark and fading with it**
+   (the music bus), his clones, a pop, a blow, possession, the glitch (and static) to its one; down — the tape
+   stopping, then spilling; the cassette's click as it's taken; the grudge's sting. **His voice**: each line
+   babbled — a grain of the tape chirps (60–120 ms, faded) a syllable, about one each three letters, pitched by his
+   face (possessed low, fury high), a static burst at each *kkzzt*, a beat at a full stop — his public lines from
+   where he is to those near (as the bubble), a personal one to its person. His recordings fetched when he's near.
+   - Checked: the three browser tests now keep each screen's sound calls — every move's on Ana's (Bia's too, the
+     shared ones), act III's flicker, breaker, music, clones, possession, glitch, the end's four and his voice — his
+     recordings in and the sound running; `vortex-fight.test.ts` 4/4 (twice — act III's shot at one of the shadowed
+     made to aim again: they move, one may be in another's way); the API's. The shadowed he lets in are silent for
+     now (the dark's own sounds follow its outdoor shadowed only). Budgets: the page 480.9 of 481 KB (unchanged), the dark's chunk 52.9 of 80.
 6. **Checks**: the server's tests (scaling, only shooters targeted, the acts, beaten and back, the grudge); a
    two-of-us fight in the browser (both screens: the acts, each move landing on the shooter, a friend getting the
    downed one up, the end); stills.

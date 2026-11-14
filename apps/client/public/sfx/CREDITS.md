@@ -134,3 +134,35 @@
   - `guns/sniper-round-*`: *Pushing 50 Cal BMG Round into Magazine* by qubodup (Freesound 855580).
   - `guns/daybreak-cell-out-*`: *Arming a Sci-Fi Gun* by jackolous (Freesound 645778).
   - `guns/daybreak-cell-in-*`: *Arming a Sci-Fi Gun* by jackolous (Freesound 645778).
+- The fight with Vortex's (docs/plan/88-vortex-fight.md, phase 5), picked by ear on `/dev/vortex-sound` 2026-11-14
+  from 108 candidates. All CC0 from Freesound (its HQ previews), found by `tools/sfx-vortex-search.mjs` and made by
+  `tools/sfx-weather.mjs` from `tools/sfx-vortex.json` (`DIR=vortex`): cut into takes by onset, each to −3 dB peak,
+  mono 80 kb/s (his babble a 4 s bed of tape chirps the game cuts syllables from); the game sets their mix
+  (`world/dark/voices.ts` VX_LEVEL).
+  - `vortex/vx-hit-*`: *Water Bucket Hit FF206.aif* by martinimeniscus (Freesound 199453).
+  - `vortex/vx-hit-dark-*`: *Distorted Impact* by Qvantor (Freesound 879269).
+  - `vortex/vx-babble-*`: *Tape Forward & Reverse* by synth2 (Freesound 786141).
+  - `vortex/vx-kkzzt-*`: *VHS Static Burst* by Assetsmith (Freesound 875404).
+  - `vortex/vx-dodge-*`: *quick woosh* by florianreichelt (Freesound 683101).
+  - `vortex/vx-whip-*`: *whip and crack sound* by JayRom01 (Freesound 615761).
+  - `vortex/vx-bound-*`: *Paper Tear* by mattfinarelli (Freesound 652982).
+  - `vortex/vx-free-*`: *Duct Tape Ripped Off.wav* by baidonovan (Freesound 187338).
+  - `vortex/vx-rew-*`: *Fast Forward* by plasterbrain (Freesound 402451).
+  - `vortex/vx-pause-*`: *vcr_click.wav* by airblock (Freesound 407720).
+  - `vortex/vx-play-*`: *vcr_click.wav* by airblock (Freesound 407720).
+  - `vortex/vx-steal-*`: *Swoosh* by woutertenbrink (Freesound 563879).
+  - `vortex/vx-duck-*`: *Squeaky Toy 8* by qubodup (Freesound 861826).
+  - `vortex/vx-radio-*`: *G#-Ab Minor Solo Synth Funk Loop 110bpm.wav* by williamkitchener (Freesound 568335).
+  - `vortex/vx-hr-*`: *Bell 11.2 OS* by Sadiquecat (Freesound 791501).
+  - `vortex/vx-dark-*`: *CP_Power_Down03_mid.aif* by stewdio2003 (Freesound 238373).
+  - `vortex/vx-flicker-*`: *Lights Flicker On.wav* by mmaruska (Freesound 232447).
+  - `vortex/vx-music3-*`: *Dark Atmospheric Drone (Time-Stretched, Seamless Loop)* by kkenny101 (Freesound 865550).
+  - `vortex/vx-clones-*`: *DSGNRythm_Glitch, Stutter, One-Shot, Pitched, Chaotic, Hard, Digital_19_JW Audio* by JW_Audio (Freesound 832726).
+  - `vortex/vx-pop-*`: *S24-24 Comedy cartoon cork pop.wav* by craigsmith (Freesound 676000).
+  - `vortex/vx-strike-*`: *Punch* by danlucaz (Freesound 517744).
+  - `vortex/vx-possess-*`: *Four_Voices_Whispering_6_wEcho.wav* by geoneo0 (Freesound 193818).
+  - `vortex/vx-glitch-*`: *JPEG Glitch* by kenokenobingo (Freesound 449494).
+  - `vortex/vx-down-*`: *Vinyl Rewind Dark 01* by loganzsound (Freesound 842582).
+  - `vortex/vx-unspool-*`: *skipping glitch tape 5.wav* by CuddleNucks (Freesound 390146).
+  - `vortex/vx-pickup-*`: *23_INSERTING VHS IN CASE.wav* by gear_clinkz (Freesound 613345).
+  - `vortex/vx-grudge-*`: *Horror Sting* by Qvantor (Freesound 879279).
