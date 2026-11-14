@@ -8,7 +8,7 @@ mocked first, then chosen; **F2a** the items' pictures rendered from their own 3
 the pack, the pack bigger; **F4a** 8 pockets. The rest of the proposal (the menu, hover + 1–4, split, organize, take
 all, quick use, no strip) as recommended, not asked. **Phase 0 (the mocks) rendered 2026-11-14 — the user chose
 B · the open pack** (a canvas pack drawn open, stitched pouches, the four at hand as loops on a wooden belt, the
-picked one on a paper tag); committed. Stills of today:
+picked one on a paper tag); committed a42710b7. **Phase 1 (the pictures) built 2026-11-14**, committed. Stills of today:
 `design/inventory/now-panel.png`, `now-strip.png`, `now-strip-over-dock.png`.
 
 ## What there is now
@@ -128,6 +128,19 @@ pages yet), crafting, weight, item shapes (RE's Tetris).
 1. **The pictures** (F2): each item rendered from its model to an image at build time (a script beside
    `tools/art/guns` — not in the browser: the readback hitch), dark-transparent, the size the panel needs; the
    things with no model yet (first aid, battery, fuse, flare, the rounds' boxes) modeled small.
+   Done in phase 1:
+   - `render_items.py --game`: the fourteen items rendered (the guns from the game's GLBs, the .38 from the
+     speedloader, the 7.62 from the AK's magazine, the cells from the Daybreak's; shells, .308s, a flare, a battery,
+     a first aid tin and a fuse modeled small), lamp-lit — a warm key, a cool rim, a dim warm room for the metal to
+     show — to `apps/client/public/life/items/<id>.webp` with their alpha: a gun 600 × 250, the rest 256 × 256
+     (twice the panel's and the tag's largest); **72 KB in all**, fetched by URL (not on the page's budget).
+   - `dark/icons.ts`: `preloadArt()` (the dark's start) loads them once; `itemArt(id)` is the picture once it's in,
+     else today's drawing (the fallback if one won't load); `artVersion()` keys the quick bar's and the panel's
+     rebuilds so a picture in late shows. Every use swapped — the panel's slots, its picked one, the drag's ghost,
+     the ground, the strip, the quick bar, the loot toast — the CSS's `svg` rules given an `img.art` twin.
+   - Checked: `inventory.spec` and `inventory-pack.spec` green, the pictures in the panel, the ground, the quick bar
+     and the strip; their drag helper waits for a slot's box (the panel rebuilt as a picture came in measured as
+     none).
 2. **The rules** (F4a and the hand tools): 8 pockets (`POCKETS` — the shared rules, the API's `Survivor::POCKETS`, a
    save of 6 read as 8), split, organize, take all, the menu's drop-some; the server, the API's save; tests.
 3. **The panel** rebuilt in the chosen look: one component; mouse, keyboard (hover + 1–4, Shift, double click, the

@@ -3,7 +3,9 @@
 # rounds and things to use from their parts (the AK's magazine, the Daybreak's cell, the speedloader) or small
 # models built here.
 #   blender -b --factory-startup -P tools/art/items/render_items.py [-- --only revolver,aid] [-- --out <dir>]
-# Phase 0 (the mocks) renders them to design/inventory/items; phase 1 tunes them for the game.
+#   blender -b --factory-startup -P tools/art/items/render_items.py -- --game
+# Phase 0 (the mocks) renders them to design/inventory/items (PNG); `--game` (phase 1) to the game's
+# apps/client/public/life/items (WEBP with its alpha, the sizes the panel and the HUD draw them at, twice over).
 import math
 import os
 import sys
@@ -15,12 +17,18 @@ HERE = os.path.dirname(__file__)
 ROOT = os.path.join(HERE, "../../..")
 GUNS = os.path.join(ROOT, "apps/client/public/life/guns")
 argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
-OUT = argv[argv.index("--out") + 1] if "--out" in argv else os.path.join(ROOT, "design/inventory/items")
+GAME = "--game" in argv
+OUT = (
+    argv[argv.index("--out") + 1]
+    if "--out" in argv
+    else os.path.join(ROOT, "apps/client/public/life/items" if GAME else "design/inventory/items")
+)
 ONLY = argv[argv.index("--only") + 1].split(",") if "--only" in argv else None
 os.makedirs(OUT, exist_ok=True)
 
-WIDE = (720, 300)  # the guns
-SQUARE = (360, 360)  # the rest
+# (the game's: a gun wide in a pocket or on the belt, the rest square — twice the panel's largest, the tag's)
+WIDE = (600, 250) if GAME else (720, 300)  # the guns
+SQUARE = (256, 256) if GAME else (360, 360)  # the rest
 
 
 def clear():
@@ -173,7 +181,15 @@ def frame(objs, res, turn=(0, 0, 0), pad=1.12):
 
 def render(name):
     s = bpy.context.scene
-    s.render.filepath = os.path.join(OUT, f"{name}.png")
+    f = s.render.image_settings
+    if GAME:
+        f.file_format = "WEBP"
+        f.color_mode = "RGBA"
+        f.quality = 86
+    else:
+        f.file_format = "PNG"
+        f.color_mode = "RGBA"
+    s.render.filepath = os.path.join(OUT, f"{name}.{'webp' if GAME else 'png'}")
     bpy.ops.render.render(write_still=True)
     print("wrote", s.render.filepath)
 

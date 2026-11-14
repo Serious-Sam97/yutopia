@@ -24,3 +24,29 @@ export const ICON: Record<ItemId, string> = {
   aid: '<svg viewBox="0 0 48 48"><rect x="7" y="13" width="34" height="26" rx="4" fill="#eceae4"/><path d="M18 13v-4h12v4" stroke="#bdb9b0" stroke-width="2.5" fill="none"/><path d="M24 19v14M17 26h14" stroke="#c7302b" stroke-width="5"/></svg>',
   fuse: '<svg viewBox="0 0 48 48"><g transform="rotate(-35 24 24)"><rect x="10" y="18" width="28" height="12" rx="2" fill="rgba(200,225,240,.35)" stroke="#cfe3ee" stroke-width="1.2"/><path d="M13 24c5-5 8 5 11 0s7-5 11 0" stroke="#e8c26a" stroke-width="1.4" fill="none"/><rect x="5" y="17" width="7" height="14" rx="1" fill="#a7a9ad"/><rect x="36" y="17" width="7" height="14" rx="1" fill="#a7a9ad"/></g></svg>',
 };
+
+// (plan 86 phase 1) …and as pictures of the things themselves: each rendered from its own model
+// (tools/art/items/render_items.py → public/life/items/<id>.webp), loaded once (preloadArt, the dark's start); till
+// it's in — or if it won't load — its drawing above. `artVersion` counts the ones in: a view built before keys its
+// rebuild on it.
+const ASKED = new Set<ItemId>();
+const LOADED = new Set<ItemId>();
+let loadedN = 0;
+export const artSrc = (id: ItemId) => `/life/items/${id}.webp`;
+export const artVersion = () => loadedN;
+export function preloadArt(): void {
+  for (const id of Object.keys(ICON) as ItemId[]) {
+    if (ASKED.has(id)) continue;
+    ASKED.add(id);
+    const im = new Image();
+    im.decoding = "async";
+    im.onload = () => {
+      LOADED.add(id);
+      loadedN++;
+    };
+    im.src = artSrc(id);
+  }
+}
+/** The item as markup: its picture once it's in, else its drawing */
+export const itemArt = (id: ItemId): string =>
+  LOADED.has(id) ? `<img class="art" src="${artSrc(id)}" alt="" draggable="false">` : ICON[id];

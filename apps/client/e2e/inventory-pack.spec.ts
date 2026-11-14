@@ -51,9 +51,20 @@ const seen = (page: Page, sid: string) =>
     };
   }, sid);
 const slot = (page: Page, i: number) => page.locator(`.dk-inv [data-slot="${i}"]`);
+// (its box measured once it's there — the panel's rebuilt when an item's picture comes in, plan 86: a box asked
+// mid-rebuild is none, so asked again)
+const boxOf = async (l: ReturnType<typeof slot>) => {
+  for (let i = 0; i < 10; i++) {
+    await l.waitFor({ state: "visible" });
+    const box = await l.boundingBox();
+    if (box) return box;
+    await l.page().waitForTimeout(100);
+  }
+  return null;
+};
 const drag = async (page: Page, from: ReturnType<typeof slot>, to: ReturnType<typeof slot>) => {
-  const a = await from.boundingBox();
-  const b = await to.boundingBox();
+  const a = await boxOf(from);
+  const b = await boxOf(to);
   if (!a || !b) throw new Error("no box");
   await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
   await page.mouse.down();

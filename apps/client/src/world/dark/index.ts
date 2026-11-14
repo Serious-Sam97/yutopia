@@ -22,7 +22,7 @@ import type { DarkHooks, Walker } from "../input/walker";
 import { hud } from "../store";
 import { ARMS_CSS, Arms } from "./arms";
 import { DOWN_CSS, Down } from "./down";
-import { ICON } from "./icons";
+import { artVersion, itemArt, preloadArt } from "./icons";
 import { INV_CSS, InventoryPanel } from "./inventory";
 import { Shades } from "./shades";
 import { STRINGS } from "./strings";
@@ -65,7 +65,7 @@ const CSS = `
 .dk-quick{padding:7px;border:5px solid transparent;border-radius:6px;background:linear-gradient(var(--panel),var(--panel)) padding-box,var(--wood) 0 0/600px 240px border-box;box-shadow:inset 0 0 0 1px rgba(0,0,0,.6),0 0 0 1px rgba(0,0,0,.55),0 12px 30px rgba(0,0,0,.5)}
 .dk-q{position:relative;height:46px;width:46px;border-radius:6px;background:rgba(255,255,255,.04);border:1px solid color-mix(in srgb,var(--amber) 16%,transparent);transition:transform .12s ease-out,border-color .12s,box-shadow .12s}
 .dk-q.w{width:78px}
-.dk-q svg{position:absolute;inset:6px 5px 10px 5px;width:calc(100% - 10px);height:calc(100% - 16px)}
+.dk-q svg,.dk-q img.art{position:absolute;inset:6px 5px 10px 5px;width:calc(100% - 10px);height:calc(100% - 16px)}
 .dk-q .k{position:absolute;left:4px;top:3px;font:400 10px/1 var(--font-mono);color:var(--cream-dim)}
 .dk-q .n{position:absolute;right:4px;bottom:1px;font-size:11px;font-weight:700;text-shadow:0 1px 2px #000}
 .dk-q.empty{background:transparent;border-style:dashed;border-color:color-mix(in srgb,var(--amber) 14%,transparent)}
@@ -79,7 +79,7 @@ const CSS = `
 .dk-bat .bar i{position:absolute;top:0;bottom:0;left:0}
 .dk-slot{position:relative;height:58px;width:58px;border-radius:7px;background:rgba(12,15,21,.66);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(3px)}
 .dk-slot.w{width:104px}
-.dk-slot svg{position:absolute;inset:6px 6px 10px 6px;width:calc(100% - 12px);height:calc(100% - 16px)}
+.dk-slot svg,.dk-slot img.art{position:absolute;inset:6px 6px 10px 6px;width:calc(100% - 12px);height:calc(100% - 16px)}
 .dk-slot .k{position:absolute;left:5px;top:3px;font-size:10px;font-weight:700;color:rgba(233,236,239,.55)}
 .dk-slot .n{position:absolute;right:5px;bottom:2px;font-size:13px;font-weight:700;text-shadow:0 1px 2px #000}
 .dk-slot.empty{background:rgba(12,15,21,.38);border-style:dashed;border-color:rgba(255,255,255,.12)}
@@ -94,7 +94,8 @@ const CSS = `
 .dk-key{display:inline-block;min-width:16px;padding:0 4px;border:1px solid rgba(233,236,239,.5);border-radius:3px;font-size:10px;font-weight:700;text-align:center;line-height:14px;color:#e9ecef;margin:0 2px}
 .dk-prompt{background:rgba(10,12,16,.72);border-radius:6px;padding:6px 10px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;transform:translate(36px,-50%);white-space:nowrap}
 .dk-toast{left:50%;top:84px;transform:translateX(-50%);background:rgba(10,12,16,.72);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:9px 14px;font-size:14px;display:flex;gap:10px;align-items:center;transition:opacity .3s}
-.dk-toast svg{width:26px;height:26px}
+.dk-toast svg,.dk-toast img.art{width:26px;height:26px}
+.dk img.art,.dk-inv img.art,.dk-inv-ghost img.art{object-fit:contain;pointer-events:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.6))}
 .dk-hit{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(120,0,0,0) 40%,rgba(150,10,10,.55) 100%);opacity:0;transition:opacity .45s ease-out}
 .dk-awake{position:fixed;inset:0;pointer-events:none;background:#000;display:flex;align-items:center;justify-content:center;font-size:20px;letter-spacing:.04em;color:#d9dde2;opacity:0;transition:opacity .9s}
 .dk-arc-l{font-size:11px;font-weight:700;color:${AMBER};letter-spacing:.06em;text-transform:uppercase;transform:translateX(-50%);white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,.8)}
@@ -176,6 +177,8 @@ class Dark implements DarkHooks {
     private readonly walker: Walker,
   ) {
     this.room = ctl.room;
+    // (plan 86: the items' pictures, in before they're first shown)
+    preloadArt();
     const style = document.createElement("style");
     style.textContent = CSS + ARMS_CSS + DOWN_CSS + VITALS_CSS + INV_CSS;
     this.root.className = "dk";
@@ -418,11 +421,11 @@ class Dark implements DarkHooks {
   private toast(text: string, icons: ItemId[]) {
     const el = this.toastEl;
     el.replaceChildren();
-    if (icons[0]) el.append(svg(ICON[icons[0]]));
+    if (icons[0]) el.append(svg(itemArt(icons[0])));
     const span = document.createElement("span");
     span.textContent = text;
     el.append(span);
-    if (icons.length > 1) el.append(svg(ICON[icons[icons.length - 1]]));
+    if (icons.length > 1) el.append(svg(itemArt(icons[icons.length - 1])));
     el.style.display = "flex";
     el.style.opacity = "1";
     this.toastUntil = performance.now() + 3200;
@@ -441,7 +444,7 @@ class Dark implements DarkHooks {
       el.className = `dk-slot${wide ? " w" : ""}${id ? "" : " empty"}${this.fresh.has(i) ? " new" : ""}`;
       if (key) el.append(tag("span", "k", key));
       if (id) {
-        el.append(svg(ICON[id]));
+        el.append(svg(itemArt(id)));
         el.append(tag("span", "n", n));
         const tip = tag("div", "dk-tip", "");
         tip.append(tag("b", "", itemName(id)));
@@ -505,7 +508,7 @@ class Dark implements DarkHooks {
     const gun = (room?.state.players.get(room.sessionId)?.gun as string) || "";
     const pulse = this.quickPulse && now < this.quickPulse.until ? this.quickPulse : null;
     if (!pulse) this.quickPulse = null;
-    const key = `${JSON.stringify(inv.quick)}|${gun}|${pulse ? `${pulse.n}${pulse.ok}` : ""}`;
+    const key = `${JSON.stringify(inv.quick)}|${gun}|${pulse ? `${pulse.n}${pulse.ok}` : ""}|${artVersion()}`;
     if (key === this.quickKey) return;
     this.quickKey = key;
     this.quickEl.replaceChildren();
@@ -517,7 +520,7 @@ class Dark implements DarkHooks {
       el.className = `dk-q${wide ? " w" : ""}${it ? "" : " empty"}${on ? " on" : ""}${go}`;
       el.append(tag("span", "k", String(i + 1)));
       if (it) {
-        el.append(svg(ICON[it.id]));
+        el.append(svg(itemArt(it.id)));
         el.append(tag("span", "n", "loaded" in it ? `${it.loaded}/${WEAPONS[it.id].mag}` : String(it.n)));
       }
       this.quickEl.append(el);

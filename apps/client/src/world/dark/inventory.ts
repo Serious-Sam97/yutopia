@@ -16,7 +16,7 @@ import {
 import { VITALS } from "@yutopia/shared/vitals";
 import type { WorldController } from "../controller";
 import type { Walker } from "../input/walker";
-import { ICON } from "./icons";
+import { artVersion, itemArt } from "./icons";
 
 // The inventory (docs/plan/30-the-dark.md, design/screens/dark/06a-inventory,
 // 06b-inventory): I (the pad's Menu) opens "Pockets" over the world, which
@@ -248,7 +248,7 @@ export class InventoryPanel {
       if (!id) return;
       d.ghost = document.createElement("div");
       d.ghost.className = "dk-inv-ghost";
-      d.ghost.innerHTML = ICON[id];
+      d.ghost.innerHTML = itemArt(id);
       this.el.append(d.ghost);
       this.el.classList.add("dragging");
     }
@@ -309,7 +309,19 @@ export class InventoryPanel {
     const out = this.walker.outside;
     const night = (room?.state.hour ?? 12) >= 20.5 || (room?.state.hour ?? 12) < 5;
     // (rebuilt only when something shown changed)
-    const sig = JSON.stringify([inv, hp, st, wm, bat, gun, out, this.sel, this.groundKey, this.walker.breath.drained]);
+    const sig = JSON.stringify([
+      inv,
+      hp,
+      st,
+      wm,
+      bat,
+      gun,
+      out,
+      this.sel,
+      this.groundKey,
+      this.walker.breath.drained,
+      artVersion(),
+    ]);
     if (sig === this.shown) return;
     this.shown = sig;
 
@@ -334,17 +346,17 @@ export class InventoryPanel {
         if (!it) quick += `<div class="slot q empty${isSel({ slot })}" data-slot="${slot}">${k}</div>`;
         else if ("loaded" in it) {
           const spare = count(inv, WEAPONS[it.id].ammo);
-          quick += `<div class="slot q w${isSel({ slot })}${gun === it.id ? " inhand" : ""}" data-slot="${slot}">${k}${ICON[it.id]}<span class="sub">+${spare}</span><span class="n">${it.loaded}/${WEAPONS[it.id].mag}</span>${gun === it.id ? `<span class="tag">${t("dark_inv_hand").toUpperCase()}</span>` : ""}</div>`;
+          quick += `<div class="slot q w${isSel({ slot })}${gun === it.id ? " inhand" : ""}" data-slot="${slot}">${k}${itemArt(it.id)}<span class="sub">+${spare}</span><span class="n">${it.loaded}/${WEAPONS[it.id].mag}</span>${gun === it.id ? `<span class="tag">${t("dark_inv_hand").toUpperCase()}</span>` : ""}</div>`;
         } else
-          quick += `<div class="slot q${isSel({ slot })}" data-slot="${slot}">${k}${ICON[it.id]}<span class="n">${it.n}<small>/${STACKS[it.id]}</small></span></div>`;
+          quick += `<div class="slot q${isSel({ slot })}" data-slot="${slot}">${k}${itemArt(it.id)}<span class="n">${it.n}<small>/${STACKS[it.id]}</small></span></div>`;
       });
       inv.pockets.forEach((it, i) => {
         // (plan 85: a weapon in the pack — carried, not equipped: its rounds in it and spare, no key)
         if (!it) pockets += `<div class="slot p empty${isSel({ slot: i })}" data-slot="${i}"></div>`;
         else if ("loaded" in it)
-          pockets += `<div class="slot p w${isSel({ slot: i })}" data-slot="${i}">${ICON[it.id]}<span class="sub">+${count(inv, WEAPONS[it.id].ammo)}</span><span class="n">${it.loaded}/${WEAPONS[it.id].mag}</span></div>`;
+          pockets += `<div class="slot p w${isSel({ slot: i })}" data-slot="${i}">${itemArt(it.id)}<span class="sub">+${count(inv, WEAPONS[it.id].ammo)}</span><span class="n">${it.loaded}/${WEAPONS[it.id].mag}</span></div>`;
         else
-          pockets += `<div class="slot p${isSel({ slot: i })}" data-slot="${i}">${ICON[it.id]}<span class="n">${it.n}<small>/${STACKS[it.id]}</small></span></div>`;
+          pockets += `<div class="slot p${isSel({ slot: i })}" data-slot="${i}">${itemArt(it.id)}<span class="n">${it.n}<small>/${STACKS[it.id]}</small></span></div>`;
       });
     }
 
@@ -352,7 +364,7 @@ export class InventoryPanel {
       ? this.ground
           .map(
             (d) =>
-              `<div class="gi${isWeapon(d.item) ? " wide" : ""}${isSel({ drop: d.id })}" data-drop="${d.id}">${ICON[d.item]}<div><b>${t(`dark_item_${d.item}`)}</b><span>${isWeapon(d.item) ? `${d.loaded}/${WEAPONS[d.item].mag}` : `×${d.n}`}</span></div><span class="take">${t("dark_inv_take").toUpperCase()}</span></div>`,
+              `<div class="gi${isWeapon(d.item) ? " wide" : ""}${isSel({ drop: d.id })}" data-drop="${d.id}">${itemArt(d.item)}<div><b>${t(`dark_item_${d.item}`)}</b><span>${isWeapon(d.item) ? `${d.loaded}/${WEAPONS[d.item].mag}` : `×${d.n}`}</span></div><span class="take">${t("dark_inv_take").toUpperCase()}</span></div>`,
           )
           .join("")
       : `<span class="none">${t("dark_inv_ground_none")}</span>`;
@@ -430,7 +442,7 @@ export class InventoryPanel {
         dropBtn;
     }
     const wide = isWeapon(id) ? " wide" : "";
-    return `${head}<div class="big${wide}">${ICON[id]}</div><h2>${t(`dark_item_${id}`)}</h2><p>${t(`dark_desc_${id}`)}</p><div class="stats">${stats}</div><div class="btns">${btns}</div>`;
+    return `${head}<div class="big${wide}">${itemArt(id)}</div><h2>${t(`dark_item_${id}`)}</h2><p>${t(`dark_desc_${id}`)}</p><div class="stats">${stats}</div><div class="btns">${btns}</div>`;
   }
 }
 
@@ -464,10 +476,10 @@ export const INV_CSS = `
 .dk-inv .slot{position:relative;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);cursor:pointer}
 .dk-inv .slot:hover{border-color:rgba(255,255,255,.4)}
 .dk-inv .slot.q{height:96px}
-.dk-inv .slot.q.w svg{inset:18px 8px 24px 8px;width:calc(100% - 16px);height:calc(100% - 42px)}
+.dk-inv .slot.q.w svg,.dk-inv .slot.q.w img.art{inset:18px 8px 24px 8px;width:calc(100% - 16px);height:calc(100% - 42px)}
 .dk-inv .slot.p{height:100px}
-.dk-inv .slot.p.w svg{inset:16px 8px 26px 8px;width:calc(100% - 16px);height:calc(100% - 42px)}
-.dk-inv .slot svg{position:absolute;inset:12px 12px 22px 12px;width:calc(100% - 24px);height:calc(100% - 34px);pointer-events:none}
+.dk-inv .slot.p.w svg,.dk-inv .slot.p.w img.art{inset:16px 8px 26px 8px;width:calc(100% - 16px);height:calc(100% - 42px)}
+.dk-inv .slot svg,.dk-inv .slot img.art{position:absolute;inset:12px 12px 22px 12px;width:calc(100% - 24px);height:calc(100% - 34px);pointer-events:none}
 .dk-inv .slot .k{position:absolute;left:8px;top:6px;font-size:11px;font-weight:800;color:rgba(233,236,239,.55)}
 .dk-inv .slot .n{position:absolute;right:8px;bottom:5px;font-size:15px;font-weight:800;text-shadow:0 1px 2px #000}
 .dk-inv .slot .n small{font-size:11px;font-weight:600;color:rgba(233,236,239,.5)}
@@ -478,11 +490,11 @@ export const INV_CSS = `
 .dk-inv .slot.sel,.dk-inv .gi.sel{border:1.5px solid ${AMBER};background:rgba(233,163,58,.09);box-shadow:0 0 16px rgba(233,163,58,.25)}
 .dk-inv.dragging .slot:hover{border:1.5px dashed ${AMBER};background:rgba(233,163,58,.06)}
 .dk-inv-ghost{position:fixed;width:84px;height:84px;transform:translate(-50%,-50%) rotate(-5deg);pointer-events:none;filter:drop-shadow(0 8px 14px rgba(0,0,0,.6))}
-.dk-inv-ghost svg{width:100%;height:100%}
+.dk-inv-ghost svg,.dk-inv-ghost img.art{width:100%;height:100%}
 .dk-inv .det .hint{font-size:13px;color:rgba(233,236,239,.5);margin-top:14px}
 .dk-inv .big{height:110px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 55%,rgba(255,255,255,.07),transparent 70%);border-radius:10px;margin:10px 0 14px}
-.dk-inv .big svg{width:100px;height:100px}
-.dk-inv .big.wide svg{width:220px;height:90px}
+.dk-inv .big svg,.dk-inv .big img.art{width:100px;height:100px}
+.dk-inv .big.wide svg,.dk-inv .big.wide img.art{width:220px;height:90px}
 .dk-inv .det h2{font-size:19px;font-weight:800;margin:0}
 .dk-inv .det p{font-size:13px;line-height:1.45;color:rgba(233,236,239,.72);margin:8px 0 12px}
 .dk-inv .stats{display:grid;grid-template-columns:1fr auto;gap:5px 10px;font-size:12px;color:rgba(233,236,239,.6);margin-bottom:16px}
@@ -499,8 +511,8 @@ export const INV_CSS = `
 .dk-inv .gl{display:flex;gap:12px;flex-wrap:wrap;min-height:72px;align-items:center}
 .dk-inv .gl .none{font-size:12px;color:rgba(233,236,239,.45)}
 .dk-inv .gi{width:190px;height:72px;border-radius:9px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;gap:10px;padding:0 12px;position:relative;cursor:pointer}
-.dk-inv .gi svg{width:46px;height:46px;flex:none;pointer-events:none}
-.dk-inv .gi.wide svg{width:64px;height:30px}
+.dk-inv .gi svg,.dk-inv .gi img.art{width:46px;height:46px;flex:none;pointer-events:none}
+.dk-inv .gi.wide svg,.dk-inv .gi.wide img.art{width:64px;height:30px}
 .dk-inv .gi b{font-size:13px;display:block}
 .dk-inv .gi span{font-size:11px;color:rgba(233,236,239,.55)}
 .dk-inv .gi .take{position:absolute;right:10px;top:8px;font-size:10px;font-weight:800;color:${AMBER};letter-spacing:.06em}
