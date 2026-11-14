@@ -429,7 +429,7 @@ export interface ClientMessages {
     at?: { x: number; y: number };
     hold?: boolean;
     // (one of his moves, now, on `to` — a session)
-    move?: "whip" | "rew" | "pause" | "steal" | "radio" | "hr";
+    move?: "whip" | "rew" | "pause" | "steal" | "radio" | "hr" | "clones" | "shades" | "possess" | "glitch";
     to?: string;
   };
   // (plan 88) cutting a friend free of Vortex's tape (near them)
@@ -651,7 +651,26 @@ export interface ServerMessages {
   "vortex:down": { by: string; secs: number };
   // (plan 88) one of his moves, for everyone to see: on whom, from where, for how long (ms); what came of it
   "vortex:move": {
-    kind: "whip" | "bound" | "missed" | "free" | "rew" | "pause" | "play" | "steal" | "radio" | "hr";
+    kind:
+      | "whip"
+      | "bound"
+      | "missed"
+      | "free"
+      | "rew"
+      | "pause"
+      | "play"
+      | "steal"
+      | "radio"
+      | "hr"
+      // (phase 3) act III: the transformation (the lights out), his clones, one popped, the shadowed let in, a
+      // blow (his or theirs), possession, the glitch
+      | "dark"
+      | "clones"
+      | "pop"
+      | "shades"
+      | "strike"
+      | "possess"
+      | "glitch";
     to?: string;
     from?: { x: number; y: number };
     ms?: number;

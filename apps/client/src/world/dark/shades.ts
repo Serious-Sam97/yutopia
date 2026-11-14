@@ -72,7 +72,7 @@ const TOPS = ["shirt", "blazer", "polo", "cardigan", "turtleneck", "sweater", "s
 const TOP_C = ["#e8e4dc", "#b8c8d8", "#8a8f96", "#2c3445", "#c9b89a", "#2a2a2e", "#efe9df", "#5a6470"];
 const BOTTOMS = ["trousers", "trousers", "skirt", "longskirt", "trousers"];
 const BOTTOM_C = ["#3a3f48", "#2c3445", "#2a2a2e", "#6d6458", "#8a8f96"];
-function officeLook(seed: number): AvatarLayers {
+export function officeLook(seed: number): AvatarLayers {
   let s = (seed * 2654435761) >>> 0;
   const pick = <T>(a: readonly T[]): T => {
     s = (Math.imul(s ^ (s >>> 15), 2246822519) + 0x9e3779b9) >>> 0;
@@ -113,6 +113,8 @@ function poseOf(state: string): NonNullable<Body3["shade"]>["pose"] {
 
 export class Shades {
   private seen = new Map<string, Seen>();
+  /** (plan 88 act III) more of them to draw — the shadowed Vortex lets into the studio (world/dark/vortex.ts) */
+  more: (() => Body3[]) | null = null;
   private lastFrame = 0;
 
   constructor(private readonly ctl: WorldController) {}
@@ -286,6 +288,7 @@ export class Shades {
         },
       });
     }
+    if (this.more) out.push(...this.more());
     return out;
   };
 }

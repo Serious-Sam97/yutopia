@@ -21,6 +21,7 @@ export type SunHost = Pick<
   | "light"
   | "orbLights"
   | "pool"
+  | "studioDark"
   | "quality"
   | "sun"
   | "target"
@@ -120,7 +121,8 @@ export class Sun {
       p.color.setHex(n.l.color);
       p.position.set(n.l.x + off.x, (n.l.h ?? 1.05) + off.y, n.l.y + off.z);
       p.distance = n.l.radius * 1.4;
-      p.intensity = n.l.intensity * k * fade * fade * (3 - 2 * fade) * n.w;
+      // (plan 88: the studio's lights out — its lamps with them)
+      p.intensity = n.l.intensity * k * fade * fade * (3 - 2 * fade) * n.w * (1 - this.c.studioDark);
     });
     this.groundLamps(d.night);
   }

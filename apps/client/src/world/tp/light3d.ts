@@ -62,6 +62,9 @@ export const litBalance = {
 // noon read as nothing against the night round it. Their light added to what
 // it falls on (its colour), warm, a soft disc under each head.
 const GLOW_PX = 4; // samples a tile
+/** (plan 88) how far a floor's lights out take what's lit down (its lamps, the hour's, the windows'): 1.2% left
+ *  (linear — about an eighth of the screen's brightness, the mock's dark) */
+export const OUT_DIM = 0.988;
 const GLOW_COLOR: [number, number, number] = [1, 0.9, 0.72];
 // …and the cars' headlights (lit in their drawing) throw a beam ahead of them
 const BEAM_LEN = 6; // tiles
@@ -74,9 +77,26 @@ const ROLL_OFF = `
   if ( lmPeak > lmKnee ) outgoingLight *= ( lmKnee + ( lmCap - lmKnee ) * ( 1.0 - exp( ( lmKnee - lmPeak ) / ( lmCap - lmKnee ) ) ) ) / lmPeak;
   #include <opaque_fragment>`;
 
-// the light chunk with the sun and the sky's fill each scaled (lmSunK, lmFillK)
-const balanced = (k: string) =>
-  ShaderChunk.lights_fragment_begin
+// the light chunk with the sun and the sky's fill each scaled (lmSunK, lmFillK); `out` (plan 88: a floor's lights
+// out, lmOutK): its point and spot lights — the torches, the flares — made up for what the lights out take off, so
+// they light as ever in the dark (only here: things not lit by the floor's light aren't darkened, nor made up for)
+const balanced = (k: string, out = false) =>
+  (out
+    ? ShaderChunk.lights_fragment_begin
+        .replace(
+          "getPointLightInfo( pointLight, geometryPosition, directLight );",
+          "getPointLightInfo( pointLight, geometryPosition, directLight );\n\t\tdirectLight.color *= lmBoost;",
+        )
+        .replace(
+          "getSpotLightInfo( spotLight, geometryPosition, directLight );",
+          "getSpotLightInfo( spotLight, geometryPosition, directLight );\n\t\tdirectLight.color *= lmBoost;",
+        )
+        .replace(
+          /^/,
+          `float lmBoost = 1.0 / max( ${(1 - OUT_DIM).toFixed(3)}, 1.0 - ${OUT_DIM.toFixed(3)} * lmOutK );\n`,
+        )
+    : ShaderChunk.lights_fragment_begin
+  )
     .replace(
       "getDirectionalLightInfo( directionalLight, directLight );",
       "getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= lmSunK;",
@@ -229,6 +249,9 @@ export class Light3 {
     lmAmb: { value: new Color(1, 1, 1) },
     lmAmbOut: { value: new Color(1, 1, 1) },
     lmWinC: { value: new Color(0, 0, 0) },
+    // (plan 88 act III) the floor's lights out, 0 … 1: what lights it — its lamps, the hour's ambient, the
+    // windows — down to a few per cent; the torches and flares make up for it (tp/view.ts studioDark)
+    lmOutK: { value: 0 },
   };
 
   constructor() {
@@ -469,9 +492,9 @@ export class Light3 {
         shader.fragmentShader = shader.fragmentShader
           .replace(
             "#include <common>",
-            "#include <common>\nuniform sampler3D lmVol;\nuniform vec3 lmAmb;\nuniform vec3 lmAmbOut;\nuniform vec3 lmWinC;\nvarying float vLmH;\nuniform sampler2D lmSky;\nuniform sampler2D lmGlow;\nuniform float lmGlowK;\nuniform float lmCap;\nuniform float lmSunOut;\nuniform float lmFillOut;\nuniform float lmDark;\nuniform float lmEyes;\nuniform vec3 landLight;\nvarying vec2 vLmUv;\nvarying float vLmUp;",
+            "#include <common>\nuniform float lmOutK;\nuniform sampler3D lmVol;\nuniform vec3 lmAmb;\nuniform vec3 lmAmbOut;\nuniform vec3 lmWinC;\nvarying float vLmH;\nuniform sampler2D lmSky;\nuniform sampler2D lmGlow;\nuniform float lmGlowK;\nuniform float lmCap;\nuniform float lmSunOut;\nuniform float lmFillOut;\nuniform float lmDark;\nuniform float lmEyes;\nuniform vec3 landLight;\nvarying vec2 vLmUv;\nvarying float vLmUp;",
           )
-          .replace("#include <lights_fragment_begin>", balanced("texture2D( lmSky, clamp( vLmUv, 0.0, 1.0 ) ).r"))
+          .replace("#include <lights_fragment_begin>", balanced("texture2D( lmSky, clamp( vLmUv, 0.0, 1.0 ) ).r", true))
           .replace(
             "#include <opaque_fragment>",
             `// (out under the sky in the dark, what's lit is lit by lamps hung high: a face turned
@@ -483,7 +506,7 @@ export class Light3 {
           // windows' daylight added: each clamped to 1, then as an sRGB colour reads)
           vec4 lmV = texture( lmVol, vec3( clamp( vLmUv, 0.0, 1.0 ), ( clamp( vLmH / ${STOREY.toFixed(3)}, 0.0, 1.0 ) * ${(LAYERS - 1).toFixed(1)} + 0.5 ) / ${LAYERS.toFixed(1)} ) );
           vec3 lmC = min( vec3( 1.0 ), mix( lmAmb, lmAmbOut, texture2D( lmSky, clamp( vLmUv, 0.0, 1.0 ) ).r ) + lmV.rgb + lmWinC * min( 1.0, lmV.a ) );
-          lmC = sRGBTransferEOTF( vec4( lmC, 1.0 ) ).rgb;
+          lmC = sRGBTransferEOTF( vec4( lmC, 1.0 ) ).rgb * ( 1.0 - ${OUT_DIM.toFixed(3)} * lmOutK );
           vec2 lmIn = step( vec2( 0.0 ), vLmUv ) * step( vLmUv, vec2( 1.0 ) );
           float lmOn = lmIn.x * lmIn.y;
           float lmOut = texture2D( lmSky, clamp( vLmUv, 0.0, 1.0 ) ).r * lmDark * lmOn;
@@ -497,6 +520,7 @@ export class Light3 {
         shader.uniforms.lmAmb = u.lmAmb;
         shader.uniforms.lmAmbOut = u.lmAmbOut;
         shader.uniforms.lmWinC = u.lmWinC;
+        shader.uniforms.lmOutK = u.lmOutK;
         // (and what else the material asks for: the lot's snow cover — roads3d.ts lotCover)
         extra?.patch(shader);
         // (the snow's layer on its tiles open to the sky — the lot, the pavements by the doors: trodden

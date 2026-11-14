@@ -1,7 +1,10 @@
 import type { ServerMessages } from "@yutopia/shared";
+import { face8 } from "@yutopia/shared/facing";
 import { VORTEX_FIGHT } from "@yutopia/shared/vortex-fight";
 import type { WorldController } from "../controller";
-import type { Walker } from "../input/walker";
+import type { DarkHooks, Walker } from "../input/walker";
+import type { Body3 } from "../tp/view";
+import { officeLook } from "./shades";
 
 // The fight with Vortex on my screen (docs/plan/88-vortex-fight.md phase 2, as design/vortex-fight/mock): his health
 // as a cassette at the top — the tape wound off its left reel as he's hurt, ticks at the acts, who's in it and their
@@ -9,6 +12,11 @@ import type { Walker } from "../input/walker";
 // the tape round whoever it caught (a friend by them: hold E to cut them free; me: I can't move), REW's ◀◀, PAUSE's
 // ▮▮ and the shots back at whoever fired them, the confiscation's slip (and the duck), the radio's dance (me: I can't
 // move), HR's slip; beaten — the building's slip.
+// (Phase 3) Act III: the transformation (a dark flash, his drawing gone dark — the controller's) and **the studio's
+// lights out** for everyone on his floor (eased, flickering off; tp/view.ts studioDark: the torch and flares what's
+// left); the shadowed he lets in, drawn as the dark's own (handed to its Shades); "a clone?" over him and his
+// clones, a popped one's *pop*; possessed — my legs walked to him, the camera turned on him, a magenta edge and its
+// count; the glitch — my controls the other way round, the screen's lines and a band slipping, the HUD jittering.
 
 const SEEN = 30; // m: his moves drawn this far from me, on his floor
 const CUT_MS = 800; // a friend's knife: held this long
@@ -52,6 +60,23 @@ export class VortexFight {
   private playUntil = 0;
   private missedUntil = 0;
   private cutting: { sid: string; at: number } | null = null;
+  // (phase 3) the lights out as eased here (0 … 1) and when they began to go; the mind games on me, till then; who's
+  // possessed (theirs: a mark); his clones' question marks, till then; popped ones; the shadowed as seen (smoothed)
+  private outK = 0;
+  private outFrom = 0;
+  private lastFrame = performance.now();
+  private possessUntil = 0;
+  private glitchUntil = 0;
+  private readonly possessed = new Map<string, number>();
+  private clonesUntil = 0;
+  private pops: { x: number; y: number; at: number }[] = [];
+  private readonly shades = new Map<
+    string,
+    { x: number; y: number; angle: number; state: string; since: number; born: number; seed: number; speed: number }
+  >();
+  private readonly possessEl = document.createElement("div");
+  private readonly glitchEl = document.createElement("div");
+  private readonly turnEl = document.createElement("div");
 
   constructor(
     private readonly ctl: WorldController,
@@ -73,6 +98,11 @@ export class VortexFight {
     for (const e of [this.boss, this.notice, this.mine, this.prompt, this.vhs, this.pauseEl]) e.style.display = "none";
     this.el.append(this.flash, this.layer, this.marks, this.boss, this.slips, this.notice, this.mine, this.prompt);
     this.el.append(this.vhs, this.pauseEl);
+    this.possessEl.className = "vxf-possess";
+    this.glitchEl.className = "vxf-glitch";
+    this.turnEl.className = "vxf-turn";
+    for (const e of [this.possessEl, this.glitchEl]) e.style.display = "none";
+    this.el.prepend(this.turnEl, this.possessEl, this.glitchEl);
     root.append(this.el);
     const room = ctl.room;
     if (!room) return;
@@ -106,6 +136,8 @@ export class VortexFight {
   dispose(): void {
     for (const off of this.offs) off();
     this.el.remove();
+    if (this.ctl.tp) this.ctl.tp.studioDark = 0;
+    document.documentElement.classList.remove("vx-glitching");
   }
 
   // ── what Dark asks ───────────────────────────────────────────────────────
@@ -115,6 +147,68 @@ export class VortexFight {
     const me = this.me();
     return (this.bound.get(me) ?? 0) > now || (this.dance.get(me) ?? 0) > now;
   }
+  /** (phase 3) my move as he has it: possessed — walked to him (no running, no aiming); the glitch — reversed */
+  steer(move: Parameters<DarkHooks["steer"]>[0]): void {
+    const now = performance.now();
+    const vx = this.vx();
+    if (this.possessUntil > now && vx) {
+      const me = this.walker.where();
+      const d = Math.hypot(vx.x - me.x, vx.y - me.y);
+      const k = d > 1.4 ? 0.55 / d : 0;
+      move.x = (vx.x - me.x) * k;
+      move.y = (vx.y - me.y) * k;
+      move.sprint = false;
+      move.aim = false;
+      move.jump = false;
+      move.jumpPressed = false;
+    } else if (this.glitchUntil > now) {
+      move.x = -move.x;
+      move.y = -move.y;
+    }
+  }
+  /** (phase 3) the shadowed he let in, as the 3D view draws the dark's (its Shades hands them on) */
+  readonly shadeBodies = (): Body3[] => {
+    const home = this.ctl.homeFloor();
+    if (this.ctl.level !== home) return [];
+    const now = performance.now();
+    const out: Body3[] = [];
+    for (const [id, s] of this.shades) {
+      const fade = s.state === "dissolve" ? Math.max(0, 1 - (now - s.since) / 800) : Math.min(1, (now - s.born) / 500);
+      const moving = s.speed > 0.3 && s.state !== "windup";
+      out.push({
+        name: "",
+        avatar: officeLook(s.seed),
+        x: s.x,
+        y: s.y,
+        yaw: face8(Math.cos(s.angle), Math.sin(s.angle)),
+        a: moving ? 1 : 0,
+        status: "online",
+        speaking: false,
+        emote: "",
+        mic: false,
+        bot: true,
+        angle: s.angle,
+        z: 0,
+        mv: 1,
+        shaded: true,
+        fade,
+        id: `vxs:${id}`,
+        level: home,
+        shade: {
+          pose: s.state === "windup" ? "windup" : s.state === "strike" ? "strike" : "lurch",
+          t: (now - s.since) / 1000,
+          seed: s.seed,
+          dark: 1,
+          state: s.state === "emerge" ? "emerge" : s.state === "dissolve" ? "dissolve" : "stalk",
+          since: s.since,
+          burn: null,
+          fade,
+          killed: s.state === "dissolve",
+        },
+      } as Body3);
+    }
+    return out;
+  };
   /** a use pressed: by a friend taped up, cutting them free (held) */
   use(): boolean {
     if (this.cutting) return true;
@@ -176,17 +270,39 @@ export class VortexFight {
         if (m.to === me) this.slip(this.tr("vx_hr", { s: String(Math.round(ms / 1000)) }), false, "hr");
         else if (this.near(m.to)) this.slip(this.tr("vx_hr_other", { name: name(m.to) }));
         break;
+      // (phase 3) act III
+      case "dark":
+        this.turnEl.classList.remove("on");
+        void this.turnEl.offsetWidth;
+        this.turnEl.classList.add("on");
+        break;
+      case "clones":
+        this.clonesUntil = now + 3500;
+        break;
+      case "pop":
+        if (m.from) this.pops.push({ ...m.from, at: now });
+        break;
+      case "possess":
+        if (m.to) this.possessed.set(m.to, now + ms);
+        if (m.to === me) this.possessUntil = now + ms;
+        break;
+      case "glitch":
+        if (m.to === me) this.glitchUntil = now + ms;
+        break;
     }
   }
 
   frame(useHeld: boolean): void {
     const now = performance.now();
+    const dt = Math.min(0.1, (now - this.lastFrame) / 1000);
+    this.lastFrame = now;
     const ctl = this.ctl;
     const vx = this.vx();
     const home = ctl.homeFloor();
     const here = ctl.level === home && !!vx;
     const me = this.walker.where();
     const near = here && !!vx && Math.hypot(vx.x - me.x, vx.y - me.y) <= SEEN;
+    this.act3(now, dt, here, vx, me);
     // (on screen: `h` metres over his floor — the studio's, indoors)
     const at = (x: number, y: number, h: number) => {
       const c = ctl.clientAt(x, y, h);
@@ -264,6 +380,24 @@ export class VortexFight {
           marks += `<i class="abs vxf-bullet" style="left:${p.x.toFixed(0)}px;top:${p.y.toFixed(0)}px"></i>`;
         }
     }
+    // (phase 3) "a clone?" over him and his clones a moment (which one's him, nobody's told); a popped one's *pop*;
+    // someone else possessed: at their feet
+    if (here) {
+      if (this.clonesUntil > now)
+        this.ctl.room?.state.npcs.forEach((n: { id: string; kind: string; x: number; y: number }) => {
+          if (n.kind === "vortex" && (n.id === "vortex" || n.id.startsWith("vortex:c")))
+            marks += this.mark(at(n.x, n.y, 1.75), this.tr("vx_clone"), "q");
+        });
+      this.pops = this.pops.filter((p) => now - p.at < 700);
+      for (const p of this.pops) marks += this.mark(at(p.x, p.y, 0.9), "*pop*", "pop");
+      for (const [sid, until] of this.possessed) {
+        if (until <= now) this.possessed.delete(sid);
+        else if (sid !== this.me()) {
+          const q = this.player(sid);
+          if (q && q.level === ctl.level) marks += this.mark(at(q.x, q.y, 0), this.tr("vx_possessed"));
+        }
+      }
+    }
     if (this.layer.innerHTML !== svg) this.layer.innerHTML = svg;
     if (this.marks.innerHTML !== marks) this.marks.innerHTML = marks;
 
@@ -300,6 +434,72 @@ export class VortexFight {
       this.prompt.innerHTML = `${ring(k, 22)}<span></span><span class="dk-key">${key}</span>`;
       (this.prompt.children[1] as HTMLElement).textContent = this.tr("vx_cut", { name: q.name });
     } else this.prompt.style.display = "none";
+  }
+
+  // ── (phase 3) act III on my screen ───────────────────────────────────────
+  // the lights out (his act III, him up: eased off over ~1.2 s with a flicker as they go, back on over 2 s); the
+  // shadowed he let in, smoothed; possessed — the camera turned on him; the mind games' overlays
+  private act3(
+    now: number,
+    dt: number,
+    here: boolean,
+    // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+    vx: any,
+    me: { x: number; y: number },
+  ): void {
+    const want = here && vx?.vact === 3 && (vx.vk ?? 1) > 0 ? 1 : 0;
+    if (want && !this.outK && !this.outFrom) this.outFrom = now;
+    if (!want) this.outFrom = 0;
+    this.outK = want ? Math.min(1, this.outK + dt / 1.2) : Math.max(0, this.outK - dt / 2);
+    // (going: the lights catch a few times before they die)
+    const going = this.outFrom && now - this.outFrom < 1100;
+    const flick = going && Math.sin((now - this.outFrom) * 0.045) * Math.sin((now - this.outFrom) * 0.017) > 0.2;
+    const k = flick ? this.outK * 0.3 : this.outK;
+    if (this.ctl.tp) this.ctl.tp.studioDark = k;
+
+    // the shadowed: as sent, smoothed (sent a few times a second)
+    const seen = new Set<string>();
+    this.ctl.room?.state.npcs.forEach((n: { id: string; kind: string; x: number; y: number; mood: string }) => {
+      if (n.kind !== "vshade") return;
+      seen.add(n.id);
+      let s = this.shades.get(n.id);
+      if (!s) {
+        s = { x: n.x, y: n.y, angle: 0, state: n.mood, since: now, born: now, seed: hash(n.id), speed: 0 };
+        this.shades.set(n.id, s);
+      }
+      if (s.state !== n.mood) {
+        s.state = n.mood;
+        s.since = now;
+      }
+      const e = 1 - Math.exp(-dt * 10);
+      const nx = s.x + (n.x - s.x) * e;
+      const ny = s.y + (n.y - s.y) * e;
+      const v = Math.hypot(nx - s.x, ny - s.y) / Math.max(dt, 1e-3);
+      if (v > 0.2) s.angle = Math.atan2(ny - s.y, nx - s.x);
+      s.speed = s.speed * 0.8 + v * 0.2;
+      s.x = nx;
+      s.y = ny;
+    });
+    for (const id of [...this.shades.keys()]) if (!seen.has(id)) this.shades.delete(id);
+
+    // possessed: the camera turned on him; its edge and its count
+    const tp = this.ctl.tp;
+    if (this.possessUntil > now) {
+      if (tp && vx) {
+        const want = Math.atan2(vx.y - me.y, vx.x - me.x);
+        const d = Math.atan2(Math.sin(want - tp.yaw), Math.cos(want - tp.yaw));
+        tp.yaw += d * Math.min(1, dt * 5);
+      }
+      this.possessEl.style.display = "block";
+      this.possessEl.innerHTML = `<b>${this.tr("vx_legs")}</b><i>${secs(this.possessUntil - now)}</i>`;
+    } else this.possessEl.style.display = "none";
+    // the glitch: the screen's lines, a band slipping, the HUD jittering; its count
+    const g = this.glitchUntil > now;
+    document.documentElement.classList.toggle("vx-glitching", g);
+    if (g) {
+      this.glitchEl.style.display = "block";
+      this.glitchEl.innerHTML = `<i class="band"></i><b>*kkzzt*</b><span>${this.tr("vx_inverted", { s: secs(this.glitchUntil - now) })}</span>`;
+    } else this.glitchEl.style.display = "none";
   }
 
   // ── bits ─────────────────────────────────────────────────────────────────
@@ -375,6 +575,12 @@ export class VortexFight {
 }
 
 const secs = (ms: number) => String(Math.max(0, Math.ceil(ms / 1000)));
+// (a shadowed's look from its id: the same for everyone)
+const hash = (s: string) => {
+  let h = 7;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+};
 
 function ring(k: number, size: number): string {
   const r = size / 2 - 2;
@@ -424,5 +630,20 @@ export const VORTEX_CSS = `
 .vxf.rewinding::after{content:"";position:fixed;inset:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 2px,transparent 2px 4px);animation:vxroll .25s linear infinite}
 @keyframes vxroll{to{background-position:0 8px}}
 .vxf-flash{position:fixed;inset:0;opacity:0;background:radial-gradient(ellipse at center,transparent 40%,rgba(255,45,149,.5) 100%);transition:opacity .8s ease-out}
+.vxf-mark.q{color:#ffd6ee;text-shadow:0 0 10px rgba(255,45,149,.7)}
+.vxf-mark.pop{background:none;color:#fff0f7;font-size:18px;letter-spacing:.04em;text-shadow:0 0 12px var(--pink)}
+.vxf-turn{position:fixed;inset:0;opacity:0;background:radial-gradient(ellipse at center,rgba(120,0,30,.15),rgba(40,0,10,.85) 75%)}
+.vxf-turn.on{animation:vxturn 1.6s ease-out}
+@keyframes vxturn{0%{opacity:0}12%{opacity:1}30%{opacity:.3}42%{opacity:.9}100%{opacity:0}}
+.vxf-possess{position:fixed;inset:0;background:radial-gradient(ellipse at center,transparent 35%,rgba(120,0,90,.65) 100%);text-align:center}
+.vxf-possess b{position:absolute;left:0;right:0;top:38%;font:600 34px/1.1 var(--font-title);letter-spacing:.2em;color:#ffd6ee;text-shadow:0 0 16px var(--pink)}
+.vxf-possess i{position:absolute;left:0;right:0;top:calc(38% + 48px);font:400 40px/1 var(--font-mono);font-style:normal;color:#fff;text-shadow:2px 0 rgba(255,0,80,.75),-2px 0 rgba(0,200,255,.75)}
+.vxf-glitch{position:fixed;inset:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.28) 0 2px,transparent 2px 4px);mix-blend-mode:normal}
+.vxf-glitch .band{position:absolute;left:0;right:0;top:34%;height:40px;background:rgba(255,255,255,.12);animation:vxband .9s steps(6) infinite}
+@keyframes vxband{0%{transform:translate(30px,0)}50%{transform:translate(-24px,120px)}100%{transform:translate(18px,-80px)}}
+.vxf-glitch b{position:absolute;left:26%;top:15%;font:400 56px/1 var(--font-mono);font-weight:400;color:#fff;text-shadow:3px 0 rgba(255,0,80,.75),-3px 0 rgba(0,200,255,.75)}
+.vxf-glitch span{position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap;bottom:150px;font:400 28px/1 var(--font-mono);color:#fff;text-shadow:2px 0 rgba(255,0,80,.75),-2px 0 rgba(0,200,255,.75)}
+.vx-glitching .dk-col,.vx-glitching .vxf-boss{animation:vxjit .16s steps(2) infinite}
+@keyframes vxjit{0%{translate:0 0}50%{translate:-6px 3px}100%{translate:5px -2px}}
 @media (max-width:639px){.vxf-slips{left:12px;right:12px;top:150px;align-items:center}.vxf-boss h1{font-size:18px}}
 `;

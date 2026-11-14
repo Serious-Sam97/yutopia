@@ -215,6 +215,7 @@ class Dark implements DarkHooks {
     this.downs = new Down(ctl, walker, this.root, () => !!this.inv && count(this.inv, "aid") > 0, t);
     // (plan 88) the fight with Vortex: his cassette, his moves on my screen
     this.vxf = new VortexFight(ctl, walker, this.root, t);
+    this.shades.more = this.vxf.shadeBodies;
     // the inventory (I, the pad's Menu): its asks go to the server, or to the guns
     this.panel = new InventoryPanel(
       ctl,
@@ -371,6 +372,9 @@ class Dark implements DarkHooks {
   frozen(): boolean {
     // (or taped up by Vortex, or made to dance)
     return this.panel.open || this.vxf.frozen();
+  }
+  steer(move: Parameters<DarkHooks["steer"]>[0]): void {
+    this.vxf.steer(move);
   }
   use(): boolean {
     // someone down by me to get up, or my own first aid down: held; a friend taped up, cut free (held)

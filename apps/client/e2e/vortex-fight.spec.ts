@@ -1,5 +1,5 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
-import { expect, type Page } from "@playwright/test";
+import { type Browser, expect, type Page } from "@playwright/test";
 import { ANA, BIA, enter, test, token } from "./helpers";
 
 // The fight with Vortex (docs/plan/88-vortex-fight.md phase 2), Ana and Bia in the studio's reception. Ana shoots
@@ -54,9 +54,8 @@ const vxSeen = async (p: Page) => {
   });
 };
 
-test("the fight with Vortex, acts I–II: his cassette, each move on Ana — as both see it", async ({ page, browser }) => {
-  test.skip(!GPU, "needs the GPU: YUTOPIA_GPU=1");
-  test.setTimeout(300_000);
+// both in the studio's lobby, his fight reset and him held ahead of Ana, by day; the stills, both screens
+async function two(page: Page, browser: Browser) {
   await prefs(page);
   await enter(page, await token(ANA));
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -93,6 +92,13 @@ test("the fight with Vortex, acts I–II: his cassette, each move on Ana — as 
     await bia.screenshot({ path: `${shots}/vx-${name}-bias.png` });
   };
 
+  return { bia, ctx, home, anaSid, still };
+}
+
+test("the fight with Vortex, acts I–II: his cassette, each move on Ana — as both see it", async ({ page, browser }) => {
+  test.skip(!GPU, "needs the GPU: YUTOPIA_GPU=1");
+  test.setTimeout(300_000);
+  const { bia, ctx, home, anaSid, still } = await two(page, browser);
   // Ana: the revolver out, facing him, aimed, a shot — hit; his cassette on both screens, act I; her slip
   await page.bringToFront();
   front = page;
@@ -211,5 +217,152 @@ test("the fight with Vortex, acts I–II: his cassette, each move on Ana — as 
   }
   await still("down");
   await w(page, (y) => y.room.send("mod:vortex", { reset: true, hold: false }));
+  await ctx.close();
+});
+
+// (phase 3) Act III, Ana and Bia in the lobby by day: into it — the lights out on both screens (Ana's torch what's
+// left), his look gone dark, the shadowed drawn on both; his clones ("a clone?" on both); possessed — her legs walked
+// to him, Bia's mark; the glitch — her move the other way round; his blows, unheld beside her, till she's down — Bia
+// holds E and gets her up; beaten — the lights back.
+test("the fight with Vortex, act III: the lights out, the shadowed, clones, the mind games, down and up", async ({
+  page,
+  browser,
+}) => {
+  test.skip(!GPU, "needs the GPU: YUTOPIA_GPU=1");
+  test.setTimeout(300_000);
+  const { bia, ctx, anaSid, still } = await two(page, browser);
+  const dark = (p: Page) => w(p, (y) => y.tp.studioDark as number);
+  await page.bringToFront();
+  front = page;
+  await page.keyboard.press("Digit2");
+  await expect
+    .poll(() => w(page, (y) => y.room.state.players.get(y.room.sessionId).gun), { timeout: 10_000 })
+    .toBe("revolver");
+  await w(page, (y) => {
+    y.tp.yaw = 0;
+    y.tp.pitch = 0.08;
+  });
+  await page.mouse.move(640, 400);
+  await page.mouse.down({ button: "right" });
+  await page.waitForTimeout(1200);
+  await page.mouse.down({ button: "left" });
+  await page.mouse.up({ button: "left" });
+  await page.mouse.up({ button: "right" });
+  await expect.poll(() => w(page, (y) => y.room.state.npcs.get("vortex").vk), { timeout: 8000 }).toBeLessThan(1);
+  // her torch on (1: the left hand)
+  await page.keyboard.press("Digit1");
+  await expect
+    .poll(() => w(page, (y) => !!y.room.state.players.get(y.room.sessionId).torch), { timeout: 8000 })
+    .toBe(true);
+
+  // act III: the lights out on both screens, his act; the shadowed let in, drawn on both
+  await w(page, (y) => y.room.send("mod:vortex", { act: 3 }));
+  for (const p of [page, bia]) {
+    await expect.poll(() => vxSeen(p).then((s) => s.act), { timeout: 8000 }).toContain("act III");
+    await expect.poll(() => vxSeen(p).then(() => dark(p)), { timeout: 8000 }).toBeGreaterThan(0.95);
+    await expect
+      .poll(() => p.evaluate(() => (window as any).__dark.vxf.shadeBodies().length), { timeout: 8000 })
+      .toBeGreaterThan(0);
+  }
+  await page.waitForTimeout(1500);
+  await still("act3");
+
+  // his clones: "a clone?" over the three of them, on both
+  await w(page, (y) => y.room.send("mod:vortex", { move: "clones" }));
+  for (const p of [page, bia])
+    await expect.poll(() => vxSeen(p).then((s) => s.marks), { timeout: 8000 }).toContain("a clone?");
+  await still("clones");
+
+  // possessed: her edge and its count; walked towards him; Bia's mark
+  const dist = () =>
+    w(page, (y) => {
+      const v = y.room.state.npcs.get("vortex");
+      const m = y.walker.where();
+      return Math.hypot(v.x - m.x, v.y - m.y);
+    }) as Promise<number>;
+  await w(page, (y) => y.room.send("mod:vortex", { at: { x: 12.5, y: 26.5 } }));
+  await page.waitForTimeout(400);
+  const d0 = await dist();
+  await page.evaluate((s) => (window as any).__yutopia.room.send("mod:vortex", { move: "possess", to: s }), anaSid);
+  await expect
+    .poll(() => page.evaluate(() => (document.querySelector(".vxf-possess") as HTMLElement).style.display), {
+      timeout: 8000,
+    })
+    .toBe("block");
+  await expect.poll(() => vxSeen(bia).then((s) => s.marks), { timeout: 8000 }).toContain("possessed");
+  await still("possess");
+  await bia.waitForTimeout(400);
+  await page.bringToFront();
+  front = page;
+  await page.waitForTimeout(1500);
+  expect(await dist(), "walked to him").toBeLessThan(d0 - 0.5);
+
+  // the glitch: her move the other way round; its lines (after possession's rest: on her the next mind game waits)
+  await page.waitForTimeout(9000);
+  await page.evaluate((s) => (window as any).__yutopia.room.send("mod:vortex", { move: "glitch", to: s }), anaSid);
+  await expect
+    .poll(() => page.evaluate(() => (document.querySelector(".vxf-glitch") as HTMLElement).style.display), {
+      timeout: 8000,
+    })
+    .toBe("block");
+  const turned = await page.evaluate(() => {
+    const m = { x: 1, y: 0.5, sprint: false, aim: false, jump: false, jumpPressed: false };
+    (window as any).__dark.vxf.steer(m);
+    return m;
+  });
+  expect(turned.x).toBe(-1);
+  expect(turned.y).toBe(-0.5);
+  await still("glitch");
+
+  // unheld beside her: his blows (and theirs) till she's down; Bia by her holds E — up
+  await page.evaluate(() => {
+    const y = (window as any).__yutopia;
+    const m = y.walker.where();
+    y.room.send("mod:vortex", { hold: false, at: { x: m.x + 1.2, y: m.y } });
+  });
+  await expect
+    .poll(() => w(page, (y) => y.room.state.players.get(y.room.sessionId).downAt), { timeout: 40_000 })
+    .toBeGreaterThan(0);
+  // (him held away, that she's got up)
+  await w(page, (y) => y.room.send("mod:vortex", { hold: true, at: { x: 12.5, y: 23 } }));
+  await bia.evaluate((s) => {
+    const y = (window as any).__yutopia;
+    const a = y.room.state.players.get(s);
+    y.teleport({ x: a.x - 0.6, y: a.y + 0.6, level: y.level });
+  }, anaSid);
+  await bia.bringToFront();
+  front = bia;
+  await bia.waitForTimeout(800);
+  await still("down");
+  // (held; again if it didn't take — a blow still landing as she went down stops the first)
+  // (got up: that down over — the shadowed still by her may put her down again at once, a new one)
+  const downAt = (await w(page, (y) => y.room.state.players.get(y.room.sessionId).downAt)) as number;
+  const up = () =>
+    w(page, (y) => y.room.state.players.get(y.room.sessionId).downAt).then((d) => d !== downAt) as Promise<boolean>;
+  for (let i = 0; i < 3 && !(await up()); i++) {
+    await bia.keyboard.down("KeyE");
+    // (Bia's hands on her — the server's word: a revive, not the bleeding running out)
+    if (i === 0) {
+      const biaSid = (await bia.evaluate(() => (window as any).__yutopia.room.sessionId)) as string;
+      await expect
+        .poll(() => w(page, (y) => y.room.state.players.get(y.room.sessionId).revBy), { timeout: 3000 })
+        .toBe(biaSid);
+    }
+    await expect
+      .poll(up, { timeout: 6000 })
+      .toBe(true)
+      .catch(() => {});
+    await bia.keyboard.up("KeyE");
+  }
+  expect(await up(), "Bia got her up").toBe(true);
+
+  // beaten: the lights back
+  await w(page, (y) => y.room.send("mod:vortex", { beat: true }));
+  for (const p of [page, bia])
+    await expect.poll(() => vxSeen(p).then(() => dark(p)), { timeout: 10_000 }).toBeLessThan(0.05);
+  await w(page, (y) => {
+    y.room.send("mod:vortex", { reset: true, hold: false });
+    y.room.send("mod:heal", {});
+  });
   await ctx.close();
 });

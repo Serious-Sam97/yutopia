@@ -192,7 +192,7 @@ export class Shroud3 {
   }
 
   /** Every frame: the shadowed in view (their feet, their shroud), the camera, the night (0..1). */
-  update(list: ShroudIn[], cam: Camera, dt: number, night: number, tall: number, px: number): void {
+  update(list: ShroudIn[], cam: Camera, dt: number, night: number, tall: number, px: number, dim = 1): void {
     this.time += dt;
     (this.smoke.material as ShaderMaterial).uniforms.scale.value = px;
     (this.embers.material as ShaderMaterial).uniforms.scale.value = px;
@@ -208,7 +208,8 @@ export class Shroud3 {
     st.fill(0);
     et.fill(0);
     // (smoke is near black; a touch lighter by day, or it reads as holes)
-    const shade = 0.03 + 0.08 * (1 - night);
+    // (and in a room with its lights out — plan 88 — darker still: smoke can't be darker than the room round it)
+    const shade = (0.03 + 0.08 * (1 - night)) * dim;
     let rung = 0;
     for (const s of list) {
       const height = s.h ?? tall;

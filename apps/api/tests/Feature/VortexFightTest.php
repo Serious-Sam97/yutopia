@@ -8,12 +8,12 @@ use App\Services\Vortex;
 
 test('the fight has its own lines, public, by event', function () {
     $v = app(Vortex::class);
-    foreach (['hit', 'dodge', 'whip', 'rew', 'pause', 'steal', 'blast'] as $event) {
+    foreach (['hit', 'dodge', 'whip', 'rew', 'pause', 'steal', 'blast', 'dark', 'clones', 'shades', 'possess', 'glitch'] as $event) {
         expect(Vortex::EVENTS)->toContain($event);
         $r = $v->line($event);
         expect($r['line'])->toBeString()->not->toBeEmpty();
         expect($r['personal'])->toBeFalse();
-        expect($r['mood'])->toBeIn(['judging', 'malicious']);
+        expect($r['mood'])->toBeIn(['judging', 'malicious', 'possessed']);
     }
 });
 

@@ -222,6 +222,8 @@ export interface DarkHooks {
   slotKey(n: number): void;
   /** the inventory open: I stand still, and don't aim */
   frozen(): boolean;
+  /** (plan 88 act III) my move as Vortex has it: possessed — walked to him; the glitch — the other way round */
+  steer(move: { x: number; y: number; sprint: boolean; aim: boolean; jump: boolean; jumpPressed: boolean }): void;
   /** the frame's pad presses, before the world has them: taken ones are deleted (Y while aiming
    *  is the next weapon, not the camera) */
   presses(p: Set<Press>, aiming: boolean): void;
@@ -513,6 +515,7 @@ export class Walker {
       move.crouch = crouched;
       for (const p of [...presses]) if (p !== "inventory") presses.delete(p);
     }
+    if (!frozen) this.dark?.steer(move);
     const manual = Math.hypot(move.x, move.y) > 0.05;
     const path = manual || frozen ? null : c.path;
     move.faceLook = c.faceLook;

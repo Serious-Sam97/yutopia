@@ -335,7 +335,8 @@ registerFeature((room: WorldRoom) => {
       const ray = { x: ox, y: oy, z: oz, ...dir };
       const who = personAlong(p, ray, gun.range, seenPeople);
       // (plan 88) Vortex: nearer than whoever's along it, he takes it — a wall on the way, it stops there
-      const vt = room.vortex?.along(p.level, ray, who ? who.t : gun.range) ?? null;
+      const va = room.vortex?.along(p.level, ray, who ? who.t : gun.range) ?? null;
+      const vt = va?.t ?? null;
       // the shadowed (out on the land): one nearer than whoever's along it takes it
       const hit =
         p.level === 0 ? room.dark?.shoot(ray, vt ?? (who ? who.t : gun.range), seenAt, shadeDamage, now) : null;
@@ -347,8 +348,8 @@ registerFeature((room: WorldRoom) => {
         const d = rayDir(ray.yaw, ray.pitch);
         const at = { x: ox + d.x * vt, y: oy + d.y * vt, z: oz + d.z * vt };
         if (!(room.sight?.(p.level, { x: ox, y: oy, z: oz }, at) ?? true)) continue;
-        room.vortex?.hit(client.sessionId, damageAt(id, gun.damage, vt, false), now);
-        room.send(client, "arms:hit", { id: "vortex", kind: "vortex", head: false, ...at });
+        room.vortex?.hit(client.sessionId, damageAt(id, gun.damage, vt, false), now, va?.id);
+        room.send(client, "arms:hit", { id: va?.id ?? "vortex", kind: "vortex", head: false, ...at });
         continue;
       }
       if (!who) continue;
@@ -428,13 +429,12 @@ registerFeature((room: WorldRoom) => {
     room.dark?.blast(x, y, z, o.level, ARMS.daybreak.damage, now, (hit) => {
       if (sc) room.send(sc, "arms:hit", hit);
     });
-    // (plan 88) Vortex caught in it: as the shadowed are
-    const v = room.vortex?.near(o.level, x, y, z, 2) ? room.vortex.at() : null;
-    if (v) {
+    // (plan 88) Vortex (and his clones, the shadowed he let in) caught in it: as the shadowed are
+    for (const v of room.vortex?.caught(o.level, x, y, z, 2) ?? []) {
       const n = burstAt(ARMS.daybreak.damage, Math.hypot(v.x - x, v.y - y, v.z - z));
       if (n > 0) {
-        room.vortex?.hit(o.sid, n, now);
-        if (sc) room.send(sc, "arms:hit", { id: "vortex", kind: "vortex", head: false, ...v });
+        room.vortex?.hit(o.sid, n, now, v.id);
+        if (sc) room.send(sc, "arms:hit", { id: v.id, kind: "vortex", head: false, x: v.x, y: v.y, z: v.z });
       }
     }
     for (const q of room.state.players.values()) {

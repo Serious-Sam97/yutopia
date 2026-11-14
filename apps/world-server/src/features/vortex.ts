@@ -49,26 +49,60 @@ const OFFLINE_FIGHT: Record<string, string> = {
   steal: "confiscated. you'll get it back at the end of the term.",
   blast: "this song slaps. so does the volume.",
   hr: "reported to hr. sit in reception and think about what you did.",
+  dark: "the lights were never yours.",
+  clones: "which one's me? *kkzzt* trick question. all of them. none of them.",
+  shades: "i brought friends. they don't like the light either.",
+  possess: "your legs are on loan. i'm calling it in.",
+  glitch: "*kkzzt* up is down. left is a rumour.",
 };
 
 type Mode = "idle" | "wander" | "stalk" | "dance" | "sleep";
 
-/** (plan 88) The fight with him, as features/arms.ts asks: a shot's line, a ball's burst, a hit. */
+/** (plan 88) The fight with him, as features/arms.ts asks: a shot's line, a ball's burst, a hit. (Act III: his
+ *  clones and the shadowed he brings in are hit as he is — `id` says which: "vortex" is him.) */
 export interface VortexHooks {
-  /** how far along a shot from `level` he is (m), or null — not his floor, down or away, not on its line */
-  along(level: number, ray: Ray, range: number): number | null;
-  /** a Daybreak ball here (`level`'s floor; z over it): close enough to burst on him */
+  /** the nearest of him (and his) a shot from `level` meets: how far along (m), which — or null */
+  along(level: number, ray: Ray, range: number): { t: number; id: string } | null;
+  /** a Daybreak ball here (`level`'s floor; z over it): close enough to burst on him (or his) */
   near(level: number, x: number, y: number, z: number, r: number): boolean;
-  /** where he is: his floor's x, y; z his middle over it */
-  at(): { x: number; y: number; z: number };
-  /** shot by `sid`, `n` (as the shadowed take it) */
-  hit(sid: string, n: number, now: number): void;
+  /** all of him (and his) within `r` of a burst there: which, and their middle */
+  caught(level: number, x: number, y: number, z: number, r: number): { id: string; x: number; y: number; z: number }[];
+  /** shot by `sid`, `n` (as the shadowed take it); `id`: which was hit (him by default) */
+  hit(sid: string, n: number, now: number, id?: string): void;
   /** (phase 2) taped up by his whip (no steps, no shots) — till a friend cuts them free */
   bound(sid: string): boolean;
 }
-/** (plan 88 phase 2) his act II moves */
+/** (plan 88 phase 2) his act II moves; (phase 3) act III's — the dark's and the mind games */
 export type VortexMove = "whip" | "rew" | "pause" | "steal" | "radio" | "hr";
+export type VortexMove3 = "clones" | "shades" | "possess" | "glitch";
 const MOVES: VortexMove[] = ["whip", "rew", "pause", "steal", "radio", "hr"];
+const MOVES3: VortexMove3[] = ["clones", "shades", "possess", "glitch"];
+// act III's numbers: his pace; his blow (how near, how hard, how often); a move every 5–8 s; his clones (how
+// many, how long, how fast); the shadowed he brings in (at most, how long, how fast, their reach, their wind-up,
+// their blow, their rest after); the mind games (how long; one person's next not before this after)
+const MV3 = {
+  speed: 5.2,
+  strikeR: 1.9,
+  strike: 30,
+  strikeEvery: 1800,
+  every: 5000,
+  jitter: 3000,
+  clones: 2,
+  cloneLife: 12_000,
+  cloneSpeed: 3.4,
+  shades: 3,
+  shadeLife: 25_000,
+  shadeSpeed: 2.6,
+  shadeR: 1.0,
+  windup: 600,
+  shadeHit: 20,
+  recover: 1200,
+  possess: 3000,
+  glitch: 4000,
+  mindGap: 8000,
+} as const;
+// the shadowed's body (as a person's) for a shot
+const SHADE_H = 1.8;
 // the moves' numbers: the lash's flight and how long it binds; REW's 5 s; PAUSE's; the blast's dance and how near;
 // HR's timeout (their shots ignored); how far he reaches; act II's pace (a move every 6–9 s); a taunt's spacing
 const MV = {
@@ -134,6 +168,22 @@ registerFeature((room: WorldRoom) => {
   // (taped up till then, by session — the Player schema is at its 64 fields; the clients have it by vortex:move)
   const boundTill = new Map<string, number>();
   const isBound = (sid: string, now = Date.now()) => (boundTill.get(sid) ?? 0) > now;
+  // (phase 3) act III: his clones and the shadowed he brings in (Npcs of their own: "vortex:c…" drawn as him,
+  // "vortex:s…" kind vshade, `mood` their state), his next blow, the mind games' rest by person
+  interface Minion {
+    npc: Npc;
+    kind: "clone" | "shade";
+    until: number;
+    state: string;
+    at: number;
+    to: string; // (whom it's after)
+    path: Point[];
+    pathAt: number;
+  }
+  const minions = new Map<string, Minion>();
+  let minionN = 0;
+  let nextStrike = 0;
+  const mindTill = new Map<string, number>();
   let lastTaunt = 0;
   const toAll = (m: ServerMessages["vortex:move"]) => room.broadcastMsg("vortex:move", m);
   const tell = (now: number) => {
@@ -159,8 +209,11 @@ registerFeature((room: WorldRoom) => {
     paused.clear();
     hrTill.clear();
     boundTill.clear();
+    clearMinions();
+    mindTill.clear();
   };
   const beaten = (by: Player, now: number) => {
+    clearMinions();
     fallAt = now;
     path = [];
     mode = "idle";
@@ -172,6 +225,37 @@ registerFeature((room: WorldRoom) => {
     for (const c of room.clients as WorldClient[]) room.send(c, "vortex:down", { by: by.name, secs });
   };
   const hittable = () => !fallAt && !npc.vgone;
+  // what a shot can meet: him, his clones (as big as he is), the shadowed he let in (a person's size)
+  const bodies = () => [
+    { id: "vortex", x: npc.x, y: npc.y, z0: VORTEX_FIGHT.z0, r: VORTEX_FIGHT.r, h: VORTEX_FIGHT.h },
+    ...[...minions.entries()]
+      .filter(([, m]) => m.state !== "dissolve")
+      .map(([id, m]) =>
+        m.kind === "clone"
+          ? { id, x: m.npc.x, y: m.npc.y, z0: VORTEX_FIGHT.z0, r: VORTEX_FIGHT.r, h: VORTEX_FIGHT.h }
+          : { id, x: m.npc.x, y: m.npc.y, z0: 0, r: BODY.r + 0.1, h: SHADE_H },
+      ),
+  ];
+  const clearMinions = () => {
+    for (const id of minions.keys()) room.state.npcs.delete(id);
+    minions.clear();
+  };
+  // the act as his health has it; into act III — the transformation, the lights out (the clients, by `vact`),
+  // the shadowed let in
+  const setAct = (a: Act, now: number) => {
+    const was = fight.act;
+    fight.act = a;
+    npc.vact = a;
+    npc.mood = ACT_MOOD[a];
+    for (const m of minions.values()) if (m.kind === "clone") m.npc.mood = npc.mood;
+    if (a === 3 && was < 3) {
+      toAll({ kind: "dark" });
+      taunt("dark", now);
+      nextStrike = now + 2500;
+      nextMove = now + 2500;
+      shadesIn(now, 2);
+    }
+  };
 
   // ── (phase 2) his moves: on whom (the ones in the fight, on his floor, near, up, free, not in HR's timeout) ──
   const fighters = (now: number) =>
@@ -316,6 +400,202 @@ registerFeature((room: WorldRoom) => {
     }
   };
   // shot in act I or later: now and then a side-step, away from the line (where there's floor)
+  // ── (phase 3) act III ──
+  const spawnMinion = (kind: Minion["kind"], x: number, y: number, now: number, life: number, to: string) => {
+    const n = new Npc();
+    n.id = `vortex:${kind === "clone" ? "c" : "s"}${++minionN}`;
+    n.kind = kind === "clone" ? "vortex" : "vshade";
+    n.x = x;
+    n.y = y;
+    n.level = -1;
+    n.mood = kind === "clone" ? npc.mood : "emerge";
+    n.vact = kind === "clone" ? npc.vact : 0;
+    n.vk = npc.vk;
+    room.state.npcs.set(n.id, n);
+    minions.set(n.id, { npc: n, kind, until: now + life, state: n.mood, at: now, to, path: [], pathAt: 0 });
+    return n;
+  };
+  // an open spot `r` from (x, y), round it from a random start
+  const spotAround = (x: number, y: number, r: number) => {
+    const a0 = Math.random() * Math.PI * 2;
+    for (let i = 0; i < 10; i++) {
+      const a = a0 + (i * Math.PI * 2) / 10;
+      const q = { x: x + Math.cos(a) * r, y: y + Math.sin(a) * r };
+      if (room.grid.fits(q.x, q.y) && room.wayFor(null, room.home, { x, y }, q)?.length) return q;
+    }
+    return null;
+  };
+  // his clones: two of him beside him, and the three shuffled — which one's real nobody knows
+  const clones = (now: number) => {
+    const spots = [0, 1].map(() => spotAround(npc.x, npc.y, 2.4)).filter((q): q is Point => !!q);
+    if (!spots.length) return false;
+    const foes = fighters(now);
+    const made = spots.map((q, i) =>
+      spawnMinion("clone", q.x, q.y, now, MV3.cloneLife, foes[i % Math.max(1, foes.length)]?.sid ?? ""),
+    );
+    const swap = Math.floor(Math.random() * (made.length + 1));
+    if (swap < made.length) {
+      const c = made[swap];
+      [npc.x, npc.y, c.x, c.y] = [c.x, c.y, npc.x, npc.y];
+      path = [];
+    }
+    toAll({ kind: "clones", n: made.length });
+    taunt("clones", now);
+    return true;
+  };
+  // the shadowed let in: at the edges of where the fight is (6–9 m from one of them), after the nearest
+  function shadesIn(now: number, n: number) {
+    const have = [...minions.values()].filter((m) => m.kind === "shade").length;
+    const foes = fighters(now);
+    let made = 0;
+    for (let i = 0; i < Math.min(n, MV3.shades - have) && foes.length; i++) {
+      const f = foes[i % foes.length];
+      const q = spotAround(f.x, f.y, 6 + Math.random() * 3);
+      if (!q) continue;
+      spawnMinion("shade", q.x, q.y, now, MV3.shadeLife, f.sid);
+      made++;
+    }
+    if (made) toAll({ kind: "shades", n: made });
+    return made > 0;
+  }
+  // a mind game on one of them (possession: the one who's shot him most; the glitch: anyone) — a few
+  // seconds, never two at once on one person
+  const mind = (kind: "possess" | "glitch", now: number, on?: Player) => {
+    const free = (p: Player) => (mindTill.get(p.sid) ?? 0) < now;
+    let p = on && free(on) ? on : undefined;
+    if (!p) {
+      const foes = fighters(now).filter(free);
+      if (!foes.length) return false;
+      if (kind === "possess") {
+        const hits = (q: Player) => fight.who.get(q.uid)?.hits ?? 0;
+        p = foes.sort((a, b) => hits(b) - hits(a))[0];
+      } else p = foes[Math.floor(Math.random() * foes.length)];
+    }
+    const ms = kind === "possess" ? MV3.possess : MV3.glitch;
+    mindTill.set(p.sid, now + ms + MV3.mindGap);
+    toAll({ kind, to: p.sid, ms });
+    taunt(kind, now);
+    return true;
+  };
+  const move3 = (kind: VortexMove3, now: number, on?: Player) =>
+    kind === "clones" ? clones(now) : kind === "shades" ? shadesIn(now, 2) : mind(kind, now, on);
+  // a blow, his or one of the shadowed's: hurt (to the ground at nothing — a friend gets them up), thrown from it
+  const strike = (p: Player, from: { x: number; y: number }, n: number, id: string, now: number) => {
+    room.survival?.hurt(p.sid, n);
+    p.hitAt = now;
+    p.hitYaw = Math.atan2(from.y - p.y, from.x - p.x);
+    const c = clientOf(p);
+    if (c) room.send(c, "dark:hit", { id, n });
+    toAll({ kind: "strike", to: p.sid, from });
+  };
+  // a step of one of his towards (x, y): straight where it can, else along the way there
+  const stepTo = (m: Minion, to: Point, speed: number, dt: number, now: number) => {
+    const n = m.npc;
+    const d = Math.hypot(to.x - n.x, to.y - n.y);
+    if (d < 0.05) return;
+    const k = Math.min(1, (speed * dt) / d);
+    const nx = n.x + (to.x - n.x) * k;
+    const ny = n.y + (to.y - n.y) * k;
+    if (room.grid.fits(nx, ny) && !m.path.length) {
+      n.x = nx;
+      n.y = ny;
+    } else {
+      if (!m.path.length || now - m.pathAt > 1000) {
+        m.path = room.wayFor(null, room.home, n, to) ?? [];
+        m.pathAt = now;
+      }
+      const wp = m.path[0];
+      if (!wp) return;
+      const dw = Math.hypot(wp.x - n.x, wp.y - n.y);
+      const kw = Math.min(1, (speed * dt) / Math.max(dw, 1e-3));
+      n.x += (wp.x - n.x) * kw;
+      n.y += (wp.y - n.y) * kw;
+      if (dw <= speed * dt) m.path.shift();
+    }
+    n.yaw = faceByte(to.x - n.x, to.y - n.y, n.yaw);
+    n.a = ANIM.walk;
+  };
+  // his and theirs, each tick: clones walk after one of them; the shadowed stalk, wind up, strike, rest; their
+  // time up — gone (the shadowed dissolve)
+  const minionsTick = (dt: number, now: number) => {
+    const foes = fighters(now);
+    for (const [id, m] of minions) {
+      const n = m.npc;
+      if (m.state === "dissolve") {
+        if (now - m.at > 800) {
+          room.state.npcs.delete(id);
+          minions.delete(id);
+        }
+        continue;
+      }
+      if (now > m.until) {
+        if (m.kind === "clone") {
+          toAll({ kind: "pop", from: { x: n.x, y: n.y } });
+          room.state.npcs.delete(id);
+          minions.delete(id);
+        } else {
+          m.state = n.mood = "dissolve";
+          m.at = now;
+        }
+        continue;
+      }
+      // whom it's after: theirs if still in it, else the nearest
+      let t = foes.find((p) => p.sid === m.to);
+      if (!t && foes.length) {
+        t = foes.reduce((a, b) => (Math.hypot(a.x - n.x, a.y - n.y) < Math.hypot(b.x - n.x, b.y - n.y) ? a : b));
+        m.to = t.sid;
+      }
+      if (m.kind === "clone") {
+        if (t && Math.hypot(t.x - n.x, t.y - n.y) > 2.2) stepTo(m, t, MV3.cloneSpeed, dt, now);
+        else n.a = ANIM.idle;
+        continue;
+      }
+      if (m.state === "emerge" && now - m.at > 800) m.state = n.mood = "stalk";
+      if (!t) {
+        n.a = ANIM.idle;
+        continue;
+      }
+      const d = Math.hypot(t.x - n.x, t.y - n.y);
+      if (m.state === "stalk") {
+        if (d > MV3.shadeR) stepTo(m, t, MV3.shadeSpeed, dt, now);
+        else {
+          m.state = n.mood = "windup";
+          m.at = now;
+          n.a = ANIM.idle;
+          n.yaw = faceByte(t.x - n.x, t.y - n.y, n.yaw);
+        }
+      } else if (m.state === "windup" && now - m.at >= MV3.windup) {
+        m.state = n.mood = "strike";
+        m.at = now;
+        // (stepped out of its reach while it wound up: missed)
+        if (d <= MV3.shadeR + 0.5) strike(t, n, MV3.shadeHit, id, now);
+      } else if (m.state === "strike" && now - m.at > 300) {
+        m.state = n.mood = "recover";
+        m.at = now;
+      } else if (m.state === "recover" && now - m.at > MV3.recover) m.state = n.mood = "stalk";
+    }
+  };
+  // his own blow in act III: the nearest of them in reach, every couple of seconds
+  const blow = (now: number) => {
+    if (now < nextStrike) return;
+    const p = fighters(now)
+      .filter((q) => Math.hypot(q.x - npc.x, q.y - npc.y) <= MV3.strikeR)
+      .sort((a, b) => Math.hypot(a.x - npc.x, a.y - npc.y) - Math.hypot(b.x - npc.x, b.y - npc.y))[0];
+    if (!p) return;
+    nextStrike = now + MV3.strikeEvery;
+    npc.yaw = faceByte(p.x - npc.x, p.y - npc.y, npc.yaw);
+    strike(p, npc, MV3.strike, "vortex", now);
+  };
+  // act III's pace: one of the dark's or the mind games now and then — or a tape trick still
+  const autoMove3 = (now: number) => {
+    const order = [...MOVES3, "whip", "rew"].sort(() => Math.random() - 0.5) as (VortexMove3 | VortexMove)[];
+    const who = fighters(now);
+    for (const k of order) {
+      if (k === "whip" || k === "rew") {
+        if (who.some((p) => move(k, p, now))) return;
+      } else if (move3(k as VortexMove3, now)) return;
+    }
+  };
   const sidestep = (p: Player) => {
     const dx = npc.x - p.x;
     const dy = npc.y - p.y;
@@ -336,21 +616,40 @@ registerFeature((room: WorldRoom) => {
   room.vortex = {
     along(level, ray, range) {
       if (level !== room.home || !hittable()) return null;
-      return rayMeets(ray, npc.x, npc.y, VORTEX_FIGHT.z0, range, VORTEX_FIGHT.r - BODY.r, VORTEX_FIGHT.h);
+      let best: { t: number; id: string } | null = null;
+      for (const b of bodies()) {
+        const t = rayMeets(ray, b.x, b.y, b.z0, best ? best.t : range, b.r - BODY.r, b.h);
+        if (t !== null && (!best || t < best.t)) best = { t, id: b.id };
+      }
+      return best;
     },
     near(level, x, y, z, r) {
-      if (level !== room.home || !hittable()) return false;
-      return (
-        Math.hypot(npc.x - x, npc.y - y) < r + VORTEX_FIGHT.r &&
-        z > VORTEX_FIGHT.z0 - 0.2 &&
-        z < VORTEX_FIGHT.z0 + VORTEX_FIGHT.h + 0.2
-      );
+      return this.caught(level, x, y, z, r).length > 0;
     },
-    at: () => ({ x: npc.x, y: npc.y, z: VORTEX_FIGHT.z0 + VORTEX_FIGHT.h / 2 }),
+    caught(level, x, y, z, r) {
+      if (level !== room.home || !hittable()) return [];
+      return bodies()
+        .filter((b) => Math.hypot(b.x - x, b.y - y) < r + b.r && z > b.z0 - 0.2 && z < b.z0 + b.h + 0.2)
+        .map((b) => ({ id: b.id, x: b.x, y: b.y, z: b.z0 + b.h / 2 }));
+    },
     bound: (sid) => isBound(sid),
-    hit(sid, n, now) {
+    hit(sid, n, now, id = "vortex") {
       const p = room.state.players.get(sid);
       if (!p || p.bot || !hittable()) return;
+      // (phase 3: one of his — a clone pops, one of the shadowed dissolves; him none the worse)
+      const mn = minions.get(id);
+      if (id !== "vortex") {
+        if (!mn || mn.state === "dissolve") return;
+        if (mn.kind === "clone") {
+          toAll({ kind: "pop", from: { x: mn.npc.x, y: mn.npc.y } });
+          room.state.npcs.delete(id);
+          minions.delete(id);
+        } else {
+          mn.state = mn.npc.mood = "dissolve";
+          mn.at = now;
+        }
+        return;
+      }
       // (phase 2: in HR's timeout — not counted; PAUSE — the shot stopped in the air, to come back at them)
       if ((hrTill.get(p.uid) ?? 0) > now) return;
       if (pauseUntil > now) {
@@ -377,10 +676,8 @@ registerFeature((room: WorldRoom) => {
           now,
         ),
       );
-      fight.act = actOf(fight.k, fight.act);
       npc.vk = fight.k;
-      npc.vact = fight.act;
-      npc.mood = ACT_MOOD[fight.act];
+      setAct(actOf(fight.k, fight.act), now);
       dirty = true;
       if (fight.k <= 0) {
         beaten(p, now);
@@ -415,10 +712,14 @@ registerFeature((room: WorldRoom) => {
       }
       fight.last = now;
       fight.k = Math.max(0.001, Math.min(1, k));
-      fight.act = actOf(fight.k);
       npc.vk = fight.k;
-      npc.vact = fight.act;
-      npc.mood = ACT_MOOD[fight.act];
+      // (an admin's: down an act too — set as it is)
+      if (actOf(fight.k) < fight.act) {
+        fight.act = actOf(fight.k);
+        npc.vact = fight.act;
+        npc.mood = ACT_MOOD[fight.act];
+        if (fight.act < 3) clearMinions();
+      } else setAct(actOf(fight.k, fight.act), now);
       dirty = true;
     }
     if (m?.beat && hittable()) {
@@ -426,9 +727,10 @@ registerFeature((room: WorldRoom) => {
       beaten(p, now);
     }
     // (one of his moves, now: on `to`, else on them)
-    if (m?.move && MOVES.includes(m.move) && hittable()) {
+    if (m?.move && hittable()) {
       const q = (m.to && room.state.players.get(m.to)) || p;
-      move(m.move, q, now);
+      if (MOVES.includes(m.move as VortexMove)) move(m.move as VortexMove, q, now);
+      else if (MOVES3.includes(m.move as VortexMove3)) move3(m.move as VortexMove3, now, q);
     }
   });
   // a friend cutting someone free of his tape: beside them, up, not taped up themselves
@@ -563,18 +865,22 @@ registerFeature((room: WorldRoom) => {
       }
       if (fight.on && now - fight.last > VORTEX_FIGHT.calm) endFight();
       moving(now);
+      if (minions.size) minionsTick(dt, now);
       if (held) return;
-      // (phase 2) act II: a move every 6–9 s
-      if (fight.on && fight.act === 2) {
-        if (!nextMove) nextMove = now + MV.every + Math.random() * MV.jitter;
+      // (phase 2) act II: a move every 6–9 s; (phase 3) act III: every 5–8 s, and his blow
+      if (fight.on && fight.act >= 2) {
+        const [every, jitter] = fight.act === 3 ? [MV3.every, MV3.jitter] : [MV.every, MV.jitter];
+        if (!nextMove) nextMove = now + every + Math.random() * jitter;
         else if (now >= nextMove) {
-          nextMove = now + MV.every + Math.random() * MV.jitter;
-          autoMove(now);
+          nextMove = now + every + Math.random() * jitter;
+          if (fight.act === 3) autoMove3(now);
+          else autoMove(now);
         }
+        if (fight.act === 3) blow(now);
       } else nextMove = 0;
       // walk
       if (path.length) {
-        let budget = SPEED * dt;
+        let budget = (fight.on && fight.act === 3 ? MV3.speed : SPEED) * dt;
         while (budget > 0 && path.length) {
           const wp = path[0];
           const dx = wp.x - npc.x;

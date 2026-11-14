@@ -174,6 +174,43 @@ day, and **holds a grudge** (below).
 3. **Act 3 — the dark**: the transformation on screen; **the studio's lights out** (new: a room-wide dark for the
    building's lights, eased in and out — the torch and flares what's left); the clones; the shadowed inside; fast;
    downs; possession and the glitch (the client's controls and screen, briefly); tests.
+   Done in phase 3 (2026-11-14):
+   - **The server** (`features/vortex.ts`): into act III (35%) — everyone told (`vortex:move` `dark`), his line
+     ("the lights were never yours."), two of the shadowed let in at once. **Fast** (5.2 m/s), after one of them;
+     **his blow** — the nearest in reach (1.9 m) every 1.8 s, 30 off (as the dark's: to the ground at nothing,
+     crawling — a friend holds E to get them up). A move every 5–8 s: **his clones** (two of him beside him, the
+     three shuffled — which is him nobody's told; 12 s; they walk after one of them; one shot pops it, him none
+     the worse), **the shadowed** (at most three at a time, 6–9 m out from one of them: they stalk, wind up 0.6 s,
+     strike 20 — stepped out of reach, missed — rest; 25 s, then dissolve; one shot dissolves one), **possession**
+     (the one who's shot him most, 3 s), **the glitch** (one of them, 4 s) — a person's next mind game not before 8
+     s after (never stacked) — or a whip, a REW still. Clones and the shadowed are Npcs of their own ("vortex:c…"
+     drawn as him; "vortex:s…" kind `vshade`, their state in `mood`); a shot or a Daybreak burst meets the nearest of
+     him and his (`room.vortex.along` says which; `caught` for a burst). Beaten, reset, out of act III: his and
+     theirs gone. His lines in the API for each (`dark`, `clones`, `shades`, `possess`, `glitch`).
+   - **The studio's lights out** (new, `tp/light3d.ts` `lmOutK`, `tp/view.ts` `studioDark`): everything lit on the
+     floor multiplied down to 1.2% (linear — about an eighth on the screen) — its lamps, the hour's ambient, the
+     windows; its point lamps off; what glows on it (lamp shades, screens) out too — a power cut; the torches' and
+     the flares' light (and a Daybreak ball's) made up for in the floor's own shader (only what the lights out
+     darkened: a torch's light on something lit otherwise isn't blown out), so they light as ever — what's left.
+     The beam's haze as at night; the shadowed's smoke darker with the room. The dark's chunk
+     (`world/dark/vortex.ts`) eases it in over 1.2 s with a flicker as the lights die, back over 2 s — for everyone
+     on his floor while he's in act III and up.
+   - **The client**: the transformation — a dark red flash, his drawing gone dark over 2 s in quarters (hollow
+     eyes, his tears from act II: the controller's `vortexLook`, `tp/stand3d.ts` "mood|t|d0.75"); the cassette dark
+     red; the shadowed drawn as the dark's own (handed to its Shades: `more`); "a clone?" over him and his clones a
+     moment, a popped one's *pop*; **possessed** — my move taken (walked to him, no running or aiming: the walker's
+     new `steer` hook), the camera turned on him, a magenta edge, "VORTEX HAS YOUR LEGS" and its count; theirs: a
+     mark at their feet; **the glitch** — my move the other way round, the screen's lines, a band slipping,
+     *kkzzt*, the HUD jittering, "CONTROLS ⇆ INVERTED · 4".
+   - Checked: `vortex-fight.test.ts` 3/3 (new: into act III — both told, his face; the shadowed in, striking her,
+     one shot dissolves; his clones — one shot pops, him none the worse; possession, nothing more on her while it
+     lasts, the glitch on B; his blows unheld till she's down; beaten — all gone); the API's (the act III pools);
+     `arms`; e2e `vortex-fight.spec.ts` act III (both screens: the lights out to ~1, the shadowed drawn, "a
+     clone?", possessed — walked to him, Bia's mark; the glitch reverses her move; down by his blows, Bia holds E
+     and gets her up; beaten — the lights back). Stills `vx-{act3,clones,possess,glitch,down}-*.png`.
+   - **Fixed on the way — getting someone up was broken** (`world/dark/down.ts`): its downed list keyed by
+     `Player.sid`, which the client never gets (""), so "hold E" sent `dark:revive` for no one — a downed friend
+     only ever came back by bleeding out to the office. Keyed by the state map's key now; `down.spec.ts` green.
 4. **The end and the grudge**: the unspooling, the cassette (its picture, in the pack), the building's notice; back in
    the server room after a while, scarred for the day; the grudge kept for a day (who, how much — saved with the
    world), its lines, stalking the top shooter, the small pranks.

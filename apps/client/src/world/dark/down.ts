@@ -114,23 +114,26 @@ export class Down {
     const here = new Set<string>();
     const downed = ctl.tp?.downed;
     downed?.clear();
+    // (who by the state map's key: the client's Player.sid isn't sent — it's "")
     room?.state.players.forEach(
-      (p: {
-        sid: string;
-        name: string;
-        x: number;
-        y: number;
-        z: number;
-        level: number;
-        downAt: number;
-        revBy: string;
-      }) => {
+      (
+        p: {
+          name: string;
+          x: number;
+          y: number;
+          z: number;
+          level: number;
+          downAt: number;
+          revBy: string;
+        },
+        sid: string,
+      ) => {
         if (!p.downAt || p.level !== ctl.level) return;
-        here.add(p.sid);
-        let d = this.seen.get(p.sid);
+        here.add(sid);
+        let d = this.seen.get(sid);
         if (!d) {
-          d = { sid: p.sid, name: p.name, x: p.x, y: p.y, z: p.z, seenAt: now, held: 0, revBy: "", revAt: 0 };
-          this.seen.set(p.sid, d);
+          d = { sid, name: p.name, x: p.x, y: p.y, z: p.z, seenAt: now, held: 0, revBy: "", revAt: 0 };
+          this.seen.set(sid, d);
         }
         d.x = p.x;
         d.y = p.y;
@@ -140,7 +143,7 @@ export class Down {
           d.revAt = now;
         }
         if (d.revBy) d.held += dt; // (the bleeding waits while someone holds)
-        downed?.set(p.sid, "down");
+        downed?.set(sid, "down");
         if (p.revBy) downed?.set(p.revBy, "kneel");
       },
     );

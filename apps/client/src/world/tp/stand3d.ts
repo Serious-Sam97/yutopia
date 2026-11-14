@@ -132,7 +132,13 @@ function vortexImage(mood: string): HTMLImageElement | null {
   const have = vortexImgs.get(mood);
   if (have !== undefined) return have;
   vortexImgs.set(mood, null);
-  const svg = vortexSvg(mood as VortexMood, `tp${mood}`).replace("<svg ", '<svg width="240" height="225" ');
+  // (plan 88: "mood|t|d0.75" — his tears in the fight, act III's dark transformation so far)
+  const [face, ...look] = mood.split("|");
+  const dark = Number(look.find((l) => l.startsWith("d"))?.slice(1) ?? 0);
+  const svg = vortexSvg(face as VortexMood, `tp${mood.replace(/[^a-z0-9]/gi, "")}`, undefined, {
+    tears: look.includes("t"),
+    dark,
+  }).replace("<svg ", '<svg width="240" height="225" ');
   const img = new Image();
   img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   img

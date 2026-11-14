@@ -19,6 +19,7 @@ class Vortex
     public const EVENTS = [
         'ambient', 'radio', 'night', 'standup', 'sleep', 'greet', 'poke', 'vortexos',
         'hit', 'dodge', 'whip', 'rew', 'pause', 'steal', 'blast', 'hr',
+        'dark', 'clones', 'shades', 'possess', 'glitch',
     ];
 
     private const PUBLIC = [
@@ -89,6 +90,32 @@ class Vortex
             'no guns in the office. house rules. my house.',
             'i put it somewhere safe. safe for me.',
         ],
+        // act III — the dark (docs/plan/88-vortex-fight.md phase 3): no jokes left in him
+        'dark' => [
+            'the lights were never yours.',
+            'lights out. the tape remembers what you looked like.',
+            'you wanted a fight. this is the b-side.',
+        ],
+        'clones' => [
+            'which one\'s me? *kkzzt* trick question.',
+            'three of me. one of you. bad maths.',
+            'pick one. wrong.',
+        ],
+        'shades' => [
+            'i brought friends. they don\'t like the light either.',
+            'they\'ve been waiting in the walls. say hello.',
+            'the dark has a guest list. you\'re on it.',
+        ],
+        'possess' => [
+            'your legs are on loan. i\'m calling it in.',
+            'come here. no, your feet decided. not you.',
+            'walk with me. you don\'t have a choice. you never did.',
+        ],
+        'glitch' => [
+            '*kkzzt* up is down. left is a rumour.',
+            'your controls are mine for a bit. press anything.',
+            'tracking error. it\'s you. you\'re the error.',
+        ],
         'blast' => [
             'this song slaps. so does the volume.',
             'everybody dance. that\'s not a request.',
@@ -106,6 +133,7 @@ class Vortex
                 'radio' => 'happy',
                 'hit', 'dodge' => 'judging',
                 'whip', 'rew', 'pause', 'steal', 'blast' => 'malicious',
+                'dark', 'clones', 'shades', 'possess', 'glitch' => 'possessed',
                 default => 'smug',
             };
 

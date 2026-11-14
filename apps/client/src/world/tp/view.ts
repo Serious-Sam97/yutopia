@@ -579,6 +579,10 @@ export class ThirdPersonView {
   quality: Quality = "high";
   lamps = LAMPS;
   nightLevel = 0;
+  /** (plan 88 act III) my floor's lights out, 0 … 1 (the studio's, Vortex's dark — world/dark/vortex.ts eases it):
+   *  its light map down (light3d.ts OUT_DIM: the torches' and flares' light made up for there), its lamps off */
+  studioDark = 0;
+  private dimmed: World3 | null = null;
   dark = 0; // out under the sky: daylight.ts `dark`
   fps = 60; // measured (auto quality steps down on it)
   // The pixel ratio, kept to the screen's (docs/plan/38-the-lag.md, round 3): a browser can
@@ -2676,6 +2680,12 @@ void main() {
     this.printsPart.drawPrints(performance.now());
     this.drawCues(dt, !!me?.reduced);
     this.sunPart.placeSun();
+    this.light.uniforms.lmOutK.value = this.studioDark;
+    // (and what glows on the floor — its lamps' shades, its screens — out with them: a power cut; a floor left
+    // behind given its glow back)
+    if (this.dimmed && this.dimmed !== this.world) this.dimmed.materials.glow.color.setScalar(1);
+    this.dimmed = this.world;
+    this.world.materials.glow.color.setScalar(1 - 0.92 * this.studioDark);
     this.sunPart.assignLamps(dt);
     this.mood.weatherFrame(dt, me);
     if (!me?.reduced) this.vehicles.breathe(bodies);
@@ -2887,9 +2897,11 @@ void main() {
         }),
         this.camera,
         dt,
-        this.nightLevel,
+        // (the studio's lights out: their smoke as dark as at night — plan 88)
+        Math.max(this.nightLevel, this.studioDark),
         1.8,
         px,
+        1 - 0.9 * this.studioDark,
       );
     }
     if (this.arms3 || this.flares.length) this.arms().update(dt, this.flares);
@@ -3392,7 +3404,8 @@ void main() {
           (a.id === meId ? -1 : b.id === meId ? 1 : 0) ||
           Math.hypot(a.x - t.x, a.y - t.z) - Math.hypot(b.x - t.x, b.y - t.z),
       );
-    const night = this.nightLevel;
+    // (the studio's lights out: as in the night, a torch's beam in the air; its light made up for — plan 88)
+    const night = Math.max(this.nightLevel, this.studioDark);
     const cam = this.camera.position;
     // (the motes' clock, kept small: a float's precision)
     const tm = this.time % 600;

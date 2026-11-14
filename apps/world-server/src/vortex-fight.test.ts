@@ -80,9 +80,9 @@ async function armed(p: Person) {
   await waitFor(() => me(p.room).gun === "revolver");
   await sleep(900);
 }
-function shoot(p: Person) {
+function shoot(p: Person, at?: { x: number; y: number; z: number }) {
   const m = me(p.room);
-  const v = vx(p.room);
+  const v = at ?? vx(p.room);
   const yaw = Math.atan2(v.y - m.y, v.x - m.x);
   p.room.send("pos", {
     x: m.x,
@@ -95,7 +95,7 @@ function shoot(p: Person) {
     pitch: 0,
   });
   const oz = 1.35;
-  const pitch = Math.atan2(VORTEX_FIGHT.z0 + VORTEX_FIGHT.h / 2 - oz, Math.hypot(v.x - m.x, v.y - m.y));
+  const pitch = Math.atan2((at ? at.z : VORTEX_FIGHT.z0 + VORTEX_FIGHT.h / 2) - oz, Math.hypot(v.x - m.x, v.y - m.y));
   setTimeout(() => p.room.send("arms:fire", { ox: m.x, oy: m.y, oz, yaw, pitch, lag: 0, seed: 7 }), 60);
 }
 
@@ -252,4 +252,89 @@ test("act II: the whip and a friend's knife, REW, PAUSE, the confiscation, the r
   a.room.send("mod:vortex", { hold: false, act: 2 });
   await waitFor(() => b.moves.slice(before).some((x) => x.kind !== "play" && x.kind !== "free"), 12_000);
   a.room.send("mod:vortex", { reset: true, hold: true });
+  await bye(a, b);
+});
+
+// (phase 3) act III: into it — the transformation told to both (the lights out are the clients'), the shadowed let
+// in, after A, striking her; one shot dissolves; his clones — one shot pops, him none the worse; possession on her,
+// no second mind game on her while it lasts, the glitch on B; his own blows, unheld, till she's down; beaten — his
+// and theirs gone
+test("act III: the dark, the shadowed, his clones, the mind games, his blows — down; beaten, all gone", async () => {
+  const a = await person(885);
+  const b = await person(886);
+  const m = me(a.room);
+  const sa = a.room.sessionId;
+  const sb = b.room.sessionId;
+  b.room.send("teleport", { to: { x: m.x - 1.5, y: m.y + 1.5, level: m.level } });
+  await waitFor(() => Math.hypot(me(b.room).x - (m.x - 1.5), me(b.room).y - (m.y + 1.5)) < 0.6);
+  a.room.send("mod:vortex", { reset: true, hold: true, at: { x: m.x + 2.5, y: m.y } });
+  await waitFor(() => Math.abs(vx(a.room).x - (m.x + 2.5)) < 0.01);
+  await armed(a);
+  shoot(a);
+  await waitFor(() => vx(a.room).vact === 1);
+  const last = (p: Person, kind: string) => p.moves.filter((x) => x.kind === kind).at(-1);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const npcs = (p: Person, kind: string): any[] =>
+    // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+    [...p.room.state.npcs.values()].filter((n: any) => n.kind === kind && n.id !== "vortex");
+
+  // into act III: his face, the transformation told to both; the shadowed let in, after her
+  a.room.send("mod:vortex", { act: 3 });
+  await waitFor(() => vx(b.room).vact === 3 && vx(b.room).mood === "possessed");
+  await waitFor(() => !!last(a, "dark") && !!last(b, "dark"));
+  await waitFor(() => npcs(b, "vshade").length >= 1);
+  const hp0 = me(a.room).hp;
+  await waitFor(() => last(b, "strike")?.to === sa, 15_000);
+  await waitFor(() => me(a.room).hp < hp0);
+  // one shot: it dissolves, then it's gone
+  const sh = npcs(a, "vshade")[0];
+  const shId = sh.id as string;
+  a.room.send("mod:vortex", { at: { x: m.x + 6, y: m.y } }); // (him out of the way)
+  shoot(a, { x: sh.x, y: sh.y, z: 0.9 });
+  await waitFor(() => !a.room.state.npcs.get(shId) || a.room.state.npcs.get(shId).mood === "dissolve");
+  await waitFor(() => !a.room.state.npcs.get(shId), 3000);
+
+  // his clones: two of him — one shot pops, him none the worse
+  a.room.send("mod:vortex", { move: "clones" });
+  await waitFor(() => last(b, "clones")?.n === 2 && npcs(b, "vortex").length === 2);
+  const k = vx(a.room).vk;
+  // (the nearest clone, aimed at again till one's hit — the shadowed still about may take a shot first)
+  const hitsOn = (pre: string) => a.hits.filter((h) => h.id.startsWith(pre)).length;
+  const onHim = hitsOn("vortex") - hitsOn("vortex:");
+  for (let i = 0; i < 5 && !hitsOn("vortex:c"); i++) {
+    const c = npcs(a, "vortex").sort(
+      (p, q) => Math.hypot(p.x - me(a.room).x, p.y - me(a.room).y) - Math.hypot(q.x - me(a.room).x, q.y - me(a.room).y),
+    )[0];
+    shoot(a, { x: c.x, y: c.y, z: VORTEX_FIGHT.z0 + VORTEX_FIGHT.h / 2 });
+    await sleep(900);
+  }
+  await waitFor(() => hitsOn("vortex:c") > 0 && !!last(b, "pop") && npcs(b, "vortex").length === 1);
+  if (hitsOn("vortex") - hitsOn("vortex:") === onHim) assert.equal(vx(a.room).vk, k, "a clone: him none the worse");
+
+  // the mind games: possession on her; nothing more on her while it lasts; the glitch on B
+  a.room.send("mod:vortex", { move: "possess", to: sa });
+  await waitFor(() => last(b, "possess")?.to === sa && last(b, "possess")?.ms === 3000);
+  a.room.send("mod:vortex", { move: "glitch", to: sa });
+  await sleep(300);
+  assert.equal(last(b, "glitch"), undefined, "never two at once on one person");
+  // (B in the fight first: only they're his)
+  await armed(b);
+  a.room.send("mod:vortex", { at: { x: m.x - 1.5, y: m.y + 4 } });
+  await waitFor(() => Math.abs(vx(b.room).y - (m.y + 4)) < 0.01);
+  shoot(b);
+  await waitFor(() => (a.fight.at(-1)?.who.length ?? 0) === 2);
+  a.room.send("mod:vortex", { move: "glitch", to: sb });
+  await waitFor(() => last(a, "glitch")?.to === sb);
+
+  // unheld, beside her: his blows (and theirs) till she's down
+  a.room.send("mod:vortex", { hold: false, at: { x: me(a.room).x + 1.2, y: me(a.room).y } });
+  await waitFor(() => me(a.room).downAt > 0, 25_000);
+
+  // beaten: his clones and the shadowed gone
+  a.room.send("mod:vortex", { beat: true, hold: true });
+  await waitFor(() => a.down.length === 1);
+  await waitFor(() => npcs(a, "vshade").length === 0 && npcs(a, "vortex").length === 0);
+  a.room.send("mod:vortex", { reset: true });
+  a.room.send("mod:heal", {});
+  await bye(a, b);
 });

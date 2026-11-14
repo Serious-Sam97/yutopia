@@ -1433,7 +1433,8 @@ export class WorldController {
       // (Vortex is the studio's; the night guard's on the ground floor — at his post in the
       // gatehouse by day, walking out to the fence after dark: the server walks him)
       const home = (n.level ?? -1) < 0 ? floorOf(this.building) : n.level;
-      if ((n.kind === "guard" || n.kind === "folk") && !guard) {
+      // (plan 88 act III: the shadowed Vortex lets in — the dark's chunk draws them, world/dark/vortex.ts)
+      if (n.kind === "vshade" || ((n.kind === "guard" || n.kind === "folk") && !guard)) {
         if (model.hasAvatar(`npc:${id}`)) model.removeAvatar(`npc:${id}`);
         return;
       }
@@ -2771,7 +2772,20 @@ export class WorldController {
   }
 
   // (Vortex as the room has him, or a stand-in of his drawn by the Grounds' life: what's read of him)
-  private npcState(n: Pick<Npc, "x" | "y" | "yaw" | "a" | "mood">): AvatarState {
+  // (plan 88) when each Vortex (him, his clones) went dark — act III's transformation eased in over 2 s
+  private vxDarkAt = new Map<string, number>();
+  private vortexLook(n: Pick<Npc, "id" | "vact">): string {
+    const act = n.vact ?? 0;
+    if (act < 3) this.vxDarkAt.delete(n.id);
+    if (act < 2) return "";
+    if (act === 2) return "|t";
+    const at = this.vxDarkAt.get(n.id) ?? performance.now();
+    this.vxDarkAt.set(n.id, at);
+    // (in quarters: each a drawing of its own, made once)
+    const k = Math.min(1, Math.ceil(((performance.now() - at) / 2000) * 4) / 4);
+    return `|t|d${k}`;
+  }
+  private npcState(n: Pick<Npc, "x" | "y" | "yaw" | "a" | "mood"> & Partial<Pick<Npc, "id" | "vact">>): AvatarState {
     return {
       name: "VORTEX",
       avatar: VORTEX_LOOK,
@@ -2782,7 +2796,8 @@ export class WorldController {
       status: "online",
       speaking: false,
       emote: n.mood === "glitch" ? "fire" : "",
-      vortexMood: n.mood,
+      // (his face; and in the fight his tears, act III's dark — plan 88: "mood|t|d0.75")
+      vortexMood: n.id ? n.mood + this.vortexLook(n as Pick<Npc, "id" | "vact">) : n.mood,
       mic: false,
       npc: true,
     };
