@@ -79,7 +79,7 @@ async function two(page: Page, browser: Browser) {
     y.room.send("mod:refill", { kit: true });
   });
   await page.evaluate(
-    (at) => (window as any).__yutopia.room.send("mod:vortex", { reset: true, hold: true, at }),
+    (at) => (window as any).__yutopia.room.send("mod:vortex", { reset: true, forget: true, hold: true, at }),
     VX_AT,
   );
   await expect
@@ -216,7 +216,7 @@ test("the fight with Vortex, acts I–II: his cassette, each move on Ana — as 
     await expect.poll(() => vxSeen(p).then((s) => s.boss)).toBe(false);
   }
   await still("down");
-  await w(page, (y) => y.room.send("mod:vortex", { reset: true, hold: false }));
+  await w(page, (y) => y.room.send("mod:vortex", { reset: true, forget: true, hold: false }));
   await ctx.close();
 });
 
@@ -361,8 +361,101 @@ test("the fight with Vortex, act III: the lights out, the shadowed, clones, the 
   for (const p of [page, bia])
     await expect.poll(() => vxSeen(p).then(() => dark(p)), { timeout: 10_000 }).toBeLessThan(0.05);
   await w(page, (y) => {
-    y.room.send("mod:vortex", { reset: true, hold: false });
+    y.room.send("mod:vortex", { reset: true, forget: true, hold: false });
     y.room.send("mod:heal", {});
   });
+  await ctx.close();
+});
+
+// (phase 4) The end and the grudge, Ana and Bia in the lobby by day: Ana shoots him, then he's beaten — the building's
+// slip on both, his tape unspooled where he fell, the cassette glowing; Bia can't take it (Ana hit him last), Ana
+// can; back, he remembers: Ana's slip ("you shot him once"), him after her, scarred
+test("the fight with Vortex, the end and the grudge: the tape unspooled, the trophy hers, he remembers", async ({
+  page,
+  browser,
+}) => {
+  test.skip(!GPU, "needs the GPU: YUTOPIA_GPU=1");
+  test.setTimeout(300_000);
+  const { bia, ctx, still } = await two(page, browser);
+  await page.bringToFront();
+  front = page;
+  await page.keyboard.press("Digit2");
+  await expect
+    .poll(() => w(page, (y) => y.room.state.players.get(y.room.sessionId).gun), { timeout: 10_000 })
+    .toBe("revolver");
+  await w(page, (y) => {
+    y.tp.yaw = 0;
+    y.tp.pitch = 0.08;
+  });
+  await page.mouse.move(640, 400);
+  await page.mouse.down({ button: "right" });
+  await page.waitForTimeout(1200);
+  await page.mouse.down({ button: "left" });
+  await page.mouse.up({ button: "left" });
+  await page.mouse.up({ button: "right" });
+  await expect.poll(() => w(page, (y) => y.room.state.npcs.get("vortex").vk), { timeout: 8000 }).toBeLessThan(1);
+
+  // beaten: both told; his tape unspooled where he fell and the cassette glowing, on both screens
+  await w(page, (y) => y.room.send("mod:vortex", { beat: true }));
+  for (const p of [page, bia]) {
+    await expect.poll(() => vxSeen(p).then((s) => s.notice), { timeout: 8000 }).toContain("VORTEX IS DOWN");
+    await expect.poll(() => vxSeen(p).then((s) => s.tape), { timeout: 8000 }).toBe(true);
+    await expect
+      .poll(() => p.evaluate(() => document.querySelectorAll(".vxf-tglow").length), { timeout: 8000 })
+      .toBeGreaterThan(0);
+  }
+  await page.waitForTimeout(1500);
+  await still("end");
+  expect(await w(page, (y) => y.room.state.npcs.get("vortex").vscar)).toBe(1);
+
+  // the trophy: hers (she hit him last) — Bia's ask refused, Ana's taken into her pack
+  const tape = () =>
+    w(page, (y) => {
+      // (the newest: an earlier fight's may still lie about — drops last two hours)
+      let t: any = null;
+      y.room.state.drops.forEach((d: any) => {
+        if (d.item === "vxtape" && (!t || d.at > t.at)) t = { id: d.id, x: d.x, y: d.y, at: d.at };
+      });
+      return t;
+    }) as Promise<{ id: string; x: number; y: number } | null>;
+  const t0 = (await tape()) as { id: string; x: number; y: number };
+  await bia.evaluate((t) => {
+    const y = (window as any).__yutopia;
+    y.teleport({ x: t.x - 0.6, y: t.y, level: y.level });
+  }, t0);
+  await bia.waitForTimeout(1200);
+  await bia.evaluate((id) => (window as any).__yutopia.room.send("dark:pick", { id }), t0.id);
+  await bia.waitForTimeout(800);
+  expect((await tape())?.id, "not Bia's to take yet").toBe(t0.id);
+  await page.evaluate((t) => {
+    const y = (window as any).__yutopia;
+    y.teleport({ x: t.x + 0.6, y: t.y, level: y.level });
+  }, t0);
+  await page.waitForTimeout(1200);
+  await page.evaluate((id) => (window as any).__yutopia.room.send("dark:pick", { id }), t0.id);
+  await expect.poll(() => tape().then((t) => t?.id), { timeout: 8000 }).not.toBe(t0.id);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const inv = (window as any).__dark.inv;
+        return [...inv.pockets, ...inv.quick].some((it: any) => it?.id === "vxtape");
+      }),
+    )
+    .toBe(true);
+
+  // back: he remembers — her slip; after her, scarred
+  await w(page, (y) => y.room.send("mod:vortex", { back: true, hold: false }));
+  await expect.poll(() => vxSeen(page).then((s) => s.slips.join("|")), { timeout: 15_000 }).toContain("holds a grudge");
+  expect((await vxSeen(page)).slips.join("|")).toContain("once");
+  const near = () =>
+    w(page, (y) => {
+      const v = y.room.state.npcs.get("vortex");
+      const m = y.walker.where();
+      return Math.hypot(v.x - m.x, v.y - m.y);
+    }) as Promise<number>;
+  await expect.poll(near, { timeout: 20_000 }).toBeLessThan(3);
+  await page.waitForTimeout(1200);
+  await still("grudge");
+  await w(page, (y) => y.room.send("mod:vortex", { reset: true, forget: true, hold: false }));
   await ctx.close();
 });

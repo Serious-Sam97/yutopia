@@ -431,6 +431,9 @@ export interface ClientMessages {
     // (one of his moves, now, on `to` — a session)
     move?: "whip" | "rew" | "pause" | "steal" | "radio" | "hr" | "clones" | "shades" | "possess" | "glitch";
     to?: string;
+    // (phase 4) back now (his fall and his time away cut short); his memory — the grudge, the scars — forgotten
+    back?: boolean;
+    forget?: boolean;
   };
   // (plan 88) cutting a friend free of Vortex's tape (near them)
   "vortex:free": { sid: string };
@@ -649,6 +652,8 @@ export interface ServerMessages {
   // (plan 88) the fight with Vortex: who's in it and their hits (none: it's over); beaten — by whom, how long it took
   "vortex:fight": { who: { sid: string; name: string; hits: number }[] };
   "vortex:down": { by: string; secs: number };
+  // (plan 88 phase 4) his grudge, to the one he holds it against: how many times they shot him today, with what
+  "vortex:grudge": { hits: number; gun: string };
   // (plan 88) one of his moves, for everyone to see: on whom, from where, for how long (ms); what came of it
   "vortex:move": {
     kind:

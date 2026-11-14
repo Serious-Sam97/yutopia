@@ -77,6 +77,8 @@ export class VortexFight {
   private readonly possessEl = document.createElement("div");
   private readonly glitchEl = document.createElement("div");
   private readonly turnEl = document.createElement("div");
+  // (phase 4) beaten: where he fell and when (his tape unspooling over the floor there a while)
+  private fell: { x: number; y: number; at: number } | null = null;
 
   constructor(
     private readonly ctl: WorldController,
@@ -114,7 +116,12 @@ export class VortexFight {
       if (!m.who.length) this.yetShown = false;
       this.who = m.who;
     });
+    on("vortex:grudge", (m) =>
+      this.slip(this.tr(m.hits === 1 ? "vx_grudge1" : "vx_grudge", { n: String(m.hits) }), false, "hr"),
+    );
     on("vortex:down", (m) => {
+      const v = this.vx();
+      if (v) this.fell = { x: v.x, y: v.y, at: performance.now() };
       this.notice.innerHTML = this.tr("vx_down", { by: esc(m.by), t: mmss(m.secs) });
       this.notice.style.display = "block";
       this.notice.classList.remove("gone");
@@ -398,6 +405,28 @@ export class VortexFight {
         }
       }
     }
+    // (phase 4) beaten: his tape unspooling across the floor from where he fell (out over a second and a half, there
+    // 9 s); his tape lying — the trophy — glowing his pink
+    if (here && this.fell && now - this.fell.at < 9000) {
+      const f = this.fell;
+      const grow = Math.min(1, (now - f.at) / 1500);
+      const fade = Math.min(1, (9000 - (now - f.at)) / 1000);
+      const c0 = at(f.x, f.y, 0);
+      const ppm = Math.abs(c0.y - at(f.x, f.y, 1).y);
+      for (const [a, len, bend] of UNSPOOL) {
+        const L = len * grow;
+        const e = at(f.x + Math.cos(a) * L, f.y + Math.sin(a) * L, 0.02);
+        const m = at(f.x + Math.cos(a + bend) * L * 0.55, f.y + Math.sin(a + bend) * L * 0.55, 0.02);
+        svg += `<path d="M${c0.x.toFixed(0)} ${c0.y.toFixed(0)} Q ${m.x.toFixed(0)} ${m.y.toFixed(0)} ${e.x.toFixed(0)} ${e.y.toFixed(0)}" stroke="#3a2416" stroke-width="${Math.max(2, ppm * 0.035).toFixed(1)}" fill="none" stroke-linecap="round" opacity="${fade.toFixed(2)}"/>`;
+      }
+    } else if (this.fell && now - this.fell.at >= 9000) this.fell = null;
+    if (here)
+      this.ctl.room?.state.drops.forEach((d: { item: string; x: number; y: number; level: number }) => {
+        if (d.item !== "vxtape" || d.level !== ctl.level || Math.hypot(d.x - me.x, d.y - me.y) > 14) return;
+        const c = at(d.x, d.y, 0.03);
+        const r = Math.max(14, Math.abs(c.y - at(d.x, d.y, 1).y) * 0.55);
+        marks += `<i class="abs vxf-tglow" style="left:${c.x.toFixed(0)}px;top:${c.y.toFixed(0)}px;width:${(r * 2).toFixed(0)}px;height:${r.toFixed(0)}px"></i>`;
+      });
     if (this.layer.innerHTML !== svg) this.layer.innerHTML = svg;
     if (this.marks.innerHTML !== marks) this.marks.innerHTML = marks;
 
@@ -575,6 +604,13 @@ export class VortexFight {
 }
 
 const secs = (ms: number) => String(Math.max(0, Math.ceil(ms / 1000)));
+// his tape unspooled where he fell: each strand's way out (radians), how far (m), how it curls
+const UNSPOOL: [number, number, number][] = [
+  [0.3, 2.1, 0.5],
+  [2.0, 1.6, -0.6],
+  [3.6, 1.9, 0.4],
+  [5.0, 1.3, -0.5],
+];
 // (a shadowed's look from its id: the same for everyone)
 const hash = (s: string) => {
   let h = 7;
@@ -630,6 +666,8 @@ export const VORTEX_CSS = `
 .vxf.rewinding::after{content:"";position:fixed;inset:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 2px,transparent 2px 4px);animation:vxroll .25s linear infinite}
 @keyframes vxroll{to{background-position:0 8px}}
 .vxf-flash{position:fixed;inset:0;opacity:0;background:radial-gradient(ellipse at center,transparent 40%,rgba(255,45,149,.5) 100%);transition:opacity .8s ease-out}
+.vxf-tglow{transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(closest-side,rgba(255,45,149,.55),rgba(255,45,149,0));mix-blend-mode:screen;animation:vxglow 1.4s ease-in-out infinite alternate}
+@keyframes vxglow{to{opacity:.55}}
 .vxf-mark.q{color:#ffd6ee;text-shadow:0 0 10px rgba(255,45,149,.7)}
 .vxf-mark.pop{background:none;color:#fff0f7;font-size:18px;letter-spacing:.04em;text-shadow:0 0 12px var(--pink)}
 .vxf-turn{position:fixed;inset:0;opacity:0;background:radial-gradient(ellipse at center,rgba(120,0,30,.15),rgba(40,0,10,.85) 75%)}

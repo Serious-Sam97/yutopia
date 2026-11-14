@@ -61,6 +61,7 @@ export interface WorldInfo {
   structure?: unknown;
   playlists?: unknown; // the YouTube playlists played here (features/media.ts)
   loot?: unknown; // the Grounds' loot: spots, the night's budget, drops (features/survival.ts)
+  vortex?: unknown; // Vortex's memory: his scars, the grudge (features/vortex.ts, plan 88 phase 4)
   karts?: unknown; // the Kart Park's record (features/karts.ts)
   // the steps' volume an admin set (WorldRoom mod:steps), and the weather's (mod:weatherVol)
   sound?: {
@@ -114,6 +115,8 @@ export const api = {
     weatherAt: number;
   }) => call("PUT", "/world/sound", { sound }),
   putWeather: (weather: SavedWeather) => call("PUT", "/world/weather", { weather }),
+  // Vortex's memory (docs/plan/88-vortex-fight.md phase 4): his scars today, the grudge
+  putVortex: (vortex: unknown) => call("PUT", "/world/vortex", { vortex }),
   // god mode (docs/plan/53-the-god-mode.md): an admin's draft (by its id: plan 55), a revision, the next one
   groundsDraft: (id: number) =>
     call<{ draft: { userId: number; name: string; baseRev: number; data: GroundsEdits } | null }>(
@@ -156,7 +159,7 @@ export const api = {
     call("PUT", "/last-spots", { spots }),
   // who's in the world and where (the phone's contacts show it)
   presence: (people: PresenceEntry[]) => call("POST", "/presence", { people }),
-  vortexLine: (context: { event: string; user_id: number | null }) =>
+  vortexLine: (context: { event: string; user_id: number | null; n?: number; gun?: string }) =>
     call<{ line: string | null; mood?: string; personal: boolean }>("POST", "/vortex", context),
   // someone's pets (features/pets.ts): all of them, a new one, a change, one let go
   pets: (userId: number) => call<{ pets: PetRecord[] }>("GET", `/pets/${userId}`),

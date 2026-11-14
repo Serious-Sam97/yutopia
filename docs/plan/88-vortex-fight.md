@@ -214,6 +214,32 @@ day, and **holds a grudge** (below).
 4. **The end and the grudge**: the unspooling, the cassette (its picture, in the pack), the building's notice; back in
    the server room after a while, scarred for the day; the grudge kept for a day (who, how much — saved with the
    world), its lines, stalking the top shooter, the small pranks.
+   Done in phase 4 (2026-11-14):
+   - **The end**: beaten, he says so ("*kkzzt* … rewind me.", the API's `down`) and lies on his side where he fell
+     (`tp/stand3d.ts`: his drawing rolled 74°, down on the floor) while his tape unspools across the floor from him
+     (four strands out over 1.5 s, there 9 s — `world/dark/vortex.ts`); **his cassette lies glowing his pink**,
+     bigger on the floor (×2.4), and is **the last hitter's for a minute** (`Drop.owner`: anyone else asking is told
+     "It's theirs — for a minute.", take-all passes it by), then anyone's; in the pack as a stack, its count your
+     wins. The building's slip as in phase 1.
+   - **Scarred for the day**: each beating today one more scar (splice, stitch, crack — three at most;
+     `Npc.vscar`, his drawing's "s1"–"s3"), healed a day after the last.
+   - **The grudge** — kept a day (each person: how many times they shot him, with what, till when), **saved with the
+     world** (`PUT /world/vortex` into the world's settings; `GET /world` gives it back to the room — offline, kept
+     only while it runs), remembered when a fight ends (beaten or calmed down; not an admin's reset), a few seconds'
+     debounce. Out of a fight he goes **after the one he holds most** against who's on his floor (30 s, then a
+     minute's rest): they're told by a slip ("Vortex holds a grudge · today / you shot him 14 times · he's following
+     you", not more than every 10 min), and when he reaches them he says it — **his personal grudge lines** ("you.
+     the .38. fourteen times. i remember every one.": the API's `grudge`, with how many and with what — "once" for
+     one); now and then, while they're 8 m from their desk, **he takes their chair** — sits in it up to 45 s and,
+     when they come back, "your chair? it was my chair. i'm made of spite." (`chair`). An admin's `mod:vortex`
+     `back` (his fall and time away cut short) and `forget` (the grudge and the scars).
+   - Checked: `vortex-fight.test.ts` 4/4 (new: beaten by her — scarred, his tape hers: B refused, she takes it;
+     back — her slip only hers, 2 hits with the revolver, his line to her "the .38 … 2 times"; forgotten — no
+     scars); the API's 4 (the grudge's lines, "once"; his memory kept with the world and given back); e2e
+     `vortex-fight.spec.ts` 3/3 (new: beaten — both told, the tape unspooled and the glow on both screens, scarred;
+     the trophy refused to Bia, taken by Ana; back — Ana's slip "once", him after her). Not checked by a test: the
+     chair (a desk is only given at join, by the API) — read through. `arms`' Daybreak test flaky (4 of 6 green;
+     his hooks return nothing off his floor, the path unchanged outdoors); `survival` red only where it was.
 5. **The sound**: his voice for each moment, the hits on him (tape, plastic), the music's turn in act 3, the
    unspooling — picked by ear like the guns' and the steps' (the user picks).
 6. **Checks**: the server's tests (scaling, only shooters targeted, the acts, beaten and back, the grudge); a

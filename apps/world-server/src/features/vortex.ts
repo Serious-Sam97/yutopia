@@ -1,5 +1,5 @@
 import type { ServerMessages } from "@yutopia/shared";
-import { ANIM, areaAt, faceByte, type Point, worldZ } from "@yutopia/shared";
+import { ANIM, areaAt, faceByte, objLevel, type Point, worldZ } from "@yutopia/shared";
 import { BODY, type Ray, rayMeets } from "@yutopia/shared/dark";
 import { isWeapon } from "@yutopia/shared/inventory";
 import { isRadio } from "@yutopia/shared/media";
@@ -7,7 +7,7 @@ import { type Act, actOf, hurtBy, shooters, VORTEX_FIGHT } from "@yutopia/shared
 import { api } from "../api.ts";
 import { config } from "../config.ts";
 import { Npc, type Player } from "../schema.ts";
-import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
+import { fromSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // Vortex lives in the building (Fita 6). He wanders, stalks people, dances when
@@ -54,9 +54,24 @@ const OFFLINE_FIGHT: Record<string, string> = {
   shades: "i brought friends. they don't like the light either.",
   possess: "your legs are on loan. i'm calling it in.",
   glitch: "*kkzzt* up is down. left is a rumour.",
+  down: "*kkzzt* … rewind me.",
+  grudge: "you. {gun}. {times}. i remember every one.",
+  chair: "your chair? it was my chair. i'm made of spite.",
 };
 
-type Mode = "idle" | "wander" | "stalk" | "dance" | "sleep";
+type Mode = "idle" | "wander" | "stalk" | "dance" | "sleep" | "squat";
+// (plan 88 phase 4) the grudge: kept a day; after the one who shot him most a while, then a rest; their slip not
+// more than every 10 min; their chair taken while they're 8 m from it, sat in up to 45 s (then a rest)
+const DAY = 24 * 60 * 60_000;
+const GRUDGE = { stalk: 30_000, rest: 60_000, told: 10 * 60_000, away: 8, sit: 45_000, chairRest: 5 * 60_000 } as const;
+// his words for what they shot him with, offline (the API has its own)
+const GUN_WORD: Record<string, string> = {
+  revolver: "the .38",
+  shotgun: "the shotgun",
+  ak47: "the ak",
+  sniper: "the rifle",
+  daybreak: "the daybreak",
+};
 
 /** (plan 88) The fight with him, as features/arms.ts asks: a shot's line, a ball's burst, a hit. (Act III: his
  *  clones and the shadowed he brings in are hit as he is — `id` says which: "vortex" is him.) */
@@ -150,6 +165,8 @@ registerFeature((room: WorldRoom) => {
     name: string;
     hits: number;
     dmg: number;
+    // (phase 4) hits by what they had out — the grudge remembers the gun
+    guns: Record<string, number>;
     at: number;
   }
   const fight = { on: false, k: 1, act: 0 as Act, last: 0, since: 0, who: new Map<number, Fighter>() };
@@ -194,7 +211,9 @@ registerFeature((room: WorldRoom) => {
       .map((f) => ({ sid: f.sid, name: f.name, hits: f.hits }));
     for (const c of room.clients as WorldClient[]) room.send(c, "vortex:fight", { who });
   };
-  const endFight = () => {
+  const endFight = (keep = true) => {
+    // (phase 4: who shot him, how much, with what — remembered a day; not an admin's reset)
+    if (keep) remember(Date.now());
     fight.on = false;
     fight.k = 1;
     fight.act = 0;
@@ -220,11 +239,103 @@ registerFeature((room: WorldRoom) => {
     npc.mood = "dead";
     npc.vk = 0;
     // (his tape where he fell — the trophy, for whoever picks it up; the building told who finished him)
-    room.survival?.drop("vxtape", 1, npc.x, npc.y, room.home);
+    // (phase 4: the last to hit him has it a minute before anyone else may)
+    room.survival?.drop("vxtape", 1, npc.x, npc.y, room.home, 0, by.uid);
+    // (scarred for the day — another scar if he was already today, three at most)
+    mem.scars = mem.scarredUntil > now ? Math.min(3, mem.scars + 1) : 1;
+    mem.scarredUntil = now + DAY;
+    npc.vscar = mem.scars;
+    memDirty = true;
+    void say("down");
     const secs = Math.round((now - fight.since) / 1000);
     for (const c of room.clients as WorldClient[]) room.send(c, "vortex:down", { by: by.name, secs });
   };
   const hittable = () => !fallAt && !npc.vgone;
+
+  // ── (phase 4) his memory: the scars today, the grudge (by user: how many hits, with what, till when) — kept with
+  // the world (the API's world settings), saved a few seconds after it changes ──
+  interface Grudge {
+    uid: number;
+    name: string;
+    hits: number;
+    gun: string;
+    until: number;
+  }
+  const mem = { scars: 0, scarredUntil: 0, grudges: new Map<number, Grudge>() };
+  let memDirty = false;
+  let memSavedAt = 0;
+  {
+    const saved = room.savedVortex as Partial<{ scars: number; scarredUntil: number; grudges: Grudge[] }> | null;
+    const now = Date.now();
+    if (saved && typeof saved === "object") {
+      if (Number(saved.scarredUntil) > now) {
+        mem.scars = Math.max(0, Math.min(3, Number(saved.scars) || 0));
+        mem.scarredUntil = Number(saved.scarredUntil);
+        npc.vscar = mem.scars;
+      }
+      for (const g of Array.isArray(saved.grudges) ? saved.grudges : [])
+        if (Number.isInteger(g?.uid) && Number(g.until) > now && Number(g.hits) > 0)
+          mem.grudges.set(g.uid, {
+            uid: g.uid,
+            name: String(g.name ?? "").slice(0, 60),
+            hits: Math.floor(Number(g.hits)),
+            gun: String(g.gun ?? "").slice(0, 20),
+            until: Number(g.until),
+          });
+    }
+  }
+  const remember = (now: number) => {
+    for (const [uid, f] of fight.who) {
+      if (!f.hits) continue;
+      const g = mem.grudges.get(uid) ?? { uid, name: f.name, hits: 0, gun: "", until: 0 };
+      g.name = f.name;
+      g.hits += f.hits;
+      g.gun = Object.entries(f.guns).sort((a, b) => b[1] - a[1])[0]?.[0] ?? g.gun;
+      g.until = now + DAY;
+      mem.grudges.set(uid, g);
+      memDirty = true;
+    }
+  };
+  const saveMem = (now: number) => {
+    // (the scars healed, a grudge's day over: let go)
+    if (mem.scarredUntil && now > mem.scarredUntil) {
+      mem.scars = 0;
+      mem.scarredUntil = 0;
+      npc.vscar = 0;
+      memDirty = true;
+    }
+    for (const [uid, g] of mem.grudges)
+      if (g.until < now) {
+        mem.grudges.delete(uid);
+        memDirty = true;
+      }
+    if (!memDirty || now - memSavedAt < 5000) return;
+    memDirty = false;
+    memSavedAt = now;
+    if (config.offline) return;
+    void api
+      .putVortex({ scars: mem.scars, scarredUntil: mem.scarredUntil, grudges: [...mem.grudges.values()] })
+      .catch((e) => console.warn("[vortex] memory not saved", (e as Error).message));
+  };
+  // the grudge he holds most, against someone here on his floor he may go after now
+  let grudgeRest = 0;
+  let chairRest = 0;
+  let chairOf: Player | null = null;
+  const grudgeTold = new Map<number, number>();
+  const grudgeHere = () =>
+    [...mem.grudges.values()]
+      .sort((a, b) => b.hits - a.hits)
+      .map((g) => ({ g, p: humans().find((p) => p.uid === g.uid) }))
+      .find(({ p }) => !!p && p.level === room.home && okTarget(p) && p.status !== "dnd") as
+      | { g: Grudge; p: Player }
+      | undefined;
+  // their desk's chair, on his floor, when they're away from it
+  const chairFor = (p: Player) => {
+    const seat = p.desk ? room.state.objects.get(p.desk) : undefined;
+    if (!seat || objLevel(fromSchema(seat), room.map) !== room.home) return null;
+    const at = { x: seat.x + 0.5, y: seat.y + 0.5 };
+    return Math.hypot(p.x - at.x, p.y - at.y) >= GRUDGE.away ? at : null;
+  };
   // what a shot can meet: him, his clones (as big as he is), the shadowed he let in (a person's size)
   const bodies = () => [
     { id: "vortex", x: npc.x, y: npc.y, z0: VORTEX_FIGHT.z0, r: VORTEX_FIGHT.r, h: VORTEX_FIGHT.h },
@@ -656,7 +767,9 @@ registerFeature((room: WorldRoom) => {
         paused.set(sid, (paused.get(sid) ?? 0) + n);
         return;
       }
-      const f = fight.who.get(p.uid) ?? { sid, name: p.name, hits: 0, dmg: 0, at: 0 };
+      const f = fight.who.get(p.uid) ?? { sid, name: p.name, hits: 0, dmg: 0, at: 0, guns: {} };
+      const gun = p.gun || "revolver";
+      f.guns[gun] = (f.guns[gun] ?? 0) + 1;
       f.sid = sid;
       f.hits++;
       f.dmg += n;
@@ -692,8 +805,29 @@ registerFeature((room: WorldRoom) => {
     const p = room.state.players.get(client.sessionId);
     if (!p?.admin) return;
     const now = Date.now();
+    // (phase 4) back now: his fall and his time away cut short — the grudge remembered as ever; his memory forgotten
+    if (m?.back) {
+      if (fallAt) {
+        fallAt = 0;
+        endFight();
+      }
+      npc.vgone = 0;
+      npc.mood = "seething";
+      path = [];
+      until = now;
+      grudgeRest = 0;
+    }
+    if (m?.forget) {
+      mem.grudges.clear();
+      mem.scars = 0;
+      mem.scarredUntil = 0;
+      npc.vscar = 0;
+      memDirty = true;
+      grudgeTold.clear();
+      grudgeRest = 0;
+    }
     if (m?.reset) {
-      endFight();
+      endFight(false);
       fallAt = 0;
       npc.vgone = 0;
       npc.mood = "smug";
@@ -759,20 +893,23 @@ registerFeature((room: WorldRoom) => {
     return true;
   };
 
-  const say = async (event: string, userId?: number, client?: WorldClient) => {
+  const say = async (event: string, userId?: number, client?: WorldClient, ctx: { n?: number; gun?: string } = {}) => {
     if (busy) return;
     busy = true;
     try {
       const res = config.offline
         ? {
-            line: OFFLINE_FIGHT[event] ?? OFFLINE_LINES[Math.floor(Math.random() * OFFLINE_LINES.length)],
+            line: (OFFLINE_FIGHT[event] ?? OFFLINE_LINES[Math.floor(Math.random() * OFFLINE_LINES.length)])
+              .replace("{gun}", GUN_WORD[ctx.gun ?? ""] ?? "that thing")
+              .replace("{times}", ctx.n === 1 ? "once" : `${ctx.n ?? 0} times`),
             mood: OFFLINE_FIGHT[event] ? ACT_MOOD[fight.act] : "smug",
             personal: false,
           }
-        : await api.vortexLine({ event, user_id: userId ?? null });
+        : await api.vortexLine({ event, user_id: userId ?? null, ...ctx });
       if (!res?.line) return;
       // (in the fight his face is the act's)
-      npc.mood = fight.on && !fallAt ? ACT_MOOD[fight.act] : (res.mood ?? "smug");
+      // (fallen: still down)
+      if (!fallAt) npc.mood = fight.on ? ACT_MOOD[fight.act] : (res.mood ?? "smug");
       if (client && userId) {
         // personal: only the person he's talking to sees it
         room.send(client, "vortex:say", { text: res.line, to: client.sessionId, mood: npc.mood });
@@ -812,6 +949,29 @@ registerFeature((room: WorldRoom) => {
       until = now + 8000;
       return;
     }
+    // (phase 4) the grudge: their chair taken while they're away from it, now and then; else after them a while —
+    // they're told he remembers
+    const held = !fight.on && now >= grudgeRest ? grudgeHere() : undefined;
+    if (held) {
+      const chair = now >= chairRest && Math.random() < 0.35 ? chairFor(held.p) : null;
+      if (chair && go(chair)) {
+        mode = "squat";
+        chairOf = held.p;
+        chairRest = now + GRUDGE.chairRest;
+        until = now + GRUDGE.sit;
+        return;
+      }
+      mode = "stalk";
+      target = held.p;
+      until = now + GRUDGE.stalk;
+      grudgeRest = now + GRUDGE.stalk + GRUDGE.rest;
+      if (now - (grudgeTold.get(held.g.uid) ?? 0) > GRUDGE.told) {
+        grudgeTold.set(held.g.uid, now);
+        const c = clientOf(held.p);
+        if (c) room.send(c, "vortex:grudge", { hits: held.g.hits, gun: held.g.gun });
+      }
+      return;
+    }
     const hour = room.state.hour; // (the world's: São Paulo's, shared clock.ts)
     if (hour >= 1 && hour < 6 && humans().length === 0) {
       mode = "sleep";
@@ -843,6 +1003,7 @@ registerFeature((room: WorldRoom) => {
 
   return {
     tick(dt, now) {
+      saveMem(now);
       // (plan 88) the fight: told to everyone when it changes (four a second at most); beaten — on the floor, then
       // away to the server room till he's back; out of it a while — calmed down, healed
       if (dirty && now - told > 250) tell(now);
@@ -899,7 +1060,7 @@ registerFeature((room: WorldRoom) => {
           }
         }
         npc.a = ANIM.walk;
-      } else npc.a = mode === "sleep" ? ANIM.sit : ANIM.idle;
+      } else npc.a = mode === "sleep" || mode === "squat" ? ANIM.sit : ANIM.idle;
       npc.area = areaAt(room.map, npc.x, npc.y)?.key ?? "";
       if (npc.mood === "glitch" && Math.random() < dt / 2) npc.mood = "smug";
 
@@ -930,8 +1091,24 @@ registerFeature((room: WorldRoom) => {
           if (!fight.on && d <= 2.6 && now - (lastGreet.get(t.uid) ?? 0) > GREET_COOLDOWN) {
             lastGreet.set(t.uid, now);
             const c = clientOf(t);
-            if (c) void say("greet", t.uid, c);
+            // (phase 4: held a grudge against — he says so, how many, with what)
+            const g = mem.grudges.get(t.uid);
+            if (c) void (g ? say("grudge", t.uid, c, { n: g.hits, gun: g.gun }) : say("greet", t.uid, c));
           }
+        }
+      }
+      // (phase 4) in their chair: up when they come back (and says so), or when he's sat long enough
+      if (mode === "squat" && chairOf) {
+        const t = room.state.players.get(chairOf.sid);
+        if (!t) {
+          mode = "idle";
+          chairOf = null;
+        } else if (!path.length && Math.hypot(t.x - npc.x, t.y - npc.y) <= 2.2) {
+          const c = clientOf(t);
+          if (c) void say("chair", t.uid, c);
+          mode = "idle";
+          chairOf = null;
+          until = now + 3000;
         }
       }
       if (now > until && !path.length) pickMode(now);

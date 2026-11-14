@@ -59,6 +59,8 @@ class InternalController extends Controller
             'sound' => $world->settings['sound'] ?? null,
             // the weather when last saved (docs/plan/65-the-weather.md): the ground, when, the call
             'weather' => $world->settings['weather'] ?? null,
+            // Vortex's memory: his scars, the grudge (docs/plan/88-vortex-fight.md phase 4)
+            'vortex' => $world->settings['vortex'] ?? null,
             // god mode's edits to the Grounds as published (docs/plan/53-the-god-mode.md)
             'edits' => GroundRevision::edits(),
             'objects' => WorldObject::orderBy('id')->get()->map->toWorld(),
@@ -433,9 +435,29 @@ class InternalController extends Controller
         $data = $request->validate([
             'event' => ['required', 'string', 'in:'.implode(',', Vortex::EVENTS)],
             'user_id' => ['nullable', 'integer'],
+            // (plan 88 phase 4: the grudge's — how many times they shot him, with what)
+            'n' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'gun' => ['nullable', 'string', 'max:20'],
         ]);
 
-        return response()->json($vortex->line($data['event'], $data['user_id'] ?? null));
+        return response()->json($vortex->line($data['event'], $data['user_id'] ?? null, [
+            'n' => $data['n'] ?? null,
+            'gun' => $data['gun'] ?? null,
+        ]));
+    }
+
+    // Vortex's memory (docs/plan/88-vortex-fight.md phase 4): his scars today, the grudge — who shot him, how much,
+    // till when — kept with the world
+    public function putVortex(Request $request): JsonResponse
+    {
+        $request->validate(['vortex' => ['present', 'array']]);
+        $v = $request->input('vortex');
+        abort_if(strlen((string) json_encode($v)) > 50_000, 422, 'too much to remember');
+        $world = World::current();
+        $world->settings = array_merge($world->settings ?? [], ['vortex' => $v]);
+        $world->save();
+
+        return response()->json(['ok' => true]);
     }
 
     // The YouTube playlists played in the world (the remotes' quick list), kept

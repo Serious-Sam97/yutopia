@@ -135,9 +135,12 @@ function vortexImage(mood: string): HTMLImageElement | null {
   // (plan 88: "mood|t|d0.75" — his tears in the fight, act III's dark transformation so far)
   const [face, ...look] = mood.split("|");
   const dark = Number(look.find((l) => l.startsWith("d"))?.slice(1) ?? 0);
+  // (phase 4: his scars today, "s1"–"s3")
+  const scars = Number(look.find((l) => l.startsWith("s"))?.slice(1) ?? 0);
   const svg = vortexSvg(face as VortexMood, `tp${mood.replace(/[^a-z0-9]/gi, "")}`, undefined, {
     tears: look.includes("t"),
     dark,
+    scars: (["splice", "stitch", "crack"] as const).slice(0, scars),
   }).replace("<svg ", '<svg width="240" height="225" ');
   const img = new Image();
   img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
@@ -192,15 +195,19 @@ export class Vortex3 {
     // (sat at a chess table — plan 70: a sitter's size, low over the seat so his face is over the far
     // rank, bobbing a little)
     const sit = p.vortexSit;
+    // (plan 88 phase 4: beaten — on the floor, on his side, still)
+    const down = mood.startsWith("dead");
     this.pivot.scale.setScalar(sit === undefined ? 1 : 0.62);
     this.pivot.position.set(
       0,
-      sit === undefined
-        ? 0.12 + Math.sin(performance.now() / 420) * 0.05
-        : sit - 0.04 + Math.sin(performance.now() / 520) * 0.012,
+      down
+        ? 0.5
+        : sit === undefined
+          ? 0.12 + Math.sin(performance.now() / 420) * 0.05
+          : sit - 0.04 + Math.sin(performance.now() / 520) * 0.012,
       0,
     );
-    this.pivot.rotation.set(-camPitch * lean, -face + Math.PI / 2, 0);
+    this.pivot.rotation.set(-camPitch * lean, -face + Math.PI / 2, down ? -1.29 : 0);
     (this.root.getObjectByName("shadow") as Mesh).visible = this.shown;
     this.mat.color.copy(tint);
   }

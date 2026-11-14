@@ -148,8 +148,9 @@ export interface SurvivalHooks {
   changed(sid: string): void;
   /** an admin's (docs/plan/48-the-admin.md): health, breath and battery full; up again if down */
   heal(sid: string): void;
-  /** (plan 88) something left lying (Vortex's tape where he fell): on `level`'s floor at (x, y) */
-  drop(item: ItemId, n: number, x: number, y: number, level: number, loaded?: number): void;
+  /** (plan 88) something left lying (Vortex's tape where he fell): on `level`'s floor at (x, y); `owner` (a user):
+   *  only theirs to take for a minute */
+  drop(item: ItemId, n: number, x: number, y: number, level: number, loaded?: number, owner?: number): void;
   /** an admin's: something into their pockets (or, `drop`, on the ground where they stand);
    *  false: nothing went (unknown, or no room) */
   give(sid: string, item: string, n: number, drop?: boolean): boolean;
@@ -283,6 +284,8 @@ registerFeature((room: WorldRoom) => {
       }
     }
   }
+  // (plan 88: one kept for someone — Vortex's tape for whoever hit him last — is theirs a minute, then anyone's)
+  const mayTake = (d: Drop, p: Player) => !d.owner || d.owner === p.uid || Date.now() - d.at > 60_000;
   function putDrop(item: ItemId, n: number, loaded: number, x: number, y: number, at: number, id?: string, level = 0) {
     // (dropped in deep water: washed up on its nearest bank — plan 66)
     if (level === 0) {
@@ -304,11 +307,13 @@ registerFeature((room: WorldRoom) => {
     d.level = Math.max(0, Math.min(255, level | 0));
     room.state.drops.set(d.id, d);
     // (the oldest go first past the cap)
+    const made = d;
     if (room.state.drops.size > MAX_DROPS) {
       const old = [...room.state.drops.values()].sort((a, b) => a.at - b.at)[0];
       room.state.drops.delete(old.id);
     }
     lootDirty = true;
+    return made;
   }
   // ── the day's caches: the nests' (shared dark/nests.ts), laid out with them; what's taken kept ──
   let nestsOf: { day: number; nests: Nest[] } | null = null;
@@ -526,6 +531,10 @@ registerFeature((room: WorldRoom) => {
     const d = room.state.drops.get(String(m?.id ?? ""));
     if (!r || !d || d.level !== r.p.level) return;
     if (Math.hypot(r.p.x - d.x, r.p.y - d.y, room.upOff(r.p, d, 0.3)) > LOOT_REACH) return;
+    if (!mayTake(d, r.p)) {
+      room.send(client, "toast", { text: "It's theirs — for a minute.", tone: "warn" });
+      return;
+    }
     const item = d.item as ItemId;
     // (into the slot it was dragged to, if it was and it fits there: the inventory's — a weapon into an empty quick
     // slot or pocket, plan 85)
@@ -572,7 +581,7 @@ registerFeature((room: WorldRoom) => {
     const { p, s } = r;
     const reach = (d: Drop) => Math.hypot(p.x - d.x, p.y - d.y, room.upOff(p, d, 0.3));
     const lying = [...room.state.drops.values()]
-      .filter((d) => d.level === p.level && reach(d) <= LOOT_REACH)
+      .filter((d) => d.level === p.level && reach(d) <= LOOT_REACH && mayTake(d, p))
       .sort((a, b) => reach(a) - reach(b));
     if (!lying.length) return;
     const got: LootItem[] = [];
@@ -768,8 +777,9 @@ registerFeature((room: WorldRoom) => {
       p.hp = vitalByte(s.v.hp);
       changed(s);
     },
-    drop(item, n, x, y, level, loaded = 0) {
-      putDrop(item, n, loaded, x, y, Date.now(), undefined, level);
+    drop(item, n, x, y, level, loaded = 0, owner = 0) {
+      const d = putDrop(item, n, loaded, x, y, Date.now(), undefined, level);
+      if (d) d.owner = owner;
     },
     give(sid, item, n, drop) {
       const p = room.state.players.get(sid);

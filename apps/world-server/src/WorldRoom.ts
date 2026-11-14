@@ -253,6 +253,8 @@ export class WorldRoom extends Room<WorldState> {
   // the Grounds' loot as the API kept it, for features/survival.ts to pick up; and that
   // feature's answers for the move's checks (out of breath: a jog's allowance; a roll's cost)
   savedLoot: unknown = null;
+  // (plan 88 phase 4) Vortex's memory as last saved: his scars, the grudge
+  savedVortex: unknown = null;
   savedKarts: unknown = null; // the Kart Park's record (features/karts.ts)
   survival: SurvivalHooks | null = null;
   dark: DarkHooks | null = null; // features/dark.ts: shots and flares (features/arms.ts)
@@ -440,6 +442,7 @@ export class WorldRoom extends Room<WorldState> {
 
     this.state.playlists = JSON.stringify(cleanPlaylists(info?.playlists ?? []));
     this.savedLoot = info?.loot ?? null;
+    this.savedVortex = info?.vortex ?? null;
     this.savedKarts = info?.karts ?? null;
     // the steps' volume an admin set (kept in the world's settings)
     const sv = Number(info?.sound?.steps);

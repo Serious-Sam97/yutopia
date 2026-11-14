@@ -246,6 +246,8 @@ const SCALE: Record<string, number> = {
   battery: 1.8,
   aid: 1.4,
   fuse: 2.2,
+  // (plan 88: the trophy, big enough to read where he fell)
+  vxtape: 2.4,
 };
 
 const made = new Map<string, BufferGeometry>();

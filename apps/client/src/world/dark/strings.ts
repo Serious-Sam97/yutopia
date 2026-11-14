@@ -239,6 +239,14 @@ export const STRINGS: Record<string, readonly [string, string]> = {
     "VORTEX IS DOWN. Last hit: <b>{by}</b>. {t}.<br><span>He'll be back. He remembers.</span>",
     "O VORTEX CAIU. Último tiro: <b>{by}</b>. {t}.<br><span>Ele vai voltar. Ele lembra.</span>",
   ],
+  vx_grudge: [
+    "Vortex holds a grudge · today<br>you shot him <b>{n} times</b> · he's following you",
+    "O Vortex guarda rancor · hoje<br>você atirou nele <b>{n} vezes</b> · ele está te seguindo",
+  ],
+  vx_grudge1: [
+    "Vortex holds a grudge · today<br>you shot him <b>once</b> · he's following you",
+    "O Vortex guarda rancor · hoje<br>você atirou nele <b>uma vez</b> · ele está te seguindo",
+  ],
   vx_clone: ["a clone?", "um clone?"],
   vx_possessed: ["possessed", "possuído"],
   vx_legs: ["VORTEX HAS YOUR LEGS", "O VORTEX TEM SUAS PERNAS"],

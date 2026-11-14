@@ -20,6 +20,8 @@ class Vortex
         'ambient', 'radio', 'night', 'standup', 'sleep', 'greet', 'poke', 'vortexos',
         'hit', 'dodge', 'whip', 'rew', 'pause', 'steal', 'blast', 'hr',
         'dark', 'clones', 'shades', 'possess', 'glitch',
+        // phase 4: beaten (public); the grudge, his chair taken (personal)
+        'down', 'grudge', 'chair',
     ];
 
     private const PUBLIC = [
@@ -116,6 +118,12 @@ class Vortex
             'your controls are mine for a bit. press anything.',
             'tracking error. it\'s you. you\'re the error.',
         ],
+        // beaten: the tape unspools
+        'down' => [
+            '*kkzzt* … rewind me.',
+            'ok. ok. *kkzzt* intermission.',
+            'tell the tape i was brave. *kkzzt*',
+        ],
         'blast' => [
             'this song slaps. so does the volume.',
             'everybody dance. that\'s not a request.',
@@ -123,8 +131,8 @@ class Vortex
         ],
     ];
 
-    /** @return array{line: ?string, mood: string, personal: bool} */
-    public function line(string $event, ?int $userId = null): array
+    /** @param array{n?: ?int, gun?: ?string} $ctx @return array{line: ?string, mood: string, personal: bool} */
+    public function line(string $event, ?int $userId = null, array $ctx = []): array
     {
         if ($userId === null || isset(self::PUBLIC[$event])) {
             $pool = self::PUBLIC[$event] ?? self::PUBLIC['ambient'];
@@ -143,7 +151,9 @@ class Vortex
         if (! $user) {
             return ['line' => null, 'mood' => 'smug', 'personal' => false];
         }
-        [$line, $mood] = $this->personal($this->nick($user), $event);
+        [$line, $mood] = $event === 'grudge' || $event === 'chair'
+            ? $this->grudge($this->nick($user), $event, (int) ($ctx['n'] ?? 0), (string) ($ctx['gun'] ?? ''))
+            : $this->personal($this->nick($user), $event);
 
         return ['line' => $this->glitchy($line), 'mood' => $mood, 'personal' => true];
     }
@@ -177,6 +187,42 @@ class Vortex
         }
 
         return $options[array_rand($options)];
+    }
+
+    // the grudge (docs/plan/88-vortex-fight.md phase 4): a day of remembering who shot him, with what, how many
+    // times — only to them. Their chair: he's in it.
+    /** @return array{0:string,1:string} */
+    private function grudge(string $nick, string $event, int $n, string $gun): array
+    {
+        $with = [
+            'revolver' => 'the .38', 'shotgun' => 'the shotgun', 'ak47' => 'the ak', 'sniper' => 'the rifle',
+            'daybreak' => 'the daybreak',
+        ][$gun] ?? 'that thing';
+        $count = $this->counted($n);
+        // (one: once)
+        $times = $n === 1 ? 'once' : "{$count} times";
+        $pool = $event === 'chair'
+            ? [
+                ["your chair? it was my chair. i'm made of spite, {$nick}.", 'smug'],
+                ["sat here all morning. it's warm now. you're welcome, {$nick}.", 'sideeye'],
+            ]
+            : [
+                ["you. {$with}. {$times}. i remember every one.", 'sideeye'],
+                ["{$nick}. {$times}. i counted. i'm made of tape, i keep everything.", 'judging'],
+                ["oh look, it's {$with} with a person attached. hi, {$nick}.", 'malicious'],
+                ["{$times}. that's how many. i'll be around, {$nick}. all day.", 'paranoid'],
+            ];
+
+        return $pool[array_rand($pool)];
+    }
+
+    // a number in his words (up to twenty), else as it is
+    private function counted(int $n): string
+    {
+        $w = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
+            'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'];
+
+        return $w[$n] ?? (string) $n;
     }
 
     // the signature tape glitch, ~1 in 5 lines (never added to an already glitched line)

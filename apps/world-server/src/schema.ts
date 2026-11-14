@@ -112,6 +112,8 @@ export class Drop extends Schema {
   @type("float32") y = 0;
   @type("float64") at = 0; // when (server ms)
   @type("uint8") level = 0;
+  // (plan 88) whose it is a while (a user; 0 anyone's): Vortex's tape, for the one who hit him last
+  @type("uint32") owner = 0;
 }
 
 // A cache in a day's nest (docs/plan/31-the-day.md, features/survival.ts): what one of
@@ -186,6 +188,8 @@ export class Npc extends Schema {
   @type("float32") vk = 1;
   @type("uint8") vact = 0;
   @type("float64") vgone = 0;
+  // (plan 88 phase 4) his scars, beaten today (0 none, at most 3)
+  @type("uint8") vscar = 0;
 }
 
 export class Standup extends Schema {

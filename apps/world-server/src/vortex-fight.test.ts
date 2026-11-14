@@ -43,6 +43,8 @@ interface Person {
   hits: { id: string; kind: string }[];
   fight: { who: { sid: string; name: string; hits: number }[] }[];
   down: { by: string; secs: number }[];
+  grudge: { hits: number; gun: string }[];
+  said: { text: string }[];
   moves: { kind: string; to?: string; who?: string[]; n?: number; item?: string; area?: string; ms?: number }[];
 }
 async function person(uid: number): Promise<Person> {
@@ -51,7 +53,7 @@ async function person(uid: number): Promise<Person> {
     token: `dev:${uid}:P${uid}:member,builder,admin`,
   });
   rooms.push(room);
-  const who: Person = { room, inv: null, hits: [], fight: [], down: [], moves: [] };
+  const who: Person = { room, inv: null, hits: [], fight: [], down: [], moves: [], grudge: [], said: [] };
   room.onMessage("dark:pockets", (m: { inv: Inventory }) => {
     who.inv = m.inv;
   });
@@ -59,6 +61,8 @@ async function person(uid: number): Promise<Person> {
   room.onMessage("vortex:fight", (m: Person["fight"][number]) => who.fight.push(m));
   room.onMessage("vortex:down", (m: Person["down"][number]) => who.down.push(m));
   room.onMessage("vortex:move", (m: Person["moves"][number]) => who.moves.push(m));
+  room.onMessage("vortex:grudge", (m: Person["grudge"][number]) => who.grudge.push(m));
+  room.onMessage("vortex:say", (m: Person["said"][number]) => who.said.push(m));
   room.onMessage("*", () => {});
   await waitFor(() => !!room.state?.players?.get(room.sessionId) && !!vx(room));
   room.send("dark:hello", {});
@@ -336,5 +340,54 @@ test("act III: the dark, the shadowed, his clones, the mind games, his blows —
   await waitFor(() => npcs(a, "vshade").length === 0 && npcs(a, "vortex").length === 0);
   a.room.send("mod:vortex", { reset: true });
   a.room.send("mod:heal", {});
+  await bye(a, b);
+});
+
+// (phase 4) the end and the grudge: beaten by A — scarred, his tape A's a minute (B can't take it, A can); back, he
+// remembers — after A, her slip (how many, with what), his line to her about it; forgotten — no scars
+test("the end and the grudge: scarred, the tape the last hitter's, back — after her, he remembers", async () => {
+  const a = await person(887);
+  const b = await person(888);
+  const m = me(a.room);
+  b.room.send("teleport", { to: { x: m.x - 1.5, y: m.y + 1.5, level: m.level } });
+  await waitFor(() => Math.hypot(me(b.room).x - (m.x - 1.5), me(b.room).y - (m.y + 1.5)) < 0.6);
+  a.room.send("mod:vortex", { reset: true, forget: true, hold: true, at: { x: m.x + 2.5, y: m.y } });
+  await waitFor(() => Math.abs(vx(a.room).x - (m.x + 2.5)) < 0.01 && vx(a.room).vscar === 0);
+  await armed(a);
+  shoot(a);
+  await waitFor(() => a.hits.filter((h) => h.kind === "vortex").length === 1);
+  await sleep(600);
+  shoot(a);
+  await waitFor(() => a.hits.filter((h) => h.kind === "vortex").length === 2);
+  // beaten (by her, as an admin's): scarred; his tape hers a minute
+  a.room.send("mod:vortex", { beat: true });
+  await waitFor(() => a.down.length === 1 && vx(b.room).vscar === 1);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const tape = (): any => [...a.room.state.drops.values()].find((d: { item: string }) => d.item === "vxtape");
+  await waitFor(() => !!tape());
+  assert.equal(tape().owner, me(a.room).uid, "the last hitter's");
+  const at = { x: tape().x, y: tape().y };
+  b.room.send("teleport", { to: { x: at.x - 0.6, y: at.y, level: m.level } });
+  await waitFor(() => Math.hypot(me(b.room).x - (at.x - 0.6), me(b.room).y - at.y) < 0.6);
+  b.room.send("dark:pick", { id: tape().id });
+  await sleep(500);
+  assert.ok(tape(), "not B's to take yet");
+  a.room.send("teleport", { to: { x: at.x + 0.6, y: at.y, level: m.level } });
+  await waitFor(() => Math.hypot(me(a.room).x - (at.x + 0.6), me(a.room).y - at.y) < 0.6);
+  a.room.send("dark:pick", { id: tape().id });
+  await waitFor(
+    () => !tape() && [...(a.inv?.pockets ?? []), ...(a.inv?.quick ?? [])].some((it) => it?.id === "vxtape"),
+  );
+
+  // back: he remembers — after her; she's told (2 hits, the revolver) and he says so to her
+  a.room.send("mod:vortex", { back: true, hold: false });
+  await waitFor(() => vx(a.room).vgone === 0 && vx(a.room).mood !== "dead");
+  await waitFor(() => a.grudge.length > 0, 10_000);
+  assert.deepEqual(a.grudge[0], { hits: 2, gun: "revolver" });
+  assert.equal(b.grudge.length, 0, "only hers");
+  await waitFor(() => a.said.some((x) => x.text.includes("the .38") && x.text.includes("2 times")), 20_000);
+  // forgotten: no scars, no grudge
+  a.room.send("mod:vortex", { forget: true, reset: true, hold: true });
+  await waitFor(() => vx(a.room).vscar === 0);
   await bye(a, b);
 });

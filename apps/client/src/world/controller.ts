@@ -2774,18 +2774,22 @@ export class WorldController {
   // (Vortex as the room has him, or a stand-in of his drawn by the Grounds' life: what's read of him)
   // (plan 88) when each Vortex (him, his clones) went dark — act III's transformation eased in over 2 s
   private vxDarkAt = new Map<string, number>();
-  private vortexLook(n: Pick<Npc, "id" | "vact">): string {
+  private vortexLook(n: Pick<Npc, "id" | "vact" | "vscar">): string {
     const act = n.vact ?? 0;
+    // (phase 4: scarred for the day — one to three)
+    const scars = n.vscar ? `|s${n.vscar}` : "";
     if (act < 3) this.vxDarkAt.delete(n.id);
-    if (act < 2) return "";
-    if (act === 2) return "|t";
+    if (act < 2) return scars;
+    if (act === 2) return `|t${scars}`;
     const at = this.vxDarkAt.get(n.id) ?? performance.now();
     this.vxDarkAt.set(n.id, at);
     // (in quarters: each a drawing of its own, made once)
     const k = Math.min(1, Math.ceil(((performance.now() - at) / 2000) * 4) / 4);
-    return `|t|d${k}`;
+    return `|t|d${k}${scars}`;
   }
-  private npcState(n: Pick<Npc, "x" | "y" | "yaw" | "a" | "mood"> & Partial<Pick<Npc, "id" | "vact">>): AvatarState {
+  private npcState(
+    n: Pick<Npc, "x" | "y" | "yaw" | "a" | "mood"> & Partial<Pick<Npc, "id" | "vact" | "vscar">>,
+  ): AvatarState {
     return {
       name: "VORTEX",
       avatar: VORTEX_LOOK,
@@ -2797,7 +2801,7 @@ export class WorldController {
       speaking: false,
       emote: n.mood === "glitch" ? "fire" : "",
       // (his face; and in the fight his tears, act III's dark — plan 88: "mood|t|d0.75")
-      vortexMood: n.id ? n.mood + this.vortexLook(n as Pick<Npc, "id" | "vact">) : n.mood,
+      vortexMood: n.id ? n.mood + this.vortexLook(n as Pick<Npc, "id" | "vact" | "vscar">) : n.mood,
       mic: false,
       npc: true,
     };
