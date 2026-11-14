@@ -8,7 +8,7 @@ Status: **investigated and proposed 2026-11-14; forks decided by the user 2026-1
 item out only while in use; **F2a** anything but a gun; **F3b** a flare there lit by 1 and held up as a light, G or
 1 again throws it; **F4a** everyone has a torch, it can be dropped, the lobby's locker gives one to whoever has none. **Phase 0 (the
 mock) signed off 2026-11-14**, committed cba1f89b; **phase 1 (the rules) built 2026-11-14**, committed 3b48ff95; **phase 2 (the keys) built 2026-11-14**, committed 5f2c97bc; **phase 3 (the left hand in use) built 2026-11-14**, committed 5102f290; **phase 4 (the pack and the HUD) built
-2026-11-14**.
+2026-11-14**, committed 45691911; **phase 5 (checks) done 2026-11-14 — plan 87 done.**
 
 ## What there is now
 
@@ -200,6 +200,19 @@ the pad's ↑ the left hand, LB + A B X Y the quick slots 2–5; a mock of the a
      `87-4-hud.png`, `87-4-phone.png`.
 5. **Checks**: the guns' specs (their keys 2–5 now: `Digit${slot + 2}`), the inventory specs (slot 12), the dark
    and night specs that switch the light (`phone:torch` → the left hand), the server's and API's tests; stills.
+   Done in phase 5 (2026-11-14) — **plan 87 done**:
+   - **The browser specs together** (18.1 min): the five guns' two-player specs, `guns-two`, `arms`, `arms-empty`,
+     `arms-feel`, `daybreak`, `beam` (3), `dark`, `dark-hud`, `inventory`, `inventory-pack`, `inventory-tools` (6),
+     `left-hand` — **23 green**.
+   - **The units**: shared 490, the client's 334, the API's `SurvivorTest` 8 (the dev DB untouched) — green.
+   - **The server's 33 files**, one at a time: 29 green; red and not this plan's — `pets-attack` (2, red before),
+     `survival`'s admin give (red before) and a spot's loot (flaky), `world`'s back after a reload (red before);
+     `rooms`' slot cars (timing: green alone) and Vortex's "personal lines are private" (he greets whoever his walk
+     passes, the other person too — random, green this morning).
+   - **Budgets** (a production build): the world page 480.7 KB (481 — unchanged by the plan), `yutopia-dark` 43.0 of
+     80, `yutopia-chars` 70.5 of 72.
+   - Stills of the phases: `design/inventory/87-*.png` (the mock), `87-3-*.png` (the flare and the torch held, both
+     screens), `87-4-*.png` (the pack, the menu, the HUD, a phone).
 
 ## Risks
 
