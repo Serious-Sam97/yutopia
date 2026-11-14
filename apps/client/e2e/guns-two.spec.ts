@@ -20,7 +20,8 @@ const prefs = (p: Page) =>
 // of hers drawn by its slot
 const empty = (bia: Page) =>
   bia.evaluate(async () => {
-    for (const slot of [6, 7, 8, 9]) {
+    // (plan 85: her pack too — a weapon there is still hers, one of a kind: a given one wouldn't go in)
+    for (let slot = 0; slot < 10; slot++) {
       (window as any).__yutopia.room.send("dark:drop", { slot });
       await new Promise((r) => setTimeout(r, 150));
     }

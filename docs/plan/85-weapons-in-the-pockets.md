@@ -11,7 +11,7 @@ free quick slot, else a free pocket; **F3a** the weapon in her hand moved to a p
 pockets named "Mochila" / "Pack" (the label only); **F5a** equipped by a drag or an Equip button; **F2a** (one of a
 kind across quick slots and pockets) as recommended, not asked. **Phase 1 (the rules) built 2026-11-14**,
 committed c81d8ec3. **Phase 2 (the server, the save) built 2026-11-14**, committed 2c684b06. **Phase 3 (the panel) built 2026-11-14**,
-committed.
+committed 7b56cda7. **Phase 4 (the checks) built 2026-11-14**, committed — **plan 85 done**.
 
 ## What there is now
 
@@ -115,6 +115,19 @@ a pocket, it shows nowhere. The work is letting it in, everywhere the rule lives
 4. **Checks**: `e2e/inventory.spec.ts` — a weapon dragged to a pocket: out of her hand, gone from her back and
    its pouch gone, on her screen and another's; dragged back: on her back again; equipped by the button; a save
    and a rejoin with it in a pocket. All the guns' specs and the inventory's green.
+
+   Done in phase 4:
+   - **`e2e/inventory-pack.spec.ts`** (Bia beside Ana): a revolver and a double-barrel given her — worn: her
+     holster, the double-barrel slung and its shell carrier, on both screens; the revolver drawn; her inventory
+     open ("PACK"): the revolver in her hand dragged to the pack — put away, off her hip, on both screens; the
+     double-barrel dragged to the pack — off her back, its carrier gone; the revolver picked in the pack — "in the
+     pack", Equip; E — into the first empty quick slot (the pockets' rounds swapped up into the ones the guns left),
+     on her hip again; gone and back — the double-barrel still in her pack, still worn nowhere.
+   - **The two-of-us specs** (`revolver-`, `shotgun-`, `ak-`, `sniper-`, `daybreak-`, `guns-two`) empty Bia's pack
+     too before arming her: a weapon left in it is still hers — one of a kind, a given one wouldn't go in (after
+     `inventory-pack`, `shotgun-two` failed so).
+   - Green: `inventory`, `inventory-pack`, `arms-empty`, `guns-two`, the five guns' two-of-us specs, `daybreak`
+     (`drops` is a review shot: skipped without `YUTOPIA_SHOTS`).
 
 ## Risks
 

@@ -88,7 +88,8 @@ test("two of us and the Daybreak: slung, drawn, aimed upright, charged and away,
   // her hands empty (her quick slots onto the snow — she's no admin: Ana gives her the Daybreak and its cells)
   await bia.evaluate(async () => {
     (window as any).__yutopia.room.send("arms:draw", { slot: -1 });
-    for (const slot of [6, 7, 8, 9]) {
+    // (plan 85: her pack too — a weapon there is still hers, one of a kind: a given one wouldn't go in)
+    for (let slot = 0; slot < 10; slot++) {
       (window as any).__yutopia.room.send("dark:drop", { slot });
       await new Promise((r) => setTimeout(r, 150));
     }
