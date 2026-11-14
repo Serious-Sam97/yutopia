@@ -216,6 +216,8 @@ function Bench({ q }: { q: URLSearchParams }) {
         sling: GUN === "shotgun" || q.get("both") === "1" || q.get("all") === "1",
         slingAk: GUN === "ak47" || q.get("both") === "1" || q.get("all") === "1",
         slingSn: GUN === "sniper" || q.get("all") === "1",
+        // (`all=1`: the Daybreak too — plan 84)
+        slingDb: GUN === "daybreak" || q.get("all") === "1",
         mv: packMv("still"),
         pitch: 0,
         torch: false,

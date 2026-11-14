@@ -16,7 +16,8 @@ over the three there; F2a (shouldered, her head upright behind the high sight), 
 (the torch against the fore-grip) as recommended, not asked. **Phase 0 (the mocks) rendered 2026-11-13** —
 sheets `design/guns/p84/sheet-84-{hold,charge,reload,slung}.png`; the model changed for them (below); **signed off
 2026-11-13** ("seguir assim"). **Phase 1 (the grip) built 2026-11-13** — `tp/daybreak-hold.ts` `DB_LONG`, the
-bench's `gun=daybreak`; stills `design/guns/p84/bench-1-hold.png`. Not committed.
+bench's `gun=daybreak`; stills `design/guns/p84/bench-1-hold.png`; committed 22bc3da (with phase 0). **Phase 2 (put
+away, drawn) built 2026-11-13** — stills `design/guns/p84/bench-2-carry.png`. Not committed.
 
 ## Where we are — read from the code and the bench
 
@@ -218,6 +219,31 @@ whatever F3–F4.
      at the ready meanwhile), port arms and struck (5).
 2. **Put away, drawn** (F6) — its sling place, flat on her back over the others (their gaps), drawn off it and
    back in the gun's own times (shared `ARMS.daybreak.draw` 0.6), `Player` flag as `slingSn`.
+   Done in phase 2:
+   - **`Player.slingDb`** (the server's schema and `features/arms.ts`: a Daybreak in her things and not in her
+     hands), the client's model, controller and `PersonIn`; `SlingFlag` takes it; the bench's `all=1` slings
+     all four.
+   - **Slung** (`DB_SLING`, `tp/daybreak-hold.ts`): upright down the middle of her back, the lens down at her
+     hips, its side to her — the carry handle to her right, the grip and the fore-grip to her left — its strap
+     from the brace over her right shoulder, across her chest to her left hip, round to the lens's collar.
+     Alone, its lens lay on her lower back and its top stood 5 cm off a feminine back, 10 off a masculine one:
+     tilted top in (`lean` alone 0.1 / 0.143) and brought nearer, **each body its own** (`SlingSpec.back`, new:
+     3.5 / 8 cm) — **0.2–3.4 cm off her all its length**. Over the others (`over`: the sniper 2, the AK 2, the
+     double-barrel 1 cm): resting on them where they cross under it, its foot tilted in a little (`lean` over
+     −0.06 / −0.12); 0.2–1 cm off them at its closest. Its brace's top 0.6–1.2 cm into the bob's hair.
+   - **Drawn by its carry handle** (`grab`, its keys): her right hand back to the handle upright at her right —
+     round it from outside, a hand's way behind her (searched by small turns: its first turn put her wrist
+     90° past its reach); off her back to her right, turning, the lens coming round forward; **at her right
+     side carried as a lamp** — level, the lens ahead, the handle up in her hanging hand, the hand rolled round
+     the bar to it by 0.6 of the draw (`grab.from`, new: a hand's hold rolled about what it holds); lifted level
+     before her right hip, its top rolled a little to her right; her right on to the walnut grip round the
+     gun's right side (`grab.arc`, new, 8 cm out — straight, her forearm went 9 cm through the lamp) as it comes
+     up into the low ready, her left meeting the fore-grip at the end. Put away the same way back.
+   - **Audited** (both bodies, the draw at 13 moments): **0–0.56 clean**; the change of hold, 0.62–0.85, her
+     right hand up to 5.5 cm short of the handle and her wrist up to 11° past its reach (the gun rising out of
+     her hanging hand), her right forearm 2.4–2.9 cm into the lamp at 0.85; her left fingers closing on the
+     fore-grip at 0.9 (0.4–1.5 cm in), on at 0.95. **Left** for the checks to hold as known, as the sniper's
+     mid-draw.
 3. **The aim and the charge** (F2–F3) — the pad in the pocket, her head upright and her eye on the sight's
    line at the game's whole reach of pitch and turn, upright, on the look; the charge's brace and the shot's
    shove; others see it.

@@ -583,6 +583,9 @@ registerFeature((room: WorldRoom) => {
           // (plan 83) the sniper carried: slung on the AK's diagonal, over it
           const slingSn = !!inv && !!weaponIn(inv, "sniper");
           if (p.slingSn !== slingSn) p.slingSn = slingSn;
+          // (plan 84) the Daybreak carried: upright down the back, the lens down, over the others
+          const slingDb = !!inv && !!weaponIn(inv, "daybreak");
+          if (p.slingDb !== slingDb) p.slingDb = slingDb;
         }
       }
     },

@@ -168,6 +168,10 @@ const ARM_RACK = 7;
 function slungAt(SL: SlingSpec, p: PersonIn, out: Vector3): Vector3 {
   out.copy(SL.at);
   for (const o of SL.over) if (p[o.flag]) out.z -= o.out;
+  if (SL.back) {
+    const B = SL.over.some((o) => p[o.flag]) ? SL.back.over : SL.back.alone;
+    out.z += B[p.avatar.gender === "feminine" ? 0 : 1];
+  }
   return out;
 }
 /** …its turn there (the chest bone's space) */
@@ -2614,20 +2618,25 @@ export class Person3D {
     let grabbing = false;
     if (GB && draw < GB.to) {
       rMg.decompose(akV2, akQ1, akS);
-      akV1.copy(GB.palm).applyMatrix4(rMg);
-      if (
-        m.wristFor(
-          "R",
-          akV1,
-          akV2.copy(GB.along).applyQuaternion(akQ1),
-          akV3.copy(GB.index).applyQuaternion(akQ1),
-          akAtB,
-          akQB,
-        )
-      ) {
+      // (plan 84: rolled round the handle from where her hand took it — its place and turn eased between)
+      const GF = GB.from;
+      const kf = GF ? Math.min(1, draw / (GF.by ?? GB.until)) : 1;
+      const ef = kf * kf * (3 - 2 * kf);
+      akV1.copy(GF ? lgFA.copy(GF.palm).lerp(GB.palm, ef) : GB.palm).applyMatrix4(rMg);
+      if (GF) {
+        akV2.copy(GF.along).lerp(GB.along, ef).normalize();
+        akV3.copy(GF.index).lerp(GB.index, ef).normalize();
+      } else {
+        akV2.copy(GB.along);
+        akV3.copy(GB.index);
+      }
+      if (m.wristFor("R", akV1, akV2.applyQuaternion(akQ1), akV3.applyQuaternion(akQ1), akAtB, akQB)) {
         const k = draw <= GB.until ? 1 : 1 - (draw - GB.until) / (GB.to - GB.until);
         const e = k * k * (3 - 2 * k);
         rAt.lerp(akAtB, e);
+        // (plan 84: on its way between them, round the gun's right side, not through it)
+        if (GB.arc)
+          rAt.addScaledVector(akV4.set(0, 0, 1).applyQuaternion(akQ1), GB.arc * Math.sin(Math.PI * e) * akS.x);
         rTurn.slerp(akQB, e);
         grabbing = true;
         this.placeGun(rMg);

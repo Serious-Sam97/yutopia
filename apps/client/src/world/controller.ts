@@ -2742,6 +2742,7 @@ export class WorldController {
       sling: p.sling || undefined,
       slingAk: p.slingAk || undefined,
       slingSn: p.slingSn || undefined,
+      slingDb: p.slingDb || undefined,
       arm: p.arm,
       fellAt: p.fellAt,
       fellYaw: p.fellYaw,

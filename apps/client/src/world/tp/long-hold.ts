@@ -104,8 +104,8 @@ export interface LongSpec {
  *  each under half a turn from the next; the draw's time and the put-away's (s); the strap's way over her
  *  (each point a bone's and an offset in her frame, out on her front — a fuller chest's `bust` more) between
  *  its two ends on the gun */
-/** The Player flags that say she carries a long gun slung (plans 81–83) */
-export type SlingFlag = "sling" | "slingAk" | "slingSn";
+/** The Player flags that say she carries a long gun slung (plans 81–84) */
+export type SlingFlag = "sling" | "slingAk" | "slingSn" | "slingDb";
 
 export interface SlingSpec {
   flag: SlingFlag;
@@ -123,10 +123,26 @@ export interface SlingSpec {
    *  straighter, further from its chest bone at the shoulders); `over`: with another long gun under it, its
    *  top brought down to her back past where they cross — else its top stood off her shoulder blades */
   lean?: { alone: [number, number]; over: [number, number] };
+  /** brought this much nearer her back (m) — on a body with a bust, without; alone, over others (plan 84: the
+   *  Daybreak upright down her back stood 4–10 cm off a masculine back where it touched a feminine one) */
+  back?: { alone: [number, number]; over: [number, number] };
   /** drawn by another place on it first (her right hand round it — its palm's middle, the fingers' way, the
    *  index side; the gun's frame) till this much of the draw, then on to the grip by `to`; `hold`: that place
    *  is the grip itself, the hand turned another way on it (its fingers kept round it) */
-  grab?: { palm: Vector3; along: Vector3; index: Vector3; until: number; to: number; hold?: boolean };
+  grab?: {
+    /** (plan 84) her hand's way from it to the grip bowed out to the gun's right this far mid-way (m) */
+    arc?: number;
+    palm: Vector3;
+    along: Vector3;
+    index: Vector3;
+    until: number;
+    to: number;
+    hold?: boolean;
+    /** (plan 84) her hand's place on it at the draw's start, rolled round to `palm`/`along`/`index` by `by` (else
+     *  `until`) —
+     *  the Daybreak's carry handle, upright on her back, then level in her hanging hand */
+    from?: { palm: Vector3; along: Vector3; index: Vector3; by?: number };
+  };
 }
 
 /** The gun's turn (the world's) and its grip point, for its butt in the right shoulder's pocket (aimed, or at
