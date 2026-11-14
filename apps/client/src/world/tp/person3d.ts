@@ -936,7 +936,8 @@ export class Person3D {
               : null,
           // (struck: thrown from where it came from — off the facing, + to the left)
           hit: p.hit ? { from: this.turned - p.hit.yaw, t: p.hit.t, k: 1 } : null,
-          torch: !!p.torch && !p.phone && !p.shade,
+          // (plan 87 F3b: a flare held up is held where the torch is)
+          torch: !!(p.torch || p.flare) && !p.phone && !p.shade,
           pitch: p.pitch ?? 0,
           // (aiming, bladed: the shoulders and the arms twist back along the look, left of the body)
           yaw: (mv & 16) !== 0 ? AIM_BLADE : 0,
@@ -1796,7 +1797,7 @@ export class Person3D {
         .addScaledVector(hv.set(1, 0, 0).applyQuaternion(tq), 0.12 * body).y -= 0.17 * body;
       this.model.reachTo("R", hp, w, [-0.6, -1, -0.3]);
     } else wrist.getWorldPosition(hp);
-    if (p.torch && !p.phone) {
+    if ((p.torch || p.flare) && !p.phone) {
       // (the left wrist under the right, back to back)
       ht.copy(hp)
         .addScaledVector(up, -0.05 * gs)
@@ -1872,7 +1873,11 @@ export class Person3D {
       }
     }
     const B = this.revFrame(p, aiming);
-    const H = revolverHold(B, { aiming, pitch: p.pitch ?? 0, torch: !!p.torch && !p.phone, run }, this.revHold);
+    const H = revolverHold(
+      B,
+      { aiming, pitch: p.pitch ?? 0, torch: !!(p.torch || p.flare) && !p.phone, run },
+      this.revHold,
+    );
     // the right wrist: the gun's place less the gun's own place under the wrist (its root's and its model's)
     const g = gun.root;
     const inner = gun.model.root;
@@ -2071,7 +2076,11 @@ export class Person3D {
     const RW = this.root.matrixWorld;
     this.root.getWorldQuaternion(rqRoot);
     const E = this.revEase;
-    const H = revolverHold(B, { aiming: false, pitch: 0, torch: !!p.torch && !p.phone, run: 0 }, this.revHold);
+    const H = revolverHold(
+      B,
+      { aiming: false, pitch: 0, torch: !!(p.torch || p.flare) && !p.phone, run: 0 },
+      this.revHold,
+    );
     const key = (name: string, pos: Vector3, quat: Quaternion) => {
       if (name === "hold") {
         pos.copy(H.grip);
@@ -4178,13 +4187,18 @@ export class Person3D {
   // the torch on: a flashlight in the left hand (docs/plan/30-the-dark.md) — not while the
   // phone's out (both hands on it)
   private torch: Prop | null = null;
+  /** (plan 87) what's in the left hand's light: the torch, or a flare held up */
+  private torchKind: "torch" | "flare" = "torch";
   private torchFrame(p: PersonIn) {
     const hand = this.model.bone("wristL");
-    const on = !!p.torch && !p.phone && !!hand;
-    if (!!this.torch !== on) {
+    // (plan 87 F3b: a flare held up takes the torch's place — its grip, every gun's hold for it — the prop its own)
+    const kind = p.flare ? "flare" : "torch";
+    const on = !!(p.torch || p.flare) && !p.phone && !!hand;
+    if (!!this.torch !== on || (on && this.torchKind !== kind)) {
       this.dropTorch();
       if (on && hand) {
-        this.torch = this.C.buildProp("torch", "#2b2e33", this.mats.prop);
+        this.torch = this.C.buildProp(kind, "#2b2e33", this.mats.prop);
+        this.torchKind = kind;
         this.C.inHand(this.torch.root, "torch");
         // (no shadow of its own: the light comes out of it)
         this.torch.root.traverse((o) => {
@@ -4282,8 +4296,15 @@ export class Person3D {
     cap.quaternion.copy(snowQ).multiply(head.getWorldQuaternion(snowQ2));
     cap.scale.set(0.1 + 0.05 * k, 0.015 + 0.045 * k, 0.1 + 0.05 * k);
   }
+  /** (plan 87 F3b) The burning end of a flare held up, in the world — null if none (its light and sparks start
+   *  there: dark/arms.ts hands it to the view) */
+  flareTip(out: Vector3): Vector3 | null {
+    if (!this.torch || this.torchKind !== "flare" || !this.root.visible) return null;
+    this.torch.root.updateWorldMatrix(true, false);
+    return this.torch.root.localToWorld(out.set(0, 0.1, 0));
+  }
   torchLens(out: Vector3): Vector3 | null {
-    if (!this.torch || !this.root.visible) return null;
+    if (!this.torch || this.torchKind !== "torch" || !this.root.visible) return null;
     this.torch.root.updateWorldMatrix(true, false);
     return this.torch.root.localToWorld(out.set(0, 0.1, 0));
   }

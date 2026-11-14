@@ -731,10 +731,18 @@ export class Arms {
     // flares burning on my floor: to the 3D view
     const tp = ctl.tp;
     if (tp) {
-      const flares: { x: number; y: number; z: number; t: number }[] = [];
-      room?.state.flares?.forEach((f: { x: number; y: number; z: number; at: number; level?: number }) => {
-        if ((f.level ?? 0) === ctl.level) flares.push({ x: f.x, y: f.y, z: f.z, t: f.at / 1000 });
-      });
+      const flares: { x: number; y: number; z: number; t: number; held?: boolean }[] = [];
+      room?.state.flares?.forEach(
+        (f: { x: number; y: number; z: number; at: number; level?: number; held?: string }) => {
+          if ((f.level ?? 0) !== ctl.level) return;
+          // (plan 87 F3b: one held up — where its end burns in the drawn hand; not drawn here, where the server
+          // has it)
+          if (f.held) {
+            const tip = tp.flareTipOf(f.held);
+            flares.push({ ...(tip ?? { x: f.x, y: f.y, z: f.z }), t: f.at / 1000, held: true });
+          } else flares.push({ x: f.x, y: f.y, z: f.z, t: f.at / 1000 });
+        },
+      );
       tp.flares = flares;
     }
     this.draws();

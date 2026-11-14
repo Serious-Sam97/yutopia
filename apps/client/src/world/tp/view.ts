@@ -2368,7 +2368,15 @@ void main() {
   /** Who's down (crawling) and who's kneeling by them getting them up (world/dark says; D7). */
   downed = new Map<string, "down" | "kneel">();
   /** Flares burning (world/dark gives them: the floor's coords, feet z, s lit): a red ground lamp each. */
-  flares: { x: number; y: number; z: number; t: number }[] = [];
+  // (plan 87 F3b: `held` — one held up in someone's left hand: x, y, z its burning end, not the ground)
+  flares: { x: number; y: number; z: number; t: number; held?: boolean }[] = [];
+  private tipV = new Vector3();
+  /** (plan 87 F3b) Where someone's flare held up burns — its end, the floor's coords (x, y; z up) — or null (not
+   *  drawn here) */
+  flareTipOf(sid: string): { x: number; y: number; z: number } | null {
+    const v = this.people3.get(sid)?.flareTip(this.tipV);
+    return v ? { x: v.x, y: v.z, z: v.y } : null;
+  }
   /** What the Daybreak's balls and bursts light (plan 79 phase 7: the arms' lights(), a frame behind). */
   orbLights: { x: number; y: number; z: number; k: number }[] = [];
   deaths: { x: number; y: number; z: number; t: number }[] = [];

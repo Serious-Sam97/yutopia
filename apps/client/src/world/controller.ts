@@ -585,7 +585,7 @@ export class WorldController {
         });
         if (hud.get().phase === "ready" && !p.bot) mixer.blip("join");
       }
-      model.upsertAvatar(sid, this.avatarState(p, local));
+      model.upsertAvatar(sid, this.avatarState(p, local, sid));
       $(p).onChange(() => {
         if (sid === room.sessionId) return;
         const r = this.remotes.get(sid);
@@ -1312,7 +1312,7 @@ export class WorldController {
     const reduced = prefs().reducedMotion;
     if (lp) {
       const st = {
-        ...this.avatarState(lp, true),
+        ...this.avatarState(lp, true, localSid),
         x: this.me.x,
         y: this.me.y,
         yaw: this.me.yaw,
@@ -1359,7 +1359,7 @@ export class WorldController {
       const hidden = (p.powers & 8) !== 0;
       const unseen = hidden && !lp?.admin;
       const st = {
-        ...this.avatarState(p, false),
+        ...this.avatarState(p, false, sid),
         ...(hidden ? { status: "away" } : null),
         x: pos.x,
         y: pos.y,
@@ -2709,7 +2709,16 @@ export class WorldController {
   wind = 0;
 
   // ── helpers ──────────────────────────────────────────────────────────────
-  private avatarState(p: Player, _local: boolean): AvatarState {
+  /** (plan 87 F3b) Someone holding a lit flare up in their left hand (the server keeps it at their hand) */
+  private holdsFlare(sid: string): boolean {
+    let held = false;
+    this.room?.state.flares?.forEach((f) => {
+      if (f.held === sid) held = true;
+    });
+    return held;
+  }
+  // (`sid` the player's session — the state's map key; the Player's own `sid` isn't sent to clients)
+  private avatarState(p: Player, _local: boolean, sid: string): AvatarState {
     const look = parseAvatar(p.avatar);
     return {
       name: p.name,
@@ -2736,6 +2745,7 @@ export class WorldController {
       ringing: p.ringing,
       recording: p.recording,
       torch: p.torch,
+      flare: this.holdsFlare(sid) || undefined,
       focused: p.focused,
       gun: p.gun,
       holster: p.holster || undefined,

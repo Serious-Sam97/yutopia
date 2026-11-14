@@ -73,7 +73,10 @@ const ARM_EMOTES = new Set(["wave", "heart", "clap", "fire", "question"]);
 
 /** What my hands are busy with right now ("" = nothing: they stay out of view). */
 export function handsDoing(
-  p: Pick<PersonIn, "phone" | "held" | "heldAt" | "typing" | "a" | "busy" | "act" | "emote" | "gun" | "torch" | "mv">,
+  p: Pick<
+    PersonIn,
+    "phone" | "held" | "heldAt" | "typing" | "a" | "busy" | "act" | "emote" | "gun" | "torch" | "flare" | "mv"
+  >,
 ): string {
   if (p.phone) return p.phone === "photo" || p.phone === "selfie" ? "" : p.phone;
   if (isHeld(p.held) && p.heldAt) return isDrink(p.held) ? "drink" : "toy";
@@ -82,7 +85,8 @@ export function handsDoing(
   if (p.act) return `act:${p.act}`;
   if (p.emote && ARM_EMOTES.has(p.emote)) return `emote:${p.emote}`;
   if (p.gun) return "gun";
-  if (p.torch) return (p.mv ?? 0) & 16 ? "torch:aim" : "torch";
+  // (plan 87 F3b: a flare held up as the torch is)
+  if (p.torch || p.flare) return (p.mv ?? 0) & 16 ? "torch:aim" : "torch";
   return "";
 }
 

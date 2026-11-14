@@ -603,7 +603,7 @@ export class Arms3 {
   slow = 1;
 
   /** Every frame: `flares` burning (the floor's coords, feet z; `t` s lit). */
-  update(step: number, flares: { x: number; y: number; z: number; t: number }[]): void {
+  update(step: number, flares: { x: number; y: number; z: number; t: number; held?: boolean }[]): void {
     const dt = step * this.slow;
     this.time += dt;
     const now = this.time;
@@ -758,16 +758,25 @@ export class Arms3 {
     // flares burning: their sticks, a hot head, sparks spitting up
     this.sticks.forEach((m, i) => {
       const f = flares[i];
-      m.visible = !!f;
+      // (plan 87 F3b: one held up — its stick's in her hand, the person's; its hot head and sparks at its end)
+      m.visible = !!f && !f.held;
       this.stickHeads[i].visible = !!f;
       if (!f) return;
       m.position.set(f.x, f.z + 0.04, f.y);
       const h = this.stickHeads[i];
-      h.position.set(f.x + 0.12, f.z + 0.12, f.y);
+      if (f.held) h.position.set(f.x, f.z + 0.02, f.y);
+      else h.position.set(f.x + 0.12, f.z + 0.12, f.y);
       const s = 0.45 + 0.15 * Math.sin(now * 37 + i) + 0.1 * Math.random();
       h.scale.set(s, s, s);
       if (Math.random() < dt * 30)
-        this.spark(f.x + 0.12, f.y, f.z + 0.1, Math.random() * Math.PI * 2, 0.4 + Math.random(), true);
+        this.spark(
+          f.x + (f.held ? 0 : 0.12),
+          f.y,
+          f.z + (f.held ? 0.02 : 0.1),
+          Math.random() * Math.PI * 2,
+          0.4 + Math.random(),
+          true,
+        );
     });
     // a flare in flight
     const fl = this.flights[0];

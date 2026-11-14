@@ -53,6 +53,7 @@ import {
   stepVitals,
   takeSlot,
   takeStack,
+  torchToHand,
   USABLE,
   type Vitals,
   type VitalsClock,
@@ -699,6 +700,8 @@ registerFeature((room: WorldRoom) => {
     const lvl = (x: unknown) => Math.max(1, Math.min(100, Number(x)));
     if (m?.hp !== undefined && Number.isFinite(Number(m.hp))) s.v.hp = lvl(m.hp);
     if (m?.wm !== undefined && Number.isFinite(Number(m.wm))) s.v.wm = lvl(m.wm);
+    // (plan 87) the torch in the left hand — ready to light by 1 (given if none; the hand's thing to the pack)
+    torchToHand(s.inv);
     // `kit`: armed for trying the fight — both guns loaded (quick 1 and 2; what was there put away),
     // rounds, shells, flares, first aid, a battery; `ak` too: the AK in quick 3, its rounds in a pocket
     // (plan 79 phase 5); `sniper`: the sniper in quick 4, its .308 (phase 6 — with both, the battery

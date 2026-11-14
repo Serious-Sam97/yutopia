@@ -59,6 +59,8 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_none_battery: ["No battery on you", "Nenhuma bateria com você"],
   dark_full_aid: ["Your health is full", "Sua saúde está cheia"],
   dark_full_battery: ["The torch is full", "A lanterna está cheia"],
+  // (plan 87) 1 with nothing to use in the left hand
+  dark_hand_none: ["Nothing to use in your left hand", "Nada para usar na mão esquerda"],
   dark_aid_pad: ["first aid", "kit médico"],
   dark_focus: ["Focus", "Foco"],
   dark_breath: ["Breath", "Fôlego"],

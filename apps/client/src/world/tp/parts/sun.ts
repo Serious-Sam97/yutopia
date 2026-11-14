@@ -183,7 +183,8 @@ export class Sun {
         near.push({
           x: f.x + 0.1,
           y: f.y,
-          h: f.z + 0.5,
+          // (plan 87 F3b: one held up lights from its end, in her hand)
+          h: f.held ? f.z + 0.05 : f.z + 0.5,
           c: { ...FLARE_LAMP, intensity: FLARE_LAMP.intensity * (0.85 + 0.15 * Math.sin(this.c.time * 23 + f.t * 7)) },
           d: -1,
           flare: true,

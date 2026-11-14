@@ -24,6 +24,7 @@ import {
   splitSlot,
   takeSlot,
   takeStack,
+  torchToHand,
   weaponIn,
 } from "./inventory.ts";
 
@@ -431,4 +432,21 @@ test("(plan 87) a save cleaned: the left hand kept, no weapon there, one torch, 
   assert.deepEqual(cleanInventory({ quick: [{ id: "torch", n: 1 }] }).hand, { id: "torch", n: 1 });
   // an old save (no hand): none
   assert.equal(cleanInventory({ quick: [], pockets: [] }).hand, null);
+});
+
+test("(plan 87) the torch to the left hand (an admin's refill): given if none, the hand's thing swapped to where it was", () => {
+  const inv = emptyInventory();
+  inv.hand = { id: "flare", n: 2 };
+  assert.equal(torchToHand(inv), true);
+  assert.deepEqual(inv.hand, { id: "torch", n: 1 });
+  assert.deepEqual(inv.pockets[0], { id: "flare", n: 2 }, "the flares where the torch was given");
+  // in the pack already: swapped in
+  const inv2 = emptyInventory();
+  inv2.pockets[3] = { id: "torch", n: 1 };
+  inv2.hand = { id: "aid", n: 1 };
+  assert.equal(torchToHand(inv2), true);
+  assert.deepEqual(inv2.pockets[3], { id: "aid", n: 1 });
+  assert.equal(count(inv2, "torch"), 1);
+  // in the hand already: as it was
+  assert.equal(torchToHand(inv2), true);
 });

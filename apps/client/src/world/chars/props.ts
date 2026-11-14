@@ -25,7 +25,7 @@ import { arc, extrude, lathe, type Prof, smoothNormals, sweepTube } from "./shap
 // ink line — built standing up (+y), centred on where the fist holds them.
 // And the earbud (on a call, the phone put away), centred on the ear.
 
-export type PropKind = "mug" | "cup" | "soda" | "phone" | "torch" | "bud";
+export type PropKind = "mug" | "cup" | "soda" | "phone" | "torch" | "bud" | "flare";
 
 interface Built {
   root: Group;
@@ -338,6 +338,52 @@ export function buildProp(kind: PropKind, color: string, mats: (color: string) =
       add(new BoxGeometry(0.007, 0.07, 0.0025).translate(0, -0.06, r * 1.12), "#9aa0a8");
       break;
     }
+    case "flare": {
+      // (plan 87 F3b) a road flare lit and held up: the torch's size and place in the fist (its grip and shape
+      // are the torch's), a red paper tube with two yellow bands, charred at the top, the burning end bright —
+      // the hot head and the sparks over it are the arms' view's (tp/arms3d.ts), its light the sun's lamps
+      const r = 0.016;
+      add(
+        lathe(
+          [
+            [0, -0.115],
+            [r * 0.95, -0.115],
+            [r, -0.111],
+            [r, 0.078],
+            [0, 0.078],
+          ],
+          SEG,
+        ),
+        "#b3261e",
+      );
+      for (const y of [-0.07, 0.035])
+        add(
+          lathe(
+            [
+              [r * 1.005, y],
+              [r * 1.005, y + 0.012],
+            ],
+            SEG,
+          ),
+          "#d9a521",
+          false,
+        );
+      add(
+        lathe(
+          [
+            [r, 0.078],
+            [r * 0.92, 0.088],
+            [0, 0.088],
+          ],
+          SEG,
+        ),
+        "#2a1d18",
+      );
+      const hot = new MeshBasicMaterial({ color: "#fff0e0" });
+      own.push(hot);
+      add(lathe(arc(0, 0.088, r * 0.85, 0, Math.PI / 2, 4), SEG), hot, false);
+      break;
+    }
     case "bud": {
       // an earbud: a little white bulb and its stem, down along the jaw
       add(lathe(arc(0, 0, 0.009, -Math.PI / 2, Math.PI / 2, 5), 10), color);
@@ -386,6 +432,7 @@ export const GRIP: Record<PropKind | "toy", { r: number; at: [number, number, nu
   soda: { r: 0.033, at: [0, 0, 0] },
   phone: { r: 0.006, at: [0, 0.01, -0.003] },
   torch: { r: 0.016, at: [0, -0.055, 0] },
+  flare: { r: 0.016, at: [0, -0.055, 0] },
   bud: { r: 0.005, at: [0, 0, 0] },
   toy: { r: 0.03, at: [0, 0, 0] },
 };
@@ -477,6 +524,7 @@ export const HELD_SHAPE: Record<PropKind | "toy" | "pad", HeldShape> = {
   cup: { round: true, r: 0.04, y0: 0, hy: 0.05 },
   soda: { round: true, r: 0.033, y0: 0, hy: 0.06 },
   torch: { round: true, r: 0.016, y0: -0.035, hy: 0.08 },
+  flare: { round: true, r: 0.016, y0: -0.035, hy: 0.08 },
   bud: { round: true, r: 0.005, y0: 0, hy: 0.005 },
   toy: { round: true, r: 0.03, y0: 0, hy: 0.03 },
   phone: { round: false, half: [0.035, 0.07, 0.0075], cz: -0.0015 },

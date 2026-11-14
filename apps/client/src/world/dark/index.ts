@@ -381,13 +381,15 @@ class Dark implements DarkHooks {
     const lp = room?.state.players.get(room.sessionId);
     if (lp?.downAt) return false;
     const it = this.inv.hand;
-    if (it?.id === "torch") room?.send("dark:hand", { on: !lp?.torch });
-    // (one lit in the hand: thrown, where I look — else the hand's next one lit)
-    else if (this.arms.heldFlare()) this.arms.flare();
+    // (a flare lit and held up: thrown first, where I look — whatever's in the slot since)
+    if (this.arms.heldFlare()) this.arms.flare();
+    else if (it?.id === "torch") room?.send("dark:hand", { on: !lp?.torch });
     else if (it?.id === "flare") room?.send("dark:hand", {});
     else if (it?.id === "aid" && ((lp?.hp as number) ?? 100) >= 100) this.toast(t("dark_full_aid"), ["aid"]);
     else if (it?.id === "battery" && this.walker.vitals.bat >= 99.5) this.toast(t("dark_full_battery"), ["battery"]);
     else if (it && isUsable(it.id)) room?.send("dark:hand", {});
+    // (nothing there, or something that does nothing from a hand — rounds, a fuse: said)
+    else this.toast(t("dark_hand_none"), it ? [it.id] : []);
     return true;
   }
 

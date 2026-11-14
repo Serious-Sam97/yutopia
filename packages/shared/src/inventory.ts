@@ -351,6 +351,15 @@ export function organize(inv: Inventory): boolean {
 
 /** (plan 87 F4a) A torch for one who carries none — into the left hand if it's free, else the pack. True if given. */
 export const giveTorch = (inv: Inventory): boolean => addStack(inv, "torch", 1) === 1;
+/** (plan 87) The torch into the left hand — one given if none is carried; what the hand held swapped out to where the
+ *  torch was. True if the torch is in the left hand after. (An admin's refill: ready to try the dark.) */
+export function torchToHand(inv: Inventory): boolean {
+  if (count(inv, "torch") < 1) giveTorch(inv);
+  const at = findStack(inv, "torch");
+  if (at < 0) return false;
+  if (at !== HAND_SLOT) moveSlot(inv, at, HAND_SLOT);
+  return inv.hand?.id === "torch";
+}
 
 /** Used up by a use: one of a stack in `slot` (aid, battery), or null. */
 export function consume(inv: Inventory, slot: number, usable: readonly StackId[] = USABLE): StackId | null {

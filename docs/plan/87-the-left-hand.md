@@ -7,7 +7,7 @@ longer by L. The new pack (plan 86, look B) adapted to it.
 Status: **investigated and proposed 2026-11-14; forks decided by the user 2026-11-14**: **F1a** the left hand's
 item out only while in use; **F2a** anything but a gun; **F3b** a flare there lit by 1 and held up as a light, G or
 1 again throws it; **F4a** everyone has a torch, it can be dropped, the lobby's locker gives one to whoever has none. **Phase 0 (the
-mock) signed off 2026-11-14**, committed cba1f89b; **phase 1 (the rules) built 2026-11-14**, committed 3b48ff95; **phase 2 (the keys) built 2026-11-14**.
+mock) signed off 2026-11-14**, committed cba1f89b; **phase 1 (the rules) built 2026-11-14**, committed 3b48ff95; **phase 2 (the keys) built 2026-11-14**, committed 5f2c97bc; **phase 3 (the left hand in use) built 2026-11-14**.
 
 ## What there is now
 
@@ -147,6 +147,29 @@ the pad's ↑ the left hand, LB + A B X Y the quick slots 2–5; a mock of the a
    too); with a first aid, a battery; **a flare lit and held up** (F3b — its own prop in the left hand, held where
    the torch is with each gun, its light and sparks, thrown by G or 1 from the hand, burnt out let fall); the rest a
    "no"; the phone's flashlight button gone.
+   Done in phase 3 (2026-11-14):
+   - **The torch** by 1: out and lit in her left hand, put out and away — the holds of plans 80–84 as they were
+     (nothing to change: they key on the light being on).
+   - **A flare held up** (F3b): the avatar's `flare` (controller `holdsFlare` — a burning flare whose `held` is her
+     session; the state's key, the Player's own `sid` isn't sent to clients); the person's left hand holds a flare
+     prop (`chars/props.ts` `flare`: a red tube, two yellow bands, charred at the top, its end burning — the
+     torch's size, grip and shape) **in the torch's place**, so every gun's hold takes it where it takes the torch
+     (Harries under the revolver, in the fist under a long gun's fore-end), no beam; first person as the torch. Its
+     end (`Person3D.flareTip`, the view's `flareTipOf`) is where the view's flare list has it: its hot head and
+     sparks there, the lying stick not drawn (`tp/arms3d.ts`), its red light from there (`parts/sun.ts`) — so it
+     moves with her hand. G or 1 throws it (lying lit where it lands, its time going on).
+   - **The "no"**: 1 with nothing usable in the left hand (nothing, rounds, a fuse) says so (a toast); the slot's
+     own shake waits for the HUD's left-hand slot (phase 4).
+   - **An admin's refill** (`mod:refill`): the torch put in the left hand (shared `torchToHand`: given if none,
+     what the hand held swapped out) — ready to light by 1; the specs that switch the light all refill.
+   - Checked: `left-hand.spec.ts` (new, two of us at night: the torch by 1 and out again; flares to her left hand,
+     one lit and held up — in her drawn hand, its end by her and well over her feet, its light drawn there, her hand
+     one fewer — on both screens; with the revolver out, still held; G: thrown, lying lit, her hand still two).
+     Stills: `design/inventory/87-3-torch-anas.png`, `87-3-flare-anas.png`, `87-3-flare-revolver-anas.png`,
+     `87-3-flare-revolver-hers.png`, `87-3-thrown-anas.png`.
+     With it, `arms`, `beam` (3), `dark-hud`, `inventory-tools` (4 and the phone) — 10 green together (a first run
+     red because a probe had left flares in Ana's left hand: why the admin's refill now puts the torch there); shared
+     inventory 16; `survival.test` green but the admin's give (red before this plan).
 4. **The pack and the HUD**: the belt's left-hand loop, hover + 1–5, the menu's 1–5, the torch's tag, the pad's belt
    row of five, a phone; the quick bar with the hand.
 5. **Checks**: the guns' specs (their keys 2–5 now: `Digit${slot + 2}`), the inventory specs (slot 12), the dark

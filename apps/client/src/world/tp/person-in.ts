@@ -45,7 +45,8 @@ export interface PersonIn {
   phonePose?: string;
   ringing?: boolean;
   recording?: boolean;
-  torch?: boolean; // the phone's flashlight on
+  torch?: boolean; // the torch on, in the left hand (plan 87: an item, lit only from there)
+  flare?: boolean; // (plan 87 F3b) a flare lit and held up in the left hand — held where the torch is
   focused?: boolean; // …focused: narrow and far (docs/plan/30-the-dark.md D4)
   gun?: string; // the weapon in the hand (D6): "revolver", "shotgun", "ak47" (plan 79)
   holster?: boolean; // carrying the revolver (plan 80): its holster on the right hip, the gun in it
