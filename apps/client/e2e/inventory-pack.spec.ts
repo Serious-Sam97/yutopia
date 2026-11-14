@@ -1,5 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
+import { POCKETS, QUICK, QUICK_SLOT } from "@yutopia/shared/inventory";
 import { ANA, BIA, enter, holdCamera, test, token } from "./helpers";
 
 // A weapon in the pack (docs/plan/85-weapons-in-the-pockets.md phase 4): Bia beside Ana on the pond's north shore
@@ -12,6 +13,8 @@ import { ANA, BIA, enter, holdCamera, test, token } from "./helpers";
 // GPU (YUTOPIA_GPU=1).
 const GPU = process.env.YUTOPIA_GPU === "1";
 const shots = process.env.YUTOPIA_SHOTS;
+// (every slot: the pack, then the quick slots — plan 86: 8 + 4)
+const ALL = POCKETS + QUICK;
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 const w = (page: Page, fn: (y: any) => unknown) =>
   page.evaluate((src) => new Function("y", `return (${src})(y)`)((window as any).__yutopia), fn.toString());
@@ -103,13 +106,13 @@ test("a weapon in the pack: put away and worn nowhere, on both screens; equipped
     y.room.send("mod:dark", { mode: "peaceful" });
   });
   // her hands and her pack empty (onto the snow — then a step away from it); she's no admin: Ana gives her the guns
-  await bia.evaluate(async () => {
+  await bia.evaluate(async (all) => {
     (window as any).__yutopia.room.send("arms:draw", { slot: -1 });
-    for (let slot = 0; slot < 10; slot++) {
+    for (let slot = 0; slot < all; slot++) {
       (window as any).__yutopia.room.send("dark:drop", { slot });
       await new Promise((r) => setTimeout(r, 80));
     }
-  });
+  }, ALL);
   await expect
     .poll(async () => {
       const v = await inv(bia);
@@ -173,14 +176,14 @@ test("a weapon in the pack: put away and worn nowhere, on both screens; equipped
   await bia.keyboard.press("KeyI");
   await expect(bia.locator(".dk-inv .panel")).toBeVisible();
   await expect(bia.locator(".dk-inv .head h1")).toHaveText(/pack/i);
-  await drag(bia, slot(bia, 6 + rev), slot(bia, 0));
+  await drag(bia, slot(bia, QUICK_SLOT + rev), slot(bia, 0));
   await expect.poll(async () => (await inv(bia))?.pockets[0]?.id, { timeout: 5000 }).toBe("revolver");
   for (const p of [bia, page]) {
     await expect.poll(() => seen(p, biaSid).then((s) => s.gun), { timeout: 3000 }).toBe("");
     await expect.poll(() => seen(p, biaSid).then((s) => s.holster || s.holster3), { timeout: 5000 }).toBe(false);
   }
   // the double-barrel to the pack too — off her back, its carrier gone, on both screens
-  await drag(bia, slot(bia, 6 + sg), slot(bia, 1));
+  await drag(bia, slot(bia, QUICK_SLOT + sg), slot(bia, 1));
   await expect.poll(async () => (await inv(bia))?.pockets[1]?.id, { timeout: 5000 }).toBe("shotgun");
   for (const p of [bia, page])
     await expect

@@ -75,7 +75,7 @@ class DarkController extends Controller
         return array_pad($out, Survivor::QUICK, null);
     }
 
-    // six pockets — the pack: a stack, a gun carried but not equipped (plan 85), or nothing in each
+    // eight pockets — the pack: a stack, a gun carried but not equipped (plan 85), or nothing in each
     private function pockets(array $slots, array &$seen): array
     {
         $out = [];

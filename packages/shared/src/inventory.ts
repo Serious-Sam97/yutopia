@@ -29,10 +29,11 @@ export const STACKS = {
 export type StackId = keyof typeof STACKS;
 export type ItemId = WeaponId | StackId;
 
-export const POCKETS = 6;
+// (plan 86 F4a: the pack's 8 pockets — was 6; the quick slots' numbers follow them: 8–11)
+export const POCKETS = 8;
 export const QUICK = 4;
 export const PAGES_MAX = 200;
-/** drop / use / move slots: the pockets 0–5, then the quick slots 6–9 (keys 1–4) */
+/** drop / use / move slots: the pockets 0–7, then the quick slots 8–11 (keys 1–4) */
 export const QUICK_SLOT = POCKETS;
 /** what a use takes one of (the rest: ammo by a reload, flares thrown, fuses for later) */
 export const USABLE = ["aid", "battery"] as const satisfies readonly StackId[];
@@ -223,12 +224,90 @@ export function addItemTo(inv: Inventory, slot: number, it: { id: ItemId; n: num
   return took + (n ? addStack(inv, it.id, n) : 0);
 }
 
-/** Take a slot out (to drop it): pockets 0–5, quick 6–9. */
+/** Take a slot out (to drop it): the pockets, then the quick slots. */
 export function removeSlot(inv: Inventory, slot: number): Item | null {
   const it = slotAt(inv, slot);
   if (!it) return null;
   put(inv, slot, null);
   return it;
+}
+
+/** (plan 86) Take `n` out of a slot (to drop some): `n` of a stack — all of it if that's as many or more, or no `n`
+ *  — or the weapon there. What came out, or null. */
+export function takeSlot(inv: Inventory, slot: number, n?: number): Item | null {
+  const it = slotAt(inv, slot);
+  if (!it) return null;
+  const s = stackOf(it);
+  const k = n === undefined ? Number.POSITIVE_INFINITY : Math.floor(n);
+  if (!s || k >= s.n) return removeSlot(inv, slot);
+  if (!(k >= 1)) return null;
+  s.n -= k;
+  return { id: s.id, n: k };
+}
+
+/** (plan 86) A stack split: `n` of it (half, rounded down, if none given) into another slot — empty, or the same
+ *  stack with room (topped up). How many moved. */
+export function splitSlot(inv: Inventory, from: number, to: number, n?: number): number {
+  if (from === to) return 0;
+  const s = stackOf(slotAt(inv, from));
+  const at = slotAt(inv, to);
+  if (!s || at === undefined) return 0;
+  const want = Math.min(s.n, Math.floor(n ?? s.n / 2));
+  if (!(want >= 1)) return 0;
+  const there = stackOf(at);
+  let k = 0;
+  if (at === null) {
+    k = Math.min(want, STACKS[s.id]);
+    put(inv, to, { id: s.id, n: k });
+  } else if (there && there.id === s.id) {
+    k = Math.min(want, STACKS[s.id] - there.n);
+    there.n += k;
+  }
+  if (k <= 0) return 0;
+  s.n -= k;
+  if (!s.n) put(inv, from, null);
+  return k;
+}
+
+/** (plan 86) The pack put in order — the quick slots left as they are: like stacks topped up into one another,
+ *  then the weapons first (the guns' order), then the rounds (their guns' order), then the things to use. True if
+ *  anything moved. */
+const ORDER: ItemId[] = [
+  ...(Object.keys(WEAPONS) as WeaponId[]),
+  ...(Object.values(WEAPONS).map((w) => w.ammo) as StackId[]),
+  "aid",
+  "battery",
+  "flare",
+  "fuse",
+];
+export function organize(inv: Inventory): boolean {
+  const before = JSON.stringify(inv.pockets);
+  // (like stacks topped up, the fuller first)
+  const items = inv.pockets.filter((it): it is Item => !!it);
+  const merged: Item[] = [];
+  for (const it of items) {
+    const s = stackOf(it);
+    if (!s) {
+      merged.push({ ...it });
+      continue;
+    }
+    let left = s.n;
+    for (const m of merged) {
+      const ms = stackOf(m);
+      if (!left || !ms || ms.id !== s.id || ms.n >= STACKS[s.id]) continue;
+      const k = Math.min(left, STACKS[s.id] - ms.n);
+      ms.n += k;
+      left -= k;
+    }
+    if (left) merged.push({ id: s.id, n: left });
+  }
+  const rank = (it: Item) => {
+    const i = ORDER.indexOf(it.id);
+    return i < 0 ? ORDER.length : i;
+  };
+  merged.sort((a, b) => rank(a) - rank(b) || ("n" in b ? b.n : 0) - ("n" in a ? a.n : 0));
+  inv.pockets = Array.from({ length: POCKETS }, (_, i) => merged[i] ?? null);
+  return JSON.stringify(inv.pockets) !== before;
 }
 
 /** Used up by a use: one of a stack in `slot` (aid, battery), or null. */

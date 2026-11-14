@@ -8,7 +8,7 @@ mocked first, then chosen; **F2a** the items' pictures rendered from their own 3
 the pack, the pack bigger; **F4a** 8 pockets. The rest of the proposal (the menu, hover + 1–4, split, organize, take
 all, quick use, no strip) as recommended, not asked. **Phase 0 (the mocks) rendered 2026-11-14 — the user chose
 B · the open pack** (a canvas pack drawn open, stitched pouches, the four at hand as loops on a wooden belt, the
-picked one on a paper tag); committed a42710b7. **Phase 1 (the pictures) built 2026-11-14**, committed. Stills of today:
+picked one on a paper tag); committed a42710b7. **Phase 1 (the pictures) built 2026-11-14**, committed 186148c9. **Phase 2 (the rules: 8 pockets, split, organize, take all, drop some) built 2026-11-14**. Stills of today:
 `design/inventory/now-panel.png`, `now-strip.png`, `now-strip-over-dock.png`.
 
 ## What there is now
@@ -143,6 +143,26 @@ pages yet), crafting, weight, item shapes (RE's Tetris).
      none).
 2. **The rules** (F4a and the hand tools): 8 pockets (`POCKETS` — the shared rules, the API's `Survivor::POCKETS`, a
    save of 6 read as 8), split, organize, take all, the menu's drop-some; the server, the API's save; tests.
+   Done in phase 2:
+   - **8 pockets**: shared `POCKETS = 8` (the quick slots' numbers follow: pockets 0–7, quick 8–11 — `QUICK_SLOT`),
+     the API's `Survivor::POCKETS = 8` (a save of 6 read back padded to 8; nine refused); the panel's pack four a row
+     (the pad's ↑/↓ by four); every hard-coded 6–9 moved to the shared constants — the server tests, the inventory
+     and the five guns' two-player specs (their "empty her" loops over `POCKETS + QUICK`); the old shared tests that
+     counted six.
+   - **The hand tools** (shared `inventory.ts`): `takeSlot(inv, slot, n?)` — `n` of a stack out (all if as many or
+     more), a weapon whole; `splitSlot(inv, from, to, n?)` — half (or `n`) into an empty slot or onto the same stack
+     up to its cap, never a weapon; `organize(inv)` — the pack only: like stacks topped up into one another, then the
+     weapons (the guns' order), their rounds (the same order), first aid, batteries, flares, fuses, empties last.
+   - **The server** (`features/survival.ts`, `protocol.ts`): `dark:drop` takes an optional `n` (Drop 1);
+     `dark:split`, `dark:organize`; `dark:takeAll` — every drop in reach on her floor, the nearest first, as many
+     picks, one notice (like things told as one: "+5 shells").
+   - Checked: shared 486 green (four new); `survival.test.ts` — the new test (split, Drop 1, the rest dropped, Take
+     all, Organize) green, the supply locker's "what fits" moved for the eight (the flares now fit in the pack, not a
+     quick slot), the rest green but the admin's give, red before this; the API's `SurvivorTest` 7 green (the dev DB
+     untouched); `inventory.spec` and `inventory-pack.spec` green (their "empty her" loops given the slot count as an
+     argument — the page can't see the spec's constant); the five guns' two-player specs and `guns-two` green (6, 6.4
+     min). Red and not ours: `pets-attack.test.ts`'s two bites (no
+     inventory on their path).
 3. **The panel** rebuilt in the chosen look: one component; mouse, keyboard (hover + 1–4, Shift, double click, the
    menu), the pad (the grid, A, X held to drop, Y the menu), the phone (tap, tap a slot to move).
 4. **The HUD**: the quick bar with the held gun's rounds; the pick-up slip; the strip and its over-the-dock overlap

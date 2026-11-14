@@ -6,6 +6,7 @@
 //   DEBUG=1: each step's state)
 import { writeFileSync } from "node:fs";
 import { chromium, type Page, request } from "@playwright/test";
+import { QUICK_SLOT } from "@yutopia/shared/inventory";
 
 const out = process.argv[2] ?? "../../design/guns";
 const name = process.env.NAME ?? "hold";
@@ -332,7 +333,9 @@ if (process.env.DROPS) {
       (window as any).__yutopia.room.send("mod:refill", { kit: true, ...k });
     }, kit);
     await page.waitForTimeout(800);
-    for (const slot of kit.ak ? [6, 7, 8, 9] : [9]) {
+    // (the quick slots: after the pack's pockets — plan 86: 8–11)
+    const q = [0, 1, 2, 3].map((i) => QUICK_SLOT + i);
+    for (const slot of kit.ak ? q : [q[3]]) {
       await w(page, (y) => y.tp.yaw);
       await page.evaluate((s) => (window as any).__yutopia.room.send("dark:drop", { slot: s }), slot);
       await page.waitForTimeout(300);

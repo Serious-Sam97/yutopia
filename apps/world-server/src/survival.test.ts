@@ -166,9 +166,9 @@ test("the locker's revolver: loaded the first time; dropped, picked up by someon
   await waitFor(() => a.found.length === 1);
   assert.deepEqual(a.found[0].got, [{ id: "revolver", n: 1, loaded: 6 }]);
   await waitFor(() => a.inv?.quick[0]?.id === "revolver");
-  // out on the snow by the gate, dropped (a weapon's slot: 6)
+  // out on the snow by the gate, dropped (a weapon's slot: the first quick slot)
   await goTo(a, LOCKER.x - 8, LOCKER.z);
-  a.room.send("dark:drop", { slot: 6 });
+  a.room.send("dark:drop", { slot: QUICK_SLOT });
   await waitFor(() => a.room.state.drops.size === 1 && a.inv?.quick[0] === null);
   // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
   const d: any = [...a.room.state.drops.values()][0];
@@ -294,21 +294,72 @@ test("the inventory: a pocket dragged to another; something on the snow taken in
   assert.equal((a.inv?.pockets[aid] as { n?: number } | null | undefined)?.n, 3);
   // quick slots swap
   const w0 = a.inv?.quick[0]?.id;
-  a.room.send("dark:move", { from: 6, to: 7 });
+  a.room.send("dark:move", { from: QUICK_SLOT, to: QUICK_SLOT + 1 });
   await waitFor(() => a.inv?.quick[1]?.id === w0);
-  // the first aid into quick slot 4 (slot 9); a gun drawn from its slot
-  a.room.send("dark:move", { from: to, to: 9 });
+  // the first aid into quick slot 4; a gun drawn from its slot
+  a.room.send("dark:move", { from: to, to: QUICK_SLOT + 3 });
   await waitFor(() => a.inv?.quick[3]?.id === "aid" && a.inv?.pockets[to] === null);
   a.room.send("arms:draw", { slot: 1 });
   await waitFor(() => me(a.room).gun === w0);
   // a stack's quick slot draws nothing (the gun stays out) — (plan 85: a weapon to a pocket, its own test)
   a.room.send("arms:draw", { slot: 3 });
   // used from the quick slot, which empties
-  a.room.send("dark:use", { slot: 9 });
+  a.room.send("dark:use", { slot: QUICK_SLOT + 3 });
   await waitFor(() => a.inv?.quick[3] === null);
   assert.equal(me(a.room).gun, w0, "still in the hand");
   assert.equal(a.inv?.quick[1]?.id, w0, "the gun stayed in its quick slot");
   assert.equal(a.inv?.pockets[to], null);
+});
+
+test("(plan 86) the hand tools: a stack split, one of it dropped, the rest dropped, Take all; the pack organized", async () => {
+  const a = await person(386, "member,builder,admin");
+  await goTo(a, -262, -60);
+  a.room.send("mod:refill", { kit: true });
+  await waitFor(() => !!a.inv?.pockets.some((s) => s?.id === "aid"));
+  const inv = () => a.inv as Inventory;
+  const n = (slot: number) => (inv().pockets[slot] as { n?: number } | null)?.n ?? 0;
+  // a stack of two or more, and an empty pocket
+  const i = inv().pockets.findIndex((s) => !!s && "n" in s && s.n >= 3);
+  const e = inv().pockets.indexOf(null);
+  assert.ok(i >= 0 && e >= 0, "a stack of three or more and a free pocket");
+  const id = inv().pockets[i]?.id as string;
+  const all = n(i);
+  const had = count(inv(), id as never);
+  // split: half into the free pocket
+  a.room.send("dark:split", { from: i, to: e });
+  await waitFor(() => inv().pockets[e]?.id === id);
+  assert.equal(n(e), Math.floor(all / 2));
+  assert.equal(n(i), all - Math.floor(all / 2));
+  // one of it dropped (the menu's Drop 1): one on the snow, the rest kept
+  const drops = () =>
+    [...a.room.state.drops.values()].filter((d) => d.item === id && Math.hypot(d.x + 262, d.y + 60) < 1);
+  a.room.send("dark:drop", { slot: i, n: 1 });
+  await waitFor(() => drops().length === 1);
+  assert.equal(drops()[0].n, 1);
+  assert.equal(n(i), all - Math.floor(all / 2) - 1);
+  // the half split off dropped whole
+  a.room.send("dark:drop", { slot: e });
+  await waitFor(() => drops().length === 2 && inv().pockets[e] === null);
+  assert.equal(count(inv(), id as never), had - 1 - Math.floor(all / 2));
+  // Take all: both back, one notice
+  a.found.length = 0;
+  a.room.send("dark:takeAll", {});
+  await waitFor(() => drops().length === 0 && a.found.length > 0);
+  assert.equal(count(inv(), id as never), had);
+  assert.equal(a.found.length, 1, "one notice for all of it");
+  assert.equal(a.found[0].got.find((g) => g.id === id)?.n, 1 + Math.floor(all / 2), "like things told as one");
+  // organize: a gun from a quick slot put in the pack's last free pocket — first in the pack after, no gaps
+  const gun = inv().quick.findIndex((s) => !!s && "loaded" in s);
+  const last = inv().pockets.lastIndexOf(null);
+  assert.ok(gun >= 0 && last >= 0);
+  const w = inv().quick[gun]?.id;
+  a.room.send("dark:move", { from: QUICK_SLOT + gun, to: last });
+  await waitFor(() => inv().pockets[last]?.id === w);
+  const things = inv().pockets.filter(Boolean).length;
+  a.room.send("dark:organize", {});
+  await waitFor(() => inv().pockets[0]?.id === w);
+  assert.equal(inv().pockets.slice(0, things).filter(Boolean).length, things, "no gaps");
+  assert.equal(count(inv(), id as never), had, "nothing lost");
 });
 
 test("indoors: dropped on the studio's floor, there; picked up on that floor only", async () => {
@@ -379,16 +430,17 @@ test("a supply locker, built: a kit a day — what fits; tomorrow another; kept 
   await sleep(200);
   const a2 = await person(381);
   assert.equal((await open(a2)).later, true);
-  // pockets nearly full: what fits (the flares in a free quick slot), the day taken
+  // a kit on her already: what fits (plan 86: the pack's eight have room — the flares in a pocket), the day taken
   b.room.send("mod:refill", { kit: true });
   await waitFor(() => b.inv?.quick[0]?.id === "revolver" && !!b.inv?.pockets.some((s) => s?.id === "battery"));
+  const flares = count(b.inv as Inventory, "flare");
   const some = await open(b);
   assert.deepEqual(
     some.got.map((g) => g.id),
     ["r38", "aid", "battery", "flare"],
   );
-  assert.deepEqual(b.inv?.quick[2], { id: "flare", n: 2 });
-  assert.equal(some.full, false, "all of it fitted, with the quick slots");
+  await waitFor(() => count(b.inv as Inventory, "flare") === flares + 2);
+  assert.equal(some.full, false, "all of it fitted");
   assert.equal((await open(b)).later, true);
   // tomorrow: another (a revolver carried: none)
   kitClock.shift = 86_400_000;

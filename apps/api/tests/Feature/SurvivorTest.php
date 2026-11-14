@@ -49,7 +49,8 @@ it('keeps the plan-79 guns and their rounds: the AK, the sniper, the Daybreak', 
     internalCall($this, 'PUT', "/api/internal/survivors/{$ana->id}", $body)->assertOk();
     $back = internalCall($this, 'GET', "/api/internal/survivors/{$ana->id}")->assertOk()->json('survivor.inventory');
     expect($back['quick'])->toBe($quick);
-    expect($back['pockets'])->toBe($pockets);
+    // (plan 86: the pack's 8 — what was saved in 6, the rest empty)
+    expect($back['pockets'])->toBe(array_pad($pockets, Survivor::POCKETS, null));
 
     // past their caps, still refused
     $put = fn (array $body) => internalCall($this, 'PUT', "/api/internal/survivors/{$ana->id}", $body);
@@ -89,9 +90,9 @@ it('refuses what nobody could carry', function () {
     $put($five)->assertUnprocessable();
     $put(pockets(['vitals' => ['hp' => 101]]))->assertUnprocessable();
     $put(pockets(['pages' => ['<script>']]))->assertUnprocessable();
-    $seven = pockets();
-    $seven['inventory']['pockets'] = array_fill(0, 7, null);
-    $put($seven)->assertUnprocessable();
+    $nine = pockets();
+    $nine['inventory']['pockets'] = array_fill(0, Survivor::POCKETS + 1, null);
+    $put($nine)->assertUnprocessable();
     internalCall($this, 'PUT', '/api/internal/survivors/999999', pockets())->assertNotFound();
     expect(Survivor::count())->toBe(0);
 });

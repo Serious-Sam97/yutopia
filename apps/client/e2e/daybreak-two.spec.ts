@@ -1,5 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
+import { POCKETS, QUICK } from "@yutopia/shared/inventory";
 import { ANA, BIA, enter, holdCamera, test, token } from "./helpers";
 
 // Two of us and the Daybreak (docs/plan/84-the-daybreak.md phase 6): Bia beside Ana on the pond's north shore by
@@ -10,6 +11,8 @@ import { ANA, BIA, enter, holdCamera, test, token } from "./helpers";
 // from her own camera and from Ana's beside her. 3D: the GPU (YUTOPIA_GPU=1).
 const GPU = process.env.YUTOPIA_GPU === "1";
 const shots = process.env.YUTOPIA_SHOTS;
+// (every slot: the pack, then the quick slots — plan 86: 8 + 4)
+const ALL = POCKETS + QUICK;
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 const w = (page: Page, fn: (y: any) => unknown) =>
   page.evaluate((src) => new Function("y", `return (${src})(y)`)((window as any).__yutopia), fn.toString());
@@ -86,14 +89,14 @@ test("two of us and the Daybreak: slung, drawn, aimed upright, charged and away,
     });
   });
   // her hands empty (her quick slots onto the snow — she's no admin: Ana gives her the Daybreak and its cells)
-  await bia.evaluate(async () => {
+  await bia.evaluate(async (all) => {
     (window as any).__yutopia.room.send("arms:draw", { slot: -1 });
     // (plan 85: her pack too — a weapon there is still hers, one of a kind: a given one wouldn't go in)
-    for (let slot = 0; slot < 10; slot++) {
+    for (let slot = 0; slot < all; slot++) {
       (window as any).__yutopia.room.send("dark:drop", { slot });
       await new Promise((r) => setTimeout(r, 150));
     }
-  });
+  }, ALL);
   await expect.poll(() => seen(page, biaSid).then((s) => s.sling), { timeout: 10_000 }).toBe(false);
   const biaUid = (await w(page, (y) => y.room.state.players.get((window as any).__bia).uid)) as number;
   for (const [item, n] of [

@@ -1,5 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
+import { POCKETS, QUICK } from "@yutopia/shared/inventory";
 import { ANA, BIA, enter, test, token } from "./helpers";
 
 // Two of us and the guns (docs/plan/79-the-guns.md phase 8): Bia beside Ana on the pond's north shore by
@@ -7,6 +8,8 @@ import { ANA, BIA, enter, test, token } from "./helpers";
 // its magazine out in her left hand reloading; the sniper's bolt worked; the Daybreak's core swelling as
 // she charges it, its ball and its burst. 3D: the GPU (YUTOPIA_GPU=1).
 const GPU = process.env.YUTOPIA_GPU === "1";
+// (every slot: the pack, then the quick slots — plan 86: 8 + 4)
+const ALL = POCKETS + QUICK;
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 const w = (page: Page, fn: (y: any) => unknown) =>
   page.evaluate((src) => new Function("y", `return (${src})(y)`)((window as any).__yutopia), fn.toString());
@@ -19,13 +22,13 @@ const prefs = (p: Page) =>
 // Bia's hands empty (her quick slots onto the snow — she's no admin: Ana gives her the guns), and a gun
 // of hers drawn by its slot
 const empty = (bia: Page) =>
-  bia.evaluate(async () => {
+  bia.evaluate(async (all) => {
     // (plan 85: her pack too — a weapon there is still hers, one of a kind: a given one wouldn't go in)
-    for (let slot = 0; slot < 10; slot++) {
+    for (let slot = 0; slot < all; slot++) {
       (window as any).__yutopia.room.send("dark:drop", { slot });
       await new Promise((r) => setTimeout(r, 150));
     }
-  });
+  }, ALL);
 const give = (ana: Page, uid: number, item: string, n = 1) =>
   ana.evaluate(([u, i, k]) => (window as any).__yutopia.room.send("mod:give", { item: i, n: k, userId: u }), [
     uid,

@@ -54,7 +54,7 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_inv_all: ["everything", "tudo"],
   // (plan 85 F4a: the six pockets are the pack — a weapon there is carried, not equipped: worn nowhere)
   dark_inv_title: ["PACK", "MOCHILA"],
-  dark_inv_sub: ["4 quick slots · 6 in the pack", "4 de acesso rápido · 6 na mochila"],
+  dark_inv_sub: ["4 quick slots · 8 in the pack", "4 de acesso rápido · 8 na mochila"],
   dark_inv_you: ["You", "Você"],
   dark_inv_health: ["Health", "Saúde"],
   dark_inv_stamina: ["Stamina", "Fôlego"],

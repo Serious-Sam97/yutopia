@@ -175,9 +175,9 @@ export class InventoryPanel {
     let to = -1;
     if (pad.pressed(15)) to = at + 1; // →
     if (pad.pressed(14)) to = at - 1; // ←
-    // (the quick slots a row of four above, the pockets three a row)
-    if (pad.pressed(13)) to = at < QUICK ? QUICK + Math.min(at, 2) : at + 3; // ↓
-    if (pad.pressed(12)) to = at < QUICK ? at : at < QUICK + 3 ? at - QUICK : at - 3; // ↑
+    // (the quick slots a row of four above, the pack four a row too — plan 86's 8)
+    if (pad.pressed(13)) to = at + 4; // ↓
+    if (pad.pressed(12)) to = at - 4; // ↑
     if (to >= 0) {
       this.sel = order[Math.max(0, Math.min(order.length - 1, to))];
       this.render();
@@ -472,7 +472,7 @@ export const INV_CSS = `
 .dk-inv .held{margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:rgba(233,236,239,.7)}
 .dk-inv .held b{display:block;font-size:14px;color:#e9ecef;margin-top:3px}
 .dk-inv .qs{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0 24px}
-.dk-inv .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:10px}
+.dk-inv .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:10px}
 .dk-inv .slot{position:relative;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);cursor:pointer}
 .dk-inv .slot:hover{border-color:rgba(255,255,255,.4)}
 .dk-inv .slot.q{height:96px}

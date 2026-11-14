@@ -15,7 +15,7 @@ class Survivor extends Model
 
     public const WEAPONS = ['revolver' => 6, 'shotgun' => 2, 'ak47' => 30, 'sniper' => 5, 'daybreak' => 3];
 
-    public const POCKETS = 6;
+    public const POCKETS = 8; // (plan 86: the pack's 8 — a save of 6 read as 8, the rest empty)
 
     // the quick slots (keys 1–4: a gun or a stack; shared/inventory.ts QUICK)
     public const QUICK = 4;

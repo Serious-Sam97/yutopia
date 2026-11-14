@@ -1,5 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
+import { POCKETS, QUICK, QUICK_SLOT } from "@yutopia/shared/inventory";
 import { ANA, enter, test, token } from "./helpers";
 
 // The inventory (docs/plan/30-the-dark.md; design/screens/dark/06a-inventory,
@@ -10,6 +11,8 @@ import { ANA, enter, test, token } from "./helpers";
 // floor and are taken back. Review shots: YUTOPIA_SHOTS=<dir>.
 
 const dir = process.env.YUTOPIA_SHOTS;
+// (every slot: the pack, then the quick slots — plan 86: 8 + 4)
+const ALL = POCKETS + QUICK;
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 const G = (x: number, y: number) => ({ x, y });
 const shot = async (page: Page, name: string) => {
@@ -78,10 +81,10 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
   await page.waitForFunction(() => !!(window as any).__dark, null, { timeout: 20_000 });
   // known pockets: whatever Ana carried from before left here on the snow, then a step away and a kit,
   // and hurt (something to use)
-  await page.evaluate(() => {
+  await page.evaluate((all) => {
     const y = (window as any).__yutopia;
-    for (let i = 0; i < 10; i++) y.room.send("dark:drop", { slot: i });
-  });
+    for (let i = 0; i < all; i++) y.room.send("dark:drop", { slot: i });
+  }, ALL);
   await expect
     .poll(async () => {
       const v = await inv(page);
@@ -98,10 +101,10 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
   await expect.poll(async () => (await inv(page)).pockets.some((s) => s?.id === "aid")).toBe(true);
   await expect.poll(async () => (await me(page)).hp).toBe(40);
 
-  // I: open — the four quick slots, six pockets, the snow in reach
+  // I: open — the four quick slots, the pack's eight pockets, the snow in reach
   await page.keyboard.press("KeyI");
   await expect(page.locator(".dk-inv .panel")).toBeVisible();
-  await expect(page.locator(".dk-inv [data-slot]")).toHaveCount(10);
+  await expect(page.locator(".dk-inv [data-slot]")).toHaveCount(POCKETS + QUICK);
   // standing still while it's open (W held a second)
   const before = await me(page);
   await page.keyboard.down("KeyW");
@@ -137,8 +140,8 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
   await expect.poll(async () => (await inv(page)).pockets[empty]?.id).toBe("flare");
   await expect(lying).toHaveCount(0);
 
-  // the flares into quick slot 3 (slot 8): anything goes in a quick slot
-  await drag(page, slot(page, empty), slot(page, 8));
+  // the flares into quick slot 3: anything goes in a quick slot
+  await drag(page, slot(page, empty), slot(page, QUICK_SLOT + 2));
   await expect.poll(async () => (await inv(page)).quick[2]?.id).toBe("flare");
 
   // the weapons: 2 takes the shotgun out from here
@@ -196,7 +199,7 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
   await expect(page.locator(".dk-inv .panel")).toBeVisible();
   await expect(page.locator(".dk-inv .gl .none")).toBeVisible();
   // (the flares left in quick slot 3)
-  await slot(page, 8).click({ button: "right" });
+  await slot(page, QUICK_SLOT + 2).click({ button: "right" });
   await expect.poll(async () => (await inv(page)).quick[2]).toBe(null);
   await expect(lying).toHaveCount(1);
   await shot(page, "inventory-inside");

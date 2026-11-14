@@ -522,13 +522,16 @@ export interface ClientMessages {
   "gps:friends": Record<string, never>;
   // the dark (docs/plan/30-the-dark.md, phase 2): the client's chunk is listening (send my
   // pockets); search a spot (shared dark/loot.ts LOOT id, or "locker"); pick up something
-  // dropped; use a pocket (first aid, a battery); drop a pocket (0–5) or a weapon (6–7)
+  // dropped; use a slot (first aid, a battery); drop one — the pack's pockets 0–7, the quick slots 8–11 (plan 86)
   "dark:hello": Record<string, never>;
   "dark:loot": { spot: string };
   "dark:pick": { id: string; slot?: number }; // (slot: into that pocket first: the inventory's drag)
   "dark:move": { from: number; to: number }; // a drag in the inventory (shared inventory.ts moveSlot)
   "dark:use": { slot: number };
-  "dark:drop": { slot: number };
+  "dark:drop": { slot: number; n?: number }; // (plan 86: `n` of a stack — Drop 1 — or all of it)
+  "dark:split": { from: number; to: number; n?: number }; // (plan 86) half (or `n`) of a stack into another slot
+  "dark:organize": Record<string, never>; // (plan 86) the pack put in order (shared inventory.ts organize)
+  "dark:takeAll": Record<string, never>; // (plan 86) everything on the ground in reach
   // an admin's own vitals full again (health, stamina, warmth, the battery): for trying things out
   "mod:refill": { kit?: boolean; ak?: boolean; sniper?: boolean; daybreak?: boolean; hp?: number; wm?: number };
   // the shadowed (features/dark.ts), admins: off ("peaceful") or on ("normal"); `spawn`: that

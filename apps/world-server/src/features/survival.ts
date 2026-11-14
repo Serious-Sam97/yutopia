@@ -40,13 +40,16 @@ import {
   nightBudget,
   nightness,
   nightOf,
+  organize,
   REFILL_MIN,
   removeSlot,
   rollLoot,
   type Stack,
   slotAt,
   spendRoll,
+  splitSlot,
   stepVitals,
+  takeSlot,
   takeStack,
   USABLE,
   type Vitals,
@@ -535,6 +538,46 @@ registerFeature((room: WorldRoom) => {
     const s = of(client.sessionId);
     if (s?.loaded && moveSlot(s.inv, Number(m?.from), Number(m?.to))) changed(s);
   });
+  // (plan 86) a stack split: `n` of it (half if none) into another slot — empty, or the same stack with room
+  room.on("dark:split", (client, m) => {
+    const s = of(client.sessionId);
+    const n = m?.n === undefined ? undefined : Number(m.n);
+    if (s?.loaded && splitSlot(s.inv, Number(m?.from), Number(m?.to), n)) changed(s);
+  });
+  // (plan 86) the pack put in order — the quick slots left as they are
+  room.on("dark:organize", (client) => {
+    const s = of(client.sessionId);
+    if (s?.loaded && organize(s.inv)) changed(s);
+  });
+  // (plan 86) Take all: everything on the ground in reach, the nearest first — as many picks, one notice
+  room.on("dark:takeAll", (client) => {
+    const r = ready(client);
+    if (!r) return;
+    const { p, s } = r;
+    const reach = (d: Drop) => Math.hypot(p.x - d.x, p.y - d.y, room.upOff(p, d, 0.3));
+    const lying = [...room.state.drops.values()]
+      .filter((d) => d.level === p.level && reach(d) <= LOOT_REACH)
+      .sort((a, b) => reach(a) - reach(b));
+    if (!lying.length) return;
+    const got: LootItem[] = [];
+    let full = false;
+    for (const d of lying) {
+      const one = take(s, [{ id: d.item as ItemId, n: d.n, loaded: d.loaded }]);
+      for (const g of one.got) {
+        const same = !isWeapon(g.id) && got.find((x) => x.id === g.id);
+        if (same) same.n += g.n;
+        else got.push({ ...g });
+      }
+      if (!one.left.length) room.state.drops.delete(d.id);
+      else {
+        full = true;
+        d.n = one.left[0].n;
+        d.loaded = one.left[0].loaded ?? 0;
+      }
+    }
+    lootDirty = true;
+    found(s, client.sessionId, "ground", got, full);
+  });
   room.on("dark:use", (client, m) => {
     const s = of(client.sessionId);
     const slot = Number(m?.slot);
@@ -663,7 +706,8 @@ registerFeature((room: WorldRoom) => {
     const slot = Number(m?.slot);
     // (onto the snow, or the floor they're on: anywhere, the office too)
     if (!p || !s?.loaded || !Number.isInteger(slot) || p.busy || p.downAt) return;
-    const it = removeSlot(s.inv, slot);
+    // (plan 86: `n` of a stack — the menu's Drop 1 — or all of it)
+    const it = m?.n === undefined ? removeSlot(s.inv, slot) : takeSlot(s.inv, slot, Number(m.n));
     if (!it) return;
     putDrop(it.id, "n" in it ? it.n : 1, "loaded" in it ? it.loaded : 0, p.x, p.y, Date.now(), undefined, p.level);
     changed(s);

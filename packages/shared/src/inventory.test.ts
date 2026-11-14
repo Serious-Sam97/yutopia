@@ -12,10 +12,14 @@ import {
   findStack,
   freeQuick,
   moveSlot,
+  organize,
+  POCKETS,
   QUICK_SLOT,
   removeSlot,
   STACKS,
   slotAt,
+  splitSlot,
+  takeSlot,
   takeStack,
   weaponIn,
 } from "./inventory.ts";
@@ -31,6 +35,9 @@ test("stacks top up first, then take empty pockets; what doesn't fit stays out",
   assert.deepEqual(inv.pockets[1], { id: "r38", n: 16 });
   for (const id of ["flare", "aid", "battery", "fuse"] as const) addStack(inv, id, 1);
   assert.equal(inv.pockets.filter(Boolean).length, 6);
+  // (plan 86: the pack's last two pockets full stacks of other things)
+  inv.pockets[6] = { id: "cell", n: STACKS.cell };
+  inv.pockets[7] = { id: "r762", n: STACKS.r762 };
   assert.equal(addStack(inv, "shell", 4), 4, "the pockets full: into a quick slot");
   assert.deepEqual(inv.quick[0], { id: "shell", n: 4 });
   inv.quick[1] = { id: "fuse", n: 1 };
@@ -88,7 +95,14 @@ test("cleanInventory: unknown ids gone, counts capped, one weapon a kind, pages 
   });
   // (an old save's two weapons: the first two quick slots)
   assert.deepEqual(inv.quick, [{ id: "revolver", loaded: 6 }, null, { id: "shotgun", loaded: 1 }, null]);
-  assert.deepEqual(inv.pockets, [{ id: "r38", n: STACKS.r38 }, null, null, null, { id: "fuse", n: 2 }, null]);
+  assert.deepEqual(inv.pockets, [
+    { id: "r38", n: STACKS.r38 },
+    null,
+    null,
+    null,
+    { id: "fuse", n: 2 },
+    ...Array(POCKETS - 5).fill(null),
+  ]);
   assert.deepEqual(inv.pages, ["p-1", "p-2"]);
   assert.deepEqual(
     cleanInventory({
@@ -109,7 +123,12 @@ test("cleanInventory: unknown ids gone, counts capped, one weapon a kind, pages 
     ],
   });
   assert.deepEqual(pack.quick[0], { id: "revolver", loaded: 3 });
-  assert.deepEqual(pack.pockets, [{ id: "ak47", loaded: 30 }, null, { id: "sniper", loaded: 0 }, null, null, null]);
+  assert.deepEqual(pack.pockets, [
+    { id: "ak47", loaded: 30 },
+    null,
+    { id: "sniper", loaded: 0 },
+    ...Array(POCKETS - 3).fill(null),
+  ]);
 });
 
 test("a drag: a swap, the same stack topped up to its cap, a weapon into a pocket and back", () => {
@@ -136,7 +155,7 @@ test("a drag: a swap, the same stack topped up to its cap, a weapon into a pocke
   // an empty one dragged: nothing; out of range
   assert.equal(moveSlot(inv, 3, 4), false);
   inv.quick[0] = { id: "revolver", loaded: 4 };
-  assert.equal(moveSlot(inv, 0, 10), false);
+  assert.equal(moveSlot(inv, 0, QUICK_SLOT + 4), false);
   // (plan 85) a weapon into an empty pocket — carried, not equipped — and back
   assert.equal(moveSlot(inv, QUICK_SLOT, 3), true);
   assert.deepEqual(inv.pockets[3], { id: "revolver", loaded: 4 });
@@ -226,7 +245,7 @@ test("(plan 85) a weapon picked up: into a free quick slot, none free into a fre
   assert.deepEqual(inv.quick[2], { id: "daybreak", loaded: 3 });
   // everything full: the weapon stays out, its rounds in (here none fit: the pockets are full of other things)
   inv.quick[2] = { id: "flare", n: 1 };
-  for (let i = 1; i < 6; i++) inv.pockets[i] = inv.pockets[i] ?? { id: "fuse", n: STACKS.fuse };
+  for (let i = 1; i < POCKETS; i++) inv.pockets[i] = inv.pockets[i] ?? { id: "fuse", n: STACKS.fuse };
   assert.equal(addItem(inv, { id: "shotgun", n: 1, loaded: 2 }), 0);
   assert.equal(carries(inv, "shotgun"), false);
   // stacks never land on a weapon in a pocket, nor are counted from it
@@ -248,4 +267,83 @@ test("ammo in a quick slot counts and is taken", () => {
   assert.equal(takeStack(inv, "r38", 7), 7);
   assert.equal(inv.quick[1], null, "the smaller went first");
   assert.deepEqual(inv.pockets[2], { id: "r38", n: 8 });
+});
+
+test("(plan 86) the pack's 8 pockets, the quick slots after them", () => {
+  assert.equal(POCKETS, 8);
+  assert.equal(QUICK_SLOT, 8);
+  const inv = emptyInventory();
+  assert.equal(inv.pockets.length, 8);
+  // (a save of six read as eight, the rest empty)
+  const old = cleanInventory({
+    quick: [],
+    pockets: [{ id: "aid", n: 1 }, null, null, null, null, { id: "fuse", n: 2 }],
+  });
+  assert.equal(old.pockets.length, 8);
+  assert.deepEqual(old.pockets[5], { id: "fuse", n: 2 });
+  assert.equal(old.pockets[7], null);
+});
+
+test("(plan 86) some of a stack taken out to drop; a weapon whole", () => {
+  const inv = emptyInventory();
+  inv.pockets[0] = { id: "shell", n: 6 };
+  inv.quick[0] = { id: "revolver", loaded: 4 };
+  assert.deepEqual(takeSlot(inv, 0, 1), { id: "shell", n: 1 });
+  assert.deepEqual(inv.pockets[0], { id: "shell", n: 5 });
+  assert.deepEqual(takeSlot(inv, 0, 9), { id: "shell", n: 5 }, "as many or more: all of it");
+  assert.equal(inv.pockets[0], null);
+  assert.equal(takeSlot(inv, 0), null, "nothing there");
+  assert.deepEqual(takeSlot(inv, QUICK_SLOT, 1), { id: "revolver", loaded: 4 }, "a weapon: whole");
+  inv.pockets[1] = { id: "aid", n: 2 };
+  assert.equal(takeSlot(inv, 1, 0), null, "none asked: none");
+  assert.deepEqual(takeSlot(inv, 1), { id: "aid", n: 2 }, "no count: all of it");
+});
+
+test("(plan 86) a stack split: half into an empty slot, some onto the same stack, never past its cap", () => {
+  const inv = emptyInventory();
+  inv.pockets[0] = { id: "r38", n: 18 };
+  assert.equal(splitSlot(inv, 0, 3), 9, "half");
+  assert.deepEqual(inv.pockets[0], { id: "r38", n: 9 });
+  assert.deepEqual(inv.pockets[3], { id: "r38", n: 9 });
+  assert.equal(splitSlot(inv, 0, 3, 4), 4, "onto the same stack");
+  assert.deepEqual(inv.pockets[3], { id: "r38", n: 13 });
+  inv.pockets[4] = { id: "r38", n: 22 };
+  assert.equal(splitSlot(inv, 0, 4, 5), 2, "topped up to its cap");
+  assert.deepEqual(inv.pockets[0], { id: "r38", n: 3 });
+  inv.pockets[5] = { id: "aid", n: 1 };
+  assert.equal(splitSlot(inv, 0, 5), 0, "onto another kind: nothing");
+  assert.equal(splitSlot(inv, 5, 6), 0, "one alone: half's none");
+  assert.equal(splitSlot(inv, 0, QUICK_SLOT + 2, 3), 3, "into a quick slot, all of it");
+  assert.equal(inv.pockets[0], null);
+  inv.pockets[7] = { id: "ak47", loaded: 30 };
+  assert.equal(splitSlot(inv, 7, 6), 0, "a weapon doesn't split");
+});
+
+test("(plan 86) the pack organized: like stacks topped up, weapons first, then rounds, then the rest; the quick slots kept", () => {
+  const inv = emptyInventory();
+  inv.quick[0] = { id: "flare", n: 1 };
+  inv.pockets = [
+    { id: "fuse", n: 1 },
+    { id: "r38", n: 10 },
+    null,
+    { id: "ak47", loaded: 12 },
+    { id: "r38", n: 20 },
+    { id: "aid", n: 1 },
+    { id: "shell", n: 3 },
+    { id: "revolver", loaded: 6 },
+  ];
+  assert.equal(organize(inv), true);
+  assert.deepEqual(inv.pockets, [
+    { id: "revolver", loaded: 6 },
+    { id: "ak47", loaded: 12 },
+    { id: "r38", n: 24 },
+    { id: "r38", n: 6 },
+    { id: "shell", n: 3 },
+    { id: "aid", n: 1 },
+    { id: "fuse", n: 1 },
+    null,
+  ]);
+  assert.deepEqual(inv.quick[0], { id: "flare", n: 1 });
+  assert.equal(organize(inv), false, "in order already");
+  assert.equal(count(inv, "r38"), 30);
 });
