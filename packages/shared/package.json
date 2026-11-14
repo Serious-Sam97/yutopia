@@ -57,6 +57,7 @@
     "./move": "./src/move/index.ts",
     "./move/flow-moves": "./src/move/flow-moves.ts",
     "./dark": "./src/dark/index.ts",
+    "./vortex-fight": "./src/vortex-fight.ts",
     "./vitals": "./src/vitals.ts",
     "./inventory": "./src/inventory.ts",
     "./beam": "./src/beam.ts",

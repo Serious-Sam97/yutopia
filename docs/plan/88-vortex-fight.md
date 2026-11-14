@@ -8,7 +8,7 @@ Status: **talked through and decided by the user 2026-11-14** (all as recommende
 **F2** he can down people — co-op (a friend gets you up); **F3** anyone, any time — shoot him and it's on, only those
 who shot him get hit; **F4** all four kinds of moves — tape tricks, pranks, the dark, mind games; **F5** beaten: a
 cassette trophy, back later with a grudge; **F6** the grudge lasts a day; **F7** his health scales with the group;
-**F8** a plan and mocks first. **Phase 0 (the mocks) rendered 2026-11-14** — to be signed off.
+**F8** a plan and mocks first. **Phase 0 (the mocks) signed off 2026-11-14**, committed 3ac94702; **phase 1 (the rules) built 2026-11-14**.
 
 ## What there is now
 
@@ -106,6 +106,26 @@ day, and **holds a grudge** (below).
    on his body; his health, scaled by the shooters of the last 30 s; the acts by health; who's in it and how much
    (only they're targets); calming down and healing out of it; beaten → the cassette dropped, his return timer; an
    admin's controls for trying it (start, set an act, beat, reset); tests.
+   Done in phase 1 (2026-11-14):
+   - **Shared** (`packages/shared/src/vortex-fight.ts`, `@yutopia/shared/vortex-fight`): `VORTEX_FIGHT` — 1500 a
+     shooter (as the shadowed take damage), shooters counted over 30 s, the acts under 70% and 35%, calm after 40 s,
+     on the floor 8 s, away 10 min, his body a column 0.55 m round, 1.15 m tall; `actOf` (never back up in a
+     fight), `shooters`, `hurtBy` (a hit takes `damage ÷ (1500 × shooters)` of him); tests.
+   - **The server** (`features/vortex.ts`): his fight — health left (`Npc.vk`), its act (`vact`, his face with it:
+     judging, fury, possessed), who's in it by user and their hits (told to everyone, `vortex:fight`, four a second
+     at most); out of it 40 s — calmed down, healed; beaten — his face dead, **his tape dropped where he fell**,
+     everyone told who finished him and how long it took (`vortex:down`), 8 s on the floor, then away to the server
+     room (`vgone`) for 10 min, back seething; nothing hits him down or away. **An admin's `mod:vortex`**: an act or
+     his health set, beaten, reset, put somewhere and held (for trying it). `room.vortex` the hooks.
+   - **The guns** (`features/arms.ts`): each pellet's line meets him (the nearest of the shadowed, a person and him
+     takes it; a wall on the way stops it) — damage as the shadowed's; the Daybreak's balls burst on him and catch
+     him in their blast; the shooter told (`arms:hit` kind `vortex`).
+   - **The trophy**: `vxtape` a stack of 99 (shared, the API), its words in both languages, its drawing, its picture
+     (`public/life/items/vxtape.webp`) and lying on the floor (`tp/items3d.ts`).
+   - Checked: `vortex-fight.test.ts` (new: shot — his health, act I, who's in it on both screens; act II set; two
+     shooting; beaten — both told, his tape where he fell, no hits while down; reset); shared 492 (the fight's two);
+     `arms` 16 green; `rooms` and `survival` red only where they were before (slot cars' timing, Vortex's greeting,
+     a spot's loot, the admin's give); the API's 8.
 2. **Acts 1–2 — the joke and the rewinding**: side-steps and taunts (new line events for the API, both languages);
    the tape whip (a lash he throws; bound, and freed by a friend), REW, PAUSE; the confiscation (and the duck), the
    radio blast's dance, HR's corner — each on both screens; tests.

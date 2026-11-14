@@ -13,6 +13,8 @@ class Survivor extends Model
         'flare' => 3, 'battery' => 2, 'aid' => 2, 'fuse' => 4,
         // (plan 87) the torch: one of a kind, lit only from the left hand
         'torch' => 1,
+        // (plan 88) Vortex's tape: a trophy, one a win
+        'vxtape' => 99,
     ];
 
     // (plan 87) carried one at a time (shared/inventory.ts ONE_OF)

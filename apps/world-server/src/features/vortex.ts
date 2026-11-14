@@ -1,5 +1,7 @@
 import { ANIM, areaAt, faceByte, type Point } from "@yutopia/shared";
+import { BODY, type Ray, rayMeets } from "@yutopia/shared/dark";
 import { isRadio } from "@yutopia/shared/media";
+import { type Act, actOf, hurtBy, shooters, VORTEX_FIGHT } from "@yutopia/shared/vortex-fight";
 import { api } from "../api.ts";
 import { config } from "../config.ts";
 import { Npc, type Player } from "../schema.ts";
@@ -34,6 +36,19 @@ const OFFLINE_LINES = ["the tape hisses. nobody listens. classic.", "i'm not wan
 
 type Mode = "idle" | "wander" | "stalk" | "dance" | "sleep";
 
+/** (plan 88) The fight with him, as features/arms.ts asks: a shot's line, a ball's burst, a hit. */
+export interface VortexHooks {
+  /** how far along a shot from `level` he is (m), or null — not his floor, down or away, not on its line */
+  along(level: number, ray: Ray, range: number): number | null;
+  /** a Daybreak ball here (`level`'s floor; z over it): close enough to burst on him */
+  near(level: number, x: number, y: number, z: number, r: number): boolean;
+  /** where he is: his floor's x, y; z his middle over it */
+  at(): { x: number; y: number; z: number };
+  /** shot by `sid`, `n` (as the shadowed take it) */
+  hit(sid: string, n: number, now: number): void;
+}
+// the fight's moods, by act (his drawing's faces)
+const ACT_MOOD = ["smug", "judging", "fury", "possessed"] as const;
 registerFeature((room: WorldRoom) => {
   const npc = new Npc();
   npc.id = "vortex";
@@ -51,6 +66,129 @@ registerFeature((room: WorldRoom) => {
   const lastPoke = new Map<number, number>();
   const lastGreet = new Map<number, number>();
   let busy = false;
+
+  // ── (plan 88) the fight: who's in it (by user), his health left, its act; beaten — on the floor, then away ──
+  interface Fighter {
+    sid: string;
+    name: string;
+    hits: number;
+    dmg: number;
+    at: number;
+  }
+  const fight = { on: false, k: 1, act: 0 as Act, last: 0, since: 0, who: new Map<number, Fighter>() };
+  let fallAt = 0;
+  let held = false; // (an admin's: kept where he is, for trying it)
+  let told = 0;
+  let dirty = false;
+  const tell = (now: number) => {
+    dirty = false;
+    told = now;
+    const who = [...fight.who.values()]
+      .sort((a, b) => b.hits - a.hits)
+      .map((f) => ({ sid: f.sid, name: f.name, hits: f.hits }));
+    for (const c of room.clients as WorldClient[]) room.send(c, "vortex:fight", { who });
+  };
+  const endFight = () => {
+    fight.on = false;
+    fight.k = 1;
+    fight.act = 0;
+    fight.who.clear();
+    npc.vk = 1;
+    npc.vact = 0;
+    dirty = true;
+  };
+  const beaten = (by: Player, now: number) => {
+    fallAt = now;
+    path = [];
+    mode = "idle";
+    npc.mood = "dead";
+    npc.vk = 0;
+    // (his tape where he fell — the trophy, for whoever picks it up; the building told who finished him)
+    room.survival?.drop("vxtape", 1, npc.x, npc.y, room.home);
+    const secs = Math.round((now - fight.since) / 1000);
+    for (const c of room.clients as WorldClient[]) room.send(c, "vortex:down", { by: by.name, secs });
+  };
+  const hittable = () => !fallAt && !npc.vgone;
+  room.vortex = {
+    along(level, ray, range) {
+      if (level !== room.home || !hittable()) return null;
+      return rayMeets(ray, npc.x, npc.y, VORTEX_FIGHT.z0, range, VORTEX_FIGHT.r - BODY.r, VORTEX_FIGHT.h);
+    },
+    near(level, x, y, z, r) {
+      if (level !== room.home || !hittable()) return false;
+      return (
+        Math.hypot(npc.x - x, npc.y - y) < r + VORTEX_FIGHT.r &&
+        z > VORTEX_FIGHT.z0 - 0.2 &&
+        z < VORTEX_FIGHT.z0 + VORTEX_FIGHT.h + 0.2
+      );
+    },
+    at: () => ({ x: npc.x, y: npc.y, z: VORTEX_FIGHT.z0 + VORTEX_FIGHT.h / 2 }),
+    hit(sid, n, now) {
+      const p = room.state.players.get(sid);
+      if (!p || p.bot || !hittable()) return;
+      const f = fight.who.get(p.uid) ?? { sid, name: p.name, hits: 0, dmg: 0, at: 0 };
+      f.sid = sid;
+      f.hits++;
+      f.dmg += n;
+      f.at = now;
+      fight.who.set(p.uid, f);
+      if (!fight.on) {
+        fight.on = true;
+        fight.since = now;
+        fight.k = 1;
+      }
+      fight.last = now;
+      fight.k = hurtBy(
+        fight.k,
+        n,
+        shooters(
+          [...fight.who.values()].map((w) => w.at),
+          now,
+        ),
+      );
+      fight.act = actOf(fight.k, fight.act);
+      npc.vk = fight.k;
+      npc.vact = fight.act;
+      npc.mood = ACT_MOOD[fight.act];
+      dirty = true;
+      if (fight.k <= 0) beaten(p, now);
+    },
+  };
+  room.on("mod:vortex", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    if (!p?.admin) return;
+    const now = Date.now();
+    if (m?.reset) {
+      endFight();
+      fallAt = 0;
+      npc.vgone = 0;
+      npc.mood = "smug";
+    }
+    if (typeof m?.hold === "boolean") held = m.hold;
+    if (m?.at && Number.isFinite(m.at.x) && Number.isFinite(m.at.y)) {
+      path = [];
+      npc.x = m.at.x;
+      npc.y = m.at.y;
+    }
+    const k = m?.k ?? (m?.act ? [1, 0.69, 0.34][m.act - 1] : undefined);
+    if (typeof k === "number" && Number.isFinite(k)) {
+      if (!fight.on) {
+        fight.on = true;
+        fight.since = now;
+      }
+      fight.last = now;
+      fight.k = Math.max(0.001, Math.min(1, k));
+      fight.act = actOf(fight.k);
+      npc.vk = fight.k;
+      npc.vact = fight.act;
+      npc.mood = ACT_MOOD[fight.act];
+      dirty = true;
+    }
+    if (m?.beat && hittable()) {
+      fight.since ||= now;
+      beaten(p, now);
+    }
+  });
 
   const humans = () => [...room.state.players.values()].filter((p) => !p.bot);
   const near = (r: number) => humans().filter((p) => Math.hypot(p.x - npc.x, p.y - npc.y) <= r);
@@ -138,6 +276,28 @@ registerFeature((room: WorldRoom) => {
 
   return {
     tick(dt, now) {
+      // (plan 88) the fight: told to everyone when it changes (four a second at most); beaten — on the floor, then
+      // away to the server room till he's back; out of it a while — calmed down, healed
+      if (dirty && now - told > 250) tell(now);
+      if (fallAt) {
+        if (now - fallAt < VORTEX_FIGHT.fall) return;
+        fallAt = 0;
+        endFight();
+        npc.vgone = now + VORTEX_FIGHT.away;
+        const home = room.grid.nearestOpen(HOME.x, HOME.y) ?? room.map.spawn;
+        npc.x = home.x;
+        npc.y = home.y;
+        path = [];
+        return;
+      }
+      if (npc.vgone) {
+        if (now < npc.vgone) return;
+        npc.vgone = 0;
+        npc.mood = "seething";
+        until = now;
+      }
+      if (fight.on && now - fight.last > VORTEX_FIGHT.calm) endFight();
+      if (held) return;
       // walk
       if (path.length) {
         let budget = SPEED * dt;

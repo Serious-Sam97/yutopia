@@ -19,6 +19,9 @@ export const ICON: Record<ItemId, string> = {
     '<svg viewBox="0 0 48 48"><rect x="11" y="9" width="11" height="24" rx="1.5" fill="#b3302b"/><rect x="11" y="31" width="11" height="8" fill="#c9a24a"/><rect x="10" y="38" width="13" height="2.5" fill="#9e7d34"/><rect x="26" y="9" width="11" height="24" rx="1.5" fill="#b3302b"/><rect x="26" y="31" width="11" height="8" fill="#c9a24a"/><rect x="25" y="38" width="13" height="2.5" fill="#9e7d34"/></svg>',
   flare:
     '<svg viewBox="0 0 48 48"><g transform="rotate(35 24 24)"><rect x="19" y="6" width="10" height="34" rx="2" fill="#c8322a"/><rect x="19" y="6" width="10" height="7" rx="2" fill="#2a2d31"/><rect x="19" y="24" width="10" height="3" fill="#f2d24b"/></g></svg>',
+  // (plan 88) Vortex's tape: a black cassette, his pink label, its tape out
+  vxtape:
+    '<svg viewBox="0 0 48 48"><rect x="6" y="11" width="36" height="24" rx="3" fill="#1d1d22"/><rect x="9" y="14" width="30" height="12" rx="1.5" fill="#ff2d95"/><circle cx="17" cy="20" r="3" fill="#ddd"/><circle cx="31" cy="20" r="3" fill="#ddd"/><path d="M22 35c0 4-4 4-4 8M26 35c0 3 3 5 2 9" stroke="#4a2c18" stroke-width="1.6" fill="none"/></svg>',
   // (plan 87) the torch: its body slanted, the head and a lit lens
   torch:
     '<svg viewBox="0 0 48 48"><g transform="rotate(-40 24 24)"><rect x="20" y="16" width="8" height="26" rx="2" fill="#2b2e33"/><path d="M19 16l-3-8h16l-3 8z" fill="#3a3f46"/><rect x="15" y="5" width="18" height="4" rx="1.5" fill="#c9cdd2"/><rect x="17" y="6" width="14" height="2" fill="#fff1c9"/><path d="M20 22h8M20 26h8M20 30h8" stroke="#1b1d21" stroke-width="1.2"/></g></svg>',

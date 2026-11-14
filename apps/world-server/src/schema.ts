@@ -182,6 +182,10 @@ export class Npc extends Schema {
   @type("string") area = "";
   // the floor they're on (shared levels.ts); -1: the studio's (Vortex's)
   @type("int8") level = -1;
+  // (plan 88, Vortex's) the fight: his health left (1 full), its act (0 none, 1–3), beaten — away till then (ms)
+  @type("float32") vk = 1;
+  @type("uint8") vact = 0;
+  @type("float64") vgone = 0;
 }
 
 export class Standup extends Schema {

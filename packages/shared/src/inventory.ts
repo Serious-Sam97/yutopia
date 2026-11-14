@@ -28,6 +28,8 @@ export const STACKS = {
   fuse: 4,
   // (plan 87) the torch: an item, one of a kind — it lights only from the left hand
   torch: 1,
+  // (plan 88) Vortex's tape: the trophy — one for each fight you landed the last hit in, the stack your wins
+  vxtape: 99,
 } as const;
 export type StackId = keyof typeof STACKS;
 export type ItemId = WeaponId | StackId;
@@ -318,6 +320,7 @@ const ORDER: ItemId[] = [
   "battery",
   "flare",
   "fuse",
+  "vxtape",
 ];
 export function organize(inv: Inventory): boolean {
   const before = JSON.stringify(inv.pockets);

@@ -131,6 +131,7 @@ import type { DarkHooks } from "./features/dark.ts";
 import { type Feature, featureNames, installFeatures } from "./features/index.ts";
 import type { PballHooks } from "./features/pballs.ts";
 import type { SurvivalHooks } from "./features/survival.ts";
+import type { VortexHooks } from "./features/vortex.ts";
 import { landEdits } from "./land.ts";
 import { removeParticipant, setCanPublish } from "./livekit.ts";
 import { metrics } from "./metrics.ts";
@@ -255,6 +256,7 @@ export class WorldRoom extends Room<WorldState> {
   savedKarts: unknown = null; // the Kart Park's record (features/karts.ts)
   survival: SurvivalHooks | null = null;
   dark: DarkHooks | null = null; // features/dark.ts: shots and flares (features/arms.ts)
+  vortex: VortexHooks | null = null; // (plan 88) features/vortex.ts: the fight — shots at him (features/arms.ts)
   pballs: PballHooks | null = null; // features/pballs.ts: pool balls out of a game
 
   send<K extends keyof ServerMessages>(client: Client, type: K, msg: ServerMessages[K]): void {

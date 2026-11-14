@@ -191,6 +191,17 @@ function torch(): Part[] {
   ];
 }
 
+function vxtape(): Part[] {
+  // (plan 88) Vortex's tape lying flat: the black shell, his pink label, two white hubs, the tape pulled out
+  return [
+    box(0.11, 0.014, 0.07, 0, 0.007, 0, 0x1d1d22),
+    box(0.09, 0.002, 0.036, 0, 0.0145, -0.008, 0xff2d95),
+    rod(0.007, 0.003, -0.018, 0.016, -0.008, 0xdddddd, 10),
+    rod(0.007, 0.003, 0.018, 0.016, -0.008, 0xdddddd, 10),
+    box(0.012, 0.002, 0.09, 0.02, 0.002, 0.07, 0x4a2c18),
+  ];
+}
+
 const MODELS: Record<string, () => Part[]> = {
   // (the guns: their own models, the ones in the hand — tp/guns3d.ts)
   revolver: () => [gunLying("revolver")],
@@ -215,6 +226,7 @@ const MODELS: Record<string, () => Part[]> = {
   "cache:hunting": hunting,
   "cache:flares": flareBag,
   "cache:torch": torch,
+  vxtape,
   // (plan 87) the torch dropped: as a cache's
   torch,
 };

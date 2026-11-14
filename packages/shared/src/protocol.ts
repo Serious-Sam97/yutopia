@@ -420,6 +420,15 @@ export interface ClientMessages {
   "wb:op": { objectId: string; op: WbOp };
   "arcade:score": { score: number };
   "vortex:poke": Record<string, never>;
+  // (plan 88) an admin's, for trying the fight: an act or his health set, beaten, reset; put somewhere and held
+  "mod:vortex": {
+    act?: 1 | 2 | 3;
+    k?: number;
+    beat?: boolean;
+    reset?: boolean;
+    at?: { x: number; y: number };
+    hold?: boolean;
+  };
   // pets (shared/pets.ts): adopt one, let it go, its name / look / clothes, a
   // command, care by hand, a toy, a lesson, a bowl filled, a battle (the
   // challenge, the answer, a move each round)
@@ -632,6 +641,9 @@ export interface ServerMessages {
   "wb:op": { objectId: string; op: WbOp; by: string };
   "arcade:scores": { scores: { name: string; score: number }[] };
   "vortex:say": { text: string; to?: string; mood?: string };
+  // (plan 88) the fight with Vortex: who's in it and their hits (none: it's over); beaten — by whom, how long it took
+  "vortex:fight": { who: { sid: string; name: string; hits: number }[] };
+  "vortex:down": { by: string; secs: number };
   kicked: { reason: string };
   // builders: what Undo/Redo would do, and whether the last change reached Yondra
   "build:history": { undo: number; redo: number; undoLabel: string | null; redoLabel: string | null };
@@ -686,7 +698,7 @@ export interface ServerMessages {
   // (head: it went in at the head — docs/plan/32-the-arms.md)
   "arms:hit": {
     id: string;
-    kind: "spark" | "hurt" | "killed" | "person" | "downed";
+    kind: "spark" | "hurt" | "killed" | "person" | "downed" | "vortex"; // (plan 88: Vortex hit)
     x: number;
     y: number;
     z: number;

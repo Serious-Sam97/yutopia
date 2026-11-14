@@ -332,10 +332,21 @@ registerFeature((room: WorldRoom) => {
     for (const dir of pellets(id, yaw, Math.max(-1.2, Math.min(1.2, pitch)), seed, spread)) {
       const ray = { x: ox, y: oy, z: oz, ...dir };
       const who = personAlong(p, ray, gun.range, seenPeople);
+      // (plan 88) Vortex: nearer than whoever's along it, he takes it — a wall on the way, it stops there
+      const vt = room.vortex?.along(p.level, ray, who ? who.t : gun.range) ?? null;
       // the shadowed (out on the land): one nearer than whoever's along it takes it
-      const hit = p.level === 0 ? room.dark?.shoot(ray, who ? who.t : gun.range, seenAt, shadeDamage, now) : null;
+      const hit =
+        p.level === 0 ? room.dark?.shoot(ray, vt ?? (who ? who.t : gun.range), seenAt, shadeDamage, now) : null;
       if (hit) {
         room.send(client, "arms:hit", hit);
+        continue;
+      }
+      if (vt !== null) {
+        const d = rayDir(ray.yaw, ray.pitch);
+        const at = { x: ox + d.x * vt, y: oy + d.y * vt, z: oz + d.z * vt };
+        if (!(room.sight?.(p.level, { x: ox, y: oy, z: oz }, at) ?? true)) continue;
+        room.vortex?.hit(client.sessionId, damageAt(id, gun.damage, vt, false), now);
+        room.send(client, "arms:hit", { id: "vortex", kind: "vortex", head: false, ...at });
         continue;
       }
       if (!who) continue;
@@ -415,6 +426,15 @@ registerFeature((room: WorldRoom) => {
     room.dark?.blast(x, y, z, o.level, ARMS.daybreak.damage, now, (hit) => {
       if (sc) room.send(sc, "arms:hit", hit);
     });
+    // (plan 88) Vortex caught in it: as the shadowed are
+    const v = room.vortex?.near(o.level, x, y, z, 2) ? room.vortex.at() : null;
+    if (v) {
+      const n = burstAt(ARMS.daybreak.damage, Math.hypot(v.x - x, v.y - y, v.z - z));
+      if (n > 0) {
+        room.vortex?.hit(o.sid, n, now);
+        if (sc) room.send(sc, "arms:hit", { id: "vortex", kind: "vortex", head: false, ...v });
+      }
+    }
     for (const q of room.state.players.values()) {
       if (shooter ? !target(shooter, q) : q.level !== o.level || q.sid === o.sid) continue;
       const qz = overFloor(q.level, q.z);
@@ -498,6 +518,8 @@ registerFeature((room: WorldRoom) => {
           }
         // (one of the shadowed: where they are now)
         if (!on && o.level === 0 && room.dark?.near?.(x, y, z, ORB.hit)) on = true;
+        // (plan 88: Vortex in its way)
+        if (!on && room.vortex?.near(o.level, x, y, z, ORB.hit)) on = true;
         if (!on) continue;
         orbs.splice(i, 1);
         burst(o, x, y, z, now);

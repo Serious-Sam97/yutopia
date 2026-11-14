@@ -148,6 +148,8 @@ export interface SurvivalHooks {
   changed(sid: string): void;
   /** an admin's (docs/plan/48-the-admin.md): health, breath and battery full; up again if down */
   heal(sid: string): void;
+  /** (plan 88) something left lying (Vortex's tape where he fell): on `level`'s floor at (x, y) */
+  drop(item: ItemId, n: number, x: number, y: number, level: number): void;
   /** an admin's: something into their pockets (or, `drop`, on the ground where they stand);
    *  false: nothing went (unknown, or no room) */
   give(sid: string, item: string, n: number, drop?: boolean): boolean;
@@ -765,6 +767,9 @@ registerFeature((room: WorldRoom) => {
       if (p.downAt) getUp(p, s, 100);
       p.hp = vitalByte(s.v.hp);
       changed(s);
+    },
+    drop(item, n, x, y, level) {
+      putDrop(item, n, 0, x, y, Date.now(), undefined, level);
     },
     give(sid, item, n, drop) {
       const p = room.state.players.get(sid);
