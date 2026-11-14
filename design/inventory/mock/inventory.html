@@ -124,6 +124,24 @@ img.it { display: block; max-width: 100%; max-height: 100%; object-fit: contain;
 .B .vit { position: absolute; right: 30px; bottom: 24px; display: flex; gap: 16px; font: 400 12px/1 var(--type); color: var(--dim); }
 .B .vit b { color: var(--cream); font-weight: 400; } .B .vit .lo b { color: var(--red); }
 
+/* plan 87 (?h=1): the left hand — its loop at the belt's left end, set off by the buckle; the torch lit there */
+.B .belt.h5 { left: 20px; width: 800px; grid-template-columns: 140px 26px repeat(4, 1fr); }
+.loop.hnd { background: linear-gradient(180deg, rgba(42,26,14,.75), rgba(26,16,8,.8)); box-shadow: inset 0 2px 8px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,220,170,.18); }
+.loop.hnd .k { display: flex; gap: 5px; align-items: center; }
+.loop .gl { width: 11px; height: 12px; opacity: .85; }
+.loop.lit { box-shadow: inset 0 2px 8px rgba(0,0,0,.6), 0 0 0 1px var(--lamp), 0 0 22px rgba(241,215,154,.45); }
+.loop.lit::after { content: ""; position: absolute; right: 14%; top: 22%; width: 46px; height: 46px; border-radius: 50%; background: radial-gradient(circle, rgba(255,236,190,.55), transparent 70%); pointer-events: none; }
+.loop .tag-lit { position: absolute; right: 8px; top: 6px; font: 400 10px/1 var(--type); letter-spacing: .1em; color: var(--lamp); }
+.buckle { align-self: center; height: 70%; border-radius: 5px; background: linear-gradient(180deg, #d8c08a, #8a7448); box-shadow: inset 0 0 0 4px #5a4a2c, inset 0 0 0 6px #c9b07a, 0 3px 6px rgba(0,0,0,.5); }
+.menu .kk.hd { color: var(--lamp); border-color: rgba(241,215,154,.5); gap: 3px; }
+.menu .kk.hd svg { width: 9px; height: 10px; }
+.qb .q.hnd { background: rgba(60,38,20,.45); }
+.qb .q.lit { border-color: var(--lamp); box-shadow: 0 0 0 1px rgba(241,215,154,.35), 0 0 14px rgba(241,215,154,.4); }
+.qb .q.burn { border-color: #ff7a4a; box-shadow: 0 0 0 1px rgba(255,122,74,.4), 0 0 16px rgba(255,110,60,.45); }
+.qb .q .gl { position: absolute; left: 14px; top: 3px; width: 9px; height: 10px; }
+.qb .sep { width: 1px; align-self: stretch; margin: 2px 3px; background: linear-gradient(180deg, transparent, rgba(241,215,154,.35), transparent); }
+.BP .belt.h5 { grid-template-columns: 1.1fr 10px repeat(4, 1fr); gap: 6px; }
+
 /* B on a phone: the belt, the pack four across, the tag a sheet at the foot, the snow a line */
 .BP { position: absolute; inset: 0; padding: 14px 12px; display: flex; flex-direction: column; gap: 12px; background: rgba(8,10,14,.6); }
 .BP .belt { position: relative; height: 84px; border-radius: 8px; background: linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.35)), var(--wood) 0 60px / 600px 240px; box-shadow: inset 0 0 0 1px rgba(255,220,170,.12), 0 10px 20px rgba(0,0,0,.5); padding: 8px 10px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
@@ -264,7 +282,18 @@ const pack = [
   null,
 ];
 const ground = [{ id: "shell", c: "×4" }, { id: "battery", c: "×1" }];
-const menu = (x, y) => `<div class="menu" style="left:${x}px;top:${y}px">
+// (plan 87, ?h=1: the left hand on 1 — the torch there, lit; the four at hand 2–5; ?f=1: a flare lit and held there)
+const H = q.get("h") === "1";
+const F = q.get("f") === "1";
+NAME.torch = "Torch";
+const HAND = F ? { id: "flare", n: "0:42", burn: true } : { id: "torch", n: "71%", lit: true };
+if (H) pack[4] = { id: "flare", n: "2<small>/3</small>" };
+const GLOVE = `<svg class="gl" viewBox="0 0 11 12"><path d="M2 11V5.5M2 5.5V2.6a.9.9 0 0 1 1.8 0V5M3.8 5V1.6a.9.9 0 0 1 1.8 0V5M5.6 5V2a.9.9 0 0 1 1.8 0v3.5M7.4 5.5V3.4a.9.9 0 0 1 1.8 0V8c0 2-1.4 3-3.2 3H4.4C3 11 2 10 2 8.6" fill="none" stroke="#f1d79a" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const menu = (x, y) => H
+  ? `<div class="menu" style="left:${x}px;top:${y}px;width:230px">
+  <div class="on">Equip to <span><span class="kk hd">${GLOVE}1</span> <span class="kk">2</span> <span class="kk">3</span> <span class="kk">4</span> <span class="kk">5</span></span></div>
+  <div>Split <span class="kk">⇧ drag</span></div><hr><div>Drop 1</div><div class="bad">Drop all 2</div></div>`
+  : `<div class="menu" style="left:${x}px;top:${y}px">
   <div class="on">Equip to <span><span class="kk">1</span> <span class="kk">2</span> <span class="kk">3</span> <span class="kk">4</span></span></div>
   <div>Split <span class="kk">Shift</span></div><hr><div>Drop 1</div><div class="bad">Drop all 6</div></div>`;
 const app = document.getElementById("app");
@@ -295,9 +324,13 @@ function ledger(phone) {
   </div>${phone ? "" : menu(470, 470)}`;
 }
 
+const handLoop = (small) =>
+  `<div class="loop hnd${HAND.lit ? " lit" : ""}${HAND.burn ? " lit" : ""}${!small && !F ? " sel" : ""}"><span class="k">${GLOVE}1${small ? "" : " · left hand"}</span>${small ? "" : `<span class="tag-lit">${HAND.burn ? "BURNING" : "LIT"}</span>`}<img class="it" src="${I(HAND.id)}"><span class="n">${HAND.n}</span></div>`;
 function packLook() {
-  const loop = (it, i) => !it ? `<div class="loop"><span class="k">${i + 1}</span></div>` :
-    `<div class="loop${it.hand ? " hand" : ""}"><span class="k">${i + 1}</span>${it.hand ? `<span class="tag tag-in">IN HAND</span>` : ""}<img class="it" src="${I(it.id)}"><span class="n">${it.n}</span></div>`;
+  const off = H ? 1 : 0;
+  const loop = (it, i) => !it ? `<div class="loop"><span class="k">${i + 1 + off}</span></div>` :
+    `<div class="loop${it.hand ? " hand" : ""}"><span class="k">${i + 1 + off}</span>${it.hand ? `<span class="tag tag-in">IN HAND</span>` : ""}<img class="it" src="${I(it.id)}"><span class="n">${it.n}</span></div>`;
+  if (H) return packLook87(loop);
   const po = (it) => !it ? `<div class="po e"></div>` :
     `<div class="po${it.sel ? " sel" : ""}"><img class="it" src="${I(it.id)}">${it.s ? `<span class="s">${it.s}</span>` : ""}<span class="n">${it.n}</span></div>`;
   return `<div class="scrim"></div><div class="B">
@@ -313,11 +346,40 @@ function packLook() {
   </div>${menu(395, 455)}`;
 }
 
+function packLook87(loop) {
+  const po = (it) => !it ? `<div class="po e"></div>` :
+    `<div class="po${it.sel ? " sel" : ""}"><img class="it" src="${I(it.id)}">${it.s ? `<span class="s">${it.s}</span>` : ""}<span class="n">${it.n}</span></div>`;
+  const p = pack.map((it) => it && { ...it, sel: false });
+  return `<div class="scrim"></div><div class="B">
+    <div class="belt h5">${handLoop(false)}<div class="buckle"></div>${quick.map(loop).join("")}</div>
+    <div class="bag"><div class="flap">The pack</div><div class="pockets">${p.map(po).join("")}</div></div>
+    <div class="string"></div><div class="ring"></div>
+    <div class="paper"><span class="cap" style="color:#7a6a4a">Left hand · 1 · lit</span><div class="pic"><img class="it" src="${I("torch")}" style="max-height:100px"></div>
+      <h2>Torch</h2><div class="what">Lights the way — only from the left hand: 1 takes it out and on, 1 again off and away.</div>
+      <div class="sp"><span>Battery</span><b style="font-weight:400">71%</b><span>Spare batteries</span><b style="font-weight:400">1 · B</b><span>Focus</span><b style="font-weight:400">right button</b><span class="note">Held with every gun — under the revolver, under a long gun's fore-end</span></div>
+      <div class="btns"><div class="lampbtn">Put out <span class="kk">1</span></div><div class="btn">Drop</div></div></div>
+    <div class="snow"><span class="cap" style="margin-right:4px">On the snow</span>${ground.map((g) => `<div class="stone"><img src="${I(g.id)}"><div><b>${NAME[g.id]}</b><span>${g.c}</span></div><span class="take">TAKE</span></div>`).join("")}<span class="kk" style="width:auto;color:var(--lamp)">Take all · T</span></div>
+    <div class="vit"><span class="lo">health <b>60</b></span><span>warmth <b>82</b></span><span>torch <b>71%</b></span></div>
+  </div>${menu(300, 590)}`;
+}
 function packPhone() {
   const loop = (it, i) => !it ? `<div class="loop"><span class="k">${i + 1}</span></div>` :
     `<div class="loop${it.hand ? " hand" : ""}"><span class="k">${i + 1}</span><img class="it" src="${I(it.id)}"><span class="n">${it.n.replace(/<small>.*<\/small>/, "")}</span></div>`;
   const po = (it) => !it ? `<div class="po e"></div>` :
     `<div class="po${it.sel ? " sel" : ""}"><img class="it" src="${I(it.id)}"><span class="n">${it.n.replace(/<small>.*<\/small>/, "")}</span></div>`;
+  if (H) {
+    const loopH = (it, i) => !it ? `<div class="loop"><span class="k">${i + 2}</span></div>` :
+      `<div class="loop${it.hand ? " hand" : ""}"><span class="k">${i + 2}</span><img class="it" src="${I(it.id)}"><span class="n">${it.n.replace(/<small>.*<\/small>/, "")}</span></div>`;
+    return `<div class="BP">
+    <div class="top"><span class="cap">Left hand · 1 &nbsp; At hand · 2–5</span><span class="kk">✕</span></div>
+    <div class="belt h5">${handLoop(true)}<div class="buckle"></div>${quick.map(loopH).join("")}</div>
+    <div class="bag" style="margin-top:12px"><div class="flap">The pack</div><div class="pockets">${pack.map((it) => !it ? `<div class="po e"></div>` : `<div class="po"><img class="it" src="${I(it.id)}"><span class="n">${it.n.replace(/<small>.*<\/small>/, "")}</span></div>`).join("")}</div></div>
+    <div class="paper"><div class="pic"><img class="it" src="${I("torch")}"></div><span class="cap" style="color:#7a6a4a;align-self:end">Left hand · 1 · lit</span><h2>Torch</h2>
+      <div class="sp"><span>Battery</span><span>71%</span><span>Spare batteries</span><span>1</span><span class="note">Only from the left hand — tap Put out, or 1</span></div>
+      <div class="btns"><div class="lampbtn">Put out</div><div class="btn">Drop <span class="kk" style="color:#555;border-color:rgba(0,0,0,.25)">hold</span></div></div></div>
+    <div class="snow">${ground.map((g) => `<div class="stone"><img src="${I(g.id)}"><div><b>${NAME[g.id]}</b><span>${g.c}</span></div></div>`).join("")}<span class="kk" style="width:auto;height:34px;padding:0 10px;color:var(--lamp)">Take all</span></div>
+  </div>`;
+  }
   return `<div class="BP">
     <div class="top"><span class="cap">At hand · 1–4</span><span class="kk">✕</span></div>
     <div class="belt">${quick.map(loop).join("")}</div>
@@ -349,8 +411,14 @@ function quiet() {
 }
 
 function hud() {
-  const q = (it, i) => !it ? `<div class="q e"><span class="k">${i + 1}</span></div>` :
-    `<div class="q${it.wide ? " wide" : ""}${it.hand ? " hand" : ""}"><span class="k">${i + 1}</span><img class="it" src="${I(it.id)}"><span class="n">${it.n.replace(/<small>.*<\/small>/, "")}</span></div>`;
+  const off = H ? 1 : 0;
+  const q = (it, i) => !it ? `<div class="q e"><span class="k">${i + 1 + off}</span></div>` :
+    `<div class="q${it.wide ? " wide" : ""}${it.hand ? " hand" : ""}"><span class="k">${i + 1 + off}</span><img class="it" src="${I(it.id)}"><span class="n">${it.n.replace(/<small>.*<\/small>/, "")}</span></div>`;
+  if (H) {
+    const h = `<div class="q hnd${HAND.lit ? " lit" : ""}${HAND.burn ? " burn" : ""}"><span class="k">1</span>${GLOVE.replace('class="gl"', 'class="gl"')}<img class="it" src="${I(HAND.id)}"><span class="n">${HAND.n}</span></div>`;
+    return `<div class="qb"><div class="cap"><span>${F ? "Left hand · flare <b>0:42</b>" : "Left hand · torch <b>71%</b>"}</span><b>.38 · 4 + 18</b></div><div class="slots">${h}<div class="sep"></div>${quick.map(q).join("")}</div></div>
+    <div class="slip" style="right:40px;bottom:150px"><img src="${I(F ? "flare" : "battery")}">${F ? "G or 1 · throw it" : "+1 battery · in the pack"}</div>`;
+  }
   return `<div class="qb"><div class="cap"><span>At hand</span><b>.38 · 4 + 18</b></div><div class="slots">${quick.map(q).join("")}</div></div>
     <div class="slip" style="right:40px;bottom:150px"><img src="${I("shell")}">+4 shells · in the pack</div>`;
 }

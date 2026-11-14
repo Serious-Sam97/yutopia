@@ -282,10 +282,30 @@ def item(name):
         cyl(0.0007, 0.04, (0, 0, 0), m=wire, verts=8)
         objs = list(bpy.data.objects)
         turn = (0, math.radians(90), math.radians(-25))
+    elif name == "torch":
+        # (plan 87) the torch, as the game's prop (chars/props.ts `torch`): the tail cap, a grip cut with six grooves,
+        # the body flaring into the head, a chrome bezel, the lens and its LED — 22 cm, its lens up
+        alu = mat("alu", (0.075, 0.078, 0.085), 0.35, 0.85)
+        rubber = mat("rubber", (0.03, 0.03, 0.032), 0.8)
+        chrome = mat("chrome", (0.85, 0.86, 0.88), 0.12, 1.0)
+        lens = mat("lens", (1.0, 0.95, 0.82), 0.05, 0.0, emit=1.6)
+        r = 0.016
+        cyl(r * 0.8, 0.012, (0, 0, -0.109), m=rubber)
+        cyl(r * 1.0, 0.086, (0, 0, -0.061), m=alu)
+        for i in range(6):
+            cyl(r * 1.05, 0.007, (0, 0, -0.0905 + i * 0.012), m=alu)
+        cyl(r, 0.048, (0, 0, 0.006), m=alu)
+        cone(r, r * 1.6, 0.046, (0, 0, 0.053), m=alu)
+        cyl(r * 1.72, 0.022, (0, 0, 0.087), m=chrome)
+        cyl(r * 1.45, 0.002, (0, 0, 0.0985), m=lens)
+        box(0.006, 0.01, 0.014, (0, -r * 1.02, 0.0), m=rubber, bevel=0.002)
+        box(0.004, 0.003, 0.05, (0, r * 1.12, -0.07), m=chrome, bevel=0.001)
+        objs = list(bpy.data.objects)
+        turn = (0, math.radians(58), math.radians(-14))
     frame(objs, res, turn)
     render(name)
 
 
 for n in ("revolver", "shotgun", "ak47", "sniper", "daybreak", "r38", "shell", "r762", "r308", "cell", "flare",
-          "battery", "aid", "fuse"):
+          "battery", "aid", "fuse", "torch"):
     item(n)
