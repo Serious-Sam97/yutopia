@@ -1,5 +1,14 @@
 import type { ServerMessages } from "@yutopia/shared";
-import { KIT_SPOT, LOCKER, LOOT_REACH, type LootItem, lockerFront, lootNow, SEARCH_MS } from "@yutopia/shared/dark";
+import {
+  FLARE,
+  KIT_SPOT,
+  LOCKER,
+  LOOT_REACH,
+  type LootItem,
+  lockerFront,
+  lootNow,
+  SEARCH_MS,
+} from "@yutopia/shared/dark";
 import { heightAt } from "@yutopia/shared/grounds";
 import { count, findStack, type Inventory, type ItemId, isUsable, isWeapon, WEAPONS } from "@yutopia/shared/inventory";
 import { addStrings, trMaybe } from "@/lib/i18n";
@@ -34,6 +43,9 @@ const t = (key: string, vars: Record<string, string> = {}) =>
 const itemName = (id: ItemId) => t(`dark_item_${id}`);
 const AMBER = "#e9a33a";
 const SLIP_MS = 3200; // a pick-up's slip, shown this long
+// (plan 87) the left hand's mark on the quick bar: a gloved hand, in the lamp's colour
+const GLOVE_SVG =
+  '<svg class="gl" viewBox="0 0 11 12"><path d="M2 11V5.5M2 5.5V2.6a.9.9 0 0 1 1.8 0V5M3.8 5V1.6a.9.9 0 0 1 1.8 0V5M5.6 5V2a.9.9 0 0 1 1.8 0v3.5M7.4 5.5V3.4a.9.9 0 0 1 1.8 0V8c0 2-1.4 3-3.2 3H4.4C3 11 2 10 2 8.6" fill="none" stroke="#f1d79a" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 type Target =
   | { kind: "spot"; id: string; label: string; x: number; y: number; z: number }
@@ -55,6 +67,12 @@ const CSS = `
 .dk-quick .cap b{font-weight:400;color:var(--cream);letter-spacing:.06em;text-transform:none}
 .dk-quick .cap .hurt{color:#e7907c}
 .dk-qs{display:flex;gap:6px;align-items:flex-end}
+.dk-quick .cap .lit{color:var(--amber)}
+.dk-q.hnd{background:rgba(60,38,20,.45)}
+.dk-q.hnd .gl{position:absolute;left:13px;top:3px;width:9px;height:10px}
+.dk-q.lit{border-color:var(--amber);box-shadow:0 0 0 1px color-mix(in srgb,var(--amber) 35%,transparent),0 0 14px color-mix(in srgb,var(--amber) 40%,transparent)}
+.dk-q.burn{border-color:#ff7a4a;box-shadow:0 0 0 1px rgba(255,122,74,.4),0 0 16px rgba(255,110,60,.45)}
+.dk-qs .sep{width:1px;align-self:stretch;margin:2px 3px;background:linear-gradient(180deg,transparent,color-mix(in srgb,var(--amber) 35%,transparent),transparent)}
 .dk-quick{padding:8px 10px 10px;border:5px solid transparent;border-radius:6px;background:linear-gradient(var(--panel),var(--panel)) padding-box,var(--wood) 0 0/600px 240px border-box;box-shadow:inset 0 0 0 1px rgba(0,0,0,.6),0 0 0 1px rgba(0,0,0,.55),0 12px 30px rgba(0,0,0,.5)}
 .dk-q{position:relative;height:54px;width:54px;border-radius:6px;background:rgba(255,255,255,.04);border:1px solid color-mix(in srgb,var(--amber) 16%,transparent);transition:transform .12s ease-out,border-color .12s,box-shadow .12s}
 .dk-q.w{width:96px}
@@ -208,7 +226,8 @@ class Dark implements DarkHooks {
         organize: () => ctl.room?.send("dark:organize", {}),
         draw: (slot) => this.arms.draw(slot),
         quick: (n) => this.arms.quick(n),
-        hand: () => this.handKey(),
+        hand: () => this.handKey(true),
+        handState: () => this.handState(),
         reload: () => this.arms.reload(),
       },
       t,
@@ -374,23 +393,52 @@ class Dark implements DarkHooks {
   /** The left hand's use, on foot (not building, no menu, the pack shut — its own keys then): the torch switched; a
    *  first aid or a battery used (not when full: said); a flare lit and held up (F3b), or the one held thrown;
    *  anything else, or nothing there: nothing. True if the key was taken. */
-  private handKey(): boolean {
+  private handKey(fromPack = false): boolean {
     const h = hud.get();
-    if (!this.inv || !this.walker.stepping || h.menu || h.build.on || this.panel.open) return false;
+    // (the pack open: its own keys and buttons call this — `fromPack`; the world's 1 waits)
+    if (!this.inv || !this.walker.stepping || h.menu || h.build.on || (this.panel.open && !fromPack)) return false;
     const room = this.ctl.room;
     const lp = room?.state.players.get(room.sessionId);
     if (lp?.downAt) return false;
     const it = this.inv.hand;
+    let ok = true;
     // (a flare lit and held up: thrown first, where I look — whatever's in the slot since)
     if (this.arms.heldFlare()) this.arms.flare();
     else if (it?.id === "torch") room?.send("dark:hand", { on: !lp?.torch });
     else if (it?.id === "flare") room?.send("dark:hand", {});
-    else if (it?.id === "aid" && ((lp?.hp as number) ?? 100) >= 100) this.toast(t("dark_full_aid"), ["aid"]);
-    else if (it?.id === "battery" && this.walker.vitals.bat >= 99.5) this.toast(t("dark_full_battery"), ["battery"]);
-    else if (it && isUsable(it.id)) room?.send("dark:hand", {});
-    // (nothing there, or something that does nothing from a hand — rounds, a fuse: said)
-    else this.toast(t("dark_hand_none"), it ? [it.id] : []);
+    else if (it?.id === "aid" && ((lp?.hp as number) ?? 100) >= 100) {
+      this.toast(t("dark_full_aid"), ["aid"]);
+      ok = false;
+    } else if (it?.id === "battery" && this.walker.vitals.bat >= 99.5) {
+      this.toast(t("dark_full_battery"), ["battery"]);
+      ok = false;
+    } else if (it && isUsable(it.id)) room?.send("dark:hand", {});
+    else {
+      // (nothing there, or something that does nothing from a hand — rounds, a fuse: said)
+      this.toast(t("dark_hand_none"), it ? [it.id] : []);
+      ok = false;
+    }
+    // (the quick bar's left-hand slot: a nudge, or a shake)
+    this.handPulse = { ok, until: performance.now() + (ok ? 160 : 280) };
+    this.quickKey = "";
     return true;
+  }
+  private handPulse: { ok: boolean; until: number } | null = null;
+  /** (plan 87) the flare held up in my left hand: which, and when I first saw it (its seconds count down from it) */
+  private heldSince: { id: string; at: number } | null = null;
+  /** (plan 87) The left hand's light: the torch lit in it; a flare held up and its seconds left (0: none). */
+  handState(): { lit: boolean; burn: number } {
+    const room = this.ctl.room;
+    const lp = room?.state.players.get(room.sessionId);
+    let id = "";
+    room?.state.flares?.forEach((f: { id: string; held?: string }) => {
+      if (f.held && f.held === room.sessionId) id = f.id;
+    });
+    const now = performance.now();
+    if (!id) this.heldSince = null;
+    else if (this.heldSince?.id !== id) this.heldSince = { id, at: now };
+    const burn = this.heldSince ? Math.max(0, Math.ceil(FLARE.secs - (now - this.heldSince.at) / 1000)) : 0;
+    return { lit: !!lp?.torch && this.inv?.hand?.id === "torch", burn };
   }
 
   /** (plan 86) H, B: a first aid or a battery used from wherever it is — on foot only (in a car H is the horn, B
@@ -491,12 +539,19 @@ class Dark implements DarkHooks {
         : "";
     const pulse = this.quickPulse && now < this.quickPulse.until ? this.quickPulse : null;
     if (!pulse) this.quickPulse = null;
-    const key = `${JSON.stringify(inv.quick)}|${gun}|${rounds}|${hurt}|${pulse ? `${pulse.n}${pulse.ok}` : ""}|${artVersion()}`;
+    const hp = this.handPulse && now < this.handPulse.until ? this.handPulse : null;
+    if (!hp) this.handPulse = null;
+    // (plan 87) the left hand: its light (the torch lit, its battery; a flare held up, its seconds)
+    const hs = this.handState();
+    const bat = Math.round(this.walker.vitals.bat);
+    const key = `${JSON.stringify(inv.quick)}|${JSON.stringify(inv.hand)}|${hs.lit ? bat : -1}|${hs.burn}|${gun}|${rounds}|${hurt}|${pulse ? `${pulse.n}${pulse.ok}` : ""}|${hp ? hp.ok : ""}|${artVersion()}`;
     if (key === this.quickKey) return;
     this.quickKey = key;
     this.quickEl.replaceChildren();
     const cap = tag("div", "cap", "");
-    if (hurt) {
+    if (hs.burn) cap.append(tag("span", "lit", t("dark_hud_flare", { s: `${hs.burn}s` })));
+    else if (hs.lit) cap.append(tag("span", "lit", t("dark_hud_torch", { p: `${bat}%` })));
+    else if (hurt) {
       const h = tag("span", "hurt", "");
       h.append(tag("span", "dk-key", "H"), ` ${t("dark_aid_pad")} ×${count(inv, "aid")}`);
       cap.append(h);
@@ -504,6 +559,21 @@ class Dark implements DarkHooks {
     if (rounds) cap.append(tag("b", "", rounds));
     const row = tag("div", "dk-qs", "");
     this.quickEl.append(cap, row);
+    {
+      const it = inv.hand;
+      const shows: ItemId | null = it?.id ?? (hs.burn ? "flare" : null);
+      const el = document.createElement("div");
+      const go = hp ? (hp.ok ? " go" : " no") : "";
+      el.className = `dk-q hnd${shows ? "" : " empty"}${hs.lit ? " lit" : ""}${hs.burn ? " burn" : ""}${go}`;
+      el.append(tag("span", "k", "1"));
+      el.insertAdjacentHTML("beforeend", GLOVE_SVG);
+      if (shows) {
+        el.append(svg(itemArt(shows)));
+        const n = !it ? "" : it.id === "torch" ? `${bat}%` : "n" in it ? String(it.n) : "";
+        if (n) el.append(tag("span", "n", n));
+      }
+      row.append(el, tag("div", "sep", ""));
+    }
     for (const [i, it] of inv.quick.entries()) {
       const el = document.createElement("div");
       const wide = !!it && isWeapon(it.id);

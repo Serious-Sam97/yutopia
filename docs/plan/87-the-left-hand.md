@@ -7,7 +7,8 @@ longer by L. The new pack (plan 86, look B) adapted to it.
 Status: **investigated and proposed 2026-11-14; forks decided by the user 2026-11-14**: **F1a** the left hand's
 item out only while in use; **F2a** anything but a gun; **F3b** a flare there lit by 1 and held up as a light, G or
 1 again throws it; **F4a** everyone has a torch, it can be dropped, the lobby's locker gives one to whoever has none. **Phase 0 (the
-mock) signed off 2026-11-14**, committed cba1f89b; **phase 1 (the rules) built 2026-11-14**, committed 3b48ff95; **phase 2 (the keys) built 2026-11-14**, committed 5f2c97bc; **phase 3 (the left hand in use) built 2026-11-14**.
+mock) signed off 2026-11-14**, committed cba1f89b; **phase 1 (the rules) built 2026-11-14**, committed 3b48ff95; **phase 2 (the keys) built 2026-11-14**, committed 5f2c97bc; **phase 3 (the left hand in use) built 2026-11-14**, committed 5102f290; **phase 4 (the pack and the HUD) built
+2026-11-14**.
 
 ## What there is now
 
@@ -172,6 +173,31 @@ the pad's ↑ the left hand, LB + A B X Y the quick slots 2–5; a mock of the a
      inventory 16; `survival.test` green but the admin's give (red before this plan).
 4. **The pack and the HUD**: the belt's left-hand loop, hover + 1–5, the menu's 1–5, the torch's tag, the pad's belt
    row of five, a phone; the quick bar with the hand.
+   Done in phase 4 (2026-11-14):
+   - **The belt** (`dark/inventory.ts`, the mock's `87-pack`): the left hand's loop first — darker leather, a
+     gloved hand's mark, "1 · left hand", the torch's battery there; lit (the lamp's ring and glow, "lit") or a flare
+     held up (orange, "burning 7s") — then the brass buckle, then 2–5. A phone's belt of five too.
+   - **The hand in the pack's ways**: hover something in the pack or on the ground and press 1 — into the left hand
+     (on the belt, 1 is the hand's own key); the menu's chips ✋1 2 3 4 5, the ones it doesn't fit greyed (no ✋1 for
+     a gun, no 2–5 for the torch); the torch in the pack: To the left hand (1, E, Shift + click); the hand's own
+     things: Light / Put out, Light one / Throw, Use (1), To the pack; the pad's rows — the belt of five over the pack
+     of four (the left hand first: ↓ from nothing lands on it), the arrows the same.
+   - **The tag**: "Left hand · 1 · lit" — the torch's battery, the spare batteries (B), focus on the right button,
+     "held with every gun"; the torch in the pack: "it lights only from the left hand"; a flare there: how many,
+     burning 7 s; anything that does nothing there, said; the keys' list with 1.
+   - **The HUD** (`dark/index.ts` `quickHud`): the left hand's slot first, a hairline, then 2–5 — its torch and
+     battery, lit in the lamp's ring; a flare held up, orange, its seconds; the caption "Left hand · torch 71%" /
+     "Left hand · flare 7s" (else H when hurt, else "At hand") and the gun's rounds; 1's nudge, or its shake when
+     there's nothing to do (the "no" of phase 3, on the slot now). A held flare's seconds counted from when this
+     screen first saw it in my hand (`handState`).
+   - A bug from phase 2 found: inside the pack, 1 and the tag's Light went through the world's key, which waits while
+     the pack is open — the pack's own calls now pass (`handKey(fromPack)`).
+   - Checked: `inventory-tools` — a new test (the hand's loop and tag; Light; hover the flares + 1, the torch out to
+     their pouch, out; the torch's To the left hand; the first aid's ✋1 chip, none on a gun's; Shift + click the
+     torch back; 1 on the HUD: the slot lit, "Left hand · torch"), the pad's first stop the left hand; the specs'
+     counts one up (13 slots in the pack, 5 on the quick bar) — `inventory-tools` (6 with the phone), `inventory`,
+     `inventory-pack`, `dark`, `left-hand` green. Stills: `design/inventory/87-4-pack.png`, `87-4-menu.png`,
+     `87-4-hud.png`, `87-4-phone.png`.
 5. **Checks**: the guns' specs (their keys 2–5 now: `Digit${slot + 2}`), the inventory specs (slot 12), the dark
    and night specs that switch the light (`phone:torch` → the left hand), the server's and API's tests; stills.
 

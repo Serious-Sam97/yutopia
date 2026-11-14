@@ -1,7 +1,9 @@
 import { ARMS, FLARE, LOOT_REACH } from "@yutopia/shared/dark";
 import {
   count,
+  fits,
   freeQuick,
+  HAND_SLOT,
   type Inventory,
   type ItemId,
   isUsable,
@@ -35,6 +37,10 @@ const PHONE = 640; // narrower: the phone's column
 const DOUBLE_MS = 350;
 const LONG_MS = 450; // a touch held: the menu
 const HOLD_MS = 500; // a drop held (a phone's, the pad's X)
+const isQuick = (slot: number) => slot >= QUICK_SLOT && slot < QUICK_SLOT + QUICK;
+/** (plan 87) the left hand's mark: a gloved hand, outlined in the lamp's colour */
+const GLOVE =
+  '<svg class="gl" viewBox="0 0 11 12"><path d="M2 11V5.5M2 5.5V2.6a.9.9 0 0 1 1.8 0V5M3.8 5V1.6a.9.9 0 0 1 1.8 0V5M5.6 5V2a.9.9 0 0 1 1.8 0v3.5M7.4 5.5V3.4a.9.9 0 0 1 1.8 0V8c0 2-1.4 3-3.2 3H4.4C3 11 2 10 2 8.6" fill="none" stroke="#f1d79a" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 /** What the panel asks for (the dark's index sends it). */
 export interface InvActions {
@@ -54,6 +60,8 @@ export interface InvActions {
   quick(n: number): void;
   /** (plan 87) the left hand as its key does (1): the torch, a first aid, a battery, a flare */
   hand(): void;
+  /** (plan 87) the left hand's light: the torch lit; a flare held up, its seconds left (0 none) */
+  handState(): { lit: boolean; burn: number };
   reload(): void;
 }
 type Tr = (key: string, vars?: Record<string, string>) => string;
@@ -71,8 +79,10 @@ interface Entry {
   label: string;
   keys?: string;
   chips?: boolean;
-  /** (the chip of the slot it's in already) */
+  /** (the chip of the slot it's in already: -1 the left hand, 0–3 the quick slots) */
   own?: number;
+  /** (plan 87: the chips it doesn't fit — the left hand for a weapon, the quick slots for the torch) */
+  ban?: number[];
   bad?: boolean;
   line?: boolean;
 }
@@ -198,7 +208,7 @@ export class InventoryPanel {
       else if (e.code === "ArrowDown") this.menuStep(1);
       else if (e.code === "ArrowUp") this.menuStep(-1);
       else if (e.code === "Enter" || e.code === "KeyE") this.runMenu(m.items[m.focus].act);
-      else if (/^Digit[2-5]$/.test(e.code) && m.items.some((it) => it.chips))
+      else if (/^Digit[1-5]$/.test(e.code) && m.items.some((it) => it.chips))
         this.runMenu("to", Number(e.code.slice(5)) - 2);
       return true;
     }
@@ -209,21 +219,22 @@ export class InventoryPanel {
     if (e.repeat) return true;
     if (e.code === "KeyE") this.primary();
     else if (e.code === "KeyR") this.act.reload();
-    else if (e.code === "Digit1") this.act.hand();
-    else if (/^Digit[2-5]$/.test(e.code)) {
-      // (hover something in the pack or on the ground and press 2–5: it goes there; else — and on the belt — as the
-      // key does in the world)
+    else if (/^Digit[1-5]$/.test(e.code)) {
+      // (hover something in the pack or on the ground and press 1–5: it goes there — 1 the left hand; else — and on
+      // the belt — as the key does in the world)
       const n = Number(e.code.slice(5)) - 2;
       const h = this.hover;
-      if (h && !("slot" in h && h.slot >= QUICK_SLOT) && this.itemOf(h)) this.assign(h, n);
+      const onBelt = !!h && "slot" in h && h.slot >= QUICK_SLOT;
+      if (h && !onBelt && this.itemOf(h)) this.assign(h, n);
+      else if (n < 0) this.act.hand();
       else this.act.quick(n);
     } else if (e.code === "Delete" || e.code === "Backspace") this.dropSel();
     else if (e.code === "KeyT") this.takeAll();
     else if (e.code === "KeyO") this.act.organize();
-    else if (e.code === "ArrowRight") this.step(1);
-    else if (e.code === "ArrowLeft") this.step(-1);
-    else if (e.code === "ArrowDown") this.step(4);
-    else if (e.code === "ArrowUp") this.step(-4);
+    else if (e.code === "ArrowRight") this.nav(0, 1);
+    else if (e.code === "ArrowLeft") this.nav(0, -1);
+    else if (e.code === "ArrowDown") this.nav(1, 0);
+    else if (e.code === "ArrowUp") this.nav(-1, 0);
     return true;
   }
 
@@ -276,11 +287,11 @@ export class InventoryPanel {
       else if (pad.pressed(1) || pad.pressed(3)) this.closeMenu();
       return;
     }
-    if (pad.pressed(15)) this.step(1); // →
-    if (pad.pressed(14)) this.step(-1); // ←
-    // (the belt a row of four, the pack two rows of four)
-    if (pad.pressed(13)) this.step(4); // ↓
-    if (pad.pressed(12)) this.step(-4); // ↑
+    if (pad.pressed(15)) this.nav(0, 1); // →
+    if (pad.pressed(14)) this.nav(0, -1); // ←
+    // (the belt a row of five — the left hand, then 2–5 — the pack two rows of four, the ground a row)
+    if (pad.pressed(13)) this.nav(1, 0); // ↓
+    if (pad.pressed(12)) this.nav(-1, 0); // ↑
     if (pad.pressed(0)) this.primary();
     if (pad.pressed(3) && this.sel) this.menuFor(this.sel);
     if (pad.held(2)) {
@@ -295,18 +306,36 @@ export class InventoryPanel {
     }
     if (pad.pressed(1)) this.close();
   }
-  private order(): Pick[] {
+  /** The panel's rows, as the pad and the arrows walk them: the belt (the left hand, then the quick slots), the
+   *  pack's two rows, the ground */
+  private rows(): Pick[][] {
+    const half = POCKETS / 2;
     return [
-      ...Array.from({ length: QUICK }, (_, i) => ({ slot: QUICK_SLOT + i })),
-      ...Array.from({ length: POCKETS }, (_, i) => ({ slot: i })),
-      ...this.ground.map((d) => ({ drop: d.id })),
+      [{ slot: HAND_SLOT }, ...Array.from({ length: QUICK }, (_, i) => ({ slot: QUICK_SLOT + i }))],
+      Array.from({ length: half }, (_, i) => ({ slot: i })),
+      Array.from({ length: half }, (_, i) => ({ slot: half + i })),
+      ...(this.ground.length ? [this.ground.map((d) => ({ drop: d.id }))] : []),
     ];
   }
-  private step(d: number) {
-    const order = this.order();
-    const at = order.findIndex((o) => same(o, this.sel));
-    const to = at < 0 ? 0 : Math.max(0, Math.min(order.length - 1, at + d));
-    this.sel = order[to];
+  /** A step through the rows: across one, or up and down — the quick slots over the pack's columns (the left hand
+   *  before them: ← along the belt) */
+  private nav(dr: number, dc: number) {
+    const rows = this.rows();
+    let r = rows.findIndex((row) => row.some((o) => same(o, this.sel)));
+    if (r < 0) {
+      this.sel = rows[0][0];
+      this.render();
+      return;
+    }
+    let c = rows[r].findIndex((o) => same(o, this.sel));
+    const clamp = (x: number, n: number) => Math.max(0, Math.min(n - 1, x));
+    if (dr) {
+      const off = (row: number) => (row === 0 ? 1 : 0);
+      const col = c - off(r);
+      r = clamp(r + dr, rows.length);
+      c = clamp(col + off(r), rows[r].length);
+    } else c = clamp(c + dc, rows[r].length);
+    this.sel = rows[r][c];
     this.render();
   }
 
@@ -316,25 +345,31 @@ export class InventoryPanel {
     const inv = this.inv();
     if (!p || !inv) return;
     if ("drop" in p) return this.act.pick(p.drop);
-    if (p.slot >= QUICK_SLOT) return this.act.quick(p.slot - QUICK_SLOT);
+    if (p.slot === HAND_SLOT) return this.act.hand();
+    if (isQuick(p.slot)) return this.act.quick(p.slot - QUICK_SLOT);
     const st = inv.pockets[p.slot];
     // (plan 85: a weapon in the pack — equipped)
     if (st && isWeapon(st.id)) return this.equip(p);
+    // (plan 87: the torch — to the left hand, where it lights)
+    if (st?.id === "torch") return this.put(p, HAND_SLOT);
     if (st && isUsable(st.id)) this.act.use(p.slot);
   }
   /** (plan 85 F5a) A weapon in the pack into the first empty quick slot — none empty, the tag says so (a drag onto
    *  one, or 2–5 on it, swaps) */
   private equip(p: Pick = this.sel) {
     const inv = this.inv();
-    if (!p || !inv || "drop" in p || p.slot >= QUICK_SLOT) return;
+    if (!p || !inv || "drop" in p || p.slot >= POCKETS) return;
     const to = freeQuick(inv);
     if (to >= 0) this.put(p, to);
   }
-  /** (plan 86) Into quick slot `n` — what's there swapped (the shared moveSlot), or taken from the ground there */
+  /** (plan 86) Into quick slot `n` — what's there swapped (the shared moveSlot), or taken from the ground there;
+   *  (plan 87) -1 the left hand. Not where it doesn't fit (a weapon in the left hand, the torch at hand). */
   private assign(p: Pick, n: number) {
-    if (!p) return;
-    const to = QUICK_SLOT + n;
-    if ("slot" in p && p.slot === to) return this.act.quick(n);
+    const id = this.itemOf(p);
+    if (!p || !id) return;
+    const to = n < 0 ? HAND_SLOT : QUICK_SLOT + n;
+    if (!fits(to, id)) return;
+    if ("slot" in p && p.slot === to) return n < 0 ? this.act.hand() : this.act.quick(n);
     this.put(p, to);
   }
   /** Moved (or taken from the ground) into a slot, picked there */
@@ -347,12 +382,14 @@ export class InventoryPanel {
     this.shown = "";
     this.render();
   }
-  /** (plan 86) Shift + click: the pack → the first free at hand, at hand → the first free pouch; the ground: taken */
+  /** (plan 86) Shift + click: the pack → the first free at hand (plan 87: the torch, the left hand), at hand or in
+   *  the left hand → the first free pouch; the ground: taken */
   private swapSide(p: Pick) {
     const inv = this.inv();
     if (!p || !inv) return;
     if ("drop" in p) return this.act.pick(p.drop);
-    const to = p.slot < QUICK_SLOT ? freeQuick(inv) : inv.pockets.indexOf(null);
+    const torch = this.itemOf(p) === "torch";
+    const to = p.slot < POCKETS ? (torch ? HAND_SLOT : freeQuick(inv)) : inv.pockets.indexOf(null);
     if (to >= 0) this.put(p, to);
   }
   /** (plan 86) Where a split goes: a free pouch, else a free one at hand */
@@ -397,9 +434,20 @@ export class InventoryPanel {
       ];
     const it = slotAt(inv, p.slot);
     if (!it) return [];
-    const q = p.slot >= QUICK_SLOT ? p.slot - QUICK_SLOT : -1;
+    const q = isQuick(p.slot) ? p.slot - QUICK_SLOT : -1;
+    const inHandSlot = p.slot === HAND_SLOT;
     const out: Entry[] = [];
-    if (isWeapon(id)) {
+    const hs = this.act.handState();
+    if (inHandSlot) {
+      // (plan 87: the left hand's own — as 1 does)
+      if (id === "torch")
+        out.push({ act: "use", label: t(hs.lit ? "dark_inv_put_out" : "dark_inv_light"), keys: kk("1") });
+      else if (id === "flare")
+        out.push({ act: "use", label: t(hs.burn ? "dark_inv_throw" : "dark_inv_light_one"), keys: kk("1") });
+      else if (isUsable(id)) out.push({ act: "use", label: t("dark_inv_use"), keys: kk("1") });
+    } else if (id === "torch") {
+      out.push({ act: "hand", label: t("dark_inv_to_hand"), keys: kk("1") });
+    } else if (isWeapon(id)) {
       if (q >= 0) {
         const inHand = this.gun() === id;
         out.push({ act: "use", label: t(inHand ? "dark_inv_away" : "dark_inv_hold"), keys: kk(String(q + 2)) });
@@ -407,8 +455,17 @@ export class InventoryPanel {
       }
     } else if (isUsable(id)) out.push({ act: "use", label: t("dark_inv_use"), keys: kk(q >= 0 ? String(q + 2) : "E") });
     else if (id === "flare" && q >= 0) out.push({ act: "use", label: t("dark_inv_throw"), keys: kk(String(q + 2)) });
-    out.push({ act: "to", label: t(q >= 0 ? "dark_inv_move_to" : "dark_inv_equip_to"), chips: true, own: q });
-    if (q >= 0 && inv.pockets.includes(null))
+    // (plan 87: the chips ✋1 2–5 — the ones it doesn't fit greyed: the left hand for a weapon, the quick slots for
+    // the torch)
+    if (id !== "torch" || !inHandSlot)
+      out.push({
+        act: "to",
+        label: t(q >= 0 || inHandSlot ? "dark_inv_move_to" : "dark_inv_equip_to"),
+        chips: true,
+        own: inHandSlot ? -1 : q >= 0 ? q : undefined,
+        ban: isWeapon(id) ? [-1] : id === "torch" ? [0, 1, 2, 3] : [],
+      });
+    if ((q >= 0 || inHandSlot) && inv.pockets.includes(null))
       out.push({ act: "pack", label: t("dark_inv_to_pack"), keys: kk(t("dark_inv_shift_click")) });
     const n = "n" in it ? it.n : 1;
     if (!isWeapon(id) && n >= 2 && this.freeFor() >= 0)
@@ -445,11 +502,11 @@ export class InventoryPanel {
         (it, i) =>
           `${it.line ? "<hr>" : ""}<div class="it${i === m.focus ? " on" : ""}${it.bad ? " bad" : ""}" data-menu="${it.act}"><span>${it.label}</span><span class="r">${
             it.chips
-              ? [0, 1, 2, 3]
-                  .map(
-                    (n) =>
-                      `<span class="kk${n === it.own ? " own" : ""}"${n === it.own ? "" : ` data-menu="to" data-n="${n}"`}>${n + 2}</span>`,
-                  )
+              ? [-1, 0, 1, 2, 3]
+                  .map((n) => {
+                    const off = n === it.own || !!it.ban?.includes(n);
+                    return `<span class="kk${n < 0 ? " hd" : ""}${off ? " own" : ""}"${off ? "" : ` data-menu="to" data-n="${n}"`}>${n < 0 ? `${GLOVE}1` : n + 2}</span>`;
+                  })
                   .join("")
               : (it.keys ?? "")
           }</span></div>`,
@@ -482,10 +539,11 @@ export class InventoryPanel {
     if (act === "use" || act === "take") this.primary(p);
     else if (act === "reload") this.act.reload();
     else if (act === "to") {
-      // (the row itself, not a chip: the first free at hand — none, the first)
+      // (the row itself, not a chip: the first free at hand — none, the first; the torch, the left hand)
       const free = freeQuick(inv);
-      this.assign(p, n ?? (free >= 0 ? free - QUICK_SLOT : 0));
-    } else if (act === "pack") this.swapSide(p);
+      this.assign(p, n ?? (this.itemOf(p) === "torch" ? -1 : free >= 0 ? free - QUICK_SLOT : 0));
+    } else if (act === "hand") this.assign(p, -1);
+    else if (act === "pack") this.swapSide(p);
     else if (act === "split") this.split(p);
     else if (act === "takeAll") this.takeAll();
     else if ("slot" in p && act === "drop1") this.act.drop(p.slot, 1);
@@ -623,6 +681,8 @@ export class InventoryPanel {
     else if (act === "equip") this.equip();
     else if (act === "takeAll") this.takeAll();
     else if (act === "organize") this.act.organize();
+    else if (act === "hand") this.act.hand();
+    else if (act === "tohand") this.assign(this.sel, -1);
   }
   private itemOf(p: Pick): ItemId | null {
     const inv = this.inv();
@@ -643,9 +703,11 @@ export class InventoryPanel {
     const bat = Math.round(this.walker.vitals.bat);
     const gun = (lp?.gun as string) || "";
     const out = this.walker.outside;
+    const hs = this.act.handState();
     // (rebuilt only when something shown changed)
     const sig = JSON.stringify([
       inv,
+      hs,
       hp,
       wm,
       bat,
@@ -665,6 +727,18 @@ export class InventoryPanel {
     let loops = "";
     let pouches = "";
     if (inv) {
+      // (plan 87) the left hand: first on the belt, its own leather, a hand's mark; the torch lit in it, a flare
+      // burning — then the belt's buckle, then 2–5
+      const h = inv.hand;
+      const shows: ItemId | null = h?.id ?? (hs.burn ? "flare" : null);
+      const hk = `<span class="k">${GLOVE}1${this.phone ? "" : ` · ${t("dark_inv_left_hand")}`}</span>`;
+      const tag = hs.burn
+        ? `<span class="tag">${t("dark_inv_burning")} ${hs.burn}s</span>`
+        : hs.lit
+          ? `<span class="tag">${t("dark_inv_lit")}</span>`
+          : "";
+      const hn = !h ? "" : h.id === "torch" ? `${bat}%` : "n" in h ? `${h.n}<small>/${STACKS[h.id]}</small>` : "";
+      loops += `<div class="loop hnd${shows ? "" : " e"}${hs.lit ? " lit" : ""}${hs.burn ? " burn" : ""}${isSel({ slot: HAND_SLOT })}" data-slot="${HAND_SLOT}">${hk}${this.phone ? "" : tag}${shows ? art(shows) : ""}${hn ? `<span class="n">${hn}</span>` : ""}</div><div class="buckle"></div>`;
       inv.quick.forEach((it, i) => {
         const slot = QUICK_SLOT + i;
         const k = `<span class="k">${i + 2}</span>`;
@@ -719,7 +793,8 @@ export class InventoryPanel {
       return `<span class="cap">${t("dark_inv_title")}</span><p class="what hint">${t("dark_inv_pick_hint")}</p><div class="sp keys">${
         this.coarse
           ? ""
-          : row(kk("2–5"), t("dark_inv_k_hover")) +
+          : row(kk("1"), t("dark_inv_k_hand")) +
+            row(kk("2–5"), t("dark_inv_k_hover")) +
             row(t("dark_inv_k_shift"), t("dark_inv_k_shift_do")) +
             row(t("dark_inv_k_dbl"), t("dark_inv_k_dbl_do")) +
             row(t("dark_inv_k_right"), t("dark_inv_k_right_do")) +
@@ -755,7 +830,7 @@ export class InventoryPanel {
         stat(t("dark_inv_loaded"), t("dark_inv_of", { n: String(w?.loaded ?? 0), m: String(WEAPONS[id].mag) })) +
         stat(t("dark_inv_spare", { ammo: t(`dark_item_${ammo}`) }), String(count(inv, ammo))) +
         stat(t("dark_inv_dmg_range"), `${a.pellets > 1 ? `${a.pellets} × ${a.damage}` : a.damage} · ${a.range} m`);
-      if (p.slot < QUICK_SLOT) {
+      if (p.slot < POCKETS) {
         // (plan 85: in the pack — carried, not equipped: equipped into the first empty quick slot, or 1–4 on it, or
         // dragged onto one to swap)
         const free = freeQuick(inv) >= 0;
@@ -770,10 +845,46 @@ export class InventoryPanel {
           (gun === id && this.canReload(inv, id) ? btn("reload", t("dark_inv_reload"), kk("R")) : "") +
           dropBtn;
       }
+    } else if (id === "torch" || p.slot === HAND_SLOT) {
+      // (plan 87) the left hand's — the torch there or in the pack, a flare, anything else there
+      const hs = this.act.handState();
+      const inHandSlot = p.slot === HAND_SLOT;
+      const it = slotAt(inv, p.slot);
+      const s = it && "n" in it ? it : null;
+      where = inHandSlot
+        ? `${t("dark_inv_hand_slot")}${hs.lit ? ` · ${t("dark_inv_lit")}` : hs.burn ? ` · ${t("dark_inv_burning")}` : ""}`
+        : t("dark_inv_in_pocket");
+      if (id === "torch") {
+        stats =
+          stat(t("dark_inv_battery_stat"), `${bat}%`) +
+          stat(t("dark_inv_spare_bat"), `${count(inv, "battery")} · B`) +
+          stat(t("dark_inv_focus"), t("dark_inv_focus_rb"));
+        note = t(inHandSlot ? "dark_inv_held_guns" : "dark_inv_torch_pack");
+        btns =
+          (inHandSlot
+            ? btn("hand", t(hs.lit ? "dark_inv_put_out" : "dark_inv_light"), kk("1"), true)
+            : btn("tohand", t("dark_inv_to_hand"), kk("1"), true)) + dropBtn;
+      } else {
+        stats = stat(t("dark_inv_how_many"), t("dark_inv_of", { n: String(s?.n ?? 0), m: String(STACKS[id]) }));
+        if (id === "flare")
+          stats += hs.burn
+            ? stat(t("dark_inv_burning_for"), `${hs.burn} s`)
+            : stat(t("dark_inv_burns"), `${FLARE.secs} s`);
+        if (id === "aid") stats += stat(t("dark_inv_health_now"), `${hp} → 100`);
+        if (id === "battery") stats += stat(t("dark_inv_bat_now"), `${bat}% → 100%`);
+        const main =
+          id === "flare"
+            ? btn("hand", t(hs.burn ? "dark_inv_throw" : "dark_inv_light_one"), kk("1"), true)
+            : isUsable(id)
+              ? btn("hand", t("dark_inv_use"), kk("1"), true)
+              : "";
+        if (!main) note = t("dark_inv_hand_idle");
+        btns = main + dropBtn;
+      }
     } else {
       const it = slotAt(inv, p.slot);
       const s = it && "n" in it ? it : null;
-      const q = p.slot >= QUICK_SLOT ? String(p.slot - QUICK_SLOT + 2) : "";
+      const q = isQuick(p.slot) ? String(p.slot - QUICK_SLOT + 2) : "";
       where = q ? t("dark_inv_at_n", { n: q }) : t("dark_inv_in_pocket");
       stats = stat(t("dark_inv_how_many"), t("dark_inv_of", { n: String(s?.n ?? 0), m: String(STACKS[id]) }));
       if (id === "aid") stats += stat(t("dark_inv_health_now"), `${hp} → 100`);
@@ -816,7 +927,17 @@ export const INV_CSS = `
 .dk-inv .top .cap{display:none}
 .dk-inv .top .x{display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--cream-dim);font-size:14px;padding:4px}
 /* the belt: the four at hand, loops on a strip of walnut */
-.dk-inv .belt{left:40px;top:18px;width:760px;height:128px;border-radius:10px;background:linear-gradient(180deg,rgba(0,0,0,.15),rgba(0,0,0,.35)),var(--wood) 0 60px/600px 240px;box-shadow:inset 0 0 0 1px rgba(255,220,170,.12),0 14px 28px rgba(0,0,0,.55);padding:12px 18px;display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.dk-inv .belt{left:20px;top:18px;width:800px;height:128px;border-radius:10px;background:linear-gradient(180deg,rgba(0,0,0,.15),rgba(0,0,0,.35)),var(--wood) 0 60px/600px 240px;box-shadow:inset 0 0 0 1px rgba(255,220,170,.12),0 14px 28px rgba(0,0,0,.55);padding:12px 18px;display:grid;grid-template-columns:140px 26px repeat(4,1fr);gap:14px}
+/* (plan 87) the left hand: its loop at the belt's left end, darker leather, a hand's mark; lit or burning; the buckle */
+.dk-inv .loop.hnd{background:linear-gradient(180deg,rgba(42,26,14,.75),rgba(26,16,8,.8));box-shadow:inset 0 2px 8px rgba(0,0,0,.6),inset 0 0 0 1px rgba(255,220,170,.18)}
+.dk-inv .loop.hnd .k{display:flex;gap:5px;align-items:center}
+.dk-inv .loop .gl{width:11px;height:12px;opacity:.85}
+.dk-inv .loop.hnd.lit{box-shadow:inset 0 2px 8px rgba(0,0,0,.6),0 0 0 1px var(--amber),0 0 22px rgba(241,215,154,.45)}
+.dk-inv .loop.hnd.burn{box-shadow:inset 0 2px 8px rgba(0,0,0,.6),0 0 0 1px #ff7a4a,0 0 22px rgba(255,110,60,.5)}
+.dk-inv .loop.hnd.lit::after,.dk-inv .loop.hnd.burn::after{content:"";position:absolute;right:14%;top:22%;width:46px;height:46px;border-radius:50%;background:radial-gradient(circle,rgba(255,236,190,.5),transparent 70%);pointer-events:none}
+.dk-inv .loop.hnd.burn::after{background:radial-gradient(circle,rgba(255,120,80,.55),transparent 70%)}
+.dk-inv .loop.hnd.sel{box-shadow:inset 0 2px 8px rgba(0,0,0,.6),0 0 0 2px var(--amber),0 0 18px rgba(241,215,154,.45)}
+.dk-inv .buckle{align-self:center;height:70%;border-radius:5px;background:linear-gradient(180deg,#d8c08a,#8a7448);box-shadow:inset 0 0 0 4px #5a4a2c,inset 0 0 0 6px #c9b07a,0 3px 6px rgba(0,0,0,.5);pointer-events:none}
 .dk-inv .belt::before{content:"";position:absolute;left:8px;right:8px;top:6px;bottom:6px;border:1px dashed rgba(255,220,170,.28);border-radius:7px;pointer-events:none}
 .dk-inv .loop{position:relative;overflow:hidden;border-radius:6px;background:rgba(20,12,6,.55);box-shadow:inset 0 2px 8px rgba(0,0,0,.6),inset 0 0 0 1px rgba(255,220,170,.1);cursor:pointer;touch-action:none}
 .dk-inv .loop .art{inset:14px 10px 22px}
@@ -900,6 +1021,8 @@ export const INV_CSS = `
 .dk-inv-menu .kk{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;font:400 10px/1 var(--font-mono);color:var(--cream-dim);border:1px solid ${HAIR};border-radius:3px;white-space:nowrap}
 .dk-inv-menu .kk[data-menu]:hover{color:var(--ink);background:var(--amber);border-color:var(--amber)}
 .dk-inv-menu .kk.own{opacity:.35}
+.dk-inv-menu .kk.hd{gap:3px;color:var(--amber);border-color:rgba(241,215,154,.5)}
+.dk-inv-menu .kk .gl{width:9px;height:10px}
 .dk-inv-menu hr{border:0;border-top:1px solid rgba(241,215,154,.14);margin:4px 2px}
 .dk-inv-warn{position:fixed;left:50%;top:24px;transform:translateX(-50%);z-index:20001;color:var(--cream);font:400 13px/1.3 var(--font-mono);background:rgba(90,20,18,.85);border:1px solid rgba(255,120,110,.4);border-radius:4px;padding:8px 14px}
 /* a phone (plan 86 0-b-phone): a column — the belt, the pack four across, the tag a sheet, the ground a line */
@@ -908,7 +1031,7 @@ export const INV_CSS = `
 .dk-inv.phone .top{justify-content:space-between}
 .dk-inv.phone .top .cap{display:block}
 .dk-inv.phone .top .x .kk{display:none}
-.dk-inv.phone .belt{height:84px;flex:none;padding:8px 10px;gap:8px;border-radius:8px}
+.dk-inv.phone .belt{height:84px;flex:none;padding:8px 10px;gap:6px;border-radius:8px;grid-template-columns:1.1fr 10px repeat(4,1fr)}
 .dk-inv.phone .belt::before{left:5px;right:5px;top:4px;bottom:4px;border-radius:6px}
 .dk-inv.phone .loop .art{inset:10px 4px 15px}
 .dk-inv.phone .loop .k{left:5px;top:4px;font-size:9px}

@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { POCKETS, QUICK, QUICK_SLOT } from "@yutopia/shared/inventory";
+import { HAND_SLOT, POCKETS, QUICK, QUICK_SLOT } from "@yutopia/shared/inventory";
 import { ANA, enter, test, token } from "./helpers";
 
 // The pack's hand tools (docs/plan/86-the-inventory.md phase 3, look B): Ana by the pond with the admin's kit (the
@@ -136,7 +136,7 @@ test("the pack's hand tools: the menu, Take all, split, organize, hover + 2–5,
   await page.keyboard.press("KeyI");
   await expect(page.locator(".dk-inv .panel")).toBeVisible();
   await expect(page.locator(".dk-inv .flap")).toHaveText(/the pack/i);
-  await expect(page.locator(".dk-inv [data-slot]")).toHaveCount(ALL);
+  await expect(page.locator(".dk-inv [data-slot]")).toHaveCount(ALL + 1);
   const lying = page.locator(".dk-inv [data-drop]");
   const menu = page.locator(".dk-inv-menu");
   await expect(lying).toHaveCount(0);
@@ -240,9 +240,9 @@ test("the pack on the pad: the d-pad picks, Y the menu, X held drops, B closes",
   await page.keyboard.press("KeyI");
   await expect(page.locator(".dk-inv .panel")).toBeVisible();
   const sel = () => page.evaluate(() => document.querySelector(".dk-inv .sel")?.getAttribute("data-slot"));
-  // ↓: the first at hand; ↓ again: the pack's first pouch (the .38s)
+  // ↓: the belt's first — the left hand (plan 87); ↓ again: the pack's first pouch (the .38s)
   await tapButton(page, 13);
-  await expect.poll(sel).toBe(String(QUICK_SLOT));
+  await expect.poll(sel).toBe(String(HAND_SLOT));
   await tapButton(page, 13);
   await expect.poll(sel).toBe("0");
   await expect(page.locator(".dk-inv .det h2")).toHaveText(/\.38/);
@@ -336,6 +336,70 @@ test("the HUD: the quick slots captioned with the held gun's rounds; a slip for 
   await page.waitForTimeout(400);
   expect(await torch(), "L is nothing now").toBe(false);
   await page.evaluate(() => (window as any).__yutopia.room.send("mod:hour", { h: null }));
+  expect(errors).toEqual([]);
+});
+
+test("(plan 87) the left hand in the pack and on the HUD: its loop, its tag, hover + 1, the menu's ✋1, lit", async ({
+  page,
+}) => {
+  test.setTimeout(150_000);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await prefs(page);
+  await kitted(page);
+  const torch = () =>
+    page.evaluate(() => {
+      const y = (window as any).__yutopia;
+      return !!y.room.state.players.get(y.room.sessionId).torch;
+    });
+  // the quick bar: the left hand first, its torch
+  await expect(page.locator(".dk-quick .dk-q.hnd")).toBeVisible();
+  await page.keyboard.press("KeyI");
+  await expect(page.locator(".dk-inv .panel")).toBeVisible();
+  const hand = slot(page, HAND_SLOT);
+  await expect(hand).toContainText(/left hand/i);
+  // its tag: the left hand's, the torch — Light (1): lit, in its loop
+  await hand.click();
+  await expect(page.locator(".dk-inv .det .cap")).toHaveText(/left hand · 1/i);
+  await expect(page.locator(".dk-inv .det h2")).toHaveText(/torch/i);
+  await page.locator('.dk-inv .det [data-act="hand"]').click();
+  await expect.poll(torch).toBe(true);
+  await expect(page.locator(".dk-inv .loop.hnd.lit")).toBeVisible();
+  await shot(page, "hand-pack");
+  // hover the flares in the pack and press 1: into the left hand — the torch out to their pouch, out
+  const fl = await at(page, "flare");
+  await slot(page, fl).hover();
+  await page.keyboard.press("Digit1");
+  await expect.poll(async () => (await inv(page)).hand?.id).toBe("flare");
+  await expect.poll(() => at(page, "torch")).toBe(fl);
+  await expect.poll(torch).toBe(false);
+  // the torch's menu in the pack: To the left hand
+  await slot(page, fl).click({ button: "right" });
+  const menu = page.locator(".dk-inv-menu");
+  await page.locator('.dk-inv-menu [data-menu="hand"]').click();
+  await expect.poll(async () => (await inv(page)).hand?.id).toBe("torch");
+  // the first aid's menu: the ✋1 chip — into the left hand; a gun's menu: no ✋1 to press
+  await slot(page, await at(page, "aid")).click({ button: "right" });
+  await expect(menu.locator('[data-menu="to"][data-n="-1"]')).toBeVisible();
+  await shot(page, "hand-menu");
+  await menu.locator('[data-menu="to"][data-n="-1"]').click();
+  await expect.poll(async () => (await inv(page)).hand?.id).toBe("aid");
+  await slot(page, QUICK_SLOT).click({ button: "right" });
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('[data-menu="to"][data-n="-1"]')).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  // the torch back in the hand (Shift + click it in the pack: to the left hand), the pack shut; 1: lit on the HUD
+  await slot(page, await at(page, "torch")).click({ modifiers: ["Shift"] });
+  await expect.poll(async () => (await inv(page)).hand?.id).toBe("torch");
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".dk-inv .panel")).toBeHidden();
+  await page.keyboard.press("Digit1");
+  await expect.poll(torch).toBe(true);
+  await expect(page.locator(".dk-quick .dk-q.hnd.lit")).toBeVisible();
+  await expect(page.locator(".dk-quick .cap")).toContainText(/left hand · torch/i);
+  await shot(page, "hand-hud");
+  await page.keyboard.press("Digit1");
+  await expect.poll(torch).toBe(false);
   expect(errors).toEqual([]);
 });
 

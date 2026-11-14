@@ -104,7 +104,8 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
   // I: open — the four quick slots, the pack's eight pockets, the snow in reach
   await page.keyboard.press("KeyI");
   await expect(page.locator(".dk-inv .panel")).toBeVisible();
-  await expect(page.locator(".dk-inv [data-slot]")).toHaveCount(POCKETS + QUICK);
+  // (plan 87: and the left hand's, first on the belt)
+  await expect(page.locator(".dk-inv [data-slot]")).toHaveCount(POCKETS + QUICK + 1);
   // standing still while it's open (W held a second)
   const before = await me(page);
   await page.keyboard.down("KeyW");
@@ -157,7 +158,7 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
 
   // Esc closes; the quick HUD bottom right: four slots, the shotgun's lit; 4 throws a flare
   await page.keyboard.press("Escape");
-  await expect(page.locator(".dk-quick .dk-q")).toHaveCount(4);
+  await expect(page.locator(".dk-quick .dk-q")).toHaveCount(5);
   await expect(page.locator(".dk-quick .dk-q.on")).toHaveCount(1);
   await shot(page, "inventory-quick");
   const nFlares = (await inv(page)).quick[2]?.n as number;

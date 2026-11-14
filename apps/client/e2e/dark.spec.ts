@@ -95,6 +95,7 @@ test("a sprint across the pond: out of breath, a jog; a search; the pockets", as
   await shot(page, "dark-search");
   // the quick slots bottom right, framed and captioned (plan 86: the strip, and Tab's peek at it, gone)
   await expect(page.locator(".dk-quick .cap")).toBeVisible();
-  await expect(page.locator(".dk-quick .dk-q")).toHaveCount(4);
+  // (the left hand, then the four at hand — plan 87)
+  await expect(page.locator(".dk-quick .dk-q")).toHaveCount(5);
   await expect(page.locator(".dk-strip")).toHaveCount(0);
 });
