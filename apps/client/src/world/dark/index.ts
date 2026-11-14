@@ -222,9 +222,12 @@ class Dark implements DarkHooks {
       () => this.inv,
       {
         use: (slot) => ctl.room?.send("dark:use", { slot }),
-        drop: (slot) => ctl.room?.send("dark:drop", { slot }),
+        drop: (slot, n) => ctl.room?.send("dark:drop", n === undefined ? { slot } : { slot, n }),
         move: (from, to) => ctl.room?.send("dark:move", { from, to }),
+        split: (from, to, n) => ctl.room?.send("dark:split", n === undefined ? { from, to } : { from, to, n }),
         pick: (id, slot) => ctl.room?.send("dark:pick", slot === undefined ? { id } : { id, slot }),
+        takeAll: () => ctl.room?.send("dark:takeAll", {}),
+        organize: () => ctl.room?.send("dark:organize", {}),
         draw: (slot) => this.arms.draw(slot),
         quick: (n) => this.arms.quick(n),
         reload: () => this.arms.reload(),
@@ -732,9 +735,10 @@ class Dark implements DarkHooks {
       this.render();
     }
     this.quickHud(now);
-    // (the phone out sits where the column is: the guns, the quick slots, the battery go under it)
+    // (the phone out sits where the column is: the guns, the quick slots, the battery go under it; plan 86: the pack
+    // open too — its belt is the quick bar, its tag the gun's rounds)
     const phone = hud.get().phone;
-    this.col.style.visibility = phone.open || phone.camera ? "hidden" : "";
+    this.col.style.visibility = phone.open || phone.camera || this.panel.open ? "hidden" : "";
     // (god mode's camera over the land: none of it, till I'm on foot again — docs/plan/53)
     const god = hud.get().god;
     const gone = god.on && !god.walking ? "none" : "";

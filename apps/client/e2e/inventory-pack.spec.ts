@@ -175,7 +175,7 @@ test("a weapon in the pack: put away and worn nowhere, on both screens; equipped
   // her inventory open: the revolver in her hand dragged to the pack — put away, off her hip, on both screens
   await bia.keyboard.press("KeyI");
   await expect(bia.locator(".dk-inv .panel")).toBeVisible();
-  await expect(bia.locator(".dk-inv .head h1")).toHaveText(/pack/i);
+  await expect(bia.locator(".dk-inv .flap")).toHaveText(/pack/i);
   await drag(bia, slot(bia, QUICK_SLOT + rev), slot(bia, 0));
   await expect.poll(async () => (await inv(bia))?.pockets[0]?.id, { timeout: 5000 }).toBe("revolver");
   for (const p of [bia, page]) {
@@ -191,7 +191,7 @@ test("a weapon in the pack: put away and worn nowhere, on both screens; equipped
       .toBe(false);
   // picked in the pack: its details — in the pack, Equip
   await slot(bia, 0).click();
-  await expect(bia.locator(".dk-inv .det .note")).toHaveText(/in the pack/i);
+  await expect(bia.locator(".dk-inv .det .cap")).toHaveText(/in the pack/i);
   await expect(bia.locator('.dk-inv .det [data-act="equip"]')).toBeVisible();
   await still("pack");
   // Equip (E): into the first empty quick slot (the pockets' rounds swapped up into the ones the guns left) — on

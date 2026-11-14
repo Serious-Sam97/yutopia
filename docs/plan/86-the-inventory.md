@@ -8,7 +8,7 @@ mocked first, then chosen; **F2a** the items' pictures rendered from their own 3
 the pack, the pack bigger; **F4a** 8 pockets. The rest of the proposal (the menu, hover + 1–4, split, organize, take
 all, quick use, no strip) as recommended, not asked. **Phase 0 (the mocks) rendered 2026-11-14 — the user chose
 B · the open pack** (a canvas pack drawn open, stitched pouches, the four at hand as loops on a wooden belt, the
-picked one on a paper tag); committed a42710b7. **Phase 1 (the pictures) built 2026-11-14**, committed 186148c9. **Phase 2 (the rules: 8 pockets, split, organize, take all, drop some) built 2026-11-14**. Stills of today:
+picked one on a paper tag); committed a42710b7. **Phase 1 (the pictures) built 2026-11-14**, committed 186148c9. **Phase 2 (the rules: 8 pockets, split, organize, take all, drop some) built 2026-11-14**, committed 3ea7bc60. **Phase 3 (the panel in look B) built 2026-11-14**. Stills of today:
 `design/inventory/now-panel.png`, `now-strip.png`, `now-strip-over-dock.png`.
 
 ## What there is now
@@ -165,6 +165,30 @@ pages yet), crafting, weight, item shapes (RE's Tetris).
      inventory on their path).
 3. **The panel** rebuilt in the chosen look: one component; mouse, keyboard (hover + 1–4, Shift, double click, the
    menu), the pad (the grid, A, X held to drop, Y the menu), the phone (tap, tap a slot to move).
+   Done in phase 3:
+   - **Look B in the game** (`dark/inventory.ts`, one component): the mock's stage (1200 × 700, its coordinates)
+     scaled to the window — the four at hand as loops on a walnut belt (the one in hand lit, "In hand", its spare
+     rounds), the canvas bag with its flap and eight stitched pouches (Organize · O on it), the paper tag on its string
+     from the bag's ring (where it is, the picture, the name, what it is, its numbers typed, a note, the lamp's button
+     and Drop), the ground along the foot as stones ("On the snow" / "On the floor", Take all · T), the vitals a typed
+     line. The HUD's own tokens (globals.css: the lamp, the paper, the walnut, Cormorant, Special Elite). Nothing
+     picked, the tag lists the keys. The You column, the footer of hints and the dashed wells gone; the dark's HUD
+     column hidden while it's open (the belt is the quick bar).
+   - **The mouse and keys**: click picks; a drag moves (Shift: splits; off the pack: drops); right click opens the
+     menu (Use/Hold/Put away, Reload, Equip to · Move to with the four chips, To the pack, Split, Drop 1, Drop all n —
+     the ground's: Take, Take to 1–4, Take all) — a right click no longer drops; hover something in the pack or on
+     the ground and press 1–4: there (on the belt 1–4 stay the keys' own); Shift + click the pack ⇄ at hand; a double
+     click uses or equips; E, R, T, O, Delete, the arrows; Esc closes the menu first.
+   - **The pad**: the d-pad picks (the belt, the pack two rows of four, the ground), A uses, Y the menu (↑/↓, A, B),
+     X held half a second drops, B closes.
+   - **A phone** (under 640 px, 0-b-phone): a column — the belt, the pack four across, the tag a sheet, the ground a
+     line; tap picks, tap an empty pouch to move the picked there, a touch held opens the menu, the tag's Drop only by
+     a hold.
+   - Checked: `inventory-tools.spec.ts` (new: the menu's Drop 1 and Drop all, T, Split from the menu and a Shift-drag,
+     O, hover + 4, Shift + click, a double click, the menu's To the pack and chip 4, a drag off the pack, Esc; the pad;
+     a phone by touch), `inventory.spec` and `inventory-pack.spec` (moved to the menu's Drop and the new markup) —
+     green. Stills: `design/inventory/3-pack.png`, `3-menu.png`, `3-keys.png`, `3-in-hand.png`, `3-inside.png`,
+     `3-phone.png`, `3-phone-menu.png`.
 4. **The HUD**: the quick bar with the held gun's rounds; the pick-up slip; the strip and its over-the-dock overlap
    gone; quick use (H, B).
 5. **Checks**: `inventory.spec` and `inventory-pack.spec` grown (the menu, hover + 1–4, split, take all, 8 pockets);

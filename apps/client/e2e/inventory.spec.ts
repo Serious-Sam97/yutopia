@@ -129,8 +129,9 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
   await expect.poll(async () => (await inv(page)).pockets[aid]?.id).toBe("flare");
   await expect.poll(async () => (await inv(page)).pockets[fl]).toBe(null);
 
-  // right click drops them on the snow; they show in reach; dragged back into a chosen pocket
+  // right click: the menu — Drop: on the snow; they show in reach; dragged back into a chosen pocket (plan 86)
   await slot(page, aid).click({ button: "right" });
+  await page.locator('.dk-inv-menu [data-menu="drop"]').click();
   await expect.poll(async () => (await inv(page)).pockets[aid]).toBe(null);
   const lying = page.locator(".dk-inv [data-drop]");
   await expect(lying).toHaveCount(1);
@@ -198,8 +199,9 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
   await page.keyboard.press("KeyI");
   await expect(page.locator(".dk-inv .panel")).toBeVisible();
   await expect(page.locator(".dk-inv .gl .none")).toBeVisible();
-  // (the flares left in quick slot 3)
+  // (the flares left in quick slot 3: the menu's Drop)
   await slot(page, QUICK_SLOT + 2).click({ button: "right" });
+  await page.locator('.dk-inv-menu [data-menu="drop"]').click();
   await expect.poll(async () => (await inv(page)).quick[2]).toBe(null);
   await expect(lying).toHaveCount(1);
   await shot(page, "inventory-inside");
