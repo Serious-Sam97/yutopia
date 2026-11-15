@@ -271,6 +271,28 @@ On a prod build, the bench of phase 0:
 8. **Checks** — the bench against phase 0 and the targets; the stills; the specs near the streaming
    (`loading`, `car`, `godmode-land`, `godmode-roads`, the world-server's `long-road.test.ts`) and the known reds; the gap
    written here.
+   Done 2026-11-15 (a prod build; the CPU 4× where it says; `e2e/stream.mts`):
+   - **The asphalt under you within 10 s of arriving anywhere, Potato at CPU 4×: met** — 2–3 s (7–8 at phase 0).
+   - **Driving at 240 km/h, CPU 4×, no dirt road in view past the first 10 s: met** — 0 s of 29 on Potato and High
+     (25 and 6 at phase 0).
+   - **No build queue grows without end: met** — made and waiting at most 63, capped at 256 (4,858 and growing
+     before the road fix); a silent or dying worker replaced (`land-pool.test.ts`).
+   - **Flat over a round trip: met** — the soak (High, 7 km out and back at 240 km/h): the heap 713 MB at the start,
+     542 out there, 522 back (the town and the floors let go out there, made again as they're needed).
+   - **The JS heap ≤ 500 MB on High after driving: not quite** — 522–542 out on the road; 733 in town with all of
+     it about (710 at phase 0: more people in the world that day). **≤ 350 MB on Low/Potato: not met** — 735 in
+     town. What's left is what's drawn there (the scene's geometry ~250 MB) and the code; a next pass would be the
+     people's and the cars' own (each a model of its own) and the KTX2 copies.
+   - **The tab ≤ 2 GB on High, ≤ 1.2 on Low/Potato: not shown** — the memory dump's sums count the GPU's shared
+     surfaces twice (the GPU process read 2.0–2.9 GB summed, its `gpu` allocator 1,395 MB on High after phase 5,
+     1,673 at phase 0); the friends' reports will say.
+   - **Same pixels where you stand**: by construction — the reach on High/Medium/Low as it was, the parked
+     dashboard the same picture, the floors' bakes the same until a GPU reset bakes them again, the road pieces
+     where they were; stills looked at, no A/B.
+   - Specs (`YUTOPIA_GPU=1`, the prod build): `loading`, `godmode-roads`, `car` green but its known-flaky "under a
+     flier"; `godmode-land` red — the worst frame while the brush is held 150–200 ms (< 50 asked) — **and as red on
+     a build of `cbc63c89`, before plan 91** (167, 200 ms). Unit: shared 670, client 367, the server's physics,
+     long road, lifts, cars green.
 9. **The graphics settings, a game's** (added 2026-11-15, the user: "everything customizable, like a game") — the
    tiers (Potato … High) become **presets**: picking one sets every setting below; each setting can then be changed
    on its own, and the preset reads **Custom**. Auto picks a preset as now (by the GPU, the 1-s test, stepping
