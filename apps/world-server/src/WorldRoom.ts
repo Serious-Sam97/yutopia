@@ -473,6 +473,7 @@ export class WorldRoom extends Room<WorldState> {
       const t0 = performance.now();
       const dt = (now - last) / 1000;
       last = now;
+      this.state.tickAt = now;
       // (each feature timed: a slow tick says whose — metrics.ts logs it)
       let worst = 0;
       let worstAt = -1;

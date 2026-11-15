@@ -3,7 +3,7 @@ import type { Player } from "@yutopia/state";
 import type { WorldController } from "../controller";
 import { jumps, loadJumps } from "../jumps-load";
 import { steps } from "../steps-load";
-import { INTERP_MS, type Remote } from "./common";
+import type { Remote } from "./common";
 
 /** What Jumps reads of the WorldController (plan 72 phase 4: its dependencies, said). */
 export type JumpsHost = Pick<
@@ -40,7 +40,7 @@ export class Jumps {
     const f = p.flow ?? 0;
     if (f !== r.flow) {
       r.flow = f;
-      r.flowAt = now + INTERP_MS;
+      r.flowAt = now + r.smooth.delay;
     }
     return { flowCode: f, flowAt: r.flowAt };
   }
@@ -50,8 +50,8 @@ export class Jumps {
     const key = `${p.jump}|${p.jumpAt}`;
     if (key !== r.jumpKey) {
       r.jumpKey = key;
-      if (isJump(p.jump)) r.track.begin(p.jump, now + INTERP_MS);
-      r.verbAt = now + INTERP_MS;
+      if (isJump(p.jump)) r.track.begin(p.jump, now + r.smooth.delay);
+      r.verbAt = now + r.smooth.delay;
       void loadJumps();
     }
     const ground = this.c.groundUnder(at.x, at.y, at.z);

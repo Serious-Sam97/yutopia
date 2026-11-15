@@ -74,7 +74,7 @@ import type { BuildController } from "./build/controller";
 import { Arrival } from "./ctl/arrival";
 import { Whiteboards } from "./ctl/boards";
 import { Cable } from "./ctl/cable";
-import { INTERP_MS, type Remote, rainOf, type Sample, VORTEX_LOOK } from "./ctl/common";
+import { type Remote, rainOf, type Sample, VORTEX_LOOK } from "./ctl/common";
 import { Doors } from "./ctl/doors";
 import { Focus } from "./ctl/focus";
 import { Input } from "./ctl/input";
@@ -85,6 +85,7 @@ import { ActionMenu } from "./ctl/menu";
 import { Pets } from "./ctl/pets";
 import { Photo } from "./ctl/photo";
 import { QualityWatch, startTier } from "./ctl/quality";
+import { Smooth } from "./ctl/smooth";
 import { Steps } from "./ctl/steps";
 import { Tables } from "./ctl/tables";
 import { Water } from "./ctl/water";
@@ -243,6 +244,11 @@ export class WorldController {
   private remotes = new Map<string, Remote>();
   private npcBuf = new Map<string, { t: number; x: number; y: number }[]>();
   private petBuf = new Map<string, { t: number; x: number; y: number }[]>();
+  // the NPCs' and pets' states on the server's clock (WorldState.tickAt), drawn as far behind as the link needs
+  // (docs/plan/89-the-weight.md phase 7): this patch's, timed once it's all in (room.onStateChange)
+  private roomSmooth = new Smooth();
+  private roomLast: number | undefined;
+  private roomNew: { t: number }[] = [];
   petHurt = new Map<string, number>(); // pet id → when it last took a hit (client ms)
   toyPick: string | null = null; // a toy I'm walking over to pick up
   battleSeen = ""; // the last battle round shown (id|round)
@@ -285,13 +291,16 @@ export class WorldController {
         const p = this.room?.state.players.get(sid);
         if (!p) return undefined;
         const r = this.remotes.get(sid);
-        const at = r ? interpolate(r.buf, performance.now() - INTERP_MS) : { x: p.x, y: p.y };
+        const at = r ? interpolate(r.buf, r.smooth.at(performance.now())) : { x: p.x, y: p.y };
         return { x: at.x, y: at.y, uid: p.uid, name: p.name };
       },
       pet: (id) => {
         const pet = this.room?.state.pets.get(id);
         if (!pet) return undefined;
-        const at = interpolate(this.petBuf.get(id) ?? [{ t: 0, x: pet.x, y: pet.y }], performance.now() - INTERP_MS);
+        const at = interpolate(
+          this.petBuf.get(id) ?? [{ t: 0, x: pet.x, y: pet.y }],
+          this.roomSmooth.at(performance.now()),
+        );
         return { x: at.x, y: at.y, name: pet.name };
       },
       walk: (to) => this.walkTo(to, undefined, true),
@@ -554,10 +563,34 @@ export class WorldController {
     }
   }
 
+  /** An NPC's or a pet's state as it came: on my clock for now, on the server's once the patch is in (timeRoom). */
+  private roomSample(x: number, y: number): { t: number; x: number; y: number } {
+    const s = { t: performance.now(), x, y };
+    this.roomNew.push(s);
+    return s;
+  }
+
+  private timeRoom(room: Room<WorldState>) {
+    if (!this.roomNew.length) return;
+    const st = room.state.tickAt;
+    // (a server from before the clock: on when they came, as before)
+    if (st > 0) {
+      const t = this.roomSmooth.time(st, performance.now(), this.roomLast);
+      for (const s of this.roomNew) s.t = t;
+      this.roomLast = t;
+    }
+    this.roomNew.length = 0;
+  }
+
   private wireRoom(room: Room<WorldState>) {
     const $ = getStateCallbacks(room);
     const model = this.model as WorldModel;
     this.remotes.clear();
+    this.roomSmooth = new Smooth();
+    this.roomLast = undefined;
+    this.roomNew = [];
+    // (a patch all in: its NPCs' and pets' new states timed by the tick it carries)
+    room.onStateChange(() => this.timeRoom(room));
     // a fresh session (not a resume) has new session ids: drop old avatars
     model.clearAvatars();
     this.uidToSid.clear();
@@ -576,8 +609,7 @@ export class WorldController {
         this.remotes.set(sid, {
           level: p.level ?? 0,
           buf: [sampleOf(p, performance.now())],
-          off: Number.NaN,
-          offAt: 0,
+          smooth: new Smooth(),
           verbAt: 0,
           jumpKey: `${p.jump}|${p.jumpAt}`, // (a jump from before I came isn't played)
           track: new JumpTrack(),
@@ -596,16 +628,11 @@ export class WorldController {
           r.level = p.level ?? 0;
           r.buf = [];
         }
-        // timed on their own clock (put on mine by the lowest gap seen, creeping up for drift):
+        // timed on their own clock (put on mine by the fastest a move's come lately — ctl/smooth.ts):
         // a message that came late is played when it was sent, not when it came
         const now = performance.now();
         const last = r.buf[r.buf.length - 1];
-        let t = now;
-        if (p.mt) {
-          r.off = Math.min(Number.isNaN(r.off) ? now : r.off + (now - r.offAt) * 0.002, now - p.mt);
-          r.offAt = now;
-          t = Math.max(p.mt + r.off, (last?.t ?? 0) + 1);
-        }
+        const t = p.mt ? r.smooth.time(p.mt, now, last?.t) : now;
         const s = sampleOf(p, t);
         if (!last || ["x", "y", "z", "a", "mv", "yaw"].some((k) => last[k as "x"] !== s[k as "x"])) {
           r.buf.push(s);
@@ -667,12 +694,12 @@ export class WorldController {
     $(room.state).npcs.onAdd((n, id) => {
       model.upsertAvatar(`npc:${id}`, this.npcState(n));
       let lastSay = n.sayAt;
-      this.npcBuf.set(id, [{ t: performance.now(), x: n.x, y: n.y }]);
+      this.npcBuf.set(id, [this.roomSample(n.x, n.y)]);
       $(n).onChange(() => {
         const buf = this.npcBuf.get(id);
         const last = buf?.[buf.length - 1];
         if (buf && (!last || last.x !== n.x || last.y !== n.y)) {
-          buf.push({ t: performance.now(), x: n.x, y: n.y });
+          buf.push(this.roomSample(n.x, n.y));
           if (buf.length > 12) buf.shift();
         }
         // public lines: only people near him hear them
@@ -686,7 +713,7 @@ export class WorldController {
 
     // pets (features/pets.ts): drawn like people, with their sounds near me
     $(room.state).pets.onAdd((pet, id) => {
-      this.petBuf.set(id, [{ t: performance.now(), x: pet.x, y: pet.y }]);
+      this.petBuf.set(id, [this.roomSample(pet.x, pet.y)]);
       void loadPets(); // its drawing, animation, sounds and strings
       if (pet.alive) model.upsertAvatar(`pet:${id}`, this.pets.petState(pet));
       let lastSay = pet.sayAt;
@@ -695,12 +722,12 @@ export class WorldController {
         // (to another floor: its coords are that floor's — no gliding there)
         if ((pet.floor ?? 0) !== floor) {
           floor = pet.floor ?? 0;
-          this.petBuf.set(id, [{ t: performance.now(), x: pet.x, y: pet.y }]);
+          this.petBuf.set(id, [this.roomSample(pet.x, pet.y)]);
         }
         const buf = this.petBuf.get(id);
         const last = buf?.[buf.length - 1];
         if (buf && (!last || last.x !== pet.x || last.y !== pet.y)) {
-          buf.push({ t: performance.now(), x: pet.x, y: pet.y });
+          buf.push(this.roomSample(pet.x, pet.y));
           if (buf.length > 12) buf.shift();
         }
         if (!pet.alive && model.hasAvatar(`pet:${id}`)) model.removeAvatar(`pet:${id}`);
@@ -1347,12 +1374,13 @@ export class WorldController {
         });
     }
 
-    const renderAt = now - INTERP_MS;
+    // (the NPCs and pets: the room's clock; each person, their own — ctl/smooth.ts)
+    const renderAt = this.roomSmooth.at(now);
     for (const [sid, r] of this.remotes) {
       const p = room.state.players.get(sid);
       if (!p) continue;
       if (!r.buf.length) r.buf.push(sampleOf(p, performance.now()));
-      const pos = interpolate(r.buf, renderAt);
+      const pos = interpolate(r.buf, r.smooth.at(now));
       const at = pos.s;
       const here = (p.level ?? 0) === this.level;
       // an admin who's hidden (docs/plan/48-the-admin.md; shared admin.ts POWERS.hidden): not
@@ -1979,7 +2007,7 @@ export class WorldController {
   whereIs(sid: string): Point | null {
     if (sid === this.room?.sessionId) return { x: this.me.x, y: this.me.y };
     const r = this.remotes.get(sid);
-    return r ? interpolate(r.buf, performance.now() - INTERP_MS) : null;
+    return r ? interpolate(r.buf, r.smooth.at(performance.now())) : null;
   }
 
   // ── the action menu ──────────────────────────────────────────────────────

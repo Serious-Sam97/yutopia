@@ -1,5 +1,6 @@
 import { type JumpTrack, parseAvatar } from "@yutopia/shared";
 import type { Pet } from "@yutopia/state";
+import { MIN_DELAY, type Smooth } from "./smooth";
 
 // What the controller and its features share (plan 72 phase 4).
 export const VORTEX_LOOK = parseAvatar({
@@ -39,9 +40,8 @@ export const INTERACT_RANGE = 1.7;
 export interface Remote {
   level: number; // the floor they're on (their coords are that floor's)
   buf: Sample[];
-  off: number; // their clock to mine: the lowest gap seen (NaN: none yet)
+  smooth: Smooth; // their clock to mine, and how far behind they're drawn (docs/plan/89-the-weight.md phase 7)
   verbAt: number; // when their last verb shows (as late as they're drawn)
-  offAt: number;
   jumpKey: string; // their last jump (kind|server ms), timed from when it showed up here
   track: JumpTrack;
   flow: number; // their Flowmotion move (Player.flow) and when it shows here
@@ -49,7 +49,8 @@ export interface Remote {
   carried?: boolean; // in a car last frame (out of it: their feet heard down)
 }
 
-export const INTERP_MS = 110;
+// (the least others are drawn behind: ctl/smooth.ts follows the link from there)
+export const INTERP_MS = MIN_DELAY;
 
 // someone as they were at a moment of their own clock, put on mine (docs/plan/29-the-move.md M7)
 export interface Sample {

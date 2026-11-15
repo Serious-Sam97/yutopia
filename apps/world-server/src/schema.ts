@@ -637,6 +637,9 @@ export class WorldState extends Schema {
   @type("float32") stepsVol = 1;
   @type("string") stepsBy = "";
   @type("float64") stepsAt = 0;
+  // the server's clock (ms) at the tick whose world a patch carries: the NPCs and pets drawn on it, not on when
+  // the patch happens to come (docs/plan/89-the-weight.md phase 7)
+  @type("float64") tickAt = 0;
   @type(Weather) weather = new Weather();
   @type({ map: Player }) players = new MapSchema<Player>();
   @type({ map: WorldObject }) objects = new MapSchema<WorldObject>();

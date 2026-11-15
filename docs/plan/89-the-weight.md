@@ -9,7 +9,7 @@ Status: **investigated 2026-11-14 (read-only); planned 2026-11-14; forks decided
 pixel-identical throughout, plus phase 9's invisible-detail cuts each signed off with stills side by side; **F2c**
 Auto starts on Medium and **steps up to High during play** when there's room (asked after: up mid-game, not only
 behind the loading screen), down as before, every tier warmed; **F3b** the adaptive buffer; **F4a** versioned URLs +
-`immutable` + a Cloudflare cache rule (the user sets the rule); **F5a** the floors' held copy kept, shrunk by phase 2. **Phase 0 (the bench, the baseline) done 2026-11-14. Phase 1 (lights that are off) done 2026-11-14; F6a: the torches left as they are. Phase 2 (by index) tried and reverted 2026-11-15: −135 MB, no fps, +0.3 s load. Phase 3 (painted once) done 2026-11-15: GPU −213 MB, canvas −67 MB, load the same. Phase 4 (outside out of sight) done 2026-11-15: M1 proxy +8–23%; sealing the land left (unsafe without declaring every mover). Phase 5 (loading) done 2026-11-15: files cached by version (revalidations 137–180 → 2), people in before the screen goes (no compiles in play; a first visit +2 s, kept). Phase 6 (Auto: Medium first, up when there's room, remembered) done 2026-11-15; the step's own ~0.8 s freeze (old) left.**
+`immutable` + a Cloudflare cache rule (the user sets the rule); **F5a** the floors' held copy kept, shrunk by phase 2. **Phase 0 (the bench, the baseline) done 2026-11-14. Phase 1 (lights that are off) done 2026-11-14; F6a: the torches left as they are. Phase 2 (by index) tried and reverted 2026-11-15: −135 MB, no fps, +0.3 s load. Phase 3 (painted once) done 2026-11-15: GPU −213 MB, canvas −67 MB, load the same. Phase 4 (outside out of sight) done 2026-11-15: M1 proxy +8–23%; sealing the land left (unsafe without declaring every mover). Phase 5 (loading) done 2026-11-15: files cached by version (revalidations 137–180 → 2), people in before the screen goes (no compiles in play; a first visit +2 s, kept). Phase 6 (Auto: Medium first, up when there's room, remembered) done 2026-11-15; the step's own ~0.8 s freeze (old) left. Phase 7 (others' smoothing: 110–250 ms by the link, NPCs/pets on the server's clock) done 2026-11-15: bursty-link bad frames −55%.**
 
 ## What was measured (2026-11-14)
 
@@ -337,6 +337,19 @@ Each phase: measured before and after on the phase 0 bench, its A/B stills at 0 
      device, not per visit. Covering it properly — the whole scene as the new tier will draw it, made before the
      step — is its own task.
 7. **Others' smoothing** — per F3.
+   Done in phase 7 (2026-11-15) — `ctl/smooth.ts`, as the cars' own (`car/playback.ts`):
+   - **The buffer follows the link**: each person drawn as far behind as their moves have had to be lately for the
+     next to be here when it's needed (the 95th percentile over 5 s, +10 ms), 110–250 ms, eased (the drawn clock at
+     0.9× deepening, 1.03× shallowing — never a step back). Their jumps, verbs and Flowmotion moves start as late.
+   - **NPCs and pets on the server's clock**: `WorldState.tickAt` (the tick a patch carries, 9 bytes a patch), their
+     states timed once the patch is all in (`room.onStateChange`) — not when it came; one clock for the room.
+   - **The clocks' offset**: the fastest a state's come in the last 2 s, followed up within a second or two
+     (0.1 ms a ms) — it crept 2 ms a second before: a minute to get over a link 100 ms slower.
+   - Checked: `e2e/others-link.spec.ts` — Ana running, Bia's messages held up in bursts (8% of them 120–250 ms, in
+     order), A/B in the same page: frames drawn stalled or leaping **49–61 → 24–28**; a clean link 0, at 121–133 ms
+     (the senders' own uneven frames, two 3D pages on one GPU); the room's clock deepened the same (246 ms).
+     What's left is holds over the 250 ms the plan allows. `ctl/smooth.test.ts` for the clock itself.
+   - Left: the karts' and slot cars' own 110 ms (their own playback, `kart/karts.ts`, `slots.ts`).
 8. **The world-server** — its RSS creep (memcheck OVER), the stalls on a room's creation and the cars' tick.
 9. **(F1b only) Detail no one sees** — per change, stills side by side first: fewer segments in bevels under a
    centimetre and in small lathes; the far trees' LOD.
