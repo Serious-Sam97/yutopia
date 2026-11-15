@@ -174,6 +174,13 @@ type Hooked = Material & {
   [OWN_KEY]?: Material["customProgramCacheKey"];
 };
 
+/** Others' changes to every shader, made through this one hook (a second hook on Material's prototype would take
+ *  this one's place): `inject` after the material's own hook, `key` added to every program's key (lights-off.ts). */
+export const compileExtras: {
+  inject: (shader: Parameters<Material["onBeforeCompile"]>[0]) => void;
+  key: () => string;
+}[] = [];
+
 let installed = false;
 /** Once, before the 3D view makes a material: the chunks swapped, the hook on. */
 export function installFog() {
@@ -190,6 +197,7 @@ export function installFog() {
   const proto = Material.prototype as Hooked;
   type Hook = Material["onBeforeCompile"];
   const inject = (m: Material, shader: Parameters<Hook>[0]) => {
+    for (const x of compileExtras) x.inject(shader);
     if (!shader.fragmentShader.includes("fog_fragment")) return;
     Object.assign(shader.uniforms, mf);
     if (m?.blending === AdditiveBlending) shader.fragmentShader = `#define MF_ADD\n${shader.fragmentShader}`;
@@ -225,7 +233,11 @@ export function installFog() {
   // own wrapper, so one that calls the key it found never calls itself
   type Key = Material["customProgramCacheKey"];
   const keys = new WeakMap<Key, Key>();
-  const add = (m: Material, k: string) => (m.blending === AdditiveBlending ? `${k}|add` : k);
+  const add = (m: Material, k: string) => {
+    let out = m.blending === AdditiveBlending ? `${k}|add` : k;
+    for (const x of compileExtras) out += x.key();
+    return out;
+  };
   const byHook: Key = function (this: Hooked) {
     return add(this, this[OWN]?.toString() ?? "");
   };

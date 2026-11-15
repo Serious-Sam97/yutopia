@@ -1,7 +1,8 @@
 import { crossings } from "@yutopia/shared/physics/structure-solids";
 import type { Structure } from "@yutopia/shared/structure";
 import { panOf, setEarYaw } from "../ear";
-// (first: the fog chunks swapped before anything below makes a material — fog3d.ts)
+// (first: the fog chunks swapped before anything below makes a material — fog3d.ts; lights-off.ts, below, adds the
+// lights that are off skipped to its hook, there before any material is compiled: that's at the first render)
 import "./fog3d";
 import {
   across,
@@ -120,6 +121,7 @@ import { setKitRenderer } from "./kit-mats";
 import { lazyMatrices } from "./lazy-matrices";
 import { type LiftStop3, Lifts3, liftMats } from "./lift3d";
 import { Light3, landLight, litBalance } from "./light3d";
+import { setLightsOffSkip } from "./lights-off";
 import { type Live, LiveFeed, type LiveSources, LiveSurfaces } from "./live";
 import { PROXIED } from "./merge-static";
 import { Body } from "./parts/body";
@@ -3801,6 +3803,11 @@ void main() {
   /** (in Warmup: read from outside) */
   readiness(...a: Parameters<Warmup["readiness"]>): ReturnType<Warmup["readiness"]> {
     return this.warmup.readiness(...a);
+  }
+  /** (tests: e2e/weight.mts's A/B) The lights at 0 skipped in the shaders (on, the game's) or worked out as three
+   *  does — the same programs, a uniform (lights-off.ts). */
+  lightsSkip(on: boolean) {
+    setLightsOffSkip(on);
   }
   /** (in Warmup: read from outside) */
   setQuality(...a: Parameters<Warmup["setQuality"]>): ReturnType<Warmup["setQuality"]> {
