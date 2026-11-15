@@ -870,6 +870,31 @@ export async function lifeWornOf(
   return { names, parts: loaded.flatMap((p) => p ?? []), renderer, pattern };
 }
 
+// The outfits' geometries in use: how many bodies are drawn in each. Each is a geometry of its own to three — its
+// own index, and its own copy of the shapes as a texture on the GPU (the body's ~1 MB) — so one no one wears any
+// more is let go with the last of them (docs/plan/89-the-weight.md: every outfit anyone had worn was kept, a
+// visitor's, every one tried on); made again if it's worn again.
+const outfitUsers = new Map<BufferGeometry, number>();
+function wearOutfit(g: BufferGeometry) {
+  outfitUsers.set(g, (outfitUsers.get(g) ?? 0) + 1);
+}
+function doneWithOutfit(base: LifeBase, g: BufferGeometry) {
+  const n = (outfitUsers.get(g) ?? 1) - 1;
+  if (n > 0) return void outfitUsers.set(g, n);
+  outfitUsers.delete(g);
+  for (const [k, v] of base.outfits) if (v === g) base.outfits.delete(k);
+  // (its arms' cut too — first person's hands)
+  const arms = armCuts.get(g);
+  armCuts.delete(g);
+  for (const x of [g, arms]) {
+    if (!x) continue;
+    // (the attributes are the base's, everyone's: off it first, so only its own index and shapes go)
+    for (const k of Object.keys(x.attributes)) x.deleteAttribute(k);
+    x.morphAttributes = {};
+    x.dispose();
+  }
+}
+
 /** The body's geometry for an outfit: its own attributes, its index without the skin under it (and,
  *  wearing none of the made garments, under the file's own outfit). Cached on the base. */
 function bodyFor(base: LifeBase, body: LifePart, names: string[]): BufferGeometry {
@@ -1073,10 +1098,16 @@ export function lifeBody(base: LifeBase, a: AvatarLayers | null, worn: LifeWorn 
   // coat, a top under a coat — 5.4: a skirt came through a coat at the hips)
   const over = (r: string) =>
     names.filter((n) => (r === "bottom" ? ["top", "outer"] : r === "top" ? ["outer"] : []).includes(roleOf(n)));
+  const outfits: BufferGeometry[] = [];
   const parts = all.map((p) => {
+    const was = p.geometry;
     if (p.name === "body") p = { ...p, geometry: bodyFor(base, p, names) };
     else if (p.name.startsWith("wear-") && over(roleOf(p.name)).length)
       p = { ...p, geometry: layered(base, p, over(roleOf(p.name))) };
+    if (p.geometry !== was) {
+      wearOutfit(p.geometry);
+      outfits.push(p.geometry);
+    }
     if (!a && p.name !== "body" && !p.name.startsWith("wear-")) return p;
     let material = p.material;
     const tint = (c: Color) => {
@@ -1205,6 +1236,7 @@ export function lifeBody(base: LifeBase, a: AvatarLayers | null, worn: LifeWorn 
     hipY,
     dispose() {
       for (const m of mine) m.dispose();
+      for (const g of outfits.splice(0)) doneWithOutfit(base, g);
     },
   };
 }

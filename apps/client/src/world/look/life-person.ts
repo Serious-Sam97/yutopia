@@ -43,6 +43,7 @@ export class LifePerson {
   /** the hip joints' height, standing (PersonModel's baked hipY) */
   hipY = 0.9;
   private body: LifeBody;
+  private skeleton: Skeleton;
 
   constructor(
     readonly base: LifeBase,
@@ -65,6 +66,7 @@ export class LifePerson {
     this.root.add(this.bones.hips);
     this.root.updateMatrixWorld(true);
     const skeleton = new Skeleton(ALL_BONES.map((j) => this.bones[j]));
+    this.skeleton = skeleton;
     for (const p of b.parts) {
       const sm = new SkinnedMesh(p.geometry, p.material);
       sm.name = p.name;
@@ -129,9 +131,12 @@ export class LifePerson {
     for (const e of EXTRA) this.bones[e].rotation.set(-y * EYE_PITCH, x * EYE_YAW, 0);
   }
 
-  /** Its own (this avatar's materials); the base's geometry and textures stay for others. */
+  /** Its own (this avatar's materials, its skeleton — the joints' texture three made for it on the GPU, one a
+   *  person: kept, every visitor who'd left stayed there — docs/plan/89-the-weight.md); the base's geometry and
+   *  textures stay for others. */
   dispose() {
     this.body.dispose();
+    this.skeleton.dispose();
   }
 }
 

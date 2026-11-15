@@ -425,7 +425,15 @@ Each phase: measured before and after on the phase 0 bench, its A/B stills at 0 
     back" — red there too, not this plan's; `actions` "the action menu" flaky on both (the cup never comes: HEAD 1 of
     5 passed, phase 0 2 of 3); `car` "under a flier" flaky (passed twice after). The full suite (245 tests, ~2.5 h)
     not run through.
-    Left: the page's textures +13 a cycle as people come and go (memcheck; phase 0's rate) — not found yet.
+    The page's textures +13 a cycle as people came and went (memcheck; phase 0's rate), found after: not the people
+    (their skeletons and garments let go, a visitor coming back adds none) but **every outfit anyone had worn** — the
+    body, and each garment under another, is a geometry of its own per outfit (its index without what's covered,
+    `life-people.ts` bodyFor/layered), and three keeps its shapes as a texture on the GPU for each (the body's
+    ~1 MB): cached for good, a new one with every new visitor's clothes and every outfit tried on. Now each is let go
+    with the last body in it (its own index and shapes only — the attributes are the base's, everyone's).
+    memcheck's morph textures 20 → 40 → 53 → 70 became 37 → 56 → 54 → 60 (what's left: new garment files, the
+    wardrobe's cap); the page's textures +55 → +23 over three cycles; memcheck ok. Someone in another outfit
+    drawn as before after one's let go (stills, no GL error); `people-3d`, `avatar` green.
 
 Not now: WebAssembly for the Grounds' maths (as plan 38 decided: worker first, numbers first); a new renderer
 (WebGPU); fewer things in the world.
