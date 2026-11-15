@@ -25,6 +25,7 @@ import { LAMPS } from "./common";
 /** What Warmup reads of the ThirdPersonView (plan 72 phase 4: its dependencies, said). */
 export type WarmupHost = Pick<
   ThirdPersonView,
+  | "meId"
   | "potato"
   | "tier"
   | "around"
@@ -116,6 +117,18 @@ export class Warmup {
       if (p.model.ready) ready++;
     }
     parts.push(!this.c.charF ? 0 : this.c.charF.pending ? 0.5 : people && !ready ? 0.5 : 1);
+    // …and whoever's to be seen as soon as it lifts: me, and those within NEAR_M of me, in (their own body and
+    // clothes — not a stand-in: one ready anywhere, an NPC out on the Grounds, was enough — plan 90)
+    const mine = this.c.people3.get(this.c.meId);
+    const at = mine?.root.position ?? this.c.camera.position;
+    let near = 0;
+    let nearIn = 0;
+    for (const p of this.c.people3.values()) {
+      if (p !== mine && p.root.position.distanceTo(at) > NEAR_M) continue;
+      near++;
+      if (p.model.ready) nearIn++;
+    }
+    parts.push(near ? nearIn / near : 1);
     // last: every shader in the scene (and my hands') compiled, once all the rest is in it
     const rest = parts.every((p) => p >= 1);
     if (rest && this.compiled === "no") this.compileAll();
@@ -367,6 +380,9 @@ export class Warmup {
 }
 
 // the lamps lit at a tier (the pool's first n)
+// (the loading screen: these near me in before it lifts — plan 90)
+const NEAR_M = 20;
+
 const lampsFor = (q: Quality) => (q === "high" ? LAMPS : q === "medium" ? 6 : q === "low" ? 3 : q === "lowest" ? 2 : 0);
 
 /** All of a scene's things in one box, each thing's own box left out when it isn't finite: an

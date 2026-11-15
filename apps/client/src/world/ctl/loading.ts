@@ -9,7 +9,9 @@ export class Loading {
 
   // ── the loading screen (docs/plan/35-the-loading.md) ──────────────────
   // Up on entering, until what the view shows is all built and a few frames in
-  // a row have come steadily; never longer than LOAD_CAP_MS.
+  // a row have come steadily. Not cut at a fixed time (it was 15 s: on a slow link, or a forest to make, the
+  // screen went with the land and one's own body still coming — docs/plan/90-the-friends-machines.md): only when
+  // nothing's come for STALL_MS (something stuck), built but never steady for BUILT_WAIT_MS, or LOAD_MAX_MS.
   loadFrom = 0; // when it went up (0: it's down)
 
   loadSteady = 0; // steady frames in a row, everything built
@@ -21,12 +23,18 @@ export class Loading {
   builtAt = 0;
   slowFrames = 0;
 
+  // how far it's got (readiness' done) and when it last got further
+  bestDone = 0;
+  movedAt = 0;
+
   holdLoading(why: "enter" | "view") {
     this.loadFrom = performance.now();
     this.loadLast = 0;
     this.loadSteady = 0;
     this.builtAt = 0;
     this.slowFrames = 0;
+    this.bestDone = 0;
+    this.movedAt = this.loadFrom;
     hud.set({ loading: { on: true, progress: why === "enter" ? hud.get().loading.progress : 0, why } });
     if (this.c.tp) this.c.tp.warmup.warming = true;
   }
@@ -36,6 +44,10 @@ export class Loading {
     const gap = this.loadLast ? now - this.loadLast : 0;
     this.loadLast = now;
     const r = this.readiness();
+    if (r.done > this.bestDone + 0.001) {
+      this.bestDone = r.done;
+      this.movedAt = now;
+    }
     // (a tier switch on its way — the test's step down, its shaders compiling —: not built till it's in)
     const built = r.done >= r.of && !this.c.tp?.warmup.qualityTo;
     this.loadSteady = built && gap > 0 && gap < STEADY_MS ? this.loadSteady + 1 : 0;
@@ -43,16 +55,20 @@ export class Loading {
       this.builtAt ||= now;
       if (gap >= STEADY_MS) this.slowFrames++;
       if (now - this.builtAt > TEST_MS && this.loadSteady < STEADY_FRAMES && this.slowFrames >= TEST_SLOW) {
-        this.builtAt = now;
         this.slowFrames = 0;
-        this.c.quality.stepDownNow();
+        // (a step taken: its tier given its own second; none left — the bottom, a tier picked by hand —: the wait
+        // for steady frames runs on from when it was built)
+        if (this.c.quality.stepDownNow()) this.builtAt = now;
       }
     } else {
       this.builtAt = 0;
       this.slowFrames = 0;
     }
-    if ((built && this.loadSteady >= STEADY_FRAMES) || now - this.loadFrom > LOAD_CAP_MS) {
-      if (!built) console.warn("loading cut short", r);
+    // (stuck: nothing's come for a while — once the view's up and drawing: before, it's its own code coming)
+    const stuck = !!this.c.tp && (this.c.tp.warmup.drawn ?? 0) > 3 && now - this.movedAt > STALL_MS;
+    const unsteady = built && now - this.builtAt > BUILT_WAIT_MS;
+    if ((built && this.loadSteady >= STEADY_FRAMES) || unsteady || stuck || now - this.loadFrom > LOAD_MAX_MS) {
+      if (!built) console.warn(stuck ? "loading stuck" : "loading cut short", r);
       this.loadFrom = 0;
       if (this.c.tp) this.c.tp.warmup.warming = false;
       hud.set((h) => ({ loading: { ...h.loading, on: false, progress: 1 } }));
@@ -79,7 +95,9 @@ const STEADY_FRAMES = 10;
 
 const STEADY_MS = 50;
 
-const LOAD_CAP_MS = 15_000;
+const STALL_MS = 15_000; // nothing more built this long (the view up): something's stuck — down
+const BUILT_WAIT_MS = 6000; // all built, never steady (a GPU the test's steps can't help): down anyway
+const LOAD_MAX_MS = 90_000; // down whatever's left
 
 const TEST_MS = 1000; // built this long, never steady …
 const TEST_SLOW = 6; // … with this many slow frames: a tier down
