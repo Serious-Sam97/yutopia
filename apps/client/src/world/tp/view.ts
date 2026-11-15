@@ -580,6 +580,14 @@ export class ThirdPersonView {
   /** the life look's sky light (plan 73 phase 2.2; null in the classic look) */
   lifeSky: LifeSky | null = null;
   quality: Quality = "high";
+
+  /** (plan 90 phase 2) drawn as lowest, lighter: half a pixel a pixel, no lamps — the weak GPUs' tier */
+  potato = false;
+
+  /** The tier as asked (potato included): `quality` is what it's drawn as. */
+  get tier(): Quality {
+    return this.potato ? "potato" : this.quality;
+  }
   lamps = LAMPS;
   nightLevel = 0;
   /** (plan 88 act III) my floor's lights out, 0 … 1 (the studio's, Vortex's dark — world/dark/vortex.ts eases it):
@@ -823,7 +831,7 @@ export class ThirdPersonView {
     // (with alpha: a glass a real player shows through is a clear hole in the frame —
     // live.ts — the page under the canvas there; everywhere else it stays opaque)
     this.renderer = new WebGLRenderer({
-      antialias: opts.quality !== "lowest",
+      antialias: opts.quality !== "lowest" && opts.quality !== "potato",
       powerPreference: "high-performance",
       alpha: true,
     });
@@ -2147,13 +2155,21 @@ void main() {
   // the ratio a fresh load picks on this screen at this quality
   ratioFor(q: Quality): number {
     const dpr = window.devicePixelRatio || 1;
-    return q === "high" ? Math.min(2, dpr) : q === "medium" ? Math.min(1.5, dpr) : q === "low" ? 1 : 0.75;
+    return q === "high"
+      ? Math.min(2, dpr)
+      : q === "medium"
+        ? Math.min(1.5, dpr)
+        : q === "low"
+          ? 1
+          : q === "lowest"
+            ? 0.75
+            : 0.5;
   }
 
   // the screen's density changed (a moved window, a zoom): to the new one at once
   private onDpr = () => {
     this.watchDpr();
-    if (this.ratioFor(this.quality) !== this.renderer.getPixelRatio()) this.resize();
+    if (this.ratioFor(this.tier) !== this.renderer.getPixelRatio()) this.resize();
   };
   private watchDpr() {
     this.dprQuery?.removeEventListener("change", this.onDpr);
@@ -2163,7 +2179,7 @@ void main() {
 
   resize() {
     if (!this.host) return;
-    const ratio = this.ratioFor(this.quality);
+    const ratio = this.ratioFor(this.tier);
     if (ratio !== this.renderer.getPixelRatio()) {
       this.renderer.setPixelRatio(ratio);
       this.ratioFixes++;
@@ -2412,7 +2428,7 @@ void main() {
     this.ratioIn -= dt;
     if (this.ratioIn <= 0) {
       this.ratioIn = 1;
-      if (this.ratioFor(this.quality) !== this.renderer.getPixelRatio()) this.resize();
+      if (this.ratioFor(this.tier) !== this.renderer.getPixelRatio()) this.resize();
     }
     if (this.extraBodies) bodies = bodies.concat(this.extraBodies());
     // the furniture's live parts (plan 68: flames, a lava lamp's blobs), on every floor shown, near

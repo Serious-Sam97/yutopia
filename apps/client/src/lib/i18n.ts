@@ -189,6 +189,11 @@ const D = {
   qualityMedium: ["Medium (light, life)", "Média (luz, vida)"],
   qualityLow: ["Low (battery saver)", "Baixa (economia de bateria)"],
   qualityLowest: ["Lowest (weak machines)", "Mínima (máquinas fracas)"],
+  qualityPotato: ["Potato (weak graphics)", "Batata (gráficos fracos)"],
+  softwareGpu: [
+    "Your browser is drawing without the graphics card, so the game will be slow — turn on hardware acceleration in its settings.",
+    "Seu navegador está desenhando sem a placa de vídeo, então o jogo vai ficar lento — ative a aceleração de hardware nas configurações dele.",
+  ],
   reducedMotion: ["Reduced motion", "Movimento reduzido"],
   maxFps: ["Frame rate", "Taxa de quadros"],
   fpsUnlimited: ["No limit", "Sem limite"],

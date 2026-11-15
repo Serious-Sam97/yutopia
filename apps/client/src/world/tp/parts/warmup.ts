@@ -16,7 +16,7 @@ import {
   Vector4,
   WebGLRenderTarget,
 } from "three";
-import type { Quality } from "@/lib/prefs";
+import { drawnAs, type Quality } from "@/lib/prefs";
 import { Post3 } from "../post3d";
 import { Proxy3, Vortex3 } from "../stand3d";
 import type { ThirdPersonView } from "../view";
@@ -25,6 +25,8 @@ import { LAMPS } from "./common";
 /** What Warmup reads of the ThirdPersonView (plan 72 phase 4: its dependencies, said). */
 export type WarmupHost = Pick<
   ThirdPersonView,
+  | "potato"
+  | "tier"
   | "around"
   | "building"
   | "camera"
@@ -254,7 +256,7 @@ export class Warmup {
   qualityTo: Quality | null = null;
 
   toQuality(q: Quality) {
-    if (q === (this.qualityTo ?? this.c.quality)) return;
+    if (q === (this.qualityTo ?? this.c.tier)) return;
     this.qualityTo = q;
     void this.compileFor(q).then(() => {
       if (!this.c.gone && this.qualityTo === q) this.setQuality(q);
@@ -319,10 +321,13 @@ export class Warmup {
     }
   }
 
-  setQuality(q: Quality) {
+  setQuality(tier: Quality) {
+    // (potato: drawn as lowest, lighter — its pixels and its lamps: plan 90 phase 2)
+    this.c.potato = tier === "potato";
+    const q = drawnAs(tier);
     this.c.quality = q;
     this.qualityTo = null;
-    this.c.renderer.setPixelRatio(this.c.ratioFor(q));
+    this.c.renderer.setPixelRatio(this.c.ratioFor(tier));
     if (!this.c.ratioAtStart && this.c.host) {
       this.c.ratioAtStart = this.c.renderer.getPixelRatio();
       this.c.dprAtStart = window.devicePixelRatio || 1;
@@ -334,7 +339,7 @@ export class Warmup {
       this.c.sun.shadow.map?.dispose();
       this.c.sun.shadow.map = null;
     }
-    this.c.lamps = lampsFor(q);
+    this.c.lamps = lampsFor(tier);
     this.c.around.grounds?.far?.setQuality(q);
     // the first flashlight (mine) throws shadows on High — its shadow map drawn once now, so it's
     // there even while it's off (a shadow-casting light with no map yet: every lit draw failed —
@@ -362,7 +367,7 @@ export class Warmup {
 }
 
 // the lamps lit at a tier (the pool's first n)
-const lampsFor = (q: Quality) => (q === "high" ? LAMPS : q === "medium" ? 6 : q === "low" ? 3 : 2);
+const lampsFor = (q: Quality) => (q === "high" ? LAMPS : q === "medium" ? 6 : q === "low" ? 3 : q === "lowest" ? 2 : 0);
 
 /** All of a scene's things in one box, each thing's own box left out when it isn't finite: an
  *  instanced pool hides a block's trees with all-zero matrices (grounds-stream.ts), which three's box

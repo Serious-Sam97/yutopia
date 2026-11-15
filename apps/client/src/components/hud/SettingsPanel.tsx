@@ -489,7 +489,7 @@ function GraphicsPage() {
     <>
       <Card>
         <Choice
-          options={["auto", "high", "medium", "low", "lowest"] as const}
+          options={["auto", "high", "medium", "low", "lowest", "potato"] as const}
           value={p.quality}
           cols={2}
           label={(q) =>
@@ -502,7 +502,9 @@ function GraphicsPage() {
                     ? "qualityMedium"
                     : q === "low"
                       ? "qualityLow"
-                      : "qualityLowest",
+                      : q === "lowest"
+                        ? "qualityLowest"
+                        : "qualityPotato",
             )
           }
           onPick={(q) => setPrefs({ quality: q })}

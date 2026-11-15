@@ -16,7 +16,7 @@ import {
   Vector4,
   type WebGLRenderer,
 } from "three";
-import type { Quality } from "@/lib/prefs";
+import type { DrawnQuality } from "@/lib/prefs";
 import { litMaterial } from "../look/lit";
 import type { FarAsk, FarLandData } from "./far-land.worker";
 
@@ -34,7 +34,7 @@ interface RingSpec {
   size: number;
   step: number;
 }
-const RINGS: Record<Quality, RingSpec[]> = {
+const RINGS: Record<DrawnQuality, RingSpec[]> = {
   high: [
     { size: 4096, step: 16 },
     { size: 16384, step: 64 },
@@ -51,7 +51,7 @@ const RINGS: Record<Quality, RingSpec[]> = {
   lowest: [{ size: 8192, step: 64 }],
 };
 // (a cell a tree at most: past 500 m a tree's a few pixels — at 10 m, ~40k of them on High)
-const TREES: Record<Quality, { r1: number; cell: number } | null> = {
+const TREES: Record<DrawnQuality, { r1: number; cell: number } | null> = {
   high: { r1: 1800, cell: 14 },
   medium: { r1: 1200, cell: 16 },
   low: null,
@@ -88,7 +88,7 @@ export class FarLand {
   private worker: Worker | null = null;
   private seq = 0;
   private waiting = new Map<number, (d: FarLandData) => void>();
-  private quality: Quality = "high";
+  private quality: DrawnQuality = "high";
   private iced = false;
   private gone = false;
 
@@ -143,7 +143,7 @@ export class FarLand {
     return m;
   }
 
-  setQuality(q: Quality) {
+  setQuality(q: DrawnQuality) {
     if (q === this.quality && this.rings.length) return;
     this.quality = q;
     for (const r of this.rings) {

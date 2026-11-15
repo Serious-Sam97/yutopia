@@ -34,7 +34,12 @@ export interface Prefs {
 }
 
 // (lowest: weak machines — no antialiasing, under a pixel a pixel; docs/plan/50-the-volume.md 7d)
-export type Quality = "high" | "medium" | "low" | "lowest";
+// (potato: below lowest, for a weak GPU — an integrated Intel/AMD one, or drawing without one: docs/plan/90-the-
+// friends-machines.md phase 2, F3c. Drawn as lowest, at half a pixel a pixel, no lamps: the four tiers untouched)
+export type Quality = "high" | "medium" | "low" | "lowest" | "potato";
+/** The tier the world draws as: potato is lowest, made lighter by the view (tp's `potato`). */
+export type DrawnQuality = Exclude<Quality, "potato">;
+export const drawnAs = (q: Quality): DrawnQuality => (q === "potato" ? "lowest" : q);
 export type QualityPref = Quality | "auto";
 export type MaxFps = 0 | 30 | 60 | 120;
 export const MAX_FPS: readonly MaxFps[] = [30, 60, 120, 0];
@@ -47,10 +52,53 @@ export function deviceQuality(): Quality {
   const small = typeof window !== "undefined" && Math.min(window.innerWidth, window.innerHeight) < 600;
   const cores = n.hardwareConcurrency ?? 4;
   const mem = n.deviceMemory ?? 8;
+  // (the GPU first: a weak one is the wall, however many cores — production's reports, plan 90)
+  const gpu = gpuKind();
+  if (gpu === "weak" || gpu === "software") return "potato";
   if (cores <= 2 || mem <= 2) return "lowest";
   if (touch && small) return "low";
   if (touch || cores <= 4 || mem <= 4) return "medium";
   return "high";
+}
+
+// What the GPU is, by its name (a throwaway context's, once): "software" — the browser drawing without one, "weak" —
+// an integrated Intel or AMD (Iris Xe and Arc aside), else "ok". Production's reports (plan 90): Intel UHD 13 fps
+// and AMD Radeon (Renoir) 22–24 on lowest, the main thread waiting; "Microsoft Basic Render Driver" seen.
+export type GpuKind = "software" | "weak" | "ok";
+let gpuSeen: { name: string; kind: GpuKind } | null = null;
+export function gpuName(): string {
+  if (gpuSeen) return gpuSeen.name;
+  let name = "";
+  try {
+    const c = document.createElement("canvas");
+    const gl = (c.getContext("webgl2") ?? c.getContext("webgl")) as WebGLRenderingContext | null;
+    if (gl) {
+      const ext = gl.getExtension("WEBGL_debug_renderer_info");
+      name = String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? "");
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
+    }
+  } catch {
+    // (no WebGL at all: nothing to say)
+  }
+  gpuSeen = { name, kind: gpuKindOf(name) };
+  return name;
+}
+export function gpuKind(): GpuKind {
+  if (typeof document === "undefined") return "ok";
+  gpuName();
+  return gpuSeen?.kind ?? "ok";
+}
+/** (pure, tests) */
+export function gpuKindOf(name: string): GpuKind {
+  if (/SwiftShader|llvmpipe|Basic Render|Software|softpipe/i.test(name)) return "software";
+  if (/Intel/i.test(name) && !/Arc|Iris\(R\) Xe|Iris Xe/i.test(name)) return "weak";
+  // (an AMD APU's graphics: "AMD Radeon(TM) Graphics", "Radeon Vega 8 Graphics" — a discrete card has its model)
+  if (
+    /AMD|Radeon/i.test(name) &&
+    /Radeon(\(TM\))? (Vega \d+ )?Graphics|Vega \d+ Graphics|renoir|cezanne|lucienne|picasso|raven/i.test(name)
+  )
+    return "weak";
+  return "ok";
 }
 
 export function resolveQuality(q: QualityPref): Quality {
@@ -88,7 +136,7 @@ export function prefs(): Prefs {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? "{}");
     cache = { ...DEFAULTS, ...raw, vol: { ...DEFAULTS.vol, ...(raw?.vol ?? {}) } };
-    if (cache && !["auto", "high", "medium", "low", "lowest"].includes(cache.quality)) cache.quality = "auto";
+    if (cache && !["auto", "high", "medium", "low", "lowest", "potato"].includes(cache.quality)) cache.quality = "auto";
     if (cache && cache.view !== "1p") cache.view = "3p"; // (a stored "iso" too: the view retired)
     if (cache && cache.cam3p !== "free") cache.cam3p = "chase";
     if (cache && !MAX_FPS.includes(cache.maxFps)) cache.maxFps = 60;

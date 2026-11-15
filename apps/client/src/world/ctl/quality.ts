@@ -1,11 +1,11 @@
-import { deviceQuality, prefs, type Quality, resolveQuality } from "@/lib/prefs";
+import { deviceQuality, drawnAs, gpuKind, prefs, type Quality, resolveQuality } from "@/lib/prefs";
 import type { WorldController } from "../controller";
 import { hud } from "../store";
 
 /** What QualityWatch reads of the WorldController (plan 72 phase 4: its dependencies, said). */
 export type QualityWatchHost = Pick<WorldController, "activeAt" | "hudFrames" | "model" | "path" | "tp">;
 
-const ORDER: readonly Quality[] = ["lowest", "low", "medium", "high"];
+const ORDER: readonly Quality[] = ["potato", "lowest", "low", "medium", "high"];
 const rank = (q: Quality) => ORDER.indexOf(q);
 
 // Auto's tier as this device last held it (docs/plan/89-the-weight.md phase 6, F2c): High kept a minute, or the tier
@@ -40,7 +40,9 @@ export function startTier(held: Held | null = readHeld(), now = Date.now()): Qua
   const ceiling = deviceQuality();
   const fresh = held && (rank(held.tier) >= rank("high") || now - held.at < RETRY_MS) ? held.tier : null;
   const want = fresh ?? (ceiling === "high" ? "medium" : ceiling);
-  return rank(want) <= rank(ceiling) ? want : ceiling;
+  // (a weak GPU that's held lowest — stepped up and kept it — starts there: one above its name's potato)
+  const top = ceiling === "potato" && gpuKind() === "weak" ? "lowest" : ceiling;
+  return rank(want) <= rank(top) ? want : ceiling;
 }
 
 /** Room to spare, steadily (s) before Auto tries High. */
@@ -97,10 +99,25 @@ export class QualityWatch {
     const e = this.c.model;
     if (!e || !this.c.tp || prefs().quality !== "auto" || Date.now() - this.startedAt < 8000 || document.hidden) return;
     const step = this.decide(this.c.tp.fps, this.fpsCap(performance.now()), prefs().maxFps, Date.now());
-    if (!step) return;
+    if (step) this.goTo(step);
+  }
+
+  private goTo(step: Quality) {
     this.autoTier = step;
-    e.setQuality(step, prefs().reducedMotion);
+    this.c.model?.setQuality(drawnAs(step), prefs().reducedMotion);
     this.c.tp?.warmup.toQuality(step);
+  }
+
+  /** Behind the loading screen, the world built but its frames never steady (plan 90 phase 2, F2c's test): a tier
+   *  down now, before anyone sees it, and remembered — the next one down from where it is. False at the bottom (or
+   *  a tier picked by hand). */
+  stepDownNow(): boolean {
+    if (prefs().quality !== "auto" || this.autoTier === "potato") return false;
+    const down = ORDER[Math.max(0, rank(this.autoTier) - 1)];
+    this.noUp = true;
+    writeHeld(down);
+    this.goTo(down);
+    return true;
   }
 
   /** (pure, tests) The tier to go to now, or null: `fps` measured, `cap` the frame rate asked for now (30 idle; 0
@@ -108,11 +125,12 @@ export class QualityWatch {
   decide(fps: number, cap: number, asked: number, now: number): Quality | null {
     // (under the cap, or 30 when idle: slow is well under what's asked for)
     const floor = cap ? Math.min(40, cap * 0.7) : 40;
-    this.slowFor = fps > 0 && fps < floor ? this.slowFor + 1 : 0;
+    // (far under — under 20 —, down in 2 s, not 6: a weak GPU's first minute was seconds a frame — plan 90)
+    this.slowFor = fps > 0 && fps < floor ? this.slowFor + (fps < 20 ? 3 : 1) : 0;
     // room: the frame rate asked for, kept, while playing (idle, the cap's 30 says nothing of what High would cost)
     const playing = !asked || cap === asked;
     this.roomFor = playing && fps >= (asked ? asked * 0.95 : 90) ? this.roomFor + 1 : 0;
-    if (this.slowFor >= SLOW_S && this.autoTier !== "lowest") {
+    if (this.slowFor >= SLOW_S && this.autoTier !== "potato") {
       this.slowFor = 0;
       this.roomFor = 0;
       this.trialAt = 0;
@@ -121,9 +139,16 @@ export class QualityWatch {
       writeHeld(down);
       return down;
     }
-    if (this.autoTier === "high" && this.trialAt && now - this.trialAt >= HOLD_MS) {
+    if (this.trialAt && now - this.trialAt >= HOLD_MS) {
       this.trialAt = 0;
-      writeHeld("high");
+      writeHeld(this.autoTier);
+    }
+    // (put on potato by its GPU's name, not by being slow: up to lowest when it has room — F2c's correction)
+    if (this.autoTier === "potato" && !this.noUp && gpuKind() === "weak" && this.roomFor >= ROOM_S) {
+      this.roomFor = 0;
+      this.slowFor = 0;
+      this.trialAt = now;
+      return "lowest";
     }
     if (this.autoTier === "medium" && !this.noUp && deviceQuality() === "high" && this.roomFor >= ROOM_S) {
       this.roomFor = 0;

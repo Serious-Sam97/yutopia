@@ -64,7 +64,7 @@ import { Client, getStateCallbacks, type Room } from "colyseus.js";
 import { ApiError, type Session, yutopia } from "@/lib/api";
 import { reportError, setErrorSink } from "@/lib/crash";
 import { lang, tr } from "@/lib/i18n";
-import { prefs, subscribePrefs } from "@/lib/prefs";
+import { drawnAs, gpuKind, prefs, subscribePrefs } from "@/lib/prefs";
 import { ActionQueue } from "./actions";
 import { loadChars } from "./art/chars-load";
 import { loadPets, pets as petsArt } from "./art/pets-load";
@@ -143,6 +143,8 @@ const JUMP_HEARD = 9; // tiles: others' jumps are heard this far
 
 // (a lot car out being driven: not where it was parked — docs/plan/28-the-car.md)
 const notDriven = (o: { kind: string; props?: Record<string, unknown> | null }) => o.kind !== "car" || !o.props?.driven;
+
+let softwareSaid = false; // (the software-GPU notice: once a page)
 
 export class WorldController {
   readonly loading: Loading = new Loading(this);
@@ -422,7 +424,7 @@ export class WorldController {
     this.model = model;
     // (Auto: Medium first on a desktop, or what this device held last — it steps up when there's room: ctl/quality.ts)
     this.quality.autoTier = startTier();
-    model.setQuality(this.quality.qualityNow(), prefs().reducedMotion);
+    model.setQuality(drawnAs(this.quality.qualityNow()), prefs().reducedMotion);
     model.events = {
       onFloorClick: (x, y, mods) => {
         if (hud.get().build.on) return this.buildClick(x, y);
@@ -474,8 +476,8 @@ export class WorldController {
     };
     this.offLook = hud.subscribe(this.focus.watchLook);
     this.offPrefs = subscribePrefs(() => {
-      this.model?.setQuality(this.quality.qualityNow(), prefs().reducedMotion);
-      if (this.tp && this.tp.quality !== this.quality.qualityNow()) this.tp.warmup.toQuality(this.quality.qualityNow());
+      this.model?.setQuality(drawnAs(this.quality.qualityNow()), prefs().reducedMotion);
+      if (this.tp && this.tp.tier !== this.quality.qualityNow()) this.tp.warmup.toQuality(this.quality.qualityNow());
       this.syncView();
     });
     // Auto quality: step down a tier when this device can't keep up
@@ -2312,6 +2314,11 @@ export class WorldController {
         id === this.room?.sessionId ? this.steps.myHop(hard) : this.steps.footfalls?.landed(id, hard);
       this.tp = v;
       this.tpHost = host;
+      // (drawing without a GPU — "Microsoft Basic Render Driver", SwiftShader —: said, once; plan 90 phase 2)
+      if (gpuKind() === "software" && !softwareSaid) {
+        softwareSaid = true;
+        toast(tr("softwareGpu"), "warn");
+      }
       // (Jolt's world in: my place asked of it from now on)
       v.body.onPhysics = () => this.rebuildGrid();
       // the GPU took the 3D view's context away (a driver reset, too many tabs): said, and

@@ -123,6 +123,17 @@ Measured on production's own reports a week after each release (against the tabl
    1-s test behind the loading screen to correct it; down faster when far under (2 s under 20 fps, not 6 s at a
    tier); software rendering said so; **a new tier below Lowest** (a lower render scale, sharpened; simpler light),
    the four tiers as they are. Shown first as stills.
+   Done 2026-11-15 — **Potato** (`lib/prefs.ts`; Settings "Potato (weak graphics)"): drawn as lowest (every
+   "low or lowest" rule applies), the view's `potato` adding **half a pixel a pixel** (lowest's 0.75) and **no lamps**
+   (lowest's 2) — `tp.tier` says which. **By the GPU's name** (`gpuKindOf`, a throwaway context's renderer string):
+   integrated Intel (Iris Xe and Arc aside) and AMD APUs (Radeon Graphics, Vega n, Renoir…) → potato, software
+   (Basic Render Driver, SwiftShader, llvmpipe) → potato and said on screen; Auto steps a weak GPU up to lowest when it
+   has room (10 s), remembered a minute on. **The test behind the loading screen** (`ctl/loading.ts`): the world
+   built, a second without steady frames (6 over 50 ms) → a tier down there and then, again each second, the screen
+   held till the switch is in — a weak GPU used to sit out the 15 s cap. **Down faster in play**: under 20 fps, 2 s
+   (6 s otherwise). Checked live (a faked Intel UHD; frames slowed to 70 ms): potato at 0.5 and no lamps; stepped down
+   behind the screen; up when there was room. Stills for the user: `design/plan90/tier-lowest-lot.png`,
+   `tier-potato-lot.png`.
 3. **People** (F4b) — out of sight not drawn, not posed, their shadows with them; a person's parts in fewer draws
    (merged where their materials allow, the soft edges and depth copies counted); people past ~25 m a lighter body,
    signed off with stills first.

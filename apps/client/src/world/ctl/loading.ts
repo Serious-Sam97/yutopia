@@ -2,7 +2,7 @@ import type { WorldController } from "../controller";
 import { hud } from "../store";
 
 /** What Loading reads of the WorldController (plan 72 phase 4: its dependencies, said). */
-export type LoadingHost = Pick<WorldController, "G" | "cars" | "life" | "tp">;
+export type LoadingHost = Pick<WorldController, "G" | "cars" | "life" | "tp" | "quality">;
 
 export class Loading {
   constructor(private readonly c: LoadingHost) {}
@@ -16,10 +16,17 @@ export class Loading {
 
   loadLast = 0;
 
+  // (plan 90 phase 2, F2c's test) the world built, its frames timed: never steady a second on — a GPU that can't
+  // draw this tier — a tier down behind the screen, and again, before anyone sees it
+  builtAt = 0;
+  slowFrames = 0;
+
   holdLoading(why: "enter" | "view") {
     this.loadFrom = performance.now();
     this.loadLast = 0;
     this.loadSteady = 0;
+    this.builtAt = 0;
+    this.slowFrames = 0;
     hud.set({ loading: { on: true, progress: why === "enter" ? hud.get().loading.progress : 0, why } });
     if (this.c.tp) this.c.tp.warmup.warming = true;
   }
@@ -29,8 +36,21 @@ export class Loading {
     const gap = this.loadLast ? now - this.loadLast : 0;
     this.loadLast = now;
     const r = this.readiness();
-    const built = r.done >= r.of;
+    // (a tier switch on its way — the test's step down, its shaders compiling —: not built till it's in)
+    const built = r.done >= r.of && !this.c.tp?.warmup.qualityTo;
     this.loadSteady = built && gap > 0 && gap < STEADY_MS ? this.loadSteady + 1 : 0;
+    if (built) {
+      this.builtAt ||= now;
+      if (gap >= STEADY_MS) this.slowFrames++;
+      if (now - this.builtAt > TEST_MS && this.loadSteady < STEADY_FRAMES && this.slowFrames >= TEST_SLOW) {
+        this.builtAt = now;
+        this.slowFrames = 0;
+        this.c.quality.stepDownNow();
+      }
+    } else {
+      this.builtAt = 0;
+      this.slowFrames = 0;
+    }
     if ((built && this.loadSteady >= STEADY_FRAMES) || now - this.loadFrom > LOAD_CAP_MS) {
       if (!built) console.warn("loading cut short", r);
       this.loadFrom = 0;
@@ -60,3 +80,6 @@ const STEADY_FRAMES = 10;
 const STEADY_MS = 50;
 
 const LOAD_CAP_MS = 15_000;
+
+const TEST_MS = 1000; // built this long, never steady …
+const TEST_SLOW = 6; // … with this many slow frames: a tier down
