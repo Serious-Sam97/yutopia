@@ -174,6 +174,12 @@ Measured on production's own reports a week after each release (against the tabl
    and it was walking that cost — left.
 6. **The land's questions** — `heightAt`/`terrainAt`/`waterSide` asked every frame answered from what's cached, or
    made ahead in the land worker.
+   Done 2026-11-15 — who asks, profiled (the lot, the proxy): the land's questions ~2–3% in all, spread thin (the
+   vehicles, the dark's distances, the feet) — but one of them **made land on the main thread mid-frame**: every
+   vehicle placed on the land every frame (`tp/parts/vehicles.ts`), the long road's bus and traffic too, kilometres
+   off — a chunk not made here yet made then (6–50 ms) as the bus drove on, every few seconds. Now a vehicle whose
+   land isn't made here keeps the height it had (past the near land, out of sight); made — by the streaming, as it
+   nears — it's on the land exactly as before.
 7. **The stutter** — by phase 0's causes: what's built or uploaded mid-play made ahead or spread over frames, garbage
    churned per frame removed.
 8. **Checks** — the bench against phase 0; production's reports a week after the release against the table above;

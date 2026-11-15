@@ -1,4 +1,5 @@
 import { elevOf } from "@yutopia/shared";
+import { landReady } from "@yutopia/shared/grounds";
 import {
   Box3,
   BoxGeometry,
@@ -85,7 +86,12 @@ export class Vehicles {
       m.userData.at = [px, pz];
       // (on the move: its headlamps a real light — car/cars.ts; parked, just their glow)
       m.userData.moving = Math.abs(v.v ?? 0) > 0.2;
-      m.position.set(px, (v.h ?? g.heightAt(v.x, v.z)) + up + 0.03, pz);
+      // (its land not made here yet — past the near land, out of sight —: where it was, not the land made now, on the
+      // main thread, 6–50 ms a chunk as the long road's bus drove on: docs/plan/90-the-friends-machines.md phase 6)
+      const known = v.h !== undefined || landReady(v.x, v.z) || !m.userData.placed;
+      if (known) m.position.set(px, (v.h ?? g.heightAt(v.x, v.z)) + up + 0.03, pz);
+      else m.position.set(px, m.position.y, pz);
+      m.userData.placed = true;
       // (the models' noses point −x: turned to the heading)
       m.rotation.y = Math.PI - v.a;
       // (their lamps on in the morning fog as after dark)
