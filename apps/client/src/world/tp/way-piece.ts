@@ -192,7 +192,9 @@ export function pieceNear(piece: Rect, own: Own): Near {
     Math.hypot(x - own.skip.cx, z - own.skip.cz) >= own.skip.r + pad;
 }
 
-/** A way's ground in a district's piece, by slot (empty slots left out). */
+/** A way's ground in a district's piece, by slot (empty slots left out) — **from the piece's corner** (`at.x0`,
+ *  `at.z0`: its mesh is put there), worked out in doubles before it's made floats: 150 km out a float has 1.6 cm,
+ *  the asphalt's edges and lines would come out in steps (plan 91 phase 7). */
 export function wayPiece(w: Way, piece: Rect, own: Own): { slot: Slot; geo: BufferGeometry }[] {
   const span = spanOf(w, piece);
   if (!span) return [];
@@ -200,7 +202,14 @@ export function wayPiece(w: Way, piece: Rect, own: Own): { slot: Slot; geo: Buff
   const r = groundsRng(77 + WAYS.indexOf(w));
   const { asphalt, lines } = wayGeo(w, pieceNear(piece, own), span, r, s);
   const by: Record<Slot, G> = { asphalt, lines, ...s };
-  return SLOTS.filter((k) => !by[k].empty).map((k) => ({ slot: k, geo: by[k].build() }));
+  return SLOTS.filter((k) => !by[k].empty).map((k) => {
+    const pos = by[k].pos;
+    for (let i = 0; i < pos.length; i += 3) {
+      pos[i] -= piece.x0;
+      pos[i + 2] -= piece.z0;
+    }
+    return { slot: k, geo: by[k].build() };
+  });
 }
 
 // ── between a worker and the main thread ──

@@ -21,6 +21,12 @@ test("a long road piece: its asphalt, its lines, its banks", () => {
   const slots = wayPiece(long, at, own).map((s) => s.slot);
   assert.ok(slots.includes("asphalt"), slots.join());
   assert.ok(slots.includes("banks"), slots.join());
+  // (from the piece's corner: a few tens of metres, not kilometres — plan 91 phase 7)
+  for (const { geo } of wayPiece(long, at, own)) {
+    const p = geo.getAttribute("position").array as Float32Array;
+    for (let i = 0; i < p.length; i += 3)
+      assert.ok(Math.abs(p[i]) < 100 && Math.abs(p[i + 2]) < 100, `${p[i]}, ${p[i + 2]}`);
+  }
 });
 
 test("what a worker sends is the same geometry, its arrays taken as they are", () => {

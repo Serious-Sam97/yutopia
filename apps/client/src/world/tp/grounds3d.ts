@@ -768,7 +768,7 @@ export class Grounds3 {
                 ask: { piece: `${r.x0},${r.z0}|${w.key}|${x0},${z0}`, way: w.key, at, own: r },
               };
               const f = () => {
-                if (remote.data) this.placePiece(w, remote.data);
+                if (remote.data) this.placePiece(w, remote.data, at);
                 else {
                   this.piece = at;
                   this.ways(w);
@@ -1219,8 +1219,14 @@ export class Grounds3 {
   }
   private asphaltMats = new Map<string, Material>();
   /** A district's road piece made by a worker (way-piece.ts): its meshes, as `ways` would have made them. */
-  private placePiece(w: Way, d: PieceData) {
-    for (const g of d.geos) this.add(pieceGeometry(g), this.slotMat(g.slot, w), "receive");
+  private placePiece(w: Way, d: PieceData, at: { x0: number; z0: number }) {
+    // (its geometry from the piece's corner: way-piece.ts — the mesh put there)
+    for (const g of d.geos) {
+      const m = this.add(pieceGeometry(g), this.slotMat(g.slot, w), "receive");
+      m.position.set(at.x0, 0, at.z0);
+      m.updateMatrix();
+      m.updateMatrixWorld(true);
+    }
   }
   /** What's of all the ways, not one: the square's crossing, the snow poles, the bridges. */
   private waysAll() {

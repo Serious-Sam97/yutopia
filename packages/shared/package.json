@@ -40,6 +40,7 @@
     "./phone": "./src/phone.ts",
     "./footing": "./src/footing.ts",
     "./grounds": "./src/grounds.ts",
+    "./cellkey": "./src/cellkey.ts",
     "./longroad": "./src/longroad.ts",
     "./land": "./src/land.ts",
     "./grow": "./src/grow.ts",

@@ -4,12 +4,14 @@
 # variant we load (single-threaded wasm-compat) with ALLOW_MEMORY_GROWTH — the published build's
 # heap is a fixed 128 MB. Its heap starts at 16 MB (INITIAL_MEMORY; the release's 128 MB was most of a
 # page's memory with ~14 MB of it in use — plan 72 phase 13's memory pass) and grows as it's wanted.
+# In double precision (docs/plan/91-the-big-map.md phase 7, F2b): positions in doubles, so a body 100 km out
+# moves as smoothly as one in town (single precision: 8 mm steps there, 1.6 cm at 150 km).
 # Needs Docker; writes dist/jolt-physics.wasm-compat.js. JOBS=n: build jobs (8).
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
 work=$(mktemp -d)
 git clone --depth 1 --branch 1.1.1 https://github.com/jrouwe/JoltPhysics.js "$work/src"
 docker run --rm -v "$work/src":/src -w /src emscripten/emsdk:6.0.13 bash -c \
-  "mkdir -p dist && cmake -B Build/Distribution/ST -DCMAKE_BUILD_TYPE=Distribution -DBUILD_WASM_COMPAT_ONLY=ON -DALLOW_MEMORY_GROWTH=ON -DINITIAL_MEMORY=16777216 -DMAXIMUM_MEMORY=2147483648 && cmake --build Build/Distribution/ST -j${JOBS:-8}"
+  "mkdir -p dist && cmake -B Build/Distribution/ST -DCMAKE_BUILD_TYPE=Distribution -DBUILD_WASM_COMPAT_ONLY=ON -DALLOW_MEMORY_GROWTH=ON -DINITIAL_MEMORY=16777216 -DMAXIMUM_MEMORY=2147483648 -DDOUBLE_PRECISION=ON && cmake --build Build/Distribution/ST -j${JOBS:-8}"
 cp "$work/src/dist/jolt-physics.wasm-compat.js" "$here/dist/"
 shasum -a 256 "$here/dist/jolt-physics.wasm-compat.js"

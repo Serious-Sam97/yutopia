@@ -1,4 +1,5 @@
 import { Worker } from "node:worker_threads";
+import { cellKey as packCell } from "@yutopia/shared/cellkey";
 import {
   adoptChunk,
   applyEdits,
@@ -21,7 +22,7 @@ import { kartLayoutNow } from "@yutopia/shared/kart";
 
 let worker: Worker | null = null;
 const asked = new Set<number>();
-const key = (cx: number, cz: number) => (cx + 2048) * 4096 + (cz + 2048);
+const key = packCell;
 
 function start(): Worker {
   const w = new Worker(new URL("./land.worker.ts", import.meta.url));

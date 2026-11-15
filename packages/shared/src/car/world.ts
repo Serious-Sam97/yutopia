@@ -1,3 +1,4 @@
+import { cellKey as packCell } from "../cellkey.ts";
 import {
   BENCH,
   BUILDINGS,
@@ -43,7 +44,7 @@ export function groundAt(x: number, z: number, cold = 0.5): Ground {
 
 // the static solids, a chunk at a time
 const chunks = new Map<number, Solid[]>();
-const key = (cx: number, cz: number) => (cx + 4096) * 8192 + (cz + 4096);
+const key = packCell;
 let lot: ReturnType<typeof lotLayout> | null = null;
 let banks: ReturnType<typeof lotBanksOf> | null = null;
 function chunkSolids(cx: number, cz: number): Solid[] {

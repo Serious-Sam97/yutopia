@@ -245,6 +245,29 @@ On a prod build, the bench of phase 0:
    0,0; the server and the shared code keep world coordinates in doubles, the shift only the client's view. A test
    lays a 200 km road (a fake region) and checks that what's made and kept depends on where you are, not the map's
    size, and stills at 150 km match those at the town (no jitter: a person, a car, the asphalt's lines).
+   Done 2026-11-15 — measured what a far place actually loses before building anything: three works out each
+   object's place from the camera in doubles on the CPU (`modelViewMatrix`), so what's placed as an object — people,
+   cars, the land's blocks — draws as well 1,000 km out as in town; what doesn't is **geometry made in the world's
+   own coordinates** (a float has 1.6 cm at 150 km, 6 cm at 1,000) and **the physics** (Jolt in single precision:
+   a walk's 2.3 cm steps came out as 0 or 1.6 cm at 150 km — a jerk every frame — on the client and the server
+   alike). So, not a scene shifted under you (every system's coordinates, the server's too, for what two things
+   already do):
+   - **Jolt in double precision** (`packages/jolt/build.sh`: `DOUBLE_PRECISION=ON`; +16 KB gzip): every position
+     a double, client and server — the wrapper (`physics/world.ts`) already passed positions as `RVec3`; nothing
+     else talks to Jolt directly (the sway, the ragdoll through the wrapper). `physics/far.test.ts`: a character
+     20 m, 150 km and 1,000 km out placed and read back to 0.1 mm, a walk's steps kept, the ground found under
+     it — red on the single-precision build at 150 and 1,000 km, green now. Shared 670 tests, the client's 367,
+     the server's physics, long road, lifts and cars green.
+   - **The road pieces made from their corner** (`way-piece.ts wayPiece`: worked out in doubles, the corner taken
+     off before they're made floats; `placePiece` puts the mesh there). (The rest's circle is round the town, by
+     0,0.)
+   - **The packed cell keys widened** (`shared/cellkey.ts`: ±2^20 cells each way — ±33,000 km at 32 m): the land's
+     chunks (client and server), the ways' sample index (`grounds.ts cellKey` — it collided past ±2,048 cells
+     already), the long road's buckets, the cars' static solids.
+   Not done (not needed for this: a far point in the shaders' world space is a few cm off at 1,000 km — the snow's
+   noise, the fog's); the land's regions and ways looped whole (a handful today — a spatial index when there are
+   hundreds). A 200 km fake road, and stills there, not made: the precision test says it in numbers. The budget's
+   two overs (/page 483.5, steps 14.7 KB) were there before plan 91 (the same in a build of `cbc63c89`).
 8. **Checks** — the bench against phase 0 and the targets; the stills; the specs near the streaming
    (`loading`, `car`, `godmode-land`, `godmode-roads`, the world-server's `long-road.test.ts`) and the known reds; the gap
    written here.

@@ -1,3 +1,4 @@
+import { cellKey as packCell } from "./cellkey.ts";
 import {
   GROW_BIOMES,
   GROW_BLEND,
@@ -975,7 +976,7 @@ interface Sample {
 let RIVER_F = 0;
 let RAVINE_F = 0;
 const cells = new Map<number, Sample[]>();
-const cellKey = (cx: number, cz: number) => cx * 4096 + cz;
+const cellKey = packCell;
 function indexLine(line: P[], f: number) {
   for (const [i, [x, z]] of line.entries()) {
     const k = cellKey(Math.floor(x / CELL), Math.floor(z / CELL));
@@ -2281,7 +2282,7 @@ export interface GroundsChunk {
   used?: number;
 }
 const chunks = new Map<number, GroundsChunk>();
-const chunkKey = (cx: number, cz: number) => (cx + 2048) * 4096 + (cz + 2048);
+const chunkKey = packCell;
 // (~33 KB a chunk — ~14 KB of JS, its heights' 17 KB: 4,000 is ~130 MB, of the land's 21,026 since the long road;
 // people roaming fill it, then the least lately used go: docs/plan/89-the-weight.md phase 8)
 let chunkCap = 4000;

@@ -7,6 +7,7 @@
 // forest by height. Everything here is the land past today's Grounds; grounds.ts blends it in (its
 // `macro`) and lays the road (a way, its heights this profile).
 // Building coords (metres; x east, z south). Kept free of grounds.ts: it reads this.
+import { cellKey as packCell } from "./cellkey.ts";
 import { BASE_LAND, type Region } from "./land.ts";
 
 export type P = [number, number, number?];
@@ -335,7 +336,7 @@ export function lakeR(x: number, z: number): number {
 // ── a spatial index of the spine (32 m buckets, every sample) ──
 const B = 32;
 const buckets = new Map<number, number[]>();
-const bk = (i: number, j: number) => (i + 4096) * 8192 + (j + 4096);
+const bk = packCell;
 for (let i = 0; i < N; i++) {
   const k = bk(Math.floor(SPINE[i][0] / B), Math.floor(SPINE[i][1] / B));
   let l = buckets.get(k);
