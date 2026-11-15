@@ -182,6 +182,19 @@ Measured on production's own reports a week after each release (against the tabl
    nears — it's on the land exactly as before.
 7. **The stutter** — by phase 0's causes: what's built or uploaded mid-play made ahead or spread over frames, garbage
    churned per frame removed.
+   Done 2026-11-15 — what's in a frame over 45 ms, by a Chrome trace walking 20 s (the frames and the main
+   thread's own samples on one clock; the proxy, Low; minified names read off the build):
+   - **The lot: 18 → 2.** 60% of the long frames was `driveVehicles → setVehicles →` the land made for a vehicle far
+     off — phase 6's fix. The two left: **an NPC placed on his land every frame** (`npcs.forEach → mapGround →
+     heightAt`, the Grounds' folk 800 m off: his chunk made then) — now his ground kept while his land isn't made
+     here (`controller.ts npcGround`, the land module's `landReady`), as the vehicles'.
+   - **The lawn: 0.**
+   - **The studio: 7 → 2–3.** A parked car coming near the camera made whole (`buildSedan`) and made still
+     (`stillModel`: merged, its shadow, its glass split) in one frame — several at once by the windows. Now one such
+     a frame (`car/cars.ts syncParked`), a car waiting shown as its far model meanwhile (what it is a little further
+     off). Left: the studio's TV's YouTube player made and destroyed as one walks in and out of its hearing (the
+     media's own rule), a shader linked at a car's first sight.
+   `car.spec` green but "under a flier" (flaky before: 1 of 2 again).
 8. **Checks** — the bench against phase 0; production's reports a week after the release against the table above;
    the targets met or the gap written here.
 

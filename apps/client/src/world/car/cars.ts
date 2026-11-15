@@ -1087,6 +1087,9 @@ export class Cars {
   // ── the parked cars: the lot's (and wherever they were left) ───────────────
   private syncParked(tp: ThirdPersonView | null, dt: number) {
     const seen = new Set<string>();
+    // (a car's whole model made, or made still, at most one a frame: several coming near at once were one frame of
+    // tens of ms — docs/plan/90-the-friends-machines.md phase 7; one waiting shows its far model meanwhile)
+    let heavy = 0;
     const me = this.host.me();
     const mx = me.x;
     const mz = me.y;
@@ -1135,7 +1138,8 @@ export class Cars {
         ? Math.hypot(P.x - (camAt.x - this.root.position.x), P.z - (camAt.z - this.root.position.z))
         : Math.hypot(P.x - mx, P.z - mz);
       const near = camD < FAR || OWN_SHAPE.has(kind);
-      if (near && !p.full) {
+      if (near && !p.full && heavy < 1) {
+        heavy++;
         const colour = colourOf(o);
         p.full = buildSedan({
           colour,
@@ -1153,7 +1157,7 @@ export class Cars {
         p.full.root.userData.stillDue = true;
         this.root.add(p.full.root);
       }
-      if (!near && !p.far) {
+      if ((!near || !p.full) && !p.far) {
         const colour = colourOf(o);
         const { solid, glass } = carGeometry(!!o.props?.wagon || kind !== "sedan", colour, !!o.props?.snowy);
         const g = new Group();
@@ -1164,7 +1168,8 @@ export class Cars {
         p.far = g as unknown as Mesh;
         this.root.add(g);
       }
-      if (p.full?.root.userData.stillDue && tp) {
+      if (p.full?.root.userData.stillDue && tp && heavy < 1) {
+        heavy++;
         p.full.root.userData.stillDue = false;
         tp.culling.stillModel(p.full.root);
       }
@@ -1175,7 +1180,7 @@ export class Cars {
           if (o.props?.role === "taxi") p.full.setBeacon(this.host.night() > 0.2, this.time);
         }
       }
-      if (p.far) p.far.visible = !near;
+      if (p.far) p.far.visible = !near || !p.full;
     }
     for (const [id, p] of this.parked)
       if (!seen.has(id)) {

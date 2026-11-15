@@ -48,6 +48,7 @@ import {
   seatYaw,
   setAreasBeyond,
   setOutdoors,
+  shiftOf,
   spHour,
   stationOf,
   TICK_HZ,
@@ -248,6 +249,8 @@ export class WorldController {
   private petBuf = new Map<string, { t: number; x: number; y: number }[]>();
   // the NPCs' and pets' states on the server's clock (WorldState.tickAt), drawn as far behind as the link needs
   // (docs/plan/89-the-weight.md phase 7): this patch's, timed once it's all in (room.onStateChange)
+  /** (plan 90 phase 7) each NPC's ground as last worked out: kept while his land isn't made here */
+  private npcGround = new Map<string, number>();
   private roomSmooth = new Smooth();
   private roomLast: number | undefined;
   private roomNew: { t: number }[] = [];
@@ -1472,7 +1475,13 @@ export class WorldController {
       // (out on the land his feet are on it: the ground's not at 0 by the gatehouse)
       // (sat on a seat, the server says how high)
       if (guard && this.level === home) {
-        st.ground = this.grid.groundAt(pos.x, pos.y, 0);
+        // (his land not made here yet — far out on the Grounds, out of sight —: the ground he had, not his land made
+        // now on the main thread, mid-frame: docs/plan/90-the-friends-machines.md phase 7)
+        const o = shiftOf(this.map, 0);
+        const had = this.npcGround.get(id);
+        const ready = this.G ? this.G.landReady(pos.x + o.x, pos.y + o.y) : true;
+        st.ground = had === undefined || ready ? this.grid.groundAt(pos.x, pos.y, 0) : had;
+        this.npcGround.set(id, st.ground);
         st.z = Math.max(st.ground, n.z ?? 0);
       }
       if (this.level === home) model.upsertAvatar(`npc:${id}`, st);
