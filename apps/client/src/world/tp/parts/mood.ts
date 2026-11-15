@@ -4,6 +4,7 @@ import { waterAt } from "@yutopia/shared/grounds";
 import { LONG_ROAD } from "@yutopia/shared/longroad";
 import { cellOf } from "@yutopia/shared/structure";
 import { type Color, type Fog, Vector3 } from "three";
+import { gfxNow } from "@/lib/graphics";
 import { litMaterial } from "../../look/lit";
 import { Bubbles } from "../bubbles3d";
 import { GROUND } from "../campus";
@@ -146,7 +147,7 @@ export class Mood {
     this.c.around.campus.lampFog = this.c.lampFog;
     // the banks over the low places (High only; made the first time they're wanted)
     const grounds = this.c.around.grounds;
-    const banks = this.c.quality === "high" && grounds ? haze * (1 - wall) * (1 - n.lift) : 0;
+    const banks = gfxNow().fogBanks && grounds ? haze * (1 - wall) * (1 - n.lift) : 0;
     if (banks > 0.01 && !this.c.banks && grounds) this.c.banks = new FogBanks(grounds.root);
     if (this.c.banks) {
       const o = this.c.around.campus.root.position;

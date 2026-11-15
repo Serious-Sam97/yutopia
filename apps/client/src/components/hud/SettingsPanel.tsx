@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { Credits } from "@/components/Credits";
 import { LangSwitch } from "@/components/LangSwitch";
 import { setToken, yutopia } from "@/lib/api";
+import { cleanGraphics, type Graphics, gfxTier, graphicsFor, isPreset } from "@/lib/graphics";
 import { type Key, useLang, useTr } from "@/lib/i18n";
-import { MAX_FPS, type Prefs, setPrefs, usePrefs } from "@/lib/prefs";
+import { MAX_FPS, type Prefs, type Quality, type QualityPref, resolveQuality, setPrefs, usePrefs } from "@/lib/prefs";
 import { VERSION } from "@/lib/version";
 import { hud, useHud } from "@/world/store";
 import { useWorld } from "./ctx";
@@ -482,15 +483,48 @@ function ViewPage() {
   );
 }
 
+// The graphics (docs/plan/91-the-big-map.md phase 9): a preset — the tiers as they always drew — and each of its
+// settings on its own; nothing's applied as it's picked (a change of these is a recompile, a rebuild: phase 10),
+// an Apply once something's changed.
+const QUALITIES = ["auto", "high", "medium", "low", "lowest", "potato"] as const;
 function GraphicsPage() {
   const t = useTr();
   const p = usePrefs();
+  // (what's picked, not applied yet)
+  const [draft, setDraft] = useState<{ quality: QualityPref; over: Partial<Graphics> | null }>(() => ({
+    quality: p.quality,
+    over: cleanGraphics(p.graphics),
+  }));
+  const tierOf = (q: QualityPref): Quality => (q === "auto" ? (gfxTier() ?? resolveQuality("auto")) : q);
+  const g = graphicsFor(tierOf(draft.quality), draft.over);
+  const custom = !isPreset(tierOf(draft.quality), draft.over);
+  const changed =
+    draft.quality !== p.quality || JSON.stringify(draft.over) !== JSON.stringify(cleanGraphics(p.graphics));
+  /** One setting set by hand: over the preset it's on (Auto's tier kept, as one picked by hand — Auto stops). */
+  const set = <K extends keyof Graphics>(k: K, v: Graphics[K]) =>
+    setDraft((d) => ({ quality: tierOf(d.quality), over: { ...(d.over ?? {}), [k]: v } }));
+  // (the frame now, beside: a change seen to land)
+  const [fps, setFps] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => {
+      const f = (window as unknown as { __yutopia?: { tp?: { fps?: number } } }).__yutopia?.tp?.fps;
+      setFps(Math.round(f ?? 0));
+    }, 500);
+    return () => clearInterval(id);
+  }, []);
+  const lvl = (o: string) => t(o === "off" ? "gOff" : o === "low" ? "gLow" : o === "medium" ? "gMedium" : "gHigh");
+  const hint = (k: Key) => (
+    <p className="text-[12px] leading-snug -mt-1 mb-1.5" style={{ color: "var(--cream-dim)" }}>
+      {t(k)}
+    </p>
+  );
+  const fin = g.finish;
   return (
     <>
-      <Card>
+      <Card label={t("gPreset")}>
         <Choice
-          options={["auto", "high", "medium", "low", "lowest", "potato"] as const}
-          value={p.quality}
+          options={QUALITIES}
+          value={custom ? ("" as never) : draft.quality}
           cols={2}
           label={(q) =>
             t(
@@ -507,10 +541,39 @@ function GraphicsPage() {
                         : "qualityPotato",
             )
           }
-          onPick={(q) => setPrefs({ quality: q })}
+          onPick={(q) => setDraft({ quality: q, over: null })}
         />
+        {custom && (
+          <div className="flex items-center justify-between gap-3 mt-2.5">
+            <span className="text-[13px]" style={{ color: "var(--amber)" }}>
+              {t("gCustom")}
+            </span>
+            <button
+              type="button"
+              className="deck-btn"
+              style={{ height: 32, fontSize: 12, padding: "0 10px" }}
+              onClick={() => setDraft((d) => ({ ...d, over: null }))}
+            >
+              {t("gReset")}
+            </button>
+          </div>
+        )}
       </Card>
-      <Card label={t("maxFps")}>
+      <Card label={`${t("gDisplay")} · ${t("gNow")} ${fps} fps`}>
+        <Slider
+          label={t("gRes")}
+          value={g.res}
+          min={25}
+          max={200}
+          step={5}
+          shown={`${Math.round(g.res)}%`}
+          onChange={(v) => set("res", v)}
+        />
+        {hint("gResHelp")}
+        <Toggle label={t("gAa")} help={t("gAaHelp")} value={g.aa} onChange={(v) => set("aa", v)} />
+        <p className={`${lab} mt-2 mb-1.5`} style={{ color: "var(--cream-dim)" }}>
+          {t("maxFps")}
+        </p>
         <Choice
           options={MAX_FPS}
           value={p.maxFps}
@@ -518,16 +581,152 @@ function GraphicsPage() {
           label={(f) => (f === 0 ? t("fpsUnlimited") : `${f} fps`)}
           onPick={(f) => setPrefs({ maxFps: f })}
         />
-        <p className="text-[12.5px] leading-snug mt-2.5" style={{ color: "var(--cream-dim)" }}>
-          {t("maxFpsHelp")}
+      </Card>
+      <Card label={t("gDistance")}>
+        <Slider
+          label={t("gLand")}
+          value={g.land}
+          min={220}
+          max={660}
+          step={55}
+          shown={`${g.land} m`}
+          onChange={(v) => set("land", v)}
+        />
+        {hint("gLandHelp")}
+        <Slider
+          label={t("gDistricts")}
+          value={g.districts}
+          min={500}
+          max={1200}
+          step={100}
+          shown={`${g.districts} m`}
+          onChange={(v) => set("districts", v)}
+        />
+        {hint("gDistrictsHelp")}
+        <p className={`${lab} mt-1 mb-1.5`} style={{ color: "var(--cream-dim)" }}>
+          {t("gHorizon")}
         </p>
+        <Choice
+          options={["lowest", "low", "medium", "high"] as const}
+          value={g.horizon}
+          cols={4}
+          label={(o) => t(o === "lowest" ? "gLow" : o === "low" ? "gMedium" : o === "medium" ? "gHigh" : "gUltra")}
+          onPick={(o) => set("horizon", o)}
+        />
+        <p className={`${lab} mt-3 mb-1.5`} style={{ color: "var(--cream-dim)" }}>
+          {t("gFarTrees")}
+        </p>
+        <Choice
+          options={[0, 1200, 1800] as const}
+          value={g.farTrees}
+          cols={3}
+          label={(o) => (o === 0 ? t("gOff") : `${(o / 1000).toFixed(1)} km`)}
+          onPick={(o) => set("farTrees", o)}
+        />
+      </Card>
+      <Card label={t("gLight")}>
+        <p className={`${lab} mb-1.5`} style={{ color: "var(--cream-dim)" }}>
+          {t("gShadows")}
+        </p>
+        <Choice
+          options={[0, 1024, 2048, 4096] as const}
+          value={g.shadows}
+          cols={4}
+          label={(o) => (o === 0 ? t("gOff") : o === 1024 ? t("gMedium") : o === 2048 ? t("gHigh") : t("gUltra"))}
+          onPick={(o) => set("shadows", o)}
+        />
+        {hint("gShadowsHelp")}
+        <Toggle label={t("gLightShadows")} value={g.lightShadows} onChange={(v) => set("lightShadows", v)} />
+        <Slider
+          label={t("gLamps")}
+          value={g.lamps}
+          min={0}
+          max={10}
+          step={1}
+          shown={String(g.lamps)}
+          onChange={(v) => set("lamps", v)}
+        />
+        {hint("gLampsHelp")}
+      </Card>
+      <Card label={t("gEffects")}>
+        <Toggle label={t("gFinish")} help={t("gFinishHelp")} value={fin} onChange={(v) => set("finish", v)} />
+        {fin && (
+          <>
+            <Toggle label={t("gAo")} value={g.ao} onChange={(v) => set("ao", v)} />
+            <Toggle label={t("gBloom")} value={g.bloom} onChange={(v) => set("bloom", v)} />
+            <Toggle label={t("gGrain")} value={g.grain} onChange={(v) => set("grain", v)} />
+          </>
+        )}
+      </Card>
+      <Card label={t("gWorld")}>
+        <Toggle label={t("gFogBanks")} value={g.fogBanks} onChange={(v) => set("fogBanks", v)} />
+        <p className={`${lab} mt-2 mb-1.5`} style={{ color: "var(--cream-dim)" }}>
+          {t("gWeather")}
+        </p>
+        <Choice
+          options={["low", "medium", "high"] as const}
+          value={g.weather}
+          cols={3}
+          label={lvl}
+          onPick={(o) => set("weather", o)}
+        />
+        <p className={`${lab} mt-3 mb-1.5`} style={{ color: "var(--cream-dim)" }}>
+          {t("gMirror")}
+        </p>
+        <Choice
+          options={["off", "low", "high"] as const}
+          value={g.mirror}
+          cols={3}
+          label={lvl}
+          onPick={(o) => set("mirror", o)}
+        />
+        <p className={`${lab} mt-3 mb-1.5`} style={{ color: "var(--cream-dim)" }}>
+          {t("gPeople")}
+        </p>
+        <Choice
+          options={["low", "high"] as const}
+          value={g.people}
+          cols={2}
+          label={lvl}
+          onPick={(o) => set("people", o)}
+        />
       </Card>
       <Card>
         <Toggle label={t("reducedMotion")} value={p.reducedMotion} onChange={(v) => setPrefs({ reducedMotion: v })} />
         <Toggle label={t("perfStats")} value={p.perfStats} onChange={(v) => setPrefs({ perfStats: v })} />
       </Card>
+      {changed && (
+        // (its own bar at the foot of the page, over nothing: the settings under it scroll up past it)
+        <div
+          className="sticky bottom-0 z-10 flex items-center justify-end gap-3 py-2.5 px-1 -mx-1"
+          style={{ background: "var(--panel, #17181c)", borderTop: "1px solid var(--well-edge)" }}
+        >
+          <button
+            type="button"
+            className="deck-btn"
+            style={{ height: 38, fontSize: 12, padding: "0 14px" }}
+            onClick={() => setDraft({ quality: p.quality, over: cleanGraphics(p.graphics) })}
+          >
+            {t("gCancel")}
+          </button>
+          <button
+            type="button"
+            className="deck-btn"
+            aria-pressed
+            style={{ height: 38, fontSize: 13, padding: "0 18px" }}
+            onClick={() => applyGraphics(draft.quality, draft.over)}
+          >
+            {t("gApply")}
+          </button>
+        </div>
+      )}
     </>
   );
+}
+
+/** The graphics picked, applied (phase 10 makes the switch). */
+function applyGraphics(quality: QualityPref, over: Partial<Graphics> | null) {
+  setPrefs({ quality, graphics: over });
 }
 
 function ControlsPage() {

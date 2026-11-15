@@ -21,6 +21,7 @@ import {
   SRGBColorSpace,
   Vector3,
 } from "three";
+import { gfxNow } from "@/lib/graphics";
 import { DARK_LEFT, type Daylight, darkK, EYES_LIFT } from "../art/daylight";
 import { Campus, GROUND, type Outline } from "./campus";
 import { GroundsStream } from "./grounds-stream";
@@ -496,7 +497,7 @@ export class Surroundings {
         wind: this.campus.weather.wind,
         windK: this.storm,
         col: this.rainCol,
-        quality: this.quality === "high" ? "high" : "medium",
+        quality: gfxNow().weather === "high" ? "high" : "medium",
       });
     }
     this.lightning(dt);

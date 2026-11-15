@@ -1,3 +1,4 @@
+import { REACH as GRAPHICS_REACH } from "@/lib/graphics";
 import type { Quality } from "@/lib/prefs";
 
 // How far what's round you is made (docs/plan/91-the-big-map.md phase 6): the near land (its blocks; the far land
@@ -13,13 +14,8 @@ export interface Reach {
   districts: number;
 }
 
-export const REACH: Record<Quality, Reach> = {
-  high: { land: 440, districts: 900 },
-  medium: { land: 440, districts: 900 },
-  low: { land: 440, districts: 900 },
-  lowest: { land: 440, districts: 700 },
-  potato: { land: 330, districts: 600 },
-};
+// (the presets' own: lib/graphics.ts — the settings may set them by hand)
+export const REACH: Record<Quality, Reach> = GRAPHICS_REACH;
 
 /** A district's freed this much past its reach (made again when it's back in it: no flicker at the edge). */
 export const GONE_PAST = 400;

@@ -53,6 +53,7 @@ import {
 } from "three";
 import { DealerPanel } from "@/components/hud/DealerPanel";
 import { extraPanels } from "@/components/hud/panels";
+import { gfxNow } from "@/lib/graphics";
 import { addStrings, trMaybe } from "@/lib/i18n";
 import { prefs, type Quality } from "@/lib/prefs";
 import { chars as charsMod } from "../art/chars-load";
@@ -966,14 +967,14 @@ export class Cars {
       if (storm < 0.1 && speed > 2)
         this.screen.s.amount = Math.max(0, this.screen.s.amount - (dt * Math.min(1, speed / 10)) / 45);
       this.cabin.step(l.model, night);
-      const q = this.host.quality();
       const tp = this.host.tp();
-      if (this.cam.mode === "cockpit" && tp && (q === "high" || q === "medium")) {
+      const mirror = gfxNow().mirror;
+      if (this.cam.mode === "cockpit" && tp && mirror !== "off") {
         if (this.mirror?.vid !== mine.vid) {
           this.mirror?.m.dispose();
           this.mirror = { vid: mine.vid, m: new Mirror(l.model) };
         }
-        this.mirror.m.render(tp.renderer, tp.scene, t, q === "high" ? 24 : 12);
+        this.mirror.m.render(tp.renderer, tp.scene, t, mirror === "high" ? 24 : 12);
       }
       // the radio, heard in the car
       const st = mine.seat === 0 ? this.station : ((l.pb.buf[l.pb.buf.length - 1]?.fl ?? 0) >> 14) & 3;
@@ -2011,7 +2012,7 @@ export class Cars {
     // (whoever stands in them takes their light: the view's tint)
     const tp = this.host.tp();
     if (tp && tp.eyes.carBeams !== this.beamLights) tp.eyes.carBeams = this.beamLights;
-    const shadow = q === "high";
+    const shadow = gfxNow().lightShadows;
     if (shadow !== this.beamShadow) {
       // (only when the tier changes: that recompiles anyway)
       this.beamShadow = shadow;

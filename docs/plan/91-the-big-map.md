@@ -331,6 +331,24 @@ On a prod build, the bench of phase 0:
    values equal today's tier (same pixels: the A/B stills of plan 89 on each preset), a custom set stored and read
    back, Auto stopping on a hand change; `loading`, the Settings panel's spec.
 
+   Done 2026-11-15 — `lib/graphics.ts`: `Graphics` (17 settings), `presetOf(tier)` — each the tier's own, the
+   resolution exactly its pixels (`ratioOf`: to a thousandth, Lowest's 0.75 on a 2× screen is 37.5%, not 38) —,
+   `prefs().graphics` only what's set by hand (`cleanGraphics`: what's known and in range), `graphicsFor(tier)` the
+   two laid together, `gfxNow()` what the world draws with now (set by `Warmup.setQuality`). What decided by the
+   tier now reads its setting: the pixels (`view.ratioNow`), antialiasing (the view's making), the sun's shadow and
+   its map, the torch's and headlamps' shadows, the lamps (and the Grounds' lamp pool by them), the post — its
+   passes each a flag (`Post3` `PostFlags`: bloom, grain, AO; the finish the chain itself) —, the far land's rings
+   and its trees (`far3d.setQuality(horizon, farTrees)`), the reach, the fog banks, the rain's and snow's density,
+   the car's mirror, people's nearest level and blob (and the hands'). What stays the tier's: Lowest's streaming
+   cadence and the lazy matrices (the CPU's, not a look). **Settings → Graphics**: the preset on top (Custom once a
+   setting differs, "Back to the preset"); Display (resolution 25–200 %, antialiasing, the frame rate), Distance
+   (land 220–660 m, roads 500–1,200, horizon, distant trees), Light and shadow (sun shadows Off/Medium/High/Ultra,
+   torch and headlamp shadows, lamps 0–10), Effects (the colour finish and, under it, AO, glow, grain), World (fog
+   banks, rain and snow, the car's mirror, people's detail) — each with a line on what it costs; the fps beside.
+   Nothing's applied as it's picked: an **Apply** bar (and Cancel) at the page's foot once something's changed. A
+   setting changed on Auto keeps Auto's tier as the preset (Auto stops, as a tier picked by hand). Checked live
+   (High; sun shadows to Ultra, the glow off, applied): the sun's map 4,096, the post's bloom off, stored as two
+   settings over High. `graphics.test.ts`: each preset what its tier drew, the pixels exact on 1–3× screens.
 10. **Changing them without the stall** (added 2026-11-15, the user: "today you feel monstrous stalls when you
     switch" — with many settings, nothing applied as it's picked: an **Apply** button shows once something's
     changed, and the change is masked or solved). What's there: `Warmup.toQuality` compiles the new tier's shaders a

@@ -480,7 +480,8 @@ export class WorldController {
     this.offLook = hud.subscribe(this.focus.watchLook);
     this.offPrefs = subscribePrefs(() => {
       this.model?.setQuality(drawnAs(this.quality.qualityNow()), prefs().reducedMotion);
-      if (this.tp && this.tp.tier !== this.quality.qualityNow()) this.tp.warmup.toQuality(this.quality.qualityNow());
+      // (the tier, or a setting set by hand over its preset: lib/graphics.ts — a no-op when neither changed)
+      if (this.tp) this.tp.warmup.toQuality(this.quality.qualityNow());
       this.syncView();
     });
     // Auto quality: step down a tier when this device can't keep up

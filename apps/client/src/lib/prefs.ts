@@ -31,6 +31,9 @@ export interface Prefs {
   maxFps: MaxFps;
   // the frame's numbers in a corner (fps, where each frame's time goes: docs/plan/38-the-lag.md)
   perfStats: boolean;
+  // the graphics settings set by hand over the quality's preset (lib/graphics.ts; docs/plan/91 phase 9): null, the
+  // preset as it is
+  graphics: Record<string, unknown> | null;
 }
 
 // (lowest: weak machines — no antialiasing, under a pixel a pixel; docs/plan/50-the-volume.md 7d)
@@ -126,6 +129,7 @@ const DEFAULTS: Prefs = {
   hands1p: true,
   maxFps: 60,
   perfStats: false,
+  graphics: null,
 };
 
 let cache: Prefs | null = null;
@@ -149,6 +153,7 @@ export function prefs(): Prefs {
     if (cache) cache.lookInvertX = cache.lookInvertX === true;
     if (cache) cache.hands1p = cache.hands1p !== false;
     if (cache) cache.perfStats = cache.perfStats === true;
+    if (cache && (typeof cache.graphics !== "object" || Array.isArray(cache.graphics))) cache.graphics = null;
     if (
       cache &&
       typeof window !== "undefined" &&

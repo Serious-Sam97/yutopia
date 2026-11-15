@@ -151,8 +151,12 @@ export class FarLand {
     // (every ring made again with its new hole, the old shown meanwhile)
     for (const ring of this.rings) ring.at = null;
   }
-  setQuality(q: DrawnQuality) {
-    if (q === this.quality && this.rings.length) return;
+  /** the far trees (the settings' far trees: lib/graphics.ts — a tier's own by default) */
+  private treeSpec: { r1: number; cell: number } | null = null;
+  setQuality(q: DrawnQuality, farTrees: number = TREES[q]?.r1 ?? 0) {
+    const trees = farTrees >= 1800 ? TREES.high : farTrees >= 1200 ? TREES.medium : null;
+    if (q === this.quality && trees?.r1 === this.treeSpec?.r1 && this.rings.length) return;
+    this.treeSpec = trees;
     this.quality = q;
     for (const r of this.rings) {
       this.drop(r.mesh);
@@ -215,7 +219,7 @@ export class FarLand {
       const cz = Math.round(z / (step * 4)) * step * 4;
       const v = editsVersion;
       r.asked = true;
-      const tr = n === 0 ? TREES[this.quality] : null;
+      const tr = n === 0 ? this.treeSpec : null;
       void this.ask({
         x0: cx - size / 2,
         z0: cz - size / 2,

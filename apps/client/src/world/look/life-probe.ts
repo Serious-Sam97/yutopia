@@ -53,6 +53,7 @@ interface PostLike {
   bloom: { enabled: boolean; strength: number; threshold: number; radius: number };
   finish: { material: ShaderMaterial; uniforms: Record<string, { value: unknown }> };
   lite: boolean;
+  flags: { bloom: boolean; grain: boolean; ao: boolean };
   setNight(n: number): void;
   setSize(w: number, h: number, r: number): void;
 }
@@ -386,14 +387,14 @@ export function lifeProbe(view: unknown, on: boolean, opts: LifeOpts = {}): stri
   u.lifeExpo = { value: o.exposure };
   u.lifeCon = { value: o.contrast };
   u.lifeSat = { value: o.sat };
-  u.grain.value = post.lite ? 0 : 0.006;
+  u.grain.value = post.flags.grain ? 0.006 : 0;
   post.finish.material.fragmentShader = o.finish ? FINISH : k.finFrag;
   post.finish.material.needsUpdate = true;
   const night = k.setNight;
   const bloom = post.bloom;
   post.setNight = (nt: number) => {
     night(nt);
-    if (post.lite) return;
+    if (!post.flags.bloom) return;
     if (nt < 0.5) {
       bloom.enabled = o.bloom > 0;
       bloom.strength = Math.max(bloom.strength, o.bloom);

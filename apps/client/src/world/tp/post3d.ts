@@ -99,6 +99,15 @@ const LIFE_FINISH = {
     }`,
 };
 
+/** The post's passes on or off (each a setting: lib/graphics.ts). */
+export interface PostFlags {
+  bloom: boolean;
+  grain: boolean;
+  ao: boolean;
+}
+/** Its flags as a key (the post made again when they change). */
+export const postKey = (f: PostFlags): string => `${+f.bloom}${+f.grain}${+f.ao}`;
+
 export class Post3 {
   private composer: EffectComposer;
   private bloom: UnrealBloomPass;
@@ -111,12 +120,21 @@ export class Post3 {
   private ao: { setSize(w: number, h: number): void; dispose(): void; enabled: boolean } | null = null;
   private readonly life = isLife();
 
+  /** What's drawn of it (the graphics settings: lib/graphics.ts — Medium's preset none of the three) */
+  readonly flags: PostFlags;
+  /** (none of the three: Medium's, and the benches') */
+  get lite(): boolean {
+    return !this.flags.bloom && !this.flags.grain && !this.flags.ao;
+  }
+
   constructor(
     renderer: WebGLRenderer,
     scene: Scene,
     camera: PerspectiveCamera,
-    readonly lite = false, // Medium: no bloom, no grain
+    // (true: Medium's — no bloom, no grain, no AO)
+    o: boolean | PostFlags = false,
   ) {
+    this.flags = typeof o === "boolean" ? { bloom: !o, grain: !o, ao: !o } : { ...o };
     // (the scene's depth kept for the ink)
     const size = renderer.getDrawingBufferSize(new Vector2());
     const rt = new WebGLRenderTarget(size.x, size.y, { type: HalfFloatType });
@@ -145,9 +163,9 @@ export class Post3 {
     bm.blendDstAlpha = OneFactor;
     this.composer.addPass(this.bloom);
     this.finish = new ShaderPass(this.life ? LIFE_FINISH : FINISH);
-    if (lite) this.finish.uniforms.grain.value = 0;
+    if (!this.flags.grain) this.finish.uniforms.grain.value = 0;
     this.composer.addPass(this.finish);
-    if (this.life && !lite) void this.addAO(scene, camera, renderer);
+    if (this.life && this.flags.ao) void this.addAO(scene, camera, renderer);
   }
 
   /** The life look's AO (High): three's GTAO, fed the frame's own depth — the one the ink reads; its own
@@ -213,7 +231,7 @@ export class Post3 {
   // 0 by day … 1 at night: how much glows
   setNight(n: number) {
     this.bloom.strength = 1.2 * n; // (High's halo round lamps, screens and light strips)
-    this.bloom.enabled = n > 0.05 && !this.lite;
+    this.bloom.enabled = n > 0.05 && this.flags.bloom;
     this.ink.setNight(n);
     // over what lit things can reach (light3d.ts): only what glows blooms
     this.bloom.threshold = litCap(n) + 0.02;

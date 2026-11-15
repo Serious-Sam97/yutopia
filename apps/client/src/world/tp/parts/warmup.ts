@@ -16,18 +16,18 @@ import {
   Vector4,
   WebGLRenderTarget,
 } from "three";
+import { type Graphics, graphicsFor, graphicsSig, setGfxNow } from "@/lib/graphics";
 import { drawnAs, type Quality } from "@/lib/prefs";
-import { Post3 } from "../post3d";
-import { reachFor } from "../reach";
+import { Post3, postKey } from "../post3d";
 import { Proxy3, Vortex3 } from "../stand3d";
 import type { ThirdPersonView } from "../view";
-import { LAMPS } from "./common";
 
 /** What Warmup reads of the ThirdPersonView (plan 72 phase 4: its dependencies, said). */
 export type WarmupHost = Pick<
   ThirdPersonView,
   | "meId"
   | "potato"
+  | "ratioNow"
   | "tier"
   | "around"
   | "building"
@@ -268,22 +268,28 @@ export class Warmup {
   // for the scene's lights — the scene drawn as it was meanwhile — then switched. At once,
   // every lit thing's shader was linked in one frame: 0.8 s here, seconds in Firefox.
   qualityTo: Quality | null = null;
+  /** the settings drawn now, and those being compiled for (lib/graphics.ts graphicsSig, with the tier) */
+  private drawnSig = "";
+  private toSig = "";
 
-  toQuality(q: Quality) {
-    if (q === (this.qualityTo ?? this.c.tier)) return;
+  /** To a tier — its preset, with what's set by hand over it (the settings: plan 91 phase 9) — compiled first. */
+  toQuality(q: Quality, g: Graphics = graphicsFor(q)) {
+    const sig = `${q}|${graphicsSig(g)}`;
+    if (sig === (this.qualityTo ? this.toSig : this.drawnSig)) return;
     this.qualityTo = q;
-    void this.compileFor(q).then(() => {
-      if (!this.c.gone && this.qualityTo === q) this.setQuality(q);
+    this.toSig = sig;
+    void this.compileFor(q, g).then(() => {
+      if (!this.c.gone && this.qualityTo === q && this.toSig === sig) this.setQuality(q, g);
     });
   }
 
-  async compileFor(q: Quality) {
+  async compileFor(q: Quality, g: Graphics = graphicsFor(q)) {
     const r = this.c.renderer;
     // the lights as `q` has them (setQuality): how many lamps, which cast shadows
     const stand = new Scene();
     stand.fog = this.c.scene.fog;
     stand.environment = this.c.scene.environment;
-    const lamps = lampsFor(q);
+    const lamps = g.lamps;
     const torches = this.c.torch3.map((t) => t.spot as Object3D);
     const shown = (o: Object3D) => {
       for (let x: Object3D | null = o; x; x = x.parent) if (!x.visible) return false;
@@ -295,9 +301,9 @@ export class Warmup {
       if (lamp >= 0 ? lamp >= lamps || !(o.parent && shown(o.parent)) : !shown(o)) return;
       const l = o.clone(false);
       l.visible = true; // (a lamp `q` lights that's off now)
-      if (o === this.c.sun) l.castShadow = q === "high" || q === "medium";
+      if (o === this.c.sun) l.castShadow = g.shadows > 0;
       const t = torches.indexOf(o);
-      if (t >= 0) l.castShadow = q === "high" && t === 0;
+      if (t >= 0) l.castShadow = g.lightShadows && t === 0;
       stand.add(l);
     });
     // one of each kind of thing drawn (its materials, what its geometry carries)
@@ -324,7 +330,7 @@ export class Warmup {
       const t0 = performance.now();
       const lot: Promise<unknown>[] = [];
       const to = r.getRenderTarget();
-      if (q === "high" || q === "medium") {
+      if (g.finish) {
         this.c.warmTarget ??= new WebGLRenderTarget(4, 4, { colorSpace: LinearSRGBColorSpace });
         r.setRenderTarget(this.c.warmTarget);
       } else r.setRenderTarget(null);
@@ -335,44 +341,48 @@ export class Warmup {
     }
   }
 
-  setQuality(tier: Quality) {
+  setQuality(tier: Quality, g: Graphics = graphicsFor(tier)) {
     // (potato: drawn as lowest, lighter — its pixels and its lamps: plan 90 phase 2)
     this.c.potato = tier === "potato";
     const q = drawnAs(tier);
     this.c.quality = q;
     this.qualityTo = null;
-    this.c.renderer.setPixelRatio(this.c.ratioFor(tier));
+    this.drawnSig = `${tier}|${graphicsSig(g)}`;
+    // (what's drawn with: every setting, the tier's preset with what's set by hand — lib/graphics.ts)
+    setGfxNow(g, tier);
+    this.c.renderer.setPixelRatio(this.c.ratioNow());
     if (!this.c.ratioAtStart && this.c.host) {
       this.c.ratioAtStart = this.c.renderer.getPixelRatio();
       this.c.dprAtStart = window.devicePixelRatio || 1;
     }
-    this.c.sun.castShadow = q === "high" || q === "medium";
-    const size = q === "high" ? 2048 : 1024;
+    this.c.sun.castShadow = g.shadows > 0;
+    const size = g.shadows || 1024;
     if (this.c.sun.shadow.mapSize.x !== size) {
       this.c.sun.shadow.mapSize.set(size, size);
       this.c.sun.shadow.map?.dispose();
       this.c.sun.shadow.map = null;
     }
-    this.c.lamps = lampsFor(tier);
-    this.c.around.grounds?.far?.setQuality(q);
-    // (how far the land and the districts are made: by the tier and the device's memory — plan 91 phase 6)
-    this.c.around.grounds?.setReach(reachFor(tier));
+    this.c.lamps = g.lamps;
+    this.c.around.grounds?.far?.setQuality(g.horizon, g.farTrees);
+    // (how far the land and the districts are made: by the tier and the device's memory — plan 91 phase 6 — or set)
+    this.c.around.grounds?.setReach({ land: g.land, districts: g.districts });
     // the first flashlight (mine) throws shadows on High — its shadow map drawn once now, so it's
     // there even while it's off (a shadow-casting light with no map yet: every lit draw failed —
     // "mismatch between texture format and sampler type" — and only the ink was left)
     for (const [i, tc] of this.c.torch3.entries()) {
-      tc.spot.castShadow = q === "high" && i === 0;
+      tc.spot.castShadow = g.lightShadows && i === 0;
       if (tc.spot.castShadow) tc.spot.shadow.needsUpdate = true;
     }
     this.c.pool.forEach((l, i) => {
       l.visible = i < this.c.lamps;
     });
-    if (q === "high" || q === "medium") {
-      if (this.c.post && this.c.post.lite !== (q === "medium")) {
+    if (g.finish) {
+      const flags = { bloom: g.bloom, grain: g.grain, ao: g.ao };
+      if (this.c.post && postKey(this.c.post.flags) !== postKey(flags)) {
         this.c.post.dispose();
         this.c.post = null;
       }
-      this.c.post ??= new Post3(this.c.renderer, this.c.scene, this.c.camera, q === "medium");
+      this.c.post ??= new Post3(this.c.renderer, this.c.scene, this.c.camera, flags);
       this.c.post.setNight(this.c.nightLevel);
     } else {
       this.c.post?.dispose();
@@ -385,8 +395,6 @@ export class Warmup {
 // the lamps lit at a tier (the pool's first n)
 // (the loading screen: these near me in before it lifts — plan 90)
 const NEAR_M = 20;
-
-const lampsFor = (q: Quality) => (q === "high" ? LAMPS : q === "medium" ? 6 : q === "low" ? 3 : q === "lowest" ? 2 : 0);
 
 /** All of a scene's things in one box, each thing's own box left out when it isn't finite: an
  *  instanced pool hides a block's trees with all-zero matrices (grounds-stream.ts), which three's box

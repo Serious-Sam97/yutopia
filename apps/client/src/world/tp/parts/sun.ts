@@ -1,5 +1,6 @@
 import { LAMPS as GROUND_LAMPS, KART_LAND, standLights } from "@yutopia/shared/grounds";
 import { Vector3 } from "three";
+import { gfxNow } from "@/lib/graphics";
 import { daylight } from "../../art/daylight";
 import type { LightSource } from "../../art/light";
 import type { ThirdPersonView } from "../view";
@@ -133,7 +134,9 @@ export class Sun {
   groundLamps(night: number) {
     const g = this.c.around.grounds;
     const on = Math.min(1, Math.max(0, night * 1.3 - 0.1));
-    const n = this.c.quality === "high" ? GROUND_POOL : this.c.quality === "medium" ? 2 : 1;
+    // (by the lamps lit: the settings' — High's ten, four of the Grounds'; Medium's six, two; one below)
+    const lit = gfxNow().lamps;
+    const n = lit >= 10 ? GROUND_POOL : lit >= 6 ? 2 : 1;
     const near: {
       x: number;
       y: number;

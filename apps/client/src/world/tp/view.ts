@@ -92,6 +92,7 @@ import {
   type WebGLRenderTarget,
 } from "three";
 import { asset } from "@/lib/asset";
+import { gfxNow, graphicsFor, ratioOf } from "@/lib/graphics";
 import { tr } from "@/lib/i18n";
 import type { Quality } from "@/lib/prefs";
 import { chars, loadChars } from "../art/chars-load";
@@ -835,7 +836,8 @@ export class ThirdPersonView {
     // (with alpha: a glass a real player shows through is a clear hole in the frame —
     // live.ts — the page under the canvas there; everywhere else it stays opaque)
     this.renderer = new WebGLRenderer({
-      antialias: opts.quality !== "lowest" && opts.quality !== "potato",
+      // (the settings' antialiasing — the tier's preset with what's set by hand: lib/graphics.ts)
+      antialias: graphicsFor(opts.quality ?? "high").aa,
       powerPreference: "high-performance",
       alpha: true,
     });
@@ -2194,6 +2196,11 @@ void main() {
     this.around.campus.skinAlways = this.level < home;
   }
 
+  /** The frame's pixels now: the settings' resolution, of the screen's own (lib/graphics.ts; a tier's preset is
+   *  what ratioFor gave it). */
+  ratioNow(): number {
+    return ratioOf(gfxNow().res);
+  }
   // the ratio a fresh load picks on this screen at this quality
   ratioFor(q: Quality): number {
     const dpr = window.devicePixelRatio || 1;
@@ -2211,7 +2218,7 @@ void main() {
   // the screen's density changed (a moved window, a zoom): to the new one at once
   private onDpr = () => {
     this.watchDpr();
-    if (this.ratioFor(this.tier) !== this.renderer.getPixelRatio()) this.resize();
+    if (this.ratioNow() !== this.renderer.getPixelRatio()) this.resize();
   };
   private watchDpr() {
     this.dprQuery?.removeEventListener("change", this.onDpr);
@@ -2221,7 +2228,7 @@ void main() {
 
   resize() {
     if (!this.host) return;
-    const ratio = this.ratioFor(this.tier);
+    const ratio = this.ratioNow();
     if (ratio !== this.renderer.getPixelRatio()) {
       this.renderer.setPixelRatio(ratio);
       this.ratioFixes++;
@@ -2470,7 +2477,7 @@ void main() {
     this.ratioIn -= dt;
     if (this.ratioIn <= 0) {
       this.ratioIn = 1;
-      if (this.ratioFor(this.tier) !== this.renderer.getPixelRatio()) this.resize();
+      if (this.ratioNow() !== this.renderer.getPixelRatio()) this.resize();
     }
     if (this.extraBodies) bodies = bodies.concat(this.extraBodies());
     // the furniture's live parts (plan 68: flames, a lava lamp's blobs), on every floor shown, near
@@ -2734,7 +2741,7 @@ void main() {
     this.around.campus.cutAbove(!this.god && this.insideBelowHome(me) ? STOREY - 0.15 : null);
     // (Lowest, a weak CPU: the snow half as thick, the land built in fewer frames)
     const lowest = this.quality === "lowest";
-    this.around.campus.lite = lowest;
+    this.around.campus.lite = gfxNow().weather === "low";
     this.around.quality = this.quality;
     if (this.around.grounds) {
       this.around.grounds.lite = lowest;
@@ -2844,7 +2851,7 @@ void main() {
             onScreen:
               (!hidden3 && this.frustum.intersectsSphere(this.sphere)) ||
               (b.id === meId && first && this.handsOn && handsDoing(b) !== ""),
-            lowQuality: this.quality === "low" || this.quality === "lowest",
+            lowQuality: gfxNow().people === "low",
             mood: this.mood.moodOf(b, shadesNear),
             groundAt: this.body.groundAt,
             rag: this.body.ragSpace,
@@ -2990,7 +2997,7 @@ void main() {
         this.pitch,
         // (a flip turns the body over: the hands drop out of view for it)
         this.lensPart.lensFov !== null || (me.jump?.kind === "flip" && me.jump.stage === "air" && !me.reduced),
-        this.quality === "low" || this.quality === "lowest",
+        gfxNow().people === "low",
       );
     } else if (this.hands) {
       // (out of first person: put by, ready for the next time)
