@@ -57,7 +57,7 @@ const TREES: Record<DrawnQuality, { r1: number; cell: number } | null> = {
   low: null,
   lowest: null,
 };
-/** The near land's reach (grounds-stream.ts RADIUS): the far land's under it there. */
+/** The near land's reach at most (grounds-stream.ts RADIUS; reach.ts nearer): the far land's under it there. */
 const NEAR = 440;
 
 interface Ring {
@@ -143,6 +143,14 @@ export class FarLand {
     return m;
   }
 
+  /** The near land's reach (grounds-stream.ts: by the tier, reach.ts): the far land's hole under it, and its trees past it. */
+  private near = NEAR;
+  setNear(r: number) {
+    if (r === this.near) return;
+    this.near = r;
+    // (every ring made again with its new hole, the old shown meanwhile)
+    for (const ring of this.rings) ring.at = null;
+  }
   setQuality(q: DrawnQuality) {
     if (q === this.quality && this.rings.length) return;
     this.quality = q;
@@ -213,8 +221,8 @@ export class FarLand {
         z0: cz - size / 2,
         n: size / step + 1,
         step,
-        near: { cx: x, cz: z, r: NEAR },
-        trees: tr ? { cx: x, cz: z, r0: NEAR + 80, r1: tr.r1, cell: tr.cell } : null,
+        near: { cx: x, cz: z, r: this.near },
+        trees: tr ? { cx: x, cz: z, r0: this.near + 80, r1: tr.r1, cell: tr.cell } : null,
       }).then((d) => {
         if (this.gone || !this.rings.includes(r)) return;
         r.asked = false;

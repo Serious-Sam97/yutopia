@@ -66,6 +66,7 @@ import {
   lifeTreeMaterial,
   solidUV,
 } from "./life-trees";
+import { deviceMemory, GONE_PAST, type Reach } from "./reach";
 import type { Themes } from "./sky";
 import type { PieceAsk } from "./way-piece";
 import { boulderGeometry, logGeometry, shrubGeometry, stoneGeometry, stumpGeometry } from "./woods3d";
@@ -176,6 +177,12 @@ export class GroundsStream {
   private urgent = false;
   /** the road's next piece within URGENT_ROAD_M last frame: the land gets half the budget, the road the rest */
   private roadUrgent = false;
+  /** How far the land and the districts are made (reach.ts: by the tier, the device's memory, the settings). */
+  private reach = { land: RADIUS, districts: DISTRICT_R, gone: DISTRICT_GONE };
+  setReach(r: Reach) {
+    this.reach = { land: r.land, districts: r.districts, gone: r.districts + GONE_PAST };
+    this.far?.setNear(r.land);
+  }
   /** what's still to build: land blocks wanted and missing, and the rest's steps */
   readonly left = { blocks: 0, statics: 0 };
 
@@ -185,8 +192,9 @@ export class GroundsStream {
     patch: (m: Material) => void,
     hqEast?: number, // (the studio's own width: Grounds3's courtyard bridge starts past it)
   ) {
-    // (the browser keeps fewer chunks than the server: ~36 MB of them — today's land, 1,184, fits)
-    setChunkCap(1500);
+    // (the browser keeps fewer chunks than the server: ~36 MB of them — today's land, 1,184, fits; a device of
+    // 4 GB or less, half — the road pieces' are the workers' now, plan 91 phase 3, the main thread asks fewer)
+    setChunkCap(deviceMemory() <= 4 ? 750 : 1500);
     this.snowTex = new CanvasTexture(snowCanvas(T, 512, 43));
     this.snowTex.colorSpace = SRGBColorSpace;
     this.snowTex.wrapS = RepeatWrapping;
@@ -544,7 +552,7 @@ if (vFade < 0.999) {
       // (a block's nearest point: no land beyond the radius, nor outside the Grounds)
       const dx = Math.max(x0 - x, 0, x - (x0 + T.size));
       const dz = Math.max(z0 - z, 0, z - (z0 + T.size));
-      if (Math.hypot(dx, dz) > RADIUS) return;
+      if (Math.hypot(dx, dz) > this.reach.land) return;
       if (tier < TIERS.length - 1 && Math.hypot(mx - x, mz - z) < T.near) {
         const h = T.size / 2;
         for (const [ox, oz] of [
@@ -561,8 +569,9 @@ if (vFade < 0.999) {
     const S = TIERS[0].size;
     // (the blocks within reach, those on the land's regions: land.ts — the land is long, docs/plan/69 L2)
     const L = landBounds();
-    for (let z0 = Math.floor(Math.max(L.z0, z - RADIUS) / S) * S; z0 < Math.min(L.z1, z + RADIUS); z0 += S)
-      for (let x0 = Math.floor(Math.max(L.x0, x - RADIUS) / S) * S; x0 < Math.min(L.x1, x + RADIUS); x0 += S)
+    const R = this.reach.land;
+    for (let z0 = Math.floor(Math.max(L.z0, z - R) / S) * S; z0 < Math.min(L.z1, z + R); z0 += S)
+      for (let x0 = Math.floor(Math.max(L.x0, x - R) / S) * S; x0 < Math.min(L.x1, x + R); x0 += S)
         if (overlapsLand(x0, z0, x0 + S, z0 + S)) visit(0, x0, z0);
     // build the nearest missing, a few ms a frame — nearest to where you'll be soon, going fast
     const now = performance.now();
@@ -776,8 +785,8 @@ if (vFade < 0.999) {
     this.away.seen = true;
     // the rest
     if (this.away.rest) {
-      if (restD < DISTRICT_R) this.away.rest = false;
-    } else if (restD > DISTRICT_GONE || (first && restD > DISTRICT_R)) {
+      if (restD < this.reach.districts) this.away.rest = false;
+    } else if (restD > this.reach.gone || (first && restD > this.reach.districts)) {
       this.away.restOut ||= now;
       // (not while god mode's remaking it: that one's swapped in first)
       if ((first || now - this.away.restOut > AWAY_MS) && !this.next) {
@@ -789,8 +798,8 @@ if (vFade < 0.999) {
     // the Kart Park
     if (!this.kart || !this.makeKart) return;
     if (this.away.kart) {
-      if (kartD < DISTRICT_R) this.away.kart = false;
-    } else if (kartD > DISTRICT_GONE || (first && kartD > DISTRICT_R)) {
+      if (kartD < this.reach.districts) this.away.kart = false;
+    } else if (kartD > this.reach.gone || (first && kartD > this.reach.districts)) {
       this.away.kartOut ||= now;
       if (first || now - this.away.kartOut > AWAY_MS) {
         this.kart.dispose();
@@ -811,12 +820,21 @@ if (vFade < 0.999) {
     const D = DISTRICT;
     const c = this.restCircle;
     const L = landBounds();
-    for (let z0 = Math.floor(Math.max(L.z0, z - DISTRICT_R) / D) * D; z0 < Math.min(L.z1, z + DISTRICT_R); z0 += D)
-      for (let x0 = Math.floor(Math.max(L.x0, x - DISTRICT_R) / D) * D; x0 < Math.min(L.x1, x + DISTRICT_R); x0 += D) {
+    for (
+      let z0 = Math.floor(Math.max(L.z0, z - this.reach.districts) / D) * D;
+      z0 < Math.min(L.z1, z + this.reach.districts);
+      z0 += D
+    )
+      for (
+        let x0 = Math.floor(Math.max(L.x0, x - this.reach.districts) / D) * D;
+        x0 < Math.min(L.x1, x + this.reach.districts);
+        x0 += D
+      ) {
         const k = `${x0},${z0}`;
         if (this.districts.has(k)) continue;
         // (its nearest point within reach, on the land, not all of it in the rest's circle)
-        if (Math.hypot(Math.max(x0 - x, 0, x - x0 - D), Math.max(z0 - z, 0, z - z0 - D)) > DISTRICT_R) continue;
+        if (Math.hypot(Math.max(x0 - x, 0, x - x0 - D), Math.max(z0 - z, 0, z - z0 - D)) > this.reach.districts)
+          continue;
         if (!overlapsLand(x0, z0, x0 + D, z0 + D)) continue;
         const far = Math.max(
           ...[
@@ -838,7 +856,7 @@ if (vFade < 0.999) {
     for (const [k, g] of this.districts) {
       const [x0, z0] = k.split(",").map(Number);
       const d = Math.hypot(Math.max(x0 - x, 0, x - x0 - D), Math.max(z0 - z, 0, z - z0 - D));
-      if (d > DISTRICT_GONE) {
+      if (d > this.reach.gone) {
         g.dispose();
         this.districts.delete(k);
         continue;

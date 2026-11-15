@@ -226,6 +226,15 @@ On a prod build, the bench of phase 0:
    count by the tier (Potato and Lowest nearer, the fog closer to hide it) and the device's memory
    (`navigator.deviceMemory`); the server told nothing of it (it's the client's view only). Same pixels on High,
    Medium and Low within the fog's reach.
+   Done 2026-11-15 — `tp/reach.ts`: `REACH` by tier — High, Medium, Low the land 440 m and the districts 900 m as
+   they were (the same pixels); **Lowest the districts 700; Potato the land 330, the districts 600**; 4 GB or less
+   (`navigator.deviceMemory`), the districts no further than Lowest's; a district freed 400 m past its reach
+   (`GONE_PAST`), the town and the park parked past it too. The stream's `setReach` (from `Warmup.setQuality`, so
+   Auto's steps too); the far land's hole and its trees follow the near land's reach (`far3d.ts setNear`: its rings
+   made again). The main thread's land chunks kept 750 at 4 GB or less (1,500). The fog isn't brought in: with the
+   long road the air sees kilometres, and the far land's there past the near land (a still on Potato 2 km out: the
+   road on to the horizon, no seam). `reach.test.ts`. CPU 4×, Potato: driving at 240 km/h the land at most 23
+   blocks behind (153), fps 23 (18); arriving 7 km out every district in 17 s (19); High as before.
 7. **Built for a bigger map** (F2b) — what reads the whole map each frame made to read only what's near: the land's
    regions and the districts' grid looked up by cell, not looped; the server's land chunks freed by distance from
    every player (it keeps 4,000 now). **The chunk keys widened** past ±2,048 chunks (client `grounds.ts chunkKey`,

@@ -18,6 +18,7 @@ import {
 } from "three";
 import { drawnAs, type Quality } from "@/lib/prefs";
 import { Post3 } from "../post3d";
+import { reachFor } from "../reach";
 import { Proxy3, Vortex3 } from "../stand3d";
 import type { ThirdPersonView } from "../view";
 import { LAMPS } from "./common";
@@ -354,6 +355,8 @@ export class Warmup {
     }
     this.c.lamps = lampsFor(tier);
     this.c.around.grounds?.far?.setQuality(q);
+    // (how far the land and the districts are made: by the tier and the device's memory — plan 91 phase 6)
+    this.c.around.grounds?.setReach(reachFor(tier));
     // the first flashlight (mine) throws shadows on High — its shadow map drawn once now, so it's
     // there even while it's off (a shadow-casting light with no map yet: every lit draw failed —
     // "mismatch between texture format and sampler type" — and only the ink was left)
