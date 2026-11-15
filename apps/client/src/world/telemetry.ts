@@ -70,8 +70,17 @@ function count(perf: FramePerf, get: () => Tally, cap: () => number): () => void
   let last = 0;
   let t0 = 0;
   let work = 0; // the frame before's main-thread time
+  // (behind the loading screen: not play's frames — a report's first window read its slow frames; the user's
+  // fps counter did too, 2026-11-15)
+  let loading = false;
   perf.begin = function (this: FramePerf) {
     const t = begin.call(this);
+    loading = hud.get().loading.on;
+    if (loading) {
+      last = 0;
+      work = 0;
+      return t;
+    }
     const y = get();
     if (last) {
       const g = t - last;
@@ -87,6 +96,7 @@ function count(perf: FramePerf, get: () => Tally, cap: () => number): () => void
   };
   perf.lap = function (this: FramePerf, stage: string, from: number) {
     const t = lap.call(this, stage, from);
+    if (loading) return t;
     const y = get();
     y.stages.set(stage, (y.stages.get(stage) ?? 0) + t - from);
     y.cur.set(stage, (y.cur.get(stage) ?? 0) + t - from);
@@ -94,6 +104,7 @@ function count(perf: FramePerf, get: () => Tally, cap: () => number): () => void
   };
   perf.end = function (this: FramePerf) {
     end.call(this);
+    if (loading) return;
     const ms = performance.now() - t0;
     work = ms;
     const y = get();

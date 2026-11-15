@@ -2,7 +2,7 @@ import type { WorldController } from "../controller";
 import { hud } from "../store";
 
 /** What Loading reads of the WorldController (plan 72 phase 4: its dependencies, said). */
-export type LoadingHost = Pick<WorldController, "G" | "cars" | "life" | "tp" | "quality">;
+export type LoadingHost = Pick<WorldController, "G" | "cars" | "life" | "tp" | "quality" | "framePerf">;
 
 export class Loading {
   constructor(private readonly c: LoadingHost) {}
@@ -74,6 +74,8 @@ export class Loading {
       if (!built) console.warn(stuck ? "loading stuck" : "loading cut short", r);
       this.loadFrom = 0;
       this.watchFiles(false);
+      // (the frame stats from here: play's, not the loading's slow frames — Show frame stats, the bench)
+      this.c.framePerf.reset();
       if (this.c.tp) this.c.tp.warmup.warming = false;
       hud.set((h) => ({ loading: { ...h.loading, on: false, progress: 1 } }));
       return;

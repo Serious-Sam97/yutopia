@@ -18,6 +18,7 @@ function rig(f: Fake) {
     G: {},
     life: {},
     cars: {},
+    framePerf: { reset() {} },
     get tp() {
       return f.tp
         ? { warmup: { readiness: () => ({ done: f.done, of: f.of }), qualityTo: null, warming: true, drawn: f.drawn } }
