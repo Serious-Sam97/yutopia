@@ -166,6 +166,12 @@ Measured on production's own reports a week after each release (against the tabl
    The friends' own rooms (production's world) not here to measure: the reports' `drawsBy` (phase 1) will say.
 5. **Fewer objects walked** — what never moves sealed out of the per-frame matrices walk on every tier (only Low and
    Lowest skip any today), marked where it's built; the scene walk skipping still groups out of sight in one step.
+   Measured 2026-11-15, nothing kept: **High and Medium on the lazy walk** (three's own pass, every object every
+   frame, was the suspect: ~7,000) — A/B in the page, walking: High 2× +0.3% studio, +0.8% lot, Low the same (it's
+   lazy already): noise — reverted. Low's own walk (15% of the proxy's main thread indoors, 7% out) only gets
+   cheaper by sealing what never moves, and the biggest of it, the land, was found unsafe in plan 89 (it moves things
+   unannounced). Below-cull's `across` (5% indoors) depends on the eye: the same answer only standing quite still,
+   and it was walking that cost — left.
 6. **The land's questions** — `heightAt`/`terrainAt`/`waterSide` asked every frame answered from what's cached, or
    made ahead in the land worker.
 7. **The stutter** — by phase 0's causes: what's built or uploaded mid-play made ahead or spread over frames, garbage
