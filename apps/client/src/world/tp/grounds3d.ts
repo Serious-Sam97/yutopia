@@ -726,7 +726,8 @@ export class Grounds3 {
   ) {
     this.sh = o.shared ?? groundsShared(T);
     // (in the game a step a frame or so: `step()`; for a still, all at once)
-    const run = (f: () => void) => (o.stream ? this.pending.push(f) : f());
+    // (`at`, `g`: a district's step's place and group — the nearest of the first group left made first: plan 91)
+    const run = (f: () => void, at?: { x: number; z: number }, g = 0) => (o.stream ? this.queue(f, at, g) : f());
     // a district: its ways' stretches, its buildings, its lamps
     if (o.part === "district" && o.own) {
       const r = o.own;
@@ -749,27 +750,37 @@ export class Grounds3 {
         for (let z0 = r.z0; z0 < r.z1; z0 += P)
           for (let x0 = r.x0; x0 < r.x1; x0 += P)
             if (by.has(((z0 - r.z0) / P) * n + (x0 - r.x0) / P))
-              run(() => {
-                this.piece = { x0, z0, x1: x0 + P, z1: z0 + P };
-                this.ways(w);
-                this.piece = null;
-              });
+              run(
+                () => {
+                  this.piece = { x0, z0, x1: x0 + P, z1: z0 + P };
+                  this.ways(w);
+                  this.piece = null;
+                },
+                { x: x0 + P / 2, z: z0 + P / 2 },
+              );
       }
+      // (the asphalt, the bridges, the crossings first — what you drive on —, then what stands by them,
+      // the lamps last: they gather every light)
       run(() => this.waysAll());
       // (what lines the long road: a piece at a time too)
       if (LONG_ROAD)
         for (let z0 = r.z0; z0 < r.z1; z0 += P)
           for (let x0 = r.x0; x0 < r.x1; x0 += P)
-            run(() => {
-              this.piece = { x0, z0, x1: x0 + P, z1: z0 + P };
-              this.longDress();
-              this.piece = null;
-            });
-      for (const b of BUILDINGS) if (this.near(b.x0, b.z0, 60)) run(() => this.building(b));
+            run(
+              () => {
+                this.piece = { x0, z0, x1: x0 + P, z1: z0 + P };
+                this.longDress();
+                this.piece = null;
+              },
+              { x: x0 + P / 2, z: z0 + P / 2 },
+              1,
+            );
+      for (const b of BUILDINGS)
+        if (this.near(b.x0, b.z0, 60)) run(() => this.building(b), { x: (b.x0 + b.x1) / 2, z: (b.z0 + b.z1) / 2 }, 1);
       // (its water: Silver Lake's and the creek's out on the long road, a grown lake's — the rest's
       // circle was the only one to draw any, and it's round the town)
-      run(() => this.water());
-      run(() => this.lamps());
+      run(() => this.water(), undefined, 1);
+      run(() => this.lamps(), undefined, 2);
       return;
     }
     const rest = o.part !== "kart";
@@ -867,10 +878,37 @@ export class Grounds3 {
     }
     this.takes = [];
   }
-  private pending: (() => void)[] = [];
+  private pending: { f: () => void; x: number; z: number; at: boolean; g: number }[] = [];
+  private queue(f: () => void, at?: { x: number; z: number }, g = 0) {
+    this.pending.push({ f, x: at?.x ?? 0, z: at?.z ?? 0, at: !!at, g });
+  }
   /** steps still to build (`step()`) */
   get left(): number {
     return this.pending.length;
+  }
+  /** Where what's built first is nearest (a district's: the stream's look-ahead); null: in order. */
+  focus: { x: number; z: number } | null = null;
+  /** The next step (`step()`'s): its index, and its priority — its group, then how far from the focus. */
+  private pick(): { i: number; key: number } {
+    let i = -1;
+    let key = Number.POSITIVE_INFINITY;
+    const F = this.focus;
+    for (let j = 0; j < this.pending.length; j++) {
+      const p = this.pending[j];
+      // (in order when there's no focus or the step has no place: the first of its group)
+      const d = F && p.at ? Math.hypot(p.x - F.x, p.z - F.z) : 0;
+      const k = p.g * 1e6 + d;
+      if (k < key) {
+        key = k;
+        i = j;
+        if (!F) break;
+      }
+    }
+    return { i, key };
+  }
+  /** What's next's priority (lower first): its group × 1e6 + metres from the focus; Infinity when done. */
+  nextKey(): number {
+    return this.pending.length ? this.pick().key : Number.POSITIVE_INFINITY;
   }
   // the stored blocks' storeys above their ground floor (gone while you're in one); `under`: how
   // high the eyes are still in it (up on its roof they aren't: it's all there)
@@ -887,8 +925,9 @@ export class Grounds3 {
   private lastNight = 0;
   /** Built a step more (the game's: a few ms a frame). The new meshes, to patch. False: all built. */
   step(): Object3D[] | false {
-    const f = this.pending.shift();
-    if (!f) return false;
+    const { i } = this.pick();
+    if (i < 0) return false;
+    const f = this.pending.splice(i, 1)[0].f;
     const n = this.root.children.length;
     f();
     if (!this.pending.length) this.setNight(this.lastNight);
@@ -4853,7 +4892,7 @@ export class Grounds3 {
           this.parkMod = { m, T3, native };
         });
       }
-      this.pending.push(() => this.kartPark());
+      this.queue(() => this.kartPark());
       this.waiting = true;
       return;
     }
@@ -4909,7 +4948,7 @@ export class Grounds3 {
         return;
       }
       if (!parts.next().done) {
-        this.pending.push(step);
+        this.queue(step);
         return;
       }
       this.circuitBuilds.delete(made);
@@ -4946,14 +4985,14 @@ export class Grounds3 {
         // short — step() — and the new one go unlit)
         if (old) {
           this.circuitGone.add(old);
-          this.pending.push(() => {
+          this.queue(() => {
             this.circuitGone.delete(old);
             old.dispose();
           });
         }
       }
     };
-    this.pending.push(step);
+    this.queue(step);
   }
 
   // ── the change's show (docs/plan/47-the-track-changer.md, phase 6): the new circuit drawn behind

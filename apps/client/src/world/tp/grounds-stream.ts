@@ -108,6 +108,11 @@ const DISTRICT_WAIT = 200; // (waited for behind the loading screen: those this 
 const BUDGET_MS = 6; // building a frame
 const MADE_CAP = 256; // the land's blocks made and waiting to be placed, at most
 const BOOST_MS = 40; // …and behind the loading screen, where a long frame doesn't show
+// (plan 91 phase 2: one build lane — what you'd see first first; the land and the districts share a frame's
+// budget, neither waiting for the other to have nothing to do)
+const URGENT_M = 64; // the land this near where you'll be: urgent
+const URGENT_ROAD_M = 160; // a district's road piece (its asphalt, its bridges) this near: urgent
+const STEP_MIN_MS = 1.5; // the steps' share at least, whatever the land took
 const CASTERS_R = 34; // trees this near cast the sun's shadow
 export const CASTER_LAYER = 1; // (seen by the sun's shadow camera only)
 
@@ -159,6 +164,13 @@ export class GroundsStream {
    *  meanwhile — a coarser block — stays) */
   lite = false;
   private turn = 0;
+  /** what's under you or just ahead still missing (the land within URGENT_M, the road's next piece within
+   *  URGENT_ROAD_M): built every frame, Lowest's one in three aside (plan 91 phase 2) */
+  private urgent = false;
+  /** steps (the rest's, the districts') waiting last frame */
+  private stepsWaiting = false;
+  /** the road's next piece within URGENT_ROAD_M last frame: the land gets half the budget, the road the rest */
+  private roadUrgent = false;
   /** what's still to build: land blocks wanted and missing, and the rest's steps */
   readonly left = { blocks: 0, statics: 0 };
 
@@ -501,7 +513,7 @@ if (vFade < 0.999) {
     // (Lowest: what's wanted, built and shown worked out one frame in three — the land two frames
     // behind at most, what covers it there meanwhile)
     this.turn = (this.turn + 1) % 3;
-    if (this.lite && !this.boost && this.turn) {
+    if (this.lite && !this.boost && this.turn && !this.urgent) {
       if (target) this.statics.cutAt(target.x, target.y, target.z);
       this.statics.faceCards(cam, this.halo);
       this.kart?.faceCards(cam, this.halo);
@@ -552,6 +564,8 @@ if (vFade < 0.999) {
     missing.sort((a, b) => distTo(a, ax, az) - distTo(b, ax, az));
     const wanted = new Set(want);
     const budget = this.boost ? BOOST_MS : this.lite ? BUDGET_MS / 2 : BUDGET_MS;
+    // (the land's share: all of it, but half when the road just ahead is waiting)
+    const landShare = this.boost || !this.roadUrgent ? budget : budget / 2;
     const t0 = performance.now();
     let built = 0;
     // (what the workers made: put together nearest first, under the budget — one a frame at least;
@@ -564,7 +578,7 @@ if (vFade < 0.999) {
       pool.made.sort((a, b) => distTo(a.key, ax, az) - distTo(b.key, ax, az));
       // (never more waiting than this: the furthest dropped, asked again when wanted — plan 91 phase 1)
       if (pool.made.length > MADE_CAP) pool.made.length = MADE_CAP;
-      while (pool.made.length && (built === 0 || performance.now() - t0 < budget)) {
+      while (pool.made.length && (built === 0 || performance.now() - t0 < landShare)) {
         this.place(pool.made.shift() as BlockData);
         built++;
       }
@@ -576,7 +590,7 @@ if (vFade < 0.999) {
     if (pool) pool.ask(missing.map(askOf), this.boost ? 1e9 : 2);
     else
       for (const k of missing) {
-        if (performance.now() - t0 > budget) break;
+        if (performance.now() - t0 > landShare) break;
         this.place(blockData(askOf(k), editsVersion));
         built++;
       }
@@ -610,31 +624,56 @@ if (vFade < 0.999) {
     }
     if (this.poolsDirty) this.fillPools();
     if (target) this.statics.cutAt(target.x, target.y, target.z);
-    // the rest of the Grounds (the ways, the buildings, the lamps…), a few ms a frame (made
-    // again: that, then swapped in whole)
+    // the rest of the Grounds (the ways, the buildings, the lamps…) and the districts round you, in what's left
+    // of the budget (a share at least): the rest first while it's being made (the town, behind the loading
+    // screen), then the districts' steps by what you'd see first — their road under you and ahead before
+    // what stands by it, the nearest district's before the next's — and god mode's remade rest last
     const s0 = performance.now();
-    // (made again behind what's shown: not in a frame the land's had its share — one long step
-    // on top of a block is a frame missed)
-    const making = this.statics.left
-      ? this.statics
-      : this.kart?.left
-        ? this.kart
-        : built && !this.boost
-          ? null
-          : this.next;
-    const stepMs = this.boost ? BOOST_MS : this.lite ? 2 : 4;
+    // (what the land left; the road just ahead a step at least, whatever the land took)
+    const stepMs = this.boost ? BOOST_MS : Math.max(this.roadUrgent ? STEP_MIN_MS : 0, budget - (s0 - t0));
+    const making = this.statics.left ? this.statics : this.kart?.left ? this.kart : null;
     while (making && performance.now() - s0 < stepMs) {
       const added = making.step();
       if (!added) break;
-      this.patchAdded(added, making === this.next);
-    }
-    // the districts round you, out past the rest's circle: the nearest being made, in what's left
-    const district = this.districtsFrame(x, z, !!making || (built > 0 && !this.boost));
-    while (district && performance.now() - s0 < stepMs) {
-      const added = district.step();
-      if (!added) break;
       this.patchAdded(added, false);
     }
+    // (the districts made and freed round you, ticked: every frame)
+    let district = this.districtsFrame(x, z, ax, az);
+    let roadNext = Number.POSITIVE_INFINITY;
+    if (!making) {
+      let steps = 0;
+      while (district && performance.now() - s0 < stepMs) {
+        const added = district.step();
+        if (!added) {
+          // (done, or waiting on what's loading: the next one by priority)
+          if (district.left) break;
+          district = this.pickDistrict(ax, az);
+          continue;
+        }
+        steps++;
+        this.patchAdded(added, false);
+        // (now and then: another district's step may be nearer now)
+        if (steps % 8 === 0) district = this.pickDistrict(ax, az);
+      }
+      roadNext = this.roadNext;
+      while (this.next && performance.now() - s0 < stepMs) {
+        const added = this.next.step();
+        if (!added) break;
+        this.patchAdded(added, true);
+      }
+    }
+    this.stepsWaiting = !!making || this.nextDistrict !== null || !!this.next?.left;
+    // urgent next frame: the land just round where you'll be, or the road's next piece near
+    this.roadUrgent = roadNext < URGENT_ROAD_M;
+    this.urgent = this.roadUrgent;
+    if (!this.urgent)
+      for (const k of missing) {
+        if (distTo(k, ax, az) > URGENT_M) break;
+        if (!this.blocks.get(k)?.mesh) {
+          this.urgent = true;
+          break;
+        }
+      }
     if (this.gone && --this.gone.frames <= 0) {
       this.gone.g.dispose();
       this.gone = null;
@@ -685,9 +724,12 @@ if (vFade < 0.999) {
       this.prepare?.(o);
     }
   }
-  /** The districts round (x, z): those wanted made, those far freed; the nearest still being made
-   *  (none while `busy`: the rest's or the land's turn this frame). */
-  private districtsFrame(x: number, z: number, busy: boolean): Grounds3 | null {
+  /** the district `districtsFrame` picked last, and its next step's priority (`Grounds3.nextKey`) */
+  private nextDistrict: Grounds3 | null = null;
+  private roadNext = Number.POSITIVE_INFINITY;
+  /** The districts round (x, z): those wanted made, those far freed; the one whose next step comes first
+   *  (its road nearest where you'll be, `ax, az`) — null when none is left to make. */
+  private districtsFrame(x: number, z: number, ax: number, az: number): Grounds3 | null {
     const D = DISTRICT;
     const c = this.restCircle;
     const L = landBounds();
@@ -714,8 +756,6 @@ if (vFade < 0.999) {
         this.root.add(g.root);
         this.districts.set(k, g);
       }
-    let next: Grounds3 | null = null;
-    let best = Number.POSITIVE_INFINITY;
     for (const [k, g] of this.districts) {
       const [x0, z0] = k.split(",").map(Number);
       const d = Math.hypot(Math.max(x0 - x, 0, x - x0 - D), Math.max(z0 - z, 0, z - z0 - D));
@@ -731,10 +771,6 @@ if (vFade < 0.999) {
         was.dispose();
         this.oldDistricts.delete(k);
       }
-      if (g.left && d < best) {
-        best = d;
-        next = g;
-      }
     }
     // (one as it was with no new one wanted there: gone)
     for (const [k, g] of this.oldDistricts) {
@@ -744,7 +780,25 @@ if (vFade < 0.999) {
         this.oldDistricts.delete(k);
       }
     }
-    return busy ? null : next;
+    return this.pickDistrict(ax, az);
+  }
+  /** Of the districts left to make, the one whose next step comes first from where you'll be (`ax, az`). */
+  private pickDistrict(ax: number, az: number): Grounds3 | null {
+    let next: Grounds3 | null = null;
+    let best = Number.POSITIVE_INFINITY;
+    for (const g of this.districts.values()) {
+      if (!g.left) continue;
+      g.focus = { x: ax, z: az };
+      const k = g.nextKey();
+      if (k < best) {
+        best = k;
+        next = g;
+      }
+    }
+    this.nextDistrict = next;
+    // (the road's next piece's metres from where you'll be: group 0's)
+    this.roadNext = best < 1e6 ? best : Number.POSITIVE_INFINITY;
+    return next;
   }
 
   private ancestorBuilt(k: string): string | null {

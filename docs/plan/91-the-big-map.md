@@ -137,6 +137,24 @@ On a prod build, the bench of phase 0:
    then the land round you, then what stands (buildings, lamps, props), then what's far; going fast, what's ahead
    first (as the land's `LOOK_S` now). No lane waits for another to finish its frame: each gets its share of the
    budget. The asphalt with the land it lies on — a road block never shown as dirt while its land is.
+   Done 2026-11-15 — a district's steps carry their place and group (`Grounds3.queue`): its road pieces, the
+   crossings and the bridges first (group 0), what stands by them next (the long road's dressing, buildings,
+   water: 1), the lamps last (2); `step()` takes the first group's nearest to its `focus` (the stream's look-ahead
+   point). The stream (`grounds-stream.ts`) picks the district whose next step comes first (`pickDistrict`, by
+   `nextKey`: group, then metres), every frame — not only in one the land placed nothing; the land takes the
+   budget but **half of it when the road's next piece is within 160 m** (`URGENT_ROAD_M`), the road a step at
+   least then; the land within 64 m of where you'll be or the road near is urgent: Lowest/Potato build it every
+   frame, not one in three. CPU 4×:
+
+   | | Before | After |
+   |---|---|---|
+   | Driving at 240 km/h: seconds with dirt under you (of 29) | Potato 25 · High 6 | **0 · 0** |
+   | Arriving 7 km out: the asphalt under you | 7–8 s · 4–5 s | **2 s · 2 s** |
+   | Driving: the land's blocks behind, at most | 77 · 19 | 92 · 37 |
+   | Driving: fps (the bench's average, teleporting 10 a second) | 39 · 22 | 25 · 17 |
+
+   The road there costs frames on a slow CPU: a road piece is a 32 m stretch made on the main thread — phase 3's.
+   Potato's districts 7 km out still not all in a minute (the dressing after every road within 900 m).
 3. **The districts in workers** (F3a) — a district's pieces (the ways' ribbons, the ground's props, the buildings'
    shells) made as data in the land's workers (the same shared code: `Grounds3`'s builders moved to plain arrays),
    the main thread making only meshes from them, a few a frame, as the land's blocks.
