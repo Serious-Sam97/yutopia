@@ -92,6 +92,26 @@ Measured on production's own reports a week after each release (against the tabl
    the land's props, cars, lights) and **the objects walked by source**; **the frame against people near** (0, 1, 5,
    10, 20); **every frame over 50 ms with its cause** (land streaming, a compile, garbage collection, someone coming
    in, an upload); the client's physics' share; Firefox beside Chrome. Written here; each phase after is sized by it.
+   Done 2026-11-15 (`e2e/weight.mts census`, a prod build, an M1's proxy on Low — Bia, noon, still weather):
+
+   | Spot | Draws: the Grounds · cars · people · my floor | Objects walked | Frame, 0 · 5 · 10 · 20 people near |
+   |---|---|---|---|
+   | Studio (floor 4) | 329: **216** · 46 · 37 · 18 | ~6,300 | 15.1 · 19.9 · 23.8 · 32.3 ms |
+   | Lot | 667: 286 · 65 · 37 · 173 | ~7,600 | 17.0 · 21.3 · 26.1 · 35.1 ms |
+   | Lawn | 1,154: 314 · **463** · 37 · 244 | ~7,600 | 26.0 · 30.5 · 34.3 · 43.8 ms |
+   | Floor 2 (empty) | 412: 227 · 46 · 37 · 14 (+ floor 0: 77) | ~7,600 | 15.4 · 20.7 · 24.9 · 33.1 ms |
+
+   - **A person near: ~0.85 ms and ~16 draws** on the proxy (20 → the frame doubles). (Production's one person:
+     ~3.5 ms on the friends' machines.)
+   - **The Grounds draw 216–314 times from everywhere** — floor 4 through its windows too; the cars 46–463 (the lawn:
+     the park's).
+   - **The main thread** (self time walking, 5 s; minified names read off the build): `lazyMatrices`' walk of every
+     object **15% indoors**, 7% out; `below-cull`'s `across` 5% indoors; three's scene walk 6.5–8%; the draws'
+     submission (renderBufferDirect, uniforms, uploads, vertex arrays) ~20–25%; a Grounds lookup on a 28 m grid ~2%
+     out. The client's physics didn't show in the top 30.
+   - **Frames over 50 ms**: 2–8 in 12 s walking, each 51–70 ms, all one rAF callback (the frame itself: 2–3× the
+     average) — no compile, upload or GC of their own in the attribution; the frame's own work peaking.
+   - Firefox and the real M1's GPU not measured here (no M1); production's reports after release will say.
 1. **Reports that say more** (F5a) — the worst frame's stages, people near by count, draws and objects by kind, the
    GPU-bound flag. Released with plan 89 and this plan together (F1b): production's table above is the before; the
    after is the reports of the week from the release.

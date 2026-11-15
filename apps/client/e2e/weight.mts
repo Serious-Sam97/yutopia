@@ -28,6 +28,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from "node:path";
 import { crc32, deflateSync, gunzipSync, gzipSync } from "node:zlib";
 import { type Browser, type CDPSession, chromium, type Page, request } from "@playwright/test";
+import { Client, type Room } from "colyseus.js";
 
 const mode = process.argv[2] ?? "all";
 const base = process.env.YUTOPIA_E2E_URL ?? "http://localhost:3107";
@@ -921,6 +922,234 @@ function diff(a: string, b: string) {
 
 const save = (name: string, data: unknown) =>
   writeFileSync(join(OUT, `${name}.json`), `${JSON.stringify(data, null, 1)}\n`);
+
+// ── census (docs/plan/90-the-friends-machines.md, phase 0) ──
+// What a frame is made of, by where it comes from: the draws (each pass apart), the objects three walks, the main
+// thread's time (a CPU profile, walking), the frame against people near (bots by the dev world-server's `bot:`
+// tokens, stood round me), and every frame over 50 ms with what ran in it (Chrome's long-animation-frame entries).
+const WORLD = process.env.YUTOPIA_WORLD_WS ?? "ws://localhost:2567";
+
+// one frame's draws, by source (the nearest labelled ancestor: a part of the view by its field's name, or a person)
+async function drawsBySource(page: Page) {
+  return page.evaluate(async () => {
+    const c = (window as any).__yutopia;
+    const tp = c.tp;
+    const R = tp.renderer;
+    const labels = new Map<any, string>();
+    for (const [k, v] of Object.entries(tp)) {
+      const o = v as any;
+      if (o?.isObject3D) labels.set(o, k);
+      else if (o && typeof o === "object" && !Array.isArray(o) && !(o instanceof Map))
+        for (const [k2, v2] of Object.entries(o))
+          if ((v2 as any)?.isObject3D && !labels.has(v2)) labels.set(v2, `${k}.${k2}`);
+    }
+    for (const [f, b] of tp.floors ?? []) labels.set(b.world.root, f === c.level ? "floor (mine)" : `floor ${f}`);
+    if (tp.around?.grounds?.root) labels.set(tp.around.grounds.root, "grounds");
+    for (const [, p] of tp.people3 ?? []) labels.set(p.root, "people");
+    const label = (o: any) => {
+      for (let x = o; x; x = x.parent) {
+        const l = labels.get(x);
+        if (l) return l;
+        if (x.parent === tp.scene) return `scene:${x.name || x.type}`;
+      }
+      return "?";
+    };
+    const by: Record<string, number> = {};
+    await new Promise<void>((done) => {
+      const fr = tp.frame;
+      const rbd = R.renderBufferDirect;
+      tp.frame = (...a: unknown[]) => {
+        tp.frame = fr;
+        R.renderBufferDirect = function (cam: any, scene: any, geo: any, mat: any, obj: any, group: any) {
+          const rt = R.getRenderTarget();
+          const pass = !rt ? "" : rt === tp.sun?.shadow?.map ? "shadow " : "target ";
+          const k = pass + label(obj);
+          by[k] = (by[k] ?? 0) + 1;
+          return rbd.call(this, cam, scene, geo, mat, obj, group);
+        };
+        try {
+          return fr.apply(tp, a);
+        } finally {
+          R.renderBufferDirect = rbd;
+          done();
+        }
+      };
+    });
+    // the objects three walks, by the same sources
+    const objs: Record<string, { all: number; visible: number }> = {};
+    tp.scene.traverse((o: any) => {
+      const k = label(o);
+      objs[k] ??= { all: 0, visible: 0 };
+      objs[k].all++;
+    });
+    tp.scene.traverseVisible((o: any) => {
+      const k = label(o);
+      objs[k] ??= { all: 0, visible: 0 };
+      objs[k].visible++;
+    });
+    const sort = <T,>(o: Record<string, T>, f: (v: T) => number) =>
+      Object.fromEntries(
+        Object.entries(o)
+          .sort((a, b) => f(b[1]) - f(a[1]))
+          .slice(0, 18),
+      );
+    const total = Object.values(by).reduce((a, b) => a + b, 0);
+    return { draws: total, by: sort(by, (v) => v), objects: sort(objs, (v) => v.all) };
+  });
+}
+
+// the main thread's time, walking: a CPU profile's self time, by function and by file
+async function profile(page: Page, cdp: CDPSession, s: number) {
+  await cdp.send("Profiler.enable");
+  await cdp.send("Profiler.setSamplingInterval", { interval: 500 });
+  await pace(page);
+  await page.waitForTimeout(800);
+  await cdp.send("Profiler.start");
+  await page.waitForTimeout(s * 1000);
+  const { profile: pr } = (await cdp.send("Profiler.stop")) as any;
+  await stopPace(page);
+  const nodes = new Map<number, any>(pr.nodes.map((n: any) => [n.id, n]));
+  const self = new Map<number, number>();
+  for (let i = 0; i < pr.samples.length; i++)
+    self.set(pr.samples[i], (self.get(pr.samples[i]) ?? 0) + (pr.timeDeltas[i] ?? 0));
+  const byFn = new Map<string, number>();
+  const byFile = new Map<string, number>();
+  let busy = 0;
+  for (const [id, us] of self) {
+    const cf = nodes.get(id).callFrame;
+    if (cf.functionName === "(idle)" || cf.functionName === "(program)") continue;
+    busy += us;
+    const file = (cf.url.split("/").pop() || cf.functionName).replace(/\?.*$/, "");
+    const fn = `${cf.functionName || "(anon)"} ${file}:${cf.lineNumber + 1}:${cf.columnNumber + 1}`;
+    byFn.set(fn, (byFn.get(fn) ?? 0) + us);
+    byFile.set(file, (byFile.get(file) ?? 0) + us);
+  }
+  const top = (m: Map<string, number>, n: number) =>
+    [...m.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, n)
+      .map(([k, v]) => [k, +((v / busy) * 100).toFixed(1)]);
+  return { busyMs: Math.round(busy / 1000), wallMs: s * 1000, byFn: top(byFn, 30), byFile: top(byFile, 15) };
+}
+
+// bots stood round me (in front, a ring 2–6 m out), as long as they're wanted
+async function botsRound(page: Page, n: number, from: number): Promise<Room[]> {
+  const me = await page.evaluate(() => {
+    const c = (window as any).__yutopia;
+    const p = c.room.state.players.get(c.room.sessionId);
+    return { x: p.x, y: p.y, z: p.z, l: p.level, yaw: c.tp?.camYaw ?? 0 };
+  });
+  const rooms: Room[] = [];
+  for (let i = 0; i < n; i++) {
+    const id = from + i;
+    const r = await new Client(WORLD).joinOrCreate("world", { token: `bot:${id}:Bench ${id % 1000}` });
+    r.onMessage("*", () => {});
+    const a = (i / Math.max(1, n)) * Math.PI * 2;
+    const d = 2 + (i % 4);
+    const x = me.x + Math.cos(a) * d;
+    const y = me.y + Math.sin(a) * d;
+    let seq = 0;
+    const put = () =>
+      r.send("pos", {
+        x,
+        y,
+        z: me.z,
+        l: me.l,
+        a: 0,
+        seq: ++seq,
+        mv: 0,
+        yaw: Math.round(((a + Math.PI) / (Math.PI * 2)) * 256) & 255,
+        pitch: 0,
+        mt: Date.now() >>> 0,
+      });
+    put();
+    setTimeout(put, 600);
+    rooms.push(r);
+  }
+  return rooms;
+}
+
+// every frame over 50 ms while walking `s` s: its length, what blocked, the scripts in it
+async function longFrames(page: Page, s: number) {
+  await page.evaluate(() => {
+    const w = window as any;
+    w.__loaf = [];
+    w.__loafObs?.disconnect();
+    w.__loafObs = new PerformanceObserver((l) => {
+      for (const e of l.getEntries() as any[])
+        if (e.duration > 50)
+          w.__loaf.push({
+            ms: Math.round(e.duration),
+            blocking: Math.round(e.blockingDuration ?? 0),
+            render: Math.round((e.renderStart ? e.startTime + e.duration - e.renderStart : 0) || 0),
+            scripts: (e.scripts ?? [])
+              .sort((a: any, b: any) => b.duration - a.duration)
+              .slice(0, 3)
+              .map(
+                (x: any) =>
+                  `${Math.round(x.duration)}ms ${x.invokerType}:${x.invoker} ${x.sourceFunctionName || ""} ${(x.sourceURL || "").split("/").pop()}:${x.sourceCharPosition}`,
+              ),
+          });
+    });
+    w.__loafObs.observe({ type: "long-animation-frame", buffered: false });
+  });
+  await pace(page);
+  await page.waitForTimeout(s * 1000);
+  await stopPace(page);
+  return page.evaluate(() => (window as any).__loaf);
+}
+
+async function census() {
+  const out: Record<string, unknown> = {};
+  const cf = { name: `low-m1 (cpu ${M1}×)`, quality: "low", dpr: 2, cpu: M1 };
+  const browser = await chromium.launch({ args: [...GPU, ...UNCAPPED] });
+  const { page } = await open(browser, { quality: cf.quality, dpr: cf.dpr, maxFps: 0 });
+  const cdp = await page.context().newCDPSession(page);
+  let botId = 930_000 + Math.floor(Math.random() * 50_000);
+  for (const s of (process.env.SPOTS ?? "studio,lot,lawn,floor2").split(",")) {
+    await goTo(page, ALL_SPOTS[s]);
+    await hold(page);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: cf.cpu });
+    await page.waitForTimeout(1500);
+    const draws = await drawsBySource(page);
+    const prof = await profile(page, cdp, 5);
+    const loaf = await longFrames(page, 12);
+    // the frame against people near: 0, 5, 10, 20 (standing still)
+    const people: Record<string, unknown> = {};
+    let bots: Room[] = [];
+    for (const n of [0, 5, 10, 20]) {
+      if (n > bots.length) {
+        bots = bots.concat(await botsRound(page, n - bots.length, botId));
+        botId += n;
+        await page.waitForTimeout(6000);
+      }
+      const l = await live(page, SECONDS);
+      people[n] = {
+        fps: l.fps,
+        frameMs: l.frameMs,
+        draws: l.draws,
+        over50: l.over50,
+        near: await page.evaluate(() => (window as any).__yutopia.tp.people3.size),
+      };
+    }
+    for (const b of bots) await b.leave().catch(() => {});
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+    await page.waitForTimeout(2000);
+    out[s] = { draws, profile: prof, longFrames: loaf, people };
+    console.log(`\n== ${cf.name} · ${s}: ${draws.draws} draws`);
+    console.log(`  draws by source: ${JSON.stringify(draws.by)}`);
+    console.log(`  objects by source: ${JSON.stringify(draws.objects)}`);
+    console.log(`  main thread busy ${prof.busyMs} of ${prof.wallMs} ms; by file: ${JSON.stringify(prof.byFile)}`);
+    console.log(`  top functions: ${JSON.stringify(prof.byFn.slice(0, 20))}`);
+    console.log(`  people near → frame: ${JSON.stringify(people)}`);
+    console.log(`  frames over 50 ms in 12 s walking: ${loaf.length}`);
+    for (const f of loaf.slice(0, 8)) console.log(`    ${f.ms} ms (render ${f.render}): ${f.scripts.join(" | ")}`);
+  }
+  await browser.close();
+  return out;
+}
+
+if (mode === "census") save("census", await census());
 if (mode === "frames" || mode === "all") save("frames", await frames());
 if (mode === "memory" || mode === "all") save("memory", await memory());
 if (mode === "load" || mode === "all") save("load", await load());
