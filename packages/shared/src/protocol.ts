@@ -112,6 +112,15 @@ export interface PerfReport {
     ratioFixes: number | null;
   };
   net: { pingMed: number | null; pingP95: number | null; reconnects: number };
+  // (docs/plan/90-the-friends-machines.md phase 1) the worst frame's own stages; the share of frames that came late
+  // with the main thread done (waiting on the GPU, past the frame cap); the people drawn; a sampled frame's draws by
+  // where they come from
+  detail?: {
+    worstStages: Record<string, number>;
+    waited: number;
+    people: number | null;
+    drawsBy: Record<string, number> | null;
+  };
 }
 
 // client → server

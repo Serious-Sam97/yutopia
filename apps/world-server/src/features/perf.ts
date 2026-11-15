@@ -38,9 +38,20 @@ export function perfRow(uid: number, r: PerfReport, snaps: number, at = Date.now
   const w = (r?.where ?? {}) as Partial<PerfReport["where"]>;
   const m = (r?.machine ?? {}) as Partial<PerfReport["machine"]>;
   const n = (r?.net ?? {}) as Partial<PerfReport["net"]>;
-  const stages: Record<string, number> = {};
-  for (const [k, v] of Object.entries(r?.stages ?? {}))
-    if (STAGES.has(k) && typeof v === "number" && Number.isFinite(v)) stages[k] = round(num(v, 0, 60_000), 100);
+  const stagesOf = (src: unknown): Record<string, number> => {
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries((src ?? {}) as Record<string, unknown>))
+      if (STAGES.has(k) && typeof v === "number" && Number.isFinite(v)) out[k] = round(num(v, 0, 60_000), 100);
+    return out;
+  };
+  const stages = stagesOf(r?.stages);
+  const drawsOf = (src: unknown): Record<string, number> | null => {
+    if (!src || typeof src !== "object") return null;
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(src as Record<string, unknown>).slice(0, 8))
+      if (DRAW_SOURCES.has(k) && typeof v === "number" && Number.isFinite(v)) out[k] = Math.round(num(v, 0, 100_000));
+    return out;
+  };
   const pair = (v: unknown): [number, number] =>
     Array.isArray(v) ? [Math.round(num(v[0], 0, 20_000)), Math.round(num(v[1], 0, 20_000))] : [0, 0];
   const view = str(w.view, 8);
@@ -97,9 +108,17 @@ export function perfRow(uid: number, r: PerfReport, snaps: number, at = Date.now
       culled: opt(r?.culled, 0, 1_000_000),
       reconnects: Math.round(num(n.reconnects, 0, 10_000)),
       commit: str(r?.client?.commit, 12),
+      // (plan 90 phase 1: the worst frame's stages, the frames that waited on the GPU, the people drawn, draws by source)
+      worstStages: stagesOf(r?.detail?.worstStages),
+      waited: round(num(r?.detail?.waited, 0, 1), 1000),
+      people: opt(r?.detail?.people, 0, 10_000),
+      drawsBy: drawsOf(r?.detail?.drawsBy),
     },
   };
 }
+
+// the sources a report's draws are split by (plan 90 phase 1: client telemetry.ts)
+const DRAW_SOURCES = new Set(["grounds", "people", "floors", "cars", "other"]);
 
 const CLIENT_ERRORS_LOGGED = 20; // a session's errors written to the log (the rest only counted)
 

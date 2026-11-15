@@ -115,6 +115,10 @@ Measured on production's own reports a week after each release (against the tabl
 1. **Reports that say more** (F5a) — the worst frame's stages, people near by count, draws and objects by kind, the
    GPU-bound flag. Released with plan 89 and this plan together (F1b): production's table above is the before; the
    after is the reports of the week from the release.
+   Done 2026-11-15: a report's `detail` (shared `PerfReport`), stored in the row's `context` — `worstStages` (the
+   worst frame's own stages), `waited` (the share of frames late with the main thread done: past the frame cap, the
+   GPU's or the browser's wait), `people` (drawn), `drawsBy` (a sampled frame's draws: grounds, floors, people,
+   cars, other). Checked through the dev stack into the dev database.
 2. **The weak GPUs** (F2c, F3c) — Auto's start by the GPU's name (integrated Intel/AMD, software renderers) and a
    1-s test behind the loading screen to correct it; down faster when far under (2 s under 20 fps, not 6 s at a
    tier); software rendering said so; **a new tier below Lowest** (a lower render scale, sharpened; simpler light),

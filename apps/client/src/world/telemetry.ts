@@ -35,12 +35,16 @@ interface Ctl {
       domElement: HTMLCanvasElement;
     };
     below3?: { count: number };
+    people3?: Map<string, { root: unknown }>;
+    floors?: Map<number, { world: { root: unknown } }>;
+    around?: { grounds?: { root: unknown } | null };
     ratioAtStart: number;
     dprAtStart: number;
     ratioFixes: number;
   } | null;
   qualityNow(): string;
   onFrame(cb: () => void): () => void;
+  quality?: { fpsCap(now: number): number };
 }
 
 /** Since the last report: frame times and gaps in 0.5 ms buckets (the last: 100 ms and
@@ -51,15 +55,21 @@ interface Tally {
   worst: number;
   gapWorst: number;
   stages: Map<string, number>;
+  /** this frame's stages so far, and the worst frame's (plan 90 phase 1) */
+  cur: Map<string, number>;
+  worstStages: Map<string, number>;
+  /** frames that came late with the main thread done: waiting on the GPU (past the frame cap) */
+  waited: number;
 }
 const bucket = (ms: number) => Math.min(200, (ms * 2) | 0);
 
 // The frame timer's own begin / lap / end, counted into the tally too: wrapped on its
 // instance from here (the page's frame timer stays as it was; these come with this chunk).
-function count(perf: FramePerf, get: () => Tally): () => void {
+function count(perf: FramePerf, get: () => Tally, cap: () => number): () => void {
   const { begin, lap, end } = perf;
   let last = 0;
   let t0 = 0;
+  let work = 0; // the frame before's main-thread time
   perf.begin = function (this: FramePerf) {
     const t = begin.call(this);
     const y = get();
@@ -67,22 +77,31 @@ function count(perf: FramePerf, get: () => Tally): () => void {
       const g = t - last;
       y.gaps[bucket(g)]++;
       if (g > y.gapWorst) y.gapWorst = g;
+      // (late with the main thread long done — not the frame cap's wait: the GPU's, or the browser's)
+      const c = cap();
+      if (work > 0 && g > work + 8 && g > work * 1.5 && g > (c > 0 ? 1000 / c : 0) * 1.2) y.waited++;
     }
     last = t0 = t;
+    y.cur.clear();
     return t;
   };
   perf.lap = function (this: FramePerf, stage: string, from: number) {
     const t = lap.call(this, stage, from);
     const y = get();
     y.stages.set(stage, (y.stages.get(stage) ?? 0) + t - from);
+    y.cur.set(stage, (y.cur.get(stage) ?? 0) + t - from);
     return t;
   };
   perf.end = function (this: FramePerf) {
     end.call(this);
     const ms = performance.now() - t0;
+    work = ms;
     const y = get();
     y.frames[bucket(ms)]++;
-    if (ms > y.worst) y.worst = ms;
+    if (ms > y.worst) {
+      y.worst = ms;
+      y.worstStages = new Map(y.cur);
+    }
   };
   return () => {
     // (back to the class's own)
@@ -98,6 +117,9 @@ const fresh = (): Tally => ({
   worst: 0,
   gapWorst: 0,
   stages: new Map(),
+  cur: new Map(),
+  worstStages: new Map(),
+  waited: 0,
 });
 
 // a percentile of a 0.5 ms histogram (its bucket's middle; the last bucket: the worst seen)
@@ -162,7 +184,11 @@ export function startTelemetry(controller: WorldController): () => void {
   if (c.stopped) return () => {};
   const perf = c.framePerf;
   let tally = fresh();
-  const uncount = count(perf, () => tally);
+  const uncount = count(
+    perf,
+    () => tally,
+    () => c.quality?.fpsCap(performance.now()) ?? 0,
+  );
   let from = performance.now();
   let reconnects = 0;
   let room: Room | null = null;
@@ -207,22 +233,52 @@ export function startTelemetry(controller: WorldController): () => void {
 
   // 3D: one frame's draw calls, every pass (the renderer counts one render() at a time)
   let draws: number | null = null;
+  // (and by where they come from — plan 90 phase 1: the nearest of these up the tree)
+  let drawsBy: Record<string, number> | null = null;
   let sampling: (() => void) | null = null;
   const sampleDraws = () => {
     const tp = c.tp;
     if (!tp || sampling) return;
     const info = tp.renderer.info;
+    const R = tp.renderer as unknown as { renderBufferDirect: (...a: unknown[]) => unknown };
     let started = false;
+    let rbd: ((...a: unknown[]) => unknown) | null = null;
     sampling = c.onFrame(() => {
       if (!started) {
         // (from this frame's end to the next's)
         info.autoReset = false;
         info.reset();
         started = true;
+        const roots = new Map<unknown, string>();
+        if (tp.around?.grounds?.root) roots.set(tp.around.grounds.root, "grounds");
+        for (const b of tp.floors?.values() ?? []) roots.set(b.world.root, "floors");
+        for (const p of tp.people3?.values() ?? []) roots.set(p.root, "people");
+        const by: Record<string, number> = {};
+        drawsBy = by;
+        const own = R.renderBufferDirect;
+        rbd = own;
+        R.renderBufferDirect = function (this: unknown, ...a: unknown[]) {
+          let k = "other";
+          for (let o = a[4] as { parent?: unknown; name?: string } | null; o; o = o.parent as typeof o) {
+            const r = roots.get(o);
+            if (r) {
+              k = r;
+              break;
+            }
+            if (o.name === "cars") {
+              k = "cars";
+              break;
+            }
+          }
+          by[k] = (by[k] ?? 0) + 1;
+          return own.apply(this, a);
+        };
         return;
       }
       draws = info.render.calls;
       info.autoReset = true;
+      if (rbd) R.renderBufferDirect = rbd;
+      rbd = null;
       sampling?.();
       sampling = null;
     });
@@ -323,6 +379,12 @@ export function startTelemetry(controller: WorldController): () => void {
         pingP95: pingsNow.length ? Math.round(pingsNow[Math.floor(pingsNow.length * 0.95)]) : null,
         reconnects,
       },
+      detail: {
+        worstStages: Object.fromEntries([...t.worstStages].map(([k, v]) => [k, Math.round(v * 100) / 100])),
+        waited: Math.round((t.waited / Math.max(1, n)) * 1000) / 1000,
+        people: c.tp?.people3 ? c.tp.people3.size : null,
+        drawsBy: c.tp ? drawsBy : null,
+      },
     };
     try {
       room.send("perf:report", report);
@@ -330,6 +392,7 @@ export function startTelemetry(controller: WorldController): () => void {
       // (the line just dropped: the next window says it)
     }
     draws = null;
+    drawsBy = null;
     sampleDraws();
   };
 
