@@ -106,6 +106,7 @@ const DISTRICT_R = 900;
 const DISTRICT_GONE = 1300;
 const DISTRICT_WAIT = 200; // (waited for behind the loading screen: those this near you)
 const BUDGET_MS = 6; // building a frame
+const MADE_CAP = 256; // the land's blocks made and waiting to be placed, at most
 const BOOST_MS = 40; // …and behind the loading screen, where a long frame doesn't show
 const CASTERS_R = 34; // trees this near cast the sun's shadow
 export const CASTER_LAYER = 1; // (seen by the sun's shadow camera only)
@@ -558,10 +559,11 @@ if (vFade < 0.999) {
     const pool = landPool();
     if (pool?.made.length) {
       pool.made = pool.made.filter(
-        (d) =>
-          d.v === editsVersion && wanted.has(d.key) && (!this.blocks.get(d.key)?.mesh || this.stale.has(d.key)),
+        (d) => d.v === editsVersion && wanted.has(d.key) && (!this.blocks.get(d.key)?.mesh || this.stale.has(d.key)),
       );
       pool.made.sort((a, b) => distTo(a.key, ax, az) - distTo(b.key, ax, az));
+      // (never more waiting than this: the furthest dropped, asked again when wanted — plan 91 phase 1)
+      if (pool.made.length > MADE_CAP) pool.made.length = MADE_CAP;
       while (pool.made.length && (built === 0 || performance.now() - t0 < budget)) {
         this.place(pool.made.shift() as BlockData);
         built++;

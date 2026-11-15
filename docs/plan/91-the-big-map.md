@@ -10,7 +10,7 @@ you as it is now; what's far, made and freed by distance; nothing built "for goo
 
 Status: **planned 2026-11-15; forks decided by the user 2026-11-15**: **F1a** the road fix committed and deployed
 ahead of the plan; **F2b** a map past ±60 km — the chunk keys widened and a floating origin built now; **F3a** the
-districts made in workers; **F4a** nothing built for good, the town too. The road bug (phase 1) found and fixed in
+districts made in workers; **F4a** nothing built for good, the town too; **phases 9–10** (graphics settings, a game's; changing them without the stall) added by the user the same day. The road bug (phase 1) found and fixed in
 the investigation.
 
 ## What was found (2026-11-15)
@@ -101,11 +101,37 @@ On a prod build, the bench of phase 0:
    made, waiting), the asphalt under you (a ray down: asphalt or dirt), the heap, the GPU's memory (Chrome's
    process), fps. And a census by owner (a heap snapshot's retainers: the scene, the wardrobe, the cars, the land,
    textures, file buffers, Jolt). The round trip as a soak. Written here; each phase after measured by it.
-1. **The road fix, and workers that can't lock it up** — (found 2026-11-15, uncommitted) a block made and waiting
+   Done 2026-11-15 — `e2e/stream.mts` (`arrive`, `drive`, `soak`, `census`; a few minutes a mode by default:
+   Potato and High, the CPU 4×; widen by hand). Arriving in play (a teleport, not behind the loading screen), the
+   seconds till the land's all in · the asphalt under you · the districts within 200 m · all of them (with the road
+   fix of phase 1 in; 60 s at most):
+
+   | CPU 4× | Woods | Road, 2 km | Road, 7 km | Town (from the road) |
+   |---|---|---|---|---|
+   | Potato | 6 · – · 1 · 1 | 4 · 7 · 14 · 26 | 6 · 7 · **55 · never** (3,821 steps left) | 6 · – · 1 · 21 |
+   | Low | 3 · – · 1 · 1 | 3 · 4 · 6 · 11 | 4 · 2 · 20 · 29 | 2 · – · 1 · 6 |
+   | High | 3 · – · 1 · 1 | 3 · 5 · 8 · 13 | 5 · 4 · 26 · 39 | 3 · – · 1 · 8 |
+
+   - Unslowed, all of it in under 11 s but Potato at 7 km (30 s: lite's one frame in three, 2 ms a step).
+   - **Driving the long road at 240 km/h, CPU 4×** (the seconds with dirt under you past the first 10, of 29):
+     **Potato 25**, High 6; the land up to 77 blocks behind on Potato.
+   - **Memory** (`census`, High, after the town and the woods): the JS heap 710 MB; the tab's array buffers 749 MB,
+     WebGL's own 442, **canvases 290**, malloc 189, V8 163; the GPU process's `gpu` 1,673 MB (ANGLE's 1,290). The
+     scene's geometry ~230 MB (the Grounds 87, cars 50, people 31, the rest 61), its textures' CPU copies 39 — **the
+     array buffers' other ~500 MB aren't the scene's**. The heap at the road's 7 km up to 1,150 MB (High) against
+     ~710–860 elsewhere.
+1. **The road fix, and workers that can't lock it up** — (found 2026-11-15, 296f3e79) a block made and waiting
    isn't asked again (`land-pool.ts ask`); one built isn't placed again (`grounds-stream.ts`). And: an ask not
    answered in 5 s asked again of another worker; a worker that errs replaced, not all of them ended; the made queue
    capped (the furthest dropped, asked again when wanted). `land-pool.test.ts` with fake workers: a slow placer, a
    silent worker, a dying one — the land all in.
+   Done 2026-11-15 — `land-pool.ts`: a worker's blocks in hand by key (not a count); a worker silent for
+   `STUCK_MS` (5 s) with blocks in hand replaced and its blocks freed for the others (a main thread held up over a
+   second isn't the workers' fault: counted again from then); one that errs replaced too; only after `DEATHS` (4)
+   the main thread makes the land; a late answer for a block asked again isn't kept twice. The stream's made queue
+   capped at 256 (`MADE_CAP`). `land-pool.test.ts` (fake workers): a slow placer (each block asked once — red on the
+   old pool), a silent worker, a stalled main thread, a dying one. In the bench, as phase 0 (within the noise);
+   blocks made and waiting at most 39 (were 4,858 and growing).
 2. **One build lane, by priority** — the land, the districts, the rest's steps and the cars' models in one queue a
    frame, shared out by what you'd see first: **the ground under you and the road ahead** (asphalt, its land),
    then the land round you, then what stands (buildings, lamps, props), then what's far; going fast, what's ahead
@@ -139,5 +165,71 @@ On a prod build, the bench of phase 0:
 8. **Checks** — the bench against phase 0 and the targets; the stills; the specs near the streaming
    (`loading`, `car`, `godmode-land`, `godmode-roads`, the world-server's `long-road.test.ts`) and the known reds; the gap
    written here.
+9. **The graphics settings, a game's** (added 2026-11-15, the user: "everything customizable, like a game") — the
+   tiers (Potato … High) become **presets**: picking one sets every setting below; each setting can then be changed
+   on its own, and the preset reads **Custom**. Auto picks a preset as now (by the GPU, the 1-s test, stepping
+   down/up); once one setting is changed by hand, Auto stops (as a tier picked by hand now) — "Reset to preset" puts
+   it back. Each setting stored alone in the prefs (`lib/prefs.ts`: a `graphics` record; today's `quality` read as
+   its preset), sent with the perf reports (plan 90's `detail`), applied live where it can be (`Warmup.toQuality`'s
+   compile-first path, one setting at a time) and marked "on restart" where not (antialiasing: the view's for good).
+   What a tier fixes today, each its own setting (today's values the presets'):
+
+   | Setting | Values | Today (High · Medium · Low · Lowest · Potato) |
+   |---|---|---|
+   | **Resolution** (render scale, % of the screen) | 50–200%, in 5% steps, + the screen's own size shown | 200 · 150 · 100 · 75 · 50 (capped by the screen's dpr) |
+   | Antialiasing | off · on (MSAA) | on · on · on · off · off |
+   | **Draw distance: land** | 220 · 330 · 440 · 660 m | 440 all (phase 6: by tier) |
+   | **Draw distance: buildings and roads** (districts) | 500 · 700 · 900 · 1,200 m | 900 all |
+   | Far land (the horizon) | off · near · far · farthest | farthest · far · far · near · near |
+   | Far trees | off · 1,200 · 1,800 m | 1,800 · 1,200 · off · off · off |
+   | Sun shadows | off · 1024 · 2048 · 4096 | 2048 · 1024 · off · off · off |
+   | Flashlight and headlamp shadows | off · on | on · off · off · off · off |
+   | Lamps lit (point lights) | 0 · 2 · 3 · 6 · 10 | 10 · 6 · 3 · 2 · 0 |
+   | Ambient occlusion (GTAO) | off · on | on · off · off · off · off |
+   | Bloom | off · on | on · off · off · off · off |
+   | Colour grade and vignette | off · on | on · on · off · off · off |
+   | Film grain | off · on | on · off · off · off · off |
+   | Fog banks | off · on | on · off · off · off · off |
+   | Rain and snow density | low · medium · high | high · medium · medium · low · low |
+   | Car mirror | off · low · high | high · low · off · off · off |
+   | People's detail | low (no nearest level, blob shadow) · high | high · high · low · low · low |
+   | Max fps (as now) | 30 · 60 · 120 · unlimited | 60 |
+
+   **The Settings panel** (the manuscript-in-wood look, plan 45): Graphics with the preset on top, the settings
+   grouped below (Display: resolution, antialiasing, fps · Distance · Light and shadow · Effects · World), each with
+   a line on what it costs (the GPU, the CPU, memory) and the frame's numbers (fps, the frame's ms) beside it, so
+   one can see a change land. The draw distances tied to phase 6's limits (a distance past what the device's memory
+   holds is shown and capped, said why), the fog drawn in to hide the edge at short ones. Unit tests: each preset's
+   values equal today's tier (same pixels: the A/B stills of plan 89 on each preset), a custom set stored and read
+   back, Auto stopping on a hand change; `loading`, the Settings panel's spec.
+
+10. **Changing them without the stall** (added 2026-11-15, the user: "today you feel monstrous stalls when you
+    switch" — with many settings, nothing applied as it's picked: an **Apply** button shows once something's
+    changed, and the change is masked or solved). What's there: `Warmup.toQuality` compiles the new tier's shaders a
+    few a frame against stand-in lights before switching (plan 50) — but only one of each kind of visible thing, not
+    the shadow pass's depth materials, nor the post chain (`Post3` made new: GTAO's, bloom's, the finish's shaders,
+    their render targets), the shadow maps' first allocation and drawing, the far land's rings made again in one go
+    (`far3d.setQuality`), people's nearest level built when it comes in, the render targets resized at the new
+    resolution. Each setting applied alone would pay that again for each.
+    - **Measured first**: a Chrome trace of each switch (High↔Low, Low↔Potato, shadows on, AO on, the resolution
+      100→150%), its long frames by cause, written here.
+    - **Solved where it can be — the switch made ahead, behind the picture**: every setting changed applied as one
+      transition (one compile, one resize); the new state's shaders compiled with the real lights and the real
+      shadow, depth and post variants (`compileAsync` with `KHR_parallel_shader_compile`, into an offscreen target at
+      the new resolution), the post chain and its targets made and drawn once offscreen, the shadow maps allocated
+      and drawn, the far land's rings and people's levels built a few a frame — only then swapped in, in one frame
+      that has nothing left to do.
+    - **Masked where it can't — "the photograph"**: on Apply, the frame on screen is copied into a still (a GPU copy,
+      no readback: `toDataURL` waits on the GPU 20–90 ms), laid over the game as an image whose only motion
+      is the compositor's (CSS transform and opacity: it keeps moving even when the main thread is stuck in a
+      compile), a soft "developing" on it, the Settings panel still there. The switch happens behind it; once the
+      new frames are steady (a few in a row under the frame's budget), **a wipe sweeps across the screen from the
+      old picture to the new** — the player sees the change land, the before beside the after, no stutter seen.
+    - **Then "Keep these settings?"** — as a game's display settings: a 15 s countdown with the fps before and after
+      ("48 → 61 fps"), and **hold to compare** (the old still shown while a key is held); not confirmed, or the new
+      settings under 20 fps, back to the old ones by the same transition.
+    - Checks: the trace's long frames on each switch before and after (target: no frame over 100 ms seen — under the
+      still is free; the swap frame ≤ 33 ms), the wipe and the revert on the proxy (an M1's, CPU throttled) and on
+      High; `loading` and the Settings spec green.
 
 Not now: a disk cache of our own (the browser's HTTP cache has the files); the renderer in a worker; WebGPU.
