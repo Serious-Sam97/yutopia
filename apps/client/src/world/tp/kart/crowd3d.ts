@@ -451,11 +451,15 @@ export function crowd3d(
     "#f3ead6",
     { ink: true },
   );
-  // (its clock: ticked as it's drawn)
+  // (its clock: ticked as it's drawn — the time itself, so a crowd out of sight a while comes back as it'd be)
   const first = g.children[0] as InstancedMesh | undefined;
   if (first)
     first.onBeforeRender = () => {
       u.uTime.value = performance.now() / 1000;
     };
+  // (its people move in the shader — risen ≤ 0.5 m, leant 0.36 m, arms, heads and knees turned about their own
+  // joints — never 3 m from where they stand: the view may leave the whole crowd out of a render wholly past its
+  // sight by that much — Culling.stillBox, docs/plan/89-the-weight.md phase 4)
+  g.userData.cullPad = 3;
   return g;
 }

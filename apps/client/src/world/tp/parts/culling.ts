@@ -41,6 +41,37 @@ export class Culling {
 
   viewCull = true;
 
+  // ── what's built outside, out of a camera's sight (docs/plan/89-the-weight.md phase 4) ──
+  /** (tests: e2e/weight.mts' A/B — off, nothing outside left out: the same picture, the long way) */
+  outCull = true;
+
+  /** The Grounds' still pieces — the statics, the kart park, the districts — off for one render when wholly
+   *  outside its camera (view.ts' scene.onBeforeRender; the shadow pass has them on again, as the parked cars).
+   *  Three tests each mesh against the view as it walks them; a piece left out isn't walked at all — the kart
+   *  park's 2,000 meshes, out of sight from almost everywhere. A piece is what three's own culling would trust
+   *  (stillBox: no particles, sprites, instances, skinned or unculled meshes — its box made again when it moves);
+   *  one that isn't is looked into, a level at a time. What's wholly outside the camera draws nothing: the same
+   *  picture. */
+  cullOutdoors(f: Frustum) {
+    if (!this.outCull) return;
+    const g = this.c.around.grounds;
+    if (!g) return;
+    for (const r of g.stillRoots()) if (r.visible && r.parent) this.cullIn(r, f, 3);
+  }
+
+  private cullIn(o: Object3D, f: Frustum, depth: number) {
+    for (const c of o.children) {
+      if (!c.visible) continue;
+      const b = this.stillBox(c);
+      if (b) {
+        if (!f.intersectsBox(b)) {
+          c.visible = false;
+          this.viewHid.push(c);
+        }
+      } else if (depth > 0 && c.children.length) this.cullIn(c, f, depth - 1);
+    }
+  }
+
   /** Glass and ink merged too (World3.setMergeClear: a few overlapping see-through pixels
    *  blend in another order). */
   setMergeClear(on: boolean) {
@@ -167,6 +198,15 @@ export class Culling {
     if (!this.matricesMade) o.updateWorldMatrix(true, false);
     const had = this.stillBoxes.get(o);
     if (had?.m.equals(o.matrixWorld)) return had.box;
+    // (one that says how far its shader moves its points from where they are — a crowd's people — boxed with
+    // that: its instances' own boxes, `cullPad` round them)
+    const pad = o.userData.cullPad as number | undefined;
+    if (typeof pad === "number") {
+      const box = new Box3().setFromObject(o);
+      const out = box.isEmpty() ? null : box.expandByScalar(pad);
+      this.stillBoxes.set(o, { m: o.matrixWorld.clone(), box: out });
+      return out;
+    }
     let ok = true;
     o.traverse((x) => {
       const d = x as Mesh & {

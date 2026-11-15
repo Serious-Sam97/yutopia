@@ -9,7 +9,7 @@ Status: **investigated 2026-11-14 (read-only); planned 2026-11-14; forks decided
 pixel-identical throughout, plus phase 9's invisible-detail cuts each signed off with stills side by side; **F2c**
 Auto starts on Medium and **steps up to High during play** when there's room (asked after: up mid-game, not only
 behind the loading screen), down as before, every tier warmed; **F3b** the adaptive buffer; **F4a** versioned URLs +
-`immutable` + a Cloudflare cache rule (the user sets the rule); **F5a** the floors' held copy kept, shrunk by phase 2. **Phase 0 (the bench, the baseline) done 2026-11-14. Phase 1 (lights that are off) done 2026-11-14; F6a: the torches left as they are. Phase 2 (by index) tried and reverted 2026-11-15: −135 MB, no fps, +0.3 s load. Phase 3 (painted once) done 2026-11-15: GPU −213 MB, canvas −67 MB, load the same.**
+`immutable` + a Cloudflare cache rule (the user sets the rule); **F5a** the floors' held copy kept, shrunk by phase 2. **Phase 0 (the bench, the baseline) done 2026-11-14. Phase 1 (lights that are off) done 2026-11-14; F6a: the torches left as they are. Phase 2 (by index) tried and reverted 2026-11-15: −135 MB, no fps, +0.3 s load. Phase 3 (painted once) done 2026-11-15: GPU −213 MB, canvas −67 MB, load the same. Phase 4 (outside out of sight) done 2026-11-15: M1 proxy +8–23%; sealing the land left (unsafe without declaring every mover).**
 
 ## What was measured (2026-11-14)
 
@@ -255,6 +255,36 @@ Each phase: measured before and after on the phase 0 bench, its A/B stills at 0 
    scene's walk when out of range or view (the far trees in cells that cull, not one InstancedMesh); still subtrees
    sealed so `lazyMatrices` skips them; High on `lazyMatrices` too; why `makeChunk` runs while still, fixed; the
    Grounds' per-frame queries cached where their answer can't change.
+   Done in phase 4, first part (2026-11-15) — what's built outside, out of a camera's sight:
+   - `Culling.cullOutdoors` (from view.ts' `scene.onBeforeRender`, as the parked cars already were): the Grounds'
+     still roots (`GroundsStream.stillRoots`: the statics, the kart park, the districts) looked into a level at a
+     time, every piece three's own culling would trust (`stillBox`, its box made again only when it moves) left
+     out of that render when wholly outside its camera; the shadow pass has them on again. ~950–990 pieces,
+     2,800–4,300 meshes a render that three no longer walks.
+   - **The kart park's crowd** (28 instanced meshes, unculled: their people move in the shader) now in it too:
+     `userData.cullPad = 3` — risen ≤ 0.5 m, leant 0.36 m, limbs turned about their joints: never 3 m from where
+     they stand — its box the instances' own plus that (`stillBox`); its clock is the time itself, so a crowd out
+     of sight comes back as it'd be.
+   - **Same pixels: 32 of 32 cameras 0 px** (`AB=outcull`).
+   - **Prod, the switch flipped in the page, walking, two runs** — an M1's proxy (Low, CPU 2.5×): studio **+9.5% /
+     +7.9%** (main thread 15.1 → 13.6 ms), lot +7.8% / −1.1%, lawn **+18% / +23.5%** (9.3–10.3 → 7.8–8.3 ms); High
+     2× within its noise (−3 to +5%: the GPU is its limit — phase 1).
+   The rest, looked at (2026-11-15) and left — the M1's proxy profiled again after the part above:
+   - **Sealing the land for `lazyMatrices`** (Low's matrices pass: 11% of the main thread on the lot, 18.5% in the
+     studio): its ceiling measured by sealing the still roots by hand — lot noise, lawn +5–9%, studio +16%. Not
+     done: a sealed piece isn't looked at, so anything that moves or is added in it without the seal knowing is
+     drawn frozen or at the origin; the land streams in, and its 5,800-line builder adds and moves things in many
+     places — the kart park alone rebuilds its circuit on a layout change, moves its gantry, raises its bridge, and
+     its stage is another module's. Safe only with every mover and every late add declared, or watched at a cost
+     like the pass it saves. Worth its own careful task, not a quiet change.
+   - **High on `lazyMatrices`**: High's limit is the GPU (phase 1; this phase's own A/B moved High nothing).
+   - **`makeChunk` while standing still** (0.6% over a minute) and **the Grounds' per-frame queries** (`heightAt`
+     1.2%): too small to be worth a change now.
+   - Found on the way: three works a program out again **10–21 times a frame** (~6% of the lot's frame on the
+     proxy) — every transparent, double-sided material is drawn back then front with `needsUpdate` between
+     (people's lash, brow and hair-card edges, a few of the land's): the glass was split into back and front meshes
+     for this (memory note `three-two-sided-glass`); the people's edges would need the same, their skeletons and
+     their order among the other transparent things kept — ~3–5%, not done.
 5. **Loading** — per F4: versioned asset URLs, `immutable` headers, the hashed transcoder; the portrait loads only
    the bodies it shows and shares the view's materials; the garments' list beside the body so they load together;
    the loading screen waits for the people in view and compiles their programs (`compileAsync`) before it lifts;

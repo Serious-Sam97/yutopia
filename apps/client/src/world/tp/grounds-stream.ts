@@ -463,6 +463,15 @@ if (vFade < 0.999) {
     return topAt(x, z);
   }
 
+  /** The roots of what's built and stands outside — the statics, the kart park, the districts (and those
+   *  being made or going): what the view leaves out a piece at a time when out of a camera's sight
+   *  (Culling.cullOutdoors, docs/plan/89-the-weight.md phase 4). */
+  stillRoots(): Object3D[] {
+    const out: Object3D[] = [];
+    for (const s of [this.statics, this.next, this.kart, ...this.districts.values(), ...this.oldDistricts.values()])
+      if (s) out.push(s.root);
+    return out;
+  }
   setNight(k: number, land: Color) {
     // (the far ridges are painted: they take the hour as a tint)
     this.night.k = k;

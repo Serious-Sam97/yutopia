@@ -21,7 +21,7 @@
 //                       the cameras that differ (a, b, and the differing pixels in red) under OUT/diff-<a>-<b>
 //     all               frames, memory, load
 //   YUTOPIA_E2E_URL (http://localhost:3107), YUTOPIA_E2E_API (http://localhost:8100), OUT (/tmp/weight),
-//   AB=<preset> (lights, unshare) or AB_OFF/AB_ON: the switch for frames' and stills' A/B; PNG=1 (stills also saved as PNGs to look at), SPOTS (studio,lot,lawn), M1 (2.5), SECONDS (4), CYCLES (2), MEM_Q (low), DOWN (20), RTT (60), CAMS (6)
+//   AB=<preset> (lights, unshare, outcull) or AB_OFF/AB_ON: the switch for frames' and stills' A/B; PNG=1 (stills also saved as PNGs to look at), SPOTS (studio,lot,lawn), M1 (2.5), SECONDS (4), CYCLES (2), MEM_Q (low), DOWN (20), RTT (60), CAMS (6)
 // Every mode writes OUT/<mode>.json too.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -53,6 +53,8 @@ const UNCAPPED = ["--disable-gpu-vsync", "--disable-frame-rate-limit"];
 const PRESETS: Record<string, { off: string; on: string }> = {
   // plan 89 phase 1: the lights at 0 worked out again, as three does (a uniform: the same programs)
   lights: { off: "tp.lightsSkip(false)", on: "tp.lightsSkip(true)" },
+  // phase 4: what's built outside never left out of a render (Culling.outCull), then back
+  outcull: { off: "tp.culling.outCull = false", on: "tp.culling.outCull = true" },
   // phase 3: every texture painted once and shared (its painter kept: userData.repaint) painted again for each
   // material that shows it, as each thing painted its own before — its repeat, offset and wrap as set on the shared
   // one — then back

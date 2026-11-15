@@ -859,6 +859,8 @@ export class ThirdPersonView {
                 this.culling.viewHid.push(o);
               }
             }
+      // (and what's built outside, a piece at a time: the same way — Culling.cullOutdoors)
+      if (this.culling.viewCull) this.culling.cullOutdoors(f);
     };
     this.scene.onAfterRender = () => {
       for (const o of this.culling.viewHid) o.visible = true;
