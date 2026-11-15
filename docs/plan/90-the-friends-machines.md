@@ -227,5 +227,17 @@ Measured on production's own reports a week after each release (against the tabl
      look swaps their materials), Low's matrices walk (sealing the land: unsafe), the studio's TV made and destroyed
      by hearing, a shader linked at a car's first sight.
 
+**After the plan (2026-11-15, the user, testing): the loading screen didn't cover it all** — entering in the woods
+(prod too), the screen went with one's own body a stand-in and the forest still coming. Two causes in
+`ctl/loading.ts` and `tp/parts/warmup.ts`: the screen was cut at a fixed 15 s whatever was left (the 3D view's
+code, Jolt, the land, every body and its clothes, every shader — past 15 s on a slow link, in a forest, or under
+`next dev`), and the people it waited for were any one ready anywhere (an NPC far out on the Grounds was enough).
+Now it's up while things keep coming — a readiness step, or any file the page gets (a body's megabytes are one
+step till their last byte) — and down once all's in and steady; only stuck (nothing for 15 s, the view up and
+drawing), built but never steady 6 s, or 90 s cut it short; it waits for my own body and those within 20 m.
+Entering the woods cold (a fresh profile): 10 Mbps — main 16.1 s with the stand-in ("cut short"), now 19.5–23.5 s
+all in; 4 Mbps — main 17.1 s with the stand-in (all in at 51.9 s), now 42.8 s all in; no cap — 12.3 vs 10.4 s.
+`ctl/loading.test.ts`. Commits b49fe198, 94542624.
+
 Not now: moving the renderer to a worker (OffscreenCanvas — the same work on another thread); WebGPU; anything that
 changes what the world is.
