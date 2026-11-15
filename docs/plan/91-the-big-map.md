@@ -189,6 +189,15 @@ On a prod build, the bench of phase 0:
    made near, freed far, with hysteresis: made within 900 m, freed past 1,300 m as now); the office and buildings
    inside as a district's; what's kept a while after you leave (a few minutes, under the memory's cap) so coming
    back is instant. The loading screen waits for the districts within 200 m (as now).
+   Done 2026-11-15 — not cut into districts (each of the rest's builders — the lot, the town, the farm, the park —
+   would have to cut itself to a square): **the rest and the Kart Park parked** (`grounds-stream.ts parkFar`):
+   after `AWAY_MS` (2 min) past `DISTRICT_GONE` (1.3 km) of the rest's circle or the park (its middle, 260 m), all
+   of it freed and a new one queued, nothing made (its steps not taken, not counted by the loading screen); made
+   again, by the same steps, once you're within `DISTRICT_R` (900 m) of it. Entering out there (nothing made yet):
+   parked at once — the town not made behind the loading screen for someone on the long road's far end. God mode's
+   remake finished first. The probe (High): the town and the park standing 476 + 1,944 meshes; 13 km out after
+   2 min both parked, **the heap −80 MB, −113 textures**; back in town all made again in under 5 s (a teleport —
+   driving, they're made from 900 m out).
 5. **The memory: copies freed, caches capped** — after the GPU has it, no CPU copy: compressed textures' images,
    morph textures' arrays, the light volume's second copy (one, `Data3DTexture`'s own); file buffers dropped once
    parsed; **caches with a ceiling, the least lately used out**: the wardrobe's garments (refcounted, as plan 90's

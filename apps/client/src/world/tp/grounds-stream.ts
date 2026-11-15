@@ -6,6 +6,7 @@ import {
   editsVersion,
   heightAt,
   KART_LAND,
+  KART_PARK,
   LAMPS,
   landBounds,
   onGroundsChanged,
@@ -115,6 +116,11 @@ const URGENT_M = 64; // the land this near where you'll be: urgent
 const URGENT_ROAD_M = 160; // a district's road piece (its asphalt, its bridges) this near: urgent
 const STEP_MIN_MS = 1.5; // the steps' share at least, whatever the land took
 const CASTERS_R = 34; // trees this near cast the sun's shadow
+// (plan 91 phase 4, F4a: nothing built for good — the rest's circle (the town) and the Kart Park made when you're
+// within the districts' reach of them, freed when you've been past DISTRICT_GONE of them a while: a few minutes,
+// so going out and back is no rebuild)
+const AWAY_MS = 120_000;
+const KART_R = 260; // (the Kart Park's own part: its circuit, stands and lamps within this of its middle)
 export const CASTER_LAYER = 1; // (seen by the sun's shadow camera only)
 
 interface Block {
@@ -345,7 +351,8 @@ if (vFade < 0.999) {
     this.statics = this.makeStatics();
     this.root.add(this.statics.root);
     if (KART_LAND) {
-      this.kart = new Grounds3(T, { ...opts, part: "kart" });
+      this.makeKart = () => new Grounds3(T, { ...opts, part: "kart" });
+      this.kart = this.makeKart();
       this.root.add(this.kart.root);
     }
     this.patch = patch;
@@ -370,8 +377,12 @@ if (vFade < 0.999) {
   private districts = new Map<string, Grounds3>();
   /** districts as they were before god mode's edits, shown till their new ones are made */
   private oldDistricts = new Map<string, Grounds3>();
-  /** the Kart Park's own part (made once) */
+  /** the Kart Park's own part */
   private kart: Grounds3 | null = null;
+  private makeKart: (() => Grounds3) | null = null;
+  /** the rest (the town) and the Kart Park parked — what's to be made queued, nothing made — while you're far
+   *  (`away`); since when you've been out of their reach (`out`: 0 when in it) */
+  private away = { rest: false, kart: false, restOut: 0, kartOut: 0, seen: false };
   /** what the rest is made from, of god mode's edits (`staticsOf`) */
   private drawnOf: ReturnType<typeof staticsOf>;
   private offChanged: () => void;
@@ -514,7 +525,11 @@ if (vFade < 0.999) {
     this.turn = (this.turn + 1) % 3;
     // (…only while there's nothing to make: with land missing or steps left, every frame in its half budget —
     // one in three, a slow machine's districts took minutes, plan 91)
-    const idle = !this.left.blocks && !this.nextDistrict && !this.statics.left && !this.kart?.left;
+    const idle =
+      !this.left.blocks &&
+      !this.nextDistrict &&
+      (this.away.rest || !this.statics.left) &&
+      (this.away.kart || !this.kart?.left);
     if (this.lite && !this.boost && this.turn && !this.urgent && idle) {
       if (target) this.statics.cutAt(target.x, target.y, target.z);
       this.statics.faceCards(cam, this.halo);
@@ -630,11 +645,13 @@ if (vFade < 0.999) {
     // of the budget (a share at least): the rest first while it's being made (the town, behind the loading
     // screen), then the districts' steps by what you'd see first — their road under you and ahead before
     // what stands by it, the nearest district's before the next's — and god mode's remade rest last
+    this.parkFar(x, z);
     const s0 = performance.now();
     // (what the land left, a share at least whatever it took — a step is cheap now its road is a worker's,
     // phase 3; the dressing by the road, the buildings, the lamps are steps of a millisecond or so)
     const stepMs = this.boost ? BOOST_MS : Math.max(this.lite ? STEP_MIN_MS / 2 : STEP_MIN_MS, budget - (s0 - t0));
-    const making = this.statics.left ? this.statics : this.kart?.left ? this.kart : null;
+    const making =
+      this.statics.left && !this.away.rest ? this.statics : this.kart?.left && !this.away.kart ? this.kart : null;
     while (making && performance.now() - s0 < stepMs) {
       const added = making.step();
       if (!added) break;
@@ -713,7 +730,7 @@ if (vFade < 0.999) {
       // (a stored block's storeys: cut again in the new one)
       if (target) this.statics.cutAt(target.x, target.y, target.z);
     }
-    this.left.statics = this.statics.left + (this.kart?.left ?? 0);
+    this.left.statics = (this.away.rest ? 0 : this.statics.left) + (this.away.kart ? 0 : (this.kart?.left ?? 0));
     // (the districts by you: those further on are made as you go, not waited for — what one draws is
     // out of the rest's circle, so no nearer than that circle's edge)
     const inner = this.restCircle.r - Math.hypot(x - this.restCircle.cx, z - this.restCircle.cz);
@@ -747,6 +764,43 @@ if (vFade < 0.999) {
       });
       this.prepare?.(o);
     }
+  }
+  /** The town and the Kart Park parked when you've been far a while (`AWAY_MS` past DISTRICT_GONE of them; at
+   *  once where nothing's made yet — entering out on the long road), made again when you're within DISTRICT_R. */
+  private parkFar(x: number, z: number) {
+    const now = performance.now();
+    const c = this.restCircle;
+    const restD = Math.hypot(x - c.cx, z - c.cz) - c.r;
+    const kartD = Math.hypot(x - KART_PARK.x, z - KART_PARK.z) - KART_R;
+    const first = !this.away.seen;
+    this.away.seen = true;
+    // the rest
+    if (this.away.rest) {
+      if (restD < DISTRICT_R) this.away.rest = false;
+    } else if (restD > DISTRICT_GONE || (first && restD > DISTRICT_R)) {
+      this.away.restOut ||= now;
+      // (not while god mode's remaking it: that one's swapped in first)
+      if ((first || now - this.away.restOut > AWAY_MS) && !this.next) {
+        this.statics.dispose();
+        this.statics = this.made();
+        this.away.rest = true;
+      }
+    } else this.away.restOut = 0;
+    // the Kart Park
+    if (!this.kart || !this.makeKart) return;
+    if (this.away.kart) {
+      if (kartD < DISTRICT_R) this.away.kart = false;
+    } else if (kartD > DISTRICT_GONE || (first && kartD > DISTRICT_R)) {
+      this.away.kartOut ||= now;
+      if (first || now - this.away.kartOut > AWAY_MS) {
+        this.kart.dispose();
+        this.kart.root.removeFromParent();
+        this.kart = this.makeKart();
+        this.root.add(this.kart.root);
+        this.kart.setNight(this.night.k);
+        this.away.kart = true;
+      }
+    } else this.away.kartOut = 0;
   }
   /** the district `districtsFrame` picked last, and its next step's priority (`Grounds3.nextKey`) */
   private nextDistrict: Grounds3 | null = null;
