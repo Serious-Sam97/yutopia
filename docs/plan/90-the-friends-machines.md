@@ -7,7 +7,7 @@ stages, draws, the GPU, the tier, where) were exported read-only for the last 30
 **The rule, as plan 89's: the same game — same look, same mechanics — only lighter**, but where a fork below says a
 tier may look less (a weak GPU's).
 
-Status: **planned 2026-11-15 from production's reports; forks decided by the user 2026-11-15**: **F1b** plan 89
+Status: **done 2026-11-15 — phases 0–8 (the user tests at the end); planned from production's reports; forks decided by the user 2026-11-15**: **F1b** plan 89
 deployed with this plan, together (the friends weren't playing that day); **F2c** the GPU's name first, a 1-s test to
 correct it; **F3c** a new tier below Lowest for the weak GPUs, the four tiers untouched; **F4b** same pixels for people,
 and far people (past ~25 m) a lighter body, signed off with stills; **F5a** richer reports; **F6a** nothing of
@@ -197,6 +197,35 @@ Measured on production's own reports a week after each release (against the tabl
    `car.spec` green but "under a flier" (flaky before: 1 of 2 again).
 8. **Checks** — the bench against phase 0; production's reports a week after the release against the table above;
    the targets met or the gap written here.
+   Done 2026-11-15 (the friends' week after the release is theirs to come): plan 90's start (f948bc9d) built again
+   and benched back to back with HEAD, the same world:
+
+   | An M1's proxy (Low) | Plan 90's start | Now |
+   |---|---|---|
+   | fps, studio · lot · lawn (still / walking) | 56 / 52 · 43 / 41 · 82 / 78 | 58 / 52 · 47 / 44 · 87 / 82 (**+1…+10%**) |
+   | Frames over 50 ms in 4 s | **1–4** everywhere | **0** everywhere |
+   | Frames over 45 ms in 20 s walking (trace): lot · studio | 10 · 17 | **0 · 8** |
+   | The frame with 0 · 20 people near (studio) | 13.4 · 31.0 ms | 12.9 · 30.5 ms |
+
+   High 2×: the same (four rounds, order swapped: 54.0 vs 54.2, 54.5 vs 53.8, 56.9 vs 54.9 fps; the first run of a
+   session read ~10% better either way). Stills (seeded cameras): no change past the noise floor — which run to run
+   is large here (the same build twice: up to 870k px, 320k over 48 levels, the snow and weather moving on); by eye
+   the same, glass included. Unit tests 353 green; `people-3d`, `avatar`, `others-link`, `move-others`, `loading`,
+   `lag`, `revolver-two`, `shotgun-two`, `ak-two` green; `car` but its flaky "under a flier".
+
+   The targets:
+   - **The stutter on the proxy: met** (frames over 50 ms 1–4 per 4 s → 0; long frames walking the lot 10 → 0).
+   - **Integrated GPUs ≥ 30 fps from the first minute**: by construction (potato: a third of lowest's pixels, no
+     lamps; picked by the GPU's name, the test behind the loading screen) — **to be seen in production's reports**.
+     Software rendering said on screen: met.
+   - **Apple friends ≥ 60 fps indoors and out on Low**: **not shown here** — the proxy +1…+10%, its studio ~52–58;
+     the friends' rooms and their real GPU only production's reports (now with `drawsBy`, `waited`, the worst frame's
+     stages) will say. **One person near ≤ 1 ms**: on the proxy ~0.85 ms a person (not a holstered gun's 13 draws
+     more since phase 3); the friends' 3.5 ms to be re-read.
+   - **Firefox within 25% of Chrome**: not measured here.
+   - Left for a next plan, with the reports' own numbers: people's soft edges and brows in three's two passes (the
+     look swaps their materials), Low's matrices walk (sealing the land: unsafe), the studio's TV made and destroyed
+     by hearing, a shader linked at a car's first sight.
 
 Not now: moving the renderer to a worker (OffscreenCanvas — the same work on another thread); WebGPU; anything that
 changes what the world is.

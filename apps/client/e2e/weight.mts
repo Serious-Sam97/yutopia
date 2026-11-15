@@ -263,7 +263,8 @@ async function frames() {
     { name: `low-m1 (cpu ${M1}×)`, quality: "low", dpr: 2, cpu: M1 },
   ];
   const out: Record<string, unknown> = {};
-  for (const cf of configs) {
+  // (CONFIGS=high or low: one of them only)
+  for (const cf of configs.filter((c) => !process.env.CONFIGS || c.name.startsWith(process.env.CONFIGS))) {
     const browser = await chromium.launch({ args: [...GPU, ...UNCAPPED] });
     const { page } = await open(browser, { quality: cf.quality, dpr: cf.dpr, maxFps: 0 });
     const cdp = await page.context().newCDPSession(page);
