@@ -23,9 +23,11 @@ export class Loading {
   builtAt = 0;
   slowFrames = 0;
 
-  // how far it's got (readiness' done) and when it last got further
+  // how far it's got (readiness' done) and when it last got further — or a file came in: a body and its clothes are
+  // megabytes, half done on the list till the last byte (over a slow link, 15 s and more of no step: not stuck)
   bestDone = 0;
   movedAt = 0;
+  private files: PerformanceObserver | null = null;
 
   holdLoading(why: "enter" | "view") {
     this.loadFrom = performance.now();
@@ -35,6 +37,7 @@ export class Loading {
     this.slowFrames = 0;
     this.bestDone = 0;
     this.movedAt = this.loadFrom;
+    this.watchFiles(true);
     hud.set({ loading: { on: true, progress: why === "enter" ? hud.get().loading.progress : 0, why } });
     if (this.c.tp) this.c.tp.warmup.warming = true;
   }
@@ -70,6 +73,7 @@ export class Loading {
     if ((built && this.loadSteady >= STEADY_FRAMES) || unsteady || stuck || now - this.loadFrom > LOAD_MAX_MS) {
       if (!built) console.warn(stuck ? "loading stuck" : "loading cut short", r);
       this.loadFrom = 0;
+      this.watchFiles(false);
       if (this.c.tp) this.c.tp.warmup.warming = false;
       hud.set((h) => ({ loading: { ...h.loading, on: false, progress: 1 } }));
       return;
@@ -78,6 +82,21 @@ export class Loading {
     const p = Math.min(0.98, r.done / Math.max(1, r.of));
     const l = hud.get().loading;
     if (p > l.progress + 0.01) hud.set({ loading: { ...l, progress: p } });
+  }
+
+  // (each file the page got — a body, a garment, a texture, the code —: still coming)
+  private watchFiles(on: boolean) {
+    this.files?.disconnect();
+    this.files = null;
+    if (!on || typeof PerformanceObserver === "undefined") return;
+    try {
+      this.files = new PerformanceObserver(() => {
+        this.movedAt = performance.now();
+      });
+      this.files.observe({ type: "resource", buffered: false });
+    } catch {
+      this.files = null; // (no such entries here: readiness alone says it moves)
+    }
   }
 
   // what's built: each part 0..1 — the Grounds, their life, the cars, then the 3D view's own
