@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import type { NextConfig } from "next";
 import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
@@ -51,6 +52,36 @@ function version(dev: boolean): Version {
   return dev && v.version !== "dev" ? { ...v, version: `${v.version}-dev` } : v;
 }
 
+// The public files' versions (docs/plan/89-the-weight.md phase 5): each folder under public/ that the game loads from
+// (life, sfx, emu, decoders and theirs) a hash of its own files' contents. A file is asked for as
+// `/a/<its folder's hash>/<its path>` (lib/asset.ts) — the same file, rewritten to it below — and that URL, in a
+// production build, is kept for a year by the browser and by Cloudflare: a file changes, its folder's URLs change.
+// Without it every visit asked again for every model, garment, material and sound (`max-age=0`), each a round trip
+// through the tunnel, and Cloudflare kept none of them.
+const ASSET_ROOTS = ["life", "sfx", "emu", "decoders"];
+function assetVersions(): Record<string, string> {
+  const pub = path.join(__dirname, "public");
+  const out: Record<string, string> = {};
+  const walk = (rel: string) => {
+    const dir = path.join(pub, rel);
+    if (!existsSync(dir)) return;
+    const h = createHash("sha1");
+    let files = 0;
+    for (const e of readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+      if (e.isDirectory()) walk(`${rel}/${e.name}`);
+      else if (e.isFile()) {
+        h.update(e.name)
+          .update("\0")
+          .update(readFileSync(path.join(dir, e.name)));
+        files++;
+      }
+    }
+    if (files) out[`/${rel}`] = h.digest("hex").slice(0, 10);
+  };
+  for (const r of ASSET_ROOTS) walk(r);
+  return out;
+}
+
 const nextConfig = (phase: string): NextConfig => ({
   transpilePackages: ["@yutopia/shared"],
   env: (() => {
@@ -59,8 +90,20 @@ const nextConfig = (phase: string): NextConfig => ({
       NEXT_PUBLIC_YUTOPIA_VERSION: v.version,
       NEXT_PUBLIC_YUTOPIA_COMMIT: v.commit,
       NEXT_PUBLIC_YUTOPIA_DATE: v.date,
+      NEXT_PUBLIC_ASSET_V: JSON.stringify(assetVersions()),
     };
   })(),
+  // a public file asked for by its folder's version (lib/asset.ts): the file itself
+  async rewrites() {
+    return [{ source: "/a/:v/:path*", destination: "/:path*" }];
+  },
+  // …kept a year where it's asked for so — a production build only (next dev's files change under it)
+  async headers() {
+    if (phase === PHASE_DEVELOPMENT_SERVER) return [];
+    return [
+      { source: "/a/:v/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
+    ];
+  },
   reactStrictMode: true,
   poweredByHeader: false,
   // `next dev` is reached through the cloudflared tunnel, not localhost

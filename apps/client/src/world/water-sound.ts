@@ -1,5 +1,6 @@
 "use client";
 
+import { asset } from "@/lib/asset";
 import { mixer } from "./audio";
 import { loopable } from "./weather-sound";
 
@@ -202,7 +203,7 @@ export class WaterSound {
   /** a candidate other than the first (the bench's) */
   private chosen: Partial<Record<Slot, number>> = {};
 
-  constructor(private readonly base = "/sfx/water/") {}
+  constructor(private readonly base = asset("/sfx/water/")) {}
 
   private ctx(): AudioContext | null {
     const c = mixer.ctx;

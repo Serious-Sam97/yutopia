@@ -1,4 +1,5 @@
 import { dangerAt, inLampPool, nightness } from "@yutopia/shared/dark";
+import { asset } from "@/lib/asset";
 import type { WorldController } from "../controller";
 import type { Walker } from "../input/walker";
 import type { Shades } from "./shades";
@@ -191,7 +192,7 @@ export class DarkSound {
   private loadRecorded(ctx: AudioContext, dir = "guns") {
     if (this.recordedAsked.has(dir)) return;
     this.recordedAsked.add(dir);
-    void fetch(`/sfx/${dir}/manifest.json`)
+    void fetch(asset(`/sfx/${dir}/manifest.json`))
       .then((r) => (r.ok ? r.json() : {}))
       // (every slot at once: ~0.7 MB — a gun out, they're wanted in a moment)
       .then((man: Record<string, { files: string[] }[]>) =>
@@ -199,7 +200,7 @@ export class DarkSound {
           Object.entries(man).map(async ([slot, list]) => {
             const bufs = await Promise.all(
               (list[0]?.files ?? []).map((f) =>
-                fetch(`/sfx/${dir}/${f}`)
+                fetch(asset(`/sfx/${dir}/${f}`))
                   .then((r) => r.arrayBuffer())
                   .then((b) => ctx.decodeAudioData(b))
                   .catch(() => null),

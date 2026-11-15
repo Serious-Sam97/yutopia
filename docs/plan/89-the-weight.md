@@ -9,7 +9,7 @@ Status: **investigated 2026-11-14 (read-only); planned 2026-11-14; forks decided
 pixel-identical throughout, plus phase 9's invisible-detail cuts each signed off with stills side by side; **F2c**
 Auto starts on Medium and **steps up to High during play** when there's room (asked after: up mid-game, not only
 behind the loading screen), down as before, every tier warmed; **F3b** the adaptive buffer; **F4a** versioned URLs +
-`immutable` + a Cloudflare cache rule (the user sets the rule); **F5a** the floors' held copy kept, shrunk by phase 2. **Phase 0 (the bench, the baseline) done 2026-11-14. Phase 1 (lights that are off) done 2026-11-14; F6a: the torches left as they are. Phase 2 (by index) tried and reverted 2026-11-15: −135 MB, no fps, +0.3 s load. Phase 3 (painted once) done 2026-11-15: GPU −213 MB, canvas −67 MB, load the same. Phase 4 (outside out of sight) done 2026-11-15: M1 proxy +8–23%; sealing the land left (unsafe without declaring every mover).**
+`immutable` + a Cloudflare cache rule (the user sets the rule); **F5a** the floors' held copy kept, shrunk by phase 2. **Phase 0 (the bench, the baseline) done 2026-11-14. Phase 1 (lights that are off) done 2026-11-14; F6a: the torches left as they are. Phase 2 (by index) tried and reverted 2026-11-15: −135 MB, no fps, +0.3 s load. Phase 3 (painted once) done 2026-11-15: GPU −213 MB, canvas −67 MB, load the same. Phase 4 (outside out of sight) done 2026-11-15: M1 proxy +8–23%; sealing the land left (unsafe without declaring every mover). Phase 5 (loading) done 2026-11-15: files cached by version (revalidations 137–180 → 2), people in before the screen goes (no compiles in play; a first visit +2 s, kept).**
 
 ## What was measured (2026-11-14)
 
@@ -289,6 +289,34 @@ Each phase: measured before and after on the phase 0 bench, its A/B stills at 0 
    the bodies it shows and shares the view's materials; the garments' list beside the body so they load together;
    the loading screen waits for the people in view and compiles their programs (`compileAsync`) before it lifts;
    Jolt's wasm as its own streamed file if the bundler allows.
+   Done in phase 5, first part (2026-11-15):
+   - **Every public file the game loads asked for by its folder's version** — `lib/asset.ts` `asset(path)` →
+     `/a/<hash>/<path>`; `next.config.ts` hashes each folder under `public/{life,sfx,emu,decoders}` (its own files'
+     names and contents, sha1, at config time: dev and build alike), rewrites `/a/:v/:path*` to the file, and in a
+     production build sends `Cache-Control: public, max-age=31536000, immutable` for it. A file changes, its
+     folder's URLs change; the others stay cached. A path — not a query — so what a loader adds to a folder (the
+     KTX2 transcoder's files, the sounds' manifests and theirs) is versioned too. Every loader routed through it
+     (people, garments, guns, items, materials, sounds, voices, emulator cores, the transcoder): 174 of 174 asset
+     requests of a load versioned, none failing.
+   - **Revalidations gone**: prod, a 20 Mbps / 60 ms link — reloading or coming back, **137–180 → 2** requests
+     sent to the server (each a round trip through the tunnel before; Cloudflare kept none of them).
+   - **For the user, at Cloudflare** (F4a): a Cache Rule — *URI Path starts with `/a/`* → *Eligible for cache*,
+     Edge TTL *use cache-control header from origin*, Browser TTL *respect origin*. Then a friend's first visit
+     after a change takes the files from Cloudflare's edge, not from the server's upload.
+   - **People in before the loading screen goes** (`warmup.ts` readiness: a person's model in — body and the
+     garments it wears — before every shader is compiled): **in play after a cold load, 15–16 programs compiled
+     and two ~200 ms freezes → none**. The price: a first visit's loading screen **+1.7–2.6 s** (the first body,
+     3 MB, and its garments on the link); a visit with them cached waits nothing more. Waiting for one person is
+     enough: theirs are the same materials. **Kept (the user, 2026-11-15).**
+   The rest, looked at and left:
+   - **The garments asked for alongside the body** (their list read out of the body's file at build time, each
+     person's asked for while the body comes): tried and taken out — on a 20 Mbps link the 26 garments of 9 people
+     shared the link with the bodies, the first body (what the loading screen waits for now) came in 2 s later and
+     the screen went 0.5 s later. The link's width is the limit there, not its round trips.
+   - **The portrait's second body and renderer** (`chars/picture.ts`): both bodies are wanted anyway wherever both
+     kinds of people are about, and with the files cached a visit after the first pays nothing for them.
+   - **Jolt's wasm inlined in its chunk** (1 MB gzip): `/_next/static`, cached for good already — a first visit's
+     cost only.
 6. **Auto's tier** — per F2c: Auto starts on Medium; with room to spare for a while (measured, with hysteresis so it
    never flips back and forth) it steps up to High during play, and down again as today when it can't keep up; every
    tier's programs warmed ahead so neither step hitches. A tier picked by hand in Settings is never touched.

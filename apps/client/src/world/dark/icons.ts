@@ -1,5 +1,6 @@
 // The items as small drawings (design/screens/dark/hud/icons.js, the mock's): SVG markup.
 import type { ItemId } from "@yutopia/shared/inventory";
+import { asset } from "@/lib/asset";
 
 export const ICON: Record<ItemId, string> = {
   revolver:
@@ -38,7 +39,7 @@ export const ICON: Record<ItemId, string> = {
 const ASKED = new Set<ItemId>();
 const LOADED = new Set<ItemId>();
 let loadedN = 0;
-export const artSrc = (id: ItemId) => `/life/items/${id}.webp`;
+export const artSrc = (id: ItemId) => asset(`/life/items/${id}.webp`);
 export const artVersion = () => loadedN;
 export function preloadArt(): void {
   for (const id of Object.keys(ICON) as ItemId[]) {

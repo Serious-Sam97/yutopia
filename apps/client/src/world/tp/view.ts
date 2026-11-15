@@ -91,6 +91,7 @@ import {
   WebGLRenderer,
   type WebGLRenderTarget,
 } from "three";
+import { asset } from "@/lib/asset";
 import { tr } from "@/lib/i18n";
 import type { Quality } from "@/lib/prefs";
 import { chars, loadChars } from "../art/chars-load";
@@ -3546,7 +3547,7 @@ void main() {
     if (have === undefined) {
       this.lifeGuns.set(kind, "loading");
       void import("../look/life-assets")
-        .then((A) => A.loadLifeGLTF(this.renderer, `/life/guns/${kind}.glb`))
+        .then((A) => A.loadLifeGLTF(this.renderer, asset(`/life/guns/${kind}.glb`)))
         .then(async (gltf) => {
           gltf.scene.traverse((o) => {
             const m = (o as Mesh).material;

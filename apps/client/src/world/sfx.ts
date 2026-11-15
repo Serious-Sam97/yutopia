@@ -2,6 +2,7 @@
 // small MP3s in public/sfx, fetched and decoded the first time they're
 // wanted, kept after. A sample that isn't there (not added yet, offline) is
 // null, and whoever asked plays its stand-in instead.
+import { asset } from "@/lib/asset";
 
 const cache = new Map<string, Promise<AudioBuffer | null>>();
 
@@ -10,7 +11,7 @@ const cache = new Map<string, Promise<AudioBuffer | null>>();
 export function sample(ctx: BaseAudioContext, name: string): Promise<AudioBuffer | null> {
   let p = cache.get(name);
   if (!p) {
-    p = fetch(`/sfx/${name}${/\.\w+$/.test(name) ? "" : ".mp3"}`)
+    p = fetch(asset(`/sfx/${name}${/\.\w+$/.test(name) ? "" : ".mp3"}`))
       .then((r) => (r.ok ? r.arrayBuffer() : null))
       .then((b) => (b ? ctx.decodeAudioData(b) : null))
       .catch(() => null);

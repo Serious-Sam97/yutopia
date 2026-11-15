@@ -1,5 +1,6 @@
 import { ANALOG_COMBO, type GameSystem, type PadButton, STICK_MAX, SYSTEMS } from "@yutopia/shared/games";
 import type { Nostalgist } from "nostalgist";
+import { asset } from "@/lib/asset";
 import { hidePads, installVirtualPads, onRumble, pulseVirtualPad, type Rumble, STD, setVirtualPad } from "./vpad";
 
 // The emulator, in the browser of whoever turned the console on: a libretro core
@@ -322,8 +323,8 @@ export async function startEmu(o: {
     size: { width: EMU_W, height: EMU_H },
     style: { imageRendering: "pixelated", backgroundColor: "#000" },
     respondToGlobalEvents: false,
-    resolveCoreJs: (core: unknown) => `/emu/cores/${String(core)}_libretro.js`,
-    resolveCoreWasm: (core: unknown) => `/emu/cores/${String(core)}_libretro.wasm`,
+    resolveCoreJs: (core: unknown) => asset(`/emu/cores/${String(core)}_libretro.js`),
+    resolveCoreWasm: (core: unknown) => asset(`/emu/cores/${String(core)}_libretro.wasm`),
     retroarchConfig: { ...retroarchConfig(o.system), ...pads.config, ...o.config } as never,
     // EmulatorJS-built cores (the 2600's) look for their canvas's parent
     // (preMainLoop: its tick, found for catching up — paceCores)

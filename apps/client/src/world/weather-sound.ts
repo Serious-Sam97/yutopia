@@ -1,6 +1,7 @@
 "use client";
 
 import { strikeFar, strikeIn } from "@yutopia/shared/weather";
+import { asset } from "@/lib/asset";
 import { mixer } from "./audio";
 
 // The weather's sound (docs/plan/65-the-weather.md, W8 and phase 9): recorded beds (CC0, picked by
@@ -232,7 +233,7 @@ export class WeatherSound {
   /** a candidate other than the first (the bench's) */
   private chosen: Partial<Record<Slot, number>> = {};
 
-  constructor(private readonly base = "/sfx/weather/") {}
+  constructor(private readonly base = asset("/sfx/weather/")) {}
 
   private ctx(): AudioContext | null {
     const c = mixer.ctx;

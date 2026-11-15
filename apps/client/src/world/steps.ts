@@ -1,4 +1,5 @@
 import type { Footing } from "@yutopia/shared/footing";
+import { asset } from "@/lib/asset";
 
 // The steps (docs/plan/63-the-steps.md, phase 2): a step's recording for what the feet are on (CC0,
 // picked by ear on /dev/steps: public/sfx/steps, its manifest), never the same one twice running,
@@ -107,7 +108,7 @@ export class StepPlayer {
     private readonly out: () => AudioNode,
     /** the synth's step, while a surface's recordings aren't in (sound.ts) */
     private readonly synth: (f: Footing, gain: number) => void,
-    private readonly base = "/sfx/steps/",
+    private readonly base = asset("/sfx/steps/"),
   ) {}
 
   /** The audio's clock (s), for what's scheduled a moment on: 0 with no audio. */

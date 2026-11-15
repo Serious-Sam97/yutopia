@@ -23,11 +23,12 @@ import {
   Vector2,
   type WebGLRenderer,
 } from "three";
+import { asset } from "@/lib/asset";
 import { AssetQueue, lifeKTX2 } from "./life-assets";
 import { LIBRARY, MAPS, type MapKind, type MatId, matFile } from "./life-matlib-list";
 
 /** Where the library's files are served. */
-export const MAT_BASE = "/life/mat/";
+export const MAT_BASE = asset("/life/mat/");
 
 type MapSet = Record<MapKind, Texture>;
 

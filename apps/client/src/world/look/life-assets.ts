@@ -12,6 +12,7 @@
 import type { WebGLRenderer } from "three";
 import type { GLTF, GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
+import { asset } from "@/lib/asset";
 
 // ── the loader ─────────────────────────────────────────────────────────────────────────────────
 
@@ -23,7 +24,7 @@ let sharedKtx2: Promise<KTX2Loader> | null = null;
 export function lifeKTX2(renderer: WebGLRenderer): Promise<KTX2Loader> {
   sharedKtx2 ??= (async () => {
     const { KTX2Loader } = await import("three/addons/loaders/KTX2Loader.js");
-    return new KTX2Loader().setTranscoderPath("/decoders/basis/").detectSupport(renderer);
+    return new KTX2Loader().setTranscoderPath(asset("/decoders/basis/")).detectSupport(renderer);
   })();
   return sharedKtx2;
 }

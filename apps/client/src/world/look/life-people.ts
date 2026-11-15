@@ -35,6 +35,7 @@ import {
   Vector3,
   type WebGLRenderer,
 } from "three";
+import { asset } from "@/lib/asset";
 import { JOINTS, type JointName, PARENT } from "../chars/rig";
 import { loadLifeGLTF } from "./life-assets";
 import { libMaterial, libStats } from "./life-matlib";
@@ -722,7 +723,7 @@ const basesIn = new Map<string, LifeBase>();
 export function lifeBase(gender: LifeGender, renderer: WebGLRenderer): Promise<LifeBase> {
   let p = bases.get(gender);
   if (!p) {
-    p = loadLifeBase(`/life/person-${gender}-painted.glb`, renderer, gender);
+    p = loadLifeBase(asset(`/life/person-${gender}-painted.glb`), renderer, gender);
     bases.set(gender, p);
     p.then(
       (b) => basesIn.set(gender, b),
@@ -749,7 +750,7 @@ export function lifeFarNow(gender: LifeGender, renderer: WebGLRenderer): LifePar
 export function lifeFar(gender: LifeGender, renderer: WebGLRenderer): Promise<LifePart> {
   let p = fars.get(gender);
   if (!p) {
-    p = loadLifeBase(`/life/person-${gender}-far.glb`, renderer, gender).then((b) => {
+    p = loadLifeBase(asset(`/life/person-${gender}-far.glb`), renderer, gender).then((b) => {
       const far = b.parts.find((x) => x.name === "far");
       if (!far) throw new Error(`person-${gender}-far.glb: no far mesh`);
       return far;
@@ -770,7 +771,7 @@ function garment(gender: LifeGender, name: string, renderer: WebGLRenderer): Pro
   const key = `${gender}/${name}`;
   let p = garments.get(key);
   if (!p) {
-    p = loadLifeBase(`/life/wear-${gender}/${name}.glb`, renderer, gender).then(
+    p = loadLifeBase(asset(`/life/wear-${gender}/${name}.glb`), renderer, gender).then(
       (b) => b.parts,
       (e) => {
         console.warn(`life wear: ${key} didn't load`, e);

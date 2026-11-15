@@ -38,6 +38,7 @@ export type WarmupHost = Pick<
   | "host"
   | "lamps"
   | "nightLevel"
+  | "people3"
   | "pool"
   | "post"
   | "quality"
@@ -102,8 +103,17 @@ export class Warmup {
       parts.push(this.most.statics ? 1 - g.left.statics / this.most.statics : 1);
       parts.push(this.preparing ? 0 : 1);
     }
-    // the people (their chunk, then everyone's model)
-    parts.push(!this.c.charF ? 0 : this.c.charF.pending ? 0.5 : 1);
+    // the people (their chunk, then a model in — the life look's: its body and the garments it wears in,
+    // Model.ready — so the people's shaders are in the scene when every shader in it is compiled below, not
+    // compiled on their first frame in play; one is enough, theirs are the same materials, and the rest come in
+    // as they load: docs/plan/89-the-weight.md phase 5 — the loading screen's own cap still holds: ctl/loading.ts)
+    let people = 0;
+    let ready = 0;
+    for (const p of this.c.people3.values()) {
+      people++;
+      if (p.model.ready) ready++;
+    }
+    parts.push(!this.c.charF ? 0 : this.c.charF.pending ? 0.5 : people && !ready ? 0.5 : 1);
     // last: every shader in the scene (and my hands') compiled, once all the rest is in it
     const rest = parts.every((p) => p >= 1);
     if (rest && this.compiled === "no") this.compileAll();
