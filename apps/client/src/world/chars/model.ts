@@ -1939,9 +1939,10 @@ export class PersonModel {
 
   /** Where a joint is in the model's own space right now (a hand for a held thing, the head for a tag). */
   jointPosition(j: JointName, out = new Vector3()): Vector3 {
-    this.root.updateMatrixWorld(true);
     const b = this.bones[j];
     if (!b) return out.set(0, this.height * 0.5, 0);
+    // (the joint's own chain up to the world made now — getWorldPosition's —, not the whole body's: the tags ask
+    // every person's head every frame — docs/plan/90-the-friends-machines.md phase 3; the same numbers)
     b.getWorldPosition(out);
     return this.root.worldToLocal(out);
   }
@@ -1951,7 +1952,7 @@ export class PersonModel {
     const e = this.fit?.eye;
     const head = this.bones.head;
     if (!e || !head) return out.set(0, this.height * 0.92, 0.08);
-    this.root.updateMatrixWorld(true);
+    head.updateWorldMatrix(true, false);
     head.localToWorld(out.set(e[0], e[1], e[2]));
     return this.root.worldToLocal(out);
   }

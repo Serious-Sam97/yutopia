@@ -21,6 +21,7 @@ import {
   Vector3,
 } from "three";
 import type { chars } from "../art/chars-load";
+import { mergeWith } from "./merge-static";
 import { COCOA_MUG, ICE_TUB, MUG_COLORS } from "../art/held";
 import { phoneColors } from "../art/phone-art";
 import type { HandFrame } from "../chars/props";
@@ -177,6 +178,23 @@ const ARM_OPEN = 3;
 /** (shared ARM.shut, ARM.rack: the AK's closing — shouldered, or its charging handle racked first: plan 82) */
 const ARM_SHUT = 6;
 const ARM_RACK = 7;
+/** (docs/plan/90-the-friends-machines.md phase 3) A gun that only hangs — in its holster, slung on a back — posed
+ *  once and never moved part from part: drawn as a few meshes, one a material (its parts ~20 draws each, a person
+ *  carrying one twice what one without did), the parts themselves gone. Its root stays — shown, hidden, where the
+ *  strap's ends are — as before. The merged meshes, to be let go with it. */
+function stillGun(g: GunModel): Mesh[] {
+  const root = g.root;
+  root.updateMatrixWorld(true);
+  const inv = new Matrix4().copy(root.matrixWorld).invert();
+  const parts: Mesh[] = [];
+  root.traverse((o) => {
+    if (o !== root && (o as Mesh).isMesh) parts.push(o as Mesh);
+  });
+  const { meshes, used } = mergeWith(parts, root, (m) => new Matrix4().multiplyMatrices(inv, m.matrixWorld));
+  for (const m of used) m.removeFromParent();
+  return meshes;
+}
+
 /** (plan 82) Where a long gun hangs slung on her back (her chest bone's space): over the other one, if she
  *  carries both */
 function slungAt(SL: SlingSpec, p: PersonIn, out: Vector3): Vector3 {
@@ -3455,7 +3473,7 @@ export class Person3D {
   /** (plan 80) The revolver's holster on her right hip while she carries one (Player.holster) — the gun in
    *  it when it isn't in her hand. On the hips (it goes with them walking); its frame is the holstered
    *  gun's, where the draw starts and the put-away ends. */
-  private holster: { root: Group; gun: GunModel | null } | null = null;
+  private holster: { root: Group; gun: GunModel | null; merged: Mesh[] } | null = null;
   /** (plan 80 F5a) the speedloader's pouch on the belt at her right hip's front, worn with the holster */
   private pouch: { root: Group } | null = null;
   private holsterFrame(p: PersonIn) {
@@ -3471,7 +3489,7 @@ export class Person3D {
       root.position.copy(HOLSTER_AT);
       root.quaternion.copy(HOLSTER_TURN);
       hips.add(root);
-      this.holster = { root, gun: null };
+      this.holster = { root, gun: null, merged: [] };
     }
     // the gun in it, while it isn't in her hand
     const out = !!this.gun && gunKind(this.gun.key) === "revolver";
@@ -3481,6 +3499,7 @@ export class Person3D {
       poseGun(g, "revolver", {});
       this.holster.root.add(g.root);
       this.holster.gun = g;
+      this.holster.merged = stillGun(g);
     }
     if (this.holster.gun) this.holster.gun.root.visible = !out;
     const ptpl = this.mats.gun?.("pouch") ?? null;
@@ -3497,7 +3516,7 @@ export class Person3D {
    *  hands: on her chest bone, its strap over her right shoulder, across her chest to her left hip and round
    *  to the barrels — the strap's points her bones', each frame. (plan 82) The AK too (Player.slingAk), mirrored:
    *  the muzzle up past her left shoulder, its strap over that one — both crossed on her back */
-  private slings = new Map<string, { root: Group; gun: GunModel; strap: Mesh[] }>();
+  private slings = new Map<string, { root: Group; gun: GunModel; strap: Mesh[]; merged: Mesh[] }>();
   private slingFrame(p: PersonIn) {
     const chest = this.model.bone("chest");
     for (const LS of Object.values(LONG)) {
@@ -3514,6 +3533,7 @@ export class Person3D {
         const gun = lifeGunModel(gunKind(LS.key), tpl);
         poseGun(gun, gunKind(LS.key), {});
         root.add(gun.root);
+        const merged = stillGun(gun);
         root.position.copy(SL.at);
         chest.add(root);
         const mat = this.mats.prop("#3a2414");
@@ -3524,7 +3544,7 @@ export class Person3D {
           this.root.add(sm);
           strap.push(sm);
         }
-        S = { root, gun, strap };
+        S = { root, gun, strap, merged };
         this.slings.set(LS.key, S);
       }
       const on = !(this.gun && this.gun.key === LS.key);
@@ -4155,11 +4175,13 @@ export class Person3D {
       if (key && k !== key) continue;
       S.root.removeFromParent();
       for (const sm of S.strap) sm.removeFromParent();
+      for (const m of S.merged) m.geometry.dispose();
       this.slings.delete(k);
     }
   }
   private dropHolster() {
     this.holster?.root.removeFromParent();
+    for (const m of this.holster?.merged ?? []) m.geometry.dispose();
     this.holster = null;
     this.pouch?.root.removeFromParent();
     this.pouch = null;

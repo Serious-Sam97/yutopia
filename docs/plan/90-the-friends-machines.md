@@ -137,6 +137,22 @@ Measured on production's own reports a week after each release (against the tabl
 3. **People** (F4b) — out of sight not drawn, not posed, their shadows with them; a person's parts in fewer draws
    (merged where their materials allow, the soft edges and depth copies counted); people past ~25 m a lighter body,
    signed off with stills first.
+   Done 2026-11-15. What a person is (the dev client, a person near): 13 skinned parts (body, brows, eyes, lashes
+   and their soft edge, teeth, tongue, top, bottom, shoes, the hair's shell, cards and their edge), a blob, a ring —
+   and **a holstered revolver: ~20 meshes of its own** (body, cylinder, crane, rod, hammer, latch, trigger, six
+   rounds, the holster), each a draw and a shadow. **The far people (F4b) were there already**: past 12 m the life
+   look's `life-far`, one mesh. Three culls each part out of view already. With 20 near (Low, the proxy): the
+   render 55% (the draws' programs and uniforms), people's own update 15% (motion 8%, the feet on the ground 7% —
+   Jolt rays and land heights asked ~60 times a person a frame), the tags 5%.
+   - **A gun that only hangs — holstered, slung — merged** (`person3d.ts stillGun`, `mergeWith`): one mesh a
+     material, its parts gone, its root kept (shown, hidden when drawn, the strap's ends). Bia, holstered: 35 → 22
+     meshes. `revolver-two`, `shotgun-two`, `ak-two` green.
+   - **A joint's place read by its own chain** (`model.ts jointPosition`, `eyePosition`): not the whole body's
+     matrices made again (the tags ask every head every frame) — the same numbers.
+   - Left: the feet's ground asked of Jolt every frame (an idle body's feet move by its breath: no exact cache, and
+     a rounded one isn't the same picture); the soft edges' and brows' two passes (three re-checks their shaders
+     every draw — but the look swaps their materials as it fades: a split copy would have to follow); people out of
+     view still posed (their steps are heard).
 4. **Fewer draws indoors** — a room's furniture and things that stand still merged by material (as the floors are),
    repeated pieces instanced; what moves or is used stays its own.
 5. **Fewer objects walked** — what never moves sealed out of the per-frame matrices walk on every tier (only Low and
