@@ -183,6 +183,12 @@ const LIVE_NEAR = 18;
 const LIVE_MAX = 64;
 
 export class World3 {
+  /** every floor built (shown or held): a GPU reset bakes all their floors again (their canvases are let go
+   *  once on the GPU — plan 91 phase 5) */
+  static readonly live = new Set<World3>();
+  static rebakeAll() {
+    for (const w of World3.live) w.rebakeFloor();
+  }
   readonly root = new Group();
   readonly materials = {
     lit: litMaterial({ vertexColors: true }),
@@ -273,6 +279,7 @@ export class World3 {
     /** its roofs (phase 11.7), in its own frame, their eaves over its floor */
     private roofs: Roof[] | null = null,
   ) {
+    World3.live.add(this);
     const t0 = performance.now();
     this.edges = edges ?? edgesOfMap(map);
     // (the floor is moved by the view, which makes its matrix then: not every frame)
@@ -1646,6 +1653,12 @@ export class World3 {
         const tex = new CanvasTexture(plan);
         tex.colorSpace = SRGBColorSpace;
         tex.anisotropy = this.anisotropy;
+        // (once on the GPU, the canvas let go — ~3 MB a chunk, 174 MB in all on a furnished building: nothing
+        // reads it again; a GPU reset bakes every floor again, World3.rebakeAll — plan 91 phase 5)
+        tex.onUpdate = () => {
+          plan.width = 1;
+          plan.height = 1;
+        };
         const pos: number[] = [];
         const nor: number[] = [];
         const uv: number[] = [];
@@ -1810,6 +1823,7 @@ export class World3 {
   }
 
   dispose() {
+    World3.live.delete(this);
     this.soon = null;
     this.later = null;
     this.dropDecks();

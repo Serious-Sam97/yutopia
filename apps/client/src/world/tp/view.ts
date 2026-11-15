@@ -325,6 +325,10 @@ const wellsKey = (w: { floor: Set<string>; ceiling: Set<string> }) =>
 
 /** A floor kept built (every floor is built once and kept): its layout's and stairwells' signature. */
 type Floor3 = { world: World3; sig: string; lit?: Light3; wells: string };
+// (plan 91 phase 5: the floors held off the scene let go this far from them, this long; built again this near)
+const FLOORS_AWAY_M = 400;
+const FLOORS_AWAY_MS = 120_000;
+const FLOORS_BACK_M = 300;
 /** Can a new layout be laid on this built floor (World3.relayout) — the same size and stairwells? */
 const sameShape = (f: Floor3, map: MapDef, wells: string) =>
   f.wells === wells && f.world.map.width === map.width && f.world.map.height === map.height;
@@ -927,7 +931,8 @@ export class ThirdPersonView {
     this.scene.add(this.world.root);
     // a GPU reset (Chrome, mid-call) empties big canvases: draw the baked ones again
     this.renderer.domElement.addEventListener("webglcontextrestored", () => {
-      this.world.rebakeFloor();
+      // (every floor's, the held ones' too: their canvases were let go once on the GPU)
+      World3.rebakeAll();
       this.light.redraw();
       for (const l of this.below.values()) l.redraw();
     });
@@ -2018,6 +2023,43 @@ void main() {
   cutWarm = false;
   warmTarget: WebGLRenderTarget | null = null;
   warmCam = new OrthographicCamera(-1, 1, 1, -1, 0.1, 400);
+  /** Floors held off the scene (built, not drawn: the ones above mine, plan 89 F5a) let go when I've been far from
+   *  them a while — 206 MB of geometry for the office's four out on the long road (plan 91 phase 5) — and built
+   *  again (warmUp) once I'm near. */
+  private floorsGone = new Map<number, { x0: number; z0: number; x1: number; z1: number }>();
+  private farSince = 0;
+  private letFloorsGo(now: number) {
+    const t = this.target;
+    const away = (r: { x0: number; z0: number; x1: number; z1: number }) =>
+      Math.hypot(Math.max(r.x0 - t.x, 0, t.x - r.x1), Math.max(r.z0 - t.z, 0, t.z - r.z1));
+    // (near again: those let go are the warm-up's to build)
+    for (const [f, r] of this.floorsGone) if (away(r) < FLOORS_BACK_M) this.floorsGone.delete(f);
+    let far = false;
+    const rects: [number, Floor3, { x0: number; z0: number; x1: number; z1: number }][] = [];
+    for (const [f, b] of this.floors) {
+      if (f === this.level || b.world.root.parent) continue;
+      const o = offsetOf(this.building, f);
+      const r = { x0: o.x, z0: o.y, x1: o.x + b.world.map.width, z1: o.y + b.world.map.height };
+      if (away(r) > FLOORS_AWAY_M) {
+        far = true;
+        rects.push([f, b, r]);
+      }
+    }
+    if (!far) {
+      this.farSince = 0;
+      return;
+    }
+    this.farSince ||= now;
+    if (now - this.farSince < FLOORS_AWAY_MS) return;
+    for (const [f, b, r] of rects) {
+      b.world.dispose();
+      this.floors.delete(f);
+      this.below.get(f)?.dispose();
+      this.below.delete(f);
+      this.floorsGone.set(f, r);
+    }
+    this.farSince = 0;
+  }
   private warmUp(now: number) {
     if (now < this.warmAt || !this.allObjects.length) return;
     // (not before the sun's shadow map is made: drawn without it — the warm-up
@@ -2025,7 +2067,7 @@ void main() {
     if (this.sun.castShadow && !this.sun.shadow.map) return;
     // (behind the loading screen: one after another, a frame apart)
     this.warmAt = now + (this.warmup.warm ? 0 : 600);
-    const f = floorsOf(this.building).find((l) => !this.floors.has(l));
+    const f = floorsOf(this.building).find((l) => !this.floors.has(l) && !this.floorsGone.has(l));
     if (f === undefined) {
       // last: the building's glass cut above a floor (campus.cutAbove) — its
       // clipped shaders compiled too, before anyone first goes downstairs
@@ -2438,6 +2480,7 @@ void main() {
       for (const w of new Set([this.world, ...[...this.floors.values()].map((b) => b.world)]))
         if (w.root.parent) w.animateLive(this.time, { x: cam.x - w.root.position.x, z: cam.z - w.root.position.z });
     }
+    this.letFloorsGo(performance.now());
     this.warmUp(performance.now());
     this.syncLifts(performance.now());
     // everyone where they are (the world's frame): the floors below down where they are, above not drawn

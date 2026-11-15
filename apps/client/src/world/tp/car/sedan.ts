@@ -596,6 +596,41 @@ function skyLit(m: Material) {
   m.customProgramCacheKey = () => `${key.call(m)}|sky`;
 }
 
+/** The dash a parked car shows (what every car showed when made), one for them all: never let go by one. */
+let parked: { cluster: CanvasTexture; radio: CanvasTexture } | null = null;
+function parkedDash(): { cluster: CanvasTexture; radio: CanvasTexture } {
+  if (parked) return parked;
+  const c = document.createElement("canvas");
+  c.width = 1024;
+  c.height = 256;
+  drawCluster(c, {
+    kmh: 0,
+    rpm: 0,
+    gear: "N",
+    fuel: 0.7,
+    temp: 0.1,
+    clock: "12:00",
+    outside: -8,
+    odo: 87412,
+    beams: "off",
+    ind: 0,
+    hand: true,
+    helps: false,
+  });
+  const r = document.createElement("canvas");
+  r.width = 512;
+  r.height = 128;
+  drawRadio(r, "FM", 98.7, 3);
+  const cluster = new CanvasTexture(c);
+  cluster.colorSpace = SRGBColorSpace;
+  cluster.anisotropy = 8;
+  const radio = new CanvasTexture(r);
+  radio.colorSpace = SRGBColorSpace;
+  for (const t of [cluster, radio]) t.dispose = () => {};
+  parked = { cluster, radio };
+  return parked;
+}
+
 function buildBody(o: SedanOpts, kind: BodyKind): Sedan {
   const sh = takeShape(kind);
   const pick = sh.kind === "pickup";
@@ -727,19 +762,22 @@ function buildBody(o: SedanOpts, kind: BodyKind): Sedan {
   const switchMat = keep(new MeshStandardMaterial({ color: "#1b1b1b", roughness: 0.5, envMapIntensity: 0.2 }));
   const strap = keep(new MeshStandardMaterial({ color: "#3a332c", roughness: 0.9 }));
   // the VFDs and the lit panels
+  // (every car's own once it's shown something of its own; till then the parked dash every car shows, one
+  // for them all — each its own 1,024 × 256 and the radio's were 34 MB of canvas across the car park, plan 91
+  // phase 5)
   const clusterCanvas = document.createElement("canvas");
-  clusterCanvas.width = 1024;
-  clusterCanvas.height = 256;
+  clusterCanvas.width = 1;
+  clusterCanvas.height = 1;
   const clusterTex = keep(new CanvasTexture(clusterCanvas));
   clusterTex.colorSpace = SRGBColorSpace;
   clusterTex.anisotropy = 8;
-  const clusterMat = keep(new MeshBasicMaterial({ map: clusterTex, toneMapped: false }));
+  const clusterMat = keep(new MeshBasicMaterial({ map: parkedDash().cluster, toneMapped: false }));
   const radioCanvas = document.createElement("canvas");
-  radioCanvas.width = 512;
-  radioCanvas.height = 128;
+  radioCanvas.width = 1;
+  radioCanvas.height = 1;
   const radioTex = keep(new CanvasTexture(radioCanvas));
   radioTex.colorSpace = SRGBColorSpace;
-  const radioMat = keep(new MeshBasicMaterial({ map: radioTex, toneMapped: false }));
+  const radioMat = keep(new MeshBasicMaterial({ map: parkedDash().radio, toneMapped: false }));
   const heaterTex = keep(T.heater());
   const heaterMat = keep(new MeshBasicMaterial({ map: heaterTex, toneMapped: false }));
   const domeMat = keep(
@@ -1783,10 +1821,20 @@ function buildBody(o: SedanOpts, kind: BodyKind): Sedan {
     heaterMat.color.setScalar(0.25 + 0.75 * d);
   };
   const setCluster = (c: Cluster) => {
+    if (clusterCanvas.width !== 1024) {
+      clusterCanvas.width = 1024;
+      clusterCanvas.height = 256;
+      clusterMat.map = clusterTex;
+    }
     drawCluster(clusterCanvas, c);
     clusterTex.needsUpdate = true;
   };
   const setRadio = (band: "FM" | "AM" | "TAPE", f: number, preset: number) => {
+    if (radioCanvas.width !== 512) {
+      radioCanvas.width = 512;
+      radioCanvas.height = 128;
+      radioMat.map = radioTex;
+    }
     drawRadio(radioCanvas, band, f, preset);
     radioTex.needsUpdate = true;
   };
@@ -1826,21 +1874,6 @@ function buildBody(o: SedanOpts, kind: BodyKind): Sedan {
     }
   };
   setLights(lastLights);
-  setCluster({
-    kmh: 0,
-    rpm: 0,
-    gear: "N",
-    fuel: 0.7,
-    temp: 0.1,
-    clock: "12:00",
-    outside: -8,
-    odo: 87412,
-    beams: "off",
-    ind: 0,
-    hand: true,
-    helps: false,
-  });
-  setRadio("FM", 98.7, 3);
 
   return {
     root,

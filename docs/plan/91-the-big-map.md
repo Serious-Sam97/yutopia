@@ -198,10 +198,30 @@ On a prod build, the bench of phase 0:
    remake finished first. The probe (High): the town and the park standing 476 + 1,944 meshes; 13 km out after
    2 min both parked, **the heap −80 MB, −113 textures**; back in town all made again in under 5 s (a teleport —
    driving, they're made from 900 m out).
+   **Left (the user, 2026-11-15): the town by district.** Parked whole, the town is one piece — it goes and comes
+   all at once. Fine for today's one town; **not for a giant map with many**: new towns are to be made by district
+   from the start (their builders cut to a square, as the ways' pieces are — `way-piece.ts`), and today's town
+   moved to districts one day (the lot, the streets, the farm, the square, the park each made a piece at a time).
 5. **The memory: copies freed, caches capped** — after the GPU has it, no CPU copy: compressed textures' images,
    morph textures' arrays, the light volume's second copy (one, `Data3DTexture`'s own); file buffers dropped once
    parsed; **caches with a ceiling, the least lately used out**: the wardrobe's garments (refcounted, as plan 90's
    outfits), the cars' full models and plates, sign canvases, tree pools by distance. Measured by phase 0's census.
+   Done 2026-11-15 — measured first (High, the town, the lot, the woods; every canvas made traced to its maker,
+   held weakly): the wardrobe's garments are **19 MB** (not phase 0's guess of 160 — that was the floors below);
+   canvases 310 MB live, **174 MB of it the floors' bakes** (`FloorBake.drawPlan`, ~3 MB a chunk, 56 of them),
+   34 MB the parked cars' dashboards; and **206 MB of geometry in the four floors held off the scene** (built,
+   not drawn: the ones above mine, plan 89 F5a). A CPU copy can't just be dropped (a GPU reset uploads from it:
+   plan 72's heap pass) — so each went where it's made again:
+   - **A floor's bake let go once on the GPU** (`build.ts`: its canvas a pixel after upload); a GPU reset bakes
+     every floor again, the held ones too (`World3.live`, `rebakeAll` — the view's handler baked only mine).
+   - **One parked dashboard for every car** (`sedan.ts parkedDash`: the cluster and the radio every car drew when
+     made, the same for all); a car's own canvases a pixel till it shows something of its own.
+   - **The floors held off the scene let go** when I've been 400 m from them 2 min (`view.ts letFloorsGo`), built
+     again by the warm-up from 300 m.
+   After (High, the same walk): canvases **310 → 118 MB**; the GPU process **1,673 → 1,395 MB**; 13 km out after
+   2 min, the floors 5 → 1 (the GPU's geometries 4,133 → 2,102), back in under 5 s. Left: the KTX2 textures' CPU
+   copies (~31 MB — a GPU reset needs them, and they'd have to be fetched again), the facades' and signs' canvases
+   (~30 MB, shared already), the light volume (its array is the texture's own — no second copy of ours).
 6. **Reach by tier and memory** — the land's radius, the districts' reach, the caches' ceilings, the workers'
    count by the tier (Potato and Lowest nearer, the fog closer to hide it) and the device's memory
    (`navigator.deviceMemory`); the server told nothing of it (it's the client's view only). Same pixels on High,
