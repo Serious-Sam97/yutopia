@@ -76,7 +76,7 @@ await page.waitForTimeout(Number(process.env.SECS ?? 20) * 1000);
 await cdp.send("Tracing.end");
 await done;
 // frames: FireAnimationFrame (or the rAF's FunctionCall) on the main thread
-const pid = events.find((e) => e.name === "TracingStartedInBrowser")?.args?.data?.frames?.[0]?.processId;
+const _pid = events.find((e) => e.name === "TracingStartedInBrowser")?.args?.data?.frames?.[0]?.processId;
 const frames = events.filter((e) => e.name === "FireAnimationFrame" && e.ph === "X" && e.dur > 0);
 const long = frames.filter((e) => e.dur > 45_000);
 console.log(
@@ -148,9 +148,9 @@ const N = tally(frames.filter((e) => e.dur < 30_000).slice(0, 200));
 console.log(
   "LONG FRAMES samples",
   L.n,
-  "\nSELF\n" + L.self.join("\n") + "\nINCL\n" + L.incl.filter((x) => !/\(root\)|\(program\)/.test(x)).join("\n"),
+  `\nSELF\n${L.self.join("\n")}\nINCL\n${L.incl.filter((x) => !/\(root\)|\(program\)/.test(x)).join("\n")}`,
 );
-console.log("\nNORMAL FRAMES samples", N.n, "\nSELF\n" + N.self.slice(0, 10).join("\n"));
+console.log("\nNORMAL FRAMES samples", N.n, `\nSELF\n${N.self.slice(0, 10).join("\n")}`);
 // GC and other main-thread events inside long frames
 const gc = events.filter(
   (e) =>
