@@ -9,7 +9,7 @@ Status: **investigated 2026-11-14 (read-only); planned 2026-11-14; forks decided
 pixel-identical throughout, plus phase 9's invisible-detail cuts each signed off with stills side by side; **F2c**
 Auto starts on Medium and **steps up to High during play** when there's room (asked after: up mid-game, not only
 behind the loading screen), down as before, every tier warmed; **F3b** the adaptive buffer; **F4a** versioned URLs +
-`immutable` + a Cloudflare cache rule (the user sets the rule); **F5a** the floors' held copy kept, shrunk by phase 2. **Phase 0 (the bench, the baseline) done 2026-11-14. Phase 1 (lights that are off) done 2026-11-14; F6a: the torches left as they are. Phase 2 (by index) tried and reverted 2026-11-15: −135 MB, no fps, +0.3 s load. Phase 3 (painted once) done 2026-11-15: GPU −213 MB, canvas −67 MB, load the same. Phase 4 (outside out of sight) done 2026-11-15: M1 proxy +8–23%; sealing the land left (unsafe without declaring every mover). Phase 5 (loading) done 2026-11-15: files cached by version (revalidations 137–180 → 2), people in before the screen goes (no compiles in play; a first visit +2 s, kept).**
+`immutable` + a Cloudflare cache rule (the user sets the rule); **F5a** the floors' held copy kept, shrunk by phase 2. **Phase 0 (the bench, the baseline) done 2026-11-14. Phase 1 (lights that are off) done 2026-11-14; F6a: the torches left as they are. Phase 2 (by index) tried and reverted 2026-11-15: −135 MB, no fps, +0.3 s load. Phase 3 (painted once) done 2026-11-15: GPU −213 MB, canvas −67 MB, load the same. Phase 4 (outside out of sight) done 2026-11-15: M1 proxy +8–23%; sealing the land left (unsafe without declaring every mover). Phase 5 (loading) done 2026-11-15: files cached by version (revalidations 137–180 → 2), people in before the screen goes (no compiles in play; a first visit +2 s, kept). Phase 6 (Auto: Medium first, up when there's room, remembered) done 2026-11-15; the step's own ~0.8 s freeze (old) left.**
 
 ## What was measured (2026-11-14)
 
@@ -320,6 +320,22 @@ Each phase: measured before and after on the phase 0 bench, its A/B stills at 0 
 6. **Auto's tier** — per F2c: Auto starts on Medium; with room to spare for a while (measured, with hysteresis so it
    never flips back and forth) it steps up to High during play, and down again as today when it can't keep up; every
    tier's programs warmed ahead so neither step hitches. A tier picked by hand in Settings is never touched.
+   Done in phase 6 (2026-11-15) — `ctl/quality.ts`:
+   - **Auto starts on Medium** on a device it would give High (`startTier`), or on what this device held last
+     (`localStorage` `yutopia:autoTier`: High kept a minute is for good; a step down, for a week, then tried again).
+   - **Up to High mid-game**: after 10 s at the frame rate asked for (95% of it), playing — not idle, whose 30 fps
+     cap says nothing of room —, a step up is tried; slow 6 s on it, back down, and no trying again this session.
+     A tier picked by hand is never touched. `decide()` is pure: `ctl/quality.test.ts`.
+   - Prod, live: started on Medium, up to High ~10 s in, down under a slowed CPU, the tier held remembered.
+   - **The step itself still freezes once, ~0.8 s** — as Auto's steps down always did: the warm-up before a tier
+     change (`Warmup.compileFor`) compiles what's visible as it is, and ~80 of the programs the new tier's first
+     frame draws with aren't among them (objects hidden at the time, materials the tier makes as it comes in), so
+     they're linked and first used in that frame (`getProgramInfoLog`/`getProgramParameter`, a round trip each).
+     Tried and left: each program's first use made ahead (no help: not the programs needed), and compiling against
+     the scene's own lights set as the new tier's (the switch down to 60 ms, but three then works every material's
+     program out again on the next frame — the same freeze, earlier). With the tier remembered it's once per
+     device, not per visit. Covering it properly — the whole scene as the new tier will draw it, made before the
+     step — is its own task.
 7. **Others' smoothing** — per F3.
 8. **The world-server** — its RSS creep (memcheck OVER), the stalls on a room's creation and the cars' tick.
 9. **(F1b only) Detail no one sees** — per change, stills side by side first: fewer segments in bevels under a

@@ -64,7 +64,7 @@ import { Client, getStateCallbacks, type Room } from "colyseus.js";
 import { ApiError, type Session, yutopia } from "@/lib/api";
 import { reportError, setErrorSink } from "@/lib/crash";
 import { lang, tr } from "@/lib/i18n";
-import { deviceQuality, prefs, subscribePrefs } from "@/lib/prefs";
+import { prefs, subscribePrefs } from "@/lib/prefs";
 import { ActionQueue } from "./actions";
 import { loadChars } from "./art/chars-load";
 import { loadPets, pets as petsArt } from "./art/pets-load";
@@ -84,7 +84,7 @@ import { Loading } from "./ctl/loading";
 import { ActionMenu } from "./ctl/menu";
 import { Pets } from "./ctl/pets";
 import { Photo } from "./ctl/photo";
-import { QualityWatch } from "./ctl/quality";
+import { QualityWatch, startTier } from "./ctl/quality";
 import { Steps } from "./ctl/steps";
 import { Tables } from "./ctl/tables";
 import { Water } from "./ctl/water";
@@ -411,7 +411,8 @@ export class WorldController {
 
     const model = new WorldModel(this.map);
     this.model = model;
-    this.quality.autoTier = deviceQuality();
+    // (Auto: Medium first on a desktop, or what this device held last — it steps up when there's room: ctl/quality.ts)
+    this.quality.autoTier = startTier();
     model.setQuality(this.quality.qualityNow(), prefs().reducedMotion);
     model.events = {
       onFloorClick: (x, y, mods) => {
