@@ -557,7 +557,10 @@ if (vFade < 0.999) {
     // what's not wanted now, or made under edits since laid again, dropped)
     const pool = landPool();
     if (pool?.made.length) {
-      pool.made = pool.made.filter((d) => d.v === editsVersion && wanted.has(d.key));
+      pool.made = pool.made.filter(
+        (d) =>
+          d.v === editsVersion && wanted.has(d.key) && (!this.blocks.get(d.key)?.mesh || this.stale.has(d.key)),
+      );
       pool.made.sort((a, b) => distTo(a.key, ax, az) - distTo(b.key, ax, az));
       while (pool.made.length && (built === 0 || performance.now() - t0 < budget)) {
         this.place(pool.made.shift() as BlockData);

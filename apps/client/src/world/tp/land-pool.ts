@@ -67,9 +67,12 @@ export class LandPool {
   }
   /** These blocks (nearest first) to the least busy worker, `most` in hand each at most. */
   ask(list: BlockAsk[], most: number) {
+    // (made and not placed yet is in hand too: asked again, a slow machine's stream re-placed the same
+    // nearest blocks over and over — thousands waiting, the land and the districts after it stuck)
+    const inHand = new Set(this.made.map((d) => d.key));
     for (const b of list) {
       if (this.dead) return;
-      if (this.asked.has(b.key)) continue;
+      if (this.asked.has(b.key) || inHand.has(b.key)) continue;
       const o = this.ws.reduce((a, c) => (c.busy < a.busy ? c : a));
       if (o.busy >= most) return;
       const a: LandBlockAsk = { ...b, v: editsVersion, ...this.news(o) };
