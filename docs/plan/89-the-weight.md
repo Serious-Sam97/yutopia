@@ -9,7 +9,7 @@ Status: **investigated 2026-11-14 (read-only); planned 2026-11-14; forks decided
 pixel-identical throughout, plus phase 9's invisible-detail cuts each signed off with stills side by side; **F2c**
 Auto starts on Medium and **steps up to High during play** when there's room (asked after: up mid-game, not only
 behind the loading screen), down as before, every tier warmed; **F3b** the adaptive buffer; **F4a** versioned URLs +
-`immutable` + a Cloudflare cache rule (the user sets the rule); **F5a** the floors' held copy kept, shrunk by phase 2. **Phase 0 (the bench, the baseline) done 2026-11-14. Phase 1 (lights that are off) done 2026-11-14; F6a: the torches left as they are. Phase 2 (by index) tried and reverted 2026-11-15: −135 MB, no fps, +0.3 s load. Phase 3 (painted once) done 2026-11-15: GPU −213 MB, canvas −67 MB, load the same. Phase 4 (outside out of sight) done 2026-11-15: M1 proxy +8–23%; sealing the land left (unsafe without declaring every mover). Phase 5 (loading) done 2026-11-15: files cached by version (revalidations 137–180 → 2), people in before the screen goes (no compiles in play; a first visit +2 s, kept). Phase 6 (Auto: Medium first, up when there's room, remembered) done 2026-11-15; the step's own ~0.8 s freeze (old) left. Phase 7 (others' smoothing: 110–250 ms by the link, NPCs/pets on the server's clock) done 2026-11-15: bursty-link bad frames −55%.**
+`immutable` + a Cloudflare cache rule (the user sets the rule); **F5a** the floors' held copy kept, shrunk by phase 2. **Phase 0 (the bench, the baseline) done 2026-11-14. Phase 1 (lights that are off) done 2026-11-14; F6a: the torches left as they are. Phase 2 (by index) tried and reverted 2026-11-15: −135 MB, no fps, +0.3 s load. Phase 3 (painted once) done 2026-11-15: GPU −213 MB, canvas −67 MB, load the same. Phase 4 (outside out of sight) done 2026-11-15: M1 proxy +8–23%; sealing the land left (unsafe without declaring every mover). Phase 5 (loading) done 2026-11-15: files cached by version (revalidations 137–180 → 2), people in before the screen goes (no compiles in play; a first visit +2 s, kept). Phase 6 (Auto: Medium first, up when there's room, remembered) done 2026-11-15; the step's own ~0.8 s freeze (old) left. Phase 7 (others' smoothing: 110–250 ms by the link, NPCs/pets on the server's clock) done 2026-11-15: bursty-link bad frames −55%. Phase 8 (world-server) done 2026-11-15: the first ticks' ~490 ms before anyone's in; the RSS creep (the bus's road built round it) gone, memcheck ok.**
 
 ## What was measured (2026-11-14)
 
@@ -351,6 +351,29 @@ Each phase: measured before and after on the phase 0 bench, its A/B stills at 0 
      What's left is holds over the 250 ms the plan allows. `ctl/smooth.test.ts` for the clock itself.
    - Left: the karts' and slot cars' own 110 ms (their own playback, `kart/karts.ts`, `slots.ts`).
 8. **The world-server** — its RSS creep (memcheck OVER), the stalls on a room's creation and the cars' tick.
+   Done in phase 8 (2026-11-15):
+   - **The stalls after a room's made** (profiled, a fresh start: `node --cpu-prof` on `perf.mts`): the first `cars`
+     tick made the home cars' land on the main thread (`heightAt` → `makeChunk`, ~240 ms where the room had none of
+     them — every dev restart), the first `physics` tick Silver Lake's ice rows (~250 ms, once a process: `lakes()`).
+     Both now in a feature's new `ready()` (`features/index.ts`), run at the end of `onCreate` — the world, the
+     physics and the weather in, nobody let in yet —, the homes' land asked of the worker as the cars install; Jolt's
+     wasm compiled at boot (`server.ts`), not by the first one in. Same world, made before anyone's there: a fresh
+     start's first tick ~490 ms → under 14 ms; the dev world joined live, nothing over 250 ms in 30 s.
+   - **Room creation itself** (~1.1–1.6 s the first time a process makes one: the land's layout, the long road, the
+     building's solids and navmesh) stays, before anyone's in; a process's later rooms ~50 ms (all of it kept).
+   - **The RSS creep**: the long road's bus and traffic. Physics built the land 160 m round every car going — the
+     server's own, with nobody in them or near — so the bus, up and down the 13.7 km, had the road's corridor made
+     (~4,700 chunks, past the land cache's 4,000: `grounds.ts`, ~33 KB a chunk) and Jolt's land round it built and
+     dropped: memcheck, 8 cycles, chunks 711 → 2,977, heap +4.5 MB a cycle, RSS 520–700 MB, Jolt 1,071–1,654
+     bodies. Now one going with nobody in it has only its way's land made ahead, in the worker (`ways()`, the
+     chunk it's on and where it'll be in 4 s: its heights, all it reads) — no Jolt round it, whoever's near has
+     their own ring as before. memcheck **ok**, 4 cycles: heap 165 → 169 MB, Jolt 246 bodies flat (16.9 MB), RSS
+     358–554 ending 412, chunks +100 a cycle (the road's own line, bounded). memcheck's bots now also stay round
+     where they came in (they walked off through the walls onto new land). The split measured as metrics and
+     memcheck rows: `process_heap_total`, `process_external`, `process_array_buffers`, `physics_heap_total`,
+     `land_worker_heap`. RSS still swings ~150 MB with V8's committed heap (its peaks), not a trend.
+   - Seen, not this phase's: the page's textures +13 a cycle as people come and go (phase 0's rate; ~3 a person who
+     left) — for phase 10.
 9. **(F1b only) Detail no one sees** — per change, stills side by side first: fewer segments in bevels under a
    centimetre and in small lathes; the far trees' LOD.
 10. **Checks** — the bench against phase 0's numbers, memcheck, `e2e/lag.spec.ts`, the e2e suite's known reds

@@ -108,6 +108,8 @@ export interface PhysicsCounts {
   refused: number;
   /** Jolt's heap in use, bytes */
   heap: number;
+  /** Jolt's heap as big as it's grown (the wasm memory: it never shrinks), bytes */
+  heapTotal: number;
 }
 
 /** A thing that falls (docs/plan/50, F): a ball or a crate, its size in m. */
@@ -1403,6 +1405,7 @@ export class PhysicsWorld {
       characters: this.chars.size,
       refused: this.refused,
       heap: J.JoltInterface.prototype.sGetTotalMemory() - J.JoltInterface.prototype.sGetFreeMemory(),
+      heapTotal: J.JoltInterface.prototype.sGetTotalMemory(),
     };
   }
 

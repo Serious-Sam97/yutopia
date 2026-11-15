@@ -2282,7 +2282,8 @@ export interface GroundsChunk {
 }
 const chunks = new Map<number, GroundsChunk>();
 const chunkKey = (cx: number, cz: number) => (cx + 2048) * 4096 + (cz + 2048);
-// (~24 KB of JS a chunk: 4,000 is ~100 MB — today's world, 1,184, never fills it)
+// (~33 KB a chunk — ~14 KB of JS, its heights' 17 KB: 4,000 is ~130 MB, of the land's 21,026 since the long road;
+// people roaming fill it, then the least lately used go: docs/plan/89-the-weight.md phase 8)
 let chunkCap = 4000;
 let useTick = 0;
 /** How many chunks are kept at most (the least lately used go past it). The browser keeps fewer. */

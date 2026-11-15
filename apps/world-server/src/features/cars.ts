@@ -30,7 +30,7 @@ import { SWIM } from "@yutopia/shared/move";
 import { BOARD_KIND, boardOfOwner, boardsOf, postOf } from "@yutopia/shared/spot";
 import { api } from "../api.ts";
 import { config } from "../config.ts";
-import { onLandChanged } from "../land.ts";
+import { onLandChanged, prefetch } from "../land.ts";
 import { type Player, Vehicle } from "../schema.ts";
 import { fromSchema, toSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
@@ -932,6 +932,9 @@ registerFeature((room: WorldRoom) => {
     if (!config.offline) void api.putObject(next).catch((e) => console.warn("[cars] home", e.message));
   };
   let homesMade = false;
+  // (the land under each home made ahead, in the worker, while the room's made: putHome asks its height — on the
+  // tick, a chunk made then is ~6–30 ms, the land's 35 homes ~250 ms — docs/plan/89-the-weight.md phase 8)
+  for (const h of HOME_CARS) prefetch(h.x, h.z, 2);
   const makeHomes = () => {
     const cars = [...room.state.objects.values()].filter((o) => o.kind === "car");
     if (cars.length < 6) return;
@@ -998,6 +1001,11 @@ registerFeature((room: WorldRoom) => {
   return {
     dispose() {
       offLand();
+    },
+    // (the fleet and the homes made before anyone's in: the first tick's, done as the room's made)
+    ready() {
+      if (!fleet) makeFleet();
+      if (!homesMade) makeHomes();
     },
     tick(dt, now) {
       if (!fleet) makeFleet();

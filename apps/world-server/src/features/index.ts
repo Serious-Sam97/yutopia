@@ -19,6 +19,9 @@ export interface Feature {
   // someone knocked on a room's door (a booth, a locked room — WorldRoom.knock)
   knock?(client: WorldClient, p: Player, areaKey: string): void;
   dispose?(): void;
+  // the room made — its world, its physics and its weather in — and nobody let in yet: what its first tick would
+  // do that's heavy, done now (docs/plan/89-the-weight.md phase 8: a first tick of ~250 ms froze everyone there)
+  ready?(now: number): void;
 }
 
 type Installer = (room: WorldRoom) => Feature;

@@ -84,6 +84,13 @@ const serverCounts = async (): Promise<Record<string, number>> => {
   return {
     heapMB: (m.process_heap_bytes ?? 0) / 1e6,
     rssMB: (m.process_rss_bytes ?? 0) / 1e6,
+    // (where it is — docs/plan/89-the-weight.md phase 8: V8's heap as committed, outside it, Jolt's wasm as grown,
+    // the land worker's heap)
+    heapTotalMB: (m.process_heap_total_bytes ?? 0) / 1e6,
+    externalMB: (m.process_external_bytes ?? 0) / 1e6,
+    buffersMB: (m.process_array_buffers_bytes ?? 0) / 1e6,
+    joltTotalMB: (m.physics_heap_total_bytes ?? 0) / 1e6,
+    landWorkerMB: (m.land_worker_heap_bytes ?? 0) / 1e6,
     joltMB: (m.physics_heap_bytes ?? 0) / 1e6,
     bodies: m.physics_bodies ?? 0,
     chunks: m.grounds_chunks ?? 0,
@@ -147,9 +154,13 @@ async function arrive(): Promise<void> {
   await new Promise<void>((r) => (room.state?.players ? r() : room.onStateChange.once(() => r())));
   const me = room.state.players.get(room.sessionId);
   const at = { x: me?.x ?? 0, y: me?.y ?? 0 };
+  const home = { ...at };
   let a = Math.random() * Math.PI * 2;
   const timer = setInterval(() => {
     a += (Math.random() - 0.5) * 0.6;
+    // (round where they came in: let wander, through walls — the server takes moves as sent —, they reach new land
+    // every cycle, and the land's cache filling up to its cap reads as a leak: docs/plan/89-the-weight.md phase 8)
+    if (Math.hypot(at.x - home.x, at.y - home.y) > 12) a = Math.atan2(home.y - at.y, home.x - at.x);
     at.x += Math.cos(a) * 0.12;
     at.y += Math.sin(a) * 0.12;
     room.send("pos", { x: at.x, y: at.y, yaw: a });
@@ -346,6 +357,11 @@ try {
     "server.heapMB": { pct: 10, abs: 20 },
     "server.rssMB": { pct: 15, abs: 60 },
     "server.joltMB": { pct: 10, abs: 4, trend: true },
+    "server.heapTotalMB": { pct: 15, abs: 40, trend: true },
+    "server.externalMB": { pct: 15, abs: 30, trend: true },
+    "server.buffersMB": { pct: 15, abs: 30, trend: true },
+    "server.joltTotalMB": { pct: 15, abs: 16, trend: true },
+    "server.landWorkerMB": { pct: 15, abs: 20, trend: true },
     "server.bodies": { pct: 10, abs: 50, trend: true },
     "server.chunks": { pct: 0, abs: 0, cap: 4000 },
     // (a walk grid a person a floor they've been on: as many as there are people, give or take)

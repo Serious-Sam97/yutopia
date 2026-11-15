@@ -94,3 +94,23 @@ export function landEdits(edits: GroundsEdits): [number, number][] {
   for (const f of listeners) f(dirty);
   return dirty;
 }
+
+// the worker's own heap (its isolate isn't in process.memoryUsage().heapUsed): read now and then, the last one said
+// (metrics: docs/plan/89-the-weight.md phase 8)
+let heapSeen = 0;
+let heapAsked = 0;
+export function landWorkerHeap(): number {
+  const now = Date.now();
+  if (worker && now - heapAsked > 5000) {
+    heapAsked = now;
+    // (Node 24's; its types here are older)
+    const w = worker as Worker & { getHeapStatistics(): Promise<{ used_heap_size: number }> };
+    void w
+      .getHeapStatistics()
+      .then((h) => {
+        heapSeen = h.used_heap_size;
+      })
+      .catch(() => {});
+  }
+  return worker ? heapSeen : 0;
+}

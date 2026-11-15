@@ -23,7 +23,7 @@ import {
   staticCount,
   WorldBuilder,
 } from "@yutopia/shared/physics";
-import { onLandChanged, prefetch } from "../land.ts";
+import { landWorkerHeap, onLandChanged, prefetch } from "../land.ts";
 import { metrics } from "../metrics.ts";
 import { fromSchema, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
@@ -66,6 +66,13 @@ metrics.gauge("physics_ground_chunks", () => current?.ready() ?? 0);
 metrics.gauge("grounds_chunks", () => chunkCount());
 metrics.gauge("process_heap_bytes", () => process.memoryUsage().heapUsed);
 metrics.gauge("process_rss_bytes", () => process.memoryUsage().rss);
+// (where the resident memory is: V8's heap as committed, what lives outside it — typed arrays' stores —, Jolt's wasm
+// memory as grown, the land worker's own heap: docs/plan/89-the-weight.md phase 8)
+metrics.gauge("process_heap_total_bytes", () => process.memoryUsage().heapTotal);
+metrics.gauge("process_external_bytes", () => process.memoryUsage().external);
+metrics.gauge("process_array_buffers_bytes", () => process.memoryUsage().arrayBuffers);
+metrics.gauge("physics_heap_total_bytes", () => current?.world.counts().heapTotal ?? 0);
+metrics.gauge("land_worker_heap_bytes", () => landWorkerHeap());
 
 registerFeature((room) => {
   let world: PhysicsWorld | null = null;
@@ -86,17 +93,29 @@ registerFeature((room) => {
     const { x: ox, y: oy } = shiftOf(room.map, 0);
     const out: [number, number][] = [];
     for (const p of room.state.players.values()) if (p.level === 0) out.push([p.x + ox, p.y + oy]);
-    // (a car parked needs nothing: the cars aren't on Jolt here; one carrying someone, or going, its way)
+    // (a car parked needs nothing: the cars aren't on Jolt here; one carrying someone, its way)
     for (const v of room.state.vehicles.values()) {
-      if (Math.abs(v.v) < 1 && !v.riders) continue;
+      if (!v.riders) continue;
       out.push([v.x, v.z]);
       if (Math.abs(v.v) > 1) out.push([v.x + Math.cos(v.a) * v.v * AHEAD_S, v.z + Math.sin(v.a) * v.v * AHEAD_S]);
     }
     return out;
   };
+  /** One going with nobody in it — the long road's bus and traffic, the town's, a car left rolling: only the land
+   *  its way's heights are read from (heightAt), made ahead in the worker; no Jolt round it (nothing there to stand
+   *  on it — whoever's near has their own ring). Round each, the 160 m ring made the whole 13.7 km road's corridor
+   *  as the bus drove it, ~4,700 chunks — past the land's cache (docs/plan/89-the-weight.md phase 8). */
+  const ways = () => {
+    for (const v of room.state.vehicles.values()) {
+      if (v.riders || Math.abs(v.v) < 1) continue;
+      prefetch(v.x, v.z, CHUNK);
+      prefetch(v.x + Math.cos(v.a) * v.v * AHEAD_S, v.z + Math.sin(v.a) * v.v * AHEAD_S, CHUNK);
+    }
+  };
   /** What's wanted now: each chunk within RING_M of someone; those not built queued, nearest first. */
   const want = (now: number) => {
     if (!build) return;
+    ways();
     const spots = near();
     const r = Math.ceil(RING_M / CHUNK);
     const queue = new Map<string, { c: [number, number]; d: number }>();
@@ -212,6 +231,10 @@ registerFeature((room) => {
   })();
 
   return {
+    // the water's ice as the weather has it now (Silver Lake's rows the first time: ~250 ms) — the first tick's
+    ready() {
+      build?.ice(underfoot().ice, iceHolesNow());
+    },
     tick() {
       if (!world || !build) return;
       // the lifts' cars where they are (features/lifts.ts): whoever's on one with it

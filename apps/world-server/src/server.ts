@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { matchMaker, Server } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { ROOM_NAME } from "@yutopia/shared";
+import { loadJolt } from "@yutopia/shared/physics";
 import { signInternal } from "./api.ts";
 import { config } from "./config.ts";
 import "./features/all.ts";
@@ -155,6 +156,8 @@ export async function startWorldServer(port: number): Promise<Server> {
   // Offline (tests, the bot swarm) a `sandbox` option opens a separate copy, so
   // each test starts from a fresh studio; nothing is stored offline anyway.
   const world = server.define(ROOM_NAME, WorldRoom);
+  // (Jolt's wasm compiled now, not when the first person in makes the room: docs/plan/89-the-weight.md phase 8)
+  void loadJolt().catch(() => {});
   if (config.offline) world.filterBy(["sandbox"]);
   await server.listen(port);
   return server;

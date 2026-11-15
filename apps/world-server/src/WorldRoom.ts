@@ -509,6 +509,7 @@ export class WorldRoom extends Room<WorldState> {
     this.clock.setInterval(() => this.weather(), 1000);
     this.clock.setInterval(() => void this.saveWeather(), WEATHER_SAVE_MS);
     this.weather();
+    this.hook("ready", Date.now());
   }
 
   // the storm over the Grounds, from the schedule (shared weather.ts) unless an
