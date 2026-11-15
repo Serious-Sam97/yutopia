@@ -158,6 +158,33 @@ On a prod build, the bench of phase 0:
 3. **The districts in workers** (F3a) — a district's pieces (the ways' ribbons, the ground's props, the buildings'
    shells) made as data in the land's workers (the same shared code: `Grounds3`'s builders moved to plain arrays),
    the main thread making only meshes from them, a few a frame, as the land's blocks.
+   Done 2026-11-15 — measured first (a profile 7 km out, High, CPU 4×): the district steps were a third of the main
+   thread, all but nothing of it **the road pieces** (`ways`: the ground's height under each vertex, `roadTarget`,
+   `nearRoad`, the banks) — the land's chunks made for them only 0.4 s of 6.4. So the road pieces went to the
+   workers, not all of `Grounds3`: `way-piece.ts` holds a way's geometry alone (`wayGeo`, `ribbon`, `wayPiece`:
+   by slot — asphalt, lines, paint, slabs, trail, walk, banks), the main thread's `ways()` and the workers both
+   making it with the one code; **the land's own workers** make a district's pieces (`land-block.worker.ts`: their
+   chunks warm, the edits and the park's layout told them already), `LandPool.askPieces` / `pieces`, the stream
+   asking the nearest not in hand (3 in a worker's hand with the land's blocks) and handing what's back to its
+   district (`takePiece`); a piece still with a worker isn't ready (`pick` skips it), the district's other steps go
+   on; with no workers, made here as before. The main thread only makes the meshes (`placePiece`: its arrays taken
+   as they are). And: a district's long road dressing only in the pieces the road passes (256 a district were
+   queued, ~20 had anything); Lowest/Potato's one frame in three only when there's nothing to make; the steps a
+   share of the budget (1.5 ms, Potato 0.75) whatever the land took. Two of Next's client build's `typeof window`
+   ("object" there, so a worker's import threw) now asked of `globalThis` (`wx3d.ts`, `roads3d.ts`). The main
+   thread keeps 23 land chunks where it kept 222. CPU 4×:
+
+   | | Phase 2 | Now |
+   |---|---|---|
+   | Arriving 7 km out: every district in · Potato | never (5,671 steps left at 40 s) | **19 s** |
+   | · High | 27 s | **14 s** |
+   | Arriving in town: every district in · Potato · High | 20 s · 8 s | **5 s · 5 s** |
+   | Driving at 240 km/h: dirt under you | 0 · 0 | 0 · 0 |
+   | Driving: fps (Potato · High) | 25 · 17 | 18 · 16 |
+
+   Potato draws fewer frames while it's building (every frame now, not one in three); left: the land's own block
+   placing on the main thread (`computeVertexNormals` — its covered cells are the main thread's to know) and the
+   far land's rings made again after a long jump (~3 s of a slowed main thread: `far3d.ts`).
 4. **Nothing for good** (F4a) — the rest's circle and the Kart Park cut into districts like the rest (512 m squares,
    made near, freed far, with hysteresis: made within 900 m, freed past 1,300 m as now); the office and buildings
    inside as a district's; what's kept a while after you leave (a few minutes, under the memory's cap) so coming

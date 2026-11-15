@@ -537,7 +537,10 @@ export function snowPoles(
 // wx3d.ts `wxSnow`: docs/plan/65, W4): none on a green day.
 export const roadSnow = { value: -1 };
 // (the e2e shots set it: after a storm)
-if (typeof window !== "undefined") (window as unknown as { __roadSnow?: typeof roadSnow }).__roadSnow = roadSnow;
+// (not in a worker — the land's make road pieces with this module, plan 91; `typeof window` is "object" to
+// Next's client build, so asked of globalThis)
+const win = (globalThis as { window?: { __roadSnow?: typeof roadSnow } }).window;
+if (win) win.__roadSnow = roadSnow;
 let snowAt = 0;
 /** `falling`: how hard it's snowing now (the storm, or the snow's own fall); `fallingAt` the same
  *  by the schedule at a time (coming in: what the last two hours left). */

@@ -101,9 +101,10 @@ export const wx = {
 export const wxNow = { snowing: 1, clear: 0, rain: 0, temp: -6 };
 /** The e2e's stills hold the snow where they set it (the room's left out). */
 export const wxHold = { on: false };
-// (the e2e reads it: the snow the view shows)
-if (typeof window !== "undefined")
-  (window as unknown as { __wxLayer?: { wx: typeof wx; hold: typeof wxHold } }).__wxLayer = { wx, hold: wxHold };
+// (the e2e reads it: the snow the view shows — not in a worker, where there's no window: the land's make road
+// pieces with this module, plan 91; `typeof window` is "object" to Next's client build, so asked of globalThis)
+const win = (globalThis as { window?: { __wxLayer?: { wx: typeof wx; hold: typeof wxHold } } }).window;
+if (win) win.__wxLayer = { wx, hold: wxHold };
 
 /** How far a piece that comes in at `at` has grown, with `snow` lying (`melt`: going — the shapes
  *  outlast the dusting a while). The shader's wxGrowOf. */

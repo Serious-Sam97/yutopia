@@ -7,6 +7,7 @@ import {
   CHUNK,
   CORN,
   DOCK,
+  editsVersion,
   FARM,
   FENCE,
   FENCE_H,
@@ -23,14 +24,12 @@ import {
   KART_LAND,
   KART_PARK,
   KART_SHOW,
-  KART_TURN,
   kartBridged,
   kartFloods,
   kartLayoutNow,
   kartShowNow,
   kartTrack,
   LAMPS,
-  LOT,
   landBounds,
   longDressIn,
   MOTORS,
@@ -60,7 +59,6 @@ import {
   wallEdgeAt,
   wallsHigh,
   waterAt,
-  wayHalf,
 } from "@yutopia/shared/grounds";
 import { grownLakeR, grownLevel, grownNow } from "@yutopia/shared/grow";
 import {
@@ -138,13 +136,22 @@ import {
   roadCover,
   slabCanvas,
   snowPoles,
-  streetCorners,
-  wayDressing,
 } from "./roads3d";
 import type { Themes } from "./sky";
-import { bankAlong, driftAlong, face, flatSnow, icicles, ridge, SNOW, slopeSnow, snowBox, wobble } from "./snow3d";
+import { driftAlong, face, flatSnow, icicles, ridge, SNOW, slopeSnow, snowBox, wobble } from "./snow3d";
 import { motorsForecourt } from "./spot3d";
 import { signFaces, streetGeometry } from "./town3d";
+import {
+  boxOf,
+  type Near,
+  type PieceAsk,
+  type PieceData,
+  pieceGeometry,
+  type Slot,
+  sinks,
+  spanOf,
+  wayGeo,
+} from "./way-piece";
 import { AT, atOf, BURIED, mergeGeometries, smoothAt, snowShadow, tagged, type WxKind, wx } from "./wx3d";
 
 // the change's show: the old circuit whitens to the snow's colour (docs/plan/47-the-track-changer.md)
@@ -679,6 +686,13 @@ export function farBareGeometry(): BufferGeometry {
 }
 
 // ── the module ──────────────────────────────────────────────────────────────
+/** A district's road piece the land's workers may make (way-piece.ts): what to ask, what came back. */
+interface Remote {
+  w: Way;
+  ask: PieceAsk;
+  data?: PieceData;
+}
+
 export class Grounds3 {
   readonly root = new Group();
   readonly lights: LampLight[] = [];
@@ -708,14 +722,6 @@ export class Grounds3 {
     }
     return t;
   }
-  private roadCtx: {
-    near: (x: number, z: number, pad?: number) => boolean;
-    yAt: (w: Way, i: number, x: number, z: number) => number;
-    span?: [number, number];
-  } = {
-    near: (x: number, z: number, pad = 0) => this.near(x, z, pad),
-    yAt: (w: Way, i: number, x: number, z: number) => (w.bridged[i] ? w.h[i] : groundAt(x, z)),
-  };
   private get ts(): GroundsShared["ts"] {
     return this.sh.ts;
   }
@@ -734,6 +740,9 @@ export class Grounds3 {
       // (a way a piece at a time — 32 m squares: a district's stretch of a long road in one step was
       // a 150 ms frame, 128 m pieces 35–55 ms, 64 m 26–45)
       const P = 32;
+      // (the long road's pieces: its dressing only there — a district's 256 pieces each a step was minutes
+      // of a slow machine's steps for the few the road passes, plan 91)
+      let longBy: Set<number> | null = null;
       for (const w of WAYS) {
         const b = boxOf(w);
         if (!(b.x0 - 40 < r.x1 && b.x1 + 40 > r.x0 && b.z0 - 40 < r.z1 && b.z1 + 40 > r.z0)) continue;
@@ -747,34 +756,46 @@ export class Grounds3 {
             for (let p = Math.floor((x - 40 - r.x0) / P); p <= Math.floor((x + 40 - r.x0) / P); p++)
               if (p >= 0 && q >= 0 && p < n) by.add(q * n + p);
         }
+        if (w.key === "long-road") longBy = by;
         for (let z0 = r.z0; z0 < r.z1; z0 += P)
           for (let x0 = r.x0; x0 < r.x1; x0 += P)
-            if (by.has(((z0 - r.z0) / P) * n + (x0 - r.x0) / P))
-              run(
-                () => {
-                  this.piece = { x0, z0, x1: x0 + P, z1: z0 + P };
+            if (by.has(((z0 - r.z0) / P) * n + (x0 - r.x0) / P)) {
+              const at = { x0, z0, x1: x0 + P, z1: z0 + P };
+              // (made by the land's workers when there are any: the stream asks them, `roadAsks`; here
+              // otherwise — plan 91 phase 3)
+              const remote: Remote = {
+                w,
+                ask: { piece: `${r.x0},${r.z0}|${w.key}|${x0},${z0}`, way: w.key, at, own: r },
+              };
+              const f = () => {
+                if (remote.data) this.placePiece(w, remote.data);
+                else {
+                  this.piece = at;
                   this.ways(w);
                   this.piece = null;
-                },
-                { x: x0 + P / 2, z: z0 + P / 2 },
-              );
+                }
+              };
+              this.queue(f, { x: x0 + P / 2, z: z0 + P / 2 }, 0, remote);
+            }
       }
       // (the asphalt, the bridges, the crossings first — what you drive on —, then what stands by them,
       // the lamps last: they gather every light)
       run(() => this.waysAll());
       // (what lines the long road: a piece at a time too)
-      if (LONG_ROAD)
+      const nP = Math.ceil((r.x1 - r.x0) / P);
+      if (LONG_ROAD && longBy)
         for (let z0 = r.z0; z0 < r.z1; z0 += P)
           for (let x0 = r.x0; x0 < r.x1; x0 += P)
-            run(
-              () => {
-                this.piece = { x0, z0, x1: x0 + P, z1: z0 + P };
-                this.longDress();
-                this.piece = null;
-              },
-              { x: x0 + P / 2, z: z0 + P / 2 },
-              1,
-            );
+            if ((longBy as Set<number>).has(((z0 - r.z0) / P) * nP + (x0 - r.x0) / P))
+              run(
+                () => {
+                  this.piece = { x0, z0, x1: x0 + P, z1: z0 + P };
+                  this.longDress();
+                  this.piece = null;
+                },
+                { x: x0 + P / 2, z: z0 + P / 2 },
+                1,
+              );
       for (const b of BUILDINGS)
         if (this.near(b.x0, b.z0, 60)) run(() => this.building(b), { x: (b.x0 + b.x1) / 2, z: (b.z0 + b.z1) / 2 }, 1);
       // (its water: Silver Lake's and the creek's out on the long road, a grown lake's — the rest's
@@ -878,9 +899,27 @@ export class Grounds3 {
     }
     this.takes = [];
   }
-  private pending: { f: () => void; x: number; z: number; at: boolean; g: number }[] = [];
-  private queue(f: () => void, at?: { x: number; z: number }, g = 0) {
-    this.pending.push({ f, x: at?.x ?? 0, z: at?.z ?? 0, at: !!at, g });
+  private pending: { f: () => void; x: number; z: number; at: boolean; g: number; remote?: Remote }[] = [];
+  private queue(f: () => void, at?: { x: number; z: number }, g = 0, remote?: Remote) {
+    this.pending.push({ f, x: at?.x ?? 0, z: at?.z ?? 0, at: !!at, g, remote });
+  }
+  /** The land's workers make the road pieces (the stream says): one not back yet waits, the others go on. */
+  remoteOn = false;
+  /** The road pieces nearest the focus not made yet and not in a worker's hand (`inHand`), `n` at most. */
+  roadAsks(n: number, inHand: (piece: string) => boolean): PieceAsk[] {
+    const F = this.focus;
+    const out: { a: PieceAsk; d: number }[] = [];
+    for (const p of this.pending) {
+      if (!p.remote || p.remote.data || inHand(p.remote.ask.piece)) continue;
+      out.push({ a: p.remote.ask, d: F ? Math.hypot(p.x - F.x, p.z - F.z) : 0 });
+    }
+    out.sort((a, b) => a.d - b.d);
+    return out.slice(0, n).map((o) => o.a);
+  }
+  /** A worker's road piece: kept for its step (one made under older edits dropped — asked again). */
+  takePiece(d: PieceData) {
+    if (d.v !== editsVersion) return;
+    for (const p of this.pending) if (p.remote?.ask.piece === d.piece) p.remote.data = d;
   }
   /** steps still to build (`step()`) */
   get left(): number {
@@ -895,6 +934,8 @@ export class Grounds3 {
     const F = this.focus;
     for (let j = 0; j < this.pending.length; j++) {
       const p = this.pending[j];
+      // (a road piece still with a worker: not ready)
+      if (this.remoteOn && p.remote && !p.remote.data) continue;
       // (in order when there's no focus or the step has no place: the first of its group)
       const d = F && p.at ? Math.hypot(p.x - F.x, p.z - F.z) : 0;
       const k = p.g * 1e6 + d;
@@ -1130,154 +1171,56 @@ export class Grounds3 {
   }
 
   // ── roads, streets, trails, pavements; the plough's banks ──
-  private ribbon(
-    w: Way,
-    width: number,
-    off: number,
-    lift: number,
-    texLen: number,
-    into: G,
-    from = 0,
-    to = w.line.length - 1,
-    widthAt?: (i: number) => number,
-  ) {
-    const L = w.line;
-    // (its picture along it from the line's start, on past what's not drawn here: a district's
-    // piece took it up from nought, a seam in the asphalt at every piece's edge)
-    let v = 0;
-    for (let i = 0; i < from; i++) v += Math.hypot(L[i + 1][0] - L[i][0], L[i + 1][1] - L[i][1]) / texLen;
-    // (a bridge's deck: flush with the way — shared deckAt; the driveway's last two tiles eased
-    // down to the lot's own asphalt, so where they meet is no step for the ink to outline)
-    const ease = (x: number, z: number) => (x > LOT.x0 && x < LOT.x1 ? Math.min(1, Math.max(0, (LOT.z0 - z) / 2)) : 1);
-    const yAt = (i: number, x: number, z: number) => (w.bridged[i] ? w.h[i] : groundAt(x, z)) + lift * ease(x, z);
-    for (let i = from; i < to; i++) {
-      const [ax, az] = L[i];
-      const [bx, bz] = L[i + 1];
-      const len = Math.hypot(bx - ax, bz - az);
-      const v1 = v + len / texLen;
-      if (!this.near(ax, az, 20)) {
-        v = v1;
-        continue;
-      }
-      const tn = (k: number) => {
-        const [px, pz] = L[Math.max(0, k - 1)];
-        const [qx, qz] = L[Math.min(L.length - 1, k + 1)];
-        const l = Math.hypot(qx - px, qz - pz) || 1;
-        return [-(qz - pz) / l, (qx - px) / l];
-      };
-      const [anx, anz] = tn(i);
-      const [bnx, bnz] = tn(i + 1);
-      const wk = (k: number) => (widthAt ? widthAt(k) : width);
-      const P = (x: number, z: number, nx: number, nz: number, s: number, k: number): V => {
-        const px = x + nx * (off + s * wk(k) * 0.5);
-        const pz = z + nz * (off + s * wk(k) * 0.5);
-        return [px, yAt(k, px, pz), pz];
-      };
-      // (narrower: the picture's middle, so across it still counts the way's own tiles)
-      const U = (s: number, k: number) => 0.5 + (s * wk(k)) / (2 * width);
-      into.quad(
-        P(ax, az, anx, anz, -1, i),
-        P(ax, az, anx, anz, 1, i),
-        P(bx, bz, bnx, bnz, 1, i + 1),
-        P(bx, bz, bnx, bnz, -1, i + 1),
-        [0, 1, 0],
-        [
-          [U(-1, i), v],
-          [U(1, i), v],
-          [U(1, i + 1), v1],
-          [U(-1, i + 1), v1],
-        ],
-      );
-      v = v1;
-    }
-  }
-  /** The samples of `w` within 40 m of a piece, and 8 either side (null: none there). */
-  private spanOf(w: Way, q: { x0: number; z0: number; x1: number; z1: number }): [number, number] | null {
-    let a = -1;
-    let b = -1;
-    for (const [i, [x, z]] of w.line.entries())
-      if (x > q.x0 - 40 && x < q.x1 + 40 && z > q.z0 - 40 && z < q.z1 + 40) {
-        if (a < 0) a = i;
-        b = i;
-      }
-    return a < 0 ? null : [Math.max(0, a - 8), Math.min(w.line.length - 1, b + 8)];
-  }
-  /** The ways (`only`: one of them; then the bridges with the last). */
+  /** The ways (`only`: one of them; then the bridges with the last) — their geometry way-piece.ts's. */
   private ways(only?: Way) {
-    const road = new G();
-    const trail = new G();
-    const walk = new G();
-    const banks = new G();
-    const paint = new G();
-    const slabs = new G();
-    let lines = new G();
+    const s = sinks();
     const r = groundsRng(77 + (only ? WAYS.indexOf(only) : 0));
+    const near: Near = (x, z, pad) => this.near(x, z, pad);
     for (const w of only ? [only] : WAYS) {
       // (a district's piece: the stretch of it there, a few samples either side — not all its line)
-      const span = this.piece ? this.spanOf(w, this.piece) : null;
+      const span = this.piece ? spanOf(w, this.piece) : null;
       if (this.piece && !span) continue;
-      this.roadCtx.span = span ?? undefined;
-      if (w.kind === "trail") {
-        this.ribbon(w, w.w + 0.8, 0, 0.03, 9, trail, span?.[0], span?.[1]);
-        // trodden down: the snow either side stands a little higher (a low berm, open where
-        // another way crosses and on the footbridge)
-        for (const side of [1, -1] as const)
-          bankAlong(banks, w.line, w.w / 2 + 0.75, side, groundAt, r, {
-            h: 0.2,
-            w: 1.1,
-            span: span ?? undefined,
-            own: (x, z) => this.near(x, z, 10),
-            skip: (x, z, i) => w.bridged[i] || WAYS.some((u) => u !== w && nearLine(u, x, z) < u.w / 2 + 1.2),
-          });
-      } else if (w.kind === "walk") this.ribbon(w, w.w, 0, 0.04, 6, walk, span?.[0], span?.[1]);
-      else {
-        // the asphalt, its own picture by its width; the lines, verges, kerbs and pavements over it
-        // (roads3d.ts)
-        const ag = new G();
-        this.ribbon(w, w.w, 0, 0.05, 9, ag, span?.[0], span?.[1], w.flare ? (i) => 2 * wayHalf(w, i) : undefined);
-        if (!ag.empty) {
+      const { asphalt, lines } = wayGeo(w, near, span, r, s);
+      if (!asphalt.empty) this.add(asphalt.build(), this.slotMat("asphalt", w), "receive");
+      if (!lines.empty) this.add(lines.build(), this.slotMat("lines", w), "receive");
+    }
+    for (const k of ["paint", "slabs", "trail", "walk", "banks"] as const)
+      if (!s[k].empty) this.add(s[k].build(), this.slotMat(k), "receive");
+    if (!only) this.waysAll();
+  }
+  /** What a way's slot is drawn with (way-piece.ts): its asphalt its own picture, its lines its kind's paint. */
+  private slotMat(slot: Slot, w?: Way): Material {
+    switch (slot) {
+      case "asphalt": {
+        const k = (w as Way).key;
+        let am = this.asphaltMats.get(k);
+        if (!am) {
           // (its own, as its picture is: with the way's step — wayStep)
-          const am = this.keep(litMaterial({ map: this.asphalt(w), vertexColors: true }));
-          roadCover(am, w);
+          am = this.keep(litMaterial({ map: this.asphalt(w as Way), vertexColors: true }));
+          roadCover(am, w as Way);
           // (the life look: the library's asphalt underfoot, after its cover — plan 73 phase 8)
           this.worn(am, "asphalt");
-          this.add(ag.build(), am, "receive");
+          this.asphaltMats.set(k, am);
         }
-        wayDressing(w, this.roadCtx, nearLine, paint, slabs, lines);
-        streetCorners(w, this.roadCtx, nearLine, banks);
-        if (!lines.empty) {
-          this.add(lines.build(), this.paintMat(w.kind), "receive");
-          lines = new G();
-        }
-        // the plough's banks beyond a road's verges: a ridge each side (none on a bridge, across
-        // another way's mouth or the lot's, nor out of reach; a street's kerbs: streetCorners)
-        if (w.kind !== "street")
-          for (const side of [1, -1] as const)
-            bankAlong(banks, w.line, (i) => wayHalf(w, i) + 1.2, side, groundAt, r, {
-              h: 0.55,
-              w: 1.8,
-              span: span ?? undefined,
-              own: (x, z) => this.near(x, z, 10),
-              skip: (x, z, i) =>
-                w.bridged[i] ||
-                WAYS.some((u) => u !== w && u.kind !== "trail" && nearLine(u, x, z) < u.w / 2 + 1.5) ||
-                (x > LOT.x0 - 2 && x < LOT.x1 + 2 && z > LOT.z0 - 2 && z < LOT.z1 + 2) ||
-                (KART_LAND && Math.hypot(x - KART_TURN.x, z - KART_TURN.z) < KART_TURN.r + 7),
-            });
+        return am;
       }
+      case "lines":
+        return this.paintMat((w as Way).kind);
+      case "slabs":
+        return this.worn(this.lambert(0xffffff, this.ts.slabs, true, "way"), "concrete");
+      case "trail":
+        return this.worn(this.lambert(0xffffff, this.ts.trail, true, "trail"), "dirt");
+      case "walk":
+        return this.worn(this.lambert(0xffffff, this.ts.walk, true, "way"), "concrete");
+      default:
+        // (paint, banks: they only take shadows — a long low ridge's own came out jagged on the road)
+        return this.lambert();
     }
-    this.roadCtx.span = undefined;
-    if (!road.empty) this.add(road.build(), this.worn(this.lambert(0xffffff, this.ts.road), "asphalt"), "receive");
-    if (!paint.empty) this.add(paint.build(), this.lambert(), "receive");
-    if (!slabs.empty)
-      this.add(slabs.build(), this.worn(this.lambert(0xffffff, this.ts.slabs, true, "way"), "concrete"), "receive");
-    if (!trail.empty)
-      this.add(trail.build(), this.worn(this.lambert(0xffffff, this.ts.trail, true, "trail"), "dirt"), "receive");
-    if (!walk.empty)
-      this.add(walk.build(), this.worn(this.lambert(0xffffff, this.ts.walk, true, "way"), "concrete"), "receive");
-    // (they only take shadows: a long low ridge's own came out jagged on the road)
-    if (!banks.empty) this.add(banks.build(), this.lambert(), "receive");
-    if (!only) this.waysAll();
+  }
+  private asphaltMats = new Map<string, Material>();
+  /** A district's road piece made by a worker (way-piece.ts): its meshes, as `ways` would have made them. */
+  private placePiece(w: Way, d: PieceData) {
+    for (const g of d.geos) this.add(pieceGeometry(g), this.slotMat(g.slot, w), "receive");
   }
   /** What's of all the ways, not one: the square's crossing, the snow poles, the bridges. */
   private waysAll() {
@@ -5879,25 +5822,4 @@ function ridgeMaterial(): MeshBasicMaterial {
   return m;
 }
 
-/** The distance from (x, z) to a way's line (its samples). */
-function nearLine(w: Way, x: number, z: number): number {
-  // (a quick "nowhere near": its box)
-  const b = (boxes.get(w) ?? boxOf(w)) as { x0: number; x1: number; z0: number; z1: number };
-  if (x < b.x0 - 12 || x > b.x1 + 12 || z < b.z0 - 12 || z > b.z1 + 12) return Number.POSITIVE_INFINITY;
-  let best = Number.POSITIVE_INFINITY;
-  for (let i = 0; i < w.line.length; i += 2) {
-    const d = Math.hypot(w.line[i][0] - x, w.line[i][1] - z);
-    if (d < best) best = d;
-  }
-  return best;
-}
-// (a way's: made again with god mode's edits, a new object)
-const boxes = new WeakMap<Way, { x0: number; x1: number; z0: number; z1: number }>();
-function boxOf(w: Way) {
-  const xs = w.line.map((p) => p[0]);
-  const zs = w.line.map((p) => p[1]);
-  const b = { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) };
-  boxes.set(w, b);
-  return b;
-}
 export type { P };

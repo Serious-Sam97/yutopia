@@ -1,6 +1,7 @@
 import { editsNow, editsVersion, kartLayoutNow } from "@yutopia/shared/grounds";
 import type { BlockAsk, BlockData } from "./land-block";
-import type { LandBlockAsk } from "./land-block.worker";
+import type { LandBlockAsk, LandPieceAsk } from "./land-block.worker";
+import type { PieceAsk, PieceData } from "./way-piece";
 
 // The streamed land's workers (land-block.worker.ts; grounds-stream.ts asks them). Started as the
 // Grounds load, while the world connects — started by the stream's first frame, a worker's first
@@ -42,6 +43,8 @@ export class LandPool {
   readonly asked = new Set<string>();
   /** blocks made, to be placed */
   made: BlockData[] = [];
+  /** districts' road pieces made (way-piece.ts), to be handed to their districts (plan 91 phase 3) */
+  pieces: PieceData[] = [];
   /** (DEATHS of them gone: none from now on) */
   dead = false;
   /** workers replaced so far (stuck or erred) */
@@ -55,15 +58,17 @@ export class LandPool {
   }
   private start(): Worker1 {
     const o: Worker1 = { w: this.make(), keys: new Set(), heardAt: this.now(), v: -1, park: "" };
-    o.w.onmessage = (e: MessageEvent<BlockData>) => {
+    o.w.onmessage = (e: MessageEvent<BlockData | PieceData>) => {
       const d = e.data;
+      const key = "geos" in d ? d.piece : d.key;
       o.heardAt = this.now();
-      o.keys.delete(d.key);
-      // (a block asked again of another while this one was silent: what comes first is kept)
-      if (!this.asked.has(d.key) || this.made.some((m) => m.key === d.key && m.v === d.v)) return;
-      for (const x of this.ws) x.keys.delete(d.key);
-      this.asked.delete(d.key);
-      this.made.push(d);
+      o.keys.delete(key);
+      // (one asked again of another while this one was silent: what comes first is kept)
+      if (!this.asked.has(key)) return;
+      for (const x of this.ws) x.keys.delete(key);
+      this.asked.delete(key);
+      if ("geos" in d) this.pieces.push(d);
+      else this.made.push(d);
     };
     o.w.onerror = (e) => {
       console.warn("land-block worker", e.message);
@@ -91,6 +96,7 @@ export class LandPool {
    *  changed since its last. */
   private news(o: Worker1): Pick<LandBlockAsk, "edits" | "park"> {
     const out: Pick<LandBlockAsk, "edits" | "park"> = {};
+    // (what's told once to a worker is told: one reads it with its next ask, a block's or a piece's)
     if (o.v !== editsVersion) {
       out.edits = editsNow();
       o.v = editsVersion;
@@ -137,6 +143,27 @@ export class LandPool {
       if (!o.keys.size) o.heardAt = this.now();
       o.keys.add(b.key);
       this.asked.add(b.key);
+      o.w.postMessage(a);
+    }
+  }
+  /** A piece asked, or made and not handed over yet. */
+  pieceInHand(): (piece: string) => boolean {
+    const back = new Set(this.pieces.map((d) => d.piece));
+    return (k) => this.asked.has(k) || back.has(k);
+  }
+  /** These road pieces (most wanted first) to the least busy worker, `most` in hand each at most (the land's
+   *  blocks counted with them). */
+  askPieces(list: PieceAsk[], most: number) {
+    this.watch();
+    for (const p of list) {
+      if (this.dead) return;
+      if (this.asked.has(p.piece)) continue;
+      const o = this.ws.reduce((a, c) => (c.keys.size < a.keys.size ? c : a));
+      if (o.keys.size >= most) return;
+      const a: LandPieceAsk = { ...p, v: editsVersion, ...this.news(o) };
+      if (!o.keys.size) o.heardAt = this.now();
+      o.keys.add(p.piece);
+      this.asked.add(p.piece);
       o.w.postMessage(a);
     }
   }
