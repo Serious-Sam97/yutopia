@@ -9,7 +9,7 @@ Status: **investigated 2026-11-14 (read-only); planned 2026-11-14; forks decided
 pixel-identical throughout, plus phase 9's invisible-detail cuts each signed off with stills side by side; **F2c**
 Auto starts on Medium and **steps up to High during play** when there's room (asked after: up mid-game, not only
 behind the loading screen), down as before, every tier warmed; **F3b** the adaptive buffer; **F4a** versioned URLs +
-`immutable` + a Cloudflare cache rule (the user sets the rule); **F5a** the floors' held copy kept, shrunk by phase 2. **Phase 0 (the bench, the baseline) done 2026-11-14. Phase 1 (lights that are off) done 2026-11-14; F6a: the torches left as they are. Phase 2 (by index) tried and reverted 2026-11-15: −135 MB, no fps, +0.3 s load. Phase 3 (painted once) done 2026-11-15: GPU −213 MB, canvas −67 MB, load the same. Phase 4 (outside out of sight) done 2026-11-15: M1 proxy +8–23%; sealing the land left (unsafe without declaring every mover). Phase 5 (loading) done 2026-11-15: files cached by version (revalidations 137–180 → 2), people in before the screen goes (no compiles in play; a first visit +2 s, kept). Phase 6 (Auto: Medium first, up when there's room, remembered) done 2026-11-15; the step's own ~0.8 s freeze (old) left. Phase 7 (others' smoothing: 110–250 ms by the link, NPCs/pets on the server's clock) done 2026-11-15: bursty-link bad frames −55%. Phase 8 (world-server) done 2026-11-15: the first ticks' ~490 ms before anyone's in; the RSS creep (the bus's road built round it) gone, memcheck ok.**
+`immutable` + a Cloudflare cache rule (the user sets the rule); **F5a** the floors' held copy kept, shrunk by phase 2. **Phase 0 (the bench, the baseline) done 2026-11-14. Phase 1 (lights that are off) done 2026-11-14; F6a: the torches left as they are. Phase 2 (by index) tried and reverted 2026-11-15: −135 MB, no fps, +0.3 s load. Phase 3 (painted once) done 2026-11-15: GPU −213 MB, canvas −67 MB, load the same. Phase 4 (outside out of sight) done 2026-11-15: M1 proxy +8–23%; sealing the land left (unsafe without declaring every mover). Phase 5 (loading) done 2026-11-15: files cached by version (revalidations 137–180 → 2), people in before the screen goes (no compiles in play; a first visit +2 s, kept). Phase 6 (Auto: Medium first, up when there's room, remembered) done 2026-11-15; the step's own ~0.8 s freeze (old) left. Phase 7 (others' smoothing: 110–250 ms by the link, NPCs/pets on the server's clock) done 2026-11-15: bursty-link bad frames −55%. Phase 8 (world-server) done 2026-11-15: the first ticks' ~490 ms before anyone's in; the RSS creep (the bus's road built round it) gone, memcheck ok. Phase 9 measured and skipped (triangles cost ~nothing). Phase 10 (checks) done 2026-11-15: High +19–23%, an M1's proxy +12–31% (noisy); the M1's 60 fps not met.**
 
 ## What was measured (2026-11-14)
 
@@ -376,8 +376,56 @@ Each phase: measured before and after on the phase 0 bench, its A/B stills at 0 
      left) — for phase 10.
 9. **(F1b only) Detail no one sees** — per change, stills side by side first: fewer segments in bevels under a
    centimetre and in small lathes; the far trees' LOD.
+   Measured first (2026-11-15), before any still: what triangles cost at all — floor 4's merged geometry drawn a
+   second time in the same page (~0.9M triangles, a fifth of the frame, its shadow too; no colour, no depth
+   written), `e2e/weight.mts frames` A/B, walking in the studio: **High 2× −0.7%** (56.2 vs 56.6 fps: noise), **an
+   M1's proxy on Low −5.5%** — the copies' draws on a slowed CPU more than their triangles. `RoundedBoxGeometry`
+   has no triangle to spare for its shape (each flat face one quad; every other quad is on the curve), so a cut is
+   its curve coarser. What's on the table: the windows' bevels (6–10 mm, 2 segments → 1: ~635k → ~230k triangles,
+   ~40 MB of geometry and as much on the GPU), the far trees (590k, High and Medium only — Low draws none). Neither
+   would show in the frame rate on either target; the windows' would be memory only.
 10. **Checks** — the bench against phase 0's numbers, memcheck, `e2e/lag.spec.ts`, the e2e suite's known reds
     (memory note `known-red-e2e-2026-10-24`); the targets met or the gap written here.
+    Done in phase 10 (2026-11-15). Phase 0's code (45bd20b6) built again in a worktree and benched back to back
+    with HEAD on the same day's world (`e2e/weight.mts`, prod builds; the world had moved since phase 0 — the home
+    cars now kept, among others —, so phase 0's own table isn't the yardstick). Two rounds each, live fps uncapped,
+    still · walking (round 1 swung widely: phase 0's studio on High 36 then 62):
+
+    | Round 2 | High 2×: phase 0 → now | Low, CPU 2.5× (an M1's proxy): phase 0 → now |
+    |---|---|---|
+    | Studio | 61.5 · 63.5 → 75.1 · 75.9 (**+20%**) | 42.5 · 44.2 → 47.5 · 50.8 (+12–15%) |
+    | Lot | 44.8 · 44.7 → 55.2 · 54.9 (**+23%**) | 38.0 · 35.0 → 45.8 · 42.8 (+21%) |
+    | Lawn | 48.7 · 49.7 → 57.8 · 59.9 (**+19%**) | 61.3 · 56.8 → 80.1 · 74.9 (+31%) |
+
+    Round 1 had High +15–60% and the M1's proxy −5…+13% (noise both ways). Frames over 50 ms in 4 s on the proxy:
+    0–4 then, 0–3 now.
+
+    Memory (Low, 2 cycles of the spots, collected): textures alive 557 → **368**, painted 510 → **248** (copies 374
+    → 112, 172 → 110 MB), the GPU process 1,417 → **1,271 MB** (ANGLE 1,005 → 914), the tab 1,321 → 1,292 MB
+    resident (canvas 301 → 246 MB), JS heap 481 → 483 MB. memcheck (phase 8): ok — the world-server flat.
+
+    Loading (20 Mbps, 60 ms): cold 8.4 → 10.4 s (the people's wait, phase 5, kept); a reload's revalidations
+    137 → **2**, ready 8.1 s both; in the 20 s after a cold load's ready, 13 shaders compiled (a 195 ms
+    task) → **none** (a reload: none either way).
+
+    The targets:
+    - **High 2× ≥ 60 fps in the studio and the lot**: the studio **met** (75), the lot **not** (55).
+    - **An M1's proxy on Low ≥ 60 fps in the studio and the lot, no frame over 50 ms walking**: **not met** —
+      43–51 fps, 0–3 frames over 50 ms. Its limit is the main thread (three's scene walk and draws, the land's
+      queries — phase 0); what's left to win there isn't triangles (phase 9) but objects and draws.
+    - **The tab ≤ 2 GB on Low**: **met** (1.29 GB). **The GPU process down a third**: **not** (−10%).
+      **The world-server's RSS flat**: **met** (phase 8).
+    - **A second visit downloads nothing again**: **met** (2 revalidations: the page). **A cold load faster**:
+      **not** — 2 s slower, by the decision to wait for people (phase 5); no compiles in play instead.
+    - **Same pixels**: every phase's own A/B stills (phases 1, 3, 4: 0 px).
+
+    e2e (prod build, GPU), the specs nearest the plan's changes and every red of a first pass: `lag.spec`,
+    `move-others`, `others-link`, `loading`, `car` (all its tests), `pets`, `discs` pass. Red on HEAD, run again on
+    phase 0's client (45bd20b6, the same world-server): `actions` "a high five", "my desk", `ghost` "a reload comes
+    back" — red there too, not this plan's; `actions` "the action menu" flaky on both (the cup never comes: HEAD 1 of
+    5 passed, phase 0 2 of 3); `car` "under a flier" flaky (passed twice after). The full suite (245 tests, ~2.5 h)
+    not run through.
+    Left: the page's textures +13 a cycle as people come and go (memcheck; phase 0's rate) — not found yet.
 
 Not now: WebAssembly for the Grounds' maths (as plan 38 decided: worker first, numbers first); a new renderer
 (WebGPU); fewer things in the world.
