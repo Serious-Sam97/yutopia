@@ -4,6 +4,10 @@ import { CanvasTexture, RepeatWrapping, SRGBColorSpace } from "three";
 // pleated cloth, the winter tyres' tread, the hubcaps, the lamps' lenses, the
 // plate, the heater's panel and the pine-tree air freshener. All drawn here,
 // deterministic, no image files.
+//
+// Painted once (docs/plan/89-the-weight.md phase 3): each picture is the same for the same arguments, so every car
+// that asks for it gets the one texture — painted the first time, kept for good (a car going doesn't dispose it: the
+// next one shows it), its painter kept with it (e2e/weight.mts' A/B paints each car its own again to compare).
 
 function canvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const c = document.createElement("canvas");
@@ -29,7 +33,7 @@ function tex(c: HTMLCanvasElement, srgb = true, repeat = false): CanvasTexture {
 }
 
 /** Walnut veneer: a warm ground, wavy darker grain, a figure of lighter streaks. */
-export function walnut(): CanvasTexture {
+function paintWalnut(): CanvasTexture {
   const [c, g] = canvas(512, 256);
   const r = rng(7);
   g.fillStyle = "#5e3a22";
@@ -66,7 +70,7 @@ export function walnut(): CanvasTexture {
 }
 
 /** The seats' cloth: cream, pleated in vertical flutes, a fine weave. */
-export function cloth(): CanvasTexture {
+function paintCloth(): CanvasTexture {
   const [c, g] = canvas(256, 256);
   const r = rng(11);
   g.fillStyle = "#cbbd9e";
@@ -93,7 +97,7 @@ export function cloth(): CanvasTexture {
 }
 
 /** Carpet, dark rust-brown, a dense pile. */
-export function carpet(): CanvasTexture {
+function paintCarpet(): CanvasTexture {
   const [c, g] = canvas(128, 128);
   const r = rng(13);
   g.fillStyle = "#4a3123";
@@ -106,7 +110,7 @@ export function carpet(): CanvasTexture {
 }
 
 /** A winter tyre's tread round the circumference (u) and across (v): chevrons and sipes. */
-export function tread(): CanvasTexture {
+function paintTread(): CanvasTexture {
   const [c, g] = canvas(1024, 128);
   g.fillStyle = "#1a1b1d";
   g.fillRect(0, 0, 1024, 128);
@@ -141,7 +145,7 @@ export function tread(): CanvasTexture {
 }
 
 /** A flat steel hubcap: brushed, slotted round the rim, a domed centre. */
-export function hubcap(): CanvasTexture {
+function paintHubcap(): CanvasTexture {
   const [c, g] = canvas(256, 256);
   const grd = g.createRadialGradient(128, 128, 10, 128, 128, 128);
   grd.addColorStop(0, "#e9ecee");
@@ -188,7 +192,7 @@ export function hubcap(): CanvasTexture {
 }
 
 /** A lamp's lens: horizontal ribs (the tail lamps) or a fluted grid (the headlamps). */
-export function lens(kind: "ribs" | "grid"): CanvasTexture {
+function paintLens(kind: "ribs" | "grid"): CanvasTexture {
   const [c, g] = canvas(128, 64);
   g.fillStyle = "#ffffff";
   g.fillRect(0, 0, 128, 64);
@@ -220,7 +224,7 @@ export function lens(kind: "ribs" | "grid"): CanvasTexture {
 }
 
 /** The plate: made-up text, embossed black on cream. */
-export function plate(text: string): CanvasTexture {
+function paintPlate(text: string): CanvasTexture {
   const [c, g] = canvas(256, 64);
   g.fillStyle = "#e8e2cf";
   g.fillRect(0, 0, 256, 64);
@@ -236,7 +240,7 @@ export function plate(text: string): CanvasTexture {
 }
 
 /** The heater's panel: three sliders in lit slots, a fan knob's scale, little icons. */
-export function heater(): CanvasTexture {
+function paintHeater(): CanvasTexture {
   const [c, g] = canvas(512, 160);
   g.fillStyle = "#151515";
   g.fillRect(0, 0, 512, 160);
@@ -284,7 +288,7 @@ export function heater(): CanvasTexture {
 }
 
 /** The pine-tree air freshener: green, with its string hole and a word on it. */
-export function freshener(): CanvasTexture {
+function paintFreshener(): CanvasTexture {
   const [c, g] = canvas(128, 192);
   g.clearRect(0, 0, 128, 192);
   g.fillStyle = "#2f6b3a";
@@ -333,7 +337,7 @@ export function freshener(): CanvasTexture {
  *  windscreen). Painted in the glass's own metres: `z` across (−hw..hw), `s` up the glass
  *  (0..len). `wipers`: each pivot (z), arm length and the arc it has swept (radians from
  *  lying flat along the base, towards +z then up). */
-export function windscreenSnow(
+function paintWindscreenSnow(
   hw: number,
   len: number,
   amount: number,
@@ -420,7 +424,7 @@ export function windscreenSnow(
 /** Rain on a windscreen (docs/plan/65, W7): beads of water, a dark rim and a bright spot each, more
  *  and bigger the more `amount`, a few running down in trails; the wipers' fans wiped to a thin
  *  smear with only fresh specks in them. As windscreenSnow is drawn: the screen's own size. */
-export function windscreenRain(
+function paintWindscreenRain(
   hw: number,
   len: number,
   amount: number,
@@ -488,7 +492,7 @@ export function windscreenRain(
 }
 
 /** Checker plate (the steps, the footplates, the running boards): raised diamonds on steel. */
-export function diamond(): CanvasTexture {
+function paintDiamond(): CanvasTexture {
   const [c, g] = canvas(128, 128);
   g.fillStyle = "#8d9399";
   g.fillRect(0, 0, 128, 128);
@@ -510,7 +514,7 @@ export function diamond(): CanvasTexture {
 }
 
 /** A dash's gauges: four dials, white on black, their needles low (the dash lit at night). */
-export function gauges(): CanvasTexture {
+function paintGauges(): CanvasTexture {
   const [c, g] = canvas(512, 128);
   g.fillStyle = "#121314";
   g.fillRect(0, 0, 512, 128);
@@ -545,7 +549,7 @@ export function gauges(): CanvasTexture {
 }
 
 /** Varnished ash (the toboggan's boards): pale, a straight grain along u, a few knots. */
-export function ash(): CanvasTexture {
+function paintAsh(): CanvasTexture {
   const [c, g] = canvas(512, 128);
   const r = rng(77);
   g.fillStyle = "#c99a5e";
@@ -570,3 +574,35 @@ export function ash(): CanvasTexture {
   }
   return tex(c, true, true);
 }
+
+// ── painted once ──
+const painted = new Map<string, CanvasTexture>();
+function once<A extends unknown[]>(name: string, paint: (...a: A) => CanvasTexture): (...a: A) => CanvasTexture {
+  return (...a: A) => {
+    const key = `${name}|${JSON.stringify(a)}`;
+    let t = painted.get(key);
+    if (!t) {
+      t = paint(...a);
+      t.userData.repaint = () => paint(...a);
+      t.userData.painted = key;
+      // (shared by every car that shows it: never let go by one of them)
+      t.dispose = () => {};
+      painted.set(key, t);
+    }
+    return t;
+  };
+}
+export const walnut = once("walnut", paintWalnut);
+export const cloth = once("cloth", paintCloth);
+export const carpet = once("carpet", paintCarpet);
+export const tread = once("tread", paintTread);
+export const hubcap = once("hubcap", paintHubcap);
+export const lens = once("lens", paintLens);
+export const plate = once("plate", paintPlate);
+export const heater = once("heater", paintHeater);
+export const freshener = once("freshener", paintFreshener);
+export const windscreenSnow = once("windscreenSnow", paintWindscreenSnow);
+export const windscreenRain = once("windscreenRain", paintWindscreenRain);
+export const diamond = once("diamond", paintDiamond);
+export const gauges = once("gauges", paintGauges);
+export const ash = once("ash", paintAsh);

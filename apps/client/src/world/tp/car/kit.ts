@@ -68,6 +68,23 @@ export function sect(y0: number, y1: number, hb: number, ht: number, rt: number,
   return ring;
 }
 
+// A decal's text painted once for what it says and how (docs/plan/89-the-weight.md phase 3: every snowmobile, plough
+// and tractor painted its own): the same picture for the same lines and style — system fonts, nothing to wait for —
+// kept for every vehicle that shows it, never let go by one of them; `repaint` for e2e/weight.mts' A/B.
+const texts = new Map<string, CanvasTexture>();
+function sharedText(lines: string[], o: Parameters<typeof textTex>[1] = {}): CanvasTexture {
+  const key = JSON.stringify([lines, o]);
+  let t = texts.get(key);
+  if (!t) {
+    t = textTex(lines, o);
+    t.userData.repaint = () => textTex(lines, o);
+    t.userData.painted = key;
+    t.dispose = () => {};
+    texts.set(key, t);
+  }
+  return t;
+}
+
 /** A canvas texture of a few lines of text (a decal, a stencil): transparent round it. */
 function textTex(
   lines: string[],
@@ -397,7 +414,7 @@ export function kit(o: SedanOpts, L: number, W: number) {
     style: Parameters<typeof textTex>[1] = {},
     into: Group = body,
   ) => {
-    const t = keep(textTex(lines, style));
+    const t = sharedText(lines, style);
     const m = tone("#ffffff", { rough: 0.45, map: t, dirt: true });
     m.transparent = true;
     m.alphaTest = 0.4;

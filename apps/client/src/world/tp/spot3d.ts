@@ -184,16 +184,36 @@ export interface BoardIn {
   post?: boolean;
 }
 
-/** The boards, each its own canvas (a few dozen at most), as one group. */
+// A board's face, painted once for its name and label (docs/plan/89-the-weight.md phase 3: the lot's boards are
+// mostly alike — a free bay's — and each painted its own 512 × 256 canvas): every board that says the same shows
+// the one texture, kept (`repaint`: e2e/weight.mts' A/B paints each its own again to compare).
+const faces = new Map<string, CanvasTexture>();
+function boardFace(T: Themes, name: string, label: string): CanvasTexture {
+  const key = JSON.stringify([name, label]);
+  let t = faces.get(key);
+  if (!t) {
+    const paint = () => {
+      const p = new CanvasTexture(boardCanvas(T, name, label));
+      p.colorSpace = SRGBColorSpace;
+      p.anisotropy = 8;
+      return p;
+    };
+    t = paint();
+    t.userData.repaint = paint;
+    t.dispose = () => {};
+    faces.set(key, t);
+  }
+  return t;
+}
+
+/** The boards, each board's face painted once for what it says (a few dozen at most), as one group. */
 export function boards(T: Themes, list: BoardIn[]): Group {
   const root = new Group();
   const solids: BufferGeometry[] = [];
   for (const b of list) {
     const { solid, face } = boardGeometry(b.post !== false);
     solids.push(place(solid, b.x, b.y ?? 0, b.z, b.ry));
-    const t = new CanvasTexture(boardCanvas(T, b.name, b.label));
-    t.colorSpace = SRGBColorSpace;
-    t.anisotropy = 8;
+    const t = boardFace(T, b.name, b.label);
     const m = new Mesh(place(face, b.x, b.y ?? 0, b.z, b.ry), litMaterial({ map: t }));
     m.castShadow = true;
     m.receiveShadow = true;

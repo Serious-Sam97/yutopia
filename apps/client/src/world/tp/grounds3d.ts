@@ -441,6 +441,23 @@ function chainCanvas(T: Themes): HTMLCanvasElement {
   return c;
 }
 // A painted sign: dark board, a thin rule, letters in cream (lit at night).
+// A sign's face painted once for what it says, its size and colours (docs/plan/89-the-weight.md phase 3: the town's
+// signs alike — every FOR LEASE — each painted its own 512 px canvas): one texture for all of them (Georgia: a system
+// font, nothing to wait for), kept, never let go by a sign; `repaint` for e2e/weight.mts' A/B.
+const signTextures = new Map<string, CanvasTexture>();
+function signFace(T: Themes, text: string, h: number, bg: string, fg: string): CanvasTexture {
+  const key = JSON.stringify([text, h, bg, fg]);
+  let t = signTextures.get(key);
+  if (!t) {
+    const paint = () => tex(signCanvas(T, text, 512, h, bg, fg), false);
+    t = paint();
+    t.userData.repaint = paint;
+    t.userData.painted = key;
+    t.dispose = () => {};
+    signTextures.set(key, t);
+  }
+  return t;
+}
 function signCanvas(T: Themes, text: string, w = 512, h = 128, bg = "#1d2226", fg = "#efe3c4"): HTMLCanvasElement {
   const { c, g } = T.canvas(w, h);
   g.fillStyle = bg;
@@ -3108,8 +3125,7 @@ export class Grounds3 {
     posts = true,
   ) {
     const y0 = groundAt(x, z);
-    const c = signCanvas(this.T, text, 512, Math.round((512 * h) / w), bg, fg);
-    const t = this.keep(tex(c, false));
+    const t = signFace(this.T, text, Math.round((512 * h) / w), bg, fg);
     const m = lit
       ? this.glows(
           this.keep(litMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0 })),
