@@ -239,5 +239,10 @@ Entering the woods cold (a fresh profile): 10 Mbps — main 16.1 s with the stan
 all in; 4 Mbps — main 17.1 s with the stand-in (all in at 51.9 s), now 42.8 s all in; no cap — 12.3 vs 10.4 s.
 `ctl/loading.test.ts`. Commits b49fe198, 94542624.
 
+**And a patch on High (2026-11-15, the user)**: a dark, grainy patch on the ground round one's legs, sliding with
+the camera — High's GTAO (the life look's screen-space AO, plan 73; not this plan's): its `thickness` of 2 m let
+someone's legs shade the snow a metre or two behind them on screen. 0.4 m (`tp/post3d.ts`): the patch gone, a foot
+on the ground, a wall on the floor, the studio's rug and corners as they were (side by side at 2, 1, 0.6, 0.35).
+
 Not now: moving the renderer to a worker (OffscreenCanvas — the same work on another thread); WebGPU; anything that
 changes what the world is.

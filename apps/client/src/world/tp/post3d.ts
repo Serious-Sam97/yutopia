@@ -165,7 +165,10 @@ export class Post3 {
     ao.blendIntensity = 1;
     // (eight samples and eight to smooth them: sixteen of each took ~1.8 ms of High's frame even at half
     // size — plan 73)
-    ao.updateGtaoMaterial({ radius: 1.4, distanceFallOff: 1, thickness: 2, scale: 1.6, samples: 8 });
+    // (thickness: how far in front of a surface something may be and still shade it — at 2 m, someone's legs shaded
+    // the snow a metre or two behind them on screen: a dark patch round them that slid with the camera. 0.4 m keeps
+    // what touches — a foot on the ground, a wall on the floor, under a table — the same; the user, 2026-11-15)
+    ao.updateGtaoMaterial({ radius: 1.4, distanceFallOff: 1, thickness: 0.4, scale: 1.6, samples: 8 });
     ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 8, rings: 2, samples: 8 });
     // (pointed at the frame's depth now, and its shaders compiled while it loads: no recompile and no
     // hitch on its first frame in play)
