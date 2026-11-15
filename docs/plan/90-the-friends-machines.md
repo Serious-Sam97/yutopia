@@ -155,6 +155,15 @@ Measured on production's own reports a week after each release (against the tabl
      view still posed (their steps are heard).
 4. **Fewer draws indoors** — a room's furniture and things that stand still merged by material (as the floors are),
    repeated pieces instanced; what moves or is used stays its own.
+   Done 2026-11-15 — measured first, and the floors aren't where the draws are: my floor, furnished, is 18 draws
+   (World3 merges it already). From floor 4 the Grounds give ~108 (69 of them instanced already); on the lawn the
+   parked sedans 163 (~10 each, merged each — across cars not, a parked car can be knocked or driven off). What was
+   left per draw: **a parked car's glass drawn in three's two passes** — a see-through two-sided material, its side
+   flipped and marked changed twice a frame, its shader worked out again each time (114 in the lot). Now two meshes
+   (`two-pass.ts`, from `Culling.stillModel`): the back faces' with a back-only material, right after it the front
+   faces' — the same place and made after it, so drawn after it, as three's passes; their materials shared by every
+   car with that glass. People's two-pass parts (brows, soft edges) left: the look swaps their materials (phase 3).
+   The friends' own rooms (production's world) not here to measure: the reports' `drawsBy` (phase 1) will say.
 5. **Fewer objects walked** — what never moves sealed out of the per-frame matrices walk on every tier (only Low and
    Lowest skip any today), marked where it's built; the scene walk skipping still groups out of sight in one step.
 6. **The land's questions** — `heightAt`/`terrainAt`/`waterSide` asked every frame answered from what's cached, or

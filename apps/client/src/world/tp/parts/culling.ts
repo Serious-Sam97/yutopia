@@ -5,6 +5,7 @@ import { BelowCull, boxInParent, HIDDEN_LAYER } from "../below-cull";
 import type { World3 } from "../build";
 import { type Gather, lazyMatrices, seal } from "../lazy-matrices";
 import { mergeStill, shadowProxy } from "../merge-static";
+import { splitTwoPass } from "../two-pass";
 import type { ThirdPersonView } from "../view";
 
 /** What Culling reads of the ThirdPersonView (plan 72 phase 4: its dependencies, said). */
@@ -173,6 +174,8 @@ export class Culling {
   stillModel(root: Object3D) {
     mergeStill(root);
     shadowProxy(root, HIDDEN_LAYER);
+    // (its glass's two passes as two meshes: no shader worked out again every draw — two-pass.ts)
+    splitTwoPass(root);
     root.traverse((o) => {
       if (o === root) return;
       o.updateMatrix();
