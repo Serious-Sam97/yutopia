@@ -308,6 +308,10 @@ day, and **holds a grudge** (below).
    - **Stills** `design/vortex-fight/6-*.png` (14: act I, the whip and Bia's knife, REW, PAUSE, the confiscation, the
      radio, HR, act III in the dark, the clones, possessed, the glitch, down and got up, the end, the grudge).
    - Polished: an item's name in a line keeps a name a name ("+1 Vortex's tape", "Pick up Vortex's tape").
+   - **Changed by the user 2026-11-15**: his voice only in a fight — out of one (a poke, his chatter, the grudge's
+     lines) his lines are silent, the bubble alone; in a fight (or down from one) babbled as before
+     (`world/dark/vortex.ts` `fighting()`). Checked: the end-and-grudge browser test pokes him after the reset — he
+     answers, no babble.
    - Left open: the shadowed he lets in are silent (the dark's sounds follow its outdoor shadowed only); the chair
      prank unchecked by a test (a desk is only given at join, by the API).
 

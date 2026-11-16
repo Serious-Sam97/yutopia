@@ -503,6 +503,21 @@ test("the fight with Vortex, the end and the grudge: the tape unspooled, the tro
   // (phase 5) the end's: down, his tape spilling, the cassette taken, the grudge's sting — and his voice
   const anaEnd = await heard(page);
   for (const x of ["vx-down", "vx-unspool", "vx-pickup", "vx-grudge", "babble"]) expect(anaEnd, x).toContain(x);
+  // out of a fight his lines are silent (the bubble alone — the user, 2026-11-15): poked, he answers, no babble
+  await w(page, (y) => y.room.send("mod:vortex", { reset: true, forget: true, hold: true }));
+  await expect.poll(() => w(page, (y) => y.room.state.npcs.get("vortex").vact), { timeout: 5000 }).toBe(0);
+  await page.waitForTimeout(600);
+  await page.evaluate(() => {
+    (window as any).__vxheard.length = 0;
+    (window as any).__said = 0;
+    (window as any).__yutopia.room.onMessage("vortex:say", () => {
+      (window as any).__said++;
+    });
+    (window as any).__yutopia.room.send("vortex:poke", {});
+  });
+  await expect.poll(() => page.evaluate(() => (window as any).__said), { timeout: 8000 }).toBeGreaterThan(0);
+  await page.waitForTimeout(500);
+  expect(await heard(page), "no babble out of a fight").not.toContain("babble");
   await w(page, (y) => y.room.send("mod:vortex", { reset: true, forget: true, hold: false }));
   await ctx.close();
 });

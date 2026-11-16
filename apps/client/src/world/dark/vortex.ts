@@ -123,8 +123,11 @@ export class VortexFight {
       this.slip(this.tr(m.hits === 1 ? "vx_grudge1" : "vx_grudge", { n: String(m.hits) }), false, "hr");
       this.sound.vx("vx-grudge");
     });
-    // (phase 5) his voice: a line to me alone (a personal one) — babbled here, close
-    on("vortex:say", (m) => this.sound.babble(m.text, m.mood ?? this.vx()?.mood ?? "smug"));
+    // (phase 5) his voice: a line to me alone (a personal one) — babbled here, close; only in a fight (the user,
+    // 2026-11-15: out of one his lines are silent, the bubble alone)
+    on("vortex:say", (m) => {
+      if (this.fighting()) this.sound.babble(m.text, m.mood ?? this.vx()?.mood ?? "smug");
+    });
     // (his cassette taken: its click)
     on("dark:found", (m) => {
       if (m.got.some((g) => g.id === "vxtape")) this.sound.vx("vx-pickup");
@@ -310,6 +313,11 @@ export class VortexFight {
         return;
     }
   }
+  // a fight on (someone's shot him, his act up), or him on the floor beaten: his voice heard
+  private fighting(): boolean {
+    const vx = this.vx();
+    return this.who.length > 0 || (vx?.vact ?? 0) > 0 || vx?.mood === "dead";
+  }
   private onHisFloor(): boolean {
     return this.ctl.level === this.ctl.homeFloor();
   }
@@ -399,11 +407,12 @@ export class VortexFight {
     const me = this.walker.where();
     const near = here && !!vx && Math.hypot(vx.x - me.x, vx.y - me.y) <= SEEN;
     this.act3(now, dt, here, vx, me);
-    // (phase 5) his public lines babbled where he is (as the bubble's: near him); his sounds in before they're wanted
+    // (phase 5) his public lines babbled where he is (as the bubble's: near him) — in a fight only; his sounds in
+    // before they're wanted
     if (here && vx) {
       if (Math.hypot(vx.x - me.x, vx.y - me.y) < 30) this.sound.warmVortex();
       if (vx.sayAt && vx.sayAt !== this.saidAt) {
-        if (this.saidAt && vx.say && Math.hypot(vx.x - me.x, vx.y - me.y) <= 8)
+        if (this.saidAt && vx.say && this.fighting() && Math.hypot(vx.x - me.x, vx.y - me.y) <= 8)
           this.sound.babble(vx.say, vx.mood ?? "smug", { x: vx.x, y: vx.y });
         this.saidAt = vx.sayAt;
       }
