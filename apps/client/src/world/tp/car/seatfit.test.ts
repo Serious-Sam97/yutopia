@@ -9,7 +9,7 @@ import { carFit } from "./seatfit";
 // Plan 62 phase 5 (docs/plan/62-the-touch.md): in the sedan at full size, the driver's right foot is
 // on the throttle and the left on the floor, nothing under the floor, the head under the roof, the
 // back to the seat's reclined back, the hands on the wheel's rim; the passenger's feet on the
-// footwell's floor. The sedan's own numbers (tp/car/sedan.ts), its driver's hip point at x 0: the
+// footwell's floor. The sedan's own numbers (the old drawn sedan, before docs/plan/92), its driver's hip point at x 0: the
 // nose toward −x, its left +z.
 
 const U = (u: number) => u - 2.68; // (the profile's u, from the front seats' hip point)

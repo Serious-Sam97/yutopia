@@ -266,3 +266,126 @@ test(
     assert.ok(gpu <= LIB_BUDGET.gpuMb, `the library: ~${gpu.toFixed(0)} MB on the GPU > ${LIB_BUDGET.gpuMb}`);
   },
 );
+
+// ── the cars (plan 92: tools/art/cars/build_cars.py → public/life/cars, manifest.json) ────────────────────
+
+const CAR_DIR = join(DIR, "cars");
+/** A car's files: meshopt geometry, the paint's dent morphs, and no images of their own — every texture a
+ *  URI to a shared KTX2 (tex/ beside the cars, or the life library's ../mat/), checked to exist. Measured
+ *  2026-11-16 (the quality pass): the road cars' near 66–89k triangles, 1.23–1.53 MB; mid 13.6–20k from the
+ *  generators (no decimation), ~0.4–0.5 MB; far ~1.7k; the shuttle 95.9k → trimmed to its budget. */
+const CAR = {
+  near: { mb: 1.6, tris: 90000 },
+  mid: { mb: 0.6, tris: 18000 },
+  far: { mb: 0.12, tris: 2600 },
+  extra: { mb: 0.05, tris: 2600 },
+  wheel: { mb: 0.12, tris: 6000 },
+};
+const MID_TRIS: Record<string, number> = { "shuttle-bus": 22000 };
+const CAR_TRIS: Record<string, number> = {};
+/** What the game looks for in a road car (and, fewer, in a work vehicle): the pivots, the lamps, the points. */
+const ROAD_NODES = [
+  "body",
+  "wheel_fl",
+  "steer_fl",
+  "spin_fl",
+  "wheel_rr",
+  "spin_rr",
+  "steering",
+  "screen",
+  "lamp_head",
+  "lamp_tail",
+  "lamp_brake",
+  "lamp_reverse",
+  "lamp_ind_l",
+  "lamp_ind_r",
+  "plate_r",
+  "collider",
+  "seat_0",
+  "eye",
+  "hub_fl",
+  "headlight_l",
+  "exhaust_0",
+  "x_roof",
+];
+const WORK_NODES = ["body", "collider", "seat_0", "hub_fl"];
+
+function trisOf(json: Glb["json"]): number {
+  let tris = 0;
+  for (const m of json.meshes)
+    for (const p of m.primitives)
+      tris +=
+        p.indices !== undefined ? json.accessors[p.indices].count / 3 : json.accessors[p.attributes.POSITION].count / 3;
+  return tris;
+}
+
+const MANIFEST_PATH = join(CAR_DIR, "manifest.json");
+const carManifest = existsSync(MANIFEST_PATH)
+  ? (JSON.parse(readFileSync(MANIFEST_PATH, "utf8")) as {
+      cars: Record<string, { file: string; variant: string; tris: Record<string, number> }>;
+      far: Record<string, { file: string }>;
+      extras?: Record<string, { file: string }>;
+      wheels?: Record<string, { file: string }>;
+    })
+  : null;
+
+for (const [id, car] of Object.entries(carManifest?.cars ?? {})) {
+  test(`life car ${id}: near, mid within budget, its nodes named`, () => {
+    const work = car.variant === "work";
+    for (const [lod, file] of [
+      ["near", car.file],
+      ["mid", car.file.replace(".glb", "-mid.glb")],
+    ] as const) {
+      const path = join(CAR_DIR, file);
+      if (work && lod === "mid" && !existsSync(path)) continue;
+      const size = readFileSync(path).length;
+      const budget = CAR[lod];
+      assert.ok(size <= budget.mb * 1e6, `${file}: ${(size / 1e6).toFixed(2)} MB > ${budget.mb} MB`);
+      const { json } = readGlb(path);
+      for (const e of json.extensionsRequired ?? []) assert.ok(SUPPORTED.has(e), `${file}: needs ${e}`);
+      const most = lod === "near" ? (CAR_TRIS[id] ?? budget.tris) : (MID_TRIS[id] ?? budget.tris);
+      const tris = trisOf(json);
+      assert.ok(tris <= most, `${file}: ${tris} triangles > ${most}`);
+      // (its textures: URIs, every one there; no embedded images)
+      for (const img of (json as { images?: { uri?: string; bufferView?: number }[] }).images ?? []) {
+        assert.ok(img.uri && img.bufferView === undefined, `${file}: an embedded image`);
+        assert.ok(existsSync(join(CAR_DIR, img.uri)), `${file}: ${img.uri} missing`);
+      }
+      if (lod === "near") {
+        const names = new Set(json.nodes.map((n) => n.name));
+        for (const n of work ? WORK_NODES : ROAD_NODES) assert.ok(names.has(n), `${file}: no node ${n}`);
+        // (a door at least: the bus's are on its right only)
+        if (!work)
+          assert.ok(
+            [...names].some((n) => n?.startsWith("door_")),
+            `${file}: no door`,
+          );
+        // (the dents: on the paint, road cars only)
+        if (!work)
+          assert.ok(
+            json.meshes.some((m) => m.name === "body-paint" && m.primitives.some((p) => "targets" in p)),
+            `${file}: no dent morphs`,
+          );
+      }
+    }
+  });
+}
+for (const [body, far] of Object.entries(carManifest?.far ?? {})) {
+  test(`life car far ${body}: within budget`, () => {
+    const path = join(CAR_DIR, far.file);
+    assert.ok(readFileSync(path).length <= CAR.far.mb * 1e6, `${far.file}: over ${CAR.far.mb} MB`);
+    assert.ok(trisOf(readGlb(path).json) <= CAR.far.tris, `${far.file}: over ${CAR.far.tris} triangles`);
+  });
+}
+for (const [group, budget] of [
+  ["extras", CAR.extra],
+  ["wheels", CAR.wheel],
+] as const) {
+  for (const [id, x] of Object.entries(carManifest?.[group] ?? {})) {
+    test(`life car ${group} ${id}: within budget`, () => {
+      const path = join(CAR_DIR, x.file);
+      assert.ok(readFileSync(path).length <= budget.mb * 1e6, `${x.file}: over ${budget.mb} MB`);
+      assert.ok(trisOf(readGlb(path).json) <= budget.tris, `${x.file}: over ${budget.tris} triangles`);
+    });
+  }
+}

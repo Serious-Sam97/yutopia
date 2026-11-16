@@ -1,6 +1,6 @@
 import { type CarState, mounts, readout } from "@yutopia/shared/car";
 import { Quaternion, Vector3 } from "three";
-import type { Lights, Sedan } from "./sedan";
+import type { Lights, Sedan } from "./model";
 import type { Cluster } from "./vfd";
 
 // A car's model posed from its physics (docs/plan/28-the-car.md): the body
@@ -82,6 +82,8 @@ export class CarRig {
   }
 
   /** Pose the model for this frame: `alpha` how far between the last two steps (0..1). */
+  /** (plan 93 S1) its flat tyres (bits FL FR RL RR): down on their rims */
+  flats = 0;
   pose(alpha: number, dt: number, t: number) {
     const m = this.model;
     const s = this.car;
@@ -95,7 +97,8 @@ export class CarRig {
     for (let i = 0; i < 4; i++) {
       const w = s.wheels[i];
       const mw = m.wheels[i];
-      mw.steer.position.y = mw.rest.y + (w.c - this.c0[i]);
+      // (plan 93 S1: a flat, down on its rim)
+      mw.steer.position.y = mw.rest.y + (w.c - this.c0[i]) - (this.flats & (1 << i) ? 0.04 : 0);
       mw.steer.rotation.y = -w.steer;
       mw.spin.rotation.z = w.turn * (mw.turnK ?? 1);
     }

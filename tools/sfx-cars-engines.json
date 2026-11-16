@@ -1,0 +1,977 @@
+{
+  "_": "The cars' engines (docs/plan/92-the-cars.md phase 11): each voice's candidate sets — a car's recordings by mic and load, CC0 on Freesound (tools/sfx-cars-search.mjs) — cut into loops at the voice's revs by tools/sfx-cars-engines.mjs into public/sfx/cars/engines. `mine` is my pick.",
+  "four": {
+    "rpm": [900, 1600, 2600, 4200, 6200],
+    "for": "the saloon, the estate, the 4x4 (petrol)",
+    "sets": [
+      {
+        "name": "Mercedes 190E-16V on a dyno (today's)",
+        "cyl": 4,
+        "strokes": 4,
+        "note": "three mics (D6 the exhaust, 4062 the bay, a distant one); the sweeps give the points between",
+        "rec": [
+          {
+            "id": "162506",
+            "user": "Chippy569",
+            "title": "19_500_D6.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162506_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162506/",
+            "dur": 1.9,
+            "downloads": 108,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "on"
+          },
+          {
+            "id": "162509",
+            "user": "Chippy569",
+            "title": "19_2500_D6.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162509_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162509/",
+            "dur": 4.8,
+            "downloads": 123,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "on"
+          },
+          {
+            "id": "162512",
+            "user": "Chippy569",
+            "title": "20_6500_D6.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162512_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162512/",
+            "dur": 1.6,
+            "downloads": 132,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "on"
+          },
+          {
+            "id": "162507",
+            "user": "Chippy569",
+            "title": "19_500_4062.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162507_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162507/",
+            "dur": 1.9,
+            "downloads": 79,
+            "note": "pinned (a car pack's)",
+            "mic": "bay",
+            "load": "on"
+          },
+          {
+            "id": "162510",
+            "user": "Chippy569",
+            "title": "19_2500_4062.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162510_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162510/",
+            "dur": 4.8,
+            "downloads": 85,
+            "note": "pinned (a car pack's)",
+            "mic": "bay",
+            "load": "on"
+          },
+          {
+            "id": "162513",
+            "user": "Chippy569",
+            "title": "20_6500_4062.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162513_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162513/",
+            "dur": 1.6,
+            "downloads": 153,
+            "note": "pinned (a car pack's)",
+            "mic": "bay",
+            "load": "on"
+          },
+          {
+            "id": "162505",
+            "user": "Chippy569",
+            "title": "19_500_Distant.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162505_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162505/",
+            "dur": 1.9,
+            "downloads": 108,
+            "note": "pinned (a car pack's)",
+            "mic": "far",
+            "load": "on"
+          },
+          {
+            "id": "162508",
+            "user": "Chippy569",
+            "title": "19_2500_Distant.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162508_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162508/",
+            "dur": 4.8,
+            "downloads": 80,
+            "note": "pinned (a car pack's)",
+            "mic": "far",
+            "load": "on"
+          },
+          {
+            "id": "162511",
+            "user": "Chippy569",
+            "title": "20_6500_Distant.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162511_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162511/",
+            "dur": 1.6,
+            "downloads": 106,
+            "note": "pinned (a car pack's)",
+            "mic": "far",
+            "load": "on"
+          },
+          {
+            "id": "162515",
+            "user": "Chippy569",
+            "title": "21_500_D6.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162515_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162515/",
+            "dur": 8.3,
+            "downloads": 89,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "off"
+          },
+          {
+            "id": "162518",
+            "user": "Chippy569",
+            "title": "21_2500_D6.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162518_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162518/",
+            "dur": 4,
+            "downloads": 91,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "off"
+          },
+          {
+            "id": "162521",
+            "user": "Chippy569",
+            "title": "21_6500_D6.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162521_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162521/",
+            "dur": 1.9,
+            "downloads": 103,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "off"
+          },
+          {
+            "id": "162516",
+            "user": "Chippy569",
+            "title": "21_500_4062.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162516_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162516/",
+            "dur": 8.3,
+            "downloads": 67,
+            "note": "pinned (a car pack's)",
+            "mic": "bay",
+            "load": "off"
+          },
+          {
+            "id": "162519",
+            "user": "Chippy569",
+            "title": "21_2500_4062.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162519_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162519/",
+            "dur": 4,
+            "downloads": 70,
+            "note": "pinned (a car pack's)",
+            "mic": "bay",
+            "load": "off"
+          },
+          {
+            "id": "162522",
+            "user": "Chippy569",
+            "title": "21_6500_4062.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162522_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162522/",
+            "dur": 1.9,
+            "downloads": 111,
+            "note": "pinned (a car pack's)",
+            "mic": "bay",
+            "load": "off"
+          },
+          {
+            "id": "162514",
+            "user": "Chippy569",
+            "title": "21_500_Distant.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162514_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162514/",
+            "dur": 8.3,
+            "downloads": 68,
+            "note": "pinned (a car pack's)",
+            "mic": "far",
+            "load": "off"
+          },
+          {
+            "id": "162517",
+            "user": "Chippy569",
+            "title": "21_2500_Distant.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162517_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162517/",
+            "dur": 4,
+            "downloads": 53,
+            "note": "pinned (a car pack's)",
+            "mic": "far",
+            "load": "off"
+          },
+          {
+            "id": "162520",
+            "user": "Chippy569",
+            "title": "21_6500_Distant.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162520_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162520/",
+            "dur": 1.9,
+            "downloads": 77,
+            "note": "pinned (a car pack's)",
+            "mic": "far",
+            "load": "off"
+          },
+          {
+            "id": "162504",
+            "user": "Chippy569",
+            "title": "17_MedSweep_D6.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162504_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162504/",
+            "dur": 10.2,
+            "downloads": 110,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          },
+          {
+            "id": "162502",
+            "user": "Chippy569",
+            "title": "18_MedSweep_4062.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162502_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162502/",
+            "dur": 9.7,
+            "downloads": 95,
+            "note": "pinned (a car pack's)",
+            "mic": "bay",
+            "load": "auto"
+          },
+          {
+            "id": "162499",
+            "user": "Chippy569",
+            "title": "Acceleration Sweep - 4062.wav",
+            "preview": "https://cdn.freesound.org/previews/162/162499_1277206-hq.mp3",
+            "url": "https://freesound.org/people/Chippy569/sounds/162499/",
+            "dur": 4.3,
+            "downloads": 1279,
+            "note": "pinned (a car pack's)",
+            "mic": "bay",
+            "load": "on"
+          }
+        ],
+        "start": {
+          "id": "162528",
+          "user": "Chippy569",
+          "title": "23_StartISmall_D6.wav",
+          "preview": "https://cdn.freesound.org/previews/162/162528_1277206-hq.mp3",
+          "url": "https://freesound.org/people/Chippy569/sounds/162528/",
+          "dur": 8.3,
+          "downloads": 91,
+          "note": "pinned (a car pack's)"
+        }
+      },
+      {
+        "name": "Peugeot 308",
+        "cyl": 4,
+        "strokes": 4,
+        "note": "an acceleration run from idle and idle loops outside and in",
+        "rec": [
+          {
+            "id": "522221",
+            "user": "Nox_Sound",
+            "title": "Vehicle_Car_Peugeot_308_Acceleration_Idle_Mono.wav",
+            "preview": "https://cdn.freesound.org/previews/522/522221_9250976-hq.mp3",
+            "url": "https://freesound.org/people/Nox_Sound/sounds/522221/",
+            "dur": 60.4,
+            "downloads": 1307,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          },
+          {
+            "id": "522225",
+            "user": "Nox_Sound",
+            "title": "Vehicle_Car_Peugeot_308_Idle_Exterior_Loop_Mono_02.wav",
+            "preview": "https://cdn.freesound.org/previews/522/522225_9250976-hq.mp3",
+            "url": "https://freesound.org/people/Nox_Sound/sounds/522225/",
+            "dur": 27.7,
+            "downloads": 367,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "off"
+          },
+          {
+            "id": "522223",
+            "user": "Nox_Sound",
+            "title": "Vehicle_Car_Peugeot_308_Idle_Interior_Loop_Mono_.wav",
+            "preview": "https://cdn.freesound.org/previews/522/522223_9250976-hq.mp3",
+            "url": "https://freesound.org/people/Nox_Sound/sounds/522223/",
+            "dur": 14.8,
+            "downloads": 529,
+            "note": "pinned (a car pack's)",
+            "mic": "cabin",
+            "load": "off"
+          }
+        ]
+      },
+      {
+        "name": "Ford Ranger (2000), outside",
+        "cyl": 4,
+        "strokes": 4,
+        "note": "4 min of revs held at many points (if it's the V6, its revs read 1.5× high)",
+        "rec": [
+          {
+            "id": "779214",
+            "user": "YannSauvin",
+            "title": "Ford Ranger (2000) RPM variations outside 4 mics",
+            "preview": "https://cdn.freesound.org/previews/779/779214_6921828-hq.mp3",
+            "url": "https://freesound.org/people/YannSauvin/sounds/779214/",
+            "dur": 257,
+            "downloads": 121,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          }
+        ]
+      },
+      {
+        "name": "Hyundai Elantra (2004)",
+        "cyl": 4,
+        "strokes": 4,
+        "note": "idle and revs, the key start",
+        "rec": [
+          {
+            "id": "865228",
+            "user": "microman502",
+            "title": "Elantra Engine Idle and Rev",
+            "preview": "https://cdn.freesound.org/previews/865/865228_13610145-hq.mp3",
+            "url": "https://freesound.org/people/microman502/sounds/865228/",
+            "dur": 34.6,
+            "downloads": 18,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          },
+          {
+            "id": "865229",
+            "user": "microman502",
+            "title": "Elantra Engine Ignition and Idle with Keys",
+            "preview": "https://cdn.freesound.org/previews/865/865229_13610145-hq.mp3",
+            "url": "https://freesound.org/people/microman502/sounds/865229/",
+            "dur": 27.7,
+            "downloads": 18,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "off"
+          }
+        ],
+        "start": {
+          "id": "865229",
+          "user": "microman502",
+          "title": "Elantra Engine Ignition and Idle with Keys",
+          "preview": "https://cdn.freesound.org/previews/865/865229_13610145-hq.mp3",
+          "url": "https://freesound.org/people/microman502/sounds/865229/",
+          "dur": 27.7,
+          "downloads": 18,
+          "note": "pinned (a car pack's)"
+        }
+      }
+    ],
+    "mine": 0,
+    "why": "an 80s saloon's twin-cam four, recorded on a dyno: real load, three mics; 17 loops: off load 3/5 revs, on 4/5; 3 mics; steadiness 0.942, pitch sure 0.99"
+  },
+  "revvy": {
+    "rpm": [950, 2000, 3500, 5200, 7000],
+    "for": "the hatch",
+    "sets": [
+      {
+        "name": "Ford Cortina on a dyno (70s, 328 hp)",
+        "cyl": 4,
+        "strokes": 4,
+        "note": "a period four pulling on a dyno",
+        "rec": [
+          {
+            "id": "177183",
+            "user": "Ears68",
+            "title": "DR09DynoRun70ishFordCortina328HP-finalA.wav",
+            "preview": "https://cdn.freesound.org/previews/177/177183_2214631-hq.mp3",
+            "url": "https://freesound.org/people/Ears68/sounds/177183/",
+            "dur": 21.4,
+            "downloads": 175,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          }
+        ]
+      },
+      {
+        "name": "Mini Cooper S (contact mic)",
+        "cyl": 4,
+        "strokes": 4,
+        "note": "a contact mic on the block: the engine's own voice, driven hard",
+        "rec": [
+          {
+            "id": "669618",
+            "user": "TheLittleCrow",
+            "title": "Car Engine Contact Recording-Mini Cooper S 2019.wav",
+            "preview": "https://cdn.freesound.org/previews/669/669618_5672786-hq.mp3",
+            "url": "https://freesound.org/people/TheLittleCrow/sounds/669618/",
+            "dur": 108,
+            "downloads": 346,
+            "note": "pinned (a car pack's)",
+            "mic": "bay",
+            "load": "auto"
+          },
+          {
+            "id": "669622",
+            "user": "TheLittleCrow",
+            "title": "Car Engine Contact Recording-Mini Cooper S 2019_Gunning_it.wav",
+            "preview": "https://cdn.freesound.org/previews/669/669622_5672786-hq.mp3",
+            "url": "https://freesound.org/people/TheLittleCrow/sounds/669622/",
+            "dur": 32,
+            "downloads": 302,
+            "note": "pinned (a car pack's)",
+            "mic": "bay",
+            "load": "auto"
+          },
+          {
+            "id": "669623",
+            "user": "TheLittleCrow",
+            "title": "Car Engine Contact Recording-Mini Cooper S 2019_Gear Shift.wav",
+            "preview": "https://cdn.freesound.org/previews/669/669623_5672786-hq.mp3",
+            "url": "https://freesound.org/people/TheLittleCrow/sounds/669623/",
+            "dur": 54,
+            "downloads": 508,
+            "note": "pinned (a car pack's)",
+            "mic": "bay",
+            "load": "auto"
+          }
+        ]
+      },
+      {
+        "name": "Renault Duster",
+        "cyl": 4,
+        "strokes": 4,
+        "note": "revs rising by the exhaust, outdoors",
+        "rec": [
+          {
+            "id": "380717",
+            "user": "semenov_nick",
+            "title": "02_Renault_duster_Exaust_engine_rising.wav",
+            "preview": "https://cdn.freesound.org/previews/380/380717_3596390-hq.mp3",
+            "url": "https://freesound.org/people/semenov_nick/sounds/380717/",
+            "dur": 8.7,
+            "downloads": 132,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          },
+          {
+            "id": "380719",
+            "user": "semenov_nick",
+            "title": "00_Renault_duster_Exaust_3times_outdoor.wav",
+            "preview": "https://cdn.freesound.org/previews/380/380719_3596390-hq.mp3",
+            "url": "https://freesound.org/people/semenov_nick/sounds/380719/",
+            "dur": 28.6,
+            "downloads": 117,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          }
+        ],
+        "start": {
+          "id": "380716",
+          "user": "semenov_nick",
+          "title": "03_Renault_duster_Engine_strarts_inside_keys.wav",
+          "preview": "https://cdn.freesound.org/previews/380/380716_3596390-hq.mp3",
+          "url": "https://freesound.org/people/semenov_nick/sounds/380716/",
+          "dur": 9,
+          "downloads": 85,
+          "note": "pinned (a car pack's)"
+        }
+      }
+    ],
+    "mine": 0,
+    "why": "a period four pulling under load; 7 loops: off load 3/5 revs, on 4/5; 1 mic; steadiness 0.907, pitch sure 0.99"
+  },
+  "v8": {
+    "rpm": [650, 1300, 2200, 3400, 4800],
+    "for": "the pickup",
+    "sets": [
+      {
+        "name": "Chevrolet Impala (1980), outside",
+        "cyl": 8,
+        "strokes": 4,
+        "note": "a period V8, revs held at many points, four mics",
+        "rec": [
+          {
+            "id": "779211",
+            "user": "YannSauvin",
+            "title": "Chevrolet Impala (1980) RPM variations outside 4 mics",
+            "preview": "https://cdn.freesound.org/previews/779/779211_6921828-hq.mp3",
+            "url": "https://freesound.org/people/YannSauvin/sounds/779211/",
+            "dur": 155,
+            "downloads": 68,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          }
+        ]
+      },
+      {
+        "name": "Hot-rod V8 (start, rough idle, revs, away)",
+        "cyl": 8,
+        "strokes": 4,
+        "note": "a lumpy cam: louder than a farm pickup",
+        "rec": [
+          {
+            "id": "146832",
+            "user": "Ears68",
+            "title": "Hot-Rod-V8-start-roughIdle-rev-DriveAway-xDR020.wav",
+            "preview": "https://cdn.freesound.org/previews/146/146832_2214631-hq.mp3",
+            "url": "https://freesound.org/people/Ears68/sounds/146832/",
+            "dur": 34.8,
+            "downloads": 1148,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          }
+        ],
+        "start": {
+          "id": "146832",
+          "user": "Ears68",
+          "title": "Hot-Rod-V8-start-roughIdle-rev-DriveAway-xDR020.wav",
+          "preview": "https://cdn.freesound.org/previews/146/146832_2214631-hq.mp3",
+          "url": "https://freesound.org/people/Ears68/sounds/146832/",
+          "dur": 34.8,
+          "downloads": 1148,
+          "note": "pinned (a car pack's)"
+        }
+      },
+      {
+        "name": "Ford F-350 5.4 V8 and a Crown Victoria",
+        "cyl": 8,
+        "strokes": 4,
+        "note": "real trucks' starts and idles (few revs)",
+        "rec": [
+          {
+            "id": "610772",
+            "user": "Therancher01",
+            "title": "F350-5.4 V8 startup and idle.m4a",
+            "preview": "https://cdn.freesound.org/previews/610/610772_13385150-hq.mp3",
+            "url": "https://freesound.org/people/Therancher01/sounds/610772/",
+            "dur": 45.7,
+            "downloads": 95,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          },
+          {
+            "id": "610774",
+            "user": "Therancher01",
+            "title": "Crown Victoria Startup and idle.m4a",
+            "preview": "https://cdn.freesound.org/previews/610/610774_13385150-hq.mp3",
+            "url": "https://freesound.org/people/Therancher01/sounds/610774/",
+            "dur": 54.7,
+            "downloads": 83,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          }
+        ],
+        "start": {
+          "id": "610772",
+          "user": "Therancher01",
+          "title": "F350-5.4 V8 startup and idle.m4a",
+          "preview": "https://cdn.freesound.org/previews/610/610772_13385150-hq.mp3",
+          "url": "https://freesound.org/people/Therancher01/sounds/610772/",
+          "dur": 45.7,
+          "downloads": 95,
+          "note": "pinned (a car pack's)"
+        }
+      }
+    ],
+    "mine": 0,
+    "why": "a 1980 V8: the period, a big car's lazy burble; 7 loops: off load 3/5 revs, on 4/5; 1 mic; steadiness 0.915, pitch sure 0.82"
+  },
+  "diesel-light": {
+    "rpm": [800, 1500, 2300, 3200, 4200],
+    "for": "the van, the 4x4 (diesel)",
+    "sets": [
+      {
+        "name": "BMW 120d",
+        "cyl": 4,
+        "strokes": 4,
+        "note": "idle, low, medium, high, outside and inside, the start and the stop",
+        "rec": [
+          {
+            "id": "401552",
+            "user": "GiocoSound",
+            "title": "SFX_Car_Engine_Outside_Idle.wav",
+            "preview": "https://cdn.freesound.org/previews/401/401552_5820033-hq.mp3",
+            "url": "https://freesound.org/people/GiocoSound/sounds/401552/",
+            "dur": 3.1,
+            "downloads": 1417,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "off"
+          },
+          {
+            "id": "401556",
+            "user": "GiocoSound",
+            "title": "SFX_Car_Engine_Outside_RPMLow.wav",
+            "preview": "https://cdn.freesound.org/previews/401/401556_5820033-hq.mp3",
+            "url": "https://freesound.org/people/GiocoSound/sounds/401556/",
+            "dur": 2.1,
+            "downloads": 395,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "off"
+          },
+          {
+            "id": "401555",
+            "user": "GiocoSound",
+            "title": "SFX_Car_Engine_Outside_RPMMed.wav",
+            "preview": "https://cdn.freesound.org/previews/401/401555_5820033-hq.mp3",
+            "url": "https://freesound.org/people/GiocoSound/sounds/401555/",
+            "dur": 2.8,
+            "downloads": 384,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "off"
+          },
+          {
+            "id": "401551",
+            "user": "GiocoSound",
+            "title": "SFX_Car_Engine_Outside_RPMHigh.wav",
+            "preview": "https://cdn.freesound.org/previews/401/401551_5820033-hq.mp3",
+            "url": "https://freesound.org/people/GiocoSound/sounds/401551/",
+            "dur": 2,
+            "downloads": 497,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "off"
+          },
+          {
+            "id": "401550",
+            "user": "GiocoSound",
+            "title": "SFX_Car_Engine_Inside_Idle.wav",
+            "preview": "https://cdn.freesound.org/previews/401/401550_5820033-hq.mp3",
+            "url": "https://freesound.org/people/GiocoSound/sounds/401550/",
+            "dur": 3.1,
+            "downloads": 1428,
+            "note": "pinned (a car pack's)",
+            "mic": "cabin",
+            "load": "off"
+          },
+          {
+            "id": "401548",
+            "user": "GiocoSound",
+            "title": "SFX_Car_Engine_Inside_RPMLow.wav",
+            "preview": "https://cdn.freesound.org/previews/401/401548_5820033-hq.mp3",
+            "url": "https://freesound.org/people/GiocoSound/sounds/401548/",
+            "dur": 2.1,
+            "downloads": 526,
+            "note": "pinned (a car pack's)",
+            "mic": "cabin",
+            "load": "off"
+          },
+          {
+            "id": "401547",
+            "user": "GiocoSound",
+            "title": "SFX_Car_Engine_Inside_RPMMed.wav",
+            "preview": "https://cdn.freesound.org/previews/401/401547_5820033-hq.mp3",
+            "url": "https://freesound.org/people/GiocoSound/sounds/401547/",
+            "dur": 2.8,
+            "downloads": 837,
+            "note": "pinned (a car pack's)",
+            "mic": "cabin",
+            "load": "off"
+          },
+          {
+            "id": "401549",
+            "user": "GiocoSound",
+            "title": "SFX_Car_Engine_Inside_RPMHigh.wav",
+            "preview": "https://cdn.freesound.org/previews/401/401549_5820033-hq.mp3",
+            "url": "https://freesound.org/people/GiocoSound/sounds/401549/",
+            "dur": 2,
+            "downloads": 452,
+            "note": "pinned (a car pack's)",
+            "mic": "cabin",
+            "load": "off"
+          }
+        ],
+        "start": {
+          "id": "401558",
+          "user": "GiocoSound",
+          "title": "SFX_Car_Engine_Outside_Start.wav",
+          "preview": "https://cdn.freesound.org/previews/401/401558_5820033-hq.mp3",
+          "url": "https://freesound.org/people/GiocoSound/sounds/401558/",
+          "dur": 2.5,
+          "downloads": 2793,
+          "note": "pinned (a car pack's)"
+        }
+      },
+      {
+        "name": "Ram 5.9 Cummins (start, idle)",
+        "cyl": 6,
+        "strokes": 4,
+        "note": "a big pickup diesel: heavier than a van's",
+        "rec": [
+          {
+            "id": "610771",
+            "user": "Therancher01",
+            "title": "Ram 5.9 cummins-startup-idle.m4a",
+            "preview": "https://cdn.freesound.org/previews/610/610771_13385150-hq.mp3",
+            "url": "https://freesound.org/people/Therancher01/sounds/610771/",
+            "dur": 64,
+            "downloads": 106,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          }
+        ],
+        "start": {
+          "id": "610771",
+          "user": "Therancher01",
+          "title": "Ram 5.9 cummins-startup-idle.m4a",
+          "preview": "https://cdn.freesound.org/previews/610/610771_13385150-hq.mp3",
+          "url": "https://freesound.org/people/Therancher01/sounds/610771/",
+          "dur": 64,
+          "downloads": 106,
+          "note": "pinned (a car pack's)"
+        }
+      }
+    ],
+    "mine": 0,
+    "why": "a small diesel's idle, low, medium and high, inside and out; 6 loops: off load 3/5 revs, on 0/5; 2 mics; steadiness 0.997, pitch sure 1"
+  },
+  "diesel": {
+    "rpm": [650, 1000, 1400, 1900, 2400],
+    "for": "the snowcat, the plough truck, the tractor",
+    "sets": [
+      {
+        "name": "A tractor at a landfill",
+        "cyl": 4,
+        "strokes": 4,
+        "note": "working: revs up and down under load",
+        "rec": [
+          {
+            "id": "256805",
+            "user": "radwoc",
+            "title": "tractor-landfill-working.wav",
+            "preview": "https://cdn.freesound.org/previews/256/256805_876304-hq.mp3",
+            "url": "https://freesound.org/people/radwoc/sounds/256805/",
+            "dur": 287,
+            "downloads": 329,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          },
+          {
+            "id": "256806",
+            "user": "radwoc",
+            "title": "tractor-landfill-lifting.wav",
+            "preview": "https://cdn.freesound.org/previews/256/256806_876304-hq.mp3",
+            "url": "https://freesound.org/people/radwoc/sounds/256806/",
+            "dur": 142.3,
+            "downloads": 616,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          }
+        ],
+        "start": {
+          "id": "256808",
+          "user": "radwoc",
+          "title": "tractor-engine-start.wav",
+          "preview": "https://cdn.freesound.org/previews/256/256808_876304-hq.mp3",
+          "url": "https://freesound.org/people/radwoc/sounds/256808/",
+          "dur": 8.4,
+          "downloads": 2256,
+          "note": "pinned (a car pack's)"
+        }
+      },
+      {
+        "name": "A truck's engine",
+        "cyl": 6,
+        "strokes": 4,
+        "note": "a heavy truck, idle and moving off on dirt",
+        "rec": [
+          {
+            "id": "515040",
+            "user": "jusebago",
+            "title": "motor de camion / truck engine",
+            "preview": "https://cdn.freesound.org/previews/515/515040_7856386-hq.mp3",
+            "url": "https://freesound.org/people/jusebago/sounds/515040/",
+            "dur": 37.4,
+            "downloads": 4611,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          },
+          {
+            "id": "515042",
+            "user": "jusebago",
+            "title": "camion pesado avanzando sobre tierra / heavy truck advancing on land",
+            "preview": "https://cdn.freesound.org/previews/515/515042_7856386-hq.mp3",
+            "url": "https://freesound.org/people/jusebago/sounds/515042/",
+            "dur": 75.9,
+            "downloads": 796,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          }
+        ]
+      },
+      {
+        "name": "A diesel engine",
+        "cyl": 4,
+        "strokes": 4,
+        "note": "an engine room's diesel, close",
+        "rec": [
+          {
+            "id": "237292",
+            "user": "AugustSandberg",
+            "title": "Diesel Engine",
+            "preview": "https://cdn.freesound.org/previews/237/237292_1934171-hq.mp3",
+            "url": "https://freesound.org/people/AugustSandberg/sounds/237292/",
+            "dur": 44.1,
+            "downloads": 1819,
+            "note": "pinned (a car pack's)",
+            "mic": "bay",
+            "load": "auto"
+          }
+        ]
+      },
+      {
+        "name": "Ram 5.9 Cummins (start, idle)",
+        "cyl": 6,
+        "strokes": 4,
+        "note": "a straight six diesel",
+        "rec": [
+          {
+            "id": "610771",
+            "user": "Therancher01",
+            "title": "Ram 5.9 cummins-startup-idle.m4a",
+            "preview": "https://cdn.freesound.org/previews/610/610771_13385150-hq.mp3",
+            "url": "https://freesound.org/people/Therancher01/sounds/610771/",
+            "dur": 64,
+            "downloads": 106,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          }
+        ],
+        "start": {
+          "id": "610771",
+          "user": "Therancher01",
+          "title": "Ram 5.9 cummins-startup-idle.m4a",
+          "preview": "https://cdn.freesound.org/previews/610/610771_13385150-hq.mp3",
+          "url": "https://freesound.org/people/Therancher01/sounds/610771/",
+          "dur": 64,
+          "downloads": 106,
+          "note": "pinned (a car pack's)"
+        }
+      }
+    ],
+    "mine": 0,
+    "why": "a working tractor under load: the farm's; 5 loops: off load 2/5 revs, on 3/5; 1 mic; steadiness 0.934, pitch sure 0.88"
+  },
+  "two": {
+    "rpm": [1500, 3000, 5000, 6500, 8000],
+    "for": "the snowmobile",
+    "sets": [
+      {
+        "name": "Ski-Doo Skandik",
+        "cyl": 2,
+        "strokes": 2,
+        "note": "a working snowmobile's twin",
+        "rec": [
+          {
+            "id": "726286",
+            "user": "SoundsLikeYukon",
+            "title": "Skidoo Skandik engine",
+            "preview": "https://cdn.freesound.org/previews/726/726286_1544275-hq.mp3",
+            "url": "https://freesound.org/people/SoundsLikeYukon/sounds/726286/",
+            "dur": 26.3,
+            "downloads": 59,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          }
+        ]
+      },
+      {
+        "name": "A snowmobile (with swans)",
+        "cyl": 2,
+        "strokes": 2,
+        "note": "passing, in the cold",
+        "rec": [
+          {
+            "id": "732881",
+            "user": "SoundsLikeYukon",
+            "title": "Snowmobile with swans",
+            "preview": "https://cdn.freesound.org/previews/732/732881_1544275-hq.mp3",
+            "url": "https://freesound.org/people/SoundsLikeYukon/sounds/732881/",
+            "dur": 48.6,
+            "downloads": 108,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          }
+        ]
+      },
+      {
+        "name": "Snowmobile braaap",
+        "cyl": 2,
+        "strokes": 2,
+        "note": "revved hard",
+        "rec": [
+          {
+            "id": "554894",
+            "user": "IMikey18",
+            "title": "Snomobile Brapp 1.m4a",
+            "preview": "https://cdn.freesound.org/previews/554/554894_11195159-hq.mp3",
+            "url": "https://freesound.org/people/IMikey18/sounds/554894/",
+            "dur": 7.9,
+            "downloads": 97,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          },
+          {
+            "id": "554893",
+            "user": "IMikey18",
+            "title": "Snomobile Brapp 2.m4a",
+            "preview": "https://cdn.freesound.org/previews/554/554893_11195159-hq.mp3",
+            "url": "https://freesound.org/people/IMikey18/sounds/554893/",
+            "dur": 14.7,
+            "downloads": 83,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          },
+          {
+            "id": "554892",
+            "user": "IMikey18",
+            "title": "Snomobile Brapp 3.m4a",
+            "preview": "https://cdn.freesound.org/previews/554/554892_11195159-hq.mp3",
+            "url": "https://freesound.org/people/IMikey18/sounds/554892/",
+            "dur": 9.8,
+            "downloads": 81,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          }
+        ]
+      }
+    ],
+    "mine": 0,
+    "why": "a working snowmobile's two-stroke twin; 6 loops: off load 3/5 revs, on 3/5; 1 mic; steadiness 0.917, pitch sure 0.95"
+  }
+}

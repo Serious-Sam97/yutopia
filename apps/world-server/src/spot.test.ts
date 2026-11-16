@@ -173,6 +173,53 @@ test("the dealer: your own beside you in the collection bay, its plate; one each
   assert.notEqual(me(a).busy, "drive:car:motors-sedan");
 });
 
+test("the look (docs/plan/92 F13b): bought with one, checked; repainted at home by its owner only", async () => {
+  const a = await join(55);
+  const b = await join(56);
+  const noA: string[] = [];
+  a.onMessage("car:no", (m: { why: string }) => noA.push(m.why));
+  const noB: string[] = [];
+  b.onMessage("car:no", (m: { why: string }) => noB.push(m.why));
+  const bought: string[] = [];
+  a.onMessage("car:bought", (m: { id: string }) => bought.push(m.id));
+  const looked: string[] = [];
+  a.onMessage("car:looked", (m: { id: string }) => looked.push(m.id));
+  const to = { x: 512, y: -393.5, level: 0 };
+  a.send("teleport", { to });
+  await waitFor(() => me(a).level === 0 && Math.hypot(me(a).x - to.x, me(a).y - to.y) < 1);
+  // one the panel wouldn't offer: refused
+  a.send("car:buy", {
+    model: "hatch",
+    colour: 0,
+    plate: "",
+    look: { variant: "saloon-gl", colour: 0x22385e, extras: [], wheels: "cover" },
+  });
+  await waitFor(() => noA.length >= 1);
+  assert.equal(noA[0], "look");
+  const look = { variant: "hatch-hot", colour: 0x22385e, extras: ["spots", "flaps"], wheels: "sport" };
+  a.send("car:buy", { model: "hatch", colour: 0, plate: "HOT", look });
+  await waitFor(() => bought.length >= 1 && !!b.state.objects.get(bought[0]));
+  const id = bought[0];
+  const p = props(b.state.objects.get(id));
+  assert.equal(p.model, "hatch");
+  assert.deepEqual(p.look, look, "everyone has its look");
+  assert.equal(typeof p.variant, "number", "and the nearest lot colour, for the thumbnails");
+  // repainted by someone else: no
+  const again = { variant: "hatch-gl", colour: 0x8e1c1c, colour2: 0xc9ccc8, extras: ["roofrack"], wheels: "lattice" };
+  b.send("car:look", { id, look: again });
+  await waitFor(() => noB.length >= 1);
+  assert.equal(noB[0], "notyours");
+  // by its owner, at MOTORS: yes, for everyone
+  a.send("car:look", { id, look: again });
+  await waitFor(() => looked.length >= 1);
+  await waitFor(() => (props(b.state.objects.get(id)).look as { variant?: string })?.variant === "hatch-gl");
+  assert.deepEqual(props(b.state.objects.get(id)).look, again);
+  // off the palette: no
+  a.send("car:look", { id, look: { ...again, colour: 0x010203 } });
+  await waitFor(() => noA.length >= 2);
+  assert.equal(noA[1], "look");
+});
+
 test("the keys: only the owner drives, anyone rides; lent, the borrower drives; taken back, not again", async () => {
   const a = await join(57);
   const b = await join(58);

@@ -1,0 +1,2005 @@
+{
+  "four": {
+    "rpm": [900, 1600, 2600, 4200, 6200],
+    "for": "the saloon, the estate, the 4x4 (petrol)",
+    "sets": [
+      {
+        "name": "Mercedes 190E-16V on a dyno (today's)",
+        "note": "three mics (D6 the exhaust, 4062 the bay, a distant one); the sweeps give the points between",
+        "cyl": 4,
+        "strokes": 4,
+        "credit": [
+          {
+            "id": "162506",
+            "user": "Chippy569",
+            "title": "19_500_D6.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162506/"
+          },
+          {
+            "id": "162509",
+            "user": "Chippy569",
+            "title": "19_2500_D6.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162509/"
+          },
+          {
+            "id": "162512",
+            "user": "Chippy569",
+            "title": "20_6500_D6.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162512/"
+          },
+          {
+            "id": "162507",
+            "user": "Chippy569",
+            "title": "19_500_4062.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162507/"
+          },
+          {
+            "id": "162510",
+            "user": "Chippy569",
+            "title": "19_2500_4062.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162510/"
+          },
+          {
+            "id": "162513",
+            "user": "Chippy569",
+            "title": "20_6500_4062.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162513/"
+          },
+          {
+            "id": "162505",
+            "user": "Chippy569",
+            "title": "19_500_Distant.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162505/"
+          },
+          {
+            "id": "162508",
+            "user": "Chippy569",
+            "title": "19_2500_Distant.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162508/"
+          },
+          {
+            "id": "162511",
+            "user": "Chippy569",
+            "title": "20_6500_Distant.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162511/"
+          },
+          {
+            "id": "162515",
+            "user": "Chippy569",
+            "title": "21_500_D6.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162515/"
+          },
+          {
+            "id": "162518",
+            "user": "Chippy569",
+            "title": "21_2500_D6.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162518/"
+          },
+          {
+            "id": "162521",
+            "user": "Chippy569",
+            "title": "21_6500_D6.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162521/"
+          },
+          {
+            "id": "162516",
+            "user": "Chippy569",
+            "title": "21_500_4062.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162516/"
+          },
+          {
+            "id": "162519",
+            "user": "Chippy569",
+            "title": "21_2500_4062.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162519/"
+          },
+          {
+            "id": "162522",
+            "user": "Chippy569",
+            "title": "21_6500_4062.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162522/"
+          },
+          {
+            "id": "162514",
+            "user": "Chippy569",
+            "title": "21_500_Distant.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162514/"
+          },
+          {
+            "id": "162517",
+            "user": "Chippy569",
+            "title": "21_2500_Distant.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162517/"
+          },
+          {
+            "id": "162520",
+            "user": "Chippy569",
+            "title": "21_6500_Distant.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162520/"
+          },
+          {
+            "id": "162504",
+            "user": "Chippy569",
+            "title": "17_MedSweep_D6.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162504/"
+          },
+          {
+            "id": "162502",
+            "user": "Chippy569",
+            "title": "18_MedSweep_4062.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162502/"
+          },
+          {
+            "id": "162499",
+            "user": "Chippy569",
+            "title": "Acceleration Sweep - 4062.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162499/"
+          },
+          {
+            "id": "162528",
+            "user": "Chippy569",
+            "title": "23_StartISmall_D6.wav",
+            "url": "https://freesound.org/people/Chippy569/sounds/162528/"
+          }
+        ],
+        "points": [
+          {
+            "file": "four-a-off-ex-1.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 1008,
+            "target": 900,
+            "steady": 0.993,
+            "sure": 1,
+            "snr": 0,
+            "from": "162515",
+            "len": 1.12
+          },
+          {
+            "file": "four-a-off-bay-1.mp3",
+            "load": "off",
+            "mic": "bay",
+            "rpm": 1046,
+            "target": 900,
+            "steady": 0.993,
+            "sure": 1,
+            "snr": 1,
+            "from": "162516",
+            "len": 1.12
+          },
+          {
+            "file": "four-a-off-far-1.mp3",
+            "load": "off",
+            "mic": "far",
+            "rpm": 1016,
+            "target": 900,
+            "steady": 0.995,
+            "sure": 0.95,
+            "snr": 1,
+            "from": "162514",
+            "len": 1.12
+          },
+          {
+            "file": "four-a-on-ex-2.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 1405,
+            "target": 1600,
+            "steady": 0.546,
+            "sure": 1,
+            "snr": 7,
+            "from": "162504",
+            "len": 0.68
+          },
+          {
+            "file": "four-a-on-bay-2.mp3",
+            "load": "on",
+            "mic": "bay",
+            "rpm": 1529,
+            "target": 1600,
+            "steady": 0.772,
+            "sure": 0.92,
+            "snr": 9,
+            "from": "162499",
+            "len": 1.18
+          },
+          {
+            "file": "four-a-on-ex-3.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 2572,
+            "target": 2600,
+            "steady": 0.997,
+            "sure": 1,
+            "snr": 0,
+            "from": "162509",
+            "len": 1.12
+          },
+          {
+            "file": "four-a-on-bay-3.mp3",
+            "load": "on",
+            "mic": "bay",
+            "rpm": 2556,
+            "target": 2600,
+            "steady": 1,
+            "sure": 1,
+            "snr": 0,
+            "from": "162510",
+            "len": 1.12
+          },
+          {
+            "file": "four-a-off-ex-3.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 2432,
+            "target": 2600,
+            "steady": 0.999,
+            "sure": 1,
+            "snr": 1,
+            "from": "162518",
+            "len": 1.12
+          },
+          {
+            "file": "four-a-off-bay-3.mp3",
+            "load": "off",
+            "mic": "bay",
+            "rpm": 2432,
+            "target": 2600,
+            "steady": 1,
+            "sure": 1,
+            "snr": 0,
+            "from": "162519",
+            "len": 1.12
+          },
+          {
+            "file": "four-a-off-far-3.mp3",
+            "load": "off",
+            "mic": "far",
+            "rpm": 2430,
+            "target": 2600,
+            "steady": 0.999,
+            "sure": 1,
+            "snr": 1,
+            "from": "162517",
+            "len": 1.12
+          },
+          {
+            "file": "four-a-on-ex-4.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 3767,
+            "target": 4200,
+            "steady": 0.878,
+            "sure": 1,
+            "snr": 9,
+            "from": "162504",
+            "len": 0.59
+          },
+          {
+            "file": "four-a-on-bay-4.mp3",
+            "load": "on",
+            "mic": "bay",
+            "rpm": 4262,
+            "target": 4200,
+            "steady": 0.848,
+            "sure": 0.94,
+            "snr": 25,
+            "from": "162499",
+            "len": 1.1
+          },
+          {
+            "file": "four-a-on-ex-5.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 6207,
+            "target": 6200,
+            "steady": 0.996,
+            "sure": 1,
+            "snr": 0,
+            "from": "162512",
+            "len": 1.12
+          },
+          {
+            "file": "four-a-on-bay-5.mp3",
+            "load": "on",
+            "mic": "bay",
+            "rpm": 6216,
+            "target": 6200,
+            "steady": 0.997,
+            "sure": 1,
+            "snr": 0,
+            "from": "162513",
+            "len": 1.12
+          },
+          {
+            "file": "four-a-on-far-5.mp3",
+            "load": "on",
+            "mic": "far",
+            "rpm": 6216,
+            "target": 6200,
+            "steady": 0.997,
+            "sure": 1,
+            "snr": 0,
+            "from": "162511",
+            "len": 1.12
+          },
+          {
+            "file": "four-a-off-bay-5.mp3",
+            "load": "off",
+            "mic": "bay",
+            "rpm": 6296,
+            "target": 6200,
+            "steady": 1,
+            "sure": 1,
+            "snr": 0,
+            "from": "162522",
+            "len": 1.12
+          },
+          {
+            "file": "four-a-off-far-5.mp3",
+            "load": "off",
+            "mic": "far",
+            "rpm": 6299,
+            "target": 6200,
+            "steady": 1,
+            "sure": 1,
+            "snr": 1,
+            "from": "162520",
+            "len": 1.12
+          }
+        ],
+        "start": "four-a-start.mp3"
+      },
+      {
+        "name": "Peugeot 308",
+        "note": "an acceleration run from idle and idle loops outside and in",
+        "cyl": 4,
+        "strokes": 4,
+        "credit": [
+          {
+            "id": "522221",
+            "user": "Nox_Sound",
+            "title": "Vehicle_Car_Peugeot_308_Acceleration_Idle_Mono.wav",
+            "url": "https://freesound.org/people/Nox_Sound/sounds/522221/"
+          },
+          {
+            "id": "522225",
+            "user": "Nox_Sound",
+            "title": "Vehicle_Car_Peugeot_308_Idle_Exterior_Loop_Mono_02.wav",
+            "url": "https://freesound.org/people/Nox_Sound/sounds/522225/"
+          },
+          {
+            "id": "522223",
+            "user": "Nox_Sound",
+            "title": "Vehicle_Car_Peugeot_308_Idle_Interior_Loop_Mono_.wav",
+            "url": "https://freesound.org/people/Nox_Sound/sounds/522223/"
+          }
+        ],
+        "points": [
+          {
+            "file": "four-b-on-ex-3.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 2553,
+            "target": 2600,
+            "steady": 0.977,
+            "sure": 1,
+            "snr": 23,
+            "from": "522221",
+            "len": 0.6
+          },
+          {
+            "file": "four-b-off-ex-3.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 2635,
+            "target": 2600,
+            "steady": 0.984,
+            "sure": 1,
+            "snr": 23,
+            "from": "522221",
+            "len": 1.12
+          },
+          {
+            "file": "four-b-off-cabin-3.mp3",
+            "load": "off",
+            "mic": "cabin",
+            "rpm": 3006,
+            "target": 2600,
+            "steady": 0.999,
+            "sure": 0.86,
+            "snr": 1,
+            "from": "522223",
+            "len": 1.12
+          },
+          {
+            "file": "four-b-on-ex-4.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 4125,
+            "target": 4200,
+            "steady": 0.881,
+            "sure": 0.95,
+            "snr": 30,
+            "from": "522221",
+            "len": 0.6
+          },
+          {
+            "file": "four-b-off-ex-4.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 4606,
+            "target": 4200,
+            "steady": 0.923,
+            "sure": 1,
+            "snr": 33,
+            "from": "522221",
+            "len": 1.11
+          },
+          {
+            "file": "four-b-on-ex-5.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 5797,
+            "target": 6200,
+            "steady": 0.884,
+            "sure": 0.56,
+            "snr": 8,
+            "from": "522221",
+            "len": 0.59
+          },
+          {
+            "file": "four-b-off-ex-5.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 6019,
+            "target": 6200,
+            "steady": 0.997,
+            "sure": 0.75,
+            "snr": 1,
+            "from": "522225",
+            "len": 1.12
+          }
+        ],
+        "start": null
+      },
+      {
+        "name": "Ford Ranger (2000), outside",
+        "note": "4 min of revs held at many points (if it's the V6, its revs read 1.5× high)",
+        "cyl": 4,
+        "strokes": 4,
+        "credit": [
+          {
+            "id": "779214",
+            "user": "YannSauvin",
+            "title": "Ford Ranger (2000) RPM variations outside 4 mics",
+            "url": "https://freesound.org/people/YannSauvin/sounds/779214/"
+          }
+        ],
+        "points": [
+          {
+            "file": "four-c-on-ex-1.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 959,
+            "target": 900,
+            "steady": 0.736,
+            "sure": 0.91,
+            "snr": 4,
+            "from": "779214",
+            "len": 0.67
+          },
+          {
+            "file": "four-c-on-ex-2.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 1603,
+            "target": 1600,
+            "steady": 0.945,
+            "sure": 0.98,
+            "snr": 6,
+            "from": "779214",
+            "len": 0.61
+          },
+          {
+            "file": "four-c-off-ex-2.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 1584,
+            "target": 1600,
+            "steady": 0.973,
+            "sure": 1,
+            "snr": 8,
+            "from": "779214",
+            "len": 1.12
+          },
+          {
+            "file": "four-c-on-ex-3.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 2477,
+            "target": 2600,
+            "steady": 0.968,
+            "sure": 1,
+            "snr": 12,
+            "from": "779214",
+            "len": 0.6
+          },
+          {
+            "file": "four-c-off-ex-3.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 2906,
+            "target": 2600,
+            "steady": 0.999,
+            "sure": 1,
+            "snr": 16,
+            "from": "779214",
+            "len": 1.12
+          }
+        ],
+        "start": null
+      },
+      {
+        "name": "Hyundai Elantra (2004)",
+        "note": "idle and revs, the key start",
+        "cyl": 4,
+        "strokes": 4,
+        "credit": [
+          {
+            "id": "865228",
+            "user": "microman502",
+            "title": "Elantra Engine Idle and Rev",
+            "url": "https://freesound.org/people/microman502/sounds/865228/"
+          },
+          {
+            "id": "865229",
+            "user": "microman502",
+            "title": "Elantra Engine Ignition and Idle with Keys",
+            "url": "https://freesound.org/people/microman502/sounds/865229/"
+          }
+        ],
+        "points": [
+          {
+            "file": "four-d-on-ex-2.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 1768,
+            "target": 1600,
+            "steady": 0.893,
+            "sure": 1,
+            "snr": 10,
+            "from": "865228",
+            "len": 0.63
+          },
+          {
+            "file": "four-d-off-ex-2.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 1874,
+            "target": 1600,
+            "steady": 0.935,
+            "sure": 0.98,
+            "snr": 43,
+            "from": "865229",
+            "len": 1.11
+          },
+          {
+            "file": "four-d-on-ex-3.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 2619,
+            "target": 2600,
+            "steady": 0.927,
+            "sure": 1,
+            "snr": 22,
+            "from": "865228",
+            "len": 0.59
+          },
+          {
+            "file": "four-d-off-ex-3.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 2605,
+            "target": 2600,
+            "steady": 0.99,
+            "sure": 1,
+            "snr": 22,
+            "from": "865228",
+            "len": 1.12
+          },
+          {
+            "file": "four-d-off-ex-4.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 4307,
+            "target": 4200,
+            "steady": 0.785,
+            "sure": 0.56,
+            "snr": 19,
+            "from": "865229",
+            "len": 1.06
+          }
+        ],
+        "start": "four-d-start.mp3"
+      }
+    ],
+    "mine": 0,
+    "why": "an 80s saloon's twin-cam four, recorded on a dyno: real load, three mics; 17 loops: off load 3/5 revs, on 4/5; 3 mics; steadiness 0.942, pitch sure 0.99"
+  },
+  "revvy": {
+    "rpm": [950, 2000, 3500, 5200, 7000],
+    "for": "the hatch",
+    "sets": [
+      {
+        "name": "Ford Cortina on a dyno (70s, 328 hp)",
+        "note": "a period four pulling on a dyno",
+        "cyl": 4,
+        "strokes": 4,
+        "credit": [
+          {
+            "id": "177183",
+            "user": "Ears68",
+            "title": "DR09DynoRun70ishFordCortina328HP-finalA.wav",
+            "url": "https://freesound.org/people/Ears68/sounds/177183/"
+          }
+        ],
+        "points": [
+          {
+            "file": "revvy-a-on-ex-1.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 1016,
+            "target": 950,
+            "steady": 0.837,
+            "sure": 1,
+            "snr": 5,
+            "from": "177183",
+            "len": 0.63
+          },
+          {
+            "file": "revvy-a-on-ex-2.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 2035,
+            "target": 2000,
+            "steady": 0.913,
+            "sure": 1,
+            "snr": 5,
+            "from": "177183",
+            "len": 0.58
+          },
+          {
+            "file": "revvy-a-off-ex-2.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 2035,
+            "target": 2000,
+            "steady": 0.959,
+            "sure": 0.97,
+            "snr": 4,
+            "from": "177183",
+            "len": 1.12
+          },
+          {
+            "file": "revvy-a-on-ex-3.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 3119,
+            "target": 3500,
+            "steady": 0.933,
+            "sure": 1,
+            "snr": 6,
+            "from": "177183",
+            "len": 0.59
+          },
+          {
+            "file": "revvy-a-off-ex-3.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 3143,
+            "target": 3500,
+            "steady": 0.981,
+            "sure": 1,
+            "snr": 7,
+            "from": "177183",
+            "len": 1.12
+          },
+          {
+            "file": "revvy-a-on-ex-5.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 7795,
+            "target": 7000,
+            "steady": 0.767,
+            "sure": 1,
+            "snr": 3,
+            "from": "177183",
+            "len": 0.56
+          },
+          {
+            "file": "revvy-a-off-ex-5.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 8201,
+            "target": 7000,
+            "steady": 0.96,
+            "sure": 0.99,
+            "snr": 4,
+            "from": "177183",
+            "len": 1.12
+          }
+        ],
+        "start": null
+      },
+      {
+        "name": "Mini Cooper S (contact mic)",
+        "note": "a contact mic on the block: the engine's own voice, driven hard",
+        "cyl": 4,
+        "strokes": 4,
+        "credit": [
+          {
+            "id": "669618",
+            "user": "TheLittleCrow",
+            "title": "Car Engine Contact Recording-Mini Cooper S 2019.wav",
+            "url": "https://freesound.org/people/TheLittleCrow/sounds/669618/"
+          },
+          {
+            "id": "669622",
+            "user": "TheLittleCrow",
+            "title": "Car Engine Contact Recording-Mini Cooper S 2019_Gunning_it.wav",
+            "url": "https://freesound.org/people/TheLittleCrow/sounds/669622/"
+          },
+          {
+            "id": "669623",
+            "user": "TheLittleCrow",
+            "title": "Car Engine Contact Recording-Mini Cooper S 2019_Gear Shift.wav",
+            "url": "https://freesound.org/people/TheLittleCrow/sounds/669623/"
+          }
+        ],
+        "points": [
+          {
+            "file": "revvy-b-on-bay-2.mp3",
+            "load": "on",
+            "mic": "bay",
+            "rpm": 1953,
+            "target": 2000,
+            "steady": 0.902,
+            "sure": 0.86,
+            "snr": -1,
+            "from": "669623",
+            "len": 0.6
+          },
+          {
+            "file": "revvy-b-on-bay-3.mp3",
+            "load": "on",
+            "mic": "bay",
+            "rpm": 3735,
+            "target": 3500,
+            "steady": 0.623,
+            "sure": 0.98,
+            "snr": 7,
+            "from": "669623",
+            "len": 0.68
+          },
+          {
+            "file": "revvy-b-off-bay-3.mp3",
+            "load": "off",
+            "mic": "bay",
+            "rpm": 3507,
+            "target": 3500,
+            "steady": 0.998,
+            "sure": 1,
+            "snr": 2,
+            "from": "669622",
+            "len": 1.12
+          },
+          {
+            "file": "revvy-b-on-bay-4.mp3",
+            "load": "on",
+            "mic": "bay",
+            "rpm": 5798,
+            "target": 5200,
+            "steady": 0.978,
+            "sure": 0.9,
+            "snr": 16,
+            "from": "669623",
+            "len": 0.6
+          },
+          {
+            "file": "revvy-b-off-bay-4.mp3",
+            "load": "off",
+            "mic": "bay",
+            "rpm": 5174,
+            "target": 5200,
+            "steady": 0.997,
+            "sure": 0.99,
+            "snr": 6,
+            "from": "669622",
+            "len": 1.12
+          },
+          {
+            "file": "revvy-b-on-bay-5.mp3",
+            "load": "on",
+            "mic": "bay",
+            "rpm": 7684,
+            "target": 7000,
+            "steady": 0.869,
+            "sure": 1,
+            "snr": 7,
+            "from": "669623",
+            "len": 0.58
+          },
+          {
+            "file": "revvy-b-off-bay-5.mp3",
+            "load": "off",
+            "mic": "bay",
+            "rpm": 7648,
+            "target": 7000,
+            "steady": 0.994,
+            "sure": 1,
+            "snr": 11,
+            "from": "669618",
+            "len": 1.12
+          }
+        ],
+        "start": null
+      },
+      {
+        "name": "Renault Duster",
+        "note": "revs rising by the exhaust, outdoors",
+        "cyl": 4,
+        "strokes": 4,
+        "credit": [
+          {
+            "id": "380717",
+            "user": "semenov_nick",
+            "title": "02_Renault_duster_Exaust_engine_rising.wav",
+            "url": "https://freesound.org/people/semenov_nick/sounds/380717/"
+          },
+          {
+            "id": "380719",
+            "user": "semenov_nick",
+            "title": "00_Renault_duster_Exaust_3times_outdoor.wav",
+            "url": "https://freesound.org/people/semenov_nick/sounds/380719/"
+          },
+          {
+            "id": "380716",
+            "user": "semenov_nick",
+            "title": "03_Renault_duster_Engine_strarts_inside_keys.wav",
+            "url": "https://freesound.org/people/semenov_nick/sounds/380716/"
+          }
+        ],
+        "points": [
+          {
+            "file": "revvy-c-on-ex-2.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 1938,
+            "target": 2000,
+            "steady": 0.835,
+            "sure": 1,
+            "snr": 13,
+            "from": "380719",
+            "len": 0.62
+          },
+          {
+            "file": "revvy-c-off-ex-2.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 2198,
+            "target": 2000,
+            "steady": 0.823,
+            "sure": 1,
+            "snr": 13,
+            "from": "380719",
+            "len": 1.13
+          },
+          {
+            "file": "revvy-c-on-ex-3.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 3504,
+            "target": 3500,
+            "steady": 0.955,
+            "sure": 1,
+            "snr": 18,
+            "from": "380719",
+            "len": 0.6
+          },
+          {
+            "file": "revvy-c-off-ex-3.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 3251,
+            "target": 3500,
+            "steady": 0.974,
+            "sure": 1,
+            "snr": 20,
+            "from": "380717",
+            "len": 1.12
+          }
+        ],
+        "start": "revvy-c-start.mp3"
+      }
+    ],
+    "mine": 0,
+    "why": "a period four pulling under load; 7 loops: off load 3/5 revs, on 4/5; 1 mic; steadiness 0.907, pitch sure 0.99"
+  },
+  "v8": {
+    "rpm": [650, 1300, 2200, 3400, 4800],
+    "for": "the pickup",
+    "sets": [
+      {
+        "name": "Chevrolet Impala (1980), outside",
+        "note": "a period V8, revs held at many points, four mics",
+        "cyl": 8,
+        "strokes": 4,
+        "credit": [
+          {
+            "id": "779211",
+            "user": "YannSauvin",
+            "title": "Chevrolet Impala (1980) RPM variations outside 4 mics",
+            "url": "https://freesound.org/people/YannSauvin/sounds/779211/"
+          }
+        ],
+        "points": [
+          {
+            "file": "v8-a-on-ex-1.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 603,
+            "target": 650,
+            "steady": 0.869,
+            "sure": 0.77,
+            "snr": 2,
+            "from": "779211",
+            "len": 0.61
+          },
+          {
+            "file": "v8-a-off-ex-1.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 745,
+            "target": 650,
+            "steady": 0.893,
+            "sure": 0.79,
+            "snr": 1,
+            "from": "779211",
+            "len": 1.17
+          },
+          {
+            "file": "v8-a-on-ex-2.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 1312,
+            "target": 1300,
+            "steady": 0.958,
+            "sure": 0.98,
+            "snr": 9,
+            "from": "779211",
+            "len": 0.6
+          },
+          {
+            "file": "v8-a-off-ex-2.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 1286,
+            "target": 1300,
+            "steady": 0.984,
+            "sure": 0.95,
+            "snr": 10,
+            "from": "779211",
+            "len": 1.13
+          },
+          {
+            "file": "v8-a-on-ex-3.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 1911,
+            "target": 2200,
+            "steady": 0.974,
+            "sure": 0.89,
+            "snr": 9,
+            "from": "779211",
+            "len": 0.61
+          },
+          {
+            "file": "v8-a-off-ex-3.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 1954,
+            "target": 2200,
+            "steady": 0.977,
+            "sure": 0.8,
+            "snr": 9,
+            "from": "779211",
+            "len": 1.12
+          },
+          {
+            "file": "v8-a-on-ex-4.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 3238,
+            "target": 3400,
+            "steady": 0.749,
+            "sure": 0.59,
+            "snr": 15,
+            "from": "779211",
+            "len": 0.54
+          }
+        ],
+        "start": null
+      },
+      {
+        "name": "Hot-rod V8 (start, rough idle, revs, away)",
+        "note": "a lumpy cam: louder than a farm pickup",
+        "cyl": 8,
+        "strokes": 4,
+        "credit": [
+          {
+            "id": "146832",
+            "user": "Ears68",
+            "title": "Hot-Rod-V8-start-roughIdle-rev-DriveAway-xDR020.wav",
+            "url": "https://freesound.org/people/Ears68/sounds/146832/"
+          }
+        ],
+        "points": [
+          {
+            "file": "v8-b-on-ex-2.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 1373,
+            "target": 1300,
+            "steady": 0.917,
+            "sure": 1,
+            "snr": 7,
+            "from": "146832",
+            "len": 0.61
+          },
+          {
+            "file": "v8-b-off-ex-2.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 1414,
+            "target": 1300,
+            "steady": 0.993,
+            "sure": 1,
+            "snr": 7,
+            "from": "146832",
+            "len": 1.12
+          },
+          {
+            "file": "v8-b-on-ex-3.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 2145,
+            "target": 2200,
+            "steady": 0.873,
+            "sure": 1,
+            "snr": 8,
+            "from": "146832",
+            "len": 0.58
+          },
+          {
+            "file": "v8-b-off-ex-3.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 2074,
+            "target": 2200,
+            "steady": 0.924,
+            "sure": 0.94,
+            "snr": 7,
+            "from": "146832",
+            "len": 1.11
+          }
+        ],
+        "start": "v8-b-start.mp3"
+      },
+      {
+        "name": "Ford F-350 5.4 V8 and a Crown Victoria",
+        "note": "real trucks' starts and idles (few revs)",
+        "cyl": 8,
+        "strokes": 4,
+        "credit": [
+          {
+            "id": "610772",
+            "user": "Therancher01",
+            "title": "F350-5.4 V8 startup and idle.m4a",
+            "url": "https://freesound.org/people/Therancher01/sounds/610772/"
+          },
+          {
+            "id": "610774",
+            "user": "Therancher01",
+            "title": "Crown Victoria Startup and idle.m4a",
+            "url": "https://freesound.org/people/Therancher01/sounds/610774/"
+          }
+        ],
+        "points": [
+          {
+            "file": "v8-c-on-ex-1.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 633,
+            "target": 650,
+            "steady": 0.693,
+            "sure": 1,
+            "snr": 16,
+            "from": "610772",
+            "len": 0.62
+          },
+          {
+            "file": "v8-c-off-ex-1.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 658,
+            "target": 650,
+            "steady": 0.754,
+            "sure": 1,
+            "snr": 16,
+            "from": "610772",
+            "len": 1.06
+          },
+          {
+            "file": "v8-c-on-ex-2.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 1297,
+            "target": 1300,
+            "steady": 0.855,
+            "sure": 1,
+            "snr": 13,
+            "from": "610772",
+            "len": 0.57
+          },
+          {
+            "file": "v8-c-off-ex-2.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 1358,
+            "target": 1300,
+            "steady": 0.957,
+            "sure": 0.98,
+            "snr": 4,
+            "from": "610774",
+            "len": 1.14
+          },
+          {
+            "file": "v8-c-on-ex-3.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 1979,
+            "target": 2200,
+            "steady": 0.859,
+            "sure": 0.95,
+            "snr": 9,
+            "from": "610772",
+            "len": 0.55
+          },
+          {
+            "file": "v8-c-off-ex-3.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 2193,
+            "target": 2200,
+            "steady": 0.993,
+            "sure": 0.98,
+            "snr": 1,
+            "from": "610774",
+            "len": 1.12
+          }
+        ],
+        "start": "v8-c-start.mp3"
+      }
+    ],
+    "mine": 0,
+    "why": "a 1980 V8: the period, a big car's lazy burble; 7 loops: off load 3/5 revs, on 4/5; 1 mic; steadiness 0.915, pitch sure 0.82"
+  },
+  "diesel-light": {
+    "rpm": [800, 1500, 2300, 3200, 4200],
+    "for": "the van, the 4x4 (diesel)",
+    "sets": [
+      {
+        "name": "BMW 120d",
+        "note": "idle, low, medium, high, outside and inside, the start and the stop",
+        "cyl": 4,
+        "strokes": 4,
+        "credit": [
+          {
+            "id": "401552",
+            "user": "GiocoSound",
+            "title": "SFX_Car_Engine_Outside_Idle.wav",
+            "url": "https://freesound.org/people/GiocoSound/sounds/401552/"
+          },
+          {
+            "id": "401556",
+            "user": "GiocoSound",
+            "title": "SFX_Car_Engine_Outside_RPMLow.wav",
+            "url": "https://freesound.org/people/GiocoSound/sounds/401556/"
+          },
+          {
+            "id": "401555",
+            "user": "GiocoSound",
+            "title": "SFX_Car_Engine_Outside_RPMMed.wav",
+            "url": "https://freesound.org/people/GiocoSound/sounds/401555/"
+          },
+          {
+            "id": "401551",
+            "user": "GiocoSound",
+            "title": "SFX_Car_Engine_Outside_RPMHigh.wav",
+            "url": "https://freesound.org/people/GiocoSound/sounds/401551/"
+          },
+          {
+            "id": "401550",
+            "user": "GiocoSound",
+            "title": "SFX_Car_Engine_Inside_Idle.wav",
+            "url": "https://freesound.org/people/GiocoSound/sounds/401550/"
+          },
+          {
+            "id": "401548",
+            "user": "GiocoSound",
+            "title": "SFX_Car_Engine_Inside_RPMLow.wav",
+            "url": "https://freesound.org/people/GiocoSound/sounds/401548/"
+          },
+          {
+            "id": "401547",
+            "user": "GiocoSound",
+            "title": "SFX_Car_Engine_Inside_RPMMed.wav",
+            "url": "https://freesound.org/people/GiocoSound/sounds/401547/"
+          },
+          {
+            "id": "401549",
+            "user": "GiocoSound",
+            "title": "SFX_Car_Engine_Inside_RPMHigh.wav",
+            "url": "https://freesound.org/people/GiocoSound/sounds/401549/"
+          },
+          {
+            "id": "401558",
+            "user": "GiocoSound",
+            "title": "SFX_Car_Engine_Outside_Start.wav",
+            "url": "https://freesound.org/people/GiocoSound/sounds/401558/"
+          }
+        ],
+        "points": [
+          {
+            "file": "diesel-light-a-off-ex-1.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 831,
+            "target": 800,
+            "steady": 0.994,
+            "sure": 1,
+            "snr": 1,
+            "from": "401552",
+            "len": 1.12
+          },
+          {
+            "file": "diesel-light-a-off-cabin-1.mp3",
+            "load": "off",
+            "mic": "cabin",
+            "rpm": 834,
+            "target": 800,
+            "steady": 0.996,
+            "sure": 1,
+            "snr": 0,
+            "from": "401550",
+            "len": 1.12
+          },
+          {
+            "file": "diesel-light-a-off-ex-2.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 1476,
+            "target": 1500,
+            "steady": 0.997,
+            "sure": 1,
+            "snr": 0,
+            "from": "401556",
+            "len": 1.12
+          },
+          {
+            "file": "diesel-light-a-off-cabin-2.mp3",
+            "load": "off",
+            "mic": "cabin",
+            "rpm": 1478,
+            "target": 1500,
+            "steady": 0.997,
+            "sure": 1,
+            "snr": 2,
+            "from": "401548",
+            "len": 1.12
+          },
+          {
+            "file": "diesel-light-a-off-ex-3.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 2040,
+            "target": 2300,
+            "steady": 0.998,
+            "sure": 1,
+            "snr": 0,
+            "from": "401555",
+            "len": 1.12
+          },
+          {
+            "file": "diesel-light-a-off-cabin-3.mp3",
+            "load": "off",
+            "mic": "cabin",
+            "rpm": 2020,
+            "target": 2300,
+            "steady": 0.999,
+            "sure": 1,
+            "snr": 2,
+            "from": "401547",
+            "len": 1.12
+          }
+        ],
+        "start": "diesel-light-a-start.mp3"
+      },
+      {
+        "name": "Ram 5.9 Cummins (start, idle)",
+        "note": "a big pickup diesel: heavier than a van's",
+        "cyl": 6,
+        "strokes": 4,
+        "credit": [
+          {
+            "id": "610771",
+            "user": "Therancher01",
+            "title": "Ram 5.9 cummins-startup-idle.m4a",
+            "url": "https://freesound.org/people/Therancher01/sounds/610771/"
+          }
+        ],
+        "points": [
+          {
+            "file": "diesel-light-b-on-ex-1.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 800,
+            "target": 800,
+            "steady": 0.826,
+            "sure": 0.97,
+            "snr": -10,
+            "from": "610771",
+            "len": 0.6
+          },
+          {
+            "file": "diesel-light-b-off-ex-1.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 702,
+            "target": 800,
+            "steady": 0.774,
+            "sure": 0.98,
+            "snr": -8,
+            "from": "610771",
+            "len": 1.16
+          },
+          {
+            "file": "diesel-light-b-on-ex-2.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 1648,
+            "target": 1500,
+            "steady": 0.905,
+            "sure": 0.64,
+            "snr": 3,
+            "from": "610771",
+            "len": 0.59
+          },
+          {
+            "file": "diesel-light-b-off-ex-2.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 1495,
+            "target": 1500,
+            "steady": 0.997,
+            "sure": 1,
+            "snr": 1,
+            "from": "610771",
+            "len": 1.12
+          }
+        ],
+        "start": "diesel-light-b-start.mp3"
+      }
+    ],
+    "mine": 0,
+    "why": "a small diesel's idle, low, medium and high, inside and out; 6 loops: off load 3/5 revs, on 0/5; 2 mics; steadiness 0.997, pitch sure 1"
+  },
+  "diesel": {
+    "rpm": [650, 1000, 1400, 1900, 2400],
+    "for": "the snowcat, the plough truck, the tractor",
+    "sets": [
+      {
+        "name": "A tractor at a landfill",
+        "note": "working: revs up and down under load",
+        "cyl": 4,
+        "strokes": 4,
+        "credit": [
+          {
+            "id": "256805",
+            "user": "radwoc",
+            "title": "tractor-landfill-working.wav",
+            "url": "https://freesound.org/people/radwoc/sounds/256805/"
+          },
+          {
+            "id": "256806",
+            "user": "radwoc",
+            "title": "tractor-landfill-lifting.wav",
+            "url": "https://freesound.org/people/radwoc/sounds/256806/"
+          },
+          {
+            "id": "256808",
+            "user": "radwoc",
+            "title": "tractor-engine-start.wav",
+            "url": "https://freesound.org/people/radwoc/sounds/256808/"
+          }
+        ],
+        "points": [
+          {
+            "file": "diesel-a-on-ex-3.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 1363,
+            "target": 1400,
+            "steady": 0.752,
+            "sure": 0.62,
+            "snr": 3,
+            "from": "256805",
+            "len": 0.69
+          },
+          {
+            "file": "diesel-a-on-ex-4.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 1967,
+            "target": 1900,
+            "steady": 0.974,
+            "sure": 0.9,
+            "snr": 11,
+            "from": "256805",
+            "len": 0.6
+          },
+          {
+            "file": "diesel-a-off-ex-4.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 1924,
+            "target": 1900,
+            "steady": 0.983,
+            "sure": 0.97,
+            "snr": 11,
+            "from": "256805",
+            "len": 1.12
+          },
+          {
+            "file": "diesel-a-on-ex-5.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 2374,
+            "target": 2400,
+            "steady": 0.963,
+            "sure": 0.93,
+            "snr": 12,
+            "from": "256805",
+            "len": 0.59
+          },
+          {
+            "file": "diesel-a-off-ex-5.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 2374,
+            "target": 2400,
+            "steady": 1,
+            "sure": 1,
+            "snr": 11,
+            "from": "256805",
+            "len": 1.12
+          }
+        ],
+        "start": "diesel-a-start.mp3"
+      },
+      {
+        "name": "A truck's engine",
+        "note": "a heavy truck, idle and moving off on dirt",
+        "cyl": 6,
+        "strokes": 4,
+        "credit": [
+          {
+            "id": "515040",
+            "user": "jusebago",
+            "title": "motor de camion / truck engine",
+            "url": "https://freesound.org/people/jusebago/sounds/515040/"
+          },
+          {
+            "id": "515042",
+            "user": "jusebago",
+            "title": "camion pesado avanzando sobre tierra / heavy truck advancing on land",
+            "url": "https://freesound.org/people/jusebago/sounds/515042/"
+          }
+        ],
+        "points": [
+          {
+            "file": "diesel-b-on-ex-4.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 1909,
+            "target": 1900,
+            "steady": 0.944,
+            "sure": 0.76,
+            "snr": 13,
+            "from": "515042",
+            "len": 0.6
+          },
+          {
+            "file": "diesel-b-off-ex-4.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 1990,
+            "target": 1900,
+            "steady": 0.949,
+            "sure": 0.76,
+            "snr": 13,
+            "from": "515042",
+            "len": 1.1
+          },
+          {
+            "file": "diesel-b-off-ex-5.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 2624,
+            "target": 2400,
+            "steady": 0.992,
+            "sure": 0.67,
+            "snr": 14,
+            "from": "515042",
+            "len": 1.12
+          },
+          {
+            "file": "diesel-b-on-ex-5.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 2511,
+            "target": 2400,
+            "steady": 0.954,
+            "sure": 0.85,
+            "snr": 12,
+            "from": "515042",
+            "len": 0.61
+          }
+        ],
+        "start": null
+      },
+      {
+        "name": "A diesel engine",
+        "note": "an engine room's diesel, close",
+        "cyl": 4,
+        "strokes": 4,
+        "credit": [
+          {
+            "id": "237292",
+            "user": "AugustSandberg",
+            "title": "Diesel Engine",
+            "url": "https://freesound.org/people/AugustSandberg/sounds/237292/"
+          }
+        ],
+        "points": [
+          {
+            "file": "diesel-c-off-bay-3.mp3",
+            "load": "off",
+            "mic": "bay",
+            "rpm": 1425,
+            "target": 1400,
+            "steady": 0.995,
+            "sure": 0.98,
+            "snr": 1,
+            "from": "237292",
+            "len": 1.12
+          }
+        ],
+        "start": null
+      },
+      {
+        "name": "Ram 5.9 Cummins (start, idle)",
+        "note": "a straight six diesel",
+        "cyl": 6,
+        "strokes": 4,
+        "credit": [
+          {
+            "id": "610771",
+            "user": "Therancher01",
+            "title": "Ram 5.9 cummins-startup-idle.m4a",
+            "url": "https://freesound.org/people/Therancher01/sounds/610771/"
+          }
+        ],
+        "points": [
+          {
+            "file": "diesel-d-on-ex-1.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 694,
+            "target": 650,
+            "steady": 0.564,
+            "sure": 0.65,
+            "snr": 2,
+            "from": "610771",
+            "len": 0.68
+          },
+          {
+            "file": "diesel-d-on-ex-2.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 1023,
+            "target": 1000,
+            "steady": 0.688,
+            "sure": 0.58,
+            "snr": 3,
+            "from": "610771",
+            "len": 0.5
+          },
+          {
+            "file": "diesel-d-off-ex-2.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 1081,
+            "target": 1000,
+            "steady": 0.829,
+            "sure": 0.82,
+            "snr": -5,
+            "from": "610771",
+            "len": 1.05
+          },
+          {
+            "file": "diesel-d-on-ex-3.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 1496,
+            "target": 1400,
+            "steady": 0.977,
+            "sure": 0.81,
+            "snr": 2,
+            "from": "610771",
+            "len": 0.6
+          },
+          {
+            "file": "diesel-d-off-ex-3.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 1495,
+            "target": 1400,
+            "steady": 0.995,
+            "sure": 0.99,
+            "snr": 1,
+            "from": "610771",
+            "len": 1.12
+          },
+          {
+            "file": "diesel-d-on-ex-4.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 1745,
+            "target": 1900,
+            "steady": 0.887,
+            "sure": 0.68,
+            "snr": -1,
+            "from": "610771",
+            "len": 0.6
+          }
+        ],
+        "start": "diesel-d-start.mp3"
+      }
+    ],
+    "mine": 0,
+    "why": "a working tractor under load: the farm's; 5 loops: off load 2/5 revs, on 3/5; 1 mic; steadiness 0.934, pitch sure 0.88"
+  },
+  "two": {
+    "rpm": [1500, 3000, 5000, 6500, 8000],
+    "for": "the snowmobile",
+    "sets": [
+      {
+        "name": "Ski-Doo Skandik",
+        "note": "a working snowmobile's twin",
+        "cyl": 2,
+        "strokes": 2,
+        "credit": [
+          {
+            "id": "726286",
+            "user": "SoundsLikeYukon",
+            "title": "Skidoo Skandik engine",
+            "url": "https://freesound.org/people/SoundsLikeYukon/sounds/726286/"
+          }
+        ],
+        "points": [
+          {
+            "file": "two-a-on-ex-3.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 5770,
+            "target": 5000,
+            "steady": 0.952,
+            "sure": 0.92,
+            "snr": 3,
+            "from": "726286",
+            "len": 0.59
+          },
+          {
+            "file": "two-a-off-ex-3.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 5818,
+            "target": 5000,
+            "steady": 0.997,
+            "sure": 1,
+            "snr": 3,
+            "from": "726286",
+            "len": 1.12
+          },
+          {
+            "file": "two-a-on-ex-4.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 5871,
+            "target": 6500,
+            "steady": 0.871,
+            "sure": 0.98,
+            "snr": 5,
+            "from": "726286",
+            "len": 0.63
+          },
+          {
+            "file": "two-a-off-ex-4.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 5862,
+            "target": 6500,
+            "steady": 0.994,
+            "sure": 1,
+            "snr": 4,
+            "from": "726286",
+            "len": 1.12
+          },
+          {
+            "file": "two-a-on-ex-5.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 7513,
+            "target": 8000,
+            "steady": 0.84,
+            "sure": 0.91,
+            "snr": 9,
+            "from": "726286",
+            "len": 0.56
+          },
+          {
+            "file": "two-a-off-ex-5.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 7512,
+            "target": 8000,
+            "steady": 0.847,
+            "sure": 0.91,
+            "snr": 8,
+            "from": "726286",
+            "len": 1.03
+          }
+        ],
+        "start": null
+      },
+      {
+        "name": "A snowmobile (with swans)",
+        "note": "passing, in the cold",
+        "cyl": 2,
+        "strokes": 2,
+        "credit": [
+          {
+            "id": "732881",
+            "user": "SoundsLikeYukon",
+            "title": "Snowmobile with swans",
+            "url": "https://freesound.org/people/SoundsLikeYukon/sounds/732881/"
+          }
+        ],
+        "points": [
+          {
+            "file": "two-b-on-ex-2.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 2891,
+            "target": 3000,
+            "steady": 0.747,
+            "sure": 0.86,
+            "snr": 11,
+            "from": "732881",
+            "len": 0.63
+          },
+          {
+            "file": "two-b-off-ex-2.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 3002,
+            "target": 3000,
+            "steady": 0.953,
+            "sure": 0.93,
+            "snr": 4,
+            "from": "732881",
+            "len": 1.14
+          },
+          {
+            "file": "two-b-on-ex-3.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 5435,
+            "target": 5000,
+            "steady": 0.349,
+            "sure": 0.72,
+            "snr": 16,
+            "from": "732881",
+            "len": 0.84
+          },
+          {
+            "file": "two-b-off-ex-3.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 4371,
+            "target": 5000,
+            "steady": 0.951,
+            "sure": 0.86,
+            "snr": 10,
+            "from": "732881",
+            "len": 1.12
+          },
+          {
+            "file": "two-b-on-ex-4.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 6846,
+            "target": 6500,
+            "steady": 0.974,
+            "sure": 0.96,
+            "snr": 12,
+            "from": "732881",
+            "len": 0.6
+          },
+          {
+            "file": "two-b-off-ex-4.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 6234,
+            "target": 6500,
+            "steady": 0.987,
+            "sure": 0.95,
+            "snr": 10,
+            "from": "732881",
+            "len": 1.12
+          },
+          {
+            "file": "two-b-on-ex-5.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 7893,
+            "target": 8000,
+            "steady": 0.916,
+            "sure": 0.92,
+            "snr": 12,
+            "from": "732881",
+            "len": 0.58
+          },
+          {
+            "file": "two-b-off-ex-5.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 7568,
+            "target": 8000,
+            "steady": 0.97,
+            "sure": 0.95,
+            "snr": 11,
+            "from": "732881",
+            "len": 1.12
+          }
+        ],
+        "start": null
+      },
+      {
+        "name": "Snowmobile braaap",
+        "note": "revved hard",
+        "cyl": 2,
+        "strokes": 2,
+        "credit": [
+          {
+            "id": "554894",
+            "user": "IMikey18",
+            "title": "Snomobile Brapp 1.m4a",
+            "url": "https://freesound.org/people/IMikey18/sounds/554894/"
+          },
+          {
+            "id": "554893",
+            "user": "IMikey18",
+            "title": "Snomobile Brapp 2.m4a",
+            "url": "https://freesound.org/people/IMikey18/sounds/554893/"
+          },
+          {
+            "id": "554892",
+            "user": "IMikey18",
+            "title": "Snomobile Brapp 3.m4a",
+            "url": "https://freesound.org/people/IMikey18/sounds/554892/"
+          }
+        ],
+        "points": [
+          {
+            "file": "two-c-on-ex-3.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 5218,
+            "target": 5000,
+            "steady": 0.951,
+            "sure": 0.58,
+            "snr": 21,
+            "from": "554894",
+            "len": 0.61
+          },
+          {
+            "file": "two-c-off-ex-3.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 4477,
+            "target": 5000,
+            "steady": 0.929,
+            "sure": 0.68,
+            "snr": 22,
+            "from": "554894",
+            "len": 1.1
+          },
+          {
+            "file": "two-c-on-ex-4.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 7180,
+            "target": 6500,
+            "steady": 0.924,
+            "sure": 0.77,
+            "snr": 28,
+            "from": "554894",
+            "len": 0.61
+          },
+          {
+            "file": "two-c-off-ex-4.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 7292,
+            "target": 6500,
+            "steady": 0.933,
+            "sure": 0.76,
+            "snr": 27,
+            "from": "554894",
+            "len": 1.13
+          },
+          {
+            "file": "two-c-on-ex-5.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 8233,
+            "target": 8000,
+            "steady": 0.927,
+            "sure": 0.97,
+            "snr": 11,
+            "from": "554892",
+            "len": 0.61
+          },
+          {
+            "file": "two-c-off-ex-5.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 8192,
+            "target": 8000,
+            "steady": 0.996,
+            "sure": 1,
+            "snr": 16,
+            "from": "554893",
+            "len": 1.12
+          }
+        ],
+        "start": null
+      }
+    ],
+    "mine": 0,
+    "why": "a working snowmobile's two-stroke twin; 6 loops: off load 3/5 revs, on 3/5; 1 mic; steadiness 0.917, pitch sure 0.95"
+  }
+}

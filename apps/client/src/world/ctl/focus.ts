@@ -257,7 +257,10 @@ export class Focus {
 
   /** Use, held: the focus's menu over it on screen, or mine with nothing in focus. */
   focusMenu() {
-    if (hud.get().prompt?.kind.startsWith("car") || hud.get().prompt?.kind.startsWith("ride")) return this.interact();
+    const p = hud.get().prompt;
+    // (my own car, parked at home: held, its "Repaint" — docs/plan/92-the-cars.md F13b)
+    if (p && this.c.cars?.hold(p.kind, p.objectId)) return;
+    if (p?.kind.startsWith("car") || p?.kind.startsWith("ride")) return this.interact();
     const f = this.lock ?? this.c.walker?.targets?.focus;
     if (f && !f.menu) return this.interact();
     const target: ActTarget = f?.menu ?? { type: "self" };

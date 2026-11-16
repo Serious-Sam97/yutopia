@@ -1,0 +1,1971 @@
+{
+  "_": "The cars' sound candidates (docs/plan/92-the-cars.md phase 11): CC0 on Freesound — recordings from car packs pinned first, then the most downloaded of each slot's searches (tools/sfx-cars-search.mjs) — fetched as their HQ previews and cut by tools/sfx-weather.mjs (LIST=tools/sfx-cars.json DIR=cars). `mine` is my pick (tools/sfx-cars-mine.mjs, its `why`), first in each; the user picks by ear on /dev/car-sound.",
+  "start-four": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "162528",
+        "user": "Chippy569",
+        "title": "23_StartISmall_D6.wav",
+        "preview": "https://cdn.freesound.org/previews/162/162528_1277206-hq.mp3",
+        "url": "https://freesound.org/people/Chippy569/sounds/162528/",
+        "dur": 8.3,
+        "downloads": 91,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "401558",
+        "user": "GiocoSound",
+        "title": "SFX_Car_Engine_Outside_Start.wav",
+        "preview": "https://cdn.freesound.org/previews/401/401558_5820033-hq.mp3",
+        "url": "https://freesound.org/people/GiocoSound/sounds/401558/",
+        "dur": 2.5,
+        "downloads": 2793,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "380716",
+        "user": "semenov_nick",
+        "title": "03_Renault_duster_Engine_strarts_inside_keys.wav",
+        "preview": "https://cdn.freesound.org/previews/380/380716_3596390-hq.mp3",
+        "url": "https://freesound.org/people/semenov_nick/sounds/380716/",
+        "dur": 9,
+        "downloads": 85,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "708649",
+        "user": "Khensi",
+        "title": "OBJEngn-INT_Car Engine Starting_Mischa_Khensani_OwSFX",
+        "preview": "https://cdn.freesound.org/previews/708/708649_14710328-hq.mp3",
+        "url": "https://freesound.org/people/Khensi/sounds/708649/",
+        "dur": 10.3,
+        "downloads": 396,
+        "note": "\"car engine start\""
+      }
+    ],
+    "mine": 0,
+    "why": "from a car's own pack, \"23_StartISmall_D6.wav\", no clipping, 23 dB over its floor, its brightness right (2.6 kHz)"
+  },
+  "start-v8": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "459367",
+        "user": "Guran89",
+        "title": "Engine start",
+        "preview": "https://cdn.freesound.org/previews/459/459367_7568147-hq.mp3",
+        "url": "https://freesound.org/people/Guran89/sounds/459367/",
+        "dur": 4.6,
+        "downloads": 474,
+        "note": "\"v8 engine start\""
+      },
+      {
+        "id": "862117",
+        "user": "dumpsterfire45",
+        "title": "engine starting, and revving",
+        "preview": "https://cdn.freesound.org/previews/862/862117_19045915-hq.mp3",
+        "url": "https://freesound.org/people/dumpsterfire45/sounds/862117/",
+        "dur": 5.8,
+        "downloads": 11,
+        "note": "\"v8 engine start\""
+      },
+      {
+        "id": "544629",
+        "user": "Legnalegna55",
+        "title": "Starting Truck sound",
+        "preview": "https://cdn.freesound.org/previews/544/544629_10485775-hq.mp3",
+        "url": "https://freesound.org/people/Legnalegna55/sounds/544629/",
+        "dur": 13.2,
+        "downloads": 794,
+        "note": "\"v8 engine start\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Engine start\", no clipping, 23 dB over its floor, its brightness right (1.2 kHz)"
+  },
+  "start-diesel": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "256808",
+        "user": "radwoc",
+        "title": "tractor-engine-start.wav",
+        "preview": "https://cdn.freesound.org/previews/256/256808_876304-hq.mp3",
+        "url": "https://freesound.org/people/radwoc/sounds/256808/",
+        "dur": 8.4,
+        "downloads": 2256,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "241756",
+        "user": "ElGeorgia",
+        "title": "diesel engine start.wav",
+        "preview": "https://cdn.freesound.org/previews/241/241756_909598-hq.mp3",
+        "url": "https://freesound.org/people/ElGeorgia/sounds/241756/",
+        "dur": 3.8,
+        "downloads": 918,
+        "note": "\"diesel engine start\""
+      },
+      {
+        "id": "186959",
+        "user": "ReadeOnly",
+        "title": "engine_start.wav",
+        "preview": "https://cdn.freesound.org/previews/186/186959_545448-hq.mp3",
+        "url": "https://freesound.org/people/ReadeOnly/sounds/186959/",
+        "dur": 2.8,
+        "downloads": 2640,
+        "note": "\"diesel engine start\""
+      }
+    ],
+    "mine": 0,
+    "why": "from a car's own pack, \"tractor-engine-start.wav\", no clipping, 9 dB over its floor, its brightness right (1.8 kHz), 2256 downloads"
+  },
+  "start-two": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "560871",
+        "user": "craig5595",
+        "title": "Snowmobiles 3.wav",
+        "preview": "https://cdn.freesound.org/previews/560/560871_8949646-hq.mp3",
+        "url": "https://freesound.org/people/craig5595/sounds/560871/",
+        "dur": 13,
+        "downloads": 182,
+        "note": "\"snowmobile\""
+      },
+      {
+        "id": "560872",
+        "user": "craig5595",
+        "title": "Snowmobiles 2.wav",
+        "preview": "https://cdn.freesound.org/previews/560/560872_8949646-hq.mp3",
+        "url": "https://freesound.org/people/craig5595/sounds/560872/",
+        "dur": 11.6,
+        "downloads": 207,
+        "note": "\"snowmobile\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Snowmobiles 3.wav\", 23 dB over its floor, its brightness right (2.6 kHz)"
+  },
+  "stop": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "401557",
+        "user": "GiocoSound",
+        "title": "SFX_Car_Engine_Outside_Stop.wav",
+        "preview": "https://cdn.freesound.org/previews/401/401557_5820033-hq.mp3",
+        "url": "https://freesound.org/people/GiocoSound/sounds/401557/",
+        "dur": 2,
+        "downloads": 1724,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "682766",
+        "user": "thomasanthony321",
+        "title": "Car engine turning off; distant.WAV",
+        "preview": "https://cdn.freesound.org/previews/682/682766_14662423-hq.mp3",
+        "url": "https://freesound.org/people/thomasanthony321/sounds/682766/",
+        "dur": 4.9,
+        "downloads": 441,
+        "note": "\"car engine turn off\""
+      }
+    ],
+    "mine": 0,
+    "why": "from a car's own pack, \"SFX_Car_Engine_Outside_Stop.wav\", no clipping, 29 dB over its floor, its brightness right (0.6 kHz), 1724 downloads"
+  },
+  "tick-cool": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "845874",
+        "user": "bassimat",
+        "title": "Switching / Turning On and Off a Light Electromagnetic Field Recording",
+        "preview": "https://cdn.freesound.org/previews/845/845874_15636277-hq.mp3",
+        "url": "https://freesound.org/people/bassimat/sounds/845874/",
+        "dur": 9.5,
+        "downloads": 30,
+        "note": "\"engine ticking\""
+      },
+      {
+        "id": "386792",
+        "user": "RichieMcMullen",
+        "title": "engine_idle_loop_2.wav",
+        "preview": "https://cdn.freesound.org/previews/386/386792_7236624-hq.mp3",
+        "url": "https://freesound.org/people/RichieMcMullen/sounds/386792/",
+        "dur": 8.7,
+        "downloads": 468,
+        "note": "\"engine ticking\""
+      },
+      {
+        "id": "350846",
+        "user": "Günne",
+        "title": "toaster_on_fridge.wav",
+        "preview": "https://cdn.freesound.org/previews/350/350846_6437392-hq.mp3",
+        "url": "https://freesound.org/people/Günne/sounds/350846/",
+        "dur": 7.8,
+        "downloads": 149,
+        "note": "\"metal ticking cooling\""
+      }
+    ],
+    "mine": 0,
+    "why": "NOTHING FOUND FITS — the best of a poor lot, no clipping, 21 dB over its floor, its brightness right (2.9 kHz)"
+  },
+  "shift": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "865231",
+        "user": "microman502",
+        "title": "Elantra Gearshifter with Reverse Beep",
+        "preview": "https://cdn.freesound.org/previews/865/865231_13610145-hq.mp3",
+        "url": "https://freesound.org/people/microman502/sounds/865231/",
+        "dur": 22.2,
+        "downloads": 20,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "380723",
+        "user": "semenov_nick",
+        "title": "04_Renault_duster_Gearbox.wav",
+        "preview": "https://cdn.freesound.org/previews/380/380723_3596390-hq.mp3",
+        "url": "https://freesound.org/people/semenov_nick/sounds/380723/",
+        "dur": 22,
+        "downloads": 281,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "519638",
+        "user": "marciofao",
+        "title": "gear shif fail scratch (1).m4a",
+        "preview": "https://cdn.freesound.org/previews/519/519638_6190866-hq.mp3",
+        "url": "https://freesound.org/people/marciofao/sounds/519638/",
+        "dur": 1.7,
+        "downloads": 238,
+        "note": "\"car gear shift\""
+      },
+      {
+        "id": "629324",
+        "user": "greatsoundstube",
+        "title": "gear select.wav",
+        "preview": "https://cdn.freesound.org/previews/629/629324_13885154-hq.mp3",
+        "url": "https://freesound.org/people/greatsoundstube/sounds/629324/",
+        "dur": 1.6,
+        "downloads": 2186,
+        "note": "\"car gear shift\""
+      }
+    ],
+    "mine": 0,
+    "why": "from a car's own pack, \"Elantra Gearshifter with Reverse Beep\", no clipping, 28 dB over its floor, its brightness right (0.9 kHz)"
+  },
+  "gear-whine": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "523672",
+        "user": "martian",
+        "title": "oulander reversing beep isolated.wav",
+        "preview": "https://cdn.freesound.org/previews/523/523672_84709-hq.mp3",
+        "url": "https://freesound.org/people/martian/sounds/523672/",
+        "dur": 8.9,
+        "downloads": 473,
+        "note": "\"car reversing\""
+      },
+      {
+        "id": "496171",
+        "user": "editboy23",
+        "title": "Import car revs on Chassis Dyno with Turbo.wav",
+        "preview": "https://cdn.freesound.org/previews/496/496171_1784475-hq.mp3",
+        "url": "https://freesound.org/people/editboy23/sounds/496171/",
+        "dur": 35.5,
+        "downloads": 2516,
+        "note": "\"transmission whine\""
+      },
+      {
+        "id": "203125",
+        "user": "bonehead",
+        "title": "holden 61 ek reverse-drive off.aif",
+        "preview": "https://cdn.freesound.org/previews/203/203125_96564-hq.mp3",
+        "url": "https://freesound.org/people/bonehead/sounds/203125/",
+        "dur": 44.6,
+        "downloads": 1946,
+        "note": "\"car reversing\""
+      },
+      {
+        "id": "513312",
+        "user": "soundsofawesome",
+        "title": "Car inside",
+        "preview": "https://cdn.freesound.org/previews/513/513312_6402675-hq.mp3",
+        "url": "https://freesound.org/people/soundsofawesome/sounds/513312/",
+        "dur": 1.5,
+        "downloads": 171,
+        "note": "\"car reversing\""
+      }
+    ],
+    "mine": 0,
+    "why": "NOTHING FOUND FITS — the best of a poor lot, no clipping, 42 dB over its floor, its brightness right (2.2 kHz), unevenness 0.41"
+  },
+  "pops": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "675723",
+        "user": "craigsmith",
+        "title": "S41-25 Car backfires; reverberant.wav",
+        "preview": "https://cdn.freesound.org/previews/675/675723_2524442-hq.mp3",
+        "url": "https://freesound.org/people/craigsmith/sounds/675723/",
+        "dur": 7.9,
+        "downloads": 334,
+        "note": "\"car backfire\""
+      },
+      {
+        "id": "105351",
+        "user": "CeebFrack",
+        "title": "BACKFIRE.ogg",
+        "preview": "https://cdn.freesound.org/previews/105/105351_1553758-hq.mp3",
+        "url": "https://freesound.org/people/CeebFrack/sounds/105351/",
+        "dur": 2,
+        "downloads": 3460,
+        "note": "\"car backfire\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"S41-25 Car backfires; reverberant.wav\", no clipping, 59 dB over its floor, its brightness right (1.4 kHz)"
+  },
+  "limiter": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "767036",
+        "user": "giaxaomuop_audio",
+        "title": "car3_record",
+        "preview": "https://cdn.freesound.org/previews/767/767036_16554347-hq.mp3",
+        "url": "https://freesound.org/people/giaxaomuop_audio/sounds/767036/",
+        "dur": 6.8,
+        "downloads": 81,
+        "note": "\"car revving limiter\""
+      }
+    ],
+    "mine": 0,
+    "why": "NOTHING FOUND FITS — the best of a poor lot, no clipping, 11 dB over its floor, its brightness right (2.4 kHz)"
+  },
+  "intake": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "652336",
+        "user": "Urkki69",
+        "title": "Carburetor problems",
+        "preview": "https://cdn.freesound.org/previews/652/652336_12244617-hq.mp3",
+        "url": "https://freesound.org/people/Urkki69/sounds/652336/",
+        "dur": 53.5,
+        "downloads": 116,
+        "note": "\"carburetor\""
+      },
+      {
+        "id": "819013",
+        "user": "Sadiquecat",
+        "title": "Ford 115 T350 - Engine from front grill intake",
+        "preview": "https://cdn.freesound.org/previews/819/819013_5287430-hq.mp3",
+        "url": "https://freesound.org/people/Sadiquecat/sounds/819013/",
+        "dur": 43.1,
+        "downloads": 17,
+        "note": "\"engine intake sound\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Carburetor problems\", no clipping, 29 dB over its floor, its brightness right (0.9 kHz), even"
+  },
+  "skid": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "71739",
+        "user": "audible-edge",
+        "title": "Chrysler LHS tire squeal 04 (04-25-2009).wav",
+        "preview": "https://cdn.freesound.org/previews/71/71739_995351-hq.mp3",
+        "url": "https://freesound.org/people/audible-edge/sounds/71739/",
+        "dur": 16.5,
+        "downloads": 14034,
+        "note": "\"tire skid\""
+      },
+      {
+        "id": "71738",
+        "user": "audible-edge",
+        "title": "Chrysler LHS tire squeal 03 (04-25-2009).wav",
+        "preview": "https://cdn.freesound.org/previews/71/71738_995351-hq.mp3",
+        "url": "https://freesound.org/people/audible-edge/sounds/71738/",
+        "dur": 13.8,
+        "downloads": 10090,
+        "note": "\"tire skid\""
+      },
+      {
+        "id": "71737",
+        "user": "audible-edge",
+        "title": "Chrysler LHS tire squeal 02 (04-25-2009).wav",
+        "preview": "https://cdn.freesound.org/previews/71/71737_995351-hq.mp3",
+        "url": "https://freesound.org/people/audible-edge/sounds/71737/",
+        "dur": 11.1,
+        "downloads": 9631,
+        "note": "\"tire skid\""
+      },
+      {
+        "id": "71736",
+        "user": "audible-edge",
+        "title": "Chrysler LHS tire squeal 01 (04-25-2009).wav",
+        "preview": "https://cdn.freesound.org/previews/71/71736_995351-hq.mp3",
+        "url": "https://freesound.org/people/audible-edge/sounds/71736/",
+        "dur": 10,
+        "downloads": 5273,
+        "note": "\"tire skid\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Chrysler LHS tire squeal 04 (04-25-2009)\", no clipping, 34 dB over its floor, its brightness right (1.8 kHz), even, 14034 downloads"
+  },
+  "squeal": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "71736",
+        "user": "audible-edge",
+        "title": "Chrysler LHS tire squeal 01 (04-25-2009).wav",
+        "preview": "https://cdn.freesound.org/previews/71/71736_995351-hq.mp3",
+        "url": "https://freesound.org/people/audible-edge/sounds/71736/",
+        "dur": 10,
+        "downloads": 5273,
+        "note": "\"tire squeal\""
+      },
+      {
+        "id": "426021",
+        "user": "HoBoTrails",
+        "title": "Car Accident with Squeal and Crash",
+        "preview": "https://cdn.freesound.org/previews/426/426021_6842851-hq.mp3",
+        "url": "https://freesound.org/people/HoBoTrails/sounds/426021/",
+        "dur": 3.4,
+        "downloads": 13242,
+        "note": "\"tire squeal\""
+      },
+      {
+        "id": "271337",
+        "user": "therisingorder",
+        "title": "Car peels off",
+        "preview": "https://cdn.freesound.org/previews/271/271337_2196252-hq.mp3",
+        "url": "https://freesound.org/people/therisingorder/sounds/271337/",
+        "dur": 3.2,
+        "downloads": 7130,
+        "note": "\"tire squeal\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Chrysler LHS tire squeal 01 (04-25-2009)\", no clipping, 24 dB over its floor, its brightness right (1.4 kHz), 5273 downloads"
+  },
+  "snow-roll": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "380718",
+        "user": "semenov_nick",
+        "title": "01_Renault_duster_Coming_to_snow_outdoor_enginestop.wav",
+        "preview": "https://cdn.freesound.org/previews/380/380718_3596390-hq.mp3",
+        "url": "https://freesound.org/people/semenov_nick/sounds/380718/",
+        "dur": 14.9,
+        "downloads": 888,
+        "note": "pinned (a car pack's)"
+      }
+    ],
+    "mine": 0,
+    "why": "from a car's own pack, \"01_Renault_duster_Coming_to_snow_outdoor\", no clipping, 19 dB over its floor, its brightness right (1 kHz), even, 888 downloads"
+  },
+  "snow-slide": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "79019",
+        "user": "RoofDog",
+        "title": "Bike Tire Varied Stop.wav",
+        "preview": "https://cdn.freesound.org/previews/79/79019_1227539-hq.mp3",
+        "url": "https://freesound.org/people/RoofDog/sounds/79019/",
+        "dur": 10.6,
+        "downloads": 436,
+        "note": "\"tires spinning\""
+      },
+      {
+        "id": "328209",
+        "user": "funkymuskrat",
+        "title": "Spoke Spinna 05",
+        "preview": "https://cdn.freesound.org/previews/328/328209_32926-hq.mp3",
+        "url": "https://freesound.org/people/funkymuskrat/sounds/328209/",
+        "dur": 43.7,
+        "downloads": 65,
+        "note": "\"tires spinning\""
+      }
+    ],
+    "mine": 0,
+    "why": "no clipping, 27 dB over its floor, unevenness 0.46"
+  },
+  "ice-hiss": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "708853",
+        "user": "trung1309vn",
+        "title": "car_18",
+        "preview": "https://cdn.freesound.org/previews/708/708853_15340226-hq.mp3",
+        "url": "https://freesound.org/people/trung1309vn/sounds/708853/",
+        "dur": 7.9,
+        "downloads": 24,
+        "note": "\"ice road car\""
+      },
+      {
+        "id": "251662",
+        "user": "OBXJohn",
+        "title": "Tires on Gravel Road 2",
+        "preview": "https://cdn.freesound.org/previews/251/251662_3719168-hq.mp3",
+        "url": "https://freesound.org/people/OBXJohn/sounds/251662/",
+        "dur": 20.8,
+        "downloads": 6256,
+        "note": "\"ice road car\""
+      },
+      {
+        "id": "251661",
+        "user": "OBXJohn",
+        "title": "Tires on Gravel Road 1",
+        "preview": "https://cdn.freesound.org/previews/251/251661_3719168-hq.mp3",
+        "url": "https://freesound.org/people/OBXJohn/sounds/251661/",
+        "dur": 12.8,
+        "downloads": 5223,
+        "note": "\"ice road car\""
+      },
+      {
+        "id": "708724",
+        "user": "akahukas",
+        "title": "car-030.wav",
+        "preview": "https://cdn.freesound.org/previews/708/708724_15370993-hq.mp3",
+        "url": "https://freesound.org/people/akahukas/sounds/708724/",
+        "dur": 5.5,
+        "downloads": 76,
+        "note": "\"ice road car\""
+      }
+    ],
+    "mine": 0,
+    "why": "NOTHING FOUND FITS — the best of a poor lot, no clipping, 16 dB over its floor, its brightness right (2.5 kHz), even"
+  },
+  "gravel": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "764716",
+        "user": "flumpytripod",
+        "title": "Car Pass on Gravel",
+        "preview": "https://cdn.freesound.org/previews/764/764716_6998158-hq.mp3",
+        "url": "https://freesound.org/people/flumpytripod/sounds/764716/",
+        "dur": 16.9,
+        "downloads": 269,
+        "note": "\"car driving gravel\""
+      },
+      {
+        "id": "874835",
+        "user": "loganzsound",
+        "title": "Car Drives Over Gravel Left to Right",
+        "preview": "https://cdn.freesound.org/previews/874/874835_16682330-hq.mp3",
+        "url": "https://freesound.org/people/loganzsound/sounds/874835/",
+        "dur": 14.9,
+        "downloads": 34,
+        "note": "\"car driving gravel\""
+      },
+      {
+        "id": "637162",
+        "user": "kyles",
+        "title": "auto car driving on gravel ext deep bassy.flac",
+        "preview": "https://cdn.freesound.org/previews/637/637162_612689-hq.mp3",
+        "url": "https://freesound.org/people/kyles/sounds/637162/",
+        "dur": 24.1,
+        "downloads": 523,
+        "note": "\"car driving gravel\""
+      },
+      {
+        "id": "877159",
+        "user": "adamdavidsmith",
+        "title": "Driving On Gravel",
+        "preview": "https://cdn.freesound.org/previews/877/877159_1501590-hq.mp3",
+        "url": "https://freesound.org/people/adamdavidsmith/sounds/877159/",
+        "dur": 14,
+        "downloads": 21,
+        "note": "\"car driving gravel\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Car Pass on Gravel\", no clipping, 33 dB over its floor, its brightness right (1.6 kHz), unevenness 0.51"
+  },
+  "slush": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "462862",
+        "user": "Breviceps",
+        "title": "Passing Car (Wet road)",
+        "preview": "https://cdn.freesound.org/previews/462/462862_9159316-hq.mp3",
+        "url": "https://freesound.org/people/Breviceps/sounds/462862/",
+        "dur": 5.8,
+        "downloads": 4411,
+        "note": "\"car driving wet road\""
+      },
+      {
+        "id": "648786",
+        "user": "klau78",
+        "title": "Cars and trucks passing by on a wet road",
+        "preview": "https://cdn.freesound.org/previews/648/648786_12184473-hq.mp3",
+        "url": "https://freesound.org/people/klau78/sounds/648786/",
+        "dur": 93.7,
+        "downloads": 1339,
+        "note": "\"car driving wet road\""
+      },
+      {
+        "id": "399822",
+        "user": "BonnyOrbit",
+        "title": "Cars passing in a rainy street.WAV",
+        "preview": "https://cdn.freesound.org/previews/399/399822_5902878-hq.mp3",
+        "url": "https://freesound.org/people/BonnyOrbit/sounds/399822/",
+        "dur": 35.2,
+        "downloads": 983,
+        "note": "\"car driving wet road\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Passing Car (Wet road)\", no clipping, 27 dB over its floor, its brightness right (1.9 kHz), unevenness 0.47, 4411 downloads"
+  },
+  "splash": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "563021",
+        "user": "cookies+policy",
+        "title": "Water Puddle Splash",
+        "preview": "https://cdn.freesound.org/previews/563/563021_10713160-hq.mp3",
+        "url": "https://freesound.org/people/cookies+policy/sounds/563021/",
+        "dur": 8.5,
+        "downloads": 1852,
+        "note": "\"car puddle splash\""
+      },
+      {
+        "id": "381698",
+        "user": "bengomori",
+        "title": "16_Car driving through burst water main on Wilton Way.MP3",
+        "preview": "https://cdn.freesound.org/previews/381/381698_3990540-hq.mp3",
+        "url": "https://freesound.org/people/bengomori/sounds/381698/",
+        "dur": 9.8,
+        "downloads": 481,
+        "note": "\"car puddle splash\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Water Puddle Splash\", no clipping, silence between its sounds, its brightness right (4.3 kHz), 1852 downloads"
+  },
+  "rumble": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "62652",
+        "user": "bsumusictech",
+        "title": "rumble strip exit 41.wav",
+        "preview": "https://cdn.freesound.org/previews/62/62652_791247-hq.mp3",
+        "url": "https://freesound.org/people/bsumusictech/sounds/62652/",
+        "dur": 16.6,
+        "downloads": 353,
+        "note": "\"rumble strip\""
+      },
+      {
+        "id": "104634",
+        "user": "cognito perceptu",
+        "title": "rumble.wav",
+        "preview": "https://cdn.freesound.org/previews/104/104634_57789-hq.mp3",
+        "url": "https://freesound.org/people/cognito perceptu/sounds/104634/",
+        "dur": 31.4,
+        "downloads": 318,
+        "note": "\"rumble strip\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"rumble strip exit 41.wav\", no clipping, 20 dB over its floor, its brightness right (0.4 kHz), even"
+  },
+  "road-roll": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "699130",
+        "user": "roisin.gleeson",
+        "title": "Interior_Truck-manual_Some_traffic_Noise.wav",
+        "preview": "https://cdn.freesound.org/previews/699/699130_12896641-hq.mp3",
+        "url": "https://freesound.org/people/roisin.gleeson/sounds/699130/",
+        "dur": 151.9,
+        "downloads": 169,
+        "note": "\"car interior road noise\""
+      },
+      {
+        "id": "847763",
+        "user": "tickle_feet_frida",
+        "title": "Interior Car Drive Night Shelby Rd East Nashville - 2015 Mazda Cx-5 T5",
+        "preview": "https://cdn.freesound.org/previews/847/847763_13973770-hq.mp3",
+        "url": "https://freesound.org/people/tickle_feet_frida/sounds/847763/",
+        "dur": 52.7,
+        "downloads": 83,
+        "note": "\"car interior road noise\""
+      },
+      {
+        "id": "860717",
+        "user": "artemditkovsky",
+        "title": "Interior sound of a moving car",
+        "preview": "https://cdn.freesound.org/previews/860/860717_9079786-hq.mp3",
+        "url": "https://freesound.org/people/artemditkovsky/sounds/860717/",
+        "dur": 90.2,
+        "downloads": 135,
+        "note": "\"car interior road noise\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Interior_Truck-manual_Some_traffic_Noise\", no clipping, 15 dB over its floor, its brightness right (0.9 kHz), even"
+  },
+  "wind": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "609828",
+        "user": "itinerantmonk108",
+        "title": "Nahant cars wind.wav",
+        "preview": "https://cdn.freesound.org/previews/609/609828_2397507-hq.mp3",
+        "url": "https://freesound.org/people/itinerantmonk108/sounds/609828/",
+        "dur": 43.5,
+        "downloads": 88,
+        "note": "\"wind noise car driving\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Nahant cars wind.wav\", no clipping, 19 dB over its floor, its brightness right (1.6 kHz), unevenness 0.68"
+  },
+  "hit-light": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "877140",
+        "user": "adamdavidsmith",
+        "title": "Car Drive By Speed bump",
+        "preview": "https://cdn.freesound.org/previews/877/877140_1501590-hq.mp3",
+        "url": "https://freesound.org/people/adamdavidsmith/sounds/877140/",
+        "dur": 9.7,
+        "downloads": 4,
+        "note": "\"car bump\""
+      },
+      {
+        "id": "508170",
+        "user": "Breviceps",
+        "title": "Passing car + road bump",
+        "preview": "https://cdn.freesound.org/previews/508/508170_9159316-hq.mp3",
+        "url": "https://freesound.org/people/Breviceps/sounds/508170/",
+        "dur": 6,
+        "downloads": 1684,
+        "note": "\"car bump\""
+      },
+      {
+        "id": "837875",
+        "user": "menfa",
+        "title": "car_speedbump_tacoya_bar_y_taqueria",
+        "preview": "https://cdn.freesound.org/previews/837/837875_13669249-hq.mp3",
+        "url": "https://freesound.org/people/menfa/sounds/837875/",
+        "dur": 6.1,
+        "downloads": 51,
+        "note": "\"car bump\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Car Drive By Speed bump\", no clipping, 9 dB over its floor, its brightness right (1.3 kHz)"
+  },
+  "hit-mid": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "237375",
+        "user": "squareal",
+        "title": "Car Crash",
+        "preview": "https://cdn.freesound.org/previews/237/237375_1502374-hq.mp3",
+        "url": "https://freesound.org/people/squareal/sounds/237375/",
+        "dur": 4.4,
+        "downloads": 104492,
+        "note": "\"car crash\""
+      },
+      {
+        "id": "862565",
+        "user": "CAT-FOX_ALEX",
+        "title": "Phonk Car Crash Impact 1",
+        "preview": "https://cdn.freesound.org/previews/862/862565_17675683-hq.mp3",
+        "url": "https://freesound.org/people/CAT-FOX_ALEX/sounds/862565/",
+        "dur": 5.3,
+        "downloads": 607,
+        "note": "\"car crash\""
+      },
+      {
+        "id": "807437",
+        "user": "Logicogonist",
+        "title": "car crash long 1",
+        "preview": "https://cdn.freesound.org/previews/807/807437_3797507-hq.mp3",
+        "url": "https://freesound.org/people/Logicogonist/sounds/807437/",
+        "dur": 1,
+        "downloads": 2349,
+        "note": "\"car crash\""
+      },
+      {
+        "id": "592388",
+        "user": "magnuswaker",
+        "title": "Car Crash (with Glass)",
+        "preview": "https://cdn.freesound.org/previews/592/592388_11537497-hq.mp3",
+        "url": "https://freesound.org/people/magnuswaker/sounds/592388/",
+        "dur": 2.6,
+        "downloads": 18688,
+        "note": "\"car crash\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Car Crash\", no clipping, silence between its sounds, its brightness right (3.1 kHz), 104492 downloads"
+  },
+  "hit-heavy": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "697736",
+        "user": "magnuswaker",
+        "title": "Wall Street Crash",
+        "preview": "https://cdn.freesound.org/previews/697/697736_11537497-hq.mp3",
+        "url": "https://freesound.org/people/magnuswaker/sounds/697736/",
+        "dur": 11.8,
+        "downloads": 918,
+        "note": "\"car crash heavy\""
+      },
+      {
+        "id": "675259",
+        "user": "craigsmith",
+        "title": "S30-30 Heavy short car crash.wav",
+        "preview": "https://cdn.freesound.org/previews/675/675259_2524442-hq.mp3",
+        "url": "https://freesound.org/people/craigsmith/sounds/675259/",
+        "dur": 2.5,
+        "downloads": 114,
+        "note": "\"car crash heavy\""
+      },
+      {
+        "id": "675902",
+        "user": "craigsmith",
+        "title": "S38-24 Big heavy car crash.wav",
+        "preview": "https://cdn.freesound.org/previews/675/675902_2524442-hq.mp3",
+        "url": "https://freesound.org/people/craigsmith/sounds/675902/",
+        "dur": 2.5,
+        "downloads": 228,
+        "note": "\"car crash heavy\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Wall Street Crash\", 67 dB over its floor, its brightness right (0.5 kHz), 918 downloads"
+  },
+  "hit-glass": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "686849",
+        "user": "ccen18",
+        "title": "glass shatter",
+        "preview": "https://cdn.freesound.org/previews/686/686849_14918565-hq.mp3",
+        "url": "https://freesound.org/people/ccen18/sounds/686849/",
+        "dur": 0.8,
+        "downloads": 566,
+        "note": "\"glass shatter\""
+      },
+      {
+        "id": "587928",
+        "user": "thecommondanger",
+        "title": "BROKEN CAR WINDOW.wav",
+        "preview": "https://cdn.freesound.org/previews/587/587928_8805852-hq.mp3",
+        "url": "https://freesound.org/people/thecommondanger/sounds/587928/",
+        "dur": 1.3,
+        "downloads": 1210,
+        "note": "\"car window smash\""
+      },
+      {
+        "id": "156579",
+        "user": "SpliceSound",
+        "title": "Pick up shattered picture frame, glass shards.wav",
+        "preview": "https://cdn.freesound.org/previews/156/156579_1480854-hq.mp3",
+        "url": "https://freesound.org/people/SpliceSound/sounds/156579/",
+        "dur": 1.7,
+        "downloads": 1157,
+        "note": "\"glass shatter\""
+      },
+      {
+        "id": "336425",
+        "user": "221Beimesche",
+        "title": "Glass Shattering and Falling",
+        "preview": "https://cdn.freesound.org/previews/336/336425_4663534-hq.mp3",
+        "url": "https://freesound.org/people/221Beimesche/sounds/336425/",
+        "dur": 3.7,
+        "downloads": 5026,
+        "note": "\"glass shatter\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"glass shatter\", no clipping, 44 dB over its floor, its brightness right (6.7 kHz), 566 downloads"
+  },
+  "hit-post": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "335976",
+        "user": "newagesoup",
+        "title": "metal-gate-slam",
+        "preview": "https://cdn.freesound.org/previews/335/335976_4067257-hq.mp3",
+        "url": "https://freesound.org/people/newagesoup/sounds/335976/",
+        "dur": 6.4,
+        "downloads": 820,
+        "note": "\"metal pole hit\""
+      },
+      {
+        "id": "531378",
+        "user": "colorsCrimsonTears",
+        "title": "Hitting metal pole",
+        "preview": "https://cdn.freesound.org/previews/531/531378_11785387-hq.mp3",
+        "url": "https://freesound.org/people/colorsCrimsonTears/sounds/531378/",
+        "dur": 1.8,
+        "downloads": 175,
+        "note": "\"metal pole hit\""
+      },
+      {
+        "id": "406490",
+        "user": "Anthousai",
+        "title": "hit - metallic - basketball hoop pipe 01.wav",
+        "preview": "https://cdn.freesound.org/previews/406/406490_5923045-hq.mp3",
+        "url": "https://freesound.org/people/Anthousai/sounds/406490/",
+        "dur": 7.5,
+        "downloads": 655,
+        "note": "\"metal pole hit\""
+      },
+      {
+        "id": "667282",
+        "user": "alegemaate",
+        "title": "Metal Pole Hit",
+        "preview": "https://cdn.freesound.org/previews/667/667282_2531187-hq.mp3",
+        "url": "https://freesound.org/people/alegemaate/sounds/667282/",
+        "dur": 0.3,
+        "downloads": 238,
+        "note": "\"metal pole hit\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"metal-gate-slam\", no clipping, 40 dB over its floor, its brightness right (1.3 kHz), 820 downloads"
+  },
+  "hit-tree": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "452609",
+        "user": "kyles",
+        "title": "door wood old heavy kick open good impact 1 with rattle 1 without.wav",
+        "preview": "https://cdn.freesound.org/previews/452/452609_612689-hq.mp3",
+        "url": "https://freesound.org/people/kyles/sounds/452609/",
+        "dur": 4.1,
+        "downloads": 1651,
+        "note": "\"wood impact heavy\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"door wood old heavy kick open good impac\", 59 dB over its floor, 1651 downloads"
+  },
+  "hit-snowbank": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "238895",
+        "user": "Olichite",
+        "title": "FX_SNOWBALL_HITS_WINDOW_OUTSIDE.wav",
+        "preview": "https://cdn.freesound.org/previews/238/238895_4024435-hq.mp3",
+        "url": "https://freesound.org/people/Olichite/sounds/238895/",
+        "dur": 1.4,
+        "downloads": 2591,
+        "note": "\"snow impact\""
+      },
+      {
+        "id": "378059",
+        "user": "bajko",
+        "title": "sfx_snowball_hit-02.wav",
+        "preview": "https://cdn.freesound.org/previews/378/378059_2341984-hq.mp3",
+        "url": "https://freesound.org/people/bajko/sounds/378059/",
+        "dur": 1,
+        "downloads": 970,
+        "note": "\"snow impact\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"FX_SNOWBALL_HITS_WINDOW_OUTSIDE.wav\", no clipping, 67 dB over its floor, its brightness right (1.8 kHz), 2591 downloads"
+  },
+  "scrape": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "697758",
+        "user": "SoundDesignForYou",
+        "title": "METLImpt_Metal Resonant Scrape Impact_SDFY_Metal Resonant.wav",
+        "preview": "https://cdn.freesound.org/previews/697/697758_13085623-hq.mp3",
+        "url": "https://freesound.org/people/SoundDesignForYou/sounds/697758/",
+        "dur": 2.5,
+        "downloads": 969,
+        "note": "\"metal scrape\""
+      },
+      {
+        "id": "328529",
+        "user": "humanoide9000",
+        "title": "Fork scraping metal 5",
+        "preview": "https://cdn.freesound.org/previews/328/328529_4361321-hq.mp3",
+        "url": "https://freesound.org/people/humanoide9000/sounds/328529/",
+        "dur": 4,
+        "downloads": 1446,
+        "note": "\"metal scrape\""
+      },
+      {
+        "id": "397260",
+        "user": "thebraindrinker",
+        "title": "field recording backyard.thunder.metal.scrape.wav",
+        "preview": "https://cdn.freesound.org/previews/397/397260_4704538-hq.mp3",
+        "url": "https://freesound.org/people/thebraindrinker/sounds/397260/",
+        "dur": 56,
+        "downloads": 53,
+        "note": "\"metal scrape\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"METLImpt_Metal Resonant Scrape Impact_SD\", no clipping, 37 dB over its floor, its brightness right (1.6 kHz), unevenness 0.48, 969 downloads"
+  },
+  "thump": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "141268",
+        "user": "escortmarius",
+        "title": "auto2.wav",
+        "preview": "https://cdn.freesound.org/previews/141/141268_2527354-hq.mp3",
+        "url": "https://freesound.org/people/escortmarius/sounds/141268/",
+        "dur": 8.5,
+        "downloads": 748,
+        "note": "\"car bottoming out\""
+      }
+    ],
+    "mine": 0,
+    "why": "NOTHING FOUND FITS — the best of a poor lot, 13 dB over its floor, 748 downloads"
+  },
+  "rattle": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "475210",
+        "user": "Sheyvan",
+        "title": "Metal Lock Rattling",
+        "preview": "https://cdn.freesound.org/previews/475/475210_3248005-hq.mp3",
+        "url": "https://freesound.org/people/Sheyvan/sounds/475210/",
+        "dur": 46.6,
+        "downloads": 669,
+        "note": "\"metal rattle\""
+      },
+      {
+        "id": "697754",
+        "user": "SoundDesignForYou",
+        "title": "METLImpt_Metal Resonant Impact With Rattle_SDFY_Metal Resonant.wav",
+        "preview": "https://cdn.freesound.org/previews/697/697754_13085623-hq.mp3",
+        "url": "https://freesound.org/people/SoundDesignForYou/sounds/697754/",
+        "dur": 2.7,
+        "downloads": 176,
+        "note": "\"metal rattle\""
+      },
+      {
+        "id": "625602",
+        "user": "alexanderdanner",
+        "title": "Metal Box Impacts 5 - Singles - Loose Lid - Rattles.wav",
+        "preview": "https://cdn.freesound.org/previews/625/625602_5476954-hq.mp3",
+        "url": "https://freesound.org/people/alexanderdanner/sounds/625602/",
+        "dur": 15.2,
+        "downloads": 307,
+        "note": "\"metal rattle\""
+      },
+      {
+        "id": "453383",
+        "user": "kyles",
+        "title": "metal shop hoist chains thick rattle pull on track1.flac",
+        "preview": "https://cdn.freesound.org/previews/453/453383_612689-hq.mp3",
+        "url": "https://freesound.org/people/kyles/sounds/453383/",
+        "dur": 51.9,
+        "downloads": 199,
+        "note": "\"metal rattle\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Metal Lock Rattling\", no clipping, 49 dB over its floor, its brightness right (4.2 kHz), unevenness 1.26, 669 downloads"
+  },
+  "door-open": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "465610",
+        "user": "Nox_Sound",
+        "title": "Vehicle_Car_Peugeot_106_Door_Open_Mono.wav",
+        "preview": "https://cdn.freesound.org/previews/465/465610_9250976-hq.mp3",
+        "url": "https://freesound.org/people/Nox_Sound/sounds/465610/",
+        "dur": 0.8,
+        "downloads": 1429,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "522219",
+        "user": "Nox_Sound",
+        "title": "Vehicle_Car_Peugeot_308_Door_Open_Mono.wav",
+        "preview": "https://cdn.freesound.org/previews/522/522219_9250976-hq.mp3",
+        "url": "https://freesound.org/people/Nox_Sound/sounds/522219/",
+        "dur": 4.5,
+        "downloads": 166,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "629322",
+        "user": "greatsoundstube",
+        "title": "car door open from inside with bell.wav",
+        "preview": "https://cdn.freesound.org/previews/629/629322_13885154-hq.mp3",
+        "url": "https://freesound.org/people/greatsoundstube/sounds/629322/",
+        "dur": 5.3,
+        "downloads": 1252,
+        "note": "\"car door open\""
+      },
+      {
+        "id": "260078",
+        "user": "supersnd",
+        "title": "car door opening5",
+        "preview": "https://cdn.freesound.org/previews/260/260078_3877322-hq.mp3",
+        "url": "https://freesound.org/people/supersnd/sounds/260078/",
+        "dur": 0.9,
+        "downloads": 5468,
+        "note": "\"car door open\""
+      }
+    ],
+    "mine": 0,
+    "why": "from a car's own pack, \"Vehicle_Car_Peugeot_106_Door_Open_Mono.w\", no clipping, 52 dB over its floor, its brightness right (2.3 kHz), 1429 downloads"
+  },
+  "door-shut": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "522220",
+        "user": "Nox_Sound",
+        "title": "Vehicle_Car_Peugeot_308_Door_Close_Mono_.wav",
+        "preview": "https://cdn.freesound.org/previews/522/522220_9250976-hq.mp3",
+        "url": "https://freesound.org/people/Nox_Sound/sounds/522220/",
+        "dur": 7.5,
+        "downloads": 209,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "162531",
+        "user": "Chippy569",
+        "title": "58FrontDoorNTG2.wav",
+        "preview": "https://cdn.freesound.org/previews/162/162531_1277206-hq.mp3",
+        "url": "https://freesound.org/people/Chippy569/sounds/162531/",
+        "dur": 82.9,
+        "downloads": 265,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "556691",
+        "user": "NachtmahrTV",
+        "title": "Car Door open and close 2.wav",
+        "preview": "https://cdn.freesound.org/previews/556/556691_5620304-hq.mp3",
+        "url": "https://freesound.org/people/NachtmahrTV/sounds/556691/",
+        "dur": 4.6,
+        "downloads": 4886,
+        "note": "\"car door close\""
+      },
+      {
+        "id": "689226",
+        "user": "zoombackcamera",
+        "title": "Car door closing from inside 2.wav",
+        "preview": "https://cdn.freesound.org/previews/689/689226_7659605-hq.mp3",
+        "url": "https://freesound.org/people/zoombackcamera/sounds/689226/",
+        "dur": 3.8,
+        "downloads": 817,
+        "note": "\"car door close\""
+      }
+    ],
+    "mine": 0,
+    "why": "from a car's own pack, \"Vehicle_Car_Peugeot_308_Door_Close_Mono_\", no clipping, silence between its sounds, its brightness right (0.8 kHz)"
+  },
+  "door-van": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "558144",
+        "user": "Nox_Sound",
+        "title": "Vehicle_Car_Peugeot_Bipper_Sliding_Door_Mono.wav",
+        "preview": "https://cdn.freesound.org/previews/558/558144_9250976-hq.mp3",
+        "url": "https://freesound.org/people/Nox_Sound/sounds/558144/",
+        "dur": 15.9,
+        "downloads": 682,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "819037",
+        "user": "Sadiquecat",
+        "title": "Ford 115 T350 - Side door sliding shut (from interrior)",
+        "preview": "https://cdn.freesound.org/previews/819/819037_5287430-hq.mp3",
+        "url": "https://freesound.org/people/Sadiquecat/sounds/819037/",
+        "dur": 3.9,
+        "downloads": 65,
+        "note": "\"van sliding door\""
+      }
+    ],
+    "mine": 0,
+    "why": "from a car's own pack, \"Vehicle_Car_Peugeot_Bipper_Sliding_Door_\", no clipping, silence between its sounds, its brightness right (0.7 kHz), 682 downloads"
+  },
+  "door-truck": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "515007",
+        "user": "jusebago",
+        "title": "cerrando puerta de carro / closing car door",
+        "preview": "https://cdn.freesound.org/previews/515/515007_7856386-hq.mp3",
+        "url": "https://freesound.org/people/jusebago/sounds/515007/",
+        "dur": 1.1,
+        "downloads": 898,
+        "note": "\"truck door close\""
+      },
+      {
+        "id": "450225",
+        "user": "kyles",
+        "title": "truck pickup door open close real nice slam.flac",
+        "preview": "https://cdn.freesound.org/previews/450/450225_612689-hq.mp3",
+        "url": "https://freesound.org/people/kyles/sounds/450225/",
+        "dur": 13,
+        "downloads": 1344,
+        "note": "\"truck door close\""
+      },
+      {
+        "id": "537844",
+        "user": "PostProdDog",
+        "title": "open and close door from outside RAM 1500",
+        "preview": "https://cdn.freesound.org/previews/537/537844_6911631-hq.mp3",
+        "url": "https://freesound.org/people/PostProdDog/sounds/537844/",
+        "dur": 8,
+        "downloads": 417,
+        "note": "\"truck door close\""
+      },
+      {
+        "id": "361823",
+        "user": "Jofae",
+        "title": "Truck Door Open and Close",
+        "preview": "https://cdn.freesound.org/previews/361/361823_6512973-hq.mp3",
+        "url": "https://freesound.org/people/Jofae/sounds/361823/",
+        "dur": 2.3,
+        "downloads": 2383,
+        "note": "\"truck door close\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"cerrando puerta de carro / closing car d\", no clipping, silence between its sounds, its brightness right (0.5 kHz), 898 downloads"
+  },
+  "boot": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "380724",
+        "user": "semenov_nick",
+        "title": "08_Renault_duster_Trunk_close_open.wav",
+        "preview": "https://cdn.freesound.org/previews/380/380724_3596390-hq.mp3",
+        "url": "https://freesound.org/people/semenov_nick/sounds/380724/",
+        "dur": 22.2,
+        "downloads": 1167,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "162529",
+        "user": "Chippy569",
+        "title": "60TrunkNTG2.wav",
+        "preview": "https://cdn.freesound.org/previews/162/162529_1277206-hq.mp3",
+        "url": "https://freesound.org/people/Chippy569/sounds/162529/",
+        "dur": 69.8,
+        "downloads": 560,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "726857",
+        "user": "Robo9418",
+        "title": "Automatic Car Trunk Closing",
+        "preview": "https://cdn.freesound.org/previews/726/726857_15176424-hq.mp3",
+        "url": "https://freesound.org/people/Robo9418/sounds/726857/",
+        "dur": 2.2,
+        "downloads": 198,
+        "note": "\"car trunk close\""
+      },
+      {
+        "id": "397685",
+        "user": "Kinoton",
+        "title": "Car Trunk, Open Close, Interior",
+        "preview": "https://cdn.freesound.org/previews/397/397685_2247456-hq.mp3",
+        "url": "https://freesound.org/people/Kinoton/sounds/397685/",
+        "dur": 20,
+        "downloads": 3434,
+        "note": "\"car trunk close\""
+      }
+    ],
+    "mine": 0,
+    "why": "from a car's own pack, \"08_Renault_duster_Trunk_close_open.wav\", no clipping, 30 dB over its floor, its brightness right (0.9 kHz), 1167 downloads"
+  },
+  "bonnet": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "865230",
+        "user": "microman502",
+        "title": "Elantra Fuel Cap and Bonnet (Hood) Open Latches",
+        "preview": "https://cdn.freesound.org/previews/865/865230_13610145-hq.mp3",
+        "url": "https://freesound.org/people/microman502/sounds/865230/",
+        "dur": 10,
+        "downloads": 19,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "879607",
+        "user": "Mihacappy",
+        "title": "412_hood_2c",
+        "preview": "https://cdn.freesound.org/previews/879/879607_10594370-hq.mp3",
+        "url": "https://freesound.org/people/Mihacappy/sounds/879607/",
+        "dur": 6.2,
+        "downloads": 1,
+        "note": "\"car hood close\""
+      },
+      {
+        "id": "329516",
+        "user": "LPA134",
+        "title": "Hood Impact",
+        "preview": "https://cdn.freesound.org/previews/329/329516_424694-hq.mp3",
+        "url": "https://freesound.org/people/LPA134/sounds/329516/",
+        "dur": 6.7,
+        "downloads": 2880,
+        "note": "\"car hood close\""
+      },
+      {
+        "id": "410134",
+        "user": "soundman9826",
+        "title": "car hood close",
+        "preview": "https://cdn.freesound.org/previews/410/410134_3598978-hq.mp3",
+        "url": "https://freesound.org/people/soundman9826/sounds/410134/",
+        "dur": 6.2,
+        "downloads": 816,
+        "note": "\"car hood close\""
+      }
+    ],
+    "mine": 0,
+    "why": "from a car's own pack, \"Elantra Fuel Cap and Bonnet (Hood) Open \", no clipping, silence between its sounds, its brightness right (1.5 kHz)"
+  },
+  "handbrake": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "865232",
+        "user": "microman502",
+        "title": "Elantra Handbrake",
+        "preview": "https://cdn.freesound.org/previews/865/865232_13610145-hq.mp3",
+        "url": "https://freesound.org/people/microman502/sounds/865232/",
+        "dur": 17.7,
+        "downloads": 17,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "162538",
+        "user": "Chippy569",
+        "title": "34EBrakeNTG2.wav",
+        "preview": "https://cdn.freesound.org/previews/162/162538_1277206-hq.mp3",
+        "url": "https://freesound.org/people/Chippy569/sounds/162538/",
+        "dur": 82.7,
+        "downloads": 101,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "380722",
+        "user": "semenov_nick",
+        "title": "05_Renault_duster_hand_Brake.wav",
+        "preview": "https://cdn.freesound.org/previews/380/380722_3596390-hq.mp3",
+        "url": "https://freesound.org/people/semenov_nick/sounds/380722/",
+        "dur": 7.5,
+        "downloads": 247,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "461678",
+        "user": "15HPanska_Ruttner_Jan",
+        "title": "06 Handbrake.wav",
+        "preview": "https://cdn.freesound.org/previews/461/461678_9679617-hq.mp3",
+        "url": "https://freesound.org/people/15HPanska_Ruttner_Jan/sounds/461678/",
+        "dur": 1.5,
+        "downloads": 349,
+        "note": "\"handbrake car\""
+      }
+    ],
+    "mine": 0,
+    "why": "from a car's own pack, \"Elantra Handbrake\", no clipping, silence between its sounds, its brightness right (1.8 kHz)"
+  },
+  "indicator": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "865233",
+        "user": "microman502",
+        "title": "Elantra Hazards",
+        "preview": "https://cdn.freesound.org/previews/865/865233_13610145-hq.mp3",
+        "url": "https://freesound.org/people/microman502/sounds/865233/",
+        "dur": 13.5,
+        "downloads": 9,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "384405",
+        "user": "Caitlin_100",
+        "title": "Car left right indicator tick.mp3",
+        "preview": "https://cdn.freesound.org/previews/384/384405_5407590-hq.mp3",
+        "url": "https://freesound.org/people/Caitlin_100/sounds/384405/",
+        "dur": 7.7,
+        "downloads": 262,
+        "note": "\"car indicator ticking\""
+      },
+      {
+        "id": "629304",
+        "user": "greatsoundstube",
+        "title": "Indicator on and off.wav",
+        "preview": "https://cdn.freesound.org/previews/629/629304_13885154-hq.mp3",
+        "url": "https://freesound.org/people/greatsoundstube/sounds/629304/",
+        "dur": 8.5,
+        "downloads": 367,
+        "note": "\"car indicator ticking\""
+      },
+      {
+        "id": "544640",
+        "user": "jeneveev",
+        "title": "indicator.wav",
+        "preview": "https://cdn.freesound.org/previews/544/544640_10974990-hq.mp3",
+        "url": "https://freesound.org/people/jeneveev/sounds/544640/",
+        "dur": 4,
+        "downloads": 374,
+        "note": "\"car indicator ticking\""
+      }
+    ],
+    "mine": 0,
+    "why": "from a car's own pack, \"Elantra Hazards\", no clipping, silence between its sounds, its brightness right (4.5 kHz), unevenness 1.17"
+  },
+  "wiper": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "865241",
+        "user": "microman502",
+        "title": "Elantra Wipers (Rear and Front)",
+        "preview": "https://cdn.freesound.org/previews/865/865241_13610145-hq.mp3",
+        "url": "https://freesound.org/people/microman502/sounds/865241/",
+        "dur": 43,
+        "downloads": 24,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "50905",
+        "user": "RutgerMuller",
+        "title": "car windshield wipers spray water squeaky.wav",
+        "preview": "https://cdn.freesound.org/previews/50/50905_179538-hq.mp3",
+        "url": "https://freesound.org/people/RutgerMuller/sounds/50905/",
+        "dur": 10,
+        "downloads": 1689,
+        "note": "\"windshield wipers\""
+      },
+      {
+        "id": "869005",
+        "user": "Filmscore",
+        "title": "Noisy Windshield Wipers",
+        "preview": "https://cdn.freesound.org/previews/869/869005_843915-hq.mp3",
+        "url": "https://freesound.org/people/Filmscore/sounds/869005/",
+        "dur": 25.3,
+        "downloads": 37,
+        "note": "\"windshield wipers\""
+      },
+      {
+        "id": "637171",
+        "user": "kyles",
+        "title": "auto int wipers until dry raw squeak windshield end.flac",
+        "preview": "https://cdn.freesound.org/previews/637/637171_612689-hq.mp3",
+        "url": "https://freesound.org/people/kyles/sounds/637171/",
+        "dur": 36.8,
+        "downloads": 168,
+        "note": "\"windshield wipers\""
+      }
+    ],
+    "mine": 0,
+    "why": "from a car's own pack, \"Elantra Wipers (Rear and Front)\", no clipping, silence between its sounds, its brightness right (1.4 kHz), unevenness 1.2"
+  },
+  "belt": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "865236",
+        "user": "microman502",
+        "title": "Elantra Seatbelt",
+        "preview": "https://cdn.freesound.org/previews/865/865236_13610145-hq.mp3",
+        "url": "https://freesound.org/people/microman502/sounds/865236/",
+        "dur": 27.9,
+        "downloads": 19,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "848306",
+        "user": "tickle_feet_frida",
+        "title": "Seatbelt Buckle Body Movement Car Interior Night — 2015 Mazda CX-5 T8",
+        "preview": "https://cdn.freesound.org/previews/848/848306_13973770-hq.mp3",
+        "url": "https://freesound.org/people/tickle_feet_frida/sounds/848306/",
+        "dur": 7.9,
+        "downloads": 82,
+        "note": "\"seatbelt buckle\""
+      },
+      {
+        "id": "384406",
+        "user": "Caitlin_100",
+        "title": "Seat belt unbuckle & buckling",
+        "preview": "https://cdn.freesound.org/previews/384/384406_5407590-hq.mp3",
+        "url": "https://freesound.org/people/Caitlin_100/sounds/384406/",
+        "dur": 7.5,
+        "downloads": 1066,
+        "note": "\"seatbelt buckle\""
+      }
+    ],
+    "mine": 0,
+    "why": "from a car's own pack, \"Elantra Seatbelt\", no clipping, 51 dB over its floor, its brightness right (2.6 kHz)"
+  },
+  "horn-saloon": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "162540",
+        "user": "Chippy569",
+        "title": "63HornNTG2.wav",
+        "preview": "https://cdn.freesound.org/previews/162/162540_1277206-hq.mp3",
+        "url": "https://freesound.org/people/Chippy569/sounds/162540/",
+        "dur": 13,
+        "downloads": 1135,
+        "note": "pinned (a car pack's)"
+      },
+      {
+        "id": "828939",
+        "user": "SpliceSound",
+        "title": "1933 Austin 10 Clifton Roadster horn",
+        "preview": "https://cdn.freesound.org/previews/828/828939_1480854-hq.mp3",
+        "url": "https://freesound.org/people/SpliceSound/sounds/828939/",
+        "dur": 11.5,
+        "downloads": 396,
+        "note": "\"car horn\""
+      },
+      {
+        "id": "170243",
+        "user": "BeatsbyCasper",
+        "title": "Car Horn.wav",
+        "preview": "https://cdn.freesound.org/previews/170/170243_3147538-hq.mp3",
+        "url": "https://freesound.org/people/BeatsbyCasper/sounds/170243/",
+        "dur": 0.4,
+        "downloads": 11471,
+        "note": "\"car horn\""
+      },
+      {
+        "id": "388276",
+        "user": "csnmedia",
+        "title": "La cucaracha car Horn.wav",
+        "preview": "https://cdn.freesound.org/previews/388/388276_926978-hq.mp3",
+        "url": "https://freesound.org/people/csnmedia/sounds/388276/",
+        "dur": 3,
+        "downloads": 4007,
+        "note": "\"car horn\""
+      }
+    ],
+    "mine": 0,
+    "why": "from a car's own pack, \"63HornNTG2.wav\", 46 dB over its floor, its brightness right (0.8 kHz), 1135 downloads"
+  },
+  "horn-truck": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "653001",
+        "user": "MisticalSounds2.o",
+        "title": "Truck Horn Passing By Left To Right.wav",
+        "preview": "https://cdn.freesound.org/previews/653/653001_14317682-hq.mp3",
+        "url": "https://freesound.org/people/MisticalSounds2.o/sounds/653001/",
+        "dur": 9.5,
+        "downloads": 1214,
+        "note": "\"truck horn\""
+      },
+      {
+        "id": "637923",
+        "user": "kyles",
+        "title": "truck real horn honk quick polite warning.flac",
+        "preview": "https://cdn.freesound.org/previews/637/637923_612689-hq.mp3",
+        "url": "https://freesound.org/people/kyles/sounds/637923/",
+        "dur": 5.2,
+        "downloads": 282,
+        "note": "\"truck horn\""
+      },
+      {
+        "id": "667749",
+        "user": "felix.blume",
+        "title": "Loud truck horn in front of a tent jail prison with traffic circulation recorded in Texas",
+        "preview": "https://cdn.freesound.org/previews/667/667749_1661766-hq.mp3",
+        "url": "https://freesound.org/people/felix.blume/sounds/667749/",
+        "dur": 6.6,
+        "downloads": 885,
+        "note": "\"truck horn\""
+      },
+      {
+        "id": "451697",
+        "user": "kyles",
+        "title": "school bus truck int horn honk.flac",
+        "preview": "https://cdn.freesound.org/previews/451/451697_612689-hq.mp3",
+        "url": "https://freesound.org/people/kyles/sounds/451697/",
+        "dur": 6.8,
+        "downloads": 2361,
+        "note": "\"truck horn\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Truck Horn Passing By Left To Right.wav\", no clipping, 78 dB over its floor, its brightness right (1.5 kHz), 1214 downloads"
+  },
+  "horn-small": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "94868",
+        "user": "tm1000",
+        "title": "small horn.wav",
+        "preview": "https://cdn.freesound.org/previews/94/94868_155902-hq.mp3",
+        "url": "https://freesound.org/people/tm1000/sounds/94868/",
+        "dur": 3.9,
+        "downloads": 4041,
+        "note": "\"small car horn\""
+      },
+      {
+        "id": "423990",
+        "user": "AmishRob",
+        "title": "Car horn beep beep two beeps honk honk",
+        "preview": "https://cdn.freesound.org/previews/423/423990_4023430-hq.mp3",
+        "url": "https://freesound.org/people/AmishRob/sounds/423990/",
+        "dur": 0.7,
+        "downloads": 9460,
+        "note": "\"small car horn\""
+      },
+      {
+        "id": "17124",
+        "user": "cognito perceptu",
+        "title": "car sharp horn.wav",
+        "preview": "https://cdn.freesound.org/previews/17/17124_57789-hq.mp3",
+        "url": "https://freesound.org/people/cognito perceptu/sounds/17124/",
+        "dur": 0.7,
+        "downloads": 1781,
+        "note": "\"small car horn\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"small horn.wav\", no clipping, 54 dB over its floor, 4041 downloads"
+  },
+  "siren": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "746302",
+        "user": "TitanKaempfer",
+        "title": "Police Siren",
+        "preview": "https://cdn.freesound.org/previews/746/746302_9713112-hq.mp3",
+        "url": "https://freesound.org/people/TitanKaempfer/sounds/746302/",
+        "dur": 15.6,
+        "downloads": 4487,
+        "note": "\"police siren\""
+      },
+      {
+        "id": "451080",
+        "user": "kyles",
+        "title": "traffic heavy dense nice short police siren woop NY MS.wav",
+        "preview": "https://cdn.freesound.org/previews/451/451080_612689-hq.mp3",
+        "url": "https://freesound.org/people/kyles/sounds/451080/",
+        "dur": 60,
+        "downloads": 765,
+        "note": "\"police siren\""
+      },
+      {
+        "id": "819894",
+        "user": "chungus43A",
+        "title": "European Police siren 1",
+        "preview": "https://cdn.freesound.org/previews/819/819894_12024110-hq.mp3",
+        "url": "https://freesound.org/people/chungus43A/sounds/819894/",
+        "dur": 3,
+        "downloads": 184,
+        "note": "\"police siren\""
+      },
+      {
+        "id": "819893",
+        "user": "chungus43A",
+        "title": "European Police siren 2",
+        "preview": "https://cdn.freesound.org/previews/819/819893_12024110-hq.mp3",
+        "url": "https://freesound.org/people/chungus43A/sounds/819893/",
+        "dur": 6,
+        "downloads": 188,
+        "note": "\"police siren\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Police Siren\", no clipping, 45 dB over its floor, its brightness right (1.3 kHz), even, 4487 downloads"
+  },
+  "reverse-beep": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "878172",
+        "user": "Mihacappy",
+        "title": "backup_beeper.wav",
+        "preview": "https://cdn.freesound.org/previews/878/878172_10594370-hq.mp3",
+        "url": "https://freesound.org/people/Mihacappy/sounds/878172/",
+        "dur": 1,
+        "downloads": 3,
+        "note": "\"reverse beeper\""
+      },
+      {
+        "id": "804483",
+        "user": "idomusics",
+        "title": "Cosntruction site truck reversing",
+        "preview": "https://cdn.freesound.org/previews/804/804483_3490256-hq.mp3",
+        "url": "https://freesound.org/people/idomusics/sounds/804483/",
+        "dur": 58.6,
+        "downloads": 300,
+        "note": "\"truck reversing beep\""
+      },
+      {
+        "id": "763015",
+        "user": "6James",
+        "title": "low beep",
+        "preview": "https://cdn.freesound.org/previews/763/763015_16161687-hq.mp3",
+        "url": "https://freesound.org/people/6James/sounds/763015/",
+        "dur": 1.3,
+        "downloads": 83,
+        "note": "\"truck reversing beep\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"backup_beeper.wav\", no clipping, silence between its sounds, its brightness right (1.6 kHz), even"
+  },
+  "plough": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "720963",
+        "user": "SoundsLikeYukon",
+        "title": "Volvo grader ploughing snow from street",
+        "preview": "https://cdn.freesound.org/previews/720/720963_1544275-hq.mp3",
+        "url": "https://freesound.org/people/SoundsLikeYukon/sounds/720963/",
+        "dur": 78.1,
+        "downloads": 77,
+        "note": "\"snow plow scraping\""
+      },
+      {
+        "id": "454189",
+        "user": "kyles",
+        "title": "snow plow passby scrape street Montreal, Canada.flac",
+        "preview": "https://cdn.freesound.org/previews/454/454189_612689-hq.mp3",
+        "url": "https://freesound.org/people/kyles/sounds/454189/",
+        "dur": 116.5,
+        "downloads": 59,
+        "note": "\"snow plow scraping\""
+      },
+      {
+        "id": "635742",
+        "user": "kyles",
+        "title": "snow plow truck pass shovel catch on ground metal scrape.flac",
+        "preview": "https://cdn.freesound.org/previews/635/635742_612689-hq.mp3",
+        "url": "https://freesound.org/people/kyles/sounds/635742/",
+        "dur": 50.9,
+        "downloads": 33,
+        "note": "\"snow plow scraping\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Volvo grader ploughing snow from street\", no clipping, 24 dB over its floor, its brightness right (2.5 kHz), unevenness 0.55"
+  },
+  "tracks": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "121531",
+        "user": "cognito perceptu",
+        "title": "tracked vehicle.wav",
+        "preview": "https://cdn.freesound.org/previews/121/121531_57789-hq.mp3",
+        "url": "https://freesound.org/people/cognito perceptu/sounds/121531/",
+        "dur": 9.4,
+        "downloads": 3048,
+        "note": "\"tank tracks\""
+      },
+      {
+        "id": "849062",
+        "user": "christerljung",
+        "title": "tracks moving",
+        "preview": "https://cdn.freesound.org/previews/849/849062_1770836-hq.mp3",
+        "url": "https://freesound.org/people/christerljung/sounds/849062/",
+        "dur": 3.6,
+        "downloads": 196,
+        "note": "\"tank tracks\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"tracked vehicle.wav\", no clipping, 5 dB over its floor, its brightness right (1.7 kHz), even, 3048 downloads"
+  },
+  "runners": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "450952",
+        "user": "kyles",
+        "title": "snowmobiles 2 approach from far pass by close dragging sleds nice",
+        "preview": "https://cdn.freesound.org/previews/450/450952_612689-hq.mp3",
+        "url": "https://freesound.org/people/kyles/sounds/450952/",
+        "dur": 40.5,
+        "downloads": 56,
+        "note": "\"sledding\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"snowmobiles 2 approach from far pass by \", no clipping, 30 dB over its floor, its brightness right (3.4 kHz), unevenness 0.41"
+  },
+  "squeal-loop": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "752837",
+        "user": "LukaCafuka",
+        "title": "Distant car tire screeching",
+        "preview": "https://cdn.freesound.org/previews/752/752837_16236894-hq.mp3",
+        "url": "https://freesound.org/people/LukaCafuka/sounds/752837/",
+        "dur": 11.6,
+        "downloads": 1111,
+        "note": "\"tire screech\""
+      },
+      {
+        "id": "71738",
+        "user": "audible-edge",
+        "title": "Chrysler LHS tire squeal 03 (04-25-2009).wav",
+        "preview": "https://cdn.freesound.org/previews/71/71738_995351-hq.mp3",
+        "url": "https://freesound.org/people/audible-edge/sounds/71738/",
+        "dur": 13.8,
+        "downloads": 10090,
+        "note": "\"tire screech cornering\""
+      },
+      {
+        "id": "71737",
+        "user": "audible-edge",
+        "title": "Chrysler LHS tire squeal 02 (04-25-2009).wav",
+        "preview": "https://cdn.freesound.org/previews/71/71737_995351-hq.mp3",
+        "url": "https://freesound.org/people/audible-edge/sounds/71737/",
+        "dur": 11.1,
+        "downloads": 9631,
+        "note": "\"tire screech cornering\""
+      },
+      {
+        "id": "71736",
+        "user": "audible-edge",
+        "title": "Chrysler LHS tire squeal 01 (04-25-2009).wav",
+        "preview": "https://cdn.freesound.org/previews/71/71736_995351-hq.mp3",
+        "url": "https://freesound.org/people/audible-edge/sounds/71736/",
+        "dur": 10,
+        "downloads": 5274,
+        "note": "\"tire screech cornering\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Distant car tire screeching\", no clipping, 16 dB over its floor, its brightness right (1.5 kHz), even, 1111 downloads"
+  },
+  "scrub": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "850041",
+        "user": "JeffPearson",
+        "title": "tire-squeal",
+        "preview": "https://cdn.freesound.org/previews/850/850041_17113968-hq.mp3",
+        "url": "https://freesound.org/people/JeffPearson/sounds/850041/",
+        "dur": 34.5,
+        "downloads": 39,
+        "note": "\"low tire squeal\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"tire-squeal\", no clipping, 5 dB over its floor, its brightness right (1 kHz), even"
+  },
+  "chirp": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "104026",
+        "user": "RutgerMuller",
+        "title": "Tires Squeaking.aif",
+        "preview": "https://cdn.freesound.org/previews/104/104026_179538-hq.mp3",
+        "url": "https://freesound.org/people/RutgerMuller/sounds/104026/",
+        "dur": 2,
+        "downloads": 93505,
+        "note": "\"tire squeak\""
+      },
+      {
+        "id": "536769",
+        "user": "egomassive",
+        "title": "Tire.ogg",
+        "preview": "https://cdn.freesound.org/previews/536/536769_1415754-hq.mp3",
+        "url": "https://freesound.org/people/egomassive/sounds/536769/",
+        "dur": 1.9,
+        "downloads": 8212,
+        "note": "\"tire squeak\""
+      },
+      {
+        "id": "774265",
+        "user": "loganzsound",
+        "title": "tire_skid_02",
+        "preview": "https://cdn.freesound.org/previews/774/774265_16682330-hq.mp3",
+        "url": "https://freesound.org/people/loganzsound/sounds/774265/",
+        "dur": 1.5,
+        "downloads": 492,
+        "note": "\"tire squeak\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Tires Squeaking.aif\", no clipping, 50 dB over its floor, its brightness right (2.3 kHz), 93505 downloads"
+  },
+  "snow-squeak": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "390246",
+        "user": "pflanigan",
+        "title": "011017 snowball.mp3",
+        "preview": "https://cdn.freesound.org/previews/390/390246_6132202-hq.mp3",
+        "url": "https://freesound.org/people/pflanigan/sounds/390246/",
+        "dur": 18.2,
+        "downloads": 203,
+        "note": "\"snow squeak\""
+      },
+      {
+        "id": "215690",
+        "user": "musicbrain",
+        "title": "Walking in snow #1",
+        "preview": "https://cdn.freesound.org/previews/215/215690_3597414-hq.mp3",
+        "url": "https://freesound.org/people/musicbrain/sounds/215690/",
+        "dur": 50.3,
+        "downloads": 3087,
+        "note": "\"snow squeak\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"011017 snowball.mp3\", no clipping, 33 dB over its floor, its brightness right (1.8 kHz), unevenness 0.91"
+  }
+}

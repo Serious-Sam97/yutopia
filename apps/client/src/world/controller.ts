@@ -1375,7 +1375,8 @@ export class WorldController {
       };
       this.jumps.jumpEffects(localSid, st, 1);
       this.life?.print(localSid, st, now, this.map, this.grid.onLand(st.x, st.y));
-      const inCar = !!this.cars?.inCar();
+      // (plan 93 C: still climbing out — the car draws me, by its door — till I'm out)
+      const inCar = !!this.cars?.inCar() || !!this.cars?.seatedIds().has(localSid);
       if (this.steps.wasInCar && !inCar) this.steps.alighted.push(localSid);
       this.steps.wasInCar = inCar;
       if (inCar) {
@@ -1393,6 +1394,8 @@ export class WorldController {
 
     // (the NPCs and pets: the room's clock; each person, their own — ctl/smooth.ts)
     const renderAt = this.roomSmooth.at(now);
+    // (plan 93 S5: my car's cabin round me, for the voices)
+    const myCab = this.cars?.cabinOf(room.sessionId) ?? null;
     for (const [sid, r] of this.remotes) {
       const p = room.state.players.get(sid);
       if (!p) continue;
@@ -1459,10 +1462,17 @@ export class WorldController {
         const src = { x: pos.x, y: pos.y, dnd: p.status === "dnd", level: p.level ?? 0, stairs: true };
         // focusing: the room's chatter turned down (whoever's right beside me still heard)
         const duck = lp?.focus && Math.hypot(pos.x - this.me.x, pos.y - this.me.y) > 2 ? 0.25 : 1;
+        // (plan 93 S5) a car's a room for voices: the people in one hear each other clearly at any speed; between
+        // in and out the glass muffles it (less with a window down — theirs or mine)
+        const cabA = myCab;
+        const cabB = this.cars?.seatedIds().has(sid) ? (this.cars.cabinOf(sid) ?? null) : null;
+        const same = !!cabA && cabA.vid === cabB?.vid;
+        const muffle = same ? 0 : 1 - (1 - (cabA?.seal ?? 0)) * (1 - (cabB?.seal ?? 0));
         this.media.setVoice(
           String(p.uid),
-          Math.max(0.05, hearingGain(this.building, ear, src, true) * duck),
+          same ? 1 : Math.max(0.05, hearingGain(this.building, ear, src, true) * duck * (1 - 0.6 * muffle)),
           tp ? tp.pan(ear, src) : panOf(ear, src),
+          muffle,
         );
       } else this.media.setVoice(String(p.uid), 0, 0);
     }

@@ -20,6 +20,7 @@ interface VoiceChain {
   track: RemoteAudioTrack;
   gain: GainNode; // distance
   pan: StereoPannerNode; // left/right
+  muff: BiquadFilterNode; // a car's glass between (plan 93 S5)
   vol: GainNode; // mixer: master × voices
   el: HTMLMediaElement;
 }
@@ -314,11 +315,15 @@ export class Media {
       const gain = ctx.createGain();
       const pan = ctx.createStereoPanner();
       const vol = ctx.createGain();
+      const muff = ctx.createBiquadFilter();
+      muff.type = "lowpass";
+      muff.frequency.value = 20000;
+      muff.Q.value = 0.5;
       gain.gain.value = 0;
       vol.gain.value = mixer.voiceLevel();
       const audio = track as RemoteAudioTrack;
       // LiveKit wires source → plugins → destination (and rewires on reconnect)
-      audio.setWebAudioPlugins([gain, pan, vol]);
+      audio.setWebAudioPlugins([gain, muff, pan, vol]);
       const el = audio.attach();
       el.muted = false;
       if (prefs().speakerId && "setSinkId" in AudioContext.prototype) {
@@ -334,7 +339,7 @@ export class Media {
             ? `${uid}:phone`
             : uid;
       this.voices.get(key)?.el.remove();
-      this.voices.set(key, { track: audio, gain, pan, vol, el });
+      this.voices.set(key, { track: audio, gain, pan, muff, vol, el });
     } else if (track.kind === Track.Kind.Video) {
       const el = track.attach() as HTMLVideoElement;
       el.muted = true;
@@ -414,16 +419,26 @@ export class Media {
     return mixer.ctx;
   }
 
-  // Called every frame-ish from the world: volume and stereo position per voice.
-  setVoice(uid: string, gain: number, pan: number) {
+  // Called every frame-ish from the world: volume and stereo position per voice; `muffle` 0 open air … 1 a
+  // shut car's glass between us (plan 93 S5: the highs gone, the voice through the body).
+  setVoice(uid: string, gain: number, pan: number, muffle = 0) {
     const ctx = mixer.ctx;
     if (!ctx) return;
+    // (a value gone NaN somewhere upstream must not throw here: an AudioParam takes finite numbers only)
+    if (!Number.isFinite(gain)) gain = 0;
+    if (!Number.isFinite(pan)) pan = 0;
+    if (!Number.isFinite(muffle)) muffle = 0;
     const spatial = prefs().spatial;
     for (const key of [uid, `${uid}:screen`, `${uid}:phone`]) {
       const v = this.voices.get(key);
       if (!v) continue;
       v.gain.gain.setTargetAtTime(gain, ctx.currentTime, 0.08);
       v.pan.pan.setTargetAtTime(spatial ? pan * 0.85 : 0, ctx.currentTime, 0.08);
+      v.muff.frequency.setTargetAtTime(
+        20000 * (700 / 20000) ** Math.min(1, Math.max(0, muffle)),
+        ctx.currentTime,
+        0.12,
+      );
     }
   }
 

@@ -48,7 +48,9 @@ import { gzipSync } from "node:zlib";
 // (raised to 481 on 2026-11-14, the same call: measured 480.7 at plan 86's end — plan 86 put nothing on the page
 // (its pack, slips and rules are in the lazy yutopia-dark and the shared rules off the page); the 11.7 KB came with
 // plans 73–85 since the last measure on 11-06, not traced yet)
-const BUDGETS = { "/page": 481, "/login/page": 160 }; // KB gzip
+// (raised to 488 on 2026-11-16, the same call: HEAD (5658892e) was already 487.1 — plans 87–91 since the last
+// measure, not traced; plan 92 (the cars) adds 0.2: the asset table's life/cars entries → 487.3)
+const BUDGETS = { "/page": 488, "/login/page": 160 }; // KB gzip
 // (/page raised from 451 on 2026-11-04 under the same call: plan 72's phase 4 — the controller split
 // into 17 feature modules (world/ctl), the same code: what the minifier can't shorten — `this.c.x`,
 // `this.<feature>.x`, the forwarders for what's read from outside — 449.7 → 451.2; the lazy chunks
@@ -99,7 +101,7 @@ const LAZY = {
   "yutopia-swim": 15, // (added 2026-11-02) plan 66 phase 4's: the swim body — treading, the strokes, under, the dives, wading (loaded with the hero's)
   "yutopia-sway": 10, // plan 61's: what's worn swinging on Jolt — the bags, the hair, the scarf, the tie, the badge, earrings (loaded with the 3D view's physics)
   "yutopia-jumps": 10, // a jump's dust and sounds (shared/jump.ts)
-  "yutopia-steps": 10, // the steps' player (docs/plan/63-the-steps.md): the recordings by surface, shoe and gait
+  "yutopia-steps": 15, // the steps' player (docs/plan/63-the-steps.md): the recordings by surface, shoe and gait; raised 10 → 15 on 2026-11-16 (HEAD 14.7, plan 92 14.8: not the cars')
   "yutopia-dark": 80, // the dark: vitals, pockets, loot on the client (docs/plan/30-the-dark.md)
   // the land round the building, generated (shared/grounds.ts, docs/plan/27): the bundler copies it into every
   // chunk that uses it — its own, the 3D view's, the dev mock pages' (~6 KB each), and the marker counts those

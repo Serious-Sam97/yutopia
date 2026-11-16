@@ -1,10 +1,12 @@
 import type { AvatarLayers } from "@yutopia/shared";
+import { type CarKind, lookFor, variantsOf } from "@yutopia/shared/car";
 import { groundAt } from "@yutopia/shared/grounds";
 import type * as THREE_NS from "three";
 import type { PetIn } from "../pet-stage";
+import { buildCar, loadCarManifest } from "./glb";
+import type { Lights, Sedan } from "./model";
+import { windscreenSnow } from "./screen-tex";
 import { carFit } from "./seatfit";
-import { buildSedan, type Lights, type Sedan, type SedanOpts } from "./sedan";
-import { windscreenSnow } from "./textures";
 import type { Cluster } from "./vfd";
 
 // The sedan on the Grounds for a still (docs/plan/28-the-car.md, phase 0):
@@ -22,7 +24,9 @@ export interface CarIn {
   a: number;
   y?: number;
   colour: number;
-  kind?: SedanOpts["kind"];
+  kind?: string;
+  /** which of its kind's models (docs/plan/92: "hatch-hot"); its kind's first if none */
+  variant?: string;
   plate?: string;
   snowy?: number;
   sink?: number; // sunk into deep snow
@@ -69,9 +73,11 @@ interface Ctx {
   bodyMat: THREE_NS.Material;
   flatMat: THREE_NS.Material;
   env: THREE_NS.Texture | null;
+  renderer: THREE_NS.WebGLRenderer;
 }
 
-export function stageCars(T3: THREE, scene: THREE_NS.Scene, cars: CarIn[], ctx: Ctx) {
+export async function stageCars(T3: THREE, scene: THREE_NS.Scene, cars: CarIn[], ctx: Ctx) {
+  await loadCarManifest();
   const built: {
     c: CarIn;
     s: Sedan;
@@ -82,13 +88,18 @@ export function stageCars(T3: THREE, scene: THREE_NS.Scene, cars: CarIn[], ctx: 
   const petSeats: { p: PetIn; parent: THREE_NS.Object3D; hip: THREE_NS.Vector3 }[] = [];
   const disposables: { dispose(): void }[] = [];
   for (const c of cars) {
-    const s = buildSedan({ colour: c.colour, snowy: c.snowy ?? 0, kind: c.kind, plate: c.plate });
+    const kind = (c.kind ?? "sedan") as CarKind;
+    const variant = c.variant ?? variantsOf(kind)[0];
+    const look = { ...lookFor(`still-${variant}`, kind), variant, colour: c.colour, extras: [] };
+    const s = buildCar({ variant, look, plate: c.plate, renderer: ctx.renderer, level: "near" });
+    await s.loaded;
+    s.setSnow(c.snowy ?? 0);
     const [x, y, z] = carToWorld(c, 0, 0, 0);
     s.root.position.set(x, y, z);
     s.root.rotation.y = Math.PI - c.a;
     s.body.rotation.x = -(c.roll ?? 0); // (the model's x runs nose → tail: about it, it rolls)
     s.body.rotation.z = c.pitch ?? 0;
-    s.setSteer(c.steer ?? 0);
+    s.setSteer(-(c.steer ?? 0)); // (setSteer: + to the right)
     for (const w of s.wheels) w.spin.rotation.z = c.spin ?? 0;
     for (const [i, a] of (c.doors ?? []).entries()) s.doors[i]?.open(a);
     s.setEnv(ctx.env);
@@ -129,7 +140,16 @@ export function stageCars(T3: THREE, scene: THREE_NS.Scene, cars: CarIn[], ctx: 
         s.screen.hw0,
         s.screen.len,
         c.screenSnow,
-        s.wipers.map((w) => ({ z: w.pivot, arm: w.len, blade: w.blade, a0: w.sweep, a1: w.park })),
+        s.wipers.map((w) => {
+          const f = w.fan ?? { park: w.park, sweep: w.sweep };
+          return {
+            z: w.pivot,
+            arm: w.len,
+            blade: w.blade,
+            a0: Math.min(f.park, f.sweep),
+            a1: Math.max(f.park, f.sweep),
+          };
+        }),
       );
       disposables.push(t);
       s.setScreenSnow(t);

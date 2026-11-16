@@ -13,6 +13,12 @@ class Mixer {
   clear!: GainNode;
   private lp!: BiquadFilterNode;
   private dim!: GainNode;
+  /** (plan 93 S5) dazed: the world's sound dulled a few seconds */
+  private stunG!: GainNode;
+  private stunLp!: BiquadFilterNode;
+  /** (plan 93 S5) the world's own sounds heard from inside a car, through its glass */
+  private glass!: BiquadFilterNode;
+  private glassDim!: GainNode;
 
   ensure(): AudioContext {
     if (this.ctx) return this.ctx;
@@ -31,8 +37,17 @@ class Mixer {
     this.lp.type = "lowpass";
     this.lp.frequency.value = 22000;
     this.dim = ctx.createGain();
-    this.lp.connect(this.dim).connect(this.master);
-    for (const b of Object.values(this.buses)) b.connect(this.lp);
+    this.stunG = ctx.createGain();
+    this.stunLp = ctx.createBiquadFilter();
+    this.stunLp.type = "lowpass";
+    this.stunLp.frequency.value = 22000;
+    this.lp.connect(this.dim).connect(this.stunLp).connect(this.stunG).connect(this.master);
+    this.glass = ctx.createBiquadFilter();
+    this.glass.type = "lowpass";
+    this.glass.frequency.value = 22000;
+    this.glassDim = ctx.createGain();
+    this.glass.connect(this.glassDim).connect(this.lp);
+    for (const [k, b] of Object.entries(this.buses)) b.connect(k === "ambience" ? this.glass : this.lp);
     this.clear = ctx.createGain();
     this.clear.connect(this.master);
     this.apply();
@@ -73,6 +88,31 @@ class Mixer {
     const t = this.ctx.currentTime;
     this.lp.frequency.setTargetAtTime(22000 * (1 - k) + 420 * k, t, 0.05);
     this.dim.gain.setTargetAtTime(1 - 0.45 * k, t, 0.05);
+  }
+
+  /** (plan 93 S5) In a car (0 open air … 1 every window up): the world's ambience — the wind in the trees, the
+   *  rain, the birds — through its glass, muffled and quieter. */
+  private glassK = 0;
+  cabin(k: number) {
+    if (!this.ctx || !Number.isFinite(k) || Math.abs(k - this.glassK) < 0.01) return;
+    this.glassK = k;
+    const t = this.ctx.currentTime;
+    this.glass.frequency.setTargetAtTime(22000 * (900 / 22000) ** k, t, 0.15);
+    this.glassDim.gain.setTargetAtTime(1 - 0.5 * k, t, 0.15);
+  }
+
+  /** (plan 93 S5) Dazed by a blow (0..1, for `sec`): everything but `clear` dulled and quieter, then back. */
+  stun(k: number, sec: number) {
+    if (!this.ctx || !Number.isFinite(k) || !Number.isFinite(sec) || sec <= 0) return;
+    const t = this.ctx.currentTime;
+    for (const [p, lo, hi] of [
+      [this.stunG.gain, 1 - 0.7 * k, 1],
+      [this.stunLp.frequency, 22000 * (500 / 22000) ** k, 22000],
+    ] as const) {
+      p.cancelScheduledValues(t);
+      p.setTargetAtTime(lo, t, 0.02);
+      p.setTargetAtTime(hi, t + sec * 0.35, sec * 0.25);
+    }
   }
 
   async resume() {

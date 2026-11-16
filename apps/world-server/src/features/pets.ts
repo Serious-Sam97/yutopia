@@ -246,6 +246,8 @@ const BARK_AGAIN_MS = 6000;
 const CAR_NEAR = 10;
 const CAR_FAST = 3;
 const CHASE_AGAIN_MS = 20_000;
+const HONK_NEAR = 14; // (plan 93 S3) a horn this near: a bark back, not again for this long
+const HONK_BARK_MS = 4000;
 const DOG_NEAR = 3;
 const PLAY_AGAIN_MS = 30_000;
 // the moves' length (ms): move:<kind> acts (art/pets3d.ts poses them)
@@ -2843,6 +2845,18 @@ registerFeature((room: WorldRoom) => {
     if (pet.act || r.path.length) return false;
     const out = outside(pet);
     const dark = nightness(room.state.hour) >= 0.5;
+    // (plan 93 S3) a horn near it — not its own car's: a bark back (a cat's hiss), turned to it
+    if (out && now - (r.barkAt ?? 0) > HONK_BARK_MS) {
+      for (const v of room.state.vehicles.values()) {
+        if (now - v.honkAt > 1500 || v.id === carOf(p)) continue;
+        const c = carSpot(v, 0, 0);
+        if (Math.hypot(c.x - pet.x, c.y - pet.y) > HONK_NEAR) continue;
+        r.barkAt = now;
+        say(pet, "angry");
+        face(pet, c);
+        return true;
+      }
+    }
     // a stranger near them after dark, outside: a bark, between them
     if (out && dark && now - (r.barkAt ?? 0) > BARK_AGAIN_MS) {
       const q = [...owners().values()].find(

@@ -1,26 +1,9 @@
 import { elevOf } from "@yutopia/shared";
 import { landReady } from "@yutopia/shared/grounds";
-import {
-  Box3,
-  BoxGeometry,
-  CanvasTexture,
-  Group,
-  Mesh,
-  MeshBasicMaterial,
-  type MeshLambertMaterial,
-  type PlaneGeometry,
-  Sprite,
-  SpriteMaterial,
-  Vector3,
-} from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { paintMaterial } from "../../look/lit";
-import { isLifeOut } from "../../look/look-mode";
-import { carGeometry } from "../campus";
-import { landLight, patchGrounds } from "../light3d";
+import { CanvasTexture, type Group, Sprite, SpriteMaterial, Vector3 } from "three";
+import type { Sedan } from "../car/model";
+import { landLight } from "../light3d";
 import { Person3D } from "../person3d";
-import { tailPatch } from "../tail-glow";
-import { busModel, ploughModel } from "../vehicles3d";
 import type { Body3, ThirdPersonView } from "../view";
 import { hashId } from "./common";
 
@@ -39,16 +22,19 @@ export type VehiclesHost = Pick<
   | "nightLevel"
   | "scene"
   | "time"
+  | "renderer"
 >;
 
 export class Vehicles {
   constructor(private readonly c: VehiclesHost) {}
 
-  // ── what drives on the Grounds (docs/plan/27, phase 6): the visitor's car,
-  // the shuttle; lit as the land is (dark at night), headlamps glowing ──
+  // ── what drives on the Grounds (docs/plan/27, phase 6): the visitor's car, the shuttle, the plough;
+  // since docs/plan/92 their Blender models (car/glb.ts), fetched the first time one's out — lit as the
+  // land is, their lamps on after dark ──
   veh3 = new Map<string, Group>();
-
-  vehMat: MeshLambertMaterial | null = null;
+  private models = new Map<string, Sedan>();
+  private glb: typeof import("../car/glb") | null = null;
+  private glbAsked = false;
 
   setVehicles(
     list: { id: string; kind: string; x: number; z: number; a: number; v?: number; shown: boolean; h?: number }[],
@@ -56,32 +42,39 @@ export class Vehicles {
     const g = this.c.around.grounds;
     const up = elevOf(0) - elevOf(this.c.level);
     const seen = new Set<string>();
+    if (list.length && !this.glbAsked) {
+      this.glbAsked = true;
+      void import("../car/glb").then(async (m) => {
+        await m.loadCarManifest();
+        this.glb = m;
+      });
+    }
+    const n = Math.max(this.c.nightLevel, 0.6 * this.c.lampFog);
     for (const v of list) {
-      if (!g || !v.shown) continue;
+      if (!g || !v.shown || !this.glb) continue;
       seen.add(v.id);
       let m = this.veh3.get(v.id);
-      if (!m) {
-        m = v.kind === "shuttle" ? this.busModel() : v.kind === "plough" ? this.ploughModel() : this.carModel(v.id);
-        // (its headlamps, for car/cars.ts's real light: either side of its nose, −x)
-        const box = new Box3().setFromObject(m);
-        const w = (box.max.z - box.min.z) * 0.36;
-        const y = m.userData.big ? 1.1 : 0.55;
-        m.userData.heads = [new Vector3(box.min.x, y, -w), new Vector3(box.min.x, y, w)];
-        // (and its tail lamps' red on the snow behind)
-        const tail = tailPatch(box.max.x);
-        m.add(tail);
-        m.userData.tailGlow = tail;
+      let car = this.models.get(v.id);
+      if (!m || !car) {
+        car = this.model(v.kind, v.id);
+        m = car.root;
+        // (its headlamps, for car/cars.ts's real light: the model's own; how big it is, for the camera)
+        m.userData.heads = car.lamps.head;
+        m.userData.big = v.kind !== "visitor";
         this.veh3.set(v.id, m);
+        this.models.set(v.id, car);
         this.c.scene.add(m);
       }
       const px = v.x;
       const pz = v.z;
-      // its wheels turn by how far it went (the shuttle's)
-      const wheels = m.userData.wheels as Group[] | undefined;
-      if (wheels && m.userData.at) {
+      // its wheels turn by how far it went
+      if (m.userData.at) {
         const [ax, az] = m.userData.at as [number, number];
         const d = Math.hypot(px - ax, pz - az);
-        if (d < 5) for (const w of wheels) w.rotation.z -= d / 0.5;
+        if (d < 5) {
+          m.userData.turn = ((m.userData.turn as number) ?? 0) + d / 0.45;
+          for (const w of car.wheels) w.spin.rotation.z = (m.userData.turn as number) * (w.turnK ?? 1);
+        }
       }
       m.userData.at = [px, pz];
       // (on the move: its headlamps a real light — car/cars.ts; parked, just their glow)
@@ -89,27 +82,50 @@ export class Vehicles {
       // (its land not made here yet — past the near land, out of sight —: where it was, not the land made now, on the
       // main thread, 6–50 ms a chunk as the long road's bus drove on: docs/plan/90-the-friends-machines.md phase 6)
       const known = v.h !== undefined || landReady(v.x, v.z) || !m.userData.placed;
-      if (known) m.position.set(px, (v.h ?? g.heightAt(v.x, v.z)) + up + 0.03, pz);
+      if (known) m.position.set(px, (v.h ?? g.heightAt(v.x, v.z)) + up + 0.02, pz);
       else m.position.set(px, m.position.y, pz);
       m.userData.placed = true;
       // (the models' noses point −x: turned to the heading)
       m.rotation.y = Math.PI - v.a;
-      // (their lamps on in the morning fog as after dark)
-      const n = Math.max(this.c.nightLevel, 0.6 * this.c.lampFog);
-      for (const l of m.userData.glow as MeshBasicMaterial[]) l.opacity = Math.min(1, 0.25 + n * 1.2);
-      for (const l of m.userData.tail as MeshBasicMaterial[]) l.opacity = Math.min(1, 0.35 + n * 1.1);
-      const tg = m.userData.tailGlow as Mesh<PlaneGeometry, MeshBasicMaterial>;
-      tg.material.opacity = 0.35 * n;
-      tg.visible = n > 0.2;
-      // (the plough's beacon: turning — a flash twice a second)
-      const b = m.userData.beacon as MeshBasicMaterial | undefined;
-      if (b) b.opacity = 0.35 + 0.65 * Math.max(0, Math.sin(performance.now() / 160)) ** 4;
+      // (their lamps on in the morning fog as after dark; the plough's beacon turning)
+      car.setLights({
+        beams: n > 0.25 ? "low" : "off",
+        tail: n > 0.15,
+        brake: Math.abs(v.v ?? 0) < 0.3 && m.userData.moving === false && n > 0.15 ? 0.4 : 0,
+        reverse: (v.v ?? 0) < -0.2,
+        ind: 0,
+        dash: n > 0.15 ? 1 : 0.5,
+        dome: false,
+      });
+      if (v.kind === "plough") car.setBeacon(true, this.c.time);
     }
     for (const [id, m] of this.veh3)
       if (!seen.has(id)) {
         this.c.scene.remove(m);
+        this.models.get(id)?.dispose();
+        this.models.delete(id);
         this.veh3.delete(id);
       }
+  }
+
+  /** A vehicle of the Grounds' own, from its Blender model: the shuttle bus, the plough truck, the
+   *  visitor's car (a saloon GL in one of the town's colours, by its id). */
+  private model(kind: string, id: string): Sedan {
+    const G = this.glb as typeof import("../car/glb");
+    let h = 0;
+    for (const c of id) h = (h * 31 + c.charCodeAt(0)) | 0;
+    const colours = [0x4a5a73, 0x6b2430, 0x2f4a3b, 0xcbbd98, 0x1f2124, 0x6a4a35];
+    const variant = kind === "shuttle" ? "shuttle-bus" : kind === "plough" ? "ploughtruck" : "saloon-gl";
+    const colour = kind === "shuttle" ? 0xe8e6df : kind === "plough" ? 0xd9a21b : colours[Math.abs(h) % colours.length];
+    const car = G.buildCar({
+      variant,
+      look: { variant, colour, colour2: kind === "shuttle" ? 0x8e1c1c : undefined, extras: [], wheels: "steel" },
+      level: "near",
+      renderer: this.c.renderer,
+    });
+    car.setSnow(kind === "visitor" ? 0.6 : 0.2);
+    car.setWear(0.3, [0, 0, 0, 0]);
+    return car;
   }
 
   /** The Grounds' own vehicles' headlamps (their lamps are on after dark), in the scene:
@@ -118,80 +134,15 @@ export class Vehicles {
     const out: { a: Vector3; b: Vector3; fwd: Vector3 }[] = [];
     for (const m of this.veh3.values()) {
       const h = m.userData.heads as Vector3[] | undefined;
-      if (!h || !m.visible || !m.userData.moving) continue;
+      if (!h?.length || !m.visible || !m.userData.moving) continue;
       m.updateMatrixWorld();
       out.push({
         a: h[0].clone().applyMatrix4(m.matrixWorld),
-        b: h[1].clone().applyMatrix4(m.matrixWorld),
+        b: (h[1] ?? h[0]).clone().applyMatrix4(m.matrixWorld),
         fwd: new Vector3(-1, 0, 0).transformDirection(m.matrixWorld),
       });
     }
     return out;
-  }
-
-  vehicleMat(): MeshLambertMaterial {
-    if (!this.vehMat) {
-      // (the life look: paint, clearcoated — plan 73 phase 8.3; smooth, not the Grounds' faces)
-      this.vehMat = paintMaterial({ vertexColors: true });
-      patchGrounds(this.vehMat);
-      if (isLifeOut()) this.vehMat.flatShading = false;
-    }
-    return this.vehMat;
-  }
-
-  lampsOf(xs: number, w: number, y: number): Mesh {
-    const lamps = new MeshBasicMaterial({ color: 0xfff1cc, transparent: true, toneMapped: false });
-    const geo = mergeGeometries(
-      [-1, 1].map((s) => new BoxGeometry(0.06, 0.18, 0.3).translate(xs, y, (s * w) / 2)),
-      false,
-    );
-    return new Mesh(geo, lamps);
-  }
-
-  /** The visitor's car: one of the town's colours and shapes (by its id), snow on it from the
-   *  drive in, headlamps and tail lamps. */
-  carModel(id: string): Group {
-    const root = new Group();
-    let h = 0;
-    for (const c of id) h = (h * 31 + c.charCodeAt(0)) | 0;
-    const colours = [0x4a5a73, 0x6b2430, 0x2f4a3b, 0xcbbd98, 0x1f2124, 0x6a4a35];
-    const { solid, glass } = carGeometry((h & 4) !== 0, colours[Math.abs(h) % colours.length], true);
-    root.add(new Mesh(solid, this.vehicleMat()), new Mesh(glass, this.vehicleMat()));
-    const l = this.lampsOf(-2.52, 1.2, 0.55);
-    root.add(l);
-    const tail = new MeshBasicMaterial({ color: 0xff3a24, transparent: true, toneMapped: false });
-    root.add(
-      new Mesh(
-        mergeGeometries(
-          [-1, 1].map((s) => new BoxGeometry(0.05, 0.14, 0.5).translate(2.53, 0.68, s * 0.62)),
-          false,
-        ),
-        tail,
-      ),
-    );
-    root.userData.glow = [l.material];
-    root.userData.tail = [tail];
-    for (const c of root.children) c.castShadow = true;
-    return root;
-  }
-
-  ploughModel(): Group {
-    const b = ploughModel(this.vehicleMat());
-    b.root.userData.big = true;
-    b.root.userData.glow = [b.lamps];
-    b.root.userData.tail = [b.tail];
-    b.root.userData.beacon = b.beacon;
-    b.root.userData.wheels = b.wheels;
-    return b.root;
-  }
-
-  busModel(): Group {
-    const b = busModel(this.vehicleMat());
-    b.root.userData.big = true;
-    b.root.userData.glow = [b.lamps, b.sign];
-    b.root.userData.tail = [b.tail];
-    b.root.userData.wheels = b.wheels;
-    return b.root;
   }
 
   // a soft round puff (a sprite with no picture is a square)

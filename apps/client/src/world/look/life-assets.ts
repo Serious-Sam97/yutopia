@@ -128,6 +128,18 @@ export class AssetQueue<T> {
     }
   }
 
+  /** Everything let go, held or not (its renderer's gone: docs/plan/92's buy panel's stand); what's
+   *  still loading freed as it comes. The queue isn't used again. */
+  drain() {
+    this.dead = true;
+    for (const e of this.items.values()) {
+      if (e.state === "ready") this.o.free(e.value as T);
+      for (const w of e.waiters) w.fail(new Error("drained"));
+    }
+    this.items.clear();
+  }
+  private dead = false;
+
   /** What's cached, in bytes (held or not), and what's held. */
   stats() {
     let bytes = 0;
@@ -161,6 +173,7 @@ export class AssetQueue<T> {
     this.o.load(e.url).then(
       (v) => {
         this.running--;
+        if (this.dead) return this.o.free(v);
         e.state = "ready";
         e.value = v;
         for (const w of e.waiters) w.ok(v);
@@ -172,6 +185,7 @@ export class AssetQueue<T> {
       },
       (err) => {
         this.running--;
+        if (this.dead) return;
         e.state = "failed";
         e.error = err;
         for (const w of e.waiters) w.fail(err);

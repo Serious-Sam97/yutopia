@@ -18,8 +18,9 @@ import {
 import { inLandBounds } from "../land.ts";
 import { lotBanksOf, lotLayout } from "../lot.ts";
 import type { Ground } from "./grip.ts";
-import type { CarWorld, Solid } from "./sim.ts";
+import type { Ruts } from "./ruts.ts";
 import type { CarSpec } from "./specs.ts";
+import type { CarWorld, Solid } from "./state.ts";
 
 // Where the cars drive (docs/plan/28-the-car.md, M7–M8): the Grounds as the
 // sim sees them — their heights, what each spot is (with the roads' slush and
@@ -179,6 +180,8 @@ export interface GroundsWorldOpts {
   coverAt?: (x: number, z: number) => number;
   /** what moves or is placed: the lot's parked cars, the other cars, people */
   extra?: (x: number, z: number, r: number, out: Solid[]) => void;
+  /** (plan 93 S6) the ruts the cars have pressed in the deep snow */
+  ruts?: Ruts;
 }
 
 /** The Grounds for the car's sim (building coords). */
@@ -186,6 +189,7 @@ export function groundsWorld(o: GroundsWorldOpts = {}): CarWorld {
   const w: CarWorld = {
     height: (x, z) => (inLandBounds(x, z) ? heightAt(x, z) : 0),
     ground: (x, z) => groundAt(x, z, o.cold?.() ?? 0.5),
+    rut: o.ruts ? (x, z, out) => (o.ruts as Ruts).at(x, z, out) : undefined,
     // (the water over the ground: its bed's, open — its ice is driven on: plan 66)
     water: (x, z) => {
       const w = waterAt(x, z);

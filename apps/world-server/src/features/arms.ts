@@ -60,6 +60,7 @@ import { registerFeature } from "./index.ts";
 // what the hand's doing, for everyone's screens.
 
 const HEARD = 60; // tiles: who's told of a shot (its tracer, its flash) or a throw
+const CAR_DRIVER_SHOT_V = 8.4; // m/s (~30 km/h): faster, the driver's hands are the wheel's (plan 93 S2)
 const CROUCHED = 1.25; // tiles: one of us crouched, as a target
 const KEPT_MS = 1200; // where the others were: this long back
 
@@ -203,6 +204,9 @@ registerFeature((room: WorldRoom) => {
     const p = room.state.players.get(client.sessionId);
     const h = p && inHand(client.sessionId, p);
     if (!p || !h || h.w.loaded >= WEAPONS[h.w.id].mag || count(h.inv, WEAPONS[h.w.id].ammo) < 1) return;
+    // (plan 93 S2: in a car, the revolver's speedloader anywhere; a long gun's not in the front seats)
+    const seat = room.carShot?.seatOf(client.sessionId);
+    if (seat && seat.seat < 2 && h.w.id !== "revolver") return;
     const hd = hand(client.sessionId);
     if (hd.reloadAt) return;
     // (opened first — the revolver's cylinder swung out, the double-barrel broken: plan 79 F11a, F12a)
@@ -230,9 +234,19 @@ registerFeature((room: WorldRoom) => {
   room.on("arms:fire", (client, m) => {
     const p = room.state.players.get(client.sessionId);
     const now = Date.now();
-    if (!p || !free(p) || (p.mv & MV_AIM) === 0) return;
+    // (plan 93 S2: sat in a car, out of its window — no aim flag from a seat; on foot as ever)
+    const seat = p && p.hp > 0 && !p.downAt ? (room.carShot?.seatOf(client.sessionId) ?? null) : null;
+    if (!p || (!seat && (!free(p) || (p.mv & MV_AIM) === 0))) return;
     const h = inHand(client.sessionId, p);
     if (!h) return;
+    if (seat) {
+      // (the driver: the revolver alone, one-handed, slower than 30 km/h — F7)
+      if (seat.seat === 0 && (h.w.id !== "revolver" || seat.speed > CAR_DRIVER_SHOT_V)) return;
+      // (out of their own side's window: its way within ~80° of straight out of it)
+      const yaw0 = Number(m?.yaw);
+      const out = seat.side * (-Math.sin(seat.a) * Math.cos(yaw0) + Math.cos(seat.a) * Math.sin(yaw0));
+      if (!Number.isFinite(out) || out < 0.17) return;
+    }
     const gun = ARMS[h.w.id];
     const hd = hand(client.sessionId);
     if (now < hd.drawnAt - 30) return;
@@ -270,6 +284,7 @@ registerFeature((room: WorldRoom) => {
     const feet = Math.min(pz, floor);
     if (Math.hypot(ox - p.x, oy - p.y) > MUZZLE_REACH || oz < feet || oz > Math.max(pz, floor) + 2.4) return;
     hd.shotAt = isAuto(h.w.id) ? Math.max(now - rateMs, hd.shotAt + rateMs) : now;
+    room.fightAt.set(client.sessionId, now); // (plan 93 S3: in a fight)
     hd.reloadAt = 0;
     h.w.loaded--;
     // (the bolt worked after it — everyone sees it: Player.arm)
@@ -331,15 +346,40 @@ registerFeature((room: WorldRoom) => {
       return;
     }
     const shadeDamage = (t: number, head: boolean) => damageAt(id, gun.damage, t, head);
+    // (plan 93 S1) the cars it struck, for everyone near: where, and what (glass, a panel, a tyre…)
+    const carHits: { id: string; x: number; y: number; z: number; struck: string; face: number }[] = [];
     for (const dir of pellets(id, yaw, Math.max(-1.2, Math.min(1.2, pitch)), seed, spread)) {
       const ray = { x: ox, y: oy, z: oz, ...dir };
-      const who = personAlong(p, ray, gun.range, seenPeople);
+      // (plan 93 S1) a car along it: struck first if nothing's nearer — a wall before it, not at all; its
+      // glass and (a rifle's round) its doors let the round on, the rest of it stops it there
+      const d0 = rayDir(ray.yaw, ray.pitch);
+      let car = room.carShot?.along(p.level, ray, d0, gun.range, id, seat?.vid) ?? null;
+      if (car) {
+        const short = Math.max(0, car.t - 0.2);
+        const before = { x: ox + d0.x * short, y: oy + d0.y * short, z: oz + d0.z * short };
+        if (!(room.sight?.(p.level, { x: ox, y: oy, z: oz }, before) ?? true)) car = null;
+      }
+      const cap = car && !car.through ? car.t : gun.range;
+      // (on through a car: what's beyond is seen from its far side — its own body isn't the wall)
+      const past = car?.through ? Math.min(car.out + 0.3, gun.range) : 0;
+      const from = { x: ox + d0.x * past, y: oy + d0.y * past, z: oz + d0.z * past };
+      const who = personAlong(p, ray, cap, seenPeople);
       // (plan 88) Vortex: nearer than whoever's along it, he takes it — a wall on the way, it stops there
-      const va = room.vortex?.along(p.level, ray, who ? who.t : gun.range) ?? null;
+      const va = room.vortex?.along(p.level, ray, who ? who.t : cap) ?? null;
+      if (car && car.t < (who?.t ?? Number.POSITIVE_INFINITY) && car.t < (va?.t ?? Number.POSITIVE_INFINITY)) {
+        // (one of the shadowed before it takes it)
+        const shade = p.level === 0 ? room.dark?.shoot(ray, car.t, seenAt, shadeDamage, now) : null;
+        if (shade) {
+          room.send(client, "arms:hit", shade);
+          continue;
+        }
+        car.apply();
+        carHits.push({ id: car.id, x: car.x, y: car.y, z: car.z, struck: car.struck, face: car.face });
+        if (!car.through) continue;
+      }
       const vt = va?.t ?? null;
       // the shadowed (out on the land): one nearer than whoever's along it takes it
-      const hit =
-        p.level === 0 ? room.dark?.shoot(ray, vt ?? (who ? who.t : gun.range), seenAt, shadeDamage, now) : null;
+      const hit = p.level === 0 ? room.dark?.shoot(ray, vt ?? (who ? who.t : cap), seenAt, shadeDamage, now) : null;
       if (hit) {
         room.send(client, "arms:hit", hit);
         continue;
@@ -347,7 +387,7 @@ registerFeature((room: WorldRoom) => {
       if (vt !== null) {
         const d = rayDir(ray.yaw, ray.pitch);
         const at = { x: ox + d.x * vt, y: oy + d.y * vt, z: oz + d.z * vt };
-        if (!(room.sight?.(p.level, { x: ox, y: oy, z: oz }, at) ?? true)) continue;
+        if (!(room.sight?.(p.level, from, at) ?? true)) continue;
         room.vortex?.hit(client.sessionId, damageAt(id, gun.damage, vt, false), now, va?.id);
         room.send(client, "arms:hit", { id: va?.id ?? "vortex", kind: "vortex", head: false, ...at });
         continue;
@@ -356,7 +396,7 @@ registerFeature((room: WorldRoom) => {
       const d = rayDir(ray.yaw, ray.pitch);
       const at = { x: ox + d.x * who.t, y: oy + d.y * who.t, z: oz + d.z * who.t };
       // (a wall or a trunk on the way: it stops there — Jolt's sight, the shot's own line)
-      if (!(room.sight?.(p.level, { x: ox, y: oy, z: oz }, at) ?? true)) continue;
+      if (!(room.sight?.(p.level, from, at) ?? true)) continue;
       const q = who.q;
       const n = damageAt(id, pvpDamage(id), who.t, who.head);
       room.survival?.hurt(q.sid, n);
@@ -372,6 +412,12 @@ registerFeature((room: WorldRoom) => {
     }
     const shot = { sid: client.sessionId, gun: id, ox, oy, oz, yaw, pitch, seed, spread };
     for (const c of near(p, ox, oy)) room.send(c, "arms:shot", shot);
+    // (plan 93 S1: the cars struck — the sparks, the glass, a tyre's bang — for the shooter and everyone near)
+    if (carHits.length) {
+      const msg = { gun: id, hits: carHits };
+      room.send(client, "car:shot", msg);
+      for (const c of near(p, ox, oy)) room.send(c, "car:shot", msg);
+    }
   });
 
   room.on("arms:flare", (client, m) => {

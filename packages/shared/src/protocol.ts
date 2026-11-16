@@ -3,6 +3,7 @@ import type { StructOp, Structure } from "./structure/index.ts";
 
 import type { Social } from "./actions.ts";
 import type { AvatarLayers } from "./avatar";
+import type { CarLook } from "./car/look.ts";
 import type { CarWire } from "./car/net.ts";
 import type { LootItem } from "./dark/loot.ts";
 import type { GroundsEdits } from "./grounds-edits.ts";
@@ -494,7 +495,10 @@ export interface ClientMessages {
   "spot:free": { bay: string };
   "car:enter": { id: string; seat: number };
   // your own, from the dealer (docs/plan/43-the-spot.md): car/own.ts BUYABLE, a CAR_COLOURS index
-  "car:buy": { model: string; colour: number; plate: string };
+  // (docs/plan/92-the-cars.md F13b: with its look chosen — car/look.ts buyLook —, `colour` then the nearest)
+  "car:buy": { model: string; colour: number; plate: string; look?: CarLook };
+  // "Repaint": my own car's look changed, parked at home (my bay, or MOTORS' forecourt) — free for now
+  "car:look": { id: string; look: CarLook };
   // the owner lends their own's keys to someone (their uid), or takes them back (null)
   "car:lend": { to: number | null };
   "car:leave": Record<string, never>;
@@ -519,11 +523,30 @@ export interface ClientMessages {
   // a parked car I knocked, come to rest: where it ended up (the Grounds' coords, its middle)
   "car:shove": { id: string; x: number; z: number; a: number };
   // my car's dirt (0..1) and dents (front, rear, left, right: 0..1), as my sim has counted them
-  "car:wear": { grime: number; dmg: number[] };
+  "car:wear": { grime: number; dmg: number[]; parts?: number };
   // at a pump, stopped: filling it (on), or not
   "car:fill": { on: boolean };
+  // (plan 93 S5) my seat's window: down, or up
+  "car:window": { down: boolean };
+  // (plan 93 S6) a snow chain fitted to a parked car's wheel (`on`), or taken off — kneeling by it a while
+  "car:chain": { id: string; wheel: number; on: boolean };
+  "car:chain-stop": Record<string, never>;
+  // (plan 93 S7) a parked car mended: under its bonnet, the next thing (`what`, as shared car/repair.ts nextMend
+  // says), or a wheel's flat changed for its spare — a while, stood (knelt) at it; the stop above drops it too
+  "car:mend": { id: string; what: string; wheel?: number };
+  // (plan 93 S7) a tow rope tied from the back of one car (`from`, its object or vehicle id) to the front of
+  // another (`to`); untied from either
+  "car:tow": { from: string; to: string };
+  "car:untow": { id: string };
+  // (plan 93 S9) my own car (or one lent me today) locked from outside, or unlocked
+  "car:lock": { id: string; on: boolean };
   // my car hit someone at speed (their session): knocked down
   "car:knock": { sid: string };
+  /** (plan 93 S4) into a car's boot (stood behind it, parked) or its glove box (sat in its front): a slot of the
+   *  pack — `n` of a stack, or all of it */
+  "car:put": { kind: "boot" | "glove"; id: string; from: number; n?: number };
+  /** (plan 93 S4) out of it into the pack: its place `i` (−1: everything), into `slot` if dragged there */
+  "car:take": { kind: "boot" | "glove"; id: string; i: number; slot?: number };
   // a passenger's radio button (the driver's client changes the station)
   "car:radio": Record<string, never>;
   // my car stuck (stopped): pulled out to the nearest clear spot (features/cars.ts; shared freeSpot)
@@ -562,7 +585,16 @@ export interface ClientMessages {
   // flare lit and held up (thrown by arms:flare)
   "dark:hand": { on?: boolean };
   // an admin's own vitals full again (health, stamina, warmth, the battery): for trying things out
-  "mod:refill": { kit?: boolean; ak?: boolean; sniper?: boolean; daybreak?: boolean; hp?: number; wm?: number };
+  "mod:refill": {
+    kit?: boolean;
+    ak?: boolean;
+    sniper?: boolean;
+    daybreak?: boolean;
+    hp?: number;
+    wm?: number;
+    chains?: number;
+    tools?: boolean;
+  };
   // the shadowed (features/dark.ts), admins: off ("peaceful") or on ("normal"); `spawn`: that
   // many out of the dark near me, to try the fight
   "mod:dark": { mode?: "peaceful" | "normal" | "called"; spawn?: number };
@@ -616,6 +648,8 @@ export interface ServerMessages {
   // my car put back where the server has it (a state it couldn't believe)
   "car:snap": CarWire & { id: string };
   "car:no": { why: string; who?: string }; // (who: whose it is, "owned")
+  // (plan 93 S9) to a car's owner: its alarm went off — a door tried, its boot, shot, knocked
+  "car:alarm": { id: string; why: string; plate: string };
   // the Kart Park: my kart put where the server has it (a grid slot, a spawn, a state it couldn't
   // believe); I was hit (spun out, or smashed in a battle); a coffee or the plough's boost is mine
   "kart:snap": { x: number; y: number; z: number; a: number; still?: boolean };
@@ -626,6 +660,7 @@ export interface ServerMessages {
   "kart:out": Record<string, never>;
   "spot:no": { why: string };
   "car:bought": { id: string };
+  "car:looked": { id: string };
   // someone's car keys lent to me, or back with them (why: "taken", "home", "day")
   "car:keys": { from: string; plate: string; lent: boolean; why?: string };
   // (to the driver) a passenger changed the radio's station
@@ -767,6 +802,12 @@ export interface ServerMessages {
     seed: number;
     /** rad: the spread the server shot it with (the same pellets from the seed) */
     spread: number;
+  };
+  /** (plan 93 S1) a shot's rounds into cars: where each struck (the ground floor's frame, z up), what — glass, a
+   *  panel, the engine block, a tyre, a lamp — and by which face (0 front, 1 rear, 2 left, 3 right, 4 roof) */
+  "car:shot": {
+    gun: string;
+    hits: { id: string; x: number; y: number; z: number; struck: string; face: number }[];
   };
   "arms:throw": { sid: string; x0: number; y0: number; z0: number; x: number; y: number; z: number; secs: number };
   // the Daybreak's ball (plan 79 phase 7): off from (x0, y0, z0) toward (x, y, z) — where it stops at the

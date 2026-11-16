@@ -99,6 +99,11 @@ export class Input {
       e.preventDefault();
       return;
     }
+    // (plan 93 S9) on foot by my own car: L locks it, or unlocks
+    if (e.code === "KeyL" && !e.repeat && !e.metaKey && !e.ctrlKey && !hud.get().build.on && this.c.cars?.lockKey()) {
+      e.preventDefault();
+      return;
+    }
     const key = e.key.toLowerCase();
     if (hud.get().build.on && (e.metaKey || e.ctrlKey) && key === "d") {
       e.preventDefault();

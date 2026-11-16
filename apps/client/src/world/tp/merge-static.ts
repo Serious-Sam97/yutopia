@@ -24,13 +24,13 @@ const plain = new Mesh().onBeforeRender;
 const IDENTITY = new Matrix4();
 
 // a mesh that may be drawn merged: plain, opaque, one material, nothing hanging off it
-function mergeable(m: Mesh, root: Object3D): boolean {
+function mergeable(m: Mesh, root: Object3D, seeThrough = false): boolean {
   return (
     !!m.isMesh &&
     !(m as { isSkinnedMesh?: boolean }).isSkinnedMesh &&
     !(m as { isInstancedMesh?: boolean }).isInstancedMesh &&
     !Array.isArray(m.material) &&
-    !m.material.transparent &&
+    (seeThrough || !m.material.transparent) &&
     !m.morphTargetInfluences &&
     m.onBeforeRender === plain &&
     m.frustumCulled &&
@@ -113,11 +113,16 @@ export function mergeStatic(root: Object3D, keep: Iterable<Object3D> = []): numb
 
 /** The given meshes drawn as one mesh per material and shadow settings in `into`'s space
  *  (`xf`: a mesh's matrix into it), added to `into`; the originals are left as they are —
- *  `used` says which went in (hide them). See-through ones, and ones alone with their
+ *  `used` says which went in (hide them). See-through ones (unless `seeThrough`), and ones alone with their
  *  material, aren't merged. */
-export function mergeWith(meshes: Mesh[], into: Object3D, xf: (m: Mesh) => Matrix4): { meshes: Mesh[]; used: Mesh[] } {
+export function mergeWith(
+  meshes: Mesh[],
+  into: Object3D,
+  xf: (m: Mesh) => Matrix4,
+  seeThrough = false, // (see-through ones too: they blend among themselves in the one mesh — a car's glass)
+): { meshes: Mesh[]; used: Mesh[] } {
   return mergeGroups(
-    meshes.filter((m) => mergeable(m, into)),
+    meshes.filter((m) => mergeable(m, into, seeThrough)),
     into,
     xf,
   );

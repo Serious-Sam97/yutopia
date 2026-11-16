@@ -29,6 +29,14 @@ export const ICON: Record<ItemId, string> = {
   battery:
     '<svg viewBox="0 0 48 48"><rect x="14" y="10" width="20" height="30" rx="3" fill="#2b2f35" stroke="#8a929c" stroke-width="1.5"/><rect x="20" y="6" width="8" height="4" rx="1" fill="#8a929c"/><rect x="16" y="28" width="16" height="10" rx="1.5" fill="#7cc46b"/><path d="M24 15v8M20 19h8" stroke="#d9dde2" stroke-width="2"/></svg>',
   aid: '<svg viewBox="0 0 48 48"><rect x="7" y="13" width="34" height="26" rx="4" fill="#eceae4"/><path d="M18 13v-4h12v4" stroke="#bdb9b0" stroke-width="2.5" fill="none"/><path d="M24 19v14M17 26h14" stroke="#c7302b" stroke-width="5"/></svg>',
+  // (plan 93 S6) a snow chain: two side chains, its ladder between, the tensioner's yellow hook
+  chains:
+    '<svg viewBox="0 0 48 48"><g transform="rotate(-30 24 24)" fill="none" stroke="#9aa0a8" stroke-width="2"><path d="M14 6v36M34 6v36" stroke-dasharray="4 2"/><path d="M14 11h20M14 20h20M14 29h20M14 38h20" stroke-dasharray="3 2"/></g><rect x="30" y="38" width="6" height="7" rx="1.5" fill="#e8b417"/></svg>',
+  // (plan 93 S7) a wrench, its open jaw; a tow rope coiled, its hooks
+  wrench:
+    '<svg viewBox="0 0 48 48"><g transform="rotate(-40 24 24)"><rect x="21" y="12" width="6" height="30" rx="2" fill="#8a929c"/><path d="M16 4h16v6l-4 4h-8l-4-4z" fill="#a7a9ad"/><path d="M21 4h6v6h-6z" fill="#2b2e33"/></g></svg>',
+  towrope:
+    '<svg viewBox="0 0 48 48"><g fill="none" stroke="#e08a2a" stroke-width="3"><ellipse cx="24" cy="24" rx="15" ry="11"/><ellipse cx="24" cy="24" rx="10" ry="7"/></g><path d="M36 30l6 8M12 30l-6 8" stroke="#e08a2a" stroke-width="3"/><path d="M40 36a3 3 0 1 0 5 3M8 36a3 3 0 1 1-5 3" stroke="#8a929c" stroke-width="2.4" fill="none"/></svg>',
   fuse: '<svg viewBox="0 0 48 48"><g transform="rotate(-35 24 24)"><rect x="10" y="18" width="28" height="12" rx="2" fill="rgba(200,225,240,.35)" stroke="#cfe3ee" stroke-width="1.2"/><path d="M13 24c5-5 8 5 11 0s7-5 11 0" stroke="#e8c26a" stroke-width="1.4" fill="none"/><rect x="5" y="17" width="7" height="14" rx="1" fill="#a7a9ad"/><rect x="36" y="17" width="7" height="14" rx="1" fill="#a7a9ad"/></g></svg>',
 };
 

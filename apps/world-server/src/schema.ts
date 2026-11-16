@@ -466,6 +466,14 @@ export class Vehicle extends Schema {
   @type("int8") gear = 0;
   @type("uint32") fl = 0;
   @type("float32") slip = 0;
+  @type("uint8") grip = 0; // (plan 93) the most grip a tyre uses, ×100
+  @type("string") holes = ""; // (plan 93 S1) where it's been shot: shared car/shot.ts addHole
+  @type("uint8") win = 0; // (plan 93 S5) the seats' windows down: bit i, seat i's (its own switch)
+  @type("uint8") chains = 0; // (plan 93 S6) its chained wheels: FL FR RL RR, bits 1 2 4 8
+  // (plan 93 S7) a tow rope: from its back to the front of the car (object id) it tows; from its front to the one
+  // towing it
+  @type("string") towing = "";
+  @type("string") towedBy = "";
   @type("string") seats = "|||";
   @type("string") obj = "";
   @type("uint8") colour = 0;
@@ -475,6 +483,8 @@ export class Vehicle extends Schema {
   // a jump: the server put it somewhere (pulled out, a new driver) — drawn there at once, not eased to
   @type("uint32") st = 0;
   @type("uint8") jump = 0;
+  // each wheel's travel from rest, a byte each (shared car/net.ts packWheels: docs/plan/92 phase 3)
+  @type("uint32") wc = 0;
   // what it carries from drive to drive (saved on its object): the tank (0..1), the dirt on it
   // (0..1), its dents ("front,rear,left,right", each 0..1); being filled at a pump
   @type("float32") fuel = 0.7;

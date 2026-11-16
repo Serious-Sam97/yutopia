@@ -23,7 +23,7 @@ import {
 import type { chars } from "../art/chars-load";
 import { COCOA_MUG, ICE_TUB, MUG_COLORS } from "../art/held";
 import { phoneColors } from "../art/phone-art";
-import type { HandFrame } from "../chars/props";
+import type { HandFrame, HeldShape } from "../chars/props";
 import type { JointName, Pose } from "../chars/rig";
 import { mergeWith } from "./merge-static";
 
@@ -391,12 +391,142 @@ function gunInHand(_kind: GunKind, f: HandFrame, q: Quaternion, p: Vector3) {
     .addScaledVector(f.n, 0.013 + GUN_GRIP_R)
     .sub(tv4.copy(GUN_GRIP_MID).applyQuaternion(q));
 }
+/** (plan 93 S2) A gun in the right hand of someone sat in a car (car/cars.ts draws them, not Person3D): its life
+ *  model, held by the hand's own frame as a walking one holds it (the long guns by theirs). Null till the body's
+ *  loaded, or with no life model for it yet (`tpl`: the view's). */
+export function seatedGun(
+  model: {
+    handFrame(S: "L" | "R"): HandFrame | null;
+    bone(j: JointName): Object3D | null;
+    hold(S: "L" | "R", h: { shape: HeldShape; pos: Vector3; quat: Quaternion; kind?: string } | null): void;
+    gripTo(S: "L" | "R", at: Vector3, q: Quaternion, w?: number, poleR?: [number, number, number]): void;
+    indexTo(S: "L" | "R", c: number): void;
+  },
+  key: string,
+  tplOf: (kind: string) => Object3D | null,
+  S: "L" | "R" = "R",
+): {
+  root: Group;
+  muzzle(out: Vector3): Vector3;
+  line: Vector3;
+  aimAt(at: Vector3, f: Vector3, w: number, pole: [number, number, number]): void;
+  rest(): void;
+  barrel(out: Vector3): Vector3;
+  grip(): void;
+  drop(): void;
+} | null {
+  const kind = gunKind(key);
+  const tpl = tplOf(kind);
+  const f0 = model.handFrame(S);
+  const hand = model.bone(S === "L" ? "wristL" : "wristR");
+  if (!tpl || !f0 || !hand) return null;
+  // (a left hand: the right's own grip, reflected — the left's frame is the right's with its x flipped, the
+  // skeleton's mirror — and the gun reflected back across its own side so it's not a mirror's gun: the two
+  // reflections a turn, x' = −x, the rotation's y and z flipped, then a half turn about its up)
+  const frame = S === "L" ? (model.handFrame("R") ?? f0) : f0;
+  const g = lifeGunModel(kind, tpl);
+  poseGun(g, kind, { cock: 1 });
+  const sq0 = new Quaternion();
+  const inner = g.root;
+  if (LONG[key]) longInHand(LONG[key], frame, inner.quaternion, inner.position);
+  else gunInHand(kind, frame, inner.quaternion, inner.position);
+  if (S === "L") {
+    inner.position.x = -inner.position.x;
+    const q = inner.quaternion;
+    q.set(q.x, -q.y, -q.z, q.w).multiply(sq0.set(0, 1, 0, 0));
+  }
+  const root = new Group();
+  root.add(inner);
+  root.scale.setScalar(LIFE_GUN_SCALE);
+  hand.add(root);
+  // (its barrel's way in the wrist's own space: rear sight to front, as it's set in the hand)
+  const line = new Vector3(...g.sight.front)
+    .sub(new Vector3(...g.sight.rear))
+    .normalize()
+    .applyQuaternion(inner.quaternion);
+  const qa = new Quaternion();
+  const sq1 = new Quaternion();
+  const sv1 = new Vector3();
+  const sv2 = new Vector3();
+  const sv3 = new Vector3();
+  const mW = new Matrix4();
+  const mH = new Matrix4();
+  const mL = new Matrix4();
+  return {
+    root,
+    line,
+    /** (aimed, as a walker holds it — plan 80's order) the gun's place first — its origin at `at`, its barrel
+     *  along `f`, its top up (the world's) —, the wrist where that puts it (the gun's place less its own under
+     *  the wrist), the arm brought there (gripTo), the gun set exactly there; the trigger finger on the trigger */
+    aimAt(at: Vector3, f: Vector3, w: number, pole: [number, number, number]) {
+      root.position.set(0, 0, 0);
+      root.quaternion.identity();
+      root.scale.setScalar(LIFE_GUN_SCALE);
+      inner.updateMatrix();
+      mL.compose(ZERO3, IDQ, root.scale).multiply(inner.matrix);
+      mL.decompose(sv1, sq1, sv2);
+      const gs = (hand.getWorldScale(sv3).x || 1) * sv2.x;
+      mL.invert();
+      gunQuat(f, UP3, qa);
+      mW.compose(at, qa, sv2.setScalar(gs)).multiply(mL);
+      mW.decompose(sv1, sq1, sv3);
+      model.gripTo(S, sv1, sq1, w, pole);
+      // (the arm a little short or long of it: the gun where it's meant to be all the same, under the wrist)
+      hand.updateWorldMatrix(true, false);
+      mH.compose(at, qa, sv2.setScalar(gs));
+      mW.copy(hand.matrixWorld)
+        .invert()
+        .multiply(mH)
+        .multiply(mL.copy(inner.matrix).invert())
+        .decompose(root.position, root.quaternion, root.scale);
+      model.indexTo(S, INDEX.aim);
+    },
+    /** held, not aimed: as it sits in the fist, the trigger finger along the frame */
+    rest() {
+      root.position.set(0, 0, 0);
+      root.quaternion.identity();
+      root.scale.setScalar(LIFE_GUN_SCALE);
+      model.indexTo(S, INDEX.ready);
+    },
+    /** its barrel's way as it's drawn now (the world's) */
+    barrel(out: Vector3) {
+      inner.updateWorldMatrix(true, false);
+      out.set(...g.sight.front).applyMatrix4(inner.matrixWorld);
+      return out.sub(tv4.set(...g.sight.rear).applyMatrix4(inner.matrixWorld)).normalize();
+    },
+    /** the fingers closed round its grip, as it sits in the hand now (a walker's own: its grip's shape) */
+    grip() {
+      const gp = new Vector3();
+      const gq = new Quaternion();
+      const LS = LONG[key];
+      if (LS) {
+        gp.copy(LS.wristShape.at).applyQuaternion(inner.quaternion).add(inner.position);
+        gq.setFromUnitVectors(Y3, LS.wristShape.axis).premultiply(inner.quaternion);
+      } else gripShapeAt(inner.quaternion, inner.position, gp, gq);
+      // (and where it's been set under the wrist: aimAt)
+      gp.applyQuaternion(root.quaternion).add(root.position);
+      gq.premultiply(root.quaternion);
+      model.hold(S, { shape: LS ? LS.wristShape.shape : GUN_GRIP_SHAPE, pos: gp, quat: gq, kind: "gun" });
+    },
+    /** let go: out of the hand, the fingers open */
+    drop() {
+      root.removeFromParent();
+      model.hold(S, null);
+    },
+    muzzle(out: Vector3) {
+      inner.updateWorldMatrix(true, false);
+      return out.set(...g.muzzle).applyMatrix4(inner.matrixWorld);
+    },
+  };
+}
+
 /** The grip's shape for the fingers (its +y up the grip), in the wrist's space, the gun placed q, p. */
 function gripShapeAt(q: Quaternion, p: Vector3, pos: Vector3, quat: Quaternion) {
   pos.copy(GUN_GRIP_MID).applyQuaternion(q).add(p);
   quat.setFromUnitVectors(Y3, UP_GRIP).premultiply(q);
 }
 const Z3 = new Vector3(0, 0, 1);
+const UP3 = new Vector3(0, 1, 0);
 // (plan 80: the revolver hold's)
 const FIST_SHAPE = { round: true as const, r: FIST.r, y0: 0, hy: FIST.hy };
 const rv1 = new Vector3();
@@ -1036,7 +1166,13 @@ export class Person3D {
       // hand on their back)
       const N = !p.reduced ? this.C.nightNow() : null;
       const now = performance.now() / 1000;
-      const r = N ? (p.down === "down" ? N.crawl2(this.crawlPh, now, dist > 1e-4) : N.kneel2(now, 1)) : null;
+      const r = N
+        ? p.down === "down"
+          ? N.crawl2(this.crawlPh, now, dist > 1e-4)
+          : p.down === "bonnet"
+            ? N.bonnet2(now)
+            : N.kneel2(now, 1)
+        : null;
       downHands = r?.hands ?? null;
       const m = r ? r.m : p.down === "down" ? this.C.crawlPose(this.crawlPh) : this.C.kneelPose();
       this.downW = Math.min(1, this.downW + step * 4);

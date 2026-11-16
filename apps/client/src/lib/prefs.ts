@@ -27,6 +27,8 @@ export interface Prefs {
   lookInvertX: boolean;
   // first person: my own arms come into view when they're doing something
   hands1p: boolean;
+  // the car's gearbox (docs/plan/92, F4a): shifted for you, or by hand (Q/E, the bumpers)
+  carManual: boolean;
   // frames per second, at most (0 = as many as the screen shows); 30 once nothing moves
   maxFps: MaxFps;
   // the frame's numbers in a corner (fps, where each frame's time goes: docs/plan/38-the-lag.md)
@@ -127,6 +129,7 @@ const DEFAULTS: Prefs = {
   stickSens: 1,
   lookInvertX: false,
   hands1p: true,
+  carManual: false,
   maxFps: 60,
   perfStats: false,
   graphics: null,
@@ -152,6 +155,7 @@ export function prefs(): Prefs {
     if (cache && !(cache.stickSens >= 0.25 && cache.stickSens <= 3)) cache.stickSens = 1;
     if (cache) cache.lookInvertX = cache.lookInvertX === true;
     if (cache) cache.hands1p = cache.hands1p !== false;
+    if (cache) cache.carManual = cache.carManual === true;
     if (cache) cache.perfStats = cache.perfStats === true;
     if (cache && (typeof cache.graphics !== "object" || Array.isArray(cache.graphics))) cache.graphics = null;
     if (

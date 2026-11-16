@@ -2011,7 +2011,7 @@ export async function runShot(
 
   // ── the cars ──
   const cars = shot.cars
-    ? (await import("./car/stage")).stageCars(T3, scene, shot.cars, {
+    ? await (await import("./car/stage")).stageCars(T3, scene, shot.cars, {
         night: P.night,
         storm: !!shot.storm,
         lit,
@@ -2020,6 +2020,7 @@ export async function runShot(
         bodyMat,
         flatMat,
         env,
+        renderer,
       })
     : null;
   // ── the Kart Park (docs/plan/46-the-karts.md) ──

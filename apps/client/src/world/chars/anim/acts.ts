@@ -414,6 +414,15 @@ export interface CarFit {
   feet: [[number, number, number], [number, number, number]];
   /** a passenger's hands in the lap (a driver's go on the rim: the car's reachTo) */
   lap?: boolean;
+  /** (plan 93 S8) the head turned (rad, + to their left: into a turn, to a mirror) and the trunk leaned by the
+   *  car's g (rad, + to their left) */
+  look?: number;
+  lean?: number;
+  /** (plan 93 S5) thrown in the belt by a crash (rad: + forward over it — the belt holds the hips and the
+   *  chest's lower half, the shoulders and head go on —, − back into the seat) */
+  jolt?: number;
+  /** (plan 93 S8) the trunk turned (rad, + to their left): round in the seat, looking back over a shoulder */
+  twist?: number;
 }
 /** In a vehicle (plan 62): the legs solved to each foot's place, the back to the seat's, the breath
  *  and a glance out now and then (car2's life). */
@@ -433,6 +442,24 @@ export function car3(f: CarFit, t: number, seed: number): Act {
   c.dy = (f.lap ? 0.6 : 0.35) * Math.max(0, wob(t * 0.25, seed)) ** 2 * Math.sign(wob(t * 0.13, seed + 1));
   c.sL = c.sR = -0.45;
   c.eL = c.eR = -1.05;
+  // (plan 93 S8: where they look — the glance kept a little under it — and the g's lean)
+  if (f.look) {
+    c.dy = f.look + 0.25 * c.dy;
+    c.ny = 0.35 * f.look;
+  }
+  if (f.lean) {
+    // (the spine's roll is + to their right: measured, a right turn's g put the head to the right)
+    c.sz = -f.lean;
+    c.dz = 0.5 * f.lean;
+  }
+  if (f.twist) {
+    c.sy = (c.sy ?? 0) + f.twist;
+    c.cy = (c.cy ?? 0) + 0.4 * f.twist;
+  }
+  if (f.jolt) {
+    c.sx = (c.sx ?? 0) + 0.4 * f.jolt;
+    c.nx = (c.nx ?? 0) + 0.55 * f.jolt;
+  }
   const m = body(c);
   const lap = (S: 1 | -1): [number, number, number] => [S * 0.13, hip + 0.1, 0.24];
   return {

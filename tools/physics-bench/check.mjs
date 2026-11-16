@@ -83,6 +83,23 @@ report(
   `Jolt's heap ${soak?.heapGrowthMB} MB over ${soak?.joinedAndLeft} joins, things and edits`,
 );
 
+// the cars on Jolt (docs/plan/92, phase 1): a scripted drive, the same each run and as recorded; a
+// frame's cost; 400 cars made and dropped with the heap flat
+const CAR = "../../packages/shared/src/car/bench.ts";
+const DRIVE_HASH = "5998757d";
+const d1 = run(["--import", "tsx", CAR]);
+const d2 = run(["--import", "tsx", CAR]);
+report(
+  "cars: a drive, deterministic",
+  d1?.hash === DRIVE_HASH && d2?.hash === DRIVE_HASH,
+  `${d1?.hash}, ${d2?.hash} (want ${DRIVE_HASH}); ${d1?.msPerFrame} ms a frame`,
+);
+report(
+  "cars: 400 made and dropped",
+  d1 !== null && Math.abs(d1.heapGrowthMB) < 0.1,
+  `Jolt's heap ${d1?.heapGrowthMB} MB`,
+);
+
 // pinned exactly wherever it's a dependency: the bench and the game move together
 for (const p of ["package.json", "../../packages/shared/package.json"]) {
   const pkg = readFileSync(`${here}${p}`, "utf8");

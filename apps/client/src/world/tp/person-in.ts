@@ -55,7 +55,7 @@ export interface PersonIn {
   slingSn?: boolean; // carrying the sniper (plan 83): slung on the AK's diagonal, over it
   slingDb?: boolean; // carrying the Daybreak (plan 84): upright down the back, the lens down, over the others
   arm?: number; // …what the hand's doing with it (shared ARM: drawing, reloading, broken open)
-  down?: "down" | "kneel"; // down, crawling; kneeling by someone down (D7: world/dark says)
+  down?: "down" | "kneel" | "bonnet"; // down, crawling; kneeling by someone down (D7: world/dark says)
   fell?: number; // knocked down by a pool ball: s since (tp/view.ts times it from when it's seen)
   fellAt?: number; // …the server's, since when (0: on their feet), and the way the ball went
   fellYaw?: number;

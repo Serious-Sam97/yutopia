@@ -717,6 +717,13 @@ registerFeature((room: WorldRoom) => {
     // rounds, shells, flares, first aid, a battery; `ak` too: the AK in quick 3, its rounds in a pocket
     // (plan 79 phase 5); `sniper`: the sniper in quick 4, its .308 (phase 6 — with both, the battery
     // doesn't fit); `daybreak`: the Daybreak there instead, three cells (phase 7: Spawn's only)
+    // (plan 93 S6) `chains`: a set of snow chains in the pack
+    if (m?.chains) addStack(s.inv, "chains", Math.max(1, Math.min(4, Number(m.chains) || 4)));
+    // (plan 93 S7) `tools`: a wrench and a tow rope
+    if (m?.tools) {
+      if (count(s.inv, "wrench") < 1) addStack(s.inv, "wrench", 1);
+      if (count(s.inv, "towrope") < 1) addStack(s.inv, "towrope", 1);
+    }
     if (m?.kit) {
       const was = s.inv.quick.filter((it): it is Stack => !!it && isStack(it.id));
       s.inv.quick = [
@@ -817,6 +824,7 @@ registerFeature((room: WorldRoom) => {
       const s = p && people.get(p.uid);
       // (an admin who's unhurt: nothing — docs/plan/48-the-admin.md)
       if (!p || !s || p.downAt || (p.admin && hasPower(p.powers, "unhurt"))) return;
+      room.fightAt.set(sid, Date.now());
       // (plan 88: `spare` — hurt, never down: Vortex's act II)
       if (spare) n = Math.min(n, Math.max(0, s.v.hp - 1));
       hurt(s.v, s.c, n);

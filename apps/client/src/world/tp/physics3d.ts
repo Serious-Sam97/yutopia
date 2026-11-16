@@ -36,6 +36,14 @@ const RING = 2; // Grounds chunks each way round you, built (the land the view h
 const KEEP = RING + 2; // …and kept till you're this many away (docs/plan/69, L2: the land is long)
 const EVERY_MS = 1000;
 const MOVED = 6; // m you go before it's drawn again
+// (docs/plan/92 phase 3: a car going fast — the land built along where it'll be over the next AHEAD_S,
+// a few chunks a call, the nearest in time first; asked again every AHEAD_MS while it's driven)
+const AHEAD_S = 3;
+const AHEAD_MS = 200;
+// (one a call: a chunk is made here, on the main thread, ~45 ms — ~110 on a slow machine; two were a frame of ~200.
+// One every 200 ms is three in the 0.6 s a chunk under the car must be in by — 180 km/h crosses one in 0.64 s.
+// The heights made in a worker, as the view's are, would take it off the main thread: docs/plan/92 phase 10, left)
+const AHEAD_PER = 1;
 
 export interface PhysicsSource {
   /** the building (the home floor, carrying the others) and every thing in it */
@@ -70,6 +78,10 @@ export class BrowserPhysics {
   private placesOf: unknown = null;
   // the chunks changed since they were built here (made again when their land is)
   private readonly stale = new Set<string>();
+  // (plan 92) a car driven here: where it is and goes, and when it last said so
+  private ahead: { x: number; z: number; vx: number; vz: number } | null = null;
+  private aheadAt = 0;
+  private aheadBuilt = 0;
   private readonly offChanged: () => void;
 
   private constructor(
@@ -109,7 +121,76 @@ export class BrowserPhysics {
   /** (plan 58 5d) A step for what's loose in it (the ragdolls, what's worn swinging — plan 61: the
    *  walker's character moves itself). */
   step(dt: number): void {
-    this.world.step(Math.min(dt, 1 / 30));
+    // (a car on Jolt here: two collision steps a frame — 120 Hz for its wheels, docs/plan/92)
+    this.world.step(Math.min(dt, 1 / 30), this.carsBusy() ? 2 : 1);
+  }
+
+  /** (plan 92 feedback) My car steps the world itself, a fixed step at a time, in the cars' frame
+   *  (car/cars.ts drive): its step, and that it did this frame — the view's own step skipped. */
+  carStep(h: number): void {
+    this.world.step(h, 2);
+  }
+  carStepped = false;
+
+  // ── cars on Jolt (docs/plan/92 phase 3) ──
+  /** The world cars are made in (shared physics addCar / addPulled). */
+  get carWorld(): PhysicsWorld {
+    return this.world;
+  }
+  /** Cars here want the world stepped each frame (the view's step: while anyone's down, swings, or drives). */
+  carsBusy(): boolean {
+    return !this.dead && (this.world.carCount() > 0 || performance.now() - this.aheadAt < 500);
+  }
+  private readonly onJolt = new Set<string>();
+  /** A car (`car:<object id>`) driven here on Jolt: its parked box gone from the world while it is
+   *  (else the new car is made inside it, and thrown out of it); off, it's the world's again. */
+  ownCar(id: string, on: boolean): void {
+    if (on) {
+      this.onJolt.add(id);
+      this.world.removeVehicle(id);
+    } else this.onJolt.delete(id);
+  }
+  /** My car this frame (the Grounds' coords, m/s): the land made ahead of it. */
+  drivingAt(x: number, z: number, vx: number, vz: number): void {
+    this.ahead = { x, z, vx, vz };
+    const now = performance.now();
+    this.aheadAt = now;
+    if (now - this.aheadBuilt < AHEAD_MS || this.dead) return;
+    this.aheadBuilt = now;
+    // the chunks it'll be in over the next few seconds, and a chunk either side: the nearest in time first
+    const want: [number, number, number][] = [];
+    const seen = new Set<string>();
+    const sp = Math.hypot(vx, vz);
+    const steps = Math.max(1, Math.ceil((sp * AHEAD_S) / (CHUNK / 2)));
+    for (let i = 0; i <= steps; i++) {
+      const t = (i / steps) * AHEAD_S;
+      const px = x + vx * t;
+      const pz = z + vz * t;
+      const cx = Math.floor(px / CHUNK);
+      const cz = Math.floor(pz / CHUNK);
+      for (let dz = -1; dz <= 1; dz++)
+        for (let dx = -1; dx <= 1; dx++) {
+          const k = `${cx + dx},${cz + dz}`;
+          if (seen.has(k)) continue;
+          seen.add(k);
+          want.push([cx + dx, cz + dz, t + (dx || dz ? 0.5 : 0)]);
+        }
+    }
+    want.sort((a, b) => a[2] - b[2]);
+    let made = 0;
+    for (const [cx, cz, t] of want) {
+      if (made >= AHEAD_PER) break;
+      if (this.world.has(`land:${cx},${cz}`)) continue;
+      // (the view's land where it's made; under the car or just ahead of it, made now whatever — never
+      // a car on no land)
+      if (!hasChunk(cx, cz) && t > 0.6) continue;
+      this.build.groundChunk(cx, cz);
+      made++;
+    }
+    if (made) {
+      this.world.settle();
+      this.rev++;
+    }
   }
 
   /** How far from a point of the scene (the floor I see) along (dx, dy, dz) the first wall, floor or
@@ -141,6 +222,8 @@ export class BrowserPhysics {
     this.seen = objects;
     this.seenMap = building;
     this.solids = buildingSolids(building, objects, structure ?? undefined);
+    // (a parked car driven here on Jolt: its parked box not made again under it — docs/plan/92)
+    for (const id of this.onJolt) this.solids.cars.delete(id);
     this.flow.building(this.solids.flow);
     const made = this.build.building(this.solids);
     return made.made + made.removed;
@@ -166,10 +249,14 @@ export class BrowserPhysics {
           more++;
         }
       }
-    // (behind you: out — they're built again if you come back)
+    // (behind you: out — they're built again if you come back; ahead of a car going fast: kept)
+    const ah = this.ahead && performance.now() - this.aheadAt < 2000 ? this.ahead : null;
+    const acx = ah ? Math.floor((ah.x + ah.vx * AHEAD_S) / CHUNK) : cx;
+    const acz = ah ? Math.floor((ah.z + ah.vz * AHEAD_S) / CHUNK) : cz;
     for (const k of [...this.build.chunksBuilt()]) {
       const [x, z] = k.split(",").map(Number);
       if (Math.max(Math.abs(x - cx), Math.abs(z - cz)) <= KEEP) continue;
+      if (Math.max(Math.abs(x - acx), Math.abs(z - acz)) <= KEEP) continue;
       this.build.dropChunk(x, z);
       this.stale.delete(k);
       more++;

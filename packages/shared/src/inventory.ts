@@ -28,6 +28,12 @@ export const STACKS = {
   fuse: 4,
   // (plan 87) the torch: an item, one of a kind — it lights only from the left hand
   torch: 1,
+  // (plan 93 S6) a snow chain: one a wheel, fitted kneeling by it
+  chains: 4,
+  // (plan 93 S7) a wrench (mends a car's engine, lamps, panels away from the garage) and a tow rope (one car
+  // pulls another): kept, not used up
+  wrench: 1,
+  towrope: 1,
   // (plan 88) Vortex's tape: the trophy — one for each fight you landed the last hit in, the stack your wins
   vxtape: 99,
 } as const;

@@ -8,7 +8,7 @@ import { useEffect, useRef } from "react";
 //
 //   /dev/car                         the test pad
 //   /dev/car?world=grounds&at=lot    the real Grounds (lot · pond · driveway · woods · town)
-//   &night=1   &car=offroad
+//   &night=1   &car=offroad   &v=hatch-hot (docs/plan/92: a variant of its kind)
 
 export default function CarDev() {
   if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_YUTOPIA_SHOTS !== "1") notFound();
@@ -26,9 +26,19 @@ export default function CarDev() {
         world: q.get("world") === "grounds" ? "grounds" : "pad",
         at: q.get("at") ?? undefined,
         night: q.get("night") === "1",
-        spec: (["offroad", "pickup", "snowmobile", "snowcat", "ploughtruck", "tractor", "toboggan"].includes(
-          q.get("car") ?? "",
-        )
+        variant: q.get("v") ?? undefined,
+        spec: ([
+          "offroad",
+          "pickup",
+          "estate",
+          "hatch",
+          "van",
+          "snowmobile",
+          "snowcat",
+          "ploughtruck",
+          "tractor",
+          "toboggan",
+        ].includes(q.get("car") ?? "")
           ? q.get("car")
           : "sedan") as "sedan",
       });

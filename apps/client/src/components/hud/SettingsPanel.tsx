@@ -488,6 +488,7 @@ function ViewPage() {
         {p.view === "1p" && (
           <Toggle label={t("hands1p")} value={p.hands1p} onChange={(v) => setPrefs({ hands1p: v })} />
         )}
+        <Toggle label={t("carManual")} value={p.carManual} onChange={(v) => setPrefs({ carManual: v })} />
       </Card>
     </>
   );

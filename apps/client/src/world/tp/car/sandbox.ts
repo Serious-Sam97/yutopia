@@ -3,34 +3,44 @@ import {
   type CarSpec,
   type CarState,
   type CarWorld,
-  createCar,
   GRIP,
   type Ground,
   groundsWorld,
   HELPS,
   type Helps,
   headingOf,
+  headK,
+  knock,
+  noDamage,
   PAD,
   padGround,
   padHeight,
   padWorld,
   readout,
   SPECS,
-  STEP,
+  seededLook,
   setEngine,
-  settle,
-  stepCar,
+  steamOf,
+  steerPull,
+  VARIANTS,
+  variantSpec,
+  variantsOf,
 } from "@yutopia/shared/car";
+import { ASSIST, feel92, feel93 } from "@yutopia/shared/car/assist";
+import { type Drive, FEEL } from "@yutopia/shared/car/drive";
+import { JoltCarWorld } from "@yutopia/shared/car/jolt-world";
 import * as T3 from "three";
 import { mixer } from "../../audio";
 import { CarInput } from "../../car/controls";
+import { Smoke, Sparks } from "../../car/fx";
 import { CarSound } from "../../car/sound";
 import { activePad } from "../../pads";
 import { CarCamera } from "./camera";
+import { buildCar, loadCarManifest } from "./glb";
+import type { Sedan } from "./model";
 import { CarRig } from "./rig";
-import { buildSedan, type Sedan } from "./sedan";
 
-// /dev/car — the sandbox (docs/plan/28-the-car.md, phase 1): drive the car on
+// /dev/car — the sandbox (docs/plan/28-the-car.md, phase 1; on Jolt since docs/plan/92): drive the car on
 // the test pad (a strip of every surface, an ice skid pan, a hill, bumps,
 // posts and a wall) or on the real Grounds, read every wheel's load and slip,
 // tune the numbers live, copy them out as a preset.
@@ -57,9 +67,14 @@ export interface SandboxOpts {
   at?: string; // on the Grounds: where to start
   night?: boolean;
   spec?: CarKind;
+  /** which of its variants (docs/plan/92: a manifest key — "hatch-hot", "van-minibus") */
+  variant?: string;
 }
 
 export async function runSandbox(el: HTMLElement, o: SandboxOpts): Promise<() => void> {
+  // (plan 93: `?feel=92` opens on plan 92's arcade layer; the panel's buttons swap)
+  if (new URLSearchParams(location.search).get("feel") === "92") feel92();
+  else feel93();
   const W = el.clientWidth || window.innerWidth;
   const H = el.clientHeight || window.innerHeight;
   const renderer = new T3.WebGLRenderer({ antialias: true });
@@ -117,24 +132,42 @@ export async function runSandbox(el: HTMLElement, o: SandboxOpts): Promise<() =>
     scene.add(padMesh());
   }
 
-  // ── the car ──
-  let spec: CarSpec = structuredClone(SPECS[o.spec ?? "sedan"]);
+  // ── the car: on Jolt (docs/plan/92), the land made round it as it goes ──
+  const jolt = await JoltCarWorld.create(world);
+  await loadCarManifest();
+  // (the car: a kind and its variant — a work vehicle is its own)
+  const kindOf = (v: string): CarKind => (VARIANTS[v]?.kind ?? v) as CarKind;
+  let variant = o.variant && VARIANTS[o.variant] ? o.variant : variantsOf(o.spec ?? "sedan")[0];
+  let spec: CarSpec = structuredClone(variantSpec(kindOf(variant), variant));
   let car: CarState;
+  let drive: Drive | null = null;
   let model: Sedan;
   let rig: CarRig;
   const helps: Helps = { ...HELPS };
+  // (docs/plan/92 phase 9) its damage as the game counts it — M mends it; smoke, steam and sparks
+  let dmg = noDamage();
+  let hitAt = -1;
+  let acc = 0;
   const place = (x: number, z: number, a: number) => {
-    car = createCar(spec, x, world.height(x, z), z, a);
-    settle(car, world);
+    if (drive) {
+      jolt.world.removeCar(drive.car);
+      jolt.drives.length = 0;
+    }
+    drive = jolt.add(spec, x, z, a);
+    car = drive.s;
     setEngine(car, true);
     car.temp = 0.4;
     if (model) {
       scene.remove(model.root);
       model.dispose();
     }
-    model = buildSedan({ colour: spec.kind === "offroad" ? 0x2f4a3b : 0x6b2430, snowy: 0.2, kind: spec.kind });
+    const look = { ...seededLook(`dev-${variant}`, spec.kind), variant };
+    model = buildCar({ variant, look, renderer, level: "near" });
     scene.add(model.root);
     rig = new CarRig(model, car);
+    // (a new car's clock starts again; its damage kept, shown on the new model — M mends it)
+    hitAt = -1;
+    model.setWear(0.2, dmg.zones, dmg.parts);
     rig.state.beams = night ? "low" : "off";
     rig.state.dash = night ? 1 : 0.45;
     model.root.traverse((m) => {
@@ -150,6 +183,11 @@ export async function runSandbox(el: HTMLElement, o: SandboxOpts): Promise<() =>
     return s;
   });
 
+  const smoke = new Smoke(scene as unknown as T3.Group);
+  const sparks = new Sparks(scene as unknown as T3.Group);
+  let steamAt = 0;
+  const padHeightAt = (x: number, z: number) => world.height(x, z);
+
   // ── input, sound, camera ──
   const input = new CarInput();
   const camCtl = new CarCamera();
@@ -158,7 +196,8 @@ export async function runSandbox(el: HTMLElement, o: SandboxOpts): Promise<() =>
   const startSound = async () => {
     await mixer.resume();
     if (!sound && mixer.ctx) {
-      sound = new CarSound(mixer.ctx, mixer.buses.effects);
+      sound = new CarSound(mixer.ctx, mixer.buses.effects, { kind: kindOf(variant), variant });
+      sound.belt();
       sound.start(1 - car.temp / 0.55);
     }
   };
@@ -174,6 +213,11 @@ export async function runSandbox(el: HTMLElement, o: SandboxOpts): Promise<() =>
       rig.state.dash = night ? 1 : 0.45;
     }
     if (e.code === "KeyT") place(car.p.x, car.p.z, headingOf(car.q)); // (back on its wheels)
+    if (e.code === "KeyR" && drive) drive.right(world); // (on its roof: righted, as in the game)
+    if (e.code === "KeyM") {
+      dmg = noDamage();
+      model.setWear(0, dmg.zones, 0);
+    }
   };
   const onUp = (e: KeyboardEvent) => input.keyUp(e.code);
   addEventListener("keydown", onDown);
@@ -188,14 +232,22 @@ export async function runSandbox(el: HTMLElement, o: SandboxOpts): Promise<() =>
     },
     helps,
     teleport: (x, z, a) => place(x, z, a),
+    drive: () => drive,
     swap: (k) => {
-      spec = structuredClone(SPECS[k]);
+      variant = k;
+      // (its engine and its doors: the new one's, started again)
+      if (sound) {
+        sound.dispose();
+        sound = null;
+        void startSound();
+      }
+      spec = structuredClone(variantSpec(kindOf(k), k));
       place(car.p.x, car.p.z, headingOf(car.q));
     },
   });
 
   // ── the loop: fixed steps, drawn in between ──
-  let acc = 0;
+  let stepMs = 0;
   let last = performance.now();
   let raf = 0;
   let t = 0;
@@ -219,23 +271,95 @@ export async function runSandbox(el: HTMLElement, o: SandboxOpts): Promise<() =>
       if (sw === "diff") car.lock = !car.lock;
       if (sw === "range") car.low = !car.low;
     }
-    acc += dt;
-    let steps = 0;
-    while (acc >= STEP && steps < 12) {
-      stepCar(car, c, world, helps);
+    // (Jolt at the game's fixed 1/60 s, two collision steps each, drawn between the last two —
+    // car/cars.ts drive; a bad front pulls the wheel)
+    const t0 = performance.now();
+    c.steer = Math.max(-1, Math.min(1, c.steer + steerPull(dmg)));
+    acc = Math.min(acc + Math.min(dt, 0.25), 4 / 60);
+    while (acc >= 1 / 60) {
+      jolt.step(c, 1 / 60, helps);
       rig.stepped();
-      acc -= STEP;
-      steps++;
-      ui.sample(car);
+      acc -= 1 / 60;
     }
+    // its knocks: the game's own rule (world/car/cars.ts hitBy)
+    const h = car.hit;
+    if (h && h.what !== "bank" && h.what !== "person" && h.j >= 2500 && car.t - hitAt > 0.3) {
+      const k = Math.min(0.35, (h.j - 2500) / 16000);
+      const up = 1 - 2 * (car.q.x * car.q.x + car.q.z * car.q.z);
+      if (h.what === "ground") {
+        if (up < 0.35) {
+          hitAt = car.t;
+          knock(dmg, 4, k, 0);
+        }
+      } else {
+        hitAt = car.t;
+        const a = headingOf(car.q);
+        const b = spec.body;
+        const off = (b.ahead - b.behind) / 2;
+        const hx = (b.ahead + b.behind) / 2;
+        const hz = b.width / 2;
+        const dx = h.x - (car.p.x + Math.cos(a) * off);
+        const dz = h.z - (car.p.z + Math.sin(a) * off);
+        const u = dx * Math.cos(a) + dz * Math.sin(a);
+        const w = -dx * Math.sin(a) + dz * Math.cos(a);
+        const i = u > hx * 0.55 ? 0 : u < -hx * 0.55 ? 1 : w < 0 ? 2 : 3;
+        const across = i < 2 ? Math.max(-1, Math.min(1, w / hz)) : Math.max(-1, Math.min(1, u / hx));
+        knock(dmg, i as 0 | 1 | 2 | 3, k, across);
+        if ((h.v ?? 0) > 3) sparks.burst(h.x, car.p.y, h.z, car.v.x, car.v.z, 0, 0, Math.min(1, (h.v ?? 0) / 10));
+      }
+      model.setWear(0.2, dmg.zones, dmg.parts);
+    }
+    // smoke off sliding tyres, powder off the snow, steam from a smashed front
+    for (const wh of car.wheels) {
+      if (!wh.contact || wh.slip < 2.5 || Math.random() > Math.min(1, (wh.slip - 2.5) / 5 + 0.25) * dt * 40) continue;
+      const ks = Math.min(1, (wh.slip - 2.5) / 9);
+      const loose = wh.ground === "snow" || wh.ground === "deep" || wh.ground === "path";
+      smoke.emit(
+        wh.px + (Math.random() - 0.5) * 0.3,
+        (loose ? 0.3 : 0.18) + padHeightAt(wh.px, wh.pz),
+        wh.pz + (Math.random() - 0.5) * 0.3,
+        car.v.x * (loose ? -0.15 : 0.25) + (Math.random() - 0.5),
+        loose ? 1.2 + ks * 2 : 0.4 + Math.random() * 0.5,
+        car.v.z * (loose ? -0.15 : 0.25) + (Math.random() - 0.5),
+        0.7 + ks * 0.6,
+        4 + ks * 3,
+        loose ? 1 + ks * 0.8 : 1.8 + ks * 1.6,
+        loose ? 0xf3f6f9 : night ? 0x9aa0a8 : 0xe2e3e4,
+        loose ? (0.14 + ks * 0.2) * Math.min(1, 0.3 + Math.hypot(car.v.x, car.v.z) / 6) : 0.16 + ks * 0.22,
+      );
+    }
+    const steam = steamOf(dmg);
+    if (steam > 0 && t - steamAt > 0.12 / steam && model.lamps.head[0]) {
+      steamAt = t;
+      const h0 = model.lamps.head[0];
+      const h1 = model.lamps.head[1] ?? h0;
+      v.set((h0.x + h1.x) / 2 + 0.55, Math.max(h0.y, h1.y) + 0.3, 0).applyMatrix4(model.root.matrixWorld);
+      smoke.emit(
+        v.x,
+        v.y,
+        v.z,
+        car.v.x * 0.5,
+        0.8,
+        car.v.z * 0.5,
+        0.45,
+        4,
+        2.2,
+        night ? 0x8c949e : 0xf4f6f8,
+        0.35 * steam,
+      );
+    }
+    smoke.step(dt, night ? 1 : 0);
+    sparks.step(dt);
+    stepMs = stepMs * 0.95 + (performance.now() - t0) * 0.05;
+    ui.sample(car);
     rig.state.clock = new Date().toTimeString().slice(0, 5);
-    rig.pose(acc / STEP, dt, t);
+    rig.pose(Math.min(1, acc * 60), dt, t);
     // lamps
     const lit = rig.state.beams !== "off";
     model.root.updateMatrixWorld();
     model.lamps.head.forEach((h, i) => {
       const s = heads[i];
-      s.intensity = lit ? (rig.state.beams === "high" ? 220 : 120) : 0;
+      s.intensity = lit ? (rig.state.beams === "high" ? 220 : 120) * headK(dmg, i === 0 ? "l" : "r") : 0;
       s.angle = rig.state.beams === "high" ? 0.36 : 0.5;
       s.position.copy(h).applyMatrix4(model.root.matrixWorld);
       v.set(h.x - 30, h.y - (rig.state.beams === "high" ? 0.4 : 1.3), h.z).applyMatrix4(model.root.matrixWorld);
@@ -252,10 +376,15 @@ export async function runSandbox(el: HTMLElement, o: SandboxOpts): Promise<() =>
     if (sound) {
       sound.update(
         car,
-        { inside: camCtl.mode === "cockpit", gain: 1, pan: 0 },
+        {
+          inside: camCtl.mode === "cockpit",
+          dist: Math.hypot(cam.position.x - car.p.x, cam.position.y - car.p.y, cam.position.z - car.p.z),
+          at: null,
+        },
         dt,
         rig.state.ind !== 0 && t % 0.9 < 0.45,
         true,
+        { hand: c.hand, wipers: rig.state.wipers, indicating: rig.state.ind !== 0 || rig.state.hazard },
       );
       sound.horn(input.horn);
     }
@@ -266,7 +395,7 @@ export async function runSandbox(el: HTMLElement, o: SandboxOpts): Promise<() =>
       Math.min(1, slip / 8) * 0.5,
     );
     renderer.render(scene, cam);
-    ui.draw(car, helps);
+    ui.draw(car, helps, stepMs, drive?.canRight ?? false);
   };
   raf = requestAnimationFrame(frame);
   const onResize = () => {
@@ -297,6 +426,9 @@ export async function runSandbox(el: HTMLElement, o: SandboxOpts): Promise<() =>
     removeEventListener("resize", onResize);
     sound?.dispose();
     model.dispose();
+    smoke.dispose();
+    sparks.dispose();
+    jolt.dispose();
     groundsBuilt?.dispose();
     renderer.dispose();
     renderer.domElement.remove();
@@ -391,23 +523,24 @@ interface PanelCtx {
   setSpec: (s: CarSpec) => void;
   helps: Helps;
   teleport: (x: number, z: number, a: number) => void;
-  swap: (k: CarKind) => void;
+  swap: (variant: string) => void;
+  drive: () => Drive | null;
 }
 function panel(host: HTMLElement, ctx: PanelCtx) {
   const tele = document.createElement("canvas");
   tele.width = 420;
-  tele.height = 560;
+  tele.height = 700;
   Object.assign(tele.style, {
     position: "fixed",
     left: "8px",
     top: "8px",
     width: "420px",
-    height: "560px",
+    height: "700px",
     pointerEvents: "none",
   });
   host.appendChild(tele);
   const g = tele.getContext("2d") as CanvasRenderingContext2D;
-  const hist: { kmh: number; rpm: number; beta: number }[] = [];
+  const hist: { kmh: number; rpm: number; beta: number; aF: number; aR: number; ay: number }[] = [];
   let sampleN = 0;
 
   const box = document.createElement("div");
@@ -459,13 +592,79 @@ function panel(host: HTMLElement, ctx: PanelCtx) {
       ctx.helps.counter = v;
     },
   );
+  // the feel (docs/plan/92: the arcade layer and the tyres — live, copied out below)
+  row("<br><b>Feel</b> (Jolt)");
+  const knob = (label: string, o: Record<string, number>, k: string, min: number, max: number, step: number) =>
+    slider(
+      box,
+      label,
+      min,
+      max,
+      step,
+      () => o[k],
+      (v) => {
+        o[k] = v;
+      },
+    );
+  knob("grip ×", FEEL as unknown as Record<string, number>, "mu", 0.7, 1.6, 0.02);
+  knob("grip +", FEEL as unknown as Record<string, number>, "mu0", 0, 0.3, 0.01);
+  knob("peak width", FEEL as unknown as Record<string, number>, "peak", 0.8, 2.5, 0.05);
+  knob("slide kept", FEEL as unknown as Record<string, number>, "slide", 0, 0.8, 0.02);
+  const A = ASSIST as unknown as Record<string, number>;
+  {
+    // (plan 93: the tyre-led layer, or plan 92's as driven on 2026-11-16 — `?feel=92` opens on it)
+    const r = row(
+      "feel: <button data-f='93'>93 · tyre-led</button> <button data-f='92'>92 · as before</button> <span></span>",
+    );
+    const say = r.querySelector("span") as HTMLElement;
+    const show = () => {
+      say.textContent = ASSIST.tyreLed ? "(93)" : "(92)";
+    };
+    r.querySelectorAll("button").forEach((b) => {
+      b.onclick = () => {
+        if (b.dataset.f === "92") feel92();
+        else feel93();
+        show();
+      };
+    });
+    show();
+  }
+  knob("turn-in", A, "turnIn", 0, 10, 0.1);
+  knob("turn-in from grip used", A, "pushFrom", 0.5, 1.5, 0.05);
+  knob("stability from β (rad)", A, "stabFrom", 0, 0.4, 0.01);
+  knob("yaw damp", A, "damp", 0, 6, 0.1);
+  knob(
+    "drift cap °",
+    {
+      get v() {
+        return (ASSIST.driftCap * 180) / Math.PI;
+      },
+      set v(x) {
+        ASSIST.driftCap = (x * Math.PI) / 180;
+      },
+    } as unknown as Record<string, number>,
+    "v",
+    10,
+    80,
+    1,
+  );
+  knob("handbrake grip", A, "handGrip", 0.05, 1, 0.01);
+  knob("handbrake yaw", A, "handYaw", 0, 6, 0.1);
+  knob("drift grip", A, "driftGrip", 0.4, 1, 0.01);
+  knob("grip back /s", A, "back", 0.2, 8, 0.1);
+  knob("speed hold", A, "hold", 0, 1, 0.02);
+  row("<button data-feel>copy feel</button>")
+    .querySelector("button")
+    ?.addEventListener("click", () => void navigator.clipboard.writeText(JSON.stringify({ FEEL, ASSIST }, null, 2)));
   // the car's numbers
   row(
-    "<br><b>Car</b> <button data-k='sedan'>sedan</button> <button data-k='offroad'>4x4</button> <button data-k='pickup'>pickup</button>",
+    `<br><b>Car</b> ${[...Object.keys(VARIANTS), "snowmobile", "snowcat", "ploughtruck", "tractor", "toboggan"]
+      .map((k) => `<button data-k='${k}'>${k}</button>`)
+      .join(" ")}`,
   )
     .querySelectorAll("button")
     .forEach((b) => {
-      b.onclick = () => ctx.swap(b.dataset.k as CarKind);
+      b.onclick = () => ctx.swap(b.dataset.k ?? "saloon-base");
     });
   const sp = (
     label: string,
@@ -674,14 +873,22 @@ function panel(host: HTMLElement, ctx: PanelCtx) {
     sample(s: CarState) {
       if (++sampleN % 6) return;
       const r = readout(s);
-      hist.push({ kmh: r.kmh, rpm: s.rpm, beta: r.beta });
+      const w = s.wheels;
+      hist.push({
+        kmh: r.kmh,
+        rpm: s.rpm,
+        beta: r.beta,
+        aF: (Math.abs(w[0].alpha) + Math.abs(w[1].alpha)) / 2,
+        aR: (Math.abs(w[2]?.alpha ?? 0) + Math.abs(w[3]?.alpha ?? 0)) / 2,
+        ay: ctx.drive()?.assistYaw ?? 0,
+      });
       if (hist.length > 400) hist.shift();
     },
-    draw(s: CarState, helps: Helps) {
+    draw(s: CarState, helps: Helps, stepMs = 0, canRight = false) {
       const r = readout(s);
-      g.clearRect(0, 0, 420, 560);
+      g.clearRect(0, 0, 420, 700);
       g.fillStyle = "rgba(12,14,16,0.78)";
-      g.fillRect(0, 0, 420, 560);
+      g.fillRect(0, 0, 420, 700);
       g.fillStyle = "#ffb24a";
       g.font = "700 34px monospace";
       g.fillText(`${Math.abs(r.kmh).toFixed(0)} km/h`, 14, 42);
@@ -706,7 +913,7 @@ function panel(host: HTMLElement, ctx: PanelCtx) {
         104,
       );
       g.fillText(
-        `belly ${s.belly.toFixed(2)}  temp ${((s.temp / 0.55) * 90).toFixed(0)}°C  fuel ${s.fuel.toFixed(1)} L  ${s.lock ? "LOCK " : ""}${s.low ? "LOW" : ""}`,
+        `jolt ${stepMs.toFixed(2)} ms${canRight ? "  R: right it" : ""}  belly ${s.belly.toFixed(2)}  temp ${((s.temp / 0.55) * 90).toFixed(0)}°C  fuel ${s.fuel.toFixed(1)} L  ${s.lock ? "LOCK " : ""}${s.low ? "LOW" : ""}`,
         14,
         124,
       );
@@ -777,8 +984,32 @@ function panel(host: HTMLElement, ctx: PanelCtx) {
         else g.moveTo(x, y);
       });
       g.stroke();
+      // (plan 93) the tyres' slip angles — front (orange), rear (green): a planted rear stays near the floor —
+      // and the arcade layer's own yaw (pink, ± about the line): what the tyres didn't do
+      const band = (pick: (h: (typeof hist)[number]) => number, colour: string, base: number, k: number) => {
+        g.strokeStyle = colour;
+        g.beginPath();
+        hist.forEach((h, i) => {
+          const x = 14 + (i / 400) * 392;
+          const y = base - pick(h) * k;
+          if (i) g.lineTo(x, y);
+          else g.moveTo(x, y);
+        });
+        g.stroke();
+      };
+      g.strokeStyle = "#333";
+      g.strokeRect(14, 572, 392, 120);
+      band((h) => h.aF, "#ff8a3d", 640, 220);
+      band((h) => h.aR, "#6ad26a", 640, 220);
+      band((h) => h.ay, "#ff6ad5", 670, 6);
       g.fillStyle = "#888";
       g.fillText("speed · β", 14, 396);
+      g.fillStyle = "#ff8a3d";
+      g.fillText("α front", 14, 566);
+      g.fillStyle = "#6ad26a";
+      g.fillText("α rear", 130, 566);
+      g.fillStyle = "#ff6ad5";
+      g.fillText("assist yaw", 240, 566);
       void helps;
     },
     dispose() {

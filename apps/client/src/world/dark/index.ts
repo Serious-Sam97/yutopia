@@ -10,7 +10,17 @@ import {
   SEARCH_MS,
 } from "@yutopia/shared/dark";
 import { heightAt } from "@yutopia/shared/grounds";
-import { count, findStack, type Inventory, type ItemId, isUsable, isWeapon, WEAPONS } from "@yutopia/shared/inventory";
+import {
+  count,
+  findStack,
+  type Inventory,
+  type ItemId,
+  isUsable,
+  isWeapon,
+  STACKS as STACKS_ANY,
+  WEAPONS,
+} from "@yutopia/shared/inventory";
+import { Vector3 } from "three";
 import { addStrings, trMaybe } from "@/lib/i18n";
 import type { WorldController } from "../controller";
 import { eyesOf, glareOf, stepEyes } from "../eyes";
@@ -207,7 +217,31 @@ class Dark implements DarkHooks {
     this.shades = new Shades(ctl);
     this.voices = new DarkSound(ctl, walker, this.shades);
     this.vitals = new VitalsHud(ctl, walker, this.root);
-    this.arms = new Arms(ctl, walker, this.shades, () => this.inv, this.root, this.voices);
+    // (plan 93 S2: sat in a car, the guns see the seat — drawn as its rules allow, aimed with the right button
+    // there, fired out of its window — and the walker otherwise)
+    const seat = () => ctl.cars?.gunSeat() ?? null;
+    const armsWalker = new Proxy(walker, {
+      get(t, k) {
+        const g = seat();
+        if (g) {
+          if (k === "stepping") return g.canDraw;
+          if (k === "aiming") return g.aiming;
+          if (k === "where")
+            // (where a gun's fired from, less what Arms adds on foot — ahead, aside, a hand's height — so its
+            // muzzle comes out at the window's)
+            return () => {
+              const m = g.muzzle();
+              const d = ctl.tp?.camera.getWorldDirection(new Vector3());
+              const yaw = d ? Math.atan2(d.z, d.x) : 0;
+              const f = { x: Math.cos(yaw), y: Math.sin(yaw) };
+              return { x: m.x - f.x * 0.45 + f.y * 0.22, y: m.y - f.y * 0.45 - f.x * 0.22, z: m.z - 1.35 };
+            };
+        }
+        const v = Reflect.get(t, k, t);
+        return typeof v === "function" ? v.bind(t) : v;
+      },
+    });
+    this.arms = new Arms(ctl, armsWalker, this.shades, () => this.inv, this.root, this.voices);
     this.arms.onQuick = (n, ok) => {
       this.quickPulse = { n, ok, until: performance.now() + (ok ? 160 : 280) };
       this.quickKey = "";
@@ -225,11 +259,32 @@ class Dark implements DarkHooks {
       () => this.inv,
       {
         use: (slot) => ctl.room?.send("dark:use", { slot }),
-        drop: (slot, n) => ctl.room?.send("dark:drop", n === undefined ? { slot } : { slot, n }),
+        // (plan 93 S4: a car's boot or glove box open — what's dropped goes in it; what's taken comes out of it)
+        drop: (slot, n) => {
+          const st = ctl.cars?.store();
+          if (st)
+            ctl.room?.send("car:put", { kind: st.kind, id: st.id, from: slot, ...(n === undefined ? {} : { n }) });
+          else ctl.room?.send("dark:drop", n === undefined ? { slot } : { slot, n });
+        },
         move: (from, to) => ctl.room?.send("dark:move", { from, to }),
         split: (from, to, n) => ctl.room?.send("dark:split", n === undefined ? { from, to } : { from, to, n }),
-        pick: (id, slot) => ctl.room?.send("dark:pick", slot === undefined ? { id } : { id, slot }),
-        takeAll: () => ctl.room?.send("dark:takeAll", {}),
+        pick: (id, slot) => {
+          const st = id.startsWith("store:") ? ctl.cars?.store() : null;
+          if (st)
+            ctl.room?.send("car:take", {
+              kind: st.kind,
+              id: st.id,
+              i: Number(id.slice(6)),
+              ...(slot === undefined ? {} : { slot }),
+            });
+          else ctl.room?.send("dark:pick", slot === undefined ? { id } : { id, slot });
+        },
+        takeAll: () => {
+          const st = ctl.cars?.store();
+          if (st) ctl.room?.send("car:take", { kind: st.kind, id: st.id, i: -1 });
+          else ctl.room?.send("dark:takeAll", {});
+        },
+        store: () => ctl.cars?.store() ?? null,
         organize: () => ctl.room?.send("dark:organize", {}),
         draw: (slot) => this.arms.draw(slot),
         quick: (n) => this.arms.quick(n),
@@ -471,6 +526,10 @@ class Dark implements DarkHooks {
   }
 
   // ── the server's word ────────────────────────────────────────────────────
+  /** (plan 93 S6) How many of a stack I carry (the cars' chain prompt asks) */
+  countOf(id: string): number {
+    return this.inv && id in STACKS_ANY ? count(this.inv, id as Parameters<typeof count>[1]) : 0;
+  }
   private pockets(inv: Inventory, bat: number) {
     const was = this.inv;
     this.inv = inv;

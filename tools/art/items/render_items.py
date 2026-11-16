@@ -321,10 +321,71 @@ def item(name):
         box(0.006, 0.0012, 0.03, (-0.004, 0.0, -0.088), m=tapem)
         objs = list(bpy.data.objects)
         turn = (math.radians(-12), 0, math.radians(-16))
+    elif name == "chains":
+        # (plan 93 S6) a snow chain laid out flat: its two side chains, the ladder's cross chains between them (the
+        # links' own steel, a little rust at the joins), a yellow tensioner hook at one end
+        steel = mat("steel", (0.55, 0.56, 0.58), 0.32, 1.0)
+        rust = mat("rust", (0.32, 0.17, 0.08), 0.75, 0.4)
+        yellow = mat("hook", (0.95, 0.72, 0.08), 0.45, 0.1)
+
+        def link(at, rot, m=steel):
+            bpy.ops.mesh.primitive_torus_add(
+                major_radius=0.007, minor_radius=0.0019, major_segments=20, minor_segments=8, location=at, rotation=rot
+            )
+            o = bpy.context.object
+            o.scale = (1.0, 1.55, 1.0)
+            put(o, m)
+
+        n = 14
+        step = 0.0165
+        for side in (-0.045, 0.045):
+            for i in range(n):
+                y = (i - n / 2) * step
+                link((side, y, 0), (0, 0, 0) if i % 2 else (0, math.pi / 2, 0), rust if i % 5 == 4 else steel)
+        for j in range(4):
+            y = (j - 1.5) * step * 3.4
+            for k in range(5):
+                x = (k - 2) * step
+                link((x, y, 0.0006), (0, 0, math.pi / 2) if k % 2 else (math.pi / 2, 0, math.pi / 2))
+        box(0.014, 0.022, 0.006, (0.045, (n / 2 + 0.6) * step, 0), m=yellow, bevel=0.002)
+        objs = list(bpy.data.objects)
+        turn = (math.radians(-55), 0, math.radians(-25))
+    elif name == "wrench":
+        # (plan 93 S7) a combination wrench: the shank, its open jaw at one end, the ring at the other
+        steel = mat("steel", (0.62, 0.63, 0.66), 0.25, 1.0)
+        dark = mat("dark", (0.08, 0.08, 0.09), 0.5, 0.6)
+        box(0.012, 0.004, 0.16, (0, 0, 0), m=steel, bevel=0.0015)
+        # (the open jaw: a base and its two prongs, a gap between them, turned 15° off the shank)
+        box(0.036, 0.005, 0.012, (0, 0, 0.084), m=steel, bevel=0.002)
+        for sx in (-1, 1):
+            box(0.01, 0.005, 0.024, (sx * 0.013, 0, 0.1), m=steel, bevel=0.002)
+        void = dark
+        bpy.ops.mesh.primitive_torus_add(major_radius=0.012, minor_radius=0.0045, location=(0, 0, -0.088), rotation=(math.pi / 2, 0, 0))
+        put(bpy.context.object, steel)
+        objs = list(bpy.data.objects)
+        turn = (0, math.radians(60), math.radians(-30))
+    elif name == "towrope":
+        # (plan 93 S7) a tow rope coiled: an orange strap in loops, a steel hook out of it each end
+        orange = mat("rope", (0.9, 0.42, 0.06), 0.8)
+        steel = mat("hook", (0.6, 0.6, 0.63), 0.3, 1.0)
+        for i, r in enumerate((0.05, 0.043, 0.036)):
+            bpy.ops.mesh.primitive_torus_add(major_radius=r, minor_radius=0.006, major_segments=40, location=(0, 0, i * 0.004))
+            o = bpy.context.object
+            o.scale = (1.0, 0.8, 1.0)
+            put(o, orange)
+        # (its two ends off the coil, flat straps out to either side, a hook on each)
+        for sx in (-1, 1):
+            box(0.045, 0.012, 0.003, (sx * 0.072, -0.012, 0.009), m=orange)
+            bpy.ops.mesh.primitive_torus_add(
+                major_radius=0.01, minor_radius=0.003, location=(sx * 0.1, -0.012, 0.009), rotation=(math.pi / 2, 0, 0)
+            )
+            put(bpy.context.object, steel)
+        objs = list(bpy.data.objects)
+        turn = (math.radians(-50), 0, math.radians(15))
     frame(objs, res, turn)
     render(name)
 
 
 for n in ("revolver", "shotgun", "ak47", "sniper", "daybreak", "r38", "shell", "r762", "r308", "cell", "flare",
-          "battery", "aid", "fuse", "torch", "vxtape"):
+          "battery", "aid", "fuse", "torch", "vxtape", "chains", "wrench", "towrope"):
     item(n)

@@ -2,7 +2,19 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { ROOM_NAME } from "@yutopia/shared";
-import { type CarWire, HOME_CARS, headingQuat, parkedPose } from "@yutopia/shared/car";
+import {
+  type CarWire,
+  CHAIN_ON_MS,
+  carKindOf,
+  chainSpot,
+  HOME_CARS,
+  headingQuat,
+  MEND_MS,
+  PART,
+  parkedPose,
+  parseDamage,
+  SPECS,
+} from "@yutopia/shared/car";
 import { heightAt, POND, POND_LEVEL } from "@yutopia/shared/grounds";
 import { Client, type Room } from "colyseus.js";
 
@@ -34,6 +46,8 @@ async function waitFor(fn: () => boolean, ms = 6000) {
 // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
 const me = (room: Room): any => room.state.players.get(room.sessionId);
 const props = (o: { props: string }) => JSON.parse(o.props) as Record<string, unknown>;
+/** a pack's place, as the server sends it */
+type Slot = { id: string; n: number } | null;
 
 test("into a lot car, driven, a passenger beside, out — and it's parked where it stopped", async () => {
   const join = async (uid: number) => {
@@ -239,6 +253,14 @@ test("its tank and its wear: only down from the driver, kept when parked; a pass
   await waitFor(() => v().grime > 0);
   assert.ok(Math.abs(v().grime - 0.1) < 1e-3, "the dirt: no more than 0.1 at once");
   assert.equal(v().dmg, "0.2,0,0,0.5");
+  // the roof and the parts (docs/plan/92 phase 9): the bumper gone and a lamp out kept, never mended by
+  // the driver (a part once broken stays, a zone never less)
+  a.send("car:wear", { grime: 0.1, dmg: [0.1, 0, 0, 0.5, 0.3], parts: 2 | 16 });
+  await waitFor(() => v().dmg.includes("|"));
+  assert.equal(v().dmg, "0.2,0,0,0.5,0.3|19");
+  a.send("car:wear", { grime: 0.1, dmg: [0.2, 0, 0, 0.5, 0.3], parts: 0 });
+  await sleep(150);
+  assert.equal(v().dmg, "0.2,0,0,0.5,0.3|19");
   // not at a pump: no filling
   let why = "";
   a.onMessage("car:no", (m: { why: string }) => {
@@ -275,7 +297,7 @@ test("its tank and its wear: only down from the driver, kept when parked; a pass
   const p = props(a.state.objects.get(o.id));
   assert.ok(Math.abs(Number(p.fuel) - 29.9 / 60) < 2e-3, `its tank kept: ${p.fuel}`);
   assert.equal(p.grime, 0.1);
-  assert.equal(p.dmg, "0.2,0,0,0.5");
+  assert.equal(p.dmg, "0.2,0,0,0.5,0.3|19");
   // the lot put back: fresh
   a.send("mod:cars", {});
   await waitFor(() => props(a.state.objects.get(o.id)).fuel === undefined);
@@ -511,4 +533,386 @@ test("into the pond (plan 66): driven in deep, its people are out of it afloat, 
   await waitFor(() => why === "gone");
   r.send("mod:ground", { to: "snow", now: true });
   await waitFor(() => r.state.weather.ice === 1);
+});
+
+test("(plan 93 S3) knocked at a walk's pace: a stagger, unhurt; in a fight, at speed: down and hurt by how fast", async () => {
+  const join = async (uid: number, roles: string) => {
+    const r = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+      sandbox: 10,
+      token: `dev:${uid}:P${uid}:${roles}`,
+    });
+    rooms.push(r);
+    await waitFor(() => r.state.players?.size > 0 && r.state.objects?.size > 0);
+    return r;
+  };
+  const a = await join(47, "member,builder,admin");
+  const b = await join(48, "member,builder");
+  a.send("mod:cars", {});
+  a.send("mod:dark", { mode: "peaceful" });
+  await sleep(300);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const o: any = [...a.state.objects.values()].filter((c: any) => c.kind === "car" && !props(c).driven)[1];
+  const pose = parkedPose({ x: o.x, y: o.y, yaw: o.yaw, props: props(o) });
+  const door = { x: pose.x + Math.cos(pose.a) * 3.4, y: pose.y + Math.sin(pose.a) * 3.4 };
+  for (const r of [a, b]) r.send("teleport", { to: { ...door, level: 0 } });
+  await waitFor(() => me(a).level === 0 && me(b).level === 0);
+  a.send("car:enter", { id: o.id, seat: 0 });
+  const vid = `car:${o.id}`;
+  await waitFor(() => me(a).busy === `drive:${vid}`);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const v = (): any => a.state.vehicles.get(vid);
+  const x = v().x;
+  const z = v().z;
+  const ca = Math.cos(v().a);
+  const sa = Math.sin(v().a);
+  const q = headingQuat(v().a);
+  let seq = 0;
+  const state = (speed: number): CarWire => ({
+    seq: ++seq,
+    x,
+    y: heightAt(x, z) + 0.52,
+    z,
+    qx: q.x,
+    qy: q.y,
+    qz: q.z,
+    qw: q.w,
+    vx: ca * speed,
+    vy: 0,
+    vz: sa * speed,
+    wy: 0,
+    steer: 0,
+    rpm: 1500,
+    gear: 1,
+    fl: 1024,
+    slip: 0,
+    fuel: 40,
+  });
+  // at 3 m/s (~11 km/h): a stagger — thrown, on her feet, unhurt
+  a.send("car:state", state(3));
+  await sleep(120);
+  a.send("car:knock", { sid: b.sessionId });
+  await waitFor(() => me(b).hitAt > 0);
+  assert.equal(me(b).fellAt, 0, "not down");
+  assert.equal(me(b).hp, 100, "unhurt");
+  // the driver fires out of her window: a fight
+  a.send("mod:refill", { kit: true });
+  await sleep(400);
+  a.send("car:state", state(0));
+  a.send("arms:draw", { slot: 0 });
+  await waitFor(() => me(a).gun === "revolver");
+  await sleep(700);
+  const m = me(a);
+  const yaw = Math.atan2(-Math.cos(v().a), Math.sin(v().a));
+  a.send("arms:fire", {
+    ox: m.x + Math.sin(v().a) * 0.6,
+    oy: m.y - Math.cos(v().a) * 0.6,
+    oz: m.z + 0.75,
+    yaw,
+    pitch: 0.3,
+    lag: 0,
+    seed: 1,
+  });
+  await sleep(4200); // (the knock's own again)
+  // at 10 m/s, into her: down, and hurt by it — (10 − 3) × 4
+  a.send("car:state", state(10));
+  await sleep(120);
+  a.send("car:knock", { sid: b.sessionId });
+  await waitFor(() => me(b).fellAt > 0);
+  await waitFor(() => me(b).hp === 72, 3000);
+});
+
+test("(plan 93 S4) its boot, stood behind it parked: put in, taken out, kept on it; its glove box from the front seat", async () => {
+  const r = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+    sandbox: 11,
+    token: "dev:49:P49:member,builder,admin",
+  });
+  rooms.push(r);
+  // biome-ignore lint/suspicious/noExplicitAny: the pack as the server sends it
+  let inv: any = null;
+  r.onMessage("dark:pockets", (m: { inv: unknown }) => {
+    inv = m.inv;
+  });
+  r.onMessage("*", () => {});
+  await waitFor(() => r.state.players?.size > 0 && r.state.objects?.size > 0);
+  r.send("dark:hello", {});
+  await waitFor(() => inv !== null);
+  r.send("mod:cars", {});
+  r.send("mod:refill", { kit: true });
+  await sleep(500);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const o: any = [...r.state.objects.values()].filter((c: any) => c.kind === "car" && !props(c).driven)[2];
+  const pose = parkedPose({ x: o.x, y: o.y, yaw: o.yaw, props: props(o) });
+  const back = 2.58 + 0.35; // (a saloon's back from its middle, and a step)
+  const behind = { x: pose.x - Math.cos(pose.a) * back, y: pose.y - Math.sin(pose.a) * back };
+  // (a stack in the pockets: which)
+  // biome-ignore lint/suspicious/noExplicitAny: the pack
+  const stackAt = () => (inv.pockets as any[]).findIndex((it) => it && !("loaded" in it));
+  const total = (id: string) =>
+    [...inv.pockets, ...inv.quick, inv.hand].reduce((a: number, it: Slot) => a + (it?.id === id ? it.n : 0), 0);
+  await waitFor(() => stackAt() >= 0);
+  const slot = stackAt();
+  const what = inv.pockets[slot].id;
+  const had = total(what);
+  // too far: nothing
+  r.send("teleport", { to: { x: behind.x - Math.cos(pose.a) * 3, y: behind.y - Math.sin(pose.a) * 3, level: 0 } });
+  await sleep(500);
+  r.send("car:put", { kind: "boot", id: o.id, from: slot });
+  await sleep(400);
+  assert.equal(props(r.state.objects.get(o.id)).boot, undefined, "not from there");
+  // behind it: in
+  r.send("teleport", { to: { ...behind, level: 0 } });
+  await waitFor(() => Math.hypot(me(r).x - behind.x, me(r).y - behind.y) < 0.5);
+  r.send("car:put", { kind: "boot", id: o.id, from: slot });
+  // biome-ignore lint/suspicious/noExplicitAny: props
+  await waitFor(() => ((props(r.state.objects.get(o.id)).boot as any[]) ?? []).some((s) => s.id === what));
+  await waitFor(() => total(what) === 0 || total(what) < had);
+  // out again: all of it
+  r.send("car:take", { kind: "boot", id: o.id, i: -1 });
+  await waitFor(() => props(r.state.objects.get(o.id)).boot === undefined);
+  await waitFor(() => total(what) === had);
+  // something left in it, the car driven off and parked: still in it
+  r.send("car:put", { kind: "boot", id: o.id, from: slot, n: 1 });
+  await waitFor(() => !!props(r.state.objects.get(o.id)).boot);
+  r.send("car:enter", { id: o.id, seat: 0 });
+  const vid = `car:${o.id}`;
+  await waitFor(() => me(r).busy === `drive:${vid}`);
+  // the glove box, sat at the wheel: the revolver in it, and out
+  const rev = (inv.quick as { id: string }[]).findIndex((it) => it?.id === "revolver");
+  assert.ok(rev >= 0, "a revolver at hand");
+  r.send("car:put", { kind: "glove", id: o.id, from: 8 + rev });
+  // biome-ignore lint/suspicious/noExplicitAny: props
+  await waitFor(() => ((props(r.state.objects.get(o.id)).glove as any[]) ?? []).some((s) => s.id === "revolver"));
+  r.send("car:take", { kind: "glove", id: o.id, i: 0 });
+  await waitFor(() => props(r.state.objects.get(o.id)).glove === undefined);
+  // biome-ignore lint/suspicious/noExplicitAny: the pack
+  await waitFor(() => [...inv.pockets, ...inv.quick].some((it: any) => it?.id === "revolver"));
+  r.send("car:leave", {});
+  await waitFor(() => !r.state.vehicles.get(vid), 8000);
+  assert.ok(
+    ((props(r.state.objects.get(o.id)).boot as { id: string }[]) ?? []).some((s) => s.id === what),
+    "kept in its boot",
+  );
+});
+
+test("(plan 93 S5) each seat's own window: down by its switch, up again; nobody's but a seated person's", async () => {
+  const r = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+    sandbox: 12,
+    token: "dev:51:P51:member,builder,admin",
+  });
+  rooms.push(r);
+  r.onMessage("*", () => {});
+  await waitFor(() => r.state.players?.size > 0 && r.state.objects?.size > 0);
+  r.send("mod:cars", {});
+  await sleep(500);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const o: any = [...r.state.objects.values()].filter((c: any) => c.kind === "car" && !props(c).driven)[3];
+  // (stood away from it: no window of mine to wind)
+  r.send("car:window", { down: true });
+  const pose = parkedPose({ x: o.x, y: o.y, yaw: o.yaw, props: props(o) });
+  const side = { x: pose.x + Math.sin(pose.a) * 1.6, y: pose.y - Math.cos(pose.a) * 1.6 };
+  r.send("teleport", { to: { ...side, level: 0 } });
+  await waitFor(() => Math.hypot(me(r).x - side.x, me(r).y - side.y) < 0.5);
+  r.send("car:enter", { id: o.id, seat: 0 });
+  const vid = `car:${o.id}`;
+  await waitFor(() => me(r).busy === `drive:${vid}` && !!r.state.vehicles.get(vid));
+  assert.equal(r.state.vehicles.get(vid).win, 0, "all up as it's got into");
+  r.send("car:window", { down: true });
+  await waitFor(() => r.state.vehicles.get(vid).win === 1);
+  r.send("car:window", { down: false });
+  await waitFor(() => r.state.vehicles.get(vid).win === 0);
+});
+
+test("(plan 93 S6) a snow chain fitted kneeling by a wheel, from the pack; walked off, not; carried driving", async () => {
+  const r = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+    sandbox: 13,
+    token: "dev:53:P53:member,builder,admin",
+  });
+  rooms.push(r);
+  // biome-ignore lint/suspicious/noExplicitAny: the pack as the server sends it
+  let inv: any = null;
+  r.onMessage("dark:pockets", (m: { inv: unknown }) => {
+    inv = m.inv;
+  });
+  r.onMessage("*", () => {});
+  await waitFor(() => r.state.players?.size > 0 && r.state.objects?.size > 0);
+  r.send("dark:hello", {});
+  await waitFor(() => inv !== null);
+  r.send("mod:cars", {});
+  r.send("mod:refill", { chains: 4 });
+  const chains = () =>
+    [...inv.pockets, ...inv.quick, inv.hand].reduce((a: number, it: Slot) => a + (it?.id === "chains" ? it.n : 0), 0);
+  await waitFor(() => chains() === 4);
+  await sleep(300);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const o: any = [...r.state.objects.values()].filter((c: any) => c.kind === "car" && !props(c).driven)[4];
+  const pose = parkedPose({ x: o.x, y: o.y, yaw: o.yaw, props: props(o) });
+  const spec = SPECS[carKindOf(props(o).model)];
+  const go = async (i: number) => {
+    const at = chainSpot(spec, pose.x, pose.y, pose.a, i);
+    r.send("teleport", { to: { x: at.x, y: at.y, level: 0 } });
+    await waitFor(() => Math.hypot(me(r).x - at.x, me(r).y - at.y) < 0.4);
+  };
+  // by its front left wheel: knelt, a while, on
+  await go(0);
+  r.send("car:chain", { id: o.id, wheel: 0, on: true });
+  await waitFor(() => me(r).busy === `chain:${o.id}:0`);
+  await sleep(CHAIN_ON_MS * 0.5);
+  assert.equal(props(r.state.objects.get(o.id)).chains, undefined, "not yet");
+  await waitFor(() => props(r.state.objects.get(o.id)).chains === 1, CHAIN_ON_MS);
+  assert.equal(me(r).busy, "");
+  await waitFor(() => chains() === 3);
+  // the front right: begun, then walked off — not fitted, still in the pack
+  await go(1);
+  r.send("car:chain", { id: o.id, wheel: 1, on: true });
+  await waitFor(() => me(r).busy === `chain:${o.id}:1`);
+  r.send("car:chain-stop", {});
+  await waitFor(() => me(r).busy === "");
+  await sleep(CHAIN_ON_MS + 300);
+  assert.equal(props(r.state.objects.get(o.id)).chains, 1);
+  assert.equal(chains(), 3);
+  // driven: its chains on the wire
+  r.send("car:enter", { id: o.id, seat: 0 });
+  const vid = `car:${o.id}`;
+  await waitFor(() => me(r).busy === `drive:${vid}` && !!r.state.vehicles.get(vid));
+  assert.equal(r.state.vehicles.get(vid).chains, 1);
+});
+
+test("(plan 93 S7) mended at its bonnet with a wrench (the engine first), a flat changed for the spare; a tow rope tied, untied", async () => {
+  const r = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+    sandbox: 14,
+    token: "dev:55:P55:member,builder,admin",
+  });
+  rooms.push(r);
+  // biome-ignore lint/suspicious/noExplicitAny: the pack as the server sends it
+  let inv: any = null;
+  const nos: string[] = [];
+  r.onMessage("dark:pockets", (m: { inv: unknown }) => {
+    inv = m.inv;
+  });
+  r.onMessage("car:no", (m: { why: string }) => nos.push(m.why));
+  r.onMessage("*", () => {});
+  await waitFor(() => r.state.players?.size > 0 && r.state.objects?.size > 0);
+  r.send("dark:hello", {});
+  await waitFor(() => inv !== null);
+  r.send("mod:cars", {});
+  await sleep(500);
+  const has = (id: string) =>
+    [...inv.pockets, ...inv.quick, inv.hand].reduce((a: number, it: Slot) => a + (it?.id === id ? it.n : 0), 0);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const cars: any[] = [...r.state.objects.values()].filter((c: any) => c.kind === "car" && !props(c).driven);
+  const o = cars[5];
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const at = (oo: any) => parkedPose({ x: oo.x, y: oo.y, yaw: oo.yaw, props: props(oo) });
+  const spec = SPECS[carKindOf(props(o).model)];
+  const stand = async (x: number, y: number) => {
+    r.send("teleport", { to: { x, y, level: 0 } });
+    await waitFor(() => Math.hypot(me(r).x - x, me(r).y - y) < 0.4);
+  };
+  // its damage: driven a moment and knocked about — the engine dead, a lamp, a side's glass, a flat at the back left
+  const pose = at(o);
+  await stand(pose.x + Math.sin(pose.a) * 1.6, pose.y - Math.cos(pose.a) * 1.6);
+  r.send("car:enter", { id: o.id, seat: 0 });
+  const vid = `car:${o.id}`;
+  await waitFor(() => me(r).busy === `drive:${vid}` && !!r.state.vehicles.get(vid));
+  const parts = PART.engineDead | PART.headL | PART.sideL | PART.flatRL;
+  r.send("car:wear", { grime: 0, dmg: [0.5, 0, 0.3, 0, 0], parts });
+  await sleep(300);
+  r.send("car:wear", { grime: 0, dmg: [0.95, 0, 0.3, 0, 0], parts });
+  await waitFor(() => parseDamage(r.state.vehicles.get(vid).dmg).parts === parts);
+  r.send("car:leave", {});
+  await waitFor(() => me(r).busy === "" && !r.state.vehicles.get(vid));
+  const dm = () => parseDamage(props(r.state.objects.get(o.id)).dmg);
+  await waitFor(() => dm().parts === parts);
+  const p2 = at(r.state.objects.get(o.id));
+  const nose = {
+    x: p2.x + Math.cos(p2.a) * (spec.body.ahead + 0.45),
+    y: p2.y + Math.sin(p2.a) * (spec.body.ahead + 0.45),
+  };
+  // at its bonnet, no wrench: refused
+  await stand(nose.x, nose.y);
+  r.send("car:mend", { id: o.id, what: "engine" });
+  await waitFor(() => nos.includes("wrench"));
+  // the wrench (and a tow rope): the engine first — the lamps aren't, out of order
+  r.send("mod:refill", { tools: true });
+  await waitFor(() => has("wrench") === 1 && has("towrope") === 1);
+  r.send("car:mend", { id: o.id, what: "lamps" });
+  await sleep(300);
+  assert.equal(me(r).busy, "", "the engine's first");
+  r.send("car:mend", { id: o.id, what: "engine" });
+  await waitFor(() => me(r).busy === `mend:${o.id}:engine`);
+  await waitFor(() => !(dm().parts & PART.engineDead), MEND_MS.engine + 2000);
+  assert.ok(dm().zones[0] <= 0.75, "no more steam");
+  assert.equal(has("wrench"), 1, "a wrench is kept");
+  // the flat at the back left: its spare
+  const w2 = chainSpot(spec, p2.x, p2.y, p2.a, 2);
+  await stand(w2.x, w2.y);
+  r.send("car:mend", { id: o.id, what: "tyre", wheel: 2 });
+  await waitFor(() => me(r).busy === `mend:${o.id}:tyre2`);
+  await waitFor(() => !(dm().parts & PART.flatRL), MEND_MS.tyre + 2000);
+  assert.equal(props(r.state.objects.get(o.id)).spare, 0, "its spare used");
+  // a tow rope: from its back to the nearest car's front, then untied — the rope back in the pack
+  const near = cars
+    .filter((c) => c.id !== o.id)
+    .sort((a, b) => Math.hypot(at(a).x - p2.x, at(a).y - p2.y) - Math.hypot(at(b).x - p2.x, at(b).y - p2.y))[0];
+  r.send("car:tow", { from: o.id, to: near.id });
+  await waitFor(
+    () => props(r.state.objects.get(o.id)).towing === near.id && props(r.state.objects.get(near.id)).towedBy === o.id,
+  );
+  assert.equal(has("towrope"), 0);
+  r.send("car:untow", { id: near.id });
+  await waitFor(() => !props(r.state.objects.get(o.id)).towing && !props(r.state.objects.get(near.id)).towedBy);
+  await waitFor(() => has("towrope") === 1);
+});
+
+test("(plan 93 S9) locked by its owner: a stranger's door refused, its alarm on and its owner told; its owner gets in, unlocked", async () => {
+  const join = async (uid: number) => {
+    const r = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+      sandbox: 15,
+      token: `dev:${uid}:P${uid}:member,builder,admin`,
+    });
+    rooms.push(r);
+    r.onMessage("*", () => {});
+    await waitFor(() => !!r.state.players?.get(r.sessionId));
+    return r;
+  };
+  const a = await join(57);
+  const b = await join(58);
+  const noB: string[] = [];
+  b.onMessage("car:no", (m: { why: string }) => noB.push(m.why));
+  const alarms: { id: string; why: string }[] = [];
+  a.onMessage("car:alarm", (m: { id: string; why: string }) => alarms.push(m));
+  const bought: string[] = [];
+  a.onMessage("car:bought", (m: { id: string }) => bought.push(m.id));
+  const to = { x: 512, y: -393.5, level: 0 };
+  a.send("teleport", { to });
+  await waitFor(() => Math.hypot(me(a).x - to.x, me(a).y - to.y) < 1);
+  a.send("car:buy", { model: "sedan", colour: 2, plate: "" });
+  await waitFor(() => bought.length === 1 && !!a.state.objects.get(bought[0]));
+  const id = bought[0];
+  const o = a.state.objects.get(id);
+  const pose = parkedPose({ x: o.x, y: o.y, yaw: o.yaw, props: props(o) });
+  const side = { x: pose.x + Math.sin(pose.a) * 1.6, y: pose.y - Math.cos(pose.a) * 1.6, level: 0 };
+  // a stranger can't lock it
+  b.send("teleport", { to: side });
+  await waitFor(() => Math.hypot(me(b).x - side.x, me(b).y - side.y) < 0.6);
+  b.send("car:lock", { id, on: true });
+  await waitFor(() => noB.includes("owned"));
+  // its owner locks it, a few steps off (its fob reaches)
+  const off = { x: pose.x - Math.sin(pose.a) * 4, y: pose.y + Math.cos(pose.a) * 4, level: 0 };
+  a.send("teleport", { to: off });
+  await waitFor(() => Math.hypot(me(a).x - off.x, me(a).y - off.y) < 1);
+  a.send("car:lock", { id, on: true });
+  await waitFor(() => props(a.state.objects.get(id)).locked === 1);
+  // the stranger tries a door: refused, its alarm on, its owner told
+  b.send("car:enter", { id, seat: 1 });
+  await waitFor(() => noB.includes("locked"));
+  await waitFor(() => alarms.length === 1 && Number(props(a.state.objects.get(id)).alarmAt) > 0);
+  assert.equal(alarms[0].why, "door");
+  assert.equal(me(b).busy, "");
+  // its owner gets in: its keys — unlocked as it's driven
+  a.send("teleport", { to: side });
+  await waitFor(() => Math.hypot(me(a).x - side.x, me(a).y - side.y) < 0.6);
+  a.send("car:enter", { id, seat: 0 });
+  await waitFor(() => me(a).busy === `drive:car:${id}`);
+  assert.equal(props(a.state.objects.get(id)).locked, undefined);
 });

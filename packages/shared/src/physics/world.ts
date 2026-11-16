@@ -21,6 +21,7 @@
 
 import type Jolt from "jolt-physics";
 import type { Solid3, SolidBox3 } from "../shapes/index.ts";
+import { type CarDef, PulledCar, WorldCar } from "./car.ts";
 import type { JoltModule } from "./load.ts";
 import { BODY } from "./size.ts";
 
@@ -216,6 +217,9 @@ export class PhysicsWorld {
   private readonly named = new Map<number, string>();
   private readonly things = new Map<number, Owned>();
   private readonly vehicles = new Map<string, Owned & { box: SolidBox3 }>();
+  /** cars on Jolt (docs/plan/92): driven here, or pulled to another's driving */
+  private readonly cars = new Set<WorldCar>();
+  private readonly pulled = new Set<PulledCar>();
   private readonly carriers = new Map<string, Owned & { sig: string; at: [number, number, number] }>();
   /** who stood on a carrier when last moved: its key, and where it was then */
   private readonly rides = new Map<number, { key: string; at: [number, number, number] }>();
@@ -1022,6 +1026,81 @@ export class PhysicsWorld {
     return this.vehicles.keys();
   }
 
+  // ── cars on Jolt (docs/plan/92-the-cars.md, phase 1): a body on a vehicle constraint ──
+  /** A car of `def`, its centre of mass at (x, y, z) turned q; null if refused. */
+  addCar(
+    def: CarDef,
+    x: number,
+    y: number,
+    z: number,
+    q: [number, number, number, number],
+    key?: string,
+  ): WorldCar | null {
+    // (its body, and room for what it meets)
+    if (!this.room(`car ${key ?? ""}`)) return null;
+    let car: WorldCar;
+    try {
+      car = new WorldCar(this.carHost(), def, { x, y, z, q });
+    } catch (e) {
+      this.log(`[physics] a car refused: ${(e as Error).message}`);
+      return null;
+    }
+    this.cars.add(car);
+    if (key) this.named.set(car.id.GetIndexAndSequenceNumber(), key);
+    return car;
+  }
+  removeCar(car: WorldCar): void {
+    if (!this.cars.delete(car)) return;
+    this.named.delete(car.id.GetIndexAndSequenceNumber());
+    car.destroy();
+  }
+  /** Someone else's car (or the Grounds' own vehicle): a body pulled to its driver's pose; null if refused. */
+  addPulled(
+    hull: CarDef["hull"],
+    mass: number,
+    x: number,
+    y: number,
+    z: number,
+    q: [number, number, number, number],
+    key?: string,
+  ): PulledCar | null {
+    if (!this.room(`pulled car ${key ?? ""}`)) return null;
+    let car: PulledCar;
+    try {
+      car = new PulledCar(this.carHost(), hull, mass, { x, y, z, q });
+    } catch (e) {
+      this.log(`[physics] a pulled car refused: ${(e as Error).message}`);
+      return null;
+    }
+    this.pulled.add(car);
+    if (key) this.named.set(car.id.GetIndexAndSequenceNumber(), key);
+    return car;
+  }
+  removePulled(car: PulledCar): void {
+    if (!this.pulled.delete(car)) return;
+    this.named.delete(car.id.GetIndexAndSequenceNumber());
+    car.destroy();
+  }
+  /** Cars on Jolt here, driven or pulled. */
+  carCount(): number {
+    return this.cars.size + this.pulled.size;
+  }
+  private carHost() {
+    return {
+      J: this.J,
+      system: this.system,
+      bodies: this.bodies,
+      layer: MOVING,
+      forget: (...o: (object | null | undefined)[]) => this.forget(...o),
+      shape: (st: Jolt.ShapeSettings) => this.shape(st),
+      letGo: (sh: Jolt.Shape) => this.letGo(sh),
+    };
+  }
+  /** What a body is called (a static's key, a vehicle's or a car's id), by its index and sequence. */
+  nameOf(body: number): string | undefined {
+    return this.named.get(body);
+  }
+
   // ── carriers: what moves and carries whoever stands on it (a lift's car: docs/plan/72 phase 8) ──
   /** A carrier with its origin at (x, y, z), its solids its own (from that origin), holding you up
    *  as a slab does (layer floor). Again with the same solids it's moved there — whoever stood on it
@@ -1401,7 +1480,7 @@ export class PhysicsWorld {
       maxBodies: this.sizes.maxBodies,
       statics: this.statics.size,
       things: this.things.size,
-      vehicles: this.vehicles.size,
+      vehicles: this.vehicles.size + this.cars.size + this.pulled.size,
       characters: this.chars.size,
       refused: this.refused,
       heap: J.JoltInterface.prototype.sGetTotalMemory() - J.JoltInterface.prototype.sGetFreeMemory(),
@@ -1462,6 +1541,8 @@ export class PhysicsWorld {
     for (const id of [...this.proxies.keys()]) this.removeProxies(id);
     for (const id of [...this.things.keys()]) this.removeThing(id);
     for (const id of [...this.vehicles.keys()]) this.removeVehicle(id);
+    for (const c of [...this.cars]) this.removeCar(c);
+    for (const c of [...this.pulled]) this.removePulled(c);
     for (const k of [...this.carriers.keys()]) this.removeCarrier(k);
     for (const k of [...this.statics.keys()]) this.remove(k);
     for (const s of [...this.spheres.values(), ...this.boxes.values()]) s.Release();

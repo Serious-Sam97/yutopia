@@ -59,7 +59,7 @@ compileExtras.push({
   inject(shader) {
     let src = shader.fragmentShader;
     // the chunk in place (most lit materials have it in already, their own changes made to it: the light map's in
-    // light3d.ts, the vehicles' sky in car/sedan.ts — the loop's found in the source either way)
+    // light3d.ts, the vehicles' sky in car/model.ts — the loop's found in the source either way)
     if (src.includes(INCLUDE)) src = src.replace(INCLUDE, ShaderChunk.lights_fragment_begin);
     if (!src.includes(LOOPS[0].head) && !src.includes(LOOPS[1].head)) return;
     if (src.includes(GUARD)) return;

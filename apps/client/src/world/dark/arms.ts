@@ -236,7 +236,8 @@ export class Arms {
       this.reload();
       return true;
     }
-    if (e.code === "KeyG" && inv && (count(inv, "flare") > 0 || this.heldFlare())) {
+    // (in a car G is its own — the police car's siren; no flare's thrown from a seat: plan 93 S2)
+    if (e.code === "KeyG" && !this.ctl.cars?.inCar() && inv && (count(inv, "flare") > 0 || this.heldFlare())) {
       this.flare();
       return true;
     }

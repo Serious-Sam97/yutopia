@@ -15,6 +15,8 @@ class Survivor extends Model
         'torch' => 1,
         // (plan 88) Vortex's tape: a trophy, one a win
         'vxtape' => 99,
+        // (plan 93 S6, S7) a snow chain (one a wheel); a wrench, a tow rope: kept, not used up
+        'chains' => 4, 'wrench' => 1, 'towrope' => 1,
     ];
 
     // (plan 87) carried one at a time (shared/inventory.ts ONE_OF)

@@ -1,0 +1,300 @@
+{
+  "slots": {
+    "start-four": {
+      "why": "from a car's own pack, \"23_StartISmall_D6.wav\", no clipping, 23 dB over its floor, its brightness right (2.6 kHz)",
+      "id": "162528",
+      "title": "23_StartISmall_D6.wav"
+    },
+    "start-v8": {
+      "why": "\"Engine start\", no clipping, 23 dB over its floor, its brightness right (1.2 kHz)",
+      "id": "459367",
+      "title": "Engine start"
+    },
+    "start-diesel": {
+      "why": "from a car's own pack, \"tractor-engine-start.wav\", no clipping, 9 dB over its floor, its brightness right (1.8 kHz), 2256 downloads",
+      "id": "256808",
+      "title": "tractor-engine-start.wav"
+    },
+    "start-two": {
+      "why": "\"Snowmobiles 3.wav\", 23 dB over its floor, its brightness right (2.6 kHz)",
+      "id": "560871",
+      "title": "Snowmobiles 3.wav"
+    },
+    "stop": {
+      "why": "from a car's own pack, \"SFX_Car_Engine_Outside_Stop.wav\", no clipping, 29 dB over its floor, its brightness right (0.6 kHz), 1724 downloads",
+      "id": "401557",
+      "title": "SFX_Car_Engine_Outside_Stop.wav"
+    },
+    "tick-cool": {
+      "why": "NOTHING FOUND FITS — the best of a poor lot, no clipping, 21 dB over its floor, its brightness right (2.9 kHz)",
+      "id": "845874",
+      "title": "Switching / Turning On and Off a Light Electromagnetic Field Recording"
+    },
+    "shift": {
+      "why": "from a car's own pack, \"Elantra Gearshifter with Reverse Beep\", no clipping, 28 dB over its floor, its brightness right (0.9 kHz)",
+      "id": "865231",
+      "title": "Elantra Gearshifter with Reverse Beep"
+    },
+    "gear-whine": {
+      "why": "NOTHING FOUND FITS — the best of a poor lot, no clipping, 42 dB over its floor, its brightness right (2.2 kHz), unevenness 0.41",
+      "id": "523672",
+      "title": "oulander reversing beep isolated.wav"
+    },
+    "pops": {
+      "why": "\"S41-25 Car backfires; reverberant.wav\", no clipping, 59 dB over its floor, its brightness right (1.4 kHz)",
+      "id": "675723",
+      "title": "S41-25 Car backfires; reverberant.wav"
+    },
+    "limiter": {
+      "why": "NOTHING FOUND FITS — the best of a poor lot, no clipping, 11 dB over its floor, its brightness right (2.4 kHz)",
+      "id": "767036",
+      "title": "car3_record"
+    },
+    "intake": {
+      "why": "\"Carburetor problems\", no clipping, 29 dB over its floor, its brightness right (0.9 kHz), even",
+      "id": "652336",
+      "title": "Carburetor problems"
+    },
+    "skid": {
+      "why": "\"Chrysler LHS tire squeal 04 (04-25-2009)\", no clipping, 34 dB over its floor, its brightness right (1.8 kHz), even, 14034 downloads",
+      "id": "71739",
+      "title": "Chrysler LHS tire squeal 04 (04-25-2009).wav"
+    },
+    "squeal": {
+      "why": "\"Chrysler LHS tire squeal 01 (04-25-2009)\", no clipping, 24 dB over its floor, its brightness right (1.4 kHz), 5273 downloads",
+      "id": "71736",
+      "title": "Chrysler LHS tire squeal 01 (04-25-2009).wav"
+    },
+    "snow-roll": {
+      "why": "from a car's own pack, \"01_Renault_duster_Coming_to_snow_outdoor\", no clipping, 19 dB over its floor, its brightness right (1 kHz), even, 888 downloads",
+      "id": "380718",
+      "title": "01_Renault_duster_Coming_to_snow_outdoor_enginestop.wav"
+    },
+    "snow-slide": {
+      "why": "no clipping, 27 dB over its floor, unevenness 0.46",
+      "id": "79019",
+      "title": "Bike Tire Varied Stop.wav"
+    },
+    "ice-hiss": {
+      "why": "NOTHING FOUND FITS — the best of a poor lot, no clipping, 16 dB over its floor, its brightness right (2.5 kHz), even",
+      "id": "708853",
+      "title": "car_18"
+    },
+    "gravel": {
+      "why": "\"Car Pass on Gravel\", no clipping, 33 dB over its floor, its brightness right (1.6 kHz), unevenness 0.51",
+      "id": "764716",
+      "title": "Car Pass on Gravel"
+    },
+    "slush": {
+      "why": "\"Passing Car (Wet road)\", no clipping, 27 dB over its floor, its brightness right (1.9 kHz), unevenness 0.47, 4411 downloads",
+      "id": "462862",
+      "title": "Passing Car (Wet road)"
+    },
+    "splash": {
+      "why": "\"Water Puddle Splash\", no clipping, silence between its sounds, its brightness right (4.3 kHz), 1852 downloads",
+      "id": "563021",
+      "title": "Water Puddle Splash"
+    },
+    "rumble": {
+      "why": "\"rumble strip exit 41.wav\", no clipping, 20 dB over its floor, its brightness right (0.4 kHz), even",
+      "id": "62652",
+      "title": "rumble strip exit 41.wav"
+    },
+    "road-roll": {
+      "why": "\"Interior_Truck-manual_Some_traffic_Noise\", no clipping, 15 dB over its floor, its brightness right (0.9 kHz), even",
+      "id": "699130",
+      "title": "Interior_Truck-manual_Some_traffic_Noise.wav"
+    },
+    "wind": {
+      "why": "\"Nahant cars wind.wav\", no clipping, 19 dB over its floor, its brightness right (1.6 kHz), unevenness 0.68",
+      "id": "609828",
+      "title": "Nahant cars wind.wav"
+    },
+    "hit-light": {
+      "why": "\"Car Drive By Speed bump\", no clipping, 9 dB over its floor, its brightness right (1.3 kHz)",
+      "id": "877140",
+      "title": "Car Drive By Speed bump"
+    },
+    "hit-mid": {
+      "why": "\"Car Crash\", no clipping, silence between its sounds, its brightness right (3.1 kHz), 104492 downloads",
+      "id": "237375",
+      "title": "Car Crash"
+    },
+    "hit-heavy": {
+      "why": "\"Wall Street Crash\", 67 dB over its floor, its brightness right (0.5 kHz), 918 downloads",
+      "id": "697736",
+      "title": "Wall Street Crash"
+    },
+    "hit-glass": {
+      "why": "\"glass shatter\", no clipping, 44 dB over its floor, its brightness right (6.7 kHz), 566 downloads",
+      "id": "686849",
+      "title": "glass shatter"
+    },
+    "hit-post": {
+      "why": "\"metal-gate-slam\", no clipping, 40 dB over its floor, its brightness right (1.3 kHz), 820 downloads",
+      "id": "335976",
+      "title": "metal-gate-slam"
+    },
+    "hit-tree": {
+      "why": "\"door wood old heavy kick open good impac\", 59 dB over its floor, 1651 downloads",
+      "id": "452609",
+      "title": "door wood old heavy kick open good impact 1 with rattle 1 without.wav"
+    },
+    "hit-snowbank": {
+      "why": "\"FX_SNOWBALL_HITS_WINDOW_OUTSIDE.wav\", no clipping, 67 dB over its floor, its brightness right (1.8 kHz), 2591 downloads",
+      "id": "238895",
+      "title": "FX_SNOWBALL_HITS_WINDOW_OUTSIDE.wav"
+    },
+    "scrape": {
+      "why": "\"METLImpt_Metal Resonant Scrape Impact_SD\", no clipping, 37 dB over its floor, its brightness right (1.6 kHz), unevenness 0.48, 969 downloads",
+      "id": "697758",
+      "title": "METLImpt_Metal Resonant Scrape Impact_SDFY_Metal Resonant.wav"
+    },
+    "thump": {
+      "why": "NOTHING FOUND FITS — the best of a poor lot, 13 dB over its floor, 748 downloads",
+      "id": "141268",
+      "title": "auto2.wav"
+    },
+    "rattle": {
+      "why": "\"Metal Lock Rattling\", no clipping, 49 dB over its floor, its brightness right (4.2 kHz), unevenness 1.26, 669 downloads",
+      "id": "475210",
+      "title": "Metal Lock Rattling"
+    },
+    "door-open": {
+      "why": "from a car's own pack, \"Vehicle_Car_Peugeot_106_Door_Open_Mono.w\", no clipping, 52 dB over its floor, its brightness right (2.3 kHz), 1429 downloads",
+      "id": "465610",
+      "title": "Vehicle_Car_Peugeot_106_Door_Open_Mono.wav"
+    },
+    "door-shut": {
+      "why": "from a car's own pack, \"Vehicle_Car_Peugeot_308_Door_Close_Mono_\", no clipping, silence between its sounds, its brightness right (0.8 kHz)",
+      "id": "522220",
+      "title": "Vehicle_Car_Peugeot_308_Door_Close_Mono_.wav"
+    },
+    "door-van": {
+      "why": "from a car's own pack, \"Vehicle_Car_Peugeot_Bipper_Sliding_Door_\", no clipping, silence between its sounds, its brightness right (0.7 kHz), 682 downloads",
+      "id": "558144",
+      "title": "Vehicle_Car_Peugeot_Bipper_Sliding_Door_Mono.wav"
+    },
+    "door-truck": {
+      "why": "\"cerrando puerta de carro / closing car d\", no clipping, silence between its sounds, its brightness right (0.5 kHz), 898 downloads",
+      "id": "515007",
+      "title": "cerrando puerta de carro / closing car door"
+    },
+    "boot": {
+      "why": "from a car's own pack, \"08_Renault_duster_Trunk_close_open.wav\", no clipping, 30 dB over its floor, its brightness right (0.9 kHz), 1167 downloads",
+      "id": "380724",
+      "title": "08_Renault_duster_Trunk_close_open.wav"
+    },
+    "bonnet": {
+      "why": "from a car's own pack, \"Elantra Fuel Cap and Bonnet (Hood) Open \", no clipping, silence between its sounds, its brightness right (1.5 kHz)",
+      "id": "865230",
+      "title": "Elantra Fuel Cap and Bonnet (Hood) Open Latches"
+    },
+    "handbrake": {
+      "why": "from a car's own pack, \"Elantra Handbrake\", no clipping, silence between its sounds, its brightness right (1.8 kHz)",
+      "id": "865232",
+      "title": "Elantra Handbrake"
+    },
+    "indicator": {
+      "why": "from a car's own pack, \"Elantra Hazards\", no clipping, silence between its sounds, its brightness right (4.5 kHz), unevenness 1.17",
+      "id": "865233",
+      "title": "Elantra Hazards"
+    },
+    "wiper": {
+      "why": "from a car's own pack, \"Elantra Wipers (Rear and Front)\", no clipping, silence between its sounds, its brightness right (1.4 kHz), unevenness 1.2",
+      "id": "865241",
+      "title": "Elantra Wipers (Rear and Front)"
+    },
+    "belt": {
+      "why": "from a car's own pack, \"Elantra Seatbelt\", no clipping, 51 dB over its floor, its brightness right (2.6 kHz)",
+      "id": "865236",
+      "title": "Elantra Seatbelt"
+    },
+    "horn-saloon": {
+      "why": "from a car's own pack, \"63HornNTG2.wav\", 46 dB over its floor, its brightness right (0.8 kHz), 1135 downloads",
+      "id": "162540",
+      "title": "63HornNTG2.wav"
+    },
+    "horn-truck": {
+      "why": "\"Truck Horn Passing By Left To Right.wav\", no clipping, 78 dB over its floor, its brightness right (1.5 kHz), 1214 downloads",
+      "id": "653001",
+      "title": "Truck Horn Passing By Left To Right.wav"
+    },
+    "horn-small": {
+      "why": "\"small horn.wav\", no clipping, 54 dB over its floor, 4041 downloads",
+      "id": "94868",
+      "title": "small horn.wav"
+    },
+    "siren": {
+      "why": "\"Police Siren\", no clipping, 45 dB over its floor, its brightness right (1.3 kHz), even, 4487 downloads",
+      "id": "746302",
+      "title": "Police Siren"
+    },
+    "reverse-beep": {
+      "why": "\"backup_beeper.wav\", no clipping, silence between its sounds, its brightness right (1.6 kHz), even",
+      "id": "878172",
+      "title": "backup_beeper.wav"
+    },
+    "plough": {
+      "why": "\"Volvo grader ploughing snow from street\", no clipping, 24 dB over its floor, its brightness right (2.5 kHz), unevenness 0.55",
+      "id": "720963",
+      "title": "Volvo grader ploughing snow from street"
+    },
+    "tracks": {
+      "why": "\"tracked vehicle.wav\", no clipping, 5 dB over its floor, its brightness right (1.7 kHz), even, 3048 downloads",
+      "id": "121531",
+      "title": "tracked vehicle.wav"
+    },
+    "runners": {
+      "why": "\"snowmobiles 2 approach from far pass by \", no clipping, 30 dB over its floor, its brightness right (3.4 kHz), unevenness 0.41",
+      "id": "450952",
+      "title": "snowmobiles 2 approach from far pass by close dragging sleds nice"
+    },
+    "squeal-loop": {
+      "why": "\"Distant car tire screeching\", no clipping, 16 dB over its floor, its brightness right (1.5 kHz), even, 1111 downloads",
+      "id": "752837",
+      "title": "Distant car tire screeching"
+    },
+    "scrub": {
+      "why": "\"tire-squeal\", no clipping, 5 dB over its floor, its brightness right (1 kHz), even",
+      "id": "850041",
+      "title": "tire-squeal"
+    },
+    "chirp": {
+      "why": "\"Tires Squeaking.aif\", no clipping, 50 dB over its floor, its brightness right (2.3 kHz), 93505 downloads",
+      "id": "104026",
+      "title": "Tires Squeaking.aif"
+    },
+    "snow-squeak": {
+      "why": "\"011017 snowball.mp3\", no clipping, 33 dB over its floor, its brightness right (1.8 kHz), unevenness 0.91",
+      "id": "390246",
+      "title": "011017 snowball.mp3"
+    }
+  },
+  "engines": {
+    "four": {
+      "why": "an 80s saloon's twin-cam four, recorded on a dyno: real load, three mics; 17 loops: off load 3/5 revs, on 4/5; 3 mics; steadiness 0.942, pitch sure 0.99",
+      "name": "Mercedes 190E-16V on a dyno (today's)"
+    },
+    "revvy": {
+      "why": "a period four pulling under load; 7 loops: off load 3/5 revs, on 4/5; 1 mic; steadiness 0.907, pitch sure 0.99",
+      "name": "Ford Cortina on a dyno (70s, 328 hp)"
+    },
+    "v8": {
+      "why": "a 1980 V8: the period, a big car's lazy burble; 7 loops: off load 3/5 revs, on 4/5; 1 mic; steadiness 0.915, pitch sure 0.82",
+      "name": "Chevrolet Impala (1980), outside"
+    },
+    "diesel-light": {
+      "why": "a small diesel's idle, low, medium and high, inside and out; 6 loops: off load 3/5 revs, on 0/5; 2 mics; steadiness 0.997, pitch sure 1",
+      "name": "BMW 120d"
+    },
+    "diesel": {
+      "why": "a working tractor under load: the farm's; 5 loops: off load 2/5 revs, on 3/5; 1 mic; steadiness 0.934, pitch sure 0.88",
+      "name": "A tractor at a landfill"
+    },
+    "two": {
+      "why": "a working snowmobile's two-stroke twin; 6 loops: off load 3/5 revs, on 3/5; 1 mic; steadiness 0.917, pitch sure 0.95",
+      "name": "Ski-Doo Skandik"
+    }
+  }
+}

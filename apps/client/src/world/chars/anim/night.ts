@@ -309,6 +309,37 @@ export function kneel2(t: number, fear: number): { m: Moved; hands: Hands } {
   };
 }
 
+/** (plan 93 S7) Bent over a car's engine, its bonnet up: bent at the hips, the knees a little given, looking down
+ *  into it; both hands in it, at work — one turning something, the other steadying, now and then swapping. */
+export function bonnet2(t: number): { m: Moved; hands: Hands } {
+  const work = Math.sin(t * 5.5) * (Math.sin(t * 0.6) > -0.2 ? 1 : 0.2);
+  const look = 0.15 * Math.sin(t * 0.37);
+  const c: Ch = {
+    up: -0.03,
+    hx: 0.55,
+    tL: -0.22,
+    tR: -0.22,
+    kL: 0.32,
+    kR: 0.32,
+    fL: -0.1,
+    fR: -0.1,
+    sx: 0.32,
+    cx: 0.08,
+    dx: 0.25,
+    dy: look,
+    sy: 0.4 * look,
+  };
+  const m = body(steady(c));
+  Object.assign(m.pose, handPose(1, HANDS.relaxed), handPose(-1, HANDS.relaxed));
+  return {
+    m,
+    hands: {
+      R: { at: [-0.16 + 0.025 * work, 0.86 + 0.02 * Math.abs(work), 0.58], w: 1, pole: ELBOW_DOWN },
+      L: { at: [0.17, 0.88, 0.56 + 0.01 * Math.sin(t * 1.3)], w: 1, pole: ELBOW_DOWN },
+    },
+  };
+}
+
 /** The fear's hunch on the move (added): the chest in, the head down a little, the arms in close. */
 export function hunch(pose: Pose, fear: number): Pose {
   if (fear <= 0.01) return pose;

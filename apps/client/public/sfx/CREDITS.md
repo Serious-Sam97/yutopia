@@ -166,3 +166,9 @@
   - `vortex/vx-unspool-*`: *skipping glitch tape 5.wav* by CuddleNucks (Freesound 390146).
   - `vortex/vx-pickup-*`: *23_INSERTING VHS IN CASE.wav* by gear_clinkz (Freesound 613345).
   - `vortex/vx-grudge-*`: *Horror Sting* by Qvantor (Freesound 879279).
+- The cars' (docs/plan/92-the-cars.md, phase 11): **candidates, not yet picked** (2026-11-16). All CC0 from
+  Freesound (its HQ previews): the engines' sets cut into loops at each voice's revs by
+  `tools/sfx-cars-engines.mjs` (`cars/engines/*`, from `tools/sfx-cars-engines.json`), the rest found by
+  `tools/sfx-cars-search.mjs` and cut by `tools/sfx-weather.mjs` (`DIR=cars`, from `tools/sfx-cars.json`).
+  Every candidate's recording and author is in `cars/manifest.json` and `cars/engines.json`; each sound the
+  game keeps gets its own line here once the user has picked by ear on `/dev/car-sound`.

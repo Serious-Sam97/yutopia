@@ -63,6 +63,8 @@ export interface InvActions {
   /** (plan 87) the left hand's light: the torch lit; a flare held up, its seconds left (0 none) */
   handState(): { lit: boolean; burn: number };
   reload(): void;
+  /** (plan 93 S4) a car's boot or glove box open here: in the ground's place — its name, what's in it */
+  store?(): { label: string; items: { id: string; n: number; loaded?: number }[] } | null;
 }
 type Tr = (key: string, vars?: Record<string, string>) => string;
 type Spot = { slot: number } | { drop: string };
@@ -110,6 +112,8 @@ export class InventoryPanel {
   private menu: Menu | null = null;
   private groundKey = "";
   private ground: Lying[] = [];
+  /** (plan 93 S4) the open store's name, in the ground's place ("" none) */
+  private storeLabel = "";
   private shown = "";
   private vitalsAt = 0;
   private phone = false;
@@ -245,13 +249,21 @@ export class InventoryPanel {
     // what lies in reach (shown when it changes)
     const me = this.walker.where();
     const lying: Lying[] = [];
-    this.ctl.room?.state.drops?.forEach(
-      (d: { id: string; item: string; n: number; loaded: number; x: number; y: number; level?: number }) => {
-        if ((d.level ?? 0) === this.ctl.level && Math.hypot(d.x - me.x, d.y - me.y) <= LOOT_REACH)
-          lying.push({ id: d.id, item: d.item as ItemId, n: d.n, loaded: d.loaded });
-      },
-    );
-    const key = lying.map((d) => `${d.id}:${d.n}`).join(",");
+    // (plan 93 S4: a car's boot or glove box open — what's in it, in the ground's place)
+    const st = this.act.store?.() ?? null;
+    if (st)
+      st.items.forEach((it, i) => {
+        lying.push({ id: `store:${i}`, item: it.id as ItemId, n: it.n, loaded: it.loaded ?? 0 });
+      });
+    else
+      this.ctl.room?.state.drops?.forEach(
+        (d: { id: string; item: string; n: number; loaded: number; x: number; y: number; level?: number }) => {
+          if ((d.level ?? 0) === this.ctl.level && Math.hypot(d.x - me.x, d.y - me.y) <= LOOT_REACH)
+            lying.push({ id: d.id, item: d.item as ItemId, n: d.n, loaded: d.loaded });
+        },
+      );
+    this.storeLabel = st?.label ?? "";
+    const key = `${this.storeLabel}|${lying.map((d) => `${d.id}:${d.item}:${d.n}:${d.loaded}`).join(",")}`;
     if (key !== this.groundKey) {
       this.groundKey = key;
       this.ground = lying;
@@ -766,7 +778,7 @@ export class InventoryPanel {
               `<div class="stone${isWeapon(d.item) ? " w" : ""}${isSel({ drop: d.id })}" data-drop="${d.id}">${art(d.item)}<div class="nm"><b>${t(`dark_item_${d.item}`)}</b><span>${isWeapon(d.item) ? `${d.loaded}/${WEAPONS[d.item].mag}` : `×${d.n}`}</span></div><span class="take">${t("dark_inv_take")}</span></div>`,
           )
           .join("")
-      : `<span class="none">${t("dark_inv_ground_none")}</span>`;
+      : `<span class="none">${t(this.storeLabel ? "dark_inv_store_empty" : "dark_inv_ground_none")}</span>`;
     const all = this.ground.length
       ? `<span class="kk all" data-act="takeAll">${t("dark_inv_take_all")}${this.phone ? "" : " · T"}</span>`
       : "";
@@ -777,7 +789,7 @@ export class InventoryPanel {
       <div class="bag"><h1 class="flap">${t("dark_inv_title")}</h1><span class="org" data-act="organize">${t("dark_inv_organize")}<span class="kk">O</span></span><div class="pockets">${pouches}</div></div>
       <div class="string"></div><div class="ring"></div>
       <div class="det paper">${this.details(inv, gun, hp, bat)}</div>
-      <div class="snow"><span class="cap">${t(out ? "dark_inv_snow" : "dark_inv_floor")}</span><div class="gl">${stones}</div>${all}</div>
+      <div class="snow"><span class="cap">${this.storeLabel || t(out ? "dark_inv_snow" : "dark_inv_floor")}</span><div class="gl">${stones}</div>${all}</div>
       <div class="vit">${v("dark_inv_v_health", String(hp), hp < 50)}${v("dark_inv_v_warmth", String(wm), wm < 40)}${v("dark_inv_v_torch", `${bat}%`, bat < 25)}</div>`;
     if (this.drag?.ghost) this.el.append(this.drag.ghost);
   }

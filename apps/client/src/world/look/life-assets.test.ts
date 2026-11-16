@@ -96,3 +96,19 @@ test("a failed load rejects its askers and can be asked again", async () => {
   fail = false;
   assert.equal(await q.get("x"), "x");
 });
+
+test("drained: everything freed, held or not, and what was still loading freed as it comes", async () => {
+  const { q, freed, finish, started } = rig({ concurrency: 1 });
+  void q.get("ready", 0);
+  await finish("ready");
+  const late = q.get("late", 0).catch(() => "failed");
+  void q.get("never", 9).catch(() => {});
+  assert.deepEqual(started, ["ready", "late"]);
+  q.drain();
+  assert.deepEqual(freed, ["ready"]);
+  assert.equal(await late, "failed");
+  await finish("late");
+  assert.deepEqual(freed, ["ready", "late"], "freed when it came");
+  assert.deepEqual(started, ["ready", "late"], "the waiting one never started");
+  assert.equal(q.stats().ready, 0);
+});

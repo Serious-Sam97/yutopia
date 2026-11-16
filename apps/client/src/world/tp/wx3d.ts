@@ -673,7 +673,7 @@ export function layerShader(
   if (kind === "none") return;
   if (!wx.wxGrass.value && typeof document !== "undefined") wx.wxGrass.value = grassTexture();
   Object.assign(sh.uniforms, wx);
-  // (a car's own: what fell on it since it last moved — car/sedan.ts `wearable` hands it over)
+  // (a car's own: what fell on it since it last moved — car/glb.ts `paintWear` hands it over)
   const own = kind === "car" && !!sh.uniforms.wxCarSnow;
   // (the land: round each vertex, the woods and a way near — `landAround`)
   if (kind === "land")

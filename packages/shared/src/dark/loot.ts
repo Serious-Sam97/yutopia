@@ -190,6 +190,11 @@ const TABLES: Record<Place, Roll[]> = {
   ],
   shed: [
     [3, "fuse"],
+    // (plan 93 S7: the tools: a wrench, a tow rope)
+    [1, "wrench"],
+    [1, "towrope"],
+    // (plan 93 S6: a set of snow chains, or half of one)
+    [2, "chains", 2, 4],
     [2, "battery"],
     [2, "shell", 2, 4],
     [2, "flare"],
@@ -215,6 +220,8 @@ const TABLES: Record<Place, Roll[]> = {
   // the farm (docs/plan/31-the-day.md): a hunter's shells in the barn, the farmhouse's drawer
   barn: [
     [3, "shell", 2, 5],
+    [1, "towrope"],
+    [1, "chains", 2, 4],
     [2, "fuse"],
     [2, "flare"],
     [1, "shotgun"],
@@ -228,6 +235,8 @@ const TABLES: Record<Place, Roll[]> = {
   ],
   tractor: [
     [3, "fuse"],
+    [1, "wrench"],
+    [2, "chains", 2, 4],
     [3, "battery"],
     [2, "flare"],
     [2, null],

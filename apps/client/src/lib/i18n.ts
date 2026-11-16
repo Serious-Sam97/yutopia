@@ -284,6 +284,7 @@ const D = {
   lookSpeed: ["Speed", "Velocidade"],
   lookInvert: ["Invert up / down", "Inverter cima / baixo"],
   hands1p: ["Show my hands in first person", "Mostrar minhas mãos em primeira pessoa"],
+  carManual: ["Manual gearbox in cars (Q/E)", "Câmbio manual nos carros (Q/E)"],
   lookRefused: [
     "The browser didn't give the mouse to the camera yet — click again in a moment.",
     "O navegador ainda não deu o mouse para a câmera — clique de novo daqui a pouco.",

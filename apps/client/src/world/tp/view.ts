@@ -143,7 +143,7 @@ import { Tags } from "./parts/tags";
 import { Vehicles } from "./parts/vehicles";
 import { Warmup } from "./parts/warmup";
 import type { Keys, PersonIn } from "./person-in";
-import { type Mats as CharMats, Person3D } from "./person3d";
+import { type Mats as CharMats, Person3D, seatedGun } from "./person3d";
 import type { Post3 } from "./post3d";
 import { Shroud3 } from "./shroud3d";
 import { fogFor, type Ground, Surroundings, type Themes } from "./sky";
@@ -2466,6 +2466,9 @@ void main() {
   private shroud: Shroud3 | null = null;
   /** Who's down (crawling) and who's kneeling by them getting them up (world/dark says; D7). */
   downed = new Map<string, "down" | "kneel">();
+  /** (plan 93 S6, S7) who's at work on a car — kneeling at a wheel (a chain, a tyre), bent over its engine: the
+   *  cars say, each frame */
+  readonly kneeling = new Map<string, "kneel" | "bonnet">();
   /** Flares burning (world/dark gives them: the floor's coords, feet z, s lit): a red ground lamp each. */
   // (plan 87 F3b: `held` — one held up in someone's left hand: x, y, z its burning end, not the ground)
   flares: { x: number; y: number; z: number; t: number; held?: boolean }[] = [];
@@ -2864,7 +2867,7 @@ void main() {
                 : undefined,
             parts: b.busy ? (this.partsFor(b.busy, b.x, b.y, angle3) ?? undefined) : undefined,
             cue: b.busy === "pool" ? this.shooters.get(b.id) : undefined,
-            down: this.downed.get(b.id),
+            down: this.downed.get(b.id) ?? this.kneeling.get(b.id),
             fell,
             hit: this.hitOf(b),
             heard: this.heardBy(b),
@@ -2953,7 +2956,9 @@ void main() {
       sw.pre(near, Math.min(dt, 1 / 30), meId ?? undefined);
     }
     // (plan 58 5d: the ragdolls in the world's physics, a step on while anyone's down — or swings)
-    if (this.body.limpNow || sw?.active) ph?.step(dt);
+    // (my car on Jolt steps it itself, in the cars' frame — plan 92 feedback: not again here)
+    if (ph?.carStepped) ph.carStepped = false;
+    else if (this.body.limpNow || sw?.active || ph?.carsBusy()) ph?.step(dt); // (and a car on Jolt: docs/plan/92)
     sw?.post();
     this.body.limpNow = false;
     for (const [id, p] of this.people3)
@@ -3491,7 +3496,7 @@ void main() {
     this.banks ??= new FogBanks(g.root);
     const banks = this.banks.warm();
     const beam = new Mesh(this.beamCone ?? undefined, this.torch3[0]?.mat);
-    warm.add(puff, this.vehicles.carModel("visitor"), this.vehicles.busModel(), banks, beam);
+    warm.add(puff, banks, beam);
     void this.renderer.compileAsync(warm, this.camera, this.scene).then(() => {
       puff.material.dispose();
       banks.geometry.dispose();
@@ -3642,6 +3647,11 @@ void main() {
   // loaded the first time anyone's hand asks for one, lit by the room's light (patched), their shaders
   // compiled before they're first drawn; null till then (the drawn gun stands in) or if it failed.
   private lifeGuns = new Map<string, Object3D | "loading" | "failed">();
+  /** (plan 93 S2) A gun in the right hand of someone sat in a car (car/cars.ts) — its life model, loaded as
+   *  anyone's is; null till it's in. */
+  seatedGun(model: Parameters<typeof seatedGun>[0], key: string, S: "L" | "R" = "R"): ReturnType<typeof seatedGun> {
+    return seatedGun(model, key, (k) => this.lifeGun(k), S);
+  }
   private lifeGun(kind: string): Object3D | null {
     const have = this.lifeGuns.get(kind);
     if (have === undefined) {

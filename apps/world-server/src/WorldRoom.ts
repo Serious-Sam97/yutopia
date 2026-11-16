@@ -259,6 +259,22 @@ export class WorldRoom extends Room<WorldState> {
   survival: SurvivalHooks | null = null;
   dark: DarkHooks | null = null; // features/dark.ts: shots and flares (features/arms.ts)
   vortex: VortexHooks | null = null; // (plan 88) features/vortex.ts: the fight — shots at him (features/arms.ts)
+  /** (plan 93 S1) features/cars.ts: the nearest car along a shot's ray on the ground floor — what it struck,
+   *  whether the round goes on — and `apply` it (the car's damage, its hole) once it's taken */
+  carShot: {
+    along(
+      level: number,
+      o: { x: number; y: number; z: number },
+      d: { x: number; y: number; z: number },
+      range: number,
+      gun: string,
+      /** (plan 93 S2) the shooter's own car: never struck by their own round */
+      skip?: string,
+    ): (import("@yutopia/shared/car").CarShot & { id: string; apply(): void }) | null;
+    /** (plan 93 S2) the car someone's sat in: which seat, its side (−1 the driver's, +1 the other), how it
+     *  points (its heading), how fast it goes (m/s) */
+    seatOf(sid: string): { vid: string; seat: number; side: number; a: number; speed: number } | null;
+  } | null = null;
   pballs: PballHooks | null = null; // features/pballs.ts: pool balls out of a game
 
   send<K extends keyof ServerMessages>(client: Client, type: K, msg: ServerMessages[K]): void {
@@ -1524,6 +1540,9 @@ export class WorldRoom extends Room<WorldState> {
   /** Sight between two points of a floor (its coords, heights over it): no wall, floor, locked door
    *  or land between — Jolt's (features/physics.ts sets it); none yet, seen. */
   sight: ((level: number, a: Feet, b: Feet) => boolean) | null = null;
+  /** (plan 93 S3) when each of us was last in a fight — fired, shot, hurt (server ms): a car that knocks them
+   *  down hurts them only then (F8a) */
+  readonly fightAt = new Map<string, number>();
   /** Something solid at a point of a floor (its coords, height over it), a ball `r` round there —
    *  a wall, a floor, a thing (Jolt's; features/physics.ts sets it); none yet, nothing. */
   solidAt: ((level: number, p: Feet, r: number) => boolean) | null = null;

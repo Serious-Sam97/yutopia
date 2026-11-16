@@ -203,7 +203,8 @@ function steps(chans) {
 /** a bed: the 30 s (and 0.6 s over, for the seam) whose loudness is the least uneven */
 function loop(chans) {
   if (chans.length === 1) chans = [chans[0], chans[0]];
-  const want = 30.6;
+  // (the cars' beds — a skid, a scrape, the wipers — 8 s: the game loops them as they play, plan 92)
+  const want = DIR === "cars" ? 8.6 : 30.6;
   const n = chans[0].length;
   const len = Math.min(Math.round(want * SR), n - Math.round(1 * SR));
   const m = mono(chans);
@@ -309,9 +310,44 @@ const VX_LEN = {
   "vx-pickup": 1,
   "vx-grudge": 3,
 };
+// (the cars', plan 92 phase 11: a start to its idle, a crash's tail, a door's clunk and its latch)
+const CAR_LEN = {
+  chirp: 0.7,
+  "start-four": 4,
+  "start-v8": 4.5,
+  "start-diesel": 5,
+  "start-two": 4,
+  stop: 3,
+  "tick-cool": 6,
+  shift: 1.2,
+  pops: 1.2,
+  limiter: 2,
+  squeal: 2.5,
+  splash: 2,
+  "hit-light": 1.2,
+  "hit-mid": 2.5,
+  "hit-heavy": 3.5,
+  "hit-glass": 2.5,
+  "hit-post": 2,
+  "hit-tree": 2,
+  "hit-snowbank": 1.5,
+  thump: 1,
+  "door-open": 1.5,
+  "door-shut": 1.5,
+  "door-van": 2.5,
+  "door-truck": 1.5,
+  boot: 1.8,
+  bonnet: 1.8,
+  handbrake: 1.5,
+  belt: 1.5,
+  "horn-saloon": 1.6,
+  "horn-truck": 1.8,
+  "horn-small": 1.2,
+};
 /** (the guns', plan 79 phase 9: a shot's tail into the land, a far one's rolling; the handling short) */
 const hitLen = (slot) =>
   HIT_LEN[slot] ??
+  (DIR === "cars" ? (CAR_LEN[slot] ?? 2) : null) ??
   (DIR === "vortex"
     ? (VX_LEN[slot] ?? 2.5)
     : DIR !== "guns"

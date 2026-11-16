@@ -1,31 +1,63 @@
 import { ANIM, bayId, CAR_COLOURS, faceByte, levelMap, lotLayout, quarterOf } from "@yutopia/shared";
 import {
+  addHole,
   BUYABLE,
   bayFor,
+  buyLook,
   CAR_FLAGS,
   CAR_HZ,
   type CarKind,
   type CarSpec,
   type CarWire,
+  CHAIN_OFF_MS,
+  CHAIN_ON_MS,
+  CHAIN_REACH,
+  carAlong,
+  carAtHome,
   carKindOf,
+  chainSpot,
+  chainsOf,
+  damageString,
+  FLATS,
   finiteState,
   freeSpot,
   groundsWorld,
   HOME_CARS,
   type HomeCar,
   headingQuat,
+  holesWithout,
   keysDay,
+  levelCar,
+  MEND_MS,
+  MEND_REACH,
+  type Mend,
   mayDrive,
+  mayMend,
+  mend,
+  mergeDamage,
+  nearestColour,
+  nextMend,
+  PART,
   parkAt,
   parkedBody,
   parkedPose,
+  parseDamage,
   plateOf,
+  putIn,
   SEATS_OF,
   type Solid,
   SPECS,
+  type Stored,
+  type StoreKind,
   SUNK,
+  shotDamage,
+  spareOf,
+  storeOf,
+  variantSpec,
+  wireCar,
 } from "@yutopia/shared/car";
 import { atPump, BUILDINGS, heightAt, inBuilt, inLandBounds, LOT, MOTORS, waterAt } from "@yutopia/shared/grounds";
+import { addItem, addItemTo, addStack, count, slotAt, takeSlot, takeStack } from "@yutopia/shared/inventory";
 import { SWIM } from "@yutopia/shared/move";
 import { BOARD_KIND, boardOfOwner, boardsOf, postOf } from "@yutopia/shared/spot";
 import { api } from "../api.ts";
@@ -60,6 +92,7 @@ import { ploughAt, ploughedSweep } from "./ploughed.ts";
 // it back there, and putting the lot back puts each at its own.
 
 const REACH = 4.2; // from its middle to whoever gets in
+const LOCK_REACH = 8; // (plan 93 S9) its key fob reaches this far (m)
 const CAR_H = 1.5; // a car's height (m): what its door and its knock reach up to
 const OUT_V = 2.5; // m/s: slower than this to get in or out
 const TOW_MS = 2 * 60 * 60 * 1000;
@@ -69,7 +102,9 @@ const SHOVE_MAX = 6.5; // m: as far as a knock may move a parked car
 const SHOVE_REACH = 12; // m: the knocking car this near where it ended up
 const EMPTY_TOW_MS = 10 * 60 * 1000; // a dry car left out: towed sooner
 const FILL_S = 8; // s: empty to full at a pump (a wash in the time)
-const KNOCK_V = 2; // m/s: as fast as a car must be going to knock someone down
+const KNOCK_V = 2; // m/s: as fast as a car must be going to knock someone (a stagger)
+const STAGGER_V = 4.2; // m/s (~15 km/h): slower, a stagger; faster, knocked down (plan 93 S3)
+const FIGHT_MS = 45_000; // a fight: someone fired, was shot or hurt this lately (plan 93 S3, F8a)
 const KNOCK_REACH = 4; // m: them this near its middle
 const UNSTICK_MS = 10_000; // a car pulled out: not again for this long
 interface Live {
@@ -90,6 +125,42 @@ registerFeature((room: WorldRoom) => {
   const has = () => !!levelMap(room.map, 0);
   const clientOf = (sid: string) => room.clients.find((c) => c.sessionId === sid);
   const no = (c: WorldClient, why: string) => room.send(c, "car:no", { why });
+  // ── (plan 93 S9) lock and alarm: a car with an owner locked from outside by its keys (the owner, or whoever's
+  // lent them today); locked, its doors and boot open to nobody else — a stranger's try, a shot, a hard knock set
+  // its alarm off (20 s: `props.alarmAt`, every client whoops and flashes it), its owner told if they're here ──
+  const ALARM_MS = 20_000;
+  const alarm = (id: string, why: "door" | "boot" | "shot" | "knock") => {
+    const o = room.state.objects.get(id);
+    if (!o) return;
+    const def = fromSchema(o);
+    const now = Date.now();
+    const was = Number(def.props?.alarmAt) || 0;
+    if (now - was < ALARM_MS / 2) return;
+    room.state.objects.set(id, toSchema({ ...def, props: { ...(def.props ?? {}), alarmAt: now } }));
+    const owner = Number(def.props?.ownerId) || 0;
+    for (const c of room.clients) {
+      const q = room.state.players.get(c.sessionId);
+      if (owner && q?.uid === owner) room.send(c, "car:alarm", { id, why, plate: String(def.props?.plate ?? "") });
+    }
+  };
+  room.on("car:lock", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const id = String(m?.id ?? "");
+    const o = room.state.objects.get(id);
+    if (!p || !o || o.kind !== "car" || bySid.has(client.sessionId) || p.level !== 0) return;
+    const def = fromSchema(o);
+    if (def.props?.driven || !def.props?.ownerId) return;
+    if (!mayDrive(def.props, p.uid, Date.now())) return no(client, "owned");
+    const pose = parkedPose(def);
+    if (Math.hypot(p.x - pose.x, p.y - pose.y) > LOCK_REACH) return no(client, "far");
+    const props: Record<string, unknown> = { ...(def.props ?? {}), locked: m?.on ? 1 : 0 };
+    if (!m?.on) {
+      delete props.locked;
+      delete props.alarmAt;
+    }
+    room.state.objects.set(id, toSchema({ ...def, props }));
+    if (!config.offline) void api.putObject({ ...def, props }).catch((e) => console.warn("[cars] lock", e.message));
+  });
   /** The water over the ground at (x, z) (the Grounds'; m, 0 none): a car's in it this deep
    *  (docs/plan/66-the-water.md, S5). */
   const wetAt = (x: number, z: number) => {
@@ -113,10 +184,6 @@ registerFeature((room: WorldRoom) => {
     const b = l.spec.body;
     const o = (b.ahead - b.behind) / 2;
     return atPump(l.veh.x + Math.cos(l.veh.a) * o, l.veh.z + Math.sin(l.veh.a) * o);
-  };
-  const dmgOf = (s: string) => {
-    const d = s.split(",").map(Number);
-    return [0, 1, 2, 3].map((i) => clamp01(Number.isFinite(d[i]) ? d[i] : 0));
   };
   const forward = (v: Vehicle) => {
     // the car's own x, from its turn
@@ -149,7 +216,7 @@ registerFeature((room: WorldRoom) => {
   room.on("car:enter", (client, m) => {
     const p = room.state.players.get(client.sessionId);
     const seat = Number(m?.seat) | 0;
-    if (!p || !has() || p.level !== 0 || seat < 0 || seat > 3) return;
+    if (!p || !has() || p.level !== 0 || !Number.isInteger(seat) || seat < 0 || seat > 7) return;
     if (bySid.has(client.sessionId) || p.busy.startsWith("ride:")) return no(client, "busy");
     const id = String(m?.id ?? "");
     let l = live.get(id) ?? live.get(`car:${id}`);
@@ -167,6 +234,11 @@ registerFeature((room: WorldRoom) => {
       if (wetAt(pose.x, pose.y) >= SUNK) return no(client, "gone");
       // (in three dimensions: shared reach.ts — a car's 1.5 tall)
       if (Math.hypot(p.x - pose.x, p.y - pose.y, room.upOff(p, pose, CAR_H)) > REACH) return no(client, "far");
+      // (plan 93 S9: locked — its doors don't open but to its keys; a stranger's try sets its alarm off)
+      if (def.props?.locked && !mayDrive(def.props, p.uid, Date.now())) {
+        alarm(o.id, "door");
+        return no(client, "locked");
+      }
       const kind = carKindOf(def.props?.model);
       const spec = SPECS[kind];
       const v = new Vehicle();
@@ -185,13 +257,27 @@ registerFeature((room: WorldRoom) => {
       v.fuel = clamp01(num(def.props?.fuel, 0.7));
       v.grime = clamp01(num(def.props?.grime, 0));
       v.dmg = typeof def.props?.dmg === "string" ? def.props.dmg : "";
+      v.holes = typeof def.props?.holes === "string" ? def.props.holes : "";
+      v.chains = chainsOf(def.props);
+      v.towing = typeof def.props?.towing === "string" ? def.props.towing : "";
+      v.towedBy = typeof def.props?.towedBy === "string" ? def.props.towedBy : "";
       v.role = typeof def.props?.role === "string" ? def.props.role : "";
       v.plate = typeof def.props?.plate === "string" ? def.props.plate : "";
-      l = { veh: v, spec, seats: ["", "", "", ""], last: null, lastAt: Date.now(), still: 0, sp: 0 };
+      l = {
+        veh: v,
+        spec,
+        seats: new Array(Math.max(4, SEATS_OF[kind].at.length)).fill(""),
+        last: null,
+        lastAt: Date.now(),
+        still: 0,
+        sp: 0,
+      };
       live.set(v.id, l);
       room.state.vehicles.set(v.id, v);
       // its object: out, being driven (no longer in anyone's way where it stood)
-      room.state.objects.set(o.id, toSchema({ ...def, props: { ...(def.props ?? {}), driven: 1 } }));
+      // (plan 93 S9: its keys in it — unlocked)
+      const { locked: _l, alarmAt: _a, ...kept } = def.props ?? {};
+      room.state.objects.set(o.id, toSchema({ ...def, props: { ...kept, driven: 1 } }));
       room.rebuildGrid();
     } else {
       const at = { x: l.veh.x, y: l.veh.z };
@@ -255,6 +341,8 @@ registerFeature((room: WorldRoom) => {
       gear: m.gear | 0,
       fl: (Number(m.fl) >>> 0) & 0x1ffff,
       slip: m.slip,
+      grip: Math.max(0, Math.min(255, Number(m.grip) | 0)),
+      wc: Number(m.wc) >>> 0 || 0,
       seq,
       at: now,
     });
@@ -275,12 +363,12 @@ registerFeature((room: WorldRoom) => {
     const v = l.veh;
     const g = Number(m.grime);
     if (Number.isFinite(g)) v.grime = clamp01(Math.max(v.grime, Math.min(g, v.grime + 0.1)));
-    const was = dmgOf(v.dmg);
+    // (the zones — four from a client before the roof, five now — and the parts it broke: shared
+    // car/damage.ts, docs/plan/92 phase 9)
     const d = Array.isArray(m.dmg) ? m.dmg.map(Number) : [];
-    if (d.length === 4 && d.every(Number.isFinite)) {
-      const next = was.map((x, i) => clamp01(Math.max(x, Math.min(d[i], x + 0.5))));
-      v.dmg = next.some((x) => x > 0) ? next.map((x) => Math.round(x * 100) / 100).join(",") : "";
-    }
+    const parts = Number(m.parts);
+    if ((d.length === 4 || d.length === 5) && d.every(Number.isFinite))
+      v.dmg = damageString(mergeDamage(parseDamage(v.dmg), { zones: d, parts: Number.isFinite(parts) ? parts : 0 }));
   });
   // at a pump, stopped: F fills it (and washes it) till it's full or it moves
   room.on("car:fill", (client, m) => {
@@ -294,6 +382,15 @@ registerFeature((room: WorldRoom) => {
     if (Math.hypot(v.vx, v.vz) > 0.4) return no(client, "moving");
     if (!pumped(l)) return no(client, "pump");
     v.filling = true;
+  });
+  // (plan 93 S5) my seat's own window switch: down or up (everyone hears what it lets in and out)
+  room.on("car:window", (client, m) => {
+    const vid = bySid.get(client.sessionId);
+    const l = vid ? live.get(vid) : undefined;
+    const seat = l ? l.seats.indexOf(client.sessionId) : -1;
+    if (!l || seat < 0 || seat > 7) return;
+    const bit = 1 << seat;
+    l.veh.win = m?.down ? l.veh.win | bit : l.veh.win & ~bit;
   });
   // hit at speed by my car: knocked down (never hurt), the way the car was going
   const knockedAt = new Map<string, number>();
@@ -312,8 +409,21 @@ registerFeature((room: WorldRoom) => {
     const at = { x: v.x, y: v.z };
     if (Math.hypot(q.x - at.x, q.y - at.y, room.upOff(q, at, CAR_H)) > KNOCK_REACH) return;
     knockedAt.set(sid, now);
-    q.fellAt = now;
-    q.fellYaw = Math.atan2(v.vz, v.vx);
+    // (plan 93 S3: at a walk's pace a stagger — thrown off from where it came, as a shot throws them —;
+    // faster, knocked down)
+    if (l.sp < STAGGER_V) {
+      q.hitAt = now;
+      q.hitYaw = Math.atan2(v.z - q.y, v.x - q.x);
+    } else {
+      q.fellAt = now;
+      q.fellYaw = Math.atan2(v.vz, v.vx);
+    }
+    // (F8a: hurt only in a fight — they or the driver fired, were shot or hurt lately — by how fast)
+    const inFight = (s: string) => now - (room.fightAt.get(s) ?? 0) < FIGHT_MS;
+    if (inFight(sid) || inFight(client.sessionId)) {
+      const n = Math.round(Math.max(0, Math.min(70, (l.sp - 3) * 4)));
+      if (n > 0) room.survival?.hurt(sid, n);
+    }
   });
   // stuck (stopped, wedged among trunks, dug in): pulled out to the nearest clear spot on firm
   // ground — the server's pick (the Grounds' solids, the parked cars, the other cars on the move)
@@ -441,6 +551,8 @@ registerFeature((room: WorldRoom) => {
     if (!inLandBounds(x, z)) return;
     if (BUILDINGS.some((b) => inBuilt(b, x, z))) return;
     shovedAt.set(o.id, now);
+    // (plan 93 S9: knocked hard where it stood, locked: its alarm)
+    if (def.props?.locked && Math.hypot(was.x - x, was.y - z) > 0.25) alarm(o.id, "knock");
     const spot = parkAt(x, z, a, heightAt(x, z), { ...(def.props ?? {}), level: 0 });
     const next = { ...def, ...spot };
     room.state.objects.set(o.id, toSchema(next));
@@ -525,9 +637,17 @@ registerFeature((room: WorldRoom) => {
       fuel: Math.round(v.fuel * 1000) / 1000,
       grime: Math.round(v.grime * 100) / 100,
       dmg: v.dmg,
+      holes: v.holes,
+      chains: v.chains,
+      towing: v.towing,
+      towedBy: v.towedBy,
     };
+    if (!v.chains) delete props.chains;
+    if (!v.towing) delete props.towing;
+    if (!v.towedBy) delete props.towedBy;
     if (!v.grime) delete props.grime;
     if (!v.dmg) delete props.dmg;
+    if (!v.holes) delete props.holes;
     const lot = lotLayout();
     const bay = bayFor(lot.bays, v.x, v.z, v.a);
     const b = bay ? lot.bays[bay.i] : null;
@@ -606,6 +726,7 @@ registerFeature((room: WorldRoom) => {
       else spot.props.fuel = Math.max(0.3, num(spot.props.fuel, 0.7));
       delete spot.props.grime;
       delete spot.props.dmg;
+      delete spot.props.holes;
       const next = { ...def, ...spot };
       room.state.objects.set(def.id, toSchema(next));
       if (!config.offline) void api.putObject(next).catch((e) => console.warn("[cars] tow", e.message));
@@ -632,7 +753,8 @@ registerFeature((room: WorldRoom) => {
       const bz = pose.y;
       const inLot = bx > LOT.x0 && bx < LOT.x1 && bz > LOT.z0 && bz < LOT.z1;
       if (!all && !down) {
-        const dry = num(def.props?.fuel, 1) <= 0.01;
+        // (plan 93 S1: shot dead, as stranded as dry)
+        const dry = num(def.props?.fuel, 1) <= 0.01 || !!(parseDamage(def.props?.dmg).parts & PART.engineDead);
         // (in someone's bay: out the next time nobody's near, however long it's been there)
         if (!out && (inLot || Date.now() - parkedAt < (dry ? EMPTY_TOW_MS : TOW_MS))) continue;
         const near = [...room.state.players.values()].some(
@@ -714,10 +836,13 @@ registerFeature((room: WorldRoom) => {
       return no(client, "far");
     const model = String(m?.model ?? "");
     if (!BUYABLE.includes(model as CarKind)) return no(client, "model");
-    const colour = Number(m?.colour);
+    // its look chosen (docs/plan/92-the-cars.md F13b): one the panel offers, or none (seeded by its id)
+    const look = m?.look == null ? null : buyLook(model as CarKind, m.look);
+    if (m?.look != null && !look) return no(client, "look");
+    const colour = look ? nearestColour(look.colour) : Number(m?.colour);
     if (!Number.isInteger(colour) || colour < 0 || colour >= CAR_COLOURS.length) return no(client, "model");
     const plate = plateOf(String(m?.plate ?? ""), p.name);
-    const spec = SPECS[model as CarKind];
+    const spec = variantSpec(model as CarKind, look?.variant);
     // the collection bay, if nothing's in it; else the nearest free spot by them
     const c = MOTORS.collect;
     const inBay = [...room.state.objects.values()].some((o) => {
@@ -746,6 +871,7 @@ registerFeature((room: WorldRoom) => {
       fuel: 1,
     };
     if (model !== "sedan") props.model = model;
+    if (look) props.look = look;
     const id = `own-${p.uid}-${Date.now().toString(36)}`;
     const next = { id, kind: "car", ...parkAt(at.x, at.z, at.a, heightAt(at.x, at.z), props) };
     room.state.objects.set(id, toSchema(next));
@@ -753,6 +879,30 @@ registerFeature((room: WorldRoom) => {
     room.rescue();
     if (!config.offline) void api.putObject(next).catch((e) => console.warn("[cars] buy", e.message));
     room.send(client, "car:bought", { id });
+  });
+  // "Repaint" (docs/plan/92-the-cars.md F13b): my own car's look, chosen again — parked at home (my own
+  // bay of the lot, or MOTORS' forecourt), nobody in it; free for now. Its variant's numbers come with
+  // it: the next time it's driven (the client reads its spec from its look).
+  room.on("car:look", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    if (!p?.uid || !has()) return;
+    const id = String(m?.id ?? "");
+    const o = room.state.objects.get(id);
+    if (!o || o.kind !== "car") return no(client, "gone");
+    const def = fromSchema(o);
+    const pr = def.props ?? {};
+    if (Number(pr.ownerId) !== p.uid || pr.retire) return no(client, "notyours");
+    if (pr.driven || live.has(`car:${id}`)) return no(client, "busy");
+    const look = buyLook(carKindOf(pr.model), m?.look);
+    if (!look) return no(client, "look");
+    if (!carAtHome(def, [...room.state.objects.values()].map(fromSchema), MOTORS.yard)) return no(client, "home");
+    const props: Record<string, unknown> = { ...pr, look, variant: nearestColour(look.colour) };
+    const next = { ...def, props };
+    room.state.objects.set(id, toSchema(next));
+    room.rebuildGrid();
+    room.rescue();
+    if (!config.offline) void api.putObject(next).catch((e) => console.warn("[cars] look", e.message));
+    room.send(client, "car:looked", { id });
   });
   // ── an admin's (docs/plan/48-the-admin.md): a vehicle spawned in front of them, any of the
   // kinds, anyone's to drive; gone when they clear what they spawned, or at the day's end
@@ -925,6 +1075,7 @@ registerFeature((room: WorldRoom) => {
       delete props.fuel;
       delete props.grime;
       delete props.dmg;
+      delete props.holes;
     } else props.fuel = Math.max(0.3, num(props.fuel, 0.7));
     const spot = parkAt(h.x, h.z, h.a, heightAt(h.x, h.z), props);
     const next = { id: h.id, kind: "car", ...spot };
@@ -967,11 +1118,13 @@ registerFeature((room: WorldRoom) => {
       const props = { ...(def.props ?? {}) };
       delete props.grime;
       delete props.dmg;
+      delete props.holes;
       putHome(h, props);
       return true;
     }
     const parkedAt = Number(def.props?.parkedAt) || 0;
-    const dry = num(def.props?.fuel, 1) <= 0.01;
+    // (plan 93 S1: shot dead, as stranded as dry)
+    const dry = num(def.props?.fuel, 1) <= 0.01 || !!(parseDamage(def.props?.dmg).parts & PART.engineDead);
     if (Date.now() - parkedAt < (dry ? EMPTY_TOW_MS : TOW_MS)) return true;
     const near = [...room.state.players.values()].some(
       (p) =>
@@ -981,6 +1134,7 @@ registerFeature((room: WorldRoom) => {
     const props = { ...(def.props ?? {}) };
     delete props.grime;
     delete props.dmg;
+    delete props.holes;
     putHome(h, props);
     return true;
   };
@@ -998,9 +1152,388 @@ registerFeature((room: WorldRoom) => {
     }
   });
 
+  // ── shots meet cars (docs/plan/93 S1): the nearest along a ray, driven or parked — what it struck, the
+  // round on or stopped; taken (`apply`): the car's damage (only ever more), its hole. A parked one's kept on
+  // its object (saved a moment after: a burst is one save) ──
+  const saveSoon = new Map<string, ReturnType<typeof setTimeout>>();
+  const saveLater = (id: string) => {
+    if (config.offline || saveSoon.has(id)) return;
+    saveSoon.set(
+      id,
+      setTimeout(() => {
+        saveSoon.delete(id);
+        const o = room.state.objects.get(id);
+        if (o) void api.putObject(fromSchema(o)).catch((e) => console.warn("[cars] shot", e.message));
+      }, 2500),
+    );
+  };
+  // ── a car's own storage (docs/plan/93 S4): its boot — stood behind it, parked —, its glove box — sat in its
+  // front, driven or not; what's put in kept on its object (saved a moment after) ──
+  const BOOT_REACH = 1.7; // m: from the middle of its back to whoever opens it
+  const storeObj = (sid: string, p: Player, kind: StoreKind, id: string) => {
+    const o = room.state.objects.get(id);
+    if (!o || o.kind !== "car" || p.hp <= 0 || p.downAt) return null;
+    const def = fromSchema(o);
+    if (kind === "glove") {
+      const vid = bySid.get(sid);
+      const l = vid ? live.get(vid) : undefined;
+      if (!l || l.veh.obj !== id || l.seats.indexOf(sid) > 1 || l.seats.indexOf(sid) < 0) return null;
+      return def;
+    }
+    if (def.props?.driven || bySid.has(sid) || p.level !== 0) return null;
+    const pose = parkedPose(def);
+    const back = SPECS[carKindOf(def.props?.model)].body.behind;
+    // (plan 93 S9: a locked boot opens to its keys; a stranger's try sets the alarm off)
+    if (def.props?.locked && !mayDrive(def.props, p.uid, Date.now())) {
+      alarm(id, "boot");
+      return null;
+    }
+    const rx = pose.x - Math.cos(pose.a) * (back + 0.35);
+    const ry = pose.y - Math.sin(pose.a) * (back + 0.35);
+    return Math.hypot(p.x - rx, p.y - ry) <= BOOT_REACH ? def : null;
+  };
+  const storeKind = (k: unknown): StoreKind | null => (k === "boot" || k === "glove" ? k : null);
+  const putStore = (id: string, def: ReturnType<typeof fromSchema>, kind: StoreKind, store: Stored[]) => {
+    const props: Record<string, unknown> = { ...(def.props ?? {}), [kind]: store };
+    if (!store.length) delete props[kind];
+    room.state.objects.set(id, toSchema({ ...def, props }));
+    saveLater(id);
+  };
+  // something from the pack (a slot, `n` of a stack or all) into it
+  room.on("car:put", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const kind = storeKind(m?.kind);
+    const inv = room.survival?.inventory(client.sessionId);
+    const id = String(m?.id ?? "");
+    if (!p || !kind || !inv) return;
+    const def = storeObj(client.sessionId, p, kind, id);
+    if (!def) return;
+    const from = Number(m?.from);
+    const it = slotAt(inv, from);
+    if (!it) return;
+    const store = storeOf(def.props, kind);
+    const want = "loaded" in it ? 1 : Math.max(1, Math.min(it.n, Number(m?.n) || it.n));
+    const got = takeSlot(inv, from, "loaded" in it ? undefined : want);
+    if (!got) return;
+    const n = putIn(store, kind, got as Stored);
+    // (no room for it all: what didn't go back where it came from)
+    if (n < ("loaded" in got ? 1 : got.n))
+      addItemTo(inv, from, { ...(got as Stored), n: ("loaded" in got ? 1 : got.n) - n });
+    putStore(id, def, kind, store);
+    room.survival?.changed(client.sessionId);
+  });
+  // something in it (its place `i`; −1: all of it) into the pack — into slot `slot` if it's dragged there
+  room.on("car:take", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const kind = storeKind(m?.kind);
+    const inv = room.survival?.inventory(client.sessionId);
+    const id = String(m?.id ?? "");
+    if (!p || !kind || !inv) return;
+    const def = storeObj(client.sessionId, p, kind, id);
+    if (!def) return;
+    const store = storeOf(def.props, kind);
+    const i = Number(m?.i);
+    const which = i === -1 ? store.map((_, k) => k) : Number.isInteger(i) && store[i] ? [i] : [];
+    if (!which.length) return;
+    const slot = m?.slot === undefined ? undefined : Number(m.slot);
+    for (const k of which) {
+      const s = store[k];
+      const n =
+        slot !== undefined && which.length === 1 && slotAt(inv, slot) !== undefined
+          ? addItemTo(inv, slot, s)
+          : addItem(inv, s);
+      if ("loaded" in s && s.loaded !== undefined) s.n = n ? 0 : 1;
+      else s.n -= n;
+    }
+    putStore(
+      id,
+      def,
+      kind,
+      store.filter((s) => s.n > 0),
+    );
+    room.survival?.changed(client.sessionId);
+  });
+
+  // ── (plan 93 S6) snow chains: knelt by a parked car's wheel (its spot out from its side), one fitted from the
+  // pack in CHAIN_ON_MS, or taken off back into it in CHAIN_OFF_MS; stood up or walked off: not done ──
+  const chainJobs = new Map<string, ReturnType<typeof setTimeout>>();
+  const chainEnd = (sid: string) => {
+    const t = chainJobs.get(sid);
+    if (t) clearTimeout(t);
+    chainJobs.delete(sid);
+    const p = room.state.players.get(sid);
+    if (p?.busy.startsWith("chain:") || p?.busy.startsWith("mend:")) p.busy = "";
+  };
+  room.on("car:chain", (client, m) => {
+    const sid = client.sessionId;
+    const p = room.state.players.get(sid);
+    const inv = room.survival?.inventory(sid);
+    const id = String(m?.id ?? "");
+    const wheel = Number(m?.wheel);
+    const on = !!m?.on;
+    chainEnd(sid);
+    if (!p || !inv || !Number.isInteger(wheel) || wheel < 0 || wheel > 3) return;
+    const o = room.state.objects.get(id);
+    if (!o || o.kind !== "car" || p.hp <= 0 || p.downAt || p.level !== 0 || bySid.has(sid) || p.busy) return;
+    const def = fromSchema(o);
+    if (def.props?.driven) return;
+    const spec = SPECS[carKindOf(def.props?.model)];
+    const pose = parkedPose(def);
+    const at = chainSpot(spec, pose.x, pose.y, pose.a, wheel);
+    if (Math.hypot(p.x - at.x, p.y - at.y) > CHAIN_REACH) return no(client, "far");
+    const has = !!(chainsOf(def.props) & (1 << wheel));
+    if (on === has) return;
+    if (on && count(inv, "chains") < 1) return no(client, "chains");
+    const x0 = p.x;
+    const y0 = p.y;
+    p.busy = `chain:${id}:${wheel}`;
+    chainJobs.set(
+      sid,
+      setTimeout(
+        () => {
+          chainJobs.delete(sid);
+          const q = room.state.players.get(sid);
+          if (!q || q.busy !== `chain:${id}:${wheel}`) return;
+          q.busy = "";
+          const inv2 = room.survival?.inventory(sid);
+          const o2 = room.state.objects.get(id);
+          if (!inv2 || !o2 || Math.hypot(q.x - x0, q.y - y0) > 0.6) return;
+          const d2 = fromSchema(o2);
+          if (d2.props?.driven) return;
+          const bits = chainsOf(d2.props);
+          if (on ? takeStack(inv2, "chains", 1) !== 1 : addStack(inv2, "chains", 1) !== 1) return;
+          const props: Record<string, unknown> = {
+            ...(d2.props ?? {}),
+            chains: on ? bits | (1 << wheel) : bits & ~(1 << wheel),
+          };
+          if (!props.chains) delete props.chains;
+          room.state.objects.set(id, toSchema({ ...d2, props }));
+          saveLater(id);
+          room.survival?.changed(sid);
+        },
+        on ? CHAIN_ON_MS : CHAIN_OFF_MS,
+      ),
+    );
+  });
+  // (moved off, or left: the job's dropped)
+  room.on("car:chain-stop", (client) => chainEnd(client.sessionId));
+
+  // ── (plan 93 S7) mending a parked car: stood at its nose (its bonnet up), the next thing under it (shared
+  // car/repair.ts); knelt at a wheel, a flat changed for its spare. At a pump (the garage's bay) everything,
+  // free; elsewhere a wrench from the pack, the glass not. A while each (MEND_MS); walked off: not done ──
+  const noseOf = (def: ReturnType<typeof fromSchema>) => {
+    const spec = SPECS[carKindOf(def.props?.model)];
+    const pose = parkedPose(def);
+    const k = spec.body.ahead + 0.45;
+    const o = (spec.body.ahead - spec.body.behind) / 2;
+    return {
+      spec,
+      pose,
+      x: pose.x + Math.cos(pose.a) * k,
+      y: pose.y + Math.sin(pose.a) * k,
+      garage: atPump(pose.x + Math.cos(pose.a) * o, pose.y + Math.sin(pose.a) * o),
+    };
+  };
+  room.on("car:mend", (client, m) => {
+    const sid = client.sessionId;
+    const p = room.state.players.get(sid);
+    const inv = room.survival?.inventory(sid);
+    const id = String(m?.id ?? "");
+    const what = String(m?.what ?? "") as Mend;
+    const wheel = Number(m?.wheel ?? 0);
+    chainEnd(sid);
+    if (!p || !inv || !(what in MEND_MS) || !Number.isInteger(wheel) || wheel < 0 || wheel > 3) return;
+    const o = room.state.objects.get(id);
+    if (!o || o.kind !== "car" || p.hp <= 0 || p.downAt || p.level !== 0 || bySid.has(sid) || p.busy) return;
+    const def = fromSchema(o);
+    if (def.props?.driven) return;
+    const at = noseOf(def);
+    const spot = what === "tyre" ? chainSpot(at.spec, at.pose.x, at.pose.y, at.pose.a, wheel) : at;
+    if (Math.hypot(p.x - spot.x, p.y - spot.y) > MEND_REACH) return no(client, "far");
+    const dm = parseDamage(def.props?.dmg);
+    if (what === "tyre" ? !(dm.parts & FLATS[wheel]) : nextMend(dm, at.garage) !== what) return;
+    if (!mayMend(what, { garage: at.garage, wrench: count(inv, "wrench") > 0, spare: spareOf(def.props) }))
+      return no(client, what === "glass" ? "garage" : what === "tyre" ? "spare" : "wrench");
+    const x0 = p.x;
+    const y0 = p.y;
+    const busy = `mend:${id}:${what}${what === "tyre" ? wheel : ""}`;
+    p.busy = busy;
+    chainJobs.set(
+      sid,
+      setTimeout(() => {
+        chainJobs.delete(sid);
+        const q = room.state.players.get(sid);
+        if (!q || q.busy !== busy) return;
+        q.busy = "";
+        const o2 = room.state.objects.get(id);
+        if (!o2 || Math.hypot(q.x - x0, q.y - y0) > 0.6) return;
+        const d2 = fromSchema(o2);
+        if (d2.props?.driven) return;
+        const r = mend(parseDamage(d2.props?.dmg), what, wheel);
+        const props: Record<string, unknown> = { ...(d2.props ?? {}), dmg: damageString(r.dm) };
+        if (r.zone >= 0 && typeof props.holes === "string") props.holes = holesWithout(props.holes, r.zone);
+        // (its spare used — or, at the garage, a new tyre fitted and its spare in the boot again)
+        if (what === "tyre") {
+          if (noseOf(d2).garage) delete props.spare;
+          else props.spare = 0;
+        }
+        if (!props.dmg) delete props.dmg;
+        if (!props.holes) delete props.holes;
+        room.state.objects.set(id, toSchema({ ...d2, props }));
+        saveLater(id);
+      }, MEND_MS[what]),
+    );
+  });
+
+  // ── (plan 93 S7) a tow rope: from one car's back to another's front (both parked, or stopped with a driver),
+  // the rope from the pack; untied from either, back into it. The drivers' own cars feel it (car/cars.ts) ──
+  const TOW_TIE = 9; // m: the most between the two cars' middles as it's tied
+  const tieOf = (id: string): { def: ReturnType<typeof fromSchema> | null; veh: Vehicle | null } => {
+    const o = room.state.objects.get(id);
+    const def = o ? fromSchema(o) : null;
+    let veh: Vehicle | null = null;
+    for (const l of live.values()) if (l.veh.obj === id) veh = l.veh;
+    return { def, veh };
+  };
+  const setTie = (id: string, key: "towing" | "towedBy", to: string) => {
+    const { def, veh } = tieOf(id);
+    if (veh) veh[key] = to;
+    if (def) {
+      const props: Record<string, unknown> = { ...(def.props ?? {}), [key]: to };
+      if (!to) delete props[key];
+      room.state.objects.set(id, toSchema({ ...def, props }));
+      saveLater(id);
+    }
+  };
+  const tieWhere = (id: string) => {
+    const { def, veh } = tieOf(id);
+    if (veh) return { x: veh.x, y: veh.z, moving: Math.hypot(veh.vx, veh.vz) > 0.5 };
+    if (!def || def.kind !== "car") return null;
+    const pose = parkedPose(def);
+    return { x: pose.x, y: pose.y, moving: false };
+  };
+  room.on("car:tow", (client, m) => {
+    const sid = client.sessionId;
+    const p = room.state.players.get(sid);
+    const inv = room.survival?.inventory(sid);
+    const from = String(m?.from ?? "");
+    const to = String(m?.to ?? "");
+    if (!p || !inv || from === to || p.level !== 0 || bySid.has(sid) || p.hp <= 0 || p.downAt) return;
+    const a = tieWhere(from);
+    const b = tieWhere(to);
+    if (!a || !b || a.moving || b.moving) return;
+    if (Math.hypot(a.x - b.x, a.y - b.y) > TOW_TIE) return no(client, "far");
+    if (Math.min(Math.hypot(p.x - a.x, p.y - a.y), Math.hypot(p.x - b.x, p.y - b.y)) > 5) return no(client, "far");
+    const ta = tieOf(from);
+    const tb = tieOf(to);
+    const busyA = ta.veh?.towing || ta.def?.props?.towing;
+    const busyB = tb.veh?.towedBy || tb.def?.props?.towedBy;
+    if (busyA || busyB) return no(client, "tied");
+    if (count(inv, "towrope") < 1 || takeStack(inv, "towrope", 1) !== 1) return no(client, "rope");
+    setTie(from, "towing", to);
+    setTie(to, "towedBy", from);
+    room.survival?.changed(sid);
+  });
+  room.on("car:untow", (client, m) => {
+    const sid = client.sessionId;
+    const p = room.state.players.get(sid);
+    const inv = room.survival?.inventory(sid);
+    const id = String(m?.id ?? "");
+    if (!p || !inv || bySid.has(sid)) return;
+    const here = tieWhere(id);
+    if (!here || here.moving || Math.hypot(p.x - here.x, p.y - here.y) > 5) return;
+    const t = tieOf(id);
+    const towing = String(t.veh?.towing || t.def?.props?.towing || "");
+    const towedBy = String(t.veh?.towedBy || t.def?.props?.towedBy || "");
+    if (!towing && !towedBy) return;
+    if (addStack(inv, "towrope", 1) !== 1) return no(client, "full");
+    if (towing) {
+      setTie(id, "towing", "");
+      setTie(towing, "towedBy", "");
+    } else {
+      setTie(id, "towedBy", "");
+      setTie(towedBy, "towing", "");
+    }
+    room.survival?.changed(sid);
+  });
+
+  room.carShot = {
+    seatOf(sid) {
+      const vid = bySid.get(sid);
+      const l = vid ? live.get(vid) : undefined;
+      if (!l) return null;
+      const seat = l.seats.indexOf(sid);
+      if (seat < 0) return null;
+      const w = SEATS_OF[l.spec.kind].at[seat]?.[1] ?? 0;
+      const v = l.veh;
+      return { vid: v.id, seat, side: w < 0 ? -1 : 1, a: v.a, speed: Math.hypot(v.vx, v.vz) };
+    },
+    along(level, o, d, range, gun, skip) {
+      if (level !== 0) return null;
+      let best: (ReturnType<typeof carAlong> & object & { id: string; apply(): void }) | null = null;
+      const near = (x: number, y: number) => {
+        // (by the ray's line: within its reach and a car's length of it)
+        const rx = x - o.x;
+        const ry = y - o.y;
+        const along = rx * d.x + ry * d.y;
+        if (along < -6 || along > (best?.t ?? range) + 6) return false;
+        return Math.abs(rx * d.y - ry * d.x) < 6 + Math.abs(d.z) * along;
+      };
+      for (const l of live.values()) {
+        const v = l.veh;
+        if (v.id === skip || !near(v.x, v.z)) continue;
+        const h = carAlong(o, d, wireCar(v.x, v.y, v.z, [v.qx, v.qy, v.qz, v.qw], l.spec), best?.t ?? range, gun);
+        if (!h || (best && h.t >= best.t)) continue;
+        best = {
+          ...h,
+          id: v.id,
+          apply() {
+            const dm = parseDamage(v.dmg);
+            shotDamage(dm, h);
+            v.dmg = damageString(dm);
+            if (h.struck === "panel" || h.struck === "engine") v.holes = addHole(v.holes, h);
+          },
+        };
+      }
+      for (const ob of room.state.objects.values()) {
+        if (ob.kind !== "car") continue;
+        const def = fromSchema(ob);
+        if (def.props?.driven || num(def.props?.level, 0) !== 0) continue;
+        const pose = parkedPose(def);
+        if (!near(pose.x, pose.y)) continue;
+        const spec = SPECS[carKindOf(def.props?.model)];
+        const car = levelCar(pose.x, pose.y, pose.h ?? heightAt(pose.x, pose.y), pose.a, spec);
+        const h = carAlong(o, d, car, best?.t ?? range, gun);
+        if (!h || (best && h.t >= best.t)) continue;
+        best = {
+          ...h,
+          id: ob.id,
+          apply() {
+            const cur = room.state.objects.get(ob.id);
+            if (!cur) return;
+            const was = fromSchema(cur);
+            const props: Record<string, unknown> = { ...(was.props ?? {}) };
+            const dm = parseDamage(props.dmg);
+            shotDamage(dm, h);
+            props.dmg = damageString(dm);
+            if (h.struck === "panel" || h.struck === "engine")
+              props.holes = addHole(typeof props.holes === "string" ? props.holes : "", h);
+            room.state.objects.set(ob.id, toSchema({ ...was, props }));
+            saveLater(ob.id);
+            // (plan 93 S9: shot, locked: its alarm)
+            if (props.locked) alarm(ob.id, "shot");
+          },
+        };
+      }
+      return best;
+    },
+  };
+
   return {
     dispose() {
       offLand();
+      room.carShot = null;
+      for (const t of saveSoon.values()) clearTimeout(t);
     },
     // (the fleet and the homes made before anyone's in: the first tick's, done as the room's made)
     ready() {

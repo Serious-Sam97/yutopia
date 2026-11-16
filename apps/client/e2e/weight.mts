@@ -46,6 +46,7 @@ const ALL_SPOTS: Record<string, Spot> = {
   floor2: { x: 30.5, y: 20.5, level: 2 }, // an empty floor (its windows)
   woods: { x: -180, y: 22, level: 0 }, // the thickest of the forest by the lawn (plan 90's loading checks)
   lobby: { x: 8, y: 28, level: 4 }, // floor 4's lobby: the town and the kart park past its walls (the window portal)
+  town: { x: 400, y: -405, level: 0 }, // Main Street, its parked cars both sides (plan 92's checks)
 };
 const SPOTS = (process.env.SPOTS ?? "studio,lot,lawn").split(",").filter((s) => ALL_SPOTS[s]);
 const GPU = ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", "--enable-precise-memory-info"];

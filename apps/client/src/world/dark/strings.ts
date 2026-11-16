@@ -15,6 +15,9 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_item_battery: ["Battery", "Bateria"],
   dark_item_aid: ["First aid kit", "Kit médico"],
   dark_item_fuse: ["Fuse", "Fusível"],
+  dark_item_chains: ["Snow chain", "Corrente de neve"],
+  dark_item_wrench: ["Wrench", "Chave inglesa"],
+  dark_item_towrope: ["Tow rope", "Cabo de reboque"],
   dark_item_torch: ["Torch", "Lanterna"],
   dark_item_vxtape: ["Vortex's tape", "Fita do Vortex"],
   dark_place_house: ["Front door", "Porta da casa"],
@@ -55,6 +58,9 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_many_battery: ["batteries", "baterias"],
   dark_many_aid: ["first aid kits", "kits médicos"],
   dark_many_fuse: ["fuses", "fusíveis"],
+  dark_many_chains: ["snow chains", "correntes de neve"],
+  dark_many_wrench: ["wrenches", "chaves inglesas"],
+  dark_many_towrope: ["tow ropes", "cabos de reboque"],
   dark_slip_hand: ["at hand · {n}", "à mão · {n}"],
   dark_none_aid: ["No first aid on you", "Nenhum kit médico com você"],
   dark_none_battery: ["No battery on you", "Nenhuma bateria com você"],
@@ -101,6 +107,8 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_inv_in_pocket: ["In the pack", "Na mochila"],
   dark_inv_snow: ["On the snow", "Na neve"],
   dark_inv_floor: ["On the floor", "No chão"],
+  // (plan 93 S4) a car's own: its boot, its glove box
+  dark_inv_store_empty: ["Nothing in it.", "Nada nele."],
   dark_inv_ground_none: ["Nothing in reach.", "Nada ao alcance."],
   dark_inv_pick_hint: ["Pick something to see it here.", "Escolha algo para vê-lo aqui."],
   dark_inv_v_health: ["health", "saúde"],
@@ -198,6 +206,18 @@ export const STRINGS: Record<string, readonly [string, string]> = {
     "Fecha as feridas: a saúde volta a 100. Caído, segure E 5 s para se levantar sozinho.",
   ],
   dark_desc_fuse: ["Keep it: some lamp out there needs one.", "Guarde: alguma luz lá fora precisa de um."],
+  dark_desc_wrench: [
+    "Mend a car where it stands: at its bonnet, the engine, the lamps, the panels. The glass waits for the garage.",
+    "Conserte um carro onde ele está: no capô, o motor, os faróis, a lataria. Os vidros só na oficina.",
+  ],
+  dark_desc_towrope: [
+    "Tie it to one car's back and another's front: the one pulls, someone at the other's wheel steers.",
+    "Amarre na traseira de um carro e na frente de outro: um puxa, alguém no volante do outro dirige.",
+  ],
+  dark_desc_chains: [
+    "One a wheel: kneel by a parked car's wheel to fit it. Grips snow and ice; on the road it rattles, 45 km/h at most.",
+    "Uma por roda: ajoelhe junto à roda de um carro parado para pôr. Agarra na neve e no gelo; no asfalto chacoalha, 45 km/h no máximo.",
+  ],
   dark_desc_vxtape: [
     "Pulled out of him when he went down. Each one a fight you finished. He knows you have it.",
     "Arrancada dele quando caiu. Cada uma, uma briga que você terminou. Ele sabe que está com você.",

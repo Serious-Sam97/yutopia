@@ -1,4 +1,8 @@
+import type { WorldObjectDef } from "../catalog.ts";
 import { SP_OFFSET_H } from "../clock.ts";
+import { bayId, type LotLayout, lotLayout } from "../lot.ts";
+import { boardOfOwner } from "../spot.ts";
+import { bayFor, parkedPose } from "./park.ts";
 import type { CarKind } from "./specs.ts";
 
 // Your own vehicle, from the dealer (docs/plan/43-the-spot.md): what MOTORS sells (every drivable
@@ -7,8 +11,11 @@ import type { CarKind } from "./specs.ts";
 
 export const BUYABLE: CarKind[] = [
   "sedan",
+  "estate",
+  "hatch",
   "offroad",
   "pickup",
+  "van",
   "snowmobile",
   "snowcat",
   "tractor",
@@ -41,4 +48,23 @@ export function mayDrive(props: Record<string, unknown> | undefined, uid: number
   const owner = Number(props?.ownerId) || 0;
   if (!owner || owner === uid) return true;
   return Number(props?.lentTo) === uid && Number(props?.lentDay) === keysDay(now);
+}
+
+let lot: LotLayout | null = null;
+/** Where a car may be repainted (docs/plan/92-the-cars.md F13b, "Repaint"): parked at home — in its owner's
+ *  own bay of the lot, or on MOTORS' forecourt (`yard`: grounds' MOTORS.yard, passed in so this stays light). */
+export function carAtHome(
+  car: WorldObjectDef,
+  objects: Iterable<WorldObjectDef>,
+  yard: { x0: number; x1: number; z0: number; z1: number },
+): boolean {
+  const pr = car.props ?? {};
+  if (Number(pr.level ?? 0) !== 0 || pr.driven) return false;
+  const q = parkedPose(car);
+  if (q.x >= yard.x0 - 14 && q.x <= yard.x1 + 2 && q.y >= yard.z0 - 4 && q.y <= yard.z1 + 2) return true;
+  lot ??= lotLayout();
+  const bay = bayFor(lot.bays, q.x, q.y, q.a);
+  if (!bay) return false;
+  const board = boardOfOwner(objects, Number(pr.ownerId));
+  return !!board && board.props?.bay === bayId(lot.bays[bay.i]);
 }
