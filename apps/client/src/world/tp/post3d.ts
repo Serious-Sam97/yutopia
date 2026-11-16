@@ -99,6 +99,16 @@ const LIFE_FINISH = {
     }`,
 };
 
+// The bloom's high pass (UnrealBloomPass's LuminosityHighPassShader, three r186): the pixel whole once
+// its luminance is over the threshold…
+const BLOOM_STOCK = "gl_FragColor = mix( outputColor, texel, alpha );";
+// …here only the part over it (`v − threshold`, eased in over KNEE, the colour kept)
+const BLOOM_KNEE = 0.12;
+const BLOOM_OVER = `float knee = ${BLOOM_KNEE.toFixed(3)};
+			float soft = clamp( v - luminosityThreshold + knee, 0.0, 2.0 * knee );
+			float over = max( soft * soft / ( 4.0 * knee ), v - luminosityThreshold );
+			gl_FragColor = mix( outputColor, vec4( texel.rgb * ( over / max( v, 1e-4 ) ), texel.a ), step( 1e-5, over ) );`;
+
 /** The post's passes on or off (each a setting: lib/graphics.ts). */
 export interface PostFlags {
   bloom: boolean;
@@ -153,6 +163,11 @@ export class Post3 {
       "vec4 texel = texture2D( tDiffuse, vUv );",
       "vec4 texel = texture2D( tDiffuse, vUv );\n\t\t\tif ( any( isnan( texel ) ) || any( isinf( texel ) ) ) texel = vec4( 0.0 );",
     );
+    // only what's over the threshold blooms, not the whole of what crosses it (three's passes the
+    // pixel entire: a white TV a hair over it bloomed as if it were all light, and its five blurs
+    // added up to ~3× itself — the screen-sized blaze from 17:00 on). A soft knee: no step at it.
+    if (!hp.fragmentShader.includes(BLOOM_STOCK)) throw new Error("bloom: three's high pass changed");
+    hp.fragmentShader = hp.fragmentShader.replace(BLOOM_STOCK, BLOOM_OVER);
     hp.needsUpdate = true;
     // (added to the colour only: the frame's alpha — a glass's hole — left as it is)
     const bm = this.bloom.blendMaterial;
