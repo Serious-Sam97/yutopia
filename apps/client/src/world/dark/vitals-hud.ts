@@ -76,20 +76,20 @@ export class VitalsHud {
     const seen = new Set<string>();
     if (out)
       room?.state.players.forEach(
-        (p: { sid: string; uid: number; x: number; y: number; z: number; level: number; hp: number; bot: boolean }) => {
-          // (not me — nor another tab of mine)
-          if (p.sid === room.sessionId || p.uid === myUid || p.level !== 0 || p.bot) return;
+        (p: { uid: number; x: number; y: number; z: number; level: number; hp: number; bot: boolean }, sid: string) => {
+          // (not me — nor another tab of mine; who by the state map's key: the client's Player.sid is "")
+          if (sid === room.sessionId || p.uid === myUid || p.level !== 0 || p.bot) return;
           const d = Math.hypot(p.x - me.x, p.y - me.y);
           if (d > TEAM || !ctl.grid.onLand(p.x, p.y)) return;
           // (out of every light in the dark, unseen: no tag over them either — docs/plan/44 N4)
-          if (ctl.tp?.eyes.isUnseen(p.sid)) return;
-          seen.add(p.sid);
-          let el = this.tags.get(p.sid);
+          if (ctl.tp?.eyes.isUnseen(sid)) return;
+          seen.add(sid);
+          let el = this.tags.get(sid);
           if (!el) {
             el = document.createElement("div");
             el.className = "abs dk-team";
             this.root.append(el);
-            this.tags.set(p.sid, el);
+            this.tags.set(sid, el);
           }
           const c = ctl.clientAt(p.x, p.y, p.z + 1.95);
           const r = ctl.hostRect();

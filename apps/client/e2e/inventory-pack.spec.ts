@@ -46,8 +46,9 @@ const seen = (page: Page, sid: string) =>
     const p3 = y.tp.people3.get(id);
     return {
       gun: (p?.gun ?? "") as string,
-      holster: !!p?.holster,
-      sling: !!p?.sling,
+      // (shared worn.ts WORN: 1 the holster, 2 the double-barrel slung)
+      holster: ((p?.worn ?? 0) & 1) !== 0,
+      sling: ((p?.worn ?? 0) & 2) !== 0,
       holster3: !!p3?.holster?.root?.parent,
       sling3: !!p3?.slings?.get("shotgun")?.root.visible,
       carrier3: !!p3?.carrier?.root?.parent,

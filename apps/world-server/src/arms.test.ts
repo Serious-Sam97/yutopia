@@ -7,6 +7,7 @@ import { ARM, ARMS, BODY, damageAt, FLARE, pvpDamage, SHADE_STATES } from "@yuto
 import { heightAt } from "@yutopia/shared/grounds";
 import { count, type Inventory } from "@yutopia/shared/inventory";
 import { MV_AIM, packMv, yawToByte } from "@yutopia/shared/move";
+import { wears } from "@yutopia/shared/worn";
 import { Client, type Room } from "colyseus.js";
 
 // Guns and flares (docs/plan/30-the-dark.md, phase 5): A exposes one with a
@@ -403,12 +404,14 @@ test("a gun's up only after its draw: a shot before it isn't; Player.arm says dr
   b.room.send("arms:draw", { slot: -1 });
   await waitFor(() => me(b.room).gun === "");
   // (plan 80) the revolver carried: its holster on the hip for everyone, put away or not; A carries none
-  await waitFor(() => me(b.room).holster, 1500);
-  assert.equal(a.room.state.players.get(b.room.sessionId)?.holster, true);
-  assert.equal(me(a.room).holster, false);
+  await waitFor(() => wears(me(b.room).worn ?? 0, "holster"), 1500);
+  assert.equal(wears(a.room.state.players.get(b.room.sessionId)?.worn ?? 0, "holster"), true);
+  // (everyone's sid on everyone's screen: the Player within 64 fields — schema.test.ts)
+  assert.equal(a.room.state.players.get(b.room.sessionId)?.sid, b.room.sessionId);
+  assert.equal(wears(me(a.room).worn ?? 0, "holster"), false);
   // (plan 81) the double-barrel carried too (the kit's): slung on her back
-  assert.equal(a.room.state.players.get(b.room.sessionId)?.sling, true);
-  assert.equal(me(a.room).sling, false);
+  assert.equal(wears(a.room.state.players.get(b.room.sessionId)?.worn ?? 0, "sling"), true);
+  assert.equal(wears(me(a.room).worn ?? 0, "sling"), false);
   b.room.send("arms:draw", { slot: 0 });
   await waitFor(() => me(b.room).gun === "revolver");
   await waitFor(() => me(b.room).arm === ARM.draw, 300);
@@ -513,7 +516,7 @@ test("the AK (plan 79 phase 5): full auto at its rate through the line's jitter,
   b.room.send("arms:draw", { slot: 2 });
   await waitFor(() => me(b.room).gun === "ak47");
   // (plan 82) the AK carried: slung on her back when it isn't in her hands, for everyone
-  await waitFor(() => me(b.room).slingAk, 1500);
+  await waitFor(() => wears(me(b.room).worn ?? 0, "slingAk"), 1500);
   await sleep(ARMS.ak47.draw * 1000 + 50);
   const loaded2 = () => (b.inv?.quick[2] as { loaded?: number } | null | undefined)?.loaded;
   const spare = () => (b.inv ? count(b.inv, "r762") : 0);

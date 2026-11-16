@@ -60,6 +60,7 @@ import { isRadio, type RadioState, radioOf } from "@yutopia/shared/media";
 import { type Species, toyAt } from "@yutopia/shared/pets";
 import { Place } from "@yutopia/shared/physics/place";
 import { applyOps, cellTop, edgeBack, edgeFront, type Structure, viewOf } from "@yutopia/shared/structure";
+import { wears } from "@yutopia/shared/worn";
 import type { Npc, Player, WorldObject, WorldState } from "@yutopia/state";
 import { Client, getStateCallbacks, type Room } from "colyseus.js";
 import { ApiError, type Session, yutopia } from "@/lib/api";
@@ -2833,11 +2834,11 @@ export class WorldController {
       flare: this.holdsFlare(sid) || undefined,
       focused: p.focused,
       gun: p.gun,
-      holster: p.holster || undefined,
-      sling: p.sling || undefined,
-      slingAk: p.slingAk || undefined,
-      slingSn: p.slingSn || undefined,
-      slingDb: p.slingDb || undefined,
+      holster: wears(p.worn, "holster") || undefined,
+      sling: wears(p.worn, "sling") || undefined,
+      slingAk: wears(p.worn, "slingAk") || undefined,
+      slingSn: wears(p.worn, "slingSn") || undefined,
+      slingDb: wears(p.worn, "slingDb") || undefined,
       arm: p.arm,
       fellAt: p.fellAt,
       fellYaw: p.fellYaw,

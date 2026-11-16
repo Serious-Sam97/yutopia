@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./slotcar": "./src/slotcar.ts",
     "./units": "./src/units.ts",
+    "./worn": "./src/worn.ts",
     "./facing": "./src/facing.ts",
     "./structure": "./src/structure/index.ts",
     "./structure/finish": "./src/structure/finish.ts",

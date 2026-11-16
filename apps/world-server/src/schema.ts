@@ -73,15 +73,9 @@ export class Player extends Schema {
   // the weapon in the hand (docs/plan/30-the-dark.md D6): "", "revolver", "shotgun", "ak47" (plan 79)
   @type("string") gun = "";
   // carrying the revolver (plan 80): its holster on the right hip, the gun in it when it's not in the hand
-  @type("boolean") holster = false;
-  // carrying the double-barrel (plan 81): slung on the back when it's not in the hand
-  @type("boolean") sling = false;
-  // carrying the AK (plan 82): slung on the back too, crossed with the double-barrel's
-  @type("boolean") slingAk = false;
-  // carrying the sniper (plan 83): slung on the back too, on the AK's diagonal, over it
-  @type("boolean") slingSn = false;
-  // carrying the Daybreak (plan 84): slung on the back too, upright down its middle, the lens down, over the others
-  @type("boolean") slingDb = false;
+  // her guns worn, for everyone to see (shared worn.ts WORN: the revolver's holster, the long guns slung) — one
+  // byte: five booleans once, and a Player past 64 fields isn't sent right (shared SCHEMA_FIELDS)
+  @type("uint8") worn = 0;
   // what the hand's doing with it (docs/plan/32-the-arms.md), for everyone to see: ARM
   @type("uint8") arm = 0;
   // down (D7): since when (server ms; 0: on their feet), and who's getting them up, since when

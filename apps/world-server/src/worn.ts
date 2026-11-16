@@ -1,4 +1,5 @@
 import { type Inventory, weaponIn } from "@yutopia/shared/inventory";
+import { WORN } from "@yutopia/shared/worn";
 import type { Player } from "./schema.ts";
 
 /** What she holds and wears, for everyone to see, from what's equipped — her quick slots (plans 80–85): the gun out
@@ -11,19 +12,13 @@ export function wear(p: Player, inv: Inventory | null | undefined): void {
   // (plan 87) the torch lights only from her left hand: moved, dropped — out
   if (p.torch && inv && inv.hand?.id !== "torch") p.torch = false;
   const on = (id: string) => !!inv && !!weaponIn(inv, id);
-  // (plan 80) the revolver: its holster on the hip
-  const holster = on("revolver");
-  if (p.holster !== holster) p.holster = holster;
-  // (plan 81) the double-barrel: slung on the back
-  const sling = on("shotgun");
-  if (p.sling !== sling) p.sling = sling;
-  // (plan 82) the AK: slung on the back, mirrored
-  const slingAk = on("ak47");
-  if (p.slingAk !== slingAk) p.slingAk = slingAk;
-  // (plan 83) the sniper: slung on the AK's diagonal, over it
-  const slingSn = on("sniper");
-  if (p.slingSn !== slingSn) p.slingSn = slingSn;
-  // (plan 84) the Daybreak: upright down the back, the lens down, over the others
-  const slingDb = on("daybreak");
-  if (p.slingDb !== slingDb) p.slingDb = slingDb;
+  // (plan 80) the revolver: its holster on the hip; (plans 81–84) the long guns: slung on the back — the
+  // double-barrel; the AK, mirrored; the sniper on the AK's diagonal, over it; the Daybreak upright, over the others
+  const worn =
+    (on("revolver") ? WORN.holster : 0) |
+    (on("shotgun") ? WORN.sling : 0) |
+    (on("ak47") ? WORN.slingAk : 0) |
+    (on("sniper") ? WORN.slingSn : 0) |
+    (on("daybreak") ? WORN.slingDb : 0);
+  if (p.worn !== worn) p.worn = worn;
 }

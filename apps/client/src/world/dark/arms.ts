@@ -899,13 +899,15 @@ export class Arms {
     const tp = this.ctl.tp;
     if (!room) return;
     const mine = room.sessionId;
+    // (who by the state map's key: the client's Player.sid isn't sent — it's "", everyone's alike; keyed by it,
+    // two players near shared one entry, flipping between them each frame: a draw or a holster every frame)
     room.state.players.forEach(
-      (p: { sid: string; gun: string; arm?: number; x: number; y: number; z: number; level: number; yaw?: number }) => {
+      (p: { gun: string; arm?: number; x: number; y: number; z: number; level: number; yaw?: number }, sid: string) => {
         const arm = p.gun ? (p.arm ?? ARM.idle) : ARM.idle;
-        const was = this.arms.get(p.sid) ?? { arm, gun: p.gun };
-        this.arms.set(p.sid, { arm, gun: p.gun });
+        const was = this.arms.get(sid) ?? { arm, gun: p.gun };
+        this.arms.set(sid, { arm, gun: p.gun });
         if (p.level !== this.ctl.level) return;
-        const me = p.sid === mine;
+        const me = sid === mine;
         const at = me ? undefined : { x: p.x, y: p.y };
         if (arm === ARM.draw && was.arm !== ARM.draw) this.voices.gun("draw", at, 15);
         else if (!p.gun && was.gun) this.voices.gun("holster", at, 15);
@@ -959,7 +961,7 @@ export class Arms {
           // (plan 82 phase 4: on its hands' moments, as everyone's screen plays it — tp/ak-hold.ts: the empty
           // rocked out, let fall and landing at her feet, the new one clicked home; racked, the handle pulled)
           if (opened && !wasOpen) {
-            const still = () => this.arms.get(p.sid)?.arm === ARM.open;
+            const still = () => this.arms.get(sid)?.arm === ARM.open;
             setTimeout(() => still() && this.voices.gun("ak-mag-out", at, 15), AK_RELOAD.out * 1000);
             // (its empty landing at her feet — tp/ak-hold.ts DROP: let fall at `drop`, down in ~0.4 s)
             setTimeout(
@@ -995,7 +997,7 @@ export class Arms {
             for (const k of [1, 2])
               setTimeout(
                 () => {
-                  if (this.arms.get(p.sid)?.arm === ARM.open) this.voices.gun(LOAD_SOUND.shotgun, at, 15);
+                  if (this.arms.get(sid)?.arm === ARM.open) this.voices.gun(LOAD_SOUND.shotgun, at, 15);
                 },
                 (ARMS.shotgun.open + ARMS.shotgun.reload * k) * 1000,
               );

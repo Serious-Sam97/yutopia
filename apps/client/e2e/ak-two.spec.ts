@@ -197,11 +197,23 @@ test("two of us and the AK: slung, drawn, aimed upright, a burst, reloaded and r
   await bia.mouse.up({ button: "right" });
   await bia.waitForTimeout(500);
   await bia.keyboard.press("KeyR");
-  for (const p of [bia, page]) {
-    await expect.poll(() => seen(p, biaSid).then((s) => s.rack), { timeout: 6000, intervals: [50] }).toBe(true);
-    await expect
-      .poll(() => seen(p, biaSid).then((s) => s.bolt), { timeout: 3000, intervals: [30] })
-      .toBeGreaterThan(0.5);
+  // (the carrier's travel at its furthest: back and home in a moment — a poll's beat, or one screen read after the
+  // other, can miss its peak: both screens watched at once from the R, the most each saw)
+  const most = await Promise.all(
+    [bia, page].map(async (p) => {
+      let m = 0;
+      let racked = false;
+      for (const t0 = Date.now(); Date.now() - t0 < 6000 && m <= 0.5; await p.waitForTimeout(15)) {
+        const s = await seen(p, biaSid);
+        racked ||= s.rack;
+        m = Math.max(m, s.bolt);
+      }
+      return { racked, m };
+    }),
+  );
+  for (const [i, who] of ["Bia", "Ana"].entries()) {
+    expect(most[i].racked, `racked on ${who}'s screen`).toBe(true);
+    expect(most[i].m, `the carrier back on ${who}'s screen`).toBeGreaterThan(0.5);
   }
   await still("racked");
   for (const p of [bia, page])
