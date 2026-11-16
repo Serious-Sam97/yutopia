@@ -56,6 +56,16 @@ export function tlsRelay(servers: RTCIceServer[]): RTCIceServer[] {
   });
 }
 
+// A world line that didn't open: tried again like a phone call's (phone/call.ts LINE_TRIES,
+// 1.5 s × try between), the direct way first — a first try that stalls (no candidates
+// within LiveKit's 15 s) is mostly gone on the next. Only when those are all spent is it
+// the TLS relay (once), then given up on. ~22% of world joins failed on the first try alone.
+export const WORLD_TRIES = 3;
+export function afterFailedOpen(tries: number, canTls: boolean): { next: "retry"; waitMs: number } | { next: "tls" | "stop" } {
+  if (tries + 1 < WORLD_TRIES) return { next: "retry", waitMs: 1500 * (tries + 1) };
+  return { next: canTls ? "tls" : "stop" };
+}
+
 // The ways a line goes that the network's to blame for (the TLS relay may help).
 const NETWORK_LOSS = new Set([
   DisconnectReason.UNKNOWN_REASON,
@@ -156,7 +166,7 @@ export class Media {
     });
   }
 
-  private async open(fromSleep: boolean): Promise<boolean> {
+  private async open(fromSleep: boolean, tries = 0): Promise<boolean> {
     if (!this.creds) return false;
     const { url, token, iceServers } = this.creds;
     if (this.tls === "next") this.tls = "on";
@@ -268,7 +278,16 @@ export class Media {
       if (!mine()) return false;
       this.room = null;
       void room.disconnect().catch(() => {});
-      if (this.toTls()) return this.open(fromSleep);
+      // (over the relay already: that was its one try)
+      const then = afterFailedOpen(tries, this.tls !== "on");
+      if (then.next === "retry") {
+        console.warn(`[media] trying the line again (${tries + 2}/${WORLD_TRIES})`);
+        await new Promise((r) => setTimeout(r, then.waitMs));
+        // (let go of meanwhile: left the world, signed out)
+        if (this.state !== "connecting" || !this.creds) return false;
+        return this.open(fromSleep, tries + 1);
+      }
+      if (then.next === "tls" && this.toTls()) return this.open(fromSleep, WORLD_TRIES);
       // waking up and the server's not there: stay asleep, try again later; at the start: offline
       this.state = fromSleep ? "asleep" : "failed";
       this.ev.onState(
