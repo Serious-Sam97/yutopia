@@ -64,6 +64,7 @@ import type { Npc, Player, WorldObject, WorldState } from "@yutopia/state";
 import { Client, getStateCallbacks, type Room } from "colyseus.js";
 import { ApiError, type Session, yutopia } from "@/lib/api";
 import { reportError, setErrorSink } from "@/lib/crash";
+import { setGfxHost } from "@/lib/gfx-switch";
 import { lang, tr } from "@/lib/i18n";
 import { drawnAs, gpuKind, prefs, subscribePrefs } from "@/lib/prefs";
 import { ActionQueue } from "./actions";
@@ -274,6 +275,9 @@ export class WorldController {
   stopped = false;
   private timers: ReturnType<typeof setInterval>[] = [];
   private offPrefs: (() => void) | null = null;
+  /** the Settings page's Apply under way: the prefs' change switched behind a photograph (lib/gfx-switch.ts) */
+  private behindWanted = false;
+  private behind: Promise<void> | null = null;
   private offLook: (() => void) | null = null;
   private reconnecting = false;
   private peopleAt = 0;
@@ -480,8 +484,14 @@ export class WorldController {
     this.offLook = hud.subscribe(this.focus.watchLook);
     this.offPrefs = subscribePrefs(() => {
       this.model?.setQuality(drawnAs(this.quality.qualityNow()), prefs().reducedMotion);
-      // (the tier, or a setting set by hand over its preset: lib/graphics.ts — a no-op when neither changed)
-      if (this.tp) this.tp.warmup.toQuality(this.quality.qualityNow());
+      // (the tier, or a setting set by hand over its preset: lib/graphics.ts — a no-op when neither changed; the
+      // Settings page's Apply: behind a photograph, lib/gfx-switch.ts)
+      if (this.tp) {
+        if (this.behindWanted) {
+          this.behindWanted = false;
+          this.behind = this.tp.warmup.switchBehind(this.quality.qualityNow());
+        } else this.tp.warmup.toQuality(this.quality.qualityNow());
+      }
       this.syncView();
     });
     // Auto quality: step down a tier when this device can't keep up
@@ -2306,6 +2316,28 @@ export class WorldController {
       };
       v.mount(host);
       v.warmup.setQuality(this.quality.qualityNow());
+      // (the graphics settings applied behind a photograph of the frame: plan 91 phase 10)
+      setGfxHost({
+        switchBehind: async (apply) => {
+          const tp = this.tp;
+          if (!tp) {
+            apply();
+            return;
+          }
+          const still = await tp.still.capture();
+          if (still && tp.host) tp.still.show(tp.host, still);
+          this.behind = null;
+          this.behindWanted = true;
+          apply();
+          this.behindWanted = false;
+          await (this.behind ?? Promise.resolve());
+          await tp.steady();
+          if (still) await tp.still.wipe();
+        },
+        compare: (on) => this.tp?.still.compare(on),
+        drop: () => this.tp?.still.drop(),
+        fps: () => this.tp?.fps ?? 0,
+      });
       v.setMode(this.camWanted());
       v.mouseLook.lookSens = prefs().lookSens;
       v.mouseLook.lookInvert = prefs().lookInvert;
@@ -2350,6 +2382,7 @@ export class WorldController {
   }
 
   private closeTp() {
+    setGfxHost(null);
     this.tp?.destroy();
     this.focus.aimId = null;
     if (hud.get().look) hud.set({ look: false });

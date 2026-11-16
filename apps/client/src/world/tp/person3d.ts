@@ -21,11 +21,11 @@ import {
   Vector3,
 } from "three";
 import type { chars } from "../art/chars-load";
-import { mergeWith } from "./merge-static";
 import { COCOA_MUG, ICE_TUB, MUG_COLORS } from "../art/held";
 import { phoneColors } from "../art/phone-art";
 import type { HandFrame } from "../chars/props";
 import type { JointName, Pose } from "../chars/rig";
+import { mergeWith } from "./merge-static";
 
 const puffAt = new Vector3();
 const puffDir = new Vector3();

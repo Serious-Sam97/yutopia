@@ -8,7 +8,7 @@ this game will have a gigantic map: we have to be smart about how we load things
 **The rule, as plans 89–90's: the same game — the same look, the same world — only loaded smarter.** What's near
 you as it is now; what's far, made and freed by distance; nothing built "for good".
 
-Status: **planned 2026-11-15; forks decided by the user 2026-11-15**: **F1a** the road fix committed and deployed
+Status: **done 2026-11-15 — phases 0–10 (the user tests at the end); forks decided by the user 2026-11-15**: **F1a** the road fix committed and deployed
 ahead of the plan; **F2b** a map past ±60 km — the chunk keys widened and a floating origin built now; **F3a** the
 districts made in workers; **F4a** nothing built for good, the town too; **phases 9–10** (graphics settings, a game's; changing them without the stall) added by the user the same day. The road bug (phase 1) found and fixed in
 the investigation.
@@ -377,5 +377,42 @@ On a prod build, the bench of phase 0:
     - Checks: the trace's long frames on each switch before and after (target: no frame over 100 ms seen — under the
       still is free; the swap frame ≤ 33 ms), the wipe and the revert on the proxy (an M1's, CPU throttled) and on
       High; `loading` and the Settings spec green.
+
+    Done 2026-11-15 — **measured first** (High, the lot; each switch as the page applies it, then the panel
+    closed): High → Low a **1.2 s** frame, sun shadows back on **2.2 s**, High → Potato 133 ms — none while the panel
+    was open (nothing under it drawn: the bill came at the first frame after). A profile: the first draw making and
+    linking every program the new state needs (`getProgramInfoLog` 1.1 s of it). And why the compile ahead hadn't
+    caught them: **81 programs** the first frames made that it hadn't — the cars' headlamps' shadows (and the
+    like) follow the settings in the game's own frame, after it, so it compiled for a spot light with a shadow that
+    was gone by the draw (`numSpotLightShadows`, the shadow map's flag in the programs' keys). So:
+    - **"The photograph"** (`tp/still-switch.ts`): Apply closes the panel; the frame's copied into a still right
+      after it's rendered (drawn into a 2D canvas: a copy on the GPU, no readback) and laid over the 3D view,
+      "developing" — a warm wash breathing over it — moving on the compositor only (opacity, transform: it goes on
+      while the main thread's busy). Nothing under it is drawn (`view.holdDraw`; the game's frame runs).
+    - **The switch behind it** (`Warmup.switchBehind`): the settings put in at once; two of the game's frames, not
+      drawn, so everything that reads them each frame is on them; then **one of each kind of thing compiled, 4 ms of
+      it a frame, with the scene's real lights, into what the frame draws to**, each lot linked in parallel
+      (`compileAsync`) — the first draw makes **0** programs (81 before), and no frame holds them all (the whole
+      scene's compile at once was a 370 ms frame).
+    - Then **steady** (`view.steady`: 8 drawn frames each under 50 ms), and **the wipe**: the old picture slides off
+      to the right — a line of light on its edge — the new one under it, 0.7 s.
+    - **"Keep these settings?"** (`components/hud/GfxConfirm.tsx`, `lib/gfx-switch.ts`): the fps before → after
+      (averaged from its second second), a 15 s bar, **Compare** held (or C) shows the photograph again, **Keep**
+      (Enter), **Put back** (Esc); not kept, or under 20 fps three seconds running, put back by the same switch.
+    After (the same walk, the same switches; the worst frame from Apply to the dialog):
+
+    | Switch | Before | After |
+    |---|---|---|
+    | High → Low | 1,200 ms | **67** |
+    | Low → High | 17–383 | 33 |
+    | High → Potato | 133–5,267 | **50** |
+    | Potato → High | 17–33 | 33 |
+    | Sun shadows off | 50–2,050 | **67** |
+    | Sun shadows on | 17–2,217 | **17** |
+    | AO off / on | 17 | 17 |
+
+    No frame over 100 ms on any switch (the target); the switch itself 2.3–4.4 s, under the photograph. Checked: a
+    switch put back (Low applied, compared, put back: High again, the photograph gone); `loading` green; the
+    client's 369 unit tests.
 
 Not now: a disk cache of our own (the browser's HTTP cache has the files); the renderer in a worker; WebGPU.

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Credits } from "@/components/Credits";
 import { LangSwitch } from "@/components/LangSwitch";
 import { setToken, yutopia } from "@/lib/api";
+import { applyGraphics as switchGraphics } from "@/lib/gfx-switch";
 import { cleanGraphics, type Graphics, gfxTier, graphicsFor, isPreset } from "@/lib/graphics";
 import { type Key, useLang, useTr } from "@/lib/i18n";
 import { MAX_FPS, type Prefs, type Quality, type QualityPref, resolveQuality, setPrefs, usePrefs } from "@/lib/prefs";
@@ -699,7 +700,7 @@ function GraphicsPage() {
         // (its own bar at the foot of the page, over nothing: the settings under it scroll up past it)
         <div
           className="sticky bottom-0 z-10 flex items-center justify-end gap-3 py-2.5 px-1 -mx-1"
-          style={{ background: "var(--panel, #17181c)", borderTop: "1px solid var(--well-edge)" }}
+          style={{ background: "var(--panel)", borderTop: "1px solid var(--well-edge)" }}
         >
           <button
             type="button"
@@ -724,9 +725,11 @@ function GraphicsPage() {
   );
 }
 
-/** The graphics picked, applied (phase 10 makes the switch). */
+/** The graphics picked, applied: the panel closed so the change is seen to land (behind a photograph of the frame,
+ *  then "Keep these settings?": lib/gfx-switch.ts). */
 function applyGraphics(quality: QualityPref, over: Partial<Graphics> | null) {
-  setPrefs({ quality, graphics: over });
+  hud.set({ panel: { kind: null } });
+  void switchGraphics({ quality, over });
 }
 
 function ControlsPage() {

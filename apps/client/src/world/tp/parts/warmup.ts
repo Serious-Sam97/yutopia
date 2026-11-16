@@ -28,6 +28,7 @@ export type WarmupHost = Pick<
   | "meId"
   | "potato"
   | "ratioNow"
+  | "holdDraw"
   | "tier"
   | "around"
   | "building"
@@ -283,6 +284,73 @@ export class Warmup {
     });
   }
 
+  /** Switched behind a still (plan 91 phase 10): the new settings put in at once, nothing drawn meanwhile
+   *  (`holdDraw`), every shader the scene now needs compiled in parallel — the real lights, the real shadows,
+   *  into what the frame draws to — and only then drawn: no frame stuck linking them (1–2 s at once before). */
+  async switchBehind(q: Quality, g: Graphics = graphicsFor(q)): Promise<void> {
+    const c = this.c;
+    this.qualityTo = q;
+    this.toSig = `${q}|${graphicsSig(g)}`;
+    c.holdDraw = true;
+    try {
+      this.setQuality(q, g);
+      // (two of the game's frames first, not drawn: what reads the settings each frame — the cars' headlamps'
+      // shadows, the mood's fog banks — on the new ones before the shaders are made for them; compiled before,
+      // 81 programs were made again at the first draw, a second's freeze)
+      for (let i = 0; i < 2; i++) await new Promise((done) => requestAnimationFrame(done));
+      if (c.gone) return;
+      const r = c.renderer;
+      const to = r.getRenderTarget();
+      if (g.finish) {
+        c.warmTarget ??= new WebGLRenderTarget(4, 4, { colorSpace: LinearSRGBColorSpace });
+        r.setRenderTarget(c.warmTarget);
+      } else r.setRenderTarget(null);
+      r.setRenderTarget(to);
+      c.scene.updateMatrixWorld();
+      // (a lot a frame, 4 ms of making programs each — all of them at once was a 370 ms frame, under the still
+      // but the game's own frame too —, with the scene's real lights; each lot linked in parallel; a few seconds at
+      // most: a driver with no parallel compile links them at the first draw, as before)
+      const reps: [Object3D, Camera, Scene][] = this.repsOf(c.scene).map((o) => [o, c.camera, c.scene]);
+      if (c.hands) for (const o of this.repsOf(c.hands.scene)) reps.push([o, c.hands.camera, c.hands.scene]);
+      const t0 = performance.now();
+      for (let i = 0; i < reps.length && performance.now() - t0 < 8000; ) {
+        if (c.gone) return;
+        const lot: Promise<unknown>[] = [];
+        const at = performance.now();
+        const was = r.getRenderTarget();
+        r.setRenderTarget(g.finish ? c.warmTarget : null);
+        while (i < reps.length && performance.now() - at < 4) lot.push(r.compileAsync(...reps[i++]));
+        r.setRenderTarget(was);
+        await Promise.all(lot).catch(() => {});
+        await new Promise((done) => requestAnimationFrame(done));
+      }
+    } finally {
+      c.holdDraw = false;
+    }
+  }
+
+  /** One of each kind of thing drawn under `root` (its materials, what its geometry carries): what a compile
+   *  needs to make every program the frame will (one holding a light: compiled when it's drawn). */
+  private repsOf(root: Object3D): Object3D[] {
+    const reps: Object3D[] = [];
+    const kinds = new Set<string>();
+    root.traverseVisible((o) => {
+      const m = (o as Mesh).material as Material | Material[] | undefined;
+      if (!m || (o as PointLight).isLight) return;
+      const g = (o as Mesh).geometry as BufferGeometry | undefined;
+      const a = g?.attributes ?? {};
+      const k = `${(Array.isArray(m) ? m : [m]).map((x) => x.uuid)}|${o.type}|${Object.keys(a).map((n) => n + a[n].itemSize)}|${Object.keys(g?.morphAttributes ?? {})}`;
+      if (kinds.has(k)) return;
+      kinds.add(k);
+      let lit = false;
+      o.traverse((x) => {
+        lit ||= !!(x as PointLight).isLight;
+      });
+      if (!lit) reps.push(o);
+    });
+    return reps;
+  }
+
   async compileFor(q: Quality, g: Graphics = graphicsFor(q)) {
     const r = this.c.renderer;
     // the lights as `q` has them (setQuality): how many lamps, which cast shadows
@@ -307,22 +375,7 @@ export class Warmup {
       stand.add(l);
     });
     // one of each kind of thing drawn (its materials, what its geometry carries)
-    const reps: Object3D[] = [];
-    const kinds = new Set<string>();
-    this.c.scene.traverseVisible((o) => {
-      const m = (o as Mesh).material as Material | Material[] | undefined;
-      if (!m || (o as PointLight).isLight) return;
-      const g = (o as Mesh).geometry as BufferGeometry | undefined;
-      const a = g?.attributes ?? {};
-      const k = `${(Array.isArray(m) ? m : [m]).map((x) => x.uuid)}|${o.type}|${Object.keys(a).map((n) => n + a[n].itemSize)}|${Object.keys(g?.morphAttributes ?? {})}`;
-      if (kinds.has(k)) return;
-      kinds.add(k);
-      let lit = false;
-      o.traverse((x) => {
-        lit ||= !!(x as PointLight).isLight;
-      });
-      if (!lit) reps.push(o); // (one holding a light: compiled when it's switched, as before)
-    });
+    const reps = this.repsOf(this.c.scene);
     // a few a frame, each lot ready before the next — into what the frame draws to (Medium
     // and High: their finish's linear buffer, as compileAll; Low: the screen)
     for (let i = 0; i < reps.length; ) {

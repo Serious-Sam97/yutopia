@@ -196,6 +196,15 @@ const D = {
   gReset: ["Back to the preset", "Voltar à predefinição"],
   gApply: ["Apply", "Aplicar"],
   gCancel: ["Cancel", "Cancelar"],
+  gKeepTitle: ["Keep these settings?", "Manter essas configurações?"],
+  gFps: ["Frames a second:", "Quadros por segundo:"],
+  gKeepBack: [
+    "Back to the old ones in {s} s. Hold Compare (or C) to see the old.",
+    "Volta às antigas em {s} s. Segure Comparar (ou C) para ver as antigas.",
+  ],
+  gCompare: ["Compare", "Comparar"],
+  gRevert: ["Put back", "Voltar"],
+  gKeep: ["Keep", "Manter"],
   gDisplay: ["Display", "Tela"],
   gRes: ["Resolution", "Resolução"],
   gResHelp: [

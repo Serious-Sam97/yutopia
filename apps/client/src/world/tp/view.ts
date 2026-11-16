@@ -149,6 +149,7 @@ import { Shroud3 } from "./shroud3d";
 import { fogFor, type Ground, Surroundings, type Themes } from "./sky";
 import { type StairStop3, Stairs3, stairMats } from "./stairs3d";
 import { Proxy3, Vortex3 } from "./stand3d";
+import { StillSwitch } from "./still-switch";
 import { heldPoolBall, type TableScene3, TablesIn3D } from "./tables3d";
 import { streetGeometry } from "./town3d";
 import { edgesOfMap, edgesOfWalls, type WallEdges } from "./walls3d";
@@ -2196,6 +2197,23 @@ void main() {
     this.around.campus.skinAlways = this.level < home;
   }
 
+  /** the graphics switched behind a photograph (still-switch.ts: plan 91 phase 10) */
+  readonly still = new StillSwitch();
+  /** nothing drawn (the game's frame run): the new settings' shaders compiling behind the still */
+  holdDraw = false;
+  private recent = new Float32Array(8);
+  private recentAt = 0;
+  private drawnSince = 0;
+  /** Drawn frames coming steady — the last `n` each under `ms` — or `wait` ms gone. */
+  async steady(n = 8, ms = 50, wait = 6000): Promise<void> {
+    this.drawnSince = 0;
+    const t0 = performance.now();
+    for (;;) {
+      await new Promise((done) => requestAnimationFrame(done));
+      if (this.gone || performance.now() - t0 > wait) return;
+      if (this.drawnSince >= n && Array.from(this.recent).every((d) => d < ms)) return;
+    }
+  }
   /** The frame's pixels now: the settings' resolution, of the screen's own (lib/graphics.ts; a tier's preset is
    *  what ratioFor gave it). */
   ratioNow(): number {
@@ -3030,7 +3048,7 @@ void main() {
       }
     if (this.gameScene) this.games3?.set(this.gameScene, (id, port, sitting) => this.handOf(id, port, sitting), face);
 
-    if (!document.hidden) {
+    if (!document.hidden && !this.holdDraw) {
       const hands = this.hands?.shown ? this.hands : null;
       // the scene's matrices once, here — the cull below reads them, the render doesn't make
       // them again (Low and Lowest: only where something moved, lazy-matrices.ts — and on the
@@ -3062,6 +3080,8 @@ void main() {
             this.renderer.autoClear = true;
           }
         }
+        // (a still wanted — the graphics switched behind it: still-switch.ts — copied while the buffer's whole)
+        this.still.afterRender(this.renderer.domElement);
       } finally {
         this.culling.below3.end();
         this.scene.matrixWorldAutoUpdate = true;
@@ -3072,7 +3092,14 @@ void main() {
     }
     this.warmup.drawn++;
     const now = performance.now();
-    if (this.lastFrameAt) this.fps += (1000 / Math.max(1, now - this.lastFrameAt) - this.fps) * 0.05;
+    if (this.lastFrameAt) {
+      this.fps += (1000 / Math.max(1, now - this.lastFrameAt) - this.fps) * 0.05;
+      // (the last frames' times, drawn ones: the switch behind a still waits for them to come steady)
+      if (!this.holdDraw) {
+        this.recent[this.recentAt++ % this.recent.length] = now - this.lastFrameAt;
+        this.drawnSince++;
+      }
+    }
     this.lastFrameAt = now;
   }
 

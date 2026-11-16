@@ -18,6 +18,7 @@ const OWN_PANELS = new Set(["settings", "avatar", "pets"]);
 import { ActionMenu, ActionQueueBar, ArrivalChip, FocusChip } from "./Actions";
 import { WorldCtx } from "./ctx";
 import { Dock } from "./Dock";
+import { GfxConfirm } from "./GfxConfirm";
 import { Guard } from "./Guard";
 import {
   CableChip,
@@ -266,6 +267,9 @@ export function WorldView({ to }: { to?: string | null }) {
           )}
           <Guard name="PanelHost">
             <PanelHost />
+          </Guard>
+          <Guard name="GfxConfirm">
+            <GfxConfirm />
           </Guard>
           {!building && (
             <Guard name="ActionMenu">
