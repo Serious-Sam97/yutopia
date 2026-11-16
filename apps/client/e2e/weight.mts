@@ -44,6 +44,7 @@ const ALL_SPOTS: Record<string, Spot> = {
   lot: { x: -24, y: 18, level: 0 }, // the car park, outdoors
   lawn: { x: -80, y: 22, level: 0 }, // the lawn by the woods
   floor2: { x: 30.5, y: 20.5, level: 2 }, // an empty floor (its windows)
+  woods: { x: -180, y: 22, level: 0 }, // the thickest of the forest by the lawn (plan 90's loading checks)
 };
 const SPOTS = (process.env.SPOTS ?? "studio,lot,lawn").split(",").filter((s) => ALL_SPOTS[s]);
 const GPU = ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", "--enable-precise-memory-info"];
