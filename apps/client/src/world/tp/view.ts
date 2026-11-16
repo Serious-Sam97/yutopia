@@ -861,6 +861,13 @@ export class ThirdPersonView {
       this.culling.looseM.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
       f.setFromProjectionMatrix(this.culling.looseM);
       for (const b of this.floors.values()) if (b.world.root.parent) b.world.cullLoose(f);
+      // (my own view: what's far outside behind my floor's walls left out too — the window portal, below-cull.ts)
+      const mine = cam === this.camera && this.culling.viewCull;
+      const below = this.culling.below3;
+      if (mine) below.aim(cam.getWorldPosition(this.culling.eye));
+      else below.aim(this.culling.nowhere);
+      // (and what's built past the view distance: not drawn — the settings' one distance, made and drawn)
+      this.culling.drawR = mine ? gfxNow().view : Number.POSITIVE_INFINITY;
       // the parked cars (still, a box each) out of this camera's view: off for this render
       // only — the shadow pass has them on again (they cast), and after it they're as they
       // were (the cars' own code shows and hides their models every frame)
@@ -870,7 +877,7 @@ export class ThirdPersonView {
             for (const o of top.children) {
               if (!o.userData.still || !o.visible) continue;
               const b = this.culling.stillBox(o);
-              if (b && !f.intersectsBox(b)) {
+              if (b && (!f.intersectsBox(b) || (mine && (this.culling.beyond(b) || below.hidesFar(b))))) {
                 o.visible = false;
                 this.culling.viewHid.push(o);
               }

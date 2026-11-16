@@ -52,6 +52,10 @@ export type MoodHost = Pick<
   | "wind"
 >;
 
+// (the view distance's edge haze: from this much of it, this much of the way into the air's colour at it)
+const EDGE_FROM = 0.7;
+const EDGE_AT = 0.5;
+
 export class Mood {
   constructor(private readonly c: MoodHost) {}
 
@@ -93,6 +97,12 @@ export class Mood {
     // camera, over them both (its fog pushed out with it: the land it sees was an island in white)
     const seen = this.c.god ? 1 : (1 - Math.min(1, s * 2)) * (mist.wall < 0.02 ? 1 : 0);
     this.c.around.grounds?.far?.frame(this.c.camera, fog, seen);
+    // a light haze at the view distance's edge (the user, 2026-11-15): what's built — no further than it is drawn
+    // (culling.ts drawR) — fades into the air's colour over its last stretch, half gone at the edge, so nothing
+    // ends against the horizon; the far land keeps the air's own haze (given it above). Not for god mode's camera.
+    // (in the shaders, over the air's own: fog3d.ts mfEdge — a single linear fog can't be both)
+    const D = gfxNow().view;
+    mf.mfEdge.value.set(EDGE_FROM * D, D, this.c.god ? 0 : EDGE_AT);
   }
 
   // The morning fog (docs/plan/64-the-fog.md, F2): fog3d.ts's uniforms by the fog, the hour and

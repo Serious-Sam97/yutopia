@@ -45,6 +45,7 @@ const ALL_SPOTS: Record<string, Spot> = {
   lawn: { x: -80, y: 22, level: 0 }, // the lawn by the woods
   floor2: { x: 30.5, y: 20.5, level: 2 }, // an empty floor (its windows)
   woods: { x: -180, y: 22, level: 0 }, // the thickest of the forest by the lawn (plan 90's loading checks)
+  lobby: { x: 8, y: 28, level: 4 }, // floor 4's lobby: the town and the kart park past its walls (the window portal)
 };
 const SPOTS = (process.env.SPOTS ?? "studio,lot,lawn").split(",").filter((s) => ALL_SPOTS[s]);
 const GPU = ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", "--enable-precise-memory-info"];
@@ -57,6 +58,8 @@ const PRESETS: Record<string, { off: string; on: string }> = {
   lights: { off: "tp.lightsSkip(false)", on: "tp.lightsSkip(true)" },
   // phase 4: what's built outside never left out of a render (Culling.outCull), then back
   outcull: { off: "tp.culling.outCull = false", on: "tp.culling.outCull = true" },
+  // the window portal (below-cull.ts aim/hidesFar): what's far outside behind my floor's walls left out
+  portal: { off: "tp.culling.below3.portalOff = true", on: "tp.culling.below3.portalOff = false" },
   // phase 3: every texture painted once and shared (its painter kept: userData.repaint) painted again for each
   // material that shows it, as each thing painted its own before — its repeat, offset and wrap as set on the shared
   // one — then back

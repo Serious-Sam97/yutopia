@@ -217,15 +217,10 @@ const D = {
     "Bordas suaves. Placa de vídeo. Vale ao recarregar.",
   ],
   gDistance: ["Distance", "Distância"],
-  gLand: ["Land", "Terreno"],
-  gLandHelp: [
-    "How far the ground is made around you. Memory and processor; past it, the horizon.",
-    "Até onde o chão é feito em volta de você. Memória e processador; depois disso, o horizonte.",
-  ],
-  gDistricts: ["Roads", "Estradas"],
-  gDistrictsHelp: [
-    "How far the roads, signs and buildings out of town are made. Memory and processor.",
-    "Até onde as estradas, placas e prédios fora da cidade são feitos. Memória e processador.",
+  gView: ["View distance", "Distância de visão"],
+  gViewHelp: [
+    "How far the ground, the roads, the buildings and the cars are made and drawn — a light haze at the edge, the horizon past it. Memory and processor.",
+    "Até onde o chão, as estradas, os prédios e os carros são feitos e desenhados — uma névoa leve na borda, o horizonte depois. Memória e processador.",
   ],
   gHorizon: ["Horizon", "Horizonte"],
   gFarTrees: ["Distant trees", "Árvores distantes"],

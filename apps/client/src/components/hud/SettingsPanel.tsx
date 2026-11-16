@@ -5,7 +5,16 @@ import { Credits } from "@/components/Credits";
 import { LangSwitch } from "@/components/LangSwitch";
 import { setToken, yutopia } from "@/lib/api";
 import { applyGraphics as switchGraphics } from "@/lib/gfx-switch";
-import { cleanGraphics, type Graphics, gfxTier, graphicsFor, isPreset } from "@/lib/graphics";
+import {
+  cleanGraphics,
+  type Graphics,
+  gfxTier,
+  graphicsFor,
+  isPreset,
+  VIEW_MAX,
+  VIEW_MIN,
+  VIEW_STEP,
+} from "@/lib/graphics";
 import { type Key, useLang, useTr } from "@/lib/i18n";
 import { MAX_FPS, type Prefs, type Quality, type QualityPref, resolveQuality, setPrefs, usePrefs } from "@/lib/prefs";
 import { VERSION } from "@/lib/version";
@@ -585,25 +594,15 @@ function GraphicsPage() {
       </Card>
       <Card label={t("gDistance")}>
         <Slider
-          label={t("gLand")}
-          value={g.land}
-          min={220}
-          max={660}
-          step={55}
-          shown={`${g.land} m`}
-          onChange={(v) => set("land", v)}
+          label={t("gView")}
+          value={g.view}
+          min={VIEW_MIN}
+          max={VIEW_MAX}
+          step={VIEW_STEP}
+          shown={`${g.view} m`}
+          onChange={(v) => set("view", v)}
         />
-        {hint("gLandHelp")}
-        <Slider
-          label={t("gDistricts")}
-          value={g.districts}
-          min={500}
-          max={1200}
-          step={100}
-          shown={`${g.districts} m`}
-          onChange={(v) => set("districts", v)}
-        />
-        {hint("gDistrictsHelp")}
+        {hint("gViewHelp")}
         <p className={`${lab} mt-1 mb-1.5`} style={{ color: "var(--cream-dim)" }}>
           {t("gHorizon")}
         </p>

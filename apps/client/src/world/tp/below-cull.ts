@@ -164,6 +164,120 @@ export class BelowCull {
     return true;
   }
 
+  // ── what's far outside, behind my floor's walls (the window portal: the user, 2026-11-15 — looking at a corner
+  // of floor 4 drew the town, the kart park and the parked cars through two small windows, 2,500 draws more,
+  // 75 → 36 fps). `hides` above takes what's under the floor's level, and only where its sight lines cross the
+  // level over the floor: a far thing's lines are near flat, they cross the level kilometres out — nothing it
+  // could say. So, in plan: from the eye, a ray a degree; each marched over my floor's tiles till it's out —
+  // through a window, a well, a hole in the slab (open: a way out), or straight into the outside (a solid wall,
+  // floor to the walls' top, between) — and how far that is. A thing wholly past the walls along every ray to it,
+  // none of them open, its top under the walls' top where its lines meet them: nothing of it can be seen. ──
+  private static readonly RAYS = 360;
+  private rayOpen = new Uint8Array(BelowCull.RAYS);
+  private rayExit = new Float32Array(BelowCull.RAYS);
+  private aimed = false;
+  /** (aimed this render: what's seen as a whole is worth looking into, piece by piece) */
+  get aimedNow(): boolean {
+    return this.aimed;
+  }
+  private aimEye = new Vector3();
+  /** The rays out of my floor from `eye`, once a render (no help — nothing hidden — with the eye out of the floor's
+   *  walls, under the floor or over their top, or a wall faded see-through). */
+  /** (tests: e2e/weight.mts' A/B — off, nothing past the walls left out: the same picture, the long way) */
+  portalOff = false;
+  aim(eye: Vector3) {
+    this.aimed = false;
+    if (this.portalOff || !Number.isFinite(eye.x) || !this.open || !this.out || !this.bad || this.faded.length) return;
+    const lv = this.origin.y;
+    if (eye.y < lv + 0.3 || eye.y > lv + this.top - 0.05) return;
+    const ex = eye.x - this.origin.x;
+    const ez = eye.z - this.origin.z;
+    const tx = Math.floor(ex);
+    const tz = Math.floor(ez);
+    const out = this.out;
+    const bad = this.bad;
+    const open = this.open;
+    if (this.any(out, tx, tz, tx, tz) || this.any(bad, tx, tz, tx, tz)) return;
+    this.aimEye.copy(eye);
+    const N = BelowCull.RAYS;
+    const reach = this.w + this.h;
+    const raw = this.rayOpen;
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * Math.PI * 2;
+      const dx = Math.cos(a);
+      const dz = Math.sin(a);
+      let o = 1;
+      let d = reach;
+      // (a half-tile a step: a wall's a tile's edge, a window a tile's width at least)
+      for (let t = 0.5; t < reach; t += 0.5) {
+        const x = Math.floor(ex + dx * t);
+        const z = Math.floor(ez + dz * t);
+        // (a way out first; then the outside — or the map's edge — reached with none: a solid wall between; then a
+        // hole in the slab inside the walls)
+        if (x >= 0 && z >= 0 && x < this.w && z < this.h && this.any(bad, x, z, x, z)) break;
+        if (x < 0 || z < 0 || x >= this.w || z >= this.h || this.any(out, x, z, x, z)) {
+          o = 0;
+          d = t;
+          break;
+        }
+        if (this.any(open, x, z, x, z)) break;
+      }
+      raw[i] = o;
+      this.rayExit[i] = d;
+    }
+    // (a ray's neighbours open too: a window between two rays is still a way out)
+    const was = raw.slice();
+    for (let i = 0; i < N; i++) if (was[i]) raw[(i + 1) % N] = raw[(i + N - 1) % N] = 1;
+    this.aimed = true;
+  }
+
+  /** Is all of `box` (world) far outside my floor and hidden by its walls from the eye last aimed at? */
+  hidesFar(box: Box3): boolean {
+    if (!this.aimed) return false;
+    const e = this.aimEye;
+    // (the box's corners in plan, round the eye: the arc it spans — less than half the round, else no)
+    const ax: number[] = [];
+    for (const [x, z] of [
+      [box.min.x, box.min.z],
+      [box.max.x, box.min.z],
+      [box.min.x, box.max.z],
+      [box.max.x, box.max.z],
+    ])
+      ax.push(Math.atan2(z - e.z, x - e.x));
+    const ref = ax[0];
+    let lo = 0;
+    let hi = 0;
+    for (const a of ax) {
+      let d = a - ref;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      if (d < lo) lo = d;
+      if (d > hi) hi = d;
+    }
+    if (hi - lo >= Math.PI) return false;
+    const near = Math.hypot(
+      Math.max(box.min.x - e.x, 0, e.x - box.max.x),
+      Math.max(box.min.z - e.z, 0, e.z - box.max.z),
+    );
+    if (near <= 0) return false;
+    const N = BelowCull.RAYS;
+    const step = (Math.PI * 2) / N;
+    const i0 = Math.floor((ref + lo) / step);
+    const i1 = Math.ceil((ref + hi) / step);
+    let exit = 0;
+    for (let i = i0; i <= i1; i++) {
+      const k = ((i % N) + N) % N;
+      if (this.rayOpen[k]) return false;
+      if (this.rayExit[k] > exit) exit = this.rayExit[k];
+    }
+    // (wholly past the walls)
+    if (near < exit + 0.5) return false;
+    // (and its lines under the walls' top where they meet them: no seeing over them)
+    const lv = this.origin.y;
+    if (box.max.y > e.y && e.y + ((box.max.y - e.y) * exit) / near > lv + this.top - 0.05) return false;
+    return true;
+  }
+
   /** Before the main render: what's hidden is switched off — three then skips it, its whole
    *  subtree, as it collects what to draw. Its shadow pass comes after that collection: there
    *  it's switched back on (`shadowPass`), so every shadow is as it was. A thing with a light

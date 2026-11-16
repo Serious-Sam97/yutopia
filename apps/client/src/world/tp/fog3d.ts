@@ -35,6 +35,10 @@ export const mf = {
   // murk's density a metre, 1 when the camera's under it, the sun's light on its bed; the murk's colour
   mfUw: { value: new Vector4(-1000, 0.14, 0, 0) },
   mfUwCol: { value: new Color(0.012, 0.05, 0.048) },
+  // the view distance's edge (plan 91, the user's one distance): from x to y (m, the view's depth) a haze into the
+  // air's colour up to z of the way — what's built ends there, faded into the air, not cut against the horizon
+  // (z 0: none)
+  mfEdge: { value: new Vector3(0, 1, 0) },
 };
 
 const VERT_PARS = `
@@ -56,7 +60,7 @@ const FRAG_PARS = `
 	uniform float mfSunK; uniform float mfT; uniform float mfBox;
 	uniform vec3 mfBoxMin; uniform vec3 mfBoxMax; uniform vec3 mfCol; uniform vec3 mfSunCol; uniform vec3 mfSun;
 	uniform vec2 mfWind; uniform float mfFlat; uniform float mfLift;
-	uniform vec4 mfUw; uniform vec3 mfUwCol;
+	uniform vec4 mfUw; uniform vec3 mfUwCol; uniform vec3 mfEdge;
 	// the haze at a height (a tile's worth; never past e^20 of it: nothing's drawn that far down, and
 	// an overflow's a NaN the bloom spreads over the frame)
 	float mfDens( float y ) { return mfA * exp( min( - ( y - mfY0 ) / mfH, 20.0 ) ); }
@@ -108,6 +112,7 @@ const FRAG = `
 		#else
 			float fogFactor = smoothstep( fogNear, fogFar, vFogDepth * mfOut / mfL );
 		#endif
+		fogFactor = max( fogFactor, mfEdge.z * smoothstep( mfEdge.x, mfEdge.y, vFogDepth ) );
 		gl_FragColor.rgb = mix( gl_FragColor.rgb, mfTo, fogFactor );
 	#endif
 	if ( mfA > 0.0 ) {

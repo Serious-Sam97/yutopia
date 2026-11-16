@@ -10,16 +10,44 @@ export type Horizon = DrawnQuality;
 export type FarTrees = 0 | 1200 | 1800;
 export type SunShadows = 0 | 1024 | 2048 | 4096;
 export type Level3 = "low" | "medium" | "high";
+/** The view distance's range (m) and its step (the settings' slider). */
+export const VIEW_MIN = 400;
+export const VIEW_MAX = 1500;
+export const VIEW_STEP = 50;
+// the near land's reach by the view distance, between these (the tiers' own exactly: Potato 600 → 330, Lowest
+// 700 → 440, the rest 900 → 440); the far land past it
+const LAND_BY: readonly [number, number][] = [
+  [400, 220],
+  [600, 330],
+  [700, 440],
+  [900, 440],
+  [1200, 550],
+  [1500, 660],
+];
+/** A view distance's reach: the near land's, and everything built's — the view distance itself (m). */
+export function reachOf(view: number): { land: number; districts: number } {
+  const v = Math.min(VIEW_MAX, Math.max(VIEW_MIN, view));
+  let land = LAND_BY[LAND_BY.length - 1][1];
+  for (let i = 1; i < LAND_BY.length; i++) {
+    const [a, la] = LAND_BY[i - 1];
+    const [b, lb] = LAND_BY[i];
+    if (v <= b) {
+      land = Math.round(la + ((lb - la) * (v - a)) / (b - a));
+      break;
+    }
+  }
+  return { land, districts: v };
+}
 
 export interface Graphics {
   /** the frame drawn at this % of the screen's own pixels (devicePixelRatio): 25 … 200 */
   res: number;
   /** antialiasing (MSAA): set when the 3D view's made — on a restart */
   aa: boolean;
-  /** the near land made out to here (m: reach.ts) */
-  land: number;
-  /** the districts — the roads, the buildings past the town — made within this (m) */
-  districts: number;
+  /** how far you see (the user, 2026-11-15: one distance, not the land's and the roads' — reach.ts): the near land
+   *  and everything built (roads, buildings, the town, the kart park, cars) made and drawn within it, a light haze
+   *  at its edge; past it the far land, the horizon */
+  view: number;
   /** the far land, the horizon's rings */
   horizon: Horizon;
   /** the far land's trees, out to here (m; 0: none) */
@@ -51,8 +79,7 @@ export interface Graphics {
 export const GRAPHICS_KEYS = [
   "res",
   "aa",
-  "land",
-  "districts",
+  "view",
   "horizon",
   "farTrees",
   "shadows",
@@ -87,13 +114,21 @@ export function tierRatio(q: Quality, dpr = screenDpr()): number {
           : 0.5;
 }
 
+/** A tier's view distance (what it always drew: High, Medium, Low long; Lowest medium; Potato short). */
+export const TIER_VIEW: Record<Quality, number> = {
+  high: 900,
+  medium: 900,
+  low: 900,
+  lowest: 700,
+  potato: 600,
+};
 // (reach.ts's, here so the settings' module reads none of the 3D view's)
 export const REACH: Record<Quality, { land: number; districts: number }> = {
-  high: { land: 440, districts: 900 },
-  medium: { land: 440, districts: 900 },
-  low: { land: 440, districts: 900 },
-  lowest: { land: 440, districts: 700 },
-  potato: { land: 330, districts: 600 },
+  high: reachOf(TIER_VIEW.high),
+  medium: reachOf(TIER_VIEW.medium),
+  low: reachOf(TIER_VIEW.low),
+  lowest: reachOf(TIER_VIEW.lowest),
+  potato: reachOf(TIER_VIEW.potato),
 };
 
 /** A tier's every setting: what it always drew (plan 91 phase 9's table). */
@@ -101,14 +136,13 @@ export function presetOf(q: Quality, dpr = screenDpr(), mem = deviceMem()): Grap
   const d = drawnAs(q);
   const hi = d === "high";
   const lowish = d === "low" || d === "lowest";
-  const reach = { ...REACH[q] };
-  if (mem <= 4) reach.districts = Math.min(reach.districts, REACH.lowest.districts);
+  // (4 GB or less: no further than Lowest's)
+  const view = mem <= 4 ? Math.min(TIER_VIEW[q], TIER_VIEW.lowest) : TIER_VIEW[q];
   return {
     // (not rounded: the preset's pixels are the tier's exactly — Lowest's 0.75 on a 2× screen is 37.5%)
     res: (tierRatio(q, dpr) / dpr) * 100,
     aa: q !== "lowest" && q !== "potato",
-    land: reach.land,
-    districts: reach.districts,
+    view,
     horizon: d,
     farTrees: hi ? 1800 : d === "medium" ? 1200 : 0,
     shadows: hi ? 2048 : d === "medium" ? 1024 : 0,
@@ -146,8 +180,7 @@ export function cleanGraphics(raw: unknown): Partial<Graphics> | null {
   };
   num("res", 25, 200);
   bool("aa");
-  num("land", 220, 660);
-  num("districts", 500, 1200);
+  num("view", VIEW_MIN, VIEW_MAX);
   one("horizon", ["lowest", "low", "medium", "high"] as const);
   one("farTrees", [0, 1200, 1800] as const);
   one("shadows", [0, 1024, 2048, 4096] as const);

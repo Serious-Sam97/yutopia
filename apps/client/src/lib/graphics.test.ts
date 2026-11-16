@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { cleanGraphics, graphicsFor, isPreset, presetOf, ratioOf, tierRatio } from "./graphics";
+import { cleanGraphics, graphicsFor, isPreset, presetOf, ratioOf, reachOf, tierRatio } from "./graphics";
 
 // The graphics settings (docs/plan/91-the-big-map.md phase 9): each tier's preset is what it always drew.
 
@@ -21,9 +21,11 @@ test("each tier's preset: what the tier drew (the pixels, antialiasing, the lamp
   const l = presetOf("low", dpr, 16);
   assert.deepEqual([l.res, l.lamps, l.shadows, l.finish, l.people, l.mirror], [50, 3, 0, false, "low", "off"]);
   const lw = presetOf("lowest", dpr, 16);
-  assert.deepEqual([lw.res, lw.aa, lw.lamps, lw.weather, lw.districts], [37.5, false, 2, "low", 700]);
+  assert.deepEqual([lw.res, lw.aa, lw.lamps, lw.weather, lw.view], [37.5, false, 2, "low", 700]);
   const p = presetOf("potato", dpr, 16);
-  assert.deepEqual([p.res, p.aa, p.lamps, p.land, p.districts, p.horizon], [25, false, 0, 330, 600, "lowest"]);
+  assert.deepEqual([p.res, p.aa, p.lamps, p.view, p.horizon], [25, false, 0, 600, "lowest"]);
+  assert.equal(h.view, 900);
+  assert.equal(presetOf("high", dpr, 4).view, 700, "4 GB: no further than Lowest's");
   // (the pixel ratio a preset draws at is the tier's, any screen)
   for (const d of [1, 1.5, 2, 3])
     for (const q of ["high", "medium", "low", "lowest", "potato"] as const)
@@ -40,4 +42,13 @@ test("a setting set by hand over the preset; what's kept of a stored one; Custom
   assert.ok(isPreset("high", null));
   assert.equal(cleanGraphics(null), null);
   assert.equal(cleanGraphics({}), null);
+});
+
+test("the view distance's reach: each tier's exactly, the land between", () => {
+  assert.deepEqual(reachOf(900), { land: 440, districts: 900 });
+  assert.deepEqual(reachOf(700), { land: 440, districts: 700 });
+  assert.deepEqual(reachOf(600), { land: 330, districts: 600 });
+  assert.deepEqual(reachOf(1500), { land: 660, districts: 1500 });
+  assert.equal(reachOf(650).land, 385);
+  assert.equal(reachOf(99999).districts, 1500, "kept in range");
 });

@@ -1,6 +1,6 @@
 import { isFloor, STAIRS_D, STOREY } from "@yutopia/shared";
 import { cellOf } from "@yutopia/shared/structure";
-import { Box3, Frustum, Matrix4, type Mesh, type Object3D, type Vector3 } from "three";
+import { Box3, Frustum, Matrix4, type Mesh, type Object3D, Vector3 } from "three";
 import { BelowCull, boxInParent, HIDDEN_LAYER } from "../below-cull";
 import type { World3 } from "../build";
 import { type Gather, lazyMatrices, seal } from "../lazy-matrices";
@@ -30,6 +30,28 @@ export class Culling {
   looseFrustum = new Frustum();
 
   viewHid: Object3D[] = []; // (parked cars out of the current render's view)
+  /** How far my view draws what's built (the view distance's: lib/graphics.ts VIEW — the town, the kart park, the
+   *  districts, the parked cars no further, whatever's made; the far land past it); Infinity for any other camera. */
+  drawR = Number.POSITIVE_INFINITY;
+  /** All of `box` past the view distance (in plan, from the eye). */
+  beyond(box: Box3): boolean {
+    const e = this.eye;
+    if (this.drawR === Number.POSITIVE_INFINITY) return false;
+    return (
+      Math.hypot(Math.max(box.min.x - e.x, 0, e.x - box.max.x), Math.max(box.min.z - e.z, 0, e.z - box.max.z)) >
+      this.drawR
+    );
+  }
+  /** Some of `box` past it, some not: its pieces worth looking at one by one. */
+  across(box: Box3): boolean {
+    if (this.drawR === Number.POSITIVE_INFINITY) return false;
+    const e = this.eye;
+    const far = Math.hypot(Math.max(e.x - box.min.x, box.max.x - e.x), Math.max(e.z - box.min.z, box.max.z - e.z));
+    return far > this.drawR;
+  }
+  /** the eye my view's render aimed the window portal from (below-cull.ts aim); `nowhere`: no aim */
+  readonly eye = new Vector3();
+  readonly nowhere = new Vector3(Number.NaN, Number.NaN, Number.NaN);
 
   looseM = new Matrix4();
 
@@ -55,6 +77,7 @@ export class Culling {
    *  picture. */
   cullOutdoors(f: Frustum) {
     if (!this.outCull) return;
+    // (the eye aimed by view.ts' onBeforeRender: my own view's; any other camera's, nothing past the walls)
     const g = this.c.around.grounds;
     if (!g) return;
     for (const r of g.stillRoots()) if (r.visible && r.parent) this.cullIn(r, f, 3);
@@ -65,10 +88,12 @@ export class Culling {
       if (!c.visible) continue;
       const b = this.stillBox(c);
       if (b) {
-        if (!f.intersectsBox(b)) {
+        if (!f.intersectsBox(b) || this.beyond(b) || this.below3.hidesFar(b)) {
           c.visible = false;
           this.viewHid.push(c);
-        }
+        } else if ((this.below3.aimedNow || this.across(b)) && depth > 0 && c.children.length > 1)
+          this.cullIn(c, f, depth - 1);
+        // (seen as a whole from in my floor: its pieces looked at one by one — a district's half behind the walls)
       } else if (depth > 0 && c.children.length) this.cullIn(c, f, depth - 1);
     }
   }

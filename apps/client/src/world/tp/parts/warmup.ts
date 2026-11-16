@@ -16,7 +16,7 @@ import {
   Vector4,
   WebGLRenderTarget,
 } from "three";
-import { type Graphics, graphicsFor, graphicsSig, setGfxNow } from "@/lib/graphics";
+import { type Graphics, graphicsFor, graphicsSig, reachOf, setGfxNow } from "@/lib/graphics";
 import { drawnAs, type Quality } from "@/lib/prefs";
 import { Post3, postKey } from "../post3d";
 import { Proxy3, Vortex3 } from "../stand3d";
@@ -418,7 +418,7 @@ export class Warmup {
     this.c.lamps = g.lamps;
     this.c.around.grounds?.far?.setQuality(g.horizon, g.farTrees);
     // (how far the land and the districts are made: by the tier and the device's memory — plan 91 phase 6 — or set)
-    this.c.around.grounds?.setReach({ land: g.land, districts: g.districts });
+    this.c.around.grounds?.setReach(reachOf(g.view));
     // the first flashlight (mine) throws shadows on High — its shadow map drawn once now, so it's
     // there even while it's off (a shadow-casting light with no map yet: every lit draw failed —
     // "mismatch between texture format and sampler type" — and only the ink was left)
