@@ -178,6 +178,9 @@ const PUSH_V = 1.5;
 const sv: Solid[] = [];
 
 /** A car driven on Jolt: its state, its Jolt car, what it keeps between steps. */
+/** (plan 98 phase 10) m/s²: the engine holding the car back off the throttle, in first gear at the limiter */
+const ENGINE_DECEL = 1.4;
+
 export class Drive {
   readonly read: CarRead;
   private readonly as: AssistState = assistState();
@@ -212,6 +215,8 @@ export class Drive {
    *  reads — and sounds — as that gear; docs/plan/92 polish) */
   private held = 0;
   pad = false;
+  /** (plan 98) the engine's pull back this step (m/s² along it), on the ground */
+  private engineDrag = 0;
   /** may be righted (R, on its roof or side, still) */
   canRight = false;
 
@@ -460,7 +465,19 @@ export class Drive {
     }
     // (held still at a stop: the brakes on lightly)
     if (helps.hold && !spec.pushed && speed < 0.35 && thr < 0.02 && Math.abs(vf) < 0.3) brake = Math.max(brake, 0.35);
-    if (s.rpm > spec.engine.limit) thr = 0;
+    // (plan 98 phase 10: the limiter a soft cut over 300 rpm — off at once, it chattered)
+    thr *= clamp((spec.engine.limit + 150 - s.rpm) / 300, 0, 1);
+    // (plan 98 phase 10: a launch from a stand on keys — all or nothing —: the throttle eased back while its driven
+    // wheels spin past the ground (their own spin, not the slip: at a stand the slip's a ratio of nothing), so a start
+    // grips instead of skidding; the pad's own)
+    if (!this.pad && !spec.pushed && thr > 0.05 && Math.abs(vf) < 6) {
+      let spin = 0;
+      for (const i of driven) spin = Math.max(spin, Math.abs(s.wheels[i].w) * spec.wheel.r - Math.abs(vf));
+      if (spin > 1.5) {
+        thr *= clamp(1 - (spin - 1.5) * 0.3, 0.45, 1);
+        s.helping |= 2;
+      }
+    }
 
     // ── to Jolt: forward (back in reverse), the steering, the brakes ──
     if (helps.auto) {
@@ -473,6 +490,25 @@ export class Drive {
     // (a throttle asked while it rolls the other way: the brakes first)
     let brk = brake;
     if (helps.auto && thr > 0.05 && Math.abs(vf) > 1.2 && Math.sign(vf) !== (back ? -1 : 1)) brk = Math.max(brk, thr);
+    // (plan 98 phase 10: off the throttle in a gear, the engine holds it back — Jolt's auto box goes to neutral off
+    // it, so it coasted free: a pull back along it by the revs, more in the low gears, downhill too; on the body, not
+    // the brakes — a brake on all four ate the tyres' grip in a corner and locked them in the air)
+    this.engineDrag = 0;
+    // (not sliding: a drift held on the keys lifts off between taps, and it bled the slide away)
+    if (
+      this.engineOn &&
+      !spec.pushed &&
+      thr < 0.05 &&
+      brk < 0.05 &&
+      s.hb < 0.5 &&
+      Math.abs(vf) > 2 &&
+      Math.abs(vs) < 0.2 * Math.abs(vf) &&
+      this.held !== 0
+    ) {
+      const g = Math.max(1, Math.abs(this.held));
+      const rev = clamp((s.rpm - spec.engine.idle) / (spec.engine.limit - spec.engine.idle), 0, 1);
+      this.engineDrag = (-Math.sign(vf) * ENGINE_DECEL * (0.35 + 0.65 * rev)) / g ** 0.7;
+    }
     this.car.input(this.engineOn || spec.pushed ? fwd : 0, steer / spec.steer.max, brk, s.hb);
 
     // ── the arcade layer ──
@@ -552,6 +588,12 @@ export class Drive {
     let tx = ao.t[0];
     let ty = ao.t[1];
     let tz = ao.t[2];
+    // (plan 98 phase 10: the engine's hold, on the ground)
+    if (this.engineDrag && r.wheels.some((w) => w.contact)) {
+      const m = spec.mass * this.engineDrag;
+      fx += X[0] * m;
+      fz += X[2] * m;
+    }
     const e = this.ext;
     if (e) {
       fx += e.f[0];

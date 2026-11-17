@@ -397,3 +397,17 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
   springs back.
 - Checked: `e2e/car-cam.mts` (backing up 0→48 km/h: the camera ±180° off the nose, i.e. straight behind, every
   sample; a still); typecheck clean.
+
+## Phase 10 — built (2026-11-17): the engine
+
+- **Engine braking in auto** (`shared car/drive.ts`): off the throttle in a gear, a pull back along the car — 1.4 m/s²
+  in first at the limiter, less with the revs and the gear (÷ gear^0.7), downhill too; Jolt's auto box goes to
+  neutral off the throttle, so it coasted free. On the body, not the brakes: a brake on all four ate the tyres' grip
+  in a corner (the cornering test's packed snow fell to 0.45 g) and locked them in the air. Not while sliding (a
+  keyboard drift's lifts between taps bled the slide) nor on the handbrake.
+- **The limiter a soft cut** over 300 rpm round it (it cut to nothing from the last step's revs: a chatter).
+- **A launch on keys grips:** while the driven wheels spin more than 1.5 m/s past the ground under 6 m/s (from their own
+  spin — the slip's a ratio of nothing at a stand), the throttle eased back (to 45% at most). A blanket ramp was tried
+  first: it changed every start, and the crest test's landing with it.
+- Checked: shared car tests 69/69 (new: `(plan 98) let off at 60 km/h …`; the dry car's person test rolls on with a
+  whisper of throttle now — let off, the engine stops it short of her).

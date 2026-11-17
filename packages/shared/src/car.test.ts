@@ -456,7 +456,8 @@ test("dry, the engine coughs out and won't start again; a person hit is told who
   const p = await car(cw);
   upTo(p.w, 25, 10);
   let hit: CarState["hit"] = null;
-  p.w.run(NONE, 4, HELPS, (c) => {
+  // (plan 98: a whisper of throttle — let off, the engine holds it back now, and it stopped short of her)
+  p.w.run(C({ up: 0.12 }), 4, HELPS, (c) => {
     if (c.hit?.what === "person" && !hit) hit = { ...c.hit };
     return false;
   });
@@ -910,4 +911,15 @@ test("(plan 93 S6) a rut in deep snow: the front wheels taken into it — the ca
   assert.ok(Math.abs(bare.z) < 0.03, `bare, straight on: ${bare.z.toFixed(2)} m`);
   assert.ok(Math.abs(rut.z - 0.25) < 0.08, `taken into the ruts (25 cm over) and along them: ${rut.z.toFixed(2)} m`);
   assert.ok(rut.x > bare.x, `further in them (less to plough): ${rut.x.toFixed(1)} vs ${bare.x.toFixed(1)} m`);
+});
+
+test("(plan 98) let off at 60 km/h in auto: the engine holds it back (not coasting free)", async () => {
+  const { w, s } = await car(flatWorld("asphalt"));
+  upTo(w, 60);
+  const v0 = readout(s).kmh / 3.6;
+  w.run(NONE, 2);
+  const v1 = readout(s).kmh / 3.6;
+  const decel = (v0 - v1) / 2;
+  assert.ok(decel > 0.45 && decel < 2.2, `slowed ${decel.toFixed(2)} m/s²`);
+  w.dispose();
 });
