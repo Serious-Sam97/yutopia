@@ -433,3 +433,16 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
 - **The rumble** (`cars.ts`): over the ground and the knocks, now a gear's kick (40 ms on the change), the limiter's
   buzz, the ABS's pump, a bump or a kerb (the springs' speed past 0.4 m/s), coming down off a jump.
 - Checked: shared car tests pass; typecheck clean. (No pad on this machine to feel it: the numbers by reading.)
+
+## Phase 13 — built (2026-11-17): others' cars, smooth
+
+- **Turning on past the newest state** (`car/playback.ts`): the yaw rate (`wy`, on the wire all along, dropped on the
+  client) carried in the samples; past the newest the car turns on at it as it goes on along its velocity — a car
+  mid-corner slid sideways without turning, then snapped round.
+- **Easing off, not stopping dead:** straight on for 500 ms as before (a slow sender's half-second frames need all
+  of it: the playback tests said so when it eased from the start), then easing off over 0.3 s instead of stopping.
+- **The steering and the springs blended** between the two states round the clock (`pairA/pairB/pairU`): they stepped
+  20 times a second.
+- **Their driven wheels spun by their slip** (a burnout spins them past the road) and held still braking with a lock.
+- Left: the brake lamp's on/off on the wire (a graded one would need a byte).
+- Checked: playback tests 7/7; typecheck clean.

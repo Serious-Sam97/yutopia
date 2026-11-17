@@ -15,6 +15,8 @@ export interface PlaybackSample {
   p: Vector3;
   q: Quaternion;
   v: Vector3;
+  /** (plan 98 phase 13) its yaw rate (rad/s about the world's up): turned on past the newest state */
+  wy?: number;
 }
 
 export interface PlaybackPose {
@@ -35,6 +37,7 @@ const RATE_MIN = 0.75;
 const RATE_MAX = 1.25;
 const RESYNC_MS = 1500; // further off than this (a tab back from the background): there at once
 const EXTRAP_MS = 500; // past the newest state: on along its velocity at most this long, then held
+const EXTRAP_TAU = 0.3; // s: (plan 98) …easing off over this long — it stopped dead at EXTRAP_MS
 const ERR_TAU = 150; // ms: a correction eased out
 const ERR_SNAP = 30; // m: a bigger one isn't eased, it's a jump (the server's own say so: `jump`)
 const CATCH_UP = 1; // a correction eased out at most this much faster than the car goes (+2 m/s)
@@ -43,6 +46,8 @@ const MOVING = 0.5; // m/s: going, so never drawn going back
 
 const v3 = new Vector3();
 const dir = new Vector3();
+const yq = new Quaternion();
+const UP = new Vector3(0, 1, 0);
 const qa = new Quaternion();
 
 export class CarPlayback<S extends PlaybackSample> {
@@ -188,11 +193,21 @@ export class CarPlayback<S extends PlaybackSample> {
         s1 = b[i + 1];
         break;
       }
+    this.pairA = s0;
+    this.pairB = s1;
+    this.pairU = 0;
     if (t >= s1.st) {
-      const ex = Math.min(EXTRAP_MS, t - s1.st) / 1000;
+      // (plan 98 phase 13: past the newest, on along its velocity easing off — not stopping dead —, and turning on at
+      // its yaw rate: a car mid-corner slid sideways without turning, then snapped round)
+      // (straight on for EXTRAP_MS as before — a slow sender's half-second frames need all of it —, then easing off)
+      const raw = (t - s1.st) / 1000;
+      const lin = EXTRAP_MS / 1000;
+      const ex = raw <= lin ? raw : lin + EXTRAP_TAU * (1 - Math.exp(-(raw - lin) / EXTRAP_TAU));
       p.p.copy(s1.p).addScaledVector(s1.v, ex);
       p.q.copy(s1.q);
+      if (s1.wy) p.q.premultiply(yq.setFromAxisAngle(UP, s1.wy * ex));
       p.v.copy(s1.v);
+      this.pairA = this.pairB = s1;
     } else if (t <= s0.st || s1 === s0) {
       p.p.copy(s0.p);
       p.q.copy(s0.q);
@@ -211,10 +226,16 @@ export class CarPlayback<S extends PlaybackSample> {
       );
       p.q.slerpQuaternions(s0.q, s1.q, u);
       p.v.lerpVectors(s0.v, s1.v, u);
+      this.pairU = u;
     }
     return p;
   }
 
+  /** (plan 98 phase 13) The two states round the playback clock as last drawn, and how far from the first to the
+   *  second (0..1): what's sent but not a pose — the steering, the springs — blended between them, not stepped. */
+  pairA: S | undefined;
+  pairB: S | undefined;
+  pairU = 0;
   /** The newest state at or before `t` (the oldest if none is). */
   private sampleAt(t: number): S | undefined {
     const b = this.buf;

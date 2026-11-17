@@ -410,6 +410,8 @@ interface Sample {
   slip: number;
   /** (plan 93) the most grip a tyre uses (1: its peak) */
   grip: number;
+  /** (plan 98 phase 13) its yaw rate */
+  wy?: number;
 }
 /** (plan 93 D) A hand on the wheel: the rim's point it holds (a mark on the steering wheel, turning with
  *  it), or on its way to a new one (hand over hand: let go, reached back up the rim, gripped again). */
@@ -527,6 +529,8 @@ interface LiveView {
   doorT?: boolean[];
   accV?: Vector3;
   accB?: Vector3;
+  /** (plan 98 phase 13) its driven wheels' turn (rad), spun by their slip too */
+  spinD?: number;
   /** (plan 98 phase 11) its weight's spring: the pitch and roll seen, and their speeds */
   wt?: { p: number; pv: number; r: number; rv: number };
   /** (plan 93 C) parked, kept a moment: someone's still climbing out of it */
@@ -2528,6 +2532,7 @@ export class Cars {
             slip: v.slip,
             grip: (v.grip ?? 0) / 100,
             wc: v.wc,
+            wy: v.wy ?? 0,
           },
           now,
           l.jump,
@@ -4057,6 +4062,7 @@ export class Cars {
 
   /** Someone else's car: played back on its driver's clock (playback.ts), its wheels, lamps, sound. */
   private wcs = [0, 0, 0, 0];
+  private wcsB = [0, 0, 0, 0];
   private poseRemote(l: LiveView, now: number, dt: number) {
     if (!l.pb.buf.length) return;
     const { pose, at } = l.pb.pose(now, dt);
@@ -4074,12 +4080,25 @@ export class Cars {
     // wheels: rolling at its speed, the fronts steered
     const fwd = v3.set(1, 0, 0).applyQuaternion(p.q);
     const sp = p.v.dot(fwd);
-    l.spin += (sp / spec.wheel.r) * dt;
-    const steer = s1.steer;
+    // (plan 98 phase 13: the steering and the springs blended between the two states round the clock — taken from one,
+    // they stepped 20 times a second)
+    const sa = l.pb.pairA ?? s1;
+    const sb = l.pb.pairB ?? s1;
+    const u = l.pb.pairU;
+    const steer = sa.steer + (sb.steer - sa.steer) * u;
     // (each on its spring, as its driver's car has it: docs/plan/92 phase 3)
-    unpackWheels(s1.wc, this.wcs);
+    unpackWheels(sa.wc, this.wcs);
+    unpackWheels(sb.wc, this.wcsB);
+    for (let i = 0; i < 4; i++) this.wcs[i] += ((this.wcsB[i] ?? 0) - (this.wcs[i] ?? 0)) * u;
+    // (plan 98 phase 13: its driven wheels spun by their slip as well as its speed — a burnout spins, a lock stops them)
+    const slipV = (s1.slip ?? 0) * (s1.fl & CAR_FLAGS.brake ? -1 : 1);
+    l.spin += (sp / spec.wheel.r) * dt;
+    l.spinD = (l.spinD ?? l.spin) + ((sp + slipV) / spec.wheel.r) * dt;
+    const driven = spec.drive === "all" ? [0, 1, 2, 3] : spec.drive === "front" ? [0, 1] : [2, 3];
     m.wheels.forEach((w, i) => {
-      w.spin.rotation.z = l.spin * (w.turnK ?? 1);
+      const locked = s1.fl & CAR_FLAGS.brake && (s1.slip ?? 0) > Math.abs(sp) * 0.6 && Math.abs(sp) > 2;
+      const a = driven.includes(i) ? l.spinD ?? l.spin : l.spin;
+      w.spin.rotation.z = (locked ? (w.spin.rotation.z / (w.turnK ?? 1)) : a) * (w.turnK ?? 1);
       if (w.front) w.steer.rotation.y = -steer;
       // (plan 93 S1: a flat, down on its rim)
       if (w.rest) w.steer.position.y = w.rest.y + (this.wcs[i] ?? 0) + (m.flatY?.[i] ?? 0);
@@ -6060,6 +6079,7 @@ interface VehWire {
   plate?: string;
   /** (plan 98) its driver came in by this seat's door (−1: their own) */
   via?: number;
+  wy?: number;
 }
 
 function headingFromQ(q: { x: number; y: number; z: number; w: number }): number {
