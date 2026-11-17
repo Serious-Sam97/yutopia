@@ -24,6 +24,8 @@ export interface RigState {
   clock: string;
   outside: number;
   dash: number; // the cluster's brightness (night: full)
+  /** (plan 98 phase 7) since the key was turned (s; −1 not lately): the dash's self-test */
+  key?: number;
 }
 
 /** What a car model needs from a car's sim, kept between two of its steps. */
@@ -118,7 +120,7 @@ export class CarRig {
       reverse: s.gear === -1,
       ind: on ? st.ind : 0,
       hazard: st.hazard && on,
-      dash: s.rpm > 50 ? st.dash : 0,
+      dash: s.rpm > 50 || ((st.key ?? -1) >= 0 && (st.key ?? -1) < 3) ? st.dash : 0,
       dome: st.dome,
     };
     m.setLights(lights);
@@ -140,6 +142,17 @@ export class CarRig {
         hand: s.hb > 0.5,
         helps: s.helping !== 0,
       };
+      // (plan 98 phase 7: the key turned — the needles and the bar swept up and back, every lamp lit a second)
+      const key = st.key ?? -1;
+      if (key >= 0 && key < 1.2) {
+        const sw = Math.sin(Math.PI * Math.min(1, key / 1.0));
+        c.rpm = Math.max(c.rpm, 7000 * sw);
+        c.kmh = Math.max(c.kmh, 220 * sw);
+        c.hand = true;
+        c.helps = true;
+        c.beams = "high";
+        c.ind = 1;
+      }
       m.setCluster(c);
     }
     // the wipers: a sweep out and back, faster on 2 and 3, resting on 0

@@ -482,9 +482,12 @@ export class CarSound {
 
   /** The starter: the picked recording's crank and catch (the voice's set's own if none); if neither's in
    *  within half a second, the synth's cranking (longer cold) and then it catches. */
-  start(cold: number) {
+  /** The starter turned over and the engine catching (its kind's recorded take, else made); `catchIn` (s, plan 98
+   *  phase 7): when the driver's engine runs — the take started part-way through its crank, so it catches then. */
+  start(cold: number, catchIn?: number) {
     let done = false;
     this.crank = 9; // (quiet till it's known which)
+    const asked = this.ctx.currentTime;
     const go = () => {
       if (done || this.dead) return;
       done = true;
@@ -495,19 +498,23 @@ export class CarSound {
       if (buf && buf.duration > 1.2) {
         const t = c.currentTime;
         const len = Math.min(5, buf.duration);
+        // (the loops come in a second before its end: started that far in, it catches when the engine runs)
+        const want = catchIn === undefined ? null : catchIn - (t - asked);
+        const off = want === null ? 0 : Math.max(0, Math.min(len - 1.2, len - 1.0 - want));
         const src = c.createBufferSource();
         src.buffer = buf;
         const g = c.createGain();
         const lvl = 0.35 * (this.inside ? 0.6 : 1);
+        const t0 = t - off;
         g.gain.setValueAtTime(lvl, t);
-        g.gain.setValueAtTime(lvl, t + len - 0.8);
-        g.gain.linearRampToValueAtTime(0.0001, t + len);
+        g.gain.setValueAtTime(lvl, Math.max(t, t0 + len - 0.8));
+        g.gain.linearRampToValueAtTime(0.0001, t0 + len);
         src.connect(g).connect(this.rec.lp);
-        src.start(t);
-        src.stop(t + len + 0.05);
+        src.start(t, off);
+        src.stop(t0 + len + 0.05);
         this.keep(src);
         this.crank = 0.3;
-        this.startAt = t;
+        this.startAt = t0;
         this.startLen = len;
       } else if (this.voice) {
         // (a short take — a V8's catch: the synth's crank, then it as the engine fires)
@@ -608,8 +615,16 @@ export class CarSound {
     if (this.dead || !this.voice) return;
     const c = this.ctx;
     const g = c.createGain();
-    g.gain.value = 1;
-    g.connect(this.dest);
+    // (plan 98 phase 7: from where the car is as it's switched off — not straight in the ears, wherever one walks)
+    g.gain.value = Math.max(0.05, this.out.gain.value);
+    const p = c.createPanner();
+    p.panningModel = this.panner.panningModel;
+    p.distanceModel = "linear";
+    p.rolloffFactor = 0;
+    p.positionX.value = this.panner.positionX.value;
+    p.positionY.value = this.panner.positionY.value;
+    p.positionZ.value = this.panner.positionZ.value;
+    g.connect(p).connect(this.dest);
     this.shot("stop", 0.4, { to: g });
     // (the tick: a few dry clicks over the next seconds, made — nothing recorded fitted)
     const t0 = c.currentTime + 1.2;
@@ -630,7 +645,10 @@ export class CarSound {
       n.start(at, Math.random());
       n.stop(at + 0.05);
     }
-    setTimeout(() => g.disconnect(), 9000);
+    setTimeout(() => {
+      g.disconnect();
+      p.disconnect();
+    }, 9000);
   }
 
   /** The police car's siren: the recording; till it's in, a two-tone wail (a sawtooth swept every 3.6 s). */

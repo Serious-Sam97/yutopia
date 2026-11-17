@@ -501,6 +501,9 @@ interface LiveView {
       pull?: Object3D;
       /** (plan 98) the door frame's top at its back: a mark on it */
       top?: Object3D;
+      /** (plan 98 phase 7) their belt on; the key's chime last rung (its count) */
+      belted?: boolean;
+      chimed?: number;
       /** (plan 98) the act's pose as last worked out, and where they stood as it began (the body's frame) */
       act?: ActPose;
       from?: { x: number; z: number; yaw: number };
@@ -516,6 +519,8 @@ interface LiveView {
   doorUntil: number[];
   /** (plan 93 C) a door held by someone getting in or out: its opening (−1: nobody's — the timer's) */
   doorBy: number[];
+  /** (plan 98 phase 7) its engine's flag as last heard (undefined: not heard yet) */
+  engOn?: boolean;
   /** (plan 98 phase 6) each door's swing (rad/s); its velocity last frame (what swings them) */
   doorW?: number[];
   /** (plan 98) a door the timer opened: shut by it too */
@@ -790,6 +795,10 @@ export class Cars {
     simMs: number;
     sound: CarSound | null;
     started: boolean;
+    /** (plan 98 phase 7) the starter turning since (this.time) for how long; when the key was turned */
+    crankAt?: number;
+    crankS?: number;
+    keyAt?: number;
     // its wear as I drive it (sent now and then: car:wear), the last knock counted
     grime: number;
     dmg: Damage;
@@ -899,6 +908,8 @@ export class Cars {
   private fires: Fires;
   private patches: RoadPatches;
   private cabin: CabinLight;
+  /** (plan 98 phase 7) my car's dome light, eased (0..1) */
+  private domeK = 0;
   private mirror: { vid: string; m: Mirror } | null = null;
   private screen: { vid: string; s: ScreenSnow } | null = null;
   private radio = new Radio();
@@ -1905,7 +1916,10 @@ export class Cars {
       // (a minute's driving clears a misted screen, out of a storm: the heater, the air over it)
       if (storm < 0.1 && speed > 2)
         this.screen.s.amount = Math.max(0, this.screen.s.amount - (dt * Math.min(1, speed / 10)) / 45);
-      this.cabin.step(l.model, night);
+      // (plan 98 phase 7: the dome light on while a door's open — and as I get in —, fading after)
+      const open = l.doors.some((d) => d > 0.05) || (this.myActT() ?? 99) < ENTER_S;
+      this.domeK = Math.max(0, Math.min(1, this.domeK + (open ? dt / 0.25 : -dt / 2.5)));
+      this.cabin.step(l.model, night, this.domeK);
       const tp = this.host.tp();
       const mirror = gfxNow().mirror;
       if (this.cam.mode === "cockpit" && tp && mirror !== "off") {
@@ -2009,6 +2023,35 @@ export class Cars {
     }
     const s = l.sound ?? (this.mine?.vid === l.id ? this.mine.sound : null);
     s?.door(open);
+  }
+  /** (plan 98 phase 7) The key's chime (in, the driver's door open): a soft two-note ding from the dash. */
+  private chime(at: Vector3) {
+    const ctx = mixer.ctx;
+    if (!ctx || ctx.state !== "running") return;
+    const local = this.root.worldToLocal(hF.copy(at));
+    const heard = this.heardAt(local.x, local.y, local.z);
+    const g = ctx.createGain();
+    const t = ctx.currentTime;
+    const lvl = 0.05 * (heard ? distanceGain(heard.dist) : 1);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(lvl, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    const p = ctx.createPanner();
+    p.panningModel = "HRTF";
+    const w = heard?.at ?? { x: 0, y: 0, z: -1 };
+    p.positionX.value = w.x;
+    p.positionY.value = w.y;
+    p.positionZ.value = w.z;
+    g.connect(p).connect(mixer.buses.effects);
+    for (const f of [1318, 1976]) {
+      const o = ctx.createOscillator();
+      o.type = "sine";
+      o.frequency.value = f;
+      o.connect(g);
+      o.start(t);
+      o.stop(t + 0.42);
+    }
+    setTimeout(() => p.disconnect(), 600);
   }
   /** (plan 98 phase 6) A parked car's boot or bonnet heard from its end. */
   private lidHeard(id: string, which: "boot" | "bonnet", gain: number) {
@@ -2645,7 +2688,7 @@ export class Cars {
           const vv = (room.state.vehicles.get(l.id) as VehWire | undefined)?.via ?? -1;
           if (vv > 0 && l.model.seats[vv] && !seats[vv]) via = vv;
         }
-        e = { m, seat: i, key, at, via };
+        e = { m, seat: i, key, at, via, belted: at < 0 };
         // (plan 98: in from where I stood — my walker's place —: the act's first beat steps onto the door's spot)
         if (at === this.time && sid === room.sessionId) {
           const me = this.host.me();
@@ -3020,6 +3063,24 @@ export class Cars {
       const to = out && p ? this.bodyPoint(l, p.x, p.y) : null;
       act = actAt(way, Math.max(0, t), out, out ? null : (e.from ?? null), to, (e.act ??= newActPose()));
       this.doorMarks(l, e, door, way);
+      // (plan 98 phase 7) the belt clicked home as they settle, undone as they start out; the key's chime with the
+      // driver's door open on the way out
+      const hipW = l.model.body.localToWorld(hA.copy(way.hip));
+      if (!out && t >= ENTER_S - 0.3 && !e.belted) {
+        e.belted = true;
+        this.bodyShot("belt", 0.2, hipW);
+      }
+      if (out && e.belted && t > 0.05) {
+        e.belted = false;
+        this.bodyShot("belt", 0.16, hipW);
+      }
+      if (out && way.driver && sid === this.host.room()?.sessionId && t > 0.25 && t < 1.7) {
+        const k = Math.floor((t - 0.25) / 0.55);
+        if (k !== e.chimed) {
+          e.chimed = k;
+          this.chime(hipW);
+        }
+      }
     } else if (!out && via !== undefined && t >= ENTER_S) {
       const k = ease((t - ENTER_S) / SLIDE_S);
       const a = mod.seats[via].hip;
@@ -4028,9 +4089,18 @@ export class Cars {
   private hearRemote(l: LiveView, s: Sample, sp: number, dt: number) {
     const me = this.host.me();
     const d = Math.hypot(l.pose.p.x - me.x, l.pose.p.z - me.y);
-    const on = d < HEARD && !!(s.fl & CAR_FLAGS.engine) && mixer.ctx?.state === "running";
-    if (on && !l.sound && mixer.ctx) l.sound = soundOf(mixer.ctx, l.kind, l.look.variant);
+    const flag = !!(s.fl & CAR_FLAGS.engine);
+    const was = l.engOn;
+    l.engOn = flag;
+    const on = d < HEARD && flag && mixer.ctx?.state === "running";
+    if (on && !l.sound && mixer.ctx) {
+      l.sound = soundOf(mixer.ctx, l.kind, l.look.variant);
+      // (plan 98 phase 7: switched on while I'm near — its starter heard, not just its engine)
+      if (was === false) l.sound?.start(0.4);
+    }
     if (!on && l.sound) {
+      // (switched off — not only gone out of earshot: its stop and its tick as it cools)
+      if (was && !flag) l.sound.switchOff();
       l.sound.dispose();
       l.sound = null;
     }
@@ -4277,17 +4347,29 @@ export class Cars {
         m.sound?.switchOff();
         this.host.toast(t("carShotDead"));
       }
+      // (plan 98 phase 7, F6a) sat: the key turned — the dash's self-test, the starter cranking (longer cold) and
+      // heard by others, then it catches; the throttle cuts the crank short
       if (!dead && !getting && (!m.started || (m.dry && s.fuel > 0.3 && !vw?.filling))) {
-        m.started = true;
-        m.dry = false;
-        setEngine(s, true);
-        if (mixer.ctx && s.rpm > 0) {
-          const fresh = !m.sound;
-          m.sound ??= soundOf(mixer.ctx, l.kind, l.look.variant);
-          if (fresh && m.seat === 0) m.sound?.belt();
-          m.sound?.start(1 - s.temp / 0.55);
+        if (m.crankAt === undefined) {
+          const cold = Math.max(0, Math.min(1, 1 - s.temp / 0.55));
+          m.crankAt = this.time;
+          m.keyAt = this.time;
+          m.crankS = 0.8 + 0.7 * cold;
+          if (mixer.ctx) {
+            m.sound ??= soundOf(mixer.ctx, l.kind, l.look.variant);
+            m.sound?.start(cold, m.crankS);
+          }
+        }
+        const cr = this.time - m.crankAt;
+        if (c.up > 0.5 && (m.crankS ?? 0) - cr > 0.3) m.crankS = cr + 0.3;
+        if (cr >= (m.crankS ?? 0)) {
+          m.crankAt = undefined;
+          m.started = true;
+          m.dry = false;
+          setEngine(s, true);
         }
       }
+      if (m.rig) m.rig.state.key = m.keyAt !== undefined && this.time - m.keyAt < 3 ? this.time - m.keyAt : -1;
       if (s.fuel <= 0 && !m.dry) {
         m.dry = true;
         this.host.toast(t("carDry"));
@@ -4585,7 +4667,8 @@ export class Cars {
     if (this.hornNow()) f |= CAR_FLAGS.horn;
     if (this.wipers & 1) f |= CAR_FLAGS.wipers1;
     if (this.wipers & 2) f |= CAR_FLAGS.wipers2;
-    if (s.rpm > 50) f |= CAR_FLAGS.engine;
+    // (plan 98: cranking — others hear the starter from the flag's rise)
+    if (s.rpm > 50 || this.mine?.crankAt !== undefined) f |= CAR_FLAGS.engine;
     if (s.hb > 0.5) f |= CAR_FLAGS.hand;
     if (this.siren) f |= CAR_FLAGS.siren;
     f |= (this.station & 3) << 14;

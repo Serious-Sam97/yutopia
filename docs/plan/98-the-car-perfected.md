@@ -363,3 +363,18 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
 - Checked: `door.test.ts` (still at rest, flung open braking, slammed latched pulling away, pressed shut by the air);
   `e2e/car-jump.mts` (out at 27 km/h: down on the ragdoll, her door flung to its stop and staying there as the car
   rolls to a stop); typecheck clean.
+
+## Phase 7 — built (2026-11-17): starting and stopping
+
+- **The key (F6a):** once sat, the starter cranks 0.8 s (+0.7 cold) before the engine runs; the throttle cuts it to
+  0.3 s more. The recorded starter take is started part-way through its crank so it catches when the engine runs
+  (`CarSound.start(cold, catchIn)`). Nothing drives or starts while getting in.
+- **The dash's self-test:** from the key, the rev bar and the speedo swept up and back over a second, every lamp
+  lit, the dash lit while cranking (`RigState.key`).
+- **Heard by others:** the engine's flag goes up as the starter turns, so other people's screens play the starter
+  on its rise (only switched on near them, not on coming into earshot); on its fall the stop and the cooling ticks.
+- **The cooling ticks from where the car is** (they went straight into the ears, full level, wherever one walked).
+- **Belts for every seat:** clicked home as each settles, undone as they start out (the driver alone before).
+- **The key's chime** with the driver's door open on the way out; **the dome light** on while a door's open and as
+  I get in, fading over 2.5 s after (through the cabin's light, a little by day, full at night).
+- Checked: `e2e/car-jump.mts` logs the start (cranking from 2.8 s, running ~1 s later, then driven); typecheck clean.

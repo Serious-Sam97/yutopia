@@ -574,7 +574,8 @@ export class CabinLight {
   constructor(G: typeof GroundsModule) {
     this.lamps = [...G.LAMPS.map((l) => ({ x: l.x, z: l.z })), ...lotLayout().lamps];
   }
-  step(model: Sedan, night: number) {
+  /** (plan 98 phase 7: `dome` its own dome lamp, 0..1 — on while a door's open, fading after) */
+  step(model: Sedan, night: number, dome = 0) {
     model.root.updateMatrixWorld();
     const p = model.root.position;
     let k = 0;
@@ -583,7 +584,7 @@ export class CabinLight {
         const d2 = (l.x - p.x) ** 2 + (l.z - p.z) ** 2;
         if (d2 < 100) k += Math.exp(-d2 / 16);
       }
-    this.light.intensity = Math.min(1.4, k) * night * 0.9;
+    this.light.intensity = Math.max(Math.min(1.4, k) * night * 0.9, dome * (0.25 + 0.75 * night) * 1.1);
     if (this.light.parent !== model.body) model.body.add(this.light);
     this.light.position.set(0.1, 1.42, 0);
   }

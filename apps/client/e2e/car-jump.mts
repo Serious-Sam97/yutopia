@@ -69,6 +69,14 @@ await page.waitForFunction(() => {
   const C = (window as any).__yutopia.cars;
   return C.live.get(C.mine.vid)?.model.ready !== false;
 }, null, { timeout: 15_000 });
+for (let i = 0; i < 6; i++) {
+  await page.waitForTimeout(700);
+  console.log("state", JSON.stringify(await page.evaluate(() => {
+    const C = (window as any).__yutopia.cars;
+    const m = C.mine;
+    return { started: m?.started, crankAt: m?.crankAt, crankS: m?.crankS, rpm: m?.sim?.rpm, actT: C.myActT(), t: C.time };
+  })));
+}
 await page.keyboard.down("KeyW");
 await page.waitForFunction(() => {
   const C = (window as any).__yutopia.cars;
