@@ -557,12 +557,79 @@ export class ScreenSnow {
       return;
     }
     const k = on < 0.4 ? 0 : on < 0.75 ? 1 : 2;
+    // (plan 98 phase 19) the wipers going: the glass as it is — the arc each blade swept since the last frame wiped
+    // off it, the snow or the rain coming back over it as it falls — not a picture with a fixed fan
+    if (wipers > 0) {
+      const base = this.get(false, k, rain);
+      if (base) {
+        this.live(base, `${rain}|${k}`, dt, rain ? 0.35 + raining : 0.1 + snowing * 0.5);
+        return;
+      }
+    }
+    this.liveKey = "";
     const t = this.get(wipers > 0, k, rain);
     if (t) this.model.setScreenSnow(t);
+  }
+  private liveC: HTMLCanvasElement | null = null;
+  private liveT: CanvasTexture | null = null;
+  private liveKey = "";
+  private bladeWas: number[] = [];
+  private live(base: Texture, key: string, dt: number, refill: number) {
+    const img = base.image as HTMLCanvasElement;
+    if (!this.liveC || this.liveC.width !== img.width || this.liveC.height !== img.height) {
+      this.liveC = document.createElement("canvas");
+      this.liveC.width = img.width;
+      this.liveC.height = img.height;
+      this.liveT?.dispose();
+      this.liveT = new CanvasTexture(this.liveC);
+      this.liveT.colorSpace = base.colorSpace;
+      this.liveKey = "";
+    }
+    const g = this.liveC.getContext("2d") as CanvasRenderingContext2D;
+    const W = img.width;
+    const H = img.height;
+    if (this.liveKey !== key) {
+      this.liveKey = key;
+      g.clearRect(0, 0, W, H);
+      g.drawImage(img, 0, 0);
+    } else {
+      // (it comes back as it falls)
+      g.globalAlpha = Math.min(1, dt * refill);
+      g.drawImage(img, 0, 0);
+      g.globalAlpha = 1;
+    }
+    // (each blade: the arc between where it was and where it is, wiped)
+    const s = this.model.screen;
+    const px = W / (2 * s.hw0);
+    g.save();
+    g.globalCompositeOperation = "destination-out";
+    g.fillStyle = "rgba(0,0,0,0.92)";
+    this.model.wipers.forEach((w, i) => {
+      const f = w.fan ?? { park: w.park, sweep: w.sweep };
+      const u = (w.arm.rotation.z - w.park) / (w.sweep - w.park || 1);
+      const a = f.park + (f.sweep - f.park) * u;
+      const was = this.bladeWas[i] ?? a;
+      this.bladeWas[i] = a;
+      const a0 = Math.min(a, was) - 0.03;
+      const a1 = Math.max(a, was) + 0.03;
+      const cx = ((w.pivot + s.hw0) / (2 * s.hw0)) * W;
+      const cy = H;
+      g.beginPath();
+      g.arc(cx, cy, w.len * px, -a1, -a0, false);
+      g.arc(cx, cy, (w.len - w.blade) * px, -a0, -a1, true);
+      g.closePath();
+      g.fill();
+    });
+    g.restore();
+    (this.liveT as CanvasTexture).needsUpdate = true;
+    this.model.setScreenSnow(this.liveT);
   }
   dispose() {
     for (const t of this.tex.values()) t.dispose();
     this.tex.clear();
+    this.liveT?.dispose();
+    this.liveT = null;
+    this.liveC = null;
     this.model.setScreenSnow(null);
   }
 }

@@ -525,3 +525,12 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
 - The key-on sweep and the lamps' self-test: phase 7.
 - Not done: the dash face's shape (a flat slab in the Blender files — a model change, at the near model's 90k budget).
 - Checked: typecheck clean.
+
+## Phase 19 — built in part (2026-11-17): glass and weather
+
+- **The wipers clear what they sweep** (`fx.ts ScreenSnow.live`): while they go, the windscreen's snow or rain is a live
+  picture — each blade's arc between where it was last frame and where it is now wiped off it, the weather coming back
+  over all of it as it falls (snow slower than rain) — not one of three baked pictures with a fixed fan.
+- Not done: drops running up the glass with speed, frost on the side and rear glass parked, the rear demister's
+  lines, the morning's mist as its own haze (only the windscreen carries weather in the models).
+- Checked: typecheck clean. Stills with phase 27.
