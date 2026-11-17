@@ -268,3 +268,32 @@ test("a tab back from the background (3 s of nothing): caught up at once, not ra
   assert.ok(Math.abs(x - truthAt(pb.rt).x) < 1, "where the driver had it");
   assert.ok(Math.abs(7000 - 30 - pb.delay - pb.rt) < 400, `the clock caught up: rt ${pb.rt}`);
 });
+
+test("a frame whose time ran back (a stalled tab's frame after the timer's): still a number, never NaN", () => {
+  // (2026-11-17: the world loop's two clocks — the timer's performance.now() ahead of a stalled rAF's
+  // timestamp — gave a frame a dt below 0; with no correction to ease out, 0 · ∞ made the car NaN for
+  // good, and its passenger, their camera and every sound with it)
+  const pb = new CarPlayback<PlaybackSample>();
+  const parked = (st: number): PlaybackSample => ({
+    st,
+    p: new Vector3(337.8, 2.04, -399.3),
+    q: new Quaternion(0, 1, 0, 0),
+    v: new Vector3(),
+  });
+  let now = 0;
+  for (let k = 1; k <= 20; k++) {
+    now += 50;
+    pb.push(parked(k * 50), now, 0);
+    pb.pose(now, 0.05);
+  }
+  for (const dt of [-0.016, -0.25, 0]) {
+    const { pose } = pb.pose(now, dt);
+    for (const n of [pose.p.x, pose.p.y, pose.p.z, pose.q.x, pose.q.y, pose.q.z, pose.q.w, pose.v.x])
+      assert.ok(Number.isFinite(n), `dt ${dt}: ${pose.p.toArray()} ${pose.q.toArray()}`);
+  }
+  // and on again after it: where it's parked
+  now += 50;
+  pb.push(parked(21 * 50), now, 0);
+  const { pose } = pb.pose(now, 1 / 60);
+  assert.ok(Math.abs(pose.p.x - 337.8) < 1e-6 && Math.abs(pose.p.z + 399.3) < 1e-6, `${pose.p.toArray()}`);
+});

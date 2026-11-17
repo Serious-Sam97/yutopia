@@ -524,6 +524,10 @@ export class WorldController {
       const cap = this.quality.fpsCap(t);
       const every = cap ? Math.max(1, Math.round(1000 / this.rafGap / cap)) : 1;
       if (++this.tick % every) return;
+      // (a rAF's time is when its frame began: a stalled tab's slow timer below may have stepped the
+      // world to performance.now() since — past it. Nothing new to step then, and never a frame back
+      // in time: a dt below 0 made a car's playback NaN, its passenger and their camera with it)
+      if (t <= this.lastFrame) return;
       const dt = Math.min(0.1, (t - this.lastFrame) / 1000);
       this.lastFrame = t;
       this.frame(dt, t);

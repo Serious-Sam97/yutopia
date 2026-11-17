@@ -119,6 +119,9 @@ export class CarPlayback<S extends PlaybackSample> {
    *  state up to the playback clock (its lamps, its wheels' steer). */
   pose(now: number, dt: number): { pose: PlaybackPose; at: S | undefined } {
     if (!this.buf.length) return { pose: this.shown, at: undefined };
+    // (a frame's time never runs back here: below 0 the catch-up below went negative and 0 · ∞ made
+    // the correction — and the car, for good — NaN)
+    dt = Math.max(0, dt) || 0;
     const goal = this.target(now);
     const off = goal - this.rt;
     if (Math.abs(off) > RESYNC_MS) {
@@ -142,7 +145,7 @@ export class CarPlayback<S extends PlaybackSample> {
     const k = Math.exp((-dt * 1000) / ERR_TAU);
     const e = this.errP.length();
     const most = (CATCH_UP * sp + 2) * dt;
-    this.errP.multiplyScalar(e * (1 - k) > most ? (e - most) / e : k);
+    if (e > 0) this.errP.multiplyScalar(e * (1 - k) > most ? (e - most) / e : k);
     qa.identity();
     this.errQ.slerp(qa, 1 - k);
     if (sp > MOVING) {
