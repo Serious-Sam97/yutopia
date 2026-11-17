@@ -519,7 +519,8 @@ export class PhysicsWorld {
   }
 
   // ── things that fall (docs/plan/50 F; guardrail 2: LinearCast, always) ──
-  addThing(t: Thing, x: number, y: number, z: number): number | null {
+  /** A thing (a ball, a crate) let go at (x, y, z), moving `v` (plan 94 P1: thrown by a blast). */
+  addThing(t: Thing, x: number, y: number, z: number, v?: [number, number, number]): number | null {
     if (!this.room(`a ${t.kind}`)) return null;
     const J = this.J;
     let st: Jolt.ShapeSettings;
@@ -533,6 +534,7 @@ export class PhysicsWorld {
     const bcs = this.settings(shape, x, y, z, 0, J.EMotionType_Dynamic, MOVING);
     bcs.mMotionQuality = J.EMotionQuality_LinearCast;
     if (t.kind === "ball") bcs.mRestitution = 0.3;
+    if (v) bcs.mLinearVelocity.Set(v[0], v[1], v[2]);
     const id = this.nextThing++;
     this.things.set(id, this.make(bcs, true));
     this.letGo(shape);

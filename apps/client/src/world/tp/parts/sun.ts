@@ -14,6 +14,7 @@ export type SunHost = Pick<
   | "camera"
   | "dark"
   | "deaths"
+  | "fireLights"
   | "flares"
   | "groundPool"
   | "hour"
@@ -180,6 +181,20 @@ export class Sun {
           color: 0xfff1d8,
         });
     }
+    // (plan 94 P1) cars on fire, and their blasts: orange, flickering, a flash at a blast — before the lamps
+    for (const o of this.c.fireLights) {
+      const d = Math.hypot(o.x - this.c.target.x, o.y - this.c.target.z);
+      if (d < GROUND_REACH && o.k > 0.02)
+        near.push({
+          x: o.x,
+          y: o.y,
+          h: o.z,
+          c: { ...FIRE_LAMP, radius: FIRE_LAMP.radius * Math.min(2.5, Math.sqrt(o.k)), intensity: FIRE_LAMP.intensity * o.k },
+          d: -2.5,
+          flare: true,
+          color: 0xff8a3a,
+        });
+    }
     // flares first, day or night: red, ~6 over 11 tiles (the mocks' 02-hud-night), flickering
     // (my floor's: dark/arms.ts hands over only those)
     for (const f of this.c.flares) {
@@ -245,6 +260,8 @@ const GROUND_LAMP: Record<string, { h: number; radius: number; intensity: number
 
 const STAND_LIGHTS = KART_LAND ? standLights() : [];
 
+// (plan 94 P1) a car on fire: orange, over its bonnet, as far as a town lamp
+const FIRE_LAMP = { h: 0, radius: 11, intensity: 9 };
 // a flare burning on the snow (docs/plan/30-the-dark.md D6), lighting like a ground lamp, red
 const FLARE_LAMP = { h: 0.5, radius: 8, intensity: 6 };
 

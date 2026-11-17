@@ -301,6 +301,12 @@ export async function runSheet(el: HTMLElement): Promise<() => void> {
     st,
     make,
     pose,
+    // (the mocks' stills: plan 94 phase 0)
+    cam,
+    scene,
+    renderer,
+    sun,
+    sky,
     get car() {
       return car;
     },

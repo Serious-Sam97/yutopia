@@ -146,6 +146,10 @@ const SLOTS = {
   "hit-light": ["shot", ["car bump", "car door bump", "light car impact"], [0.2, 10], 4],
   "hit-mid": ["shot", ["car crash", "car impact metal", "car collision"], [0.2, 10], 4],
   "hit-heavy": ["shot", ["car crash heavy", "big car crash", "metal crash heavy"], [0.3, 15], 4],
+  // (plan 94 P1) a car on fire: its bed (flames roaring and crackling), the moment it catches, the blast
+  fire: ["loop", ["car fire burning", "car on fire", "vehicle fire", "fire burning large", "fire roaring crackling", "bonfire crackling"], [10, 300], 5],
+  "fire-catch": ["shot", ["fire ignite whoosh", "fire whoosh", "gasoline ignite", "petrol ignition fire"], [0.3, 8], 4],
+  blast: ["shot", ["car explosion", "vehicle explosion", "explosion large", "big explosion", "explosion debris"], [1, 15], 6],
   "hit-glass": ["shot", ["car window smash", "glass shatter", "glass break"], [0.2, 10], 4],
   "hit-post": ["shot", ["metal pole hit", "hit metal post", "metal pipe impact"], [0.2, 10], 4],
   "hit-tree": ["shot", ["wood impact heavy", "tree trunk hit", "wood thud"], [0.2, 10], 4],
@@ -172,6 +176,13 @@ const SLOTS = {
     ["Chippy569:162529", "semenov_nick:380724"],
   ],
   bonnet: ["shot", ["car hood close", "car bonnet close", "hood slam"], [0.3, 20], 4, ["microman502:865230"]],
+  // (plan 95 F1a) a power window wound down or up: its motor's whine, the glass's slide, the stop
+  window: [
+    "shot",
+    ["car power window", "electric car window", "power window motor", "car window up down", "car electric window"],
+    [0.6, 20],
+    6,
+  ],
   handbrake: [
     "shot",
     ["handbrake car", "parking brake", "hand brake ratchet"],

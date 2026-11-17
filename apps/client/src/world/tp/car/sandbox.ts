@@ -418,6 +418,10 @@ export async function runSandbox(el: HTMLElement, o: SandboxOpts): Promise<() =>
     get model() {
       return model;
     },
+    // (plan 95 phase 3: its sound's beds read by e2e/car-squeal-pad.mts)
+    get sound() {
+      return sound;
+    },
   };
   return () => {
     cancelAnimationFrame(raf);

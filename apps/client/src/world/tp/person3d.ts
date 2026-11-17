@@ -414,6 +414,8 @@ export function seatedGun(
   barrel(out: Vector3): Vector3;
   grip(): void;
   drop(): void;
+  /** (plan 94 G2) a long gun's fore-end, where the other hand holds it (the world's); null: a pistol */
+  fore(out: Vector3): Vector3 | null;
 } | null {
   const kind = gunKind(key);
   const tpl = tplOf(kind);
@@ -512,6 +514,14 @@ export function seatedGun(
     drop() {
       root.removeFromParent();
       model.hold(S, null);
+    },
+    fore(out: Vector3) {
+      if (!LONG[key]) return null;
+      inner.updateWorldMatrix(true, false);
+      // (a life gun's own fore point, plan 79 — as a walker's other hand holds it: gripOnFore)
+      if (g.fore) out.set(g.fore[0], g.fore[1] - 0.045, g.fore[2]);
+      else out.set(0.15, -0.045, 0);
+      return out.applyMatrix4(inner.matrixWorld);
     },
     muzzle(out: Vector3) {
       inner.updateWorldMatrix(true, false);

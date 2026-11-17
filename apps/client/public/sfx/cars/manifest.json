@@ -1643,5 +1643,204 @@
         "snow-squeak-b.mp3"
       ]
     }
+  ],
+  "fire": [
+    {
+      "id": "843101",
+      "user": "Ñado",
+      "title": "Car fire burning tires explosion horn",
+      "url": "https://freesound.org/people/Ñado/sounds/843101/",
+      "files": [
+        "fire-a.mp3"
+      ]
+    },
+    {
+      "id": "563765",
+      "user": "florianreichelt",
+      "title": "Fire Auto - car on fire",
+      "url": "https://freesound.org/people/florianreichelt/sounds/563765/",
+      "files": [
+        "fire-b.mp3"
+      ]
+    },
+    {
+      "id": "479330",
+      "user": "DanielVega",
+      "title": "Burning(improved).wav",
+      "url": "https://freesound.org/people/DanielVega/sounds/479330/",
+      "files": [
+        "fire-c.mp3"
+      ]
+    },
+    {
+      "id": "371469",
+      "user": "cpolcyn",
+      "title": "Fire 2016-12-21",
+      "url": "https://freesound.org/people/cpolcyn/sounds/371469/",
+      "files": [
+        "fire-d.mp3"
+      ]
+    }
+  ],
+  "fire-catch": [
+    {
+      "id": "260555",
+      "user": "LookIMadeAThing",
+      "title": "Basic Fire Whoosh 2",
+      "url": "https://freesound.org/people/LookIMadeAThing/sounds/260555/",
+      "files": [
+        "fire-catch-a1.mp3"
+      ]
+    },
+    {
+      "id": "244926",
+      "user": "hnhnh",
+      "title": "fire-whoosh.wav",
+      "url": "https://freesound.org/people/hnhnh/sounds/244926/",
+      "files": [
+        "fire-catch-b1.mp3"
+      ]
+    },
+    {
+      "id": "186374",
+      "user": "samararaine",
+      "title": "Bonfire Being Lit",
+      "url": "https://freesound.org/people/samararaine/sounds/186374/",
+      "files": [
+        "fire-catch-c1.mp3"
+      ]
+    },
+    {
+      "id": "178886",
+      "user": "martian",
+      "title": "red whoosh gladiator 04.wav",
+      "url": "https://freesound.org/people/martian/sounds/178886/",
+      "files": [
+        "fire-catch-d1.mp3"
+      ]
+    }
+  ],
+  "blast": [
+    {
+      "id": "592000",
+      "user": "SamsterBirdies",
+      "title": "Large explosion",
+      "url": "https://freesound.org/people/SamsterBirdies/sounds/592000/",
+      "files": [
+        "blast-a1.mp3"
+      ]
+    },
+    {
+      "id": "235968",
+      "user": "tommccann",
+      "title": "Explosion_01.wav",
+      "url": "https://freesound.org/people/tommccann/sounds/235968/",
+      "files": [
+        "blast-b1.mp3"
+      ]
+    },
+    {
+      "id": "109739",
+      "user": "SoundCollectah",
+      "title": "hit and distant honks.aiff",
+      "url": "https://freesound.org/people/SoundCollectah/sounds/109739/",
+      "files": [
+        "blast-c1.mp3"
+      ]
+    },
+    {
+      "id": "523365",
+      "user": "LilMati",
+      "title": "Bomb Explosion",
+      "url": "https://freesound.org/people/LilMati/sounds/523365/",
+      "files": [
+        "blast-d1.mp3"
+      ]
+    },
+    {
+      "id": "162262",
+      "user": "qubodup",
+      "title": "Firing 25mm from LAVS during training",
+      "url": "https://freesound.org/people/qubodup/sounds/162262/",
+      "files": [
+        "blast-e1.mp3",
+        "blast-e2.mp3",
+        "blast-e3.mp3",
+        "blast-e4.mp3",
+        "blast-e5.mp3"
+      ]
+    },
+    {
+      "id": "186965",
+      "user": "ReadeOnly",
+      "title": "explosion1.wav",
+      "url": "https://freesound.org/people/ReadeOnly/sounds/186965/",
+      "files": [
+        "blast-f1.mp3"
+      ]
+    }
+  ],
+  "window": [
+    {
+      "id": "109194",
+      "user": "Gutek",
+      "title": "Car Power windows - electric windows .wav",
+      "url": "https://freesound.org/people/Gutek/sounds/109194/",
+      "files": [
+        "window-a1.mp3"
+      ]
+    },
+    {
+      "id": "558846",
+      "user": "DigPro120",
+      "title": "car window rolling up .mp3",
+      "url": "https://freesound.org/people/DigPro120/sounds/558846/",
+      "files": [
+        "window-b1.mp3",
+        "window-b2.mp3"
+      ]
+    },
+    {
+      "id": "369060",
+      "user": "AndrewAlexander",
+      "title": "car_window_close.wav",
+      "url": "https://freesound.org/people/AndrewAlexander/sounds/369060/",
+      "files": [
+        "window-c1.mp3",
+        "window-c2.mp3"
+      ]
+    },
+    {
+      "id": "50895",
+      "user": "RutgerMuller",
+      "title": "car electrical window 6 squeaky button closes.wav",
+      "url": "https://freesound.org/people/RutgerMuller/sounds/50895/",
+      "files": [
+        "window-d1.mp3",
+        "window-d2.mp3",
+        "window-d3.mp3"
+      ]
+    },
+    {
+      "id": "439247",
+      "user": "devy32",
+      "title": "Car electric window.wav",
+      "url": "https://freesound.org/people/devy32/sounds/439247/",
+      "files": [
+        "window-e1.mp3",
+        "window-e2.mp3",
+        "window-e3.mp3",
+        "window-e4.mp3"
+      ]
+    },
+    {
+      "id": "276293",
+      "user": "Sandermotions",
+      "title": "Car window down.WAV",
+      "url": "https://freesound.org/people/Sandermotions/sounds/276293/",
+      "files": [
+        "window-f1.mp3"
+      ]
+    }
   ]
 }

@@ -313,6 +313,11 @@ const VX_LEN = {
 // (the cars', plan 92 phase 11: a start to its idle, a crash's tail, a door's clunk and its latch)
 const CAR_LEN = {
   chirp: 0.7,
+  // (plan 94 P1) the blast with its rumble and the debris falling; the fire catching
+  blast: 6,
+  "fire-catch": 2.5,
+  // (plan 95 F1a) a window wound all the way, the stop at its end
+  window: 2.4,
   "start-four": 4,
   "start-v8": 4.5,
   "start-diesel": 5,

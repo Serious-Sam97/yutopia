@@ -145,6 +145,52 @@ const markAt: number = await page.evaluate(() => {
   __mark92();
   return t;
 });
+// (plan 94 phase 9, FIRE=1: two cars burning ahead along the street — their flames, black smoke and light, each
+// frame as fireFrame draws a real one — and 3 s in, a blast by the road with a parked car's parts thrown)
+if (process.env.FIRE)
+  await page.evaluate(() => {
+    const Y = (window as any).__yutopia;
+    const C = Y.cars;
+    const m = C.mine;
+    const s = m.sim;
+    const fx = 1 - 2 * (s.q.y * s.q.y + s.q.z * s.q.z);
+    const fz = 2 * (s.q.x * s.q.z - s.q.w * s.q.y);
+    const fl = Math.hypot(fx, fz) || 1;
+    const fires = [40, 90].map((d, i) => {
+      const x = s.p.x + (fx / fl) * d + (fz / fl) * 4;
+      const z = s.p.z + (fz / fl) * d - (fx / fl) * 4;
+      return { id: `fake${i}`, x, z, y: C.G.heightAt(x, z) + 0.8 };
+    });
+    const orig = C.fireFrame.bind(C);
+    let at = -1;
+    C.fireFrame = (dt: number, night: number) => {
+      for (const f of fires) {
+        C.fires.burn(f.id, f.x, f.y, f.z, 1);
+        if (Math.random() < dt / 0.06)
+          C.smoke.emit(f.x, f.y + 1.1, f.z, 0, 1.8, 0, 0.9, 7, 4.5, 0x1a1714, 0.8);
+      }
+      orig(dt, night);
+      Y.tp.fireLights = [...Y.tp.fireLights, ...fires.map((f) => ({ x: f.x, y: f.z, z: f.y + 0.9, k: 0.9 }))];
+      if (at < 0) at = C.time;
+      if (at >= 0 && C.time - at > 3 && !(window as any).__blasted) {
+        (window as any).__blasted = true;
+        const b = fires[0];
+        C.blastFx(b.x, b.y, b.z);
+        let best: any = null;
+        let bd = 1e9;
+        for (const p of C.parked.values()) {
+          if (!p.full?.ready) continue;
+          const d = Math.hypot(p.pose.x - b.x, p.pose.z - b.z);
+          if (d < bd) {
+            bd = d;
+            best = p;
+          }
+        }
+        if (best) C.partsOff(best.full, 0xffff, { x: 0, y: 7.5, z: 0 });
+        (window as any).__debris = C.debris.bits.length;
+      }
+    };
+  });
 await page.keyboard.down("KeyW");
 let top = 0;
 for (let i = 0; i < 24; i++) {
@@ -154,6 +200,8 @@ for (let i = 0; i < 24; i++) {
   console.log(`  t ${(i + 1) * 0.5}s x ${p?.x.toFixed(0)} z ${p?.z.toFixed(0)} v ${((p?.v ?? 0) * 3.6).toFixed(0)}`);
 }
 await page.keyboard.up("KeyW");
+if (process.env.FIRE)
+  console.log("  fire: blasted", await page.evaluate(() => !!(window as any).__blasted), "debris", await page.evaluate(() => (window as any).__debris));
 const f: number[] = await page.evaluate(() => (window as any).__f);
 const st: number[][] = await page.evaluate(() => (window as any).__s ?? []);
 const stalls = st.filter(([, d]) => d > 90);

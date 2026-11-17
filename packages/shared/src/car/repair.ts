@@ -7,7 +7,7 @@
 // At the gas station's bay (the car at a pump) the garage has everything; anywhere else it's a wrench from the
 // pack, and the glass waits for the garage. There's no money in the world: the garage's is free, but it takes
 // the time all the same. Pure: the server mends (features/cars.ts car:mend), the client shows what's next.
-import { type Damage, FLATS, PART, steamOf } from "./damage.ts";
+import { type Damage, FLATS, GLASS_BITS, PART, steamOf } from "./damage.ts";
 
 export type Mend = "engine" | "lamps" | "panels" | "glass" | "tyre";
 
@@ -25,15 +25,18 @@ export const MEND_REACH = 1.3;
 export const spareOf = (props: Record<string, unknown> | null | undefined): number => (props?.spare === 0 ? 0 : 1);
 
 const LAMPS = PART.headL | PART.headR | PART.tailL | PART.tailR;
-const GLASS = PART.screen | PART.screenBad | PART.sideL | PART.sideR;
+const GLASS = GLASS_BITS;
 const BODY = PART.bumperHang | PART.bumperGone | PART.mirrorL | PART.mirrorR;
 
 /** What's next under the bonnet, in order (the engine first: it's what stops you), or null: nothing there to mend
  *  — or only the glass, and this isn't the garage. */
 export function nextMend(dm: Damage, garage: boolean): Exclude<Mend, "tyre"> | null {
+  // (plan 94 P1: burning or burnt out — nothing to mend; it's towed, and made new)
+  if ((dm.fire ?? 0) >= 2) return null;
   if (dm.parts & PART.engineDead || steamOf(dm) > 0) return "engine";
   if (dm.parts & LAMPS) return "lamps";
-  if (dm.parts & BODY || dm.zones.some((z) => z > 0.05)) return "panels";
+  // (plan 94 P2: what's come off or hangs — put back with the panels)
+  if (dm.parts & BODY || dm.wreck || dm.zones.some((z) => z > 0.05)) return "panels";
   if (garage && dm.parts & GLASS) return "glass";
   return null;
 }
@@ -50,10 +53,12 @@ export function mayMend(what: Mend, o: { garage: boolean; wrench: boolean; spare
 /** Mended (a new damage): `wheel` for a tyre. The panels: the worst side's dents out (a zone a time), with the
  *  bumper and mirrors. Returns the zone the panels were knocked out of (its holes go too), else −1. */
 export function mend(dm: Damage, what: Mend, wheel = 0): { dm: Damage; zone: number } {
-  const out: Damage = { zones: dm.zones.slice(), parts: dm.parts };
+  const out: Damage = { zones: dm.zones.slice(), parts: dm.parts, wreck: dm.wreck ?? 0, fire: dm.fire ?? 0 };
   let zone = -1;
   if (what === "engine") {
     out.parts &= ~PART.engineDead;
+    // (plan 94 P1: its smoke out with it)
+    if (out.fire === 1) out.fire = 0;
     // (the radiator's patched: no steam — the front's dent itself is the panels')
     out.zones[0] = Math.min(out.zones[0], 0.75);
   } else if (what === "lamps") out.parts &= ~LAMPS;
@@ -61,6 +66,7 @@ export function mend(dm: Damage, what: Mend, wheel = 0): { dm: Damage; zone: num
   else if (what === "tyre") out.parts &= ~FLATS[wheel & 3];
   else {
     out.parts &= ~BODY;
+    out.wreck = 0;
     let worst = 0;
     for (let i = 1; i < 5; i++) if (out.zones[i] > out.zones[worst]) worst = i;
     if (out.zones[worst] > 0.05) {
@@ -71,11 +77,23 @@ export function mend(dm: Damage, what: Mend, wheel = 0): { dm: Damage; zone: num
   return { dm: out, zone };
 }
 
-/** A car's holes (shot.ts' string) without those in a side (`face`) just mended. */
+/** A car's holes (shot.ts' string) without those in a side (`face`) just mended — its glass's stars kept (plan 95
+ *  F5a: an 8th field, its pane, 0 or more; plan 96: −1 when it's a part's): new glass takes those (`glassless`). */
 export function holesWithout(s: string, face: number): string {
   if (!s || face < 0) return s;
   return s
     .split(";")
-    .filter((h) => Number(h.split(",")[3]) !== face)
+    .filter((h) => {
+      const f = h.split(",");
+      return Number(f[7] ?? -1) >= 0 || Number(f[3]) !== face;
+    })
+    .join(";");
+}
+/** (plan 95 F5a) A car's holes without its glass's: new glass in. */
+export function glassless(s: string): string {
+  if (!s) return s;
+  return s
+    .split(";")
+    .filter((h) => !(Number(h.split(",")[7] ?? -1) >= 0))
     .join(";");
 }

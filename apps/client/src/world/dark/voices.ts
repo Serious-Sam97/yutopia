@@ -511,10 +511,11 @@ export class DarkSound {
     }
     if (!l) return;
     const t = ctx.currentTime;
-    l.gain.gain.setTargetAtTime(level, t, 0.25);
-    l.pan.pan.setTargetAtTime(pan, t, 0.1);
-    l.src.playbackRate.setTargetAtTime(rate, t, 0.2);
-    if (level <= 0.005 && l.gain.gain.value < 0.003) {
+    const lv = Number.isFinite(level) ? level : 0;
+    l.gain.gain.setTargetAtTime(lv, t, 0.25);
+    l.pan.pan.setTargetAtTime(Number.isFinite(pan) ? pan : 0, t, 0.1);
+    l.src.playbackRate.setTargetAtTime(Number.isFinite(rate) ? rate : 1, t, 0.2);
+    if (lv <= 0.005 && l.gain.gain.value < 0.003) {
       l.src.stop();
       l.gain.disconnect();
       this.loops.delete(name);
@@ -533,8 +534,10 @@ export class DarkSound {
     const room = ctl.room;
     if (this.made.size) this.ready(); // (the sound came on after they were made)
     if (!this.ctx() || !room) return;
-    const out = this.walker.outside;
     const me = this.walker.where();
+    // (plan 96: sat in a car — a passenger getting in — the walker's place can be no number: not out, then; its
+    // sounds' levels never NaN — a passenger's page threw at every frame)
+    const out = this.walker.outside && Number.isFinite(me.x) && Number.isFinite(me.y);
     const lp = room.state.players.get(room.sessionId);
     const hour = room.state.hour as number;
     const night = nightness(hour);

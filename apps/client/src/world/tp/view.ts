@@ -2481,6 +2481,9 @@ void main() {
   }
   /** What the Daybreak's balls and bursts light (plan 79 phase 7: the arms' lights(), a frame behind). */
   orbLights: { x: number; y: number; z: number; k: number }[] = [];
+  /** (plan 94 P1) cars on fire and their blasts this frame (car/cars.ts): where (x, y on the ground, z up), how
+   *  bright (a fire's ~1, a blast's flash more) */
+  fireLights: { x: number; y: number; z: number; k: number }[] = [];
   deaths: { x: number; y: number; z: number; t: number }[] = [];
   private arms3: Arms3 | null = null;
   /** Shots, sparks, flares in the air and on the snow (tp/arms3d.ts), made when first wanted. */

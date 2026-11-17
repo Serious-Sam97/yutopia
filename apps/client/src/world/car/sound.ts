@@ -119,6 +119,8 @@ const SHOTS = [
   "tick-cool",
   "boot",
   "bonnet",
+  // (plan 95 F1a) a power window's motor, wound all the way
+  "window",
 ];
 
 export interface Hearing {
@@ -211,6 +213,11 @@ export class CarSound {
   /** (plan 93 B) the most grip any tyre used last frame, and the last chirp */
   private usedWas = 0;
   private chirpAt = -9;
+  /** (plan 95 F3a) how long the wheels have spun near a stop (s); the rubber's levels as heard, eased (kerbs, a
+   *  frame's spike: no squeal) */
+  private spinFor = 0;
+  private squealEased = 0;
+  private heldEased = 0;
   private splashAt = -9;
   private wetWas = false;
   private crank = 0; // seconds of cranking left
@@ -758,12 +765,41 @@ export class CarSound {
       this.whine.g.gain.setTargetAtTime(0.012 * whine * (inCar ? 1 : 0.4), t, 0.08);
     }
     // ── the tyres: the ground under each wheel, how fast it rolls, how much of its grip it uses (plan 93 B: the
-    // rubber's voice led by that — a scrub from about half its grip, a squeal held near and past its peak, a chirp
-    // when it's taken quickly, the long skid only in a real slide; on packed snow a squeak, never the rubber's)
+    // rubber's voice led by that; plan 94 P6: quiet in an ordinary corner — a soft scrub only from 85% of its grip,
+    // the squeal and the skid only past its peak and really sliding, a locked wheel braking in a line softer than a
+    // tail out, the handbrake's drift loudest; a chirp when it's taken quickly; on packed snow a squeak, never the
+    // rubber's)
+    // (how far the body is going sideways: its slip angle, from its velocity against its nose)
+    const fx = 1 - 2 * (s.q.y * s.q.y + s.q.z * s.q.z);
+    const fz = 2 * (s.q.x * s.q.z - s.q.w * s.q.y);
+    const fl = Math.hypot(fx, fz) || 1;
+    const along = Math.abs((s.v.x * fx + s.v.z * fz) / fl);
+    const across = Math.abs((s.v.z * fx - s.v.x * fz) / fl);
+    const beta = r.speed > 2 ? Math.atan2(across, along) : 0;
+    const sideways = smooth(0.08, 0.3, beta);
+    const handDrift = smooth(0.4, 0.8, x.hand ?? 0) * smooth(0.06, 0.2, beta) * clamp(r.speed / 5);
+    // (plan 95 F3a, phase 0: Jolt's slip is over the ground's speed — at a walk a wheel's `used` reads 10–100,
+    // meaningless: trusted only from ~9 km/h, wholly from ~18; under it, the grip's read as within its peak)
+    const trust = smooth(2.5, 5, r.speed);
+    const usedOf = (u: number) => trust * u + (1 - trust) * Math.min(u, 0.8);
+    // (a launch: phase 0 — every start on the keys is the throttle's all and spins the wheels its first ~0.3 s,
+    // the traction control on them after, as a tap does: no sound. A burnout — the wheels kept spinning near a
+    // stop, the throttle on (stuck, against something, no traction control) — past 0.4 s, its squeal held)
+    let spun = 0;
+    for (const w of s.wheels) if (w.contact) spun = Math.max(spun, w.slip);
+    this.spinFor = r.speed < 6 && spun > 3 && (s.thr ?? 0) > 0.5 ? this.spinFor + dt : 0;
+    const launch = 0.7 * smooth(0.4, 0.8, this.spinFor);
+    // (braking in a line: its ABS at work — no held squeal, a trace of the skid; locked (no ABS), all)
+    const helping = s.helping ?? 0;
+    const braking = smooth(0.2, 0.5, s.brk ?? 0) * (1 - sideways);
+    const abs = (helping & 1) !== 0;
+    // (the traction control holding a spin in check under power, going straight: a little of it)
+    const tcsK = (helping & 2) !== 0 && (s.thr ?? 0) > 0.5 ? 0.3 + 0.7 * sideways : 1;
     let squeal = 0; // the skid: a slide (past the peak and sliding)
     let held = 0; // the squeal held round a corner (near and past the peak)
     let scrub = 0; // the scrub (from half the grip)
     let usedHard = 0;
+    let rubber = 0; // rubber on a road under it (the wet: most of a drift's skid still)
     let squeak = 0;
     let snowRoll = 0;
     let snowSlide = 0;
@@ -773,30 +809,40 @@ export class CarSound {
     let hard = 0;
     let rough = 0;
     let snowy = 0;
-    const going = clamp(r.speed / 6);
+    // (plan 95 F3a: the held squeal only round a corner at the limit, from ~22 km/h, wholly past ~32)
+    const going = smooth(6, 9, r.speed);
     for (const w of s.wheels) {
       if (!w.contact) continue;
       const g = GRIP[w.ground];
       const isHard = w.ground === "asphalt" || w.ground === "walk" || w.ground === "floor" || w.ground === "rock";
-      const slide = clamp((w.used - 0.85) * 1.6) * clamp(w.slip / 1.5);
+      // (past the peak and the patch really sliding over the ground: m/s — at a walk only a hard launch's spin)
+      const used = usedOf(w.used);
+      const locked = abs ? 0 : smooth(0.7, 0.9, w.slip / Math.max(1, r.speed));
+      const slide = clamp((used - 1) * 1.4) * smooth(1, 3, w.slip) * tcsK;
+      const brakeK = 1 - braking * (1 - 0.15 - 0.85 * locked);
       if (isHard || w.ground === "wet") {
         // (the wet: a little of it, under its hiss)
         const k = isHard ? 1 : 0.45;
-        squeal = Math.max(squeal, slide * k);
-        held = Math.max(held, smooth(0.82, 1.1, w.used) * going * k);
-        scrub = Math.max(scrub, smooth(0.5, 0.9, w.used) * going * k);
-        usedHard = Math.max(usedHard, w.used * k);
+        squeal = Math.max(squeal, slide * k * brakeK);
+        held = Math.max(
+          held,
+          smooth(1, 1.35, used) * smooth(0.8, 2.2, w.slip) * going * k * tcsK * (1 - braking * (1 - locked)),
+        );
+        scrub = Math.max(scrub, smooth(0.85, 1.05, used) * going * k);
+        usedHard = Math.max(usedHard, used * k);
+        rubber = Math.max(rubber, isHard ? 1 : 0.7);
         if (isHard) hard += 0.25;
       }
       if (w.ground === "snow" || w.ground === "deep" || w.ground === "path") {
         snowRoll += 0.25 * clamp(r.speed / 6);
         snowSlide = Math.max(snowSlide, slide);
         snowy += 0.25;
-        // (cold packed snow squeaks under the weight: rolling slowly, and as it's leaned on in a turn)
+        // (cold packed snow squeaks under the weight: rolling, and as it's leaned on in a turn — plan 95 F3a:
+        // softer, coming in with the speed, not loudest at a crawl)
         if (w.ground !== "deep")
           squeak = Math.max(
             squeak,
-            clamp(r.speed / 1.5) * (1 - 0.75 * clamp((r.speed - 3) / 7)) * (0.5 + 0.5 * smooth(0.4, 1, w.used)),
+            smooth(1, 4, r.speed) * (1 - 0.5 * smooth(6, 14, r.speed)) * (0.5 + 0.5 * smooth(0.4, 1, used)),
           );
       }
       if (w.ground === "ice" || w.ground === "blackice") hiss += 0.25 * clamp(r.speed / 15) + 0.3 * slide;
@@ -811,16 +857,34 @@ export class CarSound {
     // the road under the tyres; the rubber (scrub, held squeal, skid, a chirp); snow rolling, squeaking and
     // sliding; grit; wet
     const rolled = this.bed("road-roll", hard * sp * (inCar ? 0.45 : 0.3), 0.8 + r.speed / 60);
-    this.bed("scrub", 0.22 * scrub * (1 - held), 0.9 + 0.15 * scrub);
+    // (a wheel locked braking in a line: half the skid a tail out has; the handbrake's drift: the rear's, loudest)
+    squeal = Math.max(squeal * (0.5 + 0.5 * sideways), handDrift * rubber, launch * rubber);
+    this.bed("scrub", 0.12 * scrub * (1 - held), 0.9 + 0.15 * scrub);
+    // (eased: a level held a moment before it's heard — a kerb's jolt, a frame's spike, isn't a squeal)
+    const ease = (was: number, to: number) => was + (to - was) * clamp(dt / (to > was ? 0.12 : 0.08));
+    this.squealEased = ease(this.squealEased, squeal);
+    this.heldEased = ease(this.heldEased, held);
+    squeal = this.squealEased;
+    held = this.heldEased;
     const heldIn = this.bed("squeal-loop", 0.5 * held * (1 - 0.6 * squeal), 0.92 + 0.1 * held + r.speed / 300);
-    const skid = this.bed("skid", 0.75 * squeal, 0.95 + 0.1 * squeal);
+    const skid = this.bed("skid", (0.6 + 0.3 * handDrift) * squeal, 0.95 + 0.1 * squeal);
     // (a chirp: the grip taken quickly — a flick in, a launch, a stab of the brake)
     const rise = (usedHard - this.usedWas) / Math.max(dt, 1e-3);
-    if (usedHard > 0.85 && rise > 3 && t - this.chirpAt > 0.7 && this.shot("chirp", 0.3 * clamp(rise / 8, 0.4, 1)))
+    // (plan 95 F3a: from ~15 km/h — under it a wheel's grip reads nothing real —, the body taking a slip angle
+    // (a flick in), neither the ABS nor the traction control at work: a kerb's jolt or a brake's stab isn't one)
+    if (
+      r.speed > 4.2 &&
+      sideways > 0.15 &&
+      !(helping & 3) &&
+      usedHard > 0.85 &&
+      rise > 3 &&
+      t - this.chirpAt > 0.7 &&
+      this.shot("chirp", 0.3 * clamp(rise / 8, 0.4, 1))
+    )
       this.chirpAt = t;
     this.usedWas = usedHard;
     if (!heldIn && squeal > 0.45 && t - this.squealAt > 1.4 && this.shot("squeal", 0.25 * squeal)) this.squealAt = t;
-    this.bed("snow-squeak", 0.35 * squeak * (snowy > 0 ? 1 : 0), 0.9 + 0.2 * squeak);
+    this.bed("snow-squeak", 0.12 * squeak * (snowy > 0 ? 1 : 0), 0.9 + 0.2 * squeak);
     const snowed = this.bed("snow-roll", 0.5 * snowRoll, 0.85 + r.speed / 40);
     const slid = this.bed("snow-slide", 0.5 * snowSlide * snowy, 0.9 + 0.2 * snowSlide);
     this.bed("gravel", 0.4 * grit, 0.85 + r.speed / 40);
@@ -915,13 +979,63 @@ export class CarSound {
     if (!soft && k > 0.15) this.ring(0.12 * k);
   }
 
-  /** Glass giving (a lamp, the windscreen, a side's windows). */
-  glass() {
-    if (!this.shot("hit-glass", 0.5)) this.ring(0.05);
+  /** Glass giving (a lamp, a pane): (plan 94 P3) a pane cracking a sharp tick; gone, the burst and its shards
+   *  landing a moment after. */
+  glass(how: "crack" | "gone" = "gone") {
+    if (how === "crack") {
+      if (!this.shot("hit-glass", 0.2, { rate: 1.5 })) this.ring(0.025);
+      return;
+    }
+    if (!this.shot("hit-glass", 0.55)) this.ring(0.05);
+    else this.shot("hit-glass", 0.22, { rate: 1.35, at: this.ctx.currentTime + 0.2 });
   }
   /** The bumper off onto the road. */
   bumperDrop() {
     if (!this.shot("hit-light", 0.4, { rate: 0.8 })) this.burst(0.25, 300, 1, 0.2, "thud");
+  }
+  /** (plan 95 F1a) A window's motor, wound all the way (`secs`): the recorded take fitted to it (a little faster
+   *  or slower), faded at its end; none in, a small motor's whine — loaded and slowing as the glass meets its
+   *  stop, a soft knock there. */
+  windowMotor(_door: number, secs = 1.5) {
+    if (this.dead) return;
+    const c = this.ctx;
+    const t = c.currentTime;
+    const g = c.createGain();
+    g.connect(this.outside);
+    const bs = this.bufs.get("window");
+    if (bs?.length) {
+      const i = (this.turn.get("window") ?? Math.floor(Math.random() * bs.length)) % bs.length;
+      this.turn.set("window", i + 1);
+      const src = c.createBufferSource();
+      src.buffer = bs[i];
+      const rate = Math.max(0.85, Math.min(1.25, bs[i].duration / secs));
+      src.playbackRate.value = rate;
+      const end = Math.min(secs, bs[i].duration / rate);
+      g.gain.setValueAtTime(0.45, t);
+      g.gain.setValueAtTime(0.45, t + Math.max(0, end - 0.08));
+      g.gain.linearRampToValueAtTime(0.0001, t + end);
+      src.connect(g);
+      src.start(t);
+      src.stop(t + end + 0.02);
+      return;
+    }
+    const o = c.createOscillator();
+    o.type = "sawtooth";
+    o.frequency.setValueAtTime(96, t);
+    o.frequency.setValueAtTime(96, t + secs - 0.18);
+    o.frequency.linearRampToValueAtTime(70, t + secs);
+    const lp = c.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 900;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.05, t + 0.05);
+    g.gain.setValueAtTime(0.05, t + secs - 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + secs + 0.03);
+    o.connect(lp).connect(g);
+    o.start(t);
+    o.stop(t + secs + 0.05);
+    const knock = () => this.burst(0.08, 220, 1, 0.05, "thud");
+    setTimeout(knock, secs * 1000);
   }
   /** The boot or the bonnet shut. */
   lid(which: "boot" | "bonnet") {

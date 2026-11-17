@@ -783,6 +783,85 @@ test("(plan 93 S3) a person stood ahead, crept up on: the car stops at its bumpe
   w.dispose();
 });
 
+test("(plan 94 P7) a person leant on a car, or walking into it, never moves it — nose, side or tail", async () => {
+  // (a person pressed against it as the game has them: their soft 0.38 into its box by what their own walker's
+  // capsule lets in and the lag between their screen and the driver's, ~23 cm, held there — on their screen the car's a solid box)
+  const b = SEDAN.body;
+  const spots: [string, number, number][] = [
+    ["its nose", b.ahead + 0.15, 0],
+    ["its side", 0.4, b.width / 2 + 0.15],
+    ["its tail", -b.behind - 0.15, 0],
+  ];
+  for (const [where, px, pz] of spots) {
+    const cw: CarWorld = {
+      height: () => 0,
+      ground: () => "asphalt",
+      solids: (x, z, r, out) => {
+        if (Math.hypot(x - px, z - pz) < r + 1)
+          out.push({ kind: "circle", x: px, z: pz, r: 0.38, soft: true, what: "person", id: "p" });
+      },
+    };
+    const { w, s } = await car(cw);
+    const x0 = s.p.x;
+    const z0 = s.p.z;
+    // (idling, in neutral, no brake: nothing holds it but its tyres)
+    w.run(NONE, 6, HELPS);
+    const moved = Math.hypot(s.p.x - x0, s.p.z - z0);
+    assert.ok(moved < 0.03, `${where}: the car moved ${moved.toFixed(3)} m`);
+    w.dispose();
+  }
+});
+
+test("(plan 94 P8) the sedan up a 25% bank of earth or of grass from a stop; slides back on 35% grass", async () => {
+  const climb = async (g: Ground, pct: number) => {
+    const w = await JoltCarWorld.create(flatWorld(g, pct / 100));
+    // (facing −z: flatWorld rises that way)
+    const d = w.add(SEDAN, 0, 0, -Math.PI / 2);
+    setEngine(d.s, true);
+    d.s.temp = 0.55;
+    w.run(NONE, 0.5);
+    const z0 = d.s.p.z;
+    w.run(C({ up: 1 }), 8, HELPS);
+    const up = -(d.s.p.z - z0);
+    w.dispose();
+    return up;
+  };
+  for (const g of ["earth", "grass"] as Ground[]) {
+    const m = await climb(g, 25);
+    assert.ok(m > 12, `${g} 25%: ${m.toFixed(1)} m up in 8 s`);
+  }
+  // (and not a goat: the steepest grass is still too much for it)
+  const steep = await climb("grass", 35);
+  assert.ok(steep < 2, `grass 35%: ${steep.toFixed(1)} m`);
+});
+
+test("(plan 94 P5) a tyre shot out at 60 km/h: the car yanked toward it; a crawl's, nothing; upright", async () => {
+  const run = async (bits: number, kmh: number) => {
+    const { w, d, s } = await car(flatWorld("asphalt"));
+    upTo(w, kmh);
+    const z0 = s.p.z;
+    if (bits) d.burst(bits);
+    w.run(C({ up: 0.3 }), 1, HELPS);
+    const out = { side: s.p.z - z0, up: upright(s), flats: d.flats };
+    w.dispose();
+    return out;
+  };
+  const none = await run(0, 60);
+  const fr = await run(2, 60);
+  const fl = await run(1, 60);
+  const rr = await run(8, 60);
+  // (heading along +x: its right is +z)
+  assert.ok(Math.abs(none.side) < 0.2, `none: ${none.side.toFixed(2)} m`);
+  assert.ok(fr.side > 1, `front right: toward its right, ${fr.side.toFixed(2)} m`);
+  assert.ok(fl.side < -1, `front left: toward its left, ${fl.side.toFixed(2)} m`);
+  assert.ok(rr.side > 0.3, `rear right: its tail swung out, it toward its right, ${rr.side.toFixed(2)} m`);
+  assert.equal(fr.flats, 2, "and then flat");
+  for (const r of [fr, fl, rr]) assert.ok(r.up > 0.95, "on its wheels");
+  // (at a crawl: no kick)
+  const slow = await run(2, 6);
+  assert.ok(Math.abs(slow.side) < 0.2, `a crawl's: ${slow.side.toFixed(2)} m`);
+});
+
 test("(plan 93 S6) chains: braking on snow and ice much shorter; on asphalt no faster than 45 km/h", async () => {
   const brake = async (g: Ground, chained: boolean) => {
     const { w, d, s } = await car(flatWorld(g));

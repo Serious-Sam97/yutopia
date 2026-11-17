@@ -36,11 +36,13 @@ export interface Grip {
 export const GRIP: Record<Ground, Grip> = {
   // the green's (W5): grass a little loose, worse wet; a dry trail's earth; mud sinking and sliding;
   // a wet road short of the dry's peak, letting go sooner
+  // (plan 94 P8: loose ground peaks later and keeps most of it spinning — the tyre digs in; the sedan up a 25%
+  // bank of either from a stop)
   grass: {
     mu: 0.55,
-    kappa: 0.14,
+    kappa: 0.2,
     alpha: 0.16,
-    slide: 0.65,
+    slide: 0.88,
     shape: 1.3,
     crr: 0.03,
     plough: 0,
@@ -49,10 +51,10 @@ export const GRIP: Record<Ground, Grip> = {
     trace: "light",
   },
   earth: {
-    mu: 0.6,
-    kappa: 0.12,
+    mu: 0.62,
+    kappa: 0.18,
     alpha: 0.15,
-    slide: 0.7,
+    slide: 0.9,
     shape: 1.4,
     crr: 0.025,
     plough: 0,

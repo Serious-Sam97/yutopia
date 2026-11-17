@@ -1967,5 +1967,235 @@
     ],
     "mine": 0,
     "why": "\"011017 snowball.mp3\", no clipping, 33 dB over its floor, its brightness right (1.8 kHz), unevenness 0.91"
+  },
+  "fire": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "843101",
+        "user": "Ñado",
+        "title": "Car fire burning tires explosion horn",
+        "preview": "https://cdn.freesound.org/previews/843/843101_17358115-hq.mp3",
+        "url": "https://freesound.org/people/Ñado/sounds/843101/",
+        "dur": 217.6,
+        "downloads": 172,
+        "note": "\"car fire burning\""
+      },
+      {
+        "id": "563765",
+        "user": "florianreichelt",
+        "title": "Fire Auto - car on fire",
+        "preview": "https://cdn.freesound.org/previews/563/563765_6253486-hq.mp3",
+        "url": "https://freesound.org/people/florianreichelt/sounds/563765/",
+        "dur": 18.1,
+        "downloads": 23165,
+        "note": "\"car fire burning\""
+      },
+      {
+        "id": "479330",
+        "user": "DanielVega",
+        "title": "Burning(improved).wav",
+        "preview": "https://cdn.freesound.org/previews/479/479330_8253036-hq.mp3",
+        "url": "https://freesound.org/people/DanielVega/sounds/479330/",
+        "dur": 16.4,
+        "downloads": 313,
+        "note": "\"car fire burning\""
+      },
+      {
+        "id": "371469",
+        "user": "cpolcyn",
+        "title": "Fire 2016-12-21",
+        "preview": "https://cdn.freesound.org/previews/371/371469_3779694-hq.mp3",
+        "url": "https://freesound.org/people/cpolcyn/sounds/371469/",
+        "dur": 198.3,
+        "downloads": 1266,
+        "note": "\"car fire burning\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Car fire burning tires explosion horn\", no clipping, 28 dB over its floor, its brightness right (3.5 kHz), unevenness 0.68",
+    "pick": 3
+  },
+  "fire-catch": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "260555",
+        "user": "LookIMadeAThing",
+        "title": "Basic Fire Whoosh 2",
+        "preview": "https://cdn.freesound.org/previews/260/260555_3968707-hq.mp3",
+        "url": "https://freesound.org/people/LookIMadeAThing/sounds/260555/",
+        "dur": 4.9,
+        "downloads": 5231,
+        "note": "\"fire whoosh\""
+      },
+      {
+        "id": "244926",
+        "user": "hnhnh",
+        "title": "fire-whoosh.wav",
+        "preview": "https://cdn.freesound.org/previews/244/244926_3983630-hq.mp3",
+        "url": "https://freesound.org/people/hnhnh/sounds/244926/",
+        "dur": 3.9,
+        "downloads": 3953,
+        "note": "\"fire whoosh\""
+      },
+      {
+        "id": "186374",
+        "user": "samararaine",
+        "title": "Bonfire Being Lit",
+        "preview": "https://cdn.freesound.org/previews/186/186374_2421128-hq.mp3",
+        "url": "https://freesound.org/people/samararaine/sounds/186374/",
+        "dur": 7.5,
+        "downloads": 29037,
+        "note": "\"fire whoosh\""
+      },
+      {
+        "id": "178886",
+        "user": "martian",
+        "title": "red whoosh gladiator 04.wav",
+        "preview": "https://cdn.freesound.org/previews/178/178886_84709-hq.mp3",
+        "url": "https://freesound.org/people/martian/sounds/178886/",
+        "dur": 2.6,
+        "downloads": 2028,
+        "note": "\"fire whoosh\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Basic Fire Whoosh 2\", no clipping, silence between its sounds, its brightness right (0.6 kHz), 5231 downloads",
+    "pick": 2
+  },
+  "blast": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "592000",
+        "user": "SamsterBirdies",
+        "title": "Large explosion",
+        "preview": "https://cdn.freesound.org/previews/592/592000_5487341-hq.mp3",
+        "url": "https://freesound.org/people/SamsterBirdies/sounds/592000/",
+        "dur": 11.3,
+        "downloads": 1207,
+        "note": "\"explosion large\""
+      },
+      {
+        "id": "235968",
+        "user": "tommccann",
+        "title": "Explosion_01.wav",
+        "preview": "https://cdn.freesound.org/previews/235/235968_4265427-hq.mp3",
+        "url": "https://freesound.org/people/tommccann/sounds/235968/",
+        "dur": 7.8,
+        "downloads": 138239,
+        "note": "\"car explosion\""
+      },
+      {
+        "id": "109739",
+        "user": "SoundCollectah",
+        "title": "hit and distant honks.aiff",
+        "preview": "https://cdn.freesound.org/previews/109/109739_1868848-hq.mp3",
+        "url": "https://freesound.org/people/SoundCollectah/sounds/109739/",
+        "dur": 4.6,
+        "downloads": 730,
+        "note": "\"car explosion\""
+      },
+      {
+        "id": "523365",
+        "user": "LilMati",
+        "title": "Bomb Explosion",
+        "preview": "https://cdn.freesound.org/previews/523/523365_6142149-hq.mp3",
+        "url": "https://freesound.org/people/LilMati/sounds/523365/",
+        "dur": 8.2,
+        "downloads": 6312,
+        "note": "\"vehicle explosion\""
+      },
+      {
+        "id": "162262",
+        "user": "qubodup",
+        "title": "Firing 25mm from LAVS during training",
+        "preview": "https://cdn.freesound.org/previews/162/162262_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/162262/",
+        "dur": 6.5,
+        "downloads": 753,
+        "note": "\"vehicle explosion\""
+      },
+      {
+        "id": "186965",
+        "user": "ReadeOnly",
+        "title": "explosion1.wav",
+        "preview": "https://cdn.freesound.org/previews/186/186965_545448-hq.mp3",
+        "url": "https://freesound.org/people/ReadeOnly/sounds/186965/",
+        "dur": 3.4,
+        "downloads": 1174,
+        "note": "\"explosion large\""
+      }
+    ],
+    "mine": 0,
+    "why": "\"Large explosion\", 64 dB over its floor, its brightness right (0.3 kHz), 1207 downloads",
+    "pick": 1
+  },
+  "window": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "109194",
+        "user": "Gutek",
+        "title": "Car Power windows - electric windows .wav",
+        "preview": "https://cdn.freesound.org/previews/109/109194_121632-hq.mp3",
+        "url": "https://freesound.org/people/Gutek/sounds/109194/",
+        "dur": 15.8,
+        "downloads": 1446,
+        "note": "\"car power window\""
+      },
+      {
+        "id": "558846",
+        "user": "DigPro120",
+        "title": "car window rolling up .mp3",
+        "preview": "https://cdn.freesound.org/previews/558/558846_7414526-hq.mp3",
+        "url": "https://freesound.org/people/DigPro120/sounds/558846/",
+        "dur": 6,
+        "downloads": 146,
+        "note": "\"car power window\""
+      },
+      {
+        "id": "369060",
+        "user": "AndrewAlexander",
+        "title": "car_window_close.wav",
+        "preview": "https://cdn.freesound.org/previews/369/369060_1535801-hq.mp3",
+        "url": "https://freesound.org/people/AndrewAlexander/sounds/369060/",
+        "dur": 4.3,
+        "downloads": 178,
+        "note": "\"car power window\""
+      },
+      {
+        "id": "50895",
+        "user": "RutgerMuller",
+        "title": "car electrical window 6 squeaky button closes.wav",
+        "preview": "https://cdn.freesound.org/previews/50/50895_179538-hq.mp3",
+        "url": "https://freesound.org/people/RutgerMuller/sounds/50895/",
+        "dur": 4.8,
+        "downloads": 574,
+        "note": "\"electric car window\""
+      },
+      {
+        "id": "439247",
+        "user": "devy32",
+        "title": "Car electric window.wav",
+        "preview": "https://cdn.freesound.org/previews/439/439247_6072659-hq.mp3",
+        "url": "https://freesound.org/people/devy32/sounds/439247/",
+        "dur": 12.5,
+        "downloads": 1721,
+        "note": "\"electric car window\""
+      },
+      {
+        "id": "276293",
+        "user": "Sandermotions",
+        "title": "Car window down.WAV",
+        "preview": "https://cdn.freesound.org/previews/276/276293_1402315-hq.mp3",
+        "url": "https://freesound.org/people/Sandermotions/sounds/276293/",
+        "dur": 9.2,
+        "downloads": 2730,
+        "note": "\"electric car window\""
+      }
+    ],
+    "pick": 0
   }
 }

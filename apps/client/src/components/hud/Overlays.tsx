@@ -40,7 +40,7 @@ export function Prompt() {
         borderRadius: pad ? 13 : 5,
       }}
     >
-      {pad ? "Y" : "E"}
+      {pad ? (prompt?.padKey ?? "Y") : (prompt?.key ?? "E")}
     </kbd>
   );
   const own = prompt && /^(car|ride|plug)/.test(prompt.kind);

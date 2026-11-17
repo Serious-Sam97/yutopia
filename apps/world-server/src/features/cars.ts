@@ -12,7 +12,10 @@ import {
   CHAIN_OFF_MS,
   CHAIN_ON_MS,
   CHAIN_REACH,
+  type CarAt,
   carAlong,
+  claimShot,
+  shotWreck,
   carAtHome,
   carKindOf,
   chainSpot,
@@ -26,6 +29,11 @@ import {
   type HomeCar,
   headingQuat,
   holesWithout,
+  glassless,
+  paneOf,
+  parseHoles,
+  type Pane,
+  type CarShot,
   keysDay,
   levelCar,
   MEND_MS,
@@ -38,6 +46,7 @@ import {
   nearestColour,
   nextMend,
   PART,
+  panesOpen,
   parkAt,
   parkedBody,
   parkedPose,
@@ -50,6 +59,10 @@ import {
   type Stored,
   type StoreKind,
   SUNK,
+  burnOut,
+  type Damage,
+  FIRE,
+  seatedAlong,
   shotDamage,
   spareOf,
   storeOf,
@@ -104,6 +117,19 @@ const EMPTY_TOW_MS = 10 * 60 * 1000; // a dry car left out: towed sooner
 const FILL_S = 8; // s: empty to full at a pump (a wash in the time)
 const KNOCK_V = 2; // m/s: as fast as a car must be going to knock someone (a stagger)
 const STAGGER_V = 4.2; // m/s (~15 km/h): slower, a stagger; faster, knocked down (plan 93 S3)
+// (plan 94 P1) the fire: a wrecked engine's heat from rounds (an engine's 2, its front's 1, elsewhere ½) and crashes —
+// smoking past HEAT_SMOKE, burning past HEAT_FIRE, blown at HEAT_BLAST (never before BURN_MIN_MS on fire — plan 95
+// F7a) or BURN_MS on fire; the blast's reach and its worst; a burnt-out wreck towed home (made new) after
+// BURNT_TOW_MS with nobody near
+const HEAT_SMOKE = 2;
+const HEAT_FIRE = 5;
+const HEAT_BLAST = 9;
+const BURN_MS = 25_000;
+const BURN_MIN_MS = 10_000;
+const BLAST_R = 9;
+const BLAST_HURT = 95;
+const FIRE_HURT = 6; // a second, seated in a burning car
+const BURNT_TOW_MS = 3 * 60 * 1000;
 const FIGHT_MS = 45_000; // a fight: someone fired, was shot or hurt this lately (plan 93 S3, F8a)
 const KNOCK_REACH = 4; // m: them this near its middle
 const UNSTICK_MS = 10_000; // a car pulled out: not again for this long
@@ -147,12 +173,20 @@ registerFeature((room: WorldRoom) => {
     const p = room.state.players.get(client.sessionId);
     const id = String(m?.id ?? "");
     const o = room.state.objects.get(id);
-    if (!p || !o || o.kind !== "car" || bySid.has(client.sessionId) || p.level !== 0) return;
+    if (!p || !o || o.kind !== "car" || p.level !== 0) return;
     const def = fromSchema(o);
-    if (def.props?.driven || !def.props?.ownerId) return;
+    if (!def.props?.ownerId) return;
     if (!mayDrive(def.props, p.uid, Date.now())) return no(client, "owned");
-    const pose = parkedPose(def);
-    if (Math.hypot(p.x - pose.x, p.y - pose.y) > LOCK_REACH) return no(client, "far");
+    // (plan 94 G6, F10b: its driver locks it from inside — its empty seats then open to its keys alone; else from
+    // beside it, parked)
+    const mine = driven(client.sessionId);
+    if (mine) {
+      if (mine.veh.obj !== id) return;
+    } else {
+      if (def.props?.driven || bySid.has(client.sessionId)) return;
+      const pose = parkedPose(def);
+      if (Math.hypot(p.x - pose.x, p.y - pose.y) > LOCK_REACH) return no(client, "far");
+    }
     const props: Record<string, unknown> = { ...(def.props ?? {}), locked: m?.on ? 1 : 0 };
     if (!m?.on) {
       delete props.locked;
@@ -275,14 +309,18 @@ registerFeature((room: WorldRoom) => {
       live.set(v.id, l);
       room.state.vehicles.set(v.id, v);
       // its object: out, being driven (no longer in anyone's way where it stood)
-      // (plan 93 S9: its keys in it — unlocked)
-      const { locked: _l, alarmAt: _a, ...kept } = def.props ?? {};
+      // (plan 93 S9: its alarm off; plan 94 G6, F10b: locked, it stays so while it's driven — its seats its keys')
+      const { alarmAt: _a, ...kept } = def.props ?? {};
       room.state.objects.set(o.id, toSchema({ ...def, props: { ...kept, driven: 1 } }));
       room.rebuildGrid();
     } else {
       const at = { x: l.veh.x, y: l.veh.z };
       if (Math.hypot(p.x - at.x, p.y - at.y, room.upOff(p, at, CAR_H)) > REACH) return no(client, "far");
       if (Math.hypot(l.veh.vx, l.veh.vz) > OUT_V) return no(client, "moving");
+      // (plan 94 G6, F10b: locked by its driver — its doors open to its keys alone)
+      const od = room.state.objects.get(l.veh.obj);
+      const op = od ? fromSchema(od).props : undefined;
+      if (op?.locked && !mayDrive(op, p.uid, Date.now())) return no(client, "locked");
       if (seat === 0) {
         const od = room.state.objects.get(l.veh.obj);
         const props = od ? fromSchema(od).props : undefined;
@@ -367,8 +405,21 @@ registerFeature((room: WorldRoom) => {
     // car/damage.ts, docs/plan/92 phase 9)
     const d = Array.isArray(m.dmg) ? m.dmg.map(Number) : [];
     const parts = Number(m.parts);
-    if ((d.length === 4 || d.length === 5) && d.every(Number.isFinite))
-      v.dmg = damageString(mergeDamage(parseDamage(v.dmg), { zones: d, parts: Number.isFinite(parts) ? parts : 0 }));
+    // (plan 94 P2: what's come off it — doors, lids, the rear bumper, mirrors — kept on it for everyone)
+    const wreck = Number(m.wreck);
+    if ((d.length === 4 || d.length === 5) && d.every(Number.isFinite)) {
+      const was = parseDamage(v.dmg);
+      const dm = mergeDamage(was, {
+        zones: d,
+        parts: Number.isFinite(parts) ? parts : 0,
+        wreck: Number.isFinite(wreck) ? wreck : 0,
+      });
+      // (plan 94 P1: a crash into a front past its worst: smoking; crashed again, hard, while it smokes: heat)
+      const rise = dm.zones.reduce((a, z, i) => a + z - (was.zones[i] ?? 0), 0);
+      if (dm.zones[0] >= 0.97 && dm.fire === FIRE.none) fireUp(dm, v.obj, HEAT_SMOKE, null);
+      else if (dm.fire >= FIRE.smoke && rise > 0.15) fireUp(dm, v.obj, 1.5, null);
+      v.dmg = damageString(dm);
+    }
   });
   // at a pump, stopped: F fills it (and washes it) till it's full or it moves
   room.on("car:fill", (client, m) => {
@@ -736,7 +787,9 @@ registerFeature((room: WorldRoom) => {
       // (someone's own is never towed: it stays where it's left, their GPS shows it — but out of the
       // water it went down in)
       const down = sunk(def);
-      if (def.props?.driven || (def.props?.ownerId && !down)) continue;
+      // (plan 94 P1: burnt out — towed home and made new, someone's own too)
+      const burnt = parseDamage(def.props?.dmg).fire === FIRE.burnt;
+      if (def.props?.driven || (def.props?.ownerId && !down && !burnt)) continue;
       const mine = own(o.id);
       const pose = parkedPose(def);
       const out = intruding(def);
@@ -747,7 +800,7 @@ registerFeature((room: WorldRoom) => {
           put(def, mine.c.x, mine.c.z, mine.c.dir);
         continue;
       }
-      if (typeof def.props?.a !== "number" && !out && !down && !(all && mine)) continue;
+      if (typeof def.props?.a !== "number" && !out && !down && !burnt && !(all && mine)) continue;
       const parkedAt = Number(def.props?.parkedAt) || 0;
       const bx = pose.x;
       const bz = pose.y;
@@ -756,7 +809,8 @@ registerFeature((room: WorldRoom) => {
         // (plan 93 S1: shot dead, as stranded as dry)
         const dry = num(def.props?.fuel, 1) <= 0.01 || !!(parseDamage(def.props?.dmg).parts & PART.engineDead);
         // (in someone's bay: out the next time nobody's near, however long it's been there)
-        if (!out && (inLot || Date.now() - parkedAt < (dry ? EMPTY_TOW_MS : TOW_MS))) continue;
+        if (burnt ? Date.now() - parkedAt < BURNT_TOW_MS : !out && (inLot || Date.now() - parkedAt < (dry ? EMPTY_TOW_MS : TOW_MS)))
+          continue;
         const near = [...room.state.players.values()].some(
           (p) => p.level === 0 && Math.hypot(p.x - bx, p.y - bz) < TOW_NEAR,
         );
@@ -1199,6 +1253,65 @@ registerFeature((room: WorldRoom) => {
     room.state.objects.set(id, toSchema({ ...def, props }));
     saveLater(id);
   };
+  // (plan 94 G3) its boot open, or shut: whoever has it open `boot:<id>` — everyone's clients lift its lid
+  room.on("car:boot", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const id = String(m?.id ?? "");
+    if (!p) return;
+    if (!m?.open) {
+      if (p.busy.startsWith("boot:")) p.busy = "";
+      return;
+    }
+    if (p.busy && !p.busy.startsWith("boot:")) return;
+    if (!storeObj(client.sessionId, p, "boot", id)) return;
+    p.busy = `boot:${id}`;
+  });
+  // (plan 94 G4, F9b) the ruts pressed lately, for whoever joins: each driver's client says its own (its front
+  // wheels' in deep snow and mud, a stretch at a time); kept RUTS_KEEP_MS, RUTS_MAX of them
+  const RUTS_KEEP_MS = 10 * 60_000;
+  const RUTS_MAX = 4000;
+  const ruts: { t: number; s: [number, number, number, number] }[] = [];
+  room.on("car:ruts", (client, m) => {
+    const l = driven(client.sessionId);
+    const segs = Array.isArray(m?.segs) ? m.segs : [];
+    if (!l || segs.length % 4 || segs.length > 400) return;
+    const now = Date.now();
+    const v = l.veh;
+    for (let i = 0; i < segs.length; i += 4) {
+      const s4 = segs.slice(i, i + 4).map(Number) as [number, number, number, number];
+      if (!s4.every(Number.isFinite)) continue;
+      const [ax, az, bx, bz] = s4.map((c) => c / 100);
+      // (a stretch of a step or two, near the car it's from)
+      if (Math.hypot(bx - ax, bz - az) > 3.5 || Math.hypot(bx - v.x, bz - v.z) > 40) continue;
+      ruts.push({ t: now, s: s4.map(Math.round) as [number, number, number, number] });
+    }
+    while (ruts.length > RUTS_MAX || (ruts.length && now - ruts[0].t > RUTS_KEEP_MS)) ruts.shift();
+  });
+  // (plan 94 G4: the ruts of the last minutes, for someone just in — asked once its client listens)
+  room.on("car:ruts-hello", (client) => {
+    const now = Date.now();
+    const segs = ruts.filter((r) => now - r.t < RUTS_KEEP_MS).flatMap((r) => r.s);
+    if (segs.length) room.send(client, "car:ruts", { segs });
+  });
+  /** (plan 94 G3) Boots left open by someone walked off (or the car gone, or driven): shut. */
+  const bootsShut = () => {
+    for (const [sid, p] of room.state.players) {
+      if (!p.busy.startsWith("boot:")) continue;
+      const id = p.busy.slice(5);
+      const o = room.state.objects.get(id);
+      if (!o) {
+        p.busy = "";
+        continue;
+      }
+      const def = fromSchema(o);
+      const pose = parkedPose(def);
+      const back = SPECS[carKindOf(def.props?.model)].body.behind;
+      const rx = pose.x - Math.cos(pose.a) * (back + 0.35);
+      const ry = pose.y - Math.sin(pose.a) * (back + 0.35);
+      if (def.props?.driven || p.level !== 0 || Math.hypot(p.x - rx, p.y - ry) > BOOT_REACH + 0.6) p.busy = "";
+      void sid;
+    }
+  };
   // something from the pack (a slot, `n` of a stack or all) into it
   room.on("car:put", (client, m) => {
     const p = room.state.players.get(client.sessionId);
@@ -1372,6 +1485,8 @@ registerFeature((room: WorldRoom) => {
         const r = mend(parseDamage(d2.props?.dmg), what, wheel);
         const props: Record<string, unknown> = { ...(d2.props ?? {}), dmg: damageString(r.dm) };
         if (r.zone >= 0 && typeof props.holes === "string") props.holes = holesWithout(props.holes, r.zone);
+        // (plan 95 F5a: new glass — its stars and cracks' points gone with the old)
+        if (what === "glass" && typeof props.holes === "string") props.holes = glassless(props.holes);
         // (its spare used — or, at the garage, a new tyre fitted and its spare in the boot again)
         if (what === "tyre") {
           if (noseOf(d2).garage) delete props.spare;
@@ -1457,6 +1572,122 @@ registerFeature((room: WorldRoom) => {
     room.survival?.changed(sid);
   });
 
+  /** (plan 95 F5a) A round into glass that's still there: its point kept (a star on the windscreen — how many it
+   *  has told; where a side's or the rear's cracked from), and true. */
+  const starOf = (dm: Damage, h: CarShot, holes: string): boolean => {
+    if (h.struck !== "glass" || h.pane < 0 || paneOf(dm.parts, h.pane as Pane) === 2) return false;
+    if (h.pane === 0) h.stars = parseHoles(holes).filter((x) => x.pane === 0).length;
+    return true;
+  };
+
+  // ── (plan 94 P1) the fire ──
+  // heat (by the car's object's id) and what's burning: since when, who set it alight (a shooter: the blast hurts as a
+  // fight's does), when its people were last burnt
+  const heat = new Map<string, number>();
+  // (`due`: when it blows — BURN_MS after it caught; shot on past HEAT_BLAST, sooner, but never before BURN_MIN_MS)
+  const burning = new Map<string, { at: number; due: number; by: string | null; hurtAt: number }>();
+  /** Heat into a car's damage `dm` (its object's `id`): only a wrecked engine's (steaming, or dead) takes it;
+   *  smoking, burning (its engine dead), or — burning and hit on — about to blow. */
+  const fireUp = (dm: Damage, id: string, add: number, by: string | null) => {
+    if (dm.fire >= FIRE.burnt) return;
+    if (dm.zones[0] < 0.8 && !(dm.parts & PART.engineDead) && dm.fire === FIRE.none) return;
+    const n = (heat.get(id) ?? 0) + add;
+    heat.set(id, n);
+    const now = Date.now();
+    if (n >= HEAT_SMOKE && dm.fire < FIRE.smoke) dm.fire = FIRE.smoke;
+    if (n >= HEAT_FIRE && dm.fire < FIRE.burning) {
+      dm.fire = FIRE.burning;
+      dm.parts |= PART.engineDead;
+      burning.set(id, { at: now, due: now + BURN_MS, by, hurtAt: now });
+    }
+    const b = burning.get(id);
+    if (b) {
+      if (by) b.by = by;
+      // (shot on while it burns: it goes sooner — but it's burnt BURN_MIN_MS first, plan 95 F7a; the tick's)
+      if (n >= HEAT_BLAST) b.due = Math.min(b.due, Math.max(now, b.at + BURN_MIN_MS));
+    }
+  };
+  /** Where a car is (live or parked, by its object's id), its damage, and how to put it back. */
+  const carNow = (id: string) => {
+    const l = live.get(`car:${id}`);
+    if (l) {
+      const v = l.veh;
+      return {
+        l,
+        x: v.x,
+        y: v.z,
+        z: v.y,
+        dm: parseDamage(v.dmg),
+        save: (dm: Damage) => {
+          v.dmg = damageString(dm);
+        },
+      };
+    }
+    const o = room.state.objects.get(id);
+    if (!o || o.kind !== "car") return null;
+    const def = fromSchema(o);
+    const pose = parkedPose(def);
+    const props: Record<string, unknown> = { ...(def.props ?? {}) };
+    return {
+      l: null,
+      x: pose.x,
+      y: pose.y,
+      z: (pose.h ?? heightAt(pose.x, pose.y)) + 0.6,
+      dm: parseDamage(props.dmg),
+      save: (dm: Damage) => {
+        props.dmg = damageString(dm);
+        // (burnt out: its clock for the tow from now)
+        if (dm.fire === FIRE.burnt) props.parkedAt = Date.now();
+        room.state.objects.set(id, toSchema({ ...def, props }));
+        saveLater(id);
+      },
+    };
+  };
+  /** It blows: burnt out (burnOut), its people thrown out of it, everyone near knocked down and hurt by how near
+   *  (in a fight's rules: set alight by a shooter, or they're in one), and everyone near shown it (`car:blast`). */
+  const blast = (id: string, by: string | null) => {
+    burning.delete(id);
+    heat.delete(id);
+    const c = carNow(id);
+    if (!c) return;
+    const now = Date.now();
+    c.dm.zones = c.dm.zones.slice();
+    burnOut(c.dm);
+    c.save(c.dm);
+    if (c.l) for (const sid of [...c.l.seats]) if (sid) leaveSeat(sid, true);
+    const inFight = (s: string) => now - (room.fightAt.get(s) ?? 0) < FIGHT_MS;
+    for (const q of room.state.players.values()) {
+      if (q.level !== 0 || q.hp <= 0) continue;
+      const d = Math.hypot(q.x - c.x, q.y - c.y);
+      if (d > BLAST_R) continue;
+      q.fellAt = now;
+      q.fellYaw = Math.atan2(q.y - c.y, q.x - c.x);
+      if (by || inFight(q.sid)) {
+        const n = Math.round(BLAST_HURT * (1 - d / BLAST_R) ** 1.3);
+        if (n > 0) {
+          room.survival?.hurt(q.sid, n);
+          room.fightAt.set(q.sid, now);
+        }
+      }
+    }
+    room.broadcastMsg("car:blast", { id, x: c.x, y: c.y, z: c.z });
+  };
+  /** A second of the fire: the people in a burning car burnt, a burning car blown when its time's up. */
+  const fireTick = (now: number) => {
+    for (const [id, b] of [...burning]) {
+      const c = carNow(id);
+      if (!c || c.dm.fire !== FIRE.burning) {
+        burning.delete(id);
+        continue;
+      }
+      if (c.l && now - b.hurtAt >= 1000) {
+        b.hurtAt = now;
+        for (const sid of c.l.seats) if (sid) room.survival?.hurt(sid, FIRE_HURT);
+      }
+      if (now >= b.due) blast(id, b.by);
+    }
+  };
+
   room.carShot = {
     seatOf(sid) {
       const vid = bySid.get(sid);
@@ -1468,9 +1699,22 @@ registerFeature((room: WorldRoom) => {
       const v = l.veh;
       return { vid: v.id, seat, side: w < 0 ? -1 : 1, a: v.a, speed: Math.hypot(v.vx, v.vz) };
     },
-    along(level, o, d, range, gun, skip) {
+    along(level, o, d, range, gun, skip, claim) {
       if (level !== 0) return null;
-      let best: (ReturnType<typeof carAlong> & object & { id: string; apply(): void }) | null = null;
+      // (plan 95 F4a: the shooter's screen met no car it drew along this round — none struck)
+      if (claim === 0) return null;
+      // (…or one, where on it: checked against the car as it is here and this round's ray; not taken, the box's)
+      const claimed = claim && typeof claim === "object" ? claim : null;
+      const hitOf = (id: string, at: CarAt) =>
+        claimed ? (id === claimed?.id ? claimShot(o, d, at, claimed, range, gun) : null) : carAlong(o, d, at, range, gun);
+      let best:
+        | (ReturnType<typeof carAlong> &
+            object & {
+              id: string;
+              apply(by?: string): void;
+              seated?(): { sid: string; t: number; head: boolean } | null;
+            })
+        | null = null;
       const near = (x: number, y: number) => {
         // (by the ray's line: within its reach and a car's length of it)
         const rx = x - o.x;
@@ -1482,16 +1726,30 @@ registerFeature((room: WorldRoom) => {
       for (const l of live.values()) {
         const v = l.veh;
         if (v.id === skip || !near(v.x, v.z)) continue;
-        const h = carAlong(o, d, wireCar(v.x, v.y, v.z, [v.qx, v.qy, v.qz, v.qw], l.spec), best?.t ?? range, gun);
+        const at = wireCar(v.x, v.y, v.z, [v.qx, v.qy, v.qz, v.qw], l.spec);
+        const h = hitOf(v.id, at);
         if (!h || (best && h.t >= best.t)) continue;
         best = {
           ...h,
           id: v.id,
-          apply() {
+          // (plan 94 P4: on through it, whoever sat in its way)
+          seated() {
+            if (!h.through) return null;
+            const taken = l.seats.flatMap((sid, i) => (sid ? [i] : []));
+            const hit = seatedAlong(o, d, at, taken, h.t, h.out);
+            return hit ? { sid: l.seats[hit.seat], t: hit.t, head: hit.head } : null;
+          },
+          apply(by) {
+            // (plan 95 F1a: its window wound down — no glass there to crack; the round goes on through)
+            if (h.struck === "glass" && h.pane >= 2 && panesOpen(l.spec, v.win) & (1 << h.pane)) return;
             const dm = parseDamage(v.dmg);
+            const star = starOf(dm, h, v.holes);
             shotDamage(dm, h);
+            fireUp(dm, v.obj, h.struck === "engine" ? 2 : h.face === 0 ? 1 : 0.5, by ?? null);
+            if (h.struck === "panel" || h.struck === "engine" || star) v.holes = addHole(v.holes, h);
+            // (plan 96 F4a: its part's rounds counted — loose, then off)
+            if (h.part && (h.struck === "panel" || h.struck === "engine")) shotWreck(dm, parseHoles(v.holes), h.part);
             v.dmg = damageString(dm);
-            if (h.struck === "panel" || h.struck === "engine") v.holes = addHole(v.holes, h);
           },
         };
       }
@@ -1503,21 +1761,26 @@ registerFeature((room: WorldRoom) => {
         if (!near(pose.x, pose.y)) continue;
         const spec = SPECS[carKindOf(def.props?.model)];
         const car = levelCar(pose.x, pose.y, pose.h ?? heightAt(pose.x, pose.y), pose.a, spec);
-        const h = carAlong(o, d, car, best?.t ?? range, gun);
+        const h = hitOf(ob.id, car);
         if (!h || (best && h.t >= best.t)) continue;
         best = {
           ...h,
           id: ob.id,
-          apply() {
+          apply(by) {
             const cur = room.state.objects.get(ob.id);
             if (!cur) return;
             const was = fromSchema(cur);
             const props: Record<string, unknown> = { ...(was.props ?? {}) };
             const dm = parseDamage(props.dmg);
+            const star = starOf(dm, h, typeof props.holes === "string" ? props.holes : "");
             shotDamage(dm, h);
-            props.dmg = damageString(dm);
-            if (h.struck === "panel" || h.struck === "engine")
+            fireUp(dm, ob.id, h.struck === "engine" ? 2 : h.face === 0 ? 1 : 0.5, by ?? null);
+            if (h.struck === "panel" || h.struck === "engine" || star)
               props.holes = addHole(typeof props.holes === "string" ? props.holes : "", h);
+            // (plan 96 F4a: its part's rounds counted — loose, then off)
+            if (h.part && (h.struck === "panel" || h.struck === "engine"))
+              shotWreck(dm, parseHoles(typeof props.holes === "string" ? props.holes : ""), h.part);
+            props.dmg = damageString(dm);
             room.state.objects.set(ob.id, toSchema({ ...was, props }));
             saveLater(ob.id);
             // (plan 93 S9: shot, locked: its alarm)
@@ -1525,6 +1788,8 @@ registerFeature((room: WorldRoom) => {
           },
         };
       }
+      // (plan 95 F4a: the claim not taken — not on that car here, or too far off this round's line: the box's)
+      if (!best && claimed) return room.carShot?.along(level, o, d, range, gun, skip) ?? null;
       return best;
     },
   };
@@ -1604,6 +1869,8 @@ registerFeature((room: WorldRoom) => {
         sweepAt = now + 5000;
         ploughedSweep(room.state, now);
       }
+      fireTick(now);
+      bootsShut();
       if (now > towAt) {
         towAt = now + 60_000;
         home(false);
@@ -1615,6 +1882,7 @@ registerFeature((room: WorldRoom) => {
     leave(client) {
       leaveSeat(client.sessionId, false);
     },
+
     levelChange(client, p, from, to) {
       if (to !== 0 && bySid.has(client.sessionId)) leaveSeat(client.sessionId, false);
       void p;

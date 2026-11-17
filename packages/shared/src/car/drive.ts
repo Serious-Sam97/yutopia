@@ -16,6 +16,8 @@ import { type CarState, type CarWorld, type Controls, HELPS, type Helps, type Hi
 
 const G = 9.81;
 const AIR = 1.29;
+/** (plan 94 P5) how long a burst front tyre yanks the steering (s) */
+const BURST_S = 0.5;
 const clamp = (x: number, a: number, b: number) => (x < a ? a : x > b ? b : x);
 const smooth = (a: number, b: number, x: number) => {
   const t = clamp((x - a) / (b - a), 0, 1);
@@ -186,6 +188,9 @@ export class Drive {
   private readonly side: number[];
   /** (plan 93 S1) its flat tyres, FL FR RL RR as bits 1 2 4 8: half their grip, dragging */
   flats = 0;
+  /** (plan 94 P5) a tyre just burst: the steering yanked its way a moment (a front's), s left and which way */
+  private burstT = 0;
+  private burstSteer = 0;
   /** (plan 93 S6) its chained wheels, bits as `flats`: ×1.5 the grip on snow and ice, a little less on the hard
    *  ground, and no faster than CHAIN_V */
   chains = 0;
@@ -253,6 +258,35 @@ export class Drive {
       this.car.setTorque(on && !this.s.spec.pushed ? 1 : 0);
       if (on) this.car.setRpm(this.s.rpm);
     }
+  }
+
+  /** (plan 94 P5) Tyres burst (bits as `flats`), now: by how fast it's going, a front's yanks the steering its way
+   *  for half a second, and either one kicks the car about its upright toward its side (a rear's harder: the
+   *  tail swings out the other way). Then flat (`flats`). */
+  burst(bits: number) {
+    const s = this.s;
+    const X = axis(s.q, 1, 0, 0);
+    const Y = axis(s.q, 0, 1, 0);
+    const vf = s.v.x * X[0] + s.v.y * X[1] + s.v.z * X[2];
+    const k = clamp((Math.abs(vf) - 3) / 17, 0, 1);
+    let yaw = 0;
+    for (let i = 0; i < 4; i++) {
+      if (!(bits & (1 << i))) continue;
+      const right = i % 2 ? 1 : -1;
+      if (i < 2) {
+        this.burstSteer = right * 0.35 * k;
+        this.burstT = BURST_S;
+      }
+      // (+ right: a right turn's the negative about its up)
+      yaw += -right * (i < 2 ? 0.25 : 1.1) * k * Math.sign(vf || 1);
+    }
+    this.flats |= bits;
+    if (!yaw) return;
+    const w: [number, number, number] = [s.w.x + Y[0] * yaw, s.w.y + Y[1] * yaw, s.w.z + Y[2] * yaw];
+    this.car.setVelocity([s.v.x, s.v.y, s.v.z], w);
+    s.w.x = w[0];
+    s.w.y = w[1];
+    s.w.z = w[2];
   }
 
   /** Before the world's step: the driver, the helps, the arcade layer, the tyres' grounds. */
@@ -386,6 +420,11 @@ export class Drive {
         const sideOf = Math.sign(X[0] * h.dx + X[2] * h.dz) || 1;
         rutSteer -= clamp(h.off / 0.12 + vn * 2.2, -1, 1) * h.k * RUT_STEER * sideOf * 0.5;
       }
+    }
+    // (plan 94 P5: a front tyre burst — the wheel yanked toward it, easing over half a second)
+    if (this.burstT > 0) {
+      rutSteer += this.burstSteer * (this.burstT / BURST_S);
+      this.burstT = Math.max(0, this.burstT - dt);
     }
     steer = clamp(steer + rutSteer, -spec.steer.max, spec.steer.max);
     // (plan 93 S6: chains on, no faster than a chain's for — the throttle let off past it)
@@ -627,7 +666,13 @@ export class Drive {
         if (!s.hit || j > s.hit.j)
           s.hit = { j, x: o.x - nx * r0, z: o.z - nz * r0, what: o.what ?? "bank", at: s.t, id: o.id, v: vin };
       }
-      const out = crawl ? 80 : 20;
+      // (plan 94 P7: a person or a pet never moves the car — a ton and more against one. They take its speed into
+      // them, above, and hold it off only while it's driven into them (the throttle, its gear their way: never
+      // crept through, plan 93 S3); leant on, walked into, it doesn't budge — it's them their own screen pushes out
+      // of its box. The banks: pushed off)
+      const dir = s.gear === -1 ? -1 : s.gear > 0 ? 1 : 0;
+      const driven = s.thr > 0.02 && dir * -(nx * ax + nz * az) > 0.3;
+      const out = !person ? 20 : driven ? 80 : 0;
       px += nx * depth * out * dt;
       pz += nz * depth * out * dt;
     }

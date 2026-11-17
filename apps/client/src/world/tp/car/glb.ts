@@ -1,15 +1,27 @@
-import { type CarLook, FLATS, PART } from "@yutopia/shared/car";
+import {
+  type CarLook,
+  DOOR_GONE,
+  DOOR_HANG,
+  doorSlot,
+  FLATS,
+  type Hole,
+  PANE_CRACK,
+  PANE_GONE,
+  PART,
+  WRECK,
+} from "@yutopia/shared/car";
 import {
   Box3,
   BoxGeometry,
+  type BufferAttribute,
   BufferGeometry,
   CanvasTexture,
-  CircleGeometry,
   Color,
   DoubleSide,
   Float32BufferAttribute,
   Group,
   InstancedMesh,
+  type InterleavedBufferAttribute,
   type Material,
   Matrix4,
   Mesh,
@@ -19,14 +31,16 @@ import {
   type Object3D,
   PlaneGeometry,
   Quaternion,
+  type Intersection,
   Raycaster,
-  RingGeometry,
   Shape,
   ShapeGeometry,
   SRGBColorSpace,
   type Texture,
   TorusGeometry,
+  Vector2,
   Vector3,
+  Vector4,
   type WebGLRenderer,
 } from "three";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
@@ -310,6 +324,13 @@ function queueFor(r: WebGLRenderer): AssetQueue<Loaded> {
       },
       size: (x) => x.bytes,
       free: (x) => free(x.scene),
+      pieces: (x) => {
+        let n = 0;
+        x.scene.traverse((o) => {
+          if ((o as Mesh).isMesh) n++;
+        });
+        return n;
+      },
       concurrency: 3,
       // (what may stay unheld: a few variants' worth, the far ones, the wheels and the extras)
       budget: 48 * 1024 * 1024,
@@ -351,6 +372,14 @@ const Z = new Vector3(0, 0, 1);
 const v1 = new Vector3();
 const v2 = new Vector3();
 const m4 = new Matrix4();
+/** (plan 96 F3a) a round's mark on the skin, across (m): its hole, its bare metal, its scorch */
+const MARK_SIZE = 0.06;
+/** (plan 95 F6a) a flat tyre's hub, down on its rim (m) */
+const FLAT_DROP = 0.08;
+/** (plan 96 F5a) a blowout's collapse (s) */
+const FLAT_S = 0.6;
+/** (plan 95 F1a) a window wound all the way down or up (s) */
+const WIN_S = 1.5;
 
 // ── the paint's wear: the road's dirt up its sides, the snow on it ────────────────────────────────
 
@@ -404,16 +433,69 @@ function own<M extends Material>(m: M): M {
   return c;
 }
 
+/** (plan 95 F6a) A car's flat tyres, for its tyre's shader: each wheel's hub (world; w its drop, 0 not flat) and
+ *  axle (world), the tyre's radius and half its width (m). */
+interface FlatU {
+  hub: { value: Vector4[] };
+  axle: { value: Vector3[] };
+  size: { value: Vector2 };
+}
+/** (plan 95 F6a) Its flat: each point of a tyre below its hub by more than its radius less the drop pushed up onto
+ *  that line — flat on the road where it sits, however it turns —, its walls bulging out there and a little
+ *  above it. In the world's frame (y up), back into the mesh's own. */
+const FLAT_GLSL = `{
+  vec4 fw = modelMatrix * vec4(transformed, 1.0);
+  vec3 dw = vec3(0.0);
+  for (int i = 0; i < 4; i++) {
+    vec4 hb = uFlatHub[i];
+    if (hb.w <= 0.0) continue;
+    vec3 rel = fw.xyz - hb.xyz;
+    vec3 ax = uFlatAxle[i];
+    float along = dot(rel, ax);
+    if (abs(along) > uFlatSize.y) continue;
+    vec3 rad = rel - ax * along;
+    if (length(rad) > uFlatSize.x * 1.2) continue;
+    float floorY = -(uFlatSize.x - hb.w);
+    float side = along >= 0.0 ? 1.0 : -1.0;
+    if (rad.y < floorY) {
+      float dz = floorY - rad.y;
+      dw.y += dz;
+      dw += ax * side * dz * 0.55;
+    } else {
+      dw += ax * side * smoothstep(floorY + 0.14, floorY, rad.y) * hb.w * 0.3;
+    }
+  }
+  transformed += inverse(mat3(modelMatrix)) * dw;
+}`;
+function flatTyre(m: Material, u: FlatU) {
+  if (m.userData.flatTyre) return;
+  m.userData.flatTyre = true;
+  const prev = m.onBeforeCompile;
+  const key = m.customProgramCacheKey;
+  m.onBeforeCompile = (sh, r) => {
+    prev.call(m, sh, r);
+    sh.uniforms.uFlatHub = u.hub;
+    sh.uniforms.uFlatAxle = u.axle;
+    sh.uniforms.uFlatSize = u.size;
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", "#include <common>\nuniform vec4 uFlatHub[4]; uniform vec3 uFlatAxle[4]; uniform vec2 uFlatSize;")
+      .replace("#include <begin_vertex>", `#include <begin_vertex>\n${FLAT_GLSL}`);
+  };
+  m.customProgramCacheKey = () => `${key.call(m)}|flat`;
+}
+
 // the windscreen's crack: lines from a star low on the passenger's side (and more of them, worse)
-const cracks: (CanvasTexture | null)[] = [null, null];
-function crackTex(bad = false): CanvasTexture {
-  const i = bad ? 1 : 0;
+const cracks: (CanvasTexture | null)[] = [null, null, null, null];
+/** (`pane`: plan 94 P3's for the other panes — square, its star in the middle reaching to the edges, laid across
+ *  each pane's own two longest ways) */
+function crackTex(bad = false, pane = false, spot = false): CanvasTexture {
+  const i = spot ? 3 : pane ? 2 : bad ? 1 : 0;
   const had = cracks[i];
   if (had) return had;
   const W = 512;
   const cv = document.createElement("canvas");
   cv.width = W;
-  cv.height = W / 2;
+  cv.height = pane ? W : W / 2;
   const g = cv.getContext("2d") as CanvasRenderingContext2D;
   let seed = bad ? 7 : 3;
   const rnd = () => {
@@ -452,8 +534,25 @@ function crackTex(bad = false): CanvasTexture {
     g.fill();
   };
   // (u: the model's z across — the passenger's side the low u; v up the glass: the canvas's y down)
-  star(W * 0.3, W * 0.36, 11, 200);
-  if (bad) {
+  // (plan 95 F5a: one round's star in laminated glass — its spider's legs and rings, the hole in the middle —,
+  // laid where it went in)
+  if (spot) {
+    star(W * 0.5, W * 0.5, 14, 240);
+    star(W * 0.5, W * 0.5, 9, 110);
+    g.fillStyle = "rgba(20,22,24,0.9)";
+    g.beginPath();
+    g.arc(W * 0.5, W * 0.5, 4, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = "rgba(245,248,250,0.8)";
+    g.lineWidth = 2.5;
+    g.beginPath();
+    g.arc(W * 0.5, W * 0.5, 8, 0, Math.PI * 2);
+    g.stroke();
+  } else if (pane) {
+    star(W * 0.5, W * 0.5, 13, 300);
+    star(W * 0.5, W * 0.5, 7, 140);
+  } else star(W * 0.3, W * 0.36, 11, 200);
+  if (bad && !pane) {
     star(W * 0.68, W * 0.2, 9, 160);
     star(W * 0.5, W * 0.42, 7, 120);
   }
@@ -462,6 +561,78 @@ function crackTex(bad = false): CanvasTexture {
   t.anisotropy = 4;
   cracks[i] = t;
   return t;
+}
+
+/** (plan 96 F3a) A round's mark on a car's skin, ~6 cm across: the hole, black and ragged; the paint chipped off
+ *  round it to the bare metal; a soft scorch fading out past that. Made once. */
+let markTexture: CanvasTexture | null = null;
+function markTex(): CanvasTexture {
+  if (markTexture) return markTexture;
+  const W = 128;
+  const cv = document.createElement("canvas");
+  cv.width = W;
+  cv.height = W;
+  const g = cv.getContext("2d") as CanvasRenderingContext2D;
+  const c = W / 2;
+  let seed = 11;
+  const rnd = () => {
+    seed = (seed * 16807) % 2147483647;
+    return seed / 2147483647;
+  };
+  // (the scorch: soot fading out, a few specks)
+  const sc = g.createRadialGradient(c, c, c * 0.35, c, c, c);
+  sc.addColorStop(0, "rgba(28,24,20,0.6)");
+  sc.addColorStop(0.55, "rgba(28,24,20,0.25)");
+  sc.addColorStop(1, "rgba(28,24,20,0)");
+  g.fillStyle = sc;
+  g.fillRect(0, 0, W, W);
+  for (let i = 0; i < 40; i++) {
+    const a = rnd() * Math.PI * 2;
+    const r = c * (0.4 + rnd() * 0.5);
+    g.fillStyle = `rgba(20,18,16,${0.15 + rnd() * 0.35})`;
+    g.fillRect(c + Math.cos(a) * r, c + Math.sin(a) * r, 1.5, 1.5);
+  }
+  // (a ragged edge: a ring of points at a radius, each a little in or out)
+  const ragged = (r0: number, jag: number, fill: string) => {
+    g.fillStyle = fill;
+    g.beginPath();
+    for (let i = 0; i <= 28; i++) {
+      const a = (i / 28) * Math.PI * 2;
+      const r = c * r0 * (1 + (rnd() - 0.5) * jag);
+      if (i === 0) g.moveTo(c + Math.cos(a) * r, c + Math.sin(a) * r);
+      else g.lineTo(c + Math.cos(a) * r, c + Math.sin(a) * r);
+    }
+    g.closePath();
+    g.fill();
+  };
+  // (the bare metal where the paint flaked off, a lighter rim where the round turned the edge out)
+  ragged(0.44, 0.35, "rgb(150,146,138)");
+  ragged(0.3, 0.25, "rgb(186,182,174)");
+  // (the hole)
+  ragged(0.2, 0.3, "rgb(10,10,10)");
+  const t = new CanvasTexture(cv);
+  t.colorSpace = SRGBColorSpace;
+  t.anisotropy = 4;
+  markTexture = t;
+  return t;
+}
+
+/** (plan 94 P3; plan 95 F5a) A crack's picture laid across a pane's glass (its points, its own frame) along its
+ *  two longest ways: its middle at `at` — where its round went in — and twice the glass's size, so the crack
+ *  runs right across it from there; none, the glass's middle, the picture its size. */
+function crackUV(pos: BufferAttribute, at: Vector3 | null): Float32Array {
+  const bb = new Box3().setFromBufferAttribute(pos);
+  const ext = bb.getSize(new Vector3());
+  const ax = [0, 1, 2].sort((p, q) => ext.getComponent(q) - ext.getComponent(p));
+  const uv = new Float32Array(pos.count * 2);
+  for (let j = 0; j < pos.count; j++)
+    for (let k = 0; k < 2; k++) {
+      const a = ax[k];
+      const e = ext.getComponent(a) || 1;
+      const x = pos.getComponent(j, a);
+      uv[j * 2 + k] = at ? 0.5 + (x - at.getComponent(a)) / (2 * e) : (x - bb.min.getComponent(a)) / e;
+    }
+  return uv;
 }
 
 const LAMP: Record<string, number> = {
@@ -515,7 +686,7 @@ class GlbCar implements Sedan {
   readonly wipers: Wiper[] = [];
   readonly freshener = new Group();
   readonly snow: Mesh[] = [];
-  readonly seats: { hip: Vector3; side: 1 | -1; front: boolean }[] = [];
+  readonly seats: { hip: Vector3; side: 1 | -1; front: boolean; floor?: number }[] = [];
   readonly eye: Vector3;
   readonly hood: Vector3;
   readonly pedals?: Vector3[];
@@ -551,6 +722,19 @@ class GlbCar implements Sedan {
   /** its broken parts (shared car/damage.ts PART), as shown */
   private partBits = 0;
   private crack: { mesh: Mesh; mat: MeshBasicMaterial } | null = null;
+  /** (plan 94 P3) each pane's middle (the model's: damage.ts PANES), and the cracks over the rest of the glass */
+  private paneMid: (Vector3 | null)[] = [null, null, null, null, null, null];
+  private paneCrackMat: MeshBasicMaterial | null = null;
+  /** (plan 94 P2) what's come off it or hangs (shared WRECK); each door's state (0 on, 1 hanging, 2 gone) and
+   *  last opening; a lid's least opening (sprung) and last */
+  private wreckBits = 0;
+  private doorState: number[] = [];
+  private doorA: number[] = [];
+  private lidMin = new Map<string, number>();
+  /** (plan 94 P1) burnt out: each material's charred copy (made once, its own) */
+  private burnt = false;
+  private charred = new Map<Material, Material>();
+  private lidA = new Map<string, number>();
   private lampK = 1;
   private lights: Lights = { beams: "off", tail: false, brake: 0, reverse: false, ind: 0, dash: 0, dome: false };
   private rimAt = new Vector3();
@@ -609,11 +793,8 @@ class GlbCar implements Sedan {
       const g = p.anim;
       const slide = pv.kind === "slide";
       const fold = pv.kind === "fold";
-      this.doors.push({
-        group: g,
-        side,
-        front: /_f[lr]$/.test(d),
-        open: slide
+      const di = this.doors.length;
+      const base: (a: number) => void = slide
           ? (a: number) => {
               // (the van's: out a little, then back along its side)
               const k = Math.min(1, a / 1.05);
@@ -625,7 +806,23 @@ class GlbCar implements Sedan {
               }
             : (a: number) => {
                 g.rotation.y = -side * a;
-              },
+              };
+      this.doors.push({
+        group: g,
+        side,
+        front: /_f[lr]$/.test(d),
+        // (plan 94 P2: hanging off its lower hinge — ajar whatever's asked, its back edge dropped; gone: nothing)
+        open: (a: number) => {
+          this.doorA[di] = a;
+          const st = this.doorState[di] ?? 0;
+          if (st === 2) return;
+          base(st === 1 ? Math.max(a, 0.55) : a);
+          g.rotation.z = st === 1 ? 0.24 : 0;
+          if (!g.matrixAutoUpdate) {
+            g.updateMatrix();
+            g.updateMatrixWorld(true);
+          }
+        },
       });
     }
     // the seats, the eye, the pedals
@@ -751,6 +948,10 @@ class GlbCar implements Sedan {
     scene.updateMatrixWorld(true);
     // the windscreen (before its glass moves anywhere): the snow's pane over it, the mirror under its top
     this.findScreen(scene);
+    // (plan 94 P3) its glass as panes, each to crack and go on its own
+    this.tagPanes(scene);
+    // (plan 94 P2) its rear bumper as a part of its own (the file has it in the body)
+    this.splitRearBumper(scene);
     // the parts: what each pivot holds, moved into the model's
     for (const [name, p] of this.parts) {
       const node = scene.getObjectByName(name);
@@ -792,16 +993,50 @@ class GlbCar implements Sedan {
       // middle, a little inside it; ×0.47 had them on the hub — docs/plan/92 polish)
       if (b) this.rimR = Math.max(0.13, Math.min(0.21, b.span * 0.9));
     }
+    this.seatFloors();
     this.ready = true;
     this.setEnv(this.env);
     this.setLights(this.lights);
     if (this.radioSays) this.setRadio(...this.radioSays);
     const bits = this.partBits;
+    const wb = this.wreckBits;
     this.partBits = 0;
-    this.setWear(this.wear.uGrime.value, this.dmg, bits);
+    this.wreckBits = 0;
+    this.setWear(this.wear.uGrime.value, this.dmg, bits, wb, this.burntWant ? 3 : 0);
+    // (plan 96 F5a: as it came in seen — a tyre shot from now on blows out, not just is)
+    this.flatSeen = true;
     this.setBeacon(this.beacon.on, this.beacon.t);
     if (this.holesWant) this.setHoles(this.holesWant);
     this.done();
+  }
+
+  /** (plan 96) Each seat's footwell floor: straight down onto its carpet where the feet go — ahead of the hip by
+   *  the reach of a sat person's feet (a front seat's 0.55 m, a rear one's 0.4) —, its height in the model's frame;
+   *  none found (a seat with no carpet before it: a bed, a sled), left to the fit's own guess. */
+  private seatFloors() {
+    const floors: Mesh[] = [];
+    this.root.traverse((x) => {
+      const m = x as Mesh;
+      if (!m.isMesh || Array.isArray(m.material)) return;
+      if (/^(carpet|floor|rubber_mat)$/.test((m.material as Material).name ?? "")) floors.push(m);
+    });
+    if (!floors.length) return;
+    this.root.updateMatrixWorld(true);
+    const ray = new Raycaster();
+    const down = new Vector3(0, -1, 0).transformDirection(this.root.matrixWorld);
+    for (const seat of this.seats) {
+      const ahead = seat.front ? 0.55 : 0.4;
+      const ys: number[] = [];
+      // (under each foot: a hand's width either side of the hip's line)
+      for (const dz of [-0.13, 0.13]) {
+        const from = this.root.localToWorld(v1.set(seat.hip.x - ahead, seat.hip.y + 0.05, seat.hip.z + dz));
+        ray.set(from, down);
+        ray.far = 0.9;
+        const hit = ray.intersectObjects(floors, false)[0];
+        if (hit) ys.push(this.root.worldToLocal(hit.point.clone()).y);
+      }
+      if (ys.length) seat.floor = Math.max(...ys);
+    }
   }
 
   /** The wheels of another style: its tyre and rim sized to this car's, the file's own let go (its
@@ -921,6 +1156,14 @@ class GlbCar implements Sedan {
         p.map = plateTexture(this.o.plate);
         skyLit(p);
         m.material = p;
+      } else if (n === "tyre" && mat.isMeshStandardMaterial) {
+        // (plan 95 F6a: its own, the flat's squash in its shader — one program for every car's, compiled with it)
+        if (!this.tyreMat) {
+          this.tyreMat = this.mat(own(mat));
+          flatTyre(this.tyreMat, this.flatU);
+          this.envMats.add(this.tyreMat);
+        }
+        m.material = this.tyreMat;
       } else if (n.startsWith("livery")) {
         m.visible = !!role && n.includes(role);
       } else if (mat.isMeshStandardMaterial) this.envMats.add(mat);
@@ -1000,6 +1243,8 @@ class GlbCar implements Sedan {
     );
     this.snowPane = new Mesh(this.geo(g), this.snowMat);
     this.snowPane.visible = false;
+    // (plan 95 F4a: a round meeting it meets the windscreen — the shot's ray test reads it so)
+    this.snowPane.userData.paneOf = 0;
     this.snowPane.renderOrder = 2;
     this.glb.add(this.snowPane);
     // the inside mirror: under the windscreen's top, a hand's breadth behind it
@@ -1067,22 +1312,281 @@ class GlbCar implements Sedan {
     if (!pv) return null;
     return toModel(pv.at, out).add(v1.set(0, 0.17, 0));
   }
-  /** (plan 93 S2) a door's window wound down, or up (a broken side's stays gone: setParts) */
-  private downs = new Set<number>();
-  windowDown(door: number, down: boolean) {
-    if (down === this.downs.has(door)) return;
-    if (down) this.downs.add(door);
-    else this.downs.delete(door);
-    const name = this.e.doors[door];
-    const p = name ? this.parts.get(name) : undefined;
-    if (!p) return;
-    const left = (this.e.pivots[name]?.at[2] ?? 0) < 0;
-    const broken = !!(this.partBits & (left ? PART.sideL : PART.sideR));
-    p.holder.traverse((x) => {
-      const m = x as Mesh;
-      const n = (m.material as Material | undefined)?.name;
-      if (m.isMesh && (n === "glass" || n === "glass_tint")) m.visible = !down && !broken;
+  // ── (plan 93 S2; plan 95 F1a) the doors' windows: wound down into the door, along their own glass, over WIN_S ──
+  /** each door's (by its index in the doors): where its window is (0 up … 1 down), where it's going, how fast (/s) */
+  private winK: number[] = [];
+  private winTo: number[] = [];
+  private winRate: number[] = [];
+  /** each door pane's way down into its door (its parent's frame), the whole of its height */
+  private paneSlide: (Vector3 | null)[] = [null, null, null, null, null, null];
+  /** A door's window wound down, or up (a broken side's stays gone: setParts): moving there over `secs` from
+   *  where it is. The first word of it (the car just come into view) is where it is, not moved. True: a move
+   *  began (heard: the motor). */
+  windowDown(door: number, down: boolean, secs = WIN_S): boolean {
+    const to = down ? 1 : 0;
+    if (this.winTo[door] === undefined) {
+      this.winTo[door] = to;
+      this.winK[door] = to;
+      this.winRate[door] = 1 / secs;
+      this.placeWindows();
+      return false;
+    }
+    // (going there already: as fast as the quicker asks — a gun out of it)
+    if (this.winTo[door] === to) {
+      this.winRate[door] = Math.max(this.winRate[door] ?? 0, 1 / secs);
+      return false;
+    }
+    this.winTo[door] = to;
+    this.winRate[door] = 1 / secs;
+    const i = this.paneOfDoor(door);
+    return i >= 0 && !!this.paneSlide[i] && !(this.partBits & PANE_GONE[i]);
+  }
+  /** (plan 95 F1a) Each frame: the windows on their way, moved. */
+  windowsTick(dt: number) {
+    let moved = false;
+    for (let d = 0; d < this.winTo.length; d++) {
+      const to = this.winTo[d];
+      const k = this.winK[d];
+      if (to === undefined || k === to) continue;
+      const step = (this.winRate[d] ?? 1 / WIN_S) * dt;
+      this.winK[d] = to > k ? Math.min(to, k + step) : Math.max(to, k - step);
+      moved = true;
+    }
+    if (moved) this.placeWindows();
+  }
+  /** a window moving now (any door's) */
+  windowsMoving(): boolean {
+    return this.winTo.some((to, d) => to !== undefined && this.winK[d] !== to);
+  }
+  private paneOfDoor(door: number): number {
+    const n = ["door_fl", "door_fr", "door_rl", "door_rr"].indexOf(this.e.doors[door] ?? "");
+    return n < 0 ? -1 : 2 + n;
+  }
+  /** (plan 95 F1a) a pane's window: how far down (0 up … 1 down; a door's own — the quarter's fixed glass never) */
+  private paneK(i: number): number {
+    if (i < 2) return 0;
+    const d = this.e.doors.indexOf(["door_fl", "door_fr", "door_rl", "door_rr"][i - 2]);
+    return d < 0 ? 0 : (this.winK[d] ?? 0);
+  }
+  private paneDown(i: number): boolean {
+    return this.paneK(i) >= 0.999;
+  }
+  /** (plan 95 F1a) Each door pane (and its two-pass twin, and its crack) where its window's wound to: down its
+   *  own glass, a motor's even pace eased at its ends; all the way down, hidden (showPanes). */
+  private placeWindows() {
+    this.root.traverse((x) => {
+      const ud = x.userData;
+      const i = (ud.pane ?? ud.crackOf) as number | undefined;
+      if (typeof i !== "number" || i < 2 || ud.fixed) return;
+      const sl = this.paneSlide[i];
+      const rest = ud.winRest as Vector3 | undefined;
+      if (!sl || !rest) return;
+      const k = this.paneK(i);
+      const e = 0.75 * k + 0.25 * k * k * (3 - 2 * k);
+      x.position.copy(rest).addScaledVector(sl, e);
+      x.updateMatrix();
+      if (!x.matrixAutoUpdate) x.updateMatrixWorld(true);
     });
+    this.showPanes(this.partBits);
+  }
+  /** (plan 95 F1a) A door pane's way down: straight down into its door, as far as it's tall; its rest kept. */
+  private slideOf(m: Mesh, i: number) {
+    m.userData.winRest = m.position.clone();
+    if (this.paneSlide[i] || !m.parent) return;
+    const pos = m.geometry.getAttribute("position");
+    if (!pos) return;
+    m.updateMatrix();
+    // (up in its parent's frame: the model's up, its door shut — straight down, not down its slope: glass leaning
+    // in at its top, its slope's way down goes out through the door's skin)
+    m.parent.updateWorldMatrix(true, false);
+    const down = new Vector3(0, -1, 0).transformDirection(m4.copy(m.parent.matrixWorld).invert());
+    const a = new Vector3();
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let j = 0; j < pos.count; j++) {
+      const q = a.fromBufferAttribute(pos, j).applyMatrix4(m.matrix).dot(down);
+      lo = Math.min(lo, q);
+      hi = Math.max(hi, q);
+    }
+    this.paneSlide[i] = down.multiplyScalar((hi - lo) * 1.03);
+  }
+  /** (plan 94 P3) Each pane and its crack as the bits have it: gone, hidden; cracked, its crack over it; a door's
+   *  window wound down, down. Both of a two-pass's meshes (their `pane` alike). */
+  private showPanes(bits: number) {
+    this.root.traverse((x) => {
+      const ud = x.userData;
+      const i = (ud.pane ?? ud.crackOf) as number | undefined;
+      if (typeof i !== "number") return;
+      const gone = !!(bits & PANE_GONE[i]);
+      const down = !ud.fixed && this.paneDown(i);
+      x.visible = !gone && !down && (ud.crackOf === undefined || !!(bits & PANE_CRACK[i]));
+    });
+  }
+  /** (plan 94 P3) The middle of a pane (the model's coords), for the shards; null if it has none. */
+  paneAt(i: number): Vector3 | null {
+    return this.paneMid[i] ?? null;
+  }
+
+  /** (plan 94 P3) Its glass told apart: the windscreen (glass_ws), the rear window (the boot's, the back doors', or
+   *  the body's that faces back), each door's window, and the body's side glass by its side (the quarter: the
+   *  side's rear pane). The body's own glass is in one mesh in the file — split here by the way each triangle
+   *  faces. In the file's frame (x ahead, z<0 its left), before the parts move. */
+  private tagPanes(scene: Object3D) {
+    const GL = new Set(["glass", "glass_ws", "glass_tint"]);
+    const found: Mesh[] = [];
+    scene.traverse((x) => {
+      const m = x as Mesh;
+      if (!m.isMesh || Array.isArray(m.material)) return;
+      if (GL.has((m.material as Material | undefined)?.name ?? "")) found.push(m);
+    });
+    const boxes = Array.from({ length: 6 }, () => new Box3());
+    const bx = new Box3();
+    const put = (m: Mesh, i: number, fixed = false) => {
+      m.userData.pane = i;
+      if (fixed) m.userData.fixed = true;
+      m.geometry.computeBoundingBox();
+      if (m.geometry.boundingBox) boxes[i].union(bx.copy(m.geometry.boundingBox).applyMatrix4(m.matrixWorld));
+    };
+    const ahead = this.e.eye[0];
+    for (const m of found) {
+      const d = ["door_fl", "door_fr", "door_rl", "door_rr"].findIndex((n) => within(m, n));
+      if (d >= 0) {
+        put(m, 2 + d);
+        this.slideOf(m, 2 + d);
+        continue;
+      }
+      if (within(m, "boot")) {
+        put(m, 1);
+        continue;
+      }
+      if ((m.material as Material).name === "glass_ws") {
+        put(m, 0);
+        continue;
+      }
+      // (another door's — a sliding one: its side's rear pane)
+      if (within(m, "door_")) {
+        m.geometry.computeBoundingBox();
+        const c = (m.geometry.boundingBox ?? bx.makeEmpty()).getCenter(v1).applyMatrix4(m.matrixWorld);
+        put(m, c.z < 0 ? 4 : 5);
+        continue;
+      }
+      // the body's: each triangle by the way it faces and where it is
+      const g = m.geometry;
+      const pos = g.getAttribute("position");
+      if (!pos) continue;
+      const idx = g.index;
+      const tris = idx ? idx.count / 3 : pos.count / 3;
+      const vi = (t: number, k: number) => (idx ? idx.getX(t * 3 + k) : t * 3 + k);
+      const groups = new Map<number, number[]>();
+      const a = new Vector3();
+      const b = new Vector3();
+      const c = new Vector3();
+      for (let t = 0; t < tris; t++) {
+        a.fromBufferAttribute(pos, vi(t, 0)).applyMatrix4(m.matrixWorld);
+        b.fromBufferAttribute(pos, vi(t, 1)).applyMatrix4(m.matrixWorld);
+        c.fromBufferAttribute(pos, vi(t, 2)).applyMatrix4(m.matrixWorld);
+        const mx = (a.x + b.x + c.x) / 3;
+        const mz = (a.z + b.z + c.z) / 3;
+        v2.subVectors(b, a).cross(v1.subVectors(c, a)).normalize();
+        const i =
+          Math.abs(v2.x) > 0.5 && Math.abs(v2.x) > Math.abs(v2.z)
+            ? mx < ahead
+              ? 1
+              : 0
+            : (mx > ahead + 0.3 ? 2 : 4) + (mz < 0 ? 0 : 1);
+        let list = groups.get(i);
+        if (!list) groups.set(i, (list = []));
+        list.push(t);
+      }
+      if (groups.size <= 1 || Object.keys(g.morphAttributes).length) {
+        const [only] = [...groups.keys()];
+        put(m, only ?? 4, true);
+        continue;
+      }
+      const parent = m.parent;
+      if (!parent) continue;
+      for (const [i, list] of groups) {
+        const sub = new BufferGeometry();
+        for (const name of Object.keys(g.attributes)) {
+          const at = g.getAttribute(name);
+          const n = at.itemSize;
+          const arr = new Float32Array(list.length * 3 * n);
+          let o = 0;
+          for (const t of list)
+            for (let k = 0; k < 3; k++) {
+              const j = vi(t, k);
+              for (let q = 0; q < n; q++) arr[o++] = at.getComponent(j, q);
+            }
+          sub.setAttribute(name, new Float32BufferAttribute(arr, n, at.normalized));
+        }
+        const piece = new Mesh(this.geo(sub), m.material);
+        piece.name = `${m.name}.${i}`;
+        piece.position.copy(m.position);
+        piece.quaternion.copy(m.quaternion);
+        piece.scale.copy(m.scale);
+        piece.castShadow = m.castShadow;
+        piece.receiveShadow = m.receiveShadow;
+        piece.renderOrder = m.renderOrder;
+        parent.add(piece);
+        piece.updateMatrixWorld(true);
+        put(piece, i, true);
+      }
+      m.removeFromParent();
+    }
+    boxes.forEach((bb, i) => {
+      if (bb.isEmpty()) return;
+      const c = bb.getCenter(new Vector3());
+      this.paneMid[i] = toModel([c.x, c.y, c.z]);
+    });
+  }
+  /** (plan 94 P3) A crack over each pane (but the windscreen's own, on its snow pane) that's cracked and has none
+   *  yet: a copy of its glass a hair off it, the crack's picture laid flat across it. */
+  private crackPanes(bits: number) {
+    const add: Mesh[] = [];
+    this.root.traverse((x) => {
+      const m = x as Mesh;
+      const i = m.userData.pane as number | undefined;
+      if (!m.isMesh || typeof i !== "number" || i === 0 || m.userData.twoPassFront || m.userData.cracked) return;
+      if (!(bits & PANE_CRACK[i]) || bits & PANE_GONE[i]) return;
+      add.push(m);
+    });
+    for (const m of add) {
+      m.userData.cracked = true;
+      const src = m.geometry;
+      const pos = src.getAttribute("position");
+      if (!pos || !m.parent) continue;
+      // (its picture across the glass's two longest ways — from where its round went in, plan 95 F5a)
+      const uv = crackUV(pos as BufferAttribute, this.crackAt[m.userData.pane as number] ?? null);
+      const g = new BufferGeometry();
+      g.setAttribute("position", pos);
+      g.setAttribute("uv", new Float32BufferAttribute(uv, 2));
+      if (src.index) g.setIndex(src.index);
+      if (!this.paneCrackMat)
+        this.paneCrackMat = this.mat(
+          new MeshBasicMaterial({
+            map: crackTex(false, true),
+            transparent: true,
+            depthWrite: false,
+            opacity: 0.9,
+            side: DoubleSide,
+            polygonOffset: true,
+            polygonOffsetFactor: -2,
+            polygonOffsetUnits: -2,
+          }),
+        );
+      const c = new Mesh(this.geo(g), this.paneCrackMat);
+      c.name = `${m.name}.crack`;
+      c.userData = { crackOf: m.userData.pane, fixed: m.userData.fixed, winRest: m.userData.winRest };
+      c.renderOrder = 3;
+      c.position.copy(m.position);
+      c.quaternion.copy(m.quaternion);
+      c.scale.copy(m.scale);
+      c.castShadow = false;
+      c.matrixAutoUpdate = m.matrixAutoUpdate;
+      m.parent.add(c);
+      c.updateMatrix();
+      c.updateMatrixWorld(true);
+    }
   }
 
   /** (plan 93 S6) snow chains on its wheels (FL FR RL RR: bits 1 2 4 8): on each, round its tread — the cross
@@ -1134,30 +1638,39 @@ class GlbCar implements Sedan {
   }
 
   // ── (plan 93 S1) where it's been shot: a hole and its chipped ring, on the body's own skin ──
-  private holesWant: readonly { u: number; w: number; h: number; face: number }[] | null = null;
+  // (plan 95 F4a, point 6: each on the very piece it's in — a door's, the bonnet's, the body's —, so it swings, falls,
+  // drops and goes with it; found from just off the skin along its own way out where the shooter's screen gave it,
+  // else its face's)
+  private holesWant: readonly Hole[] | null = null;
   private holesKey = "";
+  private dentsKey = "";
   private holeMeshes: InstancedMesh[] = [];
-  setHoles(list: readonly { u: number; w: number; h: number; face: number }[]) {
-    const key = list.map((x) => `${x.u},${x.w},${x.h},${x.face}`).join(";");
-    if (key === this.holesKey) return;
-    this.holesWant = list;
+  setHoles(all: readonly Hole[]) {
+    this.holesWant = all;
     if (!this.ready) return;
+    // (plan 95 F5a: those in glass — the windscreen's stars, where a pane cracked from)
+    this.setStars(all.filter((x) => x.pane !== undefined));
+    const list = all.filter((x) => x.pane === undefined);
+    const key = list.map((x) => `${x.u},${x.w},${x.h},${x.face},${x.n?.join("/") ?? ""}`).join(";");
+    if (key === this.holesKey) return;
     this.holesKey = key;
     for (const m of this.holeMeshes) {
       m.removeFromParent();
-      m.geometry.dispose();
       m.dispose();
     }
     this.holeMeshes = [];
     if (!list.length) return;
-    // (the body's own skin: what isn't glass, a light or a plate — found from outside the box it was struck on)
+    // (the body's own skin: what isn't glass, a light or a plate)
     const skins: Object3D[] = [];
-    this.body.traverse((o) => {
+    this.root.traverseVisible((o) => {
       const m = o as Mesh;
+      if (!m.isMesh || (m as { isInstancedMesh?: boolean }).isInstancedMesh || m.userData.hole) return;
       const n = (m.material as Material | undefined)?.name ?? "";
-      if (m.isMesh && m.visible && !/glass|emit_|plate|screen|collider/.test(n) && !/collider/.test(m.name))
+      if (!/glass|emit_|plate|screen|collider|lens/.test(n) && !/collider/.test(m.name) && m.userData.paneOf === undefined)
         skins.push(m);
     });
+    // (plan 96 F4a: each part at rest while they're laid — a bonnet sprung, a door hanging: on it as it was)
+    const back = this.partsAtRest();
     this.root.updateMatrixWorld(true);
     const ray = new Raycaster();
     const N: [number, number, number][] = [
@@ -1167,53 +1680,225 @@ class GlbCar implements Sedan {
       [0, 0, -1],
       [0, 1, 0],
     ];
-    const at: Matrix4[] = [];
+    // (each piece's: where on it, in its own frame)
+    const on = new Map<Object3D, Matrix4[]>();
     const q = new Quaternion();
+    const spinQ = new Quaternion();
     const Z = new Vector3(0, 0, 1);
+    const hits: Intersection[] = [];
     for (const h of list) {
-      const n = N[h.face] ?? N[0];
+      // (the car's frame to the model's: forward −x, right −z, up y)
+      const n = h.n ? [-h.n[0], h.n[2], -h.n[1]] : (N[h.face] ?? N[0]);
       const p = v1.set(-h.u, h.h, -h.w);
-      const nb = v2.set(n[0], n[1], n[2]);
+      const nb = v2.set(n[0], n[1], n[2]).normalize();
+      const at = this.body.localToWorld(p.clone());
       const from = this.body.localToWorld(p.clone().addScaledVector(nb, 0.3));
       const dir = nb.clone().transformDirection(this.body.matrixWorld).negate();
       ray.set(from, dir);
       ray.far = 0.9;
-      const hit = ray.intersectObjects(skins, false)[0];
+      hits.length = 0;
+      ray.intersectObjects(skins, false, hits);
+      // (the skin nearest the point it was struck at — not a mirror or a trim it might pass first)
+      let hit: Intersection | null = null;
+      for (const x of hits) if (x.face && (!hit || x.point.distanceTo(at) < hit.point.distanceTo(at))) hit = x;
       if (!hit?.face) continue;
-      // (its face's own normal, the body's frame; out a hair so it's on it)
-      const wn = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
-      const local = this.body.worldToLocal(hit.point.clone().addScaledVector(wn, 0.003));
-      const ln = wn.clone().transformDirection(m4.copy(this.body.matrixWorld).invert()).normalize();
-      q.setFromUnitVectors(Z, ln);
-      at.push(new Matrix4().compose(local, q, new Vector3(1, 1, 1)));
+      const obj = hit.object;
+      const wn = hit.face.normal.clone().transformDirection(obj.matrixWorld);
+      if (wn.dot(dir) > 0) wn.negate();
+      const inv = m4.copy(obj.matrixWorld).invert();
+      const local = hit.point.clone().addScaledVector(wn, 0.003).applyMatrix4(inv);
+      const ln = wn.clone().transformDirection(inv).normalize();
+      // (its own scale undone: the hole the size of a round on any piece; each its own way round)
+      const sc = new Vector3().setFromMatrixScale(obj.matrixWorld);
+      q.setFromUnitVectors(Z, ln).multiply(spinQ.setFromAxisAngle(Z, (on.size + (on.get(obj)?.length ?? 0)) * 2.39996 + h.u * 7));
+      let list2 = on.get(obj);
+      if (!list2) on.set(obj, (list2 = []));
+      list2.push(new Matrix4().compose(local, q, new Vector3(1 / (sc.x || 1), 1 / (sc.y || 1), 1 / (sc.z || 1))));
     }
-    if (!at.length) return;
-    const make = (g: BufferGeometry, colour: number, order: number) => {
-      const m = new InstancedMesh(
-        g,
-        this.mat(
-          new MeshBasicMaterial({
-            color: colour,
-            polygonOffset: true,
-            polygonOffsetFactor: -4,
-            polygonOffsetUnits: -4,
-          }),
-        ),
-        at.length,
-      );
+    back();
+    if (!on.size) return;
+    // (plan 96 F3a: each a 6 cm mark — the hole, the bare metal, the scorch — in one draw a piece)
+    this.markMat ??= this.mat(
+      new MeshBasicMaterial({
+        map: markTex(),
+        transparent: true,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -4,
+        polygonOffsetUnits: -4,
+      }),
+    );
+    if (!this.markGeo) {
+      this.markGeo = new PlaneGeometry(MARK_SIZE, MARK_SIZE);
+      this.geos.push(this.markGeo);
+    }
+    for (const [obj, at] of on) {
+      const m = new InstancedMesh(this.markGeo, this.markMat, at.length);
       at.forEach((x, i) => {
         m.setMatrixAt(i, x);
       });
-      m.renderOrder = order;
+      m.renderOrder = 2;
       m.frustumCulled = false;
-      this.geos.push(g);
-      this.body.add(m);
+      m.userData.hole = true;
+      m.userData.mark = true;
+      obj.add(m);
+      m.updateMatrixWorld(true);
       this.holeMeshes.push(m);
+    }
+  }
+  private markMat: MeshBasicMaterial | null = null;
+  private markGeo: PlaneGeometry | null = null;
+
+  /** (plan 96 F4a) Each part a round can move (the bonnet, the boot lid, a door, a bumper, a mirror) put at rest —
+   *  its pivot unturned, its place as it was —, the matrices made; returned, a way to put them back as they were. */
+  private partsAtRest(): () => void {
+    const kept: [Object3D, Vector3, Quaternion][] = [];
+    for (const [name, p] of this.parts) {
+      if (!/^(bonnet|boot|bumper_[fr]|mirror_[lr]|door_)/.test(name)) continue;
+      const a = p.anim;
+      const at = a.userData.at as Vector3 | undefined;
+      const turned = Math.abs(a.quaternion.w) < 0.99999;
+      if (!turned && (!at || a.position.equals(at))) continue;
+      kept.push([a, a.position.clone(), a.quaternion.clone()]);
+      a.quaternion.identity();
+      if (at) a.position.copy(at);
+      // (its own matrices and all under it: a parked car's still model isn't walked again from its root)
+      a.updateMatrix();
+      a.updateWorldMatrix(false, true);
+    }
+    return () => {
+      for (const [a, pos, q] of kept) {
+        a.position.copy(pos);
+        a.quaternion.copy(q);
+        a.updateMatrix();
+        a.updateWorldMatrix(false, true);
+      }
     };
-    // (the bare metal round it, then the hole)
-    // (a little over a round's own size: seen from a few steps off)
-    make(new RingGeometry(0.011, 0.02, 12), 0x9a9690, 1);
-    make(new CircleGeometry(0.0115, 10), 0x0a0a0a, 2);
+  }
+
+  // ── (plan 95 F5a) its glass where rounds went in: a star on the windscreen at each, staying (laminated); a side's
+  // or the rear's crack drawn from the first that struck it ──
+  private starsKey = "";
+  private starMeshes: InstancedMesh[] = [];
+  private starsN = 0;
+  /** each pane's crack's middle (its own glass's frame), where its first round went in; null: its middle */
+  private crackAt: (Vector3 | null)[] = [null, null, null, null, null, null];
+  private starMat: MeshBasicMaterial | null = null;
+  private setStars(list: readonly Hole[]) {
+    const key = list.map((x) => `${x.u},${x.w},${x.h},${x.pane},${x.n?.join("/") ?? ""}`).join(";");
+    if (key === this.starsKey) return;
+    this.starsKey = key;
+    for (const m of this.starMeshes) {
+      m.removeFromParent();
+      m.dispose();
+    }
+    this.starMeshes = [];
+    this.crackAt = [null, null, null, null, null, null];
+    this.starsN = 0;
+    // (each pane's own glass: not its two-pass twin, not a crack laid on it)
+    const panes: Mesh[][] = [[], [], [], [], [], []];
+    this.root.traverse((o) => {
+      const m = o as Mesh;
+      const i = m.userData.pane as number | undefined;
+      if (m.isMesh && typeof i === "number" && !m.userData.twoPassFront) panes[i]?.push(m);
+    });
+    const back = this.partsAtRest();
+    this.root.updateMatrixWorld(true);
+    const ray = new Raycaster();
+    const N: [number, number, number][] = [
+      [-1, 0, 0],
+      [1, 0, 0],
+      [0, 0, 1],
+      [0, 0, -1],
+      [0, 1, 0],
+    ];
+    const hits: Intersection[] = [];
+    const Z = new Vector3(0, 0, 1);
+    const q = new Quaternion();
+    const spin = new Quaternion();
+    const on = new Map<Object3D, Matrix4[]>();
+    list.forEach((h, k) => {
+      const i = h.pane as number;
+      const glass = panes[i];
+      if (!glass?.length) return;
+      if (i > 0 && this.crackAt[i]) return;
+      const n = h.n ? [-h.n[0], h.n[2], -h.n[1]] : (N[h.face] ?? N[0]);
+      const p = v1.set(-h.u, h.h, -h.w);
+      const nb = v2.set(n[0], n[1], n[2]).normalize();
+      const at = this.body.localToWorld(p.clone());
+      ray.set(this.body.localToWorld(p.clone().addScaledVector(nb, 0.3)), nb.clone().transformDirection(this.body.matrixWorld).negate());
+      ray.far = 0.9;
+      hits.length = 0;
+      ray.intersectObjects(glass, false, hits);
+      let hit: Intersection | null = null;
+      for (const x of hits) if (x.face && (!hit || x.point.distanceTo(at) < hit.point.distanceTo(at))) hit = x;
+      if (!hit?.face) return;
+      const obj = hit.object;
+      const inv = m4.copy(obj.matrixWorld).invert();
+      const local = hit.point.clone().applyMatrix4(inv);
+      if (i > 0) {
+        this.crackAt[i] = local;
+        return;
+      }
+      const wn = hit.face.normal.clone().transformDirection(obj.matrixWorld);
+      const ln = wn.transformDirection(inv).normalize();
+      const sc = new Vector3().setFromMatrixScale(obj.matrixWorld);
+      // (each its own way round: the same star never twice the same)
+      q.setFromUnitVectors(Z, ln).multiply(spin.setFromAxisAngle(Z, k * 2.39996));
+      let l2 = on.get(obj);
+      if (!l2) on.set(obj, (l2 = []));
+      l2.push(new Matrix4().compose(local.addScaledVector(ln, 0.002), q, new Vector3(1 / (sc.x || 1), 1 / (sc.y || 1), 1 / (sc.z || 1))));
+      this.starsN++;
+    });
+    back();
+    if (on.size) {
+      this.starMat ??= this.mat(
+        new MeshBasicMaterial({
+          map: crackTex(false, false, true),
+          transparent: true,
+          depthWrite: false,
+          opacity: 0.95,
+          side: DoubleSide,
+          polygonOffset: true,
+          polygonOffsetFactor: -3,
+          polygonOffsetUnits: -3,
+        }),
+      );
+      // (a star's reach: a round's in laminated glass, ~35 cm across)
+      const g = new PlaneGeometry(0.36, 0.36);
+      this.geos.push(g);
+      for (const [obj, at] of on) {
+        const m = new InstancedMesh(g, this.starMat, at.length);
+        at.forEach((x, j) => {
+          m.setMatrixAt(j, x);
+        });
+        m.renderOrder = 4;
+        m.frustumCulled = false;
+        m.userData.hole = true;
+        obj.add(m);
+        m.updateMatrixWorld(true);
+        this.starMeshes.push(m);
+      }
+    }
+    // (the whole windscreen picture only without stars; each side's crack from its own point)
+    if (this.crack) this.crack.mesh.visible = !!(this.partBits & PART.screen) && !(this.partBits & PART.screenGone) && !this.starsN;
+    this.root.traverse((x) => {
+      const m = x as Mesh;
+      const i = m.userData.crackOf as number | undefined;
+      if (!m.isMesh || typeof i !== "number" || i === 0) return;
+      const uv = crackUV(m.geometry.getAttribute("position") as BufferAttribute, this.crackAt[i]);
+      const at = m.geometry.getAttribute("uv") as BufferAttribute | undefined;
+      if (at && at.array.length === uv.length) {
+        (at.array as Float32Array).set(uv);
+        at.needsUpdate = true;
+      } else m.geometry.setAttribute("uv", new Float32BufferAttribute(uv, 2));
+    });
+  }
+  /** (plan 95 F5a) A point on it in its own frame (u forward, w right, h up: m) where the model's root has it. */
+  skinAt(u: number, w: number, h: number, out: Vector3): Vector3 {
+    this.root.updateMatrixWorld();
+    this.body.localToWorld(out.set(-u, h, -w));
+    return this.root.worldToLocal(out);
   }
 
   /** the road wheels' angle, + to the right (the model faces −x: a right turn is −y) */
@@ -1298,7 +1983,7 @@ class GlbCar implements Sedan {
     m.map = t;
     m.emissiveMap = t;
     if (had !== !!t) m.needsUpdate = true;
-    this.snowPane.visible = !!t;
+    this.snowPane.visible = !!t && !(this.partBits & PART.screenGone);
   }
   setEnv(t: Texture | null) {
     this.env = t;
@@ -1322,7 +2007,7 @@ class GlbCar implements Sedan {
     set("emit_sign", on ? 1.6 : 0.15);
     set("emit_beacon", on ? 0.4 + 3.6 * Math.max(0, Math.sin(t * 9)) ** 4 : 0.05);
   }
-  setWear(grime: number, dmg: readonly number[], parts = 0) {
+  setWear(grime: number, dmg: readonly number[], parts = 0, wreck = 0, fire = 0) {
     this.wear.uGrime.value = Math.max(0, Math.min(1, grime));
     for (let i = 0; i < 5; i++) this.dmg[i] = Math.max(0, Math.min(1, dmg[i] ?? 0));
     // (its dents: the file's own, pressed in by how hard each side was hit — the roof by a roll)
@@ -1333,12 +2018,30 @@ class GlbCar implements Sedan {
       if (!d || !inf) continue;
       for (let i = 0; i < 5; i++) {
         const j = d[names[i]];
-        if (j !== undefined) inf[j] = this.dmg[i];
+        // (plan 94 P2: past half, pressed in past the file's own dent — to 1.4 of it)
+        const z = this.dmg[i];
+        if (j !== undefined) inf[j] = z * (1 + 0.4 * Math.max(0, Math.min(1, (z - 0.5) * 2)) ** 2);
+      }
+    }
+    // (plan 96 F3a: its dents changed — its holes laid again on the skin as it is now, not left under it)
+    const dents = this.dmg.map((x) => x.toFixed(3)).join(",");
+    if (dents !== this.dentsKey) {
+      this.dentsKey = dents;
+      if (this.ready && this.holesWant?.some((x) => x.pane === undefined)) {
+        this.holesKey = "";
+        this.setHoles(this.holesWant);
       }
     }
     // (before its file's in: kept, shown as it comes — adopt)
-    if (!this.ready) this.partBits = parts;
-    else if (parts !== this.partBits) this.setParts(parts);
+    if (!this.ready) {
+      this.partBits = parts;
+      this.wreckBits = wreck;
+      this.burntWant = fire >= 3;
+    } else {
+      if (parts !== this.partBits) this.setParts(parts);
+      if (wreck !== this.wreckBits) this.setWreck(wreck);
+      this.setBurnt(fire >= 3);
+    }
     // (where it is, for the dirt up its sides: the paint's own frame)
     this.root.updateWorldMatrix(true, false);
     this.wear.uCarInv.value.copy(this.root.matrixWorld).invert();
@@ -1438,21 +2141,20 @@ class GlbCar implements Sedan {
     if (ml) ml.anim.rotation.y = bits & PART.mirrorL ? 1.15 : 0;
     const mr = this.parts.get("mirror_r");
     if (mr) mr.anim.rotation.y = bits & PART.mirrorR ? -1.15 : 0;
-    // (a side's windows shattered: its doors' glass gone; plan 93 S5: a window wound down stays down)
-    for (const [name, p] of this.parts) {
-      if (!name.startsWith("door_")) continue;
-      const left = (this.e.pivots[name]?.at[2] ?? 0) < 0;
-      const gone = !!(bits & (left ? PART.sideL : PART.sideR)) || this.downs.has(this.e.doors.indexOf(name));
-      p.holder.traverse((x) => {
-        const m = x as Mesh;
-        const n = (m.material as Material | undefined)?.name;
-        if (m.isMesh && (n === "glass" || n === "glass_tint")) m.visible = !gone;
-      });
-    }
+    // (plan 94 P3: each pane cracked, or gone — its glass hidden; plan 93 S5: a window wound down stays down)
+    this.crackPanes(bits);
+    this.showPanes(bits);
     // (plan 93 S1: a flat tyre down on its rim — a parked car's here; a driven one's set each frame as it goes)
-    this.wheels.forEach((w, i) => {
-      if (w.rest) w.steer.position.y = w.rest.y - (bits & FLATS[i] ? 0.04 : 0);
+    // (plan 95 F6a: down on its rim, its corner sagging, its tyre squashed)
+    let fl = 0;
+    FLATS.forEach((b, i) => {
+      if (bits & b) fl |= 1 << i;
     });
+    this.setFlats(fl);
+    this.wheels.forEach((w, i) => {
+      if (w.rest) w.steer.position.y = w.rest.y + this.flatY[i];
+    });
+    this.flatsTick();
     // (the windscreen: its crack on a pane over the glass, as the snow's)
     const screen = bits & (PART.screen | PART.screenBad);
     if (screen && this.snowPane && !this.crack) {
@@ -1467,11 +2169,13 @@ class GlbCar implements Sedan {
       );
       const mesh = new Mesh(this.snowPane.geometry, mat);
       mesh.renderOrder = 3;
+      mesh.userData.paneOf = 0;
       this.glb.add(mesh);
       this.crack = { mesh, mat };
     }
     if (this.crack) {
-      this.crack.mesh.visible = !!screen;
+      // (plan 95 F5a: its rounds' stars where they went in instead — the whole picture a crash's)
+      this.crack.mesh.visible = !!screen && !(bits & PART.screenGone) && !this.starsN;
       const bad = !!(bits & PART.screenBad);
       if (this.crack.mat.map !== crackTex(bad)) {
         this.crack.mat.map = crackTex(bad);
@@ -1479,6 +2183,342 @@ class GlbCar implements Sedan {
       }
     }
     this.setLights(this.lights);
+  }
+
+  private burntWant = false;
+  /** (plan 94 G5) A corner jacked up: wheel `i` (FL FR RL RR) off the ground by `k` of 6 cm — the body turned about
+   *  the far corner (that one down, the two beside half up); 0 down again. */
+  liftCorner(i: number, k: number) {
+    const name = ["fl", "fr", "rl", "rr"][i];
+    const hub = this.e.hubs[name] ?? this.e.points[`hub_${name}`];
+    if (!hub) return;
+    const p = toModel(hub, v1);
+    const h = 0.06 * Math.max(0, Math.min(1, k));
+    // (small turns: the hub up h, the far corner still — a quarter of it from each turn, half from the rise)
+    this.lift.x = Math.abs(p.z) > 0.1 ? -h / (4 * p.z) : 0;
+    this.lift.z = Math.abs(p.x) > 0.1 ? h / (4 * p.x) : 0;
+    this.lift.y = h / 2;
+    this.poseBody();
+  }
+  /** the body's tilt and rise: a corner jacked (liftCorner) and its flats' sag (setFlats), together */
+  private lift = { x: 0, z: 0, y: 0 };
+  private sag = { x: 0, z: 0, y: 0 };
+  private poseBody() {
+    this.body.rotation.x = this.lift.x + this.sag.x;
+    this.body.rotation.z = this.lift.z + this.sag.z;
+    this.body.position.y = this.lift.y + this.sag.y;
+    if (!this.body.matrixAutoUpdate) {
+      this.body.updateMatrix();
+      this.body.updateMatrixWorld(true);
+    }
+  }
+
+  // ── (plan 95 F6a) a flat: its tyre squashed where it sits, its hub FLAT_DROP down, its corner sagging ──
+  private tyreMat: MeshStandardMaterial | null = null;
+  private readonly flatU: FlatU = {
+    hub: { value: [new Vector4(), new Vector4(), new Vector4(), new Vector4()] },
+    axle: { value: [new Vector3(1, 0, 0), new Vector3(1, 0, 0), new Vector3(1, 0, 0), new Vector3(1, 0, 0)] },
+    size: { value: new Vector2(0.3, 0.15) },
+  };
+  private flatBits = 0;
+  /** each wheel's hub's own rise against its body (m: its rest + its spring's + this), the body's sag undone at
+   *  the good ones, the flat's down — the rig's, the others', a parked car's (setParts) */
+  readonly flatY = [0, 0, 0, 0];
+  /** The flats (bits FL FR RL RR): the body tipped to them — a plane through its corners as near as can be to
+   *  each flat one FLAT_DROP down and the others where they were —, each hub put where it sits on its tyre. */
+  setFlats(bits: number) {
+    bits &= 15;
+    if (bits === this.flatBits && this.flatSeen) return;
+    const now = performance.now() / 1000;
+    for (let i = 0; i < 4; i++) {
+      const on = !!(bits & (1 << i));
+      const was = !!(this.flatBits & (1 << i));
+      // (plan 96 F5a: newly blown, its collapse from now; first seen flat, or mended: as it is)
+      if (on && !was && this.flatSeen) this.flatT0[i] = now;
+      else if (on !== was || !this.flatSeen) {
+        this.flatT0[i] = -9;
+        this.flatK[i] = on ? 1 : 0;
+      }
+    }
+    this.flatSeen = true;
+    this.flatBits = bits;
+    this.flatsStep();
+    this.applyFlats();
+    this.flatsTick();
+  }
+  /** (plan 96 F5a) each wheel's flat as far as it's gone (0 up … 1 down; past 1 a moment, the corner's dip), when
+   *  its blowout began (s, performance's clock; −9 none going), whether it's been seen */
+  private readonly flatK = [0, 0, 0, 0];
+  private readonly flatT0 = [-9, -9, -9, -9];
+  private flatSeen = false;
+  /** (plan 96 F5a) A blowout going: true while any wheel's collapse is under way. */
+  flatsBusy(): boolean {
+    const now = performance.now() / 1000;
+    return this.flatT0.some((t) => t > 0 && now - t < FLAT_S + 0.05);
+  }
+  /** (plan 96 F5a) Each blowing wheel's flat by its curve: the tyre gone in a quick collapse, the corner dipping a
+   *  little past it and back — done in FLAT_S. */
+  private flatsStep(): boolean {
+    const now = performance.now() / 1000;
+    let moved = false;
+    for (let i = 0; i < 4; i++) {
+      const t0 = this.flatT0[i];
+      if (t0 < 0) continue;
+      const u = Math.min(1, (now - t0) / FLAT_S);
+      const fall = 1 - (1 - u) ** 3;
+      const dip = 0.18 * Math.sin(Math.PI * Math.max(0, Math.min(1, (u - 0.45) / 0.55)));
+      const k = u >= 1 ? 1 : fall + dip;
+      if (k !== this.flatK[i]) moved = true;
+      this.flatK[i] = k;
+      if (u >= 1) this.flatT0[i] = -9;
+    }
+    return moved;
+  }
+  /** The flats as far as each has gone: the body tipped to them — a plane through its corners as near as can be to
+   *  each one its drop down and the others where they were —, each hub put where it sits on its tyre. */
+  private applyFlats() {
+    const P: Vector3[] = [];
+    const v: number[] = [];
+    ["fl", "fr", "rl", "rr"].forEach((k, i) => {
+      const hub = this.e.hubs[k] ?? this.e.points[`hub_${k}`];
+      P.push(hub ? toModel(hub, new Vector3()) : new Vector3());
+      v.push(-FLAT_DROP * this.flatK[i]);
+    });
+    const mx = P.reduce((a, p) => a + p.x, 0) / 4;
+    const mz = P.reduce((a, p) => a + p.z, 0) / 4;
+    const c = v.reduce((a, b) => a + b, 0) / 4;
+    let sxx = 0;
+    let szz = 0;
+    let gx = 0;
+    let gz = 0;
+    P.forEach((p, i) => {
+      sxx += (p.x - mx) ** 2;
+      szz += (p.z - mz) ** 2;
+      gx += v[i] * (p.x - mx);
+      gz += v[i] * (p.z - mz);
+    });
+    gx = sxx > 1e-6 ? gx / sxx : 0;
+    gz = szz > 1e-6 ? gz / szz : 0;
+    // (a turn about z lifts +x by x·θ; about x lowers +z by z·φ)
+    this.sag.z = gx;
+    this.sag.x = -gz;
+    this.sag.y = c - gx * mx - gz * mz;
+    this.poseBody();
+    P.forEach((p, i) => {
+      const plane = this.sag.y + gx * p.x + gz * p.z;
+      this.flatY[i] = v[i] - plane;
+    });
+  }
+  /** (plan 95 F6a) Each frame a flat's car moves (and once, set): its flat tyres' hubs and axles, where they are.
+   *  (plan 96 F5a) A blowout going, its flat as far as it's gone first; `wheels`: no one else poses its wheels (a
+   *  parked car) — put them on their hubs' rise here. */
+  flatsTick(wheels = false) {
+    if (this.flatsStep()) {
+      this.applyFlats();
+      if (wheels)
+        this.wheels.forEach((w, i) => {
+          if (!w.rest) return;
+          w.steer.position.y = w.rest.y + this.flatY[i];
+          w.steer.updateMatrix();
+          w.steer.updateWorldMatrix(false, true);
+        });
+    }
+    const U = this.flatU;
+    if (!this.flatBits) {
+      for (const h of U.hub.value) h.w = 0;
+      return;
+    }
+    U.size.value.set(this.e.wheel.r, this.e.wheel.width * 0.5 + 0.06);
+    this.root.updateMatrixWorld();
+    this.wheels.forEach((w, i) => {
+      const h = U.hub.value[i];
+      if (!(this.flatBits & (1 << i))) {
+        h.w = 0;
+        return;
+      }
+      w.spin.updateWorldMatrix(true, false);
+      w.spin.getWorldPosition(v1);
+      // (the tyre squashed as far as it's gone — its dip past it a little more)
+      h.set(v1.x, v1.y, v1.z, FLAT_DROP * Math.max(0.001, this.flatK[i]));
+      U.axle.value[i].set(0, 0, 1).transformDirection(w.spin.matrixWorld);
+    });
+  }
+  /** (plan 94 G5) A wheel off its hub (changed), or on. */
+  wheelShown(i: number, on: boolean) {
+    const w = this.wheels[i];
+    if (w) w.steer.visible = on;
+  }
+  /** (plan 94 P1) Where its engine burns: the middle of its bay, the model's coords. */
+  engineAt(out: Vector3): Vector3 {
+    const front = this.e.pivots.bumper_f?.at[1] ?? 0.45;
+    return toModel([this.e.dims.ahead - 0.8, front + 0.2, 0], out);
+  }
+  /** (plan 94 P1) Burnt out, or not: every material a charred copy of itself (the paint near black, the metal dark,
+   *  matt), its glass, lenses, lamps and tyres gone; or all as it was (made new). */
+  private setBurnt(on: boolean) {
+    if (on === this.burnt) return;
+    this.burnt = on;
+    // (its tyres burnt away: down on its rims)
+    this.glb.position.y = on ? -this.e.wheel.r * 0.3 : 0;
+    this.glb.updateMatrix();
+    this.glb.updateMatrixWorld(true);
+    const GONE = /glass|lens|emit|tyre|reflector/;
+    this.root.traverse((x) => {
+      const m = x as Mesh;
+      if (!m.isMesh || Array.isArray(m.material)) return;
+      const ud = m.userData;
+      if (!on) {
+        if (ud.unburnt) m.material = ud.unburnt as Material;
+        if (ud.burntHid !== undefined) m.visible = ud.burntHid as boolean;
+        delete ud.unburnt;
+        delete ud.burntHid;
+        return;
+      }
+      // (plan 95 point 6: its holes stay as they are, on the charred skin)
+      if (ud.hole) return;
+      const mat = m.material as Material;
+      const n = mat.name ?? "";
+      if (GONE.test(n) || ud.crackOf !== undefined) {
+        ud.burntHid = m.visible;
+        m.visible = false;
+        return;
+      }
+      let c = this.charred.get(mat);
+      if (!c) {
+        c = mat.clone();
+        c.onBeforeCompile = mat.onBeforeCompile;
+        c.customProgramCacheKey = mat.customProgramCacheKey;
+        c.userData = { ...mat.userData };
+        const k = c as MeshStandardMaterial;
+        if (k.color) k.color.lerp(new Color(/paint/.test(n) ? 0x1c1612 : 0x121110), 0.94);
+        if (k.map) k.map = null;
+        if (k.roughness !== undefined) k.roughness = 1;
+        if (k.metalness !== undefined) k.metalness = 0.15;
+        if (k.emissive) k.emissive.setHex(0);
+        c.needsUpdate = true;
+        this.mine.push(c);
+        this.charred.set(mat, c);
+      }
+      ud.unburnt = mat;
+      m.material = c;
+    });
+  }
+  /** (plan 94 P2) What's come off or hangs, shown: each door hanging off its lower hinge or gone; the bonnet and
+   *  the boot lid sprung (a little up) or gone; the rear bumper hanging or gone; a mirror off. Shown again from
+   *  nothing each time (mended: all back). */
+  private setWreck(bits: number) {
+    this.wreckBits = bits;
+    const fix = (g: Group) => {
+      if (!g.matrixAutoUpdate) {
+        g.updateMatrix();
+        g.updateMatrixWorld(true);
+      }
+    };
+    this.e.doors.forEach((name, i) => {
+      const slot = doorSlot(name);
+      const st = slot < 0 ? 0 : bits & DOOR_GONE[slot] ? 2 : bits & DOOR_HANG[slot] ? 1 : 0;
+      this.doorState[i] = st;
+      const p = this.parts.get(name);
+      if (p) p.outer.visible = st !== 2;
+      this.doors[i]?.open(this.doorA[i] ?? 0);
+    });
+    const lid = (names: string[], loose: boolean, gone: boolean, a: number) => {
+      for (const n of names) {
+        const p = this.parts.get(n);
+        if (!p) continue;
+        p.outer.visible = !gone;
+        if (loose) this.lidMin.set(n, a);
+        else this.lidMin.delete(n);
+        this.setPart(n, this.lidA.get(n) ?? 0);
+      }
+    };
+    lid(["bonnet"], !!(bits & WRECK.bonnetLoose), !!(bits & WRECK.bonnetGone), 0.13);
+    lid(["boot", "boot_l", "boot_r"], !!(bits & WRECK.bootLoose), !!(bits & WRECK.bootGone), 0.11);
+    const ml = this.parts.get("mirror_l");
+    if (ml) ml.outer.visible = !(bits & WRECK.mirrorLOff);
+    const mr = this.parts.get("mirror_r");
+    if (mr) mr.outer.visible = !(bits & WRECK.mirrorROff);
+    const b = this.parts.get("bumper_r");
+    if (b) {
+      this.hangBumper(b, !!(bits & WRECK.bumperRHang), -1);
+      b.outer.visible = !(bits & WRECK.bumperRGone);
+      fix(b.anim);
+    }
+  }
+  /** A bumper hanging by its right end (turned about the car's length round that end: its left end down near the
+   *  road, a little out at the bottom), or back on. `out`: the way out of the car at its end (the file's x). */
+  private hangBumper(b: Part, hang: boolean, out: 1 | -1) {
+    const at = (b.anim.userData.at as Vector3 | undefined) ?? b.anim.position.clone();
+    b.anim.userData.at = at;
+    const th = hang ? -0.18 : 0;
+    const zr = this.e.dims.width * 0.42;
+    b.anim.rotation.set(th, 0, hang ? -0.05 * out : 0);
+    b.anim.position.set(at.x + (hang ? 0.02 * out : 0), at.y + zr * Math.sin(th), at.z + zr * (1 - Math.cos(th)));
+  }
+  /** (plan 94 P2) The rear bumper out of the body's own meshes: what's chrome, trim or rubber at its back end and
+   *  low — moved into a part of its own (`bumper_r`) about its middle, to hang and come off as the front's does.
+   *  In the file's frame, before the parts move; nothing if the file's has none there (a painted one stays). */
+  private splitRearBumper(scene: Object3D) {
+    const body = scene.getObjectByName("body");
+    if (!body || this.parts.has("bumper_r")) return;
+    const MATS = new Set(["chrome", "trim", "rubber"]);
+    let minX = Infinity;
+    body.traverse((x) => {
+      const m = x as Mesh;
+      if (!m.isMesh || (m.material as Material)?.name !== "paint") return;
+      m.geometry.computeBoundingBox();
+      const bb = m.geometry.boundingBox;
+      if (bb) minX = Math.min(minX, bx3.copy(bb).applyMatrix4(m.matrixWorld).min.x);
+    });
+    if (!Number.isFinite(minX)) return;
+    const top = (this.e.pivots.bumper_f?.at[1] ?? 0.45) + 0.17;
+    const meshes: Mesh[] = [];
+    body.traverse((x) => {
+      const m = x as Mesh;
+      if (m.isMesh && !Array.isArray(m.material) && MATS.has((m.material as Material)?.name ?? "")) meshes.push(m);
+    });
+    const cuts: { m: Mesh; tris: number[]; keep: number[] }[] = [];
+    const box = new Box3();
+    const a = new Vector3();
+    for (const m of meshes) {
+      const g = m.geometry;
+      const pos = g.getAttribute("position");
+      if (!pos) continue;
+      const idx = g.index;
+      const n = idx ? idx.count / 3 : pos.count / 3;
+      const tris: number[] = [];
+      const keep: number[] = [];
+      for (let t = 0; t < n; t++) {
+        let ok = true;
+        for (let k = 0; k < 3 && ok; k++) {
+          a.fromBufferAttribute(pos, idx ? idx.getX(t * 3 + k) : t * 3 + k).applyMatrix4(m.matrixWorld);
+          if (a.x > minX + 0.6 || a.y > top) ok = false;
+        }
+        (ok ? tris : keep).push(t);
+      }
+      if (!tris.length) continue;
+      for (const t of tris)
+        for (let k = 0; k < 3; k++) box.expandByPoint(a.fromBufferAttribute(pos, idx ? idx.getX(t * 3 + k) : t * 3 + k).applyMatrix4(m.matrixWorld));
+      cuts.push({ m, tris, keep });
+    }
+    // (a bumper's across the car's back: too little there, it isn't one)
+    if (!cuts.length || box.getSize(a).z < this.e.dims.width * 0.5) return;
+    const mid = box.getCenter(new Vector3());
+    const outer = new Group();
+    outer.name = "p:bumper_r";
+    outer.position.copy(mid);
+    this.glb.add(outer);
+    const inv = new Matrix4().makeTranslation(-mid.x, -mid.y, -mid.z);
+    for (const { m, tris, keep } of cuts) {
+      const piece = new Mesh(this.geo(subGeometry(m.geometry, tris)), m.material);
+      piece.name = `${m.name}.rear`;
+      m4.multiplyMatrices(inv, m.matrixWorld).decompose(piece.position, piece.quaternion, piece.scale);
+      piece.castShadow = m.castShadow;
+      piece.receiveShadow = m.receiveShadow;
+      outer.add(piece);
+      m.geometry = this.geo(subGeometry(m.geometry, keep));
+    }
+    this.parts.set("bumper_r", { outer, anim: outer, holder: outer });
   }
 
   partCopy(name: string): Object3D | null {
@@ -1511,8 +2551,11 @@ class GlbCar implements Sedan {
         sgn = Math.abs(pv.axis[1]) > 0.5 ? -Math.sign(b.z || 1) : Math.sign(b.x || 1);
         this.lidSign.set(n, sgn);
       }
-      if (Math.abs(pv.axis[1]) > 0.5) p.anim.rotation.y = sgn * a;
-      else p.anim.rotation.z = sgn * a;
+      // (plan 94 P2: sprung, never shut past it; gone, hidden — setWreck)
+      this.lidA.set(n, a);
+      const at = Math.max(a, this.lidMin.get(n) ?? 0);
+      if (Math.abs(pv.axis[1]) > 0.5) p.anim.rotation.y = sgn * at;
+      else p.anim.rotation.z = sgn * at;
       // (a parked car's a still model — its matrices made once and left (culling.stillModel): this hinge's own,
       // and what hangs on it, made again — the boot's lid, the bonnet up for a mend)
       if (!p.anim.matrixAutoUpdate) {
@@ -1636,6 +2679,34 @@ export function preloadCars(renderer: WebGLRenderer) {
 }
 
 // ── helpers ──
+const bx3 = new Box3();
+/** Some of a geometry's triangles (by number) as a geometry of their own, unindexed: every attribute, and its
+ *  morphs. */
+function subGeometry(g: BufferGeometry, tris: number[]): BufferGeometry {
+  const idx = g.index;
+  const vi = (t: number, k: number) => (idx ? idx.getX(t * 3 + k) : t * 3 + k);
+  const take = (at: BufferAttribute | InterleavedBufferAttribute) => {
+    const n = at.itemSize;
+    const arr = new Float32Array(tris.length * 3 * n);
+    let o = 0;
+    for (const t of tris)
+      for (let k = 0; k < 3; k++) {
+        const j = vi(t, k);
+        for (let q = 0; q < n; q++) arr[o++] = at.getComponent(j, q);
+      }
+    const out = new Float32BufferAttribute(arr, n, at.normalized);
+    out.name = at.name;
+    return out;
+  };
+  const out = new BufferGeometry();
+  for (const name of Object.keys(g.attributes)) out.setAttribute(name, take(g.getAttribute(name)));
+  for (const name of ["position", "normal", "color"] as const) {
+    const list = g.morphAttributes[name];
+    if (list) out.morphAttributes[name] = list.map(take);
+  }
+  out.morphTargetsRelative = g.morphTargetsRelative;
+  return out;
+}
 function within(o: Object3D, prefix: string): boolean {
   for (let p: Object3D | null = o; p; p = p.parent)
     if (p.name.startsWith(prefix) || p.name.startsWith(`p:${prefix}`)) return true;

@@ -269,6 +269,21 @@
       "why": "\"011017 snowball.mp3\", no clipping, 33 dB over its floor, its brightness right (1.8 kHz), unevenness 0.91",
       "id": "390246",
       "title": "011017 snowball.mp3"
+    },
+    "fire": {
+      "why": "\"Car fire burning tires explosion horn\", no clipping, 28 dB over its floor, its brightness right (3.5 kHz), unevenness 0.68",
+      "id": "843101",
+      "title": "Car fire burning tires explosion horn"
+    },
+    "fire-catch": {
+      "why": "\"Basic Fire Whoosh 2\", no clipping, silence between its sounds, its brightness right (0.6 kHz), 5231 downloads",
+      "id": "260555",
+      "title": "Basic Fire Whoosh 2"
+    },
+    "blast": {
+      "why": "\"Large explosion\", 64 dB over its floor, its brightness right (0.3 kHz), 1207 downloads",
+      "id": "592000",
+      "title": "Large explosion"
     }
   },
   "engines": {

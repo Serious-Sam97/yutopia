@@ -124,10 +124,22 @@ if (!inCar) process.exit(1);
 
 
 await page.waitForTimeout(2500);
+// (plan 94 P9: sat still, the prompt to get out shows the car's own key)
+console.log(
+  "prompt",
+  JSON.stringify(
+    await page.evaluate(() => ({
+      p: (window as any).__hud.get().prompt,
+      keycaps: [...document.querySelectorAll("kbd.keycap")].map((k) => k.textContent),
+    })),
+  ),
+);
 await page.keyboard.down("KeyW");
 await page.waitForTimeout(Number(process.env.RUN ?? 3200));
 await page.keyboard.up("KeyW");
 await page.keyboard.down(process.env.KEY ?? "KeyD");
+// (plan 94 P6: HAND=1 pulls the handbrake through the turn — the drift's skid)
+if (process.env.HAND) await page.keyboard.down("Space");
 const rows: string[] = [];
 for (let i = 0; i < 24; i++) {
   await page.waitForTimeout(100);
@@ -140,7 +152,8 @@ for (let i = 0; i < 24; i++) {
       const lv = (k: string) => (snd?.beds?.get(k)?.g.gain.value ?? -1).toFixed(2);
       const used = Math.max(...s.wheels.map((w: any) => w.used));
       const v = Y.room.state.vehicles.get(m.vid);
-      return `${(Math.hypot(s.v.x, s.v.z) * 3.6).toFixed(0)} km/h · used ${used.toFixed(2)} · ${s.wheels[0].ground} · scrub ${lv("scrub")} squeal-loop ${lv("squeal-loop")} skid ${lv("skid")} snow-squeak ${lv("snow-squeak")} · chirp at ${(snd?.chirpAt ?? 0).toFixed(1)} · ctx ${snd?.ctx?.state} · wire grip ${v?.grip}`;
+      const slip = Math.max(...s.wheels.map((w: any) => (w.contact ? w.slip : 0)));
+      return `${(Math.hypot(s.v.x, s.v.z) * 3.6).toFixed(0)} km/h · used ${used.toFixed(2)} slip ${slip.toFixed(1)} thr ${(s.thr ?? 0).toFixed(2)} help ${s.helping} spinFor ${(snd?.spinFor ?? 0).toFixed(2)} · ${s.wheels[0].ground} · scrub ${lv("scrub")} squeal-loop ${lv("squeal-loop")} skid ${lv("skid")} snow-squeak ${lv("snow-squeak")} · chirp at ${(snd?.chirpAt ?? 0).toFixed(1)} · ctx ${snd?.ctx?.state} · wire grip ${v?.grip}`;
     }),
   );
 }

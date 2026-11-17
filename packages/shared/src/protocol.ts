@@ -5,6 +5,7 @@ import type { Social } from "./actions.ts";
 import type { AvatarLayers } from "./avatar";
 import type { CarLook } from "./car/look.ts";
 import type { CarWire } from "./car/net.ts";
+import type { CarClaim } from "./car/shot.ts";
 import type { LootItem } from "./dark/loot.ts";
 import type { GroundsEdits } from "./grounds-edits.ts";
 import type { Inventory } from "./inventory.ts";
@@ -523,7 +524,7 @@ export interface ClientMessages {
   // a parked car I knocked, come to rest: where it ended up (the Grounds' coords, its middle)
   "car:shove": { id: string; x: number; z: number; a: number };
   // my car's dirt (0..1) and dents (front, rear, left, right: 0..1), as my sim has counted them
-  "car:wear": { grime: number; dmg: number[]; parts?: number };
+  "car:wear": { grime: number; dmg: number[]; parts?: number; wreck?: number };
   // at a pump, stopped: filling it (on), or not
   "car:fill": { on: boolean };
   // (plan 93 S5) my seat's window: down, or up
@@ -540,6 +541,12 @@ export interface ClientMessages {
   "car:untow": { id: string };
   // (plan 93 S9) my own car (or one lent me today) locked from outside, or unlocked
   "car:lock": { id: string; on: boolean };
+  /** (plan 94 G4) the ruts my car's front wheels pressed in deep snow or mud lately: [ax, az, bx, bz] each, cm */
+  "car:ruts": { segs: number[] };
+  /** (plan 94 G4) the ruts of the last minutes, please (once I listen for them) */
+  "car:ruts-hello": Record<string, never>;
+  /** (plan 94 G3) my car boot open (the pack on it), or shut */
+  "car:boot": { id: string; open: boolean };
   // my car hit someone at speed (their session): knocked down
   "car:knock": { sid: string };
   /** (plan 93 S4) into a car's boot (stood behind it, parked) or its glove box (sat in its front): a slot of the
@@ -613,6 +620,9 @@ export interface ClientMessages {
     seed: number;
     /** down a scope (the sniper's: plan 79 phase 6) */
     scope?: boolean;
+    /** (plan 95 F4a) each round's car (by the seed's order) as the shooter's screen found it on the model it
+     *  drew: where on it and what — 0: it met none it drew; null or none: it couldn't tell (the server's box) */
+    cars?: (CarClaim | 0 | null)[];
   };
   "arms:flare": { yaw: number; pitch: number };
   // the Daybreak pressed: charging (plan 79 phase 7) — or let go before it fired
@@ -805,6 +815,10 @@ export interface ServerMessages {
   };
   /** (plan 93 S1) a shot's rounds into cars: where each struck (the ground floor's frame, z up), what — glass, a
    *  panel, the engine block, a tyre, a lamp — and by which face (0 front, 1 rear, 2 left, 3 right, 4 roof) */
+  /** (plan 94 G4) the ruts pressed in the last minutes, for someone joining: [ax, az, bx, bz] each, cm */
+  "car:ruts": { segs: number[] };
+  /** (plan 94 P1) a car blew up (its object's id; where: the server's frame, z up) */
+  "car:blast": { id: string; x: number; y: number; z: number };
   "car:shot": {
     gun: string;
     hits: { id: string; x: number; y: number; z: number; struck: string; face: number }[];

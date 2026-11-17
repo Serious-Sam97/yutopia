@@ -318,7 +318,9 @@ test("a car passes under a flier 3 m up; for someone on the ground it stops", as
   ).toBe(0);
   // back into its bay's mouth; Ana down on the ground in its way, 5 m ahead again
   await b.keyboard.down("KeyS");
-  await expect.poll(() => along(b), { timeout: 15_000 }).toBeLessThan(1.5);
+  // (looked at every 100 ms: the poll's own waits grow to a second, and backing up it went on 10 m past the mouth,
+  // into what's behind)
+  await expect.poll(() => along(b), { timeout: 15_000, intervals: [100] }).toBeLessThan(1.5);
   await b.keyboard.up("KeyS");
   await b.keyboard.down("Space");
   await b.waitForTimeout(1500);

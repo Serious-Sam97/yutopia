@@ -107,8 +107,12 @@ export class GroundsSound {
       src.start();
       this.wind = { out, bp, src };
     }
+    // (plan 96: a frame with no place to hear from — a passenger getting in — isn't heard: an eased value once NaN
+    // stayed so, and every frame after threw)
+    if (!Number.isFinite(h.x) || !Number.isFinite(h.z) || !Number.isFinite(dt)) return;
     const woods = h.land ? Math.min(1, G.treeDensity(h.x, h.z) * 1.4) : 0;
     this.open += (1 - woods - this.open) * Math.min(1, dt * 0.8);
+    if (!Number.isFinite(this.open)) this.open = 1;
     // gusts: two slow waves
     const gust = 0.6 + 0.25 * Math.sin(this.t * 0.37) + 0.15 * Math.sin(this.t * 1.13 + 1);
     const out = h.land ? 1 : h.inside ? 0.12 : 0.18;
@@ -127,7 +131,7 @@ export class GroundsSound {
       out *
       aloft *
       (wx?.vol ?? 1);
-    this.wind.out.gain.setTargetAtTime(level, ctx.currentTime, 0.4);
+    this.wind.out.gain.setTargetAtTime(Number.isFinite(level) ? level : 0, ctx.currentTime, 0.4);
     this.wind.bp.frequency.setTargetAtTime(
       (h.land ? 320 + 380 * gust + 500 * h.storm : 240) * (h.inside ? 0.5 : 1),
       ctx.currentTime,

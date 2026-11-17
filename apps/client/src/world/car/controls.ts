@@ -44,7 +44,11 @@ export type Switch =
   | "siren"
   | "window"
   | "flash"
-  | "toot";
+  | "toot"
+  // (plan 94 P10) the keys' slip again
+  | "keys"
+  // (plan 94 G6) its doors locked, or not, from the driver's seat
+  | "lock";
 
 const KEY_SWITCH: Record<string, Switch> = {
   KeyL: "lights",
@@ -65,6 +69,8 @@ const KEY_SWITCH: Record<string, Switch> = {
   KeyN: "window",
   KeyU: "flash",
   KeyY: "toot",
+  F1: "keys",
+  KeyO: "lock",
 };
 const PAD_SWITCH: [number, Switch][] = [
   [12, "lights"],

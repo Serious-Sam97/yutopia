@@ -121,6 +121,20 @@ const GROUPS: Group[] = [
       ["runners", "The toboggan's runners"],
     ],
   },
+  {
+    // (plan 94 P1)
+    name: "The fire",
+    slots: [
+      ["fire", "A car burning: its flames' roar and crackle (looped)"],
+      ["fire-catch", "The moment it catches: the whoosh"],
+      ["blast", "It blows: the explosion, its rumble and debris"],
+    ],
+  },
+  {
+    // (plan 95 F1a)
+    name: "The window",
+    slots: [["window", "A power window wound all the way down (played over 1.5 s in the game)"]],
+  },
 ];
 const LOOPS: Record<string, [number, number]> = Object.fromEntries(
   [
@@ -144,6 +158,7 @@ const LOOPS: Record<string, [number, number]> = Object.fromEntries(
     "plough",
     "tracks",
     "runners",
+    "fire",
   ].map((s) => [s, [4, 1.6]]),
 );
 // (a sound the game goes round: every take of the one picked; else one moment, its take picked)
@@ -184,6 +199,15 @@ export default function CarSoundBench() {
   const [tab, setTab] = useState<"engines" | "rest">("engines");
   const [mine, setMine] = useState<Picks>({});
   const [copied, setCopied] = useState(false);
+  // (plan 94: `?group=fire` — straight to the sounds of the groups so named, the rest left out)
+  const [only, setOnly] = useState<string | null>(null);
+  useEffect(() => {
+    const g = new URLSearchParams(location.search).get("group");
+    if (g) {
+      setOnly(g.toLowerCase());
+      setTab("rest");
+    }
+  }, []);
   useEffect(() => {
     void fetch("/sfx/cars/picks.json")
       .then((r) => (r.ok ? r.json() : {}))
@@ -192,14 +216,14 @@ export default function CarSoundBench() {
   // (each slot's label with my pick's reason)
   const groups = useMemo(
     () =>
-      GROUPS.map((g) => ({
+      GROUPS.filter((g) => !only || g.name.toLowerCase().includes(only)).map((g) => ({
         ...g,
         slots: g.slots.map(
           ([s, label]) =>
             [s, mine.slots?.[s] ? `${label} — my pick a: ${mine.slots[s].why}` : label] as [string, string],
         ),
       })),
-    [mine],
+    [mine, only],
   );
   const tabBtn = (on: boolean): React.CSSProperties => ({
     padding: "6px 12px",

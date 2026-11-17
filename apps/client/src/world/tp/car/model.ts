@@ -80,7 +80,8 @@ export interface Sedan {
   freshener: Group; // rotation.x / z swing it
   snow: Mesh[];
   /** where people sit: the hip point and the side (model coords) */
-  seats: { hip: Vector3; side: 1 | -1; front: boolean }[];
+  /** (plan 96) `floor`: its footwell's floor (model coords' height), where its model has one */
+  seats: { hip: Vector3; side: 1 | -1; front: boolean; floor?: number }[];
   /** which door a seat's person gets in by (an index in `doors`, -1: none) */
   doorOf?: (seat: number) => number;
   /** the driver's eyes (model coords, sitting back) */
@@ -109,7 +110,10 @@ export interface Sedan {
   /** (plan 93) the gear lever's knob (body coords), if it has one */
   leverAt?(out: Vector3): Vector3 | null;
   /** (plan 93 S2) a door's window wound down (its glass gone from the frame) or up */
-  windowDown?(door: number, down: boolean): void;
+  /** (plan 95 F1a) wound down or up over `secs` (1.5 s by default); true: a move began (the motor's heard) */
+  windowDown?(door: number, down: boolean, secs?: number): boolean;
+  /** (plan 95 F1a) each frame: the windows on their way */
+  windowsTick?(dt: number): void;
   /** (plan 93 S6) snow chains on its wheels (bits FL FR RL RR), its tyres' radius and width (m) */
   setChains?(bits: number, r: number, width: number): void;
   /** (plan 93 S5) a door's sill: its glass's foot (the body's frame), how far out its outer face is */
@@ -127,14 +131,30 @@ export interface Sedan {
   /** its wear: the road's dirt up its sides (0..1), its dents (front, rear, left, right[, roof]: 0..1); a
    *  front badly hit, a headlamp cracked (dim); (plan 92) the parts it broke — shared car/damage.ts PART:
    *  the bumper hanging or gone, a mirror folded, a lamp out, the glass cracked or shattered */
-  setWear(grime: number, dmg: readonly number[], parts?: number): void;
+  setWear(grime: number, dmg: readonly number[], parts?: number, wreck?: number, fire?: number): void;
+  /** (plan 94 G5) a corner jacked up (wheel FL FR RL RR, 0..1 of 6 cm), and a wheel off or on */
+  liftCorner?(i: number, k: number): void;
+  wheelShown?(i: number, on: boolean): void;
+  /** (plan 94 P1) where its engine burns (the middle of its bay), its own coords */
+  engineAt?(out: Vector3): Vector3;
   /** (plan 93 S1) where it's been shot: its own frame (u forward, w right, h up from the ground; the face it came in by) */
-  setHoles?(list: readonly { u: number; w: number; h: number; face: number }[]): void;
+  setHoles?(list: readonly import("@yutopia/shared/car").Hole[]): void;
+  /** (plan 95 F6a) each wheel's hub's rise for its flats (its body's sag undone, the flat's down: m) */
+  flatY?: readonly number[];
+  /** (plan 95 F6a) each frame it moves: its flat tyres' squash where they are */
+  flatsTick?(wheels?: boolean): void;
+  /** (plan 96 F5a) a blowout's collapse under way */
+  flatsBusy?(): boolean;
+  /** (plan 95 F5a) a point on it (its own frame: u forward, w right, h up) where its root has it */
+  skinAt?(u: number, w: number, h: number, out: import("three").Vector3): import("three").Vector3;
   /** Parked for good: its dents pressed in and its pieces drawn merged (Blender cars: glb.ts). */
   bakeStill?(): number;
   /** (plan 92) a copy of one of its parts as it is now (the bumper falling off), in world coords; null if
    *  it has none */
   partCopy?(name: string): Object3D | null;
+  /** (plan 94 P3) the middle of one of its panes of glass (shared car/damage.ts PANES), its own coords; null if
+   *  it has none */
+  paneAt?(i: number): Vector3 | null;
   /** the snow lying on it (since it last moved: docs/plan/65), 0..1 — its paint's frost */
   setSnow(k: number): void;
   dispose(): void;

@@ -1,6 +1,6 @@
 // (plan 93 S9, S10) Lock, alarm, drive-in: Ana buys a car at MOTORS (at night); L by it — locked (its flash); her
 // own shot into it sets its alarm off (the lamps flashing, her phone told); in it, unlocked; the lights on, the
-// radio on, stood still — the lamps down (the drive-in); U flashes them. Stills (OUT=dir).
+// radio on, stood still — the lamps stay on (plan 95 F2a: no drive-in dip); U flashes them. Stills (OUT=dir).
 //   OUT=dir node --experimental-strip-types e2e/car-lock.mts [url]
 // (the same car each run: `mod:cars` puts it home first — run them one after another, never two at once)
 import { chromium, request } from "@playwright/test";
@@ -137,7 +137,7 @@ console.log("alarm:", (await props()).alarmAt ? "on" : "off", "told:", JSON.stri
 await page.screenshot({ path: `${out}/lock-1-alarm.png` });
 await page.waitForTimeout(400);
 await page.screenshot({ path: `${out}/lock-1b-alarm.png` });
-// in it: unlocked; the lights, the radio; still — the drive-in's lamps down; U flashes
+// in it: unlocked; the lights, the radio; still — the lamps stay on (plan 95 F2a); U flashes
 await page.keyboard.press("Digit2");
 const side = at(0.3, -1.6);
 await page.evaluate((q) => (window as any).__yutopia.teleport({ x: q.x, y: q.y, level: 0 }), side);
@@ -153,7 +153,7 @@ const lamps = () =>
     const C = (window as any).__yutopia.cars;
     const s = C.mine?.sim;
     const f = s ? C.flags(s) : 0;
-    return { beams: C.beams, station: C.station, still: +C.stillFor.toFixed(1), low: !!(f & 1), high: !!(f & 2) };
+    return { beams: C.beams, station: C.station, low: !!(f & 1), high: !!(f & 2) };
   });
 console.log("lit:", JSON.stringify(await lamps()));
 await page.waitForTimeout(4500);

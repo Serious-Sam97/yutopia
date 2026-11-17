@@ -22,7 +22,7 @@ interface Cabin {
  *  along x (a car's −x, a kart's +x). The seat's hip point is the root's place. */
 export function carFit(
   m: Sat,
-  seat: { hip: Vector3; front: boolean },
+  seat: { hip: Vector3; front: boolean; floor?: number },
   driver: boolean,
   cab: Cabin,
   s: number,
@@ -38,8 +38,11 @@ export function carFit(
     up: p.y / s,
     ahead: (face * (p.x - hip.x)) / s,
   });
-  const bed = !kart && cab.floor !== undefined && hip.y - cab.floor > 0.5;
-  const floor = cab.floor !== undefined && !bed ? cab.floor / s : (hip.y - (bed ? 0.02 : 0.4)) / s;
+  // (plan 96: the seat's own footwell floor, as its model has it — under the hip by 0.4 m only a guess, and for
+  // the cars' files 13–19 cm too low: every resting foot through the floor pan)
+  const cabFloor = seat.floor ?? cab.floor;
+  const bed = !kart && cabFloor !== undefined && hip.y - cabFloor > 0.5;
+  const floor = cabFloor !== undefined && !bed ? cabFloor / s : (hip.y - (bed ? 0.02 : 0.4)) / s;
   const stand: [number, number, number] = [0.13, bed ? 0.7 : seat.front ? 0.62 : 0.45, floor];
   let feet: CarFit["feet"] = [stand, stand];
   const pedals = cab.pedals;

@@ -387,7 +387,8 @@ export interface HudState {
   side: SideTab | null; // the right-hand panel and its tab
   phone: PhoneHud;
   heardBy: number[]; // user ids who can hear me right now
-  prompt: { objectId: string; kind: string; label: string } | null;
+  // (`key`, `padKey`: a prompt pressed by another key than "use" — in a car, getting out is X: plan 94 P9)
+  prompt: { objectId: string; kind: string; label: string; key?: string; padKey?: string } | null;
   targets: FocusHud | null;
   /** the Kart Park's lobby or circuits are up (their buttons want the pointer: docs/plan/56 A) */
   kartUi: boolean;

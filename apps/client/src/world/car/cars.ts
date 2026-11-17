@@ -20,8 +20,11 @@ import {
   coverAfter,
   createCar,
   type Damage,
+  DOOR_GONE,
   damageString,
+  doorSlot,
   FLATS,
+  GLASS_BITS,
   GRIP,
   type Ground,
   groundsWorld,
@@ -39,11 +42,21 @@ import {
   mayMend,
   nextMend,
   noDamage,
+  PANE_CRACK,
+  PANE_GONE,
   PART,
+  paneOf,
   parkedPose,
   parseDamage,
   parseHoles,
   ploughCell,
+  type CarAt as ShotCar,
+  type CarClaim,
+  type Hole,
+  bodyStruck,
+  faceOf,
+  levelCar,
+  wireCar,
   Ruts,
   readout,
   SEATS_OF,
@@ -58,6 +71,7 @@ import {
   toWire,
   unpackWheels,
   variantSpec,
+  WRECK,
 } from "@yutopia/shared/car";
 import { feel92 } from "@yutopia/shared/car/assist";
 import { Drive, defOf } from "@yutopia/shared/car/drive";
@@ -66,14 +80,18 @@ import type { PulledCar } from "@yutopia/shared/physics";
 import type { WorldState } from "@yutopia/state";
 import {
   BackSide,
+  BoxGeometry,
   Color,
+  Euler,
   Group,
+  type Material,
   Matrix4,
   Mesh,
   Object3D,
   PerspectiveCamera,
   PMREMGenerator,
   Quaternion,
+  Raycaster,
   Scene,
   ShaderMaterial,
   SphereGeometry,
@@ -85,6 +103,7 @@ import {
   type WebGLRenderTarget,
 } from "three";
 import { DealerPanel } from "@/components/hud/DealerPanel";
+import { litMaterial } from "../look/lit";
 import { extraPanels } from "@/components/hud/panels";
 import { gfxNow } from "@/lib/graphics";
 import { addStrings, trMaybe } from "@/lib/i18n";
@@ -110,7 +129,9 @@ import {
   Debris,
   Mirror,
   RoadPatches,
+  Fires,
   Ropes,
+  Shards,
   ScreenSnow,
   Slabs,
   Smoke,
@@ -118,6 +139,7 @@ import {
   Spray,
   Tracks,
 } from "./fx";
+import { CarHud } from "./hud";
 import { CarPlayback } from "./playback";
 import { type CarExtras, CarSound, distanceGain, HEARD, preloadEngine } from "./sound";
 import { slotBuffers, voiceOf } from "./sound-bank";
@@ -168,6 +190,48 @@ addStrings(
       "Sem combustível — abasteça no posto, ou deixe: ele é rebocado de volta ao estacionamento",
     ],
     carPassenger: ["C camera · R radio · X out", "C câmera · R rádio · X sair"],
+    // (plan 94 P10: the HUD's words)
+    carH_hudDamage: ["DAMAGE", "DANOS"],
+    carH_hudKeysAgain: ["F1 — these keys again", "F1 — estas teclas de novo"],
+    carH_kGo: ["go", "acelerar"],
+    carH_kBrake: ["brake", "frear"],
+    carH_kSteer: ["steer", "virar"],
+    carH_kHand: ["handbrake", "freio de mão"],
+    carH_kLights: ["lights", "faróis"],
+    carH_kHorn: ["horn", "buzina"],
+    carH_kWipers: ["wipers", "limpador"],
+    carH_kWindow: ["window", "janela"],
+    carH_kRadio: ["radio", "rádio"],
+    carH_kCamera: ["camera", "câmera"],
+    carH_kOut: ["get out", "sair"],
+    carH_kGears: ["gear up · down", "marcha acima · abaixo"],
+    carH_kDiff: ["diff lock", "bloqueio do diferencial"],
+    carH_kRange: ["low range", "reduzida"],
+    carH_kSiren: ["siren", "sirene"],
+    carH_kLock: ["doors locked · open", "portas trancadas · abertas"],
+    carH_kPush: ["push off", "empurrar"],
+    carH_kBack: ["back", "para trás"],
+    carH_kLean: ["lean", "inclinar"],
+    carH_kDrag: ["drag your feet", "frear com os pés"],
+    carH_kOff: ["off", "descer"],
+    carH_engCold: ["cold", "frio"],
+    carH_engWarm: ["warm", "quente"],
+    carH_engHot: ["hot", "muito quente"],
+    carH_engSteam: ["steaming", "fumegando"],
+    carH_engDead: ["dead", "morto"],
+    carH_engOff: ["off", "desligado"],
+    carH_engBurning: ["on fire", "pegando fogo"],
+    carH_chipWindow: ["window down", "janela aberta"],
+    carH_chipChains: ["chains", "correntes"],
+    carH_chipLocked: ["locked", "trancado"],
+    carH_chipFlat: ["flat", "pneu furado"],
+    carH_chipSmoke: ["smoking", "soltando fumaça"],
+    carH_chipFire: ["on fire", "pegando fogo"],
+    carH_chipEngineDead: ["engine dead", "motor morto"],
+    carH_wFL: ["front left", "dianteiro esquerdo"],
+    carH_wFR: ["front right", "dianteiro direito"],
+    carH_wRL: ["rear left", "traseiro esquerdo"],
+    carH_wRR: ["rear right", "traseiro direito"],
     carBoot: ["Open the boot", "Abrir o porta-malas"],
     carBootIn: ["In the boot", "No porta-malas"],
     // (plan 93 S6) snow chains
@@ -363,6 +427,7 @@ const hC = new Vector3();
 const hD = new Vector3();
 const hE = new Vector3();
 const hF = new Vector3();
+const hF2 = new Vector3();
 const hG = new Vector3();
 const hH = new Vector3();
 const hI = new Vector3();
@@ -416,6 +481,7 @@ interface LiveView {
           barrel(out: Vector3): Vector3;
           grip(): void;
           drop(): void;
+          fore(out: Vector3): Vector3 | null;
         } | null;
       };
       /** (plan 93 C) the door's handle and its inside pull: marks on the door, swung with it */
@@ -460,6 +526,13 @@ interface LiveView {
   /** (docs/plan/92 phase 9) its broken parts as last seen (shared car/damage.ts PART): a bumper newly gone
    *  falls on the road; -1 till first seen (none falls for what was broken before I came) */
   parts?: number;
+  /** (plan 94 P2) what's come off it or hangs, as last seen */
+  wreck?: number;
+  /** (plan 94 P1) its fire's stage (shared FIRE), and as last seen for what blew off; as last heard (its catch) */
+  fire?: number;
+  fireSeen?: number;
+  fireAt?: number;
+  fireHeard?: number;
   /** steam from under its bonnet (a front past 0.8), 0..1 */
   steam?: number;
   steamAt?: number;
@@ -481,6 +554,15 @@ interface ParkedView {
   key: string;
   /** (plan 93 S1) its damage and holes as last put on it (shot where it stands: again) */
   wearKey?: string;
+  /** (plan 94 P3) its broken parts as last seen here: a pane gone since, its glass out */
+  partsSeen?: number;
+  /** (plan 94 P2) what had come off it, as last seen here */
+  wreckSeen?: number;
+  /** (plan 94 P1) its fire's stage, and as last seen here (a blast since: what's blown off thrown); as last heard */
+  fire?: number;
+  fireSeen?: number;
+  fireAt?: number;
+  fireHeard?: number;
   kind: CarKind;
   spec: CarSpec;
   look: CarLook;
@@ -571,6 +653,9 @@ const CAR_STEPS_MAX = 8; // (plan 93 checks: a stall up to 133 ms caught up — 
 const EXIT_S = 1.35; // s: getting out (plan 93 C): the door opened from inside, up and out, turned and shut behind, before they're a person again
 const SEATED_OLD = 0.92; // a vehicle whose cabin isn't fitted to plan 59's people: drawn a little smaller in it
 const v3 = new Vector3();
+const v4 = new Vector3();
+/** (plan 94 P1) what a blast throws off a car: up, at this */
+const BLOWN = { x: 0, y: 7.5, z: 0 };
 const q1 = new Quaternion();
 /** (plan 93 S7) a tow rope: its length (m, eye to eye), its stretch's stiffness (N/m) and damping (N per m/s), the
  *  most it pulls (N) */
@@ -762,7 +847,9 @@ export class Cars {
   /** the wipers left to the weather (till V's pressed): on as it rains, off as it stops */
   private wipersAuto = true;
   private time = 0;
-  private hud: HTMLDivElement | null = null;
+  private hud: CarHud | null = null;
+  /** (plan 94 P10) when the keys' slip was last shown (getting in, F1) */
+  private keysAt = -99;
   private offMsg: (() => void)[] = [];
   private factory: InstanceType<typeof import("../chars").CharFactory> | null = null;
   private seated = new Set<string>();
@@ -785,6 +872,10 @@ export class Cars {
   private smoke: Smoke;
   private sparks: Sparks;
   private debris: Debris;
+  /** (plan 94 P3) glass out of its panes */
+  private shards: Shards;
+  /** (plan 94 P1) cars on fire, and their blasts */
+  private fires: Fires;
   private patches: RoadPatches;
   private cabin: CabinLight;
   private mirror: { vid: string; m: Mirror } | null = null;
@@ -848,6 +939,14 @@ export class Cars {
           toast(t("motorsBought"), "info");
         }),
         room.onMessage("car:shot", (m: { gun: string; hits: ShotHit[] }) => this.shotFx(m.hits ?? [])),
+        // (plan 94 G4: the ruts pressed before I came — asked for, now that they're heard)
+        room.onMessage("car:ruts", (m: { segs: number[] }) => this.rutsIn(m.segs ?? [])),
+        // (plan 94 P1: a car blew — the server's frame, z up)
+        room.onMessage("car:blast", (m: { id: string; x: number; y: number; z: number }) => {
+          this.blastFx(m.x, m.z, m.y);
+          // (plan 96 F2a: the car itself thrown up, tipping, and down again)
+          this.hop(m.id);
+        }),
         // (plan 93 S2: someone's shot — sat in a car, their arm out of its window that way a moment)
         room.onMessage("arms:shot", (m: { sid: string; yaw: number; pitch: number }) =>
           this.shotsBy.set(m.sid, { t: this.time, yaw: m.yaw, pitch: m.pitch }),
@@ -856,6 +955,8 @@ export class Cars {
           if (this.mine?.seat === 0) this.station = (this.station + 1) % 4;
         }),
       );
+      // (plan 94 G4: listening now — the ruts of the last minutes, please)
+      room.send("car:ruts-hello", {});
     }
     this.cam.reduced = host.reduced();
     // (docs/plan/92) the Blender cars' manifest, then the far outlines every parked car past the near
@@ -872,8 +973,10 @@ export class Cars {
     this.ropes = new Ropes(this.root);
     this.smoke = new Smoke(this.root);
     this.sparks = new Sparks(this.root);
+    this.shards = new Shards(this.root, (x, z) => this.G.heightAt(x, z));
+    this.fires = new Fires(this.root);
     this.debris = new Debris(this.root, {
-      add: (x, y, z) => this.physics()?.carWorld.addThing({ kind: "crate", h: 0.16 }, x, y, z) ?? null,
+      add: (x, y, z, v) => this.physics()?.carWorld.addThing({ kind: "crate", h: 0.16 }, x, y, z, v) ?? null,
       at: (id, out) => this.physics()?.carWorld.thingAt(id, out) ?? false,
       remove: (id) => this.physics()?.carWorld.removeThing(id),
       ground: (x, z) => this.G.heightAt(x, z),
@@ -934,9 +1037,12 @@ export class Cars {
       let seal = 1;
       if (l.win & (1 << e.seat)) seal = 0.15;
       else if (l.win) seal = 0.55;
-      if (parts & (PART.sideL | PART.sideR))
-        seal = Math.min(seal, parts & PART.sideL && parts & PART.sideR ? 0.25 : 0.5);
-      if (parts & PART.screenBad) seal = Math.min(seal, 0.6);
+      // (plan 94 P3: its glass gone — the side's windows, the rear's, the windscreen's — lets the outside in)
+      let gone = 0;
+      for (let i = 1; i < 6; i++) if (paneOf(parts, i as 1) === 2) gone++;
+      if (gone) seal = Math.min(seal, gone >= 3 ? 0.2 : gone === 2 ? 0.3 : 0.5);
+      if (parts & PART.screenGone) seal = Math.min(seal, 0.25);
+      else if (parts & PART.screenBad) seal = Math.min(seal, 0.6);
       return { vid: l.id, seal };
     }
     return null;
@@ -1058,14 +1164,15 @@ export class Cars {
       h.set({ prompt: car });
     return true;
   }
-  private promptNow(): { objectId: string; kind: string; label: string } | null {
+  private promptNow(): { objectId: string; kind: string; label: string; key?: string; padKey?: string } | null {
     if (this.mine) {
       // (on the move there's nothing to press: the prompt comes back at a stop)
       const l = this.live.get(this.mine.vid);
       const sp = l ? Math.hypot(l.pose.v.x, l.pose.v.z) : 0;
       return sp > 1.5
         ? { objectId: this.mine.vid, kind: "car:moving", label: "" }
-        : { objectId: this.mine.vid, kind: "car:leave", label: t("carOut") };
+        : // (out by the car's own key, X — or the pad's X button —, not the walker's use key: plan 94 P9)
+          { objectId: this.mine.vid, kind: "car:leave", label: t("carOut"), key: "X", padKey: "X" };
     }
     if (this.host.level() !== 0) return null;
     // (plan 93 S6, S7: at work on a car — pressed again, stood up)
@@ -1336,6 +1443,8 @@ export class Cars {
     if (kind === "car:boot") {
       // (plan 93 S4: its lid up, the pack open on it — what's in it beside my pockets)
       this.bootOpen = { id, packed: false };
+      // (plan 94 G3: for everyone near — its lid up on their screens)
+      room?.send("car:boot", { id, open: true });
       this.host.openPack();
       return true;
     }
@@ -1422,6 +1531,8 @@ export class Cars {
     }
     this.nowMs = now;
     this.lidsFrame(dt);
+    // (plan 95 F1a) the windows on their way down or up
+    for (const l of this.live.values()) l.model.windowsTick?.(dt);
     this.workFrame(room, dt);
     this.locksFrame();
     // (plan 93 C) at the door I walked to: in; walked off (the way let go): not
@@ -1492,6 +1603,8 @@ export class Cars {
         }
         const y = this.G.heightAt(x, z);
         this.tracks.mark(`${id}:${i}`, x, y, z, g, t, slip > 1.5);
+        // (plan 94 G4: my car's front wheels' ruts, a stretch at a time, for the server to keep)
+        if (sim && i < 2 && mine?.seat === 0) this.rutLane(i, x, z, g);
         const loose = g === "snow" || g === "deep" || g === "path" || g === "slush";
         const k = loose ? Math.min(1, (slip / 4) * (i >= 2 ? 1 : 0.5) + (speed > 6 ? (speed - 6) * 0.02 : 0)) : 0;
         if (k > 0.05) {
@@ -1560,7 +1673,8 @@ export class Cars {
         );
       }
       // (steam from a smashed front: under the bonnet's back edge, up through its gaps)
-      const steam = mine ? steamOf(mine.dmg) : (l.steam ?? 0);
+      // (plan 94 P1: on fire, its own smoke instead — fireFrame)
+      const steam = (mine ? mine.dmg.fire : (l.fire ?? 0)) ? 0 : mine ? steamOf(mine.dmg) : (l.steam ?? 0);
       if (steam > 0 && t - (l.steamAt ?? 0) > 0.12 / steam) {
         l.steamAt = t;
         const h0 = m.lamps.head[0];
@@ -1772,15 +1886,43 @@ export class Cars {
         this.spray.throw(bx, this.G.heightAt(bx, bz) + 0.3, bz, -sx, cx, Math.min(1, sp / 8), false);
       }
     this.tracks.fade(t, night);
+    if (this.rutSend.length && t - this.rutSentAt > 2) {
+      this.rutSentAt = t;
+      this.host.room()?.send("car:ruts", { segs: this.rutSend.splice(0, 400) });
+    }
     this.spray.step(dt, night);
     this.slabs.step(dt);
     this.drawRopes();
     this.smoke.step(dt, night);
     this.sparks.step(dt);
+    this.shards.step(dt);
     this.debris.step(dt);
+    this.fireFrame(dt, night);
+    this.hopsFrame();
+    // (plan 96 F5a: a parked car's tyre blowing out — its collapse, a frame at a time)
+    for (const p of this.parked.values()) if (p.full?.flatsBusy?.()) p.full.flatsTick?.(true);
+    this.warmFx();
+  }
+  /** (plan 94 phase 9) Once, when there's a view: the fire's sprites and the shards' mesh made ready (their shaders
+   *  and textures) in the background — not on the frame a car first burns near (a 200–400 ms frame on Low). */
+  private warmed = false;
+  private warmFx() {
+    const tp = this.host.tp();
+    if (this.warmed || !tp) return;
+    this.warmed = true;
+    const fire = this.fires.warm();
+    const sh = this.shards.warmMesh;
+    const shWas = sh.visible;
+    sh.visible = true;
+    void tp.renderer
+      .compileAsync(this.root, tp.camera, tp.scene)
+      .catch(() => undefined)
+      .then(() => {
+        fire.done();
+        sh.visible = shWas;
+      });
   }
   private shownStation = -1;
-  private hintAt = 0;
   /** A door's clunk (opening: a click; shutting: a thud), heard by distance. */
   private clunk(l: LiveView, open: boolean) {
     const s = l.sound ?? (this.mine?.vid === l.id ? this.mine.sound : null);
@@ -1934,6 +2076,27 @@ export class Cars {
       // (its dents changed since its still model was made — knocked where it stands: made again, the old one
       // shown till the new one's in)
       const wk = `${o.props?.dmg ?? ""}|${o.props?.holes ?? ""}|${chainsOf(o.props)}`;
+      // (plan 94 P3: shot where it stands — a pane gone since I last saw it, its glass out of its frame)
+      const dNow = dmgOf(o.props?.dmg);
+      const partsNow = dNow.parts;
+      if (p.partsSeen !== undefined && partsNow & ~p.partsSeen) {
+        const mm = p.full ?? p.old;
+        if (mm?.ready) this.glassOut(mm, partsNow & ~p.partsSeen, 0, 0, parseHoles(o.props?.holes));
+      }
+      p.partsSeen = partsNow;
+      // (plan 94 P2: parts off since — onto the road; its model made again, its shadow without them)
+      const blown = p.fireSeen !== undefined && dNow.fire === 3 && p.fireSeen < 3;
+      if (p.wreckSeen !== undefined && dNow.wreck !== p.wreckSeen) {
+        const mm = p.full ?? p.old;
+        if (mm?.ready && dNow.wreck & ~p.wreckSeen)
+          this.partsOff(mm, dNow.wreck & ~p.wreckSeen, blown ? BLOWN : { x: 0, y: 0, z: 0 });
+        if (p.stillDone && p.full) p.level = null;
+      }
+      // (burnt out since: its model made again, charred)
+      if (blown && p.stillDone && p.full) p.level = null;
+      p.wreckSeen = dNow.wreck;
+      p.fire = dNow.fire;
+      p.fireSeen = dNow.fire;
       if (p.stillDone && p.full && p.baked !== undefined && p.baked !== wk) p.level = null;
       if (r && want !== "far" && p.level !== want && heavy < 1) {
         heavy++;
@@ -1973,7 +2136,7 @@ export class Cars {
         heavy++;
         p.stillDone = true;
         const dm = dmgOf(o.props?.dmg);
-        p.full.setWear(Number(o.props?.grime) || 0, dm.zones, dm.parts);
+        p.full.setWear(Number(o.props?.grime) || 0, dm.zones, dm.parts, dm.wreck, dm.fire);
         p.full.setHoles?.(parseHoles(o.props?.holes));
         p.full.setChains?.(chainsOf(o.props), p.spec.wheel.r, p.spec.wheel.width);
         p.wearKey = wk;
@@ -1990,7 +2153,7 @@ export class Cars {
       if (p.full?.ready && p.stillDone && p.level === "near" && p.wearKey !== wk) {
         p.wearKey = wk;
         const dm = dmgOf(o.props?.dmg);
-        p.full.setWear(Number(o.props?.grime) || 0, dm.zones, dm.parts);
+        p.full.setWear(Number(o.props?.grime) || 0, dm.zones, dm.parts, dm.wreck, dm.fire);
         p.full.setHoles?.(parseHoles(o.props?.holes));
         p.full.setChains?.(chainsOf(o.props), p.spec.wheel.r, p.spec.wheel.width);
       }
@@ -2008,7 +2171,7 @@ export class Cars {
         if (shown) {
           if (p.stillDone && p.level === "near") {
             const dm = dmgOf(o.props?.dmg);
-            p.full.setWear(Number(o.props?.grime) || 0, dm.zones, dm.parts);
+            p.full.setWear(Number(o.props?.grime) || 0, dm.zones, dm.parts, dm.wreck, dm.fire);
           }
           if (role === "taxi") p.full.setBeacon(this.host.night() > 0.2, this.time);
         }
@@ -2183,7 +2346,8 @@ export class Cars {
       for (let i = 0; i < l.model.seats.length; i++) {
         const door = l.model.doorOf ? l.model.doorOf(i) : -1;
         const sid = String(v.seats ?? "").split("|")[i];
-        if (door >= 0 && !l.people.get(sid)?.gun) l.model.windowDown?.(door, !!(l.win & (1 << i)));
+        if (door >= 0 && !l.people.get(sid)?.gun && l.model.windowDown?.(door, !!(l.win & (1 << i))))
+          this.windowMotor(l, door);
       }
       // (plan 93 S6) its chains
       l.model.setChains?.(v.chains ?? 0, l.spec.wheel.r, l.spec.wheel.width);
@@ -2195,9 +2359,10 @@ export class Cars {
       // its wear (mine: as my sim counts it — wearOn)
       if (this.mine?.vid !== id || this.mine.seat !== 0) {
         const dm = dmgOf(v.dmg);
-        this.partsChanged(l, dm.parts);
+        this.partsChanged(l, dm);
         l.steam = steamOf(dm);
-        l.model.setWear(v.grime ?? 0, dm.zones, dm.parts);
+        l.fire = dm.fire;
+        l.model.setWear(v.grime ?? 0, dm.zones, dm.parts, dm.wreck, dm.fire);
       }
       const seats = String(v.seats ?? "|||").split("|");
       // someone in or out: their door swings open a moment (and shuts with a clunk)
@@ -2927,7 +3092,7 @@ export class Cars {
           kind: ok ? "car:mend" : "car:no",
           label: ok ? t(`carMend_${next}`) : `${t(`carMend_${next}`)} · ${why}`,
         });
-      } else if (dm.parts & (PART.screen | PART.screenBad | PART.sideL | PART.sideR))
+      } else if (dm.parts & GLASS_BITS)
         offer(ns.x, ns.y, MEND_REACH * 0.9, {
           objectId: `${id}#${t("carNeedsGarage")}`,
           kind: "car:no",
@@ -2969,14 +3134,34 @@ export class Cars {
     const tp = this.host.tp();
     const up = new Set<string>();
     tp?.kneeling.clear();
+    // (plan 94 G5: a tyre being changed — the jack, the corner up, the wheel off and the spare on)
+    const tyres = new Set<string>();
     room.state.players.forEach((p: { busy?: string }, sid: string) => {
       const b = p.busy ?? "";
+      const tm = /^mend:(.+):tyre(\d)$/.exec(b);
+      if (tm) {
+        const key = `${sid}|${b}`;
+        tyres.add(key);
+        if (!this.tyreJobs.has(key)) this.tyreJobs.set(key, { id: tm[1], wheel: Number(tm[2]) & 3, at: this.time, jack: null });
+      }
       if (b.startsWith("chain:") || /^mend:.*:tyre\d$/.test(b)) tp?.kneeling.set(sid, "kneel");
       else if (b.startsWith("mend:")) {
         tp?.kneeling.set(sid, "bonnet");
         up.add(b.split(":")[1]);
       }
     });
+    for (const [key, j] of this.tyreJobs) {
+      const m = this.parked.get(j.id)?.full;
+      if (!tyres.has(key) || !m) {
+        m?.liftCorner?.(j.wheel, 0);
+        m?.wheelShown?.(j.wheel, true);
+        j.jack?.removeFromParent();
+        j.jack?.traverse((o) => (o as Mesh).geometry?.dispose());
+        this.tyreJobs.delete(key);
+        continue;
+      }
+      this.tyreJob(j, m);
+    }
     for (const id of up) if (!this.bonnets.has(id)) this.bonnets.set(id, 0);
     for (const [id, a] of this.bonnets) {
       const to = up.has(id) ? 1.0 : 0;
@@ -2987,6 +3172,54 @@ export class Cars {
         this.bonnets.delete(id);
       } else this.bonnets.set(id, next);
     }
+  }
+  /** (plan 94 G5) Tyres being changed (by whose `busy`): which car, which wheel, since when (my clock), its jack. */
+  private tyreJobs = new Map<string, { id: string; wheel: number; at: number; jack: Group | null }>();
+  private jackMats: Material[] = [];
+  /** (plan 94 G5) One tyre change as it goes, over MEND_MS.tyre: the jack set under the sill by the wheel and wound
+   *  up (the first 15%), the wheel off (30–55%) and the spare on, wound down (the last 15%). */
+  private tyreJob(j: { id: string; wheel: number; at: number; jack: Group | null }, m: Sedan) {
+    const u = (this.time - j.at) / (MEND_MS.tyre / 1000);
+    const k = u < 0.15 ? u / 0.15 : u > 0.85 ? Math.max(0, (1 - u) / 0.15) : 1;
+    m.liftCorner?.(j.wheel, k);
+    m.wheelShown?.(j.wheel, !(u > 0.3 && u < 0.55));
+    if (!j.jack) {
+      if (!this.jackMats.length)
+        this.jackMats = [litMaterial({ color: 0x7a2a1e, roughness: 0.6 }), litMaterial({ color: 0x3b3b3e, roughness: 0.5 })];
+      const [red, steel] = this.jackMats;
+      const jack = new Group();
+      const base = new Mesh(new BoxGeometry(0.26, 0.03, 0.12), steel);
+      base.position.y = 0.015;
+      const post = new Mesh(new BoxGeometry(0.05, 1, 0.05), red);
+      post.name = "post";
+      const pad = new Mesh(new BoxGeometry(0.1, 0.025, 0.08), steel);
+      pad.name = "pad";
+      jack.add(base, post, pad);
+      this.root.add(jack);
+      j.jack = jack;
+    }
+    // (under its sill, a hand inside the wheel, toward the car's middle along it)
+    const w = m.wheels[j.wheel];
+    if (!w) return;
+    m.root.updateMatrixWorld(true);
+    w.steer.getWorldPosition(v3);
+    this.root.updateMatrixWorld();
+    v3.applyMatrix4(this.inv.copy(this.root.matrixWorld).invert());
+    m.root.getWorldPosition(v4).applyMatrix4(this.inv);
+    const ax = v4.x - v3.x;
+    const az = v4.z - v3.z;
+    const a = Math.atan2(az, ax);
+    const jx = v3.x + Math.cos(a) * 0.55;
+    const jz = v3.z + Math.sin(a) * 0.55;
+    const g = this.G.heightAt(jx, jz);
+    const h = 0.16 + 0.06 * k;
+    const jack = j.jack as Group;
+    jack.position.set(jx, g, jz);
+    jack.rotation.y = -a;
+    const post = jack.getObjectByName("post") as Mesh;
+    post.scale.y = h;
+    post.position.y = 0.03 + h / 2;
+    (jack.getObjectByName("pad") as Mesh).position.y = 0.03 + h;
   }
   /** (plan 93 S4) A parked car whose back I'm stood at (its middle, a step behind it: the server's own reach) —
    *  that one (`only`), or the nearest. */
@@ -3009,17 +3242,160 @@ export class Cars {
     return best;
   }
   /** (plan 93 S4) The boot I opened: its lid up while the pack's open on it — down as it's shut, or I walk off. */
+  /** (plan 95 F4a) A round's line — from `o` along the unit `d` (the server's frame: x, y on the ground, z up), as
+   *  far as `range` — against the cars' models as drawn here (not `skip`, the one I sit in): the nearest it meets,
+   *  where on it (the car's own frame) and what — its glass and which pane, a wheel, a lamp, its skin (the engine
+   *  behind the front's); 0: none it met; null: a car by its line isn't drawn here to tell (the server's box). */
+  shotAlong(
+    o: { x: number; y: number; z: number },
+    d: { x: number; y: number; z: number },
+    range: number,
+    skip?: string,
+  ): { claim: CarClaim; t: number } | 0 | null {
+    const tp = this.host.tp();
+    if (!tp) return null;
+    const cam = tp.camera;
+    const near = (x: number, y: number) => {
+      const rx = x - o.x;
+      const ry = y - o.y;
+      const along = rx * d.x + ry * d.y;
+      if (along < -6 || along > range + 6) return false;
+      return Math.abs(rx * d.y - ry * d.x) < 5 + Math.abs(d.z) * Math.max(0, along);
+    };
+    const cands: { id: string; roots: Object3D[]; at: ShotCar }[] = [];
+    let blind = false;
+    for (const l of this.live.values()) {
+      if (l.id === skip || !near(l.pose.p.x, l.pose.p.z)) continue;
+      const q = l.pose.q;
+      const at = wireCar(l.pose.p.x, l.pose.p.y, l.pose.p.z, [q.x, q.y, q.z, q.w], l.spec);
+      cands.push({ id: l.id, roots: [l.model.root], at });
+    }
+    for (const [id, p] of this.parked) {
+      if (`car:${id}` === skip || !near(p.pose.x, p.pose.z)) continue;
+      const roots: Object3D[] = [];
+      for (const r of [p.full?.root, p.old?.root, p.far?.root]) if (r && shownAll(r)) roots.push(r);
+      if (!roots.length) {
+        blind = true;
+        continue;
+      }
+      cands.push({ id, roots, at: levelCar(p.pose.x, p.pose.z, p.pose.y, p.pose.a, p.spec) });
+    }
+    if (!cands.length) return blind ? null : 0;
+    // (its line in the view: the cars' group's frame — the Grounds' — to the world)
+    this.root.updateMatrixWorld();
+    const from = this.root.localToWorld(new Vector3(o.x, o.z, o.y));
+    const dir = new Vector3(d.x, d.z, d.y).transformDirection(this.root.matrixWorld);
+    const rc = (this.rc ??= new Raycaster());
+    rc.set(from, dir);
+    rc.far = range;
+    const hits: import("three").Intersection[] = [];
+    let best: { hit: import("three").Intersection; c: (typeof cands)[number] } | null = null;
+    for (const c of cands)
+      for (const r of c.roots)
+        r.traverseVisible((x) => {
+          const m = x as Mesh;
+          if (!m.isMesh || (m as { isInstancedMesh?: boolean }).isInstancedMesh || !m.layers.test(cam.layers)) return;
+          hits.length = 0;
+          m.raycast(rc, hits);
+          for (const h of hits) if (h.distance <= rc.far && (!best || h.distance < best.hit.distance)) best = { hit: h, c };
+        });
+    if (!best) return blind ? null : 0;
+    const { hit, c } = best as { hit: import("three").Intersection; c: (typeof cands)[number] };
+    const at = c.at;
+    const spec = at.spec;
+    // (the point and its skin's way out, the server's frame — then the car's own)
+    const lp = this.root.worldToLocal(hit.point.clone());
+    const rx = lp.x - at.x;
+    const ry = lp.z - at.y;
+    const rz = lp.y - at.z;
+    const dot = (a: [number, number, number], x: number, y: number, z: number) => a[0] * x + a[1] * y + a[2] * z;
+    const u = dot(at.fwd, rx, ry, rz);
+    const w = dot(at.right, rx, ry, rz);
+    const h = dot(at.up, rx, ry, rz) + spec.cog;
+    const nw3 = (hit.face?.normal.clone() ?? new Vector3(0, 1, 0)).transformDirection(hit.object.matrixWorld);
+    if (nw3.dot(dir) > 0) nw3.negate();
+    const inv = new Matrix4().copy(this.root.matrixWorld).invert();
+    const nl = nw3.transformDirection(inv);
+    const nu = dot(at.fwd, nl.x, nl.z, nl.y);
+    const nr = dot(at.right, nl.x, nl.z, nl.y);
+    const nh = dot(at.up, nl.x, nl.z, nl.y);
+    // (what it is: the glass's pane, a lamp's lens, a wheel — its tyre, its rim —, else the skin)
+    const m = hit.object as Mesh;
+    const mats = m.material;
+    const mat = Array.isArray(mats) ? mats[hit.face?.materialIndex ?? 0] : mats;
+    const name = mat?.name ?? "";
+    const ud = m.userData;
+    const pane = (ud.pane ?? ud.crackOf ?? ud.paneOf) as number | undefined;
+    let inWheel = false;
+    for (let x: Object3D | null = m; x && !inWheel; x = x.parent)
+      inWheel = /^(spin_|wheel_|p:wheel)|^wheel/.test(x.name) && !/steer/.test(x.name);
+    const cm = (x: number) => Math.round(x * 100) / 100;
+    const claim: CarClaim = { id: c.id, u: cm(u), w: cm(w), h: cm(h), f: 0, s: "panel" };
+    if (typeof pane === "number" || /glass/.test(name)) {
+      claim.s = "glass";
+      claim.f = faceOf(spec, u, nu, nr, nh);
+      if (typeof pane === "number") claim.p = pane;
+    } else if (mirrorOf(m)) {
+      // (plan 96 F4a: a door mirror — its glass a "reflector" too, not a lamp's)
+      claim.s = "panel";
+      claim.f = w < 0 ? 2 : 3;
+      claim.part = mirrorOf(m) as string;
+    } else if (/lens|emit_|reflector/.test(name)) {
+      claim.s = "lamp";
+      claim.f = u > 0 ? 0 : 1;
+      claim.n = w < 0 ? 0 : 1;
+    } else if (inWheel || /tyre|tire|alloy|rim|hubcap|spoke/.test(name)) {
+      claim.s = "tyre";
+      claim.f = w < 0 ? 2 : 3;
+      const rear = -(spec.wheelbase - spec.front);
+      claim.n = (u > (spec.front + rear) / 2 ? 0 : 2) + (w < 0 ? 0 : 1);
+    } else {
+      claim.f = faceOf(spec, u, nu, nr, nh);
+      claim.s = bodyStruck(spec, u, h, claim.f);
+      // (plan 96 F4a: the part of its skin — its mesh's or a holder's name: "door_fr-paint", "bonnet", …)
+      for (let x: Object3D | null = m; x; x = x.parent) {
+        const k = /^(bonnet|boot|bumper_[fr]|mirror_[lr]|door_(?:fl|fr|rl|rr))(?:-|$)/.exec(x.name);
+        if (k) {
+          claim.part = k[1];
+          break;
+        }
+      }
+    }
+    claim.nu = Math.round(nu * 100);
+    claim.nw = Math.round(nr * 100);
+    claim.nh = Math.round(nh * 100);
+    return { claim, t: hit.distance };
+  }
+  private rc: Raycaster | null = null;
+  /** (plan 95 F4a) the car I sit in (its live vehicle's id), if I do */
+  myCarId(): string | null {
+    return this.mine?.vid ?? null;
+  }
+
+  /** (plan 95 F1a) A window's motor heard: by its car's sound (its door's side), mine or another's. */
+  private windowMotor(l: LiveView, door: number) {
+    const snd = l.sound ?? (this.mine?.vid === l.id ? this.mine.sound : null);
+    snd?.windowMotor(door);
+  }
   private lidsFrame(dt: number) {
     const b = this.bootOpen;
     if (b) {
       const open = this.host.packOpen();
       if (open) b.packed = true;
-      if ((b.packed && !open) || this.bootNear(b.id) !== b.id) this.bootOpen = null;
+      if ((b.packed && !open) || this.bootNear(b.id) !== b.id) {
+        this.bootOpen = null;
+        this.host.room()?.send("car:boot", { id: b.id, open: false });
+      }
     }
-    const want = this.bootOpen?.id;
-    if (want && !this.lids.has(want)) this.lids.set(want, 0);
+    // (plan 94 G3: mine, and everyone else's open — the server's `boot:<id>`)
+    const want = new Set<string>();
+    if (this.bootOpen) want.add(this.bootOpen.id);
+    this.host.room()?.state.players.forEach((p: { busy?: string }) => {
+      if (p.busy?.startsWith("boot:")) want.add(p.busy.slice(5));
+    });
+    for (const id of want) if (!this.lids.has(id)) this.lids.set(id, 0);
     for (const [id, a] of this.lids) {
-      const to = id === want ? 1.15 : 0;
+      const to = want.has(id) ? 1.15 : 0;
       const next = a + (to - a) * Math.min(1, dt * (to > a ? 4 : 6));
       const p = this.parked.get(id);
       p?.full?.setPart?.("boot", next);
@@ -3073,7 +3449,9 @@ export class Cars {
       e.gun = want ? { key: want, held } : undefined;
     }
     const door = l.model.doorOf ? l.model.doorOf(e.seat) : -1;
-    if (door >= 0) l.model.windowDown?.(door, (!!aim && across < 0.5) || !!(l.win & (1 << e.seat)));
+    // (a gun out of it: down quicker — plan 95 F1a's 1.5 s is the switch's)
+    if (door >= 0 && l.model.windowDown?.(door, (!!aim && across < 0.5) || !!(l.win & (1 << e.seat)), aim ? 0.5 : undefined))
+      this.windowMotor(l, door);
     const held = e.gun?.held;
     if (!aim || across >= 0.5) {
       held?.rest();
@@ -3084,14 +3462,19 @@ export class Cars {
     // walker's is to theirs — the fingers round its grip, the index on the trigger)
     // (out along the aim from the shoulder, as far as a walker's arm holds it — out of the window, in reach —
     // and a little toward the car's front: before the eye that sights over it, not off at its edge)
-    const at = this.gunAt(e, S, aim, hF).addScaledVector(
+    // (plan 94 G2: a long gun — the shotgun, the AK, the sniper, the Daybreak — shouldered: its grip a forearm
+    // out from the shoulder, its barrel out of the window, the other hand on its fore-end as a walker holds it)
+    const long = !!held?.fore(hF2);
+    const at = this.gunAt(e, S, aim, hF, long ? 0.3 : 0.52).addScaledVector(
       hI.set(-1, 0, 0).transformDirection(l.model.body.matrixWorld),
-      0.08,
+      long ? 0 : 0.08,
     );
     const pole: [number, number, number] = S === "R" ? [-0.6, -1, -0.45] : [0.6, -1, -0.45];
     if (held) {
       held.aimAt(at, aim, 1 - across, pole);
       held.grip();
+      const fore = long ? held.fore(hF2) : null;
+      if (fore) e.m.reachTo(S === "R" ? "L" : "R", fore, 1 - across, S === "R" ? [-0.5, -1, 0.2] : [0.5, -1, 0.2]);
     } else e.m.reachTo(S, at, 1 - across, pole);
   }
 
@@ -3102,6 +3485,7 @@ export class Cars {
     S: "L" | "R",
     aim: Vector3,
     out: Vector3,
+    reach = 0.52,
   ) {
     const sh = e.m.bone(S === "L" ? "shoulderL" : "shoulderR");
     const k = e.m.root.scale.x || 1;
@@ -3109,7 +3493,7 @@ export class Cars {
     sh.updateWorldMatrix(true, false);
     return sh
       .getWorldPosition(out)
-      .addScaledVector(aim, 0.52 * k)
+      .addScaledVector(aim, reach * k)
       .add(hG.set(0, 0.06 * k, 0));
   }
   /** (plan 93 S2) Me, sat in my car (my person there), or null */
@@ -3366,8 +3750,10 @@ export class Cars {
       w.spin.rotation.z = l.spin * (w.turnK ?? 1);
       if (w.front) w.steer.rotation.y = -steer;
       // (plan 93 S1: a flat, down on its rim)
-      if (w.rest) w.steer.position.y = w.rest.y + (this.wcs[i] ?? 0) - ((l.parts ?? 0) & FLATS[i] ? 0.04 : 0);
+      if (w.rest) w.steer.position.y = w.rest.y + (this.wcs[i] ?? 0) + (m.flatY?.[i] ?? 0);
     });
+    // (plan 95 F6a: its flats squashed where its wheels are now — posed)
+    if ((l.parts ?? 0) & (PART.flatFL | PART.flatFR | PART.flatRL | PART.flatRR)) m.flatsTick?.();
     m.steering.rotation.z = -steer * spec.steer.ratio;
     // its lamps from its switches
     const fl = s1.fl;
@@ -3384,6 +3770,7 @@ export class Cars {
     });
     this.beaconOf(l, !!(fl & CAR_FLAGS.siren));
     this.hearRemote(l, s1, sp, dt);
+    this.rimSparks(l, dt);
   }
 
   /** Someone else's car heard: its engine and tyres from what it sends, by distance. */
@@ -3415,6 +3802,9 @@ export class Cars {
       q: { x: l.pose.q.x, y: l.pose.q.y, z: l.pose.q.z, w: l.pose.q.w },
       shiftT: 0,
       gear: s.gear,
+      // (plan 95 F3a: braking, by its lamps — its ABS taken as at work: no lock's squeal heard from it)
+      brk: s.fl & CAR_FLAGS.brake ? 1 : 0,
+      helping: s.fl & CAR_FLAGS.brake ? 1 : 0,
     } as unknown as CarState;
     const heard = this.heardAt(l.pose.p.x, l.pose.p.y, l.pose.p.z);
     const extras: CarExtras = {
@@ -3572,9 +3962,6 @@ export class Cars {
     if (!l) return;
     const pad = activePad();
     const { c, switches } = this.input.read(pad);
-    // (plan 93 S10) how long it's stood still (the drive-in's lamps)
-    const sp = Math.hypot(l.pose.v.x, l.pose.v.z);
-    this.stillFor = sp < 0.3 ? this.stillFor + dt : 0;
     for (const sw of switches) {
       // (on its roof or its side, still: R puts it back on its wheels — the radio's key otherwise)
       if (sw === "radio" && m.drive?.canRight && m.drive.right(this.world)) {
@@ -3722,7 +4109,7 @@ export class Cars {
       );
       // lights for real at night (plan 93 S10: down at the drive-in; flashed up)
       const fu = this.time - this.flashAt;
-      this.headlamps(l, fu < 0.9 && fu % 0.45 < 0.22 ? "high" : this.dipped(s) ? "off" : this.beams);
+      this.headlamps(l, fu < 0.9 && fu % 0.45 < 0.22 ? "high" : this.beams);
     }
     // the camera: the car's (a passenger: the chase camera, or their own seat)
     const tp = this.host.tp();
@@ -3816,6 +4203,18 @@ export class Cars {
       this.wipers = ((this.wipers + 1) % 4) as 0 | 1 | 2 | 3;
       this.wipersAuto = false;
     } else if (sw === "camera") this.cam.cycle();
+    // (plan 94 P10: the keys' slip, again — or away, if it's up)
+    else if (sw === "keys") this.keysAt = this.time - this.keysAt < 9.5 ? -99 : this.time;
+    // (plan 94 G6, F10b: its doors locked from the driver's seat — its empty seats then its keys' alone — or not)
+    else if (sw === "lock") {
+      const m = this.mine;
+      if (m?.seat === 0) {
+        const oid = m.vid.replace(/^car:/, "");
+        const pr = this.propsOf(oid);
+        if (pr?.ownerId && mayDrive(pr, this.host.uid(), Date.now()))
+          this.host.room()?.send("car:lock", { id: oid, on: !pr.locked });
+      }
+    }
     else if (sw === "exit") this.act("car:leave", this.mine?.vid ?? "");
     else if (sw === "radio") {
       // (a passenger's: the driver's client keeps the station — the server tells it)
@@ -3855,15 +4254,10 @@ export class Cars {
   private flashAt = -9;
   private tootAt = -9;
   private tunedTo = 0;
-  private stillFor = 0;
   /** the horn: held, or the toot's two taps */
   private hornNow(): boolean {
     const u = this.time - this.tootAt;
     return this.input.horn || (u >= 0 && (u < 0.11 || (u > 0.2 && u < 0.31)));
-  }
-  /** (plan 93 S10) the drive-in: stopped four seconds at night, the radio on — its lamps down, the dash lit */
-  private dipped(s: CarState): boolean {
-    return this.stillFor > 4 && this.station > 0 && this.host.night() > 0.35 && Math.hypot(s.v.x, s.v.z) < 0.5;
   }
   /** (plan 93 S10) the station of the nearest other car playing one, within 25 m (0: none) */
   private stationNear(): number {
@@ -3886,10 +4280,9 @@ export class Cars {
 
   private flags(s: CarState): number {
     let f = 0;
-    // (plan 93 S10: stopped a while at night with the radio on — the lamps down, the dash's glow; flashed: twice)
-    const dipped = this.dipped(s);
-    if (this.beams === "low" && !dipped) f |= CAR_FLAGS.low;
-    if (this.beams === "high" && !dipped) f |= CAR_FLAGS.low | CAR_FLAGS.high;
+    // (the lamps as switched — plan 95 F2a: no drive-in dip, the radio never puts them out; flashed: twice)
+    if (this.beams === "low") f |= CAR_FLAGS.low;
+    if (this.beams === "high") f |= CAR_FLAGS.low | CAR_FLAGS.high;
     const fu = this.time - this.flashAt;
     if (fu < 0.9 && fu % 0.45 < 0.22) f |= CAR_FLAGS.low | CAR_FLAGS.high;
     if (s.brk > 0.05) f |= CAR_FLAGS.brake;
@@ -3939,7 +4332,7 @@ export class Cars {
       if (up > 0.35) return;
       m.hitAt = s.t;
       knock(m.dmg, 4, k, 0);
-      if (l) this.partsChanged(l, m.dmg.parts);
+      if (l) this.partsChanged(l, m.dmg);
       this.scrape(s.p.x, s.p.y + 0.2, s.p.z, s.v.x, s.v.z, 0, 0, Math.min(1, Math.hypot(s.v.x, s.v.z) / 8));
       return;
     }
@@ -3955,7 +4348,7 @@ export class Cars {
     // (across the front or back: −1 its left .. 1 its right; along a side: −1 its back .. 1 its front)
     const across = i < 2 ? Math.max(-1, Math.min(1, w / b.hz)) : Math.max(-1, Math.min(1, u / b.hx));
     knock(m.dmg, i as 0 | 1 | 2 | 3, k, across);
-    if (l) this.partsChanged(l, m.dmg.parts);
+    if (l) this.partsChanged(l, m.dmg);
     // (metal on something hard: sparks where it struck, flung along the way it was going)
     if ((h.v ?? 0) > 3) {
       const sp = Math.hypot(s.v.x, s.v.z) || 1;
@@ -3965,22 +4358,29 @@ export class Cars {
 
   /** A car's broken parts as seen now: what broke since it was last seen falls and shatters (a bumper on
    *  the road, glass on the snow) — not what was broken before I first saw it (docs/plan/92 phase 9). */
-  private partsChanged(l: LiveView, parts: number) {
+  private partsChanged(l: LiveView, dm: Damage) {
+    const parts = dm.parts;
     const was = l.parts;
+    const wasW = l.wreck ?? 0;
     l.parts = parts;
+    l.wreck = dm.wreck;
     if (was === undefined || was < 0) return;
     const newly = parts & ~was;
+    const newlyW = dm.wreck & ~wasW;
+    const blown = dm.fire === 3 && (l.fireSeen ?? 0) < 3;
+    l.fireSeen = dm.fire;
+    // (plan 94 P2: what's come off since: down onto the road — plan 94 P1: blown off, up and out)
+    if (newlyW) this.partsOff(l.model, newlyW, blown ? BLOWN : l.pose.v);
     if (!newly) return;
     const m = l.model;
     m.root.updateMatrixWorld(true);
     // (heard: the bumper off, glass giving)
     const snd = l.sound ?? (this.mine?.vid === l.id ? this.mine.sound : null);
     if (newly & PART.bumperGone) snd?.bumperDrop();
-    if (
-      newly &
-      (PART.headL | PART.headR | PART.tailL | PART.tailR | PART.screen | PART.screenBad | PART.sideL | PART.sideR)
-    )
-      snd?.glass();
+    // (plan 94 P3: a pane gone, its burst; only cracked, a tick)
+    const paneGone = PANE_GONE.some((b) => newly & b);
+    if (newly & (PART.headL | PART.headR | PART.tailL | PART.tailR) || paneGone) snd?.glass("gone");
+    else if (newly & GLASS_BITS) snd?.glass("crack");
     if (newly & PART.bumperGone) {
       const o = m.partCopy?.("bumper_f");
       if (o) {
@@ -4001,11 +4401,418 @@ export class Cars {
     if (newly & PART.headR && head[1]) L(head[1].x, head[1].y, head[1].z);
     if (newly & PART.tailL && m.lamps.tail[1]) L(m.lamps.tail[1].x, m.lamps.tail[1].y, m.lamps.tail[1].z);
     if (newly & PART.tailR && m.lamps.tail[0]) L(m.lamps.tail[0].x, m.lamps.tail[0].y, m.lamps.tail[0].z);
-    const eye = m.eye;
-    if (newly & PART.sideL) L(eye.x, eye.y, eye.z + 0.7);
-    if (newly & PART.sideR) L(eye.x, eye.y, eye.z - 0.7);
-    for (const [x, y, z] of glass)
+    for (const [x, y, z] of glass) {
       for (let k = 0; k < 3; k++) this.spray.throw(x, y, z, l.pose.v.x * 0.05, l.pose.v.z * 0.05, 0.9, false);
+      // (plan 94 P2: a lamp's lens in bits)
+      this.shards.burst(x, y, z, 10, l.pose.v.x, l.pose.v.z);
+    }
+    this.glassOut(m, newly, l.pose.v.x, l.pose.v.z, parseHoles(l.holes));
+  }
+  /** (plan 94 P1) Each frame, every car on fire near: smoking, thick black out of its engine bay; burning, its
+   *  flames, more smoke, its light, its crackle and roar; burnt out, a thin smoke a while. The blasts' flashes. */
+  private fireFrame(dt: number, night: number) {
+    const lights: { x: number; y: number; z: number; k: number }[] = [];
+    const t = this.time;
+    const me = this.host.me();
+    const ox = this.root.position.x;
+    const oy = this.root.position.y;
+    const oz = this.root.position.z;
+    const each = (id: string, m: Sedan, fire: number, held: { fireAt?: number; fireHeard?: number }) => {
+      if (m.engineAt) m.engineAt(v3);
+      else v3.set(-1.2, 0.9, 0);
+      v3.applyMatrix4(m.root.matrix);
+      // (far off: none of it)
+      if (Math.hypot(v3.x + ox - me.x, v3.z + oz - me.y) > 160) return;
+      // (its sounds in before they're wanted: the bed, the catch, the blast)
+      this.takes("fire");
+      this.takes("fire-catch");
+      this.takes("blast");
+      // (just caught: its whoosh)
+      if (fire === 2 && held.fireHeard !== undefined && held.fireHeard < 2) {
+        const bs = this.takes("fire-catch");
+        if (bs) this.playTake(bs, 1.1, v3.x, v3.y, v3.z);
+      }
+      held.fireHeard = fire;
+      const dark = night > 0.5 ? 0x0c0b0a : 0x1a1714;
+      if (fire === 1) {
+        if (t - (held.fireAt ?? 0) > 0.09) {
+          held.fireAt = t;
+          this.smoke.emit(
+            v3.x + (Math.random() - 0.5) * 0.6,
+            v3.y + 0.2,
+            v3.z + (Math.random() - 0.5) * 0.6,
+            0,
+            1.1 + Math.random() * 0.6,
+            0,
+            0.6,
+            5.5,
+            3.2,
+            dark,
+            0.55,
+          );
+        }
+      } else if (fire === 2) {
+        this.fires.burn(id, v3.x, v3.y, v3.z, 1);
+        if (t - (held.fireAt ?? 0) > 0.06) {
+          held.fireAt = t;
+          this.smoke.emit(
+            v3.x + (Math.random() - 0.5) * 0.8,
+            v3.y + 1.1,
+            v3.z + (Math.random() - 0.5) * 0.8,
+            0,
+            1.6 + Math.random() * 0.8,
+            0,
+            0.9,
+            7,
+            4.5,
+            dark,
+            0.8,
+          );
+          if (!this.fireLoop(id, v3.x, v3.y, v3.z) && Math.random() < 0.35) this.fireSound(v3.x, v3.y, v3.z);
+        }
+        lights.push({
+          x: v3.x + ox,
+          y: v3.z + oz,
+          z: v3.y + oy + 0.9,
+          k: 0.85 + 0.15 * Math.sin(t * 17 + v3.x) * Math.sin(t * 7.3),
+        });
+      } else if (fire === 3 && t - (held.fireAt ?? 0) > 0.5) {
+        held.fireAt = t;
+        this.smoke.emit(v3.x + (Math.random() - 0.5) * 2, v3.y, v3.z + (Math.random() - 0.5) * 2, 0, 0.7, 0, 0.5, 4, 3, dark, 0.3);
+      }
+    };
+    for (const [id, l] of this.live) {
+      const fire = this.mine?.vid === id ? this.mine.dmg.fire : (l.fire ?? 0);
+      if (fire) each(id, l.model, fire, l);
+    }
+    for (const [id, p] of this.parked) {
+      const m = p.full?.ready ? p.full : p.old?.ready ? p.old : null;
+      if (p.fire && m && m.root.visible) each(id, m, p.fire, p);
+    }
+    for (const f of this.fires.flash()) lights.push({ x: f.x + ox, y: f.z + oz, z: f.y + oy, k: f.k });
+    // (the beds of fires that aren't now: stopped)
+    for (const [id, f] of this.fireLoops) {
+      if (f.seen) {
+        f.seen = false;
+        continue;
+      }
+      f.src.stop();
+      f.src.disconnect();
+      f.g.disconnect();
+      f.p.disconnect();
+      this.fireLoops.delete(id);
+    }
+    this.fires.step(dt, t);
+    const tp = this.host.tp();
+    if (tp) tp.fireLights = lights;
+  }
+  /** (plan 94 P1) A car blew at (x, y, z) (the cars' coords, y up): the fireball, the boom by distance, my car's
+   *  camera shaken if I'm near in one. */
+  private blastFx(x: number, y: number, z: number) {
+    this.fires.blast(x, y, z);
+    // (the recorded one picked on /dev/car-sound; made, till it's in)
+    const bs = this.takes("blast");
+    if (bs) this.playTake(bs, 1.5, x, y, z);
+    else this.boom(x, y, z);
+    const me = this.host.me();
+    const d = Math.hypot(x + this.root.position.x - me.x, z + this.root.position.z - me.y);
+    if (this.mine && d < 30) this.cam.knock(Math.min(1, 1.4 - d / 25));
+  }
+  // ── (plan 96 F2a) the blast's hop, as in San Andreas: thrown up about a metre, tipping a way of its own, slammed
+  // down where it was with a bounce, rocking a moment — drawn on every screen from car:blast, over where it is ──
+  private hops = new Map<
+    string,
+    { t0: number; roll: number; pitch: number; root: Object3D | null; base: { p: Vector3; q: Quaternion } | null; landed: boolean }
+  >();
+  private hop(id: string) {
+    const r = () => (Math.random() < 0.5 ? -1 : 1) * (0.6 + 0.4 * Math.random());
+    this.hops.set(id, { t0: this.time, roll: 0.28 * r(), pitch: 0.16 * r(), root: null, base: null, landed: false });
+  }
+  /** Each frame: each car hopping, its model (live: as its pose was just made; parked: as it was placed) lifted
+   *  and tipped; done, put back as it was. */
+  private hopsFrame() {
+    for (const [id, h] of this.hops) {
+      const l = this.live.get(`car:${id}`);
+      const pk = this.parked.get(id);
+      const root: Object3D | null = l?.model.root ?? pk?.full?.root ?? pk?.far?.root ?? null;
+      const t = this.time - h.t0;
+      // (its model made again — burnt out, merged —: the new one's place its base)
+      if (root !== h.root) {
+        h.root = root;
+        h.base = root ? { p: root.position.clone(), q: root.quaternion.clone() } : null;
+      }
+      if (!root || !h.base) {
+        if (t > HOP_S) this.hops.delete(id);
+        continue;
+      }
+      // (a live car's posed afresh each frame: that's its base)
+      if (l) h.base = { p: root.position.clone(), q: root.quaternion.clone() };
+      if (t >= HOP_S) {
+        root.position.copy(h.base.p);
+        root.quaternion.copy(h.base.q);
+        root.updateMatrix();
+        root.updateMatrixWorld(true);
+        this.hops.delete(id);
+        continue;
+      }
+      // (up and down as a thrown thing — ~1 m at 0.45 s, down at HOP_UP —, a bounce, then still)
+      let y = 0;
+      let k = 0;
+      let rock = 0;
+      if (t < HOP_UP) {
+        y = 4.43 * t - 4.905 * t * t;
+        k = Math.sin((Math.PI * t) / HOP_UP);
+      } else {
+        const u = t - HOP_UP;
+        if (u < 0.3) y = 0.12 * Math.sin((Math.PI * u) / 0.3);
+        rock = 0.07 * Math.exp(-u * 4.5) * Math.sin(u * Math.PI * 2 * 3.2);
+        if (!h.landed) {
+          h.landed = true;
+          // (the slam: its thud, the snow and dust up round it)
+          const p = h.base.p;
+          this.hitSound("hit-heavy", 0.8, p.x, p.y, p.z, 0.8);
+          for (let i = 0; i < 10; i++) {
+            const a = (i / 10) * Math.PI * 2;
+            this.spray.puff(p.x + Math.cos(a) * 1.6, p.y + 0.1, p.z + Math.sin(a) * 1.6, Math.cos(a) * 2.2, 0.6, Math.sin(a) * 2.2, 1.4, 1.3, 0xd8d4cc, 0.35);
+          }
+        }
+      }
+      // (tipped about its own length and across it: the model faces −x)
+      hq.setFromEuler(he.set(h.roll * k + rock, 0, h.pitch * k + rock * 0.6));
+      root.position.copy(h.base.p);
+      root.position.y += Math.max(0, y);
+      root.quaternion.copy(h.base.q).multiply(hq);
+      root.updateMatrix();
+      root.updateMatrixWorld(true);
+    }
+  }
+  /** (plan 94 P1) A recorded slot's takes once they're in (asked the first time: loading), else null. */
+  private takes(slot: string): AudioBuffer[] | null {
+    const ctx = mixer.ctx;
+    if (!ctx) return null;
+    const bs = this.hitBufs.get(slot);
+    if (!bs) {
+      this.hitBufs.set(slot, "loading");
+      void slotBuffers(ctx, slot).then((b) => this.hitBufs.set(slot, b));
+      return null;
+    }
+    return bs === "loading" || !bs.length ? null : bs;
+  }
+  /** One of `bs` where it happened, heard by distance. */
+  private playTake(bs: AudioBuffer[], gain: number, x: number, y: number, z: number) {
+    const ctx = mixer.ctx;
+    if (!ctx || ctx.state !== "running") return;
+    const src = ctx.createBufferSource();
+    src.buffer = bs[Math.floor(Math.random() * bs.length)];
+    src.playbackRate.value = 0.95 + Math.random() * 0.1;
+    this.toEars(src, gain, x, y, z);
+    src.start();
+  }
+  /** (plan 94 P1) A burning car's bed (the recording picked), looped where it burns as long as it does; false if
+   *  it isn't in yet (the made crackle meanwhile). */
+  private fireLoops = new Map<string, { src: AudioBufferSourceNode; g: GainNode; p: PannerNode; seen: boolean }>();
+  private fireLoop(id: string, x: number, y: number, z: number): boolean {
+    const ctx = mixer.ctx;
+    if (!ctx || ctx.state !== "running") return false;
+    const bs = this.takes("fire");
+    if (!bs) return false;
+    let f = this.fireLoops.get(id);
+    if (!f) {
+      const src = ctx.createBufferSource();
+      src.buffer = bs[0];
+      src.loop = true;
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      const p = ctx.createPanner();
+      p.panningModel = "HRTF";
+      src.connect(g).connect(p).connect(mixer.buses.effects);
+      src.start(0, Math.random() * bs[0].duration);
+      f = { src, g, p, seen: true };
+      this.fireLoops.set(id, f);
+    }
+    f.seen = true;
+    const heard = this.heardAt(x, y, z);
+    const t = ctx.currentTime;
+    f.g.gain.setTargetAtTime(0.9 * distanceGain(heard?.dist ?? 60), t, 0.15);
+    const at = heard?.at ?? { x: 0, y: 0, z: -1 };
+    f.p.positionX.setTargetAtTime(at.x, t, 0.05);
+    f.p.positionY.setTargetAtTime(at.y, t, 0.05);
+    f.p.positionZ.setTargetAtTime(at.z, t, 0.05);
+    return true;
+  }
+  private boomBuf: AudioBuffer | null = null;
+  private fireBufs: AudioBuffer[] = [];
+  /** (plan 94 P1) The blast heard: a thump under a roar of noise falling away, its debris rattling after (made, not
+   *  recorded — till one's picked). */
+  private boom(x: number, y: number, z: number) {
+    const ctx = mixer.ctx;
+    if (!ctx || ctx.state !== "running") return;
+    if (!this.boomBuf) {
+      const len = 3;
+      const b = ctx.createBuffer(1, Math.floor(ctx.sampleRate * len), ctx.sampleRate);
+      const d = b.getChannelData(0);
+      let lp = 0;
+      let lp2 = 0;
+      for (let i = 0; i < d.length; i++) {
+        const tt = i / ctx.sampleRate;
+        const n = Math.random() * 2 - 1;
+        // (the roar: noise ever darker as it falls away)
+        const k = 0.02 + 0.25 * Math.exp(-tt * 3);
+        lp += (n - lp) * k;
+        lp2 += (lp - lp2) * k;
+        const roar = lp2 * 3.2 * Math.exp(-tt * 1.6) * Math.min(1, tt / 0.004);
+        const thump = Math.sin(2 * Math.PI * (38 + 30 * Math.exp(-tt * 8)) * tt) * Math.exp(-tt * 4) * 0.9;
+        const rattle = tt > 0.5 && Math.random() < 0.0009 * Math.exp(-(tt - 0.5) * 1.5) ? Math.random() * 0.6 : 0;
+        d[i] = Math.max(-1, Math.min(1, roar + thump + rattle));
+      }
+      this.boomBuf = b;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = this.boomBuf;
+    this.toEars(src, 1.6, x, y, z);
+    src.start();
+  }
+  /** (plan 94 P1) A burning car's crackle and its roar, a take at a time (made: noise, popped and darkened). */
+  private fireSound(x: number, y: number, z: number) {
+    const ctx = mixer.ctx;
+    if (!ctx || ctx.state !== "running") return;
+    if (!this.fireBufs.length)
+      for (let v = 0; v < 4; v++) {
+        const len = 0.9;
+        const b = ctx.createBuffer(1, Math.floor(ctx.sampleRate * len), ctx.sampleRate);
+        const d = b.getChannelData(0);
+        let lp = 0;
+        for (let i = 0; i < d.length; i++) {
+          const tt = i / ctx.sampleRate;
+          const env = Math.sin((Math.PI * tt) / len);
+          lp += (Math.random() * 2 - 1 - lp) * 0.06;
+          const pop = Math.random() < 0.0016 ? (Math.random() * 2 - 1) * 0.9 : 0;
+          d[i] = (lp * 1.6 * env + pop) * 0.6;
+        }
+        this.fireBufs.push(b);
+      }
+    const src = ctx.createBufferSource();
+    src.buffer = this.fireBufs[Math.floor(Math.random() * this.fireBufs.length)];
+    src.playbackRate.value = 0.85 + Math.random() * 0.3;
+    this.toEars(src, 0.5, x, y, z);
+    src.start();
+  }
+  /** (plan 94 G4) Where each of my front wheels' ruts began (deep snow or mud), and the stretches to send. */
+  private rutStart: ({ x: number; z: number } | null)[] = [null, null];
+  private rutSend: number[] = [];
+  private rutSentAt = 0;
+  private rutLane(i: number, x: number, z: number, g: Ground) {
+    const st = this.rutStart[i];
+    if (GRIP[g].trace !== "ruts") {
+      this.rutStart[i] = null;
+      return;
+    }
+    if (!st) {
+      this.rutStart[i] = { x, z };
+      return;
+    }
+    const d = Math.hypot(x - st.x, z - st.z);
+    if (d < 1.5) return;
+    if (d <= 3 && this.rutSend.length < 1200)
+      this.rutSend.push(Math.round(st.x * 100), Math.round(st.z * 100), Math.round(x * 100), Math.round(z * 100));
+    this.rutStart[i] = { x, z };
+  }
+  /** (plan 94 G4) The ruts others pressed before I came (cm, [ax, az, bx, bz] each): in my ruts — a wheel finds
+   *  them —, their marks drawn. */
+  private rutsIn(segs: number[]) {
+    for (let i = 0; i + 3 < segs.length; i += 4) {
+      const ax = segs[i] / 100;
+      const az = segs[i + 1] / 100;
+      const bx = segs[i + 2] / 100;
+      const bz = segs[i + 3] / 100;
+      if (![ax, az, bx, bz].every(Number.isFinite)) continue;
+      this.ruts.lay(ax, az, bx, bz);
+      this.tracks.stamp(ax, this.G.heightAt(ax, az), az, bx, this.G.heightAt(bx, bz), bz, "deep");
+    }
+  }
+  /** (plan 94 P5) A flat tyre's rim on the road: sparks off it now and then at speed, on the hard ground. */
+  private rimSparks(l: LiveView, dt: number) {
+    const parts = l.parts ?? 0;
+    if (!(parts & (PART.flatFL | PART.flatFR | PART.flatRL | PART.flatRR))) return;
+    const sp = Math.hypot(l.pose.v.x, l.pose.v.z);
+    if (sp < 3) return;
+    const wheels = l.model.wheels;
+    for (let i = 0; i < 4; i++) {
+      if (!(parts & FLATS[i]) || !wheels[i] || Math.random() > dt * 9 * Math.min(1, sp / 12)) continue;
+      // (its hub, in the cars' own coords — the sim's, as the ground's lookups take them)
+      wheels[i].spin.getWorldPosition(v3);
+      this.root.updateMatrixWorld();
+      v3.applyMatrix4(this.inv.copy(this.root.matrixWorld).invert());
+      const g = this.groundUnder(v3.x, v3.z);
+      if (!(g === "asphalt" || g === "walk" || g === "floor" || g === "rock" || g === "wet")) continue;
+      const y = this.G.heightAt(v3.x, v3.z) + 0.03;
+      this.sparks.burst(v3.x, y, v3.z, l.pose.v.x, l.pose.v.z, 0, 0, 0.3 * Math.min(1, sp / 15));
+    }
+  }
+  /** (plan 94 P2) A car's parts newly off (WRECK's gone bits), each a piece on the road as it was on the car — a
+   *  door to lie flat on its face. `v`: the car's own way. */
+  private partsOff(m: Sedan, gone: number, v: { x: number; y: number; z: number }) {
+    if (!m.partCopy) return;
+    m.root.updateMatrixWorld(true);
+    this.root.updateMatrixWorld(true);
+    this.inv.copy(this.root.matrixWorld).invert();
+    const vel = new Vector3(v.x, v.y, v.z);
+    // (the car's nose, the cars' group's: the model faces −x)
+    const fwd = new Vector3(-1, 0, 0).applyQuaternion(m.root.quaternion);
+    // (plan 94 P1: blown off — each out from the car's middle, and up)
+    const blown = v === BLOWN;
+    const mid = blown ? m.root.getWorldPosition(new Vector3()).applyMatrix4(this.inv) : null;
+    const drop = (name: string, flat: boolean) => {
+      const o = m.partCopy?.(name);
+      if (!o) return;
+      o.applyMatrix4(this.inv);
+      const go = mid
+        ? new Vector3(o.position.x - mid.x, 0, o.position.z - mid.z)
+            .normalize()
+            .multiplyScalar(2.2 + Math.random() * 2)
+            .setY(3.5 + Math.random() * 2)
+        : vel;
+      this.debris.drop(
+        o,
+        go,
+        flat ? new Quaternion().setFromAxisAngle(fwd, ((Math.random() < 0.5 ? 1 : -1) * Math.PI) / 2) : null,
+        blown,
+      );
+    };
+    for (const name of ["door_fl", "door_fr", "door_rl", "door_rr", "door_sr", "door_mr"]) {
+      const slot = doorSlot(name);
+      if (slot >= 0 && gone & DOOR_GONE[slot]) drop(name, true);
+    }
+    if (gone & WRECK.bonnetGone) drop("bonnet", false);
+    if (gone & WRECK.bootGone) for (const n of ["boot", "boot_l", "boot_r"]) drop(n, n !== "boot");
+    if (gone & WRECK.bumperRGone) drop("bumper_r", false);
+    if (gone & WRECK.mirrorLOff) drop("mirror_l", false);
+    if (gone & WRECK.mirrorROff) drop("mirror_r", false);
+  }
+  /** (plan 94 P3) Panes newly gone (or cracked) on a car's model: their glass out of their frames and down, the
+   *  more the bigger the pane; cracked, a few bits where it starred. (vx, vz): the car's own way. `holes`: its
+   *  rounds' (plan 95 F5a: a pane's shards from where the last went into it — the windscreen's falling in). */
+  private glassOut(m: Sedan, newly: number, vx: number, vz: number, holes: readonly Hole[] = []) {
+    m.root.updateMatrixWorld(true);
+    // (a pane gone — its shards out of its frame and down, the more the bigger it is; cracked, a few
+    // grains where it starred)
+    const eye = m.eye;
+    for (let i = 0; i < 6; i++) {
+      const gone = !!(newly & PANE_GONE[i]);
+      if (!gone && !(newly & PANE_CRACK[i])) continue;
+      let struck: Hole | null = null;
+      for (const h of holes) if (h.pane === i) struck = h;
+      const at = m.paneAt?.(i);
+      if (struck && m.skinAt) m.skinAt(struck.u, struck.w, struck.h, v3);
+      else if (at) v3.copy(at);
+      else v3.set(eye.x + (i === 0 ? 0.8 : i === 1 ? -1.2 : 0), eye.y, eye.z + (i < 2 ? 0 : i % 2 ? -0.7 : 0.7));
+      v3.applyMatrix4(m.root.matrix);
+      // (out of its side: the car's own right across — the windows' outward way; the windscreen shot in, into
+      // the cabin: back along it)
+      const out = i < 2 ? 0 : i % 2 ? 1 : -1;
+      v4.set(i === 0 && struck ? 0.8 : 0, 0, -out).applyQuaternion(m.root.quaternion);
+      this.shards.burst(v3.x, v3.y, v3.z, gone ? (i < 2 ? 46 : 28) : 3, vx, vz, v4.x, v4.z);
+    }
   }
   private inv = new Matrix4();
 
@@ -4035,12 +4842,24 @@ export class Cars {
                 : [0, 0];
       if (h.struck === "glass" || h.struck === "lamp") {
         for (let k = 0; k < 3; k++) this.spray.throw(x, y, z, n[0] * 0.6, n[1] * 0.6, 0.7, false);
+        // (plan 94 P3: a few bits of it where the round went in)
+        this.shards.burst(x, y, z, 5, 0, 0, n[0] * 0.5, n[1] * 0.5);
         this.hitSound("hit-glass", h.struck === "lamp" ? 0.25 : 0.4, x, y, z, 1.15);
       }
       if (h.struck !== "glass") this.sparks.burst(x, y, z, 0, 0, n[0], n[1], h.struck === "tyre" ? 0.25 : 0.55);
       if (h.struck === "panel" || h.struck === "engine")
         this.hitSound("hit-post", 0.22, x, y, z, 1.35 + Math.random() * 0.2);
-      if (h.struck === "tyre") this.tyreBang(x, y, z);
+      if (h.struck === "tyre") {
+        this.tyreBang(x, y, z);
+        // (plan 96 F5a: the blowout — dust off the road under it, bits of rubber, out of its side)
+        const g = this.G.heightAt(x, z);
+        for (let k = 0; k < 6; k++) {
+          const a = Math.random() * Math.PI * 2;
+          this.spray.puff(x + n[0] * 0.2, g + 0.1, z + n[1] * 0.2, n[0] * 1.6 + Math.cos(a) * 0.9, 0.4 + Math.random() * 0.5, n[1] * 1.6 + Math.sin(a) * 0.9, 0.7, 1.1, 0xcfc9bf, 0.4);
+        }
+        for (let k = 0; k < 4; k++)
+          this.spray.puff(x, y, z, n[0] * 2.4 + (Math.random() - 0.5), 1.2 + Math.random(), n[1] * 2.4 + (Math.random() - 0.5), 0.18, 0.7, 0x242220, 0.85);
+      }
     }
   }
   private hitBufs = new Map<string, AudioBuffer[] | "loading">();
@@ -4155,25 +4974,32 @@ export class Cars {
     if (vw?.dmg) {
       const sv = dmgOf(vw.dmg);
       for (let i = 0; i < 5; i++) m.dmg.zones[i] = Math.max(m.dmg.zones[i] ?? 0, sv.zones[i] ?? 0);
-      if (sv.parts & ~m.dmg.parts) {
+      if (sv.parts & ~m.dmg.parts || sv.wreck & ~m.dmg.wreck || sv.fire > m.dmg.fire) {
         m.dmg.parts |= sv.parts;
-        this.partsChanged(l, m.dmg.parts);
+        m.dmg.wreck |= sv.wreck;
+        // (plan 94 P1: the fire's the server's)
+        m.dmg.fire = Math.max(m.dmg.fire, sv.fire);
+        l.fire = m.dmg.fire;
+        this.partsChanged(l, m.dmg);
       }
     }
     const fl = FLATS.reduce((a, b, i) => (m.dmg.parts & b ? a | (1 << i) : a), 0);
     if (m.drive) {
+      // (plan 94 P5: a tyre just shot out — the kick, then flat)
+      if (fl & ~m.drive.flats) m.drive.burst(fl & ~m.drive.flats);
       m.drive.flats = fl;
       m.drive.chains = vw?.chains ?? 0;
     }
     if (m.rig) m.rig.flats = fl;
     // (washed at the pump: the server's count)
     if (vw?.filling) m.grime = Math.min(m.grime, vw.grime ?? 0);
-    l.model.setWear(m.grime, m.dmg.zones, m.dmg.parts);
+    l.model.setWear(m.grime, m.dmg.zones, m.dmg.parts, m.dmg.wreck, m.dmg.fire);
+    this.rimSparks(l, dt);
     const key = `${Math.round(m.grime * 100)}|${damageString(m.dmg)}`;
     if (key !== m.wearSent && now - m.wearAt > 1000 && !vw?.filling) {
       m.wearSent = key;
       m.wearAt = now;
-      room.send("car:wear", { grime: m.grime, dmg: m.dmg.zones, parts: m.dmg.parts });
+      room.send("car:wear", { grime: m.grime, dmg: m.dmg.zones, parts: m.dmg.parts, wreck: m.dmg.wreck });
     }
   }
 
@@ -4470,17 +5296,12 @@ export class Cars {
     return this.world.ground(x, z);
   }
 
-  // ── the car's hints and gauges on the screen ───────────────────────────────
+  // ── the car's HUD (plan 94 P10: the walnut plate, the car at a glance, the keys' slip — car/hud.ts) ──
   private showHud() {
     const tp = this.host.tp();
     if (!tp || this.hud) return;
-    const d = document.createElement("div");
-    d.style.cssText =
-      "position:absolute;left:50%;bottom:132px;transform:translateX(-50%);pointer-events:none;font:600 12px/1.4 'IBM Plex Mono',monospace;color:#f3e3c3;text-shadow:0 1px 2px #000;display:flex;flex-direction:column;align-items:center;gap:8px;white-space:nowrap";
-    // (a line for what to do now — at a pump, filling, stuck, low —; under it the keys, the speed, the tank)
-    d.innerHTML = `<span data-note style="font:700 16px/1 'IBM Plex Mono',monospace;color:#ffd08a;background:rgba(20,16,12,.55);padding:6px 12px;border-radius:8px;display:none"></span><div style="display:flex;gap:18px;align-items:flex-end"><span data-hint style="opacity:.8"></span><div data-dash class="cabinet" style="display:none;padding:0"><div class="vfd-window" style="display:flex;align-items:baseline;gap:10px;padding:5px 12px 6px"><span data-speed style="font:700 28px/1 'IBM Plex Mono',monospace;color:var(--vfd);text-shadow:0 0 8px rgba(241,215,154,.45);min-width:3ch;text-align:right"></span><span style="font:600 11px/1 'IBM Plex Mono',monospace;color:var(--cream-dim)">km/h</span><span data-gear style="font:700 20px/1 'IBM Plex Mono',monospace;color:var(--vfd);padding:2px 7px;border:1px solid var(--well-edge);border-radius:3px"></span><span data-fuel style="font:700 13px/1 'IBM Plex Mono',monospace;color:var(--vfd)"></span></div></div></div>`;
-    (tp.hostEl ?? document.body).appendChild(d);
-    this.hud = d;
+    this.hud = new CarHud(tp.hostEl ?? document.body);
+    this.keysAt = this.time;
     // a phone: the wheel and the pedals on the screen
     if (window.matchMedia?.("(pointer: coarse)").matches && this.mine) {
       this.pads = touchControls(this.input, this.mine.seat === 0);
@@ -4488,46 +5309,66 @@ export class Cars {
     }
   }
   private hideHud() {
-    this.hud?.remove();
+    this.hud?.dispose();
     this.hud = null;
     this.pads?.remove();
     this.pads = null;
     this.input.touch.on = false;
   }
   private pads: HTMLDivElement | null = null;
-  private drawHud() {
-    const d = this.hud;
+  /** The keys' slip for my seat in this car: rows of [keys, what]. */
+  private keyRows(): [string[], string][] {
     const m = this.mine;
-    if (!d || !m) return;
-    const hint = d.querySelector("[data-hint]") as HTMLElement;
-    const speed = d.querySelector("[data-speed]") as HTMLElement;
-    if (hint.dataset.v !== String(m.seat)) {
-      hint.dataset.v = String(m.seat);
-      hint.textContent = this.pads
-        ? ""
-        : m.seat !== 0
-          ? t("carPassenger")
-          : m.sim?.spec.pushed
-            ? t("sledHints")
-            : t("carHints");
-      this.hintAt = this.time;
-    }
-    // (the keys a while after getting in, then out of the way — gone, not taking the room)
-    const op = Math.max(0, Math.min(0.85, 10 - (this.time - this.hintAt)));
-    hint.style.opacity = String(op);
-    hint.style.display = op > 0 && hint.textContent ? "" : "none";
-    // the tank: at a pump (F), filling, low
-    const note = d.querySelector("[data-note]") as HTMLElement;
-    let say = "";
-    // my pets on their way to a door (docs/plan/51-the-pet.md)
-    const coming: string[] = [];
+    if (!m) return [];
+    if (m.seat !== 0)
+      return [
+        [["R"], t("carH_kRadio")],
+        [["N"], t("carH_kWindow")],
+        [["C"], t("carH_kCamera")],
+        [["X"], t("carH_kOut")],
+      ];
+    if (m.sim?.spec.pushed)
+      return [
+        [["W"], t("carH_kPush")],
+        [["S"], t("carH_kBack")],
+        [["A", "D"], t("carH_kLean")],
+        [["␣"], t("carH_kDrag")],
+        [["C"], t("carH_kCamera")],
+        [["X"], t("carH_kOff")],
+      ];
+    const rows: [string[], string][] = [
+      [["W"], `${t("carH_kGo")} · S ${t("carH_kBrake")}`],
+      [["A", "D"], `${t("carH_kSteer")} · ␣ ${t("carH_kHand")}`],
+      [["L"], `${t("carH_kLights")} · H ${t("carH_kHorn")}`],
+      [["V"], `${t("carH_kWipers")} · N ${t("carH_kWindow")}`],
+      [["R"], `${t("carH_kRadio")} · C ${t("carH_kCamera")}`],
+    ];
+    if (prefs().carManual) rows.push([["E", "Q"], t("carH_kGears")]);
+    const pr = this.propsOf(m.vid.replace(/^car:/, ""));
+    if (pr?.ownerId && mayDrive(pr, this.host.uid(), Date.now())) rows.push([["O"], t("carH_kLock")]);
+    if (m.sim?.spec.low) rows.push([["K"], `${t("carH_kDiff")} · J ${t("carH_kRange")}`]);
+    const l = this.live.get(m.vid);
+    if (l?.role === "police") rows.push([["G"], t("carH_kSiren")]);
+    rows.push([["X"], t("carH_kOut")]);
+    return rows;
+  }
+  private drawHud() {
+    const h = this.hud;
+    const m = this.mine;
+    if (!h || !m) return;
     const room = this.host.room();
+    const l = this.live.get(m.vid);
+    const v = room?.state.vehicles.get(m.vid) as VehWire | undefined;
+    // (down in the car — the dark's "Down" and its first aid in the same spot —: all of it out of the way)
+    const meP = room?.state.players.get(room.sessionId) as { downAt?: number } | undefined;
+    const down = !!meP?.downAt;
+    // what to do now: at a pump (F), filling, stuck, low; my pets on their way to a door (docs/plan/51)
+    let say = "";
+    const coming: string[] = [];
     room?.state.pets.forEach((pet) => {
       if (pet.sid === room.sessionId && pet.act === "board") coming.push(pet.name);
     });
     if (m.sim) {
-      const l = this.live.get(m.vid);
-      const v = this.host.room()?.state.vehicles.get(m.vid) as VehWire | undefined;
       const stopped = l ? Math.hypot(l.pose.v.x, l.pose.v.z) < 0.4 : false;
       const full = m.sim.fuel / m.sim.spec.fuel.litres;
       if (m.sim.spec.pushed) say = this.stuckFor > 3 ? t("carStuck") : "";
@@ -4537,33 +5378,83 @@ export class Cars {
       else if (full < 0.12) say = `${t("carLow")} ${Math.round(full * 100)}%`;
     }
     if (coming.length) say = t("carPetWait").replace("{name}", coming.join(", "));
-    if (note.textContent !== say) {
-      note.textContent = say;
-      note.style.display = say ? "" : "none";
+    // the plate: mine as my sim has it; a passenger's from the car's wire
+    const sim = m.sim;
+    const spec = sim?.spec ?? l?.spec;
+    const pushed = !!spec?.pushed;
+    let kmh = 0;
+    let gear = "";
+    let rpm = 0;
+    if (sim) {
+      const r = readout(sim);
+      kmh = r.kmh;
+      gear = r.gear === -1 ? "R" : r.gear === 0 ? "N" : String(r.gear);
+      rpm = sim.rpm;
+    } else if (l) {
+      kmh = Math.hypot(l.pose.v.x, l.pose.v.z) * 3.6;
+      gear = (v?.gear ?? 0) === -1 ? "R" : (v?.gear ?? 0) === 0 ? "N" : String(v?.gear);
+      rpm = v?.rpm ?? 0;
     }
-    // the speed, the gear, the tank (from the driver's seat they're on the dash)
-    // (docs/plan/92 phase 9: a small walnut-framed readout, the dash's own amber — only outside the cockpit)
-    const fuel = d.querySelector("[data-fuel]") as HTMLElement;
-    const gearEl = d.querySelector("[data-gear]") as HTMLElement;
-    const dash = d.querySelector("[data-dash]") as HTMLElement;
-    // (down in the car — the dark's "Down" and its first aid in the same spot —: the car's line out of the way)
-    const meP = room?.state.players.get(room.sessionId) as { downAt?: number } | undefined;
-    const down = !!meP?.downAt;
-    d.style.visibility = down ? "hidden" : "";
-    const showDash = !!m.sim && this.cam.mode !== "cockpit" && !down;
-    dash.style.display = showDash ? "" : "none";
-    if (m.sim && showDash) {
-      const r = readout(m.sim);
-      const gear = r.gear === -1 ? "R" : r.gear === 0 ? "N" : String(r.gear);
-      speed.textContent = String(Math.abs(Math.round(r.kmh)));
-      gearEl.textContent = m.sim.spec.pushed ? "" : gear;
-      gearEl.style.display = m.sim.spec.pushed ? "none" : "";
-      const full = m.sim.fuel / m.sim.spec.fuel.litres;
-      const v = this.host.room()?.state.vehicles.get(m.vid) as VehWire | undefined;
-      const pct = Math.round((v?.filling ? (v.fuel ?? full) : full) * 100);
-      fuel.textContent = m.sim.spec.pushed ? "" : `⛽ ${pct}%`;
-      fuel.style.color = pct < 15 ? "var(--rust)" : "var(--vfd)";
+    const top = spec ? spec.engine.limit : 7000;
+    const dm = m.dmg;
+    const dead = !!(dm.parts & PART.engineDead);
+    let engine: { say: string; k: number; bad: boolean } | null = null;
+    if (sim && !pushed) {
+      const temp = sim.temp;
+      const steam = steamOf(dm) > 0;
+      const off = sim.rpm < 50;
+      engine =
+        dm.fire >= 2
+          ? { say: t("carH_engBurning"), k: 1, bad: true }
+          : dead
+            ? { say: t("carH_engDead"), k: 0, bad: true }
+            : steam
+              ? { say: t("carH_engSteam"), k: Math.max(temp, 0.9), bad: true }
+              : off
+                ? { say: t("carH_engOff"), k: temp, bad: false }
+                : temp < 0.3
+                  ? { say: t("carH_engCold"), k: temp, bad: false }
+                  : temp > 0.85
+                    ? { say: t("carH_engHot"), k: temp, bad: true }
+                    : { say: t("carH_engWarm"), k: temp, bad: false };
     }
+    const fuel = pushed ? null : sim ? (v?.filling ? (v.fuel ?? 0) : sim.fuel / sim.spec.fuel.litres) : (v?.fuel ?? null);
+    // the chips: the radio, the window, chains, locked, flats, the engine, the fire
+    const chips: { say: string; warn?: boolean }[] = [];
+    const st = m.seat === 0 ? this.station : this.shownStation;
+    if (st > 0) chips.push({ say: `📻 FM ${[98.7, 88.4, 101.3][st - 1]}` });
+    if (l && l.win & (1 << m.seat)) chips.push({ say: `🪟 ${t("carH_chipWindow")}` });
+    const chains = Number(v?.chains ?? 0);
+    if (chains) chips.push({ say: `⛓ ${t("carH_chipChains")}` });
+    if (this.propsOf(m.vid.replace(/^car:/, ""))?.locked) chips.push({ say: `🔒 ${t("carH_chipLocked")}` });
+    const wheels = ["carH_wFL", "carH_wFR", "carH_wRL", "carH_wRR"];
+    FLATS.forEach((b, i) => {
+      if (dm.parts & b) chips.push({ say: `${t("carH_chipFlat")} · ${t(wheels[i])}`, warn: true });
+    });
+    if (dm.fire >= 2) chips.push({ say: `🔥 ${t("carH_chipFire")}`, warn: true });
+    else if (dm.fire === 1) chips.push({ say: t("carH_chipSmoke"), warn: true });
+    else if (dead) chips.push({ say: t("carH_chipEngineDead"), warn: true });
+    h.update({
+      hidden: down,
+      plate: this.cam.mode !== "cockpit",
+      kmh,
+      gear: pushed ? "" : gear,
+      manual: !!prefs().carManual && m.seat === 0,
+      rev: rpm / top,
+      red: spec ? spec.engine.redline / top : 0.85,
+      fuel: fuel === null ? null : Math.max(0, Math.min(1, fuel)),
+      engine,
+      chips,
+      dmg: dm,
+      note: say,
+      keys: {
+        rows: this.keyRows(),
+        foot: t("carH_hudKeysAgain"),
+        shown: !this.pads && this.time - this.keysAt < 10,
+      },
+      damageWord: t("carH_hudDamage"),
+      touch: !!this.pads,
+    });
   }
 
   /** Is this car (its middle, not its CoG) beside a pump? */
@@ -4690,6 +5581,17 @@ export class Cars {
     this.smoke.dispose();
     this.sparks.dispose();
     this.debris.dispose();
+    this.shards.dispose();
+    this.fires.dispose();
+    for (const j of this.tyreJobs.values()) j.jack?.traverse((o) => (o as Mesh).geometry?.dispose());
+    for (const mt of this.jackMats) mt.dispose();
+    for (const f of this.fireLoops.values()) {
+      f.src.stop();
+      f.src.disconnect();
+      f.g.disconnect();
+      f.p.disconnect();
+    }
+    this.fireLoops.clear();
     this.patches.dispose();
     this.cabin.dispose();
     this.mirror?.m.dispose();
@@ -4746,6 +5648,11 @@ function headingFromQ(q: { x: number; y: number; z: number; w: number }): number
   return headingOf(q);
 }
 /** A model's root at a car's middle (Grounds coords), on the ground, its nose along `a`. */
+/** (plan 96 F2a) a blast's hop: in the air (s), all of it to still (s) */
+const HOP_UP = 0.9;
+const HOP_S = 2.2;
+const hq = new Quaternion();
+const he = new Euler();
 function placeModel(root: TGroup | Mesh, x: number, y: number, z: number, a: number) {
   root.position.set(x, y, z);
   root.rotation.set(0, Math.PI - a, 0);
@@ -4842,4 +5749,19 @@ function touchControls(input: CarInput, driver: boolean): HTMLDivElement {
     col(3, "🪟", "window");
   }
   return root;
+}
+
+/** (plan 95 F4a) An object drawn: it and all it hangs from shown. */
+function shownAll(o: Object3D): boolean {
+  for (let x: Object3D | null = o; x; x = x.parent) if (!x.visible) return false;
+  return true;
+}
+
+/** (plan 96 F4a) The door mirror a mesh is part of ("mirror_l", "mirror_r"), if one. */
+function mirrorOf(o: Object3D): string | null {
+  for (let x: Object3D | null = o; x; x = x.parent) {
+    const k = /^(mirror_[lr])(?:-|$)/.exec(x.name);
+    if (k) return k[1];
+  }
+  return null;
 }

@@ -11,6 +11,7 @@ import {
   isScoped,
   pellets,
   type Ray,
+  rayDir,
   rayMeets,
   spreadOf,
 } from "@yutopia/shared/dark";
@@ -494,6 +495,14 @@ export class Arms {
       t = wall;
       onBody = false;
     }
+    // (plan 95 F4a: or a car's skin, as it's drawn — the round from the hand goes to the very spot)
+    const cars = this.ctl.cars;
+    const mineCar = cars?.myCarId() ?? undefined;
+    const onCar = cars?.shotAlong(camRay, rayDir(camRay.yaw, camRay.pitch), t, mineCar) ?? null;
+    if (onCar && onCar.t < t) {
+      t = onCar.t;
+      onBody = false;
+    }
     const aim = { x: camRay.x + d.x * t, y: camRay.y + d.y * t, z: camRay.z + d.z * t };
     // from the gun in the right hand (the body faces where the camera looks)
     const me = this.walker.where();
@@ -509,6 +518,14 @@ export class Arms {
     // (the spread the server will shoot it with, as near as I can tell: its bloom, how I stand)
     const spread = this.spread(g.id);
     this.bloom = bloomShot(g.id, this.bloom);
+    // (plan 95 F4a: each round's car as drawn here — where on it, what; the server checks it and takes it)
+    const claims =
+      cars && !isCharged(g.id)
+        ? pellets(g.id, yaw, pitch, seed, spread).map((p) => {
+            const c = cars.shotAlong(o, rayDir(p.yaw, p.pitch), ARMS[g.id].range, mineCar);
+            return c === null ? null : c === 0 ? 0 : c.claim;
+          })
+        : [];
     this.ctl.room?.send("arms:fire", {
       ox: o.x,
       oy: o.y,
@@ -518,6 +535,7 @@ export class Arms {
       lag: Math.round(this.rtt),
       seed,
       ...(scoped ? { scope: true } : {}),
+      ...(claims.some((c) => c !== null) ? { cars: claims } : {}),
     });
     // (the bolt worked after it: out of the scope till it's home — RE5's S75)
     const gb = ARMS[g.id];

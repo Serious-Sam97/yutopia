@@ -9,6 +9,7 @@ import {
   BufferGeometry,
   CanvasTexture,
   Color,
+  DoubleSide,
   DynamicDrawUsage,
   Float32BufferAttribute,
   type Group,
@@ -176,6 +177,18 @@ export class Tracks {
     this.mesh.instanceMatrix.needsUpdate = true;
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
     this.last.set(id, { x, y, z });
+  }
+  /** (plan 94 G4) A rut someone pressed before I came: its mark drawn from (x0, y0, z0) to (x1, y1, z1) (not laid
+   *  in the ruts: the caller's). */
+  stamp(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, g: Ground) {
+    const id = `stamp:${this.n}`;
+    const r = this.ruts;
+    this.ruts = null;
+    this.mark(id, x0, y0, z0, g, 0, false);
+    this.mark(id, x1, y1, z1, g, 0, false);
+    this.ruts = r;
+    this.last.delete(id);
+    this.pending.delete(id);
   }
   /** The snow falling fills them back in (a second at a time). */
   fade(now: number, night: number) {
@@ -940,10 +953,331 @@ export class Sparks {
   }
 }
 
+/** (plan 94 P1) Cars on fire — flames out of their engine bays (tongues of many small soft blobs, normal blending:
+ *  no blown-out glow) — and their blasts (a fireball of hot puffs going to smoke at its edge and rising). Sprites
+ *  from a pool; what isn't burning this frame put away. */
+export class Fires {
+  private tex: { a: Texture; b: Texture; hot: Texture; warm: Texture; smoke: Texture } | null = null;
+  private burning = new Map<
+    string,
+    { s: Sprite[]; at: Vector3; off: [number, number, number][]; ph: number[]; seen: boolean; k: number }
+  >();
+  private balls: { s: Sprite; v: Vector3; t: number; life: number; k0: number; k1: number; smoke: boolean }[] = [];
+  private spare: Sprite[] = [];
+  private flashes: { x: number; y: number; z: number; t: number }[] = [];
+  constructor(private root: Group) {}
+  private textures() {
+    if (this.tex) return this.tex;
+    const flame = (core: string, mid: string) => {
+      const cv = document.createElement("canvas");
+      cv.width = 64;
+      cv.height = 128;
+      const g = cv.getContext("2d") as CanvasRenderingContext2D;
+      g.globalCompositeOperation = "lighter";
+      for (let i = 0; i < 90; i++) {
+        const t = Math.random();
+        const y = 124 - t * 116;
+        const x = 32 + Math.sin(t * 7 + Math.random()) * 10 * t + (Math.random() - 0.5) * 18 * (1 - t * 0.6);
+        const r = (1 - t) * 16 + 4;
+        const gr = g.createRadialGradient(x, y, 0, x, y, r);
+        gr.addColorStop(0, t < 0.35 ? core : mid);
+        gr.addColorStop(1, "rgba(120,20,0,0)");
+        g.globalAlpha = 0.18 + (1 - t) * 0.25;
+        g.fillStyle = gr;
+        g.fillRect(x - r, y - r, r * 2, r * 2);
+      }
+      const t = new CanvasTexture(cv);
+      t.colorSpace = SRGBColorSpace;
+      return t;
+    };
+    const cloud = (inner: string, outer: string) => {
+      const cv = document.createElement("canvas");
+      cv.width = cv.height = 128;
+      const g = cv.getContext("2d") as CanvasRenderingContext2D;
+      for (let i = 0; i < 40; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const d = Math.random() * 34;
+        const x = 64 + Math.cos(a) * d;
+        const y = 64 + Math.sin(a) * d;
+        const r = 14 + Math.random() * 22;
+        const gr = g.createRadialGradient(x, y, 0, x, y, r);
+        gr.addColorStop(0, inner);
+        gr.addColorStop(0.6, outer);
+        gr.addColorStop(1, "rgba(0,0,0,0)");
+        g.globalAlpha = 0.35;
+        g.fillStyle = gr;
+        g.fillRect(x - r, y - r, r * 2, r * 2);
+      }
+      const t = new CanvasTexture(cv);
+      t.colorSpace = SRGBColorSpace;
+      return t;
+    };
+    this.tex = {
+      a: flame("rgba(255,236,170,1)", "rgba(255,140,30,0.9)"),
+      b: flame("rgba(255,200,90,0.95)", "rgba(230,80,10,0.8)"),
+      hot: cloud("rgba(255,240,190,1)", "rgba(255,120,20,0.8)"),
+      warm: cloud("rgba(255,150,40,1)", "rgba(140,40,10,0.8)"),
+      smoke: cloud("rgba(60,52,46,1)", "rgba(25,22,20,0.8)"),
+    };
+    return this.tex;
+  }
+  private sprite(map: Texture): Sprite {
+    const s = this.spare.pop() ?? new Sprite(new SpriteMaterial({ transparent: true, depthWrite: false }));
+    const m = s.material as SpriteMaterial;
+    m.map = map;
+    m.opacity = 1;
+    m.rotation = (Math.random() - 0.5) * 0.3;
+    s.visible = true;
+    s.renderOrder = 2;
+    this.root.add(s);
+    return s;
+  }
+  private putAway(s: Sprite) {
+    s.visible = false;
+    s.removeFromParent();
+    if (this.spare.length < 200) this.spare.push(s);
+    else (s.material as SpriteMaterial).dispose();
+  }
+  /** (plan 94 phase 9) A flame and a puff of the blast's, shown till `done` — for their shaders made before a car
+   *  first burns (the first fire near was a 200–400 ms frame), and their textures drawn. */
+  warm(): { objs: Sprite[]; done(): void } {
+    const T = this.textures();
+    const objs = [T.a, T.hot, T.smoke].map((t) => {
+      const s = this.sprite(t);
+      s.position.set(0, -500, 0);
+      return s;
+    });
+    return { objs, done: () => objs.forEach((s) => this.putAway(s)) };
+  }
+  /** This frame: `id` burning, its engine bay's middle at (x, y, z) (the cars' coords), `k` how fiercely (0..1). */
+  burn(id: string, x: number, y: number, z: number, k: number) {
+    let b = this.burning.get(id);
+    if (!b) {
+      const T = this.textures();
+      const s: Sprite[] = [];
+      const off: [number, number, number][] = [];
+      const ph: number[] = [];
+      for (let i = 0; i < 16; i++) {
+        s.push(this.sprite(i % 3 ? T.b : T.a));
+        off.push([(Math.random() - 0.5) * 1.0, Math.random() * 0.2, (Math.random() - 0.5) * 1.0]);
+        ph.push(Math.random());
+      }
+      b = { s, at: new Vector3(), off, ph, seen: true, k };
+      this.burning.set(id, b);
+    }
+    b.at.set(x, y, z);
+    b.k = k;
+    b.seen = true;
+  }
+  /** A blast at (x, y, z) (the cars' coords): the fireball. */
+  blast(x: number, y: number, z: number) {
+    const T = this.textures();
+    this.flashes.push({ x, y: y + 1.2, z, t: 0 });
+    for (let i = 0; i < 46; i++) {
+      const r = Math.random();
+      const smoke = r > 0.62;
+      const s = this.sprite(r < 0.28 ? T.hot : smoke ? T.smoke : T.warm);
+      (s.material as SpriteMaterial).rotation = Math.random() * 6;
+      s.renderOrder = smoke ? 1 : r < 0.28 ? 3 : 2;
+      s.position.set(x, y + 0.3, z);
+      const a = Math.random() * Math.PI * 2;
+      const out = smoke ? 3 + Math.random() * 3 : 2 + Math.random() * 4;
+      const up = smoke ? 2.5 + Math.random() * 3 : 1 + Math.random() * 4;
+      this.balls.push({
+        s,
+        v: new Vector3(Math.cos(a) * out, up, Math.sin(a) * out),
+        t: 0,
+        life: smoke ? 3.5 + Math.random() * 2 : 0.7 + Math.random() * 0.6,
+        k0: 0.4,
+        k1: smoke ? 3.2 + Math.random() * 1.6 : 1.6 + Math.random() * 1.3,
+        smoke,
+      });
+    }
+  }
+  step(dt: number, time: number) {
+    for (const f of this.flashes) f.t += dt;
+    this.flashes = this.flashes.filter((f) => f.t < 2.5);
+    for (const [id, b] of this.burning) {
+      if (!b.seen) {
+        for (const s of b.s) this.putAway(s);
+        this.burning.delete(id);
+        continue;
+      }
+      b.seen = false;
+      // (each tongue rising and thinning over its cycle, flickering, then again from the bay)
+      b.s.forEach((s, i) => {
+        b.ph[i] = (b.ph[i] + dt * (1.3 + (i % 5) * 0.12)) % 1;
+        const p = b.ph[i];
+        const o = b.off[i];
+        const w = (0.28 + 0.3 * ((i * 0.37) % 1)) * (1 - p * 0.55) * (0.6 + 0.4 * b.k);
+        const fl = 0.85 + 0.15 * Math.sin(time * 19 + i * 3.1);
+        s.scale.set(w * fl, w * 2.2 * fl, 1);
+        s.position.set(
+          b.at.x + o[0] * (1 - p * 0.4),
+          b.at.y + o[1] + p * 0.75 * (0.6 + 0.4 * b.k) + w * 0.55,
+          b.at.z + o[2] * (1 - p * 0.4),
+        );
+        (s.material as SpriteMaterial).opacity = 0.95 * Math.sin(Math.PI * p) ** 0.6;
+      });
+    }
+    for (let i = this.balls.length - 1; i >= 0; i--) {
+      const b = this.balls[i];
+      b.t += dt;
+      const u = b.t / b.life;
+      if (u >= 1) {
+        this.putAway(b.s);
+        this.balls.splice(i, 1);
+        continue;
+      }
+      // (out fast, slowing; the smoke on up)
+      const drag = b.smoke ? 1.4 : 3.2;
+      b.v.multiplyScalar(Math.max(0, 1 - drag * dt));
+      if (b.smoke) b.v.y += 0.6 * dt;
+      b.s.position.addScaledVector(b.v, dt);
+      const k = b.k0 + (b.k1 - b.k0) * (1 - (1 - u) ** 3);
+      b.s.scale.set(k, k, 1);
+      (b.s.material as SpriteMaterial).opacity = b.smoke ? 0.9 * Math.min(1, u * 5) * (1 - u) : 0.95 * (1 - u) ** 1.5;
+    }
+  }
+  /** The blasts' flashes now (the cars' coords; `k`: 5 at the moment, gone over two seconds) — for the light. */
+  flash(): { x: number; y: number; z: number; k: number }[] {
+    return this.flashes.map((f) => ({ x: f.x, y: f.y, z: f.z, k: 5 * Math.exp(-f.t * 2.2) }));
+  }
+  dispose() {
+    for (const b of this.burning.values()) for (const s of b.s) this.putAway(s);
+    for (const b of this.balls) this.putAway(b.s);
+    for (const s of this.spare) (s.material as SpriteMaterial).dispose();
+    this.spare.length = 0;
+    if (this.tex) for (const t of Object.values(this.tex)) t.dispose();
+  }
+}
+
+/** (plan 94 P3) Glass out of a pane: little bits of it tumbling down, glinting, lying a while where they fell,
+ *  then gone. One instanced mesh for every car's. */
+export class Shards {
+  private mesh: InstancedMesh;
+  private geo: BufferGeometry;
+  private mat: MeshLambertMaterial;
+  private p: Float32Array;
+  private v: Float32Array;
+  private q: Quaternion[];
+  private spin: Quaternion[];
+  private size: Float32Array;
+  private life: Float32Array;
+  private lying: Uint8Array;
+  private i = 0;
+  private live = 0;
+  private m = new Matrix4();
+  private s = new Vector3();
+  private t = new Vector3();
+  constructor(
+    root: Group,
+    private ground: (x: number, z: number) => number,
+    private n = 320,
+  ) {
+    // (a sliver of a triangle, 1 unit across: scaled each)
+    this.geo = new BufferGeometry();
+    this.geo.setAttribute("position", new Float32BufferAttribute([0, 0, 0.5, 0.45, 0, -0.3, -0.4, 0, -0.25], 3));
+    this.geo.setAttribute("normal", new Float32BufferAttribute([0, 1, 0, 0, 1, 0, 0, 1, 0], 3));
+    this.mat = litMaterial({
+      color: 0xd9e8ee,
+      roughness: 0.08,
+      metalness: 0.55,
+      transparent: true,
+      opacity: 0.8,
+      side: DoubleSide,
+      depthWrite: false,
+    });
+    this.mesh = new InstancedMesh(this.geo, this.mat, n);
+    this.mesh.frustumCulled = false;
+    this.mesh.instanceMatrix.setUsage(DynamicDrawUsage);
+    this.mesh.visible = false;
+    this.p = new Float32Array(n * 3);
+    this.v = new Float32Array(n * 3);
+    this.q = Array.from({ length: n }, () => new Quaternion());
+    this.spin = Array.from({ length: n }, () => new Quaternion());
+    this.size = new Float32Array(n);
+    this.life = new Float32Array(n);
+    this.lying = new Uint8Array(n);
+    this.m.makeScale(0, 0, 0);
+    for (let i = 0; i < n; i++) this.mesh.setMatrixAt(i, this.m);
+    root.add(this.mesh);
+  }
+  /** (plan 94 phase 9) its mesh, to be made ready before it's first wanted */
+  get warmMesh(): InstancedMesh {
+    return this.mesh;
+  }
+  /** `count` bits from round (x, y, z) — a pane's middle —, out along (nx, nz) a little, with the car's own
+   *  (vx, vz): most fall straight down out of the frame. */
+  burst(x: number, y: number, z: number, count: number, vx: number, vz: number, nx = 0, nz = 0) {
+    for (let k = 0; k < count; k++) {
+      const i = this.i++ % this.n;
+      this.p[i * 3] = x + (Math.random() - 0.5) * 0.6;
+      this.p[i * 3 + 1] = y + (Math.random() - 0.5) * 0.35;
+      this.p[i * 3 + 2] = z + (Math.random() - 0.5) * 0.6;
+      const out = 0.3 + Math.random() * 1.6;
+      this.v[i * 3] = vx * 0.6 + nx * out + (Math.random() - 0.5) * 1.2;
+      this.v[i * 3 + 1] = Math.random() * 1.4;
+      this.v[i * 3 + 2] = vz * 0.6 + nz * out + (Math.random() - 0.5) * 1.2;
+      this.q[i].setFromAxisAngle(this.t.set(Math.random(), Math.random(), Math.random()).normalize(), Math.random() * 6);
+      // (its tumble: a turn a step, made from the turn a second)
+      this.spin[i].setFromAxisAngle(this.t.set(Math.random() - 0.5, Math.random(), Math.random() - 0.5).normalize(), 0.25);
+      this.size[i] = 0.025 + Math.random() * 0.05;
+      this.life[i] = 7 + Math.random() * 5;
+      this.lying[i] = 0;
+    }
+    this.live = this.n;
+    this.mesh.visible = true;
+  }
+  step(dt: number) {
+    if (!this.live) return;
+    let any = 0;
+    for (let i = 0; i < this.n; i++) {
+      if (this.life[i] <= 0) continue;
+      this.life[i] -= dt;
+      if (this.life[i] <= 0) {
+        this.m.makeScale(0, 0, 0);
+        this.mesh.setMatrixAt(i, this.m);
+        continue;
+      }
+      any++;
+      if (!this.lying[i]) {
+        this.v[i * 3 + 1] -= 9.8 * dt;
+        this.p[i * 3] += this.v[i * 3] * dt;
+        this.p[i * 3 + 1] += this.v[i * 3 + 1] * dt;
+        this.p[i * 3 + 2] += this.v[i * 3 + 2] * dt;
+        this.q[i].multiply(this.spin[i]);
+        const g = this.ground(this.p[i * 3], this.p[i * 3 + 2]) + 0.006;
+        if (this.p[i * 3 + 1] <= g) {
+          // (landed: flat on the ground, turned any way)
+          this.p[i * 3 + 1] = g;
+          this.lying[i] = 1;
+          this.q[i].setFromAxisAngle(this.t.set(0, 1, 0), Math.random() * 6.28);
+        }
+      }
+      // (going: smaller over its last second)
+      const k = this.size[i] * Math.min(1, this.life[i]);
+      this.s.set(k, k, k);
+      this.t.set(this.p[i * 3], this.p[i * 3 + 1], this.p[i * 3 + 2]);
+      this.m.compose(this.t, this.q[i], this.s);
+      this.mesh.setMatrixAt(i, this.m);
+    }
+    this.mesh.instanceMatrix.needsUpdate = true;
+    this.live = any;
+    if (!any) this.mesh.visible = false;
+  }
+  dispose() {
+    this.mesh.removeFromParent();
+    this.mesh.dispose();
+    this.geo.dispose();
+    this.mat.dispose();
+  }
+}
+
 /** What falls off a car (a bumper): a crate on Jolt where there's a world (its position; it tumbles as it
  *  goes), or a fall of its own onto the land; left a while, then gone. */
 export interface DebrisHost {
-  add(x: number, y: number, z: number): number | null;
+  add(x: number, y: number, z: number, v?: [number, number, number]): number | null;
   at(id: number, out: [number, number, number]): boolean;
   remove(id: number): void;
   ground(x: number, z: number): number;
@@ -956,35 +1290,44 @@ export class Debris {
     spin: Vector3;
     t: number;
     last: Vector3;
+    /** (plan 94 P2) how it lies once still: as it was on the car, or a door on its face */
+    lie: Quaternion;
   }[] = [];
+  private dq = new Quaternion();
+  private ax = new Vector3();
   private at: [number, number, number] = [0, 0, 0];
   constructor(
     private root: Group,
     private host: DebrisHost,
   ) {}
-  /** `o` (in the root's coords, as it was on the car) let go, moving `v`. */
-  drop(o: Object3D, v: Vector3) {
-    if (this.bits.length >= 6) this.free(this.bits.shift());
+  /** `o` (in the root's coords, as it was on the car) let go, moving `v`; `flat`: turned so, it lies (a door on
+   *  its face) — else as it was. (plan 94 P2: sixteen at once, two minutes each) */
+  drop(o: Object3D, v: Vector3, flat: Quaternion | null = null, free = false) {
+    if (this.bits.length >= 16) this.free(this.bits.shift());
     this.root.add(o);
     const p = o.position;
-    const id = this.host.add(p.x, p.y, p.z);
+    const go = v
+      .clone()
+      .multiplyScalar(0.8)
+      .add(new Vector3(0, 1.2, 0));
+    // (on Jolt: going as it was let go; `free`, a fall of its own — plan 94 P1: thrown by a blast out of a parked
+    // car, whose solid box it starts inside)
+    const id = free ? null : this.host.add(p.x, p.y, p.z, [go.x, go.y, go.z]);
     this.bits.push({
       o,
       id,
-      v: v
-        .clone()
-        .multiplyScalar(0.8)
-        .add(new Vector3(0, 1.2, 0)),
+      v: go,
       spin: new Vector3((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 8),
       t: 0,
       last: p.clone(),
+      lie: flat ? flat.clone().multiply(o.quaternion) : o.quaternion.clone(),
     });
   }
   step(dt: number) {
     for (let i = this.bits.length - 1; i >= 0; i--) {
       const b = this.bits[i];
       b.t += dt;
-      if (b.t > 45) {
+      if (b.t > 120) {
         this.free(b);
         this.bits.splice(i, 1);
         continue;
@@ -1008,14 +1351,13 @@ export class Debris {
       // (it tumbles while it moves; still, it lies)
       const moving = b.id !== null ? p.distanceTo(b.last) / Math.max(dt, 1e-3) : b.v.length();
       const k = Math.min(1, moving / 3);
-      b.o.rotation.x += b.spin.x * dt * k;
-      b.o.rotation.y += b.spin.y * dt * k;
-      b.o.rotation.z += b.spin.z * dt * k;
-      if (k < 0.05) {
-        // (settling flat: its roll and pitch toward lying)
-        b.o.rotation.x -= Math.sin(b.o.rotation.x * 2) * dt;
-        b.o.rotation.z -= Math.sin(b.o.rotation.z * 2) * dt;
+      const w = b.spin.length();
+      if (w > 1e-6 && k > 0) {
+        this.dq.setFromAxisAngle(this.ax.copy(b.spin).divideScalar(w), w * dt * k);
+        b.o.quaternion.premultiply(this.dq);
       }
+      // (settling: toward lying — as it was, turned on the ground the way it ended up, or a door on its face)
+      if (k < 0.05) b.o.quaternion.slerp(b.lie, Math.min(1, dt * 2.5));
     }
   }
   private free(b: (typeof this.bits)[number] | undefined) {

@@ -49,7 +49,15 @@
     "reverse-beep": 0,
     "plough": 0,
     "tracks": 0,
-    "runners": 0
+    "runners": 0,
+    "squeal-loop": 0,
+    "scrub": 0,
+    "chirp": 0,
+    "snow-squeak": 0,
+    "fire": 3,
+    "fire-catch": 2,
+    "blast": 1,
+    "window": 0
   },
   "engines": {
     "four": 0,

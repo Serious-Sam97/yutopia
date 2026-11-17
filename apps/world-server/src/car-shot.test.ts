@@ -3,7 +3,7 @@ import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { ROOM_NAME } from "@yutopia/shared";
 import { AIM_BLADE } from "@yutopia/shared/beam";
-import { PART, parkedPose, parseDamage, SPECS } from "@yutopia/shared/car";
+import { type CarClaim, DOOR_GONE, DOOR_HANG, PANE_CRACK, PART, parkedPose, parseDamage, parseHoles, SPECS } from "@yutopia/shared/car";
 import { ARMS } from "@yutopia/shared/dark";
 import { heightAt } from "@yutopia/shared/grounds";
 import type { Inventory } from "@yutopia/shared/inventory";
@@ -83,12 +83,13 @@ function aim(p: Person, x: number, y: number) {
   });
 }
 // a shot from my hand toward (x, y) at `h` m over the ground there
-function fireAt(p: Person, x: number, y: number, h: number) {
+// (plan 95 F4a: `cars`, the shooter's screen's word on each round's car)
+function fireAt(p: Person, x: number, y: number, h: number, cars?: (CarClaim | 0 | null)[], ground?: number) {
   const m = me(p.room);
   const oz = heightAt(m.x, m.y) + 1.35;
   const yaw = Math.atan2(y - m.y, x - m.x);
-  const pitch = Math.atan2(heightAt(x, y) + h - oz, Math.hypot(x - m.x, y - m.y));
-  p.room.send("arms:fire", { ox: m.x, oy: m.y, oz, yaw, pitch, lag: 0, seed: 7 });
+  const pitch = Math.atan2((ground ?? heightAt(x, y)) + h - oz, Math.hypot(x - m.x, y - m.y));
+  p.room.send("arms:fire", { ox: m.x, oy: m.y, oz, yaw, pitch, lag: 0, seed: 7, ...(cars ? { cars } : {}) });
 }
 // a parked car of the street: its object, its pose
 // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
@@ -151,7 +152,7 @@ test("struck low at its nose: the engine block stops the round — A behind it s
   assert.equal(me(a.room).hp, 100);
 });
 
-test("through its side windows the round goes on: A behind it is hit, that side's glass is gone; a tyre goes flat", async () => {
+test("through its side windows the round goes on: A behind it is hit, that side's glass cracked (plan 94 P3); a tyre goes flat", async () => {
   const { a, b, car } = await armed(92);
   const r = [-Math.sin(car.a), Math.cos(car.a)];
   await standAt(b, car.x + r[0] * 7, car.y + r[1] * 7);
@@ -166,7 +167,8 @@ test("through its side windows the round goes on: A behind it is hit, that side'
   assert.equal(b.carShots[0].hits[0].struck, "glass");
   assert.equal(b.carShots[0].hits[0].face, 3, "by its right side");
   await waitFor(() => b.hits.some((h) => h.kind === "person" && h.id === a.room.sessionId), 3000);
-  await waitFor(() => !!(parseDamage(car.props().dmg).parts & PART.sideR), 2000);
+  // (plan 94 P3: its pane on that side cracked — the front's or the one behind, by where B is)
+  await waitFor(() => !!(parseDamage(car.props().dmg).parts & (PANE_CRACK[3] | PANE_CRACK[5])), 2000);
   // a tyre: the front right, low, from where B stands
   await sleep(ARMS.revolver.rate * 1000 + 50);
   const fr = { x: car.x + Math.cos(car.a) * SPECS.sedan.front, y: car.y + Math.sin(car.a) * SPECS.sedan.front };
@@ -218,4 +220,103 @@ test("from the driver's seat (plan 93 S2): the revolver out of their own window 
   shoot(Math.atan2(-Math.cos(a0), Math.sin(a0)));
   await sleep(800);
   assert.equal(loaded(1), sg, "not the driver's shotgun");
+});
+
+test("(plan 95 F4a) the shooter's word on where: its bonnet from ahead — the engine under it, its hole laid on the skin's way out; a round it met no car on passes over; a word far off the round's line isn't taken (the box's)", async () => {
+  const { b, car } = await armed(95);
+  const f = [Math.cos(car.a), Math.sin(car.a)];
+  const r = [-Math.sin(car.a), Math.cos(car.a)];
+  await standAt(b, car.x + f[0] * 7, car.y + f[1] * 7);
+  await draw(b, 0, "revolver");
+  aim(b, car.x, car.y);
+  const g = heightAt(car.x, car.y);
+  // (a point on its bonnet's top, in the car's frame — as a screen's ray test would give it)
+  const S = SPECS.sedan;
+  const u = S.body.ahead - 0.55;
+  const w = 0.1;
+  const h = 0.95;
+  const at = { x: car.x + f[0] * u + r[0] * w, y: car.y + f[1] * u + r[1] * w };
+  const bonnet: CarClaim = { id: car.id, u, w, h, f: 0, s: "engine", nu: 0, nw: 0, nh: 100 };
+  await sleep(ARMS.revolver.rate * 1000 + 50);
+  fireAt(b, at.x, at.y, h, [bonnet], g);
+  await waitFor(() => b.carShots.length === 1, 4000);
+  assert.equal(b.carShots[0].hits[0].struck, "engine", "the engine, through its bonnet");
+  assert.equal(b.carShots[0].hits[0].face, 0, "its front's");
+  await waitFor(() => parseHoles(car.props().holes).length === 1, 2000);
+  const hole = parseHoles(car.props().holes)[0];
+  assert.ok(Math.abs(hole.u - u) < 0.02 && Math.abs(hole.h - h) < 0.02, `its hole where it was struck (${car.props().holes})`);
+  assert.deepEqual(hole.n, [0, 0, 1], "laid on the skin's way out: up");
+  // (the same line, the screen saying it met no car: nothing struck)
+  await sleep(ARMS.revolver.rate * 1000 + 50);
+  fireAt(b, at.x, at.y, h, [0], g);
+  await sleep(700);
+  assert.equal(b.carShots.length, 1, "a round that met no car on the screen strikes none");
+  // (a word for its far side's door, the round at its bonnet — a metre off its line: not taken; the box's, its
+  // front's face)
+  await sleep(ARMS.revolver.rate * 1000 + 50);
+  fireAt(b, at.x, at.y, h, [{ id: car.id, u: 0, w: -S.body.width / 2, h: 0.7, f: 2, s: "panel" }], g);
+  await waitFor(() => b.carShots.length === 2, 4000);
+  assert.equal(b.carShots[1].hits[0].face, 0, "the box's: its front");
+  assert.notEqual(b.carShots[1].hits[0].struck, "panel", "not the claim's");
+});
+
+test("(plan 95 F5a) the windscreen shot five times from ahead: a star kept where each went in, still in till the fifth; then in", async () => {
+  const { b, car } = await armed(96);
+  const f = [Math.cos(car.a), Math.sin(car.a)];
+  const r = [-Math.sin(car.a), Math.cos(car.a)];
+  await standAt(b, car.x + f[0] * 7, car.y + f[1] * 7);
+  await draw(b, 0, "revolver");
+  aim(b, car.x, car.y);
+  const g = heightAt(car.x, car.y);
+  const S = SPECS.sedan;
+  // (points across the windscreen — as a screen's ray test would give them: its glass, pane 0)
+  const u = S.front - 0.55;
+  const h = 1.15;
+  for (let k = 0; k < 5; k++) {
+    const w = -0.45 + k * 0.22;
+    const at = { x: car.x + f[0] * u + r[0] * w, y: car.y + f[1] * u + r[1] * w };
+    await sleep(ARMS.revolver.rate * 1000 + 60);
+    fireAt(b, at.x, at.y, h, [{ id: car.id, u, w, h, f: 0, s: "glass", p: 0, nu: 70, nw: 0, nh: 70 }], g);
+    await waitFor(() => b.carShots.length === k + 1, 4000);
+    assert.equal(b.carShots[k].hits[0].struck, "glass");
+    await waitFor(() => parseHoles(car.props().holes).filter((x) => x.pane === 0).length === k + 1, 2000);
+    const dm = parseDamage(car.props().dmg);
+    assert.ok(dm.parts & PART.screen, "starred");
+    if (k < 4) assert.equal(dm.parts & PART.screenGone, 0, `still in after ${k + 1}`);
+    else assert.ok(dm.parts & PART.screenGone, "in at the fifth");
+  }
+  const stars = parseHoles(car.props().holes);
+  assert.ok(stars.every((x) => x.pane === 0 && Math.abs(x.u - u) < 0.02 && x.n), "each where it went in, its normal kept");
+});
+
+test("(plan 96 F4a, F4b) a door shot off: one shotgun blast into it — each pellet a round — and it hangs; two revolver rounds more, it's off", async () => {
+  const { b, car } = await armed(97);
+  const f = [Math.cos(car.a), Math.sin(car.a)];
+  const r = [-Math.sin(car.a), Math.cos(car.a)];
+  const S = SPECS.sedan;
+  // (its right front door's skin, from 4 m off its side)
+  const u = -0.2;
+  const w = S.body.width / 2;
+  const h = 0.7;
+  const at = { x: car.x + f[0] * u + r[0] * w, y: car.y + f[1] * u + r[1] * w };
+  await standAt(b, car.x + f[0] * u + r[0] * 4, car.y + f[1] * u + r[1] * 4);
+  const g = heightAt(car.x, car.y);
+  const door: CarClaim = { id: car.id, u, w, h, f: 3, s: "panel", part: "door_fr", nu: 0, nw: 100, nh: 0 };
+  const wreck = () => parseDamage(car.props().dmg).wreck;
+  await draw(b, 1, "shotgun");
+  aim(b, at.x, at.y);
+  await sleep(300);
+  fireAt(b, at.x, at.y, h, Array(8).fill(door), g);
+  await waitFor(() => b.carShots.length === 1, 4000);
+  await waitFor(() => (wreck() & DOOR_HANG[1]) !== 0, 2000);
+  assert.equal(wreck() & DOOR_GONE[1], 0, "hanging, not off, at 8");
+  assert.equal(parseHoles(car.props().holes).filter((x) => x.part === "door_fr").length, 8, "eight rounds in it");
+  await draw(b, 0, "revolver");
+  aim(b, at.x, at.y);
+  for (let k = 0; k < 2; k++) {
+    await sleep(ARMS.revolver.rate * 1000 + 60);
+    fireAt(b, at.x, at.y, h, [door], g);
+    await waitFor(() => b.carShots.length === 2 + k, 4000);
+  }
+  await waitFor(() => (wreck() & DOOR_GONE[1]) !== 0, 2000);
 });

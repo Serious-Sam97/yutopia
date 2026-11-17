@@ -178,6 +178,7 @@ async function depart(n: number): Promise<void> {
 const ROAD = [SPINE[Math.floor(SPINE.length / 2)], SPINE[SPINE.length - 1]];
 
 type Sample = Record<string, number>;
+let geoWas: Record<string, number> | null = null;
 const rows: { cycle: number; browser: Sample; server: Sample }[] = [];
 let browser: Awaited<ReturnType<typeof chromium.launch>> | null = null;
 let failed = false;
@@ -229,6 +230,65 @@ try {
     null,
     { timeout: 240_000 },
   );
+  if (process.env.GEO_WHO)
+    await page.evaluate(() => {
+      const w = window as any;
+      w.__geoWho = true;
+      // (every scene the renderer draws — the world's, a mirror's, an offscreen picture's — kept to look in)
+      const r = w.__yutopia.tp.renderer;
+      w.__scenes = new Set();
+      w.__render0 = r.render.bind(r);
+      // (each geometry as it's first drawn: who drew it (its nearest named thing) and when; freed, forgotten — what's
+      // left alive in nothing drawn is a leak's owner)
+      w.__drawn = new Map();
+      const O3 = Object.getPrototypeOf(Object.getPrototypeOf(w.__yutopia.tp.scene));
+      let BG: any = null;
+      w.__yutopia.tp.scene.traverse((c: any) => {
+        if (!BG && c.geometry) BG = c.geometry;
+      });
+      // (up its prototypes to BufferGeometry's own: the one that has dispose)
+      for (let pr = BG && Object.getPrototypeOf(BG); pr; pr = Object.getPrototypeOf(pr))
+        if (Object.prototype.hasOwnProperty.call(pr, "dispose") && Object.prototype.hasOwnProperty.call(pr, "setAttribute")) {
+          BG = pr;
+          break;
+        }
+      const before0 = O3.onBeforeRender;
+      O3.onBeforeRender = function (this: any, ...a: any[]) {
+        const g = a[3];
+        if (g && !w.__drawn.has(g)) {
+          let o = this;
+          let name = "";
+          while (o && !name) {
+            name = o.name;
+            o = o.parent;
+          }
+          w.__drawn.set(g, { name: `${name || "?"} <${this.type}>`, t: Math.round(performance.now() / 1000) });
+        }
+        return before0.apply(this, a);
+      };
+      const BGP = BG;
+      if (BGP && Object.prototype.hasOwnProperty.call(BGP, "setAttribute")) {
+        const d0 = BGP.dispose;
+        BGP.dispose = function (this: any) {
+          w.__drawn.delete(this);
+          return d0.call(this);
+        };
+      }
+      w.__sceneWho = [];
+      r.render = function (scene: any, cam: any) {
+        if (!w.__scenes.has(scene) && w.__scenes.size >= 14)
+          w.__sceneWho.push({
+            t: Math.round(performance.now() / 1000),
+            type: scene.type,
+            kids: (scene.children ?? []).length,
+            name: scene.name,
+            geo: scene.geometry?.type,
+            stack: (new Error().stack ?? "").split("\n").slice(2, 9).join(" | "),
+          });
+        w.__scenes.add(scene);
+        return w.__render0(scene, cam);
+      };
+    });
   const cdp = await page.context().newCDPSession(page);
   const go = async (to: { x: number; y: number; level: number }, ms: number) => {
     await page.evaluate((p) => (window as any).__yutopia.teleport(p), to);
@@ -278,12 +338,66 @@ try {
         texUsed: used.size,
         texFresh: fresh.length,
         texWho: (window as any).__texWho ? fresh.slice(0, 40) : undefined,
+        // (GEO_WHO=1: the geometries the scene still reaches, by the nearest named thing above each — and how many
+        // the renderer holds past those: alive, but in nothing drawn)
+        geoWho: (window as any).__geoWho
+          ? (() => {
+              const by: Record<string, number> = {};
+              const seen = new Set<string>();
+              const scenes: any[] = [...((window as any).__scenes ?? [tp.scene])];
+              let vis = 0;
+              for (const sc of scenes) {
+                const tag = sc === tp.scene ? "" : `[${sc.name || "scene"}] `;
+                const stack: any[] = [sc];
+                while (stack.length) {
+                  const o = stack.pop();
+                  for (const ch of o.children) stack.push(ch);
+                  const g = o.geometry;
+                  if (!g || seen.has(g.uuid)) continue;
+                  seen.add(g.uuid);
+                  // (only what's shown — itself and everything above it: what the renderer would draw)
+                  let shown = true;
+                  for (let u = o; u; u = u.parent) if (!u.visible) shown = false;
+                  if (!shown) continue;
+                  vis++;
+                  let a = o;
+                  while (a && !a.name) a = a.parent;
+                  const k = tag + String(a?.name ?? "?").replace(/[0-9a-f]{8}-[0-9a-f-]+/g, "#").replace(/\d+/g, "#");
+                  by[k] = (by[k] ?? 0) + 1;
+                }
+              }
+              by["(reached)"] = seen.size;
+              // (drawn once, not freed, in no scene now: by who drew it)
+              let lost = 0;
+              for (const [g, d] of (window as any).__drawn ?? []) {
+                if (seen.has(g.uuid)) continue;
+                lost++;
+                const k = `LOST ${d.name} @${Math.floor(d.t / 60)}m`.replace(/\d+/g, (x: string) => (x.length > 3 ? "#" : x));
+                by[k] = (by[k] ?? 0) + 1;
+              }
+              by["(lost)"] = lost;
+              by["(shown)"] = vis;
+              const wx = (window as any).__wxLayer?.wx;
+              by["(snow×100)"] = Math.round((wx?.wxSnow?.value ?? -1) * 100);
+              by["(scenes)"] = scenes.length;
+              const dl = (window as any).__yutopia.model?.getDaylight?.();
+              by["(night×100)"] = Math.round((dl?.night ?? -1) * 100);
+              by["(dark×100)"] = Math.round((dl?.dark ?? -1) * 100);
+              by[`(quality ${tp.quality})`] = 1;
+              return by;
+            })()
+          : undefined,
         programs: info.programs?.length ?? 0,
         joltMB: (ph.heap ?? 0) / 1e6,
         bodies: ph.bodies ?? 0,
         blocks: g.blocks ?? 0,
         chunks: g.chunks ?? 0,
         people: tp.people3?.size ?? 0,
+        // (the cars' files: a cache of the models seen, kept unheld to a budget — their geometries on the GPU in
+        // nothing drawn till it's over it: counted apart, as the garments' are)
+        carIdleMB: ((window as any).__carAssets?.() ?? []).reduce((a: number, q: any) => a + (q.idleBytes ?? 0), 0) / 1e6,
+        carIdlePieces: ((window as any).__carAssets?.() ?? []).reduce((a: number, q: any) => a + (q.idlePieces ?? 0), 0),
+        carFiles: ((window as any).__carAssets?.() ?? []).reduce((a: number, q: any) => a + (q.ready ?? 0), 0),
       };
     });
   };
@@ -328,7 +442,29 @@ try {
     await page.waitForTimeout(idleS * 1000);
     const row = { cycle: c, browser: await browserCounts(), server: await serverCounts() };
     rows.push(row);
+    // (GEO_WHO: what changed by owner since the cycle before — the rest printed without it)
+    const who = (row.browser as Record<string, unknown>).geoWho as Record<string, number> | undefined;
+    delete (row.browser as Record<string, unknown>).geoWho;
     console.log(JSON.stringify(row, (_, v) => (typeof v === "number" ? Math.round(v * 10) / 10 : v)));
+    if (who) {
+      const was = geoWas ?? {};
+      const keys = new Set([...Object.keys(who), ...Object.keys(was)]);
+      const moved = [...keys]
+        .map((k) => [k, (who[k] ?? 0) - (was[k] ?? 0)] as const)
+        .filter(([, d]) => d !== 0)
+        .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+        .slice(0, 25);
+      const facts = Object.fromEntries(Object.entries(who).filter(([k]) => k.startsWith("(")));
+      console.log(`  geometries ${row.browser.geometries}; ${JSON.stringify(facts)}; by owner since the last:`, JSON.stringify(moved.filter(([k]) => !k.startsWith("("))));
+      geoWas = who;
+      const sw = await page.evaluate(() => {
+        const w = window as any;
+        const out = w.__sceneWho.slice(0, 3);
+        w.__sceneWho = [];
+        return out;
+      });
+      for (const x of sw) console.log("  NEW SCENE", JSON.stringify(x).slice(0, 1500));
+    }
     if (c === Number(process.env.SERVER_FROM ?? 1)) serverFirst = await serverSnapshot();
     if (c === 1) {
       first = await snapshot();

@@ -61,6 +61,8 @@ export interface QueueOpts<T> {
   concurrency?: number;
   /** what may stay cached unheld, in bytes; past it the oldest unheld are freed */
   budget?: number;
+  /** (the memory checks) how many geometries an asset holds */
+  pieces?: (t: T) => number;
 }
 
 interface Entry<T> {
@@ -146,15 +148,21 @@ export class AssetQueue<T> {
     let held = 0;
     let queued = 0;
     let ready = 0;
+    let idleBytes = 0;
+    let idlePieces = 0;
     for (const e of this.items.values()) {
       if (e.state === "ready") {
         bytes += this.o.size(e.value as T);
         ready++;
+        if (e.holds === 0) {
+          idleBytes += this.o.size(e.value as T);
+          idlePieces += this.o.pieces?.(e.value as T) ?? 0;
+        }
       }
       if (e.holds > 0) held++;
       if (e.state === "queued") queued++;
     }
-    return { bytes, held, queued, ready, loading: this.running };
+    return { bytes, held, queued, ready, loading: this.running, idleBytes, idlePieces };
   }
 
   private pump() {

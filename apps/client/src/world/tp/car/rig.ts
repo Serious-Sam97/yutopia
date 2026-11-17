@@ -98,11 +98,14 @@ export class CarRig {
       const w = s.wheels[i];
       const mw = m.wheels[i];
       // (plan 93 S1: a flat, down on its rim)
-      mw.steer.position.y = mw.rest.y + (w.c - this.c0[i]) - (this.flats & (1 << i) ? 0.04 : 0);
+      // (plan 95 F6a: its flats' — the hub down on its rim, the body's sag undone at the good ones)
+      mw.steer.position.y = mw.rest.y + (w.c - this.c0[i]) + (m.flatY?.[i] ?? 0);
       mw.steer.rotation.y = -w.steer;
       mw.spin.rotation.z = w.turn * (mw.turnK ?? 1);
     }
     m.steering.rotation.z = -s.str * s.spec.steer.ratio;
+    // (plan 95 F6a: its flats squashed where its wheels are now — posed)
+    if (this.flats) m.flatsTick?.();
     // the lamps
     this.blink = (this.blink + dt) % 0.9;
     const on = this.blink < 0.45;

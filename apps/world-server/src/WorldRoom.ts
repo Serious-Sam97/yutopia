@@ -270,7 +270,15 @@ export class WorldRoom extends Room<WorldState> {
       gun: string,
       /** (plan 93 S2) the shooter's own car: never struck by their own round */
       skip?: string,
-    ): (import("@yutopia/shared/car").CarShot & { id: string; apply(): void }) | null;
+      /** (plan 95 F4a) the shooter's screen's word on this round: where on which car (checked), or 0 — none */
+      claim?: import("@yutopia/shared/car").CarClaim | 0 | null,
+    ): (import("@yutopia/shared/car").CarShot & {
+      id: string;
+      /** taken: its damage; `by`, the shooter (plan 94 P1: who set it alight) */
+      apply(by?: string): void;
+      /** (plan 94 P4) who sat in it the round reaches on its way through (the nearest; it stops in them) */
+      seated?(): { sid: string; t: number; head: boolean } | null;
+    }) | null;
     /** (plan 93 S2) the car someone's sat in: which seat, its side (−1 the driver's, +1 the other), how it
      *  points (its heading), how fast it goes (m/s) */
     seatOf(sid: string): { vid: string; seat: number; side: number; a: number; speed: number } | null;

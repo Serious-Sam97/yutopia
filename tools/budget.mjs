@@ -50,7 +50,9 @@ import { gzipSync } from "node:zlib";
 // plans 73–85 since the last measure on 11-06, not traced yet)
 // (raised to 488 on 2026-11-16, the same call: HEAD (5658892e) was already 487.1 — plans 87–91 since the last
 // measure, not traced; plan 92 (the cars) adds 0.2: the asset table's life/cars entries → 487.3)
-const BUDGETS = { "/page": 488, "/login/page": 160 }; // KB gzip
+// (raised to 489 on 2026-11-17, the same call: measured 488.1 at plan 96's checks, 487.9 at plan 95's — plan 96's
+// NaN guards in the world page's sound (grounds-sound.ts) and its other client changes on the page)
+const BUDGETS = { "/page": 489, "/login/page": 160 }; // KB gzip
 // (/page raised from 451 on 2026-11-04 under the same call: plan 72's phase 4 — the controller split
 // into 17 feature modules (world/ctl), the same code: what the minifier can't shorten — `this.c.x`,
 // `this.<feature>.x`, the forwarders for what's read from outside — 449.7 → 451.2; the lazy chunks
