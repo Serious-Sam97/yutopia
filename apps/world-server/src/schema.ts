@@ -495,6 +495,8 @@ export class Vehicle extends Schema {
   @type("string") role = "";
   // someone's own (docs/plan/43-the-spot.md): its plate
   @type("string") plate = "";
+  // (plan 98) its driver came in by this seat's door — the passenger's, across after; −1 their own
+  @type("int8") via = -1;
 }
 
 // The Kart Park (docs/plan/46-the-karts.md, features/karts.ts): its karts (a slot "0".."7" → who's in

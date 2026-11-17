@@ -43,16 +43,18 @@ const frames = (n = 2) =>
     requestAnimationFrame(f);
   }), n);
 // a town car on Main Street, parked along it
-const car = await page.waitForFunction(() => {
+const car = await page.waitForFunction((kind: string) => {
   const c = (window as any).__yutopia;
   const o: any[] = [];
   c.room.state.objects.forEach((x: any) => {
     const p = JSON.parse(x.props);
-    if (x.kind === "car" && !p.driven && /^town-car/.test(x.id)) o.push({ id: x.id, x: x.x });
+    const pk = c.cars.parked.get(x.id);
+    if (x.kind !== "car" || p.driven || p.role === "show") return;
+    if (kind ? pk?.kind === kind : /^town-car/.test(x.id)) o.push({ id: x.id, x: x.x });
   });
   o.sort((a, b) => a.x - b.x);
   return o[0] && c.cars.parked.get(o[0].id)?.pose ? { id: o[0].id, pose: c.cars.parked.get(o[0].id).pose } : null;
-}, null, { timeout: 20_000 }).then((h) => h.jsonValue());
+}, process.env.KIND ?? "", { timeout: 20_000 }).then((h) => h.jsonValue());
 const pp = car.pose;
 const side = seat === 1 ? 1 : -1;
 const spot = { x: pp.x - 0.4 * Math.cos(pp.a) - side * 2.2 * Math.sin(pp.a), y: pp.z - 0.4 * Math.sin(pp.a) + side * 2.2 * Math.cos(pp.a) };
@@ -63,6 +65,11 @@ await page.waitForFunction((q) => {
 }, spot, { timeout: 8000 }).catch(() => {});
 await page.evaluate(([id, s]) => (window as any).__yutopia.room.send("car:enter", { id, seat: s }), [car.id, seat] as const);
 await page.waitForFunction((s) => (window as any).__yutopia.cars.mine?.seat === s, seat, { timeout: 10_000 });
+// (its model's file in)
+await page.waitForFunction(() => {
+  const C = (window as any).__yutopia.cars;
+  return C.live.get(C.mine.vid)?.model.ready !== false;
+}, null, { timeout: 15_000 });
 // the measures
 const m = await page.evaluate((s) => {
   const C = (window as any).__yutopia.cars;
@@ -82,10 +89,13 @@ const m = await page.evaluate((s) => {
 console.log("measures", JSON.stringify(m));
 await page.waitForTimeout(400);
 // the camera, in the car body's frame: x its tail, y up, z its left (the driver's side +z)
+// (sized to the door: its back edge, its glass's top, its outer face — the sedan's 0.5, 1.46, 0.93)
+const op = m.opening ?? { x0: -0.6, x1: 0.5, glass: 1.46, out: 0.93 };
+const gy = op.glass;
 const cams: Record<string, { from: number[]; to: number[] }> = {
-  side: { from: [0.7, 2.5, 2.7], to: [0.1, 0.75, 0.9] },
-  front: { from: [-2.5, 2.0, 2.3], to: [0.2, 0.8, 0.95] },
-  back: { from: [2.7, 2.1, 2.3], to: [0.0, 0.8, 0.95] },
+  side: { from: [op.x1 + 0.2, gy + 1.05, op.out + 1.8], to: [op.x1 - 0.4, gy - 0.7, op.out] },
+  front: { from: [op.x0 - 1.9, gy + 0.55, op.out + 1.4], to: [op.x1 - 0.3, gy - 0.65, op.out] },
+  back: { from: [op.x1 + 2.2, gy + 0.65, op.out + 1.4], to: [op.x1 - 0.5, gy - 0.65, op.out] },
 };
 const s = m.seat[2] > 0 ? 1 : -1;
 // (the HUD hidden: only the world's canvas)

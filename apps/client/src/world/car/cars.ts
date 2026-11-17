@@ -139,7 +139,17 @@ import {
   Spray,
   Tracks,
 } from "./fx";
-import { actAt, type ActPose, type Doorway, ENTER_S, EXIT_S, newActPose, roofGrip, seatGrip } from "./getin";
+import {
+  actAt,
+  type ActPose,
+  type Doorway,
+  ENTER_S,
+  EXIT_S,
+  newActPose,
+  roofGrip,
+  seatGrip,
+  straddleAt,
+} from "./getin";
 import { CarHud } from "./hud";
 import { CarPlayback } from "./playback";
 import { type CarExtras, CarSound, distanceGain, HEARD, preloadEngine } from "./sound";
@@ -1463,7 +1473,12 @@ export class Cars {
         return true;
       }
       const l = this.mine ? this.live.get(this.mine.vid) : null;
-      if (l && Math.hypot(l.pose.v.x, l.pose.v.z) > 2.5) return true;
+      // (plan 98 F5a: on the move — out anyway: thrown out, a stumble or a roll; no climbing out)
+      if (l && Math.hypot(l.pose.v.x, l.pose.v.z) > 2.5) {
+        this.cancelled = l.id;
+        room.send("car:leave", { jump: true });
+        return true;
+      }
       room.send("car:leave", {});
       return true;
     }
@@ -1487,7 +1502,7 @@ export class Cars {
       return true;
     }
     this.camBefore = this.camOff();
-    room.send("car:enter", { id, seat: hit.seat });
+    room.send("car:enter", { id, seat: hit.seat, via: hit.via });
     return true;
   }
   /** The car's camera (in one, the view uses it). */
@@ -1559,7 +1574,7 @@ export class Cars {
         this.wanted = wi.id;
         this.wantedAt = performance.now();
         this.camBefore = this.camOff();
-        room.send("car:enter", { id: wi.id, seat: wi.seat });
+        room.send("car:enter", { id: wi.id, seat: wi.seat, via: wi.via });
       } else if ((t > 700 && !this.host.walking()) || t > 6000) this.walkIn = null;
       else this.wantedAt = performance.now();
     }
@@ -2529,11 +2544,10 @@ export class Cars {
           (this.myVia.id === l.id || `car:${this.myVia.id}` === l.id)
         )
           via = this.myVia.via;
-        else if (at === this.time && i === 0 && l.model.seats[1] && !seats[1]) {
-          // (across the car from its heading: − the driver's side, as SEATS_OF has it)
-          const a = headingFromQ(l.pose.q);
-          const w = -(p.x - l.pose.p.x) * Math.sin(a) + (p.y - l.pose.p.z) * Math.cos(a);
-          if (w > 0.3) via = 1;
+        else if (at === this.time && i === 0) {
+          // (plan 98: the server's word for it — the door they came in by)
+          const vv = (room.state.vehicles.get(l.id) as VehWire | undefined)?.via ?? -1;
+          if (vv > 0 && l.model.seats[vv] && !seats[vv]) via = vv;
         }
         e = { m, seat: i, key, at, via };
         // (plan 98: in from where I stood — my walker's place —: the act's first beat steps onto the door's spot)
@@ -2682,6 +2696,8 @@ export class Cars {
               ? l.model.body.localToWorld(roofGrip(g.way, hB))
               : h.at === "seat"
                 ? l.model.body.localToWorld(seatGrip(g.way, hB))
+                : h.at === "saddle"
+                  ? l.model.body.localToWorld(hB.set(g.way.hip.x + 0.28, g.way.hip.y + 0.06, g.way.hip.z))
                 : h.at === "wheel"
                   ? l.model.body.localToWorld(l.model.rim(g.way.s * 0.75, hB))
                   : ((h.at === "handle" ? e.handle : h.at === "pull" ? e.pull : e.top) as Object3D).getWorldPosition(hB);
@@ -2889,10 +2905,13 @@ export class Cars {
     const seatIn = via ?? e.seat;
     const door = mod.doorOf ? mod.doorOf(seatIn) : -1;
     const acting = out ? t < EXIT_S : t < ENTER_S;
-    const way = door >= 0 ? this.doorway(l, e, seatIn, door) : null;
+    const way = door >= 0 ? this.doorway(l, e, seatIn, door) : this.doorway(l, e, seatIn, -1);
     let act: ActPose | null = null;
     let slide: Vector3 | null = null;
-    if (acting && way) {
+    if (acting && way && door < 0) {
+      // (plan 98 phase 4: no door — straddled)
+      act = straddleAt(way, Math.max(0, t), out, out ? null : (e.from ?? null), (e.act ??= newActPose()));
+    } else if (acting && way) {
       // (where they stood as it began: mine, my walker's; the way out — to where the server has them now)
       const p = this.host.room()?.state.players.get(sid) as { x: number; y: number } | undefined;
       const to = out && p ? this.bodyPoint(l, p.x, p.y) : null;
@@ -2956,7 +2975,14 @@ export class Cars {
   ): Doorway | null {
     const mod = l.model;
     const seat = mod.seats[seatIn];
-    const op = mod.openingOf?.(door) ?? null;
+    // (no door: straddled from the side they stood on — the seat's own side, else the left)
+    const fs = e.from ? Math.sign(e.from.z - (seat?.hip.z ?? 0)) : 0;
+    const op =
+      door >= 0
+        ? (mod.openingOf?.(door) ?? null)
+        : seat && !mod.doors.length
+          ? { x0: seat.hip.x - 0.4, x1: seat.hip.x + 0.4, y0: 0, y1: seat.hip.y, out: Math.abs(seat.hip.z) + 0.3, glass: seat.hip.y, slide: false }
+          : null;
     if (!seat || !op) return null;
     const k = e.m.root.scale.x || 1;
     const fit = carFit(e.m, seat, seatIn === 0, mod, k, -1);
@@ -2965,7 +2991,7 @@ export class Cars {
       const left = (i === 0 ? 1 : -1) * f[0];
       return new Vector3(seat.hip.x - f[1] * k, f[2] * k, seat.hip.z + left * k);
     }) as [Vector3, Vector3];
-    const s = Math.sign(seat.hip.z) || 1;
+    const s = door < 0 ? fs || Math.sign(seat.hip.z) || 1 : Math.sign(seat.hip.z) || 1;
     return {
       s,
       op,
@@ -3020,7 +3046,9 @@ export class Cars {
     const m = this.mine;
     if (m) {
       const obj = String((room.state.vehicles.get(m.vid) as VehWire | undefined)?.obj ?? "");
-      if (m.seat > 1 || !obj) return null;
+      // (plan 98: not while still getting in)
+      const at = this.myActT();
+      if (m.seat > 1 || !obj || (at !== null && at < ENTER_S)) return null;
       return { kind: "glove", id: obj, label: t("carGlove"), items: storeOf(this.propsOf(obj), "glove") };
     }
     const b = this.bootOpen;
@@ -5781,6 +5809,8 @@ interface VehWire {
   obj?: string;
   role?: string;
   plate?: string;
+  /** (plan 98) its driver came in by this seat's door (−1: their own) */
+  via?: number;
 }
 
 function headingFromQ(q: { x: number; y: number; z: number; w: number }): number {

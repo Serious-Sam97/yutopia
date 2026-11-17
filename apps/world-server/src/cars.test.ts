@@ -1174,3 +1174,62 @@ test("(plan 94 G3, G4) a boot open is everyone's (its opener's busy), shut when 
   // (the two stretches near it, a step or two long — not the 90 m one)
   assert.deepEqual(got, [cx, cz, cx + 150, cz, cx, cz + 120, cx + 150, cz + 120]);
 });
+
+test("(plan 98) in by the passenger's door (said on the wire); out on the move: refused unasked, thrown out asked", async () => {
+  const r = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+    sandbox: 98,
+    token: "dev:98:P98:member,builder,admin",
+  });
+  rooms.push(r);
+  await waitFor(() => r.state.players?.size > 0 && r.state.objects?.size > 0);
+  r.send("mod:cars", {});
+  r.send("mod:dark", { mode: "peaceful" });
+  await sleep(300);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const o: any = [...r.state.objects.values()].filter((c: any) => c.kind === "car" && !props(c).driven)[2];
+  const pose = parkedPose({ x: o.x, y: o.y, yaw: o.yaw, props: props(o) });
+  r.send("teleport", { to: { x: pose.x + Math.cos(pose.a) * 3.4, y: pose.y + Math.sin(pose.a) * 3.4, level: 0 } });
+  await waitFor(() => me(r).level === 0);
+  // in at the wheel by the passenger's door: everyone's told
+  r.send("car:enter", { id: o.id, seat: 0, via: 1 });
+  const vid = `car:${o.id}`;
+  await waitFor(() => me(r).busy === `drive:${vid}`);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const v = (): any => r.state.vehicles.get(vid);
+  await waitFor(() => v()?.via === 1);
+  // on the move at 10 m/s
+  const q = headingQuat(v().a);
+  const x = v().x;
+  const z = v().z;
+  r.send("car:state", {
+    seq: 1,
+    x,
+    y: heightAt(x, z) + 0.52,
+    z,
+    qx: q.x,
+    qy: q.y,
+    qz: q.z,
+    qw: q.w,
+    vx: Math.cos(v().a) * 10,
+    vy: 0,
+    vz: Math.sin(v().a) * 10,
+    wy: 0,
+    steer: 0,
+    rpm: 3000,
+    gear: 2,
+    fl: 0,
+    slip: 0,
+    fuel: 40,
+  } satisfies CarWire);
+  await waitFor(() => Math.hypot(v().vx, v().vz) > 9);
+  const no: string[] = [];
+  r.onMessage("car:no", (m: { why: string }) => no.push(m.why));
+  r.send("car:leave", {});
+  await waitFor(() => no.includes("moving"));
+  assert.equal(me(r).busy, `drive:${vid}`, "still at the wheel");
+  // asked: out, thrown down along its way (past a stumble's pace), unhurt out of a fight
+  r.send("car:leave", { jump: true });
+  await waitFor(() => me(r).busy === "");
+  await waitFor(() => me(r).fellAt > 0);
+  assert.equal(me(r).hp, 100, "unhurt: no fight");
+});

@@ -494,7 +494,7 @@ export interface ClientMessages {
   // someone's own bay of the lot (docs/plan/43-the-spot.md): claimed standing in it, given up
   "spot:claim": { bay: string };
   "spot:free": { bay: string };
-  "car:enter": { id: string; seat: number };
+  "car:enter": { id: string; seat: number; via?: number };
   // your own, from the dealer (docs/plan/43-the-spot.md): car/own.ts BUYABLE, a CAR_COLOURS index
   // (docs/plan/92-the-cars.md F13b: with its look chosen — car/look.ts buyLook —, `colour` then the nearest)
   "car:buy": { model: string; colour: number; plate: string; look?: CarLook };
@@ -502,7 +502,7 @@ export interface ClientMessages {
   "car:look": { id: string; look: CarLook };
   // the owner lends their own's keys to someone (their uid), or takes them back (null)
   "car:lend": { to: number | null };
-  "car:leave": Record<string, never>;
+  "car:leave": { jump?: boolean };
   "car:state": CarWire;
   // the Kart Park (docs/plan/46-the-karts.md): take a kart at the desk (its colour), give it back;
   // the next race's setup (anyone in a kart, between races); ready; start; my kart's state; an item

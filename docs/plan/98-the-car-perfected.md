@@ -323,3 +323,22 @@ Two kinds of work, in the order the user named them:
   from the player's view, `DOORS=1` logs the doors). Client car and chars tests 41/41, typecheck clean.
 - Left for phase 4: a slung long gun isn't drawn on the act's body (it appears with the walker after); the car's
   prompts (the glove box) show while getting in.
+
+## Phase 4 — built (2026-11-17): every seat and vehicle
+
+- **Across from the passenger's side, seen by everyone:** `car:enter` says `via` (the door's seat); the server
+  keeps it on the vehicle (`Vehicle.via`, int8, −1 their own) for the new driver; others' screens take it from
+  there instead of guessing from where the server had them (plan 93's known gap).
+- **Tall cabs climbed** (the plough truck, the snowcat, the tractor): the floor over a knee's height puts her on a
+  step in the gap (`base`, up to 0.75 m), up from the ground and down to it again; hands up on the frame.
+- **No door — straddled** (`straddleAt`: the snowmobile, the toboggan): beside it facing its front, the near leg
+  swung up and over the seat, down onto it, the other foot onto its rest, a hand on the saddle; out backwards.
+- **Out on the move (F5a):** X at speed asks `car:leave {jump}`: out at once (no climbing out), the server puts
+  them by their door and throws them along its way — under 15 km/h a stagger (`hitAt`), past it down and rolling
+  on the ragdoll (`fellAt`, plan 58's falls on Jolt), hurt by how fast only in a fight; the car rolls on. Asked
+  without `jump`, still refused ("moving").
+- Not while getting in: the glove box's prompt.
+- `e2e/car-act.mts KIND=<kind>`: the act on another vehicle, its cameras sized to the door; waits for the model.
+- Checked: stills of the plough truck's climb and the snowmobile's straddle; world-server car tests 24/24 (new:
+  `(plan 98) in by the passenger's door …; out on the move …`); typecheck clean.
+- Left: a slung long gun isn't on the act's body (it shows with the walker after).

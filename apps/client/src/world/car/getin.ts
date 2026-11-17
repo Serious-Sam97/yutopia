@@ -19,7 +19,7 @@ export const EXIT_S = 2.5;
 
 /** What a hand holds in the act: the door's outside handle, its inside pull, its frame's top at the back (each a
  *  mark on the door, swung with it), the roof's edge over the opening (the body's). */
-export type Grip = "handle" | "pull" | "top" | "roof" | "wheel" | "seat";
+export type Grip = "handle" | "pull" | "top" | "roof" | "wheel" | "seat" | "saddle";
 
 export interface ActPose {
   /** the hips' joint (the body's frame, m) */
@@ -149,6 +149,9 @@ export function actAt(
   const faceBack = yawOf(-0.62, -0.78 * s); // stepped back out of the gap, facing the door's frame to push it
 
   const gap = { x: xh + 0.12, w: o + 0.3 };
+  // (a tall cab — the plough truck's, the snowcat's, the tractor's: its floor over a knee's height —: stood on its step
+  // in the gap, up from the ground and down to it again)
+  const base = Math.max(0, Math.min(0.75, d.floor - 0.42));
   const st0 = { x: xr + 0.2, w: o + 0.42 };
   const st1 = { x: xr + 0.24, w: o + 0.5 };
   const footW = 0.11; // half the stance
@@ -173,9 +176,9 @@ export function actAt(
           { t: 0.3, v: [st0.x, stand, st0.w], stop: true },
           { t: 0.55, v: [st0.x + 0.03, stand - 0.01, st0.w + 0.04] },
           { t: 0.85, v: [st1.x, stand - 0.02, st1.w], stop: true },
-          { t: 1.1, v: [(st1.x + gap.x) / 2, stand - 0.01, (st1.w + gap.w) / 2 + 0.02] },
-          { t: 1.35, v: [gap.x, stand - 0.03, gap.w], stop: true },
-          { t: 1.6, v: [gap.x - 0.02, stand - 0.07, gap.w - 0.08] },
+          { t: 1.1, v: [(st1.x + gap.x) / 2, stand - 0.01 + base * 0.5, (st1.w + gap.w) / 2 + 0.02] },
+          { t: 1.35, v: [gap.x, stand - 0.03 + base, gap.w], stop: true },
+          { t: 1.6, v: [gap.x - 0.02, stand - 0.07 + base, gap.w - 0.08] },
           { t: 1.85, v: [gap.x - 0.05, d.satHip + 0.22, o + 0.05] },
           { t: 2.05, v: [xh + 0.03, d.satHip + 0.1, o - 0.12] },
           { t: 2.3, v: [xh, d.satHip, wh], stop: true },
@@ -197,9 +200,9 @@ export function actAt(
           { t: 0.53, v: [st1.x + footW + 0.06, 0.07, st1.w - 0.02, 0.15] },
           { t: 0.64, v: [st1.x + footW, 0, st1.w, 0], stop: true },
           { t: 1.08, v: [st1.x + footW, 0, st1.w, 0], stop: true },
-          { t: 1.2, v: [(st1.x + gap.x) / 2 + 0.15, 0.09, gap.w - 0.02, 0.2] },
-          { t: 1.33, v: [gap.x + 0.2, 0, gap.w - 0.12, 0], stop: true },
-          { t: 1.45, v: [gap.x + 0.2, 0, gap.w - 0.12, 0], stop: true },
+          { t: 1.2, v: [(st1.x + gap.x) / 2 + 0.15, 0.09 + base, gap.w - 0.02, 0.2] },
+          { t: 1.33, v: [gap.x + 0.2, base, gap.w - 0.12, 0], stop: true },
+          { t: 1.45, v: [gap.x + 0.2, base, gap.w - 0.12, 0], stop: true },
           { t: 1.58, v: [gap.x - 0.1, sill + 0.1, o + 0.12, 0.55] },
           { t: 1.7, v: [xh - 0.28, sill + 0.08, o - 0.18, 0.45] },
           { t: 1.85, v: [xh - 0.42, d.floor, wh - 0.1, 0], stop: true },
@@ -220,9 +223,9 @@ export function actAt(
           { t: 0.74, v: [st1.x - footW + 0.03, 0.06, st1.w + 0.02, 0.12] },
           { t: 0.84, v: [st1.x - footW, 0, st1.w, 0], stop: true },
           { t: 0.92, v: [st1.x - footW, 0, st1.w, 0], stop: true },
-          { t: 1.04, v: [(st1.x + gap.x) / 2 - 0.1, 0.09, (st1.w + gap.w) / 2 + 0.12, 0.2] },
-          { t: 1.18, v: [gap.x - 0.08, 0, gap.w + 0.14, 0], stop: true },
-          { t: 1.98, v: [gap.x - 0.1, 0, gap.w + 0.12, 0], stop: true },
+          { t: 1.04, v: [(st1.x + gap.x) / 2 - 0.1, 0.09 + base, (st1.w + gap.w) / 2 + 0.12, 0.2] },
+          { t: 1.18, v: [gap.x - 0.08, base, gap.w + 0.14, 0], stop: true },
+          { t: 1.98, v: [gap.x - 0.1, base, gap.w + 0.12, 0], stop: true },
           { t: 2.14, v: [xh - 0.08, sill + 0.24, o + 0.12, 0.6] },
           { t: 2.3, v: [xh - 0.3, sill + 0.14, o - 0.22, 0.5] },
           { t: 2.5, v: [sat[B][0], sat[B][1], sat[B][2], 0], stop: true },
@@ -270,8 +273,8 @@ export function actAt(
           { t: 0.75, v: [xh, d.satHip, wh], stop: true },
           { t: 1.0, v: [xh + 0.03, d.satHip + 0.12, o - 0.1] },
           { t: 1.2, v: [gap.x - 0.04, d.satHip + 0.26, o + 0.08] },
-          { t: 1.45, v: [gap.x, stand - 0.05, gap.w - 0.04] },
-          { t: 1.6, v: [gap.x, stand - 0.02, gap.w], stop: true },
+          { t: 1.45, v: [gap.x, stand - 0.05 + base, gap.w - 0.04] },
+          { t: 1.6, v: [gap.x, stand - 0.02 + base, gap.w], stop: true },
           { t: 1.95, v: [back.x, stand - 0.02, back.w], stop: true },
           { t: 2.5, v: [end.x, stand, end.w], stop: true },
         ],
@@ -286,9 +289,9 @@ export function actAt(
           { t: 0.35, v: [sat[B][0], sat[B][1], sat[B][2], 0], stop: true },
           { t: 0.52, v: [xh - 0.3, sill + 0.16, o - 0.18, 0.5] },
           { t: 0.66, v: [xh - 0.1, sill + 0.2, o + 0.14, 0.55] },
-          { t: 0.8, v: [gap.x - 0.1, 0, gap.w + 0.12, 0], stop: true },
-          { t: 1.7, v: [gap.x - 0.1, 0, gap.w + 0.12, 0], stop: true },
-          { t: 1.82, v: [back.x - 0.12, 0.08, back.w + 0.05, 0.2] },
+          { t: 0.8, v: [gap.x - 0.1, base, gap.w + 0.12, 0], stop: true },
+          { t: 1.7, v: [gap.x - 0.1, base, gap.w + 0.12, 0], stop: true },
+          { t: 1.82, v: [back.x - 0.12, 0.08 + base * 0.5, back.w + 0.05, 0.2] },
           { t: 1.95, v: [back.x - footW, 0, back.w + 0.04, 0], stop: true },
           { t: 2.2, v: [back.x - footW, 0, back.w + 0.04, 0], stop: true },
           { t: 2.32, v: [(back.x + end.x) / 2 - footW, 0.06, (back.w + end.w) / 2, 0.15] },
@@ -307,9 +310,9 @@ export function actAt(
           { t: 1.08, v: [xh - 0.4, d.floor, wh - 0.08, 0], stop: true },
           { t: 1.22, v: [xh - 0.18, sill + 0.12, o - 0.14, 0.5] },
           { t: 1.34, v: [gap.x - 0.02, sill + 0.06, o + 0.1, 0.4] },
-          { t: 1.48, v: [gap.x + 0.22, 0, gap.w - 0.1, 0], stop: true },
-          { t: 1.62, v: [gap.x + 0.22, 0, gap.w - 0.1, 0], stop: true },
-          { t: 1.74, v: [back.x + 0.1, 0.08, back.w - 0.06, 0.2] },
+          { t: 1.48, v: [gap.x + 0.22, base, gap.w - 0.1, 0], stop: true },
+          { t: 1.62, v: [gap.x + 0.22, base, gap.w - 0.1, 0], stop: true },
+          { t: 1.74, v: [back.x + 0.1, 0.08 + base * 0.5, back.w - 0.06, 0.2] },
           { t: 1.86, v: [back.x + footW, 0, back.w - 0.04, 0], stop: true },
           { t: 2.08, v: [back.x + footW, 0, back.w - 0.04, 0], stop: true },
           { t: 2.22, v: [(back.x + end.x) / 2 + footW, 0.06, (back.w + end.w) / 2, 0.15] },
@@ -386,4 +389,77 @@ export function seatGrip(d: Doorway, out = new Vector3()): Vector3 {
 /** The roof's edge over a door's opening, where a hand grips it (the body's frame). */
 export function roofGrip(d: Doorway, out = new Vector3()): Vector3 {
   return out.set(d.hip.x - 0.2, d.op.glass + 0.03, d.s * (d.op.out - 0.1));
+}
+
+/** (plan 98 phase 4) A seat with no door — the snowmobile's, the toboggan's —: straddled. Stood beside it facing its
+ *  front (`d.s` the side), the near leg swung up and over the seat onto the far footrest, down onto the seat, the other
+ *  foot onto its own; out the same backwards. `d.op` is unused but its `out`: how far out to stand. In 1.9 s, out 1.7 s;
+ *  sat after. */
+export function straddleAt(
+  d: Doorway,
+  t: number,
+  leaving: boolean,
+  from: { x: number; z: number; yaw: number } | null,
+  out: ActPose,
+): ActPose {
+  const s = d.s;
+  const xh = d.hip.x;
+  const wh = d.hip.z * s;
+  const w0 = d.op.out + 0.32;
+  const stand = d.stand - 0.02;
+  const over = d.hip.y + 0.32;
+  const A = s > 0 ? 1 : 0;
+  const B = 1 - A;
+  const aS: "L" | "R" = A === 1 ? "R" : "L";
+  const sat = d.satFeet.map((f) => [f.x, f.y, f.z * s]);
+  const face = yawOf(-1, 0);
+  const tt = leaving ? 1.9 - t * (1.9 / 1.7) : t;
+  const f0 = !leaving && from ? { x: from.x, w: from.z * s } : { x: xh + 0.05, w: w0 };
+  const hips = track(
+    [
+      { t: 0, v: [f0.x, stand, f0.w], stop: true },
+      { t: 0.3, v: [xh + 0.05, stand, w0], stop: true },
+      { t: 0.6, v: [xh + 0.06, stand - 0.06, w0 - 0.06] },
+      { t: 1.0, v: [xh + 0.02, Math.max(d.satHip + 0.12, stand - 0.18), (w0 + wh) / 2] },
+      { t: 1.3, v: [xh, d.satHip + 0.03, wh] },
+      { t: 1.5, v: [xh, d.satHip, wh], stop: true },
+    ],
+    tt,
+    [0, 0, 0],
+  );
+  const fA = track(
+    [
+      { t: 0, v: [f0.x + 0.1, 0, f0.w - 0.1, 0], stop: true },
+      { t: 0.3, v: [xh + 0.12, 0, w0 - 0.1, 0], stop: true },
+      { t: 0.55, v: [xh + 0.12, 0, w0 - 0.1, 0], stop: true },
+      { t: 0.8, v: [xh + 0.1, over, wh + 0.05, 0.5] },
+      { t: 1.05, v: [sat[A][0], Math.max(sat[A][1], 0) + 0.06, sat[A][2], 0.2] },
+      { t: 1.2, v: [sat[A][0], sat[A][1], sat[A][2], 0], stop: true },
+    ],
+    tt,
+    [0, 0, 0, 0],
+  );
+  const fB = track(
+    [
+      { t: 0, v: [f0.x - 0.1, 0, f0.w + 0.1, 0], stop: true },
+      { t: 0.3, v: [xh - 0.08, 0, w0 + 0.1, 0], stop: true },
+      { t: 1.25, v: [xh - 0.08, 0, w0 + 0.06, 0], stop: true },
+      { t: 1.42, v: [(xh + sat[B][0]) / 2, Math.max(sat[B][1], 0) + 0.12, (w0 + sat[B][2]) / 2, 0.3] },
+      { t: 1.6, v: [sat[B][0], sat[B][1], sat[B][2], 0], stop: true },
+    ],
+    tt,
+    [0, 0, 0, 0],
+  );
+  out.hips.set(hips[0], hips[1], s * hips[2]);
+  out.feet[A].set(fA[0], fA[1], s * fA[2]);
+  out.feet[B].set(fB[0], fB[1], s * fB[2]);
+  out.toe[A] = fA[3];
+  out.toe[B] = fB[3];
+  out.yaw = !leaving && from && tt < 0.3 ? lerpA(from.yaw, face, seg(tt, 0, 0.3)) : face;
+  out.duck = win(tt, 0.5, 1.3, 0.3) * 0.3;
+  out.lean = win(tt, 0.55, 1.3, 0.25) * 0.15;
+  out.hands = [{ S: aS, at: "saddle" as Grip, w: win(tt, 0.4, 1.3, 0.2) }].filter((h) => h.w > 0.001);
+  out.door = -1;
+  out.sat = seg(tt, 1.45, 1.9);
+  return out;
 }

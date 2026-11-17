@@ -110,6 +110,8 @@ const CAR_H = 1.5; // a car's height (m): what its door and its knock reach up t
 const OUT_V = 2.5; // m/s: slower than this to get in or out
 const TOW_MS = 2 * 60 * 60 * 1000;
 const TOW_NEAR = 30;
+/** (plan 98 F5a) m/s: out of a car slower than this, a stumble; faster, thrown down and rolling (15 km/h) */
+const JUMP_STUMBLE_V = 4.2;
 const QUIET_MS = 2500; // no state from the driver for this long: rolling on its own
 const SHOVE_MAX = 6.5; // m: as far as a knock may move a parked car
 const SHOVE_REACH = 12; // m: the knocking car this near where it ended up
@@ -336,6 +338,9 @@ registerFeature((room: WorldRoom) => {
     p.busy = seat === 0 ? `drive:${l.veh.id}` : `ride:car:${l.veh.id}`;
     place(p, l, seat);
     if (seat === 0) {
+      // (plan 98: in by the passenger's door of an empty car — everyone sees them across after)
+      const via = Number(m?.via);
+      l.veh.via = Number.isInteger(via) && via > 0 && via < l.seats.length && !l.seats[via] ? via : -1;
       l.last = null; // (a new driver: their first state is believed where the car is)
       l.lastAt = Date.now();
       // (their sim clock starts again from 0: everyone else starts its playback again)
@@ -665,11 +670,30 @@ registerFeature((room: WorldRoom) => {
     if (c) room.send(c, "snap", { x: p.x, y: p.y, z: p.z, level: 0 });
   };
 
-  room.on("car:leave", (client) => {
+  room.on("car:leave", (client, m) => {
     const vid = bySid.get(client.sessionId);
     const l = vid ? live.get(vid) : undefined;
-    if (l && Math.hypot(l.veh.vx, l.veh.vz) > OUT_V) return no(client, "moving");
+    const sp = l ? Math.hypot(l.veh.vx, l.veh.vz) : 0;
+    // (plan 98 F5a) out of it on the move: only asked for — a stumble at a run's pace, thrown down and rolling past it
+    // (hurt by how fast only in a fight); it rolls on without them
+    if (l && sp > OUT_V && !m?.jump) return no(client, "moving");
+    const vx = l?.veh.vx ?? 0;
+    const vz = l?.veh.vz ?? 0;
     leaveSeat(client.sessionId, true);
+    const q = room.state.players.get(client.sessionId);
+    if (!l || !q || sp <= OUT_V) return;
+    const now = Date.now();
+    if (sp < JUMP_STUMBLE_V) {
+      q.hitAt = now;
+      q.hitYaw = Math.atan2(-vz, -vx);
+    } else {
+      q.fellAt = now;
+      q.fellYaw = Math.atan2(vz, vx);
+    }
+    if (now - (room.fightAt.get(client.sessionId) ?? 0) < FIGHT_MS) {
+      const n = Math.round(Math.max(0, Math.min(80, (sp - JUMP_STUMBLE_V) * 4.5)));
+      if (n > 0) room.survival?.hurt(client.sessionId, n);
+    }
   });
 
   /** Left still with no one in it: back to being a thing in the world, where it stopped (in a
