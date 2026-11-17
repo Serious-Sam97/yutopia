@@ -136,6 +136,12 @@ export interface Hearing {
   dist: number;
   /** where it is from the listener, in the camera's frame (x right, y up, −z ahead); null: right here */
   at: { x: number; y: number; z: number } | null;
+  /** (plan 98 phase 16) its pitch as it goes by (the closing speed's: >1 coming, <1 going), 1 by default */
+  doppler?: number;
+  /** (plan 98 phase 16) the cabin's own sounds' level in it (the chase camera's outside: lower), 1 by default */
+  cabinK?: number;
+  /** (plan 98 phase 16) the rain on its roof, 0..1 */
+  rain?: number;
 }
 /** What the car's driver does that's heard (mine; the others' as their wire has it). */
 export interface CarExtras {
@@ -205,6 +211,9 @@ export class CarSound {
   private seed = Math.random() * 10;
   private seedK = Math.random() * 2 - 1;
   private popK = 1;
+  private bumpT = 0;
+  private knockAt = -9;
+  private knockK = 0;
   private crackles = 0;
   private crackleAt = 0;
   private load = 0;
@@ -731,7 +740,19 @@ export class CarSound {
     this.panner.positionZ.setTargetAtTime(at.z, t, 0.05);
     const open = h.inside && Number.isFinite(h.open) ? clamp(h.open ?? 0) : 0;
     this.outside.frequency.setTargetAtTime(h.inside ? 1100 + 5400 * open : 18000, t, 0.1);
-    this.cabin.gain.setTargetAtTime(inCar ? 1 : 0.35, t, 0.1);
+    this.cabin.gain.setTargetAtTime(inCar ? (h.cabinK ?? 1) : 0.35, t, 0.1);
+    // (plan 98 phase 16) the rain drumming on its roof: loud in it, a patter by it
+    this.roofRain(h.rain ?? 0, h.inside ? 1 : clamp(1 - h.dist / 12) * 0.25);
+    // (plan 98 phase 16) a bump: a thump up through its springs as hard as one came up, a creak of the body at a crawl
+    const bump = s.wheels?.reduce((a, w) => Math.max(a, w.contact ? (w.cv ?? 0) : 0), 0) ?? 0;
+    this.bumpT -= dt;
+    if (bump > 0.9 && this.bumpT <= 0) {
+      this.bumpT = 0.14;
+      const k = clamp((bump - 0.9) / 2.5);
+      if (this.synthSlots.has("thump") || !this.shot("thump", (0.12 + 0.3 * k) * (inCar ? 1 : 0.6)))
+        this.burst(0.12 + 0.25 * k, 120, 0.6, 0.12 + 0.1 * k, "thud");
+      if (r.speed < 5 && Math.random() < 0.5) this.burst(0.05, 420 + Math.random() * 300, 9, 0.18, "click");
+    }
     this.inside = h.inside;
     // ── the engine
     const sv = this.voice ? SYNTH[this.voice] : null;
@@ -976,7 +997,14 @@ export class CarSound {
     // a knock: by what was hit and how hard
     if (s.hit && s.hit.at !== this.lastHit) {
       this.lastHit = s.hit.at;
-      this.knock(s.hit.what ?? "wall", clamp(s.hit.j / 9000));
+      // (plan 98 phase 16: how hard by its weight — a tractor's knock and a hatch's alike were j/9000 — and one
+      // knock, not a rattle of them as it grinds along a wall)
+      const k = clamp(s.hit.j / (9000 * Math.max(0.4, s.spec.mass / 1280)));
+      if (t - this.knockAt > 0.15 || k > this.knockK * 1.3) {
+        this.knockAt = t;
+        this.knockK = k;
+        this.knock(s.hit.what ?? "wall", k);
+      }
     }
     // ── the cabin: the indicator's relay, the wipers, the handbrake's ratchet
     if (inCar && !this.bed("indicator", x.indicating ? 0.22 : 0)) {
@@ -1096,7 +1124,8 @@ export class CarSound {
       ? has("cabin")
         ? { cabin: 1 }
         : { ex: 0.45, bay: 0.85 }
-      : { ex: has("ex") ? 1 - farK : 0, bay: h.dist < 20 ? (has("ex") ? 0.25 : 1) : 0, far: farK };
+      : // (plan 98 phase 16: the bay faded out from 14 m to 26, not cut at 20)
+        { ex: has("ex") ? 1 - farK : 0, bay: (has("ex") ? 0.25 : 1) * clamp((26 - h.dist) / 12), far: farK };
     // (a set with only some mics: its first stands in)
     const first = (Object.keys(R.loops) as Mic[])[0];
     if (!Object.entries(mix).some(([m, v]) => (v ?? 0) > 0 && has(m as Mic))) mix[first] = 1;
@@ -1126,7 +1155,7 @@ export class CarSound {
         vs.forEach((v, i) => {
           const x = clamp(Math.log(v.at / R.lo) / span);
           v.g.gain.setTargetAtTime(ws[i] * lw * level(l, x), t, 0.03);
-          v.src.playbackRate.setTargetAtTime(clamp(rpm / v.at, 0.3, 2.2), t, 0.02);
+          v.src.playbackRate.setTargetAtTime(clamp((rpm / v.at) * (h.doppler ?? 1), 0.3, 2.2), t, 0.02);
         });
       }
     }
@@ -1140,6 +1169,42 @@ export class CarSound {
     if (this.startAt >= 0) g *= clamp((t - this.startAt - (this.startLen - 1.0)) / 0.8);
     this.rec.g.gain.setTargetAtTime(g, t, 0.02);
     this.rec.lp.frequency.setTargetAtTime(h.inside ? (has("cabin") ? 7000 : 2400) : 18000, t, 0.1);
+  }
+
+  /** (plan 98 phase 16) The rain on the roof: noise through a high band, its drops patting in and out; `k` the rain,
+   *  `near` how much of it reaches me (in it: all). Made: nothing recorded fits a car's roof. */
+  private rainNode: { g: GainNode; lfo: OscillatorNode } | null = null;
+  private roofRain(k: number, near: number) {
+    const lvl = 0.09 * clamp(k) * near;
+    if (!this.rainNode) {
+      if (lvl < 0.002 || this.dead) return;
+      const c = this.ctx;
+      const src = c.createBufferSource();
+      src.buffer = noise(c);
+      src.loop = true;
+      const hp = c.createBiquadFilter();
+      hp.type = "bandpass";
+      hp.frequency.value = 3600;
+      hp.Q.value = 0.6;
+      const g = c.createGain();
+      g.gain.value = 0;
+      const am = c.createGain();
+      am.gain.value = 0.7;
+      const lfo = c.createOscillator();
+      lfo.frequency.value = 11;
+      const lg = c.createGain();
+      lg.gain.value = 0.3;
+      lfo.connect(lg).connect(am.gain);
+      src.connect(hp).connect(am).connect(g).connect(this.cabin);
+      src.start();
+      lfo.start();
+      this.keep(src);
+      this.keep(lfo);
+      this.rainNode = { g, lfo };
+    }
+    const t = this.ctx.currentTime;
+    this.rainNode.g.gain.setTargetAtTime(lvl, t, 0.5);
+    this.rainNode.lfo.frequency.setTargetAtTime(7 + 9 * Math.random(), t, 0.3);
   }
 
   /** A door: its kind's recording opening and shutting; till it's in, a click and a thud. */
@@ -1158,7 +1223,9 @@ export class CarSound {
   horn(on: boolean) {
     const c = this.ctx;
     if (on && !this.hornNode && !this.dead) {
-      const b = this.bufs.get(hornSlot(this.kind))?.[0];
+      // (plan 98 phase 16: each car its own take of its kind's horn — take 0 for all before)
+      const bs = this.bufs.get(hornSlot(this.kind));
+      const b = bs?.[Math.floor(this.seed * 7) % (bs.length || 1)];
       const g = c.createGain();
       g.gain.value = 0;
       g.gain.setTargetAtTime(b ? 0.5 : 0.11, c.currentTime, 0.01);
@@ -1172,8 +1239,9 @@ export class CarSound {
         src.start();
         this.hornNode = {
           stop: () => {
-            g.gain.setTargetAtTime(0, c.currentTime, 0.03);
-            src.stop(c.currentTime + 0.15);
+            // (plan 98: a horn's release, not a cut)
+            g.gain.setTargetAtTime(0, c.currentTime, 0.06);
+            src.stop(c.currentTime + 0.35);
           },
         };
         return;

@@ -484,3 +484,22 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
   sound object before).
 - Left: their shifts are heard in the revs (the lever's click is the cabin's); their scrapes (not on the wire).
 - Checked: typecheck clean (client, world-server).
+
+## Phase 16 — built (2026-11-17): the space round the sound
+
+- **Doppler:** a car's recorded engine pitched by how fast it closes on me (my own car's speed counted), 0.85–1.18.
+- **Behind something:** Jolt's sight ray from the camera to each car heard, four times a second — behind a wall or the
+  land, muffled (through the same low-pass a car's glass gives), eased in and out.
+- **The bay mic faded** from 14 m to 26 (it cut at 20).
+- **My cabin from the chase camera:** its own sounds (the relay, the belt, the wipers' motor) at 0.55 — the camera's
+  outside; full in the cockpit.
+- **Rain on the roof:** made (nothing recorded fits): noise through a high band, patting at 7–16 Hz, loud inside,
+  a patter beside it, by the rain.
+- **Bumps:** a thump up through the springs as hard as a wheel came up (`sw.cv` past 0.9 m/s, phase 11), a creak of the
+  body at a crawl — kerbs, potholes, the verge; once in 0.14 s.
+- **Crashes by weight**, one knock not a rattle of them grinding along a wall (0.15 s unless harder).
+- **The horn:** each car its own take of its kind's; a release (0.35 s), not a cut.
+- **One window motor:** the switch played a made one under the recorded one.
+- Left: the rumble strips (`rumble` is loaded; nothing in the world marks strips yet); a room's reverb (the steps'
+  reverb isn't shared yet).
+- Checked: typecheck clean.

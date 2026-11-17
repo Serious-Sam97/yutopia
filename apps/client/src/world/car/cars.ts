@@ -523,6 +523,10 @@ interface LiveView {
   doorUntil: number[];
   /** (plan 93 C) a door held by someone getting in or out: its opening (−1: nobody's — the timer's) */
   doorBy: number[];
+  /** (plan 98 phase 16) behind something from me (0..1, eased), what the sight ray last said, when */
+  occl?: number;
+  occlWant?: number;
+  occlAt?: number;
   /** (plan 98 phase 15) its velocity last heard (a crash's change) */
   hv?: Vector3;
   /** (plan 98 phase 7) its engine's flag as last heard (undefined: not heard yet) */
@@ -4166,7 +4170,7 @@ export class Cars {
     // (plan 98 phase 15: a crash heard — a sudden change of its velocity, as its driver's car felt it)
     const dv = l.hv ? Math.hypot(l.pose.v.x - l.hv.x, l.pose.v.y - l.hv.y, l.pose.v.z - l.hv.z) : 0;
     (l.hv ??= new Vector3()).copy(l.pose.v);
-    const hit = dt > 0 && dv > 2.2 && dv / dt > 40 ? { what: "car", j: l.spec.mass * dv, v: dv } : null;
+    const hit = dt > 0 && dv > 2.2 && dv / dt > 40 ? { what: "car", j: l.spec.mass * dv, v: dv, at: this.time } : null;
     const fake = {
       rpm: s.rpm,
       // (plan 98 phase 15: its throttle as sent — on load, off it, a lift's pops; guessed from the revs before)
@@ -4201,9 +4205,40 @@ export class Cars {
     const through = this.mine && this.cam.mode === "cockpit" && this.mine.vid !== l.id ? this.cabinSeal() : 0;
     // (plan 98 phase 15: its indicator's relay heard, in step with its lamps)
     const blinkOn = !!(s.fl & (CAR_FLAGS.left | CAR_FLAGS.right | CAR_FLAGS.hazard)) && this.time % 0.9 < 0.45;
+    // (plan 98 phase 16) going by: its pitch by how fast it closes on me (I may be driving too); behind a wall or the
+    // land, muffled (the sight ray, a few times a second)
+    const tpv = this.host.tp();
+    let doppler = 1;
+    let occl = l.occl ?? 0;
+    if (tpv) {
+      const cp = tpv.camera.position;
+      const w = this.root.localToWorld(hE.copy(l.pose.p));
+      const dx = w.x - cp.x;
+      const dy = w.y - cp.y;
+      const dz = w.z - cp.z;
+      const dd = Math.hypot(dx, dy, dz) || 1;
+      const mv = this.mine?.sim?.v;
+      const rel = (l.pose.v.x - (mv?.x ?? 0)) * dx + (l.pose.v.z - (mv?.z ?? 0)) * dz;
+      const closing = -rel / dd;
+      doppler = Math.max(0.85, Math.min(1.18, 343 / (343 - closing)));
+      if (this.time - (l.occlAt ?? -9) > 0.25) {
+        l.occlAt = this.time;
+        const hitD = dd > 3 ? this.physics()?.ray(cp.x, cp.y, cp.z, dx / dd, dy / dd, dz / dd, dd - 1.5) : null;
+        l.occlWant = hitD !== null && hitD !== undefined ? 0.7 : 0;
+      }
+      occl += ((l.occlWant ?? 0) - occl) * Math.min(1, dt * 4);
+      l.occl = occl;
+    }
     l.sound.update(
       fake,
-      { inside: false, dist: heard?.dist ?? d, at: heard?.at ?? null, through },
+      {
+        inside: false,
+        dist: heard?.dist ?? d,
+        at: heard?.at ?? null,
+        through: Math.max(through, occl),
+        doppler,
+        rain: wxNow.rain,
+      },
       dt,
       blinkOn,
       false,
@@ -4512,7 +4547,15 @@ export class Cars {
       const win = l.win & (1 << m.seat) ? 1 : l.win ? 0.35 : 0;
       m.sound?.update(
         s,
-        { inside, dist: heard?.dist ?? 0, at: heard?.at ?? null, open: win },
+        {
+          inside,
+          dist: heard?.dist ?? 0,
+          at: heard?.at ?? null,
+          open: win,
+          // (plan 98 phase 16: from the chase camera, outside it, its cabin's own sounds lower; the rain on its roof)
+          cabinK: this.cam.mode === "cockpit" ? 1 : 0.55,
+          rain: wxNow.rain,
+        },
         dt,
         this.ind !== 0 && this.time % 0.9 < 0.45,
         true,
@@ -4707,7 +4750,7 @@ export class Cars {
       const v = this.host.room()?.state.vehicles.get(this.mine.vid) as VehWire | undefined;
       const down = !!((v?.win ?? 0) & (1 << this.mine.seat));
       this.host.room()?.send("car:window", { down: !down });
-      (this.mine.sound ?? this.live.get(this.mine.vid)?.sound)?.window(!down);
+      // (plan 98 phase 16: the window's motor is windowMotor's alone — this made a second, synth one under it)
     }
   }
 
