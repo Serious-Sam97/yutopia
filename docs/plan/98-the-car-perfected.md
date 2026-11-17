@@ -470,3 +470,17 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
     (overmedium, 8.5 s, idle and blips);
   - then cut into loops at the missing rpm (each measured from its pitch), and picked by ear on `/dev/car-sound`.
 - Checked: typecheck clean.
+
+## Phase 15 — built (2026-11-17): others' cars heard as mine
+
+- **The throttle on the wire** (`CarWire.thr`, `Vehicle.thr` uint8 ×100): others hear a car on load and off it, and
+  its pops on a lift (phase 14's) — it was guessed from the revs.
+- **Their starter and stop** (phase 7, on the engine flag's rise and fall).
+- **Their crashes:** a sudden change of its velocity as played back (over 2.2 m/s at more than 4 g) heard as a hit by its
+  weight (`hit: null` before: silent).
+- **Their indicators** (the relay with their lamps), **their handbrake**, **each wheel's own ground** (four samples, not
+  one under its middle).
+- **The toboggan heard:** no engine, but a sound of its own for its runners on the snow and its knocks (no voice, no
+  sound object before).
+- Left: their shifts are heard in the revs (the lever's click is the cabin's); their scrapes (not on the wire).
+- Checked: typecheck clean (client, world-server).

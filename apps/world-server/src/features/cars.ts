@@ -385,6 +385,7 @@ registerFeature((room: WorldRoom) => {
       fl: (Number(m.fl) >>> 0) & 0x1ffff,
       slip: m.slip,
       grip: Math.max(0, Math.min(255, Number(m.grip) | 0)),
+      thr: Math.max(0, Math.min(100, Number(m.thr) | 0)),
       wc: Number(m.wc) >>> 0 || 0,
       seq,
       at: now,

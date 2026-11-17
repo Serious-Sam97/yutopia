@@ -412,6 +412,8 @@ interface Sample {
   grip: number;
   /** (plan 98 phase 13) its yaw rate */
   wy?: number;
+  /** (plan 98 phase 15) its throttle 0..1 */
+  thr?: number;
 }
 /** (plan 93 D) A hand on the wheel: the rim's point it holds (a mark on the steering wheel, turning with
  *  it), or on its way to a new one (hand over hand: let go, reached back up the rim, gripped again). */
@@ -521,6 +523,8 @@ interface LiveView {
   doorUntil: number[];
   /** (plan 93 C) a door held by someone getting in or out: its opening (−1: nobody's — the timer's) */
   doorBy: number[];
+  /** (plan 98 phase 15) its velocity last heard (a crash's change) */
+  hv?: Vector3;
   /** (plan 98 phase 7) its engine's flag as last heard (undefined: not heard yet) */
   engOn?: boolean;
   /** (plan 98 phase 6) each door's swing (rad/s); its velocity last frame (what swings them) */
@@ -675,7 +679,8 @@ const MID = 70;
 /** A car heard: its kind's doors and horn, its variant's engine (car/sound-bank.ts voiceOf); none for what
  *  has no engine (the toboggan). */
 function soundOf(ctx: AudioContext, kind: CarKind, variant?: string): CarSound | null {
-  return voiceOf(kind, variant) ? new CarSound(ctx, mixer.buses.effects, { kind, variant }) : null;
+  // (plan 98 phase 15: the toboggan has no engine but its runners on the snow, its knocks)
+  return voiceOf(kind, variant) || kind === "toboggan" ? new CarSound(ctx, mixer.buses.effects, { kind, variant }) : null;
 }
 /** The kinds the far model (a wagon's or a sedan's outline) can't stand in for: always drawn whole. */
 const SLIDE_S = 0.45; // s: (plan 93 F3a) across from the passenger's seat to the wheel, after
@@ -2533,6 +2538,7 @@ export class Cars {
             grip: (v.grip ?? 0) / 100,
             wc: v.wc,
             wy: v.wy ?? 0,
+            thr: v.thr === undefined ? undefined : v.thr / 100,
           },
           now,
           l.jump,
@@ -4128,7 +4134,8 @@ export class Cars {
   private hearRemote(l: LiveView, s: Sample, sp: number, dt: number) {
     const me = this.host.me();
     const d = Math.hypot(l.pose.p.x - me.x, l.pose.p.z - me.y);
-    const flag = !!(s.fl & CAR_FLAGS.engine);
+    // (no engine — the toboggan —: heard while it's ridden)
+    const flag = !!(s.fl & CAR_FLAGS.engine) || !voiceOf(l.kind, l.look.variant);
     const was = l.engOn;
     l.engOn = flag;
     const on = d < HEARD && flag && mixer.ctx?.state === "running";
@@ -4144,20 +4151,38 @@ export class Cars {
       l.sound = null;
     }
     if (!l.sound) return;
-    const g = this.groundUnder(l.pose.p.x, l.pose.p.z);
+    // (plan 98 phase 15: each wheel's own ground — one under its middle for all four before)
+    const a = headingFromQ(l.pose.q);
+    const ca = Math.cos(a);
+    const sa = Math.sin(a);
+    const hw = l.spec.track / 2;
+    const hl = l.spec.wheelbase / 2;
+    const gs = [
+      [hl, -hw],
+      [hl, hw],
+      [-hl, -hw],
+      [-hl, hw],
+    ].map(([u, w]) => this.groundUnder(l.pose.p.x + u * ca - w * sa, l.pose.p.z + u * sa + w * ca));
+    // (plan 98 phase 15: a crash heard — a sudden change of its velocity, as its driver's car felt it)
+    const dv = l.hv ? Math.hypot(l.pose.v.x - l.hv.x, l.pose.v.y - l.hv.y, l.pose.v.z - l.hv.z) : 0;
+    (l.hv ??= new Vector3()).copy(l.pose.v);
+    const hit = dt > 0 && dv > 2.2 && dv / dt > 40 ? { what: "car", j: l.spec.mass * dv, v: dv } : null;
     const fake = {
       rpm: s.rpm,
-      thr: Math.min(1, Math.max(0, (s.rpm - 1200) / 4000)),
+      // (plan 98 phase 15: its throttle as sent — on load, off it, a lift's pops; guessed from the revs before)
+      thr: s.thr ?? Math.min(1, Math.max(0, (s.rpm - 1200) / 4000)),
       clutch: 1,
       spec: l.spec,
+      hb: s.fl & CAR_FLAGS.hand ? 1 : 0,
       // (plan 93: the grip its tyres use, as its driver's car has it — the scrub and squeal heard rising)
-      wheels: [0, 1, 2, 3].map(() => ({
+      wheels: [0, 1, 2, 3].map((i) => ({
         contact: true,
-        ground: g,
+        ground: gs[i],
         used: s.grip || (s.slip > 1 ? 1.3 : 0.4),
         slip: s.slip,
+        cv: 0,
       })),
-      hit: null,
+      hit,
       v: { x: l.pose.v.x, y: l.pose.v.y, z: l.pose.v.z },
       q: { x: l.pose.q.x, y: l.pose.q.y, z: l.pose.q.z, w: l.pose.q.w },
       shiftT: 0,
@@ -4174,11 +4199,13 @@ export class Cars {
     };
     // (plan 93 S5: from inside my car in its cockpit, another car through my glass)
     const through = this.mine && this.cam.mode === "cockpit" && this.mine.vid !== l.id ? this.cabinSeal() : 0;
+    // (plan 98 phase 15: its indicator's relay heard, in step with its lamps)
+    const blinkOn = !!(s.fl & (CAR_FLAGS.left | CAR_FLAGS.right | CAR_FLAGS.hazard)) && this.time % 0.9 < 0.45;
     l.sound.update(
       fake,
       { inside: false, dist: heard?.dist ?? d, at: heard?.at ?? null, through },
       dt,
-      false,
+      blinkOn,
       false,
       extras,
     );
@@ -6080,6 +6107,7 @@ interface VehWire {
   /** (plan 98) its driver came in by this seat's door (−1: their own) */
   via?: number;
   wy?: number;
+  thr?: number;
 }
 
 function headingFromQ(q: { x: number; y: number; z: number; w: number }): number {

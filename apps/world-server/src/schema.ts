@@ -467,6 +467,7 @@ export class Vehicle extends Schema {
   @type("uint32") fl = 0;
   @type("float32") slip = 0;
   @type("uint8") grip = 0; // (plan 93) the most grip a tyre uses, ×100
+  @type("uint8") thr = 0; // (plan 98) the throttle, ×100
   @type("string") holes = ""; // (plan 93 S1) where it's been shot: shared car/shot.ts addHole
   @type("uint8") win = 0; // (plan 93 S5) the seats' windows down: bit i, seat i's (its own switch)
   @type("uint8") chains = 0; // (plan 93 S6) its chained wheels: FL FR RL RR, bits 1 2 4 8

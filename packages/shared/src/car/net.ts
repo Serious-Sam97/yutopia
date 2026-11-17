@@ -26,6 +26,8 @@ export interface CarWire {
   slip: number; // the most any tyre is sliding (m/s): tracks, sound
   /** (plan 93 B) the most of its grip any touching tyre uses, ×100 (100: at its peak; to 255) — the squeal heard */
   grip?: number;
+  /** (plan 98 phase 15) the throttle ×100: others hear it on load, off it, popping on a lift */
+  thr?: number;
   fuel: number;
   /** the driver's sim clock (ms of simulated time since they took the wheel): others play the car
    *  back on it, not on when its states happen to arrive (a slow driver's car in slow motion,
@@ -85,6 +87,7 @@ export function toWire(s: CarState, seq: number, fl: number, st = 0): CarWire {
     fl,
     slip: r3(slip),
     grip: Math.min(255, Math.round(grip * 100)),
+    thr: Math.max(0, Math.min(100, Math.round(s.thr * 100))),
     fuel: r3(s.fuel),
     st: Math.max(0, Math.round(st)) >>> 0,
     wc: packWheels(s),
