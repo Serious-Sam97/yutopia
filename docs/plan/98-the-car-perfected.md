@@ -503,3 +503,17 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
 - Left: the rumble strips (`rumble` is loaded; nothing in the world marks strips yet); a room's reverb (the steps'
   reverb isn't shared yet).
 - Checked: typecheck clean.
+
+## Phase 17 — built in part (2026-11-17): the lamps
+
+- **Indicators with a bulb's filament:** up over 50 ms, dying away over 100 ms after the relay lets go (`Lights.indK`;
+  mine and others'), not on/off.
+- **Another car's headlamps on the ground:** a warm pool ahead of it (`lampPatch`, 6.2 × 3.2 m, low 0.2, high 0.3) —
+  only my car throws real lights (two spots in the scene); mine paints none.
+- **The reversing lamps' white** on the ground behind, as the tail lamps' red is.
+- The brake lamps already lit the ground behind (the tail patch, brighter braking) and the third brake lamp
+  (`emit_brake`); the dome light is phase 7's.
+- Not done: the low beam's cut-off pattern (three's spot cookie needs its shadow map — a shadow light with no map
+  broke every lit draw before, see memory) and a flare on oncoming lamps; the relay's recorded loop isn't in step
+  with the lamps (it loops at its own rate).
+- Checked: typecheck clean. Stills with phase 27.

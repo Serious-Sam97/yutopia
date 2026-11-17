@@ -4118,8 +4118,12 @@ export class Cars {
     m.steering.rotation.z = -steer * spec.steer.ratio;
     // its lamps from its switches
     const fl = s1.fl;
-    const blink = this.time % 0.9 < 0.45;
+    // (plan 98 phase 17: the bulb's filament — up over 50 ms, dying away over 100)
+    const bp = this.time % 0.9;
+    const blink = bp < 0.55;
+    const indK = bp < 0.45 ? Math.min(1, bp / 0.05) : Math.max(0, 1 - (bp - 0.45) / 0.1);
     m.setLights({
+      indK,
       beams: fl & CAR_FLAGS.high ? "high" : fl & CAR_FLAGS.low ? "low" : "off",
       tail: !!(fl & (CAR_FLAGS.low | CAR_FLAGS.high)),
       brake: fl & CAR_FLAGS.brake ? 1 : 0,

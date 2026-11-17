@@ -41,6 +41,10 @@ export interface Lights {
   hazard?: boolean;
   dash: number; // the cluster and switches' brightness (0 off, 1 full; dimmer by day)
   dome: boolean;
+  /** (plan 98 phase 17) the indicator's bulb as it comes up and dies away (0..1; 1 when not said) */
+  indK?: number;
+  /** (plan 98 phase 17) its headlamps' pool on the ground drawn (not for my car: its lamps are real lights) */
+  pool?: boolean;
 }
 export interface Wheel {
   steer: Group; // turns about y

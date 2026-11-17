@@ -50,7 +50,7 @@ import { AssetQueue, loadLifeGLTF } from "../../look/life-assets";
 import { libMaterial } from "../../look/life-matlib";
 import { LIBRARY, type MatId } from "../../look/life-matlib-list";
 import { mergeWith } from "../merge-static";
-import { tailPatch } from "../tail-glow";
+import { lampPatch, tailPatch } from "../tail-glow";
 import { layerShader } from "../wx3d";
 import { type Door, type Lights, type Opening, parkedDash, type Sedan, skyLit, type Wheel, type Wiper } from "./model";
 import { plateTexture } from "./screen-tex";
@@ -741,6 +741,9 @@ class GlbCar implements Sedan {
   private rimR = 0.19;
   private rollers: { g: Group; k: number }[] = [];
   private tail: ReturnType<typeof tailPatch>;
+  /** (plan 98 phase 17) the headlamps' pool ahead, the reversing lamps' behind */
+  private headPool: ReturnType<typeof tailPatch>;
+  private backPool: ReturnType<typeof tailPatch>;
   private beacon: { on: boolean; t: number } = { on: false, t: 0 };
 
   constructor(private readonly o: BuildCar) {
@@ -885,6 +888,9 @@ class GlbCar implements Sedan {
     // the tail lamps' red on the snow behind
     this.tail = tailPatch(e.dims.length - e.dims.ahead);
     this.root.add(this.tail);
+    this.headPool = lampPatch(-(e.dims.ahead + 3.4), 3.2, 6.2, 0xffe6bf);
+    this.backPool = lampPatch(e.dims.length - e.dims.ahead + 1.1, 2.4, 2.2, 0xf4f6ff);
+    this.root.add(this.headPool, this.backPool);
     // its files
     const lvl = o.level ?? "near";
     const file = lvl === "mid" && e.tris.mid ? e.file.replace(/\.glb$/, "-mid.glb") : e.file;
@@ -1984,13 +1990,20 @@ class GlbCar implements Sedan {
     set("emit_tail_r", P & PART.tailR ? 0 : tl);
     set("emit_brake", l.brake * 3.2);
     set("emit_reverse", l.reverse ? 2.2 : 0);
-    set("emit_ind_l", l.ind === 1 || l.hazard ? 2.6 : 0);
-    set("emit_ind_r", l.ind === -1 || l.hazard ? 2.6 : 0);
+    const ik = 2.6 * (l.indK ?? 1);
+    set("emit_ind_l", l.ind === 1 || l.hazard ? ik : 0);
+    set("emit_ind_r", l.ind === -1 || l.hazard ? ik : 0);
     const d = Math.max(0, Math.min(1, l.dash));
     if (this.screenMat) this.screenMat.color.setScalar(0.3 + 0.7 * d);
     if (this.radioMat) this.radioMat.color.setScalar(0.3 + 0.7 * d);
     this.tail.material.opacity = (l.tail ? 0.35 : 0) + 0.45 * l.brake;
     this.tail.visible = this.tail.material.opacity > 0.01;
+    // (plan 98 phase 17) another car's lamps on the ground ahead; the reversing lamps' white behind
+    const hp = (l.pool ?? true) && l.beams !== "off" ? (l.beams === "high" ? 0.3 : 0.2) * this.lampK : 0;
+    this.headPool.material.opacity = hp;
+    this.headPool.visible = hp > 0.01;
+    this.backPool.material.opacity = l.reverse ? 0.28 : 0;
+    this.backPool.visible = l.reverse;
     // (the tracks' rollers turned with the wheels: asked every frame, as the lamps are)
     if (this.rollers.length) {
       const a = this.wheels[2]?.spin.rotation.z ?? 0;
@@ -2161,7 +2174,7 @@ class GlbCar implements Sedan {
     const into = new Map<Mesh, Matrix4>();
     const walk = (o: Object3D) => {
       for (const c of o.children) {
-        if (!c.visible || c === this.tail) continue;
+        if (!c.visible || c === this.tail || c === this.headPool || c === this.backPool) continue;
         const m = c as Mesh;
         if (m.isMesh && !m.children.length) into.set(m, new Matrix4().multiplyMatrices(inv, m.matrixWorld));
         else walk(c);
@@ -2676,6 +2689,10 @@ class GlbCar implements Sedan {
     this.radio?.t.dispose();
     this.tail.geometry.dispose();
     this.tail.material.dispose();
+    for (const pl of [this.headPool, this.backPool]) {
+      pl.geometry.dispose();
+      pl.material.dispose();
+    }
     this.root.removeFromParent();
   }
 }

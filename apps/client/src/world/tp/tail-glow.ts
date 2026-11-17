@@ -31,3 +31,15 @@ export function tailPatch(rear: number): Mesh<PlaneGeometry, MeshBasicMaterial> 
   patch.visible = false;
   return patch;
 }
+
+/** (plan 98 phase 17) A lamp's light on the ground: a soft patch `w` × `l` (m) centred `x` along the vehicle (its nose
+ *  −x), of `color`, added light; shown at its material's opacity. The headlamps' pool ahead of another car (only mine
+ *  throws a real light), its reversing lamps' white behind. */
+export function lampPatch(x: number, w: number, l: number, color: number): Mesh<PlaneGeometry, MeshBasicMaterial> {
+  const p = tailPatch(0);
+  p.material.color.setHex(color);
+  p.geometry.dispose();
+  p.geometry = new PlaneGeometry(l, w).rotateX(-Math.PI / 2);
+  p.position.set(x, 0.045, 0);
+  return p;
+}

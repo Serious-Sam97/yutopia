@@ -112,6 +112,10 @@ export class CarRig {
     // the lamps
     this.blink = (this.blink + dt) % 0.9;
     const on = this.blink < 0.45;
+    // (plan 98 phase 17: a bulb's filament — up over 50 ms, dying away over 100 after the relay lets go)
+    const bp = this.blink;
+    const lit = bp < 0.55;
+    const indK = bp < 0.45 ? Math.min(1, bp / 0.05) : Math.max(0, 1 - (bp - 0.45) / 0.1);
     const r = readout(s);
     const st = this.state;
     const lights: Lights = {
@@ -119,8 +123,11 @@ export class CarRig {
       tail: st.beams !== "off",
       brake: s.brk > 0.05 || s.hb > 0.5 ? Math.max(s.brk, 0.6) : 0,
       reverse: s.gear === -1,
-      ind: on ? st.ind : 0,
-      hazard: st.hazard && on,
+      ind: lit ? st.ind : 0,
+      hazard: st.hazard && lit,
+      indK,
+      // (my lamps are real lights: no painted pool)
+      pool: false,
       dash: s.rpm > 50 || ((st.key ?? -1) >= 0 && (st.key ?? -1) < 3) ? st.dash : 0,
       dome: st.dome,
     };
