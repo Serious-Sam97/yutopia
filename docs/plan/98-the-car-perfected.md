@@ -446,3 +446,27 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
 - **Their driven wheels spun by their slip** (a burnout spins them past the road) and held still braking with a lock.
 - Left: the brake lamp's on/off on the wire (a graded one would need a byte).
 - Checked: playback tests 7/7; typecheck clean.
+
+## Phase 14 — built in part (2026-11-17): the engines' voices
+
+- **An idle that lives** (`car/sound.ts`): a slow waver (2.3 and 0.71 rad/s), each car a little off the book (±2%),
+  the V8's lope (a dip 1.3 times a second) — gone as it revs past 600 over idle.
+- **Pops by engine and revs, with a crackle trail:** the V8's from 3000 rpm, the four's from 3800, the two-stroke's from
+  4500, a diesel's none; as loud as it was revving; then 2–4 smaller crackles 60–180 ms apart as it falls.
+- **The recorded limiter wired:** picked over the made stutter (`limiter` out of chosen.json's `synth`), its take plays
+  at the limit over the loops (it was loaded nowhere, so taking it out of `synth` did nothing); the `rumble` take
+  loaded too (the strips: phase 16).
+- **Waiting on the user — the missing rpm points (F8a).** New recordings mean downloading files, which needs the
+  user's OK per file (its name, source and size). CC0 candidates found by search (licences to confirm on each page,
+  nothing downloaded):
+  - the heavy diesel's idle (the snowcat, the plough truck, the tractor: today 1909/2511 rpm only, idle played at
+    0.34×): [Truck Engine Idle Loops](https://freesound.org/people/qubodup/sounds/187564/) (qubodup),
+    [Diesel idle 1](https://freesound.org/people/C-V/sounds/565598/) (C-V),
+    [Diesel Truck Idling Front](https://freesound.org/people/ibirdfilm/sounds/128160/) (ibirdfilm),
+    [bus coach diesel idle](https://freesound.org/people/kyles/sounds/453415/) (kyles);
+  - the light diesel's on-load (the van, the 4x4): [Motor Loop 3](https://freesound.org/s/325809/) (soundjoao, a
+    diesel van);
+  - the V8's low points (two loops today, 1373/2145): [v8 engine rev](https://freesound.org/people/overmedium/sounds/651534/)
+    (overmedium, 8.5 s, idle and blips);
+  - then cut into loops at the missing rpm (each measured from its pitch), and picked by ear on `/dev/car-sound`.
+- Checked: typecheck clean.

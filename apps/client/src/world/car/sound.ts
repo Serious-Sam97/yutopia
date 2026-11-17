@@ -97,6 +97,9 @@ const BEDS = [
   "scrub",
   "squeal-loop",
   "snow-squeak",
+  // (plan 98: the limiter's take, picked over the made stutter; the rumble strips)
+  "limiter",
+  "rumble",
 ];
 /** The slots played once (a take each time, gone round). */
 const SHOTS = [
@@ -197,6 +200,13 @@ export class CarSound {
   private bufs = new Map<string, AudioBuffer[]>();
   private turn = new Map<string, number>();
   private synthSlots = new Set<string>(["tick-cool", "gear-whine", "limiter", "ice-hiss", "thump"]);
+  /** (plan 98 phase 14) this car's own idle (its waver's phase, how far off the book), its pops' loudness, the crackles
+   *  left after them */
+  private seed = Math.random() * 10;
+  private seedK = Math.random() * 2 - 1;
+  private popK = 1;
+  private crackles = 0;
+  private crackleAt = 0;
   private load = 0;
   private startAt = -1; // when the starter clip began
   private startLen = 0; // …and when the loops come in under its end
@@ -759,16 +769,30 @@ export class CarSound {
       this.eng.ibp.frequency.setTargetAtTime(400 + s.rpm * 0.22, t, tc);
       this.eng.intake.gain.setTargetAtTime(syn * 0.07 * intakeK, t, tc);
     }
-    // pops: a lift at high revs (a take of the backfires; else the synth's bursts)
+    // pops: a lift at high revs (a take of the backfires; else the synth's bursts) — (plan 98 phase 14) each engine its
+    // own: the V8's from lower down, the two-stroke's higher, a diesel none; as loud as it was revving; then a trail of
+    // smaller crackles as it falls
     this.popT -= dt;
-    if (run && this.lastThr > 0.6 && s.thr < 0.15 && s.rpm > 3800) {
+    const popFrom = v8 ? 3000 : two ? 4500 : diesel ? Infinity : 3800;
+    if (run && this.lastThr > 0.6 && s.thr < 0.15 && s.rpm > popFrom) {
       this.popT = 0.6;
       this.popped = false;
+      this.popK = clamp((s.rpm - popFrom) / (s.spec.engine.limit - popFrom + 1) + 0.4);
+      this.crackles = 2 + Math.floor(Math.random() * 3);
+      this.crackleAt = 0.12 + Math.random() * 0.1;
     }
     if (this.popT > 0 && !this.popped && this.has("pops")) {
-      this.popped = this.shot("pops", 0.3);
+      this.popped = this.shot("pops", 0.3 * this.popK);
     } else if (this.popT > 0 && !this.has("pops") && Math.random() < dt * 9)
-      this.burst(0.07 + Math.random() * 0.08, 300 + Math.random() * 300, 0.6, 0.05, "pop");
+      this.burst(0.07 + Math.random() * 0.08, 300 + Math.random() * 300, 0.6 * this.popK, 0.05, "pop");
+    if (this.popT > 0 && this.crackles > 0) {
+      this.crackleAt -= dt;
+      if (this.crackleAt <= 0) {
+        this.crackles--;
+        this.crackleAt = 0.06 + Math.random() * 0.12;
+        this.burst(0.03 + Math.random() * 0.04, 500 + Math.random() * 700, 0.35 * this.popK, 0.03, "pop");
+      }
+    }
     this.lastThr = s.thr;
     // a gear change: the lever and the clutch (heard inside)
     if (r.gear !== this.lastGear) {
@@ -1081,7 +1105,14 @@ export class CarSound {
       if (k > 0 && !this.voices[m]) this.voices[m] = this.makeVoices(m, R);
       this.rec.mic[m]?.gain.setTargetAtTime(k, t, 0.1);
     }
-    const rpm = Math.max(300, s.rpm);
+    // (plan 98 phase 14: an idle that lives — a slow waver, each car its own a little off the book, the V8's lope —,
+    // gone as it revs)
+    const idle = s.spec.engine.idle;
+    const near = clamp(1 - (s.rpm - idle) / 600);
+    const tt = this.ctx.currentTime;
+    const lope = SYNTH[this.voice ?? "four"] === "v8" ? 0.035 * Math.sin(tt * 2 * Math.PI * 1.3 + this.seed) ** 8 : 0;
+    const wob = (0.012 * Math.sin(tt * 2.3 + this.seed) + 0.008 * Math.sin(tt * 0.71 + this.seed * 3) + 0.02 * this.seedK - lope) * near;
+    const rpm = Math.max(300, s.rpm * (1 + wob));
     const span = Math.log(R.hi / R.lo) || 1;
     for (const l of LOADS) {
       const lw = Math.sqrt(l === "on" ? this.load : 1 - this.load);
@@ -1100,8 +1131,12 @@ export class CarSound {
       }
     }
     let g = run ? 1.1 : 0;
-    // the limiter's stutter; the loops come in under the starter clip's end
-    if (run && s.rpm > s.spec.engine.limit - 80) g *= 0.35 + 0.65 * (Math.sin(t * 95) > 0 ? 1 : 0);
+    // the limiter's stutter; the loops come in under the starter clip's end — (plan 98 phase 14) its recording when it's
+    // picked over the made one (`synth` in chosen.json without "limiter"): the take's own stutter over the loops
+    const atLimit = run && s.rpm > s.spec.engine.limit - 80;
+    const limTake = !this.synthSlots.has("limiter") && this.bed("limiter", atLimit ? 0.3 : 0, 1);
+    if (atLimit && !limTake) g *= 0.35 + 0.65 * (Math.sin(t * 95) > 0 ? 1 : 0);
+    else if (atLimit) g *= 0.7;
     if (this.startAt >= 0) g *= clamp((t - this.startAt - (this.startLen - 1.0)) / 0.8);
     this.rec.g.gain.setTargetAtTime(g, t, 0.02);
     this.rec.lp.frequency.setTargetAtTime(h.inside ? (has("cabin") ? 7000 : 2400) : 18000, t, 0.1);
