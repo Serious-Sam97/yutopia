@@ -342,3 +342,24 @@ Two kinds of work, in the order the user named them:
 - Checked: stills of the plough truck's climb and the snowmobile's straddle; world-server car tests 24/24 (new:
   `(plan 98) in by the passenger's door …; out on the move …`); typecheck clean.
 - Left: a slung long gun isn't on the act's body (it shows with the walker after).
+
+## Phase 5 — built with phases 0–3 (2026-11-17): the camera through the act
+
+(See phases 0–3.) The on-foot camera's offset off my head is taken as I press X, kept on me through the act, and
+eased into the car's over the act's last second; the HUD comes up once I'm sat; out, the on-foot camera is turned
+to look at the car from the door's side. Out on the move, the X key (the car's `exit` switch) throws me out.
+
+## Phase 6 — built (2026-11-17): the door itself
+
+- **On its hinge** (`car/door.ts swingDoor`, F4a): a door let go open swings by the car's acceleration in its own
+  frame (a hard brake flings a front-hinged door to its stop, pulling away slams it), the air at speed (pressed
+  shut), the check strap's detent half open, its hinges' damping and friction (at rest it stays where it was left),
+  its stop (a bounce), its latch (shut with a clunk as hard as it came in; slower, left ajar). Held by a hand, it's
+  where the hand has it; opened by the old timer (someone seen getting in with no act), shut by it.
+- **Out on the move:** the door flung open behind them, swinging from there.
+- **Heard with the engine off, each from its own door** (`bodyShot`: a recorded take placed where it is, its level by
+  distance; the takes asked for ahead): opening, shutting, latching. **The boot and the bonnet heard** (their slots,
+  26 takes never played till now): the catch going up, the slam coming down.
+- Checked: `door.test.ts` (still at rest, flung open braking, slammed latched pulling away, pressed shut by the air);
+  `e2e/car-jump.mts` (out at 27 km/h: down on the ragdoll, her door flung to its stop and staying there as the car
+  rolls to a stop); typecheck clean.

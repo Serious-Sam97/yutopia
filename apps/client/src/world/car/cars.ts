@@ -150,10 +150,11 @@ import {
   seatGrip,
   straddleAt,
 } from "./getin";
+import { swingDoor } from "./door";
 import { CarHud } from "./hud";
 import { CarPlayback } from "./playback";
 import { type CarExtras, CarSound, distanceGain, HEARD, preloadEngine } from "./sound";
-import { slotBuffers, voiceOf } from "./sound-bank";
+import { doorSlots, slotBuffers, voiceOf } from "./sound-bank";
 import { type SpotPrompt, Spots, spotNo } from "./spot";
 
 // MOTORS' panel, with the cars (the world page's panels are full): docs/plan/43-the-spot.md
@@ -515,6 +516,12 @@ interface LiveView {
   doorUntil: number[];
   /** (plan 93 C) a door held by someone getting in or out: its opening (−1: nobody's — the timer's) */
   doorBy: number[];
+  /** (plan 98 phase 6) each door's swing (rad/s); its velocity last frame (what swings them) */
+  doorW?: number[];
+  /** (plan 98) a door the timer opened: shut by it too */
+  doorT?: boolean[];
+  accV?: Vector3;
+  accB?: Vector3;
   /** (plan 93 C) parked, kept a moment: someone's still climbing out of it */
   linger?: boolean;
   /** (plan 93 S1) its holes as last drawn */
@@ -1462,9 +1469,10 @@ export class Cars {
       this.host.openPack();
       return true;
     }
-    if (kind !== "car" && kind !== "car:leave") return false;
+    if (kind !== "car" && kind !== "car:leave" && kind !== "car:moving") return false;
     if (!room) return true;
-    if (kind === "car:leave") {
+    // (plan 98 F5a: X on the move — out anyway, thrown)
+    if (kind === "car:leave" || kind === "car:moving") {
       // (plan 98 F2a: still getting in — X again: sat at once)
       const at = this.myActT();
       if (at !== null && at < ENTER_S && this.mine) {
@@ -1558,6 +1566,11 @@ export class Cars {
       tp.culling.matrices(this.root);
     }
     this.nowMs = now;
+    // (plan 98: the body's takes asked for once there's sound — a parked car's boot heard the first time)
+    if (!this.bodyWarm && mixer.ctx) {
+      this.bodyWarm = true;
+      for (const sl of ["boot", "bonnet", "door-open", "door-shut"]) this.warmBody(sl);
+    }
     this.lidsFrame(dt);
     // (plan 95 F1a) the windows on their way down or up
     for (const l of this.live.values()) l.model.windowsTick?.(dt);
@@ -1731,18 +1744,46 @@ export class Cars {
       }
       // the doors: each open while someone gets in or out by it (the 4x4's back seats by its front ones,
       // the van's by its slide)
+      // (plan 98 phase 6) the car's acceleration in its own frame: what swings a door left open
+      const acc = this.bodyAcc(l, dt);
       for (let d = 0; d < m.doors.length; d++) {
         let open = false;
         // (a door held by a hand getting in or out: the timer opens nothing beside it)
         const held = l.doorBy?.some((v) => v >= 0);
         for (let i = 0; i < l.doorUntil.length && !held; i++)
           if (t < l.doorUntil[i] && (m.doorOf ? m.doorOf(i) : i) === d) open = true;
-        const want = open ? 1.05 : 0;
         const was = l.doors[d] ?? 0;
         // (plan 93 C: held by a hand — getting in or out — it's where the hand has it)
         const by = l.doorBy?.[d] ?? -1;
-        l.doors[d] = by >= 0 ? by : was + (want - was) * Math.min(1, dt * (want > was ? 7 : 5));
-        if (was > 0.08 && l.doors[d] <= 0.08 && (by >= 0 || want === 0)) this.clunk(l, false);
+        l.doorW ??= [];
+        if (by >= 0) {
+          l.doors[d] = by;
+          l.doorW[d] = dt > 0 ? (by - was) / dt : 0;
+        } else if (open) {
+          l.doors[d] = was + (1.05 - was) * Math.min(1, dt * 7);
+          l.doorW[d] = 0;
+          (l.doorT ??= [])[d] = true;
+        } else if (l.doorT?.[d]) {
+          // (opened by the timer — someone seen getting in or out with no act —: shut by it)
+          l.doors[d] = was * (1 - Math.min(1, dt * 5));
+          l.doorW[d] = 0;
+          if (l.doors[d] <= 0.08) {
+            l.doors[d] = 0;
+            l.doorT[d] = false;
+            if (was > 0.08) this.clunk(l, false, d);
+          }
+        } else if (was > 0.002) {
+          // (plan 98 F4a: let go open — on its hinge: swung by the car's going, held a little by the check strap,
+          // stopped at its stop, latched shut if it comes in hard enough, else left ajar)
+          const r = swingDoor(was, l.doorW[d] ?? 0, acc, m.doors[d].side, dt, this.vB.x);
+          l.doors[d] = r.a;
+          l.doorW[d] = r.w;
+          if (r.latched) this.clunk(l, false, d, Math.min(1.4, 0.5 + r.hit * 0.5));
+        } else {
+          l.doors[d] = 0;
+          l.doorW[d] = 0;
+        }
+        if (by >= 0 && was > 0.08 && l.doors[d] <= 0.08) this.clunk(l, false, d);
         m.doors[d].open(l.doors[d]);
       }
       // the roof's snow blown off at speed
@@ -1957,9 +1998,62 @@ export class Cars {
   }
   private shownStation = -1;
   /** A door's clunk (opening: a click; shutting: a thud), heard by distance. */
-  private clunk(l: LiveView, open: boolean) {
+  /** A door opened or shut: its kind's recording from the door itself (plan 98 phase 6: heard with the engine off
+   *  too, each door from where it is); till the takes are in, the engine sound's own (a click and a thud). */
+  private clunk(l: LiveView, open: boolean, door = -1, k = 1) {
+    const d = door >= 0 ? l.model.doors[door] : undefined;
+    if (d) {
+      d.group.getWorldPosition(hE);
+      const [o, sh] = doorSlots(l.kind);
+      if (this.bodyShot(open ? o : sh, (open ? 0.3 : 0.45) * k, hE)) return;
+    }
     const s = l.sound ?? (this.mine?.vid === l.id ? this.mine.sound : null);
     s?.door(open);
+  }
+  /** (plan 98 phase 6) A parked car's boot or bonnet heard from its end. */
+  private lidHeard(id: string, which: "boot" | "bonnet", gain: number) {
+    const m = this.parked.get(id)?.full;
+    if (!m) return;
+    const end = which === "boot" ? m.lamps.tail[0] : m.lamps.head[0];
+    if (!end) return;
+    this.bodyShot(which, gain, m.body.localToWorld(hA.set(end.x, end.y + 0.2, 0)));
+  }
+  /** (plan 98) A recorded take of a car's body (a door, a lid) heard from a point of the world: its level by distance,
+   *  round me; loaded the first time it's asked for (false till then). */
+  private bodyBufs = new Map<string, AudioBuffer[] | null>();
+  private bodyWarm = false;
+  /** (plan 98) a body take's file asked for ahead (a car near: its doors and lids) */
+  private warmBody(slot: string): boolean {
+    const ctx = mixer.ctx;
+    if (!ctx || this.bodyBufs.has(slot)) return this.bodyBufs.has(slot);
+    this.bodyBufs.set(slot, null);
+    slotBuffers(ctx, slot)
+      .then((b) => this.bodyBufs.set(slot, b))
+      .catch(() => this.bodyBufs.set(slot, []));
+    return false;
+  }
+  private bodyShot(slot: string, gain: number, at: Vector3): boolean {
+    const ctx = mixer.ctx;
+    if (!ctx || ctx.state !== "running") return false;
+    if (!this.warmBody(slot)) return false;
+    const bs = this.bodyBufs.get(slot);
+    if (!bs?.length) return false;
+    const local = this.root.worldToLocal(hF.copy(at));
+    const heard = this.heardAt(local.x, local.y, local.z);
+    const src = ctx.createBufferSource();
+    src.buffer = bs[Math.floor(Math.random() * bs.length)];
+    src.playbackRate.value = 0.96 + Math.random() * 0.08;
+    const g = ctx.createGain();
+    g.gain.value = gain * (heard ? distanceGain(heard.dist) : 1);
+    const p = ctx.createPanner();
+    p.panningModel = "HRTF";
+    const w = heard?.at ?? { x: 0, y: 0, z: -1 };
+    p.positionX.value = w.x;
+    p.positionY.value = w.y;
+    p.positionZ.value = w.z;
+    src.connect(g).connect(p).connect(mixer.buses.effects);
+    src.start();
+    return true;
   }
 
   // the sky as the paint's and the chrome's reflections, renewed now and then
@@ -2350,6 +2444,8 @@ export class Cars {
           pets: new Map(),
         };
         this.live.set(id, l);
+        // (plan 98: its doors' and lids' takes in ahead — heard the first time, the engine off or on)
+        for (const sl of [...doorSlots(l.kind), "boot", "bonnet"]) this.warmBody(sl);
       }
       // a new state from the server: a sample (or the server's put it somewhere: a jump)
       if (v.seq !== l.seq || (v.jump ?? 0) !== l.jump || !l.pb.buf.length) {
@@ -2402,7 +2498,7 @@ export class Cars {
       seats.forEach((sid, i) => {
         if ((sid || "") !== (l.prevSeats[i] || "")) {
           l.doorUntil[i] = this.time + 1.1;
-          this.clunk(l, true);
+          this.clunk(l, true, l.model.doorOf ? l.model.doorOf(i) : -1);
         }
       });
       l.prevSeats = seats;
@@ -2568,6 +2664,13 @@ export class Cars {
         if (sid === room.sessionId && this.cancelled === l.id) {
           this.cancelled = "";
           e.gone = this.time - EXIT_S;
+          // (out on the move: the door flung open behind them, on its hinge from there)
+          const d = l.model.doorOf ? l.model.doorOf(e.seat) : -1;
+          if (d >= 0 && Math.hypot(l.pose.v.x, l.pose.v.z) > 2.5) {
+            l.doorUntil[e.seat] = 0;
+            l.doors[d] = Math.max(l.doors[d] ?? 0, 0.7);
+            (l.doorW ??= [])[d] = 2.5;
+          }
         }
         if (e.gone === undefined && this.time < l.doorUntil[e.seat]) e.gone = this.time;
         if (e.gone !== undefined && this.time - e.gone < EXIT_S) {
@@ -2960,6 +3063,22 @@ export class Cars {
     const g = this.root.worldToLocal(w);
     return { x: g.x, y: g.z };
   }
+  /** (plan 98 phase 6) A car's acceleration this frame in its body's own frame (m/s², eased a little, at most 30). */
+  private bodyAcc(l: LiveView, dt: number): Vector3 {
+    const out = (l.accB ??= new Vector3());
+    if (dt <= 0) return out;
+    const prev = (l.accV ??= l.pose.v.clone());
+    const a = hD.copy(l.pose.v).sub(prev).divideScalar(dt);
+    prev.copy(l.pose.v);
+    if (a.length() > 30) a.setLength(30);
+    l.model.body.getWorldQuaternion(this.qAcc).invert();
+    a.applyQuaternion(this.qAcc);
+    this.vB.copy(l.pose.v).applyQuaternion(this.qAcc);
+    return out.lerp(a, Math.min(1, dt * 20));
+  }
+  private qAcc = new Quaternion();
+  /** (plan 98) the car's velocity in its body's frame, as last worked out by bodyAcc */
+  private vB = new Vector3();
   /** (plan 98) A point of the Grounds (x, y) in a car body's frame. */
   private bodyPoint(l: LiveView, x: number, y: number): { x: number; z: number } {
     const w = this.root.localToWorld(hD.set(x, l.pose.p.y, y));
@@ -3293,7 +3412,10 @@ export class Cars {
       const to = up.has(id) ? 1.0 : 0;
       const next = a + (to - a) * Math.min(1, dt * (to > a ? 3 : 5));
       this.parked.get(id)?.full?.setPart?.("bonnet", next);
+      // (plan 98 phase 6: its catch heard going up, its slam coming down)
+      if (a === 0 && next > 0) this.lidHeard(id, "bonnet", 0.35);
       if (to === 0 && next < 0.01) {
+        this.lidHeard(id, "bonnet", 0.55);
         this.parked.get(id)?.full?.setPart?.("bonnet", 0);
         this.bonnets.delete(id);
       } else this.bonnets.set(id, next);
@@ -3525,7 +3647,10 @@ export class Cars {
       const next = a + (to - a) * Math.min(1, dt * (to > a ? 4 : 6));
       const p = this.parked.get(id);
       p?.full?.setPart?.("boot", next);
+      // (plan 98 phase 6: its catch going up, its slam coming down)
+      if (a === 0 && next > 0) this.lidHeard(id, "boot", 0.35);
       if (to === 0 && next < 0.01) {
+        this.lidHeard(id, "boot", 0.5);
         p?.full?.setPart?.("boot", 0);
         this.lids.delete(id);
       } else this.lids.set(id, next);
