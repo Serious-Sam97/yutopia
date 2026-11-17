@@ -12,6 +12,7 @@ import type { Cluster } from "./vfd";
 const FLIP = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI); // (the model's nose is −x)
 const qa = new Quaternion();
 const qb = new Quaternion();
+const gb = new Vector3();
 const va = new Vector3();
 const vb = new Vector3();
 
@@ -174,8 +175,10 @@ export class CarRig {
       this.accel.subVectors(vb, this.lastV).divideScalar(Math.max(dt, 1e-3));
       this.lastV.copy(vb);
       qb.set(s.q.x, s.q.y, s.q.z, s.q.w).invert();
-      this.g.copy(this.accel).applyQuaternion(qb).divideScalar(9.81);
-      this.g.clampLength(0, 1.6);
+      // (plan 98 phase 9: eased — its velocity moves on 1/60 s steps, so above 60 fps one frame saw a whole step's
+      // change and the next none: a spiky g for the head and the pine tree)
+      gb.copy(this.accel).applyQuaternion(qb).divideScalar(9.81).clampLength(0, 1.6);
+      this.g.lerp(gb, 1 - Math.exp(-dt * 14));
       // a pendulum: pushed the other way to the car's g
       const sw = this.swing;
       const k = 38; // (a ~6 cm string)

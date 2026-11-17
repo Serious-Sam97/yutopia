@@ -378,3 +378,22 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
 - **The key's chime** with the driver's door open on the way out; **the dome light** on while a door's open and as
   I get in, fading over 2.5 s after (through the cabin's light, a little by day, full at night).
 - Checked: `e2e/car-jump.mts` logs the start (cranking from 2.8 s, running ~1 s later, then driven); typecheck clean.
+
+## Phases 8–9 — built (2026-11-17): the cameras
+
+- **Chase** (`tp/car/camera.ts`):
+  - backing up: the lean toward the course only going forward — straight behind it now at 48 km/h backwards (it
+    swung ~99° to the side past 3 m/s, flipping sides at straight back);
+  - walls and the land: Jolt's sight ray (the walker's camera's) from the car to the eye — in short of what's in the
+    way fast, back out slowly;
+  - on a slope: behind it down or up the slope with it (65%), so uphill the road ahead isn't under the car;
+  - stiffer at a crawl (yaw rate 3.2 → 6.6 under 8 m/s): parking no longer floats;
+  - looking back and again: a cut;
+  - the shake a smooth noise (8–18 Hz sines) instead of a random each frame;
+  - a short hop's landing dips it too (in the air 0.12 s, was 0.25).
+- **Hood and cockpit:** the hood's own stiff spring (the body's dive, squat and bumps, its nose dipping braking), a
+  little speed FOV in both (+5°, +7°); the g the head and the pine tree feel eased (it was spiky above 60 fps, the
+  velocity moving on 1/60 s steps); the pad's right stick looks where it's pushed (position, a round dead zone) and
+  springs back.
+- Checked: `e2e/car-cam.mts` (backing up 0→48 km/h: the camera ±180° off the nose, i.e. straight behind, every
+  sample; a still); typecheck clean.

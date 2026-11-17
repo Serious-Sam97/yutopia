@@ -4321,9 +4321,12 @@ export class Cars {
     const rx = pad?.axes[2] ?? 0;
     const ry = pad?.axes[3] ?? 0;
     const look = this.cam.look;
-    if (Math.abs(rx) > 0.15 || Math.abs(ry) > 0.15) {
-      look.yaw = Math.max(-2.2, Math.min(2.2, look.yaw + rx * dt * 2.4));
-      look.pitch = Math.max(-0.5, Math.min(0.4, look.pitch - ry * dt * 1.4));
+    // (plan 98 phase 9: the stick's place is where you look — round as far as it's pushed, back as it's let go;
+    // a round dead zone)
+    if (Math.hypot(rx, ry) > 0.15) {
+      const k = 1 - Math.exp(-dt * 10);
+      look.yaw += (rx * 2.2 - look.yaw) * k;
+      look.pitch += (Math.max(-0.5, Math.min(0.4, -ry * 0.5)) - look.pitch) * k;
     } else if (this.mouseHeld || this.time - this.mouseAt < 1.5) {
       // (turned with the mouse: held where it was left a moment, then back behind the car)
     } else {
@@ -4482,6 +4485,8 @@ export class Cars {
         m.sim ?? ({ v: { x: l.pose.v.x, y: l.pose.v.y, z: l.pose.v.z }, str: 0, spec: l.spec } as unknown as CarState);
       const rigFor = m.rig ?? this.passengerRig(l);
       const rough = m.sim ? m.sim.wheels.reduce((a, w) => a + GRIP[w.ground].rough, 0) * 2.5 : 0.02;
+      // (plan 98 phase 8: the chase camera kept out of walls and the land — Jolt's sight, as the walker's)
+      this.cam.ray ??= (x, y, z, dx, dy, dz, max) => this.physics()?.ray(x, y, z, dx, dy, dz, max) ?? null;
       this.cam.update(cam, rigFor, sim, dt, this.input.lookBack, rough);
       // (plan 93 S2: aiming out of my window — the camera at it, past my head, looking out along my aim)
       const gunMode = this.gunSeat()?.aiming ?? false;
