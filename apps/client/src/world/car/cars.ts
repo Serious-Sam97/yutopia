@@ -139,6 +139,7 @@ import {
   Spray,
   Tracks,
 } from "./fx";
+import { actAt, type ActPose, type Doorway, ENTER_S, EXIT_S, newActPose, roofGrip, seatGrip } from "./getin";
 import { CarHud } from "./hud";
 import { CarPlayback } from "./playback";
 import { type CarExtras, CarSound, distanceGain, HEARD, preloadEngine } from "./sound";
@@ -487,6 +488,11 @@ interface LiveView {
       /** (plan 93 C) the door's handle and its inside pull: marks on the door, swung with it */
       handle?: Object3D;
       pull?: Object3D;
+      /** (plan 98) the door frame's top at its back: a mark on it */
+      top?: Object3D;
+      /** (plan 98) the act's pose as last worked out, and where they stood as it began (the body's frame) */
+      act?: ActPose;
+      from?: { x: number; z: number; yaw: number };
     }
   >;
   sound: CarSound | null;
@@ -644,13 +650,11 @@ function soundOf(ctx: AudioContext, kind: CarKind, variant?: string): CarSound |
   return voiceOf(kind, variant) ? new CarSound(ctx, mixer.buses.effects, { kind, variant }) : null;
 }
 /** The kinds the far model (a wagon's or a sedan's outline) can't stand in for: always drawn whole. */
-const ENTER_S = 1.5; // s: getting in (plan 93 C: the door opened by hand, in onto the seat, shut from inside; the camera easing to the car's)
 const SLIDE_S = 0.45; // s: (plan 93 F3a) across from the passenger's seat to the wheel, after
 const DRIVER_SHOT_V = 8.4; // m/s (~30 km/h): the driver's revolver only slower than this (plan 93 S2, the server's)
 /** my car's step on Jolt (s; two collision steps each: 120 Hz for its wheels) and the most a frame takes */
 const CAR_STEP = 1 / 60;
 const CAR_STEPS_MAX = 8; // (plan 93 checks: a stall up to 133 ms caught up — dropped, the car fell back behind its camera)
-const EXIT_S = 1.35; // s: getting out (plan 93 C): the door opened from inside, up and out, turned and shut behind, before they're a person again
 const SEATED_OLD = 0.92; // a vehicle whose cabin isn't fitted to plan 59's people: drawn a little smaller in it
 const v3 = new Vector3();
 const v4 = new Vector3();
@@ -1451,6 +1455,13 @@ export class Cars {
     if (kind !== "car" && kind !== "car:leave") return false;
     if (!room) return true;
     if (kind === "car:leave") {
+      // (plan 98 F2a: still getting in — X again: sat at once)
+      const at = this.myActT();
+      if (at !== null && at < ENTER_S && this.mine) {
+        const e = this.live.get(this.mine.vid)?.people.get(room.sessionId);
+        if (e) e.at = this.time - ENTER_S - (e.via !== undefined ? 0 : SLIDE_S);
+        return true;
+      }
       const l = this.mine ? this.live.get(this.mine.vid) : null;
       if (l && Math.hypot(l.pose.v.x, l.pose.v.z) > 2.5) return true;
       room.send("car:leave", {});
@@ -1462,7 +1473,8 @@ export class Cars {
     // (plan 93 C: walked to the door first — its handle's spot, beside the seat it's for — then in)
     const [u, w0] = SEATS_OF[hit.kind].at[hit.via ?? hit.seat] ?? [0, -0.42];
     const w = Math.sign(w0 || -1) * (Math.abs(w0) + 0.85);
-    const spot = {
+    // (plan 98: where the act begins — beside the door's back edge, facing it — as its model measures it)
+    const spot = this.stanceOf(id, hit.via ?? hit.seat) ?? {
       x: hit.x + u * Math.cos(hit.a) - w * Math.sin(hit.a),
       y: hit.z + u * Math.sin(hit.a) + w * Math.cos(hit.a),
     };
@@ -1474,6 +1486,7 @@ export class Cars {
       this.walkIn = { id, seat: hit.seat, spot, at: performance.now(), via: hit.via };
       return true;
     }
+    this.camBefore = this.camOff();
     room.send("car:enter", { id, seat: hit.seat });
     return true;
   }
@@ -1545,6 +1558,7 @@ export class Cars {
         this.walkIn = null;
         this.wanted = wi.id;
         this.wantedAt = performance.now();
+        this.camBefore = this.camOff();
         room.send("car:enter", { id: wi.id, seat: wi.seat });
       } else if ((t > 700 && !this.host.walking()) || t > 6000) this.walkIn = null;
       else this.wantedAt = performance.now();
@@ -1559,6 +1573,10 @@ export class Cars {
     this.effects(dt);
     // (plan 93 S5) in a car, its cockpit's view: the world's ambience through its glass
     mixer.cabin(this.mine && this.cam.mode === "cockpit" ? this.cabinSeal() : 0);
+    if (this.hudAt && this.time >= this.hudAt && this.mine) {
+      this.hudAt = 0;
+      this.showHud();
+    }
     this.drawHud();
     this.kartsFrame(dt);
   }
@@ -2518,6 +2536,13 @@ export class Cars {
           if (w > 0.3) via = 1;
         }
         e = { m, seat: i, key, at, via };
+        // (plan 98: in from where I stood — my walker's place —: the act's first beat steps onto the door's spot)
+        if (at === this.time && sid === room.sessionId) {
+          const me = this.host.me();
+          const b = this.bodyPoint(l, me.x, me.y);
+          if (Math.hypot(b.x - l.model.seats[via ?? i].hip.x, b.z - l.model.seats[via ?? i].hip.z) < 2.5)
+            e.from = { ...b, yaw: Math.atan2(0, -Math.sign(b.z) || -1) };
+        }
         l.people.set(sid, e);
       }
     });
@@ -2525,6 +2550,11 @@ export class Cars {
       if (!keep.has(sid)) {
         // (plan 62: just got out — the door open —: kept a moment, climbing out by it; hidden as a
         // person till then, so there's one of them)
+        // (plan 98: let go of getting in — gone at once, no climbing out)
+        if (sid === room.sessionId && this.cancelled === l.id) {
+          this.cancelled = "";
+          e.gone = this.time - EXIT_S;
+        }
         if (e.gone === undefined && this.time < l.doorUntil[e.seat]) e.gone = this.time;
         if (e.gone !== undefined && this.time - e.gone < EXIT_S) {
           this.seated.add(sid);
@@ -2565,15 +2595,20 @@ export class Cars {
     for (const [sid, e] of l.people) {
       // (plan 93 S2) aimed out of their window: mine with the right button; another's a moment after their shot
       const aimDir = this.aimOf(l, sid, e.seat);
-      // (plan 93 C) getting in or out by hand: where they are, which way they face, how far out of the seat,
-      // the door they use and how open they hold it, and a hand on its handle or its inside pull
-      const g = this.carAct(l, e);
+      // (plan 98) getting in or out by hand: the act's pose (car/getin.ts) — the hips on their path, each foot planted
+      // or over the sill, ducked, the hands on the door and the roof —, blended into the seat's own as they settle
+      const g = this.carAct(l, e, sid);
       const seat = l.model.seats[g.seat];
       const seatAt = seat.hip;
-      const across = g.across;
-      const out = g.out;
-      e.m.root.position.copy(g.pos);
-      e.m.root.rotation.y = g.yaw;
+      const act = g.act;
+      const across = act ? 1 - act.sat : 0;
+      if (act) {
+        e.m.root.position.set(act.hips.x, 0, act.hips.z);
+        e.m.root.rotation.y = act.yaw;
+      } else {
+        e.m.root.position.set(g.slide?.x ?? seatAt.x, 0, g.slide?.z ?? seatAt.z);
+        e.m.root.rotation.y = -Math.PI / 2;
+      }
       if (!e.m.update()) continue;
       const s = e.m.root.scale.x;
       // (the driver at the wheel only once across in it)
@@ -2597,27 +2632,68 @@ export class Cars {
         if (jolt) fit.jolt = jolt * (1 - across);
         // (aiming: the head turned out of their side's window)
         if (aimDir) fit.look = (Math.sign(l.model.seats[e.seat]?.hip.z ?? 1) || 1) * 1.1;
-        // (swung out over the sill: the feet down on the ground outside, not on the pedals)
-        if (across > 0)
-          fit.feet = fit.feet.map((f) => [f[0], f[1] + (0.4 - f[1]) * across, f[2] * (1 - across)]) as typeof fit.feet;
-        const act = A.car3(fit, this.time, e.seat * 1.7);
-        const l3 = act.lift ?? [0, 0, 0];
-        e.m.setPose(C2.blend(act.pose, {}, out), [
-          l3[0] * (1 - out),
-          (l3[1] + fit.drop) * (1 - out),
-          l3[2] * (1 - out),
-        ]);
-        if (act.hands)
-          e.m.handsTo({
-            L: act.hands.L && { ...act.hands.L, w: 1 - out },
-            R: act.hands.R && { ...act.hands.R, w: 1 - out },
-          });
+        const sat = A.car3(fit, this.time, e.seat * 1.7);
+        const l3 = sat.lift ?? [0, 0, 0];
+        if (act && act.sat < 1) {
+          // (the act in her own space: the root under the hips, facing `yaw`)
+          const cy = Math.cos(act.yaw);
+          const sy = Math.sin(act.yaw);
+          const own = (p: Vector3): [number, number, number] => {
+            const dx = p.x - act.hips.x;
+            const dz = p.z - act.hips.z;
+            return [(dx * cy - dz * sy) / s, p.y / s, (dx * sy + dz * cy) / s];
+          };
+          const side = Math.sign(seat.hip.z) || 1;
+          const step = A.carStep(
+            {
+              hipY: act.hips.y / s,
+              feet: [own(act.feet[0]), own(act.feet[1])],
+              toe: act.toe,
+              duck: act.duck,
+              // (toward the car: her right on its +z side)
+              side: act.lean * side,
+            },
+            this.time,
+          );
+          const k = act.sat;
+          const ly = act.hips.y / s - fit.stand;
+          e.m.setPose(k > 0 ? C2.blend(step.pose, sat.pose, k) : step.pose, [
+            l3[0] * k,
+            ly + (l3[1] + fit.drop - ly) * k,
+            l3[2] * k,
+          ]);
+          if (k > 0 && sat.hands)
+            e.m.handsTo({
+              L: sat.hands.L && { ...sat.hands.L, w: k },
+              R: sat.hands.R && { ...sat.hands.R, w: k },
+            });
+        } else {
+          e.m.setPose(sat.pose, [l3[0], l3[1] + fit.drop, l3[2]]);
+          if (sat.hands) e.m.handsTo(sat.hands);
+        }
       } else e.m.setPose(C2.carPose(driver), [0, e.m.sitDrop((seatAt.y + 0.02) / s), 0]);
       if (driver && across < 1) this.driverHands(l, e, 1 - across, going);
-      // the hand on the door: its handle from outside, its pull from in (after the wheel's: it wins)
-      if (g.hand && g.handW > 0) {
-        e.m.reachTo(g.hand.S, g.hand.at, g.handW, [-0.6, -1, -0.45]);
-      }
+      // (plan 98) the hands on the door and the roof: its handle from outside, its frame, its pull from in (after the
+      // wheel's: they win)
+      if (act && g.way)
+        for (const h of act.hands) {
+          const at =
+            h.at === "roof"
+              ? l.model.body.localToWorld(roofGrip(g.way, hB))
+              : h.at === "seat"
+                ? l.model.body.localToWorld(seatGrip(g.way, hB))
+                : h.at === "wheel"
+                  ? l.model.body.localToWorld(l.model.rim(g.way.s * 0.75, hB))
+                  : ((h.at === "handle" ? e.handle : h.at === "pull" ? e.pull : e.top) as Object3D).getWorldPosition(hB);
+          e.m.reachTo(h.S, at, h.w, [-0.6, -1, -0.45]);
+          const dbg = (globalThis as { __actDbg?: unknown[] }).__actDbg;
+          if (dbg) {
+            const w = e.m.bones[`wrist${h.S}`].getWorldPosition(hE);
+            const sh = e.m.bones[`shoulder${h.S}`].getWorldPosition(hF);
+            const L = (v: Vector3) => l.model.body.worldToLocal(v.clone()).toArray().map((x) => +x.toFixed(2));
+            dbg.push({ S: h.S, at: h.at, w: +h.w.toFixed(2), target: L(at), wrist: L(w), shoulder: L(sh) });
+          }
+        }
       this.seatGun(l, sid, e, aimDir, across);
       this.armOut(l, e, across, going, dtSeat);
       this.bodyLife(l, e, driver, across, going, latG, dtSeat);
@@ -2792,126 +2868,148 @@ export class Cars {
     e.m.reachTo(S, at, kk, [-1, -0.25, -0.5], false);
   }
 
-  /** (plan 93 C, F3a) Someone getting into a car or out of it, by hand, `e.at` / `e.gone` ago:
-   *  - in (ENTER_S): stood at the door, the near hand on its handle, the door opened with it; turned round, down
-   *    onto the seat, the legs swung in; the inside pull reached and the door shut; from the passenger's side of
-   *    an empty car, across to the wheel after (SLIDE_S);
-   *  - out (EXIT_S): the inside pull, the door opened; the legs out, up; turned to the car, a step back, the
-   *    door pushed shut with the near hand.
-   *  The door's opening is held here (`doorBy`): it's where the hand has it, for everyone who sees it. */
+  /** (plan 98 phases 1–3) Someone getting into a car or out of it, by hand (car/getin.ts): in by the door of the
+   *  seat they're for — from the passenger's side of an empty car, across to the wheel after (SLIDE_S) —, out by
+   *  their own seat's. The act's pose (null sat, or sliding across); the door's opening held where the hand has it,
+   *  for everyone who sees them. */
   private carAct(
     l: LiveView,
     e: LiveView["people"] extends Map<string, infer P> ? P : never,
-  ): {
-    seat: number;
-    pos: Vector3;
-    yaw: number;
-    across: number;
-    out: number;
-    hand: { S: "L" | "R"; at: Vector3 } | null;
-    handW: number;
-  } {
+    sid: string,
+  ): { seat: number; act: ActPose | null; slide: Vector3 | null; way: Doorway | null } {
     const mod = l.model;
     const ease = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
-    const win = (x: number, a: number, b: number, f = 0.12) => ease((x - a) / f) * (1 - ease((x - b) / f));
     const tIn = this.time - e.at;
     const leaving = e.gone !== undefined;
-    const t = leaving ? this.time - (e.gone as number) : tIn;
+    const t0 = (globalThis as { __actAt?: { t: number; out?: boolean } | null }).__actAt;
+    const t = t0 ? t0.t : leaving ? this.time - (e.gone as number) : tIn;
+    const out = t0 ? !!t0.out : leaving;
     // (out by their own seat's door: the passenger's was only the way in)
-    const via = e.via !== undefined && !leaving && tIn < ENTER_S + SLIDE_S ? e.via : undefined;
-    // (across to the wheel: after the door's shut behind them, from the seat they came in by)
-    const slid = !leaving && via !== undefined ? ease((tIn - ENTER_S) / SLIDE_S) : 1;
-    const door = mod.doorOf ? mod.doorOf(via ?? e.seat) : -1;
-    const seatIn = via !== undefined && slid < 1 ? via : e.seat;
-    const hip = mod.seats[seatIn]?.hip ?? mod.seats[e.seat].hip;
-    const side = Math.sign(hip.z) || 1;
-    // (facing out of the door, sat sideways; facing the car, stood at its door)
-    const yawSat = -Math.PI / 2;
-    const yawOut = -Math.PI / 2 + side * (Math.PI / 2);
-    const yawCar = yawOut + Math.PI;
-    let across = 0;
-    let out = 0;
-    let yaw = yawSat;
-    let open = -1;
-    let hand: { S: "L" | "R"; at: Vector3 } | null = null;
-    let handW = 0;
-    let stand = 0.85; // (out from the seat's hip, when stood: by the door)
-    // (the near hand: toward the car's tail as they face it — the handle's at the door's back edge)
-    const near: "L" | "R" = side > 0 ? "R" : "L";
-    const inner: "L" | "R" = side > 0 ? "L" : "R";
-    const marks = () => {
-      if (door < 0) return false;
-      const dg = mod.doors[door].group;
-      if (!e.handle || e.handle.parent !== dg) {
-        // (put on while it's shut: its handle just behind the seat's hip, at the waist, on its skin; its pull
-        // inside, a little ahead)
-        mod.root.updateMatrixWorld(true);
-        e.handle?.removeFromParent();
-        e.pull?.removeFromParent();
-        const h = new Object3D();
-        const pu = new Object3D();
-        dg.add(h, pu);
-        const w = Math.abs(hip.z) + 0.43;
-        h.position.copy(dg.worldToLocal(mod.body.localToWorld(hA.set(hip.x + 0.12, 0.95, side * w))));
-        pu.position.copy(dg.worldToLocal(mod.body.localToWorld(hA.set(hip.x - 0.08, 0.85, side * (w - 0.12)))));
-        e.handle = h;
-        e.pull = pu;
-      }
-      return true;
+    const via = e.via !== undefined && !out && (t0 ? t0.t : tIn) < ENTER_S + SLIDE_S ? e.via : undefined;
+    const seatIn = via ?? e.seat;
+    const door = mod.doorOf ? mod.doorOf(seatIn) : -1;
+    const acting = out ? t < EXIT_S : t < ENTER_S;
+    const way = door >= 0 ? this.doorway(l, e, seatIn, door) : null;
+    let act: ActPose | null = null;
+    let slide: Vector3 | null = null;
+    if (acting && way) {
+      // (where they stood as it began: mine, my walker's; the way out — to where the server has them now)
+      const p = this.host.room()?.state.players.get(sid) as { x: number; y: number } | undefined;
+      const to = out && p ? this.bodyPoint(l, p.x, p.y) : null;
+      act = actAt(way, Math.max(0, t), out, out ? null : (e.from ?? null), to, (e.act ??= newActPose()));
+      this.doorMarks(l, e, door, way);
+    } else if (!out && via !== undefined && t >= ENTER_S) {
+      const k = ease((t - ENTER_S) / SLIDE_S);
+      const a = mod.seats[via].hip;
+      const b = mod.seats[e.seat].hip;
+      slide = hC.set(a.x + (b.x - a.x) * k, 0, a.z + (b.z - a.z) * k);
+    }
+    if (door >= 0 && l.doorBy) l.doorBy[door] = act && act.door >= 0 ? Math.min(1.05, act.door * 1.05) : -1;
+    return { seat: slide && t < ENTER_S + SLIDE_S * 0.5 ? (via as number) : act ? seatIn : e.seat, act, slide, way };
+  }
+  /** (plan 98) How far into getting in I am (s), or null: not getting in (sat, out, or seen sat already). */
+  private myActT(): number | null {
+    const m = this.mine;
+    const sid = this.host.room()?.sessionId;
+    const e = m && sid ? this.live.get(m.vid)?.people.get(sid) : undefined;
+    if (!e || e.gone !== undefined || e.at < 0) return null;
+    const t = this.time - e.at;
+    return t < ENTER_S + SLIDE_S ? t : null;
+  }
+  /** (plan 98) The car I let go of getting into (walked off early): out at once, not climbing out. */
+  private cancelled = "";
+  /** (plan 98) The camera's place off me as the act began (the world's): kept as I go in, then the car's. */
+  private actCam: Vector3 | null = null;
+  /** (plan 98) the on-foot camera off what it looks at (my head), as I asked to get in */
+  private camBefore: Vector3 | null = null;
+  private camOff(): Vector3 | null {
+    const tp = this.host.tp();
+    return tp ? tp.camera.position.clone().sub(tp.target) : null;
+  }
+  /** (plan 98) when the car's HUD comes up: once I'm sat */
+  private hudAt = 0;
+  /** (plan 98) Where someone stands to get in by a seat's door of a parked car (the Grounds' x, y): beside the
+   *  door's back edge, a forearm out from it — the act's first beat — as its model measures it. */
+  private stanceOf(id: string, seat: number): { x: number; y: number } | null {
+    const mod = this.parked.get(id)?.full;
+    const door = mod?.doorOf?.(seat) ?? -1;
+    const op = door >= 0 ? mod?.openingOf?.(door) : null;
+    if (!mod || !op || !mod.seats[seat]) return null;
+    const s = Math.sign(mod.seats[seat].hip.z) || 1;
+    mod.root.updateMatrixWorld(true);
+    const w = mod.body.localToWorld(hA.set(op.x1 + 0.2, 0, s * (op.out + 0.42)));
+    const g = this.root.worldToLocal(w);
+    return { x: g.x, y: g.z };
+  }
+  /** (plan 98) A point of the Grounds (x, y) in a car body's frame. */
+  private bodyPoint(l: LiveView, x: number, y: number): { x: number; z: number } {
+    const w = this.root.localToWorld(hD.set(x, l.pose.p.y, y));
+    const b = l.model.body.worldToLocal(w);
+    return { x: b.x, z: b.z };
+  }
+  /** (plan 98) The car's measures for a seat and its door, for the act (fitted to the person in it). */
+  private doorway(
+    l: LiveView,
+    e: LiveView["people"] extends Map<string, infer P> ? P : never,
+    seatIn: number,
+    door: number,
+  ): Doorway | null {
+    const mod = l.model;
+    const seat = mod.seats[seatIn];
+    const op = mod.openingOf?.(door) ?? null;
+    if (!seat || !op) return null;
+    const k = e.m.root.scale.x || 1;
+    const fit = carFit(e.m, seat, seatIn === 0, mod, k, -1);
+    // (each foot sat, from her own space — x out to its side, ahead, up — into the body's: sat facing −x)
+    const satFeet = fit.feet.map((f, i) => {
+      const left = (i === 0 ? 1 : -1) * f[0];
+      return new Vector3(seat.hip.x - f[1] * k, f[2] * k, seat.hip.z + left * k);
+    }) as [Vector3, Vector3];
+    const s = Math.sign(seat.hip.z) || 1;
+    return {
+      s,
+      op,
+      hip: seat.hip,
+      floor: seat.floor ?? mod.floor ?? seat.hip.y - 0.4,
+      stand: fit.stand * k,
+      satHip: (fit.stand + fit.drop) * k,
+      satFeet,
+      k,
+      driver: seatIn === 0 && !!mod.rim,
     };
-    if (!leaving && tIn < ENTER_S) {
-      const a = tIn / 0.4; // (at the door: the handle, the door opened)
-      const b = (tIn - 0.4) / 0.65; // (in: turned round, down, the legs in)
-      const c = (tIn - 1.05) / 0.45; // (the door shut from inside)
-      const q = 1 - ease(b);
-      across = ease(q / 0.6);
-      out = ease((q - 0.45) / 0.55);
-      // (turned from the car to its seat as they start in)
-      yaw =
-        b < 0
-          ? yawCar
-          : across >= 1
-            ? yawCar + (yawOut - yawCar) * ease(b / 0.3)
-            : yawOut + (yawSat - yawOut) * (1 - across);
-      if (b >= 0 && b < 0.3) yaw = yawCar + (yawOut - yawCar) * ease(b / 0.3);
-      if (marks()) {
-        open = c < 0 ? ease((tIn - 0.08) / 0.3) : 1 - ease(c);
-        if (a < 1.15) {
-          hand = { S: near, at: (e.handle as Object3D).getWorldPosition(hB) };
-          handW = ease((tIn - 0.0) / 0.15) * (1 - ease((tIn - 0.45) / 0.15));
-        } else if (c > -0.2) {
-          hand = { S: inner, at: (e.pull as Object3D).getWorldPosition(hB) };
-          handW = win(c, -0.15, 0.95);
-        }
-      }
-    } else if (leaving) {
-      const a = t / 0.3; // (the inside pull, the door opened)
-      const b = (t - 0.3) / 0.6; // (the legs out, up)
-      const c = (t - 0.9) / 0.45; // (turned to the car, a step back, the door pushed shut)
-      const q = ease(b);
-      across = ease(q / 0.6);
-      out = ease((q - 0.45) / 0.55);
-      yaw = c < 0 ? yawSat + (yawOut - yawSat) * across : yawOut + (yawCar - yawOut) * ease(c / 0.45);
-      stand = 0.85 + 0.25 * ease(c);
-      if (marks()) {
-        open = c < 0 ? ease((t - 0.05) / 0.25) : 1 - ease((c - 0.25) / 0.75);
-        if (a < 1) {
-          hand = { S: inner, at: (e.pull as Object3D).getWorldPosition(hB) };
-          handW = win(a, -0.5, 0.9);
-        } else if (c > 0.15) {
-          hand = { S: near, at: (e.handle as Object3D).getWorldPosition(hB) };
-          handW = win(c, 0.2, 0.95);
-        }
-      }
-    }
-    if (door >= 0 && l.doorBy) l.doorBy[door] = open >= 0 ? Math.min(1.05, open * 1.05) : -1;
-    // (across the bench to the wheel: from the seat they came in by)
-    const pos = hC.set(hip.x, 0, hip.z + side * stand * across);
-    if (via !== undefined && !leaving && slid > 0) {
-      const to = mod.seats[e.seat].hip;
-      pos.set(hip.x + (to.x - hip.x) * slid, 0, hip.z + (to.z - hip.z) * slid);
-    }
-    return { seat: slid >= 1 ? e.seat : seatIn, pos, yaw, across, out, hand, handW };
+  }
+  /** (plan 93 C, plan 98) The door's handle, its inside pull and its frame's top at the back: marks on the door's own
+   *  group, put on while it's shut, so a hand stays on them as it swings. */
+  private doorMarks(
+    l: LiveView,
+    e: LiveView["people"] extends Map<string, infer P> ? P : never,
+    door: number,
+    way: Doorway,
+  ) {
+    const mod = l.model;
+    const dg = mod.doors[door].group;
+    if (e.handle && e.handle.parent === dg && e.top) return;
+    const a = l.doors[door] ?? 0;
+    mod.doors[door].open(0);
+    mod.root.updateMatrixWorld(true);
+    e.handle?.removeFromParent();
+    e.pull?.removeFromParent();
+    e.top?.removeFromParent();
+    const h = new Object3D();
+    const pu = new Object3D();
+    const tp = new Object3D();
+    dg.add(h, pu, tp);
+    const { op, s } = way;
+    const mid = (op.y0 + op.y1) / 2;
+    // (the handle: just ahead of the door's back edge, under the glass, on its skin; the pull inside, ahead of it,
+    // at the armrest; the frame's top at the back, over the glass)
+    h.position.copy(dg.worldToLocal(mod.body.localToWorld(hA.set(op.x1 - 0.1, mid + 0.06, s * (op.out + 0.01)))));
+    pu.position.copy(dg.worldToLocal(mod.body.localToWorld(hA.set(op.x1 - 0.42, mid + 0.02, s * (op.out - 0.1)))));
+    tp.position.copy(dg.worldToLocal(mod.body.localToWorld(hA.set(op.x1 - 0.14, op.glass + 0.02, s * (op.out - 0.04)))));
+    e.handle = h;
+    e.pull = pu;
+    e.top = tp;
+    mod.doors[door].open(a);
   }
 
   /** (plan 93 S4) A car's own storage open here (the pack shows it in the ground's place): sat in its front, its
@@ -3856,8 +3954,17 @@ export class Cars {
         this.physics()?.carWorld.removeCar(was.drive.car);
         this.physics()?.ownCar(was.vid, false);
       }
+      // (plan 98 F3a: out — the camera behind me on the door's side, looking at the car: I'm seen getting out)
+      const lw = this.live.get(was.vid);
+      const tpv = this.host.tp();
+      const seat = lw?.model.seats[was.seat];
+      if (lw && tpv && seat && !this.cancelled) {
+        const out = hE.set(0, 0, Math.sign(seat.hip.z) || 1).transformDirection(lw.model.body.matrixWorld);
+        tpv.yaw = Math.atan2(-out.z, -out.x) + 0.35 * (Math.sign(seat.hip.z) || 1);
+      }
       this.mine = null;
       this.camNow = null;
+      this.hudAt = 0;
       this.input.clear();
       this.hideHud();
     }
@@ -3929,7 +4036,9 @@ export class Cars {
       this.cam.mode = "chase";
       this.enteredAt = this.time;
       this.siren = false;
-      this.showHud();
+      // (plan 98 F3a: the HUD once I'm sat; the camera with me till then)
+      this.hudAt = this.time + ENTER_S - 0.35;
+      this.actCam = null;
     }
   }
 
@@ -3962,6 +4071,21 @@ export class Cars {
     if (!l) return;
     const pad = activePad();
     const { c, switches } = this.input.read(pad);
+    // (plan 98 F2a) still getting in: nothing drives it yet — the handbrake on; walked off (a move early, before a foot's
+    // in), the act let go: out again, no climbing out
+    const actT = this.myActT();
+    const getting = actT !== null && actT < ENTER_S;
+    if (getting) {
+      const moved = Math.abs(c.steer) > 0.3 || c.up > 0.3 || c.down > 0.3;
+      if (moved && actT < 1.2 && this.cancelled !== m.vid) {
+        this.cancelled = m.vid;
+        room.send("car:leave", {});
+      }
+      c.up = 0;
+      c.down = 0;
+      c.steer = 0;
+      c.hand = 1;
+    }
     for (const sw of switches) {
       // (on its roof or its side, still: R puts it back on its wheels — the radio's key otherwise)
       if (sw === "radio" && m.drive?.canRight && m.drive.right(this.world)) {
@@ -4000,7 +4124,7 @@ export class Cars {
         m.sound?.switchOff();
         this.host.toast(t("carShotDead"));
       }
-      if (!dead && (!m.started || (m.dry && s.fuel > 0.3 && !vw?.filling))) {
+      if (!dead && !getting && (!m.started || (m.dry && s.fuel > 0.3 && !vw?.filling))) {
         m.started = true;
         m.dry = false;
         setEngine(s, true);
@@ -4166,13 +4290,28 @@ export class Cars {
         cam.updateProjectionMatrix();
       }
       const look = new Vector3(0, 0, -1).applyQuaternion(cam.quaternion).multiplyScalar(10).add(cam.position);
+      // (plan 98 F3a) getting in: the camera kept where it was off me, following me through the act, then eased into
+      // the car's over its last beats
+      const actT = this.myActT();
+      const meP = actT !== null && actT < ENTER_S ? this.meSat(l) : null;
+      if (meP && actT !== null && !peek) {
+        const focus = (meP.m.bones.head ?? meP.m.bones.chest)?.getWorldPosition(hE) ?? meP.m.root.getWorldPosition(hE);
+        if (!this.actCam) {
+          this.actCam = this.camBefore ?? tp.camera.position.clone().sub(focus);
+          this.camBefore = null;
+        }
+        const k0 = (actT - (ENTER_S - 1.0)) / 1.0;
+        const k = k0 <= 0 ? 0 : k0 >= 1 ? 1 : k0 * k0 * (3 - 2 * k0);
+        const eye = hF.copy(focus).add(this.actCam).lerp(cam.position, k);
+        look.copy(focus).lerp(look, k);
+        cam.position.copy(eye);
+      }
       this.camNow = {
         eye: [cam.position.x, cam.position.z, cam.position.y],
         look: [look.x, look.z, look.y],
         fov: cam.fov,
         showMe: false,
-        // (getting in: eased to it from where the camera was; then held to it)
-        snap: this.time - this.enteredAt > ENTER_S + 0.5,
+        snap: true,
       };
     }
   }

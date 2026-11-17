@@ -58,6 +58,17 @@ export interface Door {
   front: boolean;
   open(a: number): void;
 }
+/** (plan 98) a door's opening in the body's frame: front (hinge) and back edges along x, foot and top, outer face */
+export interface Opening {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  out: number;
+  /** the window's top (its glass's): the roof's edge just over it */
+  glass: number;
+  slide: boolean;
+}
 export interface Wiper {
   arm: Group; // turns about z (on the glass): rotation.z from `park` to `sweep`
   park: number;
@@ -118,6 +129,8 @@ export interface Sedan {
   setChains?(bits: number, r: number, width: number): void;
   /** (plan 93 S5) a door's sill: its glass's foot (the body's frame), how far out its outer face is */
   sillOf?(door: number): { y: number; out: number } | null;
+  /** (plan 98) a door's opening, measured off the shut door */
+  openingOf?(door: number): Opening | null;
   /** a lid or a back door opened `a` (radians): the bonnet, the boot */
   setPart?(name: string, a: number): void;
   setSteer(road: number): void;

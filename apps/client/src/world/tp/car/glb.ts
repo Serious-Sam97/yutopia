@@ -52,7 +52,7 @@ import { LIBRARY, type MatId } from "../../look/life-matlib-list";
 import { mergeWith } from "../merge-static";
 import { tailPatch } from "../tail-glow";
 import { layerShader } from "../wx3d";
-import { type Door, type Lights, parkedDash, type Sedan, skyLit, type Wheel, type Wiper } from "./model";
+import { type Door, type Lights, type Opening, parkedDash, type Sedan, skyLit, type Wheel, type Wiper } from "./model";
 import { plateTexture } from "./screen-tex";
 import { type Cluster, drawCluster, drawRadio } from "./vfd";
 
@@ -1617,7 +1617,11 @@ class GlbCar implements Sedan {
     const name = this.e.doors[door];
     const p = name ? this.parts.get(name) : undefined;
     let got: { y: number; out: number } | null = null;
-    if (p) {
+    const dr = this.doors[door];
+    if (p && dr) {
+      // (plan 98: measured shut — open, its glass stood a metre out)
+      const a = this.doorA[door] ?? 0;
+      dr.open(0);
       this.body.updateWorldMatrix(true, true);
       const inv = new Matrix4().copy(this.body.matrixWorld).invert();
       const box = new Box3();
@@ -1631,9 +1635,61 @@ class GlbCar implements Sedan {
         box.copy(m.geometry.boundingBox).applyMatrix4(new Matrix4().multiplyMatrices(inv, m.matrixWorld));
         all.union(box);
       });
+      dr.open(a);
       if (!all.isEmpty()) got = { y: all.min.y, out: Math.max(Math.abs(all.min.z), Math.abs(all.max.z)) };
     }
-    this.sills.set(door, got);
+    if (got || this.ready) this.sills.set(door, got);
+    return got;
+  }
+
+  /** (plan 98 phase 0) A door's opening as the shut door fills it, in the body's frame: its front edge (the hinge's,
+   *  the smaller x) and back edge, its foot and its top (the frame over the glass: the roof's edge), how far out its
+   *  outer face is. Measured once off every mesh the door carries, its own swing taken out. */
+  private openings = new Map<number, Opening | null>();
+  openingOf(door: number): Opening | null {
+    if (this.openings.has(door)) return this.openings.get(door) ?? null;
+    const name = this.e.doors[door];
+    const p = name ? this.parts.get(name) : undefined;
+    const d = this.doors[door];
+    let got: Opening | null = null;
+    if (p && d) {
+      const a = this.doorA[door] ?? 0;
+      d.open(0);
+      this.body.updateWorldMatrix(true, true);
+      const inv = new Matrix4().copy(this.body.matrixWorld).invert();
+      const box = new Box3();
+      const all = new Box3();
+      const glass = new Box3();
+      const mm = new Matrix4();
+      // (the mirror riding on the door left out: it stands 15 cm past the skin)
+      const onMirror = (x: Object3D) => {
+        for (let o: Object3D | null = x; o && o !== p.holder; o = o.parent) if (/mirror/i.test(o.name)) return true;
+        return false;
+      };
+      p.holder.traverse((x) => {
+        const m = x as Mesh;
+        if (!m.isMesh || onMirror(m) || /mirror/i.test((m.material as Material | undefined)?.name ?? "")) return;
+        m.geometry.computeBoundingBox();
+        if (!m.geometry.boundingBox) return;
+        box.copy(m.geometry.boundingBox).applyMatrix4(mm.multiplyMatrices(inv, m.matrixWorld));
+        all.union(box);
+        const n = (m.material as Material | undefined)?.name;
+        if (n === "glass" || n === "glass_tint") glass.union(box);
+      });
+      d.open(a);
+      if (!all.isEmpty())
+        got = {
+          x0: all.min.x,
+          x1: all.max.x,
+          y0: all.min.y,
+          y1: all.max.y,
+          out: Math.max(Math.abs(all.min.z), Math.abs(all.max.z)),
+          glass: glass.isEmpty() ? all.max.y - 0.06 : glass.max.y,
+          slide: this.e.pivots[name]?.kind === "slide",
+        };
+    }
+    // (not cached till the model's in: asked before its file came, there's nothing to measure yet)
+    if (got || this.ready) this.openings.set(door, got);
     return got;
   }
 

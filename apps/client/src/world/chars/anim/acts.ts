@@ -469,6 +469,52 @@ export function car3(f: CarFit, t: number, seed: number): Act {
   };
 }
 
+/** (plan 98) Getting in or out of a car, a moment of it (car/getin.ts): the hips' joint `hipY` over the root (the
+ *  root under the hips), each sole where it is in her own space (x her left, y up, z ahead), its toes pointed down
+ *  (rad), ducked under the roof (0..1) and bent to her right (rad). The legs solved to the feet. */
+export interface CarStep {
+  hipY: number;
+  feet: [[number, number, number], [number, number, number]];
+  toe: [number, number];
+  duck: number;
+  side: number;
+}
+/** The hip joints off the middle (m: car3's). */
+const HIP_W = 0.078;
+export function carStep(f: CarStep, t: number): Act {
+  const d = f.duck;
+  const c: Ch = { up: 0 };
+  // (ducked: bent at the hips most, the back and the neck after; the head kept a little up, looking where she goes)
+  c.hx = 0.5 * d;
+  c.sx = 0.34 * d + 0.012 * Math.sin(t * 1.9);
+  c.cx = 0.12 * d;
+  c.nx = 0.18 * d;
+  c.dx = -0.2 * d;
+  c.sz = f.side;
+  c.dz = -0.45 * f.side;
+  (["L", "R"] as const).forEach((S, i) => {
+    const out = S === "L" ? 1 : -1;
+    const [x, y, z] = f.feet[i];
+    // (the ankle from the hip's joint: out to her side, up, ahead)
+    const lat = (x - out * HIP_W) * out;
+    const dy = ANKLE + y - f.hipY;
+    const rho = Math.hypot(dy, z);
+    const phi = Math.atan2(lat, Math.max(0.05, rho));
+    const dd = Math.hypot(lat, rho);
+    const tc = Math.atan2(z, -dy);
+    const [th, k] = leg(dd * Math.sin(tc), -dd * Math.cos(tc));
+    c[`t${S}`] = th - c.hx;
+    c[`k${S}`] = k;
+    c[`f${S}`] = -c.hx + f.toe[i];
+    c[`a${S}`] = phi;
+  });
+  // (the arms loose, a little forward and bent: the hands are reached for after)
+  c.sL = c.sR = -0.15 - 0.25 * d;
+  c.eL = c.eR = -0.35;
+  const m = body(c);
+  return { pose: m.pose, lift: [0, 0, 0] };
+}
+
 /** In a car, sat behind the wheel or beside it: reclined, the legs out to the pedals; the breath, a
  *  glance out of the side now and then (the driver's hands go on the rim afterwards: reachTo). */
 export function car2(driver: boolean, t: number, seed: number): Act {
