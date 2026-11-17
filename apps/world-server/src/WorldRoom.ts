@@ -209,6 +209,10 @@ metrics.gauge("room_waiting", () => WorldRoom.current?.memoryCounts().waiting ??
 metrics.gauge("room_removed", () => WorldRoom.current?.memoryCounts().removed ?? 0);
 metrics.gauge("room_spawns", () => WorldRoom.current?.memoryCounts().spawns ?? 0);
 metrics.gauge("room_handlers", () => WorldRoom.current?.memoryCounts().handlers ?? 0);
+// (plan 97) the cars' own maps, by name (features/cars.ts carMaps): each as big as the cars, the drivers or the fires
+// there are now — one only growing is a leak
+for (const k of ["live", "bySid", "knockedAt", "unstuckAt", "shovedAt", "saveSoon", "chainJobs", "heat", "burning"])
+  metrics.gauge(`room_cars_${k}`, () => WorldRoom.current?.carMaps?.()[k] ?? 0);
 
 export class WorldRoom extends Room<WorldState> {
   // the most people in at once; past it a join is refused (Colyseus would
@@ -259,6 +263,8 @@ export class WorldRoom extends Room<WorldState> {
   survival: SurvivalHooks | null = null;
   dark: DarkHooks | null = null; // features/dark.ts: shots and flares (features/arms.ts)
   vortex: VortexHooks | null = null; // (plan 88) features/vortex.ts: the fight — shots at him (features/arms.ts)
+  /** (plan 97) features/cars.ts: the size of each of its maps, for the memory checker */
+  carMaps: (() => Record<string, number>) | null = null;
   /** (plan 93 S1) features/cars.ts: the nearest car along a shot's ray on the ground floor — what it struck,
    *  whether the round goes on — and `apply` it (the car's damage, its hole) once it's taken */
   carShot: {

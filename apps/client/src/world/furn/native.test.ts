@@ -26,7 +26,7 @@ import { Out } from "../tp/kit3d";
 import type { LivePart } from "./kit";
 import { animateLive, liveAt } from "./liveparts";
 import { CEL_ALPHA } from "./look";
-import { liveInto, modelOf, nativeDressInto, nativeInto, seatMotion, wordsOf } from "./native";
+import { forgetModel, hasModel, liveInto, modelOf, nativeDressInto, nativeInto, seatMotion, wordsOf } from "./native";
 import { MAX_TRIS, TRIS_X } from "./tris-limit";
 import { adventDay, XMAS_LOOKS } from "./xmas";
 
@@ -724,6 +724,14 @@ test("Christmas: on their footprints, lit and moving, named and dated", () => {
     bounds(cal(12).attributes.position.array).z1 > bounds(cal(0).attributes.position.array).z1,
     "its doors swung out",
   );
+  // (plan 97 L6) a stateful thing's old look, no one else's: dropped from the cache and let go on the GPU
+  const was = cal(3);
+  let freed = 0;
+  was.addEventListener("dispose", () => freed++);
+  const now = cal(4);
+  assert.notEqual(now, was);
+  assert.equal(freed, 1, "the old look disposed");
+  assert.notEqual(cal(3), was, "and made anew if it's wanted again");
 });
 
 // (plan 70 phase 1) the chess table's model is the table alone — its men are the living men, drawn
@@ -784,4 +792,25 @@ test("a moving seat's sitter goes with it: seatMotion turns as its live part doe
     seatMotion({ id: "c", kind: "chair", x: 0, y: 0, yaw: quarterYaw(0), props: { occupied: true } }, 1),
     null,
   );
+});
+
+// (plan 97 L6) a look made only to be pictured is let go after: out of the cache and disposed
+test("a pictured look let go: forgetModel drops it and disposes it", () => {
+  const def = (seed: number) => ({
+    id: "catalog",
+    kind: "advent_calendar",
+    x: 0,
+    y: 0,
+    yaw: quarterYaw(0),
+    props: { _thumb: true, _day: 7, seed },
+  });
+  const g = modelOf(def(0.11));
+  assert.ok(hasModel(def(0.11)));
+  let freed = 0;
+  g.addEventListener("dispose", () => freed++);
+  forgetModel(def(0.11));
+  assert.equal(hasModel(def(0.11)), false, "out of the cache");
+  assert.equal(freed, 1, "disposed");
+  assert.notEqual(modelOf(def(0.11)), g, "made anew when it's wanted again");
+  forgetModel(def(0.11));
 });

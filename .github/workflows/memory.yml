@@ -2,7 +2,7 @@ name: Memory
 
 # The memory checker (docs/plan/72-the-3d-core.md, phase 13; apps/client/e2e/memcheck.mts): the
 # built page, its own offline world-server (collectable), people coming and going, the game going
-# round the floors in cycles — every count after each cycle against a budget and a flat trend. CI's
+# round the floors in cycles, and a car's life each — every count after each cycle against a budget and a flat trend. CI's
 # browser draws in software: fewer people, shorter stills, no long road. Nightly and on demand.
 
 on:
@@ -37,6 +37,8 @@ jobs:
           BOTS: "6"
           IDLE: "8"
           NO_ROAD: "1"
+          # (plan 97 F2a: a short car's life each cycle — in, a crash, a few rounds, the blast, put home fresh)
+          CAR_SHORT: "1"
         run: |
           ./node_modules/.bin/next start -p 3198 &
           for i in $(seq 1 90); do curl -sf http://localhost:3198/login > /dev/null && break; sleep 2; done

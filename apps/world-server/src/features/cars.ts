@@ -1794,10 +1794,23 @@ registerFeature((room: WorldRoom) => {
     },
   };
 
+  room.carMaps = () => ({
+    live: live.size,
+    bySid: bySid.size,
+    knockedAt: knockedAt.size,
+    unstuckAt: unstuckAt.size,
+    shovedAt: shovedAt.size,
+    saveSoon: saveSoon.size,
+    chainJobs: chainJobs.size,
+    heat: heat.size,
+    burning: burning.size,
+  });
+
   return {
     dispose() {
       offLand();
       room.carShot = null;
+      room.carMaps = null;
       for (const t of saveSoon.values()) clearTimeout(t);
     },
     // (the fleet and the homes made before anyone's in: the first tick's, done as the room's made)
@@ -1881,6 +1894,8 @@ registerFeature((room: WorldRoom) => {
     },
     leave(client) {
       leaveSeat(client.sessionId, false);
+      // (plan 97 L4: when they were last knocked, kept only while they're here)
+      knockedAt.delete(client.sessionId);
     },
 
     levelChange(client, p, from, to) {

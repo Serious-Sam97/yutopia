@@ -624,6 +624,13 @@ test("(plan 93 S3) knocked at a walk's pace: a stagger, unhurt; in a fight, at s
   a.send("car:knock", { sid: b.sessionId });
   await waitFor(() => me(b).fellAt > 0);
   await waitFor(() => me(b).hp === 72, 3000);
+  // (plan 97 L4) the one knocked leaves: the server forgets when they were knocked
+  const { WorldRoom } = await import("./WorldRoom.ts");
+  const k0 = WorldRoom.current?.carMaps?.().knockedAt ?? 0;
+  assert.ok(k0 >= 1, "her knock kept while she's here");
+  rooms.splice(rooms.indexOf(b), 1);
+  await b.leave(true);
+  await waitFor(() => (WorldRoom.current?.carMaps?.().knockedAt ?? 0) === k0 - 1);
 });
 
 test("(plan 93 S4) its boot, stood behind it parked: put in, taken out, kept on it; its glove box from the front seat", async () => {

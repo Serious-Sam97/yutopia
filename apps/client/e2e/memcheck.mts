@@ -11,10 +11,11 @@
 // Each has a budget against the first cycle (the warm one) and a trend that must stay flat; crossing
 // either fails it, and the browser's heap crossing it diffs two heap snapshots (what grew, by kind).
 //   node --experimental-strip-types e2e/memcheck.mts [cycles=4] [out.json]
-//   PORT=2674; BOTS=12 (people at once; a third of them leave and come back each cycle); IDLE=20 (s);
+//   PORT=2674; BOTS=12 (people at once; a third of them leave and come back each cycle); IDLE=8 (s);
 //   WORLD=<world.json[.gz]> (e.g. prod's); NO_ROAD=1 (skip the long road); LOOK=classic (the old look; the life look is the default since 2026-11-10, so CI's nightly runs it)
 //   SERVER_DIFF=1: the world-server's heap diffed even when it's within its budget; SERVER_FROM=n:
 //   from cycle n (default 1); YUTOPIA_CHUNK_CAP=n: its land cache that small (full early)
+//   NO_CAR=1: no car's life in the cycles; CAR_SHORT=1: the short one (the nightly job's — plan 97 F2a)
 //   MEM_FAKE_API=1: no API — answered as the smoke e2e's (e2e/ci/api.ts), the page on Low (CI's
 //   software GL): the nightly job (.github/workflows/memory.yml) against the built page — run by tsx
 //   (the fake API reads the shared package's index, past what node's type stripping takes)
@@ -27,12 +28,13 @@ import { gunzipSync } from "node:zlib";
 import { chromium, request } from "@playwright/test";
 import { SPINE } from "@yutopia/shared/longroad";
 import { Client, type Room } from "colyseus.js";
+import { armCarLife, CENSUS, carCounts, carLife, movedSites, SOUND_TALLY } from "./car-life.ts";
 
 const cycles = Number(process.argv[2] ?? 4);
 const outFile = process.argv[3] ?? "";
 const port = Number(process.env.PORT ?? 2674);
 const bots = Number(process.env.BOTS ?? 12);
-const idleS = Number(process.env.IDLE ?? 20);
+const idleS = Number(process.env.IDLE ?? 8);
 const base = process.env.YUTOPIA_E2E_URL ?? "http://localhost:3100";
 const api = process.env.YUTOPIA_E2E_API ?? "http://localhost:8100";
 const pass = process.env.YUTOPIA_DEMO_PASSWORD ?? "yutopia-demo";
@@ -98,6 +100,12 @@ const serverCounts = async (): Promise<Record<string, number>> => {
     places: m.room_places ?? 0,
     waiting: m.room_waiting ?? 0,
     handlers: m.room_handlers ?? 0,
+    // (plan 97: the cars' maps — features/cars.ts carMaps)
+    ...Object.fromEntries(
+      Object.entries(m)
+        .filter(([k]) => k.startsWith("room_cars_"))
+        .map(([k, v]) => [`cars.${k.slice(10)}`, v]),
+    ),
   };
 };
 
@@ -193,6 +201,8 @@ try {
   });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   page.on("pageerror", (e) => console.log("  page error:", e.message));
+  // (plan 97: the sound nodes alive — car-life.ts)
+  await page.addInitScript({ content: SOUND_TALLY });
   if (process.env.MEM_FAKE_API) {
     // (the smoke's fake API, its session into our world-server)
     process.env.SMOKE_WORLD_PORT = String(port);
@@ -248,7 +258,7 @@ try {
       });
       // (up its prototypes to BufferGeometry's own: the one that has dispose)
       for (let pr = BG && Object.getPrototypeOf(BG); pr; pr = Object.getPrototypeOf(pr))
-        if (Object.prototype.hasOwnProperty.call(pr, "dispose") && Object.prototype.hasOwnProperty.call(pr, "setAttribute")) {
+        if (Object.hasOwn(pr, "dispose") && Object.hasOwn(pr, "setAttribute")) {
           BG = pr;
           break;
         }
@@ -267,7 +277,7 @@ try {
         return before0.apply(this, a);
       };
       const BGP = BG;
-      if (BGP && Object.prototype.hasOwnProperty.call(BGP, "setAttribute")) {
+      if (BGP && Object.hasOwn(BGP, "setAttribute")) {
         const d0 = BGP.dispose;
         BGP.dispose = function (this: any) {
           w.__drawn.delete(this);
@@ -275,7 +285,7 @@ try {
         };
       }
       w.__sceneWho = [];
-      r.render = function (scene: any, cam: any) {
+      r.render = (scene: any, cam: any) => {
         if (!w.__scenes.has(scene) && w.__scenes.size >= 14)
           w.__sceneWho.push({
             t: Math.round(performance.now() / 1000),
@@ -297,7 +307,7 @@ try {
   const browserCounts = async (): Promise<Sample> => {
     await cdp.send("HeapProfiler.collectGarbage");
     await page.waitForTimeout(300);
-    return page.evaluate(() => {
+    const s = await page.evaluate(() => {
       const w = (window as any).__yutopia;
       const tp = w.tp;
       const info = tp.renderer.info;
@@ -362,7 +372,11 @@ try {
                   vis++;
                   let a = o;
                   while (a && !a.name) a = a.parent;
-                  const k = tag + String(a?.name ?? "?").replace(/[0-9a-f]{8}-[0-9a-f-]+/g, "#").replace(/\d+/g, "#");
+                  const k =
+                    tag +
+                    String(a?.name ?? "?")
+                      .replace(/[0-9a-f]{8}-[0-9a-f-]+/g, "#")
+                      .replace(/\d+/g, "#");
                   by[k] = (by[k] ?? 0) + 1;
                 }
               }
@@ -372,7 +386,9 @@ try {
               for (const [g, d] of (window as any).__drawn ?? []) {
                 if (seen.has(g.uuid)) continue;
                 lost++;
-                const k = `LOST ${d.name} @${Math.floor(d.t / 60)}m`.replace(/\d+/g, (x: string) => (x.length > 3 ? "#" : x));
+                const k = `LOST ${d.name} @${Math.floor(d.t / 60)}m`.replace(/\d+/g, (x: string) =>
+                  x.length > 3 ? "#" : x,
+                );
                 by[k] = (by[k] ?? 0) + 1;
               }
               by["(lost)"] = lost;
@@ -395,12 +411,27 @@ try {
         people: tp.people3?.size ?? 0,
         // (the cars' files: a cache of the models seen, kept unheld to a budget — their geometries on the GPU in
         // nothing drawn till it's over it: counted apart, as the garments' are)
-        carIdleMB: ((window as any).__carAssets?.() ?? []).reduce((a: number, q: any) => a + (q.idleBytes ?? 0), 0) / 1e6,
-        carIdlePieces: ((window as any).__carAssets?.() ?? []).reduce((a: number, q: any) => a + (q.idlePieces ?? 0), 0),
+        carIdleMB:
+          ((window as any).__carAssets?.() ?? []).reduce((a: number, q: any) => a + (q.idleBytes ?? 0), 0) / 1e6,
+        carIdlePieces: ((window as any).__carAssets?.() ?? []).reduce(
+          (a: number, q: any) => a + (q.idlePieces ?? 0),
+          0,
+        ),
         carFiles: ((window as any).__carAssets?.() ?? []).reduce((a: number, q: any) => a + (q.ready ?? 0), 0),
       };
     });
+    // (plan 97: the cars' own lists and the sound nodes alive — those a second GC, the FinalizationRegistry's
+    // callbacks coming in a task after it)
+    await cdp.send("HeapProfiler.collectGarbage");
+    await page.waitForTimeout(300);
+    return { ...s, ...(await carCounts(page)) } as Sample;
   };
+  // (plan 97: each geometry by the code that made it — car-life.ts CENSUS; what moved since the cycle before is
+  // printed with each row)
+  await page.evaluate(CENSUS);
+  let sitesWas: Record<string, number> | null = null;
+  let progsWas: string[] | null = null;
+  const armed = process.env.NO_CAR ? null : await armCarLife(page);
   const snapshot = async (): Promise<Map<string, { n: number; size: number }>> => {
     await cdp.send("HeapProfiler.collectGarbage");
     const chunks: string[] = [];
@@ -417,12 +448,14 @@ try {
   let first: Map<string, { n: number; size: number }> | null = null;
   let serverFirst: Map<string, { n: number; size: number }> | null = null;
   for (let c = 1; c <= cycles; c++) {
-    // up and down the floors
-    for (const level of [0, 1, 2, 3, 4]) await go({ ...home, level }, 2500);
+    const cycleT0 = Date.now();
+    // up and down the floors (plan 97: each stop long enough for its floor's things to come and draw — shorter
+    // than it was, every cycle under a minute)
+    for (const level of [0, 1, 2, 3, 4]) await go({ ...home, level }, 1500);
     // out to the lot, then down the long road and back
-    await go({ x: -23, y: 24, level: 0 }, 4000);
-    if (!process.env.NO_ROAD) for (const [x, z] of ROAD) await go({ x, y: z, level: 0 }, 8000);
-    await go(home, 4000);
+    await go({ x: -23, y: 24, level: 0 }, 2500);
+    if (!process.env.NO_ROAD) for (const [x, z] of ROAD) await go({ x, y: z, level: 0 }, 5000);
+    await go(home, 2500);
     // things put down and taken away
     for (let k = 0; k < 6; k++) {
       const id = `mem-${c}-${k}`;
@@ -430,9 +463,17 @@ try {
         ([i, p]) => (window as any).__yutopia.send("obj:put", { id: i, kind: "plant", x: p.x, y: p.y, yaw: 0 }),
         [id, { x: Math.floor(home.x) + 1 + k, y: Math.floor(home.y) - 2 }] as const,
       );
-      await page.waitForTimeout(400);
+      await page.waitForTimeout(250);
       await page.evaluate((i) => (window as any).__yutopia.send("obj:remove", { id: i }), id);
-      await page.waitForTimeout(400);
+      await page.waitForTimeout(250);
+    }
+    // (plan 97) a car's whole life: driven, crashed, shot up, burnt, blown, put home fresh — or the short one
+    if (armed) {
+      const t0 = Date.now();
+      const l = await carLife(page, armed, { home, short: !!process.env.CAR_SHORT });
+      console.log(
+        `  car life: ${l.car}, rounds in ${l.screen}/${l.side}/${l.engine}, blasts ${l.blasts}, fire reached ${l.fireMax}, fresh after ${JSON.stringify(l.propsAfter)} (${Math.round((Date.now() - t0) / 1000)} s)`,
+      );
     }
     // a third of the people leave and others come
     const n = Math.max(1, Math.floor(bots / 3));
@@ -446,6 +487,34 @@ try {
     const who = (row.browser as Record<string, unknown>).geoWho as Record<string, number> | undefined;
     delete (row.browser as Record<string, unknown>).geoWho;
     console.log(JSON.stringify(row, (_, v) => (typeof v === "number" ? Math.round(v * 10) / 10 : v)));
+    console.log(`  cycle ${c}: ${Math.round((Date.now() - cycleT0) / 1000)} s`);
+    {
+      const sites = (await page.evaluate(() => (window as any).__geoSites?.() ?? {})) as Record<string, number>;
+      if (sitesWas) {
+        const moved = movedSites(sitesWas, sites, 6);
+        if (moved.length)
+          console.log(
+            "  geometries by maker since the last:",
+            moved.map(([k, d]) => `${d > 0 ? "+" : ""}${d} ${k}`).join(" · "),
+          );
+      }
+      sitesWas = sites;
+      // (and the programs new since the last: their material's name, a hash of their key, its start)
+      const progs = (await page.evaluate(() =>
+        ((window as any).__yutopia.tp.renderer.info.programs ?? []).map((p: any) => {
+          const k = String(p.cacheKey);
+          let h = 5381;
+          for (let i = 0; i < k.length; i++) h = ((h * 33) ^ k.charCodeAt(i)) >>> 0;
+          return `${p.name || "?"} #${h.toString(36)} ${k.slice(0, 48)}`;
+        }),
+      )) as string[];
+      if (progsWas) {
+        const fresh = progs.filter((k) => !progsWas?.includes(k));
+        const gone = progsWas.filter((k) => !progs.includes(k));
+        if (fresh.length || gone.length) console.log("  programs new:", JSON.stringify(fresh), "gone:", JSON.stringify(gone));
+      }
+      progsWas = progs;
+    }
     if (who) {
       const was = geoWas ?? {};
       const keys = new Set([...Object.keys(who), ...Object.keys(was)]);
@@ -455,7 +524,10 @@ try {
         .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
         .slice(0, 25);
       const facts = Object.fromEntries(Object.entries(who).filter(([k]) => k.startsWith("(")));
-      console.log(`  geometries ${row.browser.geometries}; ${JSON.stringify(facts)}; by owner since the last:`, JSON.stringify(moved.filter(([k]) => !k.startsWith("("))));
+      console.log(
+        `  geometries ${row.browser.geometries}; ${JSON.stringify(facts)}; by owner since the last:`,
+        JSON.stringify(moved.filter(([k]) => !k.startsWith("("))),
+      );
       geoWas = who;
       const sw = await page.evaluate(() => {
         const w = window as any;
@@ -475,7 +547,9 @@ try {
     }
   }
 
-  // ── the budgets: against the first (warm) cycle, and the trend over the rest ──
+  // ── the budgets: against the warm cycle, and the trend over the rest ──
+  // (plan 97: the warm cycle is the second when there are three or more — the first still brings in what's met
+  // once, ~150 geometries made early and uploaded late, then flat for six cycles: plan 97 phase 0)
   // (`cap`: a cache that grows to its cap and stays there — the land's chunks, least lately used out
   // past it: shared grounds.ts setChunkCap — over the cap is the fault; `trend`: what follows where
   // people are, judged only by creeping)
@@ -483,15 +557,29 @@ try {
     "browser.heapMB": { pct: 10, abs: 15 },
     "browser.geometries": { pct: 5, abs: 20 },
     "browser.textures": { pct: 5, abs: 10 },
-    "browser.programs": { pct: 0, abs: 3 },
+    // (plan 97 phase 1: +6 — with a car's life in each cycle the count swings 366–373 and back, never climbing: the
+    // garments' programs named and renamed as people come and go, and six (four lit, a depth, a sprite) let go one
+    // cycle and made again the next; the trend still catches one that only grows)
+    "browser.programs": { pct: 0, abs: 6 },
     "browser.joltMB": { pct: 10, abs: 4 },
     "browser.bodies": { pct: 10, abs: 50 },
     "browser.blocks": { pct: 20, abs: 4 },
     "browser.chunks": { pct: 0, abs: 0, cap: 1500 },
     // (the life look: the wardrobe's files, two genders' — plan 73 phase 11)
     "browser.wearFiles": { pct: 0, abs: 0, cap: 240 },
+    // (plan 97 F3a: what a car's life made, all let go once it's put home — its debris, its fire's loops and lights,
+    // its hop — and the sound's nodes back to where they were; a car still driven (the AI's) may come or go)
+    "browser.carsLive": { pct: 0, abs: 1 },
+    "browser.debris": { pct: 0, abs: 0, cap: 0 },
+    "browser.fireLoops": { pct: 0, abs: 0, cap: 0 },
+    "browser.hops": { pct: 0, abs: 0, cap: 0 },
+    "browser.fireLights": { pct: 0, abs: 0, cap: 0 },
+    // (the nodes alive when counted swing 22–33 with whatever's playing then — a car's life makes ~1,000: one kept
+    // would be dozens)
+    "browser.soundAlive": { pct: 0, abs: 12 },
     "server.heapMB": { pct: 10, abs: 20 },
-    "server.rssMB": { pct: 15, abs: 60 },
+    // (plan 97 F4a: the resident memory swings 200–340 MB with the allocator, its heap flat — a trend only)
+    "server.rssMB": { pct: 15, abs: 60, trend: true },
     "server.joltMB": { pct: 10, abs: 4, trend: true },
     "server.heapTotalMB": { pct: 15, abs: 40, trend: true },
     "server.externalMB": { pct: 15, abs: 30, trend: true },
@@ -504,14 +592,28 @@ try {
     "server.places": { pct: 0, abs: bots + 6 },
     "server.waiting": { pct: 0, abs: 2 },
     "server.handlers": { pct: 0, abs: 0 },
+    // (plan 97 F4a: the cars' maps — as many as the cars driven, their drivers, the fires and saves pending now)
+    "server.cars.live": { pct: 0, abs: 1 },
+    "server.cars.bySid": { pct: 0, abs: 1 },
+    "server.cars.knockedAt": { pct: 0, abs: 0 },
+    "server.cars.unstuckAt": { pct: 0, abs: 2 },
+    "server.cars.shovedAt": { pct: 0, abs: 2 },
+    "server.cars.saveSoon": { pct: 0, abs: 2 },
+    "server.cars.chainJobs": { pct: 0, abs: 0 },
+    "server.cars.heat": { pct: 0, abs: 1 },
+    "server.cars.burning": { pct: 0, abs: 0 },
   };
   const get = (r: (typeof rows)[number], k: string) => {
-    const [side, name] = k.split(".") as ["browser" | "server", string];
+    const dot = k.indexOf(".");
+    const side = k.slice(0, dot) as "browser" | "server";
+    const name = k.slice(dot + 1);
     return r[side][name] ?? 0;
   };
   const crossed: string[] = [];
+  const warm = rows.length >= 3 ? 1 : 0;
   if (rows.length >= 2) {
-    const a = rows[0];
+    console.log(`(against cycle ${warm + 1}, the warm one)`);
+    const a = rows[warm];
     const z = rows[rows.length - 1];
     for (const [k, l] of Object.entries(LIMITS)) {
       const v0 = get(a, k);
@@ -523,7 +625,7 @@ try {
       const allowed = Math.max((v0 * l.pct) / 100, l.abs) + wear;
       // (the trend: every cycle after the first higher than the one before, by more than a fifth of
       // what's allowed — creeping, even if not past the budget yet)
-      const vs = rows.map((r) => get(r, k));
+      const vs = rows.slice(warm).map((r) => get(r, k));
       const creeping = vs.length >= 4 && vs.slice(1).every((v, i) => v - vs[i] > allowed / 5);
       const ok = l.cap !== undefined ? Math.max(...vs) <= l.cap : (l.trend || v1 - v0 <= allowed) && !creeping;
       console.log(

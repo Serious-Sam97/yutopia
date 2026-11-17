@@ -1293,6 +1293,8 @@ export class Debris {
     /** (plan 94 P2) how it lies once still: as it was on the car, or a door on its face */
     lie: Quaternion;
   }[] = [];
+  /** how long a piece lies before it goes, s (the memory probes shorten it: e2e/car-life.ts) */
+  keepS = 120;
   private dq = new Quaternion();
   private ax = new Vector3();
   private at: [number, number, number] = [0, 0, 0];
@@ -1327,7 +1329,7 @@ export class Debris {
     for (let i = this.bits.length - 1; i >= 0; i--) {
       const b = this.bits[i];
       b.t += dt;
-      if (b.t > 120) {
+      if (b.t > this.keepS) {
         this.free(b);
         this.bits.splice(i, 1);
         continue;

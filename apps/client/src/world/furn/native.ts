@@ -596,7 +596,16 @@ export function modelOf(o: WorldObjectDef): BufferGeometry {
     const was = stateKey.get(o.id);
     if (was !== undefined && was !== key) {
       stateKey.set(o.id, key);
-      if (![...stateKey.values()].includes(was)) cache.delete(was);
+      if (![...stateKey.values()].includes(was)) {
+        // (let go on the GPU too — dropped from the cache alone, each dart thrown left its board's old model there,
+        // plan 97 L6; the room's buffers have their own copy, and a picture still drawing it puts it back)
+        const old = cache.get(was);
+        cache.delete(was);
+        const u = old?.userData as { glow?: BufferGeometry | null; clear?: BufferGeometry | null } | undefined;
+        u?.glow?.dispose();
+        u?.clear?.dispose();
+        old?.dispose();
+      }
     } else stateKey.set(o.id, key);
   }
   let g = cache.get(key);
@@ -606,6 +615,34 @@ export function modelOf(o: WorldObjectDef): BufferGeometry {
     cache.set(key, g);
   }
   return g;
+}
+
+/** (plan 97 L6) Is this thing's look made already? */
+export function hasModel(o: WorldObjectDef): boolean {
+  const k = KINDS[o.kind];
+  return !!k && cache.has(`${o.kind}|${k.look(o)}`);
+}
+/** (plan 97 L6) A look made only to be pictured, let go again: out of the cache, out of the same-looks list (unless
+ *  another look shares it), its geometry disposed. A thumb for each thing walked up to otherwise stayed all session. */
+export function forgetModel(o: WorldObjectDef): void {
+  const k = KINDS[o.kind];
+  if (!k) return;
+  const key = `${o.kind}|${k.look(o)}`;
+  const g = cache.get(key);
+  if (!g) return;
+  cache.delete(key);
+  for (const v of cache.values()) if (v === g) return;
+  for (const [h, list] of sameAs) {
+    const i = list.indexOf(g);
+    if (i < 0) continue;
+    list.splice(i, 1);
+    if (!list.length) sameAs.delete(h);
+    break;
+  }
+  const u = g.userData as { glow?: BufferGeometry | null; clear?: BufferGeometry | null };
+  u.glow?.dispose();
+  u.clear?.dispose();
+  g.dispose();
 }
 
 // Looks that come out the same kept once (plan 72 phase 13's memory pass): a look's key has its seed,

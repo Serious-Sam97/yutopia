@@ -34,7 +34,7 @@ import { LOOKS as DESK2_LOOKS } from "./fam/desktop2";
 import { isLifeKit, toon } from "./kit";
 import { KIT_MATS } from "./life-mats";
 import { animateLive, liveGroup } from "./liveparts";
-import { isNative, LOOK_NAMES, liveInto, modelOf, nativeInto, wordsOf } from "./native";
+import { forgetModel, hasModel, isNative, LOOK_NAMES, liveInto, modelOf, nativeInto, wordsOf } from "./native";
 import { drawFlaps, drawTicker, FLAPS_PX, TICKER_PX } from "./words";
 
 // The Furnish panel's pictures, from the models the world draws (docs/plan/67-the-furniture.md,
@@ -272,7 +272,11 @@ export function pictureOf(kind: string, props: Record<string, unknown> = {}, siz
   let url = urls.get(key);
   if (!url) {
     const turn = SITTER.has(kind) ? 3.6 : 0.55;
+    // (plan 97 L6: a look made only for this picture is let go after it — the picture's kept, as a URL)
+    const def = { id: "catalog", kind, x: 0, y: 0, yaw: quarterYaw(0), props: { _thumb: true, ...props } };
+    const had = hasModel(def);
     url = render(kind, props, size, size, turn).toDataURL("image/png");
+    if (!had) forgetModel(def);
     urls.set(key, url);
   }
   return url;

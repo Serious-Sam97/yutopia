@@ -1784,6 +1784,7 @@ class GlbCar implements Sedan {
   /** each pane's crack's middle (its own glass's frame), where its first round went in; null: its middle */
   private crackAt: (Vector3 | null)[] = [null, null, null, null, null, null];
   private starMat: MeshBasicMaterial | null = null;
+  private starGeo: PlaneGeometry | null = null;
   private setStars(list: readonly Hole[]) {
     const key = list.map((x) => `${x.u},${x.w},${x.h},${x.pane},${x.n?.join("/") ?? ""}`).join(";");
     if (key === this.starsKey) return;
@@ -1864,9 +1865,13 @@ class GlbCar implements Sedan {
           polygonOffsetUnits: -3,
         }),
       );
-      // (a star's reach: a round's in laminated glass, ~35 cm across)
-      const g = new PlaneGeometry(0.36, 0.36);
-      this.geos.push(g);
+      // (a star's reach: a round's in laminated glass, ~35 cm across — one plane for every star the car has, made
+      // once: a new one each time they were laid again stayed till the car's model went, plan 97 L1)
+      if (!this.starGeo) {
+        this.starGeo = new PlaneGeometry(0.36, 0.36);
+        this.geos.push(this.starGeo);
+      }
+      const g = this.starGeo;
       for (const [obj, at] of on) {
         const m = new InstancedMesh(g, this.starMat, at.length);
         at.forEach((x, j) => {
