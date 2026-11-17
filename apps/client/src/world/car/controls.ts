@@ -143,13 +143,20 @@ export class CarInput {
     }
     if (pad) {
       const b = (i: number) => pad.buttons[i]?.value ?? 0;
+      // (plan 98 phase 12) the stick's dead zone round, not square — a diagonal rest doesn't steer — with an outer one
+      // (a worn stick never quite reaches its edge); the triggers' own (one resting at 0.03 held a whisper of throttle
+      // and beat the hold at a stop)
       const x = pad.axes[0] ?? 0;
-      const sx = Math.abs(x) < 0.08 ? 0 : (x - Math.sign(x) * 0.08) / 0.92;
+      const y = pad.axes[1] ?? 0;
+      const r = Math.hypot(x, y);
+      const rk = r < 0.1 ? 0 : Math.min(1, (r - 0.1) / 0.85) / r;
+      const sx = x * rk;
+      const trig = (v: number) => (v < 0.06 ? 0 : Math.min(1, (v - 0.06) / 0.9));
       const used = b(7) > 0.05 || b(6) > 0.05 || Math.abs(sx) > 0 || b(0) > 0.5;
       if (used) this.pad = true;
       if (this.pad) {
-        up = Math.max(up, b(7));
-        down = Math.max(down, b(6));
+        up = Math.max(up, trig(b(7)));
+        down = Math.max(down, trig(b(6)));
         // (a little expo: fine near the middle)
         if (sx !== 0) steer = Math.sign(sx) * Math.abs(sx) ** 1.5;
         hand = Math.max(hand, b(0) > 0.5 ? 1 : 0);

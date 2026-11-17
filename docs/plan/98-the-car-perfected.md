@@ -424,3 +424,12 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
 - **Kept as it was:** the air's levelling (`airLevel` 14, `airDamp` 7) — set after the user's plan 92 feedback (a fast
   crest threw it nose-up past 60°); a crest test lands on that. Kerbs come through the bumps (`sw.cv`), not a ground.
 - Checked: shared car tests 69/69; typecheck clean. Stills with phase 27.
+
+## Phase 12 — built (2026-11-17): the controls and the rumble
+
+- **The pad** (`car/controls.ts`): the stick's dead zone round (0.1) with an outer one (0.95) — a diagonal rest
+  doesn't steer; the triggers' own (0.06: one resting at 0.03 held a whisper of throttle and beat the hold at a
+  stop); its steering rate eased with speed (8 rad/s, half at 30 m/s — `shared drive.ts`: the keys' had their own).
+- **The rumble** (`cars.ts`): over the ground and the knocks, now a gear's kick (40 ms on the change), the limiter's
+  buzz, the ABS's pump, a bump or a kerb (the springs' speed past 0.4 m/s), coming down off a jump.
+- Checked: shared car tests pass; typecheck clean. (No pad on this machine to feel it: the numbers by reading.)

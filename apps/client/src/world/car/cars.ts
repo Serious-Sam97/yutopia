@@ -910,6 +910,10 @@ export class Cars {
   private fires: Fires;
   private patches: RoadPatches;
   private cabin: CabinLight;
+  /** (plan 98 phase 12) my car was in the air last frame (a landing's rumble) */
+  private wasAir = false;
+  private gearWas: number | null = null;
+  private kickAt = -9;
   /** (plan 98 phase 7) my car's dome light, eased (0..1) */
   private domeK = 0;
   private mirror: { vid: string; m: Mirror } | null = null;
@@ -4480,10 +4484,26 @@ export class Cars {
       m.sound?.siren(this.siren);
       this.beaconOf(l, this.siren);
       const slip = s.wheels.reduce((a, w) => Math.max(a, w.slip), 0);
+      // (plan 98 phase 12) and what a driver feels through the wheel and the seat: a gear's kick (40 ms), the limiter's
+      // buzz, the ABS's pump, a bump or a kerb (the springs' speed), coming down off a jump
+      const bump = s.wheels.reduce((a, w) => Math.max(a, Math.abs(w.cv)), 0);
+      if (s.gear !== this.gearWas) {
+        if (this.gearWas !== null && s.gear !== 0) this.kickAt = this.time;
+        this.gearWas = s.gear;
+      }
+      const shiftKick = this.time - this.kickAt < 0.05 ? 0.35 : 0;
+      const limiter = s.rpm > s.spec.engine.limit - 100 ? 0.25 : 0;
+      const abs = s.helping & 1 ? 0.3 : 0;
+      const land = this.wasAir && s.wheels.some((w) => w.contact) ? Math.min(1, Math.abs(s.v.y) / 4) : 0;
+      this.wasAir = s.wheels.every((w) => !w.contact);
       this.input.rumble(
         pad,
-        (s.hit ? Math.min(1, s.hit.j / 6000) : 0) + rough * 4 * Math.min(1, readout(s).speed / 15),
-        Math.min(1, slip / 8) * 0.5,
+        (s.hit ? Math.min(1, s.hit.j / 6000) : 0) +
+          rough * 4 * Math.min(1, readout(s).speed / 15) +
+          Math.max(0, bump - 0.4) * 0.5 +
+          shiftKick +
+          land,
+        Math.min(1, slip / 8) * 0.5 + limiter + abs,
       );
       // lights for real at night (plan 93 S10: down at the drive-in; flashed up)
       const fu = this.time - this.flashAt;

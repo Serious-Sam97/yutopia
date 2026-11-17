@@ -397,7 +397,8 @@ export class Drive {
     const lockT = 0.16 + 0.44 * (1 - smooth(1.5, 6, speed)) + 0.22 * smooth(5, 30, speed);
     const rate = raw.digital
       ? ((target * s.str < 0 || Math.abs(target) < Math.abs(s.str) ? 1.6 : 1) * Math.max(0.08, maxSteer)) / lockT
-      : 8;
+      : // (plan 98 phase 12: the pad's own rate eased with speed — a twitch of the thumb at 100 was a lane change)
+        8 * (1 - 0.5 * smooth(8, 30, speed));
     s.str = toward(s.str, target, rate, rate, dt);
     let steer = s.str;
     const beta = Math.atan2(vs, Math.max(0.5, Math.abs(vf)));
