@@ -38,6 +38,10 @@ export class CarRig {
   private origin: Vector3;
   private c0: number[];
   private clusterAt = 0;
+  /** (plan 98 phase 18) the cluster's redraws a second (the cockpit's 20), its revs and speed eased */
+  clusterHz = 10;
+  private rpmS = 0;
+  private kmhS = 0;
   private blink = 0;
   private wipe = [0, 0]; // each wiper's phase 0..2 (out and back)
   private swing = { x: 0, z: 0, vx: 0, vz: 0 }; // the pine tree on its string
@@ -132,13 +136,17 @@ export class CarRig {
       dome: st.dome,
     };
     m.setLights(lights);
-    // the cluster, ten times a second
-    if (t - this.clusterAt > 0.1) {
+    // the cluster, ten times a second — (plan 98 phase 18) twenty where it's read (the cockpit), the revs and the speed
+    // eased between, so the bar sweeps rather than steps
+    const k = 1 - Math.exp(-dt * 14);
+    this.rpmS += (s.rpm - this.rpmS) * k;
+    this.kmhS += (Math.abs(r.kmh) - this.kmhS) * k;
+    if (t - this.clusterAt > 1 / this.clusterHz) {
       this.clusterAt = t;
       const gear = r.gear === -1 ? "R" : r.gear === 0 ? "N" : String(r.gear);
       const c: Cluster = {
-        kmh: Math.abs(r.kmh),
-        rpm: s.rpm,
+        kmh: this.kmhS,
+        rpm: this.rpmS,
         gear: s.rpm < 50 ? "P" : gear,
         fuel: s.fuel / s.spec.fuel.litres,
         temp: Math.min(1, s.temp / 0.55) * 0.55,

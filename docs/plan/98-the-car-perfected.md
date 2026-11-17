@@ -517,3 +517,11 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
   broke every lit draw before, see memory) and a flare on oncoming lamps; the relay's recorded loop isn't in step
   with the lamps (it loops at its own rate).
 - Checked: typecheck clean. Stills with phase 27.
+
+## Phase 18 — built in part (2026-11-17): the dashboard
+
+- The cluster redrawn 20 times a second in the cockpit (8 outside, where it's not read), the revs and the speed eased
+  between redraws: the VFD's bar sweeps instead of stepping at 10 Hz.
+- The key-on sweep and the lamps' self-test: phase 7.
+- Not done: the dash face's shape (a flat slab in the Blender files — a model change, at the near model's 90k budget).
+- Checked: typecheck clean.

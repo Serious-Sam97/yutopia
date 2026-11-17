@@ -4477,7 +4477,11 @@ export class Cars {
           setEngine(s, true);
         }
       }
-      if (m.rig) m.rig.state.key = m.keyAt !== undefined && this.time - m.keyAt < 3 ? this.time - m.keyAt : -1;
+      if (m.rig) {
+        m.rig.state.key = m.keyAt !== undefined && this.time - m.keyAt < 3 ? this.time - m.keyAt : -1;
+        // (plan 98 phase 18: read in the cockpit, redrawn twice as often)
+        m.rig.clusterHz = this.cam.mode === "cockpit" ? 20 : 8;
+      }
       if (s.fuel <= 0 && !m.dry) {
         m.dry = true;
         this.host.toast(t("carDry"));
