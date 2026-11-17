@@ -411,3 +411,16 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
   first: it changed every start, and the crest test's landing with it.
 - Checked: shared car tests 69/69 (new: `(plan 98) let off at 60 km/h …`; the dry car's person test rolls on with a
   whisper of throttle now — let off, the engine stops it short of her).
+
+## Phase 11 — built (2026-11-17): the weight
+
+- **The weight seen** (`glb.ts setWeight`, from `cars.ts` for every live car — mine and everyone's, from its own
+  acceleration in its body's frame): the nose down braking, up pulling away (2.6 cm a g at the bumpers' ~1.5°, at
+  most 2°), leant out in a turn (0.7° a g) over Jolt's own; on a spring (70, 9), so it rocks back a little as it
+  stops. Its people lean with it (they hang off the body).
+- **ABS pulsed** ~12 times a second (the brake 70% on the off beat) — `s.helping` 1 for the rumble and the tyres.
+- **The suspension's speed kept** (`sw.cv`, clamped ±5 m/s; it was always 0): for the bumps' thumps, the kerbs and
+  the rumble (phases 12, 16).
+- **Kept as it was:** the air's levelling (`airLevel` 14, `airDamp` 7) — set after the user's plan 92 feedback (a fast
+  crest threw it nose-up past 60°); a crest test lands on that. Kerbs come through the bumps (`sw.cv`), not a ground.
+- Checked: shared car tests 69/69; typecheck clean. Stills with phase 27.

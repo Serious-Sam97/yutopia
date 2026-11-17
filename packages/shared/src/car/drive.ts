@@ -215,6 +215,8 @@ export class Drive {
    *  reads — and sounds — as that gear; docs/plan/92 polish) */
   private held = 0;
   pad = false;
+  /** (plan 98) the ABS's pump's clock (s) */
+  private absT = 0;
   /** (plan 98) the engine's pull back this step (m/s² along it), on the ground */
   private engineDrag = 0;
   /** may be righted (R, on its roof or side, still) */
@@ -459,9 +461,12 @@ export class Drive {
         if (w.contact) lock = Math.max(lock, w.slipLong / (this.grips[i].kappa * FEEL.peak) - 1.3);
       }
       if (lock > 0) {
-        brake *= clamp(1 - lock * 0.5, 0.45, 1);
+        // (plan 98 phase 11: and pulsed, ~12 times a second, as an ABS pump is — felt in the pad, heard in the tyres)
+        this.absT += dt;
+        const pump = Math.sin(this.absT * Math.PI * 2 * 12) > 0 ? 1 : 0.7;
+        brake *= clamp(1 - lock * 0.5, 0.45, 1) * pump;
         s.helping |= 1;
-      }
+      } else this.absT = 0;
     }
     // (held still at a stop: the brakes on lightly)
     if (helps.hold && !spec.pushed && speed < 0.35 && thr < 0.02 && Math.abs(vf) < 0.3) brake = Math.max(brake, 0.35);
@@ -757,8 +762,10 @@ export class Drive {
       const sw = s.wheels[i];
       sw.contact = w.contact;
       // (its spring's compression as the old sim had it: c0 at rest)
-      sw.c = m[i] + (this.rest[i] - w.len);
-      sw.cv = 0;
+      // (plan 98 phase 11: its speed kept — how hard a bump came up into it, for the sounds, the rig and the rumble)
+      const c = m[i] + (this.rest[i] - w.len);
+      sw.cv = dt > 0 && Number.isFinite(sw.c) ? Math.max(-5, Math.min(5, (c - sw.c) / dt)) : 0;
+      sw.c = c;
       sw.w = w.spin;
       sw.turn = w.angle % (Math.PI * 2);
       sw.steer = w.steer;

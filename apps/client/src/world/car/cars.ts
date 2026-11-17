@@ -527,6 +527,8 @@ interface LiveView {
   doorT?: boolean[];
   accV?: Vector3;
   accB?: Vector3;
+  /** (plan 98 phase 11) its weight's spring: the pitch and roll seen, and their speeds */
+  wt?: { p: number; pv: number; r: number; rv: number };
   /** (plan 93 C) parked, kept a moment: someone's still climbing out of it */
   linger?: boolean;
   /** (plan 93 S1) its holes as last drawn */
@@ -1757,6 +1759,20 @@ export class Cars {
       // the van's by its slide)
       // (plan 98 phase 6) the car's acceleration in its own frame: what swings a door left open
       const acc = this.bodyAcc(l, dt);
+      // (plan 98 phase 11) its weight on its springs, seen: the nose down braking, up pulling away, out in a turn
+      // (model axes: x its tail, z its left; braking, its acceleration toward its tail)
+      // (on a spring: it rocks back a little as it comes to a stop)
+      const wp = Math.max(-0.035, Math.min(0.035, (acc.x / 9.81) * 0.026));
+      const wr = Math.max(-0.03, Math.min(0.03, (-acc.z / 9.81) * 0.012));
+      const wt = (l.wt ??= { p: 0, pv: 0, r: 0, rv: 0 });
+      if (dt > 0) {
+        const h = Math.min(dt, 0.05);
+        wt.pv += (70 * (wp - wt.p) - 9 * wt.pv) * h;
+        wt.rv += (70 * (wr - wt.r) - 9 * wt.rv) * h;
+        wt.p += wt.pv * h;
+        wt.r += wt.rv * h;
+      }
+      m.setWeight?.(wt.p, wt.r);
       for (let d = 0; d < m.doors.length; d++) {
         let open = false;
         // (a door held by a hand getting in or out: the timer opens nothing beside it)

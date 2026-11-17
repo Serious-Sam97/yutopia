@@ -2264,9 +2264,19 @@ class GlbCar implements Sedan {
   /** the body's tilt and rise: a corner jacked (liftCorner) and its flats' sag (setFlats), together */
   private lift = { x: 0, z: 0, y: 0 };
   private sag = { x: 0, z: 0, y: 0 };
+  private weight = { x: 0, z: 0 };
+  /** (plan 98 phase 11) The body's weight seen on its springs: its nose down braking, up pulling away (`pitch`, rad, +
+   *  nose down), leant out in a turn (`roll`, rad, + its left side down) — over Jolt's own, which its stiff springs
+   *  kept small. */
+  setWeight(pitch: number, roll: number) {
+    if (Math.abs(pitch - this.weight.z) < 1e-4 && Math.abs(roll - this.weight.x) < 1e-4) return;
+    this.weight.z = pitch;
+    this.weight.x = roll;
+    this.poseBody();
+  }
   private poseBody() {
-    this.body.rotation.x = this.lift.x + this.sag.x;
-    this.body.rotation.z = this.lift.z + this.sag.z;
+    this.body.rotation.x = this.lift.x + this.sag.x + this.weight.x;
+    this.body.rotation.z = this.lift.z + this.sag.z + this.weight.z;
     this.body.position.y = this.lift.y + this.sag.y;
     if (!this.body.matrixAutoUpdate) {
       this.body.updateMatrix();
