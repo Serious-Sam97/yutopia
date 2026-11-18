@@ -1,3 +1,4 @@
+import { Euler, Matrix4, Vector3 } from "three";
 import { ANKLE, body, type Ch, clamp01, HIP_H, type Key, SHIN, sample, smoother, steady, THIGH } from "../moves";
 import { HANDS, type HandShape, handPose, type Pose } from "../rig";
 
@@ -64,7 +65,7 @@ const hash = (n: number, s: number) => {
 // a cheap smooth wobble
 const wob = (t: number, s: number) => (Math.sin(t * 0.73 + s * 5.1) + 0.6 * Math.sin(t * 1.37 + s * 2.3)) / 1.6;
 const shape = (side: 1 | -1, h: HandShape) => handPose(side, h);
-const mixH = (a: HandShape, b: HandShape, u: number): HandShape => ({
+export const mixH = (a: HandShape, b: HandShape, u: number): HandShape => ({
   fingers: lerp(a.fingers, b.fingers, u),
   index: lerp(a.index, b.index, u),
   thumb: lerp(a.thumb, b.thumb, u),
@@ -471,16 +472,90 @@ export function car3(f: CarFit, t: number, seed: number): Act {
 
 /** (plan 98) Getting in or out of a car, a moment of it (car/getin.ts): the hips' joint `hipY` over the root (the
  *  root under the hips), each sole where it is in her own space (x her left, y up, z ahead), its toes pointed down
- *  (rad), ducked under the roof (0..1) and bent to her right (rad). The legs solved to the feet. */
+ *  (rad), ducked under the roof (0..1) and bent to her right (rad). The legs solved to the feet.
+ *  (plan 100) Each leg solved in three dimensions — its knee bent toward `knee` (her space), its foot turned to
+ *  `heading` (rad off her facing, + to her left) and pointed by its toes —; the trunk turned `twist` (+ left) and the
+ *  head `look` on it; each hand's shape as it holds (or not). */
 export interface CarStep {
   hipY: number;
   feet: [[number, number, number], [number, number, number]];
   toe: [number, number];
   duck: number;
   side: number;
+  knee?: [[number, number, number], [number, number, number]];
+  heading?: [number, number];
+  twist?: number;
+  look?: number;
+  hands?: { L?: HandShape; R?: HandShape };
 }
 /** The hip joints off the middle (m: car3's). */
 const HIP_W = 0.078;
+const _lh = new Vector3();
+const _la = new Vector3();
+const _lp = new Vector3();
+const _lk = new Vector3();
+const _lt = new Vector3();
+const _lsh = new Vector3();
+const _lf = new Vector3();
+const _lx = new Vector3();
+const _ly = new Vector3();
+const _lm = new Matrix4();
+const _lm2 = new Matrix4();
+const _lm3 = new Matrix4();
+const _le = new Euler();
+/** (plan 100) A leg's three joints (her space: the thigh's turn under the hips' own, the knee's bend, the ankle's turn
+ *  under the shin) for its ankle at `ankle`, its knee toward `pole`, its foot turned `heading` and pointed `toe`. */
+function leg3(
+  out: 1 | -1,
+  hipY: number,
+  hipsTurn: [number, number, number],
+  ankle: Vector3,
+  pole: Vector3,
+  heading: number,
+  toe: number,
+): { thigh: [number, number, number]; knee: number; ankle: [number, number, number] } {
+  const hip = _lh.set(out * HIP_W, hipY, 0);
+  const D = _la.copy(ankle).sub(hip);
+  const d = Math.min(THIGH + SHIN - 1e-4, Math.max(0.05, D.length()));
+  const u = D.normalize();
+  const v = _lp.copy(pole).addScaledVector(u, -pole.dot(u));
+  if (v.lengthSq() < 1e-8) v.set(0, 0, 1).addScaledVector(u, -u.z);
+  v.normalize();
+  const ca = Math.max(-1, Math.min(1, (THIGH * THIGH + d * d - SHIN * SHIN) / (2 * THIGH * d)));
+  const sa = Math.sqrt(1 - ca * ca);
+  // (the thigh's way, the knee's front — toward the pole —, and the knee's bend)
+  const T = _lt.copy(u).multiplyScalar(ca).addScaledVector(v, sa).normalize();
+  const knee = _lk.copy(hip).addScaledVector(T, THIGH);
+  const Sh = _lsh.copy(hip).addScaledVector(u, d).sub(knee).normalize();
+  const F = _lf.copy(Sh).addScaledVector(T, -Sh.dot(T)).multiplyScalar(-1);
+  if (F.lengthSq() < 1e-8) F.copy(v).addScaledVector(T, -v.dot(T));
+  F.normalize();
+  const kneeBend = Math.acos(Math.max(-1, Math.min(1, T.dot(Sh))));
+  // (the thigh's frame: its −y down the thigh, its +z the knee's front, its x across)
+  const Y = _ly.copy(T).multiplyScalar(-1);
+  const X = _lx.crossVectors(Y, F);
+  _lm.makeBasis(X, Y, F);
+  // (under the hips, turned as the pose has them)
+  _lm2.makeRotationFromEuler(_le.set(hipsTurn[0], hipsTurn[1], hipsTurn[2], "XYZ")).invert();
+  const local = _lm3.multiplyMatrices(_lm2, _lm);
+  _le.setFromRotationMatrix(local, "XYZ");
+  const thigh: [number, number, number] = [_le.x, _le.y, _le.z];
+  // the ankle: the foot as wanted (turned to its heading, pointed by its toes) under the shin as it is
+  _lm2.makeRotationX(kneeBend);
+  const shin = _lm3.multiplyMatrices(_lm, _lm2);
+  const foot = _lm2.makeRotationY(heading).multiply(_lm.makeRotationX(toe));
+  const ank = _lm.copy(shin).invert().multiply(foot);
+  _le.setFromRotationMatrix(ank, "XYZ");
+  // (within an ankle's reach: up and down, a little side to side and round)
+  const ankleJ: [number, number, number] = [
+    Math.max(-0.75, Math.min(0.9, _le.x)),
+    Math.max(-0.35, Math.min(0.35, _le.y)),
+    Math.max(-0.3, Math.min(0.3, _le.z)),
+  ];
+  return { thigh, knee: kneeBend, ankle: ankleJ };
+}
+const _ka = new Vector3();
+const _kp = new Vector3();
 export function carStep(f: CarStep, t: number): Act {
   const d = f.duck;
   const c: Ch = { up: 0 };
@@ -492,26 +567,68 @@ export function carStep(f: CarStep, t: number): Act {
   c.dx = -0.2 * d;
   c.sz = f.side;
   c.dz = -0.45 * f.side;
-  (["L", "R"] as const).forEach((S, i) => {
-    const out = S === "L" ? 1 : -1;
-    const [x, y, z] = f.feet[i];
-    // (the ankle from the hip's joint: out to her side, up, ahead)
-    const lat = (x - out * HIP_W) * out;
-    const dy = ANKLE + y - f.hipY;
-    const rho = Math.hypot(dy, z);
-    const phi = Math.atan2(lat, Math.max(0.05, rho));
-    const dd = Math.hypot(lat, rho);
-    const tc = Math.atan2(z, -dy);
-    const [th, k] = leg(dd * Math.sin(tc), -dd * Math.cos(tc));
-    c[`t${S}`] = th - c.hx;
-    c[`k${S}`] = k;
-    c[`f${S}`] = -c.hx + f.toe[i];
-    c[`a${S}`] = phi;
-  });
+  // (plan 100) the shoulders ahead of the hips, the head on them
+  if (f.twist) {
+    c.sy = f.twist;
+    c.cy = 0.25 * f.twist;
+  }
+  if (f.look) {
+    c.ny = 0.4 * f.look;
+    c.dy = 0.6 * f.look;
+  }
+  if (!f.knee) {
+    (["L", "R"] as const).forEach((S, i) => {
+      const out = S === "L" ? 1 : -1;
+      const [x, y, z] = f.feet[i];
+      // (the ankle from the hip's joint: out to her side, up, ahead)
+      const lat = (x - out * HIP_W) * out;
+      const dy = ANKLE + y - f.hipY;
+      const rho = Math.hypot(dy, z);
+      const phi = Math.atan2(lat, Math.max(0.05, rho));
+      const dd = Math.hypot(lat, rho);
+      const tc = Math.atan2(z, -dy);
+      const [th, k] = leg(dd * Math.sin(tc), -dd * Math.cos(tc));
+      c[`t${S}`] = th - c.hx;
+      c[`k${S}`] = k;
+      c[`f${S}`] = -c.hx + f.toe[i];
+      c[`a${S}`] = phi;
+    });
+  }
   // (the arms loose, a little forward and bent: the hands are reached for after)
   c.sL = c.sR = -0.15 - 0.25 * d;
   c.eL = c.eR = -0.35;
   const m = body(c);
+  if (f.knee) {
+    // (plan 100) the legs in three dimensions, under the hips as body() turned them
+    const hips = (m.pose.hips ?? [0, 0, 0]) as [number, number, number];
+    (["L", "R"] as const).forEach((S, i) => {
+      const out = S === "L" ? 1 : -1;
+      const [x, y, z] = f.feet[i];
+      const kp = f.knee?.[i] ?? [0, 0, 1];
+      const r = leg3(
+        out,
+        f.hipY,
+        hips,
+        _ka.set(x, y + ANKLE, z),
+        _kp.set(kp[0], kp[1], kp[2]),
+        f.heading?.[i] ?? 0,
+        f.toe[i],
+      );
+      m.pose[`thigh${S}`] = r.thigh;
+      m.pose[`knee${S}`] = [r.knee, 0, 0];
+      m.pose[`ankle${S}`] = r.ankle;
+      m.pose[`toe${S}`] = [-0.25 * Math.min(1, f.toe[i] / 0.5), 0, 0];
+    });
+  }
+  // (plan 100) each hand's shape: gripping what it holds, relaxed when it's let go
+  if (f.hands)
+    for (const [S, side] of [
+      ["L", 1],
+      ["R", -1],
+    ] as const) {
+      const h = f.hands[S];
+      if (h) Object.assign(m.pose, shape(side, h));
+    }
   return { pose: m.pose, lift: [0, 0, 0] };
 }
 

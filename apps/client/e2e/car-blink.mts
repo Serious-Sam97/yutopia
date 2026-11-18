@@ -12,7 +12,13 @@ const r = await ctx.post("http://localhost:8100/api/login", {
 });
 const tok = (await r.json()).token;
 const browser = await chromium.launch({
-  args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", "--disable-gpu-vsync", "--disable-frame-rate-limit"],
+  args: [
+    "--use-angle=metal",
+    "--enable-gpu",
+    "--ignore-gpu-blocklist",
+    "--disable-gpu-vsync",
+    "--disable-frame-rate-limit",
+  ],
 });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 page.on("pageerror", (e) => console.log("  page:", e.message));
@@ -33,10 +39,14 @@ await page.addInitScript(
   [tok, quality] as const,
 );
 await page.goto(`${base}/`);
-await page.waitForFunction(() => {
-  const h = (window as any).__hud?.get();
-  return h?.phase === "ready" && h.loading?.on === false;
-}, null, { timeout: 240_000 });
+await page.waitForFunction(
+  () => {
+    const h = (window as any).__hud?.get();
+    return h?.phase === "ready" && h.loading?.on === false;
+  },
+  null,
+  { timeout: 240_000 },
+);
 const cdp = await page.context().newCDPSession(page);
 await page.evaluate(() => {
   const W = window as any;
@@ -49,7 +59,12 @@ await page.evaluate(() => {
     const out = g(pr);
     const ms = performance.now() - t0;
     const p = r.info.programs.find((x: any) => x.program === pr);
-    W.__fu.push([Math.round(t0), +ms.toFixed(1), p ? `${p.name}#${String(p.cacheKey).slice(0, 90)}` : "?", p ? String(p.cacheKey) : ""]);
+    W.__fu.push([
+      Math.round(t0),
+      +ms.toFixed(1),
+      p ? `${p.name}#${String(p.cacheKey).slice(0, 90)}` : "?",
+      p ? String(p.cacheKey) : "",
+    ]);
     return out;
   };
 });
@@ -58,16 +73,22 @@ await page.evaluate(() => {
   c.room.send("mod:cars", {});
   c.room.send("mod:hour", { h: 12 });
 });
-const car = await page.waitForFunction(() => {
-  const c = (window as any).__yutopia;
-  const o: any[] = [];
-  c.room.state.objects.forEach((x: any) => {
-    const p = JSON.parse(x.props);
-    if (x.kind === "car" && !p.driven && /^town-car/.test(x.id)) o.push({ id: x.id, x: x.x });
-  });
-  o.sort((a, b) => a.x - b.x);
-  return o[0] && c.cars.parked.get(o[0].id)?.pose ? { id: o[0].id, pose: c.cars.parked.get(o[0].id).pose } : null;
-}, null, { timeout: 20_000 }).then((h) => h.jsonValue());
+const car = await page
+  .waitForFunction(
+    () => {
+      const c = (window as any).__yutopia;
+      const o: any[] = [];
+      c.room.state.objects.forEach((x: any) => {
+        const p = JSON.parse(x.props);
+        if (x.kind === "car" && !p.driven && /^town-car/.test(x.id)) o.push({ id: x.id, x: x.x });
+      });
+      o.sort((a, b) => a.x - b.x);
+      return o[0] && c.cars.parked.get(o[0].id)?.pose ? { id: o[0].id, pose: c.cars.parked.get(o[0].id).pose } : null;
+    },
+    null,
+    { timeout: 20_000 },
+  )
+  .then((h) => h.jsonValue());
 const pp = car.pose;
 // (by its driver's door, else its other side: the first with the car's prompt)
 let prompted = false;
@@ -137,13 +158,27 @@ await page.evaluate((id) => {
     const pm = p?.full ?? p?.old;
     W.__b.push({
       t: Math.round(performance.now() - t0),
-      park: p ? `${pm ? (pm.ready ? "R" : "r") : "-"}${shown(pm?.root) ? "v" : "h"}${p.far ? (shown(p.far.root) ? "F" : "f") : ""}` : "",
-      live: l ? `${l.model.ready ? "R" : "r"}${shown(l.model.glb ?? l.model.root) ? "v" : "h"}${l.model.root.parent ? "" : "x"}` : "",
+      park: p
+        ? `${pm ? (pm.ready ? "R" : "r") : "-"}${shown(pm?.root) ? "v" : "h"}${p.far ? (shown(p.far.root) ? "F" : "f") : ""}`
+        : "",
+      live: l
+        ? `${l.model.ready ? "R" : "r"}${shown(l.model.glb ?? l.model.root) ? "v" : "h"}${l.model.root.parent ? "" : "x"}`
+        : "",
       ho: c.handoff?.has(id) ? 1 : 0,
       dr,
       cam: W.__yutopia.tp?.camera?.position?.toArray().map((v: number) => +v.toFixed(1)),
-      lp: l ? l.model.root.getWorldPosition(new (l.model.root.position.constructor)()).toArray().map((v: number) => +v.toFixed(2)) : null,
-      pp: pm ? pm.root.getWorldPosition(new (pm.root.position.constructor)()).toArray().map((v: number) => +v.toFixed(2)) : null,
+      lp: l
+        ? l.model.root
+            .getWorldPosition(new l.model.root.position.constructor())
+            .toArray()
+            .map((v: number) => +v.toFixed(2))
+        : null,
+      pp: pm
+        ? pm.root
+            .getWorldPosition(new pm.root.position.constructor())
+            .toArray()
+            .map((v: number) => +v.toFixed(2))
+        : null,
       progs: W.__yutopia.tp?.renderer?.info?.programs?.length,
     });
     if (performance.now() - t0 < 5000) requestAnimationFrame(tick);
@@ -181,11 +216,24 @@ await page.evaluate(() => {
     return pr;
   };
 });
-console.log("spare before getting in:", await page.evaluate(() => {
-  const c = (window as any).__yutopia.cars;
-  const sp = c.spare;
-  return sp ? JSON.stringify({ oid: sp.oid, ready: sp.model.ready, stage: sp.warm.stage, left: sp.warm.toDraw.length, q: sp.warm.queue?.length, all: sp.warm.all.length, age: +(c.time - sp.at).toFixed(2) }) : "none";
-}));
+console.log(
+  "spare before getting in:",
+  await page.evaluate(() => {
+    const c = (window as any).__yutopia.cars;
+    const sp = c.spare;
+    return sp
+      ? JSON.stringify({
+          oid: sp.oid,
+          ready: sp.model.ready,
+          stage: sp.warm.stage,
+          left: sp.warm.toDraw.length,
+          q: sp.warm.queue?.length,
+          all: sp.warm.all.length,
+          age: +(c.time - sp.at).toFixed(2),
+        })
+      : "none";
+  }),
+);
 await page.evaluate(() => {
   const W = window as any;
   const r = W.__yutopia.tp.renderer;
@@ -231,11 +279,17 @@ const fu: any[] = await page.evaluate(() => (window as any).__fu);
   console.log(`materials first drawn 0.2–1.5 s after getting in: ${near.length}`);
   for (const x of near.slice(0, 40)) console.log(`   ${x[0] - Math.round(tIn)} ${x[1]} ${x[2]}`);
 }
-console.log("spare stages:", (await page.evaluate(() => (window as any).__sp)).map((x: any) => `${x[0] - Math.round(tIn)}:${x[1]}`).join(" "));
+console.log(
+  "spare stages:",
+  (await page.evaluate(() => (window as any).__sp)).map((x: any) => `${x[0] - Math.round(tIn)}:${x[1]}`).join(" "),
+);
 console.log(`first uses after getting in: ${fu.filter((x) => x[0] > tIn).length}`);
-for (const x of fu.filter((x) => x[0] > tIn - Number(process.env.SETTLE ?? 1500) - 1500)) console.log(`  ${x[0] - Math.round(tIn)} ms ${x[1]} ms ${x[2]}`);
+for (const x of fu.filter((x) => x[0] > tIn - Number(process.env.SETTLE ?? 1500) - 1500))
+  console.log(`  ${x[0] - Math.round(tIn)} ms ${x[1]} ms ${x[2]}`);
 // the first-used paint's key against every other paint program's: where they differ
-const keysNow: string[] = await page.evaluate(() => (window as any).__yutopia.tp.renderer.info.programs.map((p: any) => `${p.name}#${p.cacheKey}`));
+const keysNow: string[] = await page.evaluate(() =>
+  (window as any).__yutopia.tp.renderer.info.programs.map((p: any) => `${p.name}#${p.cacheKey}`),
+);
 const fp = fu.find((x) => x[0] > tIn && /^paint#|^wear-top/.test(x[2]));
 if (fp) {
   const nm = fp[2].split("#")[0];
@@ -244,13 +298,21 @@ if (fp) {
     const b = k.slice(nm.length + 1).split(",");
     if (b.join(",") === a.join(",")) continue;
     const d: string[] = [];
-    for (let i = 0; i < Math.max(a.length, b.length); i++) if (a[i] !== b[i]) d.push(`[${i}] used=${a[i]} other=${b[i]}`);
-    console.log(`  ${nm} differs: ${d.slice(0, 12).join("  ")}${a.length > 200 ? "" : ""} (len ${a.length}/${b.length})`);
+    for (let i = 0; i < Math.max(a.length, b.length); i++)
+      if (a[i] !== b[i]) d.push(`[${i}] used=${a[i]} other=${b[i]}`);
+    console.log(
+      `  ${nm} differs: ${d.slice(0, 12).join("  ")}${a.length > 200 ? "" : ""} (len ${a.length}/${b.length})`,
+    );
   }
 }
 await cdp.send("Page.stopScreencast");
 const t0s = shots[0]?.t ?? 0;
-shots.forEach((s, i) => fs.writeFileSync(`${out}/${String(i).padStart(3, "0")}-${Math.round((s.t - t0s) * 1000)}.jpg`, Buffer.from(s.d, "base64")));
+shots.forEach((s, i) =>
+  fs.writeFileSync(
+    `${out}/${String(i).padStart(3, "0")}-${Math.round((s.t - t0s) * 1000)}.jpg`,
+    Buffer.from(s.d, "base64"),
+  ),
+);
 console.log(`shots ${shots.length} in ${out}`);
 const b: any[] = await page.evaluate(() => (window as any).__b);
 let last = "";
@@ -259,11 +321,23 @@ for (const f of b) {
   const k = `park=${f.park || "·"} live=${f.live || "·"}`;
   const drawn = /v/.test(f.park) || f.live === "Rv";
   if (!drawn) gap++;
-  if (k !== last || (f.live && f.dr < 5) || f.t < 700) console.log(`${String(f.t).padStart(5)} ms  ${k} lp=${f.lp} draws=${f.dr} cam=${f.cam} progs=${f.progs}${drawn ? "" : "   <- no car"}`);
+  if (k !== last || (f.live && f.dr < 5) || f.t < 700)
+    console.log(
+      `${String(f.t).padStart(5)} ms  ${k} lp=${f.lp} draws=${f.dr} cam=${f.cam} progs=${f.progs}${drawn ? "" : "   <- no car"}`,
+    );
   last = k;
 }
 console.log(`frames ${b.length}, with no car drawn: ${gap}`);
 const long: any[] = await page.evaluate(() => (window as any).__s);
-console.log("long frames after getting in (at ms: ms):", long.filter((x) => x[0] > tIn - Number(process.env.SETTLE ?? 1500) - 50).map((x) => `${Math.round(x[0] - tIn)}:${x[1]}`).join(" "));
-console.log("ready at start:", await page.evaluate(() => JSON.stringify((window as any).__hud?.get()?.loading ?? null)));
+console.log(
+  "long frames after getting in (at ms: ms):",
+  long
+    .filter((x) => x[0] > tIn - Number(process.env.SETTLE ?? 1500) - 50)
+    .map((x) => `${Math.round(x[0] - tIn)}:${x[1]}`)
+    .join(" "),
+);
+console.log(
+  "ready at start:",
+  await page.evaluate(() => JSON.stringify((window as any).__hud?.get()?.loading ?? null)),
+);
 await browser.close();
