@@ -7,6 +7,7 @@ import { segBox } from "./common";
 /** What Pointer reads of the ThirdPersonView (plan 72 phase 4: its dependencies, said). */
 export type PointerHost = Pick<
   ThirdPersonView,
+  | "skLook"
   | "activeAt"
   | "aim"
   | "aimDir"
@@ -110,6 +111,8 @@ export class Pointer {
       // (some browsers send one huge jump as the lock starts)
       if (Math.abs(e.movementX) > 400 || Math.abs(e.movementY) > 400) return;
       this.c.dragged = this.c.time;
+      // (plan 105: the skate camera's look round, by how far the mouse moved)
+      this.c.skLook += e.movementX;
       if (this.c.mode === "chase" && !this.c.god && !this.c.buildPick.buildMode) {
         // the KH camera's: by how far it moved; locked on, a sideways flick is the next target
         const f = this.c.follow;

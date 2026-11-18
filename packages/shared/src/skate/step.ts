@@ -287,6 +287,16 @@ const newAir = (vert: boolean, fakie: boolean): AirNow => ({
 });
 
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+/** A unit vector turned toward another by at most `max` (rad). */
+function turnUp(a: [number, number, number], b: [number, number, number], max: number): [number, number, number] {
+  const c = clamp(a[0] * b[0] + a[1] * b[1] + a[2] * b[2], -1, 1);
+  const ang = Math.acos(c);
+  if (ang <= max || ang < 1e-6) return [b[0], b[1], b[2]];
+  const t = max / ang;
+  const v: [number, number, number] = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  const n = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [v[0] / n, v[1] / n, v[2] / n];
+}
 /** A heading turned toward another by at most `max` (rad), the short way. */
 function turnToward(from: number, to: number, max: number): number {
   const d = wrap(to - from);
@@ -330,7 +340,10 @@ export function stepSkate(b: Body, inp: MoveInput, env: MoveEnv, dt: number, ev:
   k.lastDown = keys.downPressed ? 0 : k.lastDown + dt;
   k.clock += dt;
   k.noGrind = Math.max(0, k.noGrind - dt);
-  if (k.flash && (k.flash.t -= dt) <= 0) k.flash = null;
+  if (k.flash) {
+    k.flash.t -= dt;
+    if (k.flash.t <= 0) k.flash = null;
+  }
   // (the directions pressed lately: a special's two)
   for (const [on, d] of [
     [keys.upPressed, "u"],
@@ -487,7 +500,8 @@ function roll(
     const sl = k.slope;
     const n = Math.hypot(1, sl);
     F = [Math.cos(b.yaw) / n, Math.sin(b.yaw) / n, sl / n];
-    k.n = [0, 0, 1];
+    // (plan 105: the town's own slopes lean her too — the land's slope along the board)
+    k.n = [(-sl * Math.cos(b.yaw)) / n, (-sl * Math.sin(b.yaw)) / n, 1 / n];
   }
 
   // the speed: the slope's pull (the ramps' and the land's), a push (W) or the auto-kick at a crawl (you never
@@ -938,6 +952,14 @@ function air(
     b.x += b.vx * dt;
     b.y += b.vy * dt;
     b.z += b.vz * dt;
+  }
+  // (plan 105, Tony Hawk's: in the air the board's up comes upright, ~5° a frame; on the way down, within 1.5 m of a
+  // piece's face, it turns to meet it)
+  {
+    const below = b.vz < 0 ? park.topAt(b.x, b.y, b.z + 0.02, 0) : null;
+    let want: [number, number, number] = [0, 0, 1];
+    if (below && b.z - below.z < 1.5) want = surfFrame(park.placed[below.on.pl], below.on.l, below.on.w).N;
+    k.n = turnUp(k.n, want, 5.2 * dt);
   }
   // down on a piece
   const top = park.topAt(b.x, b.y, Math.max(z0, b.z) + 0.02, 0);

@@ -83,6 +83,9 @@ export interface RideHost {
     props?: Record<string, unknown> | null;
   }>;
   landAt(x: number, y: number): number;
+  /** (plan 105) the mouse's look since asked (px, taken), and where the camera looks (rad, floor coords) */
+  mouseLook?(): number;
+  viewYaw?(): number | null;
   /** what's underfoot (the walker's footing) */
   footing?(x: number, y: number): string;
 }
@@ -152,6 +155,9 @@ export class SkateRide {
     this.hud ??= new SkateHud();
     this.hud.hidden(false);
     this.cam.reset();
+    // (plan 105: the way you look is the way you go — turned to the camera's heading, rolling straight away)
+    const vy = this.host.viewYaw?.();
+    if (vy != null) b.yaw = vy;
     startSkate(b, variant, stance, this.carry);
     hudStore.set({ skating: true });
     this.hit("on");
@@ -366,6 +372,7 @@ export class SkateRide {
   camera() {
     const b = this.host.body();
     if (!b?.skate) return null;
+    this.cam.mouse(this.host.mouseLook?.() ?? 0);
     return this.cam.frame(b, this.park, this.camDt);
   }
 

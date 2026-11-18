@@ -22,9 +22,18 @@ const lerpK = (perFrame: number, dt: number) => 1 - (1 - perFrame) ** (dt * 60);
 export class SkateCamera {
   preset: CamPreset = "normal";
   private eye: [number, number, number] | null = null;
-  private look: [number, number, number] = [0, 0, 0];
+  private target: [number, number, number] = [0, 0, 0];
   private heading = 0;
   private roll = 0;
+  /** (plan 105) the mouse's look off the heading (rad), and s since it last moved */
+  private look = 0;
+  private lookIdle = 9;
+  /** The mouse moved `px` pixels (looking round): the camera turned off the board's heading. */
+  mouse(px: number) {
+    if (!px) return;
+    this.look = Math.max(-1.2, Math.min(1.2, this.look + px * 0.004));
+    this.lookIdle = 0;
+  }
   constructor() {
     try {
       const p = localStorage.getItem("yutopia.skate.cam") as CamPreset | null;
@@ -61,8 +70,11 @@ export class SkateCamera {
       d = Math.atan2(Math.sin(d), Math.cos(d));
       this.heading += d * lerpK(0.12, dt);
     } else if (!this.eye) this.heading = b.yaw;
-    const hx = Math.cos(this.heading);
-    const hy = Math.sin(this.heading);
+    // (the mouse's look: held a moment, then eased back behind the board — Tony Hawk's look round)
+    this.lookIdle += dt;
+    if (this.lookIdle > 0.6) this.look *= Math.exp(-dt * 2.5);
+    const hx = Math.cos(this.heading + this.look);
+    const hy = Math.sin(this.heading + this.look);
     const back = P.back + Math.min(1.6, sp * 0.06);
     const look: [number, number, number] = [b.x, b.y, b.z + P.look];
     let want: [number, number, number] = [b.x - hx * back, b.y - hy * back, b.z + P.up];
@@ -83,13 +95,13 @@ export class SkateCamera {
     e[0] += (want[0] - e[0]) * kxy;
     e[1] += (want[1] - e[1]) * kxy;
     e[2] += (want[2] - e[2]) * kz;
-    this.look = look;
+    this.target = look;
     // a grind's lean: the camera rolled with it (π/6 at full lean)
     const bal = k.grind?.bal ?? 0;
     this.roll += (bal * (Math.PI / 6) - this.roll) * lerpK(0.1, dt);
     return {
       eye: [e[0], e[1], e[2]] as [number, number, number],
-      look: [this.look[0], this.look[1], this.look[2]] as [number, number, number],
+      look: [this.target[0], this.target[1], this.target[2]] as [number, number, number],
       fov: P.fov,
       showMe: true,
       snap: true,
@@ -120,7 +132,11 @@ export class SkateCamera {
       // (inside a ramp's body for two samples running: the eye kept short of it, up over it)
       if (inside >= 2) {
         const tb = Math.max(1 / 3, (i - 2) / n);
-        ok = [from[0] + (to[0] - from[0]) * tb, from[1] + (to[1] - from[1]) * tb, Math.max(to[2], top ? top.z + 0.6 : to[2])];
+        ok = [
+          from[0] + (to[0] - from[0]) * tb,
+          from[1] + (to[1] - from[1]) * tb,
+          Math.max(to[2], top ? top.z + 0.6 : to[2]),
+        ];
         break;
       }
     }

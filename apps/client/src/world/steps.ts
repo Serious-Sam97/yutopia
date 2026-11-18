@@ -672,6 +672,8 @@ const HARD = new Set<Footing>([
 /** Someone drawn this frame, as the 3D view has them (the controller's bodies). */
 export interface Walker {
   id: string;
+  /** (plan 105) on a board: its code on the wire (shared skate skateCode) — no steps */
+  sk?: number;
   x: number;
   y: number;
   z?: number;
@@ -931,6 +933,8 @@ export class Footfalls {
   // walking, on their feet: not sat, in the air, a verb or a move
   private moving(w: Walker, h: Heard): boolean {
     if (w.a === 2 || verbOf(w) || flowOf(w) || w.jump) return false;
+    // (plan 105: rolling on a board isn't walking)
+    if (w.sk && (w.sk & 7) >= 1 && (w.sk & 7) <= 6) return false;
     if (w.z !== undefined && w.ground !== undefined && w.z > w.ground + 0.05) return false;
     return w.a === 1 || h.speed > 0.3;
   }

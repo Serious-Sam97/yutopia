@@ -641,6 +641,7 @@ const tv2 = new Vector3();
 const tv3 = new Vector3();
 const skYaw = new Quaternion();
 const skN3 = new Vector3();
+const SK_UP: [number, number, number] = [0, 0, 1];
 const skHand = new Vector3();
 const skFootAt = new Vector3();
 const skFootUp = new Vector3();
@@ -777,6 +778,12 @@ export class Person3D {
   private skT0 = 0;
   private skW = 0;
   private skTipped = false;
+  /** (plan 105) the drawn up, eased to the surface's */
+  private skUp = new Vector3(0, 1, 0);
+  /** On a board (her tilt's her own: the seats leave it be). */
+  get skating(): boolean {
+    return this.skW > 0;
+  }
   /** (plan 104 F4a) the clips' player, a goofy rider's mirrored frame, each hand's spot (her space) and weight */
   private skPlayer: InstanceType<SkateAnim["SkaterPlayer"]> | null = null;
   private skMirror: InstanceType<SkateAnim["Frame"]> | null = null;
@@ -1198,7 +1205,10 @@ export class Person3D {
     // steps stand in)
     const down = this.motion.loco?.lock?.down;
     if (down?.length) {
-      if (!given && seen.onScreen) for (const S of down) seen.step?.(this.id, S);
+      // (plan 105: none on a board — its wheels are its sound)
+      const sk = p.sk ?? 0;
+      const onBoard = (sk & 7) >= 1 && (sk & 7) <= 6;
+      if (!given && seen.onScreen && !onBoard) for (const S of down) seen.step?.(this.id, S);
       down.length = 0;
     }
     // (out of a turn round from a run: down on both feet, the foot lock let go through it)
@@ -1563,11 +1573,14 @@ export class Person3D {
     if (swimHands && !limpHands) this.model.handsTo(swimHands);
     // (plan 103) on a board: tipped with the ramp under it (its normal), the hands out or to the board
     if (this.part === "all") {
-      const N = this.skW > 0 ? p.skN : null;
+      const N = this.skW > 0 ? (p.skN ?? SK_UP) : null;
       if (N) {
         skYaw.setFromAxisAngle(Y3, Math.PI / 2 - this.turned);
         skN3.set(N[0], N[2], N[1]).normalize();
-        this.root.quaternion.setFromUnitVectors(Y3, skN3).multiply(skYaw);
+        // (plan 105: eased to the surface — a quarter turn in about a tenth of a second, no snap at a kink)
+        if (!this.skTipped) this.skUp.copy(skN3);
+        else this.skUp.lerp(skN3, 1 - Math.exp(-dt * 18)).normalize();
+        this.root.quaternion.setFromUnitVectors(Y3, this.skUp).multiply(skYaw);
         this.skTipped = true;
       } else if (this.skTipped) {
         const y = this.root.rotation.y;

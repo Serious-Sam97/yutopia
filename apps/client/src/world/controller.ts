@@ -1744,7 +1744,14 @@ export class WorldController {
         sid: () => this.room?.sessionId ?? "",
         // (the built pieces: on the ground floor — their props' level, a JSON string on the wire)
         things: () => {
-          const out: { kind: string; x: number; y: number; rot?: number; yaw?: number; props: Record<string, unknown> }[] = [];
+          const out: {
+            kind: string;
+            x: number;
+            y: number;
+            rot?: number;
+            yaw?: number;
+            props: Record<string, unknown>;
+          }[] = [];
           this.room?.state.objects.forEach((o) => {
             if (!o.kind.startsWith("sk_")) return;
             let props: Record<string, unknown> = {};
@@ -1758,6 +1765,14 @@ export class WorldController {
           return out;
         },
         landAt: (x, y) => this.tp?.landHeight(x, y) ?? 0,
+        mouseLook: () => {
+          const t = this.tp;
+          if (!t) return 0;
+          const px = t.skLook;
+          t.skLook = 0;
+          return px;
+        },
+        viewYaw: () => (this.tp ? this.tp.yaw : null),
         footing: (x, y) => {
           const G = this.G;
           return G && this.grid.onLand(x, y) ? G.surfaceCellAt(Math.floor(x), Math.floor(y)) : "floor";
@@ -1947,6 +1962,8 @@ export class WorldController {
         !out.flow &&
         out.swim < 2 &&
         !this.jumpTrack.kind &&
+        // (plan 105: on a board, its wheels are its sound — no steps)
+        !skOn(out.sk) &&
         !this.tp?.downed.has(this.room?.sessionId ?? ""),
       gait: out.gait === "crouch" || out.gait === "jog" || out.gait === "sprint" ? out.gait : "walk",
     };

@@ -1,7 +1,7 @@
 import { crossings } from "@yutopia/shared/physics/structure-solids";
-import { setBoardRenderer } from "../skate/board3d";
 import type { Structure } from "@yutopia/shared/structure";
 import { panOf, setEarYaw } from "../ear";
+import { setBoardRenderer } from "../skate/board3d";
 // (first: the fog chunks swapped before anything below makes a material — fog3d.ts; lights-off.ts, below, adds the
 // lights that are off skipped to its hook, there before any material is compiled: that's at the first render)
 import "./fog3d";
@@ -540,6 +540,8 @@ export class ThirdPersonView {
   readonly printsPart: Prints = new Prints(this);
 
   readonly renderer: WebGLRenderer;
+  /** (plan 105) the mouse's look on a board: pixels moved since the skate camera last took them */
+  skLook = 0;
   /** (plan 103) the camera's way behind a board */
   private skCamYaw = 0;
   readonly scene = new Scene();
@@ -2956,10 +2958,12 @@ void main() {
             hop: this.onHop,
           },
         );
-        this.seats.rideSeat(
-          p3.root,
-          b.a === 2 ? this.seats.seatObjs.get(Math.floor(b.y) * this.map.width + Math.floor(b.x)) : undefined,
-        );
+        // (plan 105: a skater's tilt is the ramp's — the seats' reset of it would stand her upright on every ramp)
+        if (!p3.skating)
+          this.seats.rideSeat(
+            p3.root,
+            b.a === 2 ? this.seats.seatObjs.get(Math.floor(b.y) * this.map.width + Math.floor(b.x)) : undefined,
+          );
         // (plan 58 5d: down on the ragdoll — the physics stepped while anyone is; mine holds the walker)
         if (p3.limp?.on) this.body.limpNow = true;
         if (b.id === meId) {
