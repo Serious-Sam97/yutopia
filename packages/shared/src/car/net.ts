@@ -57,6 +57,10 @@ export const CAR_FLAGS = {
   radio1: 16384, // the radio's station: (fl >> 14) & 3, 0 off
   radio2: 32768,
   siren: 65536, // the police car's (its light bar flashing)
+  // (plan 101: bits 17–28 a bike's own — bike/net.ts)
+  // (plan 101) the last state of a vehicle that rolled on from someone's client (jumped out of, fallen off), come to
+  // rest: parked now, from just this pose
+  settled: 1 << 29,
 } as const;
 
 export const CAR_HZ = 20;

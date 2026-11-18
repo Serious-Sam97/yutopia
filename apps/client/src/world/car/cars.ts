@@ -783,6 +783,8 @@ const ropeB = new Vector3();
 /** how many bits are set (of four: the chained wheels) */
 const bitsN = (b: number) => (b & 1) + ((b >> 1) & 1) + ((b >> 2) & 1) + ((b >> 3) & 1);
 const FLIP = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI);
+const qBike = new Quaternion();
+const vBike = new Vector3();
 
 /** The cars for a world controller (its own state read as the host: the glue lives here, in the
  *  car's chunk, not on the world page). */
@@ -2662,7 +2664,10 @@ export class Cars {
         P.z += (z - P.z) * k;
         P.a += dA * k;
         P.y = sh ? this.G.heightAt(P.x, P.z) : (pose.h ?? this.G.heightAt(P.x, P.z));
-        if (p.full) placeModel(p.full.root, P.x, P.y, P.z, P.a);
+        if (p.full) {
+          placeModel(p.full.root, P.x, P.y, P.z, P.a);
+          this.restBike(p.full, o.props, P, p.spec.cog);
+        }
         if (p.old) placeModel(p.old.root, P.x, P.y, P.z, P.a);
         if (p.far) placeModel(p.far.root, P.x, P.y + 0.02, P.z, P.a);
       }
@@ -2717,12 +2722,8 @@ export class Cars {
         p.wearKey = undefined;
         placeModel(p.full.root, P.x, y, P.z, P.a);
         p.full.root.userData.still = true;
-        // (plan 101: a bike taken on as it stopped — on its side if it fell, else onto its kickstand)
-        if (p.full instanceof BikeModel) {
-          const down = Number(o.props?.down) || 0;
-          p.full.setStand(down ? 0 : 1);
-          p.full.body.rotation.x = down ? Math.sign(down) * 1.38 : p.full.standLean;
-        }
+        // (plan 101: a bike taken on as it stopped — just as it lies, if it fell; else onto its kickstand)
+        this.restBike(p.full, o.props, P, p.spec.cog);
       } else if (ho && (want !== "near" || this.time - ho.at > 5)) {
         this.handoff.delete(o.id);
         this.root.remove(ho.model.root);
@@ -2747,6 +2748,7 @@ export class Cars {
         p.stillDone = false;
         p.full.setEnv(this.env);
         placeModel(p.full.root, P.x, y, P.z, P.a);
+        this.restBike(p.full, o.props, P, p.spec.cog);
         p.full.root.userData.still = true; // (parked: the 3D view may leave it out when hidden, tp/below-cull.ts)
         this.root.add(p.full.root);
       }
@@ -2770,12 +2772,8 @@ export class Cars {
         p.full.setHoles?.(parseHoles(o.props?.holes));
         p.full.setChains?.(chainsOf(o.props), p.spec.wheel.r, p.spec.wheel.width);
         p.wearKey = wk;
-        // (plan 101: a bike stands on its kickstand, leant onto it; one that fell lies on its side)
-        if (p.full instanceof BikeModel) {
-          p.full.setStand(o.props?.down ? 0 : 1);
-          const down = Number(o.props?.down) || 0;
-          p.full.body.rotation.x = down ? Math.sign(down) * 1.38 : p.full.standLean;
-        }
+        // (plan 101: a bike stands on its kickstand, leant onto it; one that fell lies just as it came to rest)
+        this.restBike(p.full, o.props, P, p.spec.cog);
         // (a mid model's dents pressed in and its pieces merged: most parked cars round you; a near one — a car or
         // two, its whole cabin — left as it was: merging it is a long frame, every time one comes near)
         if (p.level === "mid") {
@@ -2892,6 +2890,34 @@ export class Cars {
       room.send("car:shove", { id, x: sh.x, z: sh.z, a: sh.a });
     }
   }
+  /** (plan 101) A parked bike at rest: one that fell, just as it lay when it stopped (its turn and its centre of
+   *  gravity's height, kept by the server: `lie`, `ly`) — drawn as the physics had it, not a pose of its own, so there's
+   *  no jump from the fall to parked; else up on its kickstand, leant onto it. After placeModel. */
+  private restBike(
+    m: Sedan | null,
+    props: Record<string, unknown> | undefined,
+    P: { x: number; z: number },
+    cog: number,
+  ) {
+    if (!(m instanceof BikeModel)) return;
+    const lie = props?.lie;
+    const ly = Number(props?.ly);
+    if (Array.isArray(lie) && lie.length === 4 && Number.isFinite(ly)) {
+      const q = qBike.set(Number(lie[0]), Number(lie[1]), Number(lie[2]), Number(lie[3])).normalize();
+      // (as poseRemote places a car: its centre of gravity, back down to the model's origin, turned)
+      // (a bike's model's origin is under its centre of gravity: straight down from it, in its own up)
+      const origin = vBike.set(0, -cog, 0).applyQuaternion(q);
+      m.root.position.set(P.x, ly, P.z).add(origin);
+      m.root.quaternion.copy(q).multiply(FLIP);
+      m.body.rotation.x = 0;
+      m.setStand(0);
+      return;
+    }
+    const down = Number(props?.down) || 0;
+    m.setStand(down ? 0 : 1);
+    m.body.rotation.x = down ? Math.sign(down) * 1.38 : m.standLean;
+  }
+
   private dropParked(p: ParkedView | undefined) {
     if (!p) return;
     p.full?.dispose();
@@ -3836,7 +3862,8 @@ export class Cars {
     const lying = !bd || Math.abs(bd.bk.roll) > 1.1 || this.time - this.coastAt > 4;
     this.coastStill = speed < 0.3 && lying ? this.coastStill + dt : 0;
     if (!l || !s || !d || !ph || taken || this.coastStill > 1 || this.time - this.coastAt > 30) {
-      if (s && vw && !taken) room.send("car:state", toWire(s, ++m.seq, 0, m.simMs));
+      // (its last state: come to rest — the server parks it from just this pose, plan 101)
+      if (s && vw && !taken) room.send("car:state", toWire(s, ++m.seq, CAR_FLAGS.settled, m.simMs));
       if (d && ph) {
         ph.carWorld.removeCar(d.car);
         ph.ownCar(m.vid, false);

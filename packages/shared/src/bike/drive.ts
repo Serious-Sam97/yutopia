@@ -13,7 +13,7 @@ import { blend, GRIP, type Grip, type Ground } from "../car/grip.ts";
 import type { CarSpec } from "../car/specs.ts";
 import { type CarState, type CarWorld, type Controls, SUNK } from "../car/state.ts";
 import type { CarDef, CarRead, WorldCar } from "../physics/car.ts";
-import { type BikeSpec, paceOn, treadOn } from "./specs.ts";
+import { BIKE_SEATS, type BikeKind, type BikeSpec, paceOn, treadOn } from "./specs.ts";
 import { type Landing, landingOf, newTricks, type TrickId, type Tricks } from "./tricks.ts";
 
 const G = 9.81;
@@ -124,19 +124,21 @@ export function bikeDefOf(spec: CarSpec): CarDef {
       caster: c || undefined,
     };
   };
-  // the hull: narrow at the bottom bracket (leant over, it never scrapes before the tyres let go), wide at the bars
-  // and the rider's shoulders, the head on top; from the centre of mass
+  // the hull: the bike alone (not its rider — thrown off, a bike lies on its bars and a pedal, not propped on a body
+  // that's gone): narrow at the bottom bracket (leant over, it never scrapes before the tyres let go), the saddle, the
+  // bars at their width up front; from the centre of mass
   const y = (h: number) => h - spec.cog;
   const fx = spec.front + b.wheels[0][0] * 0.7;
   const rx = -rearL - b.wheels[1][0] * 0.7;
+  const seatY = (BIKE_SEATS[spec.kind as BikeKind]?.hip[0] ?? 0.9) - 0.08;
   const pts: number[] = [];
   const box = (x0: number, x1: number, h: number, hw: number) => {
     for (const x of [x0, x1]) for (const z of [-hw, hw]) pts.push(x, y(h), z);
   };
   box(rx, fx, 0.3, 0.05);
-  box(rx + 0.15, fx - 0.1, 0.62, 0.1);
-  box(-rearL * 0.6, spec.front * 0.9, spec.body.height - 0.62, spec.body.width / 2);
-  box(-0.25, 0.25, spec.body.height, 0.12);
+  box(rx + 0.15, fx - 0.1, 0.62, 0.09);
+  box(-rearL * 0.55, -rearL * 0.1, seatY, 0.08);
+  box(spec.front * 0.55, spec.front * 0.8, seatY + 0.12, spec.body.width / 2);
   return {
     mass: spec.mass,
     inertia: spec.inertia,

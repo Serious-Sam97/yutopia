@@ -138,6 +138,20 @@ await page.evaluate(() => {
   };
   requestAnimationFrame(f);
   w.__t0 = performance.now();
+  const bid = w.__yutopia.cars.mine.vid.slice(4);
+  w.__track = [];
+  const tk = setInterval(() => {
+    const C = w.__yutopia.cars;
+    const P = C.parked.get(bid);
+    const L = C.live.get(`car:${bid}`);
+    const H = C.handoff.get(bid);
+    const m = P?.full ?? L?.model ?? H?.model;
+    if (!m) return w.__track.push("-");
+    m.root.updateMatrixWorld(true);
+    const sd = m.body.localToWorld(m.bike.saddle.clone());
+    w.__track.push(`${P?.full ? "P" : L ? "L" : "H"}${sd.x.toFixed(2)},${sd.y.toFixed(2)},${sd.z.toFixed(2)}`);
+    if (w.__track.length > 200) clearInterval(tk);
+  }, 50);
   w.__yutopia.cars.mine.drive.throwOff("crash");
 });
 await K.up("KeyW");
@@ -186,6 +200,35 @@ console.log(
     const o = (window as any).__yutopia.room.state.objects.get(id);
     return o ? o.props : null;
   }, id),
+);
+// (the bike drawn as it fell, then parked: where its model is and how it's turned, each 100 ms — no jump between)
+const track: string[] = [];
+for (let i = 0; i < 50; i++) {
+  track.push(
+    await page.evaluate((id) => {
+      const c = (window as any).__yutopia;
+      const P = c.cars.parked.get(id);
+      const L = c.cars.live.get(`car:${id}`);
+      const m = P?.full?.root.visible !== false && P?.full ? P.full : L?.model;
+      if (!m) return "-";
+      const r = m.root;
+      r.updateMatrixWorld(true);
+      const V = r.position.constructor;
+      // (its saddle in the world: a point that shows any jump of pose)
+      const sd = m.body.localToWorld(new V(m.bike?.saddle.x ?? 0, m.bike?.saddle.y ?? 0.9, 0));
+      return `${P?.full ? "P" : "L"}${sd.x.toFixed(2)},${sd.y.toFixed(2)},${sd.z.toFixed(2)}`;
+    }, id),
+  );
+  await page.waitForTimeout(100);
+}
+console.log("saddle:", track.filter((x, i) => i === 0 || x !== track[i - 1]).join(" "));
+const tr: string[] = await page.evaluate(() => (window as any).__track);
+console.log(
+  "from the throw:",
+  tr
+    .filter((x, i) => i === 0 || x !== tr[i - 1])
+    .slice(-12)
+    .join(" "),
 );
 const counts: string[] = [];
 for (let i = 0; i < (process.env.EARLY ? 0 : 16); i++) {

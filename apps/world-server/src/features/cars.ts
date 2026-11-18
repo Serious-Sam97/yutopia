@@ -366,7 +366,7 @@ registerFeature((room: WorldRoom) => {
     const seq = Number(m.seq) >>> 0;
     if (l.last && seq <= l.last.seq) return;
     // too often: dropped (a stuck loop)
-    if (now - l.lastAt < 1000 / (CAR_HZ * 2)) return;
+    if (now - l.lastAt < 1000 / (CAR_HZ * 2) && !(Number(m.fl) & CAR_FLAGS.settled)) return;
     const v = l.veh;
     // where the driver says it is, it is: nothing put back for its pace or its place (the user's
     // call, 2026-10-28: no anticheat for now) — only a state that isn't numbers is let go
@@ -392,7 +392,8 @@ registerFeature((room: WorldRoom) => {
       steer: m.steer,
       rpm: Math.max(0, Math.min(65535, m.rpm | 0)),
       gear: m.gear | 0,
-      fl: (Number(m.fl) >>> 0) & 0x1ffff,
+      // (plan 101: the cars' bits and a bike's own, 17–28; not `settled`, which is said, not kept)
+      fl: (Number(m.fl) >>> 0) & 0x1fffffff,
       slip: m.slip,
       grip: Math.max(0, Math.min(255, Number(m.grip) | 0)),
       thr: Math.max(0, Math.min(100, Number(m.thr) | 0)),
@@ -408,6 +409,12 @@ registerFeature((room: WorldRoom) => {
     v.v = v.vx * Math.cos(v.a) + v.vz * Math.sin(v.a);
     l.last = { ...m, seq };
     l.lastAt = now;
+    // (plan 101: its coaster's last word — come to rest —: parked now, as it lies)
+    if (l.coaster === client.sessionId && !l.seats[0] && Number(m.fl) & CAR_FLAGS.settled) {
+      l.coaster = undefined;
+      v.vx = v.vz = v.vy = 0;
+      l.still = 99;
+    }
   });
 
   // the dirt and dents the driver's client counted: only ever more, and not too much at once
@@ -787,8 +794,18 @@ registerFeature((room: WorldRoom) => {
     if (isBikeKind(v.kind)) {
       const upY = 1 - 2 * (v.qx * v.qx + v.qz * v.qz);
       const zUpY = 2 * (v.qy * v.qz - v.qw * v.qx);
-      if (upY < 0.55) props.down = -zUpY > 0 ? -1 : 1;
-      else delete props.down;
+      if (upY < 0.55) {
+        props.down = -zUpY > 0 ? -1 : 1;
+        // (and how it lies, exactly — its turn and its centre of gravity's height —: drawn parked just as it came to
+        // rest, not a second pose of its own)
+        const r4 = (x: number) => Math.round(x * 10000) / 10000;
+        props.lie = [r4(v.qx), r4(v.qy), r4(v.qz), r4(v.qw)];
+        props.ly = Math.round(v.y * 1000) / 1000;
+      } else {
+        delete props.down;
+        delete props.lie;
+        delete props.ly;
+      }
     }
     if (!v.chains) delete props.chains;
     if (!v.towing) delete props.towing;
@@ -2028,7 +2045,9 @@ registerFeature((room: WorldRoom) => {
         if (l.veh.kind === "ploughtruck" && Math.hypot(v.vx, v.vz) > 1)
           ploughAt(room.state, v.x, v.z, v.a, 3.1, 3.0, now);
         const empty = !l.seats.some(Boolean);
-        l.still = empty && Math.hypot(v.vx, v.vz) < 0.3 ? l.still + dt : 0;
+        // (plan 101: not while its coaster's client still has it falling — a bike tipping over barely moves sideways)
+        const coasting = !!l.coaster && now - l.lastAt < QUIET_MS;
+        l.still = empty && !coasting && Math.hypot(v.vx, v.vz) < 0.3 ? l.still + dt : 0;
         if (l.still > 2) park(l);
       }
       if (now > sweepAt) {

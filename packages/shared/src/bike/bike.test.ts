@@ -209,7 +209,8 @@ test("ridden into a wall it throws its rider; the bike falls over", async () => 
   const wall: Solid = { kind: "box", x: 22, z: 0, hx: 0.5, hz: 4, a: 0, what: "wall" };
   const { d, run } = await ride("bike_town", "asphalt", [wall]);
   run({ ...idle, up: 1 }, 6);
-  assert.equal(d.bk.fell?.why, "crash");
+  // (head on: the front stopped dead — thrown over the bars, or knocked off)
+  assert.ok(d.bk.fell?.why === "crash" || d.bk.fell?.why === "endo", `off: ${d.bk.fell?.why}`);
   run(idle, 3, undefined, false);
   assert.ok(Math.abs(d.bk.roll) > 1.0, `on its side ${d.bk.roll.toFixed(2)}`);
 });
