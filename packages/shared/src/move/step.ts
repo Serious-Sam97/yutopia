@@ -1,6 +1,8 @@
 import type { Point } from "../geom.ts";
 import { moveStep } from "../ground.ts";
 import { type Height, JUMP_G, type JumpKind, stepHeight } from "../jump.ts";
+// (the skate's step is handed in with its park — env.skate — so it loads where boards are, not with every body)
+import type { SkateEnv, SkateEvents, SkateKeys, SkateNow } from "../skate/step.ts";
 import type { FlowKind, FlowNow, FlowWorld } from "./flow.ts";
 import { type Gait, MOVE, type MoveSpec, STEP_DT } from "./spec.ts";
 import { type Footing, footGrip, GRIP } from "./surface.ts";
@@ -39,6 +41,8 @@ export interface MoveInput {
   tired?: boolean;
   /** where the camera looks up (+) or down, rad — swimming under, it steers (plan 66) */
   pitch?: number;
+  /** on a board: its keys (plan 103: skate/step.ts) */
+  skate?: SkateKeys;
 }
 
 export const NO_INPUT: MoveInput = {
@@ -96,6 +100,8 @@ export interface MoveEnv {
   flow?: FlowWorld;
   /** the water at (x, y), the body's heights (docs/plan/66-the-water.md: swim.ts) — none on land */
   water?(x: number, y: number): WaterHere | null;
+  /** the skate park's pieces near (plan 103: skate/pieces.ts) — none, the world's own ground only */
+  skate?: SkateEnv;
 }
 
 /** The water where a body is: its level and bed (the body's heights) and its current (tiles / s,
@@ -163,6 +169,8 @@ export interface Body {
   carry?: number;
   /** afloat (plan 66: swim.ts), and under the surface */
   swim?: { under: boolean } | null;
+  /** on a board (plan 103: skate/step.ts) */
+  skate?: SkateNow | null;
   /** s simulated */
   t: number;
 }
@@ -181,6 +189,8 @@ export interface StepEvents {
   flowEnd?: string;
   /** into the water this hard (0..1: plan 66) */
   splash?: number;
+  /** on a board: what happened (plan 103) */
+  skate?: SkateEvents;
 }
 
 export function newBody(x: number, y: number, z = 0, yaw = 0): Body {
@@ -223,6 +233,8 @@ export function dodging(b: Body, spec: MoveSpec = MOVE): boolean {
 /** One step (`dt`, STEP_DT) of a body under `inp`. */
 export function stepBody(b: Body, inp: MoveInput, env: MoveEnv, spec: MoveSpec = MOVE, dt = STEP_DT): StepEvents {
   const ev: StepEvents = {};
+  // ── on a board (docs/plan/103-the-skate.md): its own step, as the swim's
+  if (b.skate && env.skate) return env.skate.step(b, inp, env, dt, ev);
   const grid = env.grid;
   b.t += dt;
   b.buffer = inp.jumpPressed ? (b.up ? spec.fallBuffer : spec.buffer) : Math.max(0, b.buffer - dt);

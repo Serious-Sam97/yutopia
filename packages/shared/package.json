@@ -60,6 +60,7 @@
     "./car/drive": "./src/car/drive.ts",
     "./car/assist": "./src/car/assist.ts",
     "./bike": "./src/bike/index.ts",
+    "./skate": "./src/skate/index.ts",
     "./bike/drive": "./src/bike/drive.ts",
     "./kart": "./src/kart/index.ts",
     "./move": "./src/move/index.ts",
