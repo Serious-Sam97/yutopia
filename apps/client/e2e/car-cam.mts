@@ -21,6 +21,7 @@ const browser = await chromium.launch({
 });
 const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
 page.on("pageerror", (e) => console.log("  page:", e.message));
+page.on("console", (m) => /THREE\.WebGLProgram|Shader Error|ERROR:/.test(m.text()) && console.log("  shader:", m.text().slice(0, 400)));
 await page.addInitScript((t) => {
   localStorage.setItem("yutopia:token", t);
   localStorage.setItem("yutopia:prefs", JSON.stringify({ quality: "high", view: "3p", cam3p: "chase", maxFps: 0 }));

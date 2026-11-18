@@ -390,11 +390,14 @@ interface Wear {
   uGrime: { value: number };
   uCarInv: { value: Matrix4 };
   uSnow: { value: number };
+  /** (plan 98 phase 21) where the dirt's thrown: the front and rear axles (x), the wheel's radius, the tail (x) */
+  uArch: { value: Vector4 };
 }
 function paintWear(m: MeshStandardMaterial, u: Wear) {
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uGrime = u.uGrime;
     sh.uniforms.uCarInv = u.uCarInv;
+    sh.uniforms.uArch = u.uArch;
     sh.vertexShader = sh.vertexShader
       .replace(
         "#include <common>",
@@ -407,12 +410,23 @@ function paintWear(m: MeshStandardMaterial, u: Wear) {
     sh.fragmentShader = sh.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nuniform float uGrime; varying vec3 vCarPos; varying vec3 vCarN;",
+        "#include <common>\nuniform float uGrime; uniform vec4 uArch; varying vec3 vCarPos; varying vec3 vCarN;",
       )
       .replace(
         "#include <color_fragment>",
         `#include <color_fragment>
-        float grime = uGrime * (1.0 - smoothstep(0.25, 0.95, vCarPos.y)) * (0.8 + 0.2 * sin(vCarPos.x * 9.0 + vCarPos.z * 5.0));
+        float band = (1.0 - smoothstep(0.25, 0.95, vCarPos.y)) * (0.8 + 0.2 * sin(vCarPos.x * 9.0 + vCarPos.z * 5.0));
+        // (plan 98 phase 21: thrown up behind each wheel round its arch, and onto the tail's lower half)
+        float arch = 0.0;
+        if (uArch.z > 0.0) {
+          for (int i = 0; i < 2; i++) {
+            float ax = i == 0 ? uArch.x : uArch.y;
+            float d = length(vec2(vCarPos.x - ax, vCarPos.y - uArch.z));
+            arch = max(arch, (1.0 - smoothstep(uArch.z * 1.05, uArch.z * 1.6, d)) * smoothstep(-0.2, 0.25, (vCarPos.x - ax) / uArch.z));
+          }
+          arch = max(arch, 0.8 * smoothstep(uArch.w - 0.4, uArch.w - 0.05, vCarPos.x) * (1.0 - smoothstep(0.35, 1.0, vCarPos.y)));
+        }
+        float grime = uGrime * max(band, arch * (0.85 + 0.15 * sin(vCarPos.y * 23.0 + vCarPos.x * 11.0)));
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.085, 0.075, 0.06), grime * 0.8);
         // (the shell's inside — the pillars, the roof, the sills seen from the seats: faced toward the cabin's
         // middle, or their backs —: trim, not the paint's colour; docs/plan/92 polish)
@@ -720,7 +734,12 @@ class GlbCar implements Sedan {
   private snowPane: Mesh | null = null;
   private envMats = new Set<MeshStandardMaterial>();
   private env: Texture | null = null;
-  private wear: Wear = { uGrime: { value: 0 }, uCarInv: { value: new Matrix4() }, uSnow: { value: 0 } };
+  private wear: Wear = {
+    uGrime: { value: 0 },
+    uCarInv: { value: new Matrix4() },
+    uSnow: { value: 0 },
+    uArch: { value: new Vector4(0, 0, 0, 0) },
+  };
   private dmg = [0, 0, 0, 0, 0];
   /** its broken parts (shared car/damage.ts PART), as shown */
   private partBits = 0;
@@ -891,6 +910,11 @@ class GlbCar implements Sedan {
     // the tail lamps' red on the snow behind
     this.tail = tailPatch(e.dims.length - e.dims.ahead);
     this.root.add(this.tail);
+    // (plan 98 phase 21: where its dirt's thrown — its axles, its wheel, its tail)
+    const hf = e.hubs.fl ?? e.points.hub_fl;
+    const hr = e.hubs.rl ?? e.points.hub_rl;
+    if (hf && hr)
+      this.wear.uArch.value.set(toModel(hf, v1).x, toModel(hr, v1).x, e.wheel.r, e.dims.length - e.dims.ahead);
     this.headPool = lampPatch(-(e.dims.ahead + 3.4), 3.2, 6.2, 0xffe6bf);
     this.backPool = lampPatch(e.dims.length - e.dims.ahead + 1.1, 2.4, 2.2, 0xf4f6ff);
     this.root.add(this.headPool, this.backPool);

@@ -1687,6 +1687,26 @@ export class Cars {
           const back = speed > 0.5 ? -1 : 1;
           this.spray.throw(x, y, z, ca * back, sa * back, k, g === "slush");
         }
+        // (plan 98 phase 21) through water: a spray off each wheel by how fast, a bow wave off the front ones
+        const wa = speed > 1.2 ? this.G.waterAt(x, z) : null;
+        if (wa && wa.level > y - 0.03) {
+          const wk = Math.min(1, speed / 9);
+          const back = speed > 0.5 ? -1 : 1;
+          this.spray.throw(x, wa.level, z, ca * back, sa * back, wk, true);
+          if (i < 2 && Math.random() < wk * dt * 24)
+            this.spray.puff(
+              x + ca * 0.6 * -back,
+              wa.level + 0.1,
+              z + sa * 0.6 * -back,
+              (Math.random() - 0.5) * 1.2 - sa * (i === 0 ? 1 : -1) * 1.5 * wk,
+              1.2 + 1.8 * wk,
+              (Math.random() - 0.5) * 1.2 + ca * (i === 0 ? 1 : -1) * 1.5 * wk,
+              0.5 + 0.6 * wk,
+              0.7,
+              0xe8f0f6,
+              0.55,
+            );
+        }
         // (docs/plan/92 phase 9) a tyre sliding: smoke off the asphalt (a burnout, a drift), a rooster
         // tail of powder off the snow — by how fast it slides
         if (slip > 2.5 && Math.random() < Math.min(1, (slip - 2.5) / 5 + 0.25) * dt * 40) {

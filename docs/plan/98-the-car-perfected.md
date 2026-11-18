@@ -545,3 +545,11 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
   and cover wheels' depth; the snowcat's and snowmobile's belts (a plain `track` material, its UVs unknown: nothing to
   scroll).
 - Checked: typecheck clean. Stills with phase 27.
+
+## Phase 21 — built in part (2026-11-17): wear and water
+
+- **The dirt where it's thrown** (the paint's shader, `uArch` from the hubs): round each wheel's arch, behind it, and up
+  the tail's lower half, over the band up the sides as before — by the car's grime.
+- **Through water:** a spray off each wheel in it by how fast (the world's `waterAt`), a bow wave off the front ones.
+- Not done: rain-washed streaks, snow caked in the arches, the exhaust's shimmer and drips.
+- Checked: typecheck clean; a still of the car (the shader compiles, no WebGL errors on the console).
