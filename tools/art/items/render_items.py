@@ -6,8 +6,10 @@
 #   blender -b --factory-startup -P tools/art/items/render_items.py -- --game
 # Phase 0 (the mocks) renders them to design/inventory/items (PNG); `--game` (phase 1) to the game's
 # apps/client/public/life/items (WEBP with its alpha, the sizes the panel and the HUD draw them at, twice over).
+import json
 import math
 import os
+import struct
 import sys
 
 import bpy
@@ -207,6 +209,158 @@ def round_(at, r, case, tip, bullet_mat, along=(0, 0, 0)):
     cone(r * 0.96, r * 0.12, tip, (x, y, z + case + tip / 2), m=bullet_mat)
 
 
+# (plan 103) the skateboards: the game's own GLB if it's built (tools/art/skate → public/life/skate/<variant>.glb),
+# else a deck modelled here at its measures — its plies painted, the grip on top, the kicks, the trucks, the wheels
+SKATE = os.path.join(ROOT, "apps/client/public/life/skate")
+SKATE_TEX = os.path.join(ROOT, "tools/art/skate/tex-src")
+BOARD_SHAPES = {
+    # length, width, wheelbase, wheel radius, wheel width, deck over the axles, (nose kick len, angle), (tail …)
+    "vert": (0.76, 0.25, 0.38, 0.032, 0.042, 0.05, (0.08, 0.22), (0.15, 0.3)),
+    "street": (0.8, 0.205, 0.36, 0.025, 0.032, 0.045, (0.13, 0.36), (0.13, 0.36)),
+    "cruiser": (0.74, 0.23, 0.4, 0.03, 0.04, 0.06, (0.0, 0.0), (0.13, 0.3)),
+}
+# (each variant: its paint, its wheels — the pack's drawings' and the ground model's colours, tp/items3d.ts)
+BOARDS = {
+    "vert-classic": (0xE4007C, 0xF2EFE4),
+    "vert-fish": (0x00A6A6, 0xF4F1E6),
+    "vert-square": (0x2B3BFF, 0xFFFFFF),
+    "street-pop": (0xC8A27A, 0xF3F0E8),
+    "street-slick": (0x1A1A1A, 0xF3F0E8),
+    "street-tech": (0x3C6E47, 0xF3F0E8),
+    "cruiser-classic": (0xFF7F50, 0xFF8A3D),
+    "cruiser-wood": (0xB98B5E, 0xF0E68C),
+    "cruiser-mini": (0xFF4F79, 0xFFFFFF),
+}
+
+
+def srgb_lin(hexc):
+    return tuple(pow(((hexc >> sh) & 255) / 255.0, 2.2) for sh in (16, 8, 0))
+
+
+def board_manifest():
+    p = os.path.join(SKATE, "manifest.json")
+    if not os.path.exists(p):
+        return {}
+    with open(p) as f:
+        return json.load(f).get("boards", {})
+
+
+def board_glb(variant):
+    """The game's GLB of a board, its KTX2 textures swapped for their PNG sources (tools/art/skate/tex-src: Blender
+    reads no basisu) in a copy beside the output; the paint and wheels tinted as the game tints them (the manifest's
+    first colours). The meshes, or None if it isn't built."""
+    src = os.path.join(SKATE, f"{variant}.glb")
+    if not os.path.exists(src):
+        return None
+    with open(src, "rb") as f:
+        b = f.read()
+    n0, _ = struct.unpack("<II", b[12:20])
+    j = json.loads(b[20 : 20 + n0])
+    rest = b[20 + n0 :]
+    for k in ("extensionsUsed", "extensionsRequired"):
+        if k in j:
+            j[k] = [e for e in j[k] if e != "KHR_texture_basisu"]
+    have = []
+    for im in j.get("images", []):
+        png = os.path.join(SKATE_TEX, os.path.splitext(os.path.basename(im.get("uri", "")))[0] + ".png")
+        have.append(os.path.exists(png))
+        im["uri"] = png
+        im["mimeType"] = "image/png"
+    gone = set()
+    for i, t in enumerate(j.get("textures", [])):
+        bu = t.pop("extensions", {}).get("KHR_texture_basisu")
+        if bu:
+            t["source"] = bu["source"]
+        if not have[t.get("source", 0)]:
+            gone.add(i)
+    # (a shared map with no PNG here — the cars' paint normal, its ORM: left off, the factors stand)
+    for m in j.get("materials", []):
+        pbr = m.get("pbrMetallicRoughness", {})
+        for d in (m, pbr):
+            for k in [k for k, v in d.items() if k.endswith("Texture") and v.get("index") in gone]:
+                del d[k]
+    js = json.dumps(j).encode()
+    js += b" " * (-len(js) % 4)
+    out = struct.pack("<III", 0x46546C67, 2, 12 + 8 + len(js) + len(rest)) + struct.pack("<II", len(js), 0x4E4F534A) + js + rest
+    tmp = os.path.join(OUT, f".{variant}.glb")
+    with open(tmp, "wb") as f:
+        f.write(out)
+    try:
+        bpy.ops.import_scene.gltf(filepath=tmp)
+    finally:
+        os.remove(tmp)
+    objs = [o for o in bpy.context.selected_objects if o.name in bpy.data.objects]
+    for o in list(objs):
+        if o.name.startswith("collider"):
+            bpy.data.objects.remove(o, do_unlink=True)
+            objs.remove(o)
+    man = board_manifest().get(variant, {})
+
+    def hexlin(h):
+        h = h.lstrip("#")
+        return tuple(pow(int(h[i : i + 2], 16) / 255.0, 2.2) for i in (0, 2, 4))
+
+    tint = {"paint": man.get("colours", [None])[0], "urethane": man.get("wheel_colours", [None])[0]}
+    for m in bpy.data.materials:
+        c = tint.get(m.name.split(".")[0])
+        if c and m.use_nodes and "Principled BSDF" in m.node_tree.nodes:
+            m.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (*hexlin(c), 1)
+    return objs
+
+
+def board_model(variant):
+    shape = variant.split("-")[0]
+    L, W, wb, r, ww, rise, nose, tail = BOARD_SHAPES[shape]
+    if variant == "street-tech":
+        W, r, nose = 0.197, 0.024, (0.15, 0.36)
+    if variant == "cruiser-mini":
+        L, wb = 0.69, 0.36
+    paint_c, wheel_c = BOARDS[variant]
+    paint = mat("paint", srgb_lin(paint_c), 0.35 if variant != "street-slick" else 0.15)
+    grip = mat("grip", (0.03, 0.03, 0.035), 0.95)
+    alloy = mat("alloy", (0.68, 0.69, 0.71), 0.3, 1.0)
+    steel = mat("steel", (0.5, 0.5, 0.52), 0.35, 1.0)
+    urethane = mat("urethane", srgb_lin(wheel_c), 0.55)
+    t = 0.012
+    z = r + rise + t / 2
+    nf = L / 2 - nose[0] - W / 4
+    tf = L / 2 - tail[0] - W / 4
+    box(nf + tf, W, t, ((nf - tf) / 2, 0, z), m=paint, bevel=0.002)
+    box(nf + tf, W - 0.006, 0.002, ((nf - tf) / 2, 0, z + t / 2 + 0.001), m=grip)
+
+    def kick(d, length, a, at):
+        # a kick out from the flat's end (d +1 the nose, −1 the tail) and its round tip, both turned up by `a`
+        parts = []
+        if length > 0:
+            parts.append(box(length, W, t, (d * length / 2, 0, 0), m=paint, bevel=0.002))
+            parts.append(box(length, W - 0.006, 0.002, (d * length / 2, 0, t / 2 + 0.001), m=grip))
+        tip = cyl(W / 2, t, (d * length, 0, 0), m=paint, verts=32)
+        tip.scale = (0.5, 1, 1)
+        parts.append(tip)
+        top = cyl(W / 2 - 0.003, 0.002, (d * length, 0, t / 2 + 0.001), m=grip, verts=32)
+        top.scale = (0.5, 1, 1)
+        parts.append(top)
+        piv = bpy.data.objects.new(f"kick{d}", None)
+        bpy.context.scene.collection.objects.link(piv)
+        for o in parts:
+            o.parent = piv
+        piv.location = (d * at, 0, z)
+        piv.rotation_euler = Euler((0, -d * a, 0))
+
+    kick(1, nose[0], nose[1], nf)
+    kick(-1, tail[0], tail[1], tf)
+    half = W / 2 - ww / 2
+    for x in (wb / 2, -wb / 2):
+        box(0.06, 0.055, 0.012, (x, 0, z - t / 2 - 0.006), m=alloy, bevel=0.002)
+        box(0.022, 0.03, rise - 0.012, (x, 0, r + (rise - 0.012) / 2), m=alloy, bevel=0.003)
+        box(0.03, half * 1.5, 0.022, (x, 0, r + 0.004), m=alloy, bevel=0.004)
+        cyl(0.004, 2 * half + ww, (x, 0, r), rot=(math.pi / 2, 0, 0), m=steel, verts=12)
+        for y in (half, -half):
+            cyl(r, ww, (x, y, r), rot=(math.pi / 2, 0, 0), m=urethane, verts=32)
+    bpy.context.view_layer.update()
+    return [o for o in bpy.data.objects if o.type in ("MESH", "EMPTY")]
+
+
 def item(name):
     if ONLY and name not in ONLY:
         return
@@ -364,6 +518,11 @@ def item(name):
         put(bpy.context.object, steel)
         objs = list(bpy.data.objects)
         turn = (0, math.radians(60), math.radians(-30))
+    elif name.startswith("board_"):
+        # (plan 103) a skateboard, three-quarter from above: its grip, a kick, the wheels past its edge
+        variant = name[6:].replace("_", "-", 1)
+        objs = board_glb(variant) or board_model(variant)
+        turn = (math.radians(-58), 0, math.radians(-38))
     elif name == "towrope":
         # (plan 93 S7) a tow rope coiled: an orange strap in loops, a steel hook out of it each end
         orange = mat("rope", (0.9, 0.42, 0.06), 0.8)
@@ -387,5 +546,6 @@ def item(name):
 
 
 for n in ("revolver", "shotgun", "ak47", "sniper", "daybreak", "r38", "shell", "r762", "r308", "cell", "flare",
-          "battery", "aid", "fuse", "torch", "vxtape", "chains", "wrench", "towrope"):
+          "battery", "aid", "fuse", "torch", "vxtape", "chains", "wrench", "towrope",
+          *(f"board_{v.replace('-', '_', 1)}" for v in BOARDS)):
     item(n)

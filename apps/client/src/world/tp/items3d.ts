@@ -202,6 +202,186 @@ function vxtape(): Part[] {
   ];
 }
 
+// ── (plan 103) the skateboards, lying on their wheels: true size — the GLBs' measures and first colours
+// (apps/client/public/life/skate/manifest.json, tools/art/skate) ────────────────────────────────────────────────
+interface BoardLook {
+  /** length tip to tip, width, the deck's top over the ground, its thickness, the axles apart (m) */
+  l: number;
+  w: number;
+  h: number;
+  t: number;
+  wb: number;
+  /** the wheels' radius, width */
+  r: number;
+  ww: number;
+  /** the kicks: length (the tip's included), angle (rad) — a cruiser's flat nose 0 */
+  nose: [number, number];
+  tail: [number, number];
+  paint: number;
+  wheel: number;
+}
+const BOARDS: Record<string, BoardLook> = {
+  board_vert_classic: {
+    l: 0.763,
+    w: 0.255,
+    h: 0.1025,
+    t: 0.0125,
+    wb: 0.394,
+    r: 0.032,
+    ww: 0.042,
+    nose: [0.09, 0.1745],
+    tail: [0.155, 0.2618],
+    paint: 0xe4007c,
+    wheel: 0xf2efe4,
+  },
+  board_vert_fish: {
+    l: 0.767,
+    w: 0.255,
+    h: 0.1025,
+    t: 0.0125,
+    wb: 0.394,
+    r: 0.032,
+    ww: 0.042,
+    nose: [0.09, 0.1745],
+    tail: [0.155, 0.2618],
+    paint: 0x00a6a6,
+    wheel: 0xf4f1e6,
+  },
+  board_vert_square: {
+    l: 0.763,
+    w: 0.255,
+    h: 0.1025,
+    t: 0.0125,
+    wb: 0.394,
+    r: 0.032,
+    ww: 0.042,
+    nose: [0.09, 0.1745],
+    tail: [0.155, 0.2618],
+    paint: 0x2b3bff,
+    wheel: 0xffffff,
+  },
+  board_street_pop: {
+    l: 0.806,
+    w: 0.205,
+    h: 0.0885,
+    t: 0.0115,
+    wb: 0.356,
+    r: 0.025,
+    ww: 0.031,
+    nose: [0.171, 0.3316],
+    tail: [0.163, 0.3491],
+    paint: 0xc8a27a,
+    wheel: 0xf3f0e8,
+  },
+  board_street_slick: {
+    l: 0.806,
+    w: 0.205,
+    h: 0.0885,
+    t: 0.0115,
+    wb: 0.356,
+    r: 0.025,
+    ww: 0.031,
+    nose: [0.171, 0.3316],
+    tail: [0.163, 0.3491],
+    paint: 0x1a1a1a,
+    wheel: 0xf3f0e8,
+  },
+  board_street_tech: {
+    l: 0.806,
+    w: 0.199,
+    h: 0.0875,
+    t: 0.0115,
+    wb: 0.356,
+    r: 0.024,
+    ww: 0.03,
+    nose: [0.185, 0.3665],
+    tail: [0.149, 0.3491],
+    paint: 0x3c6e47,
+    wheel: 0xf3f0e8,
+  },
+  board_cruiser_classic: {
+    l: 0.74,
+    w: 0.229,
+    h: 0.102,
+    t: 0.012,
+    wb: 0.38,
+    r: 0.03,
+    ww: 0.043,
+    nose: [0.107, 0.0],
+    tail: [0.13, 0.2967],
+    paint: 0xff7f50,
+    wheel: 0xff8a3d,
+  },
+  board_cruiser_wood: {
+    l: 0.74,
+    w: 0.229,
+    h: 0.102,
+    t: 0.012,
+    wb: 0.38,
+    r: 0.03,
+    ww: 0.043,
+    nose: [0.107, 0.0],
+    tail: [0.13, 0.2967],
+    paint: 0xb98b5e,
+    wheel: 0xf0e68c,
+  },
+  board_cruiser_mini: {
+    l: 0.688,
+    w: 0.191,
+    h: 0.0965,
+    t: 0.0105,
+    wb: 0.34,
+    r: 0.03,
+    ww: 0.043,
+    nose: [0.105, 0.0],
+    tail: [0.121, 0.3142],
+    paint: 0xff4f79,
+    wheel: 0xffffff,
+  },
+};
+const GRIP = 0x26282c;
+const ALLOY = 0xa7a9ad;
+function skateboard(b: BoardLook): Part[] {
+  const { t } = b;
+  const y = b.h - t / 2; // the deck's middle, over the ground
+  const rise = b.h - t - b.r; // the truck under it
+  // (the flat, to each kick; each kick out from there, its round tip at its end)
+  const nf = b.l / 2 - b.nose[0];
+  const tf = b.l / 2 - b.tail[0];
+  const out: Part[] = [box(nf + tf, t, b.w, (nf - tf) / 2, y, 0, b.paint)];
+  out.push(box(nf + tf, 0.003, b.w - 0.006, (nf - tf) / 2, y + t / 2 + 0.0015, 0, GRIP));
+  const kick = (dir: 1 | -1, [len, a]: [number, number], at: number) => {
+    const end = (g: BufferGeometry) => g.rotateZ(dir * a).translate(dir * at, y, 0);
+    const k = Math.max(0, len - b.w / 4);
+    if (k > 0) {
+      out.push(tinted(end(new BoxGeometry(k, t, b.w).translate((dir * k) / 2, 0, 0)), b.paint));
+      out.push(tinted(end(new BoxGeometry(k, 0.003, b.w - 0.006).translate((dir * k) / 2, t / 2 + 0.0015, 0)), GRIP));
+    }
+    const tip = new CylinderGeometry(b.w / 2, b.w / 2, t, 16, 1, false, dir > 0 ? 0 : Math.PI, Math.PI)
+      .scale(0.5, 1, 1)
+      .translate(dir * k, 0, 0);
+    out.push(tinted(end(tip), b.paint));
+  };
+  kick(1, b.nose, nf);
+  kick(-1, b.tail, tf);
+  // the trucks: a baseplate under the deck, the kingpin's block, the hanger, the axle; the four wheels
+  const half = b.w / 2 - b.ww / 2;
+  for (const x of [b.wb / 2, -b.wb / 2]) {
+    out.push(box(0.06, 0.012, 0.055, x, y - t / 2 - 0.006, 0, ALLOY));
+    out.push(box(0.022, rise - 0.012, 0.03, x, b.r + (rise - 0.012) / 2, 0, ALLOY));
+    out.push(box(0.03, 0.022, half * 1.5, x, b.r + 0.004, 0, ALLOY));
+    out.push(
+      tinted(
+        new CylinderGeometry(0.004, 0.004, 2 * half + b.ww, 6).rotateX(Math.PI / 2).translate(x, b.r, 0),
+        0x8a8f94,
+      ),
+    );
+    for (const z of [half, -half])
+      out.push(tinted(new CylinderGeometry(b.r, b.r, b.ww, 14).rotateX(Math.PI / 2).translate(x, b.r, z), b.wheel));
+  }
+  return out;
+}
+
 const MODELS: Record<string, () => Part[]> = {
   // (the guns: their own models, the ones in the hand — tp/guns3d.ts)
   revolver: () => [gunLying("revolver")],
@@ -229,6 +409,7 @@ const MODELS: Record<string, () => Part[]> = {
   vxtape,
   // (plan 87) the torch dropped: as a cache's
   torch,
+  ...Object.fromEntries(Object.entries(BOARDS).map(([id, b]) => [id, () => skateboard(b)])),
 };
 // (how much bigger than life, to read on the snow)
 const SCALE: Record<string, number> = {
@@ -248,6 +429,8 @@ const SCALE: Record<string, number> = {
   fuse: 2.2,
   // (plan 88: the trophy, big enough to read where he fell)
   vxtape: 2.4,
+  // (plan 103: a board at its true size — 0.7–0.8 m reads on its own)
+  ...Object.fromEntries(Object.keys(BOARDS).map((id) => [id, 1])),
 };
 
 const made = new Map<string, BufferGeometry>();

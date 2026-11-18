@@ -20,6 +20,7 @@ import {
   STACKS as STACKS_ANY,
   WEAPONS,
 } from "@yutopia/shared/inventory";
+import { type BoardVariant, variantOfItem } from "@yutopia/shared/skate/spec";
 import { Vector3 } from "three";
 import { addStrings, trMaybe } from "@/lib/i18n";
 import type { WorldController } from "../controller";
@@ -314,6 +315,8 @@ class Dark implements DarkHooks {
       };
       on("dark:pockets", (m) => this.pockets(m.inv, m.bat));
       on("dark:found", (m) => this.found(m.got, m.full, !!m.gone, !!m.later));
+      // (plan 103) a rack's board refused: two carried already
+      on("skate:no", () => this.toast(t("dark_skate_many"), []));
       // struck: red at the edges a moment; down to nothing: black, and the office
       on("dark:hit", () => {
         this.voices.struck();
@@ -473,7 +476,13 @@ class Dark implements DarkHooks {
     // (a flare lit and held up: thrown first, where I look — whatever's in the slot since)
     if (this.arms.heldFlare()) this.arms.flare();
     else if (it?.id === "torch") room?.send("dark:hand", { on: !lp?.torch });
-    else if (it?.id === "flare") room?.send("dark:hand", {});
+    else if (variantOfItem(it?.id)) {
+      // (plan 103) a board: dropped and stepped on — the controller's (no server round trip); the pack shut first
+      const c = this.ctl as { skateHand?: (variant: BoardVariant) => void };
+      ok = !!c.skateHand;
+      if (ok && fromPack) this.panel.close();
+      c.skateHand?.(variantOfItem(it?.id) as BoardVariant);
+    } else if (it?.id === "flare") room?.send("dark:hand", {});
     else if (it?.id === "aid" && ((lp?.hp as number) ?? 100) >= 100) {
       this.toast(t("dark_full_aid"), ["aid"]);
       ok = false;

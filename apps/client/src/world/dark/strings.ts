@@ -20,6 +20,16 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_item_towrope: ["Tow rope", "Cabo de reboque"],
   dark_item_torch: ["Torch", "Lanterna"],
   dark_item_vxtape: ["Vortex's tape", "Fita do Vortex"],
+  // (plan 103) the skateboards: named by their shape, the maker and the model (invented: the skate manifest's)
+  dark_item_board_vert_classic: ["Vert board (Varlow Comet)", "Skate vertical (Varlow Comet)"],
+  dark_item_board_vert_fish: ["Vert board (Varlow Marlin)", "Skate vertical (Varlow Marlin)"],
+  dark_item_board_vert_square: ["Vert board (Varlow Bulwark)", "Skate vertical (Varlow Bulwark)"],
+  dark_item_board_street_pop: ["Street board (Larch Kerb)", "Skate de rua (Larch Kerb)"],
+  dark_item_board_street_slick: ["Street board (Larch Slick)", "Skate de rua (Larch Slick)"],
+  dark_item_board_street_tech: ["Street board (Larch Needle)", "Skate de rua (Larch Needle)"],
+  dark_item_board_cruiser_classic: ["Cruiser (Sandell Coaster)", "Cruiser (Sandell Coaster)"],
+  dark_item_board_cruiser_wood: ["Cruiser (Sandell Grove)", "Cruiser (Sandell Grove)"],
+  dark_item_board_cruiser_mini: ["Cruiser (Sandell Pip)", "Cruiser (Sandell Pip)"],
   dark_place_house: ["Front door", "Porta da casa"],
   dark_place_boathouse: ["Boathouse", "Casa de barcos"],
   dark_place_shed: ["Shed", "Galpão"],
@@ -44,6 +54,8 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_gone: ["Already searched", "Já revistado"],
   dark_tomorrow: ["Taken today — come back tomorrow", "Já pegou hoje — volte amanhã"],
   dark_full: ["Your pack is full", "Sua mochila está cheia"],
+  // (plan 103) a park's rack: two boards carried already
+  dark_skate_many: ["You're carrying two boards already", "Você já está levando dois skates"],
   dark_winded: ["Out of breath", "Sem fôlego"],
   // (plan 86: the quick slots' caption, the slips, H and B)
   dark_at_hand: ["At hand", "À mão"],
@@ -61,6 +73,15 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_many_chains: ["snow chains", "correntes de neve"],
   dark_many_wrench: ["wrenches", "chaves inglesas"],
   dark_many_towrope: ["tow ropes", "cabos de reboque"],
+  dark_many_board_vert_classic: ["vert boards (Varlow Comet)", "skates verticais (Varlow Comet)"],
+  dark_many_board_vert_fish: ["vert boards (Varlow Marlin)", "skates verticais (Varlow Marlin)"],
+  dark_many_board_vert_square: ["vert boards (Varlow Bulwark)", "skates verticais (Varlow Bulwark)"],
+  dark_many_board_street_pop: ["street boards (Larch Kerb)", "skates de rua (Larch Kerb)"],
+  dark_many_board_street_slick: ["street boards (Larch Slick)", "skates de rua (Larch Slick)"],
+  dark_many_board_street_tech: ["street boards (Larch Needle)", "skates de rua (Larch Needle)"],
+  dark_many_board_cruiser_classic: ["cruisers (Sandell Coaster)", "cruisers (Sandell Coaster)"],
+  dark_many_board_cruiser_wood: ["cruisers (Sandell Grove)", "cruisers (Sandell Grove)"],
+  dark_many_board_cruiser_mini: ["cruisers (Sandell Pip)", "cruisers (Sandell Pip)"],
   dark_slip_hand: ["at hand · {n}", "à mão · {n}"],
   dark_none_aid: ["No first aid on you", "Nenhum kit médico com você"],
   dark_none_battery: ["No battery on you", "Nenhuma bateria com você"],
@@ -98,6 +119,20 @@ export const STRINGS: Record<string, readonly [string, string]> = {
     "Só acende na mão esquerda — aperte 1 sobre ela para levá-la",
   ],
   dark_inv_hand_idle: ["Does nothing from the left hand", "Não faz nada na mão esquerda"],
+  // (plan 103) a board in the pack or the left hand
+  dark_inv_ride: ["Ride", "Andar"],
+  dark_inv_board_shape: ["Shape", "Formato"],
+  dark_inv_board_vert: ["vert · ramps", "vertical · rampas"],
+  dark_inv_board_street: ["street · flips", "rua · flips"],
+  dark_inv_board_cruiser: ["cruiser · rough ground", "cruiser · chão ruim"],
+  dark_inv_board_hand: [
+    "1 drops it and you're on · X steps off and kicks it up to the hand",
+    "1 larga o skate e você sobe · X desce e chuta ele de volta para a mão",
+  ],
+  dark_inv_board_pack: [
+    "Ridden from the left hand — press 1 on it to put it there",
+    "Anda-se a partir da mão esquerda — aperte 1 sobre ele para levá-lo",
+  ],
   dark_inv_k_hand: ["the left hand: the torch, a flare, a first aid…", "a mão esquerda: lanterna, sinalizador, kit…"],
   dark_hud_torch: ["Left hand · torch {p}", "Mão esquerda · lanterna {p}"],
   dark_hud_flare: ["Left hand · flare {s}", "Mão esquerda · sinalizador {s}"],
@@ -225,6 +260,42 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_desc_torch: [
     "Lights the way — only from the left hand: 1 takes it out and on, 1 again off and away.",
     "Ilumina o caminho — só na mão esquerda: 1 tira e acende, 1 de novo apaga e guarda.",
+  ],
+  dark_desc_board_vert_classic: [
+    "An 80s vert deck: wide and steady on big soft wheels, made for the ramps and the biggest airs. 1 from the left hand rides it.",
+    "Um shape vertical dos anos 80: largo e firme sobre rodas grandes e macias, feito para as rampas e os maiores aéreos. 1 na mão esquerda: andar nele.",
+  ],
+  dark_desc_board_vert_fish: [
+    "An 80s vert deck: wide and steady on big soft wheels, made for the ramps and the biggest airs. 1 from the left hand rides it.",
+    "Um shape vertical dos anos 80: largo e firme sobre rodas grandes e macias, feito para as rampas e os maiores aéreos. 1 na mão esquerda: andar nele.",
+  ],
+  dark_desc_board_vert_square: [
+    "An 80s vert deck: wide and steady on big soft wheels, made for the ramps and the biggest airs. 1 from the left hand rides it.",
+    "Um shape vertical dos anos 80: largo e firme sobre rodas grandes e macias, feito para as rampas e os maiores aéreos. 1 na mão esquerda: andar nele.",
+  ],
+  dark_desc_board_street_pop: [
+    "An early-90s street deck, kicked at both ends: pops highest and flips quickest; its small hard wheels feel every crack. 1 from the left hand rides it.",
+    "Um shape de rua do começo dos anos 90, com bico e rabo: o ollie mais alto e as flips mais rápidas; as rodas pequenas e duras sentem cada fresta. 1 na mão esquerda: andar nele.",
+  ],
+  dark_desc_board_street_slick: [
+    "An early-90s street deck, kicked at both ends: pops highest and flips quickest; its small hard wheels feel every crack. 1 from the left hand rides it.",
+    "Um shape de rua do começo dos anos 90, com bico e rabo: o ollie mais alto e as flips mais rápidas; as rodas pequenas e duras sentem cada fresta. 1 na mão esquerda: andar nele.",
+  ],
+  dark_desc_board_street_tech: [
+    "An early-90s street deck, kicked at both ends: pops highest and flips quickest; its small hard wheels feel every crack. 1 from the left hand rides it.",
+    "Um shape de rua do começo dos anos 90, com bico e rabo: o ollie mais alto e as flips mais rápidas; as rodas pequenas e duras sentem cada fresta. 1 na mão esquerda: andar nele.",
+  ],
+  dark_desc_board_cruiser_classic: [
+    "A kicktail cruiser on soft wheels: the fastest over rough ground and packed snow, but it pops low and flips badly. 1 from the left hand rides it.",
+    "Um cruiser só com rabo, de rodas macias: o mais rápido no chão ruim e na neve batida, mas o ollie é baixo e as flips saem mal. 1 na mão esquerda: andar nele.",
+  ],
+  dark_desc_board_cruiser_wood: [
+    "A kicktail cruiser on soft wheels: the fastest over rough ground and packed snow, but it pops low and flips badly. 1 from the left hand rides it.",
+    "Um cruiser só com rabo, de rodas macias: o mais rápido no chão ruim e na neve batida, mas o ollie é baixo e as flips saem mal. 1 na mão esquerda: andar nele.",
+  ],
+  dark_desc_board_cruiser_mini: [
+    "A kicktail cruiser on soft wheels: the fastest over rough ground and packed snow, but it pops low and flips badly. 1 from the left hand rides it.",
+    "Um cruiser só com rabo, de rodas macias: o mais rápido no chão ruim e na neve batida, mas o ollie é baixo e as flips saem mal. 1 na mão esquerda: andar nele.",
   ],
   dark_recharging: ["Recharging", "Recarregando"],
   dark_awake: ["You woke up at the office.", "Você acordou no escritório."],

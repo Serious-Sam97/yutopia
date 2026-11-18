@@ -17,6 +17,10 @@ class Survivor extends Model
         'vxtape' => 99,
         // (plan 93 S6, S7) a snow chain (one a wheel); a wrench, a tow rope: kept, not used up
         'chains' => 4, 'wrench' => 1, 'towrope' => 1,
+        // (plan 103 F10a) the skateboards, one a variant (shared/skate/spec.ts BOARD_ITEMS): one to a slot
+        'board_vert_classic' => 1, 'board_vert_fish' => 1, 'board_vert_square' => 1,
+        'board_street_pop' => 1, 'board_street_slick' => 1, 'board_street_tech' => 1,
+        'board_cruiser_classic' => 1, 'board_cruiser_wood' => 1, 'board_cruiser_mini' => 1,
     ];
 
     // (plan 87) carried one at a time (shared/inventory.ts ONE_OF)

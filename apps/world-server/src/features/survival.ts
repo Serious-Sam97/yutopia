@@ -48,6 +48,7 @@ import {
   removeSlot,
   rollLoot,
   type Stack,
+  type StackId,
   slotAt,
   spendRoll,
   splitSlot,
@@ -66,6 +67,8 @@ import { grownTemp } from "@yutopia/shared/grow";
 import { GAITS, KH_MOVE, MV_AIM } from "@yutopia/shared/move";
 import { between } from "@yutopia/shared/reach";
 import { frameOf, turnPoint } from "@yutopia/shared/shapes";
+import { BOARDS_MAX, rackNear } from "@yutopia/shared/skate/racks";
+import { BOARD_ITEMS, BOARD_VARIANTS, type BoardVariant, boardItem } from "@yutopia/shared/skate/spec";
 import { cellOf } from "@yutopia/shared/structure";
 import { api, type SurvivorRecord } from "../api.ts";
 import { config } from "../config.ts";
@@ -693,6 +696,21 @@ registerFeature((room: WorldRoom) => {
     const s = p && people.get(p.uid);
     if (!p || !s?.loaded || !p.downAt) return;
     s.selfAt = m?.on && count(s.inv, "aid") > 0 ? Date.now() : 0;
+  });
+  // (plan 103 F10a) a board borrowed from a park's rack: the variant asked for, into the pack (as found: its slip) —
+  // only by a rack (shared skate/racks), and not a third (two carried, the pack, at hand and the left hand together)
+  room.on("skate:take", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const s = p && people.get(p.uid);
+    const v = m?.variant;
+    if (!p || !s?.loaded || p.busy || p.downAt || !(BOARD_VARIANTS as readonly unknown[]).includes(v)) return;
+    const rack = rackNear(p.x, p.y, p.z);
+    if (!rack) return;
+    const carried = BOARD_ITEMS.reduce((n, id) => n + count(s.inv, id as StackId), 0);
+    if (carried >= BOARDS_MAX) return room.send(client, "skate:no", { why: "many" });
+    const id = boardItem(v as BoardVariant) as StackId;
+    const n = addStack(s.inv, id, 1);
+    found(s, client.sessionId, `rack:${rack.id}`, n ? [{ id, n }] : [], !n);
   });
   room.on("mod:down", (client) => {
     const p = room.state.players.get(client.sessionId);

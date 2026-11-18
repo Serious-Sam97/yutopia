@@ -2,6 +2,11 @@
 import type { ItemId } from "@yutopia/shared/inventory";
 import { asset } from "@/lib/asset";
 
+/** (plan 103) a skateboard, slanted: its deck from above (the grip, the painted plies' edge, a kick at each end or
+ *  one), its four wheels showing past the edge; `w` the deck's half-width, the colours its paint's and wheels' */
+const board = (w: number, paint: string, wheel: string, nose = true) =>
+  `<svg viewBox="0 0 48 48"><g transform="rotate(-40 24 24)"><rect x="${21.6 - w}" y="13" width="3.4" height="5" rx="1.4" fill="${wheel}"/><rect x="${23 + w}" y="13" width="3.4" height="5" rx="1.4" fill="${wheel}"/><rect x="${21.6 - w}" y="31" width="3.4" height="5" rx="1.4" fill="${wheel}"/><rect x="${23 + w}" y="31" width="3.4" height="5" rx="1.4" fill="${wheel}"/><rect x="${24 - w}" y="${nose ? 3 : 6}" width="${2 * w}" height="${nose ? 42 : 39}" rx="${w}" fill="${paint}"/><rect x="${25 - w}" y="${nose ? 6 : 7}" width="${2 * w - 2}" height="${nose ? 36 : 35}" rx="${w - 1}" fill="#26282c"/><path d="M${25 - w} 15h${2 * w - 2}M${25 - w} 34h${2 * w - 2}" stroke="#3a3d42" stroke-width="1"/><circle cx="23" cy="14" r=".6" fill="#8a929c"/><circle cx="25" cy="14" r=".6" fill="#8a929c"/><circle cx="23" cy="35" r=".6" fill="#8a929c"/><circle cx="25" cy="35" r=".6" fill="#8a929c"/></g></svg>`;
+
 export const ICON: Record<ItemId, string> = {
   revolver:
     '<svg viewBox="0 0 64 40"><path d="M6 12h34l3-4h6v4h9v7H44l-2 3h-8l-3 4-4 11h-9l4-13-2-3H6z" fill="#4a5058"/><circle cx="36" cy="17" r="5" fill="#3a3f46" stroke="#6b737d" stroke-width="1.2"/><path d="M6 12h30v3H6z" fill="#7a828c"/><path d="M27 23c3 0 4 2 3 5" stroke="#6b737d" stroke-width="1.5" fill="none"/><path d="M20 37l4-12h5" fill="#5b3a26"/></svg>',
@@ -38,6 +43,16 @@ export const ICON: Record<ItemId, string> = {
   towrope:
     '<svg viewBox="0 0 48 48"><g fill="none" stroke="#e08a2a" stroke-width="3"><ellipse cx="24" cy="24" rx="15" ry="11"/><ellipse cx="24" cy="24" rx="10" ry="7"/></g><path d="M36 30l6 8M12 30l-6 8" stroke="#e08a2a" stroke-width="3"/><path d="M40 36a3 3 0 1 0 5 3M8 36a3 3 0 1 1-5 3" stroke="#8a929c" stroke-width="2.4" fill="none"/></svg>',
   fuse: '<svg viewBox="0 0 48 48"><g transform="rotate(-35 24 24)"><rect x="10" y="18" width="28" height="12" rx="2" fill="rgba(200,225,240,.35)" stroke="#cfe3ee" stroke-width="1.2"/><path d="M13 24c5-5 8 5 11 0s7-5 11 0" stroke="#e8c26a" stroke-width="1.4" fill="none"/><rect x="5" y="17" width="7" height="14" rx="1" fill="#a7a9ad"/><rect x="36" y="17" width="7" height="14" rx="1" fill="#a7a9ad"/></g></svg>',
+  // (plan 103) the skateboards: the vert decks wide, the street ones narrow, the cruisers a kicktail only
+  board_vert_classic: board(6.5, "#e4007c", "#f2efe4"),
+  board_vert_fish: board(6.5, "#00a6a6", "#f4f1e6"),
+  board_vert_square: board(6.5, "#2b3bff", "#ffffff"),
+  board_street_pop: board(5, "#c8a27a", "#f3f0e8"),
+  board_street_slick: board(5, "#1a1a1a", "#f3f0e8"),
+  board_street_tech: board(4.6, "#3c6e47", "#f3f0e8"),
+  board_cruiser_classic: board(5.6, "#ff7f50", "#ff8a3d", false),
+  board_cruiser_wood: board(5.6, "#b98b5e", "#f0e68c", false),
+  board_cruiser_mini: board(5.4, "#ff4f79", "#ffffff", false),
 };
 
 // (plan 86 phase 1) …and as pictures of the things themselves: each rendered from its own model

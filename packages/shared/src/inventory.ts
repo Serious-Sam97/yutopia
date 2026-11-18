@@ -36,6 +36,17 @@ export const STACKS = {
   towrope: 1,
   // (plan 88) Vortex's tape: the trophy — one for each fight you landed the last hit in, the stack your wins
   vxtape: 99,
+  // (plan 103 F10a) the skateboards, one a variant (shared skate/spec's BOARD_ITEMS: `board_<shape>_<variant>`):
+  // one to a slot — in the pack, at hand, or in the left hand, where key 1 rides it
+  board_vert_classic: 1,
+  board_vert_fish: 1,
+  board_vert_square: 1,
+  board_street_pop: 1,
+  board_street_slick: 1,
+  board_street_tech: 1,
+  board_cruiser_classic: 1,
+  board_cruiser_wood: 1,
+  board_cruiser_mini: 1,
 } as const;
 export type StackId = keyof typeof STACKS;
 export type ItemId = WeaponId | StackId;
@@ -327,6 +338,16 @@ const ORDER: ItemId[] = [
   "flare",
   "fuse",
   "vxtape",
+  // (plan 103) the boards last, by shape
+  "board_vert_classic",
+  "board_vert_fish",
+  "board_vert_square",
+  "board_street_pop",
+  "board_street_slick",
+  "board_street_tech",
+  "board_cruiser_classic",
+  "board_cruiser_wood",
+  "board_cruiser_mini",
 ];
 export function organize(inv: Inventory): boolean {
   const before = JSON.stringify(inv.pockets);

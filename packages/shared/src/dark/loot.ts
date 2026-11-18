@@ -172,6 +172,9 @@ const TABLES: Record<Place, Roll[]> = {
     [3, "r38", 3, 6],
     [2, "flare"],
     [1, "fuse"],
+    // (plan 103 F10a) a kid's old board, rarely: a street deck, a cruiser
+    [0.3, "board_street_pop"],
+    [0.3, "board_cruiser_classic"],
     [2, null],
   ],
   glovebox: [
@@ -187,6 +190,8 @@ const TABLES: Record<Place, Roll[]> = {
     [2, "fuse"],
     [1, "battery"],
     [1, "shotgun"],
+    // (plan 103) an old vert deck by the boats
+    [0.4, "board_vert_classic"],
   ],
   shed: [
     [3, "fuse"],
@@ -199,6 +204,9 @@ const TABLES: Record<Place, Roll[]> = {
     [2, "shell", 2, 4],
     [2, "flare"],
     [1, "shotgun"],
+    // (plan 103) a board put away in the shed: a wooden cruiser, a fishtail vert deck
+    [0.4, "board_cruiser_wood"],
+    [0.3, "board_vert_fish"],
   ],
   diner: [
     [2, "aid"],
@@ -225,6 +233,8 @@ const TABLES: Record<Place, Roll[]> = {
     [2, "fuse"],
     [2, "flare"],
     [1, "shotgun"],
+    // (plan 103) a square-tailed vert deck in the barn's loft
+    [0.3, "board_vert_square"],
     [1, null],
   ],
   farmhouse: [

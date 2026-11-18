@@ -6,6 +6,7 @@ import { LOCKER, LOOT, type LootItem, lockerFront } from "@yutopia/shared/dark";
 import { heightAt } from "@yutopia/shared/grounds";
 import { count, HAND_SLOT, type Inventory, QUICK_SLOT } from "@yutopia/shared/inventory";
 import { MOVE, MV_AIM, packMv } from "@yutopia/shared/move";
+import { SKATE_RACKS } from "@yutopia/shared/skate/racks";
 import { wears } from "@yutopia/shared/worn";
 import { Client, type Room } from "colyseus.js";
 
@@ -605,4 +606,46 @@ test("an admin gives someone a gun and its rounds: they have them, and are told 
   assert.equal((b.inv?.quick.find((it) => it?.id === "ak47") as { loaded?: number }).loaded, 30, "loaded");
   await sleep(200);
   assert.deepEqual(toasts, [], "no 'that didn't go'");
+});
+
+test("(plan 103 F10a) a board borrowed from a rack — only by one, two at most; an admin gives one", async () => {
+  const a = await person(398, "member,builder,admin");
+  const b = await person(399);
+  // (out on the land, as the torch's tests stand)
+  await goTo(b, -250, -60);
+  const boards = () =>
+    [...(b.inv?.pockets ?? []), ...(b.inv?.quick ?? []), b.inv?.hand].filter((it) => it?.id.startsWith("board_"))
+      .length;
+  const no: string[] = [];
+  b.room.onMessage("skate:no", (m: { why: string }) => no.push(m.why));
+  // (no rack near: nothing)
+  b.room.send("skate:take", { variant: "street-pop" });
+  await sleep(250);
+  assert.equal(boards(), 0, "no rack here");
+  const at = me(b.room);
+  SKATE_RACKS.push({ id: "test", x: at.x + 1, y: at.z, z: at.y, yaw: 0 });
+  try {
+    b.room.send("skate:take", { variant: "longboard" });
+    await sleep(150);
+    assert.equal(boards(), 0, "no such board");
+    b.room.send("skate:take", { variant: "street-pop" });
+    await waitFor(() => count(b.inv as Inventory, "board_street_pop") === 1);
+    assert.ok(
+      b.found.some((f) => f.spot === "rack:test" && f.got[0]?.id === "board_street_pop"),
+      "told, as a find",
+    );
+    b.room.send("skate:take", { variant: "cruiser-wood" });
+    await waitFor(() => boards() === 2);
+    b.room.send("skate:take", { variant: "vert-fish" });
+    await waitFor(() => no.length === 1);
+    assert.deepEqual(no, ["many"]);
+    assert.equal(boards(), 2, "not a third");
+  } finally {
+    SKATE_RACKS.length = 0;
+  }
+  // an admin's give: any board, by its id
+  const ap = () => [...a.room.state.players.values()].find((p) => p.sid === a.room.sessionId);
+  await waitFor(() => !!ap());
+  a.room.send("mod:give", { item: "board_vert_classic" });
+  await waitFor(() => count(a.inv as Inventory, "board_vert_classic") === 1);
 });

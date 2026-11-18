@@ -85,10 +85,10 @@ export function skaterPose(i: SkaterIn): SkaterOut {
         const k = down ? ph / 0.55 : (ph - 0.55) / 0.45;
         const along = down ? 0.12 - 0.5 * k : -0.38 + 0.5 * k;
         feet[bi] = [along * way, down ? -m.deckY + 0.005 : -m.deckY + 0.04 + 0.08 * Math.sin(k * Math.PI), 0.2];
-        heading[fi] = 1.25 * st;
-        heading[bi] = 1.25 * st;
-        twist = 0.95 * way;
-        lookH = 1.25 * way;
+        heading[fi] = 0.85 * st;
+        heading[bi] = 0.7 * st;
+        twist = 0.55 * way;
+        lookH = 0.8 * way;
         hipY = i.stand - 0.1 - m.deckY * 0.5;
         duck = 0.3;
         knees[bi] = [0, 0.2, 1];

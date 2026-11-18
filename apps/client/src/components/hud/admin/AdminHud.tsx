@@ -69,6 +69,16 @@ const ITEMS = [
   "battery",
   "aid",
   "fuse",
+  // (plan 103) the skateboards: `give board_street_pop`
+  "board_vert_classic",
+  "board_vert_fish",
+  "board_vert_square",
+  "board_street_pop",
+  "board_street_slick",
+  "board_street_tech",
+  "board_cruiser_classic",
+  "board_cruiser_wood",
+  "board_cruiser_mini",
 ];
 // what the box knows: the word, what it takes, what it does
 const COMMANDS: { c: string; arg?: string; does: string }[] = [

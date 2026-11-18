@@ -20,6 +20,7 @@ import {
   QUICK_SLOT,
   removeSlot,
   STACKS,
+  type StackId,
   slotAt,
   splitSlot,
   takeSlot,
@@ -27,6 +28,8 @@ import {
   torchToHand,
   weaponIn,
 } from "./inventory.ts";
+import { BOARDS_MAX, rackNear } from "./skate/racks.ts";
+import { BOARD_ITEMS, BOARD_VARIANTS, boardItem, isBoardItem, variantOfItem } from "./skate/spec.ts";
 
 test("stacks top up first, then take empty pockets; what doesn't fit stays out", () => {
   const inv = emptyInventory();
@@ -449,4 +452,43 @@ test("(plan 87) the torch to the left hand (an admin's refill): given if none, t
   assert.equal(count(inv2, "torch"), 1);
   // in the hand already: as it was
   assert.equal(torchToHand(inv2), true);
+});
+
+test("(plan 103) the boards are items: one to a slot, in the pack, at hand or the left hand — saved, organized last", () => {
+  for (const id of BOARD_ITEMS) assert.equal(STACKS[id as StackId], 1, id);
+  assert.equal(Object.keys(STACKS).filter(isBoardItem).length, BOARD_VARIANTS.length);
+  for (const v of BOARD_VARIANTS) assert.equal(variantOfItem(boardItem(v)), v);
+  const id = "board_street_pop" as StackId;
+  assert.ok(fits(HAND_SLOT, id) && fits(QUICK_SLOT, id) && fits(0, id));
+  const inv = emptyInventory();
+  // (two of a kind: a slot each, never the left hand by addStack)
+  assert.equal(addStack(inv, id, 2), 2);
+  assert.deepEqual(inv.pockets.slice(0, 2), [
+    { id, n: 1 },
+    { id, n: 1 },
+  ]);
+  assert.equal(inv.hand, null);
+  assert.equal(moveSlot(inv, 1, HAND_SLOT), true);
+  assert.deepEqual(inv.hand, { id, n: 1 });
+  // (no stacking two in one slot: the same board onto it is no move)
+  assert.equal(moveSlot(inv, 0, HAND_SLOT), false);
+  assert.equal(count(inv, id), 2);
+  // a save's round trip keeps it in the left hand
+  const back = cleanInventory(JSON.parse(JSON.stringify(inv)));
+  assert.deepEqual(back.hand, { id, n: 1 });
+  inv.pockets[2] = { id: "aid", n: 1 };
+  organize(inv);
+  assert.deepEqual(inv.pockets.map((it) => it?.id ?? null).filter(Boolean), ["aid", id]);
+});
+
+test("(plan 103) a rack's reach: across and up, the nearest in 3 m; two boards the most", () => {
+  const racks = [
+    { id: "a", x: 10, y: 0, z: 20, yaw: 0 },
+    { id: "b", x: 12, y: 0, z: 20, yaw: 0 },
+  ];
+  assert.equal(rackNear(11.8, 20.5, 0, racks)?.id, "b");
+  assert.equal(rackNear(10, 23.5, 0, racks), null);
+  assert.equal(rackNear(10, 20, 3.5, racks), null, "a floor up");
+  assert.equal(rackNear(0, 0, 0), null, "none placed yet");
+  assert.equal(BOARDS_MAX, 2);
 });

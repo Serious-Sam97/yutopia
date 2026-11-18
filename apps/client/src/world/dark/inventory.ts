@@ -15,6 +15,7 @@ import {
   slotAt,
   WEAPONS,
 } from "@yutopia/shared/inventory";
+import { isBoardItem, shapeOf, variantOfItem } from "@yutopia/shared/skate/spec";
 import type { WorldController } from "../controller";
 import type { Walker } from "../input/walker";
 import { artVersion, itemArt } from "./icons";
@@ -358,6 +359,8 @@ export class InventoryPanel {
     if (!p || !inv) return;
     if ("drop" in p) return this.act.pick(p.drop);
     if (p.slot === HAND_SLOT) return this.act.hand();
+    // (plan 103: a board — to the left hand, where 1 rides it)
+    if (isBoardItem(this.itemOf(p))) return this.put(p, HAND_SLOT);
     if (isQuick(p.slot)) return this.act.quick(p.slot - QUICK_SLOT);
     const st = inv.pockets[p.slot];
     // (plan 85: a weapon in the pack — equipped)
@@ -400,7 +403,9 @@ export class InventoryPanel {
     const inv = this.inv();
     if (!p || !inv) return;
     if ("drop" in p) return this.act.pick(p.drop);
-    const torch = this.itemOf(p) === "torch";
+    // (plan 103: a board, as the torch — to the left hand)
+    const id = this.itemOf(p);
+    const torch = id === "torch" || isBoardItem(id);
     const to = p.slot < POCKETS ? (torch ? HAND_SLOT : freeQuick(inv)) : inv.pockets.indexOf(null);
     if (to >= 0) this.put(p, to);
   }
@@ -457,7 +462,8 @@ export class InventoryPanel {
       else if (id === "flare")
         out.push({ act: "use", label: t(hs.burn ? "dark_inv_throw" : "dark_inv_light_one"), keys: kk("1") });
       else if (isUsable(id)) out.push({ act: "use", label: t("dark_inv_use"), keys: kk("1") });
-    } else if (id === "torch") {
+      else if (isBoardItem(id)) out.push({ act: "use", label: t("dark_inv_ride"), keys: kk("1") });
+    } else if (id === "torch" || isBoardItem(id)) {
       out.push({ act: "hand", label: t("dark_inv_to_hand"), keys: kk("1") });
     } else if (isWeapon(id)) {
       if (q >= 0) {
@@ -553,7 +559,8 @@ export class InventoryPanel {
     else if (act === "to") {
       // (the row itself, not a chip: the first free at hand — none, the first; the torch, the left hand)
       const free = freeQuick(inv);
-      this.assign(p, n ?? (this.itemOf(p) === "torch" ? -1 : free >= 0 ? free - QUICK_SLOT : 0));
+      const hand = this.itemOf(p) === "torch" || isBoardItem(this.itemOf(p));
+      this.assign(p, n ?? (hand ? -1 : free >= 0 ? free - QUICK_SLOT : 0));
     } else if (act === "hand") this.assign(p, -1);
     else if (act === "pack") this.swapSide(p);
     else if (act === "split") this.split(p);
@@ -857,6 +864,18 @@ export class InventoryPanel {
           (gun === id && this.canReload(inv, id) ? btn("reload", t("dark_inv_reload"), kk("R")) : "") +
           dropBtn;
       }
+    } else if (isBoardItem(id)) {
+      // (plan 103) a board: ridden from the left hand — 1 drops it and you're on
+      const inHandSlot = p.slot === HAND_SLOT;
+      const q = isQuick(p.slot) ? String(p.slot - QUICK_SLOT + 2) : "";
+      where = inHandSlot ? t("dark_inv_hand_slot") : q ? t("dark_inv_at_n", { n: q }) : t("dark_inv_in_pocket");
+      const v = variantOfItem(id);
+      if (v) stats = stat(t("dark_inv_board_shape"), t(`dark_inv_board_${shapeOf(v)}`));
+      note = t(inHandSlot ? "dark_inv_board_hand" : "dark_inv_board_pack");
+      btns =
+        (inHandSlot
+          ? btn("hand", t("dark_inv_ride"), kk("1"), true)
+          : btn("tohand", t("dark_inv_to_hand"), kk("1"), true)) + dropBtn;
     } else if (id === "torch" || p.slot === HAND_SLOT) {
       // (plan 87) the left hand's — the torch there or in the pack, a flare, anything else there
       const hs = this.act.handState();
