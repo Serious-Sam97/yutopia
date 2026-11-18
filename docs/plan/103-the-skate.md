@@ -11,7 +11,7 @@ for this one: the trick's timing and its "finished?" test, and the landing judge
 Status: **planned 2026-11-18; forks decided 2026-11-18 one by one: the recommendations for F1, F3–F6 and F8–F13;
 **F2b**, the whole of Tony Hawk's (huge airs, moon gravity, everything forgiven), the same everywhere; **F7c**, both
 an indoor hall and an outdoor park; **F14b**, I pick the sounds, you veto; **F15b**, no sign-off, built straight
-through, you test at the end. Not started.**
+through, you test at the end. Built 2026-11-18 (phases 0–8), committed to main, not pushed.**
 
 ## Where we are, from the code
 
@@ -163,4 +163,36 @@ around (plan 56); the client decides and the server takes it (no anticheat, [no-
 
 ## Progress
 
-Not started.
+### Phases 2–4 — the board's step (shared `skate/`, 2026-11-18)
+- **A mode of the walker's body** (F1a), as the swim: `Body.skate` (`SkateNow`), stepped by `skate/step.ts`
+  `stepSkate`, handed in with the park as `MoveEnv.skate` (`skateEnv(park)`) so the code loads only where boards are.
+- **The pieces are exact** (`skate/pieces.ts`): a profile of lines and arcs swept along a width or round a centre;
+  the board rides it by ℓ along and w across, so a vert wall is as smooth as the flat, the same on every machine. Jolt
+  (boxes only) never sees the ramps' curves: walkers get stepped boxes. Twelve kinds in `PIECES`.
+- **Tony Hawk's whole** (F2b, `skate/spec.ts`): g 8 m/s² everywhere; ollie 0.75 m tapped, 1.45 m crouched 0.32 s; push
+  to 7.6 m/s; a vert lip sends you straight up ×1.22 and back in (fakie, or forwards with a 180); landings forgiven to
+  52° sideways and 15 m/s down.
+- **Tricks and the combo** (`skate/tricks.ts`, F4a/F5a): 8 flips (E + direction; E again quickly, the double), 8
+  grabs (R held: more points held longer), 11 grinds and slides (F; across the rail, a slide), 4 lip tricks, manual
+  and nose manual (W→S, S→W), the revert (Q), the wallride. The combo: the sum × the count, the same trick again
+  75 %/50 %/25 %/10 %, + 100 a half turn of spin, × 1.2 fakie; a balance needle on grinds, manuals and lips.
+- **Rails** are the park's lines and Flowmotion's tagged rails (the town's fences, the parkour rails); followed
+  round kinks, off the end into the air.
+- **Surfaces** (F8a): `UNDERWHEEL` by footing — asphalt fast, paving and paths rough, packed snow drags, deep snow and
+  sand stop the board and throw you, ice: a push barely goes.
+- 16 Node tests (`skate/skate.test.ts`).
+
+### Phases 5–7 — in the world (2026-11-18)
+- **The wire**: `Player.sk` (62 of 64 fields), the board's code (`skateCode`: mode, trick, fakie, stance, board,
+  crouch, push, lean); `SKATE_BAIL` (7) for a moment after a bail, the others' ragdoll.
+- **The client** (`apps/client/src/world/skate/`): `ride.ts` (the keys: E R F Q X the board's own, W A S D and Space
+  shared with the walker; the park; the events), `pose.ts` (the skater on plan 100's `carStep`: sideways, the push
+  with the back foot on the toe side, the crouch, knees up in the air, each grab's hand to its spot, arms out on a
+  rail, the manual's lean), `board3d.ts` (the GLB, its hangers turned with the carve, the wheels, the flips about the
+  deck's middle; a plain board till it loads), `hud.ts` (the combo and the needle in walnut), `sound.ts`.
+- **She stands sideways**: the facing is the nose + 90° (regular) or − 90° (goofy); the camera follows the way it goes.
+- **Stance** is in the avatar (`stance`: regular, goofy), the editor's body tab.
+- **The board in the pack**: nine items (`board_<variant>`), whitelisted in `Survivor::STACKS`, pictures rendered from
+  the GLBs, key 1 from the left hand rides it, `skate:take` at a park's rack, rare in loot.
+- **The sound** is made in code for now (F14b): wheels by speed and roughness, the pop, the slap, grinds, a push's
+  scuff, a bail. Recordings need your OK to fetch.

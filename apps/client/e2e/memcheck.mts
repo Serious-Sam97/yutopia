@@ -479,6 +479,44 @@ try {
         `  car life: ${l.car}, rounds in ${l.screen}/${l.side}/${l.engine}, blasts ${l.blasts}, fire reached ${l.fireMax}, fresh after ${JSON.stringify(l.propsAfter)} (${Math.round((Date.now() - t0) / 1000)} s)`,
       );
     }
+    // (plan 103) a board's life: on it out on the lot, pushed, an ollie and a kickflip, a bail (a quarter spin come
+    // down sideways: the ragdoll, the board thrown), on again and off — NO_SKATE leaves it out
+    if (!process.env.NO_SKATE) {
+      const t0 = Date.now();
+      await go({ x: -23, y: 24, level: 0 }, 1500);
+      const ride = async () => {
+        await page.evaluate(() => {
+          const c = (window as any).__yutopia;
+          c.walker.faceYaw?.(0);
+          c.skateHand("street-pop");
+        });
+        await page.waitForTimeout(500);
+        await page.keyboard.down("KeyW");
+        await page.waitForTimeout(1500);
+        await page.keyboard.up("KeyW");
+      };
+      await ride();
+      await page.keyboard.down("Space");
+      await page.waitForTimeout(250);
+      await page.keyboard.up("Space");
+      await page.waitForTimeout(100);
+      await page.keyboard.press("KeyE");
+      await page.waitForTimeout(1500);
+      // the bail
+      await page.keyboard.down("Space");
+      await page.waitForTimeout(250);
+      await page.keyboard.up("Space");
+      await page.keyboard.down("KeyD");
+      await page.waitForTimeout(260);
+      await page.keyboard.up("KeyD");
+      await page.waitForTimeout(4000);
+      await ride();
+      await page.keyboard.press("KeyX");
+      await page.waitForTimeout(800);
+      const on = await page.evaluate(() => !!(window as any).__yutopia.walker?.stepBody?.skate);
+      console.log(`  board life: off after ${on ? "NOT off" : "yes"} (${Math.round((Date.now() - t0) / 1000)} s)`);
+      await go(home, 1500);
+    }
     // a third of the people leave and others come
     const n = Math.max(1, Math.floor(bots / 3));
     await depart(n);
