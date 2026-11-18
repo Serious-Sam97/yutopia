@@ -514,7 +514,8 @@ try {
       await page.keyboard.down("KeyD");
       await page.waitForTimeout(260);
       await page.keyboard.up("KeyD");
-      await page.waitForTimeout(4000);
+      // (thrown off, the board's where it rolled: back in the hand after 8 s — skate/ride.ts)
+      await page.waitForTimeout(8500);
       await ride();
       await page.keyboard.press("KeyX");
       await page.waitForTimeout(800);
