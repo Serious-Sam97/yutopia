@@ -155,6 +155,7 @@ import {
 import {
   type ActPose,
   actAt,
+  bikeOnAt,
   type Doorway,
   ENTER_FAST_S,
   ENTER_S,
@@ -1692,7 +1693,10 @@ export class Cars {
     this.wanted = id;
     this.wantedAt = performance.now();
     this.myVia = hit.via !== undefined ? { id, via: hit.via } : null;
-    if (Math.hypot(spot.x - me.x, spot.y - me.y) > 0.6 && this.host.walk(spot)) {
+    // (plan 101: a bike within reach — fallen, or a step off its spot —: on it from where I stand, the act walks me in;
+    // walking to its spot first could find it blocked and give up)
+    const bikeNear = !!this.parked.get(id)?.spec.bike && Math.hypot(spot.x - me.x, spot.y - me.y) < 2.5;
+    if (!bikeNear && Math.hypot(spot.x - me.x, spot.y - me.y) > 0.6 && this.host.walk(spot)) {
       this.walkIn = { id, seat: hit.seat, spot, at: performance.now(), via: hit.via };
       return true;
     }
@@ -3768,7 +3772,18 @@ export class Cars {
     let slide: Vector3 | null = null;
     if (acting && way && door < 0) {
       // (plan 98 phase 4: no door — straddled)
-      act = straddleAt(way, Math.max(0, t * pace), out, out ? null : (e.from ?? null), (e.act ??= newActPose()));
+      // (plan 101: a bike's own — the far leg swung back over the saddle, or through a step-through's frame)
+      act =
+        mod instanceof BikeModel
+          ? bikeOnAt(
+              way,
+              Math.max(0, t * pace),
+              out,
+              out ? null : (e.from ?? null),
+              (e.act ??= newActPose()),
+              l.look.variant.startsWith("town"),
+            )
+          : straddleAt(way, Math.max(0, t * pace), out, out ? null : (e.from ?? null), (e.act ??= newActPose()));
     } else if (acting && way) {
       // (where they stood as it began: mine, my walker's; the way out — to where the server has them now)
       const p = this.host.room()?.state.players.get(sid) as { x: number; y: number } | undefined;

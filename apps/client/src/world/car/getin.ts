@@ -1116,3 +1116,106 @@ export function straddleAt(
   out.sat = seg(tt, 1.45, 1.9);
   return out;
 }
+
+/** (plan 101) Onto a bicycle, the way riders (and GTA) do it — on its timeline as `straddleAt` (sat by 1.9 s, out the
+ *  same backwards in 1.7): stood at its left by the top tube, both hands to the grips; weight on the near foot, the
+ *  trunk over the bars, the far leg swung back and over behind the saddle, just clearing it (a step-through's stepped
+ *  through its low frame instead), down on the far side; the hips onto the saddle; the near foot up to its pedal last.
+ *  `step`: a step-through frame. The hands' "saddle" grip is the bike's grips (cars.ts). */
+export function bikeOnAt(
+  d: Doorway,
+  t: number,
+  leaving: boolean,
+  from: { x: number; z: number; yaw: number } | null,
+  out: ActPose,
+  step: boolean,
+): ActPose {
+  const s = d.s;
+  const xh = d.hip.x;
+  const yh = d.hip.y;
+  const wh = d.hip.z * s;
+  // (stood by the top tube, a little ahead of the saddle; out from the frame by a hip's width)
+  const xs = xh - 0.3;
+  const w0 = 0.42;
+  const stand = d.stand - 0.02;
+  const A = s > 0 ? 1 : 0;
+  const B = 1 - A;
+  const sat = d.satFeet.map((f) => [f.x, f.y, f.z * s]);
+  const face = yawOf(-1, 0);
+  const tt = leaving ? 1.9 - t * (1.9 / 1.7) : t;
+  const f0 = !leaving && from ? { x: from.x, w: from.z * s } : { x: xs, w: w0 };
+  const hips = track(
+    [
+      { t: 0, v: [f0.x, stand, f0.w], stop: true },
+      { t: 0.3, v: [xs, stand, w0], stop: true },
+      { t: 0.55, v: [xs + 0.02, stand - 0.04, w0 - 0.03] },
+      { t: 0.85, v: [xs + 0.06, stand - 0.03, w0 - 0.08] },
+      { t: 1.05, v: [xh - 0.06, Math.max(d.satHip + 0.1, stand - 0.12), w0 * 0.35] },
+      { t: 1.3, v: [xh, d.satHip + 0.02, wh] },
+      { t: 1.5, v: [xh, d.satHip, wh], stop: true },
+    ],
+    tt,
+    [0, 0, 0],
+  );
+  // the far leg: back and over behind the saddle — or through the low frame
+  const swing: K[] = step
+    ? [
+        { t: 0.62, v: [xs - 0.08, 0.42, w0 - 0.22, 0.3] },
+        { t: 0.82, v: [xs - 0.06, 0.48, -0.02, 0.3] },
+        { t: 1.0, v: [(xs + sat[A][0]) / 2, Math.max(sat[A][1], 0) + 0.12, sat[A][2] * 0.7, 0.2] },
+      ]
+    : [
+        { t: 0.62, v: [xh + 0.32, yh - 0.12, w0 - 0.06, 0.7] },
+        { t: 0.8, v: [xh + 0.4, yh + 0.08, 0.02, 0.7] },
+        { t: 0.98, v: [xh + 0.18, Math.max(sat[A][1], 0) + 0.3, sat[A][2] * 0.8, 0.4] },
+      ];
+  const fA = track(
+    [
+      { t: 0, v: [f0.x - 0.05, 0, f0.w - 0.12, 0], stop: true },
+      { t: 0.3, v: [xs + 0.04, 0, w0 - 0.12, 0], stop: true },
+      { t: 0.45, v: [xs + 0.04, 0, w0 - 0.12, 0], stop: true },
+      ...swing,
+      { t: 1.15, v: [sat[A][0], sat[A][1], sat[A][2], 0], stop: true },
+    ],
+    tt,
+    [0, 0, 0, 0],
+  );
+  const fB = track(
+    [
+      { t: 0, v: [f0.x + 0.05, 0, f0.w + 0.12, 0], stop: true },
+      { t: 0.3, v: [xs - 0.04, 0, w0 + 0.1, 0], stop: true },
+      { t: 1.2, v: [xs - 0.02, 0, w0 + 0.06, 0], stop: true },
+      { t: 1.36, v: [(xs + sat[B][0]) / 2, Math.max(sat[B][1], 0) + 0.12, (w0 + sat[B][2]) / 2, 0.3] },
+      { t: 1.52, v: [sat[B][0], sat[B][1], sat[B][2], 0], stop: true },
+    ],
+    tt,
+    [0, 0, 0, 0],
+  );
+  out.hips.set(hips[0], hips[1], s * hips[2]);
+  out.feet[A].set(fA[0], fA[1], s * fA[2]);
+  out.feet[B].set(fB[0], fB[1], s * fB[2]);
+  out.toe[A] = fA[3];
+  out.toe[B] = fB[3];
+  out.yaw = !leaving && from && tt < 0.3 ? lerpA(from.yaw, face, seg(tt, 0, 0.3)) : face;
+  out.heading[0] = out.heading[1] = out.yaw;
+  // (the knees forward and a little down — a leg swung back bends behind the knee, as one does)
+  for (const i of [0, 1]) {
+    const lifted = out.feet[i].y > 0.05;
+    out.knee[i].set(Math.sin(out.yaw), lifted ? 0.1 : 0.15, Math.cos(out.yaw)).normalize();
+  }
+  // (bent over the bars as the leg goes back — less for the step-through's —, leant a touch to the bike)
+  out.duck = win(tt, 0.4, 1.15, 0.25) * (step ? 0.2 : 0.42);
+  out.lean = win(tt, 0.45, 1.2, 0.25) * 0.1;
+  out.twist = 0;
+  out.look = 0;
+  const w = seg(tt, 0.15, 0.45);
+  out.hands = (
+    [
+      { S: "L", at: "saddle" as Grip, w },
+      { S: "R", at: "saddle" as Grip, w },
+    ] as ActPose["hands"]
+  ).filter((h) => h.w > 0.001);
+  out.door = -1;
+  out.sat = seg(tt, 1.45, 1.9);
+  return out;
+}

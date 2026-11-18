@@ -141,7 +141,7 @@ await page.evaluate(() => {
   w.__yutopia.cars.mine.drive.throwOff("crash");
 });
 await K.up("KeyW");
-await page.waitForTimeout(3000);
+await page.waitForTimeout(process.env.EARLY ? 900 : 3000);
 const { profile } = await cdp.send("Profiler.stop");
 const self = new Map<string, number>();
 const dt = profile.timeDeltas ?? [];
@@ -188,7 +188,7 @@ console.log(
   }, id),
 );
 const counts: string[] = [];
-for (let i = 0; i < 16; i++) {
+for (let i = 0; i < (process.env.EARLY ? 0 : 16); i++) {
   counts.push(
     await page.evaluate((id) => {
       const c = (window as any).__yutopia;
@@ -225,6 +225,43 @@ if (png) {
   writeFileSync(`${process.env.OUT ?? "/tmp"}/fallen.png`, Buffer.from(png.split(",")[1], "base64"));
   console.log("still: fallen.png");
 }
+// (back on it: the prompt's Use, as a player presses it — wait for the prompt, then act; EARLY=1: as soon as I'm up,
+// the bike maybe still settling)
+if (!process.env.EARLY) await page.waitForTimeout(2500);
+const meNow = await page.evaluate(() => {
+  const c = (window as any).__yutopia;
+  const me = c.room.state.players.get(c.room.sessionId);
+  return { x: me.x, y: me.y, busy: me.busy, fellAt: me.fellAt, downAt: me.downAt };
+});
+const bikeAt = await page.evaluate((id) => {
+  const o = (window as any).__yutopia.room.state.objects.get(id);
+  return { x: o.x, y: o.y, props: JSON.parse(o.props) };
+}, id);
+console.log("me", JSON.stringify(meNow), "bike", JSON.stringify({ x: bikeAt.x, y: bikeAt.y, down: bikeAt.props.down }));
+await page.evaluate((b) => (window as any).__yutopia.teleport({ x: b.x + 1.2, y: b.y + 1.6, level: 0 }), bikeAt);
+await page.waitForTimeout(1500);
+const log: string[] = [];
+await page.evaluate(() => {
+  const w = window as any;
+  w.__no = [];
+  w.__yutopia.room.onMessage("car:no", (m: any) => w.__no.push(JSON.stringify(m)));
+});
+const pr = await page.evaluate(() => JSON.stringify((window as any).__hud?.get()?.prompt ?? null));
+log.push(`prompt ${pr}`);
+const acted = await page.evaluate((id) => (window as any).__yutopia.cars.act("car", id), id);
+log.push(`act ${acted}`);
+for (let i = 0; i < 12; i++) {
+  await page.waitForTimeout(500);
+  log.push(
+    await page.evaluate(() => {
+      const w = window as any;
+      const C = w.__yutopia.cars;
+      const me = w.__yutopia.room.state.players.get(w.__yutopia.room.sessionId);
+      return `${((i) => i)(0)}|mine:${!!C.mine} walkIn:${!!C.walkIn} wanted:${C.wanted} me:${me.x.toFixed(1)},${me.y.toFixed(1)} busy:${me.busy} no:${w.__no.join(",")}`;
+    }),
+  );
+}
+console.log("re-enter:\n  " + log.join("\n  "));
 await page.evaluate(() => (window as any).__yutopia.room.send("mod:clear", {}));
 await page.waitForTimeout(400);
 await browser.close();
