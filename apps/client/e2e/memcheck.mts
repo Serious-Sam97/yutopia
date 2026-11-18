@@ -490,11 +490,16 @@ try {
           c.walker.faceYaw?.(0);
           c.skateHand("street-pop");
         });
-        await page.waitForTimeout(500);
+        // (the board's code loads with the first: waited for, and on it)
+        await page
+          .waitForFunction(() => !!(window as any).__yutopia.walker?.stepBody?.skate, null, { timeout: 15_000 })
+          .catch(() => console.log("  board life: NOT on the board"));
         await page.keyboard.down("KeyW");
         await page.waitForTimeout(1500);
         await page.keyboard.up("KeyW");
+        rode = Math.max(rode, await page.evaluate(() => (window as any).__yutopia.walker?.stepBody?.skate?.s ?? 0));
       };
+      let rode = 0;
       await ride();
       await page.keyboard.down("Space");
       await page.waitForTimeout(250);
@@ -514,7 +519,9 @@ try {
       await page.keyboard.press("KeyX");
       await page.waitForTimeout(800);
       const on = await page.evaluate(() => !!(window as any).__yutopia.walker?.stepBody?.skate);
-      console.log(`  board life: off after ${on ? "NOT off" : "yes"} (${Math.round((Date.now() - t0) / 1000)} s)`);
+      console.log(
+        `  board life: pushed to ${rode.toFixed(1)} m/s, off after: ${on ? "NOT off" : "yes"} (${Math.round((Date.now() - t0) / 1000)} s)`,
+      );
       await go(home, 1500);
     }
     // a third of the people leave and others come
@@ -581,10 +588,14 @@ try {
     }
     if (c === Number(process.env.SERVER_FROM ?? 1)) serverFirst = await serverSnapshot();
     if (c === 1) {
-      first = await snapshot();
+      // (a page's heap over ~1.2 GB makes a snapshot past a string's length: the counts still go on, no diff)
+      first = await snapshot().catch((e) => {
+        console.log(`  (the page's heap snapshot couldn't be read: ${String(e).slice(0, 80)} — no heap diff)`);
+        return null;
+      });
       // (what the page's heap is, the biggest kinds)
-      const top = [...first].sort((a, b) => b[1].size - a[1].size).slice(0, 15);
-      console.log("the page's heap, the biggest kinds (first cycle):");
+      const top = first ? [...first].sort((a, b) => b[1].size - a[1].size).slice(0, 15) : [];
+      if (first) console.log("the page's heap, the biggest kinds (first cycle):");
       for (const [k, v] of top) console.log(`  ${(v.size / 1e6).toFixed(1)} MB  ×${v.n}  ${k}`);
     }
   }
