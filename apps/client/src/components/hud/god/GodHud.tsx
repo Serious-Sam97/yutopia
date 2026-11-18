@@ -1,5 +1,7 @@
 "use client";
 
+import { CAR_COLOURS } from "@yutopia/shared";
+import { type CarKind, nearestColour, SPECS, variantsOf } from "@yutopia/shared/car";
 import {
   BUILDINGS,
   type BuildingKind,
@@ -32,6 +34,7 @@ import { useLang } from "@/lib/i18n";
 import type { PublishSummary } from "@/world/god/controller";
 import { GOD_READY, GOD_TOOLS, type GodHud as GodState, type GodTool, hud, useHud } from "@/world/store";
 import { ago } from "../admin/ui";
+import { ItemThumb } from "../build/thumbs";
 import { useWorld } from "../ctx";
 import { Icon, type IconName } from "../icons";
 
@@ -231,6 +234,39 @@ const W = {
   mapOpen: ["The map (M)", "O mapa (M)"],
   you: ["the camera", "a câmera"],
   grown: ["grown in the draft", "crescido no rascunho"],
+  vehiclesHint: [
+    "Click: place it · R or the wheel: turn it · drag one to move it",
+    "Clique: coloca · R ou a roda: gira · arraste um para mover",
+  ],
+  variant: ["Model", "Modelo"],
+  colour: ["Colour", "Cor"],
+  colour2: ["Second colour", "Segunda cor"],
+  none: ["None", "Nenhuma"],
+  role: ["Role", "Papel"],
+  role_: ["Anyone's", "De todos"],
+  role_police: ["Police", "Polícia"],
+  role_taxi: ["Taxi", "Táxi"],
+  role_rental: ["Rental", "Aluguel"],
+  plate: ["Plate", "Placa"],
+  sendHome: ["Send home", "Mandar para casa"],
+  ownedNote: ["Someone's own: moved only", "É de alguém: só mover"],
+  homeNote: ["Lives here: the tow brings it back", "Mora aqui: o guincho traz de volta"],
+  placedNote: ["Placed in this draft", "Colocado neste rascunho"],
+  kind_sedan: ["Saloon", "Sedã"],
+  kind_estate: ["Estate", "Perua"],
+  kind_hatch: ["Hatchback", "Hatch"],
+  kind_van: ["Van", "Van"],
+  kind_offroad: ["4x4", "4x4"],
+  kind_pickup: ["Pickup", "Picape"],
+  kind_snowmobile: ["Snowmobile", "Moto de neve"],
+  kind_snowcat: ["Snowcat", "Snowcat"],
+  kind_ploughtruck: ["Plough truck", "Caminhão limpa-neve"],
+  kind_tractor: ["Tractor", "Trator"],
+  kind_toboggan: ["Toboggan", "Tobogã"],
+  kind_bike_town: ["Town bike", "Bike urbana"],
+  kind_bike_bmx: ["BMX", "BMX"],
+  kind_bike_mtb: ["Mountain bike", "Mountain bike"],
+  kind_bike_road: ["Road bike", "Bike de estrada"],
 } as const;
 type Word = keyof typeof W;
 function useW() {
@@ -245,6 +281,7 @@ const TOOL_WORDS: Record<GodTool, [string, string]> = {
   nature: ["Nature", "Natureza"],
   things: ["Things", "Coisas"],
   buildings: ["Buildings", "Prédios"],
+  vehicles: ["Vehicles", "Veículos"],
   grow: ["Grow", "Crescer"],
 };
 const TOOL_ICONS: Record<GodTool, IconName> = {
@@ -255,6 +292,7 @@ const TOOL_ICONS: Record<GodTool, IconName> = {
   nature: "leaf",
   things: "chair",
   buildings: "home",
+  vehicles: "key",
   grow: "map",
 };
 const READY = GOD_READY;
@@ -299,6 +337,10 @@ export function GodHud() {
       {g.tool === "select" && <SelectOptions g={g} />}
       {g.tool === "select" && g.picked === "thing" && g.things.sel && <ThingsPanel g={g} />}
       {g.tool === "select" && g.picked === "building" && g.buildings.sel && <BuildingsPanel g={g} />}
+      {g.tool === "vehicles" && <VehiclesOptions g={g} />}
+      {(g.tool === "vehicles" || (g.tool === "select" && g.picked === "vehicle" && g.vehicles.sel)) && (
+        <VehiclesPanel g={g} />
+      )}
       <Tools g={g} />
       <Pointer g={g} />
       {g.drafts.open && <DraftsPanel g={g} />}
@@ -967,7 +1009,9 @@ function SelectOptions({ g }: { g: GodState }) {
               name: `${g.roads.sel.name} · ${KIND_WORDS[g.roads.kind][pt ? 1 : 0]}`,
               locked: g.roads.sel.locked,
             }
-          : null;
+          : g.picked === "vehicle"
+            ? g.vehicles.sel && { name: vehicleName(g.vehicles.sel.kind, pt), locked: null }
+            : null;
   const blocked = g.picked === "thing" ? g.things.blocked : g.picked === "building" ? g.buildings.blocked : null;
   const status = blocked
     ? W.notThere[pt ? 1 : 0].replace("{why}", blocked)
@@ -1005,6 +1049,229 @@ function SelectOptions({ g }: { g: GodState }) {
         {status}
       </p>
     </div>
+  );
+}
+
+// ── the vehicles (docs/plan/102-god-mode-vehicles.md) ──
+const VEHICLE_KINDS = (Object.keys(SPECS) as CarKind[]).filter((k) => k !== "estate");
+const ROAD_CARS = new Set<string>(["sedan", "estate", "hatch", "van", "offroad", "pickup"]);
+const PAINTS2 = [...CAR_COLOURS, 0x16181b, 0xf2f2ee, 0xe2b42a, 0x2266cc, 0x9a2b2b];
+const vehicleName = (k: string, pt: boolean) => {
+  const w = W[`kind_${k}` as Word] as readonly [string, string] | undefined;
+  return w ? w[pt ? 1 : 0] : k;
+};
+const hex = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
+
+/** The Vehicles tool's row: what's in the way of the one held, else how it's used. */
+function VehiclesOptions({ g }: { g: GodState }) {
+  const t = useW();
+  const pt = useLang() === "pt";
+  const o = g.vehicles;
+  return (
+    <div className="pointer-events-auto cabinet absolute bottom-[86px] left-3 right-3 sm:right-auto sm:left-1/2 sm:-translate-x-1/2 px-3 py-2 flex items-center gap-3 max-w-[calc(100vw-24px)] sm:max-w-[60vw]">
+      <span className="title text-[15px] shrink-0">{vehicleName(o.kind, pt)}</span>
+      <p className="text-[12px] truncate" style={{ color: o.blocked ? "var(--amber)" : "var(--cream-dim)" }}>
+        {o.blocked ? W.notThere[pt ? 1 : 0].replace("{why}", o.blocked) : t("vehiclesHint")}
+      </p>
+    </div>
+  );
+}
+
+/** The vehicles' panel: with the Vehicles tool, every kind (its picture), its models, colours and role, to place; with
+ *  one picked (Select's), its own — and "send home" for one of the town's left away. A player's own: moved only. */
+function VehiclesPanel({ g }: { g: GodState }) {
+  const t = useW();
+  const pt = useLang() === "pt";
+  const w = useWorld();
+  const o = g.vehicles;
+  const sel = g.tool === "select" ? o.sel : null;
+  const tool = () => w?.god?.vehiclesTool();
+  const kind = (sel?.kind ?? o.kind) as CarKind;
+  const cur = sel ?? o;
+  const [plate, setPlate] = useState(sel?.plate ?? "");
+  useEffect(() => setPlate(sel?.plate ?? ""), [sel?.plate]);
+  const set = (p: {
+    variant?: string;
+    colour?: number;
+    colour2?: number | null;
+    role?: GodState["vehicles"]["role"];
+  }) => {
+    if (sel) tool()?.setPicked(p);
+    else hud.set((s) => ({ god: { ...s.god, vehicles: { ...s.god.vehicles, ...p } } }));
+  };
+  const pickKind = (k: CarKind) => {
+    const v = variantsOf(k)[0] ?? k;
+    hud.set((s) => ({
+      god: {
+        ...s.god,
+        vehicles: {
+          ...s.god.vehicles,
+          kind: k,
+          variant: v,
+          colour2: null,
+          role: ROAD_CARS.has(k) ? s.god.vehicles.role : "",
+        },
+      },
+    }));
+  };
+  const locked = !!sel?.owned;
+  const road = ROAD_CARS.has(kind);
+  return (
+    <aside className="pointer-events-auto cabinet absolute top-[92px] right-3 w-64 max-h-[calc(100vh-200px)] overflow-y-auto scroll-thin p-3 hidden sm:block">
+      <div className="flex items-baseline justify-between">
+        <h3 className="title text-[18px]">{sel ? vehicleName(kind, pt) : TOOL_WORDS.vehicles[pt ? 1 : 0]}</h3>
+        {!sel && (
+          <span className="mono text-[10.5px]" style={{ color: "var(--cream-dim)" }}>
+            {t("kinds", VEHICLE_KINDS.length)}
+          </span>
+        )}
+      </div>
+      <div className="zigzag w-24 mt-1.5" aria-hidden />
+      {!sel && (
+        <div className="grid grid-cols-3 gap-1.5 mt-2.5" role="radiogroup" aria-label={TOOL_WORDS.vehicles[pt ? 1 : 0]}>
+          {VEHICLE_KINDS.map((k) => (
+            <button
+              key={k}
+              type="button"
+              className="deck-btn h-16 flex-col gap-0.5 px-1"
+              aria-pressed={o.kind === k}
+              data-god-vehicle={k}
+              onClick={() => pickKind(k)}
+            >
+              <span className="grid place-items-center h-8 w-full">
+                <ItemThumb kind="car" props={{ model: k, variant: nearestColour(o.colour) }} />
+              </span>
+              <span className="text-[10px] leading-tight text-center">{vehicleName(k, pt)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {sel && (
+        <p className="text-[12px] mt-2" style={{ color: locked ? "var(--amber)" : "var(--cream-dim)" }}>
+          {locked ? t("ownedNote") : sel.placed ? t("placedNote") : sel.home ? t("homeNote") : ""}
+        </p>
+      )}
+      {!locked && (
+        <div className="space-y-2.5 mt-3">
+          {variantsOf(kind).length > 1 && (
+            <div>
+              <p className="grp">{t("variant")}</p>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {variantsOf(kind).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    className="chip"
+                    aria-pressed={cur.variant === v}
+                    onClick={() => set({ variant: v })}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div>
+            <p className="grp">{t("colour")}</p>
+            <div className="flex flex-wrap gap-1 mt-1" role="radiogroup" aria-label={t("colour")}>
+              {PAINTS2.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className="w-6 h-6 rounded-md"
+                  aria-label={hex(c)}
+                  aria-pressed={cur.colour === c}
+                  style={{
+                    background: hex(c),
+                    boxShadow: cur.colour === c ? "0 0 0 2px var(--amber)" : "inset 0 0 0 1px var(--edge)",
+                  }}
+                  onClick={() => set({ colour: c })}
+                />
+              ))}
+            </div>
+          </div>
+          {road && (
+            <div>
+              <p className="grp">{t("colour2")}</p>
+              <div className="flex flex-wrap gap-1 mt-1">
+                <button
+                  type="button"
+                  className="chip"
+                  aria-pressed={cur.colour2 === null}
+                  onClick={() => set({ colour2: null })}
+                >
+                  {t("none")}
+                </button>
+                {PAINTS2.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    className="w-6 h-6 rounded-md"
+                    aria-label={hex(c)}
+                    aria-pressed={cur.colour2 === c}
+                    style={{
+                      background: hex(c),
+                      boxShadow: cur.colour2 === c ? "0 0 0 2px var(--amber)" : "inset 0 0 0 1px var(--edge)",
+                    }}
+                    onClick={() => set({ colour2: c })}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          {road && (
+            <div>
+              <p className="grp">{t("role")}</p>
+              <div className="seg mt-1" role="radiogroup" aria-label={t("role")}>
+                {(["", "police", "taxi", "rental"] as const).map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    className="px-2"
+                    aria-pressed={cur.role === r}
+                    onClick={() => set({ role: r })}
+                  >
+                    {t(`role_${r}` as Word)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {sel && road && (
+            <label className="flex items-center gap-2">
+              <span className="text-[12.5px] w-12" style={{ color: "var(--cream-dim)" }}>
+                {t("plate")}
+              </span>
+              <input
+                className="field py-1 text-sm mono flex-1"
+                maxLength={8}
+                value={plate}
+                onChange={(e) => setPlate(e.target.value.toUpperCase())}
+                onBlur={() => plate !== sel.plate && tool()?.setPicked({ plate })}
+                onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+              />
+            </label>
+          )}
+        </div>
+      )}
+      {sel && (
+        <div className="flex flex-wrap gap-1 mt-3">
+          {sel.away && (
+            <button type="button" className="chip" onClick={() => w?.god?.sendHome()}>
+              {t("sendHome")}
+            </button>
+          )}
+          <button type="button" className="chip" onClick={() => w?.god?.turnPicked()}>
+            {t("turn")}
+          </button>
+          {!locked && (
+            <button type="button" className="chip" onClick={() => w?.god?.removePicked()}>
+              {t("remove")}
+            </button>
+          )}
+        </div>
+      )}
+    </aside>
   );
 }
 
@@ -2095,6 +2362,9 @@ function PublishDialog({ g }: { g: GodState }) {
     [t("things"), moves(c.things)],
     [t("buildings"), moves(c.buildings)],
     ...(c.land.add || c.land.change || c.land.remove ? [[t("growT"), moves(c.land)] as [string, string]] : []),
+    ...(c.vehicles.add || c.vehicles.change || c.vehicles.remove
+      ? [[TOOL_WORDS.vehicles[pt ? 1 : 0], moves(c.vehicles)] as [string, string]]
+      : []),
   ];
   const mb = (b: number) => (b / 1e6).toFixed(b < 1e5 ? 2 : 1);
   return (

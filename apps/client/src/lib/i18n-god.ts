@@ -40,6 +40,19 @@ export const GOD_STRINGS = {
   godTool_things: ["Things", "Coisas"],
   godTool_buildings: ["Buildings", "Prédios"],
   godTool_grow: ["Grow", "Crescer"],
+  godTool_vehicles: ["Vehicles", "Veículos"],
+  godVehicleInUse: [
+    "Someone's in it: it can be picked once it's parked",
+    "Tem alguém nele: dá para pegar quando estiver estacionado",
+  ],
+  godVehicleOwned: [
+    "Someone's own: it can be moved, not changed nor taken away",
+    "É de alguém: dá para mover, não mudar nem tirar",
+  ],
+  godVehicleOff: ["off the land", "fora do terreno"],
+  godVehicleWater: ["in the water", "na água"],
+  godVehicleBuilding: ["in a building", "dentro de um prédio"],
+  godVehicleOther: ["another vehicle stands there", "já tem outro veículo aí"],
   godLandBlocked: ["No land there: {why}", "Sem terra aí: {why}"],
   godLandStays: ["It stays: {why}", "Ele fica: {why}"],
 } as const;

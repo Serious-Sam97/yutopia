@@ -27,6 +27,7 @@ import { GrowTool } from "./grow";
 import { BrushRing } from "./ring";
 import { RoadsTool } from "./roads";
 import { ThingsTool } from "./things";
+import { VehiclesTool } from "./vehicles";
 
 // God mode (docs/plan/53-the-god-mode.md, phase 5): an admin building the open world. Going in,
 // my body stays where it stood (held here; marked "building" to everyone by the world server) and
@@ -121,6 +122,10 @@ export class GodController {
   // the buildings tool (phase 9: ./buildings.ts), and the pointer dragging a building
   private buildings: BuildingsTool | null = null;
   private buildingDrag: number | null = null;
+  // the vehicles (docs/plan/102: ./vehicles.ts) — the draft's drawn, Select's, the Vehicles tool's — and the pointer
+  // dragging one with the Vehicles tool
+  private vehicles: VehiclesTool | null = null;
+  private vehicleDrag: number | null = null;
   // the grow tool (plan 69's phase 10: ./grow.ts), and the pointer drawing a piece (where it went
   // down: a click or a drag)
   private grow: GrowTool | null = null;
@@ -207,6 +212,9 @@ export class GodController {
     this.things = null;
     this.buildings?.dispose();
     this.buildings = null;
+    this.vehicles?.dispose();
+    this.vehicles = null;
+    this.vehicleDrag = null;
     this.grow?.dispose();
     this.grow = null;
     this.growDrag = null;
@@ -248,6 +256,8 @@ export class GodController {
     this.things?.cancel();
     this.things?.hide();
     this.buildings?.hide();
+    this.vehicles?.hide();
+    this.vehicleDrag = null;
     this.grow?.cancel();
     this.grow?.hide();
     this.growDrag = null;
@@ -286,8 +296,12 @@ export class GodController {
     this.strokeFrame(dt);
     this.showRing(f);
     const tool = hud.get().god.tool;
+    // (the draft's vehicles, drawn as it has them — plan 102)
+    this.vehiclesTool()?.showDraft();
     if (tool === "select") this.selectFrame(this.under, f);
     else {
+      if (tool === "vehicles") this.vehiclesTool()?.frame(this.under, f, !this.vehicles?.dragging);
+      else this.vehicles?.hide();
       if (tool === "roads") this.roadsTool()?.frame(this.under, f);
       else this.roads?.hide();
       if (tool === "things") this.thingsTool()?.frame(this.under, f);
@@ -464,6 +478,14 @@ export class GodController {
         return true;
       }
     }
+    // the vehicles tool: R turns the one held (Shift: back), Esc lets go of one picked
+    const vt = hud.get().god.tool === "vehicles" ? this.vehicles : null;
+    if (vt && !hud.get().god.publish && !e.repeat) {
+      if (k === "r") {
+        vt.turn(e.shiftKey ? -15 : 15);
+        return true;
+      }
+    }
     // the select tool: R turns the picked thing or building, Delete takes the picked one away, Esc
     // lets it go
     const picked = hud.get().god.tool === "select" ? hud.get().god.picked : null;
@@ -546,6 +568,11 @@ export class GodController {
         this.buildingDrag = e.pointerId;
         return;
       }
+      // the vehicles tool: one under it picked up to drag (else a click places the one held)
+      if (tool === "vehicles" && e.button === 0 && !touches && this.vehiclesTool()?.grab(this.landAt(e))) {
+        this.vehicleDrag = e.pointerId;
+        return;
+      }
       // the grow tool: a piece drawn from here (let go where it went down: a click, picking one)
       if (tool === "grow" && e.button === 0 && !touches && this.growTool()?.down(this.landAt(e))) {
         this.growDrag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, t: performance.now() };
@@ -559,11 +586,13 @@ export class GodController {
         const grabbed =
           kind === "thing"
             ? this.thingsTool()?.grab(at)
-            : kind === "building"
-              ? this.buildingsTool()?.down(at)
-              : kind === "way"
-                ? this.roadsTool()?.grabWay(at)
-                : false;
+            : kind === "vehicle"
+              ? this.vehiclesTool()?.grab(at)
+              : kind === "building"
+                ? this.buildingsTool()?.down(at)
+                : kind === "way"
+                  ? this.roadsTool()?.grabWay(at)
+                  : false;
         if (kind && grabbed) {
           this.selDrag = { id: e.pointerId, kind };
           return;
@@ -590,15 +619,18 @@ export class GodController {
       if (this.roadDrag === e.pointerId) return this.roads?.move(this.landAt(e));
       if (this.thingDrag === e.pointerId) return this.things?.move(this.landAt(e));
       if (this.buildingDrag === e.pointerId) return this.buildings?.move(this.landAt(e));
+      if (this.vehicleDrag === e.pointerId) return this.vehicles?.move(this.landAt(e));
       if (this.growDrag?.id === e.pointerId) return this.grow?.move(this.landAt(e));
       if (this.selDrag?.id === e.pointerId) {
         const at = this.landAt(e);
         const k = this.selDrag.kind;
         return k === "thing"
           ? this.things?.move(at)
-          : k === "building"
-            ? this.buildings?.move(at)
-            : this.roads?.move(at);
+          : k === "vehicle"
+            ? this.vehicles?.move(at)
+            : k === "building"
+              ? this.buildings?.move(at)
+              : this.roads?.move(at);
       }
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
@@ -633,6 +665,11 @@ export class GodController {
         this.buildings?.up(this.landAt(e), false);
         return;
       }
+      if (this.vehicleDrag === e.pointerId) {
+        this.vehicleDrag = null;
+        this.vehicles?.up();
+        return;
+      }
       const gd = this.growDrag;
       if (gd?.id === e.pointerId) {
         this.growDrag = null;
@@ -646,6 +683,7 @@ export class GodController {
         const k = this.selDrag.kind;
         this.selDrag = null;
         if (k === "thing") this.things?.up(this.landAt(e), false, e);
+        else if (k === "vehicle") this.vehicles?.up();
         else if (k === "building") this.buildings?.up(this.landAt(e), false);
         else this.roads?.upWay();
         this.pickedNow(k);
@@ -666,7 +704,10 @@ export class GodController {
         if (tool === "roads") this.roads?.up(this.landAt(e), true, e);
         else if (tool === "things") this.thingsTool()?.up(this.landAt(e), true, e);
         else if (tool === "buildings") this.buildingsTool()?.up(this.landAt(e), true);
-        else if (tool === "nature") this.natureClick(this.landAt(e));
+        else if (tool === "vehicles") {
+          this.vehicles?.deselect();
+          this.vehiclesTool()?.place(this.landAt(e));
+        } else if (tool === "nature") this.natureClick(this.landAt(e));
         else if (tool === "select") this.deselect();
       }
     },
@@ -684,6 +725,12 @@ export class GodController {
         th.wheelTurn((clamp(e.deltaY, -240, 240) / 100) * (e.altKey ? 1 : 5));
         return;
       }
+      // (a vehicle held to place, or dragged: the same — plan 102)
+      const vt = this.vehicles;
+      if (vt && !e.shiftKey && !e.ctrlKey && (vt.dragging || (g.tool === "vehicles" && !g.publish))) {
+        vt.wheelTurn((clamp(e.deltaY, -240, 240) / 100) * (e.altKey ? 1 : 5));
+        return;
+      }
       // (shift: tilt; else zoom, a trackpad's small steps as smooth as a wheel's)
       if (e.shiftKey) this.tilt((e.deltaY || e.deltaX) * 0.002);
       else this.zoom(Math.exp(clamp(e.deltaY, -120, 120) * 0.0016));
@@ -694,11 +741,12 @@ export class GodController {
   }
 
   // ── the select tool (the mock 08-select): anything, generated, placed or edited ──
-  private selDrag: { id: number; kind: "thing" | "building" | "way" } | null = null;
-  /** What's under `at`: the smallest first (a thing, a building, a way). */
-  private selectHit(at: { x: number; z: number } | null): "thing" | "building" | "way" | null {
+  private selDrag: { id: number; kind: "thing" | "building" | "way" | "vehicle" } | null = null;
+  /** What's under `at`: the smallest first (a thing, a vehicle, a building, a way). */
+  private selectHit(at: { x: number; z: number } | null): "thing" | "building" | "way" | "vehicle" | null {
     if (!at) return null;
     if (this.thingsTool()?.hits(at)) return "thing";
+    if (this.vehiclesTool()?.hits(at)) return "vehicle";
     if (buildingAt(at.x, at.z)) return "building";
     if (this.roadsTool()?.hits(at)) return "way";
     return null;
@@ -715,11 +763,21 @@ export class GodController {
     else this.buildings?.hide();
     if (kind === "way") this.roadsTool()?.frame(over, f, true);
     else this.roads?.hide();
+    if (kind === "vehicle") this.vehiclesTool()?.frame(over, f, false);
+    else this.vehicles?.hide();
   }
   /** `kind` picked (if its tool has it picked): the others let go. */
-  private pickedNow(kind: "thing" | "building" | "way") {
+  private pickedNow(kind: "thing" | "building" | "way" | "vehicle") {
     const g = hud.get().god;
-    const has = kind === "thing" ? !!g.things.sel : kind === "building" ? !!g.buildings.sel : !!g.roads.sel;
+    const has =
+      kind === "thing"
+        ? !!g.things.sel
+        : kind === "building"
+          ? !!g.buildings.sel
+          : kind === "vehicle"
+            ? !!g.vehicles.sel
+            : !!g.roads.sel;
+    if (kind !== "vehicle") this.vehicles?.deselect();
     if (kind !== "thing") this.things?.deselect();
     if (kind !== "building") this.buildings?.deselect();
     if (kind !== "way") this.roads?.deselect();
@@ -727,6 +785,7 @@ export class GodController {
   }
   /** Select's: what's picked let go. */
   deselect() {
+    this.vehicles?.deselect();
     this.things?.deselect();
     this.buildings?.deselect();
     this.roads?.deselect();
@@ -736,6 +795,7 @@ export class GodController {
   turnPicked(back = false) {
     const k = hud.get().god.picked;
     if (k === "thing") this.thingsTool()?.turn(back ? -15 : 15);
+    else if (k === "vehicle") this.vehiclesTool()?.turn(back ? -15 : 15);
     else if (k === "building") this.buildingsTool()?.turn();
   }
   /** Select's: the picked one taken away. */
@@ -744,8 +804,17 @@ export class GodController {
     if (k === "thing") this.thingsTool()?.removePicked();
     else if (k === "building") this.buildingsTool()?.removePicked();
     else if (k === "way") this.roadsTool()?.removePicked();
+    else if (k === "vehicle") this.vehiclesTool()?.removePicked();
     const g = hud.get().god;
-    if (!(k === "thing" ? g.things.sel : k === "building" ? g.buildings.sel : g.roads.sel)) this.set({ picked: null });
+    const sel =
+      k === "thing"
+        ? g.things.sel
+        : k === "building"
+          ? g.buildings.sel
+          : k === "vehicle"
+            ? g.vehicles.sel
+            : g.roads.sel;
+    if (!sel) this.set({ picked: null });
   }
   /** Select's: the picked way's points edited (the roads tool, Edit points, the way picked). */
   editWay() {
@@ -785,6 +854,30 @@ export class GodController {
         tp.scene,
       );
     return this.things;
+  }
+  /** The vehicles (made the first time they're needed: the draft's drawn, Select's, the Vehicles tool). */
+  vehiclesTool(): VehiclesTool | null {
+    const tp = this.w.tp;
+    if (!this.vehicles && tp)
+      this.vehicles = new VehiclesTool(
+        {
+          draft: () => this.draftNow(),
+          published: () => publishedEdits(),
+          change: (next) => this.change(next),
+          snap: () => this.snapNow(),
+          cars: () => this.w.cars,
+          objects: () => this.w.cars?.worldObjects() ?? [],
+        },
+        tp.scene,
+      );
+    return this.vehicles;
+  }
+  /** (Select's vehicle panel) A home vehicle left away, put back at its home now (the server's: not a draft's step). */
+  sendHome() {
+    const sel = hud.get().god.vehicles.sel;
+    if (!sel?.away) return;
+    this.w.send("god:car-home", { id: sel.key });
+    this.set({ vehicles: { ...hud.get().god.vehicles, sel: { ...sel, away: false } } });
   }
   /** The buildings tool (made the first time it's needed). */
   buildingsTool(): BuildingsTool | null {

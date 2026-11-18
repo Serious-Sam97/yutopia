@@ -156,6 +156,106 @@ export function homesOf(e: GroundsEdits | null | undefined): HomeCar[] {
     if (!gone.has(d.key) && !own.has(d.key)) out.push(withDef(homeOfDef(d), s.change?.[d.key] ?? {}));
   return out;
 }
+/** A home vehicle's object props as its home has them, over what it had (`was`): what a home says it is, its alone
+ *  (an older look, role or plate dropped — plan 102's rollbacks), and set down standing (a bike that lay where it fell
+ *  stands at home). Its place is parkAt's. */
+export function homeProps(h: HomeCar, was: Record<string, unknown> = {}): Record<string, unknown> {
+  const { model: _m, wagon: _w, snowy: _s, role: _r, look: _l, plate: _p, down: _d, lie: _q, ly: _y, ...rest } = was;
+  const props: Record<string, unknown> = { ...rest, level: 0, variant: h.colour, home: 1 };
+  if (h.model !== "sedan") props.model = h.model;
+  if (h.wagon) props.wagon = 1;
+  if (h.snowy) props.snowy = 1;
+  if (h.role) props.role = h.role;
+  // (plan 101: a rack's bike as it was made, its variant and paint; plan 102: God mode's, whole)
+  if (h.look) props.look = { extras: [], wheels: "steel", ...h.look };
+  if (h.plate) props.plate = h.plate;
+  return props;
+}
+/** A vehicle that isn't a home (a lot's car, a player's own, a spawn) moved by God mode: its props then — not
+ *  someone's own, its look, role and plate too; set down standing, as if just left there. */
+export function movedProps(was: Record<string, unknown>, c: Partial<VehicleDef>, now: number): Record<string, unknown> {
+  const props: Record<string, unknown> = { ...was };
+  delete props.down;
+  delete props.lie;
+  delete props.ly;
+  if (!props.ownerId) {
+    if (c.look) props.look = { extras: [], wheels: "steel", ...c.look };
+    if (c.role !== undefined) {
+      if (c.role) props.role = c.role;
+      else delete props.role;
+    }
+    if (c.plate) props.plate = c.plate;
+  }
+  props.parkedAt = now;
+  return props;
+}
+
+/** What laying `now` over `was` does to the world's vehicles (plan 102): a home made or changed (`home`), one taken
+ *  away (`gone`), and any other vehicle moved or taken away once (`once`: its change; null, taken away). */
+export type VehicleStep =
+  | { id: string; home: HomeCar }
+  | { id: string; gone: true }
+  | { id: string; once: Partial<VehicleDef> | null };
+export function vehicleSteps(
+  was: GroundsEdits | null | undefined,
+  now: GroundsEdits | null | undefined,
+  effects: (
+    s: GroundsEdits["vehicles"],
+  ) => Map<string, { add: Record<string, unknown> } | { change: Record<string, unknown> } | { remove: true }>,
+): VehicleStep[] {
+  const out: VehicleStep[] = [];
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  if (same(was?.vehicles ?? null, now?.vehicles ?? null)) return out;
+  const before = new Map(homesOf(was).map((h) => [h.id, h]));
+  const after = homesOf(now);
+  const ids = new Set(after.map((h) => h.id));
+  for (const h of after) if (!same(before.get(h.id) ?? null, h)) out.push({ id: h.id, home: h });
+  for (const id of before.keys()) if (!ids.has(id)) out.push({ id, gone: true });
+  const e0 = effects(was?.vehicles);
+  for (const [k, e] of effects(now?.vehicles)) {
+    if (ids.has(k) || before.has(k) || same(e0.get(k) ?? null, e)) continue;
+    out.push({ id: k, once: "remove" in e ? null : (("change" in e ? e.change : e.add) as Partial<VehicleDef>) });
+  }
+  return out;
+}
+
+// God mode's steps on its vehicles (as grounds-things' on things): a new one's own entry changed, any other's by its key
+const placed = (e: GroundsEdits, key: string) => !!e.vehicles?.add?.some((d) => d.key === key);
+/** Placed. */
+export function addVehicle(e: GroundsEdits, d: VehicleDef): GroundsEdits {
+  return { ...e, vehicles: { ...e.vehicles, add: [...(e.vehicles?.add ?? []), d] } };
+}
+/** Moved, turned, repainted, its role or plate changed. */
+export function changeVehicle(e: GroundsEdits, key: string, patch: Partial<Omit<VehicleDef, "key">>): GroundsEdits {
+  if (placed(e, key))
+    return {
+      ...e,
+      vehicles: {
+        ...e.vehicles,
+        add: (e.vehicles?.add ?? []).map((d) => (d.key === key ? { ...d, ...patch } : d)),
+      },
+    };
+  return {
+    ...e,
+    vehicles: {
+      ...e.vehicles,
+      change: { ...(e.vehicles?.change ?? {}), [key]: { ...e.vehicles?.change?.[key], ...patch } },
+    },
+  };
+}
+/** Taken away (a placed one: as if never placed). */
+export function removeVehicle(e: GroundsEdits, key: string): GroundsEdits {
+  if (placed(e, key)) {
+    const change = { ...(e.vehicles?.change ?? {}) };
+    delete change[key];
+    return {
+      ...e,
+      vehicles: { ...e.vehicles, add: (e.vehicles?.add ?? []).filter((d) => d.key !== key), change },
+    };
+  }
+  return { ...e, vehicles: { ...e.vehicles, remove: [...new Set([...(e.vehicles?.remove ?? []), key])] } };
+}
+
 /** Whether an id is one of the town's own (from the code) or one God mode placed. */
 export const isHome = (homes: readonly HomeCar[], id: string): boolean => homes.some((h) => h.id === id);
 

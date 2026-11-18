@@ -195,7 +195,17 @@ export type BuildTool = "furniture" | "walls" | "rooms" | "desks" | "map";
 export type PaintMode = "line" | "arc" | "box" | "adjust" | "fill" | "erase";
 /** God mode's tools (the bottom bar): Select, then each kind of edit (phases 6–9 of plan 53; Grow,
  *  plan 69's phase 10). */
-export const GOD_TOOLS = ["select", "land", "paint", "roads", "nature", "things", "buildings", "grow"] as const;
+export const GOD_TOOLS = [
+  "select",
+  "land",
+  "paint",
+  "roads",
+  "nature",
+  "things",
+  "buildings",
+  "vehicles",
+  "grow",
+] as const;
 export type GodTool = (typeof GOD_TOOLS)[number];
 /** The tools built so far (the rest: phases 7–9 of plan 53). */
 export const GOD_READY: ReadonlySet<GodTool> = new Set<GodTool>([
@@ -206,6 +216,7 @@ export const GOD_READY: ReadonlySet<GodTool> = new Set<GodTool>([
   "nature",
   "things",
   "buildings",
+  "vehicles",
   "grow",
 ]);
 /** One of my drafts, as the list has it (the API's row: no data). */
@@ -228,8 +239,8 @@ export interface GodHud {
   /** the place under the camera */
   place: string;
   tool: GodTool;
-  /** what the Select tool has picked: a thing, a building or a way (its tool's `sel` says which) */
-  picked: "thing" | "building" | "way" | null;
+  /** what the Select tool has picked: a thing, a building, a way or a vehicle (its tool's `sel` says which) */
+  picked: "thing" | "building" | "way" | "vehicle" | null;
   /** the grid the tools snap to (m; 0: none, free to the centimetre); Ctrl/⌘ held swaps it (none:
    *  1 m, a grid: none) */
   snap: 0 | 0.5 | 1 | 4;
@@ -289,6 +300,31 @@ export interface GodHud {
     sign: string;
     sel: { key: string; locked: string | null } | null;
     blocked: string | null;
+  };
+  /** the vehicles (docs/plan/102): the kind to place and its look, role and heading (°); what's in the way of it;
+   *  the vehicle picked (Select's): its key and kind, whether it's someone's own (moved only), a home (the town's or
+   *  one placed), one placed in this draft, standing away from its home; its look, role and plate */
+  vehicles: {
+    kind: string;
+    variant: string;
+    colour: number;
+    colour2: number | null;
+    role: "" | "police" | "taxi" | "rental";
+    a: number;
+    blocked: string | null;
+    sel: {
+      key: string;
+      kind: string;
+      owned: boolean;
+      home: boolean;
+      placed: boolean;
+      away: boolean;
+      variant: string;
+      colour: number;
+      colour2: number | null;
+      role: "" | "police" | "taxi" | "rental";
+      plate: string;
+    } | null;
   };
   /** the grow tool (docs/plan/69, phase 10): the next piece's biome and lift (m; or the picked
    *  one's, and its name), the piece picked (its key), what's in the way of the one being drawn,
@@ -647,6 +683,16 @@ const initial: HudState = {
       sign: "",
       sel: null,
       blocked: null,
+    },
+    vehicles: {
+      kind: "sedan",
+      variant: "saloon-base",
+      colour: 0x7a1f1f,
+      colour2: null,
+      role: "",
+      a: 0,
+      blocked: null,
+      sel: null,
     },
     grow: { biome: "forest", lift: 0, name: "", sel: null, blocked: null, drawing: null },
     map: false,

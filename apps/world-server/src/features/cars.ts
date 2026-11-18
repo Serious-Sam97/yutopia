@@ -35,6 +35,7 @@ import {
   type HomeCar,
   headingQuat,
   holesWithout,
+  homeProps,
   homesOf,
   keysDay,
   levelCar,
@@ -45,6 +46,7 @@ import {
   mayMend,
   mend,
   mergeDamage,
+  movedProps,
   nearestColour,
   nextMend,
   PART,
@@ -70,6 +72,7 @@ import {
   spareOf,
   storeOf,
   variantSpec,
+  vehicleSteps,
   wireCar,
 } from "@yutopia/shared/car";
 import {
@@ -83,7 +86,7 @@ import {
   MOTORS,
   waterAt,
 } from "@yutopia/shared/grounds";
-import { type Effect, sectionEffects } from "@yutopia/shared/grounds-draft";
+import { sectionEffects } from "@yutopia/shared/grounds-draft";
 import type { GroundsEdits, VehicleDef } from "@yutopia/shared/grounds-edits";
 import { addItem, addItemTo, addStack, count, slotAt, takeSlot, takeStack } from "@yutopia/shared/inventory";
 import { SWIM } from "@yutopia/shared/move";
@@ -1244,20 +1247,6 @@ registerFeature((room: WorldRoom) => {
   // when edits are laid
   let homes = homesOf(editsNow());
   let homeOf = new Map(homes.map((h) => [h.id, h]));
-  const homeProps = (h: HomeCar, was: Record<string, unknown> = {}) => {
-    // (what a home says it is, its alone: an older look, role or plate it had dropped first — plan 102's rollbacks)
-    // (and set down standing: a bike that lay where it fell stands at home)
-    const { model: _m, wagon: _w, snowy: _s, role: _r, look: _l, plate: _p, down: _d, lie: _q, ly: _y, ...rest } = was;
-    const props: Record<string, unknown> = { ...rest, level: 0, variant: h.colour, home: 1 };
-    if (h.model !== "sedan") props.model = h.model;
-    if (h.wagon) props.wagon = 1;
-    if (h.snowy) props.snowy = 1;
-    if (h.role) props.role = h.role;
-    // (plan 101: a rack's bike as it was made, its variant and paint; plan 102: God mode's, whole)
-    if (h.look) props.look = { extras: [], wheels: "steel", ...h.look };
-    if (h.plate) props.plate = h.plate;
-    return props;
-  };
   const putHome = (h: HomeCar, was?: Record<string, unknown>, fresh = false) => {
     const props = homeProps(h, was);
     delete props.parkedAt;
@@ -1405,20 +1394,7 @@ registerFeature((room: WorldRoom) => {
   /** One that isn't a home, moved (and, not someone's own, its look) as God mode's edit has it. */
   const moveCar = (def: ReturnType<typeof fromSchema>, c: Partial<VehicleDef>) => {
     const pose = parkedPose(def);
-    const props: Record<string, unknown> = { ...(def.props ?? {}) };
-    delete props.down;
-    delete props.lie;
-    delete props.ly;
-    if (!props.ownerId) {
-      if (c.look) props.look = { extras: [], wheels: "steel", ...c.look };
-      if (c.role !== undefined) {
-        if (c.role) props.role = c.role;
-        else delete props.role;
-      }
-      if (c.plate) props.plate = c.plate;
-    }
-    // (as if just left there: the lot's tow takes its own back to their bays after a while, as ever)
-    props.parkedAt = Date.now();
+    const props = movedProps(def.props ?? {}, c, Date.now());
     const x = num(c.x, pose.x);
     const z = num(c.z, pose.y);
     const spot = parkAt(x, z, num(c.a, pose.a), heightAt(x, z), props);
@@ -1426,37 +1402,27 @@ registerFeature((room: WorldRoom) => {
     room.state.objects.set(def.id, toSchema(next));
     if (!config.offline) void api.putObject(next).catch((e) => console.warn("[cars] god", e.message));
   };
-  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
   const offLaid = onEditsLaid((was: GroundsEdits, now: GroundsEdits) => {
-    if (same(was.vehicles ?? null, now.vehicles ?? null)) return;
-    const before = new Map(homesOf(was).map((h) => [h.id, h]));
+    const steps = vehicleSteps(was, now, sectionEffects);
+    if (!steps.length) return;
     homes = homesOf(now);
     homeOf = new Map(homes.map((h) => [h.id, h]));
     for (const h of homes) prefetch(h.x, h.z, 2);
     // (not made yet: makeHomes makes them as they are now)
     if (!homesMade) return;
     let n = 0;
-    for (const h of homes) {
-      if (same(before.get(h.id) ?? null, h) && room.state.objects.get(h.id)) continue;
-      if (inUse(h.id)) homeLater.add(h.id);
-      else if (homeNow(h.id)) n++;
-    }
-    for (const id of before.keys()) {
-      if (homeOf.has(id) || !room.state.objects.get(id)) continue;
-      if (inUse(id)) homeLater.add(id);
-      else if (homeNow(id)) n++;
-    }
-    const e0 = sectionEffects(was.vehicles);
-    for (const [k, e] of sectionEffects(now.vehicles) as Map<string, Effect>) {
-      if (homeOf.has(k) || before.has(k) || same(e0.get(k) ?? null, e)) continue;
-      const o = room.state.objects.get(k);
-      if (!o || o.kind !== "car" || inUse(k)) continue;
-      const def = fromSchema(o);
-      if ("remove" in e) {
-        if (def.props?.ownerId) continue;
-        dropCar(k);
-      } else moveCar(def, ("change" in e ? e.change : e.add) as Partial<VehicleDef>);
-      n++;
+    for (const st of steps) {
+      const o = room.state.objects.get(st.id);
+      if ("once" in st) {
+        if (!o || o.kind !== "car" || inUse(st.id)) continue;
+        const def = fromSchema(o);
+        if (st.once) moveCar(def, st.once);
+        else if (def.props?.ownerId) continue;
+        else dropCar(st.id);
+        n++;
+      } else if ("gone" in st && !o) continue;
+      else if (inUse(st.id)) homeLater.add(st.id);
+      else if (homeNow(st.id)) n++;
     }
     if (n) room.rebuildGrid();
   });

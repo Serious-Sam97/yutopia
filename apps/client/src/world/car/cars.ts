@@ -2599,7 +2599,7 @@ export class Cars {
     const mv = this.mine?.sim?.v;
     const going = !!mv && Math.hypot(mv.x, mv.z) > 4;
     const near = going ? 0 : q === "low" || q === "lowest" ? NEAR_LOW : NEAR;
-    for (const o of this.host.objects()) {
+    for (const o of this.drawnObjects()) {
       if (o.kind !== "car" || (Number(o.props?.level ?? 0) | 0) !== 0) continue;
       // (driven now: its parked self drawn on, as it was, till its driven model's shown — reveal())
       if (o.props?.driven) {
@@ -2662,7 +2662,8 @@ export class Cars {
       const P = p.pose;
       const dA = Math.atan2(Math.sin(a - P.a), Math.cos(a - P.a));
       if (Math.hypot(x - P.x, z - P.z) > 0.002 || Math.abs(dA) > 0.001) {
-        const k = sh || Math.hypot(x - P.x, z - P.z) > 8 ? 1 : Math.min(1, dt * 5);
+        // (God mode's held one, to place: where the pointer is, at once)
+        const k = sh || o.props?.ghost || Math.hypot(x - P.x, z - P.z) > 8 ? 1 : Math.min(1, dt * 5);
         P.x += (x - P.x) * k;
         P.z += (z - P.z) * k;
         P.a += dA * k;
@@ -2827,6 +2828,93 @@ export class Cars {
     this.baySnow.set([...this.parked.values()].map((p) => p.pose));
   }
   private baySnow = new BaySnow();
+
+  // ── God mode's draft (docs/plan/102-god-mode-vehicles.md): its vehicles as it has them, drawn for the admin alone —
+  // by id, the object as the draft leaves it (null: taken away); one in use is drawn as it is. And the one held to
+  // place (its `props.ghost`). ──
+  private godView: ReadonlyMap<string, WorldObjectDef | null> | null = null;
+  private godGhost: WorldObjectDef | null = null;
+  /** The world's objects, as the room has them (God mode's: what the draft's vehicles are laid over). */
+  worldObjects(): Iterable<WorldObjectDef> {
+    return this.host.objects();
+  }
+  /** The draft's vehicles to draw (null: the world's), and the one held to place. */
+  setGodView(view: ReadonlyMap<string, WorldObjectDef | null> | null, ghost: WorldObjectDef | null = null) {
+    this.godView = view;
+    this.godGhost = ghost;
+  }
+  private *drawnObjects(): Iterable<WorldObjectDef> {
+    const v = this.godView;
+    if (!v && !this.godGhost) {
+      yield* this.host.objects();
+      return;
+    }
+    const seen = new Set<string>();
+    for (const o of this.host.objects()) {
+      if (v?.has(o.id) && o.kind === "car" && !o.props?.driven && !this.live.has(`car:${o.id}`)) {
+        seen.add(o.id);
+        const n = v.get(o.id);
+        if (n) yield n;
+        continue;
+      }
+      if (v?.has(o.id)) seen.add(o.id);
+      yield o;
+    }
+    if (v) for (const [id, n] of v) if (n && !seen.has(id)) yield n;
+    if (this.godGhost) yield this.godGhost;
+  }
+  /** (God mode's Select) The vehicle under (x, z), the Grounds' coords: a parked one's id; one in use (driven, ridden,
+   *  still rolling) said so — shown, not picked. */
+  godVehicleAt(x: number, z: number): { id: string; inUse: boolean } | null {
+    let best: { id: string; inUse: boolean } | null = null;
+    let bd = Number.POSITIVE_INFINITY;
+    const PAD = 0.25;
+    for (const [id, p] of this.parked) {
+      if (this.godGhost?.id === id) continue;
+      const dx = x - p.pose.x;
+      const dz = z - p.pose.z;
+      const c = Math.cos(p.pose.a);
+      const sn = Math.sin(p.pose.a);
+      const f = dx * c + dz * sn;
+      const sd = -dx * sn + dz * c;
+      const b = p.spec.body;
+      if (f > b.ahead + PAD || f < -b.behind - PAD || Math.abs(sd) > b.width / 2 + PAD) continue;
+      const d = Math.hypot(dx, dz);
+      if (d < bd) [best, bd] = [{ id, inUse: false }, d];
+    }
+    for (const l of this.live.values()) {
+      const r = l.model.root.position;
+      const b = l.spec.body;
+      const d = Math.hypot(x - r.x, z - r.z);
+      if (d < (b.ahead + b.behind) / 2 + PAD && d < bd)
+        [best, bd] = [{ id: l.id.replace(/^car:/, ""), inUse: true }, d];
+    }
+    return best;
+  }
+  /** (God mode) A parked vehicle as it's drawn: where, its heading, its box (from where it stands: behind, side,
+   *  ahead, side, its height) and its kind. */
+  godVehicle(
+    id: string,
+  ): {
+    x: number;
+    z: number;
+    a: number;
+    foot: [number, number, number, number, number];
+    kind: CarKind;
+    look: CarLook;
+  } | null {
+    const p = this.parked.get(id);
+    if (!p) return null;
+    const b = p.spec.body;
+    return {
+      x: p.pose.x,
+      z: p.pose.z,
+      a: p.pose.a,
+      foot: [-b.behind, -b.width / 2, b.ahead, b.width / 2, b.height],
+      kind: p.kind,
+      look: p.look,
+    };
+  }
   /** A parked car taking a knock from mine: its slide starts (or speeds up) from where it is. */
   private shoveParked(id: string, jx: number, jz: number, px: number, pz: number) {
     let sh = this.shoves.get(id);
