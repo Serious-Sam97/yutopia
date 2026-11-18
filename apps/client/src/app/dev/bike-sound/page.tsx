@@ -5,11 +5,12 @@ import { type CarState, createCar, type Ground } from "@yutopia/shared/car";
 import { notFound } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { mixer } from "@/world/audio";
-import { BikeSound } from "@/world/bike/sound";
+import { BikeSound, bikeBank } from "@/world/bike/sound";
 
 // The bikes' listening bench (docs/plan/101-the-bicycles.md, phase 8): a ride made up here — how fast, pedalled or
 // coasting, on what ground, the brake — heard through the game's own mix (world/bike/sound.ts), and its one-offs: the
-// bell, a gear changed, a landing, a knock. Each bike's freewheel is its own (the town bike's hub hums, the BMX's
+// bell, a gear changed, a landing, a knock. Each recorded sound's candidates (public/sfx/bikes/manifest.json) picked
+// here — or the one made in code —; "copy picks" gives chosen.json. Each bike's freewheel is its own (the town bike's hub hums, the BMX's
 // buzzes; the fixed gear has none). Dev only (or NEXT_PUBLIC_YUTOPIA_SHOTS=1).
 //   /dev/bike-sound
 
@@ -35,6 +36,17 @@ export default function BikeSoundBench() {
   const [skid, setSkid] = useState(0);
   const [near, setNear] = useState(true);
   const snd = useRef<BikeSound | null>(null);
+  const [man, setMan] = useState<Record<string, { name: string; license?: string }[]> | null>(null);
+  const [picks, setPicks] = useState<Record<string, number>>({});
+  useEffect(() => {
+    void bikeBank().then((b) => {
+      if (!b) return;
+      const m: Record<string, { name: string; license?: string }[]> = {};
+      for (const [k, v] of Object.entries(b.man)) if (Array.isArray(v)) m[k] = v;
+      setMan(m);
+      setPicks((p) => ({ ...Object.fromEntries(Object.keys(m).map((k) => [k, b.chosen[k] ?? 0])), ...p }));
+    });
+  }, []);
   const st = useRef<CarState | null>(null);
   const live = useRef({ kmh, pedal, cad, ground, brake, skid, near });
   live.current = { kmh, pedal, cad, ground, brake, skid, near };
@@ -43,7 +55,7 @@ export default function BikeSoundBench() {
     if (!on) return;
     const ctx = mixer.ensure();
     void mixer.resume();
-    const s = new BikeSound(ctx, mixer.buses.effects, { kind, variant: fixed ? "road-fixed" : VARIANT[kind] });
+    const s = new BikeSound(ctx, mixer.buses.effects, { kind, variant: fixed ? "road-fixed" : VARIANT[kind] }, picks);
     snd.current = s;
     const state = createCar(BIKE_SPECS[kind], 0, 0, 0, 0);
     st.current = state;
@@ -75,7 +87,7 @@ export default function BikeSoundBench() {
       s.dispose();
       snd.current = null;
     };
-  }, [on, kind, fixed]);
+  }, [on, kind, fixed, picks]);
 
   const hit = (what: "ground" | "wall", j: number) => {
     const s = st.current;
@@ -87,9 +99,7 @@ export default function BikeSoundBench() {
     <main className="p-6 max-w-2xl" style={{ color: "var(--cream)" }}>
       <h1 className="text-xl mb-2">Bikes · the listening bench</h1>
       <p className="mono text-xs mb-4" style={{ color: "var(--muted)" }}>
-        A ride made up here, heard through the game's own mix. The tyres are the cars' recordings, thinned; the
-        freewheel, the chain, the gear's click and the bell are made in code. Recordings of their own wait on your OK to
-        fetch them (docs/plan/101, phase 8).
+        A ride made up here, heard through the game's own mix. Each sound's recordings (its candidates below) or the one made in code; copy the picks into public/sfx/bikes/chosen.json.
       </p>
       <div className={row}>
         {KINDS.map((k) => (
@@ -152,6 +162,36 @@ export default function BikeSoundBench() {
         <input type="range" min={0} max={1} step={0.1} value={brake} onChange={(e) => setBrake(+e.target.value)} />
         <span className="mono text-xs">skid {skid.toFixed(1)}</span>
         <input type="range" min={0} max={6} step={0.5} value={skid} onChange={(e) => setSkid(+e.target.value)} />
+      </div>
+      {man &&
+        Object.entries(man).map(([slot, cands]) => (
+          <div key={slot} className={row}>
+            <span className="w-20 mono text-xs">{slot}</span>
+            {[{ name: "made in code" }, ...cands].map((c, j) => (
+              <button
+                key={c.name}
+                type="button"
+                className="deck-btn"
+                aria-pressed={(picks[slot] ?? 0) === j - 1}
+                title={"license" in c ? String(c.license) : ""}
+                onClick={() => setPicks((p) => ({ ...p, [slot]: j - 1 }))}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+        ))}
+      <div className={row}>
+        <button
+          type="button"
+          className="deck-btn"
+          onClick={() => void navigator.clipboard?.writeText(JSON.stringify(picks, null, 1))}
+        >
+          copy picks
+        </button>
+        <span className="mono text-xs" style={{ color: "var(--muted)" }}>
+          → public/sfx/bikes/chosen.json
+        </span>
       </div>
       <div className={row}>
         <label className="mono text-xs">

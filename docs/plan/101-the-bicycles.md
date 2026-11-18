@@ -10,8 +10,8 @@ stand on, falling off, tricks in the air, the camera on something small and quic
 
 Status: **planned 2026-11-18; forks decided 2026-11-18 one by one: the recommendations for F1–F3 and F5–F13;
 **F4b**, GTA's tricks plus air tricks now (tailwhip, barspin, 360, no-hander/superman); **F14b**, no sign-off —
-built straight through, you test at the end. Built 2026-11-18, phases 0–9, committed to main (not pushed); the
-recordings of the bikes' own (phase 8) wait on your OK to fetch them.**
+built straight through, you test at the end. Built 2026-11-18, phases 0–9, committed to main (not pushed); the bikes'
+own recordings fetched on your OK (2026-11-18), the defaults picked by me — yours to change on `/dev/bike-sound`.**
 
 **How to try it:** the town's bikes stand on the square (east side, by the benches), at the boathouse (a winter MTB
 with studs, a trail MTB, a freestyle BMX) and at the bus shelter. By one: **Use** rides it, **held Use** wheels it on
@@ -234,15 +234,18 @@ the server takes it (no anticheat).
   - the brake squeal and the skid use the cars' recordings;
   - a landing's thump, a knock, the wind.
 - `/dev/bike-sound` plays a ride made up there.
-- **Waiting on your OK to download (CC0 or CC-BY, credited)** — none fetched:
-  - a bell:
-    - [InspectorJ's bicycle bell, struck once](https://freesound.org/s/484344) (licence to confirm);
-    - [lechufly's](https://freesound.org/s/405572) (licence to confirm);
-    - [Freesound 78957](https://freesound.org/s/78957) (licence to confirm);
-  - a freewheel:
-    - [tim.kahn's bike_freewheel](https://freesound.org/s/74792) (licence to confirm);
-    - [Rudmer_Rotteveel's 719482](https://freesound.org/people/Rudmer_Rotteveel/sounds/719482) (CC0);
-  - [OpenGameArt's CC0 bicycle sound pack](https://opengameart.org/node/16321).
+- **Recordings fetched on your OK (2026-11-18)**, licences read off each page. Cut by `tools/sfx-bikes.mjs` into
+  `public/sfx/bikes/` (the list with each licence in its `manifest.json`), credited in `sfx/CREDITS.md` and so in
+  `credits.json` (`tools/credits.py` now reads a "CC BY 4.0" line):
+  - **bell**: lechufly's ring bell (CC0, five rings) — *the default*; InspectorJ's single ding (CC BY 4.0);
+    antumdeluge's rotary bell and bulb horn (OpenGameArt, CC0).
+  - **freewheel**: tim.kahn's freewheel, fast — *the default* — and slowing (CC BY 4.0); antumdeluge's spokes (CC0).
+    Played faster or slower with the wheel (the tick rate couldn't be measured reliably, so against the speed each
+    sounds like).
+  - **ride** (pedalling and rolling, under the tyres) and **brake** (once, as it bites): Rudmer_Rotteveel's ride (CC0).
+  - Not taken: plivesey's Bike Bell 2 (CC Sampling+, neither CC0 nor CC BY).
+  - I cut these by measuring, not by ear: pick on `/dev/bike-sound` (each slot's candidates, or the one made in code)
+    and paste "copy picks" over `public/sfx/bikes/chosen.json`.
 
 ### Phase 9 — checks (2026-11-18)
 - Shared: `bike/bike.test.ts` 11/11; the car tests 28/28 (bikes in `SPECS`, `BUYABLE` and the looks).

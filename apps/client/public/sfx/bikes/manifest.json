@@ -1,0 +1,109 @@
+{
+ "_": "The bikes' recordings (docs/plan/101 phase 8): each slot's candidates, their takes; the game plays chosen.json's pick of each (-1: the sound made in code). Cut by the plan's phase 8 (from the HQ previews: a shot to −3 dB peak, a bed to −20 dB RMS).",
+ "bell": [
+  {
+   "name": "A ring bell, rung (lechufly)",
+   "files": [
+    "bell-a1.mp3",
+    "bell-a2.mp3",
+    "bell-a3.mp3",
+    "bell-a4.mp3",
+    "bell-a5.mp3"
+   ],
+   "title": "Bicycle ring bell",
+   "author": "lechufly",
+   "source": "https://freesound.org/s/405572/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A single ding (InspectorJ)",
+   "files": [
+    "bell-b1.mp3"
+   ],
+   "title": "Bike, Bell Ding, Single, 01-01.wav",
+   "author": "InspectorJ",
+   "source": "https://freesound.org/s/484344/",
+   "license": "CC BY 4.0"
+  },
+  {
+   "name": "A rotary bell (antumdeluge)",
+   "files": [
+    "bell-c1.mp3"
+   ],
+   "title": "Bicycle Sounds",
+   "author": "antumdeluge",
+   "source": "https://opengameart.org/content/bicycle-sounds",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A bulb horn (antumdeluge)",
+   "files": [
+    "bell-d1.mp3"
+   ],
+   "title": "Bicycle Sounds",
+   "author": "antumdeluge",
+   "source": "https://opengameart.org/content/bicycle-sounds",
+   "license": "CC0 1.0"
+  }
+ ],
+ "freewheel": [
+  {
+   "name": "A freewheel spinning, fast (tim.kahn)",
+   "files": [
+    "freewheel-a.mp3"
+   ],
+   "rate": 4.5,
+   "title": "bike_freewheel.aif",
+   "author": "tim.kahn",
+   "source": "https://freesound.org/s/74792/",
+   "license": "CC BY 4.0"
+  },
+  {
+   "name": "…slowing (tim.kahn)",
+   "files": [
+    "freewheel-b.mp3"
+   ],
+   "rate": 2.5,
+   "title": "bike_freewheel.aif",
+   "author": "tim.kahn",
+   "source": "https://freesound.org/s/74792/",
+   "license": "CC BY 4.0"
+  },
+  {
+   "name": "Spokes ticking (antumdeluge)",
+   "files": [
+    "freewheel-c.mp3"
+   ],
+   "rate": 3.5,
+   "title": "Bicycle Sounds",
+   "author": "antumdeluge",
+   "source": "https://opengameart.org/content/bicycle-sounds",
+   "license": "CC0 1.0"
+  }
+ ],
+ "ride": [
+  {
+   "name": "Pedalling and rolling (Rudmer_Rotteveel)",
+   "files": [
+    "ride-a.mp3"
+   ],
+   "rate": 5,
+   "title": "Bicycle Pedalling Rolling Braking_01",
+   "author": "Rudmer_Rotteveel",
+   "source": "https://freesound.org/s/719482/",
+   "license": "CC0 1.0"
+  }
+ ],
+ "brake": [
+  {
+   "name": "Braking to a stop (Rudmer_Rotteveel)",
+   "files": [
+    "brake-a1.mp3"
+   ],
+   "title": "Bicycle Pedalling Rolling Braking_01",
+   "author": "Rudmer_Rotteveel",
+   "source": "https://freesound.org/s/719482/",
+   "license": "CC0 1.0"
+  }
+ ]
+}

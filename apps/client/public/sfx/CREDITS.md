@@ -172,3 +172,11 @@
   `tools/sfx-cars-search.mjs` and cut by `tools/sfx-weather.mjs` (`DIR=cars`, from `tools/sfx-cars.json`).
   Every candidate's recording and author is in `cars/manifest.json` and `cars/engines.json`; each sound the
   game keeps gets its own line here once the user has picked by ear on `/dev/car-sound`.
+- The bikes' (docs/plan/101-the-bicycles.md, phase 8), from Freesound's HQ previews and OpenGameArt, cut and levelled
+  (`bikes/manifest.json` lists each take):
+  - `bikes/bell-a*`: *Bicycle ring bell* by lechufly (Freesound 405572).
+  - `bikes/bell-b1`: *Bike, Bell Ding, Single, 01-01.wav* by InspectorJ (Freesound 484344, CC BY 4.0).
+  - `bikes/bell-c1`, `bikes/bell-d1`, `bikes/freewheel-c`: *Bicycle Sounds* by antumdeluge (OpenGameArt, bicycle-sounds).
+  - `bikes/freewheel-a`, `bikes/freewheel-b`: *bike_freewheel.aif* by tim.kahn (Freesound 74792, CC BY 4.0).
+  - `bikes/ride-a`, `bikes/brake-a1`: *Bicycle Pedalling Rolling Braking_01* by Rudmer_Rotteveel (Freesound 719482).
+

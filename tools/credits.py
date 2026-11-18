@@ -5,7 +5,7 @@
 #   hair    the works by others (CC BY 4.0) — tools/art/life/sources.json, the files each one is in (by
 #           hair.py's WARDROBE_HAIR and the beards' strands); a credit is owed for each
 #   people  MakeHuman (CC0) — the bodies, skins and its hairs; courtesy
-#   sounds  every sound by others (CC0) — read from public/sfx/CREDITS.md; courtesy
+#   sounds  every sound by others (CC0; CC BY where its line says so: owed) — read from public/sfx/CREDITS.md
 #   code    the client's libraries as shipped — their licence and its text (MIT, Apache 2.0 ask for it)
 # Also `wardrobe`: every wardrobe hair → what it's made from (a work's key, "fur", "makehuman", "ours"),
 # for the test that nothing built from a work goes uncredited (life-credits.test.ts).
@@ -69,16 +69,19 @@ def sounds_group():
     text = open(os.path.join(CLIENT, "public/sfx/CREDITS.md"), encoding="utf-8").read()
     out, seen = [], set()
 
-    def add(title, author, url):
+    BY = {"license": "CC BY 4.0", "license_url": "https://creativecommons.org/licenses/by/4.0/"}
+
+    def add(title, author, url, by=False):
         title, author = " ".join(title.split()), " ".join(author.split())  # (wrapped over lines in the .md)
         if (title, author) not in seen:
             seen.add((title, author))
-            out.append({"title": title, "author": author.strip(), "source": url, **CC0})
+            out.append({"title": title, "author": author.strip(), "source": url, **(BY if by else CC0)})
 
-    for title, author, fs, oga in re.findall(
-        r"\*([^*]+)\*\s+by\s+([^(*,]+?)\s+\((?:Freesound\s+(\d+)|OpenGameArt,\s+([\w-]+))\)", text
+    # (plan 101: a work under CC BY says so in its parenthesis — "(Freesound 484344, CC BY 4.0)")
+    for title, author, fs, by, oga in re.findall(
+        r"\*([^*]+)\*\s+by\s+([^(*,]+?)\s+\((?:Freesound\s+(\d+)(,\s*CC BY 4\.0)?|OpenGameArt,\s+([\w-]+))\)", text
     ):
-        add(title, author, f"https://freesound.org/s/{fs}/" if fs else f"https://opengameart.org/content/{oga}")
+        add(title, author, f"https://freesound.org/s/{fs}/" if fs else f"https://opengameart.org/content/{oga}", bool(by))
     for title, author, url in re.findall(r"\*([^*]+)\* by ([^,(]+?)[,\s][^h]*?(https://\S+?)[\s)]", text):
         add(title, author, url.rstrip(".,"))
     return out

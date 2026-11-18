@@ -1,0 +1,7 @@
+{
+ "_": "Each slot's pick (its candidate in manifest.json, 0-based; -1 the sound made in code): /dev/bike-sound's \"copy picks\" pasted here.",
+ "bell": 0,
+ "freewheel": 0,
+ "ride": 0,
+ "brake": 0
+}
