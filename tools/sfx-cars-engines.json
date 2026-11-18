@@ -877,6 +877,94 @@
           "downloads": 106,
           "note": "pinned (a car pack's)"
         }
+      },
+      {
+        "name": "A truck's engine + a dually's idle (plan 98)",
+        "cyl": 6,
+        "strokes": 4,
+        "note": "the picked truck, its idle filled by C-V's dually diesel",
+        "rec": [
+          {
+            "id": "515040",
+            "user": "jusebago",
+            "title": "motor de camion / truck engine",
+            "preview": "https://cdn.freesound.org/previews/515/515040_7856386-hq.mp3",
+            "url": "https://freesound.org/people/jusebago/sounds/515040/",
+            "dur": 37.4,
+            "downloads": 4611,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          },
+          {
+            "id": "515042",
+            "user": "jusebago",
+            "title": "camion pesado avanzando sobre tierra / heavy truck advancing on land",
+            "preview": "https://cdn.freesound.org/previews/515/515042_7856386-hq.mp3",
+            "url": "https://freesound.org/people/jusebago/sounds/515042/",
+            "dur": 75.9,
+            "downloads": 796,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          },
+          {
+            "id": "565598",
+            "user": "C-V",
+            "title": "Diesel idle 1.wav",
+            "preview": "https://cdn.freesound.org/previews/565/565598_8956746-hq.mp3",
+            "url": "https://freesound.org/people/C-V/sounds/565598/",
+            "dur": 43.2,
+            "downloads": 0,
+            "note": "plan 98: a dually diesel idling (CC0)",
+            "mic": "ex",
+            "load": "off"
+          }
+        ]
+      },
+      {
+        "name": "A truck's engine + a coach's idle (plan 98)",
+        "cyl": 6,
+        "strokes": 4,
+        "note": "the picked truck, its idle filled by kyles's coach",
+        "rec": [
+          {
+            "id": "515040",
+            "user": "jusebago",
+            "title": "motor de camion / truck engine",
+            "preview": "https://cdn.freesound.org/previews/515/515040_7856386-hq.mp3",
+            "url": "https://freesound.org/people/jusebago/sounds/515040/",
+            "dur": 37.4,
+            "downloads": 4611,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          },
+          {
+            "id": "515042",
+            "user": "jusebago",
+            "title": "camion pesado avanzando sobre tierra / heavy truck advancing on land",
+            "preview": "https://cdn.freesound.org/previews/515/515042_7856386-hq.mp3",
+            "url": "https://freesound.org/people/jusebago/sounds/515042/",
+            "dur": 75.9,
+            "downloads": 796,
+            "note": "pinned (a car pack's)",
+            "mic": "ex",
+            "load": "auto"
+          },
+          {
+            "id": "453415",
+            "user": "kyles",
+            "title": "bus coach ext diesel truck engine idle throaty.flac",
+            "preview": "https://cdn.freesound.org/previews/453/453415_612689-hq.mp3",
+            "url": "https://freesound.org/people/kyles/sounds/453415/",
+            "dur": 25.1,
+            "downloads": 0,
+            "note": "plan 98: a coach's diesel (CC0)",
+            "mic": "ex",
+            "load": "auto"
+          }
+        ]
       }
     ],
     "mine": 0,

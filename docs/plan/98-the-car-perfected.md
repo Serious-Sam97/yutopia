@@ -650,3 +650,16 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
   days before) — a follow-up for the memcheck (stream the snapshot instead of joining it). Its car life now waits for the
   engine (a move while getting in lets go of it); `CAR_REFLECT=off|on|auto` sets the probe for it.
 - Not run: the whole suite (2.5 h — not unasked).
+
+## Phase 14, the recordings — done (2026-11-17, the user's OK to download)
+
+- The six candidates' pages read (all CC0); their HQ previews fetched and cut by `tools/sfx-cars-engines.mjs` (new
+  sets appended to `tools/sfx-cars-engines.json`, so the picks' indices stand).
+- **Two new heavy diesel sets on `/dev/car-sound`** (the snowcat, the plough truck, the tractor; the shuttle and the bus
+  in town): **e**, the picked truck (b) with C-V's dually diesel for its idle — a point at 868 rpm; **f**, the truck with
+  kyles's coach — points at 605 and 612 rpm, on load and off. The picked set's lowest point was 1909 rpm (its idle
+  played at 0.34×). The user picks by ear (★, then "copy chosen.json" over `public/sfx/cars/chosen.json`; `diesel` is
+  1 today).
+- Tried and dropped (no point clear enough to cut, or none past their base set's): qubodup's idling trucks,
+  ibirdfilm's truck (read at 1709 rpm idling — not a 6), overmedium's V8 blips (one point at 1180 alone), soundjoao's
+  diesel van. **The V8's and the light diesel's gaps stay** — for a later search.

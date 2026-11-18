@@ -1686,6 +1686,196 @@
           }
         ],
         "start": "diesel-d-start.mp3"
+      },
+      {
+        "name": "A truck's engine + a dually's idle (plan 98)",
+        "note": "the picked truck, its idle filled by C-V's dually diesel",
+        "cyl": 6,
+        "strokes": 4,
+        "credit": [
+          {
+            "id": "515040",
+            "user": "jusebago",
+            "title": "motor de camion / truck engine",
+            "url": "https://freesound.org/people/jusebago/sounds/515040/"
+          },
+          {
+            "id": "515042",
+            "user": "jusebago",
+            "title": "camion pesado avanzando sobre tierra / heavy truck advancing on land",
+            "url": "https://freesound.org/people/jusebago/sounds/515042/"
+          },
+          {
+            "id": "565598",
+            "user": "C-V",
+            "title": "Diesel idle 1.wav",
+            "url": "https://freesound.org/people/C-V/sounds/565598/"
+          }
+        ],
+        "points": [
+          {
+            "file": "diesel-e-off-ex-2.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 868,
+            "target": 1000,
+            "steady": 0.981,
+            "sure": 0.72,
+            "snr": 1,
+            "from": "565598",
+            "len": 1.11
+          },
+          {
+            "file": "diesel-e-on-ex-4.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 1909,
+            "target": 1900,
+            "steady": 0.944,
+            "sure": 0.76,
+            "snr": 13,
+            "from": "515042",
+            "len": 0.6
+          },
+          {
+            "file": "diesel-e-off-ex-4.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 1990,
+            "target": 1900,
+            "steady": 0.949,
+            "sure": 0.76,
+            "snr": 13,
+            "from": "515042",
+            "len": 1.1
+          },
+          {
+            "file": "diesel-e-off-ex-5.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 2624,
+            "target": 2400,
+            "steady": 0.992,
+            "sure": 0.67,
+            "snr": 14,
+            "from": "515042",
+            "len": 1.12
+          },
+          {
+            "file": "diesel-e-on-ex-5.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 2511,
+            "target": 2400,
+            "steady": 0.954,
+            "sure": 0.85,
+            "snr": 12,
+            "from": "515042",
+            "len": 0.61
+          }
+        ],
+        "start": null
+      },
+      {
+        "name": "A truck's engine + a coach's idle (plan 98)",
+        "note": "the picked truck, its idle filled by kyles's coach",
+        "cyl": 6,
+        "strokes": 4,
+        "credit": [
+          {
+            "id": "515040",
+            "user": "jusebago",
+            "title": "motor de camion / truck engine",
+            "url": "https://freesound.org/people/jusebago/sounds/515040/"
+          },
+          {
+            "id": "515042",
+            "user": "jusebago",
+            "title": "camion pesado avanzando sobre tierra / heavy truck advancing on land",
+            "url": "https://freesound.org/people/jusebago/sounds/515042/"
+          },
+          {
+            "id": "453415",
+            "user": "kyles",
+            "title": "bus coach ext diesel truck engine idle throaty.flac",
+            "url": "https://freesound.org/people/kyles/sounds/453415/"
+          }
+        ],
+        "points": [
+          {
+            "file": "diesel-f-on-ex-1.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 605,
+            "target": 650,
+            "steady": 0.966,
+            "sure": 0.95,
+            "snr": 0,
+            "from": "453415",
+            "len": 0.6
+          },
+          {
+            "file": "diesel-f-off-ex-1.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 612,
+            "target": 650,
+            "steady": 0.997,
+            "sure": 0.98,
+            "snr": 1,
+            "from": "453415",
+            "len": 1.12
+          },
+          {
+            "file": "diesel-f-on-ex-4.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 1909,
+            "target": 1900,
+            "steady": 0.944,
+            "sure": 0.76,
+            "snr": 13,
+            "from": "515042",
+            "len": 0.6
+          },
+          {
+            "file": "diesel-f-off-ex-4.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 1990,
+            "target": 1900,
+            "steady": 0.949,
+            "sure": 0.76,
+            "snr": 13,
+            "from": "515042",
+            "len": 1.1
+          },
+          {
+            "file": "diesel-f-off-ex-5.mp3",
+            "load": "off",
+            "mic": "ex",
+            "rpm": 2624,
+            "target": 2400,
+            "steady": 0.992,
+            "sure": 0.67,
+            "snr": 14,
+            "from": "515042",
+            "len": 1.12
+          },
+          {
+            "file": "diesel-f-on-ex-5.mp3",
+            "load": "on",
+            "mic": "ex",
+            "rpm": 2511,
+            "target": 2400,
+            "steady": 0.954,
+            "sure": 0.85,
+            "snr": 12,
+            "from": "515042",
+            "len": 0.61
+          }
+        ],
+        "start": null
       }
     ],
     "mine": 0,
