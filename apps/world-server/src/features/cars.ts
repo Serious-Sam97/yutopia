@@ -147,6 +147,8 @@ interface Live {
   lastAt: number;
   still: number;
   sp: number; // the most it was going over its last two states (m/s)
+  /** (plan 99 F2a) who jumped out of it at its wheel: their client drives it on, rolling, till it stops */
+  coaster?: string;
 }
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 const num = (x: unknown, or: number) => (typeof x === "number" && Number.isFinite(x) ? x : or);
@@ -354,8 +356,11 @@ registerFeature((room: WorldRoom) => {
 
   room.on("car:state", (client, m) => {
     const vid = bySid.get(client.sessionId);
-    const l = vid ? live.get(vid) : undefined;
-    if (!l || l.seats[0] !== client.sessionId || !m) return;
+    // (plan 99 F2a: the car they jumped out of, rolling on — theirs to say till someone takes its wheel)
+    const l =
+      (vid ? live.get(vid) : undefined) ??
+      [...live.values()].find((x) => x.coaster === client.sessionId && !x.seats[0]);
+    if (!l || !m || (l.seats[0] !== client.sessionId && !(l.coaster === client.sessionId && !l.seats[0]))) return;
     const now = Date.now();
     const seq = Number(m.seq) >>> 0;
     if (l.last && seq <= l.last.seq) return;
@@ -733,7 +738,9 @@ registerFeature((room: WorldRoom) => {
     if (l && sp > OUT_V && !m?.jump) return no(client, "moving");
     const vx = l?.veh.vx ?? 0;
     const vz = l?.veh.vz ?? 0;
+    const atWheel = !!l && l.seats[0] === client.sessionId;
     leaveSeat(client.sessionId, true);
+    if (l && atWheel && sp > OUT_V) l.coaster = client.sessionId;
     const q = room.state.players.get(client.sessionId);
     if (!l || !q || sp <= OUT_V) return;
     const now = Date.now();
@@ -743,6 +750,8 @@ registerFeature((room: WorldRoom) => {
     } else {
       q.fellAt = now;
       q.fellYaw = Math.atan2(vz, vx);
+      // (plan 99 F1a: thrown — everyone's screen has them limp on the ragdoll at the car's speed, out of its door)
+      room.broadcast("car:thrown", { sid: client.sessionId, vx: vx * 0.85, vz: vz * 0.85 });
     }
     if (now - (room.fightAt.get(client.sessionId) ?? 0) < FIGHT_MS) {
       const n = Math.round(Math.max(0, Math.min(80, (sp - JUMP_STUMBLE_V) * 4.5)));
@@ -1927,7 +1936,9 @@ registerFeature((room: WorldRoom) => {
           place(p, l, i);
         });
         // no one driving (or their line quiet): it rolls to a stop on its own
-        const driven = !!l.seats[0] && now - l.lastAt < QUIET_MS;
+        // (plan 99 F2a: rolling on its coaster's client counts as driven while their states come)
+        if (l.coaster && (l.seats[0] || !room.state.players.has(l.coaster))) l.coaster = undefined;
+        const driven = (!!l.seats[0] || !!l.coaster) && now - l.lastAt < QUIET_MS;
         if (!driven) {
           const sp = Math.hypot(v.vx, v.vz);
           if (sp > 0.05) {

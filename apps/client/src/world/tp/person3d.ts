@@ -74,6 +74,7 @@ import {
 import { levelHands } from "./level3d";
 import { type LongSpec, longHold, longInHand, type SlingSpec } from "./long-hold";
 import type { PersonIn } from "./person-in";
+import { thrown } from "./thrown";
 import {
   at,
   type BodyFrame,
@@ -1260,7 +1261,16 @@ export class Person3D {
     const shot = !!SN && dying >= SN.LIMP && !this.shotDown;
     // (a fall into deep water is caught by it: plan 66)
     const caught = !!p.overWater || !!p.swim;
-    if (AR && RS && !this.limp?.on && (shot || ((falling || fellFrom >= 6) && !caught))) {
+    // (plan 99 F1a) thrown out of a moving car: limp on the ragdoll at the car's speed, a turn on it as it goes
+    const th = thrown.get(this.id);
+    if (th && performance.now() - th.at > 1500) thrown.delete(this.id);
+    if (th && AR && RS && !this.limp?.on && performance.now() - th.at <= 1500) {
+      thrown.delete(this.id);
+      this.limp = new AR.Downed(RS.world, this.model, RS.origin, true);
+      const sp = Math.hypot(th.v[0], th.v[2]) || 1;
+      if (!this.limp.fall(pose, th.v, { part: 2, impulse: [(-th.v[2] / sp) * 14, 0, (th.v[0] / sp) * 14] }))
+        this.limp = null;
+    } else if (AR && RS && !this.limp?.on && (shot || ((falling || fellFrom >= 6) && !caught))) {
       this.limp = new AR.Downed(RS.world, this.model, RS.origin, true);
       const c = Math.cos(this.turned);
       const sn = Math.sin(this.turned);

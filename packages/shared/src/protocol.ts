@@ -675,6 +675,8 @@ export interface ServerMessages {
   "car:looked": { id: string };
   // someone's car keys lent to me, or back with them (why: "taken", "home", "day")
   "car:keys": { from: string; plate: string; lent: boolean; why?: string };
+  /** (plan 99 F1a) someone thrown out of a moving car: their velocity as they left it */
+  "car:thrown": { sid: string; vx: number; vz: number };
   /** (plan 98 phase 25) another driver's car into mine, as their screen had it */
   "car:struck": { by: string; j: number; vx: number; vz: number; m: number; x: number; z: number };
   // (to the driver) a passenger changed the radio's station

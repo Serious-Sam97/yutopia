@@ -94,3 +94,16 @@ every frame over 50 ms named by a CPU profile)
   first time it goes fast.
 - Measured (`e2e/car-hitch.mts`, High): getting in, the engine, a crash at 65 km/h — no frame past 71 ms (the 0.4 s one
   is taking the wheel: the land round it built for Jolt); no new program as I sit or start.
+
+## Phase 2 — built (2026-11-17): the jump
+
+- **The car goes on (F2a):** jumping from the wheel, my client keeps its Jolt car, its sim and its sound (`coast`) and
+  drives it on with nobody's hands on it (the wheel let go, no pedals), drawn and said to the server 20 times a second;
+  the server takes its states from me (`Live.coaster`) till someone takes its wheel, I leave, or it's been still a
+  second (then it parks). `e2e/car-jump.mts`: out at 26 km/h, the car rolling on 7.8 → 5.6 m/s over 2 s (its tyres and the
+  engine's drag), its door left open. It stopped on the spot before (the server's line, then parked).
+- **Thrown on the ragdoll (F1a):** the server says `car:thrown` (who, the car's velocity ×0.85) as it sets the fall;
+  every client's model of that person goes limp on Jolt's ragdoll at that speed with a turn on it (`tp/thrown.ts`,
+  `person3d`), and gets up where it lies (plan 58's `Downed`; my walker follows the body's drift). Under 15 km/h still a
+  stumble on her feet. Filmed (`VIDEO=dir e2e/car-jump.mts`): out, tumbling, lying on the snow as the car rolls on.
+- Checked: typecheck clean (client, world-server).

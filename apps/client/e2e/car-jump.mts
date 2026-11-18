@@ -19,7 +19,13 @@ const tok = (await r.json()).token;
 const browser = await chromium.launch({
   args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", "--disable-gpu-vsync", "--disable-frame-rate-limit"],
 });
-const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
+// (VIDEO=dir: the whole run filmed)
+const vctx = await browser.newContext({
+  viewport: { width: 960, height: 640 },
+  ...(process.env.VIDEO ? { recordVideo: { dir: process.env.VIDEO, size: { width: 960, height: 640 } } } : {}),
+});
+const page = await vctx.newPage();
+console.log("MARK start", Date.now());
 page.on("pageerror", (e) => console.log("  page:", e.message));
 await page.addInitScript((t) => {
   localStorage.setItem("yutopia:token", t);
@@ -85,6 +91,7 @@ await page.waitForFunction(() => {
 }, null, { timeout: 15_000 }).catch(() => console.log("never got going"));
 const vid = await page.evaluate(() => (window as any).__yutopia.cars.mine.vid);
 console.log("speed", await page.evaluate((v) => { const l = (window as any).__yutopia.cars.live.get(v); return +Math.hypot(l.pose.v.x, l.pose.v.z).toFixed(1); }, vid));
+console.log("MARK jump", Date.now());
 await page.keyboard.press("KeyX");
 await page.keyboard.up("KeyW");
 for (let i = 0; i < 20; i++) {
@@ -97,4 +104,5 @@ for (let i = 0; i < 20; i++) {
   }, vid)));
 }
 await page.evaluate(() => (window as any).__yutopia.room.send("mod:hour", { h: null }));
+await vctx.close();
 await browser.close();

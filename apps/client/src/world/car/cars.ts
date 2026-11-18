@@ -155,6 +155,7 @@ import {
   seatGrip,
   straddleAt,
 } from "./getin";
+import { thrown } from "../tp/thrown";
 import { CarHud } from "./hud";
 import { CarPlayback } from "./playback";
 import { type CarExtras, CarSound, distanceGain, HEARD, preloadEngine } from "./sound";
@@ -996,6 +997,10 @@ export class Cars {
           "car:struck",
           (h: { by: string; j: number; vx: number; vz: number; m: number; x: number; z: number }) => this.struck(h),
         ),
+        // (plan 99 F1a) someone thrown out of a moving car: their model limp on the ragdoll at its speed
+        room.onMessage("car:thrown", (m: { sid: string; vx: number; vz: number }) =>
+          thrown.set(m.sid, { v: [m.vx, 1.6, m.vz], at: performance.now() }),
+        ),
         room.onMessage("car:keys", (m: { from: string; plate: string; lent: boolean; why?: string }) =>
           toast(
             t(m.lent ? "carKeysLent" : `carKeysBack_${m.why ?? "taken"}`)
@@ -1548,6 +1553,8 @@ export class Cars {
       // (plan 98 F5a: on the move — out anyway: thrown out, a stumble or a roll; no climbing out)
       if (l && Math.hypot(l.pose.v.x, l.pose.v.z) > 2.5) {
         this.cancelled = l.id;
+        // (plan 99 F2a: the car goes on — mine to drive on, with nobody at its wheel, till it stops)
+        if (this.mine?.seat === 0) this.coastWant = l.id;
         room.send("car:leave", { jump: true });
         return true;
       }
@@ -2824,9 +2831,11 @@ export class Cars {
     const ph = this.physics();
     for (const [id, l] of this.live) {
       if (this.mine?.vid === id && this.mine.sim) continue;
+      if (this.coast?.vid === id) continue;
       this.poseRemote(l, now, dt);
       this.pullRemote(ph, l, dt);
     }
+    this.coastFrame(room, dt, now);
     this.pullAi(ph, dt);
   }
 
@@ -3350,6 +3359,56 @@ export class Cars {
     if (door >= 0 && l.doorBy) l.doorBy[door] = act && act.door >= 0 ? Math.min(1.05, act.door * 1.05) : -1;
     return { seat: slide && t < ENTER_S + SLIDE_S * 0.5 ? (via as number) : act ? seatIn : e.seat, act, slide, way };
   }
+  /** (plan 99 F2a) The car I jumped out of, rolling on: stepped on Jolt as mine was — its wheel let go, no pedals —,
+   *  drawn from that, said to the server twenty times a second (it takes it from me: I'm its `coaster`), heard; let go
+   *  once it's been still a second (the server parks it), someone takes its wheel, or 30 s. */
+  private coastFrame(room: RoomLike, dt: number, now: number) {
+    const m = this.coast;
+    if (!m) return;
+    const l = this.live.get(m.vid);
+    const s = m.sim;
+    const d = m.drive;
+    const ph = this.physics();
+    const vw = room.state.vehicles.get(m.vid) as VehWire | undefined;
+    const taken = !!String(vw?.seats ?? "").split("|")[0];
+    const speed = s ? Math.hypot(s.v.x, s.v.z) : 0;
+    this.coastStill = speed < 0.3 ? this.coastStill + dt : 0;
+    if (!l || !s || !d || !ph || taken || this.coastStill > 1 || this.time - this.coastAt > 30) {
+      if (s && vw && !taken) room.send("car:state", toWire(s, ++m.seq, 0, m.simMs));
+      if (d && ph) {
+        ph.carWorld.removeCar(d.car);
+        ph.ownCar(m.vid, false);
+      }
+      m.sound?.switchOff();
+      m.sound?.dispose();
+      this.coast = null;
+      return;
+    }
+    const c = { up: 0, down: 0, steer: 0, hand: 0, digital: false };
+    m.acc += Math.min(dt, 0.25);
+    let n = 0;
+    while (m.acc >= CAR_STEP && n < CAR_STEPS_MAX) {
+      d.pre(c, this.world, CAR_STEP, this.helps);
+      ph.carStep(CAR_STEP);
+      d.post(this.world, CAR_STEP);
+      m.rig?.stepped();
+      m.simMs += CAR_STEP * 1000;
+      m.acc -= CAR_STEP;
+      n++;
+    }
+    if (n === CAR_STEPS_MAX) m.acc = Math.min(m.acc, CAR_STEP);
+    ph.carStepped = true;
+    m.rig?.pose(Math.min(1, m.acc / CAR_STEP), dt, this.time);
+    l.pose.p.set(s.p.x, s.p.y, s.p.z);
+    l.pose.q.set(s.q.x, s.q.y, s.q.z, s.q.w);
+    l.pose.v.set(s.v.x, s.v.y, s.v.z);
+    if (now - m.sentAt >= 1000 / CAR_HZ) {
+      m.sentAt = now;
+      room.send("car:state", toWire(s, ++m.seq, s.rpm > 50 ? CAR_FLAGS.engine : 0, m.simMs));
+    }
+    const heard = this.heardAt(s.p.x, s.p.y, s.p.z);
+    m.sound?.update(s, { inside: false, dist: heard?.dist ?? 0, at: heard?.at ?? null }, dt, false, false, {});
+  }
   /** (plan 98) How far into getting in I am (s), or null: not getting in (sat, out, or seen sat already). */
   private myActT(): number | null {
     const m = this.mine;
@@ -3361,6 +3420,12 @@ export class Cars {
   }
   /** (plan 98) The car I let go of getting into (walked off early): out at once, not climbing out. */
   private cancelled = "";
+  /** (plan 99 F2a) the car I jumped out of, rolling on: still mine to drive on Jolt (nobody's hands on it) and to say to
+   *  everyone, till it's settled; and the one to keep so, asked as I jump */
+  private coast: NonNullable<Cars["mine"]> | null = null;
+  private coastWant = "";
+  private coastStill = 0;
+  private coastAt = 0;
   /** (plan 98) The camera's place off me as the act began (the world's): kept as I go in, then the car's. */
   private actCam: Vector3 | null = null;
   /** (plan 98) the on-foot camera off what it looks at (my head), as I asked to get in */
@@ -4519,6 +4584,20 @@ export class Cars {
   // ── mine ───────────────────────────────────────────────────────────────────
   private become(now: { vid: string; seat: number } | null) {
     const was = this.mine;
+    if (was && !now && this.coastWant === was.vid && was.seat === 0 && was.drive && was.sim) {
+      // (plan 99 F2a) jumped out: it rolls on — its Jolt car, its sim and its sound kept, driven on with nobody's hands
+      this.coastWant = "";
+      this.coast?.drive && this.physics()?.carWorld.removeCar(this.coast.drive.car);
+      this.coast = was;
+      this.coastStill = 0;
+      this.coastAt = this.time;
+      this.mine = null;
+      this.camNow = null;
+      this.hudAt = 0;
+      this.input.clear();
+      this.hideHud();
+      return;
+    }
     if (was && (!now || now.vid !== was.vid || now.seat !== was.seat)) {
       // out (or moved seat): my sim, its Jolt car and sound go (the driver out: the engine's stop, its tick)
       if (was.seat === 0 && was.started) was.sound?.switchOff();
@@ -6093,7 +6172,7 @@ export class Cars {
     // the other cars on the move: where they are now (they're drawn a little in the past —
     // on from their newest state along its velocity), as heavy as they are
     for (const [id, l] of this.live) {
-      if (this.mine?.vid === id) continue;
+      if (this.mine?.vid === id || this.coast?.vid === id) continue;
       const s1 = l.pb.buf[l.pb.buf.length - 1];
       if (!s1) continue;
       const ahead = Math.max(0, Math.min(0.3, (this.nowMs - s1.t) / 1000));
