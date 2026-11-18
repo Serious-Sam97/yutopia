@@ -241,6 +241,8 @@ export async function carLife(
     if (inCar) break;
   }
   if (!inCar) throw new Error(`car life: couldn't get in ${car.id}`);
+  // (plan 98: sat and its engine running before it's driven — a move while still getting in lets go of it)
+  if (!(await until("!!window.__yutopia.cars.mine?.started", 9000))) throw new Error("car life: never started");
   // a short drive, the front crashed in past its worst (the server has it smoking), out
   await page.keyboard.down("KeyW");
   await page.waitForTimeout(1500);

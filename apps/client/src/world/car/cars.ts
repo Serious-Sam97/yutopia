@@ -702,7 +702,9 @@ function soundOf(ctx: AudioContext, kind: CarKind, variant?: string): CarSound |
     : null;
 }
 /** The kinds the far model (a wagon's or a sedan's outline) can't stand in for: always drawn whole. */
-const SLIDE_S = 0.45; // s: (plan 93 F3a) across from the passenger's seat to the wheel, after
+const SLIDE_S = 0.45;
+/** (plan 98 phase 23) m: the town's own cars' engines heard this near */
+const AI_HEARD = 40; // s: (plan 93 F3a) across from the passenger's seat to the wheel, after
 const DRIVER_SHOT_V = 8.4; // m/s (~30 km/h): the driver's revolver only slower than this (plan 93 S2, the server's)
 /** my car's step on Jolt (s; two collision steps each: 120 Hz for its wheels) and the most a frame takes */
 const CAR_STEP = 1 / 60;
@@ -1628,11 +1630,7 @@ export class Cars {
       tp.culling.matrices(this.root);
     }
     this.nowMs = now;
-    // (plan 98: the body's takes asked for once there's sound — a parked car's boot heard the first time)
-    if (!this.bodyWarm && mixer.ctx) {
-      this.bodyWarm = true;
-      for (const sl of ["boot", "bonnet", "door-open", "door-shut"]) this.warmBody(sl);
-    }
+
     this.lidsFrame(dt);
     // (plan 95 F1a) the windows on their way down or up
     for (const l of this.live.values()) l.model.windowsTick?.(dt);
@@ -2125,7 +2123,8 @@ export class Cars {
             : v.kind === "plough" || v.kind === "shuttle" || v.kind === "bus"
               ? "ploughtruck"
               : null;
-        if (!kind || !v.shown || Math.hypot(v.x - me.x, v.z - me.y) > HEARD) continue;
+        // (near only: an engine's recordings are tens of MB decoded — loaded when one's in earshot, let go after)
+        if (!kind || !v.shown || Math.hypot(v.x - me.x, v.z - me.y) > AI_HEARD) continue;
         const key = `${v.kind}:${v.id ?? ""}`;
         keep.add(key);
         let a = this.aiSounds.get(key);
@@ -2216,7 +2215,6 @@ export class Cars {
   /** (plan 98) A recorded take of a car's body (a door, a lid) heard from a point of the world: its level by distance,
    *  round me; loaded the first time it's asked for (false till then). */
   private bodyBufs = new Map<string, AudioBuffer[] | null>();
-  private bodyWarm = false;
   /** (plan 98) a body take's file asked for ahead (a car near: its doors and lids) */
   private warmBody(slot: string): boolean {
     const ctx = mixer.ctx;

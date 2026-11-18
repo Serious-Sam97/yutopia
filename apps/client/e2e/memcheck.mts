@@ -225,10 +225,14 @@ try {
       j.worldToken = "dev:912:Cai:member,builder,admin";
       await route.fulfill({ response: res, json: j });
     });
-    await page.addInitScript((t) => {
-      localStorage.setItem("yutopia:token", t);
-      localStorage.setItem("yutopia:prefs", JSON.stringify({ quality: "high" }));
-    }, tok);
+    // (plan 98: CAR_REFLECT=off|on|auto — the cars' reflection probe, "auto" (on, on High) by default)
+    await page.addInitScript(
+      ([t, r]) => {
+        localStorage.setItem("yutopia:token", t);
+        localStorage.setItem("yutopia:prefs", JSON.stringify({ quality: "high", carReflect: r }));
+      },
+      [tok, process.env.CAR_REFLECT ?? "auto"] as const,
+    );
   }
   await page.goto(process.env.LOOK ? `${base}/?look=${process.env.LOOK}` : `${base}/`);
   if (process.env.TEX_WHO) await page.evaluate(() => ((window as any).__texWho = true));

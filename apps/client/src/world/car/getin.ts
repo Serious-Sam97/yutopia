@@ -102,7 +102,6 @@ const seg = (t: number, a: number, b: number) => ease((t - a) / (b - a));
 const win = (t: number, a: number, b: number, f = 0.12) => seg(t, a, a + f) * (1 - seg(t, b, b + f));
 const lerpA = (a: number, b: number, k: number) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
 
-const tmp: number[] = [0, 0, 0, 0];
 
 /** The yaw (root rotation.y in the body's frame) facing along (dx, dz). */
 export const yawOf = (dx: number, dz: number) => Math.atan2(dx, dz);
@@ -133,7 +132,6 @@ export function actAt(
   const xr = op.x1;
   // (the sill as the feet cross it: over the door's foot and the floor's edge, a little to spare)
   const sill = Math.max(op.y0 + 0.14, d.floor + 0.16);
-  const top = op.y1;
   const stand = d.stand - 0.02;
   // (each foot sat, in w)
   const sat = d.satFeet.map((f) => [f.x, f.y, f.z * s]);
@@ -363,8 +361,6 @@ export function actAt(
   out.hands = hands.filter((h) => h.w > 0.001);
   out.door = door;
   out.sat = satK;
-  void tmp;
-  void top;
   return out;
 }
 
