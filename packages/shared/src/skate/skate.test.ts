@@ -61,15 +61,37 @@ const on = (variant: BoardVariant = "street-pop", x = 0, y = 0, yaw = 0, s = 0) 
 };
 const at = (t: number, when: number) => Math.abs(t - when) < STEP_DT / 2;
 
-test("W pushes to ~11 m/s; let alone at a crawl it kicks along by itself (never stalls); S at speed powerslides", () => {
+test("Shift held pushes to ~11 m/s in whole strokes; W doesn't push, nor a crawl by itself; S at speed powerslides", () => {
   const env = world();
   const b = on();
-  ride(b, env, { up: true }, 5);
+  // (plan 107: each push a whole stroke — on for at least its cycle, never flickering on and off)
+  let run = 0;
+  let shortest = 99;
+  let fastest = 0;
+  ride(
+    b,
+    env,
+    (_t, bb) => {
+      fastest = Math.max(fastest, bb.skate?.s ?? 0);
+      if (bb.skate?.pushing) run += STEP_DT;
+      else if (run > 0) {
+        shortest = Math.min(shortest, run);
+        run = 0;
+      }
+      return { brk: true };
+    },
+    5,
+  );
   const s = b.skate?.s ?? 0;
-  assert.ok(s > SKATE.push * 0.92 && s < SKATE.push * 1.05, `pushed to ${s.toFixed(2)}`);
-  const slow = on();
-  ride(slow, env, {}, 4);
-  assert.ok((slow.skate?.s ?? 0) > 1.2, `auto-kick: ${slow.skate?.s.toFixed(2)}`);
+  assert.ok(fastest > SKATE.push * 0.95 && fastest < SKATE.push * 1.03, `pushed to ${fastest.toFixed(2)}`);
+  assert.ok(s > SKATE.push * 0.85, `kept at ${s.toFixed(2)}`);
+  assert.ok(shortest > SKATE.pushCycle - 2 * STEP_DT, `a stroke ${shortest.toFixed(2)} s`);
+  const w = on();
+  ride(w, env, { up: true }, 2);
+  assert.ok((w.skate?.s ?? 0) < 0.1, `W pushed: ${w.skate?.s.toFixed(2)}`);
+  const slow = on("street-pop", 0, 0, 0, 3);
+  ride(slow, env, {}, 3);
+  assert.ok((slow.skate?.s ?? 9) < 3, `kicked along by itself: ${slow.skate?.s.toFixed(2)}`);
   const evs = ride(b, env, { down: true }, 2.5);
   assert.ok(
     evs.some((e) => e.cess),
@@ -150,7 +172,20 @@ test("break vert (Shift held) at a spine: over its top onto the far face, a Spin
   const env = world([{ kind: "spine", x: 0, y: 0, z: 0, yaw: 0 }]);
   // (the spine's near face rises toward +x from x ≈ −lip: ridden at it from the west)
   const b = on("vert-classic", -4.5, 0, 0, 9);
-  const evs = ride(b, env, { brk: true }, 4);
+  // (Shift pressed once on the ramp — held over from the flat it's a push, not a break: plan 107)
+  let was = false;
+  const evs = ride(
+    b,
+    env,
+    (_t, bb) => {
+      // (on the spine's rising face itself, not its flat foot)
+      const on = !!bb.skate?.on && (bb.skate?.n[2] ?? 1) < 0.9;
+      const k = { brk: on, breakPressed: on && !was };
+      was = on;
+      return k;
+    },
+    4,
+  );
   assert.ok(!evs.some((e) => e.bail), JSON.stringify(evs.find((e) => e.bail)));
   const banked = evs.find((e) => e.combo)?.combo;
   assert.match(
@@ -386,9 +421,9 @@ test("the snow: deep snow throws you off at speed; on ice a push barely goes", (
   const b = on("street-pop", 0, 0, 0, 6);
   assert.equal(ride(b, deep, {}, 2).find((e) => e.bail)?.bail, "snow");
   const ice = on();
-  ride(ice, world([], "ice"), { up: true }, 2);
+  ride(ice, world([], "ice"), { brk: true }, 2);
   const road = on();
-  ride(road, world(), { up: true }, 2);
+  ride(road, world(), { brk: true }, 2);
   assert.ok(
     (ice.skate?.s ?? 0) < (road.skate?.s ?? 0) * 0.45,
     `ice ${ice.skate?.s.toFixed(2)} vs ${road.skate?.s.toFixed(2)}`,
@@ -465,4 +500,37 @@ test("on the wire: the mode, the trick, fakie, goofy, the board, a powerslide, l
 
 test("the board's direction: over every ride above it rolled along its own length (never 2° across)", () => {
   assert.ok(worstOff < 2, `${worstOff.toFixed(2)}° at worst`);
+});
+
+test("(plan 107) an ollie down on bare ground inside a corner's plan box lands on the ground, not through it", () => {
+  const pieces: PiecePlace[] = [{ kind: "qp4corner", x: 0, y: 0, z: 0, yaw: 0 }];
+  const park = new SkatePark(pieces);
+  // a spot its plan box holds but its turn doesn't
+  let at: [number, number] | null = null;
+  for (let x = -4; x <= 4 && !at; x += 0.1)
+    for (let y = -4; y <= 4 && !at; y += 0.1)
+      if (
+        [0, 0.3, 0.6, 0.9, 1.2].every(
+          (d) => park.near(x + d, y).length && !park.over(x + d, y) && !park.topAt(x + d, y, 10, 0),
+        )
+      )
+        at = [x, y];
+  assert.ok(at, "a bare stretch in the corner's box");
+  const env = world(pieces);
+  const b = on("street-pop", at[0], at[1], 0, 2);
+  let flew = false;
+  let low = 0;
+  ride(
+    b,
+    env,
+    (t, bb) => {
+      if (bb.skate?.mode === "air") flew = true;
+      low = Math.min(low, bb.z);
+      return t < 0.15 ? { ollie: true } : {};
+    },
+    1.5,
+  );
+  assert.ok(flew, "she popped");
+  assert.ok(low > -0.05, `fell through: lowest z ${low.toFixed(2)}`);
+  assert.equal(b.skate?.mode, "roll");
 });

@@ -2,7 +2,7 @@
 // same body, standing on something that rolls. Pure and deterministic: the client steps it at STEP_DT; others are
 // drawn from its code on the wire (`skateCode`).
 //
-// Rolling: the board goes along its nose (or tail-first: fakie), pushed (W), slowed (S), carved (A/D), pulled by the
+// Rolling: the board goes along its nose (or tail-first: fakie), pushed (Shift held, plan 107), slowed (S), carved (A/D), pulled by the
 // slope. On the world's own ground the walker's mover (Jolt's) moves it — walls, kerbs, the land's slopes; on a
 // park's piece it rides the piece's profile exactly (pieces.ts), so a vert wall is no harder than the flat. Space
 // held crouches, let go ollies; off a vert lip it goes up and comes back in (Tony Hawk's). In the air: E a flip, R a
@@ -156,6 +156,8 @@ export interface SkateNow {
   crouch: number;
   push: number;
   pushing: boolean;
+  /** (plan 107) Shift held since a push on the flat: not a break at a lip till it's pressed again */
+  brkPush?: boolean;
   lean: number;
   /** how rough the ground under the wheels is (0 smooth … 1: the sound's) */
   rough: number;
@@ -509,13 +511,26 @@ function roll(
   let a = -SKATE.gRamp * F[2];
   const lit = k.lit ? SKATE.litSpeed : 1;
   const flat = tz < 0.3;
-  const want = keys.up ? SKATE.push * feel.speed * lit : speed < SKATE.kickMin ? SKATE.kick : 0;
-  const pushing = k.mode === "roll" && !keys.down && flat && speed < want;
-  k.pushing = pushing && foot.push > 0;
+  // (plan 107: pushing is Shift held, on the flat — no auto-kick: let go, she glides. A push is a whole stroke, each
+  // one finished: the speed comes while the foot's on the ground (the stroke's 15–65 %); another while Shift's held
+  // and there's speed to gain, so it never flickers on and off round the top)
+  const top = SKATE.push * feel.speed * lit;
+  const canPush = k.mode === "roll" && !keys.down && flat && foot.push > 0;
   if (k.pushing) {
-    a += Math.sign(k.s || 1) * SKATE.pushAccel * foot.push;
-    k.push = (k.push + dt / SKATE.pushCycle) % 1;
-  } else k.push = 0;
+    k.push += dt / SKATE.pushCycle;
+    if (k.push >= 1 || !canPush) {
+      k.push = 0;
+      k.pushing = canPush && !!keys.brk && speed < top - SKATE.pushGap;
+    }
+  } else if (canPush && keys.brk && speed < top - SKATE.pushGap) {
+    k.pushing = true;
+    k.push = 0;
+  }
+  if (k.pushing && k.push > 0.15 && k.push < 0.65 && speed < top)
+    a += Math.sign(k.s || 1) * SKATE.pushAccel * 2 * foot.push;
+  // (Shift held from the flat isn't a break at a lip — a fresh press on a ramp is)
+  if (k.mode === "roll" && flat) k.brkPush = !!keys.brk;
+  else if (keys.breakPressed || !keys.brk) k.brkPush = false;
   // (pumping: the crouch held going down a ramp)
   if (k.on && keys.ollie && F[2] * Math.sign(k.s) < -0.2) a += Math.sign(k.s) * SKATE.pump;
   let loss = SKATE.roll + foot.loss * feel.rough + SKATE.drag * k.s * k.s;
@@ -609,7 +624,7 @@ function roll(
     return takeOff(b, k, v, false);
   }
 
-  if (k.on) rideOn(b, k, env, park, dt, F, !!keys.brk);
+  if (k.on) rideOn(b, k, env, park, dt, F, !!keys.brk && !k.brkPush);
   else rideGround(b, k, env, park, dt, sev);
 }
 
@@ -938,7 +953,9 @@ function air(
   const x0 = b.x;
   const y0 = b.y;
   const z0 = b.z;
-  const overPark = park.near(b.x, b.y).length > 0 || park.near(b.x + b.vx * dt, b.y + b.vy * dt).length > 0;
+  // (plan 107: over a piece's surface itself — where only its plan box is, it's bare ground: the mover's, or she fell
+  // through it there, never caught, the mover unable to lift her back up once under it)
+  const overPark = park.over(b.x, b.y) || park.over(b.x + b.vx * dt, b.y + b.vy * dt);
   let landedWorld = false;
   if (!overPark && env.mover && (env.mover.ready?.(b.x, b.y) ?? true)) {
     // (the mover pulls by JUMP_G: the board's own pull made up to it)

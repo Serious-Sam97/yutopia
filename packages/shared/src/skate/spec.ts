@@ -14,13 +14,12 @@ export const SKATE = {
   g: 25,
   gRamp: 12,
   gVert: 9,
-  /** pushing: the speed W pushes to and how hard; the auto-kick under `kickMin` up to `kick` (you never stall); a push's
-   *  cycle (s: the pose's kick) */
+  /** pushing (Shift held, plan 107): the speed it pushes to and how hard (the average over a stroke) */
   push: 11,
   pushAccel: 6,
-  kickMin: 1.3,
-  kick: 3,
-  pushCycle: 0.62,
+  /** (plan 107) a whole stroke (s: the push clip's own length), and how far under the top a new one starts */
+  pushCycle: 0.8,
+  pushGap: 0.6,
   /** the fastest a board goes (~25 m/s: "about 1100 in/s, depends on stats"); lit (the special), × this */
   top: 25,
   litSpeed: 1.15,

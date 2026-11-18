@@ -792,6 +792,16 @@ export class SkatePark {
   }
 
   /** Within a placed surface's sweep at (u, w) */
+  /** (plan 107) Over a piece's riding surface at (x, y) — its sweep itself, not its plan box: a corner's or a bowl's
+   *  box holds bare ground outside its turn, and every box is 5 cm wider than its piece. */
+  over(x: number, y: number): boolean {
+    for (const p of this.near(x, y)) {
+      const L = toLocal(p, x, y);
+      if (SkatePark.inside(p, L.u, L.w)) return true;
+    }
+    return false;
+  }
+
   static inside(p: Placed, u: number, w: number): boolean {
     return (
       u >= p.s.prof.uMin - 1e-6 &&

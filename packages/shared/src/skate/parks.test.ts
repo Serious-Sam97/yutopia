@@ -302,7 +302,7 @@ function ride(park: SkatePark, h: number, z0: number, x: number, y: number, yaw:
   let top = h;
   const n = Math.round(secs / STEP_DT);
   for (let i = 0; i < n && b.skate; i++) {
-    const ev = stepBody(b, { ...NO_INPUT, skate: { ...NO_KEYS, up: i * STEP_DT < push } }, env);
+    const ev = stepBody(b, { ...NO_INPUT, skate: { ...NO_KEYS, brk: i * STEP_DT < push } }, env);
     if (ev.skate) evs.push(ev.skate);
     if (b.skate) modes.add(b.skate.mode);
     top = Math.max(top, b.z);
@@ -345,7 +345,8 @@ test("down each park's lines: pushed off, it rolls through the pieces without a 
       [474, -489.4, 0],
       [469, -459.5, 0],
       [467.525, -474, H, 0.4],
-      [465.5, -473, H],
+      // (plan 107: a push is whole strokes now — 1.2 s of Shift is the old 1.4 s of W's speed, ~8 m/s)
+      [465.5, -473, H, 1.2],
     ],
   };
   for (const p of TOWN_PARKS) {

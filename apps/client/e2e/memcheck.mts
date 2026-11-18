@@ -494,9 +494,9 @@ try {
         await page
           .waitForFunction(() => !!(window as any).__yutopia.walker?.stepBody?.skate, null, { timeout: 15_000 })
           .catch(() => console.log("  board life: NOT on the board"));
-        await page.keyboard.down("KeyW");
+        await page.keyboard.down("ShiftLeft");
         await page.waitForTimeout(1500);
-        await page.keyboard.up("KeyW");
+        await page.keyboard.up("ShiftLeft");
         rode = Math.max(rode, await page.evaluate(() => (window as any).__yutopia.walker?.stepBody?.skate?.s ?? 0));
       };
       let rode = 0;

@@ -52,9 +52,9 @@ await ana.evaluate(() => {
   c.walker.faceYaw?.(0);
   c.skateHand("cruiser-classic");
 });
-await ana.keyboard.down("KeyW");
+await ana.keyboard.down("ShiftLeft");
 await ana.waitForTimeout(1200);
-await ana.keyboard.up("KeyW");
+await ana.keyboard.up("ShiftLeft");
 await bia.waitForTimeout(800);
 const seen = await bia.evaluate(() => {
   const c = (window as any).__yutopia;

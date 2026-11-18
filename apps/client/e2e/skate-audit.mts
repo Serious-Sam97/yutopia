@@ -46,21 +46,21 @@ const on = async (x: number, y: number, yaw: number, variant: string) => {
 // 1. the hall's half-pipe: pushed east along it, up and back
 await on(461, -530.8, 0, "vert-classic");
 await snap("hall-on");
-await page.keyboard.down("KeyW");
+await page.keyboard.down("ShiftLeft");
 for (let i = 0; i < 6; i++) {
   await page.waitForTimeout(350);
   await snap(`pipe-${i}`);
 }
-await page.keyboard.up("KeyW");
+await page.keyboard.up("ShiftLeft");
 for (let i = 0; i < 6; i++) {
   await page.waitForTimeout(300);
   await snap(`pipe-air-${i}`);
 }
 // 2. on the yard: a kickflip, an indy
 await on(466, -478, 0, "street-pop");
-await page.keyboard.down("KeyW");
+await page.keyboard.down("ShiftLeft");
 await page.waitForTimeout(1800);
-await page.keyboard.up("KeyW");
+await page.keyboard.up("ShiftLeft");
 await snap("yard-roll");
 await page.keyboard.down("Space");
 await page.waitForTimeout(300);
@@ -85,9 +85,9 @@ await page.keyboard.up("KeyR");
 await page.waitForTimeout(1500);
 // 3. a rail in the yard: at it along it, ollied onto it, F held
 await on(470, -458, 0, "street-pop");
-await page.keyboard.down("KeyW");
+await page.keyboard.down("ShiftLeft");
 await page.waitForTimeout(900);
-await page.keyboard.up("KeyW");
+await page.keyboard.up("ShiftLeft");
 await page.keyboard.down("Space");
 await page.waitForTimeout(250);
 await page.keyboard.up("Space");

@@ -76,11 +76,11 @@ await page.evaluate((v) => {
 await page.waitForTimeout(1200);
 console.log("on:", JSON.stringify(await state()));
 await page.screenshot({ path: `${out}/skate-0-on.png` });
-await page.keyboard.down("KeyW");
+await page.keyboard.down("ShiftLeft");
 await page.waitForTimeout(2500);
 console.log("pushed:", JSON.stringify(await state()));
 await page.screenshot({ path: `${out}/skate-1-push.png` });
-await page.keyboard.up("KeyW");
+await page.keyboard.up("ShiftLeft");
 await page.keyboard.down("Space");
 await page.waitForTimeout(300);
 console.log("crouch:", JSON.stringify(await state()));

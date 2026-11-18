@@ -1,6 +1,7 @@
 // My board (docs/plan/104-the-skate-again.md): on it and off it, its keys (F2a, Tony Hawk's PC layout: A/D steer and
-// W/S lean — the tricks' directions too —, W pushes, S brakes (a powerslide at speed), Space held crouches / let go
-// ollies, J a flip, K a grind / lip / wallride, L a grab, Q/E spin, Shift the revert and break vert, X off, C the
+// W/S lean — the tricks' directions too —, Shift held pushes on the flat (plan 107: whole strokes, no auto-kick), S
+// brakes (a powerslide at speed), Space held crouches / let go ollies, J a flip, K a grind / lip / wallride, L a grab,
+// Q/E spin, Shift pressed on a ramp the revert and break vert, X off, C the
 // camera's preset), the park near (the town's two and the pieces built), what the step said (the skate HUD, the
 // sound, a bail onto the ragdoll), the skate camera, the code for the wire. Loaded when a board's first taken in hand.
 

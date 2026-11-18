@@ -13,11 +13,11 @@ import {
   Frame,
   kneeWay,
   legTo,
+  mapPoint,
   mirrorFrame,
   poseOf,
   SkaterPlayer,
   sampleClip,
-  mapPoint,
   setClips,
 } from "./pose";
 
@@ -169,7 +169,15 @@ test("a ride through the player: whole, the shots end, the grab let go plays out
 test("a spot on the street board maps onto its own measures as itself (the tail's too: plan 106)", () => {
   const man = JSON.parse(readFileSync(new URL("../../../public/life/skate/manifest.json", import.meta.url), "utf8"));
   const v = man["street-pop"] ?? man.boards?.["street-pop"];
-  const m = { length: v.dims.length, width: v.dims.width, deckY: v.dims.height, wheelbase: v.wheelbase, wheelR: 0.025, truck: 0.198, points: v.points };
+  const m = {
+    length: v.dims.length,
+    width: v.dims.width,
+    deckY: v.dims.height,
+    wheelbase: v.wheelbase,
+    wheelR: 0.025,
+    truck: 0.198,
+    points: v.points,
+  };
   for (const p of [
     [-0.25, 0.0957, -0.03],
     [-0.33, 0.12, 0.02],

@@ -86,7 +86,7 @@ const ride = async (x: number, y: number, yaw: number, variant: string, keys: (p
 };
 // 1. Main Street: pushed straight, carved both ways, an ollie, a powerslide
 await ride(320, -405, 0, "street-pop", async (p) => {
-  await p.keyboard.down("KeyW");
+  await p.keyboard.down("ShiftLeft");
   await p.waitForTimeout(2200);
   await p.keyboard.down("KeyD");
   await p.waitForTimeout(500);
@@ -94,7 +94,7 @@ await ride(320, -405, 0, "street-pop", async (p) => {
   await p.keyboard.down("KeyA");
   await p.waitForTimeout(500);
   await p.keyboard.up("KeyA");
-  await p.keyboard.up("KeyW");
+  await p.keyboard.up("ShiftLeft");
   await p.keyboard.down("Space");
   await p.waitForTimeout(300);
   await p.keyboard.up("Space");
@@ -105,9 +105,9 @@ await ride(320, -405, 0, "street-pop", async (p) => {
 });
 // 2. the hall's half-pipe: pushed along it, up the wall, an air, back in, a revert
 await ride(461, -530.8, 0, "vert-classic", async (p) => {
-  await p.keyboard.down("KeyW");
+  await p.keyboard.down("ShiftLeft");
   await p.waitForTimeout(1800);
-  await p.keyboard.up("KeyW");
+  await p.keyboard.up("ShiftLeft");
   await p.waitForTimeout(2600);
   await p.keyboard.press("ShiftLeft");
   await p.waitForTimeout(1500);
