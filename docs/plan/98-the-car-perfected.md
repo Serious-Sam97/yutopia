@@ -643,5 +643,10 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
   isn't an error).
 - **The act** (`e2e/car-act.mts`, `e2e/car-act-video.mts`), the jump (`e2e/car-jump.mts`), the reversing camera
   (`e2e/car-cam.mts`) as in their phases.
-- Not run: the whole suite (2.5 h — not unasked); the memcheck's car life (the probe's cube, the blur discs and the
-  live windscreen are new GPU things: disposed with their car; a memcheck run is the follow-up).
+- **The memcheck** (production build, its own world): the page's heap after the first cycle, no car life — the commit
+  before plan 98 (0ac4af9c, a worktree) 1182 MB, plan 98 1172 MB with the probe off, 1185 with it (programs +61, the
+  probe's own target variants). Plan 98 doesn't grow it. **But the memcheck can't finish today at either commit:** the
+  page's heap snapshot is past what Node can read as one string ("Invalid string length"; plan 97 measured ~930 MB two
+  days before) — a follow-up for the memcheck (stream the snapshot instead of joining it). Its car life now waits for the
+  engine (a move while getting in lets go of it); `CAR_REFLECT=off|on|auto` sets the probe for it.
+- Not run: the whole suite (2.5 h — not unasked).
