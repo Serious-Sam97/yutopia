@@ -64,7 +64,9 @@ export class CarCamera {
     // (plan 98 phase 8: the shake a smooth noise at 8–15 Hz — a random each frame was a jitter at the frame rate)
     this.st += dt;
     const nz = (a: number) =>
-      (Math.sin(this.st * 13.1 + a) + 0.6 * Math.sin(this.st * 8.3 + a * 2.1) + 0.4 * Math.sin(this.st * 17.9 + a * 3.7)) /
+      (Math.sin(this.st * 13.1 + a) +
+        0.6 * Math.sin(this.st * 8.3 + a * 2.1) +
+        0.4 * Math.sin(this.st * 17.9 + a * 3.7)) /
       2;
     // in the air, then down: a dip by how hard it came down, sprung back (none for a passenger's
     // stand-in state: it has no wheels)
@@ -155,7 +157,10 @@ export class CarCamera {
         const gz = this.reduced ? 0 : rig.g.z;
         const gy = this.reduced ? 0 : rig.g.y;
         const want = new Vector3(gx * 0.035, -Math.abs(gx) * 0.01 - gy * 0.02, gz * 0.03).multiplyScalar(hoodK);
-        this.headV.addScaledVector(new Vector3().subVectors(want, this.head), (this.mode === "cockpit" ? 90 : 160) * dt);
+        this.headV.addScaledVector(
+          new Vector3().subVectors(want, this.head),
+          (this.mode === "cockpit" ? 90 : 160) * dt,
+        );
         this.headV.multiplyScalar(Math.exp(-dt * 14));
         this.head.addScaledVector(this.headV, dt);
         eye.add(this.head);

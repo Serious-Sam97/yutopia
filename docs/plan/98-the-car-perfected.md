@@ -566,3 +566,27 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
 - Left: the first captures in a place still upload what they see the first time; the LODs' crossfade (a dither in
   every car material's shader — not done here).
 - Checked: typecheck clean; the probe's faces timed in the game.
+
+## Phase 23 — built in part (2026-11-17): traffic on Jolt (F10b)
+
+- **A driver** (`shared car/ai.ts`): along a route (the town's polylines), steered by pure pursuit at a point ahead on
+  it (3.5 m + 0.7 s of speed), as fast as it's let go but no faster than the bends within its stopping distance allow
+  (2.2 m/s² of sideways grip, slowed into at 3 m/s²), a stop eased into and held on the brake. Test: a saloon on Jolt
+  round an L of road (60 m, a 20 m quarter circle, 40 m) at up to 36 km/h — within 1.2 m of its line, under 33 km/h in
+  the bend, to the end.
+- **The town's cars on it** (`world-server features/grounds-life.ts`): the visitor's car (a saloon) and the plough (the
+  plough truck) driven on Jolt in the server — a `JoltCarWorld` on the Grounds' own `groundsWorld` (its land in chunks
+  round each car, its hard things as statics), stepped at 60 Hz once a tick for all of them with their own hands and
+  feet; what everyone sees is that car (its place, heading, speed and its quaternion: pitch and roll on the land).
+  Their routes' phases as before — the speed they're let go (someone in the way: 0, a honk after 1.2 s), a stop at the
+  end. Off Jolt and on their routes as before: the visitor backing out of its bay (the Jolt car kept with it), the
+  shuttle (it carries people; no spec), the long road's bus and car; the tests' fast trips.
+  - In the dev world: the visitor down the driveway's bends at 7 m/s, 3 in the lot, to its bay.
+- **Parked cars in the way:** the town's cars stop for a player's car left on their road (they drove through it).
+- **Drawn as they go** (`tp/parts/vehicles.ts`): their pitch and lean from the quaternion, front wheels steered by how
+  they turn, brake lamps whenever they slow (by day too). **Heard** (`cars.ts hearAi`): the visitor's a saloon's
+  engine, the plough's, the shuttle's and the bus's a heavy diesel's — they were silent.
+- Not done: a driver sat in each; going round something in the way (they wait); the shuttle and the long road's cars
+  on Jolt; indicators before turns.
+- Checked: shared car tests (new: the driver round the L); world-server grounds-life + park-life tests (the plough's
+  snowstorm test red on HEAD too); typecheck clean; biome's safe fixes on the changed files.

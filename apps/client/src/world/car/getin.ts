@@ -247,7 +247,8 @@ export function actAt(
     duck = win(t, 1.45, 2.1, 0.35) * 0.72;
     lean = win(t, 1.4, 2.1, 0.3) * 0.22;
     // the door: pulled open by its handle, let go to swing on, held by its frame; shut by its pull
-    door = t < 0.3 ? 0 : t < 0.78 ? 0.42 * seg(t, 0.3, 0.78) : t < 1.15 ? 0.42 + (OPEN - 0.42) * seg(t, 0.78, 1.15) : OPEN;
+    door =
+      t < 0.3 ? 0 : t < 0.78 ? 0.42 * seg(t, 0.3, 0.78) : t < 1.15 ? 0.42 + (OPEN - 0.42) * seg(t, 0.78, 1.15) : OPEN;
     if (t >= 2.48) door = OPEN * (1 - seg(t, 2.48, 2.72));
     hands.push({ S: aS, at: "handle", w: win(t, 0.02, 0.8, 0.22) });
     // (the inside hand on the roof's edge as the foot goes in, then down onto the wheel (the seat's back) to lower
@@ -259,7 +260,6 @@ export function actAt(
     satK = seg(t, 2.45, ENTER_S);
   } else {
     // ── out ──
-    const xs = xr + 0.05;
     const back = { x: xh + 0.48, w: o + 0.56 };
     // (the walker's place: the last step taken to it if it's within one)
     const tw = to ? to.z * s : back.w;

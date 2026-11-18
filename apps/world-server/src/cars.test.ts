@@ -7,9 +7,9 @@ import {
   CHAIN_ON_MS,
   carKindOf,
   chainSpot,
+  FIRE,
   HOME_CARS,
   headingQuat,
-  FIRE,
   MEND_MS,
   PANE_CRACK,
   PANE_GONE,
@@ -1028,7 +1028,12 @@ async function windowShot(sandbox: number, uids: [number, number], down: boolean
       `a window on her side cracked (${a.state.vehicles.get(vid).dmg})`,
     );
   // (wound down: no glass in her window to crack)
-  else assert.equal(dm.parts & (PANE_CRACK[near[0]] | PANE_GONE[near[0]]), 0, `her open window not cracked (${a.state.vehicles.get(vid).dmg})`);
+  else
+    assert.equal(
+      dm.parts & (PANE_CRACK[near[0]] | PANE_GONE[near[0]]),
+      0,
+      `her open window not cracked (${a.state.vehicles.get(vid).dmg})`,
+    );
 }
 
 test("(plan 94 P4) a round through a car's window hurts whoever sat behind it; its glass cracked", () =>
@@ -1069,7 +1074,12 @@ test("(plan 94 P1, plan 95 F7a) crashed past its worst it smokes; shot in the en
   assert.equal(dm().fire, FIRE.smoke, "parked, still smoking");
   // Ana well away; Bia 3.5 m ahead of its nose, armed, aiming at its engine low in its front
   // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
-  const p2: any = parkedPose({ x: a.state.objects.get(o.id).x, y: a.state.objects.get(o.id).y, yaw: a.state.objects.get(o.id).yaw, props: props(a.state.objects.get(o.id)) });
+  const p2: any = parkedPose({
+    x: a.state.objects.get(o.id).x,
+    y: a.state.objects.get(o.id).y,
+    yaw: a.state.objects.get(o.id).yaw,
+    props: props(a.state.objects.get(o.id)),
+  });
   const spec = SPECS[carKindOf(props(o).model)];
   const fx = Math.cos(p2.a);
   const fy = Math.sin(p2.a);
@@ -1095,7 +1105,15 @@ test("(plan 94 P1, plan 95 F7a) crashed past its worst it smokes; shot in the en
     const t = { x: p2.x + fx * (spec.body.ahead - 0.1), y: p2.y + fy * (spec.body.ahead - 0.1) };
     const tz = heightAt(t.x, t.y) + spec.clearance + 0.3;
     const d = Math.hypot(t.x - mb.x, t.y - mb.y);
-    b.send("arms:fire", { ox: mb.x, oy: mb.y, oz, yaw: Math.atan2(t.y - mb.y, t.x - mb.x), pitch: Math.atan2(tz - oz, d), lag: 0, seed: 5 });
+    b.send("arms:fire", {
+      ox: mb.x,
+      oy: mb.y,
+      oz,
+      yaw: Math.atan2(t.y - mb.y, t.x - mb.x),
+      pitch: Math.atan2(tz - oz, d),
+      lag: 0,
+      seed: 5,
+    });
   };
   const hp0 = me(b).hp;
   // two rounds into its engine: alight
@@ -1115,10 +1133,16 @@ test("(plan 94 P1, plan 95 F7a) crashed past its worst it smokes; shot in the en
   assert.equal(blasted, null, "…not blown yet");
   await waitFor(() => dm().fire === FIRE.burnt, 12_000);
   const burnt_s = (Date.now() - caught) / 1000;
-  assert.ok(burnt_s > 9 && burnt_s < 13, `blown ~10 s after it caught, not the 25 s left alone (${burnt_s.toFixed(1)} s)`);
+  assert.ok(
+    burnt_s > 9 && burnt_s < 13,
+    `blown ~10 s after it caught, not the 25 s left alone (${burnt_s.toFixed(1)} s)`,
+  );
   await waitFor(() => blasted !== null, 2000);
   const burnt = dm();
-  assert.ok(burnt.parts & PANE_GONE[0] && burnt.wreck, `burnt out: its glass gone, its doors off (${props(a.state.objects.get(o.id)).dmg})`);
+  assert.ok(
+    burnt.parts & PANE_GONE[0] && burnt.wreck,
+    `burnt out: its glass gone, its doors off (${props(a.state.objects.get(o.id)).dmg})`,
+  );
   assert.ok(me(b).fellAt > 0, "Bia knocked down");
   assert.ok(me(b).hp < hp0, `…and hurt (${me(b).hp})`);
   assert.equal(me(a).fellAt, 0, "Ana, 18 m off, not");
@@ -1142,7 +1166,10 @@ test("(plan 94 G3, G4) a boot open is everyone's (its opener's busy), shut when 
   const pose = parkedPose({ x: o.x, y: o.y, yaw: o.yaw, props: props(o) });
   const spec = SPECS[carKindOf(props(o).model)];
   // behind it: its boot open — busy `boot:<id>`, for every client to lift its lid
-  const back = { x: pose.x - Math.cos(pose.a) * (spec.body.behind + 0.35), y: pose.y - Math.sin(pose.a) * (spec.body.behind + 0.35) };
+  const back = {
+    x: pose.x - Math.cos(pose.a) * (spec.body.behind + 0.35),
+    y: pose.y - Math.sin(pose.a) * (spec.body.behind + 0.35),
+  };
   a.send("teleport", { to: { ...back, level: 0 } });
   await waitFor(() => Math.hypot(me(a).x - back.x, me(a).y - back.y) < 0.6);
   a.send("car:boot", { id: o.id, open: true });

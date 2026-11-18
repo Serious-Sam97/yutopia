@@ -3,37 +3,36 @@ import {
   addHole,
   BUYABLE,
   bayFor,
+  burnOut,
   buyLook,
   CAR_FLAGS,
   CAR_HZ,
+  type CarAt,
   type CarKind,
+  type CarShot,
   type CarSpec,
   type CarWire,
   CHAIN_OFF_MS,
   CHAIN_ON_MS,
   CHAIN_REACH,
-  type CarAt,
   carAlong,
-  claimShot,
-  shotWreck,
   carAtHome,
   carKindOf,
   chainSpot,
   chainsOf,
+  claimShot,
+  type Damage,
   damageString,
+  FIRE,
   FLATS,
   finiteState,
   freeSpot,
+  glassless,
   groundsWorld,
   HOME_CARS,
   type HomeCar,
   headingQuat,
   holesWithout,
-  glassless,
-  paneOf,
-  parseHoles,
-  type Pane,
-  type CarShot,
   keysDay,
   levelCar,
   MEND_MS,
@@ -46,11 +45,14 @@ import {
   nearestColour,
   nextMend,
   PART,
+  type Pane,
+  paneOf,
   panesOpen,
   parkAt,
   parkedBody,
   parkedPose,
   parseDamage,
+  parseHoles,
   plateOf,
   putIn,
   SEATS_OF,
@@ -59,11 +61,9 @@ import {
   type Stored,
   type StoreKind,
   SUNK,
-  burnOut,
-  type Damage,
-  FIRE,
   seatedAlong,
   shotDamage,
+  shotWreck,
   spareOf,
   storeOf,
   variantSpec,
@@ -834,7 +834,11 @@ registerFeature((room: WorldRoom) => {
         // (plan 93 S1: shot dead, as stranded as dry)
         const dry = num(def.props?.fuel, 1) <= 0.01 || !!(parseDamage(def.props?.dmg).parts & PART.engineDead);
         // (in someone's bay: out the next time nobody's near, however long it's been there)
-        if (burnt ? Date.now() - parkedAt < BURNT_TOW_MS : !out && (inLot || Date.now() - parkedAt < (dry ? EMPTY_TOW_MS : TOW_MS)))
+        if (
+          burnt
+            ? Date.now() - parkedAt < BURNT_TOW_MS
+            : !out && (inLot || Date.now() - parkedAt < (dry ? EMPTY_TOW_MS : TOW_MS))
+        )
           continue;
         const near = [...room.state.players.values()].some(
           (p) => p.level === 0 && Math.hypot(p.x - bx, p.y - bz) < TOW_NEAR,
@@ -1731,7 +1735,11 @@ registerFeature((room: WorldRoom) => {
       // (…or one, where on it: checked against the car as it is here and this round's ray; not taken, the box's)
       const claimed = claim && typeof claim === "object" ? claim : null;
       const hitOf = (id: string, at: CarAt) =>
-        claimed ? (id === claimed?.id ? claimShot(o, d, at, claimed, range, gun) : null) : carAlong(o, d, at, range, gun);
+        claimed
+          ? id === claimed?.id
+            ? claimShot(o, d, at, claimed, range, gun)
+            : null
+          : carAlong(o, d, at, range, gun);
       let best:
         | (ReturnType<typeof carAlong> &
             object & {

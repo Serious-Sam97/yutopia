@@ -1287,9 +1287,15 @@ export class Shards {
       this.v[i * 3] = vx * 0.6 + nx * out + (Math.random() - 0.5) * 1.2;
       this.v[i * 3 + 1] = Math.random() * 1.4;
       this.v[i * 3 + 2] = vz * 0.6 + nz * out + (Math.random() - 0.5) * 1.2;
-      this.q[i].setFromAxisAngle(this.t.set(Math.random(), Math.random(), Math.random()).normalize(), Math.random() * 6);
+      this.q[i].setFromAxisAngle(
+        this.t.set(Math.random(), Math.random(), Math.random()).normalize(),
+        Math.random() * 6,
+      );
       // (its tumble: a turn a step, made from the turn a second)
-      this.spin[i].setFromAxisAngle(this.t.set(Math.random() - 0.5, Math.random(), Math.random() - 0.5).normalize(), 0.25);
+      this.spin[i].setFromAxisAngle(
+        this.t.set(Math.random() - 0.5, Math.random(), Math.random() - 0.5).normalize(),
+        0.25,
+      );
       this.size[i] = 0.025 + Math.random() * 0.05;
       this.life[i] = 7 + Math.random() * 5;
       this.lying[i] = 0;

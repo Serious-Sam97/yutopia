@@ -56,6 +56,7 @@
     "./route": "./src/route.ts",
     "./car": "./src/car/index.ts",
     "./car/jolt-world": "./src/car/jolt-world.ts",
+    "./car/ai": "./src/car/ai.ts",
     "./car/drive": "./src/car/drive.ts",
     "./car/assist": "./src/car/assist.ts",
     "./kart": "./src/kart/index.ts",

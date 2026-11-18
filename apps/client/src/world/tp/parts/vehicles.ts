@@ -37,7 +37,20 @@ export class Vehicles {
   private glbAsked = false;
 
   setVehicles(
-    list: { id: string; kind: string; x: number; z: number; a: number; v?: number; shown: boolean; h?: number }[],
+    list: {
+      id: string;
+      kind: string;
+      x: number;
+      z: number;
+      a: number;
+      v?: number;
+      shown: boolean;
+      h?: number;
+      pitch?: number;
+      roll?: number;
+      turn?: number;
+      accel?: number;
+    }[],
   ) {
     const g = this.c.around.grounds;
     const up = elevOf(0) - elevOf(this.c.level);
@@ -85,13 +98,23 @@ export class Vehicles {
       if (known) m.position.set(px, (v.h ?? g.heightAt(v.x, v.z)) + up + 0.02, pz);
       else m.position.set(px, m.position.y, pz);
       m.userData.placed = true;
-      // (the models' noses point −x: turned to the heading)
+      // (the models' noses point −x: turned to the heading — plan 98 phase 23: and on Jolt, its nose up and its lean as
+      // the land and its springs have them (the model's +x its tail, +z its left))
+      m.rotation.order = "YXZ";
       m.rotation.y = Math.PI - v.a;
-      // (their lamps on in the morning fog as after dark; the plough's beacon turning)
+      m.rotation.z = -(v.pitch ?? 0);
+      m.rotation.x = v.roll ?? 0;
+      // (plan 98 phase 23: its front wheels steered as it turns)
+      const sp = Math.abs(v.v ?? 0);
+      const steer = sp > 0.5 ? Math.atan((2.7 * (v.turn ?? 0)) / sp) : 0;
+      for (const w of car.wheels) if (w.front) w.steer.rotation.y = Math.max(-0.6, Math.min(0.6, steer));
+      // (their lamps on in the morning fog as after dark; the plough's beacon turning — plan 98 phase 23: the brake lamps
+      // whenever it slows, by day too)
+      const slowing = (v.accel ?? 0) < -0.8 && sp > 0.3;
       car.setLights({
         beams: n > 0.25 ? "low" : "off",
         tail: n > 0.15,
-        brake: Math.abs(v.v ?? 0) < 0.3 && m.userData.moving === false && n > 0.15 ? 0.4 : 0,
+        brake: slowing ? 1 : Math.abs(v.v ?? 0) < 0.3 && m.userData.moving === false && n > 0.15 ? 0.4 : 0,
         reverse: (v.v ?? 0) < -0.2,
         ind: 0,
         dash: n > 0.15 ? 1 : 0.5,

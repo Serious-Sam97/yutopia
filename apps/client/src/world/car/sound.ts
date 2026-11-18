@@ -1140,7 +1140,12 @@ export class CarSound {
     const near = clamp(1 - (s.rpm - idle) / 600);
     const tt = this.ctx.currentTime;
     const lope = SYNTH[this.voice ?? "four"] === "v8" ? 0.035 * Math.sin(tt * 2 * Math.PI * 1.3 + this.seed) ** 8 : 0;
-    const wob = (0.012 * Math.sin(tt * 2.3 + this.seed) + 0.008 * Math.sin(tt * 0.71 + this.seed * 3) + 0.02 * this.seedK - lope) * near;
+    const wob =
+      (0.012 * Math.sin(tt * 2.3 + this.seed) +
+        0.008 * Math.sin(tt * 0.71 + this.seed * 3) +
+        0.02 * this.seedK -
+        lope) *
+      near;
     const rpm = Math.max(300, s.rpm * (1 + wob));
     const span = Math.log(R.hi / R.lo) || 1;
     for (const l of LOADS) {

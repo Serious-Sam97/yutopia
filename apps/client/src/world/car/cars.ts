@@ -2,8 +2,10 @@ import { BODY_R, face8, parseAvatar, type WorldObjectDef } from "@yutopia/shared
 import {
   beltOf,
   bodyOf,
+  bodyStruck,
   CAR_FLAGS,
   CAR_HZ,
+  type CarClaim,
   type CarKind,
   type CarLook,
   type CarSpec,
@@ -24,16 +26,19 @@ import {
   damageString,
   doorSlot,
   FLATS,
+  faceOf,
   GLASS_BITS,
   GRIP,
   type Ground,
   groundsWorld,
   HELPS,
   type Helps,
+  type Hole,
   headingOf,
   headK,
   isCarKind,
   knock,
+  levelCar,
   lookFor,
   MEND_MS,
   MEND_REACH,
@@ -50,17 +55,12 @@ import {
   parseDamage,
   parseHoles,
   ploughCell,
-  type CarAt as ShotCar,
-  type CarClaim,
-  type Hole,
-  bodyStruck,
-  faceOf,
-  levelCar,
-  wireCar,
   Ruts,
   readout,
   SEATS_OF,
+  type CarAt as ShotCar,
   type Solid,
+  SPECS,
   type Stored,
   setEngine,
   settle,
@@ -72,6 +72,7 @@ import {
   unpackWheels,
   variantSpec,
   WRECK,
+  wireCar,
 } from "@yutopia/shared/car";
 import { feel92 } from "@yutopia/shared/car/assist";
 import { Drive, defOf } from "@yutopia/shared/car/drive";
@@ -106,7 +107,6 @@ import {
   type WebGLRenderTarget,
 } from "three";
 import { DealerPanel } from "@/components/hud/DealerPanel";
-import { litMaterial } from "../look/lit";
 import { extraPanels } from "@/components/hud/panels";
 import { gfxNow } from "@/lib/graphics";
 import { addStrings, trMaybe } from "@/lib/i18n";
@@ -114,6 +114,7 @@ import { prefs, type Quality } from "@/lib/prefs";
 import { chars as charsMod } from "../art/chars-load";
 import { pets as petsMod } from "../art/pets-load";
 import { mixer } from "../audio";
+import { litMaterial } from "../look/lit";
 import { activePad } from "../pads";
 import { Radio } from "../sound";
 import { hud, toast } from "../store";
@@ -126,16 +127,17 @@ import type { BrowserPhysics } from "../tp/physics3d";
 import type { ThirdPersonView } from "../tp/view";
 import { AT, growOf, SHOWN, wx, wxHold, wxNow } from "../tp/wx3d";
 import { CarInput, type Switch } from "./controls";
+import { swingDoor } from "./door";
 import {
   BaySnow,
   CabinLight,
   Debris,
+  Fires,
   Mirror,
   RoadPatches,
-  Fires,
   Ropes,
-  Shards,
   ScreenSnow,
+  Shards,
   Slabs,
   Smoke,
   Sparks,
@@ -143,8 +145,8 @@ import {
   Tracks,
 } from "./fx";
 import {
-  actAt,
   type ActPose,
+  actAt,
   type Doorway,
   ENTER_S,
   EXIT_S,
@@ -153,7 +155,6 @@ import {
   seatGrip,
   straddleAt,
 } from "./getin";
-import { swingDoor } from "./door";
 import { CarHud } from "./hud";
 import { CarPlayback } from "./playback";
 import { type CarExtras, CarSound, distanceGain, HEARD, preloadEngine } from "./sound";
@@ -687,7 +688,9 @@ const MID = 70;
  *  has no engine (the toboggan). */
 function soundOf(ctx: AudioContext, kind: CarKind, variant?: string): CarSound | null {
   // (plan 98 phase 15: the toboggan has no engine but its runners on the snow, its knocks)
-  return voiceOf(kind, variant) || kind === "toboggan" ? new CarSound(ctx, mixer.buses.effects, { kind, variant }) : null;
+  return voiceOf(kind, variant) || kind === "toboggan"
+    ? new CarSound(ctx, mixer.buses.effects, { kind, variant })
+    : null;
 }
 /** The kinds the far model (a wagon's or a sedan's outline) can't stand in for: always drawn whole. */
 const SLIDE_S = 0.45; // s: (plan 93 F3a) across from the passenger's seat to the wheel, after
@@ -1632,6 +1635,7 @@ export class Cars {
     if (!this.mine?.sim) this.headlamps(null, "off");
     this.findMine(room, now);
     this.effects(dt);
+    this.hearAi(dt);
     // (plan 93 S5) in a car, its cockpit's view: the world's ambience through its glass
     mixer.cabin(this.mine && this.cam.mode === "cockpit" ? this.cabinSeal() : 0);
     if (this.hudAt && this.time >= this.hudAt && this.mine) {
@@ -2079,6 +2083,72 @@ export class Cars {
     }
     const s = l.sound ?? (this.mine?.vid === l.id ? this.mine.sound : null);
     s?.door(open);
+  }
+  /** (plan 98 phase 23) The town's own cars heard — they were silent: the visitor's a saloon's engine, the plough's and
+   *  the buses' a heavy diesel's — by their speed and how they're pulling, from where they are. */
+  private aiSounds = new Map<string, { s: CarSound; v: number }>();
+  private hearAi(dt: number) {
+    const ctx = mixer.ctx;
+    const me = this.host.me();
+    const keep = new Set<string>();
+    if (ctx && ctx.state === "running")
+      for (const v of this.host.ai()) {
+        const kind: CarKind | null =
+          v.kind === "visitor"
+            ? "sedan"
+            : v.kind === "plough" || v.kind === "shuttle" || v.kind === "bus"
+              ? "ploughtruck"
+              : null;
+        if (!kind || !v.shown || Math.hypot(v.x - me.x, v.z - me.y) > HEARD) continue;
+        const key = `${v.kind}:${v.id ?? ""}`;
+        keep.add(key);
+        let a = this.aiSounds.get(key);
+        if (!a) {
+          const snd = soundOf(ctx, kind);
+          if (!snd) continue;
+          a = { s: snd, v: v.v ?? 0 };
+          this.aiSounds.set(key, a);
+        }
+        const sp = Math.abs(v.v ?? 0);
+        const pull = dt > 0 ? (sp - Math.abs(a.v)) / dt : 0;
+        a.v = v.v ?? 0;
+        const spec = SPECS[kind];
+        const y = this.G.heightAt(v.x, v.z) + 1;
+        const heard = this.heardAt(v.x, y, v.z);
+        const fake = {
+          rpm: spec.engine.idle + Math.min(1, sp / 12) * (spec.engine.limit - spec.engine.idle) * 0.35,
+          thr: pull > 0.2 ? 0.6 : sp > 0.5 ? 0.2 : 0,
+          clutch: 1,
+          spec,
+          wheels: [0, 1, 2, 3].map(() => ({
+            contact: true,
+            ground: this.groundUnder(v.x, v.z),
+            used: 0.3,
+            slip: 0,
+            cv: 0,
+          })),
+          hit: null,
+          v: { x: Math.cos(v.a) * (v.v ?? 0), y: 0, z: Math.sin(v.a) * (v.v ?? 0) },
+          q: { x: 0, y: Math.sin(-v.a / 2), z: 0, w: Math.cos(-v.a / 2) },
+          shiftT: 0,
+          gear: 1,
+          brk: pull < -0.8 ? 1 : 0,
+          helping: 0,
+        } as unknown as CarState;
+        a.s.update(
+          fake,
+          { inside: false, dist: heard?.dist ?? 30, at: heard?.at ?? null, rain: wxNow.rain },
+          dt,
+          false,
+          false,
+          {},
+        );
+      }
+    for (const [k, a] of this.aiSounds)
+      if (!keep.has(k)) {
+        a.s.dispose();
+        this.aiSounds.delete(k);
+      }
   }
   /** (plan 98 phase 7) The key's chime (in, the driver's door open): a soft two-note ding from the dash. */
   private chime(at: Vector3) {
@@ -2996,15 +3066,21 @@ export class Cars {
                 ? l.model.body.localToWorld(seatGrip(g.way, hB))
                 : h.at === "saddle"
                   ? l.model.body.localToWorld(hB.set(g.way.hip.x + 0.28, g.way.hip.y + 0.06, g.way.hip.z))
-                : h.at === "wheel"
-                  ? l.model.body.localToWorld(l.model.rim(g.way.s * 0.75, hB))
-                  : ((h.at === "handle" ? e.handle : h.at === "pull" ? e.pull : e.top) as Object3D).getWorldPosition(hB);
+                  : h.at === "wheel"
+                    ? l.model.body.localToWorld(l.model.rim(g.way.s * 0.75, hB))
+                    : ((h.at === "handle" ? e.handle : h.at === "pull" ? e.pull : e.top) as Object3D).getWorldPosition(
+                        hB,
+                      );
           e.m.reachTo(h.S, at, h.w, [-0.6, -1, -0.45]);
           const dbg = (globalThis as { __actDbg?: unknown[] }).__actDbg;
           if (dbg) {
             const w = e.m.bones[`wrist${h.S}`].getWorldPosition(hE);
             const sh = e.m.bones[`shoulder${h.S}`].getWorldPosition(hF);
-            const L = (v: Vector3) => l.model.body.worldToLocal(v.clone()).toArray().map((x) => +x.toFixed(2));
+            const L = (v: Vector3) =>
+              l.model.body
+                .worldToLocal(v.clone())
+                .toArray()
+                .map((x) => +x.toFixed(2));
             dbg.push({ S: h.S, at: h.at, w: +h.w.toFixed(2), target: L(at), wrist: L(w), shoulder: L(sh) });
           }
         }
@@ -3313,7 +3389,15 @@ export class Cars {
       door >= 0
         ? (mod.openingOf?.(door) ?? null)
         : seat && !mod.doors.length
-          ? { x0: seat.hip.x - 0.4, x1: seat.hip.x + 0.4, y0: 0, y1: seat.hip.y, out: Math.abs(seat.hip.z) + 0.3, glass: seat.hip.y, slide: false }
+          ? {
+              x0: seat.hip.x - 0.4,
+              x1: seat.hip.x + 0.4,
+              y0: 0,
+              y1: seat.hip.y,
+              out: Math.abs(seat.hip.z) + 0.3,
+              glass: seat.hip.y,
+              slide: false,
+            }
           : null;
     if (!seat || !op) return null;
     const k = e.m.root.scale.x || 1;
@@ -3363,7 +3447,9 @@ export class Cars {
     // at the armrest; the frame's top at the back, over the glass)
     h.position.copy(dg.worldToLocal(mod.body.localToWorld(hA.set(op.x1 - 0.1, mid + 0.06, s * (op.out + 0.01)))));
     pu.position.copy(dg.worldToLocal(mod.body.localToWorld(hA.set(op.x1 - 0.42, mid + 0.02, s * (op.out - 0.1)))));
-    tp.position.copy(dg.worldToLocal(mod.body.localToWorld(hA.set(op.x1 - 0.14, op.glass + 0.02, s * (op.out - 0.04)))));
+    tp.position.copy(
+      dg.worldToLocal(mod.body.localToWorld(hA.set(op.x1 - 0.14, op.glass + 0.02, s * (op.out - 0.04)))),
+    );
     e.handle = h;
     e.pull = pu;
     e.top = tp;
@@ -3600,7 +3686,8 @@ export class Cars {
       if (tm) {
         const key = `${sid}|${b}`;
         tyres.add(key);
-        if (!this.tyreJobs.has(key)) this.tyreJobs.set(key, { id: tm[1], wheel: Number(tm[2]) & 3, at: this.time, jack: null });
+        if (!this.tyreJobs.has(key))
+          this.tyreJobs.set(key, { id: tm[1], wheel: Number(tm[2]) & 3, at: this.time, jack: null });
       }
       if (b.startsWith("chain:") || /^mend:.*:tyre\d$/.test(b)) tp?.kneeling.set(sid, "kneel");
       else if (b.startsWith("mend:")) {
@@ -3646,7 +3733,10 @@ export class Cars {
     m.wheelShown?.(j.wheel, !(u > 0.3 && u < 0.55));
     if (!j.jack) {
       if (!this.jackMats.length)
-        this.jackMats = [litMaterial({ color: 0x7a2a1e, roughness: 0.6 }), litMaterial({ color: 0x3b3b3e, roughness: 0.5 })];
+        this.jackMats = [
+          litMaterial({ color: 0x7a2a1e, roughness: 0.6 }),
+          litMaterial({ color: 0x3b3b3e, roughness: 0.5 }),
+        ];
       const [red, steel] = this.jackMats;
       const jack = new Group();
       const base = new Mesh(new BoxGeometry(0.26, 0.03, 0.12), steel);
@@ -3758,7 +3848,8 @@ export class Cars {
           if (!m.isMesh || (m as { isInstancedMesh?: boolean }).isInstancedMesh || !m.layers.test(cam.layers)) return;
           hits.length = 0;
           m.raycast(rc, hits);
-          for (const h of hits) if (h.distance <= rc.far && (!best || h.distance < best.hit.distance)) best = { hit: h, c };
+          for (const h of hits)
+            if (h.distance <= rc.far && (!best || h.distance < best.hit.distance)) best = { hit: h, c };
         });
     if (!best) return blind ? null : 0;
     const { hit, c } = best as { hit: import("three").Intersection; c: (typeof cands)[number] };
@@ -3914,7 +4005,10 @@ export class Cars {
     }
     const door = l.model.doorOf ? l.model.doorOf(e.seat) : -1;
     // (a gun out of it: down quicker — plan 95 F1a's 1.5 s is the switch's)
-    if (door >= 0 && l.model.windowDown?.(door, (!!aim && across < 0.5) || !!(l.win & (1 << e.seat)), aim ? 0.5 : undefined))
+    if (
+      door >= 0 &&
+      l.model.windowDown?.(door, (!!aim && across < 0.5) || !!(l.win & (1 << e.seat)), aim ? 0.5 : undefined)
+    )
       this.windowMotor(l, door);
     const held = e.gun?.held;
     if (!aim || across >= 0.5) {
@@ -4224,8 +4318,8 @@ export class Cars {
     const driven = spec.drive === "all" ? [0, 1, 2, 3] : spec.drive === "front" ? [0, 1] : [2, 3];
     m.wheels.forEach((w, i) => {
       const locked = s1.fl & CAR_FLAGS.brake && (s1.slip ?? 0) > Math.abs(sp) * 0.6 && Math.abs(sp) > 2;
-      const a = driven.includes(i) ? l.spinD ?? l.spin : l.spin;
-      w.spin.rotation.z = (locked ? (w.spin.rotation.z / (w.turnK ?? 1)) : a) * (w.turnK ?? 1);
+      const a = driven.includes(i) ? (l.spinD ?? l.spin) : l.spin;
+      w.spin.rotation.z = (locked ? w.spin.rotation.z / (w.turnK ?? 1) : a) * (w.turnK ?? 1);
       if (w.front) w.steer.rotation.y = -steer;
       // (plan 93 S1: a flat, down on its rim)
       if (w.rest) w.steer.position.y = w.rest.y + (this.wcs[i] ?? 0) + (m.flatY?.[i] ?? 0);
@@ -4845,8 +4939,7 @@ export class Cars {
         if (pr?.ownerId && mayDrive(pr, this.host.uid(), Date.now()))
           this.host.room()?.send("car:lock", { id: oid, on: !pr.locked });
       }
-    }
-    else if (sw === "exit") this.act("car:leave", this.mine?.vid ?? "");
+    } else if (sw === "exit") this.act("car:leave", this.mine?.vid ?? "");
     else if (sw === "radio") {
       // (a passenger's: the driver's client keeps the station — the server tells it)
       if (this.mine && this.mine.seat !== 0) this.host.room()?.send("car:radio", {});
@@ -5110,7 +5203,19 @@ export class Cars {
         });
       } else if (fire === 3 && t - (held.fireAt ?? 0) > 0.5) {
         held.fireAt = t;
-        this.smoke.emit(v3.x + (Math.random() - 0.5) * 2, v3.y, v3.z + (Math.random() - 0.5) * 2, 0, 0.7, 0, 0.5, 4, 3, dark, 0.3);
+        this.smoke.emit(
+          v3.x + (Math.random() - 0.5) * 2,
+          v3.y,
+          v3.z + (Math.random() - 0.5) * 2,
+          0,
+          0.7,
+          0,
+          0.5,
+          4,
+          3,
+          dark,
+          0.3,
+        );
       }
     };
     for (const [id, l] of this.live) {
@@ -5154,7 +5259,14 @@ export class Cars {
   // down where it was with a bounce, rocking a moment — drawn on every screen from car:blast, over where it is ──
   private hops = new Map<
     string,
-    { t0: number; roll: number; pitch: number; root: Object3D | null; base: { p: Vector3; q: Quaternion } | null; landed: boolean }
+    {
+      t0: number;
+      roll: number;
+      pitch: number;
+      root: Object3D | null;
+      base: { p: Vector3; q: Quaternion } | null;
+      landed: boolean;
+    }
   >();
   private hop(id: string) {
     const r = () => (Math.random() < 0.5 ? -1 : 1) * (0.6 + 0.4 * Math.random());
@@ -5205,7 +5317,18 @@ export class Cars {
           this.hitSound("hit-heavy", 0.8, p.x, p.y, p.z, 0.8);
           for (let i = 0; i < 10; i++) {
             const a = (i / 10) * Math.PI * 2;
-            this.spray.puff(p.x + Math.cos(a) * 1.6, p.y + 0.1, p.z + Math.sin(a) * 1.6, Math.cos(a) * 2.2, 0.6, Math.sin(a) * 2.2, 1.4, 1.3, 0xd8d4cc, 0.35);
+            this.spray.puff(
+              p.x + Math.cos(a) * 1.6,
+              p.y + 0.1,
+              p.z + Math.sin(a) * 1.6,
+              Math.cos(a) * 2.2,
+              0.6,
+              Math.sin(a) * 2.2,
+              1.4,
+              1.3,
+              0xd8d4cc,
+              0.35,
+            );
           }
         }
       }
@@ -5487,10 +5610,32 @@ export class Cars {
         const g = this.G.heightAt(x, z);
         for (let k = 0; k < 6; k++) {
           const a = Math.random() * Math.PI * 2;
-          this.spray.puff(x + n[0] * 0.2, g + 0.1, z + n[1] * 0.2, n[0] * 1.6 + Math.cos(a) * 0.9, 0.4 + Math.random() * 0.5, n[1] * 1.6 + Math.sin(a) * 0.9, 0.7, 1.1, 0xcfc9bf, 0.4);
+          this.spray.puff(
+            x + n[0] * 0.2,
+            g + 0.1,
+            z + n[1] * 0.2,
+            n[0] * 1.6 + Math.cos(a) * 0.9,
+            0.4 + Math.random() * 0.5,
+            n[1] * 1.6 + Math.sin(a) * 0.9,
+            0.7,
+            1.1,
+            0xcfc9bf,
+            0.4,
+          );
         }
         for (let k = 0; k < 4; k++)
-          this.spray.puff(x, y, z, n[0] * 2.4 + (Math.random() - 0.5), 1.2 + Math.random(), n[1] * 2.4 + (Math.random() - 0.5), 0.18, 0.7, 0x242220, 0.85);
+          this.spray.puff(
+            x,
+            y,
+            z,
+            n[0] * 2.4 + (Math.random() - 0.5),
+            1.2 + Math.random(),
+            n[1] * 2.4 + (Math.random() - 0.5),
+            0.18,
+            0.7,
+            0x242220,
+            0.85,
+          );
       }
     }
   }
@@ -6050,7 +6195,13 @@ export class Cars {
                     ? { say: t("carH_engHot"), k: temp, bad: true }
                     : { say: t("carH_engWarm"), k: temp, bad: false };
     }
-    const fuel = pushed ? null : sim ? (v?.filling ? (v.fuel ?? 0) : sim.fuel / sim.spec.fuel.litres) : (v?.fuel ?? null);
+    const fuel = pushed
+      ? null
+      : sim
+        ? v?.filling
+          ? (v.fuel ?? 0)
+          : sim.fuel / sim.spec.fuel.litres
+        : (v?.fuel ?? null);
     // the chips: the radio, the window, chains, locked, flats, the engine, the fire
     const chips: { say: string; warn?: boolean }[] = [];
     const st = m.seat === 0 ? this.station : this.shownStation;

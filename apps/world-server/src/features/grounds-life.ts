@@ -1,10 +1,23 @@
 import { ANIM, entranceZOf, faceByte, levelMap, lotLayout } from "@yutopia/shared";
-import { isCarKind } from "@yutopia/shared/car";
+import {
+  type CarSpec,
+  type Controls,
+  groundsWorld,
+  headingOf,
+  headingQuat,
+  isCarKind,
+  PLOUGHTRUCK,
+  parkedPose,
+  SEDAN,
+  setEngine,
+} from "@yutopia/shared/car";
+import { aiControls, projectOn } from "@yutopia/shared/car/ai";
+import { JoltCarWorld } from "@yutopia/shared/car/jolt-world";
 import { nightness } from "@yutopia/shared/dark";
 import { along, GUARD_ROUND, heightAt, LOT, type Route, SHUTTLE, visitorRoute } from "@yutopia/shared/grounds";
 import { config } from "../config.ts";
 import { Npc, type Player, Vehicle } from "../schema.ts";
-import type { WorldRoom } from "../WorldRoom.ts";
+import { fromSchema, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 import { ploughAt } from "./ploughed.ts";
 
@@ -35,6 +48,12 @@ const PLOUGH_ON = 0.25; // …and keeps going round while it's still this strong
 const PLOUGH_LYING = 0.15; // …once there's this much on the ground
 const PLOUGH_REST_MS = 10 * 60 * 1000; // home a while after a storm
 export const RIDING = "ride:shuttle";
+// (plan 98 phase 23, F10b) the visitor's car and the plough driven on Jolt, the same physics as a player's car, by the
+// shared driver (car/ai.ts) along their routes; the shuttle (it carries people) and the visitor backing out of its bay
+// on the routes as before. Not with the tests' fast trips.
+const AI_JOLT = !FAST && process.env.YUTOPIA_AI_JOLT !== "0";
+const AI_SPEC: Record<string, CarSpec> = { visitor: SEDAN, plough: PLOUGHTRUCK };
+const AI_STEP = 1 / 60;
 
 interface Drive {
   veh: Vehicle;
@@ -52,6 +71,67 @@ registerFeature((room: WorldRoom) => {
     v.kind = kind;
     room.state.vehicles.set(id, v);
     return v;
+  };
+  // (plan 98 phase 23) the Jolt world the town's own cars are driven in: its land and its hard things, as a parked car's
+  let jw: JoltCarWorld | null = null;
+  if (AI_JOLT)
+    void JoltCarWorld.create(groundsWorld())
+      .then((w) => {
+        jw = w;
+      })
+      .catch((e) => console.warn("[ai] no Jolt for the town's cars:", e));
+  type JCar = { d: ReturnType<JoltCarWorld["add"]>; s: number; want: number; active: boolean; route: Route };
+  const jcars = new Map<Drive, JCar>();
+  let jacc = 0;
+  const joltOf = (d: Drive): JCar | null => {
+    const spec = AI_SPEC[d.veh.kind];
+    if (!jw || !spec) return null;
+    let jc = jcars.get(d);
+    if (!jc) {
+      const at = along(d.route, d.s);
+      const car = jw.add(spec, at.x, at.z, at.a);
+      setEngine(car.s, true);
+      car.s.temp = 0.55;
+      jc = { d: car, s: d.s, want: 0, active: false, route: d.route };
+      jcars.set(d, jc);
+    }
+    return jc;
+  };
+  /** (plan 98 phase 23) The town's cars on Jolt: a step of each, its driver's hands and feet from its route and the speed
+   *  it's let go; each one off Jolt this tick (backing, away) put where its route has it; then what everyone sees. */
+  const stepJolt = (dt: number) => {
+    if (!jw) return;
+    const world = jw;
+    const idle: Controls = { up: 0, down: 0.4, steer: 0, hand: 1, digital: false };
+    const byDrive = new Map<unknown, JCar>();
+    for (const jc of jcars.values()) byDrive.set(jc.d, jc);
+    jacc = Math.min(jacc + dt, AI_STEP * 6);
+    while (jacc >= AI_STEP) {
+      jacc -= AI_STEP;
+      const cs = world.drives.map((dr) => {
+        const jc = byDrive.get(dr);
+        if (!jc?.active) return idle;
+        jc.s = projectOn(jc.route, dr.s.p.x, dr.s.p.z, jc.s);
+        return aiControls(dr.s, jc.route, jc.s, jc.want);
+      });
+      world.step(cs, AI_STEP);
+    }
+    for (const [d, jc] of jcars) {
+      const st = jc.d.s;
+      if (!jc.active) {
+        // (off Jolt: kept where its route has it, still)
+        const q = headingQuat(d.veh.a);
+        jc.d.car.place(d.veh.x, st.p.y, d.veh.z, [q.x, q.y, q.z, q.w], [0, 0, 0], [0, 0, 0]);
+        continue;
+      }
+      const h = headingOf(st.q);
+      d.veh.x = st.p.x;
+      d.veh.z = st.p.z;
+      d.veh.a = h;
+      d.veh.v = st.v.x * Math.cos(h) + st.v.z * Math.sin(h);
+      Object.assign(d.veh, { qx: st.q.x, qy: st.q.y, qz: st.q.z, qw: st.q.w });
+      jc.active = false;
+    }
   };
   // the visitor's way round the lot to the visitors' bay by this studio's doors (made once the
   // building is: till then, a studio 36 deep's)
@@ -133,6 +213,14 @@ registerFeature((room: WorldRoom) => {
       if (!isCarKind(v.kind)) return;
       for (const k of [-2.2, 0, 2.2]) out.push({ x: v.x + Math.cos(v.a) * k, z: v.z + Math.sin(v.a) * k });
     });
+    // (plan 98 phase 23: and the cars left parked — a player's car left on its road was driven through)
+    for (const o of room.state.objects.values()) {
+      if (o.kind !== "car") continue;
+      const def = fromSchema(o);
+      if (def.props?.driven || (Number(def.props?.level ?? 0) | 0) !== 0) continue;
+      const p = parkedPose(def);
+      for (const k of [-2.2, 0, 2.2]) out.push({ x: p.x + Math.cos(p.a) * k, z: p.y + Math.sin(p.a) * k });
+    }
     return out;
   };
   // the other big ones on the road (the shuttle and the plough queue, not drive through each other)
@@ -155,9 +243,24 @@ registerFeature((room: WorldRoom) => {
     );
   };
   // along its route at up to `top`, easing to a stop at the end; true at the end
-  const drive = (d: Drive, top: number, dt: number, now: number, people: { x: number; z: number }[]) => {
+  // (plan 98 phase 23: on Jolt when it's one of the town's cars going forward — `jolt` false: on its route as before)
+  const drive = (d: Drive, top: number, dt: number, now: number, people: { x: number; z: number }[], jolt = true) => {
     const left = d.dir > 0 ? d.route.len - d.s : d.s;
     const want = blocked(d, people) ? 0 : Math.min(top, Math.sqrt(2 * BRAKE * 0.5 * Math.max(0, left)) + 0.4);
+    const jc = jolt && d.dir > 0 ? joltOf(d) : null;
+    if (jc) {
+      if (jc.route !== d.route) {
+        jc.route = d.route;
+        jc.s = projectOn(d.route, jc.d.s.p.x, jc.d.s.p.z, d.s, 12);
+      }
+      jc.want = Math.max(0, want - 0.4 * (want < 0.5 ? 1 : 0));
+      jc.active = true;
+      d.s = jc.s;
+      const sp = Math.hypot(jc.d.s.v.x, jc.d.s.v.z);
+      d.blockedFor = want === 0 && left > 0.5 ? d.blockedFor + dt : 0;
+      if (d.blockedFor > 1.2 && now - d.veh.honkAt > 6000) d.veh.honkAt = now;
+      return d.route.len - jc.s <= 0.6 && sp < 0.5;
+    }
     const v = Math.abs(d.veh.v);
     const nv = want < v ? Math.max(want, v - BRAKE * dt) : Math.min(want, v + ACCEL * dt);
     d.veh.v = nv * d.dir;
@@ -252,7 +355,7 @@ registerFeature((room: WorldRoom) => {
       } else if (vPhase === "park" && now > vUntil) {
         vPhase = "back";
         Object.assign(visitor, { route: visits().back, s: 0, dir: 1 });
-      } else if (vPhase === "back" && drive(visitor, 1.5, dt, now, people)) {
+      } else if (vPhase === "back" && drive(visitor, 1.5, dt, now, people, false)) {
         vPhase = "out";
         Object.assign(visitor, { route: visits().out, s: 0, dir: 1 });
       } else if (vPhase === "out" && drive(visitor, inLot(visitor) ? LOT_V : VISITOR_V, dt, now, people)) {
@@ -315,6 +418,7 @@ registerFeature((room: WorldRoom) => {
       if (pPhase !== "away" && Math.abs(plough.veh.v) > 1)
         ploughAt(room.state, plough.veh.x, plough.veh.z, plough.veh.a, 4.6, 3.2, now);
       // ── the guard: his shift (out at dusk, home at dawn), round the fence at night ──
+      stepJolt(dt);
       const night = nightness(room.state.hour);
       if (shift === "post" && night > 0.3) {
         shift = "out";

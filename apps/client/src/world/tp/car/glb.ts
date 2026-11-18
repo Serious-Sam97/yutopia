@@ -12,28 +12,28 @@ import {
 } from "@yutopia/shared/car";
 import {
   Box3,
-  CircleGeometry,
   BoxGeometry,
   type BufferAttribute,
   BufferGeometry,
   CanvasTexture,
+  CircleGeometry,
   Color,
   DoubleSide,
   Float32BufferAttribute,
   Group,
   InstancedMesh,
   type InterleavedBufferAttribute,
+  type Intersection,
   type Material,
   Matrix4,
-  type MeshLambertMaterial,
   Mesh,
   MeshBasicMaterial,
+  type MeshLambertMaterial,
   type MeshPhysicalMaterial,
   MeshStandardMaterial,
   type Object3D,
   PlaneGeometry,
   Quaternion,
-  type Intersection,
   Raycaster,
   Shape,
   ShapeGeometry,
@@ -50,8 +50,8 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { asset } from "@/lib/asset";
 import { AssetQueue, loadLifeGLTF } from "../../look/life-assets";
 import { libMaterial } from "../../look/life-matlib";
-import { litMaterial } from "../../look/lit";
 import { LIBRARY, type MatId } from "../../look/life-matlib-list";
+import { litMaterial } from "../../look/lit";
 import { mergeWith } from "../merge-static";
 import { lampPatch, tailPatch } from "../tail-glow";
 import { layerShader } from "../wx3d";
@@ -495,7 +495,10 @@ function flatTyre(m: Material, u: FlatU) {
     sh.uniforms.uFlatAxle = u.axle;
     sh.uniforms.uFlatSize = u.size;
     sh.vertexShader = sh.vertexShader
-      .replace("#include <common>", "#include <common>\nuniform vec4 uFlatHub[4]; uniform vec3 uFlatAxle[4]; uniform vec2 uFlatSize;")
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform vec4 uFlatHub[4]; uniform vec3 uFlatAxle[4]; uniform vec2 uFlatSize;",
+      )
       .replace("#include <begin_vertex>", `#include <begin_vertex>\n${FLAT_GLSL}`);
   };
   m.customProgramCacheKey = () => `${key.call(m)}|flat`;
@@ -820,18 +823,18 @@ class GlbCar implements Sedan {
       const fold = pv.kind === "fold";
       const di = this.doors.length;
       const base: (a: number) => void = slide
+        ? (a: number) => {
+            // (the van's: out a little, then back along its side)
+            const k = Math.min(1, a / 1.05);
+            g.position.set(pv.at[0] - 0.75 * k, pv.at[1], pv.at[2] - side * 0.09 * Math.min(1, k * 4));
+          }
+        : fold
           ? (a: number) => {
-              // (the van's: out a little, then back along its side)
-              const k = Math.min(1, a / 1.05);
-              g.position.set(pv.at[0] - 0.75 * k, pv.at[1], pv.at[2] - side * 0.09 * Math.min(1, k * 4));
+              g.rotation.y = side * Math.min(1.5, a * 1.4);
             }
-          : fold
-            ? (a: number) => {
-                g.rotation.y = side * Math.min(1.5, a * 1.4);
-              }
-            : (a: number) => {
-                g.rotation.y = -side * a;
-              };
+          : (a: number) => {
+              g.rotation.y = -side * a;
+            };
       this.doors.push({
         group: g,
         side,
@@ -1755,7 +1758,11 @@ class GlbCar implements Sedan {
       const m = o as Mesh;
       if (!m.isMesh || (m as { isInstancedMesh?: boolean }).isInstancedMesh || m.userData.hole) return;
       const n = (m.material as Material | undefined)?.name ?? "";
-      if (!/glass|emit_|plate|screen|collider|lens/.test(n) && !/collider/.test(m.name) && m.userData.paneOf === undefined)
+      if (
+        !/glass|emit_|plate|screen|collider|lens/.test(n) &&
+        !/collider/.test(m.name) &&
+        m.userData.paneOf === undefined
+      )
         skins.push(m);
     });
     // (plan 96 F4a: each part at rest while they're laid — a bonnet sprung, a door hanging: on it as it was)
@@ -1799,7 +1806,9 @@ class GlbCar implements Sedan {
       const ln = wn.clone().transformDirection(inv).normalize();
       // (its own scale undone: the hole the size of a round on any piece; each its own way round)
       const sc = new Vector3().setFromMatrixScale(obj.matrixWorld);
-      q.setFromUnitVectors(Z, ln).multiply(spinQ.setFromAxisAngle(Z, (on.size + (on.get(obj)?.length ?? 0)) * 2.39996 + h.u * 7));
+      q.setFromUnitVectors(Z, ln).multiply(
+        spinQ.setFromAxisAngle(Z, (on.size + (on.get(obj)?.length ?? 0)) * 2.39996 + h.u * 7),
+      );
       let list2 = on.get(obj);
       if (!list2) on.set(obj, (list2 = []));
       list2.push(new Matrix4().compose(local, q, new Vector3(1 / (sc.x || 1), 1 / (sc.y || 1), 1 / (sc.z || 1))));
@@ -1916,7 +1925,10 @@ class GlbCar implements Sedan {
       const p = v1.set(-h.u, h.h, -h.w);
       const nb = v2.set(n[0], n[1], n[2]).normalize();
       const at = this.body.localToWorld(p.clone());
-      ray.set(this.body.localToWorld(p.clone().addScaledVector(nb, 0.3)), nb.clone().transformDirection(this.body.matrixWorld).negate());
+      ray.set(
+        this.body.localToWorld(p.clone().addScaledVector(nb, 0.3)),
+        nb.clone().transformDirection(this.body.matrixWorld).negate(),
+      );
       ray.far = 0.9;
       hits.length = 0;
       ray.intersectObjects(glass, false, hits);
@@ -1937,7 +1949,13 @@ class GlbCar implements Sedan {
       q.setFromUnitVectors(Z, ln).multiply(spin.setFromAxisAngle(Z, k * 2.39996));
       let l2 = on.get(obj);
       if (!l2) on.set(obj, (l2 = []));
-      l2.push(new Matrix4().compose(local.addScaledVector(ln, 0.002), q, new Vector3(1 / (sc.x || 1), 1 / (sc.y || 1), 1 / (sc.z || 1))));
+      l2.push(
+        new Matrix4().compose(
+          local.addScaledVector(ln, 0.002),
+          q,
+          new Vector3(1 / (sc.x || 1), 1 / (sc.y || 1), 1 / (sc.z || 1)),
+        ),
+      );
       this.starsN++;
     });
     back();
@@ -1975,7 +1993,8 @@ class GlbCar implements Sedan {
       }
     }
     // (the whole windscreen picture only without stars; each side's crack from its own point)
-    if (this.crack) this.crack.mesh.visible = !!(this.partBits & PART.screen) && !(this.partBits & PART.screenGone) && !this.starsN;
+    if (this.crack)
+      this.crack.mesh.visible = !!(this.partBits & PART.screen) && !(this.partBits & PART.screenGone) && !this.starsN;
     this.root.traverse((x) => {
       const m = x as Mesh;
       const i = m.userData.crackOf as number | undefined;
@@ -2654,7 +2673,10 @@ class GlbCar implements Sedan {
       }
       if (!tris.length) continue;
       for (const t of tris)
-        for (let k = 0; k < 3; k++) box.expandByPoint(a.fromBufferAttribute(pos, idx ? idx.getX(t * 3 + k) : t * 3 + k).applyMatrix4(m.matrixWorld));
+        for (let k = 0; k < 3; k++)
+          box.expandByPoint(
+            a.fromBufferAttribute(pos, idx ? idx.getX(t * 3 + k) : t * 3 + k).applyMatrix4(m.matrixWorld),
+          );
       cuts.push({ m, tris, keep });
     }
     // (a bumper's across the car's back: too little there, it isn't one)

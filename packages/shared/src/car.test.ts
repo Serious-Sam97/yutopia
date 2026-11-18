@@ -923,3 +923,57 @@ test("(plan 98) let off at 60 km/h in auto: the engine holds it back (not coasti
   assert.ok(decel > 0.45 && decel < 2.2, `slowed ${decel.toFixed(2)} m/s²`);
   w.dispose();
 });
+
+test("(plan 98 phase 23) the town's driver on Jolt: round an L of road at 36 km/h, on its line, slowing for the bend", async () => {
+  const { aiControls, projectOn } = await import("./car/ai.ts");
+  // 60 m east, a quarter circle of 20 m round to the south (+z), 40 m on
+  const pts: [number, number][] = [];
+  for (let x = 0; x <= 60; x += 2) pts.push([x, 0]);
+  for (let i = 1; i <= 16; i++) {
+    const a = (i / 16) * (Math.PI / 2);
+    pts.push([60 + Math.sin(a) * 20, 20 - Math.cos(a) * 20]);
+  }
+  for (let z = 22; z <= 60; z += 2) pts.push([80, z]);
+  const sAt = [0];
+  for (let i = 1; i < pts.length; i++)
+    sAt.push(sAt[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  const r = { pts, s: sAt, len: sAt[sAt.length - 1] };
+  const { w, s } = await car(flatWorld("asphalt"), SEDAN, 0, 0, 0);
+  let at = 0;
+  let worst = 0;
+  let inBend = Infinity;
+  w.run(
+    (c) => {
+      at = projectOn(r, c.p.x, c.p.z, at);
+      return aiControls(c, r, at, 10);
+    },
+    30,
+    HELPS,
+    (c) => {
+      const near = at;
+      const { x, z } = (() => {
+        const p = r.pts;
+        void p;
+        return { x: c.p.x, z: c.p.z };
+      })();
+      // (off the line: from the point on it nearest)
+      let d = Infinity;
+      for (let q = Math.max(0, near - 3); q <= Math.min(r.len, near + 3); q += 0.25) {
+        const i = sAt.findIndex((v) => v >= q);
+        const j = Math.max(1, i);
+        const u = (q - sAt[j - 1]) / (sAt[j] - sAt[j - 1] || 1);
+        const px = pts[j - 1][0] + (pts[j][0] - pts[j - 1][0]) * u;
+        const pz = pts[j - 1][1] + (pts[j][1] - pts[j - 1][1]) * u;
+        d = Math.min(d, Math.hypot(px - x, pz - z));
+      }
+      if (at > 5) worst = Math.max(worst, d);
+      if (at > 62 && at < 88) inBend = Math.min(inBend, readout(c).kmh);
+      return at > r.len - 6;
+    },
+  );
+  assert.ok(at > r.len - 8, `got along ${at.toFixed(0)} of ${r.len.toFixed(0)} m`);
+  assert.ok(worst < 1.2, `off its line ${worst.toFixed(2)} m at most`);
+  assert.ok(inBend < 33, `round the bend at ${inBend.toFixed(0)} km/h`);
+  void s;
+  w.dispose();
+});

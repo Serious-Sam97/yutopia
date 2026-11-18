@@ -49,6 +49,12 @@ export interface Car {
   shown: boolean;
   /** the height it's at, when the server says (the Kart Park's ploughs: on its bridge or under it) */
   h?: number;
+  /** (plan 98 phase 23) on Jolt: its nose up (rad) and its lean (rad, + its left up), eased; its turn rate (rad/s) and
+   *  its change of speed (m/s²), for its wheels and its brake lamps */
+  pitch?: number;
+  roll?: number;
+  turn?: number;
+  accel?: number;
 }
 // (the room's state, as much of it as this reads)
 interface VehicleIn {
@@ -63,6 +69,10 @@ interface VehicleIn {
   colour?: number;
   fl?: number;
   y?: number;
+  qx?: number;
+  qy?: number;
+  qz?: number;
+  qw?: number;
 }
 interface Vehicles {
   forEach(f: (v: VehicleIn, id: string) => void): void;
@@ -94,7 +104,27 @@ export class GroundsLife {
       }
       c.x += (v.x - c.x) * k;
       c.z += (v.z - c.z) * k;
-      c.a += Math.atan2(Math.sin(v.a - c.a), Math.cos(v.a - c.a)) * k;
+      const da = Math.atan2(Math.sin(v.a - c.a), Math.cos(v.a - c.a)) * k;
+      c.a += da;
+      // (plan 98 phase 23: its turn and its change of speed, eased — its wheels steered, its lamps)
+      if (dt > 0) {
+        c.turn = (c.turn ?? 0) + (da / dt - (c.turn ?? 0)) * Math.min(1, dt * 4);
+        c.accel = (c.accel ?? 0) + ((v.v - c.v) / dt - (c.accel ?? 0)) * Math.min(1, dt * 3);
+      }
+      // (on Jolt — its quaternion said —: its nose and its lean as the land and its springs have them)
+      const qw = v.qw ?? 1;
+      if (Math.abs(qw) < 0.99999 && v.qx !== undefined && v.qy !== undefined && v.qz !== undefined) {
+        const x = v.qx;
+        const y = v.qy;
+        const z = v.qz;
+        // (its own +x, its nose, and +z, its side, turned by it: their heights)
+        const fy = 2 * (x * y + qw * z);
+        const sy = 2 * (y * z - qw * x);
+        const pitch = Math.asin(Math.max(-1, Math.min(1, fy)));
+        const roll = Math.asin(Math.max(-1, Math.min(1, sy)));
+        c.pitch = (c.pitch ?? pitch) + (pitch - (c.pitch ?? pitch)) * k;
+        c.roll = (c.roll ?? roll) + (roll - (c.roll ?? roll)) * k;
+      }
       c.v = v.v;
       c.fl = v.fl;
       // (the Kart Park's ploughs, the change's show, say their height — features/karts.ts showTick)
