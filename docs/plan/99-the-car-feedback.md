@@ -107,3 +107,14 @@ every frame over 50 ms named by a CPU profile)
   `person3d`), and gets up where it lies (plan 58's `Downed`; my walker follows the body's drift). Under 15 km/h still a
   stumble on her feet. Filmed (`VIDEO=dir e2e/car-jump.mts`): out, tumbling, lying on the snow as the car rolls on.
 - Checked: typecheck clean (client, world-server).
+
+## Phase 3 — built (2026-11-17): one car, people in it or not
+
+- **Parked just where and how it stopped:** the server's `park` no longer squares a car left in a free lot bay (a jump
+  everyone saw); the lot's own put-back (`home`) still does.
+- **The same model:** a live car that parks hands its model (`handoff`) to its parked self, which takes it on as it is —
+  no still copy made, no merge, no swap; only a car that goes out of reach or comes back later is made again as a parked
+  one. `e2e/car-one.mts`: in, out, parked 2.6 s later — the very model it was driven with, moved 0.000 m.
+- Its physics left as before: rolling on is phase 2's (it parks once still); a parked car knocked slides on its locked
+  wheels (plan 94).
+- Checked: world-server car, park-life and spot tests 27/27; typecheck clean.

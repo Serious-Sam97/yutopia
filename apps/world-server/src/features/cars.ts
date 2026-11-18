@@ -801,14 +801,10 @@ registerFeature((room: WorldRoom) => {
         const p = parkedPose(fromSchema(x));
         return !fromSchema(x).props?.driven && Math.abs(p.x - b.x) < 2 && Math.abs(p.y - b.z) < 1.4;
       });
-    let spot: ReturnType<typeof parkAt>;
-    if (b && bay && free) {
-      spot = parkAt(b.x, b.z, bay.a, 0, props);
-      // (in a bay it stands square, as the lot's cars do)
-      delete spot.props.a;
-      delete spot.props.hy;
-      delete spot.props.parkedAt;
-    } else spot = parkAt(v.x, v.z, v.a, heightAt(v.x, v.z), props);
+    // (plan 99 F3a: one car, people in it or not — left, it stays just where and how it stopped; it was squared into a
+    // free bay of the lot, a jump everyone saw. The lot's own put-back — `home` — still squares them)
+    void free;
+    const spot = parkAt(v.x, v.z, v.a, heightAt(v.x, v.z), props);
     const next = { ...def, ...spot };
     room.state.objects.set(o.id, toSchema(next));
     room.rebuildGrid();

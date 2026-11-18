@@ -1638,6 +1638,13 @@ export class Cars {
     }
     this.nowMs = now;
 
+    // (plan 99 F3a) a parked car's driven model nobody took on (it parked out of reach): let go
+    for (const [k, h] of this.handoff)
+      if (this.time - h.at > 8) {
+        this.handoff.delete(k);
+        this.root.remove(h.model.root);
+        h.model.dispose();
+      }
     this.lidsFrame(dt);
     // (plan 95 F1a) the windows on their way down or up
     for (const l of this.live.values()) l.model.windowsTick?.(dt);
@@ -2519,6 +2526,21 @@ export class Cars {
       p.fire = dNow.fire;
       p.fireSeen = dNow.fire;
       if (p.stillDone && p.full && p.baked !== undefined && p.baked !== wk) p.level = null;
+      // (plan 99 F3a) the car it was a moment ago, driven: its own model taken on as it is — no still copy made, no swap
+      const ho = this.handoff.get(o.id);
+      if (ho && want === "near" && !p.full) {
+        this.handoff.delete(o.id);
+        p.full = ho.model;
+        p.level = "near";
+        p.stillDone = true;
+        p.wearKey = undefined;
+        placeModel(p.full.root, P.x, y, P.z, P.a);
+        p.full.root.userData.still = true;
+      } else if (ho && (want !== "near" || this.time - ho.at > 5)) {
+        this.handoff.delete(o.id);
+        this.root.remove(ho.model.root);
+        ho.model.dispose();
+      }
       if (r && want !== "far" && p.level !== want && heavy < 1) {
         heavy++;
         // (the one it had shows till the new one's in)
@@ -2819,8 +2841,21 @@ export class Cars {
           if (l.people.size) continue;
         }
         if (l.pulled) this.physics()?.carWorld.removePulled(l.pulled);
-        this.root.remove(l.model.root);
-        l.model.dispose();
+        // (plan 99 F3a: one car — parked now, its model kept where it stopped for its parked self to take on, not one
+        // made again: a few seconds at most)
+        if (id.startsWith("car:") && l.model.ready) {
+          const old = this.handoff.get(id.slice(4));
+          if (old) {
+            this.root.remove(old.model.root);
+            old.model.dispose();
+          }
+          l.model.doors.forEach((d) => d.open(0));
+          l.model.setWeight?.(0, 0);
+          this.handoff.set(id.slice(4), { model: l.model, at: this.time });
+        } else {
+          this.root.remove(l.model.root);
+          l.model.dispose();
+        }
         l.sound?.dispose();
         for (const p of l.people.values()) p.m.root.removeFromParent();
         for (const e of l.pets.values()) e.model.dispose();
@@ -3425,6 +3460,8 @@ export class Cars {
   private coast: NonNullable<Cars["mine"]> | null = null;
   private coastWant = "";
   private coastStill = 0;
+  /** (plan 99 F3a) a car just parked: the model it was driven with, kept for its parked self (by its object's id) */
+  private handoff = new Map<string, { model: Sedan; at: number }>();
   private coastAt = 0;
   /** (plan 98) The camera's place off me as the act began (the world's): kept as I go in, then the car's. */
   private actCam: Vector3 | null = null;
@@ -6544,6 +6581,8 @@ export class Cars {
     this.radio.stop();
     this.root.removeFromParent();
     this.envTarget?.dispose();
+    for (const h of this.handoff.values()) h.model.dispose();
+    this.handoff.clear();
     this.probeCube?.rt.dispose();
     this.probeCube = null;
     this.envTarget = null;
