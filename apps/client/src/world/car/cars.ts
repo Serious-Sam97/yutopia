@@ -1699,7 +1699,8 @@ export class Cars {
     this.myVia = hit.via !== undefined ? { id, via: hit.via } : null;
     // (plan 101: a bike within reach — fallen, or a step off its spot —: on it from where I stand, the act walks me in;
     // walking to its spot first could find it blocked and give up)
-    const bikeNear = !!this.parked.get(id)?.spec.bike && Math.hypot(spot.x - me.x, spot.y - me.y) < 2.5;
+    // (parked or still settling — a live one, just fallen off —: by its kind)
+    const bikeNear = isBikeKind(hit.kind) && Math.hypot(spot.x - me.x, spot.y - me.y) < 2.5;
     if (!bikeNear && Math.hypot(spot.x - me.x, spot.y - me.y) > 0.6 && this.host.walk(spot)) {
       this.walkIn = { id, seat: hit.seat, spot, at: performance.now(), via: hit.via };
       return true;
@@ -3872,7 +3873,8 @@ export class Cars {
       if (s && vw && !taken) room.send("car:state", toWire(s, ++m.seq, CAR_FLAGS.settled, m.simMs));
       if (d && ph) {
         ph.carWorld.removeCar(d.car);
-        ph.ownCar(m.vid, false);
+        // (not if it's mine again — got back on —: mine owns it now)
+        if (this.mine?.vid !== m.vid) ph.ownCar(m.vid, false);
       }
       m.sound?.switchOff();
       m.sound?.dispose();
@@ -5083,9 +5085,21 @@ export class Cars {
     if (now && !this.mine) {
       const l = this.live.get(now.vid);
       if (!l) return;
+      // (plan 101) back on the very one still rolling on from me (a bike just fallen off, still settling): its rolling
+      // on ends here — its Jolt car gone first — so mine's is the only one, and mine to own
+      const co = this.coast;
+      if (co && co.vid === now.vid) {
+        if (co.drive) this.physics()?.carWorld.removeCar(co.drive.car);
+        co.sound?.switchOff();
+        co.sound?.dispose();
+        this.coast = null;
+      }
       this.wanted = "";
       // (plan 93 S2: in with a gun out — put away: the car's as ever till one's drawn here)
       if (this.myGun()) this.host.room()?.send("arms:draw", { slot: -1 });
+      // (plan 101) the walking keys held as I got in — W held running up to a bike —: held in it too (no keydown comes
+      // again for them: it waits for the act, then goes)
+      if (l.spec.bike) for (const k of this.moveKeys) this.input.keyDown(k);
       this.mine = {
         vid: now.vid,
         seat: now.seat,
@@ -5122,7 +5136,8 @@ export class Cars {
           if (obj) localStorage.setItem(MY_CAR, obj);
         } catch {}
         // (fresh from parked: put down on its wheels; from someone else's driving: as it was)
-        if (Math.hypot(v.vx, v.vz) < 0.2) settle(sim, this.world);
+        // (plan 101: a bike's picked up and set on its wheels however it lay — never got on still lying, sliding)
+        if (Math.hypot(v.vx, v.vz) < 0.2 || spec.bike) settle(sim, this.world);
         else {
           sim.p.y = v.y;
           sim.q = { x: v.qx, y: v.qy, z: v.qz, w: v.qw };
@@ -5217,7 +5232,8 @@ export class Cars {
     const getting = actT !== null && actT < this.myInLen();
     if (getting) {
       const moved = Math.abs(c.steer) > 0.3 || c.up > 0.3 || c.down > 0.3;
-      if (moved && actT < 1.2 && this.cancelled !== m.vid) {
+      // (plan 101: not on a bike — W held as one gets on is wanting to ride off, it waits for the act)
+      if (moved && actT < 1.2 && this.cancelled !== m.vid && !bike) {
         this.cancelled = m.vid;
         room.send("car:leave", {});
       }
