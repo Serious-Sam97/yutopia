@@ -24,6 +24,11 @@ const browser = await chromium.launch({
 });
 const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
 page.on("pageerror", (e) => console.log("  page:", e.message));
+// (the board's recordings, as they load: plan 103 phase 7)
+const heard: string[] = [];
+page.on("response", (r) => {
+  if (r.url().includes("/sfx/skate/")) heard.push(`${r.status()} ${r.url().split("/sfx/skate/")[1]}`);
+});
 page.on("console", (m) => {
   if (m.type() === "error" || /skate|board/i.test(m.text())) console.log("  console:", m.text().slice(0, 300));
 });
@@ -95,4 +100,5 @@ await page.screenshot({ path: `${out}/skate-3-carve.png` });
 await page.keyboard.press("KeyX");
 await page.waitForTimeout(600);
 console.log("off:", JSON.stringify(await state()));
+console.log(`recordings: ${heard.length} — ${heard.join(", ")}`);
 await browser.close();

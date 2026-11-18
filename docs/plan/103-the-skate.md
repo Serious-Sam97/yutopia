@@ -230,8 +230,19 @@ around (plan 56); the client decides and the server takes it (no anticheat, [no-
 - Page budget 491 (measured 490.4; was 489).
 
 ### Not done, or left
-- **Recorded sound**: every sound is made in code (F14b); recordings need your OK to fetch.
+- **Sound picks by ear**: the recordings below are my picks, cut by measurement — yours to change (each slot's
+  candidates in `public/sfx/skate/manifest.json`, the pick in `chosen.json`; −1 keeps the made one). No bench page.
 - **No /dev/skate bench**; tuning is by the numbers in `skate/spec.ts`.
 - Others' boards aren't heard (only mine).
 - The 0.45 m ledges and stair treads are jumped onto, not walked up.
 - The board on the world's ground moves by Jolt: it may brush the stepped boxes at a ramp's foot — watch for it.
+
+### Phase 7 — the recordings (2026-11-18, on your OK)
+- Fetched from Freesound (the HQ previews, licences read off each page): nolimitkid's and BlackNeon1234's ollies,
+  SoundBiterSFX's tricks (CC BY 4.0), 21100495's rail grind, Bruno_Garcez's concrete ramp, zvance1110's driveway,
+  Scottrex05's tile, rokenjocu's pool, mbezzola's slides — all CC0 but the one. Not taken: crazy_freerider's landing
+  (CC BY-NC).
+- Cut by `tools/sfx-skate.mjs` into `public/sfx/skate/` (21 files, 450 KB): pops and landings (each cut on its own
+  transient), the wheels on concrete, tile and round a pool (on a park's ramp), the grind on steel, the slide on a
+  ledge. Credited in `sfx/CREDITS.md` and so in `credits.json`.
+- `skate/sound.ts` plays the picks over the made sounds (which thin under them, and stay where a slot has none).

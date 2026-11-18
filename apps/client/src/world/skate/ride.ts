@@ -8,6 +8,7 @@ import {
   type BoardVariant,
   NO_KEYS,
   type PiecePlace,
+  piecesOfThings,
   SKATE,
   SKATE_BAIL,
   type SkateEnv,
@@ -16,7 +17,6 @@ import {
   SkatePark,
   skateCode,
   skateEnv,
-  piecesOfThings,
   startSkate,
   surfFrame,
   townSkatePieces,
@@ -47,7 +47,14 @@ export interface RideHost {
   /** my session id (the ragdoll's) */
   sid(): string;
   /** the floor's things now (the built pieces among them: `sk_*`), and the land's height (where they sit) */
-  things(): Iterable<{ kind: string; x: number; y: number; rot?: number; yaw?: number; props?: Record<string, unknown> | null }>;
+  things(): Iterable<{
+    kind: string;
+    x: number;
+    y: number;
+    rot?: number;
+    yaw?: number;
+    props?: Record<string, unknown> | null;
+  }>;
   landAt(x: number, y: number): number;
   /** a sound (plan 103 phase 7) */
   sound?(what: string, k?: number): void;
@@ -208,7 +215,7 @@ export class SkateRide {
     }
     // the wheels, a grind, a push (the ground's roughness from the step's own: plan 103 F8a)
     const g = k.grind ? (k.grind.what === "ledge" ? "ledge" : "steel") : null;
-    snd?.update(Math.abs(k.s), k.rough, g, k.mode === "air" || k.mode === "wall", k.push);
+    snd?.update(Math.abs(k.s), k.rough, g, k.mode === "air" || k.mode === "wall", k.push, !!k.on);
     const bal = k.grind ? k.grind.bal : k.manual ? k.manual.bal : k.lip ? k.lip.bal : undefined;
     this.hud?.show({
       name: k.combo.name,

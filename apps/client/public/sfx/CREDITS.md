@@ -179,4 +179,16 @@
   - `bikes/bell-c1`, `bikes/bell-d1`, `bikes/freewheel-c`: *Bicycle Sounds* by antumdeluge (OpenGameArt, bicycle-sounds).
   - `bikes/freewheel-a`, `bikes/freewheel-b`: *bike_freewheel.aif* by tim.kahn (Freesound 74792, CC BY 4.0).
   - `bikes/ride-a`, `bikes/brake-a1`: *Bicycle Pedalling Rolling Braking_01* by Rudmer_Rotteveel (Freesound 719482).
+- The skate's (docs/plan/103-the-skate.md, phase 7), from Freesound's HQ previews, cut and levelled
+  (`skate/manifest.json` lists each take):
+  - `skate/pop-a`, `skate/land-a`: *skateboard ollie* by nolimitkid (Freesound 515229).
+  - `skate/pop-b*`, `skate/land-b`: *Ollie.wav* by BlackNeon1234 (Freesound 348321).
+  - `skate/pop-c*`, `skate/land-c*`: *Skateboarding Tricks* by SoundBiterSFX (Freesound 746602, CC BY 4.0).
+  - `skate/roll-a`: *Skateboard rolling down concrete ramp.wav* by Bruno_Garcez (Freesound 243765).
+  - `skate/roll-b`: *Skateboard* by zvance1110 (Freesound 521086).
+  - `skate/roll-c`: *Wheels rolling.wav* by Scottrex05 (Freesound 593494).
+  - `skate/pool-a`: *Skateboard Rolling in Pool.wav* by rokenjocu (Freesound 262083).
+  - `skate/grind-a`, `skate/grind-b`: *skateboard grinding on metal rail.wav* by 21100495 (Freesound 655371).
+  - `skate/slide-a`: *Skateboard_Skate_schlittert.wav* by mbezzola (Freesound 105081).
+  - `skate/slide-b`: *Skateboard_Slide_I.wav* by mbezzola (Freesound 105082).
 
