@@ -149,7 +149,7 @@ export class BuildLayer {
     for (const m of this.ghostFloor) disposeTree(m);
     this.ghostFloor = [];
     for (const g of look?.ghosts ?? []) {
-      const out = world.drawObject(g.def).out;
+      const out = world.drawObject(g.def, true).out;
       const mat = litMaterial({
         vertexColors: true,
         color: g.ok ? 0xffffff : 0xff9a80,

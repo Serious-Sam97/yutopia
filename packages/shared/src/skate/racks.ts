@@ -15,7 +15,7 @@ export interface SkateRack {
  *  inside its door, west of it, against the south wall; the outdoor park's by its south-west corner. `yaw` the plan
  *  way it faces, (cos yaw, sin yaw) over (x, z): −π/2 faces north, into each park. */
 export const SKATE_RACKS: SkateRack[] = [
-  { id: "rack:hall", x: 474, y: 1.5, z: -509.3, yaw: -Math.PI / 2 },
+  { id: "rack:hall", x: 485.5, y: 1.5, z: -509.3, yaw: -Math.PI / 2 },
   { id: "rack:yard", x: 464, y: 1.5, z: -449.4, yaw: -Math.PI / 2 },
 ];
 

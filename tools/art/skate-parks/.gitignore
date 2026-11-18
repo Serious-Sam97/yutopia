@@ -1,0 +1,3 @@
+# (made by ptex.py, deterministic: ~80 MB of PNG — the game reads the KTX2s in apps/client/public/life/skate-parks/tex)
+tex-src/
+__pycache__/

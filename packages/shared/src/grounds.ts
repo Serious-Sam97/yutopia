@@ -117,7 +117,7 @@ import {
 import type { LotLayout } from "./lot.ts";
 import { type AreaDef, type MapDef, worldShift } from "./map.ts";
 import type { GroundWhat } from "./shapes/grounds.ts";
-import { inSkateYard, SKATE_HALL, SKATE_YARD } from "./skate/parks.ts";
+import { inSkateYard, SKATE_HALL, SKATE_SHOP, SKATE_YARD } from "./skate/parks.ts";
 
 export { inSkateYard, SKATE_HALL, SKATE_YARD } from "./skate/parks.ts";
 
@@ -3115,8 +3115,12 @@ function fitsOf(b: Building): { floor: string; fits: Fit[] } {
     f("wardrobe", x0 + 8.4, z1 - 0.7, 1.6, 0.6, 2.0);
     return { floor: "#8a6a4a", fits };
   }
-  // (the skate hall: nothing fitted — its ramps are the skate's pieces, skate/parks.ts)
-  if (b.kind === "warehouse") return { floor: "#8e8b85", fits };
+  // (the skate hall: its ramps are the skate's pieces, skate/parks.ts; only the pro shop's counter fitted, east of
+  // the door — drawn with the hall, tools/art/skate-parks)
+  if (b.kind === "warehouse") {
+    f("counter", SKATE_SHOP.x, SKATE_SHOP.z, SKATE_SHOP.w, SKATE_SHOP.d, SKATE_SHOP.h);
+    return { floor: "#8e8b85", fits };
+  }
   if (b.kind === "gatehouse") {
     f("desk", x1 - 1.2, z0 + 0.8, 0.9, z1 - z0 - 1.6, 0.8);
     f("screens", x1 - 1.0, z0 + 1.6, 0.4, 2.4, 1.3, false);

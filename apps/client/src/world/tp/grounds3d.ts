@@ -125,6 +125,7 @@ import {
   tinted,
   type V,
 } from "./campus";
+import { kitRenderer } from "./kit-mats";
 import { landAround, SURF } from "./land-block";
 import { beam, railing, truss } from "./landmarks3d";
 import { lifeDress } from "./life-dress";
@@ -2170,6 +2171,24 @@ export class Grounds3 {
   private interior(i: Inside) {
     const { b } = i;
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
+    // (plan 104: the skate hall's inside as Blender built it — its floor, walls, trusses, fittings, murals, the
+    // pro shop's counter over its fit — and its lamps at the fittings)
+    if (b.kind === "warehouse" && this.hallGlb("in")) {
+      // (its fittings: three rows down the hall, one a bay between its trusses — tools/art/skate-parks/hall.py —
+      // a lamp at every other)
+      const rows = [b.z0 + 0.12 + 6, (b.z0 + b.z1) / 2, b.z1 - 0.12 - 6.5];
+      let k = 0;
+      for (const z of rows)
+        for (let bay = 0; bay < 6; bay++)
+          if (k++ % 2 === 0)
+            this.lights.push({
+              p: new Vector3(b.x0 + 6.1 + bay * 6.1, y0 + 6.45, z),
+              kind: "porch",
+              color: 0xeef3ff,
+              r: 13,
+            });
+      return;
+    }
     const g = new G();
     // the floor
     g.color(new Color(i.floor).getHex());
@@ -3389,6 +3408,17 @@ export class Grounds3 {
   // a shallow gable, high windows down its long sides, a roller door's frame round its doorway, its sign ──
   private warehouse(b: Building) {
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
+    // (plan 104: as Blender built it — brick on a block plinth, the clerestory, the roof and its skylights, the
+    // doorway's frame and drum, the sign; the lamp over the door as before)
+    if (this.hallGlb("out")) {
+      const d = insideOf(b)?.door;
+      if (d) {
+        const x = (d.from + d.to) / 2;
+        this.lights.push({ p: new Vector3(x, y0 + 3.5, b.z1 + 0.6), kind: "porch", color: 0xffd29a, r: 5 });
+        this.pool(x, b.z1 + 2, 4, 0xffd9a8);
+      }
+      return;
+    }
     const metal = this.keep(tex(corrugatedCanvas(this.T)));
     const H = wallsHigh(b);
     const i = insideOf(b);
@@ -3448,6 +3478,33 @@ export class Grounds3 {
   private skateMod: typeof import("./skate3d") | null = null;
   private skateLoading = false;
   private skateMats = new Map<string, Material>();
+  private skateImport: Promise<typeof import("./skate3d")> | null = null;
+  /** (plan 104) The skate's drawing module, loaded once. */
+  private skate3d(): Promise<typeof import("./skate3d")> {
+    this.skateImport ??= import("./skate3d").then((m) => {
+      this.skateMod = m;
+      return m;
+    });
+    return this.skateImport;
+  }
+  /** (plan 104) The parks' models' hooks: their windows and sign lit at night with the rest. */
+  private skateHooks = {
+    glow: (m: MeshStandardMaterial, on: number, kind: string) => {
+      this.glows(m, on, kind);
+      m.emissiveIntensity = on * this.lastNight;
+    },
+  };
+  /** (plan 104) The skate hall's inside or outside as built, into a group of its own here now (the Grounds cut the
+   *  outside's while you're in: it's among what this building added), filled when it's loaded. False: no renderer
+   *  to load it — drawn as before. */
+  private hallGlb(which: "in" | "out"): boolean {
+    if (!kitRenderer()) return false;
+    const holder = new Group();
+    holder.name = `skatehall-${which}`;
+    this.root.add(holder);
+    void this.skate3d().then((m) => holder.add(m.hallModel(which, this.skateHooks)));
+    return true;
+  }
   private skateParks() {
     const R = (r: { x0: number; z0: number; x1: number; z1: number }) =>
       this.near((r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2, 40);
@@ -3501,11 +3558,20 @@ export class Grounds3 {
     }
     for (const p of m.PARKS) {
       if (!R(p)) continue;
+      // (plan 104: the ramps as Blender built them from the board's own profiles; the profiles drawn here meanwhile,
+      // or if they won't load)
       const geo = m.skateParkGeometry(p);
+      const made: Mesh[] = [];
       for (const k of m.SKATE_SLOTS) {
         const gk = geo[k];
-        if (gk) this.add(gk, this.skateMat(k, p.indoor));
+        if (gk) made.push(this.add(gk, this.skateMat(k, p.indoor)));
       }
+      if (m.parksLoadable())
+        this.root.add(
+          m.parkModel(p.key, !p.indoor, this.skateHooks, (ok) => {
+            if (ok) for (const x of made) x.visible = false;
+          }),
+        );
     }
     // (plan 103 F10a) the racks, their boards in them
     for (const r of m.SKATE_RACKS) if (this.near(r.x, r.z, 40)) this.root.add(m.rackGroup(r));

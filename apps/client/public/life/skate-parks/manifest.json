@@ -1,0 +1,769 @@
+{
+ "version": 1,
+ "frame": "glTF y-up = three's: x east, y up, z south (the Grounds' z), metres",
+ "parks": {
+  "hall": {
+   "origin": [
+    456,
+    1.5,
+    -536
+   ],
+   "near": {
+    "file": "hall-ramps.glb",
+    "tris": 31694,
+    "bytes": 378436,
+    "materials": [
+     "deck",
+     "galv",
+     "lumber",
+     "masonite",
+     "mastop",
+     "plate",
+     "ply",
+     "tags",
+     "tube",
+     "void"
+    ]
+   },
+   "mid": {
+    "file": "hall-ramps-mid.glb",
+    "tris": 3426,
+    "bytes": 69152,
+    "materials": [
+     "deck",
+     "galv",
+     "masonite",
+     "mastop",
+     "plate",
+     "ply",
+     "tube"
+    ]
+   }
+  },
+  "yard": {
+   "origin": [
+    462,
+    1.5,
+    -492
+   ],
+   "near": {
+    "file": "yard-ramps.glb",
+    "tris": 34698,
+    "bytes": 309436,
+    "materials": [
+     "conc",
+     "concside",
+     "conctop",
+     "galv",
+     "paintpipe",
+     "tags",
+     "tube"
+    ]
+   },
+   "mid": {
+    "file": "yard-ramps-mid.glb",
+    "tris": 4372,
+    "bytes": 76008,
+    "materials": [
+     "conc",
+     "concside",
+     "conctop",
+     "galv",
+     "paintpipe",
+     "tube"
+    ]
+   }
+  }
+ },
+ "kinds": {
+  "sk_quarter": {
+   "wood": {
+    "near": {
+     "file": "kind-sk_quarter-wood.glb",
+     "tris": 1242,
+     "bytes": 38248,
+     "materials": [
+      "deck",
+      "galv",
+      "lumber",
+      "masonite",
+      "mastop",
+      "plate",
+      "ply",
+      "tags",
+      "tube",
+      "void"
+     ]
+    },
+    "mid": {
+     "file": "kind-sk_quarter-wood-mid.glb",
+     "tris": 128,
+     "bytes": 15320,
+     "materials": [
+      "deck",
+      "masonite",
+      "mastop",
+      "plate",
+      "ply",
+      "tube"
+     ]
+    }
+   },
+   "concrete": {
+    "near": {
+     "file": "kind-sk_quarter-concrete.glb",
+     "tris": 968,
+     "bytes": 22520,
+     "materials": [
+      "conc",
+      "concside",
+      "conctop",
+      "galv",
+      "paintpipe"
+     ]
+    },
+    "mid": {
+     "file": "kind-sk_quarter-concrete-mid.glb",
+     "tris": 128,
+     "bytes": 11200,
+     "materials": [
+      "conc",
+      "concside",
+      "conctop",
+      "paintpipe"
+     ]
+    }
+   }
+  },
+  "sk_vert": {
+   "wood": {
+    "near": {
+     "file": "kind-sk_vert-wood.glb",
+     "tris": 1954,
+     "bytes": 46132,
+     "materials": [
+      "deck",
+      "galv",
+      "lumber",
+      "masonite",
+      "mastop",
+      "plate",
+      "ply",
+      "tags",
+      "tube",
+      "void"
+     ]
+    },
+    "mid": {
+     "file": "kind-sk_vert-wood-mid.glb",
+     "tris": 174,
+     "bytes": 15712,
+     "materials": [
+      "deck",
+      "masonite",
+      "mastop",
+      "plate",
+      "ply",
+      "tube"
+     ]
+    }
+   },
+   "concrete": {
+    "near": {
+     "file": "kind-sk_vert-concrete.glb",
+     "tris": 1544,
+     "bytes": 27304,
+     "materials": [
+      "conc",
+      "concside",
+      "conctop",
+      "galv",
+      "paintpipe"
+     ]
+    },
+    "mid": {
+     "file": "kind-sk_vert-concrete-mid.glb",
+     "tris": 174,
+     "bytes": 11616,
+     "materials": [
+      "conc",
+      "concside",
+      "conctop",
+      "paintpipe"
+     ]
+    }
+   }
+  },
+  "sk_mini": {
+   "wood": {
+    "near": {
+     "file": "kind-sk_mini-wood.glb",
+     "tris": 2458,
+     "bytes": 54456,
+     "materials": [
+      "deck",
+      "galv",
+      "lumber",
+      "masonite",
+      "mastop",
+      "plate",
+      "ply",
+      "tags",
+      "tube",
+      "void"
+     ]
+    },
+    "mid": {
+     "file": "kind-sk_mini-wood-mid.glb",
+     "tris": 260,
+     "bytes": 17712,
+     "materials": [
+      "deck",
+      "masonite",
+      "mastop",
+      "plate",
+      "ply",
+      "tube"
+     ]
+    }
+   },
+   "concrete": {
+    "near": {
+     "file": "kind-sk_mini-concrete.glb",
+     "tris": 1912,
+     "bytes": 33068,
+     "materials": [
+      "conc",
+      "concside",
+      "conctop",
+      "galv",
+      "paintpipe"
+     ]
+    },
+    "mid": {
+     "file": "kind-sk_mini-concrete-mid.glb",
+     "tris": 260,
+     "bytes": 13656,
+     "materials": [
+      "conc",
+      "concside",
+      "conctop",
+      "paintpipe"
+     ]
+    }
+   }
+  },
+  "sk_kicker": {
+   "wood": {
+    "near": {
+     "file": "kind-sk_kicker-wood.glb",
+     "tris": 124,
+     "bytes": 12852,
+     "materials": [
+      "lumber",
+      "masonite",
+      "plate",
+      "ply",
+      "void"
+     ]
+    },
+    "mid": {
+     "file": "kind-sk_kicker-wood-mid.glb",
+     "tris": 10,
+     "bytes": 6836,
+     "materials": [
+      "masonite",
+      "plate",
+      "ply"
+     ]
+    }
+   },
+   "concrete": {
+    "near": {
+     "file": "kind-sk_kicker-concrete.glb",
+     "tris": 16,
+     "bytes": 4992,
+     "materials": [
+      "conc",
+      "concside"
+     ]
+    },
+    "mid": {
+     "file": "kind-sk_kicker-concrete-mid.glb",
+     "tris": 8,
+     "bytes": 4836,
+     "materials": [
+      "conc",
+      "concside"
+     ]
+    }
+   }
+  },
+  "sk_funbox": {
+   "wood": {
+    "near": {
+     "file": "kind-sk_funbox-wood.glb",
+     "tris": 52,
+     "bytes": 11612,
+     "materials": [
+      "deck",
+      "galv",
+      "masonite",
+      "plate",
+      "ply"
+     ]
+    },
+    "mid": {
+     "file": "kind-sk_funbox-wood-mid.glb",
+     "tris": 28,
+     "bytes": 11324,
+     "materials": [
+      "deck",
+      "galv",
+      "masonite",
+      "plate",
+      "ply"
+     ]
+    }
+   },
+   "concrete": {
+    "near": {
+     "file": "kind-sk_funbox-concrete.glb",
+     "tris": 44,
+     "bytes": 7292,
+     "materials": [
+      "conc",
+      "concside",
+      "galv"
+     ]
+    },
+    "mid": {
+     "file": "kind-sk_funbox-concrete-mid.glb",
+     "tris": 26,
+     "bytes": 7152,
+     "materials": [
+      "conc",
+      "concside",
+      "galv"
+     ]
+    }
+   }
+  },
+  "sk_ledge": {
+   "wood": {
+    "near": {
+     "file": "kind-sk_ledge-wood.glb",
+     "tris": 18,
+     "bytes": 6596,
+     "materials": [
+      "deck",
+      "galv",
+      "ply"
+     ]
+    },
+    "mid": {
+     "file": "kind-sk_ledge-wood-mid.glb",
+     "tris": 18,
+     "bytes": 6596,
+     "materials": [
+      "deck",
+      "galv",
+      "ply"
+     ]
+    }
+   },
+   "concrete": {
+    "near": {
+     "file": "kind-sk_ledge-concrete.glb",
+     "tris": 18,
+     "bytes": 6472,
+     "materials": [
+      "conc",
+      "concside",
+      "galv"
+     ]
+    },
+    "mid": {
+     "file": "kind-sk_ledge-concrete-mid.glb",
+     "tris": 18,
+     "bytes": 6472,
+     "materials": [
+      "conc",
+      "concside",
+      "galv"
+     ]
+    }
+   }
+  },
+  "sk_manualpad": {
+   "wood": {
+    "near": {
+     "file": "kind-sk_manualpad-wood.glb",
+     "tris": 30,
+     "bytes": 7084,
+     "materials": [
+      "deck",
+      "galv",
+      "ply"
+     ]
+    },
+    "mid": {
+     "file": "kind-sk_manualpad-wood-mid.glb",
+     "tris": 18,
+     "bytes": 6612,
+     "materials": [
+      "deck",
+      "galv",
+      "ply"
+     ]
+    }
+   },
+   "concrete": {
+    "near": {
+     "file": "kind-sk_manualpad-concrete.glb",
+     "tris": 30,
+     "bytes": 6964,
+     "materials": [
+      "conc",
+      "concside",
+      "galv"
+     ]
+    },
+    "mid": {
+     "file": "kind-sk_manualpad-concrete-mid.glb",
+     "tris": 18,
+     "bytes": 6488,
+     "materials": [
+      "conc",
+      "concside",
+      "galv"
+     ]
+    }
+   }
+  },
+  "sk_spine": {
+   "wood": {
+    "near": {
+     "file": "kind-sk_spine-wood.glb",
+     "tris": 1780,
+     "bytes": 31320,
+     "materials": [
+      "galv",
+      "masonite",
+      "mastop",
+      "ply",
+      "tube"
+     ]
+    },
+    "mid": {
+     "file": "kind-sk_spine-wood-mid.glb",
+     "tris": 212,
+     "bytes": 12852,
+     "materials": [
+      "masonite",
+      "mastop",
+      "ply",
+      "tube"
+     ]
+    }
+   },
+   "concrete": {
+    "near": {
+     "file": "kind-sk_spine-concrete.glb",
+     "tris": 1780,
+     "bytes": 31192,
+     "materials": [
+      "conc",
+      "concside",
+      "conctop",
+      "galv",
+      "paintpipe"
+     ]
+    },
+    "mid": {
+     "file": "kind-sk_spine-concrete-mid.glb",
+     "tris": 212,
+     "bytes": 12740,
+     "materials": [
+      "conc",
+      "concside",
+      "conctop",
+      "paintpipe"
+     ]
+    }
+   }
+  },
+  "sk_rail": {
+   "wood": {
+    "near": {
+     "file": "kind-sk_rail-wood.glb",
+     "tris": 284,
+     "bytes": 10224,
+     "materials": [
+      "galv",
+      "tube"
+     ]
+    },
+    "mid": {
+     "file": "kind-sk_rail-wood-mid.glb",
+     "tris": 100,
+     "bytes": 6752,
+     "materials": [
+      "galv",
+      "tube"
+     ]
+    }
+   }
+  },
+  "sk_kinkrail": {
+   "wood": {
+    "near": {
+     "file": "kind-sk_kinkrail-wood.glb",
+     "tris": 272,
+     "bytes": 9424,
+     "materials": [
+      "galv",
+      "tube"
+     ]
+    },
+    "mid": {
+     "file": "kind-sk_kinkrail-wood-mid.glb",
+     "tris": 104,
+     "bytes": 6644,
+     "materials": [
+      "galv",
+      "tube"
+     ]
+    }
+   }
+  }
+ },
+ "hall": {
+  "origin": [
+   456,
+   1.5,
+   -536
+  ],
+  "in": {
+   "near": {
+    "file": "hall-in.glb",
+    "tris": 6324,
+    "bytes": 176472,
+    "materials": [
+     "brick",
+     "chrome",
+     "cladding",
+     "fixture",
+     "floor",
+     "galv",
+     "glass",
+     "mural_east",
+     "mural_north",
+     "mural_south",
+     "mural_west",
+     "paint_black",
+     "paint_door",
+     "paint_white",
+     "paint_yellow",
+     "signlit",
+     "signs",
+     "skylight",
+     "steelpaint",
+     "tube_lit",
+     "wood"
+    ]
+   },
+   "mid": {
+    "file": "hall-in-mid.glb",
+    "tris": 6036,
+    "bytes": 171412,
+    "materials": [
+     "brick",
+     "chrome",
+     "cladding",
+     "fixture",
+     "floor",
+     "galv",
+     "glass",
+     "mural_east",
+     "mural_north",
+     "mural_south",
+     "mural_west",
+     "paint_black",
+     "paint_door",
+     "paint_white",
+     "paint_yellow",
+     "signlit",
+     "signs",
+     "skylight",
+     "steelpaint",
+     "tube_lit",
+     "wood"
+    ]
+   }
+  },
+  "out": {
+   "near": {
+    "file": "hall-out.glb",
+    "tris": 2054,
+    "bytes": 68008,
+    "materials": [
+     "block",
+     "brick",
+     "cladding",
+     "conc",
+     "galv",
+     "glass",
+     "mural_north",
+     "paint_door",
+     "signs",
+     "steelpaint",
+     "winglow"
+    ]
+   },
+   "mid": {
+    "file": "hall-out-mid.glb",
+    "tris": 2054,
+    "bytes": 68008,
+    "materials": [
+     "block",
+     "brick",
+     "cladding",
+     "conc",
+     "galv",
+     "glass",
+     "mural_north",
+     "paint_door",
+     "signs",
+     "steelpaint",
+     "winglow"
+    ]
+   }
+  },
+  "lights": [
+   [
+    462.1,
+    -529.88,
+    7.95
+   ],
+   [
+    468.2,
+    -529.88,
+    7.95
+   ],
+   [
+    474.3,
+    -529.88,
+    7.95
+   ],
+   [
+    480.4,
+    -529.88,
+    7.95
+   ],
+   [
+    486.5,
+    -529.88,
+    7.95
+   ],
+   [
+    492.6,
+    -529.88,
+    7.95
+   ],
+   [
+    462.1,
+    -522.0,
+    7.95
+   ],
+   [
+    468.2,
+    -522.0,
+    7.95
+   ],
+   [
+    474.3,
+    -522.0,
+    7.95
+   ],
+   [
+    480.4,
+    -522.0,
+    7.95
+   ],
+   [
+    486.5,
+    -522.0,
+    7.95
+   ],
+   [
+    492.6,
+    -522.0,
+    7.95
+   ],
+   [
+    462.1,
+    -514.62,
+    7.95
+   ],
+   [
+    468.2,
+    -514.62,
+    7.95
+   ],
+   [
+    474.3,
+    -514.62,
+    7.95
+   ],
+   [
+    480.4,
+    -514.62,
+    7.95
+   ],
+   [
+    486.5,
+    -514.62,
+    7.95
+   ],
+   [
+    492.6,
+    -514.62,
+    7.95
+   ]
+  ],
+  "glow": {
+   "winglow": "windows",
+   "signlit": "sign"
+  }
+ },
+ "racks": {
+  "hall": {
+   "file": "rack-hall.glb",
+   "tris": 168,
+   "bytes": 11356,
+   "materials": [
+    "ply",
+    "rubber",
+    "tags",
+    "wood"
+   ]
+  },
+  "yard": {
+   "file": "rack-yard.glb",
+   "tris": 264,
+   "bytes": 12556,
+   "materials": [
+    "galv",
+    "paint_yellow",
+    "rubber",
+    "tube"
+   ]
+  }
+ },
+ "snow": [
+  "conc",
+  "conctop",
+  "concside"
+ ]
+}

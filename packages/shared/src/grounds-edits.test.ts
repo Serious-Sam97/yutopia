@@ -52,10 +52,12 @@ import { groundSolidsIn } from "./shapes/grounds.ts";
 // legs west started past their hairpins, not behind them)
 // (2026-11-18, plan 103 F7c: the skate parks — the hall's warehouse east of the townhouses, its pad, walls,
 // roof and ramps' solids; the outdoor park's concrete pad, its trees cleared, its ramps' solids)
+// (2026-11-18, plan 104 F6a: both parks laid out again on the 10 ft module — their ramps' solids; the hall's pro
+// shop counter by its door, its only fit: its solid, its tile unwalkable, among the things)
 const TODAY = {
   land: "2b00eecb",
   // (2026-11-01: the road closed's barricades and drift shut, as their solids)
-  walk: "69e93ada",
+  walk: "96b5e27a",
   trees: "66c964f4",
   surfaces: "8ad7ea5e",
   // (2026-11-01: the false fronts flush with their faces, the road closed's barricades and drift
@@ -67,8 +69,8 @@ const TODAY = {
   // station's and the other flat roofs' snow, the kerbs in three treads)
   // (2026-11-02: the roofs, the canopies, the mailboxes and the statue at their bare heights — their
   // snow the weather's, stood a little in: docs/plan/65, the user's call)
-  solids: "d566a84a",
-  things: "62e12f28",
+  solids: "3f18d413",
+  things: "d023c2e3",
 };
 
 // the farm's open field south of the farmhouse: chunk (13, −8)

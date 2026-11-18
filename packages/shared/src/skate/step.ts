@@ -1294,7 +1294,7 @@ export function skateOfCode(c: number): SkateLook | null {
     lean: (((c >> 18) & 15) / 15) * 2 - 1,
     cess: ((c >> 22) & 1) === 1,
     lit: ((c >> 23) & 1) === 1,
-    bal: (Math.floor(c / 2 ** 24) & 31) / 31 * 2 - 1,
+    bal: ((Math.floor(c / 2 ** 24) & 31) / 31) * 2 - 1,
   };
 }
 /** The look of a board now, from the body itself (the local player's: the same shape as the wire's). */

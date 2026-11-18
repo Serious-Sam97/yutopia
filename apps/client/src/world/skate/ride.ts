@@ -7,6 +7,9 @@
 import type { Body } from "@yutopia/shared/move";
 import {
   type BoardVariant,
+  GAPS,
+  type Gap,
+  inZone,
   NO_KEYS,
   type PiecePlace,
   piecesOfThings,
@@ -104,6 +107,10 @@ export class SkateRide {
   private carry = { special: 0, lit: false, score: 0 };
   private best = 0;
   private camDt = 1 / 60;
+  /** (F9a) the gaps: those whose start this jump (or manual) left from, those already made this combo, the mode last */
+  private gapFrom: Gap[] = [];
+  private gapsMade = new Set<string>();
+  private wasMode = "";
   /** the board I'm on (or last was) */
   variant: BoardVariant = "street-pop";
   stance: 1 | -1 = 1;
@@ -283,6 +290,7 @@ export class SkateRide {
       return;
     }
     this.keep(b);
+    this.gaps(b);
     // the sound: the wheels by the speed and the surface, the grind or slide on, the air's spin-down
     const g = k.grind;
     snd?.update({
@@ -319,6 +327,39 @@ export class SkateRide {
       lit: k.lit,
       fakie: k.s < 0,
     });
+  }
+
+  /** (F9a) The named gaps: left from one's start — taking off, or into a manual — then come down, or onto a rail, in
+   *  its end: its name and points in the combo (never less for a repeat), once a combo. */
+  private gaps(b: Body) {
+    const k = b.skate;
+    if (!k) return;
+    const m = k.mode;
+    const was = this.wasMode;
+    this.wasMode = m;
+    if (k.combo.count === 0 && this.gapsMade.size) this.gapsMade.clear();
+    const grounded = (x: string) => x === "roll" || x === "manual" || x === "lip";
+    // leaving: from the ground into the air or onto a rail, or into a manual
+    if ((grounded(was) && (m === "air" || m === "grind")) || (was === "roll" && m === "manual")) {
+      this.gapFrom = GAPS.filter((g) => inZone(g.from, b.x, b.y, b.z));
+      return;
+    }
+    if (!this.gapFrom.length) return;
+    const arrived = (was === "air" && (grounded(m) || m === "grind")) || (was === "grind" && grounded(m));
+    if (!arrived && !(was === "manual" && m === "grind")) {
+      if (m === "roll" && was === "roll") this.gapFrom = [];
+      return;
+    }
+    for (const g of this.gapFrom) {
+      if (this.gapsMade.has(g.id) || !inZone(g.to, b.x, b.y, b.z)) continue;
+      const via = g.via ?? "air";
+      if (via === "grind" && m !== "grind" && was !== "grind") continue;
+      if (via === "manual" && was !== "manual" && m !== "manual") continue;
+      this.gapsMade.add(g.id);
+      k.combo.gap(g.name, g.pts);
+      this.hud?.gap(g.name, g.pts);
+    }
+    if (grounded(m)) this.gapFrom = [];
   }
 
   /** The skate camera's frame (a game camera for the view: tp/view.ts gameCam), or null off the board. */

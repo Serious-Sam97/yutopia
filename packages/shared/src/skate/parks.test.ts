@@ -17,12 +17,13 @@ import {
   piecesOfThings,
   SKATE_FITS,
   SKATE_HALL,
+  SKATE_SHOP,
   SKATE_YARD,
   skateKindParts,
   TOWN_PARKS,
   townSkatePieces,
 } from "./parks.ts";
-import { PIECES, type PiecePlace, SkatePark } from "./pieces.ts";
+import { PIECES, type PiecePlace, pieceFoot, SkatePark } from "./pieces.ts";
 import { SKATE_RACKS } from "./racks.ts";
 import { NO_KEYS, type SkateEvents, skateEnv, startSkate } from "./step.ts";
 
@@ -33,30 +34,10 @@ function overBox(s: { x: number; z: number; hx: number; hz: number; a: number },
   const lz = (x - s.x) * Math.sin(s.a) + (z - s.z) * Math.cos(s.a);
   return Math.abs(lx) <= s.hx + pad && Math.abs(lz) <= s.hz + pad;
 }
-/** A piece's ground in the plan: a box's corners (u along its run, w across), a bowl corner's quarter square. */
-function footprint(pc: PiecePlace): XY[] {
-  const d = PIECES[pc.kind];
-  const centred = pc.kind === "half" || pc.kind === "mini" || pc.kind === "spine";
-  const [lo, hi] = centred ? [-d.size[0] / 2, d.size[0] / 2] : [0, d.size[0]];
-  const half = (pc.width ?? d.size[1]) / 2;
-  const local: XY[] =
-    pc.kind === "bowlcorner"
-      ? [
-          [0, 0],
-          [d.size[0], 0],
-          [d.size[0], d.size[1]],
-          [0, d.size[1]],
-        ]
-      : [
-          [lo, -half],
-          [hi, -half],
-          [hi, half],
-          [lo, half],
-        ];
-  const c = Math.cos(pc.yaw);
-  const s = Math.sin(pc.yaw);
-  return local.map(([u, w]): XY => [pc.x + u * c - w * s, pc.y + u * s + w * c]);
-}
+/** A piece's ground in the plan (pieces.ts pieceFoot). */
+const footprint = (pc: PiecePlace): XY[] => pieceFoot(pc);
+/** A piece's height range over its floor. */
+const zs = (pc: PiecePlace, h: number): [number, number] => [pc.z - h, pc.z - h + PIECES[pc.kind].height];
 /** Two convex outlines overlap (more than touching: each shrunk `by` round its middle)? */
 function overlap(a: XY[], b: XY[], by = 0.03): boolean {
   const shrink = (p: XY[]) => {
@@ -85,9 +66,14 @@ test("the two parks: every piece inside its park, none in another, all on the fl
   const hall = BUILDINGS.find((b) => b.key === SKATE_HALL.key);
   assert.ok(hall && hall.kind === "warehouse" && hall.enter, "the hall is a warehouse you walk into");
   assert.ok(
-    INSIDES.some((i) => i.b === hall && i.fits.length === 0),
-    "nothing fitted inside it",
+    INSIDES.some((i) => i.b === hall && i.fits.length === 1 && i.fits[0].kind === "counter"),
+    "nothing fitted inside it but the pro shop's counter",
   );
+  // (the counter clear of every piece)
+  const hallPark = new SkatePark(parkPieces(TOWN_PARKS[0]));
+  for (let x = SKATE_SHOP.x - 0.5; x <= SKATE_SHOP.x + SKATE_SHOP.w + 0.5; x += 0.25)
+    for (let z = SKATE_SHOP.z - 0.5; z <= SKATE_SHOP.z + SKATE_SHOP.d + 0.5; z += 0.25)
+      assert.equal(hallPark.topAt(x, z, 99), null, `the counter's clear of the pieces at ${x}, ${z}`);
   for (const p of TOWN_PARKS) {
     // (the hall's within its walls' inner faces)
     const m = p.indoor ? 0.15 : 0;
@@ -102,8 +88,13 @@ test("the two parks: every piece inside its park, none in another, all on the fl
         const g = terrainAt(Math.min(p.x1 - 0.01, x), Math.min(p.z1 - 0.01, y));
         assert.ok(Math.abs(g - p.h) < 1e-6, `${what}: the floor at ${x.toFixed(2)}, ${y.toFixed(2)} is ${g}`);
       }
-      for (let j = i + 1; j < fps.length; j++)
+      // (none in another — one stood on another, a stair flight on its deck, only touching)
+      for (let j = i + 1; j < fps.length; j++) {
+        const [a0, a1] = zs(pc, p.h);
+        const [b0, b1] = zs(pieces[j], p.h);
+        if (a1 <= b0 + 1e-6 || b1 <= a0 + 1e-6) continue;
         assert.ok(!overlap(fp, fps[j]), `${what} overlaps ${j} ${pieces[j].kind}`);
+      }
     }
     // the floor: the hall's concrete, the outdoor park's ploughed concrete with no trees on it
     for (let x = p.x0 + 0.5; x < p.x1; x += 3)
@@ -301,9 +292,9 @@ test("a built piece is its piece: in its footprint at every turn and free, its s
 });
 
 /** A board pushed off from (x, y) heading `yaw`, ridden for `secs`: its events, and the modes it was in. */
-function ride(park: SkatePark, h: number, x: number, y: number, yaw: number, secs: number, push = 1.4) {
+function ride(park: SkatePark, h: number, z0: number, x: number, y: number, yaw: number, secs: number, push = 1.4) {
   const env: MoveEnv = { grid: openFloor(() => h), footing: () => "walk", skate: skateEnv(park) };
-  const b = newBody(x, y, h, yaw);
+  const b = newBody(x, y, z0, yaw);
   startSkate(b, "street-pop", 1);
   if (b.skate) b.skate.s = 3;
   const evs: SkateEvents[] = [];
@@ -323,24 +314,38 @@ test("down each park's lines: pushed off, it rolls through the pieces without a 
   const H = Math.PI / 2;
   const lines: Record<string, [number, number, number, number?][]> = {
     hall: [
-      // the half-pipe from its flat, east; the bowl from its middle, east and to a corner
-      [464, -530.8, 0],
-      [464, -514.8, 0],
-      [464, -514.8, -0.55],
-      [464, -514.8, H],
-      // the street course: the fun box to the east bank, between the ledge and the pad, down the stairs
-      [479, -529, 0],
-      [476, -521, 0],
-      [484.6, -512, 0, 0.4],
+      // the vert from its flat, east, west into the extension and beside it
+      [463.54, -529.6, 0],
+      [463.54, -529.6, Math.PI],
+      [463.54, -533.5, Math.PI],
+      // along the mezzanine down the roll-in; off its drop; down its stairs
+      [463, -509.7, 0],
+      [463, -509.7, -H, 0.4],
+      [457.825, -510, -H, 0.4],
+      // the spine from the west; the island's hip; the north wall; the east wall; the corner
+      [474, -527, 0],
+      [481.5, -524.5, 0],
+      [483, -529.5, -H],
+      [494.5, -516, 0],
+      [492, -529, -0.8],
+      // the seven off its deck; the island's bank from the south
+      [493.525, -526, H, 0.4],
+      [486.5, -513, -H],
     ],
     yard: [
-      // the mini ramp from its flat; at the spine; the kickers; the bowl from its middle
-      [470, -484, 0],
-      [480, -484, 0],
-      [466, -470, 0],
-      [498, -462, 0],
-      [498, -462, 2.4],
-      [498, -462, -H],
+      // the bowl from its middle: east, north, into the pocket, at the hip
+      [494, -474.5, 0],
+      [494, -474.5, -H],
+      [490.5, -470, H],
+      [492, -473.5, 0.98],
+      // up its bank from the east
+      [507, -474.5, Math.PI],
+      // the mini ramp from its flat; at the spine; the pyramid; off the platform down the stairs; the kickers
+      [468.05, -489.4, 0],
+      [474, -489.4, 0],
+      [469, -459.5, 0],
+      [467.525, -474, H, 0.4],
+      [465.5, -473, H],
     ],
   };
   for (const p of TOWN_PARKS) {
@@ -348,7 +353,7 @@ test("down each park's lines: pushed off, it rolls through the pieces without a 
     for (const [x, y, yaw, push] of lines[p.key]) {
       // (the stairs' deck: started up on it)
       const t = park.topAt(x, y, 99);
-      const r = ride(park, t ? t.z : p.h, x, y, yaw, 8, push);
+      const r = ride(park, p.h, t ? t.z : p.h, x, y, yaw, 8, push);
       const what = `${p.key} from ${x}, ${y} heading ${yaw.toFixed(2)}`;
       const walls = r.evs.filter((e) => e.bail === "wall");
       assert.equal(

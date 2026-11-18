@@ -34,6 +34,8 @@ export function setKitRenderer(r: WebGLRenderer | null): void {
     });
   }
 }
+/** (plan 104) The renderer the life look's GLBs load through (the skate parks', tp/skate3d.ts), null till set. */
+export const kitRenderer = (): WebGLRenderer | null => renderer;
 // (the library's grass's mean brightness as the layer reads it: its albedo's, linear — measured)
 const GRASS_MEAN = 0.12;
 

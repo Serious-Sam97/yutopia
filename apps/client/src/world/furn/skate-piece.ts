@@ -121,13 +121,19 @@ export function pieceGeometry(kind: PieceKind, d: PieceDraw): PieceGeos {
     const turn = s.turn ?? 0;
     const [ct, st] = [Math.cos(turn), Math.sin(turn)];
     const rIn = s.rIn ?? 0;
+    // (a turn's radius at u: out from its centre, or in toward it — a hip, plan 104 — round its centre (du, dw),
+    // its angles from `turn`)
+    const R = (u: number) => (s.inward ? rIn - u : rIn + u);
+    const k = s.inward ? -1 : 1;
     // a surface point (its u, w) in the piece's plan, and a way of its own (its +u, +w) there
     const P = (u: number, w: number): [number, number] =>
       s.sweep === "line"
         ? [(s.du ?? 0) + u * ct - w * st, (s.dw ?? 0) + u * st + w * ct]
-        : [(rIn + u) * Math.cos(w), (rIn + u) * Math.sin(w)];
-    const U = (w: number): [number, number] => (s.sweep === "line" ? [ct, st] : [Math.cos(w), Math.sin(w)]);
-    const Wd = (w: number): [number, number] => (s.sweep === "line" ? [-st, ct] : [-Math.sin(w), Math.cos(w)]);
+        : [(s.du ?? 0) + R(u) * Math.cos(turn + w), (s.dw ?? 0) + R(u) * Math.sin(turn + w)];
+    const U = (w: number): [number, number] =>
+      s.sweep === "line" ? [ct, st] : [k * Math.cos(turn + w), k * Math.sin(turn + w)];
+    const Wd = (w: number): [number, number] =>
+      s.sweep === "line" ? [-st, ct] : [-Math.sin(turn + w), Math.cos(turn + w)];
     const [w0, w1] = s.sweep === "line" ? [s.w0 * W, s.w1 * W] : [s.w0, s.w1];
     const ws: number[] = [];
     // (round a bowl's corner in 2° steps: a chord's sag on its steep wall under 3 mm)

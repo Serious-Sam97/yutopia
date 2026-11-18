@@ -135,7 +135,22 @@ export type PieceKind =
   | "spine"
   | "rail"
   | "kinkrail"
-  | "bowlcorner";
+  | "bowlcorner"
+  // (plan 104 F6a: the parks on Tony Hawk's 10 ft module and 4 ft height steps)
+  | "qp4"
+  | "qp8"
+  | "qp4corner"
+  | "hip"
+  | "bowlhip"
+  | "bank"
+  | "pyramid"
+  | "spine4"
+  | "deck4"
+  | "deck8"
+  | "stairs"
+  | "stairs8"
+  | "halfext"
+  | "railing";
 
 /** A piece as placed: where its origin is (the foot of its first profile), its plan way (+u), base height. */
 export interface PiecePlace {
@@ -149,7 +164,8 @@ export interface PiecePlace {
 }
 
 /** A ridden surface of a piece: its profile, swept along w ∈ [w0, w1] (`sweep: "line"`) or round a centre at
- *  u = −rIn (`sweep: "turn"`, w the angle ∈ [w0, w1], rad: a bowl's corner, the ramp rising outward). */
+ *  u = −rIn (`sweep: "turn"`, w the angle ∈ [w0, w1], rad: a bowl's corner, the ramp rising outward) — or, `inward`,
+ *  round a centre at u = +rIn, the ramp rising toward it (a hip: a convex corner, plan 104). */
 export interface Surface {
   prof: Profile;
   sweep: "line" | "turn";
@@ -157,6 +173,8 @@ export interface Surface {
   w1: number;
   /** turn: the radius at u = 0 */
   rIn?: number;
+  /** turn: the radius is rIn − u (the centre up the ramp: a hip's rounded corner), not rIn + u */
+  inward?: boolean;
   /** its own frame in the piece's: an offset along the piece's u, w, and a turn of its +u (rad) */
   du?: number;
   dw?: number;
@@ -176,6 +194,9 @@ export interface PieceDef {
   surfaces: Surface[];
   /** grind lines in the piece's own frame (u, w, z) */
   lines: GrindLine[];
+  /** its ground in its own plan (u0, w0, u1, w1): what it stands on — a park's pieces don't overlap (the
+   *  across scaled by a placed width, as the surfaces) */
+  foot: [number, number, number, number];
 }
 
 const Q = Math.PI / 2;
@@ -189,11 +210,11 @@ function quarterProf(r: number, deg: number, ext: number, deck: number): Profile
     lip = [top[0], top[1] + ext];
     segs.push({ k: "line", a: top, b: lip });
   }
-  segs.push({ k: "line", a: lip, b: [lip[0] + deck, lip[1]] });
+  if (deck > 0) segs.push({ k: "line", a: lip, b: [lip[0] + deck, lip[1]] });
   const p = new Profile(segs);
-  // (the coping: at the deck's start)
+  // (the coping: at the deck's start — the profile's end when it has none, a spine's crest)
   const lens = p.lens;
-  const cop = lens.slice(0, segs.length - 1).reduce((a, b) => a + b, 0);
+  const cop = lens.slice(0, deck > 0 ? segs.length - 1 : segs.length).reduce((a, b) => a + b, 0);
   return new Profile(segs, [cop]);
 }
 /** A box's top: up a slope (or straight up, no slope: a ledge's side is a wall), flat, down again. */
@@ -211,6 +232,8 @@ function boxProf(h: number, len: number, slope: number): Profile {
   const p = new Profile(segs);
   return new Profile(segs, [], [p.lens[0], p.lens[0] + p.lens[1]]);
 }
+/** A flat at height h from u0 to u1 (a deck, a stair's tread). */
+const flatProf = (u0: number, u1: number, h: number) => new Profile([{ k: "line", a: [u0, h], b: [u1, h] }]);
 
 /** The lines along a surface's sweep at a profile point (u, z): its two ends across. */
 const along = (u: number, z: number, w0: number, w1: number, what: GrindLine["what"]): GrindLine => ({
@@ -220,6 +243,8 @@ const along = (u: number, z: number, w0: number, w1: number, what: GrindLine["wh
   ],
   what,
 });
+/** A piece's ground from its run along u and its width (centred across). */
+const footOf = (u0: number, u1: number, width: number): PieceDef["foot"] => [u0, -width / 2, u1, width / 2];
 
 function quarterDef(r: number, deg: number, ext: number, deck: number, width: number): PieceDef {
   const prof = quarterProf(r, deg, ext, deck);
@@ -229,6 +254,7 @@ function quarterDef(r: number, deg: number, ext: number, deck: number, width: nu
     height: lip.z,
     surfaces: [{ prof, sweep: "line", w0: -width / 2, w1: width / 2 }],
     lines: [along(lip.u, lip.z, -width / 2, width / 2, "coping")],
+    foot: footOf(0, lip.u + deck, width),
   };
 }
 
@@ -237,12 +263,13 @@ function pipeDef(r: number, deg: number, ext: number, deck: number, flat: number
   const q = quarterDef(r, deg, ext, deck, width);
   const lipU = q.surfaces[0].prof.at(q.surfaces[0].prof.copings[0]).u;
   const half = flat / 2;
-  const flatProf = new Profile([{ k: "line", a: [-half, 0], b: [half, 0] }]);
+  const flatP = new Profile([{ k: "line", a: [-half, 0], b: [half, 0] }]);
+  const size: [number, number] = [flat + 2 * (lipU + deck), width];
   return {
-    size: [flat + 2 * (lipU + deck), width],
+    size,
     height: q.height,
     surfaces: [
-      { prof: flatProf, sweep: "line", w0: -width / 2, w1: width / 2 },
+      { prof: flatP, sweep: "line", w0: -width / 2, w1: width / 2 },
       { ...q.surfaces[0], du: half },
       { ...q.surfaces[0], du: -half, turn: Math.PI },
     ],
@@ -250,6 +277,7 @@ function pipeDef(r: number, deg: number, ext: number, deck: number, flat: number
       along(half + lipU, q.height, -width / 2, width / 2, "coping"),
       along(-half - lipU, q.height, -width / 2, width / 2, "coping"),
     ],
+    foot: footOf(-size[0] / 2, size[0] / 2, width),
   };
 }
 
@@ -277,6 +305,223 @@ function boxDef(h: number, len: number, slope: number, width: number, what: Grin
         what,
       },
     ],
+    foot: footOf(0, len + 2 * run, width),
+  };
+}
+
+/** A rail on posts: its points (u, w, z), the ground it stands on as wide as `wide`. */
+function railDef(pts: [number, number, number][], wide = 0.3): PieceDef {
+  const us = pts.map((p) => p[0]);
+  const u0 = Math.min(...us);
+  const u1 = Math.max(...us);
+  return {
+    size: [u1 - u0, wide],
+    height: Math.max(...pts.map((p) => p[2])),
+    surfaces: [],
+    lines: [{ pts, what: "rail" }],
+    foot: footOf(u0, u1, wide),
+  };
+}
+
+// ── plan 104 (docs/plan/104-the-skate-again.md F6a): the parks' own pieces, on Tony Hawk's 10 ft (3.05 m) module
+// and 4 ft (1.22 m) height steps ──
+
+/** The module: 10 ft across, 4 ft up (m). */
+export const MODULE = { across: 3.05, step: 1.22 } as const;
+/** A 4 ft quarter: a 6 ft transition (1.83 m) to the 4 ft coping (70.5°, no vert). */
+const QP4: [number, number, number] = [1.83, (Math.acos(1 - 1.22 / 1.83) * 180) / Math.PI, 0];
+/** An 8 ft quarter: a 7.5 ft transition to upright, 6 in of vert. */
+const QP8: [number, number, number] = [2.29, 90, 0.15];
+/** The bowl's (a street quarter's: plan 103's bowl corners are its arc revolved). */
+const BOWL_Q: [number, number, number] = [2.2, 78, 0];
+/** A hip's rounded coping: its radius (m). */
+const HIP_RHO = 0.3;
+
+/** A quarter's convex corner, a whole unit (plan 104): two quarters of the profile at right angles (A facing +u,
+ *  over w ∈ [−legs, 0]; B facing +w, over u ∈ [−legs, 0]), the rounded hip between them (round the origin, its
+ *  coping a ring of radius ρ), and the deck behind them all — the copings one line, round the hip. Its decks never
+ *  overlap: A's and B's are ρ deep, the rest of the platform a flat of its own. */
+function hipDef([r, deg, ext]: [number, number, number], legs: number): PieceDef {
+  const rho = HIP_RHO;
+  const q = quarterProf(r, deg, ext, rho);
+  const lip = q.at(q.copings[0]);
+  const L = lip.u;
+  const h = lip.z;
+  const rIn = L + rho;
+  const ring: [number, number, number][] = [];
+  for (let i = 0; i <= 12; i++) {
+    const a = (i / 12) * Q;
+    ring.push([rho * Math.cos(a), rho * Math.sin(a), h]);
+  }
+  return {
+    size: [legs + rIn, legs + rIn],
+    height: h,
+    surfaces: [
+      // A: its foot at u = ρ + L, up toward −u (turned π), across w ∈ [−legs, 0] (its own w flipped by the turn)
+      { prof: q, sweep: "line", w0: 0, w1: legs, du: rIn, turn: Math.PI },
+      // B: its foot at w = ρ + L, up toward −w
+      { prof: q, sweep: "line", w0: -legs, w1: 0, dw: rIn, turn: -Q },
+      // the hip: round the origin, rising inward to its ring
+      { prof: q, sweep: "turn", inward: true, w0: 0, w1: Q, rIn },
+      // the platform behind (u, w ∈ [−legs, 0])
+      { prof: flatProf(-legs, 0, h), sweep: "line", w0: -legs, w1: 0 },
+    ],
+    lines: [
+      {
+        pts: [[rho, -legs, h], ...ring, [-legs, rho, h]],
+        what: "coping",
+      },
+    ],
+    foot: [-legs, -legs, rIn, rIn],
+  };
+}
+
+/** A concave corner of a quarter's profile (a bowl corner): revolved a quarter turn round a flat of radius rIn. */
+function cornerDef([r, deg, ext]: [number, number, number], rIn: number, deck: number): PieceDef {
+  const prof = quarterProf(r, deg, ext, deck);
+  const lip = prof.at(prof.copings[0]);
+  const pts: [number, number, number][] = [];
+  for (let i = 0; i <= 8; i++) {
+    const a = (i / 8) * Q;
+    pts.push([(rIn + lip.u) * Math.cos(a), (rIn + lip.u) * Math.sin(a), lip.z]);
+  }
+  const R = rIn + lip.u + deck;
+  return {
+    size: [R, R],
+    height: lip.z,
+    surfaces: [{ prof, sweep: "turn", w0: 0, w1: Q, rIn }],
+    lines: [{ pts, what: "coping" }],
+    foot: [0, 0, R, R],
+  };
+}
+
+/** A bank: up `slope`° to h, a deck `deck` deep behind. */
+function bankDef(h: number, slope: number, deck: number, width: number): PieceDef {
+  const run = h / Math.tan((slope * Math.PI) / 180);
+  const prof = new Profile([
+    { k: "line", a: [0, 0], b: [run, h] },
+    { k: "line", a: [run, h], b: [run + deck, h] },
+  ]);
+  return {
+    size: [run + deck, width],
+    height: h,
+    surfaces: [{ prof, sweep: "line", w0: -width / 2, w1: width / 2 }],
+    lines: [],
+    foot: footOf(0, run + deck, width),
+  };
+}
+
+/** A pyramid: a square top `top` across at h, a bank down each side at `slope`°, a cone at each corner; its top's
+ *  four edges steel (ground). The origin at its middle. */
+function pyramidDef(h: number, slope: number, top: number): PieceDef {
+  const run = h / Math.tan((slope * Math.PI) / 180);
+  const a = top / 2;
+  const up = new Profile([{ k: "line", a: [0, 0], b: [run, h] }]);
+  const surfaces: Surface[] = [{ prof: flatProf(-a, a, h), sweep: "line", w0: -a, w1: a }];
+  for (let k = 0; k < 4; k++) {
+    const f = k * Q;
+    const [c, s] = [Math.cos(f), Math.sin(f)];
+    // a side: its foot `a + run` out along f, up toward the middle
+    surfaces.push({ prof: up, sweep: "line", w0: -a, w1: a, du: (a + run) * c, dw: (a + run) * s, turn: f + Math.PI });
+  }
+  for (let k = 0; k < 4; k++) {
+    const f = k * Q;
+    // a corner: round the top's corner between f and f + 90°, rising inward to it
+    const cx = a * (Math.cos(f) - Math.sin(f));
+    const cy = a * (Math.sin(f) + Math.cos(f));
+    surfaces.push({ prof: up, sweep: "turn", inward: true, w0: 0, w1: Q, rIn: run, du: cx, dw: cy, turn: f });
+  }
+  const c: [number, number][] = [
+    [a, -a],
+    [a, a],
+    [-a, a],
+    [-a, -a],
+  ];
+  const lines: GrindLine[] = c.map((p, i) => {
+    const q = c[(i + 1) % 4];
+    return {
+      pts: [
+        [p[0], p[1], h],
+        [q[0], q[1], h],
+      ],
+      what: "ledge",
+    };
+  });
+  const R = a + run;
+  return { size: [2 * R, 2 * R], height: h, surfaces, lines, foot: [-R, -R, R, R] };
+}
+
+/** A deck: flat at h, `len` along u, `width` across (stood on, rolled across; its back joins others). */
+function deckDef(h: number, len: number, width: number): PieceDef {
+  return {
+    size: [len, width],
+    height: h,
+    surfaces: [{ prof: flatProf(0, len, h), sweep: "line", w0: -width / 2, w1: width / 2 }],
+    lines: [],
+    foot: footOf(0, len, width),
+  };
+}
+
+/** A stair set: down from a deck at h (its nosing at u = 0) in `n` risers of h / n (7 a 4 ft deck: 17.4 cm), each
+ *  tread `run` deep, the last onto the floor; a handrail each side (`inset` in from the edge), 0.8 m over the
+ *  nosings, flat 0.9 m over the deck behind and past the foot. Its ground: the treads and the rails' feet past them. */
+export const STAIRS = { run: 0.32, width: 3.05, rail: 0.8, inset: 0.28, over: 0.9 } as const;
+function stairsDef(h: number, n: number): PieceDef {
+  const { run, width, rail, inset, over } = STAIRS;
+  const rise = h / n;
+  const surfaces: Surface[] = [];
+  for (let k = 1; k < n; k++)
+    surfaces.push({
+      prof: flatProf((k - 1) * run, k * run, h - k * rise),
+      sweep: "line",
+      w0: -width / 2,
+      w1: width / 2,
+    });
+  const foot = (n - 1) * run;
+  const rails: GrindLine[] = [-1, 1].map((s) => {
+    const w = s * (width / 2 - inset);
+    return {
+      pts: [
+        [-over, w, h + rail],
+        [0, w, h + rail],
+        [foot, w, h - (n - 1) * rise + rail],
+        [foot + over, w, h - (n - 1) * rise + rail],
+      ],
+      what: "rail",
+    };
+  });
+  return { size: [foot + over, width], height: h + rail, surfaces, lines: rails, foot: footOf(0, foot + over, width) };
+}
+
+/** The hall's vert ramp (plan 104): plan 103's half-pipe at 12.2 m wide over 4.88 m of flat, its −u wall with an
+ *  extension (1.22 m more vert) over its middle 3.66 m. */
+function halfExtDef(): PieceDef {
+  const [r, ext, deck, flat, width, mid] = [3.2, 0.35, 1.6, 4.88, 12.2, 3.66];
+  const base = pipeDef(r, 90, ext, deck, flat, width);
+  const hi = quarterProf(r, 90, ext + MODULE.step, deck);
+  const lo = base.surfaces[2];
+  const half = flat / 2;
+  const [w0, w1] = [-width / 2, width / 2];
+  const [m0, m1] = [-mid / 2, mid / 2];
+  const hz = hi.at(hi.copings[0]).z;
+  const lipU = half + r;
+  return {
+    ...base,
+    height: hz,
+    surfaces: [
+      base.surfaces[0],
+      base.surfaces[1],
+      { ...lo, w0, w1: m0 },
+      { prof: hi, sweep: "line", w0: m0, w1: m1, du: -half, turn: Math.PI },
+      { ...lo, w0: m1, w1 },
+    ],
+    lines: [
+      base.lines[0],
+      // (the −u wall's copings: low, the extension's, low — in the piece's own w, the turned surfaces' flipped)
+      along(-lipU, base.height, -m0, -w0, "coping"),
+      along(-lipU, hz, -m1, -m0, "coping"),
+      along(-lipU, base.height, -w1, -m1, "coping"),
+    ],
   };
 }
 
@@ -303,6 +548,7 @@ export const PIECES: Record<PieceKind, PieceDef> = {
       },
     ],
     lines: [],
+    foot: footOf(0, 1.3, 1.6),
   },
   // a fun box: up 24°, 2.4 m flat at 0.6 m, down; its long edges are ledges
   funbox: boxDef(0.6, 2.4, 24, 2.4, "ledge"),
@@ -322,59 +568,87 @@ export const PIECES: Record<PieceKind, PieceDef> = {
         { ...q.surfaces[0], du: lipU, turn: Math.PI },
       ],
       lines: [along(0, q.height, -2.4, 2.4, "coping")],
-    };
+      foot: footOf(-lipU, lipU, 4.8),
+    } satisfies PieceDef;
   })(),
   // a flat rail: 0.38 m, 5 m
-  rail: {
-    size: [5, 0.3],
-    height: 0.38,
-    surfaces: [],
-    lines: [
-      {
-        pts: [
-          [0, 0, 0.38],
-          [5, 0, 0.38],
-        ],
-        what: "rail",
-      },
-    ],
-  },
+  rail: railDef([
+    [0, 0, 0.38],
+    [5, 0, 0.38],
+  ]),
   // a kinked rail: 1.5 m flat at 0.95 m, down 30° over 3 m, 1.5 m flat at the foot
-  kinkrail: {
-    size: [6, 0.3],
-    height: 0.95,
-    surfaces: [],
-    lines: [
-      {
-        pts: [
-          [0, 0, 0.95],
-          [1.5, 0, 0.95],
-          [4.5, 0, 0.95 - 3 * Math.tan(Math.PI / 6)],
-          [6, 0, 0.95 - 3 * Math.tan(Math.PI / 6)],
-        ],
-        what: "rail",
-      },
-    ],
-  },
+  kinkrail: railDef([
+    [0, 0, 0.95],
+    [1.5, 0, 0.95],
+    [4.5, 0, 0.95 - 3 * Math.tan(Math.PI / 6)],
+    [6, 0, 0.95 - 3 * Math.tan(Math.PI / 6)],
+  ]),
   // a bowl's corner: the street quarter's arc (2.2 m to 78°: its lip level with theirs), revolved a quarter turn
   // round a 1.5 m flat
-  bowlcorner: (() => {
-    const prof = quarterProf(2.2, 78, 0, 0.8);
-    const lip = prof.at(prof.copings[0]);
-    const rIn = 1.5;
-    const pts: [number, number, number][] = [];
-    for (let i = 0; i <= 8; i++) {
-      const a = (i / 8) * Q;
-      pts.push([(rIn + lip.u) * Math.cos(a), (rIn + lip.u) * Math.sin(a), lip.z]);
-    }
+  bowlcorner: cornerDef(BOWL_Q, 1.5, 0.8),
+
+  // ── plan 104 ──
+  // a 4 ft quarter, 20 ft across, a 4 ft deck
+  qp4: quarterDef(...QP4, 1.22, 2 * MODULE.across),
+  // an 8 ft quarter (a roll-in off the mezzanine), 20 ft across
+  qp8: quarterDef(...QP8, 1.22, 2 * MODULE.across),
+  // the 4 ft quarter's concave corner, round a 0.6 m flat
+  qp4corner: cornerDef(QP4, 0.6, 1.22),
+  // the 4 ft quarter's convex corner: a hip, its legs 10 ft
+  hip: hipDef(QP4, MODULE.across),
+  // the bowl's convex corner (its pocket's), legs 2 m
+  bowlhip: hipDef(BOWL_Q, 2),
+  // a 4 ft bank at 30°, a 4 ft deck, 10 ft across
+  bank: bankDef(MODULE.step, 30, 1.22, MODULE.across),
+  // a 3 ft pyramid: 26° banks round an 8 ft top
+  pyramid: pyramidDef(0.91, 26, 2 * MODULE.step),
+  // a 4 ft spine
+  spine4: (() => {
+    const q = quarterDef(...QP4, 0, 2 * MODULE.across);
+    const lipU = q.surfaces[0].prof.at(q.surfaces[0].prof.copings[0]).u;
     return {
-      size: [rIn + lip.u + 0.8, rIn + lip.u + 0.8],
-      height: lip.z,
-      surfaces: [{ prof, sweep: "turn", w0: 0, w1: Q, rIn }],
-      lines: [{ pts, what: "coping" }],
-    };
+      size: [2 * lipU, q.size[1]],
+      height: q.height,
+      surfaces: [
+        { ...q.surfaces[0], du: -lipU },
+        { ...q.surfaces[0], du: lipU, turn: Math.PI },
+      ],
+      lines: [along(0, q.height, -q.size[1] / 2, q.size[1] / 2, "coping")],
+      foot: footOf(-lipU, lipU, q.size[1]),
+    } satisfies PieceDef;
   })(),
+  // decks: a 10 ft square at 4 ft, at 8 ft (the mezzanine)
+  deck4: deckDef(MODULE.step, MODULE.across, MODULE.across),
+  deck8: deckDef(2 * MODULE.step, MODULE.across, MODULE.across),
+  // a seven-stair down from a 4 ft deck, its handrails; fourteen down from the 8 ft mezzanine
+  stairs: stairsDef(MODULE.step, 7),
+  stairs8: stairsDef(2 * MODULE.step, 14),
+  // the hall's vert, its extension
+  halfext: halfExtDef(),
+  // a guard railing: 1 m, 20 ft (its top bar ground)
+  railing: railDef([
+    [0, 0, 1.0],
+    [2 * MODULE.across, 0, 1.0],
+  ]),
 };
+
+/** A placed piece's ground (the floor's plan): its foot's corners. */
+export function pieceFoot(pc: PiecePlace): [number, number][] {
+  const d = PIECES[pc.kind];
+  const turn = d.surfaces[0]?.sweep === "turn" && d.surfaces.length === 1;
+  const W = turn ? 1 : (pc.width ?? d.size[1]) / d.size[1];
+  const [u0, w0, u1, w1] = d.foot;
+  const c = Math.cos(pc.yaw);
+  const s = Math.sin(pc.yaw);
+  return (
+    [
+      [u0, w0 * W],
+      [u1, w0 * W],
+      [u1, w1 * W],
+      [u0, w1 * W],
+    ] as [number, number][]
+  ).map(([u, w]) => [pc.x + u * c - w * s, pc.y + u * s + w * c]);
+}
 
 // ── a piece in the world ───────────────────────────────────────────────────────────────────────────────────
 
@@ -415,6 +689,8 @@ export function toLocal(p: Placed, x: number, y: number): { u: number; w: number
   const r = Math.hypot(dx, dy) || 1e-9;
   let a = Math.atan2(dy, dx) - p.a0;
   a = Math.atan2(Math.sin(a), Math.cos(a));
+  // (a hip's: up the ramp is in toward the centre)
+  if (p.s.inward) return { u: (p.s.rIn ?? 0) - r, w: a, ux: -dx / r, uy: -dy / r };
   return { u: r - (p.s.rIn ?? 0), w: a, ux: dx / r, uy: dy / r };
 }
 
@@ -427,14 +703,18 @@ export function toWorld(
   if (p.s.sweep === "line")
     return { x: p.ox + u * p.ux - w * p.uy, y: p.oy + u * p.uy + w * p.ux, ux: p.ux, uy: p.uy, wx: -p.uy, wy: p.ux };
   const a = p.a0 + w;
-  const r = u + (p.s.rIn ?? 0);
-  const ux = Math.cos(a);
-  const uy = Math.sin(a);
-  return { x: p.ox + r * ux, y: p.oy + r * uy, ux, uy, wx: -uy, wy: ux };
+  const r = radiusAt(p.s, u);
+  const cx = Math.cos(a);
+  const cy = Math.sin(a);
+  const k = p.s.inward ? -1 : 1;
+  return { x: p.ox + r * cx, y: p.oy + r * cy, ux: k * cx, uy: k * cy, wx: -cy, wy: cx };
 }
 
+/** A turn sweep's radius at u: rIn + u outward (a bowl's corner), rIn − u inward (a hip's). */
+export const radiusAt = (s: Surface, u: number) => (s.inward ? (s.rIn ?? 0) - u : u + (s.rIn ?? 0));
+
 /** How far a w step is in metres at u (a turn sweep's arc). */
-export const wScale = (p: Placed, u: number) => (p.s.sweep === "line" ? 1 : Math.max(0.05, u + (p.s.rIn ?? 0)));
+export const wScale = (p: Placed, u: number) => (p.s.sweep === "line" ? 1 : Math.max(0.05, radiusAt(p.s, u)));
 
 /** The pieces placed: their surfaces and grind lines in the world, found by where. */
 export class SkatePark {
@@ -479,7 +759,8 @@ export class SkatePark {
           surf.sweep === "line"
             ? [surf.w0, surf.w1]
             : [0, 0.25, 0.5, 0.75, 1].map((k) => surf.w0 + (surf.w1 - surf.w0) * k);
-        if (surf.sweep === "turn") us.unshift(-(surf.rIn ?? 0));
+        // (a turn's centre: where its radius is nought)
+        if (surf.sweep === "turn") us.unshift(surf.inward ? (surf.rIn ?? 0) : -(surf.rIn ?? 0));
         for (const u of us)
           for (const w of ws) {
             const q = toWorld(pl, u, w);
@@ -517,7 +798,7 @@ export class SkatePark {
       u <= p.s.prof.uMax + 1e-6 &&
       w >= p.s.w0 - 1e-6 &&
       w <= p.s.w1 + 1e-6 &&
-      (p.s.sweep === "line" || u + (p.s.rIn ?? 0) >= 0)
+      (p.s.sweep === "line" || radiusAt(p.s, u) >= 0)
     );
   }
 

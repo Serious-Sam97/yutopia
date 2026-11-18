@@ -73,7 +73,7 @@ import { litMaterial } from "../look/lit";
 import { isLife, isLifeBuild, isLifeOut } from "../look/look-mode";
 import { CEL, fadePiece, type Piece, yuLit } from "../look/yulit";
 import { boxInParent, type Slab } from "./below-cull";
-import { floorMaterial, groundRelief, kitMaterial, surfaceMaterial } from "./kit-mats";
+import { floorMaterial, groundRelief, kitMaterial, kitRenderer, surfaceMaterial } from "./kit-mats";
 import { type Geo, Out } from "./kit3d";
 import { edgesOfMap, type FreeWall, piecesOf, turnOut, type WallEdges } from "./walls3d";
 
@@ -936,6 +936,7 @@ export class World3 {
     }
     this.syncLive(objects);
     this.syncChess(objects);
+    this.syncSkate(objects);
     for (const [k, had] of this.areas)
       if (!byArea.has(k)) {
         this.unmount(had.built);
@@ -1371,7 +1372,7 @@ export class World3 {
   }
 
   // one thing drawn on its own (also build mode's ghosts)
-  drawObject(o0: WorldObjectDef): { out: Out; top: number; tall: boolean; pick: Pick3 | null } {
+  drawObject(o0: WorldObjectDef, all = false): { out: Out; top: number; tall: boolean; pick: Pick3 | null } {
     const e = entry(o0.kind);
     // (placed free — plan 72 phase 11.9: drawn as if at no turn with its middle at the origin, then
     // turned by its yaw and set at its middle)
@@ -1411,6 +1412,15 @@ export class World3 {
     // what clicks reach: in the live world things to use, or with
     // something to do — a chair, my desk; in build mode, everything
     const b = boundsOf(out);
+    // (plan 104: a skate piece drawn apart, as Blender built it — tp/skate-things3.ts —: its pick kept, nothing of it
+    // in the floor's buffers; a ghost, `all`, drawn whole)
+    if (!all && o.kind.startsWith("sk_") && kitRenderer())
+      return {
+        out: new Out(TEXTURED),
+        top,
+        tall: false,
+        pick: b ? { id: o.id, use: !!e.interact || hasActions(o), ...b } : null,
+      };
     return {
       out,
       top,
@@ -1782,6 +1792,27 @@ export class World3 {
     }
     this.chess.sync(objects);
   }
+  // ── the skate pieces (plan 104): the build menu's ramps as Blender built them, apart from the buffers ─────────
+  private skate: import("./skate-things3").SkateThings3 | null = null;
+  private skateObjs: WorldObjectDef[] = [];
+  private skateLoading = false;
+  private disposed = false;
+  private syncSkate(objects: WorldObjectDef[]) {
+    this.skateObjs = objects;
+    if (this.skate) return this.skate.sync(objects);
+    if (this.skateLoading || !kitRenderer() || !objects.some((o) => o.kind.startsWith("sk_"))) return;
+    this.skateLoading = true;
+    void import("./skate-things3").then((m) => {
+      if (this.disposed) return;
+      this.skate = new m.SkateThings3(this.materials.lit);
+      this.root.add(this.skate.root);
+      this.skate.sync(this.skateObjs);
+    });
+  }
+  /** How many skate pieces this floor draws apart (tests). */
+  get skatePieces(): number {
+    return this.skate?.drawn ?? 0;
+  }
   /** How many chessmen this floor draws (for tests). */
   get chessmen(): number {
     return this.chess?.drawn ?? 0;
@@ -1830,6 +1861,8 @@ export class World3 {
     this.dropRoofs();
     this.glassMat?.dispose();
     this.chess?.dispose();
+    this.skate?.dispose();
+    this.disposed = true;
     for (const b of this.walls) this.unmount(b);
     for (const a of this.areas.values()) this.unmount(a.built);
     for (const t of this.tall.values()) this.unmount(t.built);

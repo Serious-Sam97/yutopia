@@ -6,7 +6,7 @@
 //
 // Frames: the floor's (x east, y south = the Grounds' z, z up), metres; a piece's yaw is the plan way of its +u.
 
-import { PIECES, type PieceKind, type PiecePlace, type Profile } from "./pieces.ts";
+import { MODULE, PIECES, type PieceKind, type PiecePlace, type Profile, radiusAt } from "./pieces.ts";
 
 const Q = Math.PI / 2;
 
@@ -37,68 +37,132 @@ export const SKATE_HALL = {
   walls: 9,
   face: "s",
 } as const;
+/** The hall's pro shop counter (plan 104): east of its door against the south wall — the Grounds' only fit in the
+ *  hall (a solid), drawn with the hall's model; the shop's rack beside it (racks.ts). */
+export const SKATE_SHOP = { x: 480.6, z: -509.9, w: 3.2, d: 0.7, h: 1.0 } as const;
 /** The outdoor park's ground: concrete, ploughed (grounds.ts groundSurfaceAt `walk`), levelled to `h`. */
 export const SKATE_YARD = { x0: 462, z0: -492, x1: 508, z1: -448, h: 1.5 } as const;
 /** On the outdoor park's concrete (`pad` m round it)? */
 export const inSkateYard = (x: number, z: number, pad = 0) =>
   x >= SKATE_YARD.x0 - pad && x < SKATE_YARD.x1 + pad && z >= SKATE_YARD.z0 - pad && z < SKATE_YARD.z1 + pad;
 
-const BOWL_R = PIECES.bowlcorner.surfaces[0].rIn ?? 1.5;
+// ── the layouts (plan 104 F6a): our own, on Tony Hawk's 10 ft module and 4 ft steps, dense lines, a named gap
+// every few metres (skate/gaps.ts) ──
 
-/** A bowl round (cx, cy): its flat 2(a + r) × 2(b + r), four corners (bowlcorner) and a quarter along each side
- *  between them (`quarter`, as wide as the side's straight). */
-function bowl(cx: number, cy: number, a: number, b: number): PiecePlace[] {
-  const r = BOWL_R;
+const E = MODULE.across;
+/** The 4 ft corner's flat radius, a hip's (its centre this far from its walls' feet). */
+const CORNER_R = PIECES.qp4corner.surfaces[0].rIn ?? 0.6;
+const HIP_R = PIECES.hip.surfaces[2].rIn ?? 2;
+const HIP_LEGS = -PIECES.hip.foot[0];
+const BANK_LEN = PIECES.bank.size[0];
+
+/** A bowl of 4 ft walls shaped as an L (plan 104's "pocket"): the main floor (its walls' feet) x0..x1 × y0..y1, the
+ *  pocket south of its west part to x px, y py; concave corners where its walls meet, the hip at the L's inside
+ *  corner. Its walls stretch between them (none where the hip's legs reach a corner). */
+function lBowl(x0: number, y0: number, y1: number, px: number): PiecePlace[] {
+  const r = CORNER_R;
+  // (the hip's centre in the deck past the inside corner; the main floor's east end and the pocket's south end
+  // where the hip's legs end at a corner)
+  const ox = px + HIP_R;
+  const oy = y1 + HIP_R;
+  const x1 = ox + HIP_LEGS + r;
+  const py = oy + HIP_LEGS + r;
+  const wall = (x: number, y: number, yaw: number, a: number, b: number): PiecePlace[] =>
+    b - a > 0.01 ? [{ kind: "qp4", x, y, z: 0, yaw, width: b - a }] : [];
   return [
-    { kind: "bowlcorner", x: cx + a, y: cy + b, z: 0, yaw: 0 },
-    { kind: "bowlcorner", x: cx - a, y: cy + b, z: 0, yaw: Q },
-    { kind: "bowlcorner", x: cx - a, y: cy - b, z: 0, yaw: Math.PI },
-    { kind: "bowlcorner", x: cx + a, y: cy - b, z: 0, yaw: -Q },
-    { kind: "quarter", x: cx + a + r, y: cy, z: 0, yaw: 0, width: 2 * b },
-    { kind: "quarter", x: cx - a - r, y: cy, z: 0, yaw: Math.PI, width: 2 * b },
-    { kind: "quarter", x: cx, y: cy + b + r, z: 0, yaw: Q, width: 2 * a },
-    { kind: "quarter", x: cx, y: cy - b - r, z: 0, yaw: -Q, width: 2 * a },
+    { kind: "qp4corner", x: x0 + r, y: y0 + r, z: 0, yaw: Math.PI },
+    { kind: "qp4corner", x: x1 - r, y: y0 + r, z: 0, yaw: -Q },
+    { kind: "qp4corner", x: x1 - r, y: y1 - r, z: 0, yaw: 0 },
+    { kind: "qp4corner", x: px - r, y: py - r, z: 0, yaw: 0 },
+    { kind: "qp4corner", x: x0 + r, y: py - r, z: 0, yaw: Q },
+    { kind: "hip", x: ox, y: oy, z: 0, yaw: Math.PI },
+    // north, west (the whole L's), east, the pocket's south
+    ...wall((x0 + x1) / 2, y0, -Q, x0 + r, x1 - r),
+    ...wall(x0, (y0 + py) / 2, Math.PI, y0 + r, py - r),
+    ...wall(x1, (y0 + y1) / 2, 0, y0 + r, y1 - r),
+    ...wall((x0 + px) / 2, py, Q, x0 + r, px - r),
   ];
 }
 
-/** The step a stair set's treads are: a ledge's height (0.45) and its run (0.75: 31°, the kinked rail's 30°). */
-export const STAIR = { rise: PIECES.ledge.height, run: 0.75, steps: 3, deck: 2, across: 4 } as const;
-/** A stair set going down `dir` (plan, rad) from its top deck's front edge at (x, y): the deck (`STAIR.deck` deep)
- *  and three treads, each a ledge widened to its depth and stood on the one under it, and a kinked rail beside
- *  them on their left (seen going down), its kink at the top nosing — its top flat 0.38 over the deck, its foot
- *  over the floor. */
-function stairSet(x: number, y: number, dir: number): PiecePlace[] {
-  const D: [number, number] = [Math.cos(dir), Math.sin(dir)];
-  // (a ledge's u across the stairs, its w down them)
-  const U: [number, number] = [Math.cos(dir - Q), Math.sin(dir - Q)];
-  const half = STAIR.across / 2;
+/** The hall's (plan 104): the vert ramp with its extension along the west wall; the mezzanine over the pro shop
+ *  in the south-west, its 8 ft roll-in east, its drop north and fourteen stairs down north off its west end; 4 ft quarters round the north and
+ *  east walls, their corner; a 4 ft spine; the island (a hip on its north-west corner, a bank down its south face,
+ *  a rail into the bank); the seven-stair off its deck in the east channel, a bank up to it; a manual pad into a
+ *  ledge. */
+const HALL_PIECES: PiecePlace[] = (() => {
   const out: PiecePlace[] = [];
-  const tread = (d0: number, d1: number, top: number) => {
-    const d = (d0 + d1) / 2;
-    out.push({
-      kind: "ledge",
-      x: x + D[0] * d - U[0] * half,
-      y: y + D[1] * d - U[1] * half,
-      z: top - STAIR.rise,
-      yaw: dir - Q,
-      width: d1 - d0,
-    });
-  };
-  const H = (STAIR.steps + 1) * STAIR.rise;
-  tread(-STAIR.deck, 0, H);
-  for (let k = 1; k <= STAIR.steps; k++) tread((k - 1) * STAIR.run, k * STAIR.run, H - k * STAIR.rise);
-  // the kinked rail: its kink (1.5 along) at the nosing, 0.4 past the treads' far side
-  const k = PIECES.kinkrail.lines[0].pts;
-  const top = k[0][2];
-  out.push({
-    kind: "kinkrail",
-    x: x - D[0] * k[1][0] + U[0] * (half + 0.4),
-    y: y - D[1] * k[1][0] + U[1] * (half + 0.4),
-    z: H + 0.38 - top,
-    yaw: dir,
-  });
+  // the vert ramp: 14.48 m along x from the west wall, 12.2 across from the north wall
+  out.push({ kind: "halfext", x: 463.54, y: -529.6, z: 0, yaw: 0 });
+  // the mezzanine (8 ft) along the south wall: four 10 ft decks; its roll-in off the east end, the drop north
+  const my = -508.2 - E / 2;
+  for (let k = 0; k < 4; k++) out.push({ kind: "deck8", x: 456.3 + k * E, y: my, z: 0, yaw: 0 });
+  out.push({ kind: "qp8", x: 456.3 + 4 * E + PIECES.qp8.size[0], y: my, z: 0, yaw: Math.PI, width: E });
+  // its stairs down north off its west end (the fourteen)
+  out.push({ kind: "stairs8", x: 456.3 + E / 2, y: -508.2 - E, z: 0, yaw: -Q });
+  // the 4 ft quarters round the north and east walls, the corner between
+  const north = -535.84 + PIECES.qp4.size[0];
+  const east = 499.84 - PIECES.qp4.size[0];
+  const cx = east - CORNER_R;
+  const cy = north + CORNER_R;
+  out.push({ kind: "qp4", x: (471 + cx) / 2, y: north, z: 0, yaw: -Q, width: cx - 471 });
+  out.push({ kind: "qp4corner", x: cx, y: cy, z: 0, yaw: -Q });
+  out.push({ kind: "qp4", x: east, y: (cy + -511) / 2, z: 0, yaw: 0, width: -511 - cy });
+  // the spine, its crest north–south
+  out.push({ kind: "spine4", x: 478, y: -527, z: 0, yaw: 0 });
+  // the island: the hip on its north-west corner (its legs the west and north faces), a bank down its south
+  // face, a flat rail running into the bank from the south
+  const hx = 486.3;
+  const hy = -526;
+  out.push({ kind: "hip", x: hx, y: hy, z: 0, yaw: Math.PI });
+  const ix0 = hx - 0.3;
+  const ix1 = hx + HIP_LEGS;
+  const iy1 = hy + HIP_LEGS;
+  out.push({ kind: "bank", x: (ix0 + ix1) / 2, y: iy1 + BANK_LEN, z: 0, yaw: -Q, width: ix1 - ix0 });
+  out.push({ kind: "rail", x: (ix0 + ix1) / 2, y: iy1 + BANK_LEN + 0.6 + 5, z: 0, yaw: -Q });
+  // the seven: a 4 ft deck in the east channel, a bank up onto it from the north, the stairs down south
+  const sx = 493.525;
+  const sy0 = -527.5;
+  out.push({ kind: "deck4", x: sx, y: sy0, z: 0, yaw: Q });
+  out.push({ kind: "bank", x: sx, y: sy0 - BANK_LEN, z: 0, yaw: Q });
+  out.push({ kind: "stairs", x: sx, y: sy0 + E, z: 0, yaw: Q });
+  // a manual pad into a ledge, west to east, south of the spine
+  out.push({ kind: "manualpad", x: 471.5, y: -517, z: 0, yaw: 0 });
+  out.push({ kind: "ledge", x: 477.5, y: -517, z: 0, yaw: 0 });
   return out;
-}
+})();
+
+/** The yard's (plan 104): the L-bowl ("the pocket") in the east, a bank up to its deck; the plaza west of it — a
+ *  4 ft platform with a seven-stair and a bank down its south side, a bank up its north and a rail into that bank;
+ *  a ledge, a manual pad, a ledge in a line; the mini ramp and the spine along the north edge; a pyramid; two
+ *  kickers facing over a gap. */
+const YARD_PIECES: PiecePlace[] = (() => {
+  const out: PiecePlace[] = [];
+  out.push(...lBowl(488, -478, -471, 493));
+  // (its deck reached up a bank from the east)
+  out.push({ kind: "bank", x: 501.62 + BANK_LEN, y: -474.5, z: 0, yaw: Math.PI });
+  // the plaza's platform: two 10 ft decks; the stairs and a bank down south side by side; a bank up its north
+  const px = 466;
+  const py0 = -476.5;
+  for (const k of [0, 1]) out.push({ kind: "deck4", x: px + E / 2 + k * E, y: py0, z: 0, yaw: Q });
+  out.push({ kind: "stairs", x: px + E / 2, y: py0 + E, z: 0, yaw: Q });
+  out.push({ kind: "bank", x: px + 1.5 * E, y: py0 + E + BANK_LEN, z: 0, yaw: -Q });
+  out.push({ kind: "bank", x: px + E, y: py0 - BANK_LEN, z: 0, yaw: Q, width: 2 * E });
+  // a rail into the north bank
+  out.push({ kind: "rail", x: px + E / 2, y: py0 - BANK_LEN - 0.6 - 5, z: 0, yaw: Q });
+  // a ledge, a manual pad, a ledge, north to south
+  out.push({ kind: "ledge", x: 482.5, y: -488, z: 0, yaw: Q });
+  out.push({ kind: "manualpad", x: 482.5, y: -482, z: 0, yaw: Q });
+  out.push({ kind: "ledge", x: 482.5, y: -476, z: 0, yaw: Q });
+  // the mini ramp and the spine along the north edge
+  out.push({ kind: "mini", x: 468.05, y: -489.4, z: 0, yaw: 0 });
+  out.push({ kind: "spine", x: 476.47, y: -489.4, z: 0, yaw: 0 });
+  // the pyramid, south-west
+  out.push({ kind: "pyramid", x: 473.5, y: -459.5, z: 0, yaw: 0 });
+  // two kickers facing, over a gap
+  out.push({ kind: "kicker", x: 465.5, y: -469.3, z: 0, yaw: Q });
+  out.push({ kind: "kicker", x: 465.5, y: -461.7, z: 0, yaw: -Q });
+  return out;
+})();
 
 /** The town's two parks (F7c). */
 export const TOWN_PARKS: TownPark[] = [
@@ -111,44 +175,14 @@ export const TOWN_PARKS: TownPark[] = [
     x1: SKATE_HALL.x1,
     z1: SKATE_HALL.z1,
     h: SKATE_HALL.h,
-    pieces: [
-      // the vert half-pipe along the north wall, west
-      { kind: "half", x: 464, y: -530.8, z: 0, yaw: 0 },
-      // the small bowl south of it, by the west wall
-      ...bowl(464, -514.8, 1.5, 1),
-      // the street course, east: a quarter facing the east bank over a fun box; a ledge and a flat rail; a manual
-      // pad; a stair set down east with its kinked rail; the bank along the whole east wall
-      { kind: "quarter", x: 478, y: -529, z: 0, yaw: Math.PI },
-      { kind: "funbox", x: 484.5, y: -529, z: 0, yaw: 0 },
-      { kind: "ledge", x: 482, y: -523.5, z: 0, yaw: 0 },
-      { kind: "rail", x: 489, y: -523.5, z: 0, yaw: 0 },
-      { kind: "manualpad", x: 483, y: -518, z: 0, yaw: 0 },
-      ...stairSet(486, -512, 0),
-      { kind: "quarter", x: 496.45, y: -521.8, z: 0, yaw: 0, width: 26.4 },
-    ],
+    pieces: HALL_PIECES,
   },
   {
     key: "yard",
     name: "Skate park",
     indoor: false,
     ...SKATE_YARD,
-    pieces: [
-      // the mini ramp and the spine along the north side, a quarter past the spine
-      { kind: "mini", x: 470, y: -484, z: 0, yaw: 0 },
-      { kind: "spine", x: 486, y: -484, z: 0, yaw: 0 },
-      { kind: "quarter", x: 500, y: -484, z: 0, yaw: 0 },
-      // two kickers facing, a manual pad
-      { kind: "kicker", x: 470, y: -470, z: 0, yaw: 0 },
-      { kind: "kicker", x: 484, y: -470, z: 0, yaw: Math.PI },
-      { kind: "manualpad", x: 476, y: -464, z: 0, yaw: 0 },
-      // ledges and rails, west and south
-      { kind: "ledge", x: 466, y: -466, z: 0, yaw: Q },
-      { kind: "ledge", x: 468, y: -456, z: 0, yaw: 0 },
-      { kind: "rail", x: 474, y: -458, z: 0, yaw: 0 },
-      { kind: "rail", x: 474, y: -452, z: 0, yaw: 0 },
-      // the bowl, south-east
-      ...bowl(498, -462, 2.5, 2),
-    ],
+    pieces: YARD_PIECES,
   },
 ];
 
@@ -349,27 +383,34 @@ export function pieceBoxes(pc: { kind: PieceKind; width?: number }): PieceBox[] 
     const steps = profileSteps(s.prof);
     if (s.sweep === "line") {
       const turn = s.turn ?? 0;
-      const k = Math.abs(turn) > 1e-6 ? -1 : 1;
       const [w0, w1] = [s.w0 * W, s.w1 * W];
-      for (const [u0, u1, top] of steps)
+      // (straight or turned back: plan 103's, a box square to the piece; turned any other way — a hip's leg, a
+      // pyramid's side — the box turned with it)
+      const square = Math.abs(turn) < 1e-6 || Math.abs(Math.abs(turn) - Math.PI) < 1e-6;
+      const k = Math.abs(turn) > 1e-6 ? -1 : 1;
+      const [ct, st] = [Math.cos(turn), Math.sin(turn)];
+      for (const [u0, u1, top] of steps) {
+        const [mu, mw] = [(u0 + u1) / 2, (w0 + w1) / 2];
         out.push({
-          cu: (s.du ?? 0) + (k * (u0 + u1)) / 2,
-          cw: (s.dw ?? 0) + (k * (w0 + w1)) / 2,
+          cu: (s.du ?? 0) + (square ? k * mu : mu * ct - mw * st),
+          cw: (s.dw ?? 0) + (square ? k * mw : mu * st + mw * ct),
           hu: (u1 - u0) / 2,
           hw: (w1 - w0) / 2,
-          a: 0,
+          a: square ? 0 : turn,
           z0: 0,
           z1: top,
           rail: false,
         });
+      }
       continue;
     }
-    const rIn = s.rIn ?? 0;
-    // (each as wide as its sector at its inner edge: none over the sector's sides — into a neighbour's)
+    // (each as wide as its sector at its inner edge: none over the sector's sides — into a neighbour's; a hip's
+    // inner edge is its upper one, toward its centre)
     const N = 12;
     const da = (s.w1 - s.w0) / N;
+    const [cu0, cw0, t0] = [s.du ?? 0, s.dw ?? 0, s.turn ?? 0];
     for (let j = 0; j < N; j++) {
-      const t = s.w0 + (j + 0.5) * da;
+      const t = t0 + s.w0 + (j + 0.5) * da;
       // (a long step — a steep wall and its deck — in rings 0.4 deep: the slivers between sectors narrow)
       const rings = steps.flatMap(([u0, u1, top]) => {
         const k = Math.max(1, Math.ceil((u1 - u0) / 0.4 - 1e-6));
@@ -380,14 +421,15 @@ export function pieceBoxes(pc: { kind: PieceKind; width?: number }): PieceBox[] 
         ]);
       });
       for (const [u0, u1, top] of rings) {
-        const r0 = rIn + u0;
-        const r1 = rIn + u1;
+        const r0 = Math.min(radiusAt(s, u0), radiusAt(s, u1));
+        const r1 = Math.max(radiusAt(s, u0), radiusAt(s, u1));
         const rm = (r0 + r1) / 2;
         out.push({
-          cu: rm * Math.cos(t),
-          cw: rm * Math.sin(t),
+          cu: cu0 + rm * Math.cos(t),
+          cw: cw0 + rm * Math.sin(t),
           hu: (r1 - r0) / 2,
-          hw: Math.tan(da / 2) * r0,
+          // (at a hip's apex, its middle's: nought wide at its inner edge)
+          hw: Math.tan(da / 2) * (r0 > 0.05 ? r0 : rm),
           a: t,
           z0: 0,
           z1: top,
