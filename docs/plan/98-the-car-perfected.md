@@ -616,3 +616,15 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
 - Not done: parked cars dented when shoved; cars far off patched less often (Colyseus' state is everyone's);
   the radio in step between cars.
 - Checked: world-server car tests (new: told once for one crash); typecheck clean.
+
+## Phase 26 — built (2026-11-17): the words and the panels
+
+- **The refusals that had no words:** `chains`, `rope`, `tied` (the toast showed their keys).
+- **The car HUD in both languages:** its plate's KM/H, FUEL (COMBUSTÍVEL), ENGINE (MOTOR), AUTO, MANUAL handed to it by
+  the cars (`CarHud(host, words)`); its other words were already the cars' own.
+- **The buy panel waits for its answer:** the button busy ("…") till the server's word (bought, repainted, or no — 8 s at
+  most); a refusal shown in the panel itself; and **your old car retired only after a second "Yes, swap"** (asked once
+  more for 4 s).
+- **The minimap's cars:** every car on the move turned the way it's heading — others' in cream, the town's own (the
+  shuttle, the bus, the plough, the visitor) in teal — beside my own last one (amber).
+- Checked: typecheck clean; biome on the changed files (the panel's effect's dependency noted).

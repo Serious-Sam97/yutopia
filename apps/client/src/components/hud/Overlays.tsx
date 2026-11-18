@@ -606,6 +606,8 @@ export function ConnectionOverlay() {
   );
 }
 const FADE_MS = 300;
+/** (plan 98 phase 26) the town's own vehicles (not a player's car): their own colour on the minimap */
+const TOWN_KINDS = new Set(["visitor", "shuttle", "plough", "bus"]);
 
 // The studio from above: rooms labelled, the one you're in outlined, people as
 // dots (amber: you can hear them), you in red. Click to walk there; ± zooms the
@@ -774,6 +776,33 @@ export function Minimap() {
       x.fill();
       x.stroke();
     }
+    // (plan 98 phase 26) the cars on the move: others' (cream) and the town's own — the shuttle, the bus, the plough,
+    // the visitor — (teal), each turned the way it's heading
+    w?.room?.state.vehicles?.forEach((v) => {
+      if (!v.shown) return;
+      const vx = X(v.x);
+      const vy = Y(v.z);
+      if (vx < -10 || vy < -10 || vx > c.width + 10 || vy > c.height + 10) return;
+      const town = TOWN_KINDS.has(v.kind);
+      const big = v.kind === "shuttle" || v.kind === "bus" || v.kind === "plough";
+      x.save();
+      x.translate(vx, vy);
+      x.rotate(v.a);
+      x.fillStyle = town ? "#5fb3a8" : "#e9dcc3";
+      x.strokeStyle = "#1a120c";
+      x.lineWidth = 1.2;
+      const hl = big ? 9 : 6;
+      x.beginPath();
+      x.moveTo(hl + 2, 0);
+      x.lineTo(hl - 1, -3.5);
+      x.lineTo(-hl, -3.5);
+      x.lineTo(-hl, 3.5);
+      x.lineTo(hl - 1, 3.5);
+      x.closePath();
+      x.fill();
+      x.stroke();
+      x.restore();
+    });
     // the car I last drove: an amber car (off the map: at its edge, the way to it)
     if (carAt) {
       const cx = Math.max(6, Math.min(c.width - 6, X(carAt.x)));

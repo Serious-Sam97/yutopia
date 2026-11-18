@@ -50,6 +50,11 @@ addStrings(
       "Ele espera ao seu lado, na vaga de retirada. Leve-o para casa.",
     ],
     motorsSwap: ["Your old one goes when this one comes.", "O antigo vai embora quando este chegar."],
+    motorsSwapSure: ["Yes, swap", "Sim, trocar"],
+    motorsSwapAsk: [
+      "Your old car is retired for good when you take this one. Sure?",
+      "Seu carro antigo vai embora de vez quando você levar este. Certeza?",
+    ],
     motorsRepaint: ["Repaint", "Repintar"],
     motorsRepaintTitle: ["MOTORS · your car", "MOTORS · seu carro"],
     motorsRepaintHint: [
@@ -170,7 +175,43 @@ export function DealerPanel({ objectId }: { objectId: string }) {
   const wheels = wheelsOf(look.variant) as string[];
   const two = twoToneOf(look.variant);
 
+  // (plan 98 phase 26) asked: waiting for the server's word — the button busy; a refusal shown here, not only as a toast;
+  // an old car to be retired: asked once more first
+  const [pending, setPending] = useState(false);
+  const [err, setErr] = useState("");
+  const [confirm, setConfirm] = useState(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tm is the words' lookup — the same every render
+  useEffect(() => {
+    const room = w?.room;
+    if (!pending || !room) return;
+    const offs = [
+      room.onMessage("car:no", (m: { why: string }) => {
+        setPending(false);
+        setErr(tm(`carNo_${m.why}`));
+      }),
+      room.onMessage("car:bought", () => setPending(false)),
+      room.onMessage("car:looked", () => setPending(false)),
+    ];
+    const tm0 = setTimeout(() => setPending(false), 8000);
+    return () => {
+      clearTimeout(tm0);
+      for (const off of offs) off?.();
+    };
+  }, [pending, w]);
+  useEffect(() => {
+    if (!confirm) return;
+    const tm1 = setTimeout(() => setConfirm(false), 4000);
+    return () => clearTimeout(tm1);
+  }, [confirm]);
   const go = () => {
+    if (pending) return;
+    if (!repaint && mine && !confirm) {
+      setConfirm(true);
+      return;
+    }
+    setConfirm(false);
+    setErr("");
+    setPending(true);
     if (repaint) w?.send("car:look", { id: carId, look });
     else
       w?.send("car:buy", {
@@ -389,13 +430,21 @@ export function DealerPanel({ objectId }: { objectId: string }) {
               style={{ height: 42, padding: "0 26px" }}
               data-motors-take
               onClick={go}
+              disabled={pending}
+              aria-busy={pending}
             >
-              {tm(repaint ? "motorsRepaint" : "motorsTake")}
+              {pending ? "…" : tm(repaint ? "motorsRepaint" : confirm ? "motorsSwapSure" : "motorsTake")}
             </button>
-            {!repaint && (
-              <span className="text-xs" style={{ color: "var(--cream-dim)" }}>
-                {tm("motorsTakeHint")} {mine ? tm("motorsSwap") : ""}
+            {err ? (
+              <span className="text-xs" role="alert" style={{ color: "var(--warn)" }}>
+                {err}
               </span>
+            ) : (
+              !repaint && (
+                <span className="text-xs" style={{ color: "var(--cream-dim)" }}>
+                  {confirm ? tm("motorsSwapAsk") : `${tm("motorsTakeHint")} ${mine ? tm("motorsSwap") : ""}`}
+                </span>
+              )
             )}
           </div>
         </div>

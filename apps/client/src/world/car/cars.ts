@@ -208,6 +208,15 @@ addStrings(
     carPassenger: ["C camera · R radio · X out", "C câmera · R rádio · X sair"],
     // (plan 94 P10: the HUD's words)
     carH_hudDamage: ["DAMAGE", "DANOS"],
+    // (plan 98 phase 26: the plate's words, and the refusals that had none — the toast showed their keys)
+    carH_hudKmh: ["KM/H", "KM/H"],
+    carH_hudFuel: ["FUEL", "COMBUSTÍVEL"],
+    carH_hudEngine: ["ENGINE", "MOTOR"],
+    carH_hudAuto: ["AUTO", "AUTO"],
+    carH_hudManual: ["MANUAL", "MANUAL"],
+    carNo_chains: ["You've no snow chains", "Você não tem correntes de neve"],
+    carNo_rope: ["You've no tow rope", "Você não tem corda de reboque"],
+    carNo_tied: ["One of them's already tied to another", "Um deles já está amarrado a outro"],
     carH_hudKeysAgain: ["F1 — these keys again", "F1 — estas teclas de novo"],
     carH_kGo: ["go", "acelerar"],
     carH_kBrake: ["brake", "frear"],
@@ -5142,7 +5151,11 @@ export class Cars {
       const v: [number, number, number] = [s.v.x + nx * close * k, s.v.y, s.v.z + nz * close * k];
       m.drive.car.place(s.p.x, s.p.y, s.p.z, [s.q.x, s.q.y, s.q.z, s.q.w], v, [s.w.x, s.w.y, s.w.z]);
     }
-    this.hitBy(room, { ...s, hit: { what: "car", j: h.j, x: h.x, z: h.z, v: Math.max(0, close), at: s.t } } as CarState, true);
+    this.hitBy(
+      room,
+      { ...s, hit: { what: "car", j: h.j, x: h.x, z: h.z, v: Math.max(0, close), at: s.t } } as CarState,
+      true,
+    );
   }
 
   /** A car's broken parts as seen now: what broke since it was last seen falls and shatters (a bumper on
@@ -6141,7 +6154,13 @@ export class Cars {
   private showHud() {
     const tp = this.host.tp();
     if (!tp || this.hud) return;
-    this.hud = new CarHud(tp.hostEl ?? document.body);
+    this.hud = new CarHud(tp.hostEl ?? document.body, {
+      kmh: t("carH_hudKmh"),
+      fuel: t("carH_hudFuel"),
+      engine: t("carH_hudEngine"),
+      auto: t("carH_hudAuto"),
+      manual: t("carH_hudManual"),
+    });
     this.keysAt = this.time;
     // a phone: the wheel and the pedals on the screen
     if (window.matchMedia?.("(pointer: coarse)").matches && this.mine) {

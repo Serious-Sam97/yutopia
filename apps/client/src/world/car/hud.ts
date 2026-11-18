@@ -93,7 +93,19 @@ export class CarHud {
   readonly el: HTMLDivElement;
   private q: Record<string, HTMLElement> = {};
   private was: Record<string, string> = {};
-  constructor(host: HTMLElement) {
+  /** (plan 98 phase 26) the plate's words, in the player's language (they were English only) */
+  private words: { kmh: string; fuel: string; engine: string; auto: string; manual: string };
+  constructor(
+    host: HTMLElement,
+    words: { kmh: string; fuel: string; engine: string; auto: string; manual: string } = {
+      kmh: "KM/H",
+      fuel: "FUEL",
+      engine: "ENGINE",
+      auto: "AUTO",
+      manual: "MANUAL",
+    },
+  ) {
+    this.words = words;
     if (!styled) {
       styled = true;
       const st = document.createElement("style");
@@ -107,12 +119,12 @@ export class CarHud {
       <div class="left">
         <div class="cabinet dmgcard" data-q="card"><div class="in"><div data-q="car"></div><div class="word" data-q="word"></div></div></div>
         <div class="cabinet plate" data-q="plate"><div class="in">
-          <div class="speed"><span data-q="kmh">0</span><small>KM/H</small></div>
-          <div class="gearbox" data-q="gearbox"><span data-q="gear">N</span><em data-q="mode">AUTO</em></div>
+          <div class="speed"><span data-q="kmh">0</span><small>${words.kmh}</small></div>
+          <div class="gearbox" data-q="gearbox"><span data-q="gear">N</span><em data-q="mode">${words.auto}</em></div>
           <div class="rev" data-q="revbar"><b data-q="red"></b><i data-q="rev"></i></div>
           <div class="bars">
-            <div data-q="fuelbox"><div class="row">FUEL<span data-q="fueln"></span></div><div class="bar" data-q="fuelbar"><i data-q="fuel"></i></div></div>
-            <div data-q="engbox"><div class="row">ENGINE<span data-q="engn"></span></div><div class="bar eng" data-q="engbar"><i data-q="eng"></i></div></div>
+            <div data-q="fuelbox"><div class="row">${words.fuel}<span data-q="fueln"></span></div><div class="bar" data-q="fuelbar"><i data-q="fuel"></i></div></div>
+            <div data-q="engbox"><div class="row">${words.engine}<span data-q="engn"></span></div><div class="bar eng" data-q="engbar"><i data-q="eng"></i></div></div>
           </div>
           <div class="chips" data-q="chips"></div>
         </div></div>
@@ -151,7 +163,7 @@ export class CarHud {
       this.set("gear", v.gear, (s) => {
         q.gear.textContent = s;
       });
-      this.set("mode", v.manual ? "MANUAL" : "AUTO", (s) => {
+      this.set("mode", v.manual ? this.words.manual : this.words.auto, (s) => {
         q.mode.textContent = s;
       });
       this.show("revbar", !!v.gear);
@@ -248,8 +260,10 @@ function outline(d: HudDamage): string {
   // the body; its sides, nose, tail, roof shaded by their dents
   out.push(`<rect x="12" y="8" width="48" height="104" rx="14" fill="${burnt ? "#111" : C.body}" stroke="${C.edge}"/>`);
   if (!burnt) {
-    if (z[0] > 0.04) out.push(`<path d="M12 30 v-8 a14 14 0 0 1 14 -14 h20 a14 14 0 0 1 14 14 v8 z" fill="${dent(z[0])}"/>`);
-    if (z[1] > 0.04) out.push(`<path d="M12 90 v8 a14 14 0 0 0 14 14 h20 a14 14 0 0 0 14 -14 v-8 z" fill="${dent(z[1])}"/>`);
+    if (z[0] > 0.04)
+      out.push(`<path d="M12 30 v-8 a14 14 0 0 1 14 -14 h20 a14 14 0 0 1 14 14 v8 z" fill="${dent(z[0])}"/>`);
+    if (z[1] > 0.04)
+      out.push(`<path d="M12 90 v8 a14 14 0 0 0 14 14 h20 a14 14 0 0 0 14 -14 v-8 z" fill="${dent(z[1])}"/>`);
     if (z[2] > 0.04) r(12, 32, 6, 56, dent(z[2]));
     if (z[3] > 0.04) r(54, 32, 6, 56, dent(z[3]));
     if ((z[4] ?? 0) > 0.04) r(22, 54, 28, 22, dent(z[4]));
@@ -278,7 +292,9 @@ function outline(d: HudDamage): string {
   ].forEach(([x, y], i) => r(x, y, 7, 16, d.parts & flats[i] || burnt ? C.bad : C.ok));
   // the lamps: out, red
   const lamp = (x: number, y: number, bit: number) =>
-    out.push(`<circle cx="${x}" cy="${y}" r="2.6" fill="${d.parts & bit ? C.bad : "#f1d79a"}" opacity="${d.parts & bit ? 1 : 0.7}"/>`);
+    out.push(
+      `<circle cx="${x}" cy="${y}" r="2.6" fill="${d.parts & bit ? C.bad : "#f1d79a"}" opacity="${d.parts & bit ? 1 : 0.7}"/>`,
+    );
   lamp(20, 11, PART.headL);
   lamp(52, 11, PART.headR);
   lamp(20, 109, PART.tailL);
@@ -292,14 +308,23 @@ function outline(d: HudDamage): string {
   ];
   for (const [i, x, y] of doors)
     if (d.wreck & DOOR_GONE[i]) out.push(`<rect x="${x}" y="${y}" width="4" height="16" fill="#17181d"/>`);
-  if (d.wreck & WRECK.bonnetGone) out.push(`<rect x="20" y="13" width="32" height="18" rx="3" fill="#0e0f12" stroke="${C.bad}" stroke-dasharray="2 2"/>`);
-  if (d.wreck & WRECK.bootGone) out.push(`<rect x="20" y="96" width="32" height="12" rx="3" fill="#0e0f12" stroke="${C.bad}" stroke-dasharray="2 2"/>`);
+  if (d.wreck & WRECK.bonnetGone)
+    out.push(
+      `<rect x="20" y="13" width="32" height="18" rx="3" fill="#0e0f12" stroke="${C.bad}" stroke-dasharray="2 2"/>`,
+    );
+  if (d.wreck & WRECK.bootGone)
+    out.push(
+      `<rect x="20" y="96" width="32" height="12" rx="3" fill="#0e0f12" stroke="${C.bad}" stroke-dasharray="2 2"/>`,
+    );
   // the engine: steam, smoke, fire
   if (d.fire === 2)
     out.push(
       `<path d="M36 10 c6 6 8 10 2 16 c2 -6 -3 -7 -4 -3 c-5 -4 -3 -9 2 -13 z" fill="#ff9a3a"/><path d="M36 15 c3 4 3 6 0 9 c-2 -3 -2 -5 0 -9 z" fill="#ffe2a0"/>`,
     );
-  else if (d.fire === 1) out.push(`<circle cx="36" cy="18" r="6" fill="#141210" opacity=".9"/><circle cx="40" cy="12" r="4" fill="#141210" opacity=".8"/>`);
+  else if (d.fire === 1)
+    out.push(
+      `<circle cx="36" cy="18" r="6" fill="#141210" opacity=".9"/><circle cx="40" cy="12" r="4" fill="#141210" opacity=".8"/>`,
+    );
   else if (!burnt && z[0] > 0.8) out.push(`<circle cx="36" cy="20" r="5" fill="${C.cream}" opacity=".7"/>`);
   return `<svg width="72" height="120" viewBox="0 0 72 120" aria-hidden="true">${out.join("")}</svg>`;
 }
