@@ -22,10 +22,12 @@ import {
   GRIND_BY,
   LIP_BY,
   SLIDE_BY,
+  SPECIALS,
   TRICK_IDS,
   TRICKS,
   type TrickDef,
   type TrickId,
+  UPGRADE,
 } from "./tricks.ts";
 
 /** The keys a board reads (the client's, from its bindings: F3a). */
@@ -36,15 +38,24 @@ export interface SkateKeys {
   right: boolean;
   upPressed: boolean;
   downPressed: boolean;
-  /** Space: held crouches, let go ollies */
+  leftPressed?: boolean;
+  rightPressed?: boolean;
+  /** Space: held crouches, let go ollies (pressed at a wall in the air: a wallplant) */
   ollie: boolean;
-  /** E (a flip), R (a grab: held), F (a grind, a lip, a wallride: held catches), Q (a revert), X (off) */
+  olliePressed?: boolean;
+  /** (docs/plan/104 F2a, Tony Hawk's PC layout) J a flip, L a grab (held), K a grind / lip / wallride (held catches),
+   *  Q / E spin, Shift the revert and break vert (spine, acid), X off */
   flipPressed: boolean;
   grab: boolean;
   grabPressed: boolean;
   grind: boolean;
   grindPressed: boolean;
-  revertPressed: boolean;
+  spinL?: boolean;
+  spinR?: boolean;
+  brk?: boolean;
+  breakPressed?: boolean;
+  /** (plan 103's Q revert: the break's press now) */
+  revertPressed?: boolean;
   offPressed: boolean;
 }
 export const NO_KEYS: SkateKeys = {
@@ -62,6 +73,13 @@ export const NO_KEYS: SkateKeys = {
   grindPressed: false,
   revertPressed: false,
   offPressed: false,
+  leftPressed: false,
+  rightPressed: false,
+  olliePressed: false,
+  spinL: false,
+  spinR: false,
+  brk: false,
+  breakPressed: false,
 };
 
 export type SkateMode = "roll" | "manual" | "air" | "grind" | "lip" | "wall";
@@ -87,6 +105,12 @@ export interface AirNow {
   done: { id: TrickId; double?: boolean; held?: number }[];
   /** the grind key pressed this long ago (a catch's buffer) */
   catch: number;
+  /** a vert air: the plan way back into its ramp (the auto-turn's), the placed surface it left; vert broken (Shift: out
+   *  over the top, a spine transfer); an acid drop called (Shift over a ramp) */
+  inYaw?: number;
+  fromPl?: number;
+  broke?: boolean;
+  acid?: boolean;
 }
 export interface Balance {
   bal: number;
@@ -147,6 +171,18 @@ export interface SkateNow {
   /** s since W and S were last pressed (the manual's taps) */
   lastUp: number;
   lastDown: number;
+  /** (docs/plan/104) the special meter (points, full at SKATE.specialFull) and lit; the session's banked score; the
+   *  combo's balance seconds (each balance harder by them), the last grind's id; the directions pressed lately (the
+   *  specials'), the board's own clock; a powerslide on; no grind for this long (after a wallplant) */
+  special: number;
+  lit: boolean;
+  score: number;
+  balT: number;
+  lastGrind: TrickId | null;
+  dirs: { d: "u" | "d" | "l" | "r"; t: number }[];
+  clock: number;
+  cess: boolean;
+  noGrind: number;
 }
 
 export interface SkateEvents {
@@ -165,6 +201,10 @@ export interface SkateEvents {
   /** stepped off, at this speed */
   off?: number;
   revert?: boolean;
+  /** a powerslide begun */
+  cess?: boolean;
+  /** a gap made (its name, points) */
+  gap?: { name: string; pts: number };
 }
 
 /** The park a board asks about where it is (the pieces placed near), and the step's numbers. */
@@ -179,7 +219,12 @@ export const skateEnv = (park: SkatePark): SkateEnv => ({ park, step: stepSkate 
 const EMPTY_PARK = new SkatePark([]);
 
 /** On a board, from standing (its speed along `yaw` the body's own). */
-export function startSkate(b: Body, variant: BoardVariant, stance: 1 | -1 = 1): SkateNow {
+export function startSkate(
+  b: Body,
+  variant: BoardVariant,
+  stance: 1 | -1 = 1,
+  carry?: { special: number; lit: boolean; score: number },
+): SkateNow {
   const s = b.vx * Math.cos(b.yaw) + b.vy * Math.sin(b.yaw);
   const k: SkateNow = {
     variant,
@@ -205,7 +250,20 @@ export function startSkate(b: Body, variant: BoardVariant, stance: 1 | -1 = 1): 
     ramp: false,
     lastUp: 9,
     lastDown: 9,
+    special: carry?.special ?? 0,
+    lit: carry?.lit ?? false,
+    score: carry?.score ?? 0,
+    balT: 0,
+    lastGrind: null,
+    dirs: [],
+    clock: 0,
+    cess: false,
+    noGrind: 0,
   };
+  // (docs/plan/104, the board's direction: rolling forward along the way she faces, at her speed that way — never
+  // across it, never fakie from a sideways step)
+  b.vx = Math.cos(b.yaw) * k.s;
+  b.vy = Math.sin(b.yaw) * k.s;
   b.skate = k;
   b.verb = null;
   b.flow = null;
@@ -226,6 +284,11 @@ const newAir = (vert: boolean, fakie: boolean): AirNow => ({
 });
 
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+/** A heading turned toward another by at most `max` (rad), the short way. */
+function turnToward(from: number, to: number, max: number): number {
+  const d = wrap(to - from);
+  return Math.abs(d) <= max ? to : wrap(from + Math.sign(d) * max);
+}
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
 /** The frame on a placed surface at (ℓ, w): the point, the tangent up ℓ, the way across, the normal. */
@@ -262,6 +325,25 @@ export function stepSkate(b: Body, inp: MoveInput, env: MoveEnv, dt: number, ev:
   k.t += dt;
   k.lastUp = keys.upPressed ? 0 : k.lastUp + dt;
   k.lastDown = keys.downPressed ? 0 : k.lastDown + dt;
+  k.clock += dt;
+  k.noGrind = Math.max(0, k.noGrind - dt);
+  // (the directions pressed lately: a special's two)
+  for (const [on, d] of [
+    [keys.upPressed, "u"],
+    [keys.downPressed, "d"],
+    [keys.leftPressed, "l"],
+    [keys.rightPressed, "r"],
+  ] as const)
+    if (on) k.dirs.push({ d, t: k.clock });
+  while (k.dirs.length && k.clock - k.dirs[0].t > SKATE.specialWindow) k.dirs.shift();
+  // the special meter: lit, it drains (~15 s); unlit, it ebbs
+  if (k.lit) {
+    k.special -= SKATE.specialDrain * dt;
+    if (k.special <= 0) {
+      k.special = 0;
+      k.lit = false;
+    }
+  } else k.special = Math.max(0, k.special - SKATE.specialDecay * dt);
   // (a manual's taps: W then S, S then W)
   const manualTap: TrickId | null =
     keys.downPressed && k.lastUp > 0 && k.lastUp < SKATE.tap
@@ -307,8 +389,19 @@ function setMode(k: SkateNow, m: SkateMode) {
 
 function bank(k: SkateNow, sev: SkateEvents) {
   k.combo.settle();
-  if (k.combo.count > 0) sev.combo = { name: k.combo.name, score: k.combo.score, count: k.combo.count };
+  if (k.combo.count > 0) {
+    const score = k.combo.score;
+    sev.combo = { name: k.combo.name, score, count: k.combo.count };
+    k.score += score;
+    // (the special fills by what the combo paid: lit at full)
+    if (!k.lit) {
+      k.special = Math.min(SKATE.specialFull, k.special + score);
+      if (k.special >= SKATE.specialFull) k.lit = true;
+    }
+  }
   k.combo.clear();
+  k.balT = 0;
+  k.lastGrind = null;
 }
 
 /** Thrown off: the walker's body again, its speed kept (the client's ragdoll takes it). */
@@ -317,6 +410,9 @@ function bail(b: Body, k: SkateNow, sev: SkateEvents, why: NonNullable<SkateEven
   k.combo.settle();
   if (k.combo.count > 0) sev.lost = { name: k.combo.name, score: k.combo.score, count: k.combo.count };
   k.combo.clear();
+  // (a bail empties the special)
+  k.special = 0;
+  k.lit = false;
   b.skate = null;
   b.up = b.vz > 0.5 || b.up;
 }
@@ -387,9 +483,13 @@ function roll(
     k.n = [0, 0, 1];
   }
 
-  // the speed: the slope's pull, a push, the brake, the ground's loss, the air's
-  let a = -SKATE.g * F[2];
-  const pushing = k.mode === "roll" && keys.up && speed < SKATE.push * feel.speed && tz < 0.3;
+  // the speed: the slope's pull (the ramps' and the land's), a push (W) or the auto-kick at a crawl (you never
+  // stall), the brake or a powerslide (S), the ground's loss, the air's
+  let a = -SKATE.gRamp * F[2];
+  const lit = k.lit ? SKATE.litSpeed : 1;
+  const flat = tz < 0.3;
+  const want = keys.up ? SKATE.push * feel.speed * lit : speed < SKATE.kickMin ? SKATE.kick : 0;
+  const pushing = k.mode === "roll" && !keys.down && flat && speed < want;
   k.pushing = pushing && foot.push > 0;
   if (k.pushing) {
     a += Math.sign(k.s || 1) * SKATE.pushAccel * foot.push;
@@ -398,13 +498,20 @@ function roll(
   // (pumping: the crouch held going down a ramp)
   if (k.on && keys.ollie && F[2] * Math.sign(k.s) < -0.2) a += Math.sign(k.s) * SKATE.pump;
   let loss = SKATE.roll + foot.loss * feel.rough + SKATE.drag * k.s * k.s;
-  if (keys.down && k.mode === "roll" && !manualTap) loss += SKATE.brake;
+  // S: at speed a powerslide (the board across, scrubbing — the one way it goes sideways), slower the brake
+  const cess = keys.down && k.mode === "roll" && !manualTap && speed > SKATE.cessFrom && flat;
+  if (cess && !k.cess) {
+    sev.trick = "powerslide";
+    sev.cess = true;
+  }
+  k.cess = cess;
+  if (keys.down && k.mode === "roll" && !manualTap) loss += cess ? SKATE.cess : SKATE.brake;
   k.s += a * dt;
   if (Math.abs(k.s) > 1e-6) {
     const d = Math.min(Math.abs(k.s), loss * dt);
     k.s -= Math.sign(k.s) * d;
   }
-  k.s = clamp(k.s, -SKATE.top, SKATE.top);
+  k.s = clamp(k.s, -SKATE.top * lit, SKATE.top * lit);
 
   // deep snow, sand: the board stops dead (on the move, she's thrown)
   if (foot.stop && !k.on) {
@@ -422,7 +529,8 @@ function roll(
   if (k.mode === "manual" && k.manual) {
     const m = k.manual;
     const into = (keys.up ? 1 : 0) - (keys.down ? 1 : 0);
-    if (!balance(m, k.t, into, dt, m.id === "manual" ? 1 : -1)) return bail(b, k, sev, "balance");
+    k.balT += dt;
+    if (!balance(m, k.t, into, dt, m.id === "manual" ? 1 : -1, k.balT)) return bail(b, k, sev, "balance");
     k.combo.grow(m.id, k.t, { switch: k.s < 0 });
     if (speed < 0.6 || k.on) {
       k.combo.settle();
@@ -433,7 +541,7 @@ function roll(
   } else if (k.combo.count > 0 && k.since > SKATE.grace) bank(k, sev);
 
   // the revert: Q just after coming down in a ramp — the board turned round on its wheels
-  if (keys.revertPressed && k.ramp && k.since < SKATE.revert && k.mode === "roll") {
+  if ((keys.breakPressed || keys.revertPressed) && k.ramp && k.since < SKATE.revert && k.mode === "roll") {
     b.yaw = wrap(b.yaw + Math.PI);
     k.s = -k.s;
     k.combo.add("revert", {});
@@ -480,7 +588,7 @@ function roll(
     return takeOff(b, k, v, false);
   }
 
-  if (k.on) rideOn(b, k, env, park, dt, F);
+  if (k.on) rideOn(b, k, env, park, dt, F, !!keys.brk);
   else rideGround(b, k, env, park, dt, sev);
 }
 
@@ -491,19 +599,30 @@ function startManual(k: SkateNow, id: TrickId, sev: SkateEvents) {
   sev.trick = id;
 }
 
-/** A balance needle: it tips the way it leans, more the longer it's held; the keys push it back. False: off. */
-function balance(m: Balance, t: number, into: number, dt: number, sign = 1): boolean {
+/** A balance needle (Neversoft's CManual: an inverted pendulum): it tips the way it leans, the harder the more
+ *  seconds of balance this combo has had (`hardT` — carried over from grind to manual to lip); the keys push its
+ *  drift back; sat too still, it's nudged. False: off. */
+function balance(m: Balance, t: number, into: number, dt: number, sign = 1, hardT = t): boolean {
   // (a drift of its own, the same on every machine: two slow waves)
   const drift = 0.55 * Math.sin(t * 1.9 + 0.7) + 0.35 * Math.sin(t * 3.3 + 2.1);
-  const hard = 1 + 0.14 * t;
+  const hard = 1 + SKATE.hard * hardT;
   m.v += (SKATE.tip * m.bal + drift) * hard * dt - into * sign * SKATE.hold * dt;
+  if (Math.abs(m.v) < 0.02 && Math.abs(m.bal) < 0.05) m.v += (Math.sin(t * 7.7) >= 0 ? 1 : -1) * SKATE.nudge * dt;
   m.v *= Math.max(0, 1 - SKATE.damp * dt);
   m.bal += m.v * dt;
   return Math.abs(m.bal) < 1;
 }
 
 /** On a piece: along its profile and across it, off its ends to the next piece, the ground or the air. */
-function rideOn(b: Body, k: SkateNow, env: MoveEnv, park: SkatePark, dt: number, F: [number, number, number]) {
+function rideOn(
+  b: Body,
+  k: SkateNow,
+  env: MoveEnv,
+  park: SkatePark,
+  dt: number,
+  F: [number, number, number],
+  brk = false,
+) {
   const on = k.on as OnSurface;
   const p = park.placed[on.pl];
   const f0 = surfFrame(p, on.l, on.w);
@@ -519,14 +638,37 @@ function rideOn(b: Body, k: SkateNow, env: MoveEnv, park: SkatePark, dt: number,
     if (on.l < cop - 1e-6 && l1 >= cop - 1e-6) {
       const at = surfFrame(p, cop - 1e-3, on.w);
       if (at.tz >= SKATE.vertLip) {
-        const up = Math.abs(nose.fu * k.s) * at.tz * SKATE.vertBoost;
         const across = nose.fw * k.s;
+        const fromPl = on.pl;
+        // vert broken (Shift held: out over the top — onto the deck, or over a spine to its far face): the speed as it is
+        if (brk) {
+          setPos(b, at.x, at.y, at.z + 0.02);
+          k.n = at.N;
+          const v: [number, number, number] = [F[0] * k.s, F[1] * k.s, F[2] * k.s];
+          // (over the top: the way up turned a little out, so it clears the coping)
+          const out = Math.max(1.5, Math.abs(k.s) * 0.25);
+          v[0] += at.ux * out;
+          v[1] += at.uy * out;
+          takeOff(b, k, v, false);
+          if (k.air) {
+            k.air.broke = true;
+            k.air.fromPl = fromPl;
+          }
+          return;
+        }
+        // Tony Hawk's vert assist: straight up (its speed kept, to a most), turned back to face in, back down
+        const up = Math.min(SKATE.vertMax, Math.abs(nose.fu * k.s) * at.tz * SKATE.vertBoost);
         // (nudged back in, over the ramp: it comes down on its face)
         b.x = at.x - at.ux * 0.08;
         b.y = at.y - at.uy * 0.08;
         b.z = at.z;
         k.n = at.N;
-        return takeOff(b, k, [at.W[0] * across, at.W[1] * across, up], true);
+        takeOff(b, k, [at.W[0] * across, at.W[1] * across, up], true);
+        if (k.air) {
+          k.air.inYaw = Math.atan2(-at.uy, -at.ux);
+          k.air.fromPl = fromPl;
+        }
+        return;
       }
     }
   }
@@ -652,28 +794,75 @@ function air(
   A.catch = keys.grindPressed ? 0 : A.catch + dt;
   const dir = dirOf(keys.up, keys.down, keys.left, keys.right);
 
-  // the spin (A/D held)
-  const spin = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+  // the spin (Q / E held: Tony Hawk's spin keys — A/D are the tricks' directions in the air); off a vert lip with no
+  // spin asked, the auto-turn back to face into the ramp (not a spin: it isn't counted)
+  const spin = (keys.spinR ? 1 : 0) - (keys.spinL ? 1 : 0);
   if (spin) {
     b.yaw = wrap(b.yaw + spin * SKATE.spin * dt);
     A.spun += SKATE.spin * dt;
+  } else if (A.vert && A.inYaw !== undefined && A.spun < 0.3) {
+    b.yaw = turnToward(b.yaw, A.inYaw, SKATE.autoturn * dt);
+  }
+  // Shift in the air over a ramp: an acid drop called
+  if (keys.breakPressed && !A.vert) A.acid = true;
+  // Space at a wall in the air: a wallplant — kicked off it, up, out
+  if (keys.olliePressed && env.flow && A.t > 0.08) {
+    const sp = Math.hypot(b.vx, b.vy);
+    if (sp > 1) {
+      const w = env.flow.wall(b.x, b.y, b.z, b.vx / sp, b.vy / sp, 0.7);
+      if (w) {
+        const into = b.vx * w.nx + b.vy * w.ny;
+        b.vx += (-into + SKATE.plantOut) * w.nx;
+        b.vy += (-into + SKATE.plantOut) * w.ny;
+        b.vz = Math.max(b.vz, SKATE.plantUp);
+        b.yaw = wrap(b.yaw + Math.PI);
+        A.done.push({ id: "wallplant" });
+        k.noGrind = SKATE.plantNoGrind;
+        sev.trick = "wallplant";
+        sev.ollie = true;
+      }
+    }
   }
 
-  // the tricks: E a flip (again quickly, its double), R a grab held, let go
+  // the tricks: J a flip (again quickly, its upgrade), L a grab held (again, its upgrade), let go; lit, two
+  // directions just before the key: a special
   const c = A.cur;
+  const special = (key: "flip" | "grab" | "grind"): TrickId | null => {
+    if (!k.lit || k.dirs.length < 2) return null;
+    const [a1, a2] = [k.dirs[k.dirs.length - 2].d, k.dirs[k.dirs.length - 1].d];
+    const sp = SPECIALS.find((x) => x.key === key && x.dirs[0] === a1 && x.dirs[1] === a2);
+    if (!sp) return null;
+    k.dirs = [];
+    return sp.id;
+  };
   if (keys.flipPressed) {
-    if (c && (TRICKS[c.id] as TrickDef).kind === "flip" && !c.double && c.t < c.len * 0.6) {
-      c.double = true;
-      c.len *= 1.6;
+    const kind = c ? (TRICKS[c.id] as TrickDef).kind : null;
+    if (c && kind === "flip" && !c.double && c.t < c.len * 0.6) {
+      const up = UPGRADE[c.id];
+      if (up) {
+        c.id = up;
+        c.len = TRICKS[up].len / feel.flip;
+      } else {
+        c.double = true;
+        c.len *= 1.6;
+      }
+      sev.trick = c.id;
     } else if (!c) {
-      const id = FLIP_BY[dir];
+      const id = special("flip") ?? FLIP_BY[dir];
       A.cur = { id, t: 0, len: TRICKS[id].len / feel.flip };
       sev.trick = id;
     }
-  } else if (keys.grabPressed && !c) {
-    const id = GRAB_BY[dir];
-    A.cur = { id, t: 0, len: TRICKS[id].len, rel: -1 };
-    sev.trick = id;
+  } else if (keys.grabPressed) {
+    const up = c ? UPGRADE[c.id] : undefined;
+    if (c && up && (TRICKS[c.id] as TrickDef).kind === "grab" && c.rel === -1) {
+      c.id = up;
+      c.len = Math.max(c.len, TRICKS[up].len);
+      sev.trick = up;
+    } else if (!c) {
+      const id = special("grab") ?? GRAB_BY[dir];
+      A.cur = { id, t: 0, len: TRICKS[id].len, rel: -1 };
+      sev.trick = id;
+    }
   }
   const cur = A.cur;
   if (cur) {
@@ -692,14 +881,14 @@ function air(
     }
   }
 
-  // a grind: F (held, or pressed a moment ago) over a rail, a ledge, a coping
-  if ((keys.grind || A.catch < 0.2) && !A.cur) {
+  // a grind: K (held, or pressed a moment ago) over a rail, a ledge, a coping — caught only in the air
+  if ((keys.grind || A.catch < 0.2) && !A.cur && k.noGrind <= 0) {
     const r = railNear(env, park, b.x, b.y, b.z, SKATE.reach);
     // (and room left along it the way it's going: not caught again on the end just ground off)
     const left = r ? (b.vx * r.ux + b.vy * r.uy >= 0 ? r.ahead : r.back) : 0;
     if (r && left > 0.3 && b.z >= r.z - SKATE.over && b.z <= r.z + SKATE.over && (b.vz <= 0.5 || b.z <= r.z + 0.1)) {
       landTricks(k, A);
-      return startGrind(b, k, r, dir, sev);
+      return startGrind(b, k, r, dir, sev, special("grind"));
     }
     // a wallride: at a wall, in the air
     if (A.catch < 0.2 && env.flow) {
@@ -732,13 +921,13 @@ function air(
   let landedWorld = false;
   if (!overPark && env.mover && (env.mover.ready?.(b.x, b.y) ?? true)) {
     // (the mover pulls by JUMP_G: the board's own pull made up to it)
-    b.vz += (JUMP_G - SKATE.g) * dt;
+    b.vz += (JUMP_G - (A.vert ? SKATE.gVert : SKATE.g)) * dt;
     const vz0 = b.vz;
     b.up = true;
     landedWorld = env.mover.step(b, dt, 0, env.blocked);
     if (landedWorld) b.vz = vz0 - JUMP_G * dt;
   } else {
-    b.vz -= SKATE.g * dt;
+    b.vz -= (A.vert ? SKATE.gVert : SKATE.g) * dt;
     b.x += b.vx * dt;
     b.y += b.vy * dt;
     b.z += b.vz * dt;
@@ -834,6 +1023,9 @@ function land(
   k.n = N;
   b.up = false;
   b.vz = 0;
+  // (the glue that's the landing's own: over a spine onto its far face, vert broken; an acid drop onto a ramp's face)
+  if (A.broke && k.on && A.fromPl !== undefined && k.on.pl !== A.fromPl) A.done.push({ id: "spine" });
+  else if (A.acid && ramp && k.on) A.done.push({ id: "acid" });
   landTricks(k, A);
   k.air = null;
   k.since = 0;
@@ -871,15 +1063,26 @@ function railNear(env: MoveEnv, park: SkatePark, x: number, y: number, z: number
   return a ?? (f ? { ...f, slope: 0, what: "rail" } : null);
 }
 
-function startGrind(b: Body, k: SkateNow, r: RailHit, dir: ReturnType<typeof dirOf>, sev: SkateEvents) {
+function startGrind(
+  b: Body,
+  k: SkateNow,
+  r: RailHit,
+  dir: ReturnType<typeof dirOf>,
+  sev: SkateEvents,
+  special: TrickId | null = null,
+) {
   const railYaw = Math.atan2(r.uy, r.ux);
   const off = Math.abs(wrap(b.yaw - railYaw));
   const offA = Math.min(off, Math.PI - off);
   const across = offA > (50 * Math.PI) / 180;
-  const id = across ? SLIDE_BY[dir] : GRIND_BY[dir];
-  // its speed along the rail (at least the grind's own)
+  const id = special ?? (across ? SLIDE_BY[dir] : GRIND_BY[dir]);
+  // (the same grind again in the combo: harder; a new one, a little easier — Same_Grind_Add_Time, New_Grind_Sub_Time)
+  k.balT = Math.max(0, k.balT + (k.lastGrind === id ? SKATE.sameAdd : -SKATE.newSub));
+  k.lastGrind = id;
+  // its speed along the rail (at least the grind's own), and the rail's boost (grinds speed you up)
   let s = b.vx * r.ux + b.vy * r.uy;
   if (Math.abs(s) < SKATE.grindMin) s = (s < 0 ? -1 : 1) * SKATE.grindMin;
+  s += Math.sign(s) * SKATE.grindBoost;
   // the board along the rail (its nose the nearer way) or across it
   if (across) b.yaw = wrap(railYaw + (wrap(b.yaw - railYaw) > 0 ? Math.PI / 2 : -Math.PI / 2));
   else b.yaw = off < Math.PI / 2 ? railYaw : wrap(railYaw + Math.PI);
@@ -902,7 +1105,8 @@ function grind(b: Body, k: SkateNow, keys: SkateKeys, env: MoveEnv, park: SkateP
   g.t += dt;
   // the balance: A / D (the board's left and right as it goes)
   const into = ((keys.right ? 1 : 0) - (keys.left ? 1 : 0)) * (k.s < 0 ? -1 : 1);
-  if (!balance(g, g.t, into, dt)) {
+  k.balT += dt;
+  if (!balance(g, g.t, into, dt, 1, k.balT)) {
     b.vx = g.ux * k.s;
     b.vy = g.uy * k.s;
     return bail(b, k, sev, "balance");
@@ -965,7 +1169,8 @@ function lip(b: Body, k: SkateNow, keys: SkateKeys, park: SkatePark, dt: number,
   const on = k.on as OnSurface;
   L.t += dt;
   const into = (keys.up ? 1 : 0) - (keys.down ? 1 : 0);
-  if (!balance(L, L.t, into, dt)) return bail(b, k, sev, "balance");
+  k.balT += dt;
+  if (!balance(L, L.t, into, dt, 1, k.balT)) return bail(b, k, sev, "balance");
   k.combo.grow(L.id, L.t);
   const p = park.placed[on.pl];
   const f = surfFrame(p, L.l, on.w);
@@ -1035,7 +1240,9 @@ export function skateCode(k: SkateNow | null | undefined): number {
     (dbl << 15) +
     (crouch << 16) +
     (push << 17) +
-    ((Math.round(clamp((k.lean + 1) / 2, 0, 1) * 15) & 15) << 18)
+    ((Math.round(clamp((k.lean + 1) / 2, 0, 1) * 15) & 15) << 18) +
+    ((k.cess ? 1 : 0) << 22) +
+    ((k.lit ? 1 : 0) << 23)
   );
 }
 export interface SkateLook {
@@ -1048,6 +1255,9 @@ export interface SkateLook {
   crouch: boolean;
   push: boolean;
   lean: number;
+  /** a powerslide (the board across the way it goes), the special lit */
+  cess: boolean;
+  lit: boolean;
 }
 export function skateOfCode(c: number): SkateLook | null {
   const mode = SKATE_MODES[(c & 7) - 1];
@@ -1063,6 +1273,8 @@ export function skateOfCode(c: number): SkateLook | null {
     crouch: ((c >> 16) & 1) === 1,
     push: ((c >> 17) & 1) === 1,
     lean: (((c >> 18) & 15) / 15) * 2 - 1,
+    cess: ((c >> 22) & 1) === 1,
+    lit: ((c >> 23) & 1) === 1,
   };
 }
 /** The look of a board now, from the body itself (the local player's: the same shape as the wire's). */
@@ -1078,5 +1290,5 @@ export const isSkateCode = (c: unknown): c is number =>
   typeof c === "number" &&
   Number.isInteger(c) &&
   c >= 0 &&
-  c < 2 ** 22 &&
+  c < 2 ** 24 &&
   ((c & 7) <= SKATE_MODES.length || c === SKATE_BAIL);
