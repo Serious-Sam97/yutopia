@@ -27,6 +27,7 @@ import {
 import type { Place } from "@yutopia/shared/physics/place";
 import { FULL_VITALS, freshClock, spendRoll, stepVitals } from "@yutopia/shared/vitals";
 import type { WorldController } from "../controller";
+import type { SkateRide } from "../skate/ride";
 import { hud } from "../store";
 import { type Action, actionOf } from "./bindings";
 import { afterFirstStep, camKeys, HeldOver, MoveControls, type Press } from "./controls";
@@ -105,6 +106,9 @@ export interface WalkOut {
   /** in the water (plan 66): 0 out of it, 1 wading, 2 afloat, 3 under; and into it this frame, how hard */
   swim: number;
   splash: number | null;
+  /** on a board (plan 103): its code for the wire (shared skateCode; 0 on foot), the ground's normal under it */
+  sk: number;
+  skN: [number, number, number] | null;
 }
 
 // the body after Kingdom Hearts 3 (docs/plan/56-the-controls.md B: signed off in /dev/move)
@@ -448,7 +452,13 @@ export class Walker {
   readonly takeoff = SPEC.takeoff;
   /** (plan 58 5d) down on the ragdoll (the view's: my person's), held still till I'm up */
   limp = false;
+  /** my board (plan 103: skate/ride.ts), once one's been in hand */
+  skate: SkateRide | null = null;
   private body: Body = newBody(0, 0);
+  /** (plan 103) the body itself, for the board's ride (skate/ride.ts) */
+  get stepBody(): Body {
+    return this.body;
+  }
   /** (plan 58 5d) Down on the ragdoll: moved with it across the ground (its hips' drift) — the body
    *  gets up where it lies, the camera on it. */
   driftBy(dx: number, dy: number): void {
@@ -585,6 +595,18 @@ export class Walker {
       ? { grid: phys.collider, mover: phys.mover, footing: c.footing, blocked, flow, water }
       : { grid: holdStill(c.grid), footing: c.footing, blocked, water };
     move.pitch = c.camPitch;
+    // on a board (plan 103): its keys and the park near — the step is its own (skate/step.ts)
+    const ride = this.body.skate ? this.skate : null;
+    if (this.body.skate && !ride) this.body.skate = null;
+    if (ride) {
+      env.skate = ride.env();
+      move.skate = ride.keys();
+      move.jump = false;
+      move.jumpPressed = false;
+      move.crouch = false;
+      move.crouchPressed = false;
+      move.dodgePressed = false;
+    }
     const flying = this.flying;
     if (flying) {
       move.crouch = false;
@@ -640,8 +662,14 @@ export class Walker {
       if (first) {
         afterFirstStep(move);
         first = false;
+        // (a board's presses are the first step's)
+        if (move.skate) {
+          ride?.stepped();
+          move.skate = { ...move.skate, upPressed: false, downPressed: false, flipPressed: false, grabPressed: false, grindPressed: false, revertPressed: false, offPressed: false };
+        }
       }
     });
+    if (ride || this.skate) this.skate?.after(events.flatMap((e) => (e.skate ? [e.skate] : [])), this.body, dt);
     this.heldOver.after(move, !first);
     // (in the water C dives and comes up: no crouch kept for when I'm out — plan 66)
     if (this.body.swim) this.controls.stand();
@@ -765,6 +793,8 @@ export class Walker {
           ? 1
           : 0,
       splash,
+      sk: this.skate?.code(b) ?? 0,
+      skN: b.skate ? b.skate.n : null,
     };
   }
 

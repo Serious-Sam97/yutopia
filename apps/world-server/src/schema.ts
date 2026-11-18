@@ -64,6 +64,9 @@ export class Player extends Schema {
   @type("uint8") yaw = 0;
   @type("int8") pitch = 0;
   @type("uint32") mt = 0;
+  // on a board (docs/plan/103-the-skate.md: shared skate skateCode — its mode, the trick, fakie, stance, the
+  // board), 0 on foot
+  @type("uint32") sk = 0;
   // the dark (docs/plan/30-the-dark.md D2): health, stamina, warmth, 0..100, for the team's HUD
   @type("uint8") hp = 100;
   @type("uint8") st = 100;

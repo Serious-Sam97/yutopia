@@ -100,6 +100,7 @@ import { cleanText } from "@yutopia/shared/glyphs";
 import { editsNow, groundsAreaAt, groundsOutdoors, inDeepWater, setUnderfoot } from "@yutopia/shared/grounds";
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
 import { isFlowCode, isVerb, MV_WINDED } from "@yutopia/shared/move";
+import { isSkateCode } from "@yutopia/shared/skate";
 import { BuildingNav } from "@yutopia/shared/nav";
 import { Place } from "@yutopia/shared/physics";
 import { type Feet, HAND, offBand, spanOf } from "@yutopia/shared/reach";
@@ -964,6 +965,8 @@ export class WorldRoom extends Room<WorldState> {
       if (Number.isFinite(m.yaw)) p.yaw = (m.yaw as number) & 255;
       if (Number.isFinite(m.pitch)) p.pitch = Math.max(-127, Math.min(127, (m.pitch as number) | 0));
       if (Number.isFinite(m.mt)) p.mt = (m.mt as number) >>> 0;
+      // (on a board: taken as said — plan 103, no anticheat)
+      p.sk = isSkateCode(m.sk) ? m.sk : 0;
       // (their feet on something: a jump may start from here a moment after — the grid's heights
       // are over their floor's; Player.z is the world's)
       const rz = overFloor(level, z);

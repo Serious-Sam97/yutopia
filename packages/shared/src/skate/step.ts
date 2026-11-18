@@ -1068,5 +1068,11 @@ export function skateLook(k: SkateNow): SkateLook {
 const TRICK_LIST = TRICK_IDS;
 const BOARD_LIST = BOARD_VARIANTS;
 const BOARD_VARIANT_INDEX = (v: BoardVariant) => Math.max(0, BOARD_LIST.indexOf(v));
+/** Thrown off (a bail): the code for the moment after (the others' ragdoll), the board gone from under her. */
+export const SKATE_BAIL = 7;
 export const isSkateCode = (c: unknown): c is number =>
-  typeof c === "number" && Number.isInteger(c) && c >= 0 && c < 2 ** 22 && (c & 7) <= SKATE_MODES.length;
+  typeof c === "number" &&
+  Number.isInteger(c) &&
+  c >= 0 &&
+  c < 2 ** 22 &&
+  ((c & 7) <= SKATE_MODES.length || c === SKATE_BAIL);

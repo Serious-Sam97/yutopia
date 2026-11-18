@@ -75,6 +75,10 @@ import { levelHands } from "./level3d";
 import { type LongSpec, longHold, longInHand, type SlingSpec } from "./long-hold";
 import type { PersonIn } from "./person-in";
 import { thrown } from "./thrown";
+import { SKATE_BAIL, skateOfCode } from "@yutopia/shared/skate";
+import { HIP_H } from "../chars/moves";
+import { BoardObj } from "../skate/board3d";
+import { type SkaterOut, skaterPose } from "../skate/pose";
 import {
   at,
   type BodyFrame,
@@ -636,6 +640,9 @@ const tq2 = new Quaternion();
 const tv = new Vector3();
 const tv2 = new Vector3();
 const tv3 = new Vector3();
+const skYaw = new Quaternion();
+const skN3 = new Vector3();
+const skHand = new Vector3();
 
 /** (plan 62) Playing the piano: sat on its stool, facing its keys, the hands on them (wide, along
  *  them) — as sat at a desk typing. Its parts (tp/view.ts): the keys, then the stool. */
@@ -741,6 +748,13 @@ export class Person3D {
   private downW = 0;
   // the swim (plan 66): its driver while in the water, how much of the body it has
   private swim2: InstanceType<SwimM["Swim2"]> | null = null;
+  // (plan 103) on a board: its drawing, the code last seen, when its trick began, how far into the pose, tipped
+  private skBoard: BoardObj | null = null;
+  private skCode = 0;
+  private skT0 = 0;
+  private skW = 0;
+  private skTipped = false;
+  private skHands: SkaterOut["hands"] | null = null;
   private swimW = 0;
   private jumpH = 0; // off the floor (a jump), tiles
   private jumpOn = false;
@@ -1223,6 +1237,49 @@ export class Person3D {
         swimHands = sw.w > 0.5 ? sw.hands : swimHands;
       } else this.swim2 = null;
     } else this.swim2 = null;
+    // on a board (docs/plan/103-the-skate.md F11a): the skater's pose over everything, the board under her feet
+    this.skHands = null;
+    {
+      const code = p.sk ?? 0;
+      // (thrown off: onto the ragdoll at the speed they had — mine's put there by the ride already)
+      if (code === SKATE_BAIL && this.skCode && this.skCode !== SKATE_BAIL && !thrown.has(this.id))
+        thrown.set(this.id, { v: [this.vx, 1.5, this.vy], at: performance.now() });
+      // (a new trick, or mode: its clock from now)
+      if ((code & 0x1f9) !== (this.skCode & 0x1f9)) this.skT0 = performance.now();
+      this.skCode = code;
+      const sk = !sitting && code ? skateOfCode(code) : null;
+      const A = sk && !this.limp?.on ? this.C.actsNow() : null;
+      if (sk && A) {
+        this.skBoard ??= new BoardObj(sk.variant);
+        const bd = this.skBoard;
+        bd.set(sk.variant);
+        if (bd.root.parent !== this.root) this.root.add(bd.root);
+        const now = performance.now() / 1000;
+        const o = skaterPose({ look: sk, t: now - this.skT0 / 1000, stand: HIP_H, m: bd.m, speed: this.spd, time: now });
+        const act = A.carStep(o.step, now);
+        this.skW = Math.min(1, this.skW + step * 6);
+        const w = this.skW;
+        pose = this.C.blend(pose, act.pose, w);
+        // (on a rail: the trucks on it, or the deck across it — she and the board let down onto it)
+        const across = sk.trick === "boardslide" || sk.trick === "lipslide";
+        const down = sk.mode === "grind" ? (across ? bd.m.deckY - 0.012 : bd.m.wheelR) : 0;
+        lift = [
+          lift[0] + (o.shift - lift[0]) * w,
+          lift[1] + (o.step.hipY - HIP_H - down - lift[1]) * w,
+          lift[2],
+        ];
+        bd.root.rotation.set(0, sk.stance > 0 ? 0 : Math.PI, 0);
+        bd.root.position.set(0, -down, 0);
+        bd.pose(sk.lean, sk.mode === "air" || sk.mode === "grind" ? 0 : this.spd, step, o.board.roll, o.board.yaw, o.board.pitch, o.board.up);
+        this.skHands = o.hands;
+      } else {
+        this.skW = 0;
+        if (this.skBoard) {
+          this.skBoard.dispose();
+          this.skBoard = null;
+        }
+      }
+    }
     // knocked down by a pool ball: thrown back onto the floor, up again (chars FALL_LEN)
     if (p.fell !== undefined && p.fell < this.C.FALL_LEN) {
       const m = this.C.fellPose(p.fell);
@@ -1345,6 +1402,27 @@ export class Person3D {
       this.model.handsTo(downHands);
     }
     if (swimHands && !limpHands) this.model.handsTo(swimHands);
+    // (plan 103) on a board: tipped with the ramp under it (its normal), the hands out or to the board
+    if (this.part === "all") {
+      const N = this.skW > 0 ? p.skN : null;
+      if (N) {
+        skYaw.setFromAxisAngle(Y3, Math.PI / 2 - this.turned);
+        skN3.set(N[0], N[2], N[1]).normalize();
+        this.root.quaternion.setFromUnitVectors(Y3, skN3).multiply(skYaw);
+        this.skTipped = true;
+      } else if (this.skTipped) {
+        const y = this.root.rotation.y;
+        this.root.rotation.set(0, y, 0);
+        this.skTipped = false;
+      }
+    }
+    if (this.skHands && this.skW > 0.3 && !limpHands) {
+      this.root.updateMatrixWorld(true);
+      for (const S of ["L", "R"] as const) {
+        const h = this.skHands[S];
+        if (h) this.model.reachTo(S, this.root.localToWorld(skHand.set(h[0], h[1], h[2])), this.skW);
+      }
+    }
     this.gunHands(p, step);
     this.akDropFrame(step);
     this.dbDropFrame(step);

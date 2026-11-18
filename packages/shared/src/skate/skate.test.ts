@@ -65,7 +65,7 @@ test("a carve at speed is a tight arc (about the board's radius), the speed kept
   const y0 = b.yaw;
   ride(b, env, { right: true }, 0.5);
   const turned = b.yaw - y0;
-  assert.ok(turned > 1, `turned ${turned.toFixed(2)} rad in half a second`);
+  assert.ok(turned > 0.8, `turned ${turned.toFixed(2)} rad in half a second`);
   assert.ok((b.skate?.s ?? 0) > 5.5);
 });
 

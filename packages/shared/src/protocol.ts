@@ -141,6 +141,8 @@ export interface ClientMessages {
     yaw?: number;
     pitch?: number;
     mt?: number;
+    /** on a board (plan 103: shared skate skateCode — its mode, trick, fakie, stance, board), 0 on foot */
+    sk?: number;
   };
   emote: { e: Emote };
   // a jump (shared/jump.ts): a hop, or a flip on the run
@@ -596,6 +598,9 @@ export interface ClientMessages {
   // (plan 87) the left hand's use (key 1): the torch on or off (`on`, else switched), a first aid or a battery used, a
   // flare lit and held up (thrown by arms:flare)
   "dark:hand": { on?: boolean };
+  // (plan 103 F10a) a board borrowed from a park's rack (shared skate/racks SKATE_RACKS): that variant, into the pack —
+  // within RACK_REACH of one, carrying fewer than BOARDS_MAX
+  "skate:take": { variant: string };
   // an admin's own vitals full again (health, stamina, warmth, the battery): for trying things out
   "mod:refill": {
     kit?: boolean;
@@ -794,6 +799,8 @@ export interface ServerMessages {
   // someone had already emptied it)
   "dark:pockets": { inv: Inventory; bat: number };
   "dark:found": { spot: string; got: LootItem[]; full: boolean; gone?: boolean; later?: boolean }; // (later: the lobby's kit, taken today)
+  // (plan 103) a rack's board refused: two carried already (shared skate/racks BOARDS_MAX)
+  "skate:no": { why: "many" };
   // one of the shadowed struck me (how much health it took); I went down to nothing and woke
   // at the office (docs/plan/30-the-dark.md D7: phase 6 puts the others' 30 s before it)
   "dark:hit": { id: string; n: number; shot?: boolean }; // (shot: one of us shot them — id, their sid)

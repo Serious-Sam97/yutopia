@@ -1,4 +1,5 @@
 import { crossings } from "@yutopia/shared/physics/structure-solids";
+import { setBoardRenderer } from "../skate/board3d";
 import type { Structure } from "@yutopia/shared/structure";
 import { panOf, setEarYaw } from "../ear";
 // (first: the fog chunks swapped before anything below makes a material — fog3d.ts; lights-off.ts, below, adds the
@@ -539,6 +540,8 @@ export class ThirdPersonView {
   readonly printsPart: Prints = new Prints(this);
 
   readonly renderer: WebGLRenderer;
+  /** (plan 103) the camera's way behind a board */
+  private skCamYaw = 0;
   readonly scene = new Scene();
   // (near 0.1, not less: the depth buffer's precision is spent near the camera,
   // and faces a hair apart far off would flicker — see kit3d Layers)
@@ -845,6 +848,8 @@ export class ThirdPersonView {
       powerPreference: "high-performance",
       alpha: true,
     });
+    // (plan 103: the boards' GLBs load with this renderer's textures)
+    setBoardRenderer(this.renderer);
     this.renderer.setClearAlpha(1);
     // (the life look's sky light, made before any material is drawn: plan 73 phase 2.2)
     if (isLife()) {
@@ -2642,17 +2647,21 @@ void main() {
         f.pitch = this.pitch;
         f.tune.pitchMin = this.aimK > 0.5 ? -0.5 : LIMITS.chase.pitch[0];
         const lock = this.lockAt;
+        // (plan 103: on a board, behind the way it goes — she stands sideways on it — and pulled back at speed)
+        const skating = ((me.sk ?? 0) & 7) > 0 && ((me.sk ?? 0) & 7) <= 6;
+        if (skating && speed > 1.2) this.skCamYaw = going;
+        else if (!skating) this.skCamYaw = this.myFacing;
         f.update({
           dt,
           look: { x: lx, y: ly },
           recenter: this.recenterAsk,
-          yaw: this.myFacing,
+          yaw: skating ? this.skCamYaw : this.myFacing,
           vx: Math.cos(going) * speed,
           vy: Math.sin(going) * speed,
           // (afloat in the water, none: plan 66)
           air: me.swim ? 0 : Math.max(0, (me.z ?? 0) - (me.ground ?? 0)),
-          run: KH_MOVE.jog,
-          dash: KH_MOVE.sprint,
+          run: skating ? 6 : KH_MOVE.jog,
+          dash: skating ? 14 : KH_MOVE.sprint,
           lock: lock ? { dx: lock.x - me.x, dy: lock.y - me.y } : null,
           still: this.aim,
           hold: !!this.swingAt,

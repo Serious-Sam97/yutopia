@@ -216,6 +216,13 @@ export class WorldController {
   private lastMv = 0;
   /** me in the water (plan 66): 0 out, 1 wading, 2 afloat, 3 under */
   mySwim = 0;
+  // on a board (plan 103: skate/ride.ts, loaded with the first board taken in hand): my code for the wire, the
+  // ground's normal under it, the code last sent
+  skateRide: import("./skate/ride").SkateRide | null = null;
+  private skateLoading = false;
+  private mySk = 0;
+  private mySkN: [number, number, number] | null = null;
+  private lastSk = 0;
   /** the ice's holes as the room last said them, mine just broken, how long I've stood on thin ice */
   holesWire = "";
   myHoles: { x: number; z: number; r: number; at: number }[] = [];
@@ -1374,6 +1381,8 @@ export class WorldController {
         focused: this.walker?.focus,
         ...this.jumps.myJump(now),
         swim: this.mySwim,
+        sk: this.mySk,
+        skN: this.mySkN,
         overWater: this.water.overDeep(this.me.x, this.me.y),
         waterOver: this.water.waterOver(this.me.x, this.me.y, this.height.z),
       };
@@ -1425,9 +1434,11 @@ export class WorldController {
         ...this.jumps.theirFlow(r, p, now),
         pitch: p.pitch / 40,
         // (their facing as they turned, not 8 ways: from the move's own senders)
-        angle: p.mt ? (at.yaw / 128) * Math.PI : undefined,
+        angle: p.mt ? (at.yaw / 128) * Math.PI + (skOn(p.sk) ? skSide(p.sk) : 0) : undefined,
         ...this.jumps.theirJump(r, p, pos, now),
         swim: this.water.swimOf(pos.x, pos.y, pos.z),
+        sk: p.sk ?? 0,
+        skN: p.sk ? (this.skateRide?.normalAt(pos.x, pos.y, pos.z) ?? null) : null,
         overWater: this.water.overDeep(pos.x, pos.y),
         waterOver: this.water.waterOver(pos.x, pos.y, pos.z),
       };
@@ -1706,6 +1717,35 @@ export class WorldController {
 
   objectsDirty = false;
 
+  /** (plan 103) Key 1 with a board in the left hand (dark/index.ts handKey): down on it — or off. The ride's code
+   *  loads with the first. */
+  skateHand(variant: import("@yutopia/shared/skate").BoardVariant | null) {
+    if (!variant) return;
+    const go = () => {
+      const r = this.skateRide;
+      const me = this.room?.state.players.get(this.room.sessionId);
+      if (!r || this.cars?.inCar()) return;
+      r.toggle(variant, me?.avatar && parseAvatar(me.avatar).stance === "goofy" ? -1 : 1);
+    };
+    if (this.skateRide) return go();
+    if (this.skateLoading) return;
+    this.skateLoading = true;
+    void import("./skate/ride").then(({ SkateRide }) => {
+      this.skateRide = new SkateRide({
+        body: () => this.walker?.stepBody ?? null,
+        sid: () => this.room?.sessionId ?? "",
+        pieces: () => this.skatePieces(),
+      });
+      if (this.walker) this.walker.skate = this.skateRide;
+      this.skateLoading = false;
+      go();
+    });
+  }
+  /** (plan 103) The skate park's pieces: the town's two parks, and the ones built. */
+  skatePieces(): import("@yutopia/shared/skate").PiecePlace[] {
+    return [];
+  }
+
   private moveLocal(dt: number) {
     // in a car: in my seat (the server says so too: world-server features/cars.ts)
     if (this.cars?.carry(this)) return;
@@ -1775,6 +1815,8 @@ export class WorldController {
       waterTemp: this.room?.state.weather?.water,
     });
     this.mySwim = out.swim;
+    this.mySk = out.sk;
+    this.mySkN = out.skN;
     this.water.thinIce(dt, out);
     // the camera on the arrows (the stick's the view's own)
     if (this.tp) {
@@ -1914,6 +1956,8 @@ export class WorldController {
     // first person: I face where I look; else a seat, a high-five turns me (input/walker.ts)
     const view = first ? this.tp : null;
     this.meAngle = w.face(this.me, view, moved, this.lookYaw, this.meAngle, face8);
+    // (plan 103: on a board she stands sideways — the nose to her left, regular; to her right, goofy)
+    if (skOn(out.sk)) this.meAngle = out.yaw + skSide(out.sk);
     this.lookYaw = view ? this.me.yaw : Number.NaN;
 
     const changed =
@@ -1925,7 +1969,8 @@ export class WorldController {
       this.me.a !== this.lastSent.a ||
       out.mv !== this.lastMv ||
       out.yawByte !== this.lastYaw ||
-      Math.round(this.myPitch * 40) !== this.lastPitch;
+      Math.round(this.myPitch * 40) !== this.lastPitch ||
+      out.sk !== this.lastSk;
     // (aiming: over the shoulder, the body and the torch where I look)
     if (this.tp) this.tp.aim = out.aim;
     // (my torch's battery: low, it flickers)
@@ -1949,7 +1994,9 @@ export class WorldController {
         yaw: out.yawByte,
         pitch: Math.round(this.myPitch * 40),
         mt: Math.round(now) >>> 0,
+        sk: out.sk,
       });
+      this.lastSk = out.sk;
       this.lastSent = { ...this.me, z, t: now, l: this.level };
       this.lastMv = out.mv;
       this.lastYaw = out.yawByte;
@@ -3057,3 +3104,8 @@ function interpolate<T extends { t: number; x: number; y: number; z?: number; a?
 
 /** How long after the land changes my feet are kept on it (till the physics' ground is made). */
 const LAND_SHIFTED_MS = 6000;
+
+/** (plan 103) A board's code on the wire says it's ridden (shared skate skateCode: its mode in the low bits) */
+const skOn = (c: number | undefined) => !!c && (c & 7) >= 1 && (c & 7) <= 6;
+/** …and which way she stands on it: the nose to her left (regular) or right (goofy) */
+const skSide = (c: number | undefined) => (((c ?? 0) >> 10) & 1 ? -Math.PI / 2 : Math.PI / 2);

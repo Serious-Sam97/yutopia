@@ -131,6 +131,8 @@ export const AVATAR_OPTIONS = {
   // how you walk (docs/plan/58-the-animation.md, decision 6): yours to choose; the folk have their
   // own too (brisk, tired, old — not offered here)
   gait: ["calm", "bouncy", "heavy"],
+  // which foot goes forward on a board (docs/plan/103-the-skate.md F12a): the left (regular) or the right (goofy)
+  stance: ["regular", "goofy"],
 } as const;
 
 export const SKIN_TONES = ["#f3d2b3", "#e4b48e", "#c68a5e", "#a8693f", "#7c4a2b", "#4f2e1c"];
@@ -173,6 +175,8 @@ export interface AvatarLayers {
   beard: string;
   /** how they walk (plan 58, 4e): calm, bouncy, heavy; the folk's brisk, tired, old */
   gait: string;
+  /** on a board, the foot forward (plan 103): regular (the left) or goofy */
+  stance: string;
   /** a layer over the top, its colour (docs/plan/60) */
   outer: string;
   outerColor: string;
@@ -220,6 +224,7 @@ export const DEFAULT_AVATAR: AvatarLayers = {
   shoesColor: "#efe4cc",
   beard: "none",
   gait: "calm",
+  stance: "regular",
   ...WARDROBE_DEFAULTS,
 };
 
@@ -306,6 +311,7 @@ export function avatarFromSeed(seed: number): AvatarLayers {
     shoesColor: pick(["#efe4cc", "#2a2420", "#5b3a26", "#b5562f", "#efe4cc"]),
     beard: "none",
     gait: "calm",
+    stance: "regular",
     ...WARDROBE_DEFAULTS,
   };
   // (the last draw: everything above stays as it was) some masculine bots grow one

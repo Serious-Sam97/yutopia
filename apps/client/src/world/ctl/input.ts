@@ -5,6 +5,7 @@ import { hud } from "../store";
 /** What Input reads of the WorldController (plan 72 phase 4: its dependencies, said). */
 export type InputHost = Pick<
   WorldController,
+  | "skateRide"
   | "activeAt"
   | "arrival"
   | "build"
@@ -94,6 +95,15 @@ export class Input {
       e.preventDefault();
       return;
     }
+    // on a board: its keys (docs/plan/103-the-skate.md F3a — E, R, F, Q, X are its own; W A S D and Space the
+    // walker's too)
+    if (this.c.skateRide && !e.metaKey && !e.ctrlKey) {
+      const ate = this.c.skateRide.key(e, true);
+      if (ate && this.c.skateRide.riding()) {
+        e.preventDefault();
+        return;
+      }
+    }
     // in a car: its controls (docs/plan/28-the-car.md, car/controls.ts)
     if (this.c.cars?.inCar() && !e.metaKey && !e.ctrlKey && this.c.cars.key(e, true)) {
       e.preventDefault();
@@ -149,6 +159,8 @@ export class Input {
   tabDown: { at: number; back: boolean } | null = null;
 
   onKeyUp = (e: KeyboardEvent) => {
+    // (a board's keys let go: plan 103)
+    this.c.skateRide?.key(e, false);
     if (e.key.toLowerCase() === "e" && this.c.focus.use?.src === "key") {
       const u = this.c.focus.use;
       this.c.focus.use = null;

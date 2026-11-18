@@ -18,7 +18,7 @@ export const SKATE = {
   /** S: a powerslide's stop (m/s²) */
   brake: 7,
   /** carving: the tightest turn (m) at speed, the turn at a crawl (rad/s: a kick turn), the most (rad/s) */
-  radius: 2.1,
+  radius: 3.0,
   pivot: 3.2,
   turnMax: 3.4,
   /** pumping (Space held going down a ramp): m/s² more */

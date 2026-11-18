@@ -178,6 +178,8 @@ const ROWS: Row[] = [
   { shape: "body", label: "body", tab: "body", focus: "chest" },
   // (plan 58 4e: kept with the look, seen by everyone; the preview walks it)
   { shape: "gait", label: "gait", tab: "body" },
+  // (plan 103: on a board, the foot forward)
+  { shape: "stance", label: "stance", tab: "body" },
   { color: "skin", palette: SKIN_TONES, label: "skin", tab: "body" },
   { shape: "hair", label: "hair", tab: "hair", focus: "head" },
   { color: "hairColor", palette: HAIR_COLORS, label: "hairColor", tab: "hair" },
@@ -405,7 +407,7 @@ export function AvatarEditor({
                   AVATAR_OPTIONS[row.shape].map((opt) => {
                     const on = a[field] === opt;
                     const named =
-                      row.shape === "gender" || row.shape === "gait"
+                      row.shape === "gender" || row.shape === "gait" || row.shape === "stance"
                         ? t(`${row.shape}_${opt}` as Key)
                         : (NAMES[opt]?.[pt ? 1 : 0] ?? opt);
                     return (
