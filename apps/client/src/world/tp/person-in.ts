@@ -74,6 +74,7 @@ export interface PersonIn {
   swim?: number; // in the water (docs/plan/66-the-water.md): 0 out, 1 wading, 2 afloat, 3 under
   sk?: number; // on a board (docs/plan/103-the-skate.md: shared skateCode), 0 on foot
   skN?: [number, number, number] | null; // the ground's normal under the board (floor coords: x, y south, z up)
+  skYaw?: number; // (plan 104) on a board: its nose's heading exactly (floor coords, rad) — the body drawn rigid with it
   overWater?: boolean; // over water deep enough to catch a fall: no ragdoll into it
   waterOver?: number; // wading: the water this far up over the feet (m)
   mv?: number; // the gait, crouching, aiming (shared/move packMv)

@@ -665,11 +665,19 @@ export class Walker {
         // (a board's presses are the first step's)
         if (move.skate) {
           ride?.stepped();
-          move.skate = { ...move.skate, upPressed: false, downPressed: false, flipPressed: false, grabPressed: false, grindPressed: false, revertPressed: false, offPressed: false };
+          // (every press: J, K, L, Shift, X, the directions, Space's)
+          const k = { ...move.skate } as unknown as Record<string, boolean>;
+          for (const f of Object.keys(k)) if (f.endsWith("Pressed")) k[f] = false;
+          move.skate = k as unknown as typeof move.skate;
         }
       }
     });
-    if (ride || this.skate) this.skate?.after(events.flatMap((e) => (e.skate ? [e.skate] : [])), this.body, dt);
+    if (ride || this.skate)
+      this.skate?.after(
+        events.flatMap((e) => (e.skate ? [e.skate] : [])),
+        this.body,
+        dt,
+      );
     this.heldOver.after(move, !first);
     // (in the water C dives and comes up: no crouch kept for when I'm out — plan 66)
     if (this.body.swim) this.controls.stand();

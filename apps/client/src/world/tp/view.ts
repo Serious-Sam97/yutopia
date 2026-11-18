@@ -1483,6 +1483,8 @@ void main() {
     showMe?: boolean;
     fov?: number;
     snap?: boolean;
+    /** (plan 104: the skate camera) rolled about its look, rad */
+    roll?: number;
     /** tiles: people this near the lens hidden (2.7 unless said: a chess board's camera is a few
      *  centimetres over its men, the players beside it — plan 70) */
     lens?: number;
@@ -2810,6 +2812,7 @@ void main() {
       const look = this.camera.getWorldDirection(new Vector3()).multiplyScalar(4).add(cam);
       cam.lerp(this.gcEye, m);
       this.camera.lookAt(look.lerp(this.gcLook, m));
+      if (gc?.roll) this.camera.rotateZ(gc.roll * m);
     }
     this.mood.underWater();
     // the lens: a game camera's own, or the photo zoom in first person

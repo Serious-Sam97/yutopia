@@ -606,7 +606,8 @@ class Dark implements DarkHooks {
   // with a first aid carried, the caption says H)
   private quickHud(now: number) {
     const inv = this.inv;
-    const show = !!inv && !this.panel.open;
+    // (plan 104 F7b: on a board the skate HUD has the screen — no quick bar)
+    const show = !!inv && !this.panel.open && !hud.get().skating;
     this.quickEl.style.display = show ? "flex" : "none";
     if (!show || !inv) return;
     const room = this.ctl.room;

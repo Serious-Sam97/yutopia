@@ -222,6 +222,7 @@ export class WorldController {
   private skateLoading = false;
   private mySk = 0;
   private mySkN: [number, number, number] | null = null;
+  private mySkYaw = 0;
   private lastSk = 0;
   /** the ice's holes as the room last said them, mine just broken, how long I've stood on thin ice */
   holesWire = "";
@@ -1383,6 +1384,7 @@ export class WorldController {
         swim: this.mySwim,
         sk: this.mySk,
         skN: this.mySkN,
+        skYaw: this.mySk ? this.mySkYaw : undefined,
         overWater: this.water.overDeep(this.me.x, this.me.y),
         waterOver: this.water.waterOver(this.me.x, this.me.y, this.height.z),
       };
@@ -1438,6 +1440,7 @@ export class WorldController {
         ...this.jumps.theirJump(r, p, pos, now),
         swim: this.water.swimOf(pos.x, pos.y, pos.z),
         sk: p.sk ?? 0,
+        skYaw: p.sk && p.mt ? (at.yaw / 128) * Math.PI : undefined,
         skN: p.sk ? (this.skateRide?.normalAt(pos.x, pos.y, pos.z) ?? (this.loadSkate(), null)) : null,
         overWater: this.water.overDeep(pos.x, pos.y),
         waterOver: this.water.waterOver(pos.x, pos.y, pos.z),
@@ -1630,6 +1633,8 @@ export class WorldController {
       tp.gameCam =
         this.god?.camera(this.godDt(now)) ??
         this.cars?.camera() ??
+        // (plan 104 F5a: on a board, the skate camera)
+        this.skateRide?.camera() ??
         this.photos.photoCam() ??
         this.tableGames.chess?.gameCam() ??
         this.tableGames.tables?.gameCam() ??
@@ -1753,6 +1758,10 @@ export class WorldController {
           return out;
         },
         landAt: (x, y) => this.tp?.landHeight(x, y) ?? 0,
+        footing: (x, y) => {
+          const G = this.G;
+          return G && this.grid.onLand(x, y) ? G.surfaceCellAt(Math.floor(x), Math.floor(y)) : "floor";
+        },
       });
       if (this.walker) this.walker.skate = this.skateRide;
       this.skateLoading = false;
@@ -1830,6 +1839,7 @@ export class WorldController {
     this.mySwim = out.swim;
     this.mySk = out.sk;
     this.mySkN = out.skN;
+    this.mySkYaw = out.yaw;
     this.water.thinIce(dt, out);
     // the camera on the arrows (the stick's the view's own)
     if (this.tp) {

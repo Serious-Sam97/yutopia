@@ -80,6 +80,8 @@ export function WorldView({ to }: { to?: string | null }) {
   // the phone's camera: the screen is the viewfinder, the HUD steps aside
   const camera = useHud((s) => s.phone.camera);
   // at the slot-car track's controls, a console or a TV: their console takes the screen
+  // on a board: the skate HUD's screen (docs/plan/104 F7b) — no dock
+  const skating = useHud((s) => s.skating);
   const racing = useHud(
     (s) =>
       s.panel.kind === "slotcar" ||
@@ -255,7 +257,7 @@ export function WorldView({ to }: { to?: string | null }) {
               <Minimap />
             </Guard>
           )}
-          {!building && !racing && (
+          {!building && !racing && !skating && (
             <Guard name="Dock">
               <Dock />
             </Guard>

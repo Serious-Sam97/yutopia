@@ -557,6 +557,9 @@ export interface HudState {
   challenge: { battle: string; fromName: string; pet: string; mine: string } | null; // a battle proposed to me
   fps: number;
   look: boolean; // mouse look (3D): the pointer locked, the mouse turns the camera
+  // on a board (docs/plan/104-the-skate-again.md F7b): the skate HUD takes the screen — the dock and the at-hand bar
+  // step aside till she's off it (set by world/skate/ride.ts)
+  skating: boolean;
 }
 
 const initial: HudState = {
@@ -727,6 +730,7 @@ const initial: HudState = {
   challenge: null,
   fps: 0,
   look: false,
+  skating: false,
 };
 
 let state: HudState = initial;
