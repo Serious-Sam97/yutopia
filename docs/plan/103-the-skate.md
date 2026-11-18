@@ -206,3 +206,32 @@ around (plan 56); the client decides and the server takes it (no anticheat, [no-
   the GLBs, key 1 from the left hand rides it, `skate:take` at a park's rack, rare in loot.
 - **The sound** is made in code for now (F14b): wheels by speed and roughness, the pop, the slap, grinds, a push's
   scuff, a bail. Recordings need your OK to fetch.
+
+### The parks (F6a, F7c — 2026-11-18)
+- **The skate hall**: a new `warehouse` building (key `skatehall`, x 456–500, z −536…−508, 9 m walls, the door on
+  its south face, a concrete floor, trusses and strip lights): a vert half-pipe along its north wall, a bowl, a street
+  course (a quarter, a fun box, a ledge, a flat rail, a manual pad), a stair set with a kinked rail, a quarter the
+  length of its east wall. Locked in God mode (its pieces wouldn't follow it).
+- **The yard** (`SKATE_YARD`, x 462–508, z −492…−448, east of the townhouses): concrete, ploughed like a road, its
+  trees cleared — a mini ramp, a spine, a quarter, kickers facing, ledges, a manual pad, rails, a bowl.
+- **Ten ramps to build** (`sk_*`, the build panel's parkour): quarter, vert, mini, kicker, fun box, ledge, manual pad,
+  spine, flat rail, kinked rail (the half-pipe and the bowl too big). Drawn from the board's own profiles
+  (`furn/skate-piece.ts`, both parks too) and ray-checked against them to 6 mm; walkers get stepped boxes.
+- A board rack in each park (`rack:hall`, `rack:yard`: `skate:take`).
+- Checked in the world: down the hall's half-pipe at 9 m/s — up the east wall, 1.6 m over the coping, back in fakie,
+  up the west wall (`e2e/skate-parks.mts`, its stills).
+
+### Checks (2026-11-18)
+- Node: the skate's 16 + the parks' tests, inventory, avatar, move, physics, grounds (the whole-world fingerprint
+  updated for the parks), furniture; the world-server's schema and survival; the client's ramps-against-profiles.
+- e2e probes: `skate-ride.mts` (push, ollie, kickflip, carve, off), `skate-poses.mts` (stills from beside her),
+  `skate-seen.mts` (another browser sees the board), `skate-parks.mts`. Headless key timing runs behind the sim's
+  clock (as the bike found): a bail there doesn't happen on cue; bails are checked in Node.
+- Page budget 491 (measured 490.4; was 489).
+
+### Not done, or left
+- **Recorded sound**: every sound is made in code (F14b); recordings need your OK to fetch.
+- **No /dev/skate bench**; tuning is by the numbers in `skate/spec.ts`.
+- Others' boards aren't heard (only mine).
+- The 0.45 m ledges and stair treads are jumped onto, not walked up.
+- The board on the world's ground moves by Jolt: it may brush the stepped boxes at a ramp's foot — watch for it.
