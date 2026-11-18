@@ -54,6 +54,7 @@ export class SkateRide {
   private pressed = new Set<keyof SkateKeys>();
   private park = new SkatePark([]);
   private piecesKey = "";
+  private parkAt = 0;
   private skEnv: SkateEnv = skateEnv(this.park);
   private hud: SkateHud | null = null;
   /** s left of the bail's code on the wire (the others' ragdoll) */
@@ -145,6 +146,12 @@ export class SkateRide {
   }
   /** The ground's normal at someone's feet (a piece's, else up): how their board's drawn. */
   normalAt(x: number, y: number, z: number): [number, number, number] | null {
+    // (the park kept up to date for the others too, a second at a time)
+    const now = performance.now();
+    if (now - this.parkAt > 1000) {
+      this.parkAt = now;
+      this.env();
+    }
     const t = this.park.topAt(x, y, z + 0.15, 0);
     if (!t || Math.abs(t.z - z) > 0.3) return null;
     const p = this.park.placed[t.on.pl];

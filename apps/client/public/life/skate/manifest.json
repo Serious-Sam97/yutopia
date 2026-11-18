@@ -1,0 +1,1775 @@
+{
+ "version": 1,
+ "frame": "glTF y-up: x forward (nose), y up, z right; origin on the ground under the axles' middle",
+ "boards": {
+  "vert-classic": {
+   "file": "vert-classic.glb",
+   "mid": "vert-classic-mid.glb",
+   "far": "vert-far.glb",
+   "shape": "vert",
+   "variant": "vert-classic",
+   "name": "Varlow Comet",
+   "dims": {
+    "length": 0.763,
+    "width": 0.255,
+    "height": 0.1025,
+    "thick": 0.0125
+   },
+   "wheelbase": 0.394,
+   "truck_width": 0.248,
+   "wheel": {
+    "r": 0.032,
+    "width": 0.042
+   },
+   "kick": {
+    "nose": {
+     "angle": 0.1745,
+     "len": 0.09
+    },
+    "tail": {
+     "angle": 0.2618,
+     "len": 0.155
+    }
+   },
+   "points": {
+    "deck": [
+     0.0,
+     0.1025,
+     -0.0
+    ],
+    "nose": [
+     0.3444,
+     0.1163,
+     -0.0
+    ],
+    "tail": [
+     -0.4094,
+     0.1394,
+     -0.0
+    ],
+    "bolts_f": [
+     0.2036,
+     0.1025,
+     -0.0
+    ],
+    "bolts_r": [
+     -0.2036,
+     0.1025,
+     -0.0
+    ],
+    "foot_f": [
+     0.2036,
+     0.1025,
+     -0.0
+    ],
+    "foot_r": [
+     -0.2894,
+     0.1072,
+     -0.0
+    ],
+    "axle_f": [
+     0.197,
+     0.032,
+     -0.0
+    ],
+    "axle_r": [
+     -0.197,
+     0.032,
+     -0.0
+    ],
+    "grab_nose": [
+     0.348,
+     0.1106,
+     -0.0
+    ],
+    "grab_tail": [
+     -0.4135,
+     0.134,
+     -0.0
+    ],
+    "grab_toe": [
+     0.0,
+     0.0997,
+     0.1263
+    ],
+    "grab_heel": [
+     0.0,
+     0.0997,
+     -0.1263
+    ],
+    "grab_toe_f": [
+     0.2763,
+     0.1004,
+     0.1108
+    ],
+    "grab_heel_f": [
+     0.2763,
+     0.1004,
+     -0.1108
+    ],
+    "grab_toe_r": [
+     -0.3093,
+     0.1082,
+     0.111
+    ],
+    "grab_heel_r": [
+     -0.3093,
+     0.1082,
+     -0.111
+    ]
+   },
+   "pivots": {
+    "deck": [
+     0.0,
+     0.1025,
+     -0.0
+    ],
+    "hanger_f": [
+     0.197,
+     0.032,
+     -0.0
+    ],
+    "hanger_r": [
+     -0.197,
+     0.032,
+     -0.0
+    ],
+    "wheel_fl": [
+     0.197,
+     0.032,
+     -0.0955
+    ],
+    "wheel_fr": [
+     0.197,
+     0.032,
+     0.0955
+    ],
+    "wheel_rl": [
+     -0.197,
+     0.032,
+     -0.0955
+    ],
+    "wheel_rr": [
+     -0.197,
+     0.032,
+     0.0955
+    ]
+   },
+   "materials": [
+    "alloy",
+    "bearing",
+    "graphic",
+    "grip",
+    "paint",
+    "plastic",
+    "rubber",
+    "steel",
+    "urethane"
+   ],
+   "tris": {
+    "near": 11484,
+    "mid": 1324,
+    "far": 148
+   },
+   "bytes": {
+    "near": 144844,
+    "mid": 42784
+   },
+   "graphic": "tex/graphic-vert-classic.ktx2",
+   "colours": [
+    "#E4007C",
+    "#FFD400",
+    "#00A3AD"
+   ],
+   "wheel_colours": [
+    "#F2EFE4",
+    "#FF5FA2",
+    "#FFE14D"
+   ],
+   "mass": 3.23,
+   "has": {
+    "rails": true,
+    "skid": true,
+    "nose_guard": false,
+    "lapper": false,
+    "slick": false,
+    "risers": false,
+    "grip_nose": true
+   }
+  },
+  "vert-fish": {
+   "file": "vert-fish.glb",
+   "mid": "vert-fish-mid.glb",
+   "far": "vert-far.glb",
+   "shape": "vert",
+   "variant": "vert-fish",
+   "name": "Varlow Marlin",
+   "dims": {
+    "length": 0.766,
+    "width": 0.255,
+    "height": 0.1025,
+    "thick": 0.0125
+   },
+   "wheelbase": 0.394,
+   "truck_width": 0.248,
+   "wheel": {
+    "r": 0.032,
+    "width": 0.042
+   },
+   "kick": {
+    "nose": {
+     "angle": 0.1745,
+     "len": 0.09
+    },
+    "tail": {
+     "angle": 0.2618,
+     "len": 0.155
+    }
+   },
+   "points": {
+    "deck": [
+     0.0,
+     0.1025,
+     -0.0
+    ],
+    "nose": [
+     0.3444,
+     0.1163,
+     -0.0
+    ],
+    "tail": [
+     -0.3594,
+     0.126,
+     -0.0
+    ],
+    "bolts_f": [
+     0.2036,
+     0.1025,
+     -0.0
+    ],
+    "bolts_r": [
+     -0.2036,
+     0.1025,
+     -0.0
+    ],
+    "foot_f": [
+     0.2036,
+     0.1025,
+     -0.0
+    ],
+    "foot_r": [
+     -0.2894,
+     0.1072,
+     -0.0
+    ],
+    "axle_f": [
+     0.197,
+     0.032,
+     -0.0
+    ],
+    "axle_r": [
+     -0.197,
+     0.032,
+     -0.0
+    ],
+    "grab_nose": [
+     0.348,
+     0.1106,
+     -0.0
+    ],
+    "grab_tail": [
+     -0.3635,
+     0.1206,
+     -0.0
+    ],
+    "grab_toe": [
+     0.0,
+     0.0997,
+     0.1263
+    ],
+    "grab_heel": [
+     0.0,
+     0.0997,
+     -0.1263
+    ],
+    "grab_toe_f": [
+     0.2763,
+     0.1004,
+     0.1108
+    ],
+    "grab_heel_f": [
+     0.2763,
+     0.1004,
+     -0.1108
+    ],
+    "grab_toe_r": [
+     -0.3093,
+     0.1079,
+     0.1038
+    ],
+    "grab_heel_r": [
+     -0.3093,
+     0.1079,
+     -0.1038
+    ]
+   },
+   "pivots": {
+    "deck": [
+     0.0,
+     0.1025,
+     -0.0
+    ],
+    "hanger_f": [
+     0.197,
+     0.032,
+     -0.0
+    ],
+    "hanger_r": [
+     -0.197,
+     0.032,
+     -0.0
+    ],
+    "wheel_fl": [
+     0.197,
+     0.032,
+     -0.0955
+    ],
+    "wheel_fr": [
+     0.197,
+     0.032,
+     0.0955
+    ],
+    "wheel_rl": [
+     -0.197,
+     0.032,
+     -0.0955
+    ],
+    "wheel_rr": [
+     -0.197,
+     0.032,
+     0.0955
+    ]
+   },
+   "materials": [
+    "alloy",
+    "bearing",
+    "graphic",
+    "grip",
+    "paint",
+    "plastic",
+    "rubber",
+    "steel",
+    "urethane"
+   ],
+   "tris": {
+    "near": 11436,
+    "mid": 1246,
+    "far": 148
+   },
+   "bytes": {
+    "near": 146580,
+    "mid": 42384
+   },
+   "graphic": "tex/graphic-vert-fish.ktx2",
+   "colours": [
+    "#00A6A6",
+    "#FF6A13",
+    "#1A1A1A"
+   ],
+   "wheel_colours": [
+    "#F4F1E6",
+    "#3DDC84",
+    "#FF8C1A"
+   ],
+   "mass": 3.18,
+   "has": {
+    "rails": true,
+    "skid": true,
+    "nose_guard": true,
+    "lapper": false,
+    "slick": false,
+    "risers": false,
+    "grip_nose": true
+   }
+  },
+  "vert-square": {
+   "file": "vert-square.glb",
+   "mid": "vert-square-mid.glb",
+   "far": "vert-far.glb",
+   "shape": "vert",
+   "variant": "vert-square",
+   "name": "Varlow Bulwark",
+   "dims": {
+    "length": 0.763,
+    "width": 0.255,
+    "height": 0.1025,
+    "thick": 0.0125
+   },
+   "wheelbase": 0.394,
+   "truck_width": 0.248,
+   "wheel": {
+    "r": 0.032,
+    "width": 0.042
+   },
+   "kick": {
+    "nose": {
+     "angle": 0.1745,
+     "len": 0.09
+    },
+    "tail": {
+     "angle": 0.2618,
+     "len": 0.155
+    }
+   },
+   "points": {
+    "deck": [
+     0.0,
+     0.1025,
+     -0.0
+    ],
+    "nose": [
+     0.3444,
+     0.1163,
+     -0.0
+    ],
+    "tail": [
+     -0.4094,
+     0.1394,
+     -0.0
+    ],
+    "bolts_f": [
+     0.2036,
+     0.1025,
+     -0.0
+    ],
+    "bolts_r": [
+     -0.2036,
+     0.1025,
+     -0.0
+    ],
+    "foot_f": [
+     0.2036,
+     0.1025,
+     -0.0
+    ],
+    "foot_r": [
+     -0.2894,
+     0.1072,
+     -0.0
+    ],
+    "axle_f": [
+     0.197,
+     0.032,
+     -0.0
+    ],
+    "axle_r": [
+     -0.197,
+     0.032,
+     -0.0
+    ],
+    "grab_nose": [
+     0.348,
+     0.1106,
+     -0.0
+    ],
+    "grab_tail": [
+     -0.4135,
+     0.134,
+     -0.0
+    ],
+    "grab_toe": [
+     0.0,
+     0.0997,
+     0.1263
+    ],
+    "grab_heel": [
+     0.0,
+     0.0997,
+     -0.1263
+    ],
+    "grab_toe_f": [
+     0.2763,
+     0.1007,
+     0.1166
+    ],
+    "grab_heel_f": [
+     0.2763,
+     0.1007,
+     -0.1166
+    ],
+    "grab_toe_r": [
+     -0.3093,
+     0.1083,
+     0.1128
+    ],
+    "grab_heel_r": [
+     -0.3093,
+     0.1083,
+     -0.1128
+    ]
+   },
+   "pivots": {
+    "deck": [
+     0.0,
+     0.1025,
+     -0.0
+    ],
+    "hanger_f": [
+     0.197,
+     0.032,
+     -0.0
+    ],
+    "hanger_r": [
+     -0.197,
+     0.032,
+     -0.0
+    ],
+    "wheel_fl": [
+     0.197,
+     0.032,
+     -0.0955
+    ],
+    "wheel_fr": [
+     0.197,
+     0.032,
+     0.0955
+    ],
+    "wheel_rl": [
+     -0.197,
+     0.032,
+     -0.0955
+    ],
+    "wheel_rr": [
+     -0.197,
+     0.032,
+     0.0955
+    ]
+   },
+   "materials": [
+    "alloy",
+    "bearing",
+    "graphic",
+    "grip",
+    "paint",
+    "plastic",
+    "rubber",
+    "steel",
+    "urethane"
+   ],
+   "tris": {
+    "near": 11744,
+    "mid": 1310,
+    "far": 148
+   },
+   "bytes": {
+    "near": 147028,
+    "mid": 43056
+   },
+   "graphic": "tex/graphic-vert-square.ktx2",
+   "colours": [
+    "#2B3BFF",
+    "#E10600",
+    "#F5F5F0"
+   ],
+   "wheel_colours": [
+    "#FFFFFF",
+    "#E8E000",
+    "#FF2D55"
+   ],
+   "mass": 3.29,
+   "has": {
+    "rails": true,
+    "skid": true,
+    "nose_guard": false,
+    "lapper": true,
+    "slick": false,
+    "risers": false,
+    "grip_nose": true
+   }
+  },
+  "street-pop": {
+   "file": "street-pop.glb",
+   "mid": "street-pop-mid.glb",
+   "far": "street-far.glb",
+   "shape": "street",
+   "variant": "street-pop",
+   "name": "Larch Kerb",
+   "dims": {
+    "length": 0.806,
+    "width": 0.205,
+    "height": 0.0885,
+    "thick": 0.0115
+   },
+   "wheelbase": 0.356,
+   "truck_width": 0.198,
+   "wheel": {
+    "r": 0.025,
+    "width": 0.031
+   },
+   "kick": {
+    "nose": {
+     "angle": 0.3316,
+     "len": 0.171
+    },
+    "tail": {
+     "angle": 0.3491,
+     "len": 0.163
+    }
+   },
+   "points": {
+    "deck": [
+     0.0,
+     0.0885,
+     -0.0
+    ],
+    "nose": [
+     0.4018,
+     0.1426,
+     -0.0
+    ],
+    "tail": [
+     -0.3938,
+     0.1425,
+     -0.0
+    ],
+    "bolts_f": [
+     0.184,
+     0.0885,
+     -0.0
+    ],
+    "bolts_r": [
+     -0.184,
+     0.0885,
+     -0.0
+    ],
+    "foot_f": [
+     0.184,
+     0.0885,
+     -0.0
+    ],
+    "foot_r": [
+     -0.265,
+     0.0957,
+     -0.0
+    ],
+    "axle_f": [
+     0.178,
+     0.025,
+     -0.0
+    ],
+    "axle_r": [
+     -0.178,
+     0.025,
+     -0.0
+    ],
+    "grab_nose": [
+     0.4058,
+     0.1379,
+     -0.0
+    ],
+    "grab_tail": [
+     -0.3978,
+     0.1379,
+     -0.0
+    ],
+    "grab_toe": [
+     0.0,
+     0.0883,
+     0.1022
+    ],
+    "grab_heel": [
+     0.0,
+     0.0883,
+     -0.1022
+    ],
+    "grab_toe_f": [
+     0.2957,
+     0.1042,
+     0.102
+    ],
+    "grab_heel_f": [
+     0.2957,
+     0.1042,
+     -0.102
+    ],
+    "grab_toe_r": [
+     -0.2918,
+     0.1036,
+     0.102
+    ],
+    "grab_heel_r": [
+     -0.2918,
+     0.1036,
+     -0.102
+    ]
+   },
+   "pivots": {
+    "deck": [
+     0.0,
+     0.0885,
+     -0.0
+    ],
+    "hanger_f": [
+     0.178,
+     0.025,
+     -0.0
+    ],
+    "hanger_r": [
+     -0.178,
+     0.025,
+     -0.0
+    ],
+    "wheel_fl": [
+     0.178,
+     0.025,
+     -0.076
+    ],
+    "wheel_fr": [
+     0.178,
+     0.025,
+     0.076
+    ],
+    "wheel_rl": [
+     -0.178,
+     0.025,
+     -0.076
+    ],
+    "wheel_rr": [
+     -0.178,
+     0.025,
+     0.076
+    ]
+   },
+   "materials": [
+    "alloy",
+    "bearing",
+    "deck_wood",
+    "graphic",
+    "grip",
+    "rubber",
+    "steel",
+    "urethane"
+   ],
+   "tris": {
+    "near": 10152,
+    "mid": 1024,
+    "far": 148
+   },
+   "bytes": {
+    "near": 125932,
+    "mid": 36160
+   },
+   "graphic": "tex/graphic-street-pop.ktx2",
+   "colours": [
+    "#C8A27A",
+    "#1E5AA8",
+    "#2E2E2E"
+   ],
+   "wheel_colours": [
+    "#F3F0E8",
+    "#E9E4D4",
+    "#DCD6C8"
+   ],
+   "mass": 2.33,
+   "has": {
+    "rails": false,
+    "skid": false,
+    "nose_guard": false,
+    "lapper": false,
+    "slick": false,
+    "risers": false,
+    "grip_nose": true
+   }
+  },
+  "street-slick": {
+   "file": "street-slick.glb",
+   "mid": "street-slick-mid.glb",
+   "far": "street-far.glb",
+   "shape": "street",
+   "variant": "street-slick",
+   "name": "Larch Slick",
+   "dims": {
+    "length": 0.806,
+    "width": 0.205,
+    "height": 0.0885,
+    "thick": 0.0115
+   },
+   "wheelbase": 0.356,
+   "truck_width": 0.198,
+   "wheel": {
+    "r": 0.025,
+    "width": 0.031
+   },
+   "kick": {
+    "nose": {
+     "angle": 0.3316,
+     "len": 0.171
+    },
+    "tail": {
+     "angle": 0.3491,
+     "len": 0.163
+    }
+   },
+   "points": {
+    "deck": [
+     0.0,
+     0.0885,
+     -0.0
+    ],
+    "nose": [
+     0.4018,
+     0.1426,
+     -0.0
+    ],
+    "tail": [
+     -0.3938,
+     0.1425,
+     -0.0
+    ],
+    "bolts_f": [
+     0.184,
+     0.0885,
+     -0.0
+    ],
+    "bolts_r": [
+     -0.184,
+     0.0885,
+     -0.0
+    ],
+    "foot_f": [
+     0.184,
+     0.0885,
+     -0.0
+    ],
+    "foot_r": [
+     -0.265,
+     0.0957,
+     -0.0
+    ],
+    "axle_f": [
+     0.178,
+     0.025,
+     -0.0
+    ],
+    "axle_r": [
+     -0.178,
+     0.025,
+     -0.0
+    ],
+    "grab_nose": [
+     0.4058,
+     0.1379,
+     -0.0
+    ],
+    "grab_tail": [
+     -0.3978,
+     0.1379,
+     -0.0
+    ],
+    "grab_toe": [
+     0.0,
+     0.0883,
+     0.1022
+    ],
+    "grab_heel": [
+     0.0,
+     0.0883,
+     -0.1022
+    ],
+    "grab_toe_f": [
+     0.2957,
+     0.1042,
+     0.102
+    ],
+    "grab_heel_f": [
+     0.2957,
+     0.1042,
+     -0.102
+    ],
+    "grab_toe_r": [
+     -0.2918,
+     0.1036,
+     0.102
+    ],
+    "grab_heel_r": [
+     -0.2918,
+     0.1036,
+     -0.102
+    ]
+   },
+   "pivots": {
+    "deck": [
+     0.0,
+     0.0885,
+     -0.0
+    ],
+    "hanger_f": [
+     0.178,
+     0.025,
+     -0.0
+    ],
+    "hanger_r": [
+     -0.178,
+     0.025,
+     -0.0
+    ],
+    "wheel_fl": [
+     0.178,
+     0.025,
+     -0.076
+    ],
+    "wheel_fr": [
+     0.178,
+     0.025,
+     0.076
+    ],
+    "wheel_rl": [
+     -0.178,
+     0.025,
+     -0.076
+    ],
+    "wheel_rr": [
+     -0.178,
+     0.025,
+     0.076
+    ]
+   },
+   "materials": [
+    "alloy",
+    "bearing",
+    "deck_wood",
+    "graphic",
+    "grip",
+    "plastic",
+    "rubber",
+    "steel",
+    "urethane"
+   ],
+   "tris": {
+    "near": 11008,
+    "mid": 1312,
+    "far": 148
+   },
+   "bytes": {
+    "near": 138092,
+    "mid": 41736
+   },
+   "graphic": "tex/graphic-street-slick.ktx2",
+   "colours": [
+    "#1A1A1A",
+    "#B22222",
+    "#2F4F4F"
+   ],
+   "wheel_colours": [
+    "#F3F0E8",
+    "#FFFFFF",
+    "#F2D16B"
+   ],
+   "mass": 2.33,
+   "has": {
+    "rails": false,
+    "skid": false,
+    "nose_guard": false,
+    "lapper": false,
+    "slick": true,
+    "risers": false,
+    "grip_nose": true
+   }
+  },
+  "street-tech": {
+   "file": "street-tech.glb",
+   "mid": "street-tech-mid.glb",
+   "far": "street-far.glb",
+   "shape": "street",
+   "variant": "street-tech",
+   "name": "Larch Needle",
+   "dims": {
+    "length": 0.806,
+    "width": 0.199,
+    "height": 0.0875,
+    "thick": 0.0115
+   },
+   "wheelbase": 0.356,
+   "truck_width": 0.19,
+   "wheel": {
+    "r": 0.024,
+    "width": 0.03
+   },
+   "kick": {
+    "nose": {
+     "angle": 0.3665,
+     "len": 0.185
+    },
+    "tail": {
+     "angle": 0.3491,
+     "len": 0.149
+    }
+   },
+   "points": {
+    "deck": [
+     0.0,
+     0.0875,
+     -0.0
+    ],
+    "nose": [
+     0.4158,
+     0.1527,
+     -0.0
+    ],
+    "tail": [
+     -0.3798,
+     0.1364,
+     -0.0
+    ],
+    "bolts_f": [
+     0.184,
+     0.0875,
+     -0.0
+    ],
+    "bolts_r": [
+     -0.184,
+     0.0875,
+     -0.0
+    ],
+    "foot_f": [
+     0.184,
+     0.0875,
+     -0.0
+    ],
+    "foot_r": [
+     -0.265,
+     0.0947,
+     -0.0
+    ],
+    "axle_f": [
+     0.178,
+     0.024,
+     -0.0
+    ],
+    "axle_r": [
+     -0.178,
+     0.024,
+     -0.0
+    ],
+    "grab_nose": [
+     0.4199,
+     0.1481,
+     -0.0
+    ],
+    "grab_tail": [
+     -0.3838,
+     0.1318,
+     -0.0
+    ],
+    "grab_toe": [
+     0.0,
+     0.088,
+     0.0991
+    ],
+    "grab_heel": [
+     0.0,
+     0.088,
+     -0.0991
+    ],
+    "grab_toe_f": [
+     0.3029,
+     0.1077,
+     0.0989
+    ],
+    "grab_heel_f": [
+     0.3029,
+     0.1077,
+     -0.0989
+    ],
+    "grab_toe_r": [
+     -0.2848,
+     0.1007,
+     0.0989
+    ],
+    "grab_heel_r": [
+     -0.2848,
+     0.1007,
+     -0.0989
+    ]
+   },
+   "pivots": {
+    "deck": [
+     0.0,
+     0.0875,
+     -0.0
+    ],
+    "hanger_f": [
+     0.178,
+     0.024,
+     -0.0
+    ],
+    "hanger_r": [
+     -0.178,
+     0.024,
+     -0.0
+    ],
+    "wheel_fl": [
+     0.178,
+     0.024,
+     -0.0725
+    ],
+    "wheel_fr": [
+     0.178,
+     0.024,
+     0.0725
+    ],
+    "wheel_rl": [
+     -0.178,
+     0.024,
+     -0.0725
+    ],
+    "wheel_rr": [
+     -0.178,
+     0.024,
+     0.0725
+    ]
+   },
+   "materials": [
+    "alloy",
+    "bearing",
+    "deck_wood",
+    "graphic",
+    "grip",
+    "rubber",
+    "steel",
+    "urethane"
+   ],
+   "tris": {
+    "near": 10152,
+    "mid": 1044,
+    "far": 148
+   },
+   "bytes": {
+    "near": 125832,
+    "mid": 36356
+   },
+   "graphic": "tex/graphic-street-tech.ktx2",
+   "colours": [
+    "#3C6E47",
+    "#7A3E9D",
+    "#B8B8B8"
+   ],
+   "wheel_colours": [
+    "#F3F0E8",
+    "#EDEDED",
+    "#9AD0EC"
+   ],
+   "mass": 2.27,
+   "has": {
+    "rails": false,
+    "skid": false,
+    "nose_guard": false,
+    "lapper": false,
+    "slick": false,
+    "risers": false,
+    "grip_nose": true
+   }
+  },
+  "cruiser-classic": {
+   "file": "cruiser-classic.glb",
+   "mid": "cruiser-classic-mid.glb",
+   "far": "cruiser-far.glb",
+   "shape": "cruiser",
+   "variant": "cruiser-classic",
+   "name": "Sandell Coaster",
+   "dims": {
+    "length": 0.74,
+    "width": 0.229,
+    "height": 0.102,
+    "thick": 0.012
+   },
+   "wheelbase": 0.38,
+   "truck_width": 0.22,
+   "wheel": {
+    "r": 0.03,
+    "width": 0.043
+   },
+   "kick": {
+    "nose": {
+     "angle": 0.0,
+     "len": 0.107
+    },
+    "tail": {
+     "angle": 0.2967,
+     "len": 0.13
+    }
+   },
+   "points": {
+    "deck": [
+     0.0,
+     0.102,
+     -0.0
+    ],
+    "nose": [
+     0.3544,
+     0.102,
+     -0.0
+    ],
+    "tail": [
+     -0.3774,
+     0.1368,
+     -0.0
+    ],
+    "bolts_f": [
+     0.1963,
+     0.102,
+     -0.0
+    ],
+    "bolts_r": [
+     -0.1963,
+     0.102,
+     -0.0
+    ],
+    "foot_f": [
+     0.1963,
+     0.102,
+     -0.0
+    ],
+    "foot_r": [
+     -0.2821,
+     0.1077,
+     -0.0
+    ],
+    "axle_f": [
+     0.19,
+     0.03,
+     -0.0
+    ],
+    "axle_r": [
+     -0.19,
+     0.03,
+     -0.0
+    ],
+    "grab_nose": [
+     0.357,
+     0.096,
+     -0.0
+    ],
+    "grab_tail": [
+     -0.3816,
+     0.1318,
+     -0.0
+    ],
+    "grab_toe": [
+     0.0,
+     0.099,
+     0.1143
+    ],
+    "grab_heel": [
+     0.0,
+     0.099,
+     -0.1143
+    ],
+    "grab_toe_f": [
+     0.2767,
+     0.0986,
+     0.1059
+    ],
+    "grab_heel_f": [
+     0.2767,
+     0.0986,
+     -0.1059
+    ],
+    "grab_toe_r": [
+     -0.2898,
+     0.1057,
+     0.0997
+    ],
+    "grab_heel_r": [
+     -0.2898,
+     0.1057,
+     -0.0997
+    ]
+   },
+   "pivots": {
+    "deck": [
+     0.0,
+     0.102,
+     -0.0
+    ],
+    "hanger_f": [
+     0.19,
+     0.03,
+     -0.0
+    ],
+    "hanger_r": [
+     -0.19,
+     0.03,
+     -0.0
+    ],
+    "wheel_fl": [
+     0.19,
+     0.03,
+     -0.081
+    ],
+    "wheel_fr": [
+     0.19,
+     0.03,
+     0.081
+    ],
+    "wheel_rl": [
+     -0.19,
+     0.03,
+     -0.081
+    ],
+    "wheel_rr": [
+     -0.19,
+     0.03,
+     0.081
+    ]
+   },
+   "materials": [
+    "alloy",
+    "bearing",
+    "graphic",
+    "grip",
+    "paint",
+    "rubber",
+    "steel",
+    "urethane"
+   ],
+   "tris": {
+    "near": 9904,
+    "mid": 1060,
+    "far": 148
+   },
+   "bytes": {
+    "near": 128600,
+    "mid": 37572
+   },
+   "graphic": "tex/graphic-cruiser-classic.ktx2",
+   "colours": [
+    "#FF7F50",
+    "#40E0D0",
+    "#F7E26B"
+   ],
+   "wheel_colours": [
+    "#FF8A3D",
+    "#58D68D",
+    "#5DADE2"
+   ],
+   "mass": 2.74,
+   "has": {
+    "rails": false,
+    "skid": false,
+    "nose_guard": false,
+    "lapper": false,
+    "slick": false,
+    "risers": true,
+    "grip_nose": true
+   }
+  },
+  "cruiser-wood": {
+   "file": "cruiser-wood.glb",
+   "mid": "cruiser-wood-mid.glb",
+   "far": "cruiser-far.glb",
+   "shape": "cruiser",
+   "variant": "cruiser-wood",
+   "name": "Sandell Grove",
+   "dims": {
+    "length": 0.74,
+    "width": 0.229,
+    "height": 0.102,
+    "thick": 0.012
+   },
+   "wheelbase": 0.38,
+   "truck_width": 0.22,
+   "wheel": {
+    "r": 0.03,
+    "width": 0.043
+   },
+   "kick": {
+    "nose": {
+     "angle": 0.0,
+     "len": 0.107
+    },
+    "tail": {
+     "angle": 0.2967,
+     "len": 0.13
+    }
+   },
+   "points": {
+    "deck": [
+     0.0,
+     0.102,
+     -0.0
+    ],
+    "nose": [
+     0.3544,
+     0.102,
+     -0.0
+    ],
+    "tail": [
+     -0.3774,
+     0.1368,
+     -0.0
+    ],
+    "bolts_f": [
+     0.1963,
+     0.102,
+     -0.0
+    ],
+    "bolts_r": [
+     -0.1963,
+     0.102,
+     -0.0
+    ],
+    "foot_f": [
+     0.1963,
+     0.102,
+     -0.0
+    ],
+    "foot_r": [
+     -0.2821,
+     0.1077,
+     -0.0
+    ],
+    "axle_f": [
+     0.19,
+     0.03,
+     -0.0
+    ],
+    "axle_r": [
+     -0.19,
+     0.03,
+     -0.0
+    ],
+    "grab_nose": [
+     0.357,
+     0.096,
+     -0.0
+    ],
+    "grab_tail": [
+     -0.3816,
+     0.1318,
+     -0.0
+    ],
+    "grab_toe": [
+     0.0,
+     0.099,
+     0.1143
+    ],
+    "grab_heel": [
+     0.0,
+     0.099,
+     -0.1143
+    ],
+    "grab_toe_f": [
+     0.2767,
+     0.0986,
+     0.1059
+    ],
+    "grab_heel_f": [
+     0.2767,
+     0.0986,
+     -0.1059
+    ],
+    "grab_toe_r": [
+     -0.2898,
+     0.1057,
+     0.0997
+    ],
+    "grab_heel_r": [
+     -0.2898,
+     0.1057,
+     -0.0997
+    ]
+   },
+   "pivots": {
+    "deck": [
+     0.0,
+     0.102,
+     -0.0
+    ],
+    "hanger_f": [
+     0.19,
+     0.03,
+     -0.0
+    ],
+    "hanger_r": [
+     -0.19,
+     0.03,
+     -0.0
+    ],
+    "wheel_fl": [
+     0.19,
+     0.03,
+     -0.081
+    ],
+    "wheel_fr": [
+     0.19,
+     0.03,
+     0.081
+    ],
+    "wheel_rl": [
+     -0.19,
+     0.03,
+     -0.081
+    ],
+    "wheel_rr": [
+     -0.19,
+     0.03,
+     0.081
+    ]
+   },
+   "materials": [
+    "alloy",
+    "bearing",
+    "deck_wood",
+    "graphic",
+    "grip",
+    "rubber",
+    "steel",
+    "urethane"
+   ],
+   "tris": {
+    "near": 9904,
+    "mid": 1060,
+    "far": 148
+   },
+   "bytes": {
+    "near": 126048,
+    "mid": 36892
+   },
+   "graphic": "tex/graphic-cruiser-wood.ktx2",
+   "colours": [
+    "#B98B5E",
+    "#8B5A2B",
+    "#D2B48C"
+   ],
+   "wheel_colours": [
+    "#F0E68C",
+    "#E74C3C",
+    "#F5F5DC"
+   ],
+   "mass": 2.74,
+   "has": {
+    "rails": false,
+    "skid": false,
+    "nose_guard": false,
+    "lapper": false,
+    "slick": false,
+    "risers": true,
+    "grip_nose": false
+   }
+  },
+  "cruiser-mini": {
+   "file": "cruiser-mini.glb",
+   "mid": "cruiser-mini-mid.glb",
+   "far": "cruiser-far.glb",
+   "shape": "cruiser",
+   "variant": "cruiser-mini",
+   "name": "Sandell Pip",
+   "dims": {
+    "length": 0.688,
+    "width": 0.191,
+    "height": 0.0965,
+    "thick": 0.0105
+   },
+   "wheelbase": 0.34,
+   "truck_width": 0.19,
+   "wheel": {
+    "r": 0.03,
+    "width": 0.043
+   },
+   "kick": {
+    "nose": {
+     "angle": 0.0,
+     "len": 0.105
+    },
+    "tail": {
+     "angle": 0.3142,
+     "len": 0.121
+    }
+   },
+   "points": {
+    "deck": [
+     0.0,
+     0.0965,
+     -0.0
+    ],
+    "nose": [
+     0.3324,
+     0.0965,
+     -0.0
+    ],
+    "tail": [
+     -0.3484,
+     0.1308,
+     -0.0
+    ],
+    "bolts_f": [
+     0.1763,
+     0.0965,
+     -0.0
+    ],
+    "bolts_r": [
+     -0.1763,
+     0.0965,
+     -0.0
+    ],
+    "foot_f": [
+     0.1763,
+     0.0965,
+     -0.0
+    ],
+    "foot_r": [
+     -0.2621,
+     0.1028,
+     -0.0
+    ],
+    "axle_f": [
+     0.17,
+     0.03,
+     -0.0
+    ],
+    "axle_r": [
+     -0.17,
+     0.03,
+     -0.0
+    ],
+    "grab_nose": [
+     0.335,
+     0.0913,
+     -0.0
+    ],
+    "grab_tail": [
+     -0.3525,
+     0.1266,
+     -0.0
+    ],
+    "grab_toe": [
+     0.0,
+     0.0932,
+     0.0952
+    ],
+    "grab_heel": [
+     0.0,
+     0.0932,
+     -0.0952
+    ],
+    "grab_toe_f": [
+     0.2557,
+     0.093,
+     0.0902
+    ],
+    "grab_heel_f": [
+     0.2557,
+     0.093,
+     -0.0902
+    ],
+    "grab_toe_r": [
+     -0.2652,
+     0.0996,
+     0.084
+    ],
+    "grab_heel_r": [
+     -0.2652,
+     0.0996,
+     -0.084
+    ]
+   },
+   "pivots": {
+    "deck": [
+     0.0,
+     0.0965,
+     -0.0
+    ],
+    "hanger_f": [
+     0.17,
+     0.03,
+     -0.0
+    ],
+    "hanger_r": [
+     -0.17,
+     0.03,
+     -0.0
+    ],
+    "wheel_fl": [
+     0.17,
+     0.03,
+     -0.066
+    ],
+    "wheel_fr": [
+     0.17,
+     0.03,
+     0.066
+    ],
+    "wheel_rl": [
+     -0.17,
+     0.03,
+     -0.066
+    ],
+    "wheel_rr": [
+     -0.17,
+     0.03,
+     0.066
+    ]
+   },
+   "materials": [
+    "alloy",
+    "bearing",
+    "grip",
+    "paint",
+    "rubber",
+    "steel",
+    "urethane"
+   ],
+   "tris": {
+    "near": 10840,
+    "mid": 1236,
+    "far": 148
+   },
+   "bytes": {
+    "near": 138672,
+    "mid": 39216
+   },
+   "graphic": null,
+   "colours": [
+    "#FF4F79",
+    "#2EC4B6",
+    "#FFD23F"
+   ],
+   "wheel_colours": [
+    "#FFFFFF",
+    "#FF9F1C",
+    "#7B61FF"
+   ],
+   "mass": 2.65,
+   "has": {
+    "rails": false,
+    "skid": false,
+    "nose_guard": false,
+    "lapper": false,
+    "slick": false,
+    "risers": true,
+    "grip_nose": false
+   }
+  }
+ },
+ "far": {
+  "vert": {
+   "file": "vert-far.glb",
+   "tris": 148,
+   "bytes": 9820,
+   "from": "vert-classic"
+  },
+  "street": {
+   "file": "street-far.glb",
+   "tris": 148,
+   "bytes": 9800,
+   "from": "street-pop"
+  },
+  "cruiser": {
+   "file": "cruiser-far.glb",
+   "tris": 148,
+   "bytes": 9836,
+   "from": "cruiser-classic"
+  }
+ }
+}

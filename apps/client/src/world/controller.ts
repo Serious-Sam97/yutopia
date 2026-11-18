@@ -1438,7 +1438,7 @@ export class WorldController {
         ...this.jumps.theirJump(r, p, pos, now),
         swim: this.water.swimOf(pos.x, pos.y, pos.z),
         sk: p.sk ?? 0,
-        skN: p.sk ? (this.skateRide?.normalAt(pos.x, pos.y, pos.z) ?? null) : null,
+        skN: p.sk ? (this.skateRide?.normalAt(pos.x, pos.y, pos.z) ?? (this.loadSkate(), null)) : null,
         overWater: this.water.overDeep(pos.x, pos.y),
         waterOver: this.water.waterOver(pos.x, pos.y, pos.z),
       };
@@ -1721,13 +1721,16 @@ export class WorldController {
    *  loads with the first. */
   skateHand(variant: import("@yutopia/shared/skate").BoardVariant | null) {
     if (!variant) return;
-    const go = () => {
+    this.loadSkate(() => {
       const r = this.skateRide;
       const me = this.room?.state.players.get(this.room.sessionId);
       if (!r || this.cars?.inCar()) return;
       r.toggle(variant, me?.avatar && parseAvatar(me.avatar).stance === "goofy" ? -1 : 1);
-    };
-    if (this.skateRide) return go();
+    });
+  }
+  /** (plan 103) The board's code, once: for my own board, or someone else's on a ramp near (its tilt). */
+  private loadSkate(then?: () => void) {
+    if (this.skateRide) return then?.();
     if (this.skateLoading) return;
     this.skateLoading = true;
     void import("./skate/ride").then(({ SkateRide }) => {
@@ -1738,7 +1741,7 @@ export class WorldController {
       });
       if (this.walker) this.walker.skate = this.skateRide;
       this.skateLoading = false;
-      go();
+      then?.();
     });
   }
   /** (plan 103) The skate park's pieces: the town's two parks, and the ones built. */
