@@ -8,7 +8,7 @@ import type { GroundsEdits, Section } from "./grounds-edits.ts";
 // Grounds (the client's god mode chunk and the tests use it).
 
 const GRIDS = ["height", "paint", "trees"] as const;
-const SECTIONS = ["ways", "things", "buildings", "land"] as const;
+const SECTIONS = ["ways", "things", "buildings", "land", "vehicles"] as const;
 type Grid = (typeof GRIDS)[number];
 type SectionName = (typeof SECTIONS)[number];
 
@@ -25,6 +25,8 @@ export interface EditsCount {
   buildings: Moves;
   /** pieces of land grown (docs/plan/69, phase 10) */
   land: Moves;
+  /** (plan 102) vehicles placed, moved or changed, taken away */
+  vehicles: Moves;
   /** all of them */
   total: number;
 }
@@ -41,8 +43,10 @@ export interface Overlap {
 }
 
 // a keyed entry's effect on the world: put there (whole), changed (those fields), taken away
-type Effect = { add: Record<string, unknown> } | { change: Record<string, unknown> } | { remove: true };
+export type Effect = { add: Record<string, unknown> } | { change: Record<string, unknown> } | { remove: true };
 
+/** (plan 102: the server's vehicles, reconciled from what a publish changed) A section's effect on the world, by key. */
+export const sectionEffects = (s: Section<{ key: string }> | undefined): Map<string, Effect> => effects(s);
 function effects(s: Section<{ key: string }> | undefined): Map<string, Effect> {
   const out = new Map<string, Effect>();
   if (!s) return out;
@@ -98,6 +102,7 @@ export function editsCount(from: GroundsEdits, to: GroundsEdits): EditsCount {
     things: { add: 0, change: 0, remove: 0 },
     buildings: { add: 0, change: 0, remove: 0 },
     land: { add: 0, change: 0, remove: 0 },
+    vehicles: { add: 0, change: 0, remove: 0 },
     total: 0,
   };
   for (const g of GRIDS) {

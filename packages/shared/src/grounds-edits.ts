@@ -22,6 +22,9 @@ export interface GroundsEdits {
   buildings?: Section<BuildingDef>;
   /** land grown past the world's edge (docs/plan/69, phase 10): pieces added, changed, taken away */
   land?: Section<GrowDef>;
+  /** (plan 102) the vehicles: each one's home — where it's parked, where the tow brings it back — added, changed (a
+   *  town vehicle's by its id, or any parked one's), taken away */
+  vehicles?: Section<VehicleDef>;
 }
 /** Added, changed (by key: only what's given), taken away (by key). */
 export interface Section<T extends { key: string }> {
@@ -74,6 +77,20 @@ export interface GrowDef {
   x1: number;
   z1: number;
   lift?: number;
+}
+/** (plan 102) A vehicle as God mode has it: its object's id (`key`: the town's own — car/homes.ts HOME_CARS —, any
+ *  parked one's, or a new one's), its kind (car/specs.ts CarKind), where its centre stands and its heading (atan2 of
+ *  its nose's z, x), its look (car/look.ts CarLook), its role and plate. For a town vehicle or a new one it's its home;
+ *  for another (a player's own, the lot's, a spawn) a move — a player's own car is only ever moved. */
+export interface VehicleDef {
+  key: string;
+  model: string;
+  x: number;
+  z: number;
+  a: number;
+  look?: { variant: string; colour: number; colour2?: number; extras?: string[]; wheels?: string };
+  role?: string;
+  plate?: string;
 }
 /** A building: the generator's own fields (its plot, axis-aligned; its door's side). */
 export type BuildingDef = Omit<Building, "stored">;
