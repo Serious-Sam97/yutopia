@@ -83,8 +83,12 @@ export class SkateSound {
       s.start();
       this.road = { g: rg, src: s };
     });
-    void slotBuffers(c, "thump").then((bs) => (this.thumps = bs));
-    void slotBuffers(c, "hit-light").then((bs) => (this.knocks = bs));
+    void slotBuffers(c, "thump").then((bs) => {
+      this.thumps = bs;
+    });
+    void slotBuffers(c, "hit-light").then((bs) => {
+      this.knocks = bs;
+    });
   }
 
   /** Each frame: how fast it rolls (m/s), on what (0 smooth … 1 rough), grinding (on steel: true; a ledge: false;

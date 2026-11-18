@@ -15,7 +15,13 @@ async function login(email: string) {
   return (await r.json()).token as string;
 }
 const browser: Browser = await chromium.launch({
-  args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", "--disable-gpu-vsync", "--disable-frame-rate-limit"],
+  args: [
+    "--use-angle=metal",
+    "--enable-gpu",
+    "--ignore-gpu-blocklist",
+    "--disable-gpu-vsync",
+    "--disable-frame-rate-limit",
+  ],
 });
 async function open(email: string): Promise<Page> {
   const tok = await login(email);
@@ -26,9 +32,13 @@ async function open(email: string): Promise<Page> {
     localStorage.setItem("yutopia:prefs", JSON.stringify({ quality: "high", view: "3p", cam3p: "chase", maxFps: 0 }));
   }, tok);
   await page.goto(`${base}/`);
-  await page.waitForFunction(() => (window as any).__hud?.get()?.phase === "ready" && !(window as any).__hud.get().loading?.on, null, {
-    timeout: 300_000,
-  });
+  await page.waitForFunction(
+    () => (window as any).__hud?.get()?.phase === "ready" && !(window as any).__hud.get().loading?.on,
+    null,
+    {
+      timeout: 300_000,
+    },
+  );
   return page;
 }
 const ana = await open("ana@yutopia.test");
@@ -61,7 +71,8 @@ const seen = await bia.evaluate(() => {
   // her board in Bia's scene: a "board" group under someone
   let boards = 0;
   c.tp.scene.traverse((o: any) => {
-    if (o.name === "board" || (o.children?.some?.((k: any) => k.name === "deck") && o.parent?.type === "Group")) boards++;
+    if (o.name === "board" || (o.children?.some?.((k: any) => k.name === "deck") && o.parent?.type === "Group"))
+      boards++;
   });
   return { sk, sid, boards };
 });
@@ -86,7 +97,9 @@ await bia.waitForTimeout(1800);
 const after = await bia.evaluate(() => {
   const c = (window as any).__yutopia;
   const out: number[] = [];
-  c.room.state.players.forEach((p: any) => out.push(p.sk));
+  c.room.state.players.forEach((p: any) => {
+    out.push(p.sk);
+  });
   return out;
 });
 console.log("after the bail, sk:", JSON.stringify(after));
