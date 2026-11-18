@@ -9,8 +9,8 @@ The skate (once plan 102) moves to plan 103.
 
 Status: **planned 2026-11-18; forks decided 2026-11-18 one by one, the recommendation for each: F1a in the draft,
 F2a every parked one (a player's own moved only), F3a everything, F4a one in use not picked, F5a the full palette,
-F6b no racks now, F7a not the AI's (the user will open its own ticket), F8b built straight, tested at the end. Not
-built yet.**
+F6b no racks now, F7a not the AI's (the user will open its own ticket), F8b built straight, tested at the end. Built
+2026-11-18, phases 1–7 (f154a09a, b3ec509d, 066b8f42, then the checks), page 488.9 of 489 KB, God chunk 22.8 of 24 KB; waiting on the user's test.**
 
 ## Where we are, from the code
 
@@ -81,3 +81,35 @@ that shows where it can stand. What you place is **its home**: where it's parked
 6. **The draft's life**: walk it (the vehicles in the walked world), discard, publish, roll back; the drafts list
    counts vehicles.
 7. **Checks**: shared and server tests, an e2e spec (place, publish, see it parked, roll back, gone), the page budget.
+
+## Progress
+
+- **Phase 1** (f154a09a): shared `VehicleDef`, the `vehicles` section, `homesOf`, `checkVehicles`, `newVehicleKey`.
+- **Phase 2** (b3ec509d): the world server, on any edits laid (`land.ts onEditsLaid`, a publish or a rollback):
+  - **homes** (the town's and the placed ones) made, put at their home as they are now, or taken away;
+  - **any other** (a lot's car, a player's own, a spawn) moved or taken away **once**, when the edit is new: a rollback
+    doesn't move them back (the lot's tow still takes its own cars back to their bays after a while);
+  - one in use is left alone, and handled once it's parked and nobody's by it;
+  - the tow's homes are `homesOf(edits)`; the boot pass drops removed homes and placed ones the edits no longer have;
+  - `god:car-home` puts a home vehicle that was left away back at its home (Select's "send home", admins only);
+  - the publish refuses a draft that takes away or repaints a player's own car.
+- **Phases 3–6** (066b8f42):
+  - **The draft's vehicles** are drawn for the admin alone. Shared `vehicleSteps(published, draft)` is the same diff
+    the server reconciles by, laid over the room's objects (`Cars.setGodView`).
+  - **Select** picks the smallest thing first: a thing, then a vehicle, then a building, then a way. A vehicle can be
+    dragged, turned with R or the wheel, and taken away with Delete. One in use says so and isn't picked.
+  - **The picked vehicle's panel**: model, colour, second colour, role, plate, "send home". A player's own car says
+    "moved only".
+  - **The Vehicles tool** (8):
+    - every kind with its picture;
+    - its models, colours and role;
+    - the one held under the pointer as its own model, in a box: green where it can stand, red where it can't (off the
+      land, in water, in a building, on another vehicle);
+    - a click places it, R or the wheel turns it.
+  - The publish dialog counts vehicles.
+- **Phase 7**: shared tests (`car/homes-god.test.ts`), the server's (`god-vehicles.test.ts`, an offline room), and
+  e2e `godmode-vehicles.spec.ts` (YUTOPIA_GPU=1). The e2e picks a taxi, drags and turns it, places a BMX, publishes,
+  sees both in the room, then rolls back.
+
+Known, not this plan's: shared `car.test.ts` "each home clear of everything" fails on `rack-boathouse-0` (plan 101's
+rack, "into a wall").
