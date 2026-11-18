@@ -1,5 +1,5 @@
 import { BODY_R, face8, parseAvatar, type WorldObjectDef } from "@yutopia/shared";
-import { BIKE_VARIANTS, type BikeSpec, bikeSprinting, packBike, unpackBike } from "@yutopia/shared/bike";
+import { BIKE_VARIANTS, type BikeSpec, bikeSprinting, isBikeKind, packBike, unpackBike } from "@yutopia/shared/bike";
 import { BikeDrive, bikeDefOf } from "@yutopia/shared/bike/drive";
 import {
   beltOf,
@@ -118,6 +118,7 @@ import { chars as charsMod } from "../art/chars-load";
 import { pets as petsMod } from "../art/pets-load";
 import { mixer } from "../audio";
 import { poseBike, type RiderNow, riderAct, riderHands, riderRoot } from "../bike/pose";
+import { BikeSound } from "../bike/sound";
 import { litMaterial } from "../look/lit";
 import { activePad } from "../pads";
 import { Radio } from "../sound";
@@ -731,6 +732,8 @@ const MID = 70;
 /** A car heard: its kind's doors and horn, its variant's engine (car/sound-bank.ts voiceOf); none for what
  *  has no engine (the toboggan). */
 function soundOf(ctx: AudioContext, kind: CarKind, variant?: string): CarSound | null {
+  // (plan 101: a bike's own — its tyres, its freewheel, its chain, its bell — where a car's goes)
+  if (isBikeKind(kind)) return new BikeSound(ctx, mixer.buses.effects, { kind, variant }) as unknown as CarSound;
   // (plan 98 phase 15: the toboggan has no engine but its runners on the snow, its knocks)
   return voiceOf(kind, variant) || kind === "toboggan"
     ? new CarSound(ctx, mixer.buses.effects, { kind, variant })
@@ -5215,8 +5218,9 @@ export class Cars {
       }
       // (plan 98 phase 7, F6a) sat: the key turned — the dash's self-test, the starter cranking (longer cold) and
       // heard by others, then it catches; the throttle cuts the crank short
-      // (plan 101: a bike goes as you pedal)
+      // (plan 101: a bike goes as you pedal — heard from the moment I'm on it)
       if (bike && !m.started) m.started = true;
+      if (bike && !m.sound && mixer.ctx) m.sound = soundOf(mixer.ctx, l.kind, l.look.variant);
       if (!dead && !getting && !bike && (!m.started || (m.dry && s.fuel > 0.3 && !vw?.filling))) {
         if (m.crankAt === undefined) {
           const cold = Math.max(0, Math.min(1, 1 - s.temp / 0.55));
