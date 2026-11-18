@@ -84,3 +84,13 @@ every frame over 50 ms named by a CPU profile)
 ## Guardrails
 - The plan 98 traps: the car camera's `snap` means "sat"; probes wait for `cars.mine.started` before driving.
 - Shared dev world; no full e2e unasked; waits on events, not sleeps.
+
+## Phase 1 — built (2026-11-17): no freezes
+
+- **The reflection probe off by default** (F4a): Settings → "Car reflections" On / Off, Off unless set; a saved "auto"
+  reads as Off. Its faces compiled the world's materials for their own target on the spot — the 2.3 s after a crash, and
+  the 355 ms as I sat (its first face, my car just taken).
+- **The rims' blur** made as soon as a car's model is in, drawn at nothing (opacity 0): compiled with the car, not the
+  first time it goes fast.
+- Measured (`e2e/car-hitch.mts`, High): getting in, the engine, a crash at 65 km/h — no frame past 71 ms (the 0.4 s one
+  is taking the wheel: the land round it built for Jolt); no new program as I sit or start.

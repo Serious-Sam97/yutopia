@@ -493,9 +493,9 @@ function ViewPage() {
           {t("carReflect")}
         </p>
         <Choice
-          options={["auto", "on", "off"] as const}
+          options={["on", "off"] as const}
           value={p.carReflect}
-          cols={3}
+          cols={2}
           label={(v) => t(`carReflect_${v}`)}
           onPick={(v) => setPrefs({ carReflect: v })}
         />

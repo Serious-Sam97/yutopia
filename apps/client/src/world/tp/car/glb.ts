@@ -2328,7 +2328,8 @@ class GlbCar implements Sedan {
     if (!this.ready) return;
     // (a spun rim's blur: light, half see-through — dark and nearly solid it read as black wheels)
     const k = Math.max(0, Math.min(0.55, (Math.abs(spin) - 22) / 18));
-    if (k > 0 && !this.blurDiscs) {
+    // (plan 99: made as soon as its model's in, drawn at nothing — compiled with the car, not when it first goes fast)
+    if (!this.blurDiscs) {
       const e = this.e;
       // (the rim's own colour — a black alloy's blur is dark, a chrome one's light)
       let rim: Color | null = null;
@@ -2351,10 +2352,7 @@ class GlbCar implements Sedan {
         return d;
       });
     }
-    for (const d of this.blurDiscs ?? []) {
-      d.material.opacity = k;
-      d.visible = k > 0.01;
-    }
+    for (const d of this.blurDiscs ?? []) d.material.opacity = k;
     if (heat > 0.5 || this.discMats) {
       if (!this.discMats) {
         this.discMats = [];

@@ -56,11 +56,20 @@ const car = await page.waitForFunction(() => {
   return o[0] && c.cars.parked.get(o[0].id)?.pose ? { id: o[0].id, pose: c.cars.parked.get(o[0].id).pose } : null;
 }, null, { timeout: 20_000 }).then((h) => h.jsonValue());
 const pp = car.pose;
-await page.evaluate((q) => (window as any).__yutopia.teleport({ x: q.x, y: q.y, level: 0 }), {
-  x: pp.x - 0.4 * Math.cos(pp.a) + 2.6 * Math.sin(pp.a),
-  y: pp.z - 0.4 * Math.sin(pp.a) - 2.6 * Math.cos(pp.a),
-});
-await page.waitForFunction(() => /^car/.test((window as any).__hud.get().prompt?.kind ?? ""), null, { timeout: 10_000 });
+// (by its driver's door, else its other side: the first with the car's prompt)
+let prompted = false;
+for (const w of [2.6, -2.6, 2.2, -2.2]) {
+  await page.evaluate((q) => (window as any).__yutopia.teleport({ x: q.x, y: q.y, level: 0 }), {
+    x: pp.x - 0.4 * Math.cos(pp.a) + w * Math.sin(pp.a),
+    y: pp.z - 0.4 * Math.sin(pp.a) - w * Math.cos(pp.a),
+  });
+  prompted = await page
+    .waitForFunction(() => (window as any).__hud.get().prompt?.kind === "car", null, { timeout: 6000 })
+    .then(() => true)
+    .catch(() => false);
+  if (prompted) break;
+}
+if (!prompted) throw new Error("no car prompt by it");
 await page.waitForTimeout(1500); // (settled: the long frames of arriving not counted)
 if (process.env.PROF) {
   await cdp.send("Profiler.enable");

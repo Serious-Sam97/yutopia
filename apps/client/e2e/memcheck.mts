@@ -231,7 +231,7 @@ try {
         localStorage.setItem("yutopia:token", t);
         localStorage.setItem("yutopia:prefs", JSON.stringify({ quality: "high", carReflect: r }));
       },
-      [tok, process.env.CAR_REFLECT ?? "auto"] as const,
+      [tok, process.env.CAR_REFLECT ?? "off"] as const,
     );
   }
   await page.goto(process.env.LOOK ? `${base}/?look=${process.env.LOOK}` : `${base}/`);

@@ -2256,8 +2256,8 @@ export class Cars {
     const dark = this.host.dark();
     // (plan 98 phase 22, F7) the world itself in the paint and the chrome — the street's lamps, the buildings, the snow —:
     // a probe caught round me every 5 s (my own car out of it), on High by itself or as set; else the sky's gradient
-    const rp = prefs().carReflect;
-    const probe = rp === "on" || (rp === "auto" && this.host.quality() === "high");
+    // (plan 99 F4a: by hand only, for now — its faces compiled the world's materials on the spot, a 2.3 s freeze)
+    const probe = prefs().carReflect === "on";
     if (probe) {
       // (a face of the cube a frame — all six at once was 30–230 ms on a frame —, every 10 s, out to 90 m)
       if (this.envMake?.for !== tp.renderer) this.envMake = this.makeEnv(tp);
