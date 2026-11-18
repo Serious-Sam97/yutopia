@@ -8,7 +8,7 @@ Asked 2026-11-17, the user testing plan 98 (in Portuguese, here in short):
 4. the getting-out act doesn't hold the character: you can walk off in the middle of it, and you're teleported.
 
 Status: **planned 2026-11-17; forks decided 2026-11-17 one by one, all recommended; every phase straight through
-(F6).**
+(F6) — all built 2026-11-17 (phases 1–6), committed to main, not pushed; the user tests now.**
 
 ## Where we are, from the code and a probe
 
