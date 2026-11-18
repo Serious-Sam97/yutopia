@@ -1177,6 +1177,7 @@ void main() {
     this.winSig = `${cutsSig(home)}|${out.key}`;
     this.around = new Surroundings(building, opts.themes, wallCuts(home), out.outline());
     this.around.floorLit = (m) => this.light.patch(m);
+    this.around.compileAhead = (o) => this.renderer.compileAsync(o, this.camera, this.scene);
     this.prepareGrounds();
     this.scene.add(this.around.root);
     this.floors.set(this.level, {
@@ -1771,6 +1772,7 @@ void main() {
     this.around.dispose();
     this.around = new Surroundings(building, this.opts.themes, wallCuts(home), this.outline().outline());
     this.around.floorLit = (m) => this.light.patch(m);
+    this.around.compileAhead = (o) => this.renderer.compileAsync(o, this.camera, this.scene);
     this.prepareGrounds();
     this.scene.add(this.around.root);
     this.placeAround();

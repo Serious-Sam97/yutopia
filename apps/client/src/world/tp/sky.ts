@@ -13,6 +13,7 @@ import {
   Mesh,
   MeshLambertMaterial,
   MeshStandardMaterial,
+  type Object3D,
   Points,
   PointsMaterial,
   RepeatWrapping,
@@ -482,8 +483,13 @@ export class Surroundings {
       this.rainSoon = -1;
       const make = () => {
         if (this.gone || this.rain) return;
-        this.rain = this.makeRain();
-        this.rain.warm();
+        const r = this.makeRain();
+        this.rain = r;
+        // (its shaders compiled off the frame first — drawn unseen, they were compiled on the spot: a 200 ms frame on
+        // Low, plan 99 —, then drawn once unseen for its buffers)
+        const ahead = this.compileAhead;
+        if (!ahead) return r.warm();
+        void Promise.all(r.parts().map((o) => ahead(o).catch(() => undefined))).then(() => !this.gone && r.warm());
       };
       if (typeof requestIdleCallback === "function") requestIdleCallback(make, { timeout: 5000 });
       else setTimeout(make, 0);
@@ -520,6 +526,8 @@ export class Surroundings {
     }
   }
 
+  /** (plan 99) compiles a thing's shaders for the view, off the frame (the view's renderer's compileAsync) */
+  compileAhead: ((o: Object3D) => Promise<unknown>) | null = null;
   private rainSoon = 0;
   private gone = false;
   private makeRain(): Rain {

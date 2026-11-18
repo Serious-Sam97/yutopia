@@ -129,3 +129,22 @@ every frame over 50 ms named by a CPU profile)
   walked to the door with, and its first frame back counted a quarter second at once (a 0.6 m step).
 - `e2e/car-hold.mts`: out, W held 0.5 s after — the act over 0.45 s after W, my walker's biggest step 0.16 m (a frame's
   walk), none as it's let go. A jump (out on the move) isn't held: the ragdoll's.
+
+## Phase 5 — built (2026-11-17): the probe redone, on High again
+
+- **Its own look** (`car/probe-look.ts`): the world drawn into the probe's cube with one plain material put on as the
+  scene's override — each thing's own colour (its material's, read as it's drawn), lit by the sky's light, its own glow
+  (emissive; an unlit one's colour is its light: the lamps, the windows at night), the sky's gradient for what has no
+  colour (the sky dome, the water, a shader's own things). The world's own materials are never compiled again for the
+  cube's target (no tone mapping: a program set of its own — the 2.3 s freeze).
+- **Its few programs made ahead:** at each cycle's start, every kind of thing in the scene not seen yet (instanced,
+  coloured, skinned, its morph targets' count: people have 2–5) gets a stand-in compiled off the frame
+  (`compileAsync`) before a face is drawn; and the blur it's made into the cars' map with (`compileCubemapShader`).
+- **On High by itself again** (F4a): Settings → "Car reflections" Auto (on High) / On / Off, Auto by default.
+- **The rain compiled ahead too:** made a few seconds after the land, it was "warmed" by drawing it unseen — its shader
+  compiled on the spot then (a 200 ms frame on Low, mid-drive in `car-hitch`); now compiled off the frame first
+  (`Surroundings.compileAhead`), then drawn unseen for its buffers.
+- Measured (`e2e/car-hitch.mts`, `REFLECT=on`, its cycles watched 22 s after the crash): a face 3–6 ms (was 3–28),
+  the worst 29 ms; on High by default three profiled runs with no frame past 89 ms (the long ones the main view's own);
+  Low, two runs, none past 67 ms. A rare first cycle can still meet something the probe hasn't drawn yet (its buffers
+  uploaded): a 120–275 ms face seen once in six runs. Stills: `e2e/car-reflect.mts` (noon and night, on and off).

@@ -124,6 +124,7 @@ import type { Sedan } from "../tp/car/model";
 import { CarRig } from "../tp/car/rig";
 import { carFit } from "../tp/car/seatfit";
 import type { BrowserPhysics } from "../tp/physics3d";
+import { thrown } from "../tp/thrown";
 import type { ThirdPersonView } from "../tp/view";
 import { AT, growOf, SHOWN, wx, wxHold, wxNow } from "../tp/wx3d";
 import { CarInput, type Switch } from "./controls";
@@ -155,9 +156,9 @@ import {
   seatGrip,
   straddleAt,
 } from "./getin";
-import { thrown } from "../tp/thrown";
 import { CarHud } from "./hud";
 import { CarPlayback } from "./playback";
+import { probeLook, probeWarm } from "./probe-look";
 import { type CarExtras, CarSound, distanceGain, HEARD, preloadEngine } from "./sound";
 import { doorSlots, slotBuffers, voiceOf } from "./sound-bank";
 import { type SpotPrompt, Spots, spotNo } from "./spot";
@@ -704,6 +705,18 @@ function soundOf(ctx: AudioContext, kind: CarKind, variant?: string): CarSound |
 }
 /** The kinds the far model (a wagon's or a sedan's outline) can't stand in for: always drawn whole. */
 const SLIDE_S = 0.45;
+/** (plan 98/99) The cars' sky (their reflection's gradient, and the probe's sky): up, the horizon, below — by the night
+ *  `n` and the dark (in the pitch dark nothing up there to shine in the paint). */
+function skyCols(n: number, dark: number, top: Color, hor: Color, low: Color) {
+  top.set("#8f9ca8").lerp(sN.set("#04070c"), n);
+  hor.set("#d5dbe0").lerp(sN.set("#141c27"), n);
+  low.set("#dfe5ea").lerp(sN.set("#0b1016"), n);
+  for (const c of [top, hor, low]) c.multiplyScalar(1 - 0.92 * dark);
+}
+const sN = new Color();
+const sT = new Color();
+const sH = new Color();
+const sL = new Color();
 /** (plan 99 F5a) s: what's left of climbing out once a move hurries it */
 const HURRY_S = 0.45;
 /** (plan 98 phase 23) m: the town's own cars' engines heard this near */
@@ -843,7 +856,6 @@ export class Cars {
     dry: boolean;
   } | null = null;
   private knocked = new Map<string, number>();
-  private enteredAt = -9;
   // the mouse turning the car's camera: moved (locked, as the view's mouse look) or dragged
   private mouseAt = -9;
   private mouseHeld = false;
@@ -2290,8 +2302,10 @@ export class Cars {
     const dark = this.host.dark();
     // (plan 98 phase 22, F7) the world itself in the paint and the chrome — the street's lamps, the buildings, the snow —:
     // a probe caught round me every 5 s (my own car out of it), on High by itself or as set; else the sky's gradient
-    // (plan 99 F4a: by hand only, for now — its faces compiled the world's materials on the spot, a 2.3 s freeze)
-    const probe = prefs().carReflect === "on";
+    // (plan 99 F4a: off for a while — its faces compiled the world's materials on the spot, a 2.3 s freeze —; on High
+    // by itself again once drawn in its own few programs, phase 5)
+    const rp = prefs().carReflect;
+    const probe = rp === "on" || (rp === "auto" && this.host.quality() === "high");
     if (probe) {
       // (a face of the cube a frame — all six at once was 30–230 ms on a frame —, every 10 s, out to 90 m)
       if (this.envMake?.for !== tp.renderer) this.envMake = this.makeEnv(tp);
@@ -2316,22 +2330,33 @@ export class Cars {
         }
         pc.cam.updateMatrixWorld(true);
         pc.face = 0;
+        pc.ready = -1;
       }
-      // (its materials compiled for the cube's target first, off the frame — a target's programs are their own
-      // (no tone mapping): each material's first time in a face was a 200–780 ms stall)
+      // (plan 99 phase 5: the world drawn into it in the probe's one plain look — car/probe-look.ts —, its few programs
+      // compiled once, ahead, off the frame: the world's own materials, compiled again for the cube's target on the
+      // spot, were the 200–2300 ms stalls)
       const faceCam = pc.cam.children[pc.face] as PerspectiveCamera;
-      if (pc.ready !== pc.face) {
+      const look = (this.probeLook ??= probeLook());
+      if (pc.face === 0 && pc.ready < 0) {
         if (pc.waiting) return;
+        // (anything new in the world since — someone come by, a car with dents —: its program made first)
+        const warm = probeWarm(look, tp.scene, this.probeKinds);
+        if (!warm) {
+          pc.ready = 1;
+          return;
+        }
         pc.waiting = true;
         const prev0 = r.getRenderTarget();
-        r.setRenderTarget(pc.rt, pc.face);
-        const face = pc.face;
+        r.setRenderTarget(pc.rt, 0);
         const cube = pc;
-        r.compileAsync(tp.scene, faceCam)
+        const pm = this.envMake.pm;
+        r.compileAsync(warm.scene, faceCam, tp.scene)
           .catch(() => {})
           .then(() => {
+            warm.dispose();
+            // (and the blur it's made into the cars' map with)
+            pm.compileCubemapShader();
             cube.waiting = false;
-            cube.ready = face;
           });
         r.setRenderTarget(prev0);
         return;
@@ -2340,10 +2365,15 @@ export class Cars {
       const mine = this.mine ? this.live.get(this.mine.vid) : undefined;
       const was = mine?.model.root.visible;
       if (mine) mine.model.root.visible = false;
+      skyCols(n, dark, sT, sH, sL);
+      look.set((1 - 0.96 * n) * (1 - 0.92 * dark), sT, sH, sL);
       const prev = r.getRenderTarget();
+      const over = tp.scene.overrideMaterial;
+      tp.scene.overrideMaterial = look;
       r.setRenderTarget(pc.rt, pc.face);
       r.render(tp.scene, faceCam);
       r.setRenderTarget(prev);
+      tp.scene.overrideMaterial = over;
       if (mine) mine.model.root.visible = was ?? true;
       pc.face++;
       if (pc.face === 6) {
@@ -2356,7 +2386,11 @@ export class Cars {
       }
       this.envMs = performance.now() - t0;
       this.envFaces.push(+this.envMs.toFixed(1));
-      if (this.envFaces.length > 24) this.envFaces.shift();
+      this.envFaceAt.push(Math.round(t0));
+      if (this.envFaces.length > 24) {
+        this.envFaces.shift();
+        this.envFaceAt.shift();
+      }
       return;
     }
     if (this.probeCube) {
@@ -2373,20 +2407,22 @@ export class Cars {
     if (this.envMake?.for !== tp.renderer) this.envMake = this.makeEnv(tp);
     const { pm, scene, dome } = this.envMake;
     const u = (dome.material as ShaderMaterial).uniforms;
-    u.top.value.set("#8f9ca8").lerp(new Color("#04070c"), n);
-    u.hor.value.set("#d5dbe0").lerp(new Color("#141c27"), n);
-    u.low.value.set("#dfe5ea").lerp(new Color("#0b1016"), n);
-    // (in the pitch dark, nothing up there to shine in the paint)
-    for (const c of [u.top.value, u.hor.value, u.low.value]) c.multiplyScalar(1 - 0.92 * dark);
+    skyCols(n, dark, u.top.value, u.hor.value, u.low.value);
     // (the render target it's drawn into let go whole with it — its texture alone left the target on
     // the GPU, one every 20 s: the memory checker's soak, plan 72 phase 13)
     this.setEnvAll(pm.fromScene(scene, 0.04, 0.1, 100));
   }
+  /** (plan 99 phase 5) the probe's one look (car/probe-look.ts) */
+  private probeLook: ReturnType<typeof probeLook> | null = null;
+  /** (plan 99 phase 5) the kinds of thing the probe's programs are made for */
+  private probeKinds = new Set<string>();
   /** (plan 98) the cars' reflection map: this target's texture on every car, the last one let go */
   private envProbe = false;
   /** (plan 98) the probe's last face's cost on the main thread (ms), and the last two dozen */
   envMs = 0;
   envFaces: number[] = [];
+  /** (plan 99) when each of them was (performance.now, ms) */
+  envFaceAt: number[] = [];
   private probeCube: {
     rt: WebGLCubeRenderTarget;
     cam: CubeCamera;
@@ -4764,7 +4800,6 @@ export class Cars {
         this.wipersAuto = true;
       }
       this.cam.mode = "chase";
-      this.enteredAt = this.time;
       this.siren = false;
       // (plan 98 F3a: the HUD once I'm sat; the camera with me till then)
       this.hudAt = this.time + ENTER_S - 0.35;

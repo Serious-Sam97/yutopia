@@ -30,8 +30,8 @@ export interface Prefs {
   // the car's gearbox (docs/plan/92, F4a): shifted for you, or by hand (Q/E, the bumpers)
   carManual: boolean;
   // (plan 98 phase 22) the cars' paint and chrome reflecting the world round them (a probe caught near you now and
-  // then), by hand on any quality — (plan 99 F4a) off by default till it draws without compiling on the spot
-  carReflect: "on" | "off";
+  // then): on High by itself ("auto"), or on or off by hand on any quality — (plan 99) drawn in its own few programs
+  carReflect: "auto" | "on" | "off";
   // frames per second, at most (0 = as many as the screen shows); 30 once nothing moves
   maxFps: MaxFps;
   // the frame's numbers in a corner (fps, where each frame's time goes: docs/plan/38-the-lag.md)
@@ -133,7 +133,7 @@ const DEFAULTS: Prefs = {
   lookInvertX: false,
   hands1p: true,
   carManual: false,
-  carReflect: "off",
+  carReflect: "auto",
   maxFps: 60,
   perfStats: false,
   graphics: null,
@@ -160,7 +160,7 @@ export function prefs(): Prefs {
     if (cache) cache.lookInvertX = cache.lookInvertX === true;
     if (cache) cache.hands1p = cache.hands1p !== false;
     if (cache) cache.carManual = cache.carManual === true;
-    if (cache && cache.carReflect !== "on") cache.carReflect = "off";
+    if (cache && !["auto", "on", "off"].includes(cache.carReflect)) cache.carReflect = "auto";
     if (cache) cache.perfStats = cache.perfStats === true;
     if (cache && (typeof cache.graphics !== "object" || Array.isArray(cache.graphics))) cache.graphics = null;
     if (

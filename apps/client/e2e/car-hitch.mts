@@ -19,9 +19,9 @@ const browser = await chromium.launch({
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 page.on("pageerror", (e) => console.log("  page:", e.message));
 await page.addInitScript(
-  ([t, q]) => {
+  ([t, q, r]) => {
     localStorage.setItem("yutopia:token", t as string);
-    localStorage.setItem("yutopia:prefs", JSON.stringify({ quality: q, view: "3p", maxFps: 0 }));
+    localStorage.setItem("yutopia:prefs", JSON.stringify({ quality: q, view: "3p", maxFps: 0, carReflect: r || undefined }));
     const W = window as any;
     W.__s = [];
     let last = performance.now();
@@ -32,7 +32,7 @@ await page.addInitScript(
     };
     requestAnimationFrame(tick);
   },
-  [tok, quality] as const,
+  [tok, quality, process.env.REFLECT ?? ""] as const,
 );
 await page.goto(`${base}/`);
 await page.waitForFunction(() => {
@@ -91,6 +91,24 @@ const newProgs = async (tag: string) => {
   progWas = now2;
   console.log(`  programs new at ${tag}: ${fresh.length}`);
   for (const f of fresh.slice(0, 14)) console.log(`    ${f}`);
+  if (fresh.length && process.env.WHO)
+    console.log("    whose:", JSON.stringify(await page.evaluate((keys: string[]) => {
+      const tp = (window as any).__yutopia.tp;
+      const r = tp.renderer;
+      const out: string[] = [];
+      tp.scene.traverse((o: any) => {
+        for (const m of [].concat(o.material ?? [])) {
+          const pr = r.properties.get(m)?.currentProgram;
+          if (!pr) continue;
+          const k = `${pr.name}#${String(pr.cacheKey).slice(0, 60).replace(/,/g, " ")}`;
+          if (!keys.includes(k)) continue;
+          const path: string[] = [];
+          for (let x = o; x && path.length < 5; x = x.parent) path.push(x.name || x.type);
+          out.push(`${(m as any).type}:${(m as any).name} on ${path.join("<")} geo ${o.geometry?.type} u ${Object.keys((m as any).uniforms ?? {}).join("/")} grp ${o.parent?.children?.length}`);
+        }
+      });
+      return [...new Set(out)].slice(0, 8);
+    }, fresh)));
 };
 // (a mark to line the profile up by)
 const markAt: number = await page.evaluate(() => {
@@ -144,6 +162,39 @@ ev.push([await now(), "crashed"]);
 await newProgs("going fast, crashed");
 await page.waitForTimeout(2500);
 await newProgs("after the crash");
+if (process.env.REFLECT) {
+  // (the probe's cycles: 10 s apart, at rest — a few of them, each face's cost)
+  await page.keyboard.up("KeyW");
+  ev.push([await now(), "stopped, the probe going round"]);
+  await page.waitForTimeout(22_000);
+  await newProgs("the probe's cycles");
+  console.log("kinds in the scene:", JSON.stringify(await page.evaluate(() => {
+    const tp = (window as any).__yutopia.tp;
+    const k = new Map<string, number>();
+    tp.scene.traverse((o: any) => {
+      if (!(o.isMesh || o.isPoints || o.isLine || o.isSprite)) return;
+      const g = o.geometry;
+      const a = g?.attributes ?? {};
+      const sig = [
+        o.isInstancedMesh ? "inst" : o.isSkinnedMesh ? "skin" : o.isPoints ? "pts" : o.isLine ? "line" : o.isSprite ? "spr" : o.isBatchedMesh ? "batch" : "mesh",
+        o.instanceColor ? "icol" : "",
+        o.morphTargetInfluences?.length ? `morph${g.morphAttributes.position?.length ?? 0}n${g.morphAttributes.normal?.length ?? 0}c${g.morphAttributes.color?.length ?? 0}` : "",
+        a.uv1 ? "uv1" : "",
+        a.uv2 ? "uv2" : "",
+        a.uv3 ? "uv3" : "",
+        o.isInstancedMesh && o.morphTexture ? "imorph" : "",
+      ].filter(Boolean).join("+");
+      k.set(sig, (k.get(sig) ?? 0) + 1);
+    });
+    return [...k];
+  })));
+  const pf = await page.evaluate(() => {
+    const C = (window as any).__yutopia.cars;
+    return { ms: C.envFaces as number[], at: C.envFaceAt as number[] };
+  });
+  console.log("probe faces (ms):", JSON.stringify(pf.ms));
+  console.log("probe faces over 20 ms (s from X: ms):", pf.ms.map((m, i) => [m, pf.at[i]]).filter(([m]) => m > 20).map(([m, t]) => `${((t - x0) / 1000).toFixed(2)}: ${m}`).join(" | "));
+}
 await page.keyboard.up("KeyW");
 ev.push([await now(), "end"]);
 const st: [number, number][] = await page.evaluate(() => (window as any).__s);

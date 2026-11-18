@@ -10,6 +10,7 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
+  type Object3D,
   PlaneGeometry,
   Quaternion,
   ShaderMaterial,
@@ -194,6 +195,10 @@ export class Rain {
     root.add(this.drips);
   }
 
+  /** (plan 99) its drawn parts (to compile ahead) */
+  parts(): Object3D[] {
+    return [this.streaks, this.splash, this.drips];
+  }
   private warming = 0;
   /** Drawn once unseen in the next frames (made ahead of the first rain: sky.ts). */
   warm(): void {

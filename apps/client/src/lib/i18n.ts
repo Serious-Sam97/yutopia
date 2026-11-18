@@ -287,6 +287,7 @@ const D = {
   carManual: ["Manual gearbox in cars (Q/E)", "Câmbio manual nos carros (Q/E)"],
   carSwap: ["Across to the wheel", "Passar para o volante"],
   carReflect: ["Car reflections (the world in the paint)", "Reflexos nos carros (o mundo na pintura)"],
+  carReflect_auto: ["On High", "No Alto"],
   carReflect_on: ["On", "Ligado"],
   carReflect_off: ["Off", "Desligado"],
   lookRefused: [
