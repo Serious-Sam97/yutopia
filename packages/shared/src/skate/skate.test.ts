@@ -443,7 +443,7 @@ test("on the wire: the mode, the trick, fakie, goofy, the board, a powerslide, l
   k.lit = true;
   k.grind = { id: "smith", ux: 1, uy: 0, slope: 0, what: "rail", across: false, t: 0, bal: 0, v: 0 };
   assert.deepEqual(
-    { ...skateOfCode(skateCode(k)), lean: 0 },
+    { ...skateOfCode(skateCode(k)), lean: 0, bal: 0 },
     {
       mode: "grind",
       trick: "smith",
@@ -456,6 +456,7 @@ test("on the wire: the mode, the trick, fakie, goofy, the board, a powerslide, l
       lean: 0,
       cess: true,
       lit: true,
+      bal: 0,
     },
   );
   assert.equal(skateCode(null), 0);

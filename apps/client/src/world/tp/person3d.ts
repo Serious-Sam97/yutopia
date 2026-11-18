@@ -33,7 +33,6 @@ const puffDir = new Vector3();
 import { SKATE_BAIL, skateOfCode } from "@yutopia/shared/skate";
 import { HIP_H } from "../chars/moves";
 import { awayAt, BoardObj } from "../skate/board3d";
-import { type SkaterOut, skaterPose } from "../skate/pose";
 import {
   AK_CLOSE,
   AK_LOAD_BLADE,
@@ -643,6 +642,30 @@ const tv3 = new Vector3();
 const skYaw = new Quaternion();
 const skN3 = new Vector3();
 const skHand = new Vector3();
+const skFootAt = new Vector3();
+const skFootUp = new Vector3();
+const skPole = new Vector3();
+const skFootQ = new Quaternion();
+const skQ2 = new Quaternion();
+const skDeck = new Matrix4();
+const skLift = new Vector3();
+
+// (plan 104 F4a) the skater's clips and their player: a chunk of their own, loaded the first time someone's seen on
+// a board (skate/pose.ts — yutopia-skate-anim)
+type SkateAnim = typeof import("../skate/pose");
+let skateAnim: SkateAnim | null = null;
+let skateAnimLoading = false;
+function skateAnimNow(): SkateAnim | null {
+  if (!skateAnim && !skateAnimLoading) {
+    skateAnimLoading = true;
+    void import("../skate/pose").then((m) => {
+      skateAnim = m;
+      m.clipsNow();
+    });
+  }
+  return skateAnim;
+}
+const wrapA = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 /** (plan 62) Playing the piano: sat on its stool, facing its keys, the hands on them (wide, along
  *  them) — as sat at a desk typing. Its parts (tp/view.ts): the keys, then the stool. */
@@ -754,7 +777,14 @@ export class Person3D {
   private skT0 = 0;
   private skW = 0;
   private skTipped = false;
-  private skHands: SkaterOut["hands"] | null = null;
+  /** (plan 104 F4a) the clips' player, a goofy rider's mirrored frame, each hand's spot (her space) and weight */
+  private skPlayer: InstanceType<SkateAnim["SkaterPlayer"]> | null = null;
+  private skMirror: InstanceType<SkateAnim["Frame"]> | null = null;
+  private skHands: { p: Vector3; w: number }[] | null = null;
+  private skHandsBuf: { p: Vector3; w: number }[] | null = null;
+  /** (plan 104) the board's nose as last drawn: a snap round (a revert) plays its skid; the body rigid with it */
+  private skWant: number | null = null;
+  private skTurned = false;
   /** (F13a) the board shot off in a bail: rolling on in the scene till it stops, then a while lying there */
   private skAway: {
     board: BoardObj;
@@ -938,6 +968,21 @@ export class Person3D {
   update(p: PersonIn, dt: number, seen: Seen, given?: MotionOut) {
     p = atPiano(p);
     const sitting = p.a === 2;
+    // (plan 104 F11a) on a board: the guns stowed out of sight — none in the hand, none slung or holstered
+    const skc = p.sk ?? 0;
+    const skating = !sitting && (skc & 7) >= 1 && (skc & 7) <= 6;
+    if (skating && (p.gun || p.holster || p.sling || p.slingAk || p.slingSn || p.slingDb || p.torch || p.flare))
+      p = {
+        ...p,
+        gun: undefined,
+        holster: false,
+        sling: false,
+        slingAk: false,
+        slingSn: false,
+        slingDb: false,
+        torch: false,
+        flare: false,
+      };
     // detail by distance (low quality never builds the closest level)
     const d = Math.hypot(seen.camX - p.x, seen.camZ - p.y);
     let lod: 0 | 1 | 2 = d < 3.5 ? 0 : d < 11 ? 1 : 2;
@@ -957,12 +1002,26 @@ export class Person3D {
       this.mood < 0 ? mood : this.mood + (mood - this.mood) * Math.min(1, dt * (mood > this.mood ? 1.5 : 0.5));
     this.motion.tension = this.mood;
 
-    // the facing turns smoothly (others only send 8 directions)
+    // the facing turns smoothly (others only send 8 directions) — but on a board (plan 104, the board's direction):
+    // rigid with its nose, exactly sideways to it (its nose to her left, regular; to her right, goofy), no lag
     if (this.turned === null) this.turned = p.angle;
-    let dA = p.angle - this.turned;
-    dA = Math.atan2(Math.sin(dA), Math.cos(dA));
-    const turnBy = this.limpYaw !== null ? 0 : dA * Math.min(1, dt * 14);
-    this.turned += turnBy;
+    let turnBy: number;
+    if (skating && this.limpYaw === null) {
+      const st = ((skc >> 10) & 1) === 1 ? -1 : 1;
+      const want = p.skYaw !== undefined ? p.skYaw + (st * Math.PI) / 2 : p.angle;
+      // (the nose snapped round in a step — a revert —: the clip's skid turns her and the board the short way, in
+      // her frame: the root itself stays with the nose)
+      if (this.skWant !== null && Math.abs(wrapA(want - this.skWant)) > 2.4) this.skTurned = true;
+      this.skWant = want;
+      turnBy = wrapA(want - this.turned);
+      this.turned = want;
+    } else {
+      this.skWant = null;
+      let dA = p.angle - this.turned;
+      dA = Math.atan2(Math.sin(dA), Math.cos(dA));
+      turnBy = this.limpYaw !== null ? 0 : dA * Math.min(1, dt * 14);
+      this.turned += turnBy;
+    }
     // (plan 58 5d: getting up off the ragdoll, turned the way they lay — the root's yaw is the scene's)
     if (this.limpYaw !== null) this.turned = Math.PI / 2 - this.limpYaw;
     // (my hands in first person are placed by hands1p.ts)
@@ -1248,7 +1307,8 @@ export class Person3D {
         swimHands = sw.w > 0.5 ? sw.hands : swimHands;
       } else this.swim2 = null;
     } else this.swim2 = null;
-    // on a board (docs/plan/103-the-skate.md F11a): the skater's pose over everything, the board under her feet
+    // on a board (docs/plan/104-the-skate-again.md F4a): the clips' pose over everything (tools/art/skate-anim), the
+    // board on its bone, the feet on its deck by IK, the hands to its spots after
     this.skHands = null;
     {
       const code = p.sk ?? 0;
@@ -1287,45 +1347,92 @@ export class Person3D {
       }
       // (a new trick, or mode: its clock from now)
       if ((code & 0x1f9) !== (this.skCode & 0x1f9)) this.skT0 = performance.now();
+      const first = !this.skCode && !!code && code !== SKATE_BAIL;
       this.skCode = code;
       const sk = !sitting && code ? skateOfCode(code) : null;
-      const A = sk && !this.limp?.on ? this.C.actsNow() : null;
-      if (sk && A) {
+      const SA = sk && !this.limp?.on ? skateAnimNow() : null;
+      const rig = SA?.clipsNow()?.rig;
+      if (sk && SA && rig) {
         this.skBoard ??= new BoardObj(sk.variant);
         const bd = this.skBoard;
         bd.set(sk.variant);
         if (bd.root.parent !== this.root) this.root.add(bd.root);
-        const now = performance.now() / 1000;
-        const o = skaterPose({
+        this.skPlayer ??= new SA.SkaterPlayer();
+        const fr = this.skPlayer.update({
           look: sk,
-          t: now - this.skT0 / 1000,
-          stand: HIP_H,
-          m: bd.m,
-          speed: this.spd,
-          time: now,
+          t: (performance.now() - this.skT0) / 1000,
+          dt: step,
+          turned: this.skTurned,
+          first,
         });
-        const act = A.carStep(o.step, now);
-        this.skW = Math.min(1, this.skW + step * 6);
-        const w = this.skW;
-        pose = this.C.blend(pose, act.pose, w);
-        // (on a rail: the trucks on it, or the deck across it — she and the board let down onto it)
-        const across = sk.trick === "boardslide" || sk.trick === "lipslide";
-        const down = sk.mode === "grind" ? (across ? bd.m.deckY - 0.012 : bd.m.wheelR) : 0;
-        lift = [lift[0] + (o.shift - lift[0]) * w, lift[1] + (o.step.hipY - HIP_H - down - lift[1]) * w, lift[2]];
-        bd.root.rotation.set(0, sk.stance > 0 ? 0 : Math.PI, 0);
-        bd.root.position.set(0, -down, 0);
-        bd.pose(
-          sk.lean,
-          sk.mode === "air" || sk.mode === "grind" ? 0 : this.spd,
-          step,
-          o.board.roll,
-          o.board.yaw,
-          o.board.pitch,
-          o.board.up,
-        );
-        this.skHands = o.hands;
+        this.skTurned = false;
+        if (fr) {
+          this.skMirror ??= new SA.Frame();
+          const f = sk.stance > 0 ? fr : SA.mirrorFrame(fr, this.skMirror);
+          // the board on its bone (her space: its middle and its turn), leant on its trucks by the carve
+          const m = bd.m;
+          bd.root.quaternion.copy(f.bq);
+          bd.root.position.set(0, m.deckY, 0).applyQuaternion(f.bq).negate().add(f.bc);
+          bd.pose(sk.lean * sk.stance, sk.mode === "air" || sk.mode === "grind" ? 0 : this.spd, step);
+          bd.deckFrame(skDeck);
+          const sp = SA.poseOf(f, {});
+          skLift.copy(f.lift);
+          // the feet: locked to the deck where the clip has them on it (its spots on this board)
+          const tl = this.model.bone("thighL");
+          const tr = this.model.bone("thighR");
+          const kl = this.model.bone("kneeL");
+          const al = this.model.bone("ankleL");
+          if (tl && tr && kl && al) {
+            const life = this.model.isLife;
+            const rh = this.model.restHips;
+            const LB = {
+              restHips: rh,
+              thigh: [tl.position, tr.position] as [Vector3, Vector3],
+              drop: life ? HIP_H - (rh[1] + tl.position.y) : 0,
+              thighLen: life ? rig.THIGH : kl.position.length(),
+              shinLen: life ? rig.THIGH : al.position.length(),
+              ankle: rig.ANKLE,
+            };
+            for (const s of [0, 1] as const) {
+              const ft = f.foot[s];
+              if (ft.lk < 0.01) continue;
+              SA.mapPoint(ft.p, m, skFootAt).applyMatrix4(skDeck);
+              // (a sole on the board's bottom — a darkslide's: stood on it upside down)
+              const under = ft.p.y < SA.UNDER_Y;
+              skFootUp.set(0, under ? -1 : 1, 0).transformDirection(skDeck);
+              skFootAt.addScaledVector(skFootUp, LB.ankle);
+              skFootQ.setFromRotationMatrix(skDeck);
+              if (under) skFootQ.multiply(skQ2.setFromAxisAngle(X3, Math.PI));
+              skFootQ.multiply(skQ2.setFromAxisAngle(Y3, ft.h));
+              skFootQ.multiply(skQ2.setFromAxisAngle(X3, ft.t));
+              SA.kneeWay(sp, s, skPole);
+              SA.legTo(LB, sp, skLift, s, skFootAt, skPole, skFootQ, Math.min(1, ft.lk));
+            }
+          }
+          this.skW = Math.min(1, this.skW + step * 8);
+          const w = this.skW;
+          pose = this.C.blend(pose, sp, w);
+          lift = [
+            lift[0] + (skLift.x - lift[0]) * w,
+            lift[1] + (skLift.y - lift[1]) * w,
+            lift[2] + (skLift.z - lift[2]) * w,
+          ];
+          // the hands' spots (her space), reached for once she's placed
+          this.skHandsBuf ??= [
+            { p: new Vector3(), w: 0 },
+            { p: new Vector3(), w: 0 },
+          ];
+          for (const [i, h] of f.hand.entries()) {
+            const o = this.skHandsBuf[i];
+            o.w = h.w;
+            if (h.root) o.p.copy(h.p);
+            else SA.mapPoint(h.p, m, o.p).applyMatrix4(skDeck);
+          }
+          this.skHands = this.skHandsBuf;
+        }
       } else {
         this.skW = 0;
+        this.skPlayer = null;
         if (this.skBoard) {
           this.skBoard.dispose();
           this.skBoard = null;
@@ -1470,9 +1577,9 @@ export class Person3D {
     }
     if (this.skHands && this.skW > 0.3 && !limpHands) {
       this.root.updateMatrixWorld(true);
-      for (const S of ["L", "R"] as const) {
-        const h = this.skHands[S];
-        if (h) this.model.reachTo(S, this.root.localToWorld(skHand.set(h[0], h[1], h[2])), this.skW);
+      for (const [i, S] of (["L", "R"] as const).entries()) {
+        const h = this.skHands[i];
+        if (h && h.w > 0.02) this.model.reachTo(S, this.root.localToWorld(skHand.copy(h.p)), h.w * this.skW);
       }
     }
     this.gunHands(p, step);

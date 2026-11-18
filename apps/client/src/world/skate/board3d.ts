@@ -8,6 +8,7 @@ import {
   CylinderGeometry,
   Group,
   type Material,
+  Matrix4,
   Mesh,
   MeshStandardMaterial,
   type Object3D,
@@ -244,10 +245,27 @@ export class BoardObj {
     // (back to the ground's origin under the deck's middle)
     this.body.translateY(-c);
   }
+  /** (plan 104) Its own frame (the manifest's points) into its parent's — the person's: her space — as drawn now,
+   *  the deck's lean in it (what the feet stand on). After `pose`. */
+  deckFrame(out: Matrix4): Matrix4 {
+    const d = this.deck;
+    out.identity();
+    // (each node's own, from the deck up to the root: the GLB's nest as it is)
+    let o: Object3D | null = d ?? this.body;
+    while (o) {
+      o.updateMatrix();
+      out.premultiply(o.matrix);
+      if (o === this.root) break;
+      o = o.parent;
+    }
+    if (d) out.multiply(_back.makeTranslation(-d.position.x, -d.position.y, -d.position.z));
+    return out;
+  }
   dispose() {
     this.root.removeFromParent();
   }
 }
+const _back = new Matrix4();
 
 /** (F13a) A board thrown off in a bail: where it's got to `t` s after (the floor's plan: from (x0, y0) at
  *  (vx, vy) m/s, rolling to a stop), the same for me and for the others. */

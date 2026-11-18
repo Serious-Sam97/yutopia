@@ -183,6 +183,9 @@ export interface SkateNow {
   clock: number;
   cess: boolean;
   noGrind: number;
+  /** a moment's trick to show on the wire (a wallplant, a revert, a spine, an acid drop: events, not states), and
+   *  s left of it */
+  flash?: { id: TrickId; t: number } | null;
 }
 
 export interface SkateEvents {
@@ -327,6 +330,7 @@ export function stepSkate(b: Body, inp: MoveInput, env: MoveEnv, dt: number, ev:
   k.lastDown = keys.downPressed ? 0 : k.lastDown + dt;
   k.clock += dt;
   k.noGrind = Math.max(0, k.noGrind - dt);
+  if (k.flash && (k.flash.t -= dt) <= 0) k.flash = null;
   // (the directions pressed lately: a special's two)
   for (const [on, d] of [
     [keys.upPressed, "u"],
@@ -378,6 +382,9 @@ export function stepSkate(b: Body, inp: MoveInput, env: MoveEnv, dt: number, ev:
       wall(b, k, keys, env, park, dt, sev);
       break;
   }
+  // (the glue's moments: shown on the wire for a few tenths, the drawing's clip)
+  const flashed = sev.revert ? "revert" : sev.trick === "wallplant" ? "wallplant" : null;
+  if (flashed && b.skate) b.skate.flash = { id: flashed, t: 0.4 };
   b.gait = "still";
   return ev;
 }
@@ -1024,8 +1031,13 @@ function land(
   b.up = false;
   b.vz = 0;
   // (the glue that's the landing's own: over a spine onto its far face, vert broken; an acid drop onto a ramp's face)
-  if (A.broke && k.on && A.fromPl !== undefined && k.on.pl !== A.fromPl) A.done.push({ id: "spine" });
-  else if (A.acid && ramp && k.on) A.done.push({ id: "acid" });
+  if (A.broke && k.on && A.fromPl !== undefined && k.on.pl !== A.fromPl) {
+    A.done.push({ id: "spine" });
+    k.flash = { id: "spine", t: 0.4 };
+  } else if (A.acid && ramp && k.on) {
+    A.done.push({ id: "acid" });
+    k.flash = { id: "acid", t: 0.4 };
+  }
   landTricks(k, A);
   k.air = null;
   k.since = 0;
@@ -1225,7 +1237,11 @@ function wall(b: Body, k: SkateNow, keys: SkateKeys, env: MoveEnv, park: SkatePa
 export function skateCode(k: SkateNow | null | undefined): number {
   if (!k) return 0;
   const mode = SKATE_MODES.indexOf(k.mode) + 1;
-  const tr = k.air?.cur?.id ?? k.grind?.id ?? k.manual?.id ?? k.lip?.id ?? (k.wall ? "wallride" : null);
+  const tr =
+    k.air?.cur?.id ?? k.grind?.id ?? k.manual?.id ?? k.lip?.id ?? (k.wall ? "wallride" : null) ?? k.flash?.id ?? null;
+  // (the balance needle, −1..1 in 5 bits: the drawing's lean on a grind, a manual, a lip)
+  const bal = k.grind?.bal ?? k.manual?.bal ?? k.lip?.bal ?? 0;
+  const balBits = Math.round(clamp((bal + 1) / 2, 0, 1) * 31) & 31;
   const ti = tr ? TRICK_LIST.indexOf(tr) + 1 : 0;
   const v = BOARD_VARIANT_INDEX(k.variant);
   const dbl = k.air?.cur?.double ? 1 : 0;
@@ -1242,7 +1258,8 @@ export function skateCode(k: SkateNow | null | undefined): number {
     (push << 17) +
     ((Math.round(clamp((k.lean + 1) / 2, 0, 1) * 15) & 15) << 18) +
     ((k.cess ? 1 : 0) << 22) +
-    ((k.lit ? 1 : 0) << 23)
+    ((k.lit ? 1 : 0) << 23) +
+    balBits * 2 ** 24
   );
 }
 export interface SkateLook {
@@ -1258,6 +1275,8 @@ export interface SkateLook {
   /** a powerslide (the board across the way it goes), the special lit */
   cess: boolean;
   lit: boolean;
+  /** the balance needle (−1..1; 0 off a balance) */
+  bal?: number;
 }
 export function skateOfCode(c: number): SkateLook | null {
   const mode = SKATE_MODES[(c & 7) - 1];
@@ -1275,6 +1294,7 @@ export function skateOfCode(c: number): SkateLook | null {
     lean: (((c >> 18) & 15) / 15) * 2 - 1,
     cess: ((c >> 22) & 1) === 1,
     lit: ((c >> 23) & 1) === 1,
+    bal: (Math.floor(c / 2 ** 24) & 31) / 31 * 2 - 1,
   };
 }
 /** The look of a board now, from the body itself (the local player's: the same shape as the wire's). */
@@ -1290,5 +1310,5 @@ export const isSkateCode = (c: unknown): c is number =>
   typeof c === "number" &&
   Number.isInteger(c) &&
   c >= 0 &&
-  c < 2 ** 24 &&
+  c < 2 ** 29 &&
   ((c & 7) <= SKATE_MODES.length || c === SKATE_BAIL);

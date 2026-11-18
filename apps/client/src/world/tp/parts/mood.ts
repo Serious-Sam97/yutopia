@@ -375,12 +375,26 @@ export class Mood {
     return Math.min(1, Math.max(night, near * (0.6 + 0.4 * this.c.nightLevel)));
   }
 
-  // out under the open sky: on the land, or the lot's open tiles (asphalt, concrete)
+  // out under the open sky: on the land, or the lot's open tiles (asphalt, concrete) — not in one of the land's
+  // buildings (plan 104 F11a: the skate hall, the barns, the farmhouse… were all "the land", and the snow settled on
+  // whoever was inside them)
   underSky(x: number, y: number): boolean {
     if (this.c.level !== 0) return false;
-    if (this.onLand(x, y)) return true;
+    if (this.onLand(x, y)) return !this.roofed(x, y);
     const ch = cellOf(this.c.map, Math.floor(x), Math.floor(y));
     return ch === "a" || ch === "c";
+  }
+
+  // under one of the land's roofs (the Grounds' buildings as drawn: their boxes, the Grounds' coords — the scene's
+  // less wxOff — as the dusting's roofs are)
+  roofed(x: number, y: number): boolean {
+    const boxes = this.c.around.grounds?.boxes;
+    if (!boxes?.length) return false;
+    const o = wx.wxOff.value;
+    const gx = x - o.x;
+    const gz = y - o.z;
+    for (const b of boxes) if (gx > b.x0 && gx < b.x1 && gz > b.z0 && gz < b.z1) return true;
+    return false;
   }
 
   // out on the land (the ground floor's frame, off its own tiles)

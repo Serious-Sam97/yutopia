@@ -105,6 +105,7 @@ const LAZY = {
   "yutopia-swim": 15, // (added 2026-11-02) plan 66 phase 4's: the swim body — treading, the strokes, under, the dives, wading (loaded with the hero's)
   "yutopia-sway": 10, // plan 61's: what's worn swinging on Jolt — the bags, the hair, the scarf, the tie, the badge, earrings (loaded with the 3D view's physics)
   "yutopia-jumps": 10, // a jump's dust and sounds (shared/jump.ts)
+  "yutopia-skate-anim": 15, // (added 2026-11-18) plan 104 F4a: the skater's clip player (skate/pose.ts) — its clips are a file, anim.json
   "yutopia-steps": 15, // the steps' player (docs/plan/63-the-steps.md): the recordings by surface, shoe and gait; raised 10 → 15 on 2026-11-16 (HEAD 14.7, plan 92 14.8: not the cars')
   "yutopia-dark": 80, // the dark: vitals, pockets, loot on the client (docs/plan/30-the-dark.md)
   // the land round the building, generated (shared/grounds.ts, docs/plan/27): the bundler copies it into every
