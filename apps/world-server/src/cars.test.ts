@@ -1301,3 +1301,42 @@ test("(plan 98 phase 24) a passenger across to the wheel once it's empty: drivin
   assert.equal(String(v.seats).split("|")[1], "");
   assert.equal(v.via, 1, "from the passenger's seat");
 });
+
+test("(plan 98 phase 25) one driver's car into another's: the other's driver told, once for the one crash", async () => {
+  const join = async (uid: number) => {
+    const r = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+      sandbox: 97,
+      token: `dev:${uid}:P${uid}:member,builder,admin`,
+    });
+    rooms.push(r);
+    await waitFor(() => r.state.players?.size > 0 && r.state.objects?.size > 0);
+    return r;
+  };
+  const a = await join(111);
+  const b = await join(112);
+  a.send("mod:cars", {});
+  await sleep(300);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const cars: any[] = [...a.state.objects.values()].filter((c: any) => c.kind === "car" && !props(c).driven);
+  const into = async (r: Room, o: { id: string; x: number; y: number; yaw: number; props: string }) => {
+    const pose = parkedPose({ x: o.x, y: o.y, yaw: o.yaw, props: props(o) });
+    r.send("teleport", { to: { x: pose.x + Math.cos(pose.a) * 3.4, y: pose.y + Math.sin(pose.a) * 3.4, level: 0 } });
+    await waitFor(() => me(r).level === 0);
+    r.send("car:enter", { id: o.id, seat: 0 });
+    await waitFor(() => me(r).busy === `drive:car:${o.id}`);
+    return `car:${o.id}`;
+  };
+  const va = await into(a, cars[4]);
+  const vb = await into(b, cars[5]);
+  const toA: unknown[] = [];
+  const toB: { by: string }[] = [];
+  a.onMessage("car:struck", (m) => toA.push(m));
+  b.onMessage("car:struck", (m: { by: string }) => toB.push(m));
+  a.send("car:hit", { other: vb, j: 9000, vx: 6, vz: 0, m: 1280, x: 0, z: 0 });
+  await waitFor(() => toB.length === 1);
+  assert.equal(toB[0].by, va);
+  // (the same crash on b's screen, told back at once: both felt it already)
+  b.send("car:hit", { other: va, j: 9000, vx: -6, vz: 0, m: 1280, x: 0, z: 0 });
+  await sleep(300);
+  assert.equal(toA.length, 0, "not told twice");
+});

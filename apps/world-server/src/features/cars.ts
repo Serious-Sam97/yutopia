@@ -675,6 +675,34 @@ registerFeature((room: WorldRoom) => {
     if (c) room.send(c, "snap", { x: p.x, y: p.y, z: p.z, level: 0 });
   };
 
+  // (plan 98 phase 25) one driver's car into another's, as the first one's screen had it: told to the other's driver —
+  // unless they've told the same crash themselves just now (both felt it already)
+  const crashAt = new Map<string, number>();
+  room.on("car:hit", (client, m) => {
+    const vid = bySid.get(client.sessionId);
+    const l = vid ? live.get(vid) : undefined;
+    const other = live.get(String(m?.other ?? ""));
+    if (!l || !other || l.seats[0] !== client.sessionId || other === l) return;
+    const to = other.seats[0];
+    if (!to || to === client.sessionId) return;
+    const now = Date.now();
+    const key = [l.veh.id, other.veh.id].sort().join("|");
+    if (now - (crashAt.get(key) ?? 0) < 400) return;
+    crashAt.set(key, now);
+    if (crashAt.size > 64) for (const [k, t] of crashAt) if (now - t > 5000) crashAt.delete(k);
+    const c = clientOf(to);
+    if (!c) return;
+    const num = (x: unknown) => (Number.isFinite(Number(x)) ? Number(x) : 0);
+    room.send(c, "car:struck", {
+      by: l.veh.id,
+      j: Math.min(200_000, Math.max(0, num(m.j))),
+      vx: num(m.vx),
+      vz: num(m.vz),
+      m: num(m.m),
+      x: num(m.x),
+      z: num(m.z),
+    });
+  });
   // (plan 98 phase 24) a passenger across to the empty driver's seat — the keys theirs —: driving it, without getting out
   room.on("car:swap", (client) => {
     const vid = bySid.get(client.sessionId);

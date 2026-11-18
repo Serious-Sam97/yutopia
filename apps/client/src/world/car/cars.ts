@@ -931,6 +931,8 @@ export class Cars {
   private cabin: CabinLight;
   /** (plan 98 phase 12) my car was in the air last frame (a landing's rumble) */
   private wasAir = false;
+  /** (plan 98 phase 25) when I last told each car's driver I'd hit it */
+  private toldAt = new Map<string, number>();
   private gearWas: number | null = null;
   private kickAt = -9;
   /** (plan 98 phase 7) my car's dome light, eased (0..1) */
@@ -977,6 +979,12 @@ export class Cars {
           toast(t("carLooked"), "info");
         }),
         // someone's car keys lent me, or back with them (docs/plan/43-the-spot.md)
+        // (plan 98 phase 25) another driver's car into mine, as their screen had it: the shove and the dent (unless my
+        // own screen felt the same crash just now)
+        room.onMessage(
+          "car:struck",
+          (h: { by: string; j: number; vx: number; vz: number; m: number; x: number; z: number }) => this.struck(h),
+        ),
         room.onMessage("car:keys", (m: { from: string; plate: string; lent: boolean; why?: string }) =>
           toast(
             t(m.lent ? "carKeysLent" : `carKeysBack_${m.why ?? "taken"}`)
@@ -5051,11 +5059,27 @@ export class Cars {
       l.model.setBeacon(l.prevSeats.slice(1).every((x) => !x) && this.host.night() > 0.2, this.time);
   }
 
-  /** My car hit something this step: someone (at speed: knocked down), or a dent where it hit. */
-  private hitBy(room: RoomLike, s: CarState) {
+  /** My car hit something this step: someone (at speed: knocked down), or a dent where it hit. `told`: another car's
+   *  driver's crash into mine, told (plan 98 phase 25) — not told back. */
+  private hitBy(room: RoomLike, s: CarState, told = false) {
     const h = s.hit;
     const m = this.mine;
     if (!h || !m) return;
+    // (plan 98 phase 25: into a car someone's driving — its driver told, once, so both of us feel the one crash)
+    if (!told && h.what === "car" && h.id && this.live.has(h.id) && h.j > 2500) {
+      if (this.time - (this.toldAt.get(h.id) ?? -9) > 0.4) {
+        this.toldAt.set(h.id, this.time);
+        room.send("car:hit", {
+          other: h.id,
+          j: Math.round(h.j),
+          vx: s.v.x,
+          vz: s.v.z,
+          m: s.spec.mass,
+          x: h.x,
+          z: h.z,
+        });
+      }
+    }
     if (h.what === "person" || h.what === "pet") {
       if (!h.id || (h.v ?? 0) < 2.2 || this.time - (this.knocked.get(h.id) ?? -9) < 4) return;
       this.knocked.set(h.id, this.time);
@@ -5096,6 +5120,29 @@ export class Cars {
       const sp = Math.hypot(s.v.x, s.v.z) || 1;
       this.scrape(h.x, s.p.y, h.z, s.v.x, s.v.z, -dx / sp, -dz / sp, Math.min(1, (h.v ?? 0) / 10));
     }
+  }
+
+  /** (plan 98 phase 25) Struck by another driver's car (their screen's crash, told): mine shoved by the momentum
+   *  along the line of the hit, by both weights, and dented where it was struck — unless I felt it myself just now. */
+  private struck(h: { by: string; j: number; vx: number; vz: number; m: number; x: number; z: number }) {
+    const m = this.mine;
+    const s = m?.sim;
+    const room = this.host.room();
+    if (!m || !s || m.seat !== 0 || !room) return;
+    if (s.t - m.hitAt < 0.4) return;
+    if (![h.j, h.vx, h.vz, h.m, h.x, h.z].every(Number.isFinite)) return;
+    const nx0 = s.p.x - h.x;
+    const nz0 = s.p.z - h.z;
+    const nl = Math.hypot(nx0, nz0) || 1;
+    const nx = nx0 / nl;
+    const nz = nz0 / nl;
+    const close = (h.vx - s.v.x) * nx + (h.vz - s.v.z) * nz;
+    if (close > 0 && m.drive) {
+      const k = (1.2 * Math.max(500, h.m)) / (Math.max(500, h.m) + s.spec.mass);
+      const v: [number, number, number] = [s.v.x + nx * close * k, s.v.y, s.v.z + nz * close * k];
+      m.drive.car.place(s.p.x, s.p.y, s.p.z, [s.q.x, s.q.y, s.q.z, s.q.w], v, [s.w.x, s.w.y, s.w.z]);
+    }
+    this.hitBy(room, { ...s, hit: { what: "car", j: h.j, x: h.x, z: h.z, v: Math.max(0, close), at: s.t } } as CarState, true);
   }
 
   /** A car's broken parts as seen now: what broke since it was last seen falls and shatters (a bumper on

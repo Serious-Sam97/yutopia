@@ -504,6 +504,7 @@ export interface ClientMessages {
   "car:lend": { to: number | null };
   "car:leave": { jump?: boolean };
   "car:swap": Record<string, never>;
+  "car:hit": { other: string; j: number; vx: number; vz: number; m: number; x: number; z: number };
   "car:state": CarWire;
   // the Kart Park (docs/plan/46-the-karts.md): take a kart at the desk (its colour), give it back;
   // the next race's setup (anyone in a kart, between races); ready; start; my kart's state; an item
@@ -674,6 +675,8 @@ export interface ServerMessages {
   "car:looked": { id: string };
   // someone's car keys lent to me, or back with them (why: "taken", "home", "day")
   "car:keys": { from: string; plate: string; lent: boolean; why?: string };
+  /** (plan 98 phase 25) another driver's car into mine, as their screen had it */
+  "car:struck": { by: string; j: number; vx: number; vz: number; m: number; x: number; z: number };
   // (to the driver) a passenger changed the radio's station
   "car:radio": Record<string, never>;
   // my own arrival point here (on join and after I change it); null: the world's

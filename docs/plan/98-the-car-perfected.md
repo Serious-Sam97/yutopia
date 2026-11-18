@@ -603,3 +603,16 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
 - Not done: an owned car left in the road towed home after a while (its owner told); a jerry can; parking off a bay
   squared to the kerb.
 - Checked: world-server car tests 20/20 (new: across to the wheel); typecheck clean.
+
+## Phase 25 — built in part (2026-11-17): two cars meet (F9a)
+
+- **One crash, felt by both:** my car into a car someone's driving (its live id on my screen) tells the server
+  (`car:hit`: the weight, the velocity, where on its hull), which tells that car's driver (`car:struck`) — unless they've
+  told the same crash themselves within 0.4 s (both felt it already). Their car is shoved by the momentum along the
+  line of the hit (by both weights, a little bouncy, ×1.2) and dented where it was struck, as if their own screen had
+  felt it — unless it did, just now. Before, each side dented only itself off a copy of the other drawn 0.1–0.6 s in
+  the past, and one could feel a hit the other never did.
+- Already so: a boot's lid up is seen by everyone (plan 94 G3); the slide across, now (phases 4 and 24).
+- Not done: parked cars dented when shoved; cars far off patched less often (Colyseus' state is everyone's);
+  the radio in step between cars.
+- Checked: world-server car tests (new: told once for one crash); typecheck clean.
