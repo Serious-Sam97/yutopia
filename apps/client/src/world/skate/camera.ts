@@ -105,17 +105,22 @@ export class SkateCamera {
     to: [number, number, number],
     park: SkatePark,
   ): [number, number, number] {
-    const n = 14;
+    const n = 16;
     let ok = to;
-    for (let i = 1; i <= n; i++) {
+    let inside = 0;
+    // (from a third of the way out: next to her the ramp she's on is right under the line — on vert, just below it)
+    for (let i = Math.ceil(n / 3); i <= n; i++) {
       const t = i / n;
       const x = from[0] + (to[0] - from[0]) * t;
       const y = from[1] + (to[1] - from[1]) * t;
       const z = from[2] + (to[2] - from[2]) * t;
       const top = park.topAt(x, y, z + 50, 0);
-      if (top && top.z > z - 0.25) {
-        const tb = Math.max(0, (i - 1.5) / n);
-        ok = [from[0] + (to[0] - from[0]) * tb, from[1] + (to[1] - from[1]) * tb, Math.max(z, top.z + 0.5)];
+      if (top && top.z > z + 0.1) inside++;
+      else inside = 0;
+      // (inside a ramp's body for two samples running: the eye kept short of it, up over it)
+      if (inside >= 2) {
+        const tb = Math.max(1 / 3, (i - 2) / n);
+        ok = [from[0] + (to[0] - from[0]) * tb, from[1] + (to[1] - from[1]) * tb, Math.max(to[2], top ? top.z + 0.6 : to[2])];
         break;
       }
     }
