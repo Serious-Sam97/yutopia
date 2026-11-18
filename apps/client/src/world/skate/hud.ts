@@ -86,6 +86,13 @@ export class SkateHud {
       this.doneUntil = 0;
     }
   }
+  /** A word on the box for a moment. */
+  note(text: string) {
+    this.done.textContent = text;
+    this.done.classList.remove("lost");
+    this.done.classList.add("on");
+    this.doneUntil = performance.now() + 1800;
+  }
   /** A combo ended: banked (its score up a moment) or lost (struck through). */
   ended(score: number, lost: boolean) {
     this.done.textContent = lost ? `${score.toLocaleString()}` : `+${score.toLocaleString()}`;

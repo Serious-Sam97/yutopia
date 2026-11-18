@@ -20,6 +20,7 @@ import {
   surfFrame,
 } from "@yutopia/shared/skate";
 import { thrown } from "../tp/thrown";
+import { awayAt } from "./board3d";
 import { SkateHud } from "./hud";
 import { skateSound } from "./sound";
 
@@ -59,6 +60,8 @@ export class SkateRide {
   private hud: SkateHud | null = null;
   /** s left of the bail's code on the wire (the others' ragdoll) */
   private bailUntil = 0;
+  /** (F13a) the board thrown off in the last bail: from where, how fast, when — got back by walking to it */
+  private away: { x: number; y: number; vx: number; vy: number; at: number } | null = null;
   /** the board I'm on (or last was) */
   variant: BoardVariant = "street-pop";
   stance: 1 | -1 = 1;
@@ -78,6 +81,16 @@ export class SkateRide {
       return;
     }
     if (b.swim || b.flow || b.verb) return;
+    // (thrown off: it's where it rolled to — walked to and picked up, or back in the hand after a while)
+    if (this.away) {
+      const t = (performance.now() - this.away.at) / 1000;
+      const w = awayAt(this.away.x, this.away.y, this.away.vx, this.away.vy, t);
+      if (t < 8 && Math.hypot(w.x - b.x, w.y - b.y) > 1.6) {
+        this.hud?.note("Your board's over there — walk to it");
+        return;
+      }
+      this.away = null;
+    }
     this.variant = variant;
     this.stance = stance;
     this.hud ??= new SkateHud();
@@ -170,6 +183,7 @@ export class SkateRide {
       if (e.bail) {
         // onto the ragdoll at the speed I had, the board shot on (plan 58's fall, as thrown from a car)
         thrown.set(this.host.sid(), { v: [b.vx, Math.max(1.2, b.vz), b.vy], at: performance.now() });
+        this.away = { x: b.x, y: b.y, vx: b.vx * 1.1, vy: b.vy * 1.1, at: performance.now() };
         this.bailUntil = 1.5;
         this.sound("bail");
       }

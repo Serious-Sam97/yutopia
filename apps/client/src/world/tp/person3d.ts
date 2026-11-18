@@ -30,6 +30,10 @@ import { mergeWith } from "./merge-static";
 const puffAt = new Vector3();
 const puffDir = new Vector3();
 
+import { SKATE_BAIL, skateOfCode } from "@yutopia/shared/skate";
+import { HIP_H } from "../chars/moves";
+import { awayAt, BoardObj } from "../skate/board3d";
+import { type SkaterOut, skaterPose } from "../skate/pose";
 import {
   AK_CLOSE,
   AK_LOAD_BLADE,
@@ -74,11 +78,6 @@ import {
 import { levelHands } from "./level3d";
 import { type LongSpec, longHold, longInHand, type SlingSpec } from "./long-hold";
 import type { PersonIn } from "./person-in";
-import { thrown } from "./thrown";
-import { SKATE_BAIL, skateOfCode } from "@yutopia/shared/skate";
-import { HIP_H } from "../chars/moves";
-import { BoardObj } from "../skate/board3d";
-import { type SkaterOut, skaterPose } from "../skate/pose";
 import {
   at,
   type BodyFrame,
@@ -142,6 +141,7 @@ import {
   snBoltAt,
   snLoadAt,
 } from "./sniper-hold";
+import { thrown } from "./thrown";
 
 type Chars = NonNullable<ReturnType<typeof chars>>;
 type SwimM = NonNullable<ReturnType<Chars["swimNow"]>>;
@@ -755,6 +755,17 @@ export class Person3D {
   private skW = 0;
   private skTipped = false;
   private skHands: SkaterOut["hands"] | null = null;
+  /** (F13a) the board shot off in a bail: rolling on in the scene till it stops, then a while lying there */
+  private skAway: {
+    board: BoardObj;
+    x: number;
+    z: number;
+    y: number;
+    vx: number;
+    vz: number;
+    at: number;
+    yaw: number;
+  } | null = null;
   private swimW = 0;
   private jumpH = 0; // off the floor (a jump), tiles
   private jumpOn = false;
@@ -1244,6 +1255,36 @@ export class Person3D {
       // (thrown off: onto the ragdoll at the speed they had — mine's put there by the ride already)
       if (code === SKATE_BAIL && this.skCode && this.skCode !== SKATE_BAIL && !thrown.has(this.id))
         thrown.set(this.id, { v: [this.vx, 1.5, this.vy], at: performance.now() });
+      // (its board shot on, out from under her)
+      if (code === SKATE_BAIL && this.skCode && this.skCode !== SKATE_BAIL && this.skBoard && this.root.parent) {
+        this.skAway?.board.dispose();
+        const bd = this.skBoard;
+        this.skBoard = null;
+        const r = this.root.position;
+        this.root.parent.add(bd.root);
+        this.skAway = {
+          board: bd,
+          x: r.x,
+          z: r.z,
+          y: r.y,
+          vx: this.vx * 1.1,
+          vz: this.vy * 1.1,
+          at: performance.now(),
+          yaw: this.root.rotation.y,
+        };
+      }
+      if (this.skAway) {
+        const A = this.skAway;
+        const t = (performance.now() - A.at) / 1000;
+        const w = awayAt(A.x, A.z, A.vx, A.vz, t);
+        A.board.root.position.set(w.x, A.y, w.y);
+        A.board.root.rotation.set(0, A.yaw + (w.moving ? t * 2.5 : Math.min(t, 1.2) * 2.5), 0);
+        A.board.pose(0, w.moving ? Math.hypot(A.vx, A.vz) * Math.exp(-1.1 * t) : 0, step);
+        if (t > 9 || (code && code !== SKATE_BAIL)) {
+          A.board.dispose();
+          this.skAway = null;
+        }
+      }
       // (a new trick, or mode: its clock from now)
       if ((code & 0x1f9) !== (this.skCode & 0x1f9)) this.skT0 = performance.now();
       this.skCode = code;
@@ -1255,7 +1296,14 @@ export class Person3D {
         bd.set(sk.variant);
         if (bd.root.parent !== this.root) this.root.add(bd.root);
         const now = performance.now() / 1000;
-        const o = skaterPose({ look: sk, t: now - this.skT0 / 1000, stand: HIP_H, m: bd.m, speed: this.spd, time: now });
+        const o = skaterPose({
+          look: sk,
+          t: now - this.skT0 / 1000,
+          stand: HIP_H,
+          m: bd.m,
+          speed: this.spd,
+          time: now,
+        });
         const act = A.carStep(o.step, now);
         this.skW = Math.min(1, this.skW + step * 6);
         const w = this.skW;
@@ -1263,14 +1311,18 @@ export class Person3D {
         // (on a rail: the trucks on it, or the deck across it — she and the board let down onto it)
         const across = sk.trick === "boardslide" || sk.trick === "lipslide";
         const down = sk.mode === "grind" ? (across ? bd.m.deckY - 0.012 : bd.m.wheelR) : 0;
-        lift = [
-          lift[0] + (o.shift - lift[0]) * w,
-          lift[1] + (o.step.hipY - HIP_H - down - lift[1]) * w,
-          lift[2],
-        ];
+        lift = [lift[0] + (o.shift - lift[0]) * w, lift[1] + (o.step.hipY - HIP_H - down - lift[1]) * w, lift[2]];
         bd.root.rotation.set(0, sk.stance > 0 ? 0 : Math.PI, 0);
         bd.root.position.set(0, -down, 0);
-        bd.pose(sk.lean, sk.mode === "air" || sk.mode === "grind" ? 0 : this.spd, step, o.board.roll, o.board.yaw, o.board.pitch, o.board.up);
+        bd.pose(
+          sk.lean,
+          sk.mode === "air" || sk.mode === "grind" ? 0 : this.spd,
+          step,
+          o.board.roll,
+          o.board.yaw,
+          o.board.pitch,
+          o.board.up,
+        );
         this.skHands = o.hands;
       } else {
         this.skW = 0;

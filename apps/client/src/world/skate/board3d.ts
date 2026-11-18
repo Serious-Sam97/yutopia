@@ -248,3 +248,17 @@ export class BoardObj {
     this.root.removeFromParent();
   }
 }
+
+/** (F13a) A board thrown off in a bail: where it's got to `t` s after (the floor's plan: from (x0, y0) at
+ *  (vx, vy) m/s, rolling to a stop), the same for me and for the others. */
+export const AWAY_K = 1.1;
+export function awayAt(
+  x0: number,
+  y0: number,
+  vx: number,
+  vy: number,
+  t: number,
+): { x: number; y: number; moving: boolean } {
+  const f = (1 - Math.exp(-AWAY_K * t)) / AWAY_K;
+  return { x: x0 + vx * f, y: y0 + vy * f, moving: Math.hypot(vx, vy) * Math.exp(-AWAY_K * t) > 0.15 };
+}
