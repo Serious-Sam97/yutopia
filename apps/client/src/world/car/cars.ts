@@ -2603,6 +2603,9 @@ export class Cars {
       this.drivenAt.delete(o.id);
       // (its driven model still there, someone climbing out of it: not two of it)
       if (this.live.get(`car:${o.id}`)?.linger) continue;
+      // (plan 101: parked this very frame, its driven model not handed over yet — the live pass runs after this one —:
+      // next frame it's taken on, not a second one made beside it)
+      if (this.live.has(`car:${o.id}`) && !this.parked.get(o.id)?.full) continue;
       seen.add(o.id);
       const pose = parkedPose(o);
       let x = pose.x;
@@ -2710,6 +2713,12 @@ export class Cars {
         p.wearKey = undefined;
         placeModel(p.full.root, P.x, y, P.z, P.a);
         p.full.root.userData.still = true;
+        // (plan 101: a bike taken on as it stopped — on its side if it fell, else onto its kickstand)
+        if (p.full instanceof BikeModel) {
+          const down = Number(o.props?.down) || 0;
+          p.full.setStand(down ? 0 : 1);
+          p.full.body.rotation.x = down ? Math.sign(down) * 1.38 : p.full.standLean;
+        }
       } else if (ho && (want !== "near" || this.time - ho.at > 5)) {
         this.handoff.delete(o.id);
         this.root.remove(ho.model.root);

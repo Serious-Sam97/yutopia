@@ -187,7 +187,24 @@ console.log(
     return o ? o.props : null;
   }, id),
 );
-await page.waitForTimeout(1500);
+const counts: string[] = [];
+for (let i = 0; i < 16; i++) {
+  counts.push(
+    await page.evaluate((id) => {
+      const c = (window as any).__yutopia;
+      const o = c.room.state.objects.get(id);
+      const P = c.cars.parked.get(id);
+      let n = 0;
+      c.cars.root.traverse((x: any) => {
+        if (x.name?.startsWith("bike:") && x.visible && Math.hypot(x.position.x - o.x, x.position.z - o.y) < 4) n++;
+      });
+      const live = [...c.cars.live.keys()].length;
+      return `${n}${P ? `p${P.level ?? "-"}` : ""}${c.cars.handoff.has(id) ? "h" : ""}${c.cars.coast ? "C" : ""}L${live}`;
+    }, id),
+  );
+  await page.waitForTimeout(500);
+}
+console.log("models at the spot:", counts.join(" "));
 const png = await page.evaluate((id) => {
   const c = (window as any).__yutopia;
   const p = c.cars.parked.get(id);
