@@ -133,6 +133,11 @@ for (const s of h.slice(Math.max(0, ie - 3), ie + 8)) console.log(JSON.stringify
 {
   const k = h.findIndex((s: any) => s.t === at);
   console.log("biggest step's frame:", h[k].t - h[k - 1].t, "ms");
+  for (const x of h.slice(Math.max(0, k - 3), k + 3)) console.log("   ", JSON.stringify(x));
+  console.log("   parked by then:", JSON.stringify(await page.evaluate(() => {
+    const C = (window as any).__yutopia.cars;
+    return { live: C.live.size, mine: !!C.mine };
+  })));
 }
 console.log("W at", tw, "ms; act over at", end, "ms (", end - tw, "ms after W ); biggest step of my walker", maxJ.toFixed(2), "m at", at, "ms");
 await browser.close();

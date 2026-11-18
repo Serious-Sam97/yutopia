@@ -148,3 +148,22 @@ every frame over 50 ms named by a CPU profile)
   the worst 29 ms; on High by default three profiled runs with no frame past 89 ms (the long ones the main view's own);
   Low, two runs, none past 67 ms. A rare first cycle can still meet something the probe hasn't drawn yet (its buffers
   uploaded): a 120–275 ms face seen once in six runs. Stills: `e2e/car-reflect.mts` (noon and night, on and off).
+
+## Phase 6 — checks (2026-11-17)
+
+- Typecheck clean (client, world-server, shared); unit tests: client car + input 20/20, shared `car.test.ts` 41/41
+  (world-server car, park-life and spot 27/27 in phase 3).
+- `e2e/car-hitch.mts` getting in, starting, a crash at 65 km/h: High (the probe on by default) three profiled runs, no
+  frame past 89 ms; Low two runs, none past 67 ms. A rare probe face of 120–275 ms (once in six runs on High — its first
+  cycle meeting something not drawn before) is the one left.
+- `e2e/car-jump.mts`: out at 26 km/h, thrown on the ragdoll, the car rolling on (5.4 m/s 2 s later). `e2e/car-one.mts`:
+  the very model, moved 0.000 m. `e2e/car-hold.mts`: held, hurried to its end 0.46 s after W, no step as it's let go.
+- Specs: `car.spec` 3/3, `car-look`, `pets-car` pass. The flier test failed once in a run after the others (the car on
+  past her — backing up it had gone 13 m past the bay's mouth: long frames, two browsers on one GPU) and passed on its
+  own and in its file's run after.
+
+### Not done / seen on the way
+- **The parked car's shape:** as a live car parks, its Jolt shape becomes the parked box — a walker pressed to its side
+  is nudged ~0.1 m (seen in `car-hold`, W into the car). One body empty or not (F3a's "same Jolt body") is still to do:
+  only the model is one today.
+- The probe's rare first-cycle face (above): its buffers could be uploaded ahead too (`initTexture`/a geometry pass).
