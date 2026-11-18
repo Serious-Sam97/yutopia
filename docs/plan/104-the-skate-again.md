@@ -6,8 +6,8 @@ Asked 2026-11-18, after plan 103 was built:
 > improve every detail and spec, please compare with tony hawk. Lets plan again.
 
 Status: **planned 2026-11-18; forks decided 2026-11-18 one by one: the recommendations for F1–F6 and F8–F12;
-**F7b**, the skate HUD in Tony Hawk's bold punk-print style; **F13c**, no sign-offs — you test at the end. Not
-started.**
+**F7b**, the skate HUD in Tony Hawk's bold punk-print style; **F13c**, no sign-offs — you test at the end. Built
+2026-11-18 (phases 0–10), committed to main (818aebaa … c0f98dc7), not pushed — yours to test.**
 
 Plan 103's code stays where it's right: the board as a walker mode, the exact ramp profiles, the wire, the items
 and racks. Everything you see, feel and hear is redone against Tony Hawk's own numbers.
@@ -145,6 +145,46 @@ What it must be (checked every phase):
 9. **The sound**: F12.
 10. **Checks**: Node, e2e videos against the audit, memcheck, the page budget.
 
-## Progress
+## Progress (2026-11-18)
 
-Not started.
+**How to try it:** an admin's Spawn tab → A skateboard (or a park's rack: Use), then 1. **A/D** steer, **W** push,
+**S** brake (a powerslide at speed), **W/A/S/D** the tricks' directions, **Space** held crouch / let go ollie, **J**
+flip, **L** grab (held; again: the upgrade), **K** grind / lip / wallride, **Q/E** spin, **Shift** revert (just after
+landing in a ramp) / break vert (spine transfer, acid drop), **Space at a wall in the air** a wallplant, **W then S**
+a manual (S then W, a nose manual), **X** off, **C** the camera (Normal / Far / Low / Near). Lit special: two
+directions then the key (→↓ + L a McTwist, ←↓ + L a Christ Air, ↑↓ + L a Judo, ↓↑ + J a Ghetto Bird, ←→ + J a
+Fingerflip Airwalk, →← + K a Darkslide, ←→ + K a Casper Slide, ↑↓ + K a Hang Ten). The sound's picks:
+`/dev/skate-sound`; the HUD's look: `/dev/skate-hud`.
+
+- **Feel and rules** (shared `skate/`, 19 Node tests): heavy street gravity (a ~0.5 s, ~0.95 m ollie), the ramps' and
+  vert air's lighter (2.5–6 m over the coping, 1.2–2.5 s); push 11, the auto-kick, top 25; the vert assist turned
+  back in (forwards); break vert; spine, acid, wallplant, powerslide; Q/E spins; THPS 1+2's maps, upgrades,
+  score.cpp's spin factors and repeats; the special meter and 8 specials; grinds that speed you up; the pendulum
+  carried through the combo; the needle and the glue's moments on the wire.
+- **The direction**: the board rolls along its own length on every step of every Node ride (< 2°); in the browser
+  (`e2e/skate-direction.mts`) the nose against the way it rolls 0.0°, her body against the nose 6.8° at worst (was
+  66°), the camera against the way it rolls 28°.
+- **The camera** (`skate/camera.ts`): Neversoft's lags, behind the way it goes, out over the pipe on vert, rolled with
+  the grind, kept out of the ramps, four presets.
+- **The animation** (`tools/art/skate-anim/`, `public/life/skate/anim.json`, `skate/pose.ts`): 80 clips with a board
+  bone, mirrored for goofy, remapped per board, feet locked to the deck; guns stowed while riding; no snow on anyone
+  under a roof on the land.
+- **The parks** (`tools/art/skate-parks/`, `public/life/skate-parks/`): both rebuilt in Blender from the profiles
+  (4 mm at worst); the hall a brick warehouse; masonite ramps, steel coping; the yard poured concrete; 12 new piece
+  kinds; 21 named gaps scored in the combo (`skate/gaps.ts`).
+- **The HUD** (`skate/hud.ts`): the punk zine — clippings for the tricks, the torn score sheet, the special bar, the
+  grind arc and manual bar; the walker's dock and at-hand hidden while riding.
+- **The sound** (`skate/sound.ts`, `public/sfx/skate/`): 11 slots × 4 surfaces (25 recorded, 19 reused) and the
+  board's own; others' boards heard.
+- **Checks**: Node (shared skate 41, client skate 12 + shapes), the direction e2e, gameplay stills
+  (`design/skate/audit104/` against `design/skate/audit/`), the page 490.9 of 491 KB, memcheck 3 cycles flat
+  (geometries, textures, programs, sound nodes, heap).
+
+### Left, or not checked
+- The sound and the HUD are picked / styled by me: yours to change on their benches.
+- In memcheck's own world the board's first get-on of a cycle is sometimes refused (it works at once on the dev
+  world); the car's life in memcheck failed once ("not parked after getting out") — not the skate's.
+- The kick-up clip never plays (the board's dropped the moment you step off); no stumble for a small slip.
+- The yard's concrete edges are sharp; its bowl stands on the slab rather than sunk in; the hall in daytime is lit by
+  its tubes' glow and the ambient only.
+- Headless key timing runs behind the sim's clock: bails and trick timing are checked in Node, not in the browser.
