@@ -47,6 +47,11 @@ const ELBOW: [number, number, number] = [-0.85, -0.7, -0.35];
 
 const pa = new Vector3();
 const pb = new Vector3();
+const pc = new Vector3();
+/** Her shoulders over her root, stood (m: over the standing hips' height). */
+const SHOULDERS = 0.5;
+/** The superman stretched out: how far the body's turned forward (rad). */
+const SUPER_PITCH = 1.22;
 const ease = (x: number) => {
   const t = Math.max(0, Math.min(1, x));
   return t * t * (3 - 2 * t);
@@ -68,12 +73,40 @@ export function poseBike(m: BikeModel, r: RiderNow) {
 }
 
 /** Where her root goes on the bike (the model's frame): under the saddle, forward as she stands. */
-export function riderRoot(m: BikeModel, r: RiderNow, out: Vector3): Vector3 {
+export function riderRoot(m: BikeModel, r: RiderNow, out: Vector3, stand = 0.863): Vector3 {
   const s = m.bike.saddle;
   // (wheeling it: stood at its left, by the saddle)
   if (r.walk) return out.set(s.x - 0.22, 0, s.z + 0.56);
   const up = Math.max(r.stand, r.trick === "superman" || r.trick === "tailwhipL" || r.trick === "tailwhipR" ? 1 : 0);
-  return out.set(s.x - STAND_AHEAD * up, 0, s.z);
+  out.set(s.x - STAND_AHEAD * up, 0, s.z);
+  // the superman: the whole body turned about the shoulders — held up by the hands on the bars —, out flat behind
+  const S = r.trick === "superman" ? trickEnv(r.trickT) : 0;
+  if (S > 0) {
+    const P = superPivot(m, pb);
+    const sh = stand + SHOULDERS;
+    const th = SUPER_PITCH * S;
+    // (her root — her feet's — swung round the pivot: back along the bike and up)
+    pa.set(P.x + sh * Math.sin(th), P.y - sh * Math.cos(th), s.z);
+    out.lerp(pa, S);
+  }
+  return out;
+}
+/** Her whole body's pitch on the bike (rad, + forward — her head toward the bike's nose): the superman's. */
+export function riderPitch(r: RiderNow): number {
+  return r.trick === "superman" ? SUPER_PITCH * trickEnv(r.trickT) : 0;
+}
+/** The superman's pivot (the model's frame): her shoulders, an arm's length behind the grips, a little over them. */
+function superPivot(m: BikeModel, out: Vector3): Vector3 {
+  const [gl, gr] = m.bike.grips;
+  return out
+    .copy(gl)
+    .add(gr)
+    .multiplyScalar(0.5)
+    .add(pc.set(0.5, 0.12, 0));
+}
+/** How far into a trick its pose is: in over its first 30 %, held, out over its last 30 % (back on the pedals to land). */
+export function trickEnv(t: number): number {
+  return ease(t / 0.3) * (1 - ease((t - 0.7) / 0.3));
 }
 
 /** Her pose on it: carStep's (the legs solved in three dimensions to the pedals), its lift; the hands after
@@ -120,9 +153,10 @@ export function riderAct(
     return { act, hipY };
   }
   const trick = r.trick;
-  const k = trick ? Math.sin(Math.PI * Math.min(1, r.trickT)) : 0;
+  const k = trick ? trickEnv(r.trickT) : 0;
   const up = trick === "superman" || trick === "tailwhipL" || trick === "tailwhipR" ? 1 : r.stand;
-  let hipY = b.saddle.y + SIT + STAND_UP * up - 0.14 * r.charge;
+  // (in the air with no trick: tucked a little, the knees up to the bike)
+  let hipY = b.saddle.y + SIT + STAND_UP * up - 0.14 * r.charge - (r.air && !trick ? 0.06 : 0);
   // each foot on its pedal (its sole on the spindle's top), the toes a little down — more as it goes down the stroke
   const feet: [[number, number, number], [number, number, number]] = [
     [0, 0, 0],
@@ -145,40 +179,59 @@ export function riderAct(
     toe[i] = 0.05;
     side = -out * 0.06;
   }
-  // the tricks' bodies
-  if (trick === "superman") {
-    // (out flat behind the bike, the hands on the bars: the legs off the pedals and up behind)
-    for (const i of [0, 1] as const) {
-      const out = i === 0 ? 1 : -1;
-      const f = feet[i];
-      feet[i] = [f[0] + (out * 0.06 - f[0]) * k, f[1] + (hipY - 0.05 - f[1]) * k, f[2] + (-0.8 - f[2]) * k];
-      toe[i] = 0.2 + 0.9 * k;
-    }
-    hipY += 0.18 * k;
-  } else if (trick === "tailwhipL" || trick === "tailwhipR") {
-    // (the feet off the pedals, wide and up, while the frame goes round under them)
-    for (const i of [0, 1] as const) {
-      const out = i === 0 ? 1 : -1;
-      const f = feet[i];
-      feet[i] = [f[0] + (out * 0.42 - f[0]) * k, f[1] + (hipY - 0.55 - f[1]) * k, f[2] + (0.15 - f[2]) * k];
-    }
-  }
   const pole = (out: number): [number, number, number] => [out * 0.12, 0.3, 1];
+  const knee: [[number, number, number], [number, number, number]] = [pole(1), pole(-1)];
   // (bent forward from the hips over the bars: a little on the town bike, low on the racer)
-  const duck = Math.min(1, 0.38 + 0.55 * r.bend + 0.2 * up + 0.3 * r.charge + (trick === "superman" ? 0.5 * k : 0));
+  let duck = Math.min(1, 0.38 + 0.55 * r.bend + 0.2 * up + 0.3 * r.charge);
+  const mix = (f: [number, number, number], to: [number, number, number]) => {
+    for (const j of [0, 1, 2]) f[j] += (to[j] - f[j]) * k;
+  };
+  const mixP = (p: [number, number, number], to: [number, number, number]) => {
+    for (const j of [0, 1, 2]) p[j] += (to[j] - p[j]) * k;
+  };
+  // the tricks' bodies, each eased in from the riding one (k) and back out to land
+  if (trick === "superman") {
+    // (stretched out straight: the legs together and pointed, under the hips — the whole body's turned out flat
+    // behind the bars by riderRoot and riderPitch, the arms straight to the grips)
+    for (const i of [0, 1] as const) mix(feet[i], [i === 0 ? 0.06 : -0.06, 0, 0.03]);
+    hipY += (stand - 0.005 - hipY) * k;
+    toe[0] += (0.95 - toe[0]) * k;
+    toe[1] += (0.95 - toe[1]) * k;
+    duck += (-0.12 - duck) * k;
+  } else if (trick === "nohander" || trick === "barspin") {
+    // (the feet stay on the pedals, the knees squeezed in on the saddle's nose — the bike held between them —, up off
+    // it a little, the trunk upright; the no-hander's arms out wide)
+    hipY += (b.saddle.y + SIT + 0.1 - hipY) * k;
+    for (const i of [0, 1] as const) {
+      const out = i === 0 ? 1 : -1;
+      mixP(knee[i], [-out * 0.6, 0.2, 1]);
+    }
+    duck += ((trick === "nohander" ? 0.05 : 0.3) - duck) * k;
+  } else if (trick === "tailwhipL" || trick === "tailwhipR") {
+    // (crouched over the bars, the feet pulled up and out wide — the knees out — while the frame swings round under
+    // them; caught back on the pedals to land)
+    const hy = b.saddle.y + 0.28;
+    hipY += (hy - hipY) * k;
+    for (const i of [0, 1] as const) {
+      const out = i === 0 ? 1 : -1;
+      mix(feet[i], [out * 0.36, hy - 0.4, 0.1]);
+      mixP(knee[i], [out * 1, 0.45, 0.55]);
+      toe[i] += (0.35 - toe[i]) * k;
+    }
+    duck += (0.62 - duck) * k;
+  }
+  const open = trick === "nohander" || (trick === "barspin" && r.trickT > 0.25 && r.trickT < 0.7);
   const step: CarStep = {
     hipY,
     feet,
     toe,
     duck,
     side,
-    knee: [pole(1), pole(-1)],
+    knee,
     heading: [0, 0],
+    // (the no-hander's head up, looking ahead; else into the turn)
     look: -r.steer * 1.4,
-    hands: {
-      L: trick === "nohander" || trick === "barspin" ? OPEN : GRIP,
-      R: trick === "nohander" || trick === "barspin" ? OPEN : GRIP,
-    },
+    hands: { L: open ? OPEN : GRIP, R: open ? OPEN : GRIP },
   };
   const act = A.carStep(step, t);
   act.lift = [0, hipY - stand, 0];
@@ -194,7 +247,7 @@ export function riderHands(
   w: number,
 ) {
   const trick = r.trick;
-  const k = trick ? Math.sin(Math.PI * Math.min(1, r.trickT)) : 0;
+  const k = trick ? trickEnv(r.trickT) : 0;
   for (const [i, S] of [
     [0, "L"],
     [1, "R"],
@@ -207,8 +260,19 @@ export function riderHands(
       continue;
     }
     const at = m.gripAt(i, pa);
-    if (trick === "nohander") at.add(pb.set(0.18 * k, 0.32 * k, (i === 0 ? 1 : -1) * 0.5 * k));
-    else if (trick === "barspin") at.add(pb.set(0.05 * k, 0.16 * k, (i === 0 ? 1 : -1) * 0.05 * k));
+    const out = i === 0 ? 1 : -1;
+    if (trick === "nohander") {
+      // (let go and thrown out wide, a little up: the arms open, from the shoulders)
+      at.add(pb.set(0.42 * k, 0.5 * k, out * 0.4 * k));
+      m.root.localToWorld(at);
+      person.reachTo(S, at, w, [-0.2, -1, -0.6]);
+      continue;
+    }
+    if (trick === "barspin") {
+      // (let go as the bars are thrown — up and a little back, open — and caught again as they come round)
+      const u = Math.sin(Math.PI * Math.max(0, Math.min(1, (r.trickT - 0.2) / 0.55)));
+      at.add(pb.set(0.1 * u, 0.2 * u, out * 0.06 * u));
+    }
     m.root.localToWorld(at);
     person.reachTo(S, at, w, ELBOW);
   }

@@ -67,6 +67,10 @@ const POSES: [string, Record<string, unknown>][] = [
   ["tailwhip", { trick: "tailwhipL", trickT: 0.35, stand: 1, foot: 0 }],
   ["barspin", { trick: "barspin", trickT: 0.4, stand: 1, foot: 0 }],
 ];
+// (the test bikes left about the square: retired, gone once nobody's by — away a moment)
+await page.evaluate(() => (window as any).__yutopia.room.send("mod:clear", {}));
+await page.evaluate(() => (window as any).__yutopia.teleport({ x: -8, y: -405, level: 0 }));
+await page.waitForTimeout(4000);
 // the square, its open middle
 await page.evaluate(() => (window as any).__yutopia.teleport({ x: 412, y: -376, level: 0 }));
 await page.waitForTimeout(2500);
@@ -108,12 +112,18 @@ for (const kind of kinds) {
   const files: string[] = [];
   // (ACT=1: the getting on and off, its clock held, in place of the poses)
   const act = process.env.ACT === "1";
-  const shots: [string, unknown][] = act
-    ? [0.2, 0.5, 0.8, 1.1, 1.4, 1.7, 0.3, 0.6, 0.9, 1.2, 1.5, 1.7].map((t, i) => [
-        `${i < 6 ? "on" : "off"} ${t}`,
-        { t, out: i >= 6 },
-      ])
-    : POSES;
+  // (TRICKS=1: each trick at three moments, the rider up off the saddle as in the air)
+  const TR: [string, Record<string, unknown>][] = [];
+  for (const id of ["superman", "nohander", "tailwhipL", "barspin"])
+    for (const t of [0.2, 0.5, 0.8]) TR.push([`${id} ${t}`, { trick: id, trickT: t, stand: 1, foot: 0, air: true }]);
+  const shots: [string, unknown][] = process.env.TRICKS
+    ? TR
+    : act
+      ? [0.2, 0.5, 0.8, 1.1, 1.4, 1.7, 0.3, 0.6, 0.9, 1.2, 1.5, 1.7].map((t, i) => [
+          `${i < 6 ? "on" : "off"} ${t}`,
+          { t, out: i >= 6 },
+        ])
+      : POSES;
   for (const [name, pose] of shots) {
     if (act) await page.evaluate((p) => ((globalThis as any).__actAt = p), pose);
     else await page.evaluate((p) => ((globalThis as any).__bikeRider = p), pose);
@@ -155,7 +165,7 @@ for (const kind of kinds) {
   fc += `;${files.map((_, i) => `[v${i}]`).join("")}xstack=inputs=${files.length}:layout=${files
     .map((_, i) => `${(i % cols) * 400}_${Math.floor(i / cols) * 267}`)
     .join("|")}`;
-  const sheet = `${out}/${act ? "act" : "poses"}-${kind}${view === "34" ? "-34" : ""}.png`;
+  const sheet = `${out}/${process.env.TRICKS ? "tricks" : act ? "act" : "poses"}-${kind}${view === "34" ? "-34" : ""}.png`;
   execFileSync("ffmpeg", [...args, "-filter_complex", fc, "-frames:v", "1", sheet]);
   console.log(kind, "→", sheet, `(${rows} rows)`);
   await page.keyboard.press("KeyX");

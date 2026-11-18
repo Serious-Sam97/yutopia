@@ -117,7 +117,7 @@ import { prefs, type Quality } from "@/lib/prefs";
 import { chars as charsMod } from "../art/chars-load";
 import { pets as petsMod } from "../art/pets-load";
 import { mixer } from "../audio";
-import { poseBike, type RiderNow, riderAct, riderHands, riderRoot } from "../bike/pose";
+import { poseBike, type RiderNow, riderAct, riderHands, riderPitch, riderRoot } from "../bike/pose";
 import { BikeSound } from "../bike/sound";
 import { litMaterial } from "../look/lit";
 import { activePad } from "../pads";
@@ -784,6 +784,8 @@ const ropeB = new Vector3();
 const bitsN = (b: number) => (b & 1) + ((b >> 1) & 1) + ((b >> 2) & 1) + ((b >> 3) & 1);
 const FLIP = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI);
 const qBike = new Quaternion();
+const qRider = new Quaternion();
+const ZRider = new Vector3(0, 0, 1);
 const vBike = new Vector3();
 
 /** The cars for a world controller (its own state read as the host: the glue lives here, in the
@@ -3422,9 +3424,12 @@ export class Cars {
         e.m.root.position.set(act.hips.x, 0, act.hips.z);
         e.m.root.rotation.y = act.yaw;
       } else if (rider && l.model instanceof BikeModel) {
-        riderRoot(l.model, rider, hF2);
+        riderRoot(l.model, rider, hF2, e.m.leg?.().hipY);
         e.m.root.position.copy(hF2);
-        e.m.root.rotation.y = -Math.PI / 2;
+        e.m.root.rotation.set(0, -Math.PI / 2, 0);
+        // (the superman: the whole body turned forward about its shoulders — about the bike's own across)
+        const pitch = riderPitch(rider);
+        if (pitch) e.m.root.quaternion.premultiply(qRider.setFromAxisAngle(ZRider, pitch));
       } else {
         e.m.root.position.set(g.slide?.x ?? seatAt.x, 0, g.slide?.z ?? seatAt.z);
         e.m.root.rotation.y = -Math.PI / 2;
@@ -3455,7 +3460,8 @@ export class Cars {
         // (plan 101: on a bike, its rider's pose — the pedals, the saddle, the bars — in place of a seat's)
         let sat = A.car3(fit, this.time, e.seat * 1.7);
         if (rider && l.model instanceof BikeModel) {
-          const ra = riderAct(A, l.model, rider, riderRoot(l.model, rider, hF2), fit.stand, this.time).act;
+          // (her space's points from the root as it stands — the superman's are her own, not the bike's)
+          const ra = riderAct(A, l.model, rider, riderRoot(l.model, rider, hF2, fit.stand), fit.stand, this.time).act;
           ra.lift = [0, (ra.lift?.[1] ?? 0) - fit.drop, 0];
           sat = ra;
         }
