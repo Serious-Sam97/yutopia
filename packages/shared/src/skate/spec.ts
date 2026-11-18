@@ -126,3 +126,13 @@ export const UNDERWHEEL: Record<Footing, Underwheel> = {
 };
 export const underwheel = (f: string | undefined): Underwheel =>
   UNDERWHEEL[(f ?? "floor") as Footing] ?? UNDERWHEEL.floor;
+
+/** A board as a thing in the pack (the inventory's id): one a variant — `board_street_pop` … */
+export const boardItem = (v: BoardVariant): string => `board_${v.replace("-", "_")}`;
+export const BOARD_ITEMS: string[] = BOARD_VARIANTS.map(boardItem);
+export const variantOfItem = (id: string | undefined | null): BoardVariant | null => {
+  if (!id?.startsWith("board_")) return null;
+  const v = id.slice(6).replace("_", "-");
+  return (BOARD_VARIANTS as readonly string[]).includes(v) ? (v as BoardVariant) : null;
+};
+export const isBoardItem = (id: unknown): boolean => typeof id === "string" && variantOfItem(id) !== null;
