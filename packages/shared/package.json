@@ -59,6 +59,8 @@
     "./car/ai": "./src/car/ai.ts",
     "./car/drive": "./src/car/drive.ts",
     "./car/assist": "./src/car/assist.ts",
+    "./bike": "./src/bike/index.ts",
+    "./bike/drive": "./src/bike/drive.ts",
     "./kart": "./src/kart/index.ts",
     "./move": "./src/move/index.ts",
     "./move/flow-moves": "./src/move/flow-moves.ts",

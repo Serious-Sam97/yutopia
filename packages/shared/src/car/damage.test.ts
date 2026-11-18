@@ -3,11 +3,11 @@ import { test } from "node:test";
 import {
   blowOff,
   burnOut,
-  FIRE,
   DOOR_GONE,
   DOOR_HANG,
   damageString,
   doorSlot,
+  FIRE,
   headK,
   hitPane,
   knock,
@@ -35,11 +35,11 @@ import {
   levelCar,
   panesOpen,
   parseHoles,
-  seatedAlong,
   partAt,
+  STARS_IN,
+  seatedAlong,
   shotDamage,
   shotWreck,
-  STARS_IN,
 } from "./shot.ts";
 import { SEATS_OF, SEDAN } from "./specs.ts";
 
@@ -176,7 +176,11 @@ test("(plan 94 P2) wrecked: a door hangs, then comes off; lids sprung, then off;
   assert.equal(parseDamage(`0.5,0,0,0|${PART.screen}`).wreck, 0);
   // (only ever more)
   assert.equal(mergeDamage(d, { zones: [0, 0, 0, 0, 0], parts: 0, wreck: 0 }).wreck, d.wreck);
-  assert.equal(mergeDamage(noDamage(), { zones: [0, 0, 0, 0, 0], wreck: WRECK.goneRR }).wreck & WRECK.hangRR, WRECK.hangRR, "gone hung first");
+  assert.equal(
+    mergeDamage(noDamage(), { zones: [0, 0, 0, 0, 0], wreck: WRECK.goneRR }).wreck & WRECK.hangRR,
+    WRECK.hangRR,
+    "gone hung first",
+  );
   // (the blast: doors and lids)
   const x = noDamage();
   blowOff(x);
@@ -186,7 +190,10 @@ test("(plan 94 P2) wrecked: a door hangs, then comes off; lids sprung, then off;
   assert.equal(nextMend(d, false), "panels");
   assert.equal(mend(d, "panels").dm.wreck, 0);
   // (the doors by their names)
-  assert.deepEqual(["door_fl", "door_fr", "door_rl", "door_rr", "door_sr", "door_x"].map(doorSlot), [0, 1, 2, 3, 3, -1]);
+  assert.deepEqual(
+    ["door_fl", "door_fr", "door_rl", "door_rr", "door_sr", "door_x"].map(doorSlot),
+    [0, 1, 2, 3, 3, -1],
+  );
 });
 
 test("(plan 94 P4) a round through a car finds who sat in its way: the nearest, by the seat; nobody in an empty seat", () => {
@@ -287,7 +294,21 @@ test("(plan 95 F4a) a shooter's claim: taken on the car and on the round's line 
 
 test("(plan 95 F5a) the windscreen stars where each round goes in and stays — badly from the third, in at the fifth; its rounds' points kept with their pane; mended panels keep the glass's, new glass drops them", () => {
   const dm = parseDamage("");
-  const base = { t: 5, out: 7, x: 0, y: 0, z: 1.2, u: 1, w: 0, h: 1.2, face: 0 as const, struck: "glass" as const, which: 0, pane: 0 as const, through: true };
+  const base = {
+    t: 5,
+    out: 7,
+    x: 0,
+    y: 0,
+    z: 1.2,
+    u: 1,
+    w: 0,
+    h: 1.2,
+    face: 0 as const,
+    struck: "glass" as const,
+    which: 0,
+    pane: 0 as const,
+    through: true,
+  };
   let holes = "";
   for (let k = 0; k < STARS_IN; k++) {
     const hit = { ...base, w: -0.4 + k * 0.2, stars: parseHoles(holes).filter((x) => x.pane === 0).length };
@@ -299,7 +320,10 @@ test("(plan 95 F5a) the windscreen stars where each round goes in and stays — 
   assert.ok(dm.parts & PART.screenBad, "badly before it");
   const list = parseHoles(holes);
   assert.equal(list.length, 5);
-  assert.ok(list.every((x) => x.pane === 0 && x.n === undefined), "its pane, no normal (0,0,0)");
+  assert.ok(
+    list.every((x) => x.pane === 0 && x.n === undefined),
+    "its pane, no normal (0,0,0)",
+  );
   // (a side window's: cracked, then gone, by hitPane as before)
   const d2 = parseDamage("");
   shotDamage(d2, { ...base, pane: 3, face: 3 });
@@ -313,7 +337,21 @@ test("(plan 95 F5a) the windscreen stars where each round goes in and stays — 
 });
 
 test("(plan 96 F4a) parts shot off by their rounds: the bonnet loose at 4 and off at 8, a door hanging at 5 and off at 10, a bumper at 3 and 6, a mirror off at 1; the part's own holes counted, kept through mending its glass", () => {
-  const base = { t: 5, out: 6, x: 0, y: 0, z: 1, u: 1.7, w: 0.1, h: 0.95, face: 0 as const, struck: "engine" as const, which: 0, pane: -1 as const, through: false };
+  const base = {
+    t: 5,
+    out: 6,
+    x: 0,
+    y: 0,
+    z: 1,
+    u: 1.7,
+    w: 0.1,
+    h: 0.95,
+    face: 0 as const,
+    struck: "engine" as const,
+    which: 0,
+    pane: -1 as const,
+    through: false,
+  };
   const shoot = (part: "bonnet" | "door_fr" | "bumper_r" | "mirror_l", n: number) => {
     const dm = parseDamage("");
     let holes = "";

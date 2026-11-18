@@ -331,7 +331,11 @@ test("up and down every flight of the HQ's stairs, the floor changed on the way 
           assert.ok(level === start || level === start + 1, `flight from ${start}: on floor ${level} at z ${b.z}`);
         }
       }
-      assert.equal(way.length, 0, `walked the whole way (left: ${way.length}, at ${b.x.toFixed(2)}, ${b.y.toFixed(2)})`);
+      assert.equal(
+        way.length,
+        0,
+        `walked the whole way (left: ${way.length}, at ${b.x.toFixed(2)}, ${b.y.toFixed(2)})`,
+      );
       assert.ok(airborne < 0.2 / STEP_DT, `walked, not hopped: ${(airborne * STEP_DT).toFixed(2)} s off the treads`);
     };
     // up: flight A (u 3), the half landing, flight B (u 1) back

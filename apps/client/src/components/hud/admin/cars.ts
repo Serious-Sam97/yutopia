@@ -13,6 +13,10 @@ export const BUYABLE = [
   "tractor",
   "ploughtruck",
   "toboggan",
+  "bike_town",
+  "bike_bmx",
+  "bike_mtb",
+  "bike_road",
 ];
 export const PLATE_MAX = 8;
 export const CAR_COLOURS = [0xcbbd98, 0x6b2430, 0x4a5a73, 0xe8e6df, 0x1f2124, 0x6a4a35, 0x8b8f93, 0x2f4a3b, 0xb8702a];

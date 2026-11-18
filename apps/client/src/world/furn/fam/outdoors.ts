@@ -32,7 +32,14 @@ export const LOOKS: Record<string, readonly string[]> = {
   fire_pit: ["Stone ring", "Steel bowl", "Brick"],
   log_seat: ["Pine log", "Birch log", "With a sheepskin"],
   picnic_table: ["Pine", "Weathered grey", "Red-painted"],
-  bike_rack: ["Steel hoops", "Wave rack", "Timber block"],
+  bike_rack: [
+    "Steel hoops",
+    "Wave rack",
+    "Timber block",
+    "Steel hoops (empty)",
+    "Wave rack (empty)",
+    "Timber block (empty)",
+  ],
   bus_shelter: ["Steel and glass", "Green heritage", "Timber"],
   mailbox: ["Red pillar box", "Blue collection box", "Rural, on a post"],
   street_sign: ["Street names", "Fingerpost", "Stop sign"],
@@ -607,7 +614,10 @@ function bike(m: Model, x: number, zf: number, c: number, s: number) {
  *  wheels. */
 export function bikeRack(m: Model, o: Look) {
   let slots: number[];
-  if (o.look === 1) {
+  // (plan 101: 3–5 the same racks with no bikes drawn in them — the town's racks, where real ones stand)
+  const empty = o.look >= 3;
+  const look = o.look % 3;
+  if (look === 1) {
     // a wave of galvanised tube along it, its feet on the ground
     const pts: V3[] = [];
     for (let i = 0; i <= 64; i++) {
@@ -617,7 +627,7 @@ export function bikeRack(m: Model, o: Look) {
     m.add(tube(pts, 0.03, 6, 120), O.galv);
     for (const x of [0.15, 1.5, 2.85]) m.add(box([0.12, 0.02, 0.12]), shade(O.galv, 0.8), { at: [x, 0.01, 0.58] });
     slots = [0.825, 1.5, 2.175];
-  } else if (o.look === 2) {
+  } else if (look === 2) {
     // a timber block, the slots cut in it
     m.add(box([2.7, 0.2, 0.24], 0.012), 0x8a5a36, { at: [1.5, 0.1, 0.42] });
     for (const x of [0.6, 1.5, 2.4]) m.add(box([0.07, 0.03, 0.245]), 0x2b1e14, { at: [x, 0.19, 0.42] });
@@ -643,6 +653,7 @@ export function bikeRack(m: Model, o: Look) {
     slots = [0.6, 1.5, 2.4];
   }
   // the bikes: at least one, in the middle; one or two more by its seed
+  if (empty) return;
   const n = 1 + Math.floor(o.seed * 2.99);
   const used = n === 1 ? [1] : n === 2 ? (o.seed > 0.5 ? [0, 1] : [1, 2]) : [0, 1, 2];
   for (const k of used)

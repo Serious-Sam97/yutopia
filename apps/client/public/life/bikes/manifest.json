@@ -1,0 +1,4367 @@
+{
+ "version": 1,
+ "frame": "glTF y-up: x forward, y up, z right; origin on the ground under the bottom bracket",
+ "bikes": {
+  "town-classic": {
+   "file": "town-classic.glb",
+   "mid": "town-classic-mid.glb",
+   "far": "town-far.glb",
+   "body": "town",
+   "variant": "town-classic",
+   "kind": "bike_town",
+   "name": "Hollin Dame",
+   "dims": {
+    "length": 1.877,
+    "width": 0.639,
+    "height": 1.093,
+    "front": 1.033,
+    "back": -0.845
+   },
+   "wheelbase": 1.12,
+   "wheel": {
+    "f": {
+     "r": 0.355,
+     "width": 0.04
+    },
+    "r": {
+     "r": 0.355,
+     "width": 0.04
+    }
+   },
+   "head_angle": 69.0,
+   "seat_angle": 67.0,
+   "rake": 0.066,
+   "crank": 0.17,
+   "crank_zero": "the right arm points forward (+x), the left back; pedals level",
+   "pedal": {
+    "from_crank": 0.06,
+    "q": 0.134,
+    "note": "pedal_l/pedal_r origins: the pedal body's centre on its spindle"
+   },
+   "teeth": [
+    38,
+    18
+   ],
+   "rings": [
+    38
+   ],
+   "cogs": [
+    18
+   ],
+   "points": {
+    "saddle": [
+     -0.2501,
+     0.87,
+     -0.0
+    ],
+    "grip_l": [
+     0.1946,
+     1.03,
+     -0.29
+    ],
+    "grip_r": [
+     0.1946,
+     1.03,
+     0.29
+    ],
+    "bell": [
+     0.2689,
+     1.0576,
+     -0.29
+    ],
+    "lamp_f": [
+     0.5359,
+     0.6935,
+     -0.0
+    ],
+    "lamp_r": [
+     -0.671,
+     0.735,
+     -0.0
+    ],
+    "stand_foot": [
+     -0.1219,
+     0.0197,
+     -0.1536
+    ],
+    "bb": [
+     0.0,
+     0.29,
+     -0.0
+    ],
+    "hub_f": [
+     0.655,
+     0.355,
+     -0.0
+    ],
+    "hub_r": [
+     -0.465,
+     0.355,
+     -0.0
+    ],
+    "steer_top": [
+     0.3622,
+     0.9335,
+     -0.0
+    ],
+    "steer_bottom": [
+     0.4482,
+     0.7094,
+     -0.0
+    ]
+   },
+   "steer": {
+    "at": [
+     0.4482,
+     0.7094,
+     -0.0
+    ],
+    "axis": [
+     -0.35837,
+     0.93358,
+     -0.0
+    ]
+   },
+   "levers": {
+    "lever_l": {
+     "pull": 0.3,
+     "brake": "rear"
+    },
+    "lever_r": {
+     "pull": 0.3,
+     "brake": "front"
+    }
+   },
+   "kickstand": {
+    "axis": "x",
+    "down": 1.5082,
+    "lean": 0.1222,
+    "lean_side": "left"
+   },
+   "has": {
+    "lamp": "dynamo",
+    "bell": true,
+    "basket": true,
+    "rack": true,
+    "carrier": false,
+    "pegs": false,
+    "gyro": false,
+    "studs": false,
+    "guards": true,
+    "gears": 3,
+    "hub_gears": 3,
+    "fixed": false,
+    "kickstand": true,
+    "chain_case": true
+   },
+   "materials": [
+    "alloy",
+    "alloy_dark",
+    "chrome",
+    "decal",
+    "emit_head",
+    "emit_tail",
+    "leather",
+    "lens",
+    "lens_amber",
+    "lens_red",
+    "paint",
+    "paint2",
+    "reflector",
+    "rubber",
+    "steel",
+    "trim",
+    "tyre",
+    "wicker"
+   ],
+   "tris": {
+    "near": 44590,
+    "mid": 7653,
+    "far": 516
+   },
+   "bytes": {
+    "near": 710644,
+    "mid": 200708
+   },
+   "colours": [
+    "#1d1f22",
+    "#22392c",
+    "#d8cfb8"
+   ],
+   "colour2": "#b8a77a",
+   "hull": [
+    [
+     1.01,
+     0.355,
+     -0.02
+    ],
+    [
+     1.01,
+     0.355,
+     0.02
+    ],
+    [
+     0.9624,
+     0.5325,
+     -0.02
+    ],
+    [
+     0.9624,
+     0.5325,
+     0.02
+    ],
+    [
+     0.8325,
+     0.6624,
+     -0.02
+    ],
+    [
+     0.8325,
+     0.6624,
+     0.02
+    ],
+    [
+     0.655,
+     0.0,
+     -0.02
+    ],
+    [
+     0.655,
+     0.0,
+     0.02
+    ],
+    [
+     0.8325,
+     0.0476,
+     -0.02
+    ],
+    [
+     0.8325,
+     0.0476,
+     0.02
+    ],
+    [
+     0.9624,
+     0.1775,
+     -0.02
+    ],
+    [
+     0.9624,
+     0.1775,
+     0.02
+    ],
+    [
+     -0.6425,
+     0.6624,
+     -0.02
+    ],
+    [
+     -0.6425,
+     0.6624,
+     0.02
+    ],
+    [
+     -0.7724,
+     0.5325,
+     -0.02
+    ],
+    [
+     -0.7724,
+     0.5325,
+     0.02
+    ],
+    [
+     -0.82,
+     0.355,
+     -0.02
+    ],
+    [
+     -0.82,
+     0.355,
+     0.02
+    ],
+    [
+     -0.7724,
+     0.1775,
+     -0.02
+    ],
+    [
+     -0.7724,
+     0.1775,
+     0.02
+    ],
+    [
+     -0.6425,
+     0.0476,
+     -0.02
+    ],
+    [
+     -0.6425,
+     0.0476,
+     0.02
+    ],
+    [
+     -0.465,
+     0.0,
+     -0.02
+    ],
+    [
+     -0.465,
+     0.0,
+     0.02
+    ],
+    [
+     0.1946,
+     1.05,
+     -0.29
+    ],
+    [
+     0.1946,
+     1.01,
+     -0.29
+    ],
+    [
+     0.1946,
+     1.05,
+     0.29
+    ],
+    [
+     0.1946,
+     1.01,
+     0.29
+    ],
+    [
+     -0.3301,
+     0.88,
+     -0.06
+    ],
+    [
+     -0.3301,
+     0.88,
+     0.06
+    ],
+    [
+     0.0,
+     0.29,
+     -0.174
+    ],
+    [
+     0.0,
+     0.29,
+     0.174
+    ]
+   ],
+   "nodes": [
+    "collider",
+    "crank",
+    "frame",
+    "kickstand",
+    "lever_l",
+    "lever_r",
+    "pedal_l",
+    "pedal_r",
+    "spin_f",
+    "spin_r",
+    "steer",
+    "wheel_f",
+    "wheel_r"
+   ],
+   "hub_ratios": [
+    0.75,
+    1.0,
+    1.333
+   ],
+   "measured": {
+    "saddle_y": 0.87,
+    "grip_y": 1.03,
+    "bb_y": 0.29,
+    "drop_y": null
+   }
+  },
+  "town-step": {
+   "file": "town-step.glb",
+   "mid": "town-step-mid.glb",
+   "far": "town-far.glb",
+   "body": "town",
+   "variant": "town-step",
+   "kind": "bike_town",
+   "name": "Hollin Lage",
+   "dims": {
+    "length": 1.877,
+    "width": 0.639,
+    "height": 1.093,
+    "front": 1.033,
+    "back": -0.845
+   },
+   "wheelbase": 1.12,
+   "wheel": {
+    "f": {
+     "r": 0.355,
+     "width": 0.04
+    },
+    "r": {
+     "r": 0.355,
+     "width": 0.04
+    }
+   },
+   "head_angle": 69.0,
+   "seat_angle": 67.0,
+   "rake": 0.066,
+   "crank": 0.17,
+   "crank_zero": "the right arm points forward (+x), the left back; pedals level",
+   "pedal": {
+    "from_crank": 0.06,
+    "q": 0.134,
+    "note": "pedal_l/pedal_r origins: the pedal body's centre on its spindle"
+   },
+   "teeth": [
+    38,
+    18
+   ],
+   "rings": [
+    38
+   ],
+   "cogs": [
+    18
+   ],
+   "points": {
+    "saddle": [
+     -0.2501,
+     0.87,
+     -0.0
+    ],
+    "grip_l": [
+     0.1946,
+     1.03,
+     -0.29
+    ],
+    "grip_r": [
+     0.1946,
+     1.03,
+     0.29
+    ],
+    "bell": [
+     0.2689,
+     1.0576,
+     -0.29
+    ],
+    "lamp_f": [
+     0.5359,
+     0.6935,
+     -0.0
+    ],
+    "lamp_r": [
+     -0.671,
+     0.735,
+     -0.0
+    ],
+    "stand_foot": [
+     -0.1219,
+     0.0197,
+     -0.1536
+    ],
+    "bb": [
+     0.0,
+     0.29,
+     -0.0
+    ],
+    "hub_f": [
+     0.655,
+     0.355,
+     -0.0
+    ],
+    "hub_r": [
+     -0.465,
+     0.355,
+     -0.0
+    ],
+    "steer_top": [
+     0.3622,
+     0.9335,
+     -0.0
+    ],
+    "steer_bottom": [
+     0.4482,
+     0.7094,
+     -0.0
+    ]
+   },
+   "steer": {
+    "at": [
+     0.4482,
+     0.7094,
+     -0.0
+    ],
+    "axis": [
+     -0.35837,
+     0.93358,
+     -0.0
+    ]
+   },
+   "levers": {
+    "lever_l": {
+     "pull": 0.3,
+     "brake": "rear"
+    },
+    "lever_r": {
+     "pull": 0.3,
+     "brake": "front"
+    }
+   },
+   "kickstand": {
+    "axis": "x",
+    "down": 1.5082,
+    "lean": 0.1222,
+    "lean_side": "left"
+   },
+   "has": {
+    "lamp": "dynamo",
+    "bell": true,
+    "basket": false,
+    "rack": true,
+    "carrier": false,
+    "pegs": false,
+    "gyro": false,
+    "studs": false,
+    "guards": true,
+    "gears": 3,
+    "hub_gears": 3,
+    "fixed": false,
+    "kickstand": true,
+    "chain_case": false
+   },
+   "materials": [
+    "alloy",
+    "alloy_dark",
+    "canvas",
+    "chain",
+    "chrome",
+    "decal",
+    "emit_head",
+    "emit_tail",
+    "gumwall",
+    "lens",
+    "lens_amber",
+    "lens_red",
+    "paint",
+    "paint2",
+    "reflector",
+    "rubber",
+    "steel",
+    "trim",
+    "tyre",
+    "vinyl",
+    "webbing"
+   ],
+   "tris": {
+    "near": 42302,
+    "mid": 7670,
+    "far": 516
+   },
+   "bytes": {
+    "near": 703188,
+    "mid": 202536
+   },
+   "colours": [
+    "#d9d0b4",
+    "#6f8fa8",
+    "#6b2430"
+   ],
+   "colour2": "#3a3328",
+   "hull": [
+    [
+     1.01,
+     0.355,
+     -0.02
+    ],
+    [
+     1.01,
+     0.355,
+     0.02
+    ],
+    [
+     0.9624,
+     0.5325,
+     -0.02
+    ],
+    [
+     0.9624,
+     0.5325,
+     0.02
+    ],
+    [
+     0.8325,
+     0.6624,
+     -0.02
+    ],
+    [
+     0.8325,
+     0.6624,
+     0.02
+    ],
+    [
+     0.655,
+     0.0,
+     -0.02
+    ],
+    [
+     0.655,
+     0.0,
+     0.02
+    ],
+    [
+     0.8325,
+     0.0476,
+     -0.02
+    ],
+    [
+     0.8325,
+     0.0476,
+     0.02
+    ],
+    [
+     0.9624,
+     0.1775,
+     -0.02
+    ],
+    [
+     0.9624,
+     0.1775,
+     0.02
+    ],
+    [
+     -0.6425,
+     0.6624,
+     -0.02
+    ],
+    [
+     -0.6425,
+     0.6624,
+     0.02
+    ],
+    [
+     -0.7724,
+     0.5325,
+     -0.02
+    ],
+    [
+     -0.7724,
+     0.5325,
+     0.02
+    ],
+    [
+     -0.82,
+     0.355,
+     -0.02
+    ],
+    [
+     -0.82,
+     0.355,
+     0.02
+    ],
+    [
+     -0.7724,
+     0.1775,
+     -0.02
+    ],
+    [
+     -0.7724,
+     0.1775,
+     0.02
+    ],
+    [
+     -0.6425,
+     0.0476,
+     -0.02
+    ],
+    [
+     -0.6425,
+     0.0476,
+     0.02
+    ],
+    [
+     -0.465,
+     0.0,
+     -0.02
+    ],
+    [
+     -0.465,
+     0.0,
+     0.02
+    ],
+    [
+     0.1946,
+     1.05,
+     -0.29
+    ],
+    [
+     0.1946,
+     1.01,
+     -0.29
+    ],
+    [
+     0.1946,
+     1.05,
+     0.29
+    ],
+    [
+     0.1946,
+     1.01,
+     0.29
+    ],
+    [
+     -0.3301,
+     0.88,
+     -0.06
+    ],
+    [
+     -0.3301,
+     0.88,
+     0.06
+    ],
+    [
+     0.0,
+     0.29,
+     -0.174
+    ],
+    [
+     0.0,
+     0.29,
+     0.174
+    ]
+   ],
+   "nodes": [
+    "collider",
+    "crank",
+    "frame",
+    "kickstand",
+    "lever_l",
+    "lever_r",
+    "pedal_l",
+    "pedal_r",
+    "spin_f",
+    "spin_r",
+    "steer",
+    "wheel_f",
+    "wheel_r"
+   ],
+   "hub_ratios": [
+    0.75,
+    1.0,
+    1.333
+   ],
+   "measured": {
+    "saddle_y": 0.87,
+    "grip_y": 1.03,
+    "bb_y": 0.29,
+    "drop_y": null
+   }
+  },
+  "town-post": {
+   "file": "town-post.glb",
+   "mid": "town-post-mid.glb",
+   "far": "town-far.glb",
+   "body": "town",
+   "variant": "town-post",
+   "kind": "bike_town",
+   "name": "Hollin Bode",
+   "dims": {
+    "length": 1.86,
+    "width": 0.639,
+    "height": 1.093,
+    "front": 1.016,
+    "back": -0.845
+   },
+   "wheelbase": 1.12,
+   "wheel": {
+    "f": {
+     "r": 0.338,
+     "width": 0.047
+    },
+    "r": {
+     "r": 0.355,
+     "width": 0.047
+    }
+   },
+   "head_angle": 69.0,
+   "seat_angle": 67.0,
+   "rake": 0.066,
+   "crank": 0.17,
+   "crank_zero": "the right arm points forward (+x), the left back; pedals level",
+   "pedal": {
+    "from_crank": 0.06,
+    "q": 0.134,
+    "note": "pedal_l/pedal_r origins: the pedal body's centre on its spindle"
+   },
+   "teeth": [
+    38,
+    18
+   ],
+   "rings": [
+    38
+   ],
+   "cogs": [
+    18
+   ],
+   "points": {
+    "saddle": [
+     -0.2501,
+     0.87,
+     -0.0
+    ],
+    "grip_l": [
+     0.1881,
+     1.03,
+     -0.29
+    ],
+    "grip_r": [
+     0.1881,
+     1.03,
+     0.29
+    ],
+    "bell": [
+     0.2624,
+     1.0576,
+     -0.29
+    ],
+    "lamp_f": [
+     0.948,
+     0.736,
+     -0.0
+    ],
+    "lamp_r": [
+     -0.671,
+     0.735,
+     -0.0
+    ],
+    "stand_foot": [
+     -0.1218,
+     0.0203,
+     -0.1582
+    ],
+    "bb": [
+     0.0,
+     0.29,
+     -0.0
+    ],
+    "hub_f": [
+     0.655,
+     0.338,
+     -0.0
+    ],
+    "hub_r": [
+     -0.465,
+     0.355,
+     -0.0
+    ],
+    "steer_top": [
+     0.3569,
+     0.9305,
+     -0.0
+    ],
+    "steer_bottom": [
+     0.4429,
+     0.7065,
+     -0.0
+    ]
+   },
+   "steer": {
+    "at": [
+     0.4429,
+     0.7065,
+     -0.0
+    ],
+    "axis": [
+     -0.35837,
+     0.93358,
+     -0.0
+    ]
+   },
+   "levers": {
+    "lever_l": {
+     "pull": 0.3,
+     "brake": "rear"
+    },
+    "lever_r": {
+     "pull": 0.3,
+     "brake": "front"
+    }
+   },
+   "kickstand": {
+    "axis": "x",
+    "down": 1.5082,
+    "lean": 0.1222,
+    "lean_side": "left"
+   },
+   "has": {
+    "lamp": "dynamo",
+    "bell": true,
+    "basket": false,
+    "rack": true,
+    "carrier": true,
+    "pegs": false,
+    "gyro": false,
+    "studs": false,
+    "guards": true,
+    "gears": 3,
+    "hub_gears": 3,
+    "fixed": false,
+    "kickstand": true,
+    "chain_case": true
+   },
+   "materials": [
+    "alloy",
+    "alloy_dark",
+    "chrome",
+    "decal",
+    "emit_head",
+    "emit_tail",
+    "lens",
+    "lens_amber",
+    "lens_red",
+    "paint",
+    "paint2",
+    "reflector",
+    "rubber",
+    "steel",
+    "trim",
+    "tyre",
+    "vinyl"
+   ],
+   "tris": {
+    "near": 41248,
+    "mid": 7658,
+    "far": 516
+   },
+   "bytes": {
+    "near": 675008,
+    "mid": 202904
+   },
+   "colours": [
+    "#d2a514",
+    "#9c2a1e",
+    "#3b3d3f"
+   ],
+   "colour2": "#1d1f22",
+   "hull": [
+    [
+     0.993,
+     0.338,
+     -0.0235
+    ],
+    [
+     0.993,
+     0.338,
+     0.0235
+    ],
+    [
+     0.9477,
+     0.507,
+     -0.0235
+    ],
+    [
+     0.9477,
+     0.507,
+     0.0235
+    ],
+    [
+     0.824,
+     0.6307,
+     -0.0235
+    ],
+    [
+     0.824,
+     0.6307,
+     0.0235
+    ],
+    [
+     0.655,
+     0.0,
+     -0.0235
+    ],
+    [
+     0.655,
+     0.0,
+     0.0235
+    ],
+    [
+     0.824,
+     0.0453,
+     -0.0235
+    ],
+    [
+     0.824,
+     0.0453,
+     0.0235
+    ],
+    [
+     0.9477,
+     0.169,
+     -0.0235
+    ],
+    [
+     0.9477,
+     0.169,
+     0.0235
+    ],
+    [
+     -0.6425,
+     0.6624,
+     -0.0235
+    ],
+    [
+     -0.6425,
+     0.6624,
+     0.0235
+    ],
+    [
+     -0.7724,
+     0.5325,
+     -0.0235
+    ],
+    [
+     -0.7724,
+     0.5325,
+     0.0235
+    ],
+    [
+     -0.82,
+     0.355,
+     -0.0235
+    ],
+    [
+     -0.82,
+     0.355,
+     0.0235
+    ],
+    [
+     -0.7724,
+     0.1775,
+     -0.0235
+    ],
+    [
+     -0.7724,
+     0.1775,
+     0.0235
+    ],
+    [
+     -0.6425,
+     0.0476,
+     -0.0235
+    ],
+    [
+     -0.6425,
+     0.0476,
+     0.0235
+    ],
+    [
+     -0.465,
+     0.0,
+     -0.0235
+    ],
+    [
+     -0.465,
+     0.0,
+     0.0235
+    ],
+    [
+     0.1881,
+     1.05,
+     -0.29
+    ],
+    [
+     0.1881,
+     1.01,
+     -0.29
+    ],
+    [
+     0.1881,
+     1.05,
+     0.29
+    ],
+    [
+     0.1881,
+     1.01,
+     0.29
+    ],
+    [
+     -0.3301,
+     0.88,
+     -0.06
+    ],
+    [
+     -0.3301,
+     0.88,
+     0.06
+    ],
+    [
+     0.0,
+     0.29,
+     -0.174
+    ],
+    [
+     0.0,
+     0.29,
+     0.174
+    ]
+   ],
+   "nodes": [
+    "collider",
+    "crank",
+    "frame",
+    "kickstand",
+    "lever_l",
+    "lever_r",
+    "pedal_l",
+    "pedal_r",
+    "spin_f",
+    "spin_r",
+    "steer",
+    "wheel_f",
+    "wheel_r"
+   ],
+   "hub_ratios": [
+    0.75,
+    1.0,
+    1.333
+   ],
+   "measured": {
+    "saddle_y": 0.87,
+    "grip_y": 1.03,
+    "bb_y": 0.29,
+    "drop_y": null
+   }
+  },
+  "bmx-free": {
+   "file": "bmx-free.glb",
+   "mid": "bmx-free-mid.glb",
+   "far": "bmx-far.glb",
+   "body": "bmx",
+   "variant": "bmx-free",
+   "kind": "bike_bmx",
+   "name": "Rook Spinner",
+   "dims": {
+    "length": 1.481,
+    "width": 0.675,
+    "height": 0.972,
+    "front": 0.871,
+    "back": -0.61
+   },
+   "wheelbase": 0.98,
+   "wheel": {
+    "f": {
+     "r": 0.251,
+     "width": 0.048
+    },
+    "r": {
+     "r": 0.251,
+     "width": 0.05
+    }
+   },
+   "head_angle": 74.0,
+   "seat_angle": 71.0,
+   "rake": 0.028,
+   "crank": 0.175,
+   "crank_zero": "the right arm points forward (+x), the left back; pedals level",
+   "pedal": {
+    "from_crank": 0.06,
+    "q": 0.13,
+    "note": "pedal_l/pedal_r origins: the pedal body's centre on its spindle"
+   },
+   "teeth": [
+    44,
+    16
+   ],
+   "rings": [
+    44
+   ],
+   "cogs": [
+    16
+   ],
+   "points": {
+    "saddle": [
+     -0.1823,
+     0.7,
+     -0.0
+    ],
+    "grip_l": [
+     0.4148,
+     0.9505,
+     -0.2693
+    ],
+    "grip_r": [
+     0.4148,
+     0.9505,
+     0.2693
+    ],
+    "peg_fl": [
+     0.62,
+     0.251,
+     -0.11
+    ],
+    "peg_rl": [
+     -0.36,
+     0.251,
+     -0.115
+    ],
+    "peg_fr": [
+     0.62,
+     0.251,
+     0.11
+    ],
+    "peg_rr": [
+     -0.36,
+     0.251,
+     0.115
+    ],
+    "lamp_r": [
+     -0.1698,
+     0.4598,
+     -0.0
+    ],
+    "bb": [
+     0.0,
+     0.3,
+     -0.0
+    ],
+    "hub_f": [
+     0.62,
+     0.251,
+     -0.0
+    ],
+    "hub_r": [
+     -0.36,
+     0.251,
+     -0.0
+    ],
+    "steer_top": [
+     0.469,
+     0.6758,
+     -0.0
+    ],
+    "steer_bottom": [
+     0.5007,
+     0.5653,
+     -0.0
+    ]
+   },
+   "steer": {
+    "at": [
+     0.5007,
+     0.5653,
+     -0.0
+    ],
+    "axis": [
+     -0.27564,
+     0.96126,
+     -0.0
+    ]
+   },
+   "levers": {
+    "lever_l": {
+     "pull": 0.3,
+     "brake": "rear"
+    },
+    "lever_r": {
+     "pull": -0.3,
+     "brake": "front"
+    }
+   },
+   "kickstand": null,
+   "has": {
+    "lamp": "none",
+    "bell": false,
+    "basket": false,
+    "rack": false,
+    "carrier": false,
+    "pegs": true,
+    "gyro": true,
+    "studs": false,
+    "guards": false,
+    "gears": 1,
+    "hub_gears": 0,
+    "fixed": false,
+    "kickstand": false,
+    "chain_case": false
+   },
+   "materials": [
+    "alloy",
+    "alloy_dark",
+    "chain",
+    "chrome",
+    "decal",
+    "foam",
+    "lens",
+    "lens_red",
+    "nylon",
+    "paint",
+    "paint2",
+    "rubber",
+    "steel",
+    "trim",
+    "tyre",
+    "vinyl"
+   ],
+   "tris": {
+    "near": 36014,
+    "mid": 7669,
+    "far": 492
+   },
+   "bytes": {
+    "near": 570804,
+    "mid": 175564
+   },
+   "colours": [
+    "#c9ccd1",
+    "#e0358a",
+    "#f2f0ea"
+   ],
+   "colour2": "#1a1a1c",
+   "hull": [
+    [
+     0.871,
+     0.251,
+     -0.024
+    ],
+    [
+     0.871,
+     0.251,
+     0.024
+    ],
+    [
+     0.8374,
+     0.3765,
+     -0.024
+    ],
+    [
+     0.8374,
+     0.3765,
+     0.024
+    ],
+    [
+     0.62,
+     0.0,
+     -0.024
+    ],
+    [
+     0.62,
+     0.0,
+     0.024
+    ],
+    [
+     0.7455,
+     0.0336,
+     -0.024
+    ],
+    [
+     0.7455,
+     0.0336,
+     0.024
+    ],
+    [
+     0.8374,
+     0.1255,
+     -0.024
+    ],
+    [
+     0.8374,
+     0.1255,
+     0.024
+    ],
+    [
+     -0.5774,
+     0.3765,
+     -0.025
+    ],
+    [
+     -0.5774,
+     0.3765,
+     0.025
+    ],
+    [
+     -0.611,
+     0.251,
+     -0.025
+    ],
+    [
+     -0.611,
+     0.251,
+     0.025
+    ],
+    [
+     -0.5774,
+     0.1255,
+     -0.025
+    ],
+    [
+     -0.5774,
+     0.1255,
+     0.025
+    ],
+    [
+     -0.4855,
+     0.0336,
+     -0.025
+    ],
+    [
+     -0.4855,
+     0.0336,
+     0.025
+    ],
+    [
+     -0.36,
+     0.0,
+     -0.025
+    ],
+    [
+     -0.36,
+     0.0,
+     0.025
+    ],
+    [
+     0.4148,
+     0.9705,
+     -0.2693
+    ],
+    [
+     0.4148,
+     0.9305,
+     -0.2693
+    ],
+    [
+     0.4148,
+     0.9705,
+     0.2693
+    ],
+    [
+     0.4148,
+     0.9305,
+     0.2693
+    ],
+    [
+     -0.2623,
+     0.71,
+     -0.06
+    ],
+    [
+     -0.2623,
+     0.71,
+     0.06
+    ],
+    [
+     0.0,
+     0.3,
+     -0.17
+    ],
+    [
+     0.0,
+     0.3,
+     0.17
+    ]
+   ],
+   "nodes": [
+    "bars_spin",
+    "collider",
+    "crank",
+    "frame",
+    "lever_l",
+    "lever_r",
+    "pedal_l",
+    "pedal_r",
+    "spin_f",
+    "spin_r",
+    "steer",
+    "wheel_f",
+    "wheel_r"
+   ],
+   "measured": {
+    "saddle_y": 0.7,
+    "grip_y": 0.95,
+    "bb_y": 0.3,
+    "drop_y": null
+   }
+  },
+  "bmx-race": {
+   "file": "bmx-race.glb",
+   "mid": "bmx-race-mid.glb",
+   "far": "bmx-far.glb",
+   "body": "bmx",
+   "variant": "bmx-race",
+   "kind": "bike_bmx",
+   "name": "Rook Gate",
+   "dims": {
+    "length": 1.481,
+    "width": 0.675,
+    "height": 0.972,
+    "front": 0.871,
+    "back": -0.61
+   },
+   "wheelbase": 0.98,
+   "wheel": {
+    "f": {
+     "r": 0.251,
+     "width": 0.044
+    },
+    "r": {
+     "r": 0.251,
+     "width": 0.046
+    }
+   },
+   "head_angle": 74.0,
+   "seat_angle": 71.0,
+   "rake": 0.028,
+   "crank": 0.175,
+   "crank_zero": "the right arm points forward (+x), the left back; pedals level",
+   "pedal": {
+    "from_crank": 0.06,
+    "q": 0.13,
+    "note": "pedal_l/pedal_r origins: the pedal body's centre on its spindle"
+   },
+   "teeth": [
+    44,
+    16
+   ],
+   "rings": [
+    44
+   ],
+   "cogs": [
+    16
+   ],
+   "points": {
+    "saddle": [
+     -0.1823,
+     0.7,
+     -0.0
+    ],
+    "grip_l": [
+     0.4148,
+     0.9505,
+     -0.2693
+    ],
+    "grip_r": [
+     0.4148,
+     0.9505,
+     0.2693
+    ],
+    "lamp_r": [
+     -0.1701,
+     0.4595,
+     -0.0
+    ],
+    "bb": [
+     0.0,
+     0.3,
+     -0.0
+    ],
+    "hub_f": [
+     0.62,
+     0.251,
+     -0.0
+    ],
+    "hub_r": [
+     -0.36,
+     0.251,
+     -0.0
+    ],
+    "steer_top": [
+     0.469,
+     0.6758,
+     -0.0
+    ],
+    "steer_bottom": [
+     0.5007,
+     0.5653,
+     -0.0
+    ]
+   },
+   "steer": {
+    "at": [
+     0.5007,
+     0.5653,
+     -0.0
+    ],
+    "axis": [
+     -0.27564,
+     0.96126,
+     -0.0
+    ]
+   },
+   "levers": {
+    "lever_l": {
+     "pull": 0.3,
+     "brake": "rear"
+    },
+    "lever_r": {
+     "pull": -0.3,
+     "brake": "front"
+    }
+   },
+   "kickstand": null,
+   "has": {
+    "lamp": "none",
+    "bell": false,
+    "basket": false,
+    "rack": false,
+    "carrier": false,
+    "pegs": false,
+    "gyro": false,
+    "studs": false,
+    "guards": false,
+    "gears": 1,
+    "hub_gears": 0,
+    "fixed": false,
+    "kickstand": false,
+    "chain_case": false
+   },
+   "materials": [
+    "alloy",
+    "alloy_dark",
+    "chain",
+    "chrome",
+    "decal",
+    "foam",
+    "lens_red",
+    "nylon",
+    "paint",
+    "paint2",
+    "rubber",
+    "steel",
+    "trim",
+    "tyre",
+    "vinyl"
+   ],
+   "tris": {
+    "near": 34519,
+    "mid": 7180,
+    "far": 492
+   },
+   "bytes": {
+    "near": 575100,
+    "mid": 159956
+   },
+   "colours": [
+    "#f2f0ea",
+    "#1c4fa0",
+    "#d02a20"
+   ],
+   "colour2": "#e3c21b",
+   "hull": [
+    [
+     0.871,
+     0.251,
+     -0.022
+    ],
+    [
+     0.871,
+     0.251,
+     0.022
+    ],
+    [
+     0.8374,
+     0.3765,
+     -0.022
+    ],
+    [
+     0.8374,
+     0.3765,
+     0.022
+    ],
+    [
+     0.62,
+     0.0,
+     -0.022
+    ],
+    [
+     0.62,
+     0.0,
+     0.022
+    ],
+    [
+     0.7455,
+     0.0336,
+     -0.022
+    ],
+    [
+     0.7455,
+     0.0336,
+     0.022
+    ],
+    [
+     0.8374,
+     0.1255,
+     -0.022
+    ],
+    [
+     0.8374,
+     0.1255,
+     0.022
+    ],
+    [
+     -0.5774,
+     0.3765,
+     -0.023
+    ],
+    [
+     -0.5774,
+     0.3765,
+     0.023
+    ],
+    [
+     -0.611,
+     0.251,
+     -0.023
+    ],
+    [
+     -0.611,
+     0.251,
+     0.023
+    ],
+    [
+     -0.5774,
+     0.1255,
+     -0.023
+    ],
+    [
+     -0.5774,
+     0.1255,
+     0.023
+    ],
+    [
+     -0.4855,
+     0.0336,
+     -0.023
+    ],
+    [
+     -0.4855,
+     0.0336,
+     0.023
+    ],
+    [
+     -0.36,
+     0.0,
+     -0.023
+    ],
+    [
+     -0.36,
+     0.0,
+     0.023
+    ],
+    [
+     0.4148,
+     0.9705,
+     -0.2693
+    ],
+    [
+     0.4148,
+     0.9305,
+     -0.2693
+    ],
+    [
+     0.4148,
+     0.9705,
+     0.2693
+    ],
+    [
+     0.4148,
+     0.9305,
+     0.2693
+    ],
+    [
+     -0.2623,
+     0.71,
+     -0.06
+    ],
+    [
+     -0.2623,
+     0.71,
+     0.06
+    ],
+    [
+     0.0,
+     0.3,
+     -0.17
+    ],
+    [
+     0.0,
+     0.3,
+     0.17
+    ]
+   ],
+   "nodes": [
+    "collider",
+    "crank",
+    "frame",
+    "lever_l",
+    "lever_r",
+    "pedal_l",
+    "pedal_r",
+    "spin_f",
+    "spin_r",
+    "steer",
+    "wheel_f",
+    "wheel_r"
+   ],
+   "measured": {
+    "saddle_y": 0.7,
+    "grip_y": 0.95,
+    "bb_y": 0.3,
+    "drop_y": null
+   }
+  },
+  "bmx-street": {
+   "file": "bmx-street.glb",
+   "mid": "bmx-street-mid.glb",
+   "far": "bmx-far.glb",
+   "body": "bmx",
+   "variant": "bmx-street",
+   "kind": "bike_bmx",
+   "name": "Rook Curb",
+   "dims": {
+    "length": 1.488,
+    "width": 0.675,
+    "height": 1.004,
+    "front": 0.874,
+    "back": -0.614
+   },
+   "wheelbase": 0.98,
+   "wheel": {
+    "f": {
+     "r": 0.254,
+     "width": 0.054
+    },
+    "r": {
+     "r": 0.254,
+     "width": 0.054
+    }
+   },
+   "head_angle": 74.0,
+   "seat_angle": 71.0,
+   "rake": 0.028,
+   "crank": 0.175,
+   "crank_zero": "the right arm points forward (+x), the left back; pedals level",
+   "pedal": {
+    "from_crank": 0.06,
+    "q": 0.13,
+    "note": "pedal_l/pedal_r origins: the pedal body's centre on its spindle"
+   },
+   "teeth": [
+    44,
+    16
+   ],
+   "rings": [
+    44
+   ],
+   "cogs": [
+    16
+   ],
+   "points": {
+    "saddle": [
+     -0.1812,
+     0.7,
+     -0.0
+    ],
+    "grip_l": [
+     0.4148,
+     0.9535,
+     -0.2693
+    ],
+    "grip_r": [
+     0.4148,
+     0.9535,
+     0.2693
+    ],
+    "peg_fl": [
+     0.62,
+     0.254,
+     -0.11
+    ],
+    "peg_rl": [
+     -0.36,
+     0.254,
+     -0.115
+    ],
+    "peg_fr": [
+     0.62,
+     0.254,
+     0.11
+    ],
+    "peg_rr": [
+     -0.36,
+     0.254,
+     0.115
+    ],
+    "bell": [
+     0.4337,
+     0.9727,
+     -0.1988
+    ],
+    "lamp_r": [
+     -0.1694,
+     0.4631,
+     -0.0
+    ],
+    "bb": [
+     0.0,
+     0.303,
+     -0.0
+    ],
+    "hub_f": [
+     0.62,
+     0.254,
+     -0.0
+    ],
+    "hub_r": [
+     -0.36,
+     0.254,
+     -0.0
+    ],
+    "steer_top": [
+     0.469,
+     0.6788,
+     -0.0
+    ],
+    "steer_bottom": [
+     0.5007,
+     0.5683,
+     -0.0
+    ]
+   },
+   "steer": {
+    "at": [
+     0.5007,
+     0.5683,
+     -0.0
+    ],
+    "axis": [
+     -0.27564,
+     0.96126,
+     -0.0
+    ]
+   },
+   "levers": {
+    "lever_l": {
+     "pull": 0.3,
+     "brake": "rear"
+    },
+    "lever_r": {
+     "pull": -0.3,
+     "brake": "front"
+    }
+   },
+   "kickstand": null,
+   "has": {
+    "lamp": "none",
+    "bell": true,
+    "basket": false,
+    "rack": false,
+    "carrier": false,
+    "pegs": true,
+    "gyro": false,
+    "studs": false,
+    "guards": false,
+    "gears": 1,
+    "hub_gears": 0,
+    "fixed": false,
+    "kickstand": false,
+    "chain_case": false
+   },
+   "materials": [
+    "alloy",
+    "alloy_dark",
+    "chain",
+    "chrome",
+    "decal",
+    "lens",
+    "lens_amber",
+    "lens_red",
+    "paint",
+    "paint2",
+    "rubber",
+    "steel",
+    "trim",
+    "tyre",
+    "vinyl"
+   ],
+   "tris": {
+    "near": 37138,
+    "mid": 7768,
+    "far": 492
+   },
+   "bytes": {
+    "near": 597636,
+    "mid": 178380
+   },
+   "colours": [
+    "#1a1a1c",
+    "#2f6b3a",
+    "#e86a1a"
+   ],
+   "colour2": "#e9e4d6",
+   "hull": [
+    [
+     0.874,
+     0.254,
+     -0.027
+    ],
+    [
+     0.874,
+     0.254,
+     0.027
+    ],
+    [
+     0.84,
+     0.381,
+     -0.027
+    ],
+    [
+     0.84,
+     0.381,
+     0.027
+    ],
+    [
+     0.62,
+     0.0,
+     -0.027
+    ],
+    [
+     0.62,
+     0.0,
+     0.027
+    ],
+    [
+     0.747,
+     0.034,
+     -0.027
+    ],
+    [
+     0.747,
+     0.034,
+     0.027
+    ],
+    [
+     0.84,
+     0.127,
+     -0.027
+    ],
+    [
+     0.84,
+     0.127,
+     0.027
+    ],
+    [
+     -0.58,
+     0.381,
+     -0.027
+    ],
+    [
+     -0.58,
+     0.381,
+     0.027
+    ],
+    [
+     -0.614,
+     0.254,
+     -0.027
+    ],
+    [
+     -0.614,
+     0.254,
+     0.027
+    ],
+    [
+     -0.58,
+     0.127,
+     -0.027
+    ],
+    [
+     -0.58,
+     0.127,
+     0.027
+    ],
+    [
+     -0.487,
+     0.034,
+     -0.027
+    ],
+    [
+     -0.487,
+     0.034,
+     0.027
+    ],
+    [
+     -0.36,
+     0.0,
+     -0.027
+    ],
+    [
+     -0.36,
+     0.0,
+     0.027
+    ],
+    [
+     0.4148,
+     0.9735,
+     -0.2693
+    ],
+    [
+     0.4148,
+     0.9335,
+     -0.2693
+    ],
+    [
+     0.4148,
+     0.9735,
+     0.2693
+    ],
+    [
+     0.4148,
+     0.9335,
+     0.2693
+    ],
+    [
+     -0.2612,
+     0.71,
+     -0.06
+    ],
+    [
+     -0.2612,
+     0.71,
+     0.06
+    ],
+    [
+     0.0,
+     0.303,
+     -0.17
+    ],
+    [
+     0.0,
+     0.303,
+     0.17
+    ]
+   ],
+   "nodes": [
+    "collider",
+    "crank",
+    "frame",
+    "lever_l",
+    "lever_r",
+    "pedal_l",
+    "pedal_r",
+    "spin_f",
+    "spin_r",
+    "steer",
+    "wheel_f",
+    "wheel_r"
+   ],
+   "measured": {
+    "saddle_y": 0.7,
+    "grip_y": 0.953,
+    "bb_y": 0.303,
+    "drop_y": null
+   }
+  },
+  "mtb-trail": {
+   "file": "mtb-trail.glb",
+   "mid": "mtb-trail-mid.glb",
+   "far": "mtb-far.glb",
+   "body": "mtb",
+   "variant": "mtb-trail",
+   "kind": "bike_mtb",
+   "name": "Tarn Ridgeline",
+   "dims": {
+    "length": 1.736,
+    "width": 0.589,
+    "height": 1.03,
+    "front": 0.973,
+    "back": -0.763
+   },
+   "wheelbase": 1.07,
+   "wheel": {
+    "f": {
+     "r": 0.333,
+     "width": 0.052
+    },
+    "r": {
+     "r": 0.333,
+     "width": 0.052
+    }
+   },
+   "head_angle": 70.5,
+   "seat_angle": 73.0,
+   "rake": 0.045,
+   "crank": 0.17,
+   "crank_zero": "the right arm points forward (+x), the left back; pedals level",
+   "pedal": {
+    "from_crank": 0.058,
+    "q": 0.137,
+    "note": "pedal_l/pedal_r origins: the pedal body's centre on its spindle"
+   },
+   "teeth": [
+    38,
+    18
+   ],
+   "rings": [
+    48,
+    38,
+    28
+   ],
+   "cogs": [
+    28,
+    24,
+    21,
+    18,
+    16,
+    14,
+    12
+   ],
+   "points": {
+    "saddle": [
+     -0.1992,
+     0.88,
+     -0.0
+    ],
+    "grip_l": [
+     0.4811,
+     0.975,
+     -0.2252
+    ],
+    "grip_r": [
+     0.4811,
+     0.975,
+     0.2252
+    ],
+    "bell": [
+     0.4916,
+     0.997,
+     -0.1281
+    ],
+    "lamp_r": [
+     -0.1762,
+     0.7782,
+     -0.0
+    ],
+    "stand_foot": [
+     -0.1234,
+     0.021,
+     -0.1641
+    ],
+    "bb": [
+     0.0,
+     0.3,
+     -0.0
+    ],
+    "hub_f": [
+     0.64,
+     0.333,
+     -0.0
+    ],
+    "hub_r": [
+     -0.43,
+     0.333,
+     -0.0
+    ],
+    "steer_top": [
+     0.4123,
+     0.8411,
+     -0.0
+    ],
+    "steer_bottom": [
+     0.4557,
+     0.7186,
+     -0.0
+    ]
+   },
+   "steer": {
+    "at": [
+     0.4557,
+     0.7186,
+     -0.0
+    ],
+    "axis": [
+     -0.33381,
+     0.94264,
+     -0.0
+    ]
+   },
+   "levers": {
+    "lever_l": {
+     "pull": 0.3,
+     "brake": "rear"
+    },
+    "lever_r": {
+     "pull": -0.3,
+     "brake": "front"
+    }
+   },
+   "kickstand": {
+    "axis": "x",
+    "down": 1.4422,
+    "lean": 0.1222,
+    "lean_side": "left"
+   },
+   "has": {
+    "lamp": "none",
+    "bell": true,
+    "basket": false,
+    "rack": false,
+    "carrier": false,
+    "pegs": false,
+    "gyro": false,
+    "studs": false,
+    "guards": false,
+    "gears": 21,
+    "hub_gears": 0,
+    "fixed": false,
+    "kickstand": true,
+    "chain_case": false
+   },
+   "materials": [
+    "alloy",
+    "alloy_dark",
+    "chain",
+    "chrome",
+    "decal",
+    "gumwall",
+    "lens",
+    "lens_amber",
+    "lens_red",
+    "nylon",
+    "paint",
+    "paint2",
+    "rubber",
+    "steel",
+    "trim",
+    "tyre",
+    "vinyl"
+   ],
+   "tris": {
+    "near": 42528,
+    "mid": 7663,
+    "far": 484
+   },
+   "bytes": {
+    "near": 699804,
+    "mid": 189304
+   },
+   "colours": [
+    "#1f7d78",
+    "#e7e33a",
+    "#5a3a86"
+   ],
+   "colour2": "#f2f0ea",
+   "hull": [
+    [
+     0.973,
+     0.333,
+     -0.026
+    ],
+    [
+     0.973,
+     0.333,
+     0.026
+    ],
+    [
+     0.9284,
+     0.4995,
+     -0.026
+    ],
+    [
+     0.9284,
+     0.4995,
+     0.026
+    ],
+    [
+     0.64,
+     0.0,
+     -0.026
+    ],
+    [
+     0.64,
+     0.0,
+     0.026
+    ],
+    [
+     0.8065,
+     0.0446,
+     -0.026
+    ],
+    [
+     0.8065,
+     0.0446,
+     0.026
+    ],
+    [
+     0.9284,
+     0.1665,
+     -0.026
+    ],
+    [
+     0.9284,
+     0.1665,
+     0.026
+    ],
+    [
+     -0.5965,
+     0.6214,
+     -0.026
+    ],
+    [
+     -0.5965,
+     0.6214,
+     0.026
+    ],
+    [
+     -0.7184,
+     0.4995,
+     -0.026
+    ],
+    [
+     -0.7184,
+     0.4995,
+     0.026
+    ],
+    [
+     -0.763,
+     0.333,
+     -0.026
+    ],
+    [
+     -0.763,
+     0.333,
+     0.026
+    ],
+    [
+     -0.7184,
+     0.1665,
+     -0.026
+    ],
+    [
+     -0.7184,
+     0.1665,
+     0.026
+    ],
+    [
+     -0.5965,
+     0.0446,
+     -0.026
+    ],
+    [
+     -0.5965,
+     0.0446,
+     0.026
+    ],
+    [
+     -0.43,
+     0.0,
+     -0.026
+    ],
+    [
+     -0.43,
+     0.0,
+     0.026
+    ],
+    [
+     0.4811,
+     0.995,
+     -0.2252
+    ],
+    [
+     0.4811,
+     0.955,
+     -0.2252
+    ],
+    [
+     0.4811,
+     0.995,
+     0.2252
+    ],
+    [
+     0.4811,
+     0.955,
+     0.2252
+    ],
+    [
+     -0.2792,
+     0.89,
+     -0.06
+    ],
+    [
+     -0.2792,
+     0.89,
+     0.06
+    ],
+    [
+     0.0,
+     0.3,
+     -0.177
+    ],
+    [
+     0.0,
+     0.3,
+     0.177
+    ]
+   ],
+   "nodes": [
+    "collider",
+    "crank",
+    "frame",
+    "kickstand",
+    "lever_l",
+    "lever_r",
+    "pedal_l",
+    "pedal_r",
+    "spin_f",
+    "spin_r",
+    "steer",
+    "wheel_f",
+    "wheel_r"
+   ],
+   "measured": {
+    "saddle_y": 0.88,
+    "grip_y": 0.975,
+    "bb_y": 0.3,
+    "drop_y": null
+   }
+  },
+  "mtb-winter": {
+   "file": "mtb-winter.glb",
+   "mid": "mtb-winter-mid.glb",
+   "far": "mtb-far.glb",
+   "body": "mtb",
+   "variant": "mtb-winter",
+   "kind": "bike_mtb",
+   "name": "Tarn Rime",
+   "dims": {
+    "length": 1.783,
+    "width": 0.589,
+    "height": 1.03,
+    "front": 0.996,
+    "back": -0.788
+   },
+   "wheelbase": 1.07,
+   "wheel": {
+    "f": {
+     "r": 0.333,
+     "width": 0.052
+    },
+    "r": {
+     "r": 0.333,
+     "width": 0.052
+    }
+   },
+   "head_angle": 70.5,
+   "seat_angle": 73.0,
+   "rake": 0.045,
+   "crank": 0.17,
+   "crank_zero": "the right arm points forward (+x), the left back; pedals level",
+   "pedal": {
+    "from_crank": 0.058,
+    "q": 0.137,
+    "note": "pedal_l/pedal_r origins: the pedal body's centre on its spindle"
+   },
+   "teeth": [
+    38,
+    18
+   ],
+   "rings": [
+    48,
+    38,
+    28
+   ],
+   "cogs": [
+    28,
+    24,
+    21,
+    18,
+    16,
+    14,
+    12
+   ],
+   "points": {
+    "saddle": [
+     -0.1992,
+     0.88,
+     -0.0
+    ],
+    "grip_l": [
+     0.4811,
+     0.975,
+     -0.2252
+    ],
+    "grip_r": [
+     0.4811,
+     0.975,
+     0.2252
+    ],
+    "bell": [
+     0.4916,
+     0.997,
+     -0.1281
+    ],
+    "lamp_f": [
+     0.5594,
+     0.975,
+     -0.06
+    ],
+    "lamp_r": [
+     -0.187,
+     0.8068,
+     -0.0
+    ],
+    "stand_foot": [
+     -0.1234,
+     0.021,
+     -0.1641
+    ],
+    "bb": [
+     0.0,
+     0.3,
+     -0.0
+    ],
+    "hub_f": [
+     0.64,
+     0.333,
+     -0.0
+    ],
+    "hub_r": [
+     -0.43,
+     0.333,
+     -0.0
+    ],
+    "steer_top": [
+     0.4123,
+     0.8411,
+     -0.0
+    ],
+    "steer_bottom": [
+     0.4557,
+     0.7186,
+     -0.0
+    ]
+   },
+   "steer": {
+    "at": [
+     0.4557,
+     0.7186,
+     -0.0
+    ],
+    "axis": [
+     -0.33381,
+     0.94264,
+     -0.0
+    ]
+   },
+   "levers": {
+    "lever_l": {
+     "pull": 0.3,
+     "brake": "rear"
+    },
+    "lever_r": {
+     "pull": -0.3,
+     "brake": "front"
+    }
+   },
+   "kickstand": {
+    "axis": "x",
+    "down": 1.4422,
+    "lean": 0.1222,
+    "lean_side": "left"
+   },
+   "has": {
+    "lamp": "battery",
+    "bell": true,
+    "basket": false,
+    "rack": false,
+    "carrier": false,
+    "pegs": false,
+    "gyro": false,
+    "studs": true,
+    "guards": true,
+    "gears": 21,
+    "hub_gears": 0,
+    "fixed": false,
+    "kickstand": true,
+    "chain_case": false
+   },
+   "materials": [
+    "alloy",
+    "alloy_dark",
+    "chain",
+    "chrome",
+    "decal",
+    "emit_head",
+    "emit_tail",
+    "lens",
+    "lens_amber",
+    "lens_red",
+    "paint",
+    "paint2",
+    "rubber",
+    "steel",
+    "trim",
+    "tyre",
+    "vinyl"
+   ],
+   "tris": {
+    "near": 44840,
+    "mid": 7663,
+    "far": 484
+   },
+   "bytes": {
+    "near": 738092,
+    "mid": 190172
+   },
+   "colours": [
+    "#b3221c",
+    "#f0eee8",
+    "#1d2b4a"
+   ],
+   "colour2": "#1a1a1c",
+   "hull": [
+    [
+     0.973,
+     0.333,
+     -0.026
+    ],
+    [
+     0.973,
+     0.333,
+     0.026
+    ],
+    [
+     0.9284,
+     0.4995,
+     -0.026
+    ],
+    [
+     0.9284,
+     0.4995,
+     0.026
+    ],
+    [
+     0.64,
+     0.0,
+     -0.026
+    ],
+    [
+     0.64,
+     0.0,
+     0.026
+    ],
+    [
+     0.8065,
+     0.0446,
+     -0.026
+    ],
+    [
+     0.8065,
+     0.0446,
+     0.026
+    ],
+    [
+     0.9284,
+     0.1665,
+     -0.026
+    ],
+    [
+     0.9284,
+     0.1665,
+     0.026
+    ],
+    [
+     -0.5965,
+     0.6214,
+     -0.026
+    ],
+    [
+     -0.5965,
+     0.6214,
+     0.026
+    ],
+    [
+     -0.7184,
+     0.4995,
+     -0.026
+    ],
+    [
+     -0.7184,
+     0.4995,
+     0.026
+    ],
+    [
+     -0.763,
+     0.333,
+     -0.026
+    ],
+    [
+     -0.763,
+     0.333,
+     0.026
+    ],
+    [
+     -0.7184,
+     0.1665,
+     -0.026
+    ],
+    [
+     -0.7184,
+     0.1665,
+     0.026
+    ],
+    [
+     -0.5965,
+     0.0446,
+     -0.026
+    ],
+    [
+     -0.5965,
+     0.0446,
+     0.026
+    ],
+    [
+     -0.43,
+     0.0,
+     -0.026
+    ],
+    [
+     -0.43,
+     0.0,
+     0.026
+    ],
+    [
+     0.4811,
+     0.995,
+     -0.2252
+    ],
+    [
+     0.4811,
+     0.955,
+     -0.2252
+    ],
+    [
+     0.4811,
+     0.995,
+     0.2252
+    ],
+    [
+     0.4811,
+     0.955,
+     0.2252
+    ],
+    [
+     -0.2792,
+     0.89,
+     -0.06
+    ],
+    [
+     -0.2792,
+     0.89,
+     0.06
+    ],
+    [
+     0.0,
+     0.3,
+     -0.177
+    ],
+    [
+     0.0,
+     0.3,
+     0.177
+    ]
+   ],
+   "nodes": [
+    "collider",
+    "crank",
+    "frame",
+    "kickstand",
+    "lever_l",
+    "lever_r",
+    "pedal_l",
+    "pedal_r",
+    "spin_f",
+    "spin_r",
+    "steer",
+    "wheel_f",
+    "wheel_r"
+   ],
+   "measured": {
+    "saddle_y": 0.88,
+    "grip_y": 0.975,
+    "bb_y": 0.3,
+    "drop_y": null
+   }
+  },
+  "mtb-tour": {
+   "file": "mtb-tour.glb",
+   "mid": "mtb-tour-mid.glb",
+   "far": "mtb-far.glb",
+   "body": "mtb",
+   "variant": "mtb-tour",
+   "kind": "bike_mtb",
+   "name": "Tarn Wayfarer",
+   "dims": {
+    "length": 1.702,
+    "width": 0.576,
+    "height": 1.03,
+    "front": 0.956,
+    "back": -0.746
+   },
+   "wheelbase": 1.07,
+   "wheel": {
+    "f": {
+     "r": 0.3175,
+     "width": 0.038
+    },
+    "r": {
+     "r": 0.3175,
+     "width": 0.038
+    }
+   },
+   "head_angle": 70.5,
+   "seat_angle": 73.0,
+   "rake": 0.045,
+   "crank": 0.17,
+   "crank_zero": "the right arm points forward (+x), the left back; pedals level",
+   "pedal": {
+    "from_crank": 0.058,
+    "q": 0.137,
+    "note": "pedal_l/pedal_r origins: the pedal body's centre on its spindle"
+   },
+   "teeth": [
+    38,
+    18
+   ],
+   "rings": [
+    48,
+    38,
+    28
+   ],
+   "cogs": [
+    28,
+    24,
+    21,
+    18,
+    16,
+    14,
+    12
+   ],
+   "points": {
+    "saddle": [
+     -0.204,
+     0.88,
+     -0.0
+    ],
+    "grip_l": [
+     0.4756,
+     0.975,
+     -0.2252
+    ],
+    "grip_r": [
+     0.4756,
+     0.975,
+     0.2252
+    ],
+    "bell": [
+     0.4861,
+     0.997,
+     -0.1281
+    ],
+    "lamp_r": [
+     -0.1762,
+     0.7627,
+     -0.0
+    ],
+    "stand_foot": [
+     -0.1209,
+     0.0194,
+     -0.1515
+    ],
+    "bb": [
+     0.0,
+     0.2845,
+     -0.0
+    ],
+    "hub_f": [
+     0.64,
+     0.3175,
+     -0.0
+    ],
+    "hub_r": [
+     -0.43,
+     0.3175,
+     -0.0
+    ],
+    "steer_top": [
+     0.4123,
+     0.8256,
+     -0.0
+    ],
+    "steer_bottom": [
+     0.4557,
+     0.7031,
+     -0.0
+    ]
+   },
+   "steer": {
+    "at": [
+     0.4557,
+     0.7031,
+     -0.0
+    ],
+    "axis": [
+     -0.33381,
+     0.94264,
+     -0.0
+    ]
+   },
+   "levers": {
+    "lever_l": {
+     "pull": 0.3,
+     "brake": "rear"
+    },
+    "lever_r": {
+     "pull": -0.3,
+     "brake": "front"
+    }
+   },
+   "kickstand": {
+    "axis": "x",
+    "down": 1.4422,
+    "lean": 0.1222,
+    "lean_side": "left"
+   },
+   "has": {
+    "lamp": "none",
+    "bell": true,
+    "basket": false,
+    "rack": true,
+    "carrier": false,
+    "pegs": false,
+    "gyro": false,
+    "studs": false,
+    "guards": false,
+    "gears": 21,
+    "hub_gears": 0,
+    "fixed": false,
+    "kickstand": true,
+    "chain_case": false
+   },
+   "materials": [
+    "alloy",
+    "alloy_dark",
+    "chain",
+    "chrome",
+    "decal",
+    "lens",
+    "lens_amber",
+    "lens_red",
+    "nylon",
+    "paint",
+    "paint2",
+    "rubber",
+    "steel",
+    "trim",
+    "tyre",
+    "vinyl"
+   ],
+   "tris": {
+    "near": 42002,
+    "mid": 7667,
+    "far": 484
+   },
+   "bytes": {
+    "near": 665996,
+    "mid": 190840
+   },
+   "colours": [
+    "#2e4a32",
+    "#c8b892",
+    "#40607e"
+   ],
+   "colour2": "#e9e4d6",
+   "hull": [
+    [
+     0.9575,
+     0.3175,
+     -0.019
+    ],
+    [
+     0.9575,
+     0.3175,
+     0.019
+    ],
+    [
+     0.915,
+     0.4762,
+     -0.019
+    ],
+    [
+     0.915,
+     0.4762,
+     0.019
+    ],
+    [
+     0.64,
+     0.0,
+     -0.019
+    ],
+    [
+     0.64,
+     0.0,
+     0.019
+    ],
+    [
+     0.7987,
+     0.0425,
+     -0.019
+    ],
+    [
+     0.7987,
+     0.0425,
+     0.019
+    ],
+    [
+     0.915,
+     0.1587,
+     -0.019
+    ],
+    [
+     0.915,
+     0.1587,
+     0.019
+    ],
+    [
+     -0.5888,
+     0.5925,
+     -0.019
+    ],
+    [
+     -0.5888,
+     0.5925,
+     0.019
+    ],
+    [
+     -0.705,
+     0.4762,
+     -0.019
+    ],
+    [
+     -0.705,
+     0.4762,
+     0.019
+    ],
+    [
+     -0.7475,
+     0.3175,
+     -0.019
+    ],
+    [
+     -0.7475,
+     0.3175,
+     0.019
+    ],
+    [
+     -0.705,
+     0.1587,
+     -0.019
+    ],
+    [
+     -0.705,
+     0.1587,
+     0.019
+    ],
+    [
+     -0.5888,
+     0.0425,
+     -0.019
+    ],
+    [
+     -0.5888,
+     0.0425,
+     0.019
+    ],
+    [
+     -0.43,
+     0.0,
+     -0.019
+    ],
+    [
+     -0.43,
+     0.0,
+     0.019
+    ],
+    [
+     0.4756,
+     0.995,
+     -0.2252
+    ],
+    [
+     0.4756,
+     0.955,
+     -0.2252
+    ],
+    [
+     0.4756,
+     0.995,
+     0.2252
+    ],
+    [
+     0.4756,
+     0.955,
+     0.2252
+    ],
+    [
+     -0.284,
+     0.89,
+     -0.06
+    ],
+    [
+     -0.284,
+     0.89,
+     0.06
+    ],
+    [
+     0.0,
+     0.2845,
+     -0.177
+    ],
+    [
+     0.0,
+     0.2845,
+     0.177
+    ]
+   ],
+   "nodes": [
+    "collider",
+    "crank",
+    "frame",
+    "kickstand",
+    "lever_l",
+    "lever_r",
+    "pedal_l",
+    "pedal_r",
+    "spin_f",
+    "spin_r",
+    "steer",
+    "wheel_f",
+    "wheel_r"
+   ],
+   "measured": {
+    "saddle_y": 0.88,
+    "grip_y": 0.975,
+    "bb_y": 0.285,
+    "drop_y": null
+   }
+  },
+  "road-race": {
+   "file": "road-race.glb",
+   "mid": "road-race-mid.glb",
+   "far": "road-far.glb",
+   "body": "road",
+   "variant": "road-race",
+   "kind": "bike_road",
+   "name": "Merrow Sprint",
+   "dims": {
+    "length": 1.669,
+    "width": 0.444,
+    "height": 0.946,
+    "front": 0.927,
+    "back": -0.743
+   },
+   "wheelbase": 1.0,
+   "wheel": {
+    "f": {
+     "r": 0.334,
+     "width": 0.023
+    },
+    "r": {
+     "r": 0.334,
+     "width": 0.023
+    }
+   },
+   "head_angle": 73.0,
+   "seat_angle": 73.5,
+   "rake": 0.045,
+   "crank": 0.17,
+   "crank_zero": "the right arm points forward (+x), the left back; pedals level",
+   "pedal": {
+    "from_crank": 0.05,
+    "q": 0.123,
+    "note": "pedal_l/pedal_r origins: the pedal body's centre on its spindle"
+   },
+   "teeth": [
+    52,
+    17
+   ],
+   "rings": [
+    52,
+    42
+   ],
+   "cogs": [
+    23,
+    21,
+    19,
+    17,
+    15,
+    14,
+    13
+   ],
+   "points": {
+    "saddle": [
+     -0.2025,
+     0.87,
+     -0.0
+    ],
+    "grip_l": [
+     0.5739,
+     0.935,
+     -0.204
+    ],
+    "drop_l": [
+     0.4269,
+     0.789,
+     -0.208
+    ],
+    "grip_r": [
+     0.5739,
+     0.935,
+     0.204
+    ],
+    "drop_r": [
+     0.4269,
+     0.789,
+     0.208
+    ],
+    "lamp_r": [
+     -0.1961,
+     0.8309,
+     -0.0
+    ],
+    "bb": [
+     0.0,
+     0.27,
+     -0.0
+    ],
+    "hub_f": [
+     0.592,
+     0.334,
+     -0.0
+    ],
+    "hub_r": [
+     -0.408,
+     0.334,
+     -0.0
+    ],
+    "steer_top": [
+     0.3896,
+     0.842,
+     -0.0
+    ],
+    "steer_bottom": [
+     0.4364,
+     0.689,
+     -0.0
+    ]
+   },
+   "steer": {
+    "at": [
+     0.4364,
+     0.689,
+     -0.0
+    ],
+    "axis": [
+     -0.29237,
+     0.9563,
+     -0.0
+    ]
+   },
+   "levers": {
+    "lever_l": {
+     "pull": -0.3,
+     "brake": "rear"
+    },
+    "lever_r": {
+     "pull": -0.3,
+     "brake": "front"
+    }
+   },
+   "kickstand": null,
+   "has": {
+    "lamp": "none",
+    "bell": false,
+    "basket": false,
+    "rack": false,
+    "carrier": false,
+    "pegs": false,
+    "gyro": false,
+    "studs": false,
+    "guards": false,
+    "gears": 14,
+    "hub_gears": 0,
+    "fixed": false,
+    "kickstand": false,
+    "chain_case": false
+   },
+   "materials": [
+    "alloy",
+    "alloy_dark",
+    "chain",
+    "chrome",
+    "decal",
+    "gumwall",
+    "leather",
+    "lens",
+    "lens_red",
+    "nylon",
+    "paint",
+    "paint2",
+    "rubber",
+    "steel",
+    "tape",
+    "trim",
+    "tyre"
+   ],
+   "tris": {
+    "near": 39421,
+    "mid": 7665,
+    "far": 484
+   },
+   "bytes": {
+    "near": 576224,
+    "mid": 172864
+   },
+   "colours": [
+    "#b5201a",
+    "#f1efe9",
+    "#1e3f8a"
+   ],
+   "colour2": "#f1efe9",
+   "hull": [
+    [
+     0.926,
+     0.334,
+     -0.0115
+    ],
+    [
+     0.926,
+     0.334,
+     0.0115
+    ],
+    [
+     0.8813,
+     0.501,
+     -0.0115
+    ],
+    [
+     0.8813,
+     0.501,
+     0.0115
+    ],
+    [
+     0.592,
+     0.0,
+     -0.0115
+    ],
+    [
+     0.592,
+     0.0,
+     0.0115
+    ],
+    [
+     0.759,
+     0.0447,
+     -0.0115
+    ],
+    [
+     0.759,
+     0.0447,
+     0.0115
+    ],
+    [
+     0.8813,
+     0.167,
+     -0.0115
+    ],
+    [
+     0.8813,
+     0.167,
+     0.0115
+    ],
+    [
+     -0.575,
+     0.6233,
+     -0.0115
+    ],
+    [
+     -0.575,
+     0.6233,
+     0.0115
+    ],
+    [
+     -0.6973,
+     0.501,
+     -0.0115
+    ],
+    [
+     -0.6973,
+     0.501,
+     0.0115
+    ],
+    [
+     -0.742,
+     0.334,
+     -0.0115
+    ],
+    [
+     -0.742,
+     0.334,
+     0.0115
+    ],
+    [
+     -0.6973,
+     0.167,
+     -0.0115
+    ],
+    [
+     -0.6973,
+     0.167,
+     0.0115
+    ],
+    [
+     -0.575,
+     0.0447,
+     -0.0115
+    ],
+    [
+     -0.575,
+     0.0447,
+     0.0115
+    ],
+    [
+     -0.408,
+     0.0,
+     -0.0115
+    ],
+    [
+     -0.408,
+     0.0,
+     0.0115
+    ],
+    [
+     0.5739,
+     0.955,
+     -0.204
+    ],
+    [
+     0.5739,
+     0.915,
+     -0.204
+    ],
+    [
+     0.5739,
+     0.955,
+     0.204
+    ],
+    [
+     0.5739,
+     0.915,
+     0.204
+    ],
+    [
+     -0.2825,
+     0.88,
+     -0.06
+    ],
+    [
+     -0.2825,
+     0.88,
+     0.06
+    ],
+    [
+     0.0,
+     0.27,
+     -0.163
+    ],
+    [
+     0.0,
+     0.27,
+     0.163
+    ]
+   ],
+   "nodes": [
+    "collider",
+    "crank",
+    "frame",
+    "lever_l",
+    "lever_r",
+    "pedal_l",
+    "pedal_r",
+    "spin_f",
+    "spin_r",
+    "steer",
+    "wheel_f",
+    "wheel_r"
+   ],
+   "measured": {
+    "saddle_y": 0.87,
+    "grip_y": 0.935,
+    "bb_y": 0.27,
+    "drop_y": 0.789
+   }
+  },
+  "road-tour": {
+   "file": "road-tour.glb",
+   "mid": "road-tour-mid.glb",
+   "far": "road-far.glb",
+   "body": "road",
+   "variant": "road-tour",
+   "kind": "bike_road",
+   "name": "Merrow Randonneur",
+   "dims": {
+    "length": 1.731,
+    "width": 0.444,
+    "height": 0.998,
+    "front": 0.957,
+    "back": -0.775
+   },
+   "wheelbase": 1.0,
+   "wheel": {
+    "f": {
+     "r": 0.342,
+     "width": 0.032
+    },
+    "r": {
+     "r": 0.342,
+     "width": 0.032
+    }
+   },
+   "head_angle": 73.0,
+   "seat_angle": 73.5,
+   "rake": 0.045,
+   "crank": 0.17,
+   "crank_zero": "the right arm points forward (+x), the left back; pedals level",
+   "pedal": {
+    "from_crank": 0.05,
+    "q": 0.127,
+    "note": "pedal_l/pedal_r origins: the pedal body's centre on its spindle"
+   },
+   "teeth": [
+    38,
+    18
+   ],
+   "rings": [
+    48,
+    38,
+    26
+   ],
+   "cogs": [
+    28,
+    24,
+    21,
+    18,
+    16,
+    14,
+    13
+   ],
+   "points": {
+    "saddle": [
+     -0.2002,
+     0.87,
+     -0.0
+    ],
+    "grip_l": [
+     0.5718,
+     0.95,
+     -0.204
+    ],
+    "drop_l": [
+     0.4248,
+     0.804,
+     -0.208
+    ],
+    "grip_r": [
+     0.5718,
+     0.95,
+     0.204
+    ],
+    "drop_r": [
+     0.4248,
+     0.804,
+     0.208
+    ],
+    "bell": [
+     0.4618,
+     0.966,
+     -0.095
+    ],
+    "lamp_f": [
+     0.6143,
+     0.4321,
+     -0.0731
+    ],
+    "lamp_r": [
+     -0.594,
+     0.699,
+     -0.0
+    ],
+    "stand_foot": [
+     -0.1199,
+     0.0187,
+     -0.1462
+    ],
+    "bb": [
+     0.0,
+     0.278,
+     -0.0
+    ],
+    "hub_f": [
+     0.592,
+     0.342,
+     -0.0
+    ],
+    "hub_r": [
+     -0.408,
+     0.342,
+     -0.0
+    ],
+    "steer_top": [
+     0.3896,
+     0.85,
+     -0.0
+    ],
+    "steer_bottom": [
+     0.4364,
+     0.697,
+     -0.0
+    ]
+   },
+   "steer": {
+    "at": [
+     0.4364,
+     0.697,
+     -0.0
+    ],
+    "axis": [
+     -0.29237,
+     0.9563,
+     -0.0
+    ]
+   },
+   "levers": {
+    "lever_l": {
+     "pull": -0.3,
+     "brake": "rear"
+    },
+    "lever_r": {
+     "pull": -0.3,
+     "brake": "front"
+    }
+   },
+   "kickstand": {
+    "axis": "x",
+    "down": 1.5212,
+    "lean": 0.1222,
+    "lean_side": "left"
+   },
+   "has": {
+    "lamp": "battery",
+    "bell": true,
+    "basket": false,
+    "rack": true,
+    "carrier": false,
+    "pegs": false,
+    "gyro": false,
+    "studs": false,
+    "guards": true,
+    "gears": 21,
+    "hub_gears": 0,
+    "fixed": false,
+    "kickstand": true,
+    "chain_case": false
+   },
+   "materials": [
+    "alloy",
+    "alloy_dark",
+    "canvas",
+    "chain",
+    "chrome",
+    "decal",
+    "emit_head",
+    "emit_tail",
+    "leather",
+    "lens",
+    "lens_red",
+    "nylon",
+    "paint",
+    "paint2",
+    "rubber",
+    "steel",
+    "tape",
+    "trim",
+    "tyre",
+    "webbing"
+   ],
+   "tris": {
+    "near": 44841,
+    "mid": 7656,
+    "far": 484
+   },
+   "bytes": {
+    "near": 653588,
+    "mid": 185648
+   },
+   "colours": [
+    "#5e1a22",
+    "#23402e",
+    "#1d2a44"
+   ],
+   "colour2": "#e2d7b8",
+   "hull": [
+    [
+     0.934,
+     0.342,
+     -0.016
+    ],
+    [
+     0.934,
+     0.342,
+     0.016
+    ],
+    [
+     0.8882,
+     0.513,
+     -0.016
+    ],
+    [
+     0.8882,
+     0.513,
+     0.016
+    ],
+    [
+     0.592,
+     0.0,
+     -0.016
+    ],
+    [
+     0.592,
+     0.0,
+     0.016
+    ],
+    [
+     0.763,
+     0.0458,
+     -0.016
+    ],
+    [
+     0.763,
+     0.0458,
+     0.016
+    ],
+    [
+     0.8882,
+     0.171,
+     -0.016
+    ],
+    [
+     0.8882,
+     0.171,
+     0.016
+    ],
+    [
+     -0.579,
+     0.6382,
+     -0.016
+    ],
+    [
+     -0.579,
+     0.6382,
+     0.016
+    ],
+    [
+     -0.7042,
+     0.513,
+     -0.016
+    ],
+    [
+     -0.7042,
+     0.513,
+     0.016
+    ],
+    [
+     -0.75,
+     0.342,
+     -0.016
+    ],
+    [
+     -0.75,
+     0.342,
+     0.016
+    ],
+    [
+     -0.7042,
+     0.171,
+     -0.016
+    ],
+    [
+     -0.7042,
+     0.171,
+     0.016
+    ],
+    [
+     -0.579,
+     0.0458,
+     -0.016
+    ],
+    [
+     -0.579,
+     0.0458,
+     0.016
+    ],
+    [
+     -0.408,
+     0.0,
+     -0.016
+    ],
+    [
+     -0.408,
+     0.0,
+     0.016
+    ],
+    [
+     0.5718,
+     0.97,
+     -0.204
+    ],
+    [
+     0.5718,
+     0.93,
+     -0.204
+    ],
+    [
+     0.5718,
+     0.97,
+     0.204
+    ],
+    [
+     0.5718,
+     0.93,
+     0.204
+    ],
+    [
+     -0.2802,
+     0.88,
+     -0.06
+    ],
+    [
+     -0.2802,
+     0.88,
+     0.06
+    ],
+    [
+     0.0,
+     0.278,
+     -0.167
+    ],
+    [
+     0.0,
+     0.278,
+     0.167
+    ]
+   ],
+   "nodes": [
+    "collider",
+    "crank",
+    "frame",
+    "kickstand",
+    "lever_l",
+    "lever_r",
+    "pedal_l",
+    "pedal_r",
+    "spin_f",
+    "spin_r",
+    "steer",
+    "wheel_f",
+    "wheel_r"
+   ],
+   "measured": {
+    "saddle_y": 0.87,
+    "grip_y": 0.95,
+    "bb_y": 0.278,
+    "drop_y": 0.804
+   }
+  },
+  "road-fixed": {
+   "file": "road-fixed.glb",
+   "mid": "road-fixed-mid.glb",
+   "far": "road-far.glb",
+   "body": "road",
+   "variant": "road-fixed",
+   "kind": "bike_road",
+   "name": "Merrow Pista",
+   "dims": {
+    "length": 1.669,
+    "width": 0.444,
+    "height": 0.954,
+    "front": 0.927,
+    "back": -0.743
+   },
+   "wheelbase": 1.0,
+   "wheel": {
+    "f": {
+     "r": 0.334,
+     "width": 0.023
+    },
+    "r": {
+     "r": 0.334,
+     "width": 0.023
+    }
+   },
+   "head_angle": 73.0,
+   "seat_angle": 73.5,
+   "rake": 0.045,
+   "crank": 0.17,
+   "crank_zero": "the right arm points forward (+x), the left back; pedals level",
+   "pedal": {
+    "from_crank": 0.05,
+    "q": 0.121,
+    "note": "pedal_l/pedal_r origins: the pedal body's centre on its spindle"
+   },
+   "teeth": [
+    48,
+    16
+   ],
+   "rings": [
+    48
+   ],
+   "cogs": [
+    16
+   ],
+   "points": {
+    "saddle": [
+     -0.2025,
+     0.87,
+     -0.0
+    ],
+    "grip_l": [
+     0.5905,
+     0.935,
+     -0.204
+    ],
+    "drop_l": [
+     0.4385,
+     0.765,
+     -0.208
+    ],
+    "grip_r": [
+     0.5905,
+     0.935,
+     0.204
+    ],
+    "drop_r": [
+     0.4385,
+     0.765,
+     0.208
+    ],
+    "lamp_r": [
+     -0.1961,
+     0.8309,
+     -0.0
+    ],
+    "bb": [
+     0.0,
+     0.27,
+     -0.0
+    ],
+    "hub_f": [
+     0.592,
+     0.334,
+     -0.0
+    ],
+    "hub_r": [
+     -0.408,
+     0.334,
+     -0.0
+    ],
+    "steer_top": [
+     0.3896,
+     0.842,
+     -0.0
+    ],
+    "steer_bottom": [
+     0.4364,
+     0.689,
+     -0.0
+    ]
+   },
+   "steer": {
+    "at": [
+     0.4364,
+     0.689,
+     -0.0
+    ],
+    "axis": [
+     -0.29237,
+     0.9563,
+     -0.0
+    ]
+   },
+   "levers": {
+    "lever_l": {
+     "pull": -0.3,
+     "brake": "rear"
+    },
+    "lever_r": {
+     "pull": -0.3,
+     "brake": "front"
+    }
+   },
+   "kickstand": null,
+   "has": {
+    "lamp": "none",
+    "bell": false,
+    "basket": false,
+    "rack": false,
+    "carrier": false,
+    "pegs": false,
+    "gyro": false,
+    "studs": false,
+    "guards": false,
+    "gears": 1,
+    "hub_gears": 0,
+    "fixed": true,
+    "kickstand": false,
+    "chain_case": false
+   },
+   "materials": [
+    "alloy",
+    "chain",
+    "chrome",
+    "decal",
+    "leather",
+    "lens",
+    "lens_red",
+    "paint",
+    "paint2",
+    "rubber",
+    "steel",
+    "tape",
+    "trim",
+    "tyre",
+    "vinyl"
+   ],
+   "tris": {
+    "near": 33205,
+    "mid": 7667,
+    "far": 484
+   },
+   "bytes": {
+    "near": 492652,
+    "mid": 165264
+   },
+   "colours": [
+    "#151517",
+    "#b9bcc0",
+    "#d9661c"
+   ],
+   "colour2": "#e8e4da",
+   "hull": [
+    [
+     0.926,
+     0.334,
+     -0.0115
+    ],
+    [
+     0.926,
+     0.334,
+     0.0115
+    ],
+    [
+     0.8813,
+     0.501,
+     -0.0115
+    ],
+    [
+     0.8813,
+     0.501,
+     0.0115
+    ],
+    [
+     0.592,
+     0.0,
+     -0.0115
+    ],
+    [
+     0.592,
+     0.0,
+     0.0115
+    ],
+    [
+     0.759,
+     0.0447,
+     -0.0115
+    ],
+    [
+     0.759,
+     0.0447,
+     0.0115
+    ],
+    [
+     0.8813,
+     0.167,
+     -0.0115
+    ],
+    [
+     0.8813,
+     0.167,
+     0.0115
+    ],
+    [
+     -0.575,
+     0.6233,
+     -0.0115
+    ],
+    [
+     -0.575,
+     0.6233,
+     0.0115
+    ],
+    [
+     -0.6973,
+     0.501,
+     -0.0115
+    ],
+    [
+     -0.6973,
+     0.501,
+     0.0115
+    ],
+    [
+     -0.742,
+     0.334,
+     -0.0115
+    ],
+    [
+     -0.742,
+     0.334,
+     0.0115
+    ],
+    [
+     -0.6973,
+     0.167,
+     -0.0115
+    ],
+    [
+     -0.6973,
+     0.167,
+     0.0115
+    ],
+    [
+     -0.575,
+     0.0447,
+     -0.0115
+    ],
+    [
+     -0.575,
+     0.0447,
+     0.0115
+    ],
+    [
+     -0.408,
+     0.0,
+     -0.0115
+    ],
+    [
+     -0.408,
+     0.0,
+     0.0115
+    ],
+    [
+     0.5905,
+     0.955,
+     -0.204
+    ],
+    [
+     0.5905,
+     0.915,
+     -0.204
+    ],
+    [
+     0.5905,
+     0.955,
+     0.204
+    ],
+    [
+     0.5905,
+     0.915,
+     0.204
+    ],
+    [
+     -0.2825,
+     0.88,
+     -0.06
+    ],
+    [
+     -0.2825,
+     0.88,
+     0.06
+    ],
+    [
+     0.0,
+     0.27,
+     -0.161
+    ],
+    [
+     0.0,
+     0.27,
+     0.161
+    ]
+   ],
+   "nodes": [
+    "collider",
+    "crank",
+    "frame",
+    "lever_l",
+    "lever_r",
+    "pedal_l",
+    "pedal_r",
+    "spin_f",
+    "spin_r",
+    "steer",
+    "wheel_f",
+    "wheel_r"
+   ],
+   "measured": {
+    "saddle_y": 0.87,
+    "grip_y": 0.935,
+    "bb_y": 0.27,
+    "drop_y": 0.765
+   }
+  }
+ },
+ "far": {
+  "town": {
+   "file": "town-far.glb",
+   "tris": 516,
+   "bytes": 16916,
+   "from": "town-classic"
+  },
+  "bmx": {
+   "file": "bmx-far.glb",
+   "tris": 492,
+   "bytes": 16536,
+   "from": "bmx-free"
+  },
+  "mtb": {
+   "file": "mtb-far.glb",
+   "tris": 484,
+   "bytes": 16312,
+   "from": "mtb-trail"
+  },
+  "road": {
+   "file": "road-far.glb",
+   "tris": 484,
+   "bytes": 16360,
+   "from": "road-race"
+  }
+ }
+}

@@ -50,7 +50,7 @@ export const CATALOG = {
     surface: PICNIC_TOP,
     top: [1, 3, 7, 5],
   },
-  bike_rack: { label: "Bike rack", w: 3, h: 2, solid: true, buildable: true, outdoor: true, variants: 3, look: 0 },
+  bike_rack: { label: "Bike rack", w: 3, h: 2, solid: true, buildable: true, outdoor: true, variants: 6, look: 0 },
   bus_shelter: {
     label: "Bus shelter",
     w: 3,

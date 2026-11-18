@@ -1,8 +1,10 @@
-import { ANIM, bayId, CAR_COLOURS, faceByte, levelMap, lotLayout, quarterOf } from "@yutopia/shared";
+import { ANIM, bayId, CAR_COLOURS, faceByte, levelMap, lotLayout, quarterOf, quarterYaw } from "@yutopia/shared";
+import { isBikeKind, RACKS } from "@yutopia/shared/bike";
 import {
   addHole,
   BUYABLE,
   bayFor,
+  boxHits,
   burnOut,
   buyLook,
   CAR_FLAGS,
@@ -56,7 +58,6 @@ import {
   plateOf,
   putIn,
   SEATS_OF,
-  boxHits,
   type Solid,
   SPECS,
   type Stored,
@@ -739,12 +740,14 @@ registerFeature((room: WorldRoom) => {
     const vx = l?.veh.vx ?? 0;
     const vz = l?.veh.vz ?? 0;
     const atWheel = !!l && l.seats[0] === client.sessionId;
+    // (plan 101 F5a: thrown off a bike — at any speed: on the ragdoll, the bike rolls on from their client and falls)
+    const fall = !!m?.fall && !!l && isBikeKind(l.veh.kind);
     leaveSeat(client.sessionId, true);
-    if (l && atWheel && sp > OUT_V) l.coaster = client.sessionId;
+    if (l && atWheel && (sp > OUT_V || fall)) l.coaster = client.sessionId;
     const q = room.state.players.get(client.sessionId);
-    if (!l || !q || sp <= OUT_V) return;
+    if (!l || !q || (sp <= OUT_V && !fall)) return;
     const now = Date.now();
-    if (sp < JUMP_STUMBLE_V) {
+    if (sp < JUMP_STUMBLE_V && !fall) {
       q.hitAt = now;
       q.hitYaw = Math.atan2(-vz, -vx);
     } else {
@@ -780,6 +783,13 @@ registerFeature((room: WorldRoom) => {
       towing: v.towing,
       towedBy: v.towedBy,
     };
+    // (plan 101: a bike that fell lies where it fell, on its side — which, by its up's lean: + its right)
+    if (isBikeKind(v.kind)) {
+      const upY = 1 - 2 * (v.qx * v.qx + v.qz * v.qz);
+      const zUpY = 2 * (v.qy * v.qz - v.qw * v.qx);
+      if (upY < 0.55) props.down = -zUpY > 0 ? -1 : 1;
+      else delete props.down;
+    }
     if (!v.chains) delete props.chains;
     if (!v.towing) delete props.towing;
     if (!v.towedBy) delete props.towedBy;
@@ -1207,6 +1217,8 @@ registerFeature((room: WorldRoom) => {
     if (h.wagon) props.wagon = 1;
     if (h.snowy) props.snowy = 1;
     if (h.role) props.role = h.role;
+    // (plan 101: a rack's bike as it was made, its variant and paint)
+    if (h.look) props.look = { ...h.look, extras: [], wheels: "steel" };
     return props;
   };
   const putHome = (h: HomeCar, was?: Record<string, unknown>, fresh = false) => {
@@ -1237,6 +1249,37 @@ registerFeature((room: WorldRoom) => {
         putHome(h, undefined, true);
         made++;
       }
+    // (plan 101: the bikes' racks, furniture where they stand — put where the list has them, moved if it moved; a rack's
+    // bike standing elsewhere, nobody on it, back in its rack at once)
+    for (const r of RACKS) {
+      const o = room.state.objects.get(r.id);
+      const was = o ? fromSchema(o) : null;
+      if (r.bare) {
+        if (o) {
+          room.state.objects.delete(r.id);
+          if (!config.offline) void api.deleteObject(r.id).catch((e) => console.warn("[cars] rack", e.message));
+          made++;
+        }
+        continue;
+      }
+      if (was && was.x === r.x && was.y === r.z && Number(was.props?.variant) === 3) continue;
+      const next = {
+        id: r.id,
+        kind: "bike_rack",
+        x: r.x,
+        y: r.z,
+        yaw: quarterYaw(r.rot),
+        props: { level: 0, variant: 3 },
+      };
+      room.state.objects.set(r.id, toSchema(next));
+      if (!config.offline) void api.putObject(next).catch((e) => console.warn("[cars] rack", e.message));
+      made++;
+      for (const h of HOME_CARS) {
+        if (!h.id.startsWith(`${r.id}-`)) continue;
+        const b = room.state.objects.get(h.id);
+        if (b && !fromSchema(b).props?.driven) putHome(h, fromSchema(b).props ?? {}, true);
+      }
+    }
     if (made) room.rebuildGrid();
   };
   /** A car that lives away from the lot, left away from its home: towed back there (or, `all`, put back). */
@@ -1953,9 +1996,7 @@ registerFeature((room: WorldRoom) => {
             const cz = nz + Math.sin(v.a) * off;
             const hit: Solid[] = [];
             carWorld.solids(cx, cz, Math.max(b.ahead, b.behind) + 1, hit);
-            const blocked = hit.some(
-              (o) => !o.soft && boxHits(cx, cz, (b.ahead + b.behind) / 2, b.width / 2, v.a, o),
-            );
+            const blocked = hit.some((o) => !o.soft && boxHits(cx, cz, (b.ahead + b.behind) / 2, b.width / 2, v.a, o));
             if (blocked) {
               v.vx = v.vz = 0;
             } else {

@@ -110,6 +110,14 @@ export class CarInput {
   keyUp(code: string) {
     this.keys.delete(code);
   }
+  /** (plan 101) a key held now (a bike's Shift, Q, Z, E) */
+  held(...codes: string[]): boolean {
+    return codes.some((c) => this.keys.has(c));
+  }
+  /** (plan 101) a pad's button held now */
+  padHeld(pad: Gamepad | null, i: number): boolean {
+    return (pad?.buttons[i]?.value ?? 0) > 0.5;
+  }
   clear() {
     this.keys.clear();
     this.pressed = [];
@@ -209,4 +217,8 @@ const DRIVE_KEYS = new Set([
   "ArrowLeft",
   "ArrowRight",
   "Space",
+  // (plan 101: a bike's — stood on the pedals, the weight back and forward)
+  "ShiftLeft",
+  "ShiftRight",
+  "KeyZ",
 ]);

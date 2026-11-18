@@ -56,7 +56,14 @@ const ALL_PARTS = (1 << 28) - 1;
 export const PANES = ["screen", "rear", "fl", "fr", "rl", "rr"] as const;
 export type Pane = 0 | 1 | 2 | 3 | 4 | 5;
 /** each pane's first crack, and its being gone */
-export const PANE_CRACK = [PART.screen, PART.rearCrack, PART.crackFL, PART.crackFR, PART.crackRL, PART.crackRR] as const;
+export const PANE_CRACK = [
+  PART.screen,
+  PART.rearCrack,
+  PART.crackFL,
+  PART.crackFR,
+  PART.crackRL,
+  PART.crackRR,
+] as const;
 export const PANE_GONE = [PART.screenGone, PART.rearGone, PART.goneFL, PART.goneFR, PART.goneRL, PART.goneRR] as const;
 /** every glass bit (what the garage's new glass mends) */
 export const GLASS_BITS =

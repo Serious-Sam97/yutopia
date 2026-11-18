@@ -87,7 +87,8 @@ export const PART_ROUNDS: Record<"lid" | "door" | "bumper" | "mirror", [number, 
   bumper: [3, 6],
   mirror: [1, 1],
 };
-export const isShotPart = (x: unknown): x is ShotPart => typeof x === "string" && (SHOT_PARTS as readonly string[]).includes(x);
+export const isShotPart = (x: unknown): x is ShotPart =>
+  typeof x === "string" && (SHOT_PARTS as readonly string[]).includes(x);
 
 /** (plan 96 F4a) Which part of a car's skin a point is in, as near as its box tells (the shooter's screen names it
  *  from the model; this, for a round the box took): the bonnet ahead of the cabin from above or high on its front,
@@ -278,7 +279,9 @@ export function carAlong(
     pane,
     through,
     // (plan 96 F4a: the part of its skin, as the box tells)
-    ...((struck === "panel" || struck === "engine") && partAt(s, u, w, h, face) ? { part: partAt(s, u, w, h, face) as ShotPart } : {}),
+    ...((struck === "panel" || struck === "engine") && partAt(s, u, w, h, face)
+      ? { part: partAt(s, u, w, h, face) as ShotPart }
+      : {}),
   };
 }
 
@@ -404,11 +407,13 @@ export function claimShot(
   if (off > 0.45 + 0.03 * t) return null;
   const struck: Struck = STRUCK.includes(c.s) ? c.s : "panel";
   const face = Math.max(0, Math.min(4, Math.round(c.f))) as Zone;
-  const which = struck === "tyre" ? Math.max(0, Math.min(3, Math.round(c.n ?? 0))) : struck === "lamp" ? (c.n ? 1 : 0) : 0;
+  const which =
+    struck === "tyre" ? Math.max(0, Math.min(3, Math.round(c.n ?? 0))) : struck === "lamp" ? (c.n ? 1 : 0) : 0;
   let pane: Pane | -1 = -1;
   if (struck === "glass") {
     const p = Math.round(c.p ?? -1);
-    pane = p >= 0 && p <= 5 ? (p as Pane) : face === 0 ? 0 : face === 1 ? 1 : sidePane(face === 2, c.u > frontRowEnd(s));
+    pane =
+      p >= 0 && p <= 5 ? (p as Pane) : face === 0 ? 0 : face === 1 ? 1 : sidePane(face === 2, c.u > frontRowEnd(s));
   }
   const through =
     struck === "glass" ||

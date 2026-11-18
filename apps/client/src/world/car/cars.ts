@@ -1,4 +1,6 @@
 import { BODY_R, face8, parseAvatar, type WorldObjectDef } from "@yutopia/shared";
+import { BIKE_VARIANTS, type BikeSpec, packBike, unpackBike } from "@yutopia/shared/bike";
+import { BikeDrive, bikeDefOf } from "@yutopia/shared/bike/drive";
 import {
   beltOf,
   bodyOf,
@@ -114,10 +116,12 @@ import { prefs, type Quality } from "@/lib/prefs";
 import { chars as charsMod } from "../art/chars-load";
 import { pets as petsMod } from "../art/pets-load";
 import { mixer } from "../audio";
+import { poseBike, type RiderNow, riderAct, riderHands, riderRoot } from "../bike/pose";
 import { litMaterial } from "../look/lit";
 import { activePad } from "../pads";
 import { Radio } from "../sound";
 import { hud, toast } from "../store";
+import { BikeModel } from "../tp/bike/model";
 import { CarCamera } from "../tp/car/camera";
 import { buildCar, buildFar, carManifest, hullPoints, loadCarManifest, preloadCars } from "../tp/car/glb";
 import type { Sedan } from "../tp/car/model";
@@ -245,6 +249,14 @@ addStrings(
     carH_kLean: ["lean", "inclinar"],
     carH_kDrag: ["drag your feet", "frear com os pés"],
     carH_kOff: ["off", "descer"],
+    // (plan 101) a bike's keys
+    bikeH_kPedal: ["pedal · ⇧ sprint", "pedalar · ⇧ arrancar"],
+    bikeH_kBrake: ["brake", "frear"],
+    bikeH_kSteer: ["lean into the turn", "inclinar na curva"],
+    bikeH_kHop: ["hold · let go: hop", "segure · solte: pulo"],
+    bikeH_kWeight: ["wheelie · stoppie (with S)", "empinar · stoppie (com S)"],
+    bikeH_kTrick: ["in the air: a trick (+ A/D, W, S)", "no ar: manobra (+ A/D, W, S)"],
+    bikeH_kLamp: ["lamp · H bell", "farol · H campainha"],
     carH_engCold: ["cold", "frio"],
     carH_engWarm: ["warm", "quente"],
     carH_engHot: ["hot", "muito quente"],
@@ -558,6 +570,8 @@ interface LiveView {
   doorW?: number[];
   /** (plan 98) a door the timer opened: shut by it too */
   doorT?: boolean[];
+  /** (plan 101) a bike's rider as last posed (another's: eased from their states) */
+  rider?: RiderNow;
   accV?: Vector3;
   accB?: Vector3;
   /** (plan 98 phase 13) its driven wheels' turn (rad), spun by their slip too */
@@ -850,8 +864,10 @@ export class Cars {
     seat: number;
     sim: CarState | null;
     rig: CarRig | null;
-    /** the car on Jolt (docs/plan/92): made once the 3D view's physics is in */
-    drive: Drive | null;
+    /** the car on Jolt (docs/plan/92): made once the 3D view's physics is in — (plan 101) a bike's its own */
+    drive: Drive | BikeDrive | null;
+    /** (plan 101) thrown off my bike: told the server once */
+    fellSent?: boolean;
     acc: number;
     seq: number;
     sentAt: number;
@@ -2618,6 +2634,10 @@ export class Cars {
       const pad = p.level === "near" ? 2 : 0;
       const padM = p.level === "mid" || p.level === "near" ? 4 : 0;
       const want: "near" | "mid" | "far" = camD < near + pad ? "near" : camD < MID + padM || !body ? "mid" : "far";
+      // (plan 101: a bike has no far outline — past a hundred and forty metres, not drawn, nor made)
+      const bikeK = !!p.spec.bike;
+      if (bikeK && p.full) p.full.root.visible = camD < BIKE_SHOWN;
+      if (bikeK && camD > BIKE_SHOWN && !p.full) continue;
       // (nothing built till the cars' manifest is in: a moment after the chunk)
       const r = carManifest() ? tp?.renderer : undefined;
       // (its dents changed since its still model was made — knocked where it stands: made again, the old one
@@ -2702,6 +2722,12 @@ export class Cars {
         p.full.setHoles?.(parseHoles(o.props?.holes));
         p.full.setChains?.(chainsOf(o.props), p.spec.wheel.r, p.spec.wheel.width);
         p.wearKey = wk;
+        // (plan 101: a bike stands on its kickstand, leant onto it; one that fell lies on its side)
+        if (p.full instanceof BikeModel) {
+          p.full.setStand(o.props?.down ? 0 : 1);
+          const down = Number(o.props?.down) || 0;
+          p.full.body.rotation.x = down ? Math.sign(down) * 1.38 : p.full.standLean;
+        }
         // (a mid model's dents pressed in and its pieces merged: most parked cars round you; a near one — a car or
         // two, its whole cabin — left as it was: merging it is a long frame, every time one comes near)
         if (p.level === "mid") {
@@ -3310,9 +3336,15 @@ export class Cars {
       const seatAt = seat.hip;
       const act = g.act;
       const across = act ? 1 - act.sat : 0;
+      // (plan 101: a bike's rider — her root under its saddle, forward as she stands)
+      const rider = l.model instanceof BikeModel ? this.riderOf(l, dtSeat) : null;
       if (act) {
         e.m.root.position.set(act.hips.x, 0, act.hips.z);
         e.m.root.rotation.y = act.yaw;
+      } else if (rider && l.model instanceof BikeModel) {
+        riderRoot(l.model, rider, hF2);
+        e.m.root.position.copy(hF2);
+        e.m.root.rotation.y = -Math.PI / 2;
       } else {
         e.m.root.position.set(g.slide?.x ?? seatAt.x, 0, g.slide?.z ?? seatAt.z);
         e.m.root.rotation.y = -Math.PI / 2;
@@ -3340,7 +3372,13 @@ export class Cars {
         if (jolt) fit.jolt = jolt * (1 - across);
         // (aiming: the head turned out of their side's window)
         if (aimDir) fit.look = (Math.sign(l.model.seats[e.seat]?.hip.z ?? 1) || 1) * 1.1;
-        const sat = A.car3(fit, this.time, e.seat * 1.7);
+        // (plan 101: on a bike, its rider's pose — the pedals, the saddle, the bars — in place of a seat's)
+        let sat = A.car3(fit, this.time, e.seat * 1.7);
+        if (rider && l.model instanceof BikeModel) {
+          const ra = riderAct(A, l.model, rider, riderRoot(l.model, rider, hF2), fit.stand, this.time).act;
+          ra.lift = [0, (ra.lift?.[1] ?? 0) - fit.drop, 0];
+          sat = ra;
+        }
         const l3 = sat.lift ?? [0, 0, 0];
         if (act && act.sat < 1) {
           // (the act in her own space: the root under the hips, facing `yaw` — act-pose.ts)
@@ -3363,7 +3401,9 @@ export class Cars {
           if (sat.hands) e.m.handsTo(sat.hands);
         }
       } else e.m.setPose(C2.carPose(driver), [0, e.m.sitDrop((seatAt.y + 0.02) / s), 0]);
-      if (driver && across < 1) this.driverHands(l, e, 1 - across, going);
+      if (rider && l.model instanceof BikeModel) {
+        if (across < 1) riderHands(e.m, l.model, rider, 1 - across);
+      } else if (driver && across < 1) this.driverHands(l, e, 1 - across, going);
       // (plan 98) the hands on the door and the roof: its handle from outside, its frame, its pull from in (after the
       // wheel's: they win)
       if (act && g.way) {
@@ -3398,10 +3438,75 @@ export class Cars {
             dbg.push({ S, at: hs.map((h) => `${h.at}:${h.w.toFixed(2)}`).join(" "), wrist: L(w), shoulder: L(sh) });
           }
       }
+      if (rider) continue;
       this.seatGun(l, sid, e, aimDir, across);
       this.armOut(l, e, across, going, dtSeat);
       this.bodyLife(l, e, driver, across, going, latG, dtSeat);
     }
+    // (plan 101: the bike's own parts as its rider rides it — or nobody's, rolling on)
+    if (l.model instanceof BikeModel) poseBike(l.model, this.riderOf(l, 0));
+  }
+
+  /** (plan 101) How a bike's rider rides it now: mine (or the one rolling on from me) from its drive; another's from
+   *  its last state (its cranks turned by its cadence, its stood and crouched eased). */
+  private riderOf(l: LiveView, dt: number): RiderNow {
+    const r = this.riderNow(l, dt);
+    // (the poses' stills, e2e/bike-poses.mts: the rider held as asked)
+    const held = (globalThis as { __bikeRider?: Partial<RiderNow> }).__bikeRider;
+    return held ? { ...r, ...held } : r;
+  }
+  private riderNow(l: LiveView, dt: number): RiderNow {
+    const b = l.spec.bike as BikeSpec;
+    const d =
+      this.mine?.vid === l.id && this.mine.drive instanceof BikeDrive
+        ? this.mine.drive
+        : this.coast?.vid === l.id && this.coast.drive instanceof BikeDrive
+          ? this.coast.drive
+          : null;
+    if (d) {
+      const k = d.bk;
+      return {
+        crank: k.crank,
+        effort: k.effort,
+        stand: k.stand,
+        charge: k.charge,
+        foot: k.fell ? 0 : k.foot,
+        trick: k.trick,
+        trickT: k.trickT,
+        steer: d.s.str,
+        brake: k.brake,
+        bend: b.bend,
+        air: k.air > 0,
+      };
+    }
+    const last = l.pb.buf[l.pb.buf.length - 1];
+    const w = unpackBike(last?.fl ?? 0);
+    const r = (l.rider ??= {
+      crank: 0,
+      effort: 0,
+      stand: 0,
+      charge: 0,
+      foot: 0,
+      trick: null,
+      trickT: 0,
+      steer: 0,
+      brake: 0,
+      bend: b.bend,
+      air: false,
+    });
+    if (dt > 0) {
+      r.crank = (r.crank + ((last?.rpm ?? 0) / 60) * Math.PI * 2 * dt) % (Math.PI * 2);
+      const to = (x: number, y: number, k: number) => x + (y - x) * Math.min(1, dt * k);
+      r.stand = to(r.stand, w.stand ? 1 : 0, 5);
+      r.charge = to(r.charge, w.crouch ? 1 : 0, 8);
+      r.effort = to(r.effort, (last?.thr ?? 0) / 100, 6);
+      r.steer = to(r.steer, last?.steer ?? 0, 12);
+      r.brake = to(r.brake, (last?.fl ?? 0) & CAR_FLAGS.brake ? 1 : 0, 10);
+    }
+    r.foot = w.foot;
+    r.trick = w.trick;
+    r.trickT = w.trickT;
+    return r;
   }
 
   /** (plan 93 S8) The rest of a body in a car, after its hands are set: the driver backing up with an arm over the
@@ -4935,7 +5040,7 @@ export class Cars {
   }
 
   /** My car on Jolt (docs/plan/92 phase 3): made in the 3D view's physics once it's in. */
-  private joltUp(m: NonNullable<Cars["mine"]>): Drive | null {
+  private joltUp(m: NonNullable<Cars["mine"]>): Drive | BikeDrive | null {
     if (m.drive) return m.drive;
     const s = m.sim;
     const ph = this.physics();
@@ -4943,15 +5048,23 @@ export class Cars {
     ph.drivingAt(s.p.x, s.p.z, s.v.x, s.v.z);
     ph.ownCar(m.vid, true);
     // (its hull the model's own collider, where the manifest has it: docs/plan/92 phase 9)
-    const def = defOf(s.spec);
+    // (plan 101: a bike's two wheels, its rider's hull)
+    const bike = !!s.spec.bike;
+    const def = bike ? bikeDefOf(s.spec) : defOf(s.spec);
     const lv = this.live.get(m.vid);
-    if (lv) def.hull.pts = hullPoints(lv.look.variant, s.spec.cog);
+    if (lv && !bike) def.hull.pts = hullPoints(lv.look.variant, s.spec.cog);
     const car = ph.carWorld.addCar(def, s.p.x, s.p.y + 0.03, s.p.z, [s.q.x, s.q.y, s.q.z, s.q.w], m.vid);
     if (!car) return null;
     car.setVelocity([s.v.x, s.v.y, s.v.z], [s.w.x, s.w.y, s.w.z]);
     if (Math.hypot(s.v.x, s.v.z) > 0.5)
       for (let i = 0; i < 4; i++) car.setSpin(i, Math.hypot(s.v.x, s.v.z) / s.spec.wheel.r);
-    m.drive = new Drive(s, car);
+    if (bike) {
+      const bd = new BikeDrive(s, car);
+      const bv = BIKE_VARIANTS[lv?.look.variant ?? ""];
+      bd.studs = !!bv?.studs;
+      bd.fixed = !!bv?.fixed;
+      m.drive = bd;
+    } else m.drive = new Drive(s, car);
     m.drive.prime();
     return m.drive;
   }
@@ -4963,6 +5076,17 @@ export class Cars {
     if (!l) return;
     const pad = activePad();
     const { c, switches } = this.input.read(pad);
+    // (plan 101) a bike's keys: Space the hop (held, its charge; let go, it hops), Shift stood on the pedals, Q the
+    // weight back, Z forward, E the trick; a pad's A, L3, LB, RB, B
+    const bike = !!l.spec.bike;
+    if (bike) {
+      const I = this.input;
+      c.hop = c.hand > 0.5;
+      c.hand = 0;
+      c.sprint = I.held("ShiftLeft", "ShiftRight") || I.padHeld(pad, 10);
+      c.lean = (I.held("KeyQ") || I.padHeld(pad, 4) ? 1 : 0) - (I.held("KeyZ") || I.padHeld(pad, 5) ? 1 : 0);
+      c.trick = I.held("KeyE") || I.padHeld(pad, 1);
+    }
     // (plan 98 F2a) still getting in: nothing drives it yet — the handbrake on; walked off (a move early, before a foot's
     // in), the act let go: out again, no climbing out
     const actT = this.myActT();
@@ -4979,6 +5103,17 @@ export class Cars {
       c.hand = 1;
     }
     for (const sw of switches) {
+      // (plan 101: a bike has no gears, wipers, radio, window, siren, pump or diffs)
+      if (
+        bike &&
+        sw !== "lights" &&
+        sw !== "camera" &&
+        sw !== "exit" &&
+        sw !== "unstick" &&
+        sw !== "keys" &&
+        sw !== "lock"
+      )
+        continue;
       // (on its roof or its side, still: R puts it back on its wheels — the radio's key otherwise)
       if (sw === "radio" && m.drive?.canRight && m.drive.right(this.world)) {
         m.rig?.snap();
@@ -5021,7 +5156,9 @@ export class Cars {
       }
       // (plan 98 phase 7, F6a) sat: the key turned — the dash's self-test, the starter cranking (longer cold) and
       // heard by others, then it catches; the throttle cuts the crank short
-      if (!dead && !getting && (!m.started || (m.dry && s.fuel > 0.3 && !vw?.filling))) {
+      // (plan 101: a bike goes as you pedal)
+      if (bike && !m.started) m.started = true;
+      if (!dead && !getting && !bike && (!m.started || (m.dry && s.fuel > 0.3 && !vw?.filling))) {
         if (m.crankAt === undefined) {
           const cold = Math.max(0, Math.min(1, 1 - s.temp / 0.55));
           m.crankAt = this.time;
@@ -5083,6 +5220,13 @@ export class Cars {
         // (a long stall: the time beyond a few steps let go, not caught up)
         if (n === CAR_STEPS_MAX) m.acc = Math.min(m.acc, CAR_STEP);
         ph.carStepped = true;
+        // (plan 101 F5a: thrown off my bike — out on the ragdoll, the bike rolls on and falls, mine till it lies still)
+        if (d instanceof BikeDrive && d.bk.fell && !m.fellSent && m.seat === 0) {
+          m.fellSent = true;
+          this.cancelled = l.id;
+          this.coastWant = l.id;
+          room.send("car:leave", { jump: true, fall: true });
+        }
         this.scraping(s);
         if (d.canRight && this.time - this.rightToast > 8) {
           this.rightToast = this.time;
@@ -5375,6 +5519,9 @@ export class Cars {
     if (s.hb > 0.5) f |= CAR_FLAGS.hand;
     if (this.siren) f |= CAR_FLAGS.siren;
     f |= (this.station & 3) << 14;
+    // (plan 101: a bike's own — stood, crouched, its trick, a foot down)
+    const bd = this.mine?.drive;
+    if (bd instanceof BikeDrive && bd.s === s) f |= packBike(bd.bk);
     return f;
   }
 
@@ -6506,6 +6653,18 @@ export class Cars {
         [["C"], t("carH_kCamera")],
         [["X"], t("carH_kOut")],
       ];
+    if (m.sim?.spec.bike)
+      return [
+        [["W"], t("bikeH_kPedal")],
+        [["S"], t("bikeH_kBrake")],
+        [["A", "D"], t("bikeH_kSteer")],
+        [["␣"], t("bikeH_kHop")],
+        [["Q", "Z"], t("bikeH_kWeight")],
+        [["E"], t("bikeH_kTrick")],
+        [["L"], t("bikeH_kLamp")],
+        [["C"], t("carH_kCamera")],
+        [["X"], t("carH_kOff")],
+      ];
     if (m.sim?.spec.pushed)
       return [
         [["W"], t("carH_kPush")],
@@ -6847,6 +7006,8 @@ const HOP_UP = 0.9;
 const HOP_S = 2.2;
 const hq = new Quaternion();
 const he = new Euler();
+/** (plan 101) A parked bike's drawn within this of the camera (m): it has no far outline. */
+const BIKE_SHOWN = 140;
 function placeModel(root: TGroup | Mesh, x: number, y: number, z: number, a: number) {
   root.position.set(x, y, z);
   root.rotation.set(0, Math.PI - a, 0);

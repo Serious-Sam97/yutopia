@@ -502,7 +502,8 @@ export interface ClientMessages {
   "car:look": { id: string; look: CarLook };
   // the owner lends their own's keys to someone (their uid), or takes them back (null)
   "car:lend": { to: number | null };
-  "car:leave": { jump?: boolean };
+  /** (plan 101) `fall`: thrown off a bike, at any speed */
+  "car:leave": { jump?: boolean; fall?: boolean };
   "car:swap": Record<string, never>;
   "car:hit": { other: string; j: number; vx: number; vz: number; m: number; x: number; z: number };
   "car:state": CarWire;

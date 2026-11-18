@@ -52,6 +52,7 @@ import { AssetQueue, loadLifeGLTF } from "../../look/life-assets";
 import { libMaterial } from "../../look/life-matlib";
 import { LIBRARY, type MatId } from "../../look/life-matlib-list";
 import { litMaterial } from "../../look/lit";
+import { BikeModel, isBikeVariant, loadBikeManifest } from "../bike/model";
 import { mergeWith } from "../merge-static";
 import { lampPatch, tailPatch } from "../tail-glow";
 import { layerShader } from "../wx3d";
@@ -128,6 +129,8 @@ export function loadCarManifest(): Promise<CarManifest> {
       if (!r.ok) throw new Error(`cars manifest: ${r.status}`);
       return r.json() as Promise<CarManifest>;
     })
+    // (plan 101: the bikes' with it — every model's numbers in before the first is made)
+    .then((m) => loadBikeManifest().then(() => m))
     .then((m) => {
       manifest = m;
       return m;
@@ -154,7 +157,8 @@ export function hullPoints(variant: string, cog: number): number[] | undefined {
 /** The manifest's entry for a variant (or the work vehicle of that kind); the saloon's if it has none. */
 export function entryOf(variant: string): ManifestCar | null {
   const m = manifest;
-  if (!m) return null;
+  // (plan 101: a bike has none — its own manifest's, tp/bike/model.ts)
+  if (!m || isBikeVariant(variant)) return null;
   return m.cars[variant] ?? m.cars[`${variant}-base`] ?? m.cars["saloon-base"] ?? null;
 }
 
@@ -693,6 +697,8 @@ interface Part {
 
 /** A car's model from its Blender file: made now, its geometry in when the file is (`ready`). */
 export function buildCar(o: BuildCar): Sedan {
+  // (plan 101: a bicycle's its own model)
+  if (isBikeVariant(o.variant)) return new BikeModel(o);
   return new GlbCar(o);
 }
 

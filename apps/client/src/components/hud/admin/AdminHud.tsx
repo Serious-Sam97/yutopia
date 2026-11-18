@@ -32,7 +32,20 @@ const STRIP = [
   { k: "unhurt", bit: 16 },
 ] as const;
 
-const MODELS = ["sedan", "offroad", "pickup", "snowmobile", "snowcat", "tractor", "ploughtruck", "toboggan"];
+const MODELS = [
+  "sedan",
+  "offroad",
+  "pickup",
+  "snowmobile",
+  "snowcat",
+  "tractor",
+  "ploughtruck",
+  "toboggan",
+  "bike_town",
+  "bike_bmx",
+  "bike_mtb",
+  "bike_road",
+];
 const ITEMS = [
   "mug",
   "cup",

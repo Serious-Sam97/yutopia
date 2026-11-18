@@ -1,3 +1,4 @@
+import { RACKS, rackSpots } from "../bike/racks.ts";
 import { BUILDINGS, MOTORS, TOWN_CARS, TRACTOR } from "../grounds.ts";
 import type { CarKind } from "./specs.ts";
 
@@ -20,6 +21,8 @@ export interface HomeCar {
   wagon?: boolean;
   snowy?: boolean;
   role?: CarRole;
+  /** (plan 101) its look as made (a rack's bike: its variant and paint) */
+  look?: { variant: string; colour: number };
 }
 
 export const HOME_CARS: HomeCar[] = (() => {
@@ -69,6 +72,20 @@ export const HOME_CARS: HomeCar[] = (() => {
     { id: "farm-tractor", x: TRACTOR.x, z: TRACTOR.z, a: TRACTOR.ry, model: "tractor", colour: 1, snowy: true },
     { id: "pond-toboggan", x: -306, z: -54, a: 0, model: "toboggan", colour: 5 },
   );
+  // (plan 101) the town's bikes, each in its rack
+  for (const r of RACKS)
+    rackSpots(r).forEach((p, i) => {
+      const b = r.bikes[i];
+      out.push({
+        id: b.id,
+        x: p.x,
+        z: p.z,
+        a: p.a,
+        model: b.model,
+        colour: 0,
+        look: { variant: b.variant, colour: b.colour },
+      });
+    });
   // (wave 4) the car dealer's forecourt: one of each, swept clean (docs/plan/43-the-spot.md)
   const SHOW: Record<string, number> = {
     sedan: 3,
