@@ -21,6 +21,7 @@ import {
 } from "@yutopia/shared/skate";
 import { thrown } from "../tp/thrown";
 import { SkateHud } from "./hud";
+import { skateSound } from "./sound";
 
 const CODES: Record<string, keyof SkateKeys | null> = {
   KeyW: "up",
@@ -72,7 +73,7 @@ export class SkateRide {
     if (!b) return;
     if (b.skate) {
       b.skate = null;
-      this.host.sound?.("off");
+      this.sound("off");
       return;
     }
     if (b.swim || b.flow || b.verb) return;
@@ -80,7 +81,7 @@ export class SkateRide {
     this.stance = stance;
     this.hud ??= new SkateHud();
     startSkate(b, variant, stance);
-    this.host.sound?.("on");
+    this.sound("on");
   }
 
   /** A key (ctl/input.ts, before the walker's): true, it's the board's. */
@@ -153,25 +154,30 @@ export class SkateRide {
   /** What the steps said this frame (the body after them). */
   after(evs: SkateEvents[], b: Body, dt: number) {
     for (const e of evs) {
-      if (e.ollie) this.host.sound?.("pop");
-      if (e.land !== undefined) this.host.sound?.("land", e.land);
-      if (e.grind) this.host.sound?.(`grind:${e.grind}`);
+      if (e.ollie) this.sound("pop");
+      if (e.land !== undefined) this.sound("land", e.land);
+      if (e.grind) this.sound(`grind:${e.grind}`);
       if (e.combo) this.hud?.ended(e.combo.score, false);
       if (e.lost) this.hud?.ended(e.lost.score, true);
-      if (e.off !== undefined) this.host.sound?.("off", e.off);
+      if (e.off !== undefined) this.sound("off", e.off);
       if (e.bail) {
         // onto the ragdoll at the speed I had, the board shot on (plan 58's fall, as thrown from a car)
         thrown.set(this.host.sid(), { v: [b.vx, Math.max(1.2, b.vz), b.vy], at: performance.now() });
         this.bailUntil = 1.5;
-        this.host.sound?.("bail");
+        this.sound("bail");
       }
     }
     this.bailUntil = Math.max(0, this.bailUntil - dt);
     const k = b.skate;
+    const snd = skateSound();
     if (!k) {
       this.hud?.show(null);
+      snd?.hush();
       return;
     }
+    // the wheels, a grind, a push (the ground's roughness from the step's own: plan 103 F8a)
+    const g = k.grind ? (k.grind.what === "ledge" ? "ledge" : "steel") : null;
+    snd?.update(Math.abs(k.s), k.rough, g, k.mode === "air" || k.mode === "wall", k.push);
     const bal = k.grind ? k.grind.bal : k.manual ? k.manual.bal : k.lip ? k.lip.bal : undefined;
     this.hud?.show({
       name: k.combo.name,
@@ -186,6 +192,12 @@ export class SkateRide {
   code(b: Body | null): number {
     if (b?.skate) return skateCode(b.skate);
     return this.bailUntil > 0 ? SKATE_BAIL : 0;
+  }
+
+  /** A moment heard (the host's, else the board's own). */
+  private sound(what: string, k?: number) {
+    if (this.host.sound) this.host.sound(what, k);
+    else skateSound()?.hit(what, k);
   }
 
   dispose() {

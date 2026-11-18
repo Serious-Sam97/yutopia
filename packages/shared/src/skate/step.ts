@@ -133,6 +133,8 @@ export interface SkateNow {
   push: number;
   pushing: boolean;
   lean: number;
+  /** how rough the ground under the wheels is (0 smooth … 1: the sound's) */
+  rough: number;
   air: AirNow | null;
   grind: GrindNow | null;
   manual: (Balance & { id: TrickId }) | null;
@@ -192,6 +194,7 @@ export function startSkate(b: Body, variant: BoardVariant, stance: 1 | -1 = 1): 
     push: 0,
     pushing: false,
     lean: 0,
+    rough: 0,
     air: b.up ? newAir(false, false) : null,
     grind: null,
     manual: null,
@@ -359,6 +362,7 @@ function roll(
   const feel = BOARD_FEEL[shapeOf(k.variant)];
   const foot = underwheel(k.on ? "floor" : env.footing(b.x, b.y));
   k.since += dt;
+  k.rough = foot.rough;
   const speed = Math.abs(k.s);
 
   // the carve: tighter the slower, a kick turn at a crawl
