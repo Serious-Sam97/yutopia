@@ -17,7 +17,15 @@ const OWN = new Set<string>(["stairs", "elevator"]);
 // (the life look's cushions dip where they're sat or leant on, plan 73 phase 6: a window seat's back
 // cushions, leant back against the wall, top out a little under their shape)
 const SAGS = new Map<string, number>([["window_seat", 0.1]]);
+// (plan 103/104: a skate ramp's toe — the transition's first stretch, under a walker's step — has no box under it,
+// a board rides the profile and a walker steps onto it; its shapes sit inside its drawing)
 const SOFT = new Set<string>([
+  "sk_quarter",
+  "sk_vert",
+  "sk_mini",
+  "sk_kicker",
+  "sk_funbox",
+  "sk_spine",
   "plant",
   "decor",
   "lamp",

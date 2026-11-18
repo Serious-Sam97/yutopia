@@ -505,15 +505,15 @@ try {
       await page.waitForTimeout(250);
       await page.keyboard.up("Space");
       await page.waitForTimeout(100);
-      await page.keyboard.press("KeyE");
+      await page.keyboard.press("KeyJ");
       await page.waitForTimeout(1500);
       // the bail
       await page.keyboard.down("Space");
       await page.waitForTimeout(250);
       await page.keyboard.up("Space");
-      await page.keyboard.down("KeyD");
+      await page.keyboard.down("KeyE");
       await page.waitForTimeout(260);
-      await page.keyboard.up("KeyD");
+      await page.keyboard.up("KeyE");
       // (thrown off, the board's where it rolled: back in the hand after 8 s — skate/ride.ts)
       await page.waitForTimeout(8500);
       await ride();
