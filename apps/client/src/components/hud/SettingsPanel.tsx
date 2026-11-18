@@ -489,6 +489,16 @@ function ViewPage() {
           <Toggle label={t("hands1p")} value={p.hands1p} onChange={(v) => setPrefs({ hands1p: v })} />
         )}
         <Toggle label={t("carManual")} value={p.carManual} onChange={(v) => setPrefs({ carManual: v })} />
+        <p className="text-[12.5px] leading-snug mt-3 mb-1.5" style={{ color: "var(--cream-dim)" }}>
+          {t("carReflect")}
+        </p>
+        <Choice
+          options={["auto", "on", "off"] as const}
+          value={p.carReflect}
+          cols={3}
+          label={(v) => t(`carReflect_${v}`)}
+          onPick={(v) => setPrefs({ carReflect: v })}
+        />
       </Card>
     </>
   );

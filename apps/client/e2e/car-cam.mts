@@ -91,6 +91,14 @@ for (let i = 0; i < 18; i++) {
   })));
 }
 if (process.env.OUT) await page.screenshot({ path: `${process.env.OUT}/cam-back.png` });
+// (plan 98 phase 22: the reflection probe's cost, High)
+await page.keyboard.up("KeyS");
+await page.keyboard.down("Space");
+await page.waitForTimeout(3000);
+await page.evaluate(() => ((window as any).__yutopia.cars.envFaces.length = 0));
+await page.waitForTimeout(32000);
+console.log("probe faces ms (at rest)", JSON.stringify(await page.evaluate(() => (window as any).__yutopia.cars.envFaces)));
+await page.keyboard.up("Space");
 await page.keyboard.up("KeyS");
 await page.evaluate(() => (window as any).__yutopia.room.send("mod:hour", { h: null }));
 await browser.close();

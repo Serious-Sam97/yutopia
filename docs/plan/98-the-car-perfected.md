@@ -553,3 +553,16 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
 - **Through water:** a spray off each wheel in it by how fast (the world's `waterAt`), a bow wave off the front ones.
 - Not done: rain-washed streaks, snow caked in the arches, the exhaust's shimmer and drips.
 - Checked: typecheck clean; a still of the car (the shader compiles, no WebGL errors on the console).
+
+## Phase 22 — built in part (2026-11-17): reflections
+
+- **The world in the paint (F7):** a reflection probe — a 128 px cube caught round my car (my own car out of it), out
+  to 60 m, PMREM'd for every car's paint and chrome — instead of the three-colour sky. **On High by itself; Settings →
+  "Car reflections": On High / On / Off** (`prefs.carReflect`, EN/PT).
+- **Its cost, measured** (`e2e/car-cam.mts`, High): all six faces at once was 30–230 ms a capture (900 with its
+  compiles) — so a face a frame, every 10 s, each face's programs compiled first off the frame (`compileAsync`), and
+  not while I'm going faster than 8 m/s (what's new round a fast car is uploaded the first time a face draws it:
+  0.2–2 s frames). At rest: 3–28 ms a face, one face a frame for six frames every 10 s.
+- Left: the first captures in a place still upload what they see the first time; the LODs' crossfade (a dither in
+  every car material's shader — not done here).
+- Checked: typecheck clean; the probe's faces timed in the game.

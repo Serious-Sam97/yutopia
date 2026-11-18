@@ -82,8 +82,10 @@ import {
   BackSide,
   BoxGeometry,
   Color,
+  CubeCamera,
   Euler,
   Group,
+  HalfFloatType,
   type Material,
   Matrix4,
   Mesh,
@@ -100,6 +102,7 @@ import {
   type Texture,
   type Group as TGroup,
   Vector3,
+  WebGLCubeRenderTarget,
   type WebGLRenderTarget,
 } from "three";
 import { DealerPanel } from "@/components/hud/DealerPanel";
@@ -2157,12 +2160,123 @@ export class Cars {
     if (!tp) return;
     const n = this.host.night();
     const dark = this.host.dark();
+    // (plan 98 phase 22, F7) the world itself in the paint and the chrome — the street's lamps, the buildings, the snow —:
+    // a probe caught round me every 5 s (my own car out of it), on High by itself or as set; else the sky's gradient
+    const rp = prefs().carReflect;
+    const probe = rp === "on" || (rp === "auto" && this.host.quality() === "high");
+    if (probe) {
+      // (a face of the cube a frame — all six at once was 30–230 ms on a frame —, every 10 s, out to 90 m)
+      if (this.envMake?.for !== tp.renderer) this.envMake = this.makeEnv(tp);
+      const r = tp.renderer;
+      let pc = this.probeCube;
+      if (!pc) {
+        const rt = new WebGLCubeRenderTarget(128, { type: HalfFloatType });
+        const cam = new CubeCamera(0.3, 60, rt);
+        pc = this.probeCube = { rt, cam, face: -1, ready: -1, waiting: false };
+      }
+      if (pc.face < 0) {
+        if (this.time - this.envAt < 10 && this.envProbe) return;
+        // (not on the move: what's new round a fast car is uploaded the first time a face draws it — long frames)
+        const mv = this.mine?.sim?.v;
+        if (this.envProbe && mv && Math.hypot(mv.x, mv.z) > 8) return;
+        const mine = this.mine ? this.live.get(this.mine.vid) : undefined;
+        const at = mine ? mine.model.root.getWorldPosition(hE).add(hF.set(0, 1.6, 0)) : tp.camera.position;
+        pc.cam.position.copy(at);
+        if (pc.cam.coordinateSystem !== r.coordinateSystem) {
+          pc.cam.coordinateSystem = r.coordinateSystem;
+          pc.cam.updateCoordinateSystem();
+        }
+        pc.cam.updateMatrixWorld(true);
+        pc.face = 0;
+      }
+      // (its materials compiled for the cube's target first, off the frame — a target's programs are their own
+      // (no tone mapping): each material's first time in a face was a 200–780 ms stall)
+      const faceCam = pc.cam.children[pc.face] as PerspectiveCamera;
+      if (pc.ready !== pc.face) {
+        if (pc.waiting) return;
+        pc.waiting = true;
+        const prev0 = r.getRenderTarget();
+        r.setRenderTarget(pc.rt, pc.face);
+        const face = pc.face;
+        const cube = pc;
+        r.compileAsync(tp.scene, faceCam)
+          .catch(() => {})
+          .then(() => {
+            cube.waiting = false;
+            cube.ready = face;
+          });
+        r.setRenderTarget(prev0);
+        return;
+      }
+      const t0 = performance.now();
+      const mine = this.mine ? this.live.get(this.mine.vid) : undefined;
+      const was = mine?.model.root.visible;
+      if (mine) mine.model.root.visible = false;
+      const prev = r.getRenderTarget();
+      r.setRenderTarget(pc.rt, pc.face);
+      r.render(tp.scene, faceCam);
+      r.setRenderTarget(prev);
+      if (mine) mine.model.root.visible = was ?? true;
+      pc.face++;
+      if (pc.face === 6) {
+        pc.face = -1;
+        this.envAt = this.time;
+        this.envNight = n;
+        this.envDark = dark;
+        this.envProbe = true;
+        this.setEnvAll(this.envMake.pm.fromCubemap(pc.rt.texture));
+      }
+      this.envMs = performance.now() - t0;
+      this.envFaces.push(+this.envMs.toFixed(1));
+      if (this.envFaces.length > 24) this.envFaces.shift();
+      return;
+    }
+    if (this.probeCube) {
+      this.probeCube.rt.dispose();
+      this.probeCube = null;
+    }
+    if (this.envProbe) this.envAt = -99;
+    this.envProbe = false;
     if (this.time - this.envAt < 20 && Math.abs(n - this.envNight) < 0.15 && Math.abs(dark - this.envDark) < 0.15)
       return;
     this.envDark = dark;
     this.envAt = this.time;
     this.envNight = n;
-    if (this.envMake?.for !== tp.renderer) {
+    if (this.envMake?.for !== tp.renderer) this.envMake = this.makeEnv(tp);
+    const { pm, scene, dome } = this.envMake;
+    const u = (dome.material as ShaderMaterial).uniforms;
+    u.top.value.set("#8f9ca8").lerp(new Color("#04070c"), n);
+    u.hor.value.set("#d5dbe0").lerp(new Color("#141c27"), n);
+    u.low.value.set("#dfe5ea").lerp(new Color("#0b1016"), n);
+    // (in the pitch dark, nothing up there to shine in the paint)
+    for (const c of [u.top.value, u.hor.value, u.low.value]) c.multiplyScalar(1 - 0.92 * dark);
+    // (the render target it's drawn into let go whole with it — its texture alone left the target on
+    // the GPU, one every 20 s: the memory checker's soak, plan 72 phase 13)
+    this.setEnvAll(pm.fromScene(scene, 0.04, 0.1, 100));
+  }
+  /** (plan 98) the cars' reflection map: this target's texture on every car, the last one let go */
+  private envProbe = false;
+  /** (plan 98) the probe's last face's cost on the main thread (ms), and the last two dozen */
+  envMs = 0;
+  envFaces: number[] = [];
+  private probeCube: {
+    rt: WebGLCubeRenderTarget;
+    cam: CubeCamera;
+    face: number;
+    ready: number;
+    waiting: boolean;
+  } | null = null;
+  private setEnvAll(rt: WebGLRenderTarget) {
+    const next = rt.texture;
+    const old = this.envTarget;
+    this.envTarget = rt;
+    this.env = next;
+    for (const p of this.parked.values()) p.full?.setEnv(next);
+    for (const l of this.live.values()) l.model.setEnv(next);
+    old?.dispose();
+  }
+  private makeEnv(tp: ThirdPersonView): NonNullable<Cars["envMake"]> {
+    {
       this.dropEnvMake();
       const scene = new Scene();
       const dome = new Mesh(
@@ -2177,25 +2291,8 @@ export class Cars {
         }),
       );
       scene.add(dome);
-      this.envMake = { pm: new PMREMGenerator(tp.renderer), for: tp.renderer, scene, dome };
+      return { pm: new PMREMGenerator(tp.renderer), for: tp.renderer, scene, dome };
     }
-    const { pm, scene, dome } = this.envMake;
-    const u = (dome.material as ShaderMaterial).uniforms;
-    u.top.value.set("#8f9ca8").lerp(new Color("#04070c"), n);
-    u.hor.value.set("#d5dbe0").lerp(new Color("#141c27"), n);
-    u.low.value.set("#dfe5ea").lerp(new Color("#0b1016"), n);
-    // (in the pitch dark, nothing up there to shine in the paint)
-    for (const c of [u.top.value, u.hor.value, u.low.value]) c.multiplyScalar(1 - 0.92 * dark);
-    // (the render target it's drawn into let go whole with it — its texture alone left the target on
-    // the GPU, one every 20 s: the memory checker's soak, plan 72 phase 13)
-    const rt = pm.fromScene(scene, 0.04, 0.1, 100);
-    const next = rt.texture;
-    const old = this.envTarget;
-    this.envTarget = rt;
-    this.env = next;
-    for (const p of this.parked.values()) p.full?.setEnv(next);
-    for (const l of this.live.values()) l.model.setEnv(next);
-    old?.dispose();
   }
   private dropEnvMake() {
     const m = this.envMake;
@@ -6135,6 +6232,8 @@ export class Cars {
     this.radio.stop();
     this.root.removeFromParent();
     this.envTarget?.dispose();
+    this.probeCube?.rt.dispose();
+    this.probeCube = null;
     this.envTarget = null;
     this.dropEnvMake();
     this.hideHud();

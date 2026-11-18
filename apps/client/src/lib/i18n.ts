@@ -285,6 +285,10 @@ const D = {
   lookInvert: ["Invert up / down", "Inverter cima / baixo"],
   hands1p: ["Show my hands in first person", "Mostrar minhas mãos em primeira pessoa"],
   carManual: ["Manual gearbox in cars (Q/E)", "Câmbio manual nos carros (Q/E)"],
+  carReflect: ["Car reflections (the world in the paint)", "Reflexos nos carros (o mundo na pintura)"],
+  carReflect_auto: ["On High", "No Alto"],
+  carReflect_on: ["On", "Ligado"],
+  carReflect_off: ["Off", "Desligado"],
   lookRefused: [
     "The browser didn't give the mouse to the camera yet — click again in a moment.",
     "O navegador ainda não deu o mouse para a câmera — clique de novo daqui a pouco.",
