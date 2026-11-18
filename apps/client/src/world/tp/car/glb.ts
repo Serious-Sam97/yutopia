@@ -12,6 +12,7 @@ import {
 } from "@yutopia/shared/car";
 import {
   Box3,
+  CircleGeometry,
   BoxGeometry,
   type BufferAttribute,
   BufferGeometry,
@@ -24,6 +25,7 @@ import {
   type InterleavedBufferAttribute,
   type Material,
   Matrix4,
+  type MeshLambertMaterial,
   Mesh,
   MeshBasicMaterial,
   type MeshPhysicalMaterial,
@@ -48,6 +50,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { asset } from "@/lib/asset";
 import { AssetQueue, loadLifeGLTF } from "../../look/life-assets";
 import { libMaterial } from "../../look/life-matlib";
+import { litMaterial } from "../../look/lit";
 import { LIBRARY, type MatId } from "../../look/life-matlib-list";
 import { mergeWith } from "../merge-static";
 import { lampPatch, tailPatch } from "../tail-glow";
@@ -2274,6 +2277,51 @@ class GlbCar implements Sedan {
     this.lift.y = h / 2;
     this.poseBody();
   }
+  /** (plan 98 phase 20) The wheels going fast: a soft disc over each rim's face, fading in past ~22 rad/s (about 27
+   *  km/h for a saloon) — the spokes strobed at speed —; its brake discs glowing with `heat` (0..1, from 0.5). */
+  private blurDiscs: Mesh<CircleGeometry, MeshLambertMaterial>[] | null = null;
+  private discMats: { m: Material & { emissive?: Color; emissiveIntensity?: number } }[] | null = null;
+  setWheelFx(spin: number, heat: number) {
+    if (!this.ready) return;
+    const k = Math.max(0, Math.min(0.85, (Math.abs(spin) - 22) / 18));
+    if (k > 0 && !this.blurDiscs) {
+      const e = this.e;
+      this.blurDiscs = this.wheels.map((w) => {
+        const d = new Mesh(
+          new CircleGeometry(e.wheel.r * 0.7, 28),
+          litMaterial({ color: 0x8d939a, transparent: true, opacity: 0, depthWrite: false }),
+        );
+        d.position.z = w.side * (e.wheel.width / 2 + 0.006);
+        if (w.side < 0) d.rotation.y = Math.PI;
+        d.renderOrder = 2;
+        w.steer.add(d);
+        return d;
+      });
+    }
+    for (const d of this.blurDiscs ?? []) {
+      d.material.opacity = k;
+      d.visible = k > 0.01;
+    }
+    if (heat > 0.5 || this.discMats) {
+      if (!this.discMats) {
+        this.discMats = [];
+        for (const w of this.wheels)
+          w.spin.traverse((o) => {
+            const m = o as Mesh;
+            if (!m.isMesh || !o.name.endsWith("-disc") || Array.isArray(m.material)) return;
+            const own = (m.material as Material).clone() as Material & { emissive?: Color };
+            if (!own.emissive) return;
+            m.material = own;
+            this.discMats?.push({ m: own });
+          });
+      }
+      const g = Math.max(0, (heat - 0.5) * 2);
+      for (const d of this.discMats) {
+        d.m.emissive?.setRGB(1, 0.3, 0.06);
+        d.m.emissiveIntensity = g * 1.6;
+      }
+    }
+  }
   /** the body's tilt and rise: a corner jacked (liftCorner) and its flats' sag (setFlats), together */
   private lift = { x: 0, z: 0, y: 0 };
   private sag = { x: 0, z: 0, y: 0 };
@@ -2693,6 +2741,11 @@ class GlbCar implements Sedan {
       pl.geometry.dispose();
       pl.material.dispose();
     }
+    for (const d of this.blurDiscs ?? []) {
+      d.geometry.dispose();
+      d.material.dispose();
+    }
+    for (const d of this.discMats ?? []) d.m.dispose();
     this.root.removeFromParent();
   }
 }

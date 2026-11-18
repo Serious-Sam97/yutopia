@@ -41,6 +41,8 @@ export class CarRig {
   /** (plan 98 phase 18) the cluster's redraws a second (the cockpit's 20), its revs and speed eased */
   clusterHz = 10;
   private rpmS = 0;
+  /** (plan 98 phase 20) the brake discs' heat (0..1) */
+  private heat = 0;
   private kmhS = 0;
   private blink = 0;
   private wipe = [0, 0]; // each wiper's phase 0..2 (out and back)
@@ -111,6 +113,11 @@ export class CarRig {
       mw.spin.rotation.z = w.turn * (mw.turnK ?? 1);
     }
     m.steering.rotation.z = -s.str * s.spec.steer.ratio;
+    // (plan 98 phase 20) the rims blurred at speed; the brake discs heated by hard braking at speed, cooling after
+    const spinMax = s.wheels.reduce((a, w) => Math.max(a, Math.abs(w.w)), 0);
+    const speed = Math.hypot(s.v.x, s.v.z);
+    this.heat = Math.max(0, Math.min(1, this.heat + (s.brk * Math.min(1, speed / 25) * 0.55 - 0.08) * dt));
+    m.setWheelFx?.(spinMax, this.heat);
     // (plan 95 F6a: its flats squashed where its wheels are now — posed)
     if (this.flats) m.flatsTick?.();
     // the lamps

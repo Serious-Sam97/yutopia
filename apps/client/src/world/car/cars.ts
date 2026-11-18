@@ -4116,6 +4116,8 @@ export class Cars {
     // (plan 95 F6a: its flats squashed where its wheels are now — posed)
     if ((l.parts ?? 0) & (PART.flatFL | PART.flatFR | PART.flatRL | PART.flatRR)) m.flatsTick?.();
     m.steering.rotation.z = -steer * spec.steer.ratio;
+    // (plan 98 phase 20: its rims blurred at speed)
+    m.setWheelFx?.(sp / spec.wheel.r, 0);
     // its lamps from its switches
     const fl = s1.fl;
     // (plan 98 phase 17: the bulb's filament — up over 50 ms, dying away over 100)

@@ -534,3 +534,14 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
 - Not done: drops running up the glass with speed, frost on the side and rear glass parked, the rear demister's
   lines, the morning's mist as its own haze (only the windscreen carries weather in the models).
 - Checked: typecheck clean. Stills with phase 27.
+
+## Phase 20 — built in part (2026-11-17): wheels
+
+- **The rims blurred at speed** (`glb.ts setWheelFx`): a soft disc over each rim's face fading in past ~22 rad/s (about
+  27 km/h for a saloon) to 0.85 — the spokes strobed; mine from its wheels' spin, others' from their speed.
+- **The brake discs glow:** heated by hard braking at speed (my car: 0.55 a second at full brake past 90 km/h), cooling
+  0.08 a second, orange from half heat — each car's own disc material, cloned the first time.
+- Not done (Blender, at the near model's budget): the coil springs moving with the wheel, the tyre's bulge, the steel
+  and cover wheels' depth; the snowcat's and snowmobile's belts (a plain `track` material, its UVs unknown: nothing to
+  scroll).
+- Checked: typecheck clean. Stills with phase 27.

@@ -133,6 +133,8 @@ export interface Sedan {
   setChains?(bits: number, r: number, width: number): void;
   /** (plan 93 S5) a door's sill: its glass's foot (the body's frame), how far out its outer face is */
   sillOf?(door: number): { y: number; out: number } | null;
+  /** (plan 98 phase 20) the wheels' spin (rad/s): a blur over the rims; the brake discs' heat (0..1) */
+  setWheelFx?(spin: number, heat: number): void;
   /** (plan 98 phase 11) the body's dive and squat (pitch, + nose down) and lean (roll, + left down), rad */
   setWeight?(pitch: number, roll: number): void;
   /** (plan 98) a door's opening, measured off the shut door */
