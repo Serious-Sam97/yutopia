@@ -111,5 +111,4 @@ that shows where it can stand. What you place is **its home**: where it's parked
   e2e `godmode-vehicles.spec.ts` (YUTOPIA_GPU=1). The e2e picks a taxi, drags and turns it, places a BMX, publishes,
   sees both in the room, then rolls back.
 
-Known, not this plan's: shared `car.test.ts` "each home clear of everything" fails on `rack-boathouse-0` (plan 101's
-rack, "into a wall").
+Fixed after: plan 101's boathouse rack stood inside the boathouse's west wall. It's now out front, west of the door (x −258, z −111), and the test leaves racked bikes a hand's width apart.

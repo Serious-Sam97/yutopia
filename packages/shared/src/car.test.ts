@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { isBikeKind } from "./bike/specs.ts";
 import {
   bayFor,
   bladeCells,
@@ -710,16 +711,18 @@ test("the cars that live away from the lot: each home clear of everything, level
     );
     assert.ok(Math.max(...ys) - Math.min(...ys) < 0.5, `${h.id}: level`);
   }
-  // …and clear of each other (a box each, a little room round it)
+  // …and clear of each other (a box each, a little room round it — a bike's a hand's width: a rack's stand side by
+  // side, one to a hoop, 0.9 m apart)
   const box = (h: (typeof HOME_CARS)[number]): Solid => {
     const b = SPECS[h.model].body;
     const off = (b.ahead - b.behind) / 2;
+    const room = isBikeKind(h.model) ? 0.05 : 0.2;
     return {
       kind: "box",
       x: h.x + Math.cos(h.a) * off,
       z: h.z + Math.sin(h.a) * off,
-      hx: (b.ahead + b.behind) / 2 + 0.2,
-      hz: b.width / 2 + 0.2,
+      hx: (b.ahead + b.behind) / 2 + room,
+      hz: b.width / 2 + room,
       a: h.a,
       what: h.id,
     } as Solid;

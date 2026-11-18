@@ -38,11 +38,12 @@ export const RACKS: Rack[] = [
     ],
   },
   {
-    // (the boathouse's: for the pond and the woods — the studded one for the ice)
+    // (the boathouse's: for the pond and the woods — the studded one for the ice; out front, west of its door, by the
+    // path down to the pond)
     id: "rack-boathouse",
-    x: -262,
-    z: -106,
-    rot: 0,
+    x: -258,
+    z: -111,
+    rot: 1,
     bikes: [
       { id: "rack-boathouse-0", model: "bike_mtb", variant: "mtb-winter", colour: 0x22385e },
       { id: "rack-boathouse-1", model: "bike_mtb", variant: "mtb-trail", colour: 0xc9a227 },
