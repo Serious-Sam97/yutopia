@@ -299,6 +299,13 @@ const PARKOUR: Partial<Record<string, GroundSolid["what"]>> = {
   pk_quarter_pipe: "pk_wall",
   pk_cargo_net: "pk_wall",
   pk_beam: "pk_rail",
+  // (plan 103 F6a: the skate park's pieces — run up the ramps' steep walls, grind the rails)
+  sk_quarter: "pk_wall",
+  sk_vert: "pk_wall",
+  sk_mini: "pk_wall",
+  sk_spine: "pk_wall",
+  sk_rail: "pk_rail",
+  sk_kinkrail: "pk_rail",
 };
 
 /** Over a lift's open doors (m): the wall on up from there. */

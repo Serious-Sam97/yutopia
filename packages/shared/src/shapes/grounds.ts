@@ -63,12 +63,14 @@ import {
   turnOf,
   WAYS,
   wallEdgeAt,
+  wallsHigh,
   waterAt,
   worldRects,
 } from "../grounds.ts";
 import { KART_FENCE_H } from "../kart/land.ts";
 import { DECK_HALF } from "../kart/park.ts";
 import { LAKE, LONG_ROAD, LOOKOUT_DECK, SHORE } from "../longroad.ts";
+import { boxInPlan, pieceBoxes, TOWN_PARKS } from "../skate/parks.ts";
 import { type Blocks, type Solid3, type SolidBox3, WALL_T } from "./index.ts";
 
 export type GroundWhat =
@@ -118,6 +120,8 @@ export type GroundWhat =
   | "pk_rail"
   | "pk_wall"
   | "pk_pole"
+  | "skate_wood"
+  | "skate_concrete"
   | "edge";
 
 export interface GroundSolid {
@@ -343,6 +347,9 @@ function shell(b: Building): { H: number; roof: (out: GroundSolid[], y0: number)
       };
     case "farmhouse":
       return { H: 6.2, roof: (o, y) => pitched(o, x0, z0, x1, z1, y + 6.2, 3, true, 0.55) };
+    case "warehouse":
+      // (a shallow gable, its ridge along x, as tp/grounds3d.ts `warehouse` draws it: 1.6 over the walls, 0.4 out)
+      return { H: wallsHigh(b), roof: (o, y) => pitched(o, x0, z0, x1, z1, y + wallsHigh(b), 1.6, true, 0.4) };
     default: {
       // the shops (the diner, the bar, the hotel too): 3.8 a floor and a parapet's 0.8
       const H = b.floors * 3.8 + 0.8;
@@ -592,7 +599,7 @@ function houseFront(out: GroundSolid[], b: Building, y0: number, H: number) {
  *  walls outside, the doorway open to its head, over it the rest. */
 function insideWalls(out: GroundSolid[], i: Inside, y0: number, H: number) {
   const { b, door } = i;
-  const doorH = b.kind === "barn" ? 2.8 : 2.4;
+  const doorH = b.kind === "barn" || b.kind === "warehouse" ? 2.8 : 2.4;
   const t = WALL_T / 2;
   const wall = (dir: "h" | "v", x: number, z: number, lo: number) =>
     out.push({
@@ -1219,6 +1226,26 @@ function things(out: GroundSolid[]) {
   if (LONG_ROAD) longDecks(out);
   pavements(out);
   if (KART_LAND) kartPark(out);
+  skateParks(out);
+}
+
+// ── the skate parks (docs/plan/103-the-skate.md F7c; skate/parks.ts): each piece's stepped boxes under its riding
+// surface (skate/parks.ts pieceBoxes: walked up where it's gentle, a wall where it's steep), from the park's floor
+// up (a stair set's treads stand on each other); its rails a thin wall to the bar — Flowmotion's rails ──
+function skateParks(out: GroundSolid[]) {
+  for (const p of TOWN_PARKS) {
+    const what: GroundWhat = p.indoor ? "skate_wood" : "skate_concrete";
+    for (const pc of p.pieces) {
+      const at = { ...pc, z: p.h + pc.z };
+      for (const b of pieceBoxes(pc)) {
+        const c = boxInPlan(at, b);
+        out.push({
+          what: b.rail ? "pk_rail" : what,
+          s: turned(c.x, c.y, -c.a, -b.hu, -b.hw, b.hu, b.hw, p.h, at.z + b.z1),
+        });
+      }
+    }
+  }
 }
 
 // ── by chunk ──
@@ -1551,6 +1578,16 @@ export const GROUND_WHATS: Record<GroundWhat, { label: string; how: string; odd?
   pk_pole: {
     label: "Swing pole",
     how: "god mode's: an upright 0.08 round, 3 tall (the tall one 5.5); its base plate under the snow's line",
+  },
+  skate_wood: {
+    label: "The skate hall's ramps",
+    how: "each piece (skate/parks.ts TOWN_PARKS) as stepped boxes under its riding face, from the floor: gentle stretches in 0.12 steps as high as the face's lowest over them, steep ones (over 45°) one block to the coping, the decks flat; a bowl's corners in 7.5° sectors, each as wide as it is at its inner edge; rails a 0.06 wall to the bar's top (pk_rail)",
+    odd: "the board rides the pieces' exact profiles (skate/pieces.ts), not these: walkers stand up to a step under the face",
+  },
+  skate_concrete: {
+    label: "The outdoor skate park's ramps",
+    how: "as the hall's (skate_wood): the outdoor park's pieces, poured concrete",
+    odd: "the board rides the pieces' exact profiles (skate/pieces.ts), not these",
   },
   edge: {
     label: "The world's edge",

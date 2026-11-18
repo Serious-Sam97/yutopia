@@ -3803,6 +3803,10 @@ void main() {
 
   /** Where a ray (the scene's) first meets the land round the ground floor, off the floor's own
    *  tiles; null on any other floor, or when it meets the floor first. */
+  /** (plan 103) The land's height at (x, z) — a built skate piece sits on it. */
+  landHeight(x: number, z: number): number {
+    return terrainAt(x, z);
+  }
   landAt(o: Vector3, dir: Vector3): { x: number; y: number } | null {
     const g = this.around.grounds;
     if (this.level !== 0 || !g) return null;

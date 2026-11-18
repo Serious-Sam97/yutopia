@@ -44,6 +44,8 @@ import {
   ROAD_CLOSED,
   riverWater,
   SCARECROWS,
+  SKATE_HALL,
+  SKATE_YARD,
   STATUE,
   STREET,
   standLights,
@@ -798,6 +800,7 @@ export class Grounds3 {
               );
       for (const b of BUILDINGS)
         if (this.near(b.x0, b.z0, 60)) run(() => this.building(b), { x: (b.x0 + b.x1) / 2, z: (b.z0 + b.z1) / 2 }, 1);
+      run(() => this.skateParks(), { x: SKATE_YARD.x0, z: SKATE_YARD.z0 }, 1);
       // (its water: Silver Lake's and the creek's out on the long road, a grown lake's — the rest's
       // circle was the only one to draw any, and it's round the town)
       run(() => this.water(), undefined, 1);
@@ -822,6 +825,7 @@ export class Grounds3 {
       run(() => this.town());
       if (LONG_ROAD) run(() => this.longDress());
       run(() => this.motors());
+      run(() => this.skateParks());
       for (const f of this.farmSteps()) run(f);
     }
     // the Kart Park (the game's: the stills and the sandbox stage it themselves)
@@ -2177,11 +2181,21 @@ export class Grounds3 {
       [0, 1, 0],
     );
     // the walls from inside (the doorway open)
+    const hall = b.kind === "warehouse";
     const wallC =
-      b.sign === "BAR" ? 0x4a3426 : b.kind === "barn" ? 0x6a4a34 : b.kind === "farmhouse" ? 0xd8c9a8 : 0xe6e0d4;
-    // (the farm's: as tall as they are outside — under their roofs, not open to the sky)
-    const H = b.kind === "barn" ? 5.2 : b.kind === "farmhouse" ? 3.0 : 2.7;
-    const doorH = b.kind === "barn" ? 2.8 : 2.4; // (as high as the doorway outside: tp barn(), farmhouse())
+      b.sign === "BAR"
+        ? 0x4a3426
+        : b.kind === "barn"
+          ? 0x6a4a34
+          : b.kind === "farmhouse"
+            ? 0xd8c9a8
+            : hall
+              ? 0x9aa0a4
+              : 0xe6e0d4;
+    // (the farm's and the skate hall's: as tall as they are outside — under their roofs, not open to the sky)
+    const H = b.kind === "barn" ? 5.2 : b.kind === "farmhouse" ? 3.0 : hall ? wallsHigh(b) : 2.7;
+    // (as high as the doorway outside: tp barn(), farmhouse(), warehouse())
+    const doorH = b.kind === "barn" || hall ? 2.8 : 2.4;
     const e = 0.12;
     g.color(wallC);
     for (let x = b.x0; x < b.x1; x++) {
@@ -2248,6 +2262,34 @@ export class Grounds3 {
       g.color(0x5a4636);
       for (const dz of [-0.35, 0.35]) g.box(b.x1 - 6.4, y0, zm + dz - 0.05, b.x1 - 6.3, top - 2.0, zm + dz + 0.05);
       for (let y = y0 + 0.4; y < top - 2.1; y += 0.4) g.box(b.x1 - 6.4, y, zm - 0.35, b.x1 - 6.3, y + 0.06, zm + 0.35);
+    }
+    // the skate hall's roof from below: its shallow slopes, the gables, steel trusses, the strip lights hung
+    // under them (lit at night); its ramps are the skate's pieces (skateParks)
+    if (hall) {
+      const zm = (b.z0 + b.z1) / 2;
+      const top = y0 + H;
+      const ridge = top + 1.6;
+      g.color(0x6b7075);
+      g.quad([b.x1, top, b.z0 + e], [b.x0, top, b.z0 + e], [b.x0, ridge, zm], [b.x1, ridge, zm], [0, -1, 0.2]);
+      g.quad([b.x0, top, b.z1 - e], [b.x1, top, b.z1 - e], [b.x1, ridge, zm], [b.x0, ridge, zm], [0, -1, -0.2]);
+      g.color(wallC);
+      g.quad([b.x0 + e, top, b.z1], [b.x0 + e, top, b.z0], [b.x0 + e, ridge, zm], [b.x0 + e, ridge, zm], [1, 0, 0]);
+      g.quad([b.x1 - e, top, b.z0], [b.x1 - e, top, b.z1], [b.x1 - e, ridge, zm], [b.x1 - e, ridge, zm], [-1, 0, 0]);
+      g.color(0x3c4146);
+      for (let x = b.x0 + 4; x < b.x1 - 1; x += 6) {
+        g.box(x - 0.08, top - 0.35, b.z0 + 0.1, x + 0.08, top - 0.15, b.z1 - 0.1);
+        g.box(x - 0.06, top - 0.15, zm - 0.06, x + 0.06, ridge - 0.1, zm + 0.06);
+        for (const [za, zb] of [
+          [b.z0 + 0.2, zm],
+          [b.z1 - 0.2, zm],
+        ])
+          for (let k = 0; k < 6; k++) {
+            const u = (k + 0.5) / 6;
+            const z = za + (zb - za) * u;
+            const y = top + (ridge - top) * u - 0.2;
+            g.box(x - 0.06, y - 0.08, z - 0.5, x + 0.06, y + 0.08, z + 0.5);
+          }
+      }
     }
     // the furniture
     const glow: [number, number, number, number, number, number, number][] = [];
@@ -2480,7 +2522,22 @@ export class Grounds3 {
       m.emissiveMap = null;
       this.add(gg.build(), m, "none");
     }
-    // its light, for the night
+    // its light, for the night (the skate hall's: strip lights down its length, high under the trusses)
+    if (hall) {
+      const gl = new G();
+      for (let x = b.x0 + 7; x < b.x1 - 4; x += 12)
+        for (const z of [b.z0 + 7, b.z1 - 7]) {
+          gl.color(0xf4f1e6).box(x - 1.2, y0 + H - 0.9, z - 0.1, x + 1.2, y0 + H - 0.8, z + 0.1);
+          this.lights.push({ p: new Vector3(x, y0 + H - 1.2, z), kind: "porch", color: 0xf2efe4, r: 14 });
+        }
+      const m = this.glows(
+        this.keep(litMaterial({ vertexColors: true, emissive: 0xffffff, emissiveIntensity: 0 })),
+        1.2,
+        "windows",
+      );
+      this.add(gl.build(), m, "none");
+      return;
+    }
     this.lights.push({
       p: new Vector3((b.x0 + b.x1) / 2, y0 + 2.4, (b.z0 + b.z1) / 2),
       kind: "porch",
@@ -2544,6 +2601,8 @@ export class Grounds3 {
         return this.silo(b);
       case "farmhouse":
         return this.farmhouse(b);
+      case "warehouse":
+        return this.warehouse(b);
       default:
         return this.shop(b);
     }
@@ -3325,6 +3384,145 @@ export class Grounds3 {
     bar(w / 2, 0, w / 2 + 0.1, h);
     bar(-0.03, 0, 0.03, h, 0.05); // the cross
     bar(-w / 2, h / 2 - 0.03, w / 2, h / 2 + 0.03, 0.05);
+  }
+  // ── the skate hall (docs/plan/103-the-skate.md F7c): a disused warehouse — corrugated walls on a block plinth,
+  // a shallow gable, high windows down its long sides, a roller door's frame round its doorway, its sign ──
+  private warehouse(b: Building) {
+    const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
+    const metal = this.keep(tex(corrugatedCanvas(this.T)));
+    const H = wallsHigh(b);
+    const i = insideOf(b);
+    const door = i?.door;
+    const g = new G();
+    this.walls(g, b, y0 + 1, H - 1, door ? { face: "s", from: door.from - 1, to: door.to + 1, h: 2.8 - 1 } : undefined);
+    this.add(g.build(), this.relief(this.lambert(b.tint ? hexOf(b.tint) : 0x9ea6ab, metal), "metal-brushed", 2));
+    const r = new G();
+    // the block plinth (the doorway's gap kept)
+    const dx0 = door ? door.from - 1 : b.x1;
+    const dx1 = door ? door.to + 1 : b.x1;
+    r.color(0x8f8c86);
+    r.box(b.x0 - 0.05, y0, b.z0 - 0.05, b.x1 + 0.05, y0 + 1, b.z0 + 0.2);
+    r.box(b.x0 - 0.05, y0, b.z0, b.x0 + 0.2, y0 + 1, b.z1);
+    r.box(b.x1 - 0.2, y0, b.z0, b.x1 + 0.05, y0 + 1, b.z1);
+    r.box(b.x0 - 0.05, y0, b.z1 - 0.2, dx0, y0 + 1, b.z1 + 0.05);
+    r.box(dx1, y0, b.z1 - 0.2, b.x1 + 0.05, y0 + 1, b.z1 + 0.05);
+    // the roof: a shallow gable over the walls, its gables the walls' metal
+    this.pitched(r, b.x0, b.z0, b.x1, b.z1, y0 + H, 1.6, true, 0x5a5f64, 0.4, 0x9ea6ab);
+    // the roller door's frame and its drum's box over the doorway; a lamp over it
+    if (door) {
+      const [d0, d1] = [door.from - 1, door.to + 1];
+      const z = b.z1;
+      r.color(0x4a4f54);
+      r.box(d0 - 0.25, y0, z - 0.02, d0, y0 + 3.1, z + 0.14);
+      r.box(d1, y0, z - 0.02, d1 + 0.25, y0 + 3.1, z + 0.14);
+      r.box(d0 - 0.25, y0 + 2.8, z - 0.02, d1 + 0.25, y0 + 3.4, z + 0.45);
+      r.color(0x2a2e33).box((d0 + d1) / 2 - 0.2, y0 + 3.6, z, (d0 + d1) / 2 + 0.2, y0 + 3.8, z + 0.35);
+      this.lights.push({ p: new Vector3((d0 + d1) / 2, y0 + 3.5, z + 0.6), kind: "porch", color: 0xffd29a, r: 5 });
+      this.pool((d0 + d1) / 2, z + 2, 4, 0xffd9a8);
+    }
+    this.add(r.build(), this.lambert());
+    // the high windows down the long sides, lit from inside at night
+    for (let x = b.x0 + 3; x < b.x1 - 2; x += 4) {
+      this.litWindow(x, y0 + H - 2.6, b.z0, 2.2, 1.4, 0, -1, false, 0.6, false);
+      this.litWindow(x, y0 + H - 2.6, b.z1, 2.2, 1.4, 0, 1, false, 0.6, false);
+    }
+    // its sign over the door
+    if (b.sign && door) {
+      const st = this.keep(tex(signCanvas(this.T, b.sign, 512, 96, "#1d2226", "#f2c94a"), false));
+      const sm = this.glows(
+        this.keep(litMaterial({ map: st, emissive: 0xffffff, emissiveMap: st, emissiveIntensity: 0 })),
+        0.9,
+        "sign",
+      );
+      const sw = 7;
+      const sh = sw * 0.1875;
+      const plane = new Mesh(this.keep(new BoxGeometry(sw, sh, 0.12)), sm);
+      plane.position.set((door.from + door.to) / 2, y0 + 4.6 + sh / 2, b.z1 + 0.12);
+      this.root.add(plane);
+    }
+  }
+
+  // ── the town's skate parks (docs/plan/103-the-skate.md F7c): the hall's ramps and the outdoor park's, each piece
+  // from its own profile (tp/skate3d.ts, loaded when this step comes: it waits for it); the outdoor park's
+  // concrete slab, the snow kept off it as the ways' ──
+  private skateMod: typeof import("./skate3d") | null = null;
+  private skateLoading = false;
+  private skateMats = new Map<string, Material>();
+  private skateParks() {
+    const R = (r: { x0: number; z0: number; x1: number; z1: number }) =>
+      this.near((r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2, 40);
+    if (!R(SKATE_HALL) && !R(SKATE_YARD)) return;
+    if (!this.skateMod) {
+      if (!this.skateLoading) {
+        this.skateLoading = true;
+        void import("./skate3d").then((m) => {
+          this.skateMod = m;
+          // (a still's Grounds are made at once, no steps after: drawn as soon as it's here)
+          if (!this.o.stream) this.skateParks();
+        });
+      }
+      if (this.o.stream) {
+        this.queue(() => this.skateParks());
+        this.waiting = true;
+      }
+      return;
+    }
+    const m = this.skateMod;
+    if (R(SKATE_YARD)) {
+      const Y = SKATE_YARD;
+      const y = groundAt((Y.x0 + Y.x1) / 2, (Y.z0 + Y.z1) / 2) + 0.012;
+      const slab = new G();
+      slab.metres = true;
+      slab.color(0xffffff);
+      for (let x = Y.x0; x < Y.x1; x += 4)
+        for (let z = Y.z0; z < Y.z1; z += 4) {
+          const [x1, z1] = [Math.min(Y.x1, x + 4), Math.min(Y.z1, z + 4)];
+          slab.quad(
+            [x, y, z],
+            [x1, y, z],
+            [x1, y, z1],
+            [x, y, z1],
+            [0, 1, 0],
+            [
+              [x / 4, z / 4],
+              [x1 / 4, z / 4],
+              [x1 / 4, z1 / 4],
+              [x / 4, z1 / 4],
+            ],
+          );
+        }
+      // (its edge: a low concrete kerb round it)
+      slab.color(0xc9c4ba);
+      slab.box(Y.x0 - 0.15, y - 0.2, Y.z0 - 0.15, Y.x1 + 0.15, y + 0.05, Y.z0);
+      slab.box(Y.x0 - 0.15, y - 0.2, Y.z1, Y.x1 + 0.15, y + 0.05, Y.z1 + 0.15);
+      slab.box(Y.x0 - 0.15, y - 0.2, Y.z0, Y.x0, y + 0.05, Y.z1);
+      slab.box(Y.x1, y - 0.2, Y.z0, Y.x1 + 0.15, y + 0.05, Y.z1);
+      this.add(slab.build(), this.slotMat("walk"), "receive");
+    }
+    for (const p of m.PARKS) {
+      if (!R(p)) continue;
+      const geo = m.skateParkGeometry(p);
+      for (const k of m.SKATE_SLOTS) {
+        const gk = geo[k];
+        if (gk) this.add(gk, this.skateMat(k, p.indoor));
+      }
+    }
+  }
+  /** A skate park slot's material: the life look's library one (masonite paint, birch ply, concrete, galvanised
+   *  steel — its parts' colours through it), else the Grounds' Lambert. */
+  private skateMat(slot: "face" | "side" | "steel", indoor: boolean): Material {
+    const key = `${slot}|${indoor}`;
+    let m = this.skateMats.get(key);
+    if (!m) {
+      const name = slot === "steel" ? "metal-brushed" : indoor ? (slot === "side" ? "birch" : "plain") : "concrete";
+      const lib = lifeDress.on ? lifeDress.material?.(name) : undefined;
+      // (the outdoor park's concrete dusted as the ways are: wx3d.ts)
+      const wxk = !indoor && slot !== "steel" ? "way" : undefined;
+      if (lib && wxk) lib.userData.wx = wxk;
+      m = lib ? this.keep(lib) : this.lambert(0xffffff, undefined, true, wxk);
+      this.skateMats.set(key, m);
+    }
+    return m;
   }
   private barn(b: Building) {
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);

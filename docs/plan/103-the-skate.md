@@ -13,6 +13,16 @@ Status: **planned 2026-11-18; forks decided 2026-11-18 one by one: the recommend
 an indoor hall and an outdoor park; **F14b**, I pick the sounds, you veto; **F15b**, no sign-off, built straight
 through, you test at the end. Built 2026-11-18 (phases 0–8), committed to main, not pushed.**
 
+**How to try it:** get a board — at a park's rack (the hall's or the yard's, east of the townhouses), in loot, or an
+admin's `give board_street_pop` (any of the nine: `board_vert_classic`, `board_vert_fish`, `board_vert_square`,
+`board_street_pop`, `board_street_slick`, `board_street_tech`, `board_cruiser_classic`, `board_cruiser_wood`,
+`board_cruiser_mini`). Put it in the left hand (the pack, I) and press **1**: you're on. **W** push, **S** stop, **A/D**
+carve (in the air, spin), **Space** held crouches — let go to ollie (held going down a ramp, it pumps), **E** + a
+direction a flip (E twice quickly, its double), **R** + a direction a grab (held), **F** + a direction at a rail, a ledge
+or a coping a grind (at a coping going up slowly, a lip trick; at a wall in the air, a wallride), **W then S** quickly a
+manual (**S then W** a nose manual), **Q** just after landing in a ramp the revert, **X** (or 1) off. Regular or goofy:
+the avatar editor's body tab. Your best combo is kept in this browser.
+
 ## Where we are, from the code
 
 - **There's no skateboard.** Nothing in the world rolls under your feet. The only "skating" is the walker sliding on

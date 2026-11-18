@@ -14,6 +14,7 @@ import * as pets2 from "./pets2";
 import * as screens2 from "./screens2";
 import * as seasons from "./seasons";
 import * as seating2 from "./seating2";
+import * as skate from "./skate";
 import * as storage2 from "./storage2";
 import * as tables2 from "./tables2";
 import * as walls2 from "./walls2";
@@ -39,6 +40,7 @@ export const FAM_LOOKS: Record<string, readonly string[]> = {
   ...kitchen.LOOKS,
   ...outdoors.LOOKS,
   ...seasons.LOOKS,
+  ...skate.LOOKS,
 };
 export const FAM_DRAW: Record<string, (m: Model, o: Look) => void> = {
   ...seating2.DRAW,
@@ -59,4 +61,5 @@ export const FAM_DRAW: Record<string, (m: Model, o: Look) => void> = {
   ...kitchen.DRAW,
   ...outdoors.DRAW,
   ...seasons.DRAW,
+  ...skate.DRAW,
 };

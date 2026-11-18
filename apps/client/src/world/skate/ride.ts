@@ -16,8 +16,10 @@ import {
   SkatePark,
   skateCode,
   skateEnv,
+  piecesOfThings,
   startSkate,
   surfFrame,
+  townSkatePieces,
 } from "@yutopia/shared/skate";
 import { thrown } from "../tp/thrown";
 import { awayAt } from "./board3d";
@@ -44,8 +46,9 @@ export interface RideHost {
   body(): Body | null;
   /** my session id (the ragdoll's) */
   sid(): string;
-  /** the park's pieces now (the town's and the ones built) */
-  pieces(): PiecePlace[];
+  /** the floor's things now (the built pieces among them: `sk_*`), and the land's height (where they sit) */
+  things(): Iterable<{ kind: string; x: number; y: number; rot?: number; yaw?: number; props?: Record<string, unknown> | null }>;
+  landAt(x: number, y: number): number;
   /** a sound (plan 103 phase 7) */
   sound?(what: string, k?: number): void;
 }
@@ -142,8 +145,15 @@ export class SkateRide {
   }
 
   /** The park near, its pieces kept up to date (the town's and the ones built: rebuilt when they change). */
+  /** The town's two parks (F7c: the hall's and the yard's), and the pieces built (F6a). */
+  private town: PiecePlace[] | null = null;
+  pieces(): PiecePlace[] {
+    this.town ??= townSkatePieces();
+    const built = piecesOfThings(this.host.things(), (x, y) => this.host.landAt(x, y));
+    return built.length ? [...this.town, ...built] : this.town;
+  }
   env(): SkateEnv {
-    const ps = this.host.pieces();
+    const ps = this.pieces();
     const key = ps
       .map((p) => `${p.kind}${p.x.toFixed(2)},${p.y.toFixed(2)},${p.z.toFixed(2)},${p.yaw.toFixed(3)}`)
       .join("|");

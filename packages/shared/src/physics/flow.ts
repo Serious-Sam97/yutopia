@@ -43,6 +43,9 @@ const RUNS: ReadonlySet<GroundWhat> = new Set([
   "kart_shed",
   "motors",
   "pk_wall",
+  // (the skate parks' ramps: plan 103, shapes/grounds.ts)
+  "skate_wood",
+  "skate_concrete",
 ]);
 // (never anything to move off: under foot, overhead, or the world's own end)
 const NOT: ReadonlySet<GroundWhat> = new Set(["street", "pavement", "bridge_deck", "forecourt", "kart_island", "edge"]);

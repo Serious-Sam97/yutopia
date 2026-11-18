@@ -64,6 +64,7 @@
     "./skate/spec": "./src/skate/spec.ts",
     "./skate/racks": "./src/skate/racks.ts",
     "./skate/parks": "./src/skate/parks.ts",
+    "./skate/pieces": "./src/skate/pieces.ts",
     "./bike/drive": "./src/bike/drive.ts",
     "./kart": "./src/kart/index.ts",
     "./move": "./src/move/index.ts",

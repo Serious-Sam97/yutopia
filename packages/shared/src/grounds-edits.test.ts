@@ -50,12 +50,14 @@ import { groundSolidsIn } from "./shapes/grounds.ts";
 // each hairpin's ends: its land, its things moved with it; the town's as it was; Silver Lake's
 // mountains eased down to it, its shore held over its level — what stands by it with them; the climb's
 // legs west started past their hairpins, not behind them)
+// (2026-11-18, plan 103 F7c: the skate parks — the hall's warehouse east of the townhouses, its pad, walls,
+// roof and ramps' solids; the outdoor park's concrete pad, its trees cleared, its ramps' solids)
 const TODAY = {
-  land: "00fb2884",
+  land: "2b00eecb",
   // (2026-11-01: the road closed's barricades and drift shut, as their solids)
-  walk: "c7cfe13e",
-  trees: "3367389b",
-  surfaces: "357af81e",
+  walk: "69e93ada",
+  trees: "66c964f4",
+  surfaces: "8ad7ea5e",
   // (2026-11-01: the false fronts flush with their faces, the road closed's barricades and drift
   // solid, the wooden poles their own what, the pitched roofs in steps under their slopes, the flat
   // roofs' snow, the streets' pavements and kerbs — the town's audit; then its details: the shops'
@@ -65,8 +67,8 @@ const TODAY = {
   // station's and the other flat roofs' snow, the kerbs in three treads)
   // (2026-11-02: the roofs, the canopies, the mailboxes and the statue at their bare heights — their
   // snow the weather's, stood a little in: docs/plan/65, the user's call)
-  solids: "0b98764e",
-  things: "d2632f05",
+  solids: "d566a84a",
+  things: "62e12f28",
 };
 
 // the farm's open field south of the farmhouse: chunk (13, −8)

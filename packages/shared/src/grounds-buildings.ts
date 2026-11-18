@@ -20,6 +20,7 @@ export const BUILDING_NAMES: Partial<Record<BuildingKind, string>> = {
   shed: "Shed",
   gas: "Gas station",
   boathouse: "Boathouse",
+  warehouse: "Warehouse",
 };
 /** The kinds that have a sign over their door. */
 export const SIGNED = new Set<BuildingKind>(["shop", "bar", "diner", "hotel"]);

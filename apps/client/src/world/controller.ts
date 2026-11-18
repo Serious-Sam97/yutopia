@@ -1737,18 +1737,28 @@ export class WorldController {
       this.skateRide = new SkateRide({
         body: () => this.walker?.stepBody ?? null,
         sid: () => this.room?.sessionId ?? "",
-        pieces: () => this.skatePieces(),
+        // (the built pieces: on the ground floor — their props' level, a JSON string on the wire)
+        things: () => {
+          const out: { kind: string; x: number; y: number; rot?: number; yaw?: number; props: Record<string, unknown> }[] = [];
+          this.room?.state.objects.forEach((o) => {
+            if (!o.kind.startsWith("sk_")) return;
+            let props: Record<string, unknown> = {};
+            try {
+              props = JSON.parse(o.props || "{}");
+            } catch {
+              props = {};
+            }
+            out.push({ kind: o.kind, x: o.x, y: o.y, yaw: o.yaw, props });
+          });
+          return out;
+        },
+        landAt: (x, y) => this.tp?.landHeight(x, y) ?? 0,
       });
       if (this.walker) this.walker.skate = this.skateRide;
       this.skateLoading = false;
       then?.();
     });
   }
-  /** (plan 103) The skate park's pieces: the town's two parks, and the ones built. */
-  skatePieces(): import("@yutopia/shared/skate").PiecePlace[] {
-    return [];
-  }
-
   private moveLocal(dt: number) {
     // in a car: in my seat (the server says so too: world-server features/cars.ts)
     if (this.cars?.carry(this)) return;

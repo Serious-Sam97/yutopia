@@ -245,7 +245,9 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
     icon: "walk",
     items: ["pk_rail", "pk_rail_long", "pk_wall", "pk_wall_tall", "pk_pole", "pk_pole_tall"]
       .map(it)
-      .concat(fam("parkour2")),
+      .concat(fam("parkour2"))
+      // (plan 103 F6a: the skate park's pieces)
+      .concat(fam("skate")),
   },
   {
     // (plan 68 phase 2: Christmas, the first of the seasons)

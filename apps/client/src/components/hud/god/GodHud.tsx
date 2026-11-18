@@ -1464,6 +1464,7 @@ const BUILDING_PT: Partial<Record<BuildingKind, string>> = {
   shed: "Galpão",
   gas: "Posto",
   boathouse: "Casa de barcos",
+  warehouse: "Armazém",
 };
 const buildingName = (k: BuildingKind, pt: boolean) => (pt ? BUILDING_PT[k] : BUILDING_NAMES[k]) ?? k;
 

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { CATALOG, placedFootprint, quarterYaw, standHeight, type WorldObjectDef } from "../catalog.ts";
 import { isOpening } from "../openings.ts";
-import { blocksOf, kindSolids, type Solid3 } from "../shapes/index.ts";
+import { blocksOf, kindSolids, type Solid3, STEP_UP } from "../shapes/index.ts";
 import { loadJolt } from "./load.ts";
 import { BODY, PhysicsWorld, sizesFor } from "./world.ts";
 
@@ -57,18 +57,24 @@ test("every solid piece in Jolt: walked at from four sides, stopped where it blo
         const span = dx ? fw / 2 : fh / 2;
         const sx = mx - dx * (span + 1.6);
         const sz = mz - dz * (span + 1.6);
-        // what stands on the walker's line, from a step to a head high
-        const blocks = solids.some((s) => {
-          const [y0, y1] = height(s);
-          if (y1 <= CLIMBS || y0 >= BODY.h - 0.1) return false;
-          // (the line: the walker's path from its start to the far side, its body's width round it)
-          for (let t = 0; t <= 1; t += 0.02) {
-            const x = sx + dx * t * (2 * span + 3.2);
-            const z = sz + dz * t * (2 * span + 3.2);
-            if (inside(s, x, z, 0.06)) return true;
+        // what stands on the walker's line, from a step to a head high over where it stands (a stepped thing —
+        // the skate park's ramps, plan 103 — climbed a step at a time: the walker on each step's top)
+        let at = 0;
+        let blocks = false;
+        // (the line: the walker's path from its start to the far side, its body's width round it)
+        for (let t = 0; t <= 1 && !blocks; t += 0.02) {
+          const x = sx + dx * t * (2 * span + 3.2);
+          const z = sz + dz * t * (2 * span + 3.2);
+          let top = 0;
+          for (const s of solids) {
+            const [y0, y1] = height(s);
+            if (y0 >= at + BODY.h - 0.1 || !inside(s, x, z, 0.06)) continue;
+            if (y1 > at + CLIMBS) blocks = true;
+            // (a step: rising from under the feet, no higher than the walker steps — not a top over a gap, a table's)
+            else if (y0 <= at + 0.05 && y1 <= at + STEP_UP + 0.01) top = Math.max(top, y1);
           }
-          return false;
-        });
+          at = top;
+        }
         const c = w.addCharacter(sx, 0.02, sz) as number;
         for (let i = 0; i < 180; i++) {
           w.moveCharacter(c, dx * 2, -2, dz * 2, 1 / 60, true);

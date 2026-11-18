@@ -13,6 +13,7 @@ import * as pets2 from "./pets2.ts";
 import * as screens2 from "./screens2.ts";
 import * as seasons from "./seasons.ts";
 import * as seating2 from "./seating2.ts";
+import * as skate from "./skate.ts";
 import * as storage2 from "./storage2.ts";
 import * as tables2 from "./tables2.ts";
 import * as walls2 from "./walls2.ts";
@@ -38,6 +39,7 @@ export const FAM_CATALOG = {
   ...kitchen.CATALOG,
   ...outdoors.CATALOG,
   ...seasons.CATALOG,
+  ...skate.CATALOG,
 };
 export const FAM_SHAPES = {
   ...seating2.SHAPES,
@@ -58,6 +60,7 @@ export const FAM_SHAPES = {
   ...kitchen.SHAPES,
   ...outdoors.SHAPES,
   ...seasons.SHAPES,
+  ...skate.SHAPES,
 };
 /** The kinds whose seats face different ways (plan 70: the chess table's chairs): fam/gameroom.ts CHAIRS. */
 export const FAM_CHAIRS = gameroom.CHAIRS;
@@ -82,6 +85,7 @@ export const FAM_SEATS = {
   ...kitchen.SEATS,
   ...outdoors.SEATS,
   ...seasons.SEATS,
+  ...skate.SEATS,
 };
 export const FAM_SURFACES = {
   ...seating2.SURFACES,
@@ -102,6 +106,7 @@ export const FAM_SURFACES = {
   ...kitchen.SURFACES,
   ...outdoors.SURFACES,
   ...seasons.SURFACES,
+  ...skate.SURFACES,
 };
 export const FAM_STANDS = {
   ...seating2.STANDS,
@@ -122,6 +127,7 @@ export const FAM_STANDS = {
   ...kitchen.STANDS,
   ...outdoors.STANDS,
   ...seasons.STANDS,
+  ...skate.STANDS,
 };
 export const FAM_HANGS = {
   ...seating2.HANGS,
@@ -142,6 +148,7 @@ export const FAM_HANGS = {
   ...kitchen.HANGS,
   ...outdoors.HANGS,
   ...seasons.HANGS,
+  ...skate.HANGS,
 };
 /** Each family's kinds in its own order (the Furnish panel puts them in their categories). */
 export const FAM_KINDS: Record<string, string[]> = {
@@ -163,4 +170,5 @@ export const FAM_KINDS: Record<string, string[]> = {
   kitchen: Object.keys(kitchen.CATALOG),
   outdoors: Object.keys(outdoors.CATALOG),
   seasons: Object.keys(seasons.CATALOG),
+  skate: Object.keys(skate.CATALOG),
 };

@@ -356,9 +356,10 @@ export const PIECES: Record<PieceKind, PieceDef> = {
       },
     ],
   },
-  // a bowl's corner: a quarter of 2.2 m to 80°, revolved a quarter turn round a 1.5 m flat
+  // a bowl's corner: the street quarter's arc (2.2 m to 78°: its lip level with theirs), revolved a quarter turn
+  // round a 1.5 m flat
   bowlcorner: (() => {
-    const prof = quarterProf(2.2, 80, 0, 0.8);
+    const prof = quarterProf(2.2, 78, 0, 0.8);
     const lip = prof.at(prof.copings[0]);
     const rIn = 1.5;
     const pts: [number, number, number][] = [];
@@ -494,7 +495,8 @@ export class SkatePark {
         this.lines.push({
           what: ln.what,
           pts: ln.pts.map(([u, w, z]) => {
-            const [x, y] = P(u, w * (ln.what === "coping" && def.surfaces[0]?.sweep === "line" ? W : 1));
+            // (a widened piece's lines across it move out with it — its copings, a box's edges; a rail is one line)
+            const [x, y] = P(u, w * (ln.what !== "rail" && def.surfaces[0]?.sweep !== "turn" ? W : 1));
             return [x, y, pc.z + z] as [number, number, number];
           }),
         });

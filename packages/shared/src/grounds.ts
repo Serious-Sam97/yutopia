@@ -117,6 +117,9 @@ import {
 import type { LotLayout } from "./lot.ts";
 import { type AreaDef, type MapDef, worldShift } from "./map.ts";
 import type { GroundWhat } from "./shapes/grounds.ts";
+import { inSkateYard, SKATE_HALL, SKATE_YARD } from "./skate/parks.ts";
+
+export { inSkateYard, SKATE_HALL, SKATE_YARD } from "./skate/parks.ts";
 
 // The Grounds (docs/plan/27-the-grounds.md): the land round the headquarters
 // made real — the campus, the woods inside the company's fence, the road out
@@ -272,7 +275,9 @@ export type BuildingKind =
   | "gas"
   | "barn"
   | "silo"
-  | "farmhouse";
+  | "farmhouse"
+  // (a disused warehouse: the skate hall's — docs/plan/103-the-skate.md F7c)
+  | "warehouse";
 export interface Building {
   key: string;
   kind: BuildingKind;
@@ -734,6 +739,12 @@ const BASE_BUILDINGS: Building[] = [
   b("barn", "barn", "Barn", 440, -320, 464, -302, 2, "w", { enter: true }),
   b("silo", "silo", "Silo", 468, -318, 476, -310, 4, "w"),
   b("farmhouse", "farmhouse", "Farmhouse", 440, -262, 454, -250, 2, "n", { enter: true }),
+  // the skate hall (docs/plan/103-the-skate.md F7c): a disused warehouse east of the townhouses, its door south to
+  // the outdoor park (skate/parks.ts: its pieces)
+  b(SKATE_HALL.key, "warehouse", "Skate hall", SKATE_HALL.x0, SKATE_HALL.z0, SKATE_HALL.x1, SKATE_HALL.z1, 2, "s", {
+    enter: true,
+    sign: "SKATE",
+  }),
 ];
 // two rows of the same townhouse up Church Street
 for (let k = 0; k < 7; k++) {
@@ -882,6 +893,7 @@ export const NATIVE_FACES: Partial<Record<BuildingKind, Face[]>> = {
   shed: ["n"],
   boathouse: ["s"],
   silo: ["n", "e", "s", "w"],
+  warehouse: ["s"],
 };
 // a quarter turn (+90° about up, as three.js turns: x' = z, z' = −x) takes a door from n to w,
 // w to s, s to e, e to n
@@ -1533,6 +1545,8 @@ export function terrainAt(x: number, z: number): number {
   if (x > SITE.x0 - 12 && x < SITE.x1 + 12 && z > SITE.z0 - 12 && z < SITE.z1 + 12) pads.push({ ...SITE, h: 0 });
   if (x > PLAZA.x0 - 8 && x < PLAZA.x1 + 8 && z > PLAZA.z0 - 8 && z < PLAZA.z1 + 8)
     pads.push({ ...PLAZA, h: macro(STATUE.x, STATUE.z) });
+  // (the outdoor skate park's concrete, levelled: docs/plan/103-the-skate.md F7c)
+  if (inSkateYard(x, z, 8)) pads.push({ ...SKATE_YARD });
   // (the Kart Park's car park, its footway and the turning circle: one level pad)
   if (KART_LAND && rectDist(KART_APRON, x, z) < 8) pads.push({ ...KART_APRON, h: KART_PARK.h });
   for (const p of pads) {
@@ -1614,6 +1628,8 @@ export function groundSurfaceAt(x: number, z: number, rough = false, under = fal
   if (x >= PLAZA.x0 && x < PLAZA.x1 && z >= PLAZA.z0 && z < PLAZA.z1) return "walk";
   // (the car dealer's forecourt: concrete, docs/plan/43-the-spot.md)
   if (inMotors(x, z)) return "walk";
+  // (the outdoor skate park: poured concrete, the snow kept off it — docs/plan/103-the-skate.md F7c)
+  if (inSkateYard(x, z)) return "walk";
   if (((x - POND.cx) / POND.rx) ** 2 + ((z - POND.cz) / POND.rz) ** 2 < 1) return "ice";
   const r = near.get(RIVER_F);
   if (r && r.d < RIVER.w / 2) return "ice";
@@ -1657,6 +1673,7 @@ const BUILT: Partial<Record<BuildingKind, Footing>> = {
   shelter: "concrete",
   silo: "concrete",
   block: "concrete",
+  warehouse: "concrete",
 };
 export const builtFooting = (kind: BuildingKind | undefined): Footing => (kind && BUILT[kind]) ?? "tile";
 
@@ -1691,7 +1708,11 @@ export function whatFooting(what: GroundWhat, way: () => Footing): Footing {
     case "kart_island":
     case "kart_tower":
     case "pk_wall":
+    case "skate_concrete":
       return "concrete";
+    // (the skate hall's ramps: plywood under masonite)
+    case "skate_wood":
+      return "wood";
     case "statue":
     case "edge":
       return "rock";
@@ -1790,6 +1811,7 @@ export function insideFence(x: number, z: number): boolean {
  *  the water (god mode's planted ones: docs/plan/53-the-god-mode.md, phase 8). */
 export function treeRoom(x: number, z: number): boolean {
   for (const bd of nearBuildings(x, z)) if (rectDist(bd, x, z) < 2) return false;
+  if (inSkateYard(x, z, 2)) return false;
   if (((x - POND.cx) / POND.rx) ** 2 + ((z - POND.cz) / POND.rz) ** 2 < 1.15) return false;
   for (const [f, n] of nearLines(x, z)) {
     if (f === RAVINE_F) {
@@ -1841,6 +1863,8 @@ export function treeDensity(x: number, z: number): number {
   }
   // the car dealer's forecourt, and a little round it
   if (inMotors(x, z, 2.5)) return 0;
+  // the outdoor skate park, and a little round it
+  if (inSkateYard(x, z, 4)) return 0;
   // the Kart Park's clearing, its car park
   if (
     KART_LAND &&
@@ -3091,6 +3115,8 @@ function fitsOf(b: Building): { floor: string; fits: Fit[] } {
     f("wardrobe", x0 + 8.4, z1 - 0.7, 1.6, 0.6, 2.0);
     return { floor: "#8a6a4a", fits };
   }
+  // (the skate hall: nothing fitted — its ramps are the skate's pieces, skate/parks.ts)
+  if (b.kind === "warehouse") return { floor: "#8e8b85", fits };
   if (b.kind === "gatehouse") {
     f("desk", x1 - 1.2, z0 + 0.8, 0.9, z1 - z0 - 1.6, 0.8);
     f("screens", x1 - 1.0, z0 + 1.6, 0.4, 2.4, 1.3, false);
@@ -3126,6 +3152,8 @@ export function wallsHigh(b: Building): number {
       return 5.2;
     case "farmhouse":
       return 6.2;
+    case "warehouse":
+      return SKATE_HALL.walls;
     default:
       return b.floors * 3.8 + 0.8;
   }
@@ -3517,6 +3545,7 @@ export const ANCHORED: Readonly<Record<string, string>> = {
   "building:motors": "Motors, the car dealer: its forecourt, the collection bay",
   "building:hall": "The town hall: a town car's home",
   "building:hotel": "The hotel: a town car's home",
+  "building:skatehall": "The skate hall: its ramps are laid out in it (skate/parks.ts)",
   "way:driveway": "The driveway: the shuttle's and the visitors' way in, the lot's mouth",
   "way:road": "The county road: the shuttle's and the visitors' way",
   "way:main": "Main Street: the shuttle's stop in town",
@@ -3542,6 +3571,11 @@ export const ANCHORED_AREAS: readonly { key: string; why: string; x0: number; z0
     z1: b.z1 + 2,
   })),
   { key: "area:forecourt", why: "Motors' forecourt", ...MOTORS.yard },
+  {
+    key: "area:skatepark",
+    why: "The outdoor skate park: its ramps are laid out on it (skate/parks.ts)",
+    ...SKATE_YARD,
+  },
 ];
 /** The anchored area at (x, z), or null; past the world's edge counts as one. */
 export function anchoredAt(x: number, z: number): { key: string; why: string } | null {
@@ -3683,6 +3717,7 @@ export const PREFABS: Partial<Record<BuildingKind, { min: number; max: number; f
   shed: { min: 6, max: 16, floors: 1 },
   gas: { min: 14, max: 28, floors: 1 },
   boathouse: { min: 8, max: 18, floors: 1 },
+  warehouse: { min: 16, max: 48, floors: 2 },
 };
 /** A boulder's or a planter's size, times its own; a sign's words; a fence's longest run (m). */
 export const THING_SIZE = { min: 0.5, max: 2 };
