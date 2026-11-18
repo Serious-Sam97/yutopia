@@ -12,6 +12,11 @@ export const CAR_BODY = {
   ploughtruck: { ahead: 3.6, behind: 3.0, width: 2.5, height: 3.0 },
   tractor: { ahead: 1.75, behind: 1.55, width: 1.9, height: 2.4 },
   toboggan: { ahead: 0.75, behind: 1.05, width: 0.6, height: 0.35 },
+  // (plan 101) the bicycles, their riders sat on them (the rider's head the height)
+  bike_town: { ahead: 1.03, behind: 0.79, width: 0.62, height: 1.62 },
+  bike_bmx: { ahead: 0.82, behind: 0.68, width: 0.7, height: 1.5 },
+  bike_mtb: { ahead: 0.97, behind: 0.76, width: 0.62, height: 1.58 },
+  bike_road: { ahead: 0.92, behind: 0.76, width: 0.44, height: 1.48 },
 };
 
 /** A car object's model (its props.model): which car it is (none: the sedan). */

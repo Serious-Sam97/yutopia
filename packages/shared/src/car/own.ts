@@ -21,6 +21,11 @@ export const BUYABLE: CarKind[] = [
   "tractor",
   "ploughtruck",
   "toboggan",
+  // (plan 101) the bicycles
+  "bike_town",
+  "bike_bmx",
+  "bike_mtb",
+  "bike_road",
 ];
 export const PLATE_MAX = 8;
 

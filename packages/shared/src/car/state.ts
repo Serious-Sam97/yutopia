@@ -92,6 +92,13 @@ export interface Controls {
   shiftDown?: boolean;
   /** keys (on/off: smoothed here) or a pad (already analog) */
   digital?: boolean;
+  /** (plan 101) a bicycle's: Shift held (stood on the pedals), Space held (the hop's charge: let go, it hops), the
+   *  rider's weight back (+1, Q: the wheelie, nose up in the air) or forward (−1, Z: the stoppie, nose down), the trick
+   *  key (E: an edge) */
+  sprint?: boolean;
+  hop?: boolean;
+  lean?: number;
+  trick?: boolean;
 }
 export const IDLE: Controls = { up: 0, down: 0, steer: 0, hand: 0, digital: true };
 

@@ -1,3 +1,4 @@
+import { BIKE_PALETTE, BIKE_VARIANTS, type BikeKind, bikeVariantsOf, isBikeKind } from "../bike/specs.ts";
 import { CAR_COLOURS } from "../lot.ts";
 import { type CarKind, type CarSpec, SPECS } from "./specs.ts";
 
@@ -224,6 +225,7 @@ const OWN_MODEL = new Set<CarKind>(["snowmobile", "snowcat", "ploughtruck", "tra
 /** The variants a kind may be (a saloon's chassis takes the estate's body too: the town's wagons). */
 export function variantsOf(kind: CarKind): string[] {
   if (OWN_MODEL.has(kind)) return [kind];
+  if (isBikeKind(kind)) return bikeVariantsOf(kind as BikeKind);
   return Object.keys(VARIANTS).filter(
     (v) => VARIANTS[v].kind === kind || (kind === "sedan" && VARIANTS[v].kind === "estate"),
   );
@@ -237,7 +239,8 @@ export const extrasOf = (variant: string): Extra[] => VARIANTS[variant]?.extras 
 /** The wheels a variant may have (the off-road ones on what stands high enough for them). */
 export function wheelsOf(variant: string): WheelStyle[] {
   const v = VARIANTS[variant];
-  if (!v) return [];
+  // (plan 101: a bike's wheels are its model's own)
+  if (!v) return BIKE_VARIANTS[variant] ? ["steel"] : [];
   const high = v.body === "4x4" || v.body === "pickup";
   return WHEELS.filter((w) => w !== "offroad" || high);
 }
@@ -278,6 +281,13 @@ export function seededLook(id: string, kind: CarKind, p: LookProps = {}): CarLoo
   // (its colour: the one the server knows it by — the lot's nine —, so parked and driven agree)
   const colour = ci >= 0 ? CAR_COLOURS[ci % CAR_COLOURS.length] : PALETTE[Math.floor(r() * PALETTE.length)];
   if (OWN_MODEL.has(kind)) return { variant: kind, colour, extras: [], wheels: "steel" };
+  if (isBikeKind(kind)) {
+    // (plan 101: a bike's own variants, the plainer commoner; its paint the bikes' palette)
+    const pool = bikeVariantsOf(kind as BikeKind);
+    const x = r();
+    const c = BIKE_PALETTE[Math.floor(r() * BIKE_PALETTE.length)];
+    return { variant: pool[x < 0.5 ? 0 : x < 0.8 ? 1 : 2] ?? pool[0], colour: c, extras: [], wheels: "steel" };
+  }
   let pool = variantsOf(kind);
   if (kind === "sedan") pool = pool.filter((v) => (p.wagon ? v.startsWith("estate") : v.startsWith("saloon")));
   let variant: string;
@@ -325,7 +335,7 @@ export function validLook(kind: CarKind, x: unknown): CarLook | null {
   const colour = Number(o.colour);
   if (!Number.isInteger(colour) || colour < 0 || colour > 0xffffff) return null;
   const look: CarLook = { variant, colour, extras: [], wheels: "steel" };
-  if (OWN_MODEL.has(kind)) return look;
+  if (OWN_MODEL.has(kind) || isBikeKind(kind)) return look;
   if (o.colour2 !== undefined && o.colour2 !== null) {
     const c2 = Number(o.colour2);
     if (!twoToneOf(variant) || !Number.isInteger(c2) || c2 < 0 || c2 > 0xffffff) return null;
@@ -347,6 +357,7 @@ export function validLook(kind: CarKind, x: unknown): CarLook | null {
  *  a work vehicle its one model. */
 export function bodyVariants(kind: CarKind): string[] {
   if (OWN_MODEL.has(kind)) return [kind];
+  if (isBikeKind(kind)) return bikeVariantsOf(kind as BikeKind);
   return Object.keys(VARIANTS).filter((v) => VARIANTS[v].kind === kind);
 }
 
@@ -355,7 +366,8 @@ export function bodyVariants(kind: CarKind): string[] {
 export function buyLook(kind: CarKind, x: unknown): CarLook | null {
   const look = validLook(kind, x);
   if (!look || !bodyVariants(kind).includes(look.variant)) return null;
-  if (!PALETTE.includes(look.colour)) return null;
+  // (a bike: its own brights, or a car's paint)
+  if (!PALETTE.includes(look.colour) && !(isBikeKind(kind) && BIKE_PALETTE.includes(look.colour))) return null;
   if (look.colour2 !== undefined && !PALETTE.includes(look.colour2)) return null;
   return look;
 }
@@ -384,6 +396,7 @@ export function startLook(kind: CarKind, from?: CarLook | null): CarLook {
   if (ok) return ok;
   const variant = bodyVariants(kind)[0];
   const def = VARIANTS[variant];
+  if (isBikeKind(kind)) return { variant, colour: BIKE_PALETTE[0], extras: [], wheels: "steel" };
   return { variant, colour: PALETTE[1], extras: [], wheels: def?.wheels ?? "steel" };
 }
 

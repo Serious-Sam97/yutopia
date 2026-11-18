@@ -27,6 +27,9 @@ export interface WheelDef {
   brake: number; // N·m
   hand: number; // N·m (the handbrake's)
   inertia: number; // kg·m²
+  /** (plan 101) a bicycle's fork: its steering axis tilted back from upright by this (rad) — the suspension down
+   *  along it, the wheel steered about it */
+  caster?: number;
 }
 
 /** The drivetrain: Jolt's engine (its curve normalised to `torque`), gearbox and diffs. */
@@ -75,6 +78,9 @@ export interface CarDef {
   tracks?: [TrackDef, TrackDef];
   /** how far it may pitch or roll before Jolt holds it (rad; π: never) */
   maxTilt?: number;
+  /** (plan 101) two wheels (front, rear) held up by Jolt's motorcycle controller: it leans into a turn by itself (its
+   *  lean spring), no further than `maxLean` (rad) */
+  bike?: { maxLean: number; spring?: number; damp?: number; smooth?: number };
 }
 
 /** What a car reads back (read()), reused: its centre of mass, its turn, velocities; each wheel. */
@@ -133,6 +139,8 @@ export class WorldCar {
   private readonly listener: Jolt.VehicleConstraintStepListener;
   private readonly tester: Jolt.VehicleCollisionTester;
   private readonly wheeled: Jolt.WheeledVehicleController | null;
+  /** (plan 101) a bicycle's: the same controller, seen as Jolt's motorcycle (its lean held or let go) */
+  private readonly moto: Jolt.MotorcycleController | null;
   private readonly tracked: Jolt.TrackedVehicleController | null;
   private readonly callbacks: Jolt.WheeledVehicleControllerCallbacksJS | null;
   private readonly wheels: Jolt.Wheel[] = [];
@@ -206,9 +214,18 @@ export class WorldCar {
       const ws = tracked ? new J.WheelSettingsTV() : new J.WheelSettingsWV();
       this.v.Set(w.x, w.y, w.z);
       ws.mPosition = this.v;
-      this.v.Set(0, -1, 0);
-      ws.mSuspensionDirection = this.v;
-      ws.mSteeringAxis = this.up;
+      if (w.caster) {
+        // (plan 101: a fork raked forward — the suspension down along it, the steering about it, up and back)
+        const c = w.caster;
+        this.v.Set(Math.sin(c), -Math.cos(c), 0);
+        ws.mSuspensionDirection = this.v;
+        this.v.Set(-Math.sin(c), Math.cos(c), 0);
+        ws.mSteeringAxis = this.v;
+      } else {
+        this.v.Set(0, -1, 0);
+        ws.mSuspensionDirection = this.v;
+        ws.mSteeringAxis = this.up;
+      }
       ws.mWheelUp = this.up;
       this.v.Set(1, 0, 0);
       ws.mWheelForward = this.v;
@@ -292,7 +309,15 @@ export class WorldCar {
       }
       vcs.mController = cs;
     } else {
-      const cs = new J.WheeledVehicleControllerSettings();
+      const bike = def.bike;
+      const ms = bike ? new J.MotorcycleControllerSettings() : null;
+      if (ms && bike) {
+        ms.mMaxLeanAngle = bike.maxLean;
+        if (bike.spring !== undefined) ms.mLeanSpringConstant = bike.spring;
+        if (bike.damp !== undefined) ms.mLeanSpringDamping = bike.damp;
+        if (bike.smooth !== undefined) ms.mLeanSmoothingFactor = bike.smooth;
+      }
+      const cs = ms ?? new J.WheeledVehicleControllerSettings();
       engineOf(cs.mEngine);
       gearsOf(cs.mTransmission);
       cs.mDifferentials.clear();
@@ -321,6 +346,7 @@ export class WorldCar {
     h.system.AddStepListener(this.listener);
     const ctl = this.constraint.GetController();
     this.wheeled = tracked ? null : J.castObject(ctl, J.WheeledVehicleController);
+    this.moto = def.bike ? J.castObject(ctl, J.MotorcycleController) : null;
     this.tracked = tracked ? J.castObject(ctl, J.TrackedVehicleController) : null;
     for (let i = 0; i < def.wheels.length; i++) {
       const w = this.constraint.GetWheel(i);
@@ -374,6 +400,16 @@ export class WorldCar {
       this.tracked.SetDriverInput(forward, Math.max(-1, l), Math.max(-1, r), brake);
     }
     if (forward !== 0 || right !== 0 || brake !== 0) this.h.bodies.ActivateBody(this.id);
+  }
+
+  /** (plan 101) A bicycle's lean held by Jolt (riding) or let go (thrown off: it falls over). */
+  holdLean(on: boolean): void {
+    if (this.gone || !this.moto) return;
+    if (this.moto.IsLeanControllerEnabled() !== on) this.moto.EnableLeanController(on);
+    if (on) this.h.bodies.ActivateBody(this.id);
+  }
+  get isBike(): boolean {
+    return !!this.moto;
   }
 
   /** The gearbox: auto, or manual and in this gear (−1 reverse, 0 neutral). */
@@ -539,7 +575,15 @@ export class WorldCar {
     J.destroy(this.listener);
     // (the constraint holds the tester: both freed with its last ref)
     this.constraint.Release();
-    this.h.forget(this.constraint, this.tester, this.wheeled, this.tracked, ...this.wheels, ...this.wheelsWV);
+    this.h.forget(
+      this.constraint,
+      this.tester,
+      this.wheeled,
+      this.tracked,
+      this.moto,
+      ...this.wheels,
+      ...this.wheelsWV,
+    );
     this.h.bodies.RemoveBody(this.id);
     this.h.bodies.DestroyBody(this.id);
     this.h.forget(this.body, this.id);

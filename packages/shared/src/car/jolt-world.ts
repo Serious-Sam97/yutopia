@@ -4,6 +4,7 @@
 // steps its own (two collision steps a frame). Not for the game: the browser's world is its own
 // (tp/physics3d.ts). Not in the car's index: it brings Jolt with it.
 
+import { BikeDrive, bikeDefOf } from "../bike/drive.ts";
 import { loadJolt } from "../physics/load.ts";
 import { PhysicsWorld, sizesFor } from "../physics/world.ts";
 import type { Solid3 } from "../shapes/index.ts";
@@ -27,7 +28,7 @@ const RING = 3;
 export class JoltCarWorld {
   private readonly built = new Set<string>();
   private readonly solidsBuilt = new Set<string>();
-  readonly drives: Drive[] = [];
+  readonly drives: (Drive | BikeDrive)[] = [];
 
   private constructor(
     readonly world: PhysicsWorld,
@@ -74,6 +75,19 @@ export class JoltCarWorld {
     }
     if (s3.length) this.world.setStatic(`solids:${k}`, s3, "wall");
     return true;
+  }
+
+  /** (plan 101) A bicycle of `spec` at (x, z) heading a, on its wheels, its rider on it. */
+  addBike(spec: CarSpec, x: number, z: number, a = 0): BikeDrive {
+    this.around(x, z);
+    const s = createCar(spec, x, this.cw.height(x, z), z, a);
+    settle(s, this.cw);
+    const car = this.world.addCar(bikeDefOf(spec), s.p.x, s.p.y + 0.03, s.p.z, [s.q.x, s.q.y, s.q.z, s.q.w]);
+    if (!car) throw new Error("no room for a bike");
+    const d = new BikeDrive(s, car);
+    this.drives.push(d);
+    d.post(this.cw, 1 / 60);
+    return d;
   }
 
   /** A car of `spec` at (x, z) heading a, on its wheels. */

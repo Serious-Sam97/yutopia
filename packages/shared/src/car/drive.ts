@@ -660,79 +660,13 @@ export class Drive {
   /** People and pets in its way (never hurt: they're knocked, the car pushed off them softly) and
    *  the soft snowbanks: from the world's solids round it. */
   private soft(world: CarWorld, X: number[], dt: number) {
-    const s = this.s;
-    const b = s.spec.body;
-    const hx = (b.ahead + b.behind) / 2;
-    const hz = b.width / 2;
-    const off = (b.ahead - b.behind) / 2;
-    const fl = Math.hypot(X[0], X[2]) || 1;
-    const ax = X[0] / fl;
-    const az = X[2] / fl;
-    const cx = s.p.x + ax * off;
-    const cz = s.p.z + az * off;
-    sv.length = 0;
-    world.solids(cx, cz, hx + 2, sv);
-    let px = 0;
-    let pz = 0;
-    for (const o of sv) {
-      if (!o.soft || o.kind !== "circle") continue;
-      const r0 = o.r ?? 0.3;
-      const dx = o.x - cx;
-      const dz = o.z - cz;
-      const lu = dx * ax + dz * az;
-      const lv = -dx * az + dz * ax;
-      const qu = clamp(lu, -hx, hx);
-      const qv = clamp(lv, -hz, hz);
-      const eu = lu - qu;
-      const ev = lv - qv;
-      const d = Math.hypot(eu, ev);
-      if (d >= r0) continue;
-      let nu = 0;
-      let nv = 0;
-      if (d > 1e-6) {
-        nu = -eu / d;
-        nv = -ev / d;
-      } else if (hx - Math.abs(lu) < hz - Math.abs(lv)) nu = -Math.sign(lu);
-      else nv = -Math.sign(lv);
-      const nx = nu * ax - nv * az;
-      const nz = nu * az + nv * ax;
-      // (the car's speed into it)
-      const vin = -(s.v.x * nx + s.v.z * nz);
-      const depth = r0 - d;
-      const m = o.m ?? 80;
-      // (soft: a fraction of its speed into it taken, by the masses — a person, a bank)
-      // (plan 93 S3: a person or a pet met at a crawl stops it at the bumper — never crept through; faster, it
-      // gives a little, and they're knocked)
-      const person = o.what === "person" || o.what === "pet";
-      const crawl = person && vin < 1.2;
-      if (vin > 0) {
-        const share = m / (m + s.spec.mass);
-        const dvn = crawl ? vin : vin * Math.min(1, share * 1.6 + 0.04);
-        px += nx * dvn;
-        pz += nz * dvn;
-        const j = s.spec.mass * dvn;
-        if (!s.hit || j > s.hit.j)
-          s.hit = { j, x: o.x - nx * r0, z: o.z - nz * r0, what: o.what ?? "bank", at: s.t, id: o.id, v: vin };
-      }
-      // (plan 94 P7: a person or a pet never moves the car — a ton and more against one. They take its speed into
-      // them, above, and hold it off only while it's driven into them (the throttle, its gear their way: never
-      // crept through, plan 93 S3); leant on, walked into, it doesn't budge — it's them their own screen pushes out
-      // of its box. The banks: pushed off)
-      const dir = s.gear === -1 ? -1 : s.gear > 0 ? 1 : 0;
-      const driven = s.thr > 0.02 && dir * -(nx * ax + nz * az) > 0.3;
-      const out = !person ? 20 : driven ? 80 : 0;
-      px += nx * depth * out * dt;
-      pz += nz * depth * out * dt;
-    }
-    if (px || pz) {
-      this.car.setVelocity([s.v.x + px, s.v.y, s.v.z + pz], [s.w.x, s.w.y, s.w.z]);
-      s.v.x += px;
-      s.v.z += pz;
-    }
+    softHits(this.s, this.car, world, X, dt);
   }
-
   /** After the world's step: Jolt's car read back into the state; a hard knock found. */
   post(world: CarWorld, dt: number, named?: (body: number) => string | undefined) {
+    this.postDrive(world, dt, named);
+  }
+  private postDrive(world: CarWorld, dt: number, named?: (body: number) => string | undefined) {
     const s = this.s;
     const r = this.read;
     // (the engine as setEngine left it since: started, dried up)
@@ -947,4 +881,77 @@ function readOfDrive(n: number): CarRead {
       on: 0,
     })),
   };
+}
+
+/** (plan 101: out of Drive, for the bikes too) People and pets in a vehicle's way — never hurt: they're knocked, it's
+ *  pushed off them softly — and the soft snowbanks: from the world's solids round it. */
+export function softHits(s: CarState, car: WorldCar, world: CarWorld, X: number[], dt: number) {
+  const b = s.spec.body;
+  const hx = (b.ahead + b.behind) / 2;
+  const hz = b.width / 2;
+  const off = (b.ahead - b.behind) / 2;
+  const fl = Math.hypot(X[0], X[2]) || 1;
+  const ax = X[0] / fl;
+  const az = X[2] / fl;
+  const cx = s.p.x + ax * off;
+  const cz = s.p.z + az * off;
+  sv.length = 0;
+  world.solids(cx, cz, hx + 2, sv);
+  let px = 0;
+  let pz = 0;
+  for (const o of sv) {
+    if (!o.soft || o.kind !== "circle") continue;
+    const r0 = o.r ?? 0.3;
+    const dx = o.x - cx;
+    const dz = o.z - cz;
+    const lu = dx * ax + dz * az;
+    const lv = -dx * az + dz * ax;
+    const qu = clamp(lu, -hx, hx);
+    const qv = clamp(lv, -hz, hz);
+    const eu = lu - qu;
+    const ev = lv - qv;
+    const d = Math.hypot(eu, ev);
+    if (d >= r0) continue;
+    let nu = 0;
+    let nv = 0;
+    if (d > 1e-6) {
+      nu = -eu / d;
+      nv = -ev / d;
+    } else if (hx - Math.abs(lu) < hz - Math.abs(lv)) nu = -Math.sign(lu);
+    else nv = -Math.sign(lv);
+    const nx = nu * ax - nv * az;
+    const nz = nu * az + nv * ax;
+    // (the car's speed into it)
+    const vin = -(s.v.x * nx + s.v.z * nz);
+    const depth = r0 - d;
+    const m = o.m ?? 80;
+    // (soft: a fraction of its speed into it taken, by the masses — a person, a bank)
+    // (plan 93 S3: a person or a pet met at a crawl stops it at the bumper — never crept through; faster, it
+    // gives a little, and they're knocked)
+    const person = o.what === "person" || o.what === "pet";
+    const crawl = person && vin < 1.2;
+    if (vin > 0) {
+      const share = m / (m + s.spec.mass);
+      const dvn = crawl ? vin : vin * Math.min(1, share * 1.6 + 0.04);
+      px += nx * dvn;
+      pz += nz * dvn;
+      const j = s.spec.mass * dvn;
+      if (!s.hit || j > s.hit.j)
+        s.hit = { j, x: o.x - nx * r0, z: o.z - nz * r0, what: o.what ?? "bank", at: s.t, id: o.id, v: vin };
+    }
+    // (plan 94 P7: a person or a pet never moves the car — a ton and more against one. They take its speed into
+    // them, above, and hold it off only while it's driven into them (the throttle, its gear their way: never
+    // crept through, plan 93 S3); leant on, walked into, it doesn't budge — it's them their own screen pushes out
+    // of its box. The banks: pushed off)
+    const dir = s.gear === -1 ? -1 : s.gear > 0 ? 1 : 0;
+    const driven = s.thr > 0.02 && dir * -(nx * ax + nz * az) > 0.3;
+    const out = !person ? 20 : driven ? 80 : 0;
+    px += nx * depth * out * dt;
+    pz += nz * depth * out * dt;
+  }
+  if (px || pz) {
+    car.setVelocity([s.v.x + px, s.v.y, s.v.z + pz], [s.w.x, s.w.y, s.w.z]);
+    s.v.x += px;
+    s.v.z += pz;
+  }
 }

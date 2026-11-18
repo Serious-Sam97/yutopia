@@ -1,3 +1,4 @@
+import { BIKE_SEATS, BIKE_SPECS, type BikeKind, type BikeSpec } from "../bike/specs.ts";
 import { CAR_BODY } from "./body.ts";
 import type { Foot } from "./grip.ts";
 
@@ -18,7 +19,9 @@ export type CarKind =
   | "snowcat"
   | "ploughtruck"
   | "tractor"
-  | "toboggan";
+  | "toboggan"
+  // (plan 101) the bicycles
+  | BikeKind;
 
 export interface AxleSpec {
   k: number; // spring rate per wheel (N/m)
@@ -75,6 +78,8 @@ export interface CarSpec {
   blade?: boolean;
   aero: { cda: number };
   fuel: { litres: number; perKm: number }; // tank, and use at a steady 80 km/h
+  /** (plan 101) a bicycle: ridden on two wheels (shared bike/drive.ts BikeDrive), pedalled */
+  bike?: BikeSpec;
 }
 
 /** The 80s rear-wheel-drive saloon: 2.3 L straight-four, 5-speed, open diff. */
@@ -559,6 +564,7 @@ export const SPECS: Record<CarKind, CarSpec> = {
   ploughtruck: PLOUGHTRUCK,
   tractor: TRACTOR,
   toboggan: TOBOGGAN,
+  ...BIKE_SPECS,
 };
 
 /** Is a vehicle of this kind one of the cars people drive (not the shuttle, the plough…)? */
@@ -782,6 +788,7 @@ export const SEATS_OF: Record<CarKind, { at: [number, number][]; hip: number[]; 
         ],
       ],
     },
+    ...BIKE_SEATS,
   };
 })();
 
