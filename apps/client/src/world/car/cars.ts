@@ -127,6 +127,7 @@ import type { BrowserPhysics } from "../tp/physics3d";
 import { thrown } from "../tp/thrown";
 import type { ThirdPersonView } from "../tp/view";
 import { AT, growOf, SHOWN, wx, wxHold, wxNow } from "../tp/wx3d";
+import { doorMarksOn, doorwayOf, handsOnGrips, stepOf } from "./act-pose";
 import { CarInput, type Switch } from "./controls";
 import { swingDoor } from "./door";
 import {
@@ -152,13 +153,11 @@ import {
   ENTER_FAST_S,
   ENTER_S,
   EXIT_S,
-  edgeY,
-  handleY,
   newActPose,
   roofGrip,
   seatGrip,
-  thighGrip,
   straddleAt,
+  thighGrip,
 } from "./getin";
 import { CarHud } from "./hud";
 import { CarPlayback } from "./playback";
@@ -166,7 +165,6 @@ import { probeLook, probeWarm } from "./probe-look";
 import { type CarExtras, CarSound, distanceGain, HEARD, preloadEngine } from "./sound";
 import { doorSlots, slotBuffers, voiceOf } from "./sound-bank";
 import { type SpotPrompt, Spots, spotNo } from "./spot";
-import { handsOnGrips, stepOf } from "./act-pose";
 import { WarmModel } from "./warm-model";
 
 // MOTORS' panel, with the cars (the world page's panels are full): docs/plan/43-the-spot.md
@@ -3234,7 +3232,9 @@ export class Cars {
         } else e = { m, seat: i, key, at, via, belted: at < 0 };
         // (plan 100 F3c) in hurried: mine as I asked; anyone's struck a moment ago
         if (at === this.time && e.at === at)
-          e.len = (sid === room.sessionId ? this.myFast || this.hurried(sid) : this.hurried(sid)) ? ENTER_FAST_S : ENTER_S;
+          e.len = (sid === room.sessionId ? this.myFast || this.hurried(sid) : this.hurried(sid))
+            ? ENTER_FAST_S
+            : ENTER_S;
         // (plan 98: in from where I stood — my walker's place —: the act's first beat steps onto the door's spot)
         if (at === this.time && sid === room.sessionId) {
           const me = this.host.me();
@@ -3372,15 +3372,16 @@ export class Cars {
           at === "thigh"
             ? l.model.body.localToWorld(thighGrip(act, S, way.k, hB))
             : at === "roof"
-            ? l.model.body.localToWorld(roofGrip(way, hB))
-            : at === "seat"
-              ? l.model.body.localToWorld(seatGrip(way, hB))
-              : at === "saddle"
-                ? l.model.body.localToWorld(hB.set(way.hip.x + 0.28, way.hip.y + 0.06, way.hip.z))
-                : at === "wheel"
-                  ? l.model.body.localToWorld(l.model.rim(way.s * 0.75, hB))
-                  : ((at === "handle" ? e.handle : at === "pull" ? e.pull : at === "edge" ? e.edge : e.top) ?? null)
-                      ?.getWorldPosition(hB) ?? null,
+              ? l.model.body.localToWorld(roofGrip(way, hB))
+              : at === "seat"
+                ? l.model.body.localToWorld(seatGrip(way, hB))
+                : at === "saddle"
+                  ? l.model.body.localToWorld(hB.set(way.hip.x + 0.28, way.hip.y + 0.06, way.hip.z))
+                  : at === "wheel"
+                    ? l.model.body.localToWorld(l.model.rim(way.s * 0.75, hB))
+                    : ((
+                        (at === "handle" ? e.handle : at === "pull" ? e.pull : at === "edge" ? e.edge : e.top) ?? null
+                      )?.getWorldPosition(hB) ?? null),
         );
         const dbg = (globalThis as { __actDbg?: unknown[] }).__actDbg;
         if (dbg)
@@ -3780,98 +3781,17 @@ export class Cars {
     seatIn: number,
     door: number,
   ): Doorway | null {
-    const mod = l.model;
-    const seat = mod.seats[seatIn];
-    // (no door: straddled from the side they stood on — the seat's own side, else the left)
-    const fs = e.from ? Math.sign(e.from.z - (seat?.hip.z ?? 0)) : 0;
-    const op =
-      door >= 0
-        ? (mod.openingOf?.(door) ?? null)
-        : seat
-          ? {
-              x0: seat.hip.x - 0.4,
-              x1: seat.hip.x + 0.4,
-              y0: 0,
-              y1: seat.hip.y,
-              out: Math.abs(seat.hip.z) + 0.3,
-              glass: seat.hip.y,
-              slide: false,
-            }
-          : null;
-    if (!seat || !op) return null;
-    // (plan 100) a back door whose own meshes don't hold its frame and glass (the sedan's: one stops at its belt, the
-    // other takes the roof's rail with it) — its opening's foot and top, and its belt, the front door's on its side
-    let opening = op;
-    let belt = door >= 0 ? mod.sillOf?.(door)?.y : undefined;
-    if (door >= 0 && mod.doorOf) {
-      const front = mod.doorOf(Math.sign(seat.hip.z) > 0 ? 0 : 1);
-      const ref = front >= 0 && front !== door ? mod.openingOf?.(front) : null;
-      if (ref && (Math.abs(op.y1 - ref.y1) > 0.15 || Math.abs(op.y0 - ref.y0) > 0.06)) {
-        opening = { ...op, y0: ref.y0, y1: ref.y1, glass: ref.glass };
-        belt = mod.sillOf?.(front)?.y ?? belt;
-      }
-      belt ??= mod.sillOf?.(front)?.y;
-    }
-    const k = e.m.root.scale.x || 1;
-    const fit = carFit(e.m, seat, seatIn === 0, mod, k, -1);
-    // (each foot sat, from her own space — x out to its side, ahead, up — into the body's: sat facing −x)
-    const satFeet = fit.feet.map((f, i) => {
-      const left = (i === 0 ? 1 : -1) * f[0];
-      return new Vector3(seat.hip.x - f[1] * k, f[2] * k, seat.hip.z + left * k);
-    }) as [Vector3, Vector3];
-    const s = door < 0 ? fs || Math.sign(seat.hip.z) || 1 : Math.sign(seat.hip.z) || 1;
-    return {
-      s,
-      op: opening,
-      hip: seat.hip,
-      floor: seat.floor ?? mod.floor ?? seat.hip.y - 0.4,
-      stand: fit.stand * k,
-      satHip: (fit.stand + fit.drop) * k,
-      satFeet,
-      k,
-      driver: seatIn === 0 && !!mod.rim,
-      belt,
-    };
+    return doorwayOf(l.model, e.m, seatIn, door, e.from?.z ?? null);
   }
-  /** (plan 93 C, plan 98) The door's handle, its inside pull and its frame's top at the back: marks on the door's own
-   *  group, put on while it's shut, so a hand stays on them as it swings. */
+  /** (plan 93 C, plan 98) The door's handle, its inside pull, its frame's top and its back edge: marks on the door's
+   *  own group (act-pose.ts doorMarksOn), so a hand stays on them as it swings. */
   private doorMarks(
     l: LiveView,
     e: LiveView["people"] extends Map<string, infer P> ? P : never,
     door: number,
     way: Doorway,
   ) {
-    const mod = l.model;
-    const dg = mod.doors[door].group;
-    if (e.handle && e.handle.parent === dg && e.top && e.edge) return;
-    const a = l.doors[door] ?? 0;
-    mod.doors[door].open(0);
-    mod.root.updateMatrixWorld(true);
-    e.handle?.removeFromParent();
-    e.pull?.removeFromParent();
-    e.top?.removeFromParent();
-    e.edge?.removeFromParent();
-    const h = new Object3D();
-    const ed = new Object3D();
-    const pu = new Object3D();
-    const tp = new Object3D();
-    dg.add(h, pu, tp, ed);
-    const { op, s } = way;
-    const mid = (op.y0 + op.y1) / 2;
-    // (the handle: just ahead of the door's back edge, under the glass, on its skin; the pull inside, ahead of it,
-    // at the armrest; the frame's top at the back, over the glass)
-    h.position.copy(dg.worldToLocal(mod.body.localToWorld(hA.set(op.x1 - 0.1, handleY(way), s * (op.out + 0.01)))));
-    pu.position.copy(dg.worldToLocal(mod.body.localToWorld(hA.set(op.x1 - 0.42, mid + 0.02, s * (op.out - 0.1)))));
-    tp.position.copy(
-      dg.worldToLocal(mod.body.localToWorld(hA.set(op.x1 - 0.14, op.glass + 0.02, s * (op.out - 0.04)))),
-    );
-    // (plan 100) its back edge at the chest of someone stood by it: held opening it, getting in and out
-    ed.position.copy(dg.worldToLocal(mod.body.localToWorld(hA.set(op.x1 - 0.03, edgeY(way), s * (op.out - 0.02)))));
-    e.handle = h;
-    e.pull = pu;
-    e.top = tp;
-    e.edge = ed;
-    mod.doors[door].open(a);
+    doorMarksOn(l.model, door, way, e, l.doors[door] ?? 0);
   }
 
   /** (plan 93 S4) A car's own storage open here (the pack shows it in the ground's place): sat in its front, its

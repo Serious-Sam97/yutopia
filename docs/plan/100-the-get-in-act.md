@@ -9,7 +9,7 @@ Only this one thing: the act of getting into a car (`car/getin.ts`, posed by `ch
 
 Status: **planned 2026-11-18; forks decided 2026-11-18 one by one: F1a procedural rebuilt, F2a GTA's way in, F3c
 length by context, F4b out too, F5a every seat and vehicle, F6b no sign-off stills (build straight), F7a straight
-through — you test at the end.**
+through — you test at the end. Built 2026-11-18, phases 0–8; committed to main, not pushed.**
 
 ## Where we are — stills of today's act (`e2e/car-act.mts`, Main Street's first town car, the driver's door)
 
@@ -169,3 +169,50 @@ motion (anticipation before the sit, a small landing as the hips meet the seat).
 - [Development of Grand Theft Auto V (motion capture)](https://www.wikipedia.org/wiki/Development_of_Grand_Theft_Auto_V)
 - [GTA IV's Niko Bellic animated — Game Developer](https://www.gamedeveloper.com/game-platforms/gamefest-how-i-gta-iv-i-s-niko-bellic-got-animated)
 - The GTA V and GTA IV get-ins themselves, as played (the beats above).
+
+## Built (2026-11-18)
+
+- **The act** (`car/getin.ts`), 2.4 s in (1.6 s hurried: ran up — over 3 m/s on foot as she asked — or hit in the last
+  4 s), 2.2 s out:
+  - in: the walk's end onto the spot behind the handle; the outside hand hooked under the handle, the door pulled open
+    with a step back (the door moved by the hand, then swinging on, slowing); the hand onto the door's back edge at the
+    chest (`edge` — never over the head); a step into the gap past the open door's end; a dip, then the inside foot
+    over the sill onto the footwell's floor while the hips go down and in onto the seat's edge, the weight on the
+    outside foot planted by the sill, the inside hand on the wheel (a passenger's on the seat's bolster), the head
+    ducked as far as the roof needs (worked out from her head and the opening's top); the hand off the door onto her
+    thigh; the outside knee up, its foot over the sill and in, turned to the front, back in the seat; leant out and
+    twisted, the hand on the pull, the door drawn shut (eased in: a slam).
+  - out: the door pushed open by its pull, swinging on; the hand on her thigh; to the seat's edge, the pedal foot back
+    by the door, the outside foot out over the sill onto the ground; leant forward over it and up, ducked, the inside
+    foot out; the hand on the door's edge; a step back behind the door, pushed shut by it; a step to where she goes on.
+  - a seat behind the opening (a two-door's back seat): in by the opening, sat on its edge there, along the seat; the
+    door let go — it shuts by itself.
+  - a seat far behind its door (the pickup's bed, the snowcat's back cabin): climbed into (the straddle act), no door.
+  - tall cabs (`climbAt`: the plough truck, the snowcat, the tractor): the door pulled open from the ground (its handle
+    low on it); facing the cab, the inside hand on the grab handle by the door, up two steps a foot at a time onto its
+    threshold (the door's foot — the cab's floor is lower inside), stood ducked in the doorway as tall as it lets her;
+    turned and sat, the outside leg in; the door let go. Out the same, backwards, down the steps facing the cab.
+  - every foot kept within its leg's reach while it's down (the hips pulled toward it); each knee the way its foot
+    goes, up as it's lifted; each foot's heading held while it's planted; the shoulders lead the hips round; the head
+    looks at the handle, into the car, out at the pull.
+- **The body** (`chars/anim/acts.ts carStep`): each leg solved in three dimensions (the thigh's turn under the hips,
+  the knee's bend toward its pole, the ankle turned to the foot's heading and toe), the trunk's twist, the head's
+  turn, each hand's shape on what it holds (hooked on a handle, wrapped on the wheel or the door's edge, flat on the
+  seat, easy on her thigh).
+- **On a body** (`car/act-pose.ts`): the act in her own space for carStep; each hand to its grips — moving from one to
+  the next between them, its elbow as each grip wants it; the doorway measured (`doorwayOf`: a back door whose meshes
+  don't hold its frame — the sedan's — takes the front door's heights and belt) and the door's marks (`doorMarksOn`:
+  the handle, the pull, the frame's top, the back edge). Shared by the game and the bench.
+- **The checks** (`car/act-faults.ts`): a leg out of reach, a knee or foot through the door, the sill, the floor or the
+  car's side, a hand over the head (not a tall cab's), an arm out of reach, the head through the roof — run by
+  `getin.test.ts` over every door of every vehicle the world parks (`ways.fixture.json`, measured in the game by
+  `e2e/car-ways.mts`), in and out, every 20 ms: 26/26 clean.
+- **The bench** (`/dev/getin?car=…&seat=…&out=1&fast=1`): the act scrubbed, played, slowed; beside the door, the front,
+  behind, above, or turned by hand; the grips and the feet marked, the faults listed.
+- **Checked:** `e2e/car-act.mts` (new beats' moments) from behind, the front and beside the door; car.spec 3/3 (the
+  flier test flaked once under load, passed alone), car-look, pets-car; `e2e/car-hold.mts` (the act's end 463 ms after
+  W); `e2e/car-blink.mts` (no frame without a car); client unit tests 449/450 (the one red: the HUD's hard-coded
+  colours in Overlays.tsx, from plan 98 phase 26); typecheck clean.
+- **Not done / seen in passing:** the door's inside face draws as a flat black panel; the van's sliding door uses the
+  hinged door's marks (no van parked in the world to measure); the seated person's own model compiles a clothes
+  variant on the first get-in (~10 ms).
