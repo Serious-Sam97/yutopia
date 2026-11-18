@@ -1,0 +1,5 @@
+# plan 106: the downloaded footage, its poses and the pose tool (not committed)
+footage/
+poses/
+.venv/
+models/

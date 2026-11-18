@@ -100,7 +100,20 @@ export class Frame {
     this.lift.lerp(o.lift, w);
     this.bc.lerp(o.bc, w);
     // (a shove-it's board ends turned 180°: the same board to the eye — swapped at once, not spun back)
-    if (Math.abs(_qa.copy(this.bq).multiply(RY_PI).dot(o.bq)) > Math.abs(this.bq.dot(o.bq))) this.bq.multiply(RY_PI);
+    if (Math.abs(_qa.copy(this.bq).multiply(RY_PI).dot(o.bq)) > Math.abs(this.bq.dot(o.bq))) {
+      this.bq.multiply(RY_PI);
+      // (plan 106: her feet on it were its own spots turned round with it — turned back with it, so they stay put)
+      for (const f of this.foot) {
+        f.p.x = -f.p.x;
+        f.p.z = -f.p.z;
+        f.h -= Math.PI;
+      }
+      for (const h of this.hand) {
+        if (h.root) continue;
+        h.p.x = -h.p.x;
+        h.p.z = -h.p.z;
+      }
+    }
     this.bq.slerp(o.bq, w);
     for (let i = 0; i < 2; i++) {
       const a = this.foot[i];
@@ -140,6 +153,8 @@ const _qa = new Quaternion();
 const _qb = new Quaternion();
 const RY_PI = new Quaternion(0, 1, 0, 0);
 const _va = new Vector3();
+/** (plan 106) the joints on springs: the neck, the head, each shoulder and elbow */
+const SPRUNG = [3, 4, 5, 6, 11, 12];
 const _e = new Euler();
 
 // each clip's channels in the order a frame reads them
@@ -376,7 +391,63 @@ export class SkaterPlayer {
       look(out, 3, -0.55 * w);
       look(out, 4, -0.9 * w);
     }
+    this.life(out, L, dt);
     return out;
+  }
+
+  // ── (plan 106 F4a) the life over the clips: so a stand never reads as a loop ────────────────────────────────
+  private clock = Math.random() * 100;
+  private spr: { s: Quaternion; v: Vector3; on: boolean }[] = SPRUNG.map(() => ({
+    s: new Quaternion(),
+    v: new Vector3(),
+    on: false,
+  }));
+  private life(out: Frame, L: SkateLook, dt: number) {
+    this.clock += dt;
+    const t = this.clock;
+    const rolling = L.mode === "roll" && !L.cess;
+    // breathing and the weight's drift from foot to foot (at rates out of step with the stance's own loop)
+    const still = rolling ? (1 - this.crouchW) * (L.push ? 0.35 : 1) : 0.3;
+    if (still > 0.01) {
+      turn(out, 2, _AX, still * (0.016 * Math.sin(t * 1.55) + 0.006 * Math.sin(t * 3.7 + 1.1)));
+      turn(out, 1, _Y, still * 0.03 * Math.sin(t * 0.41 + 0.6));
+      out.lift.x += still * 0.012 * Math.sin(t * 0.53 + 2.0);
+      out.lift.y += still * 0.004 * Math.sin(t * 1.55 + 0.3);
+    }
+    // the head where she's going: into a carve (to her toes: turned from the nose toward them)
+    if (rolling && Math.abs(this.leanW) > 0.02) {
+      look(out, 3, -0.1 * this.leanW);
+      look(out, 4, -0.2 * this.leanW);
+    }
+    // the arms and the head on springs: they follow the body a beat behind and settle (a little overshoot), not
+    // stuck to it — let go where a hand reaches for the board
+    const k = 240;
+    const c = 2 * Math.sqrt(k) * 0.55;
+    const h = Math.min(dt, 1 / 30);
+    for (const [n, j] of SPRUNG.entries()) {
+      const sp = this.spr[n];
+      const tgt = out.q[j];
+      const arm = j === 5 || j === 6 ? 0 : j === 11 || j === 12 ? 1 : -1;
+      if (!sp.on || dt > 0.08 || (arm >= 0 && out.hand[arm].w > 0.3)) {
+        sp.s.copy(tgt);
+        sp.v.set(0, 0, 0);
+        sp.on = true;
+        continue;
+      }
+      // (the error to the clip's, as a turn's vector; the turn's speed toward it)
+      _qa.copy(sp.s).invert().premultiply(tgt);
+      if (_qa.w < 0) _qa.set(-_qa.x, -_qa.y, -_qa.z, -_qa.w);
+      const sn = Math.hypot(_qa.x, _qa.y, _qa.z);
+      const ang = 2 * Math.atan2(sn, _qa.w);
+      _va.set(_qa.x, _qa.y, _qa.z).multiplyScalar(sn > 1e-6 ? ang / sn : 0);
+      const stiff = j <= 4 ? k * 1.6 : k;
+      sp.v.addScaledVector(_va, stiff * h).multiplyScalar(Math.max(0, 1 - c * h));
+      const va = sp.v.length() * h;
+      if (va > 1e-7) sp.s.premultiply(_qb.setFromAxisAngle(_va.copy(sp.v).normalize(), va));
+      // (never far from the clip's: a hard cut can't fling an arm)
+      if (ang > 0.6) sp.s.slerp(tgt, 0.5);
+      tgt.copy(sp.s);
+    }
   }
 
   private push(t: Track) {
@@ -443,8 +514,12 @@ export class SkaterPlayer {
 }
 const _ly = new Quaternion();
 const _Y = new Vector3(0, 1, 0);
+const _AX = new Vector3(1, 0, 0);
 function look(f: Frame, j: number, yaw: number) {
   f.q[j].multiply(_ly.setFromAxisAngle(_Y, yaw));
+}
+function turn(f: Frame, j: number, axis: Vector3, a: number) {
+  f.q[j].multiply(_ly.setFromAxisAngle(axis, a));
 }
 
 // ── a goofy rider: the clip's mirror ──────────────────────────────────────────────────────────────────────
@@ -508,7 +583,10 @@ export function mapPoint(p: Vector3, m: BoardMeasures, out: Vector3): Vector3 {
   let x: number;
   const x0 = p.x;
   if (x0 > a.bolts) x = bf + ((x0 - a.bolts) * (nose - bf)) / Math.max(0.01, a.nose - a.bolts);
-  else if (x0 < -a.bolts) x = br + ((x0 + a.bolts) * (br - tail)) / Math.max(0.01, a.bolts + a.tail);
+  // (the doc's tail is its x: negative — the span from the rear bolts to it is −tail − bolts. Plan 106: this was
+  // bolts + tail, clamped to 0.01, and flung every spot behind the rear bolts ~1.5 m past the tail — the back foot's
+  // leg thrown out behind her on every board)
+  else if (x0 < -a.bolts) x = br + ((x0 + a.bolts) * (br - tail)) / Math.max(0.01, -a.tail - a.bolts);
   else x = (x0 / a.bolts) * (x0 >= 0 ? bf : -br);
   // (the street deck's own heights at its nose and tail tips)
   const aNoseY = 0.1426;

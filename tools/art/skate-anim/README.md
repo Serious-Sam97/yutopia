@@ -12,6 +12,20 @@ blender -b --factory-startup -P tools/art/skate-anim/stills.py -- [--sheet flips
 cd apps/client && npx tsx --test src/world/skate/pose.test.ts
 ```
 
+**Plan 106: measured against real skaters.** The footage (Pexels, `sources.md`) → MediaPipe Pose → the numbers our
+clips are held to (`capture.py measure` beside `audit.py`):
+
+```sh
+# the pose tool, once (Apache-2.0, ~124 MB: mediapipe from PyPI, its heavy pose model from Google's storage)
+uv venv tools/art/skate-anim/.venv && uv pip install --python tools/art/skate-anim/.venv/bin/python mediapipe==1.2.3
+curl -L -o tools/art/skate-anim/models/pose_landmarker_heavy.task https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task
+# each clip in footage/ → poses/<id>.json + a contact sheet with the skeleton drawn
+tools/art/skate-anim/.venv/bin/python -I tools/art/skate-anim/pose_extract.py
+# the real skaters' numbers (hips over the sole, knees, spread, knees' width, lean, arms) and ours, the same way
+tools/art/skate-anim/.venv/bin/python -I tools/art/skate-anim/capture.py measure 9723989 180 290 3
+blender -b --factory-startup -P tools/art/skate-anim/audit.py -- --only stance,push,ollie --every 6
+```
+
 - `rig.py` — the game's rig in mathutils: the joints and parents (chars/rig.ts), the legs' numbers read from
   chars/moves.ts, the trunk and arms from `public/life/person-man.glb` (arms straight down, as the client makes them),
   FK, the legs' and arms' IK, three.js Euler orders (joints `XYZ` = mathutils `ZYX`; the board `YXZ` = `ZXY`).

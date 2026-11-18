@@ -17,6 +17,7 @@ import {
   poseOf,
   SkaterPlayer,
   sampleClip,
+  mapPoint,
   setClips,
 } from "./pose";
 
@@ -162,5 +163,21 @@ test("a ride through the player: whole, the shots end, the grab let go plays out
       assert.ok(Number.isFinite(f.lift.y) && Number.isFinite(f.bc.y));
       t += dt;
     }
+  }
+});
+
+test("a spot on the street board maps onto its own measures as itself (the tail's too: plan 106)", () => {
+  const man = JSON.parse(readFileSync(new URL("../../../public/life/skate/manifest.json", import.meta.url), "utf8"));
+  const v = man["street-pop"] ?? man.boards?.["street-pop"];
+  const m = { length: v.dims.length, width: v.dims.width, deckY: v.dims.height, wheelbase: v.wheelbase, wheelR: 0.025, truck: 0.198, points: v.points };
+  for (const p of [
+    [-0.25, 0.0957, -0.03],
+    [-0.33, 0.12, 0.02],
+    [0.17, 0.0885, -0.035],
+    [0.3, 0.11, 0.05],
+    [0.0, 0.0885, 0.1],
+  ]) {
+    const out = mapPoint(new Vector3(...(p as [number, number, number])), m, new Vector3());
+    assert.ok(out.distanceTo(new Vector3(...(p as [number, number, number]))) < 0.005, `${p} → ${out.toArray()}`);
   }
 });

@@ -180,22 +180,27 @@ def solve(rig, ch, spaces, prev=None):
     pose["head"] = (g("dx"), g("dy"), g("dz"))
     # the legs: each sole to its target — on the board (its frame) or off it (hers, the board's turns not followed)
     feet = {}
+    # (plan 106: `sw` — the board turned 180° under her feet: their spots and turns are the board's turned round)
+    swapped = g("sw") > 0.5
     for key, S in (("F", "L"), ("B", "R")):
-        p = Vector((g(f"{key}x"), g(f"{key}y"), g(f"{key}z")))
+        p0 = Vector((g(f"{key}x"), g(f"{key}y"), g(f"{key}z")))
         o = Vector((g(f"{key}ox"), g(f"{key}oy"), g(f"{key}oz")))
         lk = max(0.0, min(1.0, g(f"{key}lk")))
-        h, t = g(f"{key}h"), g(f"{key}t")
+        h0, t = g(f"{key}h"), g(f"{key}t")
+        # (on the board: its own spot, turned round with it; off it, her space as keyed)
+        p = Vector((-p0.x, p0.y, -p0.z)) if swapped else p0
+        h = h0 + math.pi if swapped else h0
         sole_on = B(p)
         # (a sole on the board's bottom — a darkslide's, a casper's: the foot stood on it upside down with it)
         under = p.y < C.D - C.THICK * 0.5
         Rf = Rb @ Matrix.Rotation(math.pi, 3, "X") if under else Rb
         up_on = Rf @ Y
-        sole_off = T(p + o)
+        sole_off = T(p0 + o)
         up_off = TR @ Y
         sole = sole_off.lerp(sole_on, lk)
         up = up_off.lerp(up_on, lk).normalized()
         rot_on = (Rf @ Matrix.Rotation(h, 3, "Y") @ Matrix.Rotation(t, 3, "X")).to_quaternion()
-        rot_off = (TR @ Matrix.Rotation(h, 3, "Y") @ Matrix.Rotation(t, 3, "X")).to_quaternion()
+        rot_off = (TR @ Matrix.Rotation(h0, 3, "Y") @ Matrix.Rotation(t, 3, "X")).to_quaternion()
         frot = rot_off.slerp(rot_on, lk).to_matrix()
         ankle = sole + up * R.ANKLE
         pole = TR @ Vector((g(f"{key}kx"), g(f"{key}ky"), g(f"{key}kz")))
@@ -337,4 +342,5 @@ def main():
         print("saved", BLEND)
 
 
-main()
+if __name__ == "__main__":
+    main()

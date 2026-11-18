@@ -7,7 +7,7 @@ Asked 2026-11-18 (a screenshot of the push: the back leg kicked up behind her):
 Status: **planned 2026-11-18; forks decided 2026-11-18: F1c, from video — real skaters' footage, free stock (Pexels,
 Pixabay) and CC-BY (credited), turned into 3D motion by an open-source model on this Mac; Tony Hawk's 1+2 gameplay
 only as a reference to compare timing and feel against (its own mocap is its art: not traced); F2b, no sign-off,
-you test at the end; F3a, every clip; F4a, the life layers on top. Not started.**
+you test at the end; F3a, every clip; F4a, the life layers on top. Built 2026-11-18: see Progress.**
 
 ## What's wrong (the audit: `design/skate/anim104/*-side.png`, the game's own screenshots)
 
@@ -105,6 +105,51 @@ Plan 104's 80 clips were keyed by script from numbers, with no footage to key ag
 9. The life layers (F4).
 10. Checks: every clip in the bench and in the game, the feet on the deck, the direction e2e, the page budget.
 
-## Progress
+## Progress (2026-11-18, built)
 
-Not started.
+**The footage and the tool.** 15 Pexels clips (`tools/art/skate-anim/sources.md`, ~50 MB, not committed) → MediaPipe
+Pose (Apache-2.0, on the CPU, ~5 s a clip) → `poses/<id>.json` and contact sheets. Six track the whole skater well:
+a push and a bail (5039768), a 60 fps ollie (9723989), an ollie onto a ledge and a 50-50 (5039465), a drop-in, a
+quarter and a fall (7644974), pushing (7634653), a kick turn (5039488); the rest are feet close-ups (the foot angles).
+
+**What one camera gives, and what it doesn't** (the change from the pipeline above). A frame-by-frame retarget was
+built (`capture.py probe`) and dropped: from one camera the turn about the vertical (the board's heading, the hips' and
+shoulders' yaw) swings by tens of degrees with the depth's guesses. What holds is measured (`capture.py measure`,
+and `audit.py` measures our clips the same way): the hips over the lowest sole, the knees' bends, the knees' width
+against the ankles', the trunk's lean, the arms' elevation and elbows, the feet off the ground, and timing.
+
+| | real skaters | ours, plan 104 | ours now |
+| --- | --- | --- | --- |
+| stance: hips / knees / knees' width / lean / arms | 0.97–1.05 · 15–45° · 0.65–0.85 · 15–30° · 35–75° | 0.98 · 49° · 1.02 · 12° · 20° | 0.99 · 45° · 0.71 · 15° · 40° |
+| crouch for the pop: hips / knees | ~0.8–0.87 · 70–85° | 0.64 · 110° (a squat) | 0.79 · 88° |
+| the pop | legs straightened to ~1.1 | 0.75 | 1.05 |
+| the air: knees' width | knees together | 1.23 (bowed) | 0.62 |
+
+**Built.**
+- The base poses from the numbers: the stance (knees over the toes, inside the ankles; the trunk over; the arms
+  loose and out; a 3.2 s breath and weight shift), the crouch, the air, the tuck, the arms out (front high, back low),
+  the grind's hips and lean.
+- The push: the back foot stepped down flat beside the front truck, swept back along the ground, the heel peeling,
+  lifted low and carried forward — not kicked up behind; the arms against the legs.
+- The ollie and the landing timed off the 60 fps ollie (the pop's extension, the knees to the chest, the legs let
+  down, the absorb and the rise back to the stance).
+- The flips: the flick (the foot out to its side and up, its knee leading), the legs drawn up and apart over the
+  turning board (never crossed), the catch front foot first and stamped, the arms thrown and floating. A half-turn
+  board (shove-it, varial, hardflip, inward heel) lands with her feet on it as on any board (`sw`, in the builder and
+  in the client's swap).
+- The grabs' boards brought up to the hand; the lips' way out levels the board under her.
+- The life (F4a, `pose.ts`): a breath and the weight drifting foot to foot at rates out of step with the loop, the head
+  into a carve, the neck, head, shoulders and elbows on springs (a beat behind, a little overshoot; let go where a hand
+  holds the board).
+- **The bug behind the screenshot**: `mapPoint` (a spot on the street board onto each board's own) divided the span
+  behind the rear bolts by `bolts + tail` with the tail negative, clamped to 0.01 — every spot behind the rear bolts
+  was flung ~1.5 m past the tail, so the back foot's IK threw her leg out behind her, on every board, in every pose.
+  Fixed, with a test.
+
+**Checks.** The client's pose tests (7, the new mapping one too), tsc, biome; the direction e2e (nose 2.9°, body 3.8°,
+camera 28°: ok); the budget (/page 490.9 of 491, the skate chunk 5.3 of 15 KB); the stills: Blender's
+(`design/skate/anim106/*-side.png`, `roll-game.png`) and the game's from both sides (`anim106/game`, `game-front`).
+
+**Not done.** The grinds' and slides' own keys, the lips, the vert airs, the specials and the bails weren't re-keyed
+one by one: they take the new base poses and arms, not clip-by-clip work. The landing isn't scaled by the fall's speed.
+There's no `/dev/skate-anim` bench (F2b: no sign-off).
