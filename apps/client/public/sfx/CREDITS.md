@@ -179,16 +179,56 @@
   - `bikes/bell-c1`, `bikes/bell-d1`, `bikes/freewheel-c`: *Bicycle Sounds* by antumdeluge (OpenGameArt, bicycle-sounds).
   - `bikes/freewheel-a`, `bikes/freewheel-b`: *bike_freewheel.aif* by tim.kahn (Freesound 74792, CC BY 4.0).
   - `bikes/ride-a`, `bikes/brake-a1`: *Bicycle Pedalling Rolling Braking_01* by Rudmer_Rotteveel (Freesound 719482).
-- The skate's (docs/plan/103-the-skate.md, phase 7), from Freesound's HQ previews, cut and levelled
-  (`skate/manifest.json` lists each take):
-  - `skate/pop-a`, `skate/land-a`: *skateboard ollie* by nolimitkid (Freesound 515229).
-  - `skate/pop-b*`, `skate/land-b`: *Ollie.wav* by BlackNeon1234 (Freesound 348321).
-  - `skate/pop-c*`, `skate/land-c*`: *Skateboarding Tricks* by SoundBiterSFX (Freesound 746602, CC BY 4.0).
-  - `skate/roll-a`: *Skateboard rolling down concrete ramp.wav* by Bruno_Garcez (Freesound 243765).
-  - `skate/roll-b`: *Skateboard* by zvance1110 (Freesound 521086).
-  - `skate/roll-c`: *Wheels rolling.wav* by Scottrex05 (Freesound 593494).
-  - `skate/pool-a`: *Skateboard Rolling in Pool.wav* by rokenjocu (Freesound 262083).
-  - `skate/grind-a`, `skate/grind-b`: *skateboard grinding on metal rail.wav* by 21100495 (Freesound 655371).
-  - `skate/slide-a`: *Skateboard_Skate_schlittert.wav* by mbezzola (Freesound 105081).
-  - `skate/slide-b`: *Skateboard_Slide_I.wav* by mbezzola (Freesound 105082).
+- The skate's (docs/plan/104-the-skate-again.md, F12a — Tony Hawk's eleven slots a surface and the board's own),
+  from Freesound's HQ previews, cut and levelled by `tools/sfx-skate.mjs` (`skate/manifest.json` lists each
+  candidate and take; the ones where no recording exists for a surface reuse another's, no file):
+  - `skate/roll-concrete-a`: *Skateboard Rolling in Pool.wav* by rokenjocu (Freesound 262083).
+  - `skate/roll-concrete-b`: *Skate.wav* by BlackNeon1234 (Freesound 348329).
+  - `skate/roll-concrete-c`: *Skateboard.wav* by lostphosphene (Freesound 250384, CC BY 4.0).
+  - `skate/roll-wood-a`: *Rolling Wheels 2* by CJspellsfish (Freesound 727643).
+  - `skate/roll-wood-b`, `skate/land-wood-b*`: *Skateboard Drive And Wooden Ramp.wav* by tjandrasounds (Freesound 196702).
+  - `skate/roll-wood-c`: *Skateboarding Indoors* by neotronable (Freesound 346380).
+  - `skate/roll-asphalt-a`: *skate board rolling* by bruno.auzet (Freesound 836284).
+  - `skate/roll-asphalt-b`: *BPS-SKATEBOARDING RIDING-City Street-Pushing-Fast-Long Strides-1.wav* by bspiller5 (Freesound 478165).
+  - `skate/roll-asphalt-c`: *skateboard_ride.wav* by PHetish (Freesound 398883).
+  - `skate/grind-metal-a`, `skate/grind-jump-metal-a*`, `skate/grind-land-metal-a*`: *skateboard grinding on metal rail.wav* by 21100495 (Freesound 655371).
+  - `skate/grind-metal-b`: *Skateboard_Grinds.wav* by BlackNeon1234 (Freesound 348326).
+  - `skate/grind-metal-c`: *Skateboard Metal Grinding.wav* by rokenjocu (Freesound 262085).
+  - `skate/grind-metal-d`, `skate/bonk-metal-b`, `skate/grind-land-metal-b*`: *Skateboarding Rail Slide* by C-V (Freesound 845524).
+  - `skate/grind-concrete-a`, `skate/grind-concrete-b`, `skate/grind-jump-concrete-a*`, `skate/grind-land-concrete-a*`: *BPS-SKATEBOARDING GRINDS-Concrete Halfpipe-Truck Grinds.wav* by bspiller5 (Freesound 478166).
+  - `skate/jump-concrete-a`, `skate/land-concrete-a`: *skateboard ollie* by nolimitkid (Freesound 515229).
+  - `skate/jump-concrete-b`: *Skateboard_Ollie_Pop_Shove-It.wav* by mbezzola (Freesound 105076).
+  - `skate/jump-concrete-c*`, `skate/land-concrete-b*`: *Skateboarding Tricks* by SoundBiterSFX (Freesound 746602, CC BY 4.0).
+  - `skate/jump-concrete-d`: *skateboard kickflip* by nolimitkid (Freesound 515230).
+  - `skate/jump-asphalt-a*`, `skate/land-asphalt-a*`: *Ollie.wav* by BlackNeon1234 (Freesound 348321).
+  - `skate/jump-asphalt-b`, `skate/land-asphalt-b`: *Skateboard Trick* by DariusOW (Freesound 766416).
+  - `skate/jump-asphalt-c`, `skate/land-asphalt-c`, `skate/kickup-a`: *Skateboard ride ollie then stop lift board.wav* by visionear (Freesound 540777).
+  - `skate/jump-wood-a`: *Skateboard Ollie Interior 1 (1)* by Sheyvan (Freesound 568406).
+  - `skate/jump-wood-b`, `skate/land-wood-c`: *skateboard1.wav* by Rbrtbiehl (Freesound 630645).
+  - `skate/land-concrete-c`: *Skateboard_Heel_Flip.wav* by mbezzola (Freesound 105073).
+  - `skate/land-wood-a*`, `skate/boom-a*`: *Skateboard ramp sounds.wav* by mikewest (Freesound 435213).
+  - `skate/land-wood-d*`: *skateboard4.wav* by Rbrtbiehl (Freesound 630642).
+  - `skate/land-metal-a*`, `skate/bonk-metal-a*`, `skate/grind-land-metal-c`: *Skateboard hitting metal rail.wav* by Bruno_Garcez (Freesound 243766).
+  - `skate/bonk-wood-a*`: *Hitting wood against floor* by takeabeat (Freesound 464120).
+  - `skate/bonk-wood-b*`: *Knocking on wood* by takeabeat (Freesound 464122).
+  - `skate/bonk-concrete-a*`, `skate/bonk-asphalt-a*`: *Drive over Border.wav* by BlackNeon1234 (Freesound 348317).
+  - `skate/bonk-concrete-b`, `skate/bail-c`: *Longboard hitting the ground* by gerardcatala (Freesound 153285).
+  - `skate/bonk-concrete-c`, `skate/on-a`: *SPRTSkate_Drop-skateboard-ground-concrete_01* by nico-audio (Freesound 717547).
+  - `skate/slide-concrete-a`, `skate/slide-concrete-b`, `skate/slide-jump-concrete-b*`, `skate/slide-land-concrete-a*`: *skateboard grinding on concreate slab.wav* by 21100495 (Freesound 655372).
+  - `skate/slide-concrete-c`, `skate/slide-jump-concrete-a*`, `skate/slide-land-concrete-b*`: *BPS-SKATEBOARDING GRINDS-Slides-Concrete Ledge-Multiple Lands-1.wav* by bspiller5 (Freesound 478164).
+  - `skate/slide-concrete-d`: *Skateboard_Skate_schlittert.wav* by mbezzola (Freesound 105081).
+  - `skate/cess-concrete-a*`: *Powerslide* by jarrondesnudo (Freesound 581378).
+  - `skate/cess-concrete-b*`: *powerslide (2).* by jarrondesnudo (Freesound 581379).
+  - `skate/cess-concrete-c*`: *powerslide 3* by jarrondesnudo (Freesound 581380).
+  - `skate/cess-asphalt-a*`: *skate board screech.wav* by pawsound (Freesound 154855).
+  - `skate/push-a*`: *Skating* by MattyCauldron (Freesound 765875).
+  - `skate/bail-a`: *Skateboard crash.ogg* by FOSSarts (Freesound 669937).
+  - `skate/bail-b`: *skateboard pennyboard crashing.ogg* by FOSSarts (Freesound 669936).
+  - `skate/spin-a`: *Skateboard wheel spinning - Long, Free* by Wastefield (Freesound 692069).
+  - `skate/spin-b`: *skateboard wheels spinning* by nolimitkid (Freesound 515228).
+  - `skate/spin-c`: *skateboard wheel spinning 4* by FOSSarts (Freesound 740131).
+  - `skate/spin-d`: *SkateWheels.WAV* by jrsevers3 (Freesound 452874).
+  - `skate/boom-b*`: *Stomping on wood* by takeabeat (Freesound 464125).
+  - `skate/boom-c*`: *Dropping* by takeabeat (Freesound 464118).
+  - `skate/on-b`: *skateboard drop 1* by FOSSarts (Freesound 740121).
 

@@ -1,10 +1,271 @@
 {
- "_": "The skate's recordings (docs/plan/103 phase 7): each slot's candidates, their takes; the game plays chosen.json's pick of each (-1: the sound made in code). Cut by measurement from the HQ previews (a shot to −3 dB peak, a bed to −20 dB mean).",
- "pop": [
+ "_": "The skate's recordings (docs/plan/104 F12a — Tony Hawk's model: eleven slots a surface and the board's own): each slot's candidates; the game plays chosen.json's pick of each (-1: the sound made in code). A shot cut at its transient (peak −3 dB); a bed a seamless loop between `loop`'s points (RMS −20 dB); a reuse another slot's pick, pitched and filtered. tools/sfx-skate.mjs.",
+ "roll.concrete": [
   {
-   "name": "An ollie's pop (nolimitkid)",
+   "name": "Round a concrete pool (rokenjocu)",
    "files": [
-    "pop-a.mp3"
+    "roll-concrete-a.mp3"
+   ],
+   "loop": [
+    0.1,
+    3.1
+   ],
+   "title": "Skateboard Rolling in Pool.wav",
+   "author": "rokenjocu",
+   "source": "https://freesound.org/s/262083/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "Riding around (BlackNeon1234)",
+   "files": [
+    "roll-concrete-b.mp3"
+   ],
+   "loop": [
+    0.1,
+    3.6
+   ],
+   "title": "Skate.wav",
+   "author": "BlackNeon1234",
+   "source": "https://freesound.org/s/348329/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "On concrete (lostphosphene)",
+   "files": [
+    "roll-concrete-c.mp3"
+   ],
+   "loop": [
+    0.1,
+    2.9
+   ],
+   "title": "Skateboard.wav",
+   "author": "lostphosphene",
+   "source": "https://freesound.org/s/250384/",
+   "license": "CC BY 4.0"
+  }
+ ],
+ "roll.wood": [
+  {
+   "name": "On a wood floor (CJspellsfish)",
+   "files": [
+    "roll-wood-a.mp3"
+   ],
+   "loop": [
+    0.1,
+    2.9
+   ],
+   "title": "Rolling Wheels 2",
+   "author": "CJspellsfish",
+   "source": "https://freesound.org/s/727643/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A skate hall (tjandrasounds)",
+   "files": [
+    "roll-wood-b.mp3"
+   ],
+   "loop": [
+    0.1,
+    2
+   ],
+   "title": "Skateboard Drive And Wooden Ramp.wav",
+   "author": "tjandrasounds",
+   "source": "https://freesound.org/s/196702/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "Indoors (neotronable)",
+   "files": [
+    "roll-wood-c.mp3"
+   ],
+   "loop": [
+    0.1,
+    2.1
+   ],
+   "title": "Skateboarding Indoors",
+   "author": "neotronable",
+   "source": "https://freesound.org/s/346380/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "No recording: concrete's, lower and duller",
+   "reuse": "roll.concrete",
+   "rate": 0.85,
+   "lp": 2200
+  }
+ ],
+ "roll.metal": [
+  {
+   "name": "No recording: wood's, brighter and thinner (a steel plate)",
+   "reuse": "roll.wood",
+   "rate": 1.15,
+   "hp": 350
+  },
+  {
+   "name": "No recording: concrete's, brighter",
+   "reuse": "roll.concrete",
+   "rate": 1.2,
+   "hp": 500
+  }
+ ],
+ "roll.asphalt": [
+  {
+   "name": "A road, close up (bruno.auzet)",
+   "files": [
+    "roll-asphalt-a.mp3"
+   ],
+   "loop": [
+    0.1,
+    4.1
+   ],
+   "title": "skate board rolling",
+   "author": "bruno.auzet",
+   "source": "https://freesound.org/s/836284/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A city street, fast (bspiller5)",
+   "files": [
+    "roll-asphalt-b.mp3"
+   ],
+   "loop": [
+    0.1,
+    4.1
+   ],
+   "title": "BPS-SKATEBOARDING RIDING-City Street-Pushing-Fast-Long Strides-1.wav",
+   "author": "bspiller5",
+   "source": "https://freesound.org/s/478165/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "Paving stones (PHetish)",
+   "files": [
+    "roll-asphalt-c.mp3"
+   ],
+   "loop": [
+    0.1,
+    3.1
+   ],
+   "title": "skateboard_ride.wav",
+   "author": "PHetish",
+   "source": "https://freesound.org/s/398883/",
+   "license": "CC0 1.0"
+  }
+ ],
+ "grind.metal": [
+  {
+   "name": "Trucks on a rail (21100495)",
+   "files": [
+    "grind-metal-a.mp3"
+   ],
+   "loop": [
+    0.1,
+    0.75
+   ],
+   "title": "skateboard grinding on metal rail.wav",
+   "author": "21100495",
+   "source": "https://freesound.org/s/655371/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "On a metal rail (BlackNeon1234)",
+   "files": [
+    "grind-metal-b.mp3"
+   ],
+   "loop": [
+    0.1,
+    1.6
+   ],
+   "title": "Skateboard_Grinds.wav",
+   "author": "BlackNeon1234",
+   "source": "https://freesound.org/s/348326/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "Metal grinding (rokenjocu)",
+   "files": [
+    "grind-metal-c.mp3"
+   ],
+   "loop": [
+    0.1,
+    1
+   ],
+   "title": "Skateboard Metal Grinding.wav",
+   "author": "rokenjocu",
+   "source": "https://freesound.org/s/262085/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A street rail (C-V)",
+   "files": [
+    "grind-metal-d.mp3"
+   ],
+   "loop": [
+    0.1,
+    0.8
+   ],
+   "title": "Skateboarding Rail Slide",
+   "author": "C-V",
+   "source": "https://freesound.org/s/845524/",
+   "license": "CC0 1.0"
+  }
+ ],
+ "grind.concrete": [
+  {
+   "name": "Trucks on a halfpipe's lip (bspiller5)",
+   "files": [
+    "grind-concrete-a.mp3"
+   ],
+   "loop": [
+    0.1,
+    1.1
+   ],
+   "title": "BPS-SKATEBOARDING GRINDS-Concrete Halfpipe-Truck Grinds.wav",
+   "author": "bspiller5",
+   "source": "https://freesound.org/s/478166/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "Trucks on a halfpipe's lip, a second (bspiller5)",
+   "files": [
+    "grind-concrete-b.mp3"
+   ],
+   "loop": [
+    0.1,
+    1
+   ],
+   "title": "BPS-SKATEBOARDING GRINDS-Concrete Halfpipe-Truck Grinds.wav",
+   "author": "bspiller5",
+   "source": "https://freesound.org/s/478166/",
+   "license": "CC0 1.0"
+  }
+ ],
+ "grind.wood": [
+  {
+   "name": "No recording: concrete's, duller (a wooden ledge)",
+   "reuse": "grind.concrete",
+   "rate": 0.9,
+   "lp": 2500
+  },
+  {
+   "name": "No recording: the rail's, low and dull",
+   "reuse": "grind.metal",
+   "rate": 0.8,
+   "lp": 1800
+  }
+ ],
+ "grind.asphalt": [
+  {
+   "name": "No recording: concrete's (a kerb)",
+   "reuse": "grind.concrete",
+   "rate": 0.95
+  }
+ ],
+ "jump.concrete": [
+  {
+   "name": "An ollie (nolimitkid)",
+   "files": [
+    "jump-concrete-a.mp3"
    ],
    "title": "skateboard ollie",
    "author": "nolimitkid",
@@ -12,45 +273,45 @@
    "license": "CC0 1.0"
   },
   {
-   "name": "Ollies' pops (BlackNeon1234)",
+   "name": "A pop (mbezzola)",
    "files": [
-    "pop-b1.mp3",
-    "pop-b2.mp3",
-    "pop-b3.mp3"
+    "jump-concrete-b.mp3"
    ],
-   "title": "Ollie.wav",
-   "author": "BlackNeon1234",
-   "source": "https://freesound.org/s/348321/",
+   "title": "Skateboard_Ollie_Pop_Shove-It.wav",
+   "author": "mbezzola",
+   "source": "https://freesound.org/s/105076/",
    "license": "CC0 1.0"
   },
   {
    "name": "Tricks' pops (SoundBiterSFX)",
    "files": [
-    "pop-c1.mp3",
-    "pop-c2.mp3",
-    "pop-c3.mp3"
+    "jump-concrete-c1.mp3",
+    "jump-concrete-c2.mp3",
+    "jump-concrete-c3.mp3"
    ],
    "title": "Skateboarding Tricks",
    "author": "SoundBiterSFX",
    "source": "https://freesound.org/s/746602/",
    "license": "CC BY 4.0"
-  }
- ],
- "land": [
-  {
-   "name": "An ollie's landing (nolimitkid)",
-   "files": [
-    "land-a.mp3"
-   ],
-   "title": "skateboard ollie",
-   "author": "nolimitkid",
-   "source": "https://freesound.org/s/515229/",
-   "license": "CC0 1.0"
   },
   {
-   "name": "A landing (BlackNeon1234)",
+   "name": "A kickflip's pop (nolimitkid)",
    "files": [
-    "land-b.mp3"
+    "jump-concrete-d.mp3"
+   ],
+   "title": "skateboard kickflip",
+   "author": "nolimitkid",
+   "source": "https://freesound.org/s/515230/",
+   "license": "CC0 1.0"
+  }
+ ],
+ "jump.asphalt": [
+  {
+   "name": "Street ollies (BlackNeon1234)",
+   "files": [
+    "jump-asphalt-a1.mp3",
+    "jump-asphalt-a2.mp3",
+    "jump-asphalt-a3.mp3"
    ],
    "title": "Ollie.wav",
    "author": "BlackNeon1234",
@@ -58,110 +319,850 @@
    "license": "CC0 1.0"
   },
   {
+   "name": "A parking lot (DariusOW)",
+   "files": [
+    "jump-asphalt-b.mp3"
+   ],
+   "title": "Skateboard Trick",
+   "author": "DariusOW",
+   "source": "https://freesound.org/s/766416/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A street ollie (visionear)",
+   "files": [
+    "jump-asphalt-c.mp3"
+   ],
+   "title": "Skateboard ride ollie then stop lift board.wav",
+   "author": "visionear",
+   "source": "https://freesound.org/s/540777/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "No recording: concrete's",
+   "reuse": "jump.concrete",
+   "rate": 0.97
+  }
+ ],
+ "jump.wood": [
+  {
+   "name": "Indoors (Sheyvan)",
+   "files": [
+    "jump-wood-a.mp3"
+   ],
+   "title": "Skateboard Ollie Interior 1 (1)",
+   "author": "Sheyvan",
+   "source": "https://freesound.org/s/568406/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A warehouse park (Rbrtbiehl)",
+   "files": [
+    "jump-wood-b.mp3"
+   ],
+   "title": "skateboard1.wav",
+   "author": "Rbrtbiehl",
+   "source": "https://freesound.org/s/630645/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "No recording: concrete's, duller",
+   "reuse": "jump.concrete",
+   "rate": 0.92,
+   "lp": 3500
+  }
+ ],
+ "jump.metal": [
+  {
+   "name": "No recording: concrete's, brighter (off a steel plate)",
+   "reuse": "jump.concrete",
+   "rate": 1.05,
+   "hp": 400
+  }
+ ],
+ "land.concrete": [
+  {
+   "name": "An ollie's landing (nolimitkid)",
+   "files": [
+    "land-concrete-a.mp3"
+   ],
+   "title": "skateboard ollie",
+   "author": "nolimitkid",
+   "source": "https://freesound.org/s/515229/",
+   "license": "CC0 1.0"
+  },
+  {
    "name": "Tricks' landings (SoundBiterSFX)",
    "files": [
-    "land-c1.mp3",
-    "land-c2.mp3",
-    "land-c3.mp3"
+    "land-concrete-b1.mp3",
+    "land-concrete-b2.mp3",
+    "land-concrete-b3.mp3"
    ],
    "title": "Skateboarding Tricks",
    "author": "SoundBiterSFX",
    "source": "https://freesound.org/s/746602/",
    "license": "CC BY 4.0"
+  },
+  {
+   "name": "A heelflip's landing (mbezzola)",
+   "files": [
+    "land-concrete-c.mp3"
+   ],
+   "title": "Skateboard_Heel_Flip.wav",
+   "author": "mbezzola",
+   "source": "https://freesound.org/s/105073/",
+   "license": "CC0 1.0"
   }
  ],
- "roll": [
+ "land.asphalt": [
   {
-   "name": "Down a concrete ramp (Bruno_Garcez)",
+   "name": "Street landings (BlackNeon1234)",
    "files": [
-    "roll-a.mp3"
+    "land-asphalt-a1.mp3",
+    "land-asphalt-a2.mp3"
    ],
-   "rate": 6,
-   "title": "Skateboard rolling down concrete ramp.wav",
+   "title": "Ollie.wav",
+   "author": "BlackNeon1234",
+   "source": "https://freesound.org/s/348321/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A parking lot (DariusOW)",
+   "files": [
+    "land-asphalt-b.mp3"
+   ],
+   "title": "Skateboard Trick",
+   "author": "DariusOW",
+   "source": "https://freesound.org/s/766416/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A street landing (visionear)",
+   "files": [
+    "land-asphalt-c.mp3"
+   ],
+   "title": "Skateboard ride ollie then stop lift board.wav",
+   "author": "visionear",
+   "source": "https://freesound.org/s/540777/",
+   "license": "CC0 1.0"
+  }
+ ],
+ "land.wood": [
+  {
+   "name": "Under a ramp (mikewest)",
+   "files": [
+    "land-wood-a1.mp3",
+    "land-wood-a2.mp3",
+    "land-wood-a3.mp3"
+   ],
+   "title": "Skateboard ramp sounds.wav",
+   "author": "mikewest",
+   "source": "https://freesound.org/s/435213/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A wooden ramp (tjandrasounds)",
+   "files": [
+    "land-wood-b1.mp3",
+    "land-wood-b2.mp3"
+   ],
+   "title": "Skateboard Drive And Wooden Ramp.wav",
+   "author": "tjandrasounds",
+   "source": "https://freesound.org/s/196702/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A warehouse park (Rbrtbiehl)",
+   "files": [
+    "land-wood-c.mp3"
+   ],
+   "title": "skateboard1.wav",
+   "author": "Rbrtbiehl",
+   "source": "https://freesound.org/s/630645/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A warehouse park, more (Rbrtbiehl)",
+   "files": [
+    "land-wood-d1.mp3",
+    "land-wood-d2.mp3"
+   ],
+   "title": "skateboard4.wav",
+   "author": "Rbrtbiehl",
+   "source": "https://freesound.org/s/630642/",
+   "license": "CC0 1.0"
+  }
+ ],
+ "land.metal": [
+  {
+   "name": "A board on a metal rail (Bruno_Garcez)",
+   "files": [
+    "land-metal-a1.mp3",
+    "land-metal-a2.mp3",
+    "land-metal-a3.mp3"
+   ],
+   "title": "Skateboard hitting metal rail.wav",
    "author": "Bruno_Garcez",
-   "source": "https://freesound.org/s/243765/",
+   "source": "https://freesound.org/s/243766/",
    "license": "CC0 1.0"
   },
   {
-   "name": "An old board on a driveway (zvance1110)",
+   "name": "No recording: concrete's, brighter",
+   "reuse": "land.concrete",
+   "rate": 1.08,
+   "hp": 400
+  }
+ ],
+ "bonk.metal": [
+  {
+   "name": "A board hitting a rail (Bruno_Garcez)",
    "files": [
-    "roll-b.mp3"
+    "bonk-metal-a1.mp3",
+    "bonk-metal-a2.mp3",
+    "bonk-metal-a3.mp3"
    ],
-   "rate": 5,
-   "title": "Skateboard",
-   "author": "zvance1110",
-   "source": "https://freesound.org/s/521086/",
+   "title": "Skateboard hitting metal rail.wav",
+   "author": "Bruno_Garcez",
+   "source": "https://freesound.org/s/243766/",
    "license": "CC0 1.0"
   },
   {
-   "name": "On tile (Scottrex05)",
+   "name": "A street rail (C-V)",
    "files": [
-    "roll-c.mp3"
+    "bonk-metal-b.mp3"
    ],
-   "rate": 4,
-   "title": "Wheels rolling.wav",
-   "author": "Scottrex05",
-   "source": "https://freesound.org/s/593494/",
+   "title": "Skateboarding Rail Slide",
+   "author": "C-V",
+   "source": "https://freesound.org/s/845524/",
    "license": "CC0 1.0"
   }
  ],
- "pool": [
+ "bonk.wood": [
   {
-   "name": "Round a pool (rokenjocu)",
+   "name": "A board against the floor (takeabeat)",
    "files": [
-    "pool-a.mp3"
+    "bonk-wood-a1.mp3",
+    "bonk-wood-a2.mp3",
+    "bonk-wood-a3.mp3"
    ],
-   "rate": 6,
-   "title": "Skateboard Rolling in Pool.wav",
-   "author": "rokenjocu",
-   "source": "https://freesound.org/s/262083/",
+   "title": "Hitting wood against floor",
+   "author": "takeabeat",
+   "source": "https://freesound.org/s/464120/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "Knocking on a deck (takeabeat)",
+   "files": [
+    "bonk-wood-b1.mp3",
+    "bonk-wood-b2.mp3",
+    "bonk-wood-b3.mp3"
+   ],
+   "title": "Knocking on wood",
+   "author": "takeabeat",
+   "source": "https://freesound.org/s/464122/",
    "license": "CC0 1.0"
   }
  ],
- "grind": [
+ "bonk.concrete": [
   {
-   "name": "Trucks on a steel rail (21100495)",
+   "name": "Over a kerb (BlackNeon1234)",
    "files": [
-    "grind-a.mp3"
+    "bonk-concrete-a1.mp3",
+    "bonk-concrete-a2.mp3"
    ],
-   "rate": 5,
+   "title": "Drive over Border.wav",
+   "author": "BlackNeon1234",
+   "source": "https://freesound.org/s/348317/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A board hitting the ground (gerardcatala)",
+   "files": [
+    "bonk-concrete-b.mp3"
+   ],
+   "title": "Longboard hitting the ground",
+   "author": "gerardcatala",
+   "source": "https://freesound.org/s/153285/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A board dropped on concrete (nico-audio)",
+   "files": [
+    "bonk-concrete-c.mp3"
+   ],
+   "title": "SPRTSkate_Drop-skateboard-ground-concrete_01",
+   "author": "nico-audio",
+   "source": "https://freesound.org/s/717547/",
+   "license": "CC0 1.0"
+  }
+ ],
+ "bonk.asphalt": [
+  {
+   "name": "Over a border (BlackNeon1234)",
+   "files": [
+    "bonk-asphalt-a1.mp3",
+    "bonk-asphalt-a2.mp3"
+   ],
+   "title": "Drive over Border.wav",
+   "author": "BlackNeon1234",
+   "source": "https://freesound.org/s/348317/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "No recording: concrete's",
+   "reuse": "bonk.concrete",
+   "rate": 0.95
+  }
+ ],
+ "grind-jump.metal": [
+  {
+   "name": "Off the rail (21100495)",
+   "files": [
+    "grind-jump-metal-a1.mp3",
+    "grind-jump-metal-a2.mp3",
+    "grind-jump-metal-a3.mp3"
+   ],
    "title": "skateboard grinding on metal rail.wav",
    "author": "21100495",
    "source": "https://freesound.org/s/655371/",
    "license": "CC0 1.0"
   },
   {
-   "name": "Trucks on a steel rail, a second (21100495)",
+   "name": "No recording: concrete's pop, brighter",
+   "reuse": "jump.concrete",
+   "rate": 1.05,
+   "hp": 500
+  }
+ ],
+ "grind-jump.concrete": [
+  {
+   "name": "Off the lip (bspiller5)",
    "files": [
-    "grind-b.mp3"
+    "grind-jump-concrete-a1.mp3",
+    "grind-jump-concrete-a2.mp3",
+    "grind-jump-concrete-a3.mp3"
    ],
-   "rate": 5,
+   "title": "BPS-SKATEBOARDING GRINDS-Concrete Halfpipe-Truck Grinds.wav",
+   "author": "bspiller5",
+   "source": "https://freesound.org/s/478166/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "No recording: concrete's pop",
+   "reuse": "jump.concrete"
+  }
+ ],
+ "grind-jump.wood": [
+  {
+   "name": "No recording: concrete's off the lip, duller",
+   "reuse": "grind-jump.concrete",
+   "rate": 0.9,
+   "lp": 3000
+  }
+ ],
+ "grind-jump.asphalt": [
+  {
+   "name": "No recording: concrete's off the lip",
+   "reuse": "grind-jump.concrete"
+  }
+ ],
+ "grind-land.metal": [
+  {
+   "name": "Onto the rail (21100495)",
+   "files": [
+    "grind-land-metal-a1.mp3",
+    "grind-land-metal-a2.mp3",
+    "grind-land-metal-a3.mp3"
+   ],
    "title": "skateboard grinding on metal rail.wav",
    "author": "21100495",
    "source": "https://freesound.org/s/655371/",
    "license": "CC0 1.0"
+  },
+  {
+   "name": "Onto a street rail (C-V)",
+   "files": [
+    "grind-land-metal-b1.mp3",
+    "grind-land-metal-b2.mp3"
+   ],
+   "title": "Skateboarding Rail Slide",
+   "author": "C-V",
+   "source": "https://freesound.org/s/845524/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A board on a rail (Bruno_Garcez)",
+   "files": [
+    "grind-land-metal-c.mp3"
+   ],
+   "title": "Skateboard hitting metal rail.wav",
+   "author": "Bruno_Garcez",
+   "source": "https://freesound.org/s/243766/",
+   "license": "CC0 1.0"
   }
  ],
- "slide": [
+ "grind-land.concrete": [
+  {
+   "name": "Onto the lip (bspiller5)",
+   "files": [
+    "grind-land-concrete-a1.mp3",
+    "grind-land-concrete-a2.mp3"
+   ],
+   "title": "BPS-SKATEBOARDING GRINDS-Concrete Halfpipe-Truck Grinds.wav",
+   "author": "bspiller5",
+   "source": "https://freesound.org/s/478166/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "No recording: the rail's, duller",
+   "reuse": "grind-land.metal",
+   "rate": 0.85,
+   "lp": 2500
+  }
+ ],
+ "grind-land.wood": [
+  {
+   "name": "No recording: concrete's, duller",
+   "reuse": "grind-land.concrete",
+   "rate": 0.9,
+   "lp": 2500
+  }
+ ],
+ "grind-land.asphalt": [
+  {
+   "name": "No recording: concrete's (a kerb)",
+   "reuse": "grind-land.concrete"
+  }
+ ],
+ "slide.concrete": [
+  {
+   "name": "A tail on a concrete slab (21100495)",
+   "files": [
+    "slide-concrete-a.mp3"
+   ],
+   "loop": [
+    0.1,
+    2
+   ],
+   "title": "skateboard grinding on concreate slab.wav",
+   "author": "21100495",
+   "source": "https://freesound.org/s/655372/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A tail on a concrete slab, short (21100495)",
+   "files": [
+    "slide-concrete-b.mp3"
+   ],
+   "loop": [
+    0.1,
+    1
+   ],
+   "title": "skateboard grinding on concreate slab.wav",
+   "author": "21100495",
+   "source": "https://freesound.org/s/655372/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A ledge slide (bspiller5)",
+   "files": [
+    "slide-concrete-c.mp3"
+   ],
+   "loop": [
+    0.1,
+    0.65
+   ],
+   "title": "BPS-SKATEBOARDING GRINDS-Slides-Concrete Ledge-Multiple Lands-1.wav",
+   "author": "bspiller5",
+   "source": "https://freesound.org/s/478164/",
+   "license": "CC0 1.0"
+  },
   {
    "name": "A board sliding (mbezzola)",
    "files": [
-    "slide-a.mp3"
+    "slide-concrete-d.mp3"
    ],
-   "rate": 4,
+   "loop": [
+    0.1,
+    1.5
+   ],
    "title": "Skateboard_Skate_schlittert.wav",
    "author": "mbezzola",
    "source": "https://freesound.org/s/105081/",
    "license": "CC0 1.0"
+  }
+ ],
+ "slide.metal": [
+  {
+   "name": "No recording: concrete's, brighter (a boardslide on a rail)",
+   "reuse": "slide.concrete",
+   "rate": 1.15,
+   "hp": 600
   },
   {
-   "name": "A short slide (mbezzola)",
+   "name": "No recording: the grind's, lower",
+   "reuse": "grind.metal",
+   "rate": 0.85
+  }
+ ],
+ "slide.wood": [
+  {
+   "name": "No recording: concrete's, duller",
+   "reuse": "slide.concrete",
+   "rate": 0.9,
+   "lp": 2500
+  }
+ ],
+ "slide.asphalt": [
+  {
+   "name": "No recording: concrete's",
+   "reuse": "slide.concrete",
+   "rate": 0.95
+  }
+ ],
+ "slide-jump.concrete": [
+  {
+   "name": "Off a ledge (bspiller5)",
    "files": [
-    "slide-b.mp3"
+    "slide-jump-concrete-a1.mp3",
+    "slide-jump-concrete-a2.mp3"
    ],
-   "title": "Skateboard_Slide_I.wav",
-   "author": "mbezzola",
-   "source": "https://freesound.org/s/105082/",
+   "title": "BPS-SKATEBOARDING GRINDS-Slides-Concrete Ledge-Multiple Lands-1.wav",
+   "author": "bspiller5",
+   "source": "https://freesound.org/s/478164/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "Off a slab (21100495)",
+   "files": [
+    "slide-jump-concrete-b1.mp3",
+    "slide-jump-concrete-b2.mp3"
+   ],
+   "title": "skateboard grinding on concreate slab.wav",
+   "author": "21100495",
+   "source": "https://freesound.org/s/655372/",
+   "license": "CC0 1.0"
+  }
+ ],
+ "slide-jump.metal": [
+  {
+   "name": "No recording: off the rail's",
+   "reuse": "grind-jump.metal",
+   "rate": 0.95
+  }
+ ],
+ "slide-jump.wood": [
+  {
+   "name": "No recording: concrete's, duller",
+   "reuse": "slide-jump.concrete",
+   "rate": 0.9,
+   "lp": 3000
+  }
+ ],
+ "slide-jump.asphalt": [
+  {
+   "name": "No recording: concrete's",
+   "reuse": "slide-jump.concrete"
+  }
+ ],
+ "slide-land.concrete": [
+  {
+   "name": "Onto a slab (21100495)",
+   "files": [
+    "slide-land-concrete-a1.mp3",
+    "slide-land-concrete-a2.mp3",
+    "slide-land-concrete-a3.mp3"
+   ],
+   "title": "skateboard grinding on concreate slab.wav",
+   "author": "21100495",
+   "source": "https://freesound.org/s/655372/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "Onto a ledge (bspiller5)",
+   "files": [
+    "slide-land-concrete-b1.mp3",
+    "slide-land-concrete-b2.mp3"
+   ],
+   "title": "BPS-SKATEBOARDING GRINDS-Slides-Concrete Ledge-Multiple Lands-1.wav",
+   "author": "bspiller5",
+   "source": "https://freesound.org/s/478164/",
+   "license": "CC0 1.0"
+  }
+ ],
+ "slide-land.metal": [
+  {
+   "name": "No recording: onto the rail's",
+   "reuse": "grind-land.metal",
+   "rate": 0.95
+  },
+  {
+   "name": "No recording: concrete's, brighter",
+   "reuse": "slide-land.concrete",
+   "rate": 1.1,
+   "hp": 500
+  }
+ ],
+ "slide-land.wood": [
+  {
+   "name": "No recording: concrete's, duller",
+   "reuse": "slide-land.concrete",
+   "rate": 0.9,
+   "lp": 3000
+  }
+ ],
+ "slide-land.asphalt": [
+  {
+   "name": "No recording: concrete's",
+   "reuse": "slide-land.concrete"
+  }
+ ],
+ "cess.concrete": [
+  {
+   "name": "A powerslide on polished concrete (jarrondesnudo)",
+   "files": [
+    "cess-concrete-a1.mp3",
+    "cess-concrete-a2.mp3",
+    "cess-concrete-a3.mp3"
+   ],
+   "title": "Powerslide",
+   "author": "jarrondesnudo",
+   "source": "https://freesound.org/s/581378/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A powerslide, two (jarrondesnudo)",
+   "files": [
+    "cess-concrete-b1.mp3",
+    "cess-concrete-b2.mp3"
+   ],
+   "title": "powerslide (2).",
+   "author": "jarrondesnudo",
+   "source": "https://freesound.org/s/581379/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A powerslide, three (jarrondesnudo)",
+   "files": [
+    "cess-concrete-c1.mp3",
+    "cess-concrete-c2.mp3"
+   ],
+   "title": "powerslide 3",
+   "author": "jarrondesnudo",
+   "source": "https://freesound.org/s/581380/",
+   "license": "CC0 1.0"
+  }
+ ],
+ "cess.asphalt": [
+  {
+   "name": "A board's screech (pawsound)",
+   "files": [
+    "cess-asphalt-a1.mp3",
+    "cess-asphalt-a2.mp3"
+   ],
+   "title": "skate board screech.wav",
+   "author": "pawsound",
+   "source": "https://freesound.org/s/154855/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "No recording: concrete's, rougher",
+   "reuse": "cess.concrete",
+   "rate": 0.92
+  }
+ ],
+ "cess.wood": [
+  {
+   "name": "No recording: concrete's, duller",
+   "reuse": "cess.concrete",
+   "rate": 0.9,
+   "lp": 3000
+  }
+ ],
+ "cess.metal": [
+  {
+   "name": "No recording: concrete's, brighter",
+   "reuse": "cess.concrete",
+   "rate": 1.1,
+   "hp": 600
+  }
+ ],
+ "push": [
+  {
+   "name": "A push down the road (MattyCauldron)",
+   "files": [
+    "push-a1.mp3",
+    "push-a2.mp3",
+    "push-a3.mp3"
+   ],
+   "title": "Skating",
+   "author": "MattyCauldron",
+   "source": "https://freesound.org/s/765875/",
+   "license": "CC0 1.0"
+  }
+ ],
+ "bail": [
+  {
+   "name": "A crash, the wheels spinning on (FOSSarts)",
+   "files": [
+    "bail-a.mp3"
+   ],
+   "title": "Skateboard crash.ogg",
+   "author": "FOSSarts",
+   "source": "https://freesound.org/s/669937/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A board into the pavement (FOSSarts)",
+   "files": [
+    "bail-b.mp3"
+   ],
+   "title": "skateboard pennyboard crashing.ogg",
+   "author": "FOSSarts",
+   "source": "https://freesound.org/s/669936/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A board hitting the ground (gerardcatala)",
+   "files": [
+    "bail-c.mp3"
+   ],
+   "title": "Longboard hitting the ground",
+   "author": "gerardcatala",
+   "source": "https://freesound.org/s/153285/",
+   "license": "CC0 1.0"
+  }
+ ],
+ "spin": [
+  {
+   "name": "A wheel spinning free (Wastefield)",
+   "files": [
+    "spin-a.mp3"
+   ],
+   "loop": [
+    0.1,
+    3.1
+   ],
+   "title": "Skateboard wheel spinning - Long, Free",
+   "author": "Wastefield",
+   "source": "https://freesound.org/s/692069/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "The wheels spinning (nolimitkid)",
+   "files": [
+    "spin-b.mp3"
+   ],
+   "loop": [
+    0.1,
+    3.1
+   ],
+   "title": "skateboard wheels spinning",
+   "author": "nolimitkid",
+   "source": "https://freesound.org/s/515228/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A cruiser's wheel (FOSSarts)",
+   "files": [
+    "spin-c.mp3"
+   ],
+   "loop": [
+    0.1,
+    1.6
+   ],
+   "title": "skateboard wheel spinning 4",
+   "author": "FOSSarts",
+   "source": "https://freesound.org/s/740131/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "The wheels spun (jrsevers3)",
+   "files": [
+    "spin-d.mp3"
+   ],
+   "loop": [
+    0.1,
+    2.9
+   ],
+   "title": "SkateWheels.WAV",
+   "author": "jrsevers3",
+   "source": "https://freesound.org/s/452874/",
+   "license": "CC0 1.0"
+  }
+ ],
+ "kickup": [
+  {
+   "name": "A tail kicked up to the hand (visionear)",
+   "files": [
+    "kickup-a.mp3"
+   ],
+   "title": "Skateboard ride ollie then stop lift board.wav",
+   "author": "visionear",
+   "source": "https://freesound.org/s/540777/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "No recording: concrete's pop, light",
+   "reuse": "jump.concrete",
+   "rate": 1.15,
+   "gain": 0.6
+  }
+ ],
+ "boom": [
+  {
+   "name": "Under a ramp (mikewest)",
+   "files": [
+    "boom-a1.mp3",
+    "boom-a2.mp3"
+   ],
+   "title": "Skateboard ramp sounds.wav",
+   "author": "mikewest",
+   "source": "https://freesound.org/s/435213/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "Stomping on a board on the floor (takeabeat)",
+   "files": [
+    "boom-b1.mp3",
+    "boom-b2.mp3"
+   ],
+   "title": "Stomping on wood",
+   "author": "takeabeat",
+   "source": "https://freesound.org/s/464125/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A board dropped on a floor (takeabeat)",
+   "files": [
+    "boom-c1.mp3",
+    "boom-c2.mp3"
+   ],
+   "title": "Dropping",
+   "author": "takeabeat",
+   "source": "https://freesound.org/s/464118/",
+   "license": "CC0 1.0"
+  }
+ ],
+ "on": [
+  {
+   "name": "A board dropped on concrete (nico-audio)",
+   "files": [
+    "on-a.mp3"
+   ],
+   "title": "SPRTSkate_Drop-skateboard-ground-concrete_01",
+   "author": "nico-audio",
+   "source": "https://freesound.org/s/717547/",
+   "license": "CC0 1.0"
+  },
+  {
+   "name": "A board dropped onto its wheels (FOSSarts)",
+   "files": [
+    "on-b.mp3"
+   ],
+   "title": "skateboard drop 1",
+   "author": "FOSSarts",
+   "source": "https://freesound.org/s/740121/",
    "license": "CC0 1.0"
   }
  ]
