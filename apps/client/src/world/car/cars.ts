@@ -704,6 +704,8 @@ function soundOf(ctx: AudioContext, kind: CarKind, variant?: string): CarSound |
 }
 /** The kinds the far model (a wagon's or a sedan's outline) can't stand in for: always drawn whole. */
 const SLIDE_S = 0.45;
+/** (plan 99 F5a) s: what's left of climbing out once a move hurries it */
+const HURRY_S = 0.45;
 /** (plan 98 phase 23) m: the town's own cars' engines heard this near */
 const AI_HEARD = 40; // s: (plan 93 F3a) across from the passenger's seat to the wheel, after
 const DRIVER_SHOT_V = 8.4; // m/s (~30 km/h): the driver's revolver only slower than this (plan 93 S2, the server's)
@@ -1143,7 +1145,24 @@ export class Cars {
   // biome-ignore lint/suspicious/noExplicitAny: the controller's private state
   carry(c: any): boolean {
     if (this.karts?.carry(c)) return true;
-    if (!this.mine) return false;
+    if (!this.mine) {
+      // (plan 99 F5a) still climbing out: held where the act ends (the server's put me there) — a move hurries it to
+      // its end, never walks me off from under it
+      const e = this.myExit();
+      if (!e) return false;
+      c.path = null;
+      c.actions.clear();
+      const room = this.host.room();
+      const p = room?.state.players.get(room.sessionId) as { x: number; y: number } | undefined;
+      if (p) {
+        c.me.x = p.x;
+        c.me.y = p.y;
+      }
+      c.walker?.still();
+      if (this.moveKeys.size && e.gone !== undefined && this.time - e.gone < EXIT_S - HURRY_S)
+        e.gone = this.time - (EXIT_S - HURRY_S);
+      return true;
+    }
     const s = this.mySeat();
     c.path = null;
     c.actions.clear();
@@ -1637,6 +1656,7 @@ export class Cars {
       tp.culling.matrices(this.root);
     }
     this.nowMs = now;
+    this.watchKeys();
 
     // (plan 99 F3a) a parked car's driven model nobody took on (it parked out of reach): let go
     for (const [k, h] of this.handoff)
@@ -3443,6 +3463,27 @@ export class Cars {
     }
     const heard = this.heardAt(s.p.x, s.p.y, s.p.z);
     m.sound?.update(s, { inside: false, dist: heard?.dist ?? 0, at: heard?.at ?? null }, dt, false, false, {});
+  }
+  /** (plan 99 F5a) My own body still climbing out of a car (its act's), or null. */
+  private myExit() {
+    const sid = this.host.room()?.sessionId;
+    if (!sid) return null;
+    for (const l of this.live.values()) {
+      const e = l.people.get(sid);
+      if (e?.gone !== undefined && this.time - e.gone < EXIT_S) return e;
+    }
+    return null;
+  }
+  /** (plan 99 F5a) the walking keys held now (a move while climbing out hurries the act) */
+  private moveKeys = new Set<string>();
+  private keysOn = false;
+  private watchKeys() {
+    if (this.keysOn || typeof window === "undefined") return;
+    this.keysOn = true;
+    const MOVE = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
+    window.addEventListener("keydown", (ev) => MOVE.has(ev.code) && this.moveKeys.add(ev.code));
+    window.addEventListener("keyup", (ev) => this.moveKeys.delete(ev.code));
+    window.addEventListener("blur", () => this.moveKeys.clear());
   }
   /** (plan 98) How far into getting in I am (s), or null: not getting in (sat, out, or seen sat already). */
   private myActT(): number | null {

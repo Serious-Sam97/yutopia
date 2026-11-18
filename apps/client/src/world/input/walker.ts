@@ -455,6 +455,20 @@ export class Walker {
     this.body.x += dx;
     this.body.y += dy;
   }
+  /** (plan 99 F5a) Held somewhere from outside (climbing out of a car): standing, its speed gone — it walks on
+   *  from rest, not with what it had walking to the door. */
+  still(): void {
+    const b = this.body;
+    b.vx = 0;
+    b.vy = 0;
+    b.vz = 0;
+    b.up = false;
+    b.verb = null;
+    b.takeoff = -1;
+    this.prev = { ...b };
+    // (its clock too: the first frame let go isn't a quarter second's walk at once)
+    this.wall = 0;
+  }
   private prev: Body = newBody(0, 0);
   private clock = new MoveClock();
   private heldOver = new HeldOver();

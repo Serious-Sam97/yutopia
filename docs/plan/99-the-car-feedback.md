@@ -118,3 +118,14 @@ every frame over 50 ms named by a CPU profile)
 - Its physics left as before: rolling on is phase 2's (it parks once still); a parked car knocked slides on its locked
   wheels (plan 94).
 - Checked: world-server car, park-life and spot tests 27/27; typecheck clean.
+
+## Phase 4 — built (2026-11-17): the way out holds you
+
+- **Held (F5a):** climbing out, my walker's held where the act ends — the server's spot for me — no path, no actions,
+  no keys walking it off (`carry` holds it while my own act's running, not only while I'm in).
+- **A move hurries it:** a walking key held while she's climbing out brings the act's clock to its last 0.45 s (out and
+  the step), then I walk on from where she stands.
+- **No jump as it lets go:** the walker's speed and its clock let go while held (`walker.still()`): it had the speed it
+  walked to the door with, and its first frame back counted a quarter second at once (a 0.6 m step).
+- `e2e/car-hold.mts`: out, W held 0.5 s after — the act over 0.45 s after W, my walker's biggest step 0.16 m (a frame's
+  walk), none as it's let go. A jump (out on the move) isn't held: the ragdoll's.
