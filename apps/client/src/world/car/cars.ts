@@ -162,6 +162,7 @@ import { probeLook, probeWarm } from "./probe-look";
 import { type CarExtras, CarSound, distanceGain, HEARD, preloadEngine } from "./sound";
 import { doorSlots, slotBuffers, voiceOf } from "./sound-bank";
 import { type SpotPrompt, Spots, spotNo } from "./spot";
+import { WarmModel } from "./warm-model";
 
 // MOTORS' panel, with the cars (the world page's panels are full): docs/plan/43-the-spot.md
 extraPanels.motors = DealerPanel;
@@ -558,6 +559,11 @@ interface LiveView {
   wt?: { p: number; pv: number; r: number; rv: number };
   /** (plan 93 C) parked, kept a moment: someone's still climbing out of it */
   linger?: boolean;
+  /** its model drawn: in and its shaders made (till then the parked car it was is drawn — no blink getting in) */
+  shown?: boolean;
+  /** when it was first seen (this.time), and its shaders being made a few a frame (car/warm-model.ts) */
+  bornAt?: number;
+  warm?: WarmModel;
   /** (plan 93 S1) its holes as last drawn */
   holes?: string;
   /** (plan 93 S5) the seats' windows down (bit i: seat i's switch) */
@@ -717,6 +723,9 @@ const sN = new Color();
 const sT = new Color();
 const sH = new Color();
 const sL = new Color();
+/** (the blink) s: a car's prompt stood this long before its driven model's made ahead; let go this long unasked */
+const SPARE_AFTER_S = 0.25;
+const SPARE_KEEP_S = 20;
 /** (plan 99 F5a) s: what's left of climbing out once a move hurries it */
 const HURRY_S = 0.45;
 /** (plan 98 phase 23) m: the town's own cars' engines heard this near */
@@ -1264,6 +1273,7 @@ export class Cars {
     const car = (spot && !carWins ? spot : near) ?? this.motorsNow();
     if (!car) return false;
     // (by a car: its engine's recordings fetched before it's started)
+    if (car.kind === "car") this.askSpare(car.objectId);
     if (car.kind === "car" && mixer.ctx) {
       const pv = this.parked.get(car.objectId);
       const v = pv ? voiceOf(pv.kind, pv.look.variant) : "four";
@@ -2120,6 +2130,7 @@ export class Cars {
     // (plan 96 F5a: a parked car's tyre blowing out — its collapse, a frame at a time)
     for (const p of this.parked.values()) if (p.full?.flatsBusy?.()) p.full.flatsTick?.(true);
     this.warmFx();
+    this.spareFrame();
   }
   /** (plan 94 phase 9) Once, when there's a view: the fire's sprites and the shards' mesh made ready (their shaders
    *  and textures) in the background — not on the frame a car first burns near (a 200–400 ms frame on Low). */
@@ -2132,8 +2143,8 @@ export class Cars {
     const sh = this.shards.warmMesh;
     const shWas = sh.visible;
     sh.visible = true;
-    void tp.renderer
-      .compileAsync(this.root, tp.camera, tp.scene)
+    void tp
+      .compileAhead(this.root)
       .catch(() => undefined)
       .then(() => {
         fire.done();
@@ -2437,6 +2448,14 @@ export class Cars {
     this.env = next;
     for (const p of this.parked.values()) p.full?.setEnv(next);
     for (const l of this.live.values()) l.model.setEnv(next);
+    // (and the one made ahead: its shaders made again if it had none — a car with a sky in its paint is another
+    // program than one without)
+    if (this.spare) {
+      const had = this.spare.hadEnv;
+      this.spare.model.setEnv(next);
+      this.spare.hadEnv = true;
+      if (!had) this.spare.warm = new WarmModel(this.spare.model, this.root);
+    }
     old?.dispose();
   }
   private makeEnv(tp: ThirdPersonView): NonNullable<Cars["envMake"]> {
@@ -2468,6 +2487,8 @@ export class Cars {
   }
 
   // ── the parked cars: the lot's (and wherever they were left) ───────────────
+  /** (cars got into) when each parked car was first seen driven: its parked self drawn on a moment (reveal()) */
+  private drivenAt = new Map<string, number>();
   private looks = new WeakMap<object, { props: unknown; kind: CarKind; look: CarLook; role: string; key: string }>();
   private syncParked(tp: ThirdPersonView | null, dt: number) {
     const seen = new Set<string>();
@@ -2486,7 +2507,16 @@ export class Cars {
     const going = !!mv && Math.hypot(mv.x, mv.z) > 4;
     const near = going ? 0 : q === "low" || q === "lowest" ? NEAR_LOW : NEAR;
     for (const o of this.host.objects()) {
-      if (o.kind !== "car" || (Number(o.props?.level ?? 0) | 0) !== 0 || o.props?.driven) continue;
+      if (o.kind !== "car" || (Number(o.props?.level ?? 0) | 0) !== 0) continue;
+      // (driven now: its parked self drawn on, as it was, till its driven model's shown — reveal())
+      if (o.props?.driven) {
+        const lv = this.live.get(`car:${o.id}`);
+        const at = this.drivenAt.get(o.id) ?? this.time;
+        this.drivenAt.set(o.id, at);
+        if (this.parked.has(o.id) && (lv ? !lv.shown : this.time - at < 1)) seen.add(o.id);
+        continue;
+      }
+      this.drivenAt.delete(o.id);
       // (its driven model still there, someone climbing out of it: not two of it)
       if (this.live.get(`car:${o.id}`)?.linger) continue;
       seen.add(o.id);
@@ -2762,6 +2792,123 @@ export class Cars {
     p.far?.dispose();
   }
 
+  /** A driven car's model shown only once it's in and its shaders are made in the background (compileAsync): till
+   *  then the car itself unseen (its people drawn) and its parked self drawn where it stood (syncParked) — not a frame
+   *  with no car, then a long one making its materials (the blink as you got in). */
+  private reveal(l: LiveView) {
+    if (l.shown) return;
+    const m = l.model;
+    const tp = this.host.tp();
+    l.warm ??= new WarmModel(m, this.root);
+    if (tp) l.warm.step(tp);
+    // (never kept unseen long: a model that won't come in, or shaders that won't finish, shown as they are)
+    if (!tp || l.warm.done || this.time - (l.bornAt ?? 0) > 2) {
+      l.shown = true;
+      l.warm = undefined;
+      m.shell?.(true);
+      // (and its parked self gone the same frame: never a frame with both, or neither)
+      const oid = l.id.startsWith("car:") ? l.id.slice(4) : "";
+      const p = oid ? this.parked.get(oid) : undefined;
+      if (p) {
+        this.dropParked(p);
+        this.parked.delete(oid);
+        this.unparked.set(oid, this.time);
+      }
+      return;
+    }
+    m.shell?.(false);
+  }
+
+  /** (the blink) The driven model of the car I'm by, made ahead — built, its shaders compiled a few a frame — so
+   *  getting in finds it ready: no frame building it (~35 ms), none waiting on its shaders (~200 ms). Asked while the
+   *  car's prompt has stood a moment (not for every car walked past); let go a while after. */
+  private spare: {
+    oid: string;
+    look: string;
+    role: string;
+    plate: string;
+    model: Sedan;
+    warm: WarmModel;
+    at: number;
+    /** made with the sky in its paint (an env map), or not yet */
+    hadEnv: boolean;
+  } | null = null;
+  private spareAsk: { oid: string; at: number } | null = null;
+  private askSpare(oid: string) {
+    if (this.mine) return;
+    if (this.spareAsk?.oid !== oid) this.spareAsk = { oid, at: this.time };
+    if (this.spare?.oid === oid) {
+      this.spare.at = this.time;
+      return;
+    }
+    // (stood by it a moment, not hurrying past)
+    if (this.time - this.spareAsk.at < SPARE_AFTER_S) return;
+    const tp = this.host.tp();
+    const obj = this.objById(oid);
+    if (!tp || !obj || !carManifest() || obj.props?.driven) return;
+    const kind = carKindOf(obj.props?.model);
+    const look = lookFor(obj.id, kind, obj.props ?? {});
+    const role = typeof obj.props?.role === "string" ? obj.props.role : "";
+    const plate = typeof obj.props?.plate === "string" ? obj.props.plate : "";
+    this.dropSpare();
+    const model = buildCar({
+      variant: look.variant,
+      look,
+      role: role || undefined,
+      plate: plate || undefined,
+      level: "near",
+      renderer: tp.renderer,
+      pad: SEATS_OF[kind],
+    });
+    model.setEnv(this.env);
+    // (where the car stands: drawn off screen there, the scene round it as it'll be)
+    const pr = this.parked.get(oid)?.full?.root;
+    if (pr) {
+      model.root.position.copy(pr.position);
+      model.root.quaternion.copy(pr.quaternion);
+    }
+    this.spare = {
+      oid,
+      look: JSON.stringify(look),
+      role,
+      plate,
+      model,
+      warm: new WarmModel(model, this.root),
+      at: this.time,
+      hadEnv: !!this.env,
+    };
+  }
+  private spareFrame() {
+    const sp = this.spare;
+    if (!sp) return;
+    const tp = this.host.tp();
+    if (this.time - sp.at > SPARE_KEEP_S || !tp) {
+      this.dropSpare();
+      return;
+    }
+    sp.warm.step(tp);
+  }
+  /** The spare, if it's this car's as it's driven now (its look, its role, its plate), taken. */
+  private takeSpare(oid: string, look: CarLook, role: string, plate: string): { model: Sedan; warm: WarmModel } | null {
+    const sp = this.spare;
+    if (
+      !sp ||
+      sp.oid !== oid ||
+      !sp.model.ready ||
+      sp.look !== JSON.stringify(look) ||
+      sp.role !== role ||
+      sp.plate !== plate
+    )
+      return null;
+    this.spare = null;
+    return { model: sp.model, warm: sp.warm };
+  }
+  private dropSpare() {
+    if (!this.spare) return;
+    this.spare.model.dispose();
+    this.spare = null;
+  }
+
   // ── the cars being driven (mine and everyone else's) ───────────────────────
   private syncLive(room: RoomLike, dt: number, now: number) {
     const seen = new Set<string>();
@@ -2778,15 +2925,19 @@ export class Cars {
         // (its look: its object's — chosen, or seeded from its id —, so it's the car that was parked there)
         const obj = this.objById(String(v.obj ?? ""));
         const look = lookFor(obj?.id ?? id, v.kind, obj?.props ?? { variant: v.colour, role: v.role });
-        const model = buildCar({
-          variant: look.variant,
-          look,
-          role: v.role || undefined,
-          plate: v.plate || undefined,
-          level: "near",
-          renderer: r,
-          pad: SEATS_OF[v.kind],
-        });
+        // (the one made ahead as I stood by it, if it's this very car)
+        const sp = obj ? this.takeSpare(obj.id, look, v.role ?? "", v.plate ?? "") : null;
+        const model =
+          sp?.model ??
+          buildCar({
+            variant: look.variant,
+            look,
+            role: v.role || undefined,
+            plate: v.plate || undefined,
+            level: "near",
+            renderer: r,
+            pad: SEATS_OF[v.kind],
+          });
         model.setEnv(this.env);
         this.root.add(model.root);
         const n = SEATS_OF[v.kind].at.length;
@@ -2815,10 +2966,13 @@ export class Cars {
           exhaustAt: 0,
           pets: new Map(),
         };
+        l.bornAt = this.time;
+        if (sp) l.warm = sp.warm;
         this.live.set(id, l);
         // (plan 98: its doors' and lids' takes in ahead — heard the first time, the engine off or on)
         for (const sl of [...doorSlots(l.kind), "boot", "bonnet"]) this.warmBody(sl);
       }
+      this.reveal(l);
       // a new state from the server: a sample (or the server's put it somewhere: a jump)
       if (v.seq !== l.seq || (v.jump ?? 0) !== l.jump || !l.pb.buf.length) {
         l.seq = v.seq;
@@ -6650,6 +6804,7 @@ export class Cars {
     }
     this.fireLoops.clear();
     this.patches.dispose();
+    this.dropSpare();
     this.cabin.dispose();
     this.mirror?.m.dispose();
     this.screen?.s.dispose();

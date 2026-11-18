@@ -700,6 +700,9 @@ class GlbCar implements Sedan {
   readonly root = new Group();
   readonly body = new Group();
   private readonly glb = new Group();
+  shell(shown: boolean) {
+    this.glb.visible = shown;
+  }
   readonly wheels: Wheel[] = [];
   readonly doors: Door[] = [];
   readonly steering: Group;

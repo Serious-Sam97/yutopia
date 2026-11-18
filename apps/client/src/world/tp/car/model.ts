@@ -137,6 +137,9 @@ export interface Sedan {
   setWheelFx?(spin: number, heat: number): void;
   /** (plan 98 phase 11) the body's dive and squat (pitch, + nose down) and lean (roll, + left down), rad */
   setWeight?(pitch: number, roll: number): void;
+  /** The car itself drawn or not — its people and lights (in `body`) left as they are: a driven model kept unseen
+   *  till its shaders are made, its parked self shown meanwhile (the blink as you get in). */
+  shell?(shown: boolean): void;
   /** (plan 98) a door's opening, measured off the shut door */
   openingOf?(door: number): Opening | null;
   /** a lid or a back door opened `a` (radians): the bonnet, the boot */

@@ -46,6 +46,7 @@ import { cellOf, layoutSig as floorLayoutSig, isFreeOpening, onOf } from "@yutop
 import { localThing, localView } from "@yutopia/shared/structure/fold";
 import {
   AdditiveBlending,
+  Box3,
   BoxGeometry,
   BufferGeometry,
   type Camera,
@@ -60,6 +61,7 @@ import {
   Frustum,
   Group,
   HemisphereLight,
+  LinearSRGBColorSpace,
   LineBasicMaterial,
   LineLoop,
   LineSegments,
@@ -89,7 +91,7 @@ import {
   Vector2,
   Vector3,
   WebGLRenderer,
-  type WebGLRenderTarget,
+  WebGLRenderTarget,
 } from "three";
 import { asset } from "@/lib/asset";
 import { gfxNow, graphicsFor, ratioOf } from "@/lib/graphics";
@@ -295,6 +297,7 @@ export interface ViewEvents {
 // the phones' flashlights: spot lights (always there, dark when off: no shader
 // changes), mine and the nearest other's; a beam you see in the snow and fog
 const TORCHES = 2;
+const aheadBox = new Box3();
 const PREP_LAYER = 30; // (things compiling: no camera draws it)
 // the cone's mesh is built wide (shared beam.ts BEAM.wide) and scaled down to a focused one
 const BEAM_LEN = BEAM.wide.len;
@@ -1177,7 +1180,7 @@ void main() {
     this.winSig = `${cutsSig(home)}|${out.key}`;
     this.around = new Surroundings(building, opts.themes, wallCuts(home), out.outline());
     this.around.floorLit = (m) => this.light.patch(m);
-    this.around.compileAhead = (o) => this.renderer.compileAsync(o, this.camera, this.scene);
+    this.around.compileAhead = (o) => this.compileAhead(o);
     this.prepareGrounds();
     this.scene.add(this.around.root);
     this.floors.set(this.level, {
@@ -1772,7 +1775,7 @@ void main() {
     this.around.dispose();
     this.around = new Surroundings(building, this.opts.themes, wallCuts(home), this.outline().outline());
     this.around.floorLit = (m) => this.light.patch(m);
-    this.around.compileAhead = (o) => this.renderer.compileAsync(o, this.camera, this.scene);
+    this.around.compileAhead = (o) => this.compileAhead(o);
     this.prepareGrounds();
     this.scene.add(this.around.root);
     this.placeAround();
@@ -2034,6 +2037,53 @@ void main() {
   warmAt = 0;
   cutWarm = false;
   warmTarget: WebGLRenderTarget | null = null;
+  /** `o`'s programs made in the background (compileAsync) as the frame will draw it: into the target the frame draws
+   *  to — High's finish draws the scene into a linear buffer, so compiled for the screen they were programs it never
+   *  uses (a car got into: 54 made for nothing, its own then made on the spot — the blink). */
+  /** `o` drawn once off screen, the scene round it as it is (warmup.warmDraw: High into its tiny linear target, else a
+   *  pixel of the screen the frame draws over) — its programs first used now, not on the frame it's first seen: on
+   *  Metal a program's first draw costs too (its link checked, its uniforms read: ~0.7 ms each, a new car's 53 were
+   *  ~40 ms of the frame I got in). `o` hung under `parent` for it if it hangs nowhere. False: not now (no sun's map). */
+  drawAhead(o: Object3D, parent: Object3D): boolean {
+    if (this.sun.castShadow && !this.sun.shadow.map) return false;
+    const had = o.parent;
+    if (!had) parent.add(o);
+    o.updateWorldMatrix(true, true);
+    const box = aheadBox.setFromObject(o);
+    if (!box.isEmpty()) {
+      const c = this.warmCam;
+      const r = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) / 2 + 0.5;
+      const x = (box.min.x + box.max.x) / 2;
+      const z = (box.min.z + box.max.z) / 2;
+      Object.assign(c, { left: -r, right: r, top: r, bottom: -r, far: box.max.y - box.min.y + 2 });
+      c.position.set(x, box.max.y + 1, z);
+      c.lookAt(x, box.min.y, z);
+      c.updateProjectionMatrix();
+      c.updateMatrixWorld();
+      // (the lights the frame's camera sees — three counts only a light on its layers: on the warm camera's own
+      // there were none, and every program it made was one the frame never draws with)
+      const mask = c.layers.mask;
+      c.layers.mask = this.camera.layers.mask;
+      this.warmup.warmDraw(c);
+      c.layers.mask = mask;
+      c.far = 400;
+    }
+    if (!had) parent.remove(o);
+    return true;
+  }
+  compileAhead(o: Object3D): Promise<unknown> {
+    const r = this.renderer;
+    const prev = r.getRenderTarget();
+    if (this.post) {
+      this.warmTarget ??= new WebGLRenderTarget(4, 4, { colorSpace: LinearSRGBColorSpace });
+      r.setRenderTarget(this.warmTarget);
+    }
+    try {
+      return r.compileAsync(o, this.camera, this.scene);
+    } finally {
+      r.setRenderTarget(prev);
+    }
+  }
   warmCam = new OrthographicCamera(-1, 1, 1, -1, 0.1, 400);
   /** Floors held off the scene (built, not drawn: the ones above mine, plan 89 F5a) let go when I've been far from
    *  them a while — 206 MB of geometry for the office's four out on the long road (plan 91 phase 5) — and built
@@ -3479,7 +3529,7 @@ void main() {
       });
       for (const t of maps) this.renderer.initTexture(t);
       this.warmup.preparing++;
-      void this.renderer.compileAsync(o, this.camera, this.scene).then(() => {
+      void this.compileAhead(o).then(() => {
         this.warmup.preparing--;
         for (const [c, m] of masks) c.layers.mask = m;
       });
@@ -3502,7 +3552,7 @@ void main() {
     const banks = this.banks.warm();
     const beam = new Mesh(this.beamCone ?? undefined, this.torch3[0]?.mat);
     warm.add(puff, banks, beam);
-    void this.renderer.compileAsync(warm, this.camera, this.scene).then(() => {
+    void this.compileAhead(warm).then(() => {
       puff.material.dispose();
       banks.geometry.dispose();
     });
@@ -3672,7 +3722,7 @@ void main() {
             // showed nothing and read black: plan 79 phase 8)
             if ((m as MeshStandardMaterial).isMeshStandardMaterial) adoptLife(m as MeshStandardMaterial);
           });
-          await this.renderer.compileAsync(gltf.scene, this.camera, this.scene).catch(() => undefined);
+          await this.compileAhead(gltf.scene).catch(() => undefined);
           this.lifeGuns.set(kind, gltf.scene);
         })
         .catch(() => this.lifeGuns.set(kind, "failed"));
