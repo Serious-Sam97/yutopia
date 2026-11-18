@@ -278,8 +278,15 @@ export class BikeDrive {
     k.trick = null;
     k.wheelie = 0;
     k.effort = 0;
-    // (no one holding it up: it falls over, its lean let go)
+    // (no one holding it up: it falls over, its lean let go — tipped its way, or a side, so it never stands balanced)
     this.car.holdLean(false);
+    const X = axis(s.q, 1, 0, 0);
+    const side = Math.sign(k.roll) || ((s.t * 1000) % 2 < 1 ? 1 : -1);
+    const tip = side * 2.2;
+    this.car.setVelocity([s.v.x, s.v.y, s.v.z], [s.w.x + X[0] * tip, s.w.y + X[1] * tip, s.w.z + X[2] * tip]);
+    s.w.x += X[0] * tip;
+    s.w.y += X[1] * tip;
+    s.w.z += X[2] * tip;
   }
 
   /** Before the world's step: the rider's legs, hands and weight; the arcade layer. */
@@ -358,6 +365,9 @@ export class BikeDrive {
       const roll = 0.006 * spec.mass * G;
       push = clamp((spec.mass * (want - vf)) / b.tau + aero + roll, 0, b.force * (sprint ? 1.2 : 1));
     }
+    // (S from a stop: walked back by the feet, slowly — on the move S brakes)
+    const backing = raw.down > 0.5 && raw.up < 0.05 && vf < 0.6 && back.contact && front.contact;
+    if (backing) push = clamp((spec.mass * (-1.1 - vf)) / 0.5, -220, 220);
     // (the back tyre's grip the most it takes: past it, it spins — a climb on ice)
     const gripMost = muR * Math.max(0, back.load) * 0.95;
     k.spin = 0;
@@ -375,7 +385,7 @@ export class BikeDrive {
     s.thr = k.effort;
     // ── the brakes (S): both, the front the stronger — eased off as it starts to lock (a bike's front locked is a
     // fall: the arcade middle keeps it on the edge) ──
-    let brake = clamp(raw.down, 0, 1);
+    let brake = backing ? 0 : clamp(raw.down, 0, 1);
     let rearOnly = 0;
     // (each wheel's own: the back one, light as the weight goes forward, would lock at once)
     let backK = 1;
@@ -486,7 +496,7 @@ export class BikeDrive {
     const climb = k.pitch > 0.1 && pedal;
     const standWant = sprint || climb || inAir || k.charge > 0.05 || Math.abs(k.wheelie) > 0.3 ? 1 : 0;
     k.stand = toward(k.stand, standWant, 3.5, 2.5, dt);
-    k.foot = speed < 0.7 && !pedal && onGround ? k.foot || (k.roll < 0 ? -1 : 1) : 0;
+    k.foot = (speed < 0.7 || backing) && !pedal && onGround ? k.foot || (k.roll < 0 ? -1 : 1) : 0;
     // ── to Jolt: no throttle (the legs are a force), the steering, the brakes (the back's on the hand: Jolt's
     // handbrake is the back wheel's alone) ──
     const frontBrake = rearOnly > 0 ? 0 : brake;

@@ -3807,7 +3807,10 @@ export class Cars {
     const vw = room.state.vehicles.get(m.vid) as VehWire | undefined;
     const taken = !!String(vw?.seats ?? "").split("|")[0];
     const speed = s ? Math.hypot(s.v.x, s.v.z) : 0;
-    this.coastStill = speed < 0.3 ? this.coastStill + dt : 0;
+    // (plan 101: a fallen bike — rolled on till it lies on its side, then still)
+    const bd = d instanceof BikeDrive ? d : null;
+    const lying = !bd || Math.abs(bd.bk.roll) > 1.1 || this.time - this.coastAt > 4;
+    this.coastStill = speed < 0.3 && lying ? this.coastStill + dt : 0;
     if (!l || !s || !d || !ph || taken || this.coastStill > 1 || this.time - this.coastAt > 30) {
       if (s && vw && !taken) room.send("car:state", toWire(s, ++m.seq, 0, m.simMs));
       if (d && ph) {
@@ -4089,6 +4092,8 @@ export class Cars {
       const props = this.propsOf(id);
       // (MOTORS' cars on show, one retired: the dealer's, nothing of theirs to work on)
       if (props?.role === "show" || props?.retire) continue;
+      // (plan 101: a bike has no boot, bonnet, chains or tow eye)
+      if (p.spec.bike) continue;
       const dm = dmgOf(props?.dmg);
       // the boot
       const bk = at(-(b.behind + 0.35), 0);

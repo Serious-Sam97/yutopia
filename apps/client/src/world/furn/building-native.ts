@@ -193,6 +193,23 @@ export function carModel(m: Model, props: Record<string, unknown>, pick: number)
     if (snowy) b(0.1, 0.6, 1.6, 0.7, 0.8676, 0.051, SNOW);
     return;
   }
+  if (typeof props.model === "string" && props.model.startsWith("bike_")) {
+    // (plan 101) a bicycle (its picture, a prompt's): two wheels, its frame, the saddle and the bars, in its paint
+    const look = props.look as { colour?: number } | undefined;
+    const paint = typeof look?.colour === "number" ? look.colour : body;
+    const bmx = props.model === "bike_bmx";
+    const r = bmx ? 0.26 : 0.34;
+    const y = 1.0;
+    for (const x of [1.9, 3.0]) wheel(x, y + 0.025, r, 0.05);
+    const t = 0.045;
+    b(2.05, y - t / 2, 0.75, t, r + 0.38, t, paint);
+    b(2.0, y - t / 2, 0.06, t, r * 0.6, 0.42, paint);
+    b(2.55, y - t / 2, 0.5, t, r - 0.02, t, paint);
+    b(2.72, y - t / 2, 0.06, t, r - 0.04, 0.48, paint);
+    b(2.62, y - 0.06, 0.26, 0.12, r + 0.5, 0.05, SEAT);
+    b(1.9, y - 0.28, 0.05, 0.56, r + 0.6, 0.04, 0x2b2b2b);
+    return;
+  }
   if (props.model === "toboggan") {
     b(0.3, 0.0, 1.5, 0.6, 0.0255, 0.051, body);
     b(0.05, 0.0, 0.25, 0.6, 0.0766, 0.2552, body);

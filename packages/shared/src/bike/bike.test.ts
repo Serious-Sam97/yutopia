@@ -77,7 +77,8 @@ test("the brakes stop it short, and stopped it stands on a foot", async () => {
   const { d, run } = await ride("bike_town");
   run({ ...idle, up: 1 }, 7);
   const x0 = d.s.p.x;
-  run({ ...idle, down: 1 }, 4);
+  // (braked till it stops — held on, S would back it up)
+  for (let i = 0; i < 40 && kmh(d) >= 1; i++) run({ ...idle, down: 1 }, 0.1);
   assert.ok(kmh(d) < 1, "stopped");
   assert.ok(d.s.p.x - x0 < 12, `in ${(d.s.p.x - x0).toFixed(1)} m`);
   run(idle, 4);
@@ -225,5 +226,22 @@ test("wheeled on foot: at a walk, upright, backed up with S, never falls", async
   run({ ...idle, down: 1 }, 2);
   assert.ok(Math.hypot(d.s.v.x, d.s.v.z) > 0.5, "backing up");
   void x0;
+  assert.equal(d.bk.fell, null);
+});
+
+test("thrown off slowly, the bike still falls over and lies on its side", async () => {
+  const { d, run } = await ride("bike_bmx");
+  run({ ...idle, up: 1 }, 0.8);
+  d.throwOff("hit");
+  run(idle, 2.5, undefined, false);
+  assert.ok(Math.abs(d.bk.roll) > 1.1, `on its side ${d.bk.roll.toFixed(2)}`);
+});
+
+test("S from a stop backs it up, slowly; going, S brakes", async () => {
+  const { d, run } = await ride("bike_town");
+  run({ ...idle, down: 1 }, 2);
+  const X = Math.cos(0);
+  assert.ok(d.s.v.x * X < -0.6, `backing ${d.s.v.x.toFixed(2)}`);
+  assert.ok(Math.hypot(d.s.v.x, d.s.v.z) < 1.4, "slowly");
   assert.equal(d.bk.fell, null);
 });

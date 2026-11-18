@@ -1,7 +1,7 @@
 import { BIKE_VARIANTS, type BikeKind } from "@yutopia/shared/bike";
 import type { CarState, Ground } from "@yutopia/shared/car";
 import { asset } from "@/lib/asset";
-import type { CarExtras, Hearing } from "../car/sound";
+import type { CarExtras, CarSound, Hearing } from "../car/sound";
 import { distanceGain } from "../car/sound";
 import { slotBuffers } from "../car/sound-bank";
 import { sample } from "../sfx";
@@ -102,7 +102,10 @@ function clickBuf(c: BaseAudioContext): AudioBuffer {
   return b;
 }
 
-export class BikeSound {
+/** A car's sound's every public method (cars.ts calls them on any vehicle's) — so a bike's can't miss one. */
+type CarSoundApi = { [K in keyof CarSound]: CarSound[K] };
+
+export class BikeSound implements CarSoundApi {
   private out: GainNode;
   private air: BiquadFilterNode;
   private panner: PannerNode;
@@ -308,6 +311,15 @@ export class BikeSound {
   start() {}
   switchOff() {}
   siren() {}
+  // (a car's that a bike hasn't — cars.ts calls them on any vehicle's sound: a door as someone gets on or off, its
+  // glass, its belt…; a bike: nothing)
+  door() {}
+  glass() {}
+  bumperDrop() {}
+  windowMotor() {}
+  lid() {}
+  belt() {}
+  window() {}
   /** Its bell (the horn's key): rung as it's pressed. */
   horn(on: boolean) {
     if (on && !this.bellWas) this.bell();
