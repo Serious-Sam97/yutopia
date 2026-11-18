@@ -590,3 +590,16 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
   on Jolt; indicators before turns.
 - Checked: shared car tests (new: the driver round the L); world-server grounds-life + park-life tests (the plough's
   snowstorm test red on HEAD too); typecheck clean; biome's safe fixes on the changed files.
+
+## Phase 24 — built in part (2026-11-17): when the driver's gone
+
+- **A car whose driver's gone quiet** (a tab in the background, a dropped line; `QUIET_MS` 2.5 s) braked where it is
+  (9 m/s²); **one with nobody at its wheel** (jumped out) rolls on, slowing (1.6 m/s²); either way **stopped by what's
+  hard in its way** (the Grounds' solids against its box) — it rolled in a line through walls and water, up to ~130 m.
+- **A passenger across to the wheel** once it's empty (`car:swap`; the keys theirs): driving it without getting out;
+  their prompt "E — Across to the wheel"; seen as a slide inside it (`via` their seat, no act at a door, no door's
+  timer or clunk for a move within the car).
+- Out of a rolling car (a passenger too): phase 4.
+- Not done: an owned car left in the road towed home after a while (its owner told); a jerry can; parking off a bay
+  squared to the kerb.
+- Checked: world-server car tests 20/20 (new: across to the wheel); typecheck clean.

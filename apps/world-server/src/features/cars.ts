@@ -56,6 +56,7 @@ import {
   plateOf,
   putIn,
   SEATS_OF,
+  boxHits,
   type Solid,
   SPECS,
   type Stored,
@@ -113,6 +114,9 @@ const TOW_NEAR = 30;
 /** (plan 98 F5a) m/s: out of a car slower than this, a stumble; faster, thrown down and rolling (15 km/h) */
 const JUMP_STUMBLE_V = 4.2;
 const QUIET_MS = 2500; // no state from the driver for this long: rolling on its own
+/** (plan 98 phase 24) m/s²: a car whose driver's gone quiet, braked; one with nobody at its wheel, rolling on */
+const QUIET_BRAKE = 9;
+const ROLL_DECEL = 1.6;
 const SHOVE_MAX = 6.5; // m: as far as a knock may move a parked car
 const SHOVE_REACH = 12; // m: the knocking car this near where it ended up
 const EMPTY_TOW_MS = 10 * 60 * 1000; // a dry car left out: towed sooner
@@ -671,6 +675,27 @@ registerFeature((room: WorldRoom) => {
     if (c) room.send(c, "snap", { x: p.x, y: p.y, z: p.z, level: 0 });
   };
 
+  // (plan 98 phase 24) a passenger across to the empty driver's seat — the keys theirs —: driving it, without getting out
+  room.on("car:swap", (client) => {
+    const vid = bySid.get(client.sessionId);
+    const l = vid ? live.get(vid) : undefined;
+    const p = room.state.players.get(client.sessionId);
+    if (!l || !p) return;
+    const i = l.seats.indexOf(client.sessionId);
+    if (i <= 0 || l.seats[0]) return no(client, "taken");
+    const od = room.state.objects.get(l.veh.obj);
+    const props = od ? fromSchema(od).props : undefined;
+    if (!mayDrive(props, p.uid, Date.now())) return notYours(client, props);
+    l.seats[i] = "";
+    l.seats[0] = client.sessionId;
+    l.veh.seats = seatsStr(l);
+    l.veh.via = i;
+    p.busy = `drive:${l.veh.id}`;
+    place(p, l, 0);
+    l.last = null;
+    l.lastAt = Date.now();
+    l.veh.jump = (l.veh.jump + 1) & 255;
+  });
   room.on("car:leave", (client, m) => {
     const vid = bySid.get(client.sessionId);
     const l = vid ? live.get(vid) : undefined;
@@ -1878,11 +1903,30 @@ registerFeature((room: WorldRoom) => {
         if (!driven) {
           const sp = Math.hypot(v.vx, v.vz);
           if (sp > 0.05) {
-            const k = Math.max(0, sp - 3.5 * dt) / sp;
+            // (plan 98 phase 24: its driver gone quiet — a tab in the background, a dropped line —: braked where it is;
+            // nobody at its wheel (jumped out): rolling on, slowing; either way stopped by what's hard in its way — it
+            // rolled up to ~130 m in a line through walls and water)
+            const decel = l.seats[0] ? QUIET_BRAKE : ROLL_DECEL;
+            const k = Math.max(0, sp - decel * dt) / sp;
             v.vx *= k;
             v.vz *= k;
-            v.x += v.vx * dt;
-            v.z += v.vz * dt;
+            const nx = v.x + v.vx * dt;
+            const nz = v.z + v.vz * dt;
+            const b = l.spec.body;
+            const off = (b.ahead - b.behind) / 2;
+            const cx = nx + Math.cos(v.a) * off;
+            const cz = nz + Math.sin(v.a) * off;
+            const hit: Solid[] = [];
+            carWorld.solids(cx, cz, Math.max(b.ahead, b.behind) + 1, hit);
+            const blocked = hit.some(
+              (o) => !o.soft && boxHits(cx, cz, (b.ahead + b.behind) / 2, b.width / 2, v.a, o),
+            );
+            if (blocked) {
+              v.vx = v.vz = 0;
+            } else {
+              v.x = nx;
+              v.z = nz;
+            }
             v.y = heightAt(v.x, v.z) + l.spec.cog;
             v.v = v.vx * Math.cos(v.a) + v.vz * Math.sin(v.a);
             v.at = now;

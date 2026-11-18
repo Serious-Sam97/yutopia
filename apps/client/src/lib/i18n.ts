@@ -285,6 +285,7 @@ const D = {
   lookInvert: ["Invert up / down", "Inverter cima / baixo"],
   hands1p: ["Show my hands in first person", "Mostrar minhas mãos em primeira pessoa"],
   carManual: ["Manual gearbox in cars (Q/E)", "Câmbio manual nos carros (Q/E)"],
+  carSwap: ["Across to the wheel", "Passar para o volante"],
   carReflect: ["Car reflections (the world in the paint)", "Reflexos nos carros (o mundo na pintura)"],
   carReflect_auto: ["On High", "No Alto"],
   carReflect_on: ["On", "Ligado"],

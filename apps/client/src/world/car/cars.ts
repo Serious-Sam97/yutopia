@@ -1226,6 +1226,11 @@ export class Cars {
       // (on the move there's nothing to press: the prompt comes back at a stop)
       const l = this.live.get(this.mine.vid);
       const sp = l ? Math.hypot(l.pose.v.x, l.pose.v.z) : 0;
+      // (plan 98 phase 24: a passenger, the wheel empty — across to it)
+      const vw = this.host.room()?.state.vehicles.get(this.mine.vid) as VehWire | undefined;
+      const wheelFree = this.mine.seat > 0 && !String(vw?.seats ?? "").split("|")[0];
+      if (wheelFree && sp <= 1.5)
+        return { objectId: this.mine.vid, kind: "car:swap", label: t("carSwap"), key: "E", padKey: "A" };
       return sp > 1.5
         ? { objectId: this.mine.vid, kind: "car:moving", label: "" }
         : // (out by the car's own key, X — or the pad's X button —, not the walker's use key: plan 94 P9)
@@ -1503,6 +1508,10 @@ export class Cars {
       // (plan 94 G3: for everyone near — its lid up on their screens)
       room?.send("car:boot", { id, open: true });
       this.host.openPack();
+      return true;
+    }
+    if (kind === "car:swap") {
+      room?.send("car:swap", {});
       return true;
     }
     if (kind !== "car" && kind !== "car:leave" && kind !== "car:moving") return false;
@@ -2762,6 +2771,9 @@ export class Cars {
       // someone in or out: their door swings open a moment (and shuts with a clunk)
       seats.forEach((sid, i) => {
         if ((sid || "") !== (l.prevSeats[i] || "")) {
+          // (plan 98 phase 24: someone across inside it — the seat they left, the one they took —: no door)
+          const moved = (sid && l.prevSeats.includes(sid)) || (!!l.prevSeats[i] && seats.includes(l.prevSeats[i]));
+          if (moved) return;
           l.doorUntil[i] = this.time + 1.1;
           this.clunk(l, true, l.model.doorOf ? l.model.doorOf(i) : -1);
         }
@@ -2910,7 +2922,12 @@ export class Cars {
           const vv = (room.state.vehicles.get(l.id) as VehWire | undefined)?.via ?? -1;
           if (vv > 0 && l.model.seats[vv] && !seats[vv]) via = vv;
         }
-        e = { m, seat: i, key, at, via, belted: at < 0 };
+        // (plan 98 phase 24: across from another seat of it — a slide, no act at the door)
+        if (e && e.seat !== i && e.gone === undefined) {
+          via = e.seat;
+          e.m.root.removeFromParent();
+          e = { m, seat: i, key, at: this.time - ENTER_S, via, belted: true };
+        } else e = { m, seat: i, key, at, via, belted: at < 0 };
         // (plan 98: in from where I stood — my walker's place —: the act's first beat steps onto the door's spot)
         if (at === this.time && sid === room.sessionId) {
           const me = this.host.me();

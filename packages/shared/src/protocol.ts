@@ -503,6 +503,7 @@ export interface ClientMessages {
   // the owner lends their own's keys to someone (their uid), or takes them back (null)
   "car:lend": { to: number | null };
   "car:leave": { jump?: boolean };
+  "car:swap": Record<string, never>;
   "car:state": CarWire;
   // the Kart Park (docs/plan/46-the-karts.md): take a kart at the desk (its colour), give it back;
   // the next race's setup (anyone in a kart, between races); ready; start; my kart's state; an item

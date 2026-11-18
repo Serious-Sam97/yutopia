@@ -1260,3 +1260,44 @@ test("(plan 98) in by the passenger's door (said on the wire); out on the move: 
   await waitFor(() => me(r).fellAt > 0);
   assert.equal(me(r).hp, 100, "unhurt: no fight");
 });
+
+test("(plan 98 phase 24) a passenger across to the wheel once it's empty: driving it, in by no door", async () => {
+  const join = async (uid: number) => {
+    const r = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+      sandbox: 99,
+      token: `dev:${uid}:P${uid}:member,builder,admin`,
+    });
+    rooms.push(r);
+    await waitFor(() => r.state.players?.size > 0 && r.state.objects?.size > 0);
+    return r;
+  };
+  const a = await join(101);
+  const b = await join(102);
+  a.send("mod:cars", {});
+  await sleep(300);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const o: any = [...a.state.objects.values()].filter((c: any) => c.kind === "car" && !props(c).driven)[3];
+  const pose = parkedPose({ x: o.x, y: o.y, yaw: o.yaw, props: props(o) });
+  for (const r of [a, b]) r.send("teleport", { to: { x: pose.x + Math.cos(pose.a) * 3.4, y: pose.y + Math.sin(pose.a) * 3.4, level: 0 } });
+  await waitFor(() => me(a).level === 0 && me(b).level === 0);
+  const vid = `car:${o.id}`;
+  a.send("car:enter", { id: o.id, seat: 0 });
+  await waitFor(() => me(a).busy === `drive:${vid}`);
+  b.send("car:enter", { id: o.id, seat: 1 });
+  await waitFor(() => me(b).busy === `ride:car:${vid}`);
+  // the wheel taken: not across
+  const no: string[] = [];
+  b.onMessage("car:no", (m: { why: string }) => no.push(m.why));
+  b.send("car:swap", {});
+  await waitFor(() => no.includes("taken"));
+  // the driver out: across
+  a.send("car:leave", {});
+  await waitFor(() => me(a).busy === "");
+  b.send("car:swap", {});
+  await waitFor(() => me(b).busy === `drive:${vid}`);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const v: any = b.state.vehicles.get(vid);
+  assert.equal(String(v.seats).split("|")[0], b.sessionId);
+  assert.equal(String(v.seats).split("|")[1], "");
+  assert.equal(v.via, 1, "from the passenger's seat");
+});
