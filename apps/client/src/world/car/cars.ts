@@ -4931,7 +4931,8 @@ export class Cars {
         look: [look.x, look.z, look.y],
         fov: cam.fov,
         showMe: false,
-        snap: true,
+        // (held to it once I'm in — the act's own camera blends till then; probes and specs read it as "sat")
+        snap: actT === null || actT >= ENTER_S,
       };
     }
   }

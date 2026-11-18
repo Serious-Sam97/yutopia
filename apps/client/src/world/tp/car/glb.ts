@@ -2326,13 +2326,23 @@ class GlbCar implements Sedan {
   private discMats: { m: Material & { emissive?: Color; emissiveIntensity?: number } }[] | null = null;
   setWheelFx(spin: number, heat: number) {
     if (!this.ready) return;
-    const k = Math.max(0, Math.min(0.85, (Math.abs(spin) - 22) / 18));
+    // (a spun rim's blur: light, half see-through — dark and nearly solid it read as black wheels)
+    const k = Math.max(0, Math.min(0.55, (Math.abs(spin) - 22) / 18));
     if (k > 0 && !this.blurDiscs) {
       const e = this.e;
+      // (the rim's own colour — a black alloy's blur is dark, a chrome one's light)
+      let rim: Color | null = null;
+      this.wheels[0]?.spin.traverse((o) => {
+        const m = o as Mesh;
+        const mat = m.isMesh && !Array.isArray(m.material) ? (m.material as Material & { color?: Color }) : null;
+        if (rim || !mat?.color || /rubber|tyre|tire|disc/i.test(`${mat.name} ${o.name}`)) return;
+        rim = mat.color.clone();
+      });
+      const col = (rim as Color | null) ?? new Color(0xc9ced3);
       this.blurDiscs = this.wheels.map((w) => {
         const d = new Mesh(
           new CircleGeometry(e.wheel.r * 0.7, 28),
-          litMaterial({ color: 0x8d939a, transparent: true, opacity: 0, depthWrite: false }),
+          litMaterial({ color: col, transparent: true, opacity: 0, depthWrite: false }),
         );
         d.position.z = w.side * (e.wheel.width / 2 + 0.006);
         if (w.side < 0) d.rotation.y = Math.PI;

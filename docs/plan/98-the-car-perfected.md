@@ -6,7 +6,8 @@ phases. One named: **how a person gets into a car — a nice animation; what we 
 
 Status: **planned 2026-11-17; forks decided 2026-11-17 one by one** (below): recommended for F1–F6, F8, F9, F12;
 **F7** a reflection probe on High with its own Settings switch; **F10b** real AI traffic on Jolt; **F11c** every
-phase straight through. Next: phase 0. Investigated from the code (four read-only audits: handling
+phase straight through. **Built 2026-11-17, every phase (0–27), committed to main (not pushed)** — some in part, each
+phase's "Not done" says what's left; the engines' new recordings (phase 14) wait on the user's OK to download. Investigated from the code (four read-only audits: handling
 and camera, sound, visuals, the world) and from a video of today's get-in and get-out (`e2e/zz-getin-video.mts`, a
 recording copy of `e2e/car-getin.mts`).
 
@@ -628,3 +629,19 @@ to look at the car from the door's side. Out on the move, the X key (the car's `
 - **The minimap's cars:** every car on the move turned the way it's heading — others' in cream, the town's own (the
   shuttle, the bus, the plough, the visitor) in teal — beside my own last one (amber).
 - Checked: typecheck clean; biome on the changed files (the panel's effect's dependency noted).
+
+## Phase 27 — checks (2026-11-17)
+
+- **Size limits** (production build, `tools/budget.mjs`): the page 488.4 / 489 KB (+0.3: the Settings switch, the
+  minimap's cars, the panel's words); the car chunk 63.8 / 120 KB (+10.3); every chunk within its budget.
+- **Unit tests:** client car, chars and state types 43/43; shared car 70/70; world-server cars 21/21 (four new),
+  grounds-life + park-life 6/7 — the plough's snowstorm test red on HEAD too.
+- **Specs near:** `car.spec` 3/3, `car-look.spec`, `pets-car.spec` — the flier test failed once on my change: it waits
+  for the car camera's `snap` as "sat", and I'd made it true from the first frame; `snap` means the act's over again.
+- **Stills** (`e2e/car-looks.mts`: at speed, braking, stopped and the front, by day and at night): the rims' blur made
+  the rim's own colour (a dark one first read as black wheels on chrome); the console clean (the dev overlay's "1 Issue"
+  isn't an error).
+- **The act** (`e2e/car-act.mts`, `e2e/car-act-video.mts`), the jump (`e2e/car-jump.mts`), the reversing camera
+  (`e2e/car-cam.mts`) as in their phases.
+- Not run: the whole suite (2.5 h — not unasked); the memcheck's car life (the probe's cube, the blur discs and the
+  live windscreen are new GPU things: disposed with their car; a memcheck run is the follow-up).
