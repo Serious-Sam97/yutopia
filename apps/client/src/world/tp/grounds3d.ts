@@ -3507,6 +3507,8 @@ export class Grounds3 {
         if (gk) this.add(gk, this.skateMat(k, p.indoor));
       }
     }
+    // (plan 103 F10a) the racks, their boards in them
+    for (const r of m.SKATE_RACKS) if (this.near(r.x, r.z, 40)) this.root.add(m.rackGroup(r));
   }
   /** A skate park slot's material: the life look's library one (masonite paint, birch ply, concrete, galvanised
    *  steel — its parts' colours through it), else the Grounds' Lambert. */

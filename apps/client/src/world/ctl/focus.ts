@@ -1,6 +1,7 @@
 import { entry, reachOf, type WorldObjectDef } from "@yutopia/shared";
 import { isGameTv } from "@yutopia/shared/games";
 import { offBand, spanOf } from "@yutopia/shared/reach";
+import { rackBoard, rackNear } from "@yutopia/shared/skate/racks";
 import { type Key, tr } from "@/lib/i18n";
 import { prefs, setPrefs } from "@/lib/prefs";
 import type { WorldController } from "../controller";
@@ -14,6 +15,7 @@ export type FocusHost = Pick<
   WorldController,
   | "camWanted"
   | "cars"
+  | "skateRide"
   | "clientAt"
   | "footprintOf"
   | "god"
@@ -155,6 +157,16 @@ export class Focus {
 
   updatePrompt() {
     if (this.c.cars?.prompt(hud)) return; // (a car: in by its door, or out — car/cars.ts)
+    // (plan 103) by a skate park's rack, on foot: its nearest board to take
+    const rack =
+      this.c.level === 0 && !this.c.skateRide?.riding() ? rackNear(this.c.me.x, this.c.me.y, this.c.height.z) : null;
+    const rb = rack ? rackBoard(rack, this.c.me.x) : null;
+    if (rack && rb) {
+      const cur = hud.get().prompt;
+      const id = `${rack.id}|${rb.variant}`;
+      if (cur?.objectId !== id) hud.set({ prompt: { objectId: id, kind: "skate:rack", label: `Take the ${rb.name}` } });
+      return;
+    }
     // the shuttle at its stop, near: on (or off, riding)
     const lp = this.c.room?.state.players.get(this.c.room.sessionId);
     const ride =
@@ -230,6 +242,8 @@ export class Focus {
   /** Use, tapped: a car's door, the shuttle, else the focus's main action (docs/plan/56 C). */
   interact() {
     const p = hud.get().prompt;
+    // (plan 103) a rack's board: into the left hand (if it's free), key 1 rides it
+    if (p?.kind === "skate:rack") return this.c.send("skate:take", { variant: p.objectId.split("|")[1] });
     if (p && this.c.cars?.act(p.kind, p.objectId)) return;
     if (p?.kind === "ride" || p?.kind === "ride:leave")
       return this.c.send(p.kind === "ride" ? "ride:board" : "ride:leave", {});

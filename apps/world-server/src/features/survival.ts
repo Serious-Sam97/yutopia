@@ -20,6 +20,7 @@ import {
   dayOf,
   emptyInventory,
   FULL_VITALS,
+  fits,
   freshClock,
   giveTorch,
   HAND_SLOT,
@@ -44,6 +45,7 @@ import {
   nightness,
   nightOf,
   organize,
+  QUICK_SLOT,
   REFILL_MIN,
   removeSlot,
   rollLoot,
@@ -68,7 +70,7 @@ import { GAITS, KH_MOVE, MV_AIM } from "@yutopia/shared/move";
 import { between } from "@yutopia/shared/reach";
 import { frameOf, turnPoint } from "@yutopia/shared/shapes";
 import { BOARDS_MAX, rackNear } from "@yutopia/shared/skate/racks";
-import { BOARD_ITEMS, BOARD_VARIANTS, type BoardVariant, boardItem } from "@yutopia/shared/skate/spec";
+import { BOARD_ITEMS, BOARD_VARIANTS, type BoardVariant, boardItem, isBoardItem } from "@yutopia/shared/skate/spec";
 import { cellOf } from "@yutopia/shared/structure";
 import { api, type SurvivorRecord } from "../api.ts";
 import { config } from "../config.ts";
@@ -158,6 +160,23 @@ export interface SurvivalHooks {
   /** an admin's: something into their pockets (or, `drop`, on the ground where they stand);
    *  false: nothing went (unknown, or no room) */
   give(sid: string, item: string, n: number, drop?: boolean): boolean;
+}
+
+/** (plan 103) A board put in the left hand: what was there moved to a free pocket (or quick slot) first — false: no
+ *  room for it, nothing moved. (Not addItem: a one-of-a-kind like the torch would go straight back to the hand.) */
+function boardToHand(inv: Inventory, id: StackId): boolean {
+  const was = inv.hand;
+  if (was) {
+    const p = inv.pockets.indexOf(null);
+    if (p >= 0) inv.pockets[p] = was;
+    else {
+      const q = inv.quick.findIndex((x, k) => x === null && fits(QUICK_SLOT + k, was.id));
+      if (q < 0) return false;
+      inv.quick[q] = was;
+    }
+  }
+  inv.hand = { id, n: 1 };
+  return true;
 }
 
 const offlineSurvivors = new Map<number, SurvivorRecord>();
@@ -709,7 +728,8 @@ registerFeature((room: WorldRoom) => {
     const carried = BOARD_ITEMS.reduce((n, id) => n + count(s.inv, id as StackId), 0);
     if (carried >= BOARDS_MAX) return room.send(client, "skate:no", { why: "many" });
     const id = boardItem(v as BoardVariant) as StackId;
-    const n = addStack(s.inv, id, 1);
+    // (plan 103: into the left hand — key 1 rides it —, what was there to the pack; no room, the board to the pack)
+    const n = boardToHand(s.inv, id) ? 1 : addStack(s.inv, id, 1);
     found(s, client.sessionId, `rack:${rack.id}`, n ? [{ id, n }] : [], !n);
   });
   room.on("mod:down", (client) => {
@@ -815,6 +835,11 @@ registerFeature((room: WorldRoom) => {
       const loaded = isWeapon(item) ? WEAPONS[item].mag : 0;
       if (drop) {
         putDrop(item, many, loaded, p.x, p.y, Date.now(), undefined, p.level);
+        return true;
+      }
+      // (plan 103: a board into the left hand — key 1 rides it at once —, what was there to the pack)
+      if (isBoardItem(item) && boardToHand(s.inv, item as StackId)) {
+        changed(s);
         return true;
       }
       // (addItem says how many it took — 0: no room; it was read as how many were left, so a give that

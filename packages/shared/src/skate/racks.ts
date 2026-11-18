@@ -37,3 +37,27 @@ export function rackNear(x: number, y: number, z: number, racks: readonly SkateR
   }
   return best;
 }
+
+/** (the boards stood in each rack, west to east: one of each shape) and their names (the Blender manifest's) */
+export const RACK_BOARDS: Record<string, { variant: string; name: string }[]> = {
+  "rack:hall": [
+    { variant: "vert-classic", name: "Varlow Comet" },
+    { variant: "street-pop", name: "Larch Kerb" },
+    { variant: "cruiser-classic", name: "Sandell Coaster" },
+  ],
+  "rack:yard": [
+    { variant: "vert-fish", name: "Varlow Marlin" },
+    { variant: "street-slick", name: "Larch Slick" },
+    { variant: "cruiser-wood", name: "Sandell Grove" },
+  ],
+};
+/** Each board's place along its rack (m from its middle, along x), west to east. */
+export const RACK_SLOTS = [-0.5, 0, 0.5];
+/** The rack's board nearest someone standing at (x, y): the one they'd take. */
+export function rackBoard(r: SkateRack, x: number): { variant: string; name: string } | null {
+  const bs = RACK_BOARDS[r.id];
+  if (!bs?.length) return null;
+  let i = 0;
+  for (let k = 1; k < bs.length; k++) if (Math.abs(r.x + RACK_SLOTS[k] - x) < Math.abs(r.x + RACK_SLOTS[i] - x)) i = k;
+  return bs[i];
+}

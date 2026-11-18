@@ -37,6 +37,11 @@ const W = {
     "Ficam a qualquer hora; o amanhecer não as manda embora.",
   ],
   else: ["Something else", "Outra coisa"],
+  board: ["A skateboard", "Um skate"],
+  boardS: [
+    "Into your left hand if it's free (else the pack): press 1 to ride it, X to step off.",
+    "Na sua mão esquerda se estiver livre (senão na mochila): aperte 1 para andar, X para descer.",
+  ],
   build: ["Furniture: build mode", "Móveis: modo construção"],
   clear: ["Clear what I spawned", "Limpar o que eu criei"],
   clearS: [
@@ -100,6 +105,18 @@ const POCKET = [
   "aid",
   "fuse",
 ] as const;
+// (plan 103) the nine boards: their item, their name (the Blender manifest's), their shape
+const BOARDS: [string, string, string][] = [
+  ["board_vert_classic", "Varlow Comet", "vert"],
+  ["board_vert_fish", "Varlow Marlin", "vert"],
+  ["board_vert_square", "Varlow Bulwark", "vert"],
+  ["board_street_pop", "Larch Kerb", "street"],
+  ["board_street_slick", "Larch Slick", "street"],
+  ["board_street_tech", "Larch Needle", "street"],
+  ["board_cruiser_classic", "Sandell Coaster", "cruiser"],
+  ["board_cruiser_wood", "Sandell Grove", "cruiser"],
+  ["board_cruiser_mini", "Sandell Pip", "cruiser"],
+];
 const hex = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
 
 export function Spawn() {
@@ -169,6 +186,25 @@ export function Spawn() {
             <Icon name="plus" size={15} />
             {t("spawn", { what: t(model as Word).toLowerCase() })}
           </button>
+        </div>
+      </Card>
+      <Card label={t("board")}>
+        <Note>{t("boardS")}</Note>
+        <div className="grid grid-cols-3 gap-2 mt-3">
+          {BOARDS.map(([id, name, shape]) => (
+            <button
+              key={id}
+              type="button"
+              className="deck-btn"
+              style={{ height: 52, flexDirection: "column", gap: 2 }}
+              onClick={() => send?.("mod:give", { item: id })}
+            >
+              <span>{name}</span>
+              <span className="text-xs" style={{ color: "var(--muted)" }}>
+                {shape}
+              </span>
+            </button>
+          ))}
         </div>
       </Card>
       <div className="grid sm:grid-cols-2 gap-3">
