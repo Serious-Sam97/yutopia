@@ -10,7 +10,16 @@ stand on, falling off, tricks in the air, the camera on something small and quic
 
 Status: **planned 2026-11-18; forks decided 2026-11-18 one by one: the recommendations for F1–F3 and F5–F13;
 **F4b**, GTA's tricks plus air tricks now (tailwhip, barspin, 360, no-hander/superman); **F14b**, no sign-off —
-built straight through, you test at the end. Not built yet.**
+built straight through, you test at the end. Built 2026-11-18, phases 0–9, committed to main (not pushed); the
+recordings of the bikes' own (phase 8) wait on your OK to fetch them.**
+
+**How to try it:** the town's bikes stand on the square (east side, by the benches), at the boathouse (a winter MTB
+with studs, a trail MTB, a freestyle BMX) and at the bus shelter. By one: **Use** rides it, **held Use** wheels it on
+foot. An admin spawns any of the four from the admin panel; MOTORS sells them (each in three variants). Keys while
+riding: **W** pedal, **Shift** stand and sprint (stamina), **S** brake, **A/D** lean into the turn, **Space** held
+then let go to hop, **Q** wheelie (and the nose up in the air), **Z** with S a stoppie (nose down in the air), **E**
+in the air a trick (with A/D a tailwhip, W a superman, S a no-hander, alone a barspin), A/D in the air spins (a 360),
+**L** lamp, **H** bell, **X** off. The benches: `/dev/bike-sound` (the sound, a ride made up).
 
 ## Where we are, from the code
 
@@ -170,3 +179,82 @@ the server takes it (no anticheat).
 - `bike/bike.test.ts`, 10 tests: cruise and sprint, the turn, the brakes and the foot down, the hop, wheelie and
   stoppie, a tailwhip (lands on a BMX; too slow on the town bike), a 360 (held round lands, let go is sideways), ice
   and studs, deep snow, a wall. `bike/probe.ts` prints a ride.
+
+### Phases 0–1 — the models (2026-11-18)
+- Built by a Blender agent from the contract in `tools/art/bikes/README.md`: twelve bikes, near / mid / far, a
+  manifest, `check_glb.py` passing (pivots on their axes, tyres on y = 0, budgets). The stills are in `design/bikes/`
+  (`0-<body>.png`, `0-all.png`, `0-scale.png`, `0-detail-*.png`, `check-*.png`).
+- Names, all invented: Hollin (town: Dame, Lage, Bode), Rook (BMX: Spinner, Gate, Curb), Tarn (MTB: Ridgeline, Rime,
+  Wayfarer), Merrow (road: Sprint, Randonneur, Pista).
+- Departures from the contract, the agent's:
+  - no kickstand on the BMXs, road-race or road-fixed (none had one in period);
+  - lamps and bells only where the bike has them;
+  - town-post's front carrier is on the frame;
+  - the road bikes' hoods sit above the saddle, from the heights I gave; lower them if they read wrong.
+- The game's `BikeModel` (`tp/bike/model.ts`) fits the cars' model interface: the rig, the parked cars and the people
+  code take it unchanged. It uses the file's own nodes as pivots, with one group added on the head tube for the
+  tailwhip.
+
+### Phase 3 — the rider (2026-11-18)
+- `bike/pose.ts`, on plan 100's `carStep`:
+  - the legs are solved to the pedals as the cranks turn, the knees forward;
+  - the bend over the bars is by the bike's body (upright on the town bike, low on the racer, crouched on the BMX);
+  - she stands for a sprint or a climb, crouches for the hop, and puts a foot down at a stop (the bike tipped to it);
+  - the head turns into the turn;
+  - each trick has its own body: the superman's legs out behind, the no-hander's arms out, the tailwhip's feet off
+    and wide, the barspin's hands up and caught again.
+- Getting on and off is the snowmobile's straddle act, with the hands on the grips.
+- Stills from `e2e/bike-poses.mts`: `poses-<kind>.png`, and the act with `ACT=1`.
+
+### Phases 4–6 — tricks, falls and surfaces in the world
+- All in the shared drive, checked in Node with exact sim time (`bike/bike.test.ts`, 11 tests).
+- In the browser, `e2e/bike-tricks.mts` came down unfinished: headless Chrome's frames run behind the sim's clock, so
+  wall-clock key timings there don't match the sim. Ride it yourself to judge the feel.
+
+### Phase 7 — in the world (2026-11-18)
+- **Racks** (`shared bike/racks.ts`): the boathouse and the bus shelter each have a rack (empty versions of the three
+  rack furniture styles, `variant` 3–5, also buildable). The square's bikes stand on their kickstands, because outdoor
+  furniture isn't drawn on the town square (the building's area system doesn't reach it). Each bike is a home vehicle,
+  so the cars' tow takes it back to its rack after a while.
+- **MOTORS** sells the four, each with its three variants and the bike palette.
+- **Wheeled on foot** (F9a): held Use takes it in a walking mode — pushed to a walk (Shift a hurry, S back), the bars
+  turned directly, held upright, no tricks or falls. She walks beside it, left hand on the grip, right on the saddle.
+- **Lamp**: on after dark for a bike that has one. Its one beam is a third of a car's, and a dynamo's brightens with
+  speed.
+- **Stamina**: the server counts a rider as outside (the cold), and standing to sprint as sprinting. The client stops
+  the sprint when winded.
+- **A fall** throws the rider at any speed (`car:leave {fall}`). The bike rolls on from their client and falls, and if
+  it ends on its side it's parked lying there (`props.down`).
+
+### Phase 8 — the sound (2026-11-18)
+- `bike/sound.ts`:
+  - the tyres use the cars' road, snow and slush recordings, thinned;
+  - the freewheel's pawls are made in code (each kind's engagement points; none on the fixed gear);
+  - the chain, the gear's click and the bell are made in code;
+  - the brake squeal and the skid use the cars' recordings;
+  - a landing's thump, a knock, the wind.
+- `/dev/bike-sound` plays a ride made up there.
+- **Waiting on your OK to download (CC0 or CC-BY, credited)** — none fetched:
+  - a bell:
+    - [InspectorJ's bicycle bell, struck once](https://freesound.org/s/484344) (licence to confirm);
+    - [lechufly's](https://freesound.org/s/405572) (licence to confirm);
+    - [Freesound 78957](https://freesound.org/s/78957) (licence to confirm);
+  - a freewheel:
+    - [tim.kahn's bike_freewheel](https://freesound.org/s/74792) (licence to confirm);
+    - [Rudmer_Rotteveel's 719482](https://freesound.org/people/Rudmer_Rotteveel/sounds/719482) (CC0);
+  - [OpenGameArt's CC0 bicycle sound pack](https://opengameart.org/node/16321).
+
+### Phase 9 — checks (2026-11-18)
+- Shared: `bike/bike.test.ts` 11/11; the car tests 28/28 (bikes in `SPECS`, `BUYABLE` and the looks).
+- World server: `cars`, `spot`, `schema` and `survival` 39/39; a new `bikes.test.ts` (the racks, a slow fall thrown,
+  left lying) 1/1.
+- World probes: `e2e/bike-ride.mts`, `bike-racks.mts`, `bike-poses.mts`, `bike-walk.mts`, `bike-tricks.mts`.
+
+### Not done, or left
+- **The memcheck's bike life** (on, ride, fall, off, park): not added yet.
+- **The get-on act** is the snowmobile's straddle (the leg swung high), not a step-through for the town bike or a
+  GTA-style swing back over the saddle.
+- **Others' Jolt bodies for a bike** are a box round bike and rider (the pulled car's).
+- **Bikes in the AI's way**: the visitor and the plough see a bike as a car.
+- **The square has no rack drawn** (see phase 7).
+- **Tyre tracks in the snow** are the cars' ruts, one line.
