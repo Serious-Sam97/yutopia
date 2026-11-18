@@ -68,6 +68,9 @@ export interface BikeState {
   spin: number;
   /** the lean the rider asks for (rad, + to the right) */
   leanTo: number;
+  /** wheeled on foot (F9a): its rider walking beside it; how far they've walked (m, the steps' clock) */
+  walk: boolean;
+  walked: number;
 }
 
 export const newBikeState = (): BikeState => ({
@@ -89,6 +92,8 @@ export const newBikeState = (): BikeState => ({
   landed: null,
   spin: 0,
   leanTo: 0,
+  walk: false,
+  walked: 0,
 });
 
 /** A bicycle's spec as a Jolt car: its hull round bike and rider, its two wheels (front, back) on their tyres' give,
@@ -298,6 +303,10 @@ export class BikeDrive {
     k.pitch = Math.asin(clamp(X[1], -1, 1));
     // (+ leaning to its right: its up tipped toward its right, Z's y going down)
     k.roll = Math.atan2(-Z[1], Y[1]);
+    if (k.walk) {
+      this.walking(raw, world, dt, X, vf, speed);
+      return;
+    }
     if (k.fell) {
       // (no rider: nothing but the brakes' drag till it lies still)
       this.car.input(0, 0, 0.3, 0.3);
@@ -515,6 +524,47 @@ export class BikeDrive {
     this.prevV[2] = s.v.z;
   }
 
+  /** (F9a) Wheeled on foot: pushed to a walk (W; Shift a jog, S back), its bars turned as asked, held upright — no
+   *  lean, no tricks, no falls; stopped, held still. */
+  private walking(raw: Controls, world: CarWorld, dt: number, X: number[], vf: number, speed: number) {
+    const s = this.s;
+    const spec = s.spec;
+    const k = this.bk;
+    const r = this.read;
+    for (let i = 0; i < 2; i++) {
+      const w = r.wheels[i];
+      const g = world.ground(w.contact ? w.cx : s.p.x, w.contact ? w.cz : s.p.z);
+      s.wheels[i * 2].ground = g;
+      s.wheels[i * 2 + 1].ground = g;
+      this.grips[i] = gripOf(world, spec, g, s.p.x, s.p.z, this.studs);
+    }
+    const want = raw.up > 0.05 ? (raw.sprint ? 2.3 : 1.5) : raw.down > 0.05 ? -0.9 : 0;
+    const push = clamp((spec.mass * (want - vf)) / 0.35, -260, 260);
+    const hold = want === 0 && Math.abs(vf) < 0.4;
+    s.str = toward(s.str, clamp(raw.steer, -1, 1) * spec.steer.max * 0.8, 3, 3, dt);
+    this.car.input(0, s.str / spec.steer.max, hold ? 0.6 : 0, hold ? 0.6 : 0);
+    // (kept upright: the walker's hand on it)
+    const Z = axis(s.q, 0, 0, 1);
+    const wx = s.w.x * X[0] + s.w.y * X[1] + s.w.z * X[2];
+    const R = spec.inertia[0] + spec.mass * spec.cog * spec.cog;
+    const tx = (R * 49 + spec.mass * G * spec.cog) * (0 - k.roll) - R * 14 * wx;
+    const d = this.dragForce(world, X, speed);
+    const T = [X[0] * tx, X[1] * tx, X[2] * tx];
+    this.car.push(X[0] * push + d[0], X[1] * push + d[1], X[2] * push + d[2], T[0], T[1], T[2]);
+    void Z;
+    k.walked += Math.abs(vf) * dt;
+    k.effort = 0;
+    k.stand = 0;
+    k.charge = 0;
+    k.foot = 0;
+    k.brake = 0;
+    k.trick = null;
+    s.thr = 0;
+    this.prevV[0] = s.v.x;
+    this.prevV[1] = s.v.y;
+    this.prevV[2] = s.v.z;
+  }
+
   /** The rolling, the snow ploughed and the air against it (N, world). */
   private dragForce(world: CarWorld, X: number[], speed: number): [number, number, number] {
     const s = this.s;
@@ -640,7 +690,7 @@ export class BikeDrive {
     if ((world.water?.(s.p.x, s.p.z) ?? 0) >= SUNK) s.drowned = true;
     k.pitch = Math.asin(clamp(X[1], -1, 1));
     k.roll = Math.atan2(-Z[1], Y[1]);
-    if (k.fell) return;
+    if (k.fell || k.walk) return;
     // ── the judge: does the rider stay on? ──
     const onGround = r.wheels[0].contact || r.wheels[1].contact;
     if (onGround && this.wasAir > 0.22) {

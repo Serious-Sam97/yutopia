@@ -29,6 +29,11 @@ export interface RiderNow {
   /** her body's bend over the bars, 0 upright … 1 low (its kind's) */
   bend: number;
   air: boolean;
+  /** (F9a) wheeling it on foot, walking beside it; how far (m: her steps' clock) */
+  walk?: boolean;
+  walked?: number;
+  /** how fast it goes (m/s) */
+  speed?: number;
 }
 
 /** The hip joint over the saddle's top, sat (m). */
@@ -65,6 +70,8 @@ export function poseBike(m: BikeModel, r: RiderNow) {
 /** Where her root goes on the bike (the model's frame): under the saddle, forward as she stands. */
 export function riderRoot(m: BikeModel, r: RiderNow, out: Vector3): Vector3 {
   const s = m.bike.saddle;
+  // (wheeling it: stood at its left, by the saddle)
+  if (r.walk) return out.set(s.x - 0.22, 0, s.z + 0.56);
   const up = Math.max(r.stand, r.trick === "superman" || r.trick === "tailwhipL" || r.trick === "tailwhipR" ? 1 : 0);
   return out.set(s.x - STAND_AHEAD * up, 0, s.z);
 }
@@ -82,6 +89,36 @@ export function riderAct(
   const b = m.bike;
   // a model point in her space: x her left (the model's +z), up, ahead (the model's −x)
   const her = (p: Vector3): [number, number, number] => [p.z - root.z, p.y, root.x - p.x];
+  if (r.walk) {
+    // (walking beside it: her steps by how far she's gone, a stride of 0.62 m; stood still, her feet together)
+    const ph = ((r.walked ?? 0) / 0.62) * Math.PI;
+    const going = Math.min(1, (r.speed ?? 0) / 0.5);
+    const sw = (k: number) => Math.sin(ph + k * Math.PI);
+    const feet: [[number, number, number], [number, number, number]] = [
+      [0.1, 0.06 * Math.max(0, sw(0)) * going, 0.22 * Math.cos(ph) * going],
+      [-0.1, 0.06 * Math.max(0, sw(1)) * going, -0.22 * Math.cos(ph) * going],
+    ];
+    const hipY = stand - 0.03 - 0.015 * Math.abs(Math.cos(ph)) * going;
+    const act = A.carStep(
+      {
+        hipY,
+        feet,
+        toe: [0.05, 0.05],
+        duck: 0.18,
+        side: -0.06,
+        knee: [
+          [0.05, 0.2, 1],
+          [-0.05, 0.2, 1],
+        ],
+        heading: [0, 0],
+        look: -r.steer * 0.6,
+        hands: { L: GRIP, R: GRIP },
+      },
+      t,
+    );
+    act.lift = [0, hipY - stand, 0];
+    return { act, hipY };
+  }
   const trick = r.trick;
   const k = trick ? Math.sin(Math.PI * Math.min(1, r.trickT)) : 0;
   const up = trick === "superman" || trick === "tailwhipL" || trick === "tailwhipR" ? 1 : r.stand;
@@ -162,6 +199,13 @@ export function riderHands(
     [0, "L"],
     [1, "R"],
   ] as const) {
+    // (wheeling it: the left hand on its grip, the right on the saddle's nose)
+    if (r.walk) {
+      const at = S === "L" ? m.gripAt(0, pa) : pa.copy(m.bike.saddle).add(pb.set(-0.08, 0.04, 0));
+      m.root.localToWorld(at);
+      person.reachTo(S, at, w, ELBOW);
+      continue;
+    }
     const at = m.gripAt(i, pa);
     if (trick === "nohander") at.add(pb.set(0.18 * k, 0.32 * k, (i === 0 ? 1 : -1) * 0.5 * k));
     else if (trick === "barspin") at.add(pb.set(0.05 * k, 0.16 * k, (i === 0 ? 1 : -1) * 0.05 * k));

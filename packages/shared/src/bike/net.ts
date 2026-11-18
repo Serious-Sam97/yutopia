@@ -11,6 +11,7 @@ const TRICK_AT = 19; // 3 bits
 const TRICK_T_AT = 22; // 4 bits
 const FOOT_L = 1 << 26;
 const FOOT_R = 1 << 27;
+const WALK = 1 << 28;
 
 const IDS: (TrickId | null)[] = [null, "tailwhipL", "tailwhipR", "barspin", "superman", "nohander"];
 
@@ -20,6 +21,8 @@ export interface BikeWire {
   trick: TrickId | null;
   trickT: number;
   foot: -1 | 0 | 1;
+  /** wheeled on foot, its rider walking beside it */
+  walk: boolean;
 }
 
 /** A bike's own bits, to OR into its car flags. */
@@ -29,8 +32,10 @@ export function packBike(b: {
   trick: TrickId | null;
   trickT: number;
   foot: number;
+  walk?: boolean;
 }): number {
   let f = 0;
+  if (b.walk) f |= WALK;
   if (b.stand > 0.5) f |= STAND;
   if (b.charge > 0.05) f |= CROUCH;
   const i = b.trick ? IDS.indexOf(b.trick) : 0;
@@ -52,5 +57,10 @@ export function unpackBike(fl: number): BikeWire {
     trick: IDS[i] ?? null,
     trickT: i ? ((fl >>> TRICK_T_AT) & 15) / 15 : 0,
     foot: fl & FOOT_L ? -1 : fl & FOOT_R ? 1 : 0,
+    walk: !!(fl & WALK),
   };
 }
+
+/** Stood on the pedals and pushing hard: a sprint (the stamina it costs — the server's survival tick, the rider's own
+ *  client). From its flags and its effort (the wire's `thr`, ×100). */
+export const bikeSprinting = (fl: number, thr: number): boolean => !!(fl & STAND) && thr >= 80;

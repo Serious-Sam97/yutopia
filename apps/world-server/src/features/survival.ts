@@ -1,5 +1,6 @@
 import { ANIM, chillOf, levelMap, objLevel, tempUp, type WorldObjectDef } from "@yutopia/shared";
 import { hasPower } from "@yutopia/shared/admin";
+import { bikeSprinting, isBikeKind } from "@yutopia/shared/bike";
 import {
   addItem,
   addItemTo,
@@ -956,8 +957,11 @@ registerFeature((room: WorldRoom) => {
             } else s.selfAt = 0;
           } else if (!p.revBy && now - p.downAt >= BLEED_MS) awake(p, s);
         }
-        const riding = p.busy.startsWith("ride:") || p.busy.startsWith("drive:");
-        const land = !riding && onLand(p);
+        // (plan 101: on a bike — out in the air, its cold; stood on the pedals pushing hard, a sprint)
+        const veh = p.busy.startsWith("drive:") ? room.state.vehicles.get(p.busy.slice(6)) : undefined;
+        const biking = !!veh && isBikeKind(veh.kind);
+        const riding = (p.busy.startsWith("ride:") || p.busy.startsWith("drive:")) && !biking;
+        const land = !riding && (biking || onLand(p));
         // the speed it really went over the last quarter second (a teleport, a floor change: forgotten)
         const tr = s.trail;
         tr.push({ t: now, x: p.x, y: p.y });
@@ -970,7 +974,9 @@ registerFeature((room: WorldRoom) => {
         // (a second of it: a sprint's momentum on the ice after letting go isn't a sprint)
         const fast = span >= 0.2 && dist / span > SPRINT_SEEN && !verb;
         s.fastSince = fast ? s.fastSince || now : 0;
-        const sprinting = land && ((p.mv & 7) === SPRINT || (s.fastSince > 0 && now - s.fastSince > 1000));
+        const sprinting = biking
+          ? !!veh && bikeSprinting(veh.fl, veh.thr)
+          : land && ((p.mv & 7) === SPRINT || (s.fastSince > 0 && now - s.fastSince > 1000));
         const b = toB(p.x, p.y);
         const onLot = !land && p.level === 0 && !!g && cellOf(g, Math.floor(p.x), Math.floor(p.y)) === "a";
         const warm =

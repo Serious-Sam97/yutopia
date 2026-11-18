@@ -1,5 +1,6 @@
 "use client";
 
+import { BIKE_PALETTE, isBikeKind } from "@yutopia/shared/bike";
 import {
   BUYABLE,
   bodyVariants,
@@ -73,6 +74,10 @@ addStrings(
     model_tractor: ["Tractor", "Trator"],
     model_ploughtruck: ["Plough truck", "Limpa-neve"],
     model_toboggan: ["Toboggan", "Trenó"],
+    model_bike_town: ["Town bike", "Bicicleta urbana"],
+    model_bike_bmx: ["BMX", "BMX"],
+    model_bike_mtb: ["Mountain bike", "Mountain bike"],
+    model_bike_road: ["Road bike", "Bicicleta de estrada"],
     modelNote_sedan: [
       "4 seats · rear-wheel drive · the lot's own",
       "4 lugares · tração traseira · o do estacionamento",
@@ -87,6 +92,10 @@ addStrings(
     modelNote_tractor: ["1 seat · slow, unstoppable", "1 lugar · lento, imparável"],
     modelNote_ploughtruck: ["2 seats · clears the road · a long one", "2 lugares · limpa a estrada · comprido"],
     modelNote_toboggan: ["2 seats · downhill only", "2 lugares · só ladeira abaixo"],
+    modelNote_bike_town: ["Upright, a basket, a lamp · in town", "Postura ereta, cesta, farol · na cidade"],
+    modelNote_bike_bmx: ["Small, quick · hops and tricks", "Pequena, ágil · pulos e manobras"],
+    modelNote_bike_mtb: ["Knobbly tyres · snow and the woods", "Pneus cravados · neve e mata"],
+    modelNote_bike_road: ["Fastest on a cleared road", "A mais rápida na estrada limpa"],
     // the variants (docs/plan/92's table): by their last word
     variant_base: ["Base", "Básico"],
     variant_gl: ["GL", "GL"],
@@ -102,6 +111,17 @@ addStrings(
     variant_panel: ["Panel van", "Furgão"],
     variant_minibus: ["Minibus", "Micro-ônibus"],
     variant_camper: ["Camper", "Camper"],
+    // (plan 101) the bikes'
+    variant_classic: ["Classic", "Clássica"],
+    variant_step: ["Step-through", "Quadro baixo"],
+    variant_post: ["Carrier", "Cargueira"],
+    variant_free: ["Freestyle", "Freestyle"],
+    variant_race: ["Race", "Corrida"],
+    variant_street: ["Street", "Street"],
+    variant_trail: ["Trail", "Trilha"],
+    variant_winter: ["Winter · studded", "Inverno · cravos"],
+    variant_tour: ["Touring", "Viagem"],
+    variant_fixed: ["Fixed gear", "Pinhão fixo"],
     extra_roofrack: ["Roof rack", "Bagageiro"],
     extra_skibox: ["Ski box", "Caixa de esqui"],
     extra_bullbar: ["Bull bar", "Quebra-mato"],
@@ -332,7 +352,7 @@ export function DealerPanel({ objectId }: { objectId: string }) {
             <div>
               {label("motorsColour")}
               <div className="flex flex-wrap gap-2 mt-2 max-w-[330px]">
-                {PALETTE.map((c, i) =>
+                {(isBikeKind(model) ? BIKE_PALETTE : PALETTE).map((c, i) =>
                   swatch(c, c === look.colour, () => set({ colour: c }), { "data-motors-colour": String(i) }),
                 )}
               </div>

@@ -1,5 +1,5 @@
 import { BODY_R, face8, parseAvatar, type WorldObjectDef } from "@yutopia/shared";
-import { BIKE_VARIANTS, type BikeSpec, packBike, unpackBike } from "@yutopia/shared/bike";
+import { BIKE_VARIANTS, type BikeSpec, bikeSprinting, packBike, unpackBike } from "@yutopia/shared/bike";
 import { BikeDrive, bikeDefOf } from "@yutopia/shared/bike/drive";
 import {
   beltOf,
@@ -80,6 +80,7 @@ import { feel92 } from "@yutopia/shared/car/assist";
 import { Drive, defOf } from "@yutopia/shared/car/drive";
 import type * as GroundsModule from "@yutopia/shared/grounds";
 import type { PulledCar } from "@yutopia/shared/physics";
+import { stepVitals } from "@yutopia/shared/vitals";
 import type { WorldState } from "@yutopia/state";
 import {
   BackSide,
@@ -249,7 +250,10 @@ addStrings(
     carH_kLean: ["lean", "inclinar"],
     carH_kDrag: ["drag your feet", "frear com os pés"],
     carH_kOff: ["off", "descer"],
-    // (plan 101) a bike's keys
+    // (plan 101) a bike's prompt and keys
+    bikeRide: ["Ride", "Pedalar"],
+    bikeWheelHold: ["hold: wheel it", "segure: empurrar"],
+    bikeH_kWalk: ["walk it · ⇧ hurry", "empurrar · ⇧ apressar"],
     bikeH_kPedal: ["pedal · ⇧ sprint", "pedalar · ⇧ arrancar"],
     bikeH_kBrake: ["brake", "frear"],
     bikeH_kSteer: ["lean into the turn", "inclinar na curva"],
@@ -399,6 +403,8 @@ export interface CarsHost {
   /** (plan 93 S4) the pack opened (the inventory, I's); whether it's open */
   openPack(): void;
   packOpen(): boolean;
+  /** (plan 101) my stamina, for a bike's sprint: out of breath; a step of it spent or got back */
+  breath(): { winded: boolean; step(sprinting: boolean, dt: number): void } | null;
   level(): number;
   me(): { x: number; y: number };
   /** my user id (my own bay: car/spot.ts) */
@@ -788,6 +794,21 @@ export function attachCars(c: any, G: typeof GroundsModule): Cars {
         if (d && !d.frozen?.()) d.inventory();
       },
       packOpen: () => !!c.walker?.dark?.frozen?.(),
+      // (plan 101) my stamina on a bike: the walker's, spent sprinting on the pedals
+      breath: () => {
+        const w = c.walker;
+        if (!w?.vitals || !w.breath) return null;
+        return {
+          winded: !!w.breath.winded,
+          step: (sprinting: boolean, dt: number) =>
+            stepVitals(
+              w.vitals,
+              w.breath,
+              { sprinting, outside: true, night: 0, storm: 0, warm: true, focus: false },
+              dt,
+            ),
+        };
+      },
       items: (id: string) => c.walker?.dark?.countOf?.(id) ?? 0,
       face: (a: number) => {
         // (as a seat turns me: the walker's body, my facing, the 8 ways the others see)
@@ -1355,7 +1376,11 @@ export class Cars {
     const hit = this.nearest();
     if (!hit) return null;
     this.nearD = hit.d;
-    const label = hit.seat === 0 ? t("carDrive") : t("carIn");
+    const label = this.parked.get(hit.id)?.spec.bike
+      ? `${t("bikeRide")} · ${t("bikeWheelHold")}`
+      : hit.seat === 0
+        ? t("carDrive")
+        : t("carIn");
     // (my own at home: held, repainted — docs/plan/92 F13b)
     if (!hit.owner && hit.seat === 0 && this.repaintable(hit.id))
       return { objectId: hit.id, kind: "car", label: `${label} · ${t("carRepaintHold")}` };
@@ -1519,10 +1544,17 @@ export class Cars {
   }
   /** Held Use by my own at home: its "Repaint" panel (true), else nothing to hold for (false). */
   hold(kind: string, id: string): boolean {
+    // (plan 101 F9a: a bike, held Use: wheeled on foot)
+    if (kind === "car" && !this.mine && this.parked.get(id)?.spec.bike) {
+      this.walkBike = id;
+      return this.act("car", id);
+    }
     if (kind !== "car" || this.mine || !this.repaintable(id)) return false;
     hud.set({ panel: { kind: "motors", objectId: `repaint:${id}` } });
     return true;
   }
+  /** (plan 101) the bike I asked to wheel on foot (its object's id): mine walking it once I have it */
+  private walkBike = "";
   /** X pressed on the prompt: true if it was a car's (or a bay's, or the dealer's). */
   act(kind: string, id: string): boolean {
     if (this.karts?.act(kind)) return true;
@@ -3231,7 +3263,11 @@ export class Cars {
         l.model.body.add(m.root);
         // (sliding in only as they get in — its door just opened —, not a model remade or a car
         // first seen with them in it)
-        const getting = (!e || e.seat !== i) && this.time < l.doorUntil[i];
+        // (plan 101 F9a: wheeling a bike — no getting on: beside it at once)
+        const walked =
+          l.model instanceof BikeModel &&
+          ((sid === room.sessionId && l.id === `car:${this.walkBike}`) || !!this.riderOf(l, 0).walk);
+        const getting = !walked && (!e || e.seat !== i) && this.time < l.doorUntil[i];
         // (remade in the same seat — the camera into the cockpit as they get in —: still getting in)
         const at = e && e.seat === i ? e.at : getting ? this.time : -9;
         // (plan 93 F3a: the wheel taken from the passenger's side of an empty car — they stood there —: in by
@@ -3287,7 +3323,9 @@ export class Cars {
             (l.doorW ??= [])[d] = 2.5;
           }
         }
-        if (e.gone === undefined && this.time < l.doorUntil[e.seat]) e.gone = this.time;
+        // (plan 101: let go of a bike walked beside — no getting off it)
+        const walkedOff = l.model instanceof BikeModel && !!this.riderOf(l, 0).walk;
+        if (e.gone === undefined && this.time < l.doorUntil[e.seat] && !walkedOff) e.gone = this.time;
         if (e.gone !== undefined && this.time - e.gone < EXIT_S) {
           this.seated.add(sid);
           continue;
@@ -3416,7 +3454,10 @@ export class Cars {
               : at === "seat"
                 ? l.model.body.localToWorld(seatGrip(way, hB))
                 : at === "saddle"
-                  ? l.model.body.localToWorld(hB.set(way.hip.x + 0.28, way.hip.y + 0.06, way.hip.z))
+                  ? // (plan 101: on a bike, the bars' grips)
+                    l.model instanceof BikeModel
+                    ? l.model.body.localToWorld(l.model.gripAt(S === "L" ? 0 : 1, hB))
+                    : l.model.body.localToWorld(hB.set(way.hip.x + 0.28, way.hip.y + 0.06, way.hip.z))
                   : at === "wheel"
                     ? l.model.body.localToWorld(l.model.rim(way.s * 0.75, hB))
                     : ((
@@ -3477,6 +3518,9 @@ export class Cars {
         brake: k.brake,
         bend: b.bend,
         air: k.air > 0,
+        walk: k.walk,
+        walked: k.walked,
+        speed: Math.hypot(d.s.v.x, d.s.v.z),
       };
     }
     const last = l.pb.buf[l.pb.buf.length - 1];
@@ -3506,6 +3550,9 @@ export class Cars {
     r.foot = w.foot;
     r.trick = w.trick;
     r.trickT = w.trickT;
+    r.walk = w.walk;
+    r.speed = Math.hypot(l.pose.v.x, l.pose.v.z);
+    r.walked = (r.walked ?? 0) + r.speed * dt;
     return r;
   }
 
@@ -4930,6 +4977,8 @@ export class Cars {
   // ── mine ───────────────────────────────────────────────────────────────────
   private become(now: { vid: string; seat: number } | null) {
     const was = this.mine;
+    // (plan 101: out of it, a walked bike let go)
+    if (!now && was) this.walkBike = "";
     if (was && !now && this.coastWant === was.vid && was.seat === 0 && was.drive && was.sim) {
       // (plan 99 F2a) jumped out: it rolls on — its Jolt car, its sim and its sound kept, driven on with nobody's hands
       this.coastWant = "";
@@ -5026,7 +5075,9 @@ export class Cars {
         }
         this.joltUp(this.mine);
         // (on after dark, and in the morning fog — docs/plan/64 F4)
-        this.beams = Math.max(this.host.night(), this.host.lampFog()) > 0.4 && !sim.spec.pushed ? "low" : "off";
+        // (plan 101: a bike with a lamp too)
+        const lampOn = !sim.spec.pushed || (!!sim.spec.bike && BIKE_VARIANTS[l.look.variant]?.lamp !== "none");
+        this.beams = Math.max(this.host.night(), this.host.lampFog()) > 0.4 && lampOn ? "low" : "off";
         // (on in a storm, and in the rain: docs/plan/65 W7)
         this.wipers = this.host.storm() > 0.4 || wxNow.rain > 0.2 ? 2 : 0;
         this.wipersAuto = true;
@@ -5063,6 +5114,8 @@ export class Cars {
       const bv = BIKE_VARIANTS[lv?.look.variant ?? ""];
       bd.studs = !!bv?.studs;
       bd.fixed = !!bv?.fixed;
+      // (asked to wheel it: walked, not ridden)
+      bd.bk.walk = !!this.walkBike && m.vid === `car:${this.walkBike}`;
       m.drive = bd;
     } else m.drive = new Drive(s, car);
     m.drive.prime();
@@ -5083,7 +5136,13 @@ export class Cars {
       const I = this.input;
       c.hop = c.hand > 0.5;
       c.hand = 0;
-      c.sprint = I.held("ShiftLeft", "ShiftRight") || I.padHeld(pad, 10);
+      // (out of breath: no sprint till it's back — the walker's own stamina, spent here as the server spends it)
+      const br = this.host.breath();
+      c.sprint = (I.held("ShiftLeft", "ShiftRight") || I.padHeld(pad, 10)) && !br?.winded;
+      const bd = this.mine?.drive;
+      // (spent only: its getting back is the walker's own, or the server's word)
+      if (br && bd instanceof BikeDrive && bikeSprinting(packBike(bd.bk), Math.round(bd.bk.effort * 100)))
+        br.step(true, dt);
       c.lean = (I.held("KeyQ") || I.padHeld(pad, 4) ? 1 : 0) - (I.held("KeyZ") || I.padHeld(pad, 5) ? 1 : 0);
       c.trick = I.held("KeyE") || I.padHeld(pad, 1);
     }
@@ -6421,7 +6480,14 @@ export class Cars {
       F.set(-1, 0, 0).transformDirection(m.root.matrix);
       lit = beams;
     } else if (night && !l) lit = this.nearestLit(A, B, F);
-    const want = lit === "off" ? 0 : q === "high" || q === "medium" ? 2 : 1;
+    // (plan 101: a bike's one lamp — a dynamo's as bright as it's pedalled —, or none)
+    const bikeL = l?.spec.bike ? BIKE_VARIANTS[l.look.variant] : null;
+    if (bikeL && bikeL.lamp === "none") lit = "off";
+    const want = lit === "off" ? 0 : bikeL ? 1 : q === "high" || q === "medium" ? 2 : 1;
+    const bikeK = !bikeL
+      ? 1
+      : 0.3 *
+        (bikeL.lamp === "dynamo" ? Math.max(0.12, Math.min(1, Math.hypot(l?.pose.v.x ?? 0, l?.pose.v.z ?? 0) / 4)) : 1);
     // (a lamp broken is out, a bad front dims both: mine — docs/plan/92 phase 9)
     const dm = l && this.mine?.vid === l.id ? this.mine.dmg : null;
     const kA = dm ? headK(dm, "l") : 1;
@@ -6446,8 +6512,8 @@ export class Cars {
             ? A
             : B;
       const k = want === 1 ? (kA + kB) / 2 : i === 0 ? kA : kB;
-      s.intensity = (lit === "high" ? 220 : 120) * k;
-      s.angle = lit === "high" ? 0.36 : 0.5;
+      s.intensity = (lit === "high" ? 220 : 120) * k * bikeK;
+      s.angle = bikeL ? 0.42 : lit === "high" ? 0.36 : 0.5;
       s.position.copy(at);
       s.target.position.copy(at).addScaledVector(F, 30);
       s.target.position.y -= lit === "high" ? 0.4 : 1.3;
@@ -6652,6 +6718,13 @@ export class Cars {
         [["N"], t("carH_kWindow")],
         [["C"], t("carH_kCamera")],
         [["X"], t("carH_kOut")],
+      ];
+    if (m.sim?.spec.bike && m.drive instanceof BikeDrive && m.drive.bk.walk)
+      return [
+        [["W"], t("bikeH_kWalk")],
+        [["S"], t("carH_kBack")],
+        [["A", "D"], t("carH_kSteer")],
+        [["X"], t("carH_kOff")],
       ];
     if (m.sim?.spec.bike)
       return [

@@ -106,8 +106,17 @@ for (const kind of kinds) {
   );
   await page.waitForTimeout(3000);
   const files: string[] = [];
-  for (const [name, pose] of POSES) {
-    await page.evaluate((p) => ((globalThis as any).__bikeRider = p), pose);
+  // (ACT=1: the getting on and off, its clock held, in place of the poses)
+  const act = process.env.ACT === "1";
+  const shots: [string, unknown][] = act
+    ? [0.2, 0.5, 0.8, 1.1, 1.4, 1.7, 0.3, 0.6, 0.9, 1.2, 1.5, 1.7].map((t, i) => [
+        `${i < 6 ? "on" : "off"} ${t}`,
+        { t, out: i >= 6 },
+      ])
+    : POSES;
+  for (const [name, pose] of shots) {
+    if (act) await page.evaluate((p) => ((globalThis as any).__actAt = p), pose);
+    else await page.evaluate((p) => ((globalThis as any).__bikeRider = p), pose);
     await frames(4);
     const png = await page.evaluate((v) => {
       const c = (window as any).__yutopia;
@@ -133,7 +142,10 @@ for (const kind of kinds) {
     writeFileSync(f, Buffer.from(png.split(",")[1], "base64"));
     files.push(f);
   }
-  await page.evaluate(() => ((globalThis as any).__bikeRider = undefined));
+  await page.evaluate(() => {
+    (globalThis as any).__bikeRider = undefined;
+    (globalThis as any).__actAt = undefined;
+  });
   // a sheet: four across, each labelled
   const cols = 4;
   const rows = Math.ceil(files.length / cols);
@@ -143,7 +155,7 @@ for (const kind of kinds) {
   fc += `;${files.map((_, i) => `[v${i}]`).join("")}xstack=inputs=${files.length}:layout=${files
     .map((_, i) => `${(i % cols) * 400}_${Math.floor(i / cols) * 267}`)
     .join("|")}`;
-  const sheet = `${out}/poses-${kind}${view === "34" ? "-34" : ""}.png`;
+  const sheet = `${out}/${act ? "act" : "poses"}-${kind}${view === "34" ? "-34" : ""}.png`;
   execFileSync("ffmpeg", [...args, "-filter_complex", fc, "-frames:v", "1", sheet]);
   console.log(kind, "→", sheet, `(${rows} rows)`);
   await page.keyboard.press("KeyX");

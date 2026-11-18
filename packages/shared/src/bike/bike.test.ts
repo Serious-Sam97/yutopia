@@ -212,3 +212,18 @@ test("ridden into a wall it throws its rider; the bike falls over", async () => 
   run(idle, 3, undefined, false);
   assert.ok(Math.abs(d.bk.roll) > 1.0, `on its side ${d.bk.roll.toFixed(2)}`);
 });
+
+test("wheeled on foot: at a walk, upright, backed up with S, never falls", async () => {
+  const { d, run } = await ride("bike_town");
+  d.bk.walk = true;
+  run({ ...idle, up: 1 }, 3);
+  assert.ok(kmh(d) > 4.5 && kmh(d) < 6.5, `walking ${kmh(d).toFixed(1)}`);
+  run({ ...idle, up: 1, steer: 1 }, 2);
+  assert.ok(Math.abs(d.bk.roll) < 0.06, `upright ${d.bk.roll.toFixed(2)}`);
+  run(idle, 1.5);
+  const x0 = d.s.p.x;
+  run({ ...idle, down: 1 }, 2);
+  assert.ok(Math.hypot(d.s.v.x, d.s.v.z) > 0.5, "backing up");
+  void x0;
+  assert.equal(d.bk.fell, null);
+});

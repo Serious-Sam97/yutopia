@@ -204,6 +204,8 @@ export class BikeModel implements Sedan {
   readonly dims: { L: number; axleF: number; kind: string };
   readonly lamps: { head: Vector3[]; tail: Vector3[]; exhaust: Vector3 };
   readonly rearView = new Mesh();
+  /** (a car's pedals: none, but its rider's full size — cars.ts scales a person by whether it has them) */
+  readonly pedals: Vector3[] = [];
   /** (a car's: its parts merged when parked — a bike's few stay as they are) */
   bakeStill?: () => number;
   screen = { u0: 0, y0: 0, u1: 0, y1: 0, hw0: 0, hw1: 0, len: 0 };
