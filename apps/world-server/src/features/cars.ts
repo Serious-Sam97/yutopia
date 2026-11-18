@@ -35,6 +35,7 @@ import {
   type HomeCar,
   headingQuat,
   holesWithout,
+  homesOf,
   keysDay,
   levelCar,
   MEND_MS,
@@ -71,13 +72,25 @@ import {
   variantSpec,
   wireCar,
 } from "@yutopia/shared/car";
-import { atPump, BUILDINGS, heightAt, inBuilt, inLandBounds, LOT, MOTORS, waterAt } from "@yutopia/shared/grounds";
+import {
+  atPump,
+  BUILDINGS,
+  editsNow,
+  heightAt,
+  inBuilt,
+  inLandBounds,
+  LOT,
+  MOTORS,
+  waterAt,
+} from "@yutopia/shared/grounds";
+import { type Effect, sectionEffects } from "@yutopia/shared/grounds-draft";
+import type { GroundsEdits, VehicleDef } from "@yutopia/shared/grounds-edits";
 import { addItem, addItemTo, addStack, count, slotAt, takeSlot, takeStack } from "@yutopia/shared/inventory";
 import { SWIM } from "@yutopia/shared/move";
 import { BOARD_KIND, boardOfOwner, boardsOf, postOf } from "@yutopia/shared/spot";
 import { api } from "../api.ts";
 import { config } from "../config.ts";
-import { onLandChanged, prefetch } from "../land.ts";
+import { onEditsLaid, onLandChanged, prefetch } from "../land.ts";
 import { type Player, Vehicle } from "../schema.ts";
 import { fromSchema, toSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
@@ -1227,15 +1240,22 @@ registerFeature((room: WorldRoom) => {
     room.rebuildGrid();
   };
 
-  const homeOf = new Map(HOME_CARS.map((h) => [h.id, h]));
+  // the vehicles that live in the world: the code's with God mode's edits laid over them (docs/plan/102), made again
+  // when edits are laid
+  let homes = homesOf(editsNow());
+  let homeOf = new Map(homes.map((h) => [h.id, h]));
   const homeProps = (h: HomeCar, was: Record<string, unknown> = {}) => {
-    const props: Record<string, unknown> = { ...was, level: 0, variant: h.colour, home: 1 };
+    // (what a home says it is, its alone: an older look, role or plate it had dropped first — plan 102's rollbacks)
+    // (and set down standing: a bike that lay where it fell stands at home)
+    const { model: _m, wagon: _w, snowy: _s, role: _r, look: _l, plate: _p, down: _d, lie: _q, ly: _y, ...rest } = was;
+    const props: Record<string, unknown> = { ...rest, level: 0, variant: h.colour, home: 1 };
     if (h.model !== "sedan") props.model = h.model;
     if (h.wagon) props.wagon = 1;
     if (h.snowy) props.snowy = 1;
     if (h.role) props.role = h.role;
-    // (plan 101: a rack's bike as it was made, its variant and paint)
-    if (h.look) props.look = { ...h.look, extras: [], wheels: "steel" };
+    // (plan 101: a rack's bike as it was made, its variant and paint; plan 102: God mode's, whole)
+    if (h.look) props.look = { extras: [], wheels: "steel", ...h.look };
+    if (h.plate) props.plate = h.plate;
     return props;
   };
   const putHome = (h: HomeCar, was?: Record<string, unknown>, fresh = false) => {
@@ -1255,15 +1275,21 @@ registerFeature((room: WorldRoom) => {
   let homesMade = false;
   // (the land under each home made ahead, in the worker, while the room's made: putHome asks its height — on the
   // tick, a chunk made then is ~6–30 ms, the land's 35 homes ~250 ms — docs/plan/89-the-weight.md phase 8)
-  for (const h of HOME_CARS) prefetch(h.x, h.z, 2);
+  for (const h of homes) prefetch(h.x, h.z, 2);
   const makeHomes = () => {
     const cars = [...room.state.objects.values()].filter((o) => o.kind === "car");
     if (cars.length < 6) return;
     homesMade = true;
     let made = 0;
-    for (const h of HOME_CARS)
+    for (const h of homes)
       if (!room.state.objects.get(h.id)) {
         putHome(h, undefined, true);
+        made++;
+      }
+    // (plan 102: one of the town's God mode took away, or one it placed and no longer has — gone)
+    for (const o of cars)
+      if (!homeOf.has(o.id) && (HOME_IDS.has(o.id) || GOD_ID.test(o.id)) && !inUse(o.id)) {
+        dropCar(o.id);
         made++;
       }
     // (plan 101: the bikes' racks, furniture where they stand — put where the list has them, moved if it moved; a rack's
@@ -1291,7 +1317,7 @@ registerFeature((room: WorldRoom) => {
       room.state.objects.set(r.id, toSchema(next));
       if (!config.offline) void api.putObject(next).catch((e) => console.warn("[cars] rack", e.message));
       made++;
-      for (const h of HOME_CARS) {
+      for (const h of homes) {
         if (!h.id.startsWith(`${r.id}-`)) continue;
         const b = room.state.objects.get(h.id);
         if (b && !fromSchema(b).props?.driven) putHome(h, fromSchema(b).props ?? {}, true);
@@ -1339,6 +1365,112 @@ registerFeature((room: WorldRoom) => {
     putHome(h, props);
     return true;
   };
+
+  // ── God mode's vehicles (docs/plan/102-god-mode-vehicles.md): edits laid — a publish, a rollback — and the world's
+  // vehicles made to match. The homes (the town's own and those God mode placed): a new one made, a changed one put at
+  // its home as it's now, one taken away gone. Any other (a lot's car, a player's own, a spawn): moved, or taken away,
+  // once, as the edit says (a player's own is moved only). One in use is left till it's parked. ──
+  const HOME_IDS = new Set(HOME_CARS.map((h) => h.id));
+  const GOD_ID = /^god-car-\d+$/;
+  const inUse = (id: string) => {
+    if (live.has(`car:${id}`)) return true;
+    const o = room.state.objects.get(id);
+    return !!(o && fromSchema(o).props?.driven);
+  };
+  const dropCar = (id: string) => {
+    room.state.objects.delete(id);
+    if (!config.offline) void api.deleteObject(id).catch((e) => console.warn("[cars] god", e.message));
+  };
+  const watched = (id: string) => {
+    const o = room.state.objects.get(id);
+    if (!o) return false;
+    const pose = parkedPose(fromSchema(o));
+    return [...room.state.players.values()].some(
+      (q) => q.level === 0 && Math.hypot(q.x - pose.x, q.y - pose.y) < TOW_NEAR,
+    );
+  };
+  /** Homes changed or gone while in use: done once each is parked and nobody's by it. */
+  const homeLater = new Set<string>();
+  const homeNow = (id: string): boolean => {
+    const h = homeOf.get(id);
+    const o = room.state.objects.get(id);
+    if (!h) {
+      if (!o) return false;
+      dropCar(id);
+      return true;
+    }
+    putHome(h, o ? (fromSchema(o).props ?? {}) : undefined, !o);
+    return true;
+  };
+  /** One that isn't a home, moved (and, not someone's own, its look) as God mode's edit has it. */
+  const moveCar = (def: ReturnType<typeof fromSchema>, c: Partial<VehicleDef>) => {
+    const pose = parkedPose(def);
+    const props: Record<string, unknown> = { ...(def.props ?? {}) };
+    delete props.down;
+    delete props.lie;
+    delete props.ly;
+    if (!props.ownerId) {
+      if (c.look) props.look = { extras: [], wheels: "steel", ...c.look };
+      if (c.role !== undefined) {
+        if (c.role) props.role = c.role;
+        else delete props.role;
+      }
+      if (c.plate) props.plate = c.plate;
+    }
+    // (as if just left there: the lot's tow takes its own back to their bays after a while, as ever)
+    props.parkedAt = Date.now();
+    const x = num(c.x, pose.x);
+    const z = num(c.z, pose.y);
+    const spot = parkAt(x, z, num(c.a, pose.a), heightAt(x, z), props);
+    const next = { ...def, ...spot };
+    room.state.objects.set(def.id, toSchema(next));
+    if (!config.offline) void api.putObject(next).catch((e) => console.warn("[cars] god", e.message));
+  };
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  const offLaid = onEditsLaid((was: GroundsEdits, now: GroundsEdits) => {
+    if (same(was.vehicles ?? null, now.vehicles ?? null)) return;
+    const before = new Map(homesOf(was).map((h) => [h.id, h]));
+    homes = homesOf(now);
+    homeOf = new Map(homes.map((h) => [h.id, h]));
+    for (const h of homes) prefetch(h.x, h.z, 2);
+    // (not made yet: makeHomes makes them as they are now)
+    if (!homesMade) return;
+    let n = 0;
+    for (const h of homes) {
+      if (same(before.get(h.id) ?? null, h) && room.state.objects.get(h.id)) continue;
+      if (inUse(h.id)) homeLater.add(h.id);
+      else if (homeNow(h.id)) n++;
+    }
+    for (const id of before.keys()) {
+      if (homeOf.has(id) || !room.state.objects.get(id)) continue;
+      if (inUse(id)) homeLater.add(id);
+      else if (homeNow(id)) n++;
+    }
+    const e0 = sectionEffects(was.vehicles);
+    for (const [k, e] of sectionEffects(now.vehicles) as Map<string, Effect>) {
+      if (homeOf.has(k) || before.has(k) || same(e0.get(k) ?? null, e)) continue;
+      const o = room.state.objects.get(k);
+      if (!o || o.kind !== "car" || inUse(k)) continue;
+      const def = fromSchema(o);
+      if ("remove" in e) {
+        if (def.props?.ownerId) continue;
+        dropCar(k);
+      } else moveCar(def, ("change" in e ? e.change : e.add) as Partial<VehicleDef>);
+      n++;
+    }
+    if (n) room.rebuildGrid();
+  });
+  // an admin's "send home" (God mode's Select, plan 102 phase 4): a home left away, put back there now
+  room.on("god:car-home", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const id = String(m?.id ?? "");
+    if (!p?.admin || !homeOf.has(id) || inUse(id)) return;
+    const o = room.state.objects.get(id);
+    if (!o) return;
+    putHome(homeOf.get(id) as HomeCar, fromSchema(o).props ?? {}, false);
+    room.rebuildGrid();
+    room.adminLog(p, "car-home", null, id);
+  });
 
   let towAt = Date.now() + 60_000;
   let sweepAt = 0;
@@ -1960,6 +2092,7 @@ registerFeature((room: WorldRoom) => {
   return {
     dispose() {
       offLand();
+      offLaid();
       room.carShot = null;
       room.carMaps = null;
       for (const t of saveSoon.values()) clearTimeout(t);
@@ -2052,6 +2185,13 @@ registerFeature((room: WorldRoom) => {
       }
       if (now > sweepAt) {
         sweepAt = now + 5000;
+        // (plan 102: homes God mode changed while they were in use, done now they're parked)
+        // (and nobody near: not changed under someone's eyes as they get out)
+        for (const id of [...homeLater])
+          if (!inUse(id) && !watched(id)) {
+            homeLater.delete(id);
+            if (homeNow(id)) room.rebuildGrid();
+          }
         ploughedSweep(room.state, now);
       }
       fireTick(now);

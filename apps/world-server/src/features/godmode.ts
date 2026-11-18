@@ -1,4 +1,5 @@
 import { worldZ } from "@yutopia/shared";
+import { checkVehicles, isCarKind, validLook } from "@yutopia/shared/car";
 import { BUILDINGS, CHUNK, checkEdits, editsNow, heightAt } from "@yutopia/shared/grounds";
 import type { GroundsEdits } from "@yutopia/shared/grounds-edits";
 import { beyondLand, REACH_MARGIN } from "@yutopia/shared/land";
@@ -6,7 +7,7 @@ import { api } from "../api.ts";
 import { config } from "../config.ts";
 import { landEdits } from "../land.ts";
 import type { Player } from "../schema.ts";
-import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
+import { fromSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // God mode (docs/plan/53-the-god-mode.md): an admin's draft of edits to the Grounds published —
@@ -35,6 +36,23 @@ registerFeature((room: WorldRoom) => {
   const refuse = (c: WorldClient, reason: string, problems: string[] = []) => {
     room.send(c, "god:refused", { reason, problems });
     room.send(c, "toast", { text: reason, tone: "warn" });
+  };
+  /** God mode's vehicles (docs/plan/102): each a kind and a look there is; a player's own car moved only, never taken
+   *  away or repainted. */
+  const vehicleProblems = (e: GroundsEdits): string[] => {
+    const out = checkVehicles(e, {
+      kind: (k) => isCarKind(k),
+      look: (k, l) => isCarKind(k) && !!validLook(k, l),
+    });
+    const owned = (id: string) => {
+      const o = room.state.objects.get(id);
+      return !!(o?.kind === "car" && fromSchema(o).props?.ownerId);
+    };
+    for (const id of e.vehicles?.remove ?? []) if (owned(id)) out.push(`${id}: someone's own car isn't taken away`);
+    for (const [id, c] of Object.entries(e.vehicles?.change ?? {}))
+      if (owned(id) && (c.look || c.model || c.role !== undefined || c.plate !== undefined))
+        out.push(`${id}: someone's own car is only moved`);
+    return out;
   };
   // one publish at a time: the next is made on what this one leaves live
   let busy = false;
@@ -158,7 +176,7 @@ registerFeature((room: WorldRoom) => {
           c,
           `Revision ${room.state.groundsRev} is live; your draft was made on ${draft.baseRev}. Bring it up to date first.`,
         );
-      const problems = checkEdits(draft.data);
+      const problems = [...checkEdits(draft.data), ...vehicleProblems(draft.data)];
       if (problems.length) return refuse(c, "The draft can't be published as it is.", problems);
       const rev = await commit(p, draft.data, { note, draftId: id });
       if (config.offline) offlineDrafts.delete(id);

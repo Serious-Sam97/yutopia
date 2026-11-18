@@ -324,6 +324,8 @@ export interface ClientMessages {
   "god:walk": { on: boolean };
   /** an admin's draft published, by its id (docs/plan/55-the-drafts.md) */
   "god:publish": { draftId: number; note?: string };
+  /** (plan 102) a home vehicle left away, put back at its home now (admins only) */
+  "god:car-home": { id: string };
   "god:rollback": { rev: number };
   // something in a hand (shared held.ts) or the pockets (shared inventory.ts): mine or someone's;
   // `drop`: on the ground where I stand, for anyone

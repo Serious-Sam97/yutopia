@@ -90,10 +90,18 @@ export function onLandChanged(f: (chunks: [number, number][]) => void): () => vo
 /** God mode's edits laid on the Grounds (docs/plan/53-the-god-mode.md): here, in the worker, and
  *  whoever keeps what's made of them told the chunks that changed. */
 export function landEdits(edits: GroundsEdits): [number, number][] {
+  const was = editsNow();
   const dirty = applyEdits(edits);
   worker?.postMessage({ edits, v: layoutVersion });
   for (const f of listeners) f(dirty);
+  for (const f of laidListeners) f(was, edits);
   return dirty;
+}
+const laidListeners = new Set<(was: GroundsEdits, now: GroundsEdits) => void>();
+/** Told the edits laid, the ones before and the ones now (plan 102: the town's vehicles, reconciled to them). */
+export function onEditsLaid(f: (was: GroundsEdits, now: GroundsEdits) => void): () => void {
+  laidListeners.add(f);
+  return () => laidListeners.delete(f);
 }
 
 // the worker's own heap (its isolate isn't in process.memoryUsage().heapUsed): read now and then, the last one said
