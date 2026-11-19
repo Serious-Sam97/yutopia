@@ -13,9 +13,10 @@
 
 import {
   BENCH,
+  BRIDGES,
   BUILDINGS,
   type Building,
-  bridgeRuns,
+  bridgePiers,
   CHUNK,
   DOCK,
   editsVersion,
@@ -48,6 +49,7 @@ import {
   PINE_H,
   pavedAt,
   paveSlabs,
+  pierSize,
   pineVariant,
   quarter,
   ROAD_CLOSED,
@@ -99,6 +101,7 @@ export type GroundWhat =
   | "fit"
   | "bridge_deck"
   | "bridge_rail"
+  | "bridge_pier"
   | "dock"
   | "lookout_deck"
   | "jetty"
@@ -715,47 +718,66 @@ function longDecks(out: GroundSolid[]) {
   });
 }
 
-// ── the bridges over the river and the ravine (WAYS' bridged samples) ──
+// ── the bridges (grounds.ts BRIDGES: the generator's over the river and the ravine, god mode's — docs/plan/109) ──
 function bridges(out: GroundSolid[]) {
-  // (each run of a way's bridged samples its own bridge: the long road has two — docs/plan/69)
-  const runs: { w: (typeof WAYS)[number]; a: number; b: number }[] = [];
-  for (const w of WAYS) for (const r of bridgeRuns(w)) if (r.length > 1) runs.push({ w, a: r[0], b: r[r.length - 1] });
-  for (const { w, a, b } of runs) {
+  for (const br of BRIDGES) {
+    const { w, a, b } = br;
+    if (b - a < 1) continue;
     const L = w.line;
-    const timber = w.kind === "trail";
     // the deck: a slab a sample long, 0.3 deep, to its edges (w/2 + 0.3), at its middle's height
-    // (on a slope a piece's ends are a hair off the road, never a step)
-    for (let i = a; i < b; i++) {
+    // (on a slope a piece's ends are a hair off the road, never a step). A sample more each end, onto
+    // the land flattened to the way, as the decks walked (grounds.ts layDecks): the land isn't flattened
+    // within half a sample of a bridged one, so without it each end was a slot across the road, the
+    // bank under it — the river bridge's 3–4 m deep, every wheel and foot fell in. Each slab a hair
+    // longer than its sample, so a bend leaves no wedge open between two.
+    for (let i = Math.max(0, a - 1); i < Math.min(L.length - 1, b + 1); i++) {
       const [ax, az] = L[i];
       const [bx, bz] = L[i + 1];
       const y = (w.h[i] + w.h[i + 1]) / 2 + 0.05;
-      const len = Math.hypot(bx - ax, bz - az);
+      const len = Math.hypot(bx - ax, bz - az) + 0.2;
       const o = w.w / 2 + 0.3;
       out.push({
         what: "bridge_deck",
         s: turned((ax + bx) / 2, (az + bz) / 2, Math.atan2(-(bz - az), bx - ax), -len / 2, -o, len / 2, o, y - 0.3, y),
       });
     }
-    // the sides: the footbridge's railing (1.05, its posts 1.13), the road's truss (5.2), 3 samples each
-    const off = timber ? w.w / 2 + 0.2 : w.w / 2 + 0.7;
-    const h = timber ? 1.13 : 5.2;
-    for (let i = a; i < b; i += 3) {
-      const j = Math.min(b, i + 3);
-      for (const s of [1, -1]) {
-        const n = (k: number) => {
-          const [px, pz] = L[Math.max(a, k - 1)];
-          const [qx, qz] = L[Math.min(b, k + 1)];
-          const l = Math.hypot(qx - px, qz - pz) || 1;
-          return [L[k][0] - ((qz - pz) / l) * s * off, L[k][1] + ((qx - px) / l) * s * off];
-        };
-        const [px, pz] = n(i);
-        const [qx, qz] = n(j);
-        const y = Math.min(w.h[i], w.h[j]) + 0.05;
-        out.push({
-          what: "bridge_rail",
-          s: along(px, pz, qx, qz, timber ? 0.12 : 0.36, y, Math.max(w.h[i], w.h[j]) + 0.05 + h),
-        });
+    // the sides, 3 samples a piece: a railing (1.05, its posts 1.13), a truss (5.2), a parapet (0.95), or none
+    if (br.rails !== "none") {
+      const [off, h, t] =
+        br.rails === "railing"
+          ? [w.w / 2 + 0.2, 1.13, 0.12]
+          : br.rails === "parapet"
+            ? [w.w / 2 + 0.5, 0.95, 0.5]
+            : [w.w / 2 + 0.7, 5.2, 0.36];
+      // (a parapet as drawn: 0.5 thick)
+      for (let i = a; i < b; i += 3) {
+        const j = Math.min(b, i + 3);
+        for (const s of [1, -1]) {
+          const n = (k: number) => {
+            const [px, pz] = L[Math.max(a, k - 1)];
+            const [qx, qz] = L[Math.min(b, k + 1)];
+            const l = Math.hypot(qx - px, qz - pz) || 1;
+            return [L[k][0] - ((qz - pz) / l) * s * off, L[k][1] + ((qx - px) / l) * s * off];
+          };
+          const [px, pz] = n(i);
+          const [qx, qz] = n(j);
+          const y = Math.min(w.h[i], w.h[j]) + 0.05;
+          out.push({ what: "bridge_rail", s: along(px, pz, qx, qz, t, y, Math.max(w.h[i], w.h[j]) + 0.05 + h) });
+        }
       }
+    }
+    // the piers: from the land up to under the deck (grounds.ts pierSize: a steel one's across its deck, a stone one's
+    // wider, a concrete one's a column)
+    for (const k of bridgePiers(br)) {
+      const [x, z] = L[k];
+      const top = w.h[k] - 0.3;
+      const foot = terrainAt(x, z) - 0.5;
+      if (top - foot < 0.6) continue;
+      const [px, pz] = L[Math.max(a, k - 1)];
+      const [qx, qz] = L[Math.min(b, k + 1)];
+      const ang = Math.atan2(-(qz - pz), qx - px);
+      const p = pierSize(br);
+      out.push({ what: "bridge_pier", s: turned(x, z, ang, -p.along, -p.across, p.along, p.across, foot, top) });
     }
   }
 }
@@ -1494,8 +1516,12 @@ export const GROUND_WHATS: Record<GroundWhat, { label: string; how: string; odd?
   },
   bridge_rail: {
     label: "Bridge sides",
-    how: "the footbridge's railing (1.13, 0.12 thick, w/2 + 0.2 out), the road bridge's truss sides (5.2, 0.36, w/2 + 0.7 out), 3 samples a piece",
+    how: "by its sides (docs/plan/109): a railing (1.13, 0.12 thick, w/2 + 0.2 out), a truss's sides (5.2, 0.36, w/2 + 0.7 out), a parapet (0.95, 0.5, w/2 + 0.5 out) or none, 3 samples a piece",
     odd: "the truss's bracing across the top (5.2) isn't a solid: a flier passes between its sides over the road",
+  },
+  bridge_pier: {
+    label: "Bridge piers",
+    how: "a bridge's piers (docs/plan/109 bridgePiers, pierSize): the steel one's across its deck on the ice, a concrete one's columns, a stone one's under its arches, a trestle's posts; from the land to under its deck",
   },
   dock: {
     label: "The pond's dock",

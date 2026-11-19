@@ -1170,12 +1170,15 @@ function distTo(k: string, x: number, z: number): number {
   return Math.hypot(x0 + s / 2 - x, z0 + s / 2 - z);
 }
 
-/** What of god mode's edits the rest of the Grounds is made from: the ways, the buildings and the
- *  things as listed, and the land's heights under them (the paint and the trees are the land's own,
- *  the blocks'). */
+/** What of god mode's edits the rest of the Grounds is made from: the ways, the buildings, the
+ *  things and the bridges (docs/plan/109: drawn with the ways) as listed, and the land's heights under them (the
+ *  paint and the trees are the land's own, the blocks'). */
 function staticsOf() {
   const e = editsNow();
-  return { lists: JSON.stringify([e.ways ?? null, e.buildings ?? null, e.things ?? null]), height: e.height ?? {} };
+  return {
+    lists: JSON.stringify([e.ways ?? null, e.buildings ?? null, e.things ?? null, e.bridges ?? null]),
+    height: e.height ?? {},
+  };
 }
 /** Did the land's heights change under anything the rest draws (a way, a building, a lamp, a
  *  thing in the street, a snow pole: each stands on it)? The ways it moved under, and whether

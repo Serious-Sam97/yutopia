@@ -54,7 +54,9 @@ import { gzipSync } from "node:zlib";
 // NaN guards in the world page's sound (grounds-sound.ts) and its other client changes on the page)
 // (raised to 491 on 2026-11-18, the same call: plan 103's skate — the build menu's ramps as plain numbers, the
 // avatar's stance, the controller's board hooks — measured 490.4)
-const BUDGETS = { "/page": 491, "/login/page": 160 }; // KB gzip
+const BUDGETS = { "/page": 492, "/login/page": 160 }; // KB gzip
+// (/page raised from 491 on 2026-11-19 under the user's standing call: plan 109 — the God HUD's bridges state, the
+// bridge icon, the bridges' layout and kinds in the shared Grounds; measured 491.0)
 // (/page raised from 451 on 2026-11-04 under the same call: plan 72's phase 4 — the controller split
 // into 17 feature modules (world/ctl), the same code: what the minifier can't shorten — `this.c.x`,
 // `this.<feature>.x`, the forwarders for what's read from outside — 449.7 → 451.2; the lazy chunks
@@ -122,7 +124,9 @@ const LAZY = {
   "yutopia-kart-play": 40,
   // god mode (docs/plan/53-the-god-mode.md): an admin's editor of the open world, its tools and strings
   // (24 on 2026-11-04: plan 69 phase 10 — the Grow tool, its panel and the land map; 17.7 → 19.8)
-  "yutopia-god": 24,
+  // (27 on 2026-11-19, the user's standing call on budgets: plan 109 — the Bridges tool, its ghost, panel and words;
+  // 22.8 at plan 102 → 25.7)
+  "yutopia-god": 27,
 }; // KB gzip
 const chunks = `${dist}static/chunks/`;
 for (const [marker, budget] of Object.entries(LAZY)) {

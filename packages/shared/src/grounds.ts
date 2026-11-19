@@ -103,6 +103,11 @@ export {
 
 import type { Footing } from "./footing.ts";
 import {
+  BRIDGE_RAILS,
+  BRIDGE_STYLES,
+  type BridgeDef,
+  type BridgeRails,
+  type BridgeStyle,
   type BuildingDef,
   decodeBytes,
   decodeHeights,
@@ -1322,6 +1327,144 @@ function layLevels() {
       const v = n.get(RAVINE_F);
       if ((r && r.d < RIVER.w / 2 + 6) || (v && v.d < RAVINE.w / 2 + 1.5)) w.bridged[i] = true;
     }
+  layBridges();
+}
+
+// ── the bridges (docs/plan/109-bridges.md): each a stretch of a way, keyed, with its style ──
+/** A bridge as it's laid: its way's samples a–b (the deck's), its style and what it has. `made`: the generator's. */
+export interface Bridge {
+  key: string;
+  w: Way;
+  a: number;
+  b: number;
+  style: BridgeStyle;
+  colour: number;
+  rails: BridgeRails;
+  piers: boolean;
+  made: boolean;
+}
+/** Each style's colour, sides and piers when it's not given. */
+export const BRIDGE_LOOK: Record<BridgeStyle, { colour: number; rails: BridgeRails; piers: boolean }> = {
+  steel: { colour: 0x56606a, rails: "truss", piers: true },
+  timber: { colour: 0x5a4636, rails: "railing", piers: false },
+  concrete: { colour: 0x9aa0a6, rails: "parapet", piers: true },
+  stone: { colour: 0x8a8174, rails: "parapet", piers: true },
+};
+/** A bridge's length bounds (m) and how many God mode may add. */
+export const BRIDGE_LIMITS = { min: 4, max: 400, count: 60 };
+export const BRIDGES: Bridge[] = [];
+// (each way's samples' distance along it, from its first: kept by its line)
+const alongs = new WeakMap<P[], number[]>();
+/** How far along its way each sample is (m). */
+export function wayAlong(w: Way): number[] {
+  let s = alongs.get(w.line);
+  if (!s) {
+    s = [0];
+    for (let i = 1; i < w.line.length; i++)
+      s.push(s[i - 1] + Math.hypot(w.line[i][0] - w.line[i - 1][0], w.line[i][1] - w.line[i - 1][1]));
+    alongs.set(w.line, s);
+  }
+  return s;
+}
+/** The sample nearest `m` metres along a way. */
+export function sampleAlong(w: Way, m: number): number {
+  const s = wayAlong(w);
+  let lo = 0;
+  let hi = s.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (s[mid] < m) lo = mid;
+    else hi = mid;
+  }
+  return m - s[lo] <= s[hi] - m ? lo : hi;
+}
+// the generator's: its bridged samples in runs, a gap of a sample or two bridged over
+function madeRuns(w: Way): [number, number][] {
+  const runs: [number, number][] = [];
+  for (let i = 0; i < w.line.length; i++) {
+    if (!w.bridged[i]) continue;
+    const last = runs[runs.length - 1];
+    if (last && i - last[1] <= 2) last[1] = i;
+    else runs.push([i, i]);
+  }
+  return runs;
+}
+// (as they've always been drawn: the trail's timber, the long road's creek timber and its high one concrete, the
+// river's steel)
+function madeStyle(w: Way, a: number, b: number): BridgeStyle {
+  if (w.kind === "trail") return "timber";
+  if (w.key === "long-road") return b - a >= 60 ? "concrete" : "timber";
+  return "steel";
+}
+const oneOf = <T extends string>(list: readonly T[], v: unknown, or: T): T =>
+  (list as readonly unknown[]).includes(v) ? (v as T) : or;
+/** The bridges as the draft has them: the generator's (each way's runs, keyed "<way>~<n>") changed or taken away,
+ *  the draft's own added; the ways' bridged samples set from them (a generated one untouched keeps its own). */
+function layBridges() {
+  BRIDGES.length = 0;
+  const e = keep<BridgeDef>(EDITS.bridges);
+  const look = (d: Partial<BridgeDef>, style: BridgeStyle) => {
+    const st = oneOf(BRIDGE_STYLES, d.style, style);
+    const L = BRIDGE_LOOK[st];
+    return {
+      style: st,
+      colour: Number.isInteger(d.colour) && (d.colour as number) >= 0 ? (d.colour as number) & 0xffffff : L.colour,
+      rails: oneOf(BRIDGE_RAILS, d.rails, L.rails),
+      piers: typeof d.piers === "boolean" ? d.piers : L.piers,
+    };
+  };
+  const span = (w: Way, d: Partial<BridgeDef>, a: number, b: number): [number, number] => {
+    const n = w.line.length - 1;
+    const i = Number.isFinite(d.s0) ? sampleAlong(w, d.s0 as number) : a;
+    const j = Number.isFinite(d.s1) ? sampleAlong(w, d.s1 as number) : b;
+    return [Math.max(0, Math.min(i, j, n)), Math.min(n, Math.max(i, j))];
+  };
+  for (const w of WAYS) {
+    const runs = madeRuns(w);
+    runs.forEach(([a, b], n) => {
+      const key = `${w.key}~${n}`;
+      const c = e.change[key];
+      if (e.gone.has(key) || c) for (let i = a; i <= b; i++) w.bridged[i] = false;
+      if (e.gone.has(key)) return;
+      const [i, j] = c ? span(w, c, a, b) : [a, b];
+      BRIDGES.push({ key, w, a: i, b: j, ...look(c ?? {}, madeStyle(w, a, b)), made: true });
+    });
+  }
+  for (const d0 of e.add) {
+    if (e.gone.has(d0.key)) continue;
+    const d = { ...d0, ...e.change[d0.key] };
+    const w = WAYS.find((u) => u.key === d.way);
+    if (!w || w.line.length < 2) continue;
+    const [a, b] = span(w, d, 0, 0);
+    // (not over another of its way's: the first laid keeps it)
+    if (b <= a || BRIDGES.some((o) => o.w === w && o.a <= b && a <= o.b)) continue;
+    BRIDGES.push({ key: d.key, w, a, b, ...look(d, w.kind === "trail" ? "timber" : "steel"), made: false });
+  }
+  for (const br of BRIDGES)
+    if (!br.made || EDITS.bridges?.change?.[br.key]) for (let i = br.a; i <= br.b; i++) br.w.bridged[i] = true;
+}
+/** Each style's span between piers (m), and a pier's half-sizes along its way and across it (by its way's half). */
+const PIER: Record<BridgeStyle, { span: number; along: number; across: (half: number) => number }> = {
+  steel: { span: 11, along: 1, across: (h) => h - 0.1 },
+  timber: { span: 6, along: 0.25, across: (h) => h },
+  concrete: { span: 30, along: 1.2, across: () => 1.2 },
+  stone: { span: 14, along: 1.4, across: (h) => h + 0.5 },
+};
+/** A pier's half-sizes on this bridge: along its way, across it. */
+export const pierSize = (br: Bridge): { along: number; across: number } => ({
+  along: PIER[br.style].along,
+  across: PIER[br.style].across(br.w.w / 2),
+});
+/** A bridge's piers: the samples they stand at (its spans even: ~11 m a steel one's — the river's two on the ice —,
+ *  ~30 m a concrete one's, ~14 m a stone one's arches, ~6 m a timber trestle's). */
+export function bridgePiers(br: Bridge): number[] {
+  if (!br.piers) return [];
+  const s = wayAlong(br.w);
+  const len = s[br.b] - s[br.a];
+  const n = Math.max(1, Math.round(len / PIER[br.style].span));
+  const out: number[] = [];
+  for (let k = 1; k < n; k++) out.push(sampleAlong(br.w, s[br.a] + (len * k) / n));
+  return out;
 }
 layLevels();
 /** The deck's height where a way is bridged (the river's: the banks either side). */
@@ -1525,7 +1668,10 @@ export function terrainAt(x: number, z: number): number {
   for (const [f, n] of near) {
     if (f >= WAYS.length) continue;
     const w = WAYS[f];
-    if (w.bridged[n.i]) continue;
+    // (under a bridge the land's its own — but at its first and last samples flattened to it still, its abutments,
+    // and cut where it stands over the deck: else half a sample each end was the bank under the road, a slot it fell
+    // into, and the ravine's rim stood 0.85 m through the footbridge)
+    if (w.bridged[n.i] && w.bridged[n.i - 1] !== false && w.bridged[n.i + 1] !== false && h <= w.h[n.i]) continue;
     const r0 = wayHalf(w, n.i) + 1.2;
     const k = smooth(r0, r0 + (w.kind === "trail" ? 3 : 8), n.d);
     if (k < best) {
@@ -1709,6 +1855,7 @@ export function whatFooting(what: GroundWhat, way: () => Footing): Footing {
     case "kart_tower":
     case "pk_wall":
     case "skate_concrete":
+    case "bridge_pier":
       return "concrete";
     // (the skate hall's ramps: plywood under masonite)
     case "skate_wood":
@@ -2905,6 +3052,8 @@ export function groundsOutdoors(map: MapDef): ReturnType<typeof outdoorsAt> | nu
  *  (you fell off into the river). */
 interface Deck {
   w: Way;
+  /** its bridge (the Kart Park's isn't one of these) */
+  br?: Bridge;
   a: number;
   b: number;
   half: number;
@@ -2914,17 +3063,19 @@ interface Deck {
   z1: number;
 }
 const RAIL = 1.6; // the blocked strip's width past the deck
-/** A way's bridges: its bridged samples in runs, a gap of a sample or two bridged over (one rule for
- *  the decks walked, the solids — shapes/grounds.ts — and the drawing — tp/grounds3d.ts). */
+/** A way's bridges' samples, each a run first to last (one rule for the decks walked, the solids —
+ *  shapes/grounds.ts — and the drawing — tp/grounds3d.ts): BRIDGES' (docs/plan/109). */
 export function bridgeRuns(w: Way): number[][] {
-  const runs: number[][] = [];
-  for (let i = 0; i < w.line.length; i++) {
-    if (!w.bridged[i]) continue;
-    const last = runs[runs.length - 1];
-    if (last && i - last[last.length - 1] <= 2) last.push(i);
-    else runs.push([i]);
+  return BRIDGES.filter((b) => b.w === w).map((b) => Array.from({ length: b.b - b.a + 1 }, (_, k) => b.a + k));
+}
+/** The bridge whose deck (or its rails) is at (x, z), or null (God mode's Select). */
+export function bridgeAt(x: number, z: number): Bridge | null {
+  for (const d of DECKS) {
+    if (!d.br || x < d.x0 || x > d.x1 || z < d.z0 || z > d.z1) continue;
+    const p = alongDeck(d, x, z);
+    if (p.within && p.off < d.half + RAIL) return d.br;
   }
-  return runs;
+  return null;
 }
 const DECKS: Deck[] = [];
 function layDecks() {
@@ -2932,15 +3083,17 @@ function layDecks() {
   DECKS.push(
     ...WAYS.flatMap((w) => {
       // (a deck a bridge: the long road has more than one — docs/plan/69 L3)
-      const runs = bridgeRuns(w);
+      const brs = BRIDGES.filter((b) => b.w === w);
       const half = w.w / 2 + (w.kind === "trail" ? 0.2 : 0.35);
       const m = half + RAIL + 0.5;
-      return runs.map((idx) => {
+      return brs.map((br) => {
+        const idx = Array.from({ length: br.b - br.a + 1 }, (_, k) => br.a + k);
         const xs = idx.map((i) => w.line[i][0]);
         const zs = idx.map((i) => w.line[i][1]);
         // (a segment more each end: onto the land flattened to the way, no gap over the bank)
         return {
           w,
+          br,
           a: Math.max(0, idx[0] - 1),
           b: Math.min(w.line.length - 1, idx[idx.length - 1] + 1),
           half,
@@ -2992,7 +3145,8 @@ export function deckAt(x: number, z: number): number | null {
 /** Just past a bridge's guard rail (along its span): nobody walks or drives there. */
 export function onBridgeRail(x: number, z: number): boolean {
   for (const d of DECKS) {
-    if (x < d.x0 || x > d.x1 || z < d.z0 || z > d.z1) continue;
+    // (one with no sides: off its edge you go)
+    if (d.br?.rails === "none" || x < d.x0 || x > d.x1 || z < d.z0 || z > d.z1) continue;
     const p = alongDeck(d, x, z);
     if (p.within && p.off >= d.half && p.off < d.half + RAIL) return true;
   }
@@ -3636,6 +3790,15 @@ function sigs(): Map<string, { sig: string; r: Rect }> {
     out.set(t.key, { sig, r });
   }
   for (const p of SNOW_POLES) out.set(p.key, { sig: `${p.x} ${p.z} ${p.ry}`, r: around(p.x, p.z, 1) });
+  // (a bridge: its stretch and its look; the land at its ends and under it, its verges eased in — 30 round)
+  for (const b of BRIDGES) {
+    const xs = b.w.line.slice(b.a, b.b + 1).map((p) => p[0]);
+    const zs = b.w.line.slice(b.a, b.b + 1).map((p) => p[1]);
+    out.set(`bridge:${b.key}`, {
+      sig: JSON.stringify([b.w.key, b.a, b.b, b.style, b.colour, b.rails, b.piers]),
+      r: { x0: Math.min(...xs) - 30, z0: Math.min(...zs) - 30, x1: Math.max(...xs) + 30, z1: Math.max(...zs) + 30 },
+    });
+  }
   return out;
 }
 function decode<T>(into: Map<number, T>, grids: Record<string, string> | undefined, f: (s: string) => T | null) {
@@ -3904,6 +4067,45 @@ export function checkEdits(e: GroundsEdits): string[] {
     const bad = dense(c.pts as P[], !!base.closed, 2).find(([x, z]) => !inWorld(x, z) || anchoredHere(x, z));
     if (bad)
       no(`${k}: through ground that stays as it is (${anchoredHere(bad[0], bad[1])?.why ?? "past the world's edge"})`);
+  }
+  // bridges (docs/plan/109): on a way the draft has, a stretch of it 4–400 m long, a style and sides there are; the
+  // generator's changed or taken away by their keys ("<way>~<n>"), new ones god mode's
+  const brk = new Set<string>();
+  const wayKeys = new Set([
+    ...BASE_WAYS.filter((w) => !e.ways?.remove?.includes(w.key)).map((w) => w.key),
+    ...(e.ways?.add ?? []).filter((d) => !e.ways?.remove?.includes(d.key)).map((d) => d.key),
+  ]);
+  const brAdds = (e.bridges?.add ?? []).map((d) => ({ ...d, ...e.bridges?.change?.[d.key] }));
+  if (brAdds.length > BRIDGE_LIMITS.count) no(`At most ${BRIDGE_LIMITS.count} new bridges`);
+  const brLook = (key: string, d: Partial<BridgeDef>) => {
+    if (d.style !== undefined && !BRIDGE_STYLES.includes(d.style)) no(`${key}: not a kind of bridge`);
+    if (d.rails !== undefined && !BRIDGE_RAILS.includes(d.rails)) no(`${key}: not a bridge's sides`);
+    if (d.colour !== undefined && !(Number.isInteger(d.colour) && d.colour >= 0 && d.colour <= 0xffffff))
+      no(`${key}: not a colour`);
+    if (d.piers !== undefined && typeof d.piers !== "boolean") no(`${key}: piers or none`);
+    const s0 = d.s0;
+    const s1 = d.s1;
+    if (s0 !== undefined || s1 !== undefined) {
+      if (!Number.isFinite(s0) || !Number.isFinite(s1) || (s0 as number) < 0) no(`${key}: where it starts and ends`);
+      else {
+        const len = Math.abs((s1 as number) - (s0 as number));
+        if (len < BRIDGE_LIMITS.min || len > BRIDGE_LIMITS.max)
+          no(`${key}: ${BRIDGE_LIMITS.min}–${BRIDGE_LIMITS.max} m long`);
+      }
+    }
+  };
+  for (const d of brAdds) {
+    if (!fresh(d.key, "bridge:", brk)) continue;
+    if (typeof d.way !== "string" || !wayKeys.has(d.way)) no(`${d.key}: on no way there is`);
+    if (d.style === undefined) no(`${d.key}: not a kind of bridge`);
+    if (d.s0 === undefined || d.s1 === undefined) no(`${d.key}: where it starts and ends`);
+    brLook(d.key, d);
+  }
+  for (const [k, c] of Object.entries(e.bridges?.change ?? {})) {
+    if (brAdds.some((d) => d.key === k)) continue;
+    if (!/^.{1,60}~\d{1,3}$/.test(k)) no(`${k}: not a bridge`);
+    if (c && "way" in c) no(`${k}: stays on its way`);
+    brLook(k, c ?? {});
   }
   // buildings
   const bk = new Set<string>();

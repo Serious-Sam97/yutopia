@@ -267,6 +267,42 @@ const W = {
   kind_bike_bmx: ["BMX", "BMX"],
   kind_bike_mtb: ["Mountain bike", "Mountain bike"],
   kind_bike_road: ["Road bike", "Bike de estrada"],
+  // (the bridges: docs/plan/109)
+  bridgeAdd: ["Add", "Adicionar"],
+  bridgeEdit: ["Edit", "Editar"],
+  bridgeRemove: ["Remove", "Remover"],
+  bridgeAddHint: [
+    "Click on a road, street or trail where the bridge starts, then where it ends",
+    "Clique numa estrada, rua ou trilha onde a ponte começa, depois onde termina",
+  ],
+  bridgeEnd: [
+    "{name} · now click where it ends ({n} m) · Esc lets it go",
+    "{name} · agora clique onde ela termina ({n} m) · Esc cancela",
+  ],
+  bridgeEditHint: [
+    "Click a bridge to pick it, drag either end along its way",
+    "Clique numa ponte para pegá-la, arraste uma ponta pela via",
+  ],
+  bridgeRemoveHint: [
+    "Click a bridge to take it away (its road then runs on the land)",
+    "Clique numa ponte para tirá-la (a via passa então pelo terreno)",
+  ],
+  bridgeT: ["Bridge", "Ponte"],
+  bridgeStyle: ["Style", "Estilo"],
+  bridgeColour: ["Colour", "Cor"],
+  bridgeSides: ["Sides", "Laterais"],
+  bridgePiers: ["Piers", "Pilares"],
+  bridgeLong: ["{n} m long", "{n} m de comprimento"],
+  bridgeTown: ["the town's own", "da cidade"],
+  bridgeNext: ["The next one", "A próxima"],
+  style_steel: ["Steel truss", "Treliça de aço"],
+  style_timber: ["Timber", "Madeira"],
+  style_concrete: ["Concrete", "Concreto"],
+  style_stone: ["Stone arches", "Arcos de pedra"],
+  rails_truss: ["Truss", "Treliça"],
+  rails_railing: ["Railing", "Gradil"],
+  rails_parapet: ["Parapet", "Mureta"],
+  rails_none: ["None", "Nenhuma"],
 } as const;
 type Word = keyof typeof W;
 function useW() {
@@ -278,6 +314,7 @@ const TOOL_WORDS: Record<GodTool, [string, string]> = {
   land: ["Land", "Terreno"],
   paint: ["Paint", "Pintar"],
   roads: ["Roads", "Vias"],
+  bridges: ["Bridges", "Pontes"],
   nature: ["Nature", "Natureza"],
   things: ["Things", "Coisas"],
   buildings: ["Buildings", "Prédios"],
@@ -289,6 +326,7 @@ const TOOL_ICONS: Record<GodTool, IconName> = {
   land: "land",
   paint: "palette",
   roads: "road",
+  bridges: "bridge",
   nature: "leaf",
   things: "chair",
   buildings: "home",
@@ -327,6 +365,10 @@ export function GodHud() {
       <Compass g={g} />
       {(g.tool === "land" || g.tool === "paint") && <ToolOptions g={g} />}
       {g.tool === "roads" && <RoadOptions g={g} />}
+      {g.tool === "bridges" && <BridgeOptions g={g} />}
+      {(g.tool === "bridges" || (g.tool === "select" && g.picked === "bridge")) && g.bridges.sel && (
+        <BridgesPanel g={g} />
+      )}
       {g.tool === "nature" && <NatureOptions g={g} />}
       {g.tool === "things" && <ThingsOptions g={g} />}
       {g.tool === "things" && <ThingsPanel g={g} />}
@@ -531,7 +573,9 @@ function Tools({ g }: { g: GodState }) {
           title={READY.has(k) ? undefined : `${TOOL_WORDS[k][pt ? 1 : 0]} · ${t("soon")}`}
           onClick={() => w?.god?.setTool(k)}
         >
-          <span className="absolute top-1 right-1.5 text-[9px] opacity-60 hidden sm:block">{i + 1}</span>
+          <span className="absolute top-1 right-1.5 text-[9px] opacity-60 hidden sm:block">
+            {k === "bridges" ? "B" : i + 1}
+          </span>
           <Icon name={TOOL_ICONS[k]} size={18} />
           <span className="text-[11px]">{TOOL_WORDS[k][pt ? 1 : 0]}</span>
         </button>
@@ -1049,6 +1093,163 @@ function SelectOptions({ g }: { g: GodState }) {
         {status}
       </p>
     </div>
+  );
+}
+
+// ── the bridges (docs/plan/109-bridges.md) ──
+const BRIDGE_STYLE_LIST = ["steel", "timber", "concrete", "stone"] as const;
+const BRIDGE_RAIL_LIST = ["truss", "railing", "parapet", "none"] as const;
+/** The colours a bridge may be painted: its style's own, then the rest (steel greys, a rust red, a bridge green, a
+ *  blue, the timbers, concrete, stones). */
+const BRIDGE_COLOURS = [
+  0x56606a, 0x8e3b2f, 0x3f5e4a, 0x3d5a7a, 0x5a4636, 0x7a5c3e, 0x9aa0a6, 0xc9c3b6, 0x8a8174, 0x6d5f52,
+] as const;
+const hex6 = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
+function BridgeOptions({ g }: { g: GodState }) {
+  const t = useW();
+  const pt = useLang() === "pt";
+  const w = useWorld();
+  const o = g.bridges;
+  const status = o.drawing
+    ? o.drawing.blocked
+      ? W.notThere[pt ? 1 : 0].replace("{why}", o.drawing.blocked)
+      : W.bridgeEnd[pt ? 1 : 0].replace("{name}", o.drawing.name).replace("{n}", String(o.drawing.m))
+    : o.mode === "add"
+      ? t("bridgeAddHint")
+      : o.mode === "edit"
+        ? t("bridgeEditHint")
+        : t("bridgeRemoveHint");
+  return (
+    <div className="pointer-events-auto cabinet absolute bottom-[86px] left-3 right-3 sm:right-auto sm:left-1/2 sm:-translate-x-1/2 px-3 py-2 flex flex-col gap-1.5 max-w-[calc(100vw-24px)]">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <div className="seg shrink-0" role="radiogroup" aria-label={TOOL_WORDS.bridges[pt ? 1 : 0]}>
+          {(["add", "edit", "remove"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              className="px-2.5 whitespace-nowrap"
+              aria-pressed={o.mode === m}
+              onClick={() => w?.god?.setBridgeMode(m)}
+            >
+              {t(m === "add" ? "bridgeAdd" : m === "edit" ? "bridgeEdit" : "bridgeRemove")}
+            </button>
+          ))}
+        </div>
+        {o.mode === "add" && (
+          <div className="flex gap-1 shrink-0" role="radiogroup" aria-label={t("bridgeNext")}>
+            {BRIDGE_STYLE_LIST.map((k) => (
+              <button
+                key={k}
+                type="button"
+                className="chip"
+                aria-pressed={o.style === k}
+                onClick={() => hud.set((s) => ({ god: { ...s.god, bridges: { ...s.god.bridges, style: k } } }))}
+              >
+                {t(`style_${k}`)}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <p className="text-[12px] truncate" style={{ color: o.drawing?.blocked ? "var(--amber)" : "var(--cream-dim)" }}>
+        {status}
+      </p>
+    </div>
+  );
+}
+function BridgesPanel({ g }: { g: GodState }) {
+  const t = useW();
+  const w = useWorld();
+  const sel = g.bridges.sel;
+  if (!sel) return null;
+  const tool = () => w?.god?.bridgesTool();
+  const row = (label: string, body: React.ReactNode) => (
+    <div className="flex items-center gap-2">
+      <span className="w-16 shrink-0" style={{ color: "var(--cream-dim)" }}>
+        {label}
+      </span>
+      {body}
+    </div>
+  );
+  return (
+    <aside className="pointer-events-auto cabinet absolute top-[92px] right-3 w-72 max-h-[calc(100vh-200px)] overflow-y-auto scroll-thin p-3 hidden sm:block">
+      <div className="flex items-baseline justify-between">
+        <h3 className="title text-[18px]">{t("bridgeT")}</h3>
+        <span className="mono text-[10.5px]" style={{ color: "var(--cream-dim)" }}>
+          {t("bridgeLong", sel.m)}
+        </span>
+      </div>
+      <div className="zigzag w-24 mt-1.5" aria-hidden />
+      <p className="grp mt-2">
+        {sel.name}
+        {sel.made ? ` · ${t("bridgeTown")}` : ""}
+      </p>
+      <div className="grid grid-cols-2 gap-1.5 mt-2.5" role="radiogroup" aria-label={t("bridgeStyle")}>
+        {BRIDGE_STYLE_LIST.map((k) => (
+          <button
+            key={k}
+            type="button"
+            className="deck-btn h-12 flex-col gap-1 px-1"
+            aria-pressed={sel.style === k}
+            onClick={() => sel.style !== k && tool()?.setOpts({ style: k })}
+          >
+            <Icon name="bridge" size={16} />
+            <span className="text-[10.5px] leading-tight text-center">{t(`style_${k}`)}</span>
+          </button>
+        ))}
+      </div>
+      <div className="space-y-2.5 mt-3 text-[12.5px]">
+        {row(
+          t("bridgeColour"),
+          <div className="flex flex-wrap gap-1.5">
+            {BRIDGE_COLOURS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                className="w-6 h-6 rounded"
+                aria-label={`${t("bridgeColour")} ${hex6(c)}`}
+                aria-pressed={sel.colour === c}
+                style={{
+                  background: hex6(c),
+                  outline: sel.colour === c ? "2px solid var(--amber)" : "1px solid var(--edge-2)",
+                  outlineOffset: 1,
+                }}
+                onClick={() => sel.colour !== c && tool()?.setOpts({ colour: c })}
+              />
+            ))}
+          </div>,
+        )}
+        {row(
+          t("bridgeSides"),
+          <div className="grid grid-cols-2 gap-1 flex-1">
+            {BRIDGE_RAIL_LIST.map((k) => (
+              <button
+                key={k}
+                type="button"
+                className="chip justify-center"
+                aria-pressed={sel.rails === k}
+                onClick={() => sel.rails !== k && tool()?.setOpts({ rails: k })}
+              >
+                {t(`rails_${k}`)}
+              </button>
+            ))}
+          </div>,
+        )}
+        {row(
+          t("bridgePiers"),
+          <button
+            type="button"
+            className="sw"
+            aria-pressed={sel.piers}
+            aria-label={t("bridgePiers")}
+            onClick={() => tool()?.setOpts({ piers: !sel.piers })}
+          />,
+        )}
+        <button type="button" className="ghost-btn w-full" onClick={() => tool()?.removePicked()}>
+          {t("takeAway")}
+        </button>
+      </div>
+    </aside>
   );
 }
 
@@ -2365,6 +2566,9 @@ function PublishDialog({ g }: { g: GodState }) {
     ...(c.land.add || c.land.change || c.land.remove ? [[t("growT"), moves(c.land)] as [string, string]] : []),
     ...(c.vehicles.add || c.vehicles.change || c.vehicles.remove
       ? [[TOOL_WORDS.vehicles[pt ? 1 : 0], moves(c.vehicles)] as [string, string]]
+      : []),
+    ...(c.bridges.add || c.bridges.change || c.bridges.remove
+      ? [[TOOL_WORDS.bridges[pt ? 1 : 0], moves(c.bridges)] as [string, string]]
       : []),
   ];
   const mb = (b: number) => (b / 1e6).toFixed(b < 1e5 ? 2 : 1);

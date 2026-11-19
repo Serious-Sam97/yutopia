@@ -2,7 +2,7 @@
 
 import type { BuildingKind, WayKind } from "@yutopia/shared/grounds";
 import type { LandMode, Paint, TreePick } from "@yutopia/shared/grounds-brush";
-import type { GrowBiome, ThingKind } from "@yutopia/shared/grounds-edits";
+import type { BridgeRails, BridgeStyle, GrowBiome, ThingKind } from "@yutopia/shared/grounds-edits";
 import type { BattleEvent, Needs, PetLook, PetOutfit, Species } from "@yutopia/shared/pets";
 import { WALL_H } from "@yutopia/shared/units";
 import { useRef, useSyncExternalStore } from "react";
@@ -205,6 +205,8 @@ export const GOD_TOOLS = [
   "buildings",
   "vehicles",
   "grow",
+  // (plan 109: last, so 1–9 stay the tools they were; B picks it)
+  "bridges",
 ] as const;
 export type GodTool = (typeof GOD_TOOLS)[number];
 /** The tools built so far (the rest: phases 7–9 of plan 53). */
@@ -218,6 +220,7 @@ export const GOD_READY: ReadonlySet<GodTool> = new Set<GodTool>([
   "buildings",
   "vehicles",
   "grow",
+  "bridges",
 ]);
 /** One of my drafts, as the list has it (the API's row: no data). */
 export interface GodDraftRow {
@@ -239,8 +242,8 @@ export interface GodHud {
   /** the place under the camera */
   place: string;
   tool: GodTool;
-  /** what the Select tool has picked: a thing, a building, a way or a vehicle (its tool's `sel` says which) */
-  picked: "thing" | "building" | "way" | "vehicle" | null;
+  /** what the Select tool has picked: a thing, a building, a way, a vehicle or a bridge (its tool's `sel` says which) */
+  picked: "thing" | "building" | "way" | "vehicle" | "bridge" | null;
   /** the grid the tools snap to (m; 0: none, free to the centimetre); Ctrl/⌘ held swaps it (none:
    *  1 m, a grid: none) */
   snap: 0 | 0.5 | 1 | 4;
@@ -265,6 +268,24 @@ export interface GodHud {
     drawing: { n: number; m: number; blocked: string | null; joins: string | null } | null;
     /** the way picked (Edit points), its name, why it can't be moved (the shuttle's) */
     sel: { key: string; name: string; locked: string | null } | null;
+  };
+  /** the bridges (docs/plan/109): adding one (a click where it starts on a way, another where it ends), its ends
+   *  dragged, taken away; the next one's style; the one being laid (its way's name, how long, why it can't be); the
+   *  one picked (its key, its way's name, the generator's or not, its look, how long) */
+  bridges: {
+    mode: "add" | "edit" | "remove";
+    style: BridgeStyle;
+    drawing: { name: string; m: number; blocked: string | null } | null;
+    sel: {
+      key: string;
+      name: string;
+      made: boolean;
+      style: BridgeStyle;
+      colour: number;
+      rails: BridgeRails;
+      piers: boolean;
+      m: number;
+    } | null;
   };
   /** the nature tool (phase 8): the forest brush (plant, clear, as made), one tree, one rock */
   nature: { mode: "plant" | "clear" | "generated" | "tree" | "rock"; pick: TreePick; thick: number; size: number };
@@ -660,6 +681,7 @@ const initial: HudState = {
     paint: { surface: "path", size: 4 },
     issues: [],
     roads: { mode: "draw", kind: "road", w: 7, pave: false, lamps: true, drawing: null, sel: null },
+    bridges: { mode: "add", style: "steel", drawing: null, sel: null },
     nature: { mode: "plant", pick: "mix", thick: 55, size: 24 },
     things: {
       mode: "place",

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CHUNK, FENCE, FENCE_H, STATUE, TOWER, terrainAt, treesIn } from "../grounds.ts";
+import { bridgeRuns, CHUNK, FENCE, FENCE_H, STATUE, TOWER, terrainAt, treesIn, WAYS } from "../grounds.ts";
 import { townBounds } from "../land.ts";
 import { GROUND_WHATS, type GroundSolid, groundSolidsIn } from "./grounds.ts";
 import type { Solid3 } from "./index.ts";
@@ -356,4 +356,53 @@ test("lamps and street things on a pavement stand on it (pavedAt), off it on the
   assert.ok(hydrant && Math.abs(pavedAt(hydrant.x, hydrant.z) - KERB) < 1e-9);
   // (off a street: none)
   assert.equal(pavedAt(0, 0), 0);
+});
+
+test("every bridge: its deck under the wheels the whole way, from the road before it onto the road after — no slot at its ends", () => {
+  // (the river bridge's ends were a slot across the road 3–4 m deep: the deck stopped at its first and last bridged
+  // samples, the land not flattened within half a sample of them — everything on Jolt fell in)
+  let n = 0;
+  for (const w of WAYS)
+    for (const r of bridgeRuns(w)) {
+      if (r.length < 2) continue;
+      n++;
+      const a = r[0];
+      const b = r[r.length - 1];
+      const L = w.line;
+      const decks = new Map<string, GroundSolid[]>();
+      const near = (x: number, z: number) => {
+        const k = `${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`;
+        let l = decks.get(k);
+        if (!l) {
+          l = chunksRound(x, z).filter((g) => g.what === "bridge_deck");
+          decks.set(k, l);
+        }
+        return l;
+      };
+      for (let i = Math.max(0, a - 4); i < Math.min(L.length - 1, b + 4); i++) {
+        const [ax, az] = L[i];
+        const [bx, bz] = L[i + 1];
+        const len = Math.hypot(bx - ax, bz - az) || 1;
+        const nx = -(bz - az) / len;
+        const nz = (bx - ax) / len;
+        // (every 5 cm along, across from kerb to kerb)
+        for (let u = 0; u <= 1; u += 0.05 / len)
+          for (const o of [-(w.w / 2 - 0.4), 0, w.w / 2 - 0.4]) {
+            const x = ax + (bx - ax) * u + nx * o;
+            const z = az + (bz - az) * u + nz * o;
+            const want = w.h[i] + (w.h[i + 1] - w.h[i]) * u;
+            const deck = Math.max(...near(x, z).map((g) => (covers(g.s, x, z) ? top(g.s) : Number.NEGATIVE_INFINITY)));
+            const got = Math.max(deck, terrainAt(x, z));
+            assert.ok(
+              want - got < 0.15,
+              `${w.key}'s bridge ${a}–${b}: ${(want - got).toFixed(2)} m down at sample ${i} + ${u.toFixed(2)} (${x.toFixed(1)}, ${z.toFixed(1)})`,
+            );
+            assert.ok(
+              got - want < 0.2,
+              `${w.key}'s bridge ${a}–${b}: a lip ${(got - want).toFixed(2)} (deck ${(deck - want).toFixed(2)}) at sample ${i} + ${u.toFixed(2)} off ${o.toFixed(1)}`,
+            );
+          }
+      }
+    }
+  assert.ok(n >= 3, "the river's, the ravine's, the long road's");
 });

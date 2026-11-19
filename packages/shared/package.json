@@ -49,6 +49,7 @@
     "./grounds-draft": "./src/grounds-draft.ts",
     "./grounds-brush": "./src/grounds-brush.ts",
     "./grounds-roads": "./src/grounds-roads.ts",
+    "./grounds-bridges": "./src/grounds-bridges.ts",
     "./grounds-things": "./src/grounds-things.ts",
     "./grounds-buildings": "./src/grounds-buildings.ts",
     "./lot": "./src/lot.ts",

@@ -25,6 +25,8 @@ export interface GroundsEdits {
   /** (plan 102) the vehicles: each one's home — where it's parked, where the tow brings it back — added, changed (a
    *  town vehicle's by its id, or any parked one's), taken away */
   vehicles?: Section<VehicleDef>;
+  /** (plan 109) the bridges: stretches of ways — the generator's (by "<way>~<n>") changed or taken away, new ones */
+  bridges?: Section<BridgeDef>;
 }
 /** Added, changed (by key: only what's given), taken away (by key). */
 export interface Section<T extends { key: string }> {
@@ -91,6 +93,26 @@ export interface VehicleDef {
   look?: { variant: string; colour: number; colour2?: number; extras?: string[]; wheels?: string };
   role?: string;
   plate?: string;
+}
+/** (plan 109) What a bridge is built as: a steel through truss, timber stringers and a railing, concrete with its
+ *  parapets, stone arches on piers. */
+export type BridgeStyle = "steel" | "timber" | "concrete" | "stone";
+export const BRIDGE_STYLES: readonly BridgeStyle[] = ["steel", "timber", "concrete", "stone"];
+/** Its sides: the truss's, a railing, a parapet, none (open: you can go off it). */
+export type BridgeRails = "truss" | "railing" | "parapet" | "none";
+export const BRIDGE_RAILS: readonly BridgeRails[] = ["truss", "railing", "parapet", "none"];
+/** (plan 109) A bridge as God mode has it: a stretch of a way, from `s0` to `s1` metres along its line, its deck the
+ *  way's own height. `key`: a new one's "god-bridge-n"; the generator's "<its way's key>~<n>", that way's n-th. Its
+ *  colour, rails and piers its style's unless given. */
+export interface BridgeDef {
+  key: string;
+  way: string;
+  s0: number;
+  s1: number;
+  style: BridgeStyle;
+  colour?: number;
+  rails?: BridgeRails;
+  piers?: boolean;
 }
 /** A building: the generator's own fields (its plot, axis-aligned; its door's side). */
 export type BuildingDef = Omit<Building, "stored">;

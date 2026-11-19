@@ -1,9 +1,11 @@
 import { CAR_COLOURS, STOREY } from "@yutopia/shared";
 import {
   BENCH,
+  BRIDGES,
+  type Bridge,
   BUILDINGS,
   type Building,
-  bridgeRuns,
+  bridgePiers,
   CHUNK,
   CORN,
   DOCK,
@@ -38,6 +40,7 @@ import {
   POND,
   POND_LEVEL,
   pavedAt,
+  pierSize,
   quarter,
   RAVINE,
   RIVER,
@@ -1248,97 +1251,16 @@ export class Grounds3 {
       this.add(mergeGeometries(poles, false), this.lambert());
       for (const p of poles) p.dispose();
     }
-    // bridges: the road's steel one over the river, the trail's timber footbridge over the ravine
-    // (each bridge of a way: the long road has two — its creek's, timber, and the high one over the
-    // gorge, a deck on tall piers: docs/plan/69)
-    const spans = WAYS.flatMap((w) => bridgeRuns(w).map((r) => ({ w, a: r[0], b: r[r.length - 1] })));
-    for (const { w, a, b } of spans) {
+    // bridges (docs/plan/109): each by its style — steel (a through truss, its piers on the ice), timber (stringers
+    // and a railing), concrete (parapets, tall piers: the long road's high one over the gorge), stone (arches on its
+    // piers) —, in its colour, its sides as chosen
+    for (const br of BRIDGES) {
+      const { w, a, b } = br;
       if (b - a < 1) continue;
+      // (drawn by the part its start's in: one bridge, drawn once)
       if (!this.near(w.line[a][0], w.line[a][1], 30)) continue;
       const g = new G();
-      const L = w.line;
-      const long = w.key === "long-road";
-      const high = long && b - a >= 60;
-      const timber = w.kind === "trail" || (long && !high);
-      const deck = (i: number): V => [L[i][0], w.h[i] + 0.05, L[i][1]];
-      if (timber) {
-        // the footbridge: a stringer either side under the deck, a railing on posts along both
-        for (const s of [1, -1]) {
-          const off = (i: number): V => {
-            const [px, pz] = L[Math.max(a, i - 1)];
-            const [qx, qz] = L[Math.min(b, i + 1)];
-            const l = Math.hypot(qx - px, qz - pz) || 1;
-            const p = deck(i);
-            return [p[0] - ((qz - pz) / l) * s * (w.w / 2 + 0.2), p[1], p[2] + ((qx - px) / l) * s * (w.w / 2 + 0.2)];
-          };
-          for (let i = a; i < b; i += 3) {
-            const j = Math.min(b, i + 3);
-            const p = off(i);
-            const q = off(j);
-            beam(g, [p[0], p[1] - 0.3, p[2]], [q[0], q[1] - 0.3, q[2]], 0.32, 0x4a3b2e);
-            railing(g, p, q, 1.05, 1.5, 0x5a4636);
-          }
-        }
-      } else if (high) {
-        // the high bridge: concrete parapets either side, piers down to the gorge's floor every 30 m
-        for (const s of [1, -1]) {
-          const off = (i: number): V => {
-            const [px, pz] = L[Math.max(a, i - 1)];
-            const [qx, qz] = L[Math.min(b, i + 1)];
-            const l = Math.hypot(qx - px, qz - pz) || 1;
-            const p = deck(i);
-            return [p[0] - ((qz - pz) / l) * s * (w.w / 2 + 0.5), p[1], p[2] + ((qx - px) / l) * s * (w.w / 2 + 0.5)];
-          };
-          for (let i = a; i < b; i += 4) {
-            const p = off(i);
-            const q = off(Math.min(b, i + 4));
-            beam(g, [p[0], p[1] + 0.45, p[2]], [q[0], q[1] + 0.45, q[2]], 0.9, 0x9aa0a6);
-          }
-        }
-        for (let k = a + 15; k < b - 10; k += 30) {
-          const [x, z] = L[k];
-          beam(g, [x, terrainAt(x, z) - 1, z], [x, w.h[k] - 1.4, z], 2.4, 0x8d939a);
-        }
-      } else {
-        // the road's: a steel through truss, its guard rails, the deck's edge girders
-        truss(g, deck(a), deck(b), w.w / 2 + 0.7, 5.2, 4, 0x56606a);
-      }
-      // the deck's underside
-      for (let i = a; i < b; i++) {
-        const [ax, az] = L[i];
-        const [bx, bz] = L[i + 1];
-        const l = Math.hypot(bx - ax, bz - az) || 1;
-        const nx = -(bz - az) / l;
-        const nz = (bx - ax) / l;
-        g.color(timber ? 0x4a3b2e : 0x3d4247);
-        const o = w.w / 2 + 0.3;
-        g.quad(
-          [ax + nx * o, w.h[i] - 0.25, az + nz * o],
-          [bx + nx * o, w.h[i + 1] - 0.25, bz + nz * o],
-          [bx - nx * o, w.h[i + 1] - 0.25, bz - nz * o],
-          [ax - nx * o, w.h[i] - 0.25, az - nz * o],
-          [0, -1, 0],
-        );
-        // its edges, seen from the side
-        for (const s of [1, -1])
-          face(
-            g,
-            [ax + nx * s * o, w.h[i] - 0.25, az + nz * s * o],
-            [bx + nx * s * o, w.h[i + 1] - 0.25, bz + nz * s * o],
-            [bx + nx * s * o, w.h[i + 1] + 0.06, bz + nz * s * o],
-            [ax + nx * s * o, w.h[i] + 0.06, az + nz * s * o],
-            [nx * s, 0, nz * s],
-          );
-      }
-      // the steel bridge's piers on the ice
-      if (!timber && !high)
-        for (const k of [a + Math.round((b - a) * 0.33), a + Math.round((b - a) * 0.66)]) {
-          const [x, z] = L[k];
-          g.color(0x6a6f75).box(x - 1, terrainAt(x, z) - 1, z - 4.4, x + 1, w.h[k] - 0.6, z + 4.4);
-          g.color(0x7a7f85).box(x - 1.3, w.h[k] - 0.6, z - 4.9, x + 1.3, w.h[k] - 0.25, z + 4.9); // its cap
-          // ice heaped against it upstream
-          g.color(0xe6eef4).box(x - 1.4, terrainAt(x, z) - 0.2, z - 4.6, x - 0.9, terrainAt(x, z) + 0.5, z + 4.6);
-        }
+      drawBridge(g, br);
       this.add(g.build(), this.lambert());
     }
   }
@@ -6095,3 +6017,187 @@ function ridgeMaterial(): MeshBasicMaterial {
 }
 
 export type { P };
+
+// ── a bridge (docs/plan/109-bridges.md): its sides, its deck's underside and edges, its piers or arches ──
+const shade = (c: number, k: number) => {
+  const r = Math.min(255, Math.round(((c >> 16) & 255) * k));
+  const gg = Math.min(255, Math.round(((c >> 8) & 255) * k));
+  const bb = Math.min(255, Math.round((c & 255) * k));
+  return (r << 16) | (gg << 8) | bb;
+};
+/** One bridge drawn into g (shared grounds.ts BRIDGES: what Jolt's solids are made of too — shapes/grounds.ts). */
+export function drawBridge(g: G, br: Bridge): void {
+  const { w, a, b, style, colour: col } = br;
+  const L = w.line;
+  const deck = (i: number): V => [L[i][0], w.h[i] + 0.05, L[i][1]];
+  // (the way's side at sample i, `by` out from its line)
+  const side = (i: number, s: number, by: number): V => {
+    const [px, pz] = L[Math.max(a, i - 1)];
+    const [qx, qz] = L[Math.min(b, i + 1)];
+    const l = Math.hypot(qx - px, qz - pz) || 1;
+    const p = deck(i);
+    return [p[0] - ((qz - pz) / l) * s * by, p[1], p[2] + ((qx - px) / l) * s * by];
+  };
+  const under = style === "timber" ? 0x4a3b2e : style === "steel" ? 0x3d4247 : shade(col, 0.85);
+  const piers = bridgePiers(br);
+  // the sides
+  if (br.rails === "truss") truss(g, deck(a), deck(b), w.w / 2 + 0.7, 5.2, 4, col);
+  else if (br.rails === "railing")
+    for (const s of [1, -1])
+      for (let i = a; i < b; i += 3) {
+        const j = Math.min(b, i + 3);
+        railing(
+          g,
+          side(i, s, w.w / 2 + 0.2),
+          side(j, s, w.w / 2 + 0.2),
+          1.05,
+          1.5,
+          style === "timber" ? 0x5a4636 : col,
+        );
+      }
+  else if (br.rails === "parapet")
+    for (const s of [1, -1])
+      for (let i = a; i < b; i += 4) {
+        const p = side(i, s, w.w / 2 + 0.5);
+        const q = side(Math.min(b, i + 4), s, w.w / 2 + 0.5);
+        for (const y of [0.25, 0.7]) beam(g, [p[0], p[1] + y, p[2]], [q[0], q[1] + y, q[2]], 0.5, col);
+      }
+  // timber: a stringer either side under its deck
+  if (style === "timber")
+    for (const s of [1, -1])
+      for (let i = a; i < b; i += 3) {
+        const p = side(i, s, w.w / 2 + 0.2);
+        const q = side(Math.min(b, i + 3), s, w.w / 2 + 0.2);
+        beam(g, [p[0], p[1] - 0.3, p[2]], [q[0], q[1] - 0.3, q[2]], 0.32, 0x4a3b2e);
+      }
+  // the deck's underside and its edges seen from the side (a stone one's: its arches' spandrels, below)
+  const o = w.w / 2 + 0.3;
+  for (let i = a; i < b; i++) {
+    const [ax, az] = L[i];
+    const [bx, bz] = L[i + 1];
+    const l = Math.hypot(bx - ax, bz - az) || 1;
+    const nx = -(bz - az) / l;
+    const nz = (bx - ax) / l;
+    g.color(under);
+    g.quad(
+      [ax + nx * o, w.h[i] - 0.25, az + nz * o],
+      [bx + nx * o, w.h[i + 1] - 0.25, bz + nz * o],
+      [bx - nx * o, w.h[i + 1] - 0.25, bz - nz * o],
+      [ax - nx * o, w.h[i] - 0.25, az - nz * o],
+      [0, -1, 0],
+    );
+    if (style === "stone") continue;
+    for (const s of [1, -1])
+      face(
+        g,
+        [ax + nx * s * o, w.h[i] - 0.25, az + nz * s * o],
+        [bx + nx * s * o, w.h[i + 1] - 0.25, bz + nz * s * o],
+        [bx + nx * s * o, w.h[i + 1] + 0.06, bz + nz * s * o],
+        [ax + nx * s * o, w.h[i] + 0.06, az + nz * s * o],
+        [nx * s, 0, nz * s],
+      );
+  }
+  // the piers (shared bridgePiers / pierSize: where Jolt's are)
+  const { along, across } = pierSize(br);
+  for (const k of piers) {
+    const [x, z] = L[k];
+    const land = terrainAt(x, z);
+    const top = w.h[k] - 0.3;
+    if (top - land < 0.6) continue;
+    const [px, pz] = L[Math.max(a, k - 1)];
+    const [qx, qz] = L[Math.min(b, k + 1)];
+    const l = Math.hypot(qx - px, qz - pz) || 1;
+    const ux = (qx - px) / l;
+    const uz = (qz - pz) / l;
+    const pc = style === "timber" ? 0x4a3b2e : style === "steel" ? 0x6a6f75 : shade(col, 0.9);
+    turnedBox(g, x, z, ux, uz, along, across, land - 1, top, pc);
+    if (style === "steel") {
+      turnedBox(g, x, z, ux, uz, along + 0.3, across + 0.5, top - 0.35, top + 0.05, 0x7a7f85); // its cap
+      // ice heaped against it upstream
+      g.color(0xe6eef4);
+      turnedBox(
+        g,
+        x - ux * (along + 0.15),
+        z - uz * (along + 0.15),
+        ux,
+        uz,
+        0.25,
+        across + 0.2,
+        land - 0.2,
+        land + 0.5,
+        0xe6eef4,
+      );
+    }
+  }
+  // stone: an arch either side of each pier, its spandrel walls from the deck down to the arch's curve, its soffit
+  if (style === "stone") {
+    const ends = [a, ...piers, b];
+    for (let e = 0; e + 1 < ends.length; e++) {
+      const i0 = ends[e];
+      const i1 = ends[e + 1];
+      if (i1 - i0 < 2) continue;
+      const lo = Math.min(terrainAt(L[i0][0], L[i0][1]), terrainAt(L[i1][0], L[i1][1]));
+      const crown = (w.h[i0] + w.h[i1]) / 2 - 0.9;
+      const rise = Math.max(0.4, Math.min(crown - lo, (i1 - i0) * 0.45));
+      const archY = (i: number) => crown - rise * (1 - Math.sin((Math.PI * (i - i0)) / (i1 - i0)));
+      for (let i = i0; i < i1; i++) {
+        const [ax, az] = L[i];
+        const [bx, bz] = L[i + 1];
+        const l = Math.hypot(bx - ax, bz - az) || 1;
+        const nx = -(bz - az) / l;
+        const nz = (bx - ax) / l;
+        const ya = archY(i);
+        const yb = archY(i + 1);
+        g.color(col);
+        for (const s of [1, -1])
+          face(
+            g,
+            [ax + nx * s * o, ya, az + nz * s * o],
+            [bx + nx * s * o, yb, bz + nz * s * o],
+            [bx + nx * s * o, w.h[i + 1] + 0.06, bz + nz * s * o],
+            [ax + nx * s * o, w.h[i] + 0.06, az + nz * s * o],
+            [nx * s, 0, nz * s],
+          );
+        g.color(shade(col, 0.7));
+        g.quad(
+          [ax + nx * o, ya, az + nz * o],
+          [bx + nx * o, yb, bz + nz * o],
+          [bx - nx * o, yb, bz - nz * o],
+          [ax - nx * o, ya, az - nz * o],
+          [0, -1, 0],
+        );
+      }
+    }
+  }
+}
+/** A box `along` × `across` (half-sizes) turned to (ux, uz), from y0 to y1 (its bottom left open). */
+function turnedBox(
+  g: G,
+  x: number,
+  z: number,
+  ux: number,
+  uz: number,
+  along: number,
+  across: number,
+  y0: number,
+  y1: number,
+  col: number,
+) {
+  g.color(col);
+  const vx = -uz;
+  const vz = ux;
+  const c = (sa: number, sb: number, y: number): V => [
+    x + ux * along * sa + vx * across * sb,
+    y,
+    z + uz * along * sa + vz * across * sb,
+  ];
+  const sides: [number, number, number, number, V][] = [
+    [1, -1, 1, 1, [ux, 0, uz]],
+    [-1, 1, -1, -1, [-ux, 0, -uz]],
+    [-1, 1, 1, 1, [vx, 0, vz]],
+    [1, -1, -1, -1, [-vx, 0, -vz]],
+  ];
+  for (const [sa0, sb0, sa1, sb1, n] of sides)
+    g.quad(c(sa0, sb0, y0), c(sa1, sb1, y0), c(sa1, sb1, y1), c(sa0, sb0, y1), n);
+  g.quad(c(-1, -1, y1), c(1, -1, y1), c(1, 1, y1), c(-1, 1, y1), [0, 1, 0]);
+}

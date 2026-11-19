@@ -41,6 +41,15 @@ export const GOD_STRINGS = {
   godTool_buildings: ["Buildings", "Prédios"],
   godTool_grow: ["Grow", "Crescer"],
   godTool_vehicles: ["Vehicles", "Veículos"],
+  godTool_bridges: ["Bridges", "Pontes"],
+  godBridgeOnWay: [
+    "A bridge goes on a road, a street or a trail: click on one where it starts",
+    "Uma ponte vai numa estrada, rua ou trilha: clique numa onde ela começa",
+  ],
+  godBridgeNoRoom: [
+    "No room for a bridge there: {n} m at least, not over another",
+    "Não cabe uma ponte aí: {n} m no mínimo, sem passar por cima de outra",
+  ],
   godVehicleInUse: [
     "Someone's in it: it can be picked once it's parked",
     "Tem alguém nele: dá para pegar quando estiver estacionado",

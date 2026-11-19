@@ -54,12 +54,16 @@ import { groundSolidsIn } from "./shapes/grounds.ts";
 // roof and ramps' solids; the outdoor park's concrete pad, its trees cleared, its ramps' solids)
 // (2026-11-18, plan 104 F6a: both parks laid out again on the 10 ft module — their ramps' solids; the hall's pro
 // shop counter by its door, its only fit: its solid, its tile unwalkable, among the things)
+// (2026-11-19: the bridges' ends — the land flattened at each one's first and last samples and cut where it stood
+// over a deck, the decks' slabs a sample on onto the road: no slot across the river bridge's ends, no rim through
+// the footbridge; the trees, the walking and the surfaces there with them; then plan 109: the river bridge's two
+// piers on the ice solid, as they're drawn — cars drove through them)
 const TODAY = {
-  land: "2b00eecb",
+  land: "e1d69c7a",
   // (2026-11-01: the road closed's barricades and drift shut, as their solids)
-  walk: "96b5e27a",
-  trees: "66c964f4",
-  surfaces: "8ad7ea5e",
+  walk: "32df9fe7",
+  trees: "39169d6f",
+  surfaces: "9d295adf",
   // (2026-11-01: the false fronts flush with their faces, the road closed's barricades and drift
   // solid, the wooden poles their own what, the pitched roofs in steps under their slopes, the flat
   // roofs' snow, the streets' pavements and kerbs — the town's audit; then its details: the shops'
@@ -69,7 +73,7 @@ const TODAY = {
   // station's and the other flat roofs' snow, the kerbs in three treads)
   // (2026-11-02: the roofs, the canopies, the mailboxes and the statue at their bare heights — their
   // snow the weather's, stood a little in: docs/plan/65, the user's call)
-  solids: "3f18d413",
+  solids: "60d4a03e",
   things: "d023c2e3",
 };
 

@@ -22,6 +22,7 @@ import type { WorldController } from "../controller";
 import { layDraft, layings, onPublished, publishedEdits, recheckEdits } from "../grounds-load";
 import { GOD_READY, GOD_TOOLS, type GodDraftRow, type GodHud, type GodTool, hud, toast } from "../store";
 import type { GodInput, ThirdPersonView } from "../tp/view";
+import { BridgesTool } from "./bridges";
 import { BuildingsTool } from "./buildings";
 import { GrowTool } from "./grow";
 import { BrushRing } from "./ring";
@@ -57,6 +58,7 @@ const PAST_EDGE = 512; // how far past the land's box the camera goes (a piece d
  *  it's made on, the whole edits set as I want it. */
 type Draft = { id: number | null; name: string; baseRev: number; data: GroundsEdits };
 type DraftRow = GodDraftRow;
+type Picked = NonNullable<GodHud["picked"]>;
 const NAME_MAX = 60;
 // the draft open last (a convenience: the list is the API's)
 const LAST = "yutopia:god-draft";
@@ -126,6 +128,9 @@ export class GodController {
   // dragging one with the Vehicles tool
   private vehicles: VehiclesTool | null = null;
   private vehicleDrag: number | null = null;
+  // the bridges (docs/plan/109: ./bridges.ts), and the pointer dragging an end of one
+  private bridges: BridgesTool | null = null;
+  private bridgeDrag: number | null = null;
   // the grow tool (plan 69's phase 10: ./grow.ts), and the pointer drawing a piece (where it went
   // down: a click or a drag)
   private grow: GrowTool | null = null;
@@ -214,6 +219,8 @@ export class GodController {
     this.buildings = null;
     this.vehicles?.dispose();
     this.vehicles = null;
+    this.bridges?.dispose();
+    this.bridges = null;
     this.vehicleDrag = null;
     this.grow?.dispose();
     this.grow = null;
@@ -258,6 +265,9 @@ export class GodController {
     this.buildings?.hide();
     this.vehicles?.hide();
     this.vehicleDrag = null;
+    this.bridges?.cancel();
+    this.bridges?.hide();
+    this.bridgeDrag = null;
     this.grow?.cancel();
     this.grow?.hide();
     this.growDrag = null;
@@ -304,6 +314,8 @@ export class GodController {
       else this.vehicles?.hide();
       if (tool === "roads") this.roadsTool()?.frame(this.under, f);
       else this.roads?.hide();
+      if (tool === "bridges") this.bridgesTool()?.frame(this.under, f);
+      else this.bridges?.hide();
       if (tool === "things") this.thingsTool()?.frame(this.under, f);
       else this.things?.hide();
       if (tool === "buildings") this.buildingsTool()?.frame(this.under, f);
@@ -478,6 +490,19 @@ export class GodController {
         return true;
       }
     }
+    // the bridges tool: Delete takes the picked one away, Esc lets a stretch being laid (or the picked one) go
+    const brt = hud.get().god.tool === "bridges" ? this.bridges : null;
+    if (brt && !hud.get().god.publish && !e.repeat) {
+      if ((e.key === "Delete" || e.key === "Backspace") && hud.get().god.bridges.sel) {
+        brt.removePicked();
+        return true;
+      }
+      if (e.key === "Escape" && (brt.drawing || hud.get().god.bridges.sel)) {
+        if (brt.drawing) brt.cancel();
+        else brt.deselect();
+        return true;
+      }
+    }
     // the vehicles tool: R turns the one held (Shift: back), Esc lets go of one picked
     const vt = hud.get().god.tool === "vehicles" ? this.vehicles : null;
     if (vt && !hud.get().god.publish && !e.repeat) {
@@ -490,7 +515,7 @@ export class GodController {
     // lets it go
     const picked = hud.get().god.tool === "select" ? hud.get().god.picked : null;
     if (picked && !hud.get().god.publish && !e.repeat) {
-      if (k === "r" && picked !== "way") {
+      if (k === "r" && picked !== "way" && picked !== "bridge") {
         this.turnPicked(e.shiftKey);
         return true;
       }
@@ -525,7 +550,9 @@ export class GodController {
     if (k === "o" || e.key === "0") this.leave();
     else if (e.key === "[" || e.key === "]") this.resize(e.key === "]" ? 1.25 : 0.8);
     else if (k === "m") this.toggleMap();
-    else if (e.key >= "1" && e.key <= String(GOD_TOOLS.length)) this.setTool(GOD_TOOLS[Number(e.key) - 1]);
+    // (1–9 the first nine tools — a number, not a string compared: "2" > "10" —, B the bridges)
+    else if (/^[1-9]$/.test(e.key) && Number(e.key) <= GOD_TOOLS.length) this.setTool(GOD_TOOLS[Number(e.key) - 1]);
+    else if (k === "b") this.setTool("bridges");
     else this.keys.add(e.code);
     return true;
   }
@@ -568,6 +595,11 @@ export class GodController {
         this.buildingDrag = e.pointerId;
         return;
       }
+      // the bridges tool: an end of a bridge grabbed to drag (Edit's; else a click)
+      if (tool === "bridges" && e.button === 0 && !touches && this.bridgesTool()?.down(this.landAt(e))) {
+        this.bridgeDrag = e.pointerId;
+        return;
+      }
       // the vehicles tool: one under it picked up to drag (else a click places the one held)
       if (tool === "vehicles" && e.button === 0 && !touches && this.vehiclesTool()?.grab(this.landAt(e))) {
         this.vehicleDrag = e.pointerId;
@@ -588,11 +620,13 @@ export class GodController {
             ? this.thingsTool()?.grab(at)
             : kind === "vehicle"
               ? this.vehiclesTool()?.grab(at)
-              : kind === "building"
-                ? this.buildingsTool()?.down(at)
-                : kind === "way"
-                  ? this.roadsTool()?.grabWay(at)
-                  : false;
+              : kind === "bridge"
+                ? this.bridgesTool()?.down(at, true)
+                : kind === "building"
+                  ? this.buildingsTool()?.down(at)
+                  : kind === "way"
+                    ? this.roadsTool()?.grabWay(at)
+                    : false;
         if (kind && grabbed) {
           this.selDrag = { id: e.pointerId, kind };
           return;
@@ -620,6 +654,7 @@ export class GodController {
       if (this.thingDrag === e.pointerId) return this.things?.move(this.landAt(e));
       if (this.buildingDrag === e.pointerId) return this.buildings?.move(this.landAt(e));
       if (this.vehicleDrag === e.pointerId) return this.vehicles?.move(this.landAt(e));
+      if (this.bridgeDrag === e.pointerId) return this.bridges?.move(this.landAt(e));
       if (this.growDrag?.id === e.pointerId) return this.grow?.move(this.landAt(e));
       if (this.selDrag?.id === e.pointerId) {
         const at = this.landAt(e);
@@ -628,9 +663,11 @@ export class GodController {
           ? this.things?.move(at)
           : k === "vehicle"
             ? this.vehicles?.move(at)
-            : k === "building"
-              ? this.buildings?.move(at)
-              : this.roads?.move(at);
+            : k === "bridge"
+              ? this.bridges?.move(at)
+              : k === "building"
+                ? this.buildings?.move(at)
+                : this.roads?.move(at);
       }
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
@@ -670,6 +707,11 @@ export class GodController {
         this.vehicles?.up();
         return;
       }
+      if (this.bridgeDrag === e.pointerId) {
+        this.bridgeDrag = null;
+        this.bridges?.up(this.landAt(e), false);
+        return;
+      }
       const gd = this.growDrag;
       if (gd?.id === e.pointerId) {
         this.growDrag = null;
@@ -684,6 +726,7 @@ export class GodController {
         this.selDrag = null;
         if (k === "thing") this.things?.up(this.landAt(e), false, e);
         else if (k === "vehicle") this.vehicles?.up();
+        else if (k === "bridge") this.bridges?.up(this.landAt(e), false);
         else if (k === "building") this.buildings?.up(this.landAt(e), false);
         else this.roads?.upWay();
         this.pickedNow(k);
@@ -702,6 +745,7 @@ export class GodController {
       ) {
         const tool = hud.get().god.tool;
         if (tool === "roads") this.roads?.up(this.landAt(e), true, e);
+        else if (tool === "bridges") this.bridgesTool()?.up(this.landAt(e), true);
         else if (tool === "things") this.thingsTool()?.up(this.landAt(e), true, e);
         else if (tool === "buildings") this.buildingsTool()?.up(this.landAt(e), true);
         else if (tool === "vehicles") {
@@ -741,13 +785,14 @@ export class GodController {
   }
 
   // ── the select tool (the mock 08-select): anything, generated, placed or edited ──
-  private selDrag: { id: number; kind: "thing" | "building" | "way" | "vehicle" } | null = null;
-  /** What's under `at`: the smallest first (a thing, a vehicle, a building, a way). */
-  private selectHit(at: { x: number; z: number } | null): "thing" | "building" | "way" | "vehicle" | null {
+  private selDrag: { id: number; kind: Picked } | null = null;
+  /** What's under `at`: the smallest first (a thing, a vehicle, a building, a bridge, a way). */
+  private selectHit(at: { x: number; z: number } | null): Picked | null {
     if (!at) return null;
     if (this.thingsTool()?.hits(at)) return "thing";
     if (this.vehiclesTool()?.hits(at)) return "vehicle";
     if (buildingAt(at.x, at.z)) return "building";
+    if (this.bridgesTool()?.hits(at)) return "bridge";
     if (this.roadsTool()?.hits(at)) return "way";
     return null;
   }
@@ -765,9 +810,11 @@ export class GodController {
     else this.roads?.hide();
     if (kind === "vehicle") this.vehiclesTool()?.frame(over, f, false);
     else this.vehicles?.hide();
+    if (kind === "bridge") this.bridgesTool()?.frame(over, f, true);
+    else this.bridges?.hide();
   }
   /** `kind` picked (if its tool has it picked): the others let go. */
-  private pickedNow(kind: "thing" | "building" | "way" | "vehicle") {
+  private pickedNow(kind: Picked) {
     const g = hud.get().god;
     const has =
       kind === "thing"
@@ -776,7 +823,10 @@ export class GodController {
           ? !!g.buildings.sel
           : kind === "vehicle"
             ? !!g.vehicles.sel
-            : !!g.roads.sel;
+            : kind === "bridge"
+              ? !!g.bridges.sel
+              : !!g.roads.sel;
+    if (kind !== "bridge") this.bridges?.deselect();
     if (kind !== "vehicle") this.vehicles?.deselect();
     if (kind !== "thing") this.things?.deselect();
     if (kind !== "building") this.buildings?.deselect();
@@ -785,6 +835,7 @@ export class GodController {
   }
   /** Select's: what's picked let go. */
   deselect() {
+    this.bridges?.deselect();
     this.vehicles?.deselect();
     this.things?.deselect();
     this.buildings?.deselect();
@@ -805,6 +856,7 @@ export class GodController {
     else if (k === "building") this.buildingsTool()?.removePicked();
     else if (k === "way") this.roadsTool()?.removePicked();
     else if (k === "vehicle") this.vehiclesTool()?.removePicked();
+    else if (k === "bridge") this.bridgesTool()?.removePicked();
     const g = hud.get().god;
     const sel =
       k === "thing"
@@ -813,7 +865,9 @@ export class GodController {
           ? g.buildings.sel
           : k === "vehicle"
             ? g.vehicles.sel
-            : g.roads.sel;
+            : k === "bridge"
+              ? g.bridges.sel
+              : g.roads.sel;
     if (!sel) this.set({ picked: null });
   }
   /** Select's: the picked way's points edited (the roads tool, Edit points, the way picked). */
@@ -839,6 +893,16 @@ export class GodController {
     return this.roads;
   }
 
+  /** The bridges (made the first time they're needed: Select's, the Bridges tool). */
+  bridgesTool(): BridgesTool | null {
+    const tp = this.w.tp;
+    if (!this.bridges && tp)
+      this.bridges = new BridgesTool(
+        { draft: () => this.draftNow(), change: (next) => this.change(next), up: () => this.up },
+        tp.scene,
+      );
+    return this.bridges;
+  }
   /** The things tool (made the first time it's needed). */
   thingsTool(): ThingsTool | null {
     const tp = this.w.tp;
@@ -1425,6 +1489,9 @@ export class GodController {
       this.end();
       this.roads?.cancel();
       this.roads?.hide();
+      this.bridges?.cancel();
+      this.bridges?.hide();
+      this.bridgeDrag = null;
       this.things?.cancel();
       this.things?.hide();
       this.buildings?.hide();
@@ -1443,6 +1510,11 @@ export class GodController {
   setRoadMode(mode: GodHud["roads"]["mode"]) {
     this.roads?.cancel();
     this.set({ roads: { ...hud.get().god.roads, mode, sel: null } });
+  }
+  /** The bridges tool's mode (Add, Edit, Remove): a stretch being laid let go. */
+  setBridgeMode(mode: GodHud["bridges"]["mode"]) {
+    this.bridges?.cancel();
+    this.set({ bridges: { ...hud.get().god.bridges, mode } });
   }
   /** The nature tool's settings. */
   setNature(p: Partial<GodHud["nature"]>) {
