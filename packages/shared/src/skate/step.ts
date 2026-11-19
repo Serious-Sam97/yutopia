@@ -969,6 +969,21 @@ function air(
     b.x += b.vx * dt;
     b.y += b.vy * dt;
     b.z += b.vz * dt;
+    // (plan 108) into a piece's body from its side — its surface above her where she's come to: a wall in the air.
+    // A low edge of it on the way down is landed on; else back out, the way in stopped. Already inside one (came in
+    // some other way): up onto it. Nothing in the air goes through a ramp.
+    const inTop = park.topAt(b.x, b.y, 99, 0);
+    if (inTop && inTop.z > b.z + 0.03 && b.z > inTop.p.oz - 0.05) {
+      const was = park.topAt(x0, y0, 99, 0);
+      const cameIn = !was || was.z <= z0 + 0.03 || was.on.pl !== inTop.on.pl;
+      if (!cameIn || (b.vz <= 0 && inTop.z - b.z < 0.3)) b.z = inTop.z;
+      else {
+        b.x = x0;
+        b.y = y0;
+        b.vx *= -0.15;
+        b.vy *= -0.15;
+      }
+    }
   }
   // (plan 105, Tony Hawk's: in the air the board's up comes upright, ~5° a frame; on the way down, within 1.5 m of a
   // piece's face, it turns to meet it)
@@ -986,6 +1001,14 @@ function air(
     const p = park.placed[top.on.pl];
     const f = surfFrame(p, top.on.l, top.on.w);
     return land(b, k, A, f.N, f.T, f.W, f.ux, f.uy, f.wx, f.wy, dt, sev, manualTap, Math.abs(f.N[2]) < 0.97);
+  }
+  // (plan 108) over a piece, never below the floor it stands on: the ground there, landed on
+  if (overPark && b.vz <= 0) {
+    const base = park.baseAt(b.x, b.y);
+    if (base !== null && b.z <= base) {
+      b.z = base;
+      landedWorld = true;
+    }
   }
   if (!overPark && !env.mover) {
     const g = env.grid.groundAt(b.x, b.y, z0 + 0.02);

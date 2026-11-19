@@ -802,6 +802,13 @@ export class SkatePark {
     return false;
   }
 
+  /** (plan 108) The floor the pieces near (x, y) stand on (the lowest's foot), or null where there are none. */
+  baseAt(x: number, y: number): number | null {
+    let base: number | null = null;
+    for (const p of this.near(x, y)) if (base === null || p.oz < base) base = p.oz;
+    return base;
+  }
+
   static inside(p: Placed, u: number, w: number): boolean {
     return (
       u >= p.s.prof.uMin - 1e-6 &&
