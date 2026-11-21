@@ -61,7 +61,8 @@ import { groundSolidsIn } from "./shapes/grounds.ts";
 const TODAY = {
   land: "e1d69c7a",
   // (2026-11-01: the road closed's barricades and drift shut, as their solids)
-  walk: "32df9fe7",
+  // (2026-11-20, plan 111: every building walked into — its inside walkable, through its door)
+  walk: "58c0ea00",
   trees: "39169d6f",
   surfaces: "9d295adf",
   // (2026-11-01: the false fronts flush with their faces, the road closed's barricades and drift
@@ -73,7 +74,11 @@ const TODAY = {
   // station's and the other flat roofs' snow, the kerbs in three treads)
   // (2026-11-02: the roofs, the canopies, the mailboxes and the statue at their bare heights — their
   // snow the weather's, stood a little in: docs/plan/65, the user's call)
-  solids: "60d4a03e",
+  // (2026-11-19, plan 110: every building but the HQ's, the blocks' and the skate hall's laid out by the kit —
+  // building-styles.ts — its solids its layout's: the town re-dressed, its walking as it was)
+  // (2026-11-20, plan 111: every building walked into — walls round it, its floor a slab at its sill, its door open;
+  // a door's steps on down to the land where it falls away; the meetinghouse's tower a porch through to its nave)
+  solids: "95e13298",
   things: "d023c2e3",
 };
 

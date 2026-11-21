@@ -218,21 +218,24 @@ export class Culling {
   // A still thing's world box, made again only when it moves; null if its bounds can't be
   // trusted (anything three itself doesn't cull by its box: particles, sprites, instances,
   // skinned or unculled meshes — their points move without the box knowing).
-  stillBoxes = new WeakMap<Object3D, { m: Matrix4; box: Box3 | null }>();
+  // (kept by its world matrix and its `userData.cullV`: what's made again in place — plan 110's kit cells, a building
+  // joining one — bumps it, its box made again: plan 111)
+  stillBoxes = new WeakMap<Object3D, { m: Matrix4; v: number; box: Box3 | null }>();
 
   matricesMade = false; // (this frame's, all of them: frame())
 
   stillBox(o: Object3D): Box3 | null {
     if (!this.matricesMade) o.updateWorldMatrix(true, false);
     const had = this.stillBoxes.get(o);
-    if (had?.m.equals(o.matrixWorld)) return had.box;
+    const v = (o.userData.cullV as number | undefined) ?? 0;
+    if (had && had.v === v && had.m.equals(o.matrixWorld)) return had.box;
     // (one that says how far its shader moves its points from where they are — a crowd's people — boxed with
     // that: its instances' own boxes, `cullPad` round them)
     const pad = o.userData.cullPad as number | undefined;
     if (typeof pad === "number") {
       const box = new Box3().setFromObject(o);
       const out = box.isEmpty() ? null : box.expandByScalar(pad);
-      this.stillBoxes.set(o, { m: o.matrixWorld.clone(), box: out });
+      this.stillBoxes.set(o, { m: o.matrixWorld.clone(), v, box: out });
       return out;
     }
     let ok = true;
@@ -249,10 +252,10 @@ export class Culling {
     });
     const box = ok ? new Box3().setFromObject(o) : null;
     if (box?.isEmpty()) {
-      this.stillBoxes.set(o, { m: o.matrixWorld.clone(), box: null });
+      this.stillBoxes.set(o, { m: o.matrixWorld.clone(), v, box: null });
       return null;
     }
-    this.stillBoxes.set(o, { m: o.matrixWorld.clone(), box });
+    this.stillBoxes.set(o, { m: o.matrixWorld.clone(), v, box });
     return box;
   }
 }

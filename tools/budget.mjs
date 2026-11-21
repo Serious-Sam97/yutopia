@@ -54,7 +54,9 @@ import { gzipSync } from "node:zlib";
 // NaN guards in the world page's sound (grounds-sound.ts) and its other client changes on the page)
 // (raised to 491 on 2026-11-18, the same call: plan 103's skate — the build menu's ramps as plain numbers, the
 // avatar's stance, the controller's board hooks — measured 490.4)
-const BUDGETS = { "/page": 492, "/login/page": 160 }; // KB gzip
+// (raised to 493 on 2026-11-20 under the user's standing call to raise as needed: plan 110's quality pass — the life
+// look's library list, life-matlib-list.ts, on the page with its ten new building materials — 492.0 over 492)
+const BUDGETS = { "/page": 493, "/login/page": 160 }; // KB gzip
 // (/page raised from 491 on 2026-11-19 under the user's standing call: plan 109 — the God HUD's bridges state, the
 // bridge icon, the bridges' layout and kinds in the shared Grounds; measured 491.0)
 // (/page raised from 451 on 2026-11-04 under the same call: plan 72's phase 4 — the controller split

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { layoutOf } from "./building-styles.ts";
 import {
   applyEdits,
   atPump,
@@ -7,8 +8,8 @@ import {
   CHUNK,
   checkEdits,
   groundSurfaceAt,
+  insideOf,
   steepleOf,
-  turnOf,
   WAYS,
   walkableCell,
 } from "./grounds.ts";
@@ -55,7 +56,7 @@ const solidsOver = (b: { x0: number; z0: number; x1: number; z1: number }) => {
   return out;
 };
 
-test("a house in the field: by the rules, on its plot, solid there, off the walking", () => {
+test("a house in the field: by the rules, on its plot, walked into (plan 111): walls round it, its floor a slab", () => {
   applyEdits(NO_EDITS);
   const e = addBuilding(NO_EDITS, house());
   assert.deepEqual(checkEdits(e), []);
@@ -63,26 +64,31 @@ test("a house in the field: by the rules, on its plot, solid there, off the walk
   applyEdits(e);
   assert.equal(buildingAt(FIELD.x, FIELD.z), "god-building-1");
   assert.equal(groundSurfaceAt(FIELD.x, FIELD.z), "floor");
-  assert.equal(walkableCell(Math.floor(FIELD.x), Math.floor(FIELD.z)), false);
-  assert.ok(solidsOver(house()).some((g) => g.what === "building"));
+  // (empty inside, walked about in: its walls round it, its door open, its floor raised to the sill)
+  assert.equal(walkableCell(Math.floor(FIELD.x), Math.floor(FIELD.z)), true);
+  // (the one laid: its inside found by the building itself)
+  const laid = BUILDINGS.find((u) => u.key === "god-building-1");
+  assert.ok(laid);
+  const inside = insideOf(laid);
+  assert.ok(inside && inside.fy > 0.1 && inside.fits.length === 0, "empty inside, its floor at its sill");
+  // (no solid mass over its plot: walls round it)
+  assert.ok(!solidsOver(laid).some((g) => g.what === "building" && g.s.t === "box" && g.s.hx > 3 && g.s.hz > 3));
   // taken away: the field again
   applyEdits(removeBuilding(e, "god-building-1"));
   assert.equal(buildingAt(FIELD.x, FIELD.z), null);
   applyEdits(NO_EDITS);
 });
 
-test("turned: a house's door north is its builder's east one turned a quarter, its solids too", () => {
-  const t = turnOf(house({ face: "n" }) as never);
-  assert.equal(t.k, 1);
-  assert.equal(t.b.face, "e");
-  assert.equal(t.b.x1 - t.b.x0, 10, "its sides swapped");
+test("any side (plan 110): a house's door north is laid facing north, its solids square on its plot", () => {
   applyEdits(addBuilding(NO_EDITS, house({ face: "n" })));
   const walls = solidsOver(house()).filter((g) => g.what === "building");
   assert.ok(walls.length);
   for (const g of walls) {
     assert.equal(g.s.t, "box");
-    if (g.s.t === "box") assert.ok(Math.abs(Math.cos(g.s.a)) < 1e-9, "a quarter turned");
+    if (g.s.t === "box") assert.ok(Math.abs(Math.sin(g.s.a)) < 1e-9, "square to the axes");
   }
+  const L = layoutOf(BUILDINGS.find((b) => b.key === "god-building-1") as never);
+  assert.ok(L && L.door.oz === -1 && Math.abs(L.door.z - house().z0) < 0.01, "its door on its north face");
   applyEdits(NO_EDITS);
 });
 
@@ -113,7 +119,7 @@ test("a gas station put down: its own forecourt, its kiosk built; the town's pum
   applyEdits(NO_EDITS);
 });
 
-test("a church turned to face north: its steeple out past its north end", () => {
+test("a meetinghouse church facing north: its steeple out past its north end", () => {
   const c: BuildingDef = {
     ...house(),
     kind: "church",
@@ -121,16 +127,25 @@ test("a church turned to face north: its steeple out past its north end", () => 
     ...plotAt(FIELD.x, FIELD.z, 14, 20),
     floors: 1,
     face: "n",
+    style: "meetinghouse",
   };
   const s = steepleOf(c as never);
-  assert.ok(s.z0 < c.z0 && s.z1 < c.z0 + 3, `the steeple north: ${JSON.stringify(s)}`);
+  assert.ok(s && s.z0 < c.z0 && s.z1 <= c.z0 + 1e-6, `the steeple north: ${JSON.stringify(s)}`);
   assert.deepEqual(checkEdits(addBuilding(NO_EDITS, c)), []);
 });
 
-test("refused: walked into with its door where its inside's isn't, a colour not theirs, on a road, on another", () => {
+test("refused: a style not its kind's, a colour not its style's, a silo walked into, on a road, on another", () => {
   const no = (d: BuildingDef) => checkEdits(addBuilding(NO_EDITS, d));
-  assert.ok(no(house({ face: "n", enter: true })).some((p) => /walk into/.test(p)));
-  assert.deepEqual(no(house({ face: "e", enter: true })), []);
+  // (plan 110: walked into on any side; its style, its colours its style's)
+  assert.deepEqual(no(house({ face: "n", enter: true })), []);
+  assert.ok(no(house({ style: "gambrel" })).some((p) => /style/.test(p)));
+  assert.deepEqual(no(house({ style: "cape", colours: { walls: "#8a7a66" } })), []);
+  assert.ok(no(house({ style: "cape", colours: { walls: "#123456" } })).some((p) => /colours/.test(p)));
+  assert.ok(
+    no({ ...house(), kind: "silo", ...plotAt(FIELD.x, FIELD.z, 8, 8), floors: 3, enter: true }).some((p) =>
+      /walked into/.test(p),
+    ),
+  );
   assert.ok(no(house({ tint: "#123456" })).some((p) => /colours/.test(p)));
   assert.deepEqual(no(house({ tint: "#9fb5a2" })), []);
   const road = WAYS.find((w) => w.key === "farm-lane") as (typeof WAYS)[number];
@@ -148,4 +163,27 @@ test("refused: walked into with its door where its inside's isn't, a colour not 
     ),
   );
   assert.deepEqual(checkEdits(changeBuilding(NO_EDITS, shed.key, { name: "The plough shed" })), []);
+});
+
+// Plan 111: every building that can be walked into is — its doorway under the door its style drew (the tiles under
+// its width), its floor at that door's sill.
+test("every walked-into building's doorway is under its drawn door, its floor at the sill", () => {
+  applyEdits(NO_EDITS);
+  let n = 0;
+  for (const b of BUILDINGS) {
+    const i = insideOf(b);
+    const L = layoutOf(b);
+    if (!i || !L) continue;
+    n++;
+    const d = L.door;
+    const on = d.x >= b.x0 - 0.5 && d.x <= b.x1 + 0.5 && d.z >= b.z0 - 0.5 && d.z <= b.z1 + 0.5;
+    if (!on) continue; // (a meetinghouse's: its door in its tower, out of the plot — its nave's front open behind)
+    const c = i.door.dir === "h" ? d.x : d.z;
+    assert.ok(
+      c > i.door.from && c < i.door.to,
+      `${b.key}: its doorway ${i.door.from}–${i.door.to} under its door at ${c}`,
+    );
+    assert.equal(i.fy, Math.max(0, d.y), `${b.key}: its floor at its sill`);
+  }
+  assert.ok(n > 30, `walked into: ${n}`);
 });

@@ -1,3 +1,4 @@
+import { isKit, KINDS, KIT_KINDS, layoutOf, PALETTES, setLandAt, styleOf } from "./building-styles.ts";
 import { cellKey as packCell } from "./cellkey.ts";
 import {
   GROW_BIOMES,
@@ -282,7 +283,18 @@ export type BuildingKind =
   | "silo"
   | "farmhouse"
   // (a disused warehouse: the skate hall's — docs/plan/103-the-skate.md F7c)
-  | "warehouse";
+  | "warehouse"
+  // (plan 110's city: building-styles.ts KINDS)
+  | "townhouses"
+  | "apartments"
+  | "cornershop"
+  | "office"
+  | "school"
+  | "police"
+  | "fire"
+  | "clinic"
+  | "library"
+  | "garage";
 export interface Building {
   key: string;
   kind: BuildingKind;
@@ -307,6 +319,10 @@ export interface Building {
   built?: { x0: number; z0: number; x1: number; z1: number };
   /** its walls' colour (god mode's: one of WALL_TINTS); none: its kind's own */
   tint?: string;
+  /** its style (building-styles.ts: one of its kind's; none: seeded from its plot) — plan 110 */
+  style?: string;
+  /** its colours, each from its style's palette (none: seeded) — plan 110 F6a */
+  colours?: { walls?: string; trim?: string; roof?: string; door?: string };
 }
 export interface Lamp {
   /** which lamp, for ever (docs/plan/53-the-god-mode.md): its way's and its place along it, or a name */
@@ -716,34 +732,63 @@ const BASE_BUILDINGS: Building[] = [
   // (clear of a studio up to 64 × 48 across a 12-tile courtyard: building.ts BLOCKS)
   b("east", "block", "East block", 76, -10, 100, 48, 5, "w", { enter: true, stored: true }),
   b("south", "block", "South block", -4, 60, 50, 84, 5, "n", { enter: true, stored: true }),
-  b("gatehouse", "gatehouse", "Gatehouse", -34, -367, -29, -361, 1, "w", { enter: true }),
-  b("boathouse", "boathouse", "Boathouse", -262, -108, -248, -98, 1, "s"),
-  b("shed", "shed", "Grounds shed", -162, 110, -148, 120, 1, "n"),
-  b("shelter", "shelter", "Bus shelter", -16, -417, -10, -413, 1, "s"),
+  b("gatehouse", "gatehouse", "Gatehouse", -34, -367, -29, -361, 1, "w", { enter: true, style: "glass-gate" }),
+  b("boathouse", "boathouse", "Boathouse", -262, -108, -248, -98, 1, "s", { style: "timber-boathouse" }),
+  b("shed", "shed", "Grounds shed", -162, 110, -148, 120, 1, "n", { style: "metal-shed" }),
+  b("shelter", "shelter", "Bus shelter", -16, -417, -10, -413, 1, "s", { style: "glass-shelter" }),
   // the town: Main Street, south side
   // (built: the kiosk at the back — the forecourt before it is open, its pumps under the canopy)
   b("gas", "gas", "Gas station", 306, -394, 328, -378, 1, "n", {
     sign: "GAS",
+    style: "classic-gas",
     built: { x0: 308, z0: -384, x1: 318, z1: -378 },
   }),
-  b("diner", "diner", "Diner", 336, -396, 354, -382, 1, "n", { enter: true, sign: "DINER" }),
-  b("market", "shop", "Market", 358, -396, 374, -380, 2, "n", { enter: true, sign: "MARKET" }),
-  b("books", "shop", "Bookshop", 378, -396, 392, -382, 2, "n", { sign: "BOOKS" }),
-  b("bar", "bar", "Bar", 448, -396, 464, -380, 2, "n", { enter: true, sign: "BAR" }),
-  b("hardware", "shop", "Hardware", 468, -396, 482, -382, 2, "n", { sign: "HARDWARE" }),
+  b("diner", "diner", "Diner", 336, -396, 354, -382, 1, "n", { enter: true, sign: "DINER", style: "streamline" }),
+  b("market", "shop", "Market", 358, -396, 374, -380, 2, "n", {
+    enter: true,
+    sign: "MARKET",
+    style: "brick",
+    colours: { walls: "#8a3e2e", trim: "#efe8d8" },
+  }),
+  b("books", "shop", "Bookshop", 378, -396, 392, -382, 2, "n", {
+    sign: "BOOKS",
+    style: "false-front",
+    colours: { walls: "#c7d2d4", trim: "#2d3a33" },
+  }),
+  b("bar", "bar", "Bar", 448, -396, 464, -380, 2, "n", { enter: true, sign: "BAR", style: "tavern" }),
+  b("hardware", "shop", "Hardware", 468, -396, 482, -382, 2, "n", {
+    sign: "HARDWARE",
+    style: "brick",
+    colours: { walls: "#b5634a", trim: "#3a3f3a" },
+  }),
   // (the shut shop, opened again as the car dealer: docs/plan/43-the-spot.md; its forecourt is MOTORS)
-  b("motors", "shop", "Motors", 486, -396, 500, -382, 2, "n", { sign: "MOTORS" }),
+  b("motors", "shop", "Motors", 486, -396, 500, -382, 2, "n", { sign: "MOTORS", style: "deco" }),
   // north side
-  b("post", "shop", "Post office", 338, -430, 354, -414, 1, "s", { sign: "POST OFFICE" }),
-  b("laundry", "shop", "Laundromat", 358, -428, 372, -414, 1, "s", { sign: "LAUNDRY" }),
-  b("hall", "shop", "Town hall", 378, -434, 404, -414, 2, "s", { sign: "TOWN HALL" }),
-  b("hotel", "hotel", "Hotel", 432, -436, 452, -414, 3, "s", { sign: "HOTEL" }),
-  b("bakery", "shop", "Bakery", 458, -428, 472, -414, 2, "s", { sign: "BAKERY" }),
-  b("church", "church", "Church", 410, -556, 430, -534, 1, "s"),
+  b("post", "shop", "Post office", 338, -430, 354, -414, 1, "s", { sign: "POST OFFICE", style: "civic" }),
+  b("laundry", "shop", "Laundromat", 358, -428, 372, -414, 1, "s", {
+    sign: "LAUNDRY",
+    style: "false-front",
+    colours: { walls: "#ddd0a8", trim: "#f4f1e8" },
+  }),
+  b("hall", "shop", "Town hall", 378, -434, 404, -414, 2, "s", { sign: "TOWN HALL", style: "civic" }),
+  b("hotel", "hotel", "Hotel", 432, -436, 452, -414, 3, "s", { sign: "HOTEL", style: "brick-hotel" }),
+  b("bakery", "shop", "Bakery", 458, -428, 472, -414, 2, "s", {
+    sign: "BAKERY",
+    style: "brick",
+    colours: { walls: "#c4a27a", trim: "#5a3a2a" },
+  }),
+  b("church", "church", "Church", 410, -556, 430, -534, 1, "s", {
+    style: "meetinghouse",
+    colours: { walls: "#efeadd", trim: "#f4f1e8" },
+  }),
   // the farm (docs/plan/31-the-day.md)
-  b("barn", "barn", "Barn", 440, -320, 464, -302, 2, "w", { enter: true }),
-  b("silo", "silo", "Silo", 468, -318, 476, -310, 4, "w"),
-  b("farmhouse", "farmhouse", "Farmhouse", 440, -262, 454, -250, 2, "n", { enter: true }),
+  b("barn", "barn", "Barn", 440, -320, 464, -302, 2, "w", {
+    enter: true,
+    style: "gambrel",
+    colours: { walls: "#9e2a22", trim: "#efeadd" },
+  }),
+  b("silo", "silo", "Silo", 468, -318, 476, -310, 4, "w", { style: "stave" }),
+  b("farmhouse", "farmhouse", "Farmhouse", 440, -262, 454, -250, 2, "n", { enter: true, style: "classic" }),
   // the skate hall (docs/plan/103-the-skate.md F7c): a disused warehouse east of the townhouses, its door south to
   // the outdoor park (skate/parks.ts: its pieces)
   b(SKATE_HALL.key, "warehouse", "Skate hall", SKATE_HALL.x0, SKATE_HALL.z0, SKATE_HALL.x1, SKATE_HALL.z1, 2, "s", {
@@ -752,25 +797,55 @@ const BASE_BUILDINGS: Building[] = [
   }),
 ];
 // two rows of the same townhouse up Church Street
+// (plan 110: each its style, no two alike side by side or across the street)
+const ROW_STYLES = [
+  ["colonial", "cape"],
+  ["victorian", "bungalow"],
+  ["cape", "colonial"],
+  ["bungalow", "victorian"],
+  ["colonial", "cape"],
+  ["victorian", "colonial"],
+  ["cape", "bungalow"],
+];
 for (let k = 0; k < 7; k++) {
   const z1 = -440 - k * 10;
-  BASE_BUILDINGS.push(b(`house-w${k}`, "house", "Townhouse", 402, z1 - 8, 412, z1, 2, "e"));
-  BASE_BUILDINGS.push(b(`house-e${k}`, "house", "Townhouse", 428, z1 - 8, 438, z1, 2, "w"));
+  BASE_BUILDINGS.push(
+    b(`house-w${k}`, "house", "Townhouse", 402, z1 - 8, 412, z1, 2, "e", { style: ROW_STYLES[k][0] }),
+  );
+  BASE_BUILDINGS.push(
+    b(`house-e${k}`, "house", "Townhouse", 428, z1 - 8, 438, z1, 2, "w", { style: ROW_STYLES[k][1] }),
+  );
 }
 // the long road's (docs/plan/69, L7): the bus's shelters, the rest stop's hut, the lake's boathouse
 // and cabins
 if (LONG_ROAD) {
   const T = BUS_STOPS.town;
-  BASE_BUILDINGS.push(b("bus-town", "shelter", "Bus stop · Silver Lake", T.x - 3, T.z - 11, T.x + 3, T.z - 7, 1, "s"));
+  BASE_BUILDINGS.push(
+    b("bus-town", "shelter", "Bus stop · Silver Lake", T.x - 3, T.z - 11, T.x + 3, T.z - 7, 1, "s", {
+      style: "glass-shelter",
+    }),
+  );
   const L = BUS_STOPS.lake;
-  BASE_BUILDINGS.push(b("bus-lake", "shelter", "Bus stop · Town", L.x - 3, L.z + 7, L.x + 3, L.z + 11, 1, "n"));
+  BASE_BUILDINGS.push(
+    b("bus-lake", "shelter", "Bus stop · Town", L.x - 3, L.z + 7, L.x + 3, L.z + 11, 1, "n", {
+      style: "timber-shelter",
+    }),
+  );
   const [rx, rz] = padAt(PADS[0]);
-  BASE_BUILDINGS.push(b("rest-hut", "shed", "Rest area hut", rx + 14, rz + 8, rx + 18, rz + 11, 1, "w"));
+  BASE_BUILDINGS.push(
+    b("rest-hut", "shed", "Rest area hut", rx + 14, rz + 8, rx + 18, rz + 11, 1, "w", { style: "timber-shed" }),
+  );
   const B = SHORE.boathouse;
-  BASE_BUILDINGS.push(b("lake-boathouse", "boathouse", `${NAMES.lake} boathouse`, B.x0, B.z0, B.x1, B.z1, 1, "n"));
+  BASE_BUILDINGS.push(
+    b("lake-boathouse", "boathouse", `${NAMES.lake} boathouse`, B.x0, B.z0, B.x1, B.z1, 1, "n", {
+      style: "stone-boathouse",
+    }),
+  );
   // (a house's porch is on its east or west face: the two face each other across the path)
   for (const [i, c] of SHORE.cabins.entries())
-    BASE_BUILDINGS.push(b(c.key, "house", "Cabin", c.x0, c.z0, c.x1, c.z1, 1, i ? "w" : "e"));
+    BASE_BUILDINGS.push(
+      b(c.key, "house", "Cabin", c.x0, c.z0, c.x1, c.z1, 1, i ? "w" : "e", { style: i ? "bungalow" : "cape" }),
+    );
 }
 /** The buildings as they are: the generator's, edited. */
 export const BUILDINGS: Building[] = [];
@@ -873,11 +948,9 @@ export const FORECOURT: {
 /** Is (x, z) in what's built of a building (its whole plot, but for one with open ground in it)? */
 /** The church's steeple, south of its nave and past its plot (docs/plan/50-the-volume.md: the drawing's,
  *  its solid's, the tiles walking keeps you off). */
-export function steepleOf(b: Building): { x0: number; z0: number; x1: number; z1: number } {
-  const t = turnOf(b);
-  const xm = (t.b.x0 + t.b.x1) / 2;
-  const s = { x0: xm - 2.2, z0: t.b.z1 - 1.2, x1: xm + 2.2, z1: t.b.z1 + 2.7 };
-  return t.k ? quarterRect(s, (b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2, t.k) : s;
+export function steepleOf(b: Building): { x0: number; z0: number; x1: number; z1: number } | null {
+  // (plan 110: what of a building stands past its plot — the meetinghouse's tower — is its layout's)
+  return layoutOf(b)?.outside[0] ?? null;
 }
 
 // ── a building turned (god mode's, docs/plan/53-the-god-mode.md phase 9): each kind's builder
@@ -937,35 +1010,16 @@ export function turnOf(b: Building): { k: number; b: Building } {
     }
   return { k: 0, b };
 }
-/** A placed gas station's kiosk (as tp/grounds3d.ts draws it: at the back, the canopy at the front). */
+/** A placed gas station's kiosk (its layout's: at the back, the canopy at the front — plan 110). */
 function kioskOf(b: Building): { x0: number; z0: number; x1: number; z1: number } {
-  const t = turnOf(b);
-  const k = { x0: t.b.x0 + 2, z0: t.b.z1 - 6, x1: t.b.x0 + 12, z1: t.b.z1 };
-  return t.k ? quarterRect(k, (b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2, t.k) : k;
+  return layoutOf(b)?.built ?? { x0: b.x0, z0: b.z0, x1: b.x1, z1: b.z1 };
 }
-/** A gas station's forecourt's solid bits (any gas station: as drawn, turned with it). */
+/** A gas station's forecourt's solid bits (any gas station's: as its layout lays them). */
 export function forecourtOf(b: Building): {
   islands: { x: number; z: number; hx: number; hz: number }[];
   posts: { x: number; z: number }[];
 } {
-  const t = turnOf(b);
-  const g = t.b;
-  const cx = (b.x0 + b.x1) / 2;
-  const cz = (b.z0 + b.z1) / 2;
-  const at = (x: number, z: number) => (t.k ? quarter(x, z, cx, cz, t.k) : ([x, z] as P));
-  const odd = t.k % 2 === 1;
-  return {
-    islands: [g.x0 + 7, g.x1 - 7].map((x) => {
-      const [ix, iz] = at(x, g.z0 + 5);
-      return { x: ix, z: iz, hx: odd ? 1.82 : 0.62, hz: odd ? 0.62 : 1.82 };
-    }),
-    posts: [g.x0 + 3, g.x1 - 3].flatMap((x) =>
-      [g.z0 + 2, g.z0 + 8].map((z) => {
-        const [px, pz] = at(x, z);
-        return { x: px, z: pz };
-      }),
-    ),
-  };
+  return layoutOf(b)?.forecourt ?? { islands: [], posts: [] };
 }
 /** God mode's walls' colours (the mock 07-buildings): cream, sage, tan, oxblood, a pale grey. */
 export const WALL_TINTS = ["#e8e1cf", "#9fb5a2", "#c9a27e", "#7a3b2e", "#d8dde0"] as const;
@@ -1726,6 +1780,8 @@ function liftAt(x: number, z: number): number {
 }
 
 /** Where a body stands at (x, z): the land, or a bridge's deck over it. */
+// (the kit's layouts lay a door's steps down to the land: plan 111)
+setLandAt((x, z) => groundAt(x, z));
 export function groundAt(x: number, z: number): number {
   for (const [f, n] of nearLines(x, z)) {
     if (f >= WAYS.length) continue;
@@ -2773,11 +2829,11 @@ function walkable(x: number, z: number): boolean {
     return false;
   if (beyond(x, z) > 24) return false;
   for (const bd of nearBuildings(x, z)) {
-    // (the church's steeple, past its plot)
-    if (bd.kind === "church") {
-      const s = steepleOf(bd);
-      if (x > s.x0 - 0.2 && x < s.x1 + 0.2 && z > s.z0 && z < s.z1 + 0.2) return false;
-    }
+    // (what stands past its plot: the meetinghouse's tower — plan 110, its layout's)
+    const out = bd.kind === "church" ? (layoutOf(bd)?.outside ?? []) : [];
+    for (const s of out) if (x > s.x0 - 0.2 && x < s.x1 + 0.2 && z > s.z0 - 0.2 && z < s.z1 + 0.2) return false;
+    // (a parking garage: its plot's open ground, walked and driven; its decks and ramps are its solids)
+    if (bd.kind === "garage" && x >= bd.x0 && x < bd.x1 && z >= bd.z0 && z < bd.z1) return true;
     // (the bus shelter: walked into from the street — its glass back and sides are walls on the
     // tiles' edges: wallEdgeAt)
     if (bd.kind === "shelter") continue;
@@ -3182,7 +3238,18 @@ export type FitKind =
   | "bookshelf"
   | "bed"
   | "nightstand"
-  | "wardrobe";
+  | "wardrobe"
+  // (plan 110: the city's insides)
+  | "pew"
+  | "altar"
+  | "lectern"
+  | "boat"
+  | "engine"
+  | "cell"
+  | "exam"
+  | "plant"
+  | "board"
+  | "rack";
 export interface Fit {
   kind: FitKind;
   x: number;
@@ -3197,8 +3264,29 @@ export interface Inside {
   floor: string; // its colour
   fits: Fit[];
   door: { dir: "h" | "v"; at: number; from: number; to: number };
+  /** its floor's height over its ground: its door's sill (plan 111 — a kit building's plinth kept, its floor a
+   *  slab up to it) */
+  fy: number;
 }
 function doorOf(b: Building): Inside["door"] {
+  // (a kit building's: where its style put its door — on its side, the tiles under its width, two at least)
+  const d = isKit(b.kind) ? layoutOf(b)?.door : null;
+  if (d && d.w > 0.5 && d.x >= b.x0 - 0.5 && d.x <= b.x1 + 0.5 && d.z >= b.z0 - 0.5 && d.z <= b.z1 + 0.5) {
+    const h = Math.abs(d.oz) >= Math.abs(d.ox);
+    const c = h ? d.x : d.z;
+    const lo = h ? b.x0 : b.z0;
+    const hi = h ? b.x1 : b.z1;
+    let from = Math.floor(c - d.w / 2 + 0.05);
+    let to = Math.ceil(c + d.w / 2 - 0.05);
+    if (to - from < 2) {
+      from = Math.round(c) - 1;
+      to = from + 2;
+    }
+    from = Math.max(lo, from);
+    to = Math.min(hi, Math.max(from + 1, to));
+    if (h) return { dir: "h", at: d.oz > 0 ? b.z1 : b.z0, from, to };
+    return { dir: "v", at: d.ox > 0 ? b.x1 : b.x0, from, to };
+  }
   const xm = Math.round((b.x0 + b.x1) / 2);
   const zm = Math.round((b.z0 + b.z1) / 2);
   if (b.face === "n") return { dir: "h", at: b.z0, from: xm - 1, to: xm + 1 };
@@ -3206,13 +3294,163 @@ function doorOf(b: Building): Inside["door"] {
   if (b.face === "e") return { dir: "v", at: b.x1, from: zm - 1, to: zm + 1 };
   return { dir: "v", at: b.x0, from: zm - 1, to: zm + 1 };
 }
+// (each kind's furniture is laid with its door on one side — the north, but the barn's, the gatehouse's and the
+// skate hall's — and turned to its door's: plan 110 F4a, any side)
+const FIT_FACE: Partial<Record<BuildingKind, Building["face"]>> = { barn: "w", gatehouse: "w" };
+/** An empty inside's floor: the colour its kind's furnished one would be. */
+function emptyFloor(b: Building): string {
+  return fitsNative({ ...b, enter: true }).floor;
+}
 function fitsOf(b: Building): { floor: string; fits: Fit[] } {
+  const nf = b.key === SKATE_HALL.key ? "s" : (FIT_FACE[b.kind] ?? "n");
+  let k = 0;
+  for (let g = nf; g !== b.face && k < 4; k++) g = TURNED[g];
+  if (k === 0 || k >= 4) return fitsNative(b);
+  const cx = (b.x0 + b.x1) / 2;
+  const cz = (b.z0 + b.z1) / 2;
+  const r = fitsNative({ ...quarterRect(b, cx, cz, 4 - k), face: nf });
+  return {
+    floor: r.floor,
+    fits: r.fits.map((f) => {
+      const q = quarterRect({ x0: f.x, z0: f.z, x1: f.x + f.w, z1: f.z + f.d }, cx, cz, k);
+      return { ...f, x: q.x0, z: q.z0, w: q.x1 - q.x0, d: q.z1 - q.z0 };
+    }),
+  };
+}
+function fitsNative(b: Building): { floor: string; fits: Fit[] } {
   const { x0, z0, x1, z1 } = b;
   const xm = (x0 + x1) / 2;
   const fits: Fit[] = [];
   const f = (kind: FitKind, x: number, z: number, w: number, d: number, h: number, solid = true) =>
     fits.push({ kind, x, z, w, d, h, solid });
-  if (b.sign === "BAR") {
+  const W = x1 - x0;
+  const D = z1 - z0;
+  /** (the way in kept clear: the door's 2 m and 2.5 in) */
+  const clear = (x: number, z: number, w: number, d: number) =>
+    !(x < xm + 1.3 && x + w > xm - 1.3 && z < z0 + 2.6 && z + d > z0);
+  const g = (kind: FitKind, x: number, z: number, w: number, d: number, h: number, solid = true) => {
+    if (clear(x, z, w, d) && x >= x0 + 0.1 && z >= z0 + 0.1 && x + w <= x1 - 0.1 && z + d <= z1 - 0.1)
+      f(kind, x, z, w, d, h, solid);
+  };
+  /** desks in rows (a table, its chair behind, a screen on it), from `za` to `zb`, `dx` apart */
+  const desks = (za: number, zb: number, dx: number, dz: number, screens: boolean, w = 1.6) => {
+    for (let z = za; z + 1.6 < zb; z += dz)
+      for (let x = x0 + 1.0; x + w < x1 - 0.8; x += dx) {
+        if (Math.abs(x + w / 2 - xm) < 0.9 + w / 2) continue;
+        g("table", x, z, w, 0.8, 0.76);
+        g("chair", x + w / 2 - 0.35, z + 0.95, 0.7, 0.7, 0.9, false);
+        if (screens) g("screens", x + w / 2 - 0.2, z + 0.1, 0.4, 0.5, 1.2, false);
+      }
+  };
+  if (b.kind === "house" || b.kind === "townhouses") {
+    // a home: the living room west of the door, the kitchen east, a bed at the back
+    g("bookshelf", x0 + 0.4, z0 + 0.15, Math.min(2.2, W * 0.25), 0.5, 2.0);
+    g("sofa", x0 + 0.2, z0 + D * 0.3, 1.0, Math.min(3.0, D * 0.3), 0.85);
+    g("rug", x0 + 1.4, z0 + D * 0.25, Math.min(3.4, W * 0.3), Math.min(4, D * 0.4), 0.02, false);
+    g("coffee", x0 + 2.0, z0 + D * 0.35, 1.1, 1.4, 0.45);
+    g("armchair", x0 + Math.min(3.8, W * 0.35), z0 + D * 0.62, 1.1, 1.1, 0.9);
+    g("fireplace", x0 + 0.8, z1 - 0.8, 2.4, 0.8, 1.6);
+    g("counter", x1 - 0.9, z0 + 1.0, 0.8, Math.min(3.6, D * 0.35), 0.95);
+    g("stove", x1 - 0.9, z0 + 1.0 + Math.min(3.6, D * 0.35), 0.8, 0.9, 0.95);
+    g("fridge", x1 - 1.0, z0 + 2.1 + Math.min(3.6, D * 0.35), 0.9, 0.9, 2.0);
+    g("table", xm + W * 0.12, z0 + D * 0.4, 1.6, 1.4, 0.78);
+    g("chair", xm + W * 0.12 - 0.9, z0 + D * 0.4 + 0.35, 0.7, 0.7, 0.9, false);
+    g("chair", xm + W * 0.12 + 1.8, z0 + D * 0.4 + 0.35, 0.7, 0.7, 0.9, false);
+    g("bed", x1 - 2.5, z1 - 3.1, 2.2, 2.9, 0.6);
+    g("nightstand", x1 - 3.1, z1 - 1.0, 0.5, 0.5, 0.6);
+    g("wardrobe", xm, z1 - 0.7, 1.6, 0.6, 2.0);
+    g("plant", x0 + 0.3, z1 - 1.2, 0.6, 0.6, 1.2);
+    return { floor: "#9a7a58", fits };
+  }
+  if (b.kind === "church") {
+    // pews either side of the aisle, the altar and lectern at the back
+    g("altar", xm - 1.5, z1 - 2.4, 3, 1, 1.0);
+    g("lectern", xm + 2.2, z1 - 3.2, 0.7, 0.7, 1.2);
+    g("rug", xm - 0.8, z0 + 2.0, 1.6, D - 4.6, 0.02, false);
+    for (let z = z0 + 3.2; z < z1 - 4.4; z += 1.25) {
+      g("pew", x0 + 1.0, z, xm - 0.8 - (x0 + 1.0), 0.55, 0.95);
+      g("pew", xm + 0.8, z, x1 - 1.0 - (xm + 0.8), 0.55, 0.95);
+    }
+    return { floor: "#7a5a3c", fits };
+  }
+  if (b.kind === "office") {
+    g("counter", xm + 1.6, z0 + 1.0, 2.2, 0.8, 1.05);
+    g("plant", x0 + 0.3, z0 + 0.3, 0.6, 0.6, 1.3);
+    desks(z0 + 3.4, z1 - 0.6, 3.0, 2.6, true);
+    return { floor: "#8a8f92", fits };
+  }
+  if (b.kind === "school") {
+    g("board", x0 + W * 0.2, z1 - 0.2, W * 0.6, 0.1, 2.4, false);
+    g("desk", xm - 1, z1 - 2.6, 2, 0.9, 0.78);
+    desks(z0 + 3.0, z1 - 3.4, 1.6, 1.7, false, 1.1);
+    g("locker", x0 + 0.15, z0 + 0.5, 0.5, Math.min(6, D * 0.4), 1.8);
+    return { floor: "#b8a98c", fits };
+  }
+  if (b.kind === "police") {
+    g("counter", x0 + 1.0, z0 + 3.0, xm - 1.4 - x0 - 1.0, 0.8, 1.1);
+    g("counter", xm + 1.4, z0 + 3.0, x1 - 1.0 - xm - 1.4, 0.8, 1.1);
+    desks(z0 + 5.0, z1 - 4.2, 3.2, 2.6, true);
+    g("cell", x1 - 3.6, z1 - 3.6, 3.4, 3.4, 2.6);
+    g("locker", x0 + 0.15, z1 - 4.0, 0.55, 3.6, 1.9);
+    return { floor: "#9a9c98", fits };
+  }
+  if (b.kind === "fire") {
+    // the engines behind their doors (the bays either side of the door: building-styles.ts `block`, "bays")
+    const nb = Math.max(1, Math.floor((W / 2 - 1.8) / 4.6));
+    for (let i = 0; i < nb; i++)
+      for (const sg of [-1, 1]) {
+        const x = xm + sg * (1.8 + 2.3 + i * 4.6);
+        g("engine", x - 1.3, z0 + 1.2, 2.6, Math.min(8.5, D - 3), 3.0);
+      }
+    g("locker", x0 + 0.5, z1 - 0.7, Math.min(6, W * 0.4), 0.55, 1.9);
+    g("rack", x1 - 4.5, z1 - 0.6, 4, 0.45, 2.2);
+    return { floor: "#a8a69e", fits };
+  }
+  if (b.kind === "clinic") {
+    g("counter", x0 + 1.2, z0 + 2.8, Math.min(3, xm - 1.6 - x0 - 1.2), 0.8, 1.05);
+    for (let x = xm + 1.4; x + 0.7 < x1 - 0.6; x += 0.8) g("chair", x, z0 + 1.2, 0.7, 0.7, 0.9, false);
+    for (let x = x0 + 1.0; x + 0.9 < x1 - 0.8; x += 2.6) g("exam", x, z1 - 2.6, 0.9, 2.0, 0.8);
+    g("plant", x1 - 0.9, z0 + 0.3, 0.6, 0.6, 1.3);
+    return { floor: "#d8dcd8", fits };
+  }
+  if (b.kind === "library") {
+    g("desk", xm + 1.6, z0 + 1.2, 2.2, 0.9, 1.0);
+    for (let z = z0 + D * 0.5; z + 0.5 < z1 - 1.2; z += 2.2) {
+      g("bookshelf", x0 + 1.0, z, xm - 1.0 - x0 - 1.0, 0.5, 2.0);
+      g("bookshelf", xm + 1.0, z, x1 - 1.0 - xm - 1.0, 0.5, 2.0);
+    }
+    desks(z0 + 3.0, z0 + D * 0.5 - 0.4, 3.0, 2.4, false, 1.8);
+    g("bookshelf", x0 + 0.15, z0 + 1.0, 0.5, D * 0.4, 2.0);
+    return { floor: "#8a6a4a", fits };
+  }
+  if (b.kind === "apartments" || b.kind === "hotel") {
+    // a lobby: the desk (or the mailboxes) at the back, sofas and armchairs on a rug, plants
+    if (b.kind === "hotel") g("counter", xm - 2, z1 - 2.6, 4, 0.9, 1.1);
+    else g("locker", x0 + 0.15, z0 + 3, 0.5, Math.min(4, D * 0.4), 1.6);
+    g("rug", xm - 2.4, z0 + D * 0.35, 4.8, Math.min(4, D * 0.35), 0.02, false);
+    g("sofa", xm - 3.6, z0 + D * 0.4, 1.0, 2.6, 0.85);
+    g("sofa", xm + 2.6, z0 + D * 0.4, 1.0, 2.6, 0.85);
+    g("coffee", xm - 0.8, z0 + D * 0.45, 1.6, 1.0, 0.45);
+    g("armchair", xm - 0.55, z0 + D * 0.62, 1.1, 1.1, 0.9);
+    for (const x of [x0 + 0.3, x1 - 0.9]) g("plant", x, z0 + 0.3, 0.6, 0.6, 1.4);
+    if (b.kind === "hotel") g("plant", xm + 2.3, z1 - 1.0, 0.6, 0.6, 1.4);
+    return { floor: b.kind === "hotel" ? "#6b4a3a" : "#a89c88", fits };
+  }
+  if (b.kind === "warehouse" && b.key !== SKATE_HALL.key) {
+    for (let z = z0 + 4; z + 1 < z1 - 1; z += 3.2) {
+      g("rack", x0 + 1.2, z, xm - 1.6 - x0 - 1.2, 1.0, 3.2);
+      g("rack", xm + 1.6, z, x1 - 1.2 - xm - 1.6, 1.0, 3.2);
+    }
+    return { floor: "#8e8b85", fits };
+  }
+  if (b.kind === "shed" || b.kind === "boathouse") {
+    if (b.kind === "boathouse") g("boat", xm - 1.0, z0 + 2.8, 2.0, Math.min(5.2, D - 3.6), 1.0);
+    g("bench", x0 + 0.3, z1 - 1.1, Math.min(3, W * 0.35), 0.8, 0.95);
+    g("rack", x1 - 0.7, z0 + 2.8, 0.5, Math.min(4, D - 3.6), 2.0);
+    g("shelf", x0 + 0.2, z0 + 2.8, 0.6, Math.min(2.4, D - 4.2), 1.8);
+    return { floor: b.kind === "boathouse" ? "#7a6248" : "#8f8b83", fits };
+  }
+  if (b.kind === "bar") {
     // the counter along the back wall, stools before it, the bottles behind;
     // tables either side of the way in, the jukebox in the corner
     f("shelf", x0 + 2, z1 - 1, x1 - x0 - 4, 1, 2.2);
@@ -3271,7 +3509,7 @@ function fitsOf(b: Building): { floor: string; fits: Fit[] } {
   }
   // (the skate hall: its ramps are the skate's pieces, skate/parks.ts; only the pro shop's counter fitted, east of
   // the door — drawn with the hall, tools/art/skate-parks)
-  if (b.kind === "warehouse") {
+  if (b.key === SKATE_HALL.key) {
     f("counter", SKATE_SHOP.x, SKATE_SHOP.z, SKATE_SHOP.w, SKATE_SHOP.d, SKATE_SHOP.h);
     return { floor: "#8e8b85", fits };
   }
@@ -3297,6 +3535,10 @@ const insideBy = new Map<string, Inside>();
 /** How tall a building's walls stand over its ground (shapes/grounds.ts `shell`'s H: a test keeps
  *  them the same) — the ones you walk into and the blocks; a house's own is its look's, not here. */
 export function wallsHigh(b: Building): number {
+  if (b.key === SKATE_HALL.key) return SKATE_HALL.walls;
+  // (plan 110: a kit building's eaves, its layout's)
+  const L = layoutOf(b);
+  if (L) return L.eave;
   switch (b.kind) {
     case "gatehouse":
       return 2.6;
@@ -3325,8 +3567,16 @@ const FIT_TILES = new Set<string>();
 const WALL_EDGES = new Set<string>();
 function layInsides() {
   INSIDES.length = 0;
-  for (const b of BUILDINGS)
-    if (b.enter && !b.stored && b.kind !== "hq") INSIDES.push({ b, door: doorOf(b), ...fitsOf(b) });
+  // (plan 111: every kit building that can be walked into is, empty inside unless it's furnished — `enter`; the
+  // rest as before, walked into when they're furnished)
+  for (const b of BUILDINGS) {
+    if (b.stored || b.kind === "hq") continue;
+    const kit = isKit(b.kind) && !!layoutOf(b);
+    if (kit ? !KINDS[b.kind as keyof typeof KINDS].enter : !b.enter) continue;
+    const fy = kit ? Math.max(0, layoutOf(b)?.door.y ?? 0) : 0;
+    const furnished = b.enter ? fitsOf(b) : { floor: emptyFloor(b), fits: [] };
+    INSIDES.push({ b, door: doorOf(b), fy, ...furnished });
+  }
   insideBy.clear();
   for (const i of INSIDES) insideBy.set(i.b.key, i);
   FIT_TILES.clear();
@@ -3871,21 +4121,31 @@ export function applyEdits(next: GroundsEdits): [number, number][] {
 
 // ── the rule book (docs/plan/53-the-god-mode.md § A): what edits may do ─────
 /** The building kinds god mode puts down, and how big each may be (m a side). */
-export const PREFABS: Partial<Record<BuildingKind, { min: number; max: number; floors: number }>> = {
-  house: { min: 8, max: 20, floors: 3 },
-  shop: { min: 8, max: 24, floors: 3 },
-  bar: { min: 10, max: 24, floors: 2 },
-  diner: { min: 10, max: 24, floors: 1 },
-  hotel: { min: 14, max: 30, floors: 5 },
-  church: { min: 14, max: 30, floors: 1 },
-  barn: { min: 14, max: 32, floors: 2 },
-  farmhouse: { min: 10, max: 20, floors: 2 },
-  silo: { min: 6, max: 10, floors: 5 },
-  shed: { min: 6, max: 16, floors: 1 },
-  gas: { min: 14, max: 28, floors: 1 },
-  boathouse: { min: 8, max: 18, floors: 1 },
-  warehouse: { min: 16, max: 48, floors: 2 },
-};
+export const PREFABS: Partial<Record<BuildingKind, { min: number; max: number; floors: number; minFloors: number }>> =
+  Object.fromEntries(
+    KIT_KINDS.map((k) => [
+      k,
+      { min: KINDS[k].min, max: KINDS[k].max, floors: KINDS[k].floors[1], minFloors: KINDS[k].floors[0] },
+    ]),
+  );
+/** Why a building's look (its style, its colours, walked into or not) isn't one god mode allows, or null. */
+function lookFault(d: Partial<Building> & { kind: BuildingKind }): string | null {
+  if (!isKit(d.kind)) return null;
+  const kd = KINDS[d.kind];
+  if (d.style !== undefined && !kd.styles.some((s) => s.id === d.style)) return "not one of its kind's styles";
+  if (d.colours !== undefined) {
+    if (typeof d.colours !== "object" || d.colours === null) return "its colours";
+    const st = styleOf({ ...(d as Building), x0: d.x0 ?? 0, z0: d.z0 ?? 0 });
+    const pal = PALETTES[st?.pal ?? "clapboard"] as { walls: string[]; trim: string[]; roof: string[]; door: string[] };
+    for (const [k, v] of Object.entries(d.colours)) {
+      const allowed = (pal as Record<string, string[]>)[k];
+      if (!allowed) return `no colour ${k}`;
+      if (v !== undefined && !allowed.includes(v as string)) return `not one of its style's ${k} colours`;
+    }
+  }
+  if (d.enter && !kd.enter) return `a ${kd.name.toLowerCase()} isn't walked into`;
+  return null;
+}
 /** A boulder's or a planter's size, times its own; a sign's words; a fence's longest run (m). */
 export const THING_SIZE = { min: 0.5, max: 2 };
 export const SIGN_TEXT = 40;
@@ -4127,10 +4387,11 @@ export function checkEdits(e: GroundsEdits): string[] {
     if (![d.x0, d.z0, d.x1, d.z1].every(Number.isInteger)) no(`${d.key}: its corners on whole metres`);
     if (!(w >= p.min && w <= p.max && h >= p.min && h <= p.max))
       no(`${d.key}: a ${d.kind} is ${p.min}–${p.max} m a side`);
-    if (!(d.floors >= 1 && d.floors <= p.floors)) no(`${d.key}: a ${d.kind} has 1–${p.floors} floors`);
+    if (!(d.floors >= p.minFloors && d.floors <= p.floors))
+      no(`${d.key}: a ${d.kind} has ${p.minFloors}–${p.floors} floors`);
     if (!["n", "s", "e", "w"].includes(d.face)) no(`${d.key}: its door's side`);
-    else if (d.enter && !NATIVE_FACES[d.kind]?.includes(d.face))
-      no(`${d.key}: one you walk into has its door ${NATIVE_FACES[d.kind]?.join(" or ")} (its inside's)`);
+    const lf = lookFault(d);
+    if (lf) no(`${d.key}: ${lf}`);
     if (d.tint !== undefined && !(WALL_TINTS as readonly string[]).includes(d.tint))
       no(`${d.key}: not one of the walls' colours`);
     if (typeof d.name !== "string" || !d.name.trim() || d.name.length > 40) no(`${d.key}: a name, 40 at most`);
@@ -4155,10 +4416,20 @@ export function checkEdits(e: GroundsEdits): string[] {
     if (across) no(`${d.key}: on ${across}`);
     plots.push(d);
   }
-  // a generator's building moved: not onto what's anchored, nor onto another
+  // a generator's building changed: its look as god mode's are; moved, not onto what's anchored, nor onto another
   for (const [k, c] of Object.entries(e.buildings?.change ?? {})) {
     const base = BASE_BUILDINGS.find((b) => b.key === k);
-    if (!base || !c || !["x0", "z0", "x1", "z1"].some((f) => f in c)) continue;
+    if (!base || !c) continue;
+    {
+      const d = { ...base, ...c };
+      const lf = lookFault(d);
+      if (lf) no(`${k}: ${lf}`);
+      const p = PREFABS[d.kind];
+      if (p && ("floors" in c || "kind" in c) && !(d.floors >= p.minFloors && d.floors <= p.floors))
+        no(`${k}: a ${d.kind} has ${p.minFloors}–${p.floors} floors`);
+      if ("kind" in c && !p) no(`${k}: not a kind god mode builds`);
+    }
+    if (!["x0", "z0", "x1", "z1"].some((f) => f in c)) continue;
     const d = { ...base, ...c };
     if ([d.x0, d.z0, d.x1, d.z1].some((v) => !Number.isInteger(v))) no(`${k}: its corners on whole metres`);
     const hit = [

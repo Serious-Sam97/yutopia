@@ -319,6 +319,10 @@ export interface GodHud {
     enter: boolean;
     name: string;
     sign: string;
+    /** (plan 110) its style (null: seeded), its colours (each its style's palette's; none set: seeded), shut */
+    style: string | null;
+    colours: { walls?: string; trim?: string; roof?: string; door?: string };
+    vacant: boolean;
     sel: { key: string; locked: string | null } | null;
     blocked: string | null;
   };
@@ -706,6 +710,9 @@ const initial: HudState = {
       enter: false,
       name: "",
       sign: "",
+      style: null,
+      colours: {},
+      vacant: false,
       sel: null,
       blocked: null,
     },

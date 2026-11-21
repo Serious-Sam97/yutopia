@@ -219,7 +219,7 @@ test("god mode's parkour pieces on the Grounds: a rail to grind, walls to run, p
 });
 
 test("GroundsFlow: a big building's every face, whichever chunk its middle's in (the hall, books, hotel, church)", async () => {
-  const { BUILDINGS, terrainAt } = await import("../grounds.ts");
+  const { BUILDINGS, terrainAt, insideOf } = await import("../grounds.ts");
   const f = new GroundsFlow(at0);
   for (const key of ["hall", "books", "hotel", "church"]) {
     const b = BUILDINGS.find((u) => u.key === key);
@@ -237,6 +237,15 @@ test("GroundsFlow: a big building's every face, whichever chunk its middle's in 
     ]) {
       // (the church's steeple stands out of its south face, its door in the middle: west and north)
       if (key === "church" && uy === -1) continue;
+      // (its doorway: walked into, no wall there to run — plan 111)
+      const d = insideOf(b)?.door;
+      if (
+        d &&
+        (d.dir === "h"
+          ? Math.abs(z - d.at) < 1 && x >= d.from - 0.5 && x <= d.to + 0.5
+          : Math.abs(x - d.at) < 1 && z >= d.from - 0.5 && z <= d.to + 0.5)
+      )
+        continue;
       const w = f.wall(x, z, terrainAt(x, z), ux, uy, 0.55);
       assert.ok(w?.run, `${key} at (${x}, ${z})`);
     }

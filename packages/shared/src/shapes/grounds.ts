@@ -11,6 +11,7 @@
 // floors: phase 6, one building); the parking lot's islands and posts (the stored ground floor's,
 // lot.ts); every vehicle (the town's parked cars, the tractor, MOTORS' show: car/homes.ts boxes).
 
+import { layoutOf } from "../building-styles.ts";
 import {
   BENCH,
   BRIDGES,
@@ -51,18 +52,15 @@ import {
   paveSlabs,
   pierSize,
   pineVariant,
-  quarter,
   ROAD_CLOSED,
   SCARECROWS,
   SNOW_POLES,
   STATUE,
   STREET,
   standRoof,
-  steepleOf,
   TOWER,
   terrainAt,
   treesIn,
-  turnOf,
   WAYS,
   wallEdgeAt,
   wallsHigh,
@@ -278,331 +276,78 @@ function roofSteps(
   }
 }
 
-// ── the looks both views pick (world/grounds-look.ts, the client's: the same seeds, kept in step by
-// hand — a townhouse's kind sets its walls and roof, a shop's false front) ──
-function rngOf(seed: number) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-function houseLook(b: Building): { kind: 0 | 1 | 2; chimneyEnd: boolean; chimneyWest: boolean } {
-  const r = rngOf(b.z0 * 17 + b.x0 * 3 + 11);
-  const kind = Math.floor(r() * 3) as 0 | 1 | 2;
-  r(); // (its wall's colour)
-  r(); // (its shutters')
-  const chimneyEnd = r() < 0.5;
-  r(); // (its windows' seed)
-  return { kind, chimneyEnd, chimneyWest: r() < 0.5 };
-}
-const houseKind = (b: Building) => houseLook(b).kind;
-function falseFront(b: Building): boolean {
-  const civic = b.key === "hall" || b.key === "post";
-  const diner = b.kind === "diner";
-  const brick = !civic && !diner && rngOf(b.x0 * 7919 + b.z0 * 31 + 7)() < 0.6;
-  return !civic && !diner && (!brick || b.floors === 1);
-}
-
-// ── the buildings ──
+// ── the buildings (plan 110: a kit building's solids are its layout's — building-styles.ts; the HQ's and the
+// blocks' their own) ──
 /** How tall a building's walls are outside, over its ground (`groundAt` of its plot's middle). */
-export const shellHeight = (b: Building): number => shell(b).H;
-/** How tall its walls are outside and what's over them. */
-function shell(b: Building): { H: number; roof: (out: GroundSolid[], y0: number) => void } {
-  const { x0, z0, x1, z1 } = b;
-  switch (b.kind) {
-    case "gatehouse":
-      return {
-        H: 2.6,
-        roof: (o, y) => o.push({ what: "roof", s: flat(x0 - 0.6, z0 - 0.6, x1 + 0.6, z1 + 0.6, y + 2.6, y + 2.95) }), // (bare: its snow the weather's)
-      };
-    case "boathouse":
-      return { H: 3.2, roof: (o, y) => pitched(o, x0, z0, x1, z1, y + 3.2, 2.4, true, 0.5) };
-    case "shed":
-      return {
-        H: 4,
-        roof: (o, y) => o.push({ what: "roof", s: flat(x0 - 0.4, z0 - 0.4, x1 + 0.4, z1 + 0.4, y + 3.95, y + 4.15) }), // (bare)
-      };
-    case "house": {
-      const k = houseKind(b);
-      const H = k === 2 ? 4.2 : 6.4;
-      const rise = k === 2 ? 4.4 : k === 1 ? 3.6 : 2.6;
-      return { H, roof: (o, y) => pitched(o, x0, z0, x1, z1, y + H, rise, k === 1, 0.45) };
-    }
-    case "church":
-      return { H: 6, roof: (o, y) => pitched(o, x0, z0, x1, z1, y + 6, 6, false, 0.5) };
-    case "barn":
-      // (a gambrel, as tp/grounds3d.ts `barn` draws it: its eaves 0.35 under the walls' top 0.6 out,
-      // 2.8 over it at the knees 3.2 in, the ridge 4.2)
-      return {
-        H: 5.2,
-        roof: (o, y) =>
-          roofSteps(o, x0, z0, x1, z1, true, [
-            [z0 - 0.6, y + 5.2 - 0.35],
-            [z0 + 3.2, y + 5.2 + 2.8],
-            [(z0 + z1) / 2, y + 5.2 + 4.2],
-            [z1 - 3.2, y + 5.2 + 2.8],
-            [z1 + 0.6, y + 5.2 - 0.35],
-          ]),
-      };
-    case "farmhouse":
-      return { H: 6.2, roof: (o, y) => pitched(o, x0, z0, x1, z1, y + 6.2, 3, true, 0.55) };
-    case "warehouse":
-      // (a shallow gable, its ridge along x, as tp/grounds3d.ts `warehouse` draws it: 1.6 over the walls, 0.4 out)
-      return { H: wallsHigh(b), roof: (o, y) => pitched(o, x0, z0, x1, z1, y + wallsHigh(b), 1.6, true, 0.4) };
-    default: {
-      // the shops (the diner, the bar, the hotel too): 3.8 a floor and a parapet's 0.8
-      const H = b.floors * 3.8 + 0.8;
-      // (and the snow drawn on it, 0.29–0.44 deep: stood on its top, flush on the walls' — a run up a
-      // face goes on to it)
-      return {
-        H,
-        roof: (o, y) => {
-          o.push({ what: "roof", s: flat(x0, z0, x1, z1, y + H - 0.3, y + H) });
-          o.push({ what: "roof", s: flat(x0, z0, x1, z1, y + H, y + H + 0.3) });
-        },
-      };
-    }
-  }
-}
+export const shellHeight = (b: Building): number => wallsHigh(b);
+/** What's over a building's walls, past them, under the snow: AWNING_IN is how far from a wall's face what
+ *  reaches out over the pavement is open (a run up the face goes on up past it); HEAD_ROOM the room under it. */
+export const AWNING_IN = 0.6;
+export const HEAD_ROOM = 2.2;
 
 function building(out: GroundSolid[], b: Building) {
-  // (turned: made as its builder draws it, then turned about its plot's middle — grounds.ts turnOf)
-  const t = turnOf(b);
-  if (t.k) {
-    const mine: GroundSolid[] = [];
-    building(mine, t.b);
-    const cx = (b.x0 + b.x1) / 2;
-    const cz = (b.z0 + b.z1) / 2;
-    for (const g of mine) {
-      const [x, z] = quarter(g.s.x, g.s.z, cx, cz, t.k);
-      out.push({ ...g, s: g.s.t === "box" ? { ...g.s, x, z, a: g.s.a + (t.k * Math.PI) / 2 } : { ...g.s, x, z } });
-    }
-    return;
-  }
   const { x0, z0, x1, z1 } = b;
   const y0 = groundAt((x0 + x1) / 2, (z0 + z1) / 2);
   const inside = INSIDES.find((i) => i.b === b);
-  if (b.kind === "shelter") {
-    // the bus shelter: open to the street (south), glass back and sides, a roof on posts
-    out.push({ what: "building", s: flat(x0, z0 - 0.05, x1, z0 + 0.05, y0, y0 + 2.5) });
-    for (const x of [x0, x1]) out.push({ what: "building", s: flat(x - 0.05, z0, x + 0.05, z1 - 1, y0, y0 + 2.5) });
-    out.push({ what: "roof", s: flat(x0 - 0.3, z0 - 0.3, x1 + 0.3, z1 + 0.3, y0 + 2.5, y0 + 2.7) }); // (bare)
+  const L = layoutOf(b);
+  if (!L) {
+    // the HQ and the blocks: their walls and a flat top; the skate hall (Blender's): its walls and a shallow
+    // gable along x, 1.6 over them, 0.4 out (docs/plan/104)
+    const hall = b.kind === "warehouse";
+    const H = hall ? wallsHigh(b) : b.floors * 3.8 + 0.8;
+    if (inside) insideWalls(out, inside, y0, H);
+    else out.push({ what: "building", s: flat(x0, z0, x1, z1, y0, y0 + H) });
+    if (hall) pitched(out, x0, z0, x1, z1, y0 + H, 1.6, true, 0.4);
+    else out.push({ what: "roof", s: flat(x0, z0, x1, z1, y0 + H - 0.3, y0 + H) });
+    if (inside) for (const f of inside.fits) fit(out, f, y0);
     return;
   }
-  if (b.kind === "silo") {
-    const R = Math.min(x1 - x0, z1 - z0) / 2 - 0.2;
-    out.push({ what: "building", s: cyl((x0 + x1) / 2, (z0 + z1) / 2, R + 0.45, y0, y0 + 13 + R * 0.5) });
-    return;
-  }
-  if (b.kind === "gas") {
-    // the kiosk at the back; its forecourt: the islands, the pumps, the canopy on four posts
-    // (any gas station's: its own islands and posts, where they're drawn — the town's are these)
-    // (the snow drawn on its roof and on the canopy's: tp/snow3d.ts flatSnow 0.32, 0.27 over the
-    // middle, less at the edges — stood on, not sunk into; the other flat roofs' too, 0.85 of theirs)
-    const SNOW = 0.25;
-    out.push({ what: "building", s: flat(x0 + 2, z1 - 6, x0 + 12, z1, y0, y0 + 3.2) });
-    out.push({ what: "roof", s: flat(x0 + 2, z1 - 6, x0 + 12, z1, y0 + 3.2, y0 + 3.2 + SNOW) });
-    for (const x of [x0 + 7, x1 - 7])
-      out.push({ what: "forecourt", s: flat(x - 0.6, z0 + 3.2, x + 0.6, z0 + 6.8, y0, y0 + 0.3) });
-    for (const x of [x0 + 7, x1 - 7])
-      for (const z of [z0 + 4.5, z0 + 5.5])
-        out.push({ what: "forecourt", s: flat(x - 0.37, z - 0.32, x + 0.37, z + 0.32, y0, y0 + 1.92) });
-    for (const x of [x0 + 3, x1 - 3])
-      for (const z of [z0 + 2, z0 + 8])
-        out.push({ what: "forecourt", s: flat(x - 0.25, z - 0.25, x + 0.25, z + 0.25, y0, y0 + 4.6) });
-    out.push({ what: "roof", s: flat(x0 + 1, z0, x1 - 1, z0 + 10, y0 + 4.6, y0 + 5.4 + SNOW) });
-    return;
-  }
-  const { H, roof } = shell(b);
-  if (inside) insideWalls(out, inside, y0, H);
-  else out.push({ what: "building", s: flat(x0, z0, x1, z1, y0, y0 + H) });
-  roof(out, y0);
-  if (b.kind === "church") {
-    // the steeple, south of the nave (out past its plot: grounds.ts steepleOf, walking's too): the
-    // tower, its belfry and roof, the spire
-    const t = steepleOf(b);
-    out.push({ what: "building", s: flat(t.x0, t.z0, t.x1, t.z1, y0, y0 + 13.4) });
-    out.push({ what: "building", s: cyl((t.x0 + t.x1) / 2, z1 + 0.75, 0.9, y0 + 13.4, y0 + 21.6) });
-    // the door's three steps up its face (tp/grounds3d.ts `church`: 0.15 each, 4 m across narrowing
-    // 0.15 a side, 1.4 deep less 0.4 a step)
-    const xm = (x0 + x1) / 2;
-    const sz1 = z1 + 2.5;
-    for (let k = 0; k < 3; k++)
-      out.push({
-        what: "porch",
-        s: flat(xm - 2 + k * 0.15, sz1, xm + 2 - k * 0.15, sz1 + 1.4 - k * 0.4, y0 - 0.2, y0 + 0.15 * (k + 1)),
-      });
-  }
-  if (["shop", "bar", "diner", "hotel"].includes(b.kind) && falseFront(b)) {
-    // the false front: its face's wall standing 1.4 over the roof, flush with the face (drawn 0.25
-    // thick inward: tp/grounds3d.ts) — one face with the wall under it, run up to its top
-    // (one you walk into: its walls 0.2 thick on its edges, the face 0.1 out)
-    const o = inside ? 0.1 : 0;
-    const [f0, f1] = b.face === "n" ? [z0 - o, z0 + 0.25] : [z1 - 0.25, z1 + o];
-    out.push({ what: "building", s: flat(x0, f0, x1, f1, y0 + H, y0 + H + 1.4) });
-  }
-  if (["shop", "bar", "diner", "hotel"].includes(b.kind)) shopFront(out, b, y0);
-  if (b.kind === "house") houseFront(out, b, y0, H);
-  if (inside) for (const f of inside.fits) fit(out, f, y0);
-}
-
-// ── what's on a building's face (tp/grounds3d.ts `shop`, `civicFront`, `house`: their numbers) ──
-// What reaches out over a pavement (an awning, a canopy, a marquee, a porch's roof) is solid from
-// AWNING_IN out from the wall's face to its edge: the strip by the wall open (a run up the face goes
-// on up past it), its top the drawn surface's, its bottom no lower than the drawn underside or the
-// valance — and HEAD_ROOM over the ground (the pavement) under it.
-/** How far from a wall's face what reaches out over the pavement is open. */
-export const AWNING_IN = 0.6;
-/** The room under anything walked under (a head, a hat). */
-export const HEAD_ROOM = 2.2;
-
-/** A shop's front: its awning (a striped or plain one: not the diner's, nor the hotel's), the hotel's
- *  marquee on its two posts and its blade sign; the town hall's and the post office's steps, the
- *  hall's columns under its entablature and pediment, the post office's canopy. None boarded. */
-function shopFront(out: GroundSolid[], b: Building, y0: number) {
-  if (b.vacant) return;
-  const { x0, z0, x1, z1 } = b;
-  const nz = b.face === "n" ? -1 : 1;
-  const fz = b.face === "n" ? z0 : z1;
-  const xm = (x0 + x1) / 2;
-  /** across from `a` to `c` out from the face */
-  const Z = (a: number, c: number): [number, number] => {
-    const p = fz + nz * a;
-    const q = fz + nz * c;
-    return [Math.min(p, q), Math.max(p, q)];
-  };
-  const box = (what: GroundWhat, xa: number, xb: number, da: number, db: number, ya: number, yb: number) => {
-    const [za, zb] = Z(da, db);
-    out.push({ what, s: flat(xa, za, xb, zb, y0 + ya, y0 + yb) });
-  };
-  if (b.key === "hall" || b.key === "post") {
-    // three steps up to the door (each 0.2: 5.2 across narrowing 0.2 a side, 1.6 deep less 0.45 a step)
-    for (let k = 0; k < 3; k++)
-      box("porch", xm - 2.6 + k * 0.2, xm + 2.6 - k * 0.2, 0, 1.6 - k * 0.45, -0.2, 0.2 * (k + 1));
-    if (b.key === "hall") {
-      // four columns 2.2 out (0.2–0.24 round, their plinths at 0.6, capitals to 4.35), the entablature
-      // over them (6.4 across, 2.6 out, 4.35–4.8), the pediment on it (its slopes from 4.8 at 3.3 either
-      // side to 6.3 at the middle: in steps, under it — bare, its snow the weather's)
-      for (const sx of [-2.4, -0.8, 0.8, 2.4])
-        out.push({ what: "building", s: cyl(xm + sx, fz + nz * 2.2, 0.22, y0 + 0.6, y0 + 4.35) });
-      box("building", xm - 3.2, xm + 3.2, 0, 2.6, 4.35, 4.8);
-      const [za, zb] = Z(0, 2.6);
+  for (const so of L.solids) {
+    if ("h" in so) {
+      if (inside) insideWalls(out, inside, y0, so.h);
+      continue;
+    }
+    // (its main mass: walls round its inside when it's walked into, else solid)
+    if (so.what === "mass") {
+      if (!inside && "box" in so)
+        out.push({
+          what: "building",
+          s: flat(so.box[0], so.box[1], so.box[2], so.box[3], y0 + so.box[4], y0 + so.box[5]),
+        });
+      continue;
+    }
+    if ("box" in so)
+      out.push({ what: so.what, s: flat(so.box[0], so.box[1], so.box[2], so.box[3], y0 + so.box[4], y0 + so.box[5]) });
+    else if ("cyl" in so)
+      out.push({ what: so.what, s: cyl(so.cyl[0], so.cyl[1], so.cyl[2], y0 + so.cyl[3], y0 + so.cyl[4]) });
+    else {
+      const st = so.steps;
       roofSteps(
         out,
-        xm - 3.3,
-        za,
-        xm + 3.3,
-        zb,
-        false,
-        [
-          [xm - 3.3, y0 + 4.8],
-          [xm, y0 + 6.3],
-          [xm + 3.3, y0 + 4.8],
-        ],
-        "building",
-        0,
+        st.x0,
+        st.z0,
+        st.x1,
+        st.z1,
+        st.alongX,
+        st.prof.map(([c, y]) => [c, y0 + y] as [number, number]),
+        so.what,
       );
-    } else {
-      // the flat canopy over the door: 3.2 across, 1.4 out, 3.75–3.95 (bare)
-      box("awning", xm - 1.55, xm + 1.55, AWNING_IN, 1.4, 3.75, 3.95);
     }
-    return;
   }
-  if (b.kind === "diner") return;
-  if (b.kind === "hotel") {
-    // the marquee over its door: 4.8 across, 3 out, 3.1–3.45 (bare); its two
-    // brass posts at 2.85 out (0.12 square, to its underside)
-    box("awning", xm - 2.35, xm + 2.35, AWNING_IN, 2.95, 3.1, 3.45);
-    for (const sx of [-2.2, 2.2]) out.push({ what: "building", s: cyl(xm + sx, fz + nz * 2.85, 0.06, y0, y0 + 3.1) });
-    // its blade sign at the corner (grounds3d.ts `signBoard`: 1.2 across the street's way, 4 tall from
-    // 3.5, 0.08 thick, on two legs 0.12 square 0.4 either side of its middle), on the ground there
-    const bx = x1 + 0.2;
-    const bz = fz + nz * 1.2;
-    const yg = groundAt(bx, bz);
-    out.push({ what: "street", s: flat(bx - 0.04, bz - 0.6, bx + 0.04, bz + 0.6, yg + 3.5, yg + 7.5) });
-    for (const s of [-0.4, 0.4])
-      out.push({ what: "street", s: flat(bx - 0.06, bz + s - 0.06, bx + 0.06, bz + s + 0.06, yg, yg + 7.5) });
-    return;
+  if (inside) {
+    // (its floor a slab up to its door's sill — the plinth kept: plan 111)
+    if (inside.fy > 0.02)
+      out.push({ what: "porch", s: flat(x0 + 0.06, z0 + 0.06, x1 - 0.06, z1 - 0.06, y0, y0 + inside.fy) });
+    for (const f of inside.fits) fit(out, f, y0 + inside.fy);
   }
-  // the awning: from 3.5 at the wall to 2.9 at 1.6 out, its valance down to 2.62, 0.6 in from either
-  // end — in AWNING_STEPS strips out, each as high as its outer edge
-  const at = (d: number) => 3.5 - (0.6 * d) / 1.6;
-  for (let k = 0; k < AWNING_STEPS; k++) {
-    const db = AWNING_IN + ((1.6 - AWNING_IN) * (k + 1)) / AWNING_STEPS;
-    box("awning", x0 + 0.6, x1 - 0.6, AWNING_IN + ((1.6 - AWNING_IN) * k) / AWNING_STEPS, db, 2.62, at(db));
-  }
-}
-const AWNING_STEPS = 3;
-
-/** A townhouse's front (tp/grounds3d.ts `house`): its porch — the deck (0.5, 1.6 out), the step
- *  before it (0.25, 0.5 more), the posts, the railing (a front gable's, either side of the steps),
- *  its roof (2.75–2.9, 1.8 out) —, the dormer (a storey and a half's), the chimney, the mailbox. */
-function houseFront(out: GroundSolid[], b: Building, y0: number, H: number) {
-  const { x0, z0, x1, z1 } = b;
-  const L = houseLook(b);
-  const front = L.kind === 1;
-  const rise = L.kind === 2 ? 4.4 : L.kind === 1 ? 3.6 : 2.6;
-  const nx = b.face === "e" ? 1 : -1;
-  const fx = b.face === "e" ? x1 : x0;
-  const zm = (z0 + z1) / 2;
-  /** out from the face from `a` to `c` */
-  const X = (a: number, c: number): [number, number] => {
-    const p = fx + nx * a;
-    const q = fx + nx * c;
-    return [Math.min(p, q), Math.max(p, q)];
-  };
-  const box = (what: GroundWhat, da: number, db: number, za: number, zb: number, ya: number, yb: number) => {
-    const [xa, xb] = X(da, db);
-    out.push({ what, s: flat(xa, za, xb, zb, y0 + ya, y0 + yb) });
-  };
-  const pz0 = front ? z0 + 0.4 : zm - 1.6;
-  const pz1 = front ? z1 - 0.4 : zm + 1.6;
-  box("porch", 0, 1.6, pz0 + 0.2, pz1 - 0.2, -0.2, 0.5);
-  box("porch", 1.6, 2.1, zm - 0.7, zm + 0.7, -0.2, 0.25);
-  box("porch", AWNING_IN, 1.8, pz0, pz1, 2.75, 2.9);
-  for (const z of front ? [pz0 + 0.2, zm - 1.2, zm + 1.2, pz1 - 0.2] : [pz0 + 0.2, pz1 - 0.2])
-    box("porch", 1.52, 1.68, z - 0.08, z + 0.08, 0.5, 2.75);
-  // (one thin box a railing: its balusters and its top rail, 1.45)
-  if (front)
-    for (const [za, zb] of [
-      [pz0 + 0.2, zm - 1.2],
-      [zm + 1.2, pz1 - 0.2],
-    ])
-      box("porch_rail", 1.55, 1.65, za, zb, 0.5, 1.45);
-  if (L.kind === 2) {
-    // the dormer: 2.2 across, from 2.6 in to 0.3 out past the face, its walls to 2.2 over the eaves,
-    // its own little roof on them (0.9 up, 0.2 over its sides)
-    box("building", -2.6, 0.3, zm - 1.1, zm + 1.1, H, H + 2.2);
-    const [xa, xb] = X(-2.6, 0.3);
-    roofSteps(out, xa, zm - 1.1, xb, zm + 1.1, true, [
-      [zm - 1.3, y0 + H + 2.2],
-      [zm, y0 + H + 3.1],
-      [zm + 1.3, y0 + H + 2.2],
-    ]);
-  }
-  // the chimney at one end of the ridge (a front gable's 2 in from a side), 0.8 over the ridge; its cap
-  {
-    const cz = L.chimneyEnd ? z0 + 1.6 : z1 - 1.6;
-    const cx = front ? (L.chimneyWest ? x0 + 2 : x1 - 2) : (x0 + x1) / 2;
-    const top = y0 + H + rise + 0.8;
-    out.push({ what: "building", s: flat(cx - 0.4, cz - 0.35, cx + 0.4, cz + 0.35, y0 + H, top) });
-    out.push({ what: "building", s: flat(cx - 0.48, cz - 0.43, cx + 0.48, cz + 0.43, top, top + 0.15) });
-  }
-  // the mailbox at the pavement: its post (1.1) and box (to 1.38; bare)
-  const mz = z1 - 0.5;
-  box("street", 1.85, 1.95, mz - 0.05, mz + 0.05, 0, 1.1);
-  box("street", 1.68, 2.12, mz - 0.25, mz + 0.25, 1.1, 1.38);
 }
 
 /** One you walk into: a wall on each of its wall edges (grounds.ts `wallEdgeAt`) as tall as its
  *  walls outside, the doorway open to its head, over it the rest. */
 function insideWalls(out: GroundSolid[], i: Inside, y0: number, H: number) {
   const { b, door } = i;
-  const doorH = b.kind === "barn" || b.kind === "warehouse" ? 2.8 : 2.4;
+  // (the doorway's head over its sill: the floor raised to it — plan 111)
+  const doorH = (b.kind === "barn" || b.kind === "warehouse" ? 2.8 : 2.4) + (i.fy ?? 0);
   const t = WALL_T / 2;
   const wall = (dir: "h" | "v", x: number, z: number, lo: number) =>
     out.push({

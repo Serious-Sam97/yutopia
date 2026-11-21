@@ -65,7 +65,7 @@ def _quantize_exporter():
     C._q2 = True
 
 
-def export(path, root, depth=0):
+def export(path, root, depth=0, uvs=True):
     _quantize_exporter()
     for o in bpy.data.objects:
         o.select_set(False)
@@ -83,6 +83,7 @@ def export(path, root, depth=0):
         export_morph_normal=False,
         export_apply=False,
         export_image_format="NONE",
+        export_texcoords=uvs,
     )
     return os.path.getsize(path)
 

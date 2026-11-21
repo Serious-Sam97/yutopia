@@ -52,6 +52,8 @@
     "./grounds-bridges": "./src/grounds-bridges.ts",
     "./grounds-things": "./src/grounds-things.ts",
     "./grounds-buildings": "./src/grounds-buildings.ts",
+    "./building-kit": "./src/building-kit.ts",
+    "./building-styles": "./src/building-styles.ts",
     "./lot": "./src/lot.ts",
     "./spot": "./src/spot.ts",
     "./route": "./src/route.ts",

@@ -2,11 +2,12 @@
 import { expect, type Page } from "@playwright/test";
 import { ANA, clearDrafts, enter, holdHour, makeDraft, test, token, useWorld } from "./helpers";
 
-// God mode, phase 9 (docs/plan/53-the-god-mode.md): buildings, on Low on the dev stack, in the
-// farm's field. A house put down from the panel (its name, its walls sage): on its plot, a floor
-// under it, solid; turned a quarter with R (its sides swapped, its door round); dragged 8 m; made
-// one you walk into (its generated inside). One put on the farmhouse is refused. Taken away with
-// Delete. Nothing's published: the draft's deleted. Stills: YUTOPIA_SHOTS=<dir>.
+// God mode, phase 9 (docs/plan/53-the-god-mode.md; plan 110): buildings, on Low on the dev stack, in the
+// farm's field. A house put down from the panel (its style a cape, its walls from the cape's palette, its name):
+// on its plot, a floor under it, solid, drawn by the kit; turned a quarter with R (its sides swapped, its door
+// round); dragged 8 m; made one you walk into on any side (its furnished inside); its kind changed in place to a
+// shop; sized by its corner. One put on the farmhouse is refused. Taken away with Delete. Nothing's published:
+// the draft's deleted. Stills: YUTOPIA_SHOTS=<dir>.
 const GPU = process.env.YUTOPIA_GPU === "1";
 const SHOTS = process.env.YUTOPIA_SHOTS;
 if (GPU || SHOTS)
@@ -76,11 +77,29 @@ test("God mode's buildings: a house put down, turned, moved, walked into; refuse
   await page.evaluate(() =>
     (window as any).__yutopia.god.buildingsTool().setOpts({ w: 12, d: 10, floors: 2, face: "e" }),
   );
-  await page.getByRole("button", { name: "Walls 2" }).click();
+  await page.locator('[data-style="cape"]').click();
+  await page.locator('[data-colour="#a39279"]').first().click();
   await clickAt(page, FIELD.x, FIELD.z);
   await expect.poll(() => mine(page).then((b) => b?.kind), { timeout: 5000 }).toBe("house");
   let b = await mine(page);
-  expect([b.x1 - b.x0, b.z1 - b.z0, b.tint, b.face]).toEqual([12, 10, "#9fb5a2", "e"]);
+  expect([b.x1 - b.x0, b.z1 - b.z0, b.style, b.colours?.walls, b.face]).toEqual([12, 10, "cape", "#a39279", "e"]);
+  // (drawn by the kit: a cell of its batches near it)
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          ([x, z]) => {
+            let n = 0;
+            (window as any).__yutopia.tp.scene.traverse((o: any) => {
+              if (o.name?.startsWith("kit-cell:") && Math.hypot(o.position.x - x, o.position.z - z) < 64) n++;
+            });
+            return n;
+          },
+          [FIELD.x, FIELD.z],
+        ),
+      { timeout: 20_000 },
+    )
+    .toBeGreaterThan(0);
   await page.getByRole("textbox").first().fill("Pine House");
   await page.getByRole("textbox").first().press("Enter");
   await expect.poll(() => mine(page).then((x) => x?.name)).toBe("Pine House");
@@ -107,17 +126,33 @@ test("God mode's buildings: a house put down, turned, moved, walked into; refuse
   await page.mouse.up();
   await expect.poll(() => mine(page).then((x) => x.x0), { timeout: 5000 }).toBeGreaterThan(b.x0 + 5);
 
-  // picked, made one you walk into: its door round to one its inside has; its inside there
+  // picked, made one you walk into: on any side (plan 110), its inside there
   b = await mine(page);
   await clickAt(page, (b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
   await expect.poll(() => god(page).then((g) => g.buildings.sel?.key)).toBe(b.key);
-  await page.getByRole("button", { name: "Enterable" }).click();
-  await expect.poll(() => mine(page).then((x) => [x.enter, ["e", "w"].includes(x.face)])).toEqual([true, true]);
+  await page.getByRole("button", { name: "Furnished" }).click();
+  await expect.poll(() => mine(page).then((x) => [x.enter, x.face])).toEqual([true, "s"]);
   await expect
     .poll(() => page.evaluate((k) => (window as any).__yutopia.G.INSIDES.some((i: any) => i.b.key === k), b.key))
     .toBe(true);
   await page.waitForTimeout(2500);
   await shot(page, "13-house-moved");
+
+  // its kind changed where it stands: a shop (its style its own kind's), then sized by its corner
+  await page.locator('[data-kind="shop"]').click();
+  await expect
+    .poll(() => mine(page).then((x) => [x.kind, x.x0, x.z0, x.style ?? null]))
+    .toEqual(["shop", b.x0, b.z0, null]);
+  b = await mine(page);
+  const c0 = await toScreen(page, b.x1 - 0.3, b.z1 - 0.3);
+  const c1 = await toScreen(page, b.x1 + 3.7, b.z1 - 0.3);
+  await page.mouse.move(c0.x, c0.y);
+  await page.mouse.down();
+  for (let i = 1; i <= 6; i++) await page.mouse.move(c0.x + ((c1.x - c0.x) * i) / 6, c0.y + ((c1.y - c0.y) * i) / 6);
+  await page.mouse.up();
+  await expect.poll(() => mine(page).then((x) => x.x1 - x.x0), { timeout: 5000 }).toBe(b.x1 - b.x0 + 4);
+  await page.waitForTimeout(2000);
+  await shot(page, "14-shop-sized");
 
   // on the farmhouse: refused
   const farm = await page.evaluate(() =>

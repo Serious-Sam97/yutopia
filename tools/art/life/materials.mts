@@ -616,7 +616,161 @@ const foliage: Pattern = (u, v) => {
   return { c: bc, h: best < 0 ? 0 : bh, r: best < 0 ? 1 : 0.7 };
 };
 
+// ── plan 110: the buildings' skins and roofs ─────────────────────────────────────────────────────
+// (v runs up a wall and up a roof's slope: row 0 at v 0, the foot)
+const clapboardP: Pattern = (u, v) => {
+  // ten boards a 1.1 m repeat, each lapping the one below: thickest at its foot, its shadow on the board under it
+  const N = 10;
+  const y = v * N;
+  const row = Math.floor(y);
+  const f = y - row;
+  const grain = (fbm(u, v * N, 3, 22, 3, 201 + row) - 0.5) * 0.06;
+  // (the foot's edge a hair round; the shade the board above casts just over it)
+  const lap = smooth(0.0, 0.06, f);
+  const k = 0.93 + grain - (1 - smooth(0.0, 0.12, f)) * 0.22;
+  return {
+    c: grey(clamp(k * (0.97 + (hash(row, 0, 205) - 0.5) * 0.04))),
+    h: clamp(0.15 + 0.75 * (1 - f) * lap),
+    r: 0.85 + grain,
+  };
+};
+const shingleWallP: Pattern = (u, v) => {
+  // ten courses of 14 cm, shingles 9–25 cm wide, each thicker at its foot, a dark slot between
+  const N = 10;
+  const y = v * N;
+  const row = Math.floor(y);
+  const f = y - row;
+  let x = u * 8 + hash(row, 1, 211) * 3;
+  let i = 0;
+  let w = 0.6 + hash(row, 0, 212) * 1.2;
+  while (x > w) {
+    x -= w;
+    i++;
+    w = 0.6 + hash(row * 31 + i, 2, 213) * 1.2;
+  }
+  const gap = smooth(0.0, 0.05, Math.min(x, w - x));
+  const tone = (hash(row * 31 + i, 3, 214) - 0.5) * 0.16;
+  const grain = (fbm(u * 4, v, 40, 6, 2, 215) - 0.5) * 0.08;
+  const k = (0.86 + tone + grain) * (0.55 + 0.45 * gap) * (1 - (1 - smooth(0.0, 0.1, f)) * 0.3);
+  return { c: grey(clamp(k)), h: clamp((0.2 + 0.7 * (1 - f)) * gap), r: 0.95 };
+};
+const battenP: Pattern = (u, v) => {
+  // boards 30 cm (six a 1.8 m repeat), a batten 6 cm over each seam
+  const x = u * 6;
+  const i = Math.floor(x);
+  const f = x - i;
+  const d = Math.min(f, 1 - f);
+  const batten = 1 - smooth(0.085, 0.105, d);
+  const grain = (fbm(u * 6, v, 4, 30, 3, 221 + i) - 0.5) * 0.1;
+  const k =
+    0.88 + grain + (hash(i, 0, 222) - 0.5) * 0.06 + batten * 0.04 - (1 - smooth(0.0, 0.02, Math.abs(d - 0.1))) * 0.25;
+  return { c: grey(clamp(k)), h: clamp(0.35 + batten * 0.5 + grain), r: 0.9 };
+};
+const stuccoP: Pattern = (u, v) => {
+  const m = fbm(u, v, 6, 6, 5, 231);
+  const fine = fbm(u, v, 120, 120, 2, 232);
+  return {
+    c: grey(clamp(0.9 + (m - 0.5) * 0.08 + (fine - 0.5) * 0.06)),
+    h: clamp(0.5 + (fine - 0.5) * 0.6 + (m - 0.5) * 0.2),
+    r: 1,
+  };
+};
+const STONES = [0x8f877b, 0x9c9384, 0x7d776d, 0xa69c8c, 0x8a8172, 0x6f6a62, 0xa89f90].map(hex);
+const fieldstoneP: Pattern = (u, v) => {
+  // rounded stones laid in courses, mortar between them deep
+  const c = cells(u, v, 7, 241, 0.75);
+  const stone = smooth(0.1, 0.22, c.f2 - c.f1);
+  const dome = Math.sqrt(clamp(smooth(0.06, 0.3, c.f2 - c.f1)));
+  const base = STONES[Math.floor(hash(c.id, 0, 242) * STONES.length)];
+  const grain = (fbm(u, v, 30, 30, 3, 243) - 0.5) * 0.18;
+  const lit = clamp(0.5 + c.dy * 1.4);
+  const sc = mul3(base, 0.72 + grain + lit * 0.3 + dome * 0.12);
+  const mortar = mul3(hex(0x9a938a), 0.85 + (fbm(u, v, 50, 50, 2, 244) - 0.5) * 0.2);
+  return { c: mix3(mortar, sc, stone), h: clamp(0.1 + stone * 0.3 + dome * 0.6), r: mix(1, 0.85, stone) };
+};
+const limestoneP: Pattern = (u, v) => {
+  // ashlar: blocks 60 × 30 cm (four courses of eight a 2.4 m repeat, half bond), fine joints, a chiselled face
+  const rows = 8;
+  const per = 4;
+  const y = v * rows;
+  const row = Math.floor(y);
+  const fy = y - row;
+  const x = u * per + (row % 2) * 0.5;
+  const b = Math.floor(x);
+  const fx = x - b;
+  const e = Math.min(Math.min(fx, 1 - fx) * 0.6, Math.min(fy, 1 - fy) * 0.3);
+  const inB = smooth(0.002, 0.005, e);
+  const edge = smooth(0.005, 0.02, e);
+  const id = mod(b, per) + row * per;
+  const tone = (hash(id, 0, 251) - 0.5) * 0.08;
+  const m = fbm(u, v, 10, 10, 4, 252);
+  const fos = smooth(0.7, 0.75, fbm(u, v, 60, 60, 2, 253)) * 0.08;
+  const k = 1 + tone + (m - 0.5) * 0.12 - fos - (1 - edge) * 0.06;
+  return {
+    c: mix3(hex(0x9a9286), mul3(hex(0xd2c8b6), k), inB),
+    h: clamp(0.2 + inB * (0.65 + 0.1 * edge) + (m - 0.5) * 0.08),
+    r: mix(1, 0.88, inB),
+  };
+};
+const panelP: Pattern = (u, v) => {
+  // composite panels 1.5 × 3 m (two a repeat across), their joints, a fine orange peel
+  const x = u * 2;
+  const fx = x - Math.floor(x);
+  const e = Math.min(fx, 1 - fx, v, 1 - v) * 3;
+  const joint = smooth(0.006, 0.012, e);
+  const peel = fbm(u, v, 90, 90, 2, 261);
+  const k = 0.9 + (peel - 0.5) * 0.03 + (hash(Math.floor(x), 0, 262) - 0.5) * 0.03;
+  return {
+    c: grey(clamp(mix(0.35, k, joint))),
+    h: clamp(0.3 + 0.6 * joint + (peel - 0.5) * 0.05),
+    r: mix(1, 0.75, joint),
+  };
+};
+const corrugatedP: Pattern = (u, v) => {
+  // corrugated sheet: twelve ribs a 0.9 m repeat, sheets lapping every repeat up, a little rust where it runs
+  const rib = Math.sin(u * Math.PI * 2 * 12);
+  const run = smooth(0.62, 0.8, fbm(u, v, 30, 3, 3, 271)) * smooth(0.6, 0.0, v) * 0.5;
+  const lap = smooth(0.0, 0.02, v);
+  const k = 0.84 + rib * 0.08 - run * 0.25;
+  const c = mix3(grey(clamp(k)), mul3(hex(0x8a5a3a), 0.9), run * 0.6);
+  return { c: mul3(c, 0.8 + 0.2 * lap), h: clamp(0.5 + rib * 0.45), r: 0.7 + run * 0.3 };
+};
+const roofShingleP: Pattern = (u, v) => {
+  // asphalt shingles: ten courses of 14 cm, three-tab strips (33 cm tabs, slots between), granules
+  const N = 10;
+  const y = v * N;
+  const row = Math.floor(y);
+  const f = y - row;
+  const x = u * 4.2 + (row % 2) * 0.5 + hash(row, 0, 281) * 0.2;
+  const fx = x - Math.floor(x);
+  const slot = smooth(0.0, 0.02, Math.min(fx, 1 - fx)) + smooth(0.45, 1, f);
+  const gran = fbm(u, v, 220, 220, 1, 282);
+  const tone = (hash(Math.floor(x) + row * 7, 1, 283) - 0.5) * 0.12;
+  const k = (0.72 + tone + (gran - 0.5) * 0.18) * (1 - (1 - smooth(0.0, 0.1, f)) * 0.35) * mix(0.55, 1, clamp(slot));
+  return { c: grey(clamp(k)), h: clamp(0.25 + 0.6 * (1 - f) * clamp(slot) + (gran - 0.5) * 0.1), r: 1 };
+};
+const roofMetalP: Pattern = (u, v) => {
+  // standing seam: pans 45 cm (four a 1.8 m repeat), a seam up each joint, a faint oil-can between
+  const x = u * 4;
+  const fx = x - Math.floor(x);
+  const d = Math.min(fx, 1 - fx);
+  const seam = 1 - smooth(0.012, 0.03, d);
+  const can = fbm(u, v, 4, 2, 3, 291);
+  const k = 0.86 + (can - 0.5) * 0.06 + seam * 0.08;
+  return { c: grey(clamp(k)), h: clamp(0.3 + seam * 0.7 + (can - 0.5) * 0.08), r: 0.55 - seam * 0.1 };
+};
+
 const PATTERNS: Record<MatId, Pattern> = {
+  clapboard: clapboardP,
+  "shingle-wall": shingleWallP,
+  batten: battenP,
+  stucco: stuccoP,
+  fieldstone: fieldstoneP,
+  limestone: limestoneP,
+  panel: panelP,
+  corrugated: corrugatedP,
+  "roof-shingle": roofShingleP,
+  "roof-metal": roofMetalP,
   oak: woodField(WOODS.oak),
   walnut: woodField(WOODS.walnut),
   pine: woodField(WOODS.pine),

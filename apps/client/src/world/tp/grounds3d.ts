@@ -1,4 +1,6 @@
-import { CAR_COLOURS, STOREY } from "@yutopia/shared";
+import { CAR_COLOURS, entry, type ObjectKind, STOREY } from "@yutopia/shared";
+import { type Layout, OPENINGS } from "@yutopia/shared/building-kit";
+import { coloursOf, KINDS as KIT_KINDS, layoutOf } from "@yutopia/shared/building-styles";
 import {
   BENCH,
   BRIDGES,
@@ -92,6 +94,7 @@ import {
   Float32BufferAttribute,
   Group,
   InstancedMesh,
+  LOD,
   type Material,
   Matrix4,
   Mesh,
@@ -99,6 +102,7 @@ import {
   type MeshLambertMaterial,
   MeshStandardMaterial,
   Object3D,
+  PlaneGeometry,
   Quaternion,
   RepeatWrapping,
   type Sphere,
@@ -107,10 +111,10 @@ import {
   SpriteMaterial,
   SRGBColorSpace,
   type Texture,
-  TorusGeometry,
   Vector3,
+  WebGLRenderTarget,
 } from "three";
-import { hexOf, houseLook, shopLook } from "../grounds-look";
+import { hexOf } from "../grounds-look";
 import { litMaterial } from "../look/lit";
 import {
   BARE_LEAVES,
@@ -128,7 +132,19 @@ import {
   tinted,
   type V,
 } from "./campus";
+import {
+  kitBatches,
+  kitMaterial,
+  kitReady,
+  loadKit,
+  type MatKey,
+  type Pack,
+  type Packed,
+  packBatches,
+  packGeometry,
+} from "./kit-buildings";
 import { kitRenderer } from "./kit-mats";
+import { roomUse } from "./kit-rooms";
 import { landAround, SURF } from "./land-block";
 import { beam, railing, truss } from "./landmarks3d";
 import { lifeDress } from "./life-dress";
@@ -164,6 +180,65 @@ import { AT, atOf, BURIED, mergeGeometries, smoothAt, snowShadow, tagged, type W
 const SHOW_SNOW = new Color("#eef2f5");
 // (how far the park's bridge sinks to be gone: its deck, 5.6 m up, and its parapets under the snow)
 const BRIDGE_SINK = 8;
+/** (plan 110's quality pass) The furniture kit's pieces for each of an inside's fits (catalog kinds), the first that
+ *  fits its spot drawn; the ones laid one after another along a long spot (a market's shelves, a counter). */
+const NATIVE_FIT: Partial<Record<string, string[]>> = {
+  sofa: ["sofa", "loveseat"],
+  armchair: ["armchair"],
+  coffee: ["coffee_table"],
+  bookshelf: ["bookcase"],
+  chair: ["chair"],
+  stool: ["bar_stool"],
+  desk: ["desk"],
+  fridge: ["fridge"],
+  shelf: ["shelving"],
+  locker: ["locker"],
+  plant: ["plant", "indoor_tree"],
+  rug: ["rug", "round_rug", "runner_rug"],
+  fireplace: ["fireplace"],
+  counter: ["counter"],
+  table: ["dining_table", "round_table"],
+  stove: ["kitchen_stove"],
+  jukebox: ["jukebox"],
+  bench: ["workbench"],
+  nightstand: ["bedside_table"],
+  till: ["reception"],
+};
+/** (the work places' tables are desks) */
+const DESK_KINDS = new Set(["office", "police", "school", "library", "gatehouse"]);
+const TILED = new Set(["shelving", "counter", "locker", "bookcase"]);
+/** (plan 110) how far off a kit building's (its cell's) parts go: its walls, roofs and panes stay */
+const KIT_FAR = 110;
+/** How high a building's inside's walls go (its rooms you walk into: the farm's under their roofs; the rest open
+ *  above, a ceiling over them from outside — kitBuilding). */
+function insideHeight(b: Building): number {
+  return b.kind === "barn"
+    ? wallsHigh(b)
+    : b.kind === "farmhouse"
+      ? 3.0
+      : b.kind === "fire" || b.kind === "warehouse"
+        ? 5
+        : b.kind === "church"
+          ? 5.5
+          : 2.7;
+}
+// (dev: the kit's own pieces for the buildings' scan — e2e/buildings-scan.mts, plan 111 phase 0)
+if (process.env.NODE_ENV !== "production" && typeof window !== "undefined")
+  (window as unknown as { __kit?: unknown }).__kit = {
+    KINDS: KIT_KINDS,
+    layoutOf,
+    coloursOf,
+    kitBatches,
+    kitMaterial,
+    packBatches,
+    packGeometry,
+    loadKit,
+    roomUse,
+    // (a target with no MSAA: a nudge flips only what really fights, not the edges' samples)
+    target: (w: number, h: number) => new WebGLRenderTarget(w, h, { samples: 0 }),
+    // (each batch flat in a colour of its own: what swaps is a fight, not a texture's shimmer)
+    flat: (hex: number) => new MeshBasicMaterial({ color: hex, vertexColors: true }),
+  };
 
 /** The Kart Park's 3D (karts3d.ts), loaded from here only: the game's scenery, the stills and the
  *  sandbox share this one import, so the build makes one chunk of it, not one for each. */
@@ -394,36 +469,6 @@ function iceCanvas(T: Themes): HTMLCanvasElement {
   }
   return c;
 }
-// Brick: courses with mortar, a little variation, soot towards the top.
-function brickCanvas(T: Themes, base: string, seed: number): HTMLCanvasElement {
-  const { c, g } = T.canvas(256, 256);
-  const r = T.rng(seed);
-  g.fillStyle = "#8a8378";
-  g.fillRect(0, 0, 256, 256);
-  const bw = 32;
-  const bh = 12;
-  const col = new Color(base);
-  for (let y = 0; y < 256; y += bh)
-    for (let x = -((y / bh) % 2) * (bw / 2); x < 256; x += bw) {
-      const k = 0.82 + r() * 0.3;
-      g.fillStyle = `rgb(${(col.r * 255 * k) | 0},${(col.g * 255 * k) | 0},${(col.b * 255 * k) | 0})`;
-      g.fillRect(x + 1, y + 1, bw - 2, bh - 2);
-    }
-  return c;
-}
-// Clapboard siding: horizontal boards with a shadow line each.
-function sidingCanvas(T: Themes, base: string): HTMLCanvasElement {
-  const { c, g } = T.canvas(128, 128);
-  g.fillStyle = base;
-  g.fillRect(0, 0, 128, 128);
-  for (let y = 0; y < 128; y += 10) {
-    g.fillStyle = "rgba(0,0,0,0.16)";
-    g.fillRect(0, y + 8, 128, 2);
-    g.fillStyle = "rgba(255,255,255,0.08)";
-    g.fillRect(0, y, 128, 2);
-  }
-  return c;
-}
 // Corrugated metal.
 function corrugatedCanvas(T: Themes): HTMLCanvasElement {
   const { c, g } = T.canvas(128, 64);
@@ -485,22 +530,6 @@ function signCanvas(T: Themes, text: string, w = 512, h = 128, bg = "#1d2226", f
   g.textAlign = "center";
   g.textBaseline = "middle";
   for (const [i, l] of lines.entries()) g.fillText(l, w / 2, h / 2 + (i - (lines.length - 1) / 2) * size * 1.1);
-  return c;
-}
-// A shop window at night: warm light, shelves and silhouettes inside.
-function shopWindowCanvas(T: Themes, seed: number, tone: string): HTMLCanvasElement {
-  const { c, g } = T.canvas(256, 128);
-  const r = T.rng(seed);
-  const grd = g.createLinearGradient(0, 0, 0, 128);
-  grd.addColorStop(0, tone);
-  grd.addColorStop(1, "#3a2a1a");
-  g.fillStyle = grd;
-  g.fillRect(0, 0, 256, 128);
-  g.fillStyle = "rgba(40,28,18,0.55)";
-  for (let i = 0; i < 6; i++) g.fillRect(r() * 220, 40 + r() * 50, 20 + r() * 40, 6 + r() * 30);
-  g.fillStyle = "rgba(20,14,10,0.9)";
-  for (let x = 0; x < 256; x += 64) g.fillRect(x, 0, 5, 128);
-  g.fillRect(0, 0, 256, 6);
   return c;
 }
 // A ring of light for a lamp's head (a sprite-less glow card).
@@ -979,7 +1008,11 @@ export class Grounds3 {
     const f = this.pending.splice(i, 1)[0].f;
     const n = this.root.children.length;
     f();
-    if (!this.pending.length) this.setNight(this.lastNight);
+    if (!this.pending.length) {
+      this.setNight(this.lastNight);
+      // (plan 110: every building's in its cell — what each cell kept of them to make it again, let go)
+      for (const c of this.kitCells.values()) c.packs = [];
+    }
     // (a step waiting on what's still loading, put back: no more this frame — asked again at once,
     // the stream's loop spun on it for all its budget, every frame, ~200k times a load)
     if (this.waiting) {
@@ -2043,6 +2076,9 @@ export class Grounds3 {
     return this.glows(m, 0.9, "windows");
   }
   private building(b: Building) {
+    // (plan 110: every kind but the HQ's and the blocks' is laid out by the kit: building-styles.ts)
+    const L = layoutOf(b);
+    if (L) return this.kitBuilding(b, L);
     // (turned: built on a side its kind's builder draws, then turned about its plot's middle —
     // shared turnOf, its solids the same — docs/plan/53-the-god-mode.md phase 9)
     const t = turnOf(b);
@@ -2060,6 +2096,233 @@ export class Grounds3 {
     const under = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2) + wallsHigh(b) - 0.3;
     this.cuts.set(b.key, { b, parts: added, under });
     this.interior(inside);
+  }
+  // ── plan 110: a kit building — its layout's batches into its cell's (a few draws a street), near and far;
+  // one you walk into its own (its outside goes while you're in); its signs, lamps, snow, drifts ──
+  private kitCells = new Map<
+    string,
+    { lod: LOD; packs: { near: Packed; far: Packed }[]; geos: BufferGeometry[]; cx: number; cz: number }
+  >();
+  private kitLoading = false;
+  /** What a step made again in place (a kit cell a building joined): the stream patches its new meshes' materials
+   *  (`step()` hands on only what's new at the root). Emptied by whoever reads it. */
+  touched: Object3D[] = [];
+  private nativeMod: (typeof import("../furn/native") & { Out: typeof import("./kit3d").Out }) | null = null;
+  private nativeLoading = false;
+  private kitBuilding(b: Building, L: Layout) {
+    // (one walked into: its furniture the kit's, furn/native.ts — loaded first)
+    const wantsNative = this.o.stream && !!insideOf(b) && !this.nativeMod;
+    if (wantsNative && !this.nativeLoading) {
+      this.nativeLoading = true;
+      void Promise.all([import("../furn/native"), import("./kit3d")]).then(([m, k]) => {
+        this.nativeMod = { ...m, Out: k.Out };
+      });
+    }
+    if (!kitReady() || wantsNative) {
+      if (!this.kitLoading && !kitReady()) {
+        this.kitLoading = true;
+        void loadKit().then((ok) => {
+          // (a still's Grounds are made at once: drawn as soon as it's in)
+          if (ok && !this.o.stream)
+            for (const u of BUILDINGS) if (this.near(u.x0, u.z0, 60) && layoutOf(u)) this.building(u);
+        });
+      }
+      if (this.o.stream) {
+        this.queue(() => this.building(b), { x: (b.x0 + b.x1) / 2, z: (b.z0 + b.z1) / 2 }, 1);
+        this.waiting = true;
+      }
+      return;
+    }
+    const cx = (b.x0 + b.x1) / 2;
+    const cz = (b.z0 + b.z1) / 2;
+    const y0 = groundAt(cx, cz);
+    const c = coloursOf(b);
+    const inside = this.o.stream ? insideOf(b) : null;
+    // (the rooms behind its glass — none on a floor walked into: its own inside's seen through it, plan 111)
+    const raw = kitBatches(L, y0, c, { ...roomUse(b.kind), insideH: inside ? inside.fy + insideHeight(b) : undefined });
+    const near = packBatches(raw.near);
+    const far = packBatches(raw.far);
+    const n = this.root.children.length;
+    if (inside) {
+      // its own, near and far, round its middle
+      const geos: BufferGeometry[] = [];
+      const lod = this.kitLod(cx, cz, [{ near, far }], geos);
+      for (const g of geos) this.keep(g);
+      this.root.add(lod);
+      // (its inside's ceiling, as high as its walls: through its windows no sky over the room — gone with the
+      // outside while you're in, so the camera over your shoulder still sees down in)
+      const H = inside.fy + insideHeight(b);
+      const e = 0.12;
+      const cg = new G();
+      cg.color(0xe8e2d6).quad(
+        [b.x0 + e, y0 + H, b.z1 - e],
+        [b.x1 - e, y0 + H, b.z1 - e],
+        [b.x1 - e, y0 + H, b.z0 + e],
+        [b.x0 + e, y0 + H, b.z0 + e],
+        [0, -1, 0],
+      );
+      this.add(cg.build(), this.lambert());
+    } else {
+      const key = `${Math.floor(cx / 64)},${Math.floor(cz / 64)}`;
+      let cell = this.kitCells.get(key);
+      if (!cell) {
+        const gx = Math.floor(cx / 64) * 64 + 32;
+        const gz = Math.floor(cz / 64) * 64 + 32;
+        cell = { lod: new LOD(), packs: [], geos: [], cx: gx, cz: gz };
+        cell.lod.position.set(gx, 0, gz);
+        cell.lod.name = `kit-cell:${key}`;
+        this.kitCells.set(key, cell);
+        this.root.add(cell.lod);
+      }
+      cell.packs.push({ near, far });
+      for (const g of cell.geos) g.dispose();
+      cell.geos = [];
+      this.kitLod(cell.cx, cell.cz, cell.packs, cell.geos, cell.lod);
+    }
+    for (const sg of L.signs) this.kitSign(sg, y0);
+    for (const p of L.lamps)
+      this.lights.push({ p: new Vector3(p[0], y0 + p[1], p[2]), kind: "porch", color: 0xffd9a0, r: 6 });
+    if (L.snow.length) {
+      const g = new G();
+      const r = groundsRng(Math.round(b.x0 * 13 + b.z0 * 7 + 1));
+      // (each lies a hair in from the edges it's laid to: its sides in the plane of a fascia's or a verge's
+      // face flickered — plan 111)
+      const IN = 0.025;
+      for (const s of L.snow) {
+        if (s.t === "flat") flatSnow(g, s.x0 + IN, s.z0 + IN, s.x1 - IN, s.z1 - IN, y0 + s.y + 0.004, s.deep ?? 0.3, r);
+        else {
+          // (in along its eave, from each end)
+          const ex = s.h1[0] - s.h0[0];
+          const ez = s.h1[2] - s.h0[2];
+          const el = Math.hypot(ex, ez) || 1;
+          const ix = (ex / el) * IN;
+          const iz = (ez / el) * IN;
+          slopeSnow(
+            g,
+            [s.h0[0] + ix, y0 + s.h0[1], s.h0[2] + iz],
+            [s.h1[0] - ix, y0 + s.h1[1], s.h1[2] - iz],
+            [s.l0[0] + ix, y0 + s.l0[1], s.l0[2] + iz],
+            [s.l1[0] - ix, y0 + s.l1[1], s.l1[2] - iz],
+            s.deep ?? 0.24,
+            r,
+            0.55,
+          );
+        }
+      }
+      // (a pitched roof's eaves: icicles along them)
+      for (const s of L.snow)
+        if (s.t === "slope" && s.h0[1] - s.l0[1] > 0.6)
+          icicles(g, [s.l0[0], y0 + s.l0[1] - 0.12, s.l0[2]], [s.l1[0], y0 + s.l1[1] - 0.12, s.l1[2]], r, 0.32);
+      // (every window's sill: the snow on it)
+      for (const p of L.parts) {
+        const o = OPENINGS[p.part];
+        if (
+          !o ||
+          !p.part.startsWith("win-") ||
+          p.part === "win-curtain" ||
+          p.part === "win-bay" ||
+          p.part.includes("ribbon")
+        )
+          continue;
+        const ax = Math.cos(p.ry);
+        const az = -Math.sin(p.ry);
+        const ox = Math.sin(p.ry);
+        const oz = Math.cos(p.ry);
+        const hw = o.w / 2 + 0.12;
+        const xs = [p.x - ax * hw - ox * 0.02, p.x + ax * hw + ox * 0.07];
+        const zs = [p.z - az * hw - oz * 0.02, p.z + az * hw + oz * 0.07];
+        const yy = y0 + p.y + 0.004;
+        snowBox(
+          g,
+          Math.min(...xs),
+          yy,
+          Math.min(...zs),
+          Math.max(...xs),
+          yy + 0.04 + 0.03 * Math.abs(Math.sin(p.x * 12.9 + p.z * 7.3)),
+          Math.max(...zs),
+        );
+      }
+      if (!g.empty) this.add(g.build(), this.lambert());
+    }
+    if (b.kind !== "garage" && b.kind !== "silo") this.settle(b);
+    if (b.kind === "house" && (b.face === "e" || b.face === "w")) this.housePlants(b);
+    if (!inside) return;
+    const added = this.root.children.slice(n);
+    const under = y0 + L.eave - 0.3;
+    this.cuts.set(b.key, { b, parts: added, under });
+    this.interior(inside);
+  }
+  /** Batches (a cell's or a building's) as an LOD at (cx, cz): its near level all of them, its far one without
+   *  the parts (past KIT_FAR). Its geometries in `geos`, kept. */
+  private kitLod(
+    cx: number,
+    cz: number,
+    packs: { near: Packed; far: Packed }[],
+    geos: BufferGeometry[],
+    into?: LOD,
+  ): LOD {
+    const lod = into ?? new LOD();
+    if (!into) lod.position.set(cx, 0, cz);
+    else {
+      // (made again in place: the view's cull boxes it again — its old box was its first building's, and the cell
+      // went whenever that one was out of sight: plan 111 — and the stream patches what's new in it)
+      lod.userData.cullV = ((lod.userData.cullV as number | undefined) ?? 0) + 1;
+      if (this.o.stream) this.touched.push(lod);
+    }
+    for (const lv of [...lod.levels]) lod.removeLevel(lv.distance);
+    for (const ch of [...lod.children]) lod.remove(ch);
+    const level = (which: "near" | "far") => {
+      const g = new Group();
+      const all = new Map<MatKey, Pack[]>();
+      for (const p of packs)
+        for (const [k, a] of p[which]) {
+          let t = all.get(k);
+          if (!t) {
+            t = [];
+            all.set(k, t);
+          }
+          t.push(a);
+        }
+      for (const [k, list] of all) {
+        const geo = packGeometry(list);
+        geo.translate(-cx, 0, -cz);
+        // (a cell's: made again as each of its buildings comes, so kept by its cell, not with the rest —
+        // each making's let go when the next is in, not held till the Grounds go)
+        geos.push(geo);
+        const m = snowShadow(
+          new Mesh(
+            geo,
+            kitMaterial(k, (mm, on, kind) => this.glows(mm as MeshStandardMaterial, on, kind)),
+          ),
+        );
+        const lit = k === "glow" || k === "pane-lit";
+        // (the rooms are inside: they cast nothing; the glass drawn after the rest)
+        const inner = k === "glass" || k === "room" || k === "room-lit";
+        m.castShadow = !lit && !inner;
+        m.receiveShadow = k !== "glass";
+        if (k === "glass") m.renderOrder = 2;
+        g.add(m);
+      }
+      return g;
+    };
+    lod.addLevel(level("near"), 0);
+    lod.addLevel(level("far"), KIT_FAR);
+    return lod;
+  }
+  /** A sign's words on its board (`y0` its building's ground). */
+  private kitSign(sg: Layout["signs"][number], y0: number) {
+    const t = signFace(this.T, sg.text, Math.max(48, Math.round((512 * sg.h) / Math.max(0.2, sg.w))), sg.bg, sg.fg);
+    const m = sg.lit
+      ? this.glows(
+          this.keep(litMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0 })),
+          0.6,
+          "sign",
+        )
+      : this.keep(litMaterial({ map: t }));
+    const mesh = new Mesh(this.keep(new PlaneGeometry(sg.w, sg.h)), m);
+    mesh.position.set(sg.x, y0 + sg.y + sg.h / 2, sg.z);
+    mesh.rotation.y = sg.ry;
+    this.root.add(mesh);
   }
   /** God mode's turned building: what's built of it moved into a pivot at its plot's middle,
    *  turned `t.k` quarters; its lights and pools turned with it (`xf`). */
@@ -2090,12 +2353,106 @@ export class Grounds3 {
       L.p.z = z;
     }
   }
+  /** An inside's fits the furniture kit has a piece for, drawn as the kit draws them (each its back to the wall
+   *  nearest it, centred in its spot or repeated along it), as one mesh; the ones drawn returned. */
+  private nativeFits(i: Inside, y0: number): Set<Inside["fits"][number]> {
+    const done = new Set<Inside["fits"][number]>();
+    const m = this.nativeMod;
+    if (!m) return done;
+    const { b } = i;
+    const out = new m.Out();
+    let n = 0;
+    const work = DESK_KINDS.has(b.kind);
+    const mid = (f: Inside["fits"][number]) => [f.x + f.w / 2, f.z + f.d / 2] as const;
+    const tables = i.fits.filter(
+      (f) => f.kind === "table" || f.kind === "counter" || f.kind === "desk" || f.kind === "booth",
+    );
+    for (const f of i.fits) {
+      const list = f.kind === "table" && work ? ["desk", "folding_table"] : NATIVE_FIT[f.kind];
+      if (!list) continue;
+      // (a seat faces what it's at — the nearest table or counter; the rest put their backs to the nearest wall)
+      let rot: number;
+      if ((f.kind === "chair" || f.kind === "stool") && tables.length) {
+        const [cx, cz] = mid(f);
+        let best = tables[0];
+        let bd = Number.POSITIVE_INFINITY;
+        for (const t of tables) {
+          const [tx, tz] = mid(t);
+          const d = Math.max(0, Math.abs(cx - tx) - t.w / 2) + Math.max(0, Math.abs(cz - tz) - t.d / 2);
+          if (d < bd) {
+            bd = d;
+            best = t;
+          }
+        }
+        const [tx, tz] = mid(best);
+        const dx = tx - cx;
+        const dz = tz - cz;
+        // (facing +z: its back north, rot 0; −x: back east, 1; −z: back south, 2; +x: back west, 3)
+        rot = Math.abs(dx) > Math.abs(dz) ? (dx < 0 ? 1 : 3) : dz > 0 ? 0 : 2;
+      } else {
+        const dN = f.z - b.z0;
+        const dS = b.z1 - (f.z + f.d);
+        const dW = f.x - b.x0;
+        const dE = b.x1 - (f.x + f.w);
+        const near = Math.min(dN, dS, dW, dE);
+        const free = f.kind === "rug" || f.kind === "coffee" || f.kind === "table";
+        rot = free ? (f.w >= f.d ? 0 : 1) : near === dN ? 0 : near === dE ? 1 : near === dS ? 2 : 3;
+      }
+      let drawn = false;
+      for (const kind of list) {
+        let e: ReturnType<typeof entry>;
+        try {
+          e = entry(kind as ObjectKind);
+        } catch {
+          continue;
+        }
+        if (!e || !m.isNative(kind)) continue;
+        const [rw, rh] = rot % 2 ? [e.h, e.w] : [e.w, e.h];
+        // (too big for its spot: the next, or drawn as it was)
+        if (rw > f.w + 0.6 || rh > f.d + 0.6) continue;
+        const along = rot % 2 ? f.d / rh : f.w / rw;
+        const count = TILED.has(kind) ? Math.max(1, Math.floor(along + 0.15)) : 1;
+        // (a home's, a bar's, a diner's chairs bentwood; the work places' task chairs)
+        const props = kind === "chair" ? { variant: work ? 0 : 2 } : undefined;
+        for (let k = 0; k < count; k++) {
+          const ox = rot % 2 ? (f.w - rw) / 2 : (f.w - rw * count) / 2 + k * rw;
+          const oz = rot % 2 ? (f.d - rh * count) / 2 + k * rh : (f.d - rh) / 2;
+          const one = new m.Out();
+          m.nativeInto(one, {
+            id: `in-${b.key}-${n++}`,
+            kind,
+            x: f.x + ox,
+            y: f.z + oz,
+            yaw: (rot * Math.PI) / 2,
+            ...(props && { props }),
+          });
+          for (let q = 1; q < one.lit.pos.length; q += 3) one.lit.pos[q] += y0 + 0.03;
+          // (a loop, not a spread: a piece's tens of thousands of numbers overflow the call's arguments)
+          for (const v of one.lit.pos) out.lit.pos.push(v);
+          for (const v of one.lit.nor) out.lit.nor.push(v);
+          for (const v of one.lit.col) out.lit.col.push(v);
+        }
+        drawn = true;
+        break;
+      }
+      if (drawn) done.add(f);
+    }
+    if (!out.lit.empty) {
+      const g = new BufferGeometry();
+      g.setAttribute("position", new Float32BufferAttribute(out.lit.pos, 3));
+      g.setAttribute("normal", new Float32BufferAttribute(out.lit.nor, 3));
+      g.setAttribute("color", new Float32BufferAttribute(out.lit.col, 4));
+      this.add(g, this.lambert(), "both");
+    }
+    return done;
+  }
   private interior(i: Inside) {
     const { b } = i;
-    const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
+    // (its floor at its door's sill: the plinth kept, plan 111)
+    const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2) + (i.fy ?? 0);
     // (plan 104: the skate hall's inside as Blender built it — its floor, walls, trusses, fittings, murals, the
     // pro shop's counter over its fit — and its lamps at the fittings)
-    if (b.kind === "warehouse" && this.hallGlb("in")) {
+    if (b.key === SKATE_HALL.key && this.hallGlb("in")) {
       // (its fittings: three rows down the hall, one a bay between its trusses — tools/art/skate-parks/hall.py —
       // a lamp at every other)
       const rows = [b.z0 + 0.12 + 6, (b.z0 + b.z1) / 2, b.z1 - 0.12 - 6.5];
@@ -2122,19 +2479,30 @@ export class Grounds3 {
       [0, 1, 0],
     );
     // the walls from inside (the doorway open)
-    const hall = b.kind === "warehouse";
+    const hall = b.key === SKATE_HALL.key;
     const wallC =
-      b.sign === "BAR"
+      b.kind === "bar"
         ? 0x4a3426
-        : b.kind === "barn"
-          ? 0x6a4a34
-          : b.kind === "farmhouse"
-            ? 0xd8c9a8
-            : hall
-              ? 0x9aa0a4
-              : 0xe6e0d4;
+        : ((
+            {
+              church: 0xece6d8,
+              school: 0xd9d2b8,
+              police: 0xc9ccc4,
+              fire: 0xb8b4aa,
+              clinic: 0xe4ebe8,
+              library: 0xd8c9a8,
+              office: 0xd8d6d0,
+              hotel: 0xc9b89a,
+              apartments: 0xd6cdb8,
+              house: 0xe2d8c4,
+              shed: 0x9a8a72,
+              boathouse: 0x8a7a64,
+              warehouse: 0xa8a69e,
+            } as Partial<Record<string, number>>
+          )[b.kind] ?? (b.kind === "barn" ? 0x6a4a34 : b.kind === "farmhouse" ? 0xd8c9a8 : hall ? 0x9aa0a4 : 0xe6e0d4));
     // (the farm's and the skate hall's: as tall as they are outside — under their roofs, not open to the sky)
-    const H = b.kind === "barn" ? 5.2 : b.kind === "farmhouse" ? 3.0 : hall ? wallsHigh(b) : 2.7;
+    // (plan 110: the barn's walls as tall as its kit's, the fire station's bays as tall as their doors)
+    const H = hall ? wallsHigh(b) : insideHeight(b);
     // (as high as the doorway outside: tp barn(), farmhouse(), warehouse())
     const doorH = b.kind === "barn" || hall ? 2.8 : 2.4;
     const e = 0.12;
@@ -2232,14 +2600,17 @@ export class Grounds3 {
           }
       }
     }
-    // the furniture
+    // the furniture: the furniture kit's own where it has the piece (plan 110 quality pass: furn/native.ts), the
+    // rest drawn here
     const glow: [number, number, number, number, number, number, number][] = [];
+    const natives = this.nativeMod ? this.nativeFits(i, y0) : new Set<Inside["fits"][number]>();
     for (const f of i.fits) {
+      if (natives.has(f)) continue;
       const { x, z, w, d, h } = f;
       switch (f.kind) {
         case "counter":
-          g.color(b.sign === "BAR" ? 0x3e2718 : 0xd8d2c4).box(x, y0, z, x + w, y0 + h - 0.08, z + d);
-          g.color(b.sign === "BAR" ? 0x7a5236 : 0xb9b2a3).box(
+          g.color(b.kind === "bar" ? 0x3e2718 : 0xd8d2c4).box(x, y0, z, x + w, y0 + h - 0.08, z + d);
+          g.color(b.kind === "bar" ? 0x7a5236 : 0xb9b2a3).box(
             x - 0.08,
             y0 + h - 0.08,
             z - 0.12,
@@ -2252,17 +2623,20 @@ export class Grounds3 {
           g.color(0x2b2a26).box(x + 0.25, y0, z + 0.25, x + 0.35, y0 + h - 0.08, z + 0.35);
           g.color(0xb5562f).box(x, y0 + h - 0.1, z, x + w, y0 + h, z + d);
           break;
-        case "table":
-          g.color(0x2b2a26).box(
-            x + w / 2 - 0.06,
-            y0,
-            z + d / 2 - 0.06,
-            x + w / 2 + 0.06,
-            y0 + h - 0.06,
-            z + d / 2 + 0.06,
-          );
-          g.color(0x8a5a36).box(x, y0 + h - 0.06, z, x + w, y0 + h, z + d);
+        case "table": {
+          // (a table the kit has none of its size for: four turned legs, an apron, a top a little over them)
+          const top = 0.045;
+          g.color(0x6b4a30).box(x, y0 + h - top, z, x + w, y0 + h, z + d);
+          g.color(0x5a3e28).box(x + 0.06, y0 + h - 0.14, z + 0.06, x + w - 0.06, y0 + h - top, z + d - 0.06);
+          for (const [lx, lz] of [
+            [x + 0.08, z + 0.08],
+            [x + w - 0.14, z + 0.08],
+            [x + 0.08, z + d - 0.14],
+            [x + w - 0.14, z + d - 0.14],
+          ])
+            g.color(0x5a3e28).box(lx, y0, lz, lx + 0.06, y0 + h - 0.14, lz + 0.06);
           break;
+        }
         case "chair":
           g.color(0x5b3a26).box(x, y0 + 0.42, z, x + w, y0 + 0.5, z + d);
           g.color(0x5b3a26).box(x, y0, z, x + 0.06, y0 + 0.42, z + 0.06);
@@ -2276,7 +2650,7 @@ export class Grounds3 {
           g.color(0x9aa1a6).box(x + w / 2 - 0.05, y0, z + d / 2 - 0.05, x + w / 2 + 0.05, y0 + 0.75, z + d / 2 + 0.05);
           break;
         case "shelf":
-          g.color(b.sign === "BAR" ? 0x3e2718 : 0x9aa0a6).box(x, y0, z, x + w, y0 + h, z + d);
+          g.color(b.kind === "bar" ? 0x3e2718 : 0x9aa0a6).box(x, y0, z, x + w, y0 + h, z + d);
           // what's on it: bottles, tins, boxes, a row a shelf
           for (let k = 0.5; k < h - 0.2; k += 0.55)
             for (let u = x + 0.1; u < x + w - 0.2; u += 0.3) {
@@ -2441,6 +2815,127 @@ export class Grounds3 {
           for (const u of [w / 2 - 0.12, w / 2 + 0.08])
             g.color(0xc9a24a).box(x + u, y0 + 1.0, z - 0.03, x + u + 0.04, y0 + 1.2, z);
           break;
+        // (plan 110: the city's insides — grounds.ts fitsOf)
+        case "pew": {
+          const along = w >= d;
+          g.color(0x5a3b26).box(x, y0 + 0.42, z, x + w, y0 + 0.48, z + d);
+          if (along) g.color(0x4e3220).box(x, y0 + 0.48, z + d - 0.08, x + w, y0 + h, z + d);
+          else g.color(0x4e3220).box(x + w - 0.08, y0 + 0.48, z, x + w, y0 + h, z + d);
+          for (const u of along ? [x, x + w - 0.06] : [z, z + d - 0.06])
+            if (along) g.color(0x4e3220).box(u, y0, z, u + 0.06, y0 + 0.9, z + d);
+            else g.color(0x4e3220).box(x, y0, u, x + w, y0 + 0.9, u + 0.06);
+          break;
+        }
+        case "altar":
+          g.color(0xe8e2d2).box(x, y0, z, x + w, y0 + h, z + d);
+          g.color(0x7a2a2a).box(x + 0.2, y0 + h - 0.6, z - 0.01, x + w - 0.2, y0 + h, z + d + 0.01);
+          g.color(0xd9a948).box(
+            x + w / 2 - 0.04,
+            y0 + h,
+            z + d / 2 - 0.04,
+            x + w / 2 + 0.04,
+            y0 + h + 0.5,
+            z + d / 2 + 0.04,
+          );
+          g.color(0xd9a948).box(
+            x + w / 2 - 0.18,
+            y0 + h + 0.32,
+            z + d / 2 - 0.03,
+            x + w / 2 + 0.18,
+            y0 + h + 0.38,
+            z + d / 2 + 0.03,
+          );
+          break;
+        case "lectern":
+          g.color(0x5a3b26).box(
+            x + w / 2 - 0.12,
+            y0,
+            z + d / 2 - 0.12,
+            x + w / 2 + 0.12,
+            y0 + h - 0.15,
+            z + d / 2 + 0.12,
+          );
+          g.color(0x6b4a30).box(x, y0 + h - 0.15, z, x + w, y0 + h, z + d);
+          break;
+        case "boat": {
+          // a rowing boat on its slip: its hull narrowing to the bow, its thwarts, two oars
+          const along = d >= w;
+          const L = along ? d : w;
+          for (let k = 0; k < 6; k++) {
+            const t0 = k / 6;
+            const narrow = 1 - Math.max(0, (k - 3) / 3) * 0.7;
+            const hw = (along ? w : d) * 0.5 * narrow;
+            const c0 = (along ? z : x) + L * t0;
+            const c1 = c0 + L / 6;
+            const mid = along ? x + w / 2 : z + d / 2;
+            if (along) g.color(k % 2 ? 0x2f5d8a : 0x2a5480).box(mid - hw, y0 + 0.1, c0, mid + hw, y0 + h * 0.75, c1);
+            else g.color(k % 2 ? 0x2f5d8a : 0x2a5480).box(c0, y0 + 0.1, mid - hw, c1, y0 + h * 0.75, mid + hw);
+          }
+          g.color(0xe8e2d2).box(x + 0.05, y0 + h * 0.75, z + 0.05, x + w - 0.05, y0 + h * 0.8, z + d - 0.05);
+          g.color(0x8a6a44).box(x + 0.1, y0 + h * 0.6, z + d * 0.3, x + w - 0.1, y0 + h * 0.66, z + d * 0.38);
+          break;
+        }
+        case "engine": {
+          // a fire engine: its cab, its body, its ladder on top, its wheels
+          const along = d >= w;
+          g.color(0xa8221c).box(x, y0 + 0.45, z, x + w, y0 + h - 0.5, z + d);
+          if (along) g.color(0x1d2226).box(x + 0.1, y0 + 1.6, z - 0.01, x + w - 0.1, y0 + 2.3, z + 0.01);
+          g.color(0xcfd2d4).box(x + 0.3, y0 + h - 0.5, z + 0.8, x + w - 0.3, y0 + h - 0.35, z + d - 0.4);
+          for (let u = z + 1.2; u < z + d - 0.4; u += 0.45)
+            g.color(0xcfd2d4).box(x + 0.35, y0 + h - 0.35, u, x + w - 0.35, y0 + h - 0.3, u + 0.06);
+          for (const zz of [z + 1.2, z + d - 1.8])
+            for (const xx of [x - 0.02, x + w - 0.28])
+              g.color(0x111111).box(xx, y0, zz, xx + 0.3, y0 + 0.95, zz + 0.95);
+          glow.push([x + 0.2, y0 + h - 0.5, z + 0.3, x + 0.6, y0 + h - 0.35, z + 0.5, 0xff3030]);
+          glow.push([x + w - 0.6, y0 + h - 0.5, z + 0.3, x + w - 0.2, y0 + h - 0.35, z + 0.5, 0x3060ff]);
+          break;
+        }
+        case "cell":
+          // a holding cell: bars on its two open sides, a bunk
+          for (let u = x; u <= x + w; u += 0.15)
+            g.color(0x3a3e42).box(u - 0.02, y0, z - 0.02, u + 0.02, y0 + h, z + 0.02);
+          for (let u = z; u <= z + d; u += 0.15)
+            g.color(0x3a3e42).box(x - 0.02, y0, u - 0.02, x + 0.02, y0 + h, u + 0.02);
+          g.color(0x3a3e42).box(x, y0 + h - 0.06, z, x + w, y0 + h, z + d);
+          g.color(0x8a8f94).box(x + w - 0.9, y0 + 0.4, z + 0.4, x + w - 0.1, y0 + 0.5, z + d - 0.4);
+          break;
+        case "exam":
+          g.color(0xcfd2d4).box(x + 0.05, y0, z + 0.05, x + w - 0.05, y0 + h - 0.15, z + d - 0.05);
+          g.color(0x9fc4c8).box(x, y0 + h - 0.15, z, x + w, y0 + h, z + d);
+          g.color(0xf1eee6).box(x + 0.05, y0 + h, z + 0.05, x + w - 0.05, y0 + h + 0.02, z + d - 0.05);
+          g.color(0xf1eee6).box(x + 0.1, y0 + h, z + d - 0.45, x + w - 0.1, y0 + h + 0.1, z + d - 0.08);
+          break;
+        case "plant":
+          g.color(0x8a5a36).box(x + 0.12, y0, z + 0.12, x + w - 0.12, y0 + 0.4, z + d - 0.12);
+          g.color(0x3d6b3a).box(x, y0 + 0.4, z, x + w, y0 + h * 0.75, z + d);
+          g.color(0x4f8048).box(x + 0.1, y0 + h * 0.75, z + 0.1, x + w - 0.1, y0 + h, z + d - 0.1);
+          break;
+        case "board":
+          g.color(0x5a3b26).box(x - 0.04, y0 + 0.86, z - 0.02, x + w + 0.04, y0 + h + 0.04, z + d);
+          g.color(0x23392e).box(x, y0 + 0.9, z - 0.03, x + w, y0 + h, z + d);
+          g.color(0x5a3b26).box(x, y0 + 0.86, z - 0.12, x + w, y0 + 0.9, z + d);
+          break;
+        case "rack": {
+          // shelving: uprights, three or four boards, what's on them
+          const along = w >= d;
+          const n = Math.max(2, Math.round((along ? w : d) / 2));
+          for (let k = 0; k <= n; k++) {
+            const u = (along ? x : z) + ((along ? w : d) * k) / n;
+            if (along) g.color(0x2f5d8a).box(u - 0.04, y0, z, u + 0.04, y0 + h, z + d);
+            else g.color(0x2f5d8a).box(x, y0, u - 0.04, x + w, y0 + h, u + 0.04);
+          }
+          for (let yy = 0.15; yy < h; yy += h / 4) {
+            g.color(0xd88a2a).box(x, y0 + yy, z, x + w, y0 + yy + 0.05, z + d);
+            for (let k = 0; k < n; k++) {
+              const u0 = (along ? x : z) + ((along ? w : d) * (k + 0.15)) / n;
+              const u1 = (along ? x : z) + ((along ? w : d) * (k + 0.8)) / n;
+              const c = [0xb8a888, 0x8a7a5c, 0x6a7a8a][(k + Math.round(yy * 3)) % 3];
+              if (along) g.color(c).box(u0, y0 + yy + 0.05, z + 0.1, u1, y0 + yy + h / 4 - 0.15, z + d - 0.1);
+              else g.color(c).box(x + 0.1, y0 + yy + 0.05, u0, x + w - 0.1, y0 + yy + h / 4 - 0.15, u1);
+            }
+          }
+          break;
+        }
         case "bench":
           g.color(0x5a4636).box(x, y0 + h - 0.1, z, x + w, y0 + h, z + d);
           for (const u of [x + 0.1, x + w - 0.2])
@@ -2518,35 +3013,9 @@ export class Grounds3 {
     if (!g.empty) this.add(g.build(), this.lambert());
   }
   private buildingBody(b: Building) {
-    switch (b.kind) {
-      case "hq":
-      case "block":
-        return this.block(b);
-      case "gatehouse":
-        return this.gatehouse(b);
-      case "boathouse":
-        return this.boathouse(b);
-      case "shed":
-        return this.shed(b);
-      case "shelter":
-        return this.shelter(b);
-      case "house":
-        return this.house(b);
-      case "church":
-        return this.church(b);
-      case "gas":
-        return this.gas(b);
-      case "barn":
-        return this.barn(b);
-      case "silo":
-        return this.silo(b);
-      case "farmhouse":
-        return this.farmhouse(b);
-      case "warehouse":
-        return this.warehouse(b);
-      default:
-        return this.shop(b);
-    }
+    // (plan 110: what's left of the builders — the HQ's and the blocks', the skate hall's; the rest the kit's)
+    if (b.kind === "warehouse") return this.warehouse(b);
+    return this.block(b);
   }
   private block(b: Building) {
     const y0 = terrainAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
@@ -2980,125 +3449,6 @@ export class Grounds3 {
     }
     this.winBatch.clear();
   }
-  /** A wall's picture, one per colour (the town's houses share theirs). */
-  private wallTex = new Map<string, Texture>();
-  private wallPic(kind: "siding" | "brick", hex: string, seed = 0): Texture {
-    const k = `${kind}|${hex}`;
-    let t = this.wallTex.get(k);
-    if (!t) {
-      t = this.keep(tex(kind === "brick" ? brickCanvas(this.T, hex, seed) : sidingCanvas(this.T, hex)));
-      this.wallTex.set(k, t);
-    }
-    return t;
-  }
-  private gatehouse(b: Building) {
-    const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
-    const g = new G();
-    g.color(0xd8d4cb).box(b.x0, y0, b.z0, b.x1, y0 + 1.0, b.z1);
-    g.color(0x2a3036);
-    for (const [x, z] of [
-      [b.x0, b.z0],
-      [b.x1, b.z0],
-      [b.x0, b.z1],
-      [b.x1, b.z1],
-    ])
-      g.box(x - 0.1, y0 + 1, z - 0.1, x + 0.1, y0 + 2.6, z + 0.1);
-    g.color(0xd8d4cb).box(b.x0 - 0.6, y0 + 2.6, b.z0 - 0.6, b.x1 + 0.6, y0 + 2.95, b.z1 + 0.6);
-    flatSnow(g, b.x0 - 0.58, b.z0 - 0.58, b.x1 + 0.58, b.z1 + 0.58, y0 + 2.95, 0.3, groundsRng(b.x0 * 3 + 1));
-    icicles(g, [b.x0 - 0.6, y0 + 2.6, b.z1 + 0.6], [b.x1 + 0.6, y0 + 2.6, b.z1 + 0.6], groundsRng(b.z0 * 3), 0.6);
-    // a fascia round the roof, mullions at the corners and halfway along, the door on the west
-    // face, a camera on the roof's corner, a floodlight on a pole
-    g.color(0x3a4048).box(b.x0 - 0.62, y0 + 2.55, b.z0 - 0.62, b.x1 + 0.62, y0 + 2.75, b.z1 + 0.62);
-    const xm = (b.x0 + b.x1) / 2;
-    const zm = (b.z0 + b.z1) / 2;
-    g.color(0x2a3036);
-    for (const x of [xm]) {
-      g.box(x - 0.05, y0 + 1, b.z0 - 0.04, x + 0.05, y0 + 2.6, b.z0 + 0.04);
-      g.box(x - 0.05, y0 + 1, b.z1 - 0.04, x + 0.05, y0 + 2.6, b.z1 + 0.04);
-    }
-    for (const z of [zm - 1.5, zm + 1.5]) g.box(b.x1 - 0.04, y0 + 1, z - 0.05, b.x1 + 0.04, y0 + 2.6, z + 0.05);
-    g.color(0x2a3036).box(b.x0 - 0.06, y0, zm - 0.6, b.x0 + 0.04, y0 + 2.4, zm + 0.6); // the door
-    g.color(0xc9a85a).box(b.x0 - 0.1, y0 + 1.05, zm + 0.35, b.x0 - 0.06, y0 + 1.15, zm + 0.45);
-    for (let k = 0; k < 2; k++)
-      g.color(0xb7b0a2).box(b.x0 - 0.9 + k * 0.3, y0, zm - 0.8, b.x0, y0 + 0.18 * (k + 1), zm + 0.8);
-    g.color(0x2a2e33).box(b.x0 - 0.3, y0 + 2.95, b.z0 - 0.3, b.x0 + 0.1, y0 + 3.25, b.z0 + 0.1);
-    g.color(0x2a2e33).box(b.x0 - 0.75, y0 + 3.0, b.z0 - 0.45, b.x0 - 0.1, y0 + 3.25, b.z0 - 0.2); // the camera
-    beam(g, [b.x1 + 1.2, y0, b.z0 - 1.2], [b.x1 + 1.2, y0 + 5.5, b.z0 - 1.2], 0.14, 0x5d6268);
-    g.color(0x2a2e33).box(b.x1 + 0.9, y0 + 5.3, b.z0 - 1.6, b.x1 + 1.5, y0 + 5.7, b.z0 - 1.0);
-    // the desk, a monitor inside
-    g.color(0x5a4636).box(b.x0 + 0.2, y0 + 1.0, b.z0 + 0.4, b.x0 + 1.0, y0 + 1.05, b.z1 - 0.4);
-    this.add(g.build(), this.lambert());
-    // the glass band, lit warm
-    const gl = new G().color(0xffffff);
-    const yb = y0 + 1.0;
-    const yt = y0 + 2.6;
-    gl.quad([b.x0, yb, b.z0], [b.x1, yb, b.z0], [b.x1, yt, b.z0], [b.x0, yt, b.z0], [0, 0, -1]);
-    gl.quad([b.x0, yb, b.z1], [b.x1, yb, b.z1], [b.x1, yt, b.z1], [b.x0, yt, b.z1], [0, 0, 1]);
-    gl.quad([b.x0, yb, b.z0], [b.x0, yb, b.z1], [b.x0, yt, b.z1], [b.x0, yt, b.z0], [-1, 0, 0]);
-    gl.quad([b.x1, yb, b.z0], [b.x1, yb, b.z1], [b.x1, yt, b.z1], [b.x1, yt, b.z0], [1, 0, 0]);
-    const m = this.keep(
-      litMaterial({
-        color: 0x51606b,
-        emissive: 0xffcf8a,
-        emissiveIntensity: 0,
-        transparent: true,
-        opacity: 0.85,
-        side: DoubleSide,
-      }),
-    );
-    this.add(gl.build(), this.glows(m, 1.1, "windows"), "none");
-    this.lights.push({
-      p: new Vector3((b.x0 + b.x1) / 2, y0 + 2.4, (b.z0 + b.z1) / 2),
-      kind: "gate",
-      color: 0xffd090,
-      r: 6,
-    });
-    this.pool((b.x0 + b.x1) / 2 - 2.5, (b.z0 + b.z1) / 2, 6, 0xffd9a8);
-    // the barrier across the road, down
-    const bar = new G();
-    const px = -36;
-    const pz = GATE.z - 0.5;
-    const py = groundAt(px, pz);
-    // its housing on a plinth, the pivot, the counterweight behind it
-    bar.color(0x9a9690).box(px - 0.45, py - 0.1, pz - 0.45, px + 0.45, py + 0.15, pz + 0.45);
-    bar.color(0xd8a62a).box(px - 0.3, py + 0.15, pz - 0.3, px + 0.3, py + 1.1, pz + 0.3);
-    bar.color(0x2a2e33).box(px - 0.32, py + 0.6, pz - 0.32, px + 0.32, py + 0.68, pz + 0.32);
-    bar.color(0x3a3e44).box(px - 0.12, py + 0.95, pz - 0.38, px + 0.12, py + 1.15, pz + 0.38);
-    bar.color(0x3a3e44).box(px + 0.3, py + 0.9, pz - 0.15, px + 0.9, py + 1.2, pz + 0.15);
-    flatSnow(bar, px - 0.3, pz - 0.3, px + 0.3, pz + 0.3, py + 1.1, 0.1, groundsRng(7));
-    // the boom: red and white, a skirt hanging under it, the rest post at its end
-    for (let k = 0; k < 8; k++)
-      bar
-        .color(k % 2 ? 0xf2f2f2 : 0xc8322a)
-        .box(px - 0.3 - (k + 1) * 0.95, py + 0.98, pz - 0.06, px - 0.3 - k * 0.95, py + 1.1, pz + 0.06);
-    snowBox(bar.color(0xf4f7fa), px - 7.9, py + 1.1, pz - 0.05, px - 0.4, py + 1.15, pz + 0.05);
-    for (let x = px - 1; x > px - 7.9; x -= 0.35)
-      bar.color(0xe9e6dc).box(x - 0.02, py + 0.55, pz - 0.015, x + 0.02, py + 0.98, pz + 0.015);
-    bar.color(0x8e9399).box(-44.6, py, pz - 0.12, -44.2, py + 0.85, pz + 0.12);
-    bar.color(0x8e9399).box(-44.6, py + 0.85, pz - 0.22, -44.2, py + 1.0, pz - 0.12);
-    bar.color(0x8e9399).box(-44.6, py + 0.85, pz + 0.12, -44.2, py + 1.0, pz + 0.22);
-    this.add(bar.build(), this.lambert());
-    // its warning light, lit after dark
-    const wl = new G().color(0xffffff);
-    wl.box(px - 0.1, py + 1.15, pz - 0.1, px + 0.1, py + 1.3, pz + 0.1);
-    this.add(
-      wl.build(),
-      this.glows(this.keep(litMaterial({ color: 0x5a1a14, emissive: 0xff3a1a, emissiveIntensity: 0 })), 1.2, "lamp"),
-      "none",
-    );
-    // the sign by the road
-    this.signBoard(
-      "PRIVATE PROPERTY\nAUTHORISED VEHICLES ONLY\nALL VISITORS REPORT TO THE GATEHOUSE",
-      -47.5,
-      GATE.z + 4,
-      Math.PI / 2,
-      4.2,
-      1.8,
-      1.0,
-      "#e9e6dc",
-      "#1c2228",
-    );
-  }
   private signBoard(
     text: string,
     x: number,
@@ -3144,124 +3494,6 @@ export class Grounds3 {
     }
     this.add(legs.build(), this.lambert());
   }
-  private boathouse(b: Building) {
-    const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
-    const siding = this.keep(tex(sidingCanvas(this.T, b.tint ?? "#6e2a22")));
-    const walls = new G();
-    const H = 3.2;
-    const U = (a: number, y: number): [number, number] => [a / 3, y / 3];
-    const box = (x0: number, z0: number, x1: number, z1: number) => {
-      walls.quad(
-        [x0, y0, z0],
-        [x1, y0, z0],
-        [x1, y0 + H, z0],
-        [x0, y0 + H, z0],
-        [0, 0, -1],
-        [U(0, 0), U(x1 - x0, 0), U(x1 - x0, H), U(0, H)],
-      );
-      walls.quad(
-        [x0, y0, z1],
-        [x1, y0, z1],
-        [x1, y0 + H, z1],
-        [x0, y0 + H, z1],
-        [0, 0, 1],
-        [U(0, 0), U(x1 - x0, 0), U(x1 - x0, H), U(0, H)],
-      );
-      walls.quad(
-        [x0, y0, z0],
-        [x0, y0, z1],
-        [x0, y0 + H, z1],
-        [x0, y0 + H, z0],
-        [-1, 0, 0],
-        [U(0, 0), U(z1 - z0, 0), U(z1 - z0, H), U(0, H)],
-      );
-      walls.quad(
-        [x1, y0, z0],
-        [x1, y0, z1],
-        [x1, y0 + H, z1],
-        [x1, y0 + H, z0],
-        [1, 0, 0],
-        [U(0, 0), U(z1 - z0, 0), U(z1 - z0, H), U(0, H)],
-      );
-    };
-    box(b.x0, b.z0, b.x1, b.z1);
-    this.add(walls.build(), this.relief(this.lambert(0xffffff, siding), "pine", 3));
-    const roof = new G();
-    this.pitched(roof, b.x0, b.z0, b.x1, b.z1, y0 + H, 2.4, true, 0x3b3530, 0.5, 0x6e2a22);
-    // the big doors to the water, white trim
-    roof.color(0xe8e4da).box(b.x0 + 3, y0, b.z1 + 0.02, b.x1 - 3, y0 + 2.6, b.z1 + 0.12);
-    roof.color(0x5a231c).box(b.x0 + 3.2, y0, b.z1 + 0.1, b.x1 - 3.2, y0 + 2.45, b.z1 + 0.16);
-    this.add(roof.build(), this.lambert());
-    this.litWindow(b.x0 + 1.7, y0 + 1.2, b.z1, 1.2, 1.0, 0, 1, true, 0.8);
-  }
-  private shed(b: Building) {
-    const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
-    const metal = this.keep(tex(corrugatedCanvas(this.T)));
-    const g = new G();
-    const H = 4;
-    const U = (a: number, y: number): [number, number] => [a / 2, y / 2];
-    g.quad(
-      [b.x0, y0, b.z0],
-      [b.x1, y0, b.z0],
-      [b.x1, y0 + H, b.z0],
-      [b.x0, y0 + H, b.z0],
-      [0, 0, -1],
-      [U(0, 0), U(b.x1 - b.x0, 0), U(b.x1 - b.x0, H), U(0, H)],
-    );
-    g.quad(
-      [b.x0, y0, b.z1],
-      [b.x1, y0, b.z1],
-      [b.x1, y0 + H, b.z1],
-      [b.x0, y0 + H, b.z1],
-      [0, 0, 1],
-      [U(0, 0), U(b.x1 - b.x0, 0), U(b.x1 - b.x0, H), U(0, H)],
-    );
-    g.quad(
-      [b.x0, y0, b.z0],
-      [b.x0, y0, b.z1],
-      [b.x0, y0 + H, b.z1],
-      [b.x0, y0 + H, b.z0],
-      [-1, 0, 0],
-      [U(0, 0), U(b.z1 - b.z0, 0), U(b.z1 - b.z0, H), U(0, H)],
-    );
-    g.quad(
-      [b.x1, y0, b.z0],
-      [b.x1, y0, b.z1],
-      [b.x1, y0 + H, b.z1],
-      [b.x1, y0 + H, b.z0],
-      [1, 0, 0],
-      [U(0, 0), U(b.z1 - b.z0, 0), U(b.z1 - b.z0, H), U(0, H)],
-    );
-    this.add(g.build(), this.relief(this.lambert(0xffffff, metal), "metal-brushed", 2));
-    const r = new G();
-    r.color(0x5d6267).box(b.x0 - 0.4, y0 + H - 0.05, b.z0 - 0.4, b.x1 + 0.4, y0 + H + 0.15, b.z1 + 0.4);
-    flatSnow(r, b.x0 - 0.38, b.z0 - 0.38, b.x1 + 0.38, b.z1 + 0.38, y0 + H + 0.15, 0.4, groundsRng(b.x0 * 5 + 2));
-    icicles(r, [b.x0 - 0.4, y0 + H - 0.05, b.z0 - 0.4], [b.x1 + 0.4, y0 + H - 0.05, b.z0 - 0.4], groundsRng(b.z1), 0.5);
-    // the roll-up door: its slats, its frame, the drum's box over it; a lamp; a side door (a narrow
-    // shed — god mode's — its door in the middle, no side door)
-    const W = b.x1 - b.x0;
-    const wide = W >= 10.5;
-    const d0 = wide ? b.x0 + 2 : b.x0 + Math.max(1, (W - 5) / 2);
-    const d1 = wide ? b.x0 + 7 : Math.min(b.x1 - 1, d0 + 5);
-    r.color(0x9aa0a6).box(d0, y0, b.z0 - 0.06, d1, y0 + 3.2, b.z0 + 0.02);
-    for (let y = 0.2; y < 3.2; y += 0.22)
-      r.color(0x868c92).box(d0, y0 + y, b.z0 - 0.09, d1, y0 + y + 0.04, b.z0 - 0.06);
-    r.color(0x5d6267).box(d0 - 0.2, y0, b.z0 - 0.12, d0, y0 + 3.4, b.z0 + 0.02);
-    r.color(0x5d6267).box(d1, y0, b.z0 - 0.12, d1 + 0.2, y0 + 3.4, b.z0 + 0.02);
-    r.color(0x5d6267).box(d0 - 0.2, y0 + 3.2, b.z0 - 0.4, d1 + 0.2, y0 + 3.7, b.z0);
-    if (wide) {
-      r.color(0x6b4a3a).box(b.x0 + 9, y0, b.z0 - 0.06, b.x0 + 10, y0 + 2.2, b.z0 + 0.02);
-      r.color(0x2a2e33).box(b.x0 + 9.3, y0 + 3.0, b.z0 - 0.35, b.x0 + 9.7, y0 + 3.2, b.z0); // its lamp
-    }
-    // (the town's shed's: the plough blade and the salt, out in front and beside it)
-    if (b.key === "shed") r.color(0x6b6f74).box(b.x1 - 4, y0, b.z0 - 3.4, b.x1 - 1, y0 + 0.9, b.z0 - 1.4);
-    r.color(0xd8d0c0);
-    this.add(r.build(), this.lambert());
-    if (b.key === "shed") {
-      const salt = tinted(new ConeGeometry(1.6, 1.5, 9).translate(0, 0.75, 0), 0xcfc7b8);
-      this.add(place(salt, b.x1 + 2, y0, b.z0 + 2), this.lambert());
-    }
-  }
   // ── the farm (docs/plan/31-the-day.md): the barn, the silo, the farmhouse ──
   // walls as quads round a box, with a gap (a doorway) on one face if asked
   private walls(
@@ -3304,27 +3536,6 @@ export class Grounds3 {
     face("s", b.x1, b.z1, b.x0, b.z1, [0, 0, 1]);
     face("w", b.x0, b.z1, b.x0, b.z0, [-1, 0, 0]);
     face("e", b.x1, b.z0, b.x1, b.z1, [1, 0, 0]);
-  }
-  // a window's white frame, its cross and sill, round dark glass (the glass: litWindow), on a face
-  // whose outward normal is (nx, nz); (x, z) its middle on the wall, y its foot
-  private frame(g: G, x: number, y: number, z: number, w: number, h: number, nx: number, nz: number, trim = 0xece6da) {
-    const tx = -nz;
-    const tz = nx;
-    const o = 0.06;
-    const bar = (u0: number, v0: number, u1: number, v1: number, t = 0.09) => {
-      const ax = x + tx * u0 + nx * o;
-      const az = z + tz * u0 + nz * o;
-      const bx = x + tx * u1 + nx * (o + t);
-      const bz = z + tz * u1 + nz * (o + t);
-      g.box(Math.min(ax, bx), y + v0, Math.min(az, bz), Math.max(ax, bx), y + v1, Math.max(az, bz));
-    };
-    g.color(trim);
-    bar(-w / 2 - 0.1, -0.1, w / 2 + 0.1, 0); // the sill
-    bar(-w / 2 - 0.1, h, w / 2 + 0.1, h + 0.12); // the head
-    bar(-w / 2 - 0.1, 0, -w / 2, h); // the sides
-    bar(w / 2, 0, w / 2 + 0.1, h);
-    bar(-0.03, 0, 0.03, h, 0.05); // the cross
-    bar(-w / 2, h / 2 - 0.03, w / 2, h / 2 + 0.03, 0.05);
   }
   // ── the skate hall (docs/plan/103-the-skate.md F7c): a disused warehouse — corrugated walls on a block plinth,
   // a shallow gable, high windows down its long sides, a roller door's frame round its doorway, its sign ──
@@ -3513,368 +3724,6 @@ export class Grounds3 {
       this.skateMats.set(key, m);
     }
     return m;
-  }
-  private barn(b: Building) {
-    const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
-    const siding = this.keep(tex(sidingCanvas(this.T, b.tint ?? "#8e2b20")));
-    const H = 5.2;
-    const zm = (b.z0 + b.z1) / 2;
-    const K = 3.2; // the gambrel's knee: this far in from each side, 2.8 up
-    const i = insideOf(b);
-    const door = i?.door;
-    const dz0 = door ? door.from - 0.6 : 0;
-    const dz1 = door ? door.to + 0.6 : 0;
-    const g = new G();
-    this.walls(g, b, y0 + 0.6, H - 0.6, door ? { face: "w", from: dz0, to: dz1, h: 2.8 } : undefined);
-    // the gable ends: red pentagons (the gambrel's shape), siding on them too
-    const P = (x: number, y: number, z: number): V => [x, y, z];
-    for (const [x, nx] of [
-      [b.x0, -1],
-      [b.x1, 1],
-    ] as const) {
-      const n: V = [nx, 0, 0];
-      const a = P(x, y0 + H, b.z0);
-      const k0 = P(x, y0 + H + 2.8, b.z0 + K);
-      const r = P(x, y0 + H + 4.2, zm);
-      const k1 = P(x, y0 + H + 2.8, b.z1 - K);
-      const c = P(x, y0 + H, b.z1);
-      if (nx < 0) {
-        g.quad(c, a, k0, k1, n);
-        g.quad(k1, k0, r, r, n);
-      } else {
-        g.quad(a, c, k1, k0, n);
-        g.quad(k0, k1, r, r, n);
-      }
-    }
-    this.add(g.build(), this.relief(this.lambert(0xffffff, siding, false), "pine", 3));
-    const r = new G();
-    // the stone foundation (the doorway's gap kept)
-    r.color(0x8a8780);
-    r.box(b.x0 - 0.06, y0, b.z0 - 0.06, b.x1 + 0.06, y0 + 0.6, b.z0 + 0.3);
-    r.box(b.x0 - 0.06, y0, b.z1 - 0.3, b.x1 + 0.06, y0 + 0.6, b.z1 + 0.06);
-    r.box(b.x1 - 0.3, y0, b.z0, b.x1 + 0.06, y0 + 0.6, b.z1);
-    r.box(b.x0 - 0.06, y0, b.z0, b.x0 + 0.3, y0 + 0.6, door ? dz0 : b.z1);
-    if (door) r.box(b.x0 - 0.06, y0, dz1, b.x0 + 0.3, y0 + 0.6, b.z1);
-    const rs = groundsRng(b.x0 * 3 + 7);
-    r.color(0x77746d);
-    for (let k = 0; k < 40; k++) {
-      const u = rs();
-      const side = Math.floor(rs() * 2);
-      const x = b.x0 + u * (b.x1 - b.x0);
-      const z = side ? b.z0 - 0.08 : b.z1 + 0.02;
-      r.box(x, y0 + 0.08 + rs() * 0.35, z, x + 0.3 + rs() * 0.3, y0 + 0.22 + rs() * 0.3, z + 0.06);
-    }
-    // the gambrel roof: steep low, shallow high, overhanging; snow on it but its dark edge showing
-    const over = 0.6;
-    const prof: [number, number][] = [
-      [b.z0 - over, H - 0.35],
-      [b.z0 + K, H + 2.8],
-      [zm, H + 4.2],
-      [b.z1 - K, H + 2.8],
-      [b.z1 + over, H - 0.35],
-    ];
-    for (let k = 0; k < 4; k++) {
-      const [za, ya] = prof[k];
-      const [zb, yb] = prof[k + 1];
-      const dz = zb - za;
-      const dy = yb - ya;
-      const l = Math.hypot(dz, dy);
-      const n: V = [0, Math.abs(dz) / l, ((k < 2 ? -1 : 1) * Math.abs(dy)) / l];
-      r.color(0x3d3a36);
-      r.quad(
-        [b.x1 + over, y0 + ya, za],
-        [b.x0 - over, y0 + ya, za],
-        [b.x0 - over, y0 + yb, zb],
-        [b.x1 + over, y0 + yb, zb],
-        n,
-      );
-      r.color(0xf4f7fa).snow(atOf("roof", b.x0 + k * 3, b.z0), () => 0.18);
-      r.quad(
-        [b.x1 + over - 0.15, y0 + ya + 0.16, za + (k < 2 ? 0.15 : -0.15)],
-        [b.x0 - over + 0.15, y0 + ya + 0.16, za + (k < 2 ? 0.15 : -0.15)],
-        [b.x0 - over + 0.15, y0 + yb + 0.16, zb],
-        [b.x1 + over - 0.15, y0 + yb + 0.16, zb],
-        n,
-      );
-      r.snow(null);
-    }
-    // white trim: the corners, the eaves' fascia, the gables' rake boards
-    const t = 0xece6da;
-    r.color(t);
-    for (const [x, z] of [
-      [b.x0, b.z0],
-      [b.x1, b.z0],
-      [b.x0, b.z1],
-      [b.x1, b.z1],
-    ])
-      r.box(x - 0.16, y0 + 0.6, z - 0.16, x + 0.16, y0 + H, z + 0.16);
-    for (const z of [b.z0 - over, b.z1 + over])
-      r.box(b.x0 - over, y0 + H - 0.55, z - 0.06, b.x1 + over, y0 + H - 0.3, z + 0.06);
-    // the rake boards: a white band along the roof's edge at each gable end, under the snow's lip
-    for (const [x, nx] of [
-      [b.x0 - over, -1],
-      [b.x1 + over, 1],
-    ] as const)
-      for (let k = 0; k < 4; k++) {
-        const [za, ya] = prof[k];
-        const [zb, yb] = prof[k + 1];
-        r.quad(
-          [x, y0 + ya - 0.28, za],
-          [x, y0 + yb - 0.28, zb],
-          [x, y0 + yb + 0.02, zb],
-          [x, y0 + ya + 0.02, za],
-          [nx, 0, 0],
-        );
-      }
-    // the doors: the doorway's white frame, the X-braced doors slid open either side, their rail
-    if (door) {
-      r.color(t).box(b.x0 - 0.14, y0 + 2.8, dz0 - 0.2, b.x0 + 0.04, y0 + 3.05, dz1 + 0.2);
-      for (const z of [dz0 - 0.2, dz1]) r.color(t).box(b.x0 - 0.14, y0, z, b.x0 + 0.04, y0 + 2.8, z + 0.2);
-      for (const [za, zb] of [
-        [dz0 - 3.2, dz0 - 0.2],
-        [dz1 + 0.2, dz1 + 3.2],
-      ]) {
-        r.color(0x8e2b20).box(b.x0 - 0.24, y0 + 0.08, za, b.x0 - 0.14, y0 + 2.75, zb);
-        for (let p = za + 0.25; p < zb - 0.1; p += 0.25)
-          r.color(0x7a2419).box(b.x0 - 0.25, y0 + 0.1, p, b.x0 - 0.24, y0 + 2.7, p + 0.02);
-        r.color(t);
-        r.box(b.x0 - 0.3, y0 + 0.08, za, b.x0 - 0.22, y0 + 0.28, zb);
-        r.box(b.x0 - 0.3, y0 + 2.55, za, b.x0 - 0.22, y0 + 2.75, zb);
-        r.box(b.x0 - 0.3, y0 + 0.08, za, b.x0 - 0.22, y0 + 2.75, za + 0.2);
-        r.box(b.x0 - 0.3, y0 + 0.08, zb - 0.2, b.x0 - 0.22, y0 + 2.75, zb);
-        r.box(b.x0 - 0.3, y0 + 1.33, za, b.x0 - 0.22, y0 + 1.5, zb);
-        // the X: two straight boards corner to corner (14 little cubes a diagonal read as stairs)
-        const xf = b.x0 - 0.31;
-        const yl = y0 + 0.28;
-        const yh = y0 + 2.55;
-        const h = 0.12;
-        for (const [z0, z1] of [
-          [za + 0.2, zb - 0.2],
-          [zb - 0.2, za + 0.2],
-        ]) {
-          r.quad([xf, yl - h, z0], [xf, yh - h, z1], [xf, yh + h, z1], [xf, yl + h, z0], [-1, 0, 0]);
-          // its edges, so it stands proud of the boards
-          r.quad([xf, yl + h, z0], [xf, yh + h, z1], [xf + 0.08, yh + h, z1], [xf + 0.08, yl + h, z0], [0, 1, 0]);
-          r.quad([xf, yl - h, z0], [xf, yh - h, z1], [xf + 0.08, yh - h, z1], [xf + 0.08, yl - h, z0], [0, -1, 0]);
-        }
-      }
-      r.color(0x2f2f2f).box(b.x0 - 0.34, y0 + 2.95, dz0 - 3.4, b.x0 - 0.22, y0 + 3.05, dz1 + 3.4);
-      // a lantern by them (unlit: nobody's here)
-      r.color(0x2a2a2a).box(b.x0 - 0.5, y0 + 3.2, dz1 + 0.8, b.x0 - 0.2, y0 + 3.6, dz1 + 1.1);
-      r.color(0xe8d8a8).box(b.x0 - 0.47, y0 + 3.25, dz1 + 0.83, b.x0 - 0.23, y0 + 3.5, dz1 + 1.07);
-    }
-    // the hay loft's door in the west gable, a pent hood over it with the hay hook's beam
-    r.color(t).box(b.x0 - 0.12, y0 + H + 0.3, zm - 1.2, b.x0 + 0.02, y0 + H + 2.5, zm + 1.2);
-    r.color(0x6d2018).box(b.x0 - 0.16, y0 + H + 0.45, zm - 1.05, b.x0 - 0.08, y0 + H + 2.35, zm + 1.05);
-    r.color(t).box(b.x0 - 0.2, y0 + H + 0.45, zm - 0.06, b.x0 - 0.14, y0 + H + 2.35, zm + 0.06);
-    r.color(0x5a4636).box(b.x0 - 1.0, y0 + H + 2.75, zm - 0.07, b.x0, y0 + H + 2.88, zm + 0.07);
-    r.color(0x8e2b20).box(b.x0 - 0.7, y0 + H + 2.88, zm - 1.25, b.x0, y0 + H + 2.98, zm + 1.25);
-    snowBox(r.color(0xf4f7fa), b.x0 - 0.7, y0 + H + 2.98, zm - 1.25, b.x0, y0 + H + 3.08, zm + 1.25);
-    // the cupola on the ridge: louvred sides, a little pyramid roof, the weathervane
-    const rx = (b.x0 + b.x1) / 2;
-    const ry = y0 + H + 4.2;
-    r.color(t).box(rx - 0.8, ry - 0.3, zm - 0.8, rx + 0.8, ry + 1.1, zm + 0.8);
-    r.color(0x8e2b20);
-    for (let y = ry; y < ry + 1.0; y += 0.18) {
-      r.box(rx - 0.82, y, zm - 0.6, rx - 0.78, y + 0.1, zm + 0.6);
-      r.box(rx + 0.78, y, zm - 0.6, rx + 0.82, y + 0.1, zm + 0.6);
-    }
-    this.add(r.build(), this.lambert());
-    const cap = tinted(new ConeGeometry(1.25, 0.9, 4).rotateY(Math.PI / 4).translate(0, 0.45, 0), 0x3d3a36);
-    const capSnow = tinted(
-      new ConeGeometry(1.1, 0.75, 4).rotateY(Math.PI / 4).translate(0, 0.62, 0),
-      0xf4f7fa,
-      atOf("cap", rx, zm),
-    );
-    const vane = tinted(new BoxGeometry(0.06, 1.2, 0.06).translate(0, 1.4, 0), 0x2a2a2a);
-    const arrow = tinted(new BoxGeometry(1.1, 0.08, 0.04).translate(0, 1.85, 0), 0x2a2a2a);
-    const bird = tinted(new BoxGeometry(0.5, 0.35, 0.04).translate(0.1, 2.15, 0), 0x2a2a2a);
-    this.add(place(mergeGeometries([cap, capSnow, vane, arrow, bird], false), rx, ry + 1.1, zm), this.lambert());
-    for (const q of [cap, capSnow, vane, arrow, bird]) q.dispose();
-    // framed windows down the long sides (dark: nobody's in)
-    const w = new G();
-    for (let x = b.x0 + 4; x < b.x1 - 2; x += 6) {
-      this.litWindow(x, y0 + 2.2, b.z0, 1, 1, 0, -1, true, 0);
-      this.litWindow(x, y0 + 2.2, b.z1, 1, 1, 0, 1, true, 0);
-      this.frame(w, x, y0 + 2.2, b.z0, 1, 1, 0, -1);
-      this.frame(w, x, y0 + 2.2, b.z1, 1, 1, 0, 1);
-    }
-    this.add(w.build(), this.lambert());
-  }
-  private silo(b: Building) {
-    const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
-    const cx = (b.x0 + b.x1) / 2;
-    const cz = (b.z0 + b.z1) / 2;
-    const R = Math.min(b.x1 - b.x0, b.z1 - b.z0) / 2 - 0.2;
-    const Hh = 13;
-    const parts: BufferGeometry[] = [
-      // the concrete footing
-      tinted(new CylinderGeometry(R + 0.35, R + 0.45, 0.5, 28).translate(0, 0.25, 0), 0x9a968e),
-    ];
-    // the ribbed sheets, ring on ring, a shade apart; their bolted seams
-    for (let y = 0.5, k = 0; y < Hh; y += 0.5, k++)
-      parts.push(
-        tinted(new CylinderGeometry(R, R, 0.5, 28, 1, true).translate(0, y + 0.25, 0), k % 2 ? 0xaeb3b7 : 0xa2a7ab),
-      );
-    for (let y = 2.5; y < Hh; y += 2.5)
-      parts.push(tinted(new CylinderGeometry(R + 0.06, R + 0.06, 0.12, 28, 1, true).translate(0, y, 0), 0x7e8388));
-    // the dome, its snow, the vent on top, a railing round its rim
-    parts.push(
-      tinted(
-        new SphereGeometry(R + 0.05, 28, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.5, 1).translate(0, Hh, 0),
-        0x8f9499,
-      ),
-      // (the weather's: pressed onto the dome)
-      tagged(
-        tinted(
-          new SphereGeometry(R + 0.12, 28, 6, 0, Math.PI * 2, 0, Math.PI / 3.2)
-            .scale(1, 0.5, 1)
-            .translate(0, Hh + 0.04, 0),
-          0xf6f8fa,
-        ),
-        atOf("roof", cx, cz),
-        (x, y, z) => Math.max(0, y - (Hh + 0.5 * Math.sqrt(Math.max(0, (R + 0.05) ** 2 - x * x - z * z))) + 0.03),
-      ),
-      tinted(new CylinderGeometry(0.45, 0.55, 0.7, 12).translate(0, Hh + R * 0.5 + 0.2, 0), 0x7e8388),
-      tinted(new ConeGeometry(0.7, 0.4, 12).translate(0, Hh + R * 0.5 + 0.75, 0), 0x6a6f74),
-      tinted(new CylinderGeometry(R + 0.4, R + 0.4, 0.06, 28, 1, true).translate(0, Hh + 0.9, 0), 0x5c6166),
-    );
-    for (let a = 0; a < Math.PI * 2; a += Math.PI / 8)
-      parts.push(
-        tinted(
-          new BoxGeometry(0.05, 0.9, 0.05).translate(Math.cos(a) * (R + 0.4), Hh + 0.45, Math.sin(a) * (R + 0.4)),
-          0x5c6166,
-        ),
-      );
-    // the caged ladder up its west side
-    for (const dz of [-0.3, 0.3])
-      parts.push(tinted(new BoxGeometry(0.06, Hh + 0.8, 0.06).translate(-R - 0.25, (Hh + 0.8) / 2, dz), 0x5c6166));
-    for (let y = 0.5; y < Hh + 0.6; y += 0.4)
-      parts.push(tinted(new BoxGeometry(0.05, 0.05, 0.6).translate(-R - 0.25, y, 0), 0x5c6166));
-    for (let y = 2.4; y < Hh; y += 0.9)
-      parts.push(
-        tinted(
-          new TorusGeometry(0.5, 0.03, 4, 12, Math.PI)
-            .rotateX(Math.PI / 2)
-            .rotateY(Math.PI / 2)
-            .translate(-R - 0.25, y, 0),
-          0x5c6166,
-        ),
-      );
-    // the chute down to the barn's side
-    for (let k = 0; k < 7; k++)
-      parts.push(
-        tinted(new BoxGeometry(0.5, 0.5, 0.5).translate(-R - 0.6 - k * 0.55, Hh - 1 - k * 0.65, 1.6), 0x8a8f94),
-      );
-    this.add(place(mergeGeometries(parts, false), cx, y0, cz), this.lambert());
-    for (const p of parts) p.dispose();
-  }
-  private farmhouse(b: Building) {
-    const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
-    const siding = this.keep(tex(sidingCanvas(this.T, b.tint ?? "#e3dccb")));
-    const H = 6.2;
-    const door = insideOf(b)?.door;
-    const g = new G();
-    this.walls(
-      g,
-      b,
-      y0 + 0.45,
-      H - 0.45,
-      door ? { face: "n", from: door.from + 0.3, to: door.to - 0.3, h: 2.0 } : undefined,
-    );
-    this.add(g.build(), this.relief(this.lambert(0xffffff, siding, false), "pine", 3));
-    const r = new G();
-    this.pitched(r, b.x0, b.z0, b.x1, b.z1, y0 + H, 3, true, 0x3a3f45, 0.55, 0xe3dccb);
-    const t = 0xf2eee6;
-    const z = b.z0;
-    const xm = (b.x0 + b.x1) / 2;
-    // the foundation, the corner boards, the gutters along the eaves
-    r.color(0x8a8780).box(b.x0 - 0.05, y0, b.z0 - 0.05, b.x1 + 0.05, y0 + 0.45, b.z1 + 0.05);
-    r.color(t);
-    for (const [x, zz] of [
-      [b.x0, b.z0],
-      [b.x1, b.z0],
-      [b.x0, b.z1],
-      [b.x1, b.z1],
-    ])
-      r.box(x - 0.13, y0 + 0.45, zz - 0.13, x + 0.13, y0 + H, zz + 0.13);
-    r.color(0x4a4f55);
-    for (const zz of [b.z0 - 0.65, b.z1 + 0.5]) r.box(b.x0 - 0.55, y0 + H - 0.2, zz, b.x1 + 0.55, y0 + H, zz + 0.15);
-    for (const x of [b.x0 - 0.45, b.x1 + 0.35]) r.box(x, y0 + 0.45, b.z0 - 0.65, x + 0.1, y0 + H - 0.2, b.z0 - 0.55);
-    // the porch along the front (north): its floor, steps, posts, railings, a roof under snow
-    r.color(0x8a7f6e).box(b.x0 + 1, y0 + 0.3, z - 2.2, b.x1 - 1, y0 + 0.5, z);
-    r.color(0x7a6f5e);
-    for (const [k, w] of [
-      [0, 1.8],
-      [1, 1.4],
-    ] as const)
-      r.box(xm - w / 2 - 0.4, y0 + k * 0.17, z - 2.2 - (2 - k) * 0.35, xm + w / 2 + 0.4, y0 + (k + 1) * 0.17, z - 2.2);
-    const posts: number[] = [];
-    for (let x = b.x0 + 1.2; x <= b.x1 - 1; x += (b.x1 - b.x0 - 2.4) / 3) posts.push(x);
-    r.color(t);
-    for (const x of posts) r.box(x - 0.1, y0 + 0.5, z - 2.1, x + 0.1, y0 + 2.9, z - 1.9);
-    for (const [xa, xb] of [
-      [b.x0 + 1.2, xm - 1.1],
-      [xm + 1.1, b.x1 - 1.2],
-    ]) {
-      r.box(xa, y0 + 1.35, z - 2.06, xb, y0 + 1.45, z - 1.94);
-      r.box(xa, y0 + 0.6, z - 2.04, xb, y0 + 0.66, z - 1.96);
-      for (let x = xa + 0.2; x < xb; x += 0.3) r.box(x - 0.03, y0 + 0.6, z - 2.03, x + 0.03, y0 + 1.35, z - 1.97);
-    }
-    r.color(0x3a3f45).box(b.x0 + 0.8, y0 + 2.9, z - 2.4, b.x1 - 0.8, y0 + 3.05, z);
-    slopeSnow(
-      r,
-      [b.x0 + 0.85, y0 + 3.05, z - 0.05],
-      [b.x1 - 0.85, y0 + 3.05, z - 0.05],
-      [b.x0 + 0.85, y0 + 3.05, z - 2.35],
-      [b.x1 - 0.85, y0 + 3.05, z - 2.35],
-      0.18,
-      groundsRng(b.x0 * 11),
-      0.5,
-    );
-    // the door: its frame, the door itself stood open into the room
-    if (door) {
-      r.color(t);
-      r.box(door.from + 0.15, y0 + 0.45, z - 0.08, door.from + 0.3, y0 + 2.55, z + 0.02);
-      r.box(door.to - 0.3, y0 + 0.45, z - 0.08, door.to - 0.15, y0 + 2.55, z + 0.02);
-      r.box(door.from + 0.15, y0 + 2.45, z - 0.08, door.to - 0.15, y0 + 2.6, z + 0.02);
-      r.color(0x4a3a2c).box(door.from + 0.3, y0 + 0.47, z + 0.05, door.from + 0.38, y0 + 2.43, z + 1.3);
-    }
-    // a brick chimney with its cap
-    const cz = (b.z0 + b.z1) / 2;
-    r.color(0x8a4a3a).box(b.x1 - 3, y0 + H - 1, cz + 0.5, b.x1 - 2, y0 + H + 3.6, cz + 1.5);
-    r.color(0x6f3a2e).box(b.x1 - 3.1, y0 + H + 3.4, cz + 0.4, b.x1 - 1.9, y0 + H + 3.6, cz + 1.6);
-    snowBox(r.color(0xf4f7fa), b.x1 - 3.05, y0 + H + 3.6, cz + 0.45, b.x1 - 1.95, y0 + H + 3.78, cz + 1.55);
-    this.add(r.build(), this.lambert());
-    // the windows: dark (nobody's home), framed, with shutters
-    const w = new G();
-    const win = (x: number, y: number, zz: number, nx: number, nz: number, ww = 1.2, hh = 1.4) => {
-      this.litWindow(x, y, zz, ww, hh, nx, nz, true, 0);
-      this.frame(w, x, y, zz, ww, hh, nx, nz, t);
-      const tx = -nz;
-      const tz = nx;
-      w.color(0x2f4a3b);
-      for (const s of [-1, 1]) {
-        const ax = x + tx * s * (ww / 2 + 0.15) + nx * 0.05;
-        const az = zz + tz * s * (ww / 2 + 0.15) + nz * 0.05;
-        const bx = x + tx * s * (ww / 2 + 0.6) + nx * 0.1;
-        const bz = zz + tz * s * (ww / 2 + 0.6) + nz * 0.1;
-        w.box(Math.min(ax, bx), y - 0.05, Math.min(az, bz), Math.max(ax, bx), y + hh + 0.05, Math.max(az, bz));
-      }
-    };
-    for (const dx of [-4, 4]) {
-      win(xm + dx, y0 + 1.0, z, 0, -1);
-      win(xm + dx, y0 + 3.7, z, 0, -1);
-    }
-    win(xm, y0 + 3.7, z, 0, -1);
-    for (const dz of [-2.5, 2.5]) {
-      win(b.x0, y0 + 1.0, cz + dz, -1, 0, 1.1);
-      win(b.x1, y0 + 1.0, cz + dz, 1, 0, 1.1);
-      win(b.x0, y0 + 3.7, cz + dz, -1, 0, 1.1);
-      win(b.x1, y0 + 3.7, cz + dz, 1, 0, 1.1);
-    }
-    for (const dx of [-4, 0, 4]) win(xm + dx, y0 + 3.7, b.z1, 0, 1);
-    this.add(w.build(), this.lambert());
   }
   /** The farm's yard a step at a time (the cornfield in bands of rows: all at once was a 100 ms frame). */
   private farmSteps(): (() => void)[] {
@@ -4107,891 +3956,6 @@ export class Grounds3 {
     }
     this.add(mergeGeometries(bales, false), this.lambert());
     for (const b of bales) b.dispose();
-  }
-  private shelter(b: Building) {
-    const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
-    const g = new G();
-    g.color(0x2f3439);
-    for (const [x, z] of [
-      [b.x0, b.z0],
-      [b.x1, b.z0],
-      [b.x0, b.z1],
-      [b.x1, b.z1],
-    ])
-      g.box(x - 0.06, y0, z - 0.06, x + 0.06, y0 + 2.5, z + 0.06);
-    g.color(0x2f3439).box(b.x0 - 0.3, y0 + 2.5, b.z0 - 0.3, b.x1 + 0.3, y0 + 2.7, b.z1 + 0.3);
-    flatSnow(g, b.x0 - 0.28, b.z0 - 0.28, b.x1 + 0.28, b.z1 + 0.28, y0 + 2.7, 0.26, groundsRng(b.x0 + 9));
-    icicles(g, [b.x0 - 0.3, y0 + 2.5, b.z0 - 0.3], [b.x1 + 0.3, y0 + 2.5, b.z0 - 0.3], groundsRng(b.z0 + 9), 0.5);
-    g.color(0x6a5040).box(b.x0 + 0.5, y0 + 0.45, b.z0 + 0.3, b.x1 - 0.5, y0 + 0.55, b.z0 + 0.8); // the bench
-    this.add(g.build(), this.lambert());
-    const gl = new G().color(0x8fa3b0);
-    gl.quad([b.x0, y0 + 0.2, b.z0], [b.x1, y0 + 0.2, b.z0], [b.x1, y0 + 2.4, b.z0], [b.x0, y0 + 2.4, b.z0], [0, 0, -1]);
-    gl.quad(
-      [b.x0, y0 + 0.2, b.z0],
-      [b.x0, y0 + 0.2, b.z1 - 1],
-      [b.x0, y0 + 2.4, b.z1 - 1],
-      [b.x0, y0 + 2.4, b.z0],
-      [-1, 0, 0],
-    );
-    gl.quad(
-      [b.x1, y0 + 0.2, b.z0],
-      [b.x1, y0 + 0.2, b.z1 - 1],
-      [b.x1, y0 + 2.4, b.z1 - 1],
-      [b.x1, y0 + 2.4, b.z0],
-      [1, 0, 0],
-    );
-    const m = this.keep(litMaterial({ vertexColors: true, transparent: true, opacity: 0.45, side: DoubleSide }));
-    this.add(gl.build(), m, "none");
-    this.signBoard("BUS STOP", b.x1 + 1.2, b.z1 + 0.6, 0, 1.1, 0.5, 2.1, "#1d4a7a", "#f2f2f2");
-  }
-  /** Four textured walls round a box, the face `tall` rising to `Hf` (a false front). */
-  private wallsUV(
-    g: G,
-    b: { x0: number; z0: number; x1: number; z1: number },
-    y0: number,
-    H: number,
-    k: number,
-    tall?: { side: "n" | "s" | "e" | "w"; Hf: number },
-  ) {
-    const { x0, z0, x1, z1 } = b;
-    const U = (a: number, y: number): [number, number] => [a / k, y / k];
-    const h = (s: string) => (tall && tall.side === s ? tall.Hf : H);
-    const fw = (a: V, bb: V, hh: number, n: V, len: number) =>
-      g.quad(a, bb, [bb[0], y0 + hh, bb[2]], [a[0], y0 + hh, a[2]], n, [U(0, 0), U(len, 0), U(len, hh), U(0, hh)]);
-    fw([x0, y0, z0], [x1, y0, z0], h("n"), [0, 0, -1], x1 - x0);
-    fw([x0, y0, z1], [x1, y0, z1], h("s"), [0, 0, 1], x1 - x0);
-    fw([x0, y0, z0], [x0, y0, z1], h("w"), [-1, 0, 0], z1 - z0);
-    fw([x1, y0, z0], [x1, y0, z1], h("e"), [1, 0, 0], z1 - z0);
-    // a false front's back, seen over the roof
-    if (tall) {
-      const s = tall.side;
-      const z = s === "n" ? z0 + 0.25 : z1 - 0.25;
-      const n: V = [0, 0, s === "n" ? 1 : -1];
-      g.quad([x0, y0 + H, z], [x1, y0 + H, z], [x1, y0 + tall.Hf, z], [x0, y0 + tall.Hf, z], n, [
-        U(0, H),
-        U(x1 - x0, H),
-        U(x1 - x0, tall.Hf),
-        U(0, tall.Hf),
-      ]);
-    }
-  }
-  /** The town's shops and their kin (docs/plan/33-the-look.md, phase 4): a façade kit — brick with
-   *  a dentilled cornice or clapboard with a false front, framed windows with stone heads on every
-   *  face, a shopfront of panes over a panelled base, a striped or plain awning; the town hall
-   *  columned under a pediment, the post office's flag, the diner's chrome and roof sign, the
-   *  hotel's marquee. */
-  private shop(b: Building) {
-    const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
-    const r = groundsRng(b.x0 * 31 + 7);
-    const fh = 3.8;
-    const H = b.floors * fh + 0.8;
-    // (what it looks like: world/grounds-look.ts)
-    const L = shopLook(b);
-    const { civic, diner, brick } = L;
-    const wall = this.wallPic(brick ? "brick" : "siding", b.tint ?? L.wall, b.x0);
-    const { x0, z0, x1, z1 } = b;
-    const nz = b.face === "n" ? -1 : 1;
-    const fz = b.face === "n" ? z0 : z1;
-    const w = x1 - x0;
-    const xm = (x0 + x1) / 2;
-    const trim = hexOf(L.trim);
-    // clapboard (and the one-storey ones, for their signs) get a false front
-    const falseFront = L.falseFront;
-    const Hf = falseFront ? H + 1.4 : H;
-    const g = new G();
-    this.wallsUV(g, b, y0, H, 4, falseFront ? { side: b.face, Hf } : undefined);
-    // (brick: the library's in its painted colour — the painting's courses can't meet the library's relief;
-    // as the building's walls, plan 73 phase 7.0)
-    const wm = this.lambert(0xffffff, wall, false);
-    if (brick && !!lifeDress.on && !wm.userData.relief && lifeDress.dress) {
-      wm.userData.relief = true;
-      lifeDress.dress(wm, "brick", {
-        tint: new Color(b.tint ?? L.wall).getHex(),
-        k: 4,
-      });
-    }
-    this.add(g.build(), brick ? wm : this.relief(wm, "pine", 4));
-    const c = new G();
-    // the top: a cornice with dentils (brick), a capped false front with a raised middle (clapboard),
-    // a plain coping (civic, the diner)
-    if (falseFront) {
-      c.color(trim).box(
-        x0 - 0.15,
-        y0 + Hf - 0.3,
-        Math.min(fz, fz + nz * 0.3),
-        x1 + 0.15,
-        y0 + Hf,
-        Math.max(fz, fz + nz * 0.3),
-      );
-      c.color(trim).box(
-        xm - 1.6,
-        y0 + Hf,
-        Math.min(fz, fz + nz * 0.25),
-        xm + 1.6,
-        y0 + Hf + 0.7,
-        Math.max(fz, fz + nz * 0.25),
-      );
-      c.color(trim).box(
-        xm - 1.75,
-        y0 + Hf + 0.7,
-        Math.min(fz, fz + nz * 0.32),
-        xm + 1.75,
-        y0 + Hf + 0.9,
-        Math.max(fz, fz + nz * 0.32),
-      );
-      flatSnow(c, xm - 1.7, Math.min(fz, fz + nz * 0.3), xm + 1.7, Math.max(fz, fz + nz * 0.3), y0 + Hf + 0.9, 0.12, r);
-      flatSnow(c, x0 - 0.1, Math.min(fz, fz + nz * 0.28), x1 + 0.1, Math.max(fz, fz + nz * 0.28), y0 + Hf, 0.12, r);
-      // the plain roof behind it, a low coping round its other sides
-      c.color(0x8c857a).box(x0 - 0.1, y0 + H - 0.2, z0 - 0.1, x1 + 0.1, y0 + H, z1 + 0.1);
-    } else if (brick) {
-      c.color(0x8c857a).box(x0 - 0.3, y0 + H - 0.35, z0 - 0.3, x1 + 0.3, y0 + H, z1 + 0.3);
-      c.color(trim).box(x0 - 0.2, y0 + H - 0.75, z0 - 0.2, x1 + 0.2, y0 + H - 0.35, z1 + 0.2);
-      for (let x = x0 + 0.2; x < x1 - 0.1; x += 0.45)
-        c.color(0x8c857a).box(x, y0 + H - 0.95, fz + nz * 0.0, x + 0.22, y0 + H - 0.75, fz + nz * 0.18);
-      // a corbelled band over the shopfront
-      c.color(trim).box(x0, y0 + 3.7, Math.min(fz, fz + nz * 0.12), x1, y0 + 3.85, Math.max(fz, fz + nz * 0.12));
-    } else {
-      c.color(diner ? 0xb8bec4 : 0xbdb6a6).box(x0 - 0.2, y0 + H - 0.4, z0 - 0.2, x1 + 0.2, y0 + H, z1 + 0.2);
-    }
-    flatSnow(c, x0 - 0.2, z0 - 0.2, x1 + 0.2, z1 + 0.2, y0 + H, 0.34, r);
-    {
-      const ez = fz + nz * 0.3;
-      icicles(c, [x0 - 0.2, y0 + Hf - 0.3, ez], [x1 + 0.2, y0 + Hf - 0.3, ez], r, 0.3);
-    }
-    this.add(c.build(), this.lambert());
-    // upstairs windows, on the front and the sides: framed, a stone head over each
-    const head = new G();
-    const upper = (x: number, y: number, z: number, ww: number, hh: number, nx: number, nzz: number, lit: number) => {
-      this.litWindow(x, y, z, ww, hh, nx, nzz, true, lit);
-      this.frame(head, x, y, z, ww, hh, nx, nzz, trim);
-      const tx = -nzz;
-      const tz = nx;
-      const a = ww / 2 + 0.22;
-      const [hx0, hx1] = [x - tx * a, x + tx * a].sort((p, q) => p - q);
-      const [hz0, hz1] = [z - tz * a, z + tz * a].sort((p, q) => p - q);
-      head
-        .color(brick ? 0xcfc6b4 : trim)
-        .box(
-          Math.min(hx0, hx0 + nx * 0.18),
-          y + hh + 0.12,
-          Math.min(hz0, hz0 + nzz * 0.18),
-          Math.max(hx1, hx1 + nx * 0.18),
-          y + hh + 0.38,
-          Math.max(hz1, hz1 + nzz * 0.18),
-        );
-    };
-    const lit = L.lit(64);
-    let li = 0;
-    for (let f = 1; f < b.floors; f++) {
-      const n = Math.max(2, Math.floor(w / 4));
-      for (let k = 0; k < n; k++) {
-        const x = x0 + (w / n) * (k + 0.5);
-        if (b.vacant) continue;
-        upper(x, y0 + f * fh + 1.3, fz, 1.3, 1.7, 0, nz, lit[li++ % 64] ? 0.8 : 0);
-      }
-      const d = z1 - z0;
-      for (const [sx, snx] of [
-        [x0, -1],
-        [x1, 1],
-      ] as const)
-        for (const t of d > 12 ? [0.3, 0.7] : [0.5])
-          upper(sx, y0 + f * fh + 1.3, z0 + d * t, 1.2, 1.6, snx, 0, lit[li++ % 64] ? 0.7 : 0);
-    }
-    this.add(head.build(), this.lambert());
-    const front = new G();
-    if (b.vacant) {
-      // boarded: planks across the shopfront and the upstairs windows, snow banked at the door
-      for (let y = 0.7; y < 3; y += 0.32)
-        front
-          .color(r() < 0.5 ? 0xa48a6a : 0x96805f)
-          .box(x0 + 0.8 + r() * 0.3, y0 + y, fz + nz * 0.02, x1 - 0.8 - r() * 0.3, y0 + y + 0.26, fz + nz * 0.1);
-      for (let f = 1; f < b.floors; f++)
-        for (let k = 0; k < 3; k++) {
-          const x = x0 + (w / 3) * (k + 0.5);
-          front
-            .color(0x2a2e33)
-            .box(x - 0.65, y0 + f * fh + 1.3, fz + nz * 0.01, x + 0.65, y0 + f * fh + 3, fz + nz * 0.03);
-          for (let y = 1.4; y < 2.9; y += 0.42)
-            front
-              .color(0x9a8264)
-              .box(x - 0.8, y0 + f * fh + y, fz + nz * 0.03, x + 0.8, y0 + f * fh + y + 0.3, fz + nz * 0.09);
-        }
-      this.add(front.build(), this.lambert());
-      this.signBoard("FOR LEASE", xm, fz + nz * 0.3, b.face === "n" ? Math.PI : 0, 1.6, 0.5, 1.5, "#d8d2c2", "#7a2a22");
-      return;
-    }
-    if (civic) return this.civicFront(b, y0, fz, nz, xm, w, H, trim, r);
-    // the shopfront: a panelled base, panes over it, a transom, pilasters, the door
-    const tone = b.sign === "BAR" ? "#c86a3c" : diner ? "#f0d9a0" : "#e6b878";
-    const wt = this.keep(tex(shopWindowCanvas(this.T, b.x0, tone), false));
-    const win = this.glows(
-      this.keep(
-        litMaterial({
-          map: wt,
-          color: 0x404850,
-          emissive: 0xffffff,
-          emissiveMap: wt,
-          emissiveIntensity: 0,
-        }),
-      ),
-      0.95,
-      "windows",
-    );
-    const wy0 = diner ? 1.25 : 0.7;
-    const wy1 = diner ? 2.7 : 3.0;
-    const wg = new G().color(0xffffff);
-    const ww = w - 2;
-    wg.quad(
-      [xm - (nz * ww) / 2, y0 + wy0, fz + nz * 0.05],
-      [xm + (nz * ww) / 2, y0 + wy0, fz + nz * 0.05],
-      [xm + (nz * ww) / 2, y0 + wy1, fz + nz * 0.05],
-      [xm - (nz * ww) / 2, y0 + wy1, fz + nz * 0.05],
-      [0, 0, nz],
-    );
-    this.add(wg.build(), win, "none");
-    const dark = b.sign === "BAR" ? 0x2a1614 : 0x23292e;
-    const F = (xa: number, ya: number, xb: number, yb: number, d0: number, d1: number, col = dark) =>
-      front
-        .color(col)
-        .box(xa, y0 + ya, Math.min(fz + nz * d0, fz + nz * d1), xb, y0 + yb, Math.max(fz + nz * d0, fz + nz * d1));
-    if (diner) {
-      // chrome below and above the strip of windows, a red band, rounded-off corners as bars
-      F(x0 - 0.02, 0, x1 + 0.02, wy0 - 0.25, 0, 0.12, 0xb8bec4);
-      F(x0 - 0.02, wy0 - 0.25, x1 + 0.02, wy0, 0, 0.14, 0xa8322a);
-      F(x0 - 0.02, wy1, x1 + 0.02, wy1 + 0.18, 0, 0.14, 0xa8322a);
-      for (let x = x0 + 1; x < x1 - 0.5; x += 1.6) F(x - 0.04, wy0, x + 0.04, wy1, 0, 0.1, 0xd8dde2);
-      F(xm - 0.7, 0, xm + 0.7, 2.45, 0.04, 0.16, 0xc9ced3); // the door
-      F(xm - 0.3, 1.5, xm + 0.3, 2.1, 0.16, 0.18, 0xf0d9a0); // its round window, squared
-    } else {
-      F(x0 + 0.4, 0, x0 + 1, 3.4, 0.02, 0.24); // pilasters
-      F(x1 - 1, 0, x1 - 0.4, 3.4, 0.02, 0.24);
-      F(x0 + 0.4, 3.0, x1 - 0.4, 3.4, 0.02, 0.22); // the fascia under the awning
-      F(x0 + 1, 0, x1 - 1, wy0, 0.02, 0.14); // the panelled base
-      for (let x = x0 + 1.4; x < x1 - 1.2; x += 1.5) F(x, 0.15, x + 1.1, wy0 - 0.15, 0.14, 0.17, 0x353c42);
-      F(x0 + 1, 2.55, x1 - 1, 2.62, 0.05, 0.12); // the transom bar
-      for (let x = x0 + 1 + 1.7; x < x1 - 1.4; x += 1.7)
-        if (Math.abs(x - xm) > 1.1) F(x - 0.04, wy0, x + 0.04, wy1, 0.05, 0.11);
-      F(xm - 0.8, 0, xm + 0.8, 2.6, 0.04, 0.12); // the door: its frame…
-      F(xm - 0.6, 1.0, xm + 0.6, 2.4, 0.12, 0.13, 0x46525c); // …its glass
-      F(xm + 0.45, 1.1, xm + 0.52, 1.3, 0.13, 0.18, 0xc9a85a); // …its handle
-    }
-    // the awning (not the diner's, nor the hotel's: a marquee), striped on some
-    if (!diner && b.kind !== "hotel") {
-      const aw = hexOf(L.awning);
-      const striped = L.striped;
-      const n = Math.round((w - 1.2) / 0.6);
-      for (let i = 0; i < n; i++) {
-        const xa = x0 + 0.6 + ((w - 1.2) * i) / n;
-        const xb = x0 + 0.6 + ((w - 1.2) * (i + 1)) / n;
-        front.color(striped && i % 2 ? 0xe9e2d0 : aw);
-        face(
-          front,
-          [xa, y0 + 3.5, fz],
-          [xb, y0 + 3.5, fz],
-          [xb, y0 + 2.9, fz + nz * 1.6],
-          [xa, y0 + 2.9, fz + nz * 1.6],
-          [0, 1, nz],
-        );
-        // the valance hanging off its edge
-        face(
-          front,
-          [xa, y0 + 2.9, fz + nz * 1.6],
-          [xb, y0 + 2.9, fz + nz * 1.6],
-          [xb, y0 + 2.62, fz + nz * 1.6],
-          [xa, y0 + 2.62, fz + nz * 1.6],
-          [0, 0, nz],
-        );
-      }
-      // its ends
-      front.color(aw);
-      for (const x of [x0 + 0.6, x1 - 0.6])
-        face(
-          front,
-          [x, y0 + 3.5, fz],
-          [x, y0 + 2.9, fz + nz * 1.6],
-          [x, y0 + 2.62, fz + nz * 1.6],
-          [x, y0 + 2.9, fz],
-          [x < xm ? -1 : 1, 0, 0],
-        );
-      slopeSnow(
-        front,
-        [x0 + 0.7, y0 + 3.5, fz + nz * 0.02],
-        [x1 - 0.7, y0 + 3.5, fz + nz * 0.02],
-        [x0 + 0.7, y0 + 2.92, fz + nz * 1.55],
-        [x1 - 0.7, y0 + 2.92, fz + nz * 1.55],
-        0.13,
-        r,
-        0.45,
-      );
-    }
-    if (b.kind === "hotel") {
-      // the marquee over its door, lit underneath
-      front
-        .color(0x23292e)
-        .box(xm - 2.4, y0 + 3.1, Math.min(fz, fz + nz * 3), xm + 2.4, y0 + 3.45, Math.max(fz, fz + nz * 3));
-      flatSnow(
-        front,
-        xm - 2.35,
-        Math.min(fz, fz + nz * 2.95),
-        xm + 2.35,
-        Math.max(fz, fz + nz * 2.95),
-        y0 + 3.45,
-        0.18,
-        r,
-      );
-      for (const sx of [-2.2, 2.2])
-        front
-          .color(0xc9a85a)
-          .box(xm + sx - 0.06, y0, fz + nz * 2.85 - 0.06, xm + sx + 0.06, y0 + 3.1, fz + nz * 2.85 + 0.06);
-      const ug = new G().color(0xffffff);
-      ug.quad(
-        [xm - 2.3, y0 + 3.08, fz + nz * 0.1],
-        [xm + 2.3, y0 + 3.08, fz + nz * 0.1],
-        [xm + 2.3, y0 + 3.08, fz + nz * 2.9],
-        [xm - 2.3, y0 + 3.08, fz + nz * 2.9],
-        [0, -1, 0],
-      );
-      this.add(
-        ug.build(),
-        this.glows(
-          this.keep(litMaterial({ color: 0x5a5040, emissive: 0xffd9a0, emissiveIntensity: 0 })),
-          1.1,
-          "windows",
-        ),
-        "none",
-      );
-    }
-    this.add(front.build(), this.lambert());
-    // the sign: over the awning (on the false front, for the low ones); the diner's up on its roof
-    if (b.sign) {
-      const st = this.keep(
-        tex(
-          signCanvas(
-            this.T,
-            b.sign,
-            512,
-            96,
-            b.sign === "BAR" ? "#2a0e0c" : diner ? "#a8322a" : "#1d2226",
-            b.sign === "BAR" ? "#ffb48a" : diner ? "#fff1d8" : "#efe3c4",
-          ),
-          false,
-        ),
-      );
-      const sm = this.glows(
-        this.keep(litMaterial({ map: st, emissive: 0xffffff, emissiveMap: st, emissiveIntensity: 0 })),
-        b.sign === "BAR" || diner ? 1.4 : 0.7,
-        "sign",
-      );
-      const sw = diner ? Math.min(w - 2, 9) : Math.min(w - 1.5, 6.2);
-      const sh = sw * 0.1875;
-      const plane = new Mesh(this.keep(new BoxGeometry(sw, sh, 0.12)), sm);
-      const sy = diner ? y0 + H + 1.2 + sh / 2 : y0 + 3.72 + sh / 2;
-      plane.position.set(xm, sy, fz + nz * (diner ? 1.2 : 0.1));
-      plane.rotation.y = nz > 0 ? 0 : Math.PI;
-      this.root.add(plane);
-      if (diner) {
-        const legs = new G().color(0x3a3f45);
-        for (const sx of [-sw / 2 + 0.4, sw / 2 - 0.4])
-          legs.box(xm + sx - 0.07, y0 + H, fz + nz * 1.2 - 0.07, xm + sx + 0.07, sy - sh / 2, fz + nz * 1.2 + 0.07);
-        snowBox(
-          legs.color(SNOW),
-          xm - sw / 2,
-          sy + sh / 2,
-          fz + nz * 1.2 - 0.07,
-          xm + sw / 2,
-          sy + sh / 2 + 0.06,
-          fz + nz * 1.2 + 0.07,
-        );
-        this.add(legs.build(), this.lambert());
-      }
-    }
-    this.lights.push({ p: new Vector3(xm, y0 + 3.2, fz + nz * 1.2), kind: "porch", color: 0xffc98a, r: 5 });
-    this.pool(xm, fz + nz * 2.4, 4.5, 0xffc98a);
-    if (b.kind === "hotel")
-      this.signBoard("HOTEL", x1 + 0.2, fz + nz * 1.2, Math.PI / 2, 1.2, 4, 3.5, "#1d2226", "#f2d6a2", true);
-  }
-  /** The town hall and the post office: steps up to a double door, framed windows either side;
-   *  the hall's columns under a pediment with its clock, a flag over each. */
-  private civicFront(
-    b: Building,
-    y0: number,
-    fz: number,
-    nz: number,
-    xm: number,
-    w: number,
-    H: number,
-    trim: number,
-    r: () => number,
-  ) {
-    const g = new G();
-    const hall = b.key === "hall";
-    const Z = (d: number) => fz + nz * d;
-    const zz = (a: number, c: number) => [Math.min(Z(a), Z(c)), Math.max(Z(a), Z(c))] as const;
-    // a stone base course round the front
-    g.color(0xb7b0a2).box(b.x0 - 0.05, y0, zz(0, 0.12)[0], b.x1 + 0.05, y0 + 0.7, zz(0, 0.12)[1]);
-    // the steps
-    for (let k = 0; k < 3; k++) {
-      const [a, c] = zz(0, 1.6 - k * 0.45);
-      g.color(0xc9c3b6).box(xm - 2.6 + k * 0.2, y0, a, xm + 2.6 - k * 0.2, y0 + 0.2 * (k + 1), c);
-    }
-    // the double door, its frame and fanlight
-    {
-      const [a, c] = zz(0.02, 0.14);
-      g.color(trim).box(xm - 1.2, y0 + 0.6, a, xm + 1.2, y0 + 3.6, c);
-      g.color(0x3b2f27).box(
-        xm - 0.95,
-        y0 + 0.6,
-        Math.min(Z(0.12), Z(0.16)),
-        xm + 0.95,
-        y0 + 3.0,
-        Math.max(Z(0.12), Z(0.16)),
-      );
-      g.color(0x2a2e33).box(
-        xm - 0.02,
-        y0 + 0.6,
-        Math.min(Z(0.15), Z(0.17)),
-        xm + 0.02,
-        y0 + 3.0,
-        Math.max(Z(0.15), Z(0.17)),
-      );
-    }
-    this.litWindow(xm, y0 + 3.05, fz, 1.9, 0.45, 0, nz, true, 0.8, false);
-    // framed windows either side, on the ground floor
-    for (const sx of [-1, 1])
-      for (const k of hall ? [4.2, 8.4] : [3.6]) {
-        const x = xm + sx * k;
-        if (Math.abs(x - xm) > w / 2 - 1) continue;
-        this.litWindow(x, y0 + 1.2, fz, 1.3, 1.9, 0, nz, true, r() < 0.5 ? 0.7 : 0);
-        this.frame(g, x, y0 + 1.2, fz, 1.3, 1.9, 0, nz, trim);
-      }
-    if (hall) {
-      // four columns under a pediment, the clock in its gable
-      const cz = Z(2.2);
-      for (const sx of [-2.4, -0.8, 0.8, 2.4]) {
-        g.color(0xe6e1d6).box(xm + sx - 0.3, y0 + 0.6, cz - 0.3, xm + sx + 0.3, y0 + 0.8, cz + 0.3);
-        this.add(
-          place(tinted(new CylinderGeometry(0.2, 0.24, 3.4, 10), 0xece6da), xm + sx, y0 + 0.8 + 1.7, cz),
-          this.lambert(),
-        );
-        g.color(0xe6e1d6).box(xm + sx - 0.3, y0 + 4.2, cz - 0.3, xm + sx + 0.3, y0 + 4.35, cz + 0.3);
-      }
-      const [a, c] = zz(0, 2.6);
-      g.color(0xe6e1d6).box(xm - 3.2, y0 + 4.35, a, xm + 3.2, y0 + 4.8, c);
-      const pz = Z(2.6);
-      g.color(0xe6e1d6);
-      face(g, [xm - 3.3, y0 + 4.8, pz], [xm + 3.3, y0 + 4.8, pz], [xm, y0 + 6.3, pz], [xm, y0 + 6.3, pz], [0, 0, nz]);
-      for (const s of [-1, 1])
-        face(
-          g,
-          [xm + s * 3.3, y0 + 4.8, pz],
-          [xm + s * 3.3, y0 + 4.8, fz],
-          [xm, y0 + 6.3, fz],
-          [xm, y0 + 6.3, pz],
-          [s * 0.6, 1, 0],
-        );
-      slopeSnow(
-        g,
-        [xm, y0 + 6.3, fz],
-        [xm, y0 + 6.3, pz],
-        [xm - 3.3, y0 + 4.8, fz],
-        [xm - 3.3, y0 + 4.8, pz],
-        0.14,
-        r,
-        0.4,
-      );
-      slopeSnow(
-        g,
-        [xm, y0 + 6.3, pz],
-        [xm, y0 + 6.3, fz],
-        [xm + 3.3, y0 + 4.8, pz],
-        [xm + 3.3, y0 + 4.8, fz],
-        0.14,
-        r,
-        0.4,
-      );
-      // the clock
-      this.add(
-        place(
-          tinted(new CylinderGeometry(0.55, 0.55, 0.08, 16).rotateX(Math.PI / 2), 0xf2ead6),
-          xm,
-          y0 + 5.35,
-          Z(2.66),
-        ),
-        this.lambert(),
-      );
-      g.color(0x1f2124).box(
-        xm - 0.03,
-        y0 + 5.33,
-        Math.min(Z(2.7), Z(2.72)),
-        xm + 0.03,
-        y0 + 5.75,
-        Math.max(Z(2.7), Z(2.72)),
-      );
-      g.color(0x1f2124).box(
-        xm - 0.02,
-        y0 + 5.33,
-        Math.min(Z(2.7), Z(2.72)),
-        xm + 0.3,
-        y0 + 5.37,
-        Math.max(Z(2.7), Z(2.72)),
-      );
-    } else {
-      // a little flat canopy over the door
-      const [a, c] = zz(0, 1.4);
-      g.color(trim).box(xm - 1.6, y0 + 3.75, a, xm + 1.6, y0 + 3.95, c);
-      flatSnow(g, xm - 1.55, a, xm + 1.55, c, y0 + 3.95, 0.12, r);
-    }
-    // the flag on its pole, over the roof's corner
-    const fx = b.x0 + 1;
-    g.color(0xd8d6cc).box(fx - 0.05, y0 + H, fz - nz * 1 - 0.05, fx + 0.05, y0 + H + 4.2, fz - nz * 1 + 0.05);
-    g.color(0x2c3e55).box(fx + 0.05, y0 + H + 3.2, fz - nz * 1 - 0.02, fx + 1.5, y0 + H + 4.1, fz - nz * 1 + 0.02);
-    g.color(0xa8322a).box(fx + 0.05, y0 + H + 3.2, fz - nz * 1 - 0.025, fx + 1.5, y0 + H + 3.4, fz - nz * 1 + 0.025);
-    this.add(g.build(), this.lambert());
-    // its name: on the hall's entablature, over the post office's canopy
-    if (b.sign)
-      this.signBoard(
-        b.sign,
-        xm,
-        Z(hall ? 2.66 : 0.12),
-        nz > 0 ? 0 : Math.PI,
-        hall ? 4.4 : 3.6,
-        hall ? 0.4 : 0.55,
-        hall ? 4.38 : 4.05,
-        "#e8e2d2",
-        "#2a2e33",
-        false,
-        !hall,
-      );
-    this.lights.push({ p: new Vector3(xm, y0 + 3.4, Z(1.4)), kind: "porch", color: 0xffc98a, r: 5 });
-    this.pool(xm, Z(2.6), 4.5, 0xffc98a);
-  }
-  /** A townhouse (docs/plan/33-the-look.md, phase 4): one of three — two storeys under a side
-   *  gable, two under a gable to the street with a porch across the front, a storey and a half with
-   *  a dormer — in one of seven colours, shutters of another; framed windows on every face, a
-   *  chimney, the mailbox at the pavement. */
-  private house(b: Building) {
-    const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
-    // (what it looks like: world/grounds-look.ts)
-    const L = houseLook(b);
-    const q = groundsRng(b.z0 * 17 + b.x0);
-    const { kind, H } = L;
-    const hex = b.tint ?? L.wall;
-    const shutter = hexOf(L.shutter);
-    const trim = 0xece6da;
-    const siding = this.wallPic("siding", hex);
-    const { x0, z0, x1, z1 } = b;
-    const g = new G();
-    this.wallsUV(g, b, y0, H, 3);
-    this.add(g.build(), this.relief(this.lambert(0xffffff, siding, false), "pine", 3));
-    this.housePlants(b);
-    const r = new G();
-    const wallHex = new Color(hex).getHex();
-    // the roof: along the street (a side gable) or end on to it (a front gable)
-    const front = kind === 1;
-    this.pitched(r, x0, z0, x1, z1, y0 + H, L.rise, front, 0x3a3f45, 0.45, wallHex);
-    const nx = b.face === "e" ? 1 : -1;
-    const fx = b.face === "e" ? x1 : x0;
-    const bx = b.face === "e" ? x0 : x1;
-    const zm = (z0 + z1) / 2;
-    const X = (d: number) => fx + nx * d;
-    const xx = (a: number, c: number) => [Math.min(X(a), X(c)), Math.max(X(a), X(c))] as const;
-    // the porch: steps, posts, a small roof (across the front for a front gable)
-    const pz0 = front ? z0 + 0.4 : zm - 1.6;
-    const pz1 = front ? z1 - 0.4 : zm + 1.6;
-    {
-      const [a, c] = xx(0, 1.6);
-      r.color(0x9a948a).box(a, y0, pz0 + 0.2, c, y0 + 0.5, pz1 - 0.2);
-      const [sa, sc] = xx(1.6, 2.1);
-      r.color(0x8c867c).box(sa, y0, zm - 0.7, sc, y0 + 0.25, zm + 0.7);
-      const [ra, rc] = xx(0, 1.8);
-      r.color(0x3a3f45).box(ra, y0 + 2.75, pz0, rc, y0 + 2.9, pz1);
-      slopeSnow(
-        r,
-        [X(0.05), y0 + 2.9, pz0 + 0.05],
-        [X(0.05), y0 + 2.9, pz1 - 0.05],
-        [X(1.75), y0 + 2.9, pz0 + 0.05],
-        [X(1.75), y0 + 2.9, pz1 - 0.05],
-        0.16,
-        q,
-        0.5,
-      );
-      const posts = front ? [pz0 + 0.2, zm - 1.2, zm + 1.2, pz1 - 0.2] : [pz0 + 0.2, pz1 - 0.2];
-      for (const z of posts) r.color(trim).box(X(1.6) - 0.08, y0 + 0.5, z - 0.08, X(1.6) + 0.08, y0 + 2.75, z + 0.08);
-      // a railing between the posts (not across the steps)
-      if (front)
-        for (const [za, zb] of [
-          [pz0 + 0.2, zm - 1.2],
-          [zm + 1.2, pz1 - 0.2],
-        ]) {
-          r.color(trim).box(X(1.6) - 0.05, y0 + 1.35, za, X(1.6) + 0.05, y0 + 1.45, zb);
-          for (let z = za + 0.25; z < zb; z += 0.3)
-            r.color(trim).box(X(1.6) - 0.03, y0 + 0.5, z - 0.03, X(1.6) + 0.03, y0 + 1.35, z + 0.03);
-        }
-    }
-    // the door, framed, a light over it
-    {
-      const [a, c] = xx(0, 0.1);
-      r.color(trim).box(a, y0 + 0.5, zm - 0.65, c, y0 + 2.75, zm + 0.65);
-      const [da, dc] = xx(0.08, 0.13);
-      r.color(new Color(shutter).getHex()).box(da, y0 + 0.5, zm - 0.5, dc, y0 + 2.6, zm + 0.5);
-    }
-    // windows: framed, shuttered at the front, a sill on the rest
-    const win = (
-      x: number,
-      y: number,
-      z: number,
-      ww: number,
-      hh: number,
-      wnx: number,
-      wnz: number,
-      lit: number,
-      shut: boolean,
-    ) => {
-      this.litWindow(x, y, z, ww, hh, wnx, wnz, true, lit);
-      this.frame(r, x, y, z, ww, hh, wnx, wnz, trim);
-      if (!shut) return;
-      const tx = -wnz;
-      const tz = wnx;
-      for (const s of [-1, 1]) {
-        const cx = x + tx * s * (ww / 2 + 0.38);
-        const cz = z + tz * s * (ww / 2 + 0.38);
-        const hw = 0.3;
-        r.color(shutter).box(
-          Math.min(cx - tx * hw, cx + tx * hw) + Math.min(0, wnx * 0.04),
-          y,
-          Math.min(cz - tz * hw, cz + tz * hw) + Math.min(0, wnz * 0.04),
-          Math.max(cx - tx * hw, cx + tx * hw) + Math.max(0, wnx * 0.1),
-          y + hh,
-          Math.max(cz - tz * hw, cz + tz * hw) + Math.max(0, wnz * 0.1),
-        );
-      }
-    };
-    for (const dz of [-2.7, 2.7]) win(fx, y0 + 0.9, zm + dz, 1.1, 1.5, nx, 0, q() < 0.4 ? 0.7 : 0, true);
-    if (kind === 2) {
-      // the dormer, out of the roof to the street
-      const dy = y0 + H + 0.6;
-      const [a, c] = xx(-2.6, 0.3);
-      r.color(wallHex).box(a, y0 + H, zm - 1.1, c, dy + 1.6, zm + 1.1);
-      this.pitched(
-        r,
-        Math.min(X(-2.6), X(0.3)),
-        zm - 1.1,
-        Math.max(X(-2.6), X(0.3)),
-        zm + 1.1,
-        dy + 1.6,
-        0.9,
-        true,
-        0x3a3f45,
-        0.2,
-        wallHex,
-      );
-      win(X(0.3), dy + 0.15, zm, 1, 1.2, nx, 0, q() < 0.3 ? 0.6 : 0, false);
-    } else for (const dz of [-2.7, 0, 2.7]) win(fx, y0 + 3.9, zm + dz, 1.0, 1.4, nx, 0, q() < 0.3 ? 0.6 : 0, true);
-    if (front) win(fx, y0 + H + 0.8, zm, 0.8, 1.0, nx, 0, q() < 0.3 ? 0.6 : 0, false); // the attic's, in the gable
-    // the back and the sides
-    for (const dz of [-2.4, 2.4]) win(bx, y0 + 0.9, zm + dz, 1, 1.3, -nx, 0, q() < 0.25 ? 0.6 : 0, false);
-    if (kind !== 2)
-      for (const dz of [-2.4, 2.4]) win(bx, y0 + 3.9, zm + dz, 1, 1.3, -nx, 0, q() < 0.25 ? 0.6 : 0, false);
-    const xc = (x0 + x1) / 2;
-    for (const [z, nzz] of [
-      [z0, -1],
-      [z1, 1],
-    ] as const) {
-      win(xc, y0 + 0.9, z, 1, 1.3, 0, nzz, q() < 0.2 ? 0.6 : 0, false);
-      if (kind !== 2) win(xc, y0 + 3.9, z, 1, 1.3, 0, nzz, q() < 0.2 ? 0.6 : 0, false);
-    }
-    // the chimney, at one end of the ridge
-    {
-      const cz = L.chimneyEnd ? z0 + 1.6 : z1 - 1.6;
-      // (which end: its look's, the solids' too — shapes/grounds.ts)
-      const cxx = front ? (L.chimneyWest ? x0 + 2 : x1 - 2) : xc;
-      const top = y0 + H + L.rise + 0.8;
-      r.color(0x7b3b2c).box(cxx - 0.4, y0 + H, cz - 0.35, cxx + 0.4, top, cz + 0.35);
-      r.color(0x5b4a44).box(cxx - 0.48, top, cz - 0.43, cxx + 0.48, top + 0.15, cz + 0.43);
-      flatSnow(r, cxx - 0.46, cz - 0.41, cxx + 0.46, cz + 0.41, top + 0.15, 0.12, q);
-    }
-    // the mailbox at the pavement
-    const mz = z1 - 0.5;
-    r.color(0x3a3f45).box(X(1.9) - 0.05, y0, mz - 0.05, X(1.9) + 0.05, y0 + 1.1, mz + 0.05);
-    r.color(0x2a2e33).box(X(1.9) - 0.22, y0 + 1.1, mz - 0.25, X(1.9) + 0.22, y0 + 1.38, mz + 0.25);
-    r.color(0xa8322a).box(X(1.9) + 0.22, y0 + 1.2, mz + 0.1, X(1.9) + 0.25, y0 + 1.5, mz + 0.16); // its flag
-    snowBox(r.color(SNOW), X(1.9) - 0.22, y0 + 1.38, mz - 0.25, X(1.9) + 0.22, y0 + 1.45, mz + 0.25);
-    this.add(r.build(), this.lambert());
-    this.lights.push({ p: new Vector3(X(1.2), y0 + 2.6, zm), kind: "porch", color: 0xffc98a, r: 3 });
-    this.pool(X(2), zm, 3, 0xffc98a);
-  }
-  /** A window with a pointed head (the church's), lit by the hour. */
-  private pointed(x: number, y: number, z: number, w: number, h: number, nx: number, nz: number, on: number) {
-    const g = this.windows(true, on);
-    const tx = -nz;
-    const tz = nx;
-    const o = 0.04;
-    const P = (u: number, v: number): V => [x + tx * u + nx * o, y + v, z + tz * u + nz * o];
-    face(g, P(-w / 2, 0), P(w / 2, 0), P(w / 2, h), P(-w / 2, h), [nx, 0, nz]);
-    // the arch: a fan of faces up to its point
-    const n = 6;
-    for (let i = 0; i < n; i++) {
-      const a0 = (i / n) * Math.PI;
-      const a1 = ((i + 1) / n) * Math.PI;
-      const pt = (a: number): V => {
-        const u = Math.cos(a) * (w / 2);
-        const v = Math.sin(a) * w * 0.75;
-        return P(u, h + v * (1 - 0.25 * Math.abs(Math.cos(a))));
-      };
-      face(g, P(0, h), pt(a0), pt(a1), pt(a1), [nx, 0, nz]);
-    }
-    // its frame: two jambs and a sill, and the snow on the sill
-    const fr = new G().color(0xe6e1d6);
-    const a = w / 2 + 0.1;
-    for (const s of [-1, 1]) {
-      const c0 = P(s * a, 0);
-      fr.box(c0[0] - 0.06, y, c0[2] - 0.06, c0[0] + 0.06 + nx * 0.06, y + h, c0[2] + 0.06 + nz * 0.06);
-    }
-    const s0 = P(-a, 0);
-    const s1 = P(a, 0);
-    fr.box(
-      Math.min(s0[0], s1[0]) - 0.05,
-      y - 0.12,
-      Math.min(s0[2], s1[2]) - 0.05,
-      Math.max(s0[0], s1[0]) + 0.05 + nx * 0.12,
-      y,
-      Math.max(s0[2], s1[2]) + 0.05 + nz * 0.12,
-    );
-    snowBox(
-      fr.color(SNOW),
-      Math.min(s0[0], s1[0]),
-      y,
-      Math.min(s0[2], s1[2]),
-      Math.max(s0[0], s1[0]) + nx * 0.1,
-      y + 0.06,
-      Math.max(s0[2], s1[2]) + nz * 0.1,
-    );
-    this.add(fr.build(), this.lambert());
-  }
-  /** The church: white clapboard, pointed windows, a door up steps under the steeple, its belfry
-   *  open (louvres in it), a cross on the spire. */
-  private church(b: Building) {
-    const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
-    const siding = this.keep(tex(sidingCanvas(this.T, b.tint ?? "#ecebe5")));
-    const H = 6;
-    const { x0, z0, x1, z1 } = b;
-    const g = new G();
-    this.wallsUV(g, b, y0, H, 3);
-    this.add(g.build(), this.relief(this.lambert(0xffffff, siding, false), "pine", 3));
-    const r = new G();
-    this.pitched(r, x0, z0, x1, z1, y0 + H, 6, false, 0x2f343a, 0.5, 0xecebe5);
-    const xm = (x0 + x1) / 2;
-    const sz0 = z1 - 1;
-    const sz1 = z1 + 2.5;
-    // the steeple: a tower, a belfry with open louvred sides, its cornices, the spire and a cross
-    r.color(0xecebe5).box(xm - 2, y0, sz0, xm + 2, y0 + 10, sz1);
-    r.color(0xe0ddd4).box(xm - 2.15, y0 + 10, sz0 - 0.15, xm + 2.15, y0 + 10.3, sz1 + 0.15);
-    for (const [px, pz] of [
-      [-1.75, sz0 + 0.25],
-      [1.75, sz0 + 0.25],
-      [-1.75, sz1 - 0.25],
-      [1.75, sz1 - 0.25],
-    ])
-      r.color(0xecebe5).box(xm + px - 0.25, y0 + 10.3, pz - 0.25, xm + px + 0.25, y0 + 12.8, pz + 0.25);
-    r.color(0x1a1d21).box(xm - 1.5, y0 + 10.3, sz0 + 0.5, xm + 1.5, y0 + 12.8, sz1 - 0.5); // the dark inside
-    for (let y = 10.6; y < 12.6; y += 0.32) {
-      r.color(0xd8d4ca).box(xm - 1.5, y0 + y, sz1 - 0.55, xm + 1.5, y0 + y + 0.08, sz1 - 0.35);
-      r.color(0xd8d4ca).box(xm - 1.5, y0 + y, sz0 + 0.35, xm + 1.5, y0 + y + 0.08, sz0 + 0.55);
-      r.color(0xd8d4ca).box(xm - 1.75, y0 + y, sz0 + 0.5, xm - 1.55, y0 + y + 0.08, sz1 - 0.5);
-      r.color(0xd8d4ca).box(xm + 1.55, y0 + y, sz0 + 0.5, xm + 1.75, y0 + y + 0.08, sz1 - 0.5);
-    }
-    r.color(0x2f343a).box(xm - 2.2, y0 + 12.8, sz0 - 0.2, xm + 2.2, y0 + 13.4, sz1 + 0.2);
-    flatSnow(r, xm - 2.15, sz0 - 0.15, xm + 2.15, sz1 + 0.15, y0 + 13.4, 0.15, groundsRng(b.x0));
-    r.color(0x8b8f93).box(xm - 0.05, y0 + 21.6, (sz0 + sz1) / 2 - 0.05, xm + 0.05, y0 + 23.2, (sz0 + sz1) / 2 + 0.05);
-    r.color(0x8b8f93).box(xm - 0.4, y0 + 22.5, (sz0 + sz1) / 2 - 0.05, xm + 0.4, y0 + 22.6, (sz0 + sz1) / 2 + 0.05);
-    // the door up steps on the steeple's face
-    r.color(0xe0ddd4).box(xm - 1.2, y0, sz1, xm + 1.2, y0 + 3.4, sz1 + 0.12);
-    r.color(0x5a2a22).box(xm - 0.85, y0 + 0.45, sz1 + 0.12, xm + 0.85, y0 + 2.9, sz1 + 0.18);
-    r.color(0x2a1a16).box(xm - 0.02, y0 + 0.45, sz1 + 0.18, xm + 0.02, y0 + 2.9, sz1 + 0.2);
-    for (let k = 0; k < 3; k++)
-      r.color(0xc9c3b6).box(xm - 2 + k * 0.15, y0, sz1, xm + 2 - k * 0.15, y0 + 0.15 * (k + 1), sz1 + 1.4 - k * 0.4);
-    this.add(r.build(), this.lambert());
-    const spire = tinted(new ConeGeometry(2.1, 8.2, 4).rotateY(Math.PI / 4).translate(0, 4.1, 0), 0x2f343a);
-    this.add(place(spire, xm, y0 + 13.4, (sz0 + sz1) / 2), this.lambert());
-    const snowCap = tinted(
-      new ConeGeometry(2.14, 1.2, 4, 1, true).rotateY(Math.PI / 4).translate(0, 0.6, 0),
-      0xf2f5f8,
-      atOf("roof", xm, sz0),
-    );
-    this.add(place(snowCap, xm, y0 + 13.4, (sz0 + sz1) / 2), this.lambert());
-    for (const z of [z0 + 4, z0 + 9, z0 + 14, z0 + 19])
-      for (const [x, nx] of [
-        [x0, -1],
-        [x1, 1],
-      ] as const)
-        this.pointed(x, y0 + 1.3, z, 1.3, 2.6, nx, 0, 0.6);
-    this.pointed(xm, y0 + 7.4, sz1, 0.9, 1.0, 0, 1, 0.8);
-    this.lights.push({ p: new Vector3(xm, y0 + 3.2, sz1 + 1.2), kind: "porch", color: 0xffc98a, r: 4 });
-    this.pool(xm, sz1 + 2.2, 4, 0xffc98a);
-  }
-  private gas(b: Building) {
-    const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
-    const g = new G();
-    // the kiosk at the back, the canopy over the pumps at the front
-    g.color(0xd8d4cb).box(b.x0 + 2, y0, b.z1 - 6, b.x0 + 12, y0 + 3.2, b.z1);
-    flatSnow(g, b.x0 + 1.8, b.z1 - 6.2, b.x0 + 12.2, b.z1 + 0.2, y0 + 3.2, 0.32, groundsRng(b.x0 + 5));
-    for (const x of [b.x0 + 3, b.x1 - 3])
-      for (const z of [b.z0 + 2, b.z0 + 8]) g.color(0xe9e9e6).box(x - 0.25, y0, z - 0.25, x + 0.25, y0 + 4.6, z + 0.25);
-    g.color(0xb8322a).box(b.x0 + 1, y0 + 4.6, b.z0, b.x1 - 1, y0 + 5.4, b.z0 + 10);
-    flatSnow(g, b.x0 + 0.95, b.z0 - 0.05, b.x1 - 0.95, b.z0 + 10.05, y0 + 5.4, 0.32, groundsRng(b.x1 + 5));
-    icicles(g, [b.x0 + 1, y0 + 4.6, b.z0 - 0.02], [b.x1 - 1, y0 + 4.6, b.z0 - 0.02], groundsRng(b.z0 + 5), 0.4);
-    // the islands: a kerb, two pumps each (a red body, a white head with its dials, a hose
-    // hanging to the nozzle in its holster), a bin and a squeegee bucket at the end
-    const dials = new G().color(0xffffff);
-    for (const x of [b.x0 + 7, b.x1 - 7]) {
-      g.color(0x9a948a).box(x - 0.6, y0, b.z0 + 3.2, x + 0.6, y0 + 0.25, b.z0 + 6.8);
-      g.color(0xd8a62a).box(x - 0.62, y0 + 0.25, b.z0 + 3.18, x + 0.62, y0 + 0.3, b.z0 + 3.4);
-      for (const z of [b.z0 + 4.5, b.z0 + 5.5]) {
-        g.color(0xb8322a).box(x - 0.35, y0 + 0.25, z - 0.3, x + 0.35, y0 + 1.25, z + 0.3);
-        g.color(0xe9e6dc).box(x - 0.37, y0 + 1.25, z - 0.32, x + 0.37, y0 + 1.85, z + 0.32);
-        g.color(0x2a2e33).box(x - 0.37, y0 + 1.85, z - 0.32, x + 0.37, y0 + 1.92, z + 0.32);
-        flatSnow(g, x - 0.36, z - 0.31, x + 0.36, z + 0.31, y0 + 1.92, 0.08, groundsRng(Math.round(x * 3 + z)));
-        for (const s of [-1, 1]) {
-          dials.quad(
-            [x + s * 0.375, y0 + 1.38, z - 0.2],
-            [x + s * 0.375, y0 + 1.38, z + 0.2],
-            [x + s * 0.375, y0 + 1.72, z + 0.2],
-            [x + s * 0.375, y0 + 1.72, z - 0.2],
-            [s, 0, 0],
-          );
-          g.color(0x2a2e33).box(x + s * 0.36, y0 + 0.75, z + 0.05, x + s * 0.46, y0 + 1.05, z + 0.17); // the nozzle
-          beam(g, [x + s * 0.4, y0 + 1.6, z - 0.1], [x + s * 0.55, y0 + 0.5, z - 0.05], 0.05, 0x1f2124);
-          beam(g, [x + s * 0.55, y0 + 0.5, z - 0.05], [x + s * 0.42, y0 + 0.95, z + 0.1], 0.05, 0x1f2124);
-        }
-      }
-      g.color(0x2f4a3b).box(x - 0.22, y0 + 0.25, b.z0 + 6.2, x + 0.22, y0 + 1.0, b.z0 + 6.6);
-      g.color(0x3a6b8a).box(x - 0.18, y0 + 0.25, b.z0 + 3.5, x + 0.18, y0 + 0.75, b.z0 + 3.85);
-    }
-    this.add(g.build(), this.lambert());
-    this.add(
-      dials.build(),
-      this.glows(this.keep(litMaterial({ color: 0x1d2a22, emissive: 0x9ff0b0, emissiveIntensity: 0 })), 0.9, "sign"),
-      "none",
-    );
-    // the canopy's lit underside
-    const u = new G().color(0xffffff);
-    u.quad(
-      [b.x0 + 1, y0 + 4.58, b.z0],
-      [b.x1 - 1, y0 + 4.58, b.z0],
-      [b.x1 - 1, y0 + 4.58, b.z0 + 10],
-      [b.x0 + 1, y0 + 4.58, b.z0 + 10],
-      [0, -1, 0],
-    );
-    const m = this.glows(
-      this.keep(litMaterial({ color: 0xcfd2d4, emissive: 0xf4f8ff, emissiveIntensity: 0 })),
-      1.0,
-      "windows",
-    );
-    this.add(u.build(), m, "none");
-    this.lights.push({ p: new Vector3((b.x0 + b.x1) / 2, y0 + 4.4, b.z0 + 5), kind: "porch", color: 0xeef3ff, r: 9 });
-    this.pool((b.x0 + b.x1) / 2, b.z0 + 5, 9, 0xe8f0ff);
-    this.litWindow(b.x0 + 7, y0 + 0.4, b.z1 - 6, 6, 2.2, 0, -1, true, 0.9);
-    this.signBoard("GAS\n1.19", b.x0 + 0.5, b.z0 - 1, Math.PI, 1.6, 2.2, 3.4, "#f2f2ee", "#a5281c", true);
   }
 
   // ── the Kart Park (docs/plan/46-the-karts.md): its floodlights and the gate's lamps among the
@@ -5980,6 +4944,8 @@ export class Grounds3 {
   }
 
   dispose() {
+    for (const c of this.kitCells.values()) for (const g of c.geos) g.dispose();
+    this.kitCells.clear();
     this.showEnd();
     this.circuit?.dispose();
     for (const o of this.circuitGone) o.dispose();

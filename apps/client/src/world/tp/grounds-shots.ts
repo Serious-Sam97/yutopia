@@ -1863,6 +1863,8 @@ export async function runShot(
   }
 
   // ── the Grounds round the shot ──
+  // (plan 110: the buildings' kit in first — a still's Grounds are made at once)
+  await (await import("./kit-buildings")).loadKit();
   const ortho = shot.ortho !== undefined;
   const tx = shot.look[0];
   const tz = shot.look[2];

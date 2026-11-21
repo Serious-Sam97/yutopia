@@ -100,11 +100,11 @@ import { cleanText } from "@yutopia/shared/glyphs";
 import { editsNow, groundsAreaAt, groundsOutdoors, inDeepWater, setUnderfoot } from "@yutopia/shared/grounds";
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
 import { isFlowCode, isVerb, MV_WINDED } from "@yutopia/shared/move";
-import { isSkateCode } from "@yutopia/shared/skate";
 import { BuildingNav } from "@yutopia/shared/nav";
 import { Place } from "@yutopia/shared/physics";
 import { type Feet, HAND, offBand, spanOf } from "@yutopia/shared/reach";
 import { type Solid3, WALL_H } from "@yutopia/shared/shapes";
+import { isSkateCode } from "@yutopia/shared/skate";
 import { boardOfOwner } from "@yutopia/shared/spot";
 import {
   applyOps,
@@ -279,13 +279,15 @@ export class WorldRoom extends Room<WorldState> {
       skip?: string,
       /** (plan 95 F4a) the shooter's screen's word on this round: where on which car (checked), or 0 — none */
       claim?: import("@yutopia/shared/car").CarClaim | 0 | null,
-    ): (import("@yutopia/shared/car").CarShot & {
-      id: string;
-      /** taken: its damage; `by`, the shooter (plan 94 P1: who set it alight) */
-      apply(by?: string): void;
-      /** (plan 94 P4) who sat in it the round reaches on its way through (the nearest; it stops in them) */
-      seated?(): { sid: string; t: number; head: boolean } | null;
-    }) | null;
+    ):
+      | (import("@yutopia/shared/car").CarShot & {
+          id: string;
+          /** taken: its damage; `by`, the shooter (plan 94 P1: who set it alight) */
+          apply(by?: string): void;
+          /** (plan 94 P4) who sat in it the round reaches on its way through (the nearest; it stops in them) */
+          seated?(): { sid: string; t: number; head: boolean } | null;
+        })
+      | null;
     /** (plan 93 S2) the car someone's sat in: which seat, its side (−1 the driver's, +1 the other), how it
      *  points (its heading), how fast it goes (m/s) */
     seatOf(sid: string): { vid: string; seat: number; side: number; a: number; speed: number } | null;
@@ -917,7 +919,10 @@ export class WorldRoom extends Room<WorldState> {
       const p = this.state.players.get(client.sessionId);
       if (!p || ![m.n, m.x, m.y, m.fx, m.fy].every(Number.isFinite)) return;
       const r2 = (v: number) => Math.round(v * 100) / 100;
-      void this.waySoon(p.uid, p.level, { x: m.fx, y: m.fy }, { x: m.x, y: m.y }).then((way) =>
+      // (each end at its height — mine, the ground's there: a way asked at the floor's own snapped to the lowest
+      // thing walked on, a jetty buried under a boathouse's front, and found no way in — plan 111)
+      const z = { fromZ: overFloor(p.level, p.z), toZ: this.groundOf(p.uid, p.level, m.x, m.y) };
+      void this.waySoon(p.uid, p.level, { x: m.fx, y: m.fy }, { x: m.x, y: m.y }, z).then((way) =>
         this.send(client, "way", { n: m.n, pts: way ? way.map((q): [number, number] => [r2(q.x), r2(q.y)]) : null }),
       );
     });
@@ -1583,8 +1588,14 @@ export class WorldRoom extends Room<WorldState> {
     return this.nav.path(level, from, to, { open: this.doorsOf(uid) }) ?? null;
   }
   /** The same, waiting for a window on the land to be made if it needs one (walk-to). */
-  waySoon(uid: number | null, level: number, from: Point, to: Point): Promise<Point[] | null> {
-    return this.nav.pathSoon(level, from, to, { open: this.doorsOf(uid) });
+  waySoon(
+    uid: number | null,
+    level: number,
+    from: Point,
+    to: Point,
+    z: { fromZ?: number; toZ?: number } = {},
+  ): Promise<Point[] | null> {
+    return this.nav.pathSoon(level, from, to, { open: this.doorsOf(uid), ...z });
   }
   // (the locked doors someone passes: their own rooms')
   private doorsOf(uid: number | null): string[] {

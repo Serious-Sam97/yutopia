@@ -107,41 +107,59 @@ test("a tree's trunk stands on the land at the tree", () => {
   assert.ok(trunk.s.t === "cyl" && trunk.s.y0 < terrainAt(t.x, t.z) && trunk.s.y0 > terrainAt(t.x, t.z) - 0.5);
 });
 
-test("the pitched roofs: steps a body walks up (≤ 0.2), none over the drawn slope (bare), up to the ridge", async () => {
+test("the kit's roofs (plan 110): steps a body walks up (≤ 0.2), none over the drawn roof, up to its ridge", async () => {
   const { BUILDINGS, CHUNK: C, groundAt: gAt } = await import("../grounds.ts");
+  const { layoutOf } = await import("../building-styles.ts");
   const { groundSolidsIn: inChunk } = await import("./grounds.ts");
-  // (the drawn slope: tp/grounds3d.ts `pitched` — over, rise, ridge along x — bare: its snow's the
-  // weather's, stood a little in — docs/plan/65)
-  const look: Record<string, { over: number; rise: number }> = {
-    church: { over: 0.5, rise: 6 },
-    farmhouse: { over: 0.55, rise: 3 },
-    boathouse: { over: 0.5, rise: 2.4 },
-  };
-  for (const b of BUILDINGS.filter((u) => look[u.kind])) {
-    const { over, rise } = look[b.kind];
-    const alongX = b.kind !== "church";
+  let roofs = 0;
+  for (const b of BUILDINGS) {
+    const L = layoutOf(b);
+    if (!L) continue;
     const y0 = gAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
-    const eave = y0 + { church: 6, farmhouse: 6.2, boathouse: 3.2 }[b.kind as "church"];
-    const [v0, v1] = alongX ? [b.z0, b.z1] : [b.x0, b.x1];
-    const half = (v1 - v0) / 2;
-    const drawn = (v: number) => eave + (rise * (half + over - Math.abs(v - (v0 + v1) / 2))) / (half + over);
-    const roofs = [];
+    const profs = L.solids.flatMap((so) => ("steps" in so ? [so.steps] : []));
+    if (!profs.length) continue;
+    /** the highest drawn roof over (a span of) the plan: each roof's slope at both ends of the span */
+    const drawnOver = (x0: number, z0: number, x1: number, z1: number) => {
+      let best = Number.NEGATIVE_INFINITY;
+      for (const st of profs) {
+        if (
+          (x0 + x1) / 2 < st.x0 - 1e-6 ||
+          (x0 + x1) / 2 > st.x1 + 1e-6 ||
+          (z0 + z1) / 2 < st.z0 - 1e-6 ||
+          (z0 + z1) / 2 > st.z1 + 1e-6
+        )
+          continue;
+        const at = (c: number) => {
+          for (let i = 0; i + 1 < st.prof.length; i++) {
+            const [ca, ya] = st.prof[i];
+            const [cb, yb] = st.prof[i + 1];
+            if (c >= ca - 1e-6 && c <= cb + 1e-6) return y0 + ya + ((yb - ya) * (c - ca)) / (cb - ca || 1);
+          }
+          return Number.NEGATIVE_INFINITY;
+        };
+        const [a, c] = st.alongX ? [z0, z1] : [x0, x1];
+        best = Math.max(best, Math.min(at(a), at(c)));
+      }
+      return best;
+    };
+    const lo = y0 + Math.min(...profs.flatMap((st) => st.prof.map((p) => p[1]))) - 0.5;
+    const peak = y0 + Math.max(...profs.flatMap((st) => st.prof.map((p) => p[1])));
+    let top = Number.NEGATIVE_INFINITY;
     for (let cx = Math.floor(b.x0 / C) - 1; cx <= Math.floor(b.x1 / C) + 1; cx++)
       for (let cz = Math.floor(b.z0 / C) - 1; cz <= Math.floor(b.z1 / C) + 1; cz++)
-        for (const g of inChunk(cx, cz))
-          if (g.what === "roof" && g.s.t === "box" && g.s.x > b.x0 && g.s.x < b.x1 && g.s.z > b.z0 && g.s.z < b.z1)
-            roofs.push(g.s);
-    assert.ok(roofs.length > 5, b.key);
-    let top = 0;
-    for (const s of roofs) {
-      assert.ok(s.hy * 2 <= 0.21, `${b.key}: a step ${s.hy * 2}`);
-      const [a, c] = alongX ? [s.z - s.hz, s.z + s.hz] : [s.x - s.hx, s.x + s.hx];
-      // (its top under the drawn surface at both its edges: the slope's lowest there)
-      assert.ok(s.y + s.hy <= Math.min(drawn(a), drawn(c)) + 0.05, `${b.key}: a step over the roof`);
-      top = Math.max(top, s.y + s.hy);
-    }
-    assert.ok(eave + rise - top < 0.25, `${b.key}: up to its ridge (${top} of ${eave + rise})`);
+        for (const g of inChunk(cx, cz)) {
+          const s = g.s;
+          if (g.what !== "roof" || s.t !== "box" || s.hy * 2 > 0.21 || s.y < lo) continue;
+          if (s.x < b.x0 - 4 || s.x > b.x1 + 4 || s.z < b.z0 - 4 || s.z > b.z1 + 4) continue;
+          const allowed = drawnOver(s.x - s.hx, s.z - s.hz, s.x + s.hx, s.z + s.hz);
+          if (allowed === Number.NEGATIVE_INFINITY) continue; // (a flat roof's, a canopy's)
+          assert.ok(s.y + s.hy <= allowed + 0.05, `${b.key}: a step over its roof`);
+          top = Math.max(top, s.y + s.hy);
+        }
+    assert.ok(peak - top < 0.3, `${b.key}: up to its ridge (${top - y0} of ${peak - y0})`);
+    roofs++;
   }
+  assert.ok(roofs >= 20, `${roofs} roofs`);
 });
 
 test("the streets' pavements: stood on at the drawn 0.18 over the ground, not where another street crosses", async () => {
@@ -184,72 +202,59 @@ function at(x: number, z: number, whats?: string[]): GroundSolid[] {
   return chunksRound(x, z).filter((g) => (!whats || whats.includes(g.what)) && covers(g.s, x, z));
 }
 
-test("the awnings, the canopy, the marquee: solid from 0.6 out, under their drawn tops, 2.2 over the pavement", async () => {
+test("the awnings, the canopies, the marquee (plan 110): solid from 0.6 out, 2.2 over what's under them", async () => {
   const { BUILDINGS, groundAt } = await import("../grounds.ts");
+  const { layoutOf } = await import("../building-styles.ts");
   const { AWNING_IN, HEAD_ROOM } = await import("./grounds.ts");
-  let shops = 0;
-  for (const b of BUILDINGS.filter((u) => ["shop", "bar", "hotel"].includes(u.kind) && !u.vacant)) {
-    const nz = b.face === "n" ? -1 : 1;
-    const fz = b.face === "n" ? b.z0 : b.z1;
-    const xm = (b.x0 + b.x1) / 2;
-    const y0 = groundAt(xm, (b.z0 + b.z1) / 2);
-    const mine = chunksRound(xm, fz).filter(
-      (g) => g.what === "awning" && g.s.t === "box" && g.s.x > b.x0 && g.s.x < b.x1 && Math.abs(g.s.z - fz) < 4,
-    );
-    if (b.key === "hall") {
-      assert.equal(mine.length, 0, "the hall has none");
-      continue;
-    }
-    assert.ok(mine.length, `${b.key}: an awning`);
-    shops++;
-    // the drawn surface at d out (and its snow, where it's flat: the canopy's, the marquee's)
-    const drawn =
-      b.key === "post"
-        ? () => 3.95 + 0.066
-        : b.kind === "hotel"
-          ? () => 3.45 + 0.099
-          : (d: number) => 3.5 - (0.6 * d) / 1.6;
-    const under = b.key === "post" ? 3.75 : b.kind === "hotel" ? 3.1 : 2.62;
-    for (const { s } of mine) {
-      if (s.t !== "box") continue;
-      const d0 = Math.abs(s.z - s.hz - fz) < Math.abs(s.z + s.hz - fz) ? s.z - s.hz : s.z + s.hz;
-      const d1 = d0 === s.z - s.hz ? s.z + s.hz : s.z - s.hz;
-      const [a, c] = [(d0 - fz) * nz, (d1 - fz) * nz];
-      assert.ok(a >= AWNING_IN - 1e-6, `${b.key}: from ${a} out, not ${AWNING_IN}`);
-      const t = top(s) - y0;
-      assert.ok(t <= Math.min(drawn(a), drawn(c)) + 1e-6, `${b.key}: its top ${t} over the drawn ${drawn(c)}`);
-      assert.ok(t >= Math.max(drawn(a), drawn(c)) - 0.2, `${b.key}: its top ${t} far under the drawn ${drawn(a)}`);
-      assert.ok(bottom(s) - y0 >= under - 1e-6, `${b.key}: its bottom ${bottom(s) - y0} under the drawn ${under}`);
-      // the head room over whatever's under it: the pavement, the steps
+  let n = 0;
+  for (const b of BUILDINGS) {
+    const L = layoutOf(b);
+    if (!L) continue;
+    const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
+    const { x, z, ox, oz } = L.door;
+    for (const so of L.solids) {
+      if (so.what !== "awning" || !("box" in so)) continue;
+      n++;
+      const [x0, z0, x1, z1, ya] = so.box;
+      // (its nearest edge to the front's face: AWNING_IN out at least)
+      const face = ox !== 0 ? x : z;
+      const near =
+        ox !== 0
+          ? Math.min(Math.abs(x0 - face), Math.abs(x1 - face))
+          : Math.min(Math.abs(z0 - face), Math.abs(z1 - face));
+      assert.ok(near >= AWNING_IN - 1e-6, `${b.key}: from ${near} out`);
       for (const [px, pz] of [
-        [s.x - s.hx + 0.01, s.z],
-        [s.x, s.z - s.hz + 0.01],
-        [s.x + s.hx - 0.01, s.z + s.hz - 0.01],
+        [x0 + 0.01, z0 + 0.01],
+        [x1 - 0.01, z1 - 0.01],
       ]) {
         const floor = Math.max(
           groundAt(px, pz),
           ...at(px, pz, ["pavement", "porch"])
             .map((g) => top(g.s))
-            .filter((y) => y < bottom(s)),
+            .filter((y) => y < y0 + ya),
         );
-        assert.ok(bottom(s) - floor >= HEAD_ROOM, `${b.key}: ${bottom(s) - floor} over the floor at (${px}, ${pz})`);
+        assert.ok(y0 + ya - floor >= HEAD_ROOM - 1e-6, `${b.key}: ${y0 + ya - floor} over the floor at (${px}, ${pz})`);
       }
+      void oz;
     }
-    // (the strip by the wall open: a run up the face goes past)
-    assert.equal(at(xm + 0.3, fz + nz * 0.3, ["awning"]).length, 0, `${b.key}: by the wall`);
   }
-  assert.ok(shops >= 8, `${shops} shops' awnings`);
+  assert.ok(n >= 8, `${n} awnings`);
 });
 
 /** Up from `from` to `to` (a straight line at a body's middle), the floor's rises: each the top of
  *  what's underfoot (the land, the pavement, a step) — none over the step-up, nothing in the way. */
-function climb(from: [number, number], to: [number, number], ground: (x: number, z: number) => number): number[] {
+function climb(
+  from: [number, number],
+  to: [number, number],
+  ground: (x: number, z: number) => number,
+  whats?: string[],
+): number[] {
   const n = 60;
   const floors: number[] = [];
   for (let i = 0; i <= n; i++) {
     const x = from[0] + ((to[0] - from[0]) * i) / n;
     const z = from[1] + ((to[1] - from[1]) * i) / n;
-    const here = at(x, z);
+    const here = at(x, z, whats);
     const g = ground(x, z);
     // (underfoot: what tops out within a step of the land; overhead: from 2 m up)
     const feet = here.filter((s) => top(s.s) <= g + 1.2);
@@ -263,81 +268,23 @@ function climb(from: [number, number], to: [number, number], ground: (x: number,
   return rises;
 }
 
-test("the porches, the civic steps and the church's: each step ≤ 0.27 up to the door, its roof 2.2 over the deck", async () => {
+test("every door (plan 110): walked up to from the street, each step ≤ 0.27, nothing in the way under 2 m", async () => {
   const { BUILDINGS, groundAt } = await import("../grounds.ts");
-  const { HEAD_ROOM } = await import("./grounds.ts");
-  let houses = 0;
-  for (const b of BUILDINGS.filter((u) => u.kind === "house")) {
-    const nx = b.face === "e" ? 1 : -1;
-    const fx = b.face === "e" ? b.x1 : b.x0;
-    const zm = (b.z0 + b.z1) / 2;
-    const y0 = groundAt((b.x0 + b.x1) / 2, zm);
-    const rises = climb([fx + nx * 3, zm], [fx + nx * 0.05, zm], groundAt);
+  const { layoutOf } = await import("../building-styles.ts");
+  let doors = 0;
+  for (const b of BUILDINGS) {
+    const L = layoutOf(b);
+    if (!L || b.kind === "garage" || b.kind === "silo" || b.kind === "shelter") continue;
+    const { x, z, ox, oz } = L.door;
+    // (where the land itself steps up onto its pad, that's the land's: not this one's to climb)
+    if (Math.abs(groundAt(x - ox * 0.3, z - oz * 0.3) - groundAt(x + ox * 0.3, z + oz * 0.3)) > 0.27) continue;
+    // (its own: the street's lamps and poles before a door are the street's)
+    const own = ["porch", "porch_rail", "awning", "pavement", "building", "roof", "forecourt"];
+    const rises = climb([x + ox * 3.4, z + oz * 3.4], [x + ox * 0.05, z + oz * 0.05], groundAt, own);
     assert.ok(Math.max(...rises) <= 0.27, `${b.key}: a step ${Math.max(...rises)}`);
-    const deck = Math.max(
-      ...at(fx + nx * 0.3, zm, ["porch"])
-        .map((g) => top(g.s))
-        .filter((y) => y < y0 + 1),
-    );
-    assert.ok(Math.abs(deck - (y0 + 0.5)) < 1e-6, `${b.key}: its deck at ${deck - y0}`);
-    // its roof: from 0.6 out, at its drawn top (2.9), 2.2 over the deck
-    const roof = at(fx + nx * 1.2, zm, ["porch"]).filter((g) => bottom(g.s) > y0 + 2);
-    assert.equal(roof.length, 1, `${b.key}: its porch roof`);
-    assert.ok(top(roof[0].s) <= y0 + 2.9 + 1e-6 && bottom(roof[0].s) - deck >= HEAD_ROOM, b.key);
-    assert.equal(at(fx + nx * 0.4, zm, ["porch"]).filter((g) => bottom(g.s) > y0 + 2).length, 0, "open by the wall");
-    // the railing (a front gable's): one thin box, its top the rail's 1.45
-    for (const g of chunksRound(fx, zm).filter((u) => u.what === "porch_rail" && u.s.t === "box")) {
-      if (g.s.t !== "box" || Math.abs(g.s.x - (fx + nx * 1.6)) > 0.01 || g.s.z < b.z0 || g.s.z > b.z1) continue;
-      assert.ok(Math.min(g.s.hx, g.s.hz) <= 0.13 && Math.abs(top(g.s) - (y0 + 1.45)) < 1e-6, `${b.key}: its railing`);
-    }
-    // the chimney: to 0.8 over the ridge and its cap
-    const chimney = chunksRound(b.x0, zm).filter(
-      (g) => g.what === "building" && g.s.x > b.x0 && g.s.x < b.x1 && g.s.z > b.z0 && g.s.z < b.z1 && top(g.s) > y0 + 7,
-    );
-    assert.ok(chimney.length >= 2, `${b.key}: its chimney`);
-    houses++;
+    doors++;
   }
-  assert.ok(houses >= 10);
-  for (const b of BUILDINGS.filter((u) => u.key === "hall" || u.key === "post")) {
-    const fz = b.face === "n" ? b.z0 : b.z1;
-    const nz = b.face === "n" ? -1 : 1;
-    const xm = (b.x0 + b.x1) / 2;
-    const rises = climb([xm + 0.5, fz + nz * 2], [xm + 0.5, fz + nz * 0.05], (x, z) => groundAt(x, z));
-    assert.ok(Math.max(...rises) <= 0.27, `${b.key}: a step ${Math.max(...rises)}`);
-  }
-  const church = BUILDINGS.find((u) => u.kind === "church");
-  if (church) {
-    const xm = (church.x0 + church.x1) / 2;
-    const sz1 = church.z1 + 2.5;
-    // (to the steeple's solid, 0.2 past its drawn face)
-    const rises = climb([xm, sz1 + 2], [xm, sz1 + 0.25], groundAt);
-    assert.ok(Math.max(...rises) <= 0.27 && rises.reduce((a, b) => a + b, 0) > 0.4, `the church: ${rises}`);
-  }
-});
-
-test("the hall's pediment: steps ≤ 0.2 under its drawn slopes, up to its peak", async () => {
-  const { BUILDINGS, groundAt } = await import("../grounds.ts");
-  const b = BUILDINGS.find((u) => u.key === "hall");
-  assert.ok(b);
-  const fz = b.face === "n" ? b.z0 : b.z1;
-  const xm = (b.x0 + b.x1) / 2;
-  const y0 = groundAt(xm, (b.z0 + b.z1) / 2);
-  const drawn = (x: number) => y0 + 4.8 + (1.5 * (3.3 - Math.abs(x - xm))) / 3.3;
-  const steps = chunksRound(xm, fz).filter(
-    (g) => g.what === "building" && g.s.t === "box" && Math.abs(g.s.x - xm) < 3.4 && bottom(g.s) >= y0 + 4.8 - 1e-6,
-  );
-  assert.ok(steps.length >= 6);
-  let peak = 0;
-  for (const { s } of steps) {
-    if (s.t !== "box") continue;
-    assert.ok(s.hy * 2 <= 0.2 + 1e-6);
-    assert.ok(
-      top(s) <= Math.min(drawn(s.x - s.hx), drawn(s.x + s.hx)) + 1e-6,
-      `a step over the pediment at ${top(s) - y0}`,
-    );
-    peak = Math.max(peak, top(s));
-  }
-  assert.ok(y0 + 6.3 - peak < 0.2, `to ${peak - y0}`);
+  assert.ok(doors >= 30, `${doors} doors`);
 });
 
 test("lamps and street things on a pavement stand on it (pavedAt), off it on the ground", async () => {

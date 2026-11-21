@@ -56,6 +56,8 @@ const CONFIG = {
 };
 /** Out on the land (the windows): cells 0.15 m — a 1 m door still a way through, at half the work. */
 const LAND_CS = 0.15;
+/** How far a window's cells are set off its chunk lines (m): no round edge on a cell's line (LAND_CS 0.15). */
+const GRID_OFF = 0.0537;
 const LAND_CONFIG = { ...CONFIG, cs: LAND_CS, walkableRadius: Math.ceil(BODY_R / LAND_CS), tileSize: 64 };
 /** A way out on the land: a window round its two ends this far each way, its sides on the land's
  *  chunks — as far as the tile grid's findPath looked; a way longer than this across, none. */
@@ -222,8 +224,11 @@ export class FloorNav {
     const { bbMin, bbMax } = getBoundingBox(soup.positions, soup.indices);
     // (a window: the land's chunks reach past it — the mesh only over it)
     if (window && land) {
-      bbMin[0] = Math.max(bbMin[0], land.x0);
-      bbMin[2] = Math.max(bbMin[2], land.z0);
+      // (its cells a fraction of one off the land's chunk lines: a window's corner on a chunk's put every round
+      // edge — a stoop's treads 0.3 deep, a slab's at a metre — exactly on a cell's line, and a stair lost its
+      // lower treads to the rasterizer: no way up the town's west-row stoops — plan 111)
+      bbMin[0] = Math.max(bbMin[0], land.x0) - GRID_OFF;
+      bbMin[2] = Math.max(bbMin[2], land.z0) - GRID_OFF;
       bbMax[0] = Math.min(bbMax[0], land.x1);
       bbMax[2] = Math.min(bbMax[2], land.z1);
     }

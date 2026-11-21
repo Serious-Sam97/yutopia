@@ -663,6 +663,7 @@ if (vFade < 0.999) {
       this.statics.left && !this.away.rest ? this.statics : this.kart?.left && !this.away.kart ? this.kart : null;
     while (making && performance.now() - s0 < stepMs) {
       const added = making.step();
+      this.patchTouched(making);
       if (!added) break;
       this.patchAdded(added, false);
     }
@@ -695,6 +696,7 @@ if (vFade < 0.999) {
       let steps = 0;
       while (district && performance.now() - s0 < stepMs) {
         const added = district.step();
+        this.patchTouched(district);
         if (!added) {
           // (done, or waiting on what's loading: the next one by priority)
           if (district.left) break;
@@ -709,6 +711,7 @@ if (vFade < 0.999) {
       roadNext = this.roadNext;
       while (this.next && performance.now() - s0 < stepMs) {
         const added = this.next.step();
+        this.patchTouched(this.next);
         if (!added) break;
         this.patchAdded(added, true);
       }
@@ -755,13 +758,37 @@ if (vFade < 0.999) {
     for (const d of [...this.districts.values(), ...this.oldDistricts.values()]) d.faceCards(cam, this.halo);
   }
   /** What a step added: its materials patched (the outdoors' light, the snow), made ready. */
+  /** A Grounds' step done: what it made again in place (its kit cells) patched as what's new is — its materials,
+   *  not its layers (prepare would hide the whole cell while its shaders compile: plan 111). */
+  private patchTouched(g: { touched: Object3D[] }) {
+    if (!g.touched.length) return;
+    for (const o of g.touched.splice(0))
+      o.traverse((c) => {
+        const m = (c as Mesh).material;
+        for (const x of Array.isArray(m) ? m : m ? [m] : [])
+          if (
+            (x instanceof MeshLambertMaterial || x instanceof MeshStandardMaterial) &&
+            !this.patched.has(x) &&
+            // (one with a look of its own — the buildings' glass, plan 111: the patch would take its hook's place)
+            !x.userData.ownLook
+          ) {
+            this.patched.add(x);
+            this.patch(x);
+          }
+      });
+  }
   private patchAdded(added: Object3D[], remade: boolean) {
     for (const o of added) {
       o.traverse((c) => {
         const m = (c as Mesh).material;
         // (the ice too: unpatched, it stayed as bright as day after dark)
         for (const x of Array.isArray(m) ? m : m ? [m] : [])
-          if ((x instanceof MeshLambertMaterial || x instanceof MeshStandardMaterial) && !this.patched.has(x)) {
+          if (
+            (x instanceof MeshLambertMaterial || x instanceof MeshStandardMaterial) &&
+            !this.patched.has(x) &&
+            // (one with a look of its own — the buildings' glass, plan 111: the patch would take its hook's place)
+            !x.userData.ownLook
+          ) {
             this.patched.add(x);
             this.patch(x);
           }

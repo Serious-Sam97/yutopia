@@ -1,7 +1,8 @@
 "use client";
 
 import { CAR_COLOURS } from "@yutopia/shared";
-import { type CarKind, nearestColour, SPECS, variantsOf } from "@yutopia/shared/car";
+import { KINDS as BKINDS, GROUPS, isKit, KIT_KINDS, type KitKind, PALETTES } from "@yutopia/shared/building-styles";
+import { type CarKind, nearestColour, SPECS, twoToneOf, variantsOf } from "@yutopia/shared/car";
 import {
   BUILDINGS,
   type BuildingKind,
@@ -11,7 +12,6 @@ import {
   landBounds,
   landRegions,
   PREFABS,
-  WALL_TINTS,
   WAYS,
   type WayKind,
 } from "@yutopia/shared/grounds";
@@ -24,13 +24,13 @@ import {
   TREE_PICKS,
   type TreePick,
 } from "@yutopia/shared/grounds-brush";
-import { BUILDING_NAMES, enterFaces, PREFAB_KINDS, SIGNED } from "@yutopia/shared/grounds-buildings";
 import type { GrowBiome, ThingKind } from "@yutopia/shared/grounds-edits";
 import { catalogThing, THINGS } from "@yutopia/shared/grounds-things";
 import { GROW_BIOMES, GROW_LIMITS, GROW_NAMES, GROW_SNAP } from "@yutopia/shared/grow";
 import type { Biome } from "@yutopia/shared/land";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLang } from "@/lib/i18n";
+import { buildingPicture, onPictures } from "@/world/god/building-pictures";
 import type { PublishSummary } from "@/world/god/controller";
 import { GOD_READY, GOD_TOOLS, type GodHud as GodState, type GodTool, hud, useHud } from "@/world/store";
 import { ago } from "../admin/ui";
@@ -205,14 +205,26 @@ const W = {
   door: ["Door", "Porta"],
   walls: ["Walls", "Paredes"],
   its: ["its own", "o seu"],
-  enterable: ["Enterable", "Dá para entrar"],
+  // (plan 111: every building's walked into — this says whether its inside is furnished or empty)
+  enterable: ["Furnished", "Mobiliado"],
+  emptyInside: ["empty inside", "vazio por dentro"],
   inside: ["Inside", "Dentro"],
   generated: ["Generated", "Gerado"],
   ownFloors: ["Own floors", "Andares próprios"],
   signW: ["Sign", "Letreiro"],
+  styleW: ["Style", "Estilo"],
+  seededStyle: ["one of its kind's, picked by its place", "um do seu tipo, pelo lugar"],
+  anyStyle: ["Any", "Qualquer"],
+  wallsC: ["Walls", "Paredes"],
+  trimC: ["Trim", "Acabamento"],
+  roofC: ["Roof", "Telhado"],
+  doorC: ["Door", "Porta"],
+  vacantW: ["Shut", "Fechado"],
+  furnished: ["furnished inside", "mobiliado"],
+  cornerHint: ["drag a corner to size it", "arraste um canto para mudar o tamanho"],
   buildingsHint: [
-    "click: put it down · R turns it a quarter · drag one to move it · Delete takes it away · its pad levels the land",
-    "clique: põe · R gira um quarto · arraste para mover · Delete tira · a base nivela o terreno",
+    "click: put it down · R turns it a quarter · drag one to move it · drag the picked one's corner to size it · Delete takes it away",
+    "clique: põe · R gira um quarto · arraste para mover · arraste o canto do escolhido para o tamanho · Delete tira",
   ],
   growT: ["Grow the land", "Crescer a terra"],
   pieces: ["{n} pieces", "{n} pedaços"],
@@ -1364,7 +1376,7 @@ function VehiclesPanel({ g }: { g: GodState }) {
                     type="button"
                     className="chip"
                     aria-pressed={cur.variant === v}
-                    onClick={() => set({ variant: v })}
+                    onClick={() => set({ variant: v, ...(!twoToneOf(v) && { colour2: null }) })}
                   >
                     {v}
                   </button>
@@ -1391,7 +1403,7 @@ function VehiclesPanel({ g }: { g: GodState }) {
               ))}
             </div>
           </div>
-          {road && (
+          {road && twoToneOf(cur.variant) && (
             <div>
               <p className="grp">{t("colour2")}</p>
               <div className="flex flex-wrap gap-1 mt-1">
@@ -1652,22 +1664,36 @@ function ThingsPanel({ g }: { g: GodState }) {
   );
 }
 
-const BUILDING_PT: Partial<Record<BuildingKind, string>> = {
-  house: "Casa",
-  shop: "Loja",
-  bar: "Bar",
-  diner: "Lanchonete",
-  hotel: "Hotel",
-  church: "Igreja",
-  barn: "Celeiro",
-  farmhouse: "Casa da fazenda",
-  silo: "Silo",
-  shed: "Galpão",
-  gas: "Posto",
-  boathouse: "Casa de barcos",
-  warehouse: "Armazém",
+/** A kind's name (plan 110: every kind's, building-styles.ts KINDS). */
+const buildingName = (k: BuildingKind, pt: boolean) => (isKit(k) ? (pt ? BKINDS[k].pt : BKINDS[k].name) : k);
+/** Each kind's icon. */
+const KIND_ICON: Record<KitKind, IconName> = {
+  house: "home",
+  townhouses: "bTownhouses",
+  apartments: "bApartments",
+  farmhouse: "bFarmhouse",
+  shop: "bShop",
+  cornershop: "bCorner",
+  bar: "mug",
+  diner: "bDiner",
+  hotel: "bHotel",
+  gas: "bGas",
+  office: "bOffice",
+  warehouse: "bWarehouse",
+  garage: "bGarage",
+  church: "bChurch",
+  school: "bSchool",
+  police: "bPolice",
+  fire: "bFire",
+  clinic: "bClinic",
+  library: "bLibrary",
+  shelter: "bShelter",
+  gatehouse: "bGatehouse",
+  barn: "bBarn",
+  silo: "bSilo",
+  shed: "bShed",
+  boathouse: "bBoathouse",
 };
-const buildingName = (k: BuildingKind, pt: boolean) => (pt ? BUILDING_PT[k] : BUILDING_NAMES[k]) ?? k;
 
 /** The buildings tool's row: what it does, what's in the way. */
 function BuildingsOptions({ g }: { g: GodState }) {
@@ -1683,20 +1709,25 @@ function BuildingsOptions({ g }: { g: GodState }) {
   );
 }
 
-/** The buildings panel (the mock 07-buildings): a kind to put down; its name, size, floors,
- *  door, walls, whether you walk in, its sign — or the picked one's, and taking it away. */
+/** The buildings panel (the mock 07-buildings; plan 110 F10a): its kinds by group, each with its icon; the new
+ *  one's (or the picked one's) style from pictures of each, its four colours from its style's palette, its name,
+ *  size, floors, door, whether you walk in, its sign, shut or open — and taking it away. */
 function BuildingsPanel({ g }: { g: GodState }) {
   const t = useW();
   const pt = useLang() === "pt";
   const w = useWorld();
   const o = g.buildings;
   const tool = () => w?.god?.buildingsTool();
-  const lim = PREFABS[o.kind] ?? { min: 6, max: 30, floors: 1 };
+  const lim = PREFABS[o.kind] ?? { min: 6, max: 30, floors: 1, minFloors: 1 };
+  const kd = isKit(o.kind) ? BKINDS[o.kind] : null;
   const [name, setName] = useState(o.name);
   const [sign, setSign] = useState(o.sign);
+  const [, redraw] = useState(0);
   useEffect(() => setName(o.name), [o.name]);
   useEffect(() => setSign(o.sign), [o.sign]);
-  const faces = o.enter ? enterFaces(o.kind) : (["n", "e", "s", "w"] as const);
+  useEffect(() => onPictures(() => redraw((n) => n + 1)), []);
+  const style = kd?.styles.find((st) => st.id === o.style) ?? null;
+  const pal = style ? (PALETTES[style.pal] as Record<string, string[]>) : null;
   const size = (k: "w" | "d") => (
     <input
       type="range"
@@ -1711,29 +1742,41 @@ function BuildingsPanel({ g }: { g: GodState }) {
       onKeyUp={(e) => o.sel && tool()?.setOpts({ [k]: Number(e.currentTarget.value) })}
     />
   );
+  const label = (k: Word) => (
+    <span className="w-16 shrink-0" style={{ color: "var(--cream-dim)" }}>
+      {t(k)}
+    </span>
+  );
   return (
-    <aside className="pointer-events-auto cabinet absolute top-[92px] right-3 w-72 max-h-[calc(100vh-200px)] overflow-y-auto scroll-thin p-3 hidden sm:block">
+    <aside className="pointer-events-auto cabinet absolute top-[92px] right-3 w-80 max-h-[calc(100vh-200px)] overflow-y-auto scroll-thin p-3 hidden sm:block">
       <div className="flex items-baseline justify-between">
         <h3 className="title text-[18px]">{t("buildingsT")}</h3>
         <span className="mono text-[10.5px]" style={{ color: "var(--cream-dim)" }}>
-          {t("kinds", PREFAB_KINDS.length)}
+          {t("kinds", KIT_KINDS.length)}
         </span>
       </div>
       <div className="zigzag w-24 mt-1.5" aria-hidden />
-      <div className="grid grid-cols-4 gap-1.5 mt-2.5" role="radiogroup" aria-label={t("buildingsT")}>
-        {PREFAB_KINDS.map((k) => (
-          <button
-            key={k}
-            type="button"
-            className="deck-btn h-14 flex-col gap-1 px-1"
-            aria-pressed={o.kind === k && !o.sel}
-            onClick={() => tool()?.setKind(k)}
-          >
-            <Icon name="home" size={16} />
-            <span className="text-[10px] leading-tight text-center">{buildingName(k, pt)}</span>
-          </button>
-        ))}
-      </div>
+      {GROUPS.map((gr) => (
+        <div key={gr.id} className="mt-2">
+          <p className="grp">{pt ? gr.pt : gr.name}</p>
+          <div className="grid grid-cols-4 gap-1.5 mt-1" role="radiogroup" aria-label={pt ? gr.pt : gr.name}>
+            {gr.kinds.map((k) => (
+              <button
+                key={k}
+                type="button"
+                className="deck-btn h-14 flex-col gap-1 px-1"
+                aria-pressed={o.kind === k}
+                data-kind={k}
+                title={buildingName(k, pt)}
+                onClick={() => tool()?.setKind(k)}
+              >
+                <Icon name={KIND_ICON[k]} size={16} />
+                <span className="text-[10px] leading-tight text-center line-clamp-2">{buildingName(k, pt)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
       <p className="grp mt-3">
         {o.sel ? `${o.name} · ${t("picked")}` : t("theNew", buildingName(o.kind, pt).toLowerCase())}
       </p>
@@ -1743,10 +1786,89 @@ function BuildingsPanel({ g }: { g: GodState }) {
         </p>
       ) : (
         <div className="space-y-2.5 mt-2 text-[12.5px]">
+          {kd && (
+            <div>
+              <p className="text-[11.5px] mb-1" style={{ color: "var(--cream-dim)" }}>
+                {t("styleW")}
+              </p>
+              <div className="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label={t("styleW")}>
+                <button
+                  type="button"
+                  className="deck-btn h-auto py-1.5 flex-col gap-1"
+                  aria-pressed={!o.style}
+                  data-style=""
+                  onClick={() => tool()?.setOpts({ style: null, colours: {} })}
+                >
+                  <span
+                    className="h-[62px] flex items-center text-[11px] px-2 text-center"
+                    style={{ color: "var(--cream-dim)" }}
+                  >
+                    {t("seededStyle")}
+                  </span>
+                  <span className="text-[10.5px]">{t("anyStyle")}</span>
+                </button>
+                {kd.styles.map((st) => {
+                  const url = buildingPicture(o.kind as KitKind, st.id);
+                  return (
+                    <button
+                      key={st.id}
+                      type="button"
+                      className="deck-btn h-auto py-1.5 flex-col gap-1"
+                      aria-pressed={o.style === st.id}
+                      data-style={st.id}
+                      onClick={() => tool()?.setOpts({ style: st.id, colours: {} })}
+                    >
+                      {url ? (
+                        // biome-ignore lint/performance/noImgElement: a picture drawn here, a data URL
+                        <img src={url} alt="" className="h-[62px] w-auto" draggable={false} />
+                      ) : (
+                        <span className="h-[62px] w-[88px] rounded" style={{ background: "var(--edge)" }} />
+                      )}
+                      <span className="text-[10.5px] leading-tight text-center">{pt ? st.pt : st.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {pal &&
+            (["walls", "trim", "roof", "door"] as const).map((part) => (
+              <div key={part} className="flex items-center gap-2">
+                {label(part === "walls" ? "wallsC" : part === "trim" ? "trimC" : part === "roof" ? "roofC" : "doorC")}
+                <div className="flex flex-wrap gap-1 items-center">
+                  {(pal[part] ?? []).map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      className="w-5 h-5 rounded"
+                      aria-label={`${part} ${c}`}
+                      aria-pressed={o.colours[part] === c}
+                      data-colour={c}
+                      style={{
+                        background: c,
+                        outline: o.colours[part] === c ? "2px solid var(--amber)" : "1px solid var(--edge-2)",
+                        outlineOffset: 1,
+                      }}
+                      onClick={() => tool()?.setOpts({ colours: { ...o.colours, [part]: c } })}
+                    />
+                  ))}
+                  <button
+                    type="button"
+                    className="chip"
+                    aria-pressed={!o.colours[part]}
+                    onClick={() => {
+                      const c = { ...o.colours };
+                      delete c[part];
+                      tool()?.setOpts({ colours: c });
+                    }}
+                  >
+                    {t("its")}
+                  </button>
+                </div>
+              </div>
+            ))}
           <label className="flex items-center gap-2">
-            <span className="w-16" style={{ color: "var(--cream-dim)" }}>
-              {t("name")}
-            </span>
+            {label("name")}
             <input
               className="field py-1 text-sm flex-1"
               maxLength={40}
@@ -1757,9 +1879,7 @@ function BuildingsPanel({ g }: { g: GodState }) {
             />
           </label>
           <div className="flex items-center gap-2">
-            <span className="w-16" style={{ color: "var(--cream-dim)" }}>
-              {t("size")}
-            </span>
+            {label("size")}
             <div className="flex-1 space-y-1">
               {size("w")}
               {size("d")}
@@ -1768,101 +1888,56 @@ function BuildingsPanel({ g }: { g: GodState }) {
               {o.w} × {o.d} m
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-16" style={{ color: "var(--cream-dim)" }}>
-              {t("floors")}
-            </span>
-            <div className="seg flex-1">
-              {Array.from({ length: lim.floors }, (_, i) => i + 1).map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  aria-pressed={o.floors === n}
-                  onClick={() => tool()?.setOpts({ floors: n })}
-                >
-                  {n}
-                </button>
-              ))}
+          {o.sel && (
+            <p className="text-[11px]" style={{ color: "var(--cream-dim)" }}>
+              {t("cornerHint")}
+            </p>
+          )}
+          {lim.floors > lim.minFloors && (
+            <div className="flex items-center gap-2">
+              {label("floors")}
+              <div className="seg flex-1">
+                {Array.from({ length: lim.floors - lim.minFloors + 1 }, (_, i) => i + lim.minFloors).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    aria-pressed={o.floors === n}
+                    onClick={() => tool()?.setOpts({ floors: n })}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
           <div className="flex items-center gap-2">
-            <span className="w-16" style={{ color: "var(--cream-dim)" }}>
-              {t("door")}
-            </span>
+            {label("door")}
             <div className="seg flex-1">
               {(["n", "e", "s", "w"] as const).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  aria-pressed={o.face === f}
-                  disabled={!(faces as readonly string[]).includes(f)}
-                  onClick={() => tool()?.setOpts({ face: f })}
-                >
+                <button key={f} type="button" aria-pressed={o.face === f} onClick={() => tool()?.setOpts({ face: f })}>
                   {f.toUpperCase()}
                 </button>
               ))}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-16" style={{ color: "var(--cream-dim)" }}>
-              {t("walls")}
-            </span>
-            <div className="flex gap-1.5 items-center">
-              {WALL_TINTS.map((c, i) => (
-                <button
-                  key={c}
-                  type="button"
-                  className="w-6 h-6 rounded"
-                  aria-label={`${t("walls")} ${i + 1}`}
-                  aria-pressed={o.tint === c}
-                  style={{
-                    background: `var(--tint-${i + 1})`,
-                    outline: o.tint === c ? "2px solid var(--amber)" : "1px solid var(--edge-2)",
-                    outlineOffset: 1,
-                  }}
-                  onClick={() => tool()?.setOpts({ tint: c })}
-                />
-              ))}
+          {kd?.enter && (
+            <div className="flex items-center gap-2">
+              {label("enterable")}
               <button
                 type="button"
-                className="chip"
-                aria-pressed={!o.tint}
-                onClick={() => tool()?.setOpts({ tint: null })}
-              >
-                {t("its")}
-              </button>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-16" style={{ color: "var(--cream-dim)" }}>
-              {t("enterable")}
-            </span>
-            <button
-              type="button"
-              className="sw"
-              aria-pressed={o.enter}
-              aria-label={t("enterable")}
-              onClick={() => tool()?.setOpts({ enter: !o.enter })}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-16" style={{ color: "var(--cream-dim)" }}>
-              {t("inside")}
-            </span>
-            <div className="seg flex-1">
-              <button type="button" aria-pressed={o.enter} disabled={!o.enter}>
-                {t("generated")}
-              </button>
-              <button type="button" disabled title={t("soon")}>
-                {t("ownFloors")}
-              </button>
-            </div>
-          </div>
-          {SIGNED.has(o.kind) && (
-            <label className="flex items-center gap-2">
-              <span className="w-16" style={{ color: "var(--cream-dim)" }}>
-                {t("signW")}
+                className="sw"
+                aria-pressed={o.enter}
+                aria-label={t("enterable")}
+                onClick={() => tool()?.setOpts({ enter: !o.enter })}
+              />
+              <span className="text-[11px]" style={{ color: "var(--cream-dim)" }}>
+                {o.enter ? t("furnished") : t("emptyInside")}
               </span>
+            </div>
+          )}
+          {kd?.sign && (
+            <label className="flex items-center gap-2">
+              {label("signW")}
               <input
                 className="field py-1 text-sm flex-1"
                 maxLength={24}
@@ -1872,6 +1947,18 @@ function BuildingsPanel({ g }: { g: GodState }) {
                 onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()}
               />
             </label>
+          )}
+          {kd?.sign && kd.group === "shops" && (
+            <div className="flex items-center gap-2">
+              {label("vacantW")}
+              <button
+                type="button"
+                className="sw"
+                aria-pressed={o.vacant}
+                aria-label={t("vacantW")}
+                onClick={() => tool()?.setOpts({ vacant: !o.vacant })}
+              />
+            </div>
           )}
           {o.sel && (
             <button type="button" className="ghost-btn w-full" onClick={() => tool()?.removePicked()}>

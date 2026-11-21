@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { setOutdoors } from "../ground.ts";
-import { groundsOutdoors } from "../grounds.ts";
+import { CHUNK, groundAt, groundsOutdoors } from "../grounds.ts";
 import { getMap } from "../index.ts";
 import { floorsOf, levelMap, objLevel } from "../levels.ts";
 import { isFloor, spanOf, tileAt } from "../map.ts";
 import { buildingSolids } from "../physics/build.ts";
 import { testWorld } from "../physics/testing.ts";
 import { finishWorld } from "../structure/finish.ts";
-import { BuildingNav, loadNav } from "./index.ts";
+import { BuildingNav, FloorNav, loadNav } from "./index.ts";
 
 // Plan 72 phase 7: the navmesh (recast) a floor, built from the solids Jolt's world is made of —
 // everywhere a body steps on Jolt, it goes (it went everywhere the tile grid's paths went, while
@@ -198,4 +198,30 @@ test("hundreds of obstacles at once all go in (the tile cache's queue takes 64 b
   f.setObstacles(new Map([...posts, ["row", row]]));
   assert.equal(f.path(from, to), null, "the row, put in after 200 others, closes the way");
   nav.dispose();
+});
+
+// Plan 111: every building walked into — a way in at its door, out on the land's windows. The west row of Church
+// Street's stoops lost their lower treads when a window's cells lay on the chunk lines (every 0.3 m tread's edge on
+// a cell's): its cells set off them now. The lake boathouse's front stands over the jetty's buried end: a way asked
+// at the floor's height snapped to the jetty — each end at its own height now.
+test("a way in at the door: a west-row house up its stoop, the lake boathouse over the jetty's end", async () => {
+  await loadNav();
+  for (const [name, fx, fz, tx, tz] of [
+    ["house-w4", 418, -484, 409, -484],
+    ["lake-boathouse", 8995, -2156, 8995, -2151],
+  ] as const) {
+    const M = 40;
+    const rect = {
+      x0: Math.floor((Math.min(fx, tx) - M) / CHUNK) * CHUNK,
+      z0: Math.floor((Math.min(fz, tz) - M) / CHUNK) * CHUNK,
+      x1: Math.ceil((Math.max(fx, tx) + M) / CHUNK) * CHUNK,
+      z1: Math.ceil((Math.max(fz, tz) + M) / CHUNK) * CHUNK,
+    };
+    const nav = await FloorNav.make(0, [], `door test ${name}`, rect, 0, true);
+    assert.ok(nav, name);
+    const way = nav.path({ x: fx, y: fz }, { x: tx, y: tz }, { fromZ: groundAt(fx, fz), toZ: groundAt(tx, tz) });
+    const end = way?.[way.length - 1];
+    assert.ok(end && Math.hypot(end.x - tx, end.y - tz) < 0.6, `${name}: a way in (${JSON.stringify(end)})`);
+    nav.dispose();
+  }
 });
