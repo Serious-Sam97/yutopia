@@ -1,6 +1,7 @@
 import { RACKS, rackSpots } from "../bike/racks.ts";
 import { BUILDINGS, MOTORS, TOWN_CARS, TRACTOR } from "../grounds.ts";
 import type { GroundsEdits, VehicleDef } from "../grounds-edits.ts";
+import { twoToneOf } from "./look.ts";
 import type { CarKind } from "./specs.ts";
 
 // The cars that live away from the lot (docs/plan/34-the-vehicles.md, wave 1): every car parked
@@ -167,10 +168,17 @@ export function homeProps(h: HomeCar, was: Record<string, unknown> = {}): Record
   if (h.snowy) props.snowy = 1;
   if (h.role) props.role = h.role;
   // (plan 101: a rack's bike as it was made, its variant and paint; plan 102: God mode's, whole)
-  if (h.look) props.look = { extras: [], wheels: "steel", ...h.look };
+  if (h.look) props.look = godLook(h.look);
   if (h.plate) props.plate = h.plate;
   return props;
 }
+/** God mode's look, whole (plan 102): no extras, steel wheels, and a second colour only where its variant takes
+ *  one — the draft keeps the variant and colours alone. */
+export function godLook(l: NonNullable<HomeCar["look"]>): NonNullable<HomeCar["look"]> {
+  const { colour2, ...rest } = l;
+  return { extras: [], wheels: "steel", ...rest, ...(colour2 != null && twoToneOf(l.variant) && { colour2 }) };
+}
+
 /** A vehicle that isn't a home (a lot's car, a player's own, a spawn) moved by God mode: its props then — not
  *  someone's own, its look, role and plate too; set down standing, as if just left there. */
 export function movedProps(was: Record<string, unknown>, c: Partial<VehicleDef>, now: number): Record<string, unknown> {
@@ -179,7 +187,7 @@ export function movedProps(was: Record<string, unknown>, c: Partial<VehicleDef>,
   delete props.lie;
   delete props.ly;
   if (!props.ownerId) {
-    if (c.look) props.look = { extras: [], wheels: "steel", ...c.look };
+    if (c.look) props.look = godLook(c.look);
     if (c.role !== undefined) {
       if (c.role) props.role = c.role;
       else delete props.role;
@@ -272,7 +280,12 @@ const ROLES = new Set(["", "police", "taxi", "rental"]);
  *  look that kind may have, a role there is, a plate as plates are; not too many. Problems, said. */
 export function checkVehicles(
   e: GroundsEdits,
-  ok: { kind: (k: string) => boolean; look: (kind: string, look: unknown) => boolean },
+  ok: {
+    kind: (k: string) => boolean;
+    look: (kind: string, look: unknown) => boolean;
+    /** the kind of a vehicle the draft changes but doesn't name one for (a lot's car: the room's) */
+    kindOf?: (key: string) => string | undefined;
+  },
 ): string[] {
   const out: string[] = [];
   const s = e.vehicles;
@@ -284,8 +297,12 @@ export function checkVehicles(
     if (whole || d.model !== undefined) if (!ok.kind(String(d.model))) no(`${key}: no such vehicle (${d.model})`);
     for (const f of ["x", "z", "a"] as const)
       if ((whole || d[f] !== undefined) && !Number.isFinite(d[f])) no(`${key}: its place isn't a number`);
-    if (d.look !== undefined && d.model !== undefined && !ok.look(String(d.model), d.look))
-      no(`${key}: a look it can't have`);
+    // (a repaint alone: its own kind's — a home's, else the room's)
+    const model = d.model ?? homesOf(e).find((h) => h.id === key)?.model ?? ok.kindOf?.(key);
+    if (d.look !== undefined) {
+      const fine = !!d.look && typeof d.look === "object" && model !== undefined;
+      if (!fine || !ok.look(String(model), godLook(d.look))) no(`${key}: a look it can't have`);
+    }
     if (d.role !== undefined && !ROLES.has(d.role)) no(`${key}: no such role (${d.role})`);
     if (d.plate !== undefined && (typeof d.plate !== "string" || d.plate.length > 8)) no(`${key}: a plate's 8 at most`);
   };

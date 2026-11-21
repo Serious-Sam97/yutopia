@@ -43,6 +43,12 @@ registerFeature((room: WorldRoom) => {
     const out = checkVehicles(e, {
       kind: (k) => isCarKind(k),
       look: (k, l) => isCarKind(k) && !!validLook(k, l),
+      kindOf: (id) => {
+        const o = room.state.objects.get(id);
+        if (o?.kind !== "car") return undefined;
+        const m = fromSchema(o).props?.model;
+        return typeof m === "string" ? m : "sedan";
+      },
     });
     const owned = (id: string) => {
       const o = room.state.objects.get(id);

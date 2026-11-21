@@ -3,6 +3,7 @@ import {
   addVehicle,
   type CarRole,
   changeVehicle,
+  godLook,
   homeProps,
   homesOf,
   isCarKind,
@@ -329,13 +330,7 @@ export class VehiclesTool {
     // the one held: its own model, where it'd stand
     const [x, z] = this.snapped(at.x, at.z);
     const a = o.a * RAD;
-    const look = {
-      variant: o.variant,
-      colour: o.colour,
-      extras: [],
-      wheels: "steel",
-      ...(o.colour2 !== null && { colour2: o.colour2 }),
-    };
+    const look = godLook({ variant: o.variant, colour: o.colour, ...(o.colour2 !== null && { colour2: o.colour2 }) });
     const props: Record<string, unknown> = { level: 0, model: o.kind, look, ghost: 1, ...(o.role && { role: o.role }) };
     this.held = { id: GHOST, kind: "car", ...parkAt(x, z, a, heightAt(x, z), props) };
     const why = this.blocked(x, z);

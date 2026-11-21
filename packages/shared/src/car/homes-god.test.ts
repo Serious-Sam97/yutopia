@@ -8,6 +8,7 @@ import {
   changeVehicle,
   checkVehicles,
   defOfHome,
+  godLook,
   HOME_CARS,
   homeProps,
   homesOf,
@@ -84,6 +85,50 @@ test("the checks: a kind there is, a place that's a number, a look it may have",
     },
   };
   assert.deepEqual(checkVehicles(good, ok), []);
+});
+
+test("the checks: a car's look as the Vehicles tool and the panel write it (variant and colours alone)", () => {
+  const taxi = HOME_CARS.find((h) => h.role === "taxi" && !h.look);
+  assert.ok(taxi);
+  const draft: GroundsEdits = {
+    rev: 1,
+    vehicles: {
+      add: [
+        { key: "god-car-1", model: "sedan", x: 0, z: 0, a: 0, look: { variant: "saloon-base", colour: 0x335577 } },
+        {
+          key: "god-car-2",
+          model: "sedan",
+          x: 9,
+          z: 0,
+          a: 0,
+          look: { variant: "saloon-gl", colour: 0x335577, colour2: 0xf2f2ee },
+        },
+        // (a second colour on a body that takes none: dropped, not refused)
+        {
+          key: "god-car-3",
+          model: "sedan",
+          x: 18,
+          z: 0,
+          a: 0,
+          look: { variant: "saloon-base", colour: 0x335577, colour2: 0xf2f2ee },
+        },
+      ],
+      // (a repaint alone: checked against its own kind — a home's, a lot car's from the room)
+      change: {
+        [taxi.id]: { look: { variant: "saloon-base", colour: 0x112233 } },
+        "car-7": { look: { variant: "hatch-base", colour: 0x112233 } },
+      },
+    },
+  };
+  assert.deepEqual(checkVehicles(draft, { ...ok, kindOf: () => "hatch" }), []);
+  const wrong = checkVehicles(draft, { ...ok, kindOf: () => "pickup" });
+  assert.deepEqual(wrong, ["car-7: a look it can't have"]);
+  assert.deepEqual(godLook({ variant: "saloon-base", colour: 1, colour2: 2 }), {
+    extras: [],
+    wheels: "steel",
+    variant: "saloon-base",
+    colour: 1,
+  });
 });
 
 test("God mode's steps: a placed one's own entry changed, taken away as if never; the town's by its key", () => {
