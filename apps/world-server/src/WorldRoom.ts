@@ -69,7 +69,10 @@ import {
   seatByte,
   setAreasBeyond,
   setOutdoors,
+  setSpaceFloors,
   skyAt,
+  spaceFloor,
+  spaceGroundAt,
   spDay,
   spHour,
   stepGround,
@@ -96,14 +99,22 @@ import {
   STORM_CALL_MS,
   WEATHER_CALL_MS,
 } from "@yutopia/shared/admin";
+import { layoutOf } from "@yutopia/shared/building-styles";
 import { cleanText } from "@yutopia/shared/glyphs";
-import { editsNow, groundsAreaAt, groundsOutdoors, inDeepWater, setUnderfoot } from "@yutopia/shared/grounds";
+import {
+  BUILDINGS,
+  editsNow,
+  groundsAreaAt,
+  groundsOutdoors,
+  inDeepWater,
+  setUnderfoot,
+} from "@yutopia/shared/grounds";
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
 import { isFlowCode, isVerb, MV_WINDED } from "@yutopia/shared/move";
 import { BuildingNav } from "@yutopia/shared/nav";
 import { Place } from "@yutopia/shared/physics";
 import { type Feet, HAND, offBand, spanOf } from "@yutopia/shared/reach";
-import { type Solid3, WALL_H } from "@yutopia/shared/shapes";
+import { kindSolids, type Solid3, WALL_H } from "@yutopia/shared/shapes";
 import { isSkateCode } from "@yutopia/shared/skate";
 import { boardOfOwner } from "@yutopia/shared/spot";
 import {
@@ -125,6 +136,7 @@ import {
   withOn,
 } from "@yutopia/shared/structure";
 import { finishWorld } from "@yutopia/shared/structure/finish";
+import { furnishingsFix, spacesFix } from "@yutopia/shared/structure/spaces";
 import { ApiError, api, type PresenceEntry, type WorldInfo } from "./api.ts";
 import { verifyWorldToken, type WorldClaims } from "./auth.ts";
 import { config } from "./config.ts";
@@ -466,6 +478,11 @@ export class WorldRoom extends Room<WorldState> {
         await api.putStructure(this.structure);
       }
     }
+    // the town's buildings' insides (docs/plan/112-the-insides.md): a space each, laid where there's none yet (its
+    // floors, shell and slabs in the structure; its stairs and a furnished one's furniture as things), kept
+    objects = this.fixSpaces(objects, true);
+    // (the town's storeys registered from the live structure only — plan 113 review)
+    setSpaceFloors(this.structure.floors);
     this.map = viewOf(this.structure);
     this.state.mapKey = this.map.key;
     this.state.name = info?.name ?? "Offline studio";
@@ -922,7 +939,7 @@ export class WorldRoom extends Room<WorldState> {
       // (each end at its height — mine, the ground's there: a way asked at the floor's own snapped to the lowest
       // thing walked on, a jetty buried under a boathouse's front, and found no way in — plan 111)
       const z = { fromZ: overFloor(p.level, p.z), toZ: this.groundOf(p.uid, p.level, m.x, m.y) };
-      void this.waySoon(p.uid, p.level, { x: m.fx, y: m.fy }, { x: m.x, y: m.y }, z).then((way) =>
+      void this.wayThrough(p.uid, p.level, { x: m.fx, y: m.fy }, { x: m.x, y: m.y }, z).then((way) =>
         this.send(client, "way", { n: m.n, pts: way ? way.map((q): [number, number] => [r2(q.x), r2(q.y)]) : null }),
       );
     });
@@ -1142,11 +1159,17 @@ export class WorldRoom extends Room<WorldState> {
       const startAt: { x: number; y: number } = target.level === p.level ? p : (entry ?? landing ?? p);
       // (a way there from where I am — or, on my own floor, from its way in: out on the land the
       // building's rooms have no way to them from where I stand, and a teleport needn't walk)
+      // (a town building's storey: its mesh made when first asked — plan 112 — so asked now, and it's let in as the
+      // land is: its rooms are open)
+      // (…unless a door's locked on it: then its way's found, as anywhere — plan 113 review)
+      if (spaceFloor(target.level) && landing) void this.waySoon(p.uid, target.level, landing, landing).catch(() => {});
+      const town = !!spaceFloor(target.level) && !this.lockedOn(target.level);
       const reach = (from: { x: number; y: number } | null | undefined) =>
-        !!from &&
-        !!landing &&
-        (!!this.wayFor(p.uid, target.level, from, landing)?.length ||
-          Math.hypot(landing.x - from.x, landing.y - from.y) <= 0.5);
+        town ||
+        (!!from &&
+          !!landing &&
+          (!!this.wayFor(p.uid, target.level, from, landing)?.length ||
+            Math.hypot(landing.x - from.x, landing.y - from.y) <= 0.5));
       if (
         !landing ||
         // (the land outdoors is all one place: no need to find the way there; an admin going
@@ -1415,6 +1438,12 @@ export class WorldRoom extends Room<WorldState> {
     const area = areaAt(this.levelMap(at.level), at.x, at.y);
     if (area && area.key !== p.area && !this.mayEnter(p, area.key))
       return `Someone's in ${area.name} with the door shut — try again when it's free.`;
+    // (a town building's storey — plan 112: let in as the teleport lets it, its rooms open; its mesh made when first
+    // asked, so asked now — plan 113 review)
+    if (spaceFloor(at.level)) {
+      void this.waySoon(p.uid, at.level, at, at).catch(() => {});
+      if (!this.lockedOn(at.level)) return null;
+    }
     const start = g.fits(from.x, from.y) ? from : g.nearestOpen(from.x, from.y);
     if (!start) return "Can't get there from here.";
     if (Math.hypot(start.x - at.x, start.y - at.y) < 0.5 || this.wayFor(p.uid, at.level, start, at)?.length)
@@ -1588,6 +1617,65 @@ export class WorldRoom extends Room<WorldState> {
     return this.nav.path(level, from, to, { open: this.doorsOf(uid) }) ?? null;
   }
   /** The same, waiting for a window on the land to be made if it needs one (walk-to). */
+  /** A way to `to` from my floor (`waySoon`), and through a town building's door (plan 112): from the land in to a
+   *  spot on its ground storey, or out of it to the land — each side its own floor's way, the door between. */
+  async wayThrough(
+    uid: number | null,
+    level: number,
+    from: Point,
+    to: Point,
+    z: { fromZ?: number; toZ?: number } = {},
+  ): Promise<Point[] | null> {
+    const here = spaceFloor(level);
+    const there = level === 0 ? spaceGroundAt(to.x, to.y) : null;
+    const b =
+      here?.storey === 0 && !this.inPlot(here, to)
+        ? BUILDINGS.find((q) => q.key === here.space)
+        : there
+          ? BUILDINGS.find((q) => q.key === there.space)
+          : null;
+    const d = b ? layoutOf(b)?.door : null;
+    if (!b || !d) return this.waySoon(uid, level, from, to, z);
+    // (the doorstep: where the door's line crosses the building's own edge — a church's door is its tower's, out
+    // in front, the porch between the land's — plan 113 review)
+    const edge = d.ox !== 0 ? { x: d.ox > 0 ? b.x1 : b.x0, y: d.z } : { x: d.x, y: d.oz > 0 ? b.z1 : b.z0 };
+    const out = { x: edge.x + d.ox * 0.9, y: edge.y + d.oz * 0.9 };
+    const inn = { x: edge.x - d.ox * 0.9, y: edge.y - d.oz * 0.9 };
+    const ground = here ?? there;
+    if (!ground) return null;
+    // (each end of each leg at its own height — the land's out there, the storey's floor in here: a leg's end asked
+    // without one snapped to the lowest thing walked on, the boathouse's jetty under its front — plan 113 review)
+    const land = (p: Point) => this.groundOf(uid ?? 0, 0, p.x, p.y);
+    const legs: [number, Point, Point, { fromZ?: number; toZ?: number }][] = here
+      ? [
+          [level, from, inn, { fromZ: z.fromZ, toZ: 0 }],
+          [0, out, to, { fromZ: land(out), toZ: land(to) }],
+        ]
+      : [
+          [0, from, out, { fromZ: z.fromZ, toZ: land(out) }],
+          [ground.index, inn, to, { fromZ: 0, toZ: 0 }],
+        ];
+    const pts: Point[] = [];
+    for (const [l, a, c, h] of legs) {
+      const w = await this.waySoon(uid, l, a, c, h);
+      if (!w) return null;
+      pts.push(...w);
+    }
+    return pts;
+  }
+  /** A door locked on this floor (a room an owner shut): its way's to be found, not let in as the land is. */
+  lockedOn(level: number): boolean {
+    for (const k of this.lockedDoors.keys()) {
+      const o = this.state.objects.get(k.slice(k.indexOf(":") + 1));
+      if (o && objLevel(fromSchema(o), this.map) === level) return true;
+    }
+    return false;
+  }
+  private inPlot(f: { grid: { x0: number; y0: number; w: number; h: number } }, p: Point): boolean {
+    const { x0, y0, w, h } = f.grid;
+    return p.x >= x0 && p.y >= y0 && p.x <= x0 + w && p.y <= y0 + h;
+  }
+
   waySoon(
     uid: number | null,
     level: number,
@@ -1751,6 +1839,104 @@ export class WorldRoom extends Room<WorldState> {
     this.state.structRev = this.structRev;
   }
 
+  /** Why `p` can't build on floor `level` (null: they can): a town building's inside is built by admins only
+   *  (docs/plan/112-the-insides.md, F1a — members walk in). */
+  spaceWhy(p: { admin?: boolean } | undefined, level: number): string | null {
+    const f = this.structure.floors.find((q) => q.index === level);
+    if (!f?.space) return null;
+    return p?.admin ? null : "only admins build inside the town's buildings";
+  }
+
+  /** Why a door or window on the tiles' edges can't go where it is (plan 112, F4a): in a town building's own wall. */
+  private shellEdgeWhy(def: WorldObjectDef, level: number): string | null {
+    const shell = this.structure.walls.filter((w) => w.floor === level && w.shell);
+    if (!shell.length) return null;
+    for (const e of openingEdges(def)) {
+      const [ax, ay, bx, by] = e.dir === "h" ? [e.x, e.y, e.x + 1, e.y] : [e.x, e.y, e.x, e.y + 1];
+      const on = (w: (typeof shell)[number]) => {
+        const along = (x: number, y: number) =>
+          Math.abs((w.b[0] - w.a[0]) * (y - w.a[1]) - (w.b[1] - w.a[1]) * (x - w.a[0])) < 1e-3 &&
+          x >= Math.min(w.a[0], w.b[0]) - 1e-3 &&
+          x <= Math.max(w.a[0], w.b[0]) + 1e-3 &&
+          y >= Math.min(w.a[1], w.b[1]) - 1e-3 &&
+          y <= Math.max(w.a[1], w.b[1]) + 1e-3;
+        return along(ax, ay) && along(bx, by);
+      };
+      if (shell.some(on)) return "the building's own wall";
+    }
+    return null;
+  }
+
+  /** The town's spaces made to match its buildings (plan 112: laid, taken out of the world, put back — shared
+   *  structure/spaces.ts): at loading (`boot`: the structure and things set in place, saved) and after a publish
+   *  (applied as any edit). The things a newly laid space starts with, added. */
+  fixSpaces(objects: WorldObjectDef[], boot = false, turned: ReadonlySet<string> = new Set()): WorldObjectDef[] {
+    const fix = spacesFix(this.structure);
+    let touched = false;
+    const put = (t: WorldObjectDef) => {
+      touched = true;
+      if (!boot) this.state.objects.set(t.id, toSchema(t));
+      if (!config.offline) void api.putObject(t).catch((e) => console.warn("[spaces] thing save failed", e.message));
+    };
+    const drop = (id: string) => {
+      touched = true;
+      if (!boot) this.state.objects.delete(id);
+      if (!config.offline) void api.deleteObject(id).catch(() => {});
+    };
+    // (the things first, then the structure: laid out again with its walls where they've gone, what hangs on a
+    // wall is found on it there — not put back where it was, its save racing the move's — plan 113 review)
+    // (a space laid again, its building's door turned to another side: its laid things as they're laid now, the
+    // rest of its laid ones gone — plan 113 review)
+    for (const r of fix.relaid) {
+      const keep = new Set(r.things.map((t) => t.id));
+      const laid = (o: WorldObjectDef) => o.id.startsWith(r.prefix ?? `sp-${r.key}-`);
+      for (const o of objects) if (laid(o) && !keep.has(o.id)) drop(o.id);
+      for (const t of r.things) put(t);
+      objects = [...objects.filter((o) => !laid(o)), ...r.things];
+      console.log(`[spaces] laid again: ${r.key}${r.prefix ? " (its stairs)" : ""}`);
+    }
+    const fresh = fix.things.filter((t) => !objects.some((o) => o.id === t.id));
+    for (const t of fresh) put(t);
+    objects = [...objects, ...fresh];
+    // (the things in a space whose building moved: with it)
+    const by = new Map(fix.moves.map((m) => [m.level, m]));
+    if (by.size)
+      objects = objects.map((o) => {
+        const m = by.get(objLevel(o, this.map ?? viewOf(this.structure)));
+        if (!m) return o;
+        const moved = { ...o, x: Math.round((o.x + m.dx) * 1000) / 1000, y: Math.round((o.y + m.dy) * 1000) / 1000 };
+        put(moved);
+        return moved;
+      });
+    if (fix.moves.length)
+      console.log(`[spaces] moved with their buildings: floors ${fix.moves.map((m) => m.level).join(", ")}`);
+    if (fix.ops.length) {
+      if (fix.laid.length) console.log(`[spaces] laid ${fix.laid.length}: ${fix.laid.join(", ")}`);
+      if (boot) {
+        this.structure = applyOps(this.structure, fix.ops);
+        setSpaceFloors(this.structure.floors);
+        // (saved as any edit is: debounced, with saveStructure's retries — plan 113 review)
+        if (!config.offline) {
+          if (this.layoutTimer) clearTimeout(this.layoutTimer);
+          this.layoutTimer = setTimeout(() => void this.saveStructure(), 1200);
+        }
+      } else this.applyStruct(fix.ops);
+    }
+    // (a building made furnished or empty in this publish: its furniture laid or taken away — plan 113; after the
+    // moves, so what's laid is laid where it stands now and isn't moved again)
+    if (turned.size) {
+      const f = furnishingsFix(this.structure, objects, turned);
+      for (const id of f.drop) drop(id);
+      for (const t of f.add) put(t);
+      const gone = new Set(f.drop);
+      objects = [...objects.filter((o) => !gone.has(o.id)), ...f.add];
+    }
+    // (what's walked round and what's solid made again from the things as they are now: a toggle's furniture alone
+    // changes no structure — plan 113 review)
+    if (!boot && touched) this.rebuildGrid();
+    return objects;
+  }
+
   // An edit made as the building it leaves (the structure after it): what turns one into the other,
   // applied as operations — kept, sent to everyone (each applies the same), stored (debounced).
   commitStructure(next: Structure) {
@@ -1760,6 +1946,8 @@ export class WorldRoom extends Room<WorldState> {
   applyStruct(ops: StructOp[]) {
     this.structure = applyOps(this.structure, ops);
     this.structRev++;
+    // (the town's storeys registered from the live structure only — plan 113 review)
+    setSpaceFloors(this.structure.floors);
     this.map = viewOf(this.structure);
     this.syncMapState();
     this.broadcast("struct:ops", { rev: this.structRev, ops });
@@ -1897,6 +2085,17 @@ export class WorldRoom extends Room<WorldState> {
     }
     const level = Number.isInteger(props0.level) ? (props0.level as number) : this.home;
     if (!levelMap(this.map, level)) return;
+    // (a town building's inside: admins' — plan 112; and no lift in one)
+    const spaceNo =
+      this.spaceWhy(p, level) ??
+      (existing ? this.spaceWhy(p, objLevel(fromSchema(existing), this.map)) : null) ??
+      (m.kind === "elevator" && this.structure.floors.some((f) => f.index === level && f.space)
+        ? "no lifts in the town's buildings"
+        : null);
+    if (spaceNo) {
+      this.send(client, "toast", { text: `Can't put it there: ${spaceNo}.`, tone: "warn" });
+      return;
+    }
     const lm = this.levelMap(level);
     const sameFloor = onLevel(others, lm);
     let def: WorldObjectDef = {
@@ -1971,6 +2170,7 @@ export class WorldRoom extends Room<WorldState> {
       def.yaw = quarterYaw(rot % 2);
       const why =
         this.lockBreak(p, null, existing ? [fromSchema(existing), def] : [def], level) ??
+        this.shellEdgeWhy(def, level) ??
         openingBlocker(lm, sameFloor, def, hungOnEdge(sameFloor));
       if (why) {
         this.send(client, "toast", { text: `Can't put it there: ${why}.`, tone: "warn" });
@@ -1986,6 +2186,11 @@ export class WorldRoom extends Room<WorldState> {
     }
     // what it plays stays the server's (a stale copy from the builder's hand, or a copy's)
     def.props = keepPlaying(def.props, existing ? safeJson(existing.props) : null);
+    const plot = this.townPlotWhy(def);
+    if (plot) {
+      this.send(client, "toast", { text: `Can't put it there: ${plot}.`, tone: "warn" });
+      return;
+    }
     if (!this.placementOk(def, others)) {
       this.send(client, "toast", { text: "That doesn't fit there.", tone: "warn" });
       return;
@@ -2025,7 +2230,7 @@ export class WorldRoom extends Room<WorldState> {
       this.send(client, "toast", { text: `${this.holderName(id)} is moving that.`, tone: "warn" });
       return;
     }
-    const locked = this.lockBreak(p, null, [fromSchema(o)]);
+    const locked = this.lockBreak(p, null, [fromSchema(o)]) ?? this.spaceWhy(p, objLevel(fromSchema(o), this.map));
     if (locked) {
       this.send(client, "toast", { text: `${locked}.`, tone: "warn" });
       return;
@@ -2063,6 +2268,35 @@ export class WorldRoom extends Room<WorldState> {
       for (const o of objs) if (isOpening(o.kind) && openingEdges(o).some((e) => keys.has(edgeKey(e)))) return why;
     }
     return null;
+  }
+
+  /** Why a thing on the land (floor 0) can't stand where it is: in a town building's plot — its inside is its own
+   *  floors', a thing put there on the land's would stand in the room, a member's too (plan 113 review). */
+  townPlotWhy(o: WorldObjectDef): string | null {
+    if (objLevel(o, this.map) !== 0) return null;
+    const pts: [number, number][] = isFreeThing(o) || isFreeOpening(o) ? [[o.x, o.y]] : [[o.x + 0.5, o.y + 0.5]];
+    for (const s of kindSolids(o)) {
+      if (s.t === "cyl") pts.push([s.x, s.z]);
+      else {
+        const c = Math.cos(-s.a);
+        const n = Math.sin(-s.a);
+        for (const [u, v] of [
+          [-s.hx, -s.hz],
+          [s.hx, -s.hz],
+          [s.hx, s.hz],
+          [-s.hx, s.hz],
+        ])
+          pts.push([s.x + u * c - v * n, s.z + u * n + v * c]);
+      }
+    }
+    // (a hair in from each corner: one by the wall outside, against it, is the land's)
+    const inside = pts.some(([x, y]) => {
+      const g = spaceGroundAt(x, y);
+      if (!g) return false;
+      const { x0, y0, w, h } = g.grid;
+      return x > x0 + 0.05 && y > y0 + 0.05 && x < x0 + w - 0.05 && y < y0 + h - 0.05;
+    });
+    return inside ? "that's inside a town building — build on its own floor" : null;
   }
 
   placementOk(o: WorldObjectDef, others: WorldObjectDef[]): boolean {

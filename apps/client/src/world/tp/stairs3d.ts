@@ -1,4 +1,4 @@
-import { STAIRS_D, STOREY, stairsDoor, V_FLIGHT, V_TURN } from "@yutopia/shared";
+import { quarterOf, STAIRS_D, STOREY, stairsDoor, V_FLIGHT, V_TURN } from "@yutopia/shared";
 import {
   BoxGeometry,
   BufferGeometry,
@@ -38,7 +38,6 @@ import { mergeStatic } from "./merge-static";
 const N = 9; // steps a flight
 const F = V_FLIGHT; // the flights start here (the door's landing is 0..F deep)
 const T = V_TURN; // and turn here (the half landing T..T+2)
-const RISE = STOREY / 2 / N;
 const RUN = 3 / N;
 const RAIL_H = 0.95;
 
@@ -236,15 +235,28 @@ export class Stairwell {
 
   /** `floor`: the number at its landing; `walls`: the well's walls drawn (a
    *  cut-away view leaves the near ones out); `storeys`: how many of them. */
+  /** how high it goes a storey (plan 112: a town building's own) */
+  private rise = STOREY;
   constructor(
-    opts: { floor?: string; next?: string; walls?: ("w" | "e" | "s")[]; storeys?: number; lights?: boolean } = {},
+    opts: {
+      floor?: string;
+      next?: string;
+      walls?: ("w" | "e" | "s")[];
+      storeys?: number;
+      lights?: boolean;
+      /** its storey's height (none: the HQ's); a town building's has no fire doors */
+      rise?: number;
+    } = {},
   ) {
+    this.rise = opts.rise ?? STOREY;
     const m = stairMats();
     const lights = opts.lights !== false;
     const storeys = opts.storeys ?? 1;
-    for (let k = 0; k < storeys; k++) this.flights(k * STOREY, m, k === 0);
+    // (its storey's own rise: a town building's isn't the HQ's — plan 113 review, the sign and lamp too)
+    const half = this.rise / 2;
+    for (let k = 0; k < storeys; k++) this.flights(k * this.rise, m, k === 0);
     // the well's walls: block, two storeys of them
-    const H = STOREY * storeys + 0.2;
+    const H = this.rise * storeys + 0.2;
     const walls = opts.walls ?? ["w", "e", "s"];
     if (walls.includes("w")) this.root.add(box(0.12, H, 7, m.wall, -0.06, H / 2, 3.5));
     if (walls.includes("e")) this.root.add(box(0.12, H, 7, m.wall, 4.06, H / 2, 3.5));
@@ -255,18 +267,18 @@ export class Stairwell {
         new PlaneGeometry(1.0, 1.0),
         new MeshBasicMaterial({ map: stencil(opts.floor, opts.next ?? `FLOOR ${opts.floor}`), transparent: true }),
       );
-      sign.position.set(2, STOREY / 2 + 1.25, 6.99);
+      sign.position.set(2, half + 1.25, 6.99);
       sign.rotation.y = Math.PI;
       this.root.add(sign);
     }
     // a bulkhead over the half landing, its light
-    const lamp = box(0.34, 0.18, 0.08, m.frame, 2, STOREY / 2 + 2.35, 6.95);
-    const lens = box(0.28, 0.12, 0.02, m.bulb, 2, STOREY / 2 + 2.35, 6.905);
+    const lamp = box(0.34, 0.18, 0.08, m.frame, 2, half + 2.35, 6.95);
+    const lens = box(0.28, 0.12, 0.02, m.bulb, 2, half + 2.35, 6.905);
     this.root.add(lamp, lens);
     // (the game leaves the light out: every light costs every surface; the lens glows)
     this.light = new PointLight("#fff0d8", lights ? 4 : 0, 7, 1.5);
     this.light.visible = lights;
-    this.light.position.set(2, STOREY / 2 + 2.1, 6.5);
+    this.light.position.set(2, half + 2.1, 6.5);
     this.light.castShadow = lights;
     this.light.shadow.mapSize.set(1024, 1024);
     this.light.shadow.bias = -0.001;
@@ -283,14 +295,20 @@ export class Stairwell {
       this.root.add(g);
       return g;
     };
-    this.doors = [leaf(0.06, 1), leaf(1.94, -1)];
-    this.root.add(box(0.06, 2.16, 0.12, m.frame, 0.03, 1.08, 0));
-    this.root.add(box(0.06, 2.16, 0.12, m.frame, 1.97, 1.08, 0));
-    this.root.add(box(2.0, 0.06, 0.12, m.frame, 1.0, 2.13, 0));
+    // (a town building's stairs: open, no fire doors — plan 112)
+    if (opts.rise === undefined) {
+      this.doors = [leaf(0.06, 1), leaf(1.94, -1)];
+      this.root.add(box(0.06, 2.16, 0.12, m.frame, 0.03, 1.08, 0));
+      this.root.add(box(0.06, 2.16, 0.12, m.frame, 1.97, 1.08, 0));
+      this.root.add(box(2.0, 0.06, 0.12, m.frame, 1.0, 2.13, 0));
+    }
     this.setDoor(0);
   }
 
   private flights(y0: number, m: StairMats, first: boolean) {
+    // (up its floor's own rise: a town building's storey isn't the HQ's — plan 112)
+    const STOREY = this.rise;
+    const RISE = STOREY / 2 / N;
     // flight A: solid steps from the floor (u 2..4, v 1 → 4)
     for (let i = 0; i < N; i++) {
       const top = y0 + RISE * (i + 1);
@@ -368,6 +386,8 @@ export class Stairwell {
   setDoor(open: number) {
     const k = Math.max(0, Math.min(1, open));
     const [a, b] = this.doors;
+    // (a town building's stairs have none: plan 112)
+    if (!a || !b) return;
     a.rotation.y = -k * 1.45;
     b.rotation.y = k * 1.45;
   }
@@ -375,12 +395,14 @@ export class Stairwell {
 
 // ── in the game: every staircase on the floors drawn ────────────────────────
 export interface StairStop3 {
-  o: { id: string; x: number; y: number; rot?: number };
+  o: { id: string; x: number; y: number; rot?: number; yaw?: number };
   off: { x: number; y: number; h: number }; // its floor from mine
   floor: string; // the number stencilled at its half landing
   next: string; // the strip under it
   people: { x: number; y: number }[]; // on its floor, in my floor's coords
   shown: boolean; // drawn (the floors above mine are kept, hidden)
+  /** its storey's height, a town building's (plan 112; none: the HQ's) */
+  rise?: number;
 }
 
 /** The staircases of the 3D view (tp/view.ts): the stairwell drawn for each,
@@ -406,7 +428,7 @@ export class Stairs3 {
     this.picks = [];
     for (const s of stops) {
       seen.add(s.o.id);
-      const key = `${s.floor}|${s.next}`;
+      const key = `${s.floor}|${s.next}|${s.rise ?? ""}`;
       let v = this.views.get(s.o.id);
       if (v && v.key !== key) {
         this.drop(s.o.id);
@@ -414,7 +436,13 @@ export class Stairs3 {
       }
       if (!v) {
         const outer = new Group();
-        const well = new Stairwell({ floor: s.floor, next: s.next, walls: [], lights: false });
+        const well = new Stairwell({
+          floor: s.floor,
+          next: s.next,
+          walls: [],
+          lights: false,
+          ...(s.rise !== undefined ? { rise: s.rise } : {}),
+        });
         // (its still pieces one mesh a material: a hundred-odd draws fewer)
         mergeStatic(well.root, well.moving());
         well.root.position.set(-2, 0, -STAIRS_D / 2);
@@ -425,7 +453,8 @@ export class Stairs3 {
       }
       v.shown = s.shown;
       v.outer.visible = s.shown || this.warming;
-      const r = (s.o.rot ?? 0) & 3;
+      // (its quarter turn: the object's yaw — a `rot` it never has drew every staircase unturned; plan 113)
+      const r = (s.o.rot ?? quarterOf(s.o)) & 3;
       const [fw, fh] = r % 2 ? [STAIRS_D, 4] : [4, STAIRS_D];
       v.outer.position.set(s.o.x + fw / 2 + s.off.x, s.off.h, s.o.y + fh / 2 + s.off.y);
       v.outer.rotation.y = -r * (Math.PI / 2);
@@ -447,7 +476,7 @@ export class Stairs3 {
         y0,
         y1: y0 + fh,
         z0: s.off.h - 0.2,
-        z1: s.off.h + STOREY,
+        z1: s.off.h + (s.rise ?? STOREY),
       });
     }
     for (const id of [...this.views.keys()]) if (!seen.has(id)) this.drop(id);

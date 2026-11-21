@@ -850,19 +850,27 @@ if (LONG_ROAD) {
 /** The buildings as they are: the generator's, edited. */
 export const BUILDINGS: Building[] = [];
 function layBuildings() {
-  const e = keep<BuildingDef>(EDITS.buildings);
+  const next = buildingsFor(EDITS);
   BUILDINGS.length = 0;
+  BUILDINGS.push(...next);
+}
+/** The buildings a set of God mode's edits would have, the town's and its own (nothing laid: what a publish or a
+ *  rollback is checked against before it's laid — plan 113 review). */
+export function buildingsFor(edits: GroundsEdits): Building[] {
+  const e = keep<BuildingDef>(edits.buildings);
+  const out: Building[] = [];
   for (const bd of BASE_BUILDINGS) {
     if (e.gone.has(bd.key)) continue;
     const c = e.change[bd.key];
-    BUILDINGS.push(c ? { ...bd, ...c } : bd);
+    out.push(c ? { ...bd, ...c } : bd);
   }
   for (const d of e.add) {
     if (e.gone.has(d.key)) continue;
     const bd: Building = { ...d, ...e.change[d.key] };
     // (a gas station put down: its kiosk built, its forecourt open — as the town's)
-    BUILDINGS.push(bd.kind === "gas" && !bd.built ? { ...bd, built: kioskOf(bd) } : bd);
+    out.push(bd.kind === "gas" && !bd.built ? { ...bd, built: kioskOf(bd) } : bd);
   }
+  return out;
 }
 layBuildings();
 
@@ -1069,15 +1077,24 @@ function layIndex() {
   indexLine(RIVER.line, RIVER_F);
   indexLine(RAVINE.line, RAVINE_F);
   bCells.clear();
-  for (const bd of BUILDINGS)
-    for (let cx = Math.floor((bd.x0 - 8) / CELL); cx <= Math.floor((bd.x1 + 8) / CELL); cx++)
-      for (let cz = Math.floor((bd.z0 - 8) / CELL); cz <= Math.floor((bd.z1 + 8) / CELL); cz++) {
-        const k = cellKey(cx, cz);
-        const l = bCells.get(k) ?? [];
-        bCells.set(k, l);
-        l.push(bd);
-      }
+  crownCells.clear();
+  for (const [map, pad] of [
+    [bCells, 8],
+    [crownCells, CROWN_PAD],
+  ] as const)
+    for (const bd of BUILDINGS)
+      for (let cx = Math.floor((bd.x0 - pad) / CELL); cx <= Math.floor((bd.x1 + pad) / CELL); cx++)
+        for (let cz = Math.floor((bd.z0 - pad) / CELL); cz <= Math.floor((bd.z1 + pad) / CELL); cz++) {
+          const k = cellKey(cx, cz);
+          const l = map.get(k) ?? [];
+          map.set(k, l);
+          l.push(bd);
+        }
 }
+/** The buildings a tree's crown could reach from (x, z): within the widest crown, the biggest tree's (plan 113
+ *  review). */
+const crownCells = new Map<number, Building[]>();
+const CROWN_PAD = 13;
 layIndex();
 
 /** The nearest sample of every line within ~a cell of (x, z): distance and sample (not to be changed). */
@@ -2147,10 +2164,25 @@ export function treesIn(cx: number, cz: number): Tree[] {
           : q > 0.9
             ? "bare"
             : "pine";
-      out.push({ x, z, y: terrainAt(x, z), kind, s: 0.72 + r() * 0.62, ry: r() * Math.PI * 2 });
+      const s0 = 0.72 + r() * 0.62;
+      const ry = r() * Math.PI * 2;
+      // (its crown kept outside the buildings by it: grown smaller where its boughs would reach through a wall — a
+      // church's nave had a pine's in it, plan 113 review)
+      let s = s0;
+      for (const bd of crownCells.get(cellKey(Math.floor(x / CELL), Math.floor(z / CELL))) ?? [])
+        s = Math.min(s, (rectDist(bd, x, z) - 0.3) / CROWN_REACH[kind]);
+      // (one of the woods' that won't fit even small: not grown there; one God mode planted, as small as a tree is)
+      if (!m && s < TREE_SMALLEST) continue;
+      out.push({ x, z, y: terrainAt(x, z), kind, s: Math.max(TREE_SMALLEST, Math.min(s0, s)), ry });
     }
   return out;
 }
+/** How far a tree's crown reaches from its trunk at scale 1 (m): its models' widest bough as they're drawn — the life
+ *  look's (tp/land-block.ts: a pine 1.45×, a bare tree 1.7×, each a tenth wider or narrower and leant), measured over
+ *  the town's trees 2026-11-21 (6.28, 7.62, 9.36), a little over; the old look's are smaller. */
+/** The smallest a tree's grown (by a building: its crown kept off the wall — plan 113 review). */
+export const TREE_SMALLEST = 0.45;
+export const CROWN_REACH: Record<TreeKind, number> = { pine: 6.4, birch: 7.8, bare: 9.6 };
 
 // ── lamps ────────────────────────────────────────────────────────────────────
 export const LAMPS: Lamp[] = [];
@@ -3267,7 +3299,11 @@ export interface Inside {
   /** its floor's height over its ground: its door's sill (plan 111 — a kit building's plinth kept, its floor a
    *  slab up to it) */
   fy: number;
+  /** its inside a space of the structure's (plan 112: a kit building's — its floors, walls and things there) */
+  space?: boolean;
 }
+/** The furniture a furnished building's kind lays in it (plan 112: its space's first things). */
+export const furnishingsOf = (b: Building): Fit[] => (b.enter ? fitsOf(b).fits : []);
 function doorOf(b: Building): Inside["door"] {
   // (a kit building's: where its style put its door — on its side, the tiles under its width, two at least)
   const d = isKit(b.kind) ? layoutOf(b)?.door : null;
@@ -3574,8 +3610,9 @@ function layInsides() {
     const kit = isKit(b.kind) && !!layoutOf(b);
     if (kit ? !KINDS[b.kind as keyof typeof KINDS].enter : !b.enter) continue;
     const fy = kit ? Math.max(0, layoutOf(b)?.door.y ?? 0) : 0;
-    const furnished = b.enter ? fitsOf(b) : { floor: emptyFloor(b), fits: [] };
-    INSIDES.push({ b, door: doorOf(b), fy, ...furnished });
+    // (plan 112: a kit building's inside is its space, the structure's — its furniture things there, not fits)
+    const furnished = b.enter && !kit ? fitsOf(b) : { floor: emptyFloor(b), fits: [] };
+    INSIDES.push({ b, door: doorOf(b), fy, ...furnished, ...(kit ? { space: true } : {}) });
   }
   insideBy.clear();
   for (const i of INSIDES) insideBy.set(i.b.key, i);

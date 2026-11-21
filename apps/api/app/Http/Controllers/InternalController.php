@@ -117,10 +117,10 @@ class InternalController extends Controller
     {
         $data = $request->validate([
             'spawn' => ['present', 'nullable', 'array'],
-            'spawn.x' => ['required_with:spawn', 'numeric', 'between:-2000,2000'],
-            'spawn.y' => ['required_with:spawn', 'numeric', 'between:-2000,2000'],
+            'spawn.x' => ['required_with:spawn', 'numeric', 'between:-50000,50000'],
+            'spawn.y' => ['required_with:spawn', 'numeric', 'between:-50000,50000'],
             // the floor it's on (the building's, see layout); none: the home floor
-            'spawn.level' => ['nullable', 'integer', 'between:0,12'],
+            'spawn.level' => ['nullable', 'integer', 'between:0,255'],
         ]);
         // (saved every minute someone's in, and as they leave: when they were last seen)
         User::findOrFail($userId)->forceFill(['seen_at' => now()])->saveQuietly();
@@ -154,9 +154,9 @@ class InternalController extends Controller
         $data = $request->validate([
             'spots' => ['present', 'array', 'max:600'],
             'spots.*.user_id' => ['required', 'integer'],
-            'spots.*.x' => ['required', 'numeric', 'between:-2000,2000'],
-            'spots.*.y' => ['required', 'numeric', 'between:-2000,2000'],
-            'spots.*.level' => ['required', 'integer', 'between:0,12'],
+            'spots.*.x' => ['required', 'numeric', 'between:-50000,50000'],
+            'spots.*.y' => ['required', 'numeric', 'between:-50000,50000'],
+            'spots.*.level' => ['required', 'integer', 'between:0,255'],
             'spots.*.yaw' => ['required', 'integer', 'between:0,255'],
         ]);
         $known = User::whereIn('id', array_column($data['spots'], 'user_id'))->pluck('id')->flip();
@@ -194,10 +194,10 @@ class InternalController extends Controller
             'reports.*.secs' => ['required', 'numeric', 'between:0,600'],
             'reports.*.view' => ['required', 'string', 'max:8'],
             'reports.*.quality' => ['required', 'string', 'max:8'],
-            'reports.*.level' => ['required', 'integer', 'between:-5,20'],
+            'reports.*.level' => ['required', 'integer', 'between:-5,255'],
             'reports.*.area' => ['present', 'string', 'max:40'],
-            'reports.*.x' => ['required', 'numeric', 'between:-3000,3000'],
-            'reports.*.y' => ['required', 'numeric', 'between:-3000,3000'],
+            'reports.*.x' => ['required', 'numeric', 'between:-50000,50000'],
+            'reports.*.y' => ['required', 'numeric', 'between:-50000,50000'],
             'reports.*.fps' => ['required', 'numeric', 'between:0,1000'],
             'reports.*.frame_med' => ['required', 'numeric', 'between:0,60000'],
             'reports.*.frame_p95' => ['required', 'numeric', 'between:0,60000'],
@@ -308,7 +308,8 @@ class InternalController extends Controller
             'structure.name' => ['required', 'string', 'max:80'],
             'structure.home' => ['required', 'integer', 'between:0,12'],
             'structure.spawn' => ['required', 'array', 'size:2'],
-            'structure.floors' => ['required', 'array', 'min:1', 'max:13'],
+            // (the HQ's floors and the town's buildings' storeys — plan 112: a floor each, numbered up to 255)
+            'structure.floors' => ['required', 'array', 'min:1', 'max:256'],
             'structure.slabs' => ['present', 'array', 'max:5000'],
             'structure.walls' => ['present', 'array', 'max:20000'],
             'structure.rooms' => ['present', 'array', 'max:2000'],
@@ -627,9 +628,9 @@ class InternalController extends Controller
             'bonds.*' => ['numeric', 'between:0,100'],
             // where it is (shared/pets.ts PetPlace): a spot on a floor (the land round the ground floor too)
             'place' => ['sometimes', 'nullable', 'array', 'max:6'],
-            'place.x' => ['required_with:place', 'numeric', 'between:-2000,2000'],
-            'place.y' => ['required_with:place', 'numeric', 'between:-2000,2000'],
-            'place.level' => ['required_with:place', 'integer', 'between:0,200'],
+            'place.x' => ['required_with:place', 'numeric', 'between:-50000,50000'],
+            'place.y' => ['required_with:place', 'numeric', 'between:-50000,50000'],
+            'place.level' => ['required_with:place', 'integer', 'between:0,255'],
             'place.mode' => ['required_with:place', 'string', 'max:12'],
             'alive' => [$req, 'boolean'],
             'wins' => [$req, 'integer', 'min:0'],
@@ -664,8 +665,8 @@ class InternalController extends Controller
             $p.'id' => ['required', 'string', 'max:64'],
             $p.'kind' => ['required', 'string', 'max:40'],
             // (out on the Grounds round the ground floor too: a car left on the lawn — docs/plan/28)
-            $p.'x' => ['required', 'numeric', 'between:-2000,2000'],
-            $p.'y' => ['required', 'numeric', 'between:-2000,2000'],
+            $p.'x' => ['required', 'numeric', 'between:-50000,50000'],
+            $p.'y' => ['required', 'numeric', 'between:-50000,50000'],
             // (radians: π/2 a quarter turn — docs/plan/72-the-3d-core.md, phase 5)
             $p.'yaw' => ['nullable', 'numeric', 'between:-7,7'],
             $p.'refId' => ['nullable', 'integer'],

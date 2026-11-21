@@ -1,9 +1,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { floorsOf, getMap, levelMap, spanOf, WALL_H } from "@yutopia/shared";
-import { cellOf, structureFromMap } from "@yutopia/shared/structure";
+import { floorsOf, getMap, levelMap, setSpaceFloors, spanOf, WALL_H } from "@yutopia/shared";
+import {
+  cellOf,
+  frontNormal,
+  type Structure,
+  structureFromMap,
+  type Wall,
+  wallsPaint,
+} from "@yutopia/shared/structure";
 import { finishWorld } from "@yutopia/shared/structure/finish";
 import { localView } from "@yutopia/shared/structure/fold";
+import { laySpace, spaceBuildings } from "@yutopia/shared/structure/spaces";
 import { Out } from "./kit3d";
 import { edgesOfMap, edgesOfWalls, piecesOf, turnOut } from "./walls3d";
 
@@ -143,4 +151,46 @@ test("the campus: what's floor by the structure's slabs (below-cull's) is what t
       }
     assert.deepEqual(differ, [], `floor ${level}`);
   }
+});
+
+test("a town building's shell painted inside shows that paint inside, every wall of every space (plan 113 review)", () => {
+  let st: Structure = {
+    version: 4,
+    key: "t",
+    name: "t",
+    home: 0,
+    spawn: [0, 0],
+    floors: [{ index: 0, name: "ground", z: 0, grid: { x0: 0, y0: 0, w: 20, h: 20 } }],
+    slabs: [],
+    walls: [],
+    rooms: [],
+  };
+  for (const b of spaceBuildings()) {
+    const s = laySpace(st, b);
+    if (s)
+      st = {
+        ...st,
+        floors: [...st.floors, ...s.floors],
+        walls: [...st.walls, ...s.walls],
+        slabs: [...st.slabs, ...s.slabs],
+      };
+  }
+  setSpaceFloors(st.floors);
+  const wrong: string[] = [];
+  const shell = st.walls.filter((q) => q.shell);
+  for (const w of shell) {
+    const f = st.floors.find((q) => q.index === w.floor);
+    assert.ok(f);
+    const L = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
+    // (its inside: its left — the paint tool's side for it as the paint tool works it out)
+    const fn = frontNormal(w, f);
+    const side: 1 | -1 = -(w.b[1] - w.a[1]) * fn[0] + (w.b[0] - w.a[0]) * fn[1] > 0 ? 1 : -1;
+    const r = wallsPaint(st, w.floor, [{ id: w.id, side, from: 0, to: L, mat: "b" }], () => "nw");
+    assert.ok(!("why" in r), "why" in r ? r.why : "");
+    const painted = (r.op as { add: Wall[] }).add[0];
+    const corner = { x: Math.floor(f.grid.x0 + 1e-6), y: Math.floor(f.grid.y0 + 1e-6) };
+    if (edgesOfWalls([painted], w.floor, corner, f.z).free[0]?.ch !== "b") wrong.push(w.id);
+  }
+  assert.ok(shell.length > 100);
+  assert.deepEqual(wrong, []);
 });

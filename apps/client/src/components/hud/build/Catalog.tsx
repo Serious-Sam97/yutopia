@@ -33,6 +33,13 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
     items: [...["chair", "armchair", "sofa", "loveseat", "beanbag", "bench", "bar_stool"].map(it), ...fam("seating2")],
   },
   {
+    // (plan 113: the town's buildings' own — a bedroom's, a diner's and a bar's, a grocery's, a barn's)
+    key: "town",
+    label: "catTown",
+    icon: "home",
+    items: fam("town"),
+  },
+  {
     key: "surfaces",
     label: "catSurfaces",
     icon: "desk",

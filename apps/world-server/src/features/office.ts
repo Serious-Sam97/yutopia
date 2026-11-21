@@ -25,6 +25,9 @@ registerFeature((room: WorldRoom) => {
     const p = room.state.players.get(client.sessionId);
     if (!p?.builder) return;
     if (floor && !p.admin) return warn(client, "Only an admin refurnishes a whole floor.");
+    // (a town building's inside: admins' — plan 112)
+    const why = room.spaceWhy(p, p.level);
+    if (why) return warn(client, `${why[0].toUpperCase()}${why.slice(1)}.`);
     const map = room.levelMap(p.level);
     const all = objects();
     const bodies = [...room.state.players.values()].filter((q) => q.level === p.level).map((q) => ({ x: q.x, y: q.y }));

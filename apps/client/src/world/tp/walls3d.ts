@@ -6,8 +6,18 @@
 //
 // Floor-local frame, as World3 draws (its corner subtracted: tp/view.ts places the floor's root).
 import type { Edge, MapDef } from "@yutopia/shared";
-import { HALF_WALL, HALF_WALL_H, NO_WALL, WALL_H, WALL_T } from "@yutopia/shared";
-import { backOf, hWallOf, isArc, layoutSig, vWallOf, type Wall, wallPoints } from "@yutopia/shared/structure";
+import { HALF_WALL, HALF_WALL_H, NO_WALL, spaceFloor, WALL_H, WALL_T } from "@yutopia/shared";
+import {
+  backOf,
+  type Floor,
+  frontNormal,
+  hWallOf,
+  isArc,
+  layoutSig,
+  vWallOf,
+  type Wall,
+  wallPoints,
+} from "@yutopia/shared/structure";
 import type { Out } from "./kit3d";
 
 /** A wall on neither axis, or off the metres: its two ends (floor-local), its faces. */
@@ -24,6 +34,39 @@ export interface FreeWall {
   thick?: number;
   /** stood over its floor (m: a mezzanine's height — phase 11.7) */
   base?: number;
+  /** a town building's shell's openings (plan 112: its windows', its door's), along it (m) and up it (m) */
+  gaps?: readonly [number, number, number, number][];
+  /** a town building's shell (plan 112) */
+  shell?: boolean;
+}
+
+/** How thick a town building's shell is drawn inside (plan 112): a skin on its inner face, the kit's wall outside
+ *  it seen from the street. */
+const SKIN = 0.04;
+/** A town building's shell wall as drawn (plan 112): a skin along its inner face (its inside on its left), short of
+ *  the corners by as much, its inner face's paint on both of its sides, its openings' gaps moved with its start. */
+function skinOf(w: Wall, a: [number, number], b: [number, number]): FreeWall & { height: number; thick: number } {
+  const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  const ux = (b[0] - a[0]) / L;
+  const uy = (b[1] - a[1]) / L;
+  const [nx, ny] = [-uy, ux];
+  const off = WALL_T / 2 - SKIN / 2;
+  // (the face the paint tool calls its front — query.ts frontNormal, by its own floor: the storey's from the
+  // registry, as the paint tool and a room's paint have it — plan 113 review: half the town's walls showed old paint)
+  const sf = spaceFloor(w.floor);
+  const fn = frontNormal(w, sf ? ({ index: sf.index, name: "", z: sf.z, grid: sf.grid } as Floor) : null);
+  const inner = fn[0] * nx + fn[1] * ny > 0 ? w.front : (w.back ?? w.front);
+  return {
+    id: w.id,
+    a: [a[0] + nx * off + ux * off, a[1] + ny * off + uy * off],
+    b: [b[0] + nx * off - ux * off, b[1] + ny * off - uy * off],
+    ch: inner,
+    back: NO_WALL,
+    height: w.height,
+    thick: SKIN,
+    shell: true,
+    ...(w.gaps?.length ? { gaps: w.gaps.map(([u0, u1, z0, z1]) => [u0 - off, u1 - off, z0, z1] as const) } : {}),
+  } as FreeWall & { height: number; thick: number };
 }
 
 /** A floor's walls as the drawing asks them: the edges of the tile lattice (a char on an edge along
@@ -67,6 +110,12 @@ export function edgesOfWalls(
     const lift = z0 === undefined ? 0 : Math.round((w.base - z0) * 1000) / 1000;
     const shape = { ...ownShape(w), ...(lift ? { base: lift } : {}) };
     sig.push(`${w.height}:${w.thick ?? ""}:${lift}`);
+    // (a town building's shell: a skin inside its kit's wall, round its openings — plan 112)
+    if (w.shell) {
+      sig.push(JSON.stringify(w.gaps ?? []));
+      free.push({ ...skinOf(w, a, b), ...(lift ? { base: lift } : {}) });
+      continue;
+    }
     if (isArc(w)) {
       const pts = wallPoints(w).map((p): [number, number] => [p[0] - corner.x, p[1] - corner.y]);
       free.push({ id: w.id, a, b, ch: w.front, back, pts, ...shape });

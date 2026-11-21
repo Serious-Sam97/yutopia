@@ -5,6 +5,7 @@ import {
   editsNow,
   editsVersion,
   heightAt,
+  insideOf,
   KART_LAND,
   KART_PARK,
   LAMPS,
@@ -403,13 +404,16 @@ if (vFade < 0.999) {
 
   /** The buildings standing on the Grounds (building coords), to their roofs:
    *  the chase camera keeps out of them as out of walls. (Filled in place: god mode's edits.) */
-  readonly boxes: { x0: number; z0: number; x1: number; z1: number; top: number; eaves: number }[] = [];
+  readonly boxes: { x0: number; z0: number; x1: number; z1: number; top: number; eaves: number; open?: boolean }[] = [];
   /** How much bigger the lamps' glows are (the morning fog's halos: view.ts sets it). */
   halo = 1;
   private fillBoxes() {
     this.boxes.length = 0;
     // (not the headquarters: the office is the campus's, at the server's size — sky.ts roofsNear)
-    for (const b of BUILDINGS) if (b.kind !== "hq") this.boxes.push(boxOf(b));
+    // (`open`: one you walk into — its walls Jolt's with its door open: the camera keeps out of them by its ray, so
+    // it follows you through the door and out again; its box spanned the doorway — plan 113 review)
+    for (const b of BUILDINGS)
+      if (b.kind !== "hq") this.boxes.push({ ...boxOf(b), ...(insideOf(b) ? { open: true } : {}) });
   }
 
   /** God mode's edits laid (docs/plan/53-the-god-mode.md): these chunks changed. Their blocks are

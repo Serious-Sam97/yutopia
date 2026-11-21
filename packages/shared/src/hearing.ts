@@ -1,4 +1,4 @@
-import { across, homeOf, levelMap } from "./levels.ts";
+import { aboveOf, across, belowOf, homeOf, levelMap, spaceFloor } from "./levels.ts";
 import { type AreaDef, type AreaKind, areaAt, type MapDef } from "./map.ts";
 
 // Who hears whom. The world-server runs this to decide LiveKit subscriptions
@@ -31,16 +31,24 @@ export function isPrivate(a: AreaDef | null): boolean {
 export function hearingGain(map: MapDef, listener: Ear, speaker: Ear, wasHearing = false): number {
   if (listener.dnd || speaker.dnd) return 0;
   const home = homeOf(map);
-  const ll = listener.level ?? home;
-  const sl = speaker.level ?? home;
+  // (plan 112: a town building's ground storey is the land's to the ears — its door open on the street, as the
+  // walk-ins were; its storeys a stairwell apart as the HQ's floors are)
+  const ear = (l: number) => (spaceFloor(l)?.storey === 0 ? 0 : l);
+  const l0 = listener.level ?? home;
+  const s0 = speaker.level ?? home;
+  const ll = ear(l0);
+  const sl = ear(s0);
   if (ll !== sl) {
-    if (Math.abs(ll - sl) !== 1 || !listener.stairs || !speaker.stairs) return 0;
+    const next = aboveOf(l0) === s0 || belowOf(l0) === s0;
+    if (!next || !listener.stairs || !speaker.stairs) return 0;
     const s = across(map, sl, ll, speaker);
     return Math.hypot(listener.x - s.x, listener.y - s.y) < HEAR_RADIUS ? STAIRWELL_GAIN : 0;
   }
-  if (ll !== home) map = levelMap(map, ll) ?? map;
-  const la = areaAt(map, listener.x, listener.y);
-  const sa = areaAt(map, speaker.x, speaker.y);
+  // (each ear's rooms its own floor's: the street's and a ground storey's are two floors' — a private room built in
+  // one stays private — plan 113 review)
+  const on = (l: number) => (l !== home ? (levelMap(map, l) ?? map) : map);
+  const la = areaAt(on(l0), listener.x, listener.y);
+  const sa = areaAt(on(s0), speaker.x, speaker.y);
   if (sa?.kind === "stage") return 1;
   if (isPrivate(la) || isPrivate(sa)) return la?.key === sa?.key ? 1 : 0;
   const d = Math.hypot(listener.x - speaker.x, listener.y - speaker.y);

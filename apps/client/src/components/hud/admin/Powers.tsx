@@ -1,5 +1,6 @@
 "use client";
 
+import { SPACE_BASE } from "@yutopia/shared";
 import { useEffect, useState } from "react";
 import { useWorld } from "../ctx";
 import { Icon, type IconName } from "../icons";
@@ -161,7 +162,10 @@ function Anywhere() {
   const home = b.floor ?? 0;
   const floors = [
     { index: home, name: b.name, areas: b.areas },
-    ...(b.levels ?? []).map((l) => ({ index: l.index, name: l.name, areas: l.areas ?? [] })),
+    // (the HQ's floors: the town's buildings' storeys aren't rooms to go to — plan 112)
+    ...(b.levels ?? [])
+      .filter((l) => l.index < SPACE_BASE)
+      .map((l) => ({ index: l.index, name: l.name, areas: l.areas ?? [] })),
   ].sort((a, c) => a.index - c.index);
   const at = floors.find((f) => f.index === (floor ?? w?.level ?? home)) ?? floors[0];
   return (

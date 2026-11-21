@@ -45,11 +45,16 @@ export function buildingLocked(key: string): string | null {
 }
 
 const isNew = (e: GroundsEdits, key: string) => !!e.buildings?.add?.some((d) => d.key === key);
-export function newBuildingKey(e: GroundsEdits): string {
-  let n = 1;
+/** A key for a building put down now: never one a building had before — a building taken away keeps its inside
+ *  under its key, out of the world, and one given that key again would come with its walls and things (plan 113
+ *  review); `now` stamps it. */
+export function newBuildingKey(e: GroundsEdits, now = Date.now()): string {
   const taken = new Set((e.buildings?.add ?? []).map((d) => d.key));
-  while (taken.has(`god-building-${n}`)) n++;
-  return `god-building-${n}`;
+  const stamp = Math.max(0, Math.floor(now)).toString(36);
+  let n = 0;
+  let key = `god-building-${stamp}`;
+  while (taken.has(key)) key = `god-building-${stamp}-${++n}`;
+  return key;
 }
 export function newBuildingName(e: GroundsEdits, kind: BuildingKind): string {
   const n = (e.buildings?.add ?? []).filter((d) => d.kind === kind).length + 1;

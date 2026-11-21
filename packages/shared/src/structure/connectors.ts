@@ -7,7 +7,7 @@
 import type { WorldObjectDef } from "../catalog.ts";
 import { footprint, quarterOf } from "../catalog.ts";
 import { flightRise } from "../flight.ts";
-import { elevOf, floorsOf, objLevel } from "../levels.ts";
+import { aboveOf, elevOf, floorsOf, objLevel } from "../levels.ts";
 import { liftFront } from "../lift.ts";
 import type { MapDef } from "../map.ts";
 import { type Ramp, STAIRS_D, STAIRS_W, stairsDoor, stairsPoint, stairsRamps, stairsWayUp } from "../stairs.ts";
@@ -46,7 +46,9 @@ export function connectorsOf(map: MapDef, objects: Iterable<WorldObjectDef>): Co
   for (const o of objects) {
     const level = objLevel(o, map);
     if (o.kind === "stairs") {
-      if (!floors.has(level + 1)) continue;
+      // (the floor over it: plan 112 — a town building's next storey)
+      const up = aboveOf(level);
+      if (up === null || !floors.has(up)) continue;
       const corners: XY[] = [
         [0, 0],
         [0, STAIRS_D],
@@ -60,7 +62,7 @@ export function connectorsOf(map: MapDef, objects: Iterable<WorldObjectDef>): Co
         outline: corners,
         stops: [
           { floor: level, z: elevOf(level), thing: o.id, at: xy(stairsDoor(o)) },
-          { floor: level + 1, z: elevOf(level + 1), thing: o.id, at: xy(way[way.length - 1]) },
+          { floor: up, z: elevOf(up), thing: o.id, at: xy(way[way.length - 1]) },
         ],
         ramps: stairsRamps(o, elevOf(level)),
       });

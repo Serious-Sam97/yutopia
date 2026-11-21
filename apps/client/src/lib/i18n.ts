@@ -598,6 +598,7 @@ const D = {
   buildSell: ["Drop here to remove", "Solte aqui para remover"],
   buildRecent: ["Recently used", "Usados recentemente"],
   catSeating: ["Seating", "Assentos"],
+  catTown: ["Home, shop & farm", "Casa, loja e fazenda"],
   catStorage: ["Storage", "Armazenamento"],
   catSeasonal: ["Seasonal", "Sazonal"],
   catOutdoors: ["Outdoors", "Ao ar livre"],
@@ -819,6 +820,10 @@ const D = {
   roomGo: ["Walk there and use it", "Ir até lá e usar"],
   tapToUse: ["tap to use", "toque para usar"],
   hallway: ["Hallway", "Corredor"],
+  spaceAdminsOnly: [
+    "Only admins build inside the town's buildings.",
+    "Só admins constroem dentro dos prédios da cidade.",
+  ],
   minimapZoomIn: ["Zoom in", "Aproximar"],
   minimapZoomOut: ["Zoom out", "Afastar"],
   welcome: ["Welcome to", "Bem-vindo ao"],

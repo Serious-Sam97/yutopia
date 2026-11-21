@@ -336,7 +336,8 @@ function building(out: GroundSolid[], b: Building) {
   }
   if (inside) {
     // (its floor a slab up to its door's sill — the plinth kept: plan 111)
-    if (inside.fy > 0.02)
+    // (a space's: its storeys' slabs the structure's — plan 112)
+    if (inside.fy > 0.02 && !inside.space)
       out.push({ what: "porch", s: flat(x0 + 0.06, z0 + 0.06, x1 - 0.06, z1 - 0.06, y0, y0 + inside.fy) });
     for (const f of inside.fits) fit(out, f, y0 + inside.fy);
   }

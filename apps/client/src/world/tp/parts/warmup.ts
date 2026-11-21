@@ -1,4 +1,4 @@
-import { type AvatarLayers, floorsOf } from "@yutopia/shared";
+import { type AvatarLayers, hqFloorsOf } from "@yutopia/shared";
 import {
   Box3,
   type BufferGeometry,
@@ -97,7 +97,7 @@ export class Warmup {
     // the sun's shadow map (made by the first frame drawn: the floors wait for it)
     parts.push(!this.c.sun.castShadow || this.c.sun.shadow.map ? 1 : 0);
     // every floor built and drawn once, and the building's cut (warmUp)
-    const all = floorsOf(this.c.building).length;
+    const all = hqFloorsOf(this.c.building).length;
     parts.push(this.c.cutWarm ? 1 : Math.min(0.95, this.c.floors.size / Math.max(1, all)));
     // the land, the rest of the Grounds, their shaders
     const g = this.c.around.grounds;

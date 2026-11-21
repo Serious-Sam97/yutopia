@@ -9,7 +9,7 @@ import {
   doorStartState,
   emptyEdges,
   entry,
-  floorsOf,
+  hqFloorsOf,
   isDressing,
   isOpening,
   levelMap,
@@ -78,9 +78,16 @@ registerFeature((room: WorldRoom) => {
   const warn = (c: WorldClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
   // which floor an edit is on (the building's, shared levels.ts; none: the home
   // floor), and that floor as a map, its things, the people on it
-  const floor = (m: { level?: unknown }): number | null => {
+  const floor = (m: { level?: unknown }, c?: WorldClient): number | null => {
     const l = m.level === undefined ? room.home : Number(m.level);
-    return Number.isInteger(l) && levelMap(room.map, l) ? l : null;
+    if (!Number.isInteger(l) || !levelMap(room.map, l)) return null;
+    // (a town building's inside: admins' — plan 112)
+    const why = c ? room.spaceWhy(room.state.players.get(c.sessionId), l) : null;
+    if (why && c) {
+      warn(c, `${why[0].toUpperCase()}${why.slice(1)}.`);
+      return null;
+    }
+    return l;
   };
   const at = (level: number) => room.levelMap(level);
   const things = (level: number) => onLevel(objects(), at(level));
@@ -117,7 +124,7 @@ registerFeature((room: WorldRoom) => {
   };
 
   room.on("struct:walls", (client, m) => {
-    const level = floor(m);
+    const level = floor(m, client);
     const p = room.state.players.get(client.sessionId);
     if (!builder(client) || level === null || !p) return;
     const add = (Array.isArray(m?.add) ? m.add : []).slice(0, WALLS_AT_ONCE).map((d: Record<string, unknown>) => ({
@@ -182,7 +189,7 @@ registerFeature((room: WorldRoom) => {
   // face round a room — the walls split where a stretch starts and ends; what's on them goes onto
   // the piece it's on
   room.on("struct:paint", (client, m) => {
-    let level = floor(m);
+    let level = floor(m, client);
     if (!builder(client) || level === null) return;
     const mat = String(m?.mat ?? "");
     let stretches: PaintStretch[];
@@ -190,6 +197,9 @@ registerFeature((room: WorldRoom) => {
       const r = room.structure.rooms.find((q) => q.key === m.room);
       if (!r) return;
       level = r.floor;
+      // (a room in a town building: admins' — plan 112, the room's floor, not the one asked)
+      const why = room.spaceWhy(room.state.players.get(client.sessionId), level);
+      if (why) return warn(client, `${why[0].toUpperCase()}${why.slice(1)}.`);
       stretches = roomStretches(room.structure, r.key, mat);
     } else
       stretches = (Array.isArray(m?.stretches) ? m.stretches : []).slice(0, 400).map((q: Record<string, unknown>) => ({
@@ -221,7 +231,7 @@ registerFeature((room: WorldRoom) => {
   let slabSeq = 0;
   const newSlabId = () => `f${Date.now().toString(36)}${(slabSeq++).toString(36)}`;
   room.on("struct:slabs", (client, m) => {
-    const level = floor(m);
+    const level = floor(m, client);
     const p = room.state.players.get(client.sessionId);
     if (!builder(client) || level === null || !p) return;
     const add = (Array.isArray(m?.add) ? m.add : []).slice(0, SLABS_AT_ONCE).map((d: Record<string, unknown>) => ({
@@ -259,7 +269,7 @@ registerFeature((room: WorldRoom) => {
   // roofs (plan 72 phase 11.7): put on a closed set of walls, taken off
   let roofSeq = 0;
   room.on("struct:roofs", (client, m) => {
-    const level = floor(m);
+    const level = floor(m, client);
     const p = room.state.players.get(client.sessionId);
     if (!builder(client) || level === null || !p) return;
     const add = (Array.isArray(m?.add) ? m.add : []).slice(0, 16).map((d: Record<string, unknown>) => ({
@@ -330,7 +340,7 @@ registerFeature((room: WorldRoom) => {
   const withRooms = (rooms: Structure["rooms"]) => ({ ...room.structure, rooms });
 
   room.on("map:room:update", (client, m) => {
-    const level = floor(m);
+    const level = floor(m, client);
     if (!builder(client) || level === null) return;
     const p = room.state.players.get(client.sessionId);
     const r = roomOn(level, m.key);
@@ -352,7 +362,7 @@ registerFeature((room: WorldRoom) => {
   });
 
   room.on("map:room:remove", (client, m) => {
-    const level = floor(m);
+    const level = floor(m, client);
     if (!builder(client) || level === null) return;
     const p = room.state.players.get(client.sessionId);
     const r = roomOn(level, m.key);
@@ -368,7 +378,8 @@ registerFeature((room: WorldRoom) => {
   // top one taken away (never the home floor) ──
   room.on("level:add", async (client) => {
     if (!builder(client)) return;
-    const floors = floorsOf(room.map);
+    // (the HQ's floors: not the town's storeys — plan 112)
+    const floors = hqFloorsOf(room.map);
     const top = floors[floors.length - 1];
     if (floors.length >= 12) return warn(client, "That's as tall as the building goes.");
     const index = top + 1;
@@ -406,7 +417,7 @@ registerFeature((room: WorldRoom) => {
 
   room.on("level:remove", async (client, m) => {
     if (!builder(client)) return;
-    const floors = floorsOf(room.map);
+    const floors = hqFloorsOf(room.map);
     const top = floors[floors.length - 1];
     const level = Number(m?.level);
     if (level !== top || level === room.home) return warn(client, "Only the floor on top goes (and never the studio).");
@@ -423,6 +434,9 @@ registerFeature((room: WorldRoom) => {
     const o = room.state.objects.get(String(m.id));
     if (!builder(client) || !o) return;
     const def = fromSchema(o);
+    // (a town building's inside: admins' — plan 113 review)
+    const why = room.spaceWhy(room.state.players.get(client.sessionId), objLevel(def, room.map));
+    if (why) return warn(client, `${why[0].toUpperCase()}${why.slice(1)}.`);
     const ownerId = Number.isInteger(m.ownerId) && (m.ownerId as number) > 0 ? (m.ownerId as number) : null;
     const props = { ...(def.props ?? {}), desk: true } as Record<string, unknown>;
     if (ownerId) {

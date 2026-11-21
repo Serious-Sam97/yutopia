@@ -1,4 +1,4 @@
-import { areaAt, footprint, hearingGain, onLevel, parseAvatar, quarterOf } from "@yutopia/shared";
+import { areaAt, footprint, hearingGain, hqFloorsOf, onLevel, parseAvatar, quarterOf } from "@yutopia/shared";
 import { keyFooting, MATS, TILE_FOOTING } from "@yutopia/shared/footing";
 import { cellOf } from "@yutopia/shared/structure";
 import { mixer } from "../audio";
@@ -111,7 +111,8 @@ export class Steps {
     const land = this.c.level === 0 && this.c.grid.onLand(this.c.me.x, this.c.me.y);
     const t = cellOf(this.c.map, Math.floor(this.c.me.x), Math.floor(this.c.me.y));
     // (the top: the office's own floor too — the building's levels list the floors under it)
-    const top = Math.max(this.c.building.floor ?? 0, ...(this.c.building.levels ?? []).map((l) => l.index));
+    // (the HQ's top floor: a town building's storeys have their own roofs — plan 112)
+    const top = Math.max(this.c.building.floor ?? 0, ...hqFloorsOf(this.c.building));
     this.c.life?.hear(
       dt,
       this.c.me,

@@ -20,6 +20,10 @@ const SAGS = new Map<string, number>([["window_seat", 0.1]]);
 // (plan 103/104: a skate ramp's toe — the transition's first stretch, under a walker's step — has no box under it,
 // a board rides the profile and a walker steps onto it; its shapes sit inside its drawing)
 const SOFT = new Set<string>([
+  // (plan 113: a table laid — its cruet, its candle, its jug — the shape its top)
+  "pub_table",
+  "farm_table",
+  "booth_table",
   "sk_quarter",
   "sk_vert",
   "sk_mini",

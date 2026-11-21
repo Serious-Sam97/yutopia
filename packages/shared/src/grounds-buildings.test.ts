@@ -5,11 +5,14 @@ import {
   applyEdits,
   atPump,
   BUILDINGS,
+  buildingsFor,
   CHUNK,
+  CROWN_REACH,
   checkEdits,
   groundSurfaceAt,
   insideOf,
   steepleOf,
+  treesIn,
   WAYS,
   walkableCell,
 } from "./grounds.ts";
@@ -18,6 +21,7 @@ import {
   buildingAt,
   buildingBlocked,
   changeBuilding,
+  newBuildingKey,
   plotAt,
   removeBuilding,
 } from "./grounds-buildings.ts";
@@ -186,4 +190,43 @@ test("every walked-into building's doorway is under its drawn door, its floor at
     assert.equal(i.fy, Math.max(0, d.y), `${b.key}: its floor at its sill`);
   }
   assert.ok(n > 30, `walked into: ${n}`);
+});
+
+test("no tree's crown through a building's wall: one by it grown no bigger than keeps it outside, or not grown (plan 113 review)", () => {
+  let near = 0;
+  for (const b of BUILDINGS) {
+    if (b.kind === "hq") continue;
+    for (let cx = Math.floor((b.x0 - 13) / CHUNK); cx <= Math.floor((b.x1 + 13) / CHUNK); cx++)
+      for (let cz = Math.floor((b.z0 - 13) / CHUNK); cz <= Math.floor((b.z1 + 13) / CHUNK); cz++)
+        for (const t of treesIn(cx, cz)) {
+          const d = Math.hypot(Math.max(b.x0 - t.x, 0, t.x - b.x1), Math.max(b.z0 - t.z, 0, t.z - b.z1));
+          if (d > 13) continue;
+          near++;
+          assert.ok(CROWN_REACH[t.kind] * t.s <= d - 0.3 + 1e-9, `${b.key}: a ${t.kind} ${d.toFixed(2)} m off, ${t.s}`);
+        }
+  }
+  assert.ok(near > 50, `${near} trees by the buildings`);
+});
+
+test("a building put down: a key no building had before, though the one before it was taken away (plan 113 review)", () => {
+  const def = (key: string): BuildingDef => house({ key });
+  const a = newBuildingKey(NO_EDITS, 1000);
+  const e = addBuilding(NO_EDITS, def(a));
+  const b = newBuildingKey(e, 1000);
+  assert.notEqual(a, b, "two put down at once");
+  // (the first taken away: the next one's key still not its)
+  const c = newBuildingKey(removeBuilding(addBuilding(e, def(b)), a), 2000);
+  assert.ok(![a, b].includes(c));
+});
+
+test("the buildings a set of edits would have, without laying them (what a publish is checked against)", () => {
+  const e = addBuilding(NO_EDITS, house({ key: "god-building-x" }));
+  const want = buildingsFor(e).map((b) => b.key);
+  applyEdits(e);
+  assert.deepEqual(
+    BUILDINGS.map((b) => b.key),
+    want,
+  );
+  applyEdits(NO_EDITS);
+  assert.ok(!buildingsFor(NO_EDITS).some((b) => b.key === "god-building-x"));
 });

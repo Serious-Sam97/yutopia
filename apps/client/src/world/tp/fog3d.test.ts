@@ -169,3 +169,16 @@ test("a material's own program key kept, an added light's marked whoever set it;
   b.customProgramCacheKey = a.customProgramCacheKey;
   assert.ok(b.customProgramCacheKey().includes("hook-b"), b.customProgramCacheKey());
 });
+
+test("the room round me on a floor stood off the tiles: found, not filled forever (plan 113 review: the rest hut)", () => {
+  // (a 4 × 3 m storey whose corner's at x 4173.147: every cell inside is floor)
+  const ext = { x0: 4173.147, y0: -466.956, x1: 4177.147, y1: -463.956 };
+  const r = roomBounds(
+    () => ".",
+    ext,
+    4174.6,
+    -465.5,
+    (ch) => !ch || ch === " ",
+  );
+  assert.deepEqual(r, { x0: 4173, y0: -467, x1: 4178, y1: -463 });
+});

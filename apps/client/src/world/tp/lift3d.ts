@@ -1,4 +1,4 @@
-import { type LiftMotion, liftFloorName } from "@yutopia/shared";
+import { type LiftMotion, liftFloorName, quarterOf } from "@yutopia/shared";
 import {
   BoxGeometry,
   CanvasTexture,
@@ -599,7 +599,7 @@ export { doorEase, rideAt } from "@yutopia/shared";
 
 // ── in the game: every stop on the floors drawn ─────────────────────────────
 export interface LiftStop3 {
-  o: { id: string; x: number; y: number; rot?: number };
+  o: { id: string; x: number; y: number; rot?: number; yaw?: number };
   off: { x: number; y: number; h: number }; // its floor from mine
   motion: LiftMotion;
   floors: string[]; // the car's buttons, top down
@@ -710,7 +710,8 @@ export class Lifts3 {
       v.shown = s.shown;
       v.outer.visible = s.shown || this.warming;
       v.outer.position.set(o.x + 1 + off.x, off.h, o.y + 1 + off.y);
-      v.outer.rotation.y = -((o.rot ?? 0) & 3) * (Math.PI / 2);
+      // (turned by its yaw, as shared lift.ts turns its walls and doors — objects carry no rot: plan 113 review)
+      v.outer.rotation.y = -((o.rot ?? quarterOf(o)) & 3) * (Math.PI / 2);
       // (on the way the floor it's passing; stood, its station's — a mezzanine's GM, 1M)
       const passing = motion.phase === "moving" ? Math.round(motion.car) : motion.car;
       const shown = `${liftFloorName(passing)}${motion.dir > 0 ? "▲" : motion.dir < 0 ? "▼" : ""}`;
@@ -743,7 +744,7 @@ export class Lifts3 {
       }
       // where a click finds it: the doors and the car behind them
       if (!s.shown) continue;
-      const r = (o.rot ?? 0) & 3;
+      const r = (o.rot ?? quarterOf(o)) & 3;
       const x0 = o.x + off.x;
       const y0 = o.y + off.y;
       this.picks.push({

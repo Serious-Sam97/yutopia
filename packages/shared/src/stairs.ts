@@ -1,7 +1,18 @@
 import type { WorldObjectDef } from "./catalog.ts";
 import { quarterOf } from "./catalog.ts";
 import type { Point } from "./geom.ts";
-import { across, elevOf, floorOf, floorsOf, levelMap, objLevel } from "./levels.ts";
+import {
+  aboveOf,
+  across,
+  belowOf,
+  elevOf,
+  floorOf,
+  floorsOf,
+  levelMap,
+  objLevel,
+  riseOf,
+  spaceGroundAt,
+} from "./levels.ts";
 import { liftShafts, shaftHoles } from "./lift.ts";
 import { type Edge, isFloor, type MapDef } from "./map.ts";
 import { cellOf } from "./structure/query.ts";
@@ -30,7 +41,6 @@ export const STAIRS_W = 4;
 export const STAIRS_D = 7;
 export const V_FLIGHT = 2; // where the flights start (the door's landing ends)
 export const V_TURN = 5; // where they turn (the half landing starts)
-const HALF = STOREY / 2;
 
 /** A surface you walk on, in tile coords of the floor it's on: a rectangle
  *  whose height runs from h0 at `along` = a0 to h1 at a1 (flat: h0 = h1). */
@@ -104,12 +114,23 @@ function slope(
 }
 
 /** The stairs' surfaces, `dz` up from their floor (−STOREY: seen from the floor above). */
-export function stairsRamps(o: { x: number; y: number; yaw?: number }, dz = 0): Ramp[] {
+export function stairsRamps(
+  o: { x: number; y: number; yaw?: number; props?: Record<string, unknown> | null },
+  dz = 0,
+): Ramp[] {
+  // (plan 112: up their floor's own rise — a town building's storey isn't the HQ's)
+  const rise = stairsRise(o);
+  const half = rise / 2;
   return [
-    slope(o, 2, STAIRS_W, V_FLIGHT, V_TURN, dz, dz + HALF), // flight A
-    slope(o, 0, STAIRS_W, V_TURN, STAIRS_D, dz + HALF, dz + HALF), // the half landing
-    slope(o, 0, 2, V_TURN, V_FLIGHT, dz + HALF, dz + STOREY), // flight B
+    slope(o, 2, STAIRS_W, V_FLIGHT, V_TURN, dz, dz + half), // flight A
+    slope(o, 0, STAIRS_W, V_TURN, STAIRS_D, dz + half, dz + half), // the half landing
+    slope(o, 0, 2, V_TURN, V_FLIGHT, dz + half, dz + rise), // flight B
   ];
+}
+/** How high a staircase goes: up to the floor over its own (a town building's storey: its own — plan 112). */
+export function stairsRise(o: { props?: Record<string, unknown> | null }): number {
+  const l = o.props?.level;
+  return typeof l === "number" ? riseOf(l) : STOREY;
 }
 
 /** The tiles of the well (v 2..7): no floor of their own, only the treads. */
@@ -156,10 +177,17 @@ export const FLOOR_BAND: [number, number] = [-0.6, STOREY - 0.6];
 /** Past the band, the feet are on the next floor up or down (when there is one):
  *  the new floor, and how much their height changes (its frame is STOREY off). */
 export function floorChange(z: number, level: number, floors: number[]): { level: number; dz: number } | null {
-  if (z > FLOOR_BAND[1] && floors.includes(level + 1)) return { level: level + 1, dz: -STOREY };
-  if (z < FLOOR_BAND[0] && floors.includes(level - 1)) return { level: level - 1, dz: STOREY };
+  // (plan 112: a town building's storeys their own heights and stacks)
+  const up = aboveOf(level);
+  const down = belowOf(level);
+  if (z > riseOf(level) + FLOOR_BAND[0] && up !== null && floors.includes(up))
+    return { level: up, dz: elevOf(level) - elevOf(up) };
+  if (z < FLOOR_BAND[0] && down !== null && floors.includes(down))
+    return { level: down, dz: elevOf(level) - elevOf(down) };
   return null;
 }
+/** A floor's band: its feet between these in its frame (a town building's storey: its own rise — plan 112). */
+export const bandOf = (level: number): [number, number] => [FLOOR_BAND[0], riseOf(level) + FLOOR_BAND[0]];
 
 /** Whether floor `l` has a floor under `p` (in its own coords): the browser asks Jolt's slabs
  *  (docs/plan/72 phase 7: the floor from the slab under you); without one, the floor's tiles.
@@ -192,21 +220,39 @@ export function floorAt(
   };
   const outdoors = () =>
     level === 0 || !floors.includes(0) ? null : { level: 0, dz: elevOf(level) - elevOf(0), at: across(m, level, 0, p) };
+  // (plan 112: on the land, in through a town building's door — on its ground storey's floor: on that floor)
+  if (level === 0) {
+    const g = spaceGroundAt(p.x, p.y);
+    if (g && floors.includes(g.index)) {
+      const zg = z - g.z;
+      if (zg >= FLOOR_BAND[0] && zg <= riseOf(g.index) + FLOOR_BAND[0] && has(g.index, zg))
+        return { level: g.index, dz: -g.z, at: across(m, 0, g.index, p) };
+    }
+  }
   // (up a floor with none under me — out through its wall: outdoors)
   if (level !== 0 && !has(level, z)) return outdoors();
-  if (z <= FLOOR_BAND[1] && z >= FLOOR_BAND[0]) return null;
+  const band = bandOf(level);
+  if (z <= band[1] && z >= band[0]) return null;
   let l = level;
   let dz = 0;
-  while (z + dz > FLOOR_BAND[1] && has(l + 1, z + dz - STOREY)) {
-    l++;
-    dz -= STOREY;
+  for (;;) {
+    const u = aboveOf(l);
+    if (u === null || !(z + dz > bandOf(l)[1])) break;
+    const step = elevOf(u) - elevOf(l);
+    if (!has(u, z + dz - step)) break;
+    l = u;
+    dz -= step;
   }
-  while (z + dz < FLOOR_BAND[0] && has(l - 1, z + dz + STOREY)) {
-    l--;
-    dz += STOREY;
+  for (;;) {
+    const d = belowOf(l);
+    if (d === null || !(z + dz < FLOOR_BAND[0])) break;
+    const step = elevOf(l) - elevOf(d);
+    if (!has(d, z + dz + step)) break;
+    l = d;
+    dz += step;
   }
   // (still over a band with no floor above: over the roof, outdoors)
-  if (z + dz > FLOOR_BAND[1]) return outdoors();
+  if (z + dz > bandOf(l)[1]) return outdoors();
   if (l === level) return null;
   return { level: l, dz, at: across(m, level, l, p) };
 }
@@ -225,7 +271,7 @@ export function wellsOf(
   for (const o of all) {
     if (o.kind !== "stairs") continue;
     const l = objLevel(o, map);
-    const at = which === "ceiling" ? (l === f ? o : null) : l === f - 1 ? { ...o, ...across(map, l, f, o) } : null;
+    const at = which === "ceiling" ? (l === f ? o : null) : l === belowOf(f) ? { ...o, ...across(map, l, f, o) } : null;
     if (at) for (const [x, y] of stairsWell(at)) out.add(`${x},${y}`);
   }
   // a lift's shaft going on down from here (the floor), or up (the ceiling): open its size

@@ -62,8 +62,10 @@ const TODAY = {
   land: "e1d69c7a",
   // (2026-11-01: the road closed's barricades and drift shut, as their solids)
   // (2026-11-20, plan 111: every building walked into — its inside walkable, through its door)
-  walk: "58c0ea00",
-  trees: "39169d6f",
+  walk: "f00b093c",
+  // (2026-11-21, plan 113 review: a tree by a building grown no bigger than its crown keeps outside the wall — a
+  // pine's boughs were through the church's nave; their trunks with them, in the solids)
+  trees: "6c45b1f6",
   surfaces: "9d295adf",
   // (2026-11-01: the false fronts flush with their faces, the road closed's barricades and drift
   // solid, the wooden poles their own what, the pitched roofs in steps under their slopes, the flat
@@ -78,8 +80,8 @@ const TODAY = {
   // building-styles.ts — its solids its layout's: the town re-dressed, its walking as it was)
   // (2026-11-20, plan 111: every building walked into — walls round it, its floor a slab at its sill, its door open;
   // a door's steps on down to the land where it falls away; the meetinghouse's tower a porch through to its nave)
-  solids: "95e13298",
-  things: "d023c2e3",
+  solids: "8596b432",
+  things: "0ba6b41d",
 };
 
 // the farm's open field south of the farmhouse: chunk (13, −8)

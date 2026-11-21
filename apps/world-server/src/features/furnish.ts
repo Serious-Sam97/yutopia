@@ -53,7 +53,8 @@ registerFeature((room: WorldRoom) => {
     for (const id of (Array.isArray(m?.ids) ? m.ids : []).slice(0, MAX_BATCH)) {
       const o = room.state.objects.get(String(id));
       if (!o || !entry(o.kind).buildable) continue;
-      const locked = room.lockBreak(p, null, [fromSchema(o)], objLevel(fromSchema(o), room.map));
+      const lv = objLevel(fromSchema(o), room.map);
+      const locked = room.lockBreak(p, null, [fromSchema(o)], lv) ?? room.spaceWhy(p, lv);
       if (locked) {
         warn(client, `${locked}.`);
         continue;
@@ -110,7 +111,13 @@ registerFeature((room: WorldRoom) => {
       // the room and of itself
       const level = objLevel(def, room.map);
       if (!levelMap(room.map, level)) return;
+      // (a town building's inside: admins' — plan 112)
+      const no =
+        room.spaceWhy(p, level) ?? (existing ? room.spaceWhy(p, objLevel(fromSchema(existing), room.map)) : null);
+      if (no) return warn(client, `${no[0].toUpperCase()}${no.slice(1)}.`);
       def.props = atLevel(def, level, room.map).props;
+      const plot = room.townPlotWhy(def);
+      if (plot) return warn(client, `Can't put it there: ${plot}.`);
       const floorBodies = bodies.filter((q) => q.level === level);
       if (!canPlace(room.levelMap(level), [...rest, ...next], def, floorBodies))
         return warn(client, "That doesn't all fit there.");
@@ -139,7 +146,8 @@ registerFeature((room: WorldRoom) => {
         warn(client, `${room.holderName(o.id)} is moving that.`);
         continue;
       }
-      const locked = room.lockBreak(p, null, [fromSchema(o)], objLevel(fromSchema(o), room.map));
+      const lv = objLevel(fromSchema(o), room.map);
+      const locked = room.lockBreak(p, null, [fromSchema(o)], lv) ?? room.spaceWhy(p, lv);
       if (locked) {
         warn(client, `${locked}.`);
         continue;
@@ -177,6 +185,9 @@ registerFeature((room: WorldRoom) => {
       }
     }
     if (!piece) return;
+    // (a town building's inside: admins' — plan 112)
+    const why = room.spaceWhy(p, at);
+    if (why) return void room.send(client, "toast", { text: `${why[0].toUpperCase()}${why.slice(1)}.`, tone: "warn" });
     const area = areaAt(lm, piece.x, piece.kind === "frame" ? piece.y + 0.25 : piece.y);
     if (!area) return;
     // (its room's own: the structure's room, its props' dressOff — docs/plan/72 phase 11)

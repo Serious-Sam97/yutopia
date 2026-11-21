@@ -56,7 +56,11 @@ import { gzipSync } from "node:zlib";
 // avatar's stance, the controller's board hooks — measured 490.4)
 // (raised to 493 on 2026-11-20 under the user's standing call to raise as needed: plan 110's quality pass — the life
 // look's library list, life-matlib-list.ts, on the page with its ten new building materials — 492.0 over 492)
-const BUDGETS = { "/page": 493, "/login/page": 160 }; // KB gzip
+// (raised to 494 on 2026-11-21 under the same standing call: plan 112's town buildings' insides — the view's floor rule
+// for their storeys, the floors' registry and stack in levels.ts, the stairs' own rise — measured 493.4)
+// (raised to 495 on 2026-11-21, the same call: plan 113's town pieces — thirteen catalog entries, their shapes and
+// seats on the page — the stairs read by their yaw, the storey over yours in play; measured 494.3)
+const BUDGETS = { "/page": 495, "/login/page": 160 }; // KB gzip
 // (/page raised from 491 on 2026-11-19 under the user's standing call: plan 109 — the God HUD's bridges state, the
 // bridge icon, the bridges' layout and kinds in the shared Grounds; measured 491.0)
 // (/page raised from 451 on 2026-11-04 under the same call: plan 72's phase 4 — the controller split

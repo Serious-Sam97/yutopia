@@ -990,12 +990,19 @@ export class Grounds3 {
   }
   // the stored blocks' storeys above their ground floor (gone while you're in one); `under`: how
   // high the eyes are still in it (up on its roof they aren't: it's all there)
-  private cuts = new Map<string, { b: Building; parts: Object3D[]; under: number }>();
+  // (`space`: one with a real inside — plan 112: its outside stays while you're in it, its windows' frames and
+  // glass, its door, seen through its walls' gaps; gone only while building in it, cutFor — plan 113 review)
+  private cuts = new Map<string, { b: Building; parts: Object3D[]; under: number; space?: boolean }>();
+  /** A building whose outside stays gone wherever the eyes are (plan 112: built inside — its storeys seen from
+   *  over it, as The Sims has it); null: by where the eyes are. */
+  cutFor: string | null = null;
   private cutKey = "";
   /** Your eyes are at (x, y, z) (building coords, y up): inside a stored block, its storeys above go. */
   cutAt(x: number, y: number, z: number) {
-    let key = "";
-    for (const [k, c] of this.cuts) if (x >= c.b.x0 && x < c.b.x1 && z >= c.b.z0 && z < c.b.z1 && y < c.under) key = k;
+    let key = this.cutFor ?? "";
+    if (!key)
+      for (const [k, c] of this.cuts)
+        if (!c.space && x >= c.b.x0 && x < c.b.x1 && z >= c.b.z0 && z < c.b.z1 && y < c.under) key = k;
     if (key === this.cutKey) return;
     this.cutKey = key;
     for (const [k, c] of this.cuts) for (const p of c.parts) p.visible = k !== key;
@@ -2139,7 +2146,14 @@ export class Grounds3 {
     const c = coloursOf(b);
     const inside = this.o.stream ? insideOf(b) : null;
     // (the rooms behind its glass — none on a floor walked into: its own inside's seen through it, plan 111)
-    const raw = kitBatches(L, y0, c, { ...roomUse(b.kind), insideH: inside ? inside.fy + insideHeight(b) : undefined });
+    // (plan 112: a building with a space has its real inside, drawn near — none of the rooms; far, its panes)
+    const raw = kitBatches(
+      L,
+      y0,
+      c,
+      inside?.space ? null : { ...roomUse(b.kind), insideH: inside ? inside.fy + insideHeight(b) : undefined },
+      !!inside?.space,
+    );
     const near = packBatches(raw.near);
     const far = packBatches(raw.far);
     const n = this.root.children.length;
@@ -2150,18 +2164,21 @@ export class Grounds3 {
       for (const g of geos) this.keep(g);
       this.root.add(lod);
       // (its inside's ceiling, as high as its walls: through its windows no sky over the room — gone with the
-      // outside while you're in, so the camera over your shoulder still sees down in)
-      const H = inside.fy + insideHeight(b);
-      const e = 0.12;
-      const cg = new G();
-      cg.color(0xe8e2d6).quad(
-        [b.x0 + e, y0 + H, b.z1 - e],
-        [b.x1 - e, y0 + H, b.z1 - e],
-        [b.x1 - e, y0 + H, b.z0 + e],
-        [b.x0 + e, y0 + H, b.z0 + e],
-        [0, -1, 0],
-      );
-      this.add(cg.build(), this.lambert());
+      // outside while you're in, so the camera over your shoulder still sees down in; a space's storeys have
+      // their own — plan 112)
+      if (!inside.space) {
+        const H = inside.fy + insideHeight(b);
+        const e = 0.12;
+        const cg = new G();
+        cg.color(0xe8e2d6).quad(
+          [b.x0 + e, y0 + H, b.z1 - e],
+          [b.x1 - e, y0 + H, b.z1 - e],
+          [b.x1 - e, y0 + H, b.z0 + e],
+          [b.x0 + e, y0 + H, b.z0 + e],
+          [0, -1, 0],
+        );
+        this.add(cg.build(), this.lambert());
+      }
     } else {
       const key = `${Math.floor(cx / 64)},${Math.floor(cz / 64)}`;
       let cell = this.kitCells.get(key);
@@ -2249,7 +2266,7 @@ export class Grounds3 {
     if (!inside) return;
     const added = this.root.children.slice(n);
     const under = y0 + L.eave - 0.3;
-    this.cuts.set(b.key, { b, parts: added, under });
+    this.cuts.set(b.key, { b, parts: added, under, space: !!inside.space });
     this.interior(inside);
   }
   /** Batches (a cell's or a building's) as an LOD at (cx, cz): its near level all of them, its far one without
@@ -2297,10 +2314,10 @@ export class Grounds3 {
         );
         const lit = k === "glow" || k === "pane-lit";
         // (the rooms are inside: they cast nothing; the glass drawn after the rest)
-        const inner = k === "glass" || k === "room" || k === "room-lit";
+        const inner = k === "glass" || k === "glass-in" || k === "room" || k === "room-lit";
         m.castShadow = !lit && !inner;
-        m.receiveShadow = k !== "glass";
-        if (k === "glass") m.renderOrder = 2;
+        m.receiveShadow = k !== "glass" && k !== "glass-in";
+        if (k === "glass" || k === "glass-in") m.renderOrder = 2;
         g.add(m);
       }
       return g;
@@ -2448,6 +2465,8 @@ export class Grounds3 {
   }
   private interior(i: Inside) {
     const { b } = i;
+    // (plan 112: a space's floors, walls and things are the structure's — drawn by the 3D view's floors)
+    if (i.space) return;
     // (its floor at its door's sill: the plinth kept, plan 111)
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2) + (i.fy ?? 0);
     // (plan 104: the skate hall's inside as Blender built it — its floor, walls, trusses, fittings, murals, the

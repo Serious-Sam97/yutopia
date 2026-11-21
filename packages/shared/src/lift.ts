@@ -1,6 +1,6 @@
 import { footprint, quarterOf } from "./catalog.ts";
 import type { Point } from "./geom.ts";
-import { objLevel } from "./levels.ts";
+import { objLevel, spaceFloor } from "./levels.ts";
 import type { Edge } from "./map.ts";
 import type { Solid3 } from "./shapes/index.ts";
 import { STOREY } from "./units.ts";
@@ -157,7 +157,9 @@ export function liftMotion(o: { props?: Record<string, unknown> | null }, level:
  *  floor's and M (GM, 1M). */
 export const liftFloorName = (level: number): string => {
   const f = Math.floor(level + 1e-3);
-  const name = f === 0 ? "G" : String(f);
+  // (a town building's storey: its own, from G at its door — plan 112)
+  const n = spaceFloor(f)?.storey ?? f;
+  const name = n === 0 ? "G" : String(n);
   return level - f > 1e-3 ? `${name}M` : name;
 };
 

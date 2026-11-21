@@ -219,6 +219,9 @@ export interface Layout {
   top: number;
   /** its door (the middle of its sill, out of it) */
   door: { x: number; z: number; y: number; ox: number; oz: number; w: number; h: number };
+  /** its storeys' floors over its ground, bottom up, and the top storey's ceiling last (plan 112: a floor each in its
+   *  space); none: one storey, door sill to eaves */
+  storeys?: number[];
   /** what's of it past its plot (a steeple: walking keeps off it) */
   outside: { x0: number; z0: number; x1: number; z1: number }[];
   /** the part of its plot built (a gas station's kiosk; none: all of it) */

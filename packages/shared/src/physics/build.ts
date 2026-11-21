@@ -38,7 +38,7 @@ import {
 } from "../grounds.ts";
 import { grownLakeR, grownLevel, grownNow, lakeBowl } from "../grow.ts";
 import { landVersion } from "../land.ts";
-import { across, levelMap, objLevel, onLevel } from "../levels.ts";
+import { across, belowOf, isSpaceLevel, levelMap, objLevel, onLevel } from "../levels.ts";
 import {
   CAR_FLOOR,
   liftDoorEdges,
@@ -152,7 +152,8 @@ export function buildingSolids(map0: MapDef, objects: Iterable<WorldObjectDef>, 
     // (an arc as its chords: phase 11 — its doors' and windows' holes, along its curve, cut from the
     // chords they cross)
     const pieces = st.walls.flatMap((q) => {
-      if (q.floor !== level) return [];
+      // (a town building's shell: the Grounds' solids hold it — plan 112)
+      if (q.floor !== level || q.shell) return [];
       let off = 0;
       return chordsOf(q).map((w) => {
         const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
@@ -177,8 +178,9 @@ export function buildingSolids(map0: MapDef, objects: Iterable<WorldObjectDef>, 
     }
     // the slab under its floor (not the stairs' well from the floor below)
     const wells: [number, number, number, number][] = [];
+    const below = belowOf(level);
     for (const o of all)
-      if (o.kind === "stairs" && objLevel(o, map) === level - 1)
+      if (o.kind === "stairs" && below !== null && objLevel(o, map) === below)
         for (const [x, y] of stairsWell(o)) wells.push([x, y, x + 1, y + 1]);
     // (and a lift's shaft going on down from here: open — its car's floor is its own)
     wells.push(...shaftHoles(shafts, level));
@@ -203,7 +205,8 @@ export function buildingSolids(map0: MapDef, objects: Iterable<WorldObjectDef>, 
     }
     // the top floor's roof: a slab over all of it, where the next floor's would be (one building,
     // docs/plan/50 D: flown up to from inside, it stops you; landed on from outside, it holds you)
-    if (!floors.includes(level + 1))
+    // (a town building's top storey: its own roof over it, the kit's — plan 112)
+    if (!floors.includes(level + 1) && !isSpaceLevel(level))
       for (const rings of own)
         for (const slab of slabBoxes(rings, [], elev + STOREY)) add(`roof:${level}:${at(slab)}`, "floor", slab);
     // the rooms' clutter (dressing.ts): what blocks walking, as the table's decor (furniture: sight
@@ -222,8 +225,8 @@ export function buildingSolids(map0: MapDef, objects: Iterable<WorldObjectDef>, 
     }
     // a stairwell from the floor below with nothing going on up from here: a rail across its top
     for (const o of all)
-      if (o.kind === "stairs" && objLevel(o, map) === level - 1) {
-        const q = across(map, level - 1, level, o);
+      if (o.kind === "stairs" && below !== null && objLevel(o, map) === below) {
+        const q = across(map, below, level, o);
         const up = here.some((u) => u.kind === "stairs" && u.x === q.x && u.y === q.y);
         if (!up) for (const e of stairsTopRail({ ...o, ...q })) put(level, moved(edgeBox(e, 0, RAIL_H), ox, elev, oz));
       }

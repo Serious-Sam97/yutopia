@@ -17,6 +17,7 @@ import {
   homeOf,
   hostWorld,
   isFloor,
+  isSpaceLevel,
   isWindow,
   isWindowKind,
   KEYBOARD_TOP,
@@ -27,14 +28,19 @@ import {
   objLevel,
   offsetOf,
   onLevel,
+  onStreet,
   PIANO_STOOL,
   type Point,
   placedFootprint,
+  riseOf,
   SEAT_SPEC,
   STOREY,
+  spaceFloor,
+  spaceFloors,
   stationOf,
   stopOver,
   surfaceAt,
+  tileInMap,
   topCentre,
   type WorldObjectDef,
   wallCuts,
@@ -333,6 +339,8 @@ const wellsKey = (w: { floor: Set<string>; ceiling: Set<string> }) =>
 type Floor3 = { world: World3; sig: string; lit?: Light3; wells: string };
 // (plan 91 phase 5: the floors held off the scene let go this far from them, this long; built again this near)
 const FLOORS_AWAY_M = 400;
+/** How near a town building's storeys are drawn (plan 112: its inside seen through its windows), m. */
+const SPACE_NEAR = 110; // (the kit's near level's: its rooms none, its panes past it — grounds3d KIT_FAR)
 const FLOORS_AWAY_MS = 120_000;
 const FLOORS_BACK_M = 300;
 /** Can a new layout be laid on this built floor (World3.relayout) — the same size and stairwells? */
@@ -1802,6 +1810,35 @@ void main() {
     return elevOf(level) - elevOf(this.level);
   }
 
+  /** Whether floor `f` (not mine) is drawn (plan 112 — the Sims rule, now with the town's buildings in it): the
+   *  HQ's below mine; from inside a town building, the land's; a town building's storeys — mine's under me, another
+   *  building's all of them while it's near. */
+  private floorShown(f: number): boolean {
+    const sf = spaceFloor(f);
+    const me = spaceFloor(this.level);
+    if (!sf) return me ? f === 0 : f < this.level;
+    // (mine: the storeys under me, and — playing, not building — the one over me, seen up its stairwell; plan 113)
+    if (me && me.space === sf.space)
+      return sf.storey < me.storey || (!this.buildPick.buildMode && sf.storey === me.storey + 1);
+    return this.spaceNear(sf);
+  }
+  /** A town building's storey within SPACE_NEAR of where the camera looks (its plot's nearest point). */
+  private spaceNear(sf: { grid: { x0: number; y0: number; w: number; h: number } }): boolean {
+    const t = this.target;
+    const { x0, y0, w, h } = sf.grid;
+    const dx = Math.max(x0 - t.x, 0, t.x - (x0 + w));
+    const dz = Math.max(y0 - t.z, 0, t.z - (y0 + h));
+    return dx * dx + dz * dz < SPACE_NEAR * SPACE_NEAR;
+  }
+  /** The town's storeys near now, as a key (placed again when it changes — plan 112). */
+  private nearKey = "";
+  private nearAt = 0;
+  private nearSpaces(): string {
+    const out: number[] = [];
+    for (const sf of spaceFloors()) if (this.floorShown(sf.index)) out.push(sf.index);
+    return out.join(",");
+  }
+
   // Every floor kept built (`floors`): mine at the origin, the ones below where
   // they are from it, the ones above hidden (the Sims rule). A floor below is
   // built the first time it's needed (or again when its layout changed); one
@@ -1830,7 +1867,7 @@ void main() {
         continue;
       }
       let b = this.floors.get(f);
-      if (f > this.level) {
+      if (!this.floorShown(f)) {
         // (out of the scene, not just hidden: three would still walk it every frame)
         if (b) this.scene.remove(b.world.root);
         continue;
@@ -1884,6 +1921,7 @@ void main() {
       b.world.setFading(false); // (a floor below never fades)
     }
     this.placeAround();
+    this.nearKey = this.nearSpaces();
   }
 
   // A floor below mine's light: baked from its own lamps and windows, at the hour.
@@ -1933,7 +1971,9 @@ void main() {
         floors,
         floor: liftFloorName(st),
         mine: level === this.level,
-        shown: level <= this.level, // (the floors above aren't drawn — kept, hidden)
+        // (as its floor is: the floors above aren't drawn — kept, hidden; from a town building's storey, the HQ's
+        // over its ground floor aren't either — plan 113 review)
+        shown: level === this.level || this.floorShown(level),
         inside: level === this.level && o.id === this.liftIn,
         sway: level === this.level && motion.phase === "moving" ? this.liftSway : 0,
         rise: level === this.level && o.id === this.liftIn && motion.phase === "moving" ? this.liftRise : 0,
@@ -1951,8 +1991,10 @@ void main() {
       if (o.kind !== "stairs") continue;
       const level = objLevel(o, this.building);
       const off = { x: 0, y: 0, h: this.upTo(level) };
+      const sf = spaceFloor(level);
       stops.push({
-        shown: level <= this.level,
+        shown: level === this.level || this.floorShown(level),
+        ...(sf ? { rise: riseOf(level) } : {}),
         o,
         off,
         floor: liftFloorName(level),
@@ -2138,7 +2180,10 @@ void main() {
     if (this.sun.castShadow && !this.sun.shadow.map) return;
     // (behind the loading screen: one after another, a frame apart)
     this.warmAt = now + (this.warmup.warm ? 0 : 600);
-    const f = floorsOf(this.building).find((l) => !this.floors.has(l) && !this.floorsGone.has(l));
+    // (the HQ's floors, and the town's buildings' storeys while they're near — plan 112)
+    const f = floorsOf(this.building).find(
+      (l) => !this.floors.has(l) && !this.floorsGone.has(l) && (!isSpaceLevel(l) || this.floorShown(l)),
+    );
     if (f === undefined) {
       // last: the building's glass cut above a floor (campus.cutAbove) — its
       // clipped shaders compiled too, before anyone first goes downstairs
@@ -2221,9 +2266,9 @@ void main() {
     c.updateProjectionMatrix();
     // (lit by a light map as every floor is, mine or one below: one set of shaders)
     this.warmup.warmDraw(c);
-    // (kept only if it's below mine: one above waits out of the scene)
-    if (f > this.level) this.scene.remove(world.root);
-    else world.root.visible = f < this.level;
+    // (kept only if it's shown: one above waits out of the scene)
+    if (!this.floorShown(f)) this.scene.remove(world.root);
+    else world.root.visible = true;
   }
 
   // My floor changed: the scene now sits round the new one. Up or down the
@@ -2580,6 +2625,17 @@ void main() {
         if (w.root.parent) w.animateLive(this.time, { x: cam.x - w.root.position.x, z: cam.z - w.root.position.z });
     }
     this.letFloorsGo(performance.now());
+    // (building inside a town building: its outside gone, its storeys seen from over it — plan 112)
+    {
+      const st = this.around.grounds?.statics;
+      if (st) st.cutFor = this.buildPick.buildMode ? (spaceFloor(this.level)?.space ?? null) : null;
+    }
+    // (the town's buildings near changed as I go: their storeys placed again — plan 112)
+    if (performance.now() > this.nearAt) {
+      this.nearAt = performance.now() + 500;
+      const k = this.nearSpaces();
+      if (k !== this.nearKey) this.placeFloors(this.allObjects);
+    }
     this.warmUp(performance.now());
     this.syncLifts(performance.now());
     // everyone where they are (the world's frame): the floors below down where they are, above not drawn
@@ -2588,7 +2644,7 @@ void main() {
       if (b.phone === "bud") b = { ...b, phone: "", bud: true };
       const l = b.level ?? this.level;
       if (l === this.level) return [b];
-      if (l > this.level) return [];
+      if (!this.floorShown(l)) return [];
       const h = this.upTo(l);
       return [{ ...b, z: (b.z ?? 0) + h, ground: (b.ground ?? 0) + h }];
     });
@@ -3414,7 +3470,8 @@ void main() {
         const cx = t.x + dx * this.dist * cp;
         const cz = t.z + dz * this.dist * cp;
         for (const f of this.world.fades) {
-          if (f.item) continue;
+          // (a town building's own wall: Jolt's ray's, below — it has the doorway)
+          if (f.item || f.shell) continue;
           const x0 = f.x0 - 0.06;
           const y0 = f.y0 - 0.06;
           const x1 = f.x1 + 0.06;
@@ -3428,8 +3485,12 @@ void main() {
         }
         // the Grounds' buildings round the ground floor (the town's, the blocks')
         const g = this.around.grounds;
-        if (g && this.level === 0) {
+        // (and round a town building's storeys: its frame its storey's — plan 112)
+        if (g && (this.level === 0 || isSpaceLevel(this.level))) {
+          const up = elevOf(this.level);
           for (const b of g.boxes) {
+            // (one walked into: its walls' Jolt's, with its door — the ray's, below)
+            if (b.open) continue;
             const x0 = b.x0 - 0.3;
             const y0 = b.z0 - 0.3;
             const x1 = b.x1 + 0.3;
@@ -3439,8 +3500,8 @@ void main() {
             const hit = segBox(t.x, t.z, cx, cz, x0, y0, x1, y1);
             if (hit === null) continue;
             const along = hit * this.dist;
-            if (t.y + sp * along > b.top + 0.1) continue;
-            block(along, b.top);
+            if (t.y + sp * along > b.top - up + 0.1) continue;
+            block(along, b.top - up);
           }
         }
         // the shuttle and the visitor's car (their box, square to the ground)
@@ -3816,8 +3877,11 @@ void main() {
   }
   landAt(o: Vector3, dir: Vector3): { x: number; y: number } | null {
     const g = this.around.grounds;
-    if (this.level !== 0 || !g) return null;
-    const below = (t: number) => o.y + dir.y * t <= g.heightAt(o.x + dir.x * t, o.z + dir.z * t);
+    // (from a town building's ground storey too, the street at its door and windows — the land drawn from my floor's
+    // height; walked to out its door — plan 113 review)
+    if (!onStreet(this.level) || !g) return null;
+    const up = elevOf(0) - elevOf(this.level);
+    const below = (t: number) => o.y + dir.y * t <= up + g.heightAt(o.x + dir.x * t, o.z + dir.z * t);
     let t0 = 0;
     let t1 = -1;
     for (let t = 0.5; t < 500; t += 0.5)
@@ -3833,6 +3897,8 @@ void main() {
     }
     const x = o.x + dir.x * t1;
     const y = o.z + dir.z * t1;
+    // (in my storey's own plot: its floor's, the floor click's)
+    if (this.level !== 0) return tileInMap(this.map, x, y) ? null : { x, y };
     // (on the floor's own tiles: the floor's, as before)
     if (
       x >= 0 &&

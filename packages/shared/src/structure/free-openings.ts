@@ -83,6 +83,8 @@ export function freeOpeningWhy(
 ): string | null {
   const w = s.walls.find((q) => q.id === on.wall && q.floor === floor);
   if (!w) return "no wall there";
+  // (a town building's own: its doors and windows the kit's — plan 112, F4a)
+  if (w.shell) return "the building's own wall";
   // (one on the tile lines takes the tile tool's, by its edges: it's drawn edge by edge, and a free
   // one's hole would never be cut in it)
   const f = s.floors?.find((q) => q.index === floor);

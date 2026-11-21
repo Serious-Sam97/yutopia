@@ -1,6 +1,8 @@
 import {
   ANIM,
+  aboveOf,
   across,
+  belowOf,
   doorCentre,
   doorLeaves,
   doorOwner,
@@ -12,6 +14,7 @@ import {
   quarterOf,
   STAIRS_D,
   STAIRS_W,
+  spaceFloor,
   stairsDoor,
   stairsLocal,
   stairsWayUp,
@@ -53,7 +56,9 @@ export class Doors {
     for (const o of this.c.objs.values()) {
       if (o.kind !== "stairs") continue;
       const l = objLevel(o, this.c.building);
-      if (l !== this.c.level && l !== this.c.level - 1) continue;
+      // (mine, or the one up from the floor under mine — the registry's: a town building's storeys aren't numbered
+      // one after the other once a restyle has added one — plan 113 review)
+      if (l !== this.c.level && l !== belowOf(this.c.level)) continue;
       const p = across(this.c.building, this.c.level, l, { x, y });
       const { u, v } = stairsLocal(o, p.x, p.y);
       // (its flights and half landing: the landing by the door is floor, walked to)
@@ -75,7 +80,7 @@ export class Doors {
   climb(o: WorldObjectDef, up: boolean): boolean {
     if (hud.get().build.on) return false;
     const S = objLevel(o, this.c.building);
-    if (up ? S !== this.c.level : S + 1 !== this.c.level) return false;
+    if (up ? S !== this.c.level : aboveOf(S) !== this.c.level) return false;
     const way = stairsWayUp(o).map((p) => across(this.c.building, S, this.c.level, p));
     const pts = up ? way : [...way].reverse();
     return this.c.walkTo(pts[0], undefined, false, pts.slice(1));
@@ -92,6 +97,8 @@ export class Doors {
     });
     for (const o of this.c.objs.values()) {
       if (o.kind !== "stairs" || objLevel(o, this.c.building) !== this.c.level) continue;
+      // (a town building's stairs have no fire doors to swing — plan 113 review)
+      if (spaceFloor(this.c.level)) continue;
       const d = stairsDoor(o);
       const open = people.some((p) => Math.hypot(p.x - d.x, p.y - d.y) < 1.15);
       const was = this.fireDoors.get(o.id);

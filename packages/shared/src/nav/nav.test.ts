@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { layoutOf } from "../building-styles.ts";
 import { setOutdoors } from "../ground.ts";
-import { CHUNK, groundAt, groundsOutdoors } from "../grounds.ts";
+import { BUILDINGS, CHUNK, groundAt, groundsOutdoors } from "../grounds.ts";
 import { getMap } from "../index.ts";
 import { floorsOf, levelMap, objLevel } from "../levels.ts";
 import { isFloor, spanOf, tileAt } from "../map.ts";
@@ -206,10 +207,17 @@ test("hundreds of obstacles at once all go in (the tile cache's queue takes 64 b
 // at the floor's height snapped to the jetty — each end at its own height now.
 test("a way in at the door: a west-row house up its stoop, the lake boathouse over the jetty's end", async () => {
   await loadNav();
-  for (const [name, fx, fz, tx, tz] of [
-    ["house-w4", 418, -484, 409, -484],
-    ["lake-boathouse", 8995, -2156, 8995, -2151],
+  // (to its door's step: inside, its ground storey's the structure's own floor — plan 112, the server's way goes on
+  // from there, wayThrough)
+  for (const [name, fx, fz] of [
+    ["house-w4", 418, -484],
+    ["lake-boathouse", 8995, -2156],
   ] as const) {
+    const b = BUILDINGS.find((q) => q.key === name);
+    const d = b && layoutOf(b)?.door;
+    assert.ok(d, name);
+    const tx = d.x + d.ox * 0.9;
+    const tz = d.z + d.oz * 0.9;
     const M = 40;
     const rect = {
       x0: Math.floor((Math.min(fx, tx) - M) / CHUNK) * CHUNK,
@@ -219,9 +227,9 @@ test("a way in at the door: a west-row house up its stoop, the lake boathouse ov
     };
     const nav = await FloorNav.make(0, [], `door test ${name}`, rect, 0, true);
     assert.ok(nav, name);
-    const way = nav.path({ x: fx, y: fz }, { x: tx, y: tz }, { fromZ: groundAt(fx, fz), toZ: groundAt(tx, tz) });
+    const way = nav.path({ x: fx, y: fz }, { x: tx, y: tz }, { fromZ: groundAt(fx, fz), toZ: groundAt(tx, tz) + d.y });
     const end = way?.[way.length - 1];
-    assert.ok(end && Math.hypot(end.x - tx, end.y - tz) < 0.6, `${name}: a way in (${JSON.stringify(end)})`);
+    assert.ok(end && Math.hypot(end.x - tx, end.y - tz) < 0.6, `${name}: a way to its door (${JSON.stringify(end)})`);
     nav.dispose();
   }
 });

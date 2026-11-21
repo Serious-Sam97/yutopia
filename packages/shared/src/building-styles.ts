@@ -274,6 +274,8 @@ function frame(P: FrameP) {
     const n = P.half ? 1 : Math.max(1, o.floors);
     const eave = plinth + P.storey * n + (P.half ? 1.1 : 0);
     const S = k.sides(0, 0, W, D);
+    // (plan 112: its storeys, a floor each inside — a half storey's attic isn't one)
+    k.L.storeys = Array.from({ length: n + 1 }, (_, i) => plinth + P.storey * i);
     // the foundation
     k.box(-0.05, -0.6, -0.05, W + 0.05, plinth, D + 0.05, "paint", "#8e8578");
     // the walls (a base storey in its own skin)
@@ -643,6 +645,7 @@ function block(P: BlockP) {
     const plinth = P.plinth;
     const n = Math.max(1, o.floors);
     const eave = plinth + P.g + P.u * (n - 1);
+    k.L.storeys = [plinth, ...Array.from({ length: n }, (_, i) => plinth + P.g + P.u * i)];
     const roofKind = P.roof ?? "flat";
     const par = roofKind === "flat" ? P.parapet : 0;
     const S = k.sides(0, 0, W, D);

@@ -159,7 +159,9 @@ it('keeps where each person last was, out on the Grounds too, for coming back th
     expect($get($ana))->toEqual(['x' => -310.5, 'y' => -88.25, 'level' => 0, 'yaw' => 224])
         ->and($get($bia))->toEqual(['x' => 30.5, 'y' => 20.5, 'level' => 2, 'yaw' => 32])
         ->and(LastSpot::count())->toBe(2);
-    $put([['user_id' => $ana->id, 'x' => 5000, 'y' => 1, 'level' => 0, 'yaw' => 0]])->assertStatus(422);
+    // (out on the long road, a cabin by the lake 9 km east: kept — plan 113 review; past any land: not)
+    $put([['user_id' => $ana->id, 'x' => 9060.5, 'y' => -2094, 'level' => 83, 'yaw' => 0]])->assertOk();
+    $put([['user_id' => $ana->id, 'x' => 60000, 'y' => 1, 'level' => 0, 'yaw' => 0]])->assertStatus(422);
     $put([['user_id' => $ana->id, 'x' => 1, 'y' => 1, 'level' => 0, 'yaw' => 300]])->assertStatus(422);
 });
 

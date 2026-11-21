@@ -71,8 +71,9 @@ export function wallsPaint(
     // as it was)
     const f = s.floors.find((q) => q.index === floor) ?? null;
     const whole = (t: number) => (f && onTiles(w, f) ? Math.round(t) : t);
+    // (a town building's shell: painted whole — its windows' gaps are along all of it, plan 113 review)
     const spans = list.map((p) =>
-      isArc(w)
+      isArc(w) || w.shell
         ? { ...p, from: 0, to: L }
         : {
             ...p,

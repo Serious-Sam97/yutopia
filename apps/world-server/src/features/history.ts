@@ -1,6 +1,15 @@
-import { applyStep, diffStep, HISTORY_LIMIT, type Snapshot, STEP_LABELS, type Step, snapshot } from "@yutopia/shared";
+import {
+  applyStep,
+  diffStep,
+  HISTORY_LIMIT,
+  objLevel,
+  type Snapshot,
+  STEP_LABELS,
+  type Step,
+  snapshot,
+} from "@yutopia/shared";
 import { keepPlaying } from "@yutopia/shared/media";
-import { applyOps, diffStructures, type Structure, viewOf } from "@yutopia/shared/structure";
+import { applyOps, diffStructures, type StructOp, type Structure, viewOf } from "@yutopia/shared/structure";
 import { api } from "../api.ts";
 import { config } from "../config.ts";
 import { fromSchema, toSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
@@ -32,6 +41,9 @@ const BUILDING_EDITS = new Set([
 
 registerFeature((room: WorldRoom) => {
   const stacks = new Map<number, { undo: Step[]; redo: Step[] }>();
+  // (the God mode revision each step was made on: one in a town building, undone after a publish moved or changed
+  // it, would put its walls and things back where the building stood — plan 113 review)
+  const revAt = new WeakMap<Step, number>();
   const open = new Map<
     number,
     { before: Snapshot; struct: Structure; building: boolean; label: string; timer: ReturnType<typeof setTimeout> }
@@ -70,6 +82,7 @@ registerFeature((room: WorldRoom) => {
       }
     }
     if (!step) return;
+    revAt.set(step, room.state.groundsRev);
     const s = stackOf(uid);
     s.undo.push(step);
     if (s.undo.length > HISTORY_LIMIT) s.undo.shift();
@@ -116,7 +129,43 @@ registerFeature((room: WorldRoom) => {
     const now = new Map(objects().map((o) => [o.id, o]));
     const touched = [...res.put, ...[...res.put.map((o) => o.id), ...res.remove].flatMap((id) => now.get(id) ?? [])];
     // (the building's: its operations — and if what they undo was changed by someone since, not at all)
-    const ops = step.struct ? (dir === "back" ? step.struct.back : step.struct.fwd) : null;
+    // (the town's storeys always as they are now: a step's whole list of floors never takes one back to where its
+    // building stood before a publish — plan 113 review)
+    const ops = step.struct
+      ? (dir === "back" ? step.struct.back : step.struct.fwd).map(
+          (o): StructOp =>
+            o.op !== "floors"
+              ? o
+              : {
+                  ...o,
+                  floors: [
+                    ...o.floors.filter((f) => f.space === undefined),
+                    ...room.structure.floors.filter((f) => f.space !== undefined),
+                  ].sort((x, y) => x.index - y.index),
+                },
+        )
+      : null;
+    // (the floors the step reaches: its things', its walls', slabs', rooms', roofs')
+    const levels = new Set<number>(touched.map((o) => objLevel(o, room.map)));
+    for (const o of ops ?? []) {
+      if (o.op === "walls") {
+        for (const w of o.add) levels.add(w.floor);
+        for (const id of o.remove) {
+          const f = room.structure.walls.find((w) => w.id === id)?.floor;
+          if (f !== undefined) levels.add(f);
+        }
+      } else if ("floor" in o) levels.add(o.floor);
+    }
+    const town = [...levels].filter((l) => room.structure.floors.some((f) => f.index === l && f.space !== undefined));
+    const refuse = (text: string) => {
+      s[dir === "back" ? "undo" : "redo"].push(step);
+      report(p.uid);
+      room.send(client, "toast", { text, tone: "warn" });
+    };
+    // (a town building's inside: admins' — plan 112; a member's step never reaches into one)
+    if (town.some((l) => room.spaceWhy(p, l))) return refuse("Only admins build inside the town's buildings.");
+    if (town.length && revAt.get(step) !== room.state.groundsRev)
+      return refuse("A God mode publish changed the town since: not undone there.");
     let next: Structure | null = null;
     if (ops) {
       try {

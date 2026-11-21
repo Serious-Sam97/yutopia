@@ -1,4 +1,4 @@
-import { ANIM, overFloor } from "@yutopia/shared";
+import { ANIM, elevOf, onStreet, overFloor, sameStreet } from "@yutopia/shared";
 import {
   ARM,
   ARMS,
@@ -134,13 +134,14 @@ registerFeature((room: WorldRoom) => {
     (room.clients as WorldClient[]).filter((c) => {
       if (c.sessionId === p.sid) return false;
       const q = room.state.players.get(c.sessionId);
-      return !!q && q.level === p.level && Math.hypot(q.x - x, q.y - y) <= HEARD;
+      return !!q && sameStreet(q.level, p.level) && Math.hypot(q.x - x, q.y - y) <= HEARD;
     });
   // one of us a shot can hit: on the shooter's floor, someone else, on their feet, not in a seat
   const target = (p: Player, q: Player) =>
     q.sid !== p.sid &&
     q.uid !== p.uid &&
-    q.level === p.level &&
+    // (the street and a ground storey's one place: through its door, its windows — plan 113 review)
+    sameStreet(q.level, p.level) &&
     !q.downAt &&
     q.hp > 0 &&
     !q.busy.startsWith("ride:") &&
@@ -155,12 +156,14 @@ registerFeature((room: WorldRoom) => {
       let head = false;
       for (const dt of [-REWIND.slackMs, 0, REWIND.slackMs]) {
         const w = pastAt(trail, seenAt + dt) ?? { x: q.x, y: q.y, z: overFloor(q.level, q.z), at: null };
-        if (w.at && w.at.level !== p.level) continue;
+        if (w.at && !sameStreet(w.at.level, p.level)) continue;
         const h = w.at?.crouch ? CROUCHED : BODY.h;
-        const m = rayMeets(ray, w.x, w.y, w.z, range, REWIND.slack, h);
+        // (their height over the shooter's floor: the street's and a ground storey's floors differ by its sill)
+        const wz = w.z + elevOf(w.at?.level ?? q.level) - elevOf(p.level);
+        const m = rayMeets(ray, w.x, w.y, wz, range, REWIND.slack, h);
         if (m !== null && (t === null || m < t)) {
           t = m;
-          head = atHead(ray, m, w.z, h);
+          head = atHead(ray, m, wz, h);
         }
       }
       if (t !== null && (!best || t < best.t)) best = { q, t, head };
@@ -356,6 +359,9 @@ registerFeature((room: WorldRoom) => {
     const claims = Array.isArray(m?.cars) ? m.cars.slice(0, 16) : [];
     for (const [pi, dir] of pellets(id, yaw, Math.max(-1.2, Math.min(1.2, pitch)), seed, spread).entries()) {
       const ray = { x: ox, y: oy, z: oz, ...dir };
+      // (the shadowed are the land's: the ray as the land has it — from a ground storey too, through its door)
+      const street = onStreet(p.level);
+      const landRay = { ...ray, z: oz + elevOf(p.level) - elevOf(0) };
       // (plan 93 S1) a car along it: struck first if nothing's nearer — a wall before it, not at all; its
       // glass and (a rifle's round) its doors let the round on, the rest of it stops it there
       const d0 = rayDir(ray.yaw, ray.pitch);
@@ -374,7 +380,7 @@ registerFeature((room: WorldRoom) => {
       const va = room.vortex?.along(p.level, ray, who ? who.t : cap) ?? null;
       if (car && car.t < (who?.t ?? Number.POSITIVE_INFINITY) && car.t < (va?.t ?? Number.POSITIVE_INFINITY)) {
         // (one of the shadowed before it takes it)
-        const shade = p.level === 0 ? room.dark?.shoot(ray, car.t, seenAt, shadeDamage, now) : null;
+        const shade = street ? room.dark?.shoot(landRay, car.t, seenAt, shadeDamage, now) : null;
         if (shade) {
           room.send(client, "arms:hit", shade);
           continue;
@@ -401,7 +407,7 @@ registerFeature((room: WorldRoom) => {
       }
       const vt = va?.t ?? null;
       // the shadowed (out on the land): one nearer than whoever's along it takes it
-      const hit = p.level === 0 ? room.dark?.shoot(ray, vt ?? (who ? who.t : cap), seenAt, shadeDamage, now) : null;
+      const hit = street ? room.dark?.shoot(landRay, vt ?? (who ? who.t : cap), seenAt, shadeDamage, now) : null;
       if (hit) {
         room.send(client, "arms:hit", hit);
         continue;
@@ -507,7 +513,8 @@ registerFeature((room: WorldRoom) => {
     }
     for (const q of room.state.players.values()) {
       if (shooter ? !target(shooter, q) : q.level !== o.level || q.sid === o.sid) continue;
-      const qz = overFloor(q.level, q.z);
+      // (over the burst's floor: one on the street caught by a burst in a ground storey's door, or the other way)
+      const qz = overFloor(o.level, q.z);
       const d = Math.hypot(q.x - x, q.y - y, Math.max(0, Math.abs(qz + 0.9 - z) - 0.9));
       const n = burstAt(pvpDamage("daybreak"), d);
       if (n <= 0) continue;
@@ -530,7 +537,8 @@ registerFeature((room: WorldRoom) => {
     const msg = { id: o.id, x, y, z, level: o.level };
     for (const c of room.clients as WorldClient[]) {
       const cp = room.state.players.get(c.sessionId);
-      if (cp && cp.level === o.level && Math.hypot(cp.x - x, cp.y - y) <= HEARD) room.send(c, "arms:burst", msg);
+      if (cp && sameStreet(cp.level, o.level) && Math.hypot(cp.x - x, cp.y - y) <= HEARD)
+        room.send(c, "arms:burst", msg);
     }
   };
 

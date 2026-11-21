@@ -1,7 +1,9 @@
-import { quarterOf } from "../catalog.ts";
+import { entry, quarterOf } from "../catalog.ts";
 import { SP_OFFSET_H } from "../clock.ts";
-import { BUILDINGS, type Building, editsVersion, INSIDES, TOWN_CARS, TRACTOR } from "../grounds.ts";
+import { BUILDINGS, type Building, editsVersion, furnishingsOf, INSIDES, TOWN_CARS, TRACTOR } from "../grounds.ts";
 import type { ItemId, StackId } from "../inventory.ts";
+import { FURNISHED } from "../structure/furnish-layouts.ts";
+import { FACE, frameOf, toWorld } from "../structure/furnishings.ts";
 
 // Where things are found on the Grounds (docs/plan/30-the-dark.md, D3): spots by
 // place — the townhouses' doors, the boathouse's and the shed's, the parked
@@ -96,7 +98,27 @@ function lootSpots(): LootSpot[] {
                 ? "farmhouse"
                 : null;
     if (!place) continue;
-    const f = ins.fits.find((f) => f.kind === (place === "market" ? "till" : place === "barn" ? "bench" : "counter"));
+    // (plan 113: its hand-made layout's counter, till or bench — before it, on its customers' side)
+    const lay = FURNISHED[ins.b.key];
+    const want =
+      place === "market"
+        ? "checkout"
+        : place === "barn"
+          ? "workbench"
+          : place === "farmhouse"
+            ? "counter"
+            : "bar_counter";
+    const pc = lay?.pieces.find((p) => p.kind === want && !p.storey);
+    const fr = pc ? frameOf(ins.b) : null;
+    if (pc && fr) {
+      const d = entry(pc.kind).h / 2 + 0.6;
+      const [x, z] = toWorld(fr, pc.u + FACE[pc.face][0] * d, pc.v + FACE[pc.face][1] * d);
+      out.push({ id: ins.b.key, place, x, z });
+      continue;
+    }
+    // (the furniture its kind laid in it: plan 112 — its space's first things, there where they were)
+    const fits = ins.fits.length ? ins.fits : furnishingsOf(ins.b);
+    const f = fits.find((f) => f.kind === (place === "market" ? "till" : place === "barn" ? "bench" : "counter"));
     if (!f) continue;
     // (the farmhouse's counter runs along its east wall: in front of it is to the west)
     if (place === "farmhouse") {
@@ -125,7 +147,15 @@ export function lootSpot(id: string): LootSpot | undefined {
 /** The gatehouse's locker (a fit of its own, shared/grounds.ts): where you open it from. */
 export const LOCKER = (() => {
   const g = INSIDES.find((i) => i.b.kind === "gatehouse");
-  const f = g?.fits.find((f) => f.kind === "locker");
+  // (plan 113: its locker where its hand-made layout stands it — before its door, a metre out)
+  const lay = g && FURNISHED[g.b.key];
+  const lk = lay?.pieces.find((p) => p.kind === "locker");
+  const fr = g && lk ? frameOf(g.b) : null;
+  if (fr && lk) {
+    const [x, z] = toWorld(fr, lk.u + FACE[lk.face][0], lk.v + FACE[lk.face][1]);
+    return { x, z };
+  }
+  const f = (g && (g.fits.length ? g.fits : furnishingsOf(g.b)))?.find((f) => f.kind === "locker");
   return f ? { x: f.x + f.w / 2, z: f.z + f.d + 0.6 } : { x: 0, z: 0 };
 })();
 

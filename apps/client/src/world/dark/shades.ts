@@ -202,11 +202,13 @@ export class Shades {
 
   /** Where they're drawn (the floor's coords, feet z): what a shot is aimed at. */
   drawn(): { id: string; x: number; y: number; z: number }[] {
-    // (upstairs a shot doesn't reach them: features/arms.ts)
-    if (this.ctl.level !== 0) return [];
+    // (upstairs a shot doesn't reach them: features/arms.ts; from a town building's ground storey it does, through
+    // its door and windows — their feet as high over my floor as the land is — plan 113 review)
+    const up = this.ctl.streetUp();
+    if (up === null) return [];
     return [...this.seen.values()]
       .filter((s) => s.state !== "dissolve" && s.gone === null)
-      .map((s) => ({ id: s.id, x: s.x, y: s.y, z: this.ground(s.x, s.y) }));
+      .map((s) => ({ id: s.id, x: s.x, y: s.y, z: up + this.ground(s.x, s.y) }));
   }
 
   // (their x / y are the world's, as the land's)
@@ -260,7 +262,7 @@ export class Shades {
         focused: boolean;
         level: number;
       }) => {
-        if (p.focused && p.level === 0)
+        if (p.focused && this.ctl.streetUp(p.level) !== null)
           torches.push(beamOf(p.x, p.y, p.z, byteToYaw(p.yaw), (p.mv & MV_AIM) !== 0 ? p.pitch / 40 : null, true));
       },
     );

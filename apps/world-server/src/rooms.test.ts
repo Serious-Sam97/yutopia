@@ -12,6 +12,7 @@ import {
   quarterOf,
   quarterYaw,
   ROOM_NAME,
+  SPACE_BASE,
   STOREY,
   takenId,
 } from "@yutopia/shared";
@@ -2584,8 +2585,9 @@ test("the building: you arrive on the studio's floor, five floors up", async () 
   const s = ++space;
   const a = await person(80, s);
   assert.equal(home(a).floor, 4);
+  // (the HQ's: the town's buildings' storeys are floors of it too, from SPACE_BASE — plan 112)
   assert.deepEqual(
-    (home(a).levels ?? []).map((l: { index: number }) => l.index),
+    (home(a).levels ?? []).map((l: { index: number }) => l.index).filter((i: number) => i < SPACE_BASE),
     [0, 1, 2, 3],
   );
   assert.equal(me(a).level, 4);
@@ -2760,7 +2762,11 @@ test("teleport to someone on another floor lands you on theirs; other floors don
 test("floors: a blank one on top, and taken away again (never the studio's)", async () => {
   const s = ++space;
   const a = await person(85, s, "member,builder");
-  const floors = () => [a.room.state.floor, ...(home(a).levels ?? []).map((l: { index: number }) => l.index)];
+  // (the HQ's floors: not the town's buildings' storeys — plan 112)
+  const floors = () =>
+    [a.room.state.floor, ...(home(a).levels ?? []).map((l: { index: number }) => l.index)].filter(
+      (i: number) => !(i >= SPACE_BASE),
+    );
   a.room.send("level:remove", { level: 4 });
   await sleep(300);
   assert.equal(floors().length, 5, "the studio stays");

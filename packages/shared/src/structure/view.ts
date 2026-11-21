@@ -39,19 +39,26 @@ function areasOf(s: Structure, f: Floor): AreaDef[] {
   return areas;
 }
 
+/** A floor's grid as whole tiles: its own when it's on them, else the tiles that cover it. */
+function tilesOver(g: { x0: number; y0: number; w: number; h: number }) {
+  const ox = Math.floor(g.x0 + 1e-6);
+  const oy = Math.floor(g.y0 + 1e-6);
+  return { ox, oy, width: Math.ceil(g.x0 + g.w - 1e-6) - ox, height: Math.ceil(g.y0 + g.h - 1e-6) - oy };
+}
+
 /** The structure as the world's map: the home floor's, the others in `levels` (objects left empty:
  *  things aren't structure). */
 export function viewOf(s: Structure): MapDef {
   const home = s.floors.find((f) => f.index === s.home) ?? s.floors[0];
   const levels: LevelDef[] = s.floors
-    .filter((f) => f !== home)
+    // (a town building's storeys taken out of the world with it: kept, not a floor of it — plan 112)
+    .filter((f) => f !== home && !f.away)
     .map((f) => ({
       index: f.index,
       name: f.name,
-      ox: f.grid.x0,
-      oy: f.grid.y0,
-      width: f.grid.w,
-      height: f.grid.h,
+      // (whole tiles over its plot: a town building stood off the tiles — the rest hut out on the long road, one
+      // God mode set down — has a floor that isn't, and a map's cells are tiles — plan 113 review)
+      ...tilesOver(f.grid),
       ...(f.outdoor ? { outdoor: true } : {}),
       areas: areasOf(s, f),
       ...(f.spawn ? { spawn: { x: f.spawn[0], y: f.spawn[1] } } : {}),

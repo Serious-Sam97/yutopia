@@ -21,7 +21,7 @@ import {
 import { getBoundingBox } from "recast-navigation/generators";
 import type { Point } from "../geom.ts";
 import { CHUNK, layoutVersion } from "../grounds.ts";
-import { elevOf } from "../levels.ts";
+import { elevOf, isSpaceLevel } from "../levels.ts";
 import type { BuildingSolids } from "../physics/build.ts";
 import { landOf } from "../physics/build.ts";
 import { groundSolidsIn } from "../shapes/grounds.ts";
@@ -354,6 +354,9 @@ export class FloorNav {
   }
 }
 
+/** How many town buildings' storeys' meshes are kept made (the last asked for). */
+const LAZY_KEPT = 12;
+
 /** Every floor's mesh, kept matching the building's solids. */
 export class BuildingNav {
   private readonly floors = new Map<number, FloorNav>();
@@ -366,6 +369,11 @@ export class BuildingNav {
   private ground: { solids: Solid3[]; sig: string } = { solids: [], sig: "" };
   private windows: { rect: Rect; nav: FloorNav | null; key: string }[] = [];
   private readonly makingWindows = new Map<string, Promise<void>>();
+  // (plan 112: a town building's storeys made when a way's first asked on one — fifty-odd floors at once was the
+  // wasm's memory; the last few asked kept)
+  private readonly lazy = new Map<number, { solids: Solid3[]; sig: string }>();
+  private readonly lazyMaking = new Map<number, Promise<void>>();
+  private lazyUsed: number[] = [];
   /** (`sliceMs`: work between giving the event loop back while a floor's made; 0: at once) */
   constructor(private readonly sliceMs = 8) {}
 
@@ -410,6 +418,7 @@ export class BuildingNav {
       obstacles.set(0, m);
     }
     this.latest = obstacles;
+    for (const l of [...this.lazy.keys()]) if (!fixed.has(l)) this.lazy.delete(l);
     // (the land windows: the ground floor changed — let go, made again when asked; else their things)
     const g = fixed.get(0);
     const gsig = g ? hashOf(`${JSON.stringify(g.solids)}|${layoutVersion}`) : "";
@@ -438,6 +447,11 @@ export class BuildingNav {
       // (the land's in it: its layout's version and the span with it)
       const sig = JSON.stringify(f.solids) + (land ? `|land ${layoutVersion} ${JSON.stringify(land)}` : "");
       if (this.floors.get(level)?.fixedSig === sig || this.making.get(level) === sig) continue;
+      // (a town building's storey: made when asked — or again now, if it's been asked for)
+      if (isSpaceLevel(level)) {
+        this.lazy.set(level, { solids: f.solids, sig });
+        if (!this.floors.has(level)) continue;
+      }
       this.making.set(level, sig);
       const nav = await FloorNav.make(level, f.solids, sig, land, this.sliceMs);
       if (this.gone || this.making.get(level) !== sig) {
@@ -468,7 +482,8 @@ export class BuildingNav {
    *  round the two ends — undefined while it's being made (ask again; `pathSoon` waits for it). */
   path(level: number, from: Point, to: Point, opts: Parameters<FloorNav["path"]>[2] = {}): Point[] | null | undefined {
     const f = this.floors.get(level);
-    if (!f) return null;
+    if (!f) return this.lazy.has(level) ? undefined : null;
+    if (this.lazy.has(level)) this.lazyUsed = [...this.lazyUsed.filter((l) => l !== level), level];
     if (!f.covers || (inRect(f.covers, from) && inRect(f.covers, to))) return f.path(from, to, opts);
     const rect = windowFor(from, to);
     if (!rect) return null;
@@ -485,9 +500,38 @@ export class BuildingNav {
   async pathSoon(level: number, from: Point, to: Point, opts: Parameters<FloorNav["path"]>[2] = {}) {
     const now = this.path(level, from, to, opts);
     if (now !== undefined) return now;
+    if (!this.floors.has(level) && this.lazy.has(level)) {
+      await this.makeLazy(level);
+      return this.path(level, from, to, opts) ?? null;
+    }
     const rect = windowFor(from, to);
     if (rect) await this.makeWindow(rect);
     return this.path(level, from, to, opts) ?? null;
+  }
+
+  /** A town building's storey's mesh, made (the oldest asked let go past LAZY_KEPT). */
+  private makeLazy(level: number): Promise<void> {
+    const had = this.lazyMaking.get(level);
+    if (had) return had;
+    const want = this.lazy.get(level);
+    if (!want) return Promise.resolve();
+    const made = (async () => {
+      const nav = await FloorNav.make(level, want.solids, want.sig, undefined, this.sliceMs);
+      if (this.gone || this.lazy.get(level)?.sig !== want.sig) return nav?.dispose();
+      this.floors.get(level)?.dispose();
+      if (!nav) return;
+      this.floors.set(level, nav);
+      nav.setObstacles(this.latest.get(level) ?? new Map());
+      this.lazyUsed = [...this.lazyUsed.filter((l) => l !== level), level];
+      while (this.lazyUsed.length > LAZY_KEPT) {
+        const old = this.lazyUsed.shift();
+        if (old === undefined) break;
+        this.floors.get(old)?.dispose();
+        this.floors.delete(old);
+      }
+    })().finally(() => this.lazyMaking.delete(level));
+    this.lazyMaking.set(level, made);
+    return made;
   }
 
   private makeWindow(rect: Rect): Promise<void> {

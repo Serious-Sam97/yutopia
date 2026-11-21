@@ -208,6 +208,10 @@ const W = {
   // (plan 111: every building's walked into — this says whether its inside is furnished or empty)
   enterable: ["Furnished", "Mobiliado"],
   emptyInside: ["empty inside", "vazio por dentro"],
+  insideW: ["Inside", "Interior"],
+  insideOf: ["{f} floors · {n} things", "{f} andares · {n} coisas"],
+  goInside: ["Go in and build", "Entrar e construir"],
+  insideAfter: ["Built in once it's published", "Construído por dentro depois de publicado"],
   inside: ["Inside", "Dentro"],
   generated: ["Generated", "Gerado"],
   ownFloors: ["Own floors", "Andares próprios"],
@@ -1935,6 +1939,7 @@ function BuildingsPanel({ g }: { g: GodState }) {
               </span>
             </div>
           )}
+          {kd?.enter && <InsideRow sel={o.sel?.key ?? null} label={label("insideW")} />}
           {kd?.sign && (
             <label className="flex items-center gap-2">
               {label("signW")}
@@ -2831,5 +2836,37 @@ function ChangeMap({ chunks }: { chunks: [number, number][] }) {
       className="w-full aspect-square rounded"
       style={{ border: "1px solid var(--edge-2)" }}
     />
+  );
+}
+
+/** A building's own inside (plan 112): its storeys and things, and in to build it — once it's published (its space
+ *  is the live world's). */
+function InsideRow({ sel, label }: { sel: string | null; label: React.ReactNode }) {
+  const t = useW();
+  const w = useWorld();
+  useHud((s) => s.mapVersion);
+  const s = sel && w ? w.spaceOf(sel) : null;
+  return (
+    <div className="flex items-center gap-2">
+      {label}
+      {s ? (
+        <>
+          <span className="text-[11px] flex-1" style={{ color: "var(--cream-dim)" }}>
+            {t("insideOf").replace("{f}", String(s.floors.length)).replace("{n}", String(s.things))}
+          </span>
+          <button
+            type="button"
+            className="ghost-btn h-[28px] px-2 mono text-[11px]"
+            onClick={() => sel && w?.goInside(sel)}
+          >
+            {t("goInside")}
+          </button>
+        </>
+      ) : (
+        <span className="text-[11px]" style={{ color: "var(--cream-dim)" }}>
+          {t("insideAfter")}
+        </span>
+      )}
+    </div>
   );
 }

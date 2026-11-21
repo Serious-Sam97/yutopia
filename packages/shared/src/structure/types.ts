@@ -28,6 +28,15 @@ export interface Floor {
   /** the floor's extent: the cells it was laid out on, its corner (world) and size in cells — a
    *  raster's bounds (the light's, the floor's bake) */
   grid: { x0: number; y0: number; w: number; h: number };
+  /** a town building's storey (plan 112: its space — the building's key, its storey from 0 at its door, how high
+   *  its walls stand to the floor above or its ceiling); none: the HQ's */
+  space?: string;
+  storey?: number;
+  ceil?: number;
+  /** its building taken away in a publish: kept, out of the world (a rollback brings it back) */
+  away?: boolean;
+  /** the quarter turn of its building's frame when it was laid (its door's side): turned since, laid again */
+  turn?: number;
 }
 
 /** A floor surface: one material, an outline with holes, at its floor's height. */
@@ -60,6 +69,11 @@ export interface Wall {
   bow?: number;
   /** how thick (m; phase 11.4: 0.1 a partition, 0.2, 0.3 an outer wall). None: WALL_T */
   thick?: number;
+  /** a town building's own wall (plan 112: its space's shell — the kit draws it and the Grounds' solids hold it;
+   *  here for the tools to snap to, hang on, paint the inside of and close rooms with; never moved nor erased) */
+  shell?: boolean;
+  /** its openings the kit cut (a shell's windows and door): along it from a (m), over its base (m) */
+  gaps?: [number, number, number, number][];
 }
 
 /** A room: an outline on a floor, with everything the old area kept (name, kind, owner, lock…). */

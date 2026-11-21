@@ -4,6 +4,7 @@ import {
   dressItems,
   edgeKey,
   entry,
+  floorOf,
   HALF_WALL,
   hangOf,
   hangStrip,
@@ -20,6 +21,7 @@ import {
   openingEdges,
   placedFootprint,
   quarterOf,
+  spaceFloor,
   topCentre,
   WALL_H,
   type WallCut,
@@ -127,6 +129,9 @@ export interface FadeGroup {
   own?: Map<Material, Material>; // per-group see-through copies, made on the first fade
   item?: boolean; // a tall piece of furniture (not a wall run)
   wall?: boolean; // …that hangs on a wall (it goes with its wall)
+  /** a town building's own wall (plan 112): its box runs over its door — the camera keeps out of it by Jolt's ray,
+   *  which sees the doorway (plan 113 review: through the door it ducked and swung down over a wall that isn't there) */
+  shell?: boolean;
   index?: number; // its slot in the merged meshes' fade flags (World3.faded)
 }
 
@@ -316,7 +321,10 @@ export class World3 {
     const want = (k: string) => !only || only.has(k);
     const low = new Map<string, Out>();
     const lowOf = (x: number, y: number) => getOr(low, this.cellOf(x, y), () => new Out(BUILD_TEX));
-    const runs = new Map<string, { out: Out; x0: number; y0: number; x1: number; y1: number; top: number }>();
+    const runs = new Map<
+      string,
+      { out: Out; x0: number; y0: number; x1: number; y1: number; top: number; shell?: boolean }
+    >();
     const runOf = (dir: "h" | "v", x: number, y: number, top: number) => {
       const k = runKey(dir, x, y);
       const r = getOr(runs, k, () => ({ out: new Out(BUILD_TEX), x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9, top: 0 }));
@@ -419,6 +427,7 @@ export class World3 {
         top: r.top,
         objects: b.objs,
         alpha: 1,
+        ...(r.shell ? { shell: true } : {}),
       };
       made.add(`run|${k}`);
       this.setWallPart(`run|${k}`, { built: b, fade: f });
@@ -441,10 +450,14 @@ export class World3 {
     posts: Map<string, unknown>,
     freeEnds: Set<string>,
     lowOf: (id: string) => Out,
-    runs: Map<string, { out: Out; x0: number; y0: number; x1: number; y1: number; top: number }>,
+    runs: Map<string, { out: Out; x0: number; y0: number; x1: number; y1: number; top: number; shell?: boolean }>,
   ) {
     // (its doors' and windows' holes: the pieces split where they start and end — phase 11.6)
-    const holes = freeCuts(this.objects, fw.id);
+    // (a town building's shell's own openings too: plan 112)
+    const holes = [
+      ...freeCuts(this.objects, fw.id),
+      ...(fw.gaps ?? []).map(([u0, u1, z0, z1]) => ({ id: "", kind: "", u0, u1, z0, z1 })),
+    ].sort((p, q) => p.u0 - q.u0);
     const pieces = piecesOf(
       fw,
       holes.flatMap((c) => [c.u0, c.u1]),
@@ -479,7 +492,15 @@ export class World3 {
       }
       appendOut(lowOut, lo);
       const k = `${FREE}|${fw.id}|${Math.floor(i / RUN)}`;
-      const r = getOr(runs, k, () => ({ out: new Out(BUILD_TEX), x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9, top: 0 }));
+      const r = getOr(runs, k, () => ({
+        out: new Out(BUILD_TEX),
+        x0: 1e9,
+        y0: 1e9,
+        x1: -1e9,
+        y1: -1e9,
+        top: 0,
+        ...(fw.shell ? { shell: true } : {}),
+      }));
       appendOut(r.out, hi);
       for (const [x, y] of [p.at, [p.at[0] + Math.cos(p.angle) * p.len, p.at[1] + Math.sin(p.angle) * p.len]]) {
         r.x0 = Math.min(r.x0, x - 0.1);
@@ -688,7 +709,12 @@ export class World3 {
   // from below only (a low free camera, eye level), never from above.
   private buildCeiling() {
     const map = this.map;
-    const z = WALL_H;
+    // (a town building's storey: its own ceiling — plan 112)
+    const sf = spaceFloor(floorOf(map));
+    // (its top storey's a hand under its roof's deck: what stands on a flat roof — a vent's foot, a unit's curb —
+    // sits on the deck, and the kit can lie a few cm lower on sloping ground; seen from in, now it's drawn, they
+    // poked through — plan 113 review)
+    const z = sf ? sf.ceil - (sf.up === null ? 0.1 : 0) : WALL_H;
     const pos: number[] = [];
     // from the structure: its indoor slabs less the wells going up (physics/structure-solids.ts
     // slabBoxes: the same rectangles Jolt's slabs are), each a quad wound to face down
@@ -697,7 +723,10 @@ export class World3 {
         const [x, y] = k.split(",").map(Number);
         return [x, y, x + 1, y + 1];
       });
-      for (const b of this.rings.flatMap((r) => slabBoxes(r, holes, 0))) {
+      // (a town building's storey: over its whole floor — the hole in its slab is the stairs' from below, not one
+      // in its ceiling; its roof's the kit's, seen only from outside: plan 113)
+      const rings = sf ? this.rings.map((r) => r.slice(0, 1)) : this.rings;
+      for (const b of rings.flatMap((r) => slabBoxes(r, holes, 0))) {
         const [x0, x1, y0, y1] = [b.x - b.hx, b.x + b.hx, b.z - b.hz, b.z + b.hz];
         pos.push(x0, z, y0, x1, z, y0, x1, z, y1, x0, z, y0, x1, z, y1, x0, z, y1);
       }

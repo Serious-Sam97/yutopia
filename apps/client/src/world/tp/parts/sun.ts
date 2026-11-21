@@ -1,3 +1,4 @@
+import { elevOf, onStreet } from "@yutopia/shared";
 import { LAMPS as GROUND_LAMPS, KART_LAND, standLights } from "@yutopia/shared/grounds";
 import { Vector3 } from "three";
 import { gfxNow } from "@/lib/graphics";
@@ -189,7 +190,11 @@ export class Sun {
           x: o.x,
           y: o.y,
           h: o.z,
-          c: { ...FIRE_LAMP, radius: FIRE_LAMP.radius * Math.min(2.5, Math.sqrt(o.k)), intensity: FIRE_LAMP.intensity * o.k },
+          c: {
+            ...FIRE_LAMP,
+            radius: FIRE_LAMP.radius * Math.min(2.5, Math.sqrt(o.k)),
+            intensity: FIRE_LAMP.intensity * o.k,
+          },
           d: -2.5,
           flare: true,
           color: 0xff8a3a,
@@ -210,21 +215,24 @@ export class Sun {
           flare: true,
         });
     }
-    if (g && this.c.level === 0 && on > 0) {
+    // (on the land, or a town building's ground storey with the street at its windows — plan 113 review: the land
+    // drawn from my floor's height)
+    if (g && onStreet(this.c.level) && on > 0) {
       const t = this.c.target;
+      const up = elevOf(0) - elevOf(this.c.level);
       for (const l of GROUND_LAMPS) {
         const x = l.x;
         const y = l.z;
         const d = Math.hypot(x - t.x, y - t.z);
         if (d < GROUND_REACH)
-          near.push({ x, y, h: g.heightAt(l.x, l.z) + GROUND_LAMP[l.kind].h, c: GROUND_LAMP[l.kind], d });
+          near.push({ x, y, h: up + g.heightAt(l.x, l.z) + GROUND_LAMP[l.kind].h, c: GROUND_LAMP[l.kind], d });
       }
       // (the Kart Park's stands: lamps under their roofs, floods over the straight — not posts)
       for (const l of STAND_LIGHTS) {
         const x = l.x;
         const y = l.z;
         const d = Math.hypot(x - t.x, y - t.z);
-        if (d < GROUND_REACH) near.push({ x, y, h: g.heightAt(l.x, l.z) + l.h, c: l, d, color: 0xffe6bc });
+        if (d < GROUND_REACH) near.push({ x, y, h: up + g.heightAt(l.x, l.z) + l.h, c: l, d, color: 0xffe6bc });
       }
       near.sort((a, b) => a.d - b.d);
     }

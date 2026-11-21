@@ -17,6 +17,7 @@ import * as seating2 from "./seating2";
 import * as skate from "./skate";
 import * as storage2 from "./storage2";
 import * as tables2 from "./tables2";
+import * as town from "./town";
 import * as walls2 from "./walls2";
 
 // Plan 68's families (docs/plan/68-more-furniture.md, phases 3–20): each its own file, merged here
@@ -41,6 +42,7 @@ export const FAM_LOOKS: Record<string, readonly string[]> = {
   ...outdoors.LOOKS,
   ...seasons.LOOKS,
   ...skate.LOOKS,
+  ...town.LOOKS,
 };
 export const FAM_DRAW: Record<string, (m: Model, o: Look) => void> = {
   ...seating2.DRAW,
@@ -62,4 +64,5 @@ export const FAM_DRAW: Record<string, (m: Model, o: Look) => void> = {
   ...outdoors.DRAW,
   ...seasons.DRAW,
   ...skate.DRAW,
+  ...town.DRAW,
 };

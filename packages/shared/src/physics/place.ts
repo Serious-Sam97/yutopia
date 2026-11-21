@@ -15,9 +15,9 @@ import { FAM_CHAIRS } from "../fam/index.ts";
 import { isFreeThing, thingCorners } from "../free-things.ts";
 import type { Point } from "../geom.ts";
 import { BODY_R, chairAt, DESK_PULL, type Outdoors, outdoorsOf, type Seat, STEP, seatFront } from "../ground.ts";
-import { across, elevOf, floorOf, objLevel, onLevel } from "../levels.ts";
+import { across, belowOf, elevOf, floorOf, objLevel, onLevel, spaceFloor } from "../levels.ts";
 import { isFloor, type MapDef, tileInMap } from "../map.ts";
-import { inRamp, type Ramp, rampHeight, type SlabUnder, stairsRamps, stairsWell } from "../stairs.ts";
+import { inRamp, type Ramp, rampHeight, type SlabUnder, stairsRamps, stairsRise, stairsWell } from "../stairs.ts";
 import { cellOf, floorAtPoint } from "../structure/query.ts";
 import { STOREY } from "../units.ts";
 import type { Through } from "./body.ts";
@@ -122,10 +122,12 @@ export class Place {
         this.ramps.push(...stairsRamps(o, 0));
         for (const [x, y] of stairsWell(o)) this.well.add(`${x},${y}`);
       }
+    // (the floor under this one's stairs up: plan 112 — a town building's storey under it, its own rise)
+    const below = belowOf(level);
     for (const o of things)
-      if (o.kind === "stairs" && objLevel(o, map) === level - 1) {
-        const q = { ...o, ...across(map, level - 1, level, o) };
-        this.ramps.push(...stairsRamps(q, -STOREY));
+      if (o.kind === "stairs" && below !== null && objLevel(o, map) === below) {
+        const q = { ...o, ...across(map, below, level, o) };
+        this.ramps.push(...stairsRamps(q, -stairsRise(o)));
         for (const [x, y] of stairsWell(q)) this.well.add(`${x},${y}`);
       }
   }
@@ -305,9 +307,17 @@ export function slabsOf(
     // what stands on them, a plant, a parked car)
     const top = Math.max(z, 0) + 0.3;
     const bottom = Math.min(z, 0) - 0.6;
-    if (world.groundUnder(p.x, elevOf(l) + top, p.y, 0.05, top - bottom, "clip") === null) return false;
+    const g = world.groundUnder(p.x, elevOf(l) + top, p.y, 0.05, top - bottom, "clip");
+    if (g === null) return false;
     const k = world.underKey() ?? "";
     if (k.startsWith(`slab:${l}:`)) return true;
+    // (a town building's storey: its slab's where the land meets it — its floor at the land's, its ground storey
+    // in its plot — plan 112)
+    const sf = spaceFloor(l);
+    if (sf) {
+      const { x0, y0, w, h } = sf.grid;
+      if (p.x > x0 && p.y > y0 && p.x < x0 + w && p.y < y0 + h && Math.abs(g - sf.z) < 0.08) return true;
+    }
     return k.startsWith("thing:") && isStairs(k.slice(6));
   };
 }

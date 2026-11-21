@@ -325,6 +325,11 @@ export function roomBounds(
   y: number,
   open: (ch: string | undefined) => boolean,
 ): { x0: number; y0: number; x1: number; y1: number } | null {
+  // (whole tiles: an extent off them gave fractional indices the seen-array never kept — a fill without end, the
+  // page out of memory at the rest hut — plan 113 review)
+  ext = { x0: Math.floor(ext.x0), y0: Math.floor(ext.y0), x1: Math.ceil(ext.x1), y1: Math.ceil(ext.y1) };
+  x = Math.floor(x);
+  y = Math.floor(y);
   const inside = (tx: number, ty: number) => tx >= ext.x0 && ty >= ext.y0 && tx < ext.x1 && ty < ext.y1;
   if (!inside(x, y) || open(cell(x, y))) return null;
   let x0 = x;

@@ -1,8 +1,9 @@
 import { worldZ } from "@yutopia/shared";
 import { checkVehicles, isCarKind, validLook } from "@yutopia/shared/car";
-import { BUILDINGS, CHUNK, checkEdits, editsNow, heightAt } from "@yutopia/shared/grounds";
+import { BUILDINGS, buildingsFor, CHUNK, checkEdits, editsNow, heightAt, insideOf } from "@yutopia/shared/grounds";
 import type { GroundsEdits } from "@yutopia/shared/grounds-edits";
 import { beyondLand, REACH_MARGIN } from "@yutopia/shared/land";
+import { spaceShrinkWhy } from "@yutopia/shared/structure/spaces";
 import { api } from "../api.ts";
 import { config } from "../config.ts";
 import { landEdits } from "../land.ts";
@@ -60,13 +61,72 @@ registerFeature((room: WorldRoom) => {
         out.push(`${id}: someone's own car is only moved`);
     return out;
   };
+  /** The town's buildings' insides (plan 112, plan 54's rule): none moved, resized, restyled or turned so that what's
+   *  built in it is left outside it, on a storey it hasn't now, or laid over — every building as these edits would
+   *  have it, not only those they name (a draft's a whole set: an entry left out puts its building back as the town
+   *  had it; a rollback the same — plan 113 review). One taken away keeps its inside, out of the world. */
+  const spaceProblems = (e: GroundsEdits): string[] => {
+    const out: string[] = [];
+    const things = [...room.state.objects.values()].map(fromSchema);
+    const after = new Map(buildingsFor(e).map((b) => [b.key, b]));
+    for (const was of BUILDINGS) {
+      const now = after.get(was.key);
+      if (!now) continue;
+      const why = spaceShrinkWhy(room.structure, was, now, things);
+      if (why) out.push(why);
+    }
+    return out;
+  };
   // one publish at a time: the next is made on what this one leaves live
   let busy = false;
 
   /** Lay these edits as the world's, and set down whoever stands where the land moved. */
   const lay = (edits: GroundsEdits) => {
+    // (which buildings were furnished before: a toggle in this publish lays or takes away their furniture — plan 113)
+    const furnished = new Map(BUILDINGS.map((b) => [b.key, !!b.enter]));
     const dirty = new Set(landEdits(edits).map(([x, z]) => `${x},${z}`));
     room.state.groundsRev = edits.rev;
+    const turned = new Set(
+      BUILDINGS.filter((b) => furnished.has(b.key) && furnished.get(b.key) !== !!b.enter).map((b) => b.key),
+    );
+    // (the town's buildings' insides with them: laid, moved, regrown, taken out of the world — plan 112)
+    const before = new Map(room.structure.floors.filter((f) => f.space !== undefined).map((f) => [f.index, f]));
+    room.fixSpaces([...room.state.objects.values()].map(fromSchema), false, turned);
+    // (whoever's inside one: with it where it moved; out at its door if it turned; back where they arrive if it's
+    // gone — plan 113 review)
+    for (const p of room.state.players.values()) {
+      const was = before.get(p.level);
+      if (!was) continue;
+      const now = room.structure.floors.find((f) => f.index === p.level);
+      const c = room.clients.getById(p.sid) as WorldClient | undefined;
+      const b = BUILDINGS.find((q) => q.key === was.space);
+      const say = (text: string) => c && !p.bot && room.send(c, "toast", { text });
+      if (!now || now.away || !b) {
+        const to = room.arrivalFor(p);
+        Object.assign(p, { x: to.x, y: to.y, level: to.level, z: worldZ(to.level, 0) });
+        say("The building you were in is gone: you're back where you arrive.");
+      } else if (now.turn !== was.turn) {
+        // (out on the street at its door)
+        const d = insideOf(b)?.door;
+        if (!d) continue;
+        const m = (d.from + d.to) / 2;
+        const o = d.dir === "h" ? (d.at === b.z1 ? 1 : -1) : d.at === b.x1 ? 1 : -1;
+        const [x, y] = d.dir === "h" ? [m, d.at + o * 1.5] : [d.at + o * 1.5, m];
+        Object.assign(p, { x, y, level: 0, z: heightAt(x, y) });
+        say(`${b.name} was laid out again: you're at its door.`);
+      } else {
+        const dx = now.grid.x0 - was.grid.x0;
+        const dy = now.grid.y0 - was.grid.y0;
+        // (its floor's height with it too: moved onto higher ground, not left in the slab — plan 113 review)
+        const dz = now.z - was.z;
+        if (!dx && !dy && !dz) continue;
+        p.x = Math.round((p.x + dx) * 1000) / 1000;
+        p.y = Math.round((p.y + dy) * 1000) / 1000;
+        p.z = Math.round((p.z + dz) * 1000) / 1000;
+      }
+      p.area = room.areaOf(p)?.key ?? "";
+      if (c) room.send(c, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
+    }
     for (const p of room.state.players.values()) {
       const g = room.gridFor(p.uid, p.level);
       if (!g.onLand(p.x, p.y)) continue;
@@ -182,7 +242,7 @@ registerFeature((room: WorldRoom) => {
           c,
           `Revision ${room.state.groundsRev} is live; your draft was made on ${draft.baseRev}. Bring it up to date first.`,
         );
-      const problems = [...checkEdits(draft.data), ...vehicleProblems(draft.data)];
+      const problems = [...checkEdits(draft.data), ...vehicleProblems(draft.data), ...spaceProblems(draft.data)];
       if (problems.length) return refuse(c, "The draft can't be published as it is.", problems);
       const rev = await commit(p, draft.data, { note, draftId: id });
       if (config.offline) offlineDrafts.delete(id);
@@ -211,6 +271,9 @@ registerFeature((room: WorldRoom) => {
           : config.offline
             ? (offline[to] ?? { rev: 0 })
             : (await api.groundsRevision(to)).revision.data;
+      // (the same rule as a publish: no rolling back past what's been built inside a building since — plan 113 review)
+      const problems = spaceProblems(data);
+      if (problems.length) return refuse(c, "Can't roll back to that revision as things are.", problems);
       const rev = await commit(p, data, { note: `Roll back to ${to}`, rollbackOf: to || null });
       room.adminLog(p, "rollback", null, `to revision ${to} (now ${rev})`);
       room.send(c, "god:published", { rev });

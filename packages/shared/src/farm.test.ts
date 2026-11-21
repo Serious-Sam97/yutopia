@@ -5,6 +5,7 @@ import {
   BUILDINGS,
   CORN,
   FARM,
+  furnishingsOf,
   groundSurfaceAt,
   heightAt,
   insideOf,
@@ -16,6 +17,7 @@ import {
   walkableCell,
   wallEdgeAt,
 } from "./grounds.ts";
+import { furnishThings } from "./structure/spaces.ts";
 
 // The farm (docs/plan/31-the-day.md, phase 1): across the river, south of Main
 // Street — a lane down from the square to the barn's doors and the farmhouse,
@@ -69,7 +71,8 @@ test("the farmhouse: in by its front door (north), its rooms furnished — round
   assert.ok(!wallEdgeAt("h", xm, h.z0), "the doorway");
   assert.ok(wallEdgeAt("h", h.x0 + 2, h.z0), "the wall beside it");
   assert.ok(walk(xm, h.z0 - 1) && walk(xm, h.z0 + 1), "through the door");
-  const kinds = new Set(ins.fits.map((f) => f.kind));
+  // (plan 112: its furniture its space's first things — the kind's, laid as the catalog's where it stood)
+  const kinds = new Set(furnishingsOf(h).map((f) => f.kind));
   for (const k of [
     "sofa",
     "armchair",
@@ -84,11 +87,10 @@ test("the farmhouse: in by its front door (north), its rooms furnished — round
     "rug",
   ])
     assert.ok(kinds.has(k as never), `a ${k}`);
-  // the furniture's in the way (the rug isn't), and the room between it is walked
-  const sofa = ins.fits.find((f) => f.kind === "sofa") as (typeof ins.fits)[number];
-  assert.ok(!walk(sofa.x + 0.5, sofa.z + 1));
-  const rug = ins.fits.find((f) => f.kind === "rug") as (typeof ins.fits)[number];
-  assert.ok(walk(rug.x + 3.2, rug.z + 0.5), "the rug's walked on");
+  const things = new Set(furnishThings(h, 40).map((o) => o.kind));
+  for (const k of ["sofa", "armchair", "fireplace", "bookcase", "kitchen_stove", "fridge", "counter", "rug"])
+    assert.ok(things.has(k), `a ${k} to move about`);
+  assert.equal(ins.fits.length, 0, "no fits of its own: its space's things");
   assert.ok(walk(xm, (h.z0 + h.z1) / 2), "the middle of the room");
 });
 

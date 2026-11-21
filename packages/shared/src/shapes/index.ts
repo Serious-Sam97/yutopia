@@ -31,6 +31,7 @@ export type { BoxPart, CylPart, KindShape, Part } from "../fam/units.ts";
 import type { KindShape, Part } from "../fam/units.ts";
 import { FLIGHT_RISE, flightParts, flightRise } from "../flight.ts";
 import { isFreeThing } from "../free-things.ts";
+import { riseOf } from "../levels.ts";
 
 /** What a body does with it: walks into it (solid), sits on it (seat: walked onto, then sat),
  *  or nothing (it's under foot, on a wall, on a table: reach and the view only). */
@@ -270,24 +271,8 @@ export const SHAPES: Record<ObjectKind, KindShape> = {
   // (9 steps a flight as stairs3d.ts draws them: treads two risers thick — the flight below walks
   // under the next floor's — the half landing, flight B's treads, the spine between the flights)
   stairs: {
-    parts: [
-      ...Array.from({ length: 9 }, (_, i) =>
-        box(2.05, 2 + i / 3, 3.95, 2 + (i + 1) / 3, Math.max(0, ((i - 1) * STOREY) / 18), ((i + 1) * STOREY) / 18),
-      ),
-      box(0, 5, 4, 7, STOREY / 2 - 0.22, STOREY / 2),
-      ...Array.from({ length: 9 }, (_, i) =>
-        box(
-          0.05,
-          5 - (i + 1) / 3,
-          1.95,
-          5 - i / 3,
-          STOREY / 2 + (i * STOREY) / 18,
-          STOREY / 2 + ((i + 1) * STOREY) / 18,
-        ),
-      ),
-      box(1.95, 2, 2.05, 5, 0, STOREY / 2 + 0.95),
-    ],
-    odd: "drawn by Stairs3 (canvases), not measured; the well's walls are edges (stairs.ts); phase 6 decides",
+    parts: stairsParts(STOREY),
+    odd: "drawn by Stairs3 (canvases), not measured; the well's walls are edges (stairs.ts); phase 6 decides; its rise its floor's (a town building's storey: plan 113 review)",
   },
   flight: {
     parts: flightParts(FLIGHT_RISE),
@@ -447,11 +432,40 @@ const DECOR_PARTS: Record<string, Part[]> = {
   bin: [cyl(0.5, 0.5, 0.19, 0, 0.38)],
   cable: [box(0.34, 0.33, 0.86, 0.68, 0, 0.03)],
 };
+/** A staircase's parts up `rise` (m): 9 treads a flight, the half landing at half of it, the spine between. */
+function stairsParts(rise: number): Part[] {
+  return [
+    ...Array.from({ length: 9 }, (_, i) =>
+      box(2.05, 2 + i / 3, 3.95, 2 + (i + 1) / 3, Math.max(0, ((i - 1) * rise) / 18), ((i + 1) * rise) / 18),
+    ),
+    box(0, 5, 4, 7, rise / 2 - 0.22, rise / 2),
+    ...Array.from({ length: 9 }, (_, i) =>
+      box(0.05, 5 - (i + 1) / 3, 1.95, 5 - i / 3, rise / 2 + (i * rise) / 18, rise / 2 + ((i + 1) * rise) / 18),
+    ),
+    box(1.95, 2, 2.05, 5, 0, rise / 2 + 0.95),
+  ];
+}
+const stairsByRise = new Map<number, Part[]>();
+/** A staircase's own parts: up to the floor over its own — a town building's storey isn't the HQ's (plan 113 review:
+ *  its treads stopped at the HQ's height, 0.7 m under the bar's upstairs). */
+function stairsOwn(o: WorldObjectDef): Part[] {
+  const l = o.props?.level;
+  const rise = typeof l === "number" ? Math.round(riseOf(l) * 1000) / 1000 : STOREY;
+  if (rise === STOREY) return shapeOf("stairs").parts;
+  let p = stairsByRise.get(rise);
+  if (!p) {
+    p = stairsParts(rise);
+    stairsByRise.set(rise, p);
+  }
+  return p;
+}
+
 export function kindSolids(o: WorldObjectDef, elev = 0): Solid3[] {
   const f = frameOf(o);
   const parts =
     (o.kind === "decor" && DECOR_PARTS[String(o.props?.d)]) ||
     (o.kind === "flight" && flightParts(flightRise(o))) ||
+    (o.kind === "stairs" && stairsOwn(o)) ||
     shapeOf(o.kind).parts;
   // (placed free — plan 72 phase 11.9: its parts laid out from its middle and turned by its yaw)
   if (isFreeThing(o)) {

@@ -1,10 +1,10 @@
 "use client";
 
-import { CLOTH_COLORS, DECOR, entry, footprint, isOpening, TEXT_DEFAULT } from "@yutopia/shared";
+import { CLOTH_COLORS, DECOR, entry, footprint, isOpening, spaceFloor, TEXT_DEFAULT } from "@yutopia/shared";
 import { wallLength, workingHeights } from "@yutopia/shared/structure";
 import { useEffect, useRef, useState } from "react";
 import { yutopia } from "@/lib/api";
-import { type Key, trMaybe, useTr } from "@/lib/i18n";
+import { type Key, tr, trMaybe, useTr } from "@/lib/i18n";
 import { type BuildTool, hud, toast, useHud } from "@/world/store";
 import { Brand } from "../../Brand";
 import { useWorld } from "../ctx";
@@ -47,6 +47,14 @@ export function BuildMode() {
   useEffect(() => {
     if (b.on && canBuild) void w?.loadBuild();
   }, [b.on, canBuild, w]);
+  // (a town building's inside: admins build there — plan 112, F1a; a member's build mode closes, told why)
+  const floor = useHud((s) => s.floor);
+  const isAdmin = useHud((s) => s.isAdmin);
+  useEffect(() => {
+    if (!b.on || isAdmin || !spaceFloor(floor)) return;
+    hud.set((s) => ({ build: { ...s.build, on: false } }));
+    toast(tr("spaceAdminsOnly"), "warn");
+  }, [b.on, floor, isAdmin]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: redraw the ghost when the tool changes
   useEffect(() => {
     w?.refreshGhost();
@@ -1057,6 +1065,7 @@ function FloorPicker() {
   if (!w) return null;
   const top = floors[floors.length - 1];
   const home = w.building ? (w.building.floor ?? 0) : 0;
+  const inSpace = !!spaceFloor(floor);
   return (
     <fieldset className="hidden md:flex items-center gap-1 shrink-0 border-0 p-0 m-0" aria-label={t("floor")}>
       <span className="mono text-[10px] mr-0.5" style={{ color: "var(--cream-dim)" }}>
@@ -1080,15 +1089,18 @@ function FloorPicker() {
           {floorLabel(f)}
         </button>
       ))}
-      <button
-        type="button"
-        className="ghost-btn h-[30px] px-2 mono text-[11px]"
-        title={t("floorAdd")}
-        onClick={() => w.send("level:add", {})}
-      >
-        + {t("floorAdd")}
-      </button>
-      {top !== home && (
+      {/* (a town building's storeys are its own: none added nor taken away here — plan 112) */}
+      {!inSpace && (
+        <button
+          type="button"
+          className="ghost-btn h-[30px] px-2 mono text-[11px]"
+          title={t("floorAdd")}
+          onClick={() => w.send("level:add", {})}
+        >
+          + {t("floorAdd")}
+        </button>
+      )}
+      {!inSpace && top !== home && (
         <button
           type="button"
           className="ghost-btn h-[30px] px-2 mono text-[11px]"

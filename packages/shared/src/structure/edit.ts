@@ -47,14 +47,28 @@ export interface WallSet {
 /** What a wall's face can be painted (Paint's swatches: plaster, walnut, foam, brick, cork). */
 export const FACE_PAINTS = ["p", "w", "f", "b", "k"] as const;
 
-const heightWhy = (h: number): string | null =>
-  !Number.isFinite(h) || h < WALL_LOWEST - 1e-6 || h > WALL_H + 1e-6 ? "not a wall's height" : null;
+// (as high as the floor's ceiling at most — a town building's lower storey's too, not a storey's: plan 113 review)
+const heightWhy = (h: number, max = WALL_H): string | null =>
+  !Number.isFinite(h) || h < WALL_LOWEST - 1e-6 || h > max + 1e-6 ? "not a wall's height" : null;
 const thickWhy = (t: number | undefined): string | null =>
   t === undefined || WALL_THICKS.some((q) => Math.abs(q - t) < 1e-6) ? null : "not a wall's thickness";
 
 const near = (p: XY, q: XY) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 0.01;
 const finite = (p: unknown): p is XY =>
   Array.isArray(p) && p.length === 2 && Number.isFinite(p[0]) && Number.isFinite(p[1]);
+
+/** How high a floor's walls stand at most: to the slab over it (a town building's storey its own — plan 112). */
+export const ceilOf = (f: { ceil?: number }): number => f.ceil ?? WALL_H;
+/** A drawn wall's height on floor `f`: as asked; a storey's full height (WALL_H, the tool's "ceiling" — from a
+ *  mezzanine `over` it, WALL_H − over) its ceiling's (a town building's lower or higher — plan 113 review). */
+export function draftHeight(f: { ceil?: number }, d: { height?: number; over?: number }): number {
+  const c = ceilOf(f);
+  const over = d.over ?? 0;
+  if (d.height === undefined || Math.abs(d.height - WALL_H) < 1e-6) return c;
+  // (from a mezzanine up to the ceiling — the tool's WALL_H − over: up to this storey's)
+  if (over && Math.abs(d.height - (WALL_H - over)) < 1e-6) return c - over;
+  return d.height;
+}
 
 /** Why this wall can't go on floor `floor` (null: it can) — on the floor's ground, long enough, of a
  *  material there is, as high as a storey at most. */
@@ -67,13 +81,14 @@ export function wallWhy(s: Structure, floor: number, d: WallDraft): string | nul
   if (len > WALL_MAX) return "too long";
   if (d.bow !== undefined && (!Number.isFinite(d.bow) || Math.abs(d.bow) > len / 2 + 1e-3)) return "bows too far";
   if (!(WALL_MATERIALS as readonly string[]).includes(d.front)) return "not a wall's material";
-  const hw = heightWhy(d.height ?? WALL_H) ?? thickWhy(d.thick);
+  const height = draftHeight(f, d);
+  const hw = heightWhy(height, ceilOf(f)) ?? thickWhy(d.thick);
   if (hw) return hw;
   // (on a mezzanine of this floor, its top under the ceiling)
   const over = d.over ?? 0;
   if (over !== 0) {
     if (!workingHeights(s, floor).some((q) => Math.abs(q - over) < 1e-3)) return "no floor up there";
-    if (over + (d.height ?? WALL_H) > WALL_H + 1e-3) return "too high up there";
+    if (over + height > ceilOf(f) + 1e-3) return "too high up there";
   }
   // (on the floor's ground: its grid — the building's footprint — a little past it for its outer walls)
   const { x0, y0, w, h: gh } = f.grid;
@@ -125,6 +140,8 @@ export function wallsEdit(
   const f = s.floors.find((q) => q.index === floor);
   if (!f) return { why: "no such floor" };
   for (const id of remove) if (!s.walls.some((w) => w.id === id && w.floor === floor)) return { why: "no such wall" };
+  // (a town building's own walls stay: plan 112)
+  if (remove.some((id) => s.walls.some((w) => w.id === id && w.shell))) return { why: "the building's own wall" };
   const added: Wall[] = [];
   // (what stands once those go: a wall drawn over one goes in only where there's none)
   const standing = s.walls.filter((w) => w.floor === floor && !remove.includes(w.id));
@@ -144,7 +161,7 @@ export function wallsEdit(
     // (only walls up where it is stand in its way: a low wall under a mezzanine's rail on its line isn't
     // "there already")
     const z0 = f.z + (d.over ?? 0);
-    const z1 = z0 + (d.height ?? WALL_H);
+    const z1 = z0 + draftHeight(f, d);
     const there = standing.filter((w) => w.base < z1 - 1e-3 && w.base + w.height > z0 + 1e-3);
     const parts: [XY, XY][] = bow ? (there.some(same) ? [] : [[d.a, d.b]]) : uncovered(there, d.a, d.b);
     for (const [a, b] of parts) {
@@ -154,7 +171,7 @@ export function wallsEdit(
         a: [r(a[0]), r(a[1])],
         b: [r(b[0]), r(b[1])],
         base: r(f.z + (d.over ?? 0)),
-        height: r(d.height ?? WALL_H),
+        height: r(draftHeight(f, d)),
         front: d.front,
         ...(bow ? { bow: r(bow) } : {}),
         ...(d.thick !== undefined && Math.abs(d.thick - WALL_T) > 1e-6 ? { thick: d.thick } : {}),
@@ -184,13 +201,17 @@ export function wallsSet(
   for (const c of set) {
     const w = s.walls.find((q) => q.id === c.id && q.floor === floor);
     if (!w || remove.includes(w.id)) return { why: "no such wall" };
-    const height = c.height === undefined ? w.height : r(c.height);
-    const why = heightWhy(height) ?? thickWhy(c.thick);
+    const fl = s.floors.find((q) => q.index === floor);
+    const height = c.height === undefined ? w.height : r(fl ? draftHeight(fl, c) : c.height);
+    const why = heightWhy(height, fl ? ceilOf(fl) : WALL_H) ?? thickWhy(c.thick);
     if (why) return { why };
+    // (a town building's own: its faces painted, never its height nor its thickness — plan 112)
+    if (w.shell && (height !== w.height || (c.thick !== undefined && c.thick !== (w.thick ?? WALL_T))))
+      return { why: "the building's own wall" };
     // (as drawing one: on a mezzanine its top under the ceiling; and never lower than a door or a
     // window in it)
-    const over = w.base - (s.floors.find((q) => q.index === floor)?.z ?? w.base);
-    if (over + height > WALL_H + 1e-3) return { why: "too high up there" };
+    const over = w.base - (fl?.z ?? w.base);
+    if (over + height > (fl ? ceilOf(fl) : WALL_H) + 1e-3) return { why: "too high up there" };
     if (height < w.height && height + 1e-3 < openingTop(w.id)) return { why: "lower than what's set in it" };
     // (a face painted: glass and half walls have no sides to; painting one face keeps the other's)
     const paint = (m: string | undefined) => m === undefined || (FACE_PAINTS as readonly string[]).includes(m);

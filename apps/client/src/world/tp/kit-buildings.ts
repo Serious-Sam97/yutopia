@@ -10,6 +10,7 @@
 import type { Colours } from "@yutopia/shared/building-kit";
 import { headRise, type KMat, type Layout, OPENINGS, ROLE_HEX, type Role } from "@yutopia/shared/building-kit";
 import {
+  BackSide,
   BufferAttribute,
   BufferGeometry,
   CanvasTexture,
@@ -283,7 +284,9 @@ type BaseKey =
   | "room"
   | "room-lit"
   | "pane"
-  | "pane-lit";
+  | "pane-lit"
+  // (plan 113 review: the glass seen from inside a building walked into — its faces turned in, a mesh of its own)
+  | "glass-in";
 /** A material's key: the layout's or a role's; `p:` before it, a part's — drawn the same, pulled a hair toward the
  *  eye (polygonOffset), so a part on a wall or a box wins where their faces lie in one plane (plan 111). */
 export type MatKey = BaseKey | `p:${BaseKey}`;
@@ -346,7 +349,17 @@ export type Batches = Map<MatKey, Acc>;
 /** A building's batches packed (what a cell keeps of it). */
 export type Packed = Map<MatKey, Pack>;
 /** Whether a material's batch keeps its UVs (one with a picture). */
-const PLAIN = new Set<string>(["paint", "glow", "glass", "glass-lit", "room", "room-lit", "pane", "pane-lit"]);
+const PLAIN = new Set<string>([
+  "paint",
+  "glow",
+  "glass",
+  "glass-lit",
+  "glass-in",
+  "room",
+  "room-lit",
+  "pane",
+  "pane-lit",
+]);
 export const takesUV = (k: MatKey) => !PLAIN.has(baseOf(k));
 /** Batches packed small. */
 export function packBatches(b: Batches): Packed {
@@ -391,6 +404,8 @@ export function kitBatches(
   y0: number,
   c: Colours,
   rooms?: RoomOpts | null,
+  /** walked into, its inside real (plan 112): its glass seen from in there too */
+  seenFromIn = false,
 ): { near: Batches; far: Batches } {
   const near: Batches = new Map();
   const far: Batches = new Map();
@@ -407,7 +422,10 @@ export function kitBatches(
   }
   for (const b of L.boxes) {
     const cc = toned(b.mat, b.colour);
-    for (const t of [near, far]) boxInto(acc(t, b.mat), b.x0, b.y0 + y0, b.z0, b.x1, b.y1 + y0, b.z1, cc);
+    // (one up off the ground — a canopy, its lamps, a sign — its underside too: seen from below it was a hole —
+    // plan 113 review; one on the ground has none to see)
+    const under = b.y0 > 0.05;
+    for (const t of [near, far]) boxInto(acc(t, b.mat), b.x0, b.y0 + y0, b.z0, b.x1, b.y1 + y0, b.z1, cc, under);
   }
   // the parts
   if (kit) {
@@ -439,6 +457,9 @@ export function kitBatches(
         // (its glass and glows as they are; the rest a part's, pulled toward the eye)
         const k: MatKey = own === "glass" || own === "glow" ? own : `p:${own}`;
         acc(near, k).geo(pm, m, nm, toned(k, roleColour(pm.role, c)), takesUV(k));
+        // (from inside: its panes' backs too — one-sided, the glass outside showed nothing in a room's window)
+        if (seenFromIn && own === "glass")
+          acc(near, "glass-in").geo(pm, m, nm, toned(k, roleColour(pm.role, c)), false);
       }
     }
   }
@@ -453,7 +474,28 @@ export function kitBatches(
   }
   return { near, far };
 }
-function boxInto(a: Acc, x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, c: Color) {
+function boxInto(
+  a: Acc,
+  x0: number,
+  y0: number,
+  z0: number,
+  x1: number,
+  y1: number,
+  z1: number,
+  c: Color,
+  under = false,
+) {
+  if (under)
+    a.fan(
+      [
+        [x0, y0, z0],
+        [x1, y0, z0],
+        [x1, y0, z1],
+        [x0, y0, z1],
+      ],
+      [0, -1, 0],
+      c,
+    );
   a.fan(
     [
       [x0, y1, z0],
@@ -694,7 +736,7 @@ export function kitMaterial(k: MatKey, glow: (m: Material, on: number, kind: str
   const libId = libOn() ? LIB[b] : undefined;
   if (libId && lifeDress.material) m = lifeDress.material(libId);
   else if (b === "paint") m = litMaterial({ vertexColors: true, roughness: 0.75, metalness: 0 });
-  else if (b === "glass" || b === "glass-lit") {
+  else if (b === "glass" || b === "glass-lit" || b === "glass-in") {
     // (plan 111: see-through — the room behind it seen straight on, the sky in it at a glance: a mirror of the sky
     // (metal: all it gives back is what's round it), as much of it as its alpha, by the angle; drawn after what's behind it, not writing depth)
     m = litMaterial({ color: 0x9aa4ac, roughness: 0.05, metalness: 1, transparent: true, depthWrite: false });
@@ -705,7 +747,10 @@ export function kitMaterial(k: MatKey, glow: (m: Material, on: number, kind: str
 gl_FragColor = vec4(outgoingLight, mix(0.3, 0.92, kitFres * kitFres * kitFres));`,
       );
     };
-    m.customProgramCacheKey = () => "kit-glass";
+    // (its back faces for the glass seen from inside: a material of their own, not both sides in one — a
+    // transparent two-sided one's drawn twice, its program checked every draw; three flips the normal for them)
+    if (b === "glass-in") m.side = BackSide;
+    m.customProgramCacheKey = () => (b === "glass-in" ? "kit-glass-in" : "kit-glass");
     // (its own look: the Grounds' land-light patch would take its hook's place — grounds-stream patchAdded)
     m.userData.ownLook = true;
   } else if (b === "room") m = litMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 });

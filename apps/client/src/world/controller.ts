@@ -8,22 +8,24 @@ import {
   type ClientMessages,
   CONTACT,
   EMOTES,
+  elevOf,
   entry,
   face8,
   faceByte,
   floorAt,
   floorOf,
-  floorsOf,
   getMap,
   HEAR_RADIUS,
   HELD,
   type Height,
   hangStrip,
   hearingGain,
+  hqFloorsOf,
   inLift,
   isHeld,
   isPrivate,
   isSocial,
+  isSpaceLevel,
   type JumpKind,
   JumpTrack,
   jumpTimes,
@@ -33,6 +35,7 @@ import {
   type MapDef,
   objLevel,
   onLevel,
+  onStreet,
   overFloor,
   type Point,
   parseAvatar,
@@ -48,8 +51,12 @@ import {
   seatYaw,
   setAreasBeyond,
   setOutdoors,
+  setSpaceFloors,
   shiftOf,
+  spaceFloor,
+  spaceFloors,
   spHour,
+  stairsPoint,
   stationOf,
   TICK_HZ,
   type WorldObjectDef,
@@ -2157,7 +2164,8 @@ export class WorldController {
         name: p.name,
         avatar: p.avatar ?? "",
         area: area?.key ?? "",
-        areaName: area?.name ?? "",
+        // (in a town building, no room of its own: the building's name — plan 112)
+        areaName: area?.name ?? this.spaceName(local ? this.level : p.level),
         status: p.status,
         mic: p.mic,
         cam: p.cam,
@@ -2208,6 +2216,42 @@ export class WorldController {
   teleport(to: ClientMessages["teleport"]["to"]) {
     this.path = null;
     this.send("teleport", { to });
+  }
+
+  /** A town building's inside (plan 112): its storeys in the world, and how many things are in it. */
+  spaceOf(key: string): { floors: number[]; things: number } | null {
+    const floors = (this.structure?.floors ?? [])
+      .filter((f) => f.space === key && !f.away)
+      .sort((a, b) => (a.storey ?? 0) - (b.storey ?? 0))
+      .map((f) => f.index);
+    if (!floors.length) return null;
+    const on = new Set(floors);
+    let things = 0;
+    for (const o of this.objs.values()) if (on.has(objLevel(o, this.building)) && o.kind !== "stairs") things++;
+    return { floors, things };
+  }
+  /** God mode's "Go in and build" (plan 112): out of god mode, in by the building's door on its ground storey, build
+   *  mode on there. */
+  goInside(key: string) {
+    // (out of God mode first: the buildings as published, not its draft's — its door from where it stands now — plan
+    // 113 review)
+    if (hud.get().god.on) this.god?.leave();
+    const s = this.spaceOf(key);
+    const b = this.G?.BUILDINGS.find((q) => q.key === key);
+    const d = b ? this.G?.insideOf(b)?.door : null;
+    if (!s || !b || !d) return;
+    const m = (d.from + d.to) / 2;
+    const out = d.dir === "h" ? (d.at === b.z1 ? 1 : -1) : d.at === b.x1 ? 1 : -1;
+    const at = d.dir === "h" ? { x: m, y: d.at - out * 1.5 } : { x: d.at - out * 1.5, y: m };
+    // (on its ground storey's own floor, whatever its door's on: a church's is its tower's porch, past the nave's —
+    // plan 113 review)
+    const g = spaceFloor(s.floors[0])?.grid;
+    if (g) {
+      at.x = Math.min(g.x0 + g.w - 0.8, Math.max(g.x0 + 0.8, at.x));
+      at.y = Math.min(g.y0 + g.h - 0.8, Math.max(g.y0 + 0.8, at.y));
+    }
+    this.teleport({ x: at.x, y: at.y, level: s.floors[0] });
+    hud.set((h) => ({ build: { ...h.build, on: true, mode: "hand" } }));
   }
 
   admit(k: { from: string; area: string }) {
@@ -2739,9 +2783,27 @@ export class WorldController {
   goToFloor(level: number) {
     const lm = levelMap(this.building, level);
     if (!lm || level === this.level) return;
+    // (a town building's storey has no spawn of its own — the world's is far off it: up its stairs, at their
+    // landing; its ground storey, in at its door — plan 113 review)
+    const sf = spaceFloor(level);
+    if (sf) {
+      if (sf.down === null) return this.goInside(sf.space);
+      const st = [...this.objs.values()].find((o) => o.kind === "stairs" && o.props?.level === sf.down);
+      const at = st ? stairsPoint(st, 1, 1) : { x: sf.grid.x0 + sf.grid.w / 2, y: sf.grid.y0 + sf.grid.h / 2 };
+      return void this.send("teleport", { to: { x: at.x, y: at.y, level } });
+    }
     this.send("teleport", { to: { x: lm.spawn.x, y: lm.spawn.y, level } });
   }
 
+  /** Out on the street — the land, or a town building's ground storey, its door and windows on it (plan 113
+   *  review): how high the land's floor is over this floor's (the land's heights from it); null off the street. */
+  streetUp(level = this.level): number | null {
+    return onStreet(level) ? elevOf(0) - elevOf(level) : null;
+  }
+  /** A town building's name, on one of its storeys (plan 112); "" elsewhere. */
+  spaceName(level: number): string {
+    return spaceFloor(level) ? (this.floorName(level).split(" · ")[0] ?? "") : "";
+  }
   /** A floor's name: the home floor is the world's, the others their own. */
   floorName(level: number): string {
     if (level === floorOf(this.building)) return this.building.name;
@@ -2766,7 +2828,7 @@ export class WorldController {
     this.path = null;
     this.objectsDirty = true;
     this.tpDue = 0; // (the 3D view moves to that floor this frame)
-    hud.set((h) => ({ floor: level, mapVersion: h.mapVersion + 1 }));
+    hud.set((h) => ({ floor: level, mapVersion: h.mapVersion + 1, floors: this.floorsHere(level) }));
   }
 
   // The map lives in room state (per-space layout): rebuild walls/floors on change.
@@ -2774,7 +2836,22 @@ export class WorldController {
     const st = this.structure;
     if (!st || !this.model) return;
     // the tile maps the code not yet ported reads, made from the structure (plan 72 phase 6)
+    // (the town's storeys registered from the live structure: plan 113 review)
+    const was = elevOf(this.level);
+    setSpaceFloors(st.floors);
     this.building = { ...viewOf(st), objects: [] };
+    // (heights over a town storey read before its height was known — a fresh page's, the structure after the
+    // players: mine and theirs again from the world's — plan 113 review)
+    const room = this.room;
+    if (room) {
+      const me = room.state.players.get(room.sessionId);
+      if (me && elevOf(this.level) !== was && this.level === me.level)
+        this.height = { z: overFloor(me.level, me.z ?? 0), vz: 0, up: false };
+      for (const [sid, r] of this.remotes) {
+        const p = room.state.players.get(sid);
+        if (p && isSpaceLevel(p.level ?? 0)) r.buf = [sampleOf(p, performance.now())];
+      }
+    }
     // the floor I'm on (gone: the home one)
     const lm = levelMap(this.building, this.level);
     if (!lm) this.level = floorOf(this.building);
@@ -2789,7 +2866,16 @@ export class WorldController {
     );
     this.objectsDirty = true;
     this.rebuildGrid();
-    hud.set((h) => ({ mapVersion: h.mapVersion + 1, floor: this.level, floors: floorsOf(this.building) }));
+    hud.set((h) => ({ mapVersion: h.mapVersion + 1, floor: this.level, floors: this.floorsHere() }));
+  }
+  /** The floors the picker lists where I am (plan 112): a town building's storeys in one, else the HQ's. */
+  floorsHere(level = this.level): number[] {
+    const sf = spaceFloor(level);
+    if (!sf) return hqFloorsOf(this.building);
+    return spaceFloors()
+      .filter((q) => q.space === sf.space)
+      .sort((a, b) => a.storey - b.storey)
+      .map((q) => q.index);
   }
   // The building's structure (docs/plan/72-the-3d-core.md, phase 6) and its revision: whole when
   // asked for, then each edit's operations applied here as the server applied them.

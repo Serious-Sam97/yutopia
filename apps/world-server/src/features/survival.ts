@@ -1,4 +1,4 @@
-import { ANIM, chillOf, levelMap, objLevel, tempUp, type WorldObjectDef } from "@yutopia/shared";
+import { ANIM, chillOf, levelMap, objLevel, spaceFloor, tempUp, type WorldObjectDef } from "@yutopia/shared";
 import { hasPower } from "@yutopia/shared/admin";
 import { bikeSprinting, isBikeKind } from "@yutopia/shared/bike";
 import {
@@ -496,8 +496,8 @@ registerFeature((room: WorldRoom) => {
       void save(s);
       return;
     }
-    // (the rest are all on the ground floor: the Grounds')
-    if (p.level !== 0) return;
+    // (the rest are all on the ground floor: the Grounds' — or a town building's ground storey, plan 112)
+    if (p.level !== 0 && spaceFloor(p.level)?.storey !== 0) return;
     if (id === "locker") {
       if (!near(p, LOCKER.x, LOCKER.z)) return;
       // (the revolver for one who carries none; plan 87 F4a: a torch too)
