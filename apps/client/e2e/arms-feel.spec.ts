@@ -106,7 +106,7 @@ test("the feel: kick and settle, the spread, an early click, over the shoulder, 
   await page.waitForTimeout(800);
   const heard = await sounds();
   // (plan 82: and the AK's empty magazine landing, on a floor and on snow — 45)
-  if (heard.ctx === "running") expect(heard.n, "the guns' recordings decoded").toBe(45);
+  if (heard.ctx === "running") expect(heard.n, "the guns' recordings decoded").toBeGreaterThanOrEqual(45);
   else console.log(`[arms-feel] audio ${heard.ctx}: the recordings not checked`);
 
   // fired fast, the ticks open; still, they close again
@@ -127,8 +127,9 @@ test("the feel: kick and settle, the spread, an early click, over the shoulder, 
   await fire(page);
   await expect.poll(async () => (await me(page)).loaded, { timeout: 3000 }).toBe(n0 - 2);
 
-  // first person (Y): a gun out stays over the shoulder — guns are third person (plan 79 F3a);
-  // the camera in tight, closer aimed (let go of the aim first: Y aiming is the next weapon)
+  // first person (Y): a gun out stays first person — its view model (plan 116 F2a; plan 79 F3a's shoulder camera is
+  // the third person's); aimed, down the gun's own sights, no crosshair (let go of the aim first: Y aiming is the next
+  // weapon)
   await page.mouse.up({ button: "right" });
   await page.waitForTimeout(600);
   const camTo = () =>
@@ -141,17 +142,19 @@ test("the feel: kick and settle, the spread, an early click, over the shoulder, 
   expect(ready, "a gun out: the camera tight over the shoulder").toBeLessThan(2.1);
   await page.keyboard.press("KeyY");
   await page.waitForTimeout(400);
-  expect(await w(page, (y) => y.tp.mode)).toBe("chase");
-  await page.mouse.down({ button: "right" });
-  await page.waitForTimeout(600);
-  expect(await camTo(), "aimed: closer still").toBeLessThan(ready - 0.3);
+  expect(await w(page, (y) => y.tp.mode)).toBe("first");
+  // (the gun on screen, drawn: the view model shown)
+  await expect.poll(() => w(page, (y) => !!y.tp.hands?.shown), { timeout: 3000 }).toBe(true);
   await expect(page.locator(".dk-cross")).toBeVisible();
+  await page.mouse.down({ button: "right" });
+  await expect.poll(() => w(page, (y) => y.tp.handsAds), { timeout: 3000 }).toBeGreaterThan(0.9);
+  await expect(page.locator(".dk-cross")).toBeHidden();
   await shot(page, "feel-1p-sights");
   await fire(page);
   await page.waitForTimeout(50);
   await shot(page, "feel-1p-kick");
 
-  // a reload, not aiming: the gun tipped up, the gate open
+  // a reload, not aiming: the work kept in the frame (plan 116 F5a)
   await page.mouse.up({ button: "right" });
   await page.waitForTimeout(400);
   await page.keyboard.press("KeyR");

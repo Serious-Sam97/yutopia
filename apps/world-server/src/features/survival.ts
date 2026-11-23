@@ -108,6 +108,8 @@ interface Survivor {
   v: Vitals;
   c: VitalsClock;
   inv: Inventory;
+  /** (plan 114) their own pockets while a loadout's lent (`inv` the lent one) */
+  own?: Inventory;
   issued: boolean; // the locker's first revolver (loaded) given
   kitDay: number; // the day (shared dayOf) the lobby's locker last gave its kit (-1: never)
   loaded: boolean; // the saved record is in (until then nothing can be taken or used)
@@ -150,6 +152,9 @@ export interface SurvivalHooks {
   down(sid: string): boolean;
   /** what they carry, to change in place (features/arms.ts: rounds, flares); null until loaded */
   inventory(sid: string): Inventory | null;
+  /** (plan 114) a loadout lent (the Strike Park's: its own guns while in its match) — their own put aside, kept
+   *  as theirs (saved, never the lent one); null gives their own back */
+  lend?(sid: string, inv: Inventory | null): void;
   /** …changed: sent to them and saved */
   changed(sid: string): void;
   /** an admin's (docs/plan/48-the-admin.md): health, breath and battery full; up again if down */
@@ -215,9 +220,9 @@ registerFeature((room: WorldRoom) => {
 
   // ── the people ─────────────────────────────────────────────────────────────
   const recordOf = (s: Survivor): SurvivorRecord => ({
-    inventory: { hand: s.inv.hand, quick: s.inv.quick, pockets: s.inv.pockets },
+    inventory: { hand: (s.own ?? s.inv).hand, quick: (s.own ?? s.inv).quick, pockets: (s.own ?? s.inv).pockets },
     vitals: { hp: s.v.hp, wm: s.v.wm, bat: s.v.bat },
-    pages: s.inv.pages,
+    pages: (s.own ?? s.inv).pages,
     issued: s.issued,
     kitDay: s.kitDay >= 0 ? s.kitDay : null,
   });
@@ -864,6 +869,8 @@ registerFeature((room: WorldRoom) => {
       return ok;
     },
     hurt(sid, n, spare) {
+      // (plan 114: in the Strike Park's match, a hit is the match's — features/strike.ts — never a down)
+      if (room.strike?.claims(sid)) return;
       const p = room.state.players.get(sid);
       const s = p && people.get(p.uid);
       // (an admin who's unhurt: nothing — docs/plan/48-the-admin.md)
@@ -884,6 +891,25 @@ registerFeature((room: WorldRoom) => {
     inventory(sid) {
       const s = of(sid);
       return s?.loaded ? s.inv : null;
+    },
+    lend(sid, inv) {
+      const s = of(sid);
+      if (!s?.loaded) return;
+      if (inv) {
+        if (!s.own) s.own = s.inv;
+        s.inv = { ...inv, pages: s.own.pages };
+      } else if (s.own) {
+        s.inv = s.own;
+        s.own = undefined;
+      } else return;
+      const p = room.state.players.get(sid);
+      if (p) {
+        // (the gun in the hand put away: the next one's drawn from what's lent)
+        p.gun = "";
+        wear(p, s.inv);
+      }
+      const c = clientOf(sid);
+      if (c) room.send(c, "dark:pockets", { inv: s.inv, bat: Math.round(s.v.bat) });
     },
     changed(sid) {
       const s = of(sid);

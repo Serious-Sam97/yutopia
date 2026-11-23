@@ -186,7 +186,9 @@ export function nestAllowed(x: number, z: number, named = false): boolean {
   if (inBuilding(x, z, named ? 0.5 : 3)) return false;
   if (SCARECROWS.some((c) => Math.hypot(c.x - x, c.z - z) < 1.5)) return false;
   if (Math.hypot(x - TRACTOR.x, z - TRACTOR.z) < 3) return false;
-  return offPaths(x, z, named ? 2.5 : NESTS.path);
+  // (the paths' ground is painted by whole tiles — a tile's middle up to 0.71 off its edge: kept that much further, so
+  // `path` tiles round it are off the painted path too, as the ground has it)
+  return offPaths(x, z, named ? 2.5 : NESTS.path + 0.71);
 }
 
 // the deep woods' candidates (every 8 tiles: thick enough, off the paths, out of the farm and town)

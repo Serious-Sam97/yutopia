@@ -488,6 +488,31 @@ function ViewPage() {
         {p.view === "1p" && (
           <Toggle label={t("hands1p")} value={p.hands1p} onChange={(v) => setPrefs({ hands1p: v })} />
         )}
+        {/* (plan 116 F7a) first person's gun: its lens, where it sits, its bob */}
+        {p.view === "1p" && (
+          <>
+            <Slider
+              label={t("vmFov")}
+              value={p.vmFov}
+              min={54}
+              max={74}
+              step={1}
+              shown={`${p.vmFov}°`}
+              onChange={(v) => setPrefs({ vmFov: v })}
+            />
+            <p className="text-[12.5px] leading-snug mt-3 mb-1.5" style={{ color: "var(--cream-dim)" }}>
+              {t("vmPlace")}
+            </p>
+            <Choice
+              options={["classic", "close", "couch"] as const}
+              value={p.vmPlace}
+              cols={3}
+              label={(v) => t(`vmPlace_${v}`)}
+              onPick={(v) => setPrefs({ vmPlace: v })}
+            />
+            <Toggle label={t("vmBob")} value={p.vmBob} onChange={(v) => setPrefs({ vmBob: v })} />
+          </>
+        )}
         <Toggle label={t("carManual")} value={p.carManual} onChange={(v) => setPrefs({ carManual: v })} />
         <p className="text-[12.5px] leading-snug mt-3 mb-1.5" style={{ color: "var(--cream-dim)" }}>
           {t("carReflect")}

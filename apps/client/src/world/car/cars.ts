@@ -401,6 +401,8 @@ export interface CarsHost {
   walking(): boolean;
   /** (plan 93 S6) how many of a stack I carry; my body turned to face `a` (the floor's radians) */
   items(id: string): number;
+  /** (plan 115) the rounds in a gun's magazine (the Strike Park's HUD) */
+  loaded?(gun: string): number;
   face(a: number): void;
   /** (plan 93 S4) the pack opened (the inventory, I's); whether it's open */
   openPack(): void;
@@ -818,6 +820,7 @@ export function attachCars(c: any, G: typeof GroundsModule): Cars {
         };
       },
       items: (id: string) => c.walker?.dark?.countOf?.(id) ?? 0,
+      loaded: (gun: string) => c.walker?.dark?.loadedOf?.(gun) ?? 0,
       face: (a: number) => {
         // (as a seat turns me: the walker's body, my facing, the 8 ways the others see)
         c.walker?.faceYaw?.(a);
@@ -1189,6 +1192,25 @@ export class Cars {
     }
     this.karts.frame(dt);
   }
+  // ── the Strike Park (docs/plan/114-the-strike-park.md; strike/strike.ts, loaded near the park) ──
+  private strike: import("../strike/strike").Strike | null = null;
+  private strikeLoading = false;
+  private strikeFrame(dt: number) {
+    if (!this.strike) {
+      const me = this.host.me();
+      const P = { x: -270, z: -735 };
+      const room = this.host.room() as { state?: { strike?: { members?: { size: number } } } } | null;
+      const near = this.host.level() === 0 && Math.hypot(me.x - P.x, me.y - P.z) < 520;
+      if ((near || (room?.state?.strike?.members?.size ?? 0) > 0) && !this.strikeLoading) {
+        this.strikeLoading = true;
+        void import("../strike/strike").then((m) => {
+          this.strike = new m.Strike(this.host);
+        });
+      }
+      return;
+    }
+    this.strike.frame(dt);
+  }
   driving(): boolean {
     return !!this.mine && this.mine.seat === 0;
   }
@@ -1287,6 +1309,7 @@ export class Cars {
   /** A key for the car (in it): handled. */
   key(e: KeyboardEvent, down: boolean): boolean {
     if (this.karts?.inKart()) return this.karts.key(e, down);
+    if (this.strike?.key(e, down)) return true;
     if (!this.mine) return false;
     if (!down) {
       this.input.keyUp(e.code);
@@ -1297,8 +1320,13 @@ export class Cars {
     void mixer.resume();
     return used;
   }
+  /** (plan 114) A key down for the Strike Park (its match, its panels): handled. */
+  strikeKey(e: KeyboardEvent): boolean {
+    return !!this.strike?.key(e, true);
+  }
   blur() {
     this.karts?.blur();
+    this.strike?.blur();
     this.input.clear();
   }
   /** The HUD's "X" prompt by a car or in one (none while it moves): set, and true; false if there's none. */
@@ -1308,7 +1336,7 @@ export class Cars {
       if (h.get().prompt) h.set({ prompt: null });
       return true;
     }
-    const kp = this.karts?.promptNow();
+    const kp = this.karts?.promptNow() ?? this.strike?.promptNow();
     if (kp) {
       const cur = h.get().prompt;
       if (cur?.objectId !== kp.objectId || cur.label !== kp.label) h.set({ prompt: kp });
@@ -1566,6 +1594,7 @@ export class Cars {
   /** X pressed on the prompt: true if it was a car's (or a bay's, or the dealer's). */
   act(kind: string, id: string): boolean {
     if (this.karts?.act(kind)) return true;
+    if (this.strike?.act(kind)) return true;
     const room = this.host.room();
     if (kind === "motors") {
       // (the one I have now: the panel starts from its looks)
@@ -1712,7 +1741,7 @@ export class Cars {
   }
   /** The car's camera (in one, the view uses it). */
   camera(): ThirdPersonView["gameCam"] {
-    return this.karts?.camera() ?? this.camNow;
+    return this.karts?.camera() ?? this.strike?.camera() ?? this.camNow;
   }
   private camNow: ThirdPersonView["gameCam"] = null;
   /** Something that blocks walking: a live car's body, its model's size, a body round (x, y)
@@ -1817,6 +1846,7 @@ export class Cars {
     }
     this.drawHud();
     this.kartsFrame(dt);
+    this.strikeFrame(dt);
   }
 
   // ── what they leave, throw and show ────────────────────────────────────────
@@ -2893,9 +2923,7 @@ export class Cars {
   }
   /** (God mode) A parked vehicle as it's drawn: where, its heading, its box (from where it stands: behind, side,
    *  ahead, side, its height) and its kind. */
-  godVehicle(
-    id: string,
-  ): {
+  godVehicle(id: string): {
     x: number;
     z: number;
     a: number;

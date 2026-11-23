@@ -40,6 +40,7 @@ import {
 import { heightAt, LAMPS, onLongRoad } from "@yutopia/shared/grounds";
 import { byteToYaw, GAITS, MV_AIM, yawToByte } from "@yutopia/shared/move";
 import { between } from "@yutopia/shared/reach";
+import { inStrikeCompound, STRIKE_PARK } from "@yutopia/shared/strike/land";
 import { prefetch, ready, stopLand } from "../land.ts";
 import { Flare, Shadow } from "../schema.ts";
 import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
@@ -143,6 +144,8 @@ registerFeature((room: WorldRoom) => {
   const lampAt = (x: number, y: number, night: number, dark: boolean): { x: number; y: number } | null => {
     // a flare's light: day or night, blackout or not
     for (const f of room.state.flares.values()) if (inFlare(f, x, y)) return { x: f.x, y: f.y };
+    // (plan 114) the Strike Park's compound: its floodlights, day or night — the shadowed keep out of the match
+    if (inStrikeCompound(x, y)) return { x: STRIKE_PARK.x, y: STRIKE_PARK.z };
     if (dark || night < 0.3) return null;
     const b = toB(x, y);
     if (!inLampPool(b.x, b.z)) return null;

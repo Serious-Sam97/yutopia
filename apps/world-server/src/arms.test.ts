@@ -3,7 +3,7 @@ import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { ROOM_NAME, STOREY } from "@yutopia/shared";
 import { AIM_BLADE } from "@yutopia/shared/beam";
-import { ARM, ARMS, BODY, damageAt, FLARE, pvpDamage, SHADE_STATES } from "@yutopia/shared/dark";
+import { ARM, ARMS, BODY, damageAt, FLARE, pvpDamage, SHADE_STATES, SPREAD } from "@yutopia/shared/dark";
 import { heightAt } from "@yutopia/shared/grounds";
 import { count, type Inventory } from "@yutopia/shared/inventory";
 import { MV_AIM, packMv, yawToByte } from "@yutopia/shared/move";
@@ -325,6 +325,47 @@ test("the lobby: B's revolver hits A for half what one of the shadowed takes; A'
   await waitFor(() => a.struck.length === 1);
   assert.deepEqual(a.struck[0], { id: b.room.sessionId, n: 25, shot: true });
   await waitFor(() => loaded0(b) === 5);
+});
+
+test("a shot from the hip (plan 116): not aimed and not said, nothing; said, it counts — a round spent, the hit, the hip's spread", async () => {
+  const { a, b, at } = await indoors(81, 0, 13.5, 17.5, 3.5, 17.5);
+  // B lowers the gun: standing, facing A, no aim bit (first person's hip, the Strike Park's)
+  const m = me(b.room);
+  b.room.send("pos", {
+    x: m.x,
+    y: m.y,
+    z: m.z,
+    a: 0,
+    seq: 1,
+    mv: packMv("still"),
+    yaw: yawToByte(Math.atan2(at.y - m.y, at.x - m.x)),
+    pitch: 0,
+  });
+  await waitFor(() => (me(b.room).mv & MV_AIM) === 0);
+  // not said: dropped, as ever (no round, no shot)
+  shootAt(b, at.x, at.y);
+  await sleep(600);
+  assert.equal(a.shots.length, 0);
+  assert.equal(loaded0(b), 6);
+  // said: from the hip
+  const mm = me(b.room);
+  const fz = mm.z - mm.level * STOREY;
+  b.room.send("arms:fire", {
+    ox: mm.x,
+    oy: mm.y,
+    oz: fz + 1.35,
+    yaw: Math.atan2(at.y - mm.y, at.x - mm.x),
+    pitch: Math.atan2(-0.35, Math.hypot(at.x - mm.x, at.y - mm.y)),
+    lag: 0,
+    seed: 7,
+    hip: true,
+  });
+  await waitFor(() => loaded0(b) === 5);
+  await waitFor(() => a.shots.length === 1);
+  assert.ok(Math.abs(a.shots[0].spread - ARMS.revolver.spread * SPREAD.hip) < 1e-6, `${a.shots[0].spread}`);
+  await waitFor(() => b.hits.length === 1, 3000);
+  assert.equal(b.hits[0].id, a.room.sessionId);
+  await waitFor(() => me(a.room).hp === 100 - pvpDamage("revolver"));
 });
 
 test("the studio (level 4): a shot there counts too; four put one of us down, the fifth finds nobody", async () => {

@@ -75,6 +75,12 @@ export const HOME_CARS: HomeCar[] = (() => {
     { id: "town-plough", x: 484, z: -410.7, a: 0, model: "ploughtruck", colour: 8 },
     { id: "farm-tractor", x: TRACTOR.x, z: TRACTOR.z, a: TRACTOR.ry, model: "tractor", colour: 1, snowy: true },
     { id: "pond-toboggan", x: -306, z: -54, a: 0, model: "toboggan", colour: 5 },
+    // (plan 115 phase 42) the Strike Park's car park: a few nosed into its bays by the wall
+    { id: "strike-car-0", x: -251, z: -592, a: -Math.PI / 2, model: "sedan", colour: 4 },
+    { id: "strike-car-1", x: -244, z: -592, a: -Math.PI / 2, model: "pickup", colour: 7 },
+    { id: "strike-car-2", x: -233, z: -592, a: -Math.PI / 2, model: "sedan", colour: 1, wagon: true },
+    { id: "strike-car-3", x: -226, z: -592, a: -Math.PI / 2, model: "offroad", colour: 0 },
+    { id: "strike-car-4", x: -247.5, z: -585, a: Math.PI / 2, model: "sedan", colour: 6 },
   );
   // (plan 101) the town's bikes, each in its rack
   for (const r of RACKS)

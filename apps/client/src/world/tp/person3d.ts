@@ -47,6 +47,7 @@ import {
   RACK_HAND,
   RACK_REACH,
 } from "./ak-hold";
+import { charmFor } from "./charm3d";
 import {
   DB_CARRY,
   DB_CELL,
@@ -1834,9 +1835,11 @@ export class Person3D {
   // the gun in the right hand (docs/plan/32-the-arms.md): its model (tp/guns3d.ts) turned into the
   // wrist's frame — the barrel along the hand's way out of the fist (−y), its top to the back of
   // the hand (+z) — the grip in the fist
-  private gun: { key: string; root: Group; model: GunModel; inHand: boolean } | null = null;
+  private gun: { key: string; root: Group; model: GunModel; inHand: boolean; charm?: string } | null = null;
   private gunFrame(p: PersonIn, hand: Object3D | null) {
     const key = p.gun ?? "";
+    // (plan 115 phase 55) a charm on it, from the Strike Park's corner
+    const charm = key && key !== "cue" && p.charm && p.charm !== "none" ? p.charm : "";
     const kind = gunKind(key);
     const cue = key === "cue";
     // (the life look's model once the view has it — plan 79; the drawn one till then, swapped when it comes)
@@ -1852,7 +1855,13 @@ export class Person3D {
       if (this.holsterT < (LONG[this.gun.key]?.sling?.away ?? HOLSTER_S)) return;
     }
     this.holsterT = -1;
-    if ((this.gun?.key ?? "") === key && !!this.gun?.model.life === !!tpl && !!this.gun?.inHand === !!frame) return;
+    if (
+      (this.gun?.key ?? "") === key &&
+      !!this.gun?.model.life === !!tpl &&
+      !!this.gun?.inHand === !!frame &&
+      (this.gun?.charm ?? "") === charm
+    )
+      return;
     // (a gun taken out — not one swapped for its life look's model: its draw's rise starts)
     if (key && !this.gun) this.drawT = 0;
     this.dropGun();
@@ -1879,11 +1888,12 @@ export class Person3D {
       inner.position.z += 0.01;
     }
     root.add(inner);
+    if (charm) inner.add(charmFor(charm, model));
     root.position.set(0, frame ? 0 : -0.05, 0);
     // (the drawn ones a little larger than life, as the old people's hands were; the life look's life size)
     root.scale.setScalar(model.life ? LIFE_GUN_SCALE : kind !== "revolver" || cue ? 1.2 : 1.4);
     hand.add(root);
-    this.gun = { key, root, model, inHand: !!frame };
+    this.gun = { key, root, model, inHand: !!frame, charm };
   }
 
   /** What the gun's doing (docs/plan/32-the-arms.md), mine as Arms says (`gunFx`): the hammer,
@@ -3853,6 +3863,15 @@ export class Person3D {
     g.root.updateWorldMatrix(true, false);
     out.set(...g.muzzle).applyMatrix4(g.root.matrixWorld);
     return true;
+  }
+
+  /** (plan 116) the gun in the hand, its model (its sights, grip, muzzle in its own frame) — the view model's */
+  heldGun(): GunModel | null {
+    return this.gun?.model ?? null;
+  }
+  /** (plan 116) a bone of the model, for the view model to frame by (the wrists, the elbows) */
+  boneOf(j: "elbowL" | "elbowR" | "wristL" | "wristR" | "fingersL" | "fingersR"): Object3D | null {
+    return this.model.bone(j);
   }
 
   /** The gun's sights in the world (the rear notch or the rib's end, the front blade or bead); false:

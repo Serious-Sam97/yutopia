@@ -58,15 +58,20 @@ import { groundSolidsIn } from "./shapes/grounds.ts";
 // over a deck, the decks' slabs a sample on onto the road: no slot across the river bridge's ends, no rim through
 // the footbridge; the trees, the walking and the surfaces there with them; then plan 109: the river bridge's two
 // piers on the ice solid, as they're drawn — cars drove through them)
+// (2026-11-21, plan 114: the Strike Park — its ground west of the Kart Park, levelled and cleared, the ridges
+// round its reach, the road in from the county road's bend, its walls and lobby as solids, the map standing in its
+// arena; grounds-town.test checks nothing changed outside that)
+// (2026-11-22, plan 115: its billboard on the county road, its verge cleared; the lobby's six buildings — the canteen,
+// the bar, the armory, the briefing hall, the trophy hall, the war room; then the gatehouse by its gate)
 const TODAY = {
-  land: "e1d69c7a",
+  land: "6db27e9f",
   // (2026-11-01: the road closed's barricades and drift shut, as their solids)
   // (2026-11-20, plan 111: every building walked into — its inside walkable, through its door)
-  walk: "f00b093c",
+  walk: "8ff73819",
   // (2026-11-21, plan 113 review: a tree by a building grown no bigger than its crown keeps outside the wall — a
   // pine's boughs were through the church's nave; their trunks with them, in the solids)
-  trees: "6c45b1f6",
-  surfaces: "9d295adf",
+  trees: "2212820d",
+  surfaces: "1ec07d7c",
   // (2026-11-01: the false fronts flush with their faces, the road closed's barricades and drift
   // solid, the wooden poles their own what, the pitched roofs in steps under their slopes, the flat
   // roofs' snow, the streets' pavements and kerbs — the town's audit; then its details: the shops'
@@ -80,8 +85,9 @@ const TODAY = {
   // building-styles.ts — its solids its layout's: the town re-dressed, its walking as it was)
   // (2026-11-20, plan 111: every building walked into — walls round it, its floor a slab at its sill, its door open;
   // a door's steps on down to the land where it falls away; the meetinghouse's tower a porch through to its nave)
-  solids: "8596b432",
-  things: "0ba6b41d",
+  solids: "a0d90c16",
+  // (2026-11-22, plan 116's check: the Strike Park's yard a walk from its gate — a way, its ground the yard's own)
+  things: "9bc555bd",
 };
 
 // the farm's open field south of the farmhouse: chunk (13, −8)

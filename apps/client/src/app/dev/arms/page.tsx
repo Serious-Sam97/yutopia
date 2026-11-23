@@ -17,7 +17,7 @@ import { useEffect, useRef, useState } from "react";
 // Keys: 1–7 the views (side, left, front, back, shoulder, hands, hands-left) · A aim · T the torch
 // window.__revolver = { ready, check(), set({...}) } for the checks (e2e/revolver-bench.mts).
 
-const VIEWS = ["side", "left", "front", "back", "shoulder", "hands", "hands-left", "over"] as const;
+const VIEWS = ["side", "left", "front", "back", "shoulder", "hands", "hands-left", "over", "eye"] as const;
 type View = (typeof VIEWS)[number];
 type Pose = "ready" | "aim" | "reload";
 interface State {
@@ -119,6 +119,8 @@ function Bench({ q }: { q: URLSearchParams }) {
         daybreak: DB_LONG,
       };
       const { lineAt, longInHand } = await import("@/world/tp/long-hold");
+      // (plan 116: the first-person view model — "eye": her own arms and gun from her eyes, as the game draws them)
+      const { Hands1P } = await import("@/world/tp/hands1p");
       const C = await loadChars();
       // (which gun: the revolver, plan 80's; the double-barrel, plan 81's…)
       const GUN = q.get("gun") ?? "revolver";
@@ -137,7 +139,8 @@ function Bench({ q }: { q: URLSearchParams }) {
       const pm = new T.PMREMGenerator(renderer);
       const env = pm.fromScene(new RoomEnvironment(), 0.04).texture;
       setLifeEnv(env, 0.6);
-      scene.add(new T.HemisphereLight("#dfe8f5", "#8a7563", 1.3));
+      const hemi = new T.HemisphereLight("#dfe8f5", "#8a7563", 1.3);
+      scene.add(hemi);
       const sun = new T.DirectionalLight("#fff4e6", 2.2);
       sun.position.set(-2, 5, 3);
       sun.castShadow = true;
@@ -240,6 +243,8 @@ function Bench({ q }: { q: URLSearchParams }) {
         "hands-left": [0.9, 0.25, 0.75, 0],
         // (close behind her right shoulder, as the aimed game camera has her: her forearms)
         over: [Math.PI + 0.35, 0.12, 0.85, 1.35],
+        // (plan 116: from her eyes — the eye camera's, not this one)
+        eye: [Math.PI, 0.1, 2.6, 1.15],
       };
       const gunAt = new T.Vector3();
       let lastView: View | null = null;
@@ -367,7 +372,9 @@ function Bench({ q }: { q: URLSearchParams }) {
         const akLen = s.dry ? 2.8 : 2.2;
         // (plan 84: the Daybreak's 2.0 s — its closing ARM.shut at 1.6)
         const len = GUN === "ak47" ? akLen : GUN === "daybreak" ? 2.0 : 2.3;
-        const t = s.play > 0 ? Math.min(1, (performance.now() - s.play) / 1000 / len) : s.t;
+        // (window.__benchT: a script's scrub — plan 116's checks)
+        const bt = (window as unknown as { __benchT?: number }).__benchT;
+        const t = s.play > 0 ? Math.min(1, (performance.now() - s.play) / 1000 / len) : (bt ?? s.t);
         const reload = s.pose === "reload";
         const sgT = t * 2.3;
         const akT = t * akLen;
@@ -416,6 +423,8 @@ function Bench({ q }: { q: URLSearchParams }) {
         (person as unknown as { gunFx: typeof fx | null }).gunFx = fx;
       };
 
+      let hands: InstanceType<typeof Hands1P> | null = null;
+      const eyeCam = new T.PerspectiveCamera(74, W / H, 0.05, 200);
       let raf = 0;
       let last = performance.now();
       let n = 0;
@@ -427,7 +436,53 @@ function Bench({ q }: { q: URLSearchParams }) {
         apply(dt);
         person.update(p as never, dt, seen);
         place();
-        renderer.render(scene, cam);
+        if (live.current.view === "eye") {
+          // her eyes: the model's, looking the way she faces (her aim's pitch), the game's lens
+          hands ??= new Hands1P(C, new C.CharFactory(), mats as never, { ...(p as object), angle: p.angle } as never);
+          person.root.updateWorldMatrix(true, true);
+          (
+            person as unknown as {
+              model: { eyePosition(v: InstanceType<typeof T.Vector3>): InstanceType<typeof T.Vector3> };
+            }
+          ).model
+            .eyePosition(eyeCam.position)
+            .applyMatrix4(person.root.matrixWorld);
+          const pitch = p.pitch ?? 0;
+          eyeCam.lookAt(
+            eyeCam.position.x + Math.cos(p.angle) * Math.cos(pitch),
+            eyeCam.position.y + Math.sin(pitch),
+            eyeCam.position.z + Math.sin(p.angle) * Math.cos(pitch),
+          );
+          eyeCam.updateMatrixWorld();
+          hands.gunFx = fx as never;
+          hands.reloadU =
+            live.current.pose === "reload"
+              ? ((window as unknown as { __benchT?: number }).__benchT ?? live.current.t)
+              : null;
+          // (the arms' own clocks set where the body's are: the reload scrubbed in first person too)
+          {
+            const HP = (hands as unknown as { person: typeof P3 }).person;
+            for (const k of ["revLoadT", "sgLoadT", "akLoadT", "dbLoadT", "snLoadT", "snCloseAt", "boltT"] as const)
+              HP[k] = P3[k];
+          }
+          hands.lightAs(scene, hemi, sun, true);
+          hands.update(p as never, person.motionOut, dt, eyeCam, -pitch, false, false);
+          eyeCam.fov = 74 * (1 - hands.zoom);
+          eyeCam.rotateX(hands.beat.pitch);
+          eyeCam.rotateZ(hands.beat.roll);
+          eyeCam.updateProjectionMatrix();
+          person.root.visible = false;
+          renderer.autoClear = true;
+          renderer.render(scene, eyeCam);
+          renderer.autoClear = false;
+          renderer.clearDepth();
+          renderer.render(hands.scene, hands.camera);
+          renderer.autoClear = true;
+          (window as unknown as { __fp?: unknown }).__fp = { hands, eyeCam, person, p };
+        } else {
+          person.root.visible = true;
+          renderer.render(scene, cam);
+        }
         if (++n % 10 === 0) {
           const c = person.revolverCheck(p as never);
           setCheck(

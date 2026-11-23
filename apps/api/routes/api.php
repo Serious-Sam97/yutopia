@@ -148,6 +148,8 @@ Route::middleware('internal')->prefix('internal')->group(function () {
     Route::put('/world/playlists', [InternalController::class, 'playlists']);
     // the Kart Park's record (docs/plan/46-the-karts.md): best lap, the last races, wins
     Route::put('/world/karts', [InternalController::class, 'karts']);
+    // the Strike Park's ranks and stats by account (docs/plan/115-the-strike-park-again.md, phase 96)
+    Route::put('/world/strike', [InternalController::class, 'strike']);
     // the world's sound an admin set (docs/plan/63-the-steps.md): the steps' volume, who, when
     Route::put('/world/sound', [InternalController::class, 'sound']);
     // the weather as last saved (docs/plan/65-the-weather.md): the ground, when, an admin's call

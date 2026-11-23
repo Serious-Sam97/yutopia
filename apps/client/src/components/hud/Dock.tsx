@@ -24,6 +24,8 @@ export function Dock() {
   const phone = useHud((s) => s.phone);
   const canBuild = useHud((s) => s.canBuild);
   const [menu, setMenu] = useState<"emotes" | "status" | "more" | null>(null);
+  // (plan 115: in the Strike Park's match its own HUD has the screen — the dock out of the way; Esc's menu has the way out)
+  const inMatch = useHud((s) => !!s.strike?.me);
   const toggleSide = (tab: SideTab) => hud.set((s) => ({ side: s.side === tab ? null : tab }));
   const ready = media.ready || media.offline;
 
@@ -43,6 +45,7 @@ export function Dock() {
     };
   }, [menu]);
 
+  if (inMatch) return null;
   return (
     <nav
       aria-label={t("controls")}

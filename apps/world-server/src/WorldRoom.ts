@@ -143,6 +143,7 @@ import { config } from "./config.ts";
 import type { DarkHooks } from "./features/dark.ts";
 import { type Feature, featureNames, installFeatures } from "./features/index.ts";
 import type { PballHooks } from "./features/pballs.ts";
+import type { StrikeHooks } from "./features/strike.ts";
 import type { SurvivalHooks } from "./features/survival.ts";
 import type { VortexHooks } from "./features/vortex.ts";
 import { landEdits } from "./land.ts";
@@ -273,9 +274,11 @@ export class WorldRoom extends Room<WorldState> {
   // (plan 88 phase 4) Vortex's memory as last saved: his scars, the grudge
   savedVortex: unknown = null;
   savedKarts: unknown = null; // the Kart Park's record (features/karts.ts)
+  savedStrike: unknown = null; // the Strike Park's cards, by account (features/strike.ts)
   survival: SurvivalHooks | null = null;
   dark: DarkHooks | null = null; // features/dark.ts: shots and flares (features/arms.ts)
   vortex: VortexHooks | null = null; // (plan 88) features/vortex.ts: the fight — shots at him (features/arms.ts)
+  strike: StrikeHooks | null = null; // (plan 114) features/strike.ts: the match — its players' hits (features/arms.ts)
   /** (plan 97) features/cars.ts: the size of each of its maps, for the memory checker */
   carMaps: (() => Record<string, number>) | null = null;
   /** (plan 93 S1) features/cars.ts: the nearest car along a shot's ray on the ground floor — what it struck,
@@ -494,6 +497,7 @@ export class WorldRoom extends Room<WorldState> {
     this.savedLoot = info?.loot ?? null;
     this.savedVortex = info?.vortex ?? null;
     this.savedKarts = info?.karts ?? null;
+    this.savedStrike = info?.strike ?? null;
     // the steps' volume an admin set (kept in the world's settings)
     const sv = Number(info?.sound?.steps);
     if (Number.isFinite(sv)) {

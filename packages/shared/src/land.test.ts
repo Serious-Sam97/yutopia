@@ -15,6 +15,7 @@ import {
   reachRects,
   setLand,
 } from "./land.ts";
+import { STRIKE_GROUND } from "./strike/land.ts";
 
 // docs/plan/69-the-long-road.md, phase 1: the land as data — with today's regions, everything the
 // hand-written box and rectangle gave is what they give (the chunks' hashes: grounds-edits.test).
@@ -25,7 +26,13 @@ function oldBeyond(x: number, z: number): number {
   const o = Math.max(-400 - x, z - 172, -580 - z, x - 528, 0);
   if (o === 0) return o;
   const F = KART_GROUND;
-  return Math.min(o, Math.max(F.x0 - x, x - F.x1, F.z0 - z, z - F.z1, 0));
+  // (2026-11-21, plan 114: and the Strike Park's ground — inside the box drawn already)
+  const S = STRIKE_GROUND;
+  return Math.min(
+    o,
+    Math.max(F.x0 - x, x - F.x1, F.z0 - z, z - F.z1, 0),
+    Math.max(S.x0 - x, x - S.x1, S.z0 - z, z - S.z1, 0),
+  );
 }
 function oldWorldRects() {
   const m = (r: { x0: number; z0: number; x1: number; z1: number }) => ({
@@ -34,7 +41,7 @@ function oldWorldRects() {
     x1: Math.min(OLD.x1 - 2, r.x1 + 24),
     z1: Math.min(OLD.z1 - 2, r.z1 + 24),
   });
-  return [m({ x0: -400, z0: -580, x1: 528, z1: 172 }), m(KART_GROUND)];
+  return [m({ x0: -400, z0: -580, x1: 528, z1: 172 }), m(KART_GROUND), m(STRIKE_GROUND)];
 }
 
 test("today's land: its box is what GROUNDS was", () => {

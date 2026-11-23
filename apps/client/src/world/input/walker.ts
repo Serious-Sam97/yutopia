@@ -29,6 +29,7 @@ import { FULL_VITALS, freshClock, spendRoll, stepVitals } from "@yutopia/shared/
 import type { WorldController } from "../controller";
 import type { SkateRide } from "../skate/ride";
 import { hud } from "../store";
+import { strikeKeys } from "../strike/flag";
 import { type Action, actionOf } from "./bindings";
 import { afterFirstStep, camKeys, HeldOver, MoveControls, type Press } from "./controls";
 import { PadState } from "./pad";
@@ -128,6 +129,30 @@ const FAST_SPEC: MoveSpec = {
   crouch: KH_FEEL.crouch * FAST_X,
   aim: KH_FEEL.aim * FAST_X,
 };
+// (plan 114, S-M1) in the Strike Park's match: CS's ground — the run by the gun in the hand, the walk and the
+// crouch its shares (CS's 52 % and 34 %), no double jump or air dash, no parkour; (plan 116 feedback, the user's
+// pick 2026-11-22) Shift sprints, 1.4× the run — it had been held to the run, only its animation changed
+const strikeSpecs = new Map<number, MoveSpec>();
+const STRIKE_SPRINT = 1.4;
+function strikeSpec(run: number): MoveSpec {
+  const had = strikeSpecs.get(run);
+  if (had) return had;
+  const s: MoveSpec = {
+    ...KH_FEEL,
+    walk: run * 0.52,
+    jog: run,
+    sprint: run * STRIKE_SPRINT,
+    crouch: run * 0.34,
+    aim: run * 0.52,
+    airJumps: 0,
+    airDash: undefined,
+    flow: undefined,
+    turn: 40,
+    grip: 3,
+  };
+  strikeSpecs.set(run, s);
+  return s;
+}
 /** Till Jolt's world is in (a second after the 3D view): nowhere to go — the body holds where it is,
  *  on the floor's height. */
 function holdStill(place: Place): Place {
@@ -519,6 +544,7 @@ export class Walker {
     this.steppedAt = performance.now();
     this.onFoot = c.usePad;
     const crouched = this.controls.crouched;
+    strikeKeys.crouched = crouched;
     const { move, presses } = this.controls.read(c.camYaw, c.camYaw, c.usePad);
     // the inventory open: standing still, no aim (the world doesn't stop), its own pad
     // (knocked down by a pool ball: where they fell till they're up — shared/pool-throw.ts KNOCK)
@@ -540,6 +566,15 @@ export class Walker {
       for (const p of [...presses]) if (p !== "inventory") presses.delete(p);
     }
     if (!frozen) this.dark?.steer(move);
+    // (plan 115 phase 85) planting or defusing in the Strike Park: down on a knee, still (CS's: a move stops it)
+    if (strikeKeys.holding) {
+      move.crouch = true;
+      move.x = 0;
+      move.y = 0;
+      move.sprint = false;
+      move.jump = false;
+      move.jumpPressed = false;
+    }
     const manual = Math.hypot(move.x, move.y) > 0.05;
     const path = manual || frozen ? null : c.path;
     move.faceLook = c.faceLook;
@@ -621,7 +656,16 @@ export class Walker {
       if (path?.length) follow(this.body, path, move);
       const ev = flying
         ? stepFly(this.body, move, env, STEP_DT, this.sinking, fast)
-        : stepBody(this.body, move, env, fast ? FAST_SPEC : SPEC);
+        : stepBody(
+            this.body,
+            move,
+            env,
+            fast
+              ? FAST_SPEC
+              : strikeKeys.speed
+                ? strikeSpec(Math.round(strikeKeys.speed * (strikeKeys.carrying ? 0.6 : 1) * 100) / 100)
+                : SPEC,
+          );
       events.push(ev);
       const out = c.grid.onLand(this.body.x, this.body.y);
       if (ev.verb === "roll") spendRoll(this.vitals, this.breath, out);

@@ -503,6 +503,93 @@ export class Vehicle extends Schema {
   @type("int8") via = -1;
 }
 
+// The Strike Park (docs/plan/114-the-strike-park.md, features/strike.ts): who's in the match, the match's
+// clock and score, the charge, the hostages, the map standing and its swap's show. Nothing on Player
+// (its 64 fields: plan 88's limit) — the people's places are their Player's; the Vortex bots' are here.
+export class StrikeMember extends Schema {
+  @type("string") name = "";
+  @type("uint8") squad = 0; // 0 started as the Raiders, 1 as the Wardens (the side follows the half)
+  @type("string") team = "r"; // r · w: their side now
+  @type("boolean") bot = false;
+  @type("boolean") alive = true;
+  @type("uint8") hp = 100;
+  @type("uint8") armor = 0;
+  @type("boolean") helmet = false;
+  @type("boolean") kit = false;
+  @type("uint16") money = 800;
+  @type("string") primary = "";
+  @type("string") pistol = "revolver";
+  @type("string") nades = ""; // comma-separated
+  @type("boolean") bomb = false;
+  @type("int8") carry = -1;
+  @type("int16") kills = 0;
+  @type("uint16") deaths = 0;
+  @type("uint16") assists = 0;
+  @type("uint8") mvps = 0;
+  @type("uint16") score = 0;
+  @type("uint8") level = 0;
+  // a bot's place (local metres in the arena) and facing; its gun out
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") z = 0;
+  @type("float32") yaw = 0;
+  @type("float32") pitch = 0;
+  @type("string") gun = "";
+  @type("boolean") crouch = false;
+  @type("float64") shotAt = 0;
+  @type("string") look = ""; // (plan 115 phase 55) their kit from the corner: strike/kit.ts
+}
+export class StrikeHostage extends Schema {
+  @type("float32") x = 0;
+  @type("float32") z = 0;
+  @type("string") by = "";
+  @type("boolean") rescued = false;
+  @type("boolean") dead = false;
+}
+export class StrikeNade extends Schema {
+  @type("string") kind = ""; // shared strike/nades.ts NadeKind
+  @type("string") state = "fly"; // fly · smoke · fire · decoy
+  @type("float32") x = 0; // local metres in the arena
+  @type("float32") y = 0;
+  @type("float32") z = 0;
+  @type("float32") left = 0; // s left of its smoke, fire, decoy
+}
+export class StrikeArena extends Schema {
+  @type("string") map = "sawmill"; // shared STRIKE_MAPS' key standing (or going up)
+  @type("boolean") up = true; // standing (false: the crew's striking it, the arena bare)
+  @type("float64") showTo = 0; // the swap's show ends (server ms; 0 none)
+  @type("string") next = ""; // the map going up after the show
+  @type("string") mode = "competitive"; // shared MODES
+  @type("string") phase = "idle"; // idle (no match) · warmup · freeze · live · planted · after · half · over
+  @type("float32") left = 0; // seconds left in the phase
+  @type("uint8") round = 0;
+  @type("uint8") scoreA = 0; // squad 0's rounds
+  @type("uint8") scoreB = 0;
+  @type("boolean") swapped = false;
+  @type("uint8") overtime = 0;
+  @type("boolean") fill = true; // Vortex bots fill the teams
+  @type("string") level = "normal"; // their level: easy · normal · hard · expert
+  // the charge
+  @type("string") charge = ""; // "" none · carried · dropped · planting · planted · defused · exploded
+  @type("float32") cx = 0;
+  @type("float32") cz = 0;
+  @type("string") site = "";
+  @type("float32") fuse = 0;
+  @type("string") defuser = "";
+  @type("float32") defuseLeft = 0;
+  @type({ array: StrikeHostage }) hostages = new ArraySchema<StrikeHostage>();
+  @type({ map: StrikeMember }) members = new MapSchema<StrikeMember>(); // sid (or "bot:n") → them
+  @type({ map: StrikeNade }) nades = new MapSchema<StrikeNade>(); // grenades thrown (id → it)
+  @type("string") last = ""; // the last round: "r:elim" …
+  // (plan 115 phases 11, 13, 14) the map vote after a match: its three maps, when it closes, who voted what (JSON);
+  // the warmup's ready (comma-separated sessions)
+  @type("string") vote = "";
+  @type("float64") voteTo = 0;
+  @type("string") votes = "";
+  @type("string") ready = "";
+  @type("string") record = ""; // the park's record (JSON: the last matches, most kills, MVPs)
+}
+
 // The Kart Park (docs/plan/46-the-karts.md, features/karts.ts): its karts (a slot "0".."7" → who's in
 // it, where it is as its driver last said, its race), what's flying, the crates.
 export class KartSlot extends Schema {
@@ -676,4 +763,5 @@ export class WorldState extends Schema {
   @type("string") playlists = "[]"; // YouTube playlists played here (shared/media.ts SavedPlaylist[], JSON)
   @type({ map: "float64" }) ploughed = new MapSchema<number>(); // plough cell → when a blade last cleared it (shared car/world.ts)
   @type({ map: KartPark }) karts = new MapSchema<KartPark>(); // "park" → the Kart Park (features/karts.ts)
+  @type(StrikeArena) strike = new StrikeArena(); // the Strike Park (features/strike.ts)
 }

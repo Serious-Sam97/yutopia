@@ -26,6 +26,8 @@ import "./long-road.ts";
 import "./cars.ts";
 import "./spot.ts";
 import "./karts.ts";
+import "./strike.ts";
+import "./strike-life.ts";
 import "./park-life.ts";
 import "./survival.ts";
 import "./dark.ts";

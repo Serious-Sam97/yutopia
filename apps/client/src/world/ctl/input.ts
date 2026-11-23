@@ -75,6 +75,11 @@ export class Input {
     }
     // Tab tapped, the same (Shift+Tab: back), on its release; held, the dark's look at the pockets
     // (build mode's Tab is its own)
+    // (plan 114) the Strike Park's match: Tab held is its scoreboard (before the focus's own Tab)
+    if (e.code === "Tab" && !hud.get().build.on && this.c.cars?.strikeKey(e)) {
+      e.preventDefault();
+      return;
+    }
     if (e.code === "Tab" && !hud.get().build.on && !hud.get().panel.kind && !this.c.god?.on) {
       e.preventDefault();
       if (!e.repeat) this.tabDown = { at: e.timeStamp, back: e.shiftKey };
@@ -106,6 +111,11 @@ export class Input {
     }
     // in a car: its controls (docs/plan/28-the-car.md, car/controls.ts)
     if (this.c.cars?.inCar() && !e.metaKey && !e.ctrlKey && this.c.cars.key(e, true)) {
+      e.preventDefault();
+      return;
+    }
+    // (plan 114) in the Strike Park's match: B buys, Tab the scoreboard, E held plants/defuses, G drops the charge
+    if (!e.metaKey && !e.ctrlKey && !hud.get().build.on && this.c.cars?.strikeKey(e)) {
       e.preventDefault();
       return;
     }

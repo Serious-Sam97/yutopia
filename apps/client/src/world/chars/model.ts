@@ -766,7 +766,7 @@ export class PersonModel {
     const restKey = JSON.stringify(baked.rest);
     if (restKey !== this.restKey) this.makeSkeleton(baked.rest, restKey);
     const sk = this.skeleton as Skeleton;
-    const g = this.part === "arms" ? armsOf(baked) : baked;
+    const g = this.part === "arms" ? armsOf(baked, this.armsUpper) : baked;
     if (!this.bodyMesh) {
       this.bodyMesh = new SkinnedMesh(g.body, this.mats.body);
       this.inkMesh = new SkinnedMesh(g.ink, this.mats.ink);
@@ -1470,6 +1470,45 @@ export class PersonModel {
     kn[`${j}2${S}`]?.quaternion.setFromAxisAngle(H[`${j}2${S}`], a.pip * DEG - rest.pip);
     kn[`${j}3${S}`]?.quaternion.setFromAxisAngle(H[`${j}3${S}`], a.dip * DEG);
   }
+  /** (plan 116) first person's arms: the whole arms drawn (a reload's: the hands go down to the belt — the arms seen
+   *  as from one's own eyes), or the forearms alone (the hip, aimed: a view model's). Cheap to call every frame. */
+  private armsUpper = false;
+  setArmsUpper(on: boolean) {
+    if (this.part !== "arms") return;
+    if (this.life) {
+      this.life.setArmsUpper(on);
+      return;
+    }
+    if (on === this.armsUpper) return;
+    this.armsUpper = on;
+    if (!this.shown || !this.bodyMesh || !this.inkMesh) return;
+    const g = armsOf(this.shown.baked, on);
+    this.bodyMesh.geometry = g.body;
+    (this.inkMesh as SkinnedMesh).geometry = g.ink;
+  }
+
+  /** (plan 116) A life finger bent `rad` more about its own hinges after the hold's posed it (− opens it): first
+   *  person's fingers closed onto the gun's real surface (tp/viewmodel.ts VM[gun].fingers, solved on the bench). The
+   *  bend's shared down the finger: the knuckle most, the tip least; the thumb's two joints. */
+  bendFinger(S: "L" | "R", j: "thumb" | "index" | "fingers" | "ring" | "little", rad: number) {
+    const life = this.life;
+    const kn = this.knuckles;
+    if (!life || !kn || !rad) return;
+    const H = life.hinge;
+    const turn = (b: Bone | undefined, axis: Vector3 | undefined, a: number) => {
+      if (b && axis) b.quaternion.multiply(_q.setFromAxisAngle(axis, a));
+    };
+    if (j === "thumb") {
+      turn(kn[`thumb2${S}`], H[`thumb2${S}`], rad * 0.55);
+      turn(kn[`thumb3${S}`], H[`thumb3${S}`], rad * 0.45);
+      return;
+    }
+    const base = j === "fingers" || j === "index" ? this.bones[`${j}${S}` as JointName] : kn[`${j}${S}`];
+    turn(base, H[`${j}${S}`], rad * 0.4);
+    turn(kn[`${j}2${S}`], H[`${j}2${S}`], rad * 0.35);
+    turn(kn[`${j}3${S}`], H[`${j}3${S}`], rad * 0.25);
+  }
+
   /** (…and its tip, the world's: 2.2 cm on from its last joint) */
   private fingerTip(S: "L" | "R", j: string, out: Vector3): Vector3 {
     const kn = this.knuckles;

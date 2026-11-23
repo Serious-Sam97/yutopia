@@ -48,7 +48,7 @@ import {
 } from "@yutopia/shared";
 import { BEAM, type Beam, beamOf } from "@yutopia/shared/beam";
 import { type StreetThing, terrainAt } from "@yutopia/shared/grounds";
-import { ALOFT, KH_MOVE, MV_AIM } from "@yutopia/shared/move";
+import { ALOFT, KH_MOVE, MV_AIM, MV_CROUCH } from "@yutopia/shared/move";
 import { cellOf, layoutSig as floorLayoutSig, isFreeOpening, onOf } from "@yutopia/shared/structure";
 import { localThing, localView } from "@yutopia/shared/structure/fold";
 import {
@@ -128,6 +128,9 @@ import { FollowCam } from "./follow-cam";
 import { type GameScene3, GamesIn3D, HAND_SIT, HAND_STAND } from "./games3d";
 import { CASTER_LAYER } from "./grounds-stream";
 import { Hands1P, handsDoing } from "./hands1p";
+
+const tmpWallDir = new Vector3();
+
 import { setKitRenderer } from "./kit-mats";
 import { lazyMatrices } from "./lazy-matrices";
 import { type LiftStop3, Lifts3, liftMats } from "./lift3d";
@@ -318,6 +321,8 @@ const EYE = 1.15; // tiles: what the camera looks at, above your feet
 const SWIM_LIFT = 0.3; // …afloat, this much more: my head, just out of the water (feet 1.25 under)
 // first person: where your eyes are (the name tag sits at 2.0 / 1.45)
 const EYE_1P = 1.7;
+/** crouched, the eyes this much lower (CS's duck: 64 → 46 units, ~0.46 m; the body here 1.8 → 1.25) */
+const CROUCH_DROP = 0.5;
 const EYE_1P_SEATED = 1.2;
 const VEIL_MS = 150;
 // the over-the-shoulder camera (docs/plan/79-the-guns.md F1a, the mocks signed off 2026-11-11): a gun out
@@ -683,7 +688,24 @@ export class ThirdPersonView {
   aim = false;
   /** a gun in my hand (the right button aims, not a thing's menu; the left fires, not picks) */
   armed = false;
+  /** (plan 116) my first-person hands' update, ms a frame (eased) */
+  handsMs = 0;
+  /** (plan 116 F7a) the settings for first person's gun */
+  vmPrefs: { fov: number; place: "classic" | "close" | "couch"; bob: boolean } = {
+    fov: 62,
+    place: "classic",
+    bob: true,
+  };
+  /** (plan 116) how far my first-person view model is down its sights (0..1) */
+  get handsAds(): number {
+    return this.hands?.shown ? this.hands.ads : 0;
+  }
   shoulder = 1;
+  /** (plan 114) over the shoulder with no side offset: the Strike Park's match (no peeking round corners) */
+  centred = false;
+  /** The Strike Park's floodlights after dark, 0 … 1 (its surfaces glow by it): the people inside its wall lit
+   *  by them too, not left black against a lit floor (parts/eyes.ts). */
+  parkFlood = 0;
   /** how long coming up to aim takes with the gun in my hand (s; shared ARMS' `aim`): the camera's ease */
   aimSecs = 0.2;
   /** Where an aim pulls the look to as it comes up (pitch, down > 0): ahead on the ground — the sniper's
@@ -2735,12 +2757,15 @@ void main() {
       if (first) {
         // in your head: exactly where you are, every frame (an eased position
         // floats); only the eyes' height eases, sitting down and getting up
-        const eye = me.a === 2 ? EYE_1P_SEATED : EYE_1P;
-        this.eyeY = this.targetReady ? this.eyeY + (eye - this.eyeY) * (1 - Math.exp(-dt * 8)) : eye;
+        // (crouched, C: the eyes down with the body — CS's duck, ~0.5 m; eased a little quicker than sitting)
+        const ducked = me.a !== 2 && ((me.mv ?? 0) & MV_CROUCH) !== 0;
+        const eye = me.a === 2 ? EYE_1P_SEATED : ducked ? EYE_1P - CROUCH_DROP : EYE_1P;
+        this.eyeY = this.targetReady ? this.eyeY + (eye - this.eyeY) * (1 - Math.exp(-dt * (ducked ? 12 : 8))) : eye;
         this.target.set(me.x, this.eyeY + (me.z ?? 0) + jumpDip(me), me.y);
         this.targetReady = true;
       } else {
-        const eye = me.a === 2 ? EYE - 0.3 : EYE;
+        // (crouched: the look's point down with the body — over the shoulder too)
+        const eye = me.a === 2 ? EYE - 0.3 : ((me.mv ?? 0) & MV_CROUCH) !== 0 ? EYE - CROUCH_DROP * 0.7 : EYE;
         // up on something the camera's up there with you; in a jump it rides some of the
         // way (you see yourself go up); flying, higher than any jump, all the rest of it
         // (shared move ALOFT: docs/plan/49-the-height.md)
@@ -2783,7 +2808,8 @@ void main() {
     this.armK += ((this.armed && !first ? 1 : 0) - this.armK) * (1 - Math.exp(-dt * 6));
     // (down the scope: quickly in, quickly out — the bolt's worked out of it)
     if (this.scope > 0) this.scopePow = this.scope;
-    this.scopeK += ((this.scope > 0 && !first ? 1 : 0) - this.scopeK) * (1 - Math.exp(-dt * 16));
+    // (plan 116: in first person too — the sniper's scope is its own first-person picture)
+    this.scopeK += ((this.scope > 0 ? 1 : 0) - this.scopeK) * (1 - Math.exp(-dt * 16));
     if (this.scopeK < 0.002 && this.scope === 0) this.scopeK = 0;
     // (into an aim the camera comes up to look ahead, near level — not at the ground at your feet)
     // (third person only: in first person the look is the look — it kept pulling it back level)
@@ -2821,7 +2847,9 @@ void main() {
       const r = Math.max(this.armK - a, 0);
       const ready = Math.min(v.dist, CAM_READY.back);
       const d = v.dist + (ready - v.dist) * r + (Math.min(v.dist, CAM_AIM.back) - v.dist) * a;
-      const side = (CAM_READY.side * r + CAM_AIM.side * a) * this.shoulder;
+      // (plan 114 F3: the Strike Park's match — the camera on my line of sight, straight behind my head: it sees
+      // round no corner my head can't)
+      const side = this.centred ? 0 : (CAM_READY.side * r + CAM_AIM.side * a) * this.shoulder;
       const sx = -Math.sin(this.yaw) * side;
       const sz = Math.cos(this.yaw) * side;
       const up = CAM_READY.up * r + CAM_AIM.up * a;
@@ -2878,7 +2906,9 @@ void main() {
     const fov =
       gc?.fov ??
       (first
-        ? (this.lensPart.lensFov ?? this.lensPart.fov1p)
+        ? (this.lensPart.lensFov ??
+          this.lensPart.fov1p * (1 - (this.hands?.zoom ?? 0)) +
+            (FOV / this.scopePow - this.lensPart.fov1p * (1 - (this.hands?.zoom ?? 0))) * this.scopeK)
         : shoulderFov + (FOV / this.scopePow - shoulderFov) * this.scopeK);
     if (Math.abs(this.camera.fov - fov) > 0.05) {
       this.camera.fov += (fov - this.camera.fov) * (1 - Math.exp(-dt * 10));
@@ -2900,6 +2930,7 @@ void main() {
       this.around.grounds.lite = lowest;
       this.around.grounds.fadeOff = !!this.god;
     }
+    this.around.parkFlood = this.parkFlood;
     this.around.update(dt, this.camera.position, !me?.reduced, this.target);
     this.printsPart.drawPrints(performance.now());
     this.drawCues(dt, !!me?.reduced);
@@ -3144,8 +3175,28 @@ void main() {
       }
       this.hands ??= new Hands1P(C3, this.charF, this.charMats, { ...me, angle });
       this.hands.gunFx = this.guns.myGun;
+      // (plan 116) the view model's time to aim: the gun's own; how near a wall is in front of my eyes (F8a)
+      this.hands.adsSecs = this.aimSecs;
+      this.hands.gunFov = this.vmPrefs.fov;
+      this.hands.place = this.vmPrefs.place;
+      this.hands.bob = this.vmPrefs.bob && !me.reduced;
+      if (me.gun) {
+        const c = this.camera;
+        const d = c.getWorldDirection(tmpWallDir);
+        const stop = this.pointerPart.rayStop(
+          c.position.x,
+          c.position.z,
+          c.position.y,
+          Math.atan2(d.z, d.x),
+          Math.asin(Math.max(-1, Math.min(1, d.y))),
+          1.2,
+        );
+        this.hands.wall = stop ? stop.t : 9;
+      } else this.hands.wall = 9;
       // (the life look: lit materials — the hands' picture takes the room's sky and sun, plan 73 4.5)
-      if (isLife()) this.hands.lightAs(this.scene, this.hemi, this.sun, this.mood.onLand(me.x, me.y));
+      // (plan 116: a gun in them too, whatever the look — its metal reads by the room's environment)
+      if (isLife() || me.gun) this.hands.lightAs(this.scene, this.hemi, this.sun, this.mood.onLand(me.x, me.y));
+      const hT0 = performance.now();
       this.hands.update(
         { ...me, angle, seat: mySeat },
         this.people3.get(me.id)?.motionOut ?? null,
@@ -3153,9 +3204,21 @@ void main() {
         this.camera,
         this.pitch,
         // (a flip turns the body over: the hands drop out of view for it)
-        this.lensPart.lensFov !== null || (me.jump?.kind === "flip" && me.jump.stage === "air" && !me.reduced),
+        this.lensPart.lensFov !== null ||
+          (me.jump?.kind === "flip" && me.jump.stage === "air" && !me.reduced) ||
+          // (down the scope: the scope's picture, no hands — plan 116)
+          this.scopeK > 0.6,
         gfxNow().people === "low",
       );
+      // (plan 116: what my hands cost a frame, ms, eased — the perf checks read it)
+      this.handsMs += (performance.now() - hT0 - this.handsMs) * 0.05;
+      // (plan 116 F5a) a reload's beats: the world's camera tipped to the work and rolled as the hands' lens is
+      const bt = this.hands.beat;
+      if (bt.pitch || bt.roll) {
+        this.camera.rotateX(bt.pitch);
+        this.camera.rotateZ(bt.roll);
+        this.camera.updateMatrixWorld();
+      }
     } else if (this.hands) {
       // (out of first person: put by, ready for the next time)
       this.handsSpare?.dispose();
@@ -3306,6 +3369,9 @@ void main() {
         inkAway: life ? NO_LINE : C.inkMaterial("#151515", 0.55),
         prop,
         toy: (kind) => {
+          // (plan 115, F5) the Strike Park's combat knife: our own — a drop-point blade with its fuller, a guard, a
+          // ribbed handle, a pommel
+          if (kind === "knife") return combatKnife(prop);
           const P = petsArt();
           return P ? P.toyMesh(kind, (c) => prop(`#${new Color(c).getHexString()}`)) : null;
         },
@@ -4202,3 +4268,26 @@ function applyFade(f: FadeGroup, shared: World3["materials"]) {
 // (the walls' back faces too: painting only a far side changes nothing else here; the floor's
 // layout asked of its structure — plan 72 phase 11)
 const layoutSig = (m: MapDef) => `${m.width}x${m.height}|${m.ox ?? 0},${m.oy ?? 0}|${floorLayoutSig(m)}`;
+
+/** (plan 115, F5) The combat knife held in the hand (the toy frame: its grip at the origin, the blade up). */
+function combatKnife(prop: (hex: string) => import("three").Material): Group {
+  const g = new Group();
+  g.name = "knife";
+  const steel = prop("#b9bec4");
+  const dark = prop("#24262a");
+  const blade = new BoxGeometry(0.032, 0.17, 0.006).translate(0, 0.135, 0);
+  const tip = new BoxGeometry(0.022, 0.03, 0.005).translate(0.004, 0.232, 0);
+  const guard = new BoxGeometry(0.06, 0.01, 0.018).translate(0, 0.045, 0);
+  const handle = new BoxGeometry(0.026, 0.1, 0.022).translate(0, -0.01, 0);
+  const pommel = new BoxGeometry(0.03, 0.014, 0.024).translate(0, -0.066, 0);
+  g.add(
+    new Mesh(blade, steel),
+    new Mesh(tip, steel),
+    new Mesh(guard, dark),
+    new Mesh(handle, dark),
+    new Mesh(pommel, steel),
+  );
+  for (let i = 0; i < 4; i++)
+    g.add(new Mesh(new BoxGeometry(0.028, 0.004, 0.024).translate(0, -0.045 + i * 0.022, 0), steel));
+  return g;
+}

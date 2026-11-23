@@ -19,7 +19,7 @@
 import { type AvatarLayers, DEFAULT_AVATAR } from "@yutopia/shared";
 import {
   type Bone,
-  type BufferGeometry,
+  BufferGeometry,
   Color,
   type Material,
   Matrix4,
@@ -35,6 +35,7 @@ import {
 import type { Knuckle, LifeBase, LifeBody, LifeGender, LifePart } from "../look/life-people";
 import type { Piece, Shader } from "../look/yulit";
 import { buildPerson } from "./build";
+import { fadeAtCut } from "./capcut";
 import { fingerAt } from "./hands";
 import type { Anchor, HangSpec, Kit, SpringSpec } from "./kit";
 import type { HandFrame } from "./props";
@@ -275,6 +276,19 @@ export class LifeLook {
   readonly hangs: HangSpec[] = [];
   private nearTris = 0;
   readonly meshes: SkinnedMesh[] = [];
+  /** (plan 116) first person's arms: each part's two cuts, by its index — the forearms', the whole arms' */
+  private armCuts = new Map<number, { fore: BufferGeometry; upper: BufferGeometry }>();
+  private upperOn = false;
+  /** (plan 116) the whole arms drawn (a reload's), or the forearms alone. Cheap to call every frame. */
+  setArmsUpper(on: boolean): void {
+    if (on === this.upperOn) return;
+    this.upperOn = on;
+    for (const [i, c] of this.armCuts) {
+      const g = on ? c.upper : c.fore;
+      // (and its copies: the soft edge's and the depth's were made on the geometry it had then)
+      for (const m of [this.meshes[i], this.edges.get(i), this.depth.get(i)]) if (m) m.geometry = g;
+    }
+  }
   private parts: { part: LifePart; geometry: BufferGeometry; own: Material; piece: Piece }[] = [];
   private mine: Material[] = [];
   private away: Material[] = [];
@@ -476,10 +490,16 @@ export class LifeLook {
     // this person's), lit by the room after its own piece
     const shared = new Set(base.parts.map((p) => p.material));
     for (const p of b.parts) {
-      const geometry = part === "arms" ? M.lifeArms(p) : p.geometry;
+      // (plan 116: first person's — the forearms, and the whole arms for a reload; a part the forearms don't have
+      // drawn as nothing till then)
+      const upperCut = part === "arms" ? M.lifeArms(p, true) : null;
+      const foreCut = part === "arms" ? M.lifeArms(p) : null;
+      const geometry = part === "arms" ? (foreCut ?? (upperCut ? emptyOf(upperCut) : null)) : p.geometry;
       if (!geometry) continue;
+      if (part === "arms" && upperCut) this.armCuts.set(this.parts.length, { fore: geometry, upper: upperCut });
       let own = p.material;
-      if (shared.has(own)) {
+      // (first person's arms always their own: their dissolve — fadeAtCut — must never reach a whole body's)
+      if (shared.has(own) || part === "arms") {
         own = own.clone();
         own.userData = { ...p.material.userData };
         this.mine.push(own);
@@ -488,6 +508,8 @@ export class LifeLook {
       // (no snow's layer or a way's wet on a person: the rain's on them is the view's — mood.wetOf)
       own.userData.wx = "none";
       h.lit(own, piece);
+      // (first person's arms: dissolved toward where they're cut — chars/capcut.ts)
+      if (part === "arms") fadeAtCut(own);
       this.parts.push({ part: p, geometry, own, piece });
       this.nearTris += trisOf(geometry);
     }
@@ -674,4 +696,15 @@ export class LifeLook {
     this.cut?.dispose();
     this.body.dispose();
   }
+}
+
+/** (plan 116) A part's cut with nothing in it: its attributes, no triangles — a forearm-less part drawn as nothing. */
+function emptyOf(g: BufferGeometry): BufferGeometry {
+  const e = new BufferGeometry();
+  for (const [k, a] of Object.entries(g.attributes)) e.setAttribute(k, a);
+  e.morphAttributes = g.morphAttributes;
+  e.morphTargetsRelative = g.morphTargetsRelative;
+  e.setIndex([]);
+  e.boundingSphere = g.boundingSphere;
+  return e;
 }

@@ -30,6 +30,7 @@ import {
 import { heightAt, inDeepWater } from "@yutopia/shared/grounds";
 import { addStack, count, isWeapon, QUICK, takeStack, WEAPONS, weaponIn } from "@yutopia/shared/inventory";
 import { MV_AIM, MV_WINDED, unpackMv } from "@yutopia/shared/move";
+import { inStrikeCompound, rangeHit } from "@yutopia/shared/strike/land";
 import type { Player } from "../schema.ts";
 import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
 import { wear } from "../worn.ts";
@@ -138,6 +139,9 @@ registerFeature((room: WorldRoom) => {
     });
   // one of us a shot can hit: on the shooter's floor, someone else, on their feet, not in a seat
   const target = (p: Player, q: Player) =>
+    // (plan 114: the Strike Park's match is its own — its players are hit only by each other, and the dead not at all)
+    !!room.strike?.claims(p.sid) === !!room.strike?.claims(q.sid) &&
+    (!room.strike?.claims(q.sid) || room.strike.alive(q.sid)) &&
     q.sid !== p.sid &&
     q.uid !== p.uid &&
     // (the street and a ground storey's one place: through its door, its windows — plan 113 review)
@@ -232,7 +236,7 @@ registerFeature((room: WorldRoom) => {
     // (plan 94 G1: sat in a car, a passenger charges it out of their window — no aim flag from a seat, as a shot
     // has it; the driver's the revolver's alone)
     const seat = p.hp > 0 && !p.downAt ? (room.carShot?.seatOf(client.sessionId) ?? null) : null;
-    const ready = seat ? seat.seat !== 0 : free(p) && (p.mv & MV_AIM) !== 0;
+    const ready = seat ? seat.seat !== 0 : free(p) && ((p.mv & MV_AIM) !== 0 || m?.hip === true);
     if (!ready || now < hd.drawnAt || hd.step || h.w.loaded <= 0) return;
     if (now - hd.shotAt < ARMS[h.w.id].rate * 1000 - 30) return;
     hd.chargeAt = now;
@@ -243,7 +247,10 @@ registerFeature((room: WorldRoom) => {
     const now = Date.now();
     // (plan 93 S2: sat in a car, out of its window — no aim flag from a seat; on foot as ever)
     const seat = p && p.hp > 0 && !p.downAt ? (room.carShot?.seatOf(client.sessionId) ?? null) : null;
-    if (!p || (!seat && (!free(p) || (p.mv & MV_AIM) === 0))) return;
+    // (plan 116: or from the hip — first person's, the Strike Park's — as the shooter says, taken at their word as
+    // their moves are; before, a hip shot was dropped here)
+    const hip = (p?.mv ?? 0) & MV_AIM ? false : m?.hip === true;
+    if (!p || (!seat && (!free(p) || ((p.mv & MV_AIM) === 0 && !hip)))) return;
     const h = inHand(client.sessionId, p);
     if (!h) return;
     if (seat) {
@@ -312,7 +319,7 @@ registerFeature((room: WorldRoom) => {
     const spread = spreadOf(id, bloom, {
       speed: speedOf(client.sessionId, now),
       crouch: mv.crouch,
-      aim: true,
+      aim: !hip,
       winded: (p.mv & MV_WINDED) !== 0,
       // (down a scope: as the shooter says — plan 79 phase 6; taken at their word, as their moves are)
       scope: m?.scope === true,
@@ -419,6 +426,43 @@ registerFeature((room: WorldRoom) => {
         room.vortex?.hit(client.sessionId, damageAt(id, gun.damage, vt, false), now, va?.id);
         room.send(client, "arms:hit", { id: va?.id ?? "vortex", kind: "vortex", head: false, ...at });
         continue;
+      }
+      // (plan 114) the Strike Park's match: its bots along the ray too; full damage, the map's wallbangs (not Jolt's
+      // sight: a round goes through its timber and drywall, weaker), armor — the match's, never a down
+      if (room.strike?.claims(p.sid)) {
+        const sb = room.strike.along(ray, who ? who.t : cap, p.sid);
+        const d = rayDir(ray.yaw, ray.pitch);
+        const tgt =
+          sb && (!who || sb.t < who.t)
+            ? { id: sb.id, t: sb.t, head: sb.head }
+            : who
+              ? { id: who.q.sid, t: who.t, head: who.head }
+              : null;
+        if (!tgt) continue;
+        const at = { x: ox + d.x * tgt.t, y: oy + d.y * tgt.t, z: oz + d.z * tgt.t };
+        const th = room.strike.through({ x: ox, y: oy, z: oz }, at);
+        if (th.kept <= 0) continue;
+        const n = Math.max(1, Math.round(damageAt(id, gun.damage, tgt.t, tgt.head) * th.kept));
+        room.strike.hit(client.sessionId, tgt.id, id, n, tgt.head, th.walls);
+        const qp = room.state.players.get(tgt.id);
+        if (qp) {
+          qp.hitAt = now;
+          qp.hitYaw = Math.atan2(oy - qp.y, ox - qp.x);
+        }
+        room.send(client, "arms:hit", { id: tgt.id, kind: "person", head: tgt.head, ...at });
+        const qc = (room.clients as WorldClient[]).find((c) => c.sessionId === tgt.id);
+        if (qc) room.send(qc, "dark:hit", { id: client.sessionId, n, shot: true });
+        continue;
+      }
+      // (plan 115 phase 47) the Strike Park's lobby range: a target on the wall before anyone else along the ray
+      if (!room.strike?.claims(p.sid) && inStrikeCompound(ox, oy)) {
+        const d0r = rayDir(ray.yaw, ray.pitch);
+        // (building coords → x, up, z: the plan's y is the world's z)
+        const rh = rangeHit([ox, oz, oy], [d0r.x, d0r.z, d0r.y], heightAt(ox, oy));
+        if (rh && (!who || rh.t < who.t)) {
+          room.send(client, "strike:target", { i: rh.i, ring: rh.ring, m: Math.round(rh.t) });
+          continue;
+        }
       }
       if (!who) continue;
       const d = rayDir(ray.yaw, ray.pitch);

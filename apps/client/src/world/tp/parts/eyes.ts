@@ -1,3 +1,4 @@
+import { STRIKE_WALL } from "@yutopia/shared/strike/land";
 import { Color, type SpotLight, Vector3 } from "three";
 import { EYES_LIFT } from "../../art/daylight";
 import { nearLift, unseen } from "../../eyes";
@@ -5,8 +6,18 @@ import { inkLeft, mf } from "../fog3d";
 import { litBalance } from "../light3d";
 import type { Body3, ThirdPersonView } from "../view";
 
+/** Inside the Strike Park's wall after dark: lit by its floods as its floor and walls are (a warm white, `k` of
+ *  them) — never darker than that. */
+function parkFlood(c: Color, x: number, y: number, k: number) {
+  if (k <= 0 || x < STRIKE_WALL.x0 || x > STRIKE_WALL.x1 || y < STRIKE_WALL.z0 || y > STRIKE_WALL.z1) return;
+  c.setRGB(Math.max(c.r, 0.62 * k), Math.max(c.g, 0.58 * k), Math.max(c.b, 0.52 * k));
+}
+
 /** What Eyes reads of the ThirdPersonView (plan 72 phase 4: its dependencies, said). */
-export type EyesHost = Pick<ThirdPersonView, "around" | "camera" | "dark" | "fogNow" | "light" | "mood" | "personTint">;
+export type EyesHost = Pick<
+  ThirdPersonView,
+  "around" | "camera" | "dark" | "fogNow" | "light" | "mood" | "parkFlood" | "personTint"
+>;
 
 export class Eyes {
   constructor(private readonly c: EyesHost) {}
@@ -23,6 +34,7 @@ export class Eyes {
   lightOn(b: Body3, me: Body3 | undefined): Color {
     const c = this.c.personTint.setHex(this.c.light.tintAt(b.x, b.y));
     if (this.c.mood.onLand(b.x, b.y)) this.c.mood.landTint(b.x, b.y, c);
+    parkFlood(c, b.x, b.y, this.c.parkFlood);
     if (this.c.mood.underSky(b.x, b.y)) {
       this.headlampTint(b.x, b.y, c);
       const d = me ? Math.hypot(b.x - me.x, b.y - me.y) : 0;
@@ -58,6 +70,7 @@ export class Eyes {
     if (!this.c.mood.underSky(x, y)) return 1;
     const c = this.glareTint.setHex(this.c.light.tintAt(x, y));
     if (this.c.mood.onLand(x, y)) this.c.mood.landTint(x, y, c, id);
+    parkFlood(c, x, y, this.c.parkFlood);
     this.headlampTint(x, y, c);
     return c.r * 0.3 + c.g * 0.55 + c.b * 0.15;
   }

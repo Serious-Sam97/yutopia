@@ -56,6 +56,7 @@ class InternalController extends Controller
             'playlists' => $world->settings['playlists'] ?? [],
             'loot' => $world->settings['loot'] ?? null,
             'karts' => $world->settings['karts'] ?? null,
+            'strike' => $world->settings['strike'] ?? null,
             'sound' => $world->settings['sound'] ?? null,
             // the weather when last saved (docs/plan/65-the-weather.md): the ground, when, the call
             'weather' => $world->settings['weather'] ?? null,
@@ -557,6 +558,23 @@ class InternalController extends Controller
         abort_if(strlen((string) json_encode($record)) > 40_000, 422, 'record too big');
         $world = World::current();
         $world->settings = array_merge($world->settings ?? [], ['karts' => $record]);
+        $world->save();
+
+        return response()->json(['ok' => true]);
+    }
+
+    // The Strike Park's cards (docs/plan/115-the-strike-park-again.md, phase 96): each account's XP, stats, history
+    // and the day's missions, keyed by user id; the world-server's to keep.
+    public function strike(Request $request): JsonResponse
+    {
+        $request->validate([
+            'record' => ['present', 'array'],
+            'record.cards' => ['present', 'array', 'max:2000'],
+        ]);
+        $record = $request->input('record');
+        abort_if(strlen((string) json_encode($record)) > 1_500_000, 422, 'record too big');
+        $world = World::current();
+        $world->settings = array_merge($world->settings ?? [], ['strike' => $record]);
         $world->save();
 
         return response()->json(['ok' => true]);

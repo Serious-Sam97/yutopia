@@ -58,6 +58,7 @@ export interface AvatarState {
   flare?: boolean; // (plan 87 F3b) a flare lit and held up in the left hand
   focused?: boolean; // …focused while aiming (docs/plan/30-the-dark.md D4)
   gun?: string; // the weapon in the hand (D6)
+  charm?: string; // (plan 115 phase 55) a charm on it, from the Strike Park's corner
   holster?: boolean; // carrying the revolver (plan 80): its holster on the right hip, the gun in it
   sling?: boolean; // carrying the double-barrel (plan 81): slung on the back when it's not in the hand
   slingAk?: boolean; // carrying the AK (plan 82): slung on the back, mirrored, when it's not in the hand

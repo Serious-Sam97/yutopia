@@ -63,6 +63,7 @@ export interface WorldInfo {
   loot?: unknown; // the Grounds' loot: spots, the night's budget, drops (features/survival.ts)
   vortex?: unknown; // Vortex's memory: his scars, the grudge (features/vortex.ts, plan 88 phase 4)
   karts?: unknown; // the Kart Park's record (features/karts.ts)
+  strike?: unknown; // the Strike Park's ranks and stats, by account (features/strike.ts, plan 115 phase 96)
   // the steps' volume an admin set (WorldRoom mod:steps), and the weather's (mod:weatherVol)
   sound?: {
     steps?: unknown;
@@ -106,6 +107,7 @@ export const api = {
   seed: (objects: WorldObjectDef[]) => call<{ objects: WorldObjectDef[] }>("POST", "/world/seed", { objects }),
   putPlaylists: (playlists: unknown[]) => call("PUT", "/world/playlists", { playlists }),
   putKarts: (record: unknown) => call("PUT", "/world/karts", { record }),
+  putStrike: (record: unknown) => call("PUT", "/world/strike", { record }),
   putSound: (sound: {
     steps: number;
     by: string | null;

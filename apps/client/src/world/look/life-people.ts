@@ -17,6 +17,7 @@
 //   lifeWornNow(base, avatar, r) what an avatar wears (phase 5.4: their wardrobe's slots), its garments'
 //                                files loaded (a file each, only those worn; null till they're in) —
 //                                lifeBody's `worn` dresses them, the skin under them hidden
+
 import type { AvatarLayers } from "@yutopia/shared";
 import {
   type BufferAttribute,
@@ -36,6 +37,7 @@ import {
   type WebGLRenderer,
 } from "three";
 import { asset } from "@/lib/asset";
+import { capCut } from "../chars/capcut";
 import { JOINTS, type JointName, PARENT } from "../chars/rig";
 import { loadLifeGLTF } from "./life-assets";
 import { libMaterial, libStats } from "./life-matlib";
@@ -1269,24 +1271,39 @@ export function lifeEar(base: LifeBase): Vector3 {
 
 // ── first person's arms ─────────────────────────────────────────────────────────────────────────
 
-const ARM = new Set([
-  ...(["shoulder", "elbow", "wrist", "fingers", "index", "thumb"] as const).flatMap((j) => [
+// (plan 116: from the elbow down — a view model's arms, as games have them: the upper arms and the sleeves' tops are
+// never in the picture at the hip or aimed. A reload's hands go down to the belt, and the arm from the shoulder's
+// drawn then: `upper`)
+const FOREARM = new Set([
+  ...(["elbow", "wrist", "fingers", "index", "thumb"] as const).flatMap((j) => [
     ALL_BONES.indexOf(`${j}L` as BoneName),
     ALL_BONES.indexOf(`${j}R` as BoneName),
   ]),
   ...KNUCKLES.map((k) => ALL_BONES.indexOf(k)),
 ]);
+const ARM = new Set([
+  ...FOREARM,
+  ALL_BONES.indexOf("shoulderL" as BoneName),
+  ALL_BONES.indexOf("shoulderR" as BoneName),
+]);
 const armCuts = new WeakMap<BufferGeometry, BufferGeometry | null>();
+const armUpperCuts = new WeakMap<BufferGeometry, BufferGeometry | null>();
 
-/** A part cut to the triangles that go with the arms (shoulder to fingertips): null if it has none. */
-export function lifeArms(p: LifePart): BufferGeometry | null {
+/** A part cut to the triangles that go with the forearms (elbow to fingertips) — `upper`: the whole arm, shoulder to
+ *  fingertips: null if it has none. */
+export function lifeArms(p: LifePart, upper = false): BufferGeometry | null {
   const g = p.geometry;
-  if (armCuts.has(g)) return armCuts.get(g) ?? null;
+  const cuts = upper ? armUpperCuts : armCuts;
+  const SET = upper ? ARM : FOREARM;
+  // (the head's things never: hair falling to the shoulders rides them, and came along with the whole arms — a head
+  // of hair seen under the gun mid-reload)
+  if (isHair(p.name) || /^(eyes|lashes|brows|teeth|tongue)$/.test(p.name)) return null;
+  if (cuts.has(g)) return cuts.get(g) ?? null;
   const si = g.getAttribute("skinIndex") as BufferAttribute;
   const sw = g.getAttribute("skinWeight") as BufferAttribute;
   const armW = (v: number) => {
     let w = 0;
-    for (let k = 0; k < 4; k++) if (ARM.has(si.getComponent(v, k))) w += sw.getComponent(v, k);
+    for (let k = 0; k < 4; k++) if (SET.has(si.getComponent(v, k))) w += sw.getComponent(v, k);
     return w;
   };
   const index = g.getIndex();
@@ -1308,6 +1325,8 @@ export function lifeArms(p: LifePart): BufferGeometry | null {
     cut.boundingBox = g.boundingBox;
     cut.boundingSphere = g.boundingSphere;
   }
-  armCuts.set(g, cut);
+  // (plan 116: the cut closed — no open tube where the arm ends)
+  if (cut) cut = capCut(cut, g);
+  cuts.set(g, cut);
   return cut;
 }

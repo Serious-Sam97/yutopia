@@ -27,6 +27,10 @@ export interface Prefs {
   lookInvertX: boolean;
   // first person: my own arms come into view when they're doing something
   hands1p: boolean;
+  // (plan 116 F7a) first person's gun: the view model's own lens (°), where it sits (CS's presets), its bob
+  vmFov: number;
+  vmPlace: "classic" | "close" | "couch";
+  vmBob: boolean;
   // the car's gearbox (docs/plan/92, F4a): shifted for you, or by hand (Q/E, the bumpers)
   carManual: boolean;
   // (plan 98 phase 22) the cars' paint and chrome reflecting the world round them (a probe caught near you now and
@@ -132,6 +136,9 @@ const DEFAULTS: Prefs = {
   stickSens: 1,
   lookInvertX: false,
   hands1p: true,
+  vmFov: 62,
+  vmPlace: "classic",
+  vmBob: true,
   carManual: false,
   carReflect: "auto",
   maxFps: 60,
@@ -159,6 +166,11 @@ export function prefs(): Prefs {
     if (cache && !(cache.stickSens >= 0.25 && cache.stickSens <= 3)) cache.stickSens = 1;
     if (cache) cache.lookInvertX = cache.lookInvertX === true;
     if (cache) cache.hands1p = cache.hands1p !== false;
+    if (cache) {
+      cache.vmFov = Math.max(54, Math.min(74, Number(cache.vmFov) || 62));
+      if (!["classic", "close", "couch"].includes(cache.vmPlace)) cache.vmPlace = "classic";
+      cache.vmBob = cache.vmBob !== false;
+    }
     if (cache) cache.carManual = cache.carManual === true;
     if (cache && !["auto", "on", "off"].includes(cache.carReflect)) cache.carReflect = "auto";
     if (cache) cache.perfStats = cache.perfStats === true;

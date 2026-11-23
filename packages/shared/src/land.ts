@@ -1,4 +1,5 @@
 import { KART_GROUND } from "./kart/land.ts";
+import { STRIKE_GROUND } from "./strike/land.ts";
 
 // The land as data (docs/plan/69-the-long-road.md, L1): what there is of the world is a list of
 // regions, not a box written out by hand. Each has the ground people may reach (`reach`) and the
@@ -43,6 +44,8 @@ export interface Region {
 
 /** The Kart Park's land is on (plan 46: in the game since 2026-10-26). */
 export const KART_LAND = true;
+/** The Strike Park's land is on (docs/plan/114-the-strike-park.md). */
+export const STRIKE_LAND = true;
 /** How far past its reach the land rises into scenery before anyone's stopped (walkable's 24). */
 export const REACH_MARGIN = 24;
 
@@ -62,6 +65,17 @@ export const BASE_LAND: readonly Region[] = [
           biome: "forest" as const,
           reach: { kind: "rect" as const, ...KART_GROUND },
           drawn: { x0: -480, z0: -960, x1: 544, z1: -624 },
+        },
+      ]
+    : []),
+  // (the Strike Park's ground west of the Kart Park: plan 114 — inside the drawn land already)
+  ...(STRIKE_LAND
+    ? [
+        {
+          key: "strike",
+          biome: "forest" as const,
+          reach: { kind: "rect" as const, ...STRIKE_GROUND },
+          drawn: { ...STRIKE_GROUND },
         },
       ]
     : []),

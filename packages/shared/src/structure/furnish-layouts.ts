@@ -280,7 +280,72 @@ const GATEHOUSE: Layout = {
   ],
 };
 
+// ── the Strike Park's lobby (docs/plan/115, arc F): its own rooms (the canteen and the bar are the diner's and the
+// bar's twins). Frames as the town's: u along the front from the left, v in from the door. ──
+
+// the armory (16 × 10): two rows of lockers back to back down the middle, the workbenches at the back, the cases on
+// the right, the quartermaster's table and the plan chest by the door, crates in the back corner
+const STRIKE_ARMORY: Layout = {
+  pieces: [
+    ...rowU("wardrobe", 4.6, 3.4, 2.2, 4, "out"),
+    ...rowU("wardrobe", 5.6, 3.4, 2.2, 4, "in"),
+    ...rowU("workbench", 8.2, 3.0, 2.4, 4, "out"),
+    ...rowV("display_cabinet", 13.6, 3.2, 1.3, 4, "left"),
+    { kind: "folding_table", u: 3.2, v: 2.4, face: "in" },
+    { kind: "plan_chest", u: 12.6, v: 1.8, face: "in" },
+    { kind: "record_crates", u: 1.6, v: 7.8, face: "right" },
+    { kind: "record_crates", u: 1.6, v: 6.8, face: "right" },
+    { kind: "track_lights", u: 8.0, v: 5.0, face: "out" },
+  ],
+};
+// the briefing hall (28 × 12): the stage at the back with its whiteboard, the projector over the room, two banks of
+// bleachers either side of the aisle up the middle
+const STRIKE_HALL: Layout = {
+  pieces: [
+    ...rowU("stage_riser", 10.0, 11.0, 2.0, 4, "out"),
+    { kind: "mobile_whiteboard", u: 8.4, v: 10.0, face: "out" },
+    { kind: "ceiling_projector", u: 14.0, v: 6.0, face: "in" },
+    ...rowU("bleachers", 4.5, 5.2, 3.2, 2, "in"),
+    ...rowU("bleachers", 4.5, 19.6, 3.2, 2, "in"),
+    ...rowU("bleachers", 7.8, 5.2, 3.2, 2, "in"),
+    ...rowU("bleachers", 7.8, 19.6, 3.2, 2, "in"),
+    { kind: "track_lights", u: 14.0, v: 9.0, face: "out" },
+  ],
+};
+// the trophy hall (20 × 9): a run of cases down the middle, a trophy on each, the sculpture behind them on its rug
+const STRIKE_TROPHIES: Layout = {
+  pieces: [
+    ...rowU("display_cabinet", 4.0, 4.4, 1.6, 8, "out"),
+    ...rowU("trophy", 4.0, 4.4, 1.6, 8, "out"),
+    { kind: "round_rug", u: 10.0, v: 6.6, face: "out" },
+    { kind: "sculpture", u: 10.0, v: 6.6, face: "out" },
+    { kind: "track_lights", u: 10.0, v: 4.5, face: "out" },
+  ],
+};
+// the war room (24 × 9, two storeys): banks of monitors across the room with a chair at each, the security desk by
+// the door; upstairs the planning room — the table, the plan chest, the whiteboards
+const STRIKE_WAR: Layout = {
+  stairs: { u: 21.0, v: 1.0, face: "left" },
+  pieces: [
+    ...rowU("corner_desk", 4.6, 5.0, 2.8, 5, "out"),
+    ...rowU("gaming_chair", 5.9, 5.0, 2.8, 5, "out"),
+    ...rowU("security_monitors", 7.4, 7.0, 4.0, 3, "out"),
+    { kind: "security_desk", u: 3.0, v: 2.2, face: "out" },
+    { kind: "gaming_chair", u: 3.0, v: 3.3, face: "out" },
+    { kind: "ceiling_projector", u: 11.0, v: 4.0, face: "in" },
+    { kind: "plan_chest", u: 5.0, v: 4.5, face: "out", storey: 1 },
+    { kind: "folding_table", u: 11.0, v: 4.5, face: "out", storey: 1 },
+    ...rowU("gaming_chair", 5.5, 10.2, 1.6, 2, "out", { storey: 1 }),
+    { kind: "mobile_whiteboard", u: 9.0, v: 7.4, face: "out", storey: 1 },
+    { kind: "mobile_whiteboard", u: 13.0, v: 7.4, face: "out", storey: 1 },
+  ],
+};
+
 export const FURNISHED: Record<string, Layout> = {
+  "strike-armory": STRIKE_ARMORY,
+  "strike-hall": STRIKE_HALL,
+  "strike-trophies": STRIKE_TROPHIES,
+  "strike-war": STRIKE_WAR,
   bar: BAR,
   diner: DINER,
   market: MARKET,

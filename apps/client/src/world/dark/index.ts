@@ -29,6 +29,7 @@ import { actionOf } from "../input/bindings";
 import type { Press } from "../input/controls";
 import type { DarkHooks, Walker } from "../input/walker";
 import { hud } from "../store";
+import { strikeKeys } from "../strike/flag";
 import { ARMS_CSS, Arms } from "./arms";
 import { DOWN_CSS, Down } from "./down";
 import { artVersion, itemArt, preloadArt } from "./icons";
@@ -340,6 +341,36 @@ class Dark implements DarkHooks {
     // E (whatever "use" is bound to) near something: search it, not the world's use
     const down = (e: KeyboardEvent) => {
       if (typing(e)) return;
+      // (plan 115: the Strike Park's vote or radio open — its number keys, not the hand's or the quick slots')
+      if (strikeKeys.digits && /^Digit[1-6]$/.test(e.code)) return;
+      // (plan 115 phase 24) in the match, CS's keys: 1 the primary, 2 the pistol, Q the last; 3–5 the park's own
+      if (strikeKeys.playing && !hud.get().panel.kind) {
+        if ((e.code === "Digit1" || e.code === "Digit2") && !e.repeat) {
+          this.arms.drawSlot(e.code === "Digit1" ? 0 : 1);
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          return;
+        }
+        if (e.code === "KeyQ" && !e.repeat) {
+          this.arms.drawLast();
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          return;
+        }
+        if (e.code === "KeyF" && !e.repeat) {
+          strikeKeys.inspectAt = performance.now();
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          return;
+        }
+        if (e.code === "Digit3" && !e.repeat) {
+          this.ctl.room?.send("strike:knife", { on: true });
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          return;
+        }
+        if (/^Digit[4-5]$/.test(e.code)) return;
+      }
       // the inventory open: its keys first (not I: the walker's, to close it)
       if (this.panel.key(e)) {
         e.preventDefault();
@@ -366,14 +397,14 @@ class Dark implements DarkHooks {
       // (plan 86) H a first aid, B a battery — from the quick slots or the pack, on foot
       if (
         !e.repeat &&
-        (e.code === "KeyH" || e.code === "KeyB") &&
+        (e.code === "KeyH" || (e.code === "KeyB" && !strikeKeys.playing)) &&
         this.quickUse(e.code === "KeyH" ? "aid" : "battery")
       ) {
         e.preventDefault();
         e.stopImmediatePropagation();
         return;
       }
-      if (!e.repeat && actionOf(this.walker.controls.b, e.code) === "use" && this.use()) {
+      if (!e.repeat && actionOf(this.walker.controls.b, e.code) === "use" && !strikeKeys.use && this.use()) {
         this.useKey = e.code;
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -388,6 +419,11 @@ class Dark implements DarkHooks {
     // the left button, aiming with a gun out: a shot (not the world's click). (mousedown: with
     // the right button already held, a second button is no pointerdown — the pointer's chord)
     const press = (e: MouseEvent) => {
+      // (only a click into the scene: the pointer held by the game, or straight on its canvas — a click on a menu, a
+      // panel or the HUD's buttons is theirs; the Strike Park's buy menu fired the gun at every pick)
+      const h = hud.get();
+      const onScene = !!document.pointerLockElement || e.target instanceof HTMLCanvasElement;
+      if (e.button === 0 && (!onScene || h.panel.kind || h.menu)) return;
       if (this.arms.click(e)) {
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -536,6 +572,11 @@ class Dark implements DarkHooks {
 
   // ── the server's word ────────────────────────────────────────────────────
   /** (plan 93 S6) How many of a stack I carry (the cars' chain prompt asks) */
+  /** (plan 115) The rounds in a gun I carry (its magazine), 0 if I've none of it. */
+  loadedOf(gun: string): number {
+    const it = this.inv ? [...this.inv.quick, ...this.inv.pockets].find((x) => x?.id === gun) : null;
+    return it && "loaded" in it ? Number((it as { loaded?: number }).loaded ?? 0) : 0;
+  }
   countOf(id: string): number {
     return this.inv && id in STACKS_ANY ? count(this.inv, id as Parameters<typeof count>[1]) : 0;
   }
@@ -607,8 +648,11 @@ class Dark implements DarkHooks {
   private quickHud(now: number) {
     const inv = this.inv;
     // (plan 104 F7b: on a board the skate HUD has the screen — no quick bar)
-    const show = !!inv && !this.panel.open && !hud.get().skating;
+    // (plan 115: in the Strike Park's match its own HUD shows the guns and the ammo — the quick bar out of the view model's way)
+    const show = !!inv && !this.panel.open && !hud.get().skating && !strikeKeys.playing;
     this.quickEl.style.display = show ? "flex" : "none";
+    // (plan 115: the guns' own counter too — the park's HUD shows the magazine)
+    this.arms.hudEl.style.visibility = strikeKeys.playing ? "hidden" : "";
     if (!show || !inv) return;
     const room = this.ctl.room;
     const lp = room?.state.players.get(room.sessionId);

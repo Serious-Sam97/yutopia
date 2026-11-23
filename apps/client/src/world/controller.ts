@@ -66,6 +66,7 @@ import { isGameTv } from "@yutopia/shared/games";
 import { isRadio, type RadioState, radioOf } from "@yutopia/shared/media";
 import { type Species, toyAt } from "@yutopia/shared/pets";
 import { Place } from "@yutopia/shared/physics/place";
+import { kitLook, kitOf } from "@yutopia/shared/strike/kit";
 import { applyOps, cellTop, edgeBack, edgeFront, type Structure, viewOf } from "@yutopia/shared/structure";
 import { wears } from "@yutopia/shared/worn";
 import type { Npc, Player, WorldObject, WorldState } from "@yutopia/state";
@@ -117,6 +118,7 @@ import type { SlotTracks } from "./slots";
 import { type Floor, radio, sound } from "./sound";
 import type { Space } from "./steps";
 import { hud, type Person, toast } from "./store";
+import { strikeKeys } from "./strike/flag";
 import type { Body3, CamMode, ThirdPersonView } from "./tp/view";
 
 // map edits that act on a floor (the one I'm on, unless they say)
@@ -1301,6 +1303,11 @@ export class WorldController {
     this.syncView();
     this.driveVehicles(dt);
     this.isolated("cars", () => this.cars?.frame(dt, now));
+    // (plan 114) the Strike Park's match: its camera (first person by default, K for over the shoulder — F3)
+    if (strikeKeys.view !== this.strikeView) {
+      this.strikeView = strikeKeys.view;
+      this.tp?.setMode(this.camWanted());
+    }
     this.moveLocal(dt);
     this.steps.hearAround(dt);
     this.updateLift();
@@ -1365,6 +1372,24 @@ export class WorldController {
       });
     // the morning fog (docs/plan/64-the-fog.md): the server's, eased by the view
     this.tp?.setFog(room.state.fog ?? 0, room.state.fogWall ?? 0, room.state.fogLift ?? 0);
+    // (plan 115 F3b) in the Strike Park's arena: the map's own climate — its sky's weather, its ground, its fog
+    const cl = strikeKeys.climate;
+    if (cl) {
+      this.tp?.setWeather(cl.storm, cl.wind);
+      this.tp?.setGround({
+        snow: cl.snow,
+        falling: cl.falling,
+        cloud: cl.cloud,
+        rain: cl.rain,
+        sleet: false,
+        wet: cl.wet,
+        puddles: cl.puddles,
+        temp: cl.temp,
+        thunder: 0,
+        ice: 1,
+      });
+      this.tp?.setFog(cl.fog, 0, 0);
+    }
     // someone high-fives me, hands me something…: turn to them
     if (lp?.act && lp.actAt !== this.facedAct) {
       this.facedAct = lp.actAt;
@@ -2331,7 +2356,9 @@ export class WorldController {
   // time; round to one an admin sets at an hour a second.
   private updateNight(first = false) {
     const st = this.room?.state;
-    const d = (((st?.players.size ? st.hour : spHour(Date.now())) - this.hour + 36) % 24) - 12;
+    // (plan 115 F3b: in the Strike Park's arena, the map's own hour)
+    const want = strikeKeys.climate?.hour ?? (st?.players.size ? st.hour : spHour(Date.now()));
+    const d = ((want - this.hour + 36) % 24) - 12;
     if (!first && Math.abs(d) < 1 / 60) return;
     this.hour = (this.hour + Math.max(-1, Math.min(1, d)) + 24) % 24;
     this.model?.setClock(this.hour);
@@ -2349,6 +2376,7 @@ export class WorldController {
   private tpDue = 0;
   private tpHidden = 0;
   meAngle = 0; // my facing in 3D (free; others see the nearest of 8)
+  private strikeView: "first" | "chase" | null = null;
   private lookYaw = Number.NaN; // first person: the 8-way facing I last set from where I look
   private viewNow: "none" | "3d" = "none"; // (none: before the 3D view has opened, or if it failed)
 
@@ -2358,8 +2386,11 @@ export class WorldController {
   camWanted(): CamMode {
     // the phone's camera: Photo is my eyes, Selfie a camera out in front of me
     if (this.photos.photo) return this.photos.photo.mode === "photo" ? "first" : "chase";
-    // (a gun out: over the shoulder, whatever the view — guns are third person, docs/plan/79 F3a)
-    if (prefs().view === "1p") return hud.get().build.on || this.tp?.armed ? "chase" : "first";
+    // (plan 114) in the Strike Park's match: first person with a gun too — the park's own (F3: both, K switches)
+    if (strikeKeys.view) return hud.get().build.on ? "chase" : strikeKeys.view;
+    // (plan 116 F2a: first person stays first person with a gun out — its view model; plan 79 F3a's shoulder camera is
+    // the third-person setting's)
+    if (prefs().view === "1p") return hud.get().build.on ? "chase" : "first";
     // (one camera behind you: how it follows is its own setting — docs/plan/56-the-controls.md D)
     return "chase";
   }
@@ -2385,6 +2416,7 @@ export class WorldController {
       this.tp.mouseLook.lookSens = prefs().lookSens;
       this.tp.mouseLook.lookInvert = prefs().lookInvert;
       this.tp.handsOn = prefs().hands1p;
+      this.tp.vmPrefs = { fov: prefs().vmFov, place: prefs().vmPlace, bob: prefs().vmBob };
       this.camPrefs(this.tp);
     }
     if (this.viewNow === "3d") return;
@@ -2991,8 +3023,35 @@ export class WorldController {
     return held;
   }
   // (`sid` the player's session — the state's map key; the Player's own `sid` isn't sent to clients)
+  /** (plan 115 phase 85) when each one in the Strike Park's match went down (client ms: the fall's own key) */
+  private strikeDown = new Map<string, number>();
   private avatarState(p: Player, _local: boolean, sid: string): AvatarState {
-    const look = parseAvatar(p.avatar);
+    let look = parseAvatar(p.avatar);
+    // (plan 115 F11) in the Strike Park's match: their own clothes, the team's vest over them
+    const sst = (
+      this.room?.state as
+        | { strike?: { phase?: string; members?: Map<string, { team?: string; look?: string; alive?: boolean }> } }
+        | undefined
+    )?.strike;
+    const sm = sst?.members?.get(sid);
+    // (plan 115 phase 85) killed in the match: down where they fell, staying down till the next round
+    let downAt: number | undefined;
+    if (sm && sm.alive === false && sst?.phase !== "warmup" && sst?.phase !== "idle") {
+      downAt = this.strikeDown.get(sid) ?? Date.now();
+      this.strikeDown.set(sid, downAt);
+    } else this.strikeDown.delete(sid);
+    // (plan 115 phase 55) the kit they chose at the corner: the vest's shade and pattern, the cap, a charm on the gun;
+    // mine tried on at the corner, out of the match
+    let charm: string | undefined;
+    const trying = _local && strikeKeys.kitTry && !sm;
+    if (sm || trying) {
+      const k = kitOf(sm ? (_local && strikeKeys.myKit ? strikeKeys.myKit : sm.look) : strikeKeys.myKit);
+      look = {
+        ...look,
+        ...kitLook(k, sm ? (sm.team === "w" ? "w" : "r") : (strikeKeys.kitTry as "r" | "w")),
+      } as typeof look;
+      if (k.charm !== "none") charm = k.charm;
+    }
     return {
       name: p.name,
       // focusing: headphones on
@@ -3021,20 +3080,21 @@ export class WorldController {
       flare: this.holdsFlare(sid) || undefined,
       focused: p.focused,
       gun: p.gun,
+      charm,
       holster: wears(p.worn, "holster") || undefined,
       sling: wears(p.worn, "sling") || undefined,
       slingAk: wears(p.worn, "slingAk") || undefined,
       slingSn: wears(p.worn, "slingSn") || undefined,
       slingDb: wears(p.worn, "slingDb") || undefined,
       arm: p.arm,
-      fellAt: p.fellAt,
-      fellYaw: p.fellYaw,
+      fellAt: downAt ?? p.fellAt,
+      fellYaw: downAt ? (p.hitYaw ?? 0) : p.fellYaw,
       hitAt: p.hitAt,
       hitYaw: p.hitYaw,
       hp: p.hp,
       wm: p.wm,
       st: p.st,
-      pinned: !!p.bitBy || undefined,
+      pinned: !!p.bitBy || !!downAt || undefined,
     };
   }
 

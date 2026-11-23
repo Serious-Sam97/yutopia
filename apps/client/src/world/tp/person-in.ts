@@ -49,6 +49,7 @@ export interface PersonIn {
   flare?: boolean; // (plan 87 F3b) a flare lit and held up in the left hand — held where the torch is
   focused?: boolean; // …focused: narrow and far (docs/plan/30-the-dark.md D4)
   gun?: string; // the weapon in the hand (D6): "revolver", "shotgun", "ak47" (plan 79)
+  charm?: string; // (plan 115 phase 55) a charm hung on it (tp/charm3d.ts)
   holster?: boolean; // carrying the revolver (plan 80): its holster on the right hip, the gun in it
   sling?: boolean; // carrying the double-barrel (plan 81): slung on the back when it's not in the hand
   slingAk?: boolean; // carrying the AK (plan 82): slung on the back, mirrored, when it's not in the hand

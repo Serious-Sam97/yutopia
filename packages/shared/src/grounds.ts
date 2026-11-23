@@ -40,6 +40,7 @@ import {
   landBounds,
   type Region,
   reachRects,
+  STRIKE_LAND,
   setLand,
 } from "./land.ts";
 import {
@@ -64,6 +65,19 @@ import {
   SHORE,
   SPINE,
 } from "./longroad.ts";
+import {
+  STRIKE_CARPARK,
+  STRIKE_CLEARING,
+  STRIKE_GATE,
+  STRIKE_PARK,
+  STRIKE_ROAD,
+  STRIKE_TURN,
+  STRIKE_VERGE,
+  STRIKE_WALL,
+  STRIKE_YARD,
+  strikeSignPosts,
+  strikeWalkBlocked,
+} from "./strike/land.ts";
 
 // the world's land: today's, and the long road's past it (docs/plan/69-the-long-road.md)
 if (LONG_ROAD) setLand([...BASE_LAND, ...LONG_LAND]);
@@ -577,6 +591,18 @@ const BASE_WAYS: Way[] = [
 ];
 // the road in to the Kart Park, off the county road by the river (docs/plan/46-the-karts.md)
 if (KART_LAND) BASE_WAYS.push(way("kart-road", "road", "Kart Park road", 9, KART_ROAD));
+// the road in to the Strike Park, off the county road's bend by the gatehouse (docs/plan/114)
+if (STRIKE_LAND) BASE_WAYS.push(way("strike-road", "road", "Strike Park road", 8, STRIKE_ROAD));
+// (and on foot through its gate and along the lobby yard, between its two rows of buildings — the yard's own ground,
+// a walk; the GPS's way to the canteen, the bar, the armory: from the road's end they were 125 m over the yard)
+if (STRIKE_LAND)
+  BASE_WAYS.push(
+    way("strike-yard", "walk", "Strike Park yard", 3, [
+      [STRIKE_GATE.x, STRIKE_WALL.z1 - 0.5],
+      [STRIKE_GATE.x, STRIKE_YARD.z1 - 12],
+      [STRIKE_WALL.x0 + 26, STRIKE_YARD.z1 - 12],
+    ]),
+  );
 // the long road (docs/plan/69, L3): its line the designed spine's, a sample a metre — its heights its
 // profile (layLevels), its bridges where the land's far under it
 if (LONG_ROAD)
@@ -846,6 +872,43 @@ if (LONG_ROAD) {
     BASE_BUILDINGS.push(
       b(c.key, "house", "Cabin", c.x0, c.z0, c.x1, c.z1, 1, i ? "w" : "e", { style: i ? "bungalow" : "cape" }),
     );
+}
+// the Strike Park's lobby (docs/plan/115-the-strike-park-again.md, arc F): a base along the yard between the gate and
+// the arena — the canteen (the diner's twin: its booths and counter), the bar (the town bar's twin), the armory, the
+// briefing hall, the trophy hall, the war room; their doors to the yard. The stairs to the gallery, the team doors
+// and the gate kept clear.
+if (STRIKE_LAND) {
+  const zn = STRIKE_YARD.z0 + 1.3; // (the inner wall's yard face)
+  const zs = STRIKE_YARD.z1 - 1.3; // (the outer wall's)
+  BASE_BUILDINGS.push(
+    b("strike-canteen", "diner", "Canteen", -344, zn, -326, zn + 14, 1, "s", {
+      enter: true,
+      sign: "CANTEEN",
+      style: "streamline",
+    }),
+    b("strike-bar", "bar", "The Last Round", -372, zs - 16, -356, zs, 2, "n", {
+      enter: true,
+      sign: "THE LAST ROUND",
+      style: "tavern",
+    }),
+    b("strike-armory", "warehouse", "Armory", -236, zn, -220, zn + 10, 1, "s", { enter: true, sign: "ARMORY" }),
+    b("strike-hall", "school", "Briefing hall", -204, zn, -176, zn + 12, 1, "s", { enter: true, sign: "BRIEFING" }),
+    b("strike-trophies", "library", "Trophy hall", -320, zs - 9, -300, zs, 1, "n", { enter: true, sign: "TROPHIES" }),
+    b("strike-war", "office", "War room", -196, zs - 9, -172, zs, 2, "n", { enter: true, sign: "WAR ROOM" }),
+    // (plan 115 phase 41) the gatehouse outside the gate, east of it by the road in
+    b(
+      "strike-gatehouse",
+      "gatehouse",
+      "Strike Park gate",
+      STRIKE_GATE.x + 7,
+      STRIKE_WALL.z1 + 1.5,
+      STRIKE_GATE.x + 13,
+      STRIKE_WALL.z1 + 6.5,
+      1,
+      "w",
+      {},
+    ),
+  );
 }
 /** The buildings as they are: the generator's, edited. */
 export const BUILDINGS: Building[] = [];
@@ -1240,6 +1303,27 @@ const kartPadDist = (x: number, z: number) => {
   const apron = Math.hypot(2 * Math.max(A.x0 - x, 0, x - A.x1), Math.max(A.z0 - z, 0, z - A.z1));
   return Math.min(rectDist(KART_FENCE, x, z), apron);
 };
+/** The Strike Park's ground outside its gate (the car park, the turning circle), levelled with
+ *  the compound (docs/plan/114-the-strike-park.md). */
+const STRIKE_APRON = {
+  x0: STRIKE_CARPARK.x0,
+  z0: STRIKE_WALL.z1,
+  x1: STRIKE_TURN.x + STRIKE_TURN.r,
+  z1: Math.max(STRIKE_CARPARK.z1, STRIKE_TURN.z + STRIKE_TURN.r),
+};
+/** How far (x, z) is off the Strike Park's level ground. */
+const strikePadDist = (x: number, z: number) => Math.min(rectDist(STRIKE_WALL, x, z), rectDist(STRIKE_APRON, x, z));
+/** What's underfoot at the Strike Park: the lobby yard's paving, the apron's asphalt (the arena's
+ *  pad is the snow; the map's own pieces are its floors). */
+function strikeGroundAt(x: number, z: number): Surface | null {
+  if (rectDist(STRIKE_YARD, x, z) === 0) return "walk";
+  if (rectDist(STRIKE_APRON, x, z) > 0) return null;
+  const t = Math.hypot(x - STRIKE_TURN.x, z - STRIKE_TURN.z);
+  if (t < STRIKE_TURN.r) return t < STRIKE_TURN.island ? null : "asphalt";
+  if (rectDist(STRIKE_CARPARK, x, z) === 0) return "asphalt";
+  if (Math.abs(x - STRIKE_GATE.x) < STRIKE_GATE.w / 2 + 1) return "walk";
+  return null;
+}
 /** What's underfoot there: the circle's and the car park's asphalt, the footway's and the gate's
  *  paving (the circle's island: the snow it is). */
 function kartApronAt(x: number, z: number): Surface | null {
@@ -1285,6 +1369,8 @@ function townMacro(x: number, z: number): number {
   // the Kart Park's pad, levelled out to its fence — and its apron outside the gate (the car park,
   // the turning circle: the road in climbs to them, not into a step) — and eased into the woods
   if (KART_LAND) m = KART_PARK.h + (m - KART_PARK.h) * smooth(4, 44, kartPadDist(x, z));
+  // the Strike Park's compound and apron, levelled the same way (docs/plan/114)
+  if (STRIKE_LAND) m = STRIKE_PARK.h + (m - STRIKE_PARK.h) * smooth(4, 44, strikePadDist(x, z));
   // (the ridges round today's land from today's regions — west of x 470 as they were — the long
   // road's reach taken in from there to the barricade's line: docs/plan/69)
   let o = LONG_ROAD ? lerp(beyondOf(BASE_LAND, x, z), beyond(x, z), smooth(470, 528, x)) : beyond(x, z);
@@ -1313,7 +1399,8 @@ function baseMicroWeight(x: number, z: number): number {
   const town = smooth(100, 170, Math.hypot(x - 418, z + 450));
   // (the Kart Park's pad: levelled flat for the circuit)
   const park = KART_LAND ? smooth(4, 44, kartPadDist(x, z)) : 1;
-  return lawn * (0.15 + 0.85 * town) * park;
+  const strike = STRIKE_LAND ? smooth(4, 44, strikePadDist(x, z)) : 1;
+  return lawn * (0.15 + 0.85 * town) * park * strike;
 }
 function micro(x: number, z: number): number {
   return 1.5 * fbm(x / 38, z / 38, 3, 21) + 0.3 * fbm(x / 9, z / 9, 1, 31);
@@ -1766,6 +1853,11 @@ export function terrainAt(x: number, z: number): number {
   if (inSkateYard(x, z, 8)) pads.push({ ...SKATE_YARD });
   // (the Kart Park's car park, its footway and the turning circle: one level pad)
   if (KART_LAND && rectDist(KART_APRON, x, z) < 8) pads.push({ ...KART_APRON, h: KART_PARK.h });
+  // (the Strike Park's compound and its apron: one level pad — docs/plan/114)
+  if (STRIKE_LAND && strikePadDist(x, z) < 8) {
+    pads.push({ ...STRIKE_WALL, h: STRIKE_PARK.h });
+    pads.push({ ...STRIKE_APRON, h: STRIKE_PARK.h });
+  }
   for (const p of pads) {
     const m = p.m ?? 0.5;
     const k = smooth(m, m + 6.5, rectDist(p, x, z));
@@ -1830,6 +1922,10 @@ export function groundSurfaceAt(x: number, z: number, rough = false, under = fal
   if (KART_LAND) {
     const ks = kartSurfaceAt(x, z) ?? kartApronAt(x, z);
     if (ks) return ks;
+  }
+  if (STRIKE_LAND) {
+    const ss = strikeGroundAt(x, z);
+    if (ss) return ss;
   }
   const near = nearLines(x, z);
   let on: Surface | null = null;
@@ -2089,6 +2185,14 @@ export function treeDensity(x: number, z: number): number {
   if (
     KART_LAND &&
     (rectDist(KART_FENCE, x, z) < KART_CLEARING || rectDist(KART_APRON, x, z) < 6 || rectDist(KART_VERGE, x, z) === 0)
+  )
+    return 0;
+  // the Strike Park's clearing, its apron (docs/plan/114)
+  if (
+    STRIKE_LAND &&
+    (rectDist(STRIKE_WALL, x, z) < STRIKE_CLEARING ||
+      rectDist(STRIKE_APRON, x, z) < 6 ||
+      rectDist(STRIKE_VERGE, x, z) === 0)
   )
     return 0;
   // the farm: cleared (the fields, the yard)
@@ -2781,6 +2885,13 @@ export function onGroundsChanged(f: Changed): () => void {
     changed.delete(f);
   };
 }
+/** The Strike Park's arena changed (docs/plan/114: its map struck or put up — strike/park.ts setStrikeMap): its
+ *  chunks' solids are made again by whoever built them (the land under it is the same pad). */
+export function arenaChanged() {
+  layoutVersion++;
+  const cs = chunksOver(STRIKE_WALL, 4);
+  for (const f of changed) f(cs, "park");
+}
 /** How many times the park's layout or god mode's edits changed here (a chunk made elsewhere
  *  before: not taken). */
 export let layoutVersion = 0;
@@ -2890,6 +3001,12 @@ function walkable(x: number, z: number): boolean {
   // (and outside it: the turning circle's island, the billboard's and the fingerpost's posts)
   if (KART_LAND && Math.hypot(x - KART_TURN.x, z - KART_TURN.z) < KART_TURN.island - 0.3) return false;
   if (KART_LAND && kartSignPosts().some(([px, pz]) => Math.abs(x - px) < 0.6 && Math.abs(z - pz) < 0.6)) return false;
+  // the Strike Park's walls (strike/land.ts: the gate and the team doors open; the map's own pieces
+  // are the physics world's — shapes/grounds.ts)
+  if (STRIKE_LAND && strikeWalkBlocked(x, z)) return false;
+  if (STRIKE_LAND && Math.hypot(x - STRIKE_TURN.x, z - STRIKE_TURN.z) < STRIKE_TURN.island - 0.3) return false;
+  if (STRIKE_LAND && strikeSignPosts().some(([px, pz]) => Math.abs(x - px) < 0.6 && Math.abs(z - pz) < 0.6))
+    return false;
   return true;
 }
 /** A tile a car can't go into (docs/plan/28-the-car.md): the fence, the tower, the statue,

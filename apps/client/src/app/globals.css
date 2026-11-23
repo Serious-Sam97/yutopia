@@ -22,6 +22,11 @@
   --panel-2: #1d1e24;
   --edge: #3a3631; /* a hairline, the lamp at 16 % on the ink */
   --focus: #f1d79a;
+  /* the Strike Park (plans 114–115): its two teams, a leave's red, its rank badges' ground */
+  --strike-raiders: #e8a33a;
+  --strike-wardens: #6fa3c7;
+  --strike-leave: #e48a76;
+  --strike-badge: #14181b;
   /* the frame: walnut, one static texture (its grain runs along) */
   --wood: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%27600%27%20height=%27240%27%3E%3Cfilter%20id=%27g%27%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.006%200.22%27%20numOctaves=%273%27%20seed=%277%27/%3E%3CfeColorMatrix%20values=%270%200%200%200%200.55%200%200%200%200%200.36%200%200%200%200%200.2%201.1%200%200%200%20-0.35%27/%3E%3C/filter%3E%3Crect%20width=%27600%27%20height=%27240%27%20fill=%27%234e301b%27/%3E%3Crect%20width=%27600%27%20height=%27240%27%20filter=%27url(%23g)%27/%3E%3C/svg%3E");
 

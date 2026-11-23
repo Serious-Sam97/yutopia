@@ -20,6 +20,7 @@ import type { WorldController } from "../controller";
 import type { Press } from "../input/controls";
 import type { Walker } from "../input/walker";
 import { hud } from "../store";
+import { strikeKeys } from "../strike/flag";
 import type { Shades } from "./shades";
 import { type DarkSound, type GunSound, SHOT_REACH } from "./voices";
 
@@ -246,7 +247,13 @@ export class Arms {
   }
   /** The left button: fires while aiming with a gun out (else the world's click) — the AK while it's held. */
   click(e: MouseEvent): boolean {
-    if (e.button !== 0 || !this.walker.aiming || !this.gun()) return false;
+    // (plan 115, F5) the Strike Park's knife in the hand: a stab (the server judges it)
+    if (strikeKeys.playing && strikeKeys.knife && e.button === 0) {
+      this.ctl.room?.send("strike:stab", {});
+      return true;
+    }
+    // (plan 115: in the Strike Park's match a gun fires from the hip too — CS's; its own hip spread, as it is)
+    if (e.button !== 0 || (!this.walker.aiming && !this.hipOk()) || !this.gun()) return false;
     this.triggerDown = true;
     const g = this.gun();
     if (g && isCharged(g.id)) this.charge();
@@ -269,7 +276,7 @@ export class Arms {
       return;
     }
     this.chargeFrom = now;
-    this.ctl.room?.send("arms:charge", {});
+    this.ctl.room?.send("arms:charge", this.walker.aiming ? {} : { hip: true });
     this.voices.gun("daybreak-charge");
   }
   private triggerUp() {
@@ -311,6 +318,24 @@ export class Arms {
     return w && "loaded" in w ? { id: w.id as GunId, loaded: w.loaded, slot } : null;
   }
 
+  /** (plan 115 phase 24) The Strike Park's keys: slot n's gun drawn — never put away (it's already out: nothing) —
+   *  the one it replaces kept as the last (Q). */
+  private lastSlot = -1;
+  drawSlot(n: number): boolean {
+    const inv = this.inv();
+    const it = inv?.quick[n];
+    if (!it || !isWeapon(it.id) || !this.walker.stepping) return false;
+    const cur = this.gun();
+    if (cur && inv?.quick[n] && cur.id === it.id) return true;
+    const was = cur ? (inv?.quick.findIndex((q) => q?.id === cur.id) ?? -1) : -1;
+    if (was >= 0) this.lastSlot = was;
+    this.draw(n);
+    return true;
+  }
+  /** Q: the gun before this one. */
+  drawLast(): boolean {
+    return this.lastSlot >= 0 ? this.drawSlot(this.lastSlot) : false;
+  }
   /** A quick slot (0–3, keys 2–5): a weapon taken out (again: away), first aid or a battery
    *  used, a flare thrown. False (and nothing sent): nothing there to do. */
   quick(n: number): boolean {
@@ -438,7 +463,17 @@ export class Arms {
       return;
     }
     if (arm === ARM.open && g.loaded > 0) {
-      this.ctl.room?.send("arms:fire", { ox: 0, oy: 0, oz: 0, yaw: 0, pitch: 0, lag: 0, seed: 0 });
+      // (from the hip too: without it the server dropped it, and the gun stayed open there)
+      this.ctl.room?.send("arms:fire", {
+        ox: 0,
+        oy: 0,
+        oz: 0,
+        yaw: 0,
+        pitch: 0,
+        lag: 0,
+        seed: 0,
+        ...(this.walker.aiming ? {} : { hip: true }),
+      });
       this.reloading = false;
       this.queued = true;
       return;
@@ -535,6 +570,9 @@ export class Arms {
       lag: Math.round(this.rtt),
       seed,
       ...(scoped ? { scope: true } : {}),
+      // (plan 116: from the hip — first person, the Strike Park's match; the server takes it with the hip's spread,
+      // where before it dropped it — no round spent, no hit)
+      ...(this.walker.aiming ? {} : { hip: true }),
       ...(claims.some((c) => c !== null) ? { cars: claims } : {}),
     });
     // (the bolt worked after it: out of the scope till it's home — RE5's S75)
@@ -704,7 +742,8 @@ export class Arms {
     // (the Daybreak charging: let the aim go and it stops; charged, the ball goes)
     if (this.chargeFrom) {
       const g = this.gun();
-      if (!g || !isCharged(g.id) || !this.walker.aiming) {
+      // (plan 116: a charge from the hip holds too — cut here, the hip's Daybreak never fired)
+      if (!g || !isCharged(g.id) || !(this.walker.aiming || this.hipOk())) {
         this.chargeFrom = 0;
         this.ctl.room?.send("arms:charge", { stop: true });
       } else if (now - this.chargeFrom >= ARMS.daybreak.charge * 1000) this.fire();
@@ -712,9 +751,10 @@ export class Arms {
     // (full auto: held, it fires at its rate; let go — or not aiming — the burst's over)
     const pulled = this.triggerDown || this.walker.controls.pad.rt > 0.6;
     const busy = armNow === ARM.draw || armNow === ARM.open || armNow === ARM.shut || armNow === ARM.rack;
-    if (g0 && isAuto(g0.id) && pulled && this.walker.aiming && !busy) this.fire();
-    else if (this.queued && this.walker.aiming && g0 && !busy) this.fire();
-    else if (!this.walker.aiming) this.queued = false;
+    const canFire = this.walker.aiming || this.hipOk();
+    if (g0 && isAuto(g0.id) && pulled && canFire && !busy) this.fire();
+    else if (this.queued && canFire && g0 && !busy) this.fire();
+    else if (!canFire) this.queued = false;
     if (!pulled && this.burst > 0) this.triggerUp();
     this.gunFx(dt, now);
     this.scopeFrame(dt, now, armNow);
@@ -744,7 +784,8 @@ export class Arms {
     // the pad: RT fires (an edge), RB throws a flare
     const pad = this.walker.controls.pad;
     const rt = pad.rt > 0.6;
-    if (rt && !this.rtDown && this.walker.aiming && this.gun()) this.fire();
+    // (from the hip as the mouse does — first person, the Strike Park)
+    if (rt && !this.rtDown && (this.walker.aiming || this.hipOk()) && this.gun()) this.fire();
     this.rtDown = rt;
     if (pad.pressed(5)) this.flare();
     // flares burning on my floor: to the 3D view
@@ -826,13 +867,23 @@ export class Arms {
     this.scopeEl.classList.toggle("on", tp.scopeK > 0.8);
   }
 
+  /** (plans 115–116) a gun fires from the hip too: in the Strike Park's match, and in first person anywhere (CS's) */
+  private hipOk(): boolean {
+    return strikeKeys.playing || this.ctl.tp?.mode === "first";
+  }
+
   private draws() {
     const out = this.walker.outside;
     const inv = this.inv();
     const g = this.gun();
     // the crosshair, aiming (3D); a mark on it when a shot met one
     const tp = this.ctl.tp;
-    const aiming = this.walker.aiming && !!tp && tp.scopeK < 0.5;
+    // (plan 116: in first person with a gun, CS's — at the hip the crosshair, down the sights none (the sights are the
+    // aim); the Strike Park's match draws its own)
+    const first = tp?.mode === "first";
+    const aiming = first
+      ? !!g && !!tp && tp.scopeK < 0.5 && tp.handsAds < 0.5 && !strikeKeys.playing
+      : this.walker.aiming && !!tp && tp.scopeK < 0.5;
     this.cross.style.display = aiming ? "block" : "none";
     if (aiming && tp) {
       const marked = performance.now() < this.markUntil;

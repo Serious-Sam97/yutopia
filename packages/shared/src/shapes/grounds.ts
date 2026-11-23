@@ -69,8 +69,22 @@ import {
 } from "../grounds.ts";
 import { KART_FENCE_H } from "../kart/land.ts";
 import { DECK_HALF } from "../kart/park.ts";
+import { STRIKE_LAND } from "../land.ts";
 import { LAKE, LONG_ROAD, LOOKOUT_DECK, SHORE } from "../longroad.ts";
 import { boxInPlan, pieceBoxes, TOWN_PARKS } from "../skate/parks.ts";
+import {
+  STRIKE_DESK,
+  STRIKE_INNER,
+  STRIKE_PARK,
+  STRIKE_SIGN,
+  STRIKE_STAIRS,
+  STRIKE_WALL_H,
+  STRIKE_WALL_T,
+  strikeSignPosts,
+  strikeSignWings,
+  strikeWalls,
+} from "../strike/land.ts";
+import { strikeVersion, strikeWorldBoxes } from "../strike/park.ts";
 import { type Blocks, type Solid3, type SolidBox3, WALL_T } from "./index.ts";
 
 export type GroundWhat =
@@ -118,6 +132,9 @@ export type GroundWhat =
   | "kart_flood"
   | "kart_sign"
   | "kart_island"
+  | "strike_wall"
+  | "strike_lobby"
+  | "strike_map"
   | "pk_rail"
   | "pk_wall"
   | "pk_pole"
@@ -994,7 +1011,67 @@ function things(out: GroundSolid[]) {
   if (LONG_ROAD) longDecks(out);
   pavements(out);
   if (KART_LAND) kartPark(out);
+  if (STRIKE_LAND) strikePark(out);
   skateParks(out);
+}
+
+// ── the Strike Park (docs/plan/114-the-strike-park.md; its sizes: shared strike/land.ts): the
+// compound's walls with their parapets (the gallery walks their top), the lobby's desk, the stairs
+// up to the gallery. The map in the arena is its own list (strikeMapSolids) ──
+function strikePark(out: GroundSolid[]) {
+  const y = STRIKE_PARK.h;
+  for (const [ax, az, bx, bz, h] of strikeWalls()) {
+    run(out, "strike_wall", ax, az, bx, bz, 8, STRIKE_WALL_T, h);
+    // the parapets either side of the gallery's walk
+    for (const side of [-1, 1]) {
+      const o = side * (STRIKE_WALL_T / 2 - 0.1);
+      const [px, pz, qx, qz] = az === bz ? [ax, az + o, bx, bz + o] : [ax + o, az, bx + o, bz];
+      const L = Math.hypot(qx - px, qz - pz);
+      const n = Math.max(1, Math.ceil(L / 8));
+      for (let i = 0; i < n; i++) {
+        const t0 = i / n;
+        const t1 = (i + 1) / n;
+        out.push({
+          what: "strike_wall",
+          s: along(
+            px + (qx - px) * t0,
+            pz + (qz - pz) * t0,
+            px + (qx - px) * t1,
+            pz + (qz - pz) * t1,
+            0.2,
+            y + h,
+            y + h + 1.1,
+          ),
+        });
+      }
+    }
+  }
+  const D = STRIKE_DESK;
+  out.push({ what: "strike_lobby", s: flat(D.x - 1.8, D.z - 0.6, D.x + 1.8, D.z + 0.6, y, y + 1.1) });
+  // the stairs up to the gallery: along the inner wall's yard face, rising east to the wall's top
+  const S = STRIKE_STAIRS;
+  const steps = Math.ceil(STRIKE_WALL_H / 0.25);
+  for (let k = 0; k < steps; k++) {
+    const x0 = S.x0 + ((S.x1 - S.x0) * k) / steps;
+    out.push({
+      what: "strike_lobby",
+      s: flat(x0, S.z - S.w / 2, S.x1, S.z + S.w / 2, y, y + (STRIKE_WALL_H * (k + 1)) / steps),
+    });
+  }
+  // (the landing onto the inner wall's walk: the stairs end against it)
+  void STRIKE_INNER;
+  // the billboard on the county road (plan 115 phase 39): its boards, their posts
+  const yg = groundAt(STRIKE_SIGN.x, STRIKE_SIGN.z);
+  for (const w of strikeSignWings())
+    out.push({ what: "strike_lobby", s: along(w.x0, w.z0, w.x1, w.z1, 0.3, yg + STRIKE_SIGN.h0, yg + STRIKE_SIGN.h1) });
+  for (const [x, z] of strikeSignPosts())
+    out.push({ what: "strike_lobby", s: cyl(x, z, 0.18, terrainAt(x, z), yg + STRIKE_SIGN.h1 - 0.1) });
+}
+
+/** The map standing in the arena, as solids (follows `strikeVersion`). */
+function strikeMapSolids(out: GroundSolid[]) {
+  for (const b of strikeWorldBoxes())
+    out.push({ what: "strike_map", s: { t: "box", x: b.x, y: b.y, z: b.z, hx: b.hx, hy: b.hy, hz: b.hz, a: b.a } });
 }
 
 // ── the skate parks (docs/plan/103-the-skate.md F7c; skate/parks.ts): each piece's stepped boxes under its riding
@@ -1061,6 +1138,7 @@ function edge(out: GroundSolid[]) {
 
 let fixed: { v: number; by: Map<string, GroundSolid[]> } | null = null;
 let bridge: { v: number; by: Map<string, GroundSolid[]> } | null = null;
+let arena: { v: number; by: Map<string, GroundSolid[]> } | null = null;
 function bucket(list: GroundSolid[]): Map<string, GroundSolid[]> {
   const by = new Map<string, GroundSolid[]>();
   for (const g of list) {
@@ -1089,7 +1167,16 @@ export function groundSolidsIn(cx: number, cz: number): GroundSolid[] {
     kartBridge(l);
     bridge = { v: layoutVersion, by: bucket(l) };
   }
-  const out = [...(fixed.by.get(key(cx, cz)) ?? []), ...(bridge?.by.get(key(cx, cz)) ?? [])];
+  if (STRIKE_LAND && arena?.v !== strikeVersion) {
+    const l: GroundSolid[] = [];
+    strikeMapSolids(l);
+    arena = { v: strikeVersion, by: bucket(l) };
+  }
+  const out = [
+    ...(fixed.by.get(key(cx, cz)) ?? []),
+    ...(bridge?.by.get(key(cx, cz)) ?? []),
+    ...(arena?.by.get(key(cx, cz)) ?? []),
+  ];
   for (const t of treesIn(cx, cz)) {
     // (as tp/grounds-stream.ts sizes them: a pine 1.45 × its scale, a bare tree 1.7 ×, `sy` taller;
     // set 0.25 into the snow)
@@ -1338,6 +1425,18 @@ export const GROUND_WHATS: Record<GroundWhat, { label: string; how: string; odd?
   kart_island: {
     label: "The turning circle's island",
     how: "the kerb (3.4 round, 0.27), the plinth and its kart (2.8 × 1.8, 1.6)",
+  },
+  strike_wall: {
+    label: "The Strike Park's walls",
+    how: "concrete STRIKE_WALL_T thick to STRIKE_WALL_H in 8 m pieces, the gate and the two team doors open; the gallery's parapet 1.1 over them",
+  },
+  strike_lobby: {
+    label: "The Strike Park's lobby",
+    how: "the desk (3.6 × 1.2, 1.1), the stairs to the gallery (treads 0.25 up to the wall's top)",
+  },
+  strike_map: {
+    label: "The map standing in the arena",
+    how: "strike/map.ts mapBoxes moved to the arena (strike/park.ts strikeWorldBoxes): every box, wall, slab, step and crate as built; follows the map standing (strikeVersion)",
   },
   pk_rail: {
     label: "Grind rail",

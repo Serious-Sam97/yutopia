@@ -44,6 +44,11 @@ export interface PhoneHud {
 }
 
 export type PanelKind =
+  | "strike"
+  | "strike-buy"
+  | "strike-esc"
+  | "strike-board"
+  | "strike-kit"
   | "whiteboard"
   | "radio"
   | "standup"
@@ -155,6 +160,53 @@ export interface SlotLane {
   time: number; // race time at the flag (s)
   offs: number; // times it flew off
   pos: number; // where it is in the race right now (1..), 0 outside a race
+}
+/** (plan 115) The Strike Park as its menus see it (strike/strike.ts writes it when it changes). */
+export interface StrikeMemberView {
+  id: string;
+  name: string;
+  team: "r" | "w";
+  bot: boolean;
+  alive: boolean;
+  hp: number;
+  armor: number;
+  helmet: boolean;
+  kit: boolean;
+  money: number;
+  primary: string;
+  pistol: string;
+  nades: string;
+  bomb: boolean;
+  kills: number;
+  deaths: number;
+  assists: number;
+  mvps: number;
+  score: number;
+  me: boolean;
+}
+export interface StrikeView {
+  map: string;
+  next: string;
+  up: boolean;
+  mode: string;
+  phase: string;
+  left: number;
+  round: number;
+  /** the rounds won, by side as it is now (Raiders, Wardens) */
+  scoreR: number;
+  scoreW: number;
+  fill: boolean;
+  level: string;
+  members: StrikeMemberView[];
+  me: StrikeMemberView | null;
+  /** may buy here and now (the buy zone, the buy time) */
+  canBuy: boolean;
+  record: string;
+  last: string;
+  /** my card (shared strike/ranks.ts StrikeCard, JSON; "" till the server's sent it) */
+  card: string;
+  /** following the match from the lobby */
+  following: boolean;
 }
 export interface SlotView {
   id: string;
@@ -497,6 +549,7 @@ export interface HudState {
   };
   standup: { active: boolean; order: number[]; turn: number; turnStartedAt: number; turnSeconds: number };
   slot: SlotView | null;
+  strike: StrikeView | null;
   game: GameView | null;
   build: {
     on: boolean;
@@ -635,6 +688,7 @@ const initial: HudState = {
   radio: { id: "", playing: false, station: 0, startedAt: 0, by: "", source: "lofi", title: "" },
   standup: { active: false, order: [], turn: 0, turnStartedAt: 0, turnSeconds: 90 },
   slot: null,
+  strike: null,
   game: null,
   build: {
     on: false,

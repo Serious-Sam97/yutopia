@@ -1,5 +1,6 @@
 import { isFloor, levelMap, type MapDef, type WallCut } from "@yutopia/shared";
 import { iceHolesNow } from "@yutopia/shared/grounds";
+import { STRIKE_WALL } from "@yutopia/shared/strike/land";
 import { cellOf } from "@yutopia/shared/structure";
 import { skyAt, strikeFar, strikeIn } from "@yutopia/shared/weather";
 import {
@@ -27,6 +28,10 @@ import { DARK_LEFT, type Daylight, darkK, EYES_LIFT } from "../art/daylight";
 import { Campus, GROUND, type Outline } from "./campus";
 import { GroundsStream } from "./grounds-stream";
 import { landBounce, landLight, litBalance, patchGrounds, patchOutdoors } from "./light3d";
+
+/** The Strike Park's floods' light on the land, at full (a warm white, about the park's own lit floor) */
+const FLOOD = [0.62, 0.58, 0.52] as const;
+
 import { Rain } from "./rain3d";
 import { stepRoadSnow } from "./roads3d";
 import { layDry, ROOFS, WxEase, wx, wxHold, wxNow } from "./wx3d";
@@ -254,6 +259,9 @@ export class Surroundings {
   }
   // (the land's light as the hour has it: a lightning's flash is laid over it — update)
   private landBase = new Color(1, 1, 1);
+  /** The Strike Park's floodlights after dark, 0 … 1 (the view's, from the park): the land inside its wall lit by them */
+  parkFlood = 0;
+  private flooded = false;
 
   /** The dome's colours as drawn now (by the hour, the weather and the fog; linear): the life look's
    *  sky light is made from them (look/life-sky.ts). */
@@ -507,6 +515,23 @@ export class Surroundings {
       });
     }
     this.lightning(dt);
+    // (the Strike Park's floods: the camera inside its wall after dark, the land's light no darker than theirs — its
+    // lobby's buildings, the guns slung on people, all of it as lit as the park's own floor and walls)
+    const inPark =
+      this.parkFlood > 0 &&
+      cam.x > STRIKE_WALL.x0 &&
+      cam.x < STRIKE_WALL.x1 &&
+      cam.z > STRIKE_WALL.z0 &&
+      cam.z < STRIKE_WALL.z1;
+    if (inPark || this.flooded) {
+      if (this.flashOn === 0) landLight.value.copy(this.landBase);
+      if (inPark) {
+        const k = this.parkFlood;
+        const L = landLight.value;
+        L.setRGB(Math.max(L.r, FLOOD[0] * k), Math.max(L.g, FLOOD[1] * k), Math.max(L.b, FLOOD[2] * k));
+      }
+      this.flooded = inPark;
+    }
     if (animate) {
       const off = this.domeMat.uniforms.cloudOff.value as number[];
       off[0] += dt * 0.0035;

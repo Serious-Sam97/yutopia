@@ -3,7 +3,9 @@
 import { byteFace, floorOf, type MapDef, parseAvatar } from "@yutopia/shared";
 import type { Footing } from "@yutopia/shared/footing";
 import type * as GroundsModule from "@yutopia/shared/grounds";
+import { packMv } from "@yutopia/shared/move";
 import type { GroundWhat } from "@yutopia/shared/shapes/grounds";
+import { STRIKE_FOLK } from "@yutopia/shared/strike/folk";
 import { addStrings, trMaybe } from "@/lib/i18n";
 import { Footprints } from "./footprints";
 import { GroundsSound, type Here } from "./grounds-sound";
@@ -27,6 +29,12 @@ addStrings(
     folkControl: ["Race control", "Direção de prova"],
     folkMechanic: ["Mechanic", "Mecânico"],
     folkCocoa: ["Hot cocoa", "Chocolate quente"],
+    strikeQm: ["Quartermaster", "Intendente"],
+    strikeInstr: ["Instructor", "Instrutor"],
+    strikeCook: ["Canteen", "Cantina"],
+    strikeKeeper: ["The Last Round", "O Último Round"],
+    strikeOfficer: ["War room", "Sala de guerra"],
+    strikeRecruit: ["Recruit", "Recruta"],
   },
   "yutopia-grounds-life",
 );
@@ -266,14 +274,56 @@ export class GroundsLife {
   /** The Kart Park's folk (shared KART_FOLK; world-server features/park-life.ts walks them): by
    *  their name, the staff's with what they do. */
   folk(n: { id: string; x: number; y: number; yaw: number; a: number }): AvatarState | null {
-    const f = this.G.KART_FOLK.find((k) => `folk-${k.id}` === n.id);
+    // (the Strike Park's bots — plan 115 phase 84: one of the world's people in their team's kit, their gun in hand;
+    // `mood` is "<team>:<gun>")
+    if (n.id.startsWith("strike-bot:")) return this.strikeBot(n as typeof n & { mood?: string });
+    // (plan 115 phase 88) a hostage: a civilian in a high-vis vest, hands up when held
+    if (n.id.startsWith("strike-hostage:")) {
+      const i = Number(n.id.slice(15)) || 0;
+      const key = `hostage:${i}`;
+      let look = this.folkLooks.get(key);
+      if (!look) {
+        look = parseAvatar({
+          gait: "tired",
+          gender: i % 2 ? "feminine" : "masculine",
+          shoes: "sneakers",
+          body: i % 3 ? "slim" : "broad",
+          skin: ["#f0c7a0", "#a8693f", "#e4b48e", "#8d5a3b"][i % 4],
+          hair: ["short", "bob", "buzz", "ponytail"][i % 4],
+          hairColor: ["#3a2414", "#140e0a", "#9a9a9a", "#b5562f"][i % 4],
+          top: "shirt",
+          topColor: "#d8d4ca",
+          bottom: "trousers",
+          bottomColor: "#3c4450",
+          outer: "vest",
+          outerColor: "#e8732a",
+        });
+        this.folkLooks.set(key, look);
+      }
+      return {
+        name: "Hostage",
+        avatar: look,
+        x: n.x,
+        y: n.y,
+        yaw: byteFace(n.yaw),
+        a: n.a,
+        status: "online",
+        speaking: false,
+        emote: "",
+        mic: false,
+        bot: true,
+      };
+    }
+    // (and the Strike Park's: shared strike/folk.ts — plan 115)
+    const sf = n.id.startsWith("strike-") ? STRIKE_FOLK.find((k) => `strike-${k.id}` === n.id) : undefined;
+    const f = sf ?? this.G.KART_FOLK.find((k) => `folk-${k.id}` === n.id);
     if (!f) return null;
     let look = this.folkLooks.get(f.id);
     if (!look) {
       look = parseAvatar(f.look);
       this.folkLooks.set(f.id, look);
     }
-    const role = FOLK_ROLE[f.role];
+    const role = sf ? STRIKE_ROLE[sf.role] : FOLK_ROLE[f.role];
     return {
       name: role ? `${f.name} · ${t(role)}` : f.name,
       avatar: look,
@@ -289,6 +339,65 @@ export class GroundsLife {
     };
   }
   private folkLooks = new Map<string, ReturnType<typeof parseAvatar>>();
+  private strikeBot(n: { id: string; x: number; y: number; yaw: number; a: number; mood?: string }): AvatarState {
+    // (plan 115 phase 85) "<team>:<gun>:<pose>:<hit at>:<hit from ×100>:<fell at>" — the server's botNpc
+    const [team, gun, pose = "", hitAt = "0", hitYaw = "0", fellAt = "0"] = String(n.mood ?? "r:").split(":");
+    const key = `${n.id}|${team}`;
+    let look = this.folkLooks.get(key);
+    if (!look) {
+      let h = 0;
+      for (const ch of n.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+      const r = (k: number) => ((h >>> (k * 3)) & 7) / 7;
+      const skins = ["#f0c7a0", "#e4b48e", "#c58c63", "#a8693f", "#8d5a3b", "#5e3a24"];
+      const hairs = ["short", "buzz", "bun", "ponytail", "bob", "short"];
+      const fem = r(1) > 0.5;
+      look = parseAvatar({
+        gait: r(2) > 0.5 ? "brisk" : "heavy",
+        gender: fem ? "feminine" : "masculine",
+        shoes: "boots",
+        body: r(3) > 0.6 ? "broad" : "athletic",
+        skin: skins[Math.floor(r(4) * skins.length) % skins.length],
+        hair: hairs[Math.floor(r(5) * hairs.length) % hairs.length],
+        hairColor: ["#140e0a", "#3a2414", "#6b4a2a", "#9a9a9a"][Math.floor(r(6) * 4) % 4],
+        top: "jacket",
+        topColor: team === "w" ? "#3e5d72" : "#8c6323",
+        bottom: "trousers",
+        bottomColor: "#2c2f2a",
+        accessory: "cap",
+        accessoryColor: team === "w" ? "#6fa3c7" : "#e8a33a",
+      });
+      this.folkLooks.set(key, look);
+    }
+    const room = (
+      window as unknown as {
+        __yutopia?: { room?: { state?: { strike?: { members?: Map<string, { name?: string }> } } } };
+      }
+    ).__yutopia?.room;
+    const name = room?.state?.strike?.members?.get(n.id.slice(11))?.name ?? "Vortex";
+    return {
+      name: `${name} · bot`,
+      avatar: look,
+      x: n.x,
+      y: n.y,
+      yaw: byteFace(n.yaw),
+      a: n.a,
+      status: "online",
+      speaking: false,
+      emote: "",
+      mic: false,
+      bot: true,
+      gun: gun || undefined,
+      // crouched (at the charge, or shooting far on Hard), the gun up when they've someone in sight, its aim level
+      mv: packMv(n.a === 1 ? "walk" : "still", pose.includes("c") || pose.includes("k"), pose.includes("a")),
+      focused: pose.includes("a") || undefined,
+      // struck: the flinch from where it came; dead: down where they fell, staying down (pinned) till the round's over
+      hitAt: Number(hitAt) || undefined,
+      hitYaw: Number(hitYaw) / 100 || undefined,
+      fellAt: Number(fellAt) || undefined,
+      fellYaw: Number(fellAt) ? Number(hitYaw) / 100 : undefined,
+      pinned: Number(fellAt) ? true : undefined,
+    };
+  }
 
   /** The night guard: a dark uniform and a cap, a flashlight; he says nothing. (A bot, not
    *  Vortex — `npc` is his —, so no muted mic shown.) */
@@ -315,6 +424,15 @@ export class GroundsLife {
 }
 
 const FOLK_ROLE: Record<string, string> = { control: "folkControl", mechanic: "folkMechanic", cocoa: "folkCocoa" };
+// (plan 115: the Strike Park's people)
+const STRIKE_ROLE: Record<string, string> = {
+  quartermaster: "strikeQm",
+  instructor: "strikeInstr",
+  cook: "strikeCook",
+  keeper: "strikeKeeper",
+  officer: "strikeOfficer",
+  recruit: "strikeRecruit",
+};
 
 const GUARD_LOOK = parseAvatar({
   // (his rounds walked heavy)

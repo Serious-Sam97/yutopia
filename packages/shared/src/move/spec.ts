@@ -15,7 +15,7 @@ export const GAITS = ["still", "walk", "jog", "sprint", "crouch", "aim"] as cons
 export type Gait = (typeof GAITS)[number];
 
 // ── on the wire (Player.mv, .yaw): the gait and two flags in a byte, the facing in another ──
-const MV_CROUCH = 8;
+export const MV_CROUCH = 8;
 export const MV_AIM = 16;
 /** In `pos` only (not kept on Player.mv): the sender is out of breath (docs/plan/30-the-dark.md
  *  D2) — the server takes it at its word, since it only holds them back. */

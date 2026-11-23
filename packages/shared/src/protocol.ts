@@ -528,6 +528,25 @@ export interface ClientMessages {
   "kart:start": Record<string, never>;
   "kart:state": KartWire;
   "kart:use": { back?: boolean; lag?: number }; // (lag: half my ping, ms: hits judged where I saw them)
+  // the Strike Park (docs/plan/114-the-strike-park.md, features/strike.ts)
+  "strike:join": { squad?: 0 | 1; mode?: string };
+  "strike:leave": Record<string, never>;
+  "strike:settings": { fill?: boolean; level?: string; mode?: string };
+  "strike:start": Record<string, never>;
+  "strike:map": { key: string };
+  "strike:buy": { item: string; for?: string };
+  "strike:use": { on: boolean };
+  "strike:drop": Record<string, never>;
+  "strike:throw": { kind: string; short?: boolean; yaw: number; pitch: number };
+  "strike:radio": { i: number };
+  "strike:vote": { key: string };
+  "strike:knife": { on: boolean };
+  "strike:stab": Record<string, never>;
+  "strike:ready": { on: boolean };
+  /** (plan 115 phase 55) my kit from the customization corner (strike/kit.ts) */
+  "strike:kit": { kit: string };
+  /** (plan 115 phase 96) my card, asked for when the terminal opens */
+  "strike:card": Record<string, never>;
   // a parked car I knocked, come to rest: where it ended up (the Grounds' coords, its middle)
   "car:shove": { id: string; x: number; z: number; a: number };
   // my car's dirt (0..1) and dents (front, rear, left, right: 0..1), as my sim has counted them
@@ -630,13 +649,15 @@ export interface ClientMessages {
     seed: number;
     /** down a scope (the sniper's: plan 79 phase 6) */
     scope?: boolean;
+    /** (plan 116) from the hip, not aimed — first person's, the Strike Park's: the hip's spread */
+    hip?: boolean;
     /** (plan 95 F4a) each round's car (by the seed's order) as the shooter's screen found it on the model it
      *  drew: where on it and what — 0: it met none it drew; null or none: it couldn't tell (the server's box) */
     cars?: (CarClaim | 0 | null)[];
   };
   "arms:flare": { yaw: number; pitch: number };
   // the Daybreak pressed: charging (plan 79 phase 7) — or let go before it fired
-  "arms:charge": { stop?: boolean };
+  "arms:charge": { stop?: boolean; hip?: boolean };
   // the line's round trip, measured (its lag goes with a shot)
   "arms:ping": { t: number };
   // how the game runs for this player (docs/plan/39-the-telemetry.md): a 30 s window, every
@@ -676,6 +697,38 @@ export interface ServerMessages {
   "kart:hit": { by: string; item: string; smash: boolean };
   "kart:boost": { secs: number; top?: number };
   "kart:no": { why: string };
+  // the Strike Park (docs/plan/114): the match's events (shared strike/match.ts MatchEvent), why not, the swap's
+  // show, a bot's shot (its tracer and its sound: the world's gun's)
+  "strike:ev": import("./strike/match.ts").MatchEvent[];
+  "strike:why": { why: string };
+  /** (plan 115 phase 47) a target on the lobby's range hit: which, its ring, how far */
+  "strike:target": { i: number; ring: number; m: number };
+  /** (plan 115 phases 96–97) my record in the park (ranks.ts StrikeCard, JSON) and, after a match, what it gave */
+  "strike:card": { card: string; xp?: number; missions?: string[]; rankUp?: string };
+  "strike:flash": { secs: number };
+  /** (plan 115 phase 94) I died: who, with what, their health left, where they were (local metres); my round's damage */
+  "strike:death": {
+    by: string;
+    name: string;
+    gun: string;
+    head: boolean;
+    hp: number;
+    at: [number, number, number] | null;
+    report: { name: string; dealt: number; hits: number; taken: number }[];
+  };
+  /** a radio line to my side: a person's (the menu's index) or a bot's own words (plan 117: `text`, `i` −1) */
+  "strike:radio": { by: string; i: number; text?: string };
+  "strike:boom": { kind: string; x: number; y: number; z: number };
+  "strike:show": { from?: string; to?: string; ms?: number; done?: string };
+  "strike:shot": {
+    id: string;
+    gun: string;
+    o: [number, number, number];
+    yaw: number;
+    pitch: number;
+    victim: string;
+    head: boolean;
+  };
   // out of my kart (before the snap to the desk: the state saying so comes after it)
   "kart:out": Record<string, never>;
   "spot:no": { why: string };

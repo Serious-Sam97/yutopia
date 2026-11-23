@@ -1264,3 +1264,130 @@ The user: "the parking lot has an old design, it does not connect right with the
   floods); a crowd drawn as the game's people (faces, ink, hats, scarves, kids, flags, signs,
   cocoa) that gets up at the go and the flag and in a wave as karts go by, heads turned to them;
   lit after dark in the game (`standLights`). Both views. `docs/plan/46-the-karts.md`, "The stands".
+
+## The Strike Park — first pass (2026-11-21, plan `114-the-strike-park.md`, uncommitted)
+- **A tactical team shooter zone on CS's rules, with our own maps, names, art and sounds**: a compound in the
+  woods west of the Kart Park, reached by the Strike Park road off the county road's bend. A lobby yard (the desk,
+  the Map Board, the big screen), the gallery on the walls, the arena where the map stands.
+- **Six original maps as data**, each passing the map checks (timings, lanes, rotation, closed). Sawmill, Freight
+  and The Lodge are bomb maps; Glass Tower is hostage; Boathouse is Wingman; The Range is aim and Deathmatch. The
+  Map Board swaps the map in the world: its solids, its 3D.
+- **The match**: CS2's economy and rounds, the charge, hostages, halves and overtime, Competitive, Casual,
+  Deathmatch, Arms Race and Retakes. Vortex bots fill both teams at four levels.
+  - Your pockets are lent the park's loadout of the world's five guns, untouched, and given back when you leave.
+  - Inside, shots do full damage with armor and the map's wallbangs, and a hit never downs you.
+- **On the client**: first person with a gun in the match (K switches to over the shoulder), CS's run speeds by
+  the gun, and grenades (HE, flash, smoke volumes, fire, decoy). The HUD, buy grid, scoreboard, kill feed and
+  radar are in walnut frames.
+- **Checked**: shared 30 strike tests and the Grounds' pins (updated with dated notes); world-server `strike` 2,
+  `arms`/`schema`/`down` 25; stills in `design/strike/`.
+- **Second pass** (2026-11-22):
+  - sounds, synthesized: the charge, the grenades, the round's calls and the radio (U, 1–6);
+  - bots' shots heard and seen as the world's guns;
+  - the swap's show: the map sinks, cranes swing, a Vortex crew walks it, the new map rises, and people are moved
+    out of the arena first;
+  - Follow the match, 3 s behind;
+  - the centred shoulder camera in the match;
+  - window facades and every map prop drawn; the charge and the hostages drawn.
+  - Checked: e2e `strike.spec.ts` passes; perf on Low shows the park adds next to nothing (its spot is
+    woods-bound); no memory leak over three map swaps.
+
+## The Strike Park again (2026-11-22, plan `115-the-strike-park-again.md`, uncommitted)
+
+- The mode redone after the user's "everything is horrible": real menus (the terminal's tabs, the Esc menu that
+  leaves, the buy grid, the scoreboard), mode picks that take, the gun always drawn in CS's view-model place with
+  hip fire, the combat knife, a lit billboard at the road's start, and a lobby with life: furnished buildings, people,
+  a yard dressed, a practice range, a war room screen, the map as a model.
+- The maps dressed with the Blender building kit and a prop kit, each in its own climate. Bots and hostages are the
+  world's 3D people; a ready check, the map vote, and a sound bed with walls that muffle.
+- A first-match tutorial, and ranks, stats and daily missions kept by account through `apps/api`.
+- Checked: e2e `strike.spec` 2 of 2; shared 34, world-server 24, API route. Low 44–47 fps in a 10-player match (from
+  24–25). Not yet at the plan's frame-rate targets; music awaits the user's picks. Details and what's left are in the
+  plan's Progress.
+- Then the rest of what was left (same day):
+  - a Blender showpiece over each map's walls, and the relay huts modelled;
+  - light baked into the maps;
+  - the bots' poses, and their falls staying down;
+  - smarter bots (Hard beat Easy 32–0);
+  - the customization corner with its mirror and gun charms;
+  - a replay of your best round.
+
+  Open: music picks, the match's frame rate, the knife's sleeve.
+
+## First person, the guns (2026-11-22, plan `116-first-person-guns.md`, uncommitted)
+
+- A view model. My first-person arms take the firing grip and are moved as one with the gun: low right at the hip
+  (CS's), down the real sights aiming. The third person is untouched.
+- Drawn is shown, in the Strike Park and in the world. First person stays first person with a gun out; the sniper's
+  scope and hip fire work in it.
+- Reloads keep their work in the frame (the body's clips, the grip held out ahead), and the camera dips and rolls on
+  the beats.
+- The arms are cut at the elbow (no shoulders or sleeve tops in the picture); the feel (strafe tilt, sprint pose, a
+  landing dip, the gun back from walls); settings for the gun's lens, place and bob.
+- `/dev/arms` has an eye view. Checked: `viewmodel.test.ts`, `arms-feel.spec` (rewritten for F2a), `strike.spec`.
+  Stills are in `design/fp116/`.
+- Second pass (2026-11-22):
+  - fingers solved against the gun's surface, most within 4 mm;
+  - the third person guarded (`e2e/fp-guard.spec.ts`);
+  - the cost measured (~1 ms CPU, fps unchanged);
+  - the cut edges closed (`chars/capcut.ts`);
+  - the reload's hair-under-the-gun fixed, each hand kept in frame, and the grip pinned further out.
+- Third pass (2026-11-22): during a reload, the forearms are kept at least 0.5 m from the eye; the arms dissolve over the
+  last 10 cm before their cut; the reload stays framed until its clip has fully blended out.
+- The user's feedback (2026-11-22):
+  - the reload arms are close again (0.5 m pin, ≤0.1 m push back);
+  - hip shots count on the server (`hip: true`);
+  - Shift sprints 1.4× the run in the Strike Park (the user's pick);
+  - the walking shake is gone (the view model's move is exact every frame; the bob is at a real cadence with a smooth curve).
+- Double-checked (2026-11-22):
+  - first person: Daybreak and snap-shut shots from the hip, the pad's hip fire, the lens keyed to the framing, the
+    hands letting go when hidden, the dissolve from the cut's own edge, a server test for the hip shot;
+  - the rest of the uncommitted work: nests clear of painted paths, a walk along the Park's yard for the GPS, the
+    Park's HUD colours as tokens, lint clean on the session's files.
+
+
+## The bots' brains (2026-11-22, plan `117-bot-brains.md`, uncommitted)
+
+- The Strike Park's bots rebuilt as one shared brain (`@yutopia/shared/strike/bots`):
+  - each map understood: routes, entrances, spots, unseen stages, grenade lineups;
+  - each side's playbook: rush, split, default, fake, lurk; setups, rotations, retakes, economy;
+  - each bot moves and aims like a person: smoothed paths, counter-strafe, flick and settle, the guns' spread;
+  - it sees, hears and remembers;
+  - the radio speaks once per event with the place and a count.
+- Your radio commands work: Follow me, Go A, Go B, Regroup…
+- Lab tests (`strike/bots/lab.test.ts`) and a `/dev/bots` overlay.
+- Before → after: radio 20–27 → ~8–11 lines a round (no repeats); bunching 7–35 → 4–10 %; deaths not looking at the
+  killer 39–51 → 4–10 %; plants almost none → 58–92 % of bomb rounds.
+- Balance pass (same day): Retakes is 4 Raiders v 3 Wardens round the site (was 4 v 4 from base: Wardens 7 of 8);
+  Casual's ten talk 10–12 lines a round (was 13–17) and bunch 12–22 % (was 21–35 %); bots give way at 4.2 m;
+  hold spots only where they can be walked to; a charge on a boat approached from its floor.
+- Maps: Freight's Signal Box (a stair up onto the containers, a parapet over the Switchyard: the Wardens' info
+  spot); the Boathouse's Lake Window (an unglazed opening in the hall's west wall). Posts watch the last seen enemy;
+  one or two left play an angle of their own; Retakes' Wardens go in at once from their spawns.
+- Raiders' share now: Sawmill 55 %, Lodge 61 %, Glass Tower 51 %, Freight 59–61 %, Boathouse 39 %; Retakes 53 / 71 /
+  52 %; Casual 10 v 10 radio 8.6–11.5 lines, bunched 14–22 %.
+- Open: Lodge (Retakes 71 %, Casual 22 %), Boathouse still Warden-sided.
+
+## Strike Park feedback (2026-11-22, uncommitted)
+
+- At night everyone in the lobby and the arena was a black shape on a lit floor: the park lights its surfaces as
+  its floodlights would (a glow of their own), but people only took the town's lamps. People inside the park's wall
+  now take the floods' light too (`view.parkFlood`, set by the park; `parts/eyes.ts`).
+- A reload in first person rode high: the gun's placement 10 cm lower (`rel` y −0.34), tipped up less (0.05), the
+  work's middle framed under the picture's middle — ~50 px lower on every gun (the sniper's upright reload still
+  reaches up: its own pose).
+- Crouching (C) now lowers the camera: 0.5 m in first person, 0.35 m over the shoulder (shared `MV_CROUCH`).
+- Checked: night stills in the lobby, the arms bench mid-reload for all five guns, the camera's height crouched in
+  the world (1p 3.70 → 3.20, 3p 4.19 → 3.84); client 477, `fp-guard` 15/15.
+- Second round: a click on a menu, a panel or the HUD fired the gun in a match — now only a click into the scene
+  (the pointer held, or on the canvas) with no panel or action menu open fires (`dark/index.ts`; checked: 1 shot on
+  the scene, 0 with Settings open). At night the lobby's buildings and the guns people carry were still black: with
+  the camera inside the park's wall the land's light is lifted to the floods' (`tp/sky.ts`, `parkFlood`) — the
+  buildings, holsters and slung guns lit like the park's floor (night stills of the lobby).
+
+## The Strike Park, polished (2026-11-22, plan `118-the-strike-park-polished.md`, planned)
+
+- The feature's last plan: one look for every park surface (three mocks, the user picks), CS2's HUD layout, one buy
+  screen with pictures, a scoreboard with stats and the round's end, spray patterns, the park's own damage table, CS's
+  hit feedback, weapons on the floor, holes/blood/volume smokes/spreading fire, every lobby building with a job, sound
+  and music. Forks decided 2026-11-22 (movement as it is; no sign-offs; frame rate best effort). Not built yet.

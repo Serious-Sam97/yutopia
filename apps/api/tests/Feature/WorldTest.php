@@ -474,3 +474,13 @@ it('keeps the building\'s structure the world-server sends, checked for its shap
     internalCall($this, 'PUT', '/api/internal/world/structure', ['structure' => [...$s, 'version' => 3]])->assertStatus(422);
     internalCall($this, 'PUT', '/api/internal/world/structure', ['structure' => [...$s, 'floors' => []]])->assertStatus(422);
 });
+
+it('keeps the Strike Park\'s cards, by account, beside the karts\' record', function () {
+    $record = ['cards' => ['7' => ['name' => 'Bia', 'xp' => 420, 'matches' => 1]]];
+    internalCall($this, 'PUT', '/api/internal/world/strike', ['record' => $record])->assertOk();
+    expect(internalCall($this, 'GET', '/api/internal/world')->json('strike'))->toBe($record);
+    // (a record without its cards refused; the karts' beside it untouched)
+    internalCall($this, 'PUT', '/api/internal/world/strike', ['record' => ['x' => 1]])->assertUnprocessable();
+    internalCall($this, 'PUT', '/api/internal/world/karts', ['record' => ['best' => null, 'last' => [], 'wins' => []]])->assertOk();
+    expect(internalCall($this, 'GET', '/api/internal/world')->json('strike.cards.7.xp'))->toBe(420);
+});

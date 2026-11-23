@@ -26,8 +26,20 @@ const DartsPanel = dynamic<P>(() => import("./Games68Panels").then((m) => m.Dart
 const ClawPanel = dynamic<P>(() => import("./Games68Panels").then((m) => m.ClawPanel), { ssr: false });
 const TableGamePanel = dynamic<P>(() => import("./Games68Panels").then((m) => m.TableGamePanel), { ssr: false });
 
+// (plan 115: the Strike Park's menus — the desk's terminal, the buy grid, the match's Esc menu, the Map Board)
+const StrikeTerminal = dynamic<P>(() => import("./StrikePanels").then((m) => m.StrikeTerminal), { ssr: false });
+const StrikeBuy = dynamic<P>(() => import("./StrikePanels").then((m) => m.StrikeBuy), { ssr: false });
+const StrikeEsc = dynamic<P>(() => import("./StrikePanels").then((m) => m.StrikeEsc), { ssr: false });
+const StrikeBoard = dynamic<P>(() => import("./StrikePanels").then((m) => m.StrikeBoard), { ssr: false });
+const StrikeKitPanel = dynamic<P>(() => import("./StrikePanels").then((m) => m.StrikeKitPanel), { ssr: false });
+
 // Panels opened from in-world objects (X / click).
 export const extraPanels: Partial<Record<string, ComponentType<{ objectId: string }>>> = {
+  strike: StrikeTerminal,
+  "strike-buy": StrikeBuy,
+  "strike-esc": StrikeEsc,
+  "strike-board": StrikeBoard,
+  "strike-kit": StrikeKitPanel,
   radio: RadioPanel,
   door: DoorPanel,
   notice: NoticePanel,

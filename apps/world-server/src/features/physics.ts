@@ -23,6 +23,7 @@ import {
   staticCount,
   WorldBuilder,
 } from "@yutopia/shared/physics";
+import { STRIKE_WALL } from "@yutopia/shared/strike/land";
 import { landWorkerHeap, onLandChanged, prefetch } from "../land.ts";
 import { metrics } from "../metrics.ts";
 import { fromSchema, type WorldRoom } from "../WorldRoom.ts";
@@ -259,10 +260,11 @@ registerFeature((room) => {
       // the park's layout changed: its chunks built, again once the worker's made them anew
       if (layout !== layoutVersion) {
         layout = layoutVersion;
-        const F = KART_FENCE;
-        for (let cz = Math.floor((F.z0 - 4) / CHUNK); cz <= Math.floor((F.z1 + 4) / CHUNK); cz++)
-          for (let cx = Math.floor((F.x0 - 4) / CHUNK); cx <= Math.floor((F.x1 + 4) / CHUNK); cx++)
-            if (build.hasChunk(cx, cz)) again.add(`${cx},${cz}`);
+        // (and the Strike Park's arena: its map struck or put up — docs/plan/114)
+        for (const F of [KART_FENCE, STRIKE_WALL])
+          for (let cz = Math.floor((F.z0 - 4) / CHUNK); cz <= Math.floor((F.z1 + 4) / CHUNK); cz++)
+            for (let cx = Math.floor((F.x0 - 4) / CHUNK); cx <= Math.floor((F.x1 + 4) / CHUNK); cx++)
+              if (build.hasChunk(cx, cz)) again.add(`${cx},${cz}`);
         wantAt = 0;
       }
       // what's wanted round the people out there

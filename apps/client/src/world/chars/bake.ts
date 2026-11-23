@@ -1,4 +1,5 @@
 import { BufferAttribute, BufferGeometry, Color, Sphere, Vector3 } from "three";
+import { capCut } from "./capcut";
 import type { Anchor, Kit, SpringSpec } from "./kit";
 import { JOINTS, type JointName, PARENT, type RestPose } from "./rig";
 
@@ -23,6 +24,8 @@ export interface Baked {
   ear: [number, number, number];
   /** only the arms, shoulder to fingertips (my own, in first person): made when first asked for */
   arms?: { body: BufferGeometry; ink: BufferGeometry };
+  /** (plan 116) the whole arm's, shoulder to fingertips (a reload's) */
+  armsUpper?: { body: BufferGeometry; ink: BufferGeometry };
   tris: number;
   /** vertex ranges of the face's moving bits ("eye", "mouth"), for morphs */
   tags: Record<string, [number, number][]>;
@@ -37,13 +40,13 @@ export const JOINT_INDEX = Object.fromEntries(JOINTS.map((j, i) => [j, i])) as R
 const ARM = new Set(
   (
     [
-      "shoulderL",
+      // (plan 116: from the elbow down — a view model's forearms; the shoulders and the sleeves' tops never in the
+      // picture, whatever the hands do)
       "elbowL",
       "wristL",
       "fingersL",
       "indexL",
       "thumbL",
-      "shoulderR",
       "elbowR",
       "wristR",
       "fingersR",
@@ -53,9 +56,13 @@ const ARM = new Set(
   ).map((j) => JOINT_INDEX[j]),
 );
 
-/** The arms alone: the same vertices, only the triangles riding the arms' bones. */
-export function armsOf(b: Baked): { body: BufferGeometry; ink: BufferGeometry } {
-  if (b.arms) return b.arms;
+const ARM_UPPER = new Set([...ARM, JOINT_INDEX.shoulderL, JOINT_INDEX.shoulderR]);
+/** The arms alone: the same vertices, only the triangles riding the arms' bones — the forearms (`upper`: the whole
+ *  arms, a reload's). */
+export function armsOf(b: Baked, upper = false): { body: BufferGeometry; ink: BufferGeometry } {
+  if (upper ? b.armsUpper : b.arms)
+    return (upper ? b.armsUpper : b.arms) as { body: BufferGeometry; ink: BufferGeometry };
+  const SET = upper ? ARM_UPPER : ARM;
   const joint = b.body.getAttribute("skinIndex");
   const keep = (g: BufferGeometry) => {
     const I = g.getIndex();
@@ -65,7 +72,7 @@ export function armsOf(b: Baked): { body: BufferGeometry; ink: BufferGeometry } 
         const a = I.getX(t);
         const c = I.getX(t + 1);
         const d = I.getX(t + 2);
-        if (ARM.has(joint.getX(a)) && ARM.has(joint.getX(c)) && ARM.has(joint.getX(d))) out.push(a, c, d);
+        if (SET.has(joint.getX(a)) && SET.has(joint.getX(c)) && SET.has(joint.getX(d))) out.push(a, c, d);
       }
     const n = new BufferGeometry();
     for (const [name, a] of Object.entries(g.attributes)) n.setAttribute(name, a);
@@ -73,8 +80,11 @@ export function armsOf(b: Baked): { body: BufferGeometry; ink: BufferGeometry } 
     n.boundingSphere = g.boundingSphere?.clone() ?? null;
     return n;
   };
-  b.arms = { body: keep(b.body), ink: keep(b.ink) };
-  return b.arms;
+  // (plan 116: the cut closed — no open tube where the arm ends; the outline's left open)
+  const cut = { body: capCut(keep(b.body), b.body), ink: keep(b.ink) };
+  if (upper) b.armsUpper = cut;
+  else b.arms = cut;
+  return cut;
 }
 
 /** Each joint's rest position in the model's space (no joint is turned at rest). */
