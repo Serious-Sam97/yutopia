@@ -10,7 +10,7 @@ Asked 2026-11-23:
 So this ticket covers **making NPCs and managing them**. Putting new ones on the map, and making their behaviour play
 out there, is the next ticket's job.
 
-Status: **planned, forks decided and built 2026-11-23 (phases 1–7); waiting on the user's test.** The forks, one by one:
+Status: **planned, forks decided, built and double-checked 2026-11-23 (phases 1–7); pushed 2026-11-23. Placing NPCs on the map: plan 121.** The forks, one by one:
 - **F1c**: everyone in the cast. The NPCs that are code today move into it (the user: "todos vão estar no God mode, se
   já existem hoje vamos migrar pra lá").
 - **F2a**: the cast is the API's own, saved on every change, outside the drafts.
