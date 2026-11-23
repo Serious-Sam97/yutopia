@@ -1,4 +1,5 @@
 import type { Building, Lamp, P, StreetThing, WayKind } from "./grounds.ts";
+import type { NpcPlaceDef } from "./npc/places.ts";
 
 // God mode's edits to the Grounds (docs/plan/53-the-god-mode.md § A): what admins changed, laid
 // over the generated world by grounds.ts applyEdits. Nothing here is the world itself: with no
@@ -27,6 +28,8 @@ export interface GroundsEdits {
   vehicles?: Section<VehicleDef>;
   /** (plan 109) the bridges: stretches of ways — the generator's (by "<way>~<n>") changed or taken away, new ones */
   bridges?: Section<BridgeDef>;
+  /** (plan 121) the cast's NPCs placed: each one's place (keyed by the NPC), what they do there, their home */
+  npcs?: Section<NpcPlaceDef>;
 }
 /** Added, changed (by key: only what's given), taken away (by key). */
 export interface Section<T extends { key: string }> {
