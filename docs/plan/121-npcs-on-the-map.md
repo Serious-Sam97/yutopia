@@ -257,14 +257,35 @@ God mode.
   - **Not run**: the older God mode specs (godmode*.spec) clear all of Ana's drafts and swap the world's fixture on
     the shared dev world. The memcheck isn't run either.
 
-## Left for later
+## Left for later — done 2026-11-23 (the user: "do the Not covered yet")
 
-- **Routes and homes across floors** go through a town building's door only: the land and its ground storey, or
-  one building to another. An upper storey or a studio floor above the ground has no way out (no stairs in the
-  walk), so a home or a route stop there leaves them standing where they are.
-- **Sit outdoors**: a seat is a world thing's (furniture). The Grounds' benches aren't seats, so a "sit" put on one
-  stands by it.
-- **The God mode draft's view** draws a placement that differs from what's published. One taken off the map in the
-  draft still shows in the world till it's published.
-- **The memcheck** with placed NPCs, and the older God mode specs, are to run when the shared world is free for it.
-
+- **Between any floors** (ab887bdc): a walk is a search over the floors' links, the fewest first and the nearest
+  link out tried first.
+  - Each staircase (shared `stairsWayUp`, as a player climbs) is a link up its flights to `aboveOf` its floor, and
+    back down. Each town building's door is a link between the land and its ground storey.
+  - Each floor's leg is the navmesh; a link's flights are walked straight. So a home or a route stop up a town
+    building's stairs or on a studio floor is reached (and left), and an NPC placed upstairs goes down to their home.
+- **Street benches** (ab887bdc): "sit" outdoors with no seat thing there takes the free half of a street bench within
+  1.5 m (`STREET` benches, two to one, facing out from the back as town3d draws them, on its 0.5 m seat, `n.z` its
+  height). They're up off it with z back to 0 when they stand.
+- **God mode's draft view** (ab887bdc): the world's `place:<key>` NPC the draft moves or takes off the map isn't drawn
+  for the admin (`NpcsTool.hidden`, `GodController.npcsHidden()`); the draft's is.
+- Tests: `npc-life.test.ts`'s third test (an offline room) covers a town building's stairs down to a home and up on a
+  route, the studio's stairs down a route, and a street bench sat on, up on its seat. The e2e's first test now moves
+  Wren in a second draft: the world's Wren hidden for Ana, back on undo.
+- **The older God mode specs**, run on the GPU with the world backed up first (its snapshot; Ana had no drafts) and
+  restored after (1115 objects, the same structure and settings):
+  - 9 passed;
+  - **bridges** and **vehicles** fail on the world as it is now: the user's published edits (revision 285) take the
+    river bridge (`road~0`) away for a bridge of their own, and add a sedan. The specs expect the generated river
+    bridge, and a draft with only their bike. Both specs' assumptions, not code;
+  - **land** (a held brush's worst frame 150 ms, limit 50) and **redraw** (117 ms, limit 25) are frame-time limits
+    on this machine. An A/B with God mode's NPCs switched off in the page gave land 167 ms, so not this work; redraw
+    publishes without entering God mode at all;
+  - **nature** waits for an "A line (fences)" button that the HUD no longer has (a stale spec, older than this
+    work).
+- **The memcheck** with placed NPCs: the dev world's internal export with 60 more in the cast, placed about the
+  studio's arrival point (wanderers and looping routes, talking often, greeting, answering, ducking), as
+  `WORLD=… CAR_SHORT=1 memcheck.mts 4`: ok. Against the warm cycle the browser heap was 1717.6 → 1727.7 MB
+  (allowed +171.8), geometries 5408 → 5566 (+270.4 allowed), programs 327 → 327, the server heap 194.6 → 199.6 MB
+  (+20 allowed), handlers 275 flat. Nothing over its budget or trending.
