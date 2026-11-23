@@ -258,6 +258,46 @@ The places a behaviour needs (the spot, the area, the route) are the next ticket
     with the cast's names and looks;
   - budget (prod build): /page 496.8 of 498 KB, God 26.8 of 27, grounds 182.7 of 205; all in.
 
+## Double check (2026-11-23)
+
+An independent review of the whole diff, plus my own pass and runs on the dev stack. Fixed:
+
+1. **Saves landing out of order** (the page): two PUTs for one NPC in flight could commit the older last. Now each NPC
+   has one save in flight, sent again if they changed meanwhile. The API stamps each cast push with when it read it
+   (`at`), and the world server lets an older push go (`server.ts castAt`).
+2. **A look stored empty came back as `[]`** (a copy of Vortex): `Npc::toDef` sends `{}`. The page runs every NPC from
+   the API through the shared `parseNpc`, and a copy of Vortex is a person in the default look.
+3. **The page's statuses**:
+   - a deleted NPC's status is dropped (it left "leave anyway?" behind for good);
+   - a delete is sent before their unsaved changes are let go (a refused delete lost them);
+   - no name and no role says "give them a name or a role" and isn't sent, nor retried every 3 s.
+4. **Vortex deleted mid-fight**: the fight's end is told, else the clients thought it went on.
+5. **A cast pushed while the room loaded** is kept, not overwritten by the older one the room loaded.
+6. **PHP and TS cut alike**: by characters (code points, never mid-surrogate), and an hour that isn't a number falls
+   back to the default.
+7. **Leftovers**:
+   - Vortex's clones are named as the cast says;
+   - the VortexOS line goes through `wire()`;
+   - the fight's babble uses the EN line only.
+8. **The cards' pictures**: drawn once a look rests (0.35 s), dropped from the queue if it changed first, and the
+   last 200 kept.
+
+Checked fine:
+- the live `onChange` of the look editor (not on mount, not on `initial`; the player's own page unchanged);
+- the editor reset per NPC, PHP's look slots against `parseAvatar`, the town flag and type rules;
+- seeding (one online room, the snapshot import, null till seeded) and `Vortex::line`;
+- seats freed, the guard's and Vortex's add and remove, `room.vortex` null everywhere, talk `never`;
+- the hostages and bots drawn as before.
+
+Runs after:
+- all shared (866) and client (478) unit tests;
+- Pest: everything but the 3 WorldTest reds on HEAD and a photos test that needs PHP's GD (the container has none);
+- the world server's cast, park-life, grounds-life, vortex-fight and schema tests, with a new one for the older push
+  let go;
+- e2e `cast.spec.ts`;
+- headless: nameless said and not saved, then named and saved; Vortex copied with a look; both deleted; the cast back
+  to 20.
+
 ## Left for later
 
 - **Placing the made NPCs on the map, and playing their behaviour** (hours, reactions, the five types): the next

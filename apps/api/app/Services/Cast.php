@@ -31,7 +31,9 @@ class Cast
             return;
         }
         try {
-            $this->world->post('/internal/cast', ['npcs' => Npc::cast()])->throw();
+            // (`at`: when it was read — two pushes close together can arrive the other way round; the world keeps the newer)
+            $at = (int) floor(microtime(true) * 1000);
+            $this->world->post('/internal/cast', ['npcs' => Npc::cast(), 'at' => $at])->throw();
         } catch (Throwable $e) {
             Log::warning('[cast] the world server didn\'t take the cast: '.$e->getMessage());
         }

@@ -176,7 +176,8 @@ const str = (v: unknown, max: number): string => {
     const c = ch.charCodeAt(0);
     s += c < 32 || c === 127 ? " " : ch;
   }
-  return s.trim().slice(0, max);
+  // (cut by characters — code points —, as the API's mb_substr: never mid-surrogate)
+  return Array.from(s.trim()).slice(0, max).join("");
 };
 const words = (v: unknown, max: number): Words => {
   const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
@@ -185,7 +186,8 @@ const words = (v: unknown, max: number): Words => {
 const oneOf = <T extends string>(v: unknown, list: readonly T[], or: T): T =>
   typeof v === "string" && (list as readonly string[]).includes(v) ? (v as T) : or;
 const hour = (v: unknown, or: number): number => {
-  const n = Number(v);
+  // (a number, or a number written out: anything else — null, "", true — is the default, as the API has it)
+  const n = typeof v === "number" || (typeof v === "string" && v.trim() !== "") ? Number(v) : Number.NaN;
   return Number.isFinite(n) ? Math.max(0, Math.min(24, Math.round(n * 2) / 2)) : or;
 };
 

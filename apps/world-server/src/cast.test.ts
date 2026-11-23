@@ -43,8 +43,8 @@ async function join(uid: number, s: number) {
   await waitFor(() => r.state.players?.size > 0 && r.state.npcs?.size > 0);
   return r;
 }
-async function sendCast(npcs: unknown, secret = true) {
-  const raw = JSON.stringify({ npcs });
+async function sendCast(npcs: unknown, secret = true, at?: number) {
+  const raw = JSON.stringify(at ? { npcs, at } : { npcs });
   const ts = String(Math.floor(Date.now() / 1000));
   return fetch(`http://localhost:${PORT}/internal/cast`, {
     method: "POST",
@@ -108,4 +108,22 @@ test("the town's people come from the cast, as the code had them; a change is li
   assert.equal((await sendCast("nope")).status, 422);
   assert.equal((await sendCast(cast)).status, 200);
   await waitFor(() => cast.every((d) => !!npc(r, d.key)));
+});
+
+test("pushes that arrive the other way round: the older is let go", async () => {
+  const r = await join(82, 902);
+  const cast = townCast();
+  await waitFor(() => !!npc(r, "folk-rosa"));
+  const t = Date.now() + 60_000; // (later than any push before it in this file)
+  const named = (name: string) => cast.map((d) => (d.key === "folk-rosa" ? { ...d, name } : d));
+  assert.equal((await sendCast(named("Rosa B"), true, t + 2)).status, 200);
+  await waitFor(() => npc(r, "folk-rosa").name === "Rosa B");
+  // (read before it, sent after it: older)
+  const res = await sendCast(named("Rosa A"), true, t + 1);
+  assert.equal(res.status, 200);
+  assert.equal(((await res.json()) as { older?: boolean }).older, true);
+  await sleep(300);
+  assert.equal(npc(r, "folk-rosa").name, "Rosa B");
+  assert.equal((await sendCast(cast, true, t + 3)).status, 200);
+  await waitFor(() => npc(r, "folk-rosa").name === "Rosa");
 });

@@ -73,6 +73,10 @@ it('lets admins alone list, make, change and delete NPCs, the cast handed to the
         ->and($made['behaviour'])->toBe(['type' => 'stand', 'hours' => 'shift', 'from' => 5, 'to' => 13, 'pace' => 1.5, 'talk' => 'often', 'greet' => true, 'answer' => false, 'shots' => 'flee'])
         ->and(mb_strlen($made['notes']))->toBe(1000);
     $this->actingAs($admin)->postJson('/api/admin/npcs', ['npc' => ['name' => ' ', 'role' => ['en' => '']]])->assertUnprocessable();
+    // (no look sent — a copy of Vortex —: an object, {}, for the shared parseAvatar to fill; never PHP's [])
+    $plain = $this->actingAs($admin)->postJson('/api/admin/npcs', ['npc' => ['name' => 'Plain', 'look' => null]])->assertCreated();
+    expect($plain->getContent())->toContain('"look":{}');
+    $this->actingAs($admin)->deleteJson('/api/admin/npcs/'.$plain->json('npc.key'))->assertOk();
     $this->actingAs($admin)->postJson('/api/admin/npcs', [])->assertUnprocessable();
 
     // changed: a town NPC keeps their type and stays the town's; someone made can take any of the types
@@ -89,11 +93,13 @@ it('lets admins alone list, make, change and delete NPCs, the cast handed to the
     expect(array_column($this->actingAs($admin)->getJson('/api/admin/npcs')->json('npcs'), 'key'))->toBe(['vortex', 'folk-rosa', $made['key']]);
 
     // the log says who did what; the world server was handed the whole cast, signed
-    expect(AdminAction::pluck('kind')->all())->toBe(['npc-new', 'npc', 'npc', 'npc-delete']);
+    expect(AdminAction::pluck('kind')->all())->toBe(['npc-new', 'npc-new', 'npc-delete', 'npc', 'npc', 'npc-delete']);
     $sent = Http::recorded()->map(fn ($p) => $p[0])->filter(fn (Sent $r) => $r->url() === 'http://world.test/internal/cast')->values();
     expect($sent->count())->toBeGreaterThan(0);
     expect(array_column($sent->last()->data()['npcs'], 'key'))->toBe(['vortex', 'folk-rosa', $made['key']]);
     Http::assertSent(fn (Sent $r) => $r->hasHeader('X-Yutopia-Signature'));
+    // (each push says when the cast was read)
+    expect($sent->last()->data()['at'])->toBeInt()->toBeGreaterThan(0);
 });
 
 it('has Vortex say the cast\'s lines once seeded, by moment; none if he was deleted', function () {

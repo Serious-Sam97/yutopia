@@ -285,6 +285,7 @@ export class WorldRoom extends Room<WorldState> {
   vortex: VortexHooks | null = null; // (plan 88) features/vortex.ts: the fight — shots at him (features/arms.ts)
   // (plan 120) the world's cast by key (cast.ts): the town's features make their people from it, and take a change live
   cast: Map<string, NpcDef> = new Map();
+  private castPushed = false;
   strike: StrikeHooks | null = null; // (plan 114) features/strike.ts: the match — its players' hits (features/arms.ts)
   /** (plan 97) features/cars.ts: the size of each of its maps, for the memory checker */
   carMaps: (() => Record<string, number>) | null = null;
@@ -344,6 +345,7 @@ export class WorldRoom extends Room<WorldState> {
   /** (plan 120) The cast as an admin left it (the API's POST /internal/cast): the town's people dressed, made or
    *  taken away by their features. */
   setCast(list: NpcDef[]) {
+    this.castPushed = true;
     this.cast = castMap(list);
     this.hook("cast", this.cast);
   }
@@ -531,7 +533,9 @@ export class WorldRoom extends Room<WorldState> {
     }
     this.registerMessages();
     // (plan 120) the world's cast, before the features that make the town's people from it
-    this.cast = castMap(await loadCast(info));
+    // (a cast pushed while this one loaded — POST /internal/cast — is newer: kept)
+    const loaded = await loadCast(info);
+    if (!this.castPushed) this.cast = castMap(loaded);
     this.features = installFeatures(this);
     // (the physics world built before anyone's let in: Jolt the only truth — plan 72 phase 7)
     await this.physicsReady;

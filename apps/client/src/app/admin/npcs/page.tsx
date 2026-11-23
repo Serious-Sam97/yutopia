@@ -1,12 +1,12 @@
 "use client";
 
 import { avatarFromSeed, parseAvatar } from "@yutopia/shared";
-import { defaultBehaviour, type NpcDef } from "@yutopia/shared/npc";
+import { defaultBehaviour, type NpcDef, parseNpc } from "@yutopia/shared/npc";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Brand } from "@/components/Brand";
 import { cast } from "@/lib/admin";
-import { getToken, yutopia } from "@/lib/api";
+import { ApiError, getToken, yutopia } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
 import { NpcEditor } from "./editor";
 import { CastFace } from "./face";
@@ -18,9 +18,13 @@ import { GONE, GONE_POST, NAMES, TYPE_WORDS, W, type Word } from "./words";
 // from God mode.
 
 type Filter = "all" | "town" | "made";
-type Status = "" | "saving" | "saved" | "failed";
+type Status = "" | "saving" | "saved" | "failed" | "invalid";
 const SAVE_AFTER = 700; // ms after the last change
 const RETRY = 3000;
+/** An NPC as the API sent it, in the shared shape (a look stored empty — `[]` from PHP — a whole look again). */
+const norm = (d: NpcDef): NpcDef => parseNpc(d, { town: !!d.town, type: d.behaviour?.type }) ?? d;
+/** Neither a name nor a role: the API won't keep them (nor the world name them). */
+const nameless = (d: NpcDef) => !d.name.trim() && !d.role.en.trim() && !d.role.pt.trim();
 
 export default function CastPage() {
   const pt = useLang() === "pt";
@@ -44,6 +48,8 @@ export default function CastPage() {
   // the latest of each one changed, and their save timers (what's not saved yet: a warning on leaving)
   const latest = useRef(new Map<string, NpcDef>());
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  // (one save at a time each: two in flight could land the other way round, the older kept)
+  const flying = useRef(new Set<string>());
 
   useEffect(() => {
     if (!getToken()) {
@@ -61,7 +67,7 @@ export default function CastPage() {
     cast
       .list()
       .then((r) => {
-        setNpcs(r.npcs);
+        setNpcs(r.npcs.map(norm));
         setMax(r.max);
         setSeeded(r.seeded);
         setSel((s) => s ?? r.npcs[0]?.key ?? null);
@@ -72,7 +78,11 @@ export default function CastPage() {
   // (leaving with changes not saved yet: asked first)
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
-      if (!timers.current.size && !Object.values(status).some((s) => s === "saving" || s === "failed")) return;
+      if (
+        !timers.current.size &&
+        !Object.values(status).some((s) => s === "saving" || s === "failed" || s === "invalid")
+      )
+        return;
       e.preventDefault();
       e.returnValue = w("unsaved");
     };
@@ -85,16 +95,34 @@ export default function CastPage() {
     (key: string) => {
       timers.current.delete(key);
       const d = latest.current.get(key);
-      if (!d) return;
+      if (!d || flying.current.has(key)) return; // (in flight: sent again when it's back, if changed since)
+      flying.current.add(key);
       mark(key, "saving");
       cast
         .save(d)
         .then(() => {
-          if (latest.current.get(key) !== d) return; // (changed again since: that save's to come)
+          flying.current.delete(key);
+          if (latest.current.get(key) !== d) {
+            // (changed again meanwhile: that one now, unless its own timer's still to go)
+            if (latest.current.has(key) && !timers.current.has(key)) flush(key);
+            return;
+          }
           latest.current.delete(key);
           mark(key, "saved");
         })
-        .catch(() => {
+        .catch((e: unknown) => {
+          flying.current.delete(key);
+          // (deleted meanwhile: nothing to save; changed meanwhile: that one now; refused as it is — no name nor role
+          // —: said, not tried again)
+          if (!latest.current.has(key)) return;
+          if (latest.current.get(key) !== d) {
+            if (!timers.current.has(key)) flush(key);
+            return;
+          }
+          if (e instanceof ApiError && e.status === 422) {
+            mark(key, "invalid");
+            return;
+          }
           mark(key, "failed");
           if (!timers.current.has(key))
             timers.current.set(
@@ -108,9 +136,14 @@ export default function CastPage() {
   const edit = (d: NpcDef) => {
     setNpcs((l) => l?.map((x) => (x.key === d.key ? d : x)) ?? l);
     latest.current.set(d.key, d);
-    mark(d.key, "saving");
     const t = timers.current.get(d.key);
     if (t) clearTimeout(t);
+    timers.current.delete(d.key);
+    if (nameless(d)) {
+      mark(d.key, "invalid");
+      return;
+    }
+    mark(d.key, "saving");
     timers.current.set(
       d.key,
       setTimeout(() => flush(d.key), SAVE_AFTER),
@@ -121,8 +154,9 @@ export default function CastPage() {
     setBusy(true);
     try {
       const r = await cast.make(d);
-      setNpcs((l) => [...(l ?? []), r.npc]);
-      setSel(r.npc.key);
+      const made = norm(r.npc);
+      setNpcs((l) => [...(l ?? []), made]);
+      setSel(made.key);
       setFilter("all");
       setQ("");
     } catch {
@@ -148,6 +182,8 @@ export default function CastPage() {
     // (a town NPC's own way of life isn't a copy's: they stand, till they're given another)
     void make({
       ...rest,
+      // (Vortex's copy: a person, in the default look — his mascot's is his alone)
+      look: d.look ?? parseAvatar({}),
       name: w("copyName", d.name || d.role.en),
       behaviour: d.town ? { ...d.behaviour, type: "stand" } : d.behaviour,
     });
@@ -155,11 +191,16 @@ export default function CastPage() {
   const remove = async (d: NpcDef) => {
     setBusy(true);
     try {
+      // (deleted first: refused, their changes not yet saved are still to be saved)
+      await cast.remove(d.key);
       const t = timers.current.get(d.key);
       if (t) clearTimeout(t);
       timers.current.delete(d.key);
       latest.current.delete(d.key);
-      await cast.remove(d.key);
+      setStatus((x) => {
+        const { [d.key]: _gone, ...rest } = x;
+        return rest;
+      });
       setNpcs((l) => {
         const next = l?.filter((x) => x.key !== d.key) ?? l;
         const at = l?.findIndex((x) => x.key === d.key) ?? -1;

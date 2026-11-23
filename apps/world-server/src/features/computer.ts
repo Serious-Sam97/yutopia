@@ -12,6 +12,7 @@ import {
   SHUTDOWN_MS,
 } from "@yutopia/shared/computer";
 import { api } from "../api.ts";
+import { wire } from "../cast.ts";
 import { config } from "../config.ts";
 import { Computer, type Player } from "../schema.ts";
 import { fromSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
@@ -51,7 +52,7 @@ registerFeature((room: WorldRoom) => {
       .then((res) => {
         if (!res?.line) return;
         npc.mood = res.mood ?? "smug";
-        npc.say = res.line;
+        npc.say = wire(res.line);
         npc.sayAt = Date.now();
       })
       .catch(() => {});

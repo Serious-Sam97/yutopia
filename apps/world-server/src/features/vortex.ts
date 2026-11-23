@@ -1026,7 +1026,11 @@ registerFeature((room: WorldRoom) => {
         room.state.npcs.set("vortex", npc);
         room.vortex = hooks;
       } else if (!here && was) {
-        if (fight.on) endFight();
+        // (a fight on: ended, and told — his tick stops, so nothing else would tell the clients)
+        if (fight.on) {
+          endFight();
+          tell(Date.now());
+        }
         room.state.npcs.delete("vortex");
         room.vortex = null;
       }

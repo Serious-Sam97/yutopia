@@ -3127,7 +3127,7 @@ export class WorldController {
   ): AvatarState {
     return {
       // (his name as the cast says — plan 120; the tables' Vortexes his too)
-      name: (n.name ?? this.room?.state.npcs.get("vortex")?.name ?? "").trim() || "VORTEX",
+      name: (n.name || this.room?.state.npcs.get("vortex")?.name || "").trim() || "VORTEX",
       avatar: VORTEX_LOOK,
       x: n.x,
       y: n.y,

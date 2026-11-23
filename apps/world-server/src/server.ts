@@ -88,11 +88,17 @@ async function handleHold(req: IncomingMessage, res: ServerResponse) {
 
 // The cast as an admin left it (docs/plan/120-god-mode-npcs.md, apps/api Cast): {npcs}, the whole cast, cleaned again
 // here; every open room takes it on (the town's people dressed, made or taken away, live).
+// (each push says when the API read it, `at` ms: two changes close together can arrive the other way round — the older
+// is let go)
+let castAt = 0;
 async function handleCast(req: IncomingMessage, res: ServerResponse) {
   const body = await signedBody(req, res, "/internal/cast");
   if (body === null) return;
   const npcs = (body as { npcs?: unknown }).npcs;
   if (!Array.isArray(npcs)) return answer(res, 422, { error: "npcs" });
+  const at = Number((body as { at?: unknown }).at) || 0;
+  if (at && at < castAt) return answer(res, 200, { ok: true, older: true });
+  if (at) castAt = at;
   const cast = parseCast(npcs);
   for (const room of WorldRoom.live) room.setCast(cast);
   return answer(res, 200, { ok: true, npcs: cast.length });

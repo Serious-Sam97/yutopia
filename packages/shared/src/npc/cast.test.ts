@@ -152,6 +152,18 @@ test("cast: what anyone sends is cleaned", () => {
   assert.equal(parseCast([{ key: "a", name: "A" }, { key: "a", name: "B" }, null]).length, 1);
 });
 
+test("cast: cleaned as the API cleans — by characters, hours only from numbers", () => {
+  const face = "😀";
+  const d = parseNpc({ key: "npc-e", name: face.repeat(60), behaviour: { from: null, to: true } });
+  assert.ok(d);
+  // (40 characters, each whole — not 40 UTF-16 units, a face cut in half)
+  assert.equal(Array.from(d.name).length, NPC_LIMITS.name);
+  assert.equal(d.name, face.repeat(NPC_LIMITS.name));
+  assert.deepEqual([d.behaviour.from, d.behaviour.to], [8, 18]);
+  const e = parseNpc({ key: "npc-f", name: "F", behaviour: { from: "6.5", to: "" } });
+  assert.deepEqual([e?.behaviour.from, e?.behaviour.to], [6.5, 18]);
+});
+
 test("cast: new keys are keys", () => {
   const k = newNpcKey();
   assert.match(k, /^npc-[a-z0-9]{8}$/);

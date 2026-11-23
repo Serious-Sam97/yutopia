@@ -413,7 +413,8 @@ export class VortexFight {
       if (Math.hypot(vx.x - me.x, vx.y - me.y) < 30) this.sound.warmVortex();
       if (vx.sayAt && vx.sayAt !== this.saidAt) {
         if (this.saidAt && vx.say && this.fighting() && Math.hypot(vx.x - me.x, vx.y - me.y) <= 8)
-          this.sound.babble(vx.say, vx.mood ?? "smug", { x: vx.x, y: vx.y });
+          // (his line as said: the cast's EN, without its PT after — plan 120)
+          this.sound.babble(vx.say.split("\u001f")[0], vx.mood ?? "smug", { x: vx.x, y: vx.y });
         this.saidAt = vx.sayAt;
       }
     }

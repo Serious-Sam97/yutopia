@@ -11,7 +11,16 @@ type Chars = NonNullable<ReturnType<typeof useChars>>;
 // React's frame — so a list of twenty doesn't stall the page (each read back waits on the GPU); kept by look. Flat in
 // their colours where WebGL can't draw. Vortex: his mark.
 const pics = new Map<string, string | null>();
+// (kept: the last 200 drawn — the editor's picture follows every change of a look)
+const KEEP = 200;
+const keep = (key: string, url: string | null) => {
+  pics.delete(key);
+  pics.set(key, url);
+  while (pics.size > KEEP) pics.delete(pics.keys().next().value as string);
+};
 const queue: { key: string; look: AvatarLayers; done: () => void }[] = [];
+// (a look still being changed — a colour dragged — drawn once it rests)
+const SETTLE = 350;
 let pumping = false;
 function pump(C: Chars) {
   if (pumping) return;
@@ -32,7 +41,7 @@ function pump(C: Chars) {
           pump(C);
         });
       } else {
-        pics.set(job.key, got);
+        keep(job.key, got);
         job.done();
       }
     } else job.done();
@@ -52,10 +61,17 @@ export function CastFace({ look, size = 44 }: { look: AvatarLayers | null; size?
       return;
     }
     let gone = false;
-    queue.push({ key, look, done: () => !gone && setSrc(pics.get(key)) });
-    pump(C);
+    const job = { key, look, done: () => !gone && setSrc(pics.get(key)) };
+    const t = setTimeout(() => {
+      queue.push(job);
+      pump(C);
+    }, SETTLE);
     return () => {
       gone = true;
+      clearTimeout(t);
+      // (a look gone by before its turn: not drawn at all)
+      const i = queue.indexOf(job);
+      if (i >= 0) queue.splice(i, 1);
     };
   }, [C, key, look]);
   const shown = look ? (src ?? (src === null ? flatFigure(look, true) : "")) : "";

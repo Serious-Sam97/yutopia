@@ -77,7 +77,13 @@ class Npc extends Model
 
     public function toDef(): array
     {
-        return array_merge($this->def ?? [], [
+        $def = $this->def ?? [];
+        // (a look with nothing set is an object — {} — not PHP's empty array: the shared parseAvatar's to fill in)
+        if (array_key_exists('look', $def) && $def['look'] === []) {
+            $def['look'] = (object) [];
+        }
+
+        return array_merge($def, [
             'key' => $this->key,
             'town' => $this->town,
             'made' => $this->created_at?->toIso8601String(),

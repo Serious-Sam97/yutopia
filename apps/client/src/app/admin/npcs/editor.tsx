@@ -34,7 +34,7 @@ export function NpcEditor({
 }: {
   npc: NpcDef;
   pt: boolean;
-  status: "" | "saving" | "saved" | "failed";
+  status: "" | "saving" | "saved" | "failed" | "invalid";
   onChange: (d: NpcDef) => void;
   onCopy: () => void;
   onDelete: () => void;
@@ -113,7 +113,7 @@ export function NpcEditor({
           <output
             className="block mono text-xs text-right min-h-4"
             data-npc-status={status}
-            style={{ color: status === "failed" ? "var(--alert)" : "var(--muted)" }}
+            style={{ color: status === "failed" || status === "invalid" ? "var(--alert)" : "var(--muted)" }}
           >
             {status === "saving"
               ? w("saving")
@@ -121,7 +121,9 @@ export function NpcEditor({
                 ? `✓ ${w("saved")}`
                 : status === "failed"
                   ? w("notSaved")
-                  : ""}
+                  : status === "invalid"
+                    ? w("needName")
+                    : ""}
           </output>
         </div>
       </div>

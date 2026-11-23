@@ -53,6 +53,7 @@ export const W = {
   saving: ["Saving…", "Salvando…"],
   saved: ["Saved", "Salvo"],
   notSaved: ["Not saved: trying again", "Não salvou: tentando de novo"],
+  needName: ["Not saved: give them a name or a role", "Não salvou: dê um nome ou um papel"],
   unsaved: ["Changes still being saved. Leave anyway?", "Ainda salvando mudanças. Sair mesmo assim?"],
   // lines
   linesHint: [
