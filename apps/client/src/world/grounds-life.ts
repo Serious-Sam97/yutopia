@@ -273,6 +273,7 @@ export class GroundsLife {
     name?: string;
     role?: string;
     look?: string;
+    mood?: string;
   }): AvatarState | null {
     // (the Strike Park's bots — plan 115 phase 84: one of the world's people in their team's kit, their gun in hand;
     // `mood` is "<team>:<gun>")
@@ -314,8 +315,10 @@ export class GroundsLife {
         bot: true,
       };
     }
-    // (the Kart Park's and the Strike Park's — plan 115 —: dressed by the world's cast, plan 120: their name, what
-    // they do, their look on their Npc)
+    // (the Kart Park's and the Strike Park's — plan 115 —, and those God mode placed — plan 121 —: dressed by the
+    // world's cast, plan 120: their name, what they do, their look on their Npc; a placed one's body by `mood`: a wave,
+    // crouched, running)
+    const mood = n.mood ?? "";
     return {
       name: this.castName(n),
       avatar: this.castLook(n.look ?? ""),
@@ -325,9 +328,10 @@ export class GroundsLife {
       a: n.a,
       status: "online",
       speaking: false,
-      emote: "",
+      emote: mood === "wave" ? "wave" : "",
       mic: false,
       bot: true,
+      ...(mood === "duck" ? { mv: packMv("still", true) } : mood === "run" ? { mv: packMv("jog") } : {}),
     };
   }
   private folkLooks = new Map<string, ReturnType<typeof parseAvatar>>();

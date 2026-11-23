@@ -226,6 +226,7 @@ registerFeature((room: WorldRoom) => {
   // ── made, dressed, taken away ──
   const fit = (l: Life, d: NpcDef, place: NpcPlaceDef) => {
     dress(l.npc, d);
+    if (l.npc.talk !== d.behaviour.answer) l.npc.talk = d.behaviour.answer;
     const moved = l.place.x !== place.x || l.place.z !== place.z || l.place.level !== place.level;
     l.def = d;
     l.place = place;

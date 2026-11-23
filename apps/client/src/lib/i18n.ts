@@ -978,6 +978,7 @@ const D = {
   act_theirCard: ["Open their card", "Abrir o card"],
   act_wave: ["Wave", "Acenar"],
   act_poke: ["Poke", "Cutucar"],
+  act_talk: ["Talk", "Conversar"],
   holdMore: ["hold: more", "segure: mais"],
   focusPrev: ["Previous in reach", "Anterior ao alcance"],
   focusNext: ["Next in reach", "Próximo ao alcance"],

@@ -104,6 +104,9 @@ test("placed NPCs: the town's let go and played here, a made one wanders and ans
   assert.equal(npc(r, "place:vortex"), undefined);
   assert.ok(npc(r, "vortex"), "Vortex still his own");
   assert.equal(npc(r, "place:npc-dora").name, "Dora");
+  // (she answers: the client offers "Talk"; Maya doesn't)
+  assert.equal(npc(r, "place:npc-dora").talk, true);
+  assert.equal(npc(r, "place:folk-maya").talk, false);
 
   // Dora wanders, within her circle
   const d0 = { x: npc(r, "place:npc-dora").x, y: npc(r, "place:npc-dora").y };

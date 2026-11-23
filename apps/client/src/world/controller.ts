@@ -468,6 +468,8 @@ export class WorldController {
       onToyClick: (id) => this.pets.pickToy(id),
       onAvatarClick: (sid, at) => {
         if (sid.startsWith("pet:")) return void this.menu.openMenu({ type: "pet", id: sid.slice(4) }, at);
+        // (plan 121: a placed NPC clicked — talked to; else Vortex poked)
+        if (sid.startsWith("npc:place:")) return this.send("npc:talk", { id: sid.slice(4) });
         if (sid.startsWith("npc:")) return this.send("vortex:poke", {});
         // yourself: your look, your drink…; anyone else: what to do with them
         if (sid === this.room?.sessionId) return this.menu.openMenu({ type: "self" }, at);

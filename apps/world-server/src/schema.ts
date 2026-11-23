@@ -192,6 +192,8 @@ export class Npc extends Schema {
   @type("string") name = "";
   @type("string") role = "";
   @type("string") look = "";
+  // (plan 121) a placed NPC who answers X ("npc:talk"): the client offers "Talk"
+  @type("boolean") talk = false;
 }
 
 export class Standup extends Schema {

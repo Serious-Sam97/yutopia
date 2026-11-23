@@ -220,6 +220,15 @@ export class Targets {
           Math.hypot(vx.x - me.x, vx.y - me.y),
           REACH.npc,
         );
+      // (plan 121) the placed NPCs who answer: "Talk"
+      room.state.npcs?.forEach((n, id) => {
+        if (!id.startsWith("place:") || !n.talk || !here(n)) return;
+        add(
+          { key: `npc:${id}`, kind: "npc", label: n.name || "…", act: "talk", x: n.x, y: n.y, menu: null },
+          Math.hypot(n.x - me.x, n.y - me.y),
+          REACH.npc,
+        );
+      });
       // toys lying about
       room.state.toys?.forEach((t) => {
         if (t.state !== "floor") return;

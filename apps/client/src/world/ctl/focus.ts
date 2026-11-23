@@ -252,7 +252,11 @@ export class Focus {
     if (!f) return;
     // (locked on to it from over there: walked over to)
     if (f.kind === "object" && f.act === "use") return this.c.menu.activateObject(f.objectId ?? "", !!this.lock);
-    if (f.kind === "npc") return this.c.send("vortex:poke", {});
+    // (plan 121: a placed NPC talked to; else Vortex poked)
+    if (f.kind === "npc")
+      return f.key.startsWith("npc:place:")
+        ? this.c.send("npc:talk", { id: f.key.slice(4) })
+        : this.c.send("vortex:poke", {});
     if (f.kind === "toy") return this.c.pets.pickToy(f.key.slice(4));
     if (f.menu) this.c.menu.doAct(f.act, f.menu, f.label);
   }
