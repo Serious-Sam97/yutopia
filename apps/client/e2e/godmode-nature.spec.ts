@@ -143,7 +143,7 @@ test("God mode's nature and things: pines planted and undone, one tree, a boulde
   await expect.poll(() => street(page).then((s) => s.find((t: any) => t.kind === "sign")?.text)).toBe("Frost Farm");
 
   // a fence along three points, ended with Enter
-  await page.getByRole("button", { name: "A line (fences)" }).click();
+  await page.getByRole("button", { name: "A line (fences, walls)" }).click();
   await clickAt(page, FIELD.x - 10, FIELD.z - 6);
   await clickAt(page, FIELD.x + 10, FIELD.z - 6);
   await clickAt(page, FIELD.x + 10, FIELD.z + 8);

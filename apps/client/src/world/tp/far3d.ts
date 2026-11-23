@@ -198,9 +198,43 @@ export class FarLand {
     });
   }
 
+  /** (the edits each ring was last made with, by what the far land sees of them: the grown land, the heights) */
+  private seenEdits: { v: number; land: string; height: Record<string, string> } | null = null;
+  /** Whether the edits laid since the rings were made change anything out past the near land they leave out (the
+   *  grown land; a height beyond it) — a hill or a brush in the town: nothing, the rings kept as they are (each was
+   *  asked again, and its mesh made on the main thread — plan 121's specs). */
+  private farMoved(x: number, z: number): boolean {
+    const e = this.edits();
+    const land = JSON.stringify(e?.land ?? null);
+    const height = e?.height ?? {};
+    const was = this.seenEdits;
+    this.seenEdits = { v: editsVersion, land, height };
+    if (!was) return true;
+    if (was.land !== land) return true;
+    const C = 32; // (shared CHUNK)
+    for (const k of new Set([...Object.keys(was.height), ...Object.keys(height)])) {
+      if (was.height[k] === height[k]) continue;
+      const [cx, cz] = k.split(",").map(Number);
+      // (the chunk's nearest point to the camera, out past the near land's edge)
+      const dx = Math.max(cx * C - x, 0, x - (cx + 1) * C);
+      const dz = Math.max(cz * C - z, 0, z - (cz + 1) * C);
+      if (Math.hypot(dx, dz) > this.near - 2 * C) return true;
+    }
+    return false;
+  }
+
   /** The camera (the Grounds' coords): the rings made again round it as it moves on. */
   update(x: number, z: number) {
     if (this.gone) return;
+    // (what the rings are first made with)
+    this.seenEdits ??= {
+      v: editsVersion,
+      land: JSON.stringify(this.edits()?.land ?? null),
+      height: this.edits()?.height ?? {},
+    };
+    // (edits laid that the far land can't see: the rings as they are, made with them)
+    if (this.seenEdits?.v !== editsVersion && this.rings.some((r) => r.v !== editsVersion) && !this.farMoved(x, z))
+      for (const r of this.rings) if (r.at && !r.asked) r.v = editsVersion;
     // (the lakes iced over or open again: drawn again, their colour the room's — iced only once
     // they're all but frozen over: nearer, the ice comes in from the shores, their middle open)
     const iced = underfoot().ice > 0.95;

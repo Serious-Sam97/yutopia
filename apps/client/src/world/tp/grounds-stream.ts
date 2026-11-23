@@ -372,11 +372,43 @@ if (vFade < 0.999) {
       if (why !== "edits") return;
       const of = staticsOf();
       const moved = movedUnder(this.drawnOf.height, of.height);
-      this.invalidate(cs, of.lists !== this.drawnOf.lists || moved.other || moved.ways.size > 0 ? moved.ways : null);
+      const lists = of.lists !== this.drawnOf.lists;
+      const rest = lists || moved.other || moved.ways.size > 0 ? moved.ways : null;
       this.drawnOf = of;
+      // (a brush held in God mode — plan 121's specs: the land's blocks made again live, the rest once it's let go,
+      // with all it moved under; made again every lay it ran nearly all the time, ~18 ms a frame)
+      if (this.restHeld) {
+        if (!this.restLater) this.restLater = { chunks: new Set(), ways: new Set(), lists: false, any: false };
+        const d = this.restLater;
+        for (const [x, z] of cs) d.chunks.add(`${x},${z}`);
+        if (rest) {
+          d.any = true;
+          for (const w of rest) d.ways.add(w);
+        }
+        d.lists ||= lists;
+        this.invalidate(cs, null);
+        return;
+      }
+      this.listsMoved = lists;
+      this.invalidate(cs, rest);
     });
   }
   private shared: GroundsShared;
+  /** (the edits laid last: whether more than the land's heights changed — the remake's water made again if so) */
+  private listsMoved = true;
+  /** (a brush held: what the rest would be made again for, gathered till it's let go) */
+  private restHeld = false;
+  private restLater: { chunks: Set<string>; ways: Set<string>; lists: boolean; any: boolean } | null = null;
+  /** God mode's brush held (true) or let go (false): the rest (ways, buildings, water…) made again once, after. */
+  holdRest(on: boolean) {
+    this.restHeld = on;
+    if (on) return;
+    const d = this.restLater;
+    this.restLater = null;
+    if (!d?.any) return;
+    this.listsMoved = d.lists;
+    this.invalidateRest(d.ways, d.chunks);
+  }
   /** the far land (null: none — the long road off) */
   far: FarLand | null = null;
   private rootAt = new Vector3();
@@ -396,7 +428,12 @@ if (vFade < 0.999) {
   /** what the rest is made from, of god mode's edits (`staticsOf`) */
   private drawnOf: ReturnType<typeof staticsOf>;
   private offChanged: () => void;
-  private makeStatics: (from?: { g: Grounds3; moved: Set<string> }) => Grounds3;
+  private makeStatics: (from?: {
+    g: Grounds3;
+    moved: Set<string>;
+    chunks?: ReadonlySet<string>;
+    lists?: boolean;
+  }) => Grounds3;
   private patch: (m: Material) => void;
   private patched = new WeakSet<Material>();
   /** Set by the view: a new thing's shaders made ready before it's drawn (a town
@@ -439,6 +476,10 @@ if (vFade < 0.999) {
       if (hit) this.stale.add(b.key);
     }
     if (!rest) return;
+    this.invalidateRest(rest, cs);
+  }
+  /** The rest made again (the ways the land moved under, `chunks` what changed of the land). */
+  private invalidateRest(rest: Set<string>, cs: ReadonlySet<string>) {
     this.fillBoxes();
     // (the districts: made again round you, each shown as it was till its new one's all there)
     for (const [k, d] of this.districts) {
@@ -458,9 +499,9 @@ if (vFade < 0.999) {
     }
     // (one being made again already: made after the one shown, as this one is)
     this.next?.dispose();
-    this.next = this.made({ g: this.statics, moved: rest });
+    this.next = this.made({ g: this.statics, moved: rest, chunks: cs, lists: this.listsMoved });
   }
-  private made(from?: { g: Grounds3; moved: Set<string> }): Grounds3 {
+  private made(from?: { g: Grounds3; moved: Set<string>; chunks?: ReadonlySet<string>; lists?: boolean }): Grounds3 {
     const g = this.makeStatics(from);
     g.root.visible = !from;
     this.root.add(g.root);
@@ -1231,8 +1272,23 @@ function movedUnder(was: Record<string, string>, now: Record<string, string>): {
     if (was[k] !== now[k])
       grids.set(k, [was[k] ? decodeHeights(was[k], N * N) : null, now[k] ? decodeHeights(now[k], N * N) : null]);
   if (!grids.size) return { ways, other: false };
+  // (where the changed chunks are, all of them in one box: anything outside it didn't move — asked of every way's
+  // every sample and more, a published hill was ~a long task between frames — plan 121's specs)
+  let bx0 = Number.POSITIVE_INFINITY;
+  let bz0 = Number.POSITIVE_INFINITY;
+  let bx1 = Number.NEGATIVE_INFINITY;
+  let bz1 = Number.NEGATIVE_INFINITY;
+  for (const k of grids.keys()) {
+    const [cx, cz] = k.split(",").map(Number);
+    bx0 = Math.min(bx0, cx * CHUNK);
+    bz0 = Math.min(bz0, cz * CHUNK);
+    bx1 = Math.max(bx1, (cx + 1) * CHUNK);
+    bz1 = Math.max(bz1, (cz + 1) * CHUNK);
+  }
+  const outside = (x0: number, z0: number, x1: number, z1: number) => x1 < bx0 || x0 > bx1 || z1 < bz0 || z0 > bz1;
   // (the lift's nearest sample, every half metre: changed by more than a centimetre)
   const moved = (x: number, z: number) => {
+    if (x < bx0 || x > bx1 || z < bz0 || z > bz1) return false;
     const cx = Math.floor(x / CHUNK);
     const cz = Math.floor(z / CHUNK);
     const g = grids.get(`${cx},${cz}`);
@@ -1243,11 +1299,27 @@ function movedUnder(was: Record<string, string>, now: Record<string, string>): {
   const round = (x: number, z: number, r: number) =>
     moved(x, z) || moved(x + r, z) || moved(x - r, z) || moved(x, z + r) || moved(x, z - r);
   const plot = (b: (typeof BUILDINGS)[number]) => {
+    if (outside(b.x0 - 2, b.z0 - 2, b.x1 + 2, b.z1 + 2)) return false;
     for (let z = b.z0 - 2; z <= b.z1 + 2; z += 2)
       for (let x = b.x0 - 2; x <= b.x1 + 2; x += 2) if (moved(x, z)) return true;
     return false;
   };
-  for (const w of WAYS) if (w.line.some(([x, z]) => round(x, z, w.w / 2 + w.pave + 1))) ways.add(w.key);
+  for (const w of WAYS) {
+    // (a way whose line's box is off the changed chunks' by more than its half width: not moved)
+    const r = w.w / 2 + w.pave + 1;
+    let x0 = Number.POSITIVE_INFINITY;
+    let z0 = Number.POSITIVE_INFINITY;
+    let x1 = Number.NEGATIVE_INFINITY;
+    let z1 = Number.NEGATIVE_INFINITY;
+    for (const [x, z] of w.line) {
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (z < z0) z0 = z;
+      if (z > z1) z1 = z;
+    }
+    if (outside(x0 - r, z0 - r, x1 + r, z1 + r)) continue;
+    if (w.line.some(([x, z]) => round(x, z, r))) ways.add(w.key);
+  }
   return {
     ways,
     other: BUILDINGS.some(plot) || [...LAMPS, ...STREET, ...SNOW_POLES].some((t) => round(t.x, t.z, 1.5)),

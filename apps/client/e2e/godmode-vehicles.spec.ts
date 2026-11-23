@@ -101,14 +101,21 @@ test("God mode's vehicles: a taxi picked, moved and turned, a bike placed; publi
   await page.locator('[data-god-vehicle="bike_bmx"]').click();
   expect((await god(page)).vehicles.kind).toBe("bike_bmx");
   const bikeAt = { x: TAXI.x - Math.sin(TAXI.a) * 5, z: TAXI.z + Math.cos(TAXI.a) * 5 };
+  // (the draft's own vehicles placed before this one: what's live may have some — an admin's)
+  const keys0: string[] = await page.evaluate(() =>
+    ((window as any).__yutopia.god.draftNow().vehicles?.add ?? []).map((v: any) => v.key),
+  );
   const pb = await toScreen(page, bikeAt.x, bikeAt.z);
   await page.mouse.move(pb.x, pb.y);
   await page.waitForTimeout(1500);
   await page.mouse.click(pb.x, pb.y);
   await expect
     .poll(() => page.evaluate(() => (window as any).__yutopia.god.draftNow().vehicles?.add?.length ?? 0))
-    .toBe(1);
-  const bike = await page.evaluate(() => (window as any).__yutopia.god.draftNow().vehicles.add[0]);
+    .toBe(keys0.length + 1);
+  const bike = await page.evaluate(
+    (k) => (window as any).__yutopia.god.draftNow().vehicles.add.find((v: any) => !k.includes(v.key)),
+    keys0,
+  );
   expect(bike.model).toBe("bike_bmx");
 
   // published: the taxi at its new home, the bike made
@@ -133,7 +140,11 @@ test("God mode's vehicles: a taxi picked, moved and turned, a bike placed; publi
     .toBe(rev0 + 2);
   await expect.poll(() => objOf(page, bike.key), { timeout: 10_000 }).toBeNull();
   const t2 = await objOf(page, TAXI.id);
-  expect(Math.hypot((t2?.x ?? 0) - TAXI.x, (t2?.z ?? 0) - TAXI.z), "the taxi home again").toBeLessThan(0.8);
+  // (where it was before: its home as what's live has it — an admin's edits may have moved it from the town's)
+  expect(
+    Math.hypot((t2?.x ?? 0) - (was?.x ?? TAXI.x), (t2?.z ?? 0) - (was?.z ?? TAXI.z)),
+    "the taxi home again",
+  ).toBeLessThan(0.8);
 
   await page.keyboard.press("o");
   await expect.poll(() => god(page).then((x) => x.on)).toBe(false);

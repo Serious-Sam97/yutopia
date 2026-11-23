@@ -179,14 +179,22 @@ function browserOf(ua: string): { browser: string; os: string } {
   return { browser, os };
 }
 
+// (asked once a context: the GPU's name doesn't change, and asking it waits on the GPU — ~12 ms at every report, a
+// frame lost now and then: plan 121's specs)
+const gpuNames = new WeakMap<object, string>();
 function gpuOf(gl: WebGLRenderingContext | null | undefined): string {
   if (!gl) return "";
+  const had = gpuNames.get(gl);
+  if (had !== undefined) return had;
+  let name = "";
   try {
     const ext = gl.getExtension("WEBGL_debug_renderer_info");
-    return String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? "");
+    name = String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? "");
   } catch {
-    return "";
+    name = "";
   }
+  gpuNames.set(gl, name);
+  return name;
 }
 
 /** Starts the reports; they stop with the controller (or by what this returns). */

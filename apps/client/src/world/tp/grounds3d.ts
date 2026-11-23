@@ -286,8 +286,10 @@ export interface GroundsOpts {
   /** the pictures and materials kept between the parts and their remakes (else its own) */
   shared?: GroundsShared;
   /** made again after this one: the ways that didn't change taken from it when swapped in
-   *  (`adopt`), not made again — save these (the land moved under them) */
-  from?: { g: Grounds3; moved: Set<string> };
+   *  (`adopt`), not made again — save these (the land moved under them). `chunks`: the land's chunks the edits
+   *  changed, `lists`: whether anything but the land's heights changed (its water taken too when neither touches
+   *  it — plan 121's specs: a held land brush made it again, ~125 ms, every step) */
+  from?: { g: Grounds3; moved: Set<string>; chunks?: ReadonlySet<string>; lists?: boolean };
 }
 
 /** The Grounds' pictures and the materials made of them: one lot for every part of the game's
@@ -836,7 +838,7 @@ export class Grounds3 {
       run(() => this.skateParks(), { x: SKATE_YARD.x0, z: SKATE_YARD.z0 }, 1);
       // (its water: Silver Lake's and the creek's out on the long road, a grown lake's — the rest's
       // circle was the only one to draw any, and it's round the town)
-      run(() => this.water(), undefined, 1);
+      run(() => this.waterStep(), undefined, 1);
       run(() => this.lamps(), undefined, 2);
       return;
     }
@@ -847,7 +849,7 @@ export class Grounds3 {
         for (const w of WAYS) run(() => this.wayStep(w));
         run(() => this.waysAll());
       } else this.ways();
-      run(() => this.water());
+      run(() => this.waterStep());
       run(() => this.lot());
       if (!o.stream) this.woods();
       for (const b of BUILDINGS)
@@ -880,6 +882,60 @@ export class Grounds3 {
   >();
   /** the ways to be taken from `from` when this one's swapped in */
   private takes: string[] = [];
+  /** the water's meshes and what they hold, and where it all is (world x, z) — taken by the next one made when the
+   *  land under it didn't change */
+  private waterPart: {
+    objects: Object3D[];
+    disp: { dispose(): void }[];
+    box: { x0: number; z0: number; x1: number; z1: number } | null;
+  } | null = null;
+  private takesWater = false;
+  /** The water (a step): taken from the one made before when nothing it stands on changed, else made. */
+  private waterStep() {
+    const from = this.o.from;
+    const was = from?.g.waterPart;
+    if (from && was && !from.lists && from.chunks) {
+      const b = was.box;
+      const pad = 8;
+      let touched = false;
+      if (b)
+        for (const k of from.chunks) {
+          const [cx, cz] = k.split(",").map(Number);
+          const x0 = cx * CHUNK;
+          const z0 = cz * CHUNK;
+          if (x0 < b.x1 + pad && x0 + CHUNK > b.x0 - pad && z0 < b.z1 + pad && z0 + CHUNK > b.z0 - pad) {
+            touched = true;
+            break;
+          }
+        }
+      if (!touched) {
+        this.takesWater = true;
+        this.waterPart = { objects: [], disp: [], box: b };
+        return;
+      }
+    }
+    const n = this.root.children.length;
+    const d = this.disposables.length;
+    this.water();
+    const objects = this.root.children.slice(n);
+    let box: { x0: number; z0: number; x1: number; z1: number } | null = null;
+    for (const o of objects) {
+      const g = (o as { geometry?: BufferGeometry }).geometry;
+      if (!g) continue;
+      if (!g.boundingBox) g.computeBoundingBox();
+      const bb = g.boundingBox;
+      if (!bb) continue;
+      box = box
+        ? {
+            x0: Math.min(box.x0, bb.min.x),
+            z0: Math.min(box.z0, bb.min.z),
+            x1: Math.max(box.x1, bb.max.x),
+            z1: Math.max(box.z1, bb.max.z),
+          }
+        : { x0: bb.min.x, z0: bb.min.z, x1: bb.max.x, z1: bb.max.z };
+    }
+    this.waterPart = { objects, disp: this.disposables.slice(d), box };
+  }
   /** what was handed on to the next one made: not freed with this one */
   private handed = new WeakSet<object>();
   /** round the ways that changed (made, gone, moved): a way near one is made again (its banks,
@@ -935,6 +991,18 @@ export class Grounds3 {
       if (t) this.asphalts.set(k, t);
     }
     this.takes = [];
+    // (the water, when it wasn't made again)
+    const w = from.waterPart;
+    if (this.takesWater && w && this.waterPart) {
+      for (const o of w.objects) this.root.add(o);
+      for (const d of w.disp) {
+        from.handed.add(d);
+        this.disposables.push(d);
+      }
+      this.waterPart.objects = w.objects;
+      this.waterPart.disp = w.disp;
+    }
+    this.takesWater = false;
   }
   private pending: { f: () => void; x: number; z: number; at: boolean; g: number; remote?: Remote }[] = [];
   private queue(f: () => void, at?: { x: number; z: number }, g = 0, remote?: Remote) {

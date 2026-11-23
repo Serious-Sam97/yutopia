@@ -1413,8 +1413,34 @@ function base(x: number, z: number): number {
 // the ways' heights: the land under them, smoothed along them — and on through a way that goes
 // on from either end, so two that meet agree where they meet (the driveway's end and the road's
 // start were 0.17 apart: a step across the road at the gatehouse)
+// (each way's land under its line, `macro`'s: the generator's and the grown land's — never a brush's heights —, kept by
+// its line and the grown land: an edit that moves neither — a held land brush laying a step every frame or two —
+// samples nothing again. It was ~130 ms a step with the long road: plan 121's God mode specs.)
+let wayRaws = new Map<string, number[]>();
+// (and where each way's line crosses the river or the ravine — its lines' alone —, kept the same way; the river's
+// heights by the grown land; the long road's bridged samples once)
+let wayBridged = new Map<string, boolean[]>();
+let riverH: { grown: string; h: number[] } | null = null;
+let longBridgedOnce: boolean[] | null = null;
+let endsMet: { key: string; met: Map<string, { u: number; j: number }> } | null = null;
 function layLevels() {
-  const raws = WAYS.map((w) => w.line.map(([x, z]) => macro(x, z)));
+  const grown = GROWN_REGIONS.length ? JSON.stringify(GROWN_REGIONS) : "";
+  const kept = new Map<string, number[]>();
+  const lineKeys = WAYS.map((w) => {
+    let h = 2166136261;
+    for (const [x, z] of w.line) {
+      h = Math.imul(h ^ Math.round(x * 1000), 16777619);
+      h = Math.imul(h ^ Math.round(z * 1000), 16777619);
+    }
+    return `${w.key}|${w.line.length}|${h >>> 0}`;
+  });
+  const raws = WAYS.map((w, f) => {
+    const k = `${grown}|${lineKeys[f]}`;
+    const raw = wayRaws.get(k) ?? w.line.map(([x, z]) => macro(x, z));
+    kept.set(k, raw);
+    return raw;
+  });
+  wayRaws = kept;
   const at = (p: P, q: P) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 1.5;
   WAYS.forEach((w, f) => {
     const raw = raws[f];
@@ -1446,20 +1472,34 @@ function layLevels() {
     w.bridged = w.line.map(() => false);
   });
   // a way that starts (or ends) on another's middle — Church Street off Main — eases from that
-  // one's height over its first (last) tiles
-  for (const w of WAYS) {
+  // one's height over its first (last) tiles. (Which way and sample each end meets: its lines' alone, kept while no
+  // way's line changes — searched every way's every sample for each end, it was most of a lay: plan 121's specs.)
+  const linesKey = lineKeys.join("~");
+  if (endsMet?.key !== linesKey) {
+    const met = new Map<string, { u: number; j: number }>();
+    WAYS.forEach((w, wi) => {
+      if (w.closed) return;
+      for (const end of [0, w.line.length - 1]) {
+        const [x, z] = w.line[end];
+        let best: { u: number; j: number; d: number } | null = null;
+        WAYS.forEach((u, ui) => {
+          if (u === w || u.kind === "trail" || u.kind === "walk") return;
+          for (let j = 2; j < u.line.length - 2; j++) {
+            const d = Math.hypot(u.line[j][0] - x, u.line[j][1] - z);
+            if (d < u.w / 2 + 3 && (!best || d < best.d)) best = { u: ui, j, d };
+          }
+        });
+        if (best) met.set(`${wi}:${end}`, { u: (best as { u: number }).u, j: (best as { j: number }).j });
+      }
+    });
+    endsMet = { key: linesKey, met };
+  }
+  for (const [wi, w] of WAYS.entries()) {
     if (w.closed) continue;
     for (const end of [0, w.line.length - 1]) {
-      const [x, z] = w.line[end];
-      let best: { u: Way; j: number; d: number } | null = null;
-      for (const u of WAYS) {
-        if (u === w || u.kind === "trail" || u.kind === "walk") continue;
-        for (let j = 2; j < u.line.length - 2; j++) {
-          const d = Math.hypot(u.line[j][0] - x, u.line[j][1] - z);
-          if (d < u.w / 2 + 3 && (!best || d < best.d)) best = { u, j, d };
-        }
-      }
-      if (!best) continue;
+      const m = endsMet.met.get(`${wi}:${end}`);
+      if (!m) continue;
+      const best = { u: WAYS[m.u], j: m.j };
       const hj = best.u.h[best.j];
       for (let k = 0; k < Math.min(12, w.line.length); k++) {
         const i = end === 0 ? k : w.line.length - 1 - k;
@@ -1474,17 +1514,27 @@ function layLevels() {
     const main = WAYS.find((w) => w.key === "main");
     const from = main ? main.h[main.h.length - 1] - ALT[0] : 0;
     long.h = ALT.map((a, i) => a + from * (1 - smooth(0, 80, longS(i))));
-    long.bridged = SPINE.map((_, i) => longBridged(i));
+    longBridgedOnce ??= SPINE.map((_, i) => longBridged(i));
+    long.bridged = longBridgedOnce.slice();
   }
-  RIVER.h = RIVER.line.map(([x, z]) => macro(x, z) - 2.6);
+  if (riverH?.grown !== grown) riverH = { grown, h: RIVER.line.map(([x, z]) => macro(x, z) - 2.6) };
+  RIVER.h = riverH.h.slice();
   // bridges: where a way crosses the river or the ravine
-  for (const w of WAYS)
-    for (const [i, [x, z]] of w.line.entries()) {
-      const n = nearLines(x, z);
-      const r = n.get(RIVER_F);
-      const v = n.get(RAVINE_F);
-      if ((r && r.d < RIVER.w / 2 + 6) || (v && v.d < RAVINE.w / 2 + 1.5)) w.bridged[i] = true;
+  const keptB = new Map<string, boolean[]>();
+  WAYS.forEach((w, f) => {
+    let over = wayBridged.get(lineKeys[f]);
+    if (!over) {
+      over = w.line.map(([x, z]) => {
+        const n = nearLines(x, z);
+        const r = n.get(RIVER_F);
+        const v = n.get(RAVINE_F);
+        return !!((r && r.d < RIVER.w / 2 + 6) || (v && v.d < RAVINE.w / 2 + 1.5));
+      });
     }
+    keptB.set(lineKeys[f], over);
+    for (let i = 0; i < over.length; i++) if (over[i]) w.bridged[i] = true;
+  });
+  wayBridged = keptB;
   layBridges();
 }
 

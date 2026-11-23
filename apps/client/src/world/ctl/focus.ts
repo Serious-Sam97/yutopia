@@ -156,6 +156,11 @@ export class Focus {
   }
 
   updatePrompt() {
+    // (God mode's camera: nobody on foot to be told what's in front of them — its targets were ~17 ms at times)
+    if (this.c.god?.on && !this.c.god.walking) {
+      if (hud.get().prompt) hud.set({ prompt: null });
+      return;
+    }
     if (this.c.cars?.prompt(hud)) return; // (a car: in by its door, or out — car/cars.ts)
     // (plan 103) by a skate park's rack, on foot: its nearest board to take
     const rack =

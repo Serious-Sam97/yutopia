@@ -782,6 +782,7 @@ class Dark implements DarkHooks {
     if (Number.isFinite(me.x))
       for (const k of this.lockersHere(now)) {
         const f = lockerFront(k);
+        if (Math.abs(f.x - me.x) > bestD || Math.abs(f.y - me.y) > bestD) continue;
         const d = far(f.x - me.x, f.y - me.y, f.x, f.y);
         if (d <= bestD) {
           bestD = d;
@@ -792,6 +793,8 @@ class Dark implements DarkHooks {
       const bx = me.x;
       const bz = me.y;
       for (const s of lootNow()) {
+        // (out of reach across already: no height asked — `far` is never less; every spot, every frame, was ~heightAt)
+        if (Math.abs(s.x - bx) > bestD || Math.abs(s.z - bz) > bestD) continue;
         const d = far(s.x - bx, s.z - bz, s.x, s.z);
         if (d <= bestD) {
           bestD = d;

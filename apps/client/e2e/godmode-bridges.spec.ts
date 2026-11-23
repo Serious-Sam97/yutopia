@@ -7,6 +7,8 @@ import { ANA, clearDrafts, enter, holdHour, makeDraft, test, token, useWorld } f
 // was one, 3–4 m deep, each end). Then God mode: a bridge added on the county road west of the river with the Bridges
 // tool (B), its deck solid in Jolt; the river bridge picked, restyled in each style (stills: YUTOPIA_SHOTS=<dir>, with
 // YUTOPIA_GPU=1), its sides off, taken away (the road on the land there). Nothing's published: the draft's deleted.
+// (The generator's bridges, whatever's published: the draft is what's live without its bridges — an admin's own may
+// have taken the river bridge away for one of theirs — and the river's checked in it, God mode's Jolt the draft's.)
 const GPU = process.env.YUTOPIA_GPU === "1";
 const SHOTS = process.env.YUTOPIA_SHOTS;
 if (GPU || SHOTS)
@@ -92,16 +94,31 @@ test("the bridges: the river bridge solid end to end in Jolt; God mode's Bridges
   });
   const tok = await token(ANA);
   await clearDrafts(tok);
-  await makeDraft(tok, "e2e: bridges");
+  await makeDraft(tok, "e2e: bridges", (live) => {
+    const { bridges: _theirs, ...rest } = live;
+    return rest;
+  });
   await enter(page, tok, space);
   await holdHour(page, 13);
-  const river = (await bridges(page)).find((b: any) => b.key === "road~0");
-  expect(river, "the river bridge, keyed").toMatchObject({ way: "road", style: "steel", rails: "truss" });
+  // (by the river: its bridge as it's live — the generator's, or one an admin put there)
+  const near = await page.evaluate(() => {
+    const B = (window as any).__yutopia.G.BRIDGES;
+    const b = B.find((x: any) => x.key === "road~0") ?? B.find((x: any) => x.w.key === "road");
+    return b ? b.w.line[(b.a + b.b) >> 1] : null;
+  });
+  expect(near, "a bridge on the road over the river").not.toBeNull();
+  await page.evaluate((p) => (window as any).__yutopia.teleport(p), { x: near[0], y: near[1] - 14, level: 0 });
+
+  // God mode: the draft's the generator's bridges (the river's `road~0`)
+  await page.keyboard.press("o");
+  await expect.poll(() => god(page).then((g) => g.on && g.loaded), { timeout: 15_000 }).toBe(true);
+  await expect
+    .poll(() => bridges(page).then((l) => l.find((b: any) => b.key === "road~0")), { timeout: 20_000 })
+    .toMatchObject({ way: "road", style: "steel", rails: "truss" });
   const mid = await page.evaluate(() => {
     const b = (window as any).__yutopia.G.BRIDGES.find((x: any) => x.key === "road~0");
     return b.w.line[(b.a + b.b) >> 1];
   });
-  await page.evaluate((p) => (window as any).__yutopia.teleport(p), { x: mid[0], y: mid[1] - 14, level: 0 });
 
   // the river bridge as Jolt has it: nothing to fall into at either end
   await expect.poll(() => joltDrop(page, "road~0").then((d) => d !== null), { timeout: 60_000 }).toBe(true);
@@ -109,9 +126,7 @@ test("the bridges: the river bridge solid end to end in Jolt; God mode's Bridges
   console.log(`[bridge] the river bridge in Jolt: worst ${JSON.stringify(ends)}`);
   expect((ends as any).drop, "under the wheels the whole way").toBeLessThan(0.15);
 
-  // God mode, the Bridges tool: a bridge laid on the county road west of the river (two clicks on the road)
-  await page.keyboard.press("o");
-  await expect.poll(() => god(page).then((g) => g.on && g.loaded), { timeout: 15_000 }).toBe(true);
+  // the Bridges tool: a bridge laid on the county road west of the river (two clicks on the road)
   await page.waitForTimeout(1500);
   // (a key pressed again till it's taken: the first frames in God mode can be long ones)
   const tool = async (key: string, want: string) =>
@@ -133,12 +148,23 @@ test("the bridges: the river bridge solid end to end in Jolt; God mode's Bridges
   await page.evaluate(([a]) => (window as any).__yutopia.god.bridgesTool().up(a, true), [p0]);
   await expect.poll(() => god(page).then((g) => g.bridges.drawing?.name)).toBe("County road");
   await page.evaluate(([b]) => (window as any).__yutopia.god.bridgesTool().up(b, true), [p1]);
-  await expect.poll(() => god(page).then((g) => g.changes), { timeout: 5000 }).toBe(1);
-  expect((await god(page)).bridges.sel).toMatchObject({ key: "god-bridge-1", style: "steel", made: false });
-  await expect.poll(() => bridges(page).then((l) => l.some((b: any) => b.key === "god-bridge-1"))).toBe(true);
+  // (one bridge in the draft — it had none of its own; against what's live the count may not move: an admin's own
+  // bridge there may have the key the new one's given)
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__yutopia.god.draftNow().bridges?.add?.length ?? 0), {
+      timeout: 5000,
+    })
+    .toBe(1);
+  expect((await god(page)).bridges.sel).toMatchObject({
+    key: expect.stringMatching(/^god-bridge-\d+$/),
+    style: "steel",
+    made: false,
+  });
+  const added = (await god(page)).bridges.sel.key as string;
+  await expect.poll(() => bridges(page).then((l) => l.some((b: any) => b.key === added))).toBe(true);
   await expect(page.getByRole("heading", { name: "Bridge" })).toBeVisible();
   await expect
-    .poll(() => joltDrop(page, "god-bridge-1", 2).then((d: any) => d && d.drop < 0.15), { timeout: 20_000 })
+    .poll(() => joltDrop(page, added, 2).then((d: any) => d && d.drop < 0.15), { timeout: 20_000 })
     .toBe(true);
 
   // the river bridge picked (Select, on its deck), in each style
@@ -165,6 +191,9 @@ test("the bridges: the river bridge solid end to end in Jolt; God mode's Bridges
       )
       .toBe("bridge");
   };
+  // (the camera over it: whatever ran before may have left it looking elsewhere)
+  await page.evaluate((m) => (window as any).__yutopia.god.lookAt(m[0], m[1]), mid);
+  await page.waitForTimeout(1500);
   await pickRiver();
   await expect.poll(() => god(page).then((g) => [g.picked, g.bridges.sel?.key])).toEqual(["bridge", "road~0"]);
   await shot(page, "picked");

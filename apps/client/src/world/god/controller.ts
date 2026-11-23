@@ -1127,6 +1127,8 @@ export class GodController {
       v: 0,
     };
     if (!(s instanceof LandStroke)) s.apply(at.x, at.z);
+    // (held: the Grounds' rest made again once it's let go, not at every lay)
+    tp?.around.grounds?.holdRest(true);
   }
   /** The brush held this frame where the pointer is (paint: along the way it moved). */
   private strokeFrame(dt: number) {
@@ -1154,6 +1156,7 @@ export class GodController {
     if (!this.stroke) return;
     this.layStroke();
     this.stroke = null;
+    this.w.tp?.around.grounds?.holdRest(false);
   }
   private showRing(f: { y: number }) {
     const g = hud.get().god;
