@@ -10,7 +10,7 @@ Plan 120 made the cast: every NPC, made and changed on `/admin/npcs`, with their
 behaviour. The ones made there wait off the map. This plan puts them on it, in God mode, and has the world play their
 behaviour.
 
-Status: **planned 2026-11-23; forks decided 2026-11-23, one by one.**
+Status: **planned 2026-11-23; forks decided 2026-11-23, one by one; built 2026-11-23 (phases 1–11), waiting on the user's test.**
 - **F1a** the draft;
 - **F2a** one place each;
 - **F3c** the town's people fully placeable:
@@ -237,4 +237,34 @@ God mode.
       the world as `place:<key>`), rolled back (gone);
     - the bakery's ground floor shown with its outside and the storey above cut away, one placed on it (its floor,
       inside its plot).
+- **Phase 10** (0a9bd956): the cast page reads the published edits. Each card says "placed · outdoors", "placed ·
+  indoors", the town's, or not on the map yet. The editor says where, which way they face, and where they live. The
+  page opens on `?key=` (God mode's "Open on the cast page").
+- **Phase 11, checks**:
+  - **perf, the server**: an offline room, npc-life's own tick, 20 s each, wanderers and routes about the houses, all
+    greeting and talking often, a player among them:
+    - 0 placed: 0.005 ms;
+    - 60 placed: 0.41 ms mean, 1.36 p95, 3.5 max;
+    - 120 placed: 0.69 ms mean, 1.65 p95, 3.3 max;
+    - (a 50 ms tick at 20 Hz.) The people near are now listed once a tick, not once an NPC.
+  - **perf, the client**: Bia on Low, this Mac's GPU, standing among them by the houses, all of them in view: 0
+    placed 60 fps, 60 placed 60 fps, 120 placed 50.5 fps. A weaker machine (friends' M1s, plan 90) will feel it
+    sooner: people cost ~3.5 ms a frame there. No cap (F9b): said, not limited.
+  - **budget**: /page 497.0 of 498 KB, grounds 182.7 of 205. God mode's chunk went 26.8 → 31.0 KB (the NPCs tool
+    and its panel), over its 27, so it's raised to 32 (`tools/budget.mjs`, noted there).
+  - **tests**: shared 871, client 478, world-server npc-life, cast and schema; e2e cast.spec and
+    godmode-npcs.spec (2).
+  - **Not run**: the older God mode specs (godmode*.spec) clear all of Ana's drafts and swap the world's fixture on
+    the shared dev world. The memcheck isn't run either.
+
+## Left for later
+
+- **Routes and homes across floors** go through a town building's door only: the land and its ground storey, or
+  one building to another. An upper storey or a studio floor above the ground has no way out (no stairs in the
+  walk), so a home or a route stop there leaves them standing where they are.
+- **Sit outdoors**: a seat is a world thing's (furniture). The Grounds' benches aren't seats, so a "sit" put on one
+  stands by it.
+- **The God mode draft's view** draws a placement that differs from what's published. One taken off the map in the
+  draft still shows in the world till it's published.
+- **The memcheck** with placed NPCs, and the older God mode specs, are to run when the shared world is free for it.
 

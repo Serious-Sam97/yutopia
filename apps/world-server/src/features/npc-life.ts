@@ -83,7 +83,17 @@ interface Life {
 registerFeature((room: WorldRoom) => {
   const lives = new Map<string, Life>();
   const pick = <T>(l: T[]): T => l[Math.floor(Math.random() * l.length)];
-  const humans = () => [...room.state.players.values()].filter((p) => !p.bot);
+  // (the people about: made once a tick, not once an NPC — 120 placed: plan 121's perf)
+  let people: Player[] = [];
+  let peopleAt = -1;
+  const humans = () => {
+    const now = Date.now();
+    if (now !== peopleAt) {
+      peopleAt = now;
+      people = [...room.state.players.values()].filter((p) => !p.bot);
+    }
+    return people;
+  };
   const nearBy = (l: Life, r: number) =>
     humans().filter((p) => p.level === l.npc.level && Math.hypot(p.x - l.npc.x, p.y - l.npc.y) <= r);
 

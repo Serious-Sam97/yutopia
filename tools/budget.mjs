@@ -134,7 +134,8 @@ const LAZY = {
   // (24 on 2026-11-04: plan 69 phase 10 — the Grow tool, its panel and the land map; 17.7 → 19.8)
   // (27 on 2026-11-19, the user's standing call on budgets: plan 109 — the Bridges tool, its ghost, panel and words;
   // 22.8 at plan 102 → 25.7)
-  "yutopia-god": 27,
+  // (plan 121: the NPCs tool and its panel, 26.8 → 31.0)
+  "yutopia-god": 32,
 }; // KB gzip
 const chunks = `${dist}static/chunks/`;
 for (const [marker, budget] of Object.entries(LAZY)) {
