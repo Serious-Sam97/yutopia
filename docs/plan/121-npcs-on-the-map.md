@@ -10,7 +10,7 @@ Plan 120 made the cast: every NPC, made and changed on `/admin/npcs`, with their
 behaviour. The ones made there wait off the map. This plan puts them on it, in God mode, and has the world play their
 behaviour.
 
-Status: **planned 2026-11-23; forks decided 2026-11-23, one by one; built 2026-11-23 (phases 1–11), waiting on the user's test.**
+Status: **planned 2026-11-23; forks decided 2026-11-23, one by one; built 2026-11-23 (phases 1–11); the user tested it ("it's good") and it was pushed 2026-11-23.**
 - **F1a** the draft;
 - **F2a** one place each;
 - **F3c** the town's people fully placeable:
