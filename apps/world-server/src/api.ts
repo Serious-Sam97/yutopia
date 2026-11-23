@@ -75,6 +75,7 @@ export interface WorldInfo {
   } | null;
   weather?: unknown; // the ground and the call in force when last saved (shared weather.ts SavedWeather)
   edits?: GroundsEdits; // god mode's edits to the Grounds as published (features/godmode.ts)
+  npcs?: unknown; // the world's cast (cast.ts, docs/plan/120): null till the town's people are seeded
 }
 
 // A survivor (docs/plan/30-the-dark.md, phase 2): what they carry, their vitals
@@ -135,6 +136,8 @@ export const api = {
     rollbackOf?: number | null;
     draftId?: number;
   }) => call<{ revision: { rev: number } }>("POST", "/grounds/revisions", b),
+  // the cast's town people, once (docs/plan/120-god-mode-npcs.md): the cast as it is after
+  seedNpcs: (npcs: unknown[]) => call<{ npcs: unknown[]; seeded: boolean }>("POST", "/npcs/seed", { npcs }),
   putObject: (o: WorldObjectDef) => call<{ object: WorldObjectDef }>("PUT", "/objects", o),
   // the building's structure, whole (docs/plan/72-the-3d-core.md, phase 6)
   putStructure: (structure: unknown) => call("PUT", "/world/structure", { structure }),

@@ -187,6 +187,11 @@ export class Npc extends Schema {
   @type("float64") vgone = 0;
   // (plan 88 phase 4) his scars, beaten today (0 none, at most 3)
   @type("uint8") vscar = 0;
+  // (plan 120) as the cast says: their name, what they do (EN, or EN\x1fPT), their look (shared packLook: what isn't
+  // the default, JSON; "" Vortex's own)
+  @type("string") name = "";
+  @type("string") role = "";
+  @type("string") look = "";
 }
 
 export class Standup extends Schema {

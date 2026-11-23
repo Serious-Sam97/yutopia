@@ -1,6 +1,8 @@
 import { ANIM, faceByte } from "@yutopia/shared";
 import { heightAt } from "@yutopia/shared/grounds";
-import { STRIKE_FOLK, STRIKE_HUB, STRIKE_LINES, strikePosts, strikeStops } from "@yutopia/shared/strike";
+import { linesFor, type NpcDef, paceOf, TALK_EVERY } from "@yutopia/shared/npc";
+import { STRIKE_FOLK, STRIKE_HUB, strikePosts, strikeStops } from "@yutopia/shared/strike";
+import { type Cast, dress, wire } from "../cast.ts";
 import { Npc } from "../schema.ts";
 import type { WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
@@ -11,11 +13,11 @@ import { registerFeature } from "./index.ts";
 // or the gate along that stop's own way, a while there, and back. Room NPCs (kind "folk"), drawn by the client from
 // shared strike/folk.ts's looks, as the Kart Park's folk (park-life.ts).
 
-const PACE: Record<string, number> = { old: 0.7, tired: 0.85, brisk: 1.15, bouncy: 1.05, heavy: 0.95 };
 const V = 1.3;
 
 registerFeature((room: WorldRoom) => {
   interface Walker {
+    key: string;
     npc: Npc;
     role: string;
     v: number;
@@ -25,13 +27,23 @@ registerFeature((room: WorldRoom) => {
     back: { x: number; z: number }[];
     until: number;
     sayAt: number;
+    /** what they say on their own (EN|PT), × how long between (plan 120: the cast's) */
+    lines: string[];
+    talk: number;
     post?: { x: number; z: number; a: number };
   }
   const walkers: Walker[] = [];
   const posts = strikePosts();
   const stops = strikeStops();
   const now0 = Date.now();
-  STRIKE_FOLK.forEach((f, k) => {
+  // (plan 120) made from the world's cast by key — someone deleted from it isn't —, dressed as it says; live
+  const fit = (w: Walker, d: NpcDef) => {
+    dress(w.npc, d);
+    w.v = V * paceOf(d);
+    w.lines = linesFor(d);
+    w.talk = TALK_EVERY[d.behaviour.talk];
+  };
+  const make = (k: number, f: (typeof STRIKE_FOLK)[number], d: NpcDef, now: number) => {
     const npc = new Npc();
     npc.id = `strike-${f.id}`;
     npc.kind = "folk";
@@ -45,18 +57,38 @@ registerFeature((room: WorldRoom) => {
       a: ANIM.idle,
       yaw: faceByte(Math.cos(at.a), Math.sin(at.a)),
     });
-    room.state.npcs.set(npc.id, npc);
-    walkers.push({
+    const w: Walker = {
+      key: npc.id,
       npc,
       role: f.role,
-      v: V * (PACE[f.look.gait ?? ""] ?? 1),
+      v: V,
       leg: [],
       back: [],
-      until: now0 + 2000 + k * 2500,
-      sayAt: now0 + 15_000 + Math.random() * 45_000,
+      until: now + 2000 + k * 2500,
+      sayAt: now + 15_000 + Math.random() * 45_000,
+      lines: [],
+      talk: 1,
       post,
+    };
+    fit(w, d);
+    room.state.npcs.set(npc.id, npc);
+    walkers.push(w);
+  };
+  const cast = (c: Cast, now: number) => {
+    for (let i = walkers.length - 1; i >= 0; i--) {
+      const d = c.get(walkers[i].key);
+      if (d) fit(walkers[i], d);
+      else {
+        room.state.npcs.delete(walkers[i].npc.id);
+        walkers.splice(i, 1);
+      }
+    }
+    STRIKE_FOLK.forEach((f, k) => {
+      const d = c.get(`strike-${f.id}`);
+      if (d && !walkers.some((w) => w.key === d.key)) make(k, f, d, now);
     });
-  });
+  };
+  cast(room.cast, now0);
   const pick = <T>(l: T[]): T => l[Math.floor(Math.random() * l.length)];
 
   return {
@@ -65,9 +97,13 @@ registerFeature((room: WorldRoom) => {
         const n = w.npc;
         // a line now and then (the staff more often: they're talking to whoever's about)
         if (now >= w.sayAt) {
-          n.say = pick(STRIKE_LINES[w.role as keyof typeof STRIKE_LINES] ?? STRIKE_LINES.recruit);
-          n.sayAt = now;
-          w.sayAt = now + (w.post ? 25_000 : 40_000) + Math.random() * 40_000;
+          // (nothing to say, or never talks: asked again in a minute)
+          if (!w.lines.length || !Number.isFinite(w.talk)) w.sayAt = now + 60_000;
+          else {
+            n.say = wire(pick(w.lines));
+            n.sayAt = now;
+            w.sayAt = now + ((w.post ? 25_000 : 40_000) + Math.random() * 40_000) * w.talk;
+          }
         }
         if (w.post) {
           // (the staff turn about at their post: to the yard, now and then aside)
@@ -117,6 +153,9 @@ registerFeature((room: WorldRoom) => {
         }
         n.z = heightAt(n.x, n.y);
       }
+    },
+    cast(c) {
+      cast(c, Date.now());
     },
     dispose() {
       for (const w of walkers) room.state.npcs.delete(w.npc.id);

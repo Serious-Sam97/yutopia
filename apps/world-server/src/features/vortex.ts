@@ -3,9 +3,11 @@ import { ANIM, areaAt, faceByte, objLevel, type Point, worldZ } from "@yutopia/s
 import { BODY, type Ray, rayMeets } from "@yutopia/shared/dark";
 import { isWeapon } from "@yutopia/shared/inventory";
 import { isRadio } from "@yutopia/shared/media";
+import { type NpcDef, TALK_EVERY } from "@yutopia/shared/npc";
 import { type Act, actOf, hurtBy, shooters, VORTEX_FIGHT } from "@yutopia/shared/vortex-fight";
 import { api } from "../api.ts";
 import { config } from "../config.ts";
+import { dress, wire } from "../cast.ts";
 import { Npc, type Player } from "../schema.ts";
 import { fromSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
@@ -148,7 +150,19 @@ registerFeature((room: WorldRoom) => {
   const spawn = room.grid.nearestOpen(HOME.x, HOME.y) ?? room.map.spawn;
   npc.x = spawn.x;
   npc.y = spawn.y;
-  room.state.npcs.set("vortex", npc);
+  // (plan 120) in the world while the cast has him (named as it says, his pace and chatter by it; his mascot's look and
+  // fight his own): deleted from it, no Vortex — not drawn, not shot, deaf to pokes — till it has him again
+  let here = room.cast.has("vortex");
+  let vPace = 1;
+  let vTalk = 1;
+  const castVortex = (d: NpcDef | undefined) => {
+    if (!d) return;
+    dress(npc, d);
+    vPace = d.behaviour.pace ?? 1;
+    vTalk = TALK_EVERY[d.behaviour.talk];
+  };
+  castVortex(room.cast.get("vortex"));
+  if (here) room.state.npcs.set("vortex", npc);
 
   let mode: Mode = "idle";
   let path: Point[] = [];
@@ -725,7 +739,7 @@ registerFeature((room: WorldRoom) => {
     }
     return false;
   };
-  room.vortex = {
+  const hooks: VortexHooks = {
     along(level, ray, range) {
       if (level !== room.home || !hittable()) return null;
       let best: { t: number; id: string } | null = null;
@@ -802,9 +816,10 @@ registerFeature((room: WorldRoom) => {
       taunt(dodged ? "dodge" : "hit", now);
     },
   };
+  room.vortex = here ? hooks : null;
   room.on("mod:vortex", (client, m) => {
     const p = room.state.players.get(client.sessionId);
-    if (!p?.admin) return;
+    if (!p?.admin || !here) return;
     const now = Date.now();
     // (phase 4) back now: his fall and his time away cut short — the grudge remembered as ever; his memory forgotten
     if (m?.back) {
@@ -873,7 +888,7 @@ registerFeature((room: WorldRoom) => {
     const p = room.state.players.get(client.sessionId);
     const q = typeof m?.sid === "string" ? room.state.players.get(m.sid) : undefined;
     const now = Date.now();
-    if (!p || !q || q === p || !isBound(q.sid, now) || isBound(p.sid, now) || p.downAt || p.level !== q.level) return;
+    if (!here || !p || !q || q === p || !isBound(q.sid, now) || isBound(p.sid, now) || p.downAt || p.level !== q.level) return;
     if (Math.hypot(p.x - q.x, p.y - q.y) > MV.freeR) return;
     boundTill.delete(q.sid);
     toAll({ kind: "free", to: q.sid, from: { x: p.x, y: p.y }, who: [p.sid] });
@@ -915,7 +930,7 @@ registerFeature((room: WorldRoom) => {
         // personal: only the person he's talking to sees it
         room.send(client, "vortex:say", { text: res.line, to: client.sessionId, mood: npc.mood });
       } else {
-        npc.say = res.line;
+        npc.say = wire(res.line);
         npc.sayAt = Date.now();
       }
     } catch (e) {
@@ -929,7 +944,7 @@ registerFeature((room: WorldRoom) => {
 
   room.on("vortex:poke", (client) => {
     const p = room.state.players.get(client.sessionId);
-    if (!p) return;
+    if (!p || !here) return;
     const now = Date.now();
     const terminal = [...room.state.objects.values()].find((o) => o.kind === "crt_terminal");
     const atTerminal = terminal && Math.hypot(p.x - (terminal.x + 0.5), p.y - (terminal.y + 0.5)) < 2.2;
@@ -1003,7 +1018,21 @@ registerFeature((room: WorldRoom) => {
   };
 
   return {
+    cast(c) {
+      const was = here;
+      here = c.has("vortex");
+      castVortex(c.get("vortex"));
+      if (here && !was) {
+        room.state.npcs.set("vortex", npc);
+        room.vortex = hooks;
+      } else if (!here && was) {
+        if (fight.on) endFight();
+        room.state.npcs.delete("vortex");
+        room.vortex = null;
+      }
+    },
     tick(dt, now) {
+      if (!here) return;
       saveMem(now);
       // (plan 88) the fight: told to everyone when it changes (four a second at most); beaten — on the floor, then
       // away to the server room till he's back; out of it a while — calmed down, healed
@@ -1042,7 +1071,7 @@ registerFeature((room: WorldRoom) => {
       } else nextMove = 0;
       // walk
       if (path.length) {
-        let budget = (fight.on && fight.act === 3 ? MV3.speed : SPEED) * dt;
+        let budget = (fight.on && fight.act === 3 ? MV3.speed : SPEED * vPace) * dt;
         while (budget > 0 && path.length) {
           const wp = path[0];
           const dx = wp.x - npc.x;
@@ -1116,7 +1145,7 @@ registerFeature((room: WorldRoom) => {
       else if (mode !== "stalk" && !path.length && now > until - 1000) pickMode(now);
 
       // public chatter, on a budget, only with an audience and never at a ritual
-      if (now - lastPublic > PUBLIC_EVERY && near(7).length > 0 && mode !== "sleep") {
+      if (Number.isFinite(vTalk) && now - lastPublic > PUBLIC_EVERY * vTalk && near(7).length > 0 && mode !== "sleep") {
         lastPublic = now;
         const standupNear = room.state.standup.active && near(6).some((p) => p.area === "standup");
         const event = standupNear

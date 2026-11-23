@@ -12,6 +12,8 @@ import {
   kartSeats,
   SIT_HIP,
 } from "@yutopia/shared/kart";
+import { linesFor, type NpcDef, paceOf, TALK_EVERY } from "@yutopia/shared/npc";
+import { type Cast, dress, wire } from "../cast.ts";
 import { Npc, type Player } from "../schema.ts";
 import type { WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
@@ -25,26 +27,7 @@ import { registerFeature } from "./index.ts";
 // is (grounds-life.ts).
 const SITTING = KART_SITTING; // (busy "ride:…": the room leaves my pose alone, as a rider's)
 const V = 1.25; // a visitor's pace, m/s
-// (by how they walk — plan 58 4e: the old slower, the tired too, the brisk quicker)
-const PACE: Record<string, number> = { old: 0.7, tired: 0.85, brisk: 1.15, bouncy: 1.05, heavy: 0.95 };
 const SPINE = KART_GATE.x; // the paddock's walk, gate to desk
-const FOLK_LINES: Record<string, string[]> = {
-  control: [
-    "Karts are on the rack: X at the desk takes one.",
-    "Next race is up to you: a Grand Prix or the Bowl.",
-    "Vortex holds the lap record. For now.",
-    "Mind the jump on the north straight!",
-  ],
-  mechanic: ["She pulls left. Always pulls left.", "Who put snow in the carburettor?", "Tyres are warm. Go on."],
-  cocoa: ["Hot cocoa! Marshmallows on top.", "Warm your hands by the fire.", "A free cocoa for whoever beats Vortex."],
-  visitor: [
-    "Did you see that drift?",
-    "I'm doing the Bowl next.",
-    "Brr. Cocoa?",
-    "That jump, though!",
-    "Purple sparks!",
-  ],
-};
 
 registerFeature((room: WorldRoom) => {
   const seats = kartSeats();
@@ -116,8 +99,11 @@ registerFeature((room: WorldRoom) => {
   room.on("park:stand", (client, m) => standUp(client.sessionId, true, !!m?.walk));
 
   // ── the folk ──
+  // (plan 120: made from the world's cast by key — someone deleted from it isn't —, dressed as it says: name, look,
+  // lines, pace, how often they talk; a change taken live)
   type Stop = "cocoa" | "fire" | "rack" | "stands" | "podium";
   interface Walker {
+    key: string;
     npc: Npc;
     role: string;
     /** their pace, m/s */
@@ -129,12 +115,21 @@ registerFeature((room: WorldRoom) => {
     until: number;
     seat: number;
     sayAt: number;
+    /** what they say on their own (EN|PT), × how long between */
+    lines: string[];
+    talk: number;
     /** staff: their spots, turned which way */
     spots?: { x: number; z: number; a: number }[];
   }
   const walkers: Walker[] = [];
   const now0 = Date.now();
-  for (const [k, f] of KART_FOLK.entries()) {
+  const fit = (w: Walker, d: NpcDef) => {
+    dress(w.npc, d);
+    w.v = V * paceOf(d);
+    w.lines = linesFor(d);
+    w.talk = TALK_EVERY[d.behaviour.talk];
+  };
+  const make = (k: number, f: (typeof KART_FOLK)[number], d: NpcDef, now: number) => {
     const npc = new Npc();
     npc.id = `folk-${f.id}`;
     npc.kind = "folk";
@@ -158,21 +153,48 @@ registerFeature((room: WorldRoom) => {
       a: ANIM.idle,
       yaw: faceByte(Math.cos(at.a), Math.sin(at.a)),
     });
-    room.state.npcs.set(npc.id, npc);
-    walkers.push({
+    const w: Walker = {
+      key: npc.id,
       npc,
       role: f.role,
-      v: V * (PACE[f.look.gait ?? ""] ?? 1),
+      v: V,
       leg: [],
       stop: "",
       from: [],
       // (the visitors set off one after another)
-      until: now0 + 1500 + Math.max(0, k - 3) * 3000,
+      until: now + 1500 + Math.max(0, k - 3) * 3000,
       seat: -1,
-      sayAt: now0 + 20_000 + Math.random() * 60_000,
+      sayAt: now + 20_000 + Math.random() * 60_000,
+      lines: [],
+      talk: 1,
       spots,
-    });
-  }
+    };
+    fit(w, d);
+    room.state.npcs.set(npc.id, npc);
+    walkers.push(w);
+  };
+  const cast = (c: Cast, now: number) => {
+    // gone from the cast: off their seat, out of the world
+    for (let i = walkers.length - 1; i >= 0; i--) {
+      const w = walkers[i];
+      const d = c.get(w.key);
+      if (d) {
+        fit(w, d);
+        continue;
+      }
+      if (w.seat >= 0) {
+        taken.delete(w.seat);
+        sync();
+      }
+      room.state.npcs.delete(w.npc.id);
+      walkers.splice(i, 1);
+    }
+    for (const [k, f] of KART_FOLK.entries()) {
+      const d = c.get(`folk-${f.id}`);
+      if (d && !walkers.some((w) => w.key === d.key)) make(k, f, d, now);
+    }
+  };
+  cast(room.cast, now0);
   const pick = <T>(l: T[]): T => l[Math.floor(Math.random() * l.length)];
   /** A free seat for a visitor: a bench by the fire (the two along the walk's side of it and
    *  across), or the nearer stand's two lowest rows (climbed to from its front). */
@@ -250,7 +272,12 @@ registerFeature((room: WorldRoom) => {
   };
   const say = (w: Walker, now: number) => {
     if (now < w.sayAt) return;
-    w.sayAt = now + 50_000 + Math.random() * 70_000;
+    // (nothing to say, or never talks: asked again in a minute — a change may give them something)
+    if (!w.lines.length || !Number.isFinite(w.talk)) {
+      w.sayAt = now + 60_000;
+      return;
+    }
+    w.sayAt = now + (50_000 + Math.random() * 70_000) * w.talk;
     const x = w.npc.x;
     const y = w.npc.y;
     let near = false;
@@ -258,7 +285,7 @@ registerFeature((room: WorldRoom) => {
       if (p.level === 0 && Math.hypot(p.x - x, p.y - y) < 10) near = true;
     });
     if (!near) return;
-    w.npc.say = pick(FOLK_LINES[w.role] ?? FOLK_LINES.visitor);
+    w.npc.say = wire(pick(w.lines));
     w.npc.sayAt = now;
   };
   const racing = () => {
@@ -360,6 +387,9 @@ registerFeature((room: WorldRoom) => {
     },
     leave(client) {
       standUp(client.sessionId, false);
+    },
+    cast(c) {
+      cast(c, Date.now());
     },
     dispose() {
       for (const w of walkers) room.state.npcs.delete(w.npc.id);

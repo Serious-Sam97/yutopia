@@ -14,8 +14,10 @@ import {
 import { aiControls, projectOn } from "@yutopia/shared/car/ai";
 import { JoltCarWorld } from "@yutopia/shared/car/jolt-world";
 import { nightness } from "@yutopia/shared/dark";
+import { linesFor, TALK_EVERY } from "@yutopia/shared/npc";
 import { along, GUARD_ROUND, heightAt, LOT, type Route, SHUTTLE, visitorRoute } from "@yutopia/shared/grounds";
 import { config } from "../config.ts";
+import { type Cast, dress, wire } from "../cast.ts";
 import { Npc, type Player, Vehicle } from "../schema.ts";
 import { fromSchema, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
@@ -168,7 +170,25 @@ registerFeature((room: WorldRoom) => {
   guard.id = "guard";
   guard.kind = "guard";
   guard.level = 0;
-  room.state.npcs.set("guard", guard);
+  // (plan 120: in the world while the cast has him — his rounds go on either way —, dressed as it says; his pace ×
+  // his own, his lines (none of his own: he says nothing) now and then to someone near)
+  let gPace = 1;
+  let gLines: string[] = [];
+  let gTalk = 1;
+  let gSayAt = Date.now() + 60_000;
+  const castGuard = (c: Cast) => {
+    const d = c.get("guard");
+    if (!d) {
+      room.state.npcs.delete("guard");
+      return;
+    }
+    dress(guard, d);
+    gPace = d.behaviour.pace ?? 1;
+    gLines = linesFor(d);
+    gTalk = TALK_EVERY[d.behaviour.talk];
+    if (!room.state.npcs.has("guard")) room.state.npcs.set("guard", guard);
+  };
+  castGuard(room.cast);
   let gS = 0;
   let gPause = 0;
   // his shift (docs/plan/33-the-look.md): by day at his post in the gatehouse; as it gets dark he
@@ -189,7 +209,7 @@ registerFeature((room: WorldRoom) => {
     const gx = guard.x;
     const gz = guard.y;
     const d = Math.hypot(t.x - gx, t.z - gz);
-    const step = GUARD_V * dt;
+    const step = GUARD_V * gPace * dt;
     guard.a = ANIM.walk;
     if (d <= step) {
       guard.x = t.x;
@@ -419,6 +439,17 @@ registerFeature((room: WorldRoom) => {
         ploughAt(room.state, plough.veh.x, plough.veh.z, plough.veh.a, 4.6, 3.2, now);
       // ── the guard: his shift (out at dusk, home at dawn), round the fence at night ──
       stepJolt(dt);
+      // (a line now and then, to someone near — plan 120: only if the cast gave him any)
+      if (now >= gSayAt) {
+        gSayAt = now + (60_000 + Math.random() * 60_000) * (Number.isFinite(gTalk) ? gTalk : 1);
+        const near = [...room.state.players.values()].some(
+          (p) => p.level === 0 && Math.hypot(p.x - guard.x, p.y - guard.y) < 10,
+        );
+        if (gLines.length && Number.isFinite(gTalk) && near && room.state.npcs.has("guard")) {
+          guard.say = wire(gLines[Math.floor(Math.random() * gLines.length)]);
+          guard.sayAt = now;
+        }
+      }
       const night = nightness(room.state.hour);
       if (shift === "post" && night > 0.3) {
         shift = "out";
@@ -448,7 +479,7 @@ registerFeature((room: WorldRoom) => {
         } else {
           const dir = shift === "home" ? homeDir : 1;
           const before = gS;
-          gS = (gS + dir * GUARD_V * dt + GUARD_ROUND.len) % GUARD_ROUND.len;
+          gS = (gS + dir * GUARD_V * gPace * dt + GUARD_ROUND.len) % GUARD_ROUND.len;
           guard.a = ANIM.walk;
           if (shift === "round" && Math.random() < dt / 150) gPause = 6 + Math.random() * 6;
           // home: past the gate's point this step — off the round, in at the door
@@ -456,7 +487,7 @@ registerFeature((room: WorldRoom) => {
             (dir > 0
               ? (gateS - before + GUARD_ROUND.len) % GUARD_ROUND.len
               : (before - gateS + GUARD_ROUND.len) % GUARD_ROUND.len) <=
-            GUARD_V * dt + 1e-6;
+            GUARD_V * gPace * dt + 1e-6;
           if (shift === "home" && passed) {
             gS = gateS;
             shift = "in";
@@ -474,6 +505,9 @@ registerFeature((room: WorldRoom) => {
     },
     leave(client) {
       if (riders.delete(client.sessionId)) shuttle.veh.riders = riders.size;
+    },
+    cast(c) {
+      castGuard(c);
     },
   };
 });

@@ -203,4 +203,30 @@ The places a behaviour needs (the spot, the area, the route) are the next ticket
     as EN, or EN and PT joined by \x1f: the moment's lines, else his ambient ones. If he's deleted, he says nothing.
   - Pest `NpcsTest` runs on in-memory SQLite; the dev DB is untouched (counted before and after). WorldTest's 3 reds
     were already red on HEAD.
+- **Phase 3**: the world server's cast (`src/cast.ts`).
+  - The room loads it before its features: the API's cast, or, never seeded, it seeds the town's first
+    (`api.seedNpcs`). Offline it's the town's, or the world file's `npcs`.
+  - A signed `POST /internal/cast` hands the whole cast to every open room (`room.setCast`, the features' `cast`
+    hook).
+  - `Npc` gains `name`, `role` (EN, or EN\x1fPT) and `look` (packLook), set by `dress()`.
+  - park-life and strike-life make their folk from the cast by key, and take a change live: their look, name, lines,
+    pace (by gait unless set) and talk (× their own interval; `never` says nothing). Someone deleted is taken out (a
+    kart visitor off their seat), and comes back if the cast has them again.
+  - The guard keeps his rounds and is in the world only while the cast has him. His pace is × his own, and he says a
+    line now and then if the cast gives him any (he has none: he says nothing, as before).
+  - Vortex: deleted, he isn't in the world, can't be shot (`room.vortex` null) and ignores pokes and the admin's
+    moves. His pace and chatter follow the cast.
+  - **A trap found**: @colyseus/schema 3.0.76 writes a str 8's length as `length % 255`, so a string of exactly 255
+    UTF-8 bytes arrives as "" and what follows it is misread. Lia's look was 255 bytes. `wire()` adds a space to any
+    NPC string (name, role, look, line) of exactly 255 bytes. The bug is the library's, for every string in the
+    state.
+  - Tests: `cast.test.ts`, an offline room: the town as it was, a change live, deleted and back, nobody at all,
+    unsigned refused. park-life, grounds-life, vortex-fight, schema and karts pass. rooms.test's Vortex "personal
+    lines" is timing-flaky on HEAD too (known).
+  - The dev world seeded its cast on its first room: 20 people, Vortex with his 63 public lines.
+- **Phase 4**: the client draws the folk and the guard from `Npc.name`, `role` and `look`: "Name · Role" in my
+  language, the look parsed once by its string. Lines and the HUD's Vortex line are said in my language (`biIn`).
+  Vortex's name is the cast's, the tables' Vortexes too, and once the cast has no Vortex the tables have none. The
+  helpers are local copies (`world/npc-words.ts`, tested against shared) so the world page doesn't take in the cast's
+  module. The role strings it no longer needs are gone.
 

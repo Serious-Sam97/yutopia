@@ -63,12 +63,12 @@ class NpcsController extends Controller
 
     // ── the world server ──
     /** The town's people, once (the world server's first boot on a cast that was never seeded): kept as sent, Vortex
-     *  given his public lines (they're the API's: Vortex::PUBLIC). Seeded already: the cast as it is (409). */
+     *  given his public lines (they're the API's: Vortex::PUBLIC). Seeded already: the cast as it is (not seeded again). */
     public function seed(Request $request): JsonResponse
     {
         $data = $request->validate(['npcs' => ['present', 'array', 'max:'.Npc::MAX], 'npcs.*' => ['array']]);
         if (Npc::seeded()) {
-            return response()->json(['npcs' => Npc::cast(), 'seeded' => false], 409);
+            return response()->json(['npcs' => Npc::cast(), 'seeded' => false]);
         }
         DB::transaction(function () use ($data) {
             $pos = (int) Npc::max('position');

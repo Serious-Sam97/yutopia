@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { matchMaker, Server } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { ROOM_NAME } from "@yutopia/shared";
+import { parseCast } from "@yutopia/shared/npc";
 import { loadJolt } from "@yutopia/shared/physics";
 import { signInternal } from "./api.ts";
 import { config } from "./config.ts";
@@ -85,6 +86,18 @@ async function handleHold(req: IncomingMessage, res: ServerResponse) {
   return answer(res, 200, { ok: true, held: WorldRoom.held, closed: hold && !!room });
 }
 
+// The cast as an admin left it (docs/plan/120-god-mode-npcs.md, apps/api Cast): {npcs}, the whole cast, cleaned again
+// here; every open room takes it on (the town's people dressed, made or taken away, live).
+async function handleCast(req: IncomingMessage, res: ServerResponse) {
+  const body = await signedBody(req, res, "/internal/cast");
+  if (body === null) return;
+  const npcs = (body as { npcs?: unknown }).npcs;
+  if (!Array.isArray(npcs)) return answer(res, 422, { error: "npcs" });
+  const cast = parseCast(npcs);
+  for (const room of WorldRoom.live) room.setCast(cast);
+  return answer(res, 200, { ok: true, npcs: cast.length });
+}
+
 export async function startWorldServer(port: number): Promise<Server> {
   const http = createServer(async (req, res) => {
     if (req.url === "/metrics" || req.url === "/metrics?gc=1") {
@@ -124,6 +137,7 @@ export async function startWorldServer(port: number): Promise<Server> {
     }
     if (req.url === "/internal/push") return void (await handlePush(req, res));
     if (req.url === "/internal/hold") return void (await handleHold(req, res));
+    if (req.url === "/internal/cast") return void (await handleCast(req, res));
     if (req.url === "/health") {
       // (honest — docs/plan/72-the-3d-core.md phase 1: a world that's up but hasn't ticked for
       // HEALTH_TICK_MS is frozen for everyone in it: 503, for the container's healthcheck. A

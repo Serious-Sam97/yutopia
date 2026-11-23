@@ -1,3 +1,4 @@
+import type { Cast } from "../cast.ts";
 import type { Player } from "../schema.ts";
 import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
 
@@ -19,6 +20,9 @@ export interface Feature {
   // someone knocked on a room's door (a booth, a locked room — WorldRoom.knock)
   knock?(client: WorldClient, p: Player, areaKey: string): void;
   dispose?(): void;
+  // (plan 120) the world's cast changed (an admin's edit, live): the town's people dressed as it says, made or taken
+  // away
+  cast?(cast: Cast): void;
   // the room made — its world, its physics and its weather in — and nobody let in yet: what its first tick would
   // do that's heavy, done now (docs/plan/89-the-weight.md phase 8: a first tick of ~250 ms froze everyone there)
   ready?(now: number): void;

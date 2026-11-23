@@ -112,6 +112,7 @@ import {
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
 import { isFlowCode, isVerb, MV_WINDED } from "@yutopia/shared/move";
 import { BuildingNav } from "@yutopia/shared/nav";
+import type { NpcDef } from "@yutopia/shared/npc";
 import { Place } from "@yutopia/shared/physics";
 import { type Feet, HAND, offBand, spanOf } from "@yutopia/shared/reach";
 import { kindSolids, type Solid3, WALL_H } from "@yutopia/shared/shapes";
@@ -139,6 +140,7 @@ import { finishWorld } from "@yutopia/shared/structure/finish";
 import { furnishingsFix, spacesFix } from "@yutopia/shared/structure/spaces";
 import { ApiError, api, type PresenceEntry, type WorldInfo } from "./api.ts";
 import { verifyWorldToken, type WorldClaims } from "./auth.ts";
+import { castMap, loadCast } from "./cast.ts";
 import { config } from "./config.ts";
 import type { DarkHooks } from "./features/dark.ts";
 import { type Feature, featureNames, installFeatures } from "./features/index.ts";
@@ -281,6 +283,8 @@ export class WorldRoom extends Room<WorldState> {
   survival: SurvivalHooks | null = null;
   dark: DarkHooks | null = null; // features/dark.ts: shots and flares (features/arms.ts)
   vortex: VortexHooks | null = null; // (plan 88) features/vortex.ts: the fight — shots at him (features/arms.ts)
+  // (plan 120) the world's cast by key (cast.ts): the town's features make their people from it, and take a change live
+  cast: Map<string, NpcDef> = new Map();
   strike: StrikeHooks | null = null; // (plan 114) features/strike.ts: the match — its players' hits (features/arms.ts)
   /** (plan 97) features/cars.ts: the size of each of its maps, for the memory checker */
   carMaps: (() => Record<string, number>) | null = null;
@@ -336,6 +340,13 @@ export class WorldRoom extends Room<WorldState> {
   private featureOff = new Set<number>();
   private tickFails: number[] = [];
   private failLogged = new Map<string, number>();
+
+  /** (plan 120) The cast as an admin left it (the API's POST /internal/cast): the town's people dressed, made or
+   *  taken away by their features. */
+  setCast(list: NpcDef[]) {
+    this.cast = castMap(list);
+    this.hook("cast", this.cast);
+  }
 
   /** Every feature's `name` hook, each on its own. */
   hook<K extends Exclude<keyof Feature, "tick">>(name: K, ...args: Parameters<NonNullable<Feature[K]>>) {
@@ -519,6 +530,8 @@ export class WorldRoom extends Room<WorldState> {
       w.volAt = Number(info?.sound?.weatherAt) || 0;
     }
     this.registerMessages();
+    // (plan 120) the world's cast, before the features that make the town's people from it
+    this.cast = castMap(await loadCast(info));
     this.features = installFeatures(this);
     // (the physics world built before anyone's let in: Jolt the only truth — plan 72 phase 7)
     await this.physicsReady;

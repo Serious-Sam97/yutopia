@@ -36,7 +36,7 @@ it('seeds the town\'s people once, Vortex with his public lines; never again, a 
     internalCall($this, 'GET', '/api/internal/world')->assertOk()->assertJsonCount(3, 'npcs')->assertJsonPath('npcs.2.name', 'Rosa');
 
     Npc::where('key', 'folk-rosa')->delete();
-    internalCall($this, 'POST', '/api/internal/npcs/seed', ['npcs' => townSeed()])->assertStatus(409)->assertJsonCount(2, 'npcs');
+    internalCall($this, 'POST', '/api/internal/npcs/seed', ['npcs' => townSeed()])->assertOk()->assertJsonPath('seeded', false)->assertJsonCount(2, 'npcs');
     expect(Npc::where('key', 'folk-rosa')->exists())->toBeFalse();
 });
 
