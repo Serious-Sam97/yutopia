@@ -2,11 +2,12 @@
 
 import { avatarFromSeed, parseAvatar } from "@yutopia/shared";
 import { defaultBehaviour, type NpcDef, parseNpc } from "@yutopia/shared/npc";
+import { type NpcPlaceDef, placesOf } from "@yutopia/shared/npc/places";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Brand } from "@/components/Brand";
 import { cast } from "@/lib/admin";
-import { ApiError, getToken, yutopia } from "@/lib/api";
+import { ApiError, api, getToken, yutopia } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
 import { NpcEditor } from "./editor";
 import { CastFace } from "./face";
@@ -70,9 +71,19 @@ export default function CastPage() {
         setNpcs(r.npcs.map(norm));
         setMax(r.max);
         setSeeded(r.seeded);
-        setSel((s) => s ?? r.npcs[0]?.key ?? null);
+        // (opened for one — God mode's "Open on the cast page": ?key=)
+        const want = new URLSearchParams(window.location.search).get("key");
+        setSel((s) => s ?? (want && r.npcs.some((d) => d.key === want) ? want : (r.npcs[0]?.key ?? null)));
       })
       .catch(() => setFailed(true));
+  }, [allowed]);
+  // (plan 121) where God mode placed them: the published edits' `npcs`
+  const [places, setPlaces] = useState<Map<string, NpcPlaceDef>>(new Map());
+  useEffect(() => {
+    if (!allowed) return;
+    api<{ edits: Parameters<typeof placesOf>[0] }>("/api/world/edits")
+      .then((r) => setPlaces(new Map(placesOf(r.edits).map((p) => [p.key, p]))))
+      .catch(() => {});
   }, [allowed]);
 
   // (leaving with changes not saved yet: asked first)
@@ -322,7 +333,11 @@ export default function CastPage() {
                         className="mono text-[10px] uppercase tracking-[.08em] shrink-0"
                         style={{ color: d.town ? "var(--vfd)" : "var(--muted)" }}
                       >
-                        {d.town ? w("townBadge") : w("offMap")}
+                        {places.has(d.key)
+                          ? w(places.get(d.key)?.level ? "placedIn" : "placedOut")
+                          : d.town
+                            ? w("townBadge")
+                            : w("offMap")}
                       </span>
                     </button>
                   </li>
@@ -343,6 +358,21 @@ export default function CastPage() {
                 onChange={edit}
                 onCopy={() => copy(picked)}
                 onDelete={() => setDel(picked)}
+                where={
+                  places.get(picked.key)
+                    ? [
+                        w("whereAt", w(places.get(picked.key)?.level ? "placedIn" : "placedOut"), "").replace(
+                          "{a}",
+                          String(Math.round((((places.get(picked.key)?.a ?? 0) * 180) / Math.PI + 360) % 360)),
+                        ),
+                        places.get(picked.key)?.home ? w("livesIn", places.get(picked.key)?.home) : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : picked.town
+                      ? w("whereTown")
+                      : w("whereNone")
+                }
               />
             ) : (
               <Note>{w("pick")}</Note>

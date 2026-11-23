@@ -29,6 +29,20 @@ export const W = {
   copyName: ["{n} · copy", "{n} · cópia"],
   townBadge: ["the town's", "da cidade"],
   offMap: ["not on the map yet", "ainda fora do mapa"],
+  // (plan 121) where God mode placed them, where they live
+  placedOut: ["placed · outdoors", "colocado · ao ar livre"],
+  placedIn: ["placed · indoors", "colocado · num interior"],
+  livesIn: ["lives in {n}", "mora em {n}"],
+  whereTitle: ["On the map", "No mapa"],
+  whereNone: [
+    "Not on the map: God mode's NPCs tool (N) puts them there.",
+    "Fora do mapa: a ferramenta NPCs do God Mode (N) coloca.",
+  ],
+  whereTown: [
+    "Where their own ways have them (not placed in God mode).",
+    "Onde a rotina deles os leva (não colocado no God Mode).",
+  ],
+  whereAt: ["{n} · facing {a}°", "{n} · olhando {a}°"],
   pick: ["Pick someone from the list, or make someone new.", "Escolha alguém da lista, ou crie alguém."],
   // the editor
   name: ["Name", "Nome"],

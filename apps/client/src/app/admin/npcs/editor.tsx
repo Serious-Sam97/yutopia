@@ -31,6 +31,7 @@ export function NpcEditor({
   onChange,
   onCopy,
   onDelete,
+  where,
 }: {
   npc: NpcDef;
   pt: boolean;
@@ -38,6 +39,8 @@ export function NpcEditor({
   onChange: (d: NpcDef) => void;
   onCopy: () => void;
   onDelete: () => void;
+  /** (plan 121) where God mode put them, said */
+  where?: string;
 }) {
   const w = (k: Word, n?: string | number) => (W[k][pt ? 1 : 0] as string).replace("{n}", String(n ?? ""));
   const two = (x: [string, string]) => x[pt ? 1 : 0];
@@ -128,6 +131,14 @@ export function NpcEditor({
         </div>
       </div>
 
+      {where && (
+        <p className="text-sm mt-3" style={{ color: "var(--cream-dim)" }} data-npc-where>
+          <span className="mono text-[11px] uppercase tracking-[.06em] mr-2" style={{ color: "var(--amber)" }}>
+            {w("whereTitle")}
+          </span>
+          {where}
+        </p>
+      )}
       <div className="flex gap-1 mt-5 mb-4" role="tablist" style={{ borderBottom: "1px solid var(--edge)" }}>
         {tabs.map((x) => (
           <button
