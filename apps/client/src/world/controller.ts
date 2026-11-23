@@ -110,6 +110,7 @@ import { liftSound } from "./lift-sound";
 import { Media } from "./media";
 import type { MediaRoom } from "./media/room";
 import { type AvatarState, WorldModel } from "./model";
+import { biIn } from "./npc-words";
 import type { OsRoom } from "./os/room";
 import { FramePerf } from "./perf";
 import type { PerfReport } from "./perf-report";
@@ -744,7 +745,8 @@ export class WorldController {
         if (n.sayAt === lastSay || !n.say) return;
         lastSay = n.sayAt;
         if (Math.hypot(n.x - this.me.x, n.y - this.me.y) > 8) return;
-        this.say(`npc:${id}`, n.say, 7000);
+        // (the cast's lines come EN|PT: mine — plan 120)
+        this.say(`npc:${id}`, biIn(n.say, lang() === "pt"), 7000);
       });
     });
     $(room.state).npcs.onRemove((_n, id) => model.removeAvatar(`npc:${id}`));
@@ -1562,8 +1564,12 @@ export class WorldController {
     });
     // Vortexes at the game tables (a Vortex for every game)
     const tv = new Set<string>();
-    // (and sat in the chess tables' empty chairs, plan 70)
-    for (const v of [...(this.tableGames.tables?.vortexes() ?? []), ...(this.tableGames.chess?.vortexes() ?? [])] as {
+    // (and sat in the chess tables' empty chairs, plan 70; none once the cast has no Vortex — plan 120: the computer
+    // still plays, from an empty chair)
+    const vxHere = room.state.npcs.has("vortex");
+    for (const v of (vxHere
+      ? [...(this.tableGames.tables?.vortexes() ?? []), ...(this.tableGames.chess?.vortexes() ?? [])]
+      : []) as {
       key: string;
       x: number;
       y: number;
@@ -2209,7 +2215,9 @@ export class WorldController {
     const fps = this.tp?.fps ?? 0;
     hud.set({ me, people, fps: Math.round(fps) });
     const vx = room.state.npcs.get("vortex");
-    hud.set({ vortex: vx ? { x: vx.x, y: vx.y, say: vx.say, sayAt: vx.sayAt, mood: vx.mood } : null });
+    hud.set({
+      vortex: vx ? { x: vx.x, y: vx.y, say: biIn(vx.say, lang() === "pt"), sayAt: vx.sayAt, mood: vx.mood } : null,
+    });
     const petsAt: { x: number; y: number }[] = [];
     room.state.pets.forEach((pet) => {
       // (lost: not where it is — where it was last seen is on the GPS)
@@ -3115,10 +3123,11 @@ export class WorldController {
     return `|t|d${k}${scars}`;
   }
   private npcState(
-    n: Pick<Npc, "x" | "y" | "yaw" | "a" | "mood"> & Partial<Pick<Npc, "id" | "vact" | "vscar">>,
+    n: Pick<Npc, "x" | "y" | "yaw" | "a" | "mood"> & Partial<Pick<Npc, "id" | "vact" | "vscar" | "name">>,
   ): AvatarState {
     return {
-      name: "VORTEX",
+      // (his name as the cast says — plan 120; the tables' Vortexes his too)
+      name: (n.name ?? this.room?.state.npcs.get("vortex")?.name ?? "").trim() || "VORTEX",
       avatar: VORTEX_LOOK,
       x: n.x,
       y: n.y,

@@ -5,11 +5,11 @@ import type { Footing } from "@yutopia/shared/footing";
 import type * as GroundsModule from "@yutopia/shared/grounds";
 import { packMv } from "@yutopia/shared/move";
 import type { GroundWhat } from "@yutopia/shared/shapes/grounds";
-import { STRIKE_FOLK } from "@yutopia/shared/strike/folk";
-import { addStrings, trMaybe } from "@/lib/i18n";
+import { addStrings, lang, trMaybe } from "@/lib/i18n";
 import { Footprints } from "./footprints";
 import { GroundsSound, type Here } from "./grounds-sound";
 import type { AvatarState } from "./model";
+import { biIn, npcLabel } from "./npc-words";
 
 // Life on the Grounds, the client's side (docs/plan/27-the-grounds.md, phase
 // 6; the server drives it: world-server features/grounds-life.ts): the
@@ -26,15 +26,6 @@ addStrings(
     rideToTownBus: ["Bus · to the town", "Ônibus · para a cidade"],
     rideLeaveBus: ["Get off the bus", "Descer do ônibus"],
     nightGuard: ["Night guard", "Vigia"],
-    folkControl: ["Race control", "Direção de prova"],
-    folkMechanic: ["Mechanic", "Mecânico"],
-    folkCocoa: ["Hot cocoa", "Chocolate quente"],
-    strikeQm: ["Quartermaster", "Intendente"],
-    strikeInstr: ["Instructor", "Instrutor"],
-    strikeCook: ["Canteen", "Cantina"],
-    strikeKeeper: ["The Last Round", "O Último Round"],
-    strikeOfficer: ["War room", "Sala de guerra"],
-    strikeRecruit: ["Recruit", "Recruta"],
   },
   "yutopia-grounds-life",
 );
@@ -271,9 +262,18 @@ export class GroundsLife {
     return { objectId: at.id, kind: "ride", label: t(label) };
   }
 
-  /** The Kart Park's folk (shared KART_FOLK; world-server features/park-life.ts walks them): by
-   *  their name, the staff's with what they do. */
-  folk(n: { id: string; x: number; y: number; yaw: number; a: number }): AvatarState | null {
+  /** The Kart Park's folk and the Strike Park's (world-server park-life.ts, strike-life.ts walk them): as the world's
+   *  cast dresses them (plan 120), by their name, the staff's with what they do. */
+  folk(n: {
+    id: string;
+    x: number;
+    y: number;
+    yaw: number;
+    a: number;
+    name?: string;
+    role?: string;
+    look?: string;
+  }): AvatarState | null {
     // (the Strike Park's bots — plan 115 phase 84: one of the world's people in their team's kit, their gun in hand;
     // `mood` is "<team>:<gun>")
     if (n.id.startsWith("strike-bot:")) return this.strikeBot(n as typeof n & { mood?: string });
@@ -314,19 +314,11 @@ export class GroundsLife {
         bot: true,
       };
     }
-    // (and the Strike Park's: shared strike/folk.ts — plan 115)
-    const sf = n.id.startsWith("strike-") ? STRIKE_FOLK.find((k) => `strike-${k.id}` === n.id) : undefined;
-    const f = sf ?? this.G.KART_FOLK.find((k) => `folk-${k.id}` === n.id);
-    if (!f) return null;
-    let look = this.folkLooks.get(f.id);
-    if (!look) {
-      look = parseAvatar(f.look);
-      this.folkLooks.set(f.id, look);
-    }
-    const role = sf ? STRIKE_ROLE[sf.role] : FOLK_ROLE[f.role];
+    // (the Kart Park's and the Strike Park's — plan 115 —: dressed by the world's cast, plan 120: their name, what
+    // they do, their look on their Npc)
     return {
-      name: role ? `${f.name} · ${t(role)}` : f.name,
-      avatar: look,
+      name: this.castName(n),
+      avatar: this.castLook(n.look ?? ""),
       x: n.x,
       y: n.y,
       yaw: byteFace(n.yaw),
@@ -339,6 +331,20 @@ export class GroundsLife {
     };
   }
   private folkLooks = new Map<string, ReturnType<typeof parseAvatar>>();
+  /** (plan 120) a look as the cast sends it (shared packLook), parsed once */
+  private castLook(s: string): ReturnType<typeof parseAvatar> {
+    const key = `cast:${s}`;
+    let look = this.folkLooks.get(key);
+    if (!look) {
+      look = parseAvatar(s || "{}");
+      this.folkLooks.set(key, look);
+    }
+    return look;
+  }
+  /** (plan 120) "Name · Role" in my language, as the cast says */
+  private castName(n: { name?: string; role?: string }): string {
+    return npcLabel((n.name ?? "").trim(), biIn(n.role ?? "", lang() === "pt").trim());
+  }
   private strikeBot(n: { id: string; x: number; y: number; yaw: number; a: number; mood?: string }): AvatarState {
     // (plan 115 phase 85) "<team>:<gun>:<pose>:<hit at>:<hit from ×100>:<fell at>" — the server's botNpc
     const [team, gun, pose = "", hitAt = "0", hitYaw = "0", fellAt = "0"] = String(n.mood ?? "r:").split(":");
@@ -403,14 +409,17 @@ export class GroundsLife {
 
   /** The night guard: a dark uniform and a cap, a flashlight; he says nothing. (A bot, not
    *  Vortex — `npc` is his —, so no muted mic shown.) */
-  guard(n: { x: number; y: number; yaw: number; a: number }, night = 1): AvatarState {
+  guard(
+    n: { x: number; y: number; yaw: number; a: number; name?: string; role?: string; look?: string },
+    night = 1,
+  ): AvatarState {
     // (his flashlight: on outside after dark, off at his post in the gatehouse)
     const gx = n.x;
     const gz = n.y;
     const atPost = gx > -34 && gx < -29 && gz > -367 && gz < -361;
     return {
-      name: t("nightGuard"),
-      avatar: GUARD_LOOK,
+      name: this.castName(n) || t("nightGuard"),
+      avatar: n.look ? this.castLook(n.look) : GUARD_LOOK,
       x: n.x,
       y: n.y,
       yaw: byteFace(n.yaw),
@@ -424,17 +433,6 @@ export class GroundsLife {
     };
   }
 }
-
-const FOLK_ROLE: Record<string, string> = { control: "folkControl", mechanic: "folkMechanic", cocoa: "folkCocoa" };
-// (plan 115: the Strike Park's people)
-const STRIKE_ROLE: Record<string, string> = {
-  quartermaster: "strikeQm",
-  instructor: "strikeInstr",
-  cook: "strikeCook",
-  keeper: "strikeKeeper",
-  officer: "strikeOfficer",
-  recruit: "strikeRecruit",
-};
 
 const GUARD_LOOK = parseAvatar({
   // (his rounds walked heavy)
