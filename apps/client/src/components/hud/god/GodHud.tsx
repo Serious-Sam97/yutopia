@@ -295,7 +295,7 @@ const W = {
   npc_sit: ["Sits", "Sentado"],
   npc_wander: ["Wanders", "Passeia"],
   npc_route: ["Route", "Rota"],
-  npcSitHint: ["Put them on a seat: they sit on it.", "Coloque num assento: ele senta nele."],
+  npcSitHint: ["Put them on a seat or by a street bench: they sit on it.", "Coloque num assento ou junto a um banco da rua: ele senta nele."],
   npcRadius: ["Circle {n} m", "Círculo {n} m"],
   npcRoute: ["Draw the route", "Desenhar a rota"],
   npcRouteOn: [

@@ -1543,8 +1543,13 @@ export class WorldController {
       // (Vortex is the studio's; the night guard's on the ground floor — at his post in the
       // gatehouse by day, walking out to the fence after dark: the server walks him)
       const home = (n.level ?? -1) < 0 ? floorOf(this.building) : n.level;
-      // (plan 88 act III: the shadowed Vortex lets in — the dark's chunk draws them, world/dark/vortex.ts)
-      if (n.kind === "vshade" || ((n.kind === "guard" || n.kind === "folk") && !guard)) {
+      // (plan 88 act III: the shadowed Vortex lets in — the dark's chunk draws them, world/dark/vortex.ts; plan 121: one
+      // God mode's draft moves or takes away, the draft's drawn instead)
+      if (
+        n.kind === "vshade" ||
+        ((n.kind === "guard" || n.kind === "folk") && !guard) ||
+        (this.god?.on && this.god.npcsHidden().has(id))
+      ) {
         if (model.hasAvatar(`npc:${id}`)) model.removeAvatar(`npc:${id}`);
         return;
       }

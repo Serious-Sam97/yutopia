@@ -125,6 +125,28 @@ test("God mode's NPCs: one held from the list and placed, a wanderer with a home
       "E2E Wren",
     );
 
+    // a second draft moves her: the world's Wren not drawn for Ana (the draft's is), back once the draft's let go
+    await page.evaluate(() => (window as any).__yutopia.god.newDraft("e2e: npcs 2"));
+    await expect.poll(() => god(page).then((g) => g.draft.name)).toBe("e2e: npcs 2");
+    const draft2 = (await god(page)).draft.id;
+    await page.evaluate((k) => {
+      const g = (window as any).__yutopia.god;
+      const d = g.draftNow();
+      const add = d.npcs.add.map((p: any) => (p.key === k ? { ...p, x: p.x + 4 } : p));
+      g.change({ ...d, npcs: { ...d.npcs, add } });
+    }, key);
+    await expect
+      .poll(() => page.evaluate((k) => (window as any).__yutopia.god.npcsHidden().has(`place:${k}`), key))
+      .toBe(true);
+    await expect
+      .poll(() => page.evaluate((k) => (window as any).__yutopia.model.hasAvatar(`npc:place:${k}`), key))
+      .toBe(false);
+    await page.evaluate(() => (window as any).__yutopia.god.undo());
+    await expect
+      .poll(() => page.evaluate((k) => (window as any).__yutopia.god.npcsHidden().has(`place:${k}`), key))
+      .toBe(false);
+    await fetch(`${API}/api/admin/grounds/drafts/${draft2}`, { method: "DELETE", headers: json(tok) });
+
     // rolled back: gone
     const rev1 = await page.evaluate(() => (window as any).__yutopia.room.state.groundsRev);
     await page.evaluate((r) => (window as any).__yutopia.room.send("god:rollback", { rev: r }), rev0);

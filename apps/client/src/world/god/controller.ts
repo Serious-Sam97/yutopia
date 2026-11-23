@@ -93,6 +93,8 @@ export interface PublishSummary {
   chunks: [number, number][];
 }
 
+const EMPTY: ReadonlySet<string> = new Set();
+
 export class GodController {
   /** in god mode (on foot in the draft too) */
   on = false;
@@ -1037,6 +1039,10 @@ export class GodController {
         tp.scene,
       );
     return this.npcs;
+  }
+  /** (plan 121) The world's placed NPCs the draft moves or takes away: not drawn while I'm here (the draft's are). */
+  npcsHidden(): ReadonlySet<string> {
+    return this.on && !this.walking ? (this.npcs?.hidden ?? EMPTY) : EMPTY;
   }
   /** (plan 121) An inside shown — a town building's storey, a studio floor — or the land again (null); the camera
    *  over its middle. */

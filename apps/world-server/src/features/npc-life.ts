@@ -1,13 +1,15 @@
-import { ANIM, faceByte, type Point, seatByte } from "@yutopia/shared";
+import { ANIM, aboveOf, faceByte, objLevel, type Point, seatByte, stairsWayUp } from "@yutopia/shared";
 import { layoutOf } from "@yutopia/shared/building-styles";
 import { nightness } from "@yutopia/shared/dark";
-import { buildingsFor, editsNow } from "@yutopia/shared/grounds";
+import { buildingsFor, editsNow, groundAt, pavedAt, STREET } from "@yutopia/shared/grounds";
+import { thingAtOf } from "@yutopia/shared/grounds-things";
+import { SIT_HIP } from "@yutopia/shared/kart";
 import { linesFor, type NpcDef, paceOf, TALK_EVERY } from "@yutopia/shared/npc";
 import { type NpcPlaceDef, onDuty, type PlacedType, placedType, placesOf } from "@yutopia/shared/npc/places";
 import { type Cast, dress, placedKeys, wire } from "../cast.ts";
 import { onEditsLaid } from "../land.ts";
 import { Npc, type Player } from "../schema.ts";
-import { seatFacing, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
+import { fromSchema, seatFacing, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // NPCs on the map (docs/plan/121-npcs-on-the-map.md): the cast NPCs God mode placed, played here. Each is made from
@@ -39,6 +41,7 @@ const FLEE_BACK_MS = 9000;
 const WAVE_MS = 2500;
 const SEAT_GIVE_MS = 30_000;
 const NO_WAY_RETRY = 20_000;
+const BENCH_SEAT = 0.5; // a street bench's seat, its top (m)
 
 /** A walk's leg: points on one floor (the next leg starts on another, through a town building's door). */
 interface Leg {
@@ -112,9 +115,40 @@ registerFeature((room: WorldRoom) => {
       inn: { x: edge.x - d.ox * 0.9, y: edge.y - d.oz * 0.9 },
     };
   };
-  /** The way from one floor's spot to another's, leg by leg: on one floor the navmesh; between the land and a town
-   *  building's ground storey (or two of them) through their doors. Null: no way (a studio floor above, a storey up a
-   *  building's stairs — never walked through walls). */
+  /** The floors' links: each staircase up its flights to the floor above and back down (shared stairsWayUp, as a
+   *  player climbs — the studio's core, a town building's storeys), and each town building's door between the land
+   *  and its ground storey. `pts`: the first on `from` (where its floor's navmesh leaves them), walked straight, the
+   *  last on `to`. */
+  interface Link {
+    from: number;
+    to: number;
+    pts: Point[];
+  }
+  const links = (): Link[] => {
+    const out: Link[] = [];
+    for (const o of room.state.objects.values()) {
+      if (o.kind !== "stairs") continue;
+      const d = fromSchema(o);
+      const S = objLevel(d, room.map);
+      const A = aboveOf(S);
+      if (A === null) continue;
+      const way = stairsWayUp(d);
+      out.push({ from: S, to: A, pts: way }, { from: A, to: S, pts: [...way].reverse() });
+    }
+    for (const f of room.structure.floors) {
+      if (f.space === undefined || (f.storey ?? 0) !== 0) continue;
+      const door = doorOf(f.space);
+      if (!door) continue;
+      out.push(
+        { from: 0, to: f.index, pts: [door.out, door.inn] },
+        { from: f.index, to: 0, pts: [door.inn, door.out] },
+      );
+    }
+    return out;
+  };
+  /** The way from one floor's spot to another's, leg by leg (F5a): on each floor the navmesh, between floors the links
+   *  — up and down stairs, in and out of doors — the fewest of them (each tried nearest first). Null: no way (never
+   *  walked through walls). */
   const plan = async (fromLevel: number, from: Point, toLevel: number, to: Point): Promise<Leg[] | null> => {
     const leg = async (level: number, a: Point, b: Point): Promise<Leg | null> => {
       const pts = await room.waySoon(null, level, a, b);
@@ -122,39 +156,63 @@ registerFeature((room: WorldRoom) => {
     };
     if (fromLevel === toLevel) {
       const one = await leg(fromLevel, from, to);
-      return one ? [one] : null;
+      if (one) return [one];
     }
-    const legs: Leg[] = [];
-    let at = from;
-    let level = fromLevel;
-    // out of the building they're in (its ground storey) to the land
-    if (level !== 0) {
-      const f = spaceOf(level);
-      const door = f?.space && (f.storey ?? 0) === 0 ? doorOf(f.space) : null;
-      if (!door) return null;
-      const out = await leg(level, at, door.inn);
-      if (!out) return null;
-      legs.push(out);
-      at = door.out;
-      level = 0;
+    // the floors' graph, breadth first: the fewest links (several to a floor: each a way to try)
+    const all = links();
+    const by = new Map<number, Link[]>();
+    for (const k of all) by.set(k.from, [...(by.get(k.from) ?? []), k]);
+    const paths: Link[][] = [];
+    const queue: { level: number; path: Link[] }[] = [{ level: fromLevel, path: [] }];
+    const depth = new Map<number, number>([[fromLevel, 0]]);
+    while (queue.length && paths.length < 6) {
+      const q = queue.shift() as { level: number; path: Link[] };
+      if (q.level === toLevel && q.path.length) {
+        paths.push(q.path);
+        continue;
+      }
+      if (q.path.length >= 8) continue;
+      for (const k of by.get(q.level) ?? []) {
+        const d = q.path.length + 1;
+        if ((depth.get(k.to) ?? Number.POSITIVE_INFINITY) < d) continue;
+        depth.set(k.to, d);
+        queue.push({ level: k.to, path: [...q.path, k] });
+      }
     }
-    if (toLevel === 0) {
-      const last = await leg(0, at, to);
-      if (!last) return null;
+    // (the nearest link out of here first)
+    paths.sort(
+      (a, b) =>
+        Math.hypot(a[0].pts[0].x - from.x, a[0].pts[0].y - from.y) -
+        Math.hypot(b[0].pts[0].x - from.x, b[0].pts[0].y - from.y),
+    );
+    for (const path of paths) {
+      const legs: Leg[] = [];
+      let at = from;
+      let level = fromLevel;
+      let ok = true;
+      for (const k of path) {
+        const walk = await leg(level, at, k.pts[0]);
+        if (!walk) {
+          ok = false;
+          break;
+        }
+        // (arrived on this floor by a link: the leg starts where it left them)
+        if (legs.length) walk.pts.unshift(at);
+        legs.push(walk);
+        // the link walked straight on its own floor (the stairs' flights; a door's two steps), out on the next
+        const mid = k.pts.slice(1, -1);
+        if (mid.length) legs.push({ level, pts: mid });
+        at = k.pts[k.pts.length - 1];
+        level = k.to;
+      }
+      if (!ok) continue;
+      const last = await leg(level, at, to);
+      if (!last) continue;
+      last.pts.unshift(at);
       legs.push(last);
       return legs;
     }
-    // in at the other's door
-    const f = spaceOf(toLevel);
-    const door = f?.space && (f.storey ?? 0) === 0 ? doorOf(f.space) : null;
-    if (!door) return null;
-    const toDoor = await leg(0, at, door.out);
-    const inside = await leg(toLevel, door.inn, to);
-    if (!toDoor || !inside) return null;
-    // (the land's leg ends at the door; the inside's starts at it)
-    inside.pts.unshift(door.inn);
-    legs.push(toDoor, inside);
-    return legs;
+    return null;
   };
   const goTo = (l: Life, level: number, to: Point, then: () => void = () => {}) => {
     if (l.finding) return;
@@ -318,10 +376,49 @@ registerFeature((room: WorldRoom) => {
   const offLaid = onEditsLaid(() => reconcile());
 
   // ── their lives ──
+  /** (out on the land) A street bench's free seat nearest their place, within 1.5 m: two to a bench, either half of it,
+   *  on its seat (0.5 m up), facing out from its back (the client's town3d bench: its back at local −z). */
+  const benchSeat = (l: Life): { x: number; z: number; y: number; a: number } | null => {
+    if (l.place.level !== 0) return null;
+    let best: { x: number; z: number; y: number; a: number; d: number } | null = null;
+    for (const t of STREET) {
+      if (t.kind !== "bench") continue;
+      const [cx, cz] = thingAtOf(t);
+      if (Math.hypot(cx - l.place.x, cz - l.place.z) > 2.6) continue;
+      // (along it: local x; out of it: local z — three.js's turn by ry)
+      const ax = Math.cos(t.ry);
+      const az = -Math.sin(t.ry);
+      const fx = Math.sin(t.ry);
+      const fz = Math.cos(t.ry);
+      for (const u of [-0.5, 0.5]) {
+        const x = cx + ax * u + fx * 0.05;
+        const z = cz + az * u + fz * 0.05;
+        const d = Math.hypot(x - l.place.x, z - l.place.z);
+        if (d > 1.5 || (best && d >= best.d)) continue;
+        const busy =
+          humans().some((p) => p.level === 0 && Math.hypot(p.x - x, p.y - z) < 0.45) ||
+          [...lives.values()].some((o) => o !== l && o.seated && Math.hypot(o.npc.x - x, o.npc.y - z) < 0.45);
+        if (busy) continue;
+        best = { x, z, y: groundAt(x, z) + pavedAt(x, z) + BENCH_SEAT - SIT_HIP, a: Math.atan2(fz, fx), d };
+      }
+    }
+    return best;
+  };
   const sitDown = (l: Life): boolean => {
     const g = room.gridFor(0, l.place.level);
     const seat = g.seatAt(l.place.x, l.place.z);
-    if (!seat) return false;
+    if (!seat) {
+      // (no seat of the world's things there: a street bench by it, out on the land)
+      const b = benchSeat(l);
+      if (!b) return false;
+      l.npc.x = b.x;
+      l.npc.y = b.z;
+      l.npc.z = b.y;
+      l.npc.a = ANIM.sit;
+      face(l.npc, b.a);
+      l.seated = true;
+      return true;
+    }
     // (never on a seat someone's in)
     const taken = humans().some(
       (p) => p.level === l.place.level && p.a === ANIM.sit && Math.hypot(p.x - l.place.x, p.y - l.place.z) < 0.8,
@@ -339,6 +436,7 @@ registerFeature((room: WorldRoom) => {
     if (!l.seated) return;
     l.seated = false;
     l.npc.a = ANIM.idle;
+    l.npc.z = 0;
   };
   /** Their type's life at their place (home, ducking and fleeing aside). */
   const live = (l: Life, dt: number, now: number) => {

@@ -20,11 +20,15 @@ const PORT = 31800 + Math.floor(Math.random() * 100);
 let server: { gracefullyShutdown: (exit?: boolean) => Promise<void> };
 let lay: (e: GroundsEdits) => unknown;
 let sign: (ts: string, method: string, path: string, raw: string) => string;
+// biome-ignore lint/suspicious/noExplicitAny: the room in this process (its structure, its grid)
+let liveRoom: () => any;
 const rooms: Room[] = [];
 before(async () => {
   const { startWorldServer } = await import("./server.ts");
   lay = (await import("./land.ts")).landEdits;
   sign = (await import("./api.ts")).signInternal;
+  const { WorldRoom } = await import("./WorldRoom.ts");
+  liveRoom = () => [...WorldRoom.live].at(-1);
   server = await startWorldServer(PORT);
 });
 after(async () => {
@@ -193,4 +197,114 @@ test("placed NPCs and a shot: one ducks, one runs away from the shooter", async 
   // the duck's over in a few seconds
   await waitFor(() => npc(r, "place:npc-duck").mood === "", 8000);
   lay({ rev: 904 });
+});
+
+test("placed NPCs between floors: down a town building's stairs to their home, up them on a route, the studio's too; a street bench sat on", async () => {
+  const r = await join(93, 913);
+  const room = liveRoom();
+  const floors = room.structure.floors as {
+    index: number;
+    space?: string;
+    storey?: number;
+    grid: { x0: number; y0: number; w: number; h: number };
+  }[];
+  const storey = (space: string, n: number) => floors.find((f) => f.space === space && (f.storey ?? 0) === n);
+  // (a building with two storeys and stairs between them)
+  const spaces = [...new Set(floors.filter((f) => f.space && (f.storey ?? 0) === 1).map((f) => f.space as string))];
+  const hasStairs = (lv: number) =>
+    [...room.state.objects.values()].some(
+      (o: { kind: string; props: string }) => o.kind === "stairs" && JSON.parse(o.props || "{}").level === lv,
+    );
+  const key = spaces.find((k) => hasStairs(storey(k, 0)?.index ?? -1));
+  assert.ok(key, "a town building with stairs up");
+  const s0 = storey(key, 0);
+  const s1 = storey(key, 1);
+  assert.ok(s0 && s1);
+  const open = (lv: number, g: { x0: number; y0: number; w: number; h: number }) =>
+    room.gridFor(null, lv).nearestOpen(g.x0 + g.w / 2, g.y0 + g.h / 2, 8);
+  const up = open(s1.index, s1.grid);
+  assert.ok(up, "a spot upstairs");
+  // the studio: a spot on its first floor and on its ground
+  // (by the foot of a staircase on each: its own floor's open spot near it)
+  const { stairsWayUp } = await import("@yutopia/shared");
+  const stairsOn = (lv: number) =>
+    [...room.state.objects.values()].find(
+      (o: { kind: string; props: string }) => o.kind === "stairs" && JSON.parse(o.props || "{}").level === lv,
+    );
+  const near = (lv: number) => {
+    const o = stairsOn(lv);
+    if (!o) return null;
+    const foot = stairsWayUp({ x: o.x, y: o.y, yaw: o.yaw })[0];
+    return room.gridFor(null, lv).nearestOpen(foot.x, foot.y, 6);
+  };
+  const stUp = near(1);
+  const stDown = near(0);
+  assert.ok(stUp && stDown, "the studio's first floor and its ground");
+  // a street bench out on the land
+  const { STREET } = await import("@yutopia/shared/grounds");
+  const bench = STREET.find((t) => t.kind === "bench");
+  assert.ok(bench, "a street bench");
+  const hour = Number(r.state.hour);
+  const cast: NpcDef[] = [
+    // Upa: upstairs, a shift that's over now, home here: down the stairs to the ground storey
+    parseNpc({
+      key: "npc-upa",
+      name: "Upa",
+      behaviour: { type: "stand", hours: "shift", from: (Math.floor(hour) + 3) % 24, to: (Math.floor(hour) + 4) % 24 },
+    }) as NpcDef,
+    // Rua: on the ground storey, a route up the stairs and back
+    parseNpc({ key: "npc-rua", name: "Rua", behaviour: { type: "route" } }) as NpcDef,
+    // Stu: the studio's first floor, a route down to its ground floor
+    parseNpc({ key: "npc-stu", name: "Stu", behaviour: { type: "route" } }) as NpcDef,
+    // Ben: sat on the bench
+    parseNpc({ key: "npc-ben", name: "Ben", behaviour: { type: "sit" } }) as NpcDef,
+  ];
+  await sendCast([...townCast(), ...cast]);
+  const g0 = open(s0.index, s0.grid);
+  const [bx, bz] = [bench.x + 1, bench.z + 0.5];
+  lay({
+    rev: 905,
+    npcs: {
+      add: [
+        { key: "npc-upa", x: up.x, z: up.y, a: 0, level: s1.index, home: key },
+        {
+          key: "npc-rua",
+          x: g0.x,
+          z: g0.y,
+          a: 0,
+          level: s0.index,
+          route: [{ x: up.x, z: up.y, level: s1.index }],
+          pause: 1,
+        },
+        ...(stUp && stDown
+          ? [
+              {
+                key: "npc-stu",
+                x: stUp.x,
+                z: stUp.y,
+                a: 0,
+                level: 1,
+                route: [{ x: stDown.x, z: stDown.y, level: 0 }],
+                pause: 1,
+              },
+            ]
+          : []),
+        { key: "npc-ben", x: bx, z: bz, a: 0, level: 0 },
+      ],
+    },
+  });
+  await waitFor(() => !!npc(r, "place:npc-upa") && !!npc(r, "place:npc-ben"));
+  // Ben sits on the bench, up on its seat
+  await waitFor(() => npc(r, "place:npc-ben").a === 2, 15_000);
+  const { groundAt, pavedAt } = await import("@yutopia/shared/grounds");
+  const b = npc(r, "place:npc-ben");
+  assert.ok(b.z > groundAt(b.x, b.y) + pavedAt(b.x, b.y), `up on the seat (${b.z})`);
+  assert.ok(Math.hypot(b.x - bx, b.y - bz) < 0.8, "on the bench");
+  // Upa walks down the stairs, to the ground storey (her home's)
+  await waitFor(() => npc(r, "place:npc-upa").level === s0.index, 40_000);
+  // Rua climbs to the storey above
+  await waitFor(() => npc(r, "place:npc-rua").level === s1.index, 40_000);
+  // Stu comes down the studio's stairs
+  if (stUp && stDown) await waitFor(() => npc(r, "place:npc-stu").level === 0, 40_000);
+  lay({ rev: 906 });
 });

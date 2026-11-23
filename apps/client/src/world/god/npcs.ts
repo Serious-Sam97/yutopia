@@ -98,6 +98,9 @@ export class NpcsTool {
   private loading = false;
   /** the pointer's spot this frame (the held one drawn there) */
   private at: Spot = null;
+  /** the world's placed NPCs (`place:<key>`) the draft moves or takes off the map: not drawn for the admin, the
+   *  draft's own drawn instead */
+  hidden: ReadonlySet<string> = new Set();
   // one dragged: its key, where it is now, the grab's offset
   private drag: { key: string; x: number; z: number; off: [number, number]; moved: boolean } | null = null;
 
@@ -382,6 +385,15 @@ export class NpcsTool {
     const pub = this.host.published();
     const places = placesOf(draft);
     const bodies: Body3[] = [];
+    // (the world's ones the draft has elsewhere, or not at all)
+    const hidden = new Set<string>();
+    for (const was of placesOf(pub)) {
+      const now = places.find((p) => p.key === was.key);
+      const dragged = this.drag?.key === was.key;
+      if (!now || dragged || now.x !== was.x || now.z !== was.z || now.level !== was.level || now.a !== was.a)
+        hidden.add(`place:${was.key}`);
+    }
+    this.hidden = hidden;
     const yOf = (x: number, z: number, level: number) =>
       level === 0 ? terrainAt(x, z) + f.y + 0.06 : level === view ? 0.06 : Number.NaN;
     // (the draft's placed ones that aren't where the world has them: drawn there for the admin)
@@ -480,6 +492,7 @@ export class NpcsTool {
     } as unknown as Body3;
   }
   hide() {
+    this.hidden = new Set();
     for (const l of this.lines) l.visible = false;
     const tp = this.host.tp();
     if (tp) tp.godBodies = null;
