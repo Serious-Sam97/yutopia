@@ -368,6 +368,45 @@ test("back where they were when they were the last one out (the room closed and 
   assert.ok(Math.hypot(me(b).x - was.x, me(b).y - was.y) < 0.6, `${me(b).x},${me(b).y} vs ${was.x},${was.y}`);
 });
 
+// (the user's, 2026-11-23: up on floor 4, out and back in — and on floor 3) a spot with no way to it from the
+// arrival point (in a lift's car, its doors shut since): out by the nearest one there is, on their own floor —
+// not the arrival point, a floor or more off
+test("back where they were with no way there now (in a lift's car): on their floor, a step out", async () => {
+  const person = async (id: number) => {
+    const room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+      sandbox: 15,
+      token: `dev:${id}:P${id}:member,builder`,
+    });
+    rooms.push(room);
+    await waitFor(() => !!room.state?.players?.get(room.sessionId));
+    return room;
+  };
+  await person(252); // (keeps the room open)
+  const a = await person(251);
+  const home = me(a).level;
+  // their own arrival point a floor down, by car A's doors there
+  a.send("teleport", { to: { x: 8.5, y: 27.5, level: home - 1 } });
+  await waitFor(() => me(a).level === home - 1);
+  a.send("spawn:mine", { at: { x: 8.5, y: 27.5 } });
+  await sleep(400);
+  // back up on the floor above, in car A (x 8–10, y 29 on: its doors shut once they're gone)
+  a.send("teleport", { to: { x: 8.5, y: 27.5, level: home } });
+  await waitFor(() => me(a).level === home);
+  await sleep(1100); // (past the teleport's quiet second)
+  for (const y of [29.5, 30.5, 31.5]) {
+    a.send("pos", { x: 8.5, y, z: home * 3.5, l: home, a: 0, yaw: 0 });
+    await sleep(120);
+  }
+  await waitFor(() => me(a).y > 31);
+  const was = { x: me(a).x, y: me(a).y };
+  rooms.splice(rooms.indexOf(a), 1);
+  await a.leave(true);
+  await sleep(200);
+  const b = await person(251);
+  assert.equal(me(b).level, home, "on the floor they were on");
+  assert.ok(Math.hypot(me(b).x - was.x, me(b).y - was.y) < 4, `${me(b).x},${me(b).y} vs ${was.x},${was.y}`);
+});
+
 test("a page's goodbye beacon: its line closed as a leave, or a dropped line's kept seat given up — gone at once", async () => {
   const person = async (id: number) => {
     const room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {

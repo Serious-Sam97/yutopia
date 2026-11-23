@@ -162,6 +162,9 @@ const WEATHER_SAVE_MS = 3 * 60_000; // the weather saved this often (and after a
 
 // a knock on a room's door: how near its walls (m)
 const KNOCK_REACH = 3;
+// back where they were with no way there now (a lift's car, the stairs' well): the nearest spot with one, this
+// many tiles off at most (a car's three deep; a well five)
+const BACK_NEAR = 5;
 /** The small games' state on their pieces (plan 68: features/games68.ts) — only the games set it. */
 // (plan 70: the chess game's time of its last move, a draw offered, who gave up, Vortex's side and level)
 const GAME_KEYS = [
@@ -825,7 +828,8 @@ export class WorldRoom extends Room<WorldState> {
   // reconnection, or a tab being put out), or where they were when they last left —
   // on the nearest open tile if that one's taken now; not if the floor's gone, or the
   // walls have changed round it (walled in, a room shut to them now), as for their own
-  // arrival point: the arrival point then (also for anyone the first time).
+  // arrival point: the arrival point then (also for anyone the first time) — but a spot with
+  // no way to it (a lift's car, the stairs): the nearest on that floor they can get to.
   private comeBack(p: Player, sid: string): (Spot & { yaw: number }) | null {
     const old = [...this.state.players.values()].find((q) => q.uid === p.uid && q.sid !== sid);
     const last = WorldRoom.lastSpot.get(p.uid);
@@ -838,8 +842,34 @@ export class WorldRoom extends Room<WorldState> {
     const open = g.fits(was.x, was.y) ? was : g.nearestOpen(was.x, was.y);
     if (!open) return null;
     const at = { x: open.x, y: open.y, level: was.level };
-    if (this.arrivalProblem(p, at, this.homeSpot())) return null;
-    return { ...at, yaw: was.yaw };
+    const home = this.homeSpot();
+    if (!this.arrivalProblem(p, at, home)) return { ...at, yaw: was.yaw };
+    // (a room shut to them now — a booth someone's talking in: the arrival point, as ever)
+    const area = areaAt(this.levelMap(at.level), at.x, at.y);
+    if (area && !this.mayEnter(p, area.key)) return null;
+    // (no way there from the arrival point — in a lift's car, its doors shut since; up the stairs' well; between
+    // desks the navmesh keeps clear of: out by the nearest spot there is a way to, on their floor — the arrival
+    // point was a floor or more off: up on floor 4, back on 3 — the user's, 2026-11-23)
+    const near = this.nearestArrival(p, at, home);
+    return near ? { ...near, yaw: was.yaw } : null;
+  }
+
+  /** The nearest tile centre to `at` on its floor, within BACK_NEAR tiles, that someone could arrive at walking
+   *  from `from` (arrivalProblem's) — or null. */
+  private nearestArrival(p: Player, at: Spot, from: Spot): Spot | null {
+    const g = this.gridFor(p.uid, at.level);
+    const cx = Math.floor(at.x);
+    const cy = Math.floor(at.y);
+    const near: { q: Spot; d: number }[] = [];
+    for (let dy = -BACK_NEAR; dy <= BACK_NEAR; dy++)
+      for (let dx = -BACK_NEAR; dx <= BACK_NEAR; dx++) {
+        const q = { x: cx + dx + 0.5, y: cy + dy + 0.5, level: at.level };
+        const d = Math.hypot(q.x - at.x, q.y - at.y);
+        if (d <= BACK_NEAR && g.fits(q.x, q.y)) near.push({ q, d });
+      }
+    near.sort((a, b) => a.d - b.d);
+    for (const { q } of near) if (!this.arrivalProblem(p, q, from)) return q;
+    return null;
   }
 
   // Where everyone is, saved (as each leaves, and everyone a minute apart: a server
