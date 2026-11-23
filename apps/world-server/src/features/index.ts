@@ -23,6 +23,8 @@ export interface Feature {
   // (plan 120) the world's cast changed (an admin's edit, live): the town's people dressed as it says, made or taken
   // away
   cast?(cast: Cast): void;
+  // (plan 121) someone fired a shot (arms.ts, a shot it took): the NPCs near duck or run
+  shot?(p: Player): void;
   // the room made — its world, its physics and its weather in — and nobody let in yet: what its first tick would
   // do that's heavy, done now (docs/plan/89-the-weight.md phase 8: a first tick of ~250 ms froze everyone there)
   ready?(now: number): void;

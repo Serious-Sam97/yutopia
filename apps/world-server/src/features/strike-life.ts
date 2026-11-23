@@ -74,9 +74,9 @@ registerFeature((room: WorldRoom) => {
     room.state.npcs.set(npc.id, npc);
     walkers.push(w);
   };
-  const cast = (c: Cast, now: number) => {
+  const cast = (_c: Cast, now: number) => {
     for (let i = walkers.length - 1; i >= 0; i--) {
-      const d = c.get(walkers[i].key);
+      const d = room.castFree(walkers[i].key);
       if (d) fit(walkers[i], d);
       else {
         room.state.npcs.delete(walkers[i].npc.id);
@@ -84,7 +84,7 @@ registerFeature((room: WorldRoom) => {
       }
     }
     STRIKE_FOLK.forEach((f, k) => {
-      const d = c.get(`strike-${f.id}`);
+      const d = room.castFree(`strike-${f.id}`);
       if (d && !walkers.some((w) => w.key === d.key)) make(k, f, d, now);
     });
   };

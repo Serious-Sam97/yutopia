@@ -1,4 +1,6 @@
+import type { GroundsEdits } from "@yutopia/shared/grounds-edits";
 import { biOf, type NpcDef, packLook, parseCast } from "@yutopia/shared/npc";
+import { placesOf } from "@yutopia/shared/npc/places";
 import { townCast } from "@yutopia/shared/npc/town";
 import { api, type WorldInfo } from "./api.ts";
 import { config } from "./config.ts";
@@ -27,6 +29,18 @@ export async function loadCast(info: (WorldInfo & { npcs?: unknown }) | null): P
     console.warn("[cast] couldn't seed the cast, the town's for now:", (e as Error).message);
     return townCast();
   }
+}
+
+/** (plan 121) The cast NPCs placed by these edits: in the cast, not Vortex (never placed). */
+export function placedKeys(e: GroundsEdits, cast: Cast): Set<string> {
+  return new Set(
+    placesOf(e)
+      .filter((p) => {
+        const d = cast.get(p.key);
+        return d && d.behaviour.type !== "vortex";
+      })
+      .map((p) => p.key),
+  );
 }
 
 /** A string as the wire can carry it: @colyseus/schema 3.0.76 writes a str 8's length as `length % 255`, so one of

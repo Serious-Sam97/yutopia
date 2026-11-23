@@ -435,6 +435,8 @@ export interface ClientMessages {
   "wb:op": { objectId: string; op: WbOp };
   "arcade:score": { score: number };
   "vortex:poke": Record<string, never>;
+  // (plan 121) X "Talk" to a placed NPC (`place:<key>`): an answer said aloud, if they answer
+  "npc:talk": { id: string };
   // (plan 88) an admin's, for trying the fight: an act or his health set, beaten, reset; put somewhere and held
   "mod:vortex": {
     act?: 1 | 2 | 3;

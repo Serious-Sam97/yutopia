@@ -29,6 +29,8 @@ import "./karts.ts";
 import "./strike.ts";
 import "./strike-life.ts";
 import "./park-life.ts";
+// (plan 121: the cast's NPCs God mode placed — after the town's own, who let go of anyone placed)
+import "./npc-life.ts";
 import "./survival.ts";
 import "./dark.ts";
 import "./arms.ts";

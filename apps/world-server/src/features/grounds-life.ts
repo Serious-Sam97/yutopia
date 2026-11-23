@@ -14,10 +14,10 @@ import {
 import { aiControls, projectOn } from "@yutopia/shared/car/ai";
 import { JoltCarWorld } from "@yutopia/shared/car/jolt-world";
 import { nightness } from "@yutopia/shared/dark";
-import { linesFor, TALK_EVERY } from "@yutopia/shared/npc";
 import { along, GUARD_ROUND, heightAt, LOT, type Route, SHUTTLE, visitorRoute } from "@yutopia/shared/grounds";
-import { config } from "../config.ts";
+import { linesFor, TALK_EVERY } from "@yutopia/shared/npc";
 import { type Cast, dress, wire } from "../cast.ts";
+import { config } from "../config.ts";
 import { Npc, type Player, Vehicle } from "../schema.ts";
 import { fromSchema, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
@@ -176,8 +176,8 @@ registerFeature((room: WorldRoom) => {
   let gLines: string[] = [];
   let gTalk = 1;
   let gSayAt = Date.now() + 60_000;
-  const castGuard = (c: Cast) => {
-    const d = c.get("guard");
+  const castGuard = (_c: Cast) => {
+    const d = room.castFree("guard");
     if (!d) {
       room.state.npcs.delete("guard");
       return;

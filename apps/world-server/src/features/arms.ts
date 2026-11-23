@@ -255,6 +255,8 @@ registerFeature((room: WorldRoom) => {
     if (room.strike?.claims(p.sid) && !room.strike.alive(p.sid)) return;
     const h = inHand(client.sessionId, p);
     if (!h) return;
+    // (plan 121: heard by the placed NPCs near — they duck or run, as the cast says)
+    room.hook("shot", p);
     if (seat) {
       // (the driver: the revolver alone, one-handed, slower than 30 km/h — F7)
       if (seat.seat === 0 && (h.w.id !== "revolver" || seat.speed > CAR_DRIVER_SHOT_V)) return;

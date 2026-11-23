@@ -6,8 +6,8 @@ import { isRadio } from "@yutopia/shared/media";
 import { type NpcDef, TALK_EVERY } from "@yutopia/shared/npc";
 import { type Act, actOf, hurtBy, shooters, VORTEX_FIGHT } from "@yutopia/shared/vortex-fight";
 import { api } from "../api.ts";
-import { config } from "../config.ts";
 import { dress, wire } from "../cast.ts";
+import { config } from "../config.ts";
 import { Npc, type Player } from "../schema.ts";
 import { fromSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
@@ -888,7 +888,8 @@ registerFeature((room: WorldRoom) => {
     const p = room.state.players.get(client.sessionId);
     const q = typeof m?.sid === "string" ? room.state.players.get(m.sid) : undefined;
     const now = Date.now();
-    if (!here || !p || !q || q === p || !isBound(q.sid, now) || isBound(p.sid, now) || p.downAt || p.level !== q.level) return;
+    if (!here || !p || !q || q === p || !isBound(q.sid, now) || isBound(p.sid, now) || p.downAt || p.level !== q.level)
+      return;
     if (Math.hypot(p.x - q.x, p.y - q.y) > MV.freeR) return;
     boundTill.delete(q.sid);
     toAll({ kind: "free", to: q.sid, from: { x: p.x, y: p.y }, who: [p.sid] });

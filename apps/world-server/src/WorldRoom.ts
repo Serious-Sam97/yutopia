@@ -140,7 +140,7 @@ import { finishWorld } from "@yutopia/shared/structure/finish";
 import { furnishingsFix, spacesFix } from "@yutopia/shared/structure/spaces";
 import { ApiError, api, type PresenceEntry, type WorldInfo } from "./api.ts";
 import { verifyWorldToken, type WorldClaims } from "./auth.ts";
-import { castMap, loadCast } from "./cast.ts";
+import { castMap, loadCast, placedKeys } from "./cast.ts";
 import { config } from "./config.ts";
 import type { DarkHooks } from "./features/dark.ts";
 import { type Feature, featureNames, installFeatures } from "./features/index.ts";
@@ -286,6 +286,8 @@ export class WorldRoom extends Room<WorldState> {
   // (plan 120) the world's cast by key (cast.ts): the town's features make their people from it, and take a change live
   cast: Map<string, NpcDef> = new Map();
   private castPushed = false;
+  /** (plan 121) the cast NPCs God mode placed (features/npc-life.ts plays them): their own features let them go */
+  placed: ReadonlySet<string> = new Set();
   strike: StrikeHooks | null = null; // (plan 114) features/strike.ts: the match — its players' hits (features/arms.ts)
   /** (plan 97) features/cars.ts: the size of each of its maps, for the memory checker */
   carMaps: (() => Record<string, number>) | null = null;
@@ -344,6 +346,17 @@ export class WorldRoom extends Room<WorldState> {
 
   /** (plan 120) The cast as an admin left it (the API's POST /internal/cast): the town's people dressed, made or
    *  taken away by their features. */
+  /** (plan 121) A cast NPC their own feature plays: in the cast and not placed by God mode (placed: npc-life's). */
+  castFree(key: string): NpcDef | undefined {
+    return this.placed.has(key) ? undefined : this.cast.get(key);
+  }
+  /** (plan 121) Who's placed now (npc-life, on edits laid or the cast changed): the town's features told, as by a
+   *  change of the cast, when it's someone else. */
+  setPlaced(keys: ReadonlySet<string>) {
+    if (keys.size === this.placed.size && [...keys].every((k) => this.placed.has(k))) return;
+    this.placed = keys;
+    this.hook("cast", this.cast);
+  }
   setCast(list: NpcDef[]) {
     this.castPushed = true;
     this.cast = castMap(list);
@@ -536,6 +549,8 @@ export class WorldRoom extends Room<WorldState> {
     // (a cast pushed while this one loaded — POST /internal/cast — is newer: kept)
     const loaded = await loadCast(info);
     if (!this.castPushed) this.cast = castMap(loaded);
+    // (plan 121) who's placed, before the town's features make their people: a placed one isn't made by their own
+    this.placed = placedKeys(editsNow(), this.cast);
     this.features = installFeatures(this);
     // (the physics world built before anyone's let in: Jolt the only truth — plan 72 phase 7)
     await this.physicsReady;

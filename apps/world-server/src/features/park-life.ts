@@ -173,11 +173,11 @@ registerFeature((room: WorldRoom) => {
     room.state.npcs.set(npc.id, npc);
     walkers.push(w);
   };
-  const cast = (c: Cast, now: number) => {
+  const cast = (_c: Cast, now: number) => {
     // gone from the cast: off their seat, out of the world
     for (let i = walkers.length - 1; i >= 0; i--) {
       const w = walkers[i];
-      const d = c.get(w.key);
+      const d = room.castFree(w.key);
       if (d) {
         fit(w, d);
         continue;
@@ -190,7 +190,7 @@ registerFeature((room: WorldRoom) => {
       walkers.splice(i, 1);
     }
     for (const [k, f] of KART_FOLK.entries()) {
-      const d = c.get(`folk-${f.id}`);
+      const d = room.castFree(`folk-${f.id}`);
       if (d && !walkers.some((w) => w.key === d.key)) make(k, f, d, now);
     }
   };

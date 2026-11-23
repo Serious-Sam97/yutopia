@@ -179,4 +179,31 @@ God mode.
 
 ## Progress
 
-(nothing built yet)
+- **Phase 1** (c1b923d8):
+  - shared `npc/places.ts`: `NpcPlaceDef`, `placesOf`, `checkNpcPlaces`, `placedType`, `onDuty`;
+  - `GroundsEdits.npcs`, counted by `editsCount`;
+  - a placement's optional `type`, for what a placed town NPC does (their cast type is their own and stays fixed);
+  - tests.
+- **Phases 2–5** (the server):
+  - `room.placed` is worked out before the town's features are made. `room.castFree(key)` is what park-life,
+    strike-life and the guard now ask, so a placed one isn't theirs. `room.setPlaced` tells them through the `cast`
+    hook when it changes.
+  - `features/npc-life.ts` plays every placed NPC: `place:<key>`, kind folk, dressed from the cast and taken live.
+    - stand, counter (turned to whoever's within 4 m), sit (the seat at their spot on its floor's grid; never one
+      someone's in; up and aside 30 s for someone at it), wander (a point in the circle, on the navmesh), route (stops
+      in order, legs on the navmesh, a pause, a loop or back);
+    - walks are legs, one floor each, joined at a town building's door (land ↔ its ground storey, or one building to
+      another). No way: they stay and try again in 20 s;
+    - a home: out of their hours they walk to its door and in, then sit on a free seat there or stand. Back out when
+      it's time. Without a home, hours are ignored;
+    - talk (× their rate, someone within 10 m), greet (3 m, once a person every 3 min, a line and a wave);
+    - `npc:talk` (X): an answer aloud, within 3 m;
+    - shots: arms.ts calls the new `shot` hook. Within 25 m they duck (`mood` "duck", 4 s) or flee (14 m away on the
+      navmesh, `mood` "run", back after 9 s).
+  - Tests `npc-life.test.ts`, an offline room:
+    - Maya (a kart visitor) placed: the Kart Park lets her go, back once she's off the map;
+    - Dora wanders within her 4 m circle and answers X aloud, EN|PT;
+    - Ned's shift over, he walks in at house-w0's door to its storey;
+    - Vortex never placed;
+    - a shot makes one duck and the other run away.
+  - Neighbouring tests pass, run alone: run all at once, Daybreak and Vortex's scaling time out on a starved machine.
