@@ -25,6 +25,7 @@ import type { GodInput, ThirdPersonView } from "../tp/view";
 import { BridgesTool } from "./bridges";
 import { BuildingsTool } from "./buildings";
 import { GrowTool } from "./grow";
+import { NpcsTool } from "./npcs";
 import { BrushRing } from "./ring";
 import { RoadsTool } from "./roads";
 import { ThingsTool } from "./things";
@@ -128,6 +129,9 @@ export class GodController {
   // dragging one with the Vehicles tool
   private vehicles: VehiclesTool | null = null;
   private vehicleDrag: number | null = null;
+  // the NPCs (docs/plan/121: ./npcs.ts) — the draft's drawn, the NPCs tool's, Select's — and the pointer dragging one
+  private npcs: NpcsTool | null = null;
+  private npcDrag: number | null = null;
   // the bridges (docs/plan/109: ./bridges.ts), and the pointer dragging an end of one
   private bridges: BridgesTool | null = null;
   private bridgeDrag: number | null = null;
@@ -219,6 +223,9 @@ export class GodController {
     this.buildings = null;
     this.vehicles?.dispose();
     this.vehicles = null;
+    this.npcs?.dispose();
+    this.npcs = null;
+    this.npcDrag = null;
     this.bridges?.dispose();
     this.bridges = null;
     this.vehicleDrag = null;
@@ -244,6 +251,8 @@ export class GodController {
       walking: false,
       publish: null,
       pointer: null,
+      // (back out of any inside shown: the view on my floor again)
+      npcs: { ...hud.get().god.npcs, floor: null, held: null, step: "" },
       naming: null,
       map: false,
       drafts: this.listShut(),
@@ -265,6 +274,8 @@ export class GodController {
     this.buildings?.hide();
     this.vehicles?.hide();
     this.vehicleDrag = null;
+    this.npcs?.hide();
+    this.npcDrag = null;
     this.bridges?.cancel();
     this.bridges?.hide();
     this.bridgeDrag = null;
@@ -280,7 +291,7 @@ export class GodController {
       this.w.teleport({ x: this.at.x, y: this.at.z, level: 0 });
       tp.god = null;
     } else tp.god = { at: new Vector3(), dist: this.up, input: this.input };
-    this.set({ walking: on, publish: null, map: false });
+    this.set({ walking: on, publish: null, map: false, npcs: { ...hud.get().god.npcs, floor: null, held: null } });
   }
 
   // ── each frame ─────────────────────────────────────────────────────────────
@@ -289,12 +300,15 @@ export class GodController {
     const tp = this.w.tp;
     if (!this.on || this.walking || !tp?.god) return null;
     this.move(dt);
-    const g = terrainAt(this.at.x, this.at.z);
+    // (an inside shown — plan 121: its floor's the ground the camera stands over, the building cut away)
+    const inside = hud.get().god.npcs.floor;
+    const g = inside ? -tp.groundsFrame().y : terrainAt(this.at.x, this.at.z);
+    tp.god.cut = inside?.cut ?? null;
     // (behind the ground point, up: never under the land)
     const back = this.up / Math.tan(this.pitch);
     const ex = this.at.x - Math.cos(this.yaw) * back;
     const ez = this.at.z - Math.sin(this.yaw) * back;
-    const ey = Math.max(g + this.up, terrainAt(ex, ez) + 2);
+    const ey = inside ? g + this.up : Math.max(g + this.up, terrainAt(ex, ez) + 2);
     const f = tp.groundsFrame();
     tp.god.at.set(this.at.x, g + f.y, this.at.z);
     tp.god.dist = Math.hypot(back, ey - g);
@@ -308,6 +322,12 @@ export class GodController {
     const tool = hud.get().god.tool;
     // (the draft's vehicles, drawn as it has them — plan 102)
     this.vehiclesTool()?.showDraft();
+    // (the draft's NPCs, and the NPCs tool's — plan 121)
+    {
+      const g0 = hud.get().god;
+      const active = tool === "npcs" || (tool === "select" && g0.picked === "npc");
+      this.npcsTool()?.frame(this.mouse, f, active);
+    }
     if (tool === "select") this.selectFrame(this.under, f);
     else {
       if (tool === "vehicles") this.vehiclesTool()?.frame(this.under, f, !this.vehicles?.dragging);
@@ -503,6 +523,31 @@ export class GodController {
         return true;
       }
     }
+    // the NPCs tool (plan 121): R turns the held or picked one, Delete takes the picked one off the map, a route's
+    // Enter ends it and Backspace takes its last stop back, Esc lets go (the step, the held one, the picked one)
+    const nt = hud.get().god.tool === "npcs" ? this.npcsTool() : null;
+    if (nt && !hud.get().god.publish && !e.repeat) {
+      const n = hud.get().god.npcs;
+      if (k === "r") {
+        nt.turn(e.shiftKey ? -15 : 15);
+        return true;
+      }
+      if (n.step === "route" && (e.key === "Enter" || e.key === "Backspace")) {
+        if (e.key === "Enter") nt.setStep("");
+        else nt.backStop();
+        return true;
+      }
+      if ((e.key === "Delete" || e.key === "Backspace") && n.sel && !n.held) {
+        nt.removePicked();
+        return true;
+      }
+      if (e.key === "Escape" && (n.step || n.held || n.sel)) {
+        if (n.step) nt.setStep("");
+        else if (n.held) nt.hold(null);
+        else nt.deselect();
+        return true;
+      }
+    }
     // the vehicles tool: R turns the one held (Shift: back), Esc lets go of one picked
     const vt = hud.get().god.tool === "vehicles" ? this.vehicles : null;
     if (vt && !hud.get().god.publish && !e.repeat) {
@@ -553,6 +598,7 @@ export class GodController {
     // (1–9 the first nine tools — a number, not a string compared: "2" > "10" —, B the bridges)
     else if (/^[1-9]$/.test(e.key) && Number(e.key) <= GOD_TOOLS.length) this.setTool(GOD_TOOLS[Number(e.key) - 1]);
     else if (k === "b") this.setTool("bridges");
+    else if (k === "n") this.setTool("npcs");
     else this.keys.add(e.code);
     return true;
   }
@@ -600,6 +646,18 @@ export class GodController {
         this.bridgeDrag = e.pointerId;
         return;
       }
+      // the NPCs tool: a placed one under it picked up to drag (else a click: the held one put down, a step's)
+      if (
+        tool === "npcs" &&
+        e.button === 0 &&
+        !touches &&
+        !hud.get().god.npcs.held &&
+        !hud.get().god.npcs.step &&
+        this.npcsTool()?.grab(this.npcs?.spotAt(e.clientX, e.clientY) ?? null)
+      ) {
+        this.npcDrag = e.pointerId;
+        return;
+      }
       // the vehicles tool: one under it picked up to drag (else a click places the one held)
       if (tool === "vehicles" && e.button === 0 && !touches && this.vehiclesTool()?.grab(this.landAt(e))) {
         this.vehicleDrag = e.pointerId;
@@ -614,19 +672,22 @@ export class GodController {
       // on nothing lets the picked one go)
       if (tool === "select" && e.button === 0 && !touches) {
         const at = this.landAt(e);
-        const kind = this.selectHit(at);
+        const spot = this.npcsTool()?.spotAt(e.clientX, e.clientY) ?? null;
+        const kind = this.npcs?.hits(spot) ? "npc" : this.selectHit(at);
         const grabbed =
-          kind === "thing"
-            ? this.thingsTool()?.grab(at)
-            : kind === "vehicle"
-              ? this.vehiclesTool()?.grab(at)
-              : kind === "bridge"
-                ? this.bridgesTool()?.down(at, true)
-                : kind === "building"
-                  ? this.buildingsTool()?.down(at)
-                  : kind === "way"
-                    ? this.roadsTool()?.grabWay(at)
-                    : false;
+          kind === "npc"
+            ? this.npcs?.grab(spot)
+            : kind === "thing"
+              ? this.thingsTool()?.grab(at)
+              : kind === "vehicle"
+                ? this.vehiclesTool()?.grab(at)
+                : kind === "bridge"
+                  ? this.bridgesTool()?.down(at, true)
+                  : kind === "building"
+                    ? this.buildingsTool()?.down(at)
+                    : kind === "way"
+                      ? this.roadsTool()?.grabWay(at)
+                      : false;
         if (kind && grabbed) {
           this.selDrag = { id: e.pointerId, kind };
           return;
@@ -654,11 +715,13 @@ export class GodController {
       if (this.thingDrag === e.pointerId) return this.things?.move(this.landAt(e));
       if (this.buildingDrag === e.pointerId) return this.buildings?.move(this.landAt(e));
       if (this.vehicleDrag === e.pointerId) return this.vehicles?.move(this.landAt(e));
+      if (this.npcDrag === e.pointerId) return this.npcs?.move(this.npcs.spotAt(e.clientX, e.clientY));
       if (this.bridgeDrag === e.pointerId) return this.bridges?.move(this.landAt(e));
       if (this.growDrag?.id === e.pointerId) return this.grow?.move(this.landAt(e));
       if (this.selDrag?.id === e.pointerId) {
         const at = this.landAt(e);
         const k = this.selDrag.kind;
+        if (k === "npc") return this.npcs?.move(this.npcs.spotAt(e.clientX, e.clientY));
         return k === "thing"
           ? this.things?.move(at)
           : k === "vehicle"
@@ -707,6 +770,11 @@ export class GodController {
         this.vehicles?.up();
         return;
       }
+      if (this.npcDrag === e.pointerId) {
+        this.npcDrag = null;
+        this.npcs?.up();
+        return;
+      }
       if (this.bridgeDrag === e.pointerId) {
         this.bridgeDrag = null;
         this.bridges?.up(this.landAt(e), false);
@@ -725,6 +793,7 @@ export class GodController {
         const k = this.selDrag.kind;
         this.selDrag = null;
         if (k === "thing") this.things?.up(this.landAt(e), false, e);
+        else if (k === "npc") this.npcs?.up();
         else if (k === "vehicle") this.vehicles?.up();
         else if (k === "bridge") this.bridges?.up(this.landAt(e), false);
         else if (k === "building") this.buildings?.up(this.landAt(e), false);
@@ -751,7 +820,8 @@ export class GodController {
         else if (tool === "vehicles") {
           this.vehicles?.deselect();
           this.vehiclesTool()?.place(this.landAt(e));
-        } else if (tool === "nature") this.natureClick(this.landAt(e));
+        } else if (tool === "npcs") this.npcsTool()?.click(this.npcs?.spotAt(e.clientX, e.clientY) ?? null);
+        else if (tool === "nature") this.natureClick(this.landAt(e));
         else if (tool === "select") this.deselect();
       }
     },
@@ -767,6 +837,11 @@ export class GodController {
         (th.dragging || (g.tool === "things" && g.things.mode === "place" && !g.things.sel && !g.publish))
       ) {
         th.wheelTurn((clamp(e.deltaY, -240, 240) / 100) * (e.altKey ? 1 : 5));
+        return;
+      }
+      // (an NPC held to place: turned — plan 121)
+      if (this.npcs && !e.shiftKey && !e.ctrlKey && g.tool === "npcs" && g.npcs.held && !g.publish) {
+        this.npcs.wheelTurn((clamp(e.deltaY, -240, 240) / 100) * (e.altKey ? 1 : 5));
         return;
       }
       // (a vehicle held to place, or dragged: the same — plan 102)
@@ -800,6 +875,7 @@ export class GodController {
   private selectFrame(at: { x: number; z: number; h: number } | null, f: { y: number }) {
     const g = hud.get().god;
     const kind = this.selDrag?.kind ?? this.selectHit(at) ?? g.picked;
+    // (an NPC's: drawn by the NPCs tool's frame — plan 121)
     // (the picked one's tool shows it when the pointer's on nothing: no hover for the others)
     const over = this.selDrag || this.selectHit(at) ? at : null;
     if (kind === "thing") this.thingsTool()?.frame(over, f, true);
@@ -817,16 +893,19 @@ export class GodController {
   private pickedNow(kind: Picked) {
     const g = hud.get().god;
     const has =
-      kind === "thing"
-        ? !!g.things.sel
-        : kind === "building"
-          ? !!g.buildings.sel
-          : kind === "vehicle"
-            ? !!g.vehicles.sel
-            : kind === "bridge"
-              ? !!g.bridges.sel
-              : !!g.roads.sel;
+      kind === "npc"
+        ? !!g.npcs.sel
+        : kind === "thing"
+          ? !!g.things.sel
+          : kind === "building"
+            ? !!g.buildings.sel
+            : kind === "vehicle"
+              ? !!g.vehicles.sel
+              : kind === "bridge"
+                ? !!g.bridges.sel
+                : !!g.roads.sel;
     if (kind !== "bridge") this.bridges?.deselect();
+    if (kind !== "npc") this.npcs?.deselect();
     if (kind !== "vehicle") this.vehicles?.deselect();
     if (kind !== "thing") this.things?.deselect();
     if (kind !== "building") this.buildings?.deselect();
@@ -835,6 +914,7 @@ export class GodController {
   }
   /** Select's: what's picked let go. */
   deselect() {
+    this.npcs?.deselect();
     this.bridges?.deselect();
     this.vehicles?.deselect();
     this.things?.deselect();
@@ -846,6 +926,7 @@ export class GodController {
   turnPicked(back = false) {
     const k = hud.get().god.picked;
     if (k === "thing") this.thingsTool()?.turn(back ? -15 : 15);
+    else if (k === "npc") this.npcsTool()?.turn(back ? -15 : 15);
     else if (k === "vehicle") this.vehiclesTool()?.turn(back ? -15 : 15);
     else if (k === "building") this.buildingsTool()?.turn();
   }
@@ -853,21 +934,24 @@ export class GodController {
   removePicked() {
     const k = hud.get().god.picked;
     if (k === "thing") this.thingsTool()?.removePicked();
+    else if (k === "npc") this.npcsTool()?.removePicked();
     else if (k === "building") this.buildingsTool()?.removePicked();
     else if (k === "way") this.roadsTool()?.removePicked();
     else if (k === "vehicle") this.vehiclesTool()?.removePicked();
     else if (k === "bridge") this.bridgesTool()?.removePicked();
     const g = hud.get().god;
     const sel =
-      k === "thing"
-        ? g.things.sel
-        : k === "building"
-          ? g.buildings.sel
-          : k === "vehicle"
-            ? g.vehicles.sel
-            : k === "bridge"
-              ? g.bridges.sel
-              : g.roads.sel;
+      k === "npc"
+        ? g.npcs.sel
+        : k === "thing"
+          ? g.things.sel
+          : k === "building"
+            ? g.buildings.sel
+            : k === "vehicle"
+              ? g.vehicles.sel
+              : k === "bridge"
+                ? g.bridges.sel
+                : g.roads.sel;
     if (!sel) this.set({ picked: null });
   }
   /** Select's: the picked way's points edited (the roads tool, Edit points, the way picked). */
@@ -935,6 +1019,38 @@ export class GodController {
         tp.scene,
       );
     return this.vehicles;
+  }
+  /** The NPCs (made the first time they're needed: the draft's drawn, the NPCs tool, Select's — plan 121). */
+  npcsTool(): NpcsTool | null {
+    const tp = this.w.tp;
+    if (!this.npcs && tp)
+      this.npcs = new NpcsTool(
+        {
+          draft: () => this.draftNow(),
+          published: () => publishedEdits(),
+          change: (next) => this.change(next),
+          snap: () => this.snapNow(),
+          tp: () => this.w.tp,
+          structure: () => this.w.structure,
+          ground: (x, z) => this.w.grid.groundAt(x, z, 0),
+        },
+        tp.scene,
+      );
+    return this.npcs;
+  }
+  /** (plan 121) An inside shown — a town building's storey, a studio floor — or the land again (null); the camera
+   *  over its middle. */
+  showFloor(level: number | null) {
+    const t = this.npcsTool();
+    const f = level === null ? null : (t?.floors().find((q) => q.level === level) ?? null);
+    // (the cut first: the view lays its floors out for the new level with it — the storeys above gone)
+    const tp = this.w.tp;
+    if (tp?.god) tp.god.cut = f?.cut ?? null;
+    this.set({ npcs: { ...hud.get().god.npcs, floor: f } });
+    const m = f ? t?.middleOf(f.level) : null;
+    if (m) this.lookAt(m.x, m.z);
+    // (an inside: close enough to see who's in it)
+    if (f) this.up = Math.min(this.up, 24);
   }
   /** (Select's vehicle panel) A home vehicle left away, put back at its home now (the server's: not a draft's step). */
   sendHome() {
@@ -1498,8 +1614,13 @@ export class GodController {
       this.grow?.cancel();
       this.grow?.hide();
       this.growDrag = null;
+      this.npcDrag = null;
       // (into Select or out of it: nothing picked by it)
       this.set({ tool: t, picked: null });
+      // (the NPCs tool: the cast loaded — the API's — plan 121; out of it, none held)
+      if (t === "npcs") this.npcsTool()?.load();
+      else if (hud.get().god.npcs.held || hud.get().god.npcs.step)
+        this.set({ npcs: { ...hud.get().god.npcs, held: null, step: "" } });
     }
   }
   /** The land brush's or the paint brush's settings. */

@@ -28,6 +28,7 @@ import type { GrowBiome, ThingKind } from "@yutopia/shared/grounds-edits";
 import { catalogThing, THINGS } from "@yutopia/shared/grounds-things";
 import { GROW_BIOMES, GROW_LIMITS, GROW_NAMES, GROW_SNAP } from "@yutopia/shared/grow";
 import type { Biome } from "@yutopia/shared/land";
+import { PLACE_LIMITS, PLACED_TYPES, placesOf } from "@yutopia/shared/npc/places";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLang } from "@/lib/i18n";
 import { buildingPicture, onPictures } from "@/world/god/building-pictures";
@@ -274,6 +275,45 @@ const W = {
   ownedNote: ["Someone's own: moved only", "É de alguém: só mover"],
   homeNote: ["Lives here: the tow brings it back", "Mora aqui: o guincho traz de volta"],
   placedNote: ["Placed in this draft", "Colocado neste rascunho"],
+  // (plan 121) the NPCs tool
+  npcWhere: ["Where", "Onde"],
+  npcOutdoors: ["Outdoors", "Ao ar livre"],
+  npcSearch: ["Search the cast", "Buscar no elenco"],
+  npcCastFailed: ["The cast couldn't be loaded.", "Não deu para carregar o elenco."],
+  npcLoading: ["Loading the cast…", "Carregando o elenco…"],
+  npcPlaced: ["placed", "colocado"],
+  npcTown: ["the town's", "da cidade"],
+  npcHeld: ["Click to put {n} down · R turns · Esc lets go", "Clique para pôr {n} · R gira · Esc solta"],
+  npcType: ["What they do", "O que faz"],
+  npcCastType: ["As the cast says", "Como o elenco diz"],
+  npcTownType: [
+    "Their own ways are set aside while they're placed.",
+    "A rotina própria fica de lado enquanto estiver colocado.",
+  ],
+  npc_stand: ["Stands", "Parado"],
+  npc_counter: ["Counter", "Balcão"],
+  npc_sit: ["Sits", "Sentado"],
+  npc_wander: ["Wanders", "Passeia"],
+  npc_route: ["Route", "Rota"],
+  npcSitHint: ["Put them on a seat: they sit on it.", "Coloque num assento: ele senta nele."],
+  npcRadius: ["Circle {n} m", "Círculo {n} m"],
+  npcRoute: ["Draw the route", "Desenhar a rota"],
+  npcRouteOn: [
+    "Click each stop · Enter ends · Backspace takes one back",
+    "Clique cada parada · Enter termina · Backspace volta uma",
+  ],
+  npcStops: ["{n} stops after their place", "{n} paradas depois do lugar"],
+  npcLoop: ["Round again", "Volta ao início"],
+  npcBack: ["Back the way they came", "Volta pelo mesmo caminho"],
+  npcPause: ["Pause {n} s", "Pausa {n} s"],
+  npcClear: ["Clear it", "Apagar"],
+  npcHome: ["Home", "Casa"],
+  npcNoHome: ["None: their hours don't matter", "Nenhuma: o horário não importa"],
+  npcPickHome: ["Pick a home", "Escolher casa"],
+  npcHomeOn: ["Click a town building to live in", "Clique num prédio da cidade para morar"],
+  npcOff: ["Take off the map", "Tirar do mapa"],
+  npcOnPage: ["Open on the cast page", "Abrir na página do elenco"],
+  npcDone: ["Done", "Pronto"],
   kind_sedan: ["Saloon", "Sedã"],
   kind_estate: ["Estate", "Perua"],
   kind_hatch: ["Hatchback", "Hatch"],
@@ -342,6 +382,7 @@ const TOOL_WORDS: Record<GodTool, [string, string]> = {
   buildings: ["Buildings", "Prédios"],
   vehicles: ["Vehicles", "Veículos"],
   grow: ["Grow", "Crescer"],
+  npcs: ["NPCs", "NPCs"],
 };
 const TOOL_ICONS: Record<GodTool, IconName> = {
   select: "cursor",
@@ -353,6 +394,7 @@ const TOOL_ICONS: Record<GodTool, IconName> = {
   things: "chair",
   buildings: "home",
   vehicles: "key",
+  npcs: "people",
   grow: "map",
 };
 const READY = GOD_READY;
@@ -401,6 +443,7 @@ export function GodHud() {
       {g.tool === "select" && <SelectOptions g={g} />}
       {g.tool === "select" && g.picked === "thing" && g.things.sel && <ThingsPanel g={g} />}
       {g.tool === "select" && g.picked === "building" && g.buildings.sel && <BuildingsPanel g={g} />}
+      {(g.tool === "npcs" || (g.tool === "select" && g.picked === "npc" && g.npcs.sel)) && <NpcsPanel g={g} />}
       {g.tool === "vehicles" && <VehiclesOptions g={g} />}
       {(g.tool === "vehicles" || (g.tool === "select" && g.picked === "vehicle" && g.vehicles.sel)) && (
         <VehiclesPanel g={g} />
@@ -606,7 +649,7 @@ function Tools({ g }: { g: GodState }) {
           onClick={() => w?.god?.setTool(k)}
         >
           <span className="absolute top-1 right-1.5 text-[9px] opacity-60 hidden sm:block">
-            {k === "bridges" ? "B" : i + 1}
+            {k === "bridges" ? "B" : k === "npcs" ? "N" : i + 1}
           </span>
           <Icon name={TOOL_ICONS[k]} size={18} />
           <span className="text-[11px]">{TOOL_WORDS[k][pt ? 1 : 0]}</span>
@@ -1312,6 +1355,259 @@ function VehiclesOptions({ g }: { g: GodState }) {
 
 /** The vehicles' panel: with the Vehicles tool, every kind (its picture), its models, colours and role, to place; with
  *  one picked (Select's), its own — and "send home" for one of the town's left away. A player's own: moved only. */
+/** (plan 121) The NPCs tool's panel: where (the land, or an inside), the cast to pick from, the one held; the picked
+ *  one's — what they do, their circle or route, their home, off the map. */
+function NpcsPanel({ g }: { g: GodState }) {
+  const t = useW();
+  const pt = useLang() === "pt";
+  const w = useWorld();
+  const o = g.npcs;
+  const tool = () => w?.god?.npcsTool();
+  const draft = w?.god?.draftNow() ?? { rev: 0 };
+  const placed = new Map(placesOf(draft).map((p) => [p.key, p]));
+  // (the insides there are: the structure's, once a frame's worth — cheap, a few dozen floors)
+  const floors = w?.god?.npcsTool()?.floors() ?? [];
+  const row = (k: string | null) => (k ? o.cast?.find((r) => r.key === k) : undefined);
+  const name = (k: string | null) => {
+    const r = row(k);
+    return r?.name || r?.role || k || "";
+  };
+  const sel = o.sel ? placed.get(o.sel) : undefined;
+  const q = o.q.trim().toLowerCase();
+  const list = (o.cast ?? []).filter((r) => !q || `${r.name} ${r.role} ${r.key}`.toLowerCase().includes(q));
+  const type: string = sel?.type ?? (row(o.sel)?.town ? "stand" : (row(o.sel)?.type ?? "stand"));
+  return (
+    <aside
+      className="pointer-events-auto cabinet absolute top-[92px] right-3 w-72 max-h-[calc(100vh-280px)] overflow-y-auto scroll-thin p-3 hidden sm:block"
+      data-god-npcs-panel
+    >
+      <div className="flex items-baseline justify-between">
+        <h3 className="title text-[18px]">{sel ? name(o.sel) : TOOL_WORDS.npcs[pt ? 1 : 0]}</h3>
+        {!sel && o.cast && (
+          <span className="mono text-[10.5px]" style={{ color: "var(--cream-dim)" }}>
+            {placed.size}/{o.cast.length}
+          </span>
+        )}
+      </div>
+      <div className="zigzag w-24 mt-1.5" aria-hidden />
+      <label className="block mt-2.5">
+        <span className="grp">{t("npcWhere")}</span>
+        <select
+          className="field py-1 mt-1 text-sm"
+          value={o.floor?.level ?? ""}
+          onChange={(e) => w?.god?.showFloor(e.target.value === "" ? null : Number(e.target.value))}
+          data-god-npc-floor
+        >
+          <option value="">{t("npcOutdoors")}</option>
+          {floors.map((f) => (
+            <option key={f.level} value={f.level}>
+              {f.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {o.held && (
+        <p className="text-[12px] mt-2.5" style={{ color: o.blocked ? "var(--alert)" : "var(--amber)" }}>
+          {o.blocked ?? t("npcHeld", name(o.held))}
+        </p>
+      )}
+      {!sel && !o.held && (
+        <>
+          <input
+            className="field py-1.5 mt-2.5 text-sm"
+            type="search"
+            placeholder={t("npcSearch")}
+            value={o.q}
+            onChange={(e) => hud.set((s) => ({ god: { ...s.god, npcs: { ...s.god.npcs, q: e.target.value } } }))}
+          />
+          {!o.cast && <p className="text-[12px] mt-2">{o.failed ? t("npcCastFailed") : t("npcLoading")}</p>}
+          <ul className="mt-2 space-y-1">
+            {list.map((r) => {
+              const p = placed.get(r.key);
+              return (
+                <li key={r.key}>
+                  <button
+                    type="button"
+                    className="deck-btn w-full justify-between h-auto py-1.5 px-2 text-left"
+                    data-god-npc={r.key}
+                    onClick={() => {
+                      if (p) {
+                        tool()?.pick(r.key);
+                        w?.god?.showFloor(p.level === 0 ? null : p.level);
+                        w?.god?.lookAt(p.x, p.z);
+                      } else tool()?.hold(r.key);
+                    }}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13px]">{r.name || r.role}</span>
+                      {r.name && r.role && (
+                        <span className="block truncate text-[10.5px]" style={{ color: "var(--cream-dim)" }}>
+                          {r.role}
+                        </span>
+                      )}
+                    </span>
+                    <span
+                      className="mono text-[9.5px] uppercase shrink-0"
+                      style={{ color: p ? "var(--vfd)" : "var(--muted)" }}
+                    >
+                      {p ? t("npcPlaced") : r.town ? t("npcTown") : ""}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+      {sel && (
+        <div className="space-y-3 mt-3">
+          <div>
+            <p className="grp">{t("npcType")}</p>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {PLACED_TYPES.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  className="chip"
+                  aria-pressed={type === k}
+                  onClick={() => tool()?.setType(k)}
+                  data-god-npc-type={k}
+                >
+                  {t(`npc_${k}` as Word)}
+                </button>
+              ))}
+            </div>
+            {row(o.sel)?.town && (
+              <p className="text-[11px] mt-1" style={{ color: "var(--cream-dim)" }}>
+                {t("npcTownType")}
+              </p>
+            )}
+            {sel.type && !row(o.sel)?.town && (
+              <button type="button" className="ghost-btn mt-1" onClick={() => tool()?.setType("")}>
+                {t("npcCastType")}
+              </button>
+            )}
+          </div>
+          {type === "sit" && (
+            <p className="text-[11.5px]" style={{ color: "var(--cream-dim)" }}>
+              {t("npcSitHint")}
+            </p>
+          )}
+          {type === "wander" && (
+            <label className="block text-[12px]">
+              {t("npcRadius", sel.r ?? 6)}
+              <input
+                type="range"
+                className="slider w-full mt-1"
+                min={PLACE_LIMITS.r[0]}
+                max={PLACE_LIMITS.r[1]}
+                value={sel.r ?? 6}
+                onChange={(e) => tool()?.setPicked({ r: Number(e.target.value) })}
+                data-god-npc-radius
+              />
+            </label>
+          )}
+          {type === "route" && (
+            <div className="space-y-1.5">
+              <p className="text-[12px]">{t("npcStops", sel.route?.length ?? 0)}</p>
+              {o.step === "route" ? (
+                <>
+                  <p className="text-[11.5px]" style={{ color: "var(--amber)" }}>
+                    {t("npcRouteOn")}
+                  </p>
+                  <button type="button" className="deck-btn lit w-full" onClick={() => tool()?.setStep("")}>
+                    {t("npcDone")}
+                  </button>
+                </>
+              ) : (
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    className="deck-btn flex-1"
+                    onClick={() => tool()?.setStep("route")}
+                    data-god-npc-route
+                  >
+                    {t("npcRoute")}
+                  </button>
+                  {!!sel.route?.length && (
+                    <button type="button" className="deck-btn" onClick={() => tool()?.setPicked({ route: undefined })}>
+                      {t("npcClear")}
+                    </button>
+                  )}
+                </div>
+              )}
+              <div className="seg">
+                <button type="button" aria-pressed={!!sel.loop} onClick={() => tool()?.setPicked({ loop: true })}>
+                  {t("npcLoop")}
+                </button>
+                <button type="button" aria-pressed={!sel.loop} onClick={() => tool()?.setPicked({ loop: undefined })}>
+                  {t("npcBack")}
+                </button>
+              </div>
+              <label className="block text-[12px]">
+                {t("npcPause", sel.pause ?? 4)}
+                <input
+                  type="range"
+                  className="slider w-full mt-1"
+                  min={PLACE_LIMITS.pause[0]}
+                  max={60}
+                  value={sel.pause ?? 4}
+                  onChange={(e) => tool()?.setPicked({ pause: Number(e.target.value) })}
+                />
+              </label>
+            </div>
+          )}
+          <div>
+            <p className="grp">{t("npcHome")}</p>
+            <p className="text-[12px] mt-1" data-god-npc-home={sel.home ?? ""}>
+              {sel.home ?? t("npcNoHome")}
+            </p>
+            {o.step === "home" ? (
+              <p className="text-[11.5px] mt-1" style={{ color: "var(--amber)" }}>
+                {t("npcHomeOn")}
+              </p>
+            ) : (
+              <div className="flex gap-1.5 mt-1">
+                <button
+                  type="button"
+                  className="deck-btn flex-1"
+                  onClick={() => tool()?.setStep("home")}
+                  data-god-npc-pick-home
+                >
+                  {t("npcPickHome")}
+                </button>
+                {sel.home && (
+                  <button type="button" className="deck-btn" onClick={() => tool()?.setPicked({ home: undefined })}>
+                    {t("npcClear")}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              className="deck-btn danger flex-1"
+              onClick={() => tool()?.removePicked()}
+              data-god-npc-off
+            >
+              {t("npcOff")}
+            </button>
+            <a
+              className="deck-btn"
+              href={`/admin/npcs?key=${encodeURIComponent(o.sel ?? "")}`}
+              target="_blank"
+              rel="noopener"
+            >
+              {t("npcOnPage")}
+            </a>
+          </div>
+        </div>
+      )}
+    </aside>
+  );
+}
+
 function VehiclesPanel({ g }: { g: GodState }) {
   const t = useW();
   const pt = useLang() === "pt";

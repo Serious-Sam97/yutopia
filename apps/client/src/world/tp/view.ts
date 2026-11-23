@@ -1515,7 +1515,7 @@ void main() {
    *  floor's frame (the land, the lamps and the sun round it, not round me), how far the camera
    *  is from it (the fog drawn back that far), and its pointer and wheel; null: the usual. The
    *  camera itself is a game camera (gameCam), eased in out of mine and back. */
-  god: { at: Vector3; dist: number; input: GodInput } | null = null;
+  god: { at: Vector3; dist: number; input: GodInput; cut?: string | null } | null = null;
   gameCam: {
     eye: [number, number, number];
     look: [number, number, number];
@@ -1848,7 +1848,8 @@ void main() {
     if (!sf) return me ? f === 0 : f < this.level;
     // (mine: the storeys under me, and — playing, not building — the one over me, seen up its stairwell; plan 113)
     if (me && me.space === sf.space)
-      return sf.storey < me.storey || (!this.buildPick.buildMode && sf.storey === me.storey + 1);
+      // (building in it, or God mode looking in — plan 121: the storeys above gone, this one seen from over it)
+      return sf.storey < me.storey || (!this.buildPick.buildMode && !this.god?.cut && sf.storey === me.storey + 1);
     return this.spaceNear(sf);
   }
   /** A town building's storey within SPACE_NEAR of where the camera looks (its plot's nearest point). */
@@ -2598,6 +2599,8 @@ void main() {
   // One frame: people from the world's bodies (`me` = whose camera this is).
   /** Bodies besides the room's people: the shadowed (world/dark, docs/plan/30-the-dark.md D5). */
   extraBodies: (() => Body3[]) | null = null;
+  /** (plan 121) God mode's people: the NPC held to place, the draft's placed ones */
+  godBodies: (() => Body3[]) | null = null;
   private shroud: Shroud3 | null = null;
   /** Who's down (crawling) and who's kneeling by them getting them up (world/dark says; D7). */
   downed = new Map<string, "down" | "kneel">();
@@ -2646,6 +2649,7 @@ void main() {
       if (this.ratioNow() !== this.renderer.getPixelRatio()) this.resize();
     }
     if (this.extraBodies) bodies = bodies.concat(this.extraBodies());
+    if (this.godBodies) bodies = bodies.concat(this.godBodies());
     // the furniture's live parts (plan 68: flames, a lava lamp's blobs), on every floor shown, near
     // the camera
     {
@@ -2657,7 +2661,8 @@ void main() {
     // (building inside a town building: its outside gone, its storeys seen from over it — plan 112)
     {
       const st = this.around.grounds?.statics;
-      if (st) st.cutFor = this.buildPick.buildMode ? (spaceFloor(this.level)?.space ?? null) : null;
+      // (plan 121: God mode looking inside a town building — its outside cut away too)
+      if (st) st.cutFor = this.god?.cut ?? (this.buildPick.buildMode ? (spaceFloor(this.level)?.space ?? null) : null);
     }
     // (the town's buildings near changed as I go: their storeys placed again — plan 112)
     if (performance.now() > this.nearAt) {

@@ -42,6 +42,7 @@ export const GOD_STRINGS = {
   godTool_grow: ["Grow", "Crescer"],
   godTool_vehicles: ["Vehicles", "Veículos"],
   godTool_bridges: ["Bridges", "Pontes"],
+  godTool_npcs: ["NPCs", "NPCs"],
   godBridgeOnWay: [
     "A bridge goes on a road, a street or a trail: click on one where it starts",
     "Uma ponte vai numa estrada, rua ou trilha: clique numa onde ela começa",
@@ -64,6 +65,22 @@ export const GOD_STRINGS = {
   godVehicleOther: ["another vehicle stands there", "já tem outro veículo aí"],
   godLandBlocked: ["No land there: {why}", "Sem terra aí: {why}"],
   godLandStays: ["It stays: {why}", "Ele fica: {why}"],
+  // (plan 121) the NPCs tool
+  godNpcOff: ["off the land", "fora do terreno"],
+  godNpcWater: ["in the water", "na água"],
+  godNpcBuilding: [
+    "inside a building's walls (pick its storey to put them in it)",
+    "dentro das paredes de um prédio (escolha o andar dele para colocar lá dentro)",
+  ],
+  godNpcFloorOff: ["off this floor", "fora deste andar"],
+  godNpcPlaced: ["{name} placed: publish to put them in the world", "{name} colocado: publique para pôr no mundo"],
+  godNpcNoHome: [
+    "Not a home: click a town building you can walk into",
+    "Não é uma casa: clique num prédio da cidade em que dá para entrar",
+  ],
+  godNpcHome: ["{name} lives in {home} now", "{name} agora mora em {home}"],
+  godNpcVortex: ["Vortex keeps his own ways: he isn't placed", "O Vortex continua com o jeito dele: não é colocado"],
+  godNpcCastFailed: ["The cast couldn't be loaded", "Não deu para carregar o elenco"],
 } as const;
 
 export type GodKey = keyof typeof GOD_STRINGS;

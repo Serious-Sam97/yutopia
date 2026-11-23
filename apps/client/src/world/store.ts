@@ -286,6 +286,8 @@ export const GOD_TOOLS = [
   "grow",
   // (plan 109: last, so 1–9 stay the tools they were; B picks it)
   "bridges",
+  // (plan 121: the cast's NPCs placed; N picks it)
+  "npcs",
 ] as const;
 export type GodTool = (typeof GOD_TOOLS)[number];
 /** The tools built so far (the rest: phases 7–9 of plan 53). */
@@ -300,6 +302,7 @@ export const GOD_READY: ReadonlySet<GodTool> = new Set<GodTool>([
   "vehicles",
   "grow",
   "bridges",
+  "npcs",
 ]);
 /** One of my drafts, as the list has it (the API's row: no data). */
 export interface GodDraftRow {
@@ -310,6 +313,24 @@ export interface GodDraftRow {
   changes: number;
   createdAt: string;
   updatedAt: string;
+}
+/** (plan 121) One of the cast as God mode's NPCs tool lists them. */
+export interface GodNpcRow {
+  key: string;
+  name: string;
+  role: string;
+  town: boolean;
+  /** their cast type (a town NPC's own) */
+  type: string;
+  /** their look (shared packLook's JSON; "" Vortex's) */
+  look: string;
+}
+/** (plan 121) An inside God mode shows: its floor, said how, its floor's height (world m), the building cut away. */
+export interface GodFloor {
+  level: number;
+  label: string;
+  z: number;
+  cut: string | null;
 }
 export interface GodHud {
   on: boolean;
@@ -322,7 +343,7 @@ export interface GodHud {
   place: string;
   tool: GodTool;
   /** what the Select tool has picked: a thing, a building, a way, a vehicle or a bridge (its tool's `sel` says which) */
-  picked: "thing" | "building" | "way" | "vehicle" | "bridge" | null;
+  picked: "thing" | "building" | "way" | "vehicle" | "bridge" | "npc" | null;
   /** the grid the tools snap to (m; 0: none, free to the centimetre); Ctrl/⌘ held swaps it (none:
    *  1 m, a grid: none) */
   snap: 0 | 0.5 | 1 | 4;
@@ -408,6 +429,21 @@ export interface GodHud {
   /** the vehicles (docs/plan/102): the kind to place and its look, role and heading (°); what's in the way of it;
    *  the vehicle picked (Select's): its key and kind, whether it's someone's own (moved only), a home (the town's or
    *  one placed), one placed in this draft, standing away from its home; its look, role and plate */
+  /** (plan 121) the NPCs tool: the cast (the API's), the one held to place, the picked one, the step under way, the
+   *  inside shown (a town building's storey, a studio floor) */
+  npcs: {
+    cast: GodNpcRow[] | null;
+    failed: boolean;
+    q: string;
+    held: string | null;
+    /** the held one's facing (degrees) */
+    a: number;
+    sel: string | null;
+    /** the picked one's: drawing their route, picking their home */
+    step: "" | "route" | "home";
+    floor: GodFloor | null;
+    blocked: string | null;
+  };
   vehicles: {
     kind: string;
     variant: string;
@@ -797,6 +833,7 @@ const initial: HudState = {
       sel: null,
       blocked: null,
     },
+    npcs: { cast: null, failed: false, q: "", held: null, a: 0, sel: null, step: "", floor: null, blocked: null },
     vehicles: {
       kind: "sedan",
       variant: "saloon-base",

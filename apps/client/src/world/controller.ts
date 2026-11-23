@@ -1646,7 +1646,7 @@ export class WorldController {
         this.tpHidden = look?.hidden.size ?? 0;
         // (nothing it's made from changed — the things, as the model has them, my floor, the
         // map — : the same floors again, not worked out again. Build mode: every time)
-        const key = look ? null : `${this.objsRev}|${model.objRev}|${this.level}|${this.cars ? 1 : 0}`;
+        const key = look ? null : `${this.objsRev}|${model.objRev}|${this.viewLevel()}|${this.cars ? 1 : 0}`;
         const same = key !== null && key === this.tpKey && this.building === this.tpBuilt && tp === this.tpFor;
         this.tpKey = key;
         this.tpBuilt = this.building;
@@ -1663,7 +1663,7 @@ export class WorldController {
           // my hand in build mode, neither drawn nor solid where it was)
           const out = (list: WorldObjectDef[]) =>
             look?.hidden.size ? list.filter((o) => !look.hidden.has(o.id)) : list;
-          tp.update(this.building, out(all), this.level, out(every.filter(notDriven)));
+          tp.update(this.building, out(all), this.viewLevel(), out(every.filter(notDriven)));
         }
       }
       lap = perf.lap("tp.update", lap);
@@ -2610,6 +2610,12 @@ export class WorldController {
 
   // ── god mode (docs/plan/53-the-god-mode.md): its own chunk (world/god), an admin's ──
   god: GodController | null = null;
+  /** The floor the 3D view shows: mine, or (plan 121) the inside God mode's looking at — a town building's storey, a
+   *  studio floor. */
+  viewLevel(): number {
+    const f = this.god?.on && !this.god.walking ? hud.get().god.npcs.floor : null;
+    return f ? f.level : this.level;
+  }
   private godLoading: Promise<GodController | null> | null = null;
   private godAt = 0;
   loadGod(): Promise<GodController | null> {

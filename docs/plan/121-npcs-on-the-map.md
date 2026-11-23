@@ -207,3 +207,34 @@ God mode.
     - Vortex never placed;
     - a shot makes one duck and the other run away.
   - Neighbouring tests pass, run alone: run all at once, Daybreak and Vortex's scaling time out on a starved machine.
+- **Phase 6** (c3e63285): placed NPCs are drawn as the town's folk.
+  - `mood` "wave" is the wave emote, "duck" crouched, "run" jogging.
+  - `Npc.talk` (they answer) puts a "Talk" target on them (`act_talk`). X or a click sends `npc:talk`; Vortex is
+    still poked.
+- **Phases 7–9** (God mode):
+  - **The NPCs tool** (N, `world/god/npcs.ts`, the HUD's `NpcsPanel`):
+    - the cast from the API (Vortex left out), searched, each marked placed or the town's;
+    - one held: drawn as themselves under the pointer (`tp.godBodies`) with a green or red ring; R or the wheel turns
+      them; a click puts them down (`putPlace` into the draft's `npcs`, kept whole in `add`);
+    - the picked one's panel: what they do (the five types; a town NPC's own set aside), the circle (a slider),
+      the route (clicked stops, Enter ends, Backspace takes one back, round again or back, a pause), a home (a town
+      building with a ground storey clicked, or none), off the map, open on the cast page;
+    - the draft's placed ones that differ from what's published are drawn for the admin; the picked one's circle
+      and route as lines.
+  - **Insides**: "Where" lists every town building's storeys (by their names) and the studio's floors above its
+    ground.
+    - Picking one shows that floor: `WorldController.viewLevel()` feeds the 3D view, the camera goes over its middle
+      at 24 m, and the building's outside is cut (`tp.god.cut` → the Grounds' `cutFor`). The storey above isn't drawn
+      either (`floorShown`, as in build mode).
+    - The pointer meets the floor's plane (the scene's 0 there).
+  - **Select** picks a placed NPC before anything else under the pointer, on the floor shown: drag, R, Delete; the
+    same panel.
+  - Fixed on the way: the NPCs panel ran under God mode's pointer readout at the bottom right (its height cut), and
+    the tool bar says N.
+  - e2e `godmode-npcs.spec.ts` (its own draft and NPC, both deleted after; no world fixture swapped, Ana's other
+    drafts left alone):
+    - one held from the list and placed by the houses, made a wanderer of 8 m with house-w0 as home, published (in
+      the world as `place:<key>`), rolled back (gone);
+    - the bakery's ground floor shown with its outside and the storey above cut away, one placed on it (its floor,
+      inside its plot).
+
