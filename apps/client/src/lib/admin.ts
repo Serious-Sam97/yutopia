@@ -1,6 +1,7 @@
 // The admins' calls to the API (docs/plan/39-the-telemetry.md, 48-the-admin.md): what the
 // admin perf endpoints answer (apps/api PerfController). Here, not in lib/api: the world
 // page carries lib/api, and only the admin panel and /admin/perf load this.
+import type { NpcDef } from "@yutopia/shared/npc";
 import { api } from "./api";
 
 export interface PerfPlayer {
@@ -109,4 +110,17 @@ export const admin = {
     api<{ log: LogRow[] }>(
       `/api/admin/log?${new URLSearchParams({ ...(kinds.length ? { kinds: kinds.join(",") } : {}), ...(before ? { before: String(before) } : {}) })}`,
     ),
+};
+
+// The world's cast (docs/plan/120-god-mode-npcs.md, apps/api NpcsController): every NPC; a change is the town's live
+export const cast = {
+  list: () => api<{ npcs: NpcDef[]; max: number; seeded: boolean }>("/api/admin/npcs"),
+  make: (npc: Omit<NpcDef, "key" | "town">) =>
+    api<{ npc: NpcDef }>("/api/admin/npcs", { method: "POST", body: JSON.stringify({ npc }) }),
+  save: (npc: NpcDef) =>
+    api<{ npc: NpcDef }>(`/api/admin/npcs/${encodeURIComponent(npc.key)}`, {
+      method: "PUT",
+      body: JSON.stringify({ npc }),
+    }),
+  remove: (key: string) => api<{ ok: true }>(`/api/admin/npcs/${encodeURIComponent(key)}`, { method: "DELETE" }),
 };

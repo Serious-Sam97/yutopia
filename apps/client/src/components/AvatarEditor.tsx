@@ -287,10 +287,16 @@ export function AvatarEditor({
   initial,
   onSave,
   stacked = false,
+  onChange,
+  title,
 }: {
   initial: AvatarLayers;
-  onSave: (a: AvatarLayers) => Promise<void>;
+  onSave?: (a: AvatarLayers) => Promise<void>;
   stacked?: boolean;
+  /** (plan 120: the cast's editor) each change as it's made — no Save button: the page saves as you go */
+  onChange?: (a: AvatarLayers) => void;
+  /** the heading over the options (my look's by default) */
+  title?: string;
 }) {
   const t = useTr();
   const pt = useLang() === "pt";
@@ -299,6 +305,11 @@ export function AvatarEditor({
   const [state, setState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const [walk, setWalk] = useState(false);
   useEffect(() => setA(initial), [initial]);
+  // (live: every change handed on, not the one it started from)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: on a change of the look alone
+  useEffect(() => {
+    if (onChange && a !== initial) onChange(a);
+  }, [a]);
 
   const set = (patch: Partial<AvatarLayers>) => {
     setA((x) => ({ ...x, ...patch }));
@@ -306,6 +317,7 @@ export function AvatarEditor({
   };
 
   async function save() {
+    if (!onSave) return;
     setState("saving");
     try {
       await onSave(a);
@@ -344,14 +356,16 @@ export function AvatarEditor({
             ⟳ {t("randomize")}
           </button>
         </div>
-        <button
-          type="button"
-          className={`deck-btn lit w-full ${stacked ? "" : "mt-3"}`}
-          onClick={save}
-          disabled={state === "saving"}
-        >
-          {state === "saved" ? `✓ ${t("saved")}` : t("save")}
-        </button>
+        {onSave && (
+          <button
+            type="button"
+            className={`deck-btn lit w-full ${stacked ? "" : "mt-3"}`}
+            onClick={save}
+            disabled={state === "saving"}
+          >
+            {state === "saved" ? `✓ ${t("saved")}` : t("save")}
+          </button>
+        )}
         {state === "failed" && (
           <p role="alert" className="mono text-xs mt-2" style={{ color: "var(--alert)" }}>
             {t("lookNotSaved")}
@@ -365,7 +379,7 @@ export function AvatarEditor({
     <div className={stacked ? "mt-4" : "cabinet px-6 py-5"}>
       {!stacked && (
         <>
-          <h1 className="title text-[26px]">{t("myLook")}</h1>
+          <h1 className="title text-[26px]">{title ?? t("myLook")}</h1>
           <div className="zigzag w-[150px] mt-3" aria-hidden />
         </>
       )}

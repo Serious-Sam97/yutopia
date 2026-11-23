@@ -108,6 +108,12 @@ const W = {
   snapHint: ["Ctrl/⌘ held: snaps (or frees)", "Ctrl/⌘ segurado: encaixa (ou solta)"],
   off: ["Off", "Não"],
   soon: ["next", "em breve"],
+  // (plan 120) the world's cast, on its own page
+  npcs: ["NPCs", "NPCs"],
+  npcsHint: [
+    "Every NPC in the world: made and changed on their own page",
+    "Todos os NPCs do mundo: criados e mudados numa página própria",
+  ],
   walking: ["Walking the draft", "Andando no rascunho"],
   onlyYou: ["only you see them", "só você as vê"],
   backUp: ["Back up", "Voltar"],
@@ -425,6 +431,16 @@ function Plate({ g }: { g: GodState }) {
           {t("up", g.up)}
         </p>
       </div>
+      <a
+        href="/admin/npcs"
+        target="_blank"
+        rel="noopener"
+        className="deck-btn h-9 hidden sm:inline-flex items-center shrink-0"
+        title={t("npcsHint")}
+        data-god-npcs
+      >
+        {t("npcs")}
+      </a>
       {/* (on a phone: the draft's name, opening the list — the mock 18-mobile-drafts) */}
       <button
         type="button"

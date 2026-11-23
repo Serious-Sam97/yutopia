@@ -223,10 +223,29 @@ The places a behaviour needs (the spot, the area, the route) are the next ticket
   - Tests: `cast.test.ts`, an offline room: the town as it was, a change live, deleted and back, nobody at all,
     unsigned refused. park-life, grounds-life, vortex-fight, schema and karts pass. rooms.test's Vortex "personal
     lines" is timing-flaky on HEAD too (known).
-  - The dev world seeded its cast on its first room: 20 people, Vortex with his 63 public lines.
+  - The dev world seeded its cast on its first room: 20 people, Vortex with his 62 public lines.
 - **Phase 4**: the client draws the folk and the guard from `Npc.name`, `role` and `look`: "Name · Role" in my
   language, the look parsed once by its string. Lines and the HUD's Vortex line are said in my language (`biIn`).
   Vortex's name is the cast's, the tables' Vortexes too, and once the cast has no Vortex the tables have none. The
   helpers are local copies (`world/npc-words.ts`, tested against shared) so the world page doesn't take in the cast's
   module. The role strings it no longer needs are gone.
+- **Phases 5–6** (built together): `/admin/npcs` (`app/admin/npcs/`: page, editor, face, words).
+  - The list: cards with the 3D head (one picture a frame, after React's: `face.tsx`; flat without WebGL; Vortex his
+    V), name, role or what they do, and a "the town's" or "not on the map yet" badge. A search box (name, role, notes,
+    key), All / The town's / Made here, the count of the 500, New (the default look) and Random (`avatarFromSeed` and
+    a first name).
+  - The editor:
+    - name, role in EN and PT, voice, Copy (a town NPC's copy stands: their own way isn't the copy's) and Delete;
+    - tabs: Look (the players' `AvatarEditor`, now with an optional live `onChange` and `title`, no Save button
+      then; Vortex has none), Lines (moment, EN, PT, up/down/remove, add), Behaviour (a town NPC's own shown fixed with
+      what applies now; anyone else's five types; hours with a shift; pace by gait or a slider; talk; greet, answer,
+      shots) and Notes.
+  - Saved as you go, 0.7 s after the last change; says Saving… / Saved / Not saved, and retries in 3 s. Leaving with
+    a save pending asks first.
+  - Delete asks first and says what happens in the world (the cocoa cart with nobody at it; Vortex's studio, fight
+    and tables), and that a town NPC doesn't come back.
+  - God mode's plate has an NPCs link (desktop) that opens the page in a new tab.
+  - Checked on the dev stack: as Bia the page says only admins. As Ana (headless, the page never joins the world) it
+    lists 20, opens Lia's look, lines and behaviour and Vortex's, and makes one at random. Named, given a line and the
+    counter type, it was saved (read back from the API), then deleted with the confirm. No page errors.
 
