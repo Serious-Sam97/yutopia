@@ -10,7 +10,7 @@ Asked 2026-11-23:
 So this ticket covers **making NPCs and managing them**. Putting new ones on the map, and making their behaviour play
 out there, is the next ticket's job.
 
-Status: **planned 2026-11-23; forks decided 2026-11-23, one by one:**
+Status: **planned, forks decided and built 2026-11-23 (phases 1–7); waiting on the user's test.** The forks, one by one:
 - **F1c**: everyone in the cast. The NPCs that are code today move into it (the user: "todos vão estar no God mode, se
   já existem hoje vamos migrar pra lá").
 - **F2a**: the cast is the API's own, saved on every change, outside the drafts.
@@ -248,4 +248,23 @@ The places a behaviour needs (the spot, the area, the route) are the next ticket
   - Checked on the dev stack: as Bia the page says only admins. As Ana (headless, the page never joins the world) it
     lists 20, opens Lia's look, lines and behaviour and Vortex's, and makes one at random. Named, given a line and the
     counter type, it was saved (read back from the API), then deleted with the confirm. No page errors.
+- **Phase 7, checks**:
+  - shared `npc/cast.test.ts`, the API's `NpcsTest`, the world server's `cast.test.ts` and its neighbours, and the
+    client's `npc-words.test.ts`;
+  - e2e `cast.spec.ts` on the dev stack: Bia refused; as Ana the page lists the API's cast; Lia renamed on it is
+    renamed in Bia's room at once, then put back; one made, copied, both deleted with the confirm; the cast as before.
+    It deletes none of the town's on the shared world: that can't be undone, so the offline tests have it;
+  - in the world as Bia by the Kart Park's desk, the model draws Rosa, Lia (her 255-byte look whole) and the guard
+    with the cast's names and looks;
+  - budget (prod build): /page 496.8 of 498 KB, God 26.8 of 27, grounds 182.7 of 205; all in.
+
+## Left for later
+
+- **Placing the made NPCs on the map, and playing their behaviour** (hours, reactions, the five types): the next
+  ticket.
+- **The Colyseus 255-byte bug** is guarded for NPC strings only. Every other state string is exposed until the library
+  is patched or upgraded.
+- **A town NPC deleted can't come back as the town's**: the cast never re-seeds. Bringing one back would need an admin
+  "restore the town's" action.
+- The look editor's labels say "you" ("How you walk"), as they do on the player's page.
 
