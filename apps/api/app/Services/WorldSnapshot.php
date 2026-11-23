@@ -63,12 +63,19 @@ class WorldSnapshot
         try {
             DB::transaction(function () use ($snap, $clearSpawns) {
                 $w = World::current();
+                // (the cast isn't the snapshot's: its seeded mark stays as it is — docs/plan/120-god-mode-npcs.md)
+                $settings = $snap['settings'] ?? null;
+                if (is_array($w->settings) && isset($w->settings['npcsSeeded'])) {
+                    $settings = array_merge(is_array($settings) ? $settings : [], ['npcsSeeded' => $w->settings['npcsSeeded']]);
+                } elseif (is_array($settings)) {
+                    unset($settings['npcsSeeded']);
+                }
                 $w->update([
                     'name' => (string) ($snap['name'] ?? $w->name),
                     'map_key' => (string) ($snap['mapKey'] ?? 'studio'),
                     'layout' => $snap['layout'] ?? null,
                     'structure' => $snap['structure'] ?? null,
-                    'settings' => $snap['settings'] ?? null,
+                    'settings' => $settings,
                     'seeded_at' => ($snap['seeded'] ?? true) ? now() : null,
                 ]);
                 WorldObject::query()->delete();

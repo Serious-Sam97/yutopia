@@ -6,6 +6,7 @@ use App\Models\AdminAction;
 use App\Models\Game;
 use App\Models\GroundRevision;
 use App\Models\LastSpot;
+use App\Models\Npc;
 use App\Models\PerfReport;
 use App\Models\Pet;
 use App\Models\Spawn;
@@ -64,6 +65,8 @@ class InternalController extends Controller
             'vortex' => $world->settings['vortex'] ?? null,
             // god mode's edits to the Grounds as published (docs/plan/53-the-god-mode.md)
             'edits' => GroundRevision::edits(),
+            // the world's cast (docs/plan/120-god-mode-npcs.md): null till the world server has seeded the town's people
+            'npcs' => Npc::seeded() ? Npc::cast() : null,
             'objects' => WorldObject::orderBy('id')->get()->map->toWorld(),
         ]);
     }

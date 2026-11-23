@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Npc;
 use App\Models\User;
 
 /*
@@ -131,11 +132,41 @@ class Vortex
         ],
     ];
 
+    /** His public lines as the cast keeps them (docs/plan/120-god-mode-npcs.md): by moment, EN only (his own voice).
+     *  @return list<array{when: string, en: string, pt: string}> */
+    public static function publicLines(): array
+    {
+        $out = [];
+        foreach (self::PUBLIC as $when => $lines) {
+            foreach ($lines as $en) {
+                $out[] = ['when' => $when, 'en' => $en, 'pt' => ''];
+            }
+        }
+
+        return $out;
+    }
+
     /** @param array{n?: ?int, gun?: ?string} $ctx @return array{line: ?string, mood: string, personal: bool} */
     public function line(string $event, ?int $userId = null, array $ctx = []): array
     {
         if ($userId === null || isset(self::PUBLIC[$event])) {
+            // (his public lines are the cast's once it's seeded — docs/plan/120-god-mode-npcs.md: EN|PT, by moment, the
+            // moment's or else his ambient ones; deleted from the cast, he says nothing)
             $pool = self::PUBLIC[$event] ?? self::PUBLIC['ambient'];
+            if (Npc::seeded()) {
+                $def = Npc::where('key', 'vortex')->first()?->def;
+                $mine = array_values(array_filter($def['lines'] ?? [], fn ($l) => ($l['when'] ?? '') === (isset(self::PUBLIC[$event]) ? $event : 'ambient')));
+                if ($mine === []) {
+                    $mine = array_values(array_filter($def['lines'] ?? [], fn ($l) => ($l['when'] ?? '') === 'ambient'));
+                }
+                if ($mine === []) {
+                    return ['line' => null, 'mood' => 'smug', 'personal' => false];
+                }
+                $l = $mine[array_rand($mine)];
+                $en = $this->glitchy((string) ($l['en'] ?? ''));
+                $pt = (string) ($l['pt'] ?? '');
+                $pool = [$pt !== '' && $pt !== ($l['en'] ?? '') ? $en."\x1f".$this->glitchy($pt) : $en];
+            }
 
             $mood = match ($event) {
                 'radio' => 'happy',
@@ -145,7 +176,9 @@ class Vortex
                 default => 'smug',
             };
 
-            return ['line' => $this->glitchy($pool[array_rand($pool)]), 'mood' => $mood, 'personal' => false];
+            $line = $pool[array_rand($pool)];
+
+            return ['line' => Npc::seeded() ? $line : $this->glitchy($line), 'mood' => $mood, 'personal' => false];
         }
         $user = User::find($userId);
         if (! $user) {

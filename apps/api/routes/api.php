@@ -9,6 +9,7 @@ use App\Http\Controllers\GamesController;
 use App\Http\Controllers\GroundsController;
 use App\Http\Controllers\InternalController;
 use App\Http\Controllers\InviteController;
+use App\Http\Controllers\NpcsController;
 use App\Http\Controllers\PerfController;
 use App\Http\Controllers\PhoneController;
 use App\Http\Controllers\SessionController;
@@ -93,6 +94,11 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::delete('/grounds/drafts/{id}', [GroundsController::class, 'deleteDraft'])->whereNumber('id');
         Route::get('/grounds/revisions', [GroundsController::class, 'revisions']);
         Route::get('/grounds/revisions/{rev}', [GroundsController::class, 'revision'])->whereNumber('rev');
+        // the world's cast (docs/plan/120-god-mode-npcs.md): every NPC, the town's live on save
+        Route::get('/npcs', [NpcsController::class, 'index']);
+        Route::post('/npcs', [NpcsController::class, 'store'])->middleware('throttle:60,1,npcs-new');
+        Route::put('/npcs/{npcKey}', [NpcsController::class, 'update'])->where('npcKey', '[a-z0-9][a-z0-9-]{0,39}')->middleware('throttle:240,1,npcs');
+        Route::delete('/npcs/{npcKey}', [NpcsController::class, 'destroy'])->where('npcKey', '[a-z0-9][a-z0-9-]{0,39}');
     });
 });
 
@@ -159,6 +165,8 @@ Route::middleware('internal')->prefix('internal')->group(function () {
     Route::get('/grounds/drafts/{id}', [GroundsController::class, 'internalDraft'])->whereNumber('id');
     Route::get('/grounds/revisions/{rev}', [GroundsController::class, 'internalRevision'])->whereNumber('rev');
     Route::post('/grounds/revisions', [GroundsController::class, 'publish']);
+    // the cast's town people, once (docs/plan/120-god-mode-npcs.md)
+    Route::post('/npcs/seed', [NpcsController::class, 'seed']);
     // the dark (docs/plan/30-the-dark.md): the Grounds' loot, someone's pockets
     Route::put('/world/loot', [DarkController::class, 'loot']);
     Route::get('/survivors/{userId}', [DarkController::class, 'survivor'])->whereNumber('userId');

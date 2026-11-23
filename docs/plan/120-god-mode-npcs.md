@@ -190,3 +190,17 @@ The places a behaviour needs (the spot, the area, the route) are the next ticket
   Park's 11 (its 5 staff and its 6 named recruits: they're lobby folk, not bots), with the Kart Park's lines moved from
   park-life.ts and the guard's look from the client. Vortex's public lines are seeded by the API from Vortex::PUBLIC
   (they're PHP). Tests: the seed is what the world drew (names, labels, looks, lines, pace).
+- **Phase 2**: the API's `npcs` table (key, def JSON, town, position) and `Npc` model, whose `clean()` follows
+  parseNpc's rules in PHP: a look's slots and values, the types, the limits, a town NPC's type and town flag kept as
+  stored.
+  - The admin routes are `GET/POST /api/admin/npcs` and `PUT/DELETE /api/admin/npcs/{key}`. Every change is logged
+    (`npc-new`, `npc`, `npc-delete`) and the whole cast is pushed to the world server (`Cast` service, `POST
+    /internal/cast`, signed, once per request).
+  - `POST /internal/npcs/seed` puts the town's people in once. The world's settings mark it seeded (`npcsSeeded`).
+    After that it answers 409 with the cast, so a deleted one stays deleted. A snapshot import keeps the mark as it was.
+  - `/internal/world` carries `npcs` (null till seeded).
+  - Vortex's public lines are seeded from `Vortex::PUBLIC` by moment. Once seeded, `Vortex::line()` says the cast's,
+    as EN, or EN and PT joined by \x1f: the moment's lines, else his ambient ones. If he's deleted, he says nothing.
+  - Pest `NpcsTest` runs on in-memory SQLite; the dev DB is untouched (counted before and after). WorldTest's 3 reds
+    were already red on HEAD.
+
