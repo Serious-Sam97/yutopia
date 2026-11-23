@@ -230,10 +230,11 @@ export function fire(
     }
     const d = Math.hypot(at[0] - o[0], at[2] - o[2]);
     const dmg = damageAt(gun, A.damage, d, met.head) * through.kept;
-    const had = byBody.get(met.b.id);
+    // (a body's head pellets and its body pellets summed apart: the park's head multiplier only on the head's)
+    const bodyKey = `${met.b.id}|${met.head ? "h" : "b"}`;
+    const had = byBody.get(bodyKey);
     if (had) {
       had.dmg += dmg;
-      had.head ||= met.head;
     } else {
       const s: Shot = {
         victim: met.b.id,
@@ -245,7 +246,7 @@ export function fire(
         gun,
         walls: through.walls,
       };
-      byBody.set(met.b.id, s);
+      byBody.set(bodyKey, s);
       out.push(s);
     }
   }

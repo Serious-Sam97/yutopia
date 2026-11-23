@@ -10,12 +10,12 @@ export type TutStep = "move" | "stop" | "crouch" | "switch" | "buy" | "hit" | "n
 const LINES: { id: TutStep; text: string; how: string; bomb?: boolean }[] = [
   { id: "move", text: "Move", how: "WASD — walk 10 m" },
   { id: "stop", text: "Stop dead", how: "run, then let go (or tap the other way): still is accurate" },
-  { id: "crouch", text: "Crouch", how: "Ctrl or C — steadier, quieter" },
-  { id: "switch", text: "Switch guns", how: "1 rifle · 2 pistol · 3 knife" },
+  { id: "crouch", text: "Crouch", how: "C or Ctrl — steadier, quieter" },
+  { id: "switch", text: "Switch guns", how: "1 rifle · 2 pistol · 3 knife (left slashes, right stabs)" },
   { id: "buy", text: "Buy", how: "B in the buy zone, at the round's start" },
   { id: "hit", text: "Land a hit", how: "a bot, or the lobby range's targets" },
-  { id: "nade", text: "Throw a grenade", how: "4 (or N) to take it, click to throw" },
-  { id: "plant", text: "Plant the charge", how: "Raiders, on a site: hold E", bomb: true },
+  { id: "nade", text: "Throw a grenade", how: "4 (or N) to take it, click to throw (right click lobs it)" },
+  { id: "plant", text: "Plant the charge", how: "Raiders: 5 takes it out, on a site hold the left button", bomb: true },
   { id: "defuse", text: "Defuse", how: "Wardens, at the charge: hold E", bomb: true },
 ];
 

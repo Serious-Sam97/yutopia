@@ -62,6 +62,7 @@ export {
   buildPad,
   buildProp,
   gripLine,
+  gripPlace,
   HELD_SHAPE,
   heldDistance,
   inHand,

@@ -183,6 +183,13 @@ export interface StrikeMemberView {
   mvps: number;
   score: number;
   me: boolean;
+  /** (plan 118) the match's damage dealt and headshot kills, the ping (ms), a "buy me this", this buy time's
+   *  refundable buys */
+  damage: number;
+  heads: number;
+  ping: number;
+  want: string;
+  refunds: string[];
 }
 export interface StrikeView {
   map: string;
@@ -196,11 +203,31 @@ export interface StrikeView {
   scoreR: number;
   scoreW: number;
   fill: boolean;
+  /** (plan 119) the players the match keeps, bots filling (CS's bot_quota) — 0: the mode's full size */
+  quota: number;
   level: string;
   members: StrikeMemberView[];
   me: StrikeMemberView | null;
   /** may buy here and now (the buy zone, the buy time) */
   canBuy: boolean;
+  /** (plan 118) seconds of buy time left (0: over); the least money I'll have next round (a loss's bonus) */
+  buyLeft: number;
+  nextLeast: number;
+  /** (plan 118) the rounds so far, each won by "r" or "w" and how (shared WinWhy) — the scoreboard's strip */
+  history: { team: "r" | "w"; why: string }[];
+  /** (plan 118, phase 17) my side's timeouts left (−1: none in this mode); a vote open */
+  timeouts: number;
+  call: {
+    kind: string;
+    team: "r" | "w";
+    by: string;
+    target: string;
+    yes: number;
+    no: number;
+    need: number;
+    left: number;
+    mine: string;
+  } | null;
   record: string;
   last: string;
   /** my card (shared strike/ranks.ts StrikeCard, JSON; "" till the server's sent it) */

@@ -23,6 +23,10 @@ export const ROUND = {
   timeout: 30,
 } as const;
 
+/** (plan 118, phase 17) The team votes: a timeout (each side's few, taken at the next freeze), a surrender (every
+ *  person on the side), a bot kicked (most of the side's people); open this long (s). */
+export const VOTE = { secs: 20, timeouts: 4 } as const;
+
 /** Money. */
 export const MONEY = {
   start: 800,
@@ -132,10 +136,24 @@ export const speedWith = (gun: StrikeGun | null) => (gun ? (shopItem(gun).speed 
 export const ARMOR = {
   ratio: 0.5,
   bonus: 0.5,
-  pierce: { sniper: 0.85, daybreak: 0.9 } as Record<string, number>,
+  // (plan 119: the knife's, CS's — 85 % through kevlar: a stab in the back still kills an armoured man)
+  pierce: { sniper: 0.85, daybreak: 0.9, knife: 0.85 } as Record<string, number>,
 } as const;
 
 /** Damage `d` on `where` against `armor` (0–100) and a helmet: [to health, off the armor]. */
+/** (plan 118, F6a) The park's own damage, as CS's: a headshot ×4 (the world's is ×1.5), each gun's body damage where
+ *  the world's is far from CS's (the AK's 22 → 36: CS's four armoured body shots, one to the head), and team
+ *  damage at a third. Applied to the world's number for a shot (its falloff kept). */
+export const PARK_HEAD = 4;
+export const PARK_BODY: Record<string, number> = { ak47: 36 };
+export const TEAM_DAMAGE = 1 / 3;
+/** A shot's damage in the park from the world's (`n`, after its falloff and its own head ×`worldHead`). */
+export function parkDamage(gun: string, n: number, head: boolean, worldHead: number, worldBody: number): number {
+  const body = head ? n / worldHead : n;
+  const scale = (PARK_BODY[gun] ?? worldBody) / Math.max(1, worldBody);
+  return Math.max(1, Math.round(body * scale * (head ? PARK_HEAD : 1)));
+}
+
 export function armored(
   d: number,
   where: "head" | "body" | "legs",
@@ -278,6 +296,22 @@ export const FULL_DAMAGE = true;
 /** Tagging: a hit slows you to this share of your speed for this long. */
 export const TAG = { share: 0.45, secs: 0.4 } as const;
 
-/** (plan 115 phase 24, F5) The combat knife: its reach (m), its cone (rad either side of the facing), its damage from
- *  the front and from behind (a back within 60° of the attacker's own facing), its swing's time (s), its kill reward. */
-export const KNIFE = { reach: 1.8, cone: 0.6, front: 40, back: 90, swing: 0.5, reward: 1500 } as const;
+/** (plan 115 phase 24, F5; plan 119, F2a: CS's two attacks) The combat knife. The left button's slash: `reach` (m,
+ *  centre to centre), `front` on a first swing, `next` on one straight after a slash that landed (within `chain` s),
+ *  `back` from behind (a back within 60° of the attacker's own facing), every `swing` s. The right button's stab:
+ *  shorter, slower, `heavy` from the front and `heavyBack` (always a kill) from behind, every `heavySwing` s. The
+ *  cone (rad either side of the facing), the kill reward. Run speed with it out: shared SPEED.knife (250). */
+export const KNIFE = {
+  reach: 1.55,
+  heavyReach: 1.2,
+  cone: 0.6,
+  front: 40,
+  next: 25,
+  chain: 1,
+  back: 90,
+  heavy: 65,
+  heavyBack: 180,
+  swing: 0.4,
+  heavySwing: 1,
+  reward: 1500,
+} as const;

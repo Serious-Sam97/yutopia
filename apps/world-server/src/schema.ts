@@ -538,6 +538,20 @@ export class StrikeMember extends Schema {
   @type("boolean") crouch = false;
   @type("float64") shotAt = 0;
   @type("string") look = ""; // (plan 115 phase 55) their kit from the corner: strike/kit.ts
+  // (plan 118) the scoreboard's: the match's damage dealt and headshot kills (ADR, HS %), the ping (ms, their own
+  // word); the buy screen's: what they've asked a teammate for, what they can still take back this buy time
+  @type("uint32") damage = 0;
+  @type("uint16") heads = 0;
+  @type("uint16") ping = 0;
+  @type("string") want = "";
+  @type("string") refunds = ""; // comma-separated
+}
+/** (plan 118, F8a) a gun on the floor of the match (local metres) */
+export class StrikeFloorGun extends Schema {
+  @type("string") gun = "";
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") z = 0;
 }
 export class StrikeHostage extends Schema {
   @type("float32") x = 0;
@@ -553,6 +567,10 @@ export class StrikeNade extends Schema {
   @type("float32") y = 0;
   @type("float32") z = 0;
   @type("float32") left = 0; // s left of its smoke, fire, decoy
+  // (plan 118) a fire's run (unit, flat), a smoke blown open (1 … 0)
+  @type("float32") fx = 0;
+  @type("float32") fz = 0;
+  @type("float32") thin = 0;
 }
 export class StrikeArena extends Schema {
   @type("string") map = "sawmill"; // shared STRIKE_MAPS' key standing (or going up)
@@ -568,6 +586,9 @@ export class StrikeArena extends Schema {
   @type("boolean") swapped = false;
   @type("uint8") overtime = 0;
   @type("boolean") fill = true; // Vortex bots fill the teams
+  // (plan 119, F1a: CS's bot_quota, fill) how many players the match keeps, bots filling what people don't — 0: the
+  // mode's full size
+  @type("uint8") quota = 0;
   @type("string") level = "normal"; // their level: easy · normal · hard · expert
   // the charge
   @type("string") charge = ""; // "" none · carried · dropped · planting · planted · defused · exploded
@@ -587,7 +608,18 @@ export class StrikeArena extends Schema {
   @type("float64") voteTo = 0;
   @type("string") votes = "";
   @type("string") ready = "";
+  // (plan 118, F10a) the ready check's countdown: when it runs out the match starts (on the warmup vote's map)
+  @type("float64") goTo = 0;
+  // (plan 118, phase 17) the team vote open (JSON: kind, squad, by, target, yes, no, left, need) and each squad's
+  // timeouts left ("a,b")
+  @type("string") call = "";
+  @type("string") timeouts = "";
   @type("string") record = ""; // the park's record (JSON: the last matches, most kills, MVPs)
+  // (plan 118) every round so far, "<r|w>:<why>" comma-separated (the scoreboard's strip); each side's losses in a row
+  @type("string") history = "";
+  @type("uint8") streakR = 0;
+  @type("uint8") streakW = 0;
+  @type({ map: StrikeFloorGun }) floor = new MapSchema<StrikeFloorGun>(); // (plan 118) guns on the floor
 }
 
 // The Kart Park (docs/plan/46-the-karts.md, features/karts.ts): its karts (a slot "0".."7" → who's in

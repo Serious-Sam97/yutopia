@@ -29,6 +29,38 @@ const REC = {
   fire: ["/sfx/cars/fire-a.mp3", "/sfx/cars/fire-b.mp3", "/sfx/cars/fire-c.mp3", "/sfx/cars/fire-d.mp3"],
 } as const;
 
+/** (plan 118, F11a) The park's music, stingers and announcer: CC0 candidates in public/sfx/strike (manifest.json, each
+ *  slot's), the picks in chosen.json — /dev/strike-sound plays them and overrides the picks on this machine. */
+export type StrikeSlot = "music" | "start" | "won" | "lost" | "victory" | "defeat" | "voice";
+export interface StrikeCand {
+  file: string;
+  title: string;
+  author: string;
+  page: string;
+  license: string;
+  about: string;
+}
+export const STRIKE_SFX = "/sfx/strike/";
+let bankP: Promise<{ man: Record<StrikeSlot, StrikeCand[]>; chosen: Record<string, number> } | null> | null = null;
+/** The candidates and the picks (this machine's bench picks over chosen.json's). */
+export function strikeBank() {
+  bankP ??= Promise.all([
+    fetch(`${STRIKE_SFX}manifest.json`).then((r) => r.json()),
+    fetch(`${STRIKE_SFX}chosen.json`).then((r) => r.json()),
+  ])
+    .then(([man, chosen]) => {
+      let mine: Record<string, number> = {};
+      try {
+        mine = JSON.parse(localStorage.getItem("yutopia:strike-sound") ?? "{}");
+      } catch {
+        mine = {};
+      }
+      return { man, chosen: { ...chosen, ...mine } };
+    })
+    .catch(() => null);
+  return bankP;
+}
+
 export class StrikeSound {
   private noiseBuf: AudioBuffer;
   private bufs = new Map<string, AudioBuffer | null>();
@@ -81,6 +113,9 @@ export class StrikeSound {
     /** (plan 115 phase 91) how many of the map's walls stand between me and (x, z): each one muffles */
     private walls: (x: number, z: number) => number = () => 0,
   ) {
+    void strikeBank().then((b) => {
+      this.bank = b;
+    });
     const n = ctx.sampleRate * 2;
     this.noiseBuf = ctx.createBuffer(1, n, ctx.sampleRate);
     const d = this.noiseBuf.getChannelData(0);
@@ -171,8 +206,89 @@ export class StrikeSound {
       }
     }
   }
+  private bank: Awaited<ReturnType<typeof strikeBank>> = null;
+  /** The picked file of a slot (its url), or null (the bank not loaded yet). */
+  private picked(slot: StrikeSlot, line = ""): string | null {
+    const b = this.bank;
+    const c = b?.man[slot]?.[b.chosen[slot] ?? 0] ?? b?.man[slot]?.[0];
+    return c ? `${STRIKE_SFX}${c.file}${line ? `${line}.mp3` : ""}` : null;
+  }
+  /** Not positional, through the mix: a recording played once (loaded the first time it's asked, so a stinger may be
+   *  missed once — `warmPicks` loads them ahead). */
+  private once(url: string | null, gain: number, out: AudioNode = this.out): boolean {
+    if (!url) return false;
+    const b = this.buf(url);
+    if (!b) return false;
+    const g = this.ctx.createGain();
+    g.gain.value = gain;
+    g.connect(out);
+    const src = this.ctx.createBufferSource();
+    src.buffer = b;
+    src.connect(g);
+    src.start();
+    src.onended = () => g.disconnect();
+    return true;
+  }
+  /** The picks' stingers and the announcer's lines, loaded ahead. */
+  warmPicks() {
+    for (const k of ["start", "won", "lost", "victory", "defeat"] as const) {
+      const u = this.picked(k);
+      if (u) this.buf(u);
+    }
+    for (const l of (this.bank?.man as unknown as { _lines?: string[] })?._lines ?? []) {
+      const u = this.picked("voice", l);
+      if (u) this.buf(u);
+    }
+  }
+  /** A stinger: the round's start, won or lost, the match won or lost. */
+  sting(slot: "start" | "won" | "lost" | "victory" | "defeat") {
+    return this.once(this.picked(slot), slot === "start" ? 0.55 : 0.7);
+  }
+  /** One of the announcer's lines (recorded: Kenney's), or the browser's voice saying `fallback`. */
+  call(line: string, fallback = "") {
+    if (this.once(this.picked("voice", line), 0.9)) return;
+    if (fallback) this.say(fallback);
+  }
+  private musicSrc: { g: GainNode; src: AudioBufferSourceNode; url: string } | null = null;
+  /** The lobby's music, looped, at `level` (0 off) through the mix's music bus. */
+  music(level: number, bus: AudioNode) {
+    const url = this.picked("music");
+    if (this.musicSrc && this.musicSrc.url !== url) {
+      const m = this.musicSrc;
+      m.g.gain.setTargetAtTime(0, this.ctx.currentTime, 0.4);
+      setTimeout(() => {
+        try {
+          m.src.stop();
+        } catch {}
+        m.g.disconnect();
+      }, 2000);
+      this.musicSrc = null;
+    }
+    if (!this.musicSrc) {
+      if (level <= 0.001 || !url) return;
+      const b = this.buf(url);
+      if (!b) return;
+      const g = this.ctx.createGain();
+      g.gain.value = 0;
+      g.connect(bus);
+      const src = this.ctx.createBufferSource();
+      src.buffer = b;
+      src.loop = true;
+      src.connect(g);
+      src.start();
+      this.musicSrc = { g, src, url };
+    }
+    this.musicSrc.g.gain.setTargetAtTime(0.32 * level, this.ctx.currentTime, 0.8);
+  }
   /** Stops the beds (leaving the park's reach). */
   hush() {
+    if (this.musicSrc) {
+      try {
+        this.musicSrc.src.stop();
+      } catch {}
+      this.musicSrc.g.disconnect();
+      this.musicSrc = null;
+    }
     for (const b of this.beds) {
       try {
         b.src.stop();
@@ -221,6 +337,28 @@ export class StrikeSound {
     s.stop(t + len + 0.05);
   }
 
+  /** (plan 118, F7a) My round in someone: a short dull thud. */
+  hitBody() {
+    const o = this.at(null, null, 1, 0.42);
+    if (!o) return;
+    this.noise(o, 0.07, 1400, 0.9, 120);
+    this.tone(o, 160, 0.06, "sine", 90, 0.5);
+  }
+  /** A headshot on a helmet: the "dink" — a bright ring off steel. */
+  dink() {
+    const o = this.at(null, null, 1, 0.5);
+    if (!o) return;
+    this.tone(o, 2650, 0.22, "sine", 2500, 0.55);
+    this.tone(o, 3920, 0.16, "sine", 3800, 0.35);
+    this.noise(o, 0.02, 9000, 0.5, 4000);
+  }
+  /** A headshot with no helmet: a sharp wet crack. */
+  crack() {
+    const o = this.at(null, null, 1, 0.5);
+    if (!o) return;
+    this.noise(o, 0.09, 3200, 1, 300, 0.001);
+    this.tone(o, 420, 0.05, "triangle", 180, 0.4);
+  }
   /** The charge's beep (where it lies), sharper as it runs out. */
   beep(urgent: number, x: number | null = null, z: number | null = null) {
     const o = this.at(x, z, 45, 0.32);
@@ -282,10 +420,24 @@ export class StrikeSound {
     this.noise(o, 2.2, 5000, 0.5, 900, 0.05);
   }
   /** The fire's crackle, a burst of it (called on while it burns). */
-  /** The knife's swing: a short airy whoosh. */
-  swing(x: number, z: number) {
+  /** The knife's swing: a short airy whoosh (plan 119: the stab's lower and longer). */
+  swing(x: number, z: number, heavy = false) {
     const o = this.at(x, z, 20, 0.5);
-    if (o) this.noise(o, 0.16, 4200, 0.6, 700, 0.02);
+    if (o) this.noise(o, heavy ? 0.26 : 0.16, heavy ? 2600 : 4200, 0.6, heavy ? 400 : 700, 0.02);
+  }
+  /** (plan 119) The blade in someone: a wet, heavy thud. */
+  slice(x: number, z: number, heavy = false) {
+    const o = this.at(x, z, 18, 0.55);
+    if (!o) return;
+    this.noise(o, heavy ? 0.16 : 0.1, 1600, 0.9, 200, 0.004);
+    this.tone(o, heavy ? 110 : 150, 0.09, "sine", 60, 0.6);
+  }
+  /** (plan 119) The blade on a wall: a scrape and a ring of steel. */
+  scrape(x: number, z: number) {
+    const o = this.at(x, z, 18, 0.45);
+    if (!o) return;
+    this.noise(o, 0.12, 7000, 0.6, 2500, 0.002);
+    this.tone(o, 3100, 0.12, "sine", 2900, 0.25);
   }
   /** A molotov catching (its whoosh). */
   ignite(x: number, z: number) {

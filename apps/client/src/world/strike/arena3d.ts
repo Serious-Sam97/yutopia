@@ -25,6 +25,7 @@ import {
   STRIKE_WALL_H,
   STRIKE_WALL_T,
   STRIKE_YARD,
+  STRIKE_YARD_ROOF,
   type StrikeMap,
   strikeSignPosts,
   strikeSignWings,
@@ -752,6 +753,83 @@ function targetFace(): CanvasTexture {
   return targetTex;
 }
 
+/** (the user's, 2026-11-23: "a roof on the lobby, the rain gets in everywhere") The yard's roof (shared
+ *  STRIKE_YARD_ROOF): steel trusses every 8 m spanning wall to wall, on posts set in the parapets (the gallery kept
+ *  clear), purlins along, and translucent sheets — the yard keeps its daylight; only the steel throws shadows. Its
+ *  sheets are a thin box each side (no two-sided transparent material: memory three-two-sided-glass). */
+function yardRoof(root: Group) {
+  const R = STRIKE_YARD_ROOF;
+  const y = STRIKE_PARK.h;
+  const zm = (R.z0 + R.z1) / 2;
+  const half = (R.z1 - R.z0) / 2;
+  const rise = R.ridge - R.eaves;
+  const slope = Math.atan2(rise, half);
+  const steel: BufferGeometry[] = [];
+  const m4 = new Matrix4();
+  const q = new Quaternion();
+  const bar = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, t = 0.16) => {
+    const L = Math.hypot(x1 - x0, y1 - y0, z1 - z0);
+    const g = new BoxGeometry(t, t, L);
+    const dir = new Vector3(x1 - x0, y1 - y0, z1 - z0).normalize();
+    q.setFromUnitVectors(new Vector3(0, 0, 1), dir);
+    m4.compose(new Vector3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2), q, new Vector3(1, 1, 1));
+    g.applyMatrix4(m4);
+    steel.push(g);
+  };
+  const nx = Math.max(2, Math.round((R.x1 - R.x0) / 8));
+  const top = (z: number) => y + R.eaves + rise * (1 - Math.abs(z - zm) / half);
+  for (let i = 0; i <= nx; i++) {
+    const x = R.x0 + ((R.x1 - R.x0) * i) / nx;
+    // the truss: a tie across at the eaves, the two rafters up to the ridge, struts between
+    bar(x, y + R.eaves, R.z0, x, y + R.eaves, R.z1, 0.18);
+    bar(x, y + R.eaves, R.z0, x, y + R.ridge, zm, 0.2);
+    bar(x, y + R.ridge, zm, x, y + R.eaves, R.z1, 0.2);
+    for (let k = 1; k < 6; k++) {
+      const z = R.z0 + ((zm - R.z0) * k) / 6;
+      const z2 = R.z1 - ((R.z1 - zm) * k) / 6;
+      bar(x, y + R.eaves, z, x, top(z), z, 0.1);
+      bar(x, y + R.eaves, z2, x, top(z2), z2, 0.1);
+    }
+    // the posts: up out of the parapets on the yard's side of each wall, to the eaves
+    // (none over the gate or the team doors: nothing under them there)
+    const overGap = (z: number) =>
+      z > zm
+        ? Math.abs(x - STRIKE_GATE.x) < STRIKE_GATE.w / 2 + 0.6
+        : STRIKE_INNER.doors.some((dx) => Math.abs(x - dx) < STRIKE_INNER.w / 2 + 0.6);
+    for (const z of [R.z0 - 0.1, R.z1 + 0.1]) if (!overGap(z)) bar(x, y + STRIKE_WALL_H, z, x, y + R.eaves, z, 0.2);
+  }
+  // the purlins: along the yard, every ~2.5 m up each slope, and the ridge's
+  const np = Math.max(3, Math.round(half / 2.5));
+  for (let k = 0; k <= np; k++) {
+    for (const s0 of [-1, 1]) {
+      const z = zm + (s0 * (half * k)) / np;
+      bar(R.x0, top(z) + 0.12, z, R.x1, top(z) + 0.12, z, 0.12);
+    }
+  }
+  const merged = mergeGeometries(steel, false);
+  for (const g of steel) g.dispose();
+  const frame = new Mesh(merged, new MeshLambertMaterial({ color: 0x5a6266 }));
+  frame.castShadow = true;
+  frame.receiveShadow = true;
+  frame.name = "strike-yard-roof";
+  root.add(frame);
+  // the sheets: each slope a thin translucent slab over the purlins
+  const sheetMat = new MeshLambertMaterial({ color: 0xdfe8ea, transparent: true, opacity: 0.42, depthWrite: false });
+  const w = R.x1 - R.x0;
+  const run = Math.hypot(half, rise) + 0.4;
+  for (const s0 of [-1, 1]) {
+    const g = new BoxGeometry(w + 0.6, 0.03, run);
+    const sheet = new Mesh(g, sheetMat);
+    sheet.position.set((R.x0 + R.x1) / 2, y + (R.eaves + R.ridge) / 2 + 0.22, zm + (s0 * half) / 2);
+    // (the north slope, s0 −1, rises toward the ridge at +z: a turn about x lifting its +z end)
+    sheet.rotation.x = -s0 * slope;
+    sheet.castShadow = false;
+    sheet.receiveShadow = false;
+    sheet.renderOrder = 2;
+    root.add(sheet);
+  }
+}
+
 /** The compound: its walls and their parapets, the stairs to the gallery, the desk, the Map Board's
  *  frame (its face drawn by the caller: `board`), the big screen's (`screen`). */
 export function buildCompound(): Built & { board: Mesh; screen: Mesh } {
@@ -819,6 +897,7 @@ export function buildCompound(): Built & { board: Mesh; screen: Mesh } {
   screen.position.set(SC.x, y + SC.y + SC.h / 2, SC.z + 0.26);
   root.add(screen);
   yardDress(root);
+  yardRoof(root);
   return {
     root,
     board,

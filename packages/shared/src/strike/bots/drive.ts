@@ -42,6 +42,8 @@ export interface BotEnv {
   shot(by: string, s: Shot): void;
   /** a bot's grenade thrown */
   nade(by: string, kind: NadeKind, eye: [number, number, number], yaw: number, pitch: number, short: boolean): void;
+  /** (plan 119) a bot's knife swung (the right's stab: `heavy`) — where it faces */
+  stab?(by: string, heavy: boolean): void;
   /** a bot's words on its side's radio */
   say(by: string, text: string, team: Team): void;
   /** how much time the knowledge may take this tick (ms; the server's small, the lab's all) */
@@ -443,7 +445,7 @@ export class Bots {
         fell: this.fell[team],
         plantSpot: (site) => this.plantSpot(site),
       };
-      const out: Out = { shots: [], throws: [], calls: [], use: false, pickup: false, grab: -1, step: false };
+      const out: Out = { shots: [], throws: [], calls: [], use: false, pickup: false, grab: -1, step: false, stab: 0 };
       stepBot(b, w, out);
       for (const s of out.shots) fired.push([b.id, s]);
       if (out.shots.length) this.sounds.push({ kind: "shot", by: b.id, x: b.feet.x, y: b.feet.y, z: b.feet.z });
@@ -457,6 +459,7 @@ export class Bots {
           n.short,
         );
       for (const c of out.calls) this.ask(b.id, team, c.c, c.contacts);
+      if (out.stab) this.env.stab?.(b.id, out.stab === 2);
       if (out.step) this.sounds.push({ kind: "step", by: b.id, x: b.feet.x, y: b.feet.y, z: b.feet.z });
       // the hands
       const at: [number, number] = [b.feet.x, b.feet.z];

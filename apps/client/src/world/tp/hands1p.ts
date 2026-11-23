@@ -425,12 +425,7 @@ export class Hands1P {
       this.camera.rotateZ(this.beat.roll);
     }
     // (plan 115) the Strike Park's view model: a gun out, in first person, off the sights — held where CS holds it
-    // (the knife: held up into the view's lower right, the blade toward the middle)
-    if (strikeKeys.view === "first" && strikeKeys.knife && this.doing === "toy") {
-      this.tilt.position.x += 0.06;
-      this.tilt.position.y += 0.1;
-      this.tilt.rotateX(0.16);
-    }
+    // (plan 119: the knife and the charge are held by the body's own gear pass — person3d strikeHands — not lifted here)
     if (gun && this.ads < 0.05) {
       // inspect (F, plan 115 phase 23): the gun brought in and turned to show its side, held, back — 2.4 s
       const it = (performance.now() - strikeKeys.inspectAt) / 2400;

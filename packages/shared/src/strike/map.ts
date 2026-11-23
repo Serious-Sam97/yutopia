@@ -300,6 +300,65 @@ export function rayBox(b: MapBox, o: [number, number, number], d: [number, numbe
   return t1 < 0 ? null : [Math.max(0, t0), t1];
 }
 
+/** (plan 118, F9a) The first solid a ray from `o` along `d` (unit; local metres, y up) meets within `max` m — the
+ *  ground's top at 0 too —: how far, the face's outward normal, its material. Null: nothing. */
+export function rayFirst(
+  map: StrikeMap,
+  o: [number, number, number],
+  d: [number, number, number],
+  max: number,
+): { t: number; n: [number, number, number]; m: Mat | "ground" } | null {
+  let best: { t: number; n: [number, number, number]; m: Mat | "ground" } | null = null;
+  if (d[1] < -1e-6 && o[1] > 0) {
+    const t = -o[1] / d[1];
+    if (t <= max) best = { t, n: [0, 1, 0], m: "ground" };
+  }
+  for (const b of mapBoxes(map)) {
+    const c = Math.cos(b.a);
+    const s = Math.sin(b.a);
+    const ox = o[0] - b.x;
+    const oz = o[2] - b.z;
+    const lo = [ox * c - oz * s, o[1] - b.y, ox * s + oz * c];
+    const ld = [d[0] * c - d[2] * s, d[1], d[0] * s + d[2] * c];
+    const h = [b.hx, b.hy, b.hz];
+    let t0 = -Infinity;
+    let t1 = Infinity;
+    let axis = -1;
+    let sign = 1;
+    let miss = false;
+    for (let k = 0; k < 3; k++) {
+      if (Math.abs(ld[k]) < 1e-9) {
+        if (Math.abs(lo[k]) > h[k]) {
+          miss = true;
+          break;
+        }
+        continue;
+      }
+      const a = (-h[k] - lo[k]) / ld[k];
+      const bb = (h[k] - lo[k]) / ld[k];
+      const near = Math.min(a, bb);
+      if (near > t0) {
+        t0 = near;
+        axis = k;
+        // (the face met first: the one facing back at the ray)
+        sign = ld[k] > 0 ? -1 : 1;
+      }
+      t1 = Math.min(t1, Math.max(a, bb));
+      if (t0 > t1) {
+        miss = true;
+        break;
+      }
+    }
+    if (miss || axis < 0 || t0 < 0 || t0 > max || (best && t0 >= best.t)) continue;
+    // (the normal back out of the box's turn)
+    const ln = [0, 0, 0];
+    ln[axis] = sign;
+    const n: [number, number, number] = [ln[0] * c + ln[2] * s, ln[1], -ln[0] * s + ln[2] * c];
+    best = { t: t0, n, m: b.m };
+  }
+  return best;
+}
+
 /** What's left of a shot's damage after it passes through a map from `o` to `to` (local metres, y up):
  *  1 when nothing's in the way, 0 when something stops it (concrete, brick, or too much of anything);
  *  `walls` how many it went through (the kill feed's wallbang mark). */

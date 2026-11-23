@@ -1,6 +1,8 @@
 // A map's radar (docs/plan/114–115): its pieces from above, the sites, the hostages, the buy zones — drawn on a
 // canvas. Kept apart (no three.js): the menus' map cards draw it too (components/hud/StrikePanels.tsx).
+
 import { climateOf, type StrikeMap } from "@yutopia/shared/strike";
+import { canvasFont } from "./look";
 
 /** A map's radar: its pieces from above, the sites, the spawns, the names. */
 export function radar(
@@ -60,7 +62,7 @@ export function radar(
     g.strokeRect(X(r.x0), Y(r.z0), (r.x1 - r.x0) * k, (r.z1 - r.z0) * k);
     if (label) {
       g.fillStyle = col;
-      g.font = `bold ${Math.max(10, Math.round(w / 14))}px Georgia`;
+      g.font = canvasFont(Math.max(10, Math.round(w / 14)), true);
       g.fillText(label, X((r.x0 + r.x1) / 2) - 5, Y((r.z0 + r.z1) / 2) + 5);
     }
   };

@@ -34,6 +34,17 @@ export const STRIKE_INNER = {
 export const STRIKE_GATE = { x: STRIKE_PARK.x + 60, z: STRIKE_WALL.z1, w: 10 };
 /** The lobby yard (between the inner wall and the gate). */
 export const STRIKE_YARD = { x0: STRIKE_WALL.x0, z0: STRIKE_INNER.z, x1: STRIKE_WALL.x1, z1: STRIKE_WALL.z1 };
+/** (the user's, 2026-11-23: "a roof on the lobby, the rain gets in everywhere") The yard's roof: wall face to wall face
+ *  over the whole yard, a shallow gable — its eaves 3.2 m over the gallery (the walls' tops), its ridge along the
+ *  yard's middle; heights over the yard's floor. Out of the weather under it (the rain's and the snow's roofs). */
+export const STRIKE_YARD_ROOF = {
+  x0: STRIKE_WALL.x0 + STRIKE_WALL_T / 2,
+  x1: STRIKE_WALL.x1 - STRIKE_WALL_T / 2,
+  z0: STRIKE_INNER.z + STRIKE_WALL_T / 2,
+  z1: STRIKE_WALL.z1 - STRIKE_WALL_T / 2,
+  eaves: STRIKE_WALL_H + 3.2,
+  ridge: STRIKE_WALL_H + 4.6,
+};
 /** The lobby: the desk (teams, mode), the Map Board, the big screen over the gate, the stairs to the gallery. */
 export const STRIKE_DESK = { x: STRIKE_PARK.x + 20, z: STRIKE_INNER.z + 16, ry: 0 };
 export const STRIKE_BOARD = { x: STRIKE_PARK.x - 10, z: STRIKE_INNER.z + 14, w: 6, h: 3.6 };
@@ -189,3 +200,17 @@ export function rangeHit(
   });
   return best;
 }
+
+/** (plan 118, F10a) The lobby's buildings' jobs and the range's drills: where each is used (E within `r`), the
+ *  prompt's words. Inside the buildings by their furnished pieces (furnish-layouts.ts STRIKE_ARMORY…: the armory's
+ *  table, the briefing hall's stage, the trophy cases, the war room's desk — strike/lobby.test.ts checks they're in their
+ *  rooms); the range's line in front of the canteen; the practice pad in the yard east of it, out of the range's way. */
+export const STRIKE_SPOTS = {
+  armory: { x: -223.2, z: -621.2, r: 2.0, label: "Your kit and loadout" },
+  briefing: { x: -190, z: -625.4, r: 2.6, label: "The briefing: the map flown over" },
+  trophies: { x: -310, z: -608.2, r: 2.6, label: "The park's records" },
+  war: { x: -193, z: -609.8, r: 2.0, label: "Watch the match" },
+  range: { x: -339, z: STRIKE_FIRING_LINE - 0.2, r: 3, label: "Aim drill: 30 s, the lit targets" },
+  pad: { x: -300, z: -619, r: 2.2, label: "Plant and defuse drill" },
+} as const;
+export type StrikeSpot = keyof typeof STRIKE_SPOTS;

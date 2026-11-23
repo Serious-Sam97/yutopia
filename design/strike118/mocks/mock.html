@@ -1,0 +1,194 @@
+<!doctype html>
+<!-- Plan 118 phase 1: three looks for the Strike Park's UI — mock.html?look=a|b|c&screen=hud|buy|score -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; width: 1440px; height: 900px; overflow: hidden; background: #222; }
+  body { position: relative; }
+  .bg { position: absolute; inset: 0; background: url(../bg/mid.png) center / cover; }
+  .bg.spawn { background-image: url(../bg/spawn.png); }
+  .dim { position: absolute; inset: 0; background: rgba(8, 10, 12, .38); }
+  .abs { position: absolute; }
+  /* ── the looks' tokens ── */
+  body.a { --font: "Avenir Next", Avenir, sans-serif; --head: "DIN Condensed", "Avenir Next Condensed", sans-serif;
+    --panel: rgba(20, 23, 23, .82); --line: rgba(233, 220, 192, .14); --ink: #f1e9d6; --mute: rgba(241, 233, 214, .6);
+    --r: #e8a33a; --w: #6fa3c7; --acc: #e8a33a; --good: #9cc46a; --bad: #e06a52; --rad: 3px; --headcase: uppercase; --headsp: .14em; }
+  body.b { --font: "Helvetica Neue", "SF Pro Display", sans-serif; --head: "Helvetica Neue", sans-serif;
+    --panel: rgba(0, 0, 0, .42); --line: rgba(255, 255, 255, .1); --ink: #fff; --mute: rgba(255, 255, 255, .62);
+    --r: #e8b552; --w: #5aa0e0; --acc: #fff; --good: #7fd08a; --bad: #ff6a5a; --rad: 6px; --headcase: none; --headsp: .02em; }
+  body.c { --font: "Avenir Next Condensed", "Avenir Next", sans-serif; --head: "Futura", "Avenir Next Condensed", sans-serif;
+    --panel: #121212; --line: rgba(242, 194, 48, .35); --ink: #f4f1e8; --mute: rgba(244, 241, 232, .6);
+    --r: #f2c230; --w: #4aa8d8; --acc: #f2c230; --good: #b6e05a; --bad: #ff5a3c; --rad: 0; --headcase: uppercase; --headsp: .06em; }
+  body { font-family: var(--font); color: var(--ink); }
+  .head { font-family: var(--head); text-transform: var(--headcase); letter-spacing: var(--headsp); font-weight: 700; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--rad); }
+  body.b .panel { backdrop-filter: blur(8px); border: none; }
+  body.c .panel { border: none; border-left: 4px solid var(--acc); }
+  body.c .head { font-style: italic; font-weight: 800; }
+  body.c .hazard { background: repeating-linear-gradient(-45deg, #f2c230 0 10px, #121212 10px 20px); }
+  .num { font-variant-numeric: tabular-nums; }
+  kbd { font-family: var(--font); font-size: 11px; font-weight: 700; padding: 1px 5px; border-radius: 2px; background: rgba(255,255,255,.12); color: var(--ink); border: 1px solid var(--line); }
+  body.c kbd { background: var(--acc); color: #121212; border: none; }
+  /* radar: a crop of the game's own */
+  .radar { width: 196px; height: 196px; overflow: hidden; }
+  .radar img { width: 1440px; margin: -100px 0 0 -24px; }
+  body.b .radar { border-radius: 50%; }
+  .gun svg { height: 100%; width: auto; display: block; }
+  .crosshair { left: 716px; top: 446px; width: 8px; height: 8px; }
+  .crosshair i { position: absolute; background: #9ef07a; box-shadow: 0 0 1px #000; }
+</style>
+</head>
+<body>
+<div class="bg" id="bg"></div>
+<div id="root"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const look = q.get("look") ?? "a";
+const screen = q.get("screen") ?? "hud";
+document.body.className = look;
+const R = document.getElementById("root");
+const ICON = {
+  revolver: '<svg viewBox="0 0 64 40"><path d="M6 12h34l3-4h6v4h9v7H44l-2 3h-8l-3 4-4 11h-9l4-13-2-3H6z" fill="currentColor"/></svg>',
+  shotgun: '<svg viewBox="0 0 96 40"><path d="M2 14h58v6H2zM58 13h8l4 3h6l16 4-2 9-18-5h-8l-6-2z" fill="currentColor"/></svg>',
+  ak47: '<svg viewBox="0 0 96 40"><path d="M30 12h32l2-2h4v2h24v4H68l-2 3H30zM4 14l26-2v8l-4 3H8l-4 6zM40 19h7l2 13-4 3-6-2 1-6zM33 19h5l-2 12h-5z" fill="currentColor"/></svg>',
+  sniper: '<svg viewBox="0 0 96 40"><path d="M2 15l24-3 6 2h40v4H34l-4 6H22l-4 8H8l2-9-8 2zM34 14h58v3H34z" fill="currentColor"/><rect x="38" y="6" width="26" height="6" rx="3" fill="currentColor"/></svg>',
+  daybreak: '<svg viewBox="0 0 96 40"><path d="M6 14l18-2h8v14H24l-6 4H8z" fill="currentColor"/><rect x="30" y="10" width="40" height="18" rx="5" fill="currentColor"/><path d="M70 8l12-2v26l-12-2z" fill="currentColor"/></svg>',
+  head: '<svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="6" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M12 2v5M12 13v5M4 10h5M15 10h5" stroke="currentColor" stroke-width="2"/></svg>',
+  wall: '<svg viewBox="0 0 24 24"><path d="M3 5h18v14H3z M3 12h18 M9 5v7 M15 12v7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M1 11h22" stroke="currentColor" stroke-width="3" stroke-dasharray="3 2"/></svg>',
+  smoke: '<svg viewBox="0 0 24 24"><circle cx="8" cy="13" r="5" fill="currentColor" opacity=".7"/><circle cx="15" cy="10" r="6" fill="currentColor" opacity=".8"/></svg>',
+  charge: '<svg viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="11" rx="2" fill="currentColor"/><rect x="8" y="4" width="8" height="3" fill="currentColor"/><circle cx="16" cy="12" r="1.6" fill="#ff4a3a"/></svg>',
+  shield: '<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z" fill="currentColor"/></svg>',
+  helmet: '<svg viewBox="0 0 24 24"><path d="M3 15a9 9 0 0118 0v2H3z" fill="currentColor"/></svg>',
+  cross: '<svg viewBox="0 0 24 24"><path d="M9 2h6v7h7v6h-7v7H9v-7H2V9h7z" fill="currentColor"/></svg>',
+  nade: '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="14" rx="6" ry="7" fill="currentColor"/><rect x="10" y="3" width="4" height="4" fill="currentColor"/><path d="M14 5h5" stroke="currentColor" stroke-width="2"/></svg>',
+  vest: '<svg viewBox="0 0 24 24"><path d="M6 3l3 2h6l3-2 3 4-2 3v11H5V10L3 7z" fill="currentColor"/></svg>',
+  kit: '<svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="12" rx="2" fill="currentColor"/><path d="M8 8V5h8v3" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
+};
+const RN = ["Bia", "Vortex", "Vortex II", "Vortex III", "Vortex IV"];
+const WN = ["Vortex VI", "Vortex VII", "Vortex VIII", "Vortex IX", "Vortex X"];
+const pic = (id) => `<img src="../../../apps/client/public/life/items/${id}.webp" style="height:100%;width:100%;object-fit:contain">`;
+
+function hud() {
+  const port = (n, team, dead, i) => `<div style="width:30px;height:34px;border-radius:${look === "b" ? "50%" : "var(--rad)"};background:${dead ? "rgba(40,40,40,.85)" : `var(--${team})`};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:${dead ? "rgba(255,255,255,.28)" : "#111"};${look === "b" ? "width:30px;height:30px;" : ""}${dead ? "filter:grayscale(1);" : ""}${i === 0 && team === "r" ? "outline:2px solid #fff;outline-offset:1px;" : ""}">${dead ? "✕" : n[0]}</div>`;
+  const ports = (names, team, deadSet) => `<div style="display:flex;gap:4px">${names.map((n, i) => port(n, team, deadSet.has(i), i)).join("")}</div>`;
+  const top = look === "c"
+    ? `<div class="abs" style="left:50%;top:14px;transform:translateX(-50%);display:flex;align-items:center;gap:10px">
+        ${ports(RN, "r", new Set([3]))}
+        <div style="display:flex;align-items:stretch">
+          <div class="head num" style="background:var(--r);color:#121212;font-size:34px;padding:2px 14px">7</div>
+          <div style="background:#121212;padding:4px 16px;text-align:center"><div class="head num" style="font-size:30px;line-height:1">1:24</div><div class="hazard" style="height:4px;margin-top:4px"></div></div>
+          <div class="head num" style="background:var(--w);color:#121212;font-size:34px;padding:2px 14px">5</div>
+        </div>
+        ${ports(WN, "w", new Set([1, 4]))}
+      </div>`
+    : `<div class="abs" style="left:50%;top:14px;transform:translateX(-50%);display:flex;align-items:center;gap:12px">
+        ${ports(RN, "r", new Set([3]))}
+        <div class="panel" style="display:flex;align-items:center;gap:14px;padding:6px 16px">
+          <span class="head num" style="font-size:30px;color:var(--r)">7</span>
+          <span style="text-align:center"><span class="num" style="font-size:24px;font-weight:600">1:24</span><br><span style="font-size:10px;color:var(--mute);letter-spacing:.1em">ROUND 13</span></span>
+          <span class="head num" style="font-size:30px;color:var(--w)">5</span>
+        </div>
+        ${ports(WN, "w", new Set([1, 4]))}
+      </div>`;
+  const feedRow = (k, kt, gun, marks, v, vt, mine) => `<div class="panel" style="display:flex;align-items:center;gap:8px;padding:5px 10px;font-size:14px;font-weight:600;${mine ? "border:1px solid var(--bad);" : ""}">
+      <span style="color:var(--${kt})">${k}</span>
+      <span class="gun" style="height:16px;color:var(--ink)">${ICON[gun]}</span>
+      ${marks.map((m) => `<span class="gun" style="height:16px;color:var(--ink)">${ICON[m]}</span>`).join("")}
+      <span style="color:var(--${vt})">${v}</span></div>`;
+  const feed = `<div class="abs" style="right:18px;top:18px;display:flex;flex-direction:column;align-items:flex-end;gap:5px">
+      ${feedRow("Bia", "r", "ak47", ["head"], "Vortex VII", "w", true)}
+      ${feedRow("Vortex IX", "w", "sniper", [], "Vortex III", "r", false)}
+      ${feedRow("Vortex II", "r", "ak47", ["wall"], "Vortex X", "w", false)}
+    </div>`;
+  const radar = `<div class="abs panel radar" style="left:18px;top:18px;padding:0"><img src="../../fp116/after/ak47-idle.png"></div>
+    <div class="abs head" style="left:18px;top:222px;font-size:12px;color:var(--mute);text-shadow:0 1px 2px #000">B site · Grain Store</div>`;
+  const hp = look === "b"
+    ? `<div class="abs" style="left:22px;bottom:22px;display:flex;gap:28px;align-items:flex-end">
+        <div style="display:flex;align-items:center;gap:8px"><span class="gun" style="height:22px;color:#fff">${ICON.cross}</span><span class="num" style="font-size:44px;font-weight:600;line-height:1">86</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span class="gun" style="height:22px;color:#fff">${ICON.shield}</span><span class="num" style="font-size:44px;font-weight:600;line-height:1">100</span><span class="gun" style="height:16px;color:#fff;opacity:.8">${ICON.helmet}</span></div>
+        <div class="num" style="font-size:24px;color:var(--good);font-weight:600">$4,350</div>
+      </div>`
+    : `<div class="abs panel" style="left:18px;bottom:18px;display:flex;gap:0">
+        <div style="padding:10px 18px"><div class="head" style="font-size:11px;color:var(--mute)">Health</div><div class="num head" style="font-size:42px;line-height:1">86</div><div style="height:4px;background:rgba(255,255,255,.12);margin-top:6px"><div style="width:86%;height:100%;background:var(--ink)"></div></div></div>
+        <div style="padding:10px 18px;border-left:1px solid var(--line)"><div class="head" style="font-size:11px;color:var(--mute)">Armour <span class="gun" style="display:inline-block;height:10px;color:var(--ink)">${ICON.helmet}</span></div><div class="num head" style="font-size:42px;line-height:1">100</div><div style="height:4px;background:rgba(255,255,255,.12);margin-top:6px"><div style="width:100%;height:100%;background:var(--w)"></div></div></div>
+        <div style="padding:10px 18px;border-left:1px solid var(--line)"><div class="head" style="font-size:11px;color:var(--mute)">Money</div><div class="num head" style="font-size:42px;line-height:1;color:var(--good)">$4,350</div><div style="font-size:12px;color:var(--good);margin-top:4px">+$300 a kill (AK)</div></div>
+      </div>`;
+  const ammo = `<div class="abs ${look === "b" ? "" : "panel"}" style="right:18px;bottom:18px;padding:10px 16px;text-align:right">
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px"><span class="gun" style="height:26px;color:var(--ink)">${ICON.ak47}</span><span class="head" style="font-size:14px;color:var(--mute)">AK</span></div>
+      <div><span class="num head" style="font-size:48px;line-height:1">24</span><span class="num" style="font-size:20px;color:var(--mute)"> / 90</span></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px;font-size:12px;color:var(--mute)"><span><kbd>1</kbd> AK</span><span><kbd>2</kbd> Revolver</span><span><kbd>3</kbd> Knife</span><span><kbd>4</kbd> <span class="gun" style="display:inline-block;height:11px">${ICON.nade}</span>×2</span></div>
+    </div>`;
+  const charge = `<div class="abs" style="left:50%;top:76px;transform:translateX(-50%);display:flex;align-items:center;gap:6px;font-size:12px;color:var(--r);margin-top:12px"><span class="gun" style="height:16px;color:var(--r)">${ICON.charge}</span><span class="head">Charge carried · Vortex II</span></div>`;
+  const xh = `<div class="abs crosshair"><i style="left:3px;top:-6px;width:2px;height:6px"></i><i style="left:3px;top:8px;width:2px;height:6px"></i><i style="left:-6px;top:3px;width:6px;height:2px"></i><i style="left:8px;top:3px;width:6px;height:2px"></i></div>`;
+  R.innerHTML = top + charge + feed + radar + hp + ammo + xh;
+}
+
+function buy() {
+  document.getElementById("bg").classList.add("spawn");
+  R.innerHTML = '<div class="dim"></div>';
+  const cols = [
+    ["Pistols", [["revolver", "Revolver", 500, "owned"]]],
+    ["Mid-tier", [["shotgun", "Double-barrel", 1100]]],
+    ["Rifles", [["ak47", "AK", 2700, "hover"], ["sniper", "Sniper", 4750], ["daybreak", "Daybreak", 5200, "poor"]]],
+    ["Gear", [["vest", "Kevlar", 650], ["helmet", "Kevlar + helmet", 1000], ["kit", "Defuse kit", 400, "team"]]],
+    ["Grenades", [["nade", "HE", 300], ["nade", "Flashbang", 200], ["smoke", "Smoke", 300], ["nade", "Molotov", 400], ["nade", "Decoy", 50]]],
+  ];
+  const card = (ci, ii, [id, name, price, st]) => {
+    const art = ICON[id] && !["ak47", "revolver", "shotgun", "sniper", "daybreak"].includes(id) ? `<div class="gun" style="height:34px;color:var(--mute);margin:10px auto">${ICON[id]}</div>` : `<div style="height:58px">${pic(id)}</div>`;
+    const hov = st === "hover";
+    return `<div class="panel" style="position:relative;padding:8px 10px;margin-bottom:8px;${hov ? "outline:2px solid var(--acc);" : ""}${st === "poor" || st === "team" ? "opacity:.4;" : ""}">
+      <div style="position:absolute;left:8px;top:6px"><kbd>${ii + 1}</kbd></div>
+      ${st === "owned" ? `<div class="head" style="position:absolute;right:8px;top:6px;font-size:10px;color:var(--good)">Owned</div>` : ""}
+      ${art}
+      <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:600"><span>${name}</span><span class="num" style="color:${st === "poor" ? "var(--bad)" : "var(--good)"}">$${price}</span></div>
+    </div>`;
+  };
+  const grid = cols.map(([t, items], ci) => `<div style="width:178px"><div class="head" style="font-size:13px;color:var(--mute);margin-bottom:8px"><kbd>${ci + 1}</kbd> ${t}</div>${items.map((it, ii) => card(ci, ii, it)).join("")}</div>`).join("");
+  const bar = (l, v, max) => `<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--mute)"><span>${l}</span><span class="num" style="color:var(--ink)">${v}</span></div><div style="height:5px;background:rgba(255,255,255,.1);margin-top:3px"><div style="width:${(parseFloat(v) / max) * 100}%;height:100%;background:var(--acc)"></div></div></div>`;
+  const stats = `<div class="panel" style="width:280px;padding:16px">
+      <div style="height:110px">${pic("ak47")}</div>
+      <div class="head" style="font-size:24px">AK</div>
+      <div style="font-size:12px;color:var(--mute);margin-bottom:6px">Full auto · deadly at range when you tap · climbs fast in a spray</div>
+      ${bar("Damage", "36", 60)}${bar("Fire rate (rpm)", "600", 900)}${bar("Range (m)", "90", 120)}${bar("Moving speed", "215", 250)}
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:10px"><span style="color:var(--mute)">Kill reward</span><span class="num" style="color:var(--good)">+$300</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--mute)">Magazine</span><span class="num">30 / 90</span></div>
+    </div>`;
+  const team = `<div style="display:flex;gap:8px;margin-top:14px">${["Bia $4,350", "Vortex $5,100 · wants AK", "Vortex II $1,800", "Vortex III $3,200", "Vortex IV $900 · wants a drop"].map((t, i) => `<div class="panel" style="padding:6px 10px;font-size:12px;${t.includes("wants") ? "border-color:var(--acc);" : ""}"><span style="color:var(--r);font-weight:700">${t.split(" $")[0]}</span> <span class="num" style="color:var(--good)">$${t.split(" $")[1]}</span></div>`).join("")}</div>`;
+  R.innerHTML += `<div class="abs" style="left:50%;top:70px;transform:translateX(-50%);width:1260px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px">
+        <div class="head" style="font-size:34px">Buy <span style="color:var(--r);font-size:20px">· Raiders</span></div>
+        <div style="font-size:14px;color:var(--mute)">Buy time <span class="num" style="color:var(--ink);font-weight:700">0:14</span> · next round at least <span class="num" style="color:var(--good)">$1,900</span></div>
+        <div class="num head" style="font-size:34px;color:var(--good)">$4,350</div>
+      </div>
+      ${look === "c" ? '<div class="hazard" style="height:6px;margin-bottom:14px"></div>' : ""}
+      <div style="display:flex;gap:14px;align-items:flex-start">${grid}${stats}</div>
+      ${team}
+      <div style="margin-top:12px;font-size:12px;color:var(--mute)"><kbd>1</kbd>–<kbd>5</kbd> a column, then <kbd>1</kbd>–<kbd>5</kbd> the item · right click: refund · <kbd>Shift</kbd> + click: buy for a teammate · <kbd>B</kbd> or <kbd>Esc</kbd> closes</div>
+    </div>`;
+}
+
+function score() {
+  R.innerHTML = '<div class="dim"></div>';
+  const cols = ["", "K", "A", "D", "ADR", "HS%", "MVP", "$", "PING"];
+  const row = (n, me, k, a, d, adr, hs, mvp, $, ping, dead, team) => `<tr style="${me ? "background:rgba(255,255,255,.08);" : ""}${dead ? "opacity:.45;" : ""}">
+      <td style="padding:7px 12px;display:flex;align-items:center;gap:10px"><span style="width:26px;height:26px;border-radius:${look === "b" ? "50%" : "var(--rad)"};background:var(--${team});display:inline-flex;align-items:center;justify-content:center;color:#111;font-weight:700;font-size:12px">${n[0]}</span><span style="font-weight:600">${n}</span>${n.startsWith("Vortex") ? '<span style="font-size:11px;color:var(--mute)">bot</span>' : ""}</td>
+      ${[k, a, d, adr, hs, mvp ? "★".repeat(mvp) : "", $, ping].map((v) => `<td class="num" style="text-align:right;padding:7px 12px">${v}</td>`).join("")}</tr>`;
+  const table = (team, names, rows) => `<div class="panel" style="padding:0;overflow:hidden;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:${look === "c" ? `var(--${team})` : "transparent"};color:${look === "c" ? "#121212" : `var(--${team})`};border-bottom:1px solid var(--line)"><span class="head" style="font-size:20px">${team === "r" ? "Raiders" : "Wardens"}</span><span class="head num" style="font-size:26px">${team === "r" ? 7 : 5}</span></div>
+      <table style="width:100%;border-collapse:collapse;font-size:14px"><tr style="font-size:11px;color:var(--mute);letter-spacing:.1em">${cols.map((c, i) => `<td style="padding:6px 12px;${i ? "text-align:right;width:72px" : ""}">${c}</td>`).join("")}</tr>${rows}</table></div>`;
+  const rr = table("r", RN, [row("Bia", true, 14, 3, 9, 92, "43%", 3, "$4,350", 12, false, "r"), row("Vortex", false, 11, 4, 10, 81, "36%", 2, "$5,100", 0, false, "r"), row("Vortex II", false, 9, 6, 11, 70, "22%", 1, "$1,800", 0, false, "r"), row("Vortex III", false, 7, 2, 12, 58, "28%", 0, "$3,200", 0, true, "r"), row("Vortex IV", false, 5, 5, 12, 49, "40%", 1, "$900", 0, false, "r")].join(""));
+  const wr = table("w", WN, [row("Vortex VI", false, 13, 2, 10, 88, "38%", 2, "$6,200", 0, false, "w"), row("Vortex VII", false, 10, 4, 11, 76, "30%", 2, "$2,400", 0, true, "w"), row("Vortex VIII", false, 9, 3, 11, 69, "33%", 1, "$4,700", 0, false, "w"), row("Vortex IX", false, 8, 5, 12, 62, "25%", 0, "$3,050", 0, false, "w"), row("Vortex X", false, 6, 2, 13, 41, "17%", 0, "$1,200", 0, true, "w")].join(""));
+  const wins = "rrwrwwrrrwrw".split("");
+  const why = ["elim", "charge", "elim", "defuse", "elim", "time", "elim", "charge", "elim", "elim", "elim", "defuse"];
+  const sym = { elim: "✕", charge: "✸", defuse: "✓", time: "⧗" };
+  const strip = `<div class="panel" style="display:flex;gap:4px;padding:8px 12px;align-items:center;margin-bottom:12px"><span style="font-size:11px;color:var(--mute);margin-right:8px;letter-spacing:.1em">ROUNDS</span>${wins.map((w, i) => `<span style="width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:var(--${w});color:#111;font-size:13px;font-weight:700;border-radius:${look === "b" ? "4px" : "var(--rad)"}">${sym[why[i]]}</span>`).join("")}${Array.from({ length: 12 }, () => `<span style="width:26px;height:26px;border:1px dashed var(--line)"></span>`).join("")}</div>`;
+  R.innerHTML += `<div class="abs" style="left:50%;top:60px;transform:translateX(-50%);width:1000px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px"><div class="head" style="font-size:28px">Sawmill <span style="font-size:16px;color:var(--mute)">· Competitive · round 13</span></div><div style="font-size:12px;color:var(--mute)"><kbd>Right click</kbd> the next stats: utility damage · enemies flashed</div></div>
+      ${look === "c" ? '<div class="hazard" style="height:6px;margin-bottom:12px"></div>' : ""}
+      ${rr}${strip}${wr}</div>`;
+}
+({ hud, buy, score })[screen]();
+</script>
+</body>
+</html>

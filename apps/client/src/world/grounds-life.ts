@@ -386,7 +386,9 @@ export class GroundsLife {
       emote: "",
       mic: false,
       bot: true,
-      gun: gun || undefined,
+      // (plan 119: the knife out a moment — in its hand as a person's, swung where the server says)
+      gun: gun && gun !== "knife" ? gun : undefined,
+      held: gun === "knife" ? "knife" : undefined,
       // crouched (at the charge, or shooting far on Hard), the gun up when they've someone in sight, its aim level
       mv: packMv(n.a === 1 ? "walk" : "still", pose.includes("c") || pose.includes("k"), pose.includes("a")),
       focused: pose.includes("a") || undefined,

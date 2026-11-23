@@ -2,11 +2,13 @@
 // the server runs — and what it shows, measured: the radio (lines, repeats), the bunching, deaths not looking at the
 // killer, plants and defuses, trades, standing about, the plays, the side balance, what a bot's step costs.
 
+import { ARMS, HEAD } from "../../dark/arms.ts";
 import { gridOf, nodeNear, nodePos } from "../grid.ts";
 import type { Team } from "../map.ts";
 import { hit, join, type Match, newMatch, squadSize, startMatch, teamOf, tick } from "../match.ts";
-import { flashFor, heDamage, NADE, type Nade, stepNade, throwNade } from "../nades.ts";
+import { fireRun, flashFor, heDamage, inFire, NADE, type Nade, stepNade, throwNade } from "../nades.ts";
 import type { ModeId } from "../rules.ts";
+import { isGun, parkDamage } from "../rules.ts";
 import { spawnPoint } from "../spawn.ts";
 import { wrap } from "./aim.ts";
 import { Bots } from "./drive.ts";
@@ -57,6 +59,8 @@ export interface LabFrame {
 }
 export interface LabResult {
   map: string;
+  /** (plan 119) the bots' knife swings (empty or reloading, someone at arm's length) */
+  stabs: number;
   over: boolean;
   rounds: number;
   why: Record<string, number>;
@@ -131,6 +135,7 @@ export function lab(o: LabOpts): LabResult {
   let repeats = 0;
   let fired = 0;
   let hits = 0;
+  let stabs = 0;
   const bots: Bots = new Bots(m, {
     rand,
     level: (id) => levels[Number(id.charAt(4)) as 0 | 1] ?? "normal",
@@ -142,11 +147,16 @@ export function lab(o: LabOpts): LabResult {
       if (!s.victim) return;
       hits++;
       bots.hurt(s.victim, by);
-      hit(m, by, s.victim, s.gun, s.dmg, s.head ? "head" : "body", s.walls);
+      // (the park's damage, as the server deals it: plan 118 F6a)
+      const dmg = isGun(s.gun) ? parkDamage(s.gun, s.dmg, s.head, HEAD.mult, ARMS[s.gun].damage) : s.dmg;
+      hit(m, by, s.victim, s.gun, dmg, s.head ? "head" : "body", s.walls);
     },
     nade: (by, kind, eye, yaw, pitch, short) => {
       nades.push(throwNade(++nadeId, kind, by, eye, yaw, pitch, short));
       thrown++;
+    },
+    stab: () => {
+      stabs++;
     },
     say: (by, text, t) => {
       lines++;
@@ -213,6 +223,7 @@ export function lab(o: LabOpts): LabResult {
               ? "done"
               : "fire";
             n.left = NADE.fire.secs;
+            fireRun(n);
           } else {
             for (const id of ids) {
               const p = m.players.get(id);
@@ -243,7 +254,7 @@ export function lab(o: LabOpts): LabResult {
         for (const id of ids) {
           const p = m.players.get(id);
           const v = bots.view(id);
-          if (p?.alive && v && Math.hypot(v.x - n.x, v.z - n.z) < NADE.fire.r && Math.abs(v.y - n.y) < 1.2)
+          if (p?.alive && v && inFire(n, v.x, v.z) && Math.abs(v.y - n.y) < 1.2)
             hit(m, n.by, id, n.kind, NADE.fire.dps * dt, "legs");
         }
     }
@@ -386,6 +397,7 @@ export function lab(o: LabOpts): LabResult {
   }
   return {
     map: o.map,
+    stabs,
     over: m.phase === "over",
     rounds,
     why,

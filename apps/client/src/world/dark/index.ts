@@ -343,10 +343,20 @@ class Dark implements DarkHooks {
       if (typing(e)) return;
       // (plan 115: the Strike Park's vote or radio open — its number keys, not the hand's or the quick slots')
       if (strikeKeys.digits && /^Digit[1-6]$/.test(e.code)) return;
+      // (plan 118: a park's panel up — the buy screen's two-press keys — its digits are its own)
+      if (strikeKeys.playing && hud.get().panel.kind && /^Digit\d$/.test(e.code)) return;
+      // (…and the buy screen's R, the loadout — not a reload under it: the double check 2)
+      if (strikeKeys.playing && hud.get().panel.kind === "strike-buy" && e.code === "KeyR") return;
       // (plan 115 phase 24) in the match, CS's keys: 1 the primary, 2 the pistol, Q the last; 3–5 the park's own
       if (strikeKeys.playing && !hud.get().panel.kind) {
+        // (plan 118) 1/2/3/Q: the grenade or the charge in hand put away for what they draw — here, as the park's own
+        // key handler never sees these (the double check 2: a click after 4 then 1 still threw a grenade)
+        if (/^(Digit[1-3]|KeyQ)$/.test(e.code)) strikeKeys.nadeReady = strikeKeys.chargeSel = false;
         if ((e.code === "Digit1" || e.code === "Digit2") && !e.repeat) {
-          this.arms.drawSlot(e.code === "Digit1" ? 0 : 1);
+          // (CS's: 1 the primary, 2 the pistol — whichever quick slots they're in; none: nothing)
+          const want = e.code === "Digit1" ? strikeKeys.loadout.primary : strikeKeys.loadout.pistol;
+          const i = want ? (this.arms.slotOf(want) ?? -1) : -1;
+          if (i >= 0) this.arms.drawSlot(i);
           e.preventDefault();
           e.stopImmediatePropagation();
           return;
@@ -424,6 +434,12 @@ class Dark implements DarkHooks {
       const h = hud.get();
       const onScene = !!document.pointerLockElement || e.target instanceof HTMLCanvasElement;
       if (e.button === 0 && (!onScene || h.panel.kind || h.menu)) return;
+      // (plan 118: a grenade in hand in the park — its own clicks)
+      if (strikeKeys.nadeReady && strikeKeys.playing) return;
+      // (out of the round, dead: no shot — the user's feedback, 2026-11-23)
+      if (strikeKeys.dead) return;
+      // (plan 119: the knife's and the charge's — the park's own mouse, strike.ts onGearMouse)
+      if ((strikeKeys.knife || strikeKeys.chargeSel) && strikeKeys.playing) return;
       if (this.arms.click(e)) {
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -586,6 +602,8 @@ class Dark implements DarkHooks {
     // (the walker counts my battery down as I focus; the server's word when they part)
     if (!was || Math.abs(this.walker.vitals.bat - bat) > 4) this.walker.vitals.bat = bat;
     if (!was) return;
+    // (plan 118: in the Strike Park's match its own HUD says what I have — the buys are lent, not found: no slips)
+    if (strikeKeys.playing) return;
     // (plan 86) what's new, by kind — a move, a split, organizing gain nothing: a slip each, typed, above the quick
     // slots ("+4 shells · in the pack"); a weapon new only if it wasn't carried before at all
     const all = (v: Inventory) => [...v.quick, ...v.pockets];

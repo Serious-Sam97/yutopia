@@ -20,8 +20,9 @@ import {
   WAYS,
 } from "@yutopia/shared/grounds";
 import { decodeHeights } from "@yutopia/shared/grounds-edits";
-import { townBounds } from "@yutopia/shared/land";
+import { STRIKE_LAND, townBounds } from "@yutopia/shared/land";
 import { LONG_ROAD } from "@yutopia/shared/longroad";
+import { STRIKE_YARD_ROOF } from "@yutopia/shared/strike/land";
 import {
   BufferAttribute,
   BufferGeometry,
@@ -414,6 +415,14 @@ if (vFade < 0.999) {
     // it follows you through the door and out again; its box spanned the doorway — plan 113 review)
     for (const b of BUILDINGS)
       if (b.kind !== "hq") this.boxes.push({ ...boxOf(b), ...(insideOf(b) ? { open: true } : {}) });
+    // (the Strike Park's yard under its roof — the user's, 2026-11-23: no rain, no snow under it; `open`: walked
+    // under, the camera free in it. Its floor the park's: the roof's heights over it, the eaves its ridge's — the rain
+    // stops at the sheets anywhere over the yard; measured as the town's buildings are, from the land under it)
+    if (STRIKE_LAND) {
+      const R = STRIKE_YARD_ROOF;
+      const top = terrainAt((R.x0 + R.x1) / 2, (R.z0 + R.z1) / 2) + R.ridge;
+      this.boxes.push({ x0: R.x0, z0: R.z0, x1: R.x1, z1: R.z1, top, eaves: top - 0.2, open: true });
+    }
   }
 
   /** God mode's edits laid (docs/plan/53-the-god-mode.md): these chunks changed. Their blocks are

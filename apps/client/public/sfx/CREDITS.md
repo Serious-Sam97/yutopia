@@ -232,3 +232,29 @@
   - `skate/boom-c*`: *Dropping* by takeabeat (Freesound 464118).
   - `skate/on-b`: *skateboard drop 1* by FOSSarts (Freesound 740121).
 
+
+- `strike/*` — the Strike Park's music, stingers and announcer (docs/plan/118-the-strike-park-polished.md, F11a),
+  candidates picked on `/dev/strike-sound` (`strike/chosen.json`). All CC0, levelled (music −20 LUFS, stingers −16/−17,
+  the voice −16, mono), MP3:
+  `music-a.mp3` *Tension (loop)* by Tsorthan Grove, https://opengameart.org/content/tension-0;
+  `music-b.mp3` *Eyes in the Shadows (loop)* by Tsorthan Grove, https://opengameart.org/content/eyes-in-the-shadows;
+  `music-c.mp3` *Electric City (Part 1 loop)* by Tsorthan Grove, https://opengameart.org/content/electric-city;
+  `music-d.mp3` *Espionage* by HaelDB, https://opengameart.org/content/espionage;
+  `music-e.mp3` *Tension (from the album "It's time for adventure vol 2", track 12)* by Komiku (OGA account: Loyalty Freak Music), https://opengameart.org/content/tension;
+  `start-a.mp3` *Riser Hit sfx 031.wav* by AudioPapkin, https://freesound.org/people/AudioPapkin/sounds/511874/;
+  `start-b.mp3` *One hit (sonar inspired)* by xkeril, https://freesound.org/people/xkeril/sounds/736851/;
+  `start-c.mp3` *Transition (hit and whoosh)* by xkeril, https://freesound.org/people/xkeril/sounds/736852/;
+  `won-a.mp3` *Stage Clear* by Qvantor, https://freesound.org/people/Qvantor/sounds/878611/;
+  `won-b.mp3` *Congrats! 2* by nomiqbomi, https://freesound.org/people/nomiqbomi/sounds/578572/;
+  `won-c.mp3` *Level Up / Mission Complete* by Beetlemuse, https://freesound.org/people/Beetlemuse/sounds/528958/;
+  `won-d.mp3` *Success* by Sjonas88, https://freesound.org/people/Sjonas88/sounds/538554/;
+  `lost-a.mp3` *Dramatic Piano Sting* by Qvantor, https://freesound.org/people/Qvantor/sounds/879280/;
+  `lost-b.mp3` *Dissonant Piano Sting 8* by nomiqbomi, https://freesound.org/people/nomiqbomi/sounds/578358/;
+  `victory-a.mp3` *Victory (short sting)* by xkeril, https://freesound.org/people/xkeril/sounds/706753/;
+  `victory-b.mp3` *Epic Sting* by iwanPlays, https://freesound.org/people/iwanPlays/sounds/438935/;
+  `victory-c.mp3` *Finish Line Stinger* by SterlingRay, https://opengameart.org/content/finish-line-stinger;
+  `defeat-a.mp3` *You've been trapped (short sting)* by xkeril, https://freesound.org/people/xkeril/sounds/706754/;
+  `defeat-b.mp3` *Game Over Dark (gameoverdark)* by Robin Lamb, https://opengameart.org/content/game-over-dark-short-music-clips;
+  `defeat-c.mp3` *Lose Game Short Music Clip* by Robin Lamb, https://opengameart.org/content/lose-game-short-music-clip;
+  `voice/m/` *Voiceover Pack (male)* by Kenney, https://kenney.nl/assets/voiceover-pack;
+  `voice/f/` *Voiceover Pack (female)* by Kenney, https://kenney.nl/assets/voiceover-pack. Freesound ones are cut from the HQ previews.

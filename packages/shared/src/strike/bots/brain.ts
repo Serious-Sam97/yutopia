@@ -10,7 +10,7 @@ import type { Team } from "../map.ts";
 import { inRect } from "../map.ts";
 import type { Match, MPlayer } from "../match.ts";
 import type { Nade } from "../nades.ts";
-import { type StrikeGun, speedWith } from "../rules.ts";
+import { KNIFE, type StrikeGun, speedWith } from "../rules.ts";
 import { acquire, type Body, fire, letGo, MAG, RELOAD_S, ready, type Shot, track, turnTo, wrap } from "./aim.ts";
 import { CHEST, clear, EYE, type Know, type Lineup, placeAt } from "./know.ts";
 import type { LevelSpec } from "./level.ts";
@@ -61,6 +61,8 @@ export interface Out {
   grab: number;
   /** a footstep heard from it */
   step: boolean;
+  /** (plan 119) the knife swung this step: 1 the slash, 2 the stab */
+  stab: 0 | 1 | 2;
 }
 
 const gunOfP = (p: MPlayer): GunId | null => (p.primary ?? p.pistol ?? null) as GunId | null;
@@ -163,6 +165,12 @@ export function stepBot(b: BotState, w: World, out: Out) {
     // (said only mid-fight, with a teammate near to cover)
     if (target && w.mates.some((q) => Math.hypot(q.x - b.feet.x, q.z - b.feet.z) < 15))
       out.calls.push({ c: { k: "reload" } });
+  }
+  // ── (plan 119) the knife: someone at arm's length while the gun's empty or reloading — CS's bots slash rather than
+  // wait; the stab when they're close enough for it (the server keeps the swings' times, the reach, the wall) ──
+  if (target && td < KNIFE.reach * 0.9 && (!gun || b.reloading || b.loaded <= 0)) {
+    const toT = Math.atan2(target.z - b.feet.z, target.x - b.feet.x);
+    if (Math.abs(wrap(b.aim.yaw - toT)) < KNIFE.cone * 0.8) out.stab = td < KNIFE.heavyReach * 0.85 ? 2 : 1;
   }
   // ── the shot ──
   // (carrying a hostage: a person's pace with one, the match's 0.6)

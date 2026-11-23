@@ -16,6 +16,7 @@ import {
   spreadOf,
 } from "@yutopia/shared/dark";
 import { count, type Inventory, isUsable, isWeapon, QUICK_SLOT, STACKS, WEAPONS } from "@yutopia/shared/inventory";
+import { sprayAt, sprayReset } from "@yutopia/shared/strike/spray";
 import type { WorldController } from "../controller";
 import type { Press } from "../input/controls";
 import type { Walker } from "../input/walker";
@@ -90,6 +91,10 @@ export class Arms {
   private triggerDown = false; // the left button held (full auto: the AK fires while it is)
   private burst = 0; // rounds into this burst (its climb walks aside by it)
   private dryPulled = false; // a dry click this pull (held, it isn't clicked again)
+  /** (plan 118) the spray: its round now (0 the first), when the last went (ms), with which gun */
+  private sprayN = 0;
+  private sprayAt = -1e9;
+  private sprayGun = "";
   private ahead = 0; // shots sent that the server's count hasn't taken off yet (full auto outruns the line)
   // the scope (the sniper's, plan 79 phase 6): its power (the wheel: 4, 8), aimed since (s), the
   // breath held (Shift) and how long, spent after holding too long; out of it while the bolt's worked
@@ -230,7 +235,7 @@ export class Arms {
     const inv = this.inv();
     const q = QUICK_KEYS.indexOf(e.code);
     // (on foot: riding, driving, at an arcade the keys are theirs; an action menu's numbers pick)
-    if (q >= 0 && this.walker.stepping && !hud.get().menu) {
+    if (q >= 0 && this.walker.stepping && !hud.get().menu && !(strikeKeys.playing && hud.get().panel.kind)) {
       this.quick(q);
       return true;
     }
@@ -247,11 +252,6 @@ export class Arms {
   }
   /** The left button: fires while aiming with a gun out (else the world's click) — the AK while it's held. */
   click(e: MouseEvent): boolean {
-    // (plan 115, F5) the Strike Park's knife in the hand: a stab (the server judges it)
-    if (strikeKeys.playing && strikeKeys.knife && e.button === 0) {
-      this.ctl.room?.send("strike:stab", {});
-      return true;
-    }
     // (plan 115: in the Strike Park's match a gun fires from the hip too — CS's; its own hip spread, as it is)
     if (e.button !== 0 || (!this.walker.aiming && !this.hipOk()) || !this.gun()) return false;
     this.triggerDown = true;
@@ -321,6 +321,11 @@ export class Arms {
   /** (plan 115 phase 24) The Strike Park's keys: slot n's gun drawn — never put away (it's already out: nothing) —
    *  the one it replaces kept as the last (Q). */
   private lastSlot = -1;
+  /** (the Strike Park's 1 and 2) the quick slot a weapon's in, or null */
+  slotOf(id: string): number | null {
+    const i = this.inv()?.quick.findIndex((q) => q?.id === id) ?? -1;
+    return i >= 0 ? i : null;
+  }
   drawSlot(n: number): boolean {
     const inv = this.inv();
     const it = inv?.quick[n];
@@ -547,8 +552,20 @@ export class Arms {
     const o = scoped
       ? { x: camRay.x, y: camRay.y, z: camRay.z }
       : { x: me.x + f.x * 0.45 - f.y * 0.22, y: me.y + f.y * 0.45 + f.x * 0.22, z: me.z + HAND };
-    const yaw = scoped ? camRay.yaw : Math.atan2(aim.y - o.y, aim.x - o.x);
-    const pitch = scoped ? camRay.pitch : Math.atan2(aim.z - o.z, Math.hypot(aim.x - o.x, aim.y - o.y));
+    let yaw = scoped ? camRay.yaw : Math.atan2(aim.y - o.y, aim.x - o.x);
+    let pitch = scoped ? camRay.pitch : Math.atan2(aim.z - o.z, Math.hypot(aim.x - o.x, aim.y - o.y));
+    // (plan 118, F5a: in the Strike Park a spray follows its gun's pattern off the crosshair — learnt and pulled
+    // against; a pause and the next starts from its first round, true)
+    if (strikeKeys.playing) {
+      const gap = (now - this.sprayAt) / 1000;
+      this.sprayN = gap > sprayReset(ARMS[g.id].rate) || this.sprayGun !== g.id ? 0 : this.sprayN + 1;
+      this.sprayAt = now;
+      this.sprayGun = g.id;
+      const [sy, sp] = sprayAt(g.id, this.sprayN);
+      // (yaw grows turning right: the radar's arrow measured it, plan 118)
+      yaw += sy;
+      pitch += sp;
+    }
     const seed = (Math.random() * 0xffffffff) >>> 0;
     // (the spread the server will shoot it with, as near as I can tell: its bloom, how I stand)
     const spread = this.spread(g.id);
@@ -561,6 +578,20 @@ export class Arms {
             return c === null ? null : c === 0 ? 0 : c.claim;
           })
         : [];
+    if (strikeKeys.playing) strikeKeys.onShot?.({ gun: g.id, ox: o.x, oy: o.y, oz: o.z, yaw, pitch, seed, spread });
+    // (plan 118, F7a: my screen's hit only if a round as the server will fly it — the spray's, the spread's, this
+    // seed's — passes by the point the crosshair's on, not on the crosshair alone)
+    if (onBody && strikeKeys.playing && strikeKeys.predictHit) {
+      const ay = Math.atan2(aim.y - o.y, aim.x - o.x);
+      const ap = Math.atan2(aim.z - o.z, Math.hypot(aim.x - o.x, aim.y - o.y));
+      const far = Math.hypot(aim.x - o.x, aim.y - o.y, aim.z - o.z);
+      const rounds = isCharged(g.id) ? [{ yaw, pitch }] : pellets(g.id, yaw, pitch, seed, spread);
+      const near = rounds.some((p) => {
+        const dy = Math.atan2(Math.sin(p.yaw - ay), Math.cos(p.yaw - ay)) * Math.cos(ap);
+        return Math.hypot(dy, p.pitch - ap) * far < 0.12;
+      });
+      if (near) strikeKeys.predictHit(aim.x, aim.y, aim.z);
+    }
     this.ctl.room?.send("arms:fire", {
       ox: o.x,
       oy: o.y,

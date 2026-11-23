@@ -33,6 +33,7 @@ const puffDir = new Vector3();
 import { SKATE_BAIL, skateOfCode } from "@yutopia/shared/skate";
 import { HIP_H } from "../chars/moves";
 import { awayAt, BoardObj } from "../skate/board3d";
+import { strikeKeys } from "../strike/flag";
 import {
   AK_CLOSE,
   AK_LOAD_BLADE,
@@ -325,6 +326,8 @@ export interface Mats {
   /** a gun's life-look model (plan 79: public/life/guns/<kind>.glb), once the view has it — till then
    *  null (the drawn one stands in) */
   gun?: (kind: string) => Object3D | null;
+  /** (plan 119) the Strike Park's gear — a fresh copy of the knife, the charge or the pack, once the view has it */
+  gear?: (name: "knife" | "charge" | "pack") => Object3D | null;
   /** the shadowed, wrapped in the dark (docs/plan/30-the-dark.md D5) */
   shade?: Material;
   shadeInk?: Material;
@@ -359,6 +362,25 @@ function goalOf(mv: number): number | undefined {
 const gq = new Quaternion();
 const hu = new Vector3();
 const hs = new Vector3();
+// (plan 119) the gear pass's scratch
+const gV = Array.from({ length: 10 }, () => new Vector3());
+const gX = new Vector3(1, 0, 0);
+const gY = new Vector3(0, 1, 0);
+const gM = new Matrix4();
+const gQ = new Quaternion();
+const gQ2 = new Quaternion();
+const gQ3 = new Quaternion();
+const gQ4 = new Quaternion();
+const gQ5 = new Quaternion();
+/** (plan 119, the user's feedback: "the arm's the wrong way round") the knife fist's turn round its grip (rad about
+ *  the blade): a half turn from the torch's thumb-forward place — the knuckles up, the thumb over the grip, the elbow
+ *  bent below (unturned, the arm hung straight back, the palm up under the grip) */
+const KNIFE_ROLL = Math.PI;
+/** (plan 119) the knife's swings, as long as their hands take (s): CS's slash and stab times */
+const KNIFE_SLASH = 0.4;
+/** (plan 119) the torch's grip point in its own frame (chars/props GRIP.torch): where the knife's grip middle goes */
+const TORCH_GRIP = new Vector3(0, -0.055, 0);
+const KNIFE_STAB = 0.9;
 const hp = new Vector3();
 const ht = new Vector3();
 const hv = new Vector3();
@@ -1597,6 +1619,7 @@ export class Person3D {
       }
     }
     this.gunHands(p, step);
+    this.strikeHands(p, step);
     this.akDropFrame(step);
     this.dbDropFrame(step);
     // (the springs — hair, a skirt, a scarf, a pack: near only, and not with reduced motion)
@@ -1803,7 +1826,10 @@ export class Person3D {
     // (two-handed — the phone texting, a pad: the model's own hold, twoFrame)
     if (this.twoKind) return;
     const G = !R && this.gun?.inHand ? this.gun : null;
-    if (G) {
+    // (plan 119: the Strike Park's knife — the fist round its grip, a torch's)
+    if (!R && !G && this.knifeGrip.on)
+      m.hold("R", { shape: shapes.torch, pos: this.knifeGrip.pos, quat: this.knifeGrip.quat, kind: "torch" });
+    else if (G) {
       // (plan 79: the revolver's grip, for the fingers to close round — in the wrist's space)
       const inner = G.model.root;
       const LS = LONG[G.key];
@@ -1952,6 +1978,220 @@ export class Person3D {
   // The gun's way (`L` rad left of the body's facing, `P` up) and the butt's drop below the right
   // shoulder are eased between them.
   private fellW = 0;
+  // ── (plan 119) the Strike Park's gear on a body: the knife (CS's slash and stab), the charge (in both hands, knelt
+  // over planting or defusing), the pack on the carrier's back. Their own models (the view's lifeGear), placed each
+  // frame under the body's root; the arms put to them after the pose (strike/flag.ts says who has what) ──
+  private gearObj: Record<"knife" | "charge" | "pack", Object3D | null> = { knife: null, charge: null, pack: null };
+  private gearW = 0;
+  private gearShow(name: "knife" | "charge" | "pack", on: boolean): Object3D | null {
+    let o = this.gearObj[name];
+    if (on && !o) {
+      o = this.mats.gear?.(name) ?? null;
+      if (o) {
+        o.traverse((m) => {
+          m.castShadow = name !== "pack" || this.part === "all";
+          m.frustumCulled = false;
+        });
+        this.root.add(o);
+        this.gearObj[name] = o;
+      }
+    } else if (!on && o) {
+      o.removeFromParent();
+      this.gearObj[name] = null;
+      o = null;
+    }
+    return o;
+  }
+  /** the knife's grip in the right wrist (its space: the torch's place), for holdFrame to close the fist round */
+  private knifeGrip = { on: false, pos: new Vector3(), quat: new Quaternion() };
+  private strikeHands(p: PersonIn, dt: number) {
+    this.knifeGrip.on = false;
+    const id = (p as PersonIn & { id?: string }).id ?? "";
+    const g = id ? strikeKeys.gear.get(id) : undefined;
+    const up = !p.down && p.fell === undefined && !this.limp?.on;
+    const knifeOn = p.held === "knife" && up && !g;
+    const holdOn = g === "hold" && up;
+    const kneel = (g === "plant" || g === "defuse") && p.fell === undefined;
+    const knife = this.gearShow("knife", knifeOn);
+    // (first person's arms planting: the charge held low before me, typed on — CS's view; it isn't on the ground yet)
+    const fpPlant = this.part === "arms" && g === "plant";
+    const charge = this.gearShow("charge", holdOn || fpPlant);
+    // (the pack on the back: the body others see — never first person's arms, whose reload swung it into the view:
+    // the user's feedback, 2026-11-23)
+    const pack = this.gearShow("pack", this.part === "all" && !!id && strikeKeys.packs.has(id) && up);
+    this.gearW += ((knifeOn || holdOn || kneel ? 1 : 0) - this.gearW) * (1 - Math.exp(-dt * 14));
+    const w = this.gearW;
+    const shR = this.model.bone("shoulderR");
+    const shL = this.model.bone("shoulderL");
+    if (!shR || !shL) return;
+    this.root.updateWorldMatrix(true, false);
+    const R = this.root.worldToLocal(shR.getWorldPosition(gV[0]));
+    const L = this.root.worldToLocal(shL.getWorldPosition(gV[1]));
+    // (her size, from her shoulders' width; which side is her right in the root's own frame: +z ahead, +y up)
+    const s = Math.max(0.7, Math.min(1.4, R.distanceTo(L) / 0.36));
+    const rx = Math.sign(R.x - L.x) || 1;
+    const inv = 1 / (this.root.getWorldScale(gV[2]).x || 1);
+    if (pack) {
+      // (on the back between the shoulder blades: the chest's height, behind the spine)
+      const chest = this.model.bone("chest");
+      const c = chest
+        ? this.root.worldToLocal(chest.getWorldPosition(gV[3]))
+        : gV[3].copy(R).add(L).multiplyScalar(0.5);
+      // (its +z out of the back: turned round to the root's −z; centred between the shoulders, clear of the clothes)
+      pack.position.set((R.x + L.x) / 2, c.y - 0.04 * s, c.z - 0.17 * s);
+      pack.quaternion.setFromAxisAngle(gY, Math.PI);
+      pack.scale.setScalar(inv * s);
+    }
+    if (w < 0.01) return;
+    const now = performance.now();
+    const toW = (v: Vector3) => this.root.localToWorld(v);
+    if (kneel && this.part === "arms") {
+      // (first person, knelt: what the hands do held up into the view — the charge low before me, the left hand
+      // holding it, the right's fingers typing the code key by key; defusing, both hands low ahead working at it)
+      const t = now / 1000;
+      const mid = gV[3].copy(R).add(L).multiplyScalar(0.5);
+      if (fpPlant && charge) {
+        charge.position.set(mid.x + rx * 0.02 * s, mid.y - 0.1 * s, mid.z + 0.4 * s);
+        charge.quaternion.setFromAxisAngle(gX, -1.0);
+        charge.scale.setScalar(inv * s);
+        const key = Math.floor(t * 6);
+        const kx = ((key * 7) % 3) - 1;
+        const kz = ((key * 5) % 4) - 1.5;
+        const tap = Math.max(0, Math.sin(t * Math.PI * 6)) * 0.025 * s;
+        // (the right index over the key it presses: on the keypad's grid, lifted between presses)
+        const pad = gV[5]
+          .set(kx * 0.024 * s, 0.095 * s + tap, -kz * 0.0155 * s)
+          .applyQuaternion(charge.quaternion)
+          .add(charge.position);
+        // (the wrist beside the keypad on its right and a little up: the fingers reach in across to the key, the palm
+        // not over it — nor up before the eye)
+        this.model.reachTo("R", toW(pad.add(gV[6].set(rx * 0.13 * s, 0.005 * s, 0.02 * s))), w);
+        const end = gV[5]
+          .set(-rx * 0.15 * s, 0.035 * s, 0)
+          .applyQuaternion(charge.quaternion)
+          .add(charge.position);
+        this.model.reachTo("L", toW(end), w);
+        if (this.model.handFrame("R")) {
+          this.model.fingersTo("R", 0.15);
+          this.model.fingersTo("L", 0.6);
+        }
+      }
+      // (defusing: the gun stays as CS's view model has it — no hands of the defuse in first person)
+      return;
+    }
+    if (kneel) {
+      // (knelt over the charge on the ground ahead: both hands to it — planting, typing on its keypad; defusing,
+      // working at it)
+      const t = now / 1000;
+      const mid = gV[3].copy(R).add(L).multiplyScalar(0.5);
+      const at = gV[4].set(mid.x, 0.06 * s, mid.z + 0.42 * s);
+      const tap = g === "plant" ? Math.abs(Math.sin(t * 17)) * 0.025 * s : Math.sin(t * 6) * 0.012 * s;
+      this.model.reachTo("R", toW(gV[5].copy(at).add(gV[6].set(rx * 0.05 * s, 0.06 * s + tap, -0.02 * s))), w);
+      this.model.reachTo("L", toW(gV[5].copy(at).add(gV[6].set(-rx * 0.07 * s, 0.05 * s, 0.02 * s))), w);
+      if (this.model.handFrame("R")) {
+        this.model.fingersTo("R", g === "plant" ? 0.25 : 0.55);
+        this.model.fingersTo("L", 0.35);
+      }
+      return;
+    }
+    if (holdOn && charge) {
+      // (in both hands before the chest, its keypad tipped up toward her: a hand at each end)
+      // (first person's arms: further out and a little to the right, the keypad tipped to the eye — CS's C4 view,
+      // not filling the screen's bottom: the user's feedback, 2026-11-23)
+      const mid = gV[3].copy(R).add(L).multiplyScalar(0.5);
+      if (this.part === "arms") {
+        charge.position.set(mid.x + rx * 0.13 * s, mid.y - 0.29 * s, mid.z + 0.47 * s);
+        charge.quaternion.setFromAxisAngle(gX, -0.85);
+      } else {
+        charge.position.set(mid.x, mid.y - 0.3 * s, mid.z + 0.3 * s);
+        charge.quaternion.setFromAxisAngle(gX, -0.5);
+      }
+      charge.scale.setScalar(inv * s);
+      for (const [S, k] of [
+        ["R", 1],
+        ["L", -1],
+      ] as const) {
+        const end = gV[5]
+          .set(rx * k * 0.15 * s, 0.035 * s, 0)
+          .applyQuaternion(charge.quaternion)
+          .add(charge.position);
+        this.model.reachTo(S, toW(end), w);
+        if (this.model.handFrame(S)) this.model.fingersTo(S, 0.6);
+      }
+      return;
+    }
+    if (!knifeOn || !knife) return;
+    // the knife: held low and forward in the right fist, the edge down (CS's hold), the left out for balance; a swing
+    // (strike/flag swings) moves the fist through its path — the slash across (its side alternating), the stab a thrust
+    const sw = strikeKeys.swings.get(id);
+    const st = sw ? (now - sw.at) / 1000 : 9;
+    // (first person's arms: the fist higher and in, the blade laid forward and across toward the middle — CS's view
+    // model; the body seen by others: low and forward)
+    const fp = this.part === "arms";
+    const hand = fp
+      ? gV[3].set(R.x - rx * 0.12 * s, R.y - 0.22 * s, R.z + 0.34 * s)
+      : gV[3].set(R.x - rx * 0.08 * s, R.y - 0.32 * s, R.z + 0.3 * s);
+    let yaw = fp ? -rx * 0.45 : 0;
+    let pitch = fp ? -0.05 : 0.35;
+    const ss = (a: number, b: number, x: number) => {
+      const k = Math.max(0, Math.min(1, (x - a) / (b - a)));
+      return k * k * (3 - 2 * k);
+    };
+    if (sw && !sw.heavy && st < KNIFE_SLASH) {
+      const side = sw.n % 2 ? 1 : -1;
+      const wind = ss(0, 0.1, st) * (1 - ss(0.1, 0.2, st));
+      const cut = ss(0.08, 0.2, st) * (1 - ss(0.24, KNIFE_SLASH, st));
+      hand.x += (rx * side * 0.22 * wind - rx * side * 0.24 * cut) * s;
+      hand.y += (0.12 * wind - 0.05 * cut) * s;
+      hand.z += (0.02 * wind + 0.3 * cut) * s;
+      yaw = rx * side * (0.9 * wind - 0.75 * cut);
+      pitch += 0.1 * wind - 0.25 * cut;
+    } else if (sw?.heavy && st < KNIFE_STAB) {
+      const back = ss(0, 0.22, st) * (1 - ss(0.22, 0.32, st));
+      const out = ss(0.22, 0.32, st) * (1 - ss(0.45, KNIFE_STAB, st));
+      hand.x += -rx * 0.04 * out * s;
+      hand.y += (0.14 * back + 0.04 * out) * s;
+      hand.z += (-0.14 * back + 0.46 * out) * s;
+      pitch += 0.25 * back - 0.3 * out;
+    }
+    // (its frame in the root's: +y the blade, +x the edge, +z the flat)
+    const blade = gV[4].set(0, Math.sin(pitch), Math.cos(pitch)).applyAxisAngle(gY, yaw).normalize();
+    const edge = gV[5].set(0, -1, 0).addScaledVector(blade, blade.y).normalize();
+    const flat = gV[6].crossVectors(edge, blade).normalize();
+    gM.makeBasis(edge, blade, flat);
+    gQ.setFromRotationMatrix(gM);
+    const fr = this.model.handFrame("R");
+    const wrist = this.model.bone("wristR");
+    if (fr && wrist) {
+      // (gripped as a torch is — thumb forward round its grip: the fist turned to suit the blade's way; the knife's
+      // origin, its grip's middle, where the torch's grip point is — 5.5 cm down its barrel)
+      this.C.gripPlace("torch", fr, this.knifeGrip.pos, this.knifeGrip.quat);
+      const kp = gV[7].copy(TORCH_GRIP).applyQuaternion(this.knifeGrip.quat).add(this.knifeGrip.pos);
+      this.root.getWorldQuaternion(gQ3);
+      // (the fist's turn round the grip: KNIFE_ROLL about the blade — the knife turned back by it in the hand, so it's
+      // held as it was meant: the edge down)
+      gQ5.setFromAxisAngle(gY, KNIFE_ROLL);
+      const qk = gQ3.multiply(gQ).multiply(gQ5); // the grip's turn in the world
+      const qw = gQ4.copy(qk).multiply(gQ2.copy(this.knifeGrip.quat).invert()); // the wrist's
+      const k = wrist.getWorldScale(gV[8]).x || 1;
+      const at = toW(gV[9].copy(hand)).sub(gV[8].copy(kp).multiplyScalar(k).applyQuaternion(qw));
+      this.model.gripTo("R", at, qw, w);
+      // (the knife in the fist where the grip has it; the fingers closed round it in holdFrame)
+      if (knife.parent !== wrist) wrist.add(knife);
+      knife.position.copy(kp);
+      knife.quaternion.copy(this.knifeGrip.quat).multiply(gQ5.invert());
+      knife.scale.setScalar(1 / k);
+      this.knifeGrip.on = true;
+    } else {
+      this.model.reachTo("R", toW(gV[9].copy(hand)), w);
+      if (knife.parent !== this.root) this.root.add(knife);
+      knife.position.copy(hand);
+      knife.quaternion.copy(gQ);
+      knife.scale.setScalar(inv * s);
+    }
+    // (the left: out low before her, a guard)
+    this.model.reachTo("L", toW(gV[9].set(L.x + rx * 0.06 * s, L.y - 0.38 * s, L.z + 0.18 * s)), w * 0.8);
+  }
   private gunHandsW = 0;
   private drawT = 9; // s since a gun was taken out (its draw's rise)
   private holsterT = -1; // s into putting one away (-1: not)
@@ -4959,6 +5199,8 @@ export class Person3D {
     this.dropBud();
     this.dropTorch();
     this.dropTool();
+    // (plan 119: the gear's copies share the view's loaded meshes — let go, never disposed)
+    for (const k of ["knife", "charge", "pack"] as const) this.gearShow(k, false);
     this.model.dispose();
     this.shadow.geometry.dispose();
     (this.shadow.material as Material).dispose();

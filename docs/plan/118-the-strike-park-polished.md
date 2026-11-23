@@ -4,8 +4,7 @@ Ask (2026-11-22, the user, after plans 114–117 and their feedback rounds): "no
 last plan of this feature will be: improve everything — UI improvement in all UI, in game, buy screen etc…;
 mechanics; visuals; lobby; all."
 
-Status: **planned 2026-11-22; forks decided by the user one by one 2026-11-22**: F1a three mocked looks (the user
-picks), F2a CS2's HUD layout, F3a one buy screen, **F4c movement as it is** (no CS step, no tagging for people), F5a
+Status: **planned 2026-11-22; forks decided by the user one by one 2026-11-22**: F1a three mocked looks — **the user picked A, the tactical skin refined** (2026-11-22; `design/strike118/mocks/`), F2a CS2's HUD layout, F3a one buy screen, **F4c movement as it is** (no CS step, no tagging for people), F5a
 spray patterns, F6a the park's own damage table, F7a CS's hit feedback, F8a weapons on the floor, F9a all the effects,
 F10a every lobby building with a job, F11a all the sound, **F12c no sign-offs** (straight through; the look's mocks
 still shown, since F1 is your pick), **F13b frame rate best effort**. Follows plans 114 (the park), 115 (the
@@ -159,5 +158,91 @@ Then the open items, the frame rate, and the checks.
   with it); a test fires a spray and checks the server's holes.
 - **Decals and smokes cost frames** on Low: pooled, capped, measured (phases 13 and 19).
 - **Blood.** A setting, on by default in the park only, off in the world.
-- **Nothing committed yet.** Plans 114–117 and their feedback rounds are all uncommitted; a commit before this plan
-  starts keeps it reviewable (your call).
+- **Committed before it began** (plans 114–117, 3430cac2); this plan's work is on top of that, uncommitted.
+
+## Progress — built 2026-11-22/23, straight through (F12c), uncommitted
+
+| # | Done | Where / checked |
+|---|---|---|
+| 0 | the words fixed (How to play, tutorial, keys); the round-end card and money ticks shown; buy keys; one shotgun name | StrikePanels.tsx, tutorial.ts |
+| 1 | three mocks; **A · tactical refined** picked | `design/strike118/mocks/` |
+| 2 | one look: `world/strike/look.ts` tokens for DOM, panels and canvases; the world's HUD hidden in a match | TopBar, Overlays |
+| 3 | CS2 HUD: radar top-left (smokes, fires, charge, my facing), portraits, kill feed with glyphs and marks, radio lines apart, vitals and ammo | stills `design/strike118/` |
+| 4 | buy screen: pictures from the 3D icons, stats, two-press keys, refund (right click), "buy for" a mate, asks (Alt) | zz-hud118 BUY |
+| 5 | scoreboard K A D ADR HS% MVP $ ping + the round strip; round-end report per enemy | zz-hud118 END |
+| 6 | spectating: left/right click cycles, the watched one's HUD | coded; not walked through dead in an e2e |
+| 8 | spray patterns (`strike/spray.ts`), the server takes the shot as sent (no anticheat) | shared tests |
+| 9 | the park's damage table (`parkDamage`: head ×4, team ⅓), aim punch, hit sounds (dink, crack), predicted blood; **bots hit with a rewind** (ping/2 + 100 ms, ≤ 250 ms) | strike.test, features/strike.ts `rewound` |
+| 11 | drop (G), the dead's drop, E pickup / auto-pickup with a grace | zz-hud118 DROP |
+| 12 | grenades: 4/N in hand, left click long, right click short | e2e/zz-nade118.mts (smoke and molotov thrown by clicks) |
+| 13 | holes and blood (instanced pools, cleared each round), smokes cut by rounds and thinned by an HE, fire running along the throw, flash white or dark (setting) | zz-hud118 HOLES |
+| 15 | footsteps from the map's materials, muffled by walls (`strikeKeys.footing/muffle`); music, stingers and the announcer from CC0 candidates (`public/sfx/strike`, `/dev/strike-sound`, default picks in `chosen.json` — **the user's picks pending**) | zz-nade118 (footing "mud" on Sawmill) |
+| 16 | lobby: warmup map vote (V, 1–3) and a 5 s ready countdown (F3; strike:start goes through it); armory = kit + **loadout** (R in the buy screen); briefing hall = the map flown over (`strike/brief.ts`); trophy hall = the record; war room = watch the match; range aim drill; practice pad plant/defuse drill | world-server strike.test (vote, countdown), shared `strike/lobby.test.ts`, e2e/zz-lobby118.mts + zz-warm118.mts, stills `design/strike118/lobby/` |
+| 17 | team votes: timeout (4 a side, the next freeze), surrender (everyone), kick a bot (its place left empty); F1/F2, the Esc menu | shared `strike/votes.test.ts` (7), world-server strike.test |
+| 18 | a bot's Daybreak is a ball (arms:orb, burst a flight later); the "ready up" test passes (3 runs); Lodge and Boathouse in the lab with park damage: 11/11 | lab.test |
+| 19 | dev build, uncapped, Sawmill live: **Low 40–42 fps, High 35** (p95 27 / 32 ms); the radar's DOM now 10 Hz; the profile is the scene's draws (projectObject, renderBufferDirect, lazy matrices ≈ 20 %), the HUD ≈ 2 % | e2e/zz-fps118.mts (PROF=1) |
+| 20 | shared strike 44 + lab 11, world-server strike 5, client 477, strike.spec 2, fp-guard + arms-feel 16 (YUTOPIA_GPU=1) — all green | |
+
+**Not done, and why:**
+- **14, the replay's people as 3D people** — not started (the replay keeps its drawings).
+- **The knife's left sleeve, the 116 fingertips** — not touched: they need a look-and-fix pass on the view model.
+- **Firefox** — headless Firefox can't start in this machine's sandbox ("Could not find profile folder"); untried.
+- **Stills of a match on every map** — only Sawmill this round (each swap is a 20 s show on the shared world).
+- **Frame-rate targets** — best effort only (F13b); the cost is the scene, not this plan's HUD.
+- **The lab plays the bots' Daybreak as a hitscan** still (the server flies it).
+
+## Double check (2026-11-23)
+
+A second read of the whole diff (the client by hand, the server and shared by an independent reviewer), each finding
+checked in the code before it was fixed:
+
+| Found | Fixed |
+|---|---|
+| Killed with a grenade in hand (or out of them), `nadeReady` stayed up: the next round's clicks didn't fire | dropped each frame when not up or none left (e2e `zz-nadestuck118`) |
+| `dispose()` left the new hooks (`footing`, `muffle`, `onShot`, `predictHit`, `nadeReady`) answering for a gone park | cleared there |
+| The predicted hit (thud, blood) took the crosshair, not the round: a spray's later rounds "hit" what the server missed | predicted only when a round as the server flies it (spray, spread, seed) passes within 12 cm |
+| The tutorial said "hold J" for a grenade; the click throws it | the line says click, right click lobs |
+| Refunding the kevlar before the helmet bought after it: all the money back, armour 100 | armour refunds newest first (`refund.test.ts`) |
+| A bot's Daybreak orb took the hitscan roll's damage — 0 for a miss: 1 HP a metre off | the orb's own damage, as a person's |
+| A bot's orb burst through walls | a wall between shields, as a person's burst |
+| A bot's orb made teammates (friendly fire off) and anyone in the freeze feel struck | only a hit that took |
+| A bot's shotgun blast with one head pellet counted every pellet a headshot (×2.67 on the body's) | head and body pellets summed apart |
+| The warmup clock run out started on this map, the vote ignored | through the vote, as the countdown's end (e2e `zz-warmout118`: voted Lodge → swapped → freeze on Lodge) |
+| Readying up cancelled a `strike:start` countdown | only an un-ready stops it |
+| Floor guns, the vote, the timeouts, the rounds' strip stayed after the match (and floated through a map swap) | cleared with the match |
+| An orb thrown in a match gone since could land in the next | an orb belongs to its match |
+| Killed in the warmup, the rifle fell and the respawn didn't give it back | no drop in the warmup |
+
+Tests after: shared 855, world-server strike 5 (+ schema), client 477, e2e fp-guard + arms-feel + strike 18.
+
+## Double check 2 (2026-11-23)
+
+A third read by two fresh reviewers (server + shared, client), not told the first pass's findings beyond a list to skip;
+each finding checked in the code before it was fixed:
+
+| Found | Fixed |
+|---|---|
+| The last un-ready person leaving the warmup left the rest waiting (the first pass's leftover) | `readyCheck` after every way out: the rest all ready → the countdown (world-server test) |
+| 4 then 1/2/3/Q: the rifle out, but every click still threw a grenade (and 5 then 1 kept "the charge in hand", G dropping it) — dark/index.ts's capture listener takes those keys, the park's own handler never saw them | put away there; `chargeSel` a shared key, dropped when the charge is gone |
+| R in the buy screen reloaded the gun under it, never bought the loadout | the buy screen's R passes the arms by |
+| A right-click lob also raised the sights (the walker's aim is a pointerdown) | the right pointerdown stopped while a grenade's in hand (its pointerup goes through); a grenade click off the scene ignored |
+| The HUD's parts were parsed and laid out again every frame: `innerHTML` never reads back as written (`<img/>`, SVG `<path/>`, `&#38;`) | compared against the string last written |
+| A buy for a teammate who died with the screen open: refused unseen | for me again, as the screen shows |
+| A mate's fire did 20 hp/s, not 13 (each 2-point tick rounded up to 1); each fire tick counted a "hit" in the damage report | the cut kept as it is for small ticks; fire's ticks aren't hits (`holds.test.ts`) |
+| A kicked (or leaving) defuser or hostage leader held them: nobody else could defuse or lead | let go on leaving, as a death does |
+| Deathmatch / Arms Race warmups ran out on this map, the vote ignored | the vote's countdown end in every mode |
+| Arms Race: an AK walked up from the floor skipped the ladder | drops and pick-ups in the round modes only |
+| A gun dropped with G came straight back to a player standing still (dropped 0.9 m ahead, picked up within 1.1 m) | never walked back up by who dropped it (E still takes it) |
+| A refused join (the match full) cancelled the countdown; someone leaving cancelled one Start began | cancelled only once a join takes, or by an un-ready |
+| Refunding my kevlar under a teammate's gifted helmet took the gift off and paid me | gifts kept in the buy record, marked: not refundable, and the armour under them stays |
+| Votes of people gone counted for the map | only who's still in the match |
+| Bullet holes and blood hung in the air through a map swap | cleared at the show too |
+| The How to play keys: "G drop the charge", "hold J" | G the gun (5 then G: the charge); 4 then click |
+
+The three left low, then fixed (2026-11-23):
+
+| Found | Fixed |
+|---|---|
+| A Deathmatch shot within ~0.2 s of a bot's respawn was rewound to a point between its death and its spawn | a respawn starts its rewind history again; no point ever taken between two samples more than 3 m apart (a round's start) |
+| `bought` grew all through a Deathmatch (no rounds to clear it) | cleared at each respawn: a life's buys taken back in that life (`holds.test.ts`) |
+| The click that takes the pointer back threw the grenade in hand | that click only locks; where the browser refuses the lock (an error since the last one), every click throws (e2e `zz-relock118`: headless Chromium refuses every lock, so the locking browser's state is set by hand) |

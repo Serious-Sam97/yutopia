@@ -3,19 +3,23 @@ import { tmpdir } from "node:os";
 import { join as joinPath } from "node:path";
 import type { ServerMessages } from "@yutopia/shared";
 import { ANIM, faceByte } from "@yutopia/shared";
-import { type GunId, type Ray, rayMeets } from "@yutopia/shared/dark";
+import { ARMS, burstAt, type GunId, HEAD, ORB, type Ray, rayMeets } from "@yutopia/shared/dark";
 import { arenaChanged } from "@yutopia/shared/grounds";
 import { emptyInventory, type Inventory, type Item, WEAPONS } from "@yutopia/shared/inventory";
 import { unpackMv } from "@yutopia/shared/move";
 import {
   addMatch,
   buy,
+  callVote,
   canBuy,
   carryTick,
+  castVote,
   cleanKit,
   dropCharge,
+  dropGun,
   emptierSquad,
   emptyTally,
+  fireRun,
   flashFor,
   frozen,
   grabHostage,
@@ -24,10 +28,13 @@ import {
   hit,
   holdTick,
   type ItemId,
+  inFire,
   inRect,
   inStrikeArena,
   inStrikeCompound,
+  isGun,
   join,
+  type KillHow,
   KNIFE,
   leave,
   type Match,
@@ -43,12 +50,17 @@ import {
   newMatch,
   nodeNear,
   nodePos,
+  parkDamage,
   pickCharge,
+  pickGun,
+  rayFirst,
+  refund,
   SHOP,
   STRIKE_DESK,
   STRIKE_MAPS,
   STRIKE_PARK,
   type StrikeCard,
+  type StrikeGun,
   setStrikeMap,
   shotThrough,
   spawnPoint,
@@ -56,10 +68,13 @@ import {
   startMatch,
   stepNade,
   strikeMap,
+  THIN_SECS,
   teamOf,
+  throughSmoke,
   throwNade,
   tick,
   toLocal,
+  voteNeeds,
 } from "@yutopia/shared/strike";
 import {
   type BotEnv,
@@ -76,7 +91,7 @@ import {
 import { api } from "../api.ts";
 import { config } from "../config.ts";
 import type { Player } from "../schema.ts";
-import { Npc, StrikeHostage, StrikeMember, StrikeNade } from "../schema.ts";
+import { Npc, StrikeFloorGun, StrikeHostage, StrikeMember, StrikeNade } from "../schema.ts";
 import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
@@ -89,7 +104,11 @@ import { registerFeature } from "./index.ts";
 // Board swaps the map in the world (the plan 47 way, with a crew's show: F6).
 
 const SHOW_MS = process.env.YUTOPIA_STRIKE_FAST ? 400 : 20_000; // (tests: fast)
+/** (plan 118) how far behind the server a bot is drawn (the NPCs' smoothing), ms */
+const REWIND_DRAW_MS = 100;
 const VOTE_MS = process.env.YUTOPIA_STRIKE_FAST ? 1500 : 15_000;
+// (plan 118, F10a) the ready check's countdown before a match
+const GO_MS = process.env.YUTOPIA_STRIKE_FAST ? 300 : 5_000;
 const BOT_HZ = 20;
 /** CS's reserves for each of the world's guns (the rounds lent beside the magazine). */
 const RESERVE: Record<GunId, number> = { revolver: 24, shotgun: 32, ak47: 90, sniper: 30, daybreak: 6 };
@@ -100,7 +119,7 @@ export interface StrikeHooks {
   /** whether sid can be hit there now (in the match, alive) */
   alive(sid: string): boolean;
   /** a shot of the zone's landed: `n` its damage as the world's gun works it out, after the map's walls */
-  hit(by: string, victim: string, gun: string, n: number, head: boolean, walls: number): void;
+  hit(by: string, victim: string, gun: string, n: number, head: boolean, walls: number, hip?: boolean): void;
   /** the nearest bot along a shot's ray (building coords), within `range` */
   along(ray: Ray, range: number, by: string): { id: string; t: number; head: boolean } | null;
   /** what's left of a shot from a to b through the map's walls (building coords; 1 none in the way) */
@@ -171,6 +190,8 @@ registerFeature((room: WorldRoom) => {
       const m = match;
       if (!m) return;
       botShotAt.set(id, Date.now());
+      // (plan 118: a bot's Daybreak is a ball of light, as a person's — it flies and bursts, not a hitscan)
+      if (s.gun === "daybreak") return botOrb(id, s);
       // (heard and seen as the world's own guns are: its sound, its flash, its tracer — the arms client's)
       armsShot(id, s.gun, s.o, s.yaw, s.pitch);
       const vc0 = clientOf(s.victim);
@@ -186,13 +207,23 @@ registerFeature((room: WorldRoom) => {
         });
       if (s.victim) {
         brain?.hurt(s.victim, id);
-        hit(m, id, s.victim, s.gun, s.dmg, s.head ? "head" : "body", s.walls);
+        const dmg = isGun(s.gun) ? parkDamage(s.gun, s.dmg, s.head, HEAD.mult, ARMS[s.gun].damage) : s.dmg;
+        hit(m, id, s.victim, s.gun, dmg, s.head ? "head" : "body", s.walls, howOf(m, id, s.victim, s.gun, false));
         const vc = clientOf(s.victim);
         if (vc) room.send(vc, "dark:hit", { id, n: s.dmg, shot: true });
       }
     },
     nade: (id, kind, eye, yaw, pitch, short) => {
       nades.push(throwNade(++nadeId, kind, id, eye, yaw, pitch, short));
+    },
+    // (plan 119) a bot's knife: out in its hand a moment, swung where it faces
+    stab: (id, heavy) => {
+      const b = brain?.view(id);
+      const mp = match?.players.get(id);
+      const at = mp ? whereOf(mp) : null;
+      if (!b || !at) return;
+      botKnifeTo.set(id, Date.now() + 1500);
+      knifeSwing(id, at[0], at[1], at[2], b.yaw, heavy);
     },
     say: (by, text, team) => {
       const m = match;
@@ -262,11 +293,32 @@ registerFeature((room: WorldRoom) => {
       arena.members.clear();
       arena.charge = "";
       arena.hostages.clear();
+      arena.floor.clear();
+      arena.call = "";
+      arena.timeouts = "";
+      arena.history = "";
       return;
     }
     const m = match;
     arena.phase = m.phase;
     arena.left = Math.max(0, m.left);
+    // (plan 118, phase 17) the vote open, the timeouts left
+    const v = m.vote;
+    const call = v
+      ? JSON.stringify({
+          kind: v.kind,
+          squad: v.squad,
+          by: v.by,
+          target: v.target,
+          yes: v.yes,
+          no: v.no,
+          left: Math.max(0, Math.ceil(v.until - m.clock)),
+          need: voteNeeds(m, v),
+        })
+      : "";
+    if (arena.call !== call) arena.call = call;
+    const tos = m.mode.rounds ? `${m.timeouts[0]},${m.timeouts[1]}` : "";
+    if (arena.timeouts !== tos) arena.timeouts = tos;
     arena.round = m.round;
     arena.scoreA = m.score[0];
     arena.scoreB = m.score[1];
@@ -280,6 +332,17 @@ registerFeature((room: WorldRoom) => {
     arena.site = c?.site ?? "";
     arena.fuse = c?.state === "planted" || c?.state === "planting" ? c.left : 0;
     arena.defuser = c?.defuser ?? "";
+    // (plan 118, F8a) the guns on the floor
+    for (const id of [...arena.floor.keys()]) if (!m.floor.some((g) => g.id === id)) arena.floor.delete(id);
+    for (const g of m.floor)
+      if (!arena.floor.has(g.id)) {
+        const f = new StrikeFloorGun();
+        f.gun = g.gun;
+        f.x = g.x;
+        f.y = g.y;
+        f.z = g.z;
+        arena.floor.set(g.id, f);
+      }
     arena.defuseLeft = c?.defuseLeft ?? 0;
     // (plan 115 phase 88) the hostages as the world's people: on their floor, or with whoever carries them
     const g = gridOf(m.map);
@@ -354,6 +417,14 @@ registerFeature((room: WorldRoom) => {
       s.deaths = p.deaths;
       s.assists = p.assists;
       s.mvps = p.mvps;
+      s.damage = p.damage;
+      s.heads = p.headKills;
+      if (s.want !== p.want) s.want = p.want;
+      const refunds = p.bought
+        .filter((b) => !b.gift)
+        .map((b) => b.item)
+        .join(",");
+      if (s.refunds !== refunds) s.refunds = refunds;
       s.score = p.score;
       s.level = p.level;
       if (!p.bot) {
@@ -376,6 +447,10 @@ registerFeature((room: WorldRoom) => {
       }
     }
     arena.last = m.last ? `${m.last.team}:${m.last.why}` : "";
+    const hist = m.history.map((h) => `${h.team}:${h.why}`).join(",");
+    if (arena.history !== hist) arena.history = hist;
+    arena.streakR = m.streak.r;
+    arena.streakW = m.streak.w;
   };
 
   /** A bot's NPC (`strike-bot:<id>`): where it is (world coords), its facing, walking or still, and in `mood` (plan
@@ -423,7 +498,8 @@ registerFeature((room: WorldRoom) => {
     // (its gun up on someone, or holding an angle; k: at the charge)
     const pose = `${b.crouch && !b.using ? "c" : ""}${b.aiming ? "a" : ""}${b.using ? "k" : ""}`;
     const hitYaw = Math.round((((L.hitYaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) * 100);
-    const mood = `${team}:${p.primary ?? p.pistol ?? ""}:${pose}:${L.hitAt}:${hitYaw}:${L.fellAt}`;
+    const knifeOut = (botKnifeTo.get(id) ?? 0) > Date.now();
+    const mood = `${team}:${knifeOut ? "knife" : (p.primary ?? p.pistol ?? "")}:${pose}:${L.hitAt}:${hitYaw}:${L.fellAt}`;
     if (n.mood !== mood) n.mood = mood;
   };
   // ── places: spawns, a person put there ──
@@ -465,15 +541,38 @@ registerFeature((room: WorldRoom) => {
     "Vortex IX",
     "Vortex X",
   ];
+  /** (plan 119, F1a) each side's bots: CS's bot_quota with fill — the match kept at `quota` players (0: the mode's
+   *  full size), people first, each bot to the side with fewer players (a tie: the Raiders'), never past a side's
+   *  size or the places a team vote emptied. */
+  const botsWanted = (m: Match): [number, number] => {
+    const size = [squadSize(m, 0), squadSize(m, 1)];
+    const people = [0, 0];
+    for (const p of m.players.values()) if (!p.bot) people[p.squad]++;
+    const want: [number, number] = [0, 0];
+    if (!arena.fill) return want;
+    const total = size[0] + size[1];
+    const quota = arena.quota > 0 ? Math.min(arena.quota, total) : total;
+    let left = Math.max(0, quota - people[0] - people[1]);
+    const room0 = (k: 0 | 1) => size[k] - people[k] - m.short[k] - want[k];
+    while (left > 0) {
+      const a = room0(0) > 0;
+      const b = room0(1) > 0;
+      if (!a && !b) break;
+      const k: 0 | 1 = !a ? 1 : !b ? 0 : people[1] + want[1] < people[0] + want[0] ? 1 : 0;
+      want[k]++;
+      left--;
+    }
+    return want;
+  };
   const fillBots = () => {
     if (!match) return;
     const m = match;
+    const wanted = botsWanted(m);
     for (const squad of [0, 1] as const) {
-      // (its side's size: Retakes' Wardens three to the Raiders' four)
-      const size = squadSize(m, squad);
       const have = [...m.players.values()].filter((p) => p.squad === squad);
-      const people = have.filter((p) => !p.bot).length;
-      const want = arena.fill ? Math.max(0, size - people) : 0;
+      // (its side's size, Retakes' Wardens three to the Raiders' four; plan 118: a bot its side voted out leaves its
+      // place empty; plan 119: the quota)
+      const want = wanted[squad];
       const botsIn = have.filter((p) => p.bot);
       for (let i = botsIn.length; i < want; i++) {
         let k = 0;
@@ -611,6 +710,10 @@ registerFeature((room: WorldRoom) => {
     for (const e of evs) {
       tallyEvent(e);
       brainOf()?.event(e);
+      if (e.e === "kicked") {
+        brain?.remove(e.id);
+        room.state.npcs.delete(`strike-bot:${e.id}`);
+      }
       if (e.e === "round") {
         nades.length = 0;
         blindTo.clear();
@@ -625,7 +728,39 @@ registerFeature((room: WorldRoom) => {
         if (mp) {
           place(mp, Math.floor(rand() * 10));
           lend(mp);
+          // (a new life: no rewind back through to where the last one ended — the double check 2's leftover)
+          past.delete(e.id);
         }
+      }
+      if (e.e === "win" && match) {
+        // (plan 118) the round's damage report to each person: every enemy, what passed between them
+        const mt = match;
+        for (const me of mt.players.values()) {
+          if (me.bot) continue;
+          const c = clientOf(me.id);
+          if (!c) continue;
+          const mine = teamOf(mt, me);
+          const rows = [...mt.players.values()]
+            .filter((q) => teamOf(mt, q) !== mine)
+            .map((q) => ({
+              name: q.name,
+              team: teamOf(mt, q),
+              dealt: Math.round(me.dealt[q.id] ?? 0),
+              hits: me.hitsOn[q.id] ?? 0,
+              taken: Math.round(q.dealt[me.id] ?? 0),
+              hitsTaken: q.hitsOn[me.id] ?? 0,
+              dead: !q.alive,
+            }));
+          room.send(c, "strike:report", { rows });
+        }
+      }
+      if (e.e === "kill" && match) {
+        // (plan 118, F8a) the dead let their primary fall where they fell
+        const dead = match.players.get(e.victim);
+        const at = dead ? whereOf(dead) : null;
+        // (not in the warmup: its respawns give back only the health, and G drops nothing there either)
+        if (dead?.primary && at && match.mode.rounds && match.phase !== "warmup")
+          dropGun(match, dead, dead.primary, at[0], at[1], at[2]);
       }
       if (e.e === "kill") {
         // (plan 115 phase 94) the kill cam and the damage report, to whoever died
@@ -638,8 +773,9 @@ registerFeature((room: WorldRoom) => {
             .map((q) => ({
               name: q.name,
               dealt: Math.round(me.dealt[q.id] ?? 0),
-              hits: 0,
+              hits: me.hitsOn[q.id] ?? 0,
               taken: Math.round(q.dealt[me.id] ?? 0),
+              hitsTaken: q.hitsOn[me.id] ?? 0,
             }));
           room.send(vc, "strike:death", {
             by: e.by,
@@ -684,6 +820,11 @@ registerFeature((room: WorldRoom) => {
       arena.record = "";
     }
     // (plan 115 phase 13) the map vote: this map and two others the mode is played on, 15 s
+    voteChoices();
+    arena.voteTo = Date.now() + VOTE_MS;
+  };
+  /** The map vote's three: this map and two others the mode is played on (plan 118: the warmup's too). */
+  const voteChoices = () => {
     const fits = STRIKE_MAPS.filter(
       (mp) => MODES[match?.mode.id ?? "competitive"].on.includes(mp.mode) && mp.key !== arena.map,
     );
@@ -693,12 +834,49 @@ registerFeature((room: WorldRoom) => {
       .map((mp) => mp.key);
     arena.vote = [arena.map, ...others].join(",");
     arena.votes = "{}";
-    arena.voteTo = Date.now() + VOTE_MS;
+  };
+  /** The vote's map: the most votes (a tie, a draw of them; none, the map stays). */
+  const voted = (): string => {
+    const v = arena.votes ? (JSON.parse(arena.votes) as Record<string, string>) : {};
+    const n = new Map<string, number>();
+    // (only who's still in the match: a voter gone doesn't pick the map — the double check 2)
+    for (const [id, k] of Object.entries(v)) if (match?.players.has(id)) n.set(k, (n.get(k) ?? 0) + 1);
+    const most = Math.max(0, ...n.values());
+    const top = [...n.entries()].filter(([, c]) => c === most).map(([k]) => k);
+    if (top.includes(arena.map) || !top.length) return arena.map;
+    return top[Math.floor(rand() * top.length)];
+  };
+  /** (plan 118, F10a) the ready set kept to who's still in the warmup: everyone left ready → the countdown (someone
+   * unready walking off mustn't leave the rest waiting on them — the double check, 2026-11-23). Only `unready` (someone
+   * taking theirs back) stops a countdown: a leaver doesn't stop one Start began (the double check 2). */
+  const readyCheck = (unready = false) => {
+    if (!match || match.phase !== "warmup") return;
+    const m = match;
+    const set = new Set((arena.ready ? arena.ready.split(",") : []).filter((id) => m.players.has(id)));
+    arena.ready = [...set].join(",");
+    const people = [...m.players.values()].filter((q) => !q.bot);
+    if (people.length && people.every((q) => set.has(q.id))) {
+      if (!arena.goTo) arena.goTo = Date.now() + GO_MS;
+    } else if (unready) arena.goTo = 0;
+  };
+  /** (plan 118, F10a) the countdown's end: the match starts here, or on the voted map once the crew has put it up. */
+  const go = () => {
+    arena.goTo = 0;
+    if (!match || match.phase !== "warmup") return;
+    const key = arena.vote ? voted() : arena.map;
+    arena.vote = "";
+    arena.votes = "";
+    arena.ready = "";
+    if (key === arena.map) {
+      startMatch(match);
+      handle(match.events.splice(0));
+      sync();
+    } else again(key, true);
   };
   /** A new match on `key` in `mode` with the people kept on their sides (after the vote): the map swapped first (the
    *  show) if it's another. */
-  let pending: { mode: ModeId; people: { id: string; name: string; squad: 0 | 1 }[] } | null = null;
-  const again = (key: string) => {
+  let pending: { mode: ModeId; people: { id: string; name: string; squad: 0 | 1 }[]; start?: boolean } | null = null;
+  const again = (key: string, start = false) => {
     if (!match) return;
     const people = [...match.players.values()]
       .filter((q) => !q.bot)
@@ -706,16 +884,16 @@ registerFeature((room: WorldRoom) => {
     const mode = match.mode.id;
     stopMatchKeep();
     if (key !== arena.map) {
-      pending = { mode, people };
+      pending = { mode, people, start };
       arena.next = key;
       arena.showTo = Date.now() + SHOW_MS;
       arena.up = false;
       putUp(arena.map, false);
       toAll("strike:show", { from: arena.map, to: key, ms: SHOW_MS });
-    } else begin(mode, people);
+    } else begin(mode, people, start);
   };
   /** The match made again with these people (warmup), each lent and put at a spawn. */
-  const begin = (mode: ModeId, people: { id: string; name: string; squad: 0 | 1 }[]) => {
+  const begin = (mode: ModeId, people: { id: string; name: string; squad: 0 | 1 }[], start = false) => {
     match = newMatch(arena.map, MODES[mode].on.includes(strikeMap(arena.map).mode) ? mode : "competitive");
     for (const q of people) if (room.state.players.has(q.id)) join(match, q.id, q.name, q.squad);
     if (![...match.players.values()].length) {
@@ -730,6 +908,11 @@ registerFeature((room: WorldRoom) => {
       place(q, n[teamOf(match, q)]++);
     }
     arena.ready = "";
+    // (plan 118: straight in after a warmup vote moved it; else a warmup with its own vote)
+    if (start) {
+      startMatch(match);
+      handle(match.events.splice(0));
+    } else voteChoices();
     sync();
   };
   /** The match let go, the people's pockets kept lent (they go straight into the next). */
@@ -745,6 +928,10 @@ registerFeature((room: WorldRoom) => {
     arena.vote = "";
     arena.voteTo = 0;
     arena.votes = "";
+    arena.goTo = 0;
+    // (the guns dropped on the old map: not floating over the next one through the swap)
+    arena.floor.clear();
+    arena.call = "";
   };
   const stopMatch = () => {
     if (!match) return;
@@ -776,11 +963,14 @@ registerFeature((room: WorldRoom) => {
       if (!MODES[mode].on.includes(map.mode))
         return room.send(client, "strike:why", { why: `${MODES[mode].name} isn't played on ${map.name}` });
       match = newMatch(map.key, mode);
+      voteChoices();
     }
     if (match.players.has(client.sessionId)) return;
     const humans = [...match.players.values()].filter((q) => !q.bot);
     if (humans.length >= squadSize(match, 0) + squadSize(match, 1))
       return room.send(client, "strike:why", { why: "the match is full" });
+    // (someone new: the countdown waits for them — only once they're in; a refused join stopped it: the double check 2)
+    arena.goTo = 0;
     const want = msg?.squad === 0 || msg?.squad === 1 ? (msg.squad as 0 | 1) : emptierSquad(match);
     // (a bot gives up its place)
     const botOut = [...match.players.values()].find((q) => q.bot && q.squad === want);
@@ -840,6 +1030,7 @@ registerFeature((room: WorldRoom) => {
     if (![...match.players.values()].some((q) => !q.bot)) stopMatch();
     else {
       fillBots();
+      readyCheck();
       sync();
     }
   });
@@ -852,6 +1043,9 @@ registerFeature((room: WorldRoom) => {
     if (match && match.phase !== "warmup" && match.phase !== "over")
       return room.send(client, "strike:why", { why: "the match is on: change it in the warmup" });
     if (typeof msg?.fill === "boolean") arena.fill = msg.fill;
+    // (plan 119, F1a) the players kept: 1 to 20 (each mode clamps it to its own size), 0 the mode's full size
+    if (typeof msg?.quota === "number" && Number.isFinite(msg.quota))
+      arena.quota = Math.max(0, Math.min(20, Math.round(msg.quota)));
     if (msg?.level && isBotLevel(String(msg.level))) arena.level = String(msg.level);
     const mode = String(msg?.mode ?? "");
     if (mode && mode in MODES && mode !== arena.mode) {
@@ -866,6 +1060,8 @@ registerFeature((room: WorldRoom) => {
         brain = null;
         nades.length = 0;
         match = newMatch(map.key, mode as ModeId);
+        voteChoices();
+        arena.goTo = 0;
         for (const q of people) join(match, q.id, q.name, q.squad);
         fillBots();
         const n = { r: 0, w: 0 };
@@ -880,9 +1076,8 @@ registerFeature((room: WorldRoom) => {
   });
   room.on("strike:start", (client) => {
     if (!match?.players.has(client.sessionId) || match.phase !== "warmup") return;
-    startMatch(match);
-    handle(match.events.splice(0));
-    sync();
+    // (plan 118, F10a: through the countdown, the warmup's vote read at its end)
+    if (!arena.goTo) arena.goTo = Date.now() + GO_MS;
   });
   room.on("strike:map", (client, msg) => {
     const p = room.state.players.get(client.sessionId);
@@ -899,6 +1094,74 @@ registerFeature((room: WorldRoom) => {
     arena.up = false;
     putUp(arena.map, false);
     toAll("strike:show", { from: arena.map, to: key, ms: SHOW_MS });
+  });
+  // (plan 118) a buy taken back in the buy time
+  room.on("strike:refund", (client, msg) => {
+    const p = room.state.players.get(client.sessionId);
+    if (!match || !p) return;
+    const mp = match.players.get(client.sessionId);
+    if (!mp) return;
+    const [x, z] = local(p);
+    const why = refund(match, mp.id, String(msg?.item) as ItemId, inRect(match.map.buy[teamOf(match, mp)], x, z));
+    if (why) room.send(client, "strike:why", { why });
+    else lend(mp);
+    sync();
+  });
+  // (plan 118) "buy me this": shown to the team on their buy screens; a bot with money to spare buys it
+  room.on("strike:want", (client, msg) => {
+    const mp = match?.players.get(client.sessionId);
+    if (!match || !mp) return;
+    const item = String(msg?.item ?? "");
+    mp.want = item && SHOP.some((it) => it.id === item) ? item : "";
+    if (mp.want) botsBuyFor(match, mp);
+    sync();
+  });
+  /** A person's "buy me this": the richest bot of their side with the money to spare (the price and $1,000 left)
+   *  buys it for them, as plan 115's drops do. */
+  function botsBuyFor(m: Match, mp: MPlayer) {
+    const it = SHOP.find((x) => x.id === mp.want);
+    if (!it || !mp.alive) return;
+    const bots = [...m.players.values()]
+      .filter((q) => q.bot && q.alive && q !== mp && teamOf(m, q) === teamOf(m, mp))
+      .sort((a, b) => b.money - a.money);
+    const giver = bots.find((q) => q.money >= it.price + 1000 && canBuy(m, q, true));
+    if (!giver) return;
+    const before = mp.money;
+    mp.money += it.price;
+    if (buy(m, mp.id, it.id as ItemId, true)) {
+      mp.money = before;
+      return;
+    }
+    giver.money -= it.price;
+    // (the buy's own record is the receiver's: no refund of a gift)
+    const gb = mp.bought.at(-1);
+    if (gb) gb.gift = true;
+    lend(mp);
+    const c = clientOf(mp.id);
+    if (c) room.send(c, "strike:radio", { by: giver.id, i: -1, text: `Here — a ${it.name} for you.` });
+  }
+  // (plan 118) the scoreboard's ping: echoed; the last round trip measured kept on the member
+  // (plan 118, phase 17) the team votes: a timeout, a surrender, a bot kicked — called, then yes or no
+  room.on("strike:call", (client, msg) => {
+    if (!match) return;
+    const kind = String(msg?.kind ?? "");
+    if (kind !== "timeout" && kind !== "surrender" && kind !== "kick") return;
+    const why = callVote(match, client.sessionId, kind, String(msg?.target ?? ""));
+    if (why) return room.send(client, "strike:why", { why });
+    handle(match.events.splice(0));
+    sync();
+  });
+  room.on("strike:ballot", (client, msg) => {
+    if (!match || !castVote(match, client.sessionId, !!msg?.yes)) return;
+    handle(match.events.splice(0));
+    sync();
+  });
+  room.on("strike:ping", (client, msg) => {
+    const t = Number(msg?.t);
+    if (Number.isFinite(t)) room.send(client, "strike:pong", { t });
+    const rtt = Number(msg?.rtt);
+    const s = arena.members.get(client.sessionId);
+    if (s && Number.isFinite(rtt)) s.ping = Math.max(0, Math.min(999, Math.round(rtt)));
   });
   room.on("strike:buy", (client, msg) => {
     const p = room.state.players.get(client.sessionId);
@@ -924,6 +1187,9 @@ registerFeature((room: WorldRoom) => {
         room.send(client, "strike:why", { why: `${mate.name}: ${why}` });
       } else {
         mp.money -= price;
+        // (a gift's not theirs to take back for the money: plan 118's refunds)
+        const gb = mate.bought.at(-1);
+        if (gb) gb.gift = true;
         lend(mate);
       }
       sync();
@@ -936,6 +1202,10 @@ registerFeature((room: WorldRoom) => {
   });
   room.on("strike:use", (client, msg) => {
     if (!match?.players.has(client.sessionId)) return;
+    // (plan 119, F4a: CS's — the charge is planted only drawn, the left button held (`plant`); E never plants)
+    const carrier = !!match.players.get(client.sessionId)?.bomb;
+    const drawn = room.state.players.get(client.sessionId)?.held === "charge";
+    if (msg?.on && carrier && !(msg.plant && drawn)) return;
     if (msg?.on) holding.add(client.sessionId);
     else {
       holding.delete(client.sessionId);
@@ -950,12 +1220,39 @@ registerFeature((room: WorldRoom) => {
       if (i >= 0) grabHostage(match, client.sessionId, i);
     }
   });
-  room.on("strike:drop", (client) => {
+  room.on("strike:drop", (client, msg) => {
     const p = room.state.players.get(client.sessionId);
     const mp = match?.players.get(client.sessionId);
-    if (!match || !p || !mp?.bomb) return;
+    if (!match || !p || !mp?.alive) return;
     const [x, z] = local(p);
-    dropCharge(match, mp, x, z);
+    const gun = String(p.gun ?? "");
+    // (plan 118, F8a: G lets go of the gun in hand — the charge if it's chosen, 5, or there's no gun in hand)
+    if (mp.bomb && ((msg as { charge?: boolean } | undefined)?.charge || !isGun(gun))) {
+      dropCharge(match, mp, x, z);
+      return;
+    }
+    if (!isGun(gun) || match.phase === "warmup") return;
+    const f = (p.yaw / 256) * Math.PI * 2;
+    const y = whereOf(mp)?.[1] ?? 0;
+    if (dropGun(match, mp, gun as StrikeGun, x + Math.cos(f) * 0.9, y, z + Math.sin(f) * 0.9)) {
+      lend(mp);
+      sync();
+    }
+  });
+  // (plan 118, F8a) E by a gun on the floor: it's taken, what was in its slot left there
+  room.on("strike:pickup", (client) => {
+    const mp = match?.players.get(client.sessionId);
+    if (!match || !mp?.alive) return;
+    const at = whereOf(mp);
+    if (!at) return;
+    const near = match.floor
+      .map((g) => ({ g, d: Math.hypot(g.x - at[0], g.z - at[2]) }))
+      .filter(({ g, d }) => d < 1.8 && Math.abs(g.y - at[1]) < 1.6)
+      .sort((a, b) => a.d - b.d)[0];
+    if (near && pickGun(match, mp, near.g.id, true)) {
+      lend(mp);
+      sync();
+    }
   });
 
   // the radio: a line to my team (and the dead of it) — our words, the client says it (strike/sound.ts RADIO)
@@ -977,7 +1274,7 @@ registerFeature((room: WorldRoom) => {
     }
   });
   room.on("strike:vote", (client, msg) => {
-    if (!match?.players.has(client.sessionId) || !arena.voteTo) return;
+    if (!match?.players.has(client.sessionId) || (!arena.voteTo && match.phase !== "warmup")) return;
     const key = String(msg?.key ?? "");
     if (!arena.vote.split(",").includes(key)) return;
     const v = arena.votes ? (JSON.parse(arena.votes) as Record<string, string>) : {};
@@ -991,13 +1288,8 @@ registerFeature((room: WorldRoom) => {
     if (msg?.on) set.add(client.sessionId);
     else set.delete(client.sessionId);
     arena.ready = [...set].join(",");
-    const people = [...match.players.values()].filter((q) => !q.bot);
-    if (people.length && people.every((q) => set.has(q.id))) {
-      arena.ready = "";
-      startMatch(match);
-      handle(match.events.splice(0));
-      sync();
-    }
+    // (plan 118, F10a: all ready → the countdown; one not → it stops)
+    readyCheck(!msg?.on);
   });
   // (plan 115 phase 24, F5) the combat knife: out (slot 3: the gun away, the knife in the hand) or put back; a stab —
   // the nearest enemy in reach and in front of me, harder in the back
@@ -1012,26 +1304,50 @@ registerFeature((room: WorldRoom) => {
       p.heldAt = Date.now();
     } else if (p.held === "knife") p.held = "";
   });
-  room.on("strike:stab", (client) => {
+  // (plan 119) 5: the charge drawn — in both hands, the gun put away (CS's slot 5); off, or not mine any more: gone
+  room.on("strike:charge", (client, msg) => {
     const p = room.state.players.get(client.sessionId);
     const mp = match?.players.get(client.sessionId);
-    if (!match || !p || !mp?.alive || p.held !== "knife" || frozen(match)) return;
+    if (!p || !mp?.alive) return;
+    if (msg?.on && mp.bomb) {
+      p.gun = "";
+      p.held = "charge";
+      p.heldAt = Date.now();
+    } else if (p.held === "charge") p.held = "";
+  });
+  // (plan 119, F2a) CS's two: the left's slash (40, 25 straight after one that landed, 90 in the back), the right's
+  // stab (65, 180 in the back), each its own reach and time; a wall in the way takes it (a spark, a mark)
+  const slashN = new Map<string, number>();
+  const landedAt = new Map<string, number>();
+  /** (plan 119, F2a) A knife's swing by `id` (a person or a bot) from (x, y0, z) feet, facing `yaw`: the nearest enemy
+   *  in reach and in front (no wall between) struck — the slash's 40 / 25 chained / 90 in the back, the stab's 65 /
+   *  180 — or the wall ahead scraped; heard and drawn by all. False: too soon after the last. */
+  const knifeSwing = (id: string, x: number, y0: number, z: number, yaw: number, heavy: boolean): boolean => {
+    const m = match;
+    const mp = m?.players.get(id);
+    if (!m || !mp?.alive || frozen(m)) return false;
     const now = Date.now();
-    if (now - (stabAt.get(client.sessionId) ?? 0) < KNIFE.swing * 1000) return;
-    stabAt.set(client.sessionId, now);
-    const [x, z] = local(p);
-    const yaw = (p.yaw / 256) * Math.PI * 2;
+    // (each swing sets when the next may come — the slash's 0.4 s, the stab's 1 s, CS's; the client keeps the same
+    // time and a click in the wait is swung when it ends: a little slack for the line)
+    if (now < (stabAt.get(id) ?? 0)) return false;
+    stabAt.set(id, now + (heavy ? KNIFE.heavySwing : KNIFE.swing) * 1000 * 0.85);
+    const n = (slashN.get(id) ?? 0) + 1;
+    slashN.set(id, n);
+    const reach = heavy ? KNIFE.heavyReach : KNIFE.reach;
+    const eye: [number, number, number] = [x, y0 + 1.4, z];
     let best: { id: string; d: number; back: boolean } | null = null;
-    for (const q of match.players.values()) {
-      if (!q.alive || q.id === mp.id || teamOf(match, q) === teamOf(match, mp)) continue;
+    for (const q of m.players.values()) {
+      if (!q.alive || q.id === mp.id || teamOf(m, q) === teamOf(m, mp)) continue;
       const at = whereOf(q);
       if (!at) continue;
       const dx = at[0] - x;
       const dz = at[2] - z;
       const d = Math.hypot(dx, dz);
-      if (d > KNIFE.reach || Math.abs(at[1] - (p.z - STRIKE_PARK.h)) > 1.2) continue;
+      if (d > reach || Math.abs(at[1] - y0) > 1.2) continue;
       const off = Math.abs(((Math.atan2(dz, dx) - yaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
       if (off > KNIFE.cone) continue;
+      // (no stab through a wall)
+      if (shotThrough(m.map, eye, [at[0], at[1] + 1.1, at[2]]).walls > 0) continue;
       // their facing: a bot's own, a person's byte
       const qb = brain?.view(q.id);
       const qp = room.state.players.get(q.id);
@@ -1039,11 +1355,41 @@ registerFeature((room: WorldRoom) => {
       const turned = Math.abs(((qyaw - yaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
       if (!best || d < best.d) best = { id: q.id, d, back: turned < Math.PI / 3 };
     }
-    toAll("strike:boom", { kind: "swing", x, y: p.z - STRIKE_PARK.h + 1.2, z });
-    if (!best) return;
-    hit(match, mp.id, best.id, "knife", best.back ? KNIFE.back : KNIFE.front, "body");
-    handle(match.events.splice(0));
+    let struck = "";
+    if (best) struck = "body";
+    else {
+      const tip: [number, number, number] = [x + Math.cos(yaw) * reach, y0 + 1.3, z + Math.sin(yaw) * reach];
+      if (shotThrough(m.map, eye, tip).walls > 0) struck = "wall";
+    }
+    toAll("strike:boom", { kind: "swing", x, y: y0 + 1.2, z, by: id, heavy, n, struck, yaw });
+    if (!best) return true;
+    const chained = !heavy && now - (landedAt.get(id) ?? 0) < KNIFE.chain * 1000;
+    const dmg = heavy
+      ? best.back
+        ? KNIFE.heavyBack
+        : KNIFE.heavy
+      : best.back
+        ? KNIFE.back
+        : chained
+          ? KNIFE.next
+          : KNIFE.front;
+    landedAt.set(id, now);
+    if (hit(m, mp.id, best.id, "knife", dmg, "body")) {
+      brain?.hurt(best.id, mp.id);
+      const vc = clientOf(best.id);
+      if (vc) room.send(vc, "dark:hit", { id: mp.id, n: dmg });
+    }
+    handle(m.events.splice(0));
     sync();
+    return true;
+  };
+  /** (plan 119) a bot's knife out, till then (ms): drawn in its hand (its NPC's mood) */
+  const botKnifeTo = new Map<string, number>();
+  room.on("strike:stab", (client, msg) => {
+    const p = room.state.players.get(client.sessionId);
+    if (!match || !p || p.held !== "knife") return;
+    const [x, z] = local(p);
+    knifeSwing(client.sessionId, x, p.z - STRIKE_PARK.h, z, (p.yaw / 256) * Math.PI * 2, !!msg?.heavy);
   });
   room.on("strike:throw", (client, msg) => {
     const p = room.state.players.get(client.sessionId);
@@ -1076,6 +1422,9 @@ registerFeature((room: WorldRoom) => {
         if (dmg > 0 && shotThrough(m.map, [n.x, n.y + 0.2, n.z], [at[0], at[1] + 1, at[2]]).walls === 0)
           hit(m, n.by, q.id, "he", dmg, "body");
       }
+      // (plan 118, F9a: a smoke near the blast blown open a while — CS2's)
+      for (const sm of nades)
+        if (sm.state === "smoke" && Math.hypot(sm.x - n.x, sm.z - n.z) < NADE.he.r * 0.8 + NADE.smoke.r) sm.thin = 1;
       n.state = "done";
     } else if (n.kind === "flash") {
       for (const q of m.players.values()) {
@@ -1090,8 +1439,9 @@ registerFeature((room: WorldRoom) => {
         const pitch = b ? b.pitch : 0;
         const secs = flashFor(m.map, [n.x, n.y, n.z], [at[0], at[1] + 1.6, at[2]], yaw, pitch);
         if (secs <= 0) continue;
-        if (b) blindTo.set(q.id, m.clock + secs);
-        else {
+        // (everyone's kept: a bot's eyes, and the kill feed's "blind" mark — plan 118)
+        blindTo.set(q.id, m.clock + secs);
+        if (!b) {
           const c = clientOf(q.id);
           if (c) room.send(c, "strike:flash", { secs });
         }
@@ -1108,6 +1458,8 @@ registerFeature((room: WorldRoom) => {
       const smoked = nades.some((s) => s.state === "smoke" && Math.hypot(s.x - n.x, s.z - n.z) < NADE.smoke.r);
       n.state = smoked ? "done" : "fire";
       n.left = NADE.fire.secs;
+      // (plan 118: it runs on the way it was thrown)
+      fireRun(n);
     } else if (n.kind === "decoy") {
       n.state = "decoy";
       n.left = NADE.decoy.secs;
@@ -1121,6 +1473,24 @@ registerFeature((room: WorldRoom) => {
     if (!p) return null;
     const [x, z] = local(p);
     return [x, p.z - STRIKE_PARK.h, z];
+  };
+  /** How a kill was made (plan 118, the feed's marks): through a smoke on the line, the killer blinded, a sniper
+   *  fired off the scope. */
+  const howOf = (m: Match, by: string, victim: string, gun: string, hip: boolean): KillHow => {
+    const a = m.players.get(by);
+    const v = m.players.get(victim);
+    const pa = a ? whereOf(a) : null;
+    const pv = v ? whereOf(v) : null;
+    const smokes = nades.filter((n) => n.state === "smoke");
+    return {
+      smoke:
+        !!pa &&
+        !!pv &&
+        smokes.length > 0 &&
+        throughSmoke(smokes, [pa[0], pa[1] + 1.6, pa[2]], [pv[0], pv[1] + 1.2, pv[2]]),
+      blind: (blindTo.get(by) ?? 0) > m.clock,
+      noscope: gun === "sniper" && hip,
+    };
   };
   let decoyAt = 0;
   const stepNades = (dt: number, now: number) => {
@@ -1138,6 +1508,8 @@ registerFeature((room: WorldRoom) => {
         else if ((n.kind === "smoke" || n.kind === "decoy") && n.rest) pop(n);
         continue;
       }
+      // (plan 118: a smoke an HE blew open fills back in)
+      if (n.thin) n.thin = Math.max(0, n.thin - dt / THIN_SECS);
       if (n.state === "smoke" || n.state === "fire" || n.state === "decoy") {
         n.left -= dt;
         if (n.left <= 0) n.state = "done";
@@ -1146,7 +1518,7 @@ registerFeature((room: WorldRoom) => {
         for (const q of m.players.values()) {
           if (!q.alive) continue;
           const at = whereOf(q);
-          if (at && Math.hypot(at[0] - n.x, at[2] - n.z) < NADE.fire.r && Math.abs(at[1] - n.y) < 1.2)
+          if (at && inFire(n, at[0], at[2]) && Math.abs(at[1] - n.y) < 1.2)
             hit(m, n.by, q.id, n.kind, NADE.fire.dps * dt, "legs");
         }
       if (n.state === "decoy" && now >= decoyAt) {
@@ -1171,10 +1543,88 @@ registerFeature((room: WorldRoom) => {
       s.y = n.y;
       s.z = n.z;
       s.left = n.left;
+      s.fx = n.fx ?? 0;
+      s.fz = n.fz ?? 0;
+      s.thin = n.thin ?? 0;
     }
   };
 
   /** A shot (a bot's, a decoy's) as the world's guns send theirs: everyone near hears and sees it (local → world). */
+  // (plan 118) a bot's Daybreak ball: off toward who it aimed at (or its range), bursting there a flight later — its
+  // damage on everyone near the burst (as a person's ball), the world's arms:orb and arms:burst drawing it
+  const orbsOut: { at: number; by: string; x: number; y: number; z: number; id: string; m: Match }[] = [];
+  let botOrbN = 0;
+  const botOrb = (
+    id: string,
+    s: { o: [number, number, number]; yaw: number; pitch: number; victim?: string; dmg: number },
+  ) => {
+    const c = Math.cos(s.pitch);
+    const d: [number, number, number] = [Math.cos(s.yaw) * c, Math.sin(s.pitch), Math.sin(s.yaw) * c];
+    let t: number = ORB.range;
+    if (s.victim) {
+      const v = brain?.view(s.victim) ?? env.other(s.victim);
+      if (v) t = Math.min(ORB.range, Math.hypot(v.x - s.o[0], v.z - s.o[2]));
+    }
+    const hitT = rayFirst((match as Match).map, s.o, d, t);
+    if (hitT) t = Math.min(t, hitT.t);
+    const end: [number, number, number] = [s.o[0] + d[0] * t, s.o[1] + d[1] * t, s.o[2] + d[2] * t];
+    const secs = t / ORB.speed;
+    const oid = `sorb:${++botOrbN}`;
+    const msg = {
+      id: oid,
+      sid: id,
+      x0: s.o[0] + STRIKE_PARK.x,
+      y0: s.o[2] + STRIKE_PARK.z,
+      z0: s.o[1] + STRIKE_PARK.h,
+      x: end[0] + STRIKE_PARK.x,
+      y: end[2] + STRIKE_PARK.z,
+      z: end[1] + STRIKE_PARK.h,
+      secs,
+      level: 0,
+    };
+    for (const cl of room.clients as WorldClient[]) {
+      const p = room.state.players.get(cl.sessionId);
+      if (p && p.level === 0 && Math.hypot(p.x - msg.x0, p.y - msg.y0) < 140) room.send(cl, "arms:orb", msg);
+    }
+    // (the burst's own damage, as a person's orb: not the hitscan roll's, which is 0 for a miss)
+    if (match)
+      orbsOut.push({ at: Date.now() + secs * 1000, by: id, x: end[0], y: end[1], z: end[2], id: oid, m: match });
+  };
+  const orbsLand = () => {
+    const m = match;
+    const now = Date.now();
+    for (let i = orbsOut.length - 1; i >= 0; i--) {
+      const o = orbsOut[i];
+      if (o.at > now) continue;
+      orbsOut.splice(i, 1);
+      // (thrown in a match gone since: nothing to burst in)
+      if (!m || o.m !== m) continue;
+      for (const cl of room.clients as WorldClient[])
+        room.send(cl, "arms:burst", {
+          id: o.id,
+          x: o.x + STRIKE_PARK.x,
+          y: o.z + STRIKE_PARK.z,
+          z: o.y + STRIKE_PARK.h,
+          level: 0,
+        });
+      for (const q of m.players.values()) {
+        if (!q.alive || q.id === o.by) continue;
+        const v = q.bot ? brain?.view(q.id) : env.other(q.id);
+        if (!v) continue;
+        const dd = Math.hypot(v.x - o.x, v.z - o.z, Math.max(0, Math.abs(v.y + 0.9 - o.y) - 0.9));
+        const n = burstAt(parkDamage("daybreak", ARMS.daybreak.damage, false, HEAD.mult, ARMS.daybreak.damage), dd);
+        if (n <= 0) continue;
+        // (a wall between the burst and them shields them, as a person's burst — arms.ts room.sight)
+        if (shotThrough(m.map, [o.x, o.y + 0.3, o.z], [v.x, v.y + 1.2, v.z]).walls > 0) continue;
+        // (only a hit that took: a teammate with friendly fire off, or the freeze, feels nothing)
+        if (!hit(m, o.by, q.id, "daybreak", n, "body", 0, howOf(m, o.by, q.id, "daybreak", false))) continue;
+        brain?.hurt(q.id, o.by);
+        const vc = clientOf(q.id);
+        if (vc) room.send(vc, "dark:hit", { id: o.by, n, shot: true });
+      }
+      handle(m.events.splice(0));
+    }
+  };
   const armsShot = (sid: string, gun: string, o: [number, number, number], yaw: number, pitch: number) => {
     const ox = o[0] + STRIKE_PARK.x;
     const oy = o[2] + STRIKE_PARK.z;
@@ -1189,22 +1639,28 @@ registerFeature((room: WorldRoom) => {
   const hooks: StrikeHooks = {
     claims: (sid) => !!match?.players.has(sid),
     alive: (sid) => !!match?.players.get(sid)?.alive && !frozen(match),
-    hit(by, victim, gun, n, head, walls) {
+    hit(by, victim, gun, n, head, walls, hip) {
       if (!match) return;
       brain?.hurt(victim, by);
-      const r = hit(match, by, victim, gun, n, head ? "head" : "body", walls);
+      const dmg = isGun(gun) ? parkDamage(gun, n, head, HEAD.mult, ARMS[gun].damage) : n;
+      const r = hit(match, by, victim, gun, dmg, head ? "head" : "body", walls, howOf(match, by, victim, gun, !!hip));
       if (r) handle(match.events.splice(0));
       sync();
     },
     along(ray, range, by) {
       if (!match) return null;
       heardBy(by, ray.x - STRIKE_PARK.x, ray.y - STRIKE_PARK.z);
+      // (plan 118, phase 9: a bot where the shooter saw it — rewound by half their round trip and the drawing's own
+      // smoothing behind the server, at most a quarter second)
+      const ping = Number(arena.members.get(by)?.ping ?? 0);
+      const back = Math.min(250, ping / 2 + REWIND_DRAW_MS);
       let best: { id: string; t: number; head: boolean } | null = null;
       for (const id of brain?.bots.keys() ?? []) {
         if (id === by) continue;
         const mp = match.players.get(id);
-        const b = brain?.view(id);
-        if (!mp?.alive || !b) continue;
+        const b0 = brain?.view(id);
+        if (!mp?.alive || !b0) continue;
+        const b = rewound(id, Date.now() - back) ?? b0;
         const h = b.crouch ? 1.25 : 1.8;
         const wx = b.x + STRIKE_PARK.x;
         const wy = b.z + STRIKE_PARK.z;
@@ -1233,8 +1689,40 @@ registerFeature((room: WorldRoom) => {
     shotThrough((match as Match).map, a, b);
   room.strike = hooks;
 
+  // (plan 118, phase 9) where each bot was, the last half second (for the rewind)
+  const past = new Map<string, { t: number; x: number; y: number; z: number; crouch: boolean }[]>();
+  const keepPast = () => {
+    const t = Date.now();
+    for (const id of brain?.bots.keys() ?? []) {
+      const b = brain?.view(id);
+      if (!b) continue;
+      const l = past.get(id) ?? [];
+      l.push({ t, x: b.x, y: b.y, z: b.z, crouch: !!b.crouch });
+      while (l.length && t - l[0].t > 600) l.shift();
+      past.set(id, l);
+    }
+    for (const id of past.keys()) if (!brain?.bots.has(id)) past.delete(id);
+  };
+  const rewound = (id: string, at: number) => {
+    const l = past.get(id);
+    if (!l?.length) return null;
+    if (at >= l[l.length - 1].t) return null;
+    for (let i = l.length - 1; i > 0; i--) {
+      const a = l[i - 1];
+      const b = l[i];
+      if (a.t <= at) {
+        // (a jump between two samples — a round's start: never a point between them, the nearer in time taken)
+        if (Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) > 3) return at - a.t < b.t - at ? a : b;
+        const k = (at - a.t) / Math.max(1, b.t - a.t);
+        return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: a.z + (b.z - a.z) * k, crouch: b.crouch };
+      }
+    }
+    return l[0];
+  };
   return {
     tick(dt, now) {
+      keepPast();
+      if (orbsOut.length) orbsLand();
       // (plan 117) the bots' knowledge of the map that's up (or coming up) readied ahead of any match: a little a
       // tick — less while a match is live
       if (arena.map) {
@@ -1261,20 +1749,17 @@ registerFeature((room: WorldRoom) => {
         if (pending) {
           const p = pending;
           pending = null;
-          begin(p.mode, p.people);
+          begin(p.mode, p.people, p.start);
         }
       }
       // the vote closes: the most votes (a tie, a draw of them; none, the map stays)
       if (arena.voteTo && now >= arena.voteTo && match) {
-        const v = arena.votes ? (JSON.parse(arena.votes) as Record<string, string>) : {};
-        const n = new Map<string, number>();
-        for (const k of Object.values(v)) n.set(k, (n.get(k) ?? 0) + 1);
-        const most = Math.max(0, ...n.values());
-        const top = [...n.entries()].filter(([, c]) => c === most).map(([k]) => k);
-        const key = top.length ? top[Math.floor(rand() * top.length)] : arena.map;
+        const key = voted();
         arena.voteTo = 0;
         again(key);
       }
+      // (plan 118, F10a) the ready check's countdown run out
+      if (arena.goTo && now >= arena.goTo) go();
       if (!match) return;
       const m = match;
       // people: their places for the charge, the hostages; walking over a dropped charge; leaving the arena
@@ -1289,7 +1774,12 @@ registerFeature((room: WorldRoom) => {
           continue;
         }
         if (!mp.alive) continue;
-        if (p.gun && p.held === "knife") p.held = "";
+        if (p.gun && (p.held === "knife" || p.held === "charge")) p.held = "";
+        // (the charge planted, dropped, picked up by another: not in my hands any more — plan 119)
+        if (p.held === "charge" && !mp.bomb) {
+          p.held = "";
+          holding.delete(mp.id);
+        }
         const at = local(p);
         if (holding.has(mp.id) || m.charge?.planter === mp.id || m.charge?.defuser === mp.id)
           holdTick(m, mp.id, holding.has(mp.id) && inArena(p), at, dt);
@@ -1298,6 +1788,23 @@ registerFeature((room: WorldRoom) => {
           pickCharge(m, mp.id);
         // (a fall off something high, or out of the arena's pad: the world's — not counted here)
       }
+      // (plan 118, F8a) a gun on the floor walked over with its slot empty: taken — people and bots alike
+      if (m.floor.length)
+        for (const mp of m.players.values()) {
+          if (!mp.alive) continue;
+          const at = whereOf(mp);
+          if (!at) continue;
+          for (const g of [...m.floor])
+            if (
+              m.clock - g.at > 1.2 &&
+              Math.hypot(g.x - at[0], g.z - at[2]) < 1.1 &&
+              Math.abs(g.y - at[1]) < 1.5 &&
+              pickGun(m, mp, g.id, false)
+            ) {
+              lend(mp);
+              break;
+            }
+        }
       // the bots (plan 117: one driver — shared strike/bots — its knowledge worked out a little a tick till it's there)
       botAcc += dt;
       if (botAcc >= 1 / BOT_HZ) {
@@ -1315,14 +1822,30 @@ registerFeature((room: WorldRoom) => {
           if (at) [m.charge.x, m.charge.z] = at;
         }
       stepNades(dt, now);
+      // (plan 118: the warmup's clock run out — the map vote counted, as the ready check's end; not the match's own
+      // start on this map — in every mode, Deathmatch and Arms Race too: the double check 2)
+      if (m.phase === "warmup" && m.left - dt <= 0) {
+        go();
+        return;
+      }
       handle(tick(m, dt));
       if (match) sync();
+    },
+    // (the user's feedback, 2026-11-23: out mid-match by closing the page — no menu's way out — and back later, they
+    // came back where they'd been, inside the arena with no match of theirs: stuck. Back in the lobby yard by the desk
+    // then, as leaving from the menu does; a line dropped and back in time is still in its match)
+    join(client) {
+      if (!match?.players.has(client.sessionId)) toLobby(client as WorldClient);
+    },
+    back(client) {
+      if (!match?.players.has(client.sessionId)) toLobby(client as WorldClient);
     },
     leave(client) {
       if (!match?.players.has(client.sessionId)) return;
       leave(match, client.sessionId);
       giveBack(client.sessionId);
       if (![...match.players.values()].some((q) => !q.bot)) stopMatch();
+      else readyCheck();
     },
     drop(client) {
       // (a dropped line: their place kept a while — the world's own; their pockets are survival's to save

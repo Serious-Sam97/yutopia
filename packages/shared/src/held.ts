@@ -30,6 +30,8 @@ export const HELD = {
   laser: { label: "Laser pointer", uses: 1, first: 0, every: 0, linger: 0, from: ["toybox"], toy: true },
   // (plan 115 phase 24, F5) the Strike Park's combat knife: slot 3 in its match, held till a gun's drawn
   knife: { label: "Combat knife", uses: 1, first: 0, every: 0, linger: 0, from: ["strike"], toy: true },
+  // (plan 119) the Raiders' charge drawn (slot 5): in both hands, planted with the left button held
+  charge: { label: "The charge", uses: 1, first: 0, every: 0, linger: 0, from: ["strike"], toy: true },
 } as const satisfies Record<string, HeldDef>;
 export const isToyHeld = (k: unknown): boolean => isHeld(k) && !!(HELD[k] as HeldDef).toy;
 /** (plan 68) What a present put out (not wrapped by someone) has in it. */

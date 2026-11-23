@@ -1,0 +1,212 @@
+{
+ "music": [
+  {
+   "file": "music-a.mp3",
+   "title": "Tension (loop)",
+   "author": "Tsorthan Grove",
+   "page": "https://opengameart.org/content/tension-0",
+   "license": "CC0",
+   "about": "Page: \"Menu music, part of an intro or scene maybe.\" Loop version."
+  },
+  {
+   "file": "music-b.mp3",
+   "title": "Eyes in the Shadows (loop)",
+   "author": "Tsorthan Grove",
+   "page": "https://opengameart.org/content/eyes-in-the-shadows",
+   "license": "CC0",
+   "about": "Page: \"A short tense or stealthy track.\" Loop version."
+  },
+  {
+   "file": "music-c.mp3",
+   "title": "Electric City (Part 1 loop)",
+   "author": "Tsorthan Grove",
+   "page": "https://opengameart.org/content/electric-city",
+   "license": "CC0",
+   "about": "Page: two loops of one theme; Part 1 is the relaxed one, \"Exploring, stealth etc.\" (Part 2 is high-energy combat, not downloaded)."
+  },
+  {
+   "file": "music-d.mp3",
+   "title": "Espionage",
+   "author": "HaelDB",
+   "page": "https://opengameart.org/content/espionage",
+   "license": "CC0",
+   "about": "Page: \"Loopable slow stealth song\" - sneaking into an enemy base feel."
+  },
+  {
+   "file": "music-e.mp3",
+   "title": "Tension (from the album \"It's time for adventure vol 2\", track 12)",
+   "author": "Komiku (OGA account: Loyalty Freak Music)",
+   "page": "https://opengameart.org/content/tension",
+   "license": "CC0",
+   "about": "Page gives only the album name. 3:21 full track, not marked as a loop."
+  }
+ ],
+ "start": [
+  {
+   "file": "start-a.mp3",
+   "title": "Riser Hit sfx 031.wav",
+   "author": "AudioPapkin",
+   "page": "https://freesound.org/people/AudioPapkin/sounds/511874/",
+   "license": "CC0",
+   "about": "Page: riser into a hit, \"perfect for cinematic uses, video games\"; field-recorded (Zoom H6). Tags: build, cinematic, hit, impact, implosion, intro."
+  },
+  {
+   "file": "start-b.mp3",
+   "title": "One hit (sonar inspired)",
+   "author": "xkeril",
+   "page": "https://freesound.org/people/xkeril/sounds/736851/",
+   "license": "CC0",
+   "about": "Page: bright cinematic impact/stab with reverb from a processed metal jar, \"sounding like a sonar or a radar\". Audible ~2.2 s."
+  },
+  {
+   "file": "start-c.mp3",
+   "title": "Transition (hit and whoosh)",
+   "author": "xkeril",
+   "page": "https://freesound.org/people/xkeril/sounds/736852/",
+   "license": "CC0",
+   "about": "Page: modern transition, two impacts and a whoosh (processed metal jar), tuned to C at 90 bpm. Audible ~2.6 s."
+  }
+ ],
+ "won": [
+  {
+   "file": "won-a.mp3",
+   "title": "Stage Clear",
+   "author": "Qvantor",
+   "page": "https://freesound.org/people/Qvantor/sounds/878611/",
+   "license": "CC0",
+   "about": "ROUND WON (pair A). Page: wide supersaw chord gated in four quick pulses, then held as the filter opens; \"electronic wins\"."
+  },
+  {
+   "file": "won-b.mp3",
+   "title": "Congrats! 2",
+   "author": "nomiqbomi",
+   "page": "https://freesound.org/people/nomiqbomi/sounds/578572/",
+   "license": "CC0",
+   "about": "ROUND WON (pair B). Page: \"A short, happy orchestral stinger.\""
+  },
+  {
+   "file": "won-c.mp3",
+   "title": "Level Up / Mission Complete",
+   "author": "Beetlemuse",
+   "page": "https://freesound.org/people/Beetlemuse/sounds/528958/",
+   "license": "CC0",
+   "about": "ROUND WON (extra). Page: level-up sound / \"a nice Fanfare for winning a battle\"."
+  },
+  {
+   "file": "won-d.mp3",
+   "title": "Success",
+   "author": "Sjonas88",
+   "page": "https://freesound.org/people/Sjonas88/sounds/538554/",
+   "license": "CC0",
+   "about": "ROUND WON (extra). Page: simple \"success\" C-major synth chord (Arturia MicroFreak). Short hit, then a quiet tail."
+  }
+ ],
+ "lost": [
+  {
+   "file": "lost-a.mp3",
+   "title": "Dramatic Piano Sting",
+   "author": "Qvantor",
+   "page": "https://freesound.org/people/Qvantor/sounds/879280/",
+   "license": "CC0",
+   "about": "ROUND LOST (pair A). Page: low piano octaves with a sub, in a hall - \"for drama, bad news, tension\". Audible ~4.5 s."
+  },
+  {
+   "file": "lost-b.mp3",
+   "title": "Dissonant Piano Sting 8",
+   "author": "nomiqbomi",
+   "page": "https://freesound.org/people/nomiqbomi/sounds/578358/",
+   "license": "CC0",
+   "about": "ROUND LOST (pair B). Page: soft dissonant piano sting (Logic Pro X); tags dark, eerie, dramatic. Quiet (peak -12.9 dB) - needs gain."
+  }
+ ],
+ "victory": [
+  {
+   "file": "victory-a.mp3",
+   "title": "Victory (short sting)",
+   "author": "xkeril",
+   "page": "https://freesound.org/people/xkeril/sounds/706753/",
+   "license": "CC0",
+   "about": "VICTORY (pair with the next). Page: bright major-key bumper, bells + piano-type sound + home-made sfx. Audible ~3.8 s."
+  },
+  {
+   "file": "victory-b.mp3",
+   "title": "Epic Sting",
+   "author": "iwanPlays",
+   "page": "https://freesound.org/people/iwanPlays/sounds/438935/",
+   "license": "CC0",
+   "about": "VICTORY. Page: short electronic/synth sting made with VSTs for announcing a key word; tags epic, fanfare, success. Loud (mean -12.6 dB)."
+  },
+  {
+   "file": "victory-c.mp3",
+   "title": "Finish Line Stinger",
+   "author": "SterlingRay",
+   "page": "https://opengameart.org/content/finish-line-stinger",
+   "license": "CC0",
+   "about": "VICTORY. Page only says it was made with Soundtrap sfx, keyboards and loops (title suggests a race-finish win). ~7.7 s audible."
+  }
+ ],
+ "defeat": [
+  {
+   "file": "defeat-a.mp3",
+   "title": "You've been trapped (short sting)",
+   "author": "xkeril",
+   "page": "https://freesound.org/people/xkeril/sounds/706754/",
+   "license": "CC0",
+   "about": "DEFEAT (pair with the previous). Page: descending minor-key bumper, \"a bad thing happening\", same bells/piano palette. Audible ~4 s."
+  },
+  {
+   "file": "defeat-b.mp3",
+   "title": "Game Over Dark (gameoverdark)",
+   "author": "Robin Lamb",
+   "page": "https://opengameart.org/content/game-over-dark-short-music-clips",
+   "license": "CC0",
+   "about": "DEFEAT. Page: game-over clip \"with a darker sound\". Quiet (peak -10.9 dB), 10 s."
+  },
+  {
+   "file": "defeat-c.mp3",
+   "title": "Lose Game Short Music Clip",
+   "author": "Robin Lamb",
+   "page": "https://opengameart.org/content/lose-game-short-music-clip",
+   "license": "CC0",
+   "about": "DEFEAT. Page: short clip for when a game is lost, made from the public-domain VSCO 2 CE / VCSL sample libraries. ~5.7 s audible."
+  }
+ ],
+ "voice": [
+  {
+   "file": "voice/m/",
+   "title": "Voiceover Pack (male)",
+   "author": "Kenney",
+   "page": "https://kenney.nl/assets/voiceover-pack",
+   "license": "CC0",
+   "about": "a man announcer: numbers, go, you win, you lose, game over, mission completed/failed, hurry up"
+  },
+  {
+   "file": "voice/f/",
+   "title": "Voiceover Pack (female)",
+   "author": "Kenney",
+   "page": "https://kenney.nl/assets/voiceover-pack",
+   "license": "CC0",
+   "about": "the same lines, a woman announcer"
+  }
+ ],
+ "_lines": [
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "go",
+  "ready",
+  "you_win",
+  "you_lose",
+  "game_over",
+  "mission_completed",
+  "mission_failed",
+  "objective_achieved",
+  "hurry_up",
+  "final_round",
+  "its_a_tie",
+  "round",
+  "time_over"
+ ]
+}

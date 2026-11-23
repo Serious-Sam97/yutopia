@@ -17,6 +17,10 @@ const LOCKABLE = ["war-room", "booth-1", "booth-2", "booth-3", "standup", "serve
 // here under it) and what's on (the clock, the radio). Top right: who's in, the
 // connection, and me — a menu: my look, settings, signing out (docs/plan/45-the-ui.md).
 export function TopBar() {
+  // (plan 118, F2a: in the Strike Park's match its HUD has the screen's corners — the radar and the kill feed sit
+  // where these do; the Esc menu has the way out)
+  const inMatch = useHud((s) => !!s.strike?.me);
+  if (inMatch) return null;
   return (
     <>
       <WhereBar />

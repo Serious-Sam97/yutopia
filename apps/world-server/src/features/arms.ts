@@ -251,6 +251,8 @@ registerFeature((room: WorldRoom) => {
     // their moves are; before, a hip shot was dropped here)
     const hip = (p?.mv ?? 0) & MV_AIM ? false : m?.hip === true;
     if (!p || (!seat && (!free(p) || ((p.mv & MV_AIM) === 0 && !hip)))) return;
+    // (the Strike Park: out of the round — dead — fires nothing: the user's feedback, 2026-11-23)
+    if (room.strike?.claims(p.sid) && !room.strike.alive(p.sid)) return;
     const h = inHand(client.sessionId, p);
     if (!h) return;
     if (seat) {
@@ -443,7 +445,7 @@ registerFeature((room: WorldRoom) => {
         const th = room.strike.through({ x: ox, y: oy, z: oz }, at);
         if (th.kept <= 0) continue;
         const n = Math.max(1, Math.round(damageAt(id, gun.damage, tgt.t, tgt.head) * th.kept));
-        room.strike.hit(client.sessionId, tgt.id, id, n, tgt.head, th.walls);
+        room.strike.hit(client.sessionId, tgt.id, id, n, tgt.head, th.walls, hip);
         const qp = room.state.players.get(tgt.id);
         if (qp) {
           qp.hitAt = now;

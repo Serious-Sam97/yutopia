@@ -550,7 +550,8 @@ export class Walker {
     // (knocked down by a pool ball: where they fell till they're up — shared/pool-throw.ts KNOCK)
     // (held still by an admin, too: docs/plan/48-the-admin.md)
     // (down on the ragdoll from a fall, till I'm up: plan 58 5d)
-    const frozen = !!this.dark?.frozen() || this.fell || this.heldStill || this.limp;
+    // (…and out of the Strike Park's round — dead, lying where I fell: the user's feedback, 2026-11-23)
+    const frozen = !!this.dark?.frozen() || this.fell || this.heldStill || this.limp || strikeKeys.dead;
     if (frozen) {
       move.x = 0;
       move.y = 0;

@@ -60,7 +60,9 @@ import { gzipSync } from "node:zlib";
 // for their storeys, the floors' registry and stack in levels.ts, the stairs' own rise — measured 493.4)
 // (raised to 495 on 2026-11-21, the same call: plan 113's town pieces — thirteen catalog entries, their shapes and
 // seats on the page — the stairs read by their yaw, the storey over yours in play; measured 494.3)
-const BUDGETS = { "/page": 495, "/login/page": 160 }; // KB gzip
+// (raised to 498 on 2026-11-23 under the user's standing call to raise as needed: plans 118–119 — the Strike Park's
+// hooks on the page, the body's gear pass (the knife, the charge, the pack) and the view's gear loader — measured 496.6)
+const BUDGETS = { "/page": 498, "/login/page": 160 }; // KB gzip
 // (/page raised from 491 on 2026-11-19 under the user's standing call: plan 109 — the God HUD's bridges state, the
 // bridge icon, the bridges' layout and kinds in the shared Grounds; measured 491.0)
 // (/page raised from 451 on 2026-11-04 under the same call: plan 72's phase 4 — the controller split
@@ -104,7 +106,7 @@ const LAZY = {
   // its own file, layered, its springs; the glasses and the extras' slots) — 59.4 → 59.8, the next would
   // tip it)
   "yutopia-chars": 72, // (raised from 62 on 2026-11-12 under the standing call: plans 76–78's hands (dbf0df7) had it at 68.4 — measured on claude/friendly-cerf-633790 —, plan 80 phase 1's revolver hold (the wrist IK with a turn, the hold, its checks) 69.5) // (raised from 58 on 2026-11-02 under the user's standing call to raise as needed: plan 66's swim — the hook that loads its own chunk, yutopia-swim — tipped it over 58.0) // (raised from 40 on 2026-10-22 by the user's call: 39.1, the next detail on people would tip it; to 50 on 2026-10-31 by the user's call: the character pass — docs/plan/59 — 48.8; to 58 the same day by the user's call: the wardrobe — docs/plan/60 — 55.8) // the 3D people: the model builder, motion, iso sprites (docs/plan/22-people-3d.md)
-  "yutopia-input": 17.5, // (raised from 17 on 2026-11-05 under the user's standing call to raise as needed: plan 72 phase 8 — measured 17.1; the lifts' code isn't in it) // (raised from 15.5 on 2026-11-02 under the user's standing call to raise as needed: plan 66's swimming — shared move/swim.ts, the walker's breath and water — 15.0 → 16.5) // (raised from 15 on 2026-11-02 under the user's standing call to raise as needed: 14.99 → 15.04 with plan 65's phase 3 — none of the weather in it, the minifier's names moved with the shared modules) // the keys by position, the pad, my body's movement core (docs/plan/29-the-move.md)
+  "yutopia-input": 18, // (raised from 17.5 on 2026-11-23 under the user's standing call: plans 118–119 — the park's keys (strike/flag.ts copied in) — measured 17.6) // (raised from 17 on 2026-11-05 under the user's standing call to raise as needed: plan 72 phase 8 — measured 17.1; the lifts' code isn't in it) // (raised from 15.5 on 2026-11-02 under the user's standing call to raise as needed: plan 66's swimming — shared move/swim.ts, the walker's breath and water — 15.0 → 16.5) // (raised from 15 on 2026-11-02 under the user's standing call to raise as needed: 14.99 → 15.04 with plan 65's phase 3 — none of the weather in it, the minifier's names moved with the shared modules) // the keys by position, the pad, my body's movement core (docs/plan/29-the-move.md)
   "yutopia-anim": 15, // plan 58's animations, loaded with the 3D people when asked for (docs/plan/58-the-animation.md)
   "yutopia-air": 15, // plan 58 phase 5's: over things with the hands placed, Flowmotion's grips, the ragdoll and the get-ups (loaded with the hero's)
   "yutopia-acts": 15, // plan 58 phase 6's: sitting, the hands and the phone, busy, together, the emotes (loaded with the hero's)
@@ -114,7 +116,7 @@ const LAZY = {
   "yutopia-sway": 10, // plan 61's: what's worn swinging on Jolt — the bags, the hair, the scarf, the tie, the badge, earrings (loaded with the 3D view's physics)
   "yutopia-jumps": 10, // a jump's dust and sounds (shared/jump.ts)
   "yutopia-skate-anim": 15, // (added 2026-11-18) plan 104 F4a: the skater's clip player (skate/pose.ts) — its clips are a file, anim.json
-  "yutopia-steps": 15, // the steps' player (docs/plan/63-the-steps.md): the recordings by surface, shoe and gait; raised 10 → 15 on 2026-11-16 (HEAD 14.7, plan 92 14.8: not the cars')
+  "yutopia-steps": 15.5, // (raised from 15 on 2026-11-23 under the user's standing call: plan 118's muffled steps — measured 15.0) // the steps' player (docs/plan/63-the-steps.md): the recordings by surface, shoe and gait; raised 10 → 15 on 2026-11-16 (HEAD 14.7, plan 92 14.8: not the cars')
   "yutopia-dark": 80, // the dark: vitals, pockets, loot on the client (docs/plan/30-the-dark.md)
   // the land round the building, generated (shared/grounds.ts, docs/plan/27): the bundler copies it into every
   // chunk that uses it — its own, the 3D view's, the dev mock pages' (~6 KB each), and the marker counts those

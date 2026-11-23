@@ -191,7 +191,10 @@ export function LookHint() {
       clearTimeout(gone);
     };
   }, [look]);
-  if (touch) return null;
+  // (plan 118: in the Strike Park's match the pointer's let go only for its menu — Esc's opens with it — and the
+  // score sits where this did)
+  const inMatch = useHud((s) => !!s.strike?.me);
+  if (touch || inMatch) return null;
   const ask = !look && free;
   if (!ask && phase === "off") return null;
   return (
@@ -303,6 +306,8 @@ export function HeldChip() {
   }, [held]);
   const armed = useHud((s) => s.throwArm);
   if (!held || !isHeld(held.kind)) return null;
+  // (plan 119: the Strike Park's knife and charge are its weapons — its HUD's slots, not a held thing's card)
+  if ((HELD[held.kind].from as readonly string[]).includes("strike")) return null;
   if (isToyHeld(held.kind)) {
     const kind = held.kind;
     const throws = kind === "ball" || kind === "frisbee";

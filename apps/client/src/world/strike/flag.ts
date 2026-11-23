@@ -27,4 +27,44 @@ export const strikeKeys = {
   knife: false,
   /** (plan 115 F3) the map's climate while I'm in the arena (null: the world's own) */
   climate: null as import("@yutopia/shared/strike").Climate | null,
+  /** (plan 118, F9a) my own shot as I fired it (the server's "arms:shot" goes to the others): its holes */
+  onShot: null as
+    | ((m: {
+        gun: string;
+        ox: number;
+        oy: number;
+        oz: number;
+        yaw: number;
+        pitch: number;
+        seed: number;
+        spread: number;
+      }) => void)
+    | null,
+  /** (plan 118, F11a) in the arena: what's under someone's feet there (the map's own materials), and how much of a
+   *  sound from there gets through the map's walls to me (1 none in the way) — null, the world's own */
+  footing: null as ((x: number, y: number, z: number) => string | null) | null,
+  muffle: null as ((x: number, y: number, z: number) => number) | null,
+  /** (plan 118) a grenade in hand: the clicks throw it, not the gun's */
+  nadeReady: false,
+  /** (plan 118) the charge in hand (5): G drops it, not the gun — put away by 1/2/3/Q like the grenade (the hand's
+   *  keys are dark/index.ts's capture listener's, the park's own never sees them: the double check 2) */
+  chargeSel: false,
+  /** (plan 118, F7a) my shot's on someone as my screen draws them: the park plays the hit at once (the server's
+   *  word follows) — the point (the floor's coords, z up) */
+  predictHit: null as ((x: number, y: number, z: number) => void) | null,
+  /** (plan 119, F2a) the knife's swings to draw on each person: sid → when (performance.now), the right's stab or the
+   *  left's slash, the n-th (the slash's side alternates) */
+  swings: new Map<string, { at: number; heavy: boolean; n: number }>(),
+  /** (plan 119) who has the charge before them: drawn in both hands, knelt over it planting, or defusing it */
+  gear: new Map<string, "hold" | "plant" | "defuse">(),
+  /** (the user's feedback 2026-11-23) in the match and out of the round — dead: no firing, no moving (the body lies
+   *  where it fell; the spectator's camera is the mouse's) */
+  dead: false,
+  /** my primary and pistol as the match has them: 1 and 2 draw these, whichever quick slots they sit in (no rifle: the
+   *  pistol's slot 0 — 2 found nothing there and the charge stayed in hand) */
+  loadout: { primary: "", pistol: "" },
+  /** (plan 119) the charge's carriers with it on their backs (not drawn) */
+  packs: new Set<string>(),
+  /** (plan 119) where the charge is being planted or lies planted (the floor's coords x, z: the park's own) */
+  gearAt: null as [number, number] | null,
 };

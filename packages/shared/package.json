@@ -74,6 +74,7 @@
     "./strike": "./src/strike/index.ts",
     "./strike/bots": "./src/strike/bots/index.ts",
     "./strike/land": "./src/strike/land.ts",
+    "./strike/spray": "./src/strike/spray.ts",
     "./strike/folk": "./src/strike/folk.ts",
     "./strike/kit": "./src/strike/kit.ts",
     "./move": "./src/move/index.ts",

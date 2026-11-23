@@ -1,5 +1,7 @@
 // The Strike Park (docs/plan/114-the-strike-park.md): the land, the maps and their checks, the walk grid,
 // CS's movement, the rules and the economy, the match.
+
+export * from "./brief.ts";
 export * from "./carve.ts";
 export * from "./check.ts";
 export * from "./climate.ts";
@@ -16,3 +18,4 @@ export * from "./park.ts";
 export * from "./ranks.ts";
 export * from "./rules.ts";
 export * from "./spawn.ts";
+export * from "./spray.ts";

@@ -250,7 +250,8 @@ describe("armor and hits", () => {
     assert.equal(hit(c, "ana", "bia", "ak47", 22, "body"), null);
     const k = two();
     run(k, ROUND.freeze + 0.2);
-    assert.equal(hit(k, "ana", "bia", "ak47", 22, "body")?.hp, 78);
+    // (plan 118: a teammate's shot at a third — CS's)
+    assert.equal(hit(k, "ana", "bia", "ak47", 22, "body")?.hp, 93);
   });
 });
 

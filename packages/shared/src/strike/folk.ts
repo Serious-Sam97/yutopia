@@ -151,7 +151,7 @@ export const STRIKE_LINES: Record<StrikeRole, string[]> = {
     "No live rounds past the armory door.",
   ],
   instructor: [
-    "X at the desk: pick a side, pick a mode.",
+    "E at the desk: pick a side, pick a mode.",
     "Counter-strafe, then shoot. Every time.",
     "Smoke the choke, then go together.",
     "Warmup's free. Buy everything, try everything.",
@@ -163,7 +163,7 @@ export const STRIKE_LINES: Record<StrikeRole, string[]> = {
   ],
   keeper: ["The Last Round's open. Always is.", "Losers buy the next one. House rule.", "Tell me about that clutch."],
   officer: [
-    "The war room has the match on every screen.",
+    "The war room has the match up on its screen.",
     "Sawmill's B is too far for a rotation. Plan it.",
     "Comms, people. Call what you see.",
   ],

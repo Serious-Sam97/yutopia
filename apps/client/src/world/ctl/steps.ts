@@ -6,6 +6,7 @@ import type { WorldController } from "../controller";
 import { type Floor, sound } from "../sound";
 import type { Ears, Footfalls, Shoe, StepGait, StepPlayer, Walker } from "../steps";
 import { loadSteps, steps } from "../steps-load";
+import { strikeKeys } from "../strike/flag";
 import { rainOf } from "./common";
 
 /** What Steps reads of the WorldController (plan 72 phase 4: its dependencies, said). */
@@ -38,6 +39,9 @@ export class Steps {
    *  stand on — a car's roof, a desk, a porch, a bridge's deck — else the floor's tile (a rug on it)
    *  or the land (under a bridge: the ice). */
   footingAt(x: number, y: number, z: number): Floor {
+    // (plan 118, F11a: in the Strike Park's arena, its map's own floors — timber, steel, concrete, its ground)
+    const park = strikeKeys.footing?.(x, y, z);
+    if (park) return park as Floor;
     const on = this.c.tp?.underfoot(this.c.level, x, y, z)?.on ?? "";
     const night = this.c.model?.getDaylight().night ?? 0;
     const land = (under = false) => this.c.life?.footingAt(x, y, this.c.map, night, this.c.storm, under) ?? "asphalt";
@@ -174,7 +178,9 @@ export class Steps {
         { x: this.c.me.x, y: this.c.me.y, level: this.c.level },
         { x: w.x, y: w.y, level: w.level ?? this.c.level },
         true,
-      ),
+      ) *
+      // (plan 118, F11a: the arena's walls between us muffle them — the information CS's steps give, fairly)
+      (strikeKeys.muffle?.(w.x, w.y, w.z ?? w.ground ?? 0) ?? 1),
     pan: (w) => this.c.tp?.pan(this.c.me, w) ?? 0,
     footing: (w) => this.footingAt(w.x, w.y, w.z ?? w.ground ?? 0),
     down: (id) => this.c.tp?.downed.get(id),

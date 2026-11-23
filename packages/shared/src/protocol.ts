@@ -531,17 +531,32 @@ export interface ClientMessages {
   // the Strike Park (docs/plan/114-the-strike-park.md, features/strike.ts)
   "strike:join": { squad?: 0 | 1; mode?: string };
   "strike:leave": Record<string, never>;
-  "strike:settings": { fill?: boolean; level?: string; mode?: string };
+  "strike:settings": { fill?: boolean; level?: string; mode?: string; quota?: number };
   "strike:start": Record<string, never>;
   "strike:map": { key: string };
   "strike:buy": { item: string; for?: string };
-  "strike:use": { on: boolean };
-  "strike:drop": Record<string, never>;
+  /** (plan 118) a buy taken back in the buy time; a teammate asked to buy me `item` ("" withdraws it) */
+  "strike:refund": { item: string };
+  "strike:want": { item: string };
+  /** (plan 118) the scoreboard's ping: `t` echoed back; `rtt` the last one measured (ms) */
+  "strike:ping": { t: number; rtt?: number };
+  // (plan 118, phase 17) a team vote called (a kick: its bot), a yes or a no on it
+  "strike:call": { kind: "timeout" | "surrender" | "kick"; target?: string };
+  "strike:ballot": { yes: boolean };
+  // (plan 119, F4a: `plant` — the left button held with the charge drawn; E alone never plants)
+  "strike:use": { on: boolean; plant?: boolean };
+  // (plan 119) 5: the charge drawn into both hands (or put away)
+  "strike:charge": { on: boolean };
+  /** G: the gun in hand to the floor — or the charge (`charge`, or no gun in hand) */
+  "strike:drop": { charge?: boolean };
+  /** (plan 118) E by a gun on the floor: take it, swapping */
+  "strike:pickup": Record<string, never>;
   "strike:throw": { kind: string; short?: boolean; yaw: number; pitch: number };
   "strike:radio": { i: number };
   "strike:vote": { key: string };
   "strike:knife": { on: boolean };
-  "strike:stab": Record<string, never>;
+  // (plan 119, F2a) the left's slash, or `heavy`: the right's stab
+  "strike:stab": { heavy?: boolean };
   "strike:ready": { on: boolean };
   /** (plan 115 phase 55) my kit from the customization corner (strike/kit.ts) */
   "strike:kit": { kit: string };
@@ -701,6 +716,7 @@ export interface ServerMessages {
   // show, a bot's shot (its tracer and its sound: the world's gun's)
   "strike:ev": import("./strike/match.ts").MatchEvent[];
   "strike:why": { why: string };
+  "strike:pong": { t: number };
   /** (plan 115 phase 47) a target on the lobby's range hit: which, its ring, how far */
   "strike:target": { i: number; ring: number; m: number };
   /** (plan 115 phases 96–97) my record in the park (ranks.ts StrikeCard, JSON) and, after a match, what it gave */
@@ -714,11 +730,35 @@ export interface ServerMessages {
     head: boolean;
     hp: number;
     at: [number, number, number] | null;
-    report: { name: string; dealt: number; hits: number; taken: number }[];
+    report: { name: string; dealt: number; hits: number; taken: number; hitsTaken?: number }[];
+  };
+  /** (plan 118) the round's end: my damage report, each enemy I traded with — given and taken, and the hits */
+  "strike:report": {
+    rows: {
+      name: string;
+      team: string;
+      dealt: number;
+      hits: number;
+      taken: number;
+      hitsTaken: number;
+      dead: boolean;
+    }[];
   };
   /** a radio line to my side: a person's (the menu's index) or a bot's own words (plan 117: `text`, `i` −1) */
   "strike:radio": { by: string; i: number; text?: string };
-  "strike:boom": { kind: string; x: number; y: number; z: number };
+  // (plan 119: a knife's "swing" says whose, which attack, the n-th, and what it struck — "" air, "body", "wall")
+  "strike:boom": {
+    kind: string;
+    x: number;
+    y: number;
+    z: number;
+    by?: string;
+    heavy?: boolean;
+    n?: number;
+    struck?: string;
+    /** (a swing's) which way it went (rad, the floor's x–z): its scratch on a wall */
+    yaw?: number;
+  };
   "strike:show": { from?: string; to?: string; ms?: number; done?: string };
   "strike:shot": {
     id: string;

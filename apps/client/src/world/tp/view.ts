@@ -131,6 +131,7 @@ import { Hands1P, handsDoing } from "./hands1p";
 
 const tmpWallDir = new Vector3();
 
+import { strikeKeys } from "../strike/flag";
 import { setKitRenderer } from "./kit-mats";
 import { lazyMatrices } from "./lazy-matrices";
 import { type LiftStop3, Lifts3, liftMats } from "./lift3d";
@@ -256,6 +257,12 @@ const noLifts = (objects: WorldObjectDef[]): WorldObjectDef[] =>
   objects.filter((o) => o.kind !== "elevator" && o.kind !== "stairs");
 
 export type CamMode = "chase" | "free" | "first";
+
+/** (plan 119) Knelt over the Strike Park's charge: planting it, defusing it (strike/flag.ts gear). */
+const strikeKneel = (id: string): "kneel" | undefined => {
+  const g = strikeKeys.gear.get(id);
+  return g === "plant" || g === "defuse" ? "kneel" : undefined;
+};
 
 export type Body3 = Omit<PersonIn, "angle"> & {
   id: string;
@@ -3023,7 +3030,7 @@ void main() {
                 : undefined,
             parts: b.busy ? (this.partsFor(b.busy, b.x, b.y, angle3) ?? undefined) : undefined,
             cue: b.busy === "pool" ? this.shooters.get(b.id) : undefined,
-            down: this.downed.get(b.id) ?? this.kneeling.get(b.id),
+            down: this.downed.get(b.id) ?? this.kneeling.get(b.id) ?? strikeKneel(b.id),
             fell,
             hit: this.hitOf(b),
             heard: this.heardBy(b),
@@ -3369,14 +3376,14 @@ void main() {
         inkAway: life ? NO_LINE : C.inkMaterial("#151515", 0.55),
         prop,
         toy: (kind) => {
-          // (plan 115, F5) the Strike Park's combat knife: our own — a drop-point blade with its fuller, a guard, a
-          // ribbed handle, a pommel
-          if (kind === "knife") return combatKnife(prop);
+          // (plan 119: the Strike Park's knife and charge are the body's own gear — person3d strikeHands — not a toy)
+          if (kind === "knife" || kind === "charge") return null;
           const P = petsArt();
           return P ? P.toyMesh(kind, (c) => prop(`#${new Color(c).getHexString()}`)) : null;
         },
         pball: (n) => heldPoolBall(n, (m) => this.light.patch(m)),
         gun: life ? (kind) => this.lifeGun(kind) : undefined,
+        gear: (name) => this.lifeGear(name),
       };
       const r = this.renderer.domElement.getBoundingClientRect();
       C.inkResolution(r.width || 1, r.height || 1);
@@ -3850,6 +3857,33 @@ void main() {
   seatedGun(model: Parameters<typeof seatedGun>[0], key: string, S: "L" | "R" = "R"): ReturnType<typeof seatedGun> {
     return seatedGun(model, key, (k) => this.lifeGun(k), S);
   }
+  // (plan 119, F3a) the Strike Park's gear — the knife, the charge, the pack (tools/art/strike/gear.py →
+  // /life/strike/gear.glb): one file, loaded the first time a body asks, lit as the guns are; a fresh copy each ask
+  private gearScene: Object3D | "loading" | "failed" | null = null;
+  lifeGear(name: "knife" | "charge" | "pack"): Object3D | null {
+    if (this.gearScene === null) {
+      this.gearScene = "loading";
+      void import("../look/life-assets")
+        .then((A) => A.loadLifeGLTF(this.renderer, asset("/life/strike/gear.glb")))
+        .then(async (gltf) => {
+          gltf.scene.traverse((o) => {
+            const m = (o as Mesh).material;
+            if (!m || Array.isArray(m)) return;
+            this.light.patch(m);
+            if ((m as MeshStandardMaterial).isMeshStandardMaterial) adoptLife(m as MeshStandardMaterial);
+          });
+          await this.compileAhead(gltf.scene).catch(() => undefined);
+          this.gearScene = gltf.scene;
+        })
+        .catch(() => {
+          this.gearScene = "failed";
+        });
+      return null;
+    }
+    if (typeof this.gearScene === "string") return null;
+    const node = this.gearScene.getObjectByName(name);
+    return node ? node.clone(true) : null;
+  }
   private lifeGun(kind: string): Object3D | null {
     const have = this.lifeGuns.get(kind);
     if (have === undefined) {
@@ -4268,26 +4302,3 @@ function applyFade(f: FadeGroup, shared: World3["materials"]) {
 // (the walls' back faces too: painting only a far side changes nothing else here; the floor's
 // layout asked of its structure — plan 72 phase 11)
 const layoutSig = (m: MapDef) => `${m.width}x${m.height}|${m.ox ?? 0},${m.oy ?? 0}|${floorLayoutSig(m)}`;
-
-/** (plan 115, F5) The combat knife held in the hand (the toy frame: its grip at the origin, the blade up). */
-function combatKnife(prop: (hex: string) => import("three").Material): Group {
-  const g = new Group();
-  g.name = "knife";
-  const steel = prop("#b9bec4");
-  const dark = prop("#24262a");
-  const blade = new BoxGeometry(0.032, 0.17, 0.006).translate(0, 0.135, 0);
-  const tip = new BoxGeometry(0.022, 0.03, 0.005).translate(0.004, 0.232, 0);
-  const guard = new BoxGeometry(0.06, 0.01, 0.018).translate(0, 0.045, 0);
-  const handle = new BoxGeometry(0.026, 0.1, 0.022).translate(0, -0.01, 0);
-  const pommel = new BoxGeometry(0.03, 0.014, 0.024).translate(0, -0.066, 0);
-  g.add(
-    new Mesh(blade, steel),
-    new Mesh(tip, steel),
-    new Mesh(guard, dark),
-    new Mesh(handle, dark),
-    new Mesh(pommel, steel),
-  );
-  for (let i = 0; i < 4; i++)
-    g.add(new Mesh(new BoxGeometry(0.028, 0.004, 0.024).translate(0, -0.045 + i * 0.022, 0), steel));
-  return g;
-}

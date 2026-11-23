@@ -42,6 +42,27 @@ export interface Nade {
   left: number;
   /** on the ground and still */
   rest: boolean;
+  /** (plan 118, F9a) a fire's run: the way the bottle was going as it burst (unit, flat; 0 0 a round pool) */
+  fx?: number;
+  fz?: number;
+  /** (plan 118, F9a) a smoke blown open by an HE: 1 just now, back to 0 over FIRE/SMOKE's `thinSecs` */
+  thin?: number;
+}
+/** (plan 118) a fire runs this far on along the way it was thrown; a smoke an HE opens fills back in this long (s) */
+export const FIRE_RUN = 2.5;
+export const THIN_SECS = 3;
+/** Whether (x, z) is in a fire: within its radius of the line it runs along. */
+export function inFire(n: Nade, x: number, z: number): boolean {
+  const fx = n.fx ?? 0;
+  const fz = n.fz ?? 0;
+  const t = Math.max(0, Math.min(FIRE_RUN, (x - n.x) * fx + (z - n.z) * fz));
+  return Math.hypot(x - (n.x + fx * t), z - (n.z + fz * t)) < NADE.fire.r;
+}
+/** The way a burst bottle's fire runs: its flat velocity's, if it was going anywhere. */
+export function fireRun(n: Nade): void {
+  const v = Math.hypot(n.vx, n.vz);
+  n.fx = v > 0.5 ? n.vx / v : 0;
+  n.fz = v > 0.5 ? n.vz / v : 0;
 }
 
 /** A throw from the eye along yaw/pitch (yaw: atan2(z, x) as the match's; pitch up +). */
@@ -170,7 +191,7 @@ export function smokeR(s: Nade): number {
   const age = NADE.smoke.secs - s.left;
   const grow = Math.min(1, age / NADE.smoke.grow);
   const fade = Math.min(1, s.left / 2);
-  return NADE.smoke.r * grow * (0.6 + 0.4 * fade);
+  return NADE.smoke.r * grow * (0.6 + 0.4 * fade) * (1 - 0.85 * (s.thin ?? 0));
 }
 
 /** How long a flash whites someone out (s): by distance, by how squarely they faced it, nothing through a
