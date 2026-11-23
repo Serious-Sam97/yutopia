@@ -77,6 +77,8 @@
     "./strike/spray": "./src/strike/spray.ts",
     "./strike/folk": "./src/strike/folk.ts",
     "./strike/kit": "./src/strike/kit.ts",
+    "./npc": "./src/npc/cast.ts",
+    "./npc/town": "./src/npc/town.ts",
     "./move": "./src/move/index.ts",
     "./move/flow-moves": "./src/move/flow-moves.ts",
     "./dark": "./src/dark/index.ts",
