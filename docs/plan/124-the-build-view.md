@@ -509,3 +509,11 @@ Asked (pt): "Deixe o atalho B para ir ao build mode; quando eu clicar O para o G
 
 Committed and pushed as `c339a2cd` (2026-11-24): the build and God mode music with its admin level, B for build mode
 (the battery on N), the mouse handed over in and out of both modes, the gun's camera kept out while building.
+
+### The phone hands the mouse back too (2026-11-24)
+Asked (pt): "faz o mesmo para o celular — quando apertar P para fechar, ou fechar mesmo, faz o mouse sair". The phone
+gave the mouse back to the camera only if the camera had it when the phone came out: opened with the mouse free (the
+Dock's phone), closed by P or its own button, the cursor stayed. `world/phone/index.ts` `setOpen(false)` — every way
+of putting it away goes through it — now gives the mouse back unless a menu, a panel, build mode or God mode wants it
+(the `relook` flag gone). Checked with the lock faked (`e2e/zz-bv-phone.mts`): P in / P out, and opened free then put
+away by its button — the latter failed without the change. phone.spec: 6 passed, "a call of three" red on HEAD too.
