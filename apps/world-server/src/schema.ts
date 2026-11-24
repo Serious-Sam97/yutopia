@@ -194,6 +194,16 @@ export class Npc extends Schema {
   @type("string") look = "";
   // (plan 121) a placed NPC who answers X ("npc:talk"): the client offers "Talk"
   @type("boolean") talk = false;
+  // (plan 123) their life: what's in their hand (shared HELD's kinds; "umbrella" open over them), what their body's
+  // doing (an act: "make", "give", "eat", "chat", "laugh", "hug"…) since when and with whom (a player's sid, an NPC's
+  // id), what they want now (npc/mind.ts ACTIVITIES' icons; "" nothing)
+  @type("string") held = "";
+  @type("string") act = "";
+  @type("float64") actAt = 0;
+  @type("string") actWith = "";
+  @type("string") want = "";
+  // (plan 123) their meal set down before them while they eat: on the table's top, "x,y,h" (their floor's; "" none)
+  @type("string") dish = "";
 }
 
 export class Standup extends Schema {

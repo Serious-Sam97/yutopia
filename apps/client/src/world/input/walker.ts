@@ -251,6 +251,8 @@ export interface DarkHooks {
   slotKey(n: number): void;
   /** the inventory open: I stand still, and don't aim */
   frozen(): boolean;
+  /** (plan 123) how many of an item I carry, the pockets, quick slots and hands all told */
+  countOf(id: string): number;
   /** (plan 88 act III) my move as Vortex has it: possessed — walked to him; the glitch — the other way round */
   steer(move: { x: number; y: number; sprint: boolean; aim: boolean; jump: boolean; jumpPressed: boolean }): void;
   /** the frame's pad presses, before the world has them: taken ones are deleted (Y while aiming
@@ -295,6 +297,10 @@ export class Walker {
   /** a gun in my hand, in 3D (world/dark/arms.ts says): aiming indoors too */
   armed = false;
   private dark: DarkHooks | null = null;
+  /** (plan 123) how many of an item I carry (0 till the dark's chunk is in) */
+  carried(id: string): number {
+    return this.dark?.countOf(id) ?? 0;
+  }
   private steppedAt = 0;
   private onFoot = false;
   private darkLoading = false;

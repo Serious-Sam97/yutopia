@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { editsCount } from "../grounds-draft.ts";
 import type { GroundsEdits } from "../grounds-edits.ts";
 import { defaultBehaviour, type NpcDef, parseNpc } from "./cast.ts";
-import { checkNpcPlaces, onDuty, placedType, placeOf, placesOf } from "./places.ts";
+import { checkNpcPlaces, inShift, jobFor, onDuty, placedType, placeOf, placesOf } from "./places.ts";
 import { townCast } from "./town.ts";
 
 // NPCs on the map (docs/plan/121-npcs-on-the-map.md): the draft's `npcs` section — placed, changed, taken away; checked.
@@ -112,4 +112,36 @@ test("places: on duty — always, by day, by night, a shift (past midnight too)"
   assert.ok(onDuty(b("night"), 23, 1) && !onDuty(b("night"), 12, 0));
   assert.ok(onDuty(b("shift"), 9) && !onDuty(b("shift"), 18) && !onDuty(b("shift"), 7.5));
   assert.ok(onDuty(b("shift", 22, 6), 23) && onDuty(b("shift", 22, 6), 2) && !onDuty(b("shift", 22, 6), 12));
+});
+
+test("places: a workplace — a town building's storey, a job, a spot, a shift; checked; in the shift or not", () => {
+  const work = { building: "bakery", job: "cashier" as const, spot: "till" as const, x: 1, z: 2, a: 0, level: 32 };
+  const e = (w: unknown): GroundsEdits => ({
+    rev: 0,
+    npcs: { add: [{ key: "npc-dora", x: 1, z: 2, a: 0, level: 0, work: w as never }] },
+  });
+  const okW = { ...ok, storeyOf: (b: string, l: number) => b === "bakery" && l === 32 };
+  assert.deepEqual(checkNpcPlaces(e({ ...work, from: 8, to: 17 }), okW), []);
+  const got = [
+    { ...work, building: "moon", from: 8, to: 17 },
+    { ...work, job: "astronaut", from: 8, to: 17 },
+    { ...work, spot: "roof", from: 8, to: 17 },
+    { ...work, level: 33, from: 8, to: 17 },
+    { ...work, from: 8, to: 8 },
+    { ...work, x: Number.NaN, from: 8, to: 17 },
+  ].map((w) => checkNpcPlaces(e(w), okW).join(""));
+  for (const [i, m] of [
+    "isn't in a town building",
+    "no such job",
+    "no such spot",
+    "work's floor",
+    "a shift is",
+    "isn't a number",
+  ].entries())
+    assert.ok(got[i].includes(m), `${m}: ${got[i]}`);
+  assert.ok(inShift({ from: 8, to: 17 }, 9) && !inShift({ from: 8, to: 17 }, 17));
+  assert.ok(inShift({ from: 22, to: 6 }, 2) && !inShift({ from: 22, to: 6 }, 12));
+  assert.deepEqual(jobFor("bar"), { job: "bartender", spot: "counter" });
+  assert.deepEqual(jobFor("library"), { job: "librarian", spot: "desk" });
+  assert.deepEqual(jobFor("shop"), { job: "cashier", spot: "till" });
 });

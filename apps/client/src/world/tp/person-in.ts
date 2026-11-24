@@ -15,6 +15,7 @@ export interface Keys {
 
 export interface PersonIn {
   name: string;
+  seedName?: string; // (plan 123) the name their look's seeded by, when the tag shows more (an NPC's want before it)
   avatar: AvatarLayers;
   x: number;
   y: number;
@@ -32,6 +33,8 @@ export interface PersonIn {
   busy?: string; // using something (the arcade, the piano…)
   act?: string; // with someone (shared SOCIAL, or "take"), since actAt
   actAt?: number;
+  actWith?: string; // (plan 123) who with: a player's session, an NPC's id
+  actTo?: number; // (plan 123) how far ahead the other one's drawn for it, m (tp/close-in.ts)
   typing?: boolean; // seated at a desk with a keyboard
   keys?: Keys; // (plan 62) the keys they type on: its middle on the floor, its top's height
   parts?: Keys[]; // (plan 62) the parts of what they're busy at their hands go to (a button, a tap…)
@@ -46,6 +49,9 @@ export interface PersonIn {
   ringing?: boolean;
   recording?: boolean;
   torch?: boolean; // the torch on, in the left hand (plan 87: an item, lit only from there)
+  umbrella?: "open" | "shut";
+  tray?: boolean; // (plan 123) a waiter's plate carried out on the right hand
+  dish?: [number, number, number]; // (plan 123) their meal on the table before them: x, y (their floor's), its top (m) // (plan 123) an umbrella in the left hand: open over them (rain out on the land), furled
   flare?: boolean; // (plan 87 F3b) a flare lit and held up in the left hand — held where the torch is
   focused?: boolean; // …focused: narrow and far (docs/plan/30-the-dark.md D4)
   gun?: string; // the weapon in the hand (D6): "revolver", "shotgun", "ak47" (plan 79)

@@ -220,11 +220,19 @@ export class Targets {
           Math.hypot(vx.x - me.x, vx.y - me.y),
           REACH.npc,
         );
-      // (plan 121) the placed NPCs who answer: "Talk"
+      // (plans 121, 123) the placed NPCs: "Talk", held for what else (the menu)
       room.state.npcs?.forEach((n, id) => {
-        if (!id.startsWith("place:") || !n.talk || !here(n)) return;
+        if (!id.startsWith("place:") || !here(n)) return;
         add(
-          { key: `npc:${id}`, kind: "npc", label: n.name || "…", act: "talk", x: n.x, y: n.y, menu: null },
+          {
+            key: `npc:${id}`,
+            kind: "npc",
+            label: n.name || "…",
+            act: "talk",
+            x: n.x,
+            y: n.y,
+            menu: { type: "npc", id },
+          },
           Math.hypot(n.x - me.x, n.y - me.y),
           REACH.npc,
         );

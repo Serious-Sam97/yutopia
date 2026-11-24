@@ -22,7 +22,14 @@ class Npc extends Model
         'strike-quartermaster', 'strike-instructor', 'strike-cook', 'strike-keeper', 'strike-officer', 'strike-recruit',
     ];
 
-    public const LINE_WHEN = ['ambient', 'greet', 'answer'];
+    /** Anyone's line moments (plan 123: what's done with them too — shared npc/cast.ts LINE_WHEN). */
+    public const LINE_WHEN = [
+        'ambient', 'greet', 'answer', 'joke', 'laugh', 'compliment', 'day', 'job', 'chat', 'order', 'served', 'refuse',
+        'thanks',
+    ];
+
+    /** Who they are (plan 123: shared npc/mind.ts), 0…1 each. */
+    public const TRAITS = ['outgoing', 'active', 'neat', 'cheerful'];
 
     /** Vortex's public moments (Vortex::PUBLIC's keys). */
     public const VORTEX_WHEN = [
@@ -167,9 +174,31 @@ class Npc extends Model
                 'greet' => ($b['greet'] ?? false) === true,
                 'answer' => ($b['answer'] ?? false) === true,
                 'shots' => $one($b['shots'] ?? null, ['ignore', 'duck', 'flee'], 'ignore'),
+                'traits' => self::traits($b['traits'] ?? null),
             ],
             'town' => $town,
         ];
+    }
+
+    /** Traits as sent: each 0…1 in tenths (one not a number: 0.5); none a number: null — from their key. */
+    private static function traits(mixed $v): ?array
+    {
+        if (! is_array($v)) {
+            return null;
+        }
+        $out = [];
+        $any = false;
+        foreach (self::TRAITS as $k) {
+            $n = $v[$k] ?? null;
+            if ((is_int($n) || is_float($n)) && is_finite((float) $n)) {
+                $any = true;
+                $out[$k] = max(0, min(1, round(((float) $n) * 10) / 10));
+            } else {
+                $out[$k] = 0.5;
+            }
+        }
+
+        return $any ? $out : null;
     }
 
     // (control characters out: spaces; trimmed; at most this many characters)

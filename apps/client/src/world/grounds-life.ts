@@ -1,6 +1,6 @@
 "use client";
 
-import { byteFace, floorOf, type MapDef, parseAvatar } from "@yutopia/shared";
+import { byteFace, floorOf, isSocial, type MapDef, parseAvatar } from "@yutopia/shared";
 import type { Footing } from "@yutopia/shared/footing";
 import type * as GroundsModule from "@yutopia/shared/grounds";
 import { packMv } from "@yutopia/shared/move";
@@ -76,6 +76,22 @@ interface VehicleIn {
 interface Vehicles {
   forEach(f: (v: VehicleIn, id: string) => void): void;
   get(id: string): VehicleIn | undefined;
+}
+
+/** (plan 123) what a placed NPC wants, over their name (the server's `want`). */
+const WANT_ICON: Record<string, string> = { meal: "🍽️", coffee: "☕", zzz: "💤", fun: "🎈", chat: "💬", home: "🏠" };
+/** (plan 123) An NPC's plate on the table, "x,y,h" parsed once each. */
+const dishes = new Map<string, [number, number, number]>();
+function dishOf(s: string): [number, number, number] | undefined {
+  let d = dishes.get(s);
+  if (!d) {
+    const [x, y, h] = s.split(",").map(Number);
+    if (![x, y, h].every(Number.isFinite)) return undefined;
+    d = [x, y, h];
+    if (dishes.size > 300) dishes.clear();
+    dishes.set(s, d);
+  }
+  return d;
 }
 
 export class GroundsLife {
@@ -274,6 +290,12 @@ export class GroundsLife {
     role?: string;
     look?: string;
     mood?: string;
+    held?: string;
+    act?: string;
+    actAt?: number;
+    actWith?: string;
+    want?: string;
+    dish?: string;
   }): AvatarState | null {
     // (the Strike Park's bots — plan 115 phase 84: one of the world's people in their team's kit, their gun in hand;
     // `mood` is "<team>:<gun>")
@@ -319,22 +341,60 @@ export class GroundsLife {
     // world's cast, plan 120: their name, what they do, their look on their Npc; a placed one's body by `mood`: a wave,
     // crouched, running)
     const mood = n.mood ?? "";
+    // (plan 123) their life: a together act (with someone: its clip, its contact), a laugh or a shrug (an emote), a
+    // chat (talking), an order made (the machine's), what's in their hand; what they want over them
+    const act = n.act ?? "";
+    const together = act === "take" || (isSocial(act) && act !== "wave");
+    const emote =
+      mood === "wave" || act === "wave"
+        ? "wave"
+        : act === "laugh"
+          ? "laugh"
+          : act === "shrug" || act === "refuse" || act === "frown"
+            ? "question"
+            : act === "smile"
+              ? "heart"
+              : "";
+    const want = n.want ? WANT_ICON[n.want] : "";
     return {
-      name: this.castName(n),
+      name: want ? `${want} ${this.castName(n)}` : this.castName(n),
+      // (their look's seed by their name alone: not changed by what they want)
+      seedName: this.castName(n),
       avatar: this.castLook(n.look ?? ""),
       x: n.x,
       y: n.y,
       yaw: byteFace(n.yaw),
       a: n.a,
       status: "online",
-      speaking: false,
-      emote: mood === "wave" ? "wave" : "",
+      speaking: act === "chat",
+      emote,
       mic: false,
       bot: true,
+      ...(n.held === "umbrella"
+        ? { umbrella: together ? ("shut" as const) : ("open" as const) }
+        : n.held === "plate"
+          ? { tray: true }
+          : n.held
+            ? { held: n.held, heldAt: this.heldSince(n.id, n.held) }
+            : {}),
+      ...(together ? { act, actAt: n.actAt ?? 0, actWith: n.actWith ?? "" } : {}),
+      ...(act === "make" ? { busy: "coffee" } : {}),
+      ...(n.dish ? { dish: dishOf(n.dish) } : {}),
       ...(mood === "duck" ? { mv: packMv("still", true) } : mood === "run" ? { mv: packMv("jog") } : {}),
     };
   }
   private folkLooks = new Map<string, ReturnType<typeof parseAvatar>>();
+  /** (plan 123) when I first saw each NPC with what they hold (ms): their drink drunk down from then, sip by sip */
+  private folkHeld = new Map<string, { kind: string; at: number }>();
+  private heldSince(id: string, kind: string): number {
+    const h = this.folkHeld.get(id);
+    if (h?.kind === kind) return h.at;
+    const at = Date.now();
+    this.folkHeld.set(id, { kind, at });
+    // (kept small: those long gone dropped now and then)
+    if (this.folkHeld.size > 400) for (const k of [...this.folkHeld.keys()].slice(0, 200)) this.folkHeld.delete(k);
+    return at;
+  }
   /** (plan 120) a look as the cast sends it (shared packLook), parsed once */
   private castLook(s: string): ReturnType<typeof parseAvatar> {
     const key = `cast:${s}`;

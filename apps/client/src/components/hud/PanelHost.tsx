@@ -10,6 +10,8 @@ const ControllersPanel = dynamic(() => import("./ControllersPanel").then((m) => 
 // the avatar editor loads on demand (the world page is close to its size budget)
 const AvatarPanel = dynamic(() => import("./AvatarPanel").then((m) => m.AvatarPanel), { ssr: false });
 const PetPanel = dynamic(() => import("./PetPanel").then((m) => m.PetPanel), { ssr: false });
+// (plan 123) a placed NPC's card
+const NpcCard = dynamic(() => import("./NpcCard").then((m) => m.NpcCard), { ssr: false });
 const EmoteWheel = dynamic(() => import("./EmoteWheel").then((m) => m.EmoteWheel), { ssr: false });
 // the admins' panel (docs/plan/48-the-admin.md): only ever loaded for an admin
 const AdminPanel = dynamic(() => import("./admin/AdminPanel").then((m) => m.AdminPanel), { ssr: false });
@@ -21,6 +23,7 @@ export function PanelHost() {
   if (panel.kind === "pads") return <ControllersPanel onClose={() => hud.set({ panel: { kind: "settings" } })} />;
   if (panel.kind === "avatar") return <AvatarPanel />;
   if (panel.kind === "pets") return <PetPanel />;
+  if (panel.kind === "npc") return <NpcCard objectId={panel.objectId ?? ""} />;
   if (panel.kind === "emotes") return <EmoteWheel objectId={panel.objectId ?? ""} />;
   if (panel.kind === "admin") return <AdminPanel />;
   const Extra = extraPanels[panel.kind];

@@ -70,7 +70,7 @@ it('lets admins alone list, make, change and delete NPCs, the cast handed to the
         ->and($made['look'])->toBe(['hair' => 'bun', 'topColor' => '#AABBCC'])
         ->and($made['voice'])->toBe('man')
         ->and($made['lines'])->toBe([['when' => 'greet', 'en' => 'Fresh bread!', 'pt' => 'Pão fresquinho!'], ['when' => 'ambient', 'en' => 'x', 'pt' => '']])
-        ->and($made['behaviour'])->toBe(['type' => 'stand', 'hours' => 'shift', 'from' => 5, 'to' => 13, 'pace' => 1.5, 'talk' => 'often', 'greet' => true, 'answer' => false, 'shots' => 'flee'])
+        ->and($made['behaviour'])->toBe(['type' => 'stand', 'hours' => 'shift', 'from' => 5, 'to' => 13, 'pace' => 1.5, 'talk' => 'often', 'greet' => true, 'answer' => false, 'shots' => 'flee', 'traits' => null])
         ->and(mb_strlen($made['notes']))->toBe(1000);
     $this->actingAs($admin)->postJson('/api/admin/npcs', ['npc' => ['name' => ' ', 'role' => ['en' => '']]])->assertUnprocessable();
     // (no look sent — a copy of Vortex —: an object, {}, for the shared parseAvatar to fill; never PHP's [])
@@ -121,4 +121,17 @@ it('has Vortex say the cast\'s lines once seeded, by moment; none if he was dele
     expect(str_replace(' *kkzzt*', '', app(Vortex::class)->line('radio')['line']))->toBe('just the hiss');
     $v->delete();
     expect(app(Vortex::class)->line('hit')['line'])->toBeNull();
+});
+
+// plan 123: who they are (traits, 0…1 in tenths) and the lines for what's done with them
+it('keeps an NPC\'s traits and the new line moments', function () {
+    $ana = User::factory()->create(['is_admin' => true]);
+    $made = $this->actingAs($ana)->postJson('/api/admin/npcs', ['npc' => [
+        'key' => 'npc-traits', 'name' => 'Tess',
+        'behaviour' => ['traits' => ['outgoing' => 0.83, 'cheerful' => 2, 'neat' => 'x']],
+        'lines' => [['when' => 'joke', 'en' => 'Knock knock', 'pt' => 'Toc toc'], ['when' => 'nope', 'en' => 'Hi', 'pt' => '']],
+    ]])->assertCreated()->json('npc');
+    expect($made['behaviour']['traits'])->toBe(['outgoing' => 0.8, 'active' => 0.5, 'neat' => 0.5, 'cheerful' => 1])
+        ->and($made['lines'][0]['when'])->toBe('joke')
+        ->and($made['lines'][1]['when'])->toBe('ambient');
 });

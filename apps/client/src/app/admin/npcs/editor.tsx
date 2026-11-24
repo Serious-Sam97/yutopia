@@ -10,6 +10,7 @@ import {
   type NpcBehaviour,
   type NpcDef,
   type NpcLine,
+  TRAIT_KEYS,
 } from "@yutopia/shared/npc";
 import { type CSSProperties, useState } from "react";
 import { AvatarEditor } from "@/components/AvatarEditor";
@@ -408,6 +409,54 @@ function Behaviour({
             </label>
           )}
         </div>
+      </fieldset>
+      <fieldset className="space-y-2">
+        {label("traits")}
+        <label className="flex items-center gap-2 text-sm">
+          <button
+            type="button"
+            className="sw"
+            aria-pressed={b.traits === null}
+            aria-label={w("byKey")}
+            onClick={() =>
+              setB({ traits: b.traits === null ? { outgoing: 0.5, active: 0.5, neat: 0.5, cheerful: 0.5 } : null })
+            }
+            data-npc-traits-auto
+          />
+          {w("byKey")}
+        </label>
+        {b.traits !== null &&
+          TRAIT_KEYS.map((k) => {
+            const v = b.traits?.[k] ?? 0.5;
+            return (
+              <label key={k} className="flex items-center gap-3 text-sm">
+                <span className="w-56">{w(k)}</span>
+                <input
+                  type="range"
+                  className="slider w-48"
+                  min={0}
+                  max={1}
+                  step={0.1}
+                  value={v}
+                  style={{ "--v": `${v * 100}%` } as CSSProperties}
+                  onChange={(e) =>
+                    setB({
+                      traits: {
+                        outgoing: b.traits?.outgoing ?? 0.5,
+                        active: b.traits?.active ?? 0.5,
+                        neat: b.traits?.neat ?? 0.5,
+                        cheerful: b.traits?.cheerful ?? 0.5,
+                        [k]: Number(e.target.value),
+                      },
+                    })
+                  }
+                  aria-label={w(k)}
+                  data-npc-trait={k}
+                />
+                <span className="mono">{v.toFixed(1)}</span>
+              </label>
+            );
+          })}
       </fieldset>
       <fieldset>
         {label("talk")}

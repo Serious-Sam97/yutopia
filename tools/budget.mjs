@@ -62,7 +62,10 @@ import { gzipSync } from "node:zlib";
 // seats on the page — the stairs read by their yaw, the storey over yours in play; measured 494.3)
 // (raised to 498 on 2026-11-23 under the user's standing call to raise as needed: plans 118–119 — the Strike Park's
 // hooks on the page, the body's gear pass (the knife, the charge, the pack) and the view's gear loader — measured 496.6)
-const BUDGETS = { "/page": 498, "/login/page": 160 }; // KB gzip
+// (raised to 500 on 2026-11-24 under the user's standing call to raise as needed: plan 123 — NPCs alive: the action
+// menu on a placed NPC, its acts' and moods' words, the umbrella stand's prompt; the card's own words moved off the
+// page into its lazy chunk — 497.0 → 499.2 → 498.7; its double-check, the hug drawn close, 498.9)
+const BUDGETS = { "/page": 500, "/login/page": 160 }; // KB gzip
 // (/page raised from 491 on 2026-11-19 under the user's standing call: plan 109 — the God HUD's bridges state, the
 // bridge icon, the bridges' layout and kinds in the shared Grounds; measured 491.0)
 // (/page raised from 451 on 2026-11-04 under the same call: plan 72's phase 4 — the controller split

@@ -16,7 +16,9 @@ import { applyOps } from "./ops.ts";
 import { slabUnder } from "./query.ts";
 import {
   floorsOfSpace,
+  furnishingsFix,
   furnitureOf,
+  layoutAdditions,
   layoutFor,
   laySpace,
   spaceBuildings,
@@ -569,4 +571,38 @@ test("a wall no higher than its storey's ceiling, drawn or set (a house's 2.6 m 
     );
   assert.deepEqual(at(3.2), { why: "not a wall's height" });
   assert.ok("op" in at(2.4));
+});
+
+// (plan 123) a layout's later additions: a space laid before them gets them once, its ground storey marked; one laid
+// now has them already; one taken away after isn't put back
+test("layouts' additions: put into spaces laid before them, once; laid with a space laid now", () => {
+  const { st } = town();
+  assert.equal(layoutAdditions(st).ops.length, 0, "laid now: nothing to add");
+  const ground = (s: Structure, key: string) => s.floors.find((f) => f.space === key && !f.storey);
+  for (const key of ["bar", "diner", "market"]) assert.equal(ground(st, key)?.added, 1, `${key}: marked as laid`);
+  // (a world from before: its spaces laid without the marks)
+  const old: Structure = { ...st, floors: st.floors.map(({ added: _a, ...f }) => f) };
+  const add = layoutAdditions(old);
+  // (the bar, the diner, the market — and the Strike Park's canteen and bar, laid by the diner's and the bar's)
+  assert.deepEqual([...add.keys].sort(), ["bar", "diner", "market", "strike-bar", "strike-canteen"]);
+  assert.equal(add.things.length, 5);
+  for (const t of add.things) assert.equal(t.kind, "umbrella_stand");
+  // (the ids the layout's own: its place in the list, at its end — nothing laid before renumbered)
+  for (const key of add.keys) {
+    const b = spaceBuildings().find((q) => q.key === key);
+    const n = (b && layoutFor(b)?.pieces.length) ?? 0;
+    assert.ok(
+      add.things.some((t) => t.id === `sp-${key}-p${n - 1}`),
+      key,
+    );
+  }
+  const after = applyOps(old, add.ops);
+  for (const key of ["bar", "diner", "market"]) assert.equal(ground(after, key)?.added, 1);
+  assert.equal(layoutAdditions(after).ops.length, 0, "once: not again");
+  // (one made furnished in a publish, laid whole then: marked too — a stand taken away after isn't put back at loading)
+  const fix = furnishingsFix(old, [], new Set(["bar"]));
+  assert.ok(fix.add.some((t) => t.kind === "umbrella_stand"));
+  const laidWhole = applyOps(old, fix.ops);
+  assert.equal(ground(laidWhole, "bar")?.added, 1);
+  assert.ok(!layoutAdditions(laidWhole).keys.includes("bar"));
 });

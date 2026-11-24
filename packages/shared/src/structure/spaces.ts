@@ -119,6 +119,8 @@ export function laySpace(
       storey: i,
       ceil: s.ceil,
       ...(turnOf(b) !== undefined ? { turn: turnOf(b) } : {}),
+      // (plan 123: laid now, its layout's later additions with it)
+      ...(i === 0 && additionsOf(layout) ? { added: additionsOf(layout) } : {}),
     });
     // (the floor over the stairs from the storey below: open there)
     const holes: Ring[] = [];
@@ -728,6 +730,49 @@ export function spacesFix(
   return { ops: out, things, laid, moves, relaid };
 }
 
+/** (plan 123) The rounds of additions a layout has (its pieces' highest `since`; 0: none). */
+export function additionsOf(lay: Layout | null | undefined): number {
+  let n = 0;
+  for (const p of lay?.pieces ?? []) n = Math.max(n, p.since ?? 0);
+  return n;
+}
+
+/** (plan 123) What layouts gained since spaces were laid: each laid space whose ground storey has had fewer rounds of
+ *  additions than its layout now has — its newer pieces' things, and its ground storey marked as having them. Once: a
+ *  piece taken away after (an admin's call) isn't put back. */
+export function layoutAdditions(
+  st: Structure,
+  buildings: readonly Building[] = spaceBuildings(),
+): { ops: StructOp[]; things: WorldObjectDef[]; keys: string[] } {
+  const things: WorldObjectDef[] = [];
+  const keys: string[] = [];
+  const marked = new Map<number, Floor>();
+  for (const b of buildings) {
+    if (!hasSpace(b)) continue;
+    const lay = layoutFor(b);
+    const rev = additionsOf(lay);
+    if (!lay || !rev) continue;
+    const list = st.floors
+      .filter((f) => f.space === b.key && !f.away)
+      .sort((x, y) => (x.storey ?? 0) - (y.storey ?? 0));
+    const g = list.find((f) => (f.storey ?? 0) === 0);
+    if (!g || (g.added ?? 0) >= rev) continue;
+    const had = g.added ?? 0;
+    const ids = new Set(lay.pieces.flatMap((p, i) => ((p.since ?? 0) > had ? [`sp-${b.key}-p${i}`] : [])));
+    things.push(
+      ...layoutThings(
+        b,
+        lay,
+        list.map((f) => f.index),
+      ).filter((t) => ids.has(t.id)),
+    );
+    marked.set(g.index, { ...g, added: rev });
+    keys.push(b.key);
+  }
+  if (!marked.size) return { ops: [], things: [], keys: [] };
+  return { ops: [{ op: "floors", floors: st.floors.map((f) => marked.get(f.index) ?? f) }], things, keys };
+}
+
 /** Why a building's new plot or storeys can't hold what's built in its space (null: it can) — plan 54's rule: a
  *  publish never leaves walls or things outside a building, nor on a storey it no longer has. `things`: every thing
  *  in the world. */
@@ -861,9 +906,10 @@ export function furnishingsFix(
   objects: readonly WorldObjectDef[],
   turned: ReadonlySet<string>,
   buildings: readonly Building[] = spaceBuildings(),
-): { add: WorldObjectDef[]; drop: string[] } {
+): { add: WorldObjectDef[]; drop: string[]; ops: StructOp[] } {
   const add: WorldObjectDef[] = [];
   const drop: string[] = [];
+  const laid: Building[] = [];
   for (const b of buildings) {
     if (!turned.has(b.key)) continue;
     const levels = floorsOfSpace(st, b.key)
@@ -874,7 +920,20 @@ export function furnishingsFix(
     const have = objects.filter(mine);
     if (b.enter && !have.length) {
       add.push(...furnitureOf(b, layoutFor(b), levels));
+      laid.push(b);
     } else if (!b.enter) drop.push(...have.map((o) => o.id));
   }
-  return { add, drop };
+  // (plan 123: laid whole now, its layout's later additions with it — marked, so loading never adds them again)
+  return { add, drop, ops: markAdditions(st, laid) };
+}
+
+/** (plan 123) Spaces laid whole now: their ground storeys marked as having every round of their layouts' additions. */
+export function markAdditions(st: Structure, laid: readonly Building[]): StructOp[] {
+  const marked = new Map<number, Floor>();
+  for (const b of laid) {
+    const rev = additionsOf(layoutFor(b));
+    const g = st.floors.find((f) => f.space === b.key && !f.away && (f.storey ?? 0) === 0);
+    if (rev && g && (g.added ?? 0) < rev) marked.set(g.index, { ...g, added: rev });
+  }
+  return marked.size ? [{ op: "floors", floors: st.floors.map((f) => marked.get(f.index) ?? f) }] : [];
 }

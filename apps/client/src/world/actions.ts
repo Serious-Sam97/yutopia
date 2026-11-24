@@ -45,6 +45,8 @@ export interface ActionHost {
   object(id: string): WorldObjectDef | undefined;
   person(sid: string): { x: number; y: number; uid: number; name: string } | undefined;
   pet(id: string): { x: number; y: number; name: string } | undefined;
+  /** (plan 123) a placed NPC, where they're drawn */
+  npc(id: string): { x: number; y: number; name: string } | undefined;
   walk(to: Point): boolean; // false: no way there
   walking(): boolean;
   stopWalking(): void;
@@ -87,6 +89,8 @@ interface Running {
   spot?: Point; // where to stand to use it (in front of it)
 }
 
+/** (plan 123) how near a placed NPC to do something with them (the server's: 2.2 m) */
+const NPC_REACH = 2;
 export class ActionQueue {
   private items: Queued[] = [];
   private cur: Running | null = null;
@@ -195,6 +199,13 @@ export class ActionQueue {
       const spot = besideOf(h.grid(), p, me);
       return !!spot && h.walk(spot);
     }
+    if (t.type === "npc") {
+      const p = h.npc(t.id);
+      if (!p) return false;
+      if (this.inReach(c.q)) return true;
+      const spot = besideOf(h.grid(), p, me);
+      return !!spot && h.walk(spot);
+    }
     if (t.type === "person") {
       const p = h.person(t.sid);
       if (!p) return false;
@@ -235,6 +246,12 @@ export class ActionQueue {
     if (q.target.type === "pet") {
       const p = h.pet(q.target.id);
       return !!p && Math.hypot(p.x - me.x, p.y - me.y) <= PET_REACH;
+    }
+    if (q.target.type === "npc") {
+      const p = h.npc(q.target.id);
+      if (!p) return false;
+      const act = q.act.replace(/^npc_/, "");
+      return Math.hypot(p.x - me.x, p.y - me.y) <= (act === "wave" ? 6 : NPC_REACH);
     }
     if (q.target.type === "person") {
       const p = h.person(q.target.sid);
@@ -293,6 +310,15 @@ export class ActionQueue {
         return null;
       }
       return null;
+    }
+    if (q.target.type === "npc") {
+      // (plan 123) done with a placed NPC: the server weighs it, they answer — a together act takes its while
+      const p = h.npc(q.target.id);
+      if (!p) return null;
+      h.setFacing(face8(p.x - me.x, p.y - me.y, me.yaw));
+      const act = q.act.replace(/^npc_/, "");
+      h.send("npc:act", { id: q.target.id, act });
+      return later(isSocial(act) ? SOCIAL_MS[act] : 1200);
     }
     if (q.target.type === "person") {
       const p = h.person(q.target.sid);

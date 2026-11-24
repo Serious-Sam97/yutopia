@@ -1,3 +1,4 @@
+import type { NpcAbout } from "@yutopia/shared";
 import {
   entry,
   face8,
@@ -49,6 +50,31 @@ export type ActionMenuHost = Pick<
 
 export class ActionMenu {
   constructor(private readonly c: ActionMenuHost) {}
+  /** (plan 123) a placed NPC's menu asked for: opened once they're known (`npc:about`) */
+  private pendingNpc: { id: string; at: { x: number; y: number }; chosen: boolean; t: number } | null = null;
+  /** (plan 123) the NPC whose answer is opening their menu now */
+  private answered = "";
+
+  /** (plan 123) what a placed NPC is to me now: kept (the panel's), their menu opened if it was asked for. */
+  aboutCame(m: NpcAbout) {
+    hud.set({ npcAbout: m });
+    const p = this.pendingNpc;
+    if (p && p.id === m.id) {
+      this.pendingNpc = null;
+      // (opened on this answer, not one kept from before; not late, not over another menu opened meanwhile)
+      if (performance.now() - p.t < 3000 && !hud.get().menu) {
+        this.answered = m.id;
+        this.openMenu({ type: "npc", id: m.id }, p.at, p.chosen);
+        this.answered = "";
+      }
+    }
+  }
+  /** (plan 123) how it went: said if they wouldn't, the bond kept. */
+  actedCame(m: { id: string; act: string; ok: boolean; react: string; bond: NpcAbout["bond"] }) {
+    const a = hud.get().npcAbout;
+    if (a?.id === m.id) hud.set({ npcAbout: { ...a, bond: m.bond } });
+    if (!m.ok && m.react === "refuse") toast(tr("npcRefused"), "info");
+  }
 
   // What can be done with it, with a title (and a line about it): null when
   // there's nothing to do.
@@ -96,6 +122,20 @@ export class ActionMenu {
       const feeling = tr(`feel_${P.feelingOf(petNeeds(pet))}` as never);
       return { title: pet.name, subtitle: `${tr(`sp_${sp}` as never)} · Lv ${pet.level} · ${feeling}`, items };
     }
+    if (target.type === "npc") {
+      // (plan 123) what the server says I can do with them now (`npc:about`), and their card
+      const a = hud.get().npcAbout;
+      const n = room.state.npcs?.get(target.id);
+      if (!n || a?.id !== target.id) return null;
+      const items = a.acts.map((act) => ({ act: `npc_${act}`, ok: true }));
+      items.push({ act: "npcCard", ok: true });
+      const bits = [
+        a.job ? tr(`job_${a.job}` as never) : "",
+        tr(`npcMood_${a.mood}` as never),
+        tr(`npcBond_${a.bond.level}` as never),
+      ].filter(Boolean);
+      return { title: a.name || n.name, subtitle: bits.join(" · "), items };
+    }
     if (target.type === "person") {
       const p = room.state.players.get(target.sid);
       if (!p) return null;
@@ -130,6 +170,13 @@ export class ActionMenu {
   }
 
   openMenu(target: ActTarget, at: { x: number; y: number }, chosen = false): boolean {
+    // (plan 123) a placed NPC's: asked of the server first, opened when it answers
+    // (what I can do with them changes — what I hold, where they are, how they feel —: asked afresh every time)
+    if (target.type === "npc" && this.answered !== target.id) {
+      this.pendingNpc = { id: target.id, at, chosen, t: performance.now() };
+      this.c.send("npc:about", { id: target.id });
+      return true;
+    }
     const m = this.menuFor(target);
     if (!m) return false;
     mixer.blip("click");
@@ -189,6 +236,8 @@ export class ActionMenu {
       return;
     }
     if (act === "look") return hud.set({ panel: { kind: "avatar" } });
+    // (plan 123) a placed NPC's card: at once
+    if (act === "npcCard" && t.type === "npc") return hud.set({ panel: { kind: "npc", objectId: t.id } });
     // a pet's commands need no walking over; care, toys and lessons do
     if (t.type === "pet") {
       const id = t.id;

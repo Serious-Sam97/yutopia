@@ -1,5 +1,6 @@
 "use client";
 
+import type { NpcAbout } from "@yutopia/shared";
 import type { BuildingKind, WayKind } from "@yutopia/shared/grounds";
 import type { LandMode, Paint, TreePick } from "@yutopia/shared/grounds-brush";
 import type { BridgeRails, BridgeStyle, GrowBiome, ThingKind } from "@yutopia/shared/grounds-edits";
@@ -72,6 +73,7 @@ export type PanelKind =
   | "motors" // the car dealer's (car/cars.ts registers it: docs/plan/43-the-spot.md)
   | "admin" // Run the place: admins only (docs/plan/48-the-admin.md)
   | "chess" // at a chess table: the HUD strip (docs/plan/70-the-chess.md)
+  | "npc" // a placed NPC's card: their needs, mood, work, how they feel about me (docs/plan/123, F8b; objectId: theirs)
   | null;
 
 // A pet in the room (shared/pets.ts), as the panel and the menus see it.
@@ -123,6 +125,7 @@ export type ActTarget =
   | { type: "object"; id: string }
   | { type: "person"; sid: string }
   | { type: "pet"; id: string }
+  | { type: "npc"; id: string }
   | { type: "self" };
 export interface ActionMenu {
   x: number; // where it opens (client px)
@@ -440,7 +443,7 @@ export interface GodHud {
     a: number;
     sel: string | null;
     /** the picked one's: drawing their route, picking their home */
-    step: "" | "route" | "home";
+    step: "" | "route" | "home" | "work";
     floor: GodFloor | null;
     blocked: string | null;
   };
@@ -578,6 +581,8 @@ export interface HudState {
   wrap: { id: string } | null; // (plan 68) at a wrapping table: who it's for
   menu: ActionMenu | null;
   queue: QueuedAct[];
+  /** (plan 123) a placed NPC as they are to me, as last asked (the menu's acts, the panel: F8b) */
+  npcAbout: NpcAbout | null;
   focus: boolean; // heads down at my desk
   torch: boolean; // my phone's flashlight on
   mySpawn: { x: number; y: number } | null; // where I arrive (null: the world's arrival point)
@@ -727,6 +732,7 @@ const initial: HudState = {
   wrap: null,
   menu: null,
   queue: [],
+  npcAbout: null,
   focus: false,
   torch: false,
   mySpawn: null,

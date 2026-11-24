@@ -437,6 +437,14 @@ export interface ClientMessages {
   "vortex:poke": Record<string, never>;
   // (plan 121) X "Talk" to a placed NPC (`place:<key>`): an answer said aloud, if they answer
   "npc:talk": { id: string };
+  // (plan 123) what a placed NPC is to me now (the menu's acts, the panel: NpcAbout back); something done with them
+  // (npc/mind.ts NPC_ACTS)
+  "npc:about": { id: string };
+  "npc:act": { id: string; act: string };
+  // (plan 123) an admin's: how a placed NPC feels about them, set (−100…100)
+  "mod:npcBond": { id: string; v: number };
+  // (plan 123) an umbrella from the stand I'm by: into my left hand (what was there to the pack)
+  "umbrella:take": Record<string, never>;
   // (plan 88) an admin's, for trying the fight: an act or his health set, beaten, reset; put somewhere and held
   "mod:vortex": {
     act?: 1 | 2 | 3;
@@ -693,10 +701,32 @@ export interface ClientMessages {
 }
 
 // server → client
+/** (plan 123) A placed NPC as they are to me: who, their work, their mood and needs, what they want and are at, how
+ *  they feel about me, what I can do with them now. */
+export interface NpcAbout {
+  id: string;
+  name: string;
+  /** EN, or EN\x1fPT */
+  role: string;
+  job: string;
+  work: string;
+  shift: [number, number] | null;
+  home: string;
+  mood: string;
+  needs: Record<string, number>;
+  want: string;
+  doing: string;
+  traits: Record<string, number>;
+  bond: { v: number; n: number; level: string };
+  acts: string[];
+}
 export interface ServerMessages {
   // god mode (docs/plan/53-the-god-mode.md): published as revision `rev`; refused and why; the
   // edits laid (offline only: online, every client fetches them from the API)
   "god:published": { rev: number };
+  // (plan 123) a placed NPC as they are to me; how what I did went (taken or not, how they took it, the bond now)
+  "npc:about": NpcAbout;
+  "npc:acted": { id: string; act: string; ok: boolean; react: string; bond: NpcAbout["bond"] };
   "god:refused": { reason: string; problems: string[] };
   "god:edits": GroundsEdits;
   snap: { x: number; y: number; z?: number; level?: number };

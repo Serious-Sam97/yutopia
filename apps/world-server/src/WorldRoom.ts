@@ -137,7 +137,7 @@ import {
   withOn,
 } from "@yutopia/shared/structure";
 import { finishWorld } from "@yutopia/shared/structure/finish";
-import { furnishingsFix, spacesFix } from "@yutopia/shared/structure/spaces";
+import { furnishingsFix, layoutAdditions, spacesFix } from "@yutopia/shared/structure/spaces";
 import { ApiError, api, type PresenceEntry, type WorldInfo } from "./api.ts";
 import { verifyWorldToken, type WorldClaims } from "./auth.ts";
 import { castMap, loadCast, placedKeys } from "./cast.ts";
@@ -288,6 +288,13 @@ export class WorldRoom extends Room<WorldState> {
   private castPushed = false;
   /** (plan 121) the cast NPCs God mode placed (features/npc-life.ts plays them): their own features let them go */
   placed: ReadonlySet<string> = new Set();
+  /** (plan 123) a placed NPC's mind (features/npc-life.ts): read, and their needs set — a fresh choice made then */
+  npcMind: {
+    needs(key: string): Record<string, number> | null;
+    nudge(key: string, needs: Record<string, number>): void;
+    /** what they're at: their mode, their plan's kind and where, its stage */
+    doing(key: string): { mode: string; kind: string; at: string; stage: string } | null;
+  } | null = null;
   strike: StrikeHooks | null = null; // (plan 114) features/strike.ts: the match — its players' hits (features/arms.ts)
   /** (plan 97) features/cars.ts: the size of each of its maps, for the memory checker */
   carMaps: (() => Record<string, number>) | null = null;
@@ -1988,12 +1995,33 @@ export class WorldRoom extends Room<WorldState> {
         }
       } else this.applyStruct(fix.ops);
     }
+    // (plan 123) what the town's layouts gained since its spaces were laid (an umbrella stand by a door): put in once,
+    // the space marked as having it — at loading only
+    if (boot) {
+      const add = layoutAdditions(this.structure);
+      if (add.ops.length) {
+        const fresh = add.things.filter((t) => !objects.some((o) => o.id === t.id));
+        for (const t of fresh) put(t);
+        objects = [...objects, ...fresh];
+        this.structure = applyOps(this.structure, add.ops);
+        setSpaceFloors(this.structure.floors);
+        if (!config.offline) {
+          if (this.layoutTimer) clearTimeout(this.layoutTimer);
+          this.layoutTimer = setTimeout(() => void this.saveStructure(), 1200);
+        }
+        console.log(`[spaces] layouts' additions put in: ${add.keys.join(", ")} (${fresh.length} things)`);
+      }
+    }
     // (a building made furnished or empty in this publish: its furniture laid or taken away — plan 113; after the
     // moves, so what's laid is laid where it stands now and isn't moved again)
     if (turned.size) {
       const f = furnishingsFix(this.structure, objects, turned);
       for (const id of f.drop) drop(id);
       for (const t of f.add) put(t);
+      if (f.ops.length) {
+        if (boot) this.structure = applyOps(this.structure, f.ops);
+        else this.applyStruct(f.ops);
+      }
       const gone = new Set(f.drop);
       objects = [...objects.filter((o) => !gone.has(o.id)), ...f.add];
     }

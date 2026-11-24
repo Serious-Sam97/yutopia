@@ -3,6 +3,7 @@ import { checkVehicles, isCarKind, validLook } from "@yutopia/shared/car";
 import { BUILDINGS, buildingsFor, CHUNK, checkEdits, editsNow, heightAt, insideOf } from "@yutopia/shared/grounds";
 import type { GroundsEdits } from "@yutopia/shared/grounds-edits";
 import { beyondLand, REACH_MARGIN } from "@yutopia/shared/land";
+import { checkNpcPlaces } from "@yutopia/shared/npc/places";
 import { spaceShrinkWhy } from "@yutopia/shared/structure/spaces";
 import { api } from "../api.ts";
 import { config } from "../config.ts";
@@ -65,6 +66,22 @@ registerFeature((room: WorldRoom) => {
    *  built in it is left outside it, on a storey it hasn't now, or laid over — every building as these edits would
    *  have it, not only those they name (a draft's a whole set: an entry left out puts its building back as the town
    *  had it; a rollback the same — plan 113 review). One taken away keeps its inside, out of the world. */
+  // the draft's NPCs (plans 121, 123): each one of the cast, their home and work in a town building that's there — on
+  // one of its storeys —, their floors floors there are
+  const npcProblems = (e: GroundsEdits): string[] => {
+    const floors = room.structure.floors;
+    return checkNpcPlaces(e, {
+      npc: (k) => room.cast.get(k),
+      home: (k) => floors.some((f) => f.space === k && (f.storey ?? 0) === 0),
+      level: (l) => l === 0 || floors.some((f) => f.index === l),
+      storeyOf: (b, l) => floors.some((f) => f.space === b && f.index === l),
+      within: (l, x, z) =>
+        floors.some(
+          (f) =>
+            f.index === l && x >= f.grid.x0 && x <= f.grid.x0 + f.grid.w && z >= f.grid.y0 && z <= f.grid.y0 + f.grid.h,
+        ),
+    });
+  };
   const spaceProblems = (e: GroundsEdits): string[] => {
     const out: string[] = [];
     const things = [...room.state.objects.values()].map(fromSchema);
@@ -242,7 +259,12 @@ registerFeature((room: WorldRoom) => {
           c,
           `Revision ${room.state.groundsRev} is live; your draft was made on ${draft.baseRev}. Bring it up to date first.`,
         );
-      const problems = [...checkEdits(draft.data), ...vehicleProblems(draft.data), ...spaceProblems(draft.data)];
+      const problems = [
+        ...checkEdits(draft.data),
+        ...vehicleProblems(draft.data),
+        ...spaceProblems(draft.data),
+        ...npcProblems(draft.data),
+      ];
       if (problems.length) return refuse(c, "The draft can't be published as it is.", problems);
       const rev = await commit(p, draft.data, { note, draftId: id });
       if (config.offline) offlineDrafts.delete(id);

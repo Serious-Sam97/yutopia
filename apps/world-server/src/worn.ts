@@ -19,6 +19,7 @@ export function wear(p: Player, inv: Inventory | null | undefined): void {
     (on("shotgun") ? WORN.sling : 0) |
     (on("ak47") ? WORN.slingAk : 0) |
     (on("sniper") ? WORN.slingSn : 0) |
-    (on("daybreak") ? WORN.slingDb : 0);
+    (on("daybreak") ? WORN.slingDb : 0) |
+    (inv?.hand?.id === "umbrella" ? WORN.umbrella : 0);
   if (p.worn !== worn) p.worn = worn;
 }

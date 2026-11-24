@@ -122,6 +122,7 @@ import { HIDDEN_LAYER } from "./below-cull";
 import { type FadeGroup, World3 } from "./build";
 import { BuildLayer } from "./build3d";
 import { facadeWindows, type Outline } from "./campus";
+import { closeIn } from "./close-in";
 import { FogBanks } from "./fog-banks";
 import { flatLight } from "./fog3d";
 import { FollowCam } from "./follow-cam";
@@ -752,6 +753,7 @@ export class ThirdPersonView {
   dragged = -10; // time of the last manual turn
   activeAt = 0; // when the pointer or keys last did something here (performance.now)
   time = 0;
+  private closeSeen = new Map<string, number>(); // (plan 123) when each close act was first drawn (tp/close-in.ts)
 
   // input
   private keys = new Set<string>();
@@ -2682,7 +2684,10 @@ void main() {
       const h = this.upTo(l);
       return [{ ...b, z: (b.z ?? 0) + h, ground: (b.ground ?? 0) + h }];
     });
+    // (my own place, as it is: the camera's — not the step a hug draws me in by)
     const me = bodies.find((b) => b.id === meId);
+    // (plan 123) a hug, a kiss on the cheek, a handshake: the two drawn in close for it
+    bodies = closeIn(bodies, this.time, this.closeSeen);
     this.syncStairs(dt, bodies);
     const pad = this.padFree ? activePad() : null;
     // look around: the arrows, the right stick — the chase camera's the KH camera's (follow-cam.ts,

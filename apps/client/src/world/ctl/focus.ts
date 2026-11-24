@@ -1,7 +1,8 @@
-import { entry, reachOf, type WorldObjectDef } from "@yutopia/shared";
+import { entry, objLevel, reachOf, thingMiddle, type WorldObjectDef } from "@yutopia/shared";
 import { isGameTv } from "@yutopia/shared/games";
 import { offBand, spanOf } from "@yutopia/shared/reach";
 import { rackBoard, rackNear } from "@yutopia/shared/skate/racks";
+import { wears } from "@yutopia/shared/worn";
 import { type Key, tr } from "@/lib/i18n";
 import { prefs, setPrefs } from "@/lib/prefs";
 import type { WorldController } from "../controller";
@@ -172,6 +173,21 @@ export class Focus {
       if (cur?.objectId !== id) hud.set({ prompt: { objectId: id, kind: "skate:rack", label: `Take the ${rb.name}` } });
       return;
     }
+    // (plan 123 F9a) by an umbrella stand on my floor: one to take — not with one on me already (the server's rule:
+    // one each), and not over what I'm looking at (a door, someone: theirs first)
+    const stand = this.standNear();
+    // (what's in front of me looked at again here too: the stand's prompt mustn't hold it as it was)
+    const tg0 = this.c.walker?.targets;
+    if (stand && tg0 && performance.now() - this.standFocusAt > 120) {
+      this.standFocusAt = performance.now();
+      tg0.update();
+    }
+    if (stand && !tg0?.focus) {
+      const cur = hud.get().prompt;
+      if (cur?.objectId !== stand.id || cur.kind !== "umbrella:stand")
+        hud.set({ prompt: { objectId: stand.id, kind: "umbrella:stand", label: tr("takeUmbrella") } });
+      return;
+    }
     // the shuttle at its stop, near: on (or off, riding)
     const lp = this.c.room?.state.players.get(this.c.room.sessionId);
     const ride =
@@ -244,11 +260,36 @@ export class Focus {
     menuFor: (t) => this.c.menu.menuFor(t),
   };
 
+  // (plan 123) the umbrella stand near me, looked for a few times a second, not every frame
+  private standAt = 0;
+  private standFocusAt = 0;
+  private stand: WorldObjectDef | null = null;
+  private standNear(): WorldObjectDef | null {
+    const now = performance.now();
+    if (now < this.standAt) return this.stand;
+    this.standAt = now + 250;
+    const lp = this.c.room?.state.players.get(this.c.room.sessionId);
+    this.stand =
+      // (one on me already — in a hand, the pockets, a quick slot —: the server's one each)
+      lp && !wears(lp.worn, "umbrella") && lp.held !== "umbrella" && !this.c.walker?.carried("umbrella")
+        ? (this.c.model
+            ?.allObjects()
+            .find(
+              (o) =>
+                o.kind === "umbrella_stand" &&
+                objLevel(o, this.c.map) === this.c.level &&
+                Math.hypot(thingMiddle(o)[0] - this.c.me.x, thingMiddle(o)[1] - this.c.me.y) <= 1.6,
+            ) ?? null)
+        : null;
+    return this.stand;
+  }
+
   /** Use, tapped: a car's door, the shuttle, else the focus's main action (docs/plan/56 C). */
   interact() {
     const p = hud.get().prompt;
     // (plan 103) a rack's board: into the left hand (if it's free), key 1 rides it
     if (p?.kind === "skate:rack") return this.c.send("skate:take", { variant: p.objectId.split("|")[1] });
+    if (p?.kind === "umbrella:stand") return this.c.send("umbrella:take", {});
     if (p && this.c.cars?.act(p.kind, p.objectId)) return;
     if (p?.kind === "ride" || p?.kind === "ride:leave")
       return this.c.send(p.kind === "ride" ? "ride:board" : "ride:leave", {});
@@ -257,10 +298,10 @@ export class Focus {
     if (!f) return;
     // (locked on to it from over there: walked over to)
     if (f.kind === "object" && f.act === "use") return this.c.menu.activateObject(f.objectId ?? "", !!this.lock);
-    // (plan 121: a placed NPC talked to; else Vortex poked)
+    // (plans 121, 123: a placed NPC talked to — walked up to first; else Vortex poked)
     if (f.kind === "npc")
-      return f.key.startsWith("npc:place:")
-        ? this.c.send("npc:talk", { id: f.key.slice(4) })
+      return f.key.startsWith("npc:place:") && f.menu
+        ? this.c.menu.doAct("npc_talk", f.menu, f.label)
         : this.c.send("vortex:poke", {});
     if (f.kind === "toy") return this.c.pets.pickToy(f.key.slice(4));
     if (f.menu) this.c.menu.doAct(f.act, f.menu, f.label);

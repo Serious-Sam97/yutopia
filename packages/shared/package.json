@@ -80,6 +80,8 @@
     "./npc": "./src/npc/cast.ts",
     "./npc/town": "./src/npc/town.ts",
     "./npc/places": "./src/npc/places.ts",
+    "./npc/mind": "./src/npc/mind.ts",
+    "./npc/lines": "./src/npc/lines.ts",
     "./move": "./src/move/index.ts",
     "./move/flow-moves": "./src/move/flow-moves.ts",
     "./dark": "./src/dark/index.ts",

@@ -106,6 +106,13 @@ export const W = {
   greet: ["Say hello to someone coming near", "Cumprimentam quem chega perto"],
   answer: ["Answer when talked to (X)", "Respondem quando falam com eles (X)"],
   reactions: ["Reactions", "Reações"],
+  // (plan 123) who they are
+  traits: ["Who they are", "Quem são"],
+  byKey: ["Their own (from their key)", "Do jeito deles (pela chave)"],
+  outgoing: ["Shy · Outgoing", "Tímido · Extrovertido"],
+  active: ["Laid-back · Active", "Tranquilo · Ativo"],
+  neat: ["Messy · Neat", "Bagunceiro · Organizado"],
+  cheerful: ["Grumpy · Cheerful", "Ranzinza · Alegre"],
   shots: ["Shots near them", "Tiros por perto"],
   notes: ["Notes for admins", "Notas para admins"],
   notesHint: ["Only admins see these. Up to 1000 letters.", "Só admins veem. Até 1000 letras."],

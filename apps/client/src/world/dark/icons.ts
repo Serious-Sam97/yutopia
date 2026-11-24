@@ -28,6 +28,9 @@ export const ICON: Record<ItemId, string> = {
   // (plan 88) Vortex's tape: a black cassette, his pink label, its tape out
   vxtape:
     '<svg viewBox="0 0 48 48"><rect x="6" y="11" width="36" height="24" rx="3" fill="#1d1d22"/><rect x="9" y="14" width="30" height="12" rx="1.5" fill="#ff2d95"/><circle cx="17" cy="20" r="3" fill="#ddd"/><circle cx="31" cy="20" r="3" fill="#ddd"/><path d="M22 35c0 4-4 4-4 8M26 35c0 3 3 5 2 9" stroke="#4a2c18" stroke-width="1.6" fill="none"/></svg>',
+  // (plan 123) an umbrella, furled and slanted, its crook
+  umbrella:
+    '<svg viewBox="0 0 48 48"><g transform="rotate(-35 24 24)"><path d="M24 4l5 26h-10z" fill="#2f5d8a"/><path d="M24 4l2.5 26h-5z" fill="#3f73a6"/><rect x="23" y="30" width="2" height="9" fill="#2a2724"/><path d="M24 39v3a3 3 0 0 0 6 0" stroke="#5a3a22" stroke-width="2.4" fill="none"/></g></svg>',
   // (plan 87) the torch: its body slanted, the head and a lit lens
   torch:
     '<svg viewBox="0 0 48 48"><g transform="rotate(-40 24 24)"><rect x="20" y="16" width="8" height="26" rx="2" fill="#2b2e33"/><path d="M19 16l-3-8h16l-3 8z" fill="#3a3f46"/><rect x="15" y="5" width="18" height="4" rx="1.5" fill="#c9cdd2"/><rect x="17" y="6" width="14" height="2" fill="#fff1c9"/><path d="M20 22h8M20 26h8M20 30h8" stroke="#1b1d21" stroke-width="1.2"/></g></svg>',

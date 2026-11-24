@@ -1,4 +1,13 @@
-import { ANIM, chillOf, levelMap, objLevel, spaceFloor, tempUp, type WorldObjectDef } from "@yutopia/shared";
+import {
+  ANIM,
+  chillOf,
+  levelMap,
+  objLevel,
+  spaceFloor,
+  tempUp,
+  thingMiddle,
+  type WorldObjectDef,
+} from "@yutopia/shared";
 import { hasPower } from "@yutopia/shared/admin";
 import { bikeSprinting, isBikeKind } from "@yutopia/shared/bike";
 import {
@@ -184,6 +193,8 @@ function boardToHand(inv: Inventory, id: StackId): boolean {
   return true;
 }
 
+/** (plan 123) how near an umbrella stand to take one (m, from its middle) */
+const UMBRELLA_REACH = 1.8;
 const offlineSurvivors = new Map<number, SurvivorRecord>();
 /** The lobby locker's clock, ahead by `shift` ms (the tests' next day). */
 export const kitClock = { shift: 0 };
@@ -736,6 +747,22 @@ registerFeature((room: WorldRoom) => {
     // (plan 103: into the left hand — key 1 rides it —, what was there to the pack; no room, the board to the pack)
     const n = boardToHand(s.inv, id) ? 1 : addStack(s.inv, id, 1);
     found(s, client.sessionId, `rack:${rack.id}`, n ? [{ id, n }] : [], !n);
+  });
+  // (plan 123 F9a) an umbrella from an umbrella stand within reach: into the left hand (key 1), what was there to the
+  // pack — one carried at most
+  room.on("umbrella:take", (client) => {
+    const p = room.state.players.get(client.sessionId);
+    const s = p && people.get(p.uid);
+    if (!p || !s?.loaded || p.busy || p.downAt || count(s.inv, "umbrella") >= 1) return;
+    let stand = "";
+    for (const o of room.state.objects.values())
+      if (o.kind === "umbrella_stand" && objLevel(fromSchema(o), room.map) === p.level) {
+        const [mx, my] = thingMiddle(fromSchema(o));
+        if (Math.hypot(mx - p.x, my - p.y) <= UMBRELLA_REACH) stand = o.id;
+      }
+    if (!stand) return;
+    const n = boardToHand(s.inv, "umbrella") ? 1 : addStack(s.inv, "umbrella", 1);
+    found(s, client.sessionId, `stand:${stand}`, n ? [{ id: "umbrella", n }] : [], !n);
   });
   room.on("mod:down", (client) => {
     const p = room.state.players.get(client.sessionId);

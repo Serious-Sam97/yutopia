@@ -52,6 +52,7 @@ const W = {
   k_publish: ["published the open world's {d}", "publicou o mundo aberto: {d}"],
   k_rollback: ["rolled the open world back {d}", "voltou o mundo aberto {d}"],
   k_god: ["god mode: {d}", "modo deus: {d}"],
+  k_npcbond: ["set an NPC's bond with them: {d}", "definiu a relação de um NPC: {d}"],
 } as const;
 type Word = keyof typeof W;
 
@@ -75,7 +76,7 @@ const GROUPS: Record<string, string[]> = {
   powers: ["power"],
   roles: ["admin", "unadmin"],
   invites: ["invite"],
-  god: ["publish", "rollback", "god"],
+  god: ["publish", "rollback", "god", "npcbond"],
 };
 const ICON: Record<string, IconName> = {
   mute: "micOff",
@@ -90,6 +91,7 @@ const ICON: Record<string, IconName> = {
   steps: "walk",
   weather: "cam",
   weathersound: "ear",
+  npcbond: "heart",
   storm: "cam",
   fog: "cam",
   notice: "send",

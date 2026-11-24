@@ -55,6 +55,10 @@ export interface AvatarState {
   ringing?: boolean;
   recording?: boolean; // its camera recording (a red light)
   torch?: boolean; // the torch on, in the left hand (plan 87: an item, lit only from there)
+  umbrella?: "open" | "shut"; // (plan 123) an umbrella in the left hand: open in rain out on the land, else furled
+  tray?: boolean; // (plan 123) a waiter's plate carried out on the right hand
+  dish?: [number, number, number]; // (plan 123) their meal on the table before them: x, y, the table's top
+  seedName?: string; // (plan 123) the name their look's seeded by, when the tag shows more
   flare?: boolean; // (plan 87 F3b) a flare lit and held up in the left hand
   focused?: boolean; // …focused while aiming (docs/plan/30-the-dark.md D4)
   gun?: string; // the weapon in the hand (D6)

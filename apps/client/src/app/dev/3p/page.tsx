@@ -20,7 +20,8 @@ import { useEffect, useRef, useState } from "react";
 // wander and sit, seen by a three.js camera behind you. Dev only (or a build
 // with NEXT_PUBLIC_YUTOPIA_SHOTS=1).
 //   /dev/3p?crowd=8&hour=12&cam=chase|free|first&x=&y=&yaw=&pitch=&dist=&frozen=1
-//   &me=phone:text|held:mug|type|busy:coffee|emote:wave|act:highfive|gun:revolver|gun:shotgun  (what you're doing:
+//   &me=phone:text|held:mug|type|busy:coffee|emote:wave|act:highfive|gun:revolver|gun:shotgun|umbrella:shut|tray|dish
+//   (what you're doing — plan 123: an umbrella in the left hand, open or furled; a waiter's plate carried out —:
 //   first person's hands; a gun aims, &aim=0 at the hip, &torch=1 the flashlight on too,
 //   &reload=1 reloading; &walk=1 / &run=1 round in a circle)
 //   &shade=1  one of the shadowed a few steps ahead, shot down every 6 s (its death);
@@ -143,15 +144,21 @@ export default function ThirdPersonDemo() {
                   ? { emote: what || "wave" }
                   : doing === "act"
                     ? { act: what || "wave", actAt: since }
-                    : doing === "gun"
-                      ? // (a gun out, aiming: &aim=0 at the hip)
-                        {
-                          gun: what || "revolver",
-                          mv: q.get("aim") === "0" ? 0 : 16,
-                          pitch: Number(q.get("aimPitch") ?? 0),
-                          torch: q.get("torch") === "1",
-                        }
-                      : null;
+                    : doing === "umbrella"
+                      ? { umbrella: what === "open" ? "open" : "shut" }
+                      : doing === "tray"
+                        ? { tray: true }
+                        : doing === "dish"
+                          ? { a: 2 }
+                          : doing === "gun"
+                            ? // (a gun out, aiming: &aim=0 at the hip)
+                              {
+                                gun: what || "revolver",
+                                mv: q.get("aim") === "0" ? 0 : 16,
+                                pitch: Number(q.get("aimPitch") ?? 0),
+                                torch: q.get("torch") === "1",
+                              }
+                            : null;
       const view = new ThirdPersonView(map, objects, { themes });
       // (the bots and you on Jolt's world once the view's is in)
       demo.placeOf = () => view.body.placeFor(null, floorOf(map));
@@ -275,6 +282,11 @@ export default function ThirdPersonDemo() {
           Object.assign(demo.me, { angle: view.yaw + Number(q.get("turn")) });
         // (an act plays again every 2.5 s, so there's always one to look at)
         if (meState?.act) Object.assign(demo.me, { actAt: Math.floor(Date.now() / 2500) * 2500 });
+        // (plan 123, &me=dish: sat, a meal set down 0.45 m before them on a table's top, 0.76 m up)
+        if (doing === "dish") {
+          const a = (demo.me as { angle?: number; yaw: number }).angle ?? demo.me.yaw;
+          Object.assign(demo.me, { dish: [demo.me.x + Math.cos(a) * 0.45, demo.me.y + Math.sin(a) * 0.45, 0.76] });
+        }
         view.frame(dt, withShade ? [...demo.all(), shade()] : demo.all(), "me");
         for (const m of demo.said.splice(0)) view.tags.say(m.id, m.text);
         frames++;

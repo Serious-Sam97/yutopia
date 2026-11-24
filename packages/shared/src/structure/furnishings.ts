@@ -29,6 +29,9 @@ export interface Piece {
   skew?: number;
   /** meant to stand at a window (a sink under it, a guard's desk, a stall's back) */
   atWindow?: boolean;
+  /** (plan 123) added to the layout after worlds had it laid: its round of additions (1 and up) — put into a space
+   *  laid before once (structure/spaces.ts layoutAdditions), always at the end of the list (its id's by its place) */
+  since?: number;
 }
 export interface Layout {
   /** the staircase on each storey but the top (the same spot each storey up): its corner, where its door looks */

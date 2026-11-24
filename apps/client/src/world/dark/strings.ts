@@ -19,6 +19,7 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_item_wrench: ["Wrench", "Chave inglesa"],
   dark_item_towrope: ["Tow rope", "Cabo de reboque"],
   dark_item_torch: ["Torch", "Lanterna"],
+  dark_item_umbrella: ["Umbrella", "Guarda-chuva"],
   dark_item_vxtape: ["Vortex's tape", "Fita do Vortex"],
   // (plan 103) the skateboards: named by their shape, the maker and the model (invented: the skate manifest's)
   dark_item_board_vert_classic: ["Vert board (Varlow Comet)", "Skate vertical (Varlow Comet)"],

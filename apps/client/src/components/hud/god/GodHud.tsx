@@ -28,6 +28,7 @@ import type { GrowBiome, ThingKind } from "@yutopia/shared/grounds-edits";
 import { catalogThing, THINGS } from "@yutopia/shared/grounds-things";
 import { GROW_BIOMES, GROW_LIMITS, GROW_NAMES, GROW_SNAP } from "@yutopia/shared/grow";
 import type { Biome } from "@yutopia/shared/land";
+import { JOB_SPOTS, JOBS, type Job, type SpotKind } from "@yutopia/shared/npc/mind";
 import { PLACE_LIMITS, PLACED_TYPES, placesOf } from "@yutopia/shared/npc/places";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLang } from "@/lib/i18n";
@@ -295,7 +296,10 @@ const W = {
   npc_sit: ["Sits", "Sentado"],
   npc_wander: ["Wanders", "Passeia"],
   npc_route: ["Route", "Rota"],
-  npcSitHint: ["Put them on a seat or by a street bench: they sit on it.", "Coloque num assento ou junto a um banco da rua: ele senta nele."],
+  npcSitHint: [
+    "Put them on a seat or by a street bench: they sit on it.",
+    "Coloque num assento ou junto a um banco da rua: ele senta nele.",
+  ],
   npcRadius: ["Circle {n} m", "Círculo {n} m"],
   npcRoute: ["Draw the route", "Desenhar a rota"],
   npcRouteOn: [
@@ -311,6 +315,33 @@ const W = {
   npcNoHome: ["None: their hours don't matter", "Nenhuma: o horário não importa"],
   npcPickHome: ["Pick a home", "Escolher casa"],
   npcHomeOn: ["Click a town building to live in", "Clique num prédio da cidade para morar"],
+  npcWork: ["Work", "Trabalho"],
+  npcNoWork: ["None", "Nenhum"],
+  npcPickWork: ["Pick a workplace", "Escolher trabalho"],
+  npcWorkFacing: ["Facing at work (R while picking)", "Virado no trabalho (R ao escolher)"],
+  npcWorkTurnL: ["Turn left", "Virar à esquerda"],
+  npcWorkTurnR: ["Turn right", "Virar à direita"],
+  npcWorkOn: [
+    "Click their spot inside a town building (its storey shown), or a building on the land",
+    "Clique no lugar dele dentro de um prédio (com o andar à mostra), ou num prédio no mapa",
+  ],
+  npcWorkAt: ["{job} at {work}", "{job} em {work}"],
+  npcJob: ["Job", "Profissão"],
+  npcSpot: ["Spot", "Lugar"],
+  npcShift: ["Shift {from}–{to}", "Turno {from}–{to}"],
+  job_barista: ["Barista", "Barista"],
+  job_bartender: ["Bartender", "Barman"],
+  job_cook: ["Cook", "Cozinheiro"],
+  job_waiter: ["Waiter", "Garçom"],
+  job_cashier: ["Cashier", "Caixa"],
+  job_clerk: ["Clerk", "Atendente"],
+  job_librarian: ["Librarian", "Bibliotecário"],
+  job_cleaner: ["Cleaner", "Faxineiro"],
+  job_guard: ["Guard", "Segurança"],
+  spot_counter: ["Behind the counter", "Atrás do balcão"],
+  spot_till: ["At the till", "No caixa"],
+  spot_desk: ["At the desk", "Na mesa"],
+  spot_floor: ["Walking the floor", "Andando pelo salão"],
   npcOff: ["Take off the map", "Tirar do mapa"],
   npcOnPage: ["Open on the cast page", "Abrir na página do elenco"],
   npcDone: ["Done", "Pronto"],
@@ -1578,6 +1609,119 @@ function NpcsPanel({ g }: { g: GodState }) {
                 </button>
                 {sel.home && (
                   <button type="button" className="deck-btn" onClick={() => tool()?.setPicked({ home: undefined })}>
+                    {t("npcClear")}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          <div>
+            <p className="grp">{t("npcWork")}</p>
+            <p className="text-[12px] mt-1" data-god-npc-work={sel.work?.building ?? ""}>
+              {sel.work
+                ? t("npcWorkAt")
+                    .replace("{job}", t(`job_${sel.work.job}` as never))
+                    .replace("{work}", sel.work.building)
+                : t("npcNoWork")}
+            </p>
+            {sel.work && (
+              <div className="space-y-1.5 mt-1">
+                <label className="block text-[12px]">
+                  {t("npcJob")}
+                  <select
+                    className="w-full mt-0.5"
+                    value={sel.work.job}
+                    onChange={(e) => {
+                      const job = e.target.value as Job;
+                      tool()?.setWorkField({ job, spot: JOB_SPOTS[job][0] });
+                    }}
+                    data-god-npc-job
+                  >
+                    {JOBS.map((j) => (
+                      <option key={j} value={j}>
+                        {t(`job_${j}` as never)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-[12px]">
+                  {t("npcSpot")}
+                  <select
+                    className="w-full mt-0.5"
+                    value={sel.work.spot}
+                    onChange={(e) => tool()?.setWorkField({ spot: e.target.value as SpotKind })}
+                  >
+                    {JOB_SPOTS[sel.work.job].map((k) => (
+                      <option key={k} value={k}>
+                        {t(`spot_${k}` as never)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex items-center gap-1.5 text-[12px]">
+                  <span className="flex-1">{t("npcWorkFacing")}</span>
+                  <button
+                    type="button"
+                    className="deck-btn"
+                    aria-label={t("npcWorkTurnL")}
+                    onClick={() => tool()?.turnWork(-45)}
+                    data-god-npc-work-turn="-45"
+                  >
+                    ⟲
+                  </button>
+                  <button
+                    type="button"
+                    className="deck-btn"
+                    aria-label={t("npcWorkTurnR")}
+                    onClick={() => tool()?.turnWork(45)}
+                    data-god-npc-work-turn="45"
+                  >
+                    ⟳
+                  </button>
+                </div>
+                <label className="block text-[12px]">
+                  {t("npcShift").replace("{from}", String(sel.work.from)).replace("{to}", String(sel.work.to))}
+                  <div className="flex gap-1.5 mt-0.5">
+                    <input
+                      type="range"
+                      className="slider flex-1"
+                      min={0}
+                      max={23.5}
+                      step={0.5}
+                      value={sel.work.from}
+                      onChange={(e) => tool()?.setWorkField({ from: Number(e.target.value) })}
+                      data-god-npc-from
+                    />
+                    <input
+                      type="range"
+                      className="slider flex-1"
+                      min={0.5}
+                      max={24}
+                      step={0.5}
+                      value={sel.work.to}
+                      onChange={(e) => tool()?.setWorkField({ to: Number(e.target.value) })}
+                      data-god-npc-to
+                    />
+                  </div>
+                </label>
+              </div>
+            )}
+            {o.step === "work" ? (
+              <p className="text-[11.5px] mt-1" style={{ color: "var(--amber)" }}>
+                {t("npcWorkOn")}
+              </p>
+            ) : (
+              <div className="flex gap-1.5 mt-1">
+                <button
+                  type="button"
+                  className="deck-btn flex-1"
+                  onClick={() => tool()?.setStep("work")}
+                  data-god-npc-pick-work
+                >
+                  {t("npcPickWork")}
+                </button>
+                {sel.work && (
+                  <button type="button" className="deck-btn" onClick={() => tool()?.setPicked({ work: undefined })}>
                     {t("npcClear")}
                   </button>
                 )}

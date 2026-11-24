@@ -79,6 +79,11 @@ export const GOD_STRINGS = {
     "Não é uma casa: clique num prédio da cidade em que dá para entrar",
   ],
   godNpcHome: ["{name} lives in {home} now", "{name} agora mora em {home}"],
+  godNpcNoWork: [
+    "Not a workplace: click inside a town building's storey (pick the storey first) or a building you can walk into",
+    "Não é um trabalho: clique dentro do andar de um prédio da cidade (escolha o andar antes) ou num prédio em que dá para entrar",
+  ],
+  godNpcWork: ["{name} works at {work} now ({job})", "{name} agora trabalha em {work} ({job})"],
   godNpcVortex: ["Vortex keeps his own ways: he isn't placed", "O Vortex continua com o jeito dele: não é colocado"],
   godNpcCastFailed: ["The cast couldn't be loaded", "Não deu para carregar o elenco"],
 } as const;

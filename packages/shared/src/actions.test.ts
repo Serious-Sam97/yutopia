@@ -41,8 +41,9 @@ test("my own desk: focus and work", () => {
 test("between people: what's on offer depends on the drinks and do-not-disturb", () => {
   const free = { held: "", status: "online" };
   const mug = { held: "mug", status: "online" };
-  assert.deepEqual(socialFor(free, free), ["wave", "highfive", "fistbump"]);
-  assert.deepEqual(socialFor(mug, free), ["wave", "highfive", "fistbump", "give"]);
-  assert.deepEqual(socialFor(mug, mug), ["wave", "highfive", "fistbump", "cheers"]);
+  // (plan 123: a handshake and a hug too; a kiss never between players)
+  assert.deepEqual(socialFor(free, free), ["wave", "highfive", "fistbump", "handshake", "hug"]);
+  assert.deepEqual(socialFor(mug, free), ["wave", "highfive", "fistbump", "handshake", "hug", "give"]);
+  assert.deepEqual(socialFor(mug, mug), ["wave", "highfive", "fistbump", "handshake", "hug", "cheers"]);
   assert.deepEqual(socialFor(mug, { held: "", status: "dnd" }), ["wave"]);
 });

@@ -98,6 +98,14 @@ export interface PresenceEntry {
   status: string;
 }
 
+/** An NPC's bond as the API keeps it: their key, the other ("u:<uid>", "n:<key>"), −100…100, times met, when (ms). */
+export interface SavedBond {
+  npc: string;
+  other: string;
+  v: number;
+  n: number;
+  at: number;
+}
 export const api = {
   world: () => call<WorldInfo>("GET", "/world"),
   // everyone with an account (features/spot.ts: what's left of anyone gone comes down)
@@ -120,6 +128,9 @@ export const api = {
   putWeather: (weather: SavedWeather) => call("PUT", "/world/weather", { weather }),
   // Vortex's memory (docs/plan/88-vortex-fight.md phase 4): his scars today, the grudge
   putVortex: (vortex: unknown) => call("PUT", "/world/vortex", { vortex }),
+  // how the NPCs feel about people (docs/plan/123-npcs-alive.md): all of them, and the changed kept
+  npcBonds: () => call<{ bonds: SavedBond[] }>("GET", "/npc-bonds"),
+  putNpcBonds: (bonds: SavedBond[]) => call("PUT", "/npc-bonds", { bonds }),
   // god mode (docs/plan/53-the-god-mode.md): an admin's draft (by its id: plan 55), a revision, the next one
   groundsDraft: (id: number) =>
     call<{ draft: { userId: number; name: string; baseRev: number; data: GroundsEdits } | null }>(

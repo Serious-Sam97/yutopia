@@ -1120,7 +1120,16 @@ export function busy2(
 // each act has — wound up, struck (a slap, a bump, a clink, a hand-over), followed through. `k` 0..1
 // through it (the hands meet at `contact`), `with` the other one's place in her own space (x her
 // left, z ahead: they face her)
-const MEET_Y: Record<string, number> = { highfive: 1.78, fistbump: 1.22, cheers: 1.38, give: 1.12, take: 1.12 };
+const MEET_Y: Record<string, number> = {
+  highfive: 1.78,
+  fistbump: 1.22,
+  cheers: 1.38,
+  give: 1.12,
+  take: 1.12,
+  handshake: 1.02,
+  hug: 1.3,
+  kiss: 1.36,
+};
 export function together2(what: string, k: number, contact: number, w: [number, number] = [0, 1.2]): Act {
   const c: Ch = {};
   const into = smoother(k / contact);
@@ -1137,6 +1146,9 @@ export function together2(what: string, k: number, contact: number, w: [number, 
   const mx = w[0] / 2;
   const mz = Math.max(0.3, w[1] / 2);
   const y = MEET_Y[what] ?? 1.2;
+  // (plan 123) the hug, the handshake, the kiss on the cheek
+  if (what === "hug" || what === "kiss" || what === "handshake")
+    return closeTogether(what, k, contact, mx, mz, y, Math.max(0.3, w[1]));
   // (wound up first: the hand back and down; then out to the place; after it, back — a high five's
   // down past her side, a bump's fist pulled back and opened, a cheers' drink back to the mouth)
   const wind = win(k, -0.1, contact * 0.45, contact * 0.3);
@@ -1176,6 +1188,59 @@ export function together2(what: string, k: number, contact: number, w: [number, 
   return {
     pose: p,
     hands: reach > 0.01 ? { R: { at, w: reach, pole: ELBOW_DOWN } } : null,
+  };
+}
+
+/** (plan 123) Closer acts: a handshake (the right hands met at the waist, pumped twice), a hug (both arms round
+ *  the other's back, leaned in, the head to the side), a kiss on the cheek (leaned in, the head turned and dipped, a
+ *  hand on their shoulder). `k` 0..1 through it, the hands meeting at `contact`. */
+function closeTogether(
+  what: string,
+  k: number,
+  contact: number,
+  mx: number,
+  mz: number,
+  y: number,
+  pz: number, // the other one's middle, this far ahead (m)
+): Act {
+  const c: Ch = {};
+  const reach = smoother(k / contact) * (1 - smoother((k - 0.82) / 0.18));
+  const after = clamp01((k - contact) / (1 - contact));
+  if (what === "handshake") {
+    const pump = after > 0 && after < 0.7 ? Math.sin((after / 0.7) * Math.PI * 4) * 0.05 : 0;
+    Object.assign(c, { sR: -0.25 - 0.6 * reach, eR: -0.9 + 0.45 * reach, sx: 0.06 * reach, sL: 0.06, eL: -0.25 });
+    const p = upper(c);
+    Object.assign(p, shape(-1, HANDS.grip));
+    return {
+      pose: p,
+      hands: reach > 0.01 ? { R: { at: [mx, y + pump, mz - 0.04], w: reach, pole: ELBOW_DOWN } } : null,
+    };
+  }
+  if (what === "hug") {
+    // (round them: past the middle, over their shoulders; leaned in, the head to my left of theirs)
+    Object.assign(c, { sx: 0.16 * reach, dy: 0.35 * reach, dx: 0.08 * reach, sR: -1.1 * reach, sL: -1.1 * reach });
+    const p = upper(c);
+    Object.assign(p, shape(-1, HANDS.relaxed), shape(1, HANDS.relaxed));
+    const r = reach > 0.01;
+    return {
+      pose: p,
+      hands: r
+        ? {
+            // (round their back, not reaching past it: the right over their shoulder to its blade, the left under their
+            // arm to the small of their back — theirs the same, so the arms go one over, one under — the elbows out)
+            R: { at: [mx - 0.05, y + 0.02, pz + 0.1], w: reach, pole: ELBOW_OUT },
+            L: { at: [mx + 0.07, y - 0.3, pz + 0.07], w: reach, pole: ELBOW_OUT },
+          }
+        : null,
+    };
+  }
+  // a kiss on the cheek: leaned in, the head turned and dipped to theirs, a hand on their shoulder
+  Object.assign(c, { sx: 0.24 * reach, nx: 0.12 * reach, dy: -0.5 * reach, dx: 0.12 * reach, sL: 0.06, eL: -0.25 });
+  const p = upper(c);
+  Object.assign(p, shape(-1, HANDS.relaxed));
+  return {
+    pose: p,
+    hands: reach > 0.01 ? { R: { at: [mx - 0.18, y - 0.02, mz - 0.02], w: reach * 0.8, pole: ELBOW_DOWN } } : null,
   };
 }
 

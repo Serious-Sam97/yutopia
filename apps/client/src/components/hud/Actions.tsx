@@ -27,12 +27,16 @@ export function ActionMenu() {
     return () => window.removeEventListener("resize", on);
   }, []);
   if (!menu) return null;
-  // on a phone: a sheet from the bottom instead of a ring
-  if (vw.w < 560) return <ActionSheet />;
-  // the ring stays on screen
-  const x = Math.max(170, Math.min(vw.w - 170, menu.x));
-  const y = Math.max(130, Math.min(vw.h - 130, menu.y));
   const n = menu.items.length;
+  // (plan 123: an NPC's menu, a dozen and more: a wider ring)
+  const r = n <= 2 ? R * 0.9 : R + (n > 5 ? 10 : 0) + Math.max(0, n - 10) * 12;
+  // the ring stays on screen: its reach across (labels grow outwards, ~150 px) and down
+  const mx = Math.max(170, r * 1.25 + 150);
+  const my = Math.max(130, r + 36);
+  // on a phone — or a ring too big for the window —: a sheet from the bottom instead
+  if (vw.w < 560 || vw.w < mx * 2 || vw.h < my * 2) return <ActionSheet />;
+  const x = Math.max(mx, Math.min(vw.w - mx, menu.x));
+  const y = Math.max(my, Math.min(vw.h - my, menu.y));
   return (
     <div className="pointer-events-auto absolute inset-0" data-action-menu>
       <button
@@ -73,13 +77,12 @@ export function ActionMenu() {
           {menu.items.map((it, i) => {
             // round the ring from the top, clockwise (a single one sits on top)
             const a = -Math.PI / 2 + (n === 1 ? 0 : (i / n) * Math.PI * 2);
-            const r = n <= 2 ? R * 0.9 : R + (n > 5 ? 10 : 0);
             const ix = Math.cos(a) * r * 1.25;
             const iy = Math.sin(a) * r;
             // grow away from the middle (long labels on both sides never meet);
             // straight above or below: centred
             const c = Math.cos(a);
-            const tx = Math.abs(c) < 0.3 ? "-50%" : c > 0 ? "-24px" : "calc(-100% + 24px)";
+            const tx = Math.abs(c) < (n > 10 ? 0.12 : 0.3) ? "-50%" : c > 0 ? "-24px" : "calc(-100% + 24px)";
             return (
               <button
                 key={it.act}
@@ -103,8 +106,13 @@ export function ActionMenu() {
                 }}
                 data-sel={i === menu.sel ? "1" : undefined}
               >
-                <kbd className="keycap" style={{ height: 20, minWidth: 20, fontSize: 11, opacity: 1 }}>
-                  {i + 1}
+                {/* (the digits 1–9 pick: past them, no key to show) */}
+                <kbd
+                  className="keycap"
+                  style={{ height: 20, minWidth: 20, fontSize: 11, opacity: i < 9 ? 1 : 0 }}
+                  aria-hidden={i >= 9 || undefined}
+                >
+                  {i < 9 ? i + 1 : ""}
                 </kbd>
                 {t(`act_${it.act}` as Key)}
               </button>
@@ -282,6 +290,7 @@ function Thumb({ target, size }: { target: ActTarget; size: number }) {
       </span>
     );
   }
+  if (target.type === "npc") return <span className="rounded-full shrink-0" style={disc} />;
   const p = target.type === "self" ? me : people.find((x) => x.sid === target.sid);
   return (
     <span className="rounded-full grid place-items-center shrink-0 overflow-hidden" style={disc}>

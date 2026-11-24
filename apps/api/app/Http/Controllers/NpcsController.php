@@ -55,6 +55,8 @@ class NpcsController extends Controller
         $npc = Npc::where('key', $npcKey)->firstOrFail();
         $label = $this->label($npc->def ?? []);
         $npc->delete();
+        // (what they felt, and what others felt about them: gone with them — plan 123)
+        DB::table('npc_bonds')->where('npc', $npcKey)->orWhere('other', 'n:'.$npcKey)->delete();
         AdminAction::record($request->user(), 'npc-delete', null, $npc->town ? 'the town\'s' : '', $label);
         $this->cast->changed();
 

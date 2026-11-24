@@ -12,6 +12,8 @@ export const WORN = {
   slingSn: 8,
   /** (plan 84) the Daybreak upright down her back, the lens down, over the others */
   slingDb: 16,
+  /** (plan 123) an umbrella in her left hand: open over her in rain out on the land, else furled */
+  umbrella: 32,
 } as const;
 export type Worn = keyof typeof WORN;
 

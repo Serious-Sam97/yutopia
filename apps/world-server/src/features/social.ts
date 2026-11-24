@@ -16,6 +16,9 @@ const NAMES: Record<string, string> = {
   fistbump: "bumped fists with you 👊",
   cheers: "said cheers 🥂",
   give: "handed you their drink",
+  // (plan 123) between players too
+  handshake: "shook your hand 🤝",
+  hug: "hugged you 🤗",
 };
 
 registerFeature((room: WorldRoom) => {

@@ -1,5 +1,6 @@
 import type { GroundsEdits, Section } from "../grounds-edits.ts";
 import type { NpcDef, NpcType } from "./cast.ts";
+import { JOB_SPOTS, JOBS, type Job, SPOT_KINDS, type SpotKind } from "./mind.ts";
 
 // NPCs on the map (docs/plan/121-npcs-on-the-map.md): where God mode put each of the cast — the draft's `npcs`
 // section of the Grounds' edits, published with revisions and rollback (F1a), one place each, keyed by the cast NPC's
@@ -9,6 +10,20 @@ import type { NpcDef, NpcType } from "./cast.ts";
 // building's storey from SPACE_BASE — plan 112). What their type needs comes with it: a seat (sit: the place is the
 // seat's), a circle's radius (wander), a route (route); and a home they walk to out of their hours (F8).
 
+/** Where they work (docs/plan/123-npcs-alive.md, F2a): a town building, their job there, its spot — behind its counter,
+ *  at the till, a desk, its floor to walk — on one of its storeys, which way they face there, and their shift (the
+ *  world's hours; past midnight when `to` < `from`). In their shift they're at work, whatever their hours say. */
+export interface NpcWork {
+  building: string;
+  job: Job;
+  spot: SpotKind;
+  x: number;
+  z: number;
+  a: number;
+  level: number;
+  from: number;
+  to: number;
+}
 /** A route's stop: where, on which floor. */
 export interface RoutePoint {
   x: number;
@@ -37,6 +52,8 @@ export interface NpcPlaceDef {
   pause?: number;
   /** a town building's key: out of their hours they walk to it and stay in (F8); none: their hours don't matter (F8.2) */
   home?: string;
+  /** where they work (plan 123, F2a) */
+  work?: NpcWork;
 }
 
 /** What a placed NPC can do. */
@@ -77,6 +94,10 @@ export function checkNpcPlaces(
     home: (key: string) => boolean;
     /** a floor that's there */
     level: (level: number) => boolean;
+    /** a storey of this town building (plan 123: a workplace's); unasked, any floor that's there */
+    storeyOf?: (building: string, level: number) => boolean;
+    /** (plan 123) a spot inside that floor (its outline); unasked, anywhere */
+    within?: (level: number, x: number, z: number) => boolean;
   },
 ): string[] {
   const out: string[] = [];
@@ -116,6 +137,21 @@ export function checkNpcPlaces(
     if (d.pause !== undefined && (!num(d.pause) || d.pause < PLACE_LIMITS.pause[0] || d.pause > PLACE_LIMITS.pause[1]))
       no(`${name}: a pause is ${PLACE_LIMITS.pause[0]}–${PLACE_LIMITS.pause[1]} s`);
     if (d.home !== undefined && !ok.home(d.home)) no(`${name}: their home isn't a town building (${d.home})`);
+    if (d.work !== undefined) {
+      const w = d.work;
+      const hour = (v: unknown) => num(v) && (v as number) >= 0 && (v as number) <= 24;
+      if (!w || typeof w !== "object") no(`${name}: their work isn't one`);
+      else if (!ok.home(w.building)) no(`${name}: their work isn't in a town building (${w.building})`);
+      else if (!(JOBS as readonly string[]).includes(w.job)) no(`${name}: no such job (${w.job})`);
+      else if (!(SPOT_KINDS as readonly string[]).includes(w.spot)) no(`${name}: no such spot at work (${w.spot})`);
+      else if (!JOB_SPOTS[w.job as Job].includes(w.spot as SpotKind))
+        no(`${name}: a ${w.job} doesn't work at a ${w.spot}`);
+      else if (!num(w.x) || !num(w.z) || !num(w.a)) no(`${name}: their spot at work isn't a number`);
+      else if (!Number.isInteger(w.level) || !(ok.storeyOf ?? ((_b, l) => ok.level(l)))(w.building, w.level))
+        no(`${name}: their work's floor isn't one of ${w.building}'s`);
+      else if (ok.within && !ok.within(w.level, w.x, w.z)) no(`${name}: their spot at work is outside ${w.building}`);
+      else if (!hour(w.from) || !hour(w.to) || w.from === w.to) no(`${name}: a shift is two hours of the day, 0–24`);
+    }
   }
   return out;
 }
@@ -134,4 +170,25 @@ export function onDuty(b: Pick<NpcDef["behaviour"], "hours" | "from" | "to">, ho
   if (b.hours === "day") return night < 0.5;
   if (b.hours === "night") return night >= 0.5;
   return b.from <= b.to ? hour >= b.from && hour < b.to : hour >= b.from || hour < b.to;
+}
+
+/** Whether the world's hour is in their shift. */
+export function inShift(w: Pick<NpcWork, "from" | "to">, hour: number): boolean {
+  return w.from <= w.to ? hour >= w.from && hour < w.to : hour >= w.from || hour < w.to;
+}
+/** A job for a building's kind, and its spot: what God mode offers first. */
+export function jobFor(kind: string): { job: Job; spot: SpotKind } {
+  const job: Job =
+    kind === "bar"
+      ? "bartender"
+      : kind === "diner"
+        ? "cook"
+        : kind === "shop" || kind === "cornershop" || kind === "gas" || kind === "market"
+          ? "cashier"
+          : kind === "library"
+            ? "librarian"
+            : kind === "police" || kind === "fire"
+              ? "guard"
+              : "clerk";
+  return { job, spot: JOB_SPOTS[job][0] };
 }

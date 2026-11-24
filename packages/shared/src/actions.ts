@@ -158,7 +158,9 @@ export function hasActions(o: WorldObjectDef): boolean {
 }
 
 // ── between people ──────────────────────────────────────────────────────────
-export const SOCIAL = ["wave", "highfive", "fistbump", "cheers", "give"] as const;
+// (plan 123: a handshake and a hug — anyone's; a kiss on the cheek — an NPC's, who can say no: never offered between
+// players, unasked)
+export const SOCIAL = ["wave", "highfive", "fistbump", "cheers", "give", "handshake", "hug", "kiss"] as const;
 export type Social = (typeof SOCIAL)[number];
 export const isSocial = (s: unknown): s is Social => typeof s === "string" && (SOCIAL as readonly string[]).includes(s);
 
@@ -169,10 +171,22 @@ export const SOCIAL_MS: Record<Social, number> = {
   fistbump: 1400,
   cheers: 1700,
   give: 1500,
+  handshake: 1800,
+  hug: 2600,
+  kiss: 1600,
 };
 export const CONTACT = 0.45;
 // how close you have to be (tiles between the two); a wave carries across a room
-export const SOCIAL_REACH: Record<Social, number> = { wave: 7, highfive: 1.7, fistbump: 1.7, cheers: 1.7, give: 1.7 };
+export const SOCIAL_REACH: Record<Social, number> = {
+  wave: 7,
+  highfive: 1.7,
+  fistbump: 1.7,
+  cheers: 1.7,
+  give: 1.7,
+  handshake: 1.7,
+  hug: 1.5,
+  kiss: 1.4,
+};
 // the other one's side of it (a give is a take)
 export const answerOf = (s: Social): string => (s === "give" ? "take" : s);
 
@@ -186,7 +200,7 @@ export function socialFor(me: SocialSide, them: SocialSide): Social[] {
   const out: Social[] = ["wave"];
   // nobody gets bumped while they've asked not to be disturbed
   if (them.status === "dnd") return out;
-  out.push("highfive", "fistbump");
+  out.push("highfive", "fistbump", "handshake", "hug");
   if (isHeld(me.held) && isHeld(them.held)) out.push("cheers");
   if (isHeld(me.held) && !them.held) out.push("give");
   return out;

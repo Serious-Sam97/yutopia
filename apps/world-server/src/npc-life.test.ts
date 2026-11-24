@@ -308,3 +308,206 @@ test("placed NPCs between floors: down a town building's stairs to their home, u
   if (stUp && stDown) await waitFor(() => npc(r, "place:npc-stu").level === 0, 40_000);
   lay({ rev: 906 });
 });
+
+// docs/plan/123-npcs-alive.md: their minds — Bea at work behind house-w0's counter in her shift; Tom, thirsty, walks in,
+// waits his turn, is made a coffee and handed it, and drinks it there.
+test("placed NPCs' minds: a worker at her spot in her shift, a thirsty one served there, cup in hand", async () => {
+  const r = await join(94, 914);
+  const room = liveRoom();
+  const f = room.structure.floors.find((q: { space?: string; storey?: number }) => q.space === "house-w0" && !q.storey);
+  assert.ok(f, "house-w0's ground storey");
+  const g = room.gridFor(0, f.index);
+  const spot = g.nearestOpen(f.grid.x0 + f.grid.w / 2, f.grid.y0 + f.grid.h / 2, 4);
+  assert.ok(spot);
+  const hour = Math.floor(Number(r.state.hour));
+  const bea = parseNpc({ key: "npc-bea", name: "Bea", behaviour: { type: "stand", talk: "never" } }) as NpcDef;
+  const tom = parseNpc({ key: "npc-tom", name: "Tom", behaviour: { type: "stand", talk: "never" } }) as NpcDef;
+  await sendCast([...townCast(), bea, tom]);
+  lay({
+    rev: 931,
+    npcs: {
+      add: [
+        {
+          key: "npc-bea",
+          x: 417,
+          z: -446,
+          a: 0,
+          level: 0,
+          work: {
+            building: "house-w0",
+            job: "barista",
+            spot: "counter",
+            x: spot.x,
+            z: spot.y,
+            a: 0,
+            level: f.index,
+            from: (hour + 23) % 24,
+            to: (hour + 2) % 24,
+          },
+        },
+        { key: "npc-tom", x: 417, z: -442, a: 0, level: 0 },
+      ],
+    },
+  });
+  await waitFor(() => !!npc(r, "place:npc-bea") && !!npc(r, "place:npc-tom"));
+  // Bea: in her shift, to her spot inside
+  await waitFor(() => {
+    const b = npc(r, "place:npc-bea");
+    return b.level === f.index && Math.hypot(b.x - spot.x, b.y - spot.y) < 0.8;
+  }, 40_000);
+  assert.ok(room.npcMind.needs("npc-tom"), "Tom has a mind");
+  // Tom, thirsty: a coffee at hers — in line, made, handed, drunk
+  room.npcMind.nudge("npc-tom", { thirst: 4 });
+  await waitFor(() => room.npcMind.doing("npc-tom")?.kind === "coffee", 20_000);
+  assert.equal(room.npcMind.doing("npc-tom")?.at, "npc-bea");
+  await waitFor(() => npc(r, "place:npc-tom").level === f.index, 40_000);
+  await waitFor(() => npc(r, "place:npc-bea").act === "make", 20_000);
+  assert.equal(npc(r, "place:npc-bea").actWith, "place:npc-tom");
+  await waitFor(() => npc(r, "place:npc-tom").held === "mug", 15_000);
+  await waitFor(() => npc(r, "place:npc-tom").act === "drink", 15_000);
+  // (a coffee's half a need a second: well up after a few)
+  const t0 = room.npcMind.needs("npc-tom")?.thirst ?? 0;
+  await waitFor(() => (room.npcMind.needs("npc-tom")?.thirst ?? 0) > t0 + 5, 20_000);
+
+  // a player at her counter (F4c): what she is to me — her job, what I can do — an order made and handed over
+  const next = (type: string) =>
+    // biome-ignore lint/suspicious/noExplicitAny: decoded messages
+    new Promise<any>((res) => {
+      const off = r.onMessage(type, (m) => {
+        off();
+        res(m);
+      });
+    });
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const me = (): any => r.state.players.get(r.sessionId);
+  r.send("pos", { x: spot.x + 1.3, y: spot.y, z: 0, l: f.index, a: 0, mv: 0, yaw: 0, pitch: 0 });
+  await waitFor(() => me().level === f.index && Math.hypot(me().x - spot.x - 1.3, me().y - spot.y) < 0.2);
+  const about = next("npc:about");
+  r.send("npc:about", { id: "place:npc-bea" });
+  const a = await about;
+  assert.equal(a.job, "barista");
+  assert.equal(a.work, "house-w0");
+  assert.ok(a.acts.includes("order") && a.acts.includes("talk") && !a.acts.includes("hug"), a.acts.join());
+  assert.equal(a.bond.level, "stranger");
+  const ordered = next("npc:acted");
+  r.send("npc:act", { id: "place:npc-bea", act: "order" });
+  assert.equal((await ordered).act, "order");
+  await waitFor(() => me().held === "mug", 25_000);
+  // a compliment to Tom, sat with his coffee: taken (or not), and he's met me once now
+  const tomNow = npc(r, "place:npc-tom");
+  r.send("pos", { x: tomNow.x + 0.8, y: tomNow.y, z: 0, l: f.index, a: 0, mv: 0, yaw: 0, pitch: 0 });
+  await waitFor(() => Math.hypot(me().x - tomNow.x - 0.8, me().y - tomNow.y) < 0.2);
+  const done = next("npc:acted");
+  r.send("npc:act", { id: "place:npc-tom", act: "compliment" });
+  const d = await done;
+  assert.equal(d.act, "compliment");
+  assert.equal(d.bond.n, 1);
+  // (said aloud: on his Npc, a patch after the answer)
+  await waitFor(() => npc(r, "place:npc-tom").say.length > 0, 3000);
+  lay({ rev: 0 });
+});
+
+// docs/plan/123-npcs-alive.md F9a: rain called — Cleo, out on the land, opens an umbrella; dry again, put away
+test("placed NPCs in the rain: an umbrella out on the land, put away once it's dry", async () => {
+  const r = await join(95, 915);
+  const cleo = parseNpc({ key: "npc-cleo", name: "Cleo", behaviour: { type: "stand", talk: "never" } }) as NpcDef;
+  await sendCast([...townCast(), cleo]);
+  lay({ rev: 951, npcs: { add: [{ key: "npc-cleo", x: 418, z: -436, a: 0, level: 0 }] } });
+  try {
+    await waitFor(() => !!npc(r, "place:npc-cleo"));
+    assert.equal(npc(r, "place:npc-cleo").held, "");
+    r.send("mod:weather", { to: "rain", now: true });
+    await waitFor(() => npc(r, "place:npc-cleo").held === "umbrella", 10_000);
+    r.send("mod:weather", { to: "clear", now: true });
+    await waitFor(() => npc(r, "place:npc-cleo").held === "", 10_000);
+  } finally {
+    r.send("mod:weather", { to: null });
+    lay({ rev: 0 });
+  }
+});
+
+// docs/plan/123-npcs-alive.md, its leftovers: table service — Wes waiting the diner's tables in his shift; Ann, hungry,
+// shown to a table and sat; her order taken there, Wes to the pass, a plate carried out, set down; she eats. And an
+// admin's bond with her set outright: a friend's acts on her menu (the kiss among them).
+test("placed NPCs at a waited place: sat at a table, the order taken there, a plate brought; an admin's bond set", async () => {
+  const r = await join(96, 916);
+  const room = liveRoom();
+  const f = room.structure.floors.find((q: { space?: string; storey?: number }) => q.space === "diner" && !q.storey);
+  assert.ok(f, "the diner's floor");
+  const g = room.gridFor(0, f.index);
+  const spot = g.nearestOpen(f.grid.x0 + f.grid.w / 2, f.grid.y0 + f.grid.h / 2, 4);
+  const far = g.nearestOpen(f.grid.x0 + 2, f.grid.y0 + f.grid.h / 2, 4);
+  assert.ok(spot && far);
+  const hour = Math.floor(Number(r.state.hour));
+  const wes = parseNpc({ key: "npc-wes", name: "Wes", behaviour: { type: "stand", talk: "never" } }) as NpcDef;
+  const ann = parseNpc({ key: "npc-ann", name: "Ann", behaviour: { type: "stand", talk: "never" } }) as NpcDef;
+  await sendCast([...townCast(), wes, ann]);
+  lay({
+    rev: 961,
+    npcs: {
+      add: [
+        {
+          key: "npc-wes",
+          x: spot.x,
+          z: spot.y,
+          a: 0,
+          level: f.index,
+          work: {
+            building: "diner",
+            job: "waiter",
+            spot: "floor",
+            x: spot.x,
+            z: spot.y,
+            a: 0,
+            level: f.index,
+            from: (hour + 23) % 24,
+            to: (hour + 2) % 24,
+          },
+        },
+        { key: "npc-ann", x: far.x, z: far.y, a: 0, level: f.index },
+      ],
+    },
+  });
+  try {
+    await waitFor(() => !!npc(r, "place:npc-wes") && !!npc(r, "place:npc-ann"));
+    await waitFor(() => room.npcMind.doing("npc-wes")?.mode === "work", 20_000);
+    room.npcMind.nudge("npc-ann", { hunger: 3 });
+    await waitFor(() => room.npcMind.doing("npc-ann")?.kind === "meal", 20_000);
+    assert.equal(room.npcMind.doing("npc-ann")?.at, "npc-wes");
+    // sat at a table (her place a seat), waiting there
+    await waitFor(() => room.npcMind.doing("npc-ann")?.stage === "queue", 40_000);
+    // (the room's state a patch behind the mind)
+    await waitFor(() => npc(r, "place:npc-ann").a === 2, 3000);
+    // Wes over to her, the order taken, to the pass and back with a plate
+    await waitFor(() => npc(r, "place:npc-wes").held === "plate", 60_000);
+    await waitFor(() => npc(r, "place:npc-wes").held === "" && npc(r, "place:npc-wes").act === "give", 40_000);
+    await waitFor(() => npc(r, "place:npc-ann").act === "eat", 15_000);
+    assert.equal(npc(r, "place:npc-ann").a, 2, "still at her table");
+    // her plate set down before her: on a table's top in reach (a booth's at 0.76 m)
+    await waitFor(() => !!npc(r, "place:npc-ann").dish, 5000);
+    const [dx, dy, dh] = String(npc(r, "place:npc-ann").dish).split(",").map(Number);
+    const annAt = npc(r, "place:npc-ann");
+    assert.ok(Math.hypot(dx - annAt.x, dy - annAt.y) < 0.9, `the plate in reach: ${npc(r, "place:npc-ann").dish}`);
+    assert.ok(dh > 0.6 && dh < 1.15, `on a table's top: ${dh}`);
+
+    // an admin's: her bond with me set to a friend's — the kiss on offer near her
+    const ann0 = npc(r, "place:npc-ann");
+    r.send("pos", { x: ann0.x + 0.9, y: ann0.y, z: 0, l: f.index, a: 0, mv: 0, yaw: 0, pitch: 0 });
+    // biome-ignore lint/suspicious/noExplicitAny: decoded state
+    const me = (): any => r.state.players.get(r.sessionId);
+    await waitFor(() => me().level === f.index && Math.hypot(me().x - ann0.x - 0.9, me().y - ann0.y) < 0.2);
+    // biome-ignore lint/suspicious/noExplicitAny: decoded messages
+    const about = new Promise<any>((res) => {
+      const off = r.onMessage("npc:about", (m) => {
+        off();
+        res(m);
+      });
+    });
+    r.send("mod:npcBond", { id: "place:npc-ann", v: 50 });
+    const a = await about;
+    assert.equal(a.bond.level, "friend");
+    assert.ok(a.acts.includes("kiss") && a.acts.includes("hug"), a.acts.join());
+  } finally {
+    lay({ rev: 0 });
+  }
+});

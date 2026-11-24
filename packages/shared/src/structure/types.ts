@@ -37,6 +37,8 @@ export interface Floor {
   away?: boolean;
   /** the quarter turn of its building's frame when it was laid (its door's side): turned since, laid again */
   turn?: number;
+  /** (plan 123; a ground storey's) the layout's rounds of additions its space has had (furnishings.ts Piece.since) */
+  added?: number;
 }
 
 /** A floor surface: one material, an outline with holes, at its floor's height. */

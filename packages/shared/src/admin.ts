@@ -74,5 +74,7 @@ export const LOG_KINDS = [
   "steps",
   "weather",
   "weathersound",
+  // (plan 123) a placed NPC's bond with the admin, set
+  "npcbond",
 ] as const;
 export type LogKind = (typeof LOG_KINDS)[number];

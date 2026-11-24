@@ -60,7 +60,12 @@ export interface NpcBehaviour {
   answer: boolean;
   /** shots near them */
   shots: NpcShots;
+  /** who they are (plan 123: 0…1 each — outgoing, active, neat, cheerful); null: from their key (npc/mind.ts
+   *  traitsOf) */
+  traits: Record<(typeof TRAIT_KEYS)[number], number> | null;
 }
+/** The traits' names (npc/mind.ts TRAIT_NAMES: the same, here for the cast's parse). */
+export const TRAIT_KEYS = ["outgoing", "active", "neat", "cheerful"] as const;
 
 export interface NpcDef {
   /** its id: a town NPC's is the one the world gives them (`guard`, `folk-rosa`, `vortex`, `strike-marta`…) */
@@ -84,8 +89,23 @@ export interface NpcDef {
 
 export const NPC_LIMITS = { name: 40, role: 40, line: 140, lines: 120, notes: 1000, cast: 500 } as const;
 export const NPC_KEY = /^[a-z0-9][a-z0-9-]{0,39}$/;
-/** The lines' moments anyone has. */
-export const LINE_WHEN = ["ambient", "greet", "answer"] as const;
+/** The lines' moments anyone has (plan 123: what's done with them too — a joke, a compliment, asked about their day or
+ *  their job, a chat with another NPC, an order taken, something refused; npc/lines.ts has the defaults). */
+export const LINE_WHEN = [
+  "ambient",
+  "greet",
+  "answer",
+  "joke",
+  "laugh",
+  "compliment",
+  "day",
+  "job",
+  "chat",
+  "order",
+  "served",
+  "refuse",
+  "thanks",
+] as const;
 /** Vortex's public moments (apps/api Vortex::PUBLIC): his lines by what's going on. */
 export const VORTEX_WHEN = [
   "ambient",
@@ -165,6 +185,7 @@ export function defaultBehaviour(type: NpcType = "stand"): NpcBehaviour {
     greet: false,
     answer: false,
     shots: "ignore",
+    traits: null,
   };
 }
 
@@ -191,6 +212,19 @@ const hour = (v: unknown, or: number): number => {
   return Number.isFinite(n) ? Math.max(0, Math.min(24, Math.round(n * 2) / 2)) : or;
 };
 
+// (traits as sent: each 0…1 in tenths; none given — or none a number — null, from their key)
+function traitsIn(v: unknown): NpcBehaviour["traits"] {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const out = {} as Record<(typeof TRAIT_KEYS)[number], number>;
+  let any = false;
+  for (const k of TRAIT_KEYS) {
+    const n = typeof o[k] === "number" ? (o[k] as number) : Number.NaN;
+    if (Number.isFinite(n)) any = true;
+    out[k] = Number.isFinite(n) ? Math.max(0, Math.min(1, Math.round(n * 10) / 10)) : 0.5;
+  }
+  return any ? out : null;
+}
 /** An NPC as anyone sent it, cleaned: null if it can't be one (no key, neither a name nor a role). A town type only
  *  for a town NPC (`town` is the stored one's, never what was sent: pass `town` from what's kept). */
 export function parseNpc(raw: unknown, keep?: { town: boolean; type?: NpcType }): NpcDef | null {
@@ -221,6 +255,7 @@ export function parseNpc(raw: unknown, keep?: { town: boolean; type?: NpcType })
     greet: b.greet === true,
     answer: b.answer === true,
     shots: oneOf(b.shots, NPC_SHOTS, "ignore"),
+    traits: traitsIn(b.traits),
   };
   const when = linesWhen(type);
   const lines: NpcLine[] = [];

@@ -659,6 +659,13 @@ const ramp = (x: number, a: number, b: number) => {
 
 const tq = new Quaternion();
 const tq2 = new Quaternion();
+const tq3 = new Quaternion();
+const umbDown = new Vector3();
+const trayPalm = new Vector3();
+const trayAlong = new Vector3();
+const trayIndex = new Vector3();
+const trayAt = new Vector3();
+const trayTurn = new Quaternion();
 const tv = new Vector3();
 const tv2 = new Vector3();
 const tv3 = new Vector3();
@@ -756,6 +763,9 @@ const LEG_SKIN: [JointName, number][] = [
 ];
 const LEG_AT = new Vector3();
 
+/** (plan 123) umbrellas' canopies: one each, by their name */
+const UMBRELLA_COLOURS = ["#2f5d8a", "#8a2f3a", "#2f6a4a", "#3a3a40", "#c9a227", "#6a3f8a", "#d8d4ca"];
+const umbAt = new Vector3();
 export class Person3D {
   readonly root = new Group();
   readonly model: Model;
@@ -971,8 +981,8 @@ export class Person3D {
       { body: mats.body, ink: mats.ink, away: mats.bodyAway },
       part,
     );
-    this.model.seed = C.nameSeed(p.name || id);
-    this.motion = new C.Motion3(hashSeed(p.name || id));
+    this.model.seed = C.nameSeed(p.seedName || p.name || id);
+    this.motion = new C.Motion3(hashSeed(p.seedName || p.name || id));
     this.root.add(this.model.root);
     this.shadow = new Mesh(
       new CircleGeometry(0.26, 24),
@@ -1638,6 +1648,9 @@ export class Person3D {
     this.model.setFace(mo.blink, mo.talk);
     this.model.setEyes(mo.eyes?.[0] ?? 0, mo.eyes?.[1] ?? 0);
 
+    this.umbrellaFrame(p, d > 25);
+    this.trayFrame(p, d > 25);
+    this.dishFrame(p);
     this.props(p, held, mo.sip);
     // away: faded
     const away = p.status === "away";
@@ -1685,6 +1698,106 @@ export class Person3D {
   }
 
   // what's in the right hand: a drink (its level going down sip by sip), a toy, the phone
+  // (plan 123 F9a) the umbrella in the left hand: open — the hand up before the shoulder, the canopy over the head,
+  // upright whatever the wrist does — or furled, hung from the fist by its crook, its tip down. Not with the torch
+  // or a flare in that hand, nor a gun in both.
+  private umb: { key: string; prop: { root: Group; dispose: () => void } } | null = null;
+  private umbrellaFrame(p: PersonIn, far = false) {
+    const hand = this.model.bone("wristL");
+    const key = p.umbrella && hand && !p.torch && !p.flare && !p.gun ? p.umbrella : "";
+    if ((this.umb?.key ?? "") !== key) {
+      if (this.umb) {
+        this.umb.prop.root.removeFromParent();
+        this.umb.prop.dispose();
+        this.umb = null;
+      }
+      if (key && hand) {
+        const colour = UMBRELLA_COLOURS[Math.floor(hashSeed(p.seedName ?? p.name) * UMBRELLA_COLOURS.length)];
+        const prop = this.C.buildProp(key === "open" ? "umbrella" : "umbrellaShut", colour, this.mats.prop);
+        hand.add(prop.root);
+        this.umb = { key, prop };
+      }
+    }
+    if (!this.umb || !hand) return;
+    // (far off: the hand where the pose has it — no reach worked out for a speck)
+    if (this.umb.key === "open" && p.a !== 2 && !far) {
+      this.root.updateMatrixWorld(true);
+      this.model.reachTo("L", this.root.localToWorld(umbAt.set(0.16, 1.28, 0.2)), 1, [-0.5, -1, -0.2]);
+    }
+    hand.updateWorldMatrix(true, false);
+    hand.getWorldQuaternion(tq);
+    tq.invert();
+    const r = this.umb.prop.root;
+    // (upright whatever the wrist does, turned with the body — its crook, its panels — not with the world)
+    this.root.getWorldQuaternion(tq2);
+    r.quaternion.copy(tq).multiply(tq2);
+    // (the fist's middle: as the torch's grip, down the wrist and a little ahead)
+    r.position.set(0, -0.06, 0.03);
+    if (this.umb.key === "shut") {
+      // (furled, carried by its handle: tip down, the fist round the crook's straight, its hook curled forward over
+      // the fingers — turned so, and let down a hand's width from the shaft's grip)
+      r.quaternion.multiply(tq2.setFromAxisAngle(X3, Math.PI)).multiply(tq3.setFromAxisAngle(Y3, Math.PI / 2));
+      r.position.add(umbDown.set(0, -0.1, 0).applyQuaternion(tq));
+    }
+  }
+  // (plan 123) a waiter's plate: carried out flat on the right hand, the forearm level before the waist, the plate
+  // kept flat whatever the wrist does
+  private tray: { root: Group; dispose: () => void } | null = null;
+  private trayFrame(p: PersonIn, far = false) {
+    const hand = this.model.bone("wristR");
+    const on = !!p.tray && !!hand && !p.gun && !p.phone && p.a !== 2;
+    if (!on || !hand) {
+      if (this.tray) {
+        this.tray.root.removeFromParent();
+        this.tray.dispose();
+        this.tray = null;
+      }
+      return;
+    }
+    if (!this.tray) {
+      this.tray = this.C.buildProp("plate", "#a8693f", this.mats.prop);
+      hand.add(this.tray.root);
+    }
+    this.root.updateMatrixWorld(true);
+    this.root.getWorldQuaternion(tq2);
+    // (the palm up under it before the waist, the fingers on ahead, the thumb out to the right — the elbow down by
+    // the side; a body without life hands: the hand reached there)
+    const palm = this.root.localToWorld(trayPalm.set(-0.16, 1.04, 0.36));
+    const along = trayAlong.set(0, 0, 1).applyQuaternion(tq2);
+    const index = trayIndex.set(-1, 0, 0).applyQuaternion(tq2);
+    if (this.model.wristFor("R", palm, along, index, trayAt, trayTurn))
+      this.model.gripTo("R", trayAt, trayTurn, 1, [-0.4, -1, -0.3], far);
+    else this.model.reachTo("R", palm, 1, [-0.4, -1, -0.3]);
+    hand.updateWorldMatrix(true, false);
+    hand.getWorldQuaternion(tq);
+    tq.invert();
+    const r = this.tray.root;
+    // (flat, turned with the body; its foot on the palm)
+    r.quaternion.copy(tq).multiply(tq2);
+    r.position.copy(hand.worldToLocal(umbAt.copy(palm).add(umbDown.set(0, 0.012, 0))));
+  }
+  // (plan 123) their meal set down on the table before them while they eat: on its top where the server says
+  private dish: { root: Group; dispose: () => void } | null = null;
+  private dishFrame(p: PersonIn) {
+    const at = p.dish && p.a === 2 ? p.dish : null;
+    const parent = this.root.parent;
+    if (!at || !parent) {
+      if (this.dish) {
+        this.dish.root.removeFromParent();
+        this.dish.dispose();
+        this.dish = null;
+      }
+      return;
+    }
+    if (!this.dish) {
+      this.dish = this.C.buildProp("plate", "#a8693f", this.mats.prop);
+      this.root.add(this.dish.root);
+    }
+    // (their floor's x, y → the world through the body's own parent, then into the body's frame: it sits there)
+    this.root.updateWorldMatrix(true, false);
+    const w = parent.localToWorld(umbAt.set(at[0], this.root.position.y + at[2], at[1]));
+    this.dish.root.position.copy(this.root.worldToLocal(w));
+  }
   private props(p: PersonIn, held: { kind: HeldKind; since: number } | null, sip: number) {
     const hand = this.model.bone("wristR");
     // the drink or toy
@@ -1697,7 +1810,7 @@ export class Person3D {
           // (plan 68: a hot cocoa in the station's red mug, a tea in a white one, an ice-cream tub)
           const color =
             kind === "mug"
-              ? MUG_COLORS[Math.floor(hashSeed(p.name) * MUG_COLORS.length)]
+              ? MUG_COLORS[Math.floor(hashSeed(p.seedName ?? p.name) * MUG_COLORS.length)]
               : kind === "soda"
                 ? "#c4402b"
                 : kind === "cocoa"
@@ -5063,7 +5176,7 @@ export class Person3D {
   }
 
   // A move with someone (shared SOCIAL): what, and how far into it.
-  private actOf(p: PersonIn): { what: string; t: number; len: number } | null {
+  private actOf(p: PersonIn): { what: string; t: number; len: number; with?: [number, number] } | null {
     if (!p.act) {
       this.actKey = "";
       return null;
@@ -5075,7 +5188,9 @@ export class Person3D {
     }
     const kind = p.act === "take" ? "give" : p.act;
     const len = (isSocial(kind) ? SOCIAL_MS[kind] : 1500) / 1000;
-    return { what: p.act, t: (performance.now() - this.actSeen) / 1000, len };
+    // (plan 123: a hug's, a handshake's arms to where the other one's drawn — straight ahead, they face each other)
+    const t = (performance.now() - this.actSeen) / 1000;
+    return p.actTo ? { what: p.act, t, len, with: [0, p.actTo] } : { what: p.act, t, len };
   }
 
   /** How far along `ray` it meets this person (a standing capsule), or null. */
@@ -5199,6 +5314,15 @@ export class Person3D {
     this.dropBud();
     this.dropTorch();
     this.dropTool();
+    this.umb?.prop.root.removeFromParent();
+    this.umb?.prop.dispose();
+    this.umb = null;
+    this.tray?.root.removeFromParent();
+    this.tray?.dispose();
+    this.tray = null;
+    this.dish?.root.removeFromParent();
+    this.dish?.dispose();
+    this.dish = null;
     // (plan 119: the gear's copies share the view's loaded meshes — let go, never disposed)
     for (const k of ["knife", "charge", "pack"] as const) this.gearShow(k, false);
     this.model.dispose();

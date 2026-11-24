@@ -28,6 +28,9 @@ export const STACKS = {
   fuse: 4,
   // (plan 87) the torch: an item, one of a kind — it lights only from the left hand
   torch: 1,
+  // (plan 123 F9a) an umbrella, from a stand: in the left hand (key 1) it's open over you in rain or sleet out on the
+  // land, furled anywhere else; kept in the pack
+  umbrella: 1,
   // (plan 93 S6) a snow chain: one a wheel, fitted kneeling by it
   chains: 4,
   // (plan 93 S7) a wrench (mends a car's engine, lamps, panels away from the garage) and a tow rope (one car

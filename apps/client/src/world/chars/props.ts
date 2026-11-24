@@ -25,7 +25,17 @@ import { arc, extrude, lathe, type Prof, smoothNormals, sweepTube } from "./shap
 // ink line — built standing up (+y), centred on where the fist holds them.
 // And the earbud (on a call, the phone put away), centred on the ear.
 
-export type PropKind = "mug" | "cup" | "soda" | "phone" | "torch" | "bud" | "flare";
+export type PropKind =
+  | "mug"
+  | "cup"
+  | "soda"
+  | "phone"
+  | "torch"
+  | "bud"
+  | "flare"
+  | "umbrella"
+  | "umbrellaShut"
+  | "plate";
 
 interface Built {
   root: Group;
@@ -186,6 +196,29 @@ export function buildProp(kind: PropKind, color: string, mats: (color: string) =
         ),
         "#b5562f",
       );
+      break;
+    }
+    case "plate": {
+      // (plan 123) a waiter's plate, carried flat on the fingers: a china plate, its rim turned up, and a meal on
+      // it (a mound of something, a sprig of green) — its origin under its middle
+      add(
+        lathe(
+          [
+            [0, 0],
+            [0.07, 0],
+            [0.115, 0.012],
+            [0.13, 0.02],
+            [0.126, 0.024],
+            [0.1, 0.016],
+            [0.07, 0.008],
+            [0, 0.008],
+          ],
+          SEG,
+        ),
+        "#f2efe8",
+      );
+      add(lathe(arc(0, 0.008, 0.06, 0, Math.PI / 2, 4), SEG).scale(1, 0.55, 1), color);
+      add(lathe(arc(0, 0.008, 0.022, 0, Math.PI / 2, 3), 6).translate(0.045, 0.012, 0.02), "#5d8a3a", false);
       break;
     }
     case "soda": {
@@ -384,6 +417,75 @@ export function buildProp(kind: PropKind, color: string, mats: (color: string) =
       add(lathe(arc(0, 0.088, r * 0.85, 0, Math.PI / 2, 4), SEG), hot, false);
       break;
     }
+    case "umbrella":
+    case "umbrellaShut": {
+      // (plan 123 F9a) an umbrella, from its grip (the fist round the shaft at the origin) up: open — eight flat
+      // panels over a shell, the ribs' tips, the ferrule — or furled round its shaft; the crook of its handle
+      // under the fist, the shaft dark
+      const open = kind === "umbrella";
+      const dark = "#2a2724";
+      add(
+        lathe(
+          [
+            [0.006, -0.02],
+            [0.007, 0.86],
+            [0.003, 0.92],
+            [0, 0.93],
+          ],
+          6,
+        ),
+        dark,
+        false,
+      );
+      const crook = sweepTube(
+        [
+          new Vector3(0, -0.01, 0),
+          new Vector3(0, -0.1, 0),
+          new Vector3(0.012, -0.15, 0),
+          new Vector3(0.05, -0.16, 0),
+          new Vector3(0.075, -0.12, 0),
+        ],
+        () => [0.012, 0.012],
+        { segs: 12, radial: 6 },
+      );
+      add(crook, "#5a3a22");
+      if (open) {
+        // (its shell: the top, then back under it a little lower — seen from under it too)
+        add(
+          lathe(
+            [
+              [0, 0.875],
+              [0.1, 0.86],
+              [0.3, 0.79],
+              [0.5, 0.67],
+              [0.53, 0.64],
+              [0.5, 0.655],
+              [0.3, 0.775],
+              [0.1, 0.845],
+              [0, 0.86],
+            ],
+            8,
+          ),
+          color,
+        );
+      } else
+        add(
+          lathe(
+            [
+              [0, 0.86],
+              [0.02, 0.8],
+              [0.04, 0.62],
+              [0.042, 0.4],
+              [0.02, 0.2],
+              [0.008, 0.16],
+              [0, 0.16],
+            ],
+            8,
+          ),
+          color,
+        );
+      break;
+    }
     case "bud": {
       // an earbud: a little white bulb and its stem, down along the jaw
       add(lathe(arc(0, 0, 0.009, -Math.PI / 2, Math.PI / 2, 5), 10), color);
@@ -435,6 +537,11 @@ export const GRIP: Record<PropKind | "toy", { r: number; at: [number, number, nu
   flare: { r: 0.016, at: [0, -0.055, 0] },
   bud: { r: 0.005, at: [0, 0, 0] },
   toy: { r: 0.03, at: [0, 0, 0] },
+  // (plan 123) by its shaft, the fist at its origin
+  umbrella: { r: 0.008, at: [0, 0, 0] },
+  umbrellaShut: { r: 0.008, at: [0, 0, 0] },
+  // (plan 123) on the flat of the fingers, under its middle
+  plate: { r: 0.01, at: [0, 0, 0] },
 };
 const gm = new Matrix4();
 const gx = new Vector3();
@@ -527,6 +634,9 @@ export const HELD_SHAPE: Record<PropKind | "toy" | "pad", HeldShape> = {
   flare: { round: true, r: 0.016, y0: -0.035, hy: 0.08 },
   bud: { round: true, r: 0.005, y0: 0, hy: 0.005 },
   toy: { round: true, r: 0.03, y0: 0, hy: 0.03 },
+  umbrella: { round: true, r: 0.008, y0: 0, hy: 0.06 },
+  umbrellaShut: { round: true, r: 0.008, y0: 0, hy: 0.06 },
+  plate: { round: true, r: 0.13, y0: 0.012, hy: 0.012 },
   phone: { round: false, half: [0.035, 0.07, 0.0075], cz: -0.0015 },
   // (a pad as a pad is: its body, and a handle off each end angled down and back — what the fists close on)
   pad: {

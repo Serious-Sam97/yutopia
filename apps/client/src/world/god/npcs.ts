@@ -1,9 +1,11 @@
 import { byteFace, faceByte, parseAvatar } from "@yutopia/shared";
-import { inLandBounds, terrainAt, waterAt } from "@yutopia/shared/grounds";
+import { BUILDINGS, inLandBounds, terrainAt, waterAt } from "@yutopia/shared/grounds";
 import { buildingAt } from "@yutopia/shared/grounds-buildings";
 import type { GroundsEdits } from "@yutopia/shared/grounds-edits";
 import {
+  jobFor,
   type NpcPlaceDef,
+  type NpcWork,
   PLACE_LIMITS,
   type PlacedType,
   placeOf,
@@ -241,6 +243,7 @@ export class NpcsTool {
     if (o.held) return this.place(at);
     if (o.sel && o.step === "route") return this.addStop(at);
     if (o.sel && o.step === "home") return this.setHome(at);
+    if (o.sel && o.step === "work") return this.setWork(at);
     this.pick(this.hits(at));
   }
   private place(at: NonNullable<Spot>) {
@@ -286,8 +289,78 @@ export class NpcsTool {
     toast(tr("godNpcHome").replace("{name}", this.label(p.key)).replace("{home}", home), "info");
     this.setO({ step: "" });
   }
+  /** Their work (plan 123, F2a): a spot clicked on a town building's storey (shown) — or the building itself on the land,
+   *  its ground storey's middle —, its job from the building's kind (the panel changes it), a shift of 8–17 (or theirs). */
+  private setWork(at: NonNullable<Spot>) {
+    const key = this.o.sel;
+    const p = key ? placeOf(this.host.draft(), key) : undefined;
+    if (!p) return;
+    const floors = this.host.structure()?.floors ?? [];
+    let f = at.level !== 0 ? floors.find((q) => q.index === at.level && q.space) : undefined;
+    let x = at.x;
+    let z = at.z;
+    if (!f && at.level === 0) {
+      const b = buildingAt(at.x, at.z);
+      f = b ? floors.find((q) => q.space === b && (q.storey ?? 0) === 0) : undefined;
+      if (f) {
+        x = f.grid.x0 + f.grid.w / 2;
+        z = f.grid.y0 + f.grid.h / 2;
+      }
+    }
+    const building = f?.space;
+    if (!f || !building) return void toast(tr("godNpcNoWork"), "warn");
+    // (a storey's spot: inside its outline, somewhere one can stand — the publish's check too)
+    const g = f.grid;
+    if (x < g.x0 || x > g.x0 + g.w || z < g.y0 || z > g.y0 + g.h) return void toast(tr("godNpcNoWork"), "warn");
+    if (at.level !== 0) {
+      const why = this.blocked(at);
+      if (why) return void toast(why, "warn");
+    }
+    const kind = BUILDINGS.find((b) => b.key === building)?.kind ?? "shop";
+    const was = p.work;
+    const { job, spot } = was && was.building === building ? was : jobFor(kind);
+    const [sx, sz] = this.snapped(x, z);
+    const work: NpcWork = {
+      building,
+      job,
+      spot,
+      x: sx,
+      z: sz,
+      // (moved: as it looked — turned on its own with R while picking, or the panel's arrows)
+      a: was ? was.a : r3(this.o.a * RAD),
+      level: f.index,
+      from: was?.from ?? 8,
+      to: was?.to ?? 17,
+    };
+    this.host.change(putPlace(this.host.draft(), { ...p, work }));
+    toast(
+      tr("godNpcWork").replace("{name}", this.label(p.key)).replace("{work}", building).replace("{job}", job),
+      "info",
+    );
+    this.setO({ step: "" });
+  }
+  /** (plan 123) Their work spot's facing turned by `by`° (the way their customers come from), on its own. */
+  turnWork(by: number) {
+    const key = this.o.sel;
+    const p = key ? placeOf(this.host.draft(), key) : undefined;
+    if (!p?.work) return;
+    const a = (((Math.round(p.work.a / RAD) + by) % 360) + 360) % 360;
+    this.host.change(putPlace(this.host.draft(), { ...p, work: { ...p.work, a: r3(a * RAD) } }));
+  }
+  /** The panel's: their work's job, spot or shift changed. */
+  setWorkField(patch: Partial<Pick<NpcWork, "job" | "spot" | "from" | "to">>) {
+    const key = this.o.sel;
+    const p = key ? placeOf(this.host.draft(), key) : undefined;
+    if (!p?.work) return;
+    this.host.change(putPlace(this.host.draft(), { ...p, work: { ...p.work, ...patch } }));
+  }
   /** The panel's: the picked one's placement changed (their type, circle, route's loop and pause, no home). */
-  setPicked(patch: Partial<Omit<NpcPlaceDef, "key" | "x" | "z" | "level">> & { home?: string | undefined }) {
+  setPicked(
+    patch: Partial<Omit<NpcPlaceDef, "key" | "x" | "z" | "level">> & {
+      home?: string | undefined;
+      work?: NpcWork | undefined;
+    },
+  ) {
     const key = this.o.sel;
     const p = key ? placeOf(this.host.draft(), key) : undefined;
     if (!p) return;
@@ -296,14 +369,22 @@ export class NpcsTool {
     this.host.change(putPlace(this.host.draft(), next));
   }
   setStep(step: GodHud["npcs"]["step"]) {
-    this.setO({ step });
+    // (picking their workplace: the facing R turns starts from theirs — the spot's they have, else their own)
+    const p = step === "work" && this.o.sel ? placeOf(this.host.draft(), this.o.sel) : undefined;
+    if (p) this.setO({ step, a: Math.round(((((p.work?.a ?? p.a) / RAD) % 360) + 360) % 360) });
+    else this.setO({ step });
   }
   setType(type: PlacedType | "") {
     this.setPicked({ type: type || undefined });
   }
-  /** R: the held one (or the picked one) turned 15° (Shift: back). */
+  /** R: the held one (or the picked one) turned 15° (Shift: back) — picking their work spot: that spot. */
   turn(by: number) {
     const sel = this.o.sel;
+    // (picking their workplace: its spot — or, none yet, the one about to be picked)
+    if (sel && !this.o.held && this.o.step === "work")
+      return placeOf(this.host.draft(), sel)?.work
+        ? this.turnWork(by)
+        : this.setO({ a: Math.round((((this.o.a + by) % 360) + 360) % 360) });
     if (this.o.held || !sel) return this.setO({ a: Math.round((((this.o.a + by) % 360) + 360) % 360) });
     const p = placeOf(this.host.draft(), sel);
     if (p) this.host.change(putPlace(this.host.draft(), { ...p, a: r3(p.a + by * RAD) }));
@@ -466,6 +547,20 @@ export class NpcsTool {
           for (const s of p.route) circle(s.x, s.z, s.level, 0.3, AMBER);
         }
       }
+    }
+    // (the picked one's work spot, on its storey: green, a tick the way they face there — plan 123)
+    const w = o.sel ? placeOf(this.host.draft(), o.sel)?.work : undefined;
+    if (w && w.level === view) {
+      circle(w.x, w.z, w.level, 0.45, GREEN);
+      const y = yOf(w.x, w.z, w.level);
+      line(
+        [
+          [w.x, y, w.z],
+          [w.x + Math.cos(w.a) * 0.8, y, w.z + Math.sin(w.a) * 0.8],
+        ],
+        GREEN,
+        false,
+      );
     }
     if (ring) circle(ring.x, ring.z, ring.level, 0.6, ring.colour);
     for (let i = n; i < this.lines.length; i++) this.lines[i].visible = false;

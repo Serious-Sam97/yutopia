@@ -22,6 +22,7 @@ import {
   hearingGain,
   hqFloorsOf,
   inLift,
+  isFloor,
   isHeld,
   isPrivate,
   isSocial,
@@ -67,7 +68,15 @@ import { isRadio, type RadioState, radioOf } from "@yutopia/shared/media";
 import { type Species, toyAt } from "@yutopia/shared/pets";
 import { Place } from "@yutopia/shared/physics/place";
 import { kitLook, kitOf } from "@yutopia/shared/strike/kit";
-import { applyOps, cellTop, edgeBack, edgeFront, type Structure, viewOf } from "@yutopia/shared/structure";
+import {
+  applyOps,
+  cellTop,
+  edgeBack,
+  edgeFront,
+  floorAtPoint,
+  type Structure,
+  viewOf,
+} from "@yutopia/shared/structure";
 import { wears } from "@yutopia/shared/worn";
 import type { Npc, Player, WorldObject, WorldState } from "@yutopia/state";
 import { Client, getStateCallbacks, type Room } from "colyseus.js";
@@ -322,6 +331,10 @@ export class WorldController {
         const at = r ? interpolate(r.buf, r.smooth.at(performance.now())) : { x: p.x, y: p.y };
         return { x: at.x, y: at.y, uid: p.uid, name: p.name };
       },
+      npc: (id) => {
+        const n = this.room?.state.npcs?.get(id);
+        return n ? { x: n.x, y: n.y, name: n.name } : undefined;
+      },
       pet: (id) => {
         const pet = this.room?.state.pets.get(id);
         if (!pet) return undefined;
@@ -468,8 +481,8 @@ export class WorldController {
       onToyClick: (id) => this.pets.pickToy(id),
       onAvatarClick: (sid, at) => {
         if (sid.startsWith("pet:")) return void this.menu.openMenu({ type: "pet", id: sid.slice(4) }, at);
-        // (plan 121: a placed NPC clicked — talked to; else Vortex poked)
-        if (sid.startsWith("npc:place:")) return this.send("npc:talk", { id: sid.slice(4) });
+        // (plan 123: a placed NPC clicked — what to do with them, the menu; else Vortex poked)
+        if (sid.startsWith("npc:place:")) return void this.menu.openMenu({ type: "npc", id: sid.slice(4) }, at);
         if (sid.startsWith("npc:")) return this.send("vortex:poke", {});
         // yourself: your look, your drink…; anyone else: what to do with them
         if (sid === this.room?.sessionId) return this.menu.openMenu({ type: "self" }, at);
@@ -859,6 +872,9 @@ export class WorldController {
       if (area) this.walkTo({ x: area.x + area.w / 2, y: area.y + area.h / 2 });
     });
     room.onMessage("toast", (m: ServerMessages["toast"]) => toast(m.text, m.tone ?? "info"));
+    // (plan 123) a placed NPC as they are to me (the menu asked it: opened now), how what I did went
+    room.onMessage("npc:about", (m: ServerMessages["npc:about"]) => this.menu.aboutCame(m));
+    room.onMessage("npc:acted", (m: ServerMessages["npc:acted"]) => this.menu.actedCame(m));
     // (plan 68 phases 21–25) the small games' news, to their panels
     for (const type of ["claw:result", "tg:state"] as const)
       room.onMessage(type, (m: unknown) => {
@@ -1397,7 +1413,8 @@ export class WorldController {
     // someone high-fives me, hands me something…: turn to them
     if (lp?.act && lp.actAt !== this.facedAct) {
       this.facedAct = lp.actAt;
-      const other = room.state.players.get(lp.actWith);
+      // (plan 123: or an NPC — a hug, a handshake asked of them)
+      const other = room.state.players.get(lp.actWith) ?? room.state.npcs?.get(lp.actWith);
       if (other && !this.path) this.me.yaw = face8(other.x - this.me.x, other.y - this.me.y, this.me.yaw);
     }
     const tp = this.tp;
@@ -3046,6 +3063,16 @@ export class WorldController {
   // (`sid` the player's session — the state's map key; the Player's own `sid` isn't sent to clients)
   /** (plan 115 phase 85) when each one in the Strike Park's match went down (client ms: the fall's own key) */
   private strikeDown = new Map<string, number>();
+  /** (plan 123) Rain or sleet falling where they stand out on the land (as the server opens the NPCs' umbrellas). */
+  private wetAt(p: { x: number; y: number; level: number }): boolean {
+    const w = this.room?.state.weather;
+    if (!w || !(w.kind === "rain" || w.kind === "sleet") || w.fall <= 0.12) return false;
+    // (the land's floor, out on it — no floor of a building over it: my grid's word while I'm on it, its own map's
+    // from another floor)
+    if (p.level !== 0) return false;
+    if (this.level === 0) return this.grid.onLand(p.x, p.y);
+    return !isFloor(floorAtPoint(levelMap(this.building, 0) ?? this.building, p.x, p.y));
+  }
   private avatarState(p: Player, _local: boolean, sid: string): AvatarState {
     let look = parseAvatar(p.avatar);
     // (plan 115 F11) in the Strike Park's match: their own clothes, the team's vest over them
@@ -3107,6 +3134,8 @@ export class WorldController {
       slingAk: wears(p.worn, "slingAk") || undefined,
       slingSn: wears(p.worn, "slingSn") || undefined,
       slingDb: wears(p.worn, "slingDb") || undefined,
+      // (plan 123) an umbrella in the left hand: open in rain or sleet out on the land, else furled
+      umbrella: wears(p.worn, "umbrella") ? (this.wetAt(p) ? "open" : "shut") : undefined,
       arm: p.arm,
       fellAt: downAt ?? p.fellAt,
       fellYaw: downAt ? (p.hitYaw ?? 0) : p.fellYaw,

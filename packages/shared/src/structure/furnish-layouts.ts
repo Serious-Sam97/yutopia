@@ -106,6 +106,8 @@ const BAR: Layout = {
     { kind: "coffee_table", u: 1.75, v: 4.6, face: "right", storey: 1 },
     ...highTop(13.6, 4.6, 1),
     ...highTop(13.6, 8.0, 1),
+    // (plan 123, added after worlds had it laid: an umbrella stand just in the door, against the glass to its right)
+    { kind: "umbrella_stand", u: 9.6, v: 0.4, face: "in", atWindow: true, since: 1 },
   ],
 };
 
@@ -130,6 +132,8 @@ const DINER: Layout = {
     ...fourTop(13.2, 8.0, 0, 2, 1),
     // (at the counter's end, facing the room: every wall's windows)
     { kind: "jukebox", u: 4.85, v: 11.48, face: "out" },
+    // (plan 123, added after: an umbrella stand just in the door, by the booth to its left)
+    { kind: "umbrella_stand", u: 7.85, v: 0.4, face: "in", atWindow: true, since: 1 },
   ],
 };
 
@@ -157,6 +161,8 @@ const MARKET: Layout = {
     ...rowU("shelving", 15.7, 4.6, 3.4, 2, "out", { storey: 1 }),
     { kind: "desk", u: 6.0, v: 5.0, face: "in", storey: 1 },
     { kind: "chair", u: 6.0, v: 5.85, face: "out", storey: 1 },
+    // (plan 123, added after: an umbrella stand just in the door, before the checkout)
+    { kind: "umbrella_stand", u: 6.5, v: 0.4, face: "in", atWindow: true, since: 1 },
   ],
 };
 
