@@ -283,7 +283,11 @@ test("third person: build mode places, picks up and moves a thing in 3D", async 
     await page.waitForTimeout(600);
 
     // place from the catalog: the ghost follows the 3D pointer, a click puts it down
-    await page.getByRole("tab", { name: "Decor" }).click();
+    await page.evaluate(() =>
+      (window as any).__hud.set((h: any) => ({
+        build: { ...h.build, tab: "buy", tool: "furniture", shopBy: "func", shopCat: "decor", shopSub: "" },
+      })),
+    ); // (plan 124: Buy, func · decor)
     await page.getByRole("button", { name: "Plant", exact: true }).click();
     expect((await build()).mode).toBe("place");
     const p0 = await screenAt(X + 0.5, Y + 0.5);

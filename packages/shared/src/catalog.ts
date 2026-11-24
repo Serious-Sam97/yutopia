@@ -70,6 +70,9 @@ export interface CatalogEntry {
   surface?: number;
   top?: [number, number, number, number];
   onSurface?: boolean;
+  /** What it costs in build mode's catalog (docs/plan/124-the-build-view.md F7): none yet — the town has no money; the
+   *  catalog's card and tiles keep a place for it, shown once prices are set. */
+  price?: number;
   // doors and windows (openings.ts): set into a wall on tile edges, `w` of
   // them along it, cutting their own hole; the wall keeps its material
   opening?: "door" | "window";

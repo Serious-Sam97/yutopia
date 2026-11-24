@@ -98,12 +98,13 @@ test("doors and windows go into a wall from the catalog; the wall stays, a door 
   const made: string[] = [];
   try {
     // the catalog has a Doors tab and a Windows tab
-    await setBuild(page, { on: true, tool: "furniture", mode: "hand", catalogTab: "doors" });
+    // (plan 124: the Build tab's Doors and Windows)
+    await setBuild(page, { on: true, tool: "furniture", mode: "hand", tab: "build", part: "doors" });
     await page.waitForFunction(() => !!(window as any).__yutopia.build, null, { timeout: 15_000 });
-    await expect(page.getByRole("tab", { name: /^Doors\b/ })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("build-part-doors")).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByText("Saloon doors").first()).toBeVisible();
     await expect(page.getByText("Tall window")).toHaveCount(0);
-    await page.getByRole("tab", { name: /^Windows\b/ }).click();
+    await page.getByTestId("build-part-windows").click();
     await expect(page.getByText("Tall window").first()).toBeVisible();
     await expect(page.getByText("Saloon doors")).toHaveCount(0);
 

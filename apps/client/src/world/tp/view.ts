@@ -142,7 +142,7 @@ import { type Live, LiveFeed, type LiveSources, LiveSurfaces } from "./live";
 import { PROXIED } from "./merge-static";
 import { Body } from "./parts/body";
 import { BuildPick } from "./parts/buildpick";
-import { FOV, GROUND_POOL, LAMPS, LIMITS, segBox } from "./parts/common";
+import { BUILD_LIMITS, FOV, GROUND_POOL, LAMPS, LIMITS, segBox } from "./parts/common";
 import { Culling } from "./parts/culling";
 import { Eyes } from "./parts/eyes";
 import { Guns } from "./parts/guns";
@@ -1518,6 +1518,9 @@ void main() {
    *  is from it (the fog drawn back that far), and its pointer and wheel; null: the usual. The
    *  camera itself is a game camera (gameCam), eased in out of mine and back. */
   god: { at: Vector3; dist: number; input: GodInput; cut?: string | null } | null = null;
+  /** Build mode's camera (world/build/camera.ts, docs/plan/124-the-build-view.md): the point on my floor it
+   *  looks at, panned by the build camera's keys; null: me, as usual. */
+  buildAt: Vector3 | null = null;
   gameCam: {
     eye: [number, number, number];
     look: [number, number, number];
@@ -2818,6 +2821,12 @@ void main() {
     if (this.god) {
       this.target.copy(this.god.at);
       this.targetReady = true;
+    } else if (this.buildAt && this.buildPick.buildMode) {
+      // (where it looks across the floor is the build camera's; how high is mine — the floor I'm on, eased as it was:
+      // up a floor (PgUp) the camera's up there with me)
+      this.target.set(this.buildAt.x, this.target.y, this.buildAt.z);
+      this.buildAt.y = this.target.y;
+      this.targetReady = true;
     }
     // (in as fast as the gun comes up — ~95% in its `aim` s; out a touch slower)
     const aimRate = this.aim ? 3 / Math.max(0.08, this.aimSecs) : 10;
@@ -3498,7 +3507,8 @@ void main() {
   }
 
   clampCam() {
-    const L = LIMITS[this.mode];
+    // (build mode's camera: further back and up to straight down — plan 124)
+    const L = this.buildAt && this.buildPick.buildMode ? BUILD_LIMITS : LIMITS[this.mode];
     // (aiming: up to looking above level)
     this.pitch = Math.max(this.aimK > 0.5 ? -0.5 : L.pitch[0], Math.min(L.pitch[1], this.pitch));
     this.dist = Math.max(L.dist[0], Math.min(L.dist[1], this.dist));

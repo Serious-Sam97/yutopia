@@ -841,7 +841,8 @@ export function Minimap() {
 
   // (+ brings the camera in: its distance shrinks)
   const zoom = (f: number) => w?.tp?.lensPart.zoomBy(1 / f);
-  const shown = building || !me || me.area === "lot" || !w?.grid?.onLand(me.x, me.y);
+  // (building: hidden — the catalog strip has the bottom of the screen, plan 124)
+  const shown = !building && (!me || me.area === "lot" || !w?.grid?.onLand(me.x, me.y));
   if (!shown) return null;
   return (
     <div

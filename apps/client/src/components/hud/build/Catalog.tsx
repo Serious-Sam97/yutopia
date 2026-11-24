@@ -1,341 +1,71 @@
 "use client";
 
-import { CLOTH_COLORS, entry, FAM_KINDS, SEAT_SPEC, SURFACE, TEMPLATES, TEXT_DEFAULT } from "@yutopia/shared";
+import { CLOTH_COLORS, DECOR, entry, SEAT_SPEC, SURFACE, TEMPLATES, TEXT_DEFAULT } from "@yutopia/shared";
 import { GAME_ROOM_SETUP } from "@yutopia/shared/library";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { yutopia } from "@/lib/api";
-import { type Key, trMaybe, useTr } from "@/lib/i18n";
+import { addStrings, type Key, useTr } from "@/lib/i18n";
 import { hud, useHud } from "@/world/store";
 import { useWorld } from "../ctx";
-import { Icon, type IconName } from "../icons";
+import { Icon } from "../icons";
+import { ask } from "./Dialogs";
+import {
+  type BuildPart,
+  buildShelf,
+  bw,
+  FUNCS,
+  type Item,
+  labelOf,
+  NEW_KEYS,
+  priceOf,
+  ROOMS,
+  type Room,
+  roomSubs,
+  SHOP,
+  type ShopItem,
+  shopShelf,
+  swName,
+} from "./shop";
 import { ItemThumb, loadPictures } from "./thumbs";
 
-// A catalog entry: a kind, and for decor what it is (props.d).
-interface Item {
-  key: string;
-  kind: string;
-  props?: Record<string, unknown>;
-}
-const it = (kind: string): Item => ({ key: kind, kind });
-const decor = (kind: "decor" | "tabletop" | "frame", d: string): Item => ({
-  key: `${kind}:${d}`,
-  kind,
-  props: { d, seed: 0.37 },
-});
-// (plan 68's families, in their own order: shared fam/)
-const fam = (...names: string[]): Item[] => names.flatMap((n) => FAM_KINDS[n] ?? []).map(it);
+// Build mode's catalog, The Sims 3's Buy mode (docs/plan/124-the-build-view.md, phase 5): along the bottom strip — the
+// categories By Room or By Function in its left column, the subcategories and the pictures in the middle (two rows that
+// page sideways), the object card on the right. The Build tab's doors, windows and stairs are the same grid.
 
-const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
+export { labelOf } from "./shop";
+
+addStrings(
   {
-    key: "seating",
-    label: "catSeating",
-    icon: "sofa",
-    items: [...["chair", "armchair", "sofa", "loveseat", "beanbag", "bench", "bar_stool"].map(it), ...fam("seating2")],
-  },
-  {
-    // (plan 113: the town's buildings' own — a bedroom's, a diner's and a bar's, a grocery's, a barn's)
-    key: "town",
-    label: "catTown",
-    icon: "home",
-    items: fam("town"),
-  },
-  {
-    key: "surfaces",
-    label: "catSurfaces",
-    icon: "desk",
-    items: [
-      "desk",
-      "standing_desk",
-      "meeting_table",
-      "coffee_table",
-      "side_table",
-      "high_table",
-      "reception",
-      "counter",
-    ]
-      .map(it)
-      .concat(fam("tables2")),
-  },
-  {
-    // (plan 67: what holds things, and the office's own pieces)
-    key: "storage",
-    label: "catStorage",
-    icon: "board",
-    items: [
-      "cupboard",
-      "bookcase",
-      "shelving",
-      "tape_shelf",
-      "filing_cabinet",
-      "locker", // (a kit a day: docs/plan/30-the-dark.md)
-      "coat_rack",
-      "wall_shelf",
-    ]
-      .map(it)
-      .concat(fam("storage2")),
-  },
-  {
-    key: "office",
-    label: "catOffice",
-    icon: "hammer",
-    items: ["printer", "phone_booth", "partition", "water_cooler", "vending"]
-      .map(it)
-      .concat(fam("office2").filter((i) => i.kind !== "drinks_fridge")),
-  },
-  {
-    // what goes on them: as many as fit, a quarter tile at a time
-    key: "tops",
-    label: "catTops",
-    icon: "mug",
-    items: [
-      it("computer"),
-      ...(["keyboard", "desklamp", "phone"] as const).map((d) => decor("tabletop", d)),
-      it("radio"),
-      it("turntable"),
-      ...(["mug", "papers", "book", "binder", "tapes", "vinyl", "photo", "succulent", "cards", "bell"] as const).map(
-        (d) => decor("tabletop", d),
-      ),
-      ...fam("desktop2"),
+    bvByRoom: ["By room", "Por cômodo"],
+    bvByFunc: ["By function", "Por função"],
+    bvAll: ["All", "Tudo"],
+    bvRecent: ["Recent", "Recentes"],
+    bvThings: ["{n} things", "{n} itens"],
+    bvPage: ["{a} of {b}", "{a} de {b}"],
+    bvPickTitle: ["Pick something", "Escolha algo"],
+    bvPickHint: [
+      "Click a picture, then click in the room to put it down. Click a thing in the room to lift only it — a plate off its table too.",
+      "Clique numa imagem e depois no cômodo para colocar. Clique numa coisa no cômodo para levantar só ela — um prato da mesa também.",
     ],
+    bvFits: ["Fits", "Cabe"],
+    bvBlocked: ["Doesn't fit here", "Não cabe aqui"],
+    bvFacing: ["facing {d}", "virado para {d}"],
+    bvMoving: ["Moving {n}", "Movendo {n}"],
+    bvMove: ["Move", "Mover"],
+    bvDesign: ["Design", "Design"],
+    bvSell: ["Sell", "Vender"],
+    bvPutDown: ["Put down", "Colocar"],
+    bvTurn: ["Turn", "Girar"],
+    bvDropToSell: ["Drop it here to sell it", "Solte aqui para vender"],
+    bvUnder: ["what's under", "o que está embaixo"],
   },
-  {
-    // YouTube / Jellyfin on them for everyone nearby (docs/plan/10-media.md)
-    key: "screens",
-    label: "catScreens",
-    icon: "tv",
-    items: [
-      "tv_wall",
-      "tv_hd",
-      "tv_giant",
-      "projector_screen",
-      "cinema_screen",
-      "projector",
-      "tv_console",
-      "tv_portable",
-      "computer",
-    ]
-      .map(it)
-      .concat(fam("screens2")),
-  },
-  {
-    key: "games",
-    label: "catGames",
-    icon: "gamepad",
-    items: [
-      "crt_tv",
-      "console_2600",
-      "console_nes",
-      "console_snes",
-      "console_md",
-      "console_gb",
-      "console_ps1",
-      "console_ps1_slim",
-      "cart_shelf",
-      "disc_rack",
-    ]
-      .map(it)
-      .concat(fam("gameroom")),
-  },
-  {
-    key: "tech",
-    label: "catTech",
-    icon: "radio",
-    items: ["arcade", "slot_track", "pool_table", "pingpong_table", "piano", "mixing_desk", "speaker_cab", "mic_stand"]
-      .map(it)
-      .concat(fam("music")),
-  },
-  {
-    key: "lights",
-    label: "catLights",
-    icon: "globe",
-    items: [
-      it("lamp"),
-      it("pendant_light"),
-      it("panel_light"),
-      it("lava_lamp"),
-      decor("tabletop", "desklamp"),
-      ...fam("lights2"),
-    ],
-  },
-  {
-    key: "walls",
-    label: "catWalls",
-    icon: "frame",
-    items: [
-      ...[
-        "board_wall",
-        "screen_wall",
-        "whiteboard",
-        "notice_board",
-        "clock",
-        "neon",
-        "light_switch",
-        "acoustic_panel",
-        "poster",
-        "marquee_sign",
-        "vfd_ticker",
-        "split_flap",
-      ].map(it),
-      decor("frame", "frame"),
-      ...fam("walls2"),
-    ],
-  },
-  {
-    // set into a wall (shared openings.ts): the wall keeps its material
-    key: "doors",
-    label: "catDoors",
-    icon: "door",
-    items: [
-      // (shown shut in the catalog; they go in open)
-      { key: "door", kind: "door", props: { state: "closed" } },
-      { key: "door:glass", kind: "door", props: { glass: true, state: "closed" } },
-      { key: "door_double", kind: "door_double", props: { state: "closed" } },
-      { key: "door_studio", kind: "door_studio", props: { state: "closed" } },
-      { key: "door_barn", kind: "door_barn", props: { state: "closed" } },
-      { key: "door_saloon", kind: "door_saloon", props: { state: "closed" } },
-      ...["door_auto", "door_revolving", "door_garage"].map((k) => ({ key: k, kind: k, props: { state: "closed" } })),
-      it("archway"),
-    ],
-  },
-  {
-    // windows, set into a wall the same way
-    key: "windows",
-    label: "catWindows",
-    icon: "window",
-    items: [
-      it("window"),
-      it("window_wide"),
-      it("window_tall"),
-      it("window_round"),
-      it("window_arched"),
-      it("window_high"),
-      it("window_stained"),
-      it("window_blinds"),
-      it("window_studio"),
-      ...fam("doors2"),
-    ],
-  },
-  {
-    key: "decor",
-    label: "catDecor",
-    icon: "leaf",
-    items: [
-      it("plant"),
-      decor("decor", "plant"),
-      it("fireplace"),
-      it("column"),
-      decor("decor", "boxes"),
-      decor("decor", "bin"),
-      decor("decor", "cable"),
-      ...fam("decor2"),
-    ],
-  },
-  { key: "floor", label: "catFloor", icon: "marquee", items: ["rug", "standup_mat"].map(it).concat(fam("floor2")) },
-  {
-    // the building (docs/plan/25): stairs up to the floor above, an elevator's
-    // stop (it joins the shaft of the ones above or below), and outside
-    key: "building",
-    label: "catBuilding",
-    icon: "stairs",
-    items: ["stairs", "flight", "elevator", "car", "lamp_post"].map(it),
-  },
-  {
-    key: "pets",
-    label: "catPets",
-    icon: "paw",
-    items: ["pet_bed", "pet_bowl", "water_bowl", "scratch_post", "pet_house", "toy_box"].map(it).concat(fam("pets2")),
-  },
-  {
-    // out of doors only (shared catalog `outdoor`): Flowmotion's, off indoors
-    key: "parkour",
-    label: "catParkour",
-    icon: "walk",
-    items: ["pk_rail", "pk_rail_long", "pk_wall", "pk_wall_tall", "pk_pole", "pk_pole_tall"]
-      .map(it)
-      .concat(fam("parkour2"))
-      // (plan 103 F6a: the skate park's pieces)
-      .concat(fam("skate")),
-  },
-  {
-    // (plan 68 phase 2: Christmas, the first of the seasons)
-    key: "seasonal",
-    label: "catSeasonal",
-    icon: "gift",
-    items: [
-      "xmas_tree",
-      "xmas_tree_small",
-      "present",
-      "stocking",
-      "wreath",
-      "garland",
-      "mistletoe",
-      "advent_calendar",
-      "poinsettia",
-      "nutcracker",
-      "candle_arch",
-      "gingerbread_house",
-      "xmas_village",
-      "cocoa_station",
-      "wrapping_table",
-    ]
-      .map(it)
-      .concat(fam("seasons")),
-  },
-  {
-    // out of doors only (shared catalog `outdoor`)
-    key: "outdoors",
-    label: "catOutdoors",
-    icon: "land",
-    items: ["candy_cane", "reindeer", "sleigh", "inflatable_snowman", "snow_globe"].map(it).concat(fam("outdoors")),
-  },
-  {
-    // (plan 68 phase 19: the kitchen and the café, with the office's fridge, microwave and coffee)
-    key: "kitchen",
-    label: "catKitchen",
-    icon: "mug",
-    items: [...fam("kitchen"), ...["fridge", "drinks_fridge", "microwave", "coffee_machine"].map(it)],
-  },
-];
-const ALL = CATS.flatMap((c) => c.items);
+  "yutopia-build",
+);
+
+// which way a thing faces at each quarter turn (seats face their desk): −y north, +x east
+const FACING = ["S", "W", "N", "E"];
 const LOOK_IX = [0, 1, 2, 3, 4, 5, 6, 7];
-// (plan 67's new pieces, badged NEW in the panel)
-const NEW = new Set([
-  "standing_desk",
-  "filing_cabinet",
-  "printer",
-  "shelving",
-  "fridge",
-  "microwave",
-  "bar_stool",
-  "high_table",
-  "phone_booth",
-  "coat_rack",
-  "wall_shelf",
-  "pendant_light",
-  "panel_light",
-  "toy_box",
-  // (plan 68's)
-  "loveseat",
-  "fireplace",
-  "lava_lamp",
-  ...["xmas_tree", "xmas_tree_small", "present", "stocking", "wreath", "garland", "mistletoe"],
-  ...["advent_calendar", "poinsettia", "nutcracker", "candle_arch", "gingerbread_house", "xmas_village"],
-  ...["cocoa_station", "wrapping_table", "candy_cane", "reindeer", "sleigh", "inflatable_snowman", "snow_globe"],
-  "marquee_sign",
-  "vfd_ticker",
-  "split_flap",
-  "door_auto",
-  "door_revolving",
-  "door_garage",
-  ...Object.values(FAM_KINDS).flat(),
-]);
 const RECENT_KEY = "yutopia:build:recent";
-
-function labelOf(i: Item): string {
-  if (i.props?.d) return trMaybe(`decor_${String(i.props.d)}`) ?? entry(i.kind).label;
-  if (i.kind === "door" && i.props?.glass) return "Glass door";
-  return entry(i.kind).label;
-}
 
 // "2×1", or "wall 3" for things that hang on a wall ("" for things on a
 // surface: they take quarter tiles, not tiles).
@@ -355,28 +85,110 @@ function readRecent(): string[] {
 }
 function pushRecent(key: string) {
   try {
-    localStorage.setItem(RECENT_KEY, JSON.stringify([key, ...readRecent().filter((k) => k !== key)].slice(0, 6)));
+    localStorage.setItem(RECENT_KEY, JSON.stringify([key, ...readRecent().filter((k) => k !== key)].slice(0, 16)));
   } catch {}
 }
 
 // Start placing an item (it follows the pointer, like picking it off the shelf).
 function choose(i: Item) {
   pushRecent(i.key);
-  hud.set((s) => ({ build: { ...s.build, mode: "place", kind: i.kind, props: i.props ?? null, rot: 0 } }));
+  hud.set((s) => ({
+    build: { ...s.build, mode: "place", kind: i.kind, props: i.props ?? null, rot: 0, styling: false },
+  }));
 }
 
-export function Catalog() {
+// the picture under the pointer in the grid: the card shows it (module state: the card is another column)
+let hovered: ShopItem | null = null;
+const hoverSubs = new Set<() => void>();
+function setHovered(i: ShopItem | null) {
+  if (hovered === i) return;
+  hovered = i;
+  for (const s of hoverSubs) s();
+}
+function useHovered(): ShopItem | null {
+  return useSyncExternalStore(
+    (cb) => {
+      hoverSubs.add(cb);
+      return () => hoverSubs.delete(cb);
+    },
+    () => hovered,
+    () => null,
+  );
+}
+/** What's being placed from the catalog, if anything. */
+function useCurrent(): ShopItem | null {
+  const b = useHud((s) => s.build);
+  if (b.mode !== "place") return null;
+  return SHOP.find((i) => i.kind === b.kind && (i.props?.d ?? null) === ((b.props?.d as string) ?? null)) ?? null;
+}
+
+// ── the left column: By Room · By Function ───────────────────────────────────
+
+export function BuyColumn() {
   const t = useTr();
-  const w = useWorld();
-  // (the tab is kept in the HUD: the Walls panel opens Doors & windows)
-  const cat = useHud((s) => s.build.catalogTab);
-  const setCat = (k: string) => hud.set((s) => ({ build: { ...s.build, catalogTab: k } }));
+  const by = useHud((s) => s.build.shopBy);
+  const cat = useHud((s) => s.build.shopCat);
+  const set = (patch: Partial<ReturnType<typeof hud.get>["build"]>) =>
+    hud.set((s) => ({ build: { ...s.build, ...patch } }));
+  const list: { key: string; face: string }[] = by === "room" ? ROOMS : FUNCS;
+  const here = list.find((c) => c.key === cat) ?? list[0];
+  const n = by === "room" ? shopShelf("room", here.key).length : shopShelf("func", here.key).length;
+  return (
+    <div className="flex flex-col gap-2.5 p-3 min-w-0" style={{ borderRight: "1px solid var(--glass-hair)" }}>
+      <div className="gl-seg" role="tablist" aria-label={t("buildFurniture")}>
+        {(
+          [
+            ["room", "bvByRoom", ROOMS[0].key],
+            ["func", "bvByFunc", FUNCS[0].key],
+          ] as const
+        ).map(([k, label, first]) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={by === k}
+            className="gl-btn flex-1 gl-sm !px-1.5 !text-[11.5px]"
+            onClick={() => by !== k && set({ shopBy: k, shopCat: first, shopSub: "" })}
+          >
+            {bw(label)}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-4 gap-1.5">
+        {list.map((c) => (
+          <button
+            key={c.key}
+            type="button"
+            className="gl-tile h-[42px]"
+            aria-pressed={c.key === here.key}
+            title={bw(`bv_${by === "room" ? "room" : "func"}_${c.key}`)}
+            aria-label={bw(`bv_${by === "room" ? "room" : "func"}_${c.key}`)}
+            onClick={() => set({ shopCat: c.key, shopSub: "" })}
+          >
+            <span className="w-[36px] h-[34px] flex items-center justify-center">
+              <ItemThumb kind={c.face} />
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-auto flex items-baseline justify-between gap-2">
+        <span className="gl-title !text-[16px] truncate">
+          {bw(`bv_${by === "room" ? "room" : "func"}_${here.key}`)}
+        </span>
+        <span className="gl-lab shrink-0">{n}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── the middle: subcategories, search, the pictures ─────────────────────────
+
+export function BuyMain() {
+  const t = useTr();
+  const b = useHud((s) => s.build);
   const [q, setQ] = useState("");
-  const [hover, setHover] = useState<Item | null>(null);
   const [recent, setRecent] = useState<string[]>([]);
   const search = useRef<HTMLInputElement>(null);
-  const b = useHud((s) => s.build);
-
   useEffect(() => setRecent(readRecent()), []);
   // "/" jumps to the search box
   useEffect(() => {
@@ -389,8 +201,96 @@ export function Catalog() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+  const room = b.shopBy === "room";
+  const cats: readonly string[] = room ? ROOMS.map((r) => r.key) : FUNCS.map((f) => f.key);
+  const cat = cats.includes(b.shopCat) ? b.shopCat : cats[0];
+  const subs: string[] = room ? roomSubs(cat as Room) : (FUNCS.find((f) => f.key === cat)?.subs ?? []);
+  const sub = b.shopSub === "recent" || subs.includes(b.shopSub) ? b.shopSub : "";
+  const found = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return s ? SHOP.filter((i) => labelOf(i).toLowerCase().includes(s) || i.kind.includes(s)) : null;
+  }, [q]);
+  const items: ShopItem[] =
+    found ??
+    (sub === "recent"
+      ? recent.map((k) => SHOP.find((i) => i.key === k)).filter((i): i is ShopItem => !!i && !!i.func)
+      : room
+        ? shopShelf("room", cat).filter((i) => !sub || i.func === sub)
+        : shopShelf("func", cat, sub));
+  const setSub = (s: string) => hud.set((h) => ({ build: { ...h.build, shopSub: s } }));
+  const subLabel = (s: string) => bw(room ? `bv_func_${s}` : `bv_sub_${s}`);
+  return (
+    <div className="flex flex-col gap-2 py-2.5 px-3.5 min-w-0">
+      <div className="flex items-center gap-1.5 min-w-0">
+        <div className="flex gap-1.5 overflow-x-auto gl-scroll min-w-0 pb-0.5">
+          {!found &&
+            ["", ...subs, ...(recent.length ? ["recent"] : [])].map((s) => (
+              <button
+                key={s || "all"}
+                type="button"
+                className="gl-btn gl-sm shrink-0"
+                aria-pressed={sub === s}
+                onClick={() => {
+                  setSub(s);
+                  if (s === "recent") setRecent(readRecent());
+                }}
+              >
+                {s === "recent" && <Icon name="clock" size={13} />}
+                {s === "" ? bw("bvAll") : s === "recent" ? bw("bvRecent") : subLabel(s)}
+              </button>
+            ))}
+          {found && <span className="gl-lab self-center">{bw("bvThings").replace("{n}", String(found.length))}</span>}
+        </div>
+        <label className="gl-field ml-auto shrink-0 w-[170px] flex items-center gap-1.5 !px-2.5" style={{ height: 30 }}>
+          <Icon name="search" size={15} />
+          <input
+            ref={search}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setQ("");
+                (e.target as HTMLInputElement).blur();
+              }
+              if (e.key === "Enter" && found?.[0]) {
+                choose(found[0]);
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            placeholder={t("buildSearch")}
+            aria-label={t("buildSearch")}
+            className="flex-1 min-w-0 bg-transparent outline-none text-[12.5px] font-bold"
+          />
+          <span className="gl-kk">/</span>
+        </label>
+      </div>
+      <ItemsGrid items={items} onPicked={() => setRecent(readRecent())} empty={found ? q.trim() : null} />
+    </div>
+  );
+}
 
-  // Drag a card straight into the room: let go over the world to put it down.
+/** The Build tab's doors, windows or stairs: the same pictures. */
+export function PartItems({ part }: { part: BuildPart }) {
+  return (
+    <div className="flex flex-col gap-2 py-2.5 px-3.5 min-w-0">
+      <div className="flex items-center gap-2">
+        <span className="gl-title !text-[17px]">{bw(`bv_build_${part}`)}</span>
+        <span className="gl-lab">{bw("bvThings").replace("{n}", String(buildShelf(part).length))}</span>
+      </div>
+      <ItemsGrid items={buildShelf(part)} />
+    </div>
+  );
+}
+
+// two rows of pictures that page sideways (The Sims 3's grid)
+function ItemsGrid({ items, onPicked, empty }: { items: ShopItem[]; onPicked?: () => void; empty?: string | null }) {
+  const t = useTr();
+  const w = useWorld();
+  const current = useCurrent();
+  const box = useRef<HTMLDivElement>(null);
+  const [page, setPage] = useState({ at: 0, of: 1 });
+  const dragging = useRef(false);
+  // drag a picture straight into the room: let go over the world to put it down
   useEffect(() => {
     const up = (e: PointerEvent) => {
       if (!dragging.current) return;
@@ -400,197 +300,227 @@ export function Catalog() {
     window.addEventListener("pointerup", up);
     return () => window.removeEventListener("pointerup", up);
   }, [w]);
-  const dragging = useRef(false);
-
-  const found = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    return s ? ALL.filter((i) => labelOf(i).toLowerCase().includes(s) || i.kind.includes(s)) : null;
-  }, [q]);
-  const shown = found ?? CATS.find((c) => c.key === cat)?.items ?? [];
-  const recentItems = recent.map((k) => ALL.find((i) => i.key === k)).filter((i): i is Item => !!i);
-  const current = ALL.find((i) => i.kind === b.kind && (i.props?.d ?? null) === ((b.props?.d as string) ?? null));
-  const details = hover ?? (b.mode === "place" ? current : null) ?? null;
-
-  const card = (i: Item, small = false) => {
-    const on = b.mode === "place" && current?.key === i.key;
-    return (
-      <button
-        key={i.key}
-        type="button"
-        className={`tile-card text-left ${small ? "h-[74px]" : "h-[112px]"}`}
-        aria-pressed={on}
-        title={labelOf(i)}
-        aria-label={labelOf(i)}
-        onPointerEnter={() => setHover(i)}
-        onPointerLeave={() => setHover((h) => (h?.key === i.key ? null : h))}
-        onPointerDown={(e) => {
-          if (e.button !== 0) return;
-          dragging.current = true;
-          choose(i);
-          setRecent(readRecent());
-        }}
-      >
-        <span
-          className={`absolute inset-x-2 top-2 flex items-center justify-center drop-shadow-[0_4px_4px_rgba(0,0,0,0.35)] ${small ? "h-[50px]" : "h-[68px]"}`}
-        >
-          <ItemThumb kind={i.kind} props={i.props} />
-        </span>
-        {!small && sizeLabel(i.kind) && (
-          <span
-            className="absolute top-1.5 right-1.5 mono text-[10px] px-1.5 rounded"
-            style={{ background: "rgba(0,0,0,.35)", color: "var(--muted)" }}
-          >
-            {sizeLabel(i.kind)}
-          </span>
-        )}
-        {on ? (
-          <span
-            className="absolute top-1.5 left-1.5 mono text-[9px] px-1.5 rounded"
-            style={{ background: "var(--vfd)", color: "var(--ink)" }}
-          >
-            {t("buildPlacing").toUpperCase()}
-          </span>
-        ) : (
-          !small &&
-          NEW.has(i.kind) && (
-            <span
-              className="absolute top-1.5 left-1.5 mono text-[9px] px-1.5 rounded"
-              style={{ background: "var(--rust)", color: "var(--cream)" }}
-            >
-              {t("buildNew").toUpperCase()}
-            </span>
-          )
-        )}
-        {!small && (entry(i.kind).variants ?? 1) > 1 && (
-          // its looks, as dots (plan 67's panel)
-          <span className="absolute left-2 bottom-[22px] flex gap-[3px]" aria-hidden>
-            {LOOK_IX.slice(0, entry(i.kind).variants ?? 1).map((k) => (
-              <i
-                key={k}
-                className="block w-[5px] h-[5px] rounded-full"
-                style={{ background: k === (entry(i.kind).look ?? 0) ? "var(--amber)" : "var(--edge-strong)" }}
-              />
-            ))}
-          </span>
-        )}
-        {!small && (
-          <span className="absolute left-2 right-2 bottom-1.5 text-[11.5px] font-medium truncate">{labelOf(i)}</span>
-        )}
-      </button>
-    );
+  const measure = () => {
+    const el = box.current;
+    if (!el) return;
+    const of = Math.max(1, Math.ceil(el.scrollWidth / Math.max(1, el.clientWidth) - 0.02));
+    const at = Math.min(of - 1, Math.round(el.scrollLeft / Math.max(1, el.clientWidth)));
+    setPage((p) => (p.at === at && p.of === of ? p : { at, of }));
   };
-
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new shelf starts at its first page
+  useEffect(() => {
+    box.current?.scrollTo({ left: 0 });
+    requestAnimationFrame(measure);
+    // (the picture under the pointer may be gone: the card forgets it — review)
+    setHovered(null);
+  }, [items]);
+  // (and when the grid goes: build mode closed, another tab — the card's hover isn't left behind)
+  useEffect(() => () => setHovered(null), []);
+  const turn = (d: number) => {
+    const el = box.current;
+    if (el) el.scrollBy({ left: d * el.clientWidth, behavior: "smooth" });
+  };
+  if (!items.length)
+    return (
+      <p className="flex-1 grid place-items-center text-[13px] font-bold" style={{ color: "var(--glass-dim)" }}>
+        {empty ? t("buildNoResults").replace("{q}", empty) : "—"}
+      </p>
+    );
   return (
-    <>
-      <header className="flex items-baseline justify-between px-4 pt-3 pb-2">
-        <h2 className="lcd text-2xl leading-none">{t("buildFurniture").toUpperCase()}</h2>
-        <span className="mono text-[11px] uppercase" style={{ color: "var(--muted)" }}>
-          {ALL.length} {t("buildItems")}
-        </span>
-      </header>
-      <label
-        className="mx-3 flex items-center gap-2 rounded-[9px] px-2.5 h-9 focus-within:border-[var(--amber)]"
-        style={{ background: "var(--field)", border: "1px solid var(--edge)", color: "var(--muted)" }}
+    <div className="flex-1 min-h-0 flex flex-col gap-1">
+      <div
+        ref={box}
+        onScroll={measure}
+        className="flex-1 min-h-0 grid grid-flow-col grid-rows-2 auto-cols-[minmax(88px,1fr)] gap-2 overflow-x-auto gl-scroll snap-x snap-mandatory"
+        style={{ gridAutoColumns: "calc((100% - 7 * 8px) / 8)" }}
       >
-        <Icon name="search" size={16} />
-        <input
-          ref={search}
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              setQ("");
-              (e.target as HTMLInputElement).blur();
-            }
-            if (e.key === "Enter" && found?.[0]) {
-              choose(found[0]);
-              (e.target as HTMLInputElement).blur();
-            }
-          }}
-          placeholder={t("buildSearch")}
-          aria-label={t("buildSearch")}
-          className="flex-1 min-w-0 bg-transparent outline-none text-sm"
-          style={{ color: "var(--cream)" }}
-        />
-        <span className="keycap" style={{ color: "var(--muted)" }}>
-          /
-        </span>
-      </label>
-      {!found && (
-        // the categories as labelled chips with their counts, one row that scrolls (plan 67's panel)
-        <div
-          className="flex gap-1.5 px-3 pt-2.5 pb-0.5 overflow-x-auto scroll-thin"
-          role="tablist"
-          aria-label={t("buildFurniture")}
-        >
-          {[
-            ...CATS.map((c) => ({ key: c.key, label: t(c.label), icon: c.icon, n: c.items.length as number | null })),
-            { key: "layouts", label: t("buildLayouts"), icon: "room" as IconName, n: null },
-            { key: "setups", label: t("buildSetups"), icon: "pin" as IconName, n: null },
-          ].map((c) => (
+        {items.map((i) => {
+          const price = priceOf(i);
+          return (
             <button
-              key={c.key}
+              key={i.key}
               type="button"
-              role="tab"
-              aria-selected={cat === c.key}
-              className="cat-chip shrink-0 flex items-center gap-1.5 h-8 px-2.5 rounded-full text-[12px] whitespace-nowrap"
-              style={{
-                background: cat === c.key ? "var(--amber)" : "var(--field)",
-                color: cat === c.key ? "var(--ink)" : "var(--cream-dim)",
-                border: `1px solid ${cat === c.key ? "var(--amber)" : "var(--edge)"}`,
+              className="gl-tile snap-start min-h-0"
+              aria-pressed={current?.key === i.key}
+              title={labelOf(i)}
+              aria-label={labelOf(i)}
+              onPointerEnter={() => setHovered(i)}
+              onPointerLeave={() => hovered?.key === i.key && setHovered(null)}
+              onPointerDown={(e) => {
+                if (e.button !== 0) return;
+                dragging.current = true;
+                choose(i);
+                onPicked?.();
               }}
-              onClick={() => setCat(c.key)}
             >
-              <Icon name={c.icon} size={14} />
-              {c.label}
-              {c.n !== null && <em className="mono not-italic text-[10px] opacity-70">{c.n}</em>}
+              <span className="absolute inset-x-2 top-1.5 bottom-[20px] flex items-center justify-center drop-shadow-[0_4px_4px_rgba(0,0,0,0.28)]">
+                <ItemThumb kind={i.kind} props={i.props} />
+              </span>
+              {NEW_KEYS.has(i.key) && (
+                <span
+                  className="absolute top-1 left-1 text-[9px] font-black px-1.5 py-0.5 rounded-md"
+                  style={{ background: "var(--glass-acc)", color: "var(--glass-hi)" }}
+                >
+                  {t("buildNew").toUpperCase()}
+                </span>
+              )}
+              {price !== null && <span className="absolute top-1 right-1.5 text-[10.5px] font-black">§{price}</span>}
+              <span
+                className="absolute inset-x-1.5 bottom-1 text-[10.5px] font-bold truncate text-center"
+                style={{ color: current?.key === i.key ? "var(--glass-ink)" : "var(--glass-dim)" }}
+              >
+                {labelOf(i)}
+              </span>
             </button>
-          ))}
+          );
+        })}
+      </div>
+      {page.of > 1 && (
+        <div className="flex items-center justify-end gap-1.5 gl-lab">
+          {bw("bvPage")
+            .replace("{a}", String(page.at + 1))
+            .replace("{b}", String(page.of))}
+          <button
+            type="button"
+            className="gl-btn gl-sm !h-[22px] !min-w-[22px] !p-0"
+            onClick={() => turn(-1)}
+            aria-label="‹"
+          >
+            <Icon name="chev" size={13} className="rotate-90" />
+          </button>
+          <button
+            type="button"
+            className="gl-btn gl-sm !h-[22px] !min-w-[22px] !p-0"
+            onClick={() => turn(1)}
+            aria-label="›"
+          >
+            <Icon name="chev" size={13} className="-rotate-90" />
+          </button>
         </div>
       )}
-      <div className="flex-1 min-h-0 overflow-y-auto scroll-thin px-3 pt-2 pb-3 space-y-3">
-        {!found && recentItems.length > 0 && cat !== "layouts" && cat !== "setups" && (
-          <section className="space-y-1.5">
-            <h3 className="grp flex items-center gap-1.5">
-              <Icon name="clock" size={12} />
-              {t("buildRecent")}
-            </h3>
-            <div className="grid grid-cols-6 gap-[5px]">{recentItems.map((i) => card(i, true))}</div>
-          </section>
-        )}
-        {cat === "layouts" && !found ? (
-          <Layouts />
-        ) : cat === "setups" && !found ? (
-          <Setups />
-        ) : shown.length ? (
-          <section className="space-y-1.5">
-            <h3 className="grp">
-              {found ? t("buildSearch") : t(CATS.find((c) => c.key === cat)?.label ?? "catSeating")}
-            </h3>
-            <div className="grid grid-cols-3 gap-[7px]">{shown.map((i) => card(i))}</div>
-          </section>
-        ) : (
-          <p className="text-sm py-6 text-center" style={{ color: "var(--muted)" }}>
-            {t("buildNoResults").replace("{q}", q.trim())}
-          </p>
-        )}
-      </div>
-      {b.held.length > 0 ? (
-        <SellBin />
-      ) : b.mode === "place" && current && !hover ? (
-        <HeldCard item={current} />
-      ) : details ? (
-        <Details item={details} />
-      ) : null}
-    </>
+    </div>
   );
 }
 
-// What the hovered (or chosen) item is: its size and what it does.
-function Details({ item }: { item: Item }) {
+// ── the right: the object card ───────────────────────────────────────────────
+
+/** The card: what's carried (and the bin), what's being placed (its turntable, looks, fabric, words), what the
+ *  pointer is on in the grid, what's selected in the room — or how to start. */
+export function ItemCard() {
+  const t = useTr();
+  const w = useWorld();
+  const b = useHud((s) => s.build);
+  useHud((s) => s.objectsVersion);
+  const hover = useHovered();
+  const current = useCurrent();
+  if (b.held.length > 0) return <Moving />;
+  if (hover) return <Details item={hover} />;
+  if (current) return <HeldCard item={current} />;
+  const sel = b.selected.length === 1 ? w?.model?.getObject(b.selected[0]) : null;
+  if (sel) {
+    const item: Item = { key: sel.id, kind: sel.kind, props: sel.props ?? undefined };
+    return (
+      <Details item={item}>
+        <div className="flex gap-1.5 mt-auto">
+          <button type="button" className="gl-btn gl-sm" onClick={() => w?.build?.pickSelection()}>
+            <Icon name="move" size={15} />
+            {bw("bvMove")}
+          </button>
+          <button type="button" className="gl-btn gl-sm" onClick={() => w?.build?.setMode("design")}>
+            <Icon name="brush" size={15} />
+            {bw("bvDesign")}
+          </button>
+          <button type="button" className="gl-btn gl-sm gl-bad" onClick={() => w?.buildKey("delete")}>
+            <Icon name="sledge" size={15} />
+            {bw("bvSell")}
+          </button>
+        </div>
+      </Details>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2 p-3.5">
+      <span className="gl-title">{bw("bvPickTitle")}</span>
+      <p className="text-[12.5px] font-semibold leading-snug" style={{ color: "var(--glass-dim)" }}>
+        {bw("bvPickHint")}
+      </p>
+      <p className="text-[12px] font-bold mt-auto flex flex-wrap gap-x-2 gap-y-1" style={{ color: "var(--glass-dim)" }}>
+        <span>
+          <span className="gl-kk">R</span> {t("buildRotate")}
+        </span>
+        <span>
+          <span className="gl-kk">Tab</span> {bw("bvUnder")}
+        </span>
+        <span>
+          <span className="gl-kk">I</span> {t("buildEyedrop")}
+        </span>
+        <span>
+          <span className="gl-kk">K</span> {bw("bvSell")}
+        </span>
+      </p>
+    </div>
+  );
+}
+
+/** Fits or not, which way it faces — while something's on the pointer. */
+function FitLine() {
+  const w = useWorld();
+  const b = useHud((s) => s.build);
+  const info = b.carrying ? w?.build?.handInfo() : null;
+  if (!info) return null;
+  return (
+    <div className="flex items-center gap-2 text-[12px] font-extrabold">
+      <span style={{ color: b.fits ? "var(--glass-good)" : "var(--glass-bad)" }}>
+        ● {bw(b.fits ? "bvFits" : "bvBlocked")}
+      </span>
+      {!entry(info.kind).opening && (
+        <span style={{ color: "var(--glass-dim)" }}>{bw("bvFacing").replace("{d}", FACING[info.rot % 4])}</span>
+      )}
+    </div>
+  );
+}
+
+function Moving() {
+  const w = useWorld();
+  const b = useHud((s) => s.build);
+  const info = w?.build?.handInfo();
+  return (
+    <div className="flex flex-col gap-2 p-3.5 min-h-0">
+      <div className="flex items-center gap-3">
+        {info && (
+          <span className="gl-tile w-[64px] h-[56px] shrink-0">
+            <span className="absolute inset-1.5 flex items-center justify-center">
+              <ItemThumb kind={info.kind} props={info.props} />
+            </span>
+          </span>
+        )}
+        <div className="min-w-0">
+          <div className="gl-title !text-[18px] truncate">
+            {bw("bvMoving").replace("{n}", String(b.held.length > 1 ? b.held.length : 1))}
+          </div>
+          <FitLine />
+        </div>
+      </div>
+      <div className="flex gap-1.5">
+        <button type="button" className="gl-btn gl-sm" onClick={() => w?.buildKey("r")}>
+          <Icon name="rotate" size={15} /> {bw("bvTurn")} <span className="gl-kk">R</span>
+        </button>
+        <button type="button" className="gl-btn gl-sm gl-go" onClick={() => w?.buildKey("enter")}>
+          <Icon name="check" size={15} /> {bw("bvPutDown")}
+        </button>
+      </div>
+      <SellBin />
+    </div>
+  );
+}
+
+// What the hovered (or selected) item is: its picture, size and what it does.
+function Details({ item, children }: { item: Item; children?: React.ReactNode }) {
   const t = useTr();
   const e = entry(item.kind);
   const chips: string[] = [];
+  const size = sizeLabel(item.kind);
+  if (size) chips.push(size);
   if (e.seat) chips.push(t("buildInfoSeat"));
   if (e.light) chips.push(t("buildInfoLight"));
   if (e.interact) chips.push(t("buildInfoUse"));
@@ -600,29 +530,34 @@ function Details({ item }: { item: Item }) {
   if (e.onSurface) chips.push(t("buildInfoOnSurface"));
   if (e.outdoor) chips.push(t("buildInfoOutdoor"));
   if ((e.variants ?? 1) > 1) chips.push(t("buildInfoLooks").replace("{n}", String(e.variants)));
+  const price = priceOf(item);
   return (
-    <footer className="flex items-center gap-3 px-3 py-2.5" style={{ borderTop: "1px solid var(--edge)" }}>
-      <span
-        className="w-[64px] h-[52px] rounded-lg flex items-center justify-center p-1 shrink-0"
-        style={{
-          background: "radial-gradient(90% 70% at 50% 62%,var(--tile-hi),var(--panel) 72%)",
-          border: "1px solid var(--edge)",
-        }}
-      >
-        <ItemThumb kind={item.kind} props={item.props} />
-      </span>
-      <span className="min-w-0">
-        <span className="lcd text-xl leading-none block truncate">{labelOf(item).toUpperCase()}</span>
-        <span className="mono text-[10.5px] uppercase block" style={{ color: "var(--muted)" }}>
-          {[sizeLabel(item.kind), ...chips].filter(Boolean).join(" · ")}
+    <div className="flex flex-col gap-2 p-3.5 min-h-0">
+      <div className="flex gap-3">
+        <span className="gl-tile w-[104px] h-[96px] shrink-0">
+          <span className="absolute inset-2 flex items-center justify-center">
+            <ItemThumb kind={item.kind} props={item.props} />
+          </span>
         </span>
-      </span>
-    </footer>
+        <div className="min-w-0 flex flex-col gap-1.5">
+          <span className="gl-title">{labelOf(item)}</span>
+          <span className="flex flex-wrap gap-1">
+            {chips.map((c) => (
+              <span key={c} className="gl-chip">
+                {c}
+              </span>
+            ))}
+          </span>
+        </div>
+      </div>
+      {price !== null && <span className="gl-title !text-[18px] self-end">§ {price}</span>}
+      {children}
+    </div>
   );
 }
 
-// The piece being put down (plan 67's panel): on a slow turntable (drag it round), what it is, its
-// looks as pictures and its fabrics or paints by name — what's picked goes down with it.
+// The piece being put down: on a slow turntable (drag it round), what it is, its looks as pictures, its fabric, its
+// words — what's picked goes down with it.
 // (the shared palette's paints — avatar.ts CLOTH_COLORS, what the server accepts — by name)
 const FABRIC_NAMES = [
   "Rust",
@@ -638,7 +573,8 @@ const FABRIC_NAMES = [
   "Plum",
   "Terracotta",
 ];
-const FABRICS: [string, string][] = CLOTH_COLORS.map((c, i) => [c, FABRIC_NAMES[i] ?? c]);
+export const FABRICS: [string, string][] = CLOTH_COLORS.map((c, i) => [c, swName(FABRIC_NAMES[i] ?? c)]);
+
 function HeldCard({ item }: { item: Item }) {
   const t = useTr();
   const w = useWorld();
@@ -693,18 +629,16 @@ function HeldCard({ item }: { item: Item }) {
   if (top !== undefined) chips.push(t("buildInfoTopAt").replace("{m}", top.toFixed(2)));
   if (e.light) chips.push(t("buildInfoLight"));
   if (e.interact) chips.push(t("buildInfoUse"));
-  if (e.wall) chips.push(t("buildInfoWall"));
   const v = typeof props.variant === "number" ? props.variant : (e.look ?? 0);
+  const price = priceOf(item);
+  // (plan 124 follow-up) anything to choose before it goes down: the design panel for it in the strip's middle
+  const canStyle = (e.variants ?? 1) > 1 || item.kind in DECOR || !!e.paint || (e.text ?? 0) > 0;
   return (
-    <footer className="px-3 pt-2.5 pb-3 space-y-2" style={{ borderTop: "1px solid var(--edge)" }}>
-      <div className="flex items-center gap-3">
+    <div className="flex flex-col gap-2 p-3.5 min-h-0 overflow-y-auto gl-scroll">
+      <div className="flex gap-3">
         <span
-          className="relative w-[120px] h-[96px] rounded-lg shrink-0 overflow-hidden touch-none"
-          style={{
-            background: "radial-gradient(90% 70% at 50% 62%,var(--tile-hi),var(--panel) 72%)",
-            border: "1px solid var(--edge)",
-            cursor: spins ? "grab" : undefined,
-          }}
+          className="gl-tile w-[104px] h-[96px] shrink-0 touch-none"
+          style={{ cursor: spins ? "grab" : undefined }}
           onPointerDown={(ev) => {
             drag.current = ev.clientX;
             (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
@@ -719,143 +653,138 @@ function HeldCard({ item }: { item: Item }) {
           }}
         >
           {spins ? (
-            <canvas ref={stage} width={240} height={192} className="w-full h-full" />
+            <canvas ref={stage} width={208} height={192} className="w-full h-full" />
           ) : (
-            <span className="absolute inset-1 flex items-center justify-center">
+            <span className="absolute inset-2 flex items-center justify-center">
               <ItemThumb kind={item.kind} props={props} />
             </span>
           )}
           {spins && (
             <span
-              className="absolute bottom-0.5 inset-x-0 text-center mono text-[9px]"
-              style={{ color: "var(--muted)" }}
+              className="absolute bottom-0.5 inset-x-0 text-center text-[9px] font-bold"
+              style={{ color: "var(--glass-dim)" }}
             >
-              {t("buildHeldTurn")}
+              ◂ {t("buildHeldTurn")} ▸
             </span>
           )}
         </span>
-        <span className="min-w-0">
-          <span className="lcd text-xl leading-none block truncate">{labelOf(item).toUpperCase()}</span>
-          <span className="mono text-[10.5px] uppercase block" style={{ color: "var(--muted)" }}>
-            {chips.filter(Boolean).join(" · ")}
+        <div className="min-w-0 flex flex-col gap-1.5">
+          <span className="gl-title">{labelOf(item)}</span>
+          <span className="flex flex-wrap gap-1">
+            {chips.filter(Boolean).map((c) => (
+              <span key={c} className="gl-chip">
+                {c}
+              </span>
+            ))}
           </span>
-          {(e.variants ?? 1) > 1 && (
-            <span className="mono text-[10px] block mt-1" style={{ color: "var(--muted)" }}>
-              <span className="keycap">L</span> {t("buildHeldNextLook")}
-            </span>
+          <FitLine />
+          {canStyle && (
+            <button
+              type="button"
+              className="gl-btn gl-sm gl-on self-start"
+              data-testid="held-customize"
+              onClick={() => hud.set((s) => ({ build: { ...s.build, styling: !s.build.styling } }))}
+            >
+              <Icon name="brush" size={14} />
+              {bw("bvCustomize")}
+            </button>
           )}
-        </span>
+        </div>
       </div>
-      {(e.text ?? 0) > 0 && (
-        <label className="flex flex-col gap-1">
-          <span className="grp">{t("buildWords")}</span>
-          <input
-            defaultValue={String(props.text ?? TEXT_DEFAULT[item.kind] ?? "")}
-            maxLength={e.text}
-            aria-label={t("buildWords")}
-            className="h-8 rounded-md px-2 mono text-sm uppercase bg-transparent"
-            style={{ border: "1px solid var(--edge)", color: "var(--cream)" }}
-            onKeyDown={(ev) => {
-              ev.stopPropagation();
-              if (ev.key === "Enter") (ev.target as HTMLInputElement).blur();
-            }}
-            onBlur={(ev) => w?.build?.placeLook({ text: ev.target.value })}
-          />
-        </label>
-      )}
-      {(e.variants ?? 1) > 1 && (
-        <fieldset className="space-y-1" aria-label={t("buildHeldLook")}>
-          <legend className="grp">{t("buildHeldLook")}</legend>
-          <div className="flex gap-1.5 overflow-x-auto scroll-thin">
+      {(e.variants ?? 1) > 1 && !b.styling && (
+        <fieldset className="flex items-center gap-1.5 border-0 m-0 min-w-0" aria-label={t("buildHeldLook")}>
+          <span className="gl-lab w-[44px] shrink-0">{t("buildHeldLook")}</span>
+          <div className="flex gap-1 overflow-x-auto gl-scroll">
             {LOOK_IX.slice(0, e.variants ?? 1).map((k) => (
               <button
                 key={k}
                 type="button"
-                className="tile-card shrink-0 w-[68px] h-[76px]"
+                className="gl-tile shrink-0 w-[38px] h-[34px]"
                 aria-pressed={v === k}
                 title={looks[k] ?? `${t("buildLook")} ${k + 1}`}
                 onClick={() => w?.build?.placeLook({ variant: k })}
               >
-                <span className="absolute inset-x-1 top-1 h-[50px] flex items-center justify-center">
+                <span className="absolute inset-0.5 flex items-center justify-center">
                   <ItemThumb kind={item.kind} props={{ ...props, variant: k }} />
-                </span>
-                <span className="absolute inset-x-1 bottom-1 text-[9.5px] leading-tight truncate text-center">
-                  {looks[k] ?? k + 1}
                 </span>
               </button>
             ))}
           </div>
         </fieldset>
       )}
-      {e.paint && (
-        <fieldset className="space-y-1" aria-label={t("buildHeldFabric")}>
-          <legend className="grp">
-            {t("buildHeldFabric")} · {FABRICS.find(([c]) => c === props.color)?.[1] ?? t("buildColourDefault")}
-          </legend>
-          <div className="flex gap-1 flex-wrap items-center">
-            <button
-              type="button"
-              className="w-6 h-6 rounded-full border-2 grid place-items-center text-[11px]"
-              style={{ borderColor: props.color ? "#0006" : "var(--amber)", color: "var(--cream-dim)" }}
-              title={t("buildColourDefault")}
-              aria-label={t("buildColourDefault")}
-              aria-pressed={!props.color}
-              onClick={() => w?.build?.placeLook({ color: "" })}
-            >
-              ×
-            </button>
+      {e.paint && !b.styling && (
+        <fieldset className="flex items-center gap-1.5 border-0 m-0 min-w-0" aria-label={t("buildHeldFabric")}>
+          <span className="gl-lab w-[44px] shrink-0">{t("buildHeldFabric")}</span>
+          <div className="flex gap-1 flex-wrap">
             {FABRICS.map(([c, name]) => (
               <button
                 key={c}
                 type="button"
-                className="w-6 h-6 rounded-full border-2"
-                style={{ background: c, borderColor: props.color === c ? "var(--amber)" : "#0006" }}
+                className="w-[20px] h-[20px] rounded-full"
+                style={{
+                  background: c,
+                  boxShadow:
+                    props.color === c
+                      ? "0 0 0 2px var(--glass-hi), 0 0 0 4px var(--glass-acc)"
+                      : "0 1px 3px rgba(0,0,0,.35)",
+                }}
                 title={name}
                 aria-label={name}
                 aria-pressed={props.color === c}
-                onClick={() => w?.build?.placeLook({ color: c })}
+                onClick={() => w?.build?.placeLook({ color: props.color === c ? "" : c })}
               />
             ))}
           </div>
         </fieldset>
       )}
-    </footer>
+      {(e.text ?? 0) > 0 && !b.styling && (
+        <input
+          defaultValue={String(props.text ?? TEXT_DEFAULT[item.kind] ?? "")}
+          maxLength={e.text}
+          aria-label={t("buildWords")}
+          className="gl-field uppercase"
+          onKeyDown={(ev) => {
+            ev.stopPropagation();
+            if (ev.key === "Enter") (ev.target as HTMLInputElement).blur();
+          }}
+          onBlur={(ev) => w?.build?.placeLook({ text: ev.target.value })}
+        />
+      )}
+      {price !== null && <span className="gl-title !text-[18px] self-end mt-auto">§ {price}</span>}
+    </div>
   );
 }
 
-// While carrying placed things: drop them here to remove them (the Sims bin).
+// While carrying placed things: drop them here to sell them (the Sims bin).
 function SellBin() {
   const t = useTr();
   const w = useWorld();
   const [over, setOver] = useState(false);
   return (
-    <footer
+    <div
       data-build-bin
-      className="m-3 mt-0 rounded-xl flex items-center justify-center gap-2 h-[60px] transition-colors"
+      className="mt-auto rounded-2xl flex items-center justify-center gap-2 h-[56px] transition-colors font-extrabold text-[12.5px]"
       style={{
-        border: `2px dashed ${over ? "var(--danger-hot)" : "var(--edge-strong)"}`,
-        background: over ? "rgba(199,69,45,.22)" : "rgba(0,0,0,.18)",
-        color: over ? "var(--danger-soft)" : "var(--cream-dim)",
+        border: `2px dashed ${over ? "var(--glass-bad)" : "var(--glass-hair2)"}`,
+        background: over ? "color-mix(in srgb, var(--glass-bad) 16%, transparent)" : "rgba(255,255,255,.45)",
+        color: over ? "var(--glass-bad)" : "var(--glass-dim)",
       }}
-      onPointerEnter={() => {
-        setOver(true);
-      }}
-      onPointerLeave={() => {
-        setOver(false);
-      }}
+      onPointerEnter={() => setOver(true)}
+      onPointerLeave={() => setOver(false)}
       onPointerUp={() => {
         setOver(false);
         w?.build?.remove();
       }}
     >
-      <Icon name="bin" size={20} />
-      <span className="mono text-xs uppercase tracking-wider">{t("buildSell")}</span>
-    </footer>
+      <Icon name="sledge" size={18} />
+      {bw("bvDropToSell")}
+      <span className="sr-only">{t("buildSell")}</span>
+    </div>
   );
 }
 
 // My setups: groups of things I saved (a dressed desk…), to place again.
-function Setups() {
+export function Setups() {
   const t = useTr();
   const w = useWorld();
   const setups = useHud((s) => s.build.setups);
@@ -977,8 +906,9 @@ function Furnish() {
             type="button"
             className="ghost-btn justify-start"
             onClick={() => {
-              if (window.confirm(t("buildFurnishConfirm").replace("{name}", t(p.name))))
-                w?.send("build:furnish", { plan: p.key });
+              void ask(t("buildFurnishConfirm").replace("{name}", t(p.name))).then(
+                (ok) => ok && w?.send("build:furnish", { plan: p.key }),
+              );
             }}
           >
             {t(p.name)}
@@ -990,7 +920,7 @@ function Furnish() {
           type="button"
           className="ghost-btn w-full"
           onClick={() => {
-            if (window.confirm(t("buildRefurnishConfirm"))) w?.send("build:refurnish", {});
+            void ask(t("buildRefurnishConfirm"), true).then((ok) => ok && w?.send("build:refurnish", {}));
           }}
         >
           {t("buildRefurnish")}
@@ -1003,7 +933,7 @@ function Furnish() {
             type="button"
             className="ghost-btn justify-start"
             onClick={() => {
-              if (window.confirm(t("buildChristmasConfirm"))) w?.send("build:christmas", { on: true });
+              void ask(t("buildChristmasConfirm")).then((ok) => ok && w?.send("build:christmas", { on: true }));
             }}
           >
             🎄 {t("buildChristmasOn")}
@@ -1021,7 +951,7 @@ function Furnish() {
   );
 }
 
-function Layouts() {
+export function Layouts() {
   const t = useTr();
   const w = useWorld();
   const room = w?.map.areas.find((a) => a.key === "tracking")?.name ?? "Tracking Room";
@@ -1044,8 +974,9 @@ function Layouts() {
             type="button"
             className="ghost-btn"
             onClick={() => {
-              if (window.confirm(t("buildLayoutConfirm").replace("{room}", room).replace("{name}", tp.name)))
-                w?.send("build:template", { template: tp.key });
+              void ask(t("buildLayoutConfirm").replace("{room}", room).replace("{name}", tp.name)).then(
+                (ok) => ok && w?.send("build:template", { template: tp.key }),
+              );
             }}
           >
             {t("buildLayoutUse")}

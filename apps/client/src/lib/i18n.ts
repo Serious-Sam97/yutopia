@@ -532,8 +532,8 @@ const D = {
   wallWhyBow: ["A half circle at most.", "No máximo meio círculo."],
   wallWhyHeight: ["Between 0.5 m and the ceiling.", "Entre 0,5 m e o teto."],
   wallHintPaint: [
-    "Click a wall face to paint it, drag along a wall, Shift-click for the whole room. Tab: the other side. E: pick a face's paint.",
-    "Clique numa face da parede para pintar, arraste ao longo dela, Shift e clique para a sala toda. Tab: o outro lado. E: copiar a pintura de uma face.",
+    "Click a wall face to paint it, drag along a wall, Shift-click for the whole room. Tab: the other side. I: pick a face's paint.",
+    "Clique numa face da parede para pintar, arraste ao longo dela, Shift e clique para a sala toda. Tab: o outro lado. I: copiar a pintura de uma face.",
   ],
   wallHintFloors: [
     "Line: click a floor's corners (they snap to walls), back on the first or Enter. Box: drag. Fill room: click inside one. Up: a mezzanine over this floor (PgUp/PgDn).",
@@ -575,6 +575,7 @@ const D = {
   wallHalf: ["Half wall", "Meia-parede"],
   buildCopying: ["Copying {item} — click to place, Esc stops.", "Copiando {item} — clique para colocar, Esc para."],
   buildHeldBy: ["{name} is moving that.", "{name} está movendo isso."],
+  buildGetOff: ["Get off first, then build.", "Desça primeiro, depois construa."],
   buildHand: ["Hand", "Mão"],
   buildEyedrop: ["Eyedropper", "Conta-gotas"],
   buildHandHint: [

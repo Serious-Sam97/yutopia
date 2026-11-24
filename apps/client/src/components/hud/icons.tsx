@@ -104,6 +104,21 @@ const PATHS = {
   bSilo: "M7 21V8a5 5 0 0 1 10 0v13M5 21h14M7 12h10M7 16h10M12 3V1.5",
   bShelter: "M3 7h18l-1-2H4zM5 7v14M19 7v14M3 21h18M7 16.5h10M8 16.5v3M16 16.5v3M14 9.5h3v3h-3z",
   bGatehouse: "M4 21V8h8v13M3 21h7M6 11h4v3H6zM12 13.5h9M16 13.5v7.5M21 13.5v7.5",
+  // (plan 124: build mode's glass screen)
+  sledge: "M13 3.5l7.5 7.5-3.5 3.5L9.5 7zM11.3 8.8 3.5 16.6a2 2 0 0 0 2.8 2.8l7.8-7.8",
+  brush:
+    "M19 3a2 2 0 0 1 2 2c0 3-6 9-8 10l-4-4c1-2 7-8 10-8zM9 11l4 4M8.5 14.5c-2 0-3.5 1.5-3.5 3.5 0 1-1 2-2 2 1 1 3 1 4.5 1 2.5 0 4-1.5 4-3.5z",
+  floor: "M3 15l9-5 9 5-9 5zM7.5 12.5l9 5M12 10l4.5 7.5M16.5 12.5l-9 5",
+  roller: "M5 4h12v5H5zM17 6.5h2v5h-8v3M10 14.5h2V21h-2z",
+  roof: "M2 13l10-8 10 8M5 11v9h14v-9",
+  grid: "M4 4h16v16H4zM4 9.3h16M4 14.6h16M9.3 4v16M14.6 4v16",
+  top: "M12 3v4M12 17v4M3 12h4M17 12h4M8 8h8v8H8z",
+  turnL: "M4 12a8 8 0 1 0 2.4-5.7M4 4v5h5",
+  turnR: "M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5",
+  wUp: "M4 20h16M6 20V7h12v13M6 7l6-3 6 3",
+  wCut: "M4 20h16M6 20v-7h12v7M6 13h12",
+  wDown: "M4 20h16M6 20v-2h12v2",
+  chevUp: "M7 14l5-5 5 5",
 } as const;
 
 export type IconName = keyof typeof PATHS;

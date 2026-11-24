@@ -9,6 +9,17 @@ export type BuildPickHost = Pick<
   "camera" | "events" | "landAt" | "map" | "mouseLook" | "pointerPart" | "ray" | "toys3" | "world"
 >;
 
+type PickBox = { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number };
+
+/** A box sits on another's top: its foot near that top's height, its middle over it, and smaller than it. */
+export function standsOn(a: PickBox, b: PickBox): boolean {
+  if (Math.abs(a.z0 - b.z1) > 0.14 || a.z1 <= b.z1) return false;
+  const cx = (a.x0 + a.x1) / 2;
+  const cy = (a.y0 + a.y1) / 2;
+  if (cx < b.x0 || cx > b.x1 || cy < b.y0 || cy > b.y1) return false;
+  return (a.x1 - a.x0) * (a.y1 - a.y0) < (b.x1 - b.x0) * (b.y1 - b.y0);
+}
+
 export class BuildPick {
   constructor(private readonly c: BuildPickHost) {}
 
@@ -100,6 +111,7 @@ export class BuildPick {
     const o = this.c.ray.ray.origin;
     const d = this.c.ray.ray.direction;
     const out: { id: string; dress: boolean; kind?: string; t: number }[] = [];
+    const boxes: PickBox[] = [];
     for (const p of this.c.world.picks) {
       let t0 = 0;
       let t1 = Number.POSITIVE_INFINITY;
@@ -120,10 +132,25 @@ export class BuildPick {
         t1 = Math.min(t1, b);
         if (t0 > t1) ok = false;
       }
-      if (ok) out.push({ id: p.id, dress: !!p.dress, kind: p.dress?.kind, t: t0 });
+      if (ok) {
+        out.push({ id: p.id, dress: !!p.dress, kind: p.dress?.kind, t: t0 });
+        boxes.push(p);
+      }
     }
-    // small things on a surface first (a mug wins over its desk), then nearest
-    return out.sort((a, b) => a.t - b.t);
+    // nearest first — but a small thing standing on another's top before it (a plate wins over its table: at a low
+    // camera the ray met the table's padded box first and you couldn't lift the plate alone — plan 124, point 3)
+    const order = out.map((_, i) => i).sort((a, b) => out[a].t - out[b].t);
+    for (let pass = 0; pass < 4; pass++) {
+      let moved = false;
+      for (let i = 0; i < order.length; i++)
+        for (let j = i + 1; j < order.length; j++)
+          if (standsOn(boxes[order[j]], boxes[order[i]])) {
+            order.splice(i, 0, order.splice(j, 1)[0]);
+            moved = true;
+          }
+      if (!moved) break;
+    }
+    return order.map((i) => out[i]);
   }
 
   pick(clientX: number, clientY: number, mods?: { shift: boolean; right: boolean }) {

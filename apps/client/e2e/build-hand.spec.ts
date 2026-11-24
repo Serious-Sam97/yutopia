@@ -60,7 +60,11 @@ test("the hand: Shift keeps placing, wheel and drag turn, arrows nudge, Delete r
     expect(await page.evaluate(() => (window as any).__yutopia.model.buildLook().grid)).toBe(true);
 
     // ── Shift-click keeps placing copies; a plain click places the last one and lets go
-    await page.getByRole("tab", { name: "Decor" }).click();
+    await page.evaluate(() =>
+      (window as any).__hud.set((h: any) => ({
+        build: { ...h.build, tab: "buy", tool: "furniture", shopBy: "func", shopCat: "decor", shopSub: "" },
+      })),
+    ); // (plan 124: Buy, func · decor)
     await page.getByRole("button", { name: "Plant", exact: true }).click();
     await page.keyboard.down("Shift");
     for (const dx of [0, 1]) {

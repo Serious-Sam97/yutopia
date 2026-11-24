@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Cormorant_Garamond, Inter, Share_Tech_Mono, Special_Elite, VT323 } from "next/font/google";
+import { Cormorant_Garamond, Inter, Nunito, Share_Tech_Mono, Special_Elite, VT323 } from "next/font/google";
 import "./globals.css";
 
 const vt323 = VT323({ weight: "400", subsets: ["latin"], variable: "--font-vt323" });
@@ -8,6 +8,13 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 // the look (docs/plan/45-the-ui.md): titles in a book face, small labels typed
 const cormorant = Cormorant_Garamond({ weight: "600", subsets: ["latin"], variable: "--font-cormorant" });
 const specialElite = Special_Elite({ weight: "400", subsets: ["latin"], variable: "--font-special-elite" });
+// build mode's glass look (docs/plan/124-the-build-view.md): round and friendly — fetched when build mode shows it
+const nunito = Nunito({
+  weight: ["600", "700", "800", "900"],
+  subsets: ["latin"],
+  variable: "--font-nunito",
+  preload: false,
+});
 
 export const metadata: Metadata = {
   title: "Yutopia",
@@ -24,7 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${vt323.variable} ${shareTech.variable} ${inter.variable} ${cormorant.variable} ${specialElite.variable}`}
+      className={`${vt323.variable} ${shareTech.variable} ${inter.variable} ${cormorant.variable} ${specialElite.variable} ${nunito.variable}`}
     >
       <body>{children}</body>
     </html>

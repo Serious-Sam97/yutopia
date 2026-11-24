@@ -3,10 +3,12 @@
 import { type AreaDef, doorRoom, isDoorKind } from "@yutopia/shared";
 import { useState } from "react";
 import { type Key, useTr } from "@/lib/i18n";
-import { toast, useHud } from "@/world/store";
+import { hud, toast, useHud } from "@/world/store";
 import { useWorld } from "../ctx";
 import { Icon } from "../icons";
 import type { Member } from "./BuildMode";
+import { ask } from "./Dialogs";
+import { partPatch } from "./tabs";
 import { WALL_MATERIALS } from "./WallsPanel";
 
 const KIND_COLOR: Record<string, string> = {
@@ -51,12 +53,16 @@ export function RoomsPanel({ members }: { members: Member[] }) {
             background: "linear-gradient(180deg,var(--amber-hi),var(--amber-lo))",
             boxShadow: "0 3px 0 var(--amber-shade)",
           }}
-          onClick={() => toast(t("buildDrawRoomHint"))}
+          // (plan 124 F10a: a room is drawn as a box of walls — Build's Walls, Box; the room's found when it closes)
+          onClick={() => {
+            hud.set((s) => ({ build: { ...s.build, ...partPatch(s.build, "walls"), paintMode: "box" } }));
+            toast(t("buildDrawRoomHint"));
+          }}
         >
           <Icon name="plus" size={16} /> {t("buildDrawRoom")}
         </button>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto scroll-thin px-3 pb-3 space-y-2">
+      <div className="flex-1 min-h-0 overflow-y-auto gl-scroll px-3 pb-3 grid grid-cols-2 xl:grid-cols-3 gap-2 items-start">
         {rooms.map((r) => (
           <RoomCard
             key={r.key}
@@ -225,8 +231,9 @@ function RoomCard({
               className="ghost-btn flex-1"
               style={{ borderStyle: "dashed", borderColor: "var(--danger-dashed)", color: "var(--error)" }}
               onClick={() => {
-                if (window.confirm(t("buildRemoveRoom").replace("{name}", room.name)))
-                  w?.send("map:room:remove", { key: room.key });
+                void ask(t("buildRemoveRoom").replace("{name}", room.name), true).then(
+                  (ok) => ok && w?.send("map:room:remove", { key: room.key }),
+                );
               }}
             >
               {t("buildRemove")}

@@ -1988,7 +1988,8 @@ test("game room: plug a console into a TV, a cartridge, power, pad 2 relayed, th
 
 test("your own booth: you arrive at your spot in it with someone talking in it, and right after a reload", async () => {
   const s = ++space;
-  const owner = await person(58, s, "member,builder");
+  // (an admin: a blank start is theirs — plan 124)
+  const owner = await person(58, s, "member,builder,admin");
   const sam = await person(59, s);
   const gabe = await person(60, s);
   owner.room.send("map:new", { width: 32, height: 24 });

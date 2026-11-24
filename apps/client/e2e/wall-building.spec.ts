@@ -235,7 +235,7 @@ test("the Walls tool, Sims-style: runs, paint with indicators, the inspector, th
     // E: sample a face (the north wall inside: cork now)
     await setBuild(page, { paint: "w" });
     await pointAt(page, X0 + 2.5, Y0 + 0.1, 1.53);
-    await page.keyboard.press("e");
+    await page.keyboard.press("i"); // (plan 124: the eyedropper's I — E turns the build camera)
     await expect.poll(async () => (await build(page)).paint).toBe("k");
 
     // ── Select: the inspector (a whole wall: the north wall's metre the drag split off) ──

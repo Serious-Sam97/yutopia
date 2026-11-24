@@ -11,7 +11,19 @@ import { edgeBlocker } from "./map-edit.ts";
 import { studio } from "./maps/studio.ts";
 import { Place } from "./physics/place.ts";
 import { testWorld } from "./physics/testing.ts";
-import { carried, hostOf, riders, splitAll, splitBuiltIns, surfaceAt, topAt, topCentre, topRect } from "./tops.ts";
+import {
+  carried,
+  hostOf,
+  lifted,
+  riders,
+  splitAll,
+  splitBuiltIns,
+  surfaceAt,
+  topAt,
+  topCentre,
+  topRect,
+  unridden,
+} from "./tops.ts";
 
 const desk = (x: number, y: number, rot = 0): WorldObjectDef => ({
   id: "desk",
@@ -232,4 +244,21 @@ test("a sofa is three seats, walkable, facing the way it's turned", async () => 
     assert.deepEqual(g.seats.get(`${x},6`), { id: "s", rot: 2, kind: "sofa", pull: 0 });
   }
   w.dispose();
+});
+
+test("a click on a mug on a selected desk lifts the mug alone (plan 124, point 3)", () => {
+  const d = desk(10, 3);
+  const mug = top("mug", "mug", 44, 13);
+  const pen = top("pen", "mug", 46, 13);
+  const all = [d, mug, pen];
+  assert.equal(hostOf(all, mug)?.id, "desk");
+  // the desk was moved: it and what rode on it were selected
+  assert.deepEqual(lifted(all, "mug", ["desk", "mug", "pen"]), ["mug"], "the mug alone, not the desk and all");
+  assert.deepEqual(lifted(all, "mug", []), ["mug"]);
+  assert.deepEqual(lifted(all, "desk", ["desk", "mug"]), ["desk", "mug"], "the desk lifts its selection");
+  // a mug in a selection without its desk: the selection
+  assert.deepEqual(lifted(all, "mug", ["mug", "pen"]), ["mug", "pen"]);
+  // what's selected after a move: the desk, not the riders
+  assert.deepEqual(unridden(all, ["desk", "mug", "pen"]), ["desk"]);
+  assert.deepEqual(unridden(all, ["mug", "pen"]), ["mug", "pen"]);
 });

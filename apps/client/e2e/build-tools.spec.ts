@@ -81,6 +81,8 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   await build(true, "map");
   await page.getByRole("button", { name: /^S\s*32×24$/ }).click();
   await page.getByRole("button", { name: /Start from a blank/ }).click();
+  // (build mode's own confirm — plan 124)
+  await page.getByRole("button", { name: "Yes, do it" }).click();
   await expect.poll(() => width(page)).toBe(32);
   await build(false);
   // (a teleport: right after the new map the walk there sometimes never starts)
@@ -118,7 +120,7 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   await shot(page, "build-walls-box");
 
   // Box with a wall brush (Build): brick walls all around
-  await page.getByRole("button", { name: "Build", exact: true }).click();
+  await page.getByTestId("build-part-walls").click(); // (plan 124: Build · Walls)
   await page.getByRole("button", { name: "Brick", exact: true }).click();
   await page.getByRole("button", { name: "Box", exact: true }).click();
   await drag(page, [8.1, 3.1], [11.9, 5.9]);
@@ -138,7 +140,7 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
 
   // Erase: drag along the top wall line, in Build (a wall the pointer comes near goes, whole: so
   // clear of the corners, where the sides are)
-  await page.getByRole("button", { name: "Build", exact: true }).click();
+  await page.getByTestId("build-part-walls").click(); // (plan 124: Build · Walls)
   await page.getByRole("button", { name: "Brick", exact: true }).click();
   await page.getByRole("button", { name: "Erase", exact: true }).click();
   await drag(page, [8.6, 3], [11.4, 3], 18);
@@ -146,7 +148,7 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   expect(await vWall(page, 8, 4)).toBe("b"); // the sides stay
 
   // Search, place, pick up, copy (C)
-  await page.getByRole("tab", { name: /Furnish/ }).click();
+  await page.getByTestId("build-tab-buy").click(); // (plan 124: Buy)
   await page.keyboard.press("/");
   await page.keyboard.type("pla");
   await expect(page.getByRole("button", { name: "Plant", exact: true })).toBeVisible();
@@ -168,7 +170,8 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   await page.getByRole("button", { name: "Chair", exact: true }).click();
   await clickFloor(page, 19, 10);
   await expect.poll(async () => (await kinds(page, "chair")).length).toBe(1);
-  await page.getByRole("tab", { name: /Desks/ }).click();
+  await page.getByTestId("build-tab-lot").click(); // (plan 124: Lot · Desks)
+  await page.getByTestId("lot-part-desks").click();
   await look(page, 19.5, 10.5);
   const seat = await screen(page, 19.5, 10.5);
   const canvas = page.locator('canvas[aria-label="Yutopia world"]');
@@ -180,8 +183,8 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   await shot(page, "build-desks");
 
   // Rooms: walls boxed round one find it (plan 72 phase 11), named in the prompt; then "go there"
-  await page.getByRole("tab", { name: /Walls/ }).click();
-  await page.getByRole("button", { name: "Build", exact: true }).click();
+  await page.getByTestId("build-tab-build").click();
+  await page.getByTestId("build-part-walls").click(); // (plan 124: Build · Walls)
   await page.getByRole("button", { name: "Box", exact: true }).click();
   await drag(page, [21.1, 3.1], [25.9, 6.9]);
   const prompt = page.getByTestId("found-room");
@@ -199,7 +202,7 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
     }),
   );
   await page.waitForFunction(() => !!(window as any).__yutopia.room.state.objects.get("e2e-lab-room-door"));
-  await page.getByRole("tab", { name: /Rooms/ }).click();
+  await page.getByTestId("build-part-rooms").click();
   await page.getByRole("button", { name: /LAB ROOM/ }).click();
   await shot(page, "build-rooms");
   await page.getByRole("button", { name: "Go there" }).click();
@@ -212,7 +215,8 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
     { timeout: 10_000 },
   );
 
-  await page.getByRole("tab", { name: /Map/ }).click();
+  await page.getByTestId("build-tab-lot").click();
+  await page.getByTestId("lot-part-map").click();
   await shot(page, "build-map");
   await page.getByRole("button", { name: "Done" }).click();
   await expect(page.getByRole("region", { name: /build mode/i })).toHaveCount(0);

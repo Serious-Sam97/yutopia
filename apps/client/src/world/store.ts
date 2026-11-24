@@ -274,6 +274,8 @@ export interface GameView {
 }
 
 export type BuildTool = "furniture" | "walls" | "rooms" | "desks" | "map";
+/** (plan 124) Build mode's Build tab: what it holds, The Sims 3's way. */
+export type BuildPartKey = "walls" | "floors" | "paint" | "roof" | "rooms" | "doors" | "windows" | "stairs";
 export type PaintMode = "line" | "arc" | "box" | "adjust" | "fill" | "erase";
 /** God mode's tools (the bottom bar): Select, then each kind of edit (phases 6–9 of plan 53; Grow,
  *  plan 69's phase 10). */
@@ -626,7 +628,24 @@ export interface HudState {
     rot: number;
     // furniture: the Sims hand (pick up / move), placing from the catalog, or
     // the eyedropper (click something to place copies of it)
-    mode: "hand" | "place" | "eyedrop";
+    // (plan 124: the sledgehammer — a click sells it — and the design tool — a click restyles it)
+    mode: "hand" | "place" | "eyedrop" | "sledge" | "design";
+    /** (plan 124) The Sims 3's modes: Buy (things), Build (walls, floors, paint, roof, doors, windows, stairs, rooms),
+     *  Lot (layouts, setups, desks, the map) — each sets the tool it works with. */
+    tab: "buy" | "build" | "lot";
+    /** Buy's catalog: By Room or By Function, which one, and its subcategory ("" all) */
+    shopBy: "room" | "func";
+    shopCat: string;
+    shopSub: string;
+    /** Build's part, Lot's part */
+    part: BuildPartKey;
+    lotPart: "layouts" | "setups" | "desks" | "map";
+    /** the floor's grid shown while building (G) */
+    grid: boolean;
+    /** the build camera looks straight down (T) */
+    topDown: boolean;
+    /** what's on the pointer from the catalog is being customized before it goes down (the strip's middle) */
+    styling: boolean;
     held: string[]; // placed things in your hand right now
     carrying: number; // everything in your hand (new copies too)
     selected: string[];
@@ -771,6 +790,15 @@ const initial: HudState = {
     hover: null,
     brush: "w:p",
     catalogTab: "seating",
+    tab: "buy",
+    shopBy: "room",
+    shopCat: "living",
+    shopSub: "",
+    part: "walls",
+    lotPart: "layouts",
+    grid: true,
+    topDown: false,
+    styling: false,
     paintMode: "line",
     wallMode: "build",
     snapGrid: 0.5,

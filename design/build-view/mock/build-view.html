@@ -1,0 +1,352 @@
+<!doctype html>
+<!-- Plan 124 phase 0: the build view after The Sims 3's Build/Buy, in three looks.
+     build-view.html?look=a|b|c&s=buy|build|design|money  ·  render: node render.mjs -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Build view mocks</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Nunito:wght@600;700;800;900&family=Special+Elite&display=block" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1440px;height:900px;overflow:hidden}
+body{position:relative;background:#222 center/cover no-repeat;-webkit-font-smoothing:antialiased;font-family:var(--body);color:var(--tx)}
+:root{
+  --wood:url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%27600%27%20height=%27240%27%3E%3Cfilter%20id=%27g%27%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.006%200.22%27%20numOctaves=%273%27%20seed=%277%27/%3E%3CfeColorMatrix%20values=%270%200%200%200%200.55%200%200%200%200%200.36%200%200%200%200%200.2%201.1%200%200%200%20-0.35%27/%3E%3C/filter%3E%3Crect%20width=%27600%27%20height=%27240%27%20fill=%27%234e301b%27/%3E%3Crect%20width=%27600%27%20height=%27240%27%20filter=%27url(%23g)%27/%3E%3C/svg%3E");
+}
+/* ---------- look A: walnut and ink (the HUD's own, plan 45) ---------- */
+html[data-look=a]{--pn:#17181d;--pn2:#1d1e24;--tx:#ece6da;--dim:#a7a094;--acc:#f1d79a;--on:#1a1a1e;--hair:rgba(241,215,154,.16);--hair2:rgba(241,215,154,.3);
+  --tile:#1c1d22;--tileOn:#2b2921;--r:5px;--rb:4px;--frame:5px;--title:"Cormorant Garamond",serif;--titlew:600;--lab:"Special Elite",monospace;--body:Inter,sans-serif;
+  --good:#a8e07a;--bad:#ff6a3a;--ghost:#7fc04a}
+/* ---------- look B: the cabin (cream paper in walnut trim, soft and round) ---------- */
+html[data-look=b]{--pn:#f3ead9;--pn2:#fbf6ec;--tx:#2e2217;--dim:#7d6b57;--acc:#c46a2c;--on:#fff8ec;--hair:rgba(94,62,36,.16);--hair2:rgba(94,62,36,.32);
+  --tile:#fffaf1;--tileOn:#fde6cc;--r:16px;--rb:999px;--frame:4px;--title:"Cormorant Garamond",serif;--titlew:700;--lab:Inter,sans-serif;--body:Inter,sans-serif;
+  --good:#5d9a32;--bad:#d2452c;--ghost:#6fbf3a}
+/* ---------- look C: glass (The Sims 3's own: pale blue, glossy, round) ---------- */
+html[data-look=c]{--pn:rgba(226,240,252,.93);--pn2:#fff;--tx:#123e6a;--dim:#5b7a9b;--acc:#2a84dc;--on:#fff;--hair:rgba(42,132,220,.18);--hair2:rgba(42,132,220,.36);
+  --tile:linear-gradient(180deg,#fff,#e6f1fb);--tileOn:linear-gradient(180deg,#e0f0ff,#b9dbfa);--r:20px;--rb:999px;--frame:0px;--title:Nunito,sans-serif;--titlew:900;--lab:Nunito,sans-serif;--body:Nunito,sans-serif;
+  --good:#3fae3a;--bad:#e0442c;--ghost:#52d24a}
+
+/* panels */
+.pn{position:absolute;background:var(--pn);border-radius:var(--r)}
+html[data-look=a] .pn{border:var(--frame) solid transparent;background:linear-gradient(var(--pn),var(--pn)) padding-box,var(--wood) border-box;background-size:auto,600px 240px;box-shadow:0 10px 28px rgba(0,0,0,.55),inset 0 0 0 1px rgba(0,0,0,.6)}
+html[data-look=b] .pn{border:var(--frame) solid transparent;background:linear-gradient(var(--pn),var(--pn)) padding-box,var(--wood) border-box;background-size:auto,600px 240px;box-shadow:0 12px 30px rgba(40,22,8,.38)}
+html[data-look=c] .pn{border:1.5px solid rgba(255,255,255,.95);box-shadow:0 10px 30px rgba(10,50,100,.35),inset 0 1px 0 #fff,inset 0 -10px 24px rgba(120,170,220,.25);backdrop-filter:blur(8px)}
+html[data-look=c] .pn>*{position:relative;z-index:1}
+html[data-look=c] .pn::before{content:"";z-index:0;position:absolute;left:10px;right:10px;top:3px;height:38%;border-radius:calc(var(--r) - 4px) calc(var(--r) - 4px) 40% 40%/calc(var(--r) - 4px) calc(var(--r) - 4px) 18px 18px;background:linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,0));pointer-events:none}
+.ttl{font:var(--titlew) 22px/1 var(--title);letter-spacing:.14em;text-transform:uppercase}
+html[data-look=c] .ttl{letter-spacing:.02em;text-transform:none;font-size:21px}
+.lab{font:500 11px/1 var(--lab);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+html[data-look=b] .lab{font-weight:700;letter-spacing:.1em;font-size:10.5px}
+html[data-look=c] .lab{font-weight:800;letter-spacing:.06em;font-size:11.5px;text-transform:none}
+.kk{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 4px;font:600 10.5px/1 var(--lab);color:var(--dim);border:1px solid var(--hair2);border-radius:4px}
+html[data-look=c] .kk{border-radius:8px;background:rgba(255,255,255,.7)}
+svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* buttons */
+.b{display:flex;align-items:center;justify-content:center;gap:7px;height:40px;min-width:40px;padding:0 11px;border-radius:var(--rb);color:var(--tx);font:600 13px/1 var(--body);border:1px solid var(--hair2);background:rgba(255,255,255,.03);position:relative;white-space:nowrap}
+html[data-look=a] .b{border-radius:4px}
+html[data-look=b] .b{background:var(--pn2);box-shadow:0 2px 0 rgba(94,62,36,.18);border-color:rgba(94,62,36,.22)}
+html[data-look=c] .b{background:linear-gradient(180deg,#fff,#dcecfb);border:1.5px solid #fff;box-shadow:0 2px 6px rgba(20,70,130,.25),inset 0 -2px 0 rgba(80,140,210,.25);font-weight:800}
+.b.on{background:var(--acc);color:var(--on);border-color:var(--acc)}
+html[data-look=a] .b.on{box-shadow:0 0 14px rgba(241,215,154,.35)}
+html[data-look=b] .b.on{background:#5b3a26;border-color:#5b3a26;color:#fbefdc}
+html[data-look=c] .b.on{background:linear-gradient(180deg,#6ab8ff,#1f74cf);border-color:#bfe0ff;color:#fff;text-shadow:0 1px 1px rgba(0,40,90,.5)}
+.b.dim{opacity:.45}
+.b.go{background:var(--acc);color:var(--on);border-color:var(--acc)}
+html[data-look=b] .b.go{background:#5f8a35;border-color:#5f8a35;color:#fff}
+html[data-look=c] .b.go{background:linear-gradient(180deg,#8fe07a,#36a52c);border-color:#d8ffd0;color:#fff;text-shadow:0 1px 1px rgba(0,60,0,.4)}
+.seg{display:flex;gap:2px;padding:2px;border-radius:var(--rb);border:1px solid var(--hair2)}
+html[data-look=a] .seg{border-radius:5px}
+.seg .b{height:34px;border:0;box-shadow:none;background:transparent}
+.seg .b.on{background:var(--acc);color:var(--on)}
+html[data-look=b] .seg .b.on{background:#5b3a26;color:#fbefdc}
+html[data-look=c] .seg .b.on{background:linear-gradient(180deg,#6ab8ff,#1f74cf);color:#fff}
+html[data-look=c] .seg{background:rgba(255,255,255,.6);border:1.5px solid #fff}
+.sep{width:1px;align-self:stretch;margin:6px 4px;background:var(--hair2)}
+
+/* the place, top left */
+#where{left:16px;top:16px;height:60px;display:flex;align-items:center;gap:14px;padding:0 18px}
+#where .m{width:10px;height:10px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px var(--acc)}
+#where .s{font:500 13px/1 var(--body);color:var(--dim)}
+#mocktag{position:absolute;left:16px;top:86px;font:600 11px/1 Inter,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#fff;background:rgba(0,0,0,.55);padding:6px 9px;border-radius:4px}
+
+/* the view cluster, top right */
+#view{right:16px;top:16px;height:60px;display:flex;align-items:center;gap:6px;padding:0 10px}
+#view .fl{display:flex;align-items:center;gap:6px}
+#view .fl .nm{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:74px}
+#view .fl .nm b{font:var(--titlew) 15px/1 var(--title)}
+html[data-look=a] #view .fl .nm b,html[data-look=b] #view .fl .nm b{font-size:17px}
+
+/* mode tabs, bottom left */
+#modes{left:16px;bottom:16px;width:104px;height:268px;display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px 0}
+.mode{width:72px;display:flex;flex-direction:column;align-items:center;gap:5px;font:600 11.5px/1 var(--lab);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+html[data-look=c] .mode{text-transform:none;letter-spacing:0;font-weight:800;font-size:13px}
+.mode i{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid var(--hair2);color:var(--tx);background:rgba(255,255,255,.03)}
+html[data-look=a] .mode i{border-radius:6px}
+html[data-look=b] .mode i{background:var(--pn2);box-shadow:0 3px 0 rgba(94,62,36,.2)}
+html[data-look=c] .mode i{background:linear-gradient(180deg,#fff,#d4e8fb);border:2px solid #fff;box-shadow:0 3px 8px rgba(20,70,130,.3)}
+.mode i svg.i{width:28px;height:28px}
+.mode.on{color:var(--tx)}
+.mode.on i{background:var(--acc);color:var(--on);border-color:var(--acc)}
+html[data-look=a] .mode.on i{box-shadow:0 0 16px rgba(241,215,154,.4)}
+html[data-look=b] .mode.on i{background:#5b3a26;color:#fbefdc;border-color:#5b3a26}
+html[data-look=c] .mode.on i{background:linear-gradient(180deg,#6ab8ff,#1f74cf);color:#fff;border-color:#cfe7ff}
+#funds{display:flex;flex-direction:column;gap:4px}
+#funds b{font:var(--titlew) 17px/1 var(--title);color:var(--tx)}
+
+/* the catalog strip along the bottom */
+#strip{left:132px;right:16px;bottom:16px;height:268px;display:grid;grid-template-columns:196px 1fr 316px}
+#cats{border-right:1px solid var(--hair);padding:12px 12px 0;display:flex;flex-direction:column;gap:9px}
+#cats .tog{display:flex}
+#cats .tog .b{flex:1;height:28px;font-size:11.5px;padding:0 6px}
+#cats .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.cat{height:44px;border-radius:calc(var(--r) * .6);display:flex;align-items:center;justify-content:center;border:1px solid transparent;position:relative}
+.cat img{max-width:34px;max-height:34px;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))}
+.cat svg.i{width:24px;height:24px;color:var(--tx)}
+.cat.on{background:var(--tileOn);border-color:var(--acc)}
+html[data-look=c] .cat.on{border:2px solid #fff;box-shadow:0 0 0 2px var(--acc)}
+#cats .nm{font:var(--titlew) 15px/1 var(--title);margin-top:1px;display:flex;justify-content:space-between;align-items:baseline}
+#cats .nm em{font:600 11px/1 var(--body);color:var(--dim);font-style:normal}
+#main{display:flex;flex-direction:column;padding:10px 14px 12px;gap:9px;min-width:0}
+#subs{display:flex;gap:5px;align-items:center}
+#subs .b{height:30px;font-size:12px;padding:0 11px}
+#subs .srch{margin-left:auto;width:150px;justify-content:flex-start;color:var(--dim);font-weight:500}
+#items{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(2,1fr);gap:8px;flex:1;position:relative}
+.t{position:relative;border-radius:calc(var(--r) * .7);background:var(--tile);border:1px solid var(--hair);display:flex;align-items:center;justify-content:center;overflow:hidden}
+html[data-look=b] .t{box-shadow:0 2px 0 rgba(94,62,36,.12)}
+html[data-look=c] .t{border:1.5px solid #fff;box-shadow:0 2px 6px rgba(20,70,130,.18)}
+.t img{max-width:76%;max-height:72%;filter:drop-shadow(0 4px 4px rgba(0,0,0,.28));margin-bottom:12px}
+.t .n{position:absolute;left:6px;right:6px;bottom:5px;font:500 10.5px/1.1 var(--body);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dim)}
+html[data-look=c] .t .n{font-weight:700}
+.t.on{background:var(--tileOn);border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+html[data-look=a] .t.on{box-shadow:0 0 0 1px var(--acc),0 0 14px rgba(241,215,154,.25)}
+html[data-look=c] .t.on{border:2px solid #fff;box-shadow:0 0 0 2.5px var(--acc),0 3px 10px rgba(20,70,130,.3)}
+.t.on .n{color:var(--tx)}
+.t .pr{position:absolute;top:5px;right:6px;font:700 10.5px/1 var(--body);color:var(--tx);opacity:.85}
+.t .nw{position:absolute;top:5px;left:6px;font:700 9px/1 var(--body);letter-spacing:.06em;padding:3px 5px;border-radius:4px;background:var(--acc);color:var(--on)}
+.pager{position:absolute;right:-6px;top:50%;transform:translate(100%,-50%)}
+#pg{display:flex;align-items:center;gap:6px;margin-left:8px;white-space:nowrap;font:600 11.5px/1 var(--body);color:var(--dim)}
+#pg .b{height:26px;min-width:26px;padding:0 6px}
+/* the tools, on the strip's top edge */
+#tools{position:absolute;left:328px;bottom:284px;display:flex;gap:6px;padding:7px 8px;height:56px;align-items:center}
+#tools .b{height:40px;width:40px;padding:0}
+#tools .hint{font:500 12px/1 var(--body);color:var(--dim);padding:0 8px 0 4px;display:flex;gap:6px;align-items:center}
+/* the object card */
+#card{border-left:1px solid var(--hair);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+#card .top{display:flex;gap:12px}
+#card .pic{width:104px;height:100px;flex:none;border-radius:calc(var(--r) * .7);background:var(--tile);border:1px solid var(--hair);display:flex;align-items:center;justify-content:center;position:relative}
+html[data-look=c] #card .pic{border:1.5px solid #fff}
+#card .pic img{max-width:86%;max-height:86%;filter:drop-shadow(0 5px 5px rgba(0,0,0,.3))}
+#card .pic .spin{position:absolute;bottom:4px;left:0;right:0;text-align:center;font:600 9.5px/1 var(--body);color:var(--dim)}
+#card h3{font:var(--titlew) 21px/1.05 var(--title)}
+html[data-look=a] #card h3,html[data-look=b] #card h3{font-size:23px}
+#card p{font:400 12px/1.35 var(--body);color:var(--dim);margin-top:5px}
+html[data-look=c] #card p{font-weight:600}
+#card .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px}
+.chip{font:600 10.5px/1 var(--body);padding:4px 7px;border-radius:var(--rb);border:1px solid var(--hair2);color:var(--tx)}
+html[data-look=a] .chip{border-radius:3px;font-family:var(--lab);font-weight:400;letter-spacing:.04em}
+html[data-look=c] .chip{background:rgba(255,255,255,.7);border-color:#fff;font-weight:800}
+.row{display:flex;align-items:center;gap:6px}
+.sw{width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,.75);box-shadow:0 1px 3px rgba(0,0,0,.35)}
+.sw.on{outline:2px solid var(--acc);outline-offset:1px}
+.lk{width:34px;height:30px;border-radius:6px;background:var(--tile);border:1px solid var(--hair);display:flex;align-items:center;justify-content:center}
+.lk img{max-width:28px;max-height:26px}
+.lk.on{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+#card .foot{margin-top:auto;display:flex;gap:6px;align-items:center}
+#card .price{margin-left:auto;font:var(--titlew) 19px/1 var(--title)}
+.slot{border:1px dashed var(--hair2);color:var(--dim);font:500 11px/1 var(--body);padding:5px 8px;border-radius:6px}
+
+/* in the scene */
+#ov{position:absolute;inset:0;pointer-events:none}
+.tag{position:absolute;padding:8px 11px;display:flex;flex-direction:column;gap:4px;font:600 12.5px/1.15 var(--body)}
+.tag small{font:500 11px/1.2 var(--body);color:var(--dim)}
+.tag .row{gap:5px;font:500 11px/1 var(--body);color:var(--dim)}
+html[data-look=a] .tag,html[data-look=b] .tag{border-width:3px}
+#keys{right:16px;bottom:298px;height:36px;display:flex;align-items:center;gap:12px;padding:0 14px;font:500 12px/1 var(--body);color:var(--dim)}
+html[data-look=a] #keys,html[data-look=b] #keys{border-width:3px}
+#keys b{color:var(--tx);font-weight:600}
+.ghost{position:absolute;filter:sepia(1) hue-rotate(50deg) saturate(3) brightness(1.15);opacity:.78}
+.note{position:absolute;padding:9px 13px;background:#ece5d3;color:#222;font:400 13px/1.3 "Special Elite",monospace;box-shadow:0 8px 18px rgba(0,0,0,.4);transform:rotate(-.6deg);max-width:300px}
+.note::before{content:"▸ ";color:#c8553f}
+</style>
+</head>
+<body>
+<div id="ov"></div>
+<script>
+const Q = new URLSearchParams(location.search);
+const LOOK = Q.get("look") ?? "a";
+const S = Q.get("s") ?? "buy";
+document.documentElement.dataset.look = LOOK;
+const LOOKNAME = { a: "Look A · Walnut and ink", b: "Look B · The cabin", c: "Look C · Glass" }[LOOK];
+const MONEY = S === "money";
+document.body.style.backgroundImage = `url(bg/${S === "build" ? "farmhouse" : "diner"}.jpg)`;
+
+// --- icons (24×24 strokes)
+const P = {
+  hand: "M8 13V5.5a1.5 1.5 0 0 1 3 0V12m0-1V4.5a1.5 1.5 0 0 1 3 0V12m0-6.5a1.5 1.5 0 0 1 3 0V13m0-4.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-4.9-2.6L4 15a1.6 1.6 0 0 1 2.6-1.9L8 15",
+  drop: "M19.5 4.5a2.8 2.8 0 0 0-4 0L13 7l-1-1-2 2 1 1-6.5 6.5V20h4.5l6.5-6.5 1 1 2-2-1-1 2.5-2.5a2.8 2.8 0 0 0 0-4zM7 16.5h5",
+  hammer: "M13 3.5l7.5 7.5-3.5 3.5L9.5 7zM11.3 8.8 3.5 16.6a2 2 0 0 0 2.8 2.8l7.8-7.8",
+  brush: "M19 3a2 2 0 0 1 2 2c0 3-6 9-8 10l-4-4c1-2 7-8 10-8zM9 11l4 4M8.5 14.5c-2 0-3.5 1.5-3.5 3.5 0 1-1 2-2 2 1 1 3 1 4.5 1 2.5 0 4-1.5 4-3.5z",
+  search: "M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15zM16 16l5 5",
+  up: "M6 15l6-6 6 6", down: "M6 9l6 6 6-6", left: "M15 6l-6 6 6 6", right: "M9 6l6 6-6 6",
+  wup: "M4 20h16M6 20V7h12v13M6 7l6-3 6 3", wcut: "M4 20h16M6 20v-7h12v7M6 13l12 0", wdown: "M4 20h16M6 20v-2h12v2",
+  top: "M12 3v4M12 17v4M3 12h4M17 12h4M8 8h8v8H8z", grid: "M4 4h16v16H4zM4 9.3h16M4 14.6h16M9.3 4v16M14.6 4v16",
+  rotl: "M4 12a8 8 0 1 0 2.4-5.7M4 4v5h5", rotr: "M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5",
+  undo: "M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3", redo: "M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3",
+  check: "M4 12.5l5 5L20 6.5",
+  buy: "M3 18v-6a2 2 0 0 1 4 0v2h10v-2a2 2 0 0 1 4 0v6zM5 10V8a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v2M5 18v2M19 18v2",
+  build: "M3 21h18M5 21V10l7-6 7 6v11M9 21v-6h6v6",
+  lot: "M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2zM9 4v14M15 6v14",
+  wall: "M3 20h18M4 20V6h16v14M4 10.6h16M4 15.3h16M9 6v4.6M15 6v4.6M12 10.6v4.7M7 15.3V20M17 15.3V20",
+  floor: "M3 15l9-5 9 5-9 5zM7.5 12.5l9 5M12 10l4.5 7.5M16.5 12.5l-9 5",
+  paint: "M5 4h12v5H5zM17 6.5h2v5h-8v3M10 14.5h2V21h-2z",
+  roof: "M2 13l10-8 10 8M5 11v9h14v-9",
+  rooms: "M4 4h16v16H4zM12 4v9M4 13h9M16 13h4",
+  line: "M4 18L20 6M4 18h.01M20 6h.01", arc: "M4 18c2-8 8-12 16-12", box: "M5 5h14v14H5z", adjust: "M4 18L20 6M10 13.5l2 2M14 10.5l2 2",
+  fill: "M5 11l7-7 7 7-7 7zM19 15s2 2.4 2 3.5a2 2 0 0 1-4 0c0-1.1 2-3.5 2-3.5z", erase: "M8 20l-4-4L14 6l6 6-8 8zM4 20h16M9 11l6 6",
+  play: "M8 5v14l11-7z",
+};
+const ic = (n, s = 22) => `<svg class="i" viewBox="0 0 24 24" style="width:${s}px;height:${s}px"><path d="${P[n]}"/></svg>`;
+const img = (f) => `items/${f}.png`;
+const $ = (h) => { const d = document.createElement("div"); d.innerHTML = h.trim(); return document.body.appendChild(d.firstElementChild); };
+
+// --- the place and the mock's tag
+$(`<div class="pn" id="where"><span class="m"></span><span class="ttl">${S === "build" ? "Build" : S === "design" ? "Design" : "Buy"}</span><span class="s">${S === "build" ? "The farmhouse · upstairs" : "The diner · ground floor"}</span>${MONEY ? `<span class="sep"></span><span id="funds"><span class="lab">Funds</span><b>§ 12,480</b></span>` : ""}</div>`);
+$(`<div id="mocktag">${LOOKNAME}${MONEY ? " · with money (later)" : ""}</div>`);
+
+// --- the view cluster
+$(`<div class="pn" id="view">
+  <div class="fl"><div class="b">${ic("down", 18)}</div><div class="nm"><span class="lab">Floor</span><b>${S === "build" ? "Upstairs" : "Ground"}</b></div><div class="b">${ic("up", 18)}</div></div>
+  <div class="sep"></div>
+  <div class="seg"><div class="b" title="Walls up">${ic("wup")}</div><div class="b on" title="Cutaway">${ic("wcut")}</div><div class="b" title="Walls down">${ic("wdown")}</div></div>
+  <div class="sep"></div>
+  <div class="b">${ic("top")}</div><div class="b ${S === "build" ? "on" : ""}">${ic("grid")}</div>
+  <div class="b">${ic("rotl")}</div><div class="b">${ic("rotr")}</div>
+  <div class="sep"></div>
+  <div class="b">${ic("undo", 18)}</div><div class="b dim">${ic("redo", 18)}</div>
+  <div class="b go" style="padding:0 16px">${ic("check", 18)} Done</div>
+</div>`);
+
+// --- mode tabs
+$(`<div class="pn" id="modes">
+  <div class="mode ${S !== "build" ? "on" : ""}"><i>${ic("buy")}</i>Buy</div>
+  <div class="mode ${S === "build" ? "on" : ""}"><i>${ic("build")}</i>Build</div>
+  <div class="mode"><i>${ic("lot")}</i>Lot</div>
+</div>`);
+
+// --- the camera keys, over the scene
+$(`<div class="pn" id="keys"><span><b>WASD</b> pan</span><span><b>Q E</b> turn</span><span><b>Wheel</b> zoom</span><span><b>Right drag</b> orbit</span><span><b>T</b> top-down</span><span><b>PgUp PgDn</b> floor</span></div>`);
+
+// --- the tools on the strip's top edge
+const tool = S === "design" ? "brush" : S === "build" ? "" : "hand";
+$(`<div class="pn" id="tools">
+  ${[["hand", "H"], ["drop", "E"], ["hammer", "K"], ["brush", "D"]].map(([n]) => `<div class="b ${n === tool ? "on" : ""}">${ic(n)}</div>`).join("")}
+  <span class="hint">${S === "design" ? "<b>Design</b> · click anything to restyle it" : S === "build" ? "<b>Walls</b> · drag to draw, <span class=kk>⌘</span> drag removes" : "<b>Hand</b> · click a thing to lift only it"}</span>
+</div>`);
+
+// --- the strip
+const ROOMS = [["Living", "sofa"], ["Kitchen", "range-cooker"], ["Dining", "dining-table"], ["Bedroom", "double-bed"], ["Bath", "sink-unit"], ["Office", "desk"], ["Games", "arcade-cabinet"], ["Shop & town", "grocery-shelves"], ["Outdoors", "picnic-table"], ["Pets", "pet-bed"], ["Play", "ping-pong-table"], ["Seasonal", "christmas-tree"]];
+const BUILD = [["Walls", "wall"], ["Floors", "floor"], ["Paint", "paint"], ["Doors", "door", 1], ["Windows", "window", 1], ["Stairs", "staircase", 1], ["Roof", "roof"], ["Rooms", "rooms"], ["Fences", "box"]];
+const cats = S === "build" ? BUILD : ROOMS;
+const sel = S === "build" ? "Walls" : "Dining";
+const catHtml = cats.map(([n, f, pic]) => `<div class="cat ${n === sel ? "on" : ""}" title="${n}">${S === "build" && !pic ? ic(f, 24) : `<img src="${img(f)}">`}</div>`).join("");
+
+const DINING = [
+  ["Table for four", "table-for-four", 180], ["Booth table", "booth-table", 150], ["Booth bench", "booth-bench", 320], ["Dining table", "dining-table", 260],
+  ["Farmhouse table", "farmhouse-table", 410], ["High table", "high-table", 140], ["Chair", "chair", 60], ["Bar stool", "bar-stool", 75],
+  ["Counter stool", "counter-stool", 90], ["Bar counter", "bar-counter", 540], ["Café counter", "caf-counter", 620], ["Pendant light", "pendant-light", 85],
+  ["Chandelier", "chandelier", 390], ["Jukebox", "jukebox", 1200], ["Potted plant", "potted-plant", 45], ["Fruit bowl", "fruit-bowl", 20],
+];
+const WALLS = [["Plaster", "#e9e1cf"], ["Walnut", "#6a432a"], ["Brick", "#9a4a35"], ["Cork", "#b98b5a"], ["Foam", "#3b3d44"], ["Glass", "linear-gradient(135deg,#cfe6f3,#8fb9d3 60%,#e8f5fb)"], ["Half wall", "linear-gradient(180deg,transparent 45%,#e9e1cf 45%)"], ["Tile", "repeating-linear-gradient(0deg,#f4f1ea 0 9px,#cfc8ba 9px 10px),#fff"],
+  ["Shiplap", "repeating-linear-gradient(0deg,#e7dcc6 0 7px,#c9b99b 7px 8px)"], ["Stone", "#8c8a84"], ["Logs", "repeating-linear-gradient(0deg,#8a5a36 0 10px,#5b3a26 10px 12px)"], ["Panelled", "linear-gradient(90deg,#7a4e30 0 48%,#5b3a26 48% 52%,#7a4e30 52%)"], ["Concrete", "#b7b4ad"], ["Wallpaper", "repeating-linear-gradient(90deg,#e9dfc8 0 6px,#d9c9a8 6px 8px)"], ["Mint", "#a9cdbb"], ["Night blue", "#2d3c55"]];
+
+let subs, items;
+if (S === "build") {
+  subs = [["Line", "line"], ["Arc", "arc"], ["Box", "box"], ["Adjust", "adjust"], ["Fill", "fill"], ["Erase", "erase"]];
+  items = WALLS.map(([n, bg], i) => `<div class="t ${i === 0 ? "on" : ""}"><span style="width:56%;height:52%;border-radius:4px;margin-bottom:14px;background:${bg};box-shadow:inset 0 0 0 1px rgba(0,0,0,.18),0 3px 6px rgba(0,0,0,.25)"></span><span class="n">${n}</span></div>`).join("");
+} else if (S === "design") {
+  items = "";
+} else {
+  subs = [["All"], ["Tables"], ["Chairs"], ["Booths"], ["Counters"], ["On tables"], ["Lights"], ["Decor"]];
+  items = DINING.map(([n, f, pr], i) => `<div class="t ${f === "potted-plant" ? "on" : ""}">${i === 13 ? '<span class="nw">NEW</span>' : ""}${MONEY ? `<span class="pr">§${pr}</span>` : ""}<img src="${img(f)}"><span class="n">${n}</span></div>`).join("");
+}
+
+let mainHtml;
+if (S === "design") {
+  const looks = [0, 140, 205, 290, 40];
+  const fabrics = [["Cherry vinyl", "#c8343a"], ["Teal vinyl", "#2f8a8a"], ["Mustard", "#d8a531"], ["Cream", "#efe3c8"], ["Forest", "#3e6a3e"], ["Navy", "#253c66"], ["Plum", "#6c2f55"], ["Charcoal", "#3a3a3d"], ["Tan leather", "#a8723f"], ["Oxblood", "#6b2420"], ["Sky", "#8fc1e6"], ["Blush", "#e7aaa4"]];
+  const woods = ["#e9e3d6", "#c9c3b8", "#3a3a3d", "#b07a48", "#6a432a", "#2f2f33"];
+  mainHtml = `<div id="main">
+    <div class="row" style="justify-content:space-between"><span class="ttl" style="font-size:17px">Booth bench · restyle</span><span class="lab">Live · <span class="kk">⌘Z</span> undoes</span></div>
+    <div style="display:grid;grid-template-columns:1.2fr 1.4fr 1fr;gap:16px;flex:1">
+      <div style="display:flex;flex-direction:column;gap:8px"><span class="lab">Looks</span>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">${looks.map((h, i) => `<div class="t ${i === 0 ? "on" : ""}" style="height:66px"><img src="${img("booth-bench")}" style="margin:0;filter:hue-rotate(${h}deg) drop-shadow(0 3px 3px rgba(0,0,0,.3))"></div>`).join("")}<div class="t" style="height:66px"><span class="n" style="position:static;font-size:11px">Shuffle ⟳</span></div></div></div>
+      <div style="display:flex;flex-direction:column;gap:8px"><span class="lab">Seat fabric</span>
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px 6px">${fabrics.map(([n, c], i) => `<div style="display:flex;flex-direction:column;align-items:center;gap:4px"><span class="sw ${i === 0 ? "on" : ""}" style="background:${c};width:28px;height:28px"></span><span style="font:500 9.5px/1.1 var(--body);color:var(--dim);text-align:center">${n}</span></div>`).join("")}</div></div>
+      <div style="display:flex;flex-direction:column;gap:8px"><span class="lab">Frame</span>
+        <div class="row" style="flex-wrap:wrap;gap:8px">${woods.map((c, i) => `<span class="sw ${i === 0 ? "on" : ""}" style="background:${c};width:28px;height:28px"></span>`).join("")}</div>
+        <span class="lab" style="margin-top:8px">Copy this style</span>
+        <div class="row"><div class="b" style="height:32px;font-size:12px">${ic("drop", 16)} Pick up style</div></div></div>
+    </div></div>`;
+} else {
+  mainHtml = `<div id="main">
+    <div id="subs">${subs.map(([n, k], i) => `<div class="b ${i === 0 ? "on" : ""}">${k ? ic(k, 16) : ""}${n}</div>`).join("")}
+      ${S === "build" ? `<div class="sep"></div><span class="lab">Height</span><div class="seg"><div class="b on" style="height:26px;font-size:11.5px">Ceiling</div><div class="b" style="height:26px;font-size:11.5px">Rail</div><div class="b" style="height:26px;font-size:11.5px">Low</div></div>` : `<div class="b srch">${ic("search", 16)} Find a thing <span class="kk" style="margin-left:auto">/</span></div>`}
+      <div id="pg">1 / 3 <div class="b">${ic("left", 14)}</div><div class="b">${ic("right", 14)}</div></div>
+    </div>
+    <div id="items">${items}</div>
+  </div>`;
+}
+
+const card = S === "build"
+  ? `<div class="top"><div class="pic" style="background:#e9e1cf"><span class="spin">swatch</span></div><div><h3>Plaster wall</h3><p>Smooth and warm. Paints both faces; Tab paints the other.</p><div class="chips"><span class="chip">0.15 m thick</span><span class="chip">2.8 m</span></div></div></div>
+     <span class="lab">Thickness</span><div class="seg"><div class="b" style="height:28px;flex:1">Thin</div><div class="b on" style="height:28px;flex:1">Normal</div><div class="b" style="height:28px;flex:1">Thick</div></div>
+     <div class="foot"><span class="lab">Snap</span><div class="seg"><div class="b on" style="height:26px;font-size:11px">0.5 m</div><div class="b" style="height:26px;font-size:11px">1 m</div><div class="b" style="height:26px;font-size:11px">Off</div></div></div>`
+  : S === "design"
+    ? `<div class="top"><div class="pic"><img src="${img("booth-bench")}"><span class="spin">◂ drag to turn ▸</span></div><div><h3>Booth bench</h3><p>A diner's red booth for two. Seats face the table.</p><div class="chips"><span class="chip">2 × 1</span><span class="chip">2 seats</span><span class="chip">comfort ●●●○</span></div></div></div>
+       <div class="foot"><div class="b" style="height:32px;font-size:12px">${ic("hand", 16)} Move</div><div class="b" style="height:32px;font-size:12px">${ic("hammer", 16)} Sell</div></div>`
+    : `<div class="top"><div class="pic"><img src="${img("potted-plant")}"><span class="spin">◂ drag to turn ▸</span></div><div><h3>Potted plant</h3><p>A snake plant in a striped pot. Happy anywhere.</p><div class="chips"><span class="chip">1 × 1</span><span class="chip">decor</span><span class="chip">on floor or table</span></div></div></div>
+       <div class="row"><span class="lab" style="width:48px">Looks</span>${["potted-plant", "plant", "succulent", "bonsai", "vase"].map((f, i) => `<span class="lk ${i === 0 ? "on" : ""}"><img src="${img(f)}"></span>`).join("")}</div>
+       <div class="row"><span class="lab" style="width:48px">Pot</span>${["#e9dfc8", "#c8553f", "#3e6a3e", "#253c66", "#2f2f33", "#d8a531"].map((c, i) => `<span class="sw ${i === 0 ? "on" : ""}" style="background:${c}"></span>`).join("")}</div>
+       <div class="foot"><div class="b" style="height:32px;font-size:12px">${ic("brush", 16)} Design</div>${MONEY ? `<span class="price">§ 45</span>` : `<span class="slot" style="margin-left:auto">price · when money comes</span>`}</div>`;
+
+$(`<div class="pn" id="strip">
+  <div id="cats">${S === "build" ? `<div class="nm">Build <em>structure</em></div>` : `<div class="seg tog"><div class="b on">By room</div><div class="b">By function</div></div>`}
+    <div class="grid">${catHtml}</div>
+    <div class="nm">${sel}<em>${S === "build" ? "16" : "48"}</em></div></div>
+  ${mainHtml}
+  <div id="card">${card}</div>
+</div>`);
+
+// --- in the scene
+const ov = document.getElementById("ov");
+const svg = (h) => { ov.insertAdjacentHTML("beforeend", `<svg width="1440" height="900" style="position:absolute;inset:0">${h}</svg>`); };
+const accent = getComputedStyle(document.documentElement).getPropertyValue("--acc").trim();
+const outline = LOOK === "c" ? "#5ec4ff" : LOOK === "b" ? "#ffb347" : "#f1d79a";
+if (S === "buy" || S === "money") {
+  // the hovered top: only it lit, not its table (the bug's fix)
+  svg(`<defs><filter id="gl"><feGaussianBlur stdDeviation="2.2"/></filter></defs>
+    <rect x="417" y="539" width="22" height="22" rx="4" fill="none" stroke="${outline}" stroke-width="5" filter="url(#gl)" opacity=".9"/>
+    <rect x="417" y="539" width="22" height="22" rx="4" fill="none" stroke="${outline}" stroke-width="2"/>
+    <ellipse cx="760" cy="446" rx="40" ry="20" fill="rgba(110,210,80,.28)" stroke="#7fe060" stroke-width="2.5"/>
+    <path d="M708 452 a52 24 0 0 0 30 18" fill="none" stroke="#fff" stroke-width="2" opacity=".85"/><path d="M812 440 a52 24 0 0 0 -30 -18" fill="none" stroke="#fff" stroke-width="2" opacity=".85"/>`);
+  ov.insertAdjacentHTML("beforeend", `<img class="ghost" src="${img("potted-plant")}" style="left:718px;top:356px;width:84px">`);
+  $(`<div class="pn tag" style="left:448px;top:470px"><span>Napkin holder</span><small>on the Table for four</small><span class="row"><span class="kk">click</span> lifts only this · <span class="kk">Tab</span> the table</span></div>`);
+  $(`<div class="pn tag" style="left:830px;top:404px"><span style="color:var(--good)">● Fits</span><span class="row"><span class="kk">R</span><span class="kk">,</span><span class="kk">.</span> turn · <span class="kk">Alt</span> free</span></div>`);
+}
+if (S === "design") {
+  svg(`<defs><filter id="gl"><feGaussianBlur stdDeviation="3"/></filter></defs>
+    <path d="M1178 244 L1234 184 L1282 196 L1284 236 L1226 298 L1180 286 Z" fill="none" stroke="${outline}" stroke-width="8" stroke-linejoin="round" filter="url(#gl)" opacity=".8"/>
+    <path d="M1178 244 L1234 184 L1282 196 L1284 236 L1226 298 L1180 286 Z" fill="none" stroke="${outline}" stroke-width="2.2" stroke-linejoin="round"/>`);
+  $(`<div class="pn tag" style="left:1010px;top:330px"><span>Booth bench</span><small>restyling · changes show live</small></div>`);
+}
+if (S === "build") {
+  // a wall being drawn: amber ghost from a corner, its length as you drag
+  svg(`<polygon points="118,452 300,372 300,292 118,372" fill="${LOOK === "c" ? "rgba(94,196,255,.42)" : "rgba(242,164,58,.45)"}" stroke="${outline}" stroke-width="2.5"/>
+    <circle cx="118" cy="452" r="7" fill="#fff" stroke="${outline}" stroke-width="3"/><circle cx="300" cy="372" r="7" fill="${outline}" stroke="#fff" stroke-width="2"/>
+    <path d="M118 470 L300 390" stroke="#fff" stroke-dasharray="5 5" stroke-width="2"/>`);
+  $(`<div class="pn tag" style="left:196px;top:440px"><span>3.5 m · 24°</span><small>type a length, Enter</small></div>`);
+}
+</script>
+</body>
+</html>

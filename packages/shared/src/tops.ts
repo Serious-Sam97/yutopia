@@ -321,3 +321,28 @@ export function topsOnHosts(objects: WorldObjectDef[]): { objects: WorldObjectDe
   });
   return { objects: out, changed };
 }
+
+// What a click lifts in build mode (docs/plan/124-the-build-view.md, point 3): the selection it's in — but a thing
+// on a surface whose host is selected too is lifted alone (the plate, not its table: The Sims' hand). Not in the
+// selection: just it. (What stands on each lifted thing comes along: `carried`.)
+export function lifted(objects: WorldObjectDef[], id: string, selected: readonly string[]): string[] {
+  if (!selected.includes(id)) return [id];
+  const o = objects.find((x) => x.id === id);
+  if (o && entry(o.kind).onSurface) {
+    const host = hostOf(objects, o);
+    if (host && selected.includes(host.id)) return [id];
+  }
+  return [...selected];
+}
+
+// The selection after things were lifted or put down: what was taken, not what rode along on it (a table moved
+// leaves the table selected, its plates free to be clicked alone).
+export function unridden(objects: WorldObjectDef[], ids: readonly string[]): string[] {
+  const set = new Set(ids);
+  return ids.filter((id) => {
+    const o = objects.find((x) => x.id === id);
+    if (!o || !entry(o.kind).onSurface) return true;
+    const host = hostOf(objects, o);
+    return !host || !set.has(host.id);
+  });
+}

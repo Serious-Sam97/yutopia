@@ -143,6 +143,22 @@ export class Input {
       e.preventDefault();
       return;
     }
+    // building: every other key is build mode's — the camera's, the mic, the zoom; nothing reaches the
+    // body (it stands idle where it was: docs/plan/124-the-build-view.md, point 1)
+    if (hud.get().build.on) {
+      if (this.c.build?.camKey(e.code, true, e.shiftKey, e.repeat)) {
+        e.preventDefault();
+        return;
+      }
+      // (Space's default would press the last button clicked)
+      if (e.code === "Space") e.preventDefault();
+      if (e.repeat) return;
+      else if (key === "m") void this.c.toggleMic();
+      else if (key === "v") void this.c.toggleCam();
+      else if (key === "+" || key === "=") this.c.tp?.lensPart.zoomBy(1 / 1.15);
+      else if (key === "-") this.c.tp?.lensPart.zoomBy(1.15);
+      return;
+    }
     // moving and jumping: the keys by where they are on the keyboard (input/bindings.ts)
     if (this.c.walker?.controls.world(e.code)) {
       if (e.code !== "ShiftLeft" && e.code !== "ShiftRight") e.preventDefault();
@@ -169,6 +185,8 @@ export class Input {
   tabDown: { at: number; back: boolean } | null = null;
 
   onKeyUp = (e: KeyboardEvent) => {
+    // (the build camera's keys let go — always, so one held as build mode closes doesn't stick)
+    this.c.build?.camKey(e.code, false, e.shiftKey);
     // (a board's keys let go: plan 103)
     this.c.skateRide?.key(e, false);
     if (e.key.toLowerCase() === "e" && this.c.focus.use?.src === "key") {

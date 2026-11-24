@@ -478,8 +478,10 @@ export class WorldController {
         if (this.doors.climbAt(x, y)) return;
         this.walkTo({ x, y });
       },
-      onToyClick: (id) => this.pets.pickToy(id),
+      onToyClick: (id) => !hud.get().build.on && this.pets.pickToy(id),
       onAvatarClick: (sid, at) => {
+        // (building: people and pets aren't clicked — plan 124)
+        if (hud.get().build.on) return;
         if (sid.startsWith("pet:")) return void this.menu.openMenu({ type: "pet", id: sid.slice(4) }, at);
         // (plan 123: a placed NPC clicked — what to do with them, the menu; else Vortex poked)
         if (sid.startsWith("npc:place:")) return void this.menu.openMenu({ type: "npc", id: sid.slice(4) }, at);
@@ -1660,6 +1662,7 @@ export class WorldController {
       // build mode: what it shows (ghosts, previews, outlines); things in hand are left out of the
       // room — and my arrival pin while I pick one, outside it too
       const building = hud.get().build.on;
+      if (building) this.build?.camFrame(dt);
       const look = building || model.minePin() ? model.buildLook() : null;
       tp.buildPick.setBuild(look, building);
       tp.buildPick.floorHover = hud.get().pickArrival;
@@ -1905,7 +1908,8 @@ export class WorldController {
       // (aiming, in 3D, anywhere: a gun, or the flashlight raised — world/dark/arms.ts; a quick
       // right click on a thing is still its menu)
       canAim: !!this.tp,
-      usePad: !playing && !hud.get().menu,
+      // (building: not on foot — the slots, the wheels, the hand, the pad stand down: plan 124)
+      usePad: !playing && !hud.get().menu && !hud.get().build.on,
       path: this.path,
       at: { x: this.me.x, y: this.me.y, z: this.height.z },
       // (the Grounds' pond and river, out on the land: docs/plan/66-the-water.md)

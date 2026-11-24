@@ -92,9 +92,12 @@ test("Tab steps through what's stacked; a dressed desk saved as a setup and plac
 
     // ── from the catalog: My setups → on the pointer, all three; down to the right
     await page.keyboard.press("Escape");
-    await page.getByRole("tab", { name: "My setups" }).click();
+    await page.getByTestId("build-tab-lot").click(); // (plan 124: Lot · My setups)
+    await page.getByTestId("lot-part-setups").click();
     await page.getByRole("button", { name: `Place: ${name}` }).click();
     await expect.poll(async () => (await build(page)).carrying).toBe(3);
+    // (plan 124: the catalog strip has the screen's bottom — the camera over where it goes, as a builder pans there)
+    await holdCamera(page, { at: { x: X + 3.5, y: Y + 2.5 }, dist: 8, pitch: 1.3 });
     const spot = await at(page, X + 3.5, Y + 2.5, 0);
     await page.mouse.move(spot.x, spot.y, { steps: 4 });
     await page.waitForTimeout(200);

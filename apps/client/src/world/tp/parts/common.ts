@@ -7,6 +7,12 @@ export const LIMITS: Record<CamMode, { pitch: [number, number]; dist: [number, n
   free: { pitch: [-0.12, 1.45], dist: [1.2, 14] },
   first: { pitch: [-1.25, 1.25], dist: [0, 0] },
 };
+/** Build mode's own camera (docs/plan/124-the-build-view.md): back over the lot, up to straight down. */
+export const BUILD_LIMITS: { pitch: [number, number]; dist: [number, number] } = {
+  // (as low and near as the chase camera's: a view set close to a wall stays the same)
+  pitch: [-0.15, 1.53],
+  dist: [2, 34],
+};
 
 // Where a 2D segment first enters a box (0..1 along it), or null.
 export function segBox(ax: number, ay: number, bx: number, by: number, x0: number, y0: number, x1: number, y1: number) {

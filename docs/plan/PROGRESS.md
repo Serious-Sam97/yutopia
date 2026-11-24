@@ -1391,3 +1391,10 @@ The user: "the parking lot has an old design, it does not connect right with the
   screen with pictures, a scoreboard with stats and the round's end, spray patterns, the park's own damage table, CS's
   hit feedback, weapons on the floor, holes/blood/volume smokes/spreading fire, every lobby building with a job, sound
   and music. Forks decided 2026-11-22 (movement as it is; no sign-offs; frame rate best effort). Not built yet.
+
+## The build view (2026-11-24, plan `124-the-build-view.md`, planned)
+
+- Build mode after The Sims 3's Build/Buy: the body frozen and a free build camera, a catalog strip along the bottom
+  with Buy · Build · Lot tabs and By Room / By Function, a view cluster, a Design tool, and the fix for a top on a
+  table that couldn't be moved alone. Forks decided 2026-11-24 (three looks mocked for the user to pick; no price yet
+  but room left for money; desktop only). Not built yet.

@@ -299,6 +299,9 @@ registerFeature((room: WorldRoom) => {
   // a blank home floor: the generator's, put in place of the one there (the other floors stay)
   room.on("map:new", (client, m) => {
     if (!builder(client)) return;
+    // (it wipes the home floor for everyone: an admin's — docs/plan/124-the-build-view.md F10a)
+    if (!room.state.players.get(client.sessionId)?.admin)
+      return warn(client, "Only an admin can start the floor blank.");
     const w = Math.max(MAP_MIN, Math.min(MAP_MAX, Math.floor(Number(m.width) || 32)));
     const h = Math.max(MAP_MIN, Math.min(MAP_MAX, Math.floor(Number(m.height) || 24)));
     const home = room.home;

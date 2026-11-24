@@ -68,7 +68,8 @@ export class PoolBallsOut {
   // (capture: before the world's own click — which would walk there, or pick what's under it)
   private downAt = 0;
   private onDown = (e: MouseEvent) => {
-    if (e.button !== 0) return;
+    // (building: the click is build mode's — plan 124)
+    if (e.button !== 0 || hud.get().build.on) return;
     const el = e.target as HTMLElement | null;
     if (el?.tagName !== "CANVAS") return;
     const what = this.holdingNow();
@@ -87,6 +88,7 @@ export class PoolBallsOut {
   private onKey = (e: KeyboardEvent) => {
     const tag = (e.target as HTMLElement | null)?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || e.repeat || e.metaKey || e.ctrlKey) return;
+    if (hud.get().build.on) return; // (building: the keys are build mode's — plan 124)
     const me = this.me();
     if (!me) return;
     if (e.code === "KeyB" && this.holdingNow()) {

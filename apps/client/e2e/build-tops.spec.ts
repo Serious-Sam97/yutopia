@@ -59,7 +59,11 @@ test("dress a desk: many things on top, moved cell by cell, carried with the des
       h.set({ build: { ...h.get().build, on: true, tool: "furniture", mode: "hand", selected: [] } });
     });
     await page.waitForFunction(() => !!(window as any).__yutopia.build, null, { timeout: 15_000 });
-    await page.getByRole("tab", { name: "On desks & tables" }).click();
+    await page.evaluate(() =>
+      (window as any).__hud.set((h: any) => ({
+        build: { ...h.build, tab: "buy", tool: "furniture", shopBy: "room", shopCat: "office", shopSub: "" },
+      })),
+    ); // (plan 124: Buy, By room · Office — a workstation's things)
 
     // ── a workstation, piece by piece: seven things on one desk
     const plan: [string, number, number][] = [

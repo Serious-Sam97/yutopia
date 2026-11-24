@@ -6,12 +6,15 @@ import { useTr } from "@/lib/i18n";
 import { hud, useHud } from "@/world/store";
 import { useWorld } from "../ctx";
 import { Icon } from "../icons";
+import { ask } from "./Dialogs";
 
 export function MapPanel() {
   const t = useTr();
   const w = useWorld();
   useHud((s) => s.mapVersion);
   const pickSpawn = useHud((s) => s.build.pickSpawn);
+  // (a blank start wipes the floor for everyone: admins only — plan 124 F10a; the server says so too)
+  const admin = useHud((s) => s.isAdmin);
   const cur = { width: w?.map.width ?? 48, height: w?.map.height ?? 36 };
   const [size, setSize] = useState(cur);
   // follow resizes made by someone else (or an undo)
@@ -101,19 +104,25 @@ export function MapPanel() {
           {pickSpawn ? t("buildArrivalPick") : t("buildArrival")}
         </button>
         <div className="flex-1" />
-        <h3 className="grp" style={{ color: "var(--error)" }}>
-          {t("buildDanger")}
-        </h3>
-        <button
-          type="button"
-          className="ghost-btn w-full"
-          style={{ height: 40, borderStyle: "dashed", borderColor: "var(--danger-dashed)", color: "var(--error)" }}
-          onClick={() => {
-            if (window.confirm(t("buildBlankConfirm").replace("{size}", sizeText))) w?.send("map:new", size);
-          }}
-        >
-          {t("buildStartBlank")}
-        </button>
+        {admin && (
+          <>
+            <h3 className="grp" style={{ color: "var(--error)" }}>
+              {t("buildDanger")}
+            </h3>
+            <button
+              type="button"
+              className="ghost-btn w-full"
+              style={{ height: 40, borderStyle: "dashed", borderColor: "var(--danger-dashed)", color: "var(--error)" }}
+              onClick={() => {
+                void ask(t("buildBlankConfirm").replace("{size}", sizeText), true).then(
+                  (ok) => ok && w?.send("map:new", size),
+                );
+              }}
+            >
+              {t("buildStartBlank")}
+            </button>
+          </>
+        )}
       </div>
     </>
   );

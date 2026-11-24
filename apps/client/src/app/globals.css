@@ -103,6 +103,31 @@
   --font-mono: var(--font-special-elite), "Special Elite", ui-monospace, monospace;
   --font-title: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
   --font-body: var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif;
+  /* build mode's glass (docs/plan/124-the-build-view.md, look C — The Sims 3's own): pale blue, glossy, round */
+  --glass: rgba(226, 240, 252, 0.93);
+  --glass-hi: #ffffff;
+  --glass-lo: #dcecfb;
+  --glass-tile-lo: #e6f1fb;
+  --glass-on-hi: #6ab8ff;
+  --glass-on-lo: #1f74cf;
+  --glass-on-ring: #bfe0ff;
+  --glass-sel: #e0f0ff;
+  --glass-sel-lo: #b9dbfa;
+  --glass-ink: #123e6a;
+  --glass-dim: #5b7a9b;
+  --glass-acc: #2a84dc;
+  --glass-glow: #5ec4ff;
+  --glass-hair: rgba(42, 132, 220, 0.18);
+  --glass-hair2: rgba(42, 132, 220, 0.36);
+  --glass-shadow: rgba(10, 50, 100, 0.35);
+  --glass-go-hi: #8fe07a;
+  --glass-go-lo: #36a52c;
+  --glass-go-ring: #d8ffd0;
+  --glass-good: #2f9a2a;
+  --glass-bad: #d8432a;
+  --glass-bad-hi: #ff8a6a;
+  --glass-bad-lo: #c8361f;
+  --font-glass: var(--font-nunito), Nunito, ui-rounded, system-ui, sans-serif;
   color-scheme: dark;
 }
 
@@ -705,5 +730,295 @@ body {
       animation: none;
       transform: scaleY(0.6);
     }
+  }
+
+  /* ── build mode's glass (plan 124) ─────────────────────────────────────── */
+  .gl {
+    font-family: var(--font-glass);
+    color: var(--glass-ink);
+    -webkit-font-smoothing: antialiased;
+    /* the HUD's own tokens, glass inside build mode: its older panels (rooms, desks, the map, layouts) read on it */
+    --cream: var(--glass-ink);
+    --cream-dim: var(--glass-dim);
+    --muted: var(--glass-dim);
+    --panel: var(--glass-lo);
+    --panel-2: var(--glass-lo);
+    --panel-top: var(--glass-lo);
+    --panel-raised: var(--glass-hi);
+    --tile-hi: var(--glass-hi);
+    --face-hi: var(--glass-hi);
+    --edge: var(--glass-hair2);
+    --edge-2: var(--glass-hair2);
+    --edge-cabinet: var(--glass-hair2);
+    --edge-strong: var(--glass-acc);
+    --edge-hover: var(--glass-acc);
+    --well: rgba(255, 255, 255, 0.55);
+    --well-edge: var(--glass-hair);
+    --well-on: var(--glass-sel);
+    --field: rgba(255, 255, 255, 0.85);
+    --pit: var(--glass-lo);
+    --vfd: var(--glass-acc);
+    --amber: var(--glass-acc);
+    --amber-hi: var(--glass-on-hi);
+    --amber-lo: var(--glass-on-lo);
+    --amber-shade: var(--glass-on-lo);
+    --on-amber: var(--glass-hi);
+    --ink: var(--glass-hi);
+    --lamp-tint: color-mix(in srgb, var(--glass-acc) 12%, transparent);
+    --lamp-glow: color-mix(in srgb, var(--glass-acc) 50%, transparent);
+    --lamp-ring: color-mix(in srgb, var(--glass-acc) 55%, transparent);
+    --good: var(--glass-good);
+    --good-bright: var(--glass-good);
+    --error: var(--glass-bad);
+    --danger-text: var(--glass-bad);
+    --danger-soft: var(--glass-bad);
+    --danger-edge: var(--glass-bad);
+    --danger-hot: var(--glass-bad);
+  }
+  .gl .lcd,
+  .gl .mono,
+  .gl .grp,
+  .gl .ghost-btn,
+  .gl .deck-btn,
+  .gl .seg > button,
+  .gl .keycap {
+    font-family: var(--font-glass);
+    font-weight: 800;
+    text-shadow: none;
+  }
+  .gl .lcd {
+    font-weight: 900;
+    letter-spacing: 0;
+  }
+  .gl .ghost-btn,
+  .gl .deck-btn {
+    border-radius: 999px;
+    background: linear-gradient(180deg, var(--glass-hi), var(--glass-lo));
+    border: 1.5px solid var(--glass-hi);
+    box-shadow: 0 2px 5px color-mix(in srgb, var(--glass-shadow) 60%, transparent);
+  }
+  .gl .seg {
+    border-radius: 999px;
+  }
+  .gl .vfd-window {
+    background: linear-gradient(180deg, var(--glass-hi), var(--glass-lo));
+    border: 1.5px solid var(--glass-hi);
+    box-shadow: inset 0 1px 4px color-mix(in srgb, var(--glass-shadow) 40%, transparent);
+    border-radius: 14px;
+  }
+  .gl .seg > button {
+    border-radius: 999px;
+  }
+  .gl-panel {
+    position: relative;
+    background: var(--glass);
+    border: 1.5px solid var(--glass-hi);
+    border-radius: 20px;
+    box-shadow:
+      0 10px 30px var(--glass-shadow),
+      inset 0 1px 0 var(--glass-hi),
+      inset 0 -10px 24px color-mix(in srgb, var(--glass-acc) 14%, transparent);
+    backdrop-filter: blur(8px);
+    color: var(--glass-ink);
+  }
+  .gl-panel::before {
+    content: "";
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    top: 3px;
+    height: 34%;
+    max-height: 48px;
+    border-radius: 16px 16px 40% 40% / 16px 16px 18px 18px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+    pointer-events: none;
+  }
+  .gl-panel > * {
+    position: relative;
+  }
+  .gl-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 40px;
+    min-width: 40px;
+    padding: 0 11px;
+    border-radius: 999px;
+    border: 1.5px solid var(--glass-hi);
+    background: linear-gradient(180deg, var(--glass-hi), var(--glass-lo));
+    box-shadow:
+      0 2px 6px color-mix(in srgb, var(--glass-shadow) 70%, transparent),
+      inset 0 -2px 0 color-mix(in srgb, var(--glass-acc) 25%, transparent);
+    color: var(--glass-ink);
+    font: 800 13px / 1 var(--font-glass);
+    white-space: nowrap;
+    transition:
+      transform 0.08s,
+      filter 0.12s;
+  }
+  .gl-btn:hover:not(:disabled) {
+    filter: brightness(1.04);
+    transform: translateY(-1px);
+  }
+  .gl-btn:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  .gl-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .gl-btn[aria-pressed="true"],
+  .gl-btn[aria-selected="true"],
+  .gl-on {
+    background: linear-gradient(180deg, var(--glass-on-hi), var(--glass-on-lo));
+    border-color: var(--glass-on-ring);
+    color: var(--glass-hi);
+    text-shadow: 0 1px 1px color-mix(in srgb, var(--glass-ink) 60%, transparent);
+  }
+  .gl-btn.gl-go {
+    background: linear-gradient(180deg, var(--glass-go-hi), var(--glass-go-lo));
+    border-color: var(--glass-go-ring);
+    color: var(--glass-hi);
+    text-shadow: 0 1px 1px rgba(0, 60, 0, 0.4);
+  }
+  .gl-btn.gl-bad[aria-pressed="true"],
+  .gl-btn.gl-bad:hover {
+    background: linear-gradient(180deg, var(--glass-bad-hi), var(--glass-bad-lo));
+    border-color: var(--glass-hi);
+    color: var(--glass-hi);
+  }
+  .gl-btn.gl-sm {
+    height: 30px;
+    min-width: 30px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+  .gl-btn.gl-round {
+    padding: 0;
+    width: 40px;
+  }
+  .gl-seg {
+    display: inline-flex;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.6);
+    border: 1.5px solid var(--glass-hi);
+  }
+  .gl-seg > .gl-btn {
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+    height: 30px;
+  }
+  .gl-seg > .gl-btn[aria-pressed="true"],
+  .gl-seg > .gl-btn[aria-selected="true"] {
+    background: linear-gradient(180deg, var(--glass-on-hi), var(--glass-on-lo));
+    color: var(--glass-hi);
+  }
+  .gl-tile {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: linear-gradient(180deg, var(--glass-hi), var(--glass-tile-lo));
+    border: 1.5px solid var(--glass-hi);
+    box-shadow: 0 2px 6px color-mix(in srgb, var(--glass-shadow) 55%, transparent);
+    color: var(--glass-ink);
+    overflow: hidden;
+    transition: transform 0.08s;
+  }
+  .gl-tile:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--glass-acc) 45%, transparent),
+      0 4px 10px color-mix(in srgb, var(--glass-shadow) 60%, transparent);
+  }
+  .gl-tile[aria-pressed="true"],
+  .gl-tile[aria-selected="true"] {
+    background: linear-gradient(180deg, var(--glass-sel), var(--glass-sel-lo));
+    box-shadow:
+      0 0 0 2.5px var(--glass-acc),
+      0 3px 10px color-mix(in srgb, var(--glass-shadow) 80%, transparent);
+  }
+  .gl-lab {
+    font: 800 11.5px / 1 var(--font-glass);
+    color: var(--glass-dim);
+    letter-spacing: 0.02em;
+  }
+  .gl-title {
+    font: 900 21px / 1.05 var(--font-glass);
+    color: var(--glass-ink);
+  }
+  .gl-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid var(--glass-hi);
+    font: 800 10.5px / 1 var(--font-glass);
+    color: var(--glass-ink);
+  }
+  .gl-kk {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid var(--glass-hair2);
+    font: 800 10.5px / 1 var(--font-glass);
+    color: var(--glass-dim);
+  }
+  .gl-tag {
+    border-radius: 14px;
+    padding: 7px 11px;
+    font: 800 12.5px / 1.2 var(--font-glass);
+  }
+  .gl-field {
+    height: 32px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1.5px solid var(--glass-hi);
+    box-shadow: inset 0 1px 3px color-mix(in srgb, var(--glass-shadow) 40%, transparent);
+    color: var(--glass-ink);
+    font: 700 13px / 1 var(--font-glass);
+    padding: 0 12px;
+    outline: none;
+  }
+  .gl-field:focus {
+    border-color: var(--glass-acc);
+  }
+  .gl-sep {
+    width: 1px;
+    align-self: stretch;
+    margin: 6px 3px;
+    background: var(--glass-hair2);
+  }
+  .gl-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--glass-hair2) transparent;
+  }
+  @keyframes gl-pop {
+    0% {
+      transform: scale(0.6);
+      opacity: 0;
+    }
+    60% {
+      transform: scale(1.08);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  .gl-pop {
+    animation: gl-pop 0.22s ease-out;
   }
 }

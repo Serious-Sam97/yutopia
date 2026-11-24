@@ -341,6 +341,8 @@ class Dark implements DarkHooks {
     // E (whatever "use" is bound to) near something: search it, not the world's use
     const down = (e: KeyboardEvent) => {
       if (typing(e)) return;
+      // (building: build mode's keys — no search, no draw, no reload: plan 124)
+      if (hud.get().build.on) return;
       // (plan 115: the Strike Park's vote or radio open — its number keys, not the hand's or the quick slots')
       if (strikeKeys.digits && /^Digit[1-6]$/.test(e.code)) return;
       // (plan 118: a park's panel up — the buy screen's two-press keys — its digits are its own)
@@ -432,6 +434,8 @@ class Dark implements DarkHooks {
       // (only a click into the scene: the pointer held by the game, or straight on its canvas — a click on a menu, a
       // panel or the HUD's buttons is theirs; the Strike Park's buy menu fired the gun at every pick)
       const h = hud.get();
+      // (building: the click is build mode's, never a shot — plan 124)
+      if (h.build.on) return;
       const onScene = !!document.pointerLockElement || e.target instanceof HTMLCanvasElement;
       if (e.button === 0 && (!onScene || h.panel.kind || h.menu)) return;
       // (plan 118: a grenade in hand in the park — its own clicks)
@@ -667,10 +671,12 @@ class Dark implements DarkHooks {
     const inv = this.inv;
     // (plan 104 F7b: on a board the skate HUD has the screen — no quick bar)
     // (plan 115: in the Strike Park's match its own HUD shows the guns and the ammo — the quick bar out of the view model's way)
-    const show = !!inv && !this.panel.open && !hud.get().skating && !strikeKeys.playing;
+    // (plan 124: building, the catalog strip has the bottom of the screen)
+    const building = hud.get().build.on;
+    const show = !!inv && !this.panel.open && !hud.get().skating && !strikeKeys.playing && !building;
     this.quickEl.style.display = show ? "flex" : "none";
     // (plan 115: the guns' own counter too — the park's HUD shows the magazine)
-    this.arms.hudEl.style.visibility = strikeKeys.playing ? "hidden" : "";
+    this.arms.hudEl.style.visibility = strikeKeys.playing || building ? "hidden" : "";
     if (!show || !inv) return;
     const room = this.ctl.room;
     const lp = room?.state.players.get(room.sessionId);

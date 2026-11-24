@@ -307,7 +307,9 @@ export class Walker {
   private darkIdle = 0; // when the dark's chunk comes anyway, indoors too (performance.now; 0: not yet set)
   // the right button: aiming (the world says where it may: WalkCtx.canAim)
   // (the right button aims; the wheel's locks on: docs/plan/56-the-controls.md)
-  private onDown = (e: PointerEvent) => (e.button === 2 || e.button === 1) && this.controls.down(`Mouse${e.button}`);
+  // (building: the right button orbits the build camera, never aims — plan 124)
+  private onDown = (e: PointerEvent) =>
+    (e.button === 2 || e.button === 1) && !hud.get().build.on && this.controls.down(`Mouse${e.button}`);
   private onUp = (e: PointerEvent) => (e.button === 2 || e.button === 1) && this.controls.up(`Mouse${e.button}`);
   // the inventory's key (I): wherever I am — the dark's chunk loaded for it if it isn't yet
   private onKey = (e: KeyboardEvent) => {
@@ -557,7 +559,9 @@ export class Walker {
     // (held still by an admin, too: docs/plan/48-the-admin.md)
     // (down on the ragdoll from a fall, till I'm up: plan 58 5d)
     // (…and out of the Strike Park's round — dead, lying where I fell: the user's feedback, 2026-11-23)
-    const frozen = !!this.dark?.frozen() || this.fell || this.heldStill || this.limp || strikeKeys.dead;
+    // (…and while building: the body stands idle where it was, the keys are the build camera's — plan 124)
+    const frozen =
+      !!this.dark?.frozen() || this.fell || this.heldStill || this.limp || strikeKeys.dead || hud.get().build.on;
     if (frozen) {
       move.x = 0;
       move.y = 0;

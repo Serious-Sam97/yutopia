@@ -21,6 +21,7 @@ import {
   isDoorKind,
   isFreeThing,
   isOpening,
+  lifted,
   liftRect,
   lockedEdge,
   type MapDef,
@@ -41,6 +42,7 @@ import {
   topNear,
   topRect,
   topSize,
+  unridden,
   type WorldObjectDef,
   WQ,
   WZ,
@@ -67,6 +69,7 @@ import { C } from "../art/palette";
 import type { WorldController } from "../controller";
 import type { Outline, Pick, SegGhost } from "../model";
 import { hud, toast, type WallTag, type WallView } from "../store";
+import { BuildCam } from "./camera";
 import { FreeFloors, FreeRoofs } from "./freefloors";
 import { FreeWalls } from "./freewalls";
 import { buildSound } from "./sounds";
@@ -180,6 +183,31 @@ export class BuildController {
     removing: () => this.removing,
   });
 
+  /** Build mode's own camera (plan 124 F4a): its point panned, me standing still. */
+  readonly cam = new BuildCam(() => this.w.tp);
+  /** A key down or up for the build camera (true: it was its). */
+  camKey(code: string, down: boolean, shift: boolean, repeat = false): boolean {
+    if (!hud.get().build.on) return false;
+    if (code === "KeyT") {
+      if (down && !repeat) this.topDown();
+      return true;
+    }
+    return this.cam.key(code, down, shift);
+  }
+  /** T, or the view cluster's button: straight down, and back. */
+  topDown() {
+    this.cam.topDown();
+    this.setBuild({ topDown: this.cam.looksDown });
+  }
+  /** The view cluster's turn buttons: an eighth of a turn, eased. */
+  turnCam(dir: 1 | -1) {
+    this.cam.turnBy((dir * Math.PI) / 4);
+  }
+  /** Each frame while building: the camera's pan and turn. */
+  camFrame(dt: number) {
+    if (hud.get().build.on) this.cam.frame(dt, this.w.me ? { x: this.w.me.x, y: this.w.me.y } : null);
+  }
+
   constructor(private w: WorldController) {
     window.addEventListener("keydown", this.onMods);
     window.addEventListener("keyup", this.onMods);
@@ -217,6 +245,7 @@ export class BuildController {
   private onBlur = () => {
     this.shift = false;
     this.removing = false;
+    this.cam.blur();
   };
 
   private get model() {
@@ -538,7 +567,8 @@ export class BuildController {
 
   // Pick up placed things (one, or the selection it belongs to). Things on a
   // surface come along with what they sit on.
-  private async pickUp(pick: Pick) {
+  // (`whole`: Move / M — the whole selection, whatever its first is; a click on a top lifts it alone)
+  private async pickUp(pick: Pick, whole = false) {
     let id = pick.id;
     if (pick.dress) {
       // generated clutter becomes a real object first (server: dress:take)
@@ -567,8 +597,10 @@ export class BuildController {
       return;
     }
     const sel = hud.get().build.selected;
-    const ids = new Set(sel.includes(id) ? sel : [id]);
     const all = this.objects();
+    // (a plate on a selected table: the plate alone — plan 124, point 3)
+    const taken = whole ? [...sel] : lifted(all, id, sel);
+    const ids = new Set(taken);
     for (const i of [...ids]) {
       const o = all.find((x) => x.id === i);
       if (o) for (const r of carried(o, o, all)) ids.add(r.id);
@@ -579,7 +611,8 @@ export class BuildController {
     this.anchor = t;
     this.setHand(this.holding(group, all, t, null));
     this.send("obj:hold", { ids: group.map((o) => o.id) });
-    this.setBuild({ selected: group.map((o) => o.id) });
+    // (selected: what was taken, not what rides on it — its plates stay clickable alone)
+    this.setBuild({ selected: unridden(all, taken).filter((i) => group.some((o) => o.id === i)) });
     buildSound("pickup");
   }
 
@@ -667,6 +700,8 @@ export class BuildController {
       const h = byId.get(def.id) as Held;
       if (h.origin) this.pending.set(h.origin.id, { key: spotKey(def), until });
       this.model?.puff(...this.middle(def), "drop");
+      // (new from the catalog: The Sims' little sparkle where it lands — plan 124)
+      if (!h.origin) this.model?.puff(...this.middle(def), "spark", 0.4, 0.6);
     }
     this.watchPending();
     buildSound("drop");
@@ -688,7 +723,13 @@ export class BuildController {
       if (b.mode === "place") this.setBuild({ mode: "hand", props: null });
     }
     if (!again && !copies)
-      this.setBuild({ selected: placed.flatMap(({ def }) => (byId.get(def.id)?.origin ? [def.id] : [])) });
+      this.setBuild({
+        selected: placed.flatMap(({ def }) => {
+          const h = byId.get(def.id);
+          // (what rode along isn't selected: plan 124, point 3)
+          return h?.origin && !h.ride ? [def.id] : [];
+        }),
+      });
     return true;
   }
 
@@ -769,7 +810,7 @@ export class BuildController {
   // The toolbar's Move: pick up the selection.
   pickSelection() {
     const id = hud.get().build.selected[0];
-    if (id) void this.pickUp({ id, dress: false });
+    if (id) void this.pickUp({ id, dress: false }, true);
   }
 
   // Put down what's on the pointer (a card dragged in from the catalog).
@@ -1032,7 +1073,13 @@ export class BuildController {
         if (this.heldByOther(id)) list.push({ id, color: C.rust, fill: 0.12 });
       const hp = this.hoverPick;
       if (hp && !this.hand.length && !b.selected.includes(hp.id) && (hp.dress || !this.heldByOther(hp.id)))
-        list.push({ id: hp.id, dress: hp.dress, color: b.mode === "eyedrop" ? 0x8fd0ff : C.amber, fill: 0.1 });
+        list.push({
+          id: hp.id,
+          dress: hp.dress,
+          // (the eyedropper's blue, the sledgehammer's red, the hand's and the design tool's lamp)
+          color: b.mode === "eyedrop" ? 0x8fd0ff : b.mode === "sledge" ? 0xff6a4a : C.amber,
+          fill: 0.1,
+        });
     }
     e.setOutlines(list);
   }
@@ -1055,7 +1102,16 @@ export class BuildController {
       });
       // (on the 3D view's canvas: it leaves its own hover cursor alone in build mode)
       const canvas = this.w.tp?.renderer.domElement;
-      if (b.on && canvas) canvas.style.cursor = p ? (b.mode === "eyedrop" ? "copy" : "grab") : "default";
+      if (b.on && canvas)
+        canvas.style.cursor = p
+          ? b.mode === "eyedrop"
+            ? "copy"
+            : b.mode === "sledge"
+              ? "not-allowed"
+              : b.mode === "design"
+                ? "pointer"
+                : "grab"
+          : "default";
     }
     this.drawOutlines();
   }
@@ -1226,6 +1282,20 @@ export class BuildController {
     if (pr) {
       if (b.mode === "eyedrop") return this.copyFrom(pr.pick);
       if (!pr.pick) return;
+      // (plan 124) the sledgehammer: what's clicked goes (what stands on it with it); the design tool: what's clicked
+      // is picked to restyle — neither lifts it
+      if (b.mode === "sledge") {
+        if (pr.pick.dress) return;
+        this.setBuild({ selected: [pr.pick.id] });
+        this.remove();
+        return this.drawOutlines();
+      }
+      if (b.mode === "design") {
+        if (pr.pick.dress) return;
+        buildSound("select");
+        this.setBuild({ selected: [pr.pick.id] });
+        return this.drawOutlines();
+      }
       if (this.shift && !pr.pick.dress) {
         const sel = new Set(b.selected);
         if (sel.has(pr.pick.id)) sel.delete(pr.pick.id);
@@ -1290,10 +1360,14 @@ export class BuildController {
       else this.setBuild({ rot: (b.rot + 1) % 4 });
     } else if (furn && (key === "delete" || key === "backspace")) {
       if (!this.remove()) return false;
-    } else if (furn && key === "e") this.setMode(b.mode === "eyedrop" ? "hand" : "eyedrop");
+    } else if (furn && key === "i") this.setMode(b.mode === "eyedrop" ? "hand" : "eyedrop");
     else if (furn && key === "l") this.nextLook();
     else if (furn && key === "h") this.setMode("hand");
-    else if (furn && key === "c") {
+    else if (furn && key === "k") this.setMode(b.mode === "sledge" ? "hand" : "sledge");
+    else if (key === "g") {
+      this.setBuild({ grid: !b.grid });
+      this.refresh();
+    } else if (furn && key === "c") {
       // copies of what you hold (put back first), or of what you point at
       const held = this.hand.find((h) => h.origin)?.origin;
       const pick: Pick | null = held
@@ -1301,7 +1375,7 @@ export class BuildController {
         : (this.hoverPick ?? (b.selected[0] ? { id: b.selected[0], dress: false } : null));
       if (held) this.cancel();
       this.copyFrom(pick);
-    } else if (furn && key === "m" && b.selected.length) void this.pickUp({ id: b.selected[0], dress: false });
+    } else if (furn && key === "m" && b.selected.length) void this.pickUp({ id: b.selected[0], dress: false }, true);
     else if (furn && key === "tab" && !this.hand.length && this.under.length > 1) {
       // the next thing stacked under the pointer
       this.cycle = (this.cycle + 1) % this.under.length;
@@ -1344,8 +1418,11 @@ export class BuildController {
     return true;
   }
 
-  setMode(mode: "hand" | "place" | "eyedrop") {
+  setMode(mode: "hand" | "place" | "eyedrop" | "sledge" | "design") {
     if (mode !== "place") this.cancel();
+    // (the design tool restyles one thing: a selection of several keeps its first — plan 124 review)
+    const sel = hud.get().build.selected;
+    if (mode === "design" && sel.length > 1) this.setBuild({ selected: [sel[0]] });
     this.setBuild({ mode, ...(mode !== "place" ? { props: null } : {}) });
     this.refresh();
   }
@@ -1358,8 +1435,21 @@ export class BuildController {
     model.passAvatars = bt.on;
     model.passObjects = bt.on && bt.tool === "walls";
     model.showSpawn(bt.on && (bt.tool === "map" || bt.pickSpawn));
-    model.setBuildGrid(bt.on && (bt.tool === "furniture" || bt.tool === "walls" || bt.tool === "rooms"));
+    model.setBuildGrid(bt.on && bt.grid && (bt.tool === "furniture" || bt.tool === "walls" || bt.tool === "rooms"));
     model.wallView = bt.on ? bt.wallView : null;
+    if (bt.on) {
+      // (not from a car, a bike or a board: off it first — plan 124)
+      const sid = this.room?.sessionId ?? "";
+      if (this.w.cars?.inCar() || (sid && this.w.cars?.seatedIds().has(sid)) || this.w.skateRide?.riding()) {
+        toast(tr("buildGetOff"), "warn");
+        this.setBuild({ on: false });
+        return;
+      }
+      this.cam.start();
+    } else {
+      this.cam.stop();
+      if (bt.topDown) this.setBuild({ topDown: false });
+    }
     if (!bt.on) {
       this.cancel();
       model.setGhosts([], 0);
@@ -1737,7 +1827,8 @@ export class BuildController {
       this.refreshOther();
       return true;
     }
-    if (key === "e" && b.wallMode === "paint") return this.sampleFace();
+    // (I: the eyedropper's key — E turns the build camera now, plan 124)
+    if (key === "i" && b.wallMode === "paint") return this.sampleFace();
     if (key === "escape") {
       if (this.paintFrom) {
         this.paintFrom = null;

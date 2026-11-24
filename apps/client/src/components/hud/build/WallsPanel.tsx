@@ -18,15 +18,15 @@ export const WALL_SWATCHES = [
   { ch: "w:g", label: "Glass", face: "rgba(150,190,200,.55)", side: "rgba(110,150,160,.55)" },
 ] as const;
 // the snaps a wall's drawn with (plan 72 phase 11): the grid (m), the angle steps (°); 0 off
-const SNAP_GRIDS = [0.5, 1, 0] as const;
-const SNAP_ANGLES = [15, 45, 0] as const;
+export const SNAP_GRIDS = [0.5, 1, 0] as const;
+export const SNAP_ANGLES = [15, 45, 0] as const;
 // how high and how thick new walls go up (plan 72 phase 11.4; the user's three thicknesses)
-const HEIGHTS: [number, Key][] = [
+export const HEIGHTS: [number, Key][] = [
   [WALL_HEIGHTS.ceiling, "hCeiling"],
   [WALL_HEIGHTS.rail, "hRail"],
   [WALL_HEIGHTS.low, "hLow"],
 ];
-const OPENINGS = [{ ch: "w:h", label: "Half wall" }] as const;
+export const OPENINGS = [{ ch: "w:h", label: "Half wall" }] as const;
 export const FLOOR_SWATCHES = [
   { ch: ".", label: "Wood", fill: "#8f6038", line: "#6f4527" },
   { ch: ",", label: "Carpet", fill: "#6b6a3a", line: "#5a592f" },
@@ -39,7 +39,7 @@ export const FLOOR_SWATCHES = [
 // what a room repaint can use (Rooms panel)
 export const WALL_MATERIALS = WALL_SWATCHES.map((w) => ({ key: w.ch.slice(2), label: w.label, color: w.face }));
 
-const MODES: [PaintMode, Key][] = [
+export const MODES: [PaintMode, Key][] = [
   ["line", "buildLine"],
   ["arc", "buildArc"],
   ["box", "buildBox"],
@@ -57,7 +57,7 @@ export const MODE_HINT: Record<PaintMode, Key> = {
 };
 
 // A short wall seen from the room's camera: front face lit, side in shade.
-function WallChip({ ch }: { ch: string }) {
+export function WallChip({ ch }: { ch: string }) {
   const w = WALL_SWATCHES.find((s) => s.ch === ch);
   const face = w?.face ?? "#efe4cc";
   const side = w?.side ?? "#c9bb9b";
@@ -106,7 +106,7 @@ function WallChip({ ch }: { ch: string }) {
   );
 }
 
-function FloorTile({ fill, line, none }: { fill: string; line: string; none?: boolean }) {
+export function FloorTile({ fill, line, none }: { fill: string; line: string; none?: boolean }) {
   return (
     <svg width="56" height="30" viewBox="0 0 56 30" aria-hidden="true">
       <polygon
@@ -155,7 +155,7 @@ function Swatch({
 }
 
 // Paint's materials (a face of a wall that's there)
-const PAINTS = WALL_SWATCHES.filter((w) => w.ch !== "w:g");
+export const PAINTS = WALL_SWATCHES.filter((w) => w.ch !== "w:g");
 // Build: a new wall in a material, or another kind of wall / an opening
 const BUILD_WALLS = WALL_SWATCHES;
 const TABS: [WallMode, Key][] = [
@@ -182,7 +182,7 @@ export const matLabel = (m: string | null): string =>
 
 const mode0 = (m: WallMode) => m;
 // new mezzanines' heights over the floor (m): a floor's own and the ones it has are offered too
-const DECKS = [1.25, 1.75, 2.25];
+export const DECKS = [1.25, 1.75, 2.25];
 
 export function WallsPanel() {
   const t = useTr();

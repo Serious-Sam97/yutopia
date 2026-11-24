@@ -60,7 +60,11 @@ test.fixme("build mode: pick up what you see, carry, drop, select, copy, look, c
   const made: string[] = [];
   try {
     // ── place from the catalog: the item follows the pointer, a click puts it down
-    await page.getByRole("tab", { name: "Decor" }).click();
+    await page.evaluate(() =>
+      (window as any).__hud.set((h: any) => ({
+        build: { ...h.build, tab: "buy", tool: "furniture", shopBy: "func", shopCat: "decor", shopSub: "" },
+      })),
+    ); // (plan 124: Buy, func · decor)
     await page.getByRole("button", { name: "Plant", exact: true }).click();
     expect((await build(page)).mode).toBe("place");
     await click(page, 10.5, 10.5);
@@ -114,7 +118,7 @@ test.fixme("build mode: pick up what you see, carry, drop, select, copy, look, c
     await click(page, 13, 9.5, 0.56); // pick up…
     await page.keyboard.press("Escape"); // …and put back: it stays selected
     await expect.poll(async () => (await build(page)).selected).toContain(desk);
-    await page.getByRole("button", { name: "Look" }).first().click();
+    await page.getByRole("button", { name: "Design tool" }).first().click(); // (plan 124: the Design tool)
     await page.getByRole("button", { name: "Look 3" }).click();
     await expect.poll(async () => (await objectsAt(page, 12, 9))[0]?.props.variant).toBe(2);
 
@@ -140,7 +144,7 @@ test.fixme("build mode: pick up what you see, carry, drop, select, copy, look, c
     await expect.poll(async () => [...(await objectsAt(page, 12, 9)), ...(await objectsAt(page, 14, 10))]).toEqual([]);
 
     // ── eyedropper: click the plant to place copies of it
-    await page.keyboard.press("e");
+    await page.keyboard.press("i"); // (plan 124: the eyedropper's I)
     expect((await build(page)).mode).toBe("eyedrop");
     await click(page, 12.5, 10.5, 1.02);
     await expect.poll(async () => (await build(page)).mode).toBe("place");

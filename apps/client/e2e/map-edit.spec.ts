@@ -71,6 +71,8 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
   );
   await ana.getByRole("button", { name: /^S\s*32×24$/ }).click();
   await ana.getByRole("button", { name: /Start from a blank/ }).click();
+  // (build mode's own confirm — plan 124)
+  await ana.getByRole("button", { name: "Yes, do it" }).click();
   await expect.poll(() => st(ana, () => (window as any).__yutopia.building.width)).toBe(32);
   // stand near where we'll build so it's on screen (no walking in build mode)
   const build = (on: boolean, tool = "rooms") =>
@@ -139,8 +141,8 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
 
   // 1 · walls drawn free (plan 72 phase 11): drag along the line x = 16 for a brick wall, corner
   // to corner on whole metres (it reads back as the cells' edges); Esc ends the run
-  await ana.getByRole("tab", { name: /Walls/ }).click();
-  await ana.getByRole("button", { name: "Build", exact: true }).click();
+  await ana.getByTestId("build-tab-build").click(); // (plan 124: Build · Walls)
+  await ana.getByTestId("build-part-walls").click();
   await ana.getByRole("button", { name: "Line", exact: true }).click();
   await ana.getByRole("button", { name: "Brick", exact: true }).click();
   await dragWorld(ana, [16, 4], [16, 12]);
@@ -153,11 +155,18 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
   expect(across).toBe(".".repeat(18));
 
   // 2 · a desk for Ana inside her room
-  await ana.getByRole("tab", { name: /Furnish/ }).click();
-  await ana.getByRole("tab", { name: /^Desks & tables/ }).click();
+  await ana.evaluate(() =>
+    (window as any).__hud.set((h: any) => ({
+      build: { ...h.build, tab: "buy", tool: "furniture", shopBy: "func", shopCat: "surfaces", shopSub: "" },
+    })),
+  ); // (plan 124: Buy, func · surfaces)
   await ana.getByRole("button", { name: "Desk", exact: true }).click();
   await clickFloor(ana, 5, 5);
-  await ana.getByRole("tab", { name: /^Seating/ }).click();
+  await ana.evaluate(() =>
+    (window as any).__hud.set((h: any) => ({
+      build: { ...h.build, tab: "buy", tool: "furniture", shopBy: "func", shopCat: "comfort", shopSub: "" },
+    })),
+  ); // (plan 124: Buy, func · comfort)
   await ana.getByRole("button", { name: "Chair", exact: true }).click();
   await clickFloor(ana, 5, 4);
   await expect
@@ -165,7 +174,8 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
       st(ana, () => [...(window as any).__yutopia.floorObjects()].filter((o: any) => o.kind === "chair").length),
     )
     .toBe(1);
-  await ana.getByRole("tab", { name: /^Desks( \d+)?$/ }).click();
+  await ana.getByTestId("build-tab-lot").click(); // (plan 124: Lot · Desks)
+  await ana.getByTestId("lot-part-desks").click();
   await clickFloor(ana, 5, 4);
   await ana.getByLabel("Whose desk is this?").selectOption({ label: "Ana Demo" });
   await ana.getByRole("button", { name: "Save" }).click();
@@ -176,7 +186,7 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
       ),
     )
     .toBe(true);
-  await ana.getByRole("tab", { name: /Walls/ }).click();
+  await ana.getByTestId("build-tab-build").click();
   await ana.screenshot({ path: `${SHOTS}/09-build-walls-room.png` });
   await ana.keyboard.press("Escape");
   await ana.evaluate(() => (window as any).__hud.set({ build: { ...(window as any).__hud.get().build, on: false } }));
