@@ -9,7 +9,7 @@ Asked 2026-11-23, after the older God mode specs were fixed (b38fecf2):
 `e2e/godmode-redraw.spec.ts` "a hill published" wants every frame under 25 ms while a hill published in the woods
 is drawn where Ana stands (`YUTOPIA_GPU=1`) — no vsync missed at all. With today's world it was 50–117 ms.
 
-Status: **built 2026-11-23, not committed.** Both tests of the spec pass, 5 runs of 5 at the end: the hill's worst
+Status: **built 2026-11-23; committed + pushed 36d66ca2 2026-11-23.** Both tests of the spec pass, 5 runs of 5 at the end: the hill's worst
 frame 17 ms, the road's 33–34 ms (its limit is 50). The God mode specs pass (11 + the redraw's 2).
 
 ## Where a publish's frame went
