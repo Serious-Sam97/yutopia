@@ -282,3 +282,7 @@ cheap one.
   prompt shows, and the server takes none.
 - The plate on a real table seen in the world by eye (the bench has no table: seen at a table's height before her).
 - Bonds load 50,000 rows at most: past that the oldest would be overwritten as new.
+
+## Committed
+
+Committed and pushed as bda442ff on 2026-11-24.
