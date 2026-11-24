@@ -47,6 +47,7 @@ import {
   layoutVersion,
   longRailsIn,
   MOTORS,
+  onGroundsChanged,
   PINE_H,
   pavedAt,
   paveSlabs,
@@ -402,47 +403,54 @@ function fit(out: GroundSolid[], f: Inside["fits"][number], y0: number) {
 // crosses, nor on a bridge — grounds.ts paveSlabs, the rule `pavedAt` lifts what stands on them by):
 // a slab a sample long each side, its top the drawn one where the ground's lowest under it
 // (stepped onto: under the step-up) ──
-function pavements(out: GroundSolid[]) {
-  for (const w of WAYS)
-    for (const p of paveSlabs(w)) {
-      if (!p) continue;
-      const { ax, az, bx, bz, hw, wide, kerb } = p;
-      const len = Math.hypot(bx - ax, bz - az);
-      const nx = -(bz - az) / len;
-      const nz = (bx - ax) / len;
-      for (const sd of [1, -1]) {
-        // (its lowest ground under it, at its four corners)
-        let g = Number.POSITIVE_INFINITY;
-        for (const [px, pz] of [
-          [ax, az],
-          [bx, bz],
-        ])
-          for (const o of [hw, hw + wide]) g = Math.min(g, groundAt(px + nx * sd * o, pz + nz * sd * o));
-        // (the kerb's face as three treads a third of its height each across its top, 0.28 — a body's
-        // round foot meets a 0.18 edge as a wall, and slid along it come at it aslant; a third of it
-        // it walks up as a slope, whatever way it comes — then the slab at the pavement's height)
-        const box = (o0: number, o1: number, top: number) => {
-          const [l0, l1] = sd > 0 ? [o0, o1] : [-o1, -o0];
-          out.push({
-            what: "pavement",
-            s: turned(
-              (ax + bx) / 2,
-              (az + bz) / 2,
-              Math.atan2(-(bz - az), bx - ax),
-              -len / 2,
-              l0,
-              len / 2,
-              l1,
-              g - 0.2,
-              top,
-            ),
-          });
-        };
-        box(hw, hw + 0.09, g + kerb / 3);
-        box(hw + 0.09, hw + 0.18, g + (kerb * 2) / 3);
-        box(hw + 0.18, hw + wide, g + kerb);
-      }
+function* pavements(out: GroundSolid[]): Generator<void> {
+  for (const w of WAYS) {
+    yield;
+    piece(out, `pave:${w.key}`, JSON.stringify([w.kind, w.w, w.pave, w.pts, w.closed, w.line]), (o) =>
+      pavementsOf(o, w),
+    );
+  }
+}
+function pavementsOf(out: GroundSolid[], w: (typeof WAYS)[number]) {
+  for (const p of paveSlabs(w)) {
+    if (!p) continue;
+    const { ax, az, bx, bz, hw, wide, kerb } = p;
+    const len = Math.hypot(bx - ax, bz - az);
+    const nx = -(bz - az) / len;
+    const nz = (bx - ax) / len;
+    for (const sd of [1, -1]) {
+      // (its lowest ground under it, at its four corners)
+      let g = Number.POSITIVE_INFINITY;
+      for (const [px, pz] of [
+        [ax, az],
+        [bx, bz],
+      ])
+        for (const o of [hw, hw + wide]) g = Math.min(g, groundAt(px + nx * sd * o, pz + nz * sd * o));
+      // (the kerb's face as three treads a third of its height each across its top, 0.28 — a body's
+      // round foot meets a 0.18 edge as a wall, and slid along it come at it aslant; a third of it
+      // it walks up as a slope, whatever way it comes — then the slab at the pavement's height)
+      const box = (o0: number, o1: number, top: number) => {
+        const [l0, l1] = sd > 0 ? [o0, o1] : [-o1, -o0];
+        out.push({
+          what: "pavement",
+          s: turned(
+            (ax + bx) / 2,
+            (az + bz) / 2,
+            Math.atan2(-(bz - az), bx - ax),
+            -len / 2,
+            l0,
+            len / 2,
+            l1,
+            g - 0.2,
+            top,
+          ),
+        });
+      };
+      box(hw, hw + 0.09, g + kerb / 3);
+      box(hw + 0.09, hw + 0.18, g + (kerb * 2) / 3);
+      box(hw + 0.18, hw + wide, g + kerb);
     }
+  }
 }
 
 // ── the pond's dock (plan 66: the water has depth under it) ──
@@ -754,9 +762,14 @@ function kartBridge(out: GroundSolid[]) {
 }
 
 // ── everything else on the land ──
-function things(out: GroundSolid[]) {
+function* things(out: GroundSolid[]): Generator<void> {
   // the company's fence: chain-link on posts every 3 m, to FENCE_H, 0.12 thick; open at the gate
   // (as drawn: x −45 to −28, the gatehouse's stretch too)
+  piece(out, "fence", "", fence);
+  yield;
+  yield* rest(out);
+}
+function fence(out: GroundSolid[]) {
   for (let i = 0; i < FENCE.length; i++) {
     const [ax, az] = FENCE[i];
     const [bx, bz] = FENCE[(i + 1) % FENCE.length];
@@ -773,6 +786,8 @@ function things(out: GroundSolid[]) {
       (x, z) => Math.abs(z - GATE.z) < 1 && x > GATE.x - 5 && x < GATE.x + 12,
     );
   }
+}
+function* rest(out: GroundSolid[]): Generator<void> {
   // the lamps
   // (on a street's pavement: stood on it, grounds.ts pavedAt — as drawn; a porch's on its wall)
   for (const l of LAMPS) {
@@ -790,6 +805,7 @@ function things(out: GroundSolid[]) {
       out.push({ what: "lamp_town", s: cyl(l.x, l.z, 0.34, y + 4.25, y + 5.4) });
     }
   }
+  yield;
   // the water tower: its riser (0.9 thick, 24.5), four legs splayed out to under the tank (each in
   // four upright pieces following its lean), the tank (6.6 round, its bowl from 24.3 to 33.3), the
   // walkway round it with its rail (7.6, 26.8–28.0), the roof's cone (as a drum, to 36.9), the vent
@@ -854,7 +870,10 @@ function things(out: GroundSolid[]) {
   // the town's street furniture (tp/town3d.ts): at (x, z), turned ry; a bench's middle (x + 1, z + 0.5);
   // on a street's pavement, stood on it (grounds.ts pavedAt, as drawn)
   const on = (x: number, z: number) => groundAt(x, z) + pavedAt(x, z);
+  yield;
+  let n = 0;
   for (const t of STREET) {
+    if (++n % 32 === 0) yield;
     const y = on(t.x, t.z);
     const b = (lx0: number, lz0: number, lx1: number, lz1: number, y0: number, y1: number) =>
       out.push({ what: "street", s: turned(t.x, t.z, t.ry, lx0, lz0, lx1, lz1, y + y0, y + y1) });
@@ -965,6 +984,7 @@ function things(out: GroundSolid[]) {
         break;
     }
   }
+  yield;
   // the road closed (tp/grounds3d.ts): three sawhorse barricades across it, 1.3 high, and the drift
   // past them (an ellipsoid 4 × 1.8 × 7 at x + 5, sunk 0.3: three steps under its curve)
   if (!LONG_ROAD) {
@@ -1005,14 +1025,25 @@ function things(out: GroundSolid[]) {
       }
     }
   }
-  for (const b of BUILDINGS) if (b.kind !== "hq" && !b.stored) building(out, b);
+  yield;
+  for (const b of BUILDINGS) {
+    yield;
+    if (b.kind !== "hq" && !b.stored)
+      piece(out, `building:${b.key}`, JSON.stringify([b, INSIDES.find((i) => i.b === b) ?? null]), (o) =>
+        building(o, b),
+      );
+  }
+  yield;
   bridges(out);
   dock(out);
   if (LONG_ROAD) longDecks(out);
-  pavements(out);
-  if (KART_LAND) kartPark(out);
-  if (STRIKE_LAND) strikePark(out);
-  skateParks(out);
+  yield* pavements(out);
+  yield;
+  if (KART_LAND) piece(out, "kart", `${layoutVersion}`, kartPark);
+  yield;
+  if (STRIKE_LAND) piece(out, "strike", `${strikeVersion}`, strikePark);
+  yield;
+  piece(out, "skate", "", skateParks, false);
 }
 
 // ── the Strike Park (docs/plan/114-the-strike-park.md; its sizes: shared strike/land.ts): the
@@ -1136,7 +1167,81 @@ function edge(out: GroundSolid[]) {
     }
 }
 
+// (the list's pieces — a building, a way's pavements, a park, the company's fence, the world's edge — kept from one
+// edit to the next while their look is the same and no chunk under them was dropped since (grounds.ts applyEdits: the
+// chunks whose land or things changed — what's drawn and the physics' compounds are made again by the same rule).
+// Every one made again was ~27 ms a publish, in the frame Flowmotion next asked: plan 122.)
+type Kept = { sig: string; ground: boolean; x0: number; z0: number; x1: number; z1: number; solids: GroundSolid[] };
+let kept = new Map<string, Kept>();
+let made = new Map<string, Kept>();
+const dropped = new Set<string>();
+// (the chunks dropped before the list being made began: what its pieces are checked against)
+let seen = new Set<string>();
+let listening = false;
+/** `make`'s solids for piece `id` — kept from the list before when its `sig` is the same and (`ground`: it stands on
+ *  the land) none of the chunks it reaches over was dropped since. */
+function piece(out: GroundSolid[], id: string, sig: string, make: (o: GroundSolid[]) => void, ground = true) {
+  let k = kept.get(id);
+  if (!k || k.sig !== sig || (k.ground && touched(k))) {
+    const solids: GroundSolid[] = [];
+    make(solids);
+    k = { sig, ground, x0: Infinity, z0: Infinity, x1: -Infinity, z1: -Infinity, solids };
+    for (const g of solids) {
+      const r = g.s.t === "cyl" ? g.s.r : Math.hypot(g.s.hx, g.s.hz);
+      k.x0 = Math.min(k.x0, g.s.x - r);
+      k.z0 = Math.min(k.z0, g.s.z - r);
+      k.x1 = Math.max(k.x1, g.s.x + r);
+      k.z1 = Math.max(k.z1, g.s.z + r);
+    }
+  }
+  made.set(id, k);
+  for (const g of k.solids) out.push(g);
+}
+function touched(k: Kept): boolean {
+  if (!seen.size || !k.solids.length) return false;
+  // (a metre round: the land it's stood on read at its edges)
+  for (let cx = Math.floor((k.x0 - 1) / CHUNK); cx <= Math.floor((k.x1 + 1) / CHUNK); cx++)
+    for (let cz = Math.floor((k.z0 - 1) / CHUNK); cz <= Math.floor((k.z1 + 1) / CHUNK); cz++)
+      if (seen.has(key(cx, cz))) return true;
+  return false;
+}
 let fixed: { v: number; by: Map<string, GroundSolid[]> } | null = null;
+// (the list being made a step at a time, for the edits laid when it began)
+let making: { v: number; steps: Generator<void> } | null = null;
+function begin() {
+  // (one left unfinished — the edits moved on meanwhile —: the chunks dropped before it began still to be checked)
+  making = { v: editsVersion, steps: remakeFixed(making ? seen : null) };
+}
+function* remakeFixed(carry: Set<string> | null): Generator<void> {
+  if (!listening) {
+    listening = true;
+    onGroundsChanged((cs) => {
+      for (const [cx, cz] of cs) dropped.add(key(cx, cz));
+    });
+  }
+  const v = editsVersion;
+  // (what's dropped from here on: the next list's)
+  seen = new Set([...(carry ?? []), ...dropped]);
+  dropped.clear();
+  const all: GroundSolid[] = [];
+  made = new Map();
+  yield* things(all);
+  yield;
+  piece(all, "edge", JSON.stringify(worldRects()), edge, false);
+  kept = made;
+  yield;
+  fixed = { v, by: bucket(all) };
+  making = null;
+}
+/** (the client's: docs/plan/122) The Grounds' fixed solids made again for the edits laid now, a step each call — false
+ *  till they're made. Asked for meanwhile, the rest's made there and then. */
+export function solidsInSteps(): () => boolean {
+  return () => {
+    if (fixed?.v === editsVersion) return true;
+    if (making?.v !== editsVersion) begin();
+    return !!making?.steps.next().done && fixed?.v === editsVersion;
+  };
+}
 let bridge: { v: number; by: Map<string, GroundSolid[]> } | null = null;
 let arena: { v: number; by: Map<string, GroundSolid[]> } | null = null;
 function bucket(list: GroundSolid[]): Map<string, GroundSolid[]> {
@@ -1157,10 +1262,9 @@ function bucket(list: GroundSolid[]): Map<string, GroundSolid[]> {
 export function groundSolidsIn(cx: number, cz: number): GroundSolid[] {
   // (made again when god mode's edits are laid: docs/plan/53-the-god-mode.md)
   if (fixed?.v !== editsVersion) {
-    const all: GroundSolid[] = [];
-    things(all);
-    edge(all);
-    fixed = { v: editsVersion, by: bucket(all) };
+    // (made here and now; or what's being made after the frames finished at once — `solidsInSteps`)
+    if (making?.v !== editsVersion) begin();
+    while (making && !making.steps.next().done);
   }
   if (KART_LAND && bridge?.v !== layoutVersion) {
     const l: GroundSolid[] = [];
@@ -1173,7 +1277,7 @@ export function groundSolidsIn(cx: number, cz: number): GroundSolid[] {
     arena = { v: strikeVersion, by: bucket(l) };
   }
   const out = [
-    ...(fixed.by.get(key(cx, cz)) ?? []),
+    ...(fixed?.by.get(key(cx, cz)) ?? []),
     ...(bridge?.by.get(key(cx, cz)) ?? []),
     ...(arena?.by.get(key(cx, cz)) ?? []),
   ];
@@ -1202,6 +1306,16 @@ export function groundSolidsIn(cx: number, cz: number): GroundSolid[] {
     });
   }
   return out;
+}
+
+/** (tests) Every fixed solid as the list keeps them — `fresh`: every piece made again first. */
+export function fixedGroundSolids(fresh = false): GroundSolid[] {
+  if (fresh) {
+    kept = new Map();
+    fixed = null;
+  }
+  groundSolidsIn(0, 0);
+  return [...(fixed?.by.values() ?? [])].flat();
 }
 
 /** Chunk (cx, cz)'s thing whose top is at `top` under (x, z), r round, or null: what the feet stand

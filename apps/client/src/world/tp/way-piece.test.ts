@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { WAYS } from "@yutopia/shared/grounds";
+import { groundsRng, WAYS } from "@yutopia/shared/grounds";
 import { SPINE } from "@yutopia/shared/longroad";
-import { pieceData, pieceGeometry, wayPiece } from "./way-piece";
+import { pieceData, pieceGeometry, sinks, wayGeo, wayPiece } from "./way-piece";
 
 // A district's road piece made off the main thread (docs/plan/91-the-big-map.md phase 3): what a worker sends is
 // what the main thread would have made.
@@ -57,4 +57,37 @@ test("a piece the way doesn't pass: nothing", () => {
   assert.ok(long);
   const far = { x0: -100000, z0: -100000, x1: -99968, z1: -99968 };
   assert.deepEqual(wayPiece(long, far, own), []);
+});
+
+// docs/plan/122: a way of the rest made again behind what's shown, made whole by a worker for the rest's circle — the
+// same as the main thread's (Grounds3.ways), from the way's own corner.
+test("the rest's way made whole: the main thread's, moved to its corner", () => {
+  const w = WAYS.find((u) => u.key !== "long-road" && u.line.length > 40) ?? WAYS[0];
+  const xs = w.line.map((p) => p[0]);
+  const zs = w.line.map((p) => p[1]);
+  const box = { x0: Math.min(...xs), z0: Math.min(...zs), x1: Math.max(...xs), z1: Math.max(...zs) };
+  const circle = { cx: (box.x0 + box.x1) / 2, cz: (box.z0 + box.z1) / 2, r: 400 };
+  const s = sinks();
+  const { asphalt, lines } = wayGeo(
+    w,
+    (x, z, pad = 0) => Math.hypot(x - circle.cx, z - circle.cz) < circle.r + pad,
+    null,
+    groundsRng(77 + WAYS.indexOf(w)),
+    s,
+  );
+  const main: Record<string, number[]> = {};
+  for (const [k, g] of Object.entries({ asphalt, lines, ...s }))
+    if (!g.empty) main[k] = Array.from(g.build().getAttribute("position").array);
+  const made = wayPiece(w, box, { circle });
+  assert.deepEqual(made.map((m) => m.slot).sort(), Object.keys(main).sort());
+  for (const { slot, geo } of made) {
+    const p = geo.getAttribute("position").array as Float32Array;
+    const q = main[slot];
+    assert.equal(p.length, q.length, slot);
+    for (let i = 0; i < p.length; i += 3) {
+      assert.ok(Math.abs(p[i] + box.x0 - q[i]) < 1e-3, `${slot} x ${i}`);
+      assert.ok(Math.abs(p[i + 1] - q[i + 1]) < 1e-6, `${slot} y ${i}`);
+      assert.ok(Math.abs(p[i + 2] + box.z0 - q[i + 2]) < 1e-3, `${slot} z ${i}`);
+    }
+  }
 });

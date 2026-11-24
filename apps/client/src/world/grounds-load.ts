@@ -1,5 +1,6 @@
 import type { GroundsEdits } from "@yutopia/shared/grounds-edits";
 import { api } from "@/lib/api";
+import { afterFrameSteps } from "./after-frame";
 
 // The Grounds (shared grounds.ts, docs/plan/27-the-grounds.md): the land round
 // the ground floor, generated here as on the server. Fetched once when the
@@ -26,6 +27,8 @@ export function loadGrounds(): Promise<Grounds> {
   loading ??= import("@yutopia/shared/grounds").then(async (m) => {
     await layWanted(m);
     mod = m;
+    // (from here an edit's dropped chunks made again each after a frame of their own: docs/plan/122)
+    m.remakeDroppedAfter((step) => afterFrameSteps(step));
     // (the land's workers started now, while the world connects: the 3D view's land is theirs)
     void import("./tp/land-pool").then((p) => p.landPool()?.warm());
     return m;

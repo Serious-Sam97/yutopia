@@ -3,6 +3,7 @@ import {
   Box3,
   type BufferGeometry,
   type Camera,
+  CanvasTexture,
   Color,
   type InstancedMesh,
   LinearSRGBColorSpace,
@@ -13,6 +14,8 @@ import {
   type PointLight,
   Scene,
   type SpotLight,
+  Sprite,
+  SpriteMaterial,
   Vector4,
   WebGLRenderTarget,
 } from "three";
@@ -190,6 +193,8 @@ export class Warmup {
   // Someone not built yet (their stand-in, its shadow and speaking ring) and Vortex's drawing: one
   // of each, kept — else the first of them to come into view linked their shaders then
   private standKept: (Proxy3 | Vortex3)[] = [];
+  private spritesKept: Sprite[] = [];
+  private spriteTex: CanvasTexture | null = null;
   standSamples(): Scene {
     const s = new Scene();
     const p = new Proxy3("warm");
@@ -199,6 +204,24 @@ export class Warmup {
     v.plane.visible = true; // (compiled only what's shown)
     this.standKept.push(p, v);
     s.add(p.root, v.root);
+    // (and a sprite, with a picture and without — a breath's puff in the cold, a car's spray, a gun's glint: the first
+    // of them linked its shader then, ~40 ms waiting on the GPU — plan 121's specs)
+    if (!this.spriteTex) {
+      const cv = document.createElement("canvas");
+      cv.width = cv.height = 2;
+      this.spriteTex = new CanvasTexture(cv);
+    }
+    // (with a map and without, tone-mapped and not: view.puff's dust is a plain toneMapped:false one)
+    for (const [map, toneMapped] of [
+      [this.spriteTex, true],
+      [null, true],
+      [this.spriteTex, false],
+      [null, false],
+    ] as const) {
+      const sp = new Sprite(new SpriteMaterial({ map, transparent: true, depthWrite: false, toneMapped }));
+      this.spritesKept.push(sp);
+      s.add(sp);
+    }
     return s;
   }
 

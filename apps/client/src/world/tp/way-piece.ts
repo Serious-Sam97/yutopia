@@ -14,6 +14,9 @@ export type Near = (x: number, z: number, pad?: number) => boolean;
 type Rect = { x0: number; z0: number; x1: number; z1: number };
 /** A district's square, less the rest's circle (what that draws). */
 export type Own = Rect & { skip: { cx: number; cz: number; r: number } };
+/** The rest's: its circle — a way of it made whole there, as Grounds3.ways makes it (docs/plan/122: a way made again
+ *  by a publish, its banks 15–55 ms of a frame). */
+export type RestOwn = { circle: { cx: number; cz: number; r: number } };
 
 /** Where a way's geometry goes, by what it's drawn with (Grounds3 gives each its material). */
 export type Slot = "asphalt" | "lines" | "paint" | "slabs" | "trail" | "walk" | "banks";
@@ -195,12 +198,16 @@ export function pieceNear(piece: Rect, own: Own): Near {
 /** A way's ground in a district's piece, by slot (empty slots left out) — **from the piece's corner** (`at.x0`,
  *  `at.z0`: its mesh is put there), worked out in doubles before it's made floats: 150 km out a float has 1.6 cm,
  *  the asphalt's edges and lines would come out in steps (plan 91 phase 7). */
-export function wayPiece(w: Way, piece: Rect, own: Own): { slot: Slot; geo: BufferGeometry }[] {
-  const span = spanOf(w, piece);
-  if (!span) return [];
+export function wayPiece(w: Way, piece: Rect, own: Own | RestOwn): { slot: Slot; geo: BufferGeometry }[] {
+  const rest = "circle" in own ? own.circle : null;
+  const span = rest ? null : spanOf(w, piece);
+  if (!rest && !span) return [];
   const s = sinks();
   const r = groundsRng(77 + WAYS.indexOf(w));
-  const { asphalt, lines } = wayGeo(w, pieceNear(piece, own), span, r, s);
+  const near: Near = rest
+    ? (x, z, pad = 0) => Math.hypot(x - rest.cx, z - rest.cz) < rest.r + pad
+    : pieceNear(piece, own as Own);
+  const { asphalt, lines } = wayGeo(w, near, span, r, s);
   const by: Record<Slot, G> = { asphalt, lines, ...s };
   return SLOTS.filter((k) => !by[k].empty).map((k) => {
     const pos = by[k].pos;
@@ -219,7 +226,7 @@ export interface PieceAsk {
   piece: string;
   way: string;
   at: Rect;
-  own: Own;
+  own: Own | RestOwn;
 }
 export interface PieceGeo {
   slot: Slot;

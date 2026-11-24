@@ -8,6 +8,7 @@ import {
   CHUNK,
   checkEdits,
   deckAt,
+  groundAt,
   onBridgeRail,
   terrainAt,
   WAYS,
@@ -191,4 +192,30 @@ test("along a way: a point's distance and back", () => {
   assert.ok(w);
   const [x, z] = pointAlong(w, 123.4);
   assert.ok(Math.abs(alongAt(w, x, z) - 123.4) < 0.05);
+});
+
+// docs/plan/122: groundAt measures the ways' samples only by a bridged one — on a deck it's the deck still, its ends
+// too; away from every bridge it's the land's own.
+test("groundAt: a bridge's deck on it, the land away from them", () => {
+  applyEdits(NO_EDITS);
+  assert.ok(BRIDGES.length > 0);
+  let on = 0;
+  for (const br of BRIDGES)
+    for (let i = br.a + 1; i < br.b; i++) {
+      const [x, z] = br.w.line[i];
+      assert.equal(groundAt(x, z), br.w.h[i], `${br.key} sample ${i}`);
+      on++;
+    }
+  assert.ok(on > 20, `${on} on decks`);
+  let off = 0;
+  for (let x = -400; x < 700; x += 37)
+    for (let z = -1000; z < 300; z += 41) {
+      const near = BRIDGES.some((br) =>
+        br.w.line.slice(br.a, br.b + 1).some(([bx, bz]) => Math.hypot(bx - x, bz - z) < 90),
+      );
+      if (near) continue;
+      assert.equal(groundAt(x, z), terrainAt(x, z));
+      off++;
+    }
+  assert.ok(off > 500, `${off} off`);
 });

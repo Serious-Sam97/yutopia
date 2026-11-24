@@ -64,10 +64,21 @@ export interface Station {
 export function ridge(g: G, st: Station[], prof: [number, number][], yAt: YAt, kind: keyof typeof AT = "drift") {
   g.color(SNOW);
   const [lo, hi] = AT[kind];
+  // (each vertex's land and its snow's height, asked once: its faces' corners asked them again — six a face, a vertex
+  // in four — most of a road's banks being made again, ~40 ms a way: docs/plan/122)
+  const land = new Map<V, number>();
+  const comes = new Map<V, number>();
   g.snow(
-    (p) => smoothAt(p[0], p[2], lo, hi) + BURIED,
+    (p) => {
+      let v = comes.get(p);
+      if (v === undefined) {
+        v = smoothAt(p[0], p[2], lo, hi) + BURIED;
+        comes.set(p, v);
+      }
+      return v;
+    },
     // (well under: the land's drawn between its vertices, lower than its height in places)
-    (p) => p[1] - (yAt(p[0], p[2]) - 0.5),
+    (p) => p[1] - ((land.get(p) ?? yAt(p[0], p[2])) - 0.5),
   );
   // (only the stations by a stretch that's drawn: the ground's height is the generator's, dear — a
   // long way skipped nearly all along, a district's, read it all for nothing: docs/plan/69 L2)
@@ -78,7 +89,10 @@ export function ridge(g: G, st: Station[], prof: [number, number][], yAt: YAt, k
       ? prof.map(([o, h]): V => {
           const x = s.x + s.nx * o;
           const z = s.z + s.nz * o;
-          return [x, yAt(x, z) - 0.06 + Math.max(h * s.k, -0.1), z];
+          const y = yAt(x, z);
+          const v: V = [x, y - 0.06 + Math.max(h * s.k, -0.1), z];
+          land.set(v, y);
+          return v;
         })
       : [],
   );

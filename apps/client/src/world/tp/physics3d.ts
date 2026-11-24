@@ -19,8 +19,10 @@ import {
   WorldBuilder,
 } from "@yutopia/shared/physics";
 import type { Solid3 } from "@yutopia/shared/shapes";
+import { solidsInSteps } from "@yutopia/shared/shapes/grounds";
 import type { Structure } from "@yutopia/shared/structure";
 import { BufferGeometry, Float32BufferAttribute, LineBasicMaterial, LineSegments, type Scene } from "three";
+import { afterFrameSteps } from "../after-frame";
 
 // The browser's physics world (docs/plan/50-the-volume.md): Jolt, built from the same data as the
 // server's (shared physics/build.ts) — the building, kept to the world as it's edited, and the
@@ -104,14 +106,35 @@ export class BrowserPhysics {
     this.mover.along = true;
     this.flow = new GroundsFlow(() => this.src.frameOf(this.level));
     this.flow.building(this.solids.flow);
-    this.offChanged = onGroundsChanged((cs) => {
+    this.offChanged = onGroundsChanged((cs, why) => {
       for (const [cx, cz] of cs) {
         if (this.world.has(`land:${cx},${cz}`)) this.stale.add(`${cx},${cz}`);
-        this.flow.forget(cx, cz);
+        if (why === "edits") this.forgetSoon.push([cx, cz]);
+        else this.flow.forget(cx, cz);
       }
+      if (why === "edits") this.remakeSoon();
     });
     this.timer = setInterval(() => this.refresh(), EVERY_MS);
     this.refresh();
+  }
+
+  // An edit laid (god mode's publish): the Grounds' solids made again (~6 ms) a slice after each frame (after-frame.ts),
+  // and only then Flowmotion's parts of the chunks it moved asked afresh: made in the frame Flowmotion first asked, on
+  // top of the frame's own, they were a frame missed at every publish (docs/plan/122). Flowmotion runs on the old parts
+  // there meanwhile — a few frames —: the land drawn there is the old one still.
+  private forgetSoon: [number, number][] = [];
+  private remaking = false;
+  private remakeSoon() {
+    if (this.remaking) return;
+    this.remaking = true;
+    const made = solidsInSteps();
+    afterFrameSteps(() => {
+      if (this.dead) return true;
+      if (!made()) return false;
+      this.remaking = false;
+      for (const [cx, cz] of this.forgetSoon.splice(0)) this.flow.forget(cx, cz);
+      return true;
+    });
   }
 
   /** (plan 58 5d) The world to lay a ragdoll in, and where its origin is in the scene (my floor's frame). */

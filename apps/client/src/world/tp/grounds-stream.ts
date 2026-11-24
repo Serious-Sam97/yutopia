@@ -43,6 +43,7 @@ import {
   StaticDrawUsage,
   Vector3,
 } from "three";
+import { afterFrame } from "../after-frame";
 import { litMaterial } from "../look/lit";
 import { BARE_LEAVES, BIRCH_LEAVES, bareTree3, crowned, snowCanvas, tinted } from "./campus";
 import { FarLand } from "./far3d";
@@ -370,28 +371,48 @@ if (vFade < 0.999) {
     this.drawnOf = staticsOf();
     this.offChanged = onGroundsChanged((cs, why) => {
       if (why !== "edits") return;
-      const of = staticsOf();
-      const moved = movedUnder(this.drawnOf.height, of.height);
-      const lists = of.lists !== this.drawnOf.lists;
-      const rest = lists || moved.other || moved.ways.size > 0 ? moved.ways : null;
-      this.drawnOf = of;
-      // (a brush held in God mode — plan 121's specs: the land's blocks made again live, the rest once it's let go,
-      // with all it moved under; made again every lay it ran nearly all the time, ~18 ms a frame)
-      if (this.restHeld) {
-        if (!this.restLater) this.restLater = { chunks: new Set(), ways: new Set(), lists: false, any: false };
-        const d = this.restLater;
-        for (const [x, z] of cs) d.chunks.add(`${x},${z}`);
-        if (rest) {
-          d.any = true;
-          for (const w of rest) d.ways.add(w);
-        }
-        d.lists ||= lists;
-        this.invalidate(cs, null);
-        return;
-      }
-      this.listsMoved = lists;
-      this.invalidate(cs, rest);
+      // (after the frame, in a task of its own: the edit's laid in one already — docs/plan/122; edits laid meanwhile
+      // gathered into the one)
+      for (const c of cs) this.laidCs.set(`${c[0]},${c[1]}`, c);
+      // (its blocks marked now — cheap —: what's being made again is so from the edit on)
+      this.markStale(cs);
+      if (this.laidSoon) return;
+      this.laidSoon = true;
+      afterFrame(() => {
+        this.laidSoon = false;
+        if (this.disposed) return;
+        const all = [...this.laidCs.values()];
+        this.laidCs.clear();
+        this.laid(all);
+      });
     });
+  }
+  private laidCs = new Map<string, [number, number]>();
+  private laidSoon = false;
+  private disposed = false;
+  /** God mode's edits laid on these chunks: what's drawn of them made again. */
+  private laid(cs: [number, number][]) {
+    const of = staticsOf();
+    const moved = movedUnder(this.drawnOf.height, of.height);
+    const lists = of.lists !== this.drawnOf.lists;
+    const rest = lists || moved.other || moved.ways.size > 0 ? moved.ways : null;
+    this.drawnOf = of;
+    // (a brush held in God mode — plan 121's specs: the land's blocks made again live, the rest once it's let go,
+    // with all it moved under; made again every lay it ran nearly all the time, ~18 ms a frame)
+    if (this.restHeld) {
+      if (!this.restLater) this.restLater = { chunks: new Set(), ways: new Set(), lists: false, any: false };
+      const d = this.restLater;
+      for (const [x, z] of cs) d.chunks.add(`${x},${z}`);
+      if (rest) {
+        d.any = true;
+        for (const w of rest) d.ways.add(w);
+      }
+      d.lists ||= lists;
+      this.invalidate(cs, null);
+      return;
+    }
+    this.listsMoved = lists;
+    this.invalidate(cs, rest);
   }
   private shared: GroundsShared;
   /** (the edits laid last: whether more than the land's heights changed — the remake's water made again if so) */
@@ -467,6 +488,12 @@ if (vFade < 0.999) {
    *  the land moved under), the rest too (the ways, the buildings, the lamps…: anything but the
    *  land's paint and trees), its ways that didn't change taken from the one shown. */
   invalidate(chunks: [number, number][], rest: Set<string> | null) {
+    const cs = this.markStale(chunks);
+    if (!rest) return;
+    this.invalidateRest(rest, cs);
+  }
+  /** The blocks over these chunks: made again (their old shown meanwhile). */
+  private markStale(chunks: [number, number][]): Set<string> {
     const cs = new Set(chunks.map(([x, z]) => `${x},${z}`));
     for (const b of this.blocks.values()) {
       const S = TIERS[b.tier].size;
@@ -475,8 +502,7 @@ if (vFade < 0.999) {
         for (let cx = Math.floor(b.x0 / CHUNK); !hit && cx * CHUNK < b.x0 + S; cx++) hit = cs.has(`${cx},${cz}`);
       if (hit) this.stale.add(b.key);
     }
-    if (!rest) return;
-    this.invalidateRest(rest, cs);
+    return cs;
   }
   /** The rest made again (the ways the land moved under, `chunks` what changed of the land). */
   private invalidateRest(rest: Set<string>, cs: ReadonlySet<string>) {
@@ -497,10 +523,19 @@ if (vFade < 0.999) {
       this.statics = this.made();
       return;
     }
-    // (one being made again already: made after the one shown, as this one is)
+    // (one being made again already: made after the one shown, as this one is — with what that one was made for too:
+    // it's taken from the one shown, older than both)
+    if (this.next && this.nextFor) {
+      rest = new Set([...this.nextFor.moved, ...rest]);
+      cs = new Set([...this.nextFor.chunks, ...cs]);
+      this.listsMoved ||= this.nextFor.lists;
+    }
     this.next?.dispose();
-    this.next = this.made({ g: this.statics, moved: rest, chunks: cs, lists: this.listsMoved });
+    this.nextFor = { moved: rest, chunks: cs, lists: this.listsMoved };
+    this.next = this.made({ g: this.statics, ...this.nextFor });
   }
+  /** what the one being made again is made for */
+  private nextFor: { moved: Set<string>; chunks: ReadonlySet<string>; lists: boolean } | null = null;
   private made(from?: { g: Grounds3; moved: Set<string>; chunks?: ReadonlySet<string>; lists?: boolean }): Grounds3 {
     const g = this.makeStatics(from);
     g.root.visible = !from;
@@ -658,8 +693,16 @@ if (vFade < 0.999) {
       pool.made.sort((a, b) => distTo(a.key, ax, az) - distTo(b.key, ax, az));
       // (never more waiting than this: the furthest dropped, asked again when wanted — plan 91 phase 1)
       if (pool.made.length > MADE_CAP) pool.made.length = MADE_CAP;
+      // (one an edit made again — its old one shown meanwhile — a frame at most: each is new geometry the GPU takes in
+      // on its first draw, several a frame on top of the frame's own were a frame missed at a publish: docs/plan/122)
+      let again = 0;
       while (pool.made.length && (built === 0 || performance.now() - t0 < landShare)) {
-        this.place(pool.made.shift() as BlockData);
+        const d = pool.made[0];
+        const remade = !!this.blocks.get(d.key)?.mesh;
+        if (remade && again > 0) break;
+        pool.made.shift();
+        if (remade) again++;
+        this.place(d);
         built++;
       }
     }
@@ -725,7 +768,12 @@ if (vFade < 0.999) {
     // districts, the nearest not asked yet asked, three in a worker's hand with the land's blocks at most)
     if (pool) {
       if (pool.pieces.length) {
-        for (const d of pool.pieces) this.districts.get(d.piece.slice(0, d.piece.indexOf("|")))?.takePiece(d);
+        for (const d of pool.pieces) {
+          const k = d.piece.slice(0, d.piece.indexOf("|"));
+          // (the rest's ways made again: the one being made's — docs/plan/122)
+          if (k === "rest") this.next?.takePiece(d);
+          else this.districts.get(k)?.takePiece(d);
+        }
         pool.pieces = [];
       }
       const inHand = pool.pieceInHand();
@@ -737,12 +785,19 @@ if (vFade < 0.999) {
         for (const a of g.roadAsks(this.boost ? 1e9 : 4, inHand))
           asks.push({ a, d: Math.hypot((a.at.x0 + a.at.x1) / 2 - ax, (a.at.z0 + a.at.z1) / 2 - az) });
       }
+      if (this.next?.left) {
+        this.next.remoteOn = true;
+        for (const a of this.next.roadAsks(this.boost ? 1e9 : 4, inHand)) asks.push({ a, d: -1 });
+      }
       asks.sort((p, q) => p.d - q.d);
       pool.askPieces(
         asks.map((o) => o.a),
         this.boost ? 1e9 : 3,
       );
-    } else for (const g of this.districts.values()) g.remoteOn = false;
+    } else {
+      for (const g of this.districts.values()) g.remoteOn = false;
+      if (this.next) this.next.remoteOn = false;
+    }
     // (the districts made and freed round you, ticked: every frame)
     let district = this.districtsFrame(x, z, ax, az);
     let roadNext = Number.POSITIVE_INFINITY;
@@ -846,10 +901,14 @@ if (vFade < 0.999) {
             this.patched.add(x);
             this.patch(x);
           }
-        // (made again: its bounds worked out now, not all of them the frame it's swapped in)
+        // (made again: its bounds worked out now, not all of them the frame it's swapped in — its box too, the
+        // still matrices' (lazy-matrices.ts): ~13 ms of the swap's frame, docs/plan/122)
         if (remade && c instanceof Mesh) {
           if (c instanceof InstancedMesh) c.boundingSphere ?? c.computeBoundingSphere();
-          else c.geometry.boundingSphere ?? c.geometry.computeBoundingSphere();
+          else {
+            c.geometry.boundingSphere ?? c.geometry.computeBoundingSphere();
+            c.geometry.boundingBox ?? c.geometry.computeBoundingBox();
+          }
         }
       });
       this.prepare?.(o);
@@ -1111,6 +1170,7 @@ if (vFade < 0.999) {
 
   dispose() {
     this.offChanged();
+    this.disposed = true;
     this.next?.dispose();
     this.gone?.g.dispose();
     for (const b of this.blocks.values()) freeBlock(b);

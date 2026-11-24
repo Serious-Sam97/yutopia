@@ -1131,8 +1131,10 @@ const bCells = new Map<number, Building[]>();
 // (the last asked, kept: the land's height, its surface and its trees each ask it of the same
 // point in turn — read, never changed; dropped when the index is laid again)
 const nearLast = { x: Number.NaN, z: 0, out: new Map<number, { d: number; i: number }>() };
+let bridgedCells: Set<number> | null = null;
 function layIndex() {
   nearLast.x = Number.NaN;
+  bridgedCells = null;
   RIVER_F = WAYS.length;
   RAVINE_F = WAYS.length + 1;
   cells.clear();
@@ -1160,6 +1162,26 @@ const crownCells = new Map<number, Building[]>();
 const CROWN_PAD = 13;
 layIndex();
 
+// (the index's cells with a way's bridged sample in them — made when next asked once the index or the bridges are laid
+// again: groundAt asks nearLines only by one — every sample of nine cells measured for a deck there's nearly never
+// was most of a road's snow banks being made again, ~40 ms: docs/plan/122)
+function bridgedNear(x: number, z: number): boolean {
+  if (!bridgedCells) {
+    bridgedCells = new Set();
+    for (const [k, l] of cells)
+      for (const s of l)
+        if (s.f < WAYS.length && WAYS[s.f].bridged[s.i]) {
+          bridgedCells.add(k);
+          break;
+        }
+  }
+  if (!bridgedCells.size) return false;
+  const cx = Math.floor(x / CELL);
+  const cz = Math.floor(z / CELL);
+  for (let dx = -1; dx <= 1; dx++)
+    for (let dz = -1; dz <= 1; dz++) if (bridgedCells.has(cellKey(cx + dx, cz + dz))) return true;
+  return false;
+}
 /** The nearest sample of every line within ~a cell of (x, z): distance and sample (not to be changed). */
 function nearLines(x: number, z: number): ReadonlyMap<number, { d: number; i: number }> {
   if (x === nearLast.x && z === nearLast.z) return nearLast.out;
@@ -1424,6 +1446,7 @@ let riverH: { grown: string; h: number[] } | null = null;
 let longBridgedOnce: boolean[] | null = null;
 let endsMet: { key: string; met: Map<string, { u: number; j: number }> } | null = null;
 function layLevels() {
+  bridgedCells = null;
   const grown = GROWN_REGIONS.length ? JSON.stringify(GROWN_REGIONS) : "";
   const kept = new Map<string, number[]>();
   const lineKeys = WAYS.map((w) => {
@@ -1536,6 +1559,7 @@ function layLevels() {
   });
   wayBridged = keptB;
   layBridges();
+  bridgedCells = null;
 }
 
 // ── the bridges (docs/plan/109-bridges.md): each a stretch of a way, keyed, with its style ──
@@ -1942,6 +1966,7 @@ function liftAt(x: number, z: number): number {
 // (the kit's layouts lay a door's steps down to the land: plan 111)
 setLandAt((x, z) => groundAt(x, z));
 export function groundAt(x: number, z: number): number {
+  if (!bridgedNear(x, z)) return terrainAt(x, z);
   for (const [f, n] of nearLines(x, z)) {
     if (f >= WAYS.length) continue;
     const w = WAYS[f];
@@ -2720,6 +2745,55 @@ function trimChunks() {
   }
 }
 
+// The client's (docs/plan/122): a chunk god mode's edit dropped is handed out as it was when next asked, and made again
+// after the frames, a few rows of its heights at a time. Made in the frame that first asked (the feet's, the lift onto
+// the land) it was ~6 ms on top of the edit's other costs there: a frame missed at every publish. What's drawn of the
+// land there is the old one still meanwhile (its blocks are made again in the land's workers).
+let remakeAfter: ((step: () => boolean) => void) | null = null;
+const stale = new Map<number, GroundsChunk>();
+const remakeQ = new Set<number>();
+/** (the client's) Chunks an edit drops handed out as they were till each is made again: `after` runs the step it's
+ *  given (a few rows of a chunk's heights each) after the frames, till it says it's done; null: made again when next
+ *  asked, as the server's are. */
+export function remakeDroppedAfter(after: ((step: () => boolean) => void) | null) {
+  remakeAfter = after;
+  if (!after) {
+    stale.clear();
+    remakeQ.clear();
+  }
+}
+let remaking: { k: number; v: number; steps: Generator<void, GroundsChunk> } | null = null;
+function remakeNext() {
+  remakeAfter?.(() => {
+    if (!remaking) {
+      const k = remakeQ.values().next().value;
+      if (k === undefined) return true;
+      const was = stale.get(k);
+      if (!was || chunks.has(k)) {
+        remakeQ.delete(k);
+        stale.delete(k);
+        return remakeQ.size === 0;
+      }
+      remaking = { k, v: editsVersion, steps: chunkSteps(was.cx, was.cz) };
+    }
+    const r = remaking.steps.next();
+    if (!r.done) return false;
+    const { k, v } = remaking;
+    remaking = null;
+    // (made for edits laid since: made again)
+    if (v !== editsVersion) return false;
+    remakeQ.delete(k);
+    stale.delete(k);
+    if (!chunks.has(k)) {
+      r.value.used = ++useTick;
+      chunks.set(k, r.value);
+      if (chunks.size > chunkCap) trimChunks();
+    }
+    // (its tiles' surfaces, read off it meanwhile: asked afresh)
+    surfaces.delete(k);
+    return remakeQ.size === 0;
+  });
+}
 /** The chunk (cx, cz) (CHUNK tiles a side, building coords / CHUNK). */
 export function groundsChunk(cx: number, cz: number): GroundsChunk {
   const k = chunkKey(cx, cz);
@@ -2727,6 +2801,15 @@ export function groundsChunk(cx: number, cz: number): GroundsChunk {
   if (hit) {
     hit.used = ++useTick;
     return hit;
+  }
+  // (one an edit dropped, while it's made again after a frame: as it was — `remakeAfter`)
+  const was = remakeAfter ? stale.get(k) : undefined;
+  if (was) {
+    if (!remakeQ.has(k)) {
+      remakeQ.add(k);
+      if (remakeQ.size === 1) remakeNext();
+    }
+    return was;
   }
   const c = makeChunk(cx, cz);
   c.used = ++useTick;
@@ -2737,7 +2820,9 @@ export function groundsChunk(cx: number, cz: number): GroundsChunk {
 /** Whether the land at (x, z) is made already (its chunk): reading it then costs nothing — the
  *  fog's banks wait for it rather than make it (a chunk by the river is 30–50 ms: fog-banks.ts). */
 export function landReady(x: number, z: number): boolean {
-  return chunks.has(chunkKey(Math.floor(x / CHUNK), Math.floor(z / CHUNK)));
+  const k = chunkKey(Math.floor(x / CHUNK), Math.floor(z / CHUNK));
+  // (one an edit dropped, being made again: handed out as it was meanwhile, for nothing)
+  return chunks.has(k) || (!!remakeAfter && stale.has(k));
 }
 /** The Kart Park's layout to race (docs/plan/47-the-track-changer.md): what's asphalt there
  *  follows it, and the bridge (there for a layout over it: its deck walked, its guard strips not),
@@ -2921,9 +3006,15 @@ function chunksOver(r: { x0: number; z0: number; x1: number; z1: number }, pad: 
 /** Drop these chunks and their tiles' surfaces: they're made again when next asked. */
 function drop(cs: [number, number][]) {
   for (const [cx, cz] of cs) {
-    chunks.delete(chunkKey(cx, cz));
-    surfaces.delete(chunkKey(cx, cz));
+    const k = chunkKey(cx, cz);
+    const c = chunks.get(k);
+    if (remakeAfter && c) stale.set(k, c);
+    chunks.delete(k);
+    surfaces.delete(k);
   }
+  // (the ones dropped before and never asked since: gone — what's there's long moved on)
+  if (stale.size > 64)
+    for (const k of [...stale.keys()].slice(0, stale.size - 64)) if (!remakeQ.has(k)) stale.delete(k);
 }
 type Changed = (chunks: [number, number][], why: "park" | "edits") => void;
 const changed = new Set<Changed>();
@@ -2963,10 +3054,21 @@ export function missingLand(cx: number, cz: number): [number, number] | null {
 }
 
 function makeChunk(cx: number, cz: number): GroundsChunk {
+  const steps = chunkSteps(cx, cz);
+  for (;;) {
+    const r = steps.next();
+    if (r.done) return r.value;
+  }
+}
+/** Chunk (cx, cz) made a few rows of its heights a step (`remakeDroppedAfter`'s), its tiles the last. */
+function* chunkSteps(cx: number, cz: number): Generator<void, GroundsChunk> {
   const x0 = cx * CHUNK;
   const z0 = cz * CHUNK;
   const h = new Float32Array(LN * LN);
-  for (let j = 0; j < LN; j++) for (let i = 0; i < LN; i++) h[j * LN + i] = terrainAt(x0 + i / LAT, z0 + j / LAT);
+  for (let j = 0; j < LN; j++) {
+    for (let i = 0; i < LN; i++) h[j * LN + i] = terrainAt(x0 + i / LAT, z0 + j / LAT);
+    if (j % 4 === 3) yield;
+  }
   const walk = new Uint8Array(CHUNK * CHUNK);
   const trees = treesIn(cx, cz);
   const blocked = new Set<number>();
@@ -4255,19 +4357,40 @@ function sigs(): Map<string, { sig: string; r: Rect }> {
   }
   return out;
 }
+// (each grid decoded from its string kept with it: a grid the next edits have the same string for isn't decoded again
+// — a publish's brushed land decoded whole was ~1 ms of the frame it's laid in: docs/plan/122)
+const decodedFrom = new WeakMap<Map<number, unknown>, Map<number, string>>();
 function decode<T>(into: Map<number, T>, grids: Record<string, string> | undefined, f: (s: string) => T | null) {
-  into.clear();
+  const from = decodedFrom.get(into) ?? new Map<number, string>();
+  decodedFrom.set(into, from);
+  const keep = new Set<number>();
   for (const [k, s] of Object.entries(grids ?? {})) {
     const [cx, cz] = k.split(",").map(Number);
-    const g = Number.isInteger(cx) && Number.isInteger(cz) ? f(s) : null;
-    if (g) into.set(chunkKey(cx, cz), g);
+    if (!Number.isInteger(cx) || !Number.isInteger(cz)) continue;
+    const ck = chunkKey(cx, cz);
+    if (from.get(ck) === s && into.has(ck)) {
+      keep.add(ck);
+      continue;
+    }
+    const g = f(s);
+    if (!g) continue;
+    into.set(ck, g);
+    from.set(ck, s);
+    keep.add(ck);
   }
+  for (const ck of [...into.keys()])
+    if (!keep.has(ck)) {
+      into.delete(ck);
+      from.delete(ck);
+    }
 }
+// (what's on the Grounds as the edits laid last left it: the next's "before")
+let sigsNow: ReturnType<typeof sigs> | null = null;
 /** Lay these edits over the generated Grounds (in place of the ones laid before) and give back
  *  the chunks that changed: they're dropped here, to be made again when next asked. The same on
  *  the server and every client, so they agree. */
 export function applyEdits(next: GroundsEdits): [number, number][] {
-  const before = sigs();
+  const before = sigsNow ?? sigs();
   const was = EDITS;
   EDITS = next;
   decode(lifts, next.height, (s) => decodeHeights(s, LIFT_N * LIFT_N));
@@ -4287,6 +4410,7 @@ export function applyEdits(next: GroundsEdits): [number, number][] {
   things = null;
   // what changed: a thing whose look did, where it was and where it is
   const after = sigs();
+  sigsNow = after;
   const dirty = new Map<number, [number, number]>();
   const add = (cs: [number, number][]) => {
     for (const c of cs) dirty.set(chunkKey(c[0], c[1]), c);

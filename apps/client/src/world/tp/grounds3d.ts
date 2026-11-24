@@ -838,8 +838,8 @@ export class Grounds3 {
       run(() => this.skateParks(), { x: SKATE_YARD.x0, z: SKATE_YARD.z0 }, 1);
       // (its water: Silver Lake's and the creek's out on the long road, a grown lake's — the rest's
       // circle was the only one to draw any, and it's round the town)
-      run(() => this.waterStep(), undefined, 1);
-      run(() => this.lamps(), undefined, 2);
+      run(() => this.waterStep(1), undefined, 1);
+      run(() => this.lamps(2), undefined, 2);
       return;
     }
     const rest = o.part !== "kart";
@@ -850,17 +850,17 @@ export class Grounds3 {
         run(() => this.waysAll());
       } else this.ways();
       run(() => this.waterStep());
-      run(() => this.lot());
+      run(() => this.keptStep("lot", () => this.lot()));
       if (!o.stream) this.woods();
       for (const b of BUILDINGS)
         if (this.near(b.x0, b.z0, 60) && !(o.stream && b.kind === "hq")) run(() => this.building(b));
       run(() => this.courtyardBridge());
-      run(() => this.fence());
+      run(() => this.keptStep("fence", () => this.fence()));
       run(() => this.landmarks());
       run(() => this.town());
       if (LONG_ROAD) run(() => this.longDress());
       run(() => this.motors());
-      run(() => this.skateParks());
+      run(() => this.keptStep("skate", () => this.skateParks()));
       for (const f of this.farmSteps()) run(f);
     }
     // the Kart Park (the game's: the stills and the sandbox stage it themselves)
@@ -887,55 +887,97 @@ export class Grounds3 {
   private waterPart: {
     objects: Object3D[];
     disp: { dispose(): void }[];
-    box: { x0: number; z0: number; x1: number; z1: number } | null;
+    /** the chunks it's in, round its vertices (a box round it took in most of the map: a road anywhere had it made
+     *  again) — worked out when the next one made asks (~7 ms: not in the swap's frame) */
+    cells: ReadonlySet<string> | null;
   } | null = null;
   private takesWater = false;
   /** The water (a step): taken from the one made before when nothing it stands on changed, else made. */
-  private waterStep() {
+  private waterStep(g = 0) {
     const from = this.o.from;
     const was = from?.g.waterPart;
-    if (from && was && !from.lists && from.chunks) {
-      const b = was.box;
-      const pad = 8;
-      let touched = false;
-      if (b)
-        for (const k of from.chunks) {
-          const [cx, cz] = k.split(",").map(Number);
-          const x0 = cx * CHUNK;
-          const z0 = cz * CHUNK;
-          if (x0 < b.x1 + pad && x0 + CHUNK > b.x0 - pad && z0 < b.z1 + pad && z0 + CHUNK > b.z0 - pad) {
-            touched = true;
-            break;
-          }
-        }
-      if (!touched) {
+    // (it's of the land under and round it alone, and the dock: the chunks an edit changed — its land, its things —
+    // say where; one that changed none by it, whatever the lists did, keeps it — a road added was ~100 ms a step
+    // made again: docs/plan/122)
+    if (from && was && from.chunks) {
+      was.cells ??= cellsOf(was.objects);
+      if (!touchedBy(from.chunks, was.cells)) {
         this.takesWater = true;
-        this.waterPart = { objects: [], disp: [], box: b };
+        this.waterPart = { objects: [], disp: [], cells: was.cells };
         return;
       }
     }
+    // (a part a step, put back after each — the river alone was ~60 ms in a frame; at once for a still)
+    const made = this.waterMade();
+    const objects: Object3D[] = [];
+    const disp: { dispose(): void }[] = [];
+    const part = () => {
+      const n = this.root.children.length;
+      const d = this.disposables.length;
+      const r = made.next();
+      objects.push(...this.root.children.slice(n));
+      disp.push(...this.disposables.slice(d));
+      return !!r.done;
+    };
+    this.stepped(
+      (function* () {
+        while (!part()) yield;
+      })(),
+      g,
+      () => this.waterMadeAll(objects, disp),
+    );
+  }
+  /** The water made: what it is and where, kept for the next one made to take. */
+  private waterMadeAll(objects: Object3D[], disp: { dispose(): void }[]) {
+    const part: NonNullable<Grounds3["waterPart"]> = { objects, disp, cells: null };
+    this.waterPart = part;
+    // (where it is worked out in a step of its own: the next one made asks it in its first, ~7 ms)
+    if (this.o.stream)
+      this.queue(() => {
+        part.cells ??= cellsOf(part.objects);
+      });
+  }
+  // ── a step of what stands on its own — the lot, the company's fence, the skate parks: of the land under it alone —
+  // taken from the one made before when no chunk an edit changed is by it (as the water is): made again for a road
+  // anywhere they were 10–30 ms steps each: docs/plan/122 ──
+  private keptParts = new Map<
+    string,
+    {
+      objects: Object3D[];
+      disp: { dispose(): void }[];
+      night: Grounds3["night"];
+      /** the chunks it's in (`cellsOf`), when asked: a model still loading when it's made is in by then */
+      cells: ReadonlySet<string> | null;
+    }
+  >();
+  private takesKept: string[] = [];
+  private keptStep(name: string, make: () => void) {
+    const from = this.o.from;
+    const was = from?.g.keptParts.get(name);
+    if (was) was.cells ??= cellsOf(was.objects);
+    if (from?.chunks && was?.cells && !touchedBy(from.chunks, was.cells)) {
+      this.takesKept.push(name);
+      this.keptParts.set(name, { objects: [], disp: [], night: [], cells: was.cells });
+      return;
+    }
     const n = this.root.children.length;
     const d = this.disposables.length;
-    this.water();
+    const k = this.night.length;
+    this.keptNow = name;
+    make();
+    this.keptNow = null;
+    // (one that put itself back to wait for what's loading: kept once it's made, its step again)
+    if (this.waiting) return;
     const objects = this.root.children.slice(n);
-    let box: { x0: number; z0: number; x1: number; z1: number } | null = null;
-    for (const o of objects) {
-      const g = (o as { geometry?: BufferGeometry }).geometry;
-      if (!g) continue;
-      if (!g.boundingBox) g.computeBoundingBox();
-      const bb = g.boundingBox;
-      if (!bb) continue;
-      box = box
-        ? {
-            x0: Math.min(box.x0, bb.min.x),
-            z0: Math.min(box.z0, bb.min.z),
-            x1: Math.max(box.x1, bb.max.x),
-            z1: Math.max(box.z1, bb.max.z),
-          }
-        : { x0: bb.min.x, z0: bb.min.z, x1: bb.max.x, z1: bb.max.z };
-    }
-    this.waterPart = { objects, disp: this.disposables.slice(d), box };
+    this.keptParts.set(name, {
+      objects,
+      disp: this.disposables.slice(d),
+      night: this.night.slice(k),
+      cells: null,
+    });
   }
+  /** the kept step being made (one that puts itself back is put back as it) */
+  private keptNow: string | null = null;
   /** what was handed on to the next one made: not freed with this one */
   private handed = new WeakSet<object>();
   /** round the ways that changed (made, gone, moved): a way near one is made again (its banks,
@@ -967,10 +1009,26 @@ export class Grounds3 {
         return;
       }
     }
-    const n = this.root.children.length;
-    const d = this.disposables.length;
-    this.ways(w);
-    this.wayParts.set(w.key, { sig, box, objects: this.root.children.slice(n), disp: this.disposables.slice(d) });
+    // (one made again behind what's shown: made whole by the land's workers when there are any, as a district's
+    // pieces are — its banks were 15–55 ms of a frame here: docs/plan/122)
+    const make = (remote?: Remote) => {
+      const n = this.root.children.length;
+      const d = this.disposables.length;
+      if (remote?.data) this.placePiece(w, remote.data, remote.ask.at);
+      else this.ways(w);
+      this.wayParts.set(w.key, { sig, box, objects: this.root.children.slice(n), disp: this.disposables.slice(d) });
+    };
+    if (!from || !this.o.stream || this.o.own) return make();
+    const remote: Remote = {
+      w,
+      ask: {
+        piece: `rest|${w.key}`,
+        way: w.key,
+        at: { x0: box.x0, z0: box.z0, x1: box.x1, z1: box.z1 },
+        own: { circle: { cx: this.o.cx, cz: this.o.cz, r: this.o.radius } },
+      },
+    };
+    this.queue(() => make(remote), undefined, 0, remote);
   }
   /** Swapped in: the ways not made again taken from the one made before (once it's done). */
   adopt() {
@@ -1003,6 +1061,33 @@ export class Grounds3 {
       this.waterPart.disp = w.disp;
     }
     this.takesWater = false;
+    // (the steps kept: their meshes, and all they're made of — a material made by another step of the old one's too)
+    for (const name of this.takesKept) {
+      const p = from.keptParts.get(name);
+      const mine = this.keptParts.get(name);
+      if (!p || !mine) continue;
+      const mats = new Set<{ dispose(): void }>(p.disp);
+      for (const o of p.objects)
+        o.traverse((c) => {
+          const m = c as Mesh;
+          if (m.geometry) mats.add(m.geometry);
+          if (m.material) for (const x of Array.isArray(m.material) ? m.material : [m.material]) mats.add(x);
+        });
+      // (what's shared by every one made — the stream's — stays the stream's to free)
+      const shared = new Set<unknown>(this.sh.disp);
+      for (const x of [...mats]) if (shared.has(x)) mats.delete(x);
+      for (const o of p.objects) this.root.add(o);
+      for (const x of mats) {
+        from.handed.add(x);
+        this.disposables.push(x);
+      }
+      for (const nt of p.night) this.night.push(nt);
+      mine.objects = p.objects;
+      mine.disp = [...mats];
+      mine.night = p.night;
+    }
+    this.takesKept = [];
+    this.setNight(this.lastNight);
   }
   private pending: { f: () => void; x: number; z: number; at: boolean; g: number; remote?: Remote }[] = [];
   private queue(f: () => void, at?: { x: number; z: number }, g = 0, remote?: Remote) {
@@ -1374,7 +1459,9 @@ export class Grounds3 {
   }
 
   // ── the pond and the river, frozen ──
-  private water() {
+  /** The water, a part a step (`waterStep`): the pond, its weeds, the reeds, the river a stretch at a time, the creek,
+   *  the lakes. */
+  private *waterMade(): Generator<void> {
     const ice = this.keep(
       new MeshStandardMaterial({ map: this.ts.ice, roughness: 0.38, metalness: 0.0, color: 0xf2f6f9 }),
     );
@@ -1494,7 +1581,9 @@ export class Grounds3 {
             pw.idx.push(i0, i1, o0, i1, o1, o0);
           }
       }
+      yield;
       surface(pw);
+      yield;
       // the shore: snow lying over the ice's edge all round (but where the dock goes out)
       const shore = new G();
       const rs = groundsRng(911);
@@ -1522,6 +1611,7 @@ export class Grounds3 {
         (x, z) => Math.max(groundAt(x, z), POND_LEVEL + 0.1),
       );
       this.add(shore.build(), this.lambert());
+      yield;
       // the dock: planks on posts, a canoe turned over under snow
       const d = new G();
       const dx0 = DOCK.x0;
@@ -1557,6 +1647,7 @@ export class Grounds3 {
       const c = mergeGeometries([hull, floor, ...thwarts], false);
       this.add(place(c, DOCK.x1 + 0.95, POND_LEVEL + 0.1, -89, 0.03), this.lambert());
     }
+    yield;
     // under the water (plan 66 S8): weeds up off the pond's deep bed, stones on the river's slow one
     {
       const rr = groundsRng(3907);
@@ -1613,6 +1704,7 @@ export class Grounds3 {
       }
       if (stones.length) this.add(mergeGeometries(stones, false), this.lambert(), "receive");
     }
+    yield;
     // reeds (plan 66 S7): clumps of blades in the shallows — the pond's shelf and the river's slow
     // reach — standing out of the water, its depth to a metre and a half over it
     {
@@ -1666,6 +1758,7 @@ export class Grounds3 {
         this.add(g, m, "none");
       }
     }
+    yield;
     // the river: a ribbon of water at its level, ice on it where it's slow enough to freeze (the rapid
     // and the falls stay open: grounds.ts ICE_FAST, plan 66)
     const g = new G();
@@ -1728,6 +1821,8 @@ export class Grounds3 {
       rv = grid();
     };
     for (let i = 0; i < L.length; i++) {
+      // (a stretch a step: its depth is the land's under each of its 27 a row)
+      if (i % 32 === 31) yield;
       if (!this.near(L[i][0], L[i][1], 30)) {
         flush();
         continue;
@@ -1769,6 +1864,7 @@ export class Grounds3 {
     }
     if (!gi.empty) this.add(sided(gi.build(), ribbon(ri)), ice, "receive");
     void v;
+    yield;
     // the ravine's creek: a thin ice line on its floor
     const k = new G();
     const ks: { a: V; n: [number, number]; o: number }[] = [];
@@ -1807,6 +1903,7 @@ export class Grounds3 {
       }
       surface(cw);
     }
+    yield;
     this.longWater(ice, sided, surface, grid);
   }
 
@@ -3739,7 +3836,9 @@ export class Grounds3 {
         });
       }
       if (this.o.stream) {
-        this.queue(() => this.skateParks());
+        // (kept, when it's a kept step: `keptStep`)
+        const k = this.keptNow;
+        this.queue(k ? () => this.keptStep(k, () => this.skateParks()) : () => this.skateParks());
         this.waiting = true;
       }
       return;
@@ -4414,19 +4513,45 @@ export class Grounds3 {
       this.pool(x, z, kind === "lone" ? 7 : 6, 0xffd9a8);
     }
   }
-  private lamps() {
+  /** The lamps (a step): a few dozen a step, then their posts, heads, pools and glow cards a step each. */
+  private lamps(g = 0) {
+    this.stepped(this.lampsMade(), g);
+  }
+  /** A step's parts each a step of its own, put back after each — a step of 30–40 ms was a frame missed while a
+   *  publish was made again (docs/plan/122) —; at once for a still. */
+  private stepped(made: Generator<void>, g = 0, done?: () => void) {
+    if (!this.o.stream) {
+      while (!made.next().done);
+      done?.();
+      return;
+    }
+    const go = () => {
+      if (made.next().done) done?.();
+      else this.queue(go, undefined, g);
+    };
+    go();
+  }
+  private *lampsMade(): Generator<void> {
     // (the Kart Park's floods are its own masts: karts3d.ts, their pools kartParkLamps; its own
     // part has no lamps of the Grounds')
+    let n = 0;
     if (this.o.part !== "kart")
-      for (const l of LAMPS) if (l.kind !== "flood" && this.near(l.x, l.z)) this.lampAt(l.x, l.z, l.ry, l.kind);
+      for (const l of LAMPS)
+        if (l.kind !== "flood" && this.near(l.x, l.z)) {
+          this.lampAt(l.x, l.z, l.ry, l.kind);
+          if (++n % 24 === 0) yield;
+        }
+    yield;
     if (this.lampGeo.length) this.add(mergeGeometries(this.lampGeo, false), this.lambert());
     for (const g of this.lampGeo) g.dispose();
+    yield;
     const head = this.glows(
       this.keep(new MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, toneMapped: false })),
       1,
       "lamp",
     );
     if (!this.headGeo.empty) this.add(this.headGeo.build(), head, "none");
+    yield;
     // the pools: added light on the ground — over whatever's painted on it (the paddock's paint, a
     // circuit's lines: pulled to the camera by their polygon offset, at a glancing look they came
     // in front of the pool and hid it, a straight edge across the ground past some distance)
@@ -5043,6 +5168,85 @@ export class Grounds3 {
   }
 }
 
+/** The chunks ("cx,cz") these objects are in: round their vertices (a few thousand of each mesh's), `PAD` m — on the
+ *  Grounds' x, z, their place in a Grounds3's root. A group still empty (a model loading): 80 m round where it stands. */
+const CELLS_PAD = 12;
+function cellsOf(objects: Object3D[]): Set<string> {
+  const out = new Set<string>();
+  const v = new Vector3();
+  const mark = (x: number, z: number, r: number) => {
+    for (let cx = Math.floor((x - r) / CHUNK); cx <= Math.floor((x + r) / CHUNK); cx++)
+      for (let cz = Math.floor((z - r) / CHUNK); cz <= Math.floor((z + r) / CHUNK); cz++) out.add(`${cx},${cz}`);
+  };
+  for (const o of objects) {
+    o.updateMatrixWorld(true);
+    const inv = o.parent ? o.parent.matrixWorld.clone().invert() : null;
+    let any = false;
+    o.traverse((c) => {
+      const g = (c as { geometry?: BufferGeometry }).geometry;
+      const pos = g?.getAttribute("position");
+      if (!g || !pos) return;
+      any = true;
+      const m = c.matrixWorld.clone();
+      if (inv) m.premultiply(inv);
+      // (one instanced: its box, by its instances' — they're few, or set by the scene)
+      if ((c as InstancedMesh).isInstancedMesh) {
+        const im = c as InstancedMesh;
+        im.computeBoundingBox();
+        const b = im.boundingBox?.clone().applyMatrix4(m);
+        if (b)
+          for (let x = b.min.x; x <= b.max.x + CHUNK; x += CHUNK)
+            for (let z = b.min.z; z <= b.max.z + CHUNK; z += CHUNK)
+              mark(Math.min(x, b.max.x), Math.min(z, b.max.z), CELLS_PAD);
+        return;
+      }
+      // (a small one: its box — a park's models are hundreds of meshes, their triangles 25 ms a look)
+      if (!g.boundingBox) g.computeBoundingBox();
+      const bb = g.boundingBox?.clone().applyMatrix4(m);
+      if (bb && bb.max.x - bb.min.x < 64 && bb.max.z - bb.min.z < 64) {
+        for (
+          let cx = Math.floor((bb.min.x - CELLS_PAD) / CHUNK);
+          cx <= Math.floor((bb.max.x + CELLS_PAD) / CHUNK);
+          cx++
+        )
+          for (
+            let cz = Math.floor((bb.min.z - CELLS_PAD) / CHUNK);
+            cz <= Math.floor((bb.max.z + CELLS_PAD) / CHUNK);
+            cz++
+          )
+            out.add(`${cx},${cz}`);
+        return;
+      }
+      // (a long one — the fence, the river —: each triangle's own area, a big quad's middle too; a few thousand)
+      const idx = g.getIndex();
+      const n = idx ? idx.count : pos.count;
+      const step = Math.max(1, Math.floor(n / 3 / 4000)) * 3;
+      for (let t = 0; t + 2 < n; t += step) {
+        let x0 = Number.POSITIVE_INFINITY;
+        let z0 = Number.POSITIVE_INFINITY;
+        let x1 = Number.NEGATIVE_INFINITY;
+        let z1 = Number.NEGATIVE_INFINITY;
+        for (let j = 0; j < 3; j++) {
+          v.fromBufferAttribute(pos, idx ? idx.getX(t + j) : t + j).applyMatrix4(m);
+          x0 = Math.min(x0, v.x);
+          z0 = Math.min(z0, v.z);
+          x1 = Math.max(x1, v.x);
+          z1 = Math.max(z1, v.z);
+        }
+        for (let cx = Math.floor((x0 - CELLS_PAD) / CHUNK); cx <= Math.floor((x1 + CELLS_PAD) / CHUNK); cx++)
+          for (let cz = Math.floor((z0 - CELLS_PAD) / CHUNK); cz <= Math.floor((z1 + CELLS_PAD) / CHUNK); cz++)
+            out.add(`${cx},${cz}`);
+      }
+    });
+    if (!any) mark(o.position.x, o.position.z, 80);
+  }
+  return out;
+}
+/** Whether any of these chunks (an edit's changed: "cx,cz") is one of `cells`. */
+function touchedBy(chunks: ReadonlySet<string>, cells: ReadonlySet<string>): boolean {
+  for (const k of chunks) if (cells.has(k)) return true;
+  return false;
+}
 function ridgeMaterial(): MeshBasicMaterial {
   const m = Object.assign(new MeshBasicMaterial({ vertexColors: true }), { defines: { MF_MORNING_ONLY: "" } });
   m.onBeforeCompile = (sh) => {
