@@ -438,3 +438,6 @@ Asked: "when I select a furniture, be able to customize the color etc. before I 
   succulent put down as a succulent (both taken away after); a keyboard too wide for the spot said "Doesn't fit here".
   Client unit 485/485; build, build-tops, build-hand, doors-windows, build-setups 5 passed (build-setups once flaky in a
   batch, passed alone and in the batch again).
+
+## Committed
+Committed and pushed to main as `d68f3aff` (2026-11-24), with the customize-before-placing follow-up.
