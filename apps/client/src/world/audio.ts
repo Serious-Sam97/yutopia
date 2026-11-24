@@ -76,10 +76,18 @@ class Mixer {
     const t = this.ctx.currentTime;
     this.master.gain.setTargetAtTime(v.master, t, 0.05);
     this.buses.voices.gain.setTargetAtTime(v.voices, t, 0.05);
-    this.buses.ambience.gain.setTargetAtTime(v.ambience, t, 0.05);
+    this.buses.ambience.gain.setTargetAtTime(v.ambience * (1 - 0.5 * this.duckK), t, 0.4);
     this.buses.music.gain.setTargetAtTime(v.music, t, 0.05);
     this.buses.effects.gain.setTargetAtTime(v.effects, t, 0.05);
-    this.clear.gain.setTargetAtTime(v.ambience, t, 0.05);
+    this.clear.gain.setTargetAtTime(v.ambience * (1 - 0.5 * this.duckK), t, 0.4);
+  }
+
+  /** (plan 124: build mode's music) the world's ambience dipped under the music (0 … 1) */
+  private duckK = 0;
+  duck(k: number) {
+    if (k === this.duckK) return;
+    this.duckK = k;
+    this.apply();
   }
 
   /** Under the water (0 … 1): everything but `clear` muffled and quieter. */

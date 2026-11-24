@@ -818,7 +818,7 @@ export class InventoryPanel {
             row(t("dark_inv_k_dbl"), t("dark_inv_k_dbl_do")) +
             row(t("dark_inv_k_right"), t("dark_inv_k_right_do")) +
             row(t("dark_inv_k_drag"), t("dark_inv_k_drag_do")) +
-            row(`${kk("H")} ${kk("B")}`, t("dark_inv_k_hb")) +
+            row(`${kk("H")} ${kk("N")}`, t("dark_inv_k_hb")) +
             row(t("dark_inv_k_pad"), t("dark_inv_k_pad_do"))
       }</div>`;
     }
@@ -888,7 +888,7 @@ export class InventoryPanel {
       if (id === "torch") {
         stats =
           stat(t("dark_inv_battery_stat"), `${bat}%`) +
-          stat(t("dark_inv_spare_bat"), `${count(inv, "battery")} · B`) +
+          stat(t("dark_inv_spare_bat"), `${count(inv, "battery")} · N`) +
           stat(t("dark_inv_focus"), t("dark_inv_focus_rb"));
         note = t(inHandSlot ? "dark_inv_held_guns" : "dark_inv_torch_pack");
         btns =

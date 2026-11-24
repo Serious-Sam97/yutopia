@@ -63,6 +63,11 @@ const W = {
     "The rain, the sleet, the drips, the birds, the river, the thunder and the wind, for everyone.",
     "A chuva, o granizo, as gotas, os pássaros, o rio, o trovão e o vento, para todos.",
   ],
+  bmVol: ["Build & God mode music", "Música do modo construção e Deus"],
+  bmVolS: [
+    "The jazz that plays while anyone builds or is in God mode, for everyone (each person's own Music volume on top).",
+    "O jazz que toca enquanto alguém constrói ou está no modo Deus, para todos (o volume de Música de cada um por cima).",
+  ],
   scheduled: ["As scheduled", "Como previsto"],
   calledBy: ["{what} called by {who} · {m} min left", "{what} pedido por {who} · faltam {m} min"],
   locks: ["Locked now · {n}", "Trancado agora · {n}"],
@@ -126,6 +131,9 @@ interface Snap {
   stepsVol: number;
   stepsBy: string;
   stepsAt: number;
+  musicVol: number;
+  musicBy: string;
+  musicAt: number;
   rooms: { key: string; by: string }[];
   doors: { id: string; x: number; y: number; level: number; kind: string }[];
   layout: string;
@@ -143,6 +151,7 @@ export function World() {
   const [hourDraft, setHourDraft] = useState<number | null>(null);
   const [stepsDraft, setStepsDraft] = useState<number | null>(null);
   const [wxVolDraft, setWxVolDraft] = useState<number | null>(null);
+  const [musicDraft, setMusicDraft] = useState<number | null>(null);
   const [text, setText] = useState("");
   const [tone, setTone] = useState<"info" | "warn">("info");
   const s = useLive<Snap>(w, (w) => {
@@ -187,6 +196,9 @@ export function World() {
       stepsVol: st?.stepsVol ?? 1,
       stepsBy: st?.stepsBy ?? "",
       stepsAt: st?.stepsAt ?? 0,
+      musicVol: st?.buildMusicVol ?? 1,
+      musicBy: st?.buildMusicBy ?? "",
+      musicAt: st?.buildMusicAt ?? 0,
       rooms,
       doors,
       layout: park?.layout ?? "eight",
@@ -244,6 +256,11 @@ export function World() {
   const hour = hourDraft ?? s.hour;
   const steps = stepsDraft ?? s.stepsVol;
   const wxVol = wxVolDraft ?? s.wx.vol;
+  const music = musicDraft ?? s.musicVol;
+  const sendMusic = () => {
+    if (musicDraft !== null) w.send("mod:buildMusic", { v: musicDraft });
+    setMusicDraft(null);
+  };
   const sendWxVol = () => {
     if (wxVolDraft !== null) w.send("mod:weatherVol", { v: wxVolDraft });
     setWxVolDraft(null);
@@ -466,6 +483,42 @@ export function World() {
           </button>
         </div>
         <Note>{t("wxVolS")}</Note>
+      </Card>
+      <Card
+        label={t("bmVol")}
+        right={s.musicBy ? <Tag tone="lamp">{t("stepsBy", { who: s.musicBy, when: ago(s.musicAt, pt) })}</Tag> : null}
+      >
+        <div className="flex items-center gap-5 flex-wrap">
+          <div className="text-center w-24">
+            <div className="title text-[32px]" style={{ letterSpacing: ".04em" }}>
+              {Math.round(music * 100)}%
+            </div>
+          </div>
+          <input
+            type="range"
+            className="slider flex-1 min-w-[160px]"
+            min={0}
+            max={2}
+            step={0.05}
+            value={music}
+            style={{ "--v": `${(music / 2) * 100}%` } as React.CSSProperties}
+            aria-label={t("bmVol")}
+            data-testid="build-music-volume"
+            onChange={(e) => setMusicDraft(Number(e.target.value))}
+            onPointerUp={sendMusic}
+            onKeyUp={sendMusic}
+          />
+          <button
+            type="button"
+            className="deck-btn"
+            disabled={!s.musicBy}
+            onClick={() => w.send("mod:buildMusic", { v: null })}
+          >
+            <Icon name="ear" size={15} />
+            {t("stepsReset")}
+          </button>
+        </div>
+        <Note>{t("bmVolS")}</Note>
       </Card>
       <Card label={t("locks", { n: locked })}>
         {!locked && <Note>{t("noLocks")}</Note>}

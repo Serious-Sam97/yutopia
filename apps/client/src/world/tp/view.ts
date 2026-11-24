@@ -2830,8 +2830,10 @@ void main() {
     }
     // (in as fast as the gun comes up — ~95% in its `aim` s; out a touch slower)
     const aimRate = this.aim ? 3 / Math.max(0.08, this.aimSecs) : 10;
-    this.aimK += ((this.aim && !first ? 1 : 0) - this.aimK) * (1 - Math.exp(-dt * aimRate));
-    this.armK += ((this.armed && !first ? 1 : 0) - this.armK) * (1 - Math.exp(-dt * 6));
+    // (building: the gun's held down — the build camera stays where it's put, not in at the shoulder: plan 124)
+    const building = this.buildPick.buildMode;
+    this.aimK += ((this.aim && !first && !building ? 1 : 0) - this.aimK) * (1 - Math.exp(-dt * aimRate));
+    this.armK += ((this.armed && !first && !building ? 1 : 0) - this.armK) * (1 - Math.exp(-dt * 6));
     // (down the scope: quickly in, quickly out — the bolt's worked out of it)
     if (this.scope > 0) this.scopePow = this.scope;
     // (plan 116: in first person too — the sniper's scope is its own first-person picture)

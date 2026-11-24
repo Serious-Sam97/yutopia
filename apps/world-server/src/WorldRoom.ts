@@ -551,6 +551,13 @@ export class WorldRoom extends Room<WorldState> {
       w.volBy = typeof info?.sound?.weatherBy === "string" ? info.sound.weatherBy : "";
       w.volAt = Number(info?.sound?.weatherAt) || 0;
     }
+    // (and build mode's music, plan 124)
+    const mv = Number(info?.sound?.music);
+    if (Number.isFinite(mv)) {
+      this.state.buildMusicVol = Math.max(0, Math.min(2, mv));
+      this.state.buildMusicBy = typeof info?.sound?.musicBy === "string" ? info.sound.musicBy : "";
+      this.state.buildMusicAt = Number(info?.sound?.musicAt) || 0;
+    }
     this.registerMessages();
     // (plan 120) the world's cast, before the features that make the town's people from it
     // (a cast pushed while this one loaded — POST /internal/cast — is newer: kept)
@@ -718,6 +725,9 @@ export class WorldRoom extends Room<WorldState> {
         weather: s.weather.vol,
         weatherBy: s.weather.volBy || null,
         weatherAt: s.weather.volAt,
+        music: s.buildMusicVol,
+        musicBy: s.buildMusicBy || null,
+        musicAt: s.buildMusicAt,
       })
       .catch((e) => console.warn(`[sound] ${what}`, e.message));
   }
@@ -1422,6 +1432,26 @@ export class WorldRoom extends Room<WorldState> {
       this.saveSound("weather");
       if (by)
         this.adminLog(by, "weathersound", null, v === null ? "back to as it is" : `to ${Math.round(w.vol * 100)} %`);
+    });
+    // build mode's and God mode's music for everyone (docs/plan/124-the-build-view.md) — 0 … 2, or null: as it is (1).
+    // Admins only; kept in the world's settings beside the steps' and the weather's
+    this.on("mod:buildMusic", (client, m) => {
+      if (!owner(client)) return;
+      const v = m.v === null || m.v === undefined ? null : Number(m.v);
+      if (v !== null && !Number.isFinite(v)) return;
+      const by = this.state.players.get(client.sessionId);
+      const s = this.state;
+      s.buildMusicVol = v === null ? 1 : Math.round(Math.max(0, Math.min(2, v)) * 100) / 100;
+      s.buildMusicBy = v === null ? "" : (by?.name ?? "");
+      s.buildMusicAt = v === null ? 0 : Date.now();
+      this.saveSound("buildMusic");
+      if (by)
+        this.adminLog(
+          by,
+          "buildmusic",
+          null,
+          v === null ? "back to as it is" : `to ${Math.round(s.buildMusicVol * 100)} %`,
+        );
     });
     const byUid = (uid: number) => [...this.state.players.values()].find((q) => q.uid === uid);
     this.on("mod:mute", (client, m) => {

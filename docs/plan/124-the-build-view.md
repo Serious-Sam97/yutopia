@@ -441,3 +441,68 @@ Asked: "when I select a furniture, be able to customize the color etc. before I 
 
 ## Committed
 Committed and pushed to main as `d68f3aff` (2026-11-24), with the customize-before-placing follow-up.
+
+### Follow-up: build mode's music (2026-11-24)
+Asked: "Music when we enter build menu… The Sims 3 build music". The Sims 3's own tracks are EA's — not usable; the
+same spirit from CC BY music instead. Forks asked 2026-11-24: **CC BY tracks, credited**; **candidates picked by ear**;
+**a shuffled playlist**.
+- 12 candidates by Kevin MacLeod (incompetech.com, CC BY 4.0) in `public/sfx/build` (levelled −18 LUFS, 128 kb/s;
+  `manifest.json`): Bossa Antigua, Lobby Time, Local Forecast - Elevator, Airport Lounge, Cool Vibes, Daily Beetle,
+  Hep Cats, George Street Shuffle, Jazz Brunch, Easy Lemon, Wallpaper, Laid Back Guitars.
+- `/dev/build-music`: each heard (▷, a bar to seek) and ★ kept; the picks play in the game at once on that machine;
+  "copy picks" gives `chosen.json`. Until picks: every candidate.
+- `world/build/music.ts` `BuildMusic`: the picks shuffled (a fresh shuffle once round, not the same one twice running),
+  through the mixer's music bus (Settings' Music volume); fades in as build mode opens (1.6 s) and out on Done (0.9 s),
+  paused where it was and going on from there the next time; the world's ambience dips under it (`mixer.duck`).
+- Credits: `public/sfx/CREDITS.md` lines read by `tools/credits.py` as CC BY (a new pattern, before the CC0 one; a
+  work counted once by its link; the author up to its comma) → Settings → Credits. The regeneration also brought in
+  the Strike Park's music credits that weren't in `credits.json` yet.
+- Checked in the game (`e2e/zz-bv-music.mts`): opened → playing at full gain; Done → faded and paused; opened again →
+  the same track went on. Client unit 485/485.
+- **Picked by ear 2026-11-24** (6 of 12): Lobby Time, Cool Vibes, Daily Beetle, Hep Cats, Easy Lemon, Bossa Antigua
+  — `chosen.json`; the other six's files, manifest entries and credit lines taken out (25 MB left). Checked again in
+  the game from chosen.json alone (a fresh browser): one of the six played, faded on Done, went on when opened again.
+
+### Follow-up: the music in God mode, and an admin's level for everyone (2026-11-24)
+Asked: "add also on God Mode — and this background music's volume on build mode and god mode in admin settings so I
+can change it for all".
+- `world/build/music.ts` is one player for the page (`buildMusic`): build mode and God mode each `want` it; it plays
+  while either does (God mode's "Go in and build" carries straight on). God mode's chunk imports it.
+- The admin's level, as the steps' and the weather's are: `mod:buildMusic { v }` (shared protocol; admins only,
+  0 … 2, null back to 1) → `WorldState.buildMusicVol / buildMusicBy / buildMusicAt` (51 of 64 fields) → saved in the
+  world's settings' `sound` (`music`, `musicBy`, `musicAt`; the API's InternalController checks them, a Pest test) →
+  loaded on start; logged in the admin log ("buildmusic", allowed by the API, shown by the log page). The player follows
+  it while it plays (a level gain after the fades; each player's own Music volume still on top).
+- Admin panel → The world: "Build & God mode music", a slider 0–200 % with who set it and when, and Back to 100 %.
+- Checked in the game (`e2e/zz-bv-music2.mts`): God mode → playing; out → faded and paused; an admin's 30 % → the
+  world's 0.30 and the music's level 0.30 within a second; the card in the admin panel; reset → 1; the admin log
+  taken (no 422). API WorldTest + AdminTest 33 passed (3 failing on HEAD too, untouched); schema guard; client 485/485.
+- Budgets: the world page 499.8 of 500 KB; the build chunk 47.5 of 50; God mode's 32.0 — its budget raised 32 → 34
+  (`tools/budget.mjs`, noted).
+
+### Fix: a gun out kept the build camera at the shoulder (2026-11-24)
+The user: "when I have a weapon equipped, the camera even in build mode is always close". The view's over-the-shoulder
+ease (`armK`, plan 79's gun camera; `aimK` too) went in whatever the mode: building, the camera sat ~1.7 m from its
+point whatever the wheel did. `tp/view.ts`: building, both ease to 0 (the gun counts as held down). Checked
+(`e2e/zz-bv-gun.mts`): a gun drawn on foot 1.68 m; building 11.00 m, the wheel out to 16.11; after Done back at the
+shoulder.
+
+### B for build mode, the cursor at once in God mode (2026-11-24)
+Asked (pt): "Deixe o atalho B para ir ao build mode; quando eu clicar O para o God mode, faça o mouse já aparecer".
+- **B** opens build mode on foot (where I may build, not in God mode); B again is Done. In a car B still looks back,
+  in the Strike Park's match it still buys, holding a pool ball or the cue it still puts it back — those take it first.
+  The **battery moves to N** (the dark's quick use, the HUD's battery caption, the pack's key list); the Dock's hammer
+  says "(B)".
+- **God mode's cursor**: `ctl/focus.ts` `watchLook` let the camera's pointer lock go when build mode, a panel, a menu…
+  opened — not God mode, so the cursor came only later. God mode joined them (and its leaving locks again when nothing
+  else wants the pointer).
+- Checked (`e2e/zz-bv-keys.mts`, `zz-bv-godlock.mts`): B opens and closes build mode with the cursor free; N says "The
+  torch is full"; B no longer touches the battery; with the lock held (faked — headless never locks), O let it go at
+  once — and without the change it didn't (0). inventory-tools (N for the battery) and pool-balls (B puts the cue back):
+  6 passed.
+- Then: "when you exit building mode, make the mouse disappear too, like in God mode". Leaving build mode left the
+  cursor out: the lock came back only if it had been held when build mode opened (a Dock click left the mouse free),
+  and even then was refused — the view still thought it was building (it hears it a frame later). `watchLook` now, out
+  of build mode or God mode, tells the view at once and gives the mouse back to the camera if nothing else wants it.
+  Checked with the lock faked (`e2e/zz-bv-relock.mts`): Done, B out and O out all lock again; without the change none
+  did.

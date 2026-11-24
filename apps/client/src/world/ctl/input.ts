@@ -157,6 +157,8 @@ export class Input {
       else if (key === "v") void this.c.toggleCam();
       else if (key === "+" || key === "=") this.c.tp?.lensPart.zoomBy(1 / 1.15);
       else if (key === "-") this.c.tp?.lensPart.zoomBy(1.15);
+      // B again: Done (plan 124 — B opens it)
+      else if (key === "b") hud.set((s) => ({ build: { ...s.build, on: false, mode: "hand", props: null } }));
       return;
     }
     // moving and jumping: the keys by where they are on the keyboard (input/bindings.ts)
@@ -174,6 +176,9 @@ export class Input {
     else if (key === "y") this.c.focus.swapCamera();
     else if (key === "p" && !hud.get().build.on) void this.c.togglePhone();
     else if (key === "o" && hud.get().isAdmin && !hud.get().build.on) void this.c.toggleGod();
+    // B: build mode (plan 124; the battery is N now) — where I may build, not in God mode, not driving or in a match
+    else if (key === "b" && hud.get().canBuild && !this.c.god?.on && !hud.get().build.on)
+      hud.set((s) => ({ build: { ...s.build, on: true, mode: "hand" } }));
     // (plan 87: 1 the left hand, 2–5 the quick slots — the dark's, loaded for them; the emotes on 6–9: the four that
     // were on 5–8, the rest on the wheel)
     else if (key >= "1" && key <= "5") this.c.walker?.slotKey(Number(key) - 1);

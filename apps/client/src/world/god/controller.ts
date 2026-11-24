@@ -18,6 +18,7 @@ import { Vector3 } from "three";
 import { api } from "@/lib/api";
 import { addStrings, type Key, tr } from "@/lib/i18n";
 import { GOD_STRINGS } from "@/lib/i18n-god";
+import { buildMusic } from "../build/music";
 import type { WorldController } from "../controller";
 import { layDraft, layings, onPublished, publishedEdits, recheckEdits } from "../grounds-load";
 import { GOD_READY, GOD_TOOLS, type GodDraftRow, type GodHud, type GodTool, hud, toast } from "../store";
@@ -189,6 +190,8 @@ export class GodController {
     if (this.on || !tp || !hud.get().isAdmin) return;
     this.on = true;
     this.walking = false;
+    // (plan 124 follow-up: build mode's music here too, at the admin's level)
+    buildMusic.want("god", true, () => this.w.room?.state.buildMusicVol ?? 1);
     // (out of my head: where I stand, looking the way I look)
     const me = this.w.meAt();
     this.at = { x: me.x, z: me.y };
@@ -235,6 +238,7 @@ export class GodController {
     this.grow = null;
     this.growDrag = null;
     this.on = false;
+    buildMusic.want("god", false);
     const tp = this.w.tp;
     if (tp) tp.god = null;
     this.keys.clear();

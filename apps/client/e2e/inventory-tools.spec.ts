@@ -317,8 +317,8 @@ test("the HUD: the quick slots captioned with the held gun's rounds; a slip for 
   await expect(cap.locator(".hurt")).toHaveCount(0);
   await page.keyboard.press("KeyH");
   await expect(toast).toHaveText(/no first aid/i);
-  // B with the torch full: not wasted, said
-  await page.keyboard.press("KeyB");
+  // N with the torch full: not wasted, said (plan 124: B opens build mode now)
+  await page.keyboard.press("KeyN");
   await expect(toast).toHaveText(/torch is full/i);
   expect(await total(page, "battery")).toBe(1);
   // (plan 87) 1 is the left hand: the torch lit from it, and off; L no longer anything

@@ -258,3 +258,12 @@
   `defeat-c.mp3` *Lose Game Short Music Clip* by Robin Lamb, https://opengameart.org/content/lose-game-short-music-clip;
   `voice/m/` *Voiceover Pack (male)* by Kenney, https://kenney.nl/assets/voiceover-pack;
   `voice/f/` *Voiceover Pack (female)* by Kenney, https://kenney.nl/assets/voiceover-pack. Freesound ones are cut from the HQ previews.
+- Build mode's music (docs/plan/124-the-build-view.md), picked by ear on `/dev/build-music` 2026-11-24 from 12: light jazz and bossa in The Sims 3 build mode's spirit:
+  all by Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 4.0. Levelled to
+  −18 LUFS, 128 kb/s stereo; otherwise as published.
+  - `build/bossa-antigua.mp3`: *Bossa Antigua* by Kevin MacLeod, https://incompetech.com/music/royalty-free/mp3-royaltyfree/Bossa%20Antigua.mp3 (CC BY 4.0).
+  - `build/lobby-time.mp3`: *Lobby Time* by Kevin MacLeod, https://incompetech.com/music/royalty-free/mp3-royaltyfree/Lobby%20Time.mp3 (CC BY 4.0).
+  - `build/cool-vibes.mp3`: *Cool Vibes* by Kevin MacLeod, https://incompetech.com/music/royalty-free/mp3-royaltyfree/Cool%20Vibes.mp3 (CC BY 4.0).
+  - `build/daily-beetle.mp3`: *Daily Beetle* by Kevin MacLeod, https://incompetech.com/music/royalty-free/mp3-royaltyfree/Daily%20Beetle.mp3 (CC BY 4.0).
+  - `build/hep-cats.mp3`: *Hep Cats* by Kevin MacLeod, https://incompetech.com/music/royalty-free/mp3-royaltyfree/Hep%20Cats.mp3 (CC BY 4.0).
+  - `build/easy-lemon.mp3`: *Easy Lemon* by Kevin MacLeod, https://incompetech.com/music/royalty-free/mp3-royaltyfree/Easy%20Lemon.mp3 (CC BY 4.0).

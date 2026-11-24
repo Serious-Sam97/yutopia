@@ -300,6 +300,9 @@ export interface ClientMessages {
   "mod:steps": { v: number | null };
   // the weather's sound for everyone (docs/plan/65-the-weather.md): 0 none … 1 as it is … 2 twice; null: 1 again
   "mod:weatherVol": { v: number | null };
+  // build mode's and God mode's music for everyone (docs/plan/124-the-build-view.md): 0 none … 1 as it is … 2 twice;
+  // null: 1 again
+  "mod:buildMusic": { v: number | null };
   // thin ice broken through under me (docs/plan/66-the-water.md S4): where, the Grounds' coords
   "ice:break": { x: number; z: number };
   // removed for `minutes` (shared admin.ts REMOVE_MINUTES; none: 10), or let back in early

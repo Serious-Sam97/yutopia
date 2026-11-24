@@ -46,7 +46,7 @@ import { VORTEX_CSS, VortexFight } from "./vortex";
 // right — framed, captioned with the held gun's rounds (plan 86) — and a typed slip
 // above them for what I gain (plan 86: the strip that was there gone), searching a
 // spot (E or the pad's X near it: a ring fills, then the server says what was in
-// it), what lies on the snow; H a first aid, B a battery from anywhere (plan 86).
+// it), what lies on the snow; H a first aid, N a battery from anywhere (plan 86; B was, till B opened build mode).
 // As in design/screens/dark/05a-loot and design/inventory/0-hud.
 export const DARK_CHUNK = "yutopia-dark";
 addStrings(STRINGS, DARK_CHUNK);
@@ -406,10 +406,10 @@ class Dark implements DarkHooks {
         e.stopImmediatePropagation();
         return;
       }
-      // (plan 86) H a first aid, B a battery — from the quick slots or the pack, on foot
+      // (plan 86) H a first aid, N a battery — from the quick slots or the pack, on foot (B builds now: plan 124)
       if (
         !e.repeat &&
-        (e.code === "KeyH" || (e.code === "KeyB" && !strikeKeys.playing)) &&
+        (e.code === "KeyH" || (e.code === "KeyN" && !strikeKeys.playing)) &&
         this.quickUse(e.code === "KeyH" ? "aid" : "battery")
       ) {
         e.preventDefault();
@@ -930,9 +930,9 @@ class Dark implements DarkHooks {
       const drained = this.walker.breath.drained;
       const label = drained ? t("dark_recharging") : t("dark_focus");
       const mark = drained ? `<i style="left:25%;width:2px;background:${AMBER}"></i>` : "";
-      // (plan 86: a battery carried — B puts it in)
+      // (plan 86: a battery carried — N puts it in)
       const spare = this.inv ? count(this.inv, "battery") : 0;
-      const b = spare ? `<span class="dk-bk"><span class="dk-key">B</span>×${spare}</span>` : "";
+      const b = spare ? `<span class="dk-bk"><span class="dk-key">N</span>×${spare}</span>` : "";
       this.bat.innerHTML = `<div class="row"><span style="color:var(--amber)">${label.toUpperCase()}</span><span style="color:${low ? "var(--error)" : "var(--cream)"}">${b}${pct}%</span></div><div class="bar"><i style="width:${bat - eat}%;background:${fill}"></i><i style="left:${bat - eat}%;width:${eat}%;background:var(--amber);opacity:.4"></i>${mark}</div>`;
     }
     // the air under the water: under it, and a moment after it's full again

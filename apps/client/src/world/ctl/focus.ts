@@ -64,7 +64,15 @@ export class Focus {
   // mode, a side panel, choosing my arrival — and comes back when that's gone (if it was mine).
   aimId: string | null = null; // the usable thing under the crosshair
 
-  lookWas = { menu: false, panel: false, build: false, side: null as string | null, pick: false, kart: false };
+  lookWas = {
+    menu: false,
+    panel: false,
+    build: false,
+    side: null as string | null,
+    pick: false,
+    kart: false,
+    god: false,
+  };
 
   relock = false;
 
@@ -102,6 +110,8 @@ export class Focus {
       side: h.side,
       pick: h.pickArrival,
       kart: h.kartUi,
+      // (plan 124: God mode — its pointer's the cursor at once, as build mode's)
+      god: h.god.on,
     };
     const was = this.lookWas;
     this.lookWas = now;
@@ -113,10 +123,18 @@ export class Focus {
       (now.build && !was.build) ||
       (now.pick && !was.pick) ||
       (now.kart && !was.kart) ||
+      (now.god && !was.god) ||
       (now.side !== null && now.side !== was.side);
     if (opened && tp.mouseLook.looking) {
       this.relock = true;
       tp.mouseLook.setLook(false);
+    }
+    // (plan 124) out of build mode or God mode: the mouse is the camera's again at once, however they were opened (a
+    // Dock click left it free) — the view told build mode's gone now (it hears it next frame, and a lock asked for while
+    // it thinks it's building is refused)
+    if ((was.build && !now.build) || (was.god && !now.god)) {
+      tp.buildPick.buildMode = false;
+      this.relock = true;
     }
     // all of it gone again: back to the camera (Chrome locks again without a click after a
     // let-go from code; where the browser says no, the next click on the world does)

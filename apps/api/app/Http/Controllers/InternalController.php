@@ -27,7 +27,7 @@ use Illuminate\Validation\Rule;
 class InternalController extends Controller
 {
     // (shared admin.ts LOG_KINDS: what the log takes)
-    private const LOG_KINDS = ['mute', 'unmute', 'remove', 'unremove', 'lock', 'unlock', 'admin', 'unadmin', 'hour', 'storm', 'fog', 'notice', 'power', 'spawn', 'clear', 'freeze', 'home', 'bring', 'unseat', 'heal', 'give', 'cars', 'shuttle', 'dark', 'invite', 'publish', 'rollback', 'god', 'steps', 'weather', 'weathersound', 'npcbond'];
+    private const LOG_KINDS = ['mute', 'unmute', 'remove', 'unremove', 'lock', 'unlock', 'admin', 'unadmin', 'hour', 'storm', 'fog', 'notice', 'power', 'spawn', 'clear', 'freeze', 'home', 'bring', 'unseat', 'heal', 'give', 'cars', 'shuttle', 'dark', 'invite', 'publish', 'rollback', 'god', 'steps', 'weather', 'weathersound', 'buildmusic', 'npcbond'];
 
     public function __construct(private readonly Worlds $worlds) {}
 
@@ -495,6 +495,10 @@ class InternalController extends Controller
             'sound.weather' => ['sometimes', 'numeric', 'min:0', 'max:2'],
             'sound.weatherBy' => ['sometimes', 'nullable', 'string', 'max:120'],
             'sound.weatherAt' => ['sometimes', 'integer', 'min:0'],
+            // build mode's and God mode's music (docs/plan/124-the-build-view.md): the same, its own who and when
+            'sound.music' => ['sometimes', 'numeric', 'min:0', 'max:2'],
+            'sound.musicBy' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'sound.musicAt' => ['sometimes', 'integer', 'min:0'],
         ]);
         $sound = $request->input('sound');
         $world = World::current();
@@ -504,6 +508,13 @@ class InternalController extends Controller
                 'weather' => (float) $sound['weather'],
                 'weatherBy' => $sound['weatherBy'] ?? null,
                 'weatherAt' => (int) ($sound['weatherAt'] ?? 0),
+            ];
+        }
+        if (array_key_exists('music', $sound)) {
+            $kept += [
+                'music' => (float) $sound['music'],
+                'musicBy' => $sound['musicBy'] ?? null,
+                'musicAt' => (int) ($sound['musicAt'] ?? 0),
             ];
         }
         $world->settings = array_merge($world->settings ?? [], ['sound' => $kept]);

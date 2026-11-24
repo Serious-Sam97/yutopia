@@ -72,6 +72,7 @@ import { hud, toast, type WallTag, type WallView } from "../store";
 import { BuildCam } from "./camera";
 import { FreeFloors, FreeRoofs } from "./freefloors";
 import { FreeWalls } from "./freewalls";
+import { buildMusic } from "./music";
 import { buildSound } from "./sounds";
 
 // Marks this chunk for `pnpm budget` (build mode loads on demand).
@@ -183,6 +184,8 @@ export class BuildController {
     removing: () => this.removing,
   });
 
+  /** Build mode's music (plan 124 follow-up): a shuffled playlist faded in and out with it (God mode's too). */
+  readonly music = buildMusic;
   /** Build mode's own camera (plan 124 F4a): its point panned, me standing still. */
   readonly cam = new BuildCam(() => this.w.tp);
   /** A key down or up for the build camera (true: it was its). */
@@ -227,6 +230,7 @@ export class BuildController {
 
   dispose() {
     this.unsub();
+    this.music.want("build", false);
     window.removeEventListener("keydown", this.onMods);
     window.removeEventListener("keyup", this.onMods);
     window.removeEventListener("blur", this.onBlur);
@@ -1445,8 +1449,11 @@ export class BuildController {
         this.setBuild({ on: false });
         return;
       }
+      // (the music on opening — refresh runs on every change while it's open)
+      if (!this.cam.on) this.music.want("build", true, () => this.w.room?.state.buildMusicVol ?? 1);
       this.cam.start();
     } else {
+      if (this.cam.on) this.music.want("build", false);
       this.cam.stop();
       if (bt.topDown) this.setBuild({ topDown: false });
     }

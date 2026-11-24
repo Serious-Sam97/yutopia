@@ -1,0 +1,46 @@
+{
+ "music": [
+  {
+   "file": "bossa-antigua.mp3",
+   "title": "Bossa Antigua",
+   "author": "Kevin MacLeod",
+   "page": "https://incompetech.com/music/royalty-free/music.html",
+   "license": "CC BY 4.0"
+  },
+  {
+   "file": "lobby-time.mp3",
+   "title": "Lobby Time",
+   "author": "Kevin MacLeod",
+   "page": "https://incompetech.com/music/royalty-free/music.html",
+   "license": "CC BY 4.0"
+  },
+  {
+   "file": "cool-vibes.mp3",
+   "title": "Cool Vibes",
+   "author": "Kevin MacLeod",
+   "page": "https://incompetech.com/music/royalty-free/music.html",
+   "license": "CC BY 4.0"
+  },
+  {
+   "file": "daily-beetle.mp3",
+   "title": "Daily Beetle",
+   "author": "Kevin MacLeod",
+   "page": "https://incompetech.com/music/royalty-free/music.html",
+   "license": "CC BY 4.0"
+  },
+  {
+   "file": "hep-cats.mp3",
+   "title": "Hep Cats",
+   "author": "Kevin MacLeod",
+   "page": "https://incompetech.com/music/royalty-free/music.html",
+   "license": "CC BY 4.0"
+  },
+  {
+   "file": "easy-lemon.mp3",
+   "title": "Easy Lemon",
+   "author": "Kevin MacLeod",
+   "page": "https://incompetech.com/music/royalty-free/music.html",
+   "license": "CC BY 4.0"
+  }
+ ]
+}

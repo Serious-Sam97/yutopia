@@ -255,7 +255,7 @@ export function Dock() {
               type="button"
               className="deck-btn"
               onClick={() => hud.set((s) => ({ build: { ...s.build, on: true, mode: "hand" } }))}
-              title={t("build")}
+              title={`${t("build")} (B)`}
               aria-label={t("build")}
             >
               <Icon name="hammer" size={20} />

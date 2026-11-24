@@ -783,6 +783,11 @@ export class WorldState extends Schema {
   @type("float32") stepsVol = 1;
   @type("string") stepsBy = "";
   @type("float64") stepsAt = 0;
+  // build mode's and God mode's music for everyone (docs/plan/124-the-build-view.md): 1 as it is, 0 none, 2 twice —
+  // an admin's, who and when (WorldRoom mod:buildMusic)
+  @type("float32") buildMusicVol = 1;
+  @type("string") buildMusicBy = "";
+  @type("float64") buildMusicAt = 0;
   // the server's clock (ms) at the tick whose world a patch carries: the NPCs and pets drawn on it, not on when
   // the patch happens to come (docs/plan/89-the-weight.md phase 7)
   @type("float64") tickAt = 0;

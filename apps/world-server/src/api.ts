@@ -72,6 +72,9 @@ export interface WorldInfo {
     weather?: unknown;
     weatherBy?: unknown;
     weatherAt?: unknown;
+    music?: unknown; // build mode's and God mode's music (mod:buildMusic, plan 124)
+    musicBy?: unknown;
+    musicAt?: unknown;
   } | null;
   weather?: unknown; // the ground and the call in force when last saved (shared weather.ts SavedWeather)
   edits?: GroundsEdits; // god mode's edits to the Grounds as published (features/godmode.ts)
@@ -124,6 +127,9 @@ export const api = {
     weather: number;
     weatherBy: string | null;
     weatherAt: number;
+    music: number;
+    musicBy: string | null;
+    musicAt: number;
   }) => call("PUT", "/world/sound", { sound }),
   putWeather: (weather: SavedWeather) => call("PUT", "/world/weather", { weather }),
   // Vortex's memory (docs/plan/88-vortex-fight.md phase 4): his scars today, the grudge

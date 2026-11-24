@@ -73,7 +73,11 @@ def sounds_group():
 
     def add(title, author, url, by=False):
         title, author = " ".join(title.split()), " ".join(author.split())  # (wrapped over lines in the .md)
-        if (title, author) not in seen:
+        url = url.rstrip(".,;")
+        # (one work once: by its link — a line two patterns read is the first's, CC BY before CC0; plan 124)
+        key = url or (title, author)
+        if key not in seen and (title, author) not in seen:
+            seen.add(key)
             seen.add((title, author))
             out.append({"title": title, "author": author.strip(), "source": url, **(BY if by else CC0)})
 
@@ -82,8 +86,12 @@ def sounds_group():
         r"\*([^*]+)\*\s+by\s+([^(*,]+?)\s+\((?:Freesound\s+(\d+)(,\s*CC BY 4\.0)?|OpenGameArt,\s+([\w-]+))\)", text
     ):
         add(title, author, f"https://freesound.org/s/{fs}/" if fs else f"https://opengameart.org/content/{oga}", bool(by))
-    for title, author, url in re.findall(r"\*([^*]+)\* by ([^,(]+?)[,\s][^h]*?(https://\S+?)[\s)]", text):
-        add(title, author, url.rstrip(".,"))
+    # (plan 124: music under CC BY — "*Title* by Author, https://… (CC BY 4.0)": owed; before the CC0 lines' pattern)
+    for title, author, url in re.findall(r"\*([^*]+)\* by ([^,(]+?), (https://\S+?) \(CC BY 4\.0\)", text):
+        add(title, author, url, True)
+    # (the author up to its comma or bracket: "Tsorthan Grove", not "Tsorthan" — plan 124)
+    for title, author, url in re.findall(r"\*([^*]+)\* by ([^,(]+?)\s*[,(][^h]*?(https://\S+?)[\s)]", text):
+        add(title, author, url)
     return out
 
 
