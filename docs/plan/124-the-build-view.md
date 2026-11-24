@@ -506,3 +506,6 @@ Asked (pt): "Deixe o atalho B para ir ao build mode; quando eu clicar O para o G
   of build mode or God mode, tells the view at once and gives the mouse back to the camera if nothing else wants it.
   Checked with the lock faked (`e2e/zz-bv-relock.mts`): Done, B out and O out all lock again; without the change none
   did.
+
+Committed and pushed as `c339a2cd` (2026-11-24): the build and God mode music with its admin level, B for build mode
+(the battery on N), the mouse handed over in and out of both modes, the gun's camera kept out while building.
