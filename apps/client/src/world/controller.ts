@@ -84,6 +84,7 @@ import { ApiError, type Session, yutopia } from "@/lib/api";
 import { reportError, setErrorSink } from "@/lib/crash";
 import { setGfxHost } from "@/lib/gfx-switch";
 import { lang, tr } from "@/lib/i18n";
+import { lampWanted } from "@/lib/lamp";
 import { drawnAs, gpuKind, prefs, subscribePrefs } from "@/lib/prefs";
 import { ActionQueue } from "./actions";
 import { loadChars } from "./art/chars-load";
@@ -119,7 +120,7 @@ import { liftSound } from "./lift-sound";
 import { Media } from "./media";
 import type { MediaRoom } from "./media/room";
 import { type AvatarState, WorldModel } from "./model";
-import { biIn } from "./npc-words";
+import { biIn, npcLabel } from "./npc-words";
 import type { OsRoom } from "./os/room";
 import { FramePerf } from "./perf";
 import type { PerfReport } from "./perf-report";
@@ -127,7 +128,7 @@ import type { Phone } from "./phone";
 import type { SlotTracks } from "./slots";
 import { type Floor, radio, sound } from "./sound";
 import type { Space } from "./steps";
-import { hud, type Person, toast } from "./store";
+import { hud, lampSay, type Person, toast } from "./store";
 import { strikeKeys } from "./strike/flag";
 import type { Body3, CamMode, ThirdPersonView } from "./tp/view";
 
@@ -763,7 +764,10 @@ export class WorldController {
         lastSay = n.sayAt;
         if (Math.hypot(n.x - this.me.x, n.y - this.me.y) > 8) return;
         // (the cast's lines come EN|PT: mine — plan 120)
-        this.say(`npc:${id}`, biIn(n.say, lang() === "pt"), 7000);
+        const line = biIn(n.say, lang() === "pt");
+        this.say(`npc:${id}`, line, 7000);
+        // (plan 125 F8a) the new UI: what they say as a subtitle too
+        lampSay(npcLabel((n.name ?? "").trim(), "").trim() || "", line, 7000);
       });
     });
     $(room.state).npcs.onRemove((_n, id) => model.removeAvatar(`npc:${id}`));
@@ -2498,9 +2502,24 @@ export class WorldController {
         buildDown: (x, y) => model.events.onPointerDown?.(x, y),
         buildUp: (x, y) => model.events.onPointerUp?.(x, y),
         wheel: (dy) => model.events.onWheel?.(dy) ?? false,
-        look: (on) => {
+        look: (on, byUser) => {
           hud.set({ look: on });
           if (!on) this.focus.aimId = null;
+          // (plan 125) the new UI: the mouse freed by Esc in play — that Esc never reaches the page — is the pause,
+          // as Esc is with the pointer free (ctl/input.ts)
+          const h = hud.get();
+          if (
+            !on &&
+            byUser &&
+            lampWanted() &&
+            !h.panel.kind &&
+            !h.menu &&
+            h.side === null &&
+            !h.build.on &&
+            !this.god?.on &&
+            !h.strike?.me
+          )
+            hud.set((s) => ({ panel: { kind: "pause" }, lamp: { ...s.lamp, tab: "map", wheel: false } }));
         },
         lookRefused: () => toast(tr("lookRefused")),
         aim: (at) => {

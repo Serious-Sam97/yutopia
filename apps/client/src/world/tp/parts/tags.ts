@@ -1,5 +1,6 @@
 import { EMOTES, type Emote, WANTS, type Want } from "@yutopia/shared";
 import { tr } from "@/lib/i18n";
+import { lampWanted } from "@/lib/lamp";
 import { emoteUrl } from "../../art/emotes";
 import type { Body3, ThirdPersonView } from "../view";
 import type { Tag } from "./common";
@@ -71,11 +72,23 @@ export class Tags {
         t.emoteKey = emote;
         if (emote) t.emote.src = emoteUrl(emote);
       }
+      // (plan 125, the new UI) the plumbob — The Sims' — over a person who's away or busy, mine too: the normal status
+      // has none; nor pets, the town's people, bots; nor in the dark, unseen
+      const bobSt =
+        !b.pet && !b.npc && !b.bot && !dark && lampWanted() && (b.status === "away" || b.status === "dnd")
+          ? b.status
+          : "";
+      if (t.bobKey !== bobSt) {
+        t.bobKey = bobSt;
+        if (bobSt) t.bob.innerHTML = bobSvg(BOB[bobSt]);
+        t.bob.style.display = bobSt ? "" : "none";
+      }
       // (out in the dark, unseen: no name, no emote — the bubble still: they're heard)
       const showEmote = emote && !dark ? "" : "none";
       if (t.emote.style.display !== showEmote) t.emote.style.display = showEmote;
       const pill = t.name.parentElement as HTMLElement;
-      const showName = dark ? "none" : "";
+      // (my own name not over my head — I know who I am; my plumbob, a bubble, an emote still)
+      const showName = dark || b.id === this.c.meId ? "none" : "";
       if (pill.style.display !== showName) pill.style.display = showName;
       // (fading with them as the fog takes them; a bubble not: they're heard)
       const fade = fogK >= 0.5 ? "" : (Math.max(0, fogK - 0.1) / 0.4).toFixed(2);
@@ -109,6 +122,7 @@ export class Tags {
       if (p) {
         const bob = emote && !b.reduced ? Math.sin(now / 166) * 2 : 0;
         t.emote.style.transform = `translate(-50%, ${bob}px)`;
+        if (t.bobKey) t.bob.style.transform = `translateY(${b.reduced ? 0 : Math.sin(now / 700) * 3}px)`;
         t.root.style.transform = `translate(${p.x}px, ${p.y}px)`;
         t.root.style.zIndex = String(Math.round(10000 - Math.hypot(cam.x - b.x, cam.z - b.y) * 100));
       }
@@ -155,7 +169,18 @@ function makeTag(): Tag {
   dot.appendChild(slash);
   const name = document.createElement("span");
   pill.append(dot, name);
-  stack.append(bubble, emote, pill);
+  const bob = document.createElement("div");
+  bob.style.cssText = "display:none;width:22px;height:40px;margin-bottom:2px;pointer-events:none";
+  stack.append(bubble, emote, bob, pill);
   root.appendChild(stack);
-  return { root, name, dot, slash, emote, bubble, dotKey: "", emoteKey: "", bubbleUntil: 0 };
+  return { root, name, dot, slash, emote, bubble, bob, bobKey: "", dotKey: "", emoteKey: "", bubbleUntil: 0 };
+}
+
+// (plan 125) the plumbob's colours by status: its face, its shade, its light, its glow
+const BOB = {
+  away: ["#f6dc8a", "#d9a93a", "#fff3cf", "rgba(246,220,138,.8)"],
+  dnd: ["#f2a08f", "#d0533c", "#ffe1da", "rgba(240,130,110,.8)"],
+} as const;
+function bobSvg(c: readonly string[]): string {
+  return `<svg width="22" height="40" viewBox="0 0 34 62" style="filter:drop-shadow(0 0 8px ${c[3]}) drop-shadow(0 0 18px ${c[3]});opacity:.92" aria-hidden="true"><path d="M17 0 L34 24 L17 62 L0 24Z" fill="${c[0]}"/><path d="M17 0 L34 24 L17 30Z" fill="${c[2]}"/><path d="M0 24 L17 30 L17 62Z" fill="${c[1]}"/><path d="M17 4 L9 18 L17 12Z" fill="#fff" opacity=".6"/></svg>`;
 }

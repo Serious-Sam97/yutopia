@@ -96,7 +96,8 @@
     "./physics": "./src/physics/index.ts",
     "./physics/place": "./src/physics/place.ts",
     "./physics/structure-solids": "./src/physics/structure-solids.ts",
-    "./reach": "./src/reach.ts"
+    "./reach": "./src/reach.ts",
+    "./stickers": "./src/stickers.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

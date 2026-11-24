@@ -152,3 +152,16 @@ it('keeps the day the lobby\'s locker last gave its kit', function () {
     $put(pockets(['kitDay' => null]))->assertOk();
     expect(internalCall($this, 'GET', "/api/internal/survivors/{$ana->id}")->json('survivor.kitDay'))->toBeNull();
 });
+
+// (plan 125) Ana's Case: where each thing lies, and the stash at home, kept; what can't be a place left out
+it('keeps where things lie in the case, and the stash at home', function () {
+    $ana = User::factory()->create();
+    internalCall($this, 'PUT', "/api/internal/survivors/{$ana->id}", pockets(['inventory' => [
+        'place' => ['0' => [0, 0, 0], '17' => [3, 2, 1], '18' => [11, 0, 0], 'x' => [1, 1, 0]],
+        'stash' => [['id' => 'sniper', 'loaded' => 5], ['id' => 'r38', 'n' => 24]],
+    ]]))->assertOk();
+    $inv = internalCall($this, 'GET', "/api/internal/survivors/{$ana->id}")->assertOk()->json('survivor.inventory');
+    expect($inv['place'])->toBe(['0' => [0, 0, 0], '17' => [3, 2, 1]]);
+    expect($inv['stash'][0])->toBe(['id' => 'sniper', 'loaded' => 5]);
+    expect($inv['pockets'])->toHaveCount(Survivor::POCKETS);
+});

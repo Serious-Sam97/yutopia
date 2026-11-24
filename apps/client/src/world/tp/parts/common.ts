@@ -58,6 +58,9 @@ export interface Tag {
   slash: HTMLSpanElement;
   emote: HTMLImageElement;
   bubble: HTMLDivElement;
+  /** (plan 125) the plumbob over the head: away or busy only */
+  bob: HTMLDivElement;
+  bobKey: string;
   dotKey: string;
   emoteKey: string;
   bubbleUntil: number;

@@ -54,11 +54,17 @@ export const STACKS = {
 export type StackId = keyof typeof STACKS;
 export type ItemId = WeaponId | StackId;
 
-// (plan 86 F4a: the pack's 8 pockets — was 6; the quick slots' numbers follow them: 8–11)
-export const POCKETS = 8;
+// (plan 86 F4a: the pack's 8 pockets — was 6; the quick slots' numbers follow them)
+// (plan 125 F5a: Ana's Case — the room's the case's now, by size: 16 places for boxes, however many fit)
+export const POCKETS = 16;
 export const QUICK = 4;
 export const PAGES_MAX = 200;
+/** (plan 125 F17a) the stash at home holds this many things at most */
+export const STASH_MAX = 100;
 /** drop / use / move slots: the pockets 0–7, then the quick slots 8–11, then the left hand 12 (plan 87) */
+/** (plan 125) what the stash may hold at most once the case spills into it — a full stash and everything carried with
+ *  nowhere to lie (a load's settle): never cut (`dark:stash` stops at STASH_MAX; the API takes up to this) */
+export const STASH_HOLD = STASH_MAX + POCKETS + QUICK + 1;
 export const QUICK_SLOT = POCKETS;
 /** (plan 87) the left hand's slot: key 1 — anything but a weapon (a weapon takes both hands) */
 export const HAND_SLOT = POCKETS + QUICK;
@@ -81,7 +87,130 @@ export interface Inventory {
   pockets: (Item | null)[]; // POCKETS: the pack — a weapon here is only carried (plan 85)
   hand: Item | null; // (plan 87) the left hand, key 1: the torch lit from here, anything else used by 1
   pages: string[];
+  /** (plan 125 F5a) where each thing lies in the case, by its slot: [x, y, turned] — everything carried, at hand
+   *  too (the hands are shortcuts into the case, RE4's) */
+  place?: Record<number, CasePlace>;
+  /** (plan 125 F17a) what didn't fit when the pack became the case: kept at home, to fetch */
+  stash?: Item[];
 }
+
+// ── (plan 125) Ana's Case: RE4's attaché case — every thing its size in a grid, turned to fit ──
+export const CASE_W = 10;
+export const CASE_H = 7;
+/** [x, y, turned (0 as drawn, 1 a quarter turn)] in the case's cells */
+export type CasePlace = [number, number, 0 | 1];
+const BOARD: [number, number] = [6, 2];
+/** Each thing's size in the case's cells (w × h, lying as drawn). */
+export const SIZE: Record<ItemId, [number, number]> = {
+  revolver: [3, 2],
+  shotgun: [7, 2],
+  ak47: [6, 3],
+  sniper: [8, 2],
+  daybreak: [6, 3],
+  r38: [1, 1],
+  shell: [1, 1],
+  r762: [1, 2],
+  r308: [1, 1],
+  cell: [1, 1],
+  flare: [2, 1],
+  battery: [1, 1],
+  aid: [2, 2],
+  fuse: [1, 1],
+  torch: [3, 1],
+  umbrella: [4, 1],
+  chains: [2, 2],
+  wrench: [2, 1],
+  towrope: [2, 2],
+  vxtape: [2, 1],
+  board_vert_classic: BOARD,
+  board_vert_fish: BOARD,
+  board_vert_square: BOARD,
+  board_street_pop: BOARD,
+  board_street_slick: BOARD,
+  board_street_tech: BOARD,
+  board_cruiser_classic: BOARD,
+  board_cruiser_wood: BOARD,
+  board_cruiser_mini: BOARD,
+};
+/** A thing's cells lying at `r`. */
+export const sizeOf = (id: ItemId, r: 0 | 1): [number, number] => {
+  const [w, h] = SIZE[id] ?? [1, 1];
+  return r ? [h, w] : [w, h];
+};
+const places = (inv: Inventory): Record<number, CasePlace> => {
+  inv.place ??= {};
+  return inv.place;
+};
+/** The case's cells: 0 free, else the slot + 1 lying there (`skip`: one not counted — it's moving). */
+export function caseCells(inv: Inventory, skip = -1): Int16Array {
+  const g = new Int16Array(CASE_W * CASE_H);
+  const pl = places(inv);
+  for (const { it, i } of slots(inv)) {
+    const p = pl[i];
+    if (!it || !p || i === skip) continue;
+    const [w, h] = sizeOf(it.id, p[2]);
+    // (a bad place — past the edge — marks only what's inside: it mustn't wrap into the next row)
+    for (let y = Math.max(0, p[1]); y < Math.min(CASE_H, p[1] + h); y++)
+      for (let x = Math.max(0, p[0]); x < Math.min(CASE_W, p[0] + w); x++) g[y * CASE_W + x] = i + 1;
+  }
+  return g;
+}
+/** Does a thing fit at `p` (in the case, over nothing else — `skip`'s own cells free)? */
+export function fitsAt(inv: Inventory, id: ItemId, p: CasePlace, skip = -1, g = caseCells(inv, skip)): boolean {
+  const [w, h] = sizeOf(id, p[2]);
+  if (!Number.isInteger(p[0]) || !Number.isInteger(p[1]) || p[0] < 0 || p[1] < 0) return false;
+  if (p[0] + w > CASE_W || p[1] + h > CASE_H) return false;
+  for (let y = p[1]; y < p[1] + h; y++) for (let x = p[0]; x < p[0] + w; x++) if (g[y * CASE_W + x]) return false;
+  return true;
+}
+/** The first place a thing fits (row by row, as drawn, then turned), or null — no room. */
+export function spotFor(inv: Inventory, id: ItemId, skip = -1): CasePlace | null {
+  const g = caseCells(inv, skip);
+  const [w, h] = SIZE[id] ?? [1, 1];
+  for (const r of w === h ? ([0] as const) : ([0, 1] as const))
+    for (let y = 0; y < CASE_H; y++)
+      for (let x = 0; x < CASE_W; x++) if (fitsAt(inv, id, [x, y, r], skip, g)) return [x, y, r];
+  return null;
+}
+/** Room for one more of it (a new box, a weapon)? */
+export const roomFor = (inv: Inventory, id: ItemId): boolean => spotFor(inv, id) !== null;
+/** (F14a) A thing moved (or turned) within the case: true if it fits there. */
+export function placeSlot(inv: Inventory, slot: number, p: CasePlace): boolean {
+  const it = slotAt(inv, slot);
+  if (!it || !fitsAt(inv, it.id, p, slot)) return false;
+  places(inv)[slot] = [p[0], p[1], p[2] ? 1 : 0];
+  return true;
+}
+/** Every thing carried given a place where it has none (or a bad one): what has no room — taken out, returned. */
+export function settle(inv: Inventory): Item[] {
+  const pl = places(inv);
+  const out: Item[] = [];
+  for (const k of Object.keys(pl)) if (!slotAt(inv, Number(k))) delete pl[Number(k)];
+  // (the ones placed first: the bad ones dropped, one by one, so the good keep theirs)
+  for (const { it, i } of slots(inv)) {
+    if (!it || !pl[i]) continue;
+    const p = pl[i];
+    delete pl[i];
+    if (fitsAt(inv, it.id, p)) pl[i] = p;
+  }
+  // (the biggest first: the small fill round them)
+  const loose = slots(inv)
+    .filter((e) => e.it && !pl[e.i])
+    .sort((a, b) => area(b.it as Item) - area(a.it as Item));
+  for (const { it, i } of loose) {
+    const p = spotFor(inv, (it as Item).id);
+    if (p) pl[i] = p;
+    else {
+      out.push(it as Item);
+      put(inv, i, null);
+    }
+  }
+  return out;
+}
+const area = (it: Item) => {
+  const [w, h] = SIZE[it.id] ?? [1, 1];
+  return w * h;
+};
 
 export const isWeapon = (id: unknown): id is WeaponId => typeof id === "string" && Object.hasOwn(WEAPONS, id);
 export const isStack = (id: unknown): id is StackId => typeof id === "string" && Object.hasOwn(STACKS, id);
@@ -96,6 +225,8 @@ export const emptyInventory = (): Inventory => ({
   pockets: Array.from({ length: POCKETS }, () => null),
   hand: null,
   pages: [],
+  place: {},
+  stash: [],
 });
 
 /** What's in a slot (pockets 0–7, quick 8–11, the left hand 12): null empty, undefined no such slot. */
@@ -110,6 +241,16 @@ function put(inv: Inventory, slot: number, it: Item | null): void {
   if (slot === HAND_SLOT) inv.hand = it;
   else if (slot < POCKETS) inv.pockets[slot] = it;
   else inv.quick[slot - QUICK_SLOT] = it;
+  // (plan 125: an empty slot lies nowhere in the case)
+  if (!it && inv.place) delete inv.place[slot];
+}
+/** (plan 125) Something new into an empty slot, where it fits in the case (`at`, if it fits there): false — no room. */
+function putNew(inv: Inventory, slot: number, it: Item, at?: CasePlace): boolean {
+  const p = at && fitsAt(inv, it.id, at) ? at : spotFor(inv, it.id);
+  if (!p) return false;
+  put(inv, slot, it);
+  places(inv)[slot] = p;
+  return true;
 }
 /** (plan 87) What a slot takes: the left hand anything but a weapon; a quick slot anything but the torch (it lights
  *  only from the left hand); a pocket anything. */
@@ -154,8 +295,7 @@ export function addStack(inv: Inventory, id: StackId, n: number): number {
     if (n < 1 || count(inv, id) > 0) return 0;
     const at = inv.hand ? inv.pockets.indexOf(null) : HAND_SLOT;
     if (at < 0) return 0;
-    put(inv, at, { id, n: 1 });
-    return 1;
+    return putNew(inv, at, { id, n: 1 }) ? 1 : 0;
   }
   let left = Math.max(0, Math.floor(n));
   const cap = STACKS[id];
@@ -171,7 +311,8 @@ export function addStack(inv: Inventory, id: StackId, n: number): number {
     if (!left) break;
     if (it || i === HAND_SLOT) continue;
     const k = Math.min(left, cap);
-    put(inv, i, { id, n: k });
+    // (plan 125: a new box only where the case has room for it)
+    if (!putNew(inv, i, { id, n: k })) break;
     left -= k;
   }
   return Math.max(0, Math.floor(n)) - left;
@@ -202,15 +343,9 @@ export function addWeapon(inv: Inventory, w: Weapon): Weapon | null {
   const loaded = Math.max(0, Math.min(WEAPONS[w.id].mag, Math.floor(w.loaded)));
   if (!carries(inv, w.id)) {
     const i = inv.quick.indexOf(null);
-    if (i >= 0) {
-      inv.quick[i] = { id: w.id, loaded };
-      return null;
-    }
+    if (i >= 0 && putNew(inv, QUICK_SLOT + i, { id: w.id, loaded })) return null;
     const p = inv.pockets.indexOf(null);
-    if (p >= 0) {
-      inv.pockets[p] = { id: w.id, loaded };
-      return null;
-    }
+    if (p >= 0 && putNew(inv, p, { id: w.id, loaded })) return null;
   }
   const took = loaded ? addStack(inv, WEAPONS[w.id].ammo, loaded) : 0;
   return { id: w.id, loaded: loaded - took };
@@ -219,7 +354,16 @@ export function addWeapon(inv: Inventory, w: Weapon): Weapon | null {
 /** Take something found (a search, a drop): how much of it went in. A weapon
  *  is `n` 1 with `loaded` rounds in it. */
 export function addItem(inv: Inventory, it: { id: ItemId; n: number; loaded?: number }): number {
-  if (isWeapon(it.id)) return addWeapon(inv, { id: it.id, loaded: it.loaded ?? 0 }) === null ? 1 : 0;
+  // (plan 125: the gun whole or nothing — not its rounds alone, which the caller, told 0, would leave in it too and
+  // so make twice; a search's `take` empties a second gun's rounds by addWeapon, counting them)
+  if (isWeapon(it.id)) {
+    if (carries(inv, it.id)) return 0;
+    const w = { id: it.id, loaded: Math.max(0, Math.min(WEAPONS[it.id].mag, Math.floor(it.loaded ?? 0))) };
+    const q = inv.quick.indexOf(null);
+    if (q >= 0 && putNew(inv, QUICK_SLOT + q, w)) return 1;
+    const p = inv.pockets.indexOf(null);
+    return p >= 0 && putNew(inv, p, w) ? 1 : 0;
+  }
   return addStack(inv, it.id, it.n);
 }
 
@@ -243,8 +387,16 @@ export function moveSlot(inv: Inventory, from: number, to: number): boolean {
     if (!sa.n) put(inv, from, null);
     return true;
   }
+  // (plan 125: each keeps its place in the case — a slot's only which hand it's at)
+  const pl = places(inv);
+  const pa = pl[from];
+  const pb = pl[to];
   put(inv, from, b);
   put(inv, to, a);
+  if (pb && b) pl[from] = pb;
+  else delete pl[from];
+  if (pa) pl[to] = pa;
+  else delete pl[to];
   return true;
 }
 
@@ -255,17 +407,17 @@ export function addItemTo(inv: Inventory, slot: number, it: { id: ItemId; n: num
   const at = slotAt(inv, slot);
   // (plan 87: not where it doesn't fit — as addItem puts it; one of a kind, as addStack takes it)
   if (at === undefined || !fits(slot, it.id) || oneOf(it.id)) {
-    if (oneOf(it.id) && at === null && fits(slot, it.id) && count(inv, it.id as StackId) < 1) {
-      put(inv, slot, { id: it.id as StackId, n: 1 });
-      return 1;
-    }
+    if (oneOf(it.id) && at === null && fits(slot, it.id) && count(inv, it.id as StackId) < 1)
+      return putNew(inv, slot, { id: it.id as StackId, n: 1 }) ? 1 : 0;
     return addItem(inv, it);
   }
   if (isWeapon(it.id)) {
-    if (at === null && !carries(inv, it.id)) {
-      put(inv, slot, { id: it.id, loaded: Math.max(0, Math.min(WEAPONS[it.id].mag, Math.floor(it.loaded ?? 0))) });
+    if (
+      at === null &&
+      !carries(inv, it.id) &&
+      putNew(inv, slot, { id: it.id, loaded: Math.max(0, Math.min(WEAPONS[it.id].mag, Math.floor(it.loaded ?? 0))) })
+    )
       return 1;
-    }
     return addItem(inv, it);
   }
   let n = Math.max(0, Math.floor(it.n));
@@ -273,8 +425,7 @@ export function addItemTo(inv: Inventory, slot: number, it: { id: ItemId; n: num
   const s = stackOf(at);
   if (at === null) {
     const k = Math.min(n, STACKS[it.id]);
-    put(inv, slot, { id: it.id, n: k });
-    took = k;
+    took = putNew(inv, slot, { id: it.id, n: k }) ? k : 0;
   } else if (s && s.id === it.id) {
     const k = Math.min(n, STACKS[it.id] - s.n);
     s.n += k;
@@ -318,7 +469,7 @@ export function splitSlot(inv: Inventory, from: number, to: number, n?: number):
   let k = 0;
   if (at === null) {
     k = Math.min(want, STACKS[s.id]);
-    put(inv, to, { id: s.id, n: k });
+    if (!putNew(inv, to, { id: s.id, n: k })) return 0;
   } else if (there && there.id === s.id) {
     k = Math.min(want, STACKS[s.id] - there.n);
     there.n += k;
@@ -354,6 +505,8 @@ const ORDER: ItemId[] = [
 ];
 export function organize(inv: Inventory): boolean {
   const before = JSON.stringify(inv.pockets);
+  // (plan 125: packed again only if everything still fits — biggest first can lose what your own layout held)
+  const was = structuredClone({ pockets: inv.pockets, quick: inv.quick, hand: inv.hand, place: inv.place });
   // (like stacks topped up, the fuller first)
   const items = inv.pockets.filter((it): it is Item => !!it);
   const merged: Item[] = [];
@@ -378,8 +531,52 @@ export function organize(inv: Inventory): boolean {
     return i < 0 ? ORDER.length : i;
   };
   merged.sort((a, b) => rank(a) - rank(b) || ("n" in b ? b.n : 0) - ("n" in a ? a.n : 0));
+  const placedBefore = JSON.stringify(inv.place ?? {});
   inv.pockets = Array.from({ length: POCKETS }, (_, i) => merged[i] ?? null);
-  return JSON.stringify(inv.pockets) !== before;
+  // (plan 125: the case packed again, the biggest first — the hands' things too)
+  inv.place = {};
+  if (settle(inv).length) {
+    Object.assign(inv, was);
+    return false;
+  }
+  return JSON.stringify(inv.pockets) !== before || JSON.stringify(inv.place) !== placedBefore;
+}
+
+/** (plan 125 F14a) Something found put where it was laid in the case (`at`), else where `addItem` puts it: how much
+ *  went in. A stack tops up the boxes there first (no room needed), the rest a new box at `at`. */
+export function addItemAt(inv: Inventory, it: { id: ItemId; n: number; loaded?: number }, at: CasePlace): number {
+  const p = inv.pockets.indexOf(null);
+  if (p < 0 || !fitsAt(inv, it.id, at)) return addItem(inv, it);
+  if (isWeapon(it.id)) {
+    if (carries(inv, it.id)) return addItem(inv, it);
+    return putNew(
+      inv,
+      p,
+      { id: it.id, loaded: Math.max(0, Math.min(WEAPONS[it.id].mag, Math.floor(it.loaded ?? 0))) },
+      at,
+    )
+      ? 1
+      : 0;
+  }
+  // (one of a kind: the left hand if it's free, else a pocket — laid at `at` either way)
+  if (oneOf(it.id)) {
+    if (count(inv, it.id as StackId) > 0) return 0;
+    return putNew(inv, inv.hand ? p : HAND_SLOT, { id: it.id as StackId, n: 1 }, at) ? 1 : 0;
+  }
+  const id = it.id as StackId;
+  const total = Math.max(0, Math.floor(it.n));
+  let left = total;
+  for (const { it: x } of slots(inv)) {
+    const s = stackOf(x);
+    if (!left || s?.id !== id || s.n >= STACKS[id]) continue;
+    const k = Math.min(left, STACKS[id] - s.n);
+    s.n += k;
+    left -= k;
+  }
+  const k = Math.min(STACKS[id], left);
+  if (k && putNew(inv, p, { id, n: k }, at)) left -= k;
+  if (left) left -= addStack(inv, id, left);
+  return total - left;
 }
 
 /** (plan 87 F4a) A torch for one who carries none — into the left hand if it's free, else the pack. True if given. */
@@ -452,7 +649,28 @@ export function cleanInventory(x: unknown): Inventory {
     const n = Math.max(0, Math.min(STACKS[s.id], Math.floor(Number(s.n) || 0)));
     if (n) inv.pockets[i] = { id: s.id, n };
   }
+  // (plan 125) where each thing lay in the case — kept where it still fits; the rest placed; what has no room
+  // goes to the stash at home (F17a), with what was stashed before
+  const pl = (o.place ?? {}) as Record<string, unknown>;
+  inv.place = {};
+  for (const [k, v] of Object.entries(pl)) {
+    const slot = Number(k);
+    if (!Array.isArray(v) || !slotAt(inv, slot)) continue;
+    inv.place[slot] = [Math.floor(Number(v[0])), Math.floor(Number(v[1])), v[2] ? 1 : 0];
+  }
+  const stash: Item[] = [];
+  for (const x of Array.isArray(o.stash) ? o.stash : []) {
+    const it = x as Record<string, unknown> | null;
+    if (!it) continue;
+    if (isWeapon(it.id))
+      stash.push({ id: it.id, loaded: Math.max(0, Math.min(WEAPONS[it.id].mag, Math.floor(Number(it.loaded) || 0))) });
+    else if (isStack(it.id)) {
+      const n = Math.max(0, Math.min(STACKS[it.id], Math.floor(Number(it.n) || 0)));
+      if (n) stash.push({ id: it.id, n });
+    }
+  }
   for (const id of stray) addStack(inv, id, 1);
+  inv.stash = [...stash, ...settle(inv)].slice(0, STASH_HOLD);
   const pages = Array.isArray(o.pages) ? o.pages : [];
   inv.pages = [
     ...new Set(pages.filter((p): p is string => typeof p === "string" && /^[a-z0-9-]{1,32}$/.test(p))),

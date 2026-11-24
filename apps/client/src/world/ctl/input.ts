@@ -1,6 +1,8 @@
+import { lampWanted } from "@/lib/lamp";
 import { mixer } from "../audio";
 import type { WorldController } from "../controller";
 import { hud } from "../store";
+import { strikeKeys } from "../strike/flag";
 
 /** What Input reads of the WorldController (plan 72 phase 4: its dependencies, said). */
 export type InputHost = Pick<
@@ -82,7 +84,20 @@ export class Input {
     }
     if (e.code === "Tab" && !hud.get().build.on && !hud.get().panel.kind && !this.c.god?.on) {
       e.preventDefault();
-      if (!e.repeat) this.tabDown = { at: e.timeStamp, back: e.shiftKey };
+      if (!e.repeat) {
+        this.tabDown = { at: e.timeStamp, back: e.shiftKey };
+        // (plan 125 F4a) held: GTA's wheel — on the desktop, on foot
+        const down = this.tabDown;
+        if (lampWanted())
+          setTimeout(() => {
+            if (this.tabDown !== down || !this.c.walker?.stepping || hud.get().menu || this.c.cars?.inCar()) return;
+            // (it opens on what's drawn — let go without pointing elsewhere, nothing changes: GTA's)
+            const g = hud.get().lamp.gun?.id ?? "";
+            const at = WHEEL_OF[g] ?? 7;
+            this.wheelFrom = at;
+            hud.set((s) => ({ lamp: { ...s.lamp, wheel: true, wheelSel: at } }));
+          }, TAB_TAP_MS);
+      }
       return;
     }
     if (hud.get().cable && e.key === "Escape" && !hud.get().panel.kind) {
@@ -95,6 +110,23 @@ export class Input {
       return;
     }
     if (hud.get().panel.kind && e.key !== "Escape") return;
+    // (plan 125 phase 6) the new UI: Esc with nothing open is the pause menu (GTA's); the pointer's let go first
+    if (
+      e.key === "Escape" &&
+      !e.repeat &&
+      !hud.get().panel.kind &&
+      hud.get().side === null &&
+      !hud.get().build.on &&
+      !this.c.god?.on &&
+      !hud.get().strike?.me &&
+      lampWanted()
+    ) {
+      e.preventDefault();
+      // (the wheel open under it: let go, nothing taken)
+      this.tabDown = null;
+      hud.set((s) => ({ panel: { kind: "pause" }, lamp: { ...s.lamp, tab: "map", wheel: false } }));
+      return;
+    }
     // god mode: its camera's keys, its own (on foot in the draft: Esc goes back up)
     if (!hud.get().panel.kind && this.c.god?.key(e, true)) {
       e.preventDefault();
@@ -181,13 +213,20 @@ export class Input {
       hud.set((s) => ({ build: { ...s.build, on: true, mode: "hand" } }));
     // (plan 87: 1 the left hand, 2–5 the quick slots — the dark's, loaded for them; the emotes on 6–9: the four that
     // were on 5–8, the rest on the wheel)
-    else if (key >= "1" && key <= "5") this.c.walker?.slotKey(Number(key) - 1);
+    // (plan 125 F4a: the new UI's keys 1–8 are GTA's kinds; the emotes on its X wheel)
+    // (not in a Strike Park match — CS's keys there; not over an action menu — its numbers pick)
+    else if (key >= "1" && key <= "8" && lampWanted() && !strikeKeys.playing) {
+      if (hud.get().lamp.wheel) hud.set((s) => ({ lamp: { ...s.lamp, wheelSel: Number(key) - 1 } }));
+      else if (!hud.get().menu && !hud.get().panel.kind) this.c.walker?.kindKey(Number(key));
+    } else if (key >= "1" && key <= "5") this.c.walker?.slotKey(Number(key) - 1);
     else if (key >= "6" && key <= "9") this.c.emote(Number(key) - 2);
     else if (key === "+" || key === "=") this.c.tp?.lensPart.zoomBy(1 / 1.15);
     else if (key === "-") this.c.tp?.lensPart.zoomBy(1.15);
   };
 
   tabDown: { at: number; back: boolean } | null = null;
+  /** (plan 125) the wheel's kind when it opened: what was drawn */
+  wheelFrom = -1;
 
   onKeyUp = (e: KeyboardEvent) => {
     // (the build camera's keys let go — always, so one held as build mode closes doesn't stick)
@@ -199,7 +238,13 @@ export class Input {
       this.c.focus.use = null;
       if (!u.done) this.c.focus.interact();
     }
-    if (e.code === "Tab" && this.tabDown) {
+    if (e.code === "Tab" && hud.get().lamp.wheel) {
+      // (plan 125 F4a) the wheel let go: what it points at, taken
+      this.tabDown = null;
+      const sel = hud.get().lamp.wheelSel;
+      hud.set((s) => ({ lamp: { ...s.lamp, wheel: false } }));
+      if (sel !== this.wheelFrom && !hud.get().panel.kind) this.c.walker?.kindKey(sel + 1);
+    } else if (e.code === "Tab" && this.tabDown) {
       const t = this.tabDown;
       this.tabDown = null;
       // (by the events' own times: a long frame between the two is no hold)
@@ -212,6 +257,7 @@ export class Input {
 
   onBlur = () => {
     this.tabDown = null;
+    if (hud.get().lamp.wheel) hud.set((s) => ({ lamp: { ...s.lamp, wheel: false } }));
     this.c.walker?.clear();
     this.c.cars?.blur();
   };
@@ -260,6 +306,8 @@ export class Input {
   };
 }
 
+/** (plan 125 F4a) the wheel's kind (0-based: key − 1) of what's drawn — dark/index.ts KIND_IDS */
+const WHEEL_OF: Record<string, number> = { revolver: 1, shotgun: 2, ak47: 3, sniper: 3, daybreak: 4 };
 const TAB_TAP_MS = 250; // Tab let go sooner: a tap, the next in reach (the dark's TAB_PEEK_MS)
 
 const MENU_STEP: Record<string, number> = {

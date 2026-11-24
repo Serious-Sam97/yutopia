@@ -14,11 +14,16 @@ const PetPanel = dynamic(() => import("./PetPanel").then((m) => m.PetPanel), { s
 const NpcCard = dynamic(() => import("./NpcCard").then((m) => m.NpcCard), { ssr: false });
 const EmoteWheel = dynamic(() => import("./EmoteWheel").then((m) => m.EmoteWheel), { ssr: false });
 // the admins' panel (docs/plan/48-the-admin.md): only ever loaded for an admin
+// (plan 125 phase 6) the new UI's pause menu: its own chunk (the map's drawing)
+const LampPause = dynamic(() => import("./lamp/LampPause").then((m) => m.LampPause), { ssr: false });
+const LampCase = dynamic(() => import("./lamp/LampCase").then((m) => m.LampCase), { ssr: false });
 const AdminPanel = dynamic(() => import("./admin/AdminPanel").then((m) => m.AdminPanel), { ssr: false });
 
 export function PanelHost() {
   const panel = useHud((s) => s.panel);
   if (!panel.kind) return null;
+  if (panel.kind === "pause") return <LampPause />;
+  if (panel.kind === "case") return <LampCase />;
   if (panel.kind === "settings") return <SettingsPanel />;
   if (panel.kind === "pads") return <ControllersPanel onClose={() => hud.set({ panel: { kind: "settings" } })} />;
   if (panel.kind === "avatar") return <AvatarPanel />;

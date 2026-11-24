@@ -306,7 +306,7 @@ export interface ViewEvents {
   person?: (id: string, at: { x: number; y: number }) => void;
   object?: (id: string, at: { x: number; y: number }) => void;
   // mouse look on / off (the pointer locked or let go — by Z, Esc, the browser…)
-  look?: (on: boolean) => void;
+  look?: (on: boolean, byUser?: boolean) => void;
   lookRefused?: () => void; // the browser said no (right after Esc it waits a moment)
   // in mouse look: what the crosshair is on (someone, a thing to use), or null
   aim?: (at: { person?: string; object?: string } | null) => void;

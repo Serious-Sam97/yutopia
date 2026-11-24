@@ -29,7 +29,17 @@ class Survivor extends Model
 
     public const WEAPONS = ['revolver' => 6, 'shotgun' => 2, 'ak47' => 30, 'sniper' => 5, 'daybreak' => 3];
 
-    public const POCKETS = 8; // (plan 86: the pack's 8 — a save of 6 read as 8, the rest empty)
+    public const POCKETS = 16; // (plan 86: the pack's 8; plan 125: Ana's Case — 16 places, the room the case's)
+
+    // (plan 125) the case's cells (shared/inventory.ts CASE_W, CASE_H), what the stash at home keeps at most
+    public const CASE_W = 10;
+
+    public const CASE_H = 7;
+
+    public const STASH_MAX = 100;
+
+    // (the stash once the case spills into it on a load: STASH_MAX and every carried slot — shared inventory STASH_HOLD)
+    public const STASH_HOLD = self::STASH_MAX + self::POCKETS + self::QUICK + 1;
 
     // the quick slots (keys 1–4: a gun or a stack; shared/inventory.ts QUICK)
     public const QUICK = 4;

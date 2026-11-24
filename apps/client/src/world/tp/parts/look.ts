@@ -27,9 +27,13 @@ export class MouseLook {
 
   aimDue = 0;
 
+  /** when the game itself last let the pointer go (a panel, the phone): a let-go not near it is the player's Esc */
+  letGoAt = 0;
+
   setLook(on: boolean, quiet = false) {
     const c = this.c.renderer.domElement;
     if (!on) {
+      this.letGoAt = performance.now();
       if (document.pointerLockElement === c) document.exitPointerLock();
       return;
     }
@@ -73,7 +77,10 @@ export class MouseLook {
     this.showCrosshair();
     this.aimKey = "";
     if (!on) this.c.events.aim?.(null);
-    this.c.events.look?.(on);
+    // (plan 125: let go by the player — Chrome keeps the Esc that frees a locked pointer from the page — not by the
+    // game, in the window they're in)
+    const byUser = !on && performance.now() - this.letGoAt > 400 && document.hasFocus();
+    this.c.events.look?.(on, byUser);
   };
 
   // the aim's dot: in first person only (in third person you see where you look)

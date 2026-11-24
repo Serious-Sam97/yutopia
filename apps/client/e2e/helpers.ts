@@ -124,16 +124,26 @@ export async function useWorld(name: World = "demo"): Promise<World> {
   return name;
 }
 
-export async function enter(page: Page, tok: string, worldName: World = "demo") {
+export async function enter(page: Page, tok: string, worldName: World = "demo", o: { ui?: "old" | "new" } = {}) {
   // (a spec that names no world is the demo's — not whichever fixture the spec before it left)
   await useWorld(worldName);
-  await page.addInitScript((t) => {
-    localStorage.setItem("yutopia:token", t);
-    // a fixed tier: Auto would step down mid-test in a headless browser (software GPU)
-    const k = "yutopia:prefs";
-    const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, quality: p.quality && p.quality !== "auto" ? p.quality : "high" }));
-  }, tok);
+  await page.addInitScript(
+    ([t, ui]) => {
+      localStorage.setItem("yutopia:token", t);
+      // (which UI on the desktop: the old one, which the specs were written against, unless the spec says new —
+      // docs/plan/125-the-new-ui.md; contexts a spec makes itself miss the config's storageState)
+      if (ui === "new") localStorage.removeItem("yutopia:ui");
+      else localStorage.setItem("yutopia:ui", "old");
+      // a fixed tier: Auto would step down mid-test in a headless browser (software GPU)
+      const k = "yutopia:prefs";
+      const p = JSON.parse(localStorage.getItem(k) ?? "{}");
+      localStorage.setItem(
+        k,
+        JSON.stringify({ ...p, quality: p.quality && p.quality !== "auto" ? p.quality : "high" }),
+      );
+    },
+    [tok, o.ui ?? "old"] as const,
+  );
   await page.goto("/");
   await page.waitForFunction(
     () => (window as unknown as { __hud?: { get(): { phase: string } } }).__hud?.get().phase === "ready",

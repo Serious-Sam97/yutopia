@@ -1,5 +1,6 @@
 import { AIM_BLADE, beamOf } from "@yutopia/shared/beam";
 import { type Object3D, Vector2 } from "three";
+import { hud } from "../../store";
 import { Vortex3 } from "../stand3d";
 import type { Body3, ThirdPersonView } from "../view";
 import { segBox } from "./common";
@@ -108,6 +109,8 @@ export class Pointer {
     this.c.activeAt = performance.now();
     if (this.c.god) return this.c.god.input.move(e);
     if (this.c.mouseLook.looking) {
+      // (plan 125 F4a: the quick wheel open — the mouse points at a kind, the camera holds)
+      if (hud.get().lamp.wheel) return;
       // (some browsers send one huge jump as the lock starts)
       if (Math.abs(e.movementX) > 400 || Math.abs(e.movementY) > 400) return;
       this.c.dragged = this.c.time;

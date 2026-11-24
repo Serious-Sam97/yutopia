@@ -40,6 +40,8 @@ export interface Prefs {
   maxFps: MaxFps;
   // the frame's numbers in a corner (fps, where each frame's time goes: docs/plan/38-the-lag.md)
   perfStats: boolean;
+  // (plan 125) the new UI's film over the screen — the grain and the darker edges: off unless asked for
+  film: boolean;
   // the graphics settings set by hand over the quality's preset (lib/graphics.ts; docs/plan/91 phase 9): null, the
   // preset as it is
   graphics: Record<string, unknown> | null;
@@ -143,6 +145,7 @@ const DEFAULTS: Prefs = {
   carReflect: "auto",
   maxFps: 60,
   perfStats: false,
+  film: false,
   graphics: null,
 };
 
@@ -174,6 +177,7 @@ export function prefs(): Prefs {
     if (cache) cache.carManual = cache.carManual === true;
     if (cache && !["auto", "on", "off"].includes(cache.carReflect)) cache.carReflect = "auto";
     if (cache) cache.perfStats = cache.perfStats === true;
+    if (cache) cache.film = cache.film === true;
     if (cache && (typeof cache.graphics !== "object" || Array.isArray(cache.graphics))) cache.graphics = null;
     if (
       cache &&

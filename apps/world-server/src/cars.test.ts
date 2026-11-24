@@ -20,6 +20,7 @@ import {
   SPECS,
 } from "@yutopia/shared/car";
 import { heightAt, POND, POND_LEVEL } from "@yutopia/shared/grounds";
+import { QUICK_SLOT } from "@yutopia/shared/inventory";
 import { MV_AIM, packMv } from "@yutopia/shared/move";
 import { Client, type Room } from "colyseus.js";
 
@@ -691,7 +692,7 @@ test("(plan 93 S4) its boot, stood behind it parked: put in, taken out, kept on 
   // the glove box, sat at the wheel: the revolver in it, and out
   const rev = (inv.quick as { id: string }[]).findIndex((it) => it?.id === "revolver");
   assert.ok(rev >= 0, "a revolver at hand");
-  r.send("car:put", { kind: "glove", id: o.id, from: 8 + rev });
+  r.send("car:put", { kind: "glove", id: o.id, from: QUICK_SLOT + rev });
   // biome-ignore lint/suspicious/noExplicitAny: props
   await waitFor(() => ((props(r.state.objects.get(o.id)).glove as any[]) ?? []).some((s) => s.id === "revolver"));
   r.send("car:take", { kind: "glove", id: o.id, i: 0 });
@@ -1278,7 +1279,8 @@ test("(plan 98 phase 24) a passenger across to the wheel once it's empty: drivin
   // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
   const o: any = [...a.state.objects.values()].filter((c: any) => c.kind === "car" && !props(c).driven)[3];
   const pose = parkedPose({ x: o.x, y: o.y, yaw: o.yaw, props: props(o) });
-  for (const r of [a, b]) r.send("teleport", { to: { x: pose.x + Math.cos(pose.a) * 3.4, y: pose.y + Math.sin(pose.a) * 3.4, level: 0 } });
+  for (const r of [a, b])
+    r.send("teleport", { to: { x: pose.x + Math.cos(pose.a) * 3.4, y: pose.y + Math.sin(pose.a) * 3.4, level: 0 } });
   await waitFor(() => me(a).level === 0 && me(b).level === 0);
   const vid = `car:${o.id}`;
   a.send("car:enter", { id: o.id, seat: 0 });

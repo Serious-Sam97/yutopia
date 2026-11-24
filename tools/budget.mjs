@@ -65,7 +65,10 @@ import { gzipSync } from "node:zlib";
 // (raised to 500 on 2026-11-24 under the user's standing call to raise as needed: plan 123 — NPCs alive: the action
 // menu on a placed NPC, its acts' and moods' words, the umbrella stand's prompt; the card's own words moved off the
 // page into its lazy chunk — 497.0 → 499.2 → 498.7; its double-check, the hug drawn close, 498.9)
-const BUDGETS = { "/page": 500, "/login/page": 160 }; // KB gzip
+// (raised to 505 on 2026-11-24 under the user's standing call to raise as needed: plan 125 — the new UI: its HUD state
+// (store.ts `lamp`), the GTA loading screen, the ring's and queue's new look, the keys (Esc's pause, Tab's wheel, the
+// kinds), the root's class and their words; the HUD itself, its wheel and the route a chunk of their own (512.9 → 503.3))
+const BUDGETS = { "/page": 505, "/login/page": 160 }; // KB gzip
 // (/page raised from 491 on 2026-11-19 under the user's standing call: plan 109 — the God HUD's bridges state, the
 // bridge icon, the bridges' layout and kinds in the shared Grounds; measured 491.0)
 // (/page raised from 451 on 2026-11-04 under the same call: plan 72's phase 4 — the controller split

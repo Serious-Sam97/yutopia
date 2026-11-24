@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { type Key, useTr } from "@/lib/i18n";
+import { useLamp } from "@/lib/lamp";
 import { type ActTarget, useHud } from "@/world/store";
 import { ItemThumb } from "./build/thumbs";
 import { useWorld } from "./ctx";
@@ -18,6 +19,8 @@ const BOX = { w: 440, h: 270 }; // what the ring takes up around the click
 export function ActionMenu() {
   const t = useTr();
   const w = useWorld();
+  // (plan 125 phase 3) the new UI's look on the desktop: white pills, the picked one gold
+  const lamp = useLamp();
   const menu = useHud((s) => s.menu);
   const [vw, setVw] = useState({ w: 1280, h: 800 });
   useEffect(() => {
@@ -61,10 +64,21 @@ export function ActionMenu() {
             className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-1 pointer-events-none pop-in"
             aria-hidden
           >
-            <Thumb target={menu.target} size={46} />
-            <span className="cabinet rounded-full px-2.5 py-0.5 text-[12px] whitespace-nowrap max-w-[220px] truncate">
-              {menu.title}
-            </span>
+            {lamp ? (
+              <>
+                <span className="lp-hub">
+                  <Thumb target={menu.target} size={64} />
+                </span>
+                <span className="lp-name max-w-[260px] truncate">{menu.title}</span>
+              </>
+            ) : (
+              <>
+                <Thumb target={menu.target} size={46} />
+                <span className="cabinet rounded-full px-2.5 py-0.5 text-[12px] whitespace-nowrap max-w-[220px] truncate">
+                  {menu.title}
+                </span>
+              </>
+            )}
             {menu.subtitle && (
               <span
                 className="mono text-[11px] px-2 rounded whitespace-nowrap max-w-[240px] truncate"
@@ -90,14 +104,18 @@ export function ActionMenu() {
                 role="menuitem"
                 disabled={!it.ok}
                 onClick={() => w?.menu.pickAction(it.act)}
-                className="pointer-events-auto absolute cabinet rounded-full pl-1.5 pr-3.5 h-9 flex items-center gap-2 text-[13px] whitespace-nowrap pop-in act-item disabled:opacity-45"
+                className={
+                  lamp
+                    ? "pointer-events-auto absolute lp-pill pop-in act-item"
+                    : "pointer-events-auto absolute cabinet rounded-full pl-1.5 pr-3.5 h-9 flex items-center gap-2 text-[13px] whitespace-nowrap pop-in act-item disabled:opacity-45"
+                }
                 style={{
                   left: ix,
                   top: iy,
                   translate: `${tx} -50%`,
                   animationDelay: `${i * 25}ms`,
                   // (chosen on the keys or a pad: docs/plan/56-the-controls.md C)
-                  ...(i === menu.sel
+                  ...(i === menu.sel && !lamp
                     ? {
                         boxShadow: "0 0 0 2px var(--amber), 0 0 18px color-mix(in srgb, var(--amber) 45%, transparent)",
                         color: "var(--amber)",
@@ -107,13 +125,19 @@ export function ActionMenu() {
                 data-sel={i === menu.sel ? "1" : undefined}
               >
                 {/* (the digits 1–9 pick: past them, no key to show) */}
-                <kbd
-                  className="keycap"
-                  style={{ height: 20, minWidth: 20, fontSize: 11, opacity: i < 9 ? 1 : 0 }}
-                  aria-hidden={i >= 9 || undefined}
-                >
-                  {i < 9 ? i + 1 : ""}
-                </kbd>
+                {lamp ? (
+                  <span className="lp-n" style={{ opacity: i < 9 ? 1 : 0 }} aria-hidden={i >= 9 || undefined}>
+                    {i < 9 ? i + 1 : ""}
+                  </span>
+                ) : (
+                  <kbd
+                    className="keycap"
+                    style={{ height: 20, minWidth: 20, fontSize: 11, opacity: i < 9 ? 1 : 0 }}
+                    aria-hidden={i >= 9 || undefined}
+                  >
+                    {i < 9 ? i + 1 : ""}
+                  </kbd>
+                )}
                 {t(`act_${it.act}` as Key)}
               </button>
             );
@@ -179,7 +203,46 @@ export function ActionQueueBar() {
   const t = useTr();
   const w = useWorld();
   const queue = useHud((s) => s.queue);
+  const lamp = useLamp();
   if (!queue.length) return null;
+  // (plan 125 phase 3) GTA's round icons, the running one ringed gold, what it is beside them
+  if (lamp)
+    return (
+      <ul
+        className="pointer-events-auto absolute left-[36px] top-[128px] flex items-center gap-2"
+        aria-label={t("actQueue")}
+      >
+        {queue.map((q) => (
+          <li
+            key={q.key}
+            className={`lp-q ${q.running ? "run" : ""}`}
+            title={`${t(`act_${q.act}` as Key)} · ${q.title}`}
+          >
+            <Thumb target={q.target} size={q.running ? 52 : 42} />
+            <button
+              type="button"
+              className="lp-x"
+              aria-label={`${t("actCancel")}: ${t(`act_${q.act}` as Key)}`}
+              onClick={() => w?.actions.cancel(q.key)}
+            >
+              ×
+            </button>
+          </li>
+        ))}
+        <li
+          className="lp-name"
+          style={{
+            fontFamily: "var(--font-inter-tight)",
+            fontWeight: 700,
+            fontSize: 15,
+            letterSpacing: 0,
+            marginLeft: 6,
+          }}
+        >
+          {t(`act_${queue[0].act}` as Key)} · {queue[0].title}
+        </li>
+      </ul>
+    );
   return (
     <ul
       className="pointer-events-auto absolute top-[74px] left-3 flex items-center gap-1.5 rise"

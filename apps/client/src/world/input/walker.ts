@@ -249,6 +249,8 @@ export interface DarkHooks {
   hand(): void;
   /** (plan 87) a number key 1–5 before the dark's own keys listen: 0 the left hand, 1–4 the quick slots */
   slotKey(n: number): void;
+  /** (plan 125 F4a) the new UI's keys 1–8: a kind of thing (1 the left hand … 8 nothing in hand) */
+  kindKey(n: number): void;
   /** the inventory open: I stand still, and don't aim */
   frozen(): boolean;
   /** (plan 123) how many of an item I carry, the pockets, quick slots and hands all told */
@@ -441,6 +443,9 @@ export class Walker {
   }
   /** (plan 87) A number key 1–5 before the dark's chunk listens (it's loaded for it): 0 the left hand, 1–4 the quick
    *  slots — once it's in, its own listener takes them. */
+  kindKey(n: number): void {
+    if (this.stepping) this.loadDark(() => this.dark?.kindKey(n));
+  }
   slotKey(n: number): void {
     if (this.stepping) this.loadDark(() => this.dark?.slotKey(n));
   }

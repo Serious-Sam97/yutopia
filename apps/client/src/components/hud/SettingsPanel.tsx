@@ -16,6 +16,7 @@ import {
   VIEW_STEP,
 } from "@/lib/graphics";
 import { type Key, useLang, useTr } from "@/lib/i18n";
+import { lampWanted } from "@/lib/lamp";
 import { MAX_FPS, type Prefs, type Quality, type QualityPref, resolveQuality, setPrefs, usePrefs } from "@/lib/prefs";
 import { VERSION } from "@/lib/version";
 import { hud, useHud } from "@/world/store";
@@ -239,7 +240,7 @@ function Choice<T extends string | number>({
 
 // ── the pages ───────────────────────────────────────────────────────────────
 
-function MePage() {
+export function MePage() {
   const t = useWords();
   return (
     <>
@@ -382,7 +383,7 @@ function Device({
   );
 }
 
-function SoundPage() {
+export function SoundPage() {
   const t = useTr();
   const p = usePrefs();
   const { devices, blocked, allow, named } = useDevices();
@@ -423,7 +424,7 @@ function SoundPage() {
   );
 }
 
-function CameraPage() {
+export function CameraPage() {
   const t = useTr();
   const { devices, blocked, allow, named } = useDevices();
   return (
@@ -436,7 +437,7 @@ function CameraPage() {
   );
 }
 
-function ViewPage() {
+export function ViewPage() {
   const t = useTr();
   const p = usePrefs();
   return (
@@ -533,7 +534,7 @@ function ViewPage() {
 // settings on its own; nothing's applied as it's picked (a change of these is a recompile, a rebuild: phase 10),
 // an Apply once something's changed.
 const QUALITIES = ["auto", "high", "medium", "low", "lowest", "potato"] as const;
-function GraphicsPage() {
+export function GraphicsPage() {
   const t = useTr();
   const p = usePrefs();
   // (what's picked, not applied yet)
@@ -730,6 +731,8 @@ function GraphicsPage() {
       <Card>
         <Toggle label={t("reducedMotion")} value={p.reducedMotion} onChange={(v) => setPrefs({ reducedMotion: v })} />
         <Toggle label={t("perfStats")} value={p.perfStats} onChange={(v) => setPrefs({ perfStats: v })} />
+        {/* (plan 125) the new UI's film: the grain and the darker edges — desktop only */}
+        {lampWanted() && <Toggle label={t("filmGrain")} value={p.film} onChange={(v) => setPrefs({ film: v })} />}
       </Card>
       {changed && (
         // (its own bar at the foot of the page, over nothing: the settings under it scroll up past it)
@@ -767,7 +770,7 @@ function applyGraphics(quality: QualityPref, over: Partial<Graphics> | null) {
   void switchGraphics({ quality, over });
 }
 
-function ControlsPage() {
+export function ControlsPage() {
   const t = useTr();
   return (
     <>

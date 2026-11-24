@@ -1,0 +1,672 @@
+/* The new UI (docs/plan/125-the-new-ui.md, look F — design/ui-life/r2/sheet-f.jpg): the dark and the lamp's gold of
+   the town at night, with GTA's signatures — tall numbers, heavy names, black boxes with white key caps, white
+   pictures of what's in hand. Everything lives under .lamp: the old look (globals.css, plan 45) stays for phones
+   (F12c) and for the screens not moved yet. */
+
+.lamp {
+  --l-ink: #0b0a08;
+  --l-text: #efe9dc;
+  --l-soft: #d9d4c8;
+  --l-dim: #a59f92;
+  --l-gold: #f3d27a; /* the lamp: what's picked, what matters */
+  --l-gold-glow: rgba(243, 215, 140, 0.45);
+  --l-red: #e3593f;
+  --l-cash: #8fd66a; /* GTA's money green (F3a: hidden until the town has money) */
+  --l-health: #5fbf4a;
+  --l-stamina: #4aa3df;
+  --l-warmth: #e9c046;
+  --l-battery: #f3d27a;
+  --l-box: rgba(0, 0, 0, 0.8);
+  --l-box-soft: rgba(0, 0, 0, 0.62);
+  --l-row-on: #f2f2f2;
+  --f-num: var(--font-bebas), "Bebas Neue", Impact, sans-serif;
+  --f-name: var(--font-anton), var(--font-bebas), Impact, sans-serif;
+  --f-sans: var(--font-inter-tight), var(--font-inter), system-ui, sans-serif;
+  --f-thin: var(--font-oswald), var(--font-inter-tight), sans-serif;
+  --f-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --f-hand: var(--font-caveat), cursive;
+  font-family: var(--f-sans);
+  color: var(--l-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* text over the world: GTA's dark halo, and the lamp's glow on the big names */
+.lamp .l-sh {
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.95),
+    0 2px 6px rgba(0, 0, 0, 0.7);
+}
+.lamp .l-glow {
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.95),
+    0 2px 6px rgba(0, 0, 0, 0.7),
+    0 0 22px rgba(243, 215, 140, 0.28);
+}
+
+/* the film over the view: grain and darker edges (one small picture, no blend modes over the 3D) */
+/* (off unless Settings → Graphics turns it on: html.lamp-film-on, components/LampRoot.tsx) */
+html:not(.lamp-film-on) .lamp-film {
+  display: none;
+}
+.lamp-film {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: url(/lamp/grain.png), radial-gradient(ellipse at 50% 46%, transparent 52%, rgba(0, 0, 0, 0.42) 100%);
+  background-size:
+    200px 200px,
+    100% 100%;
+}
+
+/* a white key cap, GTA's */
+.lamp .l-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  margin: 0 2px;
+  border-radius: 3px;
+  background: #f2f2f2;
+  color: #111;
+  font: 800 13px / 1 var(--f-sans);
+  vertical-align: 1px;
+}
+.lamp .l-key.sm {
+  min-width: 20px;
+  height: 20px;
+  font-size: 11px;
+}
+
+/* the help box, top-left: a black box, a gold edge */
+.lamp .l-help {
+  position: absolute;
+  left: 36px;
+  top: 36px;
+  max-width: 380px;
+  padding: 14px 16px;
+  background: rgba(0, 0, 0, 0.82);
+  border-left: 3px solid var(--l-gold);
+  border-radius: 3px;
+  font: 500 16px / 1.5 var(--f-sans);
+  color: #f2f2f2;
+}
+
+/* a card in the feed (over the map): an icon, a line */
+.lamp .l-feed {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.75);
+  border-radius: 3px;
+  padding: 8px 10px;
+  font: 600 14px / 1.25 var(--f-sans);
+}
+.lamp .l-feed.gold {
+  border-left: 3px solid var(--l-gold);
+}
+.lamp .l-feed.warn {
+  border-left: 3px solid var(--l-red);
+}
+
+/* quiet labels: typed, spaced capitals */
+.lamp .l-cap {
+  font: 400 11.5px / 1 var(--f-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--l-dim);
+}
+
+/* GTA's bars: under the map, in the feed's stat cards */
+.lamp .l-bars {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-top: 5px;
+}
+.lamp .l-bars i {
+  display: block;
+  height: 9px;
+  background: rgba(0, 0, 0, 0.6);
+  position: relative;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+.lamp .l-bars i b {
+  position: absolute;
+  inset: 0 auto 0 0;
+}
+.lamp .l-bars span {
+  display: block;
+  margin-top: 4px;
+  font: 500 9.5px / 1 var(--f-mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.75);
+  text-shadow: 0 1px 2px #000;
+}
+.lamp .l-bars .low b {
+  animation: l-low 1s ease-in-out infinite alternate;
+}
+@keyframes l-low {
+  to {
+    opacity: 0.35;
+  }
+}
+
+/* glowing cells: the torch's battery */
+.lamp .l-cells {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+.lamp .l-cells b {
+  width: 34px;
+  height: 8px;
+  background: var(--l-gold);
+  box-shadow: 0 0 10px rgba(243, 223, 162, 0.6);
+}
+.lamp .l-cells b.o {
+  background: rgba(239, 233, 220, 0.15);
+  box-shadow: none;
+}
+
+/* a loaded shell */
+.lamp .l-shell {
+  display: inline-block;
+  width: 10px;
+  height: 24px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #d9c7a0 0 30%, #c0392b 30%);
+}
+.lamp .l-shell.o {
+  background: rgba(239, 233, 220, 0.15);
+}
+
+/* the big numbers and names */
+.lamp .l-clock {
+  font: 400 58px / 1 var(--f-num);
+  letter-spacing: 0.03em;
+}
+.lamp .l-ammo {
+  font: 400 34px / 1 var(--f-num);
+}
+.lamp .l-ammo small {
+  font-size: 24px;
+  opacity: 0.75;
+}
+.lamp .l-place {
+  font: 500 54px / 1 var(--f-thin);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.lamp .l-rule {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(243, 223, 162, 0.85));
+}
+
+/* subtitles: bold white, the speaker in gold, a soft dark band */
+.lamp .l-sub {
+  font: 600 21px / 1.4 var(--f-sans);
+  text-align: center;
+}
+.lamp .l-sub span {
+  background: rgba(0, 0, 0, 0.5);
+  padding: 3px 12px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.lamp .l-sub b {
+  color: var(--l-gold);
+}
+
+/* GTA's menus: black rows, the picked one white with a gold edge */
+.lamp .l-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  padding: 0 16px;
+  background: rgba(0, 0, 0, 0.66);
+  color: #fff;
+  font: 600 15px / 1 var(--f-sans);
+}
+.lamp .l-row.on {
+  background: var(--l-row-on);
+  color: #111;
+  box-shadow: inset 4px 0 0 var(--l-gold);
+}
+.lamp .l-head {
+  background: rgba(0, 0, 0, 0.9);
+  padding: 10px 16px;
+  font: 800 13px / 1 var(--f-sans);
+  letter-spacing: 0.14em;
+  display: flex;
+  justify-content: space-between;
+}
+.lamp .l-tabs {
+  display: flex;
+  gap: 4px;
+}
+.lamp .l-tabs > * {
+  flex: 1;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.74);
+  border-bottom: 4px solid rgba(255, 255, 255, 0.14);
+  font: 800 15px / 1 var(--f-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  cursor: pointer;
+}
+.lamp .l-tabs > .on {
+  background: var(--l-row-on);
+  color: #111;
+  border-bottom-color: var(--l-gold);
+}
+/* the keys, bottom-right */
+.lamp .l-keys {
+  display: flex;
+  gap: 18px;
+  font: 600 15px / 1 var(--f-sans);
+}
+.lamp .l-keys > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── (phase 3) the action ring and the queue, F's way: they sit outside .lamp (Actions.tsx), so prefixed ── */
+.lp-pill {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 38px;
+  padding: 0 18px 0 9px;
+  border-radius: 30px;
+  background: #fff;
+  color: #111;
+  font:
+    700 15px / 1 var(--font-inter-tight),
+    system-ui,
+    sans-serif;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  transition:
+    transform 0.12s ease-out,
+    background 0.12s;
+}
+.lp-pill:hover:not(:disabled),
+.lp-pill[data-sel] {
+  background: #f3d27a;
+  transform: scale(1.04);
+}
+.lp-pill:disabled {
+  opacity: 0.45;
+}
+.lp-pill .lp-n {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #111;
+  color: #fff;
+  font:
+    800 12px / 22px var(--font-inter-tight),
+    system-ui,
+    sans-serif;
+  text-align: center;
+}
+.lp-hub {
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.75);
+  box-shadow:
+    0 0 0 3px #fff,
+    0 6px 16px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+.lp-name {
+  font:
+    400 28px / 1 var(--font-bebas),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.05em;
+  color: #fff;
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.95),
+    0 2px 6px rgba(0, 0, 0, 0.7);
+  white-space: nowrap;
+}
+.lp-q {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.72);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+.lp-q.run {
+  width: 62px;
+  height: 62px;
+  box-shadow:
+    0 0 0 3px #f3d27a,
+    0 0 18px rgba(243, 215, 140, 0.5);
+}
+.lp-q .lp-x {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  color: #111;
+  font:
+    800 12px / 20px var(--font-inter-tight),
+    sans-serif;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.lp-q:hover .lp-x {
+  opacity: 1;
+}
+
+/* ── (plan 125 phase 8) every screen not redrawn yet, in F's look on the desktop: the old tokens and frames
+   (globals.css, plan 45) turned to the dark and the lamp's gold — html.lamp-ui, set by LampRoot. Build mode's glass
+   (.gl, plan 124) keeps its own. ── */
+html.lamp-ui {
+  --amber: #f3d27a;
+  --vfd: #f3d27a;
+  --meter-lit: #f3d27a;
+  --focus: #f3d27a;
+  --amber-hi: #ffe7a6;
+  --amber-lo: #d9b25a;
+  --cream: #efe9dc;
+  --cream-dim: #a59f92;
+  --muted: #8f897d;
+  --panel: rgba(8, 8, 10, 0.9);
+  --panel-2: rgba(16, 16, 18, 0.92);
+  --panel-top: rgba(20, 20, 22, 0.92);
+  --panel-raised: rgba(255, 255, 255, 0.06);
+  --edge: rgba(255, 255, 255, 0.12);
+  --edge-2: rgba(255, 255, 255, 0.16);
+  --edge-cabinet: rgba(255, 255, 255, 0.14);
+  --edge-strong: rgba(243, 210, 122, 0.45);
+  --edge-hover: rgba(243, 210, 122, 0.7);
+  --well: rgba(0, 0, 0, 0.45);
+  --well-edge: rgba(255, 255, 255, 0.1);
+  --field: rgba(0, 0, 0, 0.55);
+  --track: rgba(255, 255, 255, 0.12);
+  --wood: linear-gradient(#0b0a08, #0b0a08);
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --font-lcd: var(--font-bebas), Impact, sans-serif;
+  --font-title: var(--font-bebas), Impact, sans-serif;
+  --font-body: var(--font-inter-tight), var(--font-inter), system-ui, sans-serif;
+}
+html.lamp-ui body {
+  font-family: var(--font-body);
+}
+/* build mode's glass: its own tokens back */
+html.lamp-ui .gl {
+  --amber: #f1d79a;
+  --cream: #ece6da;
+  --panel: #17181d;
+  --font-mono: var(--font-special-elite), "Special Elite", ui-monospace, monospace;
+  --font-title: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
+  --font-body: var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif;
+}
+/* a panel: GTA's black box, the lamp's gold edge — no walnut */
+html.lamp-ui .cabinet:not(.gl *) {
+  border: 0;
+  border-left: 3px solid #f3d27a;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.84);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+}
+html.lamp-ui .cabinet.rounded-full:not(.gl *) {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+}
+html.lamp-ui .title:not(.gl *) {
+  font-family: var(--font-bebas), Impact, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+}
+html.lamp-ui .lcd:not(.gl *) {
+  letter-spacing: 0.03em;
+  text-shadow: 0 0 10px rgba(243, 215, 140, 0.3);
+}
+html.lamp-ui .zigzag:not(.gl *) {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(243, 223, 162, 0.85), transparent);
+  opacity: 1;
+}
+/* keys: GTA's rows — dark, white on hover, the lamp when on */
+html.lamp-ui .deck-btn:not(.gl *),
+html.lamp-ui .ghost-btn:not(.gl *) {
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #efe9dc;
+  font-family: var(--font-inter-tight), system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+html.lamp-ui .deck-btn:not(.gl *):hover,
+html.lamp-ui .ghost-btn:not(.gl *):hover {
+  background: #f2f2f2;
+  color: #111;
+  border-color: #f2f2f2;
+}
+html.lamp-ui .deck-btn[aria-pressed="true"]:not(.gl *),
+html.lamp-ui .deck-btn.lit:not(.gl *) {
+  background: #f3d27a;
+  color: #111;
+  box-shadow: 0 0 14px rgba(243, 215, 140, 0.4);
+}
+html.lamp-ui .keycap:not(.gl *) {
+  background: #f2f2f2;
+  color: #111;
+  border-color: #f2f2f2;
+  font-family: var(--font-inter-tight), system-ui, sans-serif;
+  font-weight: 800;
+}
+html.lamp-ui .faceplate:not(.gl *) {
+  background: url(/lamp/case/card.png), #efe6cf;
+}
+html.lamp-ui .card:not(.gl *) {
+  border-radius: 0;
+  background: rgba(0, 0, 0, 0.62);
+  border: 0;
+  border-left: 2px solid rgba(243, 210, 122, 0.35);
+}
+html.lamp-ui .slider:not(.gl *) {
+  height: 8px;
+  border-radius: 0;
+  background:
+    linear-gradient(90deg, #fff, #fff) 0 0 / var(--v, 50%) 100% no-repeat,
+    rgba(255, 255, 255, 0.14);
+}
+html.lamp-ui .slider:not(.gl *)::-webkit-slider-thumb {
+  width: 6px;
+  height: 18px;
+  border-radius: 1px;
+  background: #f3d27a;
+  box-shadow: 0 0 8px rgba(243, 215, 140, 0.7);
+}
+html.lamp-ui .rail-item:not(.gl *) {
+  border-radius: 0;
+  height: 42px;
+  background: rgba(0, 0, 0, 0.66);
+  color: #fff;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+html.lamp-ui .rail-item[aria-selected="true"]:not(.gl *) {
+  background: #f2f2f2;
+  color: #111;
+  box-shadow: inset 4px 0 0 #f3d27a;
+}
+/* the car's own HUD (world/car/hud.ts) in F's places: its plate over the map, its keys under the clock */
+html.lamp-ui .carhud .left {
+  left: 36px;
+  bottom: 300px;
+}
+html.lamp-ui .carhud .keys {
+  right: 44px;
+  left: auto;
+  top: 190px;
+  width: 280px;
+}
+html.lamp-ui .carhud .keys .slip {
+  background: rgba(0, 0, 0, 0.82);
+  color: #f2f2f2;
+  font-family: var(--font-inter-tight), sans-serif;
+}
+html.lamp-ui .carhud .keys b {
+  background: #f2f2f2;
+  color: #111;
+  border-color: #f2f2f2;
+  font-weight: 800;
+}
+html.lamp-ui .carhud .speed {
+  font:
+    400 64px / 0.9 var(--font-bebas),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.02em;
+}
+html.lamp-ui .carhud .gearbox {
+  border: 2px solid #fff;
+  border-radius: 2px;
+  background: transparent;
+}
+html.lamp-ui .carhud .gearbox span {
+  font:
+    400 34px / 1 var(--font-bebas),
+    Impact,
+    sans-serif;
+  color: #fff;
+}
+html.lamp-ui .carhud .rev {
+  border-radius: 0;
+  height: 10px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 calc(100% / 14 - 2px),
+      rgba(0, 0, 0, 0.9) calc(100% / 14 - 2px) calc(100% / 14)
+    ), rgba(255, 255, 255, 0.14);
+}
+html.lamp-ui .carhud .rev i {
+  background: #fff;
+}
+html.lamp-ui .carhud .bar {
+  border-radius: 0;
+}
+html.lamp-ui .carhud .bar i {
+  background: #f3d27a;
+  box-shadow: 0 0 6px rgba(243, 215, 140, 0.6);
+}
+html.lamp-ui .carhud .note {
+  bottom: 150px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.82);
+  border: 0;
+  border-left: 3px solid #f3d27a;
+  font-family: var(--font-inter-tight), sans-serif;
+  font-weight: 600;
+}
+/* the skate HUD (world/skate/hud.ts) in F: the zine's colours to the lamp's, its paper to GTA's black, under the clock */
+html.lamp-ui .skh {
+  --pink: #f3d27a;
+  --yel: #f3d27a;
+  --cyan: #ffffff;
+  --red: #e3593f;
+  --ink: #000;
+}
+html.lamp-ui .skh-top {
+  top: 104px;
+  right: 44px;
+}
+html.lamp-ui .skh-card {
+  transform: none;
+  filter: none;
+}
+html.lamp-ui .skh-card .pap {
+  background: rgba(0, 0, 0, 0.8) !important;
+  border-left: 3px solid #f3d27a;
+  padding: 10px 16px 6px;
+}
+html.lamp-ui .skh-card .num {
+  font-family: var(--font-bebas), Impact, sans-serif;
+  font-weight: 400;
+  color: #fff;
+  text-shadow: none;
+}
+html.lamp-ui .skh-tape,
+html.lamp-ui .skh-best {
+  transform: none;
+  background: rgba(0, 0, 0, 0.75) !important;
+  color: #f3d27a;
+  font-family: var(--font-plex-mono), monospace;
+}
+html.lamp-ui .skh-best b {
+  font-family: var(--font-bebas), Impact, sans-serif;
+  font-weight: 400;
+  color: #f3d27a;
+}
+html.lamp-ui .skh-spec .bar {
+  transform: none;
+  border: 0;
+  background: rgba(255, 255, 255, 0.14) !important;
+}
+html.lamp-ui .skh-spec .fill {
+  background: #f3d27a;
+  box-shadow: 0 0 10px rgba(243, 215, 140, 0.6);
+}
+html.lamp-ui .skh-it b {
+  background: none !important;
+  color: #fff;
+  font-family: var(--font-inter-tight), sans-serif;
+  font-weight: 800;
+  text-shadow:
+    0 0 2px #000,
+    0 2px 6px rgba(0, 0, 0, 0.8);
+  transform: none !important;
+  box-shadow: none !important;
+}
+html.lamp-ui .skh .ol {
+  -webkit-text-stroke: 0;
+  text-shadow:
+    0 0 2px #000,
+    0 2px 6px rgba(0, 0, 0, 0.8);
+  font-family: var(--font-bebas), Impact, sans-serif;
+}
+/* the sign-in pages: the town at dusk behind (a frame of the game), the card to the left, GTA's way */
+html.lamp-ui .auth {
+  justify-content: flex-start;
+  padding-left: clamp(24px, 7vw, 110px);
+  background:
+    linear-gradient(90deg, rgba(6, 7, 9, 0.92) 0, rgba(6, 7, 9, 0.75) 34%, rgba(6, 7, 9, 0.1) 62%, transparent),
+    url(/lamp/town-dusk.jpg) center / cover;
+}
+html.lamp-ui .auth button[type="submit"].deck-btn {
+  background: #f3d27a;
+  color: #111;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+@keyframes lamp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

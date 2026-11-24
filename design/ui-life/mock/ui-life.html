@@ -1,0 +1,395 @@
+<!doctype html>
+<!-- The UI redo (GTA × The Sims): three looks over real frames of the game.
+     ui-life.html?look=a|b|c&s=play|act|night|wheel  ·  render: node render.mjs
+     The build view (plan 124) is not part of this: it keeps its own look. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>UI life mocks</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Inter+Tight:wght@500;600;700;800&family=Nunito:wght@600;700;800;900&family=Permanent+Marker&family=Archivo+Black&family=Pacifico&display=block" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1440px;height:900px;overflow:hidden}
+body{position:relative;background:#111;-webkit-font-smoothing:antialiased}
+#bg{position:absolute;inset:0;background:center/cover no-repeat}
+.abs{position:absolute}
+svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.sil{fill:currentColor;flex:none}
+.row{display:flex;align-items:center}
+.col{display:flex;flex-direction:column}
+
+/* ================= A · STREET (GTA V first, The Sims on top) ================= */
+html[data-look=a] body{font-family:"Inter Tight",sans-serif;color:#fff}
+.a-sh{text-shadow:0 0 2px rgba(0,0,0,.9),0 2px 6px rgba(0,0,0,.7)}
+.a-radar{left:34px;bottom:34px;width:300px;height:206px}
+.a-radar .map{width:300px;height:184px;border-radius:6px;overflow:hidden;background:rgba(14,18,24,.72);box-shadow:0 0 0 2px rgba(0,0,0,.45)}
+.a-bars{display:flex;gap:4px;margin-top:5px}
+.a-bars i{display:block;height:9px;background:rgba(0,0,0,.55);position:relative;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+.a-bars i b{position:absolute;left:0;top:0;bottom:0}
+.a-help{left:34px;top:34px;width:340px;padding:14px 16px;background:rgba(0,0,0,.78);border-radius:4px;font:500 16px/1.45 "Inter Tight";color:#f2f2f2}
+.a-key{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 6px;margin:0 2px;border-radius:4px;background:#f2f2f2;color:#111;font:800 13px/1 "Inter Tight";vertical-align:1px}
+.a-tr{right:40px;top:30px;text-align:right}
+.a-clock{font:400 54px/1 "Bebas Neue";letter-spacing:.02em}
+.a-money{font:400 36px/1 "Bebas Neue";color:#9ce07a;letter-spacing:.03em}
+.a-wep{display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:10px}
+.a-wep .sil{width:150px;height:50px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.8))}
+.a-ammo{font:400 34px/1 "Bebas Neue"}
+.a-ammo small{font-size:24px;opacity:.75}
+.a-place{right:40px;bottom:36px;text-align:right}
+.a-place .big{font:400 64px/0.95 "Anton";letter-spacing:.01em;text-transform:uppercase}
+.a-place .sub{font:600 17px/1.3 "Inter Tight";letter-spacing:.06em;text-transform:uppercase;opacity:.9}
+.a-dock{left:50%;transform:translateX(-50%);bottom:30px;display:flex;gap:6px}
+.a-dock .k{width:52px;height:52px;border-radius:50%;background:rgba(0,0,0,.62);display:grid;place-items:center;position:relative;box-shadow:0 0 0 1.5px rgba(255,255,255,.18)}
+.a-dock .k.off{color:#ff5a4a}
+.a-dock .k em{position:absolute;bottom:-6px;right:-4px;font:800 10.5px/1 "Inter Tight";font-style:normal;background:#f2f2f2;color:#111;border-radius:3px;padding:2px 4px}
+.a-dock .k .badge{position:absolute;top:-3px;right:-3px;min-width:18px;height:18px;border-radius:9px;background:#e33;font:800 10px/18px "Inter Tight";text-align:center}
+.a-dock .sep{width:10px}
+.a-feed{left:34px;bottom:262px;display:flex;flex-direction:column;gap:6px;width:300px}
+.a-feed div{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.72);border-radius:4px;padding:8px 10px;font:600 14px/1.25 "Inter Tight"}
+.a-feed .ic{width:36px;height:36px;border-radius:3px;background:#2d3036;display:grid;place-items:center;color:#ddd}
+.a-me{display:flex;align-items:center;gap:8px;justify-content:flex-end;margin-top:8px;font:600 15px/1 "Inter Tight"}
+.a-queue{left:34px;top:34px;display:flex;gap:8px;align-items:center}
+.a-queue .q{width:54px;height:54px;border-radius:50%;background:rgba(0,0,0,.7);display:grid;place-items:center;box-shadow:0 0 0 2px rgba(255,255,255,.25)}
+.a-queue .q.now{width:66px;height:66px;box-shadow:0 0 0 3px #6fe05a}
+.a-queue .lbl{font:700 15px/1.3 "Inter Tight";margin-left:6px}
+
+/* the Sims pie, A's way: white pills around the thing */
+.pie .opt{position:absolute;transform:translate(-50%,-50%);white-space:nowrap}
+html[data-look=a] .pie .opt{background:#fff;color:#111;font:700 16px/1 "Inter Tight";padding:11px 18px 11px 12px;border-radius:30px;box-shadow:0 4px 14px rgba(0,0,0,.45);display:flex;align-items:center;gap:9px}
+html[data-look=a] .pie .opt.hi{background:#6fe05a;color:#0d2a06}
+html[data-look=a] .pie .opt .n{width:22px;height:22px;border-radius:50%;background:#111;color:#fff;font:800 12px/22px "Inter Tight";text-align:center}
+html[data-look=a] .pie .hub{position:absolute;transform:translate(-50%,-50%);width:78px;height:78px;border-radius:50%;background:rgba(0,0,0,.75);box-shadow:0 0 0 3px #fff;display:grid;place-items:center;color:#fff}
+html[data-look=a] .pie .name{position:absolute;transform:translate(-50%,0);font:400 30px/1 "Bebas Neue";letter-spacing:.04em;white-space:nowrap}
+
+/* the wheel */
+.wheel{left:720px;top:450px}
+.wseg{position:absolute;left:0;top:0}
+html[data-look=a] .wcen{position:absolute;transform:translate(-50%,-50%);text-align:center;width:220px}
+html[data-look=a] .wcen .t{font:400 34px/1 "Bebas Neue";letter-spacing:.04em}
+html[data-look=a] .wcen .s{font:600 15px/1.3 "Inter Tight";opacity:.85;margin-top:4px}
+
+/* ================= B · LIVE (The Sims first, GTA on top) ================= */
+html[data-look=b] body{font-family:Nunito,sans-serif;color:#123e6a}
+.gl{background:rgba(232,244,255,.92);border:1.5px solid #fff;border-radius:22px;box-shadow:0 10px 30px rgba(10,50,100,.35),inset 0 1px 0 #fff,inset 0 -10px 24px rgba(120,170,220,.22);position:absolute;backdrop-filter:blur(8px)}
+.gl::before{content:"";position:absolute;left:12px;right:12px;top:3px;height:40%;border-radius:18px 18px 40% 40%/18px 18px 16px 16px;background:linear-gradient(180deg,rgba(255,255,255,.6),rgba(255,255,255,0));pointer-events:none}
+.gl>*{position:relative}
+.b-panel{left:24px;bottom:22px;width:520px;height:150px}
+.b-por{position:absolute;left:-6px;bottom:-4px;width:150px;height:150px;border-radius:50%;background:url(bg/portrait.jpg) center/cover;border:5px solid #fff;box-shadow:0 8px 22px rgba(10,50,100,.4),0 0 0 4px #57d14a}
+.b-mood{position:absolute;left:156px;top:16px}
+.b-mood .nm{font:900 22px/1 Nunito}
+.b-mood .md{font:800 15px/1.2 Nunito;color:#2f9b26;margin-top:4px;display:flex;align-items:center;gap:6px}
+.b-mood .md i{width:10px;height:10px;border-radius:50%;background:#43c33a;box-shadow:0 0 0 3px rgba(67,195,58,.25)}
+.b-lets{position:absolute;left:156px;top:66px;display:flex;gap:8px}
+.b-let{width:46px;height:46px;border-radius:12px;background:linear-gradient(180deg,#fff,#dbeefe);border:1.5px solid #fff;box-shadow:0 2px 6px rgba(20,70,130,.25);display:grid;place-items:center;position:relative}
+.b-let.g{box-shadow:0 2px 6px rgba(20,70,130,.25),inset 0 0 0 2px #6ccf5e}
+.b-let.r{box-shadow:0 2px 6px rgba(20,70,130,.25),inset 0 0 0 2px #f08a6a}
+.b-let em{position:absolute;bottom:-7px;right:-5px;font:900 10.5px/1 Nunito;font-style:normal;background:#fff;border-radius:7px;padding:2px 4px;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.b-tabs{position:absolute;right:12px;top:14px;display:flex;flex-direction:column;gap:6px}
+.b-tab{width:40px;height:36px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(180deg,#fff,#dcecfb);border:1.5px solid #fff;box-shadow:0 2px 5px rgba(20,70,130,.22);color:#2a6fb3}
+.b-tab.on{background:linear-gradient(180deg,#6ab8ff,#1f74cf);color:#fff;border-color:#bfe0ff}
+.b-dock{left:560px;bottom:30px;height:64px;display:flex;gap:6px;padding:8px 12px;align-items:center}
+.b-k{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(180deg,#fff,#dcecfb);border:1.5px solid #fff;box-shadow:0 2px 6px rgba(20,70,130,.25),inset 0 -2px 0 rgba(80,140,210,.25);color:#1f5f9e;position:relative}
+.b-k.off{color:#e0442c}
+.b-k .badge{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;border-radius:9px;background:#e0442c;color:#fff;font:900 10px/18px Nunito;text-align:center;border:1.5px solid #fff}
+.b-sep{width:1.5px;height:34px;background:rgba(42,132,220,.25);margin:0 4px}
+.b-radar{right:30px;bottom:26px;width:214px;height:214px;border-radius:50%;overflow:hidden;border:6px solid #fff;box-shadow:0 10px 26px rgba(10,50,100,.4),0 0 0 2px rgba(42,132,220,.35)}
+.b-n{position:absolute;right:130px;bottom:226px;width:30px;height:30px;border-radius:50%;background:#fff;color:#1f74cf;font:900 15px/30px Nunito;text-align:center;box-shadow:0 2px 6px rgba(10,50,100,.35)}
+.b-clock{right:26px;top:22px;height:60px;display:flex;align-items:center;gap:14px;padding:0 18px 0 14px}
+.b-clock .t{font:900 30px/1 Nunito;color:#123e6a}
+.b-clock .w{display:flex;align-items:center;gap:6px;font:800 15px/1 Nunito;color:#3a6c9b}
+.b-clock .on{display:flex;align-items:center;gap:6px;font:800 14px/1 Nunito;color:#2f9b26;padding-left:12px;border-left:1.5px solid rgba(42,132,220,.22)}
+.b-title{left:50%;top:48px;transform:translateX(-50%);text-align:center;color:#fff}
+.b-title .big{font:400 66px/1.1 Pacifico;text-shadow:0 3px 0 rgba(10,40,80,.45),0 6px 18px rgba(0,0,0,.45);-webkit-text-stroke:1px rgba(10,40,80,.25)}
+.b-title .sub{display:inline-block;margin-top:6px;font:900 15px/1 Nunito;letter-spacing:.24em;text-transform:uppercase;background:rgba(18,62,106,.75);padding:7px 16px;border-radius:20px}
+.b-wep{right:262px;bottom:150px;width:230px;padding:12px 16px;display:flex;flex-direction:column;align-items:flex-end}
+.b-wep .sil{width:160px;height:52px;color:#1d5592}
+.b-wep .am{font:900 30px/1 Nunito;color:#123e6a}
+.b-wep .am small{font-size:19px;color:#5b7a9b}
+.b-wep .lb{font:800 13px/1 Nunito;color:#5b7a9b;margin-top:2px}
+.b-note{right:26px;width:330px;padding:12px 14px;display:flex;gap:12px;align-items:center}
+.b-note .ic{width:46px;height:46px;border-radius:14px;background:linear-gradient(180deg,#fff,#dbeefe);display:grid;place-items:center;border:1.5px solid #fff;box-shadow:0 2px 5px rgba(20,70,130,.2);color:#1f5f9e}
+.b-note .t{font:900 15.5px/1.2 Nunito}
+.b-note .s{font:700 13px/1.25 Nunito;color:#5b7a9b;margin-top:2px}
+.b-queue{left:30px;bottom:186px;display:flex;gap:8px;align-items:flex-end}
+.b-queue .q{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(180deg,#fff,#dcecfb);border:3px solid #fff;box-shadow:0 3px 8px rgba(10,50,100,.35);color:#1f5f9e;position:relative}
+.b-queue .q.now{width:68px;height:68px;box-shadow:0 3px 8px rgba(10,50,100,.35),0 0 0 3px #57d14a}
+.b-queue .q .x{position:absolute;top:-4px;right:-4px;width:20px;height:20px;border-radius:50%;background:#e0442c;color:#fff;font:900 12px/20px Nunito;text-align:center;border:2px solid #fff}
+html[data-look=b] .pie .opt{background:linear-gradient(180deg,#fff,#e3f0fc);color:#123e6a;font:800 16px/1 Nunito;padding:11px 18px;border-radius:24px;border:1.5px solid #fff;box-shadow:0 4px 12px rgba(10,50,100,.4),inset 0 -2px 0 rgba(80,140,210,.2)}
+html[data-look=b] .pie .opt.hi{background:linear-gradient(180deg,#8fd0ff,#2a84dc);color:#fff;text-shadow:0 1px 1px rgba(0,40,90,.5);border-color:#cde8ff}
+html[data-look=b] .pie .hub{position:absolute;transform:translate(-50%,-50%);width:84px;height:84px;border-radius:50%;background:linear-gradient(180deg,#fff,#d6eafc);border:4px solid #fff;box-shadow:0 6px 16px rgba(10,50,100,.45);display:grid;place-items:center;color:#c8323a}
+html[data-look=b] .pie .name{position:absolute;transform:translate(-50%,0);font:900 17px/1 Nunito;white-space:nowrap;background:rgba(18,62,106,.82);color:#fff;padding:7px 14px;border-radius:16px}
+html[data-look=b] .wcen{position:absolute;transform:translate(-50%,-50%);text-align:center;width:180px;height:180px;border-radius:50%;background:linear-gradient(180deg,#fff,#d6eafc);border:5px solid #fff;box-shadow:0 10px 26px rgba(10,50,100,.45);display:flex;flex-direction:column;align-items:center;justify-content:center}
+html[data-look=b] .wcen .t{font:900 22px/1.05 Nunito;color:#123e6a}
+html[data-look=b] .wcen .s{font:800 14px/1.3 Nunito;color:#5b7a9b;margin-top:4px}
+
+/* ================= C · POSTCARD (half and half, its own soul) ================= */
+html[data-look=c] body{font-family:"Inter Tight",sans-serif;color:#141414}
+.st{position:absolute;background:#fbf6ea;border:3px solid #141414;border-radius:10px;box-shadow:5px 5px 0 #141414}
+.st.y{background:#ffd23f}
+.st.g{background:#4fd35a}
+.st.k{background:#141414;color:#fbf6ea}
+.c-tape{position:absolute;width:64px;height:20px;background:rgba(255,210,63,.85);border:1.5px solid rgba(20,20,20,.25)}
+.c-radar{left:34px;bottom:40px;width:300px;height:210px;transform:rotate(-1.6deg);overflow:hidden;padding:0}
+.c-radar .map{width:100%;height:100%}
+.c-me{left:350px;bottom:40px;width:330px;height:142px;transform:rotate(1deg)}
+.c-por{position:absolute;left:12px;top:12px;width:96px;height:96px;border-radius:8px;border:3px solid #141414;background:url(bg/portrait.jpg) center/cover}
+.c-me .nm{position:absolute;left:122px;top:12px;font:400 28px/1 "Bebas Neue";letter-spacing:.03em}
+.c-me .md{position:absolute;left:122px;top:42px;font:400 16px/1 "Permanent Marker";color:#1e8d2a}
+.c-needs{position:absolute;left:122px;top:70px;right:14px;display:grid;grid-template-columns:1fr 1fr;gap:6px 10px}
+.c-need{font:800 10.5px/1 "Inter Tight";letter-spacing:.08em;text-transform:uppercase}
+.c-need i{display:block;height:9px;border:2px solid #141414;border-radius:6px;margin-top:3px;background:#fff;position:relative;overflow:hidden}
+.c-need b{position:absolute;left:0;top:0;bottom:0}
+.c-clock{right:36px;top:30px;padding:8px 16px 6px;transform:rotate(1.8deg);text-align:center}
+.c-clock .t{font:400 58px/0.9 "Anton";letter-spacing:.01em}
+.c-clock .w{font:800 12px/1 "Inter Tight";letter-spacing:.14em;text-transform:uppercase;margin-top:5px}
+.c-cash{right:44px;top:132px;padding:5px 14px;transform:rotate(-1.4deg);font:400 30px/1 "Anton";color:#0e5c18}
+.c-place{left:50%;top:70px;transform:translateX(-50%) rotate(-2.5deg);padding:14px 36px 12px;text-align:center}
+.c-place .big{font:400 78px/0.9 "Anton";letter-spacing:.01em;text-transform:uppercase;color:#141414}
+.c-place .sub{font:400 22px/1 "Permanent Marker";margin-top:4px;color:#c2410c}
+.c-dock{left:704px;bottom:44px;display:flex;gap:8px}
+.c-dock .k{width:50px;height:50px;border-radius:10px;border:3px solid #141414;background:#fbf6ea;box-shadow:3px 3px 0 #141414;display:grid;place-items:center;position:relative}
+.c-dock .k.off{background:#ff6b57}
+.c-dock .k .badge{position:absolute;top:-8px;right:-8px;min-width:20px;height:20px;border-radius:10px;background:#ffd23f;border:2px solid #141414;font:900 10px/16px "Inter Tight";text-align:center}
+.c-wep{right:36px;bottom:40px;width:224px;padding:12px 16px;transform:rotate(-1.2deg);display:flex;flex-direction:column;align-items:flex-end}
+.c-wep .sil{width:170px;height:56px}
+.c-wep .am{font:400 40px/1 "Anton"}
+.c-wep .am small{font-size:24px;opacity:.6}
+.c-wep .lb{font:400 16px/1 "Permanent Marker";color:#c2410c}
+.c-help{left:34px;top:34px;width:330px;padding:14px 16px;transform:rotate(-1deg);font:600 16px/1.45 "Inter Tight"}
+.c-key{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 6px;margin:0 2px;border-radius:6px;background:#141414;color:#ffd23f;font:900 13px/1 "Inter Tight";vertical-align:1px}
+.c-note{left:34px;width:300px;padding:9px 12px;display:flex;gap:10px;align-items:center;font:700 14.5px/1.25 "Inter Tight"}
+.c-note .ic{width:38px;height:38px;border-radius:7px;border:2.5px solid #141414;background:#fff;display:grid;place-items:center}
+html[data-look=c] .pie .opt{background:#fbf6ea;border:3px solid #141414;border-radius:10px;box-shadow:4px 4px 0 #141414;font:800 16px/1 "Inter Tight";padding:10px 16px 10px 10px;display:flex;gap:9px;align-items:center}
+html[data-look=c] .pie .opt.hi{background:#4fd35a}
+html[data-look=c] .pie .opt .n{width:24px;height:24px;border-radius:6px;background:#141414;color:#ffd23f;font:900 12px/24px "Inter Tight";text-align:center}
+html[data-look=c] .pie .hub{position:absolute;transform:translate(-50%,-50%) rotate(-4deg);width:86px;height:86px;border-radius:12px;background:#ffd23f;border:3px solid #141414;box-shadow:4px 4px 0 #141414;display:grid;place-items:center;color:#141414}
+html[data-look=c] .pie .name{position:absolute;transform:translate(-50%,0) rotate(-2deg);font:400 30px/1 "Anton";white-space:nowrap;background:#141414;color:#fbf6ea;padding:6px 14px 4px;border-radius:6px;text-transform:uppercase}
+.c-queue{left:34px;top:34px;display:flex;gap:10px;align-items:center;transform:rotate(-1deg)}
+.c-queue .q{width:54px;height:54px;border-radius:10px;border:3px solid #141414;background:#fbf6ea;box-shadow:3px 3px 0 #141414;display:grid;place-items:center}
+.c-queue .q.now{width:68px;height:68px;background:#4fd35a}
+.c-queue .lbl{font:400 19px/1.1 "Permanent Marker";color:#fff;text-shadow:0 2px 0 #141414,0 0 6px rgba(0,0,0,.6);margin-left:6px}
+html[data-look=c] .wcen{position:absolute;transform:translate(-50%,-50%) rotate(-2deg);text-align:center;width:200px;padding:16px 10px 12px;background:#fbf6ea;border:3px solid #141414;border-radius:12px;box-shadow:5px 5px 0 #141414}
+html[data-look=c] .wcen .t{font:400 34px/1 "Anton";text-transform:uppercase}
+html[data-look=c] .wcen .s{font:400 17px/1.2 "Permanent Marker";color:#c2410c;margin-top:6px}
+
+/* plumbob over my head (my status: green available, amber busy, red don't disturb) */
+.bob{position:absolute;transform:translate(-50%,-50%);filter:drop-shadow(0 0 10px rgba(90,255,90,.55)) drop-shadow(0 3px 4px rgba(0,0,0,.35))}
+.crossh{position:absolute;left:720px;top:450px;width:6px;height:6px;margin:-3px;border-radius:50%;background:#fff;box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
+.label{position:absolute;left:50%;bottom:6px;transform:translateX(-50%);font:700 11px/1 Inter Tight,sans-serif;color:rgba(255,255,255,.55);letter-spacing:.12em;text-transform:uppercase}
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<div id="hud"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const LOOK = q.get("look") || "a", S = q.get("s") || "play";
+document.documentElement.dataset.look = LOOK;
+const BG = { play: "day", act: "diner", night: "night", wheel: "dusk" }[S];
+const bg = document.getElementById("bg");
+bg.style.backgroundImage = `url(bg/${BG}.jpg)`;
+if (S === "wheel") bg.style.filter = LOOK === "b" ? "saturate(.35) brightness(.85) blur(2px)" : "saturate(.15) brightness(.6) blur(2px)";
+if (S === "act" && LOOK !== "b") bg.style.filter = "brightness(.92)";
+
+/* ---------- icons (stroke) ---------- */
+const P = {
+  micOff: '<path d="M9 9v3a3 3 0 0 0 5.1 2.1M15 9.3V5a3 3 0 0 0-5.9-.7"/><path d="M19 11a7 7 0 0 1-1.1 3.8M5 11a7 7 0 0 0 11.4 5.4M12 18v3M3 3l18 18"/>',
+  camOff: '<path d="M3 7h9l3 3v-1l5-3v12l-5-3v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" /><path d="M2 3l20 18"/>',
+  share: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M12 13V8M9.5 10.5 12 8l2.5 2.5"/>',
+  emote: '<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/>',
+  phone: '<rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M11 18.5h2"/>',
+  people: '<circle cx="9" cy="8.5" r="3.2"/><path d="M3 20c.6-3.6 3-5.5 6-5.5s5.4 1.9 6 5.5"/><circle cx="17" cy="9.5" r="2.5"/><path d="M16.5 14.6c2.6.1 4 1.9 4.5 4.9"/>',
+  hammer: '<path d="M14 6l4 4M13 7l-9 9 4 4 9-9M14 3l7 7-2 2-7-7z"/>',
+  paw: '<circle cx="7" cy="9" r="1.8"/><circle cx="11" cy="6" r="1.8"/><circle cx="15" cy="6.5" r="1.8"/><circle cx="18" cy="10" r="1.8"/><path d="M8 16c0-2.5 2-4.5 4.5-4.5s4.5 2 4 4.6c-.4 2.2-2.4 2.2-4 1.6-1.4-.5-2.2-.5-3.2.1C8 18.6 8 17.4 8 16z"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
+  pack: '<path d="M7 7a5 5 0 0 1 10 0"/><rect x="4.5" y="7" width="15" height="14" rx="3"/><path d="M8.5 12h7v4h-7z"/>',
+  walk: '<circle cx="13" cy="4.5" r="1.8"/><path d="M10 21l2.5-6 2.5 2v4M9 11l3-3 3 2 3 1M12 8l-1.5 7"/>',
+  sit: '<path d="M6 3v10h10l2 8M6 13l-1 8M10 13v-4h7"/>',
+  cup: '<path d="M5 8h11v6a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 10h1.5a2.5 2.5 0 0 1 0 5H16M8 3c0 1.5 1 1.5 1 3M11 3c0 1.5 1 1.5 1 3"/>',
+  plate: '<circle cx="12" cy="13" r="7"/><circle cx="12" cy="13" r="3.5"/><path d="M3 4v5M3 9c0 1 .8 1.5 1.5 1.5M21 4v16"/>',
+  book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/>',
+  window: '<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M12 3v18M4 12h16"/>',
+  bell: '<path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15z"/><path d="M10 21h4"/>',
+  snow: '<path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7M9 4l3 2 3-2M9 20l3-2 3 2"/>',
+  booth: '<path d="M4 20V7a3 3 0 0 1 3-3h1v10h8v6M8 14H4M20 20v-6h-4"/><path d="M14 10h7"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+  dot: '<circle cx="12" cy="12" r="4"/>',
+};
+const I = (n, s = 22, extra = "") => `<svg class="i" viewBox="0 0 24 24" style="width:${s}px;height:${s}px;${extra}">${P[n]}</svg>`;
+/* ---------- silhouettes (fill), GTA's white weapon pictures ---------- */
+const SIL = {
+  revolver: '<path d="M24 15 L36 10 L52 10 L52 8 L114 8 L114 15 L58 15 L58 20 L51 23 L43 23 L41 27 C39 31 37 35 35 39 L19 39 C21 33 24 27 27 22 L23 19Z"/><path d="M43 23 C43 30 52 30 52 23" fill="none" stroke="currentColor" stroke-width="2.6"/><rect x="36" y="11" width="18" height="11" rx="2" opacity=".55"/>',
+  shotgun: '<path d="M2 24 L32 16 L48 16 L50 13 L118 11.5 L118 18.5 L64 19 L58 22 L48 22 L44 27 L36 27 L10 34 L2 32Z"/><path d="M44 22 C44 29 52 29 52 22" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M50 15.5 L118 15" stroke="rgba(0,0,0,.35)" stroke-width="1"/>',
+  ak: '<path d="M2 19 L26 14 L30 12 L80 12 L80 9 L118 9 L118 13 L88 14 L86 17 L66 17 C66 24 68 30 72 36 L62 38 C58 32 56 25 56 18 L44 18 L42 25 L35 25 L34 19 L29 19 L7 27 L2 26Z"/>',
+  torch: '<path d="M8 15 L66 15 L78 9 L102 9 L102 31 L78 31 L66 25 L8 25Z"/><rect x="104" y="11" width="6" height="18" rx="2" opacity=".55"/><rect x="30" y="13" width="10" height="2.5"/>',
+  flare: '<rect x="16" y="15" width="74" height="10" rx="3"/><rect x="88" y="12" width="18" height="16" rx="3" opacity=".7"/><path d="M106 20 l8 -4 l-3 4 l3 4z" opacity=".9"/>',
+  aid: '<rect x="35" y="5" width="50" height="32" rx="5"/><path d="M60 11v20M50 21h20" stroke="rgba(0,0,0,.55)" stroke-width="5"/><rect x="51" y="1" width="18" height="6" rx="2"/>',
+};
+const sil = (n, w = 150, h = 50, col = "currentColor") => `<svg class="sil" viewBox="0 0 120 40" style="width:${w}px;height:${h}px;color:${col}">${SIL[n]}</svg>`;
+
+/* plumbob */
+const BOB = (x, y, s = 1, c1 = "#7dff6a", c2 = "#2fb52a", c3 = "#56e04a") => `<svg class="bob" style="left:${x}px;top:${y}px" width="${34 * s}" height="${62 * s}" viewBox="0 0 34 62"><path d="M17 0 L34 24 L17 62 L0 24Z" fill="${c3}"/><path d="M17 0 L34 24 L17 30Z" fill="${c1}"/><path d="M17 0 L0 24 L17 30Z" fill="${c3}"/><path d="M0 24 L17 30 L17 62Z" fill="${c2}"/><path d="M34 24 L17 30 L17 62Z" fill="#40c936"/><path d="M17 4 L9 18 L17 12Z" fill="#fff" opacity=".55"/></svg>`;
+const BOB_AT = { play: [704, 272, 0.9], act: [716, 64, 1.1], night: [704, 278, 0.85], wheel: [690, 262, 0.9] };
+
+/* ---------- the radar: the street ahead is "up" (GTA), blips for the town's places ---------- */
+function radar(w, h, theme) {
+  const T = {
+    a: { bg: "rgba(14,18,24,.0)", blk: "rgba(70,78,90,.55)", road: "#9aa3ad", line: "#c9b23a", snow: "rgba(210,225,240,.18)", me: "#fff", blip: "#fff", blipBg: "#1c1f25" },
+    b: { bg: "#dff0e4", blk: "#bcd6c4", road: "#ffffff", line: "#f6c94a", snow: "#eef7f1", me: "#2a84dc", blip: "#fff", blipBg: "#2a84dc" },
+    c: { bg: "#fbf6ea", blk: "#e6dcc4", road: "#141414", line: "#ffd23f", snow: "#fff", me: "#4fd35a", blip: "#141414", blipBg: "#ffd23f" },
+  }[theme];
+  const cx = w / 2, cy = h * 0.66;
+  const blip = (x, y, ic) => `<g transform="translate(${x},${y})"><circle r="11" fill="${T.blipBg}" stroke="${theme === "c" ? "#141414" : "#fff"}" stroke-width="${theme === "c" ? 2.5 : 1.6}"/><g transform="translate(-7,-7) scale(.58)" fill="none" stroke="${theme === "c" ? "#141414" : T.blip}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${P[ic]}</g></g>`;
+  const rw = theme === "c" ? 26 : 30;
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;background:${T.bg}">
+    <rect width="${w}" height="${h}" fill="${T.snow}"/>
+    ${[0, 1, 2, 3].map((i) => `<rect x="${cx - rw / 2 - 74}" y="${-10 + i * 62}" width="62" height="48" rx="3" fill="${T.blk}"/><rect x="${cx + rw / 2 + 12}" y="${-10 + i * 62}" width="62" height="48" rx="3" fill="${T.blk}"/>`).join("")}
+    <rect x="${cx - rw / 2}" y="-10" width="${rw}" height="${h + 20}" fill="${T.road}"/>
+    <rect x="-10" y="${cy - 52}" width="${w + 20}" height="${rw * 0.6}" fill="${T.road}"/>
+    <rect x="-10" y="${cy + 66}" width="${w + 20}" height="${rw * 0.6}" fill="${T.road}"/>
+    <rect x="-10" y="${h * 0.12}" width="${w + 20}" height="${rw * 0.6}" fill="${T.road}"/>
+    <path d="M${cx - 1.6} -10 V${h + 10} M${cx + 1.6} -10 V${h + 10}" stroke="${T.line}" stroke-width="1.4"/>
+    ${blip(cx - 62, cy - 86, "plate")}${blip(cx + 66, cy - 18, "cup")}${blip(cx + 60, cy - 150, "bell")}${blip(cx - 58, cy + 30, "pack")}
+    <g transform="translate(${cx},${cy})"><path d="M0 -13 L10 10 L0 5 L-10 10Z" fill="${T.me}" stroke="${theme === "a" ? "#000" : theme === "b" ? "#fff" : "#141414"}" stroke-width="2"/></g>
+  </svg>`;
+}
+
+/* ---------- the pie (the Sims action ring) ---------- */
+const OPTS = [["sit", "Sit"], ["cup", "Order a coffee"], ["plate", "Order the special"], ["book", "Read the menu"], ["window", "Look out the window"]];
+function pie(cx, cy, r, numbered) {
+  const n = OPTS.length;
+  return `<div class="pie">` + OPTS.map(([ic, t], i) => {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+    const x = cx + Math.cos(a) * r * 1.45, y = cy + Math.sin(a) * r;
+    return `<div class="opt${i === 1 ? " hi" : ""}" style="left:${x}px;top:${y}px">${numbered ? `<span class="n">${i + 1}</span>` : ""}${t}</div>`;
+  }).join("") + `<div class="hub" style="left:${cx}px;top:${cy}px">${I("booth", 40)}</div><div class="name" style="left:${cx}px;top:${cy + r + 44}px">Diner booth</div></div>`;
+}
+
+/* ---------- the wheel (Tab held): the hands' slots + pack, phone, emote ---------- */
+const WH = [
+  ["torch", "Left hand · Torch", "battery 64%", "1"], ["revolver", "Revolver", "6 | 18", "2"], ["shotgun", "Shotgun", "2 | 14", "3"],
+  ["ak", "AK", "30 | 60", "4"], [null, "Empty", "slot 5", "5"], ["pack", "Pack", "8 pockets", ""], ["phone", "Phone", "9 new", ""], ["emote", "Emote", "wave, dance…", ""],
+];
+function wheel(look) {
+  const R0 = 128, R1 = 290, n = WH.length, cx = 720, cy = 450;
+  const segs = WH.map(([k, t, s, key], i) => {
+    const a0 = -Math.PI / 2 - Math.PI / n + (i * 2 * Math.PI) / n + 0.012, a1 = a0 + (2 * Math.PI) / n - 0.024;
+    const pt = (r, a) => `${cx + Math.cos(a) * r} ${cy + Math.sin(a) * r}`;
+    const d = `M${pt(R0, a0)} L${pt(R1, a0)} A${R1} ${R1} 0 0 1 ${pt(R1, a1)} L${pt(R0, a1)} A${R0} ${R0} 0 0 0 ${pt(R0, a0)}Z`;
+    const hi = i === 2;
+    const am = (a0 + a1) / 2, mx = cx + Math.cos(am) * (R0 + R1) / 2, my = cy + Math.sin(am) * (R0 + R1) / 2;
+    const fill = look === "a" ? (hi ? "rgba(255,255,255,.92)" : "rgba(0,0,0,.6)") : look === "b" ? (hi ? "url(#gb)" : "rgba(235,245,255,.9)") : hi ? "#4fd35a" : "#fbf6ea";
+    const stroke = look === "a" ? (hi ? "#fff" : "rgba(255,255,255,.25)") : look === "b" ? "#fff" : "#141414";
+    const col = look === "a" ? (hi ? "#111" : "#fff") : look === "b" ? (hi ? "#fff" : "#1d5592") : "#141414";
+    const pic = !k ? `<div style="font:700 13px/1 Inter Tight;opacity:.5">—</div>` : SIL[k] ? sil(k, 112, 38, col) : I(k, 36, `color:${col}`);
+    const kk = key ? `<div style="position:absolute;left:${mx - 60}px;top:${my - 52}px;font:800 12px/1 ${look === "b" ? "Nunito" : "Inter Tight"};color:${col};opacity:.7">${key}</div>` : "";
+    return { d, fill, stroke, hi, html: `<div style="position:absolute;left:${mx}px;top:${my}px;transform:translate(-50%,-50%);display:grid;place-items:center;color:${col}">${pic}</div>${kk}` };
+  });
+  const sw = look === "c" ? 3 : 1.5;
+  return `<svg class="abs" style="left:0;top:0" width="1440" height="900"><defs><linearGradient id="gb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fd0ff"/><stop offset="1" stop-color="#1f74cf"/></linearGradient></defs>
+    ${look === "c" ? segs.map((s) => `<path d="${s.d}" transform="translate(5 5)" fill="#141414"/>`).join("") : ""}
+    ${segs.map((s) => `<path d="${s.d}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${sw}"/>`).join("")}</svg>
+    ${segs.map((s) => s.html).join("")}
+    <div class="wcen" style="left:${cx}px;top:${cy}px"><div class="t">Shotgun</div><div class="s">2 in · 14 in the pack</div></div>`;
+}
+
+/* ================= look A ================= */
+function A() {
+  let h = "";
+  const dock = `<div class="abs a-dock a-sh">
+    <div class="k off">${I("micOff")}<em>M</em></div><div class="k">${I("camOff")}</div><div class="k">${I("share")}</div><div class="sep"></div>
+    <div class="k">${I("emote")}<em>G</em></div><div class="k">${I("phone")}<span class="badge">9+</span><em>P</em></div><div class="k">${I("people")}</div><div class="sep"></div>
+    <div class="k">${I("hammer")}<em>B</em></div><div class="k">${I("paw")}</div><div class="k">${I("gear")}</div></div>`;
+  const rad = (bars = true) => `<div class="abs a-radar"><div class="map">${radar(300, 184, "a")}</div>
+    ${bars ? `<div class="a-bars"><i style="width:146px"><b style="width:82%;background:#5fbf4a"></b></i><i style="width:72px"><b style="width:64%;background:#e9c046"></b></i><i style="width:74px"><b style="width:100%;background:#4aa3df"></b></i></div>` : ""}</div>`;
+  const tr = (wep, ammo, money = true, t = "13:52") => `<div class="abs a-tr a-sh"><div class="a-clock">${t}</div>${money ? `<div class="a-money">$ 1,250</div>` : ""}
+    <div class="a-wep">${wep ? `<div class="a-ammo">${ammo}</div>${sil(wep)}` : ""}</div></div>`;
+  if (S === "play") {
+    h += rad() + tr("torch", "64<small>%</small>") + dock;
+    h += `<div class="abs a-place a-sh"><div class="big">Main Street</div><div class="sub">Yutopia · Town · 4 here</div></div>`;
+    h += `<div class="abs a-help">Press <span class="a-key">E</span> to get in the <b>police car</b>. Hold <span class="a-key">Tab</span> for your hands.</div>`;
+  } else if (S === "act") {
+    h += rad() + tr(null, "") + dock;
+    h += `<div class="abs a-queue a-sh"><div class="q now">${I("walk", 30)}</div><div class="q">${I("sit", 24)}</div><div class="q">${I("cup", 24)}</div><div class="lbl">Walking to the booth<br><span style="opacity:.7;font-weight:600">then sit · order a coffee</span></div></div>`;
+    h += pie(330, 400, 112, true);
+    h += `<div class="abs a-place a-sh"><div class="big" style="font-size:46px">The Diner</div><div class="sub">Main Street · Floor G</div></div>`;
+  } else if (S === "night") {
+    h += rad() + tr("shotgun", "2 <small>| 14</small>", true, "22:10") + dock + `<div class="crossh"></div>`;
+    h += `<div class="abs a-feed"><div><span class="ic">${sil("flare", 32, 12, "#eee")}</span>+3 flares · in the pack</div><div><span class="ic">${sil("aid", 30, 12, "#eee")}</span>+1 first aid kit · in the pack</div></div>`;
+    h += `<div class="abs a-help">Hold <span class="a-key">RMB</span> to aim · <span class="a-key">R</span> reload · <span class="a-key">F</span> torch on/off</div>`;
+    h += `<div class="abs a-place a-sh" style="opacity:.9"><div class="sub">Main Street · Yutopia · 22:10</div></div>`;
+  } else {
+    h += wheel("a") + rad(false) + `<div class="abs a-place a-sh"><div class="sub">Hold Tab · let go to take it</div></div>`;
+  }
+  return h;
+}
+
+/* ================= look B ================= */
+function B() {
+  let h = "";
+  const panel = `<div class="gl b-panel"><div class="b-mood"><div class="nm">Ana Demo</div><div class="md"><i></i>Available · Cheerful</div></div>
+    <div class="b-lets"><div class="b-let g">${I("snow", 24, "color:#3d8fd8")}<em>+1</em></div><div class="b-let g">${I("cup", 24, "color:#8a5a2b")}<em>+2</em></div><div class="b-let g">${I("sun", 24, "color:#e2a01a")}<em>+1</em></div><div class="b-let r">${I("walk", 24, "color:#c8553a")}<em>−1</em></div></div>
+    <div class="b-tabs"><div class="b-tab on">${I("heart", 18)}</div><div class="b-tab">${I("pack", 18)}</div><div class="b-tab">${I("paw", 18)}</div></div>
+    <div class="b-por"></div></div>`;
+  const dock = `<div class="gl b-dock"><div class="b-k off">${I("micOff")}</div><div class="b-k">${I("camOff")}</div><div class="b-k">${I("share")}</div><div class="b-sep"></div>
+    <div class="b-k">${I("emote")}</div><div class="b-k">${I("phone")}<span class="badge">9+</span></div><div class="b-k">${I("people")}</div><div class="b-sep"></div>
+    <div class="b-k">${I("hammer")}</div><div class="b-k">${I("gear")}</div></div>`;
+  const rad = `<div class="abs b-radar">${radar(214, 214, "b")}</div><div class="b-n">N</div>`;
+  const clock = (t = "1:52 pm", w = "−4°  Snow") => `<div class="gl b-clock"><div class="t">${t}</div><div class="w">${I("snow", 18)}${w}</div><div class="on">${I("dot", 12)}4 here</div></div>`;
+  if (S === "play") {
+    h += panel + dock + rad + clock();
+    h += `<div class="abs b-title"><div class="big">Main Street</div><div class="sub">Yutopia · Town</div></div>`;
+    h += `<div class="gl b-note" style="top:96px">${`<div class="ic">${I("cup", 26)}</div>`}<div><div class="t">Moodlet: Fresh coffee</div><div class="s">+2 Cheerful · for 2 hours</div></div></div>`;
+  } else if (S === "act") {
+    h += panel + dock + rad + clock();
+    h += `<div class="abs b-queue"><div class="q now">${I("walk", 30)}<span class="x">×</span></div><div class="q">${I("sit", 24)}</div><div class="q">${I("cup", 24)}</div></div>`;
+    h += pie(330, 400, 112, false);
+    h += `<div class="abs" style="left:30px;top:30px;color:#fff"><div class="b-title" style="position:static;transform:none"><div class="sub">The Diner · Main Street</div></div></div>`;
+  } else if (S === "night") {
+    h += panel + dock + rad + clock("10:10 pm", "−9°  Clear") + `<div class="crossh"></div>`;
+    h += `<div class="gl b-wep">${sil("shotgun", 160, 52, "#1d5592")}<div class="am">2 <small>/ 14</small></div><div class="lb">Shotgun · torch 64%</div></div>`;
+    h += `<div class="gl b-note" style="top:96px"><div class="ic">${sil("flare", 36, 14, "#c8323a")}</div><div><div class="t">+3 flares</div><div class="s">in the pack</div></div></div>`;
+    h += `<div class="gl b-note" style="top:174px"><div class="ic">${sil("aid", 34, 14, "#c8323a")}</div><div><div class="t">+1 first aid kit</div><div class="s">in the pack</div></div></div>`;
+  } else {
+    h += wheel("b") + panel;
+  }
+  return h;
+}
+
+/* ================= look C ================= */
+function C() {
+  let h = "";
+  const rad = `<div class="st c-radar"><div class="map">${radar(294, 204, "c")}</div></div><div class="c-tape" style="left:60px;bottom:236px;transform:rotate(-8deg)"></div><div class="c-tape" style="left:268px;bottom:238px;transform:rotate(6deg)"></div>`;
+  const me = `<div class="st c-me"><div class="c-por"></div><div class="nm">Ana Demo</div><div class="md">available · cheerful</div>
+    <div class="c-needs"><div class="c-need">Warmth<i><b style="width:62%;background:#4fb4ff"></b></i></div><div class="c-need">Energy<i><b style="width:80%;background:#4fd35a"></b></i></div><div class="c-need">Fun<i><b style="width:46%;background:#ffd23f"></b></i></div><div class="c-need">Hunger<i><b style="width:30%;background:#ff6b57"></b></i></div></div></div>`;
+  const clock = (t = "13:52", w = "Tue · −4° snow") => `<div class="st y c-clock"><div class="t">${t}</div><div class="w">${w}</div></div><div class="st c-cash">$1,250</div>`;
+  const dock = `<div class="c-dock abs"><div class="k off">${I("micOff")}</div><div class="k">${I("camOff")}</div><div class="k">${I("share")}</div><div class="k">${I("emote")}</div><div class="k">${I("phone")}<span class="badge">9+</span></div><div class="k">${I("people")}</div><div class="k">${I("hammer")}</div><div class="k">${I("gear")}</div></div>`;
+  const wep = (k, am, lb) => `<div class="st c-wep">${sil(k, 170, 56, "#141414")}<div class="am">${am}</div><div class="lb">${lb}</div></div>`;
+  if (S === "play") {
+    h += rad + me + clock() + wep("torch", "64<small>%</small>", "left hand · torch");
+    h += `<div class="st c-place"><div class="big">Main Street</div><div class="sub">welcome to town!</div></div>`;
+    h += `<div class="abs" style="left:1060px;bottom:178px;width:320px">${""}</div>`;
+    h += `<div class="st c-help" style="top:auto;bottom:270px;left:34px;width:300px">Press <span class="c-key">E</span> to get in the police car</div>`;
+    h += `<div class="c-dock abs" style="margin-left:0;left:auto;right:330px;transform:none;bottom:40px;display:none"></div>`;
+  } else if (S === "act") {
+    h += rad + me + clock();
+    h += `<div class="abs c-queue"><div class="q now">${I("walk", 30)}</div><div class="q">${I("sit", 24)}</div><div class="q">${I("cup", 24)}</div><div class="lbl">walking to the booth…</div></div>`;
+    h += pie(330, 400, 112, true);
+    h += `<div class="st k" style="right:36px;top:190px;padding:10px 16px;transform:rotate(-1.5deg);font:400 26px/1 Anton;letter-spacing:.02em;text-transform:uppercase">The Diner <span style="font:400 16px/1 'Permanent Marker';color:#ffd23f;text-transform:none;margin-left:6px">floor G</span></div>`;
+  } else if (S === "night") {
+    h += rad + me + clock("22:10", "Tue · −9° clear") + wep("shotgun", "2 <small>| 14</small>", "shotgun · torch 64%") + `<div class="crossh"></div>`;
+    h += `<div class="st c-note" style="top:34px;transform:rotate(-1deg)"><div class="ic">${sil("flare", 30, 11, "#c2410c")}</div>+3 flares · in the pack</div>`;
+    h += `<div class="st c-note" style="top:96px;transform:rotate(.8deg)"><div class="ic">${sil("aid", 30, 11, "#c2410c")}</div>+1 first aid kit · in the pack</div>`;
+  } else {
+    h += wheel("c") + me;
+  }
+  if (S !== "wheel") h += dock;
+  return h;
+}
+
+const [bx, by, bs] = BOB_AT[S];
+document.getElementById("hud").innerHTML = ({ a: A, b: B, c: C })[LOOK]() + (S === "wheel" ? "" : BOB(bx, by, bs));
+</script>
+</body>
+</html>

@@ -28,6 +28,9 @@ class DarkController extends Controller
             'inventory.pockets' => ['present', 'array', 'max:'.Survivor::POCKETS],
             // (plan 87) the left hand: a stack or nothing — never a gun; an old save has none
             'inventory.hand' => ['sometimes', 'nullable', 'array'],
+            // (plan 125) where each thing lies in the case, by slot; the stash at home
+            'inventory.place' => ['sometimes', 'array', 'max:'.(Survivor::POCKETS + Survivor::QUICK + 1)],
+            'inventory.stash' => ['sometimes', 'array', 'max:'.Survivor::STASH_HOLD],
             'vitals' => ['required', 'array'],
             'vitals.hp' => ['required', 'numeric', 'between:0,100'],
             'vitals.wm' => ['required', 'numeric', 'between:0,100'],
@@ -43,6 +46,8 @@ class DarkController extends Controller
             'hand' => $this->hand($data['inventory']['hand'] ?? null, $seen),
             'quick' => $this->quick($data['inventory']['quick'], $seen),
             'pockets' => $this->pockets($data['inventory']['pockets'], $seen),
+            'place' => $this->place($data['inventory']['place'] ?? []),
+            'stash' => $this->stash($data['inventory']['stash'] ?? []),
         ];
         $survivor = Survivor::updateOrCreate(['user_id' => $userId], [
             'inventory' => $inventory,
@@ -87,6 +92,43 @@ class DarkController extends Controller
         }
 
         return array_pad($out, Survivor::POCKETS, null);
+    }
+
+    // (plan 125) where things lie in the case: slot => [x, y, turned], inside the case — the world-server keeps them
+    // from overlapping (shared placeSlot); here only what can't be a place is left out
+    private function place(array $place): array|object
+    {
+        $out = [];
+        $slots = Survivor::POCKETS + Survivor::QUICK + 1;
+        foreach ($place as $slot => $p) {
+            if (! is_numeric($slot) || (int) $slot < 0 || (int) $slot >= $slots || ! is_array($p) || count($p) < 3) {
+                continue;
+            }
+            [$x, $y, $r] = array_values($p);
+            if (! is_int($x) || ! is_int($y) || $x < 0 || $y < 0 || $x >= Survivor::CASE_W || $y >= Survivor::CASE_H) {
+                continue;
+            }
+            $out[(string) (int) $slot] = [$x, $y, $r ? 1 : 0];
+        }
+
+        // (an empty one stays an object in the JSON, as the world-server writes it)
+        return $out === [] ? (object) [] : $out;
+    }
+
+    // (plan 125 F17a) the stash at home: what didn't fit in the case — stacks and guns, as anywhere else
+    private function stash(array $stash): array
+    {
+        $out = [];
+        foreach (array_values($stash) as $i => $it) {
+            if ($it === null) {
+                continue;
+            }
+            // (its own count of kinds: a gun at home and one carried may both be there)
+            $seen = [];
+            $out[] = $this->item($it, "inventory.stash.$i", $seen);
+        }
+
+        return $out;
     }
 
     // (plan 87) the left hand: a stack (the torch, a flare, a first aid…) or nothing — a gun takes both hands

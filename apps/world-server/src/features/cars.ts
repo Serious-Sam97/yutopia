@@ -88,7 +88,7 @@ import {
 } from "@yutopia/shared/grounds";
 import { sectionEffects } from "@yutopia/shared/grounds-draft";
 import type { GroundsEdits, VehicleDef } from "@yutopia/shared/grounds-edits";
-import { addItem, addItemTo, addStack, count, slotAt, takeSlot, takeStack } from "@yutopia/shared/inventory";
+import { addItem, addItemAt, addItemTo, addStack, count, slotAt, takeSlot, takeStack } from "@yutopia/shared/inventory";
 import { SWIM } from "@yutopia/shared/move";
 import { BOARD_KIND, boardOfOwner, boardsOf, postOf } from "@yutopia/shared/spot";
 import { api } from "../api.ts";
@@ -1594,12 +1594,18 @@ registerFeature((room: WorldRoom) => {
     const which = i === -1 ? store.map((_, k) => k) : Number.isInteger(i) && store[i] ? [i] : [];
     if (!which.length) return;
     const slot = m?.slot === undefined ? undefined : Number(m.slot);
+    // (plan 125 F14a) laid in the case where it was put
+    const at = Array.isArray(m?.at)
+      ? ([Number(m.at[0]), Number(m.at[1]), m.at[2] ? 1 : 0] as [number, number, 0 | 1])
+      : null;
     for (const k of which) {
       const s = store[k];
       const n =
-        slot !== undefined && which.length === 1 && slotAt(inv, slot) !== undefined
-          ? addItemTo(inv, slot, s)
-          : addItem(inv, s);
+        at && which.length === 1
+          ? addItemAt(inv, s, at)
+          : slot !== undefined && which.length === 1 && slotAt(inv, slot) !== undefined
+            ? addItemTo(inv, slot, s)
+            : addItem(inv, s);
       if ("loaded" in s && s.loaded !== undefined) s.n = n ? 0 : 1;
       else s.n -= n;
     }

@@ -649,3 +649,75 @@ test("(plan 103 F10a) a board borrowed from a rack — only by one, two at most;
   a.room.send("mod:give", { item: "board_vert_classic" });
   await waitFor(() => count(a.inv as Inventory, "board_vert_classic") === 1);
 });
+
+test("(plan 125) the case: a thing moved keeps its place across a rejoin; left at home and taken back — only at home", async () => {
+  const a = await person(1251);
+  // someone new: a torch in the left hand, lying somewhere in the case
+  const where = () => (a.inv?.place ?? {})[HAND_SLOT];
+  await waitFor(() => !!where());
+  // moved to the case's far corner (the torch is 3 × 1)
+  a.room.send("dark:place", { slot: HAND_SLOT, x: 7, y: 6, r: 0 });
+  await waitFor(() => where()?.[0] === 7 && where()?.[1] === 6);
+  // over the edge: refused
+  a.room.send("dark:place", { slot: HAND_SLOT, x: 8, y: 6, r: 0 });
+  await sleep(300);
+  assert.deepEqual(where(), [7, 6, 0]);
+  // gone and back: where it was put
+  rooms.splice(rooms.indexOf(a.room), 1);
+  await a.room.leave(true);
+  await sleep(300);
+  const a2 = await person(1251);
+  assert.deepEqual((a2.inv?.place ?? {})[HAND_SLOT], [7, 6, 0], "kept across a rejoin");
+  // left at home: not out on the land
+  await goTo(a2, -250, -60);
+  a2.room.send("dark:stash", { slot: HAND_SLOT });
+  await sleep(300);
+  assert.equal(a2.inv?.hand?.id, "torch", "not away from home");
+  // by the lobby's locker: there, and kept across a rejoin
+  await goTo(a2, LOCKER.x, LOCKER.z);
+  a2.room.send("dark:stash", { slot: HAND_SLOT });
+  await waitFor(() => !a2.inv?.hand && (a2.inv?.stash ?? []).some((it) => it.id === "torch"));
+  rooms.splice(rooms.indexOf(a2.room), 1);
+  await a2.room.leave(true);
+  await sleep(300);
+  const a3 = await person(1251);
+  assert.ok(
+    (a3.inv?.stash ?? []).some((it) => it.id === "torch"),
+    "the stash kept across a rejoin",
+  );
+  // taken back, laid at a place
+  await goTo(a3, LOCKER.x, LOCKER.z);
+  const i = (a3.inv?.stash ?? []).findIndex((it) => it.id === "torch");
+  a3.room.send("dark:unstash", { i, at: [0, 6, 0] });
+  await waitFor(() => count(a3.inv as Inventory, "torch") === 1);
+  assert.equal((a3.inv?.stash ?? []).length, 0);
+  const slot = [...(a3.inv?.pockets ?? []), null].findIndex((it) => it?.id === "torch");
+  const at = slot >= 0 ? (a3.inv?.place ?? {})[slot] : (a3.inv?.place ?? {})[HAND_SLOT];
+  assert.deepEqual(at, [0, 6, 0], "where it was laid");
+});
+
+test("(plan 125) the lobby's locker: a revolver left at home counts — no second one to stash; unstash checks the thing", async () => {
+  const a = await person(1252);
+  await goTo(a, LOCKER.x, LOCKER.z);
+  a.room.send("dark:loot", { spot: "locker" });
+  await waitFor(() => a.found.length === 1);
+  const slot = () => [...(a.inv?.quick ?? [])].findIndex((it) => it?.id === "revolver");
+  await waitFor(() => slot() >= 0);
+  // left at home by the locker, then the locker again: nothing new
+  a.room.send("dark:stash", { slot: QUICK_SLOT + slot() });
+  await waitFor(() => (a.inv?.stash ?? []).some((it) => it.id === "revolver"));
+  a.room.send("dark:loot", { spot: "locker" });
+  await waitFor(() => a.found.length === 2);
+  assert.equal(
+    a.found[1].got.some((g) => g.id === "revolver"),
+    false,
+    "one at home: none given",
+  );
+  // an unstash naming another thing than what's there: refused
+  const i = (a.inv?.stash ?? []).findIndex((it) => it.id === "revolver");
+  a.room.send("dark:unstash", { i, id: "torch" });
+  await sleep(300);
+  assert.ok((a.inv?.stash ?? []).some((it) => it.id === "revolver"));
+  a.room.send("dark:unstash", { i, id: "revolver" });
+  await waitFor(() => !(a.inv?.stash ?? []).some((it) => it.id === "revolver"));
+});

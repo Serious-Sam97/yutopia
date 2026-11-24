@@ -607,7 +607,7 @@ export interface ClientMessages {
    *  pack — `n` of a stack, or all of it */
   "car:put": { kind: "boot" | "glove"; id: string; from: number; n?: number };
   /** (plan 93 S4) out of it into the pack: its place `i` (−1: everything), into `slot` if dragged there */
-  "car:take": { kind: "boot" | "glove"; id: string; i: number; slot?: number };
+  "car:take": { kind: "boot" | "glove"; id: string; i: number; slot?: number; at?: [number, number, number] }; // (at: plan 125 F14a — where it was laid in the case)
   // a passenger's radio button (the driver's client changes the station)
   "car:radio": Record<string, never>;
   // my car stuck (stopped): pulled out to the nearest clear spot (features/cars.ts; shared freeSpot)
@@ -635,8 +635,12 @@ export interface ClientMessages {
   // dropped; use a slot (first aid, a battery); drop one — the pack's pockets 0–7, the quick slots 8–11 (plan 86)
   "dark:hello": Record<string, never>;
   "dark:loot": { spot: string };
-  "dark:pick": { id: string; slot?: number }; // (slot: into that pocket first: the inventory's drag)
+  "dark:pick": { id: string; slot?: number; at?: [number, number, number] }; // (slot: into that pocket first: the inventory's drag; at: (plan 125 F14a) where it was laid in the case)
   "dark:move": { from: number; to: number }; // a drag in the inventory (shared inventory.ts moveSlot)
+  "dark:place": { slot: number; x: number; y: number; r: number }; // (plan 125 F5a) moved or turned within the case (placeSlot)
+  // (plan 125 F17a) the stash at home: its `i`th thing into the case (at `at` if laid there), or a slot left there
+  "dark:unstash": { i: number; id?: string; at?: [number, number, 0 | 1] };
+  "dark:stash": { slot: number };
   "dark:use": { slot: number };
   "dark:drop": { slot: number; n?: number }; // (plan 86: `n` of a stack — Drop 1 — or all of it)
   "dark:split": { from: number; to: number; n?: number }; // (plan 86) half (or `n`) of a stack into another slot
@@ -926,6 +930,8 @@ export interface ServerMessages {
   // change); what a search or a pick-up gave (full: my pockets couldn't take it all; gone:
   // someone had already emptied it)
   "dark:pockets": { inv: Inventory; bat: number };
+  /** (plan 125 F6a) the first time at a place with a sticker: it's on the case's lid now (shared stickers.ts) */
+  "dark:sticker": { key: string };
   "dark:found": { spot: string; got: LootItem[]; full: boolean; gone?: boolean; later?: boolean }; // (later: the lobby's kit, taken today)
   // (plan 103) a rack's board refused: two carried already (shared skate/racks BOARDS_MAX)
   "skate:no": { why: "many" };

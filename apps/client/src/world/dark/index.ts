@@ -21,14 +21,16 @@ import {
   WEAPONS,
 } from "@yutopia/shared/inventory";
 import { type BoardVariant, variantOfItem } from "@yutopia/shared/skate/spec";
+import { STICKERS } from "@yutopia/shared/stickers";
 import { Vector3 } from "three";
 import { addStrings, trMaybe } from "@/lib/i18n";
+import { lampWanted } from "@/lib/lamp";
 import type { WorldController } from "../controller";
 import { eyesOf, glareOf, stepEyes } from "../eyes";
 import { actionOf } from "../input/bindings";
 import type { Press } from "../input/controls";
 import type { DarkHooks, Walker } from "../input/walker";
-import { hud } from "../store";
+import { hud, lampBig, lampFeed } from "../store";
 import { strikeKeys } from "../strike/flag";
 import { ARMS_CSS, Arms } from "./arms";
 import { DOWN_CSS, Down } from "./down";
@@ -65,6 +67,15 @@ const GLOVE_SVG =
 type Target =
   | { kind: "spot"; id: string; label: string; x: number; y: number; z: number }
   | { kind: "drop"; id: string; label: string; x: number; y: number; z: number };
+
+/** (plan 125 F4a) the wheel's kinds (2–5, 7): the weapons each holds */
+const KIND_IDS: Record<number, string[]> = {
+  2: ["revolver"],
+  3: ["shotgun"],
+  4: ["ak47", "sniper"],
+  5: ["daybreak"],
+  7: [],
+};
 
 export function startDark(ctl: WorldController, walker: Walker): DarkHooks {
   return new Dark(ctl, walker);
@@ -128,6 +139,9 @@ class Dark implements DarkHooks {
   private readonly col = document.createElement("div"); // bottom right, up from the guns: the quick slots, the slips, the battery
   private readonly quickEl = document.createElement("div");
   private quickKey = "";
+  private lampKey = ""; // (plan 125) what the new UI was last told
+  private lampVitals = "";
+  private lampVitalsAt = 0;
   private quickPulse: { n: number; ok: boolean; until: number } | null = null;
   private readonly prompt = document.createElement("div");
   private readonly toastEl = document.createElement("div");
@@ -315,6 +329,16 @@ class Dark implements DarkHooks {
         if (typeof off === "function") this.offs.push(off as () => void);
       };
       on("dark:pockets", (m) => this.pockets(m.inv, m.bat));
+      // (plan 125 F6a) a first visit: GTA's big message, and the sticker's on the case's lid
+      on("dark:sticker", (m) => {
+        const st = STICKERS.find((x) => x.key === m.key);
+        if (!st) return;
+        const pt = trMaybe("hallway") === "Corredor";
+        lampBig(
+          pt ? st.pt : st.en,
+          pt ? "primeira vez aqui · um adesivo para a maleta" : "first time here · a sticker for your case",
+        );
+      });
       on("dark:found", (m) => this.found(m.got, m.full, !!m.gone, !!m.later));
       // (plan 103) a rack's board refused: two carried already
       on("skate:no", () => this.toast(t("dark_skate_many"), []));
@@ -343,6 +367,12 @@ class Dark implements DarkHooks {
       if (typing(e)) return;
       // (building: build mode's keys — no search, no draw, no reload: plan 124)
       if (hud.get().build.on) return;
+      // (plan 125, the new UI: the case and the pause menu have their own keys — no draw, reload or search under
+      // them; and on the desktop the digits are GTA's kinds (ctl/input.ts → kindKey: the wheel's, 1 the left hand
+      // among them), not the quick slots — but in a Strike Park match, CS's)
+      const pk = hud.get().panel.kind;
+      if (pk === "case" || pk === "pause") return;
+      if (lampWanted() && !strikeKeys.playing && /^Digit[1-8]$/.test(e.code)) return;
       // (plan 115: the Strike Park's vote or radio open — its number keys, not the hand's or the quick slots')
       if (strikeKeys.digits && /^Digit[1-6]$/.test(e.code)) return;
       // (plan 118: a park's panel up — the buy screen's two-press keys — its digits are its own)
@@ -483,11 +513,17 @@ class Dark implements DarkHooks {
 
   // ── what the walker hands on ─────────────────────────────────────────────
   inventory(): void {
+    // (plan 125 phase 5: on the desktop the pack is Ana's Case, the new UI's)
+    if (lampWanted()) {
+      const open = hud.get().panel.kind === "case";
+      hud.set({ panel: { kind: open ? null : "case" } });
+      return;
+    }
     this.panel.toggle();
   }
   frozen(): boolean {
-    // (or taped up by Vortex, or made to dance)
-    return this.panel.open || this.vxf.frozen();
+    // (or taped up by Vortex, or made to dance — or the case open, plan 125)
+    return this.panel.open || this.vxf.frozen() || hud.get().panel.kind === "case";
   }
   steer(move: Parameters<DarkHooks["steer"]>[0]): void {
     this.vxf.steer(move);
@@ -516,6 +552,45 @@ class Dark implements DarkHooks {
   slotKey(n: number): void {
     if (n === 0) this.handKey();
     else if (n >= 1 && n <= 4) this.arms.quick(n - 1);
+  }
+  /** (plan 125 F4a) GTA's wheel by kind, keys 1–8: 1 the left hand, 2 a pistol, 3 a shotgun, 4 a rifle (again: the
+   *  next one carried), 5 heavy, 6 a throwable (the flare: lit in the hand, or thrown), 7 melee (none yet), 8 nothing
+   *  in hand (what's drawn, put away). A weapon must be at hand (the quick slots) to be drawn — in the pack, said. */
+  kindKey(n: number): void {
+    const inv = this.inv;
+    if (!inv) return;
+    if (n === 1 || n === 6) {
+      if (n === 6 && inv.hand?.id !== "flare" && !this.arms.heldFlare()) {
+        this.toast(t("lamp_no_flare"), ["flare"]);
+        return;
+      }
+      this.handKey();
+      return;
+    }
+    const room = this.ctl.room;
+    const drawn = (room?.state.players.get(room.sessionId)?.gun as string) || "";
+    if (n === 8) {
+      const i = inv.quick.findIndex((it) => it?.id === drawn && isWeapon(drawn));
+      if (i >= 0) this.arms.quick(i);
+      return;
+    }
+    const ids = KIND_IDS[n] ?? [];
+    if (!ids.length) {
+      this.toast(t("lamp_no_kind"), []);
+      return;
+    }
+    const at = ids.flatMap((id) => {
+      const i = inv.quick.findIndex((it) => it?.id === id);
+      return i >= 0 ? [i] : [];
+    });
+    if (!at.length) {
+      const inPack = ids.find((id) => inv.pockets.some((it) => it?.id === id));
+      this.toast(t(inPack ? "lamp_in_pack" : "lamp_no_kind"), inPack ? [inPack as ItemId] : []);
+      return;
+    }
+    // again on a kind drawn: the next of it carried (a rifle, then the sniper), else put it away
+    const cur = at.findIndex((i) => inv.quick[i]?.id === drawn);
+    this.arms.quick(at[cur >= 0 && at.length > 1 ? (cur + 1) % at.length : cur >= 0 ? cur : 0]);
   }
   /** The left hand's use, on foot (not building, no menu, the pack shut — its own keys then): the torch switched; a
    *  first aid or a battery used (not when full: said); a flare lit and held up (F3b), or the one held thrown;
@@ -635,6 +710,7 @@ class Dark implements DarkHooks {
 
   /** (plan 86) A typed slip above the quick slots, for a moment — three at most, the oldest let go */
   private slip(id: ItemId, text: string) {
+    if (lampWanted()) return lampFeed(text, "gold", id);
     const el = tag("div", `dk-slip${isWeapon(id) ? " w" : ""}`, "");
     el.append(svg(itemArt(id)), tag("span", "", text));
     this.slips.append(el);
@@ -652,6 +728,7 @@ class Dark implements DarkHooks {
   }
 
   private toast(text: string, icons: ItemId[]) {
+    if (lampWanted()) return lampFeed(text, "info", icons[0]);
     const el = this.toastEl;
     el.replaceChildren();
     if (icons[0]) el.append(svg(itemArt(icons[0])));
@@ -674,10 +751,14 @@ class Dark implements DarkHooks {
     // (plan 124: building, the catalog strip has the bottom of the screen)
     const building = hud.get().build.on;
     const show = !!inv && !this.panel.open && !hud.get().skating && !strikeKeys.playing && !building;
-    this.quickEl.style.display = show ? "flex" : "none";
+    // (plan 125: on the desktop the new UI shows the hands — top-right, and the wheel)
+    const lamp = lampWanted();
+    this.quickEl.style.display = show && !lamp ? "flex" : "none";
     // (plan 115: the guns' own counter too — the park's HUD shows the magazine)
-    this.arms.hudEl.style.visibility = strikeKeys.playing || building ? "hidden" : "";
-    if (!show || !inv) return;
+    this.arms.hudEl.style.visibility = strikeKeys.playing || building || lamp ? "hidden" : "";
+    if (!inv) return;
+    if (lamp) this.publishLamp(inv);
+    if (!show || lamp) return;
     const room = this.ctl.room;
     const lp = room?.state.players.get(room.sessionId);
     const gun = (lp?.gun as string) || "";
@@ -739,6 +820,69 @@ class Dark implements DarkHooks {
     }
   }
 
+  // ── (plan 125) the new UI's side: what's in hand, the counts, the body ──
+  private publishLamp(inv: Inventory) {
+    const room = this.ctl.room;
+    const lp = room?.state.players.get(room.sessionId);
+    const gunId = (lp?.gun as string) || "";
+    const hs = this.handState();
+    const held = isWeapon(gunId) ? inv.quick.find((it) => it?.id === gunId) : null;
+    const hurt = ((lp?.hp as number) ?? 100) < 60 && count(inv, "aid") > 0 && !lp?.downAt;
+    const key = `${JSON.stringify(inv.quick)}|${JSON.stringify(inv.hand)}|${JSON.stringify(inv.pockets)}|${JSON.stringify(inv.place ?? {})}|${JSON.stringify(inv.stash ?? [])}|${hs.lit}|${hs.burn}|${gunId}|${hurt}`;
+    if (key === this.lampKey) return;
+    this.lampKey = key;
+    const counts: Record<string, number> = {};
+    for (const it of [...inv.pockets, ...inv.quick, inv.hand])
+      if (it) counts[it.id] = (counts[it.id] ?? 0) + ("n" in it ? it.n : 1);
+    const gun =
+      held && "loaded" in held
+        ? { id: held.id, loaded: held.loaded, mag: WEAPONS[held.id].mag, spare: count(inv, WEAPONS[held.id].ammo) }
+        : null;
+    const h = inv.hand;
+    hud.set((s) => ({
+      lamp: {
+        ...s.lamp,
+        gun,
+        hand: { id: h?.id ?? (hs.burn ? "flare" : null), n: h && "n" in h ? h.n : 0, lit: hs.lit, burn: hs.burn },
+        quick: inv.quick.map((it) =>
+          it ? { id: it.id, n: "n" in it ? it.n : 1, loaded: "loaded" in it ? it.loaded : undefined } : null,
+        ),
+        counts,
+        hurt,
+        inv: {
+          pockets: inv.pockets.map((it) =>
+            it ? { id: it.id, n: "n" in it ? it.n : 1, loaded: "loaded" in it ? it.loaded : undefined } : null,
+          ),
+          quick: inv.quick.map((it) =>
+            it ? { id: it.id, n: "n" in it ? it.n : 1, loaded: "loaded" in it ? it.loaded : undefined } : null,
+          ),
+          hand: inv.hand ? { id: inv.hand.id, n: "n" in inv.hand ? inv.hand.n : 1 } : null,
+          place: { ...(inv.place ?? {}) },
+          stash: (inv.stash ?? []).map((it) => ({
+            id: it.id,
+            n: "n" in it ? it.n : 1,
+            loaded: "loaded" in it ? it.loaded : undefined,
+          })),
+          stickers: inv.pages.filter((p) => p.startsWith("sticker-")).map((p) => p.slice(8)),
+        },
+      },
+    }));
+  }
+
+  private lampVitalsTick() {
+    const now = performance.now();
+    if (now - this.lampVitalsAt < 200) return;
+    this.lampVitalsAt = now;
+    const v = this.walker.vitals;
+    const lp = this.ctl.room?.state.players.get(this.ctl.room.sessionId);
+    const hp = Math.round(((lp?.hp as number) ?? v.hp) || 0);
+    const vit = { hp, st: Math.round(v.st), wm: Math.round(v.wm), bat: Math.round(v.bat) };
+    const key = `${vit.hp}|${vit.st}|${vit.wm}|${vit.bat}`;
+    if (key === this.lampVitals) return;
+    this.lampVitals = key;
+    hud.set((s) => ({ lamp: { ...s.lamp, vitals: vit } }));
+  }
+
   // ── every frame: what's in reach, the arc, the drops ─────────────────────
   // the eyes (docs/plan/44-the-night.md N3): seconds adjusted to the dark, and when last stepped
   private eyesT = 0;
@@ -756,6 +900,7 @@ class Dark implements DarkHooks {
   }
 
   private frame() {
+    if (lampWanted()) this.lampVitalsTick();
     this.panel.frame();
     this.shades.frame();
     this.arms.frame();
@@ -918,7 +1063,7 @@ class Dark implements DarkHooks {
     const lp = ctl.room?.state.players.get(ctl.room.sessionId);
     const bat = this.walker.vitals.bat;
     if (out && (lp?.torch || bat < 99.5)) this.batSeen = now;
-    const showBat = now - this.batSeen < 1500;
+    const showBat = now - this.batSeen < 1500 && !lampWanted();
     this.bat.style.display = showBat ? "block" : "none";
     if (showBat) {
       const focus = this.walker.focus;

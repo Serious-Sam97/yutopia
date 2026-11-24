@@ -4,12 +4,14 @@ import { HELD, heldState, isHeld, isToyHeld, originOf } from "@yutopia/shared";
 import { cellOf, hWallOf, slabAt, vWallOf, wallPoints } from "@yutopia/shared/structure";
 import { useEffect, useRef, useState } from "react";
 import { type Key, trMaybe, useTr } from "@/lib/i18n";
+import { useLamp } from "@/lib/lamp";
 import { COCOA_MUG, HELD_BOX, heldSvg, MUG_COLORS, TEA_MUG } from "@/world/art/held";
 import { MINIMAP } from "@/world/art/minimap";
 import { svgDoc } from "@/world/art/svgdoc";
 import { useHud } from "@/world/store";
 import { ItemThumb } from "./build/thumbs";
 import { useWorld } from "./ctx";
+import { LampLoading } from "./lamp/LampLoading";
 
 // What's in reach (docs/plan/56-the-controls.md C): the focus at the bottom — its picture, its
 // name, the button and what it does, "hold: more" when it has a menu — and the others in reach
@@ -546,6 +548,8 @@ export function VideoBubbles() {
 const LOAD_CELLS = 24;
 export function ConnectionOverlay() {
   const t = useTr();
+  // (plan 125 phase 9: the new UI's loading screen, GTA's, on the desktop)
+  const lamp = useLamp();
   const phase = useHud((s) => s.phase);
   const error = useHud((s) => s.error);
   const loading = useHud((s) => s.loading);
@@ -582,31 +586,35 @@ export function ConnectionOverlay() {
       aria-live="polite"
       aria-busy={solid}
     >
-      <div className={`cabinet p-6 text-center max-w-sm ${loading.why === "view" && building ? "" : "rise"}`}>
-        <div className="vfd-window px-4 py-3">
-          <p className="lcd text-2xl">{msg}</p>
-          {solid && (
-            // (VFD cells: the lit ones over the dim ones, as far as it's got)
-            <div
-              className="mt-3 h-2.5 load-cells"
-              role="progressbar"
-              aria-valuenow={Math.round(loading.progress * 100)}
-            >
-              <i style={{ clipPath: `inset(0 ${100 - (lit / LOAD_CELLS) * 100}% 0 0)` }} />
+      {lamp && phase !== "failed" && phase !== "kicked" && phase !== "removed" ? (
+        <LampLoading msg={msg} progress={building ? loading.progress : 0} solid={solid} />
+      ) : (
+        <div className={`cabinet p-6 text-center max-w-sm ${loading.why === "view" && building ? "" : "rise"}`}>
+          <div className="vfd-window px-4 py-3">
+            <p className="lcd text-2xl">{msg}</p>
+            {solid && (
+              // (VFD cells: the lit ones over the dim ones, as far as it's got)
+              <div
+                className="mt-3 h-2.5 load-cells"
+                role="progressbar"
+                aria-valuenow={Math.round(loading.progress * 100)}
+              >
+                <i style={{ clipPath: `inset(0 ${100 - (lit / LOAD_CELLS) * 100}% 0 0)` }} />
+              </div>
+            )}
+          </div>
+          {(phase === "failed" || phase === "kicked" || phase === "removed") && (
+            <div className="flex gap-2 justify-center mt-4">
+              <button type="button" className="deck-btn" onClick={() => location.reload()}>
+                {t("retry")}
+              </button>
+              <a href="/" className="ghost-btn self-center">
+                {t("back")}
+              </a>
             </div>
           )}
         </div>
-        {(phase === "failed" || phase === "kicked" || phase === "removed") && (
-          <div className="flex gap-2 justify-center mt-4">
-            <button type="button" className="deck-btn" onClick={() => location.reload()}>
-              {t("retry")}
-            </button>
-            <a href="/" className="ghost-btn self-center">
-              {t("back")}
-            </a>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

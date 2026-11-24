@@ -45,6 +45,10 @@ export interface PhoneHud {
 }
 
 export type PanelKind =
+  // (plan 125 phase 6) the new UI's pause menu (Esc): GTA's tabs over the town's map
+  | "pause"
+  // (plan 125 phase 5) Ana's Case: the pack, RE4's
+  | "case"
   | "strike"
   | "strike-buy"
   | "strike-esc"
@@ -553,6 +557,44 @@ export interface CarAt {
   z: number;
   where: string;
 }
+/** (plan 125) What the new UI's play HUD shows that the dark chunk knows (world/dark publishes it as it changes). */
+export interface LampHud {
+  // the body (shared vitals.ts, 0..100): health, stamina, warmth, the torch's battery
+  vitals: { hp: number; st: number; wm: number; bat: number };
+  // what's out: a gun drawn (its rounds in it, the mag, spare in the pack), or null
+  gun: { id: string; loaded: number; mag: number; spare: number } | null;
+  // the left hand (key 1): what's in it, the torch lit, a flare's seconds
+  hand: { id: string | null; n: number; lit: boolean; burn: number };
+  // the four at hand (keys 2–5) and the pack's counts by item (the wheel's kinds, phase 4)
+  quick: ({ id: string; n: number; loaded?: number } | null)[];
+  counts: Record<string, number>;
+  // (phase 5) everything carried, as the case shows it: the slots and where each lies
+  inv: {
+    pockets: ({ id: string; n: number; loaded?: number } | null)[];
+    quick: ({ id: string; n: number; loaded?: number } | null)[];
+    hand: { id: string; n: number } | null;
+    place: Record<number, [number, number, 0 | 1]>;
+    // (F17a) what's at home: taken back into the case at home (your own room, or the lobby's locker)
+    stash: { id: string; n: number; loaded?: number }[];
+    // (F6a) the stickers earned (their keys: shared stickers.ts)
+    stickers: string[];
+  } | null;
+  // GTA's big message, centred a moment (a first visit: "MAIN STREET · first time here")
+  big: { id: number; title: string; sub: string } | null;
+  hurt: boolean; // hurt with a first aid carried (H)
+  // the feed's real news over the map (F8a): what came into the pack, what ran low
+  feed: { id: number; item?: string; text: string; tone: "gold" | "warn" | "info"; at: number }[];
+  // (F8a) a subtitle: who speaks (an NPC's name), what they said
+  sub: { id: number; who: string; text: string } | null;
+  // (F7a) where I'm going: set on the pause map, the radar's gold line to it
+  waypoint: { x: number; y: number; name: string } | null;
+  // (F4a) the quick wheel (Tab held): open, and the kind the mouse points at (0–7)
+  wheel: boolean;
+  wheelSel: number;
+  // the pause menu's tab
+  tab: "map" | "pack" | "pets" | "build" | "voice" | "settings" | "admin" | "credits" | "leave";
+}
+
 export interface HudState {
   phase: "loading" | "connecting" | "ready" | "reconnecting" | "failed" | "kicked" | "removed";
   error: string;
@@ -725,6 +767,8 @@ export interface HudState {
   // on a board (docs/plan/104-the-skate-again.md F7b): the skate HUD takes the screen — the dock and the at-hand bar
   // step aside till she's off it (set by world/skate/ride.ts)
   skating: boolean;
+  /** (plan 125) the new UI's play HUD: the dark chunk's side of it */
+  lamp: LampHud;
 }
 
 const initial: HudState = {
@@ -912,6 +956,22 @@ const initial: HudState = {
   fps: 0,
   look: false,
   skating: false,
+  lamp: {
+    vitals: { hp: 100, st: 100, wm: 100, bat: 100 },
+    gun: null,
+    hand: { id: null, n: 0, lit: false, burn: 0 },
+    quick: [],
+    counts: {},
+    inv: null,
+    big: null,
+    hurt: false,
+    feed: [],
+    sub: null,
+    waypoint: null,
+    wheel: false,
+    wheelSel: 2,
+    tab: "map",
+  },
 };
 
 let state: HudState = initial;
@@ -935,6 +995,30 @@ export const hud = {
     };
   },
 };
+
+let feedId = 1;
+/** (plan 125) A line in the new UI's feed for a while (four at most, the oldest let go). */
+export function lampFeed(text: string, tone: "gold" | "warn" | "info" = "info", item?: string, ms = 4200) {
+  const id = feedId++;
+  hud.set((s) => ({ lamp: { ...s.lamp, feed: [...s.lamp.feed.slice(-3), { id, text, tone, item, at: Date.now() }] } }));
+  setTimeout(() => hud.set((s) => ({ lamp: { ...s.lamp, feed: s.lamp.feed.filter((f) => f.id !== id) } })), ms);
+}
+
+let bigId = 1;
+/** (plan 125) GTA's big message for a while. */
+export function lampBig(title: string, sub: string, ms = 5200) {
+  const id = bigId++;
+  hud.set((s) => ({ lamp: { ...s.lamp, big: { id, title, sub } } }));
+  setTimeout(() => hud.set((s) => (s.lamp.big?.id === id ? { lamp: { ...s.lamp, big: null } } : {})), ms);
+}
+
+let subId = 1;
+/** (plan 125 F8a) What an NPC (or the town) says, as a subtitle for a while. */
+export function lampSay(who: string, text: string, ms = 6000) {
+  const id = subId++;
+  hud.set((s) => ({ lamp: { ...s.lamp, sub: { id, who, text } } }));
+  setTimeout(() => hud.set((s) => (s.lamp.sub?.id === id ? { lamp: { ...s.lamp, sub: null } } : {})), ms);
+}
 
 let toastId = 1;
 export function toast(text: string, tone: "info" | "warn" | "vortex" = "info", ms = 4500) {

@@ -1,0 +1,18 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0;background:transparent">
+<script>
+// Plan 125 phase 5: the case's materials, drawn once from the mock's lit noise (ui-life2.html TX) → public/lamp/case/
+const svgURI = (w, h, body) => `url('data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'>${body}</svg>`).replace(/'/g, "%27").replace(/\(/g, "%28").replace(/\)/g, "%29")}')`;
+const lit = (id, f1, o1, f2, scale, az, el, m) => `<filter id='${id}' x='0' y='0' width='100%' height='100%' color-interpolation-filters='sRGB'><feTurbulence type='fractalNoise' baseFrequency='${f1}' numOctaves='${o1}' seed='4' stitchTiles='stitch' result='a'/><feTurbulence type='fractalNoise' baseFrequency='${f2}' numOctaves='2' seed='11' stitchTiles='stitch' result='b'/><feComposite in='a' in2='b' operator='arithmetic' k2='.6' k3='.85' result='c'/><feDiffuseLighting in='c' surfaceScale='${scale}' lighting-color='#fff' diffuseConstant='1.15'><feDistantLight azimuth='${az}' elevation='${el}'/></feDiffuseLighting><feColorMatrix values='${m}'/></filter><rect width='100%' height='100%' filter='url(#${id})'/>`;
+const T = {
+  leather: [420, 420, lit("l", ".85", 3, ".018", 2.6, 235, 50, ".52 0 0 0 .02  .35 0 0 0 .01  .22 0 0 0 0  0 0 0 0 1")],
+  foam: [300, 300, lit("f", "1.2", 2, ".05", 1.6, 225, 60, ".14 0 0 0 .01  .17 0 0 0 .012  .16 0 0 0 .012  0 0 0 0 1")],
+  felt: [240, 240, lit("v", "1.4", 2, ".08", 1.1, 225, 65, ".2 0 0 0 .02  .12 0 0 0 .01  .1 0 0 0 .01  0 0 0 0 1")],
+  card: [300, 300, lit("p", ".9", 2, ".03", .5, 225, 72, ".95 0 0 0 .02  .93 0 0 0 .02  .86 0 0 0 .03  0 0 0 0 1")],
+  brushed: [300, 60, `<filter id='b' color-interpolation-filters='sRGB'><feTurbulence type='fractalNoise' baseFrequency='.004 .9' numOctaves='2' seed='3'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 .9  0 0 0 0 .7  1 0 0 0 -.35'/></filter><rect width='100%' height='100%' filter='url(#b)'/>`],
+};
+for (const [k, [w, h, body]] of Object.entries(T)) {
+  const d = document.createElement("div");
+  d.id = k; d.style.cssText = `width:${w}px;height:${h}px;background:${svgURI(w, h, body)}`;
+  document.body.append(d);
+}
+</script>

@@ -15,6 +15,7 @@ import { extraPanels } from "./panels";
 // the panels PanelHost draws itself (the rest come from ./panels)
 const OWN_PANELS = new Set(["settings", "avatar", "pets"]);
 
+import { useLamp } from "@/lib/lamp";
 import { ActionMenu, ActionQueueBar, ArrivalChip, FocusChip } from "./Actions";
 import { WorldCtx } from "./ctx";
 import { Dock } from "./Dock";
@@ -38,6 +39,9 @@ import { PersonCard } from "./PersonCard";
 import { Rituals } from "./Rituals";
 import { ScreenTray } from "./Screens";
 import { TopBar } from "./TopBar";
+
+// (plan 125) the new UI's HUD — the desktop's only: its own chunk, come with the world (the loading screen covers it)
+const LampHud = dynamic(() => import("./lamp/LampHud").then((m) => m.LampHud), { ssr: false });
 
 // (the lift's panel, its pad's floors among it: only in an elevator's car — loaded then)
 const LiftPanel = dynamic(() => import("./LiftPanel").then((m) => m.LiftPanel), { ssr: false });
@@ -74,6 +78,11 @@ export function WorldView({ to }: { to?: string | null }) {
   // foot in its draft a strip of its own over a bare world
   const god = useHud((s) => s.god.on);
   const godWalking = useHud((s) => s.god.on && s.god.walking);
+  // (plan 125) where the new HUD's feed is off — building, God mode over the map, a Strike Park match — the toasts
+  // are the old ones still (its notices must show somewhere)
+  const feedOff = useHud((s) => s.build.on || (s.god.on && !s.god.walking) || !!s.strike?.me);
+  // (plan 125) the new UI on the desktop (F12c: phones keep the old one)
+  const lamp = useLamp();
   const building = useHud((s) => (s.build.on && s.canBuild) || s.god.on);
   const admin = useHud((s) => s.isAdmin);
   const side = useHud((s) => s.side);
@@ -158,7 +167,12 @@ export function WorldView({ to }: { to?: string | null }) {
           <VideoBubbles />
         </Guard>
         <div className="pointer-events-none absolute inset-0" style={camera ? { display: "none" } : undefined}>
-          {(!building || godWalking) && (
+          {lamp && (
+            <Guard name="LampHud">
+              <LampHud />
+            </Guard>
+          )}
+          {!lamp && (!building || godWalking) && (
             <Guard name="TopBar">
               <TopBar />
             </Guard>
@@ -179,10 +193,12 @@ export function WorldView({ to }: { to?: string | null }) {
           <Guard name="Knocks">
             <Knocks />
           </Guard>
-          <Guard name="Toasts">
-            <Toasts />
-          </Guard>
-          {!building && (
+          {(!lamp || feedOff) && (
+            <Guard name="Toasts">
+              <Toasts />
+            </Guard>
+          )}
+          {!building && !lamp && (
             <Guard name="Prompt">
               <Prompt />
             </Guard>
@@ -207,7 +223,7 @@ export function WorldView({ to }: { to?: string | null }) {
               <CableChip />
             </Guard>
           )}
-          {!building && (
+          {!building && !lamp && (
             <Guard name="LookHint">
               <LookHint />
             </Guard>
@@ -252,12 +268,13 @@ export function WorldView({ to }: { to?: string | null }) {
               <GodHud />
             </Guard>
           )}
-          {!racing && (
+          {!racing && !lamp && (
             <Guard name="Minimap">
               <Minimap />
             </Guard>
           )}
-          {!building && !racing && !skating && (
+          {/* (plan 125 phase 6: on the desktop the Dock's jobs are keys and the pause menu's — Esc) */}
+          {!building && !racing && !skating && !lamp && (
             <Guard name="Dock">
               <Dock />
             </Guard>

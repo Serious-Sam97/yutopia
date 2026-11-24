@@ -1,5 +1,6 @@
 import {
   ANIM,
+  areaAt,
   chillOf,
   levelMap,
   objLevel,
@@ -12,6 +13,7 @@ import { hasPower } from "@yutopia/shared/admin";
 import { bikeSprinting, isBikeKind } from "@yutopia/shared/bike";
 import {
   addItem,
+  addItemAt,
   addItemTo,
   addStack,
   addWeapon,
@@ -54,15 +56,21 @@ import {
   nightness,
   nightOf,
   organize,
+  PAGES_MAX,
+  POCKETS,
+  placeSlot,
   QUICK_SLOT,
   REFILL_MIN,
   removeSlot,
   rollLoot,
+  STASH_MAX,
   type Stack,
   type StackId,
+  settle,
   slotAt,
   spendRoll,
   splitSlot,
+  spotFor,
   stepVitals,
   takeSlot,
   takeStack,
@@ -80,6 +88,7 @@ import { between } from "@yutopia/shared/reach";
 import { frameOf, turnPoint } from "@yutopia/shared/shapes";
 import { BOARDS_MAX, rackNear } from "@yutopia/shared/skate/racks";
 import { BOARD_ITEMS, BOARD_VARIANTS, type BoardVariant, boardItem, isBoardItem } from "@yutopia/shared/skate/spec";
+import { STICKER_PAGE, stickerAt } from "@yutopia/shared/stickers";
 import { cellOf } from "@yutopia/shared/structure";
 import { api, type SurvivorRecord } from "../api.ts";
 import { config } from "../config.ts";
@@ -131,6 +140,8 @@ interface Survivor {
   fastSince: number; // going faster than a jog since (0: not)
   batSent: number;
   batAt: number;
+  /** (plan 125 F6a) when the places with stickers were last looked at for them */
+  stickAt?: number;
   out: boolean; // outside (counted for the night's budget)
 }
 
@@ -180,16 +191,42 @@ export interface SurvivalHooks {
  *  room for it, nothing moved. (Not addItem: a one-of-a-kind like the torch would go straight back to the hand.) */
 function boardToHand(inv: Inventory, id: StackId): boolean {
   const was = inv.hand;
+  inv.place ??= {};
+  const place = inv.place;
+  const wasAt = place[HAND_SLOT];
+  let to = -1;
   if (was) {
-    const p = inv.pockets.indexOf(null);
-    if (p >= 0) inv.pockets[p] = was;
-    else {
+    to = inv.pockets.indexOf(null);
+    if (to < 0) {
       const q = inv.quick.findIndex((x, k) => x === null && fits(QUICK_SLOT + k, was.id));
       if (q < 0) return false;
-      inv.quick[q] = was;
+      to = QUICK_SLOT + q;
     }
   }
+  // (plan 125: what was in the hand keeps where it lay in the case — only its slot changes; the board needs room)
+  if (was) {
+    if (to < POCKETS) inv.pockets[to] = was;
+    else inv.quick[to - QUICK_SLOT] = was;
+    if (wasAt) place[to] = wasAt;
+    else delete place[to]; // (none of its own: not one left there by a direct write)
+  }
   inv.hand = { id, n: 1 };
+  delete place[HAND_SLOT];
+  const at = spotFor(inv, id);
+  // (and it, if it lay nowhere — a lent or written inventory — somewhere too, after the board)
+  const wasSpot = was && !wasAt && at ? spotFor({ ...inv, place: { ...place, [HAND_SLOT]: at } }, was.id, to) : null;
+  if (!at || (was && !wasAt && !wasSpot)) {
+    inv.hand = was;
+    if (wasAt) place[HAND_SLOT] = wasAt;
+    if (was) {
+      if (to < POCKETS) inv.pockets[to] = null;
+      else inv.quick[to - QUICK_SLOT] = null;
+      delete place[to];
+    }
+    return false;
+  }
+  place[HAND_SLOT] = at;
+  if (wasSpot) place[to] = wasSpot;
   return true;
 }
 
@@ -231,7 +268,14 @@ registerFeature((room: WorldRoom) => {
 
   // ── the people ─────────────────────────────────────────────────────────────
   const recordOf = (s: Survivor): SurvivorRecord => ({
-    inventory: { hand: (s.own ?? s.inv).hand, quick: (s.own ?? s.inv).quick, pockets: (s.own ?? s.inv).pockets },
+    inventory: {
+      hand: (s.own ?? s.inv).hand,
+      quick: (s.own ?? s.inv).quick,
+      pockets: (s.own ?? s.inv).pockets,
+      // (plan 125: where each thing lies in the case, and what's at home)
+      place: (s.own ?? s.inv).place ?? {},
+      stash: (s.own ?? s.inv).stash ?? [],
+    },
     vitals: { hp: s.v.hp, wm: s.v.wm, bat: s.v.bat },
     pages: (s.own ?? s.inv).pages,
     issued: s.issued,
@@ -425,6 +469,13 @@ registerFeature((room: WorldRoom) => {
     const left: LootItem[] = [];
     for (const it of items) {
       if (isWeapon(it.id)) {
+        // (plan 125: not carried but no room for it in the case — it stays as it is, rounds and all; a second of a
+        // kind gives its rounds, below)
+        if (!carries(s.inv, it.id)) {
+          if (addItem(s.inv, it)) got.push(it);
+          else left.push({ id: it.id, n: 1, loaded: it.loaded ?? 0 });
+          continue;
+        }
         const rest = addWeapon(s.inv, { id: it.id, loaded: it.loaded ?? 0 });
         if (!rest) {
           got.push(it);
@@ -494,11 +545,13 @@ registerFeature((room: WorldRoom) => {
       const day = dayOf(now + kitClock.shift);
       if (s.kitDay === day) return found(s, client.sessionId, id, [], false, false, true);
       // (plan 85: one carried anywhere — equipped or in the pack — counts)
-      const gun = !carries(s.inv, "revolver");
+      // (plan 125: one left at home counts as carried)
+      const atHomeToo = (id: string) => (s.inv.stash ?? []).some((x) => x.id === id);
+      const gun = !carries(s.inv, "revolver") && !atHomeToo("revolver");
       const kit: LootItem[] = [
         ...(gun ? [{ id: "revolver" as const, n: 1, loaded: s.issued ? 0 : WEAPONS.revolver.mag }] : []),
         // (plan 87 F4a: a torch for one who carries none)
-        ...(count(s.inv, "torch") < 1 ? [{ id: "torch" as const, n: 1 }] : []),
+        ...(count(s.inv, "torch") < 1 && !atHomeToo("torch") ? [{ id: "torch" as const, n: 1 }] : []),
         ...LOCKER_KIT,
         // (some days the AK, or its rounds: plan 79 F9a)
         ...lockerAk(() => lockerDice.roll(), carries(s.inv, "ak47")),
@@ -517,11 +570,13 @@ registerFeature((room: WorldRoom) => {
     if (id === "locker") {
       if (!near(p, LOCKER.x, LOCKER.z)) return;
       // (the revolver for one who carries none; plan 87 F4a: a torch too)
+      // (plan 125: one left at home counts — else stash it, take another, again)
+      const home = (id: string) => (s.inv.stash ?? []).some((x) => x.id === id);
       const kit: LootItem[] = [
-        ...(carries(s.inv, "revolver")
+        ...(carries(s.inv, "revolver") || home("revolver")
           ? []
           : [{ id: "revolver" as const, n: 1, loaded: s.issued ? 0 : WEAPONS.revolver.mag }]),
-        ...(count(s.inv, "torch") < 1 ? [{ id: "torch" as const, n: 1 }] : []),
+        ...(count(s.inv, "torch") < 1 && !home("torch") ? [{ id: "torch" as const, n: 1 }] : []),
       ];
       if (!kit.length) return found(s, client.sessionId, id, [], false, true);
       const { got } = take(s, kit);
@@ -582,7 +637,14 @@ registerFeature((room: WorldRoom) => {
     const into = at !== undefined && (isStack(item) || (isWeapon(item) && !carries(r.s.inv, item) && at === null));
     let got: LootItem[];
     let left: LootItem[];
-    if (into) {
+    // (plan 125 F14a) laid in the case where it was put
+    const laid = Array.isArray(m?.at) ? ([Number(m.at[0]), Number(m.at[1]), m.at[2] ? 1 : 0] as const) : null;
+    if (laid && !into) {
+      const all = isWeapon(item) ? 1 : d.n;
+      const n = addItemAt(r.s.inv, { id: item, n: d.n, loaded: d.loaded }, [laid[0], laid[1], laid[2]]);
+      got = n ? [isWeapon(item) ? { id: item, n: 1, loaded: d.loaded } : { id: item, n }] : [];
+      left = n < all ? [{ id: item, n: all - n, loaded: d.loaded }] : [];
+    } else if (into) {
       const n = addItemTo(r.s.inv, slot, { id: item, n: d.n, loaded: d.loaded });
       const all = isWeapon(item) ? 1 : d.n;
       got = n ? [isWeapon(item) ? { id: item, n: 1, loaded: d.loaded } : { id: item, n }] : [];
@@ -601,6 +663,51 @@ registerFeature((room: WorldRoom) => {
   room.on("dark:move", (client, m) => {
     const s = of(client.sessionId);
     if (s?.loaded && moveSlot(s.inv, Number(m?.from), Number(m?.to))) changed(s);
+  });
+  // (plan 125 F5a) moved or turned within the case: where it fits
+  room.on("dark:place", (client, m) => {
+    const s = of(client.sessionId);
+    if (s?.loaded && placeSlot(s.inv, Number(m?.slot), [Number(m?.x), Number(m?.y), m?.r ? 1 : 0])) changed(s);
+  });
+  // (plan 125 F17a) the stash at home — in your own room, or by the lobby's locker: a thing taken back (laid at `at`
+  // in the case if it was put there, else where it fits), or one left there
+  const atHome = (p: Player) => {
+    const a = areaAt(room.levelMap(p.level), p.x, p.y);
+    if (a && a.ownerId === p.uid && a.kind !== "booth") return true;
+    return p.level === 0 && near(p, LOCKER.x, LOCKER.z);
+  };
+  const notHome = (client: WorldClient) =>
+    room.send(client, "toast", { text: "At home only — your own room, or the lobby's locker.", tone: "warn" });
+  room.on("dark:unstash", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const s = of(client.sessionId);
+    if (!p || !s?.loaded || s.own || p.busy || p.downAt) return;
+    const i = Number(m?.i);
+    const it = Number.isInteger(i) ? s.inv.stash?.[i] : undefined;
+    // (the thing the client saw there: two quick drags mustn't take the next one after the first's gone)
+    if (!it || (m?.id !== undefined && m.id !== it.id)) return;
+    if (!atHome(p)) return notHome(client);
+    const all = "loaded" in it ? 1 : it.n;
+    const one = { id: it.id, n: all, loaded: "loaded" in it ? it.loaded : undefined };
+    const n = Array.isArray(m?.at)
+      ? addItemAt(s.inv, one, [Number(m.at[0]), Number(m.at[1]), m.at[2] ? 1 : 0])
+      : addItem(s.inv, one);
+    if (!n) return room.send(client, "toast", { text: "No room in the case.", tone: "warn" });
+    const stash = s.inv.stash ?? [];
+    if (n >= all) stash.splice(i, 1);
+    else (it as { n: number }).n -= n;
+    changed(s);
+  });
+  room.on("dark:stash", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const s = of(client.sessionId);
+    if (!p || !s?.loaded || s.own || p.busy || p.downAt) return;
+    if (!atHome(p)) return notHome(client);
+    if ((s.inv.stash?.length ?? 0) >= STASH_MAX) return;
+    const it = removeSlot(s.inv, Number(m?.slot));
+    if (!it) return;
+    s.inv.stash = [...(s.inv.stash ?? []), it];
+    changed(s);
   });
   // (plan 86) a stack split: `n` of it (half if none) into another slot — empty, or the same stack with room
   room.on("dark:split", (client, m) => {
@@ -828,6 +935,10 @@ registerFeature((room: WorldRoom) => {
       // (plan 87: a torch, if none)
       giveTorch(s.inv);
     }
+    // (plan 125: the guns written straight into the hands lie nowhere yet, or where something else did — the case
+    // settled again; what has no room is put down where the admin stands)
+    for (const it of settle(s.inv))
+      putDrop(it.id, "n" in it ? it.n : 1, "loaded" in it ? it.loaded : 0, p.x, p.y, Date.now(), undefined, p.level);
     changed(s);
   });
   room.on("dark:drop", (client, m) => {
@@ -1040,6 +1151,20 @@ registerFeature((room: WorldRoom) => {
         }
         // (at nothing and not down — however it came about: down)
         if (!p.downAt && s.loaded && s.v.hp <= 0) goDown(p, s);
+        // (plan 125 F6a) a place with a sticker, the first time on its land: a sticker for the case's lid (a page)
+        if (s.loaded && !s.bot && p.level === 0 && now - (s.stickAt ?? 0) > 1000) {
+          s.stickAt = now;
+          const st = stickerAt(p.x, p.y);
+          const pages = (s.own ?? s.inv).pages;
+          const page = st ? `${STICKER_PAGE}${st.key}` : "";
+          if (st && !pages.includes(page) && pages.length < PAGES_MAX) {
+            pages.push(page);
+            if (s.own && !s.inv.pages.includes(page)) s.inv.pages.push(page);
+            changed(s);
+            const c = clientOf(p.sid);
+            if (c) room.send(c, "dark:sticker", { key: st.key });
+          }
+        }
         // down: someone getting them up (it holds the bleeding), their own first aid, else bleeding out
         if (p.downAt) {
           const by = p.revBy ? room.state.players.get(p.revBy) : undefined;

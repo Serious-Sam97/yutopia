@@ -2,21 +2,27 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   addItem,
+  addItemAt,
   addItemTo,
   addStack,
+  addWeapon,
   carries,
+  caseCells,
   cleanInventory,
   consume,
   count,
   emptyInventory,
   findStack,
   fits,
+  fitsAt,
   freeQuick,
   giveTorch,
   HAND_SLOT,
+  type Item,
   moveSlot,
   organize,
   POCKETS,
+  placeSlot,
   QUICK_SLOT,
   removeSlot,
   STACKS,
@@ -42,9 +48,8 @@ test("stacks top up first, then take empty pockets; what doesn't fit stays out",
   assert.deepEqual(inv.pockets[1], { id: "r38", n: 16 });
   for (const id of ["flare", "aid", "battery", "fuse"] as const) addStack(inv, id, 1);
   assert.equal(inv.pockets.filter(Boolean).length, 6);
-  // (plan 86: the pack's last two pockets full stacks of other things)
-  inv.pockets[6] = { id: "cell", n: STACKS.cell };
-  inv.pockets[7] = { id: "r762", n: STACKS.r762 };
+  // (plan 86: the pack's other pockets full stacks of other things — plan 125: as many as there are)
+  for (let i = 6; i < POCKETS; i++) inv.pockets[i] = { id: "cell", n: STACKS.cell };
   assert.equal(addStack(inv, "shell", 4), 4, "the pockets full: into a quick slot");
   assert.deepEqual(inv.quick[0], { id: "shell", n: 4 });
   inv.quick[1] = { id: "fuse", n: 1 };
@@ -63,6 +68,8 @@ test("weapons: one of a kind, in the quick slots; a second gives its rounds; dro
   assert.equal(addItem(inv, { id: "revolver", n: 1, loaded: 6 }), 1);
   assert.deepEqual(inv.quick[0], { id: "revolver", loaded: 6 });
   assert.equal(addItem(inv, { id: "revolver", n: 1, loaded: 4 }), 0, "the gun stays where it was");
+  assert.equal(count(inv, "r38"), 0, "and its rounds in it (plan 125: told 0, the caller leaves them there)");
+  assert.deepEqual(addWeapon(inv, { id: "revolver", loaded: 4 }), { id: "revolver", loaded: 0 }, "a search's");
   assert.equal(count(inv, "r38"), 4, "its rounds came along");
   assert.equal(addItem(inv, { id: "shotgun", n: 1, loaded: 9 }), 1);
   assert.deepEqual(inv.quick[1], { id: "shotgun", loaded: 2 }, "loaded no more than it holds");
@@ -222,10 +229,10 @@ test("taken into a chosen pocket first, the rest where it fits", () => {
   // …into a full pocket: as addItem would — the first free quick slot
   assert.equal(addItemTo(inv, 4, { id: "ak47", n: 1, loaded: 30 }), 1);
   assert.deepEqual(inv.quick[0], { id: "ak47", loaded: 30 });
-  // one of its kind already in the pack: not a second — its rounds instead
+  // one of its kind already in the pack: not a second — and (plan 125) its rounds left in it, where it lies
   assert.equal(addItemTo(inv, QUICK_SLOT + 1, { id: "revolver", n: 1, loaded: 3 }), 0);
   assert.equal(inv.quick[1], null);
-  assert.equal(count(inv, "r38"), 3);
+  assert.equal(count(inv, "r38"), 0);
 });
 
 test("(plan 85) a weapon picked up: into a free quick slot, none free into a free pocket, then its rounds only", () => {
@@ -243,6 +250,8 @@ test("(plan 85) a weapon picked up: into a free quick slot, none free into a fre
   assert.equal(weaponIn(inv, "sniper"), null);
   // one of a kind across both: a second sniper's rounds instead
   assert.equal(addItem(inv, { id: "sniper", n: 1, loaded: 4 }), 0);
+  assert.equal(count(inv, "r308"), 0);
+  assert.deepEqual(addWeapon(inv, { id: "sniper", loaded: 4 }), { id: "sniper", loaded: 0 });
   assert.equal(count(inv, "r308"), 4);
   assert.equal(inv.pockets.filter((it) => it?.id === "sniper").length, 1);
   // a free quick slot again: the next one goes there
@@ -276,17 +285,17 @@ test("ammo in a quick slot counts and is taken", () => {
   assert.deepEqual(inv.pockets[2], { id: "r38", n: 8 });
 });
 
-test("(plan 86) the pack's 8 pockets, the quick slots after them", () => {
-  assert.equal(POCKETS, 8);
-  assert.equal(QUICK_SLOT, 8);
+test("(plan 86, 125) the pack's pockets, the quick slots after them", () => {
+  assert.equal(POCKETS, 16);
+  assert.equal(QUICK_SLOT, POCKETS);
   const inv = emptyInventory();
-  assert.equal(inv.pockets.length, 8);
-  // (a save of six read as eight, the rest empty)
+  assert.equal(inv.pockets.length, POCKETS);
+  // (a save of six read as all of them, the rest empty)
   const old = cleanInventory({
     quick: [],
     pockets: [{ id: "aid", n: 1 }, null, null, null, null, { id: "fuse", n: 2 }],
   });
-  assert.equal(old.pockets.length, 8);
+  assert.equal(old.pockets.length, POCKETS);
   assert.deepEqual(old.pockets[5], { id: "fuse", n: 2 });
   assert.equal(old.pockets[7], null);
 });
@@ -348,7 +357,7 @@ test("(plan 86) the pack organized: like stacks topped up, weapons first, then r
     { id: "shell", n: 3 },
     { id: "aid", n: 1 },
     { id: "fuse", n: 1 },
-    null,
+    ...Array(POCKETS - 7).fill(null),
   ]);
   assert.deepEqual(inv.quick[0], { id: "flare", n: 1 });
   assert.equal(organize(inv), false, "in order already");
@@ -356,7 +365,7 @@ test("(plan 86) the pack organized: like stacks topped up, weapons first, then r
 });
 
 test("(plan 87) the left hand: slot 12 after the quick slots; anything but a weapon; the torch only there or in the pack", () => {
-  assert.equal(HAND_SLOT, 12);
+  assert.equal(HAND_SLOT, POCKETS + 4);
   const inv = emptyInventory();
   assert.equal(inv.hand, null);
   assert.equal(slotAt(inv, HAND_SLOT), null);
@@ -491,4 +500,123 @@ test("(plan 103) a rack's reach: across and up, the nearest in 3 m; two boards t
   assert.equal(rackNear(10, 20, 3.5, racks), null, "a floor up");
   assert.equal(rackNear(0, 0, 0), null, "none placed yet");
   assert.equal(BOARDS_MAX, 2);
+});
+
+// ── (plan 125) Ana's Case: every thing its size in a 10 × 7 case ──
+test("(plan 125) the case: things take room by their size; no room, none taken", () => {
+  const inv = emptyInventory();
+  assert.equal(addItem(inv, { id: "ak47", n: 1, loaded: 30 }), 1);
+  assert.equal(addItem(inv, { id: "daybreak", n: 1, loaded: 3 }), 1);
+  assert.deepEqual(inv.place?.[QUICK_SLOT], [0, 0, 0], "the first where it fits");
+  // 6×3 and 6×3 stacked: an 8×2 sniper fits nowhere (nor turned: 2×8 is taller than the case)
+  assert.equal(addItem(inv, { id: "sniper", n: 1, loaded: 5 }), 0, "no room: not taken");
+  assert.equal(count(inv, "r308"), 0, "nor its rounds (they stay in it)");
+  // a revolver (3×2) fits beside them
+  assert.equal(addItem(inv, { id: "revolver", n: 1, loaded: 6 }), 1);
+  const g = caseCells(inv);
+  assert.equal(g.filter(Boolean).length, 18 + 18 + 6);
+});
+
+test("(plan 125) a thing moved or turned in the case: only where it fits", () => {
+  const inv = emptyInventory();
+  addItem(inv, { id: "shotgun", n: 1, loaded: 2 });
+  addStack(inv, "aid", 1);
+  const gun = QUICK_SLOT;
+  const aid = findStack(inv, "aid");
+  assert.deepEqual(inv.place?.[gun], [0, 0, 0]);
+  assert.equal(placeSlot(inv, aid, [3, 1, 0]), false, "over the shotgun");
+  assert.equal(placeSlot(inv, aid, [8, 5, 0]), true);
+  // the shotgun turned (2×7) at the left fits; out of the case it doesn't
+  assert.equal(placeSlot(inv, gun, [0, 0, 1]), true);
+  assert.equal(placeSlot(inv, gun, [9, 0, 1]), false);
+  // swapped to another hand: it keeps its place
+  const where = inv.place?.[aid];
+  assert.equal(moveSlot(inv, aid, HAND_SLOT), true);
+  assert.deepEqual(inv.place?.[HAND_SLOT], where);
+  assert.equal(inv.place?.[aid], undefined);
+});
+
+test("(plan 125 F14a) something found laid where it was put", () => {
+  const inv = emptyInventory();
+  assert.equal(addItemAt(inv, { id: "flare", n: 3 }, [5, 4, 1]), 3);
+  const at = findStack(inv, "flare");
+  assert.deepEqual(inv.place?.[at], [5, 4, 1]);
+  // not where it doesn't fit: where addItem puts it
+  assert.equal(addItemAt(inv, { id: "aid", n: 1 }, [5, 4, 0]), 1);
+  assert.notDeepEqual(inv.place?.[findStack(inv, "aid")], [5, 4, 0]);
+});
+
+test("(plan 125 F17a) an old pack into the case: places kept, the rest placed, what has no room to the stash", () => {
+  const inv = cleanInventory({
+    quick: [
+      { id: "ak47", loaded: 10 },
+      { id: "daybreak", loaded: 1 },
+      { id: "shotgun", loaded: 2 },
+    ],
+    pockets: [
+      { id: "sniper", loaded: 5 },
+      { id: "aid", n: 2 },
+    ],
+    place: { [QUICK_SLOT + 2]: [3, 5, 0] },
+  });
+  assert.deepEqual(inv.place?.[QUICK_SLOT + 2], [3, 5, 0], "kept where it lay");
+  // everything carried has a place, none over another (caseCells counts each cell once)
+  for (const [k, p] of Object.entries(inv.place ?? {})) assert.ok(p, `slot ${k} placed`);
+  assert.ok(caseCells(inv).filter(Boolean).length > 0);
+  assert.ok((inv.stash ?? []).length >= 1, "what had no room went to the stash");
+  assert.ok(
+    (inv.stash ?? []).every((it) => !inv.pockets.includes(it) && !inv.quick.includes(it)),
+    "the stash's things aren't carried too",
+  );
+});
+
+test("(plan 125) no room for a gun: it stays out whole — its rounds not taken (else told 0, they'd be in both)", () => {
+  const inv = emptyInventory();
+  // the case full of fuses (1 × 1 boxes: 16 pockets) and the quick slots taken
+  for (let i = 0; i < POCKETS; i++) addItemTo(inv, i, { id: "fuse", n: STACKS.fuse });
+  inv.quick = [
+    { id: "flare", n: 1 },
+    { id: "flare", n: 1 },
+    { id: "flare", n: 1 },
+    { id: "flare", n: 1 },
+  ];
+  assert.equal(addItem(inv, { id: "revolver", n: 1, loaded: 6 }), 0);
+  assert.equal(count(inv, "r38"), 0);
+});
+
+test("(plan 125) Organize never loses a thing: if packing again leaves one out, the case stays as it was", () => {
+  const inv = emptyInventory();
+  // two boards (6 × 2) and a shotgun (5 × 1), laid so they all fit — the repack, biggest first, may not
+  inv.pockets[0] = { id: "board_street_pop", n: 1 };
+  inv.pockets[1] = { id: "board_street_pop", n: 1 };
+  inv.pockets[2] = { id: "shotgun", loaded: 0 };
+  inv.place = { 0: [0, 0, 0], 1: [0, 2, 0], 2: [0, 4, 0] };
+  const before = JSON.stringify({ p: inv.pockets, pl: inv.place });
+  organize(inv);
+  const all = [...inv.pockets, ...inv.quick, inv.hand].filter(Boolean).length;
+  assert.equal(all, 3, "nothing gone");
+  assert.equal((inv.stash ?? []).length, 0, "nothing sent home");
+  if (JSON.stringify({ p: inv.pockets, pl: inv.place }) !== before)
+    for (const [k, p] of Object.entries(inv.place ?? {}))
+      assert.ok(fitsAt(inv, (slotAt(inv, Number(k)) as Item).id, p, Number(k)));
+});
+
+test("(plan 125) laid where it was put: the torch too; a stack tops up its boxes first", () => {
+  const inv = emptyInventory();
+  assert.equal(addItemAt(inv, { id: "torch", n: 1 }, [0, 6, 0]), 1);
+  assert.deepEqual(inv.place?.[HAND_SLOT], [0, 6, 0]);
+  addItemAt(inv, { id: "r38", n: 10 }, [5, 0, 0]);
+  const boxes = () => inv.pockets.filter((it) => it?.id === "r38").length;
+  assert.equal(boxes(), 1);
+  assert.equal(addItemAt(inv, { id: "r38", n: 6 }, [8, 3, 0]), 6);
+  assert.equal(boxes(), 1, "topped up, no new box");
+  assert.equal(count(inv, "r38"), 16);
+});
+
+test("(plan 125) a bad place past the case's edge doesn't wrap into the next row", () => {
+  const inv = emptyInventory();
+  inv.pockets[0] = { id: "shotgun", loaded: 0 };
+  inv.place = { 0: [8, 0, 0] }; // (5 wide at x 8: past the edge)
+  const g = caseCells(inv);
+  assert.equal(g[1 * 10 + 0], 0, "row 1 untouched");
 });
