@@ -268,10 +268,11 @@ function runs(f: (x: number, z: number) => boolean, x0: number, z0: number, x1: 
 const runLen = (r: Run) => Math.abs(r.x1 - r.x0) + Math.abs(r.z1 - r.z0);
 
 /** The building's outline, from its structure (docs/plan/72-the-3d-core.md, phase 8: the campus's
- *  outside from the structure): the home floor's slabs' rings (what's floor, read even-odd) and its
- *  walls as the drawing asks them (walls3d.ts) — in the home map's own frame. */
+ *  outside from the structure): the home floor's slabs' rings, a list a slab (`outlineSlabs`: what's
+ *  floor is in any of them, each read even-odd — they overlap where a floor's painted over another)
+ *  and its walls as the drawing asks them (walls3d.ts) — in the home map's own frame. */
 export interface Outline {
-  rings: Ring[];
+  rings: Ring[][];
   edges: WallEdges;
   /** every floor's windows and glass walls (facadeWindows): the facade shows them where they are */
   windows?: FacadeWindow[];
@@ -333,20 +334,48 @@ export function facadeWindows(
   return out;
 }
 
-/** What's floor at a tile by the rings (even-odd at its middle): a row's crossings each, once. */
-function ringFloor(rings: Ring[]): (x: number, z: number) => boolean {
-  const rows = new Map<number, number[]>();
+/** What's floor at a tile by the slabs' rings (at its middle: in any slab, each read even-odd — a
+ *  floor painted over another isn't a hole in it): a row's crossings each, once. */
+function ringFloor(slabs: Ring[][]): (x: number, z: number) => boolean {
+  const rows = new Map<number, number[][]>();
   return (x, z) => {
     let xs = rows.get(z);
     if (!xs) {
-      xs = crossings(rings, z + 0.5);
+      xs = slabs.map((rings) => crossings(rings, z + 0.5));
       rows.set(z, xs);
     }
-    let n = 0;
-    for (const c of xs) if (c < x + 0.5) n++;
-    return n % 2 === 1;
+    return inSlabs(xs, x + 0.5);
   };
 }
+/** Whether x is in any slab, by each one's crossings on its row (even-odd within a slab). */
+function inSlabs(xs: number[][], x: number): boolean {
+  for (const row of xs) {
+    let n = 0;
+    for (const c of row) if (c < x) n++;
+    if (n % 2 === 1) return true;
+  }
+  return false;
+}
+/** A floor's slabs at its own height (not its mezzanines) as the outline's rings, a list a slab, in
+ *  the frame from `corner`. */
+export function outlineSlabs(
+  s: Pick<Structure, "floors" | "slabs">,
+  floor: number,
+  corner: { x: number; y: number },
+): Ring[][] {
+  const z = s.floors.find((f) => f.index === floor)?.z ?? 0;
+  return s.slabs
+    .filter((sl) => sl.floor === floor && Math.abs(sl.z - z) < 1e-3)
+    .map((sl) =>
+      [sl.outline, ...sl.holes].map((r) => r.map(([x, y]): [number, number] => [x - corner.x, y - corner.y])),
+    );
+}
+/** Whether (x, y) is in any of the outline's slabs. */
+export const inOutline = (slabs: Ring[][], x: number, y: number): boolean =>
+  inSlabs(
+    slabs.map((rings) => crossings(rings, y)),
+    x,
+  );
 
 /** The main block's facade's runs: its footprint's outer edges with their outward side, from the
  *  outline when there is one (merged as the tiles' were: the same runs — campus.test.ts), else the

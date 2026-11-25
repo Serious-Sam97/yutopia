@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { edgeKey, floorOf, getMap, hWall, isWindow, vWall } from "@yutopia/shared";
 import { structureFromMap } from "@yutopia/shared/structure";
 import { finishWorld } from "@yutopia/shared/structure/finish";
-import { facadeRuns, type Outline } from "./campus";
+import { facadeRuns, inOutline, type Outline, outlineSlabs } from "./campus";
 import { edgesOfWalls } from "./walls3d";
 
 // Phase 8 (docs/plan/72): the campus's outside from the structure — the main block's facade runs
@@ -18,10 +18,7 @@ test("the campus: the facade's runs and windows from the structure are the tiles
   const f = floorOf(building);
   const corner = building.world ? { x: building.ox ?? 0, y: building.oy ?? 0 } : { x: 0, y: 0 };
   const outline: Outline = {
-    rings: s.slabs
-      .filter((sl) => sl.floor === f)
-      .flatMap((sl) => [sl.outline, ...sl.holes])
-      .map((r) => r.map(([x, y]): [number, number] => [x - corner.x, y - corner.y])),
+    rings: outlineSlabs(s, f, corner),
     edges: edgesOfWalls(s.walls, f, corner),
   };
   const fromTiles = facadeRuns(building);
@@ -59,7 +56,7 @@ test("an L-shaped floor round a courtyard, windows painted on its outside: the s
   ]);
   const s = structureFromMap(m);
   const outline: Outline = {
-    rings: s.slabs.filter((sl) => sl.floor === floorOf(m)).flatMap((sl) => [sl.outline, ...sl.holes]),
+    rings: outlineSlabs(s, floorOf(m), { x: 0, y: 0 }),
     edges: edgesOfWalls(s.walls, floorOf(m), { x: 0, y: 0 }),
   };
   const fromTiles = facadeRuns(m);
@@ -133,4 +130,70 @@ test("the facade's windows: every floor's, where their walls hold them, at their
   assert.deepEqual(glass, [{ a: [0, 10], b: [10, 10], y0: -3.5, y1: -3.5 + 3.266, glass: true }]);
   assert.equal(ws.filter((w) => !w.glass && w.a[0] === 10).length, 10);
   assert.equal(ws.length, 2 + 1 + 10);
+});
+
+// (found 2026-11-25: floors painted over the studio's own — a tile square, a slanted stage — were
+// read with it even-odd, as holes: the campus stood its outside wall round each one, in the room)
+test("floors painted over the floor, and a mezzanine: the same facade, no wall round them", () => {
+  const studio = getMap("studio");
+  const building = finishWorld(studio, studio.objects, { fresh: true, building: true }).map;
+  const s = structureFromMap(building);
+  const f = floorOf(building);
+  const corner = building.world ? { x: building.ox ?? 0, y: building.oy ?? 0 } : { x: 0, y: 0 };
+  const z = s.floors.find((q) => q.index === f)?.z ?? 0;
+  const runsOf = (slabs: typeof s.slabs) =>
+    facadeRuns(building, { rings: outlineSlabs({ ...s, slabs }, f, corner), edges: edgesOfWalls(s.walls, f, corner) });
+  const before = runsOf(s.slabs);
+  // (inside the floor, away from its edges: its middle, in the world's frame)
+  const mid = [corner.x + building.width / 2, corner.y + building.height / 2];
+  const painted = [
+    ...s.slabs,
+    {
+      id: "paint-tile",
+      floor: f,
+      z,
+      top: "_",
+      outline: [
+        [mid[0] - 4, mid[1] - 3],
+        [mid[0], mid[1] - 3],
+        [mid[0], mid[1]],
+        [mid[0] - 4, mid[1]],
+      ] as [number, number][],
+      holes: [],
+    },
+    {
+      id: "paint-stage",
+      floor: f,
+      z,
+      top: "~",
+      outline: [
+        [mid[0] + 4.5, mid[1] - 2],
+        [mid[0] + 0.6, mid[1] - 1],
+        [mid[0] + 0.1, mid[1] + 1],
+        [mid[0] + 4.4, mid[1] - 0.2],
+      ] as [number, number][],
+      holes: [],
+    },
+    // (a mezzanine over the floor: not its outline)
+    {
+      id: "mezzanine",
+      floor: f,
+      z: z + 2,
+      top: ".",
+      outline: [
+        [corner.x - 6, corner.y - 6],
+        [corner.x - 2, corner.y - 6],
+        [corner.x - 2, corner.y - 2],
+        [corner.x - 6, corner.y - 2],
+      ] as [number, number][],
+      holes: [],
+    },
+  ];
+  assert.deepEqual(runsOf(painted), before, "the facade's runs as without them");
+  const rings = outlineSlabs({ ...s, slabs: painted }, f, corner);
+  assert.equal(rings.length, s.slabs.filter((q) => q.floor === f).length + 2, "a slab each, the mezzanine left out");
+  assert.ok(
+    inOutline(rings, building.width / 2 - 2, building.height / 2 - 1.5),
+    "in the painted square: in the building",
+  );
 });

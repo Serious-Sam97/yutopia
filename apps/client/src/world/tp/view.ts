@@ -1,4 +1,3 @@
-import { crossings } from "@yutopia/shared/physics/structure-solids";
 import type { Structure } from "@yutopia/shared/structure";
 import { panOf, setEarYaw } from "../ear";
 import { setBoardRenderer } from "../skate/board3d";
@@ -121,7 +120,7 @@ import { Arms3 } from "./arms3d";
 import { HIDDEN_LAYER } from "./below-cull";
 import { type FadeGroup, World3 } from "./build";
 import { BuildLayer } from "./build3d";
-import { facadeWindows, type Outline } from "./campus";
+import { facadeWindows, inOutline, type Outline, outlineSlabs } from "./campus";
 import { closeIn } from "./close-in";
 import { FogBanks } from "./fog-banks";
 import { flatLight } from "./fog3d";
@@ -476,12 +475,11 @@ function outlineOf(
   if (!structure) return { outline: () => null, key: "", shape: "" };
   const f = floorOf(building);
   const corner = building.world ? { x: building.ox ?? 0, y: building.oy ?? 0 } : { x: 0, y: 0 };
-  const rings = structure.slabs
-    .filter((sl) => sl.floor === f)
-    .flatMap((sl) => [sl.outline, ...sl.holes])
-    .map((r) => r.map(([x, y]): [number, number] => [x - corner.x, y - corner.y]));
+  // (its slabs at its height, each its own: a floor painted over another isn't a hole in it — read
+  // even-odd together, the campus drew its outside wall round every painted floor)
+  const rings = outlineSlabs(structure, f, corner);
   // (windows on the outline only: floor one side, none the other — the facade's)
-  const inside = (x: number, y: number) => crossings(rings, y).filter((c) => c < x).length % 2 === 1;
+  const inside = (x: number, y: number) => inOutline(rings, x, y);
   const wins = structure.walls
     .filter((w) => {
       if (w.floor !== f || !isWindow(w.front)) return false;
