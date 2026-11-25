@@ -1508,6 +1508,11 @@ class Steam {
   }
 }
 
+/** The main block's walls' runs as a key (and whether it has an outline): `Campus.refacade` lays new
+ *  windows on the same runs only. */
+const runsKey = (runs: Run[], outline: Outline | null) =>
+  `${outline ? 1 : 0}|${runs.map((r) => `${r.x0},${r.z0},${r.x1},${r.z1},${r.nx},${r.nz}`).join(";")}`;
+
 // ── the campus ───────────────────────────────────────────────────────────────
 export class Campus {
   readonly root = new Group();
@@ -1650,110 +1655,23 @@ export class Campus {
     const ground = (x: number, z: number) => GROUND + this.terrain.at(x, z);
 
     // ── the main block: the studio's floor on four storeys of glass ──
-    const skin = new G();
-    const topSkin = new G();
     // (the life look: the stone in the library's concrete, its UVs in metres — plan 73 phase 7.3)
     const dressed = (...gs: G[]) => {
       for (const g of gs) g.metres = !!lifeDress.on;
     };
-    const cap = new G();
-    const coping = new G();
-    dressed(cap, coping);
     // (its outline: the home floor's slabs; its walls, the structure's — or, with none, the map's)
     const mainRuns = facadeRuns(map, outline);
-    const wallAt = (e: { dir: "h" | "v"; x: number; y: number }) =>
-      outline
-        ? e.dir === "h"
-          ? outline.edges.h(e.x, e.y)
-          : outline.edges.v(e.x, e.y)
-        : e.dir === "h"
-          ? hWallOf(map, e.x, e.y)
-          : vWallOf(map, e.x, e.y);
-    // a window in the studio's wall there (shared openings.ts; older saves' painted ones): its hole, tiles up
-    const win = (r: Run, i: number): [number, number] | null => {
-      const e = r.nz !== 0 ? { dir: "h" as const, x: r.x0 + i, y: r.z0 } : { dir: "v" as const, x: r.x0, y: r.z0 + i };
-      const c = cuts.get(edgeKey(e));
-      if (c && isWindowKind(c.kind)) return [c.z0, c.z1];
-      return isWindow(wallAt(e)) ? [WIN0, WIN1] : null;
-    };
-    const mainWhite = this.lambert(0xdcd8d0);
-    const mainConcrete = this.lambert(0xcfcbc2);
+    this.mainWhite = this.lambert(0xdcd8d0);
+    this.mainConcrete = this.lambert(0xcfcbc2);
     if (lifeDress.on)
-      for (const m of [mainWhite, mainConcrete, white, concrete]) {
+      for (const m of [this.mainWhite, this.mainConcrete, white, concrete]) {
         lifeDress.dress?.(m, "concrete", {});
         // (its colour the hour's base: setDay tints from it)
         const t = this.tinted.find(([x]) => x === m);
         if (t) t[1].copy(m.color);
       }
-    this.mainCut = [this.mainFacade, mainWhite, mainConcrete];
-    // (punched: the glass in the windows and their trims, the top storey's apart — see topSkin)
-    const panes = new G();
-    const topPanes = new G();
-    const trims = new G();
-    const topTrims = new G();
-    dressed(trims, topTrims);
-    const lights: { r: Run; u0: number; u1: number; y: number; k: number }[] = [];
-    if (windows) {
-      for (const r of mainRuns) {
-        const on = this.cladRun(skin, topSkin, panes, topPanes, trims, topTrims, r, windows);
-        lights.push(...on.map((l) => ({ r, ...l })));
-        this.parapet(cap, coping, r, true);
-      }
-    } else for (const r of mainRuns) this.facadeRun(skin, cap, coping, r, 0, (i) => win(r, i), topSkin);
-    this.add(skin.build(), this.mainFacade);
-    // the top storey's skin would stand between a camera just outside the
-    // building and you (walls fade, this wouldn't): only from further away
-    this.topSkin = this.add(topSkin.build(), this.mainFacade);
-    this.add(cap.build(), mainWhite);
-    this.add(coping.build(), mainConcrete);
-    if (this.panes) {
-      this.mainCut.push(this.panes);
-      if (!panes.empty) this.add(panes.build(), this.panes);
-      if (!trims.empty) this.add(trims.build(), mainWhite);
-      // (the studio's own windows are its to draw when it is: these only when it isn't — you're below it)
-      this.topPanes = topPanes.empty ? null : this.add(topPanes.build(), this.panes);
-      this.topTrims = topTrims.empty ? null : this.add(topTrims.build(), mainWhite);
-    }
-    // ── the windows' light on the snow under them at night (docs/plan/44-the-night.md N2):
-    // a soft fan out from the facade a tile at a time, as the offices above are lit or not
-    // (hashed: some dark, the rest brighter or dimmer) ──
-    const spill = new G();
-    // (punched: under the lit windows, the brighter the lower)
-    for (const { r, u0, u1, y, k } of lights) {
-      const kk = k * Math.max(0.3, 1 - (y - GROUND) / 16);
-      const P = (u: number): [number, number] => (r.nz !== 0 ? [r.x0 + u, r.z0] : [r.x0, r.z0 + u]);
-      const [ax, az] = P(u0);
-      const [bx, bz] = P(u1);
-      const [ox, oz] = [r.nx * 3.4, r.nz * 3.4];
-      const yy = (x: number, z: number) => ground(x, z) + 0.19;
-      spill.color(new Color(kk, kk, kk).getHex());
-      spill.quad(
-        [ax, yy(ax, az), az],
-        [bx, yy(bx, bz), bz],
-        [bx + ox, yy(bx + ox, bz + oz), bz + oz],
-        [ax + ox, yy(ax + ox, az + oz), az + oz],
-        [0, 1, 0],
-      );
-    }
-    for (const r of windows ? [] : mainRuns)
-      for (let i = 0; i < runLen(r); i++) {
-        const [ax, az] = r.nz !== 0 ? [r.x0 + i, r.z0] : [r.x0, r.z0 + i];
-        const h = (((Math.sin(ax * 12.9898 + az * 78.233) * 43758.5453) % 1) + 1) % 1;
-        if (h < 0.35) continue;
-        const k = 0.35 + (h - 0.35);
-        const [bx, bz] = r.nz !== 0 ? [ax + 1, az] : [ax, az + 1];
-        const [ox, oz] = [r.nx * 3.4, r.nz * 3.4];
-        // (over the lot's own floor and the pavement's kerb along the building)
-        const y = (x: number, z: number) => ground(x, z) + 0.19;
-        spill.color(new Color(k, k, k).getHex());
-        spill.quad(
-          [ax, y(ax, az), az],
-          [bx, y(bx, bz), bz],
-          [bx + ox, y(bx + ox, bz + oz), bz + oz],
-          [ax + ox, y(ax + ox, az + oz), az + oz],
-          [0, 1, 0],
-        );
-      }
+    this.mainCut = [this.mainFacade, this.mainWhite, this.mainConcrete];
+    if (this.panes) this.mainCut.push(this.panes);
     const spillTex = new CanvasTexture(spillCanvas(T));
     this.disposables.push(spillTex);
     this.spill = new MeshBasicMaterial({
@@ -1765,7 +1683,8 @@ export class Campus {
       blending: AdditiveBlending,
       depthWrite: false,
     });
-    this.add(spill.build(), this.spill).renderOrder = 1;
+    this.root.add(this.main);
+    this.buildMain(map, cuts, outline, mainRuns);
 
     // (a world on the Grounds: the land, the woods, the other blocks, the
     // driveway and all round are the Grounds' own, drawn from shared
@@ -2541,7 +2460,8 @@ export class Campus {
     }
   }
   private headMat: MeshBasicMaterial;
-  private topSkin: Mesh;
+  private topSkin!: Mesh;
+  private topSkinShown = true;
   // the punched facade's glass (its windows'), and the studio's storey's own (shown when it isn't drawn)
   private panes: MeshLambertMaterial | null = null;
   private topPanes: Mesh | null = null;
@@ -2770,6 +2690,140 @@ export class Campus {
     return lit;
   }
 
+  // ── the main block's walls: its facade, its windows in it, their light on the snow ──
+  // (in a group of its own — `main` — made again alone when a window comes, goes or moves: `refacade`;
+  // its materials made once, in the constructor)
+  private readonly main = new Group();
+  private mainGeos: BufferGeometry[] = [];
+  private mainWhite!: MeshLambertMaterial;
+  private mainConcrete!: MeshLambertMaterial;
+  /** Whether `refacade` can lay these windows on the campus as built: its materials are those of a
+   *  building with an outline, or of one without, and the runs of its walls are the same (else it's
+   *  built anew). */
+  private mainKey = "";
+  private buildMain(
+    map: MapDef,
+    cuts: Map<string, WallCut>,
+    outline: Outline | null,
+    mainRuns = facadeRuns(map, outline),
+  ) {
+    this.mainKey = runsKey(mainRuns, outline);
+    const windows = outline?.windows ?? null;
+    const add = (g: BufferGeometry, mat: MeshLambertMaterial | MeshBasicMaterial): Mesh => {
+      const mesh = snowShadow(new Mesh(g, mat));
+      this.mainGeos.push(g);
+      this.main.add(mesh);
+      return mesh;
+    };
+    const ground = (x: number, z: number) => GROUND + this.terrain.at(x, z);
+    const skin = new G();
+    const topSkin = new G();
+    const cap = new G();
+    const coping = new G();
+    cap.metres = coping.metres = !!lifeDress.on;
+    const wallAt = (e: { dir: "h" | "v"; x: number; y: number }) =>
+      outline
+        ? e.dir === "h"
+          ? outline.edges.h(e.x, e.y)
+          : outline.edges.v(e.x, e.y)
+        : e.dir === "h"
+          ? hWallOf(map, e.x, e.y)
+          : vWallOf(map, e.x, e.y);
+    // a window in the studio's wall there (shared openings.ts; older saves' painted ones): its hole, tiles up
+    const win = (r: Run, i: number): [number, number] | null => {
+      const e = r.nz !== 0 ? { dir: "h" as const, x: r.x0 + i, y: r.z0 } : { dir: "v" as const, x: r.x0, y: r.z0 + i };
+      const c = cuts.get(edgeKey(e));
+      if (c && isWindowKind(c.kind)) return [c.z0, c.z1];
+      return isWindow(wallAt(e)) ? [WIN0, WIN1] : null;
+    };
+    // (punched: the glass in the windows and their trims, the top storey's apart — see topSkin)
+    const panes = new G();
+    const topPanes = new G();
+    const trims = new G();
+    const topTrims = new G();
+    trims.metres = topTrims.metres = !!lifeDress.on;
+    const lights: { r: Run; u0: number; u1: number; y: number; k: number }[] = [];
+    if (windows) {
+      for (const r of mainRuns) {
+        const on = this.cladRun(skin, topSkin, panes, topPanes, trims, topTrims, r, windows);
+        lights.push(...on.map((l) => ({ r, ...l })));
+        this.parapet(cap, coping, r, true);
+      }
+    } else for (const r of mainRuns) this.facadeRun(skin, cap, coping, r, 0, (i) => win(r, i), topSkin);
+    add(skin.build(), this.mainFacade);
+    // the top storey's skin would stand between a camera just outside the
+    // building and you (walls fade, this wouldn't): only from further away
+    this.topSkin = add(topSkin.build(), this.mainFacade);
+    add(cap.build(), this.mainWhite);
+    add(coping.build(), this.mainConcrete);
+    this.topPanes = null;
+    this.topTrims = null;
+    if (this.panes) {
+      if (!panes.empty) add(panes.build(), this.panes);
+      if (!trims.empty) add(trims.build(), this.mainWhite);
+      // (the studio's own windows are its to draw when it is: these only when it isn't — you're below it)
+      this.topPanes = topPanes.empty ? null : add(topPanes.build(), this.panes);
+      this.topTrims = topTrims.empty ? null : add(topTrims.build(), this.mainWhite);
+    }
+    // ── the windows' light on the snow under them at night (docs/plan/44-the-night.md N2):
+    // a soft fan out from the facade a tile at a time, as the offices above are lit or not
+    // (hashed: some dark, the rest brighter or dimmer) ──
+    const spill = new G();
+    // (punched: under the lit windows, the brighter the lower)
+    for (const { r, u0, u1, y, k } of lights) {
+      const kk = k * Math.max(0.3, 1 - (y - GROUND) / 16);
+      const P = (u: number): [number, number] => (r.nz !== 0 ? [r.x0 + u, r.z0] : [r.x0, r.z0 + u]);
+      const [ax, az] = P(u0);
+      const [bx, bz] = P(u1);
+      const [ox, oz] = [r.nx * 3.4, r.nz * 3.4];
+      const yy = (x: number, z: number) => ground(x, z) + 0.19;
+      spill.color(new Color(kk, kk, kk).getHex());
+      spill.quad(
+        [ax, yy(ax, az), az],
+        [bx, yy(bx, bz), bz],
+        [bx + ox, yy(bx + ox, bz + oz), bz + oz],
+        [ax + ox, yy(ax + ox, az + oz), az + oz],
+        [0, 1, 0],
+      );
+    }
+    for (const r of windows ? [] : mainRuns)
+      for (let i = 0; i < runLen(r); i++) {
+        const [ax, az] = r.nz !== 0 ? [r.x0 + i, r.z0] : [r.x0, r.z0 + i];
+        const h = (((Math.sin(ax * 12.9898 + az * 78.233) * 43758.5453) % 1) + 1) % 1;
+        if (h < 0.35) continue;
+        const k = 0.35 + (h - 0.35);
+        const [bx, bz] = r.nz !== 0 ? [ax + 1, az] : [ax, az + 1];
+        const [ox, oz] = [r.nx * 3.4, r.nz * 3.4];
+        // (over the lot's own floor and the pavement's kerb along the building)
+        const y = (x: number, z: number) => ground(x, z) + 0.19;
+        spill.color(new Color(k, k, k).getHex());
+        spill.quad(
+          [ax, y(ax, az), az],
+          [bx, y(bx, bz), bz],
+          [bx + ox, y(bx + ox, bz + oz), bz + oz],
+          [ax + ox, y(ax + ox, az + oz), az + oz],
+          [0, 1, 0],
+        );
+      }
+    add(spill.build(), this.spill).renderOrder = 1;
+  }
+  /** The main block's facade made again for these windows (a door's or window's come, gone or
+   *  moved; a wall painted as windows) — the rest of the campus kept. False: it can't be (its walls'
+   *  runs aren't the same, or it had no outline and now has, or the other way): build it anew. */
+  refacade(map: MapDef, cuts: Map<string, WallCut>, outline: Outline | null): boolean {
+    const mainRuns = facadeRuns(map, outline);
+    if (runsKey(mainRuns, outline) !== this.mainKey || !!outline?.windows !== !!this.panes) return false;
+    for (const m of [...this.main.children]) this.main.remove(m);
+    for (const g of this.mainGeos) g.dispose();
+    this.mainGeos = [];
+    this.buildMain(map, cuts, outline, mainRuns);
+    // (shown as they were: update sets them each frame from the camera, the cut from the floor)
+    this.topSkin.visible = this.topSkinShown;
+    if (this.topPanes) this.topPanes.visible = this.skinAlways;
+    if (this.topTrims) this.topTrims.visible = this.topSkin.visible;
+    return true;
+  }
+
   private lambert(hex: number, map?: CanvasTexture, vertex = false): MeshLambertMaterial {
     const m = litMaterial({ color: hex, map: map ?? null, vertexColors: vertex });
     this.disposables.push(m);
@@ -2870,7 +2924,8 @@ export class Campus {
     if (animate) this.t += dt;
     const outX = Math.max(0, this.fx0 + 0.5 - cam.x, cam.x - this.fx1 + 0.5);
     const outZ = Math.max(0, this.fz0 + 0.5 - cam.z, cam.z - this.fz1 + 0.5);
-    this.topSkin.visible = this.skinAlways || Math.hypot(outX, outZ) > 14.5;
+    this.topSkinShown = this.skinAlways || Math.hypot(outX, outZ) > 14.5;
+    this.topSkin.visible = this.topSkinShown;
     if (this.topPanes) this.topPanes.visible = this.skinAlways;
     if (this.topTrims) this.topTrims.visible = this.topSkin.visible;
     for (const t of this.trees) t.rotation.y = Math.atan2(cam.x - t.position.x, cam.z - t.position.z);

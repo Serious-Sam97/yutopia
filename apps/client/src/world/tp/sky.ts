@@ -220,6 +220,11 @@ export class Surroundings {
     }
   }
 
+  /** The campus's windows laid again (campus.ts Campus.refacade): false when it can't be — build anew. */
+  refacade(map: MapDef, cuts: Map<string, WallCut>, outline: Outline | null): boolean {
+    return this.campus.refacade(map, cuts, outline);
+  }
+
   readonly horizon = new Color();
   /** The ground floor's light (its light map, view.ts Light3.patch), for what lies on it. */
   floorLit: ((m: Material) => void) | null = null;

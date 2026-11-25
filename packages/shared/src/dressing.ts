@@ -3,6 +3,7 @@ import { hangOf, wallSpan } from "./hang.ts";
 import { type AreaDef, areaAt, holdsItems, inArea as inRoom, isFloor, isWallEdge, type MapDef } from "./map.ts";
 import { isDoorKind, isOpening, openingEdges } from "./openings.ts";
 import { cellOf, hWallOf, vWallOf } from "./structure/query.ts";
+import type { Structure } from "./structure/types.ts";
 
 // Dressing: the clutter that makes a room lived in, chosen per room as a preset
 // and placed by rules, the same on every client and on the server (so a plant
@@ -74,6 +75,55 @@ function rng(seed: number) {
 function inArea(map: MapDef, a: AreaDef, x: number, y: number) {
   return inRoom(a, x + 0.5, y + 0.5) && areaAt(map, x + 0.5, y + 0.5)?.key === a.key;
 }
+
+/** dressItems, kept while nothing it reads changed — the floor's own of the structure (its entry,
+ *  slabs and walls: an edit keeps the others' as they were — ops.ts) or its tile rows, its rooms, its
+ *  spawn, its frame, its things —: every edit asks it again of every floor (the physics, the floor
+ *  drawn), ~13 ms on a dressed building; a wall built, again only on its floor. The list is shared:
+ *  not to be changed. */
+export function dressItemsOf(map: MapDef, objects: readonly WorldObjectDef[]): DressItem[] {
+  const st = map.st;
+  const rows = map as { tiles?: unknown; hWalls?: unknown; vWalls?: unknown };
+  const parts: unknown[] = st ? floorParts(st, map.floor ?? 0) : [rows.tiles, rows.hWalls, rows.vWalls];
+  if (!st && !rows.tiles) return dressItems(map, objects);
+  const k = `${map.key}|${map.floor ?? ""}|${map.world ? 1 : 0}|${map.ox ?? 0},${map.oy ?? 0}|${map.width}x${map.height}`;
+  const spawn = map.spawn ? `${map.spawn.x},${map.spawn.y}` : "";
+  const sig = objects.map(dressSig).join(";");
+  const had = DRESS_MEMO.get(k);
+  if (had && had.areas === map.areas && had.spawn === spawn && had.sig === sig && sameList(had.parts, parts))
+    return had.items;
+  const items = dressItems(map, objects);
+  // (the last of each floor and frame only: a world swapped, or a floor gone, leaves one stale each)
+  DRESS_MEMO.set(k, { areas: map.areas, spawn, sig, parts, items });
+  return items;
+}
+const DRESS_MEMO = new Map<
+  string,
+  { areas: unknown; spawn: string; sig: string; parts: unknown[]; items: DressItem[] }
+>();
+/** A floor's own of the structure, in one list: its entry, its slabs, its walls. */
+const PARTS = new WeakMap<Structure, Map<number, unknown[]>>();
+function floorParts(st: Structure, floor: number): unknown[] {
+  let m = PARTS.get(st);
+  if (!m) {
+    const by = new Map<number, unknown[]>();
+    const at = (f: number): unknown[] => {
+      const l = by.get(f) ?? [];
+      by.set(f, l);
+      return l;
+    };
+    for (const f of st.floors) at(f.index).push(f);
+    for (const x of st.slabs) at(x.floor).push(x);
+    for (const w of st.walls) at(w.floor).push(w);
+    PARTS.set(st, by);
+    m = by;
+  }
+  return m.get(floor) ?? [];
+}
+const sameList = (a: unknown[], b: unknown[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+// (what of a thing the dressing reads: where it is, how it's turned, what it is, its props — hung, set in a wall)
+const dressSig = (o: WorldObjectDef): string =>
+  `${o.id}|${o.kind}|${o.x}|${o.y}|${o.yaw ?? ""}|${o.props ? JSON.stringify(o.props) : ""}`;
 
 export function dressItems(map: MapDef, objects: Iterable<WorldObjectDef>): DressItem[] {
   const objs = [...objects];

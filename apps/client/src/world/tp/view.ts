@@ -472,8 +472,8 @@ function outlineOf(
   building: MapDef,
   structure: Structure | null,
   windows: WorldObjectDef[] = [],
-): { outline: () => Outline | null; key: string } {
-  if (!structure) return { outline: () => null, key: "" };
+): { outline: () => Outline | null; key: string; shape: string } {
+  if (!structure) return { outline: () => null, key: "", shape: "" };
   const f = floorOf(building);
   const corner = building.world ? { x: building.ox ?? 0, y: building.oy ?? 0 } : { x: 0, y: 0 };
   const rings = structure.slabs
@@ -504,6 +504,7 @@ function outlineOf(
       return made;
     },
     key: `${JSON.stringify(rings)}|${wins.join(";")}|${windowsSig(windows)}|${glassSig(structure)}`,
+    shape: JSON.stringify(rings),
   };
 }
 
@@ -522,6 +523,11 @@ const glassSig = (s: Structure) =>
     .filter((w) => w.front === "g" || w.back === "g")
     .map((w) => `${w.a}:${w.b}:${w.base}`)
     .join(";");
+
+/** What of the outdoors (sky.ts Surroundings) isn't the building's windows: its size and floors, its
+ *  outline (its slabs' rings) — one of them changed: built anew; else its windows laid again alone. */
+const aroundShape = (building: MapDef, out: { key: string; shape: string }) =>
+  `${building.width}x${building.height}|${(building.levels ?? []).map((l) => l.index).join(",")}|${out.key ? 1 : 0}|${out.shape}`;
 
 /** (what the layout signature can't see: the walls off the lattice) */
 const freeSig = (e: WallEdges) => (e.free.length ? JSON.stringify(e.free) : "");
@@ -1224,6 +1230,7 @@ void main() {
     this.windowThings = all.filter((o) => isWindowKind(o.kind));
     const out = this.outline();
     this.winSig = `${cutsSig(home)}|${out.key}`;
+    this.aroundShape = aroundShape(building, out);
     this.around = new Surroundings(building, opts.themes, wallCuts(home), out.outline());
     this.around.floorLit = (m) => this.light.patch(m);
     this.around.compileAhead = (o) => this.compileAhead(o);
@@ -1778,7 +1785,15 @@ void main() {
     this.wellSig = wellSig;
     this.placeFloors(all);
     // the campus is built once: only the studio's windows change it
-    if (winSig !== this.winSig) this.surround(building, home);
+    if (winSig !== this.winSig) {
+      // (only its windows changed — a door or window put, taken, moved; a wall painted as windows —:
+      // the main block's facade laid again, the rest kept: building the outdoors anew, the Grounds
+      // round it with it, froze the game ~0.5 s an opening)
+      const shape = aroundShape(building, this.outline());
+      if (shape !== this.aroundShape || !this.around.refacade(building, wallCuts(home), this.outline().outline()))
+        this.surround(building, home);
+      this.aroundShape = shape;
+    }
     this.winSig = winSig;
     if (!changed && !moved) return;
     this.buildPick.builder.setMap(map);
@@ -1792,6 +1807,8 @@ void main() {
 
   // what the studio stands in, again (a new layout, or the windows changed)
   private winSig = "";
+  // (and what of it isn't its windows: the building's size, its outline — `aroundShape`)
+  private aroundShape = "";
   // (the home floor's outline, kept while the structure's the same)
   private outlined: {
     of: Structure | null;
@@ -1802,7 +1819,7 @@ void main() {
     of: null,
     building: null,
     wins: "",
-    at: { outline: () => null, key: "" },
+    at: { outline: () => null, key: "", shape: "" },
   };
   // (every floor's window things: the facade's — kept as the layout hands them over)
   private windowThings: WorldObjectDef[] = [];

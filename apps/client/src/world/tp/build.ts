@@ -1,7 +1,7 @@
 import {
   cutsSig,
   type DressItem,
-  dressItems,
+  dressItemsOf,
   edgeKey,
   entry,
   floorOf,
@@ -29,7 +29,17 @@ import {
   wallCuts,
 } from "@yutopia/shared";
 import { crossings, slabBoxes } from "@yutopia/shared/physics/structure-solids";
-import { cellOf, floorsSig, freeCuts, inRing, type Ring, type Roof, roofFaces } from "@yutopia/shared/structure";
+import {
+  cellOf,
+  floorsSig,
+  freeCuts,
+  inRing,
+  isFreeOpening,
+  onOf,
+  type Ring,
+  type Roof,
+  roofFaces,
+} from "@yutopia/shared/structure";
 import { SLAB, WALL_T } from "@yutopia/shared/units";
 import {
   BackSide,
@@ -303,6 +313,10 @@ export class World3 {
     this.light(this.materials.clearFront);
     this.cuts = wallCuts(objects);
     this.cutSig = cutsSig(objects);
+    this.freeHoles = freeHolesOf(objects);
+    // (the walls drawn free read their doors' and windows' holes off the things — freeWall: a floor
+    // built anew had them solid till an edit drew every wall again)
+    this.objects = objects;
     this.buildWalls();
     this.buildDecks();
     this.buildRoofs();
@@ -396,9 +410,18 @@ export class World3 {
     // walls on neither axis, or off the metres (walls3d.ts): pieces along their own line, each the
     // x-wall's piece turned and placed; a post at each end the lattice's posts don't hold
     const freeEnds = new Set<string>();
-    if (!only || only.has(FREE))
-      for (const fw of E.free)
-        this.freeWall(fw, posts, freeEnds, (id) => getOr(low, `${FREE}|${id}`, () => new Out(BUILD_TEX)), runs);
+    const someFree = !only || only.has(FREE) || [...only].some((k) => k.startsWith(FREE_ONE));
+    if (someFree)
+      for (const fw of E.free) {
+        if (!only || only.has(FREE) || only.has(freeOne(fw.id)))
+          this.freeWall(fw, posts, freeEnds, (id) => getOr(low, `${FREE}|${id}`, () => new Out(BUILD_TEX)), runs);
+        // (one kept as it's drawn: the ends whose post it drew, still its — freeWall's rule)
+        else if (Math.hypot(fw.b[0] - fw.a[0], fw.b[1] - fw.a[1]) > 1e-6)
+          for (const p of [fw.a, fw.b]) {
+            const k = `${p[0]},${p[1]}`;
+            if (!posts.has(k)) freeEnds.add(k);
+          }
+      }
     this.posts = new Set(posts.keys());
     for (const [key, { height, ch, e, w, s }] of posts) {
       const [X, Y] = key.split(",").map(Number);
@@ -438,6 +461,15 @@ export class World3 {
     if (only?.has(FREE))
       for (const k of [...this.wallParts.keys()])
         if (k.includes(`|${FREE}|`) && !made.has(k)) this.setWallPart(k, null);
+    // (and one of them drawn again alone: its pieces that are gone, gone)
+    if (only && !only.has(FREE))
+      for (const o of only) {
+        if (!o.startsWith(FREE_ONE)) continue;
+        const id = o.slice(FREE_ONE.length);
+        for (const k of [...this.wallParts.keys()])
+          if ((k === `low|${FREE}|${id}` || k.startsWith(`run|${FREE}|${id}|`)) && !made.has(k))
+            this.setWallPart(k, null);
+      }
     this.listWalls();
   }
 
@@ -900,11 +932,42 @@ export class World3 {
     // a door or window came, went or moved: the walls again, with their holes
     const sig = cutsSig(objects);
     let rewalled = false;
+    // (only the pieces round the walls whose holes changed: all of them again froze the game ~0.2 s
+    // a door on a furnished floor)
+    let holesBox = null as TileRect | null;
     if (sig !== this.cutSig) {
       this.cutSig = sig;
+      const was = this.cuts;
       this.cuts = wallCuts(objects);
-      for (const k of [...this.wallParts.keys()]) this.setWallPart(k, null);
-      this.buildWalls();
+      const freeWas = this.freeHoles;
+      this.freeHoles = freeHolesOf(objects);
+      const only = new Set<string>();
+      const hole = (r: TileRect) => {
+        holesBox = holesBox ? union(holesBox, r) : r;
+      };
+      for (const k of new Set([...was.keys(), ...this.cuts.keys()])) {
+        const a = was.get(k);
+        const b = this.cuts.get(k);
+        if (a && b && a.z0 === b.z0 && a.z1 === b.z1) continue;
+        const dir = k[0] as "h" | "v";
+        const [x, y] = k.slice(1).split(",").map(Number);
+        only.add(`low|${this.cellOf(x, y)}`);
+        only.add(`run|${runKey(dir, x, y)}`);
+        hole(dir === "h" ? { x0: x, y0: y - 1, x1: x + 1, y1: y + 1 } : { x0: x - 1, y0: y, x1: x + 1, y1: y + 1 });
+      }
+      for (const id of new Set([...freeWas.keys(), ...this.freeHoles.keys()])) {
+        if (freeWas.get(id) === this.freeHoles.get(id)) continue;
+        only.add(freeOne(id));
+        const fw = this.edges.free.find((w) => w.id === id);
+        if (fw)
+          hole({
+            x0: Math.floor(Math.min(fw.a[0], fw.b[0])) - 1,
+            y0: Math.floor(Math.min(fw.a[1], fw.b[1])) - 1,
+            x1: Math.ceil(Math.max(fw.a[0], fw.b[0])) + 1,
+            y1: Math.ceil(Math.max(fw.a[1], fw.b[1])) + 1,
+          });
+      }
+      if (only.size) this.buildWalls(only);
       rewalled = true;
     }
     const byArea = new Map<string, { objs: WorldObjectDef[]; dress: DressItem[]; sig: string[] }>();
@@ -921,7 +984,7 @@ export class World3 {
       a.objs.push(o);
       a.sig.push(sig);
     }
-    for (const d of dressItems(this.map, objects)) {
+    for (const d of dressItemsOf(this.map, objects)) {
       const at = dressAt(d);
       const a = area(this.cellOf(at[0], at[1]));
       a.dress.push(d);
@@ -1019,8 +1082,19 @@ export class World3 {
     this.rechunk();
     if (!changed && !rewalled && this.floor) return;
     this.collect();
-    this.bakeFloor();
+    // (the floor's bake: whole the first time; after, the frame after, near what was drawn again —
+    // the things' contact shadows, the walls' holes — as relayout's)
+    if (!this.floor) this.bakeFloor();
+    else {
+      const near = [this.redrawn && grow(this.redrawn, SOFT_REACH), holesBox && grow(holesBox, FLOOR_REACH)].filter(
+        (r): r is TileRect => !!r,
+      );
+      if (near.length) this.bakeSoon(near.reduce(union));
+    }
   }
+  // (the holes of each wall drawn free — by its id —, as a key: `update` draws again the walls whose
+  // holes changed)
+  private freeHoles = new Map<string, string>();
 
   /** The floor's slab for below-cull.ts: the tiles its floor is drawn on (opaque, at the
    *  floor's level), and a key that changes when it's baked again. Null until it's baked. */
@@ -1988,6 +2062,19 @@ const DECK_COLOR: Record<string, number> = {
 /** The wall parts of walls off the lattice (World3.freeWall): `free|<wall>|<run>`; as a key of
  *  `buildWalls(only)`, all of them again. */
 const FREE = "free";
+/** One wall off the lattice drawn again alone (World3.update: its holes changed). */
+const FREE_ONE = "free1|";
+const freeOne = (id: string) => `${FREE_ONE}${id}`;
+/** Each wall drawn free's holes (the free openings in it), as a key, by the wall's id. */
+function freeHolesOf(objects: Iterable<WorldObjectDef>): Map<string, string> {
+  const out = new Map<string, string[]>();
+  for (const o of objects) {
+    if (!isFreeOpening(o)) continue;
+    const on = onOf(o);
+    if (on) getOr(out, on.wall, () => []).push(`${o.kind}@${on.at}`);
+  }
+  return new Map([...out].map(([k, v]) => [k, v.sort().join(";")]));
+}
 /** One piece's buffers, added to another's (a turned piece into its area's or run's). */
 function appendOut(to: Out, from: Out): void {
   for (const k of ["lit", "glow", "clear"] as const) {

@@ -19,7 +19,7 @@
 import { parkedBody } from "../car/park.ts";
 import { entry, standHeight, type WorldObjectDef } from "../catalog.ts";
 import { doorOwner } from "../doors.ts";
-import { dressItems } from "../dressing.ts";
+import { dressItemsOf } from "../dressing.ts";
 import {
   CHUNK,
   groundsChunk,
@@ -211,7 +211,7 @@ export function buildingSolids(map0: MapDef, objects: Iterable<WorldObjectDef>, 
         for (const slab of slabBoxes(rings, [], elev + STOREY)) add(`roof:${level}:${at(slab)}`, "floor", slab);
     // the rooms' clutter (dressing.ts): what blocks walking, as the table's decor (furniture: sight
     // goes past it)
-    for (const d of dressItems(lm, here)) {
+    for (const d of dressItemsOf(lm, here)) {
       if (!d.solid || !d.tile) continue;
       const [tx, ty] = d.tile;
       for (const s of kindSolids(
