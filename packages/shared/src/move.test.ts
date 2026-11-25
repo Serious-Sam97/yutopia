@@ -363,6 +363,34 @@ test("a jump pressed early at a chest-high wall catches its edge and climbs up",
   assert.ok(Math.abs(b.z - 1.1) < 1e-6 && b.x > 8.2, `on top at ${b.x.toFixed(2)}, ${b.z}`);
 });
 
+test("a column (a 0.6 m post, 2.14 high) isn't climbed: no mantle onto a top with nowhere to stand — from the floor or a jump", () => {
+  // (the lobby's columns: shapes column, flat(0.2, 0.2, 0.8, 0.8, 2.14) — a box narrower than a tile)
+  const post = (x: number, y: number) => x >= 8.2 && x < 8.8 && y >= 5.7 && y < 6.3;
+  const g = pad(20, 12, []);
+  const narrow = {
+    ...g,
+    fitsAt: (x: number, y: number, z: number, r?: number) =>
+      g.fitsAt(x, y, z, r) &&
+      !(z < 2.14 && Math.hypot(Math.max(8.2 - x, 0, x - 8.8), Math.max(5.7 - y, 0, y - 6.3)) < (r ?? 0.27)),
+    groundAt: (x: number, y: number, z: number, tol?: number) =>
+      post(x, y) && z >= 2.14 - (tol ?? 0) ? 2.14 : g.groundAt(x, y, z, tol),
+  } as typeof g;
+  // mid-jump, the feet 0.9 up: its top 1.24 over them — within a mantle's reach, but no place on it
+  assert.equal(probeVault(narrow, 7.4, 6, 0.9, 1, 0, 0, undefined, true), null);
+  // a jump at it, the jump held: no climb — stopped by it, on the floor again
+  const b = newBody(6, 6);
+  let verb: string | undefined;
+  let pressed = false;
+  for (let i = 0; i < 300; i++) {
+    const press: boolean = !pressed && b.x >= 7.2;
+    pressed ||= press;
+    const ev = stepBody(b, go({ jump: true, jumpPressed: press }), on(narrow));
+    verb ??= ev.verb;
+  }
+  assert.equal(verb, undefined, "no mantle onto the post");
+  assert.ok(b.z < 0.05 && b.x < 8.2, `beside it at ${b.x.toFixed(2)}, ${b.z.toFixed(2)}`);
+});
+
 test("a roll bursts about three tiles, dodging for a moment in the middle", () => {
   const b = newBody(3, 6);
   const tr = run(b, on(pad()), 0.6, (t) => ({ ...NO_INPUT, x: 1, dodgePressed: t < STEP_DT / 2 }));

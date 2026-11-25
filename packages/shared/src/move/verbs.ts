@@ -30,6 +30,9 @@ export interface Probe {
 }
 
 const DS = 0.05;
+/** (a mantle from an edge caught in the air) the top goes on this far round where the body's put on it — ahead and
+ *  to either side — or it's no place to stand (a column's, a post's), tiles */
+const STAND = 0.35;
 
 /** What's ahead of a body at (x, y), feet z up, going (dx, dy) at `speed`: something to vault
  *  or mantle, or null (nothing there, too low — a step or a hop — too high, or no room). The
@@ -43,6 +46,8 @@ export function probeVault(
   dy: number,
   speed = 0,
   spec: MoveSpec = MOVE,
+  /** (an edge caught in the air) only onto a top there's room to stand on — see STAND */
+  stand = false,
 ): Probe | null {
   const n = Math.hypot(dx, dy);
   if (n < 1e-6) return null;
@@ -97,8 +102,22 @@ export function probeVault(
       }
     }
   }
-  // up onto it: room to stand on the top, and nothing in the way up there
+  // up onto it: room to stand on the top, and nothing in the way up there — caught in the air, a top there to stand
+  // on round that spot too: ahead of it and to either side. A narrow thing (a column, a post) has none past it —
+  // climbed, the body was put up on a top it couldn't stay on and its next step dropped it back (the user's lobby
+  // column, 2026-11-24). (From the ground a narrow top's still climbed — a bench's, got over that way.)
   const on = at(near + BODY_R + 0.35);
+  if (stand)
+    for (const [a, s] of [
+      [0, 0],
+      [STAND, 0],
+      [0, STAND],
+      [0, -STAND],
+    ]) {
+      const px = on.x + ux * a - uy * s;
+      const py = on.y + uy * a + ux * s;
+      if (Math.abs(grid.groundAt(px, py, top + 0.05, 0.04) - top) > 0.12) return null;
+    }
   if (grid.fitsAt(on.x, on.y, top) && grid.clear(at(near), on, BODY_R, top + 0.02))
     return { kind: "mantle", h, near, dist: near + BODY_R + 0.35 };
   return null;

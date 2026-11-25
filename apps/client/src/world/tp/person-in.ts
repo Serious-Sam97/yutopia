@@ -83,6 +83,7 @@ export interface PersonIn {
   skN?: [number, number, number] | null; // the ground's normal under the board (floor coords: x, y south, z up)
   skYaw?: number; // (plan 104) on a board: its nose's heading exactly (floor coords, rad) — the body drawn rigid with it
   overWater?: boolean; // over water deep enough to catch a fall: no ragdoll into it
+  inLift?: boolean; // standing in a lift's car: its ride up or down is no fall (no ragdoll)
   waterOver?: number; // wading: the water this far up over the feet (m)
   mv?: number; // the gait, crouching, aiming (shared/move packMv)
   // a vault, a mantle, a roll, a slide: how far in (`at`: since when, performance.now ms)

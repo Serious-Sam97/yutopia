@@ -362,7 +362,7 @@ export function stepBody(b: Body, inp: MoveInput, env: MoveEnv, spec: MoveSpec =
   }
   // in the air with the jump held, going at something too high to clear: catch its edge, climb up
   if (b.up && inp.jump && mag > 0.2 && b.vz < 2.5 && b.takeoff < 0) {
-    const p = probeVault(grid, b.x, b.y, b.z, ux, uy, 0, spec);
+    const p = probeVault(grid, b.x, b.y, b.z, ux, uy, 0, spec, true);
     if (p?.kind === "mantle" && p.h >= 0.3) {
       begin(b, "mantle", ux, uy, p.h, p.dist, spec, p.near);
       ev.verb = "mantle";

@@ -1445,6 +1445,7 @@ export class WorldController {
         skN: this.mySkN,
         skYaw: this.mySk ? this.mySkYaw : undefined,
         overWater: this.water.overDeep(this.me.x, this.me.y),
+        inLift: this.inLiftAt(this.me.x, this.me.y, this.level) || undefined,
         waterOver: this.water.waterOver(this.me.x, this.me.y, this.height.z),
       };
       this.jumps.jumpEffects(localSid, st, 1);
@@ -1502,6 +1503,7 @@ export class WorldController {
         skYaw: p.sk && p.mt ? (at.yaw / 128) * Math.PI : undefined,
         skN: p.sk ? (this.skateRide?.normalAt(pos.x, pos.y, pos.z) ?? (this.loadSkate(), null)) : null,
         overWater: this.water.overDeep(pos.x, pos.y),
+        inLift: this.inLiftAt(pos.x, pos.y, p.level) || undefined,
         waterOver: this.water.waterOver(pos.x, pos.y, pos.z),
       };
       this.jumps.jumpEffects(
@@ -3030,6 +3032,27 @@ export class WorldController {
     if (this.level !== 0 || !this.grid.onLand(this.me.x, this.me.y)) return;
     const g = this.grid.outside?.height(this.me.x, this.me.y);
     if (g !== undefined && this.height.z < g - 0.05) this.height = { z: g, vz: 0, up: false };
+  }
+  // (the lifts' cars by floor, made again now and then: a body in one isn't falling as it rides — person3d's ragdoll)
+  private liftCars: { at: number; n: number; by: Map<number, WorldObjectDef[]> } = { at: 0, n: -1, by: new Map() };
+  /** Standing in a lift's car on floor `level` (any floor's: others ride them too). */
+  inLiftAt(x: number, y: number, level: number): boolean {
+    const now = performance.now();
+    const c = this.liftCars;
+    if (now - c.at > 1000 || c.n !== this.objs.size) {
+      c.at = now;
+      c.n = this.objs.size;
+      c.by.clear();
+      for (const o of this.objs.values()) {
+        if (o.kind !== "elevator") continue;
+        const l = objLevel(o, this.building);
+        const list = c.by.get(l);
+        if (list) list.push(o);
+        else c.by.set(l, [o]);
+      }
+    }
+    for (const o of c.by.get(level) ?? []) if (inLift(o, { x, y })) return true;
+    return false;
   }
   /** Standing in a lift's car on my floor (its floor answers a landing). */
   inLiftCar(x: number, y: number): boolean {

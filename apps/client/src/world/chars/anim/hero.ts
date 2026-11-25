@@ -1946,10 +1946,17 @@ export class Stepper {
     }
     const x = lift[0] + (one ? 0.35 * one.at[0] : 0);
     const k = 22;
-    this.hyv += (k * k * (y - this.hy) - 2 * k * this.hyv) * dt;
-    this.hy += this.hyv * dt;
-    this.hxv += (k * k * (x - this.hx) - 2 * k * this.hxv) * dt;
-    this.hx += this.hxv * dt;
+    // (in steps of 1/120 s at most: one step of a slow frame's — past 1/k, ~45 ms — overshot more each
+    // frame, the whole body flung out and back, kilometres, for a few frames: the user's "breaking"
+    // stretch when the frame rate fell, 2026-11-25)
+    const n = Math.min(24, Math.ceil(Math.max(dt, 0) * 120));
+    const h = n > 0 ? dt / n : 0;
+    for (let i = 0; i < n; i++) {
+      this.hyv += (k * k * (y - this.hy) - 2 * k * this.hyv) * h;
+      this.hy += this.hyv * h;
+      this.hxv += (k * k * (x - this.hx) - 2 * k * this.hxv) * h;
+      this.hx += this.hxv * h;
+    }
     m.lift = [lerp(lift[0], this.hx, w), lerp(lift[1], this.hy, w), lift[2]];
     for (const S of SIDES) {
       const ft = this.feet[S];

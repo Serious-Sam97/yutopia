@@ -766,6 +766,11 @@ const LEG_AT = new Vector3();
 /** (plan 123) umbrellas' canopies: one each, by their name */
 const UMBRELLA_COLOURS = ["#2f5d8a", "#8a2f3a", "#2f6a4a", "#3a3a40", "#c9a227", "#6a3f8a", "#d8d4ca"];
 const umbAt = new Vector3();
+/** a height that changes by more than this in one frame is a jump of reference (a floor changed, a teleport), not a
+ *  movement: m, or m/s at the frame's length — a real fall's fastest (~25 m/s) never goes this far at even 10 fps */
+const SNAP_M = 1.2;
+const SNAP_MPS = 30;
+
 export class Person3D {
   readonly root = new Group();
   readonly model: Model;
@@ -949,6 +954,8 @@ export class Person3D {
    *  while getting up, one of the shadowed shot down already laid on it */
   limp: InstanceType<NonNullable<ReturnType<Chars["airNow"]>>["Downed"]> | null = null;
   private fallTop: number | null = null;
+  /** (the height jumped this frame — a floor changed, a teleport: no fall from it) */
+  private heightSnapped = false;
   private limpYaw: number | null = null;
   // (plan 63) the ragdoll's speed last frame (its impacts heard)
   private ragSpeed = 0;
@@ -1137,7 +1144,14 @@ export class Person3D {
       this.acc += ((spd - this.spd) / dt - this.acc) * a;
       this.spd = spd;
       this.turnRate += (turnBy / dt - this.turnRate) * a;
-      this.vz += ((h - this.lastH) / dt - this.vz) * Math.min(1, dt * 20);
+      // (a height that jumps in a frame — a floor changed under a lift's rider, a teleport, a frame's
+      // reference moved — is no speed: as a jump sideways isn't, above; and no fall — what was the
+      // fall's top is gone with it: the user's ragdoll in place, in the lobby, 2026-11-24)
+      const dh = h - this.lastH;
+      if (Math.abs(dh) > Math.max(SNAP_M, SNAP_MPS * dt)) {
+        this.heightSnapped = true;
+        this.fallTop = null;
+      } else this.vz += (dh / dt - this.vz) * Math.min(1, dt * 20);
     }
     this.lastH = h;
     // (afloat isn't in the air: plan 66 — the feet over the bed, the body on the water)
@@ -1505,7 +1519,12 @@ export class Person3D {
     const hz = p.z ?? 0;
     // (a fall's height by the body's own, over what's under it — not the jump's stages: a fall's
     // hop has a land stage after the feet are down, and limp only after it the body stood up first)
-    const airborne = !sitting && hz > ground + 0.03 && !p.swim;
+    // (riding a lift's car: going down in it is no fall)
+    const airborne = !sitting && hz > ground + 0.03 && !p.swim && !p.inLift;
+    if (this.heightSnapped || p.inLift) {
+      this.heightSnapped = false;
+      this.fallTop = airborne ? hz : null;
+    }
     let fellFrom = 0;
     let falling = false;
     if (airborne) {
