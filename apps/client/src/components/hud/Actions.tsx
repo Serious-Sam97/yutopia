@@ -353,7 +353,7 @@ function Thumb({ target, size }: { target: ActTarget; size: number }) {
       </span>
     );
   }
-  if (target.type === "npc") return <span className="rounded-full shrink-0" style={disc} />;
+  if (target.type === "npc" || target.type === "animal") return <span className="rounded-full shrink-0" style={disc} />;
   const p = target.type === "self" ? me : people.find((x) => x.sid === target.sid);
   return (
     <span className="rounded-full grid place-items-center shrink-0 overflow-hidden" style={disc}>

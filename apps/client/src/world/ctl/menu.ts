@@ -30,6 +30,7 @@ import { INTERACT_RANGE, petNeeds, safeParse } from "./common";
 export type ActionMenuHost = Pick<
   WorldController,
   | "actions"
+  | "animals"
   | "arrival"
   | "focus"
   | "grid"
@@ -122,6 +123,7 @@ export class ActionMenu {
       const feeling = tr(`feel_${P.feelingOf(petNeeds(pet))}` as never);
       return { title: pet.name, subtitle: `${tr(`sp_${sp}` as never)} · Lv ${pet.level} · ${feeling}`, items };
     }
+    if (target.type === "animal") return this.c.animals?.menuFor(target.id, room.sessionId) ?? null;
     if (target.type === "npc") {
       // (plan 123) what the server says I can do with them now (`npc:about`), and their card
       const a = hud.get().npcAbout;
@@ -238,6 +240,8 @@ export class ActionMenu {
     if (act === "look") return hud.set({ panel: { kind: "avatar" } });
     // (plan 123) a placed NPC's card: at once
     if (act === "npcCard" && t.type === "npc") return hud.set({ panel: { kind: "npc", objectId: t.id } });
+    // (plan 126) an animal's: sent at once (the menu only opens within reach)
+    if (t.type === "animal") return this.c.animals?.act(t.id, act);
     // a pet's commands need no walking over; care, toys and lessons do
     if (t.type === "pet") {
       const id = t.id;

@@ -32,6 +32,9 @@ def credits():
     S = load()
     os.makedirs(os.path.join(HERE, "licenses"), exist_ok=True)
     for key, e in S.items():
+        # (plan 126: the animals' works aren't Sketchfab downloads — their credit is written by hand)
+        if e.get("kind") == "animal":
+            continue
         path = os.path.join(IMPORTS, e["dir"], "x", "license.txt")
         text = open(path, encoding="utf-8").read()
 
@@ -56,7 +59,7 @@ def credits():
 
 def extract(keys):
     S = load()
-    for key in keys or list(S):
+    for key in keys or [k for k in S if S[k].get("kind") != "animal"]:
         e = S[key]
         d = os.path.join(IMPORTS, e["dir"])
         env = {**os.environ, **e["extract"]}

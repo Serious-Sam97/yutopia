@@ -6,6 +6,16 @@ import type { PetOut, PetRecord } from "@yutopia/shared/pets";
 import { config } from "./config.ts";
 import { metrics } from "./metrics.ts";
 
+/** (plan 126) one person's trust with one animal (shared animals/mind.ts Trust), whether it's their friend, its name. */
+export interface SavedTrust {
+  id: string;
+  kind: string;
+  v: number;
+  day: number;
+  friend: boolean;
+  name: string;
+}
+
 // A non-2xx answer from the API; `status` tells a refusal (4xx) from an outage.
 export class ApiError extends Error {
   constructor(
@@ -137,6 +147,9 @@ export const api = {
   // how the NPCs feel about people (docs/plan/123-npcs-alive.md): all of them, and the changed kept
   npcBonds: () => call<{ bonds: SavedBond[] }>("GET", "/npc-bonds"),
   putNpcBonds: (bonds: SavedBond[]) => call("PUT", "/npc-bonds", { bonds }),
+  // (plan 126) a person's trust with the animals they've fed: theirs when they come, the changed kept
+  animalTrust: (uid: number) => call<{ trust: SavedTrust[] }>("GET", `/animal-trust?user=${uid}`),
+  putAnimalTrust: (trust: (SavedTrust & { user: number })[]) => call("PUT", "/animal-trust", { trust }),
   // god mode (docs/plan/53-the-god-mode.md): an admin's draft (by its id: plan 55), a revision, the next one
   groundsDraft: (id: number) =>
     call<{ draft: { userId: number; name: string; baseRev: number; data: GroundsEdits } | null }>(

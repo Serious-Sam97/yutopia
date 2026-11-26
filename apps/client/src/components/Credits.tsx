@@ -20,6 +20,11 @@ const W = {
     "Compartilhados sob Creative Commons Atribuição 4.0. Alterados por nós: o que cada linha diz.",
   ],
   people: ["People", "Pessoas"],
+  animals: ["Animals", "Animais"],
+  animalsSub: [
+    "Made from these works (CC BY), reshaped and recoloured; the rest of the animals from Quaternius' CC0 models.",
+    "Feitos a partir destas obras (CC BY), remodelados e recoloridos; os outros animais dos modelos CC0 de Quaternius.",
+  ],
   sounds: ["Sounds", "Sons"],
   soundsSub: [
     "Dedicated to the public domain (CC0) — credited with thanks.",
@@ -50,6 +55,8 @@ export type CreditsData = {
     change: string;
     files: string[];
   }[];
+  /** (plan 126) the animals made from works by others */
+  animals?: CreditsData["hair"];
   people: {
     title: string;
     author: string;
@@ -128,6 +135,33 @@ export function Credits() {
           ))}
         </ul>
       </section>
+
+      {!!data.animals?.length && (
+        <section className="card" aria-labelledby="cr-animals">
+          <h4 id="cr-animals" className={`${lab} mb-1`} style={{ color: "var(--amber)" }}>
+            {t("animals")}
+          </h4>
+          <p className="text-[12.5px] mb-2" style={dim}>
+            {t("animalsSub")}
+          </p>
+          <ul className="space-y-3">
+            {data.animals.map((w) => (
+              <li key={w.key} className="text-[13.5px] leading-snug" data-work={w.key}>
+                <A href={w.source}>
+                  <em>{w.title}</em>
+                </A>{" "}
+                {t("by")} <A href={w.author_url}>{w.author}</A> · <A href={w.license_url}>{w.license}</A>
+                <span className="block text-[12.5px] mt-0.5" style={dim}>
+                  {w.change}
+                </span>
+                <span className="block text-[12px] mt-0.5" style={dim}>
+                  {t("inGame")}: {w.files.map((f) => f.replace("animals/", "")).join(", ")}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="card" aria-labelledby="cr-people">
         <h4 id="cr-people" className={`${lab} mb-2`} style={{ color: "var(--amber)" }}>

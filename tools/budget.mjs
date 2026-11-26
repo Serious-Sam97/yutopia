@@ -145,7 +145,9 @@ const LAZY = {
   // (plan 121: the NPCs tool and its panel, 26.8 → 31.0)
   // (raised to 34 on 2026-11-24, the user's standing call on budgets: plan 124 — the build music in God mode, its
   //  want and the admin's level: 32.0, at the edge)
-  "yutopia-god": 34,
+  // (raised to 37 on 2026-11-25, the user's standing call on budgets: plans 126–127 — the Animals tool: the land's own
+  //  places and the dark's nests round the camera, picked, moved, changed; 35.1)
+  "yutopia-god": 37,
 }; // KB gzip
 const chunks = `${dist}static/chunks/`;
 for (const [marker, budget] of Object.entries(LAZY)) {

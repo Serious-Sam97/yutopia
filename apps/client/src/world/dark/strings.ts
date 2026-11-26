@@ -21,6 +21,29 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_item_torch: ["Torch", "Lanterna"],
   dark_item_umbrella: ["Umbrella", "Guarda-chuva"],
   dark_item_vxtape: ["Vortex's tape", "Fita do Vortex"],
+  dark_inv_cook: ["Cook it (by a fire)", "Assar (perto do fogo)"],
+  dark_inv_make: ["Make: {what}", "Fazer: {what}"],
+  dark_inv_eat: ["Eat", "Comer"],
+  // (plan 126) the animals' things
+  dark_item_bread: ["Bread", "Pão"],
+  dark_item_seed: ["Bag of seed", "Saco de sementes"],
+  dark_item_nut: ["Nuts", "Nozes"],
+  dark_item_apple: ["Apple", "Maçã"],
+  dark_item_carrot: ["Carrot", "Cenoura"],
+  dark_item_meat: ["Raw meat", "Carne crua"],
+  dark_item_meat_cooked: ["Cooked meat", "Carne assada"],
+  dark_item_fish_raw: ["Raw fish", "Peixe cru"],
+  dark_item_hide_fur: ["Fur", "Pele de pelo"],
+  dark_item_hide_pelt: ["Pelt", "Pelego"],
+  dark_item_hide_leather: ["Hide", "Couro"],
+  dark_item_hide_wool: ["Wool", "Lã"],
+  dark_item_hide_feathers: ["Feathers", "Penas"],
+  dark_item_egg: ["Egg", "Ovo"],
+  dark_item_milk: ["Milk", "Leite"],
+  dark_item_fur_coat: ["Fur coat", "Casaco de pele"],
+  dark_item_fur_hat: ["Fur hat", "Gorro de pele"],
+  dark_item_fur_gloves: ["Fur gloves", "Luvas de pele"],
+  dark_item_fur_boots: ["Fur boots", "Botas de pele"],
   // (plan 103) the skateboards: named by their shape, the maker and the model (invented: the skate manifest's)
   dark_item_board_vert_classic: ["Vert board (Varlow Comet)", "Skate vertical (Varlow Comet)"],
   dark_item_board_vert_fish: ["Vert board (Varlow Marlin)", "Skate vertical (Varlow Marlin)"],
@@ -41,6 +64,9 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_place_locker: ["Locker", "Armário"],
   dark_place_kit: ["Supply locker", "Armário de suprimentos"], // (a kit a day: any built `locker`)
   dark_place_barn: ["Workbench", "Bancada"],
+  // (plan 126) cooked at a fire, made at a workbench
+  dark_place_fire: ["The fire", "A fogueira"],
+  dark_place_workbench: ["Workbench", "Bancada"],
   dark_place_farmhouse: ["Kitchen counter", "Balcão da cozinha"],
   dark_place_tractor: ["Tractor's toolbox", "Caixa de ferramentas do trator"],
   // the day's nests' caches (docs/plan/31-the-day.md)
@@ -253,6 +279,83 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_desc_chains: [
     "One a wheel: kneel by a parked car's wheel to fit it. Grips snow and ice; on the road it rattles, 45 km/h at most.",
     "Uma por roda: ajoelhe junto à roda de um carro parado para pôr. Agarra na neve e no gelo; no asfalto chacoalha, 45 km/h no máximo.",
+  ],
+  // (plan 126)
+  dark_desc_bread: [
+    "Held out in the left hand, the ducks, the geese and the pigeons come for it. The foxes and the raccoons too.",
+    "Na mão esquerda, estendido: os patos, os gansos e os pombos vêm buscar. As raposas e os guaxinins também.",
+  ],
+  dark_desc_seed: [
+    "For the small birds, the chickens and the squirrels: hold it out and keep still.",
+    "Para os passarinhos, as galinhas e os esquilos: estenda e fique parado.",
+  ],
+  dark_desc_nut: [
+    "A squirrel's favourite. A raccoon's, a boar's, a bear's too.",
+    "O favorito do esquilo. Do guaxinim, do javali e do urso também.",
+  ],
+  dark_desc_apple: [
+    "Deer, elk, horses, boars and bears take it from the hand.",
+    "Cervos, alces, cavalos, javalis e ursos pegam da mão.",
+  ],
+  dark_desc_carrot: [
+    "The hares, the horses and the farm's animals come for it.",
+    "As lebres, os cavalos e os bichos da fazenda vêm buscar.",
+  ],
+  dark_desc_meat: [
+    "From an animal shot and skinned. Cook it at a fire: eaten raw, it makes you sick. The wolves and the foxes take it from the hand.",
+    "De um animal abatido e esfolado. Asse numa fogueira: crua, faz mal. Lobos e raposas pegam da mão.",
+  ],
+  dark_desc_meat_cooked: [
+    "Eat it for health and warmth.",
+    "Coma para recuperar saúde e calor.",
+  ],
+  dark_desc_fish_raw: [
+    "The bears, the cats, the gulls and the foxes like it.",
+    "Os ursos, os gatos, as gaivotas e as raposas gostam.",
+  ],
+  dark_desc_hide_fur: [
+    "Thick fur, a wolf's or a bear's: made into warm clothes at the barn's workbench.",
+    "Pelo grosso, de lobo ou de urso: vira roupa quente na bancada do celeiro.",
+  ],
+  dark_desc_hide_pelt: [
+    "A fox's or a raccoon's pelt: for a warm hat or gloves at the workbench.",
+    "Pelego de raposa ou guaxinim: gorro ou luvas quentes na bancada.",
+  ],
+  dark_desc_hide_leather: [
+    "A deer's, an elk's, a boar's hide: boots and a coat at the workbench.",
+    "Couro de cervo, alce ou javali: botas e casaco na bancada.",
+  ],
+  dark_desc_hide_wool: [
+    "Shorn from a sheep: lining for warm clothes.",
+    "Tosquiada de uma ovelha: forro para roupas quentes.",
+  ],
+  dark_desc_hide_feathers: [
+    "Down for lining a coat.",
+    "Penugem para forrar um casaco.",
+  ],
+  dark_desc_egg: [
+    "From the coop, one a hen a day. Cooked at a fire, a little health.",
+    "Do galinheiro, um por galinha por dia. Cozido na fogueira, um pouco de saúde.",
+  ],
+  dark_desc_milk: [
+    "A bottle from a cow, once a day. Warm, it warms you.",
+    "Uma garrafa da vaca, uma vez por dia. Quente, aquece.",
+  ],
+  dark_desc_fur_coat: [
+    "Made from hides. Worn, the cold comes on you half as fast.",
+    "Feito de couro e pele. Vestido, o frio chega na metade do tempo.",
+  ],
+  dark_desc_fur_hat: [
+    "Made from a pelt. Keeps the cold off a little.",
+    "Feito de pelego. Protege um pouco do frio.",
+  ],
+  dark_desc_fur_gloves: [
+    "Made from a pelt. Keeps the cold off a little.",
+    "Feitas de pelego. Protegem um pouco do frio.",
+  ],
+  dark_desc_fur_boots: [
+    "Made from hide. Keeps the cold off a little.",
+    "Feitas de couro. Protegem um pouco do frio.",
   ],
   dark_desc_vxtape: [
     "Pulled out of him when he went down. Each one a fight you finished. He knows you have it.",

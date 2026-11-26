@@ -332,6 +332,10 @@ export interface ClientMessages {
   /** (plan 102) a home vehicle left away, put back at its home now (admins only) */
   "god:car-home": { id: string };
   "god:rollback": { rev: number };
+  /** (plan 127) God mode's Animals tool: the land's own animal places and today's dark nests round (x, z), asked */
+  "god:wild": { x: number; z: number };
+  /** (plan 128, F10a) the animals' minds shown round me (admins: the dev overlay), or not */
+  "animal:debug": { on: boolean };
   // something in a hand (shared held.ts) or the pockets (shared inventory.ts): mine or someone's;
   // `drop`: on the ground where I stand, for anyone
   "mod:give": { item: string; n?: number; userId?: number; drop?: boolean };
@@ -448,6 +452,15 @@ export interface ClientMessages {
   "mod:npcBond": { id: string; v: number };
   // (plan 123) an umbrella from the stand I'm by: into my left hand (what was there to the pack)
   "umbrella:take": Record<string, never>;
+  // (plan 126) something done with an animal near me (animals/acts.ts ANIMAL_ACTS): feed it what's in my left hand, skin
+  // one shot down, collect the farm's (eggs, milk, wool), mount or get off a horse, stroke one that trusts me, name a
+  // friend; `name` with "name"
+  "animal:act": { id: string; act: string; name?: string };
+  // (plan 126) a feed crate's food into my left hand (the barn's, the market's)
+  "animal:take": { food: string };
+  // (plan 126 F6c) the raw meat or fish in a slot cooked at the fire I'm by; (phase 8) warm clothes made at a workbench
+  "dark:cook": { slot: number };
+  "dark:craft": { what: string };
   // (plan 88) an admin's, for trying the fight: an act or his health set, beaten, reset; put somewhere and held
   "mod:vortex": {
     act?: 1 | 2 | 3;
@@ -734,8 +747,27 @@ export interface ServerMessages {
   // (plan 123) a placed NPC as they are to me; how what I did went (taken or not, how they took it, the bond now)
   "npc:about": NpcAbout;
   "npc:acted": { id: string; act: string; ok: boolean; react: string; bond: NpcAbout["bond"] };
+  // (plan 126) what came of an animal act: what I got (items), its trust in me now (0..1), friends now
+  "animal:did": { id: string; act: string; ok: boolean; why?: string; got?: { id: string; n: number }[]; trust?: number; friend?: boolean };
+  // (plan 126) an animal struck me (a bite, a swipe, a kick, a charge): from where, how much
+  "animal:strike": { id: string; kind: string; n: number; x: number; y: number };
+  // (plan 128, F8a) an animal's call, heard far off (a howl over the woods, an owl, the dawn's birds): who, where, what
+  "animal:call": { id: string; k: string; x: number; y: number; c: "call" | "alarm" };
+  // (plan 128, F10a) the minds round me, for the dev overlay (admins who asked)
+  "animal:debug": {
+    list: { id: string; d: string; why: string; to: [number, number] | null; path: number; aware: number; hunger: number; thirst: number; tired: number; fear: number }[];
+  };
   "god:refused": { reason: string; problems: string[] };
   "god:edits": GroundsEdits;
+  /** (plan 127) what the land makes round (x, z) (as it is, before God mode's changes: the tool lays the draft's
+   *  over it), today's dark nests there; `pending`: squares whose land the server's still making (ask again) */
+  "god:wild": {
+    x: number;
+    z: number;
+    land: import("./animals/habitat.ts").AnimalPlaceDef[];
+    nests: { id: string; x: number; z: number; n: number }[];
+    pending: number;
+  };
   snap: { x: number; y: number; z?: number; level?: number };
   /** the way asked for (`n` its ask): its waypoints after where I was, the last the target (or the
    *  nearest of it there is); null: none */

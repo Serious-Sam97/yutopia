@@ -396,6 +396,13 @@ registerFeature((room: WorldRoom) => {
           room.send(client, "arms:hit", shade);
           continue;
         }
+        // (plan 126) an animal before it: it takes the round, not the car behind it
+        const beast = street ? room.animals?.shoot(landRay, car.t, shadeDamage, client.sessionId, now) : null;
+        if (beast) {
+          const { t: _t, ...h } = beast;
+          room.send(client, "arms:hit", h);
+          continue;
+        }
         car.apply(client.sessionId);
         carHits.push({ id: car.id, x: car.x, y: car.y, z: car.z, struck: car.struck, face: car.face });
         if (!car.through) continue;
@@ -421,6 +428,15 @@ registerFeature((room: WorldRoom) => {
       const hit = street ? room.dark?.shoot(landRay, vt ?? (who ? who.t : cap), seenAt, shadeDamage, now) : null;
       if (hit) {
         room.send(client, "arms:hit", hit);
+        continue;
+      }
+      // (plan 126) an animal out on the land nearer than whoever's along it: it takes the round
+      const beast = street
+        ? room.animals?.shoot(landRay, vt ?? (who ? who.t : cap), shadeDamage, client.sessionId, now)
+        : null;
+      if (beast) {
+        const { t: _t, ...h } = beast;
+        room.send(client, "arms:hit", h);
         continue;
       }
       if (vt !== null) {

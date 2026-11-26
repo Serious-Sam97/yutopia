@@ -1,4 +1,6 @@
 import type { Building, Lamp, P, StreetThing, WayKind } from "./grounds.ts";
+import type { AnimalPlaceDef } from "./animals/habitat.ts";
+import type { NestPlaceDef } from "./dark/nests.ts";
 import type { NpcPlaceDef } from "./npc/places.ts";
 
 // God mode's edits to the Grounds (docs/plan/53-the-god-mode.md § A): what admins changed, laid
@@ -30,6 +32,10 @@ export interface GroundsEdits {
   bridges?: Section<BridgeDef>;
   /** (plan 121) the cast's NPCs placed: each one's place (keyed by the NPC), what they do there, their home */
   npcs?: Section<NpcPlaceDef>;
+  /** (plan 126) the animals: herds, dens and nests placed by hand, places kept empty, the farm's pens (by key) */
+  animals?: Section<AnimalPlaceDef>;
+  /** (plan 127) the dark's day nests: God mode's own (out every day) and places kept clear of them */
+  nests?: Section<NestPlaceDef>;
 }
 /** Added, changed (by key: only what's given), taken away (by key). */
 export interface Section<T extends { key: string }> {

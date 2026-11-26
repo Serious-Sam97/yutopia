@@ -1589,6 +1589,11 @@ registerFeature((room: WorldRoom) => {
     if (isDead(n)) return die(pet, now, cold && n.food > 0 && n.water > 0 ? "cold" : "hunger");
     // lost in the wild: a chance it's never seen again (offline, the tests: always)
     if (lost && wildAt(pet) && (config.offline ? 0 : Math.random()) < goneChance(hours)) return die(pet, now, "gone");
+    // (plan 126 F8a) the wolves, the bear, the lynx near a lost pet out there: it's found by them
+    // (a chance each settle — every few seconds —; never offline, the tests' world keeps its own odds)
+    if (lost && !config.offline && Math.random() < 0.02)
+      if ((room.animals?.near(pet.x, pet.y, 25) ?? []).some((x) => x.doing !== "dead" && (x.kind === "wolf" || x.kind === "bear" || x.kind === "lynx")))
+        return die(pet, now, "gone");
     // not with its owner: where it is, for them to find (the panel, the GPS)
     if (!lost) {
       const away = pet.mode !== "follow" || !p;
@@ -2892,6 +2897,27 @@ registerFeature((room: WorldRoom) => {
           .nearestOpen(pet.x + (c.x - pet.x) * k, pet.y + (c.y - pet.y) * k, 1);
         if (to && go(pet, to)) {
           r.pace = 1.6;
+          act(pet, "move:chase", to);
+        }
+        return true;
+      }
+    }
+    // (plan 126 F8a) the wild: a dog after a squirrel, a hare, a deer, the ducks; a cat stalking the birds
+    if (out && now - (r.chaseAt ?? 0) > CHASE_AGAIN_MS && (pet.species === "dog" || pet.species === "cat")) {
+      const quarry =
+        pet.species === "dog"
+          ? ["squirrel", "hare", "deer", "duck", "goose", "pigeon", "chicken", "sheep", "cat", "raccoon", "fox"]
+          : ["songbird", "pigeon", "frog", "squirrel", "chicken"];
+      const near = room.animals?.near(pet.x, pet.y, 14) ?? [];
+      const a = near.find((x) => quarry.includes(x.kind) && x.doing !== "dead");
+      if (a) {
+        r.chaseAt = now;
+        say(pet, pet.species === "dog" ? "call" : "happy");
+        const d = Math.hypot(a.x - pet.x, a.y - pet.y);
+        const k = Math.min(d + 4, 10) / Math.max(0.01, d);
+        const to = room.gridFor(pet.uid, pet.floor).nearestOpen(pet.x + (a.x - pet.x) * k, pet.y + (a.y - pet.y) * k, 1);
+        if (to && go(pet, to)) {
+          r.pace = pet.species === "dog" ? 1.8 : 0.6;
           act(pet, "move:chase", to);
         }
         return true;

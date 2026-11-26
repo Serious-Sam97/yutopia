@@ -22,6 +22,12 @@ class Survivor extends Model
         'board_vert_classic' => 1, 'board_vert_fish' => 1, 'board_vert_square' => 1,
         'board_street_pop' => 1, 'board_street_slick' => 1, 'board_street_tech' => 1,
         'board_cruiser_classic' => 1, 'board_cruiser_wood' => 1, 'board_cruiser_mini' => 1,
+        // (plan 126) food for the animals, what they leave (meat, hides), the farm's, warm clothes from hides
+        'bread' => 6, 'seed' => 10, 'nut' => 10, 'apple' => 6, 'carrot' => 6,
+        'meat' => 8, 'meat_cooked' => 8, 'fish_raw' => 6,
+        'hide_fur' => 6, 'hide_pelt' => 6, 'hide_leather' => 6, 'hide_wool' => 10, 'hide_feathers' => 20,
+        'egg' => 12, 'milk' => 4,
+        'fur_coat' => 1, 'fur_hat' => 1, 'fur_gloves' => 1, 'fur_boots' => 1,
     ];
 
     // (plan 87) carried one at a time (shared/inventory.ts ONE_OF)

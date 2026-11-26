@@ -302,6 +302,8 @@ class Dark implements DarkHooks {
         },
         store: () => ctl.cars?.store() ?? null,
         organize: () => ctl.room?.send("dark:organize", {}),
+        cook: (slot) => ctl.room?.send("dark:cook", { slot }),
+        craft: (what) => ctl.room?.send("dark:craft", { what }),
         draw: (slot) => this.arms.draw(slot),
         quick: (n) => this.arms.quick(n),
         hand: () => this.handKey(true),
@@ -671,6 +673,10 @@ class Dark implements DarkHooks {
   loadedOf(gun: string): number {
     const it = this.inv ? [...this.inv.quick, ...this.inv.pockets].find((x) => x?.id === gun) : null;
     return it && "loaded" in it ? Number((it as { loaded?: number }).loaded ?? 0) : 0;
+  }
+  /** (plan 126) what's in my left hand: the food held out to an animal (animals/index.ts) */
+  handId(): string | undefined {
+    return this.inv?.hand?.id;
   }
   countOf(id: string): number {
     return this.inv && id in STACKS_ANY ? count(this.inv, id as Parameters<typeof count>[1]) : 0;

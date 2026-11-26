@@ -130,6 +130,8 @@ export type ActTarget =
   | { type: "person"; sid: string }
   | { type: "pet"; id: string }
   | { type: "npc"; id: string }
+  // (plan 126) an animal out on the land
+  | { type: "animal"; id: string }
   | { type: "self" };
 export interface ActionMenu {
   x: number; // where it opens (client px)
@@ -297,6 +299,8 @@ export const GOD_TOOLS = [
   "bridges",
   // (plan 121: the cast's NPCs placed; N picks it)
   "npcs",
+  // (plan 126: herds, dens, nests, places kept empty; J picks it)
+  "animals",
 ] as const;
 export type GodTool = (typeof GOD_TOOLS)[number];
 /** The tools built so far (the rest: phases 7–9 of plan 53). */
@@ -312,6 +316,7 @@ export const GOD_READY: ReadonlySet<GodTool> = new Set<GodTool>([
   "grow",
   "bridges",
   "npcs",
+  "animals",
 ]);
 /** One of my drafts, as the list has it (the API's row: no data). */
 export interface GodDraftRow {
@@ -440,6 +445,23 @@ export interface GodHud {
    *  one placed), one placed in this draft, standing away from its home; its look, role and plate */
   /** (plan 121) the NPCs tool: the cast (the API's), the one held to place, the picked one, the step under way, the
    *  inside shown (a town building's storey, a studio floor) */
+  /** (plan 126) the Animals tool: the kind of place to put down, its species, how many, how far round (an empty
+   *  place's, a den's territory), its young; the place picked */
+  animals: {
+    /** (plan 127: "dnest" a dark nest of God mode's own, out every day; "dclear" a place kept clear of them) */
+    kind: "herd" | "den" | "nest" | "empty" | "dnest" | "dclear";
+    species: import("@yutopia/shared/animals/species").AnimalKind;
+    n: number;
+    r: number;
+    young: number;
+    sel: string | null;
+    /** (plan 127) the picked one goes where the next click is */
+    moving: boolean;
+    /** (plan 127, F6a) the layers drawn: the animals' places, the dark's nests */
+    layers: { animals: boolean; dark: boolean };
+    /** what's drawn round the camera now (~500 m): the land's own, God mode's, the day's dark nests */
+    inView: { land: number; placed: number; dark: number };
+  };
   npcs: {
     cast: GodNpcRow[] | null;
     failed: boolean;
@@ -912,6 +934,17 @@ const initial: HudState = {
       blocked: null,
     },
     npcs: { cast: null, failed: false, q: "", held: null, a: 0, sel: null, step: "", floor: null, blocked: null },
+    animals: {
+      kind: "herd",
+      species: "deer",
+      n: 4,
+      r: 120,
+      young: 1,
+      sel: null,
+      moving: false,
+      layers: { animals: true, dark: true },
+      inView: { land: 0, placed: 0, dark: 0 },
+    },
     vehicles: {
       kind: "sedan",
       variant: "saloon-base",

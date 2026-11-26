@@ -33,6 +33,8 @@ import "./park-life.ts";
 import "./npc-life.ts";
 import "./survival.ts";
 import "./dark.ts";
+// (plan 126: the animals out on the land — after the dark, which makes client.view too)
+import "./animals.ts";
 import "./arms.ts";
 import "./perf.ts";
 import "./admin.ts";

@@ -255,6 +255,8 @@ export interface DarkHooks {
   frozen(): boolean;
   /** (plan 123) how many of an item I carry, the pockets, quick slots and hands all told */
   countOf(id: string): number;
+  /** (plan 126) what's in my left hand (the food held out to an animal) */
+  handId?(): string | undefined;
   /** (plan 88 act III) my move as Vortex has it: possessed — walked to him; the glitch — the other way round */
   steer(move: { x: number; y: number; sprint: boolean; aim: boolean; jump: boolean; jumpPressed: boolean }): void;
   /** the frame's pad presses, before the world has them: taken ones are deleted (Y while aiming
@@ -302,6 +304,10 @@ export class Walker {
   /** (plan 123) how many of an item I carry (0 till the dark's chunk is in) */
   carried(id: string): number {
     return this.dark?.countOf(id) ?? 0;
+  }
+  /** (plan 126) what's in my left hand (undefined till the dark's chunk is in) */
+  inHand(): string | undefined {
+    return this.dark?.handId?.();
   }
   private steppedAt = 0;
   private onFoot = false;
@@ -492,6 +498,8 @@ export class Walker {
   limp = false;
   /** my board (plan 103: skate/ride.ts), once one's been in hand */
   skate: SkateRide | null = null;
+  /** (plan 126) on a horse: its gaits for mine (walk, trot as the jog, gallop as the sprint) */
+  ride: MoveSpec | null = null;
   private body: Body = newBody(0, 0);
   /** (plan 103) the body itself, for the board's ride (skate/ride.ts) */
   get stepBody(): Body {
@@ -678,7 +686,9 @@ export class Walker {
             env,
             fast
               ? FAST_SPEC
-              : strikeKeys.speed
+              : this.ride
+                ? this.ride
+                : strikeKeys.speed
                 ? strikeSpec(Math.round(strikeKeys.speed * (strikeKeys.carrying ? 0.6 : 1) * 100) / 100)
                 : SPEC,
           );

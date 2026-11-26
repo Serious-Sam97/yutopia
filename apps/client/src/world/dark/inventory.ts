@@ -1,6 +1,9 @@
 import { ARMS, FLARE, LOOT_REACH } from "@yutopia/shared/dark";
 import {
+  COOKS,
+  CRAFTS,
   count,
+  EATEN,
   fits,
   freeQuick,
   HAND_SLOT,
@@ -12,6 +15,7 @@ import {
   QUICK,
   QUICK_SLOT,
   STACKS,
+  type StackId,
   slotAt,
   WEAPONS,
 } from "@yutopia/shared/inventory";
@@ -64,6 +68,9 @@ export interface InvActions {
   /** (plan 87) the left hand's light: the torch lit; a flare held up, its seconds left (0 none) */
   handState(): { lit: boolean; burn: number };
   reload(): void;
+  /** (plan 126) the raw meat or fish in a slot cooked at the fire I'm by; warm clothes made at a workbench */
+  cook?(slot: number): void;
+  craft?(what: string): void;
   /** (plan 93 S4) a car's boot or glove box open here: in the ground's place — its name, what's in it */
   store?(): { label: string; items: { id: string; n: number; loaded?: number }[] } | null;
 }
@@ -694,6 +701,8 @@ export class InventoryPanel {
   private button(act: string) {
     if (act === "close") this.close();
     else if (act === "use" || act === "take" || act === "hold") this.primary();
+    else if (act === "cook" && this.sel && "slot" in this.sel) this.act.cook?.(this.sel.slot);
+    else if (act.startsWith("craft_")) this.act.craft?.(act.slice(6));
     else if (act === "drop") this.dropSel();
     else if (act === "reload") this.act.reload();
     else if (act === "away") this.act.draw(-1);
@@ -925,6 +934,16 @@ export class InventoryPanel {
         (isUsable(id) ? btn("use", t("dark_inv_use"), kk(q || "E"), true) : "") +
         (id === "flare" && q ? btn("use", t("dark_inv_throw"), kk(q), true) : "") +
         dropBtn;
+    }
+    // (plan 126) meat and fish cooked at a fire; hides made into warm clothes at a workbench
+    if (!("drop" in p)) {
+      const extra = (COOKS[id as StackId] ? btn("cook", t("dark_inv_cook")) : "") +
+        Object.entries(CRAFTS)
+          .filter(([, parts]) => parts?.some((q) => q.of.includes(id as StackId)))
+          .map(([what]) => btn(`craft_${what}`, t("dark_inv_make", { what: t(`dark_item_${what}`) })))
+          .join("");
+      if (extra) btns = extra + btns;
+      if (EATEN[id as StackId]) btns = btns.replace(`<span>${t("dark_inv_use")}</span>`, `<span>${t("dark_inv_eat")}</span>`);
     }
     const wide = isWeapon(id) ? " wide" : "";
     return `<span class="cap">${where}</span><div class="pic${wide}">${itemArt(id)}</div><h2>${t(`dark_item_${id}`)}</h2><p class="what">${t(`dark_desc_${id}`)}</p><div class="sp">${stats}${note ? `<span class="note">${note}</span>` : ""}</div><div class="btns">${btns}</div>`;

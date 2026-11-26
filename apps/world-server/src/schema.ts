@@ -139,6 +139,27 @@ export class Shadow extends Schema {
   @type("boolean") k = false; // dissolving because it was shot down (a burst of light)
 }
 
+// (plan 126) An animal out on the land (features/animals.ts; shared animals/): its species, where it is, what it's
+// doing. Each client sees only those near it (client.view), as the shadowed.
+export class Animal extends Schema {
+  @type("string") id = "";
+  @type("string") k = ""; // its species (shared animals/species.ts AnimalKind)
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") h = 0; // over the ground (m): a bird in the air, up a tree; 0 on the ground (or the water)
+  @type("uint8") yaw = 0; // which way it faces (a byte, 256 a turn: shared move faceByte)
+  @type("uint8") d = 0; // what it's doing (shared animals/mind.ts DOINGS' index)
+  @type("uint8") p = 0; // its pace (mind.ts PACES' index): the clip and its speed
+  @type("float64") at = 0; // since when it's doing it (server ms)
+  @type("string") t = ""; // whom: its target (attack, chase, approach), its rider, its friend's session
+  @type("uint8") hp = 100; // health, a percentage
+  @type("boolean") young = false;
+  @type("uint8") v = 0; // its variant: a coat, a buck's antlers (the client's looks)
+  @type("string") name = ""; // a friend's name for it (befriended)
+  @type("float64") hitAt = 0; // last struck (a flinch)
+  @type("uint8") n = 0; // bits: 1 skinned, 2 eggs/milk/wool ready, 4 befriended
+}
+
 // A flare burning (D6): lit where it landed, on the snow or indoors (`level`), out at
 // `until` (server ms).
 export class Flare extends Schema {
@@ -810,6 +831,8 @@ export class WorldState extends Schema {
   @type({ map: Cache }) caches = new MapSchema<Cache>(); // the day's nests' caches (features/survival.ts)
   // the shadowed: each client sees only those near it outside (features/dark.ts: client.view)
   @view() @type({ map: Shadow }) shadows = new MapSchema<Shadow>();
+  // (plan 126) the animals out on the land: each client sees only those near it (features/animals.ts: client.view)
+  @view() @type({ map: Animal }) animals = new MapSchema<Animal>();
   @type({ map: Flare }) flares = new MapSchema<Flare>(); // flares burning (features/arms.ts)
   @type({ map: PetBattle }) battles = new MapSchema<PetBattle>();
   @type({ map: Toy }) toys = new MapSchema<Toy>();

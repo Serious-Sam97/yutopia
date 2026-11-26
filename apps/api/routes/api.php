@@ -9,6 +9,7 @@ use App\Http\Controllers\GamesController;
 use App\Http\Controllers\GroundsController;
 use App\Http\Controllers\InternalController;
 use App\Http\Controllers\InviteController;
+use App\Http\Controllers\AnimalTrustController;
 use App\Http\Controllers\NpcBondsController;
 use App\Http\Controllers\NpcsController;
 use App\Http\Controllers\PerfController;
@@ -171,6 +172,9 @@ Route::middleware('internal')->prefix('internal')->group(function () {
     // how the NPCs feel about people (docs/plan/123-npcs-alive.md): all of them, and the changed kept
     Route::get('/npc-bonds', [NpcBondsController::class, 'index']);
     Route::put('/npc-bonds', [NpcBondsController::class, 'put']);
+    // the animals' trust (docs/plan/126-animal-life.md): a person's when they come, the changed kept
+    Route::get('/animal-trust', [AnimalTrustController::class, 'index']);
+    Route::put('/animal-trust', [AnimalTrustController::class, 'put']);
     // the dark (docs/plan/30-the-dark.md): the Grounds' loot, someone's pockets
     Route::put('/world/loot', [DarkController::class, 'loot']);
     Route::get('/survivors/{userId}', [DarkController::class, 'survivor'])->whereNumber('userId');

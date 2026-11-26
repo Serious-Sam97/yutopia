@@ -147,6 +147,7 @@ import { type Feature, featureNames, installFeatures } from "./features/index.ts
 import type { PballHooks } from "./features/pballs.ts";
 import type { StrikeHooks } from "./features/strike.ts";
 import type { SurvivalHooks } from "./features/survival.ts";
+import type { AnimalHooks } from "./features/animals.ts";
 import type { VortexHooks } from "./features/vortex.ts";
 import { landEdits } from "./land.ts";
 import { removeParticipant, setCanPublish } from "./livekit.ts";
@@ -283,6 +284,7 @@ export class WorldRoom extends Room<WorldState> {
   survival: SurvivalHooks | null = null;
   dark: DarkHooks | null = null; // features/dark.ts: shots and flares (features/arms.ts)
   vortex: VortexHooks | null = null; // (plan 88) features/vortex.ts: the fight — shots at him (features/arms.ts)
+  animals: AnimalHooks | null = null; // (plan 126) features/animals.ts: shots at them (features/arms.ts)
   // (plan 120) the world's cast by key (cast.ts): the town's features make their people from it, and take a change live
   cast: Map<string, NpcDef> = new Map();
   private castPushed = false;

@@ -26,6 +26,7 @@ import type { GodInput, ThirdPersonView } from "../tp/view";
 import { BridgesTool } from "./bridges";
 import { BuildingsTool } from "./buildings";
 import { GrowTool } from "./grow";
+import { AnimalsTool } from "./animals";
 import { NpcsTool } from "./npcs";
 import { BrushRing } from "./ring";
 import { RoadsTool } from "./roads";
@@ -134,6 +135,8 @@ export class GodController {
   private vehicleDrag: number | null = null;
   // the NPCs (docs/plan/121: ./npcs.ts) — the draft's drawn, the NPCs tool's, Select's — and the pointer dragging one
   private npcs: NpcsTool | null = null;
+  // (plan 126) the animals' places — the draft's drawn, the Animals tool's
+  private animals: AnimalsTool | null = null;
   private npcDrag: number | null = null;
   // the bridges (docs/plan/109: ./bridges.ts), and the pointer dragging an end of one
   private bridges: BridgesTool | null = null;
@@ -167,6 +170,8 @@ export class GodController {
     if (room) {
       this.offs.push(room.onMessage("god:published", (m: ServerMessages["god:published"]) => this.done(m.rev)));
       this.offs.push(room.onMessage("god:refused", (m: ServerMessages["god:refused"]) => this.refused(m)));
+      // (plan 127) the land's own animal places and today's dark nests round the camera, as the server has them
+      this.offs.push(room.onMessage("god:wild", (m: ServerMessages["god:wild"]) => this.animals?.told(m)));
     }
     window.addEventListener("blur", this.onBlur);
     document.addEventListener("pointerout", this.onOut);
@@ -230,6 +235,8 @@ export class GodController {
     this.vehicles = null;
     this.npcs?.dispose();
     this.npcs = null;
+    this.animals?.dispose();
+    this.animals = null;
     this.npcDrag = null;
     this.bridges?.dispose();
     this.bridges = null;
@@ -281,6 +288,7 @@ export class GodController {
     this.vehicles?.hide();
     this.vehicleDrag = null;
     this.npcs?.hide();
+    this.animals?.hide();
     this.npcDrag = null;
     this.bridges?.cancel();
     this.bridges?.hide();
@@ -334,6 +342,9 @@ export class GodController {
       const active = tool === "npcs" || (tool === "select" && g0.picked === "npc");
       this.npcsTool()?.frame(this.mouse, f, active);
     }
+    // (plan 126) the draft's animal places: drawn with the Animals tool out
+    if (tool === "animals") this.animalsTool()?.frame(this.under, true);
+    else this.animals?.hide();
     if (tool === "select") this.selectFrame(this.under, f);
     else {
       if (tool === "vehicles") this.vehiclesTool()?.frame(this.under, f, !this.vehicles?.dragging);
@@ -516,6 +527,18 @@ export class GodController {
         return true;
       }
     }
+    // (plan 126) the animals tool: Delete takes the picked place away
+    if (hud.get().god.tool === "animals" && !hud.get().god.publish && !e.repeat && hud.get().god.animals.sel) {
+      if (e.key === "Delete" || e.key === "Backspace") {
+        this.animals?.removePicked();
+        return true;
+      }
+      // (plan 127) Esc: the picked one not moved after all (Move is the panel's: M is the map)
+      if (e.key === "Escape" && hud.get().god.animals.moving) {
+        hud.set({ god: { ...hud.get().god, animals: { ...hud.get().god.animals, moving: false } } });
+        return true;
+      }
+    }
     // the bridges tool: Delete takes the picked one away, Esc lets a stretch being laid (or the picked one) go
     const brt = hud.get().god.tool === "bridges" ? this.bridges : null;
     if (brt && !hud.get().god.publish && !e.repeat) {
@@ -605,6 +628,7 @@ export class GodController {
     else if (/^[1-9]$/.test(e.key) && Number(e.key) <= GOD_TOOLS.length) this.setTool(GOD_TOOLS[Number(e.key) - 1]);
     else if (k === "b") this.setTool("bridges");
     else if (k === "n") this.setTool("npcs");
+    else if (k === "j") this.setTool("animals");
     else this.keys.add(e.code);
     return true;
   }
@@ -827,6 +851,7 @@ export class GodController {
           this.vehicles?.deselect();
           this.vehiclesTool()?.place(this.landAt(e));
         } else if (tool === "npcs") this.npcsTool()?.click(this.npcs?.spotAt(e.clientX, e.clientY) ?? null);
+        else if (tool === "animals") this.animalsTool()?.click(this.landAt(e));
         else if (tool === "nature") this.natureClick(this.landAt(e));
         else if (tool === "select") this.deselect();
       }
@@ -1025,6 +1050,35 @@ export class GodController {
         tp.scene,
       );
     return this.vehicles;
+  }
+  /** (plan 126) The animals' places (made the first time the Animals tool's out). */
+  animalsTool(): AnimalsTool | null {
+    const tp = this.w.tp;
+    if (!this.animals && tp)
+      this.animals = new AnimalsTool(
+        {
+          draft: () => this.draftNow(),
+          change: (next) => this.change(next),
+          focus: () => this.at,
+          ask: (x, z) => this.w.room?.send("god:wild", { x, z }),
+        },
+        tp.scene,
+      );
+    return this.animals;
+  }
+  /** (plan 126) The picked animal place taken away (the panel's button, Delete). */
+  removeAnimalPlace() {
+    this.animals?.removePicked();
+  }
+  /** (plan 127) The picked animal place or nest: moved by the next click, changed by the panel, what it is. */
+  moveAnimalPlace() {
+    this.animals?.startMove();
+  }
+  changeAnimalPlace(o: Parameters<AnimalsTool["changePicked"]>[0]) {
+    this.animals?.changePicked(o);
+  }
+  animalPicked() {
+    return this.animals?.pickedInfo() ?? null;
   }
   /** The NPCs (made the first time they're needed: the draft's drawn, the NPCs tool, Select's — plan 121). */
   npcsTool(): NpcsTool | null {

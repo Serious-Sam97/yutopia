@@ -1,0 +1,6070 @@
+{
+  "_": "The animals' sound candidates (docs/plan/126-animal-life.md, F11b): every one CC0 on Freesound, fetched as its HQ preview. `picks`: what the game gets — each a candidate's id and how many of its events (`n`) or its cuts by hand (`cuts`, [from, to] s); `out`: every file made, with its source, licence and cut (s into the HQ preview). Picked by the agent from the titles, lengths and measured quality (snr: the loudest 20 ms over the quietest fifth, dB); the user tests and we change what doesn't fit. Made by tools/sfx-animals.mjs.",
+  "crow-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "75162",
+        "user": "nigelcoop",
+        "title": "crow.wav",
+        "preview": "https://cdn.freesound.org/previews/75/75162_1088850-hq.mp3",
+        "url": "https://freesound.org/people/nigelcoop/sounds/75162/",
+        "licence": "CC0",
+        "dur": 4.1,
+        "downloads": 7236,
+        "note": "\"crow caw\"",
+        "snr": 39
+      },
+      {
+        "id": "56234",
+        "user": "Q.K.",
+        "title": "Crows_02.wav",
+        "preview": "https://cdn.freesound.org/previews/56/56234_91374-hq.mp3",
+        "url": "https://freesound.org/people/Q.K./sounds/56234/",
+        "licence": "CC0",
+        "dur": 4.7,
+        "downloads": 7142,
+        "note": "\"crow caw\"",
+        "snr": 21
+      },
+      {
+        "id": "56233",
+        "user": "Q.K.",
+        "title": "Crows_01.wav",
+        "preview": "https://cdn.freesound.org/previews/56/56233_91374-hq.mp3",
+        "url": "https://freesound.org/people/Q.K./sounds/56233/",
+        "licence": "CC0",
+        "dur": 30.6,
+        "downloads": 6416,
+        "note": "\"crow caw\"",
+        "snr": 33
+      },
+      {
+        "id": "328846",
+        "user": "deleted_user_958643",
+        "title": "Raven call.wav",
+        "preview": "https://cdn.freesound.org/previews/328/328846_958643-hq.mp3",
+        "url": "https://freesound.org/people/deleted_user_958643/sounds/328846/",
+        "licence": "CC0",
+        "dur": 22.3,
+        "downloads": 5089,
+        "note": "\"crow caw\"",
+        "snr": 25
+      },
+      {
+        "id": "537988",
+        "user": "Ambientsoundapp",
+        "title": "Crow.wav",
+        "preview": "https://cdn.freesound.org/previews/537/537988_11926345-hq.mp3",
+        "url": "https://freesound.org/people/Ambientsoundapp/sounds/537988/",
+        "licence": "CC0",
+        "dur": 30,
+        "downloads": 4915,
+        "note": "\"crow caw\""
+      },
+      {
+        "id": "86883",
+        "user": "JamesOC",
+        "title": "ravenflyby.aif",
+        "preview": "https://cdn.freesound.org/previews/86/86883_435349-hq.mp3",
+        "url": "https://freesound.org/people/JamesOC/sounds/86883/",
+        "licence": "CC0",
+        "dur": 33.9,
+        "downloads": 3211,
+        "note": "\"crow caw\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "75162",
+        "n": 1
+      },
+      {
+        "id": "56233",
+        "n": 1
+      },
+      {
+        "id": "328846",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "crow-call-1.mp3",
+        "id": "75162",
+        "title": "crow.wav",
+        "user": "nigelcoop",
+        "url": "https://freesound.org/people/nigelcoop/sounds/75162/",
+        "licence": "CC0",
+        "cut": [
+          0.045,
+          0.9
+        ]
+      },
+      {
+        "file": "crow-call-2.mp3",
+        "id": "56233",
+        "title": "Crows_01.wav",
+        "user": "Q.K.",
+        "url": "https://freesound.org/people/Q.K./sounds/56233/",
+        "licence": "CC0",
+        "cut": [
+          6.325,
+          9.35
+        ]
+      },
+      {
+        "file": "crow-call-3.mp3",
+        "id": "328846",
+        "title": "Raven call.wav",
+        "user": "deleted_user_958643",
+        "url": "https://freesound.org/people/deleted_user_958643/sounds/328846/",
+        "licence": "CC0",
+        "cut": [
+          0.055,
+          0.42
+        ]
+      }
+    ]
+  },
+  "crow-alarm": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "842587",
+        "user": "harrisonlace",
+        "title": "BIRDFowl_Rooster Crow, Boisterous Cock, Cocorico",
+        "preview": "https://cdn.freesound.org/previews/842/842587_9839964-hq.mp3",
+        "url": "https://freesound.org/people/harrisonlace/sounds/842587/",
+        "licence": "CC0",
+        "dur": 2.3,
+        "downloads": 182,
+        "note": "\"crows alarm\"",
+        "snr": 12
+      },
+      {
+        "id": "75162",
+        "user": "nigelcoop",
+        "title": "crow.wav",
+        "preview": "https://cdn.freesound.org/previews/75/75162_1088850-hq.mp3",
+        "url": "https://freesound.org/people/nigelcoop/sounds/75162/",
+        "licence": "CC0",
+        "dur": 4.1,
+        "downloads": 7236,
+        "note": "\"crows cawing\""
+      },
+      {
+        "id": "56234",
+        "user": "Q.K.",
+        "title": "Crows_02.wav",
+        "preview": "https://cdn.freesound.org/previews/56/56234_91374-hq.mp3",
+        "url": "https://freesound.org/people/Q.K./sounds/56234/",
+        "licence": "CC0",
+        "dur": 4.7,
+        "downloads": 7142,
+        "note": "\"crows cawing\""
+      },
+      {
+        "id": "56233",
+        "user": "Q.K.",
+        "title": "Crows_01.wav",
+        "preview": "https://cdn.freesound.org/previews/56/56233_91374-hq.mp3",
+        "url": "https://freesound.org/people/Q.K./sounds/56233/",
+        "licence": "CC0",
+        "dur": 30.6,
+        "downloads": 6416,
+        "note": "\"crows cawing\""
+      },
+      {
+        "id": "474266",
+        "user": "MKzing",
+        "title": "Bell with Crows",
+        "preview": "https://cdn.freesound.org/previews/474/474266_3531986-hq.mp3",
+        "url": "https://freesound.org/people/MKzing/sounds/474266/",
+        "licence": "CC0",
+        "dur": 10.5,
+        "downloads": 2056,
+        "note": "\"crows cawing\""
+      },
+      {
+        "id": "536732",
+        "user": "egomassive",
+        "title": "Caw.ogg",
+        "preview": "https://cdn.freesound.org/previews/536/536732_1415754-hq.mp3",
+        "url": "https://freesound.org/people/egomassive/sounds/536732/",
+        "licence": "CC0",
+        "dur": 1.9,
+        "downloads": 2004,
+        "note": "\"crows cawing\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "842587",
+        "n": 1
+      },
+      {
+        "id": "75162",
+        "n": 1
+      },
+      {
+        "id": "56234",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "crow-alarm-1.mp3",
+        "id": "842587",
+        "title": "BIRDFowl_Rooster Crow, Boisterous Cock, Cocorico",
+        "user": "harrisonlace",
+        "url": "https://freesound.org/people/harrisonlace/sounds/842587/",
+        "licence": "CC0",
+        "cut": [
+          0,
+          0.19
+        ]
+      },
+      {
+        "file": "crow-alarm-2.mp3",
+        "id": "75162",
+        "title": "crow.wav",
+        "user": "nigelcoop",
+        "url": "https://freesound.org/people/nigelcoop/sounds/75162/",
+        "licence": "CC0",
+        "cut": [
+          0.045,
+          0.9
+        ]
+      },
+      {
+        "file": "crow-alarm-3.mp3",
+        "id": "56234",
+        "title": "Crows_02.wav",
+        "user": "Q.K.",
+        "url": "https://freesound.org/people/Q.K./sounds/56234/",
+        "licence": "CC0",
+        "cut": [
+          0.245,
+          2.31
+        ]
+      }
+    ]
+  },
+  "songbird-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "182500",
+        "user": "swiftoid",
+        "title": "Birds chirping 04",
+        "preview": "https://cdn.freesound.org/previews/182/182500_854782-hq.mp3",
+        "url": "https://freesound.org/people/swiftoid/sounds/182500/",
+        "licence": "CC0",
+        "dur": 22.9,
+        "downloads": 6517,
+        "note": "\"bird chirp\"",
+        "snr": 31
+      },
+      {
+        "id": "182506",
+        "user": "swiftoid",
+        "title": "Cow Shed with Birds",
+        "preview": "https://cdn.freesound.org/previews/182/182506_854782-hq.mp3",
+        "url": "https://freesound.org/people/swiftoid/sounds/182506/",
+        "licence": "CC0",
+        "dur": 12.6,
+        "downloads": 3790,
+        "note": "\"bird chirp\"",
+        "snr": 19
+      },
+      {
+        "id": "706679",
+        "user": "Sadiquecat",
+        "title": "Low Whoosh Bamboo 4",
+        "preview": "https://cdn.freesound.org/previews/706/706679_5287430-hq.mp3",
+        "url": "https://freesound.org/people/Sadiquecat/sounds/706679/",
+        "licence": "CC0",
+        "dur": 0.8,
+        "downloads": 3315,
+        "note": "\"bird chirp\"",
+        "snr": 40
+      },
+      {
+        "id": "118577",
+        "user": "Antwash",
+        "title": "birds chirping.mp3",
+        "preview": "https://cdn.freesound.org/previews/118/118577_2124559-hq.mp3",
+        "url": "https://freesound.org/people/Antwash/sounds/118577/",
+        "licence": "CC0",
+        "dur": 18.2,
+        "downloads": 3219,
+        "note": "\"bird chirp\"",
+        "snr": 29
+      },
+      {
+        "id": "164489",
+        "user": "deleted_user_2104797",
+        "title": "Tweeting.wav",
+        "preview": "https://cdn.freesound.org/previews/164/164489_2104797-hq.mp3",
+        "url": "https://freesound.org/people/deleted_user_2104797/sounds/164489/",
+        "licence": "CC0",
+        "dur": 14.8,
+        "downloads": 3160,
+        "note": "\"bird chirp\""
+      },
+      {
+        "id": "166709",
+        "user": "Snapper4298",
+        "title": "seagulls 3.wav",
+        "preview": "https://cdn.freesound.org/previews/166/166709_33044-hq.mp3",
+        "url": "https://freesound.org/people/Snapper4298/sounds/166709/",
+        "licence": "CC0",
+        "dur": 15.5,
+        "downloads": 3026,
+        "note": "\"bird chirp\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "706679",
+        "n": 1
+      },
+      {
+        "id": "182500",
+        "n": 1
+      },
+      {
+        "id": "118577",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "songbird-call-1.mp3",
+        "id": "706679",
+        "title": "Low Whoosh Bamboo 4",
+        "user": "Sadiquecat",
+        "url": "https://freesound.org/people/Sadiquecat/sounds/706679/",
+        "licence": "CC0",
+        "cut": [
+          0.025,
+          0.48
+        ]
+      },
+      {
+        "file": "songbird-call-2.mp3",
+        "id": "182500",
+        "title": "Birds chirping 04",
+        "user": "swiftoid",
+        "url": "https://freesound.org/people/swiftoid/sounds/182500/",
+        "licence": "CC0",
+        "cut": [
+          0.365,
+          1.89
+        ]
+      },
+      {
+        "file": "songbird-call-3.mp3",
+        "id": "118577",
+        "title": "birds chirping.mp3",
+        "user": "Antwash",
+        "url": "https://freesound.org/people/Antwash/sounds/118577/",
+        "licence": "CC0",
+        "cut": [
+          0.235,
+          1.04
+        ]
+      }
+    ]
+  },
+  "songbird-alarm": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "316920",
+        "user": "Rudmer_Rotteveel",
+        "title": "Chicken Single Alarm Call",
+        "preview": "https://cdn.freesound.org/previews/316/316920_4921277-hq.mp3",
+        "url": "https://freesound.org/people/Rudmer_Rotteveel/sounds/316920/",
+        "licence": "CC0",
+        "dur": 1.2,
+        "downloads": 25097,
+        "note": "\"bird alarm call\"",
+        "snr": 35
+      },
+      {
+        "id": "316921",
+        "user": "Rudmer_Rotteveel",
+        "title": "Chicken Alarm Call full with Occasional bird sound",
+        "preview": "https://cdn.freesound.org/previews/316/316921_4921277-hq.mp3",
+        "url": "https://freesound.org/people/Rudmer_Rotteveel/sounds/316921/",
+        "licence": "CC0",
+        "dur": 25.1,
+        "downloads": 12209,
+        "note": "\"bird alarm call\"",
+        "snr": 43
+      },
+      {
+        "id": "392406",
+        "user": "AlanCat",
+        "title": "WoodDucks1a.wav",
+        "preview": "https://cdn.freesound.org/previews/392/392406_5486695-hq.mp3",
+        "url": "https://freesound.org/people/AlanCat/sounds/392406/",
+        "licence": "CC0",
+        "dur": 30.3,
+        "downloads": 218,
+        "note": "\"bird alarm call\"",
+        "snr": 22
+      },
+      {
+        "id": "812026",
+        "user": "qubodup",
+        "title": "Bird Freaking Out",
+        "preview": "https://cdn.freesound.org/previews/812/812026_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/812026/",
+        "licence": "CC0",
+        "dur": 1.8,
+        "downloads": 102,
+        "note": "\"bird alarm call\"",
+        "snr": 25
+      },
+      {
+        "id": "737204",
+        "user": "Sadiquecat",
+        "title": "Black bird 1",
+        "preview": "https://cdn.freesound.org/previews/737/737204_5287430-hq.mp3",
+        "url": "https://freesound.org/people/Sadiquecat/sounds/737204/",
+        "licence": "CC0",
+        "dur": 16.2,
+        "downloads": 81,
+        "note": "\"bird alarm call\""
+      },
+      {
+        "id": "572736",
+        "user": "TRP",
+        "title": "Northern Mockingbird alarm calls 6am Runaway Hill mono B BAHAMAS 180520.mp3",
+        "preview": "https://cdn.freesound.org/previews/572/572736_97550-hq.mp3",
+        "url": "https://freesound.org/people/TRP/sounds/572736/",
+        "licence": "CC0",
+        "dur": 27.3,
+        "downloads": 53,
+        "note": "\"bird alarm call\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "316921",
+        "n": 1
+      },
+      {
+        "id": "316920",
+        "n": 1
+      },
+      {
+        "id": "812026",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "songbird-alarm-1.mp3",
+        "id": "316921",
+        "title": "Chicken Alarm Call full with Occasional bird sound",
+        "user": "Rudmer_Rotteveel",
+        "url": "https://freesound.org/people/Rudmer_Rotteveel/sounds/316921/",
+        "licence": "CC0",
+        "cut": [
+          0.485,
+          0.9
+        ]
+      },
+      {
+        "file": "songbird-alarm-2.mp3",
+        "id": "316920",
+        "title": "Chicken Single Alarm Call",
+        "user": "Rudmer_Rotteveel",
+        "url": "https://freesound.org/people/Rudmer_Rotteveel/sounds/316920/",
+        "licence": "CC0",
+        "cut": [
+          0.005,
+          0.89
+        ]
+      },
+      {
+        "file": "songbird-alarm-3.mp3",
+        "id": "812026",
+        "title": "Bird Freaking Out",
+        "user": "qubodup",
+        "url": "https://freesound.org/people/qubodup/sounds/812026/",
+        "licence": "CC0",
+        "cut": [
+          0,
+          1.41
+        ]
+      }
+    ]
+  },
+  "duck-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "326543",
+        "user": "sqeeeek",
+        "title": "WetFootsteps.wav",
+        "preview": "https://cdn.freesound.org/previews/326/326543_4277312-hq.mp3",
+        "url": "https://freesound.org/people/sqeeeek/sounds/326543/",
+        "licence": "CC0",
+        "dur": 4.9,
+        "downloads": 6101,
+        "note": "\"duck quack\"",
+        "snr": 34
+      },
+      {
+        "id": "242664",
+        "user": "Reitanna",
+        "title": "quack.wav",
+        "preview": "https://cdn.freesound.org/previews/242/242664_950925-hq.mp3",
+        "url": "https://freesound.org/people/Reitanna/sounds/242664/",
+        "licence": "CC0",
+        "dur": 0.6,
+        "downloads": 4779,
+        "note": "\"duck quack\"",
+        "snr": 40
+      },
+      {
+        "id": "607226",
+        "user": "D4XX",
+        "title": "Ducks",
+        "preview": "https://cdn.freesound.org/previews/607/607226_887696-hq.mp3",
+        "url": "https://freesound.org/people/D4XX/sounds/607226/",
+        "licence": "CC0",
+        "dur": 3.2,
+        "downloads": 4498,
+        "note": "\"duck quack\"",
+        "snr": 40
+      },
+      {
+        "id": "418509",
+        "user": "Mikes-MultiMedia",
+        "title": "single quack from a duck",
+        "preview": "https://cdn.freesound.org/previews/418/418509_5632532-hq.mp3",
+        "url": "https://freesound.org/people/Mikes-MultiMedia/sounds/418509/",
+        "licence": "CC0",
+        "dur": 0.8,
+        "downloads": 3689,
+        "note": "\"duck quack\"",
+        "snr": 54
+      },
+      {
+        "id": "515408",
+        "user": "Tabby+Gus.",
+        "title": "Duck Quack - Sound Effect (HD).mp3",
+        "preview": "https://cdn.freesound.org/previews/515/515408_10319640-hq.mp3",
+        "url": "https://freesound.org/people/Tabby+Gus./sounds/515408/",
+        "licence": "CC0",
+        "dur": 3.1,
+        "downloads": 3083,
+        "note": "\"duck quack\"",
+        "snr": 114
+      },
+      {
+        "id": "244329",
+        "user": "squashy555",
+        "title": "ducks1.wav",
+        "preview": "https://cdn.freesound.org/previews/244/244329_1149179-hq.mp3",
+        "url": "https://freesound.org/people/squashy555/sounds/244329/",
+        "licence": "CC0",
+        "dur": 26.1,
+        "downloads": 2943,
+        "note": "\"duck quack\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "418509",
+        "n": 1
+      },
+      {
+        "id": "242664",
+        "n": 1
+      },
+      {
+        "id": "607226",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "duck-call-1.mp3",
+        "id": "418509",
+        "title": "single quack from a duck",
+        "user": "Mikes-MultiMedia",
+        "url": "https://freesound.org/people/Mikes-MultiMedia/sounds/418509/",
+        "licence": "CC0",
+        "cut": [
+          0,
+          0.19
+        ]
+      },
+      {
+        "file": "duck-call-2.mp3",
+        "id": "242664",
+        "title": "quack.wav",
+        "user": "Reitanna",
+        "url": "https://freesound.org/people/Reitanna/sounds/242664/",
+        "licence": "CC0",
+        "cut": [
+          0.005,
+          0.46
+        ]
+      },
+      {
+        "file": "duck-call-3.mp3",
+        "id": "607226",
+        "title": "Ducks",
+        "user": "D4XX",
+        "url": "https://freesound.org/people/D4XX/sounds/607226/",
+        "licence": "CC0",
+        "cut": [
+          0,
+          0.18
+        ]
+      }
+    ]
+  },
+  "duck-alarm": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "456770",
+        "user": "WavJunction.com",
+        "title": "Mallard Duck Quack Flying Away.wav",
+        "preview": "https://cdn.freesound.org/previews/456/456770_9514571-hq.mp3",
+        "url": "https://freesound.org/people/WavJunction.com/sounds/456770/",
+        "licence": "CC0",
+        "dur": 25.9,
+        "downloads": 1974,
+        "note": "\"duck quacking flying\"",
+        "snr": 51
+      },
+      {
+        "id": "479608",
+        "user": "craigsmith",
+        "title": "R30-32-Ducks Quack on Pond.wav",
+        "preview": "https://cdn.freesound.org/previews/479/479608_2524442-hq.mp3",
+        "url": "https://freesound.org/people/craigsmith/sounds/479608/",
+        "licence": "CC0",
+        "dur": 15.7,
+        "downloads": 156,
+        "note": "\"duck quacking flying\"",
+        "snr": 26
+      },
+      {
+        "id": "392406",
+        "user": "AlanCat",
+        "title": "WoodDucks1a.wav",
+        "preview": "https://cdn.freesound.org/previews/392/392406_5486695-hq.mp3",
+        "url": "https://freesound.org/people/AlanCat/sounds/392406/",
+        "licence": "CC0",
+        "dur": 30.3,
+        "downloads": 218,
+        "note": "\"duck alarm\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "456770",
+        "n": 1
+      },
+      {
+        "id": "479608",
+        "n": 1
+      },
+      {
+        "id": "392406",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "duck-alarm-1.mp3",
+        "id": "456770",
+        "title": "Mallard Duck Quack Flying Away.wav",
+        "user": "WavJunction.com",
+        "url": "https://freesound.org/people/WavJunction.com/sounds/456770/",
+        "licence": "CC0",
+        "cut": [
+          6.835,
+          7.18
+        ]
+      },
+      {
+        "file": "duck-alarm-2.mp3",
+        "id": "479608",
+        "title": "R30-32-Ducks Quack on Pond.wav",
+        "user": "craigsmith",
+        "url": "https://freesound.org/people/craigsmith/sounds/479608/",
+        "licence": "CC0",
+        "cut": [
+          0.635,
+          3.16
+        ]
+      },
+      {
+        "file": "duck-alarm-3.mp3",
+        "id": "392406",
+        "title": "WoodDucks1a.wav",
+        "user": "AlanCat",
+        "url": "https://freesound.org/people/AlanCat/sounds/392406/",
+        "licence": "CC0",
+        "cut": [
+          4.935,
+          5.09
+        ]
+      }
+    ]
+  },
+  "goose-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "515408",
+        "user": "Tabby+Gus.",
+        "title": "Duck Quack - Sound Effect (HD).mp3",
+        "preview": "https://cdn.freesound.org/previews/515/515408_10319640-hq.mp3",
+        "url": "https://freesound.org/people/Tabby+Gus./sounds/515408/",
+        "licence": "CC0",
+        "dur": 3.1,
+        "downloads": 3083,
+        "note": "\"goose honk\""
+      },
+      {
+        "id": "164484",
+        "user": "deleted_user_2104797",
+        "title": "Geese.wav",
+        "preview": "https://cdn.freesound.org/previews/164/164484_2104797-hq.mp3",
+        "url": "https://freesound.org/people/deleted_user_2104797/sounds/164484/",
+        "licence": "CC0",
+        "dur": 37.7,
+        "downloads": 1833,
+        "note": "\"goose honk\"",
+        "snr": 79
+      },
+      {
+        "id": "425488",
+        "user": "EpicWizard",
+        "title": "Geese Fly Overhead - Sweden",
+        "preview": "https://cdn.freesound.org/previews/425/425488_2291325-hq.mp3",
+        "url": "https://freesound.org/people/EpicWizard/sounds/425488/",
+        "licence": "CC0",
+        "dur": 28.5,
+        "downloads": 1448,
+        "note": "\"goose honk\"",
+        "snr": 29
+      },
+      {
+        "id": "160686",
+        "user": "antique98",
+        "title": "A squeaking goose",
+        "preview": "https://cdn.freesound.org/previews/160/160686_2369092-hq.mp3",
+        "url": "https://freesound.org/people/antique98/sounds/160686/",
+        "licence": "CC0",
+        "dur": 4,
+        "downloads": 891,
+        "note": "\"goose honk\"",
+        "snr": 34
+      },
+      {
+        "id": "510945",
+        "user": "SpaceJoe",
+        "title": "Water Birds - 5.wav",
+        "preview": "https://cdn.freesound.org/previews/510/510945_6150892-hq.mp3",
+        "url": "https://freesound.org/people/SpaceJoe/sounds/510945/",
+        "licence": "CC0",
+        "dur": 3,
+        "downloads": 643,
+        "note": "\"goose honk\""
+      },
+      {
+        "id": "805297",
+        "user": "jahjahjahjah",
+        "title": "goose honk",
+        "preview": "https://cdn.freesound.org/previews/805/805297_17326459-hq.mp3",
+        "url": "https://freesound.org/people/jahjahjahjah/sounds/805297/",
+        "licence": "CC0",
+        "dur": 0.7,
+        "downloads": 608,
+        "note": "\"goose honk\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "164484",
+        "n": 1
+      },
+      {
+        "id": "160686",
+        "n": 1
+      },
+      {
+        "id": "425488",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "goose-call-1.mp3",
+        "id": "164484",
+        "title": "Geese.wav",
+        "user": "deleted_user_2104797",
+        "url": "https://freesound.org/people/deleted_user_2104797/sounds/164484/",
+        "licence": "CC0",
+        "cut": [
+          0,
+          0.37
+        ]
+      },
+      {
+        "file": "goose-call-2.mp3",
+        "id": "160686",
+        "title": "A squeaking goose",
+        "user": "antique98",
+        "url": "https://freesound.org/people/antique98/sounds/160686/",
+        "licence": "CC0",
+        "cut": [
+          2.845,
+          3.96
+        ]
+      },
+      {
+        "file": "goose-call-3.mp3",
+        "id": "425488",
+        "title": "Geese Fly Overhead - Sweden",
+        "user": "EpicWizard",
+        "url": "https://freesound.org/people/EpicWizard/sounds/425488/",
+        "licence": "CC0",
+        "cut": [
+          0.045,
+          2.57
+        ]
+      }
+    ]
+  },
+  "goose-angry": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "740195",
+        "user": "el_boss",
+        "title": "Goose Hiss",
+        "preview": "https://cdn.freesound.org/previews/740/740195_9129912-hq.mp3",
+        "url": "https://freesound.org/people/el_boss/sounds/740195/",
+        "licence": "CC0",
+        "dur": 3.2,
+        "downloads": 130,
+        "note": "\"goose hiss\"",
+        "snr": 21
+      },
+      {
+        "id": "581156",
+        "user": "ChunaawChika09",
+        "title": "Goose Hissing At Me.aiff",
+        "preview": "https://cdn.freesound.org/previews/581/581156_13080218-hq.mp3",
+        "url": "https://freesound.org/people/ChunaawChika09/sounds/581156/",
+        "licence": "CC0",
+        "dur": 17.9,
+        "downloads": 60,
+        "note": "\"goose hiss\"",
+        "snr": 53
+      },
+      {
+        "id": "844558",
+        "user": "TheKingOfGeeks360",
+        "title": "Waterfowl - White Chinese Goose; Hiss",
+        "preview": "https://cdn.freesound.org/previews/844/844558_15895934-hq.mp3",
+        "url": "https://freesound.org/people/TheKingOfGeeks360/sounds/844558/",
+        "licence": "CC0",
+        "dur": 1.5,
+        "downloads": 34,
+        "note": "\"goose hiss\"",
+        "snr": 9
+      },
+      {
+        "id": "384520",
+        "user": "UrbanSoundBcn",
+        "title": "oca_enfadada_vr.wav",
+        "preview": "https://cdn.freesound.org/previews/384/384520_7181592-hq.mp3",
+        "url": "https://freesound.org/people/UrbanSoundBcn/sounds/384520/",
+        "licence": "CC0",
+        "dur": 10.7,
+        "downloads": 303,
+        "note": "\"goose angry\"",
+        "snr": 23
+      },
+      {
+        "id": "581162",
+        "user": "ChunaawChika09",
+        "title": "My Goose Screams Like A Pig.aiff",
+        "preview": "https://cdn.freesound.org/previews/581/581162_13080218-hq.mp3",
+        "url": "https://freesound.org/people/ChunaawChika09/sounds/581162/",
+        "licence": "CC0",
+        "dur": 2,
+        "downloads": 73,
+        "note": "\"goose angry\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "581156",
+        "n": 1
+      },
+      {
+        "id": "384520",
+        "n": 1
+      },
+      {
+        "id": "740195",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "goose-angry-1.mp3",
+        "id": "581156",
+        "title": "Goose Hissing At Me.aiff",
+        "user": "ChunaawChika09",
+        "url": "https://freesound.org/people/ChunaawChika09/sounds/581156/",
+        "licence": "CC0",
+        "cut": [
+          0.345,
+          1.63
+        ]
+      },
+      {
+        "file": "goose-angry-2.mp3",
+        "id": "384520",
+        "title": "oca_enfadada_vr.wav",
+        "user": "UrbanSoundBcn",
+        "url": "https://freesound.org/people/UrbanSoundBcn/sounds/384520/",
+        "licence": "CC0",
+        "cut": [
+          0,
+          1.25
+        ]
+      },
+      {
+        "file": "goose-angry-3.mp3",
+        "id": "740195",
+        "title": "Goose Hiss",
+        "user": "el_boss",
+        "url": "https://freesound.org/people/el_boss/sounds/740195/",
+        "licence": "CC0",
+        "cut": [
+          0.165,
+          1.36
+        ]
+      }
+    ]
+  },
+  "owl-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "465697",
+        "user": "Breviceps",
+        "title": "Owl Hoot",
+        "preview": "https://cdn.freesound.org/previews/465/465697_9159316-hq.mp3",
+        "url": "https://freesound.org/people/Breviceps/sounds/465697/",
+        "licence": "CC0",
+        "dur": 4.4,
+        "downloads": 15575,
+        "note": "\"owl hoot\"",
+        "snr": 30
+      },
+      {
+        "id": "398734",
+        "user": "Anthousai",
+        "title": "owl.wav",
+        "preview": "https://cdn.freesound.org/previews/398/398734_5923045-hq.mp3",
+        "url": "https://freesound.org/people/Anthousai/sounds/398734/",
+        "licence": "CC0",
+        "dur": 4,
+        "downloads": 10294,
+        "note": "\"owl hoot\"",
+        "snr": 31
+      },
+      {
+        "id": "353173",
+        "user": "ivolipa",
+        "title": "screech_owl.wav",
+        "preview": "https://cdn.freesound.org/previews/353/353173_3474310-hq.mp3",
+        "url": "https://freesound.org/people/ivolipa/sounds/353173/",
+        "licence": "CC0",
+        "dur": 34.1,
+        "downloads": 4963,
+        "note": "\"owl hoot\"",
+        "snr": 25
+      },
+      {
+        "id": "558396",
+        "user": "Gerent",
+        "title": "owl_hooting_000102_0145S3 002-070 000-002 068-074.wav",
+        "preview": "https://cdn.freesound.org/previews/558/558396_556505-hq.mp3",
+        "url": "https://freesound.org/people/Gerent/sounds/558396/",
+        "licence": "CC0",
+        "dur": 3.5,
+        "downloads": 2052,
+        "note": "\"owl hoot\"",
+        "snr": 40
+      },
+      {
+        "id": "558397",
+        "user": "Gerent",
+        "title": "owl_hooting_000102_0145S3 002-070 000-002 037-044.wav",
+        "preview": "https://cdn.freesound.org/previews/558/558397_556505-hq.mp3",
+        "url": "https://freesound.org/people/Gerent/sounds/558397/",
+        "licence": "CC0",
+        "dur": 4.4,
+        "downloads": 1548,
+        "note": "\"owl hoot\""
+      },
+      {
+        "id": "159727",
+        "user": "gfrog",
+        "title": "Crickets and Owl",
+        "preview": "https://cdn.freesound.org/previews/159/159727_401105-hq.mp3",
+        "url": "https://freesound.org/people/gfrog/sounds/159727/",
+        "licence": "CC0",
+        "dur": 9.7,
+        "downloads": 1403,
+        "note": "\"owl hoot\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "558396",
+        "n": 1
+      },
+      {
+        "id": "398734",
+        "n": 1
+      },
+      {
+        "id": "465697",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "owl-call-1.mp3",
+        "id": "558396",
+        "title": "owl_hooting_000102_0145S3 002-070 000-002 068-074.wav",
+        "user": "Gerent",
+        "url": "https://freesound.org/people/Gerent/sounds/558396/",
+        "licence": "CC0",
+        "cut": [
+          0.685,
+          0.87
+        ]
+      },
+      {
+        "file": "owl-call-2.mp3",
+        "id": "398734",
+        "title": "owl.wav",
+        "user": "Anthousai",
+        "url": "https://freesound.org/people/Anthousai/sounds/398734/",
+        "licence": "CC0",
+        "cut": [
+          1.105,
+          2.02
+        ]
+      },
+      {
+        "file": "owl-call-3.mp3",
+        "id": "465697",
+        "title": "Owl Hoot",
+        "user": "Breviceps",
+        "url": "https://freesound.org/people/Breviceps/sounds/465697/",
+        "licence": "CC0",
+        "cut": [
+          0.195,
+          1.32
+        ]
+      }
+    ]
+  },
+  "gull-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "353416",
+        "user": "squashy555",
+        "title": "Seagull on beach",
+        "preview": "https://cdn.freesound.org/previews/353/353416_1149179-hq.mp3",
+        "url": "https://freesound.org/people/squashy555/sounds/353416/",
+        "licence": "CC0",
+        "dur": 33.6,
+        "downloads": 77959,
+        "note": "\"seagull\"",
+        "snr": 25
+      },
+      {
+        "id": "166703",
+        "user": "Snapper4298",
+        "title": "sea gulls.wav",
+        "preview": "https://cdn.freesound.org/previews/166/166703_33044-hq.mp3",
+        "url": "https://freesound.org/people/Snapper4298/sounds/166703/",
+        "licence": "CC0",
+        "dur": 7.3,
+        "downloads": 13806,
+        "note": "\"seagull\"",
+        "snr": 23
+      },
+      {
+        "id": "166704",
+        "user": "Snapper4298",
+        "title": "seagull echo 140bpm.wav",
+        "preview": "https://cdn.freesound.org/previews/166/166704_33044-hq.mp3",
+        "url": "https://freesound.org/people/Snapper4298/sounds/166704/",
+        "licence": "CC0",
+        "dur": 22.4,
+        "downloads": 9733,
+        "note": "\"seagull\"",
+        "snr": 98
+      },
+      {
+        "id": "510917",
+        "user": "Lydmakeren",
+        "title": "Seagulls_short.wav",
+        "preview": "https://cdn.freesound.org/previews/510/510917_11157357-hq.mp3",
+        "url": "https://freesound.org/people/Lydmakeren/sounds/510917/",
+        "licence": "CC0",
+        "dur": 14.5,
+        "downloads": 9221,
+        "note": "\"seagull\"",
+        "snr": 29
+      },
+      {
+        "id": "263786",
+        "user": "steaq",
+        "title": "Seagull single call",
+        "preview": "https://cdn.freesound.org/previews/263/263786_1474204-hq.mp3",
+        "url": "https://freesound.org/people/steaq/sounds/263786/",
+        "licence": "CC0",
+        "dur": 0.4,
+        "downloads": 6464,
+        "note": "\"seagull\""
+      },
+      {
+        "id": "166707",
+        "user": "Snapper4298",
+        "title": "seagull 2.wav",
+        "preview": "https://cdn.freesound.org/previews/166/166707_33044-hq.mp3",
+        "url": "https://freesound.org/people/Snapper4298/sounds/166707/",
+        "licence": "CC0",
+        "dur": 6.2,
+        "downloads": 6378,
+        "note": "\"seagull\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "166704",
+        "n": 1
+      },
+      {
+        "id": "510917",
+        "n": 1
+      },
+      {
+        "id": "353416",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "gull-call-1.mp3",
+        "id": "166704",
+        "title": "seagull echo 140bpm.wav",
+        "user": "Snapper4298",
+        "url": "https://freesound.org/people/Snapper4298/sounds/166704/",
+        "licence": "CC0",
+        "cut": [
+          0.655,
+          3.68
+        ]
+      },
+      {
+        "file": "gull-call-2.mp3",
+        "id": "510917",
+        "title": "Seagulls_short.wav",
+        "user": "Lydmakeren",
+        "url": "https://freesound.org/people/Lydmakeren/sounds/510917/",
+        "licence": "CC0",
+        "cut": [
+          2.685,
+          5.71
+        ]
+      },
+      {
+        "file": "gull-call-3.mp3",
+        "id": "353416",
+        "title": "Seagull on beach",
+        "user": "squashy555",
+        "url": "https://freesound.org/people/squashy555/sounds/353416/",
+        "licence": "CC0",
+        "cut": [
+          0.055,
+          0.18
+        ]
+      }
+    ]
+  },
+  "pigeon-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "319512",
+        "user": "squashy555",
+        "title": "pigeon.wav",
+        "preview": "https://cdn.freesound.org/previews/319/319512_1149179-hq.mp3",
+        "url": "https://freesound.org/people/squashy555/sounds/319512/",
+        "licence": "CC0",
+        "dur": 12.8,
+        "downloads": 7509,
+        "note": "\"pigeon coo\"",
+        "snr": 50
+      },
+      {
+        "id": "154865",
+        "user": "pawsound",
+        "title": "pidgeons cooing city park.wav",
+        "preview": "https://cdn.freesound.org/previews/154/154865_2592501-hq.mp3",
+        "url": "https://freesound.org/people/pawsound/sounds/154865/",
+        "licence": "CC0",
+        "dur": 25.2,
+        "downloads": 1050,
+        "note": "\"pigeon coo\"",
+        "snr": 13
+      },
+      {
+        "id": "735366",
+        "user": "haulaway",
+        "title": "Domestic Dove Coo",
+        "preview": "https://cdn.freesound.org/previews/735/735366_7228277-hq.mp3",
+        "url": "https://freesound.org/people/haulaway/sounds/735366/",
+        "licence": "CC0",
+        "dur": 13.8,
+        "downloads": 498,
+        "note": "\"pigeon coo\"",
+        "snr": 38
+      },
+      {
+        "id": "593598",
+        "user": "Rehanjo",
+        "title": "Dove.wav",
+        "preview": "https://cdn.freesound.org/previews/593/593598_12589944-hq.mp3",
+        "url": "https://freesound.org/people/Rehanjo/sounds/593598/",
+        "licence": "CC0",
+        "dur": 13.2,
+        "downloads": 470,
+        "note": "\"pigeon coo\"",
+        "snr": 51
+      },
+      {
+        "id": "795558",
+        "user": "Fsu2001",
+        "title": "Pigeon cooing",
+        "preview": "https://cdn.freesound.org/previews/795/795558_14886990-hq.mp3",
+        "url": "https://freesound.org/people/Fsu2001/sounds/795558/",
+        "licence": "CC0",
+        "dur": 21,
+        "downloads": 413,
+        "note": "\"pigeon coo\""
+      },
+      {
+        "id": "175217",
+        "user": "MinigunFiend",
+        "title": "creatures-pigeon.wav",
+        "preview": "https://cdn.freesound.org/previews/175/175217_197944-hq.mp3",
+        "url": "https://freesound.org/people/MinigunFiend/sounds/175217/",
+        "licence": "CC0",
+        "dur": 3.8,
+        "downloads": 392,
+        "note": "\"pigeon coo\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "593598",
+        "n": 1
+      },
+      {
+        "id": "319512",
+        "n": 1
+      },
+      {
+        "id": "735366",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "pigeon-call-1.mp3",
+        "id": "593598",
+        "title": "Dove.wav",
+        "user": "Rehanjo",
+        "url": "https://freesound.org/people/Rehanjo/sounds/593598/",
+        "licence": "CC0",
+        "cut": [
+          0.255,
+          0.71
+        ]
+      },
+      {
+        "file": "pigeon-call-2.mp3",
+        "id": "319512",
+        "title": "pigeon.wav",
+        "user": "squashy555",
+        "url": "https://freesound.org/people/squashy555/sounds/319512/",
+        "licence": "CC0",
+        "cut": [
+          0.645,
+          1.17
+        ]
+      },
+      {
+        "file": "pigeon-call-3.mp3",
+        "id": "735366",
+        "title": "Domestic Dove Coo",
+        "user": "haulaway",
+        "url": "https://freesound.org/people/haulaway/sounds/735366/",
+        "licence": "CC0",
+        "cut": [
+          0.985,
+          1.36
+        ]
+      }
+    ]
+  },
+  "bat-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "445958",
+        "user": "Breviceps",
+        "title": "Cartoon - Bat / Mouse Squeak",
+        "preview": "https://cdn.freesound.org/previews/445/445958_9159316-hq.mp3",
+        "url": "https://freesound.org/people/Breviceps/sounds/445958/",
+        "licence": "CC0",
+        "dur": 0.4,
+        "downloads": 7185,
+        "note": "\"bat squeak\"",
+        "snr": 17
+      },
+      {
+        "id": "455593",
+        "user": "coelhoigor",
+        "title": "Bat chirp (close-up)",
+        "preview": "https://cdn.freesound.org/previews/455/455593_2774962-hq.mp3",
+        "url": "https://freesound.org/people/coelhoigor/sounds/455593/",
+        "licence": "CC0",
+        "dur": 30,
+        "downloads": 819,
+        "note": "\"bat squeak\"",
+        "snr": 39
+      },
+      {
+        "id": "74385",
+        "user": "dland",
+        "title": "To Hell With Vinyl.wav",
+        "preview": "https://cdn.freesound.org/previews/74/74385_274531-hq.mp3",
+        "url": "https://freesound.org/people/dland/sounds/74385/",
+        "licence": "CC0",
+        "dur": 0.8,
+        "downloads": 15358,
+        "note": "\"bat\"",
+        "snr": 8
+      },
+      {
+        "id": "573047",
+        "user": "thecoolcookie17",
+        "title": "Bonk Sound effect",
+        "preview": "https://cdn.freesound.org/previews/573/573047_12946586-hq.mp3",
+        "url": "https://freesound.org/people/thecoolcookie17/sounds/573047/",
+        "licence": "CC0",
+        "dur": 2,
+        "downloads": 7608,
+        "note": "\"bat\"",
+        "snr": 110
+      },
+      {
+        "id": "111739",
+        "user": "thebondman",
+        "title": "indiana-jones-style-punch.wav",
+        "preview": "https://cdn.freesound.org/previews/111/111739_186748-hq.mp3",
+        "url": "https://freesound.org/people/thebondman/sounds/111739/",
+        "licence": "CC0",
+        "dur": 0.7,
+        "downloads": 7592,
+        "note": "\"bat\""
+      },
+      {
+        "id": "332056",
+        "user": "qubodup",
+        "title": "Fast Collision",
+        "preview": "https://cdn.freesound.org/previews/332/332056_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/332056/",
+        "licence": "CC0",
+        "dur": 0.3,
+        "downloads": 4849,
+        "note": "\"bat\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "573047",
+        "n": 1
+      },
+      {
+        "id": "455593",
+        "n": 1
+      },
+      {
+        "id": "445958",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "bat-call-1.mp3",
+        "id": "573047",
+        "title": "Bonk Sound effect",
+        "user": "thecoolcookie17",
+        "url": "https://freesound.org/people/thecoolcookie17/sounds/573047/",
+        "licence": "CC0",
+        "cut": [
+          0.455,
+          0.87
+        ]
+      },
+      {
+        "file": "bat-call-2.mp3",
+        "id": "455593",
+        "title": "Bat chirp (close-up)",
+        "user": "coelhoigor",
+        "url": "https://freesound.org/people/coelhoigor/sounds/455593/",
+        "licence": "CC0",
+        "cut": [
+          0.045,
+          1.57
+        ]
+      },
+      {
+        "file": "bat-call-3.mp3",
+        "id": "445958",
+        "title": "Cartoon - Bat / Mouse Squeak",
+        "user": "Breviceps",
+        "url": "https://freesound.org/people/Breviceps/sounds/445958/",
+        "licence": "CC0",
+        "cut": [
+          0,
+          0.27
+        ]
+      }
+    ]
+  },
+  "squirrel-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "195440",
+        "user": "Littlebrojay",
+        "title": "squirrel chatter w city.wav",
+        "preview": "https://cdn.freesound.org/previews/195/195440_3634316-hq.mp3",
+        "url": "https://freesound.org/people/Littlebrojay/sounds/195440/",
+        "licence": "CC0",
+        "dur": 16,
+        "downloads": 1132,
+        "note": "\"squirrel chatter\"",
+        "snr": 25
+      },
+      {
+        "id": "554043",
+        "user": "CGVega",
+        "title": "Chipmunk - rodent - rat - squirrel angry or chattering",
+        "preview": "https://cdn.freesound.org/previews/554/554043_8653810-hq.mp3",
+        "url": "https://freesound.org/people/CGVega/sounds/554043/",
+        "licence": "CC0",
+        "dur": 15.9,
+        "downloads": 624,
+        "note": "\"squirrel chatter\"",
+        "snr": 48
+      },
+      {
+        "id": "763377",
+        "user": "Mastersoundboy2005",
+        "title": "Chattering Alien Squirrel Sound Effect",
+        "preview": "https://cdn.freesound.org/previews/763/763377_13999124-hq.mp3",
+        "url": "https://freesound.org/people/Mastersoundboy2005/sounds/763377/",
+        "licence": "CC0",
+        "dur": 1,
+        "downloads": 91,
+        "note": "\"squirrel chatter\"",
+        "snr": 18
+      },
+      {
+        "id": "795975",
+        "user": "dollarstoredingus",
+        "title": "squirrelly",
+        "preview": "https://cdn.freesound.org/previews/795/795975_16962904-hq.mp3",
+        "url": "https://freesound.org/people/dollarstoredingus/sounds/795975/",
+        "licence": "CC0",
+        "dur": 2.8,
+        "downloads": 61,
+        "note": "\"squirrel chatter\"",
+        "snr": 30
+      },
+      {
+        "id": "852386",
+        "user": "TheKingOfGeeks360",
+        "title": "Rodents - Eastern Gray Squirrel; Chatter, Close Perspective",
+        "preview": "https://cdn.freesound.org/previews/852/852386_15895934-hq.mp3",
+        "url": "https://freesound.org/people/TheKingOfGeeks360/sounds/852386/",
+        "licence": "CC0",
+        "dur": 4.2,
+        "downloads": 24,
+        "note": "\"squirrel chatter\""
+      },
+      {
+        "id": "658429",
+        "user": "IENBA",
+        "title": "Animal Footsteps",
+        "preview": "https://cdn.freesound.org/previews/658/658429_9616576-hq.mp3",
+        "url": "https://freesound.org/people/IENBA/sounds/658429/",
+        "licence": "CC0",
+        "dur": 23.7,
+        "downloads": 6318,
+        "note": "\"squirrel\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "554043",
+        "n": 1
+      },
+      {
+        "id": "795975",
+        "n": 1
+      },
+      {
+        "id": "195440",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "squirrel-call-1.mp3",
+        "id": "554043",
+        "title": "Chipmunk - rodent - rat - squirrel angry or chattering",
+        "user": "CGVega",
+        "url": "https://freesound.org/people/CGVega/sounds/554043/",
+        "licence": "CC0",
+        "cut": [
+          1.465,
+          2.05
+        ]
+      },
+      {
+        "file": "squirrel-call-2.mp3",
+        "id": "795975",
+        "title": "squirrelly",
+        "user": "dollarstoredingus",
+        "url": "https://freesound.org/people/dollarstoredingus/sounds/795975/",
+        "licence": "CC0",
+        "cut": [
+          0.375,
+          2.83
+        ]
+      },
+      {
+        "file": "squirrel-call-3.mp3",
+        "id": "195440",
+        "title": "squirrel chatter w city.wav",
+        "user": "Littlebrojay",
+        "url": "https://freesound.org/people/Littlebrojay/sounds/195440/",
+        "licence": "CC0",
+        "cut": [
+          0.505,
+          2.33
+        ]
+      }
+    ]
+  },
+  "squirrel-alarm": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "744596",
+        "user": "genghisattenborough",
+        "title": "Squirrel, Grey alarm calls",
+        "preview": "https://cdn.freesound.org/previews/744/744596_205108-hq.mp3",
+        "url": "https://freesound.org/people/genghisattenborough/sounds/744596/",
+        "licence": "CC0",
+        "dur": 15.5,
+        "downloads": 74,
+        "note": "\"squirrel alarm\"",
+        "snr": 34
+      },
+      {
+        "id": "188438",
+        "user": "scottemoil",
+        "title": "Squirrel Impression",
+        "preview": "https://cdn.freesound.org/previews/188/188438_3399958-hq.mp3",
+        "url": "https://freesound.org/people/scottemoil/sounds/188438/",
+        "licence": "CC0",
+        "dur": 14,
+        "downloads": 1323,
+        "note": "\"squirrel angry\"",
+        "snr": 64
+      },
+      {
+        "id": "554043",
+        "user": "CGVega",
+        "title": "Chipmunk - rodent - rat - squirrel angry or chattering",
+        "preview": "https://cdn.freesound.org/previews/554/554043_8653810-hq.mp3",
+        "url": "https://freesound.org/people/CGVega/sounds/554043/",
+        "licence": "CC0",
+        "dur": 15.9,
+        "downloads": 624,
+        "note": "\"squirrel angry\""
+      },
+      {
+        "id": "744792",
+        "user": "qubodup",
+        "title": "Small Evil Creature Attack Shout 1",
+        "preview": "https://cdn.freesound.org/previews/744/744792_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/744792/",
+        "licence": "CC0",
+        "dur": 0.5,
+        "downloads": 308,
+        "note": "\"squirrel angry\"",
+        "snr": 44
+      },
+      {
+        "id": "744795",
+        "user": "qubodup",
+        "title": "Small Evil Creature Warning Shout",
+        "preview": "https://cdn.freesound.org/previews/744/744795_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/744795/",
+        "licence": "CC0",
+        "dur": 1,
+        "downloads": 263,
+        "note": "\"squirrel angry\""
+      },
+      {
+        "id": "744794",
+        "user": "qubodup",
+        "title": "Small Evil Creature Attack Shout 3",
+        "preview": "https://cdn.freesound.org/previews/744/744794_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/744794/",
+        "licence": "CC0",
+        "dur": 0.4,
+        "downloads": 252,
+        "note": "\"squirrel angry\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "188438",
+        "n": 1
+      },
+      {
+        "id": "744792",
+        "n": 1
+      },
+      {
+        "id": "744596",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "squirrel-alarm-1.mp3",
+        "id": "188438",
+        "title": "Squirrel Impression",
+        "user": "scottemoil",
+        "url": "https://freesound.org/people/scottemoil/sounds/188438/",
+        "licence": "CC0",
+        "cut": [
+          0.605,
+          1.28
+        ]
+      },
+      {
+        "file": "squirrel-alarm-2.mp3",
+        "id": "744792",
+        "title": "Small Evil Creature Attack Shout 1",
+        "user": "qubodup",
+        "url": "https://freesound.org/people/qubodup/sounds/744792/",
+        "licence": "CC0",
+        "cut": [
+          0,
+          0.29
+        ]
+      },
+      {
+        "file": "squirrel-alarm-3.mp3",
+        "id": "744596",
+        "title": "Squirrel, Grey alarm calls",
+        "user": "genghisattenborough",
+        "url": "https://freesound.org/people/genghisattenborough/sounds/744596/",
+        "licence": "CC0",
+        "cut": [
+          0.355,
+          1.39
+        ]
+      }
+    ]
+  },
+  "hare-hurt": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "181188",
+        "user": "Ears68",
+        "title": "V-8s-HareRuns-andPackHoundsChase.wav",
+        "preview": "https://cdn.freesound.org/previews/181/181188_2214631-hq.mp3",
+        "url": "https://freesound.org/people/Ears68/sounds/181188/",
+        "licence": "CC0",
+        "dur": 37.3,
+        "downloads": 838,
+        "note": "\"hare scream\"",
+        "snr": 21
+      },
+      {
+        "id": "482732",
+        "user": "davi-sh",
+        "title": "A rabbit is eating a cucumber",
+        "preview": "https://cdn.freesound.org/previews/482/482732_1324102-hq.mp3",
+        "url": "https://freesound.org/people/davi-sh/sounds/482732/",
+        "licence": "CC0",
+        "dur": 38.2,
+        "downloads": 1636,
+        "note": "\"rabbit\"",
+        "snr": 39
+      },
+      {
+        "id": "205576",
+        "user": "lucyve",
+        "title": "bunny sneeze",
+        "preview": "https://cdn.freesound.org/previews/205/205576_769765-hq.mp3",
+        "url": "https://freesound.org/people/lucyve/sounds/205576/",
+        "licence": "CC0",
+        "dur": 1.2,
+        "downloads": 1615,
+        "note": "\"rabbit\"",
+        "snr": 36
+      },
+      {
+        "id": "386007",
+        "user": "kessir",
+        "title": "Rabbit Thump on Soil",
+        "preview": "https://cdn.freesound.org/previews/386/386007_4521595-hq.mp3",
+        "url": "https://freesound.org/people/kessir/sounds/386007/",
+        "licence": "CC0",
+        "dur": 6.1,
+        "downloads": 1442,
+        "note": "\"rabbit\"",
+        "snr": 41
+      },
+      {
+        "id": "575759",
+        "user": "code_box",
+        "title": "Rabbit Bop",
+        "preview": "https://cdn.freesound.org/previews/575/575759_10962806-hq.mp3",
+        "url": "https://freesound.org/people/code_box/sounds/575759/",
+        "licence": "CC0",
+        "dur": 38.4,
+        "downloads": 1334,
+        "note": "\"rabbit\""
+      },
+      {
+        "id": "376187",
+        "user": "BeeProductive",
+        "title": "Rabbit drinking.wav",
+        "preview": "https://cdn.freesound.org/previews/376/376187_4298084-hq.mp3",
+        "url": "https://freesound.org/people/BeeProductive/sounds/376187/",
+        "licence": "CC0",
+        "dur": 37.7,
+        "downloads": 729,
+        "note": "\"rabbit\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "386007",
+        "n": 1
+      },
+      {
+        "id": "482732",
+        "n": 1
+      },
+      {
+        "id": "205576",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "hare-hurt-1.mp3",
+        "id": "482732",
+        "title": "A rabbit is eating a cucumber",
+        "user": "davi-sh",
+        "url": "https://freesound.org/people/davi-sh/sounds/482732/",
+        "licence": "CC0",
+        "cut": [
+          0.025,
+          0.48
+        ]
+      },
+      {
+        "file": "hare-hurt-2.mp3",
+        "id": "205576",
+        "title": "bunny sneeze",
+        "user": "lucyve",
+        "url": "https://freesound.org/people/lucyve/sounds/205576/",
+        "licence": "CC0",
+        "cut": [
+          0.525,
+          0.84
+        ]
+      }
+    ]
+  },
+  "fox-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "420451",
+        "user": "Mrthenoronha",
+        "title": "Dogs Barking.wav",
+        "preview": "https://cdn.freesound.org/previews/420/420451_2402876-hq.mp3",
+        "url": "https://freesound.org/people/Mrthenoronha/sounds/420451/",
+        "licence": "CC0",
+        "dur": 13,
+        "downloads": 5259,
+        "note": "\"fox bark\"",
+        "snr": 43
+      },
+      {
+        "id": "173208",
+        "user": "Setzilla",
+        "title": "foxBark2.wav",
+        "preview": "https://cdn.freesound.org/previews/173/173208_3230528-hq.mp3",
+        "url": "https://freesound.org/people/Setzilla/sounds/173208/",
+        "licence": "CC0",
+        "dur": 2.2,
+        "downloads": 2251,
+        "note": "\"fox bark\"",
+        "snr": 18
+      },
+      {
+        "id": "420447",
+        "user": "Mrthenoronha",
+        "title": "Barking 4.wav",
+        "preview": "https://cdn.freesound.org/previews/420/420447_2402876-hq.mp3",
+        "url": "https://freesound.org/people/Mrthenoronha/sounds/420447/",
+        "licence": "CC0",
+        "dur": 0.6,
+        "downloads": 1553,
+        "note": "\"fox bark\"",
+        "snr": 91
+      },
+      {
+        "id": "397655",
+        "user": "gadzooks",
+        "title": "Fox Barking",
+        "preview": "https://cdn.freesound.org/previews/397/397655_44431-hq.mp3",
+        "url": "https://freesound.org/people/gadzooks/sounds/397655/",
+        "licence": "CC0",
+        "dur": 32,
+        "downloads": 1456,
+        "note": "\"fox bark\"",
+        "snr": 30
+      },
+      {
+        "id": "420450",
+        "user": "Mrthenoronha",
+        "title": "Barking 1.wav",
+        "preview": "https://cdn.freesound.org/previews/420/420450_2402876-hq.mp3",
+        "url": "https://freesound.org/people/Mrthenoronha/sounds/420450/",
+        "licence": "CC0",
+        "dur": 0.8,
+        "downloads": 1365,
+        "note": "\"fox bark\""
+      },
+      {
+        "id": "420449",
+        "user": "Mrthenoronha",
+        "title": "Barking 2.wav",
+        "preview": "https://cdn.freesound.org/previews/420/420449_2402876-hq.mp3",
+        "url": "https://freesound.org/people/Mrthenoronha/sounds/420449/",
+        "licence": "CC0",
+        "dur": 0.8,
+        "downloads": 1334,
+        "note": "\"fox bark\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "420447",
+        "n": 1
+      },
+      {
+        "id": "420451",
+        "n": 1
+      },
+      {
+        "id": "397655",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "fox-call-1.mp3",
+        "id": "420447",
+        "title": "Barking 4.wav",
+        "user": "Mrthenoronha",
+        "url": "https://freesound.org/people/Mrthenoronha/sounds/420447/",
+        "licence": "CC0",
+        "cut": [
+          0,
+          0.26
+        ]
+      },
+      {
+        "file": "fox-call-2.mp3",
+        "id": "420451",
+        "title": "Dogs Barking.wav",
+        "user": "Mrthenoronha",
+        "url": "https://freesound.org/people/Mrthenoronha/sounds/420451/",
+        "licence": "CC0",
+        "cut": [
+          0.295,
+          0.6
+        ]
+      },
+      {
+        "file": "fox-call-3.mp3",
+        "id": "397655",
+        "title": "Fox Barking",
+        "user": "gadzooks",
+        "url": "https://freesound.org/people/gadzooks/sounds/397655/",
+        "licence": "CC0",
+        "cut": [
+          5.685,
+          6.55
+        ]
+      }
+    ]
+  },
+  "fox-alarm": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "634005",
+        "user": "Soundburst",
+        "title": "Fox Screams",
+        "preview": "https://cdn.freesound.org/previews/634/634005_13454867-hq.mp3",
+        "url": "https://freesound.org/people/Soundburst/sounds/634005/",
+        "licence": "CC0",
+        "dur": 33.5,
+        "downloads": 1108,
+        "note": "\"fox scream\"",
+        "snr": 70
+      },
+      {
+        "id": "554308",
+        "user": "nielstii",
+        "title": "Fox scream in the forest",
+        "preview": "https://cdn.freesound.org/previews/554/554308_6290213-hq.mp3",
+        "url": "https://freesound.org/people/nielstii/sounds/554308/",
+        "licence": "CC0",
+        "dur": 18.8,
+        "downloads": 999,
+        "note": "\"fox scream\"",
+        "snr": 22
+      },
+      {
+        "id": "869011",
+        "user": "CAT-FOX_ALEX",
+        "title": "Minion Scream",
+        "preview": "https://cdn.freesound.org/previews/869/869011_17675683-hq.mp3",
+        "url": "https://freesound.org/people/CAT-FOX_ALEX/sounds/869011/",
+        "licence": "CC0",
+        "dur": 1.3,
+        "downloads": 220,
+        "note": "\"fox scream\"",
+        "snr": 5
+      },
+      {
+        "id": "676376",
+        "user": "drewtait",
+        "title": "Fox Scream Mating Call",
+        "preview": "https://cdn.freesound.org/previews/676/676376_14682229-hq.mp3",
+        "url": "https://freesound.org/people/drewtait/sounds/676376/",
+        "licence": "CC0",
+        "dur": 21.1,
+        "downloads": 127,
+        "note": "\"fox scream\"",
+        "snr": 11
+      },
+      {
+        "id": "479928",
+        "user": "Lapis_Fox",
+        "title": "buWEEEEEEEEH.wav",
+        "preview": "https://cdn.freesound.org/previews/479/479928_8168516-hq.mp3",
+        "url": "https://freesound.org/people/Lapis_Fox/sounds/479928/",
+        "licence": "CC0",
+        "dur": 0.6,
+        "downloads": 82,
+        "note": "\"fox scream\""
+      },
+      {
+        "id": "867907",
+        "user": "CAT-FOX_ALEX",
+        "title": "EDM Yell_Woo Dry",
+        "preview": "https://cdn.freesound.org/previews/867/867907_17675683-hq.mp3",
+        "url": "https://freesound.org/people/CAT-FOX_ALEX/sounds/867907/",
+        "licence": "CC0",
+        "dur": 0.4,
+        "downloads": 25,
+        "note": "\"fox scream\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "634005",
+        "n": 1
+      },
+      {
+        "id": "554308",
+        "n": 1
+      },
+      {
+        "id": "676376",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "fox-alarm-1.mp3",
+        "id": "634005",
+        "title": "Fox Screams",
+        "user": "Soundburst",
+        "url": "https://freesound.org/people/Soundburst/sounds/634005/",
+        "licence": "CC0",
+        "cut": [
+          1.045,
+          1.59
+        ]
+      },
+      {
+        "file": "fox-alarm-2.mp3",
+        "id": "554308",
+        "title": "Fox scream in the forest",
+        "user": "nielstii",
+        "url": "https://freesound.org/people/nielstii/sounds/554308/",
+        "licence": "CC0",
+        "cut": [
+          0.445,
+          1.16
+        ]
+      }
+    ]
+  },
+  "raccoon-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "717839",
+        "user": "TRP",
+        "title": "230127 Raccoon calls, noisy world, EMT272s, roof, Toronto 10pm",
+        "preview": "https://cdn.freesound.org/previews/717/717839_97550-hq.mp3",
+        "url": "https://freesound.org/people/TRP/sounds/717839/",
+        "licence": "CC0",
+        "dur": 23.6,
+        "downloads": 269,
+        "note": "\"raccoon\"",
+        "snr": 36
+      },
+      {
+        "id": "828793",
+        "user": "flumpytripod",
+        "title": "Angry Raccoon",
+        "preview": "https://cdn.freesound.org/previews/828/828793_6998158-hq.mp3",
+        "url": "https://freesound.org/people/flumpytripod/sounds/828793/",
+        "licence": "CC0",
+        "dur": 36.9,
+        "downloads": 223,
+        "note": "\"raccoon\"",
+        "snr": 30
+      },
+      {
+        "id": "637445",
+        "user": "h_sylvan",
+        "title": "racoon gecker.wav",
+        "preview": "https://cdn.freesound.org/previews/637/637445_4540279-hq.mp3",
+        "url": "https://freesound.org/people/h_sylvan/sounds/637445/",
+        "licence": "CC0",
+        "dur": 11.1,
+        "downloads": 214,
+        "note": "\"raccoon\"",
+        "snr": 69
+      },
+      {
+        "id": "653467",
+        "user": "dearydanmusic",
+        "title": "Raccoon Beat",
+        "preview": "https://cdn.freesound.org/previews/653/653467_13537647-hq.mp3",
+        "url": "https://freesound.org/people/dearydanmusic/sounds/653467/",
+        "licence": "CC0",
+        "dur": 8,
+        "downloads": 71,
+        "note": "\"raccoon\"",
+        "snr": 113
+      },
+      {
+        "id": "852086",
+        "user": "TheKingOfGeeks360",
+        "title": "Small Mammals - Kinkajou; Baby Chirping",
+        "preview": "https://cdn.freesound.org/previews/852/852086_15895934-hq.mp3",
+        "url": "https://freesound.org/people/TheKingOfGeeks360/sounds/852086/",
+        "licence": "CC0",
+        "dur": 2.5,
+        "downloads": 53,
+        "note": "\"raccoon\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "653467",
+        "n": 1
+      },
+      {
+        "id": "637445",
+        "n": 1
+      },
+      {
+        "id": "717839",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "raccoon-call-1.mp3",
+        "id": "653467",
+        "title": "Raccoon Beat",
+        "user": "dearydanmusic",
+        "url": "https://freesound.org/people/dearydanmusic/sounds/653467/",
+        "licence": "CC0",
+        "cut": [
+          0,
+          0.13
+        ]
+      },
+      {
+        "file": "raccoon-call-2.mp3",
+        "id": "637445",
+        "title": "racoon gecker.wav",
+        "user": "h_sylvan",
+        "url": "https://freesound.org/people/h_sylvan/sounds/637445/",
+        "licence": "CC0",
+        "cut": [
+          0.585,
+          0.71
+        ]
+      },
+      {
+        "file": "raccoon-call-3.mp3",
+        "id": "717839",
+        "title": "230127 Raccoon calls, noisy world, EMT272s, roof, Toronto 10pm",
+        "user": "TRP",
+        "url": "https://freesound.org/people/TRP/sounds/717839/",
+        "licence": "CC0",
+        "cut": [
+          1.365,
+          3.63
+        ]
+      }
+    ]
+  },
+  "beaver-alarm": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "48083",
+        "user": "suspiciononline",
+        "title": "2_9_2008_joey vocal beaver imitation.mp3",
+        "preview": "https://cdn.freesound.org/previews/48/48083_528100-hq.mp3",
+        "url": "https://freesound.org/people/suspiciononline/sounds/48083/",
+        "licence": "CC0",
+        "dur": 3.5,
+        "downloads": 127,
+        "note": "\"beaver\"",
+        "snr": 47
+      },
+      {
+        "id": "761543",
+        "user": "doubleDog",
+        "title": "Babbling Brook",
+        "preview": "https://cdn.freesound.org/previews/761/761543_67720-hq.mp3",
+        "url": "https://freesound.org/people/doubleDog/sounds/761543/",
+        "licence": "CC0",
+        "dur": 31.4,
+        "downloads": 36,
+        "note": "\"beaver\"",
+        "snr": 21
+      },
+      {
+        "id": "796158",
+        "user": "olafitiany",
+        "title": "An Argument",
+        "preview": "https://cdn.freesound.org/previews/796/796158_17132594-hq.mp3",
+        "url": "https://freesound.org/people/olafitiany/sounds/796158/",
+        "licence": "CC0",
+        "dur": 13.4,
+        "downloads": 10,
+        "note": "\"beaver\"",
+        "snr": 17
+      }
+    ],
+    "picks": [
+      {
+        "id": "48083",
+        "n": 1
+      },
+      {
+        "id": "761543",
+        "n": 1
+      },
+      {
+        "id": "796158",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "beaver-alarm-1.mp3",
+        "id": "48083",
+        "title": "2_9_2008_joey vocal beaver imitation.mp3",
+        "user": "suspiciononline",
+        "url": "https://freesound.org/people/suspiciononline/sounds/48083/",
+        "licence": "CC0",
+        "cut": [
+          0.075,
+          0.21
+        ]
+      },
+      {
+        "file": "beaver-alarm-2.mp3",
+        "id": "761543",
+        "title": "Babbling Brook",
+        "user": "doubleDog",
+        "url": "https://freesound.org/people/doubleDog/sounds/761543/",
+        "licence": "CC0",
+        "cut": [
+          2.815,
+          5.34
+        ]
+      },
+      {
+        "file": "beaver-alarm-3.mp3",
+        "id": "796158",
+        "title": "An Argument",
+        "user": "olafitiany",
+        "url": "https://freesound.org/people/olafitiany/sounds/796158/",
+        "licence": "CC0",
+        "cut": [
+          0.195,
+          0.96
+        ]
+      }
+    ]
+  },
+  "frog-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "536759",
+        "user": "egomassive",
+        "title": "Frog.ogg",
+        "preview": "https://cdn.freesound.org/previews/536/536759_1415754-hq.mp3",
+        "url": "https://freesound.org/people/egomassive/sounds/536759/",
+        "licence": "CC0",
+        "dur": 0.6,
+        "downloads": 6489,
+        "note": "\"frog croak\"",
+        "snr": 104
+      },
+      {
+        "id": "354132",
+        "user": "betterchinese",
+        "title": "Frog croaking sound effect",
+        "preview": "https://cdn.freesound.org/previews/354/354132_5462031-hq.mp3",
+        "url": "https://freesound.org/people/betterchinese/sounds/354132/",
+        "licence": "CC0",
+        "dur": 2,
+        "downloads": 3751,
+        "note": "\"frog croak\"",
+        "snr": 55
+      },
+      {
+        "id": "251938",
+        "user": "BinaryMonkFlint",
+        "title": "frog.mp3",
+        "preview": "https://cdn.freesound.org/previews/251/251938_4638936-hq.mp3",
+        "url": "https://freesound.org/people/BinaryMonkFlint/sounds/251938/",
+        "licence": "CC0",
+        "dur": 0.5,
+        "downloads": 3187,
+        "note": "\"frog croak\"",
+        "snr": 21
+      },
+      {
+        "id": "361117",
+        "user": "katzlbt",
+        "title": "frog_quak.mp3",
+        "preview": "https://cdn.freesound.org/previews/361/361117_914016-hq.mp3",
+        "url": "https://freesound.org/people/katzlbt/sounds/361117/",
+        "licence": "CC0",
+        "dur": 1.4,
+        "downloads": 1943,
+        "note": "\"frog croak\"",
+        "snr": 33
+      },
+      {
+        "id": "532235",
+        "user": "shaunhillyard",
+        "title": "Frog Croaking (UK Common Frog)",
+        "preview": "https://cdn.freesound.org/previews/532/532235_4759831-hq.mp3",
+        "url": "https://freesound.org/people/shaunhillyard/sounds/532235/",
+        "licence": "CC0",
+        "dur": 39.8,
+        "downloads": 1873,
+        "note": "\"frog croak\""
+      },
+      {
+        "id": "515862",
+        "user": "astriferal",
+        "title": "Wooden Frog \"Croaks\"",
+        "preview": "https://cdn.freesound.org/previews/515/515862_10044255-hq.mp3",
+        "url": "https://freesound.org/people/astriferal/sounds/515862/",
+        "licence": "CC0",
+        "dur": 12,
+        "downloads": 1139,
+        "note": "\"frog croak\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "536759",
+        "n": 1
+      },
+      {
+        "id": "354132",
+        "n": 1
+      },
+      {
+        "id": "361117",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "frog-call-1.mp3",
+        "id": "536759",
+        "title": "Frog.ogg",
+        "user": "egomassive",
+        "url": "https://freesound.org/people/egomassive/sounds/536759/",
+        "licence": "CC0",
+        "cut": [
+          0.085,
+          0.57
+        ]
+      },
+      {
+        "file": "frog-call-2.mp3",
+        "id": "354132",
+        "title": "Frog croaking sound effect",
+        "user": "betterchinese",
+        "url": "https://freesound.org/people/betterchinese/sounds/354132/",
+        "licence": "CC0",
+        "cut": [
+          0.615,
+          0.93
+        ]
+      },
+      {
+        "file": "frog-call-3.mp3",
+        "id": "361117",
+        "title": "frog_quak.mp3",
+        "user": "katzlbt",
+        "url": "https://freesound.org/people/katzlbt/sounds/361117/",
+        "licence": "CC0",
+        "cut": [
+          0.005,
+          0.76
+        ]
+      }
+    ]
+  },
+  "cat-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "110011",
+        "user": "tuberatanka",
+        "title": "cat meow",
+        "preview": "https://cdn.freesound.org/previews/110/110011_1537422-hq.mp3",
+        "url": "https://freesound.org/people/tuberatanka/sounds/110011/",
+        "licence": "CC0",
+        "dur": 1.5,
+        "downloads": 47369,
+        "note": "\"cat meow\"",
+        "snr": 31
+      },
+      {
+        "id": "333916",
+        "user": "lextrack",
+        "title": "Cat Meowing",
+        "preview": "https://cdn.freesound.org/previews/333/333916_4930786-hq.mp3",
+        "url": "https://freesound.org/people/lextrack/sounds/333916/",
+        "licence": "CC0",
+        "dur": 1.4,
+        "downloads": 20088,
+        "note": "\"cat meow\"",
+        "snr": 21
+      },
+      {
+        "id": "412017",
+        "user": "skymary",
+        "title": "cat meow short",
+        "preview": "https://cdn.freesound.org/previews/412/412017_3652520-hq.mp3",
+        "url": "https://freesound.org/people/skymary/sounds/412017/",
+        "licence": "CC0",
+        "dur": 1.8,
+        "downloads": 17210,
+        "note": "\"cat meow\"",
+        "snr": 42
+      },
+      {
+        "id": "362652",
+        "user": "TRNGLE",
+        "title": "Cat meow",
+        "preview": "https://cdn.freesound.org/previews/362/362652_5966858-hq.mp3",
+        "url": "https://freesound.org/people/TRNGLE/sounds/362652/",
+        "licence": "CC0",
+        "dur": 1.2,
+        "downloads": 10998,
+        "note": "\"cat meow\"",
+        "snr": 20
+      },
+      {
+        "id": "436541",
+        "user": "Mafon2",
+        "title": "Cat Meow",
+        "preview": "https://cdn.freesound.org/previews/436/436541_1196472-hq.mp3",
+        "url": "https://freesound.org/people/Mafon2/sounds/436541/",
+        "licence": "CC0",
+        "dur": 0.6,
+        "downloads": 7544,
+        "note": "\"cat meow\""
+      },
+      {
+        "id": "196251",
+        "user": "lolamadeus",
+        "title": "Kitten Meowing.wav",
+        "preview": "https://cdn.freesound.org/previews/196/196251_544580-hq.mp3",
+        "url": "https://freesound.org/people/lolamadeus/sounds/196251/",
+        "licence": "CC0",
+        "dur": 8.6,
+        "downloads": 5732,
+        "note": "\"cat meow\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "412017",
+        "n": 1
+      },
+      {
+        "id": "110011",
+        "n": 1
+      },
+      {
+        "id": "333916",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "cat-call-1.mp3",
+        "id": "412017",
+        "title": "cat meow short",
+        "user": "skymary",
+        "url": "https://freesound.org/people/skymary/sounds/412017/",
+        "licence": "CC0",
+        "cut": [
+          0.255,
+          1.28
+        ]
+      },
+      {
+        "file": "cat-call-2.mp3",
+        "id": "110011",
+        "title": "cat meow",
+        "user": "tuberatanka",
+        "url": "https://freesound.org/people/tuberatanka/sounds/110011/",
+        "licence": "CC0",
+        "cut": [
+          0.145,
+          1.21
+        ]
+      },
+      {
+        "file": "cat-call-3.mp3",
+        "id": "333916",
+        "title": "Cat Meowing",
+        "user": "lextrack",
+        "url": "https://freesound.org/people/lextrack/sounds/333916/",
+        "licence": "CC0",
+        "cut": [
+          0.245,
+          1.06
+        ]
+      }
+    ]
+  },
+  "cat-angry": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "343927",
+        "user": "Reitanna",
+        "title": "hiss2.wav",
+        "preview": "https://cdn.freesound.org/previews/343/343927_950925-hq.mp3",
+        "url": "https://freesound.org/people/Reitanna/sounds/343927/",
+        "licence": "CC0",
+        "dur": 0.6,
+        "downloads": 3510,
+        "note": "\"cat hiss\"",
+        "snr": 20
+      },
+      {
+        "id": "316915",
+        "user": "Rudmer_Rotteveel",
+        "title": "Cats Fighting Amplified",
+        "preview": "https://cdn.freesound.org/previews/316/316915_4921277-hq.mp3",
+        "url": "https://freesound.org/people/Rudmer_Rotteveel/sounds/316915/",
+        "licence": "CC0",
+        "dur": 17.4,
+        "downloads": 2785,
+        "note": "\"cat hiss\"",
+        "snr": 29
+      },
+      {
+        "id": "45199",
+        "user": "stomachache",
+        "title": "catfight.WAV",
+        "preview": "https://cdn.freesound.org/previews/45/45199_177850-hq.mp3",
+        "url": "https://freesound.org/people/stomachache/sounds/45199/",
+        "licence": "CC0",
+        "dur": 6.7,
+        "downloads": 2485,
+        "note": "\"cat hiss\"",
+        "snr": 41
+      },
+      {
+        "id": "146963",
+        "user": "Zabuhailo",
+        "title": "catHisses1.wav",
+        "preview": "https://cdn.freesound.org/previews/146/146963_2580450-hq.mp3",
+        "url": "https://freesound.org/people/Zabuhailo/sounds/146963/",
+        "licence": "CC0",
+        "dur": 1.5,
+        "downloads": 2357,
+        "note": "\"cat hiss\"",
+        "snr": 36
+      },
+      {
+        "id": "343928",
+        "user": "Reitanna",
+        "title": "hiss3.wav",
+        "preview": "https://cdn.freesound.org/previews/343/343928_950925-hq.mp3",
+        "url": "https://freesound.org/people/Reitanna/sounds/343928/",
+        "licence": "CC0",
+        "dur": 0.9,
+        "downloads": 2326,
+        "note": "\"cat hiss\""
+      },
+      {
+        "id": "316916",
+        "user": "Rudmer_Rotteveel",
+        "title": "Cats Fighting Amplified and Noise removed",
+        "preview": "https://cdn.freesound.org/previews/316/316916_4921277-hq.mp3",
+        "url": "https://freesound.org/people/Rudmer_Rotteveel/sounds/316916/",
+        "licence": "CC0",
+        "dur": 17.4,
+        "downloads": 2143,
+        "note": "\"cat hiss\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "45199",
+        "n": 1
+      },
+      {
+        "id": "146963",
+        "n": 1
+      },
+      {
+        "id": "316915",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "cat-angry-1.mp3",
+        "id": "45199",
+        "title": "catfight.WAV",
+        "user": "stomachache",
+        "url": "https://freesound.org/people/stomachache/sounds/45199/",
+        "licence": "CC0",
+        "cut": [
+          0,
+          1.35
+        ]
+      },
+      {
+        "file": "cat-angry-2.mp3",
+        "id": "146963",
+        "title": "catHisses1.wav",
+        "user": "Zabuhailo",
+        "url": "https://freesound.org/people/Zabuhailo/sounds/146963/",
+        "licence": "CC0",
+        "cut": [
+          0.285,
+          1.23
+        ]
+      },
+      {
+        "file": "cat-angry-3.mp3",
+        "id": "316915",
+        "title": "Cats Fighting Amplified",
+        "user": "Rudmer_Rotteveel",
+        "url": "https://freesound.org/people/Rudmer_Rotteveel/sounds/316915/",
+        "licence": "CC0",
+        "cut": [
+          6.295,
+          8.82
+        ]
+      }
+    ]
+  },
+  "cat-hurt": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "131262",
+        "user": "red3zzz",
+        "title": "cat screech.wav",
+        "preview": "https://cdn.freesound.org/previews/131/131262_1950871-hq.mp3",
+        "url": "https://freesound.org/people/red3zzz/sounds/131262/",
+        "licence": "CC0",
+        "dur": 4.2,
+        "downloads": 1663,
+        "note": "\"cat screech\"",
+        "snr": 75
+      },
+      {
+        "id": "537990",
+        "user": "cognito perceptu",
+        "title": "cat scream.wav",
+        "preview": "https://cdn.freesound.org/previews/537/537990_57789-hq.mp3",
+        "url": "https://freesound.org/people/cognito perceptu/sounds/537990/",
+        "licence": "CC0",
+        "dur": 11.6,
+        "downloads": 1324,
+        "note": "\"cat screech\"",
+        "snr": 23
+      },
+      {
+        "id": "647307",
+        "user": "jess90",
+        "title": "cat fight.wav",
+        "preview": "https://cdn.freesound.org/previews/647/647307_4627588-hq.mp3",
+        "url": "https://freesound.org/people/jess90/sounds/647307/",
+        "licence": "CC0",
+        "dur": 4.6,
+        "downloads": 531,
+        "note": "\"cat screech\"",
+        "snr": 33
+      },
+      {
+        "id": "436540",
+        "user": "Mafon2",
+        "title": "Short Sharp Meow",
+        "preview": "https://cdn.freesound.org/previews/436/436540_1196472-hq.mp3",
+        "url": "https://freesound.org/people/Mafon2/sounds/436540/",
+        "licence": "CC0",
+        "dur": 0.3,
+        "downloads": 392,
+        "note": "\"cat screech\"",
+        "snr": 23
+      },
+      {
+        "id": "593604",
+        "user": "Rehanjo",
+        "title": "Kittens.wav",
+        "preview": "https://cdn.freesound.org/previews/593/593604_12589944-hq.mp3",
+        "url": "https://freesound.org/people/Rehanjo/sounds/593604/",
+        "licence": "CC0",
+        "dur": 8.7,
+        "downloads": 161,
+        "note": "\"cat screech\""
+      },
+      {
+        "id": "557684",
+        "user": "z.z.z.z.z",
+        "title": "zzzbeats driven chugging chords.wav",
+        "preview": "https://cdn.freesound.org/previews/557/557684_12396743-hq.mp3",
+        "url": "https://freesound.org/people/z.z.z.z.z/sounds/557684/",
+        "licence": "CC0",
+        "dur": 1.5,
+        "downloads": 84,
+        "note": "\"cat screech\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "131262",
+        "n": 1
+      },
+      {
+        "id": "647307",
+        "n": 1
+      },
+      {
+        "id": "537990",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "cat-hurt-1.mp3",
+        "id": "131262",
+        "title": "cat screech.wav",
+        "user": "red3zzz",
+        "url": "https://freesound.org/people/red3zzz/sounds/131262/",
+        "licence": "CC0",
+        "cut": [
+          1.765,
+          2.68
+        ]
+      },
+      {
+        "file": "cat-hurt-2.mp3",
+        "id": "647307",
+        "title": "cat fight.wav",
+        "user": "jess90",
+        "url": "https://freesound.org/people/jess90/sounds/647307/",
+        "licence": "CC0",
+        "cut": [
+          0.265,
+          1.32
+        ]
+      },
+      {
+        "file": "cat-hurt-3.mp3",
+        "id": "537990",
+        "title": "cat scream.wav",
+        "user": "cognito perceptu",
+        "url": "https://freesound.org/people/cognito perceptu/sounds/537990/",
+        "licence": "CC0",
+        "cut": [
+          1.225,
+          1.92
+        ]
+      }
+    ]
+  },
+  "deer-alarm": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "569926",
+        "user": "Spamanator",
+        "title": "Deer barking.m4a",
+        "preview": "https://cdn.freesound.org/previews/569/569926_12833977-hq.mp3",
+        "url": "https://freesound.org/people/Spamanator/sounds/569926/",
+        "licence": "CC0",
+        "dur": 10.9,
+        "downloads": 701,
+        "note": "\"deer bark\"",
+        "snr": 26
+      },
+      {
+        "id": "696776",
+        "user": "ferventtorpor",
+        "title": "Deer_Bark_5_s",
+        "preview": "https://cdn.freesound.org/previews/696/696776_9391615-hq.mp3",
+        "url": "https://freesound.org/people/ferventtorpor/sounds/696776/",
+        "licence": "CC0",
+        "dur": 0.8,
+        "downloads": 86,
+        "note": "\"deer bark\"",
+        "snr": 13
+      }
+    ],
+    "picks": [
+      {
+        "id": "569926",
+        "n": 1
+      },
+      {
+        "id": "696776",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "deer-alarm-1.mp3",
+        "id": "569926",
+        "title": "Deer barking.m4a",
+        "user": "Spamanator",
+        "url": "https://freesound.org/people/Spamanator/sounds/569926/",
+        "licence": "CC0",
+        "cut": [
+          2.925,
+          3.65
+        ]
+      },
+      {
+        "file": "deer-alarm-2.mp3",
+        "id": "696776",
+        "title": "Deer_Bark_5_s",
+        "user": "ferventtorpor",
+        "url": "https://freesound.org/people/ferventtorpor/sounds/696776/",
+        "licence": "CC0",
+        "cut": [
+          0.015,
+          0.82
+        ]
+      }
+    ]
+  },
+  "deer-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "351113",
+        "user": "msantoro11",
+        "title": "Deer Meewing 01.wav",
+        "preview": "https://cdn.freesound.org/previews/351/351113_4790684-hq.mp3",
+        "url": "https://freesound.org/people/msantoro11/sounds/351113/",
+        "licence": "CC0",
+        "dur": 15.8,
+        "downloads": 3472,
+        "note": "\"deer call\"",
+        "snr": 32
+      },
+      {
+        "id": "407631",
+        "user": "IchBinChrist",
+        "title": "Bellowing deer - Animal - Nature - Hirsch - Röhren - Tiere - Wald",
+        "preview": "https://cdn.freesound.org/previews/407/407631_3216899-hq.mp3",
+        "url": "https://freesound.org/people/IchBinChrist/sounds/407631/",
+        "licence": "CC0",
+        "dur": 16.8,
+        "downloads": 1256,
+        "note": "\"deer call\"",
+        "snr": 85
+      },
+      {
+        "id": "634615",
+        "user": "Mastersoundboy2005",
+        "title": "Alligator Deer Sound (Alligatorus Ceverius Delvocianises).ogg",
+        "preview": "https://cdn.freesound.org/previews/634/634615_13999124-hq.mp3",
+        "url": "https://freesound.org/people/Mastersoundboy2005/sounds/634615/",
+        "licence": "CC0",
+        "dur": 29.3,
+        "downloads": 505,
+        "note": "\"deer call\"",
+        "snr": 38
+      },
+      {
+        "id": "696777",
+        "user": "ferventtorpor",
+        "title": "Deer_chucker_call_s",
+        "preview": "https://cdn.freesound.org/previews/696/696777_9391615-hq.mp3",
+        "url": "https://freesound.org/people/ferventtorpor/sounds/696777/",
+        "licence": "CC0",
+        "dur": 3.1,
+        "downloads": 128,
+        "note": "\"deer call\"",
+        "snr": 54
+      }
+    ],
+    "picks": [
+      {
+        "id": "407631",
+        "n": 1
+      },
+      {
+        "id": "696777",
+        "n": 1
+      },
+      {
+        "id": "634615",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "deer-call-1.mp3",
+        "id": "407631",
+        "title": "Bellowing deer - Animal - Nature - Hirsch - Röhren - Tiere - Wald",
+        "user": "IchBinChrist",
+        "url": "https://freesound.org/people/IchBinChrist/sounds/407631/",
+        "licence": "CC0",
+        "cut": [
+          0.635,
+          1.21
+        ]
+      },
+      {
+        "file": "deer-call-2.mp3",
+        "id": "696777",
+        "title": "Deer_chucker_call_s",
+        "user": "ferventtorpor",
+        "url": "https://freesound.org/people/ferventtorpor/sounds/696777/",
+        "licence": "CC0",
+        "cut": [
+          0,
+          1.12
+        ]
+      },
+      {
+        "file": "deer-call-3.mp3",
+        "id": "634615",
+        "title": "Alligator Deer Sound (Alligatorus Ceverius Delvocianises).ogg",
+        "user": "Mastersoundboy2005",
+        "url": "https://freesound.org/people/Mastersoundboy2005/sounds/634615/",
+        "licence": "CC0",
+        "cut": [
+          0.055,
+          1.22
+        ]
+      }
+    ]
+  },
+  "elk-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "743078",
+        "user": "qubodup",
+        "title": "Wildlife Creature Warning Howl",
+        "preview": "https://cdn.freesound.org/previews/743/743078_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/743078/",
+        "licence": "CC0",
+        "dur": 10.7,
+        "downloads": 558,
+        "note": "\"elk bugle\"",
+        "snr": 47
+      },
+      {
+        "id": "769934",
+        "user": "Mastersoundboy2005",
+        "title": "Demonic Creature Bellowing Sound Effect #1",
+        "preview": "https://cdn.freesound.org/previews/769/769934_13999124-hq.mp3",
+        "url": "https://freesound.org/people/Mastersoundboy2005/sounds/769934/",
+        "licence": "CC0",
+        "dur": 4.9,
+        "downloads": 33,
+        "note": "\"elk bugle\"",
+        "snr": 36
+      },
+      {
+        "id": "486554",
+        "user": "gleith",
+        "title": "Moose_Elk.mp3",
+        "preview": "https://cdn.freesound.org/previews/486/486554_2795485-hq.mp3",
+        "url": "https://freesound.org/people/gleith/sounds/486554/",
+        "licence": "CC0",
+        "dur": 20.7,
+        "downloads": 2740,
+        "note": "\"elk\"",
+        "snr": 40
+      },
+      {
+        "id": "467699",
+        "user": "LucasDuff",
+        "title": "Nightgaunt screams",
+        "preview": "https://cdn.freesound.org/previews/467/467699_8272463-hq.mp3",
+        "url": "https://freesound.org/people/LucasDuff/sounds/467699/",
+        "licence": "CC0",
+        "dur": 20.5,
+        "downloads": 657,
+        "note": "\"elk\"",
+        "snr": 32
+      },
+      {
+        "id": "263489",
+        "user": "lwdickens",
+        "title": "elk.1.wav",
+        "preview": "https://cdn.freesound.org/previews/263/263489_2663250-hq.mp3",
+        "url": "https://freesound.org/people/lwdickens/sounds/263489/",
+        "licence": "CC0",
+        "dur": 14,
+        "downloads": 556,
+        "note": "\"elk\""
+      },
+      {
+        "id": "563686",
+        "user": "J.R.Mythical",
+        "title": "Elk Dragon Roar.mp3",
+        "preview": "https://cdn.freesound.org/previews/563/563686_12393343-hq.mp3",
+        "url": "https://freesound.org/people/J.R.Mythical/sounds/563686/",
+        "licence": "CC0",
+        "dur": 5.7,
+        "downloads": 304,
+        "note": "\"elk\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "743078",
+        "n": 1
+      },
+      {
+        "id": "486554",
+        "n": 1
+      },
+      {
+        "id": "769934",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "elk-call-1.mp3",
+        "id": "743078",
+        "title": "Wildlife Creature Warning Howl",
+        "user": "qubodup",
+        "url": "https://freesound.org/people/qubodup/sounds/743078/",
+        "licence": "CC0",
+        "cut": [
+          0.105,
+          5.13
+        ]
+      },
+      {
+        "file": "elk-call-2.mp3",
+        "id": "486554",
+        "title": "Moose_Elk.mp3",
+        "user": "gleith",
+        "url": "https://freesound.org/people/gleith/sounds/486554/",
+        "licence": "CC0",
+        "cut": [
+          0.785,
+          2.09
+        ]
+      },
+      {
+        "file": "elk-call-3.mp3",
+        "id": "769934",
+        "title": "Demonic Creature Bellowing Sound Effect #1",
+        "user": "Mastersoundboy2005",
+        "url": "https://freesound.org/people/Mastersoundboy2005/sounds/769934/",
+        "licence": "CC0",
+        "cut": [
+          0.095,
+          3.57
+        ]
+      }
+    ]
+  },
+  "moose-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "155150",
+        "user": "genel",
+        "title": "awhoo.mp3",
+        "preview": "https://cdn.freesound.org/previews/155/155150_1032573-hq.mp3",
+        "url": "https://freesound.org/people/genel/sounds/155150/",
+        "licence": "CC0",
+        "dur": 3.2,
+        "downloads": 207,
+        "note": "\"moose call\"",
+        "snr": 16
+      },
+      {
+        "id": "148874",
+        "user": "gio td",
+        "title": "ghost out of mirror.aiff",
+        "preview": "https://cdn.freesound.org/previews/148/148874_849559-hq.mp3",
+        "url": "https://freesound.org/people/gio td/sounds/148874/",
+        "licence": "CC0",
+        "dur": 19.4,
+        "downloads": 3432,
+        "note": "\"moose\"",
+        "snr": 48
+      },
+      {
+        "id": "486554",
+        "user": "gleith",
+        "title": "Moose_Elk.mp3",
+        "preview": "https://cdn.freesound.org/previews/486/486554_2795485-hq.mp3",
+        "url": "https://freesound.org/people/gleith/sounds/486554/",
+        "licence": "CC0",
+        "dur": 20.7,
+        "downloads": 2740,
+        "note": "\"moose\""
+      },
+      {
+        "id": "338946",
+        "user": "visual",
+        "title": "MooseSpaceE31.wav",
+        "preview": "https://cdn.freesound.org/previews/338/338946_52391-hq.mp3",
+        "url": "https://freesound.org/people/visual/sounds/338946/",
+        "licence": "CC0",
+        "dur": 16,
+        "downloads": 151,
+        "note": "\"moose\"",
+        "snr": 44
+      },
+      {
+        "id": "707850",
+        "user": "DARKSOUL3303",
+        "title": "Rugido 1",
+        "preview": "https://cdn.freesound.org/previews/707/707850_11502918-hq.mp3",
+        "url": "https://freesound.org/people/DARKSOUL3303/sounds/707850/",
+        "licence": "CC0",
+        "dur": 10.7,
+        "downloads": 93,
+        "note": "\"moose\""
+      },
+      {
+        "id": "718740",
+        "user": "modbom",
+        "title": "chill moose beat 808 drums - 120 BPM",
+        "preview": "https://cdn.freesound.org/previews/718/718740_9379257-hq.mp3",
+        "url": "https://freesound.org/people/modbom/sounds/718740/",
+        "licence": "CC0",
+        "dur": 22.3,
+        "downloads": 51,
+        "note": "\"moose\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "148874",
+        "n": 1
+      },
+      {
+        "id": "338946",
+        "n": 1
+      },
+      {
+        "id": "155150",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "moose-call-1.mp3",
+        "id": "148874",
+        "title": "ghost out of mirror.aiff",
+        "user": "gio td",
+        "url": "https://freesound.org/people/gio td/sounds/148874/",
+        "licence": "CC0",
+        "cut": [
+          4.655,
+          7.68
+        ]
+      },
+      {
+        "file": "moose-call-2.mp3",
+        "id": "338946",
+        "title": "MooseSpaceE31.wav",
+        "user": "visual",
+        "url": "https://freesound.org/people/visual/sounds/338946/",
+        "licence": "CC0",
+        "cut": [
+          0,
+          1.11
+        ]
+      },
+      {
+        "file": "moose-call-3.mp3",
+        "id": "155150",
+        "title": "awhoo.mp3",
+        "user": "genel",
+        "url": "https://freesound.org/people/genel/sounds/155150/",
+        "licence": "CC0",
+        "cut": [
+          0.555,
+          2.77
+        ]
+      }
+    ]
+  },
+  "boar-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "330704",
+        "user": "mr_marcello",
+        "title": "wild pig cartoon",
+        "preview": "https://cdn.freesound.org/previews/330/330704_3898607-hq.mp3",
+        "url": "https://freesound.org/people/mr_marcello/sounds/330704/",
+        "licence": "CC0",
+        "dur": 4,
+        "downloads": 671,
+        "note": "\"wild boar grunt\"",
+        "snr": 40
+      },
+      {
+        "id": "842313",
+        "user": "TheKingOfGeeks360",
+        "title": "Swine - Pig; Dinosaur-like Grunt",
+        "preview": "https://cdn.freesound.org/previews/842/842313_15895934-hq.mp3",
+        "url": "https://freesound.org/people/TheKingOfGeeks360/sounds/842313/",
+        "licence": "CC0",
+        "dur": 1.7,
+        "downloads": 236,
+        "note": "\"wild boar grunt\"",
+        "snr": 15
+      },
+      {
+        "id": "842326",
+        "user": "iainmccurdy",
+        "title": "Distant Gunfire",
+        "preview": "https://cdn.freesound.org/previews/842/842326_3655844-hq.mp3",
+        "url": "https://freesound.org/people/iainmccurdy/sounds/842326/",
+        "licence": "CC0",
+        "dur": 7.6,
+        "downloads": 162,
+        "note": "\"wild boar\"",
+        "snr": 42
+      },
+      {
+        "id": "732980",
+        "user": "The_Sample_Workshop",
+        "title": "19-PIG-NUT-CRUNCH",
+        "preview": "https://cdn.freesound.org/previews/732/732980_151878-hq.mp3",
+        "url": "https://freesound.org/people/The_Sample_Workshop/sounds/732980/",
+        "licence": "CC0",
+        "dur": 4.4,
+        "downloads": 33,
+        "note": "\"wild boar\"",
+        "snr": 49
+      },
+      {
+        "id": "729296",
+        "user": "Mastersoundboy2005",
+        "title": "Pig shrieking sound effect",
+        "preview": "https://cdn.freesound.org/previews/729/729296_13999124-hq.mp3",
+        "url": "https://freesound.org/people/Mastersoundboy2005/sounds/729296/",
+        "licence": "CC0",
+        "dur": 4.5,
+        "downloads": 112,
+        "note": "\"boar\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "732980",
+        "n": 1
+      },
+      {
+        "id": "842326",
+        "n": 1
+      },
+      {
+        "id": "330704",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "boar-call-1.mp3",
+        "id": "732980",
+        "title": "19-PIG-NUT-CRUNCH",
+        "user": "The_Sample_Workshop",
+        "url": "https://freesound.org/people/The_Sample_Workshop/sounds/732980/",
+        "licence": "CC0",
+        "cut": [
+          0.025,
+          0.59
+        ]
+      },
+      {
+        "file": "boar-call-2.mp3",
+        "id": "842326",
+        "title": "Distant Gunfire",
+        "user": "iainmccurdy",
+        "url": "https://freesound.org/people/iainmccurdy/sounds/842326/",
+        "licence": "CC0",
+        "cut": [
+          0,
+          0.48
+        ]
+      },
+      {
+        "file": "boar-call-3.mp3",
+        "id": "330704",
+        "title": "wild pig cartoon",
+        "user": "mr_marcello",
+        "url": "https://freesound.org/people/mr_marcello/sounds/330704/",
+        "licence": "CC0",
+        "cut": [
+          0.525,
+          2.23
+        ]
+      }
+    ]
+  },
+  "boar-angry": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "352698",
+        "user": "Jofae",
+        "title": "Angry Pig Oinking",
+        "preview": "https://cdn.freesound.org/previews/352/352698_6512973-hq.mp3",
+        "url": "https://freesound.org/people/Jofae/sounds/352698/",
+        "licence": "CC0",
+        "dur": 8.1,
+        "downloads": 5527,
+        "note": "\"pig squeal angry\"",
+        "snr": 40
+      },
+      {
+        "id": "842313",
+        "user": "TheKingOfGeeks360",
+        "title": "Swine - Pig; Dinosaur-like Grunt",
+        "preview": "https://cdn.freesound.org/previews/842/842313_15895934-hq.mp3",
+        "url": "https://freesound.org/people/TheKingOfGeeks360/sounds/842313/",
+        "licence": "CC0",
+        "dur": 1.7,
+        "downloads": 236,
+        "note": "\"boar snort\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "352698",
+        "n": 1
+      },
+      {
+        "id": "842313",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "boar-angry-1.mp3",
+        "id": "352698",
+        "title": "Angry Pig Oinking",
+        "user": "Jofae",
+        "url": "https://freesound.org/people/Jofae/sounds/352698/",
+        "licence": "CC0",
+        "cut": [
+          0.045,
+          0.73
+        ]
+      },
+      {
+        "file": "boar-angry-2.mp3",
+        "id": "842313",
+        "title": "Swine - Pig; Dinosaur-like Grunt",
+        "user": "TheKingOfGeeks360",
+        "url": "https://freesound.org/people/TheKingOfGeeks360/sounds/842313/",
+        "licence": "CC0",
+        "cut": [
+          0.065,
+          0.56
+        ]
+      }
+    ]
+  },
+  "wolf-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "398430",
+        "user": "NaturesTemper",
+        "title": "Wolf howl",
+        "preview": "https://cdn.freesound.org/previews/398/398430_3862281-hq.mp3",
+        "url": "https://freesound.org/people/NaturesTemper/sounds/398430/",
+        "licence": "CC0",
+        "dur": 8.1,
+        "downloads": 18988,
+        "note": "\"wolf howl\"",
+        "snr": 31
+      },
+      {
+        "id": "158780",
+        "user": "Paresh",
+        "title": "wolves.wav",
+        "preview": "https://cdn.freesound.org/previews/158/158780_229952-hq.mp3",
+        "url": "https://freesound.org/people/Paresh/sounds/158780/",
+        "licence": "CC0",
+        "dur": 33.3,
+        "downloads": 9168,
+        "note": "\"wolf howl\"",
+        "snr": 19
+      },
+      {
+        "id": "380156",
+        "user": "taure",
+        "title": "Howl_Echo.wav",
+        "preview": "https://cdn.freesound.org/previews/380/380156_2940947-hq.mp3",
+        "url": "https://freesound.org/people/taure/sounds/380156/",
+        "licence": "CC0",
+        "dur": 28,
+        "downloads": 6933,
+        "note": "\"wolf howl\"",
+        "snr": 38
+      },
+      {
+        "id": "267179",
+        "user": "BrainClaim",
+        "title": "Scary Ghost Wolf Howling.wav",
+        "preview": "https://cdn.freesound.org/previews/267/267179_4875045-hq.mp3",
+        "url": "https://freesound.org/people/BrainClaim/sounds/267179/",
+        "licence": "CC0",
+        "dur": 8.4,
+        "downloads": 6376,
+        "note": "\"wolf howl\"",
+        "snr": 31
+      },
+      {
+        "id": "143568",
+        "user": "ondrosik",
+        "title": "wolfs.wav",
+        "preview": "https://cdn.freesound.org/previews/143/143568_2140699-hq.mp3",
+        "url": "https://freesound.org/people/ondrosik/sounds/143568/",
+        "licence": "CC0",
+        "dur": 36.9,
+        "downloads": 5742,
+        "note": "\"wolf howl\""
+      },
+      {
+        "id": "378334",
+        "user": "Kingcornz",
+        "title": "Howling wolves",
+        "preview": "https://cdn.freesound.org/previews/378/378334_4804147-hq.mp3",
+        "url": "https://freesound.org/people/Kingcornz/sounds/378334/",
+        "licence": "CC0",
+        "dur": 7.9,
+        "downloads": 5264,
+        "note": "\"wolf howl\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "380156",
+        "n": 1
+      },
+      {
+        "id": "398430",
+        "n": 1
+      },
+      {
+        "id": "267179",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "wolf-call-1.mp3",
+        "id": "380156",
+        "title": "Howl_Echo.wav",
+        "user": "taure",
+        "url": "https://freesound.org/people/taure/sounds/380156/",
+        "licence": "CC0",
+        "cut": [
+          2.345,
+          7.69
+        ]
+      },
+      {
+        "file": "wolf-call-2.mp3",
+        "id": "398430",
+        "title": "Wolf howl",
+        "user": "NaturesTemper",
+        "url": "https://freesound.org/people/NaturesTemper/sounds/398430/",
+        "licence": "CC0",
+        "cut": [
+          0.985,
+          7.01
+        ]
+      },
+      {
+        "file": "wolf-call-3.mp3",
+        "id": "267179",
+        "title": "Scary Ghost Wolf Howling.wav",
+        "user": "BrainClaim",
+        "url": "https://freesound.org/people/BrainClaim/sounds/267179/",
+        "licence": "CC0",
+        "cut": [
+          1.385,
+          7.41
+        ]
+      }
+    ]
+  },
+  "wolf-angry": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "380156",
+        "user": "taure",
+        "title": "Howl_Echo.wav",
+        "preview": "https://cdn.freesound.org/previews/380/380156_2940947-hq.mp3",
+        "url": "https://freesound.org/people/taure/sounds/380156/",
+        "licence": "CC0",
+        "dur": 28,
+        "downloads": 6933,
+        "note": "\"wolf growl\""
+      },
+      {
+        "id": "267179",
+        "user": "BrainClaim",
+        "title": "Scary Ghost Wolf Howling.wav",
+        "preview": "https://cdn.freesound.org/previews/267/267179_4875045-hq.mp3",
+        "url": "https://freesound.org/people/BrainClaim/sounds/267179/",
+        "licence": "CC0",
+        "dur": 8.4,
+        "downloads": 6376,
+        "note": "\"wolf growl\""
+      },
+      {
+        "id": "420451",
+        "user": "Mrthenoronha",
+        "title": "Dogs Barking.wav",
+        "preview": "https://cdn.freesound.org/previews/420/420451_2402876-hq.mp3",
+        "url": "https://freesound.org/people/Mrthenoronha/sounds/420451/",
+        "licence": "CC0",
+        "dur": 13,
+        "downloads": 5259,
+        "note": "\"wolf growl\""
+      },
+      {
+        "id": "342204",
+        "user": "Christopherderp",
+        "title": "Beast Snarling",
+        "preview": "https://cdn.freesound.org/previews/342/342204_3908740-hq.mp3",
+        "url": "https://freesound.org/people/Christopherderp/sounds/342204/",
+        "licence": "CC0",
+        "dur": 3.2,
+        "downloads": 3380,
+        "note": "\"wolf growl\"",
+        "snr": 41
+      },
+      {
+        "id": "351876",
+        "user": "ScouseMouseJB",
+        "title": "Small dog.wav",
+        "preview": "https://cdn.freesound.org/previews/351/351876_5284496-hq.mp3",
+        "url": "https://freesound.org/people/ScouseMouseJB/sounds/351876/",
+        "licence": "CC0",
+        "dur": 3.6,
+        "downloads": 2505,
+        "note": "\"wolf growl\""
+      },
+      {
+        "id": "434049",
+        "user": "klangfabrik",
+        "title": "dog growls.wav",
+        "preview": "https://cdn.freesound.org/previews/434/434049_181941-hq.mp3",
+        "url": "https://freesound.org/people/klangfabrik/sounds/434049/",
+        "licence": "CC0",
+        "dur": 16.4,
+        "downloads": 2363,
+        "note": "\"wolf growl\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "342204",
+        "n": 1
+      },
+      {
+        "id": "380156",
+        "n": 1
+      },
+      {
+        "id": "267179",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "wolf-angry-1.mp3",
+        "id": "342204",
+        "title": "Beast Snarling",
+        "user": "Christopherderp",
+        "url": "https://freesound.org/people/Christopherderp/sounds/342204/",
+        "licence": "CC0",
+        "cut": [
+          0.065,
+          1.93
+        ]
+      },
+      {
+        "file": "wolf-angry-2.mp3",
+        "id": "380156",
+        "title": "Howl_Echo.wav",
+        "user": "taure",
+        "url": "https://freesound.org/people/taure/sounds/380156/",
+        "licence": "CC0",
+        "cut": [
+          2.345,
+          5.37
+        ]
+      },
+      {
+        "file": "wolf-angry-3.mp3",
+        "id": "267179",
+        "title": "Scary Ghost Wolf Howling.wav",
+        "user": "BrainClaim",
+        "url": "https://freesound.org/people/BrainClaim/sounds/267179/",
+        "licence": "CC0",
+        "cut": [
+          1.385,
+          4.41
+        ]
+      }
+    ]
+  },
+  "wolf-hurt": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "9032",
+        "user": "MisterTood",
+        "title": "Dog bark2.wav",
+        "preview": "https://cdn.freesound.org/previews/9/9032_22734-hq.mp3",
+        "url": "https://freesound.org/people/MisterTood/sounds/9032/",
+        "licence": "CC0",
+        "dur": 2.8,
+        "downloads": 5164,
+        "note": "\"dog yelp\"",
+        "snr": 57
+      },
+      {
+        "id": "350593",
+        "user": "AustinXYZ",
+        "title": "Chihuahua Puppy Whine",
+        "preview": "https://cdn.freesound.org/previews/350/350593_6433555-hq.mp3",
+        "url": "https://freesound.org/people/AustinXYZ/sounds/350593/",
+        "licence": "CC0",
+        "dur": 1.1,
+        "downloads": 4071,
+        "note": "\"dog yelp\"",
+        "snr": 45
+      },
+      {
+        "id": "110817",
+        "user": "bsperan",
+        "title": "bsperan-&-pete668__Jake_the_puppy__cut.wav",
+        "preview": "https://cdn.freesound.org/previews/110/110817_703160-hq.mp3",
+        "url": "https://freesound.org/people/bsperan/sounds/110817/",
+        "licence": "CC0",
+        "dur": 15.2,
+        "downloads": 3153,
+        "note": "\"dog yelp\"",
+        "snr": 36
+      },
+      {
+        "id": "340991",
+        "user": "Filmscore",
+        "title": "Dog talking or howling",
+        "preview": "https://cdn.freesound.org/previews/340/340991_843915-hq.mp3",
+        "url": "https://freesound.org/people/Filmscore/sounds/340991/",
+        "licence": "CC0",
+        "dur": 36.2,
+        "downloads": 2616,
+        "note": "\"dog yelp\"",
+        "snr": 61
+      },
+      {
+        "id": "9031",
+        "user": "MisterTood",
+        "title": "Dog Bark1.wav",
+        "preview": "https://cdn.freesound.org/previews/9/9031_22734-hq.mp3",
+        "url": "https://freesound.org/people/MisterTood/sounds/9031/",
+        "licence": "CC0",
+        "dur": 13.3,
+        "downloads": 2383,
+        "note": "\"dog yelp\""
+      },
+      {
+        "id": "208031",
+        "user": "Mewsel",
+        "title": "Chihuahua Whines",
+        "preview": "https://cdn.freesound.org/previews/208/208031_2027013-hq.mp3",
+        "url": "https://freesound.org/people/Mewsel/sounds/208031/",
+        "licence": "CC0",
+        "dur": 16.8,
+        "downloads": 1911,
+        "note": "\"dog yelp\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "340991",
+        "n": 1
+      },
+      {
+        "id": "9032",
+        "n": 1
+      },
+      {
+        "id": "350593",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "wolf-hurt-1.mp3",
+        "id": "340991",
+        "title": "Dog talking or howling",
+        "user": "Filmscore",
+        "url": "https://freesound.org/people/Filmscore/sounds/340991/",
+        "licence": "CC0",
+        "cut": [
+          0,
+          0.16
+        ]
+      },
+      {
+        "file": "wolf-hurt-2.mp3",
+        "id": "9032",
+        "title": "Dog bark2.wav",
+        "user": "MisterTood",
+        "url": "https://freesound.org/people/MisterTood/sounds/9032/",
+        "licence": "CC0",
+        "cut": [
+          0.025,
+          0.21
+        ]
+      },
+      {
+        "file": "wolf-hurt-3.mp3",
+        "id": "350593",
+        "title": "Chihuahua Puppy Whine",
+        "user": "AustinXYZ",
+        "url": "https://freesound.org/people/AustinXYZ/sounds/350593/",
+        "licence": "CC0",
+        "cut": [
+          0,
+          0.64
+        ]
+      }
+    ]
+  },
+  "lynx-angry": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "844316",
+        "user": "TheKingOfGeeks360",
+        "title": "Wild Cats - Siberian Lynx, Huff",
+        "preview": "https://cdn.freesound.org/previews/844/844316_15895934-hq.mp3",
+        "url": "https://freesound.org/people/TheKingOfGeeks360/sounds/844316/",
+        "licence": "CC0",
+        "dur": 2.4,
+        "downloads": 70,
+        "note": "\"lynx growl\"",
+        "snr": 35
+      },
+      {
+        "id": "404059",
+        "user": "Lynx_5969",
+        "title": "Honky-Tonk Piano.wav",
+        "preview": "https://cdn.freesound.org/previews/404/404059_7844747-hq.mp3",
+        "url": "https://freesound.org/people/Lynx_5969/sounds/404059/",
+        "licence": "CC0",
+        "dur": 5,
+        "downloads": 220,
+        "note": "\"lynx\"",
+        "snr": 22
+      },
+      {
+        "id": "720578",
+        "user": "Mastersoundboy2005",
+        "title": "Alien Dinosaur Sound effect",
+        "preview": "https://cdn.freesound.org/previews/720/720578_13999124-hq.mp3",
+        "url": "https://freesound.org/people/Mastersoundboy2005/sounds/720578/",
+        "licence": "CC0",
+        "dur": 6.7,
+        "downloads": 19,
+        "note": "\"cougar growl\"",
+        "snr": 19
+      },
+      {
+        "id": "63668",
+        "user": "Miselaineous",
+        "title": "elaine-growl.wav",
+        "preview": "https://cdn.freesound.org/previews/63/63668_652624-hq.mp3",
+        "url": "https://freesound.org/people/Miselaineous/sounds/63668/",
+        "licence": "CC0",
+        "dur": 2.8,
+        "downloads": 4271,
+        "note": "\"big cat growl\"",
+        "snr": 27
+      },
+      {
+        "id": "410343",
+        "user": "waxsocks",
+        "title": "Roar.wav",
+        "preview": "https://cdn.freesound.org/previews/410/410343_1766049-hq.mp3",
+        "url": "https://freesound.org/people/waxsocks/sounds/410343/",
+        "licence": "CC0",
+        "dur": 5.9,
+        "downloads": 2057,
+        "note": "\"big cat growl\""
+      },
+      {
+        "id": "381857",
+        "user": "cribbler",
+        "title": "Cat Monster.wav",
+        "preview": "https://cdn.freesound.org/previews/381/381857_3728489-hq.mp3",
+        "url": "https://freesound.org/people/cribbler/sounds/381857/",
+        "licence": "CC0",
+        "dur": 1.9,
+        "downloads": 321,
+        "note": "\"big cat growl\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "844316",
+        "n": 1
+      },
+      {
+        "id": "63668",
+        "n": 1
+      },
+      {
+        "id": "404059",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "lynx-angry-1.mp3",
+        "id": "844316",
+        "title": "Wild Cats - Siberian Lynx, Huff",
+        "user": "TheKingOfGeeks360",
+        "url": "https://freesound.org/people/TheKingOfGeeks360/sounds/844316/",
+        "licence": "CC0",
+        "cut": [
+          0.205,
+          1.24
+        ]
+      },
+      {
+        "file": "lynx-angry-2.mp3",
+        "id": "63668",
+        "title": "elaine-growl.wav",
+        "user": "Miselaineous",
+        "url": "https://freesound.org/people/Miselaineous/sounds/63668/",
+        "licence": "CC0",
+        "cut": [
+          0.075,
+          2.39
+        ]
+      },
+      {
+        "file": "lynx-angry-3.mp3",
+        "id": "404059",
+        "title": "Honky-Tonk Piano.wav",
+        "user": "Lynx_5969",
+        "url": "https://freesound.org/people/Lynx_5969/sounds/404059/",
+        "licence": "CC0",
+        "cut": [
+          0.025,
+          3.05
+        ]
+      }
+    ]
+  },
+  "lynx-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "118974",
+        "user": "esperri",
+        "title": "Small Bulldozer Engine.wav",
+        "preview": "https://cdn.freesound.org/previews/118/118974_1990695-hq.mp3",
+        "url": "https://freesound.org/people/esperri/sounds/118974/",
+        "licence": "CC0",
+        "dur": 12,
+        "downloads": 1700,
+        "note": "\"bobcat\"",
+        "snr": 6
+      },
+      {
+        "id": "460313",
+        "user": "sethrk",
+        "title": "Reverse beep.m4a",
+        "preview": "https://cdn.freesound.org/previews/460/460313_9572408-hq.mp3",
+        "url": "https://freesound.org/people/sethrk/sounds/460313/",
+        "licence": "CC0",
+        "dur": 11.5,
+        "downloads": 46,
+        "note": "\"bobcat\"",
+        "snr": 19
+      }
+    ],
+    "picks": [
+      {
+        "id": "460313",
+        "n": 1
+      },
+      {
+        "id": "118974",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "lynx-call-1.mp3",
+        "id": "460313",
+        "title": "Reverse beep.m4a",
+        "user": "sethrk",
+        "url": "https://freesound.org/people/sethrk/sounds/460313/",
+        "licence": "CC0",
+        "cut": [
+          10.425,
+          11.49
+        ]
+      }
+    ]
+  },
+  "bear-angry": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "204912",
+        "user": "Noxdl",
+        "title": "Didgeridoo Monster Roar",
+        "preview": "https://cdn.freesound.org/previews/204/204912_3048844-hq.mp3",
+        "url": "https://freesound.org/people/Noxdl/sounds/204912/",
+        "licence": "CC0",
+        "dur": 3.1,
+        "downloads": 6952,
+        "note": "\"bear roar\"",
+        "snr": 27
+      },
+      {
+        "id": "445983",
+        "user": "Breviceps",
+        "title": "Zombie gargles",
+        "preview": "https://cdn.freesound.org/previews/445/445983_9159316-hq.mp3",
+        "url": "https://freesound.org/people/Breviceps/sounds/445983/",
+        "licence": "CC0",
+        "dur": 0.9,
+        "downloads": 6305,
+        "note": "\"bear roar\"",
+        "snr": 18
+      },
+      {
+        "id": "342204",
+        "user": "Christopherderp",
+        "title": "Beast Snarling",
+        "preview": "https://cdn.freesound.org/previews/342/342204_3908740-hq.mp3",
+        "url": "https://freesound.org/people/Christopherderp/sounds/342204/",
+        "licence": "CC0",
+        "dur": 3.2,
+        "downloads": 3380,
+        "note": "\"bear roar\""
+      },
+      {
+        "id": "240311",
+        "user": "rifthead",
+        "title": "Nemean Roar.wav",
+        "preview": "https://cdn.freesound.org/previews/240/240311_864571-hq.mp3",
+        "url": "https://freesound.org/people/rifthead/sounds/240311/",
+        "licence": "CC0",
+        "dur": 15.6,
+        "downloads": 2650,
+        "note": "\"bear roar\"",
+        "snr": 14
+      },
+      {
+        "id": "77634",
+        "user": "lendrick",
+        "title": "growl3.wav",
+        "preview": "https://cdn.freesound.org/previews/77/77634_237568-hq.mp3",
+        "url": "https://freesound.org/people/lendrick/sounds/77634/",
+        "licence": "CC0",
+        "dur": 4.3,
+        "downloads": 2572,
+        "note": "\"bear roar\""
+      },
+      {
+        "id": "410343",
+        "user": "waxsocks",
+        "title": "Roar.wav",
+        "preview": "https://cdn.freesound.org/previews/410/410343_1766049-hq.mp3",
+        "url": "https://freesound.org/people/waxsocks/sounds/410343/",
+        "licence": "CC0",
+        "dur": 5.9,
+        "downloads": 2057,
+        "note": "\"bear roar\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "204912",
+        "n": 1
+      },
+      {
+        "id": "445983",
+        "n": 1
+      },
+      {
+        "id": "240311",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "bear-angry-1.mp3",
+        "id": "204912",
+        "title": "Didgeridoo Monster Roar",
+        "user": "Noxdl",
+        "url": "https://freesound.org/people/Noxdl/sounds/204912/",
+        "licence": "CC0",
+        "cut": [
+          0.155,
+          2.51
+        ]
+      },
+      {
+        "file": "bear-angry-2.mp3",
+        "id": "445983",
+        "title": "Zombie gargles",
+        "user": "Breviceps",
+        "url": "https://freesound.org/people/Breviceps/sounds/445983/",
+        "licence": "CC0",
+        "cut": [
+          0.075,
+          0.86
+        ]
+      },
+      {
+        "file": "bear-angry-3.mp3",
+        "id": "240311",
+        "title": "Nemean Roar.wav",
+        "user": "rifthead",
+        "url": "https://freesound.org/people/rifthead/sounds/240311/",
+        "licence": "CC0",
+        "cut": [
+          1.145,
+          4.67
+        ]
+      }
+    ]
+  },
+  "bear-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "506361",
+        "user": "highflyer500",
+        "title": "Rocket Sled Crash On A Frozen Lake In Wisconsin",
+        "preview": "https://cdn.freesound.org/previews/506/506361_10785049-hq.mp3",
+        "url": "https://freesound.org/people/highflyer500/sounds/506361/",
+        "licence": "CC0",
+        "dur": 25.8,
+        "downloads": 408,
+        "note": "\"bear breathing\"",
+        "snr": 46
+      },
+      {
+        "id": "708959",
+        "user": "PJ_Bear",
+        "title": "spooky_wind",
+        "preview": "https://cdn.freesound.org/previews/708/708959_15124018-hq.mp3",
+        "url": "https://freesound.org/people/PJ_Bear/sounds/708959/",
+        "licence": "CC0",
+        "dur": 4.6,
+        "downloads": 164,
+        "note": "\"bear breathing\"",
+        "snr": 13
+      },
+      {
+        "id": "519598",
+        "user": "Nivatius",
+        "title": "huf grizzly",
+        "preview": "https://cdn.freesound.org/previews/519/519598_7143328-hq.mp3",
+        "url": "https://freesound.org/people/Nivatius/sounds/519598/",
+        "licence": "CC0",
+        "dur": 0.4,
+        "downloads": 77,
+        "note": "\"bear breathing\"",
+        "snr": 25
+      },
+      {
+        "id": "170454",
+        "user": "husky70",
+        "title": "Angry Beast.wav",
+        "preview": "https://cdn.freesound.org/previews/170/170454_2840087-hq.mp3",
+        "url": "https://freesound.org/people/husky70/sounds/170454/",
+        "licence": "CC0",
+        "dur": 13.1,
+        "downloads": 11227,
+        "note": "\"bear\"",
+        "snr": 41
+      },
+      {
+        "id": "368834",
+        "user": "georgisound",
+        "title": "Footsteps_Hallway.wav",
+        "preview": "https://cdn.freesound.org/previews/368/368834_6790631-hq.mp3",
+        "url": "https://freesound.org/people/georgisound/sounds/368834/",
+        "licence": "CC0",
+        "dur": 31.7,
+        "downloads": 10643,
+        "note": "\"bear\""
+      },
+      {
+        "id": "274007",
+        "user": "tony_bear",
+        "title": "prize wheel",
+        "preview": "https://cdn.freesound.org/previews/274/274007_4993416-hq.mp3",
+        "url": "https://freesound.org/people/tony_bear/sounds/274007/",
+        "licence": "CC0",
+        "dur": 39.6,
+        "downloads": 7340,
+        "note": "\"bear\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "506361",
+        "n": 1
+      },
+      {
+        "id": "170454",
+        "n": 1
+      },
+      {
+        "id": "519598",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "bear-call-1.mp3",
+        "id": "506361",
+        "title": "Rocket Sled Crash On A Frozen Lake In Wisconsin",
+        "user": "highflyer500",
+        "url": "https://freesound.org/people/highflyer500/sounds/506361/",
+        "licence": "CC0",
+        "cut": [
+          4.655,
+          7.68
+        ]
+      },
+      {
+        "file": "bear-call-2.mp3",
+        "id": "170454",
+        "title": "Angry Beast.wav",
+        "user": "husky70",
+        "url": "https://freesound.org/people/husky70/sounds/170454/",
+        "licence": "CC0",
+        "cut": [
+          0.825,
+          2.08
+        ]
+      },
+      {
+        "file": "bear-call-3.mp3",
+        "id": "519598",
+        "title": "huf grizzly",
+        "user": "Nivatius",
+        "url": "https://freesound.org/people/Nivatius/sounds/519598/",
+        "licence": "CC0",
+        "cut": [
+          0.035,
+          0.35
+        ]
+      }
+    ]
+  },
+  "chicken-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "316920",
+        "user": "Rudmer_Rotteveel",
+        "title": "Chicken Single Alarm Call",
+        "preview": "https://cdn.freesound.org/previews/316/316920_4921277-hq.mp3",
+        "url": "https://freesound.org/people/Rudmer_Rotteveel/sounds/316920/",
+        "licence": "CC0",
+        "dur": 1.2,
+        "downloads": 25097,
+        "note": "\"chicken cluck\""
+      },
+      {
+        "id": "316921",
+        "user": "Rudmer_Rotteveel",
+        "title": "Chicken Alarm Call full with Occasional bird sound",
+        "preview": "https://cdn.freesound.org/previews/316/316921_4921277-hq.mp3",
+        "url": "https://freesound.org/people/Rudmer_Rotteveel/sounds/316921/",
+        "licence": "CC0",
+        "dur": 25.1,
+        "downloads": 12209,
+        "note": "\"chicken cluck\""
+      },
+      {
+        "id": "456803",
+        "user": "Breviceps",
+        "title": "Chicken clucking",
+        "preview": "https://cdn.freesound.org/previews/456/456803_9159316-hq.mp3",
+        "url": "https://freesound.org/people/Breviceps/sounds/456803/",
+        "licence": "CC0",
+        "dur": 15,
+        "downloads": 8661,
+        "note": "\"chicken cluck\"",
+        "snr": 35
+      },
+      {
+        "id": "170808",
+        "user": "esperar",
+        "title": "Chicken imitation",
+        "preview": "https://cdn.freesound.org/previews/170/170808_377731-hq.mp3",
+        "url": "https://freesound.org/people/esperar/sounds/170808/",
+        "licence": "CC0",
+        "dur": 2.4,
+        "downloads": 4272,
+        "note": "\"chicken cluck\"",
+        "snr": 42
+      },
+      {
+        "id": "346961",
+        "user": "evsecrets",
+        "title": "Chickens clucking and rooster with cockadoodledoo.wav",
+        "preview": "https://cdn.freesound.org/previews/346/346961_2367065-hq.mp3",
+        "url": "https://freesound.org/people/evsecrets/sounds/346961/",
+        "licence": "CC0",
+        "dur": 37,
+        "downloads": 3944,
+        "note": "\"chicken cluck\""
+      },
+      {
+        "id": "128069",
+        "user": "Framefive",
+        "title": "clucking_Chickens_and_a_crowing_Rooster.wav",
+        "preview": "https://cdn.freesound.org/previews/128/128069_707115-hq.mp3",
+        "url": "https://freesound.org/people/Framefive/sounds/128069/",
+        "licence": "CC0",
+        "dur": 39.8,
+        "downloads": 1959,
+        "note": "\"chicken cluck\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "170808",
+        "n": 1
+      },
+      {
+        "id": "456803",
+        "n": 1
+      },
+      {
+        "id": "316920",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "chicken-call-1.mp3",
+        "id": "170808",
+        "title": "Chicken imitation",
+        "user": "esperar",
+        "url": "https://freesound.org/people/esperar/sounds/170808/",
+        "licence": "CC0",
+        "cut": [
+          0.165,
+          0.79
+        ]
+      },
+      {
+        "file": "chicken-call-2.mp3",
+        "id": "456803",
+        "title": "Chicken clucking",
+        "user": "Breviceps",
+        "url": "https://freesound.org/people/Breviceps/sounds/456803/",
+        "licence": "CC0",
+        "cut": [
+          0.445,
+          1.75
+        ]
+      },
+      {
+        "file": "chicken-call-3.mp3",
+        "id": "316920",
+        "title": "Chicken Single Alarm Call",
+        "user": "Rudmer_Rotteveel",
+        "url": "https://freesound.org/people/Rudmer_Rotteveel/sounds/316920/",
+        "licence": "CC0",
+        "cut": [
+          0.005,
+          0.89
+        ]
+      }
+    ]
+  },
+  "chicken-alarm": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "406094",
+        "user": "Zajjman",
+        "title": "Chicken Talk.wav",
+        "preview": "https://cdn.freesound.org/previews/406/406094_3194431-hq.mp3",
+        "url": "https://freesound.org/people/Zajjman/sounds/406094/",
+        "licence": "CC0",
+        "dur": 36,
+        "downloads": 1235,
+        "note": "\"chicken squawk\"",
+        "snr": 54
+      },
+      {
+        "id": "673255",
+        "user": "Preacher13",
+        "title": "Bwack.mp3",
+        "preview": "https://cdn.freesound.org/previews/673/673255_14693005-hq.mp3",
+        "url": "https://freesound.org/people/Preacher13/sounds/673255/",
+        "licence": "CC0",
+        "dur": 3.7,
+        "downloads": 942,
+        "note": "\"chicken squawk\"",
+        "snr": 50
+      },
+      {
+        "id": "96958",
+        "user": "deia15",
+        "title": "chicken_freesound.wav",
+        "preview": "https://cdn.freesound.org/previews/96/96958_1357240-hq.mp3",
+        "url": "https://freesound.org/people/deia15/sounds/96958/",
+        "licence": "CC0",
+        "dur": 32.1,
+        "downloads": 911,
+        "note": "\"chicken squawk\"",
+        "snr": 27
+      },
+      {
+        "id": "484722",
+        "user": "Breviceps",
+        "title": "Feeding chickens",
+        "preview": "https://cdn.freesound.org/previews/484/484722_9159316-hq.mp3",
+        "url": "https://freesound.org/people/Breviceps/sounds/484722/",
+        "licence": "CC0",
+        "dur": 9.9,
+        "downloads": 542,
+        "note": "\"chicken squawk\"",
+        "snr": 27
+      },
+      {
+        "id": "349177",
+        "user": "Zajjman",
+        "title": "Chicken squawk.wav",
+        "preview": "https://cdn.freesound.org/previews/349/349177_3194431-hq.mp3",
+        "url": "https://freesound.org/people/Zajjman/sounds/349177/",
+        "licence": "CC0",
+        "dur": 21,
+        "downloads": 418,
+        "note": "\"chicken squawk\""
+      },
+      {
+        "id": "444377",
+        "user": "deleted_user_958643",
+        "title": "Chicken.wav",
+        "preview": "https://cdn.freesound.org/previews/444/444377_958643-hq.mp3",
+        "url": "https://freesound.org/people/deleted_user_958643/sounds/444377/",
+        "licence": "CC0",
+        "dur": 7.9,
+        "downloads": 313,
+        "note": "\"chicken squawk\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "406094",
+        "n": 1
+      },
+      {
+        "id": "673255",
+        "n": 1
+      },
+      {
+        "id": "96958",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "chicken-alarm-1.mp3",
+        "id": "406094",
+        "title": "Chicken Talk.wav",
+        "user": "Zajjman",
+        "url": "https://freesound.org/people/Zajjman/sounds/406094/",
+        "licence": "CC0",
+        "cut": [
+          0.315,
+          1.62
+        ]
+      },
+      {
+        "file": "chicken-alarm-2.mp3",
+        "id": "673255",
+        "title": "Bwack.mp3",
+        "user": "Preacher13",
+        "url": "https://freesound.org/people/Preacher13/sounds/673255/",
+        "licence": "CC0",
+        "cut": [
+          1.115,
+          1.77
+        ]
+      },
+      {
+        "file": "chicken-alarm-3.mp3",
+        "id": "96958",
+        "title": "chicken_freesound.wav",
+        "user": "deia15",
+        "url": "https://freesound.org/people/deia15/sounds/96958/",
+        "licence": "CC0",
+        "cut": [
+          0.125,
+          1.19
+        ]
+      }
+    ]
+  },
+  "cow-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "177253",
+        "user": "JosephSardin",
+        "title": "Cow moos",
+        "preview": "https://cdn.freesound.org/previews/177/177253_276010-hq.mp3",
+        "url": "https://freesound.org/people/JosephSardin/sounds/177253/",
+        "licence": "CC0",
+        "dur": 14.3,
+        "downloads": 15368,
+        "note": "\"cow moo\"",
+        "snr": 54
+      },
+      {
+        "id": "163727",
+        "user": "felix.blume",
+        "title": "Cow mooing in south of France (Limousin)",
+        "preview": "https://cdn.freesound.org/previews/163/163727_1661766-hq.mp3",
+        "url": "https://freesound.org/people/felix.blume/sounds/163727/",
+        "licence": "CC0",
+        "dur": 15.4,
+        "downloads": 9919,
+        "note": "\"cow moo\"",
+        "snr": 50
+      },
+      {
+        "id": "59245",
+        "user": "Zozzy",
+        "title": "z-moo01.wav",
+        "preview": "https://cdn.freesound.org/previews/59/59245_91975-hq.mp3",
+        "url": "https://freesound.org/people/Zozzy/sounds/59245/",
+        "licence": "CC0",
+        "dur": 1.7,
+        "downloads": 6850,
+        "note": "\"cow moo\"",
+        "snr": 11
+      },
+      {
+        "id": "401636",
+        "user": "Mystikuum",
+        "title": "cows_mooing_mono_4824.wav",
+        "preview": "https://cdn.freesound.org/previews/401/401636_1643758-hq.mp3",
+        "url": "https://freesound.org/people/Mystikuum/sounds/401636/",
+        "licence": "CC0",
+        "dur": 5.5,
+        "downloads": 4383,
+        "note": "\"cow moo\"",
+        "snr": 33
+      },
+      {
+        "id": "513565",
+        "user": "spurioustransients",
+        "title": "Cow moo #8",
+        "preview": "https://cdn.freesound.org/previews/513/513565_2898771-hq.mp3",
+        "url": "https://freesound.org/people/spurioustransients/sounds/513565/",
+        "licence": "CC0",
+        "dur": 10.8,
+        "downloads": 3803,
+        "note": "\"cow moo\""
+      },
+      {
+        "id": "182506",
+        "user": "swiftoid",
+        "title": "Cow Shed with Birds",
+        "preview": "https://cdn.freesound.org/previews/182/182506_854782-hq.mp3",
+        "url": "https://freesound.org/people/swiftoid/sounds/182506/",
+        "licence": "CC0",
+        "dur": 12.6,
+        "downloads": 3790,
+        "note": "\"cow moo\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "177253",
+        "n": 1
+      },
+      {
+        "id": "163727",
+        "n": 1
+      },
+      {
+        "id": "401636",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "cow-call-1.mp3",
+        "id": "177253",
+        "title": "Cow moos",
+        "user": "JosephSardin",
+        "url": "https://freesound.org/people/JosephSardin/sounds/177253/",
+        "licence": "CC0",
+        "cut": [
+          1.215,
+          2.31
+        ]
+      },
+      {
+        "file": "cow-call-2.mp3",
+        "id": "163727",
+        "title": "Cow mooing in south of France (Limousin)",
+        "user": "felix.blume",
+        "url": "https://freesound.org/people/felix.blume/sounds/163727/",
+        "licence": "CC0",
+        "cut": [
+          0.215,
+          2.32
+        ]
+      },
+      {
+        "file": "cow-call-3.mp3",
+        "id": "401636",
+        "title": "cows_mooing_mono_4824.wav",
+        "user": "Mystikuum",
+        "url": "https://freesound.org/people/Mystikuum/sounds/401636/",
+        "licence": "CC0",
+        "cut": [
+          0.475,
+          2.16
+        ]
+      }
+    ]
+  },
+  "sheep-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "210511",
+        "user": "Yuval",
+        "title": "sheep bleat outdoors",
+        "preview": "https://cdn.freesound.org/previews/210/210511_770707-hq.mp3",
+        "url": "https://freesound.org/people/Yuval/sounds/210511/",
+        "licence": "CC0",
+        "dur": 30.2,
+        "downloads": 4551,
+        "note": "\"lamb bleat\"",
+        "snr": 51
+      },
+      {
+        "id": "171149",
+        "user": "esperar",
+        "title": "sheep 3.mp3",
+        "preview": "https://cdn.freesound.org/previews/171/171149_377731-hq.mp3",
+        "url": "https://freesound.org/people/esperar/sounds/171149/",
+        "licence": "CC0",
+        "dur": 0.8,
+        "downloads": 2365,
+        "note": "\"lamb bleat\"",
+        "snr": 13
+      },
+      {
+        "id": "171151",
+        "user": "esperar",
+        "title": "sheep 2.mp3",
+        "preview": "https://cdn.freesound.org/previews/171/171151_377731-hq.mp3",
+        "url": "https://freesound.org/people/esperar/sounds/171151/",
+        "licence": "CC0",
+        "dur": 1.1,
+        "downloads": 2310,
+        "note": "\"lamb bleat\"",
+        "snr": 38
+      },
+      {
+        "id": "182509",
+        "user": "swiftoid",
+        "title": "Lamb and Mother",
+        "preview": "https://cdn.freesound.org/previews/182/182509_854782-hq.mp3",
+        "url": "https://freesound.org/people/swiftoid/sounds/182509/",
+        "licence": "CC0",
+        "dur": 4.7,
+        "downloads": 2251,
+        "note": "\"lamb bleat\"",
+        "snr": 25
+      },
+      {
+        "id": "171152",
+        "user": "esperar",
+        "title": "sheep 1",
+        "preview": "https://cdn.freesound.org/previews/171/171152_377731-hq.mp3",
+        "url": "https://freesound.org/people/esperar/sounds/171152/",
+        "licence": "CC0",
+        "dur": 0.6,
+        "downloads": 1824,
+        "note": "\"lamb bleat\""
+      },
+      {
+        "id": "669872",
+        "user": "SergioJbs",
+        "title": "bah bala oveja/baa bleat sheep.WAV",
+        "preview": "https://cdn.freesound.org/previews/669/669872_8392567-hq.mp3",
+        "url": "https://freesound.org/people/SergioJbs/sounds/669872/",
+        "licence": "CC0",
+        "dur": 1.8,
+        "downloads": 890,
+        "note": "\"lamb bleat\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "210511",
+        "n": 1
+      },
+      {
+        "id": "171151",
+        "n": 1
+      },
+      {
+        "id": "182509",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "sheep-call-1.mp3",
+        "id": "210511",
+        "title": "sheep bleat outdoors",
+        "user": "Yuval",
+        "url": "https://freesound.org/people/Yuval/sounds/210511/",
+        "licence": "CC0",
+        "cut": [
+          1.295,
+          2.37
+        ]
+      },
+      {
+        "file": "sheep-call-2.mp3",
+        "id": "171151",
+        "title": "sheep 2.mp3",
+        "user": "esperar",
+        "url": "https://freesound.org/people/esperar/sounds/171151/",
+        "licence": "CC0",
+        "cut": [
+          0.135,
+          0.98
+        ]
+      },
+      {
+        "file": "sheep-call-3.mp3",
+        "id": "182509",
+        "title": "Lamb and Mother",
+        "user": "swiftoid",
+        "url": "https://freesound.org/people/swiftoid/sounds/182509/",
+        "licence": "CC0",
+        "cut": [
+          1.245,
+          2.63
+        ]
+      }
+    ]
+  },
+  "pig-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "352698",
+        "user": "Jofae",
+        "title": "Angry Pig Oinking",
+        "preview": "https://cdn.freesound.org/previews/352/352698_6512973-hq.mp3",
+        "url": "https://freesound.org/people/Jofae/sounds/352698/",
+        "licence": "CC0",
+        "dur": 8.1,
+        "downloads": 5527,
+        "note": "\"pig oink\""
+      },
+      {
+        "id": "442906",
+        "user": "qubodup",
+        "title": "Pig Oink",
+        "preview": "https://cdn.freesound.org/previews/442/442906_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/442906/",
+        "licence": "CC0",
+        "dur": 0.7,
+        "downloads": 4637,
+        "note": "\"pig oink\"",
+        "snr": 12
+      },
+      {
+        "id": "233151",
+        "user": "JarredGibb",
+        "title": "Pig - Scream 5 - 96kHz.wav",
+        "preview": "https://cdn.freesound.org/previews/233/233151_4056007-hq.mp3",
+        "url": "https://freesound.org/people/JarredGibb/sounds/233151/",
+        "licence": "CC0",
+        "dur": 2,
+        "downloads": 2852,
+        "note": "\"pig oink\"",
+        "snr": 11
+      },
+      {
+        "id": "449577",
+        "user": "zachrau",
+        "title": "Pigs oinking",
+        "preview": "https://cdn.freesound.org/previews/449/449577_676927-hq.mp3",
+        "url": "https://freesound.org/people/zachrau/sounds/449577/",
+        "licence": "CC0",
+        "dur": 10.9,
+        "downloads": 2647,
+        "note": "\"pig oink\"",
+        "snr": 27
+      },
+      {
+        "id": "233183",
+        "user": "JarredGibb",
+        "title": "Pig - Multiple Snorts 2 (2 pigs) - 96kHz.wav",
+        "preview": "https://cdn.freesound.org/previews/233/233183_4056007-hq.mp3",
+        "url": "https://freesound.org/people/JarredGibb/sounds/233183/",
+        "licence": "CC0",
+        "dur": 1.7,
+        "downloads": 2567,
+        "note": "\"pig oink\""
+      },
+      {
+        "id": "442907",
+        "user": "qubodup",
+        "title": "Pig Grunt",
+        "preview": "https://cdn.freesound.org/previews/442/442907_71257-hq.mp3",
+        "url": "https://freesound.org/people/qubodup/sounds/442907/",
+        "licence": "CC0",
+        "dur": 0.4,
+        "downloads": 2275,
+        "note": "\"pig oink\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "449577",
+        "n": 1
+      },
+      {
+        "id": "442906",
+        "n": 1
+      },
+      {
+        "id": "233151",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "pig-call-1.mp3",
+        "id": "449577",
+        "title": "Pigs oinking",
+        "user": "zachrau",
+        "url": "https://freesound.org/people/zachrau/sounds/449577/",
+        "licence": "CC0",
+        "cut": [
+          0.265,
+          0.88
+        ]
+      }
+    ]
+  },
+  "pig-hurt": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "233151",
+        "user": "JarredGibb",
+        "title": "Pig - Scream 5 - 96kHz.wav",
+        "preview": "https://cdn.freesound.org/previews/233/233151_4056007-hq.mp3",
+        "url": "https://freesound.org/people/JarredGibb/sounds/233151/",
+        "licence": "CC0",
+        "dur": 2,
+        "downloads": 2852,
+        "note": "\"pig scream\""
+      },
+      {
+        "id": "233152",
+        "user": "JarredGibb",
+        "title": "Pig - Scream 2 - 96kHz.wav",
+        "preview": "https://cdn.freesound.org/previews/233/233152_4056007-hq.mp3",
+        "url": "https://freesound.org/people/JarredGibb/sounds/233152/",
+        "licence": "CC0",
+        "dur": 2.9,
+        "downloads": 1334,
+        "note": "\"pig scream\"",
+        "snr": 35
+      },
+      {
+        "id": "233158",
+        "user": "JarredGibb",
+        "title": "Pig - Snort 9 - 96kHz.wav",
+        "preview": "https://cdn.freesound.org/previews/233/233158_4056007-hq.mp3",
+        "url": "https://freesound.org/people/JarredGibb/sounds/233158/",
+        "licence": "CC0",
+        "dur": 0.6,
+        "downloads": 1096,
+        "note": "\"pig scream\"",
+        "snr": 42
+      },
+      {
+        "id": "233149",
+        "user": "JarredGibb",
+        "title": "Pig - Scream 4 - 96kHz.wav",
+        "preview": "https://cdn.freesound.org/previews/233/233149_4056007-hq.mp3",
+        "url": "https://freesound.org/people/JarredGibb/sounds/233149/",
+        "licence": "CC0",
+        "dur": 1.8,
+        "downloads": 890,
+        "note": "\"pig scream\"",
+        "snr": 34
+      },
+      {
+        "id": "233155",
+        "user": "JarredGibb",
+        "title": "Pig - Scream 1 - 96kHz.wav",
+        "preview": "https://cdn.freesound.org/previews/233/233155_4056007-hq.mp3",
+        "url": "https://freesound.org/people/JarredGibb/sounds/233155/",
+        "licence": "CC0",
+        "dur": 3.2,
+        "downloads": 775,
+        "note": "\"pig scream\""
+      },
+      {
+        "id": "233148",
+        "user": "JarredGibb",
+        "title": "Pig - Snort 10 - 96kHz.wav",
+        "preview": "https://cdn.freesound.org/previews/233/233148_4056007-hq.mp3",
+        "url": "https://freesound.org/people/JarredGibb/sounds/233148/",
+        "licence": "CC0",
+        "dur": 0.7,
+        "downloads": 696,
+        "note": "\"pig scream\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "233158",
+        "n": 1
+      },
+      {
+        "id": "233152",
+        "n": 1
+      },
+      {
+        "id": "233149",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "pig-hurt-1.mp3",
+        "id": "233158",
+        "title": "Pig - Snort 9 - 96kHz.wav",
+        "user": "JarredGibb",
+        "url": "https://freesound.org/people/JarredGibb/sounds/233158/",
+        "licence": "CC0",
+        "cut": [
+          0.065,
+          0.32
+        ]
+      },
+      {
+        "file": "pig-hurt-2.mp3",
+        "id": "233152",
+        "title": "Pig - Scream 2 - 96kHz.wav",
+        "user": "JarredGibb",
+        "url": "https://freesound.org/people/JarredGibb/sounds/233152/",
+        "licence": "CC0",
+        "cut": [
+          0.295,
+          2.12
+        ]
+      },
+      {
+        "file": "pig-hurt-3.mp3",
+        "id": "233149",
+        "title": "Pig - Scream 4 - 96kHz.wav",
+        "user": "JarredGibb",
+        "url": "https://freesound.org/people/JarredGibb/sounds/233149/",
+        "licence": "CC0",
+        "cut": [
+          0.035,
+          1.16
+        ]
+      }
+    ]
+  },
+  "horse-call": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "149024",
+        "user": "foxen10",
+        "title": "Horse_Whinny.wav",
+        "preview": "https://cdn.freesound.org/previews/149/149024_2581089-hq.mp3",
+        "url": "https://freesound.org/people/foxen10/sounds/149024/",
+        "licence": "CC0",
+        "dur": 6.9,
+        "downloads": 30664,
+        "note": "\"horse whinny\"",
+        "snr": 36
+      },
+      {
+        "id": "59569",
+        "user": "3bagbrew",
+        "title": "horse.mp3",
+        "preview": "https://cdn.freesound.org/previews/59/59569_571436-hq.mp3",
+        "url": "https://freesound.org/people/3bagbrew/sounds/59569/",
+        "licence": "CC0",
+        "dur": 10,
+        "downloads": 15740,
+        "note": "\"horse whinny\"",
+        "snr": 62
+      },
+      {
+        "id": "347036",
+        "user": "Kubuzz",
+        "title": "horse's whinny",
+        "preview": "https://cdn.freesound.org/previews/347/347036_1708499-hq.mp3",
+        "url": "https://freesound.org/people/Kubuzz/sounds/347036/",
+        "licence": "CC0",
+        "dur": 10.7,
+        "downloads": 12903,
+        "note": "\"horse whinny\"",
+        "snr": 46
+      },
+      {
+        "id": "269571",
+        "user": "shadoWisp",
+        "title": "horse neigh shortened.wav",
+        "preview": "https://cdn.freesound.org/previews/269/269571_4564240-hq.mp3",
+        "url": "https://freesound.org/people/shadoWisp/sounds/269571/",
+        "licence": "CC0",
+        "dur": 1.5,
+        "downloads": 5742,
+        "note": "\"horse whinny\"",
+        "snr": 31
+      },
+      {
+        "id": "547967",
+        "user": "gurek",
+        "title": "a_herd_of_horses.wav",
+        "preview": "https://cdn.freesound.org/previews/547/547967_969948-hq.mp3",
+        "url": "https://freesound.org/people/gurek/sounds/547967/",
+        "licence": "CC0",
+        "dur": 19.3,
+        "downloads": 5602,
+        "note": "\"horse whinny\""
+      },
+      {
+        "id": "521246",
+        "user": "poodaddy69",
+        "title": "Horse",
+        "preview": "https://cdn.freesound.org/previews/521/521246_8923841-hq.mp3",
+        "url": "https://freesound.org/people/poodaddy69/sounds/521246/",
+        "licence": "CC0",
+        "dur": 2.3,
+        "downloads": 2718,
+        "note": "\"horse whinny\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "59569",
+        "n": 1
+      },
+      {
+        "id": "347036",
+        "n": 1
+      },
+      {
+        "id": "149024",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "horse-call-1.mp3",
+        "id": "59569",
+        "title": "horse.mp3",
+        "user": "3bagbrew",
+        "url": "https://freesound.org/people/3bagbrew/sounds/59569/",
+        "licence": "CC0",
+        "cut": [
+          0.045,
+          2.9
+        ]
+      },
+      {
+        "file": "horse-call-2.mp3",
+        "id": "347036",
+        "title": "horse's whinny",
+        "user": "Kubuzz",
+        "url": "https://freesound.org/people/Kubuzz/sounds/347036/",
+        "licence": "CC0",
+        "cut": [
+          1.295,
+          3.64
+        ]
+      },
+      {
+        "file": "horse-call-3.mp3",
+        "id": "149024",
+        "title": "Horse_Whinny.wav",
+        "user": "foxen10",
+        "url": "https://freesound.org/people/foxen10/sounds/149024/",
+        "licence": "CC0",
+        "cut": [
+          0.115,
+          0.74
+        ]
+      }
+    ]
+  },
+  "horse-snort": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "175356",
+        "user": "Max_Headroom",
+        "title": "Horse Galloping.wav",
+        "preview": "https://cdn.freesound.org/previews/175/175356_2861652-hq.mp3",
+        "url": "https://freesound.org/people/Max_Headroom/sounds/175356/",
+        "licence": "CC0",
+        "dur": 5.8,
+        "downloads": 15929,
+        "note": "\"horse snort\"",
+        "snr": 17
+      },
+      {
+        "id": "274898",
+        "user": "Podsburgh",
+        "title": "Maxheadroom's Galloping Horse (39 sec. loop)",
+        "preview": "https://cdn.freesound.org/previews/274/274898_4869300-hq.mp3",
+        "url": "https://freesound.org/people/Podsburgh/sounds/274898/",
+        "licence": "CC0",
+        "dur": 39.4,
+        "downloads": 5689,
+        "note": "\"horse snort\"",
+        "snr": 17
+      },
+      {
+        "id": "437111",
+        "user": "craigsmith",
+        "title": "G38-16-Four Horse Snorts.wav",
+        "preview": "https://cdn.freesound.org/previews/437/437111_2524442-hq.mp3",
+        "url": "https://freesound.org/people/craigsmith/sounds/437111/",
+        "licence": "CC0",
+        "dur": 10.6,
+        "downloads": 3953,
+        "note": "\"horse snort\"",
+        "snr": 30
+      },
+      {
+        "id": "538697",
+        "user": "bruno.auzet",
+        "title": "horse snort.wav",
+        "preview": "https://cdn.freesound.org/previews/538/538697_11519060-hq.mp3",
+        "url": "https://freesound.org/people/bruno.auzet/sounds/538697/",
+        "licence": "CC0",
+        "dur": 10.1,
+        "downloads": 2775,
+        "note": "\"horse snort\"",
+        "snr": 40
+      },
+      {
+        "id": "475483",
+        "user": "o_ciz",
+        "title": "Horse(snort)_3.wav",
+        "preview": "https://cdn.freesound.org/previews/475/475483_7009965-hq.mp3",
+        "url": "https://freesound.org/people/o_ciz/sounds/475483/",
+        "licence": "CC0",
+        "dur": 2.5,
+        "downloads": 1934,
+        "note": "\"horse snort\""
+      },
+      {
+        "id": "531429",
+        "user": "Garuda1982",
+        "title": "horse snort breathe eat recording",
+        "preview": "https://cdn.freesound.org/previews/531/531429_2061858-hq.mp3",
+        "url": "https://freesound.org/people/Garuda1982/sounds/531429/",
+        "licence": "CC0",
+        "dur": 31,
+        "downloads": 1672,
+        "note": "\"horse snort\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "538697",
+        "n": 1
+      },
+      {
+        "id": "437111",
+        "n": 1
+      },
+      {
+        "id": "175356",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "horse-snort-1.mp3",
+        "id": "538697",
+        "title": "horse snort.wav",
+        "user": "bruno.auzet",
+        "url": "https://freesound.org/people/bruno.auzet/sounds/538697/",
+        "licence": "CC0",
+        "cut": [
+          0.145,
+          1.02
+        ]
+      },
+      {
+        "file": "horse-snort-2.mp3",
+        "id": "437111",
+        "title": "G38-16-Four Horse Snorts.wav",
+        "user": "craigsmith",
+        "url": "https://freesound.org/people/craigsmith/sounds/437111/",
+        "licence": "CC0",
+        "cut": [
+          0.415,
+          1.53
+        ]
+      },
+      {
+        "file": "horse-snort-3.mp3",
+        "id": "175356",
+        "title": "Horse Galloping.wav",
+        "user": "Max_Headroom",
+        "url": "https://freesound.org/people/Max_Headroom/sounds/175356/",
+        "licence": "CC0",
+        "cut": [
+          0.635,
+          2.66
+        ]
+      }
+    ]
+  },
+  "wings-small": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "19295",
+        "user": "martian",
+        "title": "wing flaps layered.wav",
+        "preview": "https://cdn.freesound.org/previews/19/19295_84709-hq.mp3",
+        "url": "https://freesound.org/people/martian/sounds/19295/",
+        "licence": "CC0",
+        "dur": 13.8,
+        "downloads": 14335,
+        "note": "\"bird wings flap\"",
+        "snr": 27
+      },
+      {
+        "id": "532180",
+        "user": "mcmikai",
+        "title": "Pigeons flying",
+        "preview": "https://cdn.freesound.org/previews/532/532180_9735871-hq.mp3",
+        "url": "https://freesound.org/people/mcmikai/sounds/532180/",
+        "licence": "CC0",
+        "dur": 5.6,
+        "downloads": 11247,
+        "note": "\"bird wings flap\"",
+        "snr": 35
+      },
+      {
+        "id": "71417",
+        "user": "philberts",
+        "title": "wingflap_fast.wav",
+        "preview": "https://cdn.freesound.org/previews/71/71417_835438-hq.mp3",
+        "url": "https://freesound.org/people/philberts/sounds/71417/",
+        "licence": "CC0",
+        "dur": 15.4,
+        "downloads": 9409,
+        "note": "\"bird wings flap\"",
+        "snr": 28
+      },
+      {
+        "id": "240476",
+        "user": "Godowan",
+        "title": "wings.wav",
+        "preview": "https://cdn.freesound.org/previews/240/240476_1662097-hq.mp3",
+        "url": "https://freesound.org/people/Godowan/sounds/240476/",
+        "licence": "CC0",
+        "dur": 1,
+        "downloads": 7545,
+        "note": "\"bird wings flap\"",
+        "snr": 49
+      },
+      {
+        "id": "240469",
+        "user": "Godowan",
+        "title": "wings2.wav",
+        "preview": "https://cdn.freesound.org/previews/240/240469_1662097-hq.mp3",
+        "url": "https://freesound.org/people/Godowan/sounds/240469/",
+        "licence": "CC0",
+        "dur": 0.6,
+        "downloads": 6689,
+        "note": "\"bird wings flap\""
+      },
+      {
+        "id": "561009",
+        "user": "TurboFool",
+        "title": "Light Wing Flap",
+        "preview": "https://cdn.freesound.org/previews/561/561009_9160390-hq.mp3",
+        "url": "https://freesound.org/people/TurboFool/sounds/561009/",
+        "licence": "CC0",
+        "dur": 2.1,
+        "downloads": 6086,
+        "note": "\"bird wings flap\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "240476",
+        "n": 1
+      },
+      {
+        "id": "532180",
+        "n": 1
+      },
+      {
+        "id": "71417",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "wings-small-1.mp3",
+        "id": "240476",
+        "title": "wings.wav",
+        "user": "Godowan",
+        "url": "https://freesound.org/people/Godowan/sounds/240476/",
+        "licence": "CC0",
+        "cut": [
+          0,
+          0.58
+        ]
+      },
+      {
+        "file": "wings-small-2.mp3",
+        "id": "532180",
+        "title": "Pigeons flying",
+        "user": "mcmikai",
+        "url": "https://freesound.org/people/mcmikai/sounds/532180/",
+        "licence": "CC0",
+        "cut": [
+          1.035,
+          2.56
+        ]
+      },
+      {
+        "file": "wings-small-3.mp3",
+        "id": "71417",
+        "title": "wingflap_fast.wav",
+        "user": "philberts",
+        "url": "https://freesound.org/people/philberts/sounds/71417/",
+        "licence": "CC0",
+        "cut": [
+          0.065,
+          0.88
+        ]
+      }
+    ]
+  },
+  "wings-medium": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "153277",
+        "user": "gerardcatala",
+        "title": "Beating wings of a pigeon",
+        "preview": "https://cdn.freesound.org/previews/153/153277_2358240-hq.mp3",
+        "url": "https://freesound.org/people/gerardcatala/sounds/153277/",
+        "licence": "CC0",
+        "dur": 1.2,
+        "downloads": 6981,
+        "note": "\"pigeon take off\"",
+        "snr": 24
+      },
+      {
+        "id": "207387",
+        "user": "sinewave1kHz",
+        "title": "pigeon_take_off",
+        "preview": "https://cdn.freesound.org/previews/207/207387_1667744-hq.mp3",
+        "url": "https://freesound.org/people/sinewave1kHz/sounds/207387/",
+        "licence": "CC0",
+        "dur": 2.8,
+        "downloads": 2522,
+        "note": "\"pigeon take off\"",
+        "snr": 35
+      },
+      {
+        "id": "138029",
+        "user": "AMTR",
+        "title": "Pigeons Taking Off",
+        "preview": "https://cdn.freesound.org/previews/138/138029_2527802-hq.mp3",
+        "url": "https://freesound.org/people/AMTR/sounds/138029/",
+        "licence": "CC0",
+        "dur": 8.2,
+        "downloads": 267,
+        "note": "\"pigeon take off\"",
+        "snr": 21
+      },
+      {
+        "id": "532180",
+        "user": "mcmikai",
+        "title": "Pigeons flying",
+        "preview": "https://cdn.freesound.org/previews/532/532180_9735871-hq.mp3",
+        "url": "https://freesound.org/people/mcmikai/sounds/532180/",
+        "licence": "CC0",
+        "dur": 5.6,
+        "downloads": 11247,
+        "note": "\"pigeon wings\""
+      },
+      {
+        "id": "120107",
+        "user": "TOC1",
+        "title": "Bird Wings.aif",
+        "preview": "https://cdn.freesound.org/previews/120/120107_1943838-hq.mp3",
+        "url": "https://freesound.org/people/TOC1/sounds/120107/",
+        "licence": "CC0",
+        "dur": 8.5,
+        "downloads": 8894,
+        "note": "\"pigeon wings\""
+      },
+      {
+        "id": "467294",
+        "user": "XfiXy8",
+        "title": "Small Bird Flying.wav",
+        "preview": "https://cdn.freesound.org/previews/467/467294_9895957-hq.mp3",
+        "url": "https://freesound.org/people/XfiXy8/sounds/467294/",
+        "licence": "CC0",
+        "dur": 6,
+        "downloads": 5538,
+        "note": "\"pigeon wings\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "207387",
+        "n": 1
+      },
+      {
+        "id": "153277",
+        "n": 1
+      },
+      {
+        "id": "138029",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "wings-medium-1.mp3",
+        "id": "207387",
+        "title": "pigeon_take_off",
+        "user": "sinewave1kHz",
+        "url": "https://freesound.org/people/sinewave1kHz/sounds/207387/",
+        "licence": "CC0",
+        "cut": [
+          0.285,
+          1.54
+        ]
+      },
+      {
+        "file": "wings-medium-2.mp3",
+        "id": "153277",
+        "title": "Beating wings of a pigeon",
+        "user": "gerardcatala",
+        "url": "https://freesound.org/people/gerardcatala/sounds/153277/",
+        "licence": "CC0",
+        "cut": [
+          0.285,
+          1.03
+        ]
+      },
+      {
+        "file": "wings-medium-3.mp3",
+        "id": "138029",
+        "title": "Pigeons Taking Off",
+        "user": "AMTR",
+        "url": "https://freesound.org/people/AMTR/sounds/138029/",
+        "licence": "CC0",
+        "cut": [
+          0.915,
+          2.94
+        ]
+      }
+    ]
+  },
+  "wings-large": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "19295",
+        "user": "martian",
+        "title": "wing flaps layered.wav",
+        "preview": "https://cdn.freesound.org/previews/19/19295_84709-hq.mp3",
+        "url": "https://freesound.org/people/martian/sounds/19295/",
+        "licence": "CC0",
+        "dur": 13.8,
+        "downloads": 14335,
+        "note": "\"wings flapping\""
+      },
+      {
+        "id": "389634",
+        "user": "_stubb",
+        "title": "Wing Flap 1.wav",
+        "preview": "https://cdn.freesound.org/previews/389/389634_6068748-hq.mp3",
+        "url": "https://freesound.org/people/_stubb/sounds/389634/",
+        "licence": "CC0",
+        "dur": 0.9,
+        "downloads": 12288,
+        "note": "\"wings flapping\"",
+        "snr": 47
+      },
+      {
+        "id": "71417",
+        "user": "philberts",
+        "title": "wingflap_fast.wav",
+        "preview": "https://cdn.freesound.org/previews/71/71417_835438-hq.mp3",
+        "url": "https://freesound.org/people/philberts/sounds/71417/",
+        "licence": "CC0",
+        "dur": 15.4,
+        "downloads": 9409,
+        "note": "\"wings flapping\""
+      },
+      {
+        "id": "386706",
+        "user": "tommy_mooney",
+        "title": "wings flapping.wav",
+        "preview": "https://cdn.freesound.org/previews/386/386706_5798760-hq.mp3",
+        "url": "https://freesound.org/people/tommy_mooney/sounds/386706/",
+        "licence": "CC0",
+        "dur": 2.2,
+        "downloads": 7739,
+        "note": "\"wings flapping\"",
+        "snr": 101
+      },
+      {
+        "id": "240476",
+        "user": "Godowan",
+        "title": "wings.wav",
+        "preview": "https://cdn.freesound.org/previews/240/240476_1662097-hq.mp3",
+        "url": "https://freesound.org/people/Godowan/sounds/240476/",
+        "licence": "CC0",
+        "dur": 1,
+        "downloads": 7545,
+        "note": "\"wings flapping\""
+      },
+      {
+        "id": "240469",
+        "user": "Godowan",
+        "title": "wings2.wav",
+        "preview": "https://cdn.freesound.org/previews/240/240469_1662097-hq.mp3",
+        "url": "https://freesound.org/people/Godowan/sounds/240469/",
+        "licence": "CC0",
+        "dur": 0.6,
+        "downloads": 6689,
+        "note": "\"wings flapping\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "386706",
+        "n": 1
+      },
+      {
+        "id": "389634",
+        "n": 1
+      },
+      {
+        "id": "19295",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "wings-large-1.mp3",
+        "id": "386706",
+        "title": "wings flapping.wav",
+        "user": "tommy_mooney",
+        "url": "https://freesound.org/people/tommy_mooney/sounds/386706/",
+        "licence": "CC0",
+        "cut": [
+          0.135,
+          0.32
+        ]
+      },
+      {
+        "file": "wings-large-2.mp3",
+        "id": "389634",
+        "title": "Wing Flap 1.wav",
+        "user": "_stubb",
+        "url": "https://freesound.org/people/_stubb/sounds/389634/",
+        "licence": "CC0",
+        "cut": [
+          0.085,
+          0.52
+        ]
+      },
+      {
+        "file": "wings-large-3.mp3",
+        "id": "19295",
+        "title": "wing flaps layered.wav",
+        "user": "martian",
+        "url": "https://freesound.org/people/martian/sounds/19295/",
+        "licence": "CC0",
+        "cut": [
+          0.905,
+          3.43
+        ]
+      }
+    ]
+  },
+  "splash": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "398032",
+        "user": "swordofkings128",
+        "title": "Splash",
+        "preview": "https://cdn.freesound.org/previews/398/398032_7586736-hq.mp3",
+        "url": "https://freesound.org/people/swordofkings128/sounds/398032/",
+        "licence": "CC0",
+        "dur": 1.3,
+        "downloads": 15883,
+        "note": "\"splash small\"",
+        "snr": 39
+      },
+      {
+        "id": "50623",
+        "user": "vibe_crc",
+        "title": "water_splash_10shots.wav",
+        "preview": "https://cdn.freesound.org/previews/50/50623_333536-hq.mp3",
+        "url": "https://freesound.org/people/vibe_crc/sounds/50623/",
+        "licence": "CC0",
+        "dur": 15.7,
+        "downloads": 9744,
+        "note": "\"splash small\"",
+        "snr": 52
+      },
+      {
+        "id": "55246",
+        "user": "jasonmchl",
+        "title": "c02 bubbles edit.wav",
+        "preview": "https://cdn.freesound.org/previews/55/55246_685481-hq.mp3",
+        "url": "https://freesound.org/people/jasonmchl/sounds/55246/",
+        "licence": "CC0",
+        "dur": 23.5,
+        "downloads": 5428,
+        "note": "\"splash small\"",
+        "snr": 13
+      },
+      {
+        "id": "319418",
+        "user": "Braleven",
+        "title": "Small Water Spill",
+        "preview": "https://cdn.freesound.org/previews/319/319418_2809401-hq.mp3",
+        "url": "https://freesound.org/people/Braleven/sounds/319418/",
+        "licence": "CC0",
+        "dur": 1,
+        "downloads": 3242,
+        "note": "\"splash small\"",
+        "snr": 27
+      },
+      {
+        "id": "390005",
+        "user": "morganveilleux",
+        "title": "water splash- small",
+        "preview": "https://cdn.freesound.org/previews/390/390005_6987210-hq.mp3",
+        "url": "https://freesound.org/people/morganveilleux/sounds/390005/",
+        "licence": "CC0",
+        "dur": 2.9,
+        "downloads": 2323,
+        "note": "\"splash small\""
+      },
+      {
+        "id": "321490",
+        "user": "dslrguide",
+        "title": "Tiny Splash",
+        "preview": "https://cdn.freesound.org/previews/321/321490_5485024-hq.mp3",
+        "url": "https://freesound.org/people/dslrguide/sounds/321490/",
+        "licence": "CC0",
+        "dur": 1.6,
+        "downloads": 2139,
+        "note": "\"splash small\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "50623",
+        "n": 1
+      },
+      {
+        "id": "398032",
+        "n": 1
+      },
+      {
+        "id": "319418",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "splash-1.mp3",
+        "id": "50623",
+        "title": "water_splash_10shots.wav",
+        "user": "vibe_crc",
+        "url": "https://freesound.org/people/vibe_crc/sounds/50623/",
+        "licence": "CC0",
+        "cut": [
+          0.075,
+          0.45
+        ]
+      },
+      {
+        "file": "splash-2.mp3",
+        "id": "398032",
+        "title": "Splash",
+        "user": "swordofkings128",
+        "url": "https://freesound.org/people/swordofkings128/sounds/398032/",
+        "licence": "CC0",
+        "cut": [
+          0.005,
+          0.85
+        ]
+      },
+      {
+        "file": "splash-3.mp3",
+        "id": "319418",
+        "title": "Small Water Spill",
+        "user": "Braleven",
+        "url": "https://freesound.org/people/Braleven/sounds/319418/",
+        "licence": "CC0",
+        "cut": [
+          0.105,
+          0.85
+        ]
+      }
+    ]
+  },
+  "thud": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "675895",
+        "user": "craigsmith",
+        "title": "S29-30 Body falls in hard snow.wav",
+        "preview": "https://cdn.freesound.org/previews/675/675895_2524442-hq.mp3",
+        "url": "https://freesound.org/people/craigsmith/sounds/675895/",
+        "licence": "CC0",
+        "dur": 26.7,
+        "downloads": 490,
+        "note": "\"body fall snow\"",
+        "snr": 56
+      },
+      {
+        "id": "417994",
+        "user": "DylanTheFish",
+        "title": "Body fall.wav",
+        "preview": "https://cdn.freesound.org/previews/417/417994_7482766-hq.mp3",
+        "url": "https://freesound.org/people/DylanTheFish/sounds/417994/",
+        "licence": "CC0",
+        "dur": 1.8,
+        "downloads": 21097,
+        "note": "\"body fall\"",
+        "snr": 45
+      },
+      {
+        "id": "504626",
+        "user": "leonelmail",
+        "title": "BODY FALL - V HVY - DIRT",
+        "preview": "https://cdn.freesound.org/previews/504/504626_4437257-hq.mp3",
+        "url": "https://freesound.org/people/leonelmail/sounds/504626/",
+        "licence": "CC0",
+        "dur": 1.6,
+        "downloads": 16569,
+        "note": "\"body fall\"",
+        "snr": 38
+      },
+      {
+        "id": "244259",
+        "user": "j0rd4nkzf",
+        "title": "Fall on carpet",
+        "preview": "https://cdn.freesound.org/previews/244/244259_3254696-hq.mp3",
+        "url": "https://freesound.org/people/j0rd4nkzf/sounds/244259/",
+        "licence": "CC0",
+        "dur": 6.5,
+        "downloads": 15390,
+        "note": "\"body fall\"",
+        "snr": 55
+      },
+      {
+        "id": "82027",
+        "user": "raubana",
+        "title": "Body Fall Over.wav",
+        "preview": "https://cdn.freesound.org/previews/82/82027_1178110-hq.mp3",
+        "url": "https://freesound.org/people/raubana/sounds/82027/",
+        "licence": "CC0",
+        "dur": 0.4,
+        "downloads": 14791,
+        "note": "\"body fall\""
+      },
+      {
+        "id": "447922",
+        "user": "Breviceps",
+        "title": "Thud / Falling on wooden floor / Snapping, breaking neck",
+        "preview": "https://cdn.freesound.org/previews/447/447922_9159316-hq.mp3",
+        "url": "https://freesound.org/people/Breviceps/sounds/447922/",
+        "licence": "CC0",
+        "dur": 0.4,
+        "downloads": 11876,
+        "note": "\"body fall\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "675895",
+        "n": 1
+      },
+      {
+        "id": "244259",
+        "n": 1
+      },
+      {
+        "id": "417994",
+        "n": 1
+      }
+    ],
+    "out": [
+      {
+        "file": "thud-1.mp3",
+        "id": "675895",
+        "title": "S29-30 Body falls in hard snow.wav",
+        "user": "craigsmith",
+        "url": "https://freesound.org/people/craigsmith/sounds/675895/",
+        "licence": "CC0",
+        "cut": [
+          5.015,
+          5.53
+        ]
+      },
+      {
+        "file": "thud-2.mp3",
+        "id": "244259",
+        "title": "Fall on carpet",
+        "user": "j0rd4nkzf",
+        "url": "https://freesound.org/people/j0rd4nkzf/sounds/244259/",
+        "licence": "CC0",
+        "cut": [
+          4.695,
+          5.41
+        ]
+      },
+      {
+        "file": "thud-3.mp3",
+        "id": "417994",
+        "title": "Body fall.wav",
+        "user": "DylanTheFish",
+        "url": "https://freesound.org/people/DylanTheFish/sounds/417994/",
+        "licence": "CC0",
+        "cut": [
+          0.225,
+          1.05
+        ]
+      }
+    ]
+  },
+  "hooves-gallop": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "175356",
+        "user": "Max_Headroom",
+        "title": "Horse Galloping.wav",
+        "preview": "https://cdn.freesound.org/previews/175/175356_2861652-hq.mp3",
+        "url": "https://freesound.org/people/Max_Headroom/sounds/175356/",
+        "licence": "CC0",
+        "dur": 5.8,
+        "downloads": 15929,
+        "note": "\"horse gallop\""
+      },
+      {
+        "id": "165532",
+        "user": "StephenSaldanha",
+        "title": "SRS_Foley_Horse_Galloping.wav",
+        "preview": "https://cdn.freesound.org/previews/165/165532_1799601-hq.mp3",
+        "url": "https://freesound.org/people/StephenSaldanha/sounds/165532/",
+        "licence": "CC0",
+        "dur": 11.5,
+        "downloads": 15025,
+        "note": "\"horse gallop\""
+      },
+      {
+        "id": "564628",
+        "user": "D4XX",
+        "title": "Single Horse Galopp",
+        "preview": "https://cdn.freesound.org/previews/564/564628_887696-hq.mp3",
+        "url": "https://freesound.org/people/D4XX/sounds/564628/",
+        "licence": "CC0",
+        "dur": 11.8,
+        "downloads": 7895,
+        "note": "\"horse gallop\""
+      },
+      {
+        "id": "197212",
+        "user": "HebronTheatre",
+        "title": "Horse Gallop - Loopable.mp3",
+        "preview": "https://cdn.freesound.org/previews/197/197212_3001728-hq.mp3",
+        "url": "https://freesound.org/people/HebronTheatre/sounds/197212/",
+        "licence": "CC0",
+        "dur": 2.9,
+        "downloads": 6385,
+        "note": "\"horse gallop\""
+      },
+      {
+        "id": "274898",
+        "user": "Podsburgh",
+        "title": "Maxheadroom's Galloping Horse (39 sec. loop)",
+        "preview": "https://cdn.freesound.org/previews/274/274898_4869300-hq.mp3",
+        "url": "https://freesound.org/people/Podsburgh/sounds/274898/",
+        "licence": "CC0",
+        "dur": 39.4,
+        "downloads": 5689,
+        "note": "\"horse gallop\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "175356",
+        "cuts": [
+          [
+            0.5,
+            3
+          ]
+        ]
+      }
+    ],
+    "out": [
+      {
+        "file": "hooves-gallop-1.mp3",
+        "id": "175356",
+        "title": "Horse Galloping.wav",
+        "user": "Max_Headroom",
+        "url": "https://freesound.org/people/Max_Headroom/sounds/175356/",
+        "licence": "CC0",
+        "cut": [
+          0.5,
+          3.5
+        ]
+      }
+    ]
+  },
+  "hooves-trot": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "182504",
+        "user": "swiftoid",
+        "title": "Horse Clip Clopping Downhill (stereo)",
+        "preview": "https://cdn.freesound.org/previews/182/182504_854782-hq.mp3",
+        "url": "https://freesound.org/people/swiftoid/sounds/182504/",
+        "licence": "CC0",
+        "dur": 29.4,
+        "downloads": 7593,
+        "note": "\"horse trot\"",
+        "snr": 37
+      },
+      {
+        "id": "197212",
+        "user": "HebronTheatre",
+        "title": "Horse Gallop - Loopable.mp3",
+        "preview": "https://cdn.freesound.org/previews/197/197212_3001728-hq.mp3",
+        "url": "https://freesound.org/people/HebronTheatre/sounds/197212/",
+        "licence": "CC0",
+        "dur": 2.9,
+        "downloads": 6385,
+        "note": "\"horse trot\""
+      },
+      {
+        "id": "322448",
+        "user": "DeadxCreed",
+        "title": "Horse Gallop Loop.wav",
+        "preview": "https://cdn.freesound.org/previews/322/322448_4946822-hq.mp3",
+        "url": "https://freesound.org/people/DeadxCreed/sounds/322448/",
+        "licence": "CC0",
+        "dur": 3,
+        "downloads": 1691,
+        "note": "\"horse trot\""
+      },
+      {
+        "id": "653091",
+        "user": "chuckeazay22",
+        "title": "Horse and Carriage.wav",
+        "preview": "https://cdn.freesound.org/previews/653/653091_6663213-hq.mp3",
+        "url": "https://freesound.org/people/chuckeazay22/sounds/653091/",
+        "licence": "CC0",
+        "dur": 15.2,
+        "downloads": 1621,
+        "note": "\"horse trot\""
+      },
+      {
+        "id": "581834",
+        "user": "MrFizzywig",
+        "title": "SFX - Horse - Trot.wav",
+        "preview": "https://cdn.freesound.org/previews/581/581834_6904485-hq.mp3",
+        "url": "https://freesound.org/people/MrFizzywig/sounds/581834/",
+        "licence": "CC0",
+        "dur": 22.7,
+        "downloads": 1333,
+        "note": "\"horse trot\""
+      }
+    ],
+    "picks": [
+      {
+        "id": "182504",
+        "cuts": [
+          [
+            0.5,
+            3
+          ]
+        ]
+      }
+    ],
+    "out": [
+      {
+        "file": "hooves-trot-1.mp3",
+        "id": "182504",
+        "title": "Horse Clip Clopping Downhill (stereo)",
+        "user": "swiftoid",
+        "url": "https://freesound.org/people/swiftoid/sounds/182504/",
+        "licence": "CC0",
+        "cut": [
+          0.5,
+          3.5
+        ]
+      }
+    ]
+  },
+  "paws": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "444789",
+        "user": "ross_sinc",
+        "title": "Dog Growling and Running.wav",
+        "preview": "https://cdn.freesound.org/previews/444/444789_8282800-hq.mp3",
+        "url": "https://freesound.org/people/ross_sinc/sounds/444789/",
+        "licence": "CC0",
+        "dur": 8.3,
+        "downloads": 2427,
+        "note": "\"dog running\""
+      },
+      {
+        "id": "613368",
+        "user": "felix.blume",
+        "title": "Coyotes Running During The Night In The Woods",
+        "preview": "https://cdn.freesound.org/previews/613/613368_1661766-hq.mp3",
+        "url": "https://freesound.org/people/felix.blume/sounds/613368/",
+        "licence": "CC0",
+        "dur": 48.2,
+        "downloads": 2063,
+        "note": "\"dog running\""
+      },
+      {
+        "id": "169081",
+        "user": "bloomypetal",
+        "title": "kids at the beach.wav",
+        "preview": "https://cdn.freesound.org/previews/169/169081_266745-hq.mp3",
+        "url": "https://freesound.org/people/bloomypetal/sounds/169081/",
+        "licence": "CC0",
+        "dur": 34.2,
+        "downloads": 1604,
+        "note": "\"dog running\""
+      },
+      {
+        "id": "452202",
+        "user": "kyles",
+        "title": "dog small whimper +run.flac",
+        "preview": "https://cdn.freesound.org/previews/452/452202_612689-hq.mp3",
+        "url": "https://freesound.org/people/kyles/sounds/452202/",
+        "licence": "CC0",
+        "dur": 7.8,
+        "downloads": 1566,
+        "note": "\"dog running\""
+      },
+      {
+        "id": "207124",
+        "user": "ahill86",
+        "title": "DogBARKING.wav",
+        "preview": "https://cdn.freesound.org/previews/207/207124_2568776-hq.mp3",
+        "url": "https://freesound.org/people/ahill86/sounds/207124/",
+        "licence": "CC0",
+        "dur": 13.2,
+        "downloads": 1351,
+        "note": "\"dog running\""
+      }
+    ]
+  }
+}

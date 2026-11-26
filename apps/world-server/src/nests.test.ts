@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { ROOM_NAME } from "@yutopia/shared";
-import { dayNests, dayOf, NESTS, SHADE_STATES } from "@yutopia/shared/dark";
+import { dayNests, dayNestsIn, dayOf, NESTS, SHADE_STATES } from "@yutopia/shared/dark";
+import type { GroundsEdits } from "@yutopia/shared/grounds-edits";
 import { heightAt, walkableCell } from "@yutopia/shared/grounds";
 import { packMv } from "@yutopia/shared/move";
 import { Client, type Room } from "colyseus.js";
@@ -168,4 +169,68 @@ test("the nests' caches: out for the day; searched, what's in it comes to the po
   await waitFor(() => found.length > 0, 4000);
   assert.deepEqual(found[0].got.map((g) => g.id).sort(), c.items.map((i) => i.id).sort());
   await waitFor(() => !a.state.caches.has(c.id), 3000);
+});
+
+// ── past the campus (docs/plan/127-default-nests.md, F3b/F4a) ──────────────────────────────────────────────────────
+
+test("past the campus: a day's nest out on the long road, asleep, once you're near", async () => {
+  const a = await person(841, 85);
+  await hour(a, 12);
+  const d = dayOf(Date.now());
+  // the first far square east with a nest in it, a walkable spot by it
+  let far: ReturnType<typeof dayNestsIn>[number] | null = null;
+  let by: { x: number; z: number } | null = null;
+  for (let cx = 5; cx < 40 && !by; cx++)
+    for (let cz = -6; cz <= 1 && !by; cz++)
+      for (const n of dayNestsIn(d, cx, cz)) {
+        try {
+          by = spotNear(n.x, n.z, 25);
+          far = n;
+          break;
+        } catch {}
+      }
+  assert.ok(far && by, "a nest past the campus, somewhere to stand by it");
+  await standAt(a, by.x, by.z);
+  // (its square made once its land is: the worker's, a second or so)
+  await waitFor(() => round(a, far).length === far.n, 25_000);
+  for (const s of round(a, far)) assert.equal(s.s, code("lurk"), "asleep");
+  a.send("mod:dark", { mode: "peaceful" });
+});
+
+test("God mode's own nest out by day; a place kept clear keeps the day's away (F3b)", async () => {
+  const lay = (await import("./land.ts")).landEdits as (e: GroundsEdits) => unknown;
+  const a = await person(851, 86);
+  await hour(a, 12);
+  // somewhere far from the day's nests for its own; the farm's nest kept clear
+  let lone: { x: number; z: number } | null = null;
+  for (let z = -300; z < 100 && !lone; z += 23)
+    for (let x = -350; x < 200 && !lone; x += 29) {
+      if (!walkableCell(Math.floor(x), Math.floor(z))) continue;
+      if (nests.every((n) => Math.hypot(n.x - x, n.z - z) > 110)) lone = { x: Math.floor(x) + 0.5, z: Math.floor(z) + 0.5 };
+    }
+  const farm = nests.find((n) => n.zone === "farm");
+  assert.ok(lone && farm);
+  try {
+    lay({
+      rev: 9,
+      nests: {
+        add: [
+          { key: "t-nest", kind: "nest", x: lone.x, z: lone.z, n: 2 },
+          { key: "t-clear", kind: "clear", x: farm.x, z: farm.z, r: 20 },
+        ],
+      },
+    });
+    const own = { x: lone.x, z: lone.z };
+    const by = spotNear(own.x, own.z, 25);
+    await standAt(a, by.x, by.z);
+    await waitFor(() => round(a, own).length === 2, 15_000);
+    // by the farm's: nobody (kept clear)
+    const byFarm = spotNear(farm.x, farm.z, 25);
+    await standAt(a, byFarm.x, byFarm.z);
+    await sleep(3500);
+    assert.equal(round(a, farm).length, 0, "the farm's nest kept clear");
+  } finally {
+    lay({ rev: 0 });
+    a.send("mod:dark", { mode: "peaceful" });
+  }
 });

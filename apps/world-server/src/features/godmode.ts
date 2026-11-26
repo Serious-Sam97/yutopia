@@ -3,6 +3,8 @@ import { checkVehicles, isCarKind, validLook } from "@yutopia/shared/car";
 import { BUILDINGS, buildingsFor, CHUNK, checkEdits, editsNow, heightAt, insideOf } from "@yutopia/shared/grounds";
 import type { GroundsEdits } from "@yutopia/shared/grounds-edits";
 import { beyondLand, REACH_MARGIN } from "@yutopia/shared/land";
+import { animalPlacesOf, canBeAt, checkAnimalPlace, checkDefaultChange, isGeneratedKey } from "@yutopia/shared/animals/habitat";
+import { checkNestPlace, nestPlacesOf } from "@yutopia/shared/dark/nests";
 import { checkNpcPlaces } from "@yutopia/shared/npc/places";
 import { spaceShrinkWhy } from "@yutopia/shared/structure/spaces";
 import { api } from "../api.ts";
@@ -264,6 +266,23 @@ registerFeature((room: WorldRoom) => {
         ...vehicleProblems(draft.data),
         ...spaceProblems(draft.data),
         ...npcProblems(draft.data),
+        // (plan 126) the draft's animal places: herds, dens, nests, empty places, pens — each sound
+        ...animalPlacesOf(draft.data)
+          .map((p) => checkAnimalPlace(p))
+          .filter((w): w is string => !!w),
+        // (plan 127) the land's own groups changed: sound, and one moved where it can be (F7a) — only those this draft
+        // changes (one published long ago, its land changed since, doesn't hold every later publish up)
+        ...Object.entries(draft.data.animals?.change ?? {})
+          .filter(([k, c]) => isGeneratedKey(k) && JSON.stringify(editsNow().animals?.change?.[k] ?? null) !== JSON.stringify(c ?? null))
+          .map(([k, c]) => checkDefaultChange(k, c, canBeAt))
+          .filter((w): w is string => !!w),
+        ...(draft.data.animals?.remove ?? [])
+          .filter((k) => typeof k !== "string" || k.length > 40)
+          .map((k) => `${String(k).slice(0, 40)}: a key to take away`),
+        // (plan 127) the dark's nests God mode put down, its places kept clear
+        ...nestPlacesOf(draft.data)
+          .map((p) => checkNestPlace(p))
+          .filter((w): w is string => !!w),
       ];
       if (problems.length) return refuse(c, "The draft can't be published as it is.", problems);
       const rev = await commit(p, draft.data, { note, draftId: id });

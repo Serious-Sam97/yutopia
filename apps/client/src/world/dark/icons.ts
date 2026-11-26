@@ -56,6 +56,45 @@ export const ICON: Record<ItemId, string> = {
   board_cruiser_classic: board(5.6, "#ff7f50", "#ff8a3d", false),
   board_cruiser_wood: board(5.6, "#b98b5e", "#f0e68c", false),
   board_cruiser_mini: board(5.4, "#ff4f79", "#ffffff", false),
+  // (plan 126) food for the animals, what they leave, the farm's, warm clothes
+  bread:
+    '<svg viewBox="0 0 48 48"><path d="M6 30c0-10 8-16 18-16s18 6 18 16v4H6z" fill="#c98a43"/><path d="M14 22l4 6M22 18l3 8M31 19l2 7" stroke="#8a5420" stroke-width="2" stroke-linecap="round"/><rect x="6" y="32" width="36" height="4" rx="2" fill="#a96c30"/></svg>',
+  seed:
+    '<svg viewBox="0 0 48 48"><path d="M14 12h20l4 30H10z" fill="#c8b48a"/><path d="M14 12l4-4h12l4 4" fill="#a8946a"/><circle cx="20" cy="26" r="1.6" fill="#6b4a22"/><circle cx="27" cy="30" r="1.6" fill="#6b4a22"/><circle cx="24" cy="22" r="1.6" fill="#6b4a22"/><circle cx="29" cy="24" r="1.4" fill="#6b4a22"/></svg>',
+  nut:
+    '<svg viewBox="0 0 48 48"><path d="M24 12c9 0 14 7 14 15s-6 13-14 13-14-5-14-13 5-15 14-15z" fill="#a8703a"/><path d="M12 22c4-8 20-8 24 0" fill="#6b4422"/><path d="M24 12v-5" stroke="#5a3a1c" stroke-width="2.5"/></svg>',
+  apple:
+    '<svg viewBox="0 0 48 48"><path d="M24 16c-6-5-16-2-16 9s8 16 12 16c2 0 3-1 4-1s2 1 4 1c4 0 12-5 12-16s-10-14-16-9z" fill="#c8302b"/><path d="M24 16c0-4 1-8 4-10" stroke="#5a3a1c" stroke-width="2.4" fill="none"/><path d="M27 10c4-3 8-1 9 1-3 2-7 2-9-1z" fill="#5a9a3a"/></svg>',
+  carrot:
+    '<svg viewBox="0 0 48 48"><g transform="rotate(-40 24 24)"><path d="M20 14h8l-3 30h-2z" fill="#e8822a"/><path d="M21 20h3M22 27h3M23 34h2" stroke="#b85a14" stroke-width="1.2"/><path d="M24 14l-5-9M24 14l0-10M24 14l5-9" stroke="#4a9a3a" stroke-width="2.6" stroke-linecap="round"/></g></svg>',
+  meat:
+    '<svg viewBox="0 0 48 48"><path d="M10 26c0-9 9-15 18-13s12 9 10 16-11 11-18 9-10-6-10-12z" fill="#b8333a"/><path d="M16 24c4-5 12-6 16-2" stroke="#f2d6d0" stroke-width="2.4" fill="none"/><rect x="34" y="30" width="10" height="4" rx="2" transform="rotate(30 39 32)" fill="#efe9dc"/></svg>',
+  meat_cooked:
+    '<svg viewBox="0 0 48 48"><path d="M10 26c0-9 9-15 18-13s12 9 10 16-11 11-18 9-10-6-10-12z" fill="#7a4022"/><path d="M15 22l14 10M18 18l14 10" stroke="#4a2410" stroke-width="2"/><rect x="34" y="30" width="10" height="4" rx="2" transform="rotate(30 39 32)" fill="#efe9dc"/></svg>',
+  fish_raw:
+    '<svg viewBox="0 0 48 48"><path d="M6 24c8-10 22-12 32 0-10 12-24 10-32 0z" fill="#8aa6b8"/><path d="M38 24l8-7v14z" fill="#6e8a9c"/><circle cx="13" cy="22" r="1.8" fill="#1d2024"/><path d="M20 20q4 4 0 8M26 19q4 5 0 10" stroke="#5e7a8c" stroke-width="1.2" fill="none"/></svg>',
+  hide_fur:
+    '<svg viewBox="0 0 48 48"><path d="M10 12l6 3 8-4 8 4 6-3-2 10 4 8-6 2-2 8-8-3-8 3-2-8-6-2 4-8z" fill="#8a8478"/><path d="M18 20q6 4 12 0M17 28q7 4 14 0" stroke="#5e594f" stroke-width="1.4" fill="none"/></svg>',
+  hide_pelt:
+    '<svg viewBox="0 0 48 48"><path d="M10 12l6 3 8-4 8 4 6-3-2 10 4 8-6 2-2 8-8-3-8 3-2-8-6-2 4-8z" fill="#c26a2e"/><path d="M18 20q6 4 12 0M17 28q7 4 14 0" stroke="#8a4418" stroke-width="1.4" fill="none"/></svg>',
+  hide_leather:
+    '<svg viewBox="0 0 48 48"><path d="M10 12l6 3 8-4 8 4 6-3-2 10 4 8-6 2-2 8-8-3-8 3-2-8-6-2 4-8z" fill="#9a6a42"/><path d="M18 20q6 4 12 0M17 28q7 4 14 0" stroke="#6a4426" stroke-width="1.4" fill="none"/></svg>',
+  hide_wool:
+    '<svg viewBox="0 0 48 48"><g fill="#f1ece0" stroke="#cfc6b2" stroke-width="1.2"><circle cx="16" cy="22" r="8"/><circle cx="28" cy="18" r="9"/><circle cx="33" cy="29" r="8"/><circle cx="20" cy="31" r="8"/></g></svg>',
+  hide_feathers:
+    '<svg viewBox="0 0 48 48"><g transform="rotate(-35 24 24)"><path d="M24 4c8 8 8 26 0 36-8-10-8-28 0-36z" fill="#d9d4c8"/><path d="M24 6v38" stroke="#7a7466" stroke-width="1.4"/><path d="M24 14l-5-3M24 20l-6-3M24 26l-6-3M24 14l5-3M24 20l6-3M24 26l6-3" stroke="#a49e90" stroke-width="1"/></g></svg>',
+  egg:
+    '<svg viewBox="0 0 48 48"><path d="M24 8c8 0 13 13 13 21s-6 12-13 12-13-4-13-12S16 8 24 8z" fill="#efe3cf"/><path d="M18 18q2-5 6-6" stroke="#fff" stroke-width="2" fill="none"/></svg>',
+  milk:
+    '<svg viewBox="0 0 48 48"><path d="M19 6h10v6l5 6v24H14V18l5-6z" fill="#f4f4ef" stroke="#cfd4d8" stroke-width="1.4"/><rect x="18" y="4" width="12" height="4" rx="1" fill="#2f6db3"/><rect x="14" y="24" width="20" height="10" fill="#2f6db3"/></svg>',
+  fur_coat:
+    '<svg viewBox="0 0 48 48"><path d="M16 6l-8 6-4 26h8l2-18v24h20V20l2 18h8l-4-26-8-6-8 6z" fill="#7a5a3e"/><path d="M16 6l8 8 8-8" fill="none" stroke="#e8dcc6" stroke-width="4"/><path d="M24 14v30" stroke="#5a3e26" stroke-width="1.4"/></svg>',
+  fur_hat:
+    '<svg viewBox="0 0 48 48"><path d="M10 30c0-12 6-18 14-18s14 6 14 18z" fill="#6b5038"/><rect x="7" y="28" width="34" height="9" rx="4" fill="#d8cbb2"/><path d="M8 36l-2 8M40 36l2 8" stroke="#d8cbb2" stroke-width="5" stroke-linecap="round"/></svg>',
+  fur_gloves:
+    '<svg viewBox="0 0 48 48"><path d="M8 34V18q0-5 5-5t5 5v6l3-3 3 3-5 6v4z" fill="#6b5038"/><path d="M26 34V18q0-5 5-5t5 5v6l3-3 3 3-5 6v4z" fill="#6b5038"/><rect x="7" y="32" width="13" height="7" rx="3" fill="#d8cbb2"/><rect x="25" y="32" width="13" height="7" rx="3" fill="#d8cbb2"/></svg>',
+  fur_boots:
+    '<svg viewBox="0 0 48 48"><path d="M8 10h10v22l8 4v6H8z" fill="#6b5038"/><path d="M26 10h10v22l8 4v6H26z" fill="#6b5038"/><rect x="7" y="8" width="12" height="6" rx="3" fill="#d8cbb2"/><rect x="25" y="8" width="12" height="6" rx="3" fill="#d8cbb2"/></svg>',
 };
 
 // (plan 86 phase 1) …and as pictures of the things themselves: each rendered from its own model

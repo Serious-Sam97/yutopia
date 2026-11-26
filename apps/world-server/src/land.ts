@@ -49,6 +49,25 @@ export function ready(x: number, z: number): boolean {
   return hasChunk(Math.floor(x / CHUNK), Math.floor(z / CHUNK));
 }
 
+/** Is all the land in the square at (x0, z0) of `size` made (each of its land chunks)? If not, it's asked for (in the
+ *  worker): what reads the land everywhere in a square (the animals' cells, the dark's far nests — plan 127) waits for
+ *  it rather than make its chunks on the tick (~6 ms each, 36 in a 192 m square). */
+export function squareReady(x0: number, z0: number, size: number): boolean {
+  const c0 = Math.floor(x0 / CHUNK);
+  const c1 = Math.floor((x0 + size - 0.001) / CHUNK);
+  const d0 = Math.floor(z0 / CHUNK);
+  const d1 = Math.floor((z0 + size - 0.001) / CHUNK);
+  let all = true;
+  for (let cz = d0; cz <= d1 && all; cz++)
+    for (let cx = c0; cx <= c1; cx++)
+      if (isLandChunk(cx, cz, CHUNK) && !hasChunk(cx, cz)) {
+        all = false;
+        break;
+      }
+  if (!all) prefetch(x0 + size / 2, z0 + size / 2, size / 2 + CHUNK);
+  return all;
+}
+
 /** Make the land within `r` tiles of (x, z) ahead (in the worker), if it isn't. */
 export function prefetch(x: number, z: number, r: number): void {
   const L = landBounds();

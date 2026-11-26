@@ -1,0 +1,313 @@
+{
+  "bat": {
+    "call": [
+      "bat-call-1.mp3",
+      "bat-call-2.mp3",
+      "bat-call-3.mp3"
+    ]
+  },
+  "bear": {
+    "angry": [
+      "bear-angry-1.mp3",
+      "bear-angry-2.mp3",
+      "bear-angry-3.mp3"
+    ],
+    "call": [
+      "bear-call-1.mp3",
+      "bear-call-2.mp3",
+      "bear-call-3.mp3"
+    ]
+  },
+  "beaver": {
+    "alarm": [
+      "beaver-alarm-1.mp3",
+      "beaver-alarm-2.mp3",
+      "beaver-alarm-3.mp3"
+    ]
+  },
+  "boar": {
+    "call": [
+      "boar-call-1.mp3",
+      "boar-call-2.mp3",
+      "boar-call-3.mp3"
+    ],
+    "angry": [
+      "boar-angry-1.mp3",
+      "boar-angry-2.mp3"
+    ]
+  },
+  "cat": {
+    "call": [
+      "cat-call-1.mp3",
+      "cat-call-2.mp3",
+      "cat-call-3.mp3"
+    ],
+    "angry": [
+      "cat-angry-1.mp3",
+      "cat-angry-2.mp3",
+      "cat-angry-3.mp3"
+    ],
+    "hurt": [
+      "cat-hurt-1.mp3",
+      "cat-hurt-2.mp3",
+      "cat-hurt-3.mp3"
+    ]
+  },
+  "chicken": {
+    "call": [
+      "chicken-call-1.mp3",
+      "chicken-call-2.mp3",
+      "chicken-call-3.mp3"
+    ],
+    "alarm": [
+      "chicken-alarm-1.mp3",
+      "chicken-alarm-2.mp3",
+      "chicken-alarm-3.mp3"
+    ]
+  },
+  "cow": {
+    "call": [
+      "cow-call-1.mp3",
+      "cow-call-2.mp3",
+      "cow-call-3.mp3"
+    ]
+  },
+  "crow": {
+    "call": [
+      "crow-call-1.mp3",
+      "crow-call-2.mp3",
+      "crow-call-3.mp3"
+    ],
+    "alarm": [
+      "crow-alarm-1.mp3",
+      "crow-alarm-2.mp3",
+      "crow-alarm-3.mp3"
+    ]
+  },
+  "deer": {
+    "alarm": [
+      "deer-alarm-1.mp3",
+      "deer-alarm-2.mp3"
+    ],
+    "call": [
+      "deer-call-1.mp3",
+      "deer-call-2.mp3",
+      "deer-call-3.mp3"
+    ]
+  },
+  "duck": {
+    "call": [
+      "duck-call-1.mp3",
+      "duck-call-2.mp3",
+      "duck-call-3.mp3"
+    ],
+    "alarm": [
+      "duck-alarm-1.mp3",
+      "duck-alarm-2.mp3",
+      "duck-alarm-3.mp3"
+    ]
+  },
+  "elk": {
+    "call": [
+      "elk-call-1.mp3",
+      "elk-call-2.mp3",
+      "elk-call-3.mp3"
+    ]
+  },
+  "fox": {
+    "call": [
+      "fox-call-1.mp3",
+      "fox-call-2.mp3",
+      "fox-call-3.mp3"
+    ],
+    "alarm": [
+      "fox-alarm-1.mp3",
+      "fox-alarm-2.mp3"
+    ]
+  },
+  "frog": {
+    "call": [
+      "frog-call-1.mp3",
+      "frog-call-2.mp3",
+      "frog-call-3.mp3"
+    ]
+  },
+  "goose": {
+    "call": [
+      "goose-call-1.mp3",
+      "goose-call-2.mp3",
+      "goose-call-3.mp3"
+    ],
+    "angry": [
+      "goose-angry-1.mp3",
+      "goose-angry-2.mp3",
+      "goose-angry-3.mp3"
+    ]
+  },
+  "gull": {
+    "call": [
+      "gull-call-1.mp3",
+      "gull-call-2.mp3",
+      "gull-call-3.mp3"
+    ]
+  },
+  "hare": {
+    "hurt": [
+      "hare-hurt-1.mp3",
+      "hare-hurt-2.mp3"
+    ]
+  },
+  "hooves": {
+    "gallop": [
+      "hooves-gallop-1.mp3"
+    ],
+    "trot": [
+      "hooves-trot-1.mp3"
+    ]
+  },
+  "horse": {
+    "call": [
+      "horse-call-1.mp3",
+      "horse-call-2.mp3",
+      "horse-call-3.mp3"
+    ],
+    "snort": [
+      "horse-snort-1.mp3",
+      "horse-snort-2.mp3",
+      "horse-snort-3.mp3"
+    ]
+  },
+  "lynx": {
+    "angry": [
+      "lynx-angry-1.mp3",
+      "lynx-angry-2.mp3",
+      "lynx-angry-3.mp3"
+    ],
+    "call": [
+      "lynx-call-1.mp3"
+    ]
+  },
+  "moose": {
+    "call": [
+      "moose-call-1.mp3",
+      "moose-call-2.mp3",
+      "moose-call-3.mp3"
+    ]
+  },
+  "owl": {
+    "call": [
+      "owl-call-1.mp3",
+      "owl-call-2.mp3",
+      "owl-call-3.mp3"
+    ]
+  },
+  "pig": {
+    "call": [
+      "pig-call-1.mp3"
+    ],
+    "hurt": [
+      "pig-hurt-1.mp3",
+      "pig-hurt-2.mp3",
+      "pig-hurt-3.mp3"
+    ]
+  },
+  "pigeon": {
+    "call": [
+      "pigeon-call-1.mp3",
+      "pigeon-call-2.mp3",
+      "pigeon-call-3.mp3"
+    ]
+  },
+  "raccoon": {
+    "call": [
+      "raccoon-call-1.mp3",
+      "raccoon-call-2.mp3",
+      "raccoon-call-3.mp3"
+    ]
+  },
+  "sheep": {
+    "call": [
+      "sheep-call-1.mp3",
+      "sheep-call-2.mp3",
+      "sheep-call-3.mp3"
+    ]
+  },
+  "songbird": {
+    "call": [
+      "songbird-call-1.mp3",
+      "songbird-call-2.mp3",
+      "songbird-call-3.mp3"
+    ],
+    "alarm": [
+      "songbird-alarm-1.mp3",
+      "songbird-alarm-2.mp3",
+      "songbird-alarm-3.mp3"
+    ]
+  },
+  "splash": [
+    "splash-1.mp3",
+    "splash-2.mp3",
+    "splash-3.mp3"
+  ],
+  "squirrel": {
+    "call": [
+      "squirrel-call-1.mp3",
+      "squirrel-call-2.mp3",
+      "squirrel-call-3.mp3"
+    ],
+    "alarm": [
+      "squirrel-alarm-1.mp3",
+      "squirrel-alarm-2.mp3",
+      "squirrel-alarm-3.mp3"
+    ]
+  },
+  "thud": [
+    "thud-1.mp3",
+    "thud-2.mp3",
+    "thud-3.mp3"
+  ],
+  "wings": {
+    "small": [
+      "wings-small-1.mp3",
+      "wings-small-2.mp3",
+      "wings-small-3.mp3"
+    ],
+    "medium": [
+      "wings-medium-1.mp3",
+      "wings-medium-2.mp3",
+      "wings-medium-3.mp3"
+    ],
+    "large": [
+      "wings-large-1.mp3",
+      "wings-large-2.mp3",
+      "wings-large-3.mp3"
+    ]
+  },
+  "wolf": {
+    "call": [
+      "wolf-call-1.mp3",
+      "wolf-call-2.mp3",
+      "wolf-call-3.mp3"
+    ],
+    "angry": [
+      "wolf-angry-1.mp3",
+      "wolf-angry-2.mp3",
+      "wolf-angry-3.mp3"
+    ],
+    "hurt": [
+      "wolf-hurt-1.mp3",
+      "wolf-hurt-2.mp3",
+      "wolf-hurt-3.mp3"
+    ]
+  },
+  "loops": {
+    "hooves-gallop-1.mp3": [
+      0.1,
+      3.1
+    ],
+    "hooves-trot-1.mp3": [
+      0.1,
+      3.1
+    ]
+  }
+}

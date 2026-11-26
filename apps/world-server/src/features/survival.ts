@@ -65,7 +65,13 @@ import {
   rollLoot,
   STASH_MAX,
   type Stack,
+  STACKS,
   type StackId,
+  EATEN,
+  COOKS,
+  CRAFTS,
+  coldKept,
+  craft,
   settle,
   slotAt,
   spendRoll,
@@ -81,7 +87,8 @@ import {
   vitalByte,
   WEAPONS,
 } from "@yutopia/shared/dark";
-import { bankNear, heightAt, INSIDES, iceAt, inDeepWater, waterAt } from "@yutopia/shared/grounds";
+import { keptClear, nestPlacesOf } from "@yutopia/shared/dark/nests";
+import { bankNear, editsNow, heightAt, INSIDES, iceAt, inDeepWater, waterAt } from "@yutopia/shared/grounds";
 import { grownTemp } from "@yutopia/shared/grow";
 import { GAITS, KH_MOVE, MV_AIM } from "@yutopia/shared/move";
 import { between } from "@yutopia/shared/reach";
@@ -177,6 +184,9 @@ export interface SurvivalHooks {
   lend?(sid: string, inv: Inventory | null): void;
   /** …changed: sent to them and saved */
   changed(sid: string): void;
+  /** (plan 126) items given (an animal skinned, an egg, a crate's food): put in the pack — `toHand` the left hand first —,
+   *  sent and saved; what fitted */
+  gift(sid: string, items: { id: string; n: number }[], toHand?: boolean): { id: string; n: number }[];
   /** an admin's (docs/plan/48-the-admin.md): health, breath and battery full; up again if down */
   heal(sid: string): void;
   /** (plan 88) something left lying (Vortex's tape where he fell): on `level`'s floor at (x, y); `owner` (a user):
@@ -399,15 +409,20 @@ registerFeature((room: WorldRoom) => {
     return made;
   }
   // ── the day's caches: the nests' (shared dark/nests.ts), laid out with them; what's taken kept ──
-  let nestsOf: { day: number; nests: Nest[] } | null = null;
+  let nestsOf: { day: number; edits: unknown; nests: Nest[] } | null = null;
   const todays = (day: number) => {
-    if (nestsOf?.day !== day) nestsOf = { day, nests: dayNests(day) };
+    // (God mode's places kept clear of nests taken out first, as the dark lays them: plan 127)
+    const e = editsNow();
+    if (nestsOf?.day !== day || nestsOf.edits !== e) {
+      const places = nestPlacesOf(e);
+      nestsOf = { day, edits: e, nests: dayNests(day).filter((n) => !keptClear(places, n.x, n.z)) };
+    }
     return nestsOf.nests;
   };
   const cacheOf = (id: string): Cache | null => {
     const c = loot.cache;
     if (!c) return null;
-    return todays(c.day).find((n) => n.cache?.id === id)?.cache ?? null;
+    return todays(c.day).find((n) => n.cache?.id === id)?.cache ?? room.dark?.nestCaches().find((k) => k.id === id) ?? null;
   };
   // the caches out today: the nests that are (the base and more as people go out), not emptied
   const cachesTick = (now: number) => {
@@ -424,6 +439,18 @@ registerFeature((room: WorldRoom) => {
     for (let i = 0; i < k; i++) {
       const cache = all[i].cache;
       if (!cache || c.left[cache.id]?.length === 0) continue;
+      want.add(cache.id);
+      if (room.state.caches.has(cache.id)) continue;
+      const w = new CacheWire();
+      w.id = cache.id;
+      w.kind = cache.kind;
+      w.x = cache.x;
+      w.y = cache.z;
+      room.state.caches.set(w.id, w);
+    }
+    // (plan 127: God mode's nests' and the far land's, as the dark makes them)
+    for (const cache of room.dark?.peaceful ? [] : (room.dark?.nestCaches() ?? [])) {
+      if (c.left[cache.id]?.length === 0) continue;
       want.add(cache.id);
       if (room.state.caches.has(cache.id)) continue;
       const w = new CacheWire();
@@ -756,7 +783,50 @@ registerFeature((room: WorldRoom) => {
     const used = consume(s.inv, slot, USABLE);
     if (used === "aid") s.v.hp = 100;
     if (used === "battery") s.v.bat = 100;
+    if (used) ate(s, used);
     if (used) changed(s);
+  });
+  // (plan 126 F6c) what's eaten: health and warmth (raw meat: sick)
+  function ate(s: Survivor, id: StackId) {
+    const e = EATEN[id];
+    if (!e) return;
+    s.v.hp = Math.max(1, Math.min(100, s.v.hp + e.hp));
+    s.v.wm = Math.max(0, Math.min(100, s.v.wm + e.wm));
+  }
+  const byFire = (p: Player) => fires.some((f) => f.level === p.level && Math.hypot(p.x - f.x, p.y - f.y) < HEARTH_M);
+  // (plan 126 F6c) raw meat and fish cooked at a fire: the whole stack in the slot
+  room.on("dark:cook", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const s = p && people.get(p.uid);
+    const slot = Number(m?.slot);
+    if (!p || !s?.loaded || !Number.isInteger(slot)) return;
+    if (!byFire(p)) return room.send(client, "animal:did", { id: "", act: "cook", ok: false, why: "fire" });
+    const it = slotAt(s.inv, slot);
+    const st = it && "n" in it ? it : null;
+    const to = st ? COOKS[st.id] : undefined;
+    if (!st || !to) return;
+    // (cooked where it lies — the same box in the case, the left hand too: nothing raw taken that isn't given back
+    // cooked, a full pack or not)
+    const n = Math.min(st.n, STACKS[to]);
+    st.id = to;
+    st.n = n;
+    found(s, client.sessionId, "fire", [{ id: to, n }], false);
+  });
+  // (plan 126 phase 8) warm clothes made from hides at a workbench (the barn's, any built one)
+  room.on("dark:craft", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const s = p && people.get(p.uid);
+    const what = String(m?.what ?? "");
+    if (!p || !s?.loaded || !isStack(what) || !CRAFTS[what]) return;
+    let bench = Math.hypot(p.x - 444, p.y + 311) < 14 && p.level === 0; // (the barn's, by its doors: 440…464, −320…−302)
+    for (const o of room.state.objects.values())
+      if (!bench && o.kind === "workbench" && objLevel(fromSchema(o), room.map) === p.level) {
+        const [mx, my] = thingMiddle(fromSchema(o));
+        if (Math.hypot(mx - p.x, my - p.y) < 2.5) bench = true;
+      }
+    if (!bench) return room.send(client, "animal:did", { id: "", act: "craft", ok: false, why: "bench" });
+    if (!craft(s.inv, what)) return room.send(client, "animal:did", { id: "", act: "craft", ok: false, why: "short" });
+    found(s, client.sessionId, "workbench", [{ id: what, n: 1 }], false);
   });
   // (plan 87) the left hand's use — key 1: the torch on or off (`on`, else switched); a first aid or a battery used;
   // a flare lit and held up (F3b: one at a time — arms:flare throws it, still burning)
@@ -779,6 +849,7 @@ registerFeature((room: WorldRoom) => {
     const used = consume(s.inv, HAND_SLOT, USABLE);
     if (used === "aid") s.v.hp = 100;
     if (used === "battery") s.v.bat = 100;
+    if (used) ate(s, used);
     if (used) changed(s);
   });
   // ── down, up, awake (D7) ─────────────────────────────────────────────────
@@ -1053,6 +1124,24 @@ registerFeature((room: WorldRoom) => {
       const s = of(sid);
       if (s) changed(s);
     },
+    gift(sid: string, items: { id: string; n: number }[], toHand?: boolean) {
+      const s = of(sid);
+      if (!s?.loaded) return [];
+      const got: { id: string; n: number }[] = [];
+      for (const it of items) {
+        if (!isStack(it.id) || it.n < 1) continue;
+        let n = 0;
+        if (toHand && s.inv.hand?.id !== it.id && boardToHand(s.inv, it.id)) {
+          // (into the left hand — what was there to the pack —, a handful)
+          n = Math.min(it.n, STACKS[it.id]);
+          s.inv.hand = { id: it.id, n };
+        } else if (toHand && s.inv.hand?.id === it.id) n = addItemTo(s.inv, HAND_SLOT, { id: it.id, n: it.n });
+        else n = addItem(s.inv, { id: it.id, n: it.n });
+        if (n > 0) got.push({ id: it.id, n });
+      }
+      if (got.length) changed(s);
+      return got;
+    },
     breathless(sid) {
       const s = of(sid);
       if (!s || s.c.winded) return;
@@ -1228,7 +1317,8 @@ registerFeature((room: WorldRoom) => {
         stepVitals(
           s.v,
           s.c,
-          { sprinting, outside: land, night, storm: room.state.storm, chill, warm, hearth, focus, water },
+          // (plan 126 phase 8: warm clothes made from hides keep the cold off)
+          { sprinting, outside: land, night, storm: room.state.storm, chill: chill * coldKept(s.inv), warm, hearth, focus, water },
           dt,
         );
         p.focused = focus && s.v.bat > 0;

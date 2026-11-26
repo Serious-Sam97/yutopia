@@ -15,6 +15,9 @@ import {
   treeDensity,
   wayClearance,
 } from "../grounds.ts";
+import { buildingAt } from "../grounds-buildings.ts";
+import type { GroundsEdits } from "../grounds-edits.ts";
+import { pavedAt, walkableCell, waterAt } from "../grounds.ts";
 import type { ItemId } from "../inventory.ts";
 
 // The day's shadowed (docs/plan/31-the-day.md): nobody comes out of the dark
@@ -361,4 +364,196 @@ export function revive(alive: boolean[], deadAt: readonly number[], now: number,
       k++;
     }
   return k;
+}
+
+// ── past the campus (docs/plan/127-default-nests.md, F3b/F4a): the day's nests over all the land ──────────────────
+// The campus keeps its own (`dayNests`: the named places, the woods). Everywhere else the land makes a day's nests a
+// square at a time — by how much of it is deep woods, open ground, a bank — seeded by the day and the square: random
+// each day, the same for everyone; made only round people (the server's), so an empty map costs nothing. God mode
+// puts its own down (out every day) and keeps places clear of them.
+
+/** The squares the far land's nests are made in (m). */
+export const NEST_CELL = 192;
+/** A day's nests a km² of each, past the campus (fewer than the campus's showpiece woods: ~100 a km² there). */
+export const FAR_NESTS = { woods: 22, clearing: 5, river: 9 } as const;
+type FarZone = keyof typeof FAR_NESTS;
+
+/** Is (x, z) the campus's (its own nests, `dayNests`)? */
+export const inCampus = (x: number, z: number) => x >= LAND.x0 && x <= LAND.x1 && z >= LAND.z0 && z <= LAND.z1;
+
+/** Somewhere past the campus a nest may sit: the land walked, out of the water, off the paths and the paving, clear
+ *  of buildings. */
+export function farNestAllowed(x: number, z: number): boolean {
+  if (inCampus(x, z)) return false;
+  if (Math.hypot(x - HQ_DOORS.x, z - HQ_DOORS.z) < NESTS.hq) return false;
+  try {
+    if (!walkableCell(Math.floor(x), Math.floor(z))) return false;
+  } catch {
+    return false;
+  }
+  if (waterAt(x, z)) return false;
+  if (pavedAt(x, z) > 0.3) return false;
+  for (const [dx, dz] of [
+    [0, 0],
+    [3, 0],
+    [-3, 0],
+    [0, 3],
+    [0, -3],
+  ])
+    if (buildingAt(x + dx, z + dz)) return false;
+  return offPaths(x, z, NESTS.path + 0.71);
+}
+
+const farZoneAt = (x: number, z: number): FarZone | null => {
+  const w = waterAt(x, z);
+  if (w && w.depth >= 0.5) return null;
+  if (treeDensity(x, z) >= 0.6) return "woods";
+  for (let k = 0; k < 4; k++) {
+    const a = (k / 4) * Math.PI * 2;
+    const q = waterAt(x + Math.cos(a) * 10, z + Math.sin(a) * 10);
+    if (q && q.depth >= 0.5) return "river";
+  }
+  return "clearing";
+};
+const ZONE_OF: Record<FarZone, NestZone> = { woods: "woods", clearing: "clearing", river: "river" };
+
+const mix = (...v: number[]) => {
+  let h = 2166136261;
+  for (const n of v) {
+    h ^= Math.floor(n) | 0;
+    h = Math.imul(h, 16777619);
+    h ^= h >>> 13;
+  }
+  return h >>> 0;
+};
+
+/** The day's nests in square (cx, cz) past the campus: random each day, the same for everyone. */
+export function dayNestsIn(day: number, cx: number, cz: number): Nest[] {
+  const x0 = cx * NEST_CELL;
+  const z0 = cz * NEST_CELL;
+  // (all of it the campus's: none)
+  if (inCampus(x0, z0) && inCampus(x0 + NEST_CELL, z0 + NEST_CELL)) return [];
+  const r = groundsRng(mix(day, cx, cz, 127));
+  // (4 × 4 looks at the square: ~1–2 ms with its land made — the server makes one a second)
+  const S = 4;
+  const step = NEST_CELL / S;
+  const at: Record<FarZone, { x: number; z: number }[]> = { woods: [], clearing: [], river: [] };
+  for (let j = 0; j < S; j++)
+    for (let i = 0; i < S; i++) {
+      const x = x0 + (i + 0.5) * step;
+      const z = z0 + (j + 0.5) * step;
+      if (inCampus(x, z)) continue;
+      const zone = farZoneAt(x, z);
+      if (zone) at[zone].push({ x, z });
+    }
+  const km2 = (NEST_CELL * NEST_CELL) / 1e6;
+  const share = (z: FarZone) => (at[z].length / (S * S)) * FAR_NESTS[z] * km2;
+  const expect = share("woods") + share("clearing") + share("river");
+  const want = Math.floor(expect + r());
+  const out: Nest[] = [];
+  const size = () => {
+    let q = r();
+    for (let i = 0; i < NESTS.sizes.length; i++) {
+      q -= NESTS.sizes[i];
+      if (q < 0) return i + 1;
+    }
+    return 1;
+  };
+  for (let k = 0, tries = 0; k < want && tries < want * 10; tries++) {
+    // a zone by its share, a sample of it, a little off
+    let q = r() * expect;
+    let zone: FarZone = "woods";
+    for (const z of ["woods", "clearing", "river"] as const) {
+      q -= share(z);
+      if (q <= 0) {
+        zone = z;
+        break;
+      }
+    }
+    const pts = at[zone];
+    if (!pts.length) continue;
+    const p = pts[Math.floor(r() * pts.length)];
+    const x = p.x + (r() - 0.5) * step;
+    const z = p.z + (r() - 0.5) * step;
+    const n = size();
+    const cacheRoll = r();
+    const kindRoll = r();
+    if (!farNestAllowed(x, z) || out.some((o) => Math.hypot(o.x - x, o.z - z) < NESTS.apart)) continue;
+    const id = `${day}-f${cx}_${cz}_${k}`;
+    const nz = ZONE_OF[zone];
+    let cache: Cache | null = null;
+    if (cacheRoll < NESTS.cache) {
+      const kinds = CACHES[nz];
+      const kind = kinds[Math.floor(kindRoll * kinds.length)];
+      cache = {
+        id: `cache-${id}`,
+        kind,
+        x: x + (r() - 0.5) * 1.5,
+        z: z + (r() - 0.5) * 1.5,
+        items: cacheItems(kind, n, r, groundsRng(mix(day, cx, cz, 1013 + k))),
+      };
+    }
+    out.push({ id, zone: nz, x, z, n, cache });
+    k++;
+  }
+  return out;
+}
+
+// ── God mode's (F3b): nests of its own, places kept clear ────────────────────────────────────────────────────────
+
+/** One in the draft's `nests` section: a nest put down (out every day, `n` asleep in it), or a place kept clear. */
+export interface NestPlaceDef {
+  key: string;
+  kind: "nest" | "clear";
+  x: number;
+  z: number;
+  /** a nest: how many sleep in it (1–4) */
+  n?: number;
+  /** clear: how far round (m) */
+  r?: number;
+}
+
+/** God mode's nest places as the edits leave them. */
+export function nestPlacesOf(e: GroundsEdits): NestPlaceDef[] {
+  const s = e.nests;
+  const gone = new Set(s?.remove ?? []);
+  const out: NestPlaceDef[] = [];
+  for (const p of s?.add ?? []) {
+    if (gone.has(p.key)) continue;
+    const c = s?.change?.[p.key];
+    out.push(c ? { ...p, ...c, key: p.key } : p);
+  }
+  return out;
+}
+/** Is (x, z) in a place God mode keeps clear of nests? */
+export const keptClear = (places: readonly NestPlaceDef[], x: number, z: number) =>
+  places.some((p) => p.kind === "clear" && Math.hypot(p.x - x, p.z - z) < (p.r ?? 0));
+/** The day's nests God mode put down (out every day; a cache some days, as any nest). */
+export function fixedNests(day: number, places: readonly NestPlaceDef[]): Nest[] {
+  const out: Nest[] = [];
+  for (const p of places) {
+    if (p.kind !== "nest") continue;
+    let h = 0;
+    for (let i = 0; i < p.key.length; i++) h = (Math.imul(h, 31) + p.key.charCodeAt(i)) | 0;
+    const r = groundsRng(mix(day, h, 271));
+    const n = Math.max(1, Math.min(4, Math.round(p.n ?? 2)));
+    const id = `${day}-g${p.key}`;
+    let cache: Cache | null = null;
+    if (r() < NESTS.cache) {
+      const kinds = CACHES.woods;
+      const kind = kinds[Math.floor(r() * kinds.length)];
+      cache = { id: `cache-${id}`, kind, x: p.x + (r() - 0.5) * 1.5, z: p.z + (r() - 0.5) * 1.5, items: cacheItems(kind, n, r, groundsRng(mix(day, h, 2013))) };
+    }
+    out.push({ id, zone: "woods", x: p.x, z: p.z, n, cache });
+  }
+  return out;
+}
+/** Why a nest place can't be as it is, or null (the server checks a draft's before it's published). */
+export function checkNestPlace(p: NestPlaceDef): string | null {
+  if (!p || typeof p.key !== "string" || !/^[A-Za-z0-9:_.-]{1,40}$/.test(p.key)) return "a nest place: key";
+  if (p.kind !== "nest" && p.kind !== "clear") return `${p.key}: kind`;
+  if (!Number.isFinite(p.x) || !Number.isFinite(p.z)) return `${p.key}: where`;
+  if (p.kind === "nest" && p.n !== undefined && !(Number.isInteger(p.n) && p.n >= 1 && p.n <= 4)) return `${p.key}: n`;
+  if (p.kind === "clear" && !(Number(p.r) > 0 && Number(p.r) <= 3000)) return `${p.key}: r`;
+  return null;
 }

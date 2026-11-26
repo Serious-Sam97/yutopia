@@ -1054,6 +1054,8 @@ export class WorldController {
     this.os?.dispose();
     this.cars?.dispose();
     this.cars = null;
+    this.animals?.dispose();
+    this.animals = null;
     cancelAnimationFrame(this.raf);
     for (const t of this.timers) clearInterval(t);
     if (this.arrival.arrivalFlash) clearTimeout(this.arrival.arrivalFlash);
@@ -1329,6 +1331,7 @@ export class WorldController {
     this.syncView();
     this.driveVehicles(dt);
     this.isolated("cars", () => this.cars?.frame(dt, now));
+    this.isolated("animals", () => this.animals?.frame(dt));
     // (plan 114) the Strike Park's match: its camera (first person by default, K for over the shoulder — F3)
     if (strikeKeys.view !== this.strikeView) {
       this.strikeView = strikeKeys.view;
@@ -1449,6 +1452,10 @@ export class WorldController {
         waterOver: this.water.waterOver(this.me.x, this.me.y, this.height.z),
       };
       this.jumps.jumpEffects(localSid, st, 1);
+      // (plan 126) on a horse: sat up on its back
+      const myHorse = this.animals?.riderSeat(localSid, st);
+      if (myHorse) Object.assign(st, { a: 2, z: (st.z ?? 0) + myHorse.seat, mv: 0 });
+      if (this.walker) this.walker.ride = myHorse ? myHorse.spec : null;
       this.life?.print(localSid, st, now, this.map, this.grid.onLand(st.x, st.y));
       // (plan 93 C: still climbing out — the car draws me, by its door — till I'm out)
       const inCar = !!this.cars?.inCar() || !!this.cars?.seatedIds().has(localSid);
@@ -1506,6 +1513,9 @@ export class WorldController {
         inLift: this.inLiftAt(pos.x, pos.y, p.level) || undefined,
         waterOver: this.water.waterOver(pos.x, pos.y, pos.z),
       };
+      // (plan 126) on a horse: sat up on its back
+      const horse = this.animals?.riderSeat(sid, st);
+      if (horse) Object.assign(st, { a: 2, z: ((st as { z?: number }).z ?? 0) + horse.seat, mv: 0 });
       this.jumps.jumpEffects(
         sid,
         st,
@@ -2161,6 +2171,8 @@ export class WorldController {
 
   // ── the lot's cars, driven (docs/plan/28-the-car.md; car/cars.ts, loaded on their own) ──
   cars: import("./car/cars").Cars | null = null;
+  /** (plan 126) the animals out on the land: drawn, played back, their acts (a chunk of its own) */
+  animals: import("./animals").AnimalLife | null = null;
   private lifeCars: { id: string; kind: string; x: number; z: number; a: number; shown: boolean; h?: number }[] = [];
 
   // ── life on the Grounds (docs/plan/27, phase 6; grounds-life.ts, loaded with them) ──
@@ -3002,6 +3014,11 @@ export class WorldController {
         if (!this.G) return;
         this.life = new m.GroundsLife(G);
         if (this.tp) this.tp.printsPart.prints = this.life.prints;
+      });
+      // (plan 126: the animals out on the land, in a chunk of their own)
+      void import("./animals").then((m) => {
+        if (!this.G || this.stopped || this.animals) return;
+        this.animals = new m.AnimalLife(this);
       });
       // (the lot's cars, driven: docs/plan/28-the-car.md, in a chunk of their own — through the view's, tp/game-view.ts)
       void Promise.all([import("./tp/game-view").then((v) => v.loadCars()), loadChars()]).then(([m]) => {

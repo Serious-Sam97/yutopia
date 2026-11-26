@@ -1,0 +1,7125 @@
+{
+ "deer": {
+  "attack": {
+   "frames": 20,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.001,
+   "moves": 0.514,
+   "size": 1.299,
+   "flags": []
+  },
+  "die": {
+   "frames": 21,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.178,
+   "sinks": 0.178,
+   "lift": 0.001,
+   "seam": 1.439,
+   "moves": 1.477,
+   "size": 1.299,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "drink": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.026,
+   "size": 1.299,
+   "flags": []
+  },
+  "eat": {
+   "frames": 145,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.923,
+   "size": 1.299,
+   "flags": []
+  },
+  "groom": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.36,
+   "size": 1.299,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 12,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.003,
+   "moves": 0.287,
+   "size": 1.299,
+   "flags": []
+  },
+  "hitR": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.004,
+   "moves": 0.283,
+   "size": 1.299,
+   "flags": []
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.665,
+   "size": 1.299,
+   "flags": []
+  },
+  "idle": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.095,
+   "size": 1.299,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.124,
+   "size": 1.299,
+   "flags": []
+  },
+  "jump": {
+   "frames": 34,
+   "speed": 1.884,
+   "slide": 0.987,
+   "floats": -0.037,
+   "sinks": 0.037,
+   "lift": 0.568,
+   "seam": 0.042,
+   "moves": 1.112,
+   "size": 1.299,
+   "flags": []
+  },
+  "kick": {
+   "frames": 20,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.192,
+   "seam": 0.033,
+   "moves": 0.719,
+   "size": 1.299,
+   "flags": [
+    "floats"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.024,
+   "sinks": 0.024,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.051,
+   "size": 1.299,
+   "flags": []
+  },
+  "look": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.285,
+   "size": 1.299,
+   "flags": []
+  },
+  "play": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.013,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.098,
+   "size": 1.299,
+   "flags": []
+  },
+  "run": {
+   "frames": 34,
+   "speed": 14.98,
+   "slide": 0.03,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.092,
+   "seam": 0.0,
+   "moves": 0.988,
+   "size": 1.299,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.184,
+   "size": 1.299,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.186,
+   "moves": 0.186,
+   "size": 1.299,
+   "flags": []
+  },
+  "swim": {
+   "frames": 41,
+   "speed": 0.524,
+   "slide": 0.127,
+   "floats": -0.007,
+   "sinks": 0.007,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.47,
+   "size": 1.299,
+   "flags": []
+  },
+  "trot": {
+   "frames": 12,
+   "speed": 3.358,
+   "slide": 0.006,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.003,
+   "seam": 0.0,
+   "moves": 0.511,
+   "size": 1.299,
+   "flags": []
+  },
+  "walk": {
+   "frames": 11,
+   "speed": 1.4,
+   "slide": 0.002,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.402,
+   "size": 1.299,
+   "flags": []
+  }
+ },
+ "deer_buck": {
+  "attack": {
+   "frames": 20,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.002,
+   "moves": 0.917,
+   "size": 1.622,
+   "flags": []
+  },
+  "die": {
+   "frames": 27,
+   "speed": 0.001,
+   "slide": 0.001,
+   "floats": -0.574,
+   "sinks": 0.574,
+   "lift": 0.001,
+   "seam": 1.79,
+   "moves": 2.147,
+   "size": 1.622,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "drink": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.056,
+   "size": 1.622,
+   "flags": []
+  },
+  "eat": {
+   "frames": 291,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.941,
+   "size": 1.622,
+   "flags": []
+  },
+  "groom": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.753,
+   "size": 1.622,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 12,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.006,
+   "moves": 0.737,
+   "size": 1.622,
+   "flags": []
+  },
+  "hitR": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.01,
+   "moves": 0.739,
+   "size": 1.622,
+   "flags": []
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.001,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.951,
+   "size": 1.622,
+   "flags": []
+  },
+  "idle": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.114,
+   "size": 1.622,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.136,
+   "size": 1.622,
+   "flags": []
+  },
+  "jump": {
+   "frames": 34,
+   "speed": 1.854,
+   "slide": 0.973,
+   "floats": -0.037,
+   "sinks": 0.037,
+   "lift": 0.56,
+   "seam": 0.041,
+   "moves": 1.085,
+   "size": 1.622,
+   "flags": []
+  },
+  "kick": {
+   "frames": 20,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.19,
+   "seam": 0.038,
+   "moves": 0.699,
+   "size": 1.622,
+   "flags": [
+    "floats"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.012,
+   "sinks": 0.012,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.073,
+   "size": 1.622,
+   "flags": []
+  },
+  "look": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.278,
+   "size": 1.622,
+   "flags": []
+  },
+  "play": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.016,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.102,
+   "size": 1.622,
+   "flags": []
+  },
+  "run": {
+   "frames": 33,
+   "speed": 14.98,
+   "slide": 0.035,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.096,
+   "seam": 0.001,
+   "moves": 1.022,
+   "size": 1.622,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.241,
+   "size": 1.622,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.291,
+   "moves": 0.291,
+   "size": 1.622,
+   "flags": []
+  },
+  "swim": {
+   "frames": 41,
+   "speed": 0.515,
+   "slide": 0.132,
+   "floats": -0.009,
+   "sinks": 0.009,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.463,
+   "size": 1.622,
+   "flags": []
+  },
+  "trot": {
+   "frames": 12,
+   "speed": 3.358,
+   "slide": 0.004,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.004,
+   "seam": 0.0,
+   "moves": 0.53,
+   "size": 1.622,
+   "flags": []
+  },
+  "walk": {
+   "frames": 11,
+   "speed": 1.399,
+   "slide": 0.006,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.393,
+   "size": 1.622,
+   "flags": []
+  }
+ },
+ "elk": {
+  "attack": {
+   "frames": 20,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.003,
+   "moves": 1.627,
+   "size": 2.591,
+   "flags": []
+  },
+  "die": {
+   "frames": 27,
+   "speed": 0.001,
+   "slide": 0.001,
+   "floats": -1.009,
+   "sinks": 1.009,
+   "lift": 0.001,
+   "seam": 2.909,
+   "moves": 3.51,
+   "size": 2.591,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "drink": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.095,
+   "size": 2.591,
+   "flags": []
+  },
+  "eat": {
+   "frames": 291,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 1.507,
+   "size": 2.591,
+   "flags": []
+  },
+  "groom": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 1.32,
+   "size": 2.591,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 12,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.018,
+   "moves": 1.272,
+   "size": 2.591,
+   "flags": []
+  },
+  "hitR": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.018,
+   "moves": 1.275,
+   "size": 2.591,
+   "flags": []
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 1.702,
+   "size": 2.591,
+   "flags": []
+  },
+  "idle": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.174,
+   "size": 2.591,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.233,
+   "size": 2.591,
+   "flags": []
+  },
+  "jump": {
+   "frames": 34,
+   "speed": 2.658,
+   "slide": 1.397,
+   "floats": -0.052,
+   "sinks": 0.052,
+   "lift": 0.801,
+   "seam": 0.059,
+   "moves": 1.552,
+   "size": 2.591,
+   "flags": []
+  },
+  "kick": {
+   "frames": 20,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.272,
+   "seam": 0.061,
+   "moves": 1.055,
+   "size": 2.591,
+   "flags": [
+    "floats"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.017,
+   "sinks": 0.017,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.124,
+   "size": 2.591,
+   "flags": []
+  },
+  "look": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.398,
+   "size": 2.591,
+   "flags": []
+  },
+  "play": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.022,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.146,
+   "size": 2.591,
+   "flags": []
+  },
+  "run": {
+   "frames": 20,
+   "speed": 11.977,
+   "slide": 0.023,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.075,
+   "seam": 0.0,
+   "moves": 1.099,
+   "size": 2.591,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.423,
+   "size": 2.591,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.506,
+   "moves": 0.506,
+   "size": 2.591,
+   "flags": []
+  },
+  "swim": {
+   "frames": 41,
+   "speed": 0.732,
+   "slide": 0.192,
+   "floats": -0.013,
+   "sinks": 0.013,
+   "lift": 0.001,
+   "seam": 0.001,
+   "moves": 0.662,
+   "size": 2.591,
+   "flags": []
+  },
+  "trot": {
+   "frames": 12,
+   "speed": 3.595,
+   "slide": 0.003,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.005,
+   "seam": 0.0,
+   "moves": 0.758,
+   "size": 2.591,
+   "flags": []
+  },
+  "walk": {
+   "frames": 14,
+   "speed": 1.5,
+   "slide": 0.007,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.557,
+   "size": 2.591,
+   "flags": []
+  }
+ },
+ "moose": {
+  "attack": {
+   "frames": 20,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.006,
+   "moves": 1.503,
+   "size": 2.593,
+   "flags": []
+  },
+  "die": {
+   "frames": 27,
+   "speed": 0.002,
+   "slide": 0.002,
+   "floats": -0.538,
+   "sinks": 0.538,
+   "lift": 0.001,
+   "seam": 3.064,
+   "moves": 3.099,
+   "size": 2.593,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "drink": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.069,
+   "size": 2.593,
+   "flags": []
+  },
+  "eat": {
+   "frames": 291,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.02,
+   "sinks": 0.02,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 1.856,
+   "size": 2.593,
+   "flags": []
+  },
+  "groom": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 1.327,
+   "size": 2.593,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 12,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.012,
+   "moves": 0.94,
+   "size": 2.593,
+   "flags": []
+  },
+  "hitR": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.023,
+   "moves": 0.913,
+   "size": 2.593,
+   "flags": []
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 1.48,
+   "size": 2.593,
+   "flags": []
+  },
+  "idle": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.22,
+   "size": 2.593,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.233,
+   "size": 2.593,
+   "flags": []
+  },
+  "jump": {
+   "frames": 34,
+   "speed": 3.462,
+   "slide": 1.81,
+   "floats": -0.068,
+   "sinks": 0.068,
+   "lift": 1.025,
+   "seam": 0.085,
+   "moves": 1.966,
+   "size": 2.593,
+   "flags": []
+  },
+  "kick": {
+   "frames": 20,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.358,
+   "seam": 0.055,
+   "moves": 1.245,
+   "size": 2.593,
+   "flags": [
+    "floats"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.006,
+   "sinks": 0.006,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.133,
+   "size": 2.593,
+   "flags": []
+  },
+  "look": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.038,
+   "seam": 0.0,
+   "moves": 0.506,
+   "size": 2.593,
+   "flags": []
+  },
+  "play": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.029,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.104,
+   "size": 2.593,
+   "flags": []
+  },
+  "run": {
+   "frames": 19,
+   "speed": 8.0,
+   "slide": 0.019,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.107,
+   "seam": 0.0,
+   "moves": 1.364,
+   "size": 2.593,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.491,
+   "size": 2.593,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.486,
+   "moves": 0.486,
+   "size": 2.593,
+   "flags": []
+  },
+  "swim": {
+   "frames": 41,
+   "speed": 0.959,
+   "slide": 0.247,
+   "floats": -0.014,
+   "sinks": 0.014,
+   "lift": 0.013,
+   "seam": 0.001,
+   "moves": 0.863,
+   "size": 2.593,
+   "flags": []
+  },
+  "trot": {
+   "frames": 15,
+   "speed": 3.359,
+   "slide": 0.006,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.997,
+   "size": 2.593,
+   "flags": []
+  },
+  "walk": {
+   "frames": 19,
+   "speed": 1.4,
+   "slide": 0.004,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.698,
+   "size": 2.593,
+   "flags": []
+  }
+ },
+ "wolf": {
+  "attack": {
+   "frames": 33,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.003,
+   "sinks": 0.003,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.507,
+   "size": 0.936,
+   "flags": []
+  },
+  "die": {
+   "frames": 26,
+   "speed": 0.0,
+   "slide": 0.001,
+   "floats": -0.064,
+   "sinks": 0.064,
+   "lift": 0.0,
+   "seam": 0.967,
+   "moves": 0.967,
+   "size": 0.936,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "drink": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": -0.001,
+   "seam": 0.0,
+   "moves": 0.02,
+   "size": 0.936,
+   "flags": []
+  },
+  "eat": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.007,
+   "moves": 0.596,
+   "size": 0.936,
+   "flags": []
+  },
+  "groom": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.405,
+   "size": 0.936,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.359,
+   "size": 0.936,
+   "flags": []
+  },
+  "hitR": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.359,
+   "size": 0.936,
+   "flags": []
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.514,
+   "size": 0.936,
+   "flags": []
+  },
+  "idle": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.058,
+   "size": 0.936,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.086,
+   "size": 0.936,
+   "flags": []
+  },
+  "jump": {
+   "frames": 23,
+   "speed": 2.092,
+   "slide": 0.39,
+   "floats": -0.053,
+   "sinks": 0.053,
+   "lift": 0.325,
+   "seam": 0.041,
+   "moves": 1.061,
+   "size": 0.936,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.03,
+   "size": 0.936,
+   "flags": []
+  },
+  "look": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.306,
+   "size": 0.936,
+   "flags": []
+  },
+  "play": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.012,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.959,
+   "size": 0.936,
+   "flags": []
+  },
+  "run": {
+   "frames": 26,
+   "speed": 11.0,
+   "slide": 0.002,
+   "floats": -0.004,
+   "sinks": 0.004,
+   "lift": 0.064,
+   "seam": 0.0,
+   "moves": 0.915,
+   "size": 0.936,
+   "flags": []
+  },
+  "sit": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": -0.001,
+   "seam": 0.0,
+   "moves": 0.039,
+   "size": 0.936,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.192,
+   "size": 0.936,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.0,
+   "seam": 0.188,
+   "moves": 0.214,
+   "size": 0.936,
+   "flags": []
+  },
+  "swim": {
+   "frames": 37,
+   "speed": 0.611,
+   "slide": 0.28,
+   "floats": -0.008,
+   "sinks": 0.008,
+   "lift": 0.001,
+   "seam": 0.033,
+   "moves": 0.559,
+   "size": 0.936,
+   "flags": [
+    "slides"
+   ]
+  },
+  "trot": {
+   "frames": 12,
+   "speed": 3.84,
+   "slide": 0.003,
+   "floats": -0.004,
+   "sinks": 0.004,
+   "lift": -0.002,
+   "seam": 0.0,
+   "moves": 0.483,
+   "size": 0.936,
+   "flags": []
+  },
+  "walk": {
+   "frames": 9,
+   "speed": 1.599,
+   "slide": 0.002,
+   "floats": -0.004,
+   "sinks": 0.004,
+   "lift": -0.004,
+   "seam": 0.0,
+   "moves": 0.346,
+   "size": 0.936,
+   "flags": []
+  }
+ },
+ "bear": {
+  "attack": {
+   "frames": 33,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.027,
+   "sinks": 0.027,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.568,
+   "size": 1.116,
+   "flags": []
+  },
+  "die": {
+   "frames": 26,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.372,
+   "sinks": 0.372,
+   "lift": 0.002,
+   "seam": 1.458,
+   "moves": 1.458,
+   "size": 1.116,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "drink": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": -0.001,
+   "seam": 0.0,
+   "moves": 0.02,
+   "size": 1.116,
+   "flags": []
+  },
+  "eat": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.009,
+   "moves": 0.635,
+   "size": 1.116,
+   "flags": []
+  },
+  "groom": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.4,
+   "size": 1.116,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.462,
+   "size": 1.116,
+   "flags": []
+  },
+  "hitR": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.462,
+   "size": 1.116,
+   "flags": []
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.003,
+   "seam": 0.0,
+   "moves": 0.473,
+   "size": 1.116,
+   "flags": []
+  },
+  "idle": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.047,
+   "size": 1.116,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.074,
+   "size": 1.116,
+   "flags": []
+  },
+  "jump": {
+   "frames": 23,
+   "speed": 2.16,
+   "slide": 0.396,
+   "floats": -0.086,
+   "sinks": 0.086,
+   "lift": 0.328,
+   "seam": 0.052,
+   "moves": 1.011,
+   "size": 1.116,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.013,
+   "sinks": 0.013,
+   "lift": 0.012,
+   "seam": 0.0,
+   "moves": 0.031,
+   "size": 1.116,
+   "flags": []
+  },
+  "look": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.294,
+   "size": 1.116,
+   "flags": []
+  },
+  "play": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.012,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.197,
+   "size": 1.116,
+   "flags": []
+  },
+  "run": {
+   "frames": 19,
+   "speed": 8.974,
+   "slide": 0.043,
+   "floats": -0.007,
+   "sinks": 0.007,
+   "lift": 0.056,
+   "seam": 0.0,
+   "moves": 0.7,
+   "size": 1.116,
+   "flags": []
+  },
+  "sit": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.039,
+   "size": 1.116,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.184,
+   "size": 1.116,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.0,
+   "seam": 0.176,
+   "moves": 0.222,
+   "size": 1.116,
+   "flags": []
+  },
+  "swim": {
+   "frames": 37,
+   "speed": 0.611,
+   "slide": 0.295,
+   "floats": -0.035,
+   "sinks": 0.035,
+   "lift": 0.002,
+   "seam": 0.04,
+   "moves": 0.588,
+   "size": 1.116,
+   "flags": [
+    "sinks",
+    "slides"
+   ]
+  },
+  "trot": {
+   "frames": 12,
+   "speed": 2.876,
+   "slide": 0.004,
+   "floats": -0.006,
+   "sinks": 0.006,
+   "lift": -0.004,
+   "seam": 0.0,
+   "moves": 0.602,
+   "size": 1.116,
+   "flags": []
+  },
+  "walk": {
+   "frames": 14,
+   "speed": 1.199,
+   "slide": 0.002,
+   "floats": -0.006,
+   "sinks": 0.006,
+   "lift": -0.006,
+   "seam": 0.0,
+   "moves": 0.434,
+   "size": 1.116,
+   "flags": []
+  }
+ },
+ "boar": {
+  "attack": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.007,
+   "moves": 0.43,
+   "size": 0.844,
+   "flags": []
+  },
+  "die": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.418,
+   "sinks": 0.418,
+   "lift": 0.001,
+   "seam": 1.145,
+   "moves": 1.16,
+   "size": 0.844,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "drink": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.028,
+   "size": 0.844,
+   "flags": []
+  },
+  "eat": {
+   "frames": 145,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.441,
+   "size": 0.844,
+   "flags": []
+  },
+  "groom": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.424,
+   "size": 0.844,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.316,
+   "size": 0.844,
+   "flags": []
+  },
+  "hitR": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.316,
+   "size": 0.844,
+   "flags": []
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.574,
+   "size": 0.844,
+   "flags": []
+  },
+  "idle": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.221,
+   "size": 0.844,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.218,
+   "size": 0.844,
+   "flags": []
+  },
+  "jump": {
+   "frames": 36,
+   "speed": 0.698,
+   "slide": 0.337,
+   "floats": -0.015,
+   "sinks": 0.015,
+   "lift": 0.26,
+   "seam": 0.01,
+   "moves": 0.574,
+   "size": 0.844,
+   "flags": []
+  },
+  "kick": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.001,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.105,
+   "seam": 0.031,
+   "moves": 0.399,
+   "size": 0.844,
+   "flags": [
+    "floats"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.006,
+   "sinks": 0.006,
+   "lift": 0.012,
+   "seam": 0.0,
+   "moves": 0.036,
+   "size": 0.844,
+   "flags": []
+  },
+  "look": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.197,
+   "size": 0.844,
+   "flags": []
+  },
+  "play": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.006,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.057,
+   "size": 0.844,
+   "flags": []
+  },
+  "run": {
+   "frames": 23,
+   "speed": 7.996,
+   "slide": 0.006,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.052,
+   "seam": 0.0,
+   "moves": 0.464,
+   "size": 0.844,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.2,
+   "size": 0.844,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.212,
+   "moves": 0.212,
+   "size": 0.844,
+   "flags": []
+  },
+  "trot": {
+   "frames": 12,
+   "speed": 2.878,
+   "slide": 0.006,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.319,
+   "size": 0.844,
+   "flags": []
+  },
+  "walk": {
+   "frames": 9,
+   "speed": 1.199,
+   "slide": 0.002,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.215,
+   "size": 0.844,
+   "flags": []
+  }
+ },
+ "lynx": {
+  "attack": {
+   "frames": 33,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.004,
+   "sinks": 0.004,
+   "lift": 0.007,
+   "seam": 0.0,
+   "moves": 0.399,
+   "size": 0.677,
+   "flags": []
+  },
+  "die": {
+   "frames": 26,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.109,
+   "sinks": 0.109,
+   "lift": -0.0,
+   "seam": 0.763,
+   "moves": 0.763,
+   "size": 0.677,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "drink": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": -0.001,
+   "seam": 0.0,
+   "moves": 0.01,
+   "size": 0.677,
+   "flags": []
+  },
+  "eat": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.004,
+   "moves": 0.448,
+   "size": 0.677,
+   "flags": []
+  },
+  "groom": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.338,
+   "size": 0.677,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.289,
+   "size": 0.677,
+   "flags": []
+  },
+  "hitR": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.289,
+   "size": 0.677,
+   "flags": []
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.348,
+   "size": 0.677,
+   "flags": []
+  },
+  "idle": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.032,
+   "size": 0.677,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.053,
+   "size": 0.677,
+   "flags": []
+  },
+  "jump": {
+   "frames": 23,
+   "speed": 1.831,
+   "slide": 0.341,
+   "floats": -0.046,
+   "sinks": 0.046,
+   "lift": 0.285,
+   "seam": 0.036,
+   "moves": 0.83,
+   "size": 0.677,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.018,
+   "size": 0.677,
+   "flags": []
+  },
+  "look": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.23,
+   "size": 0.677,
+   "flags": []
+  },
+  "play": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.007,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.161,
+   "size": 0.677,
+   "flags": []
+  },
+  "run": {
+   "frames": 29,
+   "speed": 10.0,
+   "slide": 0.021,
+   "floats": -0.005,
+   "sinks": 0.005,
+   "lift": 0.05,
+   "seam": 0.0,
+   "moves": 0.558,
+   "size": 0.677,
+   "flags": []
+  },
+  "sit": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.017,
+   "size": 0.677,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.105,
+   "size": 0.677,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.113,
+   "moves": 0.129,
+   "size": 0.677,
+   "flags": []
+  },
+  "swim": {
+   "frames": 37,
+   "speed": 0.533,
+   "slide": 0.246,
+   "floats": -0.007,
+   "sinks": 0.007,
+   "lift": 0.0,
+   "seam": 0.025,
+   "moves": 0.485,
+   "size": 0.677,
+   "flags": [
+    "slides"
+   ]
+  },
+  "trot": {
+   "frames": 12,
+   "speed": 2.637,
+   "slide": 0.004,
+   "floats": -0.005,
+   "sinks": 0.005,
+   "lift": -0.003,
+   "seam": 0.0,
+   "moves": 0.323,
+   "size": 0.677,
+   "flags": []
+  },
+  "walk": {
+   "frames": 9,
+   "speed": 1.099,
+   "slide": 0.002,
+   "floats": -0.005,
+   "sinks": 0.005,
+   "lift": -0.004,
+   "seam": 0.0,
+   "moves": 0.242,
+   "size": 0.677,
+   "flags": []
+  }
+ },
+ "fox": {
+  "attack": {
+   "frames": 33,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.004,
+   "sinks": 0.004,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.266,
+   "size": 0.443,
+   "flags": []
+  },
+  "die": {
+   "frames": 26,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.047,
+   "sinks": 0.047,
+   "lift": 0.0,
+   "seam": 0.474,
+   "moves": 0.474,
+   "size": 0.443,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "drink": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.01,
+   "size": 0.443,
+   "flags": []
+  },
+  "eat": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.005,
+   "moves": 0.304,
+   "size": 0.443,
+   "flags": []
+  },
+  "groom": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.221,
+   "size": 0.443,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.184,
+   "size": 0.443,
+   "flags": []
+  },
+  "hitR": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.184,
+   "size": 0.443,
+   "flags": []
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.284,
+   "size": 0.443,
+   "flags": []
+  },
+  "idle": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.027,
+   "size": 0.443,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.047,
+   "size": 0.443,
+   "flags": []
+  },
+  "jump": {
+   "frames": 23,
+   "speed": 0.993,
+   "slide": 0.182,
+   "floats": -0.022,
+   "sinks": 0.022,
+   "lift": 0.155,
+   "seam": 0.019,
+   "moves": 0.51,
+   "size": 0.443,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": -0.001,
+   "seam": 0.0,
+   "moves": 0.015,
+   "size": 0.443,
+   "flags": []
+  },
+  "look": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.157,
+   "size": 0.443,
+   "flags": []
+  },
+  "play": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.004,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.498,
+   "size": 0.443,
+   "flags": []
+  },
+  "run": {
+   "frames": 45,
+   "speed": 12.995,
+   "slide": 0.074,
+   "floats": -0.003,
+   "sinks": 0.003,
+   "lift": 0.037,
+   "seam": 0.001,
+   "moves": 0.497,
+   "size": 0.443,
+   "flags": []
+  },
+  "sit": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.002,
+   "sinks": 0.002,
+   "lift": -0.002,
+   "seam": 0.0,
+   "moves": 0.019,
+   "size": 0.443,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.096,
+   "size": 0.443,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.099,
+   "moves": 0.106,
+   "size": 0.443,
+   "flags": []
+  },
+  "swim": {
+   "frames": 37,
+   "speed": 0.288,
+   "slide": 0.144,
+   "floats": -0.004,
+   "sinks": 0.004,
+   "lift": 0.0,
+   "seam": 0.017,
+   "moves": 0.264,
+   "size": 0.443,
+   "flags": [
+    "slides"
+   ]
+  },
+  "trot": {
+   "frames": 12,
+   "speed": 2.159,
+   "slide": 0.007,
+   "floats": -0.003,
+   "sinks": 0.003,
+   "lift": -0.002,
+   "seam": 0.0,
+   "moves": 0.219,
+   "size": 0.443,
+   "flags": []
+  },
+  "walk": {
+   "frames": 9,
+   "speed": 0.899,
+   "slide": 0.001,
+   "floats": -0.003,
+   "sinks": 0.003,
+   "lift": -0.003,
+   "seam": 0.0,
+   "moves": 0.158,
+   "size": 0.443,
+   "flags": []
+  }
+ },
+ "raccoon": {
+  "attack": {
+   "frames": 33,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.01,
+   "sinks": 0.01,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.213,
+   "size": 0.312,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "die": {
+   "frames": 26,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.161,
+   "sinks": 0.161,
+   "lift": -0.0,
+   "seam": 0.46,
+   "moves": 0.46,
+   "size": 0.312,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "drink": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.007,
+   "size": 0.312,
+   "flags": []
+  },
+  "eat": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.002,
+   "sinks": 0.002,
+   "lift": -0.0,
+   "seam": 0.002,
+   "moves": 0.234,
+   "size": 0.312,
+   "flags": []
+  },
+  "groom": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.167,
+   "size": 0.312,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.154,
+   "size": 0.312,
+   "flags": []
+  },
+  "hitR": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.154,
+   "size": 0.312,
+   "flags": []
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.186,
+   "size": 0.312,
+   "flags": []
+  },
+  "idle": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.019,
+   "size": 0.312,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.032,
+   "size": 0.312,
+   "flags": []
+  },
+  "jump": {
+   "frames": 23,
+   "speed": 0.495,
+   "slide": 0.091,
+   "floats": -0.023,
+   "sinks": 0.023,
+   "lift": 0.078,
+   "seam": 0.013,
+   "moves": 0.359,
+   "size": 0.312,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.004,
+   "sinks": 0.004,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.011,
+   "size": 0.312,
+   "flags": []
+  },
+  "look": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.117,
+   "size": 0.312,
+   "flags": []
+  },
+  "play": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.003,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.311,
+   "size": 0.312,
+   "flags": []
+  },
+  "run": {
+   "frames": 26,
+   "speed": 5.999,
+   "slide": 0.009,
+   "floats": -0.003,
+   "sinks": 0.003,
+   "lift": 0.016,
+   "seam": 0.0,
+   "moves": 0.316,
+   "size": 0.312,
+   "flags": []
+  },
+  "sit": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.012,
+   "size": 0.312,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.067,
+   "size": 0.312,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.07,
+   "moves": 0.079,
+   "size": 0.312,
+   "flags": []
+  },
+  "swim": {
+   "frames": 37,
+   "speed": 0.144,
+   "slide": 0.071,
+   "floats": -0.012,
+   "sinks": 0.012,
+   "lift": -0.0,
+   "seam": 0.01,
+   "moves": 0.148,
+   "size": 0.312,
+   "flags": [
+    "sinks",
+    "slides"
+   ]
+  },
+  "trot": {
+   "frames": 12,
+   "speed": 1.439,
+   "slide": 0.002,
+   "floats": -0.003,
+   "sinks": 0.003,
+   "lift": -0.002,
+   "seam": 0.0,
+   "moves": 0.137,
+   "size": 0.312,
+   "flags": []
+  },
+  "walk": {
+   "frames": 9,
+   "speed": 0.6,
+   "slide": 0.001,
+   "floats": -0.003,
+   "sinks": 0.003,
+   "lift": -0.003,
+   "seam": 0.0,
+   "moves": 0.11,
+   "size": 0.312,
+   "flags": []
+  }
+ },
+ "squirrel": {
+  "attack": {
+   "frames": 33,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.002,
+   "sinks": 0.002,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.074,
+   "size": 0.212,
+   "flags": []
+  },
+  "die": {
+   "frames": 26,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.078,
+   "sinks": 0.078,
+   "lift": -0.0,
+   "seam": 0.236,
+   "moves": 0.236,
+   "size": 0.212,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "drink": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.002,
+   "size": 0.212,
+   "flags": []
+  },
+  "eat": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.001,
+   "moves": 0.079,
+   "size": 0.212,
+   "flags": []
+  },
+  "groom": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.056,
+   "size": 0.212,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.056,
+   "size": 0.212,
+   "flags": []
+  },
+  "hitR": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.056,
+   "size": 0.212,
+   "flags": []
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.059,
+   "size": 0.212,
+   "flags": []
+  },
+  "idle": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.009,
+   "size": 0.212,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.011,
+   "size": 0.212,
+   "flags": []
+  },
+  "jump": {
+   "frames": 23,
+   "speed": 0.186,
+   "slide": 0.035,
+   "floats": -0.007,
+   "sinks": 0.007,
+   "lift": 0.029,
+   "seam": 0.005,
+   "moves": 0.181,
+   "size": 0.212,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.003,
+   "size": 0.212,
+   "flags": []
+  },
+  "look": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.039,
+   "size": 0.212,
+   "flags": []
+  },
+  "play": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.004,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.093,
+   "size": 0.212,
+   "flags": []
+  },
+  "run": {
+   "frames": 60,
+   "speed": 4.973,
+   "slide": 0.044,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.013,
+   "seam": 0.0,
+   "moves": 0.17,
+   "size": 0.212,
+   "flags": []
+  },
+  "sit": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.003,
+   "size": 0.212,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.019,
+   "size": 0.212,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.02,
+   "moves": 0.024,
+   "size": 0.212,
+   "flags": []
+  },
+  "swim": {
+   "frames": 37,
+   "speed": 0.053,
+   "slide": 0.024,
+   "floats": -0.003,
+   "sinks": 0.003,
+   "lift": 0.0,
+   "seam": 0.003,
+   "moves": 0.056,
+   "size": 0.212,
+   "flags": [
+    "slides"
+   ]
+  },
+  "trot": {
+   "frames": 16,
+   "speed": 1.2,
+   "slide": 0.002,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.049,
+   "size": 0.212,
+   "flags": []
+  },
+  "walk": {
+   "frames": 9,
+   "speed": 0.5,
+   "slide": 0.001,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": -0.001,
+   "seam": 0.0,
+   "moves": 0.04,
+   "size": 0.212,
+   "flags": []
+  }
+ },
+ "beaver": {
+  "attack": {
+   "frames": 33,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.048,
+   "sinks": 0.048,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.24,
+   "size": 0.358,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "die": {
+   "frames": 26,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.255,
+   "sinks": 0.255,
+   "lift": -0.0,
+   "seam": 0.599,
+   "moves": 0.599,
+   "size": 0.358,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "drink": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.007,
+   "size": 0.358,
+   "flags": []
+  },
+  "eat": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.006,
+   "sinks": 0.006,
+   "lift": -0.0,
+   "seam": 0.003,
+   "moves": 0.258,
+   "size": 0.358,
+   "flags": []
+  },
+  "groom": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.166,
+   "size": 0.358,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.183,
+   "size": 0.358,
+   "flags": []
+  },
+  "hitR": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.183,
+   "size": 0.358,
+   "flags": []
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.188,
+   "size": 0.358,
+   "flags": []
+  },
+  "idle": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.019,
+   "size": 0.358,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.03,
+   "size": 0.358,
+   "flags": []
+  },
+  "jump": {
+   "frames": 23,
+   "speed": 0.546,
+   "slide": 0.255,
+   "floats": -0.054,
+   "sinks": 0.054,
+   "lift": 0.08,
+   "seam": 0.016,
+   "moves": 0.353,
+   "size": 0.358,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.003,
+   "sinks": 0.003,
+   "lift": 0.005,
+   "seam": 0.0,
+   "moves": 0.013,
+   "size": 0.358,
+   "flags": []
+  },
+  "look": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.119,
+   "size": 0.358,
+   "flags": []
+  },
+  "play": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.026,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.354,
+   "size": 0.358,
+   "flags": []
+  },
+  "run": {
+   "frames": 14,
+   "speed": 2.198,
+   "slide": 0.006,
+   "floats": -0.004,
+   "sinks": 0.004,
+   "lift": 0.009,
+   "seam": 0.0,
+   "moves": 0.261,
+   "size": 0.358,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.064,
+   "size": 0.358,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.067,
+   "moves": 0.09,
+   "size": 0.358,
+   "flags": []
+  },
+  "swim": {
+   "frames": 37,
+   "speed": 0.144,
+   "slide": 0.066,
+   "floats": -0.023,
+   "sinks": 0.023,
+   "lift": -0.0,
+   "seam": 0.008,
+   "moves": 0.158,
+   "size": 0.358,
+   "flags": [
+    "sinks",
+    "slides"
+   ]
+  },
+  "trot": {
+   "frames": 12,
+   "speed": 0.958,
+   "slide": 0.002,
+   "floats": -0.004,
+   "sinks": 0.004,
+   "lift": -0.004,
+   "seam": 0.0,
+   "moves": 0.261,
+   "size": 0.358,
+   "flags": []
+  },
+  "walk": {
+   "frames": 12,
+   "speed": 0.4,
+   "slide": 0.002,
+   "floats": -0.004,
+   "sinks": 0.004,
+   "lift": -0.004,
+   "seam": 0.0,
+   "moves": 0.135,
+   "size": 0.358,
+   "flags": []
+  }
+ },
+ "cat": {
+  "attack": {
+   "frames": 33,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.044,
+   "sinks": 0.044,
+   "lift": 0.006,
+   "seam": 0.0,
+   "moves": 0.187,
+   "size": 0.292,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "die": {
+   "frames": 26,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.058,
+   "sinks": 0.058,
+   "lift": -0.0,
+   "seam": 0.338,
+   "moves": 0.338,
+   "size": 0.292,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "drink": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.005,
+   "size": 0.292,
+   "flags": []
+  },
+  "eat": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.002,
+   "moves": 0.207,
+   "size": 0.292,
+   "flags": []
+  },
+  "groom": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.154,
+   "size": 0.292,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.129,
+   "size": 0.292,
+   "flags": []
+  },
+  "hitR": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.129,
+   "size": 0.292,
+   "flags": []
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.17,
+   "size": 0.292,
+   "flags": []
+  },
+  "idle": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.02,
+   "size": 0.292,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.026,
+   "size": 0.292,
+   "flags": []
+  },
+  "jump": {
+   "frames": 23,
+   "speed": 0.595,
+   "slide": 0.111,
+   "floats": -0.047,
+   "sinks": 0.047,
+   "lift": 0.093,
+   "seam": 0.012,
+   "moves": 0.373,
+   "size": 0.292,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.003,
+   "sinks": 0.003,
+   "lift": -0.003,
+   "seam": 0.0,
+   "moves": 0.009,
+   "size": 0.292,
+   "flags": []
+  },
+  "look": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.107,
+   "size": 0.292,
+   "flags": []
+  },
+  "play": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.003,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.395,
+   "size": 0.292,
+   "flags": []
+  },
+  "run": {
+   "frames": 34,
+   "speed": 7.995,
+   "slide": 0.014,
+   "floats": -0.003,
+   "sinks": 0.003,
+   "lift": 0.025,
+   "seam": 0.0,
+   "moves": 0.285,
+   "size": 0.292,
+   "flags": []
+  },
+  "sit": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.002,
+   "sinks": 0.002,
+   "lift": -0.002,
+   "seam": 0.0,
+   "moves": 0.008,
+   "size": 0.292,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.051,
+   "size": 0.292,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.055,
+   "moves": 0.061,
+   "size": 0.292,
+   "flags": []
+  },
+  "swim": {
+   "frames": 37,
+   "speed": 0.173,
+   "slide": 0.085,
+   "floats": -0.003,
+   "sinks": 0.003,
+   "lift": 0.0,
+   "seam": 0.011,
+   "moves": 0.164,
+   "size": 0.292,
+   "flags": [
+    "slides"
+   ]
+  },
+  "trot": {
+   "frames": 12,
+   "speed": 1.679,
+   "slide": 0.0,
+   "floats": -0.003,
+   "sinks": 0.003,
+   "lift": -0.002,
+   "seam": 0.0,
+   "moves": 0.14,
+   "size": 0.292,
+   "flags": []
+  },
+  "walk": {
+   "frames": 9,
+   "speed": 0.699,
+   "slide": 0.001,
+   "floats": -0.002,
+   "sinks": 0.002,
+   "lift": -0.002,
+   "seam": 0.0,
+   "moves": 0.109,
+   "size": 0.292,
+   "flags": []
+  }
+ },
+ "hare": {
+  "die": {
+   "frames": 17,
+   "speed": -0.041,
+   "slide": 0.098,
+   "floats": -0.042,
+   "sinks": 0.042,
+   "lift": 0.0,
+   "seam": 0.237,
+   "moves": 0.237,
+   "size": 0.299,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "eat": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": -0.001,
+   "seam": 0.0,
+   "moves": 0.005,
+   "size": 0.299,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.011,
+   "sinks": 0.011,
+   "lift": -0.001,
+   "seam": 0.0,
+   "moves": 0.036,
+   "size": 0.299,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "hitR": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.011,
+   "sinks": 0.011,
+   "lift": -0.001,
+   "seam": 0.0,
+   "moves": 0.037,
+   "size": 0.299,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "idle": {
+   "frames": 58,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": -0.001,
+   "seam": 0.0,
+   "moves": 0.062,
+   "size": 0.299,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 61,
+   "speed": -0.001,
+   "slide": 0.018,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.004,
+   "seam": 0.0,
+   "moves": 0.123,
+   "size": 0.299,
+   "flags": []
+  },
+  "jump": {
+   "frames": 31,
+   "speed": 0.116,
+   "slide": 0.092,
+   "floats": -0.022,
+   "sinks": 0.022,
+   "lift": 0.019,
+   "seam": 0.0,
+   "moves": 0.189,
+   "size": 0.299,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "lie": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.005,
+   "size": 0.299,
+   "flags": []
+  },
+  "look": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": -0.001,
+   "seam": 0.0,
+   "moves": 0.05,
+   "size": 0.299,
+   "flags": []
+  },
+  "run": {
+   "frames": 67,
+   "speed": 11.587,
+   "slide": 0.931,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.083,
+   "seam": 0.0,
+   "moves": 0.173,
+   "size": 0.299,
+   "flags": []
+  },
+  "sit": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.019,
+   "size": 0.299,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": -0.001,
+   "seam": 0.0,
+   "moves": 0.005,
+   "size": 0.299,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.002,
+   "sinks": 0.002,
+   "lift": -0.002,
+   "seam": 0.029,
+   "moves": 0.051,
+   "size": 0.299,
+   "flags": []
+  },
+  "swim": {
+   "frames": 41,
+   "speed": 0.086,
+   "slide": 0.069,
+   "floats": -0.022,
+   "sinks": 0.022,
+   "lift": 0.021,
+   "seam": 0.0,
+   "moves": 0.19,
+   "size": 0.299,
+   "flags": [
+    "sinks",
+    "slides"
+   ]
+  },
+  "trot": {
+   "frames": 16,
+   "speed": 1.435,
+   "slide": 0.05,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.025,
+   "seam": 0.0,
+   "moves": 0.114,
+   "size": 0.299,
+   "flags": []
+  },
+  "walk": {
+   "frames": 16,
+   "speed": 0.596,
+   "slide": 0.028,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.024,
+   "seam": 0.0,
+   "moves": 0.114,
+   "size": 0.299,
+   "flags": [
+    "floats"
+   ]
+  }
+ },
+ "frog": {
+  "die": {
+   "frames": 17,
+   "speed": -0.016,
+   "slide": 0.019,
+   "floats": -0.015,
+   "sinks": 0.015,
+   "lift": 0.0,
+   "seam": 0.071,
+   "moves": 0.071,
+   "size": 0.057,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "eat": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.001,
+   "size": 0.057,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.005,
+   "sinks": 0.005,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.009,
+   "size": 0.057,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "hitR": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.005,
+   "sinks": 0.005,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.01,
+   "size": 0.057,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "idle": {
+   "frames": 58,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.019,
+   "size": 0.057,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 61,
+   "speed": -0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.021,
+   "size": 0.057,
+   "flags": []
+  },
+  "jump": {
+   "frames": 31,
+   "speed": 0.031,
+   "slide": 0.029,
+   "floats": -0.011,
+   "sinks": 0.011,
+   "lift": 0.004,
+   "seam": 0.0,
+   "moves": 0.067,
+   "size": 0.057,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "lie": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.001,
+   "size": 0.057,
+   "flags": []
+  },
+  "look": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.013,
+   "size": 0.057,
+   "flags": []
+  },
+  "run": {
+   "frames": 58,
+   "speed": 1.483,
+   "slide": 0.155,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.016,
+   "seam": 0.0,
+   "moves": 0.03,
+   "size": 0.057,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.001,
+   "size": 0.057,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.004,
+   "moves": 0.016,
+   "size": 0.057,
+   "flags": []
+  },
+  "swim": {
+   "frames": 41,
+   "speed": 0.021,
+   "slide": 0.019,
+   "floats": -0.011,
+   "sinks": 0.011,
+   "lift": 0.004,
+   "seam": 0.0,
+   "moves": 0.068,
+   "size": 0.057,
+   "flags": [
+    "sinks",
+    "no-stride",
+    "slides"
+   ]
+  },
+  "trot": {
+   "frames": 16,
+   "speed": 0.495,
+   "slide": 0.018,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.004,
+   "seam": 0.0,
+   "moves": 0.033,
+   "size": 0.057,
+   "flags": []
+  },
+  "walk": {
+   "frames": 16,
+   "speed": 0.202,
+   "slide": 0.011,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.003,
+   "seam": 0.0,
+   "moves": 0.033,
+   "size": 0.057,
+   "flags": []
+  }
+ },
+ "cow": {
+  "attack": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.017,
+   "moves": 1.001,
+   "size": 1.393,
+   "flags": []
+  },
+  "die": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.302,
+   "sinks": 0.302,
+   "lift": 0.001,
+   "seam": 1.676,
+   "moves": 1.696,
+   "size": 1.393,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "drink": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.036,
+   "size": 1.393,
+   "flags": []
+  },
+  "eat": {
+   "frames": 145,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.819,
+   "size": 1.393,
+   "flags": []
+  },
+  "groom": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.901,
+   "size": 1.393,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.521,
+   "size": 1.393,
+   "flags": []
+  },
+  "hitR": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.521,
+   "size": 1.393,
+   "flags": []
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 1.149,
+   "size": 1.393,
+   "flags": []
+  },
+  "idle": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.533,
+   "size": 1.393,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.525,
+   "size": 1.393,
+   "flags": []
+  },
+  "jump": {
+   "frames": 36,
+   "speed": 1.57,
+   "slide": 0.767,
+   "floats": -0.041,
+   "sinks": 0.041,
+   "lift": 0.567,
+   "seam": 0.025,
+   "moves": 1.198,
+   "size": 1.393,
+   "flags": []
+  },
+  "kick": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.003,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.188,
+   "seam": 0.043,
+   "moves": 0.844,
+   "size": 1.393,
+   "flags": [
+    "floats"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.002,
+   "sinks": 0.002,
+   "lift": -0.002,
+   "seam": 0.0,
+   "moves": 0.063,
+   "size": 1.393,
+   "flags": []
+  },
+  "look": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.012,
+   "seam": 0.0,
+   "moves": 0.41,
+   "size": 1.393,
+   "flags": []
+  },
+  "play": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.012,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.186,
+   "size": 1.393,
+   "flags": []
+  },
+  "run": {
+   "frames": 19,
+   "speed": 6.0,
+   "slide": 0.006,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.068,
+   "seam": 0.0,
+   "moves": 0.922,
+   "size": 1.393,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.335,
+   "size": 1.393,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.372,
+   "moves": 0.372,
+   "size": 1.393,
+   "flags": []
+  },
+  "trot": {
+   "frames": 13,
+   "speed": 2.638,
+   "slide": 0.006,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.681,
+   "size": 1.393,
+   "flags": []
+  },
+  "walk": {
+   "frames": 15,
+   "speed": 1.099,
+   "slide": 0.003,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.432,
+   "size": 1.393,
+   "flags": []
+  }
+ },
+ "pig": {
+  "attack": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.007,
+   "moves": 0.43,
+   "size": 0.793,
+   "flags": []
+  },
+  "die": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.523,
+   "sinks": 0.523,
+   "lift": 0.001,
+   "seam": 1.204,
+   "moves": 1.219,
+   "size": 0.793,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "drink": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.022,
+   "size": 0.793,
+   "flags": []
+  },
+  "eat": {
+   "frames": 145,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.393,
+   "size": 0.793,
+   "flags": []
+  },
+  "groom": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.42,
+   "size": 0.793,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.284,
+   "size": 0.793,
+   "flags": []
+  },
+  "hitR": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.284,
+   "size": 0.793,
+   "flags": []
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.536,
+   "size": 0.793,
+   "flags": []
+  },
+  "idle": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.235,
+   "size": 0.793,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.231,
+   "size": 0.793,
+   "flags": []
+  },
+  "jump": {
+   "frames": 36,
+   "speed": 0.634,
+   "slide": 0.31,
+   "floats": -0.019,
+   "sinks": 0.019,
+   "lift": 0.232,
+   "seam": 0.011,
+   "moves": 0.536,
+   "size": 0.793,
+   "flags": []
+  },
+  "kick": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.001,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.1,
+   "seam": 0.033,
+   "moves": 0.378,
+   "size": 0.793,
+   "flags": [
+    "floats"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.005,
+   "sinks": 0.005,
+   "lift": 0.01,
+   "seam": 0.0,
+   "moves": 0.038,
+   "size": 0.793,
+   "flags": []
+  },
+  "look": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.004,
+   "sinks": 0.004,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.187,
+   "size": 0.793,
+   "flags": []
+  },
+  "play": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.006,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.054,
+   "size": 0.793,
+   "flags": []
+  },
+  "run": {
+   "frames": 15,
+   "speed": 4.994,
+   "slide": 0.014,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.042,
+   "seam": 0.0,
+   "moves": 0.323,
+   "size": 0.793,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.17,
+   "size": 0.793,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.187,
+   "moves": 0.187,
+   "size": 0.793,
+   "flags": []
+  },
+  "trot": {
+   "frames": 12,
+   "speed": 2.398,
+   "slide": 0.005,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.294,
+   "size": 0.793,
+   "flags": []
+  },
+  "walk": {
+   "frames": 9,
+   "speed": 1.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.167,
+   "size": 0.793,
+   "flags": []
+  }
+ },
+ "sheep": {
+  "attack": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.011,
+   "moves": 0.362,
+   "size": 0.793,
+   "flags": []
+  },
+  "die": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.42,
+   "sinks": 0.42,
+   "lift": 0.001,
+   "seam": 1.107,
+   "moves": 1.117,
+   "size": 0.793,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "drink": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.014,
+   "size": 0.793,
+   "flags": []
+  },
+  "eat": {
+   "frames": 145,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.347,
+   "size": 0.793,
+   "flags": []
+  },
+  "groom": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.332,
+   "size": 0.793,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.275,
+   "size": 0.793,
+   "flags": []
+  },
+  "hitR": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.275,
+   "size": 0.793,
+   "flags": []
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.358,
+   "size": 0.793,
+   "flags": []
+  },
+  "idle": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.345,
+   "size": 0.793,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.34,
+   "size": 0.793,
+   "flags": []
+  },
+  "jump": {
+   "frames": 36,
+   "speed": 0.634,
+   "slide": 0.308,
+   "floats": -0.01,
+   "sinks": 0.01,
+   "lift": 0.25,
+   "seam": 0.016,
+   "moves": 0.564,
+   "size": 0.793,
+   "flags": []
+  },
+  "kick": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.001,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.114,
+   "seam": 0.027,
+   "moves": 0.501,
+   "size": 0.793,
+   "flags": [
+    "floats"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.002,
+   "sinks": 0.002,
+   "lift": 0.006,
+   "seam": 0.0,
+   "moves": 0.027,
+   "size": 0.793,
+   "flags": []
+  },
+  "look": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.193,
+   "size": 0.793,
+   "flags": []
+  },
+  "play": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.006,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.053,
+   "size": 0.793,
+   "flags": []
+  },
+  "run": {
+   "frames": 19,
+   "speed": 5.995,
+   "slide": 0.017,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.056,
+   "seam": 0.0,
+   "moves": 0.392,
+   "size": 0.793,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.117,
+   "size": 0.793,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.129,
+   "moves": 0.129,
+   "size": 0.793,
+   "flags": []
+  },
+  "trot": {
+   "frames": 12,
+   "speed": 2.395,
+   "slide": 0.004,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.005,
+   "seam": 0.0,
+   "moves": 0.28,
+   "size": 0.793,
+   "flags": []
+  },
+  "walk": {
+   "frames": 9,
+   "speed": 1.0,
+   "slide": 0.003,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.163,
+   "size": 0.793,
+   "flags": []
+  }
+ },
+ "horse": {
+  "attack": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.014,
+   "moves": 0.875,
+   "size": 2.121,
+   "flags": []
+  },
+  "die": {
+   "frames": 25,
+   "speed": 0.002,
+   "slide": 0.0,
+   "floats": -0.044,
+   "sinks": 0.044,
+   "lift": 0.002,
+   "seam": 2.124,
+   "moves": 2.155,
+   "size": 2.121,
+   "flags": []
+  },
+  "drink": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.043,
+   "size": 2.121,
+   "flags": []
+  },
+  "eat": {
+   "frames": 145,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.035,
+   "moves": 1.466,
+   "size": 2.121,
+   "flags": []
+  },
+  "groom": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.693,
+   "size": 2.121,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.613,
+   "size": 2.121,
+   "flags": []
+  },
+  "hitR": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.613,
+   "size": 2.121,
+   "flags": []
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.979,
+   "size": 2.121,
+   "flags": []
+  },
+  "idle": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.536,
+   "size": 2.121,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.535,
+   "size": 2.121,
+   "flags": []
+  },
+  "jump": {
+   "frames": 36,
+   "speed": 2.267,
+   "slide": 1.116,
+   "floats": -0.056,
+   "sinks": 0.056,
+   "lift": 0.828,
+   "seam": 0.021,
+   "moves": 1.666,
+   "size": 2.121,
+   "flags": []
+  },
+  "kick": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.006,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.282,
+   "seam": 0.055,
+   "moves": 1.105,
+   "size": 2.121,
+   "flags": [
+    "floats"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.003,
+   "sinks": 0.003,
+   "lift": -0.003,
+   "seam": 0.0,
+   "moves": 0.056,
+   "size": 2.121,
+   "flags": []
+  },
+  "look": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.427,
+   "size": 2.121,
+   "flags": []
+  },
+  "play": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.021,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.363,
+   "size": 2.121,
+   "flags": []
+  },
+  "run": {
+   "frames": 21,
+   "speed": 13.982,
+   "slide": 0.036,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.096,
+   "seam": 0.0,
+   "moves": 1.278,
+   "size": 2.121,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.313,
+   "size": 2.121,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.343,
+   "moves": 0.343,
+   "size": 2.121,
+   "flags": []
+  },
+  "swim": {
+   "frames": 41,
+   "speed": 0.754,
+   "slide": 0.172,
+   "floats": -0.012,
+   "sinks": 0.012,
+   "lift": 0.003,
+   "seam": 0.0,
+   "moves": 0.727,
+   "size": 2.121,
+   "flags": []
+  },
+  "trot": {
+   "frames": 12,
+   "speed": 4.076,
+   "slide": 0.007,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.006,
+   "seam": 0.0,
+   "moves": 0.879,
+   "size": 2.121,
+   "flags": []
+  },
+  "walk": {
+   "frames": 15,
+   "speed": 1.698,
+   "slide": 0.007,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.003,
+   "seam": 0.001,
+   "moves": 0.642,
+   "size": 2.121,
+   "flags": []
+  }
+ },
+ "horse_white": {
+  "attack": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.014,
+   "moves": 0.875,
+   "size": 2.121,
+   "flags": []
+  },
+  "die": {
+   "frames": 25,
+   "speed": 0.002,
+   "slide": 0.0,
+   "floats": -0.044,
+   "sinks": 0.044,
+   "lift": 0.002,
+   "seam": 2.124,
+   "moves": 2.155,
+   "size": 2.121,
+   "flags": []
+  },
+  "drink": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.043,
+   "size": 2.121,
+   "flags": []
+  },
+  "eat": {
+   "frames": 145,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.035,
+   "moves": 1.466,
+   "size": 2.121,
+   "flags": []
+  },
+  "groom": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.693,
+   "size": 2.121,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.613,
+   "size": 2.121,
+   "flags": []
+  },
+  "hitR": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.613,
+   "size": 2.121,
+   "flags": []
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.979,
+   "size": 2.121,
+   "flags": []
+  },
+  "idle": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.536,
+   "size": 2.121,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.535,
+   "size": 2.121,
+   "flags": []
+  },
+  "jump": {
+   "frames": 36,
+   "speed": 2.267,
+   "slide": 1.116,
+   "floats": -0.056,
+   "sinks": 0.056,
+   "lift": 0.828,
+   "seam": 0.021,
+   "moves": 1.666,
+   "size": 2.121,
+   "flags": []
+  },
+  "kick": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.006,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.282,
+   "seam": 0.055,
+   "moves": 1.105,
+   "size": 2.121,
+   "flags": [
+    "floats"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.003,
+   "sinks": 0.003,
+   "lift": -0.003,
+   "seam": 0.0,
+   "moves": 0.056,
+   "size": 2.121,
+   "flags": []
+  },
+  "look": {
+   "frames": 81,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.427,
+   "size": 2.121,
+   "flags": []
+  },
+  "play": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.021,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.363,
+   "size": 2.121,
+   "flags": []
+  },
+  "run": {
+   "frames": 21,
+   "speed": 13.982,
+   "slide": 0.036,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.096,
+   "seam": 0.0,
+   "moves": 1.278,
+   "size": 2.121,
+   "flags": []
+  },
+  "sniff": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.313,
+   "size": 2.121,
+   "flags": []
+  },
+  "stamp": {
+   "frames": 19,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.343,
+   "moves": 0.343,
+   "size": 2.121,
+   "flags": []
+  },
+  "swim": {
+   "frames": 41,
+   "speed": 0.754,
+   "slide": 0.172,
+   "floats": -0.012,
+   "sinks": 0.012,
+   "lift": 0.003,
+   "seam": 0.0,
+   "moves": 0.727,
+   "size": 2.121,
+   "flags": []
+  },
+  "trot": {
+   "frames": 12,
+   "speed": 4.076,
+   "slide": 0.007,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.006,
+   "seam": 0.0,
+   "moves": 0.879,
+   "size": 2.121,
+   "flags": []
+  },
+  "walk": {
+   "frames": 15,
+   "speed": 1.698,
+   "slide": 0.007,
+   "floats": 0.002,
+   "sinks": -0.0,
+   "lift": 0.003,
+   "seam": 0.001,
+   "moves": 0.642,
+   "size": 2.121,
+   "flags": []
+  }
+ },
+ "crow": {
+  "attack": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.282,
+   "size": 0.284,
+   "flags": []
+  },
+  "die": {
+   "frames": 19,
+   "speed": -0.036,
+   "slide": 0.028,
+   "floats": -0.002,
+   "sinks": 0.002,
+   "lift": 0.047,
+   "seam": 0.311,
+   "moves": 0.311,
+   "size": 0.284,
+   "flags": []
+  },
+  "drink": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.009,
+   "seam": 0.0,
+   "moves": 0.13,
+   "size": 0.284,
+   "flags": []
+  },
+  "eat": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.014,
+   "seam": 0.0,
+   "moves": 0.176,
+   "size": 0.284,
+   "flags": []
+  },
+  "fly": {
+   "frames": 32,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.023,
+   "sinks": -0.0,
+   "lift": 0.06,
+   "seam": 0.025,
+   "moves": 0.367,
+   "size": 0.284,
+   "flags": [
+    "seam"
+   ]
+  },
+  "glide": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.002,
+   "floats": 0.057,
+   "sinks": -0.0,
+   "lift": 0.061,
+   "seam": 0.0,
+   "moves": 0.03,
+   "size": 0.284,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.014,
+   "sinks": 0.014,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.173,
+   "size": 0.284,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "hitR": {
+   "frames": 13,
+   "speed": -0.0,
+   "slide": 0.0,
+   "floats": -0.015,
+   "sinks": 0.015,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.169,
+   "size": 0.284,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.022,
+   "size": 0.284,
+   "flags": []
+  },
+  "idle": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.015,
+   "size": 0.284,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.005,
+   "seam": 0.0,
+   "moves": 0.072,
+   "size": 0.284,
+   "flags": []
+  },
+  "jump": {
+   "frames": 15,
+   "speed": 0.026,
+   "slide": 0.013,
+   "floats": -0.033,
+   "sinks": 0.033,
+   "lift": 0.145,
+   "seam": 0.0,
+   "moves": 0.266,
+   "size": 0.284,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.009,
+   "sinks": 0.009,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.022,
+   "size": 0.284,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "look": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.061,
+   "size": 0.284,
+   "flags": []
+  },
+  "run": {
+   "frames": 17,
+   "speed": 1.569,
+   "slide": 0.073,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.034,
+   "seam": 0.0,
+   "moves": 0.065,
+   "size": 0.284,
+   "flags": []
+  },
+  "swim": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.161,
+   "floats": -0.02,
+   "sinks": 0.02,
+   "lift": -0.007,
+   "seam": 0.0,
+   "moves": 0.037,
+   "size": 0.284,
+   "flags": [
+    "sinks",
+    "no-stride"
+   ]
+  },
+  "walk": {
+   "frames": 17,
+   "speed": 0.465,
+   "slide": 0.012,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.034,
+   "seam": 0.0,
+   "moves": 0.064,
+   "size": 0.284,
+   "flags": [
+    "floats"
+   ]
+  }
+ },
+ "songbird": {
+  "attack": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.095,
+   "size": 0.101,
+   "flags": []
+  },
+  "die": {
+   "frames": 19,
+   "speed": -0.006,
+   "slide": 0.002,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.01,
+   "seam": 0.11,
+   "moves": 0.11,
+   "size": 0.101,
+   "flags": []
+  },
+  "drink": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.049,
+   "size": 0.101,
+   "flags": []
+  },
+  "eat": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.065,
+   "size": 0.101,
+   "flags": []
+  },
+  "fly": {
+   "frames": 32,
+   "speed": 0.0,
+   "slide": 0.001,
+   "floats": 0.005,
+   "sinks": -0.0,
+   "lift": 0.016,
+   "seam": 0.009,
+   "moves": 0.131,
+   "size": 0.101,
+   "flags": [
+    "seam"
+   ]
+  },
+  "glide": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.001,
+   "floats": 0.015,
+   "sinks": -0.0,
+   "lift": 0.015,
+   "seam": 0.0,
+   "moves": 0.01,
+   "size": 0.101,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.015,
+   "sinks": 0.015,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.062,
+   "size": 0.101,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "hitR": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.002,
+   "floats": -0.015,
+   "sinks": 0.015,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.062,
+   "size": 0.101,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.008,
+   "size": 0.101,
+   "flags": []
+  },
+  "idle": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.005,
+   "size": 0.101,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.025,
+   "size": 0.101,
+   "flags": []
+  },
+  "jump": {
+   "frames": 15,
+   "speed": 0.006,
+   "slide": 0.004,
+   "floats": -0.01,
+   "sinks": 0.01,
+   "lift": 0.034,
+   "seam": 0.0,
+   "moves": 0.097,
+   "size": 0.101,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.007,
+   "size": 0.101,
+   "flags": []
+  },
+  "look": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.021,
+   "size": 0.101,
+   "flags": []
+  },
+  "run": {
+   "frames": 36,
+   "speed": 1.007,
+   "slide": 0.045,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.015,
+   "seam": 0.0,
+   "moves": 0.024,
+   "size": 0.101,
+   "flags": []
+  },
+  "swim": {
+   "frames": 25,
+   "speed": -0.0,
+   "slide": 0.043,
+   "floats": -0.003,
+   "sinks": 0.003,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.01,
+   "size": 0.101,
+   "flags": [
+    "no-stride"
+   ]
+  },
+  "walk": {
+   "frames": 17,
+   "speed": 0.299,
+   "slide": 0.005,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.015,
+   "seam": 0.0,
+   "moves": 0.022,
+   "size": 0.101,
+   "flags": [
+    "floats"
+   ]
+  }
+ },
+ "duck": {
+  "attack": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.312,
+   "size": 0.235,
+   "flags": []
+  },
+  "die": {
+   "frames": 19,
+   "speed": -0.028,
+   "slide": 0.009,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.059,
+   "seam": 0.389,
+   "moves": 0.389,
+   "size": 0.235,
+   "flags": []
+  },
+  "drink": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.006,
+   "seam": 0.0,
+   "moves": 0.139,
+   "size": 0.235,
+   "flags": []
+  },
+  "eat": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.006,
+   "sinks": 0.006,
+   "lift": 0.006,
+   "seam": 0.0,
+   "moves": 0.182,
+   "size": 0.235,
+   "flags": []
+  },
+  "fly": {
+   "frames": 32,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.08,
+   "sinks": 0.08,
+   "lift": 0.011,
+   "seam": 0.025,
+   "moves": 0.457,
+   "size": 0.235,
+   "flags": [
+    "seam",
+    "sinks"
+   ]
+  },
+  "glide": {
+   "frames": 49,
+   "speed": -0.0,
+   "slide": 0.001,
+   "floats": -0.034,
+   "sinks": 0.034,
+   "lift": 0.011,
+   "seam": 0.0,
+   "moves": 0.047,
+   "size": 0.235,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "hitL": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.012,
+   "sinks": 0.012,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.165,
+   "size": 0.235,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "hitR": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.012,
+   "sinks": 0.012,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.165,
+   "size": 0.235,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.026,
+   "size": 0.235,
+   "flags": []
+  },
+  "idle": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.016,
+   "size": 0.235,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.004,
+   "seam": 0.0,
+   "moves": 0.08,
+   "size": 0.235,
+   "flags": []
+  },
+  "jump": {
+   "frames": 15,
+   "speed": 0.014,
+   "slide": 0.023,
+   "floats": -0.027,
+   "sinks": 0.027,
+   "lift": 0.121,
+   "seam": 0.0,
+   "moves": 0.294,
+   "size": 0.235,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.026,
+   "size": 0.235,
+   "flags": []
+  },
+  "look": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.073,
+   "size": 0.235,
+   "flags": []
+  },
+  "run": {
+   "frames": 27,
+   "speed": 1.79,
+   "slide": 0.036,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.011,
+   "seam": 0.0,
+   "moves": 0.045,
+   "size": 0.235,
+   "flags": []
+  },
+  "swim": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.106,
+   "floats": -0.014,
+   "sinks": 0.014,
+   "lift": -0.004,
+   "seam": 0.0,
+   "moves": 0.024,
+   "size": 0.235,
+   "flags": [
+    "sinks",
+    "no-stride"
+   ]
+  },
+  "walk": {
+   "frames": 9,
+   "speed": 0.395,
+   "slide": 0.014,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.056,
+   "size": 0.235,
+   "flags": []
+  }
+ },
+ "goose": {
+  "attack": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.456,
+   "size": 0.607,
+   "flags": []
+  },
+  "die": {
+   "frames": 19,
+   "speed": -0.04,
+   "slide": 0.021,
+   "floats": -0.002,
+   "sinks": 0.002,
+   "lift": 0.118,
+   "seam": 0.482,
+   "moves": 0.485,
+   "size": 0.607,
+   "flags": []
+  },
+  "drink": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.012,
+   "seam": 0.0,
+   "moves": 0.369,
+   "size": 0.607,
+   "flags": []
+  },
+  "eat": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.018,
+   "seam": 0.0,
+   "moves": 0.533,
+   "size": 0.607,
+   "flags": []
+  },
+  "fly": {
+   "frames": 32,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.05,
+   "sinks": 0.05,
+   "lift": 0.058,
+   "seam": 0.029,
+   "moves": 0.598,
+   "size": 0.607,
+   "flags": [
+    "seam",
+    "sinks"
+   ]
+  },
+  "glide": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.014,
+   "sinks": -0.0,
+   "lift": 0.054,
+   "seam": 0.0,
+   "moves": 0.057,
+   "size": 0.607,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.007,
+   "floats": -0.019,
+   "sinks": 0.019,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.254,
+   "size": 0.607,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "hitR": {
+   "frames": 13,
+   "speed": -0.0,
+   "slide": 0.0,
+   "floats": -0.017,
+   "sinks": 0.017,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.246,
+   "size": 0.607,
+   "flags": []
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.036,
+   "size": 0.607,
+   "flags": []
+  },
+  "idle": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.022,
+   "size": 0.607,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.007,
+   "seam": 0.0,
+   "moves": 0.175,
+   "size": 0.607,
+   "flags": []
+  },
+  "jump": {
+   "frames": 15,
+   "speed": 0.021,
+   "slide": 0.041,
+   "floats": -0.066,
+   "sinks": 0.066,
+   "lift": 0.3,
+   "seam": 0.0,
+   "moves": 0.426,
+   "size": 0.607,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": -0.001,
+   "seam": 0.0,
+   "moves": 0.033,
+   "size": 0.607,
+   "flags": []
+  },
+  "look": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.1,
+   "size": 0.607,
+   "flags": []
+  },
+  "run": {
+   "frames": 11,
+   "speed": 2.21,
+   "slide": 0.085,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.116,
+   "size": 0.607,
+   "flags": []
+  },
+  "swim": {
+   "frames": 25,
+   "speed": -0.001,
+   "slide": 0.21,
+   "floats": -0.026,
+   "sinks": 0.026,
+   "lift": -0.008,
+   "seam": 0.0,
+   "moves": 0.047,
+   "size": 0.607,
+   "flags": [
+    "sinks",
+    "no-stride"
+   ]
+  },
+  "walk": {
+   "frames": 10,
+   "speed": 0.501,
+   "slide": 0.01,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.118,
+   "size": 0.607,
+   "flags": []
+  }
+ },
+ "gull": {
+  "attack": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.42,
+   "size": 0.335,
+   "flags": []
+  },
+  "die": {
+   "frames": 19,
+   "speed": -0.011,
+   "slide": 0.011,
+   "floats": -0.007,
+   "sinks": 0.007,
+   "lift": 0.048,
+   "seam": 0.482,
+   "moves": 0.482,
+   "size": 0.335,
+   "flags": []
+  },
+  "drink": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.01,
+   "seam": 0.0,
+   "moves": 0.17,
+   "size": 0.335,
+   "flags": []
+  },
+  "eat": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.014,
+   "seam": 0.0,
+   "moves": 0.23,
+   "size": 0.335,
+   "flags": []
+  },
+  "fly": {
+   "frames": 32,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.076,
+   "sinks": 0.076,
+   "lift": 0.058,
+   "seam": 0.027,
+   "moves": 0.577,
+   "size": 0.335,
+   "flags": [
+    "seam",
+    "sinks"
+   ]
+  },
+  "glide": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.004,
+   "floats": -0.008,
+   "sinks": 0.008,
+   "lift": 0.051,
+   "seam": 0.0,
+   "moves": 0.045,
+   "size": 0.335,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.04,
+   "sinks": 0.04,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.254,
+   "size": 0.335,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "hitR": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.001,
+   "floats": -0.043,
+   "sinks": 0.043,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.246,
+   "size": 0.335,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.027,
+   "size": 0.335,
+   "flags": []
+  },
+  "idle": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.017,
+   "size": 0.335,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.006,
+   "seam": 0.0,
+   "moves": 0.093,
+   "size": 0.335,
+   "flags": []
+  },
+  "jump": {
+   "frames": 15,
+   "speed": 0.026,
+   "slide": 0.019,
+   "floats": -0.038,
+   "sinks": 0.038,
+   "lift": 0.17,
+   "seam": 0.0,
+   "moves": 0.381,
+   "size": 0.335,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.011,
+   "sinks": 0.011,
+   "lift": 0.003,
+   "seam": 0.0,
+   "moves": 0.028,
+   "size": 0.335,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "look": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.077,
+   "size": 0.335,
+   "flags": []
+  },
+  "run": {
+   "frames": 11,
+   "speed": 1.837,
+   "slide": 0.012,
+   "floats": -0.007,
+   "sinks": 0.007,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.09,
+   "size": 0.335,
+   "flags": []
+  },
+  "swim": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.176,
+   "floats": -0.021,
+   "sinks": 0.021,
+   "lift": -0.006,
+   "seam": 0.0,
+   "moves": 0.039,
+   "size": 0.335,
+   "flags": [
+    "sinks",
+    "no-stride"
+   ]
+  },
+  "walk": {
+   "frames": 10,
+   "speed": 0.406,
+   "slide": 0.016,
+   "floats": -0.008,
+   "sinks": 0.008,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.094,
+   "size": 0.335,
+   "flags": []
+  }
+ },
+ "owl": {
+  "attack": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.052,
+   "sinks": 0.052,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.256,
+   "size": 0.45,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "die": {
+   "frames": 19,
+   "speed": -0.018,
+   "slide": 0.013,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.018,
+   "seam": 0.427,
+   "moves": 0.427,
+   "size": 0.45,
+   "flags": []
+  },
+  "drink": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.055,
+   "seam": 0.0,
+   "moves": 0.19,
+   "size": 0.45,
+   "flags": [
+    "floats"
+   ]
+  },
+  "eat": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.055,
+   "seam": 0.0,
+   "moves": 0.239,
+   "size": 0.45,
+   "flags": [
+    "floats"
+   ]
+  },
+  "fly": {
+   "frames": 32,
+   "speed": 0.0,
+   "slide": 0.001,
+   "floats": 0.055,
+   "sinks": -0.0,
+   "lift": 0.061,
+   "seam": 0.031,
+   "moves": 0.478,
+   "size": 0.45,
+   "flags": [
+    "seam"
+   ]
+  },
+  "glide": {
+   "frames": 49,
+   "speed": 0.001,
+   "slide": 0.006,
+   "floats": 0.061,
+   "sinks": -0.0,
+   "lift": 0.061,
+   "seam": 0.0,
+   "moves": 0.036,
+   "size": 0.45,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.072,
+   "sinks": 0.072,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.216,
+   "size": 0.45,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "hitR": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.073,
+   "sinks": 0.073,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.214,
+   "size": 0.45,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.073,
+   "size": 0.45,
+   "flags": []
+  },
+  "idle": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.002,
+   "sinks": 0.002,
+   "lift": 0.005,
+   "seam": 0.0,
+   "moves": 0.049,
+   "size": 0.45,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.032,
+   "seam": 0.0,
+   "moves": 0.105,
+   "size": 0.45,
+   "flags": [
+    "floats"
+   ]
+  },
+  "jump": {
+   "frames": 15,
+   "speed": 0.004,
+   "slide": 0.036,
+   "floats": -0.045,
+   "sinks": 0.045,
+   "lift": 0.26,
+   "seam": 0.0,
+   "moves": 0.432,
+   "size": 0.45,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.002,
+   "sinks": 0.002,
+   "lift": 0.005,
+   "seam": 0.0,
+   "moves": 0.042,
+   "size": 0.45,
+   "flags": []
+  },
+  "look": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.185,
+   "size": 0.45,
+   "flags": []
+  },
+  "run": {
+   "frames": 12,
+   "speed": 0.809,
+   "slide": 0.082,
+   "floats": -0.005,
+   "sinks": 0.005,
+   "lift": 0.012,
+   "seam": 0.0,
+   "moves": 0.04,
+   "size": 0.45,
+   "flags": []
+  },
+  "swim": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.158,
+   "floats": 0.0,
+   "sinks": -0.0,
+   "lift": 0.0,
+   "seam": 0.0,
+   "moves": 0.035,
+   "size": 0.45,
+   "flags": [
+    "no-stride"
+   ]
+  },
+  "walk": {
+   "frames": 9,
+   "speed": 0.308,
+   "slide": 0.003,
+   "floats": -0.005,
+   "sinks": 0.005,
+   "lift": 0.011,
+   "seam": 0.0,
+   "moves": 0.051,
+   "size": 0.45,
+   "flags": []
+  }
+ },
+ "pigeon": {
+  "attack": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.207,
+   "size": 0.182,
+   "flags": []
+  },
+  "die": {
+   "frames": 19,
+   "speed": -0.009,
+   "slide": 0.009,
+   "floats": -0.002,
+   "sinks": 0.002,
+   "lift": 0.026,
+   "seam": 0.236,
+   "moves": 0.236,
+   "size": 0.182,
+   "flags": []
+  },
+  "drink": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.004,
+   "seam": 0.0,
+   "moves": 0.088,
+   "size": 0.182,
+   "flags": []
+  },
+  "eat": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.006,
+   "seam": 0.0,
+   "moves": 0.12,
+   "size": 0.182,
+   "flags": []
+  },
+  "fly": {
+   "frames": 32,
+   "speed": 0.001,
+   "slide": 0.001,
+   "floats": -0.005,
+   "sinks": 0.005,
+   "lift": 0.02,
+   "seam": 0.018,
+   "moves": 0.271,
+   "size": 0.182,
+   "flags": [
+    "seam"
+   ]
+  },
+  "glide": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.002,
+   "floats": 0.018,
+   "sinks": -0.0,
+   "lift": 0.019,
+   "seam": 0.0,
+   "moves": 0.022,
+   "size": 0.182,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.021,
+   "sinks": 0.021,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.119,
+   "size": 0.182,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "hitR": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.02,
+   "sinks": 0.02,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.122,
+   "size": 0.182,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.011,
+   "size": 0.182,
+   "flags": []
+  },
+  "idle": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.008,
+   "size": 0.182,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.045,
+   "size": 0.182,
+   "flags": []
+  },
+  "jump": {
+   "frames": 15,
+   "speed": 0.007,
+   "slide": 0.011,
+   "floats": -0.02,
+   "sinks": 0.02,
+   "lift": 0.064,
+   "seam": 0.0,
+   "moves": 0.173,
+   "size": 0.182,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.004,
+   "sinks": 0.004,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.012,
+   "size": 0.182,
+   "flags": []
+  },
+  "look": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.033,
+   "size": 0.182,
+   "flags": []
+  },
+  "run": {
+   "frames": 37,
+   "speed": 1.379,
+   "slide": 0.087,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.008,
+   "seam": 0.0,
+   "moves": 0.028,
+   "size": 0.182,
+   "flags": []
+  },
+  "swim": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.074,
+   "floats": -0.009,
+   "sinks": 0.009,
+   "lift": -0.003,
+   "seam": 0.0,
+   "moves": 0.015,
+   "size": 0.182,
+   "flags": [
+    "sinks",
+    "no-stride"
+   ]
+  },
+  "walk": {
+   "frames": 9,
+   "speed": 0.351,
+   "slide": 0.003,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.037,
+   "size": 0.182,
+   "flags": []
+  }
+ },
+ "chicken": {
+  "attack": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.21,
+   "size": 0.4,
+   "flags": []
+  },
+  "die": {
+   "frames": 19,
+   "speed": -0.038,
+   "slide": 0.02,
+   "floats": -0.002,
+   "sinks": 0.002,
+   "lift": 0.065,
+   "seam": 0.291,
+   "moves": 0.291,
+   "size": 0.4,
+   "flags": []
+  },
+  "drink": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.011,
+   "seam": 0.0,
+   "moves": 0.18,
+   "size": 0.4,
+   "flags": []
+  },
+  "eat": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.017,
+   "seam": 0.0,
+   "moves": 0.241,
+   "size": 0.4,
+   "flags": []
+  },
+  "fly": {
+   "frames": 32,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.086,
+   "sinks": -0.0,
+   "lift": 0.088,
+   "seam": 0.015,
+   "moves": 0.289,
+   "size": 0.4,
+   "flags": []
+  },
+  "glide": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.085,
+   "sinks": -0.0,
+   "lift": 0.087,
+   "seam": 0.0,
+   "moves": 0.029,
+   "size": 0.4,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.008,
+   "floats": -0.018,
+   "sinks": 0.018,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.101,
+   "size": 0.4,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "hitR": {
+   "frames": 13,
+   "speed": -0.0,
+   "slide": 0.0,
+   "floats": -0.017,
+   "sinks": 0.017,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.101,
+   "size": 0.4,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.028,
+   "size": 0.4,
+   "flags": []
+  },
+  "idle": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.019,
+   "size": 0.4,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.007,
+   "seam": 0.0,
+   "moves": 0.096,
+   "size": 0.4,
+   "flags": []
+  },
+  "jump": {
+   "frames": 15,
+   "speed": 0.02,
+   "slide": 0.039,
+   "floats": -0.045,
+   "sinks": 0.045,
+   "lift": 0.208,
+   "seam": 0.0,
+   "moves": 0.299,
+   "size": 0.4,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": -0.001,
+   "seam": 0.0,
+   "moves": 0.028,
+   "size": 0.4,
+   "flags": []
+  },
+  "look": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": 0.001,
+   "sinks": -0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.079,
+   "size": 0.4,
+   "flags": []
+  },
+  "run": {
+   "frames": 15,
+   "speed": 2.967,
+   "slide": 0.034,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.009,
+   "seam": 0.0,
+   "moves": 0.122,
+   "size": 0.4,
+   "flags": []
+  },
+  "swim": {
+   "frames": 25,
+   "speed": -0.001,
+   "slide": 0.201,
+   "floats": -0.026,
+   "sinks": 0.026,
+   "lift": -0.007,
+   "seam": 0.0,
+   "moves": 0.045,
+   "size": 0.4,
+   "flags": [
+    "sinks",
+    "no-stride"
+   ]
+  },
+  "walk": {
+   "frames": 11,
+   "speed": 0.405,
+   "slide": 0.022,
+   "floats": -0.001,
+   "sinks": 0.001,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.102,
+   "size": 0.4,
+   "flags": []
+  }
+ },
+ "chick": {
+  "attack": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.055,
+   "size": 0.12,
+   "flags": []
+  },
+  "die": {
+   "frames": 19,
+   "speed": -0.009,
+   "slide": 0.004,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.017,
+   "seam": 0.104,
+   "moves": 0.104,
+   "size": 0.12,
+   "flags": []
+  },
+  "drink": {
+   "frames": 61,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.002,
+   "seam": 0.0,
+   "moves": 0.057,
+   "size": 0.12,
+   "flags": []
+  },
+  "eat": {
+   "frames": 37,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.003,
+   "seam": 0.0,
+   "moves": 0.074,
+   "size": 0.12,
+   "flags": []
+  },
+  "hitL": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.004,
+   "sinks": 0.004,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.024,
+   "size": 0.12,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "hitR": {
+   "frames": 13,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.004,
+   "sinks": 0.004,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.025,
+   "size": 0.12,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "howl": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.01,
+   "size": 0.12,
+   "flags": []
+  },
+  "idle": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.007,
+   "size": 0.12,
+   "flags": []
+  },
+  "idle2": {
+   "frames": 49,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.031,
+   "size": 0.12,
+   "flags": []
+  },
+  "lie": {
+   "frames": 73,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.011,
+   "size": 0.12,
+   "flags": []
+  },
+  "look": {
+   "frames": 97,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": -0.0,
+   "seam": 0.0,
+   "moves": 0.029,
+   "size": 0.12,
+   "flags": []
+  },
+  "run": {
+   "frames": 73,
+   "speed": 2.938,
+   "slide": 0.048,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.01,
+   "seam": 0.0,
+   "moves": 0.024,
+   "size": 0.12,
+   "flags": []
+  },
+  "swim": {
+   "frames": 25,
+   "speed": -0.0,
+   "slide": 0.036,
+   "floats": -0.005,
+   "sinks": 0.005,
+   "lift": -0.002,
+   "seam": 0.0,
+   "moves": 0.008,
+   "size": 0.12,
+   "flags": [
+    "sinks",
+    "no-stride"
+   ]
+  },
+  "walk": {
+   "frames": 14,
+   "speed": 0.415,
+   "slide": 0.008,
+   "floats": -0.0,
+   "sinks": 0.0,
+   "lift": 0.001,
+   "seam": 0.0,
+   "moves": 0.019,
+   "size": 0.12,
+   "flags": []
+  }
+ },
+ "bat": {
+  "attack": {
+   "frames": 22,
+   "speed": -0.014,
+   "slide": 0.082,
+   "floats": -0.073,
+   "sinks": 0.073,
+   "lift": -0.053,
+   "seam": 0.0,
+   "moves": 0.134,
+   "size": 0.119,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "die": {
+   "frames": 30,
+   "speed": 0.0,
+   "slide": 0.02,
+   "floats": -0.089,
+   "sinks": 0.089,
+   "lift": -0.042,
+   "seam": 0.146,
+   "moves": 0.147,
+   "size": 0.119,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "fly": {
+   "frames": 31,
+   "speed": -0.002,
+   "slide": 0.004,
+   "floats": -0.075,
+   "sinks": 0.075,
+   "lift": -0.059,
+   "seam": 0.0,
+   "moves": 0.085,
+   "size": 0.119,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "glide": {
+   "frames": 25,
+   "speed": 0.0,
+   "slide": 0.0,
+   "floats": -0.066,
+   "sinks": 0.066,
+   "lift": -0.066,
+   "seam": 0.0,
+   "moves": 0.0,
+   "size": 0.119,
+   "flags": [
+    "still",
+    "sinks"
+   ]
+  },
+  "hitL": {
+   "frames": 31,
+   "speed": -0.003,
+   "slide": 0.005,
+   "floats": -0.075,
+   "sinks": 0.075,
+   "lift": -0.058,
+   "seam": 0.0,
+   "moves": 0.094,
+   "size": 0.119,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "hitR": {
+   "frames": 31,
+   "speed": -0.003,
+   "slide": 0.005,
+   "floats": -0.075,
+   "sinks": 0.075,
+   "lift": -0.058,
+   "seam": 0.0,
+   "moves": 0.094,
+   "size": 0.119,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "idle": {
+   "frames": 39,
+   "speed": 0.0,
+   "slide": 0.003,
+   "floats": -0.075,
+   "sinks": 0.075,
+   "lift": -0.059,
+   "seam": 0.0,
+   "moves": 0.085,
+   "size": 0.119,
+   "flags": [
+    "sinks"
+   ]
+  }
+ },
+ "fish": {
+  "die": {
+   "frames": 21,
+   "speed": 0.0,
+   "slide": 0.07,
+   "floats": -0.096,
+   "sinks": 0.096,
+   "lift": -0.036,
+   "seam": 0.145,
+   "moves": 0.145,
+   "size": 0.098,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "hitL": {
+   "frames": 11,
+   "speed": 0.0,
+   "slide": 0.018,
+   "floats": -0.049,
+   "sinks": 0.049,
+   "lift": -0.049,
+   "seam": 0.0,
+   "moves": 0.079,
+   "size": 0.098,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "hitR": {
+   "frames": 11,
+   "speed": 0.0,
+   "slide": 0.017,
+   "floats": -0.049,
+   "sinks": 0.049,
+   "lift": -0.049,
+   "seam": 0.0,
+   "moves": 0.077,
+   "size": 0.098,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "idle": {
+   "frames": 63,
+   "speed": 0.0,
+   "slide": 0.001,
+   "floats": -0.049,
+   "sinks": 0.049,
+   "lift": -0.049,
+   "seam": 0.003,
+   "moves": 0.018,
+   "size": 0.098,
+   "flags": [
+    "sinks"
+   ]
+  },
+  "run": {
+   "frames": 17,
+   "speed": 0.0,
+   "slide": 0.003,
+   "floats": -0.049,
+   "sinks": 0.049,
+   "lift": -0.049,
+   "seam": 0.003,
+   "moves": 0.018,
+   "size": 0.098,
+   "flags": [
+    "sinks",
+    "no-stride"
+   ]
+  },
+  "swim": {
+   "frames": 32,
+   "speed": 0.0,
+   "slide": 0.001,
+   "floats": -0.049,
+   "sinks": 0.049,
+   "lift": -0.049,
+   "seam": 0.003,
+   "moves": 0.018,
+   "size": 0.098,
+   "flags": [
+    "sinks",
+    "no-stride"
+   ]
+  }
+ }
+}

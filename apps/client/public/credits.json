@@ -188,6 +188,43 @@
    ]
   }
  ],
+ "animals": [
+  {
+   "key": "pprabbit",
+   "title": "Rabbit",
+   "author": "Sherkiz",
+   "author_url": "https://poly.pizza/u/Sherkiz",
+   "source": "https://poly.pizza/m/Km89u3twcR",
+   "license": "CC BY 3.0",
+   "license_url": "https://creativecommons.org/licenses/by/3.0/",
+   "change": "Recoloured and reshaped into Yutopia's birds/hares/frogs, new clips",
+   "files": [
+    "animals/hare",
+    "animals/frog"
+   ]
+  },
+  {
+   "key": "pphawk",
+   "title": "Hawk Lp Rigged",
+   "author": "Sherkiz",
+   "author_url": "https://poly.pizza/u/Sherkiz",
+   "source": "https://poly.pizza/m/RkN6MEbP6g",
+   "license": "CC BY 3.0",
+   "license_url": "https://creativecommons.org/licenses/by/3.0/",
+   "change": "Recoloured and reshaped into Yutopia's birds/hares/frogs, new clips",
+   "files": [
+    "animals/crow",
+    "animals/songbird",
+    "animals/duck",
+    "animals/goose",
+    "animals/gull",
+    "animals/owl",
+    "animals/pigeon",
+    "animals/chicken",
+    "animals/chick"
+   ]
+  }
+ ],
  "people": [
   {
    "title": "MakeHuman",
@@ -1660,6 +1697,958 @@
    "title": "Voiceover Pack (male)",
    "author": "Kenney",
    "source": "https://kenney.nl/assets/voiceover-pack",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "crow.wav",
+   "author": "nigelcoop",
+   "source": "https://freesound.org/people/nigelcoop/sounds/75162/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Crows_01.wav",
+   "author": "Q.K.",
+   "source": "https://freesound.org/people/Q.K./sounds/56233/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Raven call.wav",
+   "author": "deleted_user_958643",
+   "source": "https://freesound.org/people/deleted_user_958643/sounds/328846/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "BIRDFowl_Rooster Crow, Boisterous Cock, Cocorico",
+   "author": "harrisonlace",
+   "source": "https://freesound.org/people/harrisonlace/sounds/842587/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Crows_02.wav",
+   "author": "Q.K.",
+   "source": "https://freesound.org/people/Q.K./sounds/56234/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Low Whoosh Bamboo 4",
+   "author": "Sadiquecat",
+   "source": "https://freesound.org/people/Sadiquecat/sounds/706679/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Birds chirping 04",
+   "author": "swiftoid",
+   "source": "https://freesound.org/people/swiftoid/sounds/182500/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "birds chirping.mp3",
+   "author": "Antwash",
+   "source": "https://freesound.org/people/Antwash/sounds/118577/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Chicken Alarm Call full with Occasional bird sound",
+   "author": "Rudmer_Rotteveel",
+   "source": "https://freesound.org/people/Rudmer_Rotteveel/sounds/316921/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Chicken Single Alarm Call",
+   "author": "Rudmer_Rotteveel",
+   "source": "https://freesound.org/people/Rudmer_Rotteveel/sounds/316920/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Bird Freaking Out",
+   "author": "qubodup",
+   "source": "https://freesound.org/people/qubodup/sounds/812026/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "single quack from a duck",
+   "author": "Mikes-MultiMedia",
+   "source": "https://freesound.org/people/Mikes-MultiMedia/sounds/418509/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "quack.wav",
+   "author": "Reitanna",
+   "source": "https://freesound.org/people/Reitanna/sounds/242664/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Ducks",
+   "author": "D4XX",
+   "source": "https://freesound.org/people/D4XX/sounds/607226/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Mallard Duck Quack Flying Away.wav",
+   "author": "WavJunction.com",
+   "source": "https://freesound.org/people/WavJunction.com/sounds/456770/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "R30-32-Ducks Quack on Pond.wav",
+   "author": "craigsmith",
+   "source": "https://freesound.org/people/craigsmith/sounds/479608/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "WoodDucks1a.wav",
+   "author": "AlanCat",
+   "source": "https://freesound.org/people/AlanCat/sounds/392406/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Geese.wav",
+   "author": "deleted_user_2104797",
+   "source": "https://freesound.org/people/deleted_user_2104797/sounds/164484/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "A squeaking goose",
+   "author": "antique98",
+   "source": "https://freesound.org/people/antique98/sounds/160686/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Geese Fly Overhead - Sweden",
+   "author": "EpicWizard",
+   "source": "https://freesound.org/people/EpicWizard/sounds/425488/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Goose Hissing At Me.aiff",
+   "author": "ChunaawChika09",
+   "source": "https://freesound.org/people/ChunaawChika09/sounds/581156/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "oca_enfadada_vr.wav",
+   "author": "UrbanSoundBcn",
+   "source": "https://freesound.org/people/UrbanSoundBcn/sounds/384520/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Goose Hiss",
+   "author": "el_boss",
+   "source": "https://freesound.org/people/el_boss/sounds/740195/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "owl_hooting_000102_0145S3 002-070 000-002 068-074.wav",
+   "author": "Gerent",
+   "source": "https://freesound.org/people/Gerent/sounds/558396/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "owl.wav",
+   "author": "Anthousai",
+   "source": "https://freesound.org/people/Anthousai/sounds/398734/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Owl Hoot",
+   "author": "Breviceps",
+   "source": "https://freesound.org/people/Breviceps/sounds/465697/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "seagull echo 140bpm.wav",
+   "author": "Snapper4298",
+   "source": "https://freesound.org/people/Snapper4298/sounds/166704/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Seagulls_short.wav",
+   "author": "Lydmakeren",
+   "source": "https://freesound.org/people/Lydmakeren/sounds/510917/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Seagull on beach",
+   "author": "squashy555",
+   "source": "https://freesound.org/people/squashy555/sounds/353416/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Dove.wav",
+   "author": "Rehanjo",
+   "source": "https://freesound.org/people/Rehanjo/sounds/593598/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "pigeon.wav",
+   "author": "squashy555",
+   "source": "https://freesound.org/people/squashy555/sounds/319512/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Domestic Dove Coo",
+   "author": "haulaway",
+   "source": "https://freesound.org/people/haulaway/sounds/735366/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Bonk Sound effect",
+   "author": "thecoolcookie17",
+   "source": "https://freesound.org/people/thecoolcookie17/sounds/573047/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Bat chirp (close-up)",
+   "author": "coelhoigor",
+   "source": "https://freesound.org/people/coelhoigor/sounds/455593/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Cartoon - Bat / Mouse Squeak",
+   "author": "Breviceps",
+   "source": "https://freesound.org/people/Breviceps/sounds/445958/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Chipmunk - rodent - rat - squirrel angry or chattering",
+   "author": "CGVega",
+   "source": "https://freesound.org/people/CGVega/sounds/554043/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "squirrelly",
+   "author": "dollarstoredingus",
+   "source": "https://freesound.org/people/dollarstoredingus/sounds/795975/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "squirrel chatter w city.wav",
+   "author": "Littlebrojay",
+   "source": "https://freesound.org/people/Littlebrojay/sounds/195440/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Squirrel Impression",
+   "author": "scottemoil",
+   "source": "https://freesound.org/people/scottemoil/sounds/188438/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Small Evil Creature Attack Shout 1",
+   "author": "qubodup",
+   "source": "https://freesound.org/people/qubodup/sounds/744792/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Squirrel, Grey alarm calls",
+   "author": "genghisattenborough",
+   "source": "https://freesound.org/people/genghisattenborough/sounds/744596/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "A rabbit is eating a cucumber",
+   "author": "davi-sh",
+   "source": "https://freesound.org/people/davi-sh/sounds/482732/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "bunny sneeze",
+   "author": "lucyve",
+   "source": "https://freesound.org/people/lucyve/sounds/205576/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Barking 4.wav",
+   "author": "Mrthenoronha",
+   "source": "https://freesound.org/people/Mrthenoronha/sounds/420447/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Dogs Barking.wav",
+   "author": "Mrthenoronha",
+   "source": "https://freesound.org/people/Mrthenoronha/sounds/420451/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Fox Barking",
+   "author": "gadzooks",
+   "source": "https://freesound.org/people/gadzooks/sounds/397655/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Fox Screams",
+   "author": "Soundburst",
+   "source": "https://freesound.org/people/Soundburst/sounds/634005/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Fox scream in the forest",
+   "author": "nielstii",
+   "source": "https://freesound.org/people/nielstii/sounds/554308/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Raccoon Beat",
+   "author": "dearydanmusic",
+   "source": "https://freesound.org/people/dearydanmusic/sounds/653467/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "racoon gecker.wav",
+   "author": "h_sylvan",
+   "source": "https://freesound.org/people/h_sylvan/sounds/637445/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "230127 Raccoon calls, noisy world, EMT272s, roof, Toronto 10pm",
+   "author": "TRP",
+   "source": "https://freesound.org/people/TRP/sounds/717839/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "2_9_2008_joey vocal beaver imitation.mp3",
+   "author": "suspiciononline",
+   "source": "https://freesound.org/people/suspiciononline/sounds/48083/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Babbling Brook",
+   "author": "doubleDog",
+   "source": "https://freesound.org/people/doubleDog/sounds/761543/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "An Argument",
+   "author": "olafitiany",
+   "source": "https://freesound.org/people/olafitiany/sounds/796158/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Frog.ogg",
+   "author": "egomassive",
+   "source": "https://freesound.org/people/egomassive/sounds/536759/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Frog croaking sound effect",
+   "author": "betterchinese",
+   "source": "https://freesound.org/people/betterchinese/sounds/354132/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "frog_quak.mp3",
+   "author": "katzlbt",
+   "source": "https://freesound.org/people/katzlbt/sounds/361117/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "cat meow short",
+   "author": "skymary",
+   "source": "https://freesound.org/people/skymary/sounds/412017/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "cat meow",
+   "author": "tuberatanka",
+   "source": "https://freesound.org/people/tuberatanka/sounds/110011/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Cat Meowing",
+   "author": "lextrack",
+   "source": "https://freesound.org/people/lextrack/sounds/333916/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "catfight.WAV",
+   "author": "stomachache",
+   "source": "https://freesound.org/people/stomachache/sounds/45199/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "catHisses1.wav",
+   "author": "Zabuhailo",
+   "source": "https://freesound.org/people/Zabuhailo/sounds/146963/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Cats Fighting Amplified",
+   "author": "Rudmer_Rotteveel",
+   "source": "https://freesound.org/people/Rudmer_Rotteveel/sounds/316915/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "cat screech.wav",
+   "author": "red3zzz",
+   "source": "https://freesound.org/people/red3zzz/sounds/131262/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "cat fight.wav",
+   "author": "jess90",
+   "source": "https://freesound.org/people/jess90/sounds/647307/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "cat scream.wav",
+   "author": "cognito perceptu",
+   "source": "https://freesound.org/people/cognito",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Deer barking.m4a",
+   "author": "Spamanator",
+   "source": "https://freesound.org/people/Spamanator/sounds/569926/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Deer_Bark_5_s",
+   "author": "ferventtorpor",
+   "source": "https://freesound.org/people/ferventtorpor/sounds/696776/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Bellowing deer - Animal - Nature - Hirsch - Röhren - Tiere - Wald",
+   "author": "IchBinChrist",
+   "source": "https://freesound.org/people/IchBinChrist/sounds/407631/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Deer_chucker_call_s",
+   "author": "ferventtorpor",
+   "source": "https://freesound.org/people/ferventtorpor/sounds/696777/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Alligator Deer Sound (Alligatorus Ceverius Delvocianises).ogg",
+   "author": "Mastersoundboy2005",
+   "source": "https://freesound.org/people/Mastersoundboy2005/sounds/634615/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Wildlife Creature Warning Howl",
+   "author": "qubodup",
+   "source": "https://freesound.org/people/qubodup/sounds/743078/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Moose_Elk.mp3",
+   "author": "gleith",
+   "source": "https://freesound.org/people/gleith/sounds/486554/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Demonic Creature Bellowing Sound Effect #1",
+   "author": "Mastersoundboy2005",
+   "source": "https://freesound.org/people/Mastersoundboy2005/sounds/769934/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "ghost out of mirror.aiff",
+   "author": "gio td",
+   "source": "https://freesound.org/people/gio",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "MooseSpaceE31.wav",
+   "author": "visual",
+   "source": "https://freesound.org/people/visual/sounds/338946/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "awhoo.mp3",
+   "author": "genel",
+   "source": "https://freesound.org/people/genel/sounds/155150/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "19-PIG-NUT-CRUNCH",
+   "author": "The_Sample_Workshop",
+   "source": "https://freesound.org/people/The_Sample_Workshop/sounds/732980/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Distant Gunfire",
+   "author": "iainmccurdy",
+   "source": "https://freesound.org/people/iainmccurdy/sounds/842326/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "wild pig cartoon",
+   "author": "mr_marcello",
+   "source": "https://freesound.org/people/mr_marcello/sounds/330704/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Angry Pig Oinking",
+   "author": "Jofae",
+   "source": "https://freesound.org/people/Jofae/sounds/352698/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Swine - Pig; Dinosaur-like Grunt",
+   "author": "TheKingOfGeeks360",
+   "source": "https://freesound.org/people/TheKingOfGeeks360/sounds/842313/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Howl_Echo.wav",
+   "author": "taure",
+   "source": "https://freesound.org/people/taure/sounds/380156/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Wolf howl",
+   "author": "NaturesTemper",
+   "source": "https://freesound.org/people/NaturesTemper/sounds/398430/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Scary Ghost Wolf Howling.wav",
+   "author": "BrainClaim",
+   "source": "https://freesound.org/people/BrainClaim/sounds/267179/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Beast Snarling",
+   "author": "Christopherderp",
+   "source": "https://freesound.org/people/Christopherderp/sounds/342204/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Dog talking or howling",
+   "author": "Filmscore",
+   "source": "https://freesound.org/people/Filmscore/sounds/340991/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Dog bark2.wav",
+   "author": "MisterTood",
+   "source": "https://freesound.org/people/MisterTood/sounds/9032/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Chihuahua Puppy Whine",
+   "author": "AustinXYZ",
+   "source": "https://freesound.org/people/AustinXYZ/sounds/350593/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Wild Cats - Siberian Lynx, Huff",
+   "author": "TheKingOfGeeks360",
+   "source": "https://freesound.org/people/TheKingOfGeeks360/sounds/844316/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "elaine-growl.wav",
+   "author": "Miselaineous",
+   "source": "https://freesound.org/people/Miselaineous/sounds/63668/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Honky-Tonk Piano.wav",
+   "author": "Lynx_5969",
+   "source": "https://freesound.org/people/Lynx_5969/sounds/404059/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Reverse beep.m4a",
+   "author": "sethrk",
+   "source": "https://freesound.org/people/sethrk/sounds/460313/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Didgeridoo Monster Roar",
+   "author": "Noxdl",
+   "source": "https://freesound.org/people/Noxdl/sounds/204912/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Zombie gargles",
+   "author": "Breviceps",
+   "source": "https://freesound.org/people/Breviceps/sounds/445983/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Nemean Roar.wav",
+   "author": "rifthead",
+   "source": "https://freesound.org/people/rifthead/sounds/240311/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Rocket Sled Crash On A Frozen Lake In Wisconsin",
+   "author": "highflyer500",
+   "source": "https://freesound.org/people/highflyer500/sounds/506361/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Angry Beast.wav",
+   "author": "husky70",
+   "source": "https://freesound.org/people/husky70/sounds/170454/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "huf grizzly",
+   "author": "Nivatius",
+   "source": "https://freesound.org/people/Nivatius/sounds/519598/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Chicken imitation",
+   "author": "esperar",
+   "source": "https://freesound.org/people/esperar/sounds/170808/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Chicken clucking",
+   "author": "Breviceps",
+   "source": "https://freesound.org/people/Breviceps/sounds/456803/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Chicken Talk.wav",
+   "author": "Zajjman",
+   "source": "https://freesound.org/people/Zajjman/sounds/406094/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Bwack.mp3",
+   "author": "Preacher13",
+   "source": "https://freesound.org/people/Preacher13/sounds/673255/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "chicken_freesound.wav",
+   "author": "deia15",
+   "source": "https://freesound.org/people/deia15/sounds/96958/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Cow moos",
+   "author": "JosephSardin",
+   "source": "https://freesound.org/people/JosephSardin/sounds/177253/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Cow mooing in south of France (Limousin)",
+   "author": "felix.blume",
+   "source": "https://freesound.org/people/felix.blume/sounds/163727/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "cows_mooing_mono_4824.wav",
+   "author": "Mystikuum",
+   "source": "https://freesound.org/people/Mystikuum/sounds/401636/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "sheep bleat outdoors",
+   "author": "Yuval",
+   "source": "https://freesound.org/people/Yuval/sounds/210511/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "sheep 2.mp3",
+   "author": "esperar",
+   "source": "https://freesound.org/people/esperar/sounds/171151/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Lamb and Mother",
+   "author": "swiftoid",
+   "source": "https://freesound.org/people/swiftoid/sounds/182509/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Pigs oinking",
+   "author": "zachrau",
+   "source": "https://freesound.org/people/zachrau/sounds/449577/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Pig - Snort 9 - 96kHz.wav",
+   "author": "JarredGibb",
+   "source": "https://freesound.org/people/JarredGibb/sounds/233158/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Pig - Scream 2 - 96kHz.wav",
+   "author": "JarredGibb",
+   "source": "https://freesound.org/people/JarredGibb/sounds/233152/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Pig - Scream 4 - 96kHz.wav",
+   "author": "JarredGibb",
+   "source": "https://freesound.org/people/JarredGibb/sounds/233149/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "horse.mp3",
+   "author": "3bagbrew",
+   "source": "https://freesound.org/people/3bagbrew/sounds/59569/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "horse's whinny",
+   "author": "Kubuzz",
+   "source": "https://freesound.org/people/Kubuzz/sounds/347036/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Horse_Whinny.wav",
+   "author": "foxen10",
+   "source": "https://freesound.org/people/foxen10/sounds/149024/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "horse snort.wav",
+   "author": "bruno.auzet",
+   "source": "https://freesound.org/people/bruno.auzet/sounds/538697/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "G38-16-Four Horse Snorts.wav",
+   "author": "craigsmith",
+   "source": "https://freesound.org/people/craigsmith/sounds/437111/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Horse Galloping.wav",
+   "author": "Max_Headroom",
+   "source": "https://freesound.org/people/Max_Headroom/sounds/175356/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "wings.wav",
+   "author": "Godowan",
+   "source": "https://freesound.org/people/Godowan/sounds/240476/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Pigeons flying",
+   "author": "mcmikai",
+   "source": "https://freesound.org/people/mcmikai/sounds/532180/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "wingflap_fast.wav",
+   "author": "philberts",
+   "source": "https://freesound.org/people/philberts/sounds/71417/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "pigeon_take_off",
+   "author": "sinewave1kHz",
+   "source": "https://freesound.org/people/sinewave1kHz/sounds/207387/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Beating wings of a pigeon",
+   "author": "gerardcatala",
+   "source": "https://freesound.org/people/gerardcatala/sounds/153277/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Pigeons Taking Off",
+   "author": "AMTR",
+   "source": "https://freesound.org/people/AMTR/sounds/138029/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "wings flapping.wav",
+   "author": "tommy_mooney",
+   "source": "https://freesound.org/people/tommy_mooney/sounds/386706/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Wing Flap 1.wav",
+   "author": "_stubb",
+   "source": "https://freesound.org/people/_stubb/sounds/389634/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "wing flaps layered.wav",
+   "author": "martian",
+   "source": "https://freesound.org/people/martian/sounds/19295/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "water_splash_10shots.wav",
+   "author": "vibe_crc",
+   "source": "https://freesound.org/people/vibe_crc/sounds/50623/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Splash",
+   "author": "swordofkings128",
+   "source": "https://freesound.org/people/swordofkings128/sounds/398032/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Small Water Spill",
+   "author": "Braleven",
+   "source": "https://freesound.org/people/Braleven/sounds/319418/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "S29-30 Body falls in hard snow.wav",
+   "author": "craigsmith",
+   "source": "https://freesound.org/people/craigsmith/sounds/675895/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Fall on carpet",
+   "author": "j0rd4nkzf",
+   "source": "https://freesound.org/people/j0rd4nkzf/sounds/244259/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Body fall.wav",
+   "author": "DylanTheFish",
+   "source": "https://freesound.org/people/DylanTheFish/sounds/417994/",
+   "license": "CC0 1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+   "title": "Horse Clip Clopping Downhill (stereo)",
+   "author": "swiftoid",
+   "source": "https://freesound.org/people/swiftoid/sounds/182504/",
    "license": "CC0 1.0",
    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
   }

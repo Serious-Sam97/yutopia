@@ -11,7 +11,7 @@ import type { ActTarget } from "../store";
 // longer (no flicker between two). The nearest few make the prompt's stack; Tab (⇧Tab back), [ ]
 // or LB held and the pad's ↑ ↓ pick between them. Tap Use: its main action; hold: its menu.
 
-export type TargetKind = "object" | "person" | "pet" | "npc" | "toy";
+export type TargetKind = "object" | "person" | "pet" | "npc" | "toy" | "animal";
 
 export interface Target {
   /** "o:id", "p:sid", "pet:id", "npc:vortex", "toy:id" */
@@ -49,10 +49,12 @@ export interface TargetHost {
   /** an elevator's panel is open (its car's the way to use it) */
   inLift(): boolean;
   menuFor(t: ActTarget): { title: string; items: { act: string; ok: boolean }[] } | null;
+  /** (plan 126) the animals near me (out on the land), nearest first */
+  animals?(r: number): { id: string; x: number; y: number }[];
 }
 
 /** How far each kind is in reach (tiles): a thing's own (the controller's INTERACT_RANGE), the rest. */
-export const REACH = { object: 1.7, person: 2.4, pet: 2.2, npc: 2.6, toy: 2.4 };
+export const REACH = { object: 1.7, person: 2.4, pet: 2.2, npc: 2.6, toy: 2.4, animal: 2.6 };
 const OFF_FACING = (100 * Math.PI) / 180; // past this off where I face, only what's right by me
 const BY_ME = 0.9;
 const STICKY = 0.8; // the one I had: its score × this
@@ -237,6 +239,19 @@ export class Targets {
           REACH.npc,
         );
       });
+      // (plan 126) the animals out on the land: their menu's first act (feed, skin, collect, ride, stroke)
+      if (h.level === 0)
+        for (const a of h.animals?.(REACH.animal + 2) ?? []) {
+          const menu: ActTarget = { type: "animal", id: a.id };
+          const m = h.menuFor(menu);
+          const first = m?.items.find((i) => i.ok);
+          if (!m || !first) continue;
+          add(
+            { key: `animal:${a.id}`, kind: "animal", label: m.title, act: first.act, x: a.x, y: a.y, menu },
+            Math.hypot(a.x - me.x, a.y - me.y),
+            REACH.animal,
+          );
+        }
       // toys lying about
       room.state.toys?.forEach((t) => {
         if (t.state !== "floor") return;

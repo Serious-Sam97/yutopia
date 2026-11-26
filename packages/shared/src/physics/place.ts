@@ -180,13 +180,16 @@ export class Place {
   }
 
   // ── a body (Jolt) ──
-  /** A body with its feet z over the floor fits at (x, y): nothing in its way, something under it. */
-  fitsAt(x: number, y: number, z: number, r = BODY_R): boolean {
+  /** A body with its feet z over the floor fits at (x, y): nothing in its way, something under it. (`h`: its height —
+   *  a person's, or an animal's: a cat goes under a bench, plan 129.) */
+  fitsAt(x: number, y: number, z: number, r = BODY_R, h = BODY.h): boolean {
     if (!this.ready(x, y)) return this.mapFits(x, y);
     const world = this.world as PhysicsWorld;
     const Y = this.elev + this.atLeastLand(x, y, z);
-    if (this.through.mask === "all" && !world.fits(x, Y + STEP, y, r, BODY.h - STEP, "tops", this.through.pass))
-      return false;
+    // (its box from a step over its feet — what it steps up on isn't in its way — to its top; a small body's step
+    // its own, so the box is never over it)
+    const step = Math.min(STEP, h * 0.4);
+    if (this.through.mask === "all" && !world.fits(x, Y + step, y, r, h - step, "tops", this.through.pass)) return false;
     return world.groundUnder(x, Y + STEP, y, r, DEEP, "all") !== null;
   }
   /** What a body there stands on, its feet z over the floor (over it: within a step), the floor's. */
@@ -231,12 +234,12 @@ export class Place {
     }
     return true;
   }
-  /** A body standing at (x, y) fits: on whatever's there within a step of the floor (or the land). */
-  fits(x: number, y: number, r = BODY_R): boolean {
+  /** A body standing at (x, y) fits: on whatever's there within a step of the floor (or the land). `h`: its height. */
+  fits(x: number, y: number, r = BODY_R, h = BODY.h): boolean {
     // (out on the land, the land's own word too: a ridge too steep, deep water — not to stand on)
     if (this.outside && this.onLand(x, y) && !this.outside.walkable(Math.floor(x), Math.floor(y))) return false;
     const g = this.groundAt(x, y, this.atLeastLand(x, y, 0), r);
-    return (this.onLand(x, y) || g > -STOREY) && this.fitsAt(x, y, g, r);
+    return (this.onLand(x, y) || g > -STOREY) && this.fitsAt(x, y, g, r, h);
   }
   /** From tile (x, y) to its neighbour (nx, ny), a body's middle goes straight (no wall between,
    *  room all the way) — the grid's edge test. */

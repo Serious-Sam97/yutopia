@@ -56,6 +56,20 @@ def hair_group():
     return works, made
 
 
+def animals_group():
+    """(plan 126) the animals made from works by others (CC BY): sources.json's `kind: animal` entries, their files."""
+    sources = json.load(open(os.path.join(LIFE, "sources.json")))
+    return [
+        {
+            "key": key, "title": e["title"], "author": e["author"], "author_url": e["author_url"],
+            "source": e["source"], "license": e["license"], "license_url": e["license_url"],
+            "change": e["change"], "files": e.get("files", []),
+        }
+        for key, e in sources.items()
+        if e.get("kind") == "animal" and e.get("files")
+    ]  # fmt: skip
+
+
 def people_group():
     return [{
         "title": "MakeHuman", "author": "the MakeHuman team and community",
@@ -154,6 +168,7 @@ if __name__ == "__main__":
     works, made = hair_group()
     data = {
         "hair": works,
+        "animals": animals_group(),
         "people": people_group(),
         "sounds": sounds_group(),
         "code": code_group(),

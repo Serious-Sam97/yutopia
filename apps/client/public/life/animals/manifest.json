@@ -1,0 +1,2579 @@
+{
+ "_note": "tools/art/animals/build_animals.py \u2014 nose along +X, feet on y=0, metres",
+ "deer": {
+  "file": "deer.glb",
+  "source": "deer",
+  "bytes": 840672,
+  "tris": 11640,
+  "bones": 42,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "attack",
+   "kick",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "swim",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "missing": [
+   "sit",
+   "fly",
+   "glide"
+  ],
+  "size_m": {
+   "length": 1.331,
+   "width": 0.438,
+   "height": 1.299
+  },
+  "measured": "top = 0.95 m",
+  "gaits": {
+   "walk": {
+    "speed": 1.4,
+    "cycle": 0.417,
+    "stance": 0.385,
+    "leg": 0.489,
+    "fps": 24,
+    "drop": 0.04,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "walk"
+   },
+   "trot": {
+    "speed": 3.36,
+    "cycle": 0.297,
+    "stance": 0.45,
+    "leg": 0.489,
+    "fps": 37,
+    "drop": 0.08,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "trot"
+   },
+   "run": {
+    "speed": 15.0,
+    "cycle": 0.228,
+    "stance": 0.523,
+    "leg": 0.489,
+    "fps": 145,
+    "drop": 0.138,
+    "miss": [
+     0.001,
+     0.013,
+     1.0
+    ],
+    "gait": "gallop"
+   }
+  },
+  "speeds": {
+   "swim": 0.524,
+   "walk": 1.4,
+   "trot": 3.36,
+   "run": 15.0
+  }
+ },
+ "deer_buck": {
+  "file": "deer_buck.glb",
+  "source": "stag",
+  "bytes": 759408,
+  "tris": 11640,
+  "bones": 34,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "attack",
+   "kick",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "swim",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "missing": [
+   "sit",
+   "fly",
+   "glide"
+  ],
+  "size_m": {
+   "length": 1.445,
+   "width": 0.7,
+   "height": 1.623
+  },
+  "measured": "top = 1.0 m",
+  "gaits": {
+   "walk": {
+    "speed": 1.4,
+    "cycle": 0.417,
+    "stance": 0.385,
+    "leg": 0.539,
+    "fps": 24,
+    "drop": 0.04,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "walk"
+   },
+   "trot": {
+    "speed": 3.36,
+    "cycle": 0.306,
+    "stance": 0.462,
+    "leg": 0.539,
+    "fps": 36,
+    "drop": 0.08,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "trot"
+   },
+   "run": {
+    "speed": 15.0,
+    "cycle": 0.235,
+    "stance": 0.548,
+    "leg": 0.539,
+    "fps": 136,
+    "drop": 0.137,
+    "miss": [
+     0.001,
+     0.018,
+     0.95
+    ],
+    "gait": "gallop"
+   }
+  },
+  "speeds": {
+   "swim": 0.515,
+   "walk": 1.4,
+   "trot": 3.36,
+   "run": 15.0
+  }
+ },
+ "elk": {
+  "file": "elk.glb",
+  "source": "stag",
+  "bytes": 756328,
+  "tris": 11640,
+  "bones": 34,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "attack",
+   "kick",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "swim",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "missing": [
+   "sit",
+   "fly",
+   "glide"
+  ],
+  "size_m": {
+   "length": 2.067,
+   "width": 1.206,
+   "height": 2.59
+  },
+  "measured": "top = 1.45 m",
+  "gaits": {
+   "walk": {
+    "speed": 1.5,
+    "cycle": 0.542,
+    "stance": 0.536,
+    "leg": 0.771,
+    "fps": 24,
+    "drop": 0.04,
+    "miss": [
+     0.0,
+     0.006,
+     1.0
+    ],
+    "gait": "walk"
+   },
+   "trot": {
+    "speed": 3.6,
+    "cycle": 0.407,
+    "stance": 0.66,
+    "leg": 0.771,
+    "fps": 27,
+    "drop": 0.08,
+    "miss": [
+     0.0,
+     0.002,
+     1.0
+    ],
+    "gait": "trot"
+   },
+   "run": {
+    "speed": 12.0,
+    "cycle": 0.25,
+    "stance": 0.79,
+    "leg": 0.771,
+    "fps": 76,
+    "drop": 0.143,
+    "miss": [
+     0.001,
+     0.014,
+     1.0
+    ],
+    "gait": "gallop"
+   }
+  },
+  "speeds": {
+   "swim": 0.732,
+   "walk": 1.5,
+   "trot": 3.6,
+   "run": 12.0
+  }
+ },
+ "moose": {
+  "file": "moose.glb",
+  "source": "stag",
+  "bytes": 765880,
+  "tris": 11639,
+  "bones": 34,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "attack",
+   "kick",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "swim",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "missing": [
+   "sit",
+   "fly",
+   "glide"
+  ],
+  "size_m": {
+   "length": 2.668,
+   "width": 1.621,
+   "height": 2.592
+  },
+  "measured": "top = 1.9 m",
+  "gaits": {
+   "walk": {
+    "speed": 1.4,
+    "cycle": 0.75,
+    "stance": 0.693,
+    "leg": 1.033,
+    "fps": 24,
+    "drop": 0.04,
+    "miss": [
+     0.0,
+     0.009,
+     1.0
+    ],
+    "gait": "walk"
+   },
+   "trot": {
+    "speed": 3.36,
+    "cycle": 0.583,
+    "stance": 0.882,
+    "leg": 1.033,
+    "fps": 24,
+    "drop": 0.08,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "trot"
+   },
+   "run": {
+    "speed": 8.0,
+    "cycle": 0.45,
+    "stance": 1.008,
+    "leg": 1.033,
+    "fps": 40,
+    "drop": 0.134,
+    "miss": [
+     0.0,
+     0.006,
+     1.0
+    ],
+    "gait": "gallop"
+   }
+  },
+  "speeds": {
+   "swim": 0.959,
+   "walk": 1.4,
+   "trot": 3.36,
+   "run": 8.0
+  }
+ },
+ "wolf": {
+  "file": "wolf.glb",
+  "source": "wolf_b",
+  "bytes": 886132,
+  "tris": 11772,
+  "bones": 47,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "attack",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "sit",
+   "swim",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "missing": [
+   "kick",
+   "fly",
+   "glide"
+  ],
+  "size_m": {
+   "length": 1.935,
+   "width": 0.368,
+   "height": 0.936
+  },
+  "measured": "top = 0.8 m",
+  "gaits": {
+   "walk": {
+    "speed": 1.6,
+    "cycle": 0.333,
+    "stance": 0.352,
+    "leg": 0.432,
+    "fps": 24,
+    "drop": 0.04,
+    "miss": [
+     0.0,
+     0.0,
+     1.0
+    ],
+    "gait": "walk"
+   },
+   "trot": {
+    "speed": 3.84,
+    "cycle": 0.239,
+    "stance": 0.413,
+    "leg": 0.432,
+    "fps": 46,
+    "drop": 0.08,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "trot"
+   },
+   "run": {
+    "speed": 11.0,
+    "cycle": 0.214,
+    "stance": 0.477,
+    "leg": 0.432,
+    "fps": 117,
+    "drop": 0.12,
+    "miss": [
+     0.001,
+     0.018,
+     0.955
+    ],
+    "gait": "gallop"
+   }
+  },
+  "speeds": {
+   "swim": 0.611,
+   "walk": 1.6,
+   "trot": 3.84,
+   "run": 11.0
+  }
+ },
+ "bear": {
+  "file": "bear.glb",
+  "source": "wolf_b",
+  "bytes": 889448,
+  "tris": 11772,
+  "bones": 47,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "attack",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "sit",
+   "swim",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "missing": [
+   "kick",
+   "fly",
+   "glide"
+  ],
+  "size_m": {
+   "length": 1.54,
+   "width": 0.579,
+   "height": 1.117
+  },
+  "measured": "top = 1.0 m",
+  "gaits": {
+   "walk": {
+    "speed": 1.2,
+    "cycle": 0.542,
+    "stance": 0.429,
+    "leg": 0.438,
+    "fps": 24,
+    "drop": 0.04,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "walk"
+   },
+   "trot": {
+    "speed": 2.88,
+    "cycle": 0.367,
+    "stance": 0.475,
+    "leg": 0.438,
+    "fps": 30,
+    "drop": 0.08,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "trot"
+   },
+   "run": {
+    "speed": 9.0,
+    "cycle": 0.212,
+    "stance": 0.528,
+    "leg": 0.438,
+    "fps": 85,
+    "drop": 0.12,
+    "miss": [
+     0.0,
+     0.003,
+     1.0
+    ],
+    "gait": "lope"
+   }
+  },
+  "speeds": {
+   "swim": 0.611,
+   "walk": 1.2,
+   "trot": 2.88,
+   "run": 9.0
+  }
+ },
+ "boar": {
+  "file": "boar.glb",
+  "source": "cow",
+  "bytes": 778228,
+  "tris": 11640,
+  "bones": 38,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "attack",
+   "kick",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "missing": [
+   "sit",
+   "fly",
+   "glide",
+   "swim"
+  ],
+  "size_m": {
+   "length": 1.441,
+   "width": 0.498,
+   "height": 0.844
+  },
+  "measured": "top = 0.85 m",
+  "gaits": {
+   "walk": {
+    "speed": 1.2,
+    "cycle": 0.267,
+    "stance": 0.211,
+    "leg": 0.278,
+    "fps": 30,
+    "drop": 0.102,
+    "miss": [
+     0.0,
+     0.014,
+     1.0
+    ],
+    "gait": "walk"
+   },
+   "trot": {
+    "speed": 2.88,
+    "cycle": 0.208,
+    "stance": 0.269,
+    "leg": 0.278,
+    "fps": 53,
+    "drop": 0.08,
+    "miss": [
+     0.0,
+     0.006,
+     1.0
+    ],
+    "gait": "trot"
+   },
+   "run": {
+    "speed": 8.0,
+    "cycle": 0.168,
+    "stance": 0.303,
+    "leg": 0.278,
+    "fps": 131,
+    "drop": 0.217,
+    "miss": [
+     0.001,
+     0.015,
+     1.0
+    ],
+    "gait": "gallop"
+   }
+  },
+  "speeds": {
+   "walk": 1.2,
+   "trot": 2.88,
+   "run": 8.0
+  }
+ },
+ "lynx": {
+  "file": "lynx.glb",
+  "source": "fox",
+  "bytes": 870520,
+  "tris": 11088,
+  "bones": 47,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "attack",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "sit",
+   "swim",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "missing": [
+   "kick",
+   "fly",
+   "glide"
+  ],
+  "size_m": {
+   "length": 0.891,
+   "width": 0.283,
+   "height": 0.677
+  },
+  "measured": "top = 0.6 m",
+  "gaits": {
+   "walk": {
+    "speed": 1.1,
+    "cycle": 0.333,
+    "stance": 0.242,
+    "leg": 0.292,
+    "fps": 24,
+    "drop": 0.04,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "walk"
+   },
+   "trot": {
+    "speed": 2.64,
+    "cycle": 0.229,
+    "stance": 0.272,
+    "leg": 0.292,
+    "fps": 48,
+    "drop": 0.08,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "trot"
+   },
+   "run": {
+    "speed": 10.0,
+    "cycle": 0.176,
+    "stance": 0.319,
+    "leg": 0.292,
+    "fps": 159,
+    "drop": 0.131,
+    "miss": [
+     0.001,
+     0.019,
+     0.952
+    ],
+    "gait": "gallop"
+   }
+  },
+  "speeds": {
+   "swim": 0.533,
+   "walk": 1.1,
+   "trot": 2.64,
+   "run": 10.0
+  }
+ },
+ "fox": {
+  "file": "fox.glb",
+  "source": "fox",
+  "bytes": 838296,
+  "tris": 8730,
+  "bones": 47,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "attack",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "sit",
+   "swim",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "missing": [
+   "kick",
+   "fly",
+   "glide"
+  ],
+  "size_m": {
+   "length": 0.972,
+   "width": 0.17,
+   "height": 0.443
+  },
+  "measured": "top = 0.4 m",
+  "gaits": {
+   "walk": {
+    "speed": 0.9,
+    "cycle": 0.267,
+    "stance": 0.158,
+    "leg": 0.205,
+    "fps": 30,
+    "drop": 0.04,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "walk"
+   },
+   "trot": {
+    "speed": 2.16,
+    "cycle": 0.193,
+    "stance": 0.188,
+    "leg": 0.205,
+    "fps": 57,
+    "drop": 0.08,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "trot"
+   },
+   "run": {
+    "speed": 13.0,
+    "cycle": 0.146,
+    "stance": 0.215,
+    "leg": 0.205,
+    "fps": 302,
+    "drop": 0.12,
+    "miss": [
+     0.0,
+     0.014,
+     1.0
+    ],
+    "gait": "gallop"
+   }
+  },
+  "speeds": {
+   "swim": 0.288,
+   "walk": 0.9,
+   "trot": 2.16,
+   "run": 13.0
+  }
+ },
+ "raccoon": {
+  "file": "raccoon.glb",
+  "source": "fox",
+  "bytes": 816008,
+  "tris": 7760,
+  "bones": 47,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "attack",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "sit",
+   "swim",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "missing": [
+   "kick",
+   "fly",
+   "glide"
+  ],
+  "size_m": {
+   "length": 0.698,
+   "width": 0.168,
+   "height": 0.312
+  },
+  "measured": "top = 0.3 m",
+  "gaits": {
+   "walk": {
+    "speed": 0.6,
+    "cycle": 0.267,
+    "stance": 0.106,
+    "leg": 0.102,
+    "fps": 30,
+    "drop": 0.04,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "walk"
+   },
+   "trot": {
+    "speed": 1.44,
+    "cycle": 0.175,
+    "stance": 0.113,
+    "leg": 0.102,
+    "fps": 63,
+    "drop": 0.08,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "trot"
+   },
+   "run": {
+    "speed": 6.0,
+    "cycle": 0.104,
+    "stance": 0.126,
+    "leg": 0.102,
+    "fps": 241,
+    "drop": 0.187,
+    "miss": [
+     0.001,
+     0.008,
+     1.0
+    ],
+    "gait": "lope"
+   }
+  },
+  "speeds": {
+   "swim": 0.144,
+   "walk": 0.6,
+   "trot": 1.44,
+   "run": 6.0
+  }
+ },
+ "squirrel": {
+  "file": "squirrel.glb",
+  "source": "fox",
+  "bytes": 786176,
+  "tris": 5820,
+  "bones": 47,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "attack",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "sit",
+   "swim",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "missing": [
+   "kick",
+   "fly",
+   "glide"
+  ],
+  "size_m": {
+   "length": 0.186,
+   "width": 0.063,
+   "height": 0.212
+  },
+  "measured": "top = 0.1 m",
+  "gaits": {
+   "walk": {
+    "speed": 0.5,
+    "cycle": 0.116,
+    "stance": 0.038,
+    "leg": 0.032,
+    "fps": 69,
+    "drop": 0.04,
+    "miss": [
+     0.0,
+     0.002,
+     1.0
+    ],
+    "gait": "walk"
+   },
+   "trot": {
+    "speed": 1.2,
+    "cycle": 0.099,
+    "stance": 0.039,
+    "leg": 0.032,
+    "fps": 152,
+    "drop": 0.08,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "trot"
+   },
+   "run": {
+    "speed": 5.0,
+    "cycle": 0.1,
+    "stance": 0.043,
+    "leg": 0.032,
+    "fps": 588,
+    "drop": 0.12,
+    "miss": [
+     0.001,
+     0.013,
+     1.0
+    ],
+    "gait": "bound"
+   }
+  },
+  "speeds": {
+   "swim": 0.053,
+   "walk": 0.5,
+   "trot": 1.2,
+   "run": 5.0
+  }
+ },
+ "beaver": {
+  "file": "beaver.glb",
+  "source": "fox",
+  "bytes": 800904,
+  "tris": 7760,
+  "bones": 47,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "attack",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "swim",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "missing": [
+   "kick",
+   "sit",
+   "fly",
+   "glide"
+  ],
+  "size_m": {
+   "length": 0.804,
+   "width": 0.232,
+   "height": 0.358
+  },
+  "measured": "top = 0.35 m",
+  "gaits": {
+   "walk": {
+    "speed": 0.4,
+    "cycle": 0.458,
+    "stance": 0.121,
+    "leg": 0.092,
+    "fps": 24,
+    "drop": 0.04,
+    "miss": [
+     0.0,
+     0.002,
+     1.0
+    ],
+    "gait": "walk"
+   },
+   "trot": {
+    "speed": 0.96,
+    "cycle": 0.289,
+    "stance": 0.125,
+    "leg": 0.092,
+    "fps": 38,
+    "drop": 0.08,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "trot"
+   },
+   "run": {
+    "speed": 2.2,
+    "cycle": 0.16,
+    "stance": 0.134,
+    "leg": 0.092,
+    "fps": 81,
+    "drop": 0.293,
+    "miss": [
+     0.005,
+     0.04,
+     0.947
+    ],
+    "gait": "lope"
+   }
+  },
+  "speeds": {
+   "swim": 0.144,
+   "walk": 0.4,
+   "trot": 0.96,
+   "run": 2.2
+  }
+ },
+ "cat": {
+  "file": "cat.glb",
+  "source": "fox",
+  "bytes": 820224,
+  "tris": 7760,
+  "bones": 47,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "attack",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "sit",
+   "swim",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "missing": [
+   "kick",
+   "fly",
+   "glide"
+  ],
+  "size_m": {
+   "length": 0.66,
+   "width": 0.124,
+   "height": 0.292
+  },
+  "measured": "top = 0.26 m",
+  "gaits": {
+   "walk": {
+    "speed": 0.7,
+    "cycle": 0.235,
+    "stance": 0.109,
+    "leg": 0.123,
+    "fps": 34,
+    "drop": 0.04,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "walk"
+   },
+   "trot": {
+    "speed": 1.68,
+    "cycle": 0.157,
+    "stance": 0.119,
+    "leg": 0.123,
+    "fps": 70,
+    "drop": 0.08,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "trot"
+   },
+   "run": {
+    "speed": 8.0,
+    "cycle": 0.112,
+    "stance": 0.134,
+    "leg": 0.123,
+    "fps": 295,
+    "drop": 0.124,
+    "miss": [
+     0.0,
+     0.007,
+     1.0
+    ],
+    "gait": "gallop"
+   }
+  },
+  "speeds": {
+   "swim": 0.173,
+   "walk": 0.7,
+   "trot": 1.68,
+   "run": 8.0
+  }
+ },
+ "hare": {
+  "file": "hare.glb",
+  "source": "rabbit",
+  "bytes": 403632,
+  "tris": 5820,
+  "bones": 40,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "sit",
+   "swim",
+   "sniff",
+   "stamp"
+  ],
+  "missing": [
+   "attack",
+   "kick",
+   "fly",
+   "glide",
+   "drink",
+   "groom",
+   "play",
+   "howl"
+  ],
+  "size_m": {
+   "length": 0.324,
+   "width": 0.169,
+   "height": 0.299
+  },
+  "measured": "height = 0.3 m",
+  "gaits": {
+   "walk": {
+    "speed": 0.6,
+    "cycle": 0.455,
+    "stance": 0.093,
+    "leg": 0.103,
+    "fps": 33,
+    "drop": 0.303,
+    "miss": [
+     0.007,
+     0.061,
+     0.905
+    ],
+    "gait": "hare"
+   },
+   "trot": {
+    "speed": 1.44,
+    "cycle": 0.165,
+    "stance": 0.081,
+    "leg": 0.103,
+    "fps": 91,
+    "drop": 0.304,
+    "miss": [
+     0.007,
+     0.07,
+     0.905
+    ],
+    "gait": "hare"
+   },
+   "run": {
+    "speed": 12.0,
+    "cycle": 0.103,
+    "stance": 0.093,
+    "leg": 0.103,
+    "fps": 641,
+    "drop": 0.194,
+    "miss": [
+     0.023,
+     0.153,
+     0.8
+    ],
+    "gait": "hare"
+   }
+  },
+  "speeds": {
+   "swim": 0.086,
+   "walk": 0.6,
+   "trot": 1.44,
+   "run": 12.0
+  }
+ },
+ "frog": {
+  "file": "frog.glb",
+  "source": "rabbit",
+  "bytes": 347356,
+  "tris": 3880,
+  "bones": 40,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "swim",
+   "sniff",
+   "stamp"
+  ],
+  "missing": [
+   "attack",
+   "kick",
+   "sit",
+   "fly",
+   "glide",
+   "drink",
+   "groom",
+   "play",
+   "howl"
+  ],
+  "size_m": {
+   "length": 0.089,
+   "width": 0.064,
+   "height": 0.057
+  },
+  "measured": "length = 0.09 m",
+  "gaits": {
+   "walk": {
+    "speed": 0.2,
+    "cycle": 0.405,
+    "stance": 0.028,
+    "leg": 0.03,
+    "fps": 37,
+    "drop": 0.369,
+    "miss": [
+     0.004,
+     0.04,
+     0.905
+    ],
+    "gait": "hare"
+   },
+   "trot": {
+    "speed": 0.48,
+    "cycle": 0.169,
+    "stance": 0.028,
+    "leg": 0.03,
+    "fps": 89,
+    "drop": 0.37,
+    "miss": [
+     0.006,
+     0.072,
+     0.905
+    ],
+    "gait": "hare"
+   },
+   "run": {
+    "speed": 1.6,
+    "cycle": 0.101,
+    "stance": 0.014,
+    "leg": 0.03,
+    "fps": 566,
+    "drop": 0.205,
+    "miss": [
+     0.008,
+     0.064,
+     0.857
+    ],
+    "gait": "hare"
+   }
+  },
+  "speeds": {
+   "walk": 0.2,
+   "trot": 0.48,
+   "run": 1.6
+  }
+ },
+ "cow": {
+  "file": "cow.glb",
+  "source": "cow",
+  "bytes": 781088,
+  "tris": 11640,
+  "bones": 38,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "attack",
+   "kick",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "missing": [
+   "sit",
+   "fly",
+   "glide",
+   "swim"
+  ],
+  "size_m": {
+   "length": 2.453,
+   "width": 0.701,
+   "height": 1.393
+  },
+  "measured": "top = 1.4 m",
+  "gaits": {
+   "walk": {
+    "speed": 1.1,
+    "cycle": 0.583,
+    "stance": 0.424,
+    "leg": 0.653,
+    "fps": 24,
+    "drop": 0.081,
+    "miss": [
+     0.0,
+     0.006,
+     1.0
+    ],
+    "gait": "walk"
+   },
+   "trot": {
+    "speed": 2.64,
+    "cycle": 0.5,
+    "stance": 0.594,
+    "leg": 0.653,
+    "fps": 24,
+    "drop": 0.08,
+    "miss": [
+     0.0,
+     0.006,
+     1.0
+    ],
+    "gait": "trot"
+   },
+   "run": {
+    "speed": 6.0,
+    "cycle": 0.4,
+    "stance": 0.672,
+    "leg": 0.653,
+    "fps": 45,
+    "drop": 0.163,
+    "miss": [
+     0.001,
+     0.016,
+     1.0
+    ],
+    "gait": "gallop"
+   }
+  },
+  "speeds": {
+   "walk": 1.1,
+   "trot": 2.64,
+   "run": 6.0
+  }
+ },
+ "pig": {
+  "file": "pig.glb",
+  "source": "cow",
+  "bytes": 775584,
+  "tris": 11640,
+  "bones": 38,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "attack",
+   "kick",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "missing": [
+   "sit",
+   "fly",
+   "glide",
+   "swim"
+  ],
+  "size_m": {
+   "length": 1.516,
+   "width": 0.555,
+   "height": 0.793
+  },
+  "measured": "top = 0.8 m",
+  "gaits": {
+   "walk": {
+    "speed": 1.0,
+    "cycle": 0.25,
+    "stance": 0.165,
+    "leg": 0.247,
+    "fps": 32,
+    "drop": 0.101,
+    "miss": [
+     0.0,
+     0.008,
+     1.0
+    ],
+    "gait": "walk"
+   },
+   "trot": {
+    "speed": 2.4,
+    "cycle": 0.229,
+    "stance": 0.247,
+    "leg": 0.247,
+    "fps": 48,
+    "drop": 0.106,
+    "miss": [
+     0.0,
+     0.004,
+     1.0
+    ],
+    "gait": "trot"
+   },
+   "run": {
+    "speed": 5.0,
+    "cycle": 0.157,
+    "stance": 0.277,
+    "leg": 0.247,
+    "fps": 89,
+    "drop": 0.164,
+    "miss": [
+     0.001,
+     0.019,
+     0.95
+    ],
+    "gait": "lope"
+   }
+  },
+  "speeds": {
+   "walk": 1.0,
+   "trot": 2.4,
+   "run": 5.0
+  }
+ },
+ "sheep": {
+  "file": "sheep.glb",
+  "source": "cow",
+  "bytes": 775412,
+  "tris": 11640,
+  "bones": 38,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "attack",
+   "kick",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "missing": [
+   "sit",
+   "fly",
+   "glide",
+   "swim"
+  ],
+  "size_m": {
+   "length": 1.082,
+   "width": 0.491,
+   "height": 0.793
+  },
+  "measured": "top = 0.8 m",
+  "gaits": {
+   "walk": {
+    "speed": 1.0,
+    "cycle": 0.242,
+    "stance": 0.16,
+    "leg": 0.263,
+    "fps": 33,
+    "drop": 0.101,
+    "miss": [
+     0.0,
+     0.014,
+     1.0
+    ],
+    "gait": "walk"
+   },
+   "trot": {
+    "speed": 2.4,
+    "cycle": 0.224,
+    "stance": 0.242,
+    "leg": 0.263,
+    "fps": 49,
+    "drop": 0.08,
+    "miss": [
+     0.0,
+     0.016,
+     1.0
+    ],
+    "gait": "trot"
+   },
+   "run": {
+    "speed": 6.0,
+    "cycle": 0.168,
+    "stance": 0.283,
+    "leg": 0.263,
+    "fps": 107,
+    "drop": 0.214,
+    "miss": [
+     0.001,
+     0.009,
+     1.0
+    ],
+    "gait": "gallop"
+   }
+  },
+  "speeds": {
+   "walk": 1.0,
+   "trot": 2.4,
+   "run": 6.0
+  }
+ },
+ "horse": {
+  "file": "horse.glb",
+  "source": "horse_a",
+  "bytes": 891908,
+  "tris": 11640,
+  "bones": 46,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "attack",
+   "kick",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "swim",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "missing": [
+   "sit",
+   "fly",
+   "glide"
+  ],
+  "size_m": {
+   "length": 2.486,
+   "width": 0.599,
+   "height": 2.121
+  },
+  "measured": "top = 1.6 m",
+  "gaits": {
+   "walk": {
+    "speed": 1.7,
+    "cycle": 0.583,
+    "stance": 0.655,
+    "leg": 0.857,
+    "fps": 24,
+    "drop": 0.051,
+    "miss": [
+     0.0,
+     0.004,
+     1.0
+    ],
+    "gait": "walk"
+   },
+   "trot": {
+    "speed": 4.08,
+    "cycle": 0.423,
+    "stance": 0.777,
+    "leg": 0.857,
+    "fps": 26,
+    "drop": 0.08,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "trot"
+   },
+   "run": {
+    "speed": 14.0,
+    "cycle": 0.253,
+    "stance": 0.904,
+    "leg": 0.857,
+    "fps": 79,
+    "drop": 0.145,
+    "miss": [
+     0.001,
+     0.017,
+     1.0
+    ],
+    "gait": "gallop"
+   }
+  },
+  "speeds": {
+   "swim": 0.754,
+   "walk": 1.7,
+   "trot": 4.08,
+   "run": 14.0
+  }
+ },
+ "horse_white": {
+  "file": "horse_white.glb",
+  "source": "horse_white",
+  "bytes": 890532,
+  "tris": 11640,
+  "bones": 46,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "attack",
+   "kick",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "swim",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "missing": [
+   "sit",
+   "fly",
+   "glide"
+  ],
+  "size_m": {
+   "length": 2.486,
+   "width": 0.599,
+   "height": 2.121
+  },
+  "measured": "top = 1.6 m",
+  "gaits": {
+   "walk": {
+    "speed": 1.7,
+    "cycle": 0.583,
+    "stance": 0.655,
+    "leg": 0.857,
+    "fps": 24,
+    "drop": 0.051,
+    "miss": [
+     0.0,
+     0.004,
+     1.0
+    ],
+    "gait": "walk"
+   },
+   "trot": {
+    "speed": 4.08,
+    "cycle": 0.423,
+    "stance": 0.777,
+    "leg": 0.857,
+    "fps": 26,
+    "drop": 0.08,
+    "miss": [
+     0.0,
+     0.001,
+     1.0
+    ],
+    "gait": "trot"
+   },
+   "run": {
+    "speed": 14.0,
+    "cycle": 0.253,
+    "stance": 0.904,
+    "leg": 0.857,
+    "fps": 79,
+    "drop": 0.145,
+    "miss": [
+     0.001,
+     0.018,
+     0.952
+    ],
+    "gait": "gallop"
+   }
+  },
+  "speeds": {
+   "swim": 0.754,
+   "walk": 1.7,
+   "trot": 4.08,
+   "run": 14.0
+  }
+ },
+ "crow": {
+  "file": "crow.glb",
+  "source": "hawk",
+  "bytes": 522428,
+  "tris": 5820,
+  "bones": 57,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "run",
+   "jump",
+   "attack",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "fly",
+   "glide",
+   "swim",
+   "drink",
+   "howl"
+  ],
+  "missing": [
+   "trot",
+   "kick",
+   "sit",
+   "sniff",
+   "groom",
+   "play",
+   "stamp"
+  ],
+  "size_m": {
+   "length": 0.45,
+   "width": 0.761,
+   "height": 0.284
+  },
+  "measured": "length = 0.45 m",
+  "gaits": {
+   "walk": {
+    "speed": 0.45,
+    "cycle": 0.364,
+    "stance": 0.052,
+    "leg": 0.07,
+    "fps": 44,
+    "drop": 0.058,
+    "miss": [
+     0.0,
+     0.005,
+     1.0
+    ],
+    "gait": "hop"
+   },
+   "run": {
+    "speed": 1.6,
+    "cycle": 0.105,
+    "stance": 0.054,
+    "leg": 0.07,
+    "fps": 153,
+    "drop": 0.06,
+    "miss": [
+     0.0,
+     0.005,
+     1.0
+    ],
+    "gait": "hop"
+   }
+  },
+  "speeds": {
+   "walk": 0.45,
+   "run": 1.6
+  }
+ },
+ "songbird": {
+  "file": "songbird.glb",
+  "source": "hawk",
+  "bytes": 489816,
+  "tris": 3880,
+  "bones": 57,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "run",
+   "jump",
+   "attack",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "fly",
+   "glide",
+   "swim",
+   "drink",
+   "howl"
+  ],
+  "missing": [
+   "trot",
+   "kick",
+   "sit",
+   "sniff",
+   "groom",
+   "play",
+   "stamp"
+  ],
+  "size_m": {
+   "length": 0.15,
+   "width": 0.259,
+   "height": 0.101
+  },
+  "measured": "length = 0.15 m",
+  "gaits": {
+   "walk": {
+    "speed": 0.3,
+    "cycle": 0.208,
+    "stance": 0.02,
+    "leg": 0.019,
+    "fps": 77,
+    "drop": 0.109,
+    "miss": [
+     0.001,
+     0.009,
+     1.0
+    ],
+    "gait": "hop"
+   },
+   "run": {
+    "speed": 1.0,
+    "cycle": 0.099,
+    "stance": 0.014,
+    "leg": 0.019,
+    "fps": 353,
+    "drop": 0.04,
+    "miss": [
+     0.0,
+     0.005,
+     1.0
+    ],
+    "gait": "hop"
+   }
+  },
+  "speeds": {
+   "walk": 0.3,
+   "run": 1.0
+  }
+ },
+ "duck": {
+  "file": "duck.glb",
+  "source": "hawk",
+  "bytes": 524796,
+  "tris": 5820,
+  "bones": 57,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "run",
+   "jump",
+   "attack",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "fly",
+   "glide",
+   "swim",
+   "drink",
+   "howl"
+  ],
+  "missing": [
+   "trot",
+   "kick",
+   "sit",
+   "sniff",
+   "groom",
+   "play",
+   "stamp"
+  ],
+  "size_m": {
+   "length": 0.55,
+   "width": 0.927,
+   "height": 0.235
+  },
+  "measured": "length = 0.55 m",
+  "gaits": {
+   "walk": {
+    "speed": 0.4,
+    "cycle": 0.222,
+    "stance": 0.055,
+    "leg": 0.047,
+    "fps": 36,
+    "drop": 0.269,
+    "miss": [
+     0.0,
+     0.002,
+     1.0
+    ],
+    "gait": "bwalk"
+   },
+   "run": {
+    "speed": 1.8,
+    "cycle": 0.1,
+    "stance": 0.035,
+    "leg": 0.047,
+    "fps": 259,
+    "drop": 0.144,
+    "miss": [
+     0.001,
+     0.019,
+     1.0
+    ],
+    "gait": "bwalk"
+   }
+  },
+  "speeds": {
+   "walk": 0.4,
+   "run": 1.8
+  }
+ },
+ "goose": {
+  "file": "goose.glb",
+  "source": "hawk",
+  "bytes": 521152,
+  "tris": 5820,
+  "bones": 57,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "run",
+   "jump",
+   "attack",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "fly",
+   "glide",
+   "swim",
+   "drink",
+   "howl"
+  ],
+  "missing": [
+   "trot",
+   "kick",
+   "sit",
+   "sniff",
+   "groom",
+   "play",
+   "stamp"
+  ],
+  "size_m": {
+   "length": 0.85,
+   "width": 1.254,
+   "height": 0.607
+  },
+  "measured": "length = 0.85 m",
+  "gaits": {
+   "walk": {
+    "speed": 0.5,
+    "cycle": 0.375,
+    "stance": 0.116,
+    "leg": 0.092,
+    "fps": 24,
+    "drop": 0.234,
+    "miss": [
+     0.0,
+     0.004,
+     1.0
+    ],
+    "gait": "bwalk"
+   },
+   "run": {
+    "speed": 2.2,
+    "cycle": 0.101,
+    "stance": 0.113,
+    "leg": 0.092,
+    "fps": 99,
+    "drop": 0.234,
+    "miss": [
+     0.0,
+     0.003,
+     1.0
+    ],
+    "gait": "bwalk"
+   }
+  },
+  "speeds": {
+   "walk": 0.5,
+   "run": 2.2
+  }
+ },
+ "gull": {
+  "file": "gull.glb",
+  "source": "hawk",
+  "bytes": 521280,
+  "tris": 5820,
+  "bones": 57,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "run",
+   "jump",
+   "attack",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "fly",
+   "glide",
+   "swim",
+   "drink",
+   "howl"
+  ],
+  "missing": [
+   "trot",
+   "kick",
+   "sit",
+   "sniff",
+   "groom",
+   "play",
+   "stamp"
+  ],
+  "size_m": {
+   "length": 0.6,
+   "width": 1.127,
+   "height": 0.335
+  },
+  "measured": "length = 0.6 m",
+  "gaits": {
+   "walk": {
+    "speed": 0.4,
+    "cycle": 0.375,
+    "stance": 0.093,
+    "leg": 0.073,
+    "fps": 24,
+    "drop": 0.11,
+    "miss": [
+     0.0,
+     0.002,
+     1.0
+    ],
+    "gait": "bwalk"
+   },
+   "run": {
+    "speed": 1.8,
+    "cycle": 0.098,
+    "stance": 0.087,
+    "leg": 0.073,
+    "fps": 102,
+    "drop": 0.107,
+    "miss": [
+     0.0,
+     0.002,
+     1.0
+    ],
+    "gait": "bwalk"
+   }
+  },
+  "speeds": {
+   "walk": 0.4,
+   "run": 1.8
+  }
+ },
+ "owl": {
+  "file": "owl.glb",
+  "source": "hawk",
+  "bytes": 520880,
+  "tris": 5820,
+  "bones": 57,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "run",
+   "jump",
+   "attack",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "fly",
+   "glide",
+   "swim",
+   "drink",
+   "howl"
+  ],
+  "missing": [
+   "trot",
+   "kick",
+   "sit",
+   "sniff",
+   "groom",
+   "play",
+   "stamp"
+  ],
+  "size_m": {
+   "length": 0.35,
+   "width": 0.922,
+   "height": 0.45
+  },
+  "measured": "height = 0.45 m",
+  "gaits": {
+   "walk": {
+    "speed": 0.3,
+    "cycle": 0.267,
+    "stance": 0.05,
+    "leg": 0.068,
+    "fps": 30,
+    "drop": 0.069,
+    "miss": [
+     0.001,
+     0.055,
+     0.8
+    ],
+    "gait": "bwalk"
+   },
+   "run": {
+    "speed": 0.8,
+    "cycle": 0.1,
+    "stance": 0.036,
+    "leg": 0.068,
+    "fps": 110,
+    "drop": 0.087,
+    "miss": [
+     0.002,
+     0.065,
+     0.636
+    ],
+    "gait": "bwalk"
+   }
+  },
+  "speeds": {
+   "walk": 0.3,
+   "run": 0.8
+  }
+ },
+ "pigeon": {
+  "file": "pigeon.glb",
+  "source": "hawk",
+  "bytes": 523328,
+  "tris": 5820,
+  "bones": 57,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "run",
+   "jump",
+   "attack",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "fly",
+   "glide",
+   "swim",
+   "drink",
+   "howl"
+  ],
+  "missing": [
+   "trot",
+   "kick",
+   "sit",
+   "sniff",
+   "groom",
+   "play",
+   "stamp"
+  ],
+  "size_m": {
+   "length": 0.32,
+   "width": 0.553,
+   "height": 0.182
+  },
+  "measured": "length = 0.32 m",
+  "gaits": {
+   "walk": {
+    "speed": 0.35,
+    "cycle": 0.167,
+    "stance": 0.036,
+    "leg": 0.03,
+    "fps": 48,
+    "drop": 0.153,
+    "miss": [
+     0.0,
+     0.002,
+     1.0
+    ],
+    "gait": "bwalk"
+   },
+   "run": {
+    "speed": 1.4,
+    "cycle": 0.099,
+    "stance": 0.019,
+    "leg": 0.03,
+    "fps": 363,
+    "drop": 0.046,
+    "miss": [
+     0.0,
+     0.002,
+     1.0
+    ],
+    "gait": "bwalk"
+   }
+  },
+  "speeds": {
+   "walk": 0.35,
+   "run": 1.4
+  }
+ },
+ "chicken": {
+  "file": "chicken.glb",
+  "source": "hawk",
+  "bytes": 521748,
+  "tris": 5820,
+  "bones": 57,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "run",
+   "jump",
+   "attack",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "fly",
+   "glide",
+   "swim",
+   "drink",
+   "howl"
+  ],
+  "missing": [
+   "trot",
+   "kick",
+   "sit",
+   "sniff",
+   "groom",
+   "play",
+   "stamp"
+  ],
+  "size_m": {
+   "length": 0.548,
+   "width": 0.65,
+   "height": 0.4
+  },
+  "measured": "height = 0.4 m",
+  "gaits": {
+   "walk": {
+    "speed": 0.4,
+    "cycle": 0.417,
+    "stance": 0.103,
+    "leg": 0.088,
+    "fps": 24,
+    "drop": 0.148,
+    "miss": [
+     0.0,
+     0.003,
+     1.0
+    ],
+    "gait": "bwalk"
+   },
+   "run": {
+    "speed": 3.0,
+    "cycle": 0.099,
+    "stance": 0.106,
+    "leg": 0.088,
+    "fps": 141,
+    "drop": 0.16,
+    "miss": [
+     0.001,
+     0.013,
+     1.0
+    ],
+    "gait": "bwalk"
+   }
+  },
+  "speeds": {
+   "walk": 0.4,
+   "run": 3.0
+  }
+ },
+ "chick": {
+  "file": "chick.glb",
+  "source": "hawk",
+  "bytes": 281908,
+  "tris": 3880,
+  "bones": 57,
+  "clips": [
+   "idle",
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "run",
+   "attack",
+   "hitL",
+   "hitR",
+   "die",
+   "lie",
+   "swim",
+   "drink",
+   "howl"
+  ],
+  "missing": [
+   "trot",
+   "jump",
+   "kick",
+   "sit",
+   "fly",
+   "glide",
+   "sniff",
+   "groom",
+   "play",
+   "stamp"
+  ],
+  "size_m": {
+   "length": 0.149,
+   "width": 0.136,
+   "height": 0.12
+  },
+  "measured": "height = 0.12 m",
+  "gaits": {
+   "walk": {
+    "speed": 0.4,
+    "cycle": 0.098,
+    "stance": 0.015,
+    "leg": 0.016,
+    "fps": 132,
+    "drop": 0.273,
+    "miss": [
+     0.001,
+     0.008,
+     1.0
+    ],
+    "gait": "bwalk"
+   },
+   "run": {
+    "speed": 3.0,
+    "cycle": 0.1,
+    "stance": 0.016,
+    "leg": 0.016,
+    "fps": 720,
+    "drop": 0.04,
+    "miss": [
+     0.001,
+     0.003,
+     1.0
+    ],
+    "gait": "bwalk"
+   }
+  },
+  "speeds": {
+   "walk": 0.4,
+   "run": 3.0
+  }
+ },
+ "bat": {
+  "file": "bat.glb",
+  "source": "bat",
+  "bytes": 217420,
+  "tris": 4850,
+  "bones": 23,
+  "clips": [
+   "idle",
+   "attack",
+   "hitL",
+   "hitR",
+   "die",
+   "fly",
+   "glide"
+  ],
+  "missing": [
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "run",
+   "jump",
+   "kick",
+   "lie",
+   "sit",
+   "swim",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "size_m": {
+   "length": 0.122,
+   "width": 0.082,
+   "height": 0.119
+  },
+  "measured": "height = 0.12 m",
+  "gaits": {},
+  "speeds": {}
+ },
+ "fish": {
+  "file": "fish.glb",
+  "source": "fish",
+  "bytes": 85380,
+  "tris": 3264,
+  "bones": 8,
+  "clips": [
+   "idle",
+   "run",
+   "hitL",
+   "hitR",
+   "die",
+   "swim"
+  ],
+  "missing": [
+   "idle2",
+   "look",
+   "eat",
+   "walk",
+   "trot",
+   "jump",
+   "attack",
+   "kick",
+   "lie",
+   "sit",
+   "fly",
+   "glide",
+   "drink",
+   "sniff",
+   "groom",
+   "play",
+   "howl",
+   "stamp"
+  ],
+  "size_m": {
+   "length": 0.297,
+   "width": 0.042,
+   "height": 0.098
+  },
+  "measured": "length = 0.3 m",
+  "gaits": {},
+  "speeds": {}
+ }
+}

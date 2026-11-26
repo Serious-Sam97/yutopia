@@ -7,6 +7,14 @@ import {
   burstAt,
   dangerAt,
   dayNests,
+  dayNestsIn,
+  type Cache,
+  NESTS,
+  fixedNests,
+  inCampus,
+  keptClear,
+  NEST_CELL,
+  nestPlacesOf,
   dayOf,
   FLARE,
   HQ_DOORS,
@@ -37,11 +45,11 @@ import {
   wake,
   wound,
 } from "@yutopia/shared/dark";
-import { heightAt, LAMPS, onLongRoad } from "@yutopia/shared/grounds";
+import { editsNow, heightAt, LAMPS, onLongRoad } from "@yutopia/shared/grounds";
 import { byteToYaw, GAITS, MV_AIM, yawToByte } from "@yutopia/shared/move";
 import { between } from "@yutopia/shared/reach";
 import { inStrikeCompound, STRIKE_PARK } from "@yutopia/shared/strike/land";
-import { prefetch, ready, stopLand } from "../land.ts";
+import { onEditsLaid, prefetch, ready, squareReady, stopLand } from "../land.ts";
 import { Flare, Shadow } from "../schema.ts";
 import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
@@ -110,6 +118,11 @@ export interface DarkHooks {
   near?(x: number, y: number, z: number, r: number): boolean;
   /** the dark switched off (mod:dark peaceful): no threat at all */
   readonly peaceful: boolean;
+  /** (plan 127) today's caches past the campus's: God mode's nests' and the far land's made so far (kept through the
+   *  night, as the campus's are) */
+  nestCaches(): Cache[];
+  /** (plan 127) the campus's nests out today (God mode's clear places taken out first), or null outside the day */
+  campusNests(): Nest[] | null;
 }
 export interface ShotHit {
   id: string;
@@ -169,8 +182,43 @@ registerFeature((room: WorldRoom) => {
     /** its shadowed out now (run ids by slot; null: put away, or dead) */
     runs: (string | null)[];
   }
-  let today: { day: number; all: NestRun[]; count: number; out: Set<number> } | null = null;
+  /** the day's nests: the campus's (`all`, the first `count` out), God mode's own (`fixed`, out every day), and the
+   *  far land's (`far`, by square, made as people come near them — plan 127) */
+  let today: {
+    day: number;
+    all: NestRun[];
+    count: number;
+    out: Set<number>;
+    fixed: NestRun[];
+    far: Map<string, NestRun[]>;
+  } | null = null;
+  /** God mode's nests' and the far land's caches of a day (the campus's are survival's own) */
+  const cachesOf = (t: NonNullable<typeof today>): Cache[] => {
+    const out: Cache[] = [];
+    for (const nr of t.fixed) if (nr.nest.cache) out.push(nr.nest.cache);
+    for (const l of t.far.values()) for (const nr of l) if (nr.nest.cache) out.push(nr.nest.cache);
+    return out;
+  };
+  let keptCaches: { day: number; caches: Cache[] } | null = null;
+  const runOf = (nest: Nest): NestRun => ({
+    nest,
+    alive: Array.from({ length: nest.n }, () => true),
+    deadAt: Array.from({ length: nest.n }, () => 0),
+    runs: Array.from({ length: nest.n }, () => null as string | null),
+  });
+  /** every nest made today */
+  const everyNest = function* (t: NonNullable<typeof today>) {
+    yield* t.all;
+    yield* t.fixed;
+    for (const l of t.far.values()) yield* l;
+  };
   let nestsAt = 0;
+  // (God mode published: the day's nests laid out again — its own put down, its clear places cleared)
+  const offNestEdits = onEditsLaid((was, now) => {
+    if (JSON.stringify(was.nests ?? null) === JSON.stringify(now.nests ?? null) || !today) return;
+    for (const nr of everyNest(today)) for (const id of nr.runs) if (id) remove(id);
+    today = null;
+  });
   const nestOf = new Map<string, { n: NestRun; slot: number }>();
   // shots just fired (where from, the clock): those asleep near enough hear them
   const shots: { x: number; y: number; t: number }[] = [];
@@ -360,7 +408,7 @@ registerFeature((room: WorldRoom) => {
   const nestsTick = (now: number, prey: readonly { id: string; x: number; y: number }[], hour: number) => {
     if (mode !== "normal" || !isDay(hour)) {
       if (today) {
-        for (const nr of today.all)
+        for (const nr of everyNest(today))
           for (const id of nr.runs) {
             const r = id ? shades.get(id) : undefined;
             if (!id || !r) continue;
@@ -375,20 +423,22 @@ registerFeature((room: WorldRoom) => {
             r.wire.s = shadeCode(r.shade.state);
             r.wire.at = now;
           }
+        // (their caches stay the day's — searchable at night as the campus's are — till the day turns)
+        keptCaches = { day: today.day, caches: cachesOf(today) };
         today = null;
       }
       return;
     }
     const d = dayOf(now);
     if (!today || today.day !== d) {
-      if (today) for (const nr of today.all) for (const id of nr.runs) if (id) remove(id);
-      const all = dayNests(d).map((nest) => ({
-        nest,
-        alive: Array.from({ length: nest.n }, () => true),
-        deadAt: Array.from({ length: nest.n }, () => 0),
-        runs: Array.from({ length: nest.n }, () => null as string | null),
-      }));
-      today = { day: d, all, count: nestCount(dayNests(d), 0), out: new Set() };
+      if (today) for (const nr of everyNest(today)) for (const id of nr.runs) if (id) remove(id);
+      // (God mode's places kept clear of them, its own nests: plan 127)
+      const places = nestPlacesOf(editsNow());
+      const all = dayNests(d)
+        .filter((n) => !keptClear(places, n.x, n.z))
+        .map(runOf);
+      const fixed = fixedNests(d, places).map(runOf);
+      today = { day: d, all, count: nestCount(all.map((n) => n.nest), 0), out: new Set(), fixed, far: new Map() };
     }
     // who's been out today: more nests for each
     let grew = false;
@@ -399,12 +449,41 @@ registerFeature((room: WorldRoom) => {
         grew = true;
       }
     }
-    if (grew) today.count = nestCount(dayNests(d), today.out.size);
+    if (grew) today.count = nestCount(today.all.map((n) => n.nest), today.out.size);
     if (now - nestsAt < 1000) return;
     nestsAt = now;
     const g = grid();
-    for (let i = 0; i < today.count; i++) {
-      const nr = today.all[i];
+    // the far land's squares round each person out there: made as they come (one a second at most, its land made
+    // first: a square's ~1–2 ms then), those round nobody left as they are (their dead kept dead for the day)
+    const t = today;
+    const places = nestPlacesOf(editsNow());
+    const nearSquares = new Set<string>();
+    let made = 0;
+    for (const q of prey) {
+      if (inCampus(q.x, q.y) && inCampus(q.x + NEST_CELL, q.y + NEST_CELL) && inCampus(q.x - NEST_CELL, q.y - NEST_CELL)) continue;
+      const cx = Math.floor(q.x / NEST_CELL);
+      const cz = Math.floor(q.y / NEST_CELL);
+      for (let dz = -1; dz <= 1; dz++)
+        for (let dx = -1; dx <= 1; dx++) {
+          const k = `${cx + dx},${cz + dz}`;
+          if (!t.far.has(k)) {
+            if (made >= 1 || !squareReady((cx + dx) * NEST_CELL, (cz + dz) * NEST_CELL, NEST_CELL)) continue;
+            made++;
+            t.far.set(
+              k,
+              dayNestsIn(d, cx + dx, cz + dz)
+                .filter((n) => !keptClear(places, n.x, n.z))
+                .map(runOf),
+            );
+          }
+          nearSquares.add(k);
+        }
+    }
+    // (God mode's own first — the cap shared, they're always there —, the campus's out, then every far square made
+    // today: those round nobody have their sleepers put away, as the campus's do)
+    const tended = [...t.fixed, ...t.all.slice(0, t.count)];
+    for (const l of t.far.values()) tended.push(...l);
+    for (const nr of tended) {
       const nx = nr.nest.x;
       const ny = nr.nest.z;
       let near = Number.POSITIVE_INFINITY;
@@ -420,6 +499,8 @@ registerFeature((room: WorldRoom) => {
       if (near <= 64)
         for (let k = 0; k < nr.alive.length; k++) {
           if (!nr.alive[k] || nr.runs[k]) continue;
+          // (the shadowed out of the nests capped, the far land's with the campus's)
+          if (nestOf.size >= NESTS.cap) break;
           // somewhere round the nest (not where one fell: a fresh spot each time)
           for (let tries = 0; tries < 10; tries++) {
             const a = Math.random() * Math.PI * 2;
@@ -440,6 +521,13 @@ registerFeature((room: WorldRoom) => {
   room.dark = {
     get peaceful() {
       return mode === "peaceful";
+    },
+    nestCaches() {
+      if (today) return cachesOf(today);
+      return keptCaches?.day === dayOf(Date.now()) ? keptCaches.caches : [];
+    },
+    campusNests() {
+      return today ? today.all.slice(0, today.count).map((nr) => nr.nest) : null;
     },
     shoot(ray, range, seenAt, damage, now) {
       shots.push({ x: ray.x, y: ray.y, t: clock });
@@ -765,6 +853,7 @@ registerFeature((room: WorldRoom) => {
       }
     },
     dispose() {
+      offNestEdits();
       stopLand();
       for (const id of [...shades.keys()]) remove(id);
       room.dark = null;

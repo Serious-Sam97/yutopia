@@ -15,6 +15,7 @@ import { INTERACT_RANGE } from "./common";
 export type FocusHost = Pick<
   WorldController,
   | "camWanted"
+  | "animals"
   | "cars"
   | "skateRide"
   | "clientAt"
@@ -276,6 +277,7 @@ export class Focus {
     cable: () => !!hud.get().cable,
     inLift: () => !!hud.get().lift,
     menuFor: (t) => this.c.menu.menuFor(t),
+    animals: (r) => this.c.animals?.near(this.c.me.x, this.c.me.y, r) ?? [],
   };
 
   // (plan 123) the umbrella stand near me, looked for a few times a second, not every frame

@@ -222,5 +222,48 @@
     "author_url": "https://sketchfab.com/KaitlynAndrus",
     "license": "CC BY 4.0",
     "license_url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "pprabbit": {
+    "dir": "../polypizza",
+    "out": "rabbit.glb",
+    "extract": {},
+    "build": {},
+    "kind": "animal",
+    "files": [
+      "animals/hare",
+      "animals/frog"
+    ],
+    "change": "Recoloured and reshaped into Yutopia's birds/hares/frogs, new clips",
+    "title": "Rabbit",
+    "source": "https://poly.pizza/m/Km89u3twcR",
+    "author": "Sherkiz",
+    "author_url": "https://poly.pizza/u/Sherkiz",
+    "license": "CC BY 3.0",
+    "license_url": "https://creativecommons.org/licenses/by/3.0/"
+  },
+  "pphawk": {
+    "dir": "../polypizza",
+    "out": "hawk.glb",
+    "extract": {},
+    "build": {},
+    "kind": "animal",
+    "files": [
+      "animals/crow",
+      "animals/songbird",
+      "animals/duck",
+      "animals/goose",
+      "animals/gull",
+      "animals/owl",
+      "animals/pigeon",
+      "animals/chicken",
+      "animals/chick"
+    ],
+    "change": "Recoloured and reshaped into Yutopia's birds/hares/frogs, new clips",
+    "title": "Hawk Lp Rigged",
+    "source": "https://poly.pizza/m/RkN6MEbP6g",
+    "author": "Sherkiz",
+    "author_url": "https://poly.pizza/u/Sherkiz",
+    "license": "CC BY 3.0",
+    "license_url": "https://creativecommons.org/licenses/by/3.0/"
   }
 }

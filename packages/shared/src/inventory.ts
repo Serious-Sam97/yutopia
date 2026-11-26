@@ -50,6 +50,30 @@ export const STACKS = {
   board_cruiser_classic: 1,
   board_cruiser_wood: 1,
   board_cruiser_mini: 1,
+  // (plan 126) food to hold out to an animal in the left hand (animals/species.ts FOODS): from a feed crate
+  bread: 6,
+  seed: 10,
+  nut: 10,
+  apple: 6,
+  carrot: 6,
+  // (plan 126 F6c) what a shot animal leaves, skinned: meat (cooked at a fire: health and warmth; raw: sick) and hides
+  // (made into warm clothes at a workbench); a fish
+  meat: 8,
+  meat_cooked: 8,
+  fish_raw: 6,
+  hide_fur: 6,
+  hide_pelt: 6,
+  hide_leather: 6,
+  hide_wool: 10,
+  hide_feathers: 20,
+  // (plan 126 F1c) the farm's: eggs from the coop, a bottle of milk from a cow
+  egg: 12,
+  milk: 4,
+  // (plan 126 phase 8) warm clothes made from hides: worn from the pack's slot, they keep the cold off
+  fur_coat: 1,
+  fur_hat: 1,
+  fur_gloves: 1,
+  fur_boots: 1,
 } as const;
 export type StackId = keyof typeof STACKS;
 export type ItemId = WeaponId | StackId;
@@ -71,7 +95,80 @@ export const HAND_SLOT = POCKETS + QUICK;
 /** (plan 87) carried one at a time: a second isn't taken */
 export const ONE_OF = ["torch"] as const satisfies readonly StackId[];
 /** what a use takes one of (the rest: ammo by a reload, flares thrown, fuses for later) */
-export const USABLE = ["aid", "battery"] as const satisfies readonly StackId[];
+export const USABLE = [
+  "aid",
+  "battery",
+  // (plan 126 F6c) eaten: meat cooked for health and warmth, raw makes you sick; an egg, a bottle of milk
+  "meat_cooked",
+  "meat",
+  "fish_raw",
+  "egg",
+  "milk",
+] as const satisfies readonly StackId[];
+/** (plan 126 F6c) what eating one does: health and warmth gained (or lost: raw meat makes you sick) */
+export const EATEN: Partial<Record<StackId, { hp: number; wm: number }>> = {
+  meat_cooked: { hp: 25, wm: 20 },
+  meat: { hp: -8, wm: -12 },
+  fish_raw: { hp: -5, wm: -8 },
+  egg: { hp: 6, wm: 0 },
+  milk: { hp: 4, wm: 12 },
+};
+/** (plan 126 F6c) what a fire makes of a thing: raw meat and fish cooked */
+export const COOKS: Partial<Record<StackId, StackId>> = { meat: "meat_cooked", fish_raw: "meat_cooked" };
+/** (plan 126 phase 8) warm clothes made at a workbench from hides: what each takes (any of a kind's ids) */
+export const CRAFTS: Partial<Record<StackId, { of: StackId[]; n: number }[]>> = {
+  fur_coat: [
+    { of: ["hide_fur", "hide_leather"], n: 2 },
+    { of: ["hide_wool", "hide_feathers"], n: 1 },
+  ],
+  fur_hat: [{ of: ["hide_pelt", "hide_fur"], n: 1 }],
+  fur_gloves: [{ of: ["hide_pelt", "hide_leather"], n: 1 }],
+  fur_boots: [{ of: ["hide_leather", "hide_fur"], n: 2 }],
+};
+/** (plan 126 phase 8) how much slower the cold comes on with these carried (worn from the pack): ×, 1 none */
+export function coldKept(inv: Inventory): number {
+  let k = 1;
+  if (count(inv, "fur_coat")) k *= 0.5;
+  if (count(inv, "fur_hat")) k *= 0.88;
+  if (count(inv, "fur_gloves")) k *= 0.9;
+  if (count(inv, "fur_boots")) k *= 0.88;
+  return k;
+}
+/** (plan 126 phase 8) make `what` from the hides in the pack: taken and given, or false (not enough, no room). */
+export function craft(inv: Inventory, what: StackId): boolean {
+  const need = CRAFTS[what];
+  if (!need || count(inv, what) >= STACKS[what]) return false;
+  // enough of each part, from whichever of its kinds there's most of
+  const takes: { id: StackId; n: number }[] = [];
+  for (const part of need) {
+    let left = part.n;
+    for (const id of [...part.of].sort((a, b) => count(inv, b) - count(inv, a))) {
+      const k = Math.min(left, count(inv, id) - (takes.find((t) => t.id === id)?.n ?? 0));
+      if (k > 0) {
+        takes.push({ id, n: k });
+        left -= k;
+      }
+      if (!left) break;
+    }
+    if (left) return false;
+  }
+  // (the hides out, then the thing in where they were — or, no room for it, all as it was: nothing taken for nothing)
+  const was = structuredClone(inv);
+  for (const t of takes)
+    for (let i = 0; i < t.n; i++) {
+      const slot = findStack(inv, t.id);
+      if (slot < 0 || !consume(inv, slot, [t.id])) return undo(inv, was);
+    }
+  return addStack(inv, what, 1) === 1 || undo(inv, was);
+}
+function undo(inv: Inventory, was: Inventory): false {
+  inv.pockets = was.pockets;
+  inv.quick = was.quick;
+  inv.hand = was.hand;
+  if (was.place) inv.place = was.place;
+  else delete inv.place;
+  return false;
+}
 
 export interface Weapon {
   id: WeaponId;
@@ -131,6 +228,26 @@ export const SIZE: Record<ItemId, [number, number]> = {
   board_cruiser_classic: BOARD,
   board_cruiser_wood: BOARD,
   board_cruiser_mini: BOARD,
+  // (plan 126) food, meat and hides, the farm's, warm clothes
+  bread: [2, 1],
+  seed: [1, 1],
+  nut: [1, 1],
+  apple: [1, 1],
+  carrot: [2, 1],
+  meat: [2, 1],
+  meat_cooked: [2, 1],
+  fish_raw: [2, 1],
+  hide_fur: [2, 2],
+  hide_pelt: [2, 2],
+  hide_leather: [2, 2],
+  hide_wool: [2, 1],
+  hide_feathers: [1, 1],
+  egg: [1, 1],
+  milk: [1, 2],
+  fur_coat: [3, 3],
+  fur_hat: [2, 1],
+  fur_gloves: [2, 1],
+  fur_boots: [2, 2],
 };
 /** A thing's cells lying at `r`. */
 export const sizeOf = (id: ItemId, r: 0 | 1): [number, number] => {

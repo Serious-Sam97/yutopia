@@ -8,7 +8,7 @@ import type { GroundsEdits, Section } from "./grounds-edits.ts";
 // Grounds (the client's god mode chunk and the tests use it).
 
 const GRIDS = ["height", "paint", "trees"] as const;
-const SECTIONS = ["ways", "things", "buildings", "land", "vehicles", "bridges", "npcs"] as const;
+const SECTIONS = ["ways", "things", "buildings", "land", "vehicles", "bridges", "npcs", "animals", "nests"] as const;
 type Grid = (typeof GRIDS)[number];
 type SectionName = (typeof SECTIONS)[number];
 
@@ -31,6 +31,10 @@ export interface EditsCount {
   bridges: Moves;
   /** (plan 121) NPCs placed, moved or changed, taken off the map */
   npcs: Moves;
+  /** (plan 126) animal places: herds, dens, nests, empty places, pens */
+  animals: Moves;
+  /** (plan 127) the dark's nests God mode put down, places kept clear of them */
+  nests: Moves;
   /** all of them */
   total: number;
 }
@@ -109,6 +113,8 @@ export function editsCount(from: GroundsEdits, to: GroundsEdits): EditsCount {
     vehicles: { add: 0, change: 0, remove: 0 },
     bridges: { add: 0, change: 0, remove: 0 },
     npcs: { add: 0, change: 0, remove: 0 },
+    animals: { add: 0, change: 0, remove: 0 },
+    nests: { add: 0, change: 0, remove: 0 },
     total: 0,
   };
   for (const g of GRIDS) {

@@ -28,6 +28,7 @@ import type { GrowBiome, ThingKind } from "@yutopia/shared/grounds-edits";
 import { catalogThing, THINGS } from "@yutopia/shared/grounds-things";
 import { GROW_BIOMES, GROW_LIMITS, GROW_NAMES, GROW_SNAP } from "@yutopia/shared/grow";
 import type { Biome } from "@yutopia/shared/land";
+import { ANIMAL_KINDS, ANIMALS, type AnimalKind } from "@yutopia/shared/animals/species";
 import { JOB_SPOTS, JOBS, type Job, type SpotKind } from "@yutopia/shared/npc/mind";
 import { PLACE_LIMITS, PLACED_TYPES, placesOf } from "@yutopia/shared/npc/places";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -414,6 +415,7 @@ const TOOL_WORDS: Record<GodTool, [string, string]> = {
   vehicles: ["Vehicles", "Veículos"],
   grow: ["Grow", "Crescer"],
   npcs: ["NPCs", "NPCs"],
+  animals: ["Animals", "Animais"],
 };
 const TOOL_ICONS: Record<GodTool, IconName> = {
   select: "cursor",
@@ -426,6 +428,7 @@ const TOOL_ICONS: Record<GodTool, IconName> = {
   buildings: "home",
   vehicles: "key",
   npcs: "people",
+  animals: "paw",
   grow: "map",
 };
 const READY = GOD_READY;
@@ -475,6 +478,7 @@ export function GodHud() {
       {g.tool === "select" && g.picked === "thing" && g.things.sel && <ThingsPanel g={g} />}
       {g.tool === "select" && g.picked === "building" && g.buildings.sel && <BuildingsPanel g={g} />}
       {(g.tool === "npcs" || (g.tool === "select" && g.picked === "npc" && g.npcs.sel)) && <NpcsPanel g={g} />}
+      {g.tool === "animals" && <AnimalsPanel g={g} />}
       {g.tool === "vehicles" && <VehiclesOptions g={g} />}
       {(g.tool === "vehicles" || (g.tool === "select" && g.picked === "vehicle" && g.vehicles.sel)) && (
         <VehiclesPanel g={g} />
@@ -680,7 +684,7 @@ function Tools({ g }: { g: GodState }) {
           onClick={() => w?.god?.setTool(k)}
         >
           <span className="absolute top-1 right-1.5 text-[9px] opacity-60 hidden sm:block">
-            {k === "bridges" ? "B" : k === "npcs" ? "N" : i + 1}
+            {k === "bridges" ? "B" : k === "npcs" ? "N" : k === "animals" ? "J" : i + 1}
           </span>
           <Icon name={TOOL_ICONS[k]} size={18} />
           <span className="text-[11px]">{TOOL_WORDS[k][pt ? 1 : 0]}</span>
@@ -3324,5 +3328,134 @@ function InsideRow({ sel, label }: { sel: string | null; label: React.ReactNode 
         </span>
       )}
     </div>
+  );
+}
+
+// (plan 126) the Animals tool's panel: the kind of place, the species, how many, how far round; the picked one taken away
+function AnimalsPanel({ g }: { g: GodState }) {
+  const pt = useLang() === "pt";
+  const w = useWorld();
+  const a = g.animals;
+  const [, bump] = useState(0);
+  const set = (o: Partial<GodState["animals"]>) => hud.set({ god: { ...hud.get().god, animals: { ...hud.get().god.animals, ...o } } });
+  const KINDS: [GodState["animals"]["kind"], string, string][] = [
+    ["herd", "Herd", "Bando"],
+    ["den", "Den", "Toca"],
+    ["nest", "Nest", "Ninho"],
+    ["empty", "Keep empty", "Manter vazio"],
+    // (plan 127, F3b) the dark's: a nest of God mode's own, out every day; a place kept clear of them
+    ["dnest", "Dark nest", "Ninho do escuro"],
+    ["dclear", "No dark nests", "Sem ninhos do escuro"],
+  ];
+  const picked = a.sel ? (w?.god?.animalPicked() ?? null) : null;
+  const change = (o: Parameters<NonNullable<NonNullable<typeof w>["god"]>["changeAnimalPlace"]>[0]) => {
+    w?.god?.changeAnimalPlace(o);
+    bump((n) => n + 1);
+  };
+  const wild = ANIMAL_KINDS.filter((k) => ANIMALS[k].group !== "farm");
+  return (
+    <aside className="pointer-events-auto cabinet absolute top-16 right-3 w-64 p-3 flex flex-col gap-2 text-[13px]">
+      <div className="flex flex-wrap gap-1">
+        <button
+          type="button"
+          className="deck-btn px-2 py-1"
+          aria-pressed={a.layers.animals}
+          onClick={() => set({ layers: { ...a.layers, animals: !a.layers.animals } })}
+        >
+          {pt ? `Animais (${a.inView.land + a.inView.placed})` : `Animals (${a.inView.land + a.inView.placed})`}
+        </button>
+        <button type="button" className="deck-btn px-2 py-1" aria-pressed={a.layers.dark} onClick={() => set({ layers: { ...a.layers, dark: !a.layers.dark } })}>
+          {pt ? `O escuro (${a.inView.dark})` : `The dark (${a.inView.dark})`}
+        </button>
+      </div>
+      <p className="opacity-70 text-[12px]">
+        {pt
+          ? `Perto da câmera: ${a.inView.land} da terra, ${a.inView.placed} postos; ${a.inView.dark} ninhos do escuro hoje.`
+          : `Near the camera: ${a.inView.land} the land's own, ${a.inView.placed} placed; ${a.inView.dark} dark nests today.`}
+      </p>
+      <div className="flex flex-wrap gap-1">
+        {KINDS.map(([k, en, ptw]) => (
+          <button key={k} type="button" className="deck-btn px-2 py-1" aria-pressed={a.kind === k} onClick={() => set({ kind: k })}>
+            {pt ? ptw : en}
+          </button>
+        ))}
+      </div>
+      {(a.kind === "herd" || a.kind === "den" || a.kind === "nest") && (
+        <label className="flex flex-col gap-1">
+          {pt ? "Espécie" : "Species"}
+          <select className="input" value={a.species} onChange={(e) => set({ species: e.target.value as GodState["animals"]["species"] })}>
+            {wild.map((k) => (
+              <option key={k} value={k}>
+                {ANIMALS[k].label[pt ? 1 : 0]}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {(a.kind === "herd" || a.kind === "den" || a.kind === "nest" || a.kind === "dnest") && (
+        <label className="flex flex-col gap-1">
+          {pt ? `Quantos: ${a.kind === "dnest" ? Math.min(4, a.n) : a.n}` : `How many: ${a.kind === "dnest" ? Math.min(4, a.n) : a.n}`}
+          <input type="range" min={1} max={a.kind === "dnest" ? 4 : 20} value={a.kind === "dnest" ? Math.min(4, a.n) : a.n} onChange={(e) => set({ n: Number(e.target.value) })} />
+        </label>
+      )}
+      {(a.kind === "den" || a.kind === "nest") && (
+        <label className="flex flex-col gap-1">
+          {pt ? `Filhotes: ${a.young}` : `Young: ${a.young}`}
+          <input type="range" min={0} max={6} value={a.young} onChange={(e) => set({ young: Number(e.target.value) })} />
+        </label>
+      )}
+      {(a.kind === "empty" || a.kind === "den" || a.kind === "dclear") && (
+        <label className="flex flex-col gap-1">
+          {a.kind === "den" ? (pt ? `Território: ${a.r} m` : `Territory: ${a.r} m`) : pt ? `Raio: ${a.r} m` : `Radius: ${a.r} m`}
+          <input type="range" min={10} max={600} step={10} value={a.r} onChange={(e) => set({ r: Number(e.target.value) })} />
+        </label>
+      )}
+      <p className="opacity-70">
+        {a.moving
+          ? pt
+            ? "Clique onde ele vai ficar (Esc: não mover)."
+            : "Click where it goes (Esc: don't move it)."
+          : pt
+            ? "Clique no terreno para pôr; clique num lugar para escolher — os da terra também."
+            : "Click the land to place; click a place to pick it — the land's own too."}
+      </p>
+      {picked && (
+        <div className="flex flex-col gap-2 border-t border-white/15 pt-2">
+          <p className="opacity-80">
+            {picked.land ? (pt ? "Da terra: " : "The land's own: ") : ""}
+            {picked.species ? ANIMALS[picked.species].label[pt ? 1 : 0] : picked.kind === "dclear" ? (pt ? "Sem ninhos" : "Kept clear") : pt ? "Ninho do escuro" : "Dark nest"}
+          </p>
+          {picked.species && picked.kind !== "pen" && (
+            <select className="input" value={picked.species} onChange={(e) => change({ species: e.target.value as AnimalKind })}>
+              {wild.map((k) => (
+                <option key={k} value={k}>
+                  {ANIMALS[k].label[pt ? 1 : 0]}
+                </option>
+              ))}
+            </select>
+          )}
+          {picked.kind !== "pen" && picked.kind !== "empty" && picked.kind !== "dclear" && (
+            <label className="flex flex-col gap-1">
+              {pt ? `Quantos: ${picked.n ?? 1}` : `How many: ${picked.n ?? 1}`}
+              <input
+                type="range"
+                min={1}
+                max={picked.kind === "dnest" ? 4 : 20}
+                value={picked.n ?? 1}
+                onChange={(e) => change({ n: Number(e.target.value) })}
+              />
+            </label>
+          )}
+          <div className="flex gap-1">
+            <button type="button" className="deck-btn px-2 py-1" aria-pressed={a.moving} onClick={() => w?.god?.moveAnimalPlace()}>
+              {pt ? "Mover" : "Move"}
+            </button>
+            <button type="button" className="deck-btn px-2 py-1" onClick={() => w?.god?.removeAnimalPlace()}>
+              {pt ? "Tirar (Delete)" : "Take away (Delete)"}
+            </button>
+          </div>
+        </div>
+      )}
+    </aside>
   );
 }
