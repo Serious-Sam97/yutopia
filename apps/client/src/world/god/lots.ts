@@ -24,6 +24,8 @@ type Ground = { x: number; z: number; h: number } | null;
 export interface LotsHost {
   draft(): GroundsEdits;
   change(next: GroundsEdits): void;
+  /** Who owns the lot now (live — claims are the structure's), or null: it's free. */
+  ownerOf(key: string): string | null;
 }
 const OK = 0x52d24a;
 const BAD = 0xe0442c;
@@ -251,6 +253,9 @@ export class LotsTool {
   removePicked() {
     const key = this.o.sel;
     if (!key) return;
+    // (someone's: freed first — the panel's Free it —, not refused only at Publish)
+    const who = this.host.ownerOf(key);
+    if (who) return toast(`${HOME_LOTS.find((l) => l.key === key)?.name ?? "It"} is ${who}'s: free it first.`, "warn");
     const d0 = this.host.draft();
     const s = d0.homeLots ?? {};
     const own = (s.add ?? []).some((l) => l.key === key);

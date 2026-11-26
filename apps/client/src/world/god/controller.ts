@@ -1160,7 +1160,15 @@ export class GodController {
   lotsTool(): LotsTool | null {
     const tp = this.w.tp;
     if (!this.lots && tp)
-      this.lots = new LotsTool({ draft: () => this.draftNow(), change: (next) => this.change(next) }, tp.scene);
+      this.lots = new LotsTool(
+        {
+          draft: () => this.draftNow(),
+          change: (next) => this.change(next),
+          ownerOf: (key) =>
+            this.w.structure?.floors.find((f) => f.space === `home:${key}` && f.claim)?.claim?.ownerName ?? null,
+        },
+        tp.scene,
+      );
     return this.lots;
   }
   /** The buildings tool (made the first time it's needed). */

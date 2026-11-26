@@ -1115,3 +1115,7 @@ The user's draft had a lot (x 39–69, z −34…−4) with its corner 6 m into 
 ### Lots each: no limit (11-26)
 
 The user changed F1a's "one lot each": a person claims as many free lots as they like (asked, "No limit"). `lotsOf` (homes.ts) lists them; `lotOf` is the first. The server no longer refuses a second claim, an admin giving someone a lot no longer frees their other one, and "Go to my lot" goes to the lot whose card it's pressed on. Freeing someone's lot was already there: an admin opens the lot's card (by its sign) and presses Free it. Test in homes.test.ts; checked live as Bia (two lots claimed, gone to the second, both given back — `e2e/zz-twolots.mts`).
+
+### Freeing a lot from God mode (11-26)
+
+Publish refused taking Lot 1 away: "someone's" — it was Ana's own (the user's), claimed in testing. The message now names the owner and where to free it. God mode's lot panel shows **Free it** on a claimed lot (asks first: the owner loses it and everything on it goes — the same `lot:free` as the lot card's), and **Take it away** on a claimed lot is refused with a toast when clicked, not only at Publish. Not clicked through live: God mode needs Ana, the user's account.

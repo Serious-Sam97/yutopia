@@ -109,9 +109,15 @@ registerFeature((room: WorldRoom) => {
       const was = HOME_LOTS.find((l) => l.key === key);
       const is = now.get(key);
       if (!was) continue;
-      if (!is) out.push(`${was.name} is someone's: free it before taking it away`);
+      // (whose, by name: an admin's own test claim read as "someone's", 11-26)
+      const who = room.structure.floors.find((f) => f.space === `home:${key}` && f.claim)?.claim?.ownerName;
+      const whose = who ? `${who}'s` : "someone's";
+      if (!is)
+        out.push(
+          `${was.name} is ${whose}: free it first (Free it on the lot's card by its sign, or in God mode with it picked)`,
+        );
       else if (is.x0 !== was.x0 || is.z0 !== was.z0 || is.x1 !== was.x1 || is.z1 !== was.z1)
-        out.push(`${was.name} is someone's: free it before moving it`);
+        out.push(`${was.name} is ${whose}: free it before moving it`);
     }
     const things = [...room.state.objects.values()].map(fromSchema);
     const after = new Map(buildingsFor(e).map((b) => [b.key, b]));

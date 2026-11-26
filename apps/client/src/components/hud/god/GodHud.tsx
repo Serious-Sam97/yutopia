@@ -1239,10 +1239,18 @@ const LOT_WORDS: Record<string, [string, string]> = {
     "Clique onde a placa vai (no terreno ou até 3 m dele) · Esc para",
   ],
   signBack: ["Sign to its corner", "Placa no canto"],
+  freeIt: ["Free it", "Liberar"],
+  freeAsk: [
+    "Free {name}? {who} loses it, and everything built on it goes with it.",
+    "Liberar o {name}? {who} perde o terreno, e tudo construído nele vai junto.",
+  ],
+  freeYes: ["Yes, free it", "Sim, liberar"],
+  notNow: ["Not now", "Agora não"],
 };
 function LotOptions({ g }: { g: GodState }) {
   const pt = useLang() === "pt";
   const w = useWorld();
+  const [freeing, setFreeing] = useState<string | null>(null);
   const o = g.lots;
   const L = (k: string) => LOT_WORDS[k][pt ? 1 : 0];
   const set = (p: Partial<GodState["lots"]>) => hud.set((s) => ({ god: { ...s.god, lots: { ...s.god.lots, ...p } } }));
@@ -1318,12 +1326,43 @@ function LotOptions({ g }: { g: GodState }) {
                 {L("signBack")}
               </button>
             )}
+            {claim && (
+              <button
+                type="button"
+                className="chip"
+                style={{ color: "var(--bad)" }}
+                data-testid="god-lot-free"
+                onClick={() => setFreeing(lot.key)}
+              >
+                {L("freeIt")}
+              </button>
+            )}
             <button type="button" className="chip" onClick={() => tool?.removePicked()}>
               {L("remove")}
             </button>
           </>
         )}
       </div>
+      {lot && claim && freeing === lot.key && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span>{L("freeAsk").replace("{name}", lot.name).replace("{who}", claim.ownerName)}</span>
+          <button
+            type="button"
+            className="chip"
+            style={{ color: "var(--bad)" }}
+            data-testid="god-lot-free-yes"
+            onClick={() => {
+              (w?.send as ((t: string, m: unknown) => void) | undefined)?.("lot:free", { key: lot.key });
+              setFreeing(null);
+            }}
+          >
+            {L("freeYes")}
+          </button>
+          <button type="button" className="chip" onClick={() => setFreeing(null)}>
+            {L("notNow")}
+          </button>
+        </div>
+      )}
       <p className="text-xs opacity-80">
         {lot && o.signing
           ? L("signing")
