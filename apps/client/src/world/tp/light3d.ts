@@ -1,5 +1,5 @@
 import { type MapDef, STOREY, type WorldObjectDef } from "@yutopia/shared";
-import { cellOf, layoutSig } from "@yutopia/shared/structure";
+import { cellOf, floorAtPoint, layoutSig } from "@yutopia/shared/structure";
 import {
   Color,
   Data3DTexture,
@@ -272,7 +272,12 @@ export class Light3 {
     for (let y = 0; y < H; y++)
       for (let x = 0; x < W; x++) {
         const ch = cellOf(map, x, y);
-        d[(y * W + x) * 4] = ch === "a" || ch === "c" ? 255 : 0;
+        // (plan 130: a tile a slab's edge cuts off the whole metre — its middle out of it — open if its part is)
+        const open = (c: string) => c === "a" || c === "c";
+        const part =
+          !open(ch) &&
+          [0.25, 0.75].some((u) => [0.25, 0.75].some((v) => open(floorAtPoint(map, x + u, y + v))));
+        d[(y * W + x) * 4] = open(ch) || part ? 255 : 0;
       }
     this.sky.dispose();
     this.sky = new DataTexture(d, W, H, RGBAFormat);

@@ -10,7 +10,7 @@ import {
   quarterOf,
   type WorldObjectDef,
 } from "@yutopia/shared";
-import { cellOf, coverOf, hWallOf, isCover, vWallOf } from "@yutopia/shared/structure";
+import { cellOf, coverOf, floorAtPoint, hWallOf, isCover, vWallOf } from "@yutopia/shared/structure";
 
 // Floors, baked: each material is a seamless top-down texture (4×4 tiles, generated once), painted
 // over the floor's slabs in their own space — the plan, seen from straight above (docs/plan/72-the-3d-
@@ -357,7 +357,11 @@ export function aoCanvas(
   const W = map.width;
   const H = map.height;
   const occ = new Float32Array(W * H); // 0..1 occluder strength per tile
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!isFloor(cellOf(map, x, y))) occ[y * W + x] = 1;
+  // (plan 130: a tile a slab's edge cuts off the whole metre is floor by its part — no shade cast from it)
+  const partFloor = (x: number, y: number) =>
+    [0.25, 0.75].some((u) => [0.25, 0.75].some((v) => isFloor(floorAtPoint(map, x + u, y + v))));
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) if (!isFloor(cellOf(map, x, y)) && !partFloor(x, y)) occ[y * W + x] = 1;
   const boxes: { x0: number; y0: number; x1: number; y1: number }[] = [];
   for (const o of objects) {
     const e = entry(o.kind);

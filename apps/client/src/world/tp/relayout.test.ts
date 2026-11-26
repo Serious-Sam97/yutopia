@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { applyEdges, blankMap, type TileMap } from "@yutopia/shared";
-import { touchedWalls } from "./build";
+import { cutCells, touchedWalls } from "./build";
 
 // A wall built or taken away redraws only the wall pieces it touches (docs/plan/72-the-3d-core.md,
 // phase 2; World3.relayout): the pieces holding an edge that changed or one meeting it at either
@@ -53,4 +53,23 @@ test("a wall taken away: the pieces it was in, from the old layout", () => {
   assert.ok(t.keys.has("run|v|2|0"));
   assert.ok(t.keys.has("low|0,0"));
   assert.deepEqual(t.box, { x0: 2, y0: 3, x1: 2, y1: 4 });
+});
+
+test("a slab off the whole metre (a 12.5 m foundation): its last half metre drawn, clipped to its edge (plan 130)", () => {
+  const ring: [number, number][] = [
+    [0, 0],
+    [12.5, 0],
+    [12.5, 3],
+    [0, 3],
+  ];
+  const cut = cutCells([{ top: "c", rings: [ring] }], new Set());
+  // (the column the edge crosses, each row: the slab's half of it, no more)
+  assert.deepEqual([...cut.keys()].sort(), ["12,0", "12,1", "12,2"]);
+  for (const pieces of cut.values()) {
+    assert.equal(pieces.length, 1);
+    const xs = pieces[0].poly.map((p) => p[0]);
+    assert.deepEqual([Math.min(...xs), Math.max(...xs)], [12, 12.5]);
+  }
+  // (a slab on whole metres: nothing cut)
+  assert.equal(cutCells([{ top: "c", rings: [ring.map(([x, y]) => [Math.min(x, 12), y] as [number, number])] }], new Set()).size, 0);
 });

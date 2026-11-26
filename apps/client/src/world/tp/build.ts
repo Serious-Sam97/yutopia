@@ -38,6 +38,7 @@ import {
   floorsSig,
   freeCuts,
   inRing,
+  isCover,
   isFreeOpening,
   onOf,
   type Ring,
@@ -1859,7 +1860,11 @@ export class World3 {
     // (the life look: the library's floors under the bake — plan 73 phase 7)
     const bake = new FloorBake(map, this.objects, this.wells.floor, aoOnly, this.slabs, BUILD_TEX ? FLOOR_FILL : null);
     // (what's floor: the slabs' — the structure's — or the tiles'; less the wells)
-    const floorAt = (x: number, y: number) => this.isFloorAt(x, y) && !this.wells.floor.has(`${x},${y}`);
+    // (plan 130: a slab's edge off the whole metre — a 12.5 m foundation — cuts its cells: those drawn as the slab
+    // clipped to the cell, not a whole square or none, else the last half metre was the pad's cap showing)
+    const cut = cutCells(this.slabs, this.wells.floor);
+    const floorAt = (x: number, y: number) =>
+      !cut.has(`${x},${y}`) && this.isFloorAt(x, y) && !this.wells.floor.has(`${x},${y}`);
     const softs = [...this.areas.values(), ...this.tall.values()].map((a) => a.built.soft);
     if (!kept) this.dropFloor();
     const chunks = new Map<string, Mesh>();
@@ -1915,6 +1920,36 @@ export class World3 {
             x = x1;
           }
         }
+        // (the cut cells: each slab's piece of the cell, its own material's)
+        for (let y = cy; y < cy + h; y++)
+          for (let x = cx; x < cx + w; x++) {
+            const pieces = cut.get(`${x},${y}`);
+            if (!pieces) continue;
+            for (const { top, poly } of pieces) {
+              const lib = BUILD_TEX && floorLib(top) ? top : OUT_TEX && LOT_RELIEF[top] ? `#${top}` : "";
+              const g = getOr(groups, lib, () => ({ pos: [], nor: [], uv: [], buv: [] }));
+              const fl = floorLib(lib);
+              for (const tri of ShapeUtils.triangulateShape(
+                poly.map(([a, b]) => new Vector2(a, b)),
+                [],
+              )) {
+                const i = tri[0];
+                let [j, k] = [tri[1], tri[2]];
+                const [a, b, c] = [poly[i], poly[j], poly[k]];
+                // (wound as the runs' quads: clockwise in plan, so up-facing)
+                if ((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]) > 0) [j, k] = [k, j];
+                for (const q of [poly[i], poly[j], poly[k]]) {
+                  g.pos.push(q[0], 0, q[1]);
+                  g.nor.push(0, 1, 0);
+                  const cu = [(q[0] - cx) / w, 1 - (q[1] - cy) / h];
+                  if (fl) {
+                    g.uv.push(q[0] * fl[2], q[1] * fl[2]);
+                    g.buv.push(...cu);
+                  } else g.uv.push(...cu);
+                }
+              }
+            }
+          }
         if (!groups.size) continue;
         const plan = bake.drawPlan(px, cx, cy, w, h);
         softShadows(plan, px, cx, cy, w, h, softs);
@@ -2606,4 +2641,76 @@ function joinedOf(o: WorldObjectDef, objects: readonly WorldObjectDef[]): WorldO
   const l = cuts.some((c) => same(c) && Math.abs(c.u1 - me.u0) < 1e-3);
   const r = cuts.some((c) => same(c) && Math.abs(c.u0 - me.u1) < 1e-3);
   return l || r ? { ...o, props: { ...o.props, ...(l ? { _joinL: true } : {}), ...(r ? { _joinR: true } : {}) } } : o;
+}
+
+// ── (plan 130) a floor's cells cut by a slab edge off the whole metre ───────────────────────────────────────────────
+type Pt = [number, number];
+/** A polygon clipped to the box [x0,x1]×[y0,y1] (Sutherland–Hodgman: the box is convex). */
+function clipToCell(ring: readonly Pt[], x0: number, y0: number, x1: number, y1: number): Pt[] {
+  let out: Pt[] = ring.map((p) => [p[0], p[1]]);
+  const sides: [(p: Pt) => number][] = [[(p) => p[0] - x0], [(p) => x1 - p[0]], [(p) => p[1] - y0], [(p) => y1 - p[1]]];
+  for (const [d] of sides) {
+    const src = out;
+    out = [];
+    for (let i = 0; i < src.length; i++) {
+      const a = src[i];
+      const b = src[(i + 1) % src.length];
+      const [da, db] = [d(a), d(b)];
+      if (da >= 0) out.push(a);
+      if (da >= 0 !== db >= 0) {
+        const t = da / (da - db);
+        out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+      }
+    }
+    if (out.length < 3) return [];
+  }
+  return out;
+}
+const areaOf = (p: readonly Pt[]) => {
+  let a = 0;
+  for (let i = 0; i < p.length; i++) {
+    const [q, r] = [p[i], p[(i + 1) % p.length]];
+    a += q[0] * r[1] - r[0] * q[1];
+  }
+  return Math.abs(a) / 2;
+};
+/** The cells a floor slab's edge crosses off the whole metre (an edge along a whole line is exact as it is), each
+ *  with the slabs' pieces of it — a slab with holes in the cell keeps the old whole-or-none. */
+export function cutCells(
+  slabs: readonly FloorSlab[] | null,
+  wells: ReadonlySet<string>,
+): Map<string, { top: string; poly: Pt[] }[]> {
+  const out = new Map<string, { top: string; poly: Pt[] }[]>();
+  if (!slabs) return out;
+  const own = slabs.filter((sl) => !sl.part && (isFloor(sl.top) || isCover(sl.top, "floor")));
+  const cells = new Set<string>();
+  const whole = (v: number) => Math.abs(v - Math.round(v)) < 1e-6;
+  for (const sl of own) {
+    const r = sl.rings[0];
+    if (!r) continue;
+    for (let i = 0; i < r.length; i++) {
+      const [a, b] = [r[i], r[(i + 1) % r.length]];
+      const vert = Math.abs(a[0] - b[0]) < 1e-6;
+      const horiz = Math.abs(a[1] - b[1]) < 1e-6;
+      if ((vert && whole(a[0])) || (horiz && whole(a[1]))) continue;
+      const [lx, hx] = [Math.min(a[0], b[0]), Math.max(a[0], b[0])];
+      const [ly, hy] = [Math.min(a[1], b[1]), Math.max(a[1], b[1])];
+      for (let y = Math.floor(ly); y < Math.max(Math.ceil(hy), Math.floor(ly) + 1); y++)
+        for (let x = Math.floor(lx); x < Math.max(Math.ceil(hx), Math.floor(lx) + 1); x++) cells.add(`${x},${y}`);
+    }
+  }
+  for (const k of cells) {
+    if (wells.has(k)) continue;
+    const [x, y] = k.split(",").map(Number);
+    const pieces: { top: string; poly: Pt[] }[] = [];
+    let holed = false;
+    for (const sl of own) {
+      if (sl.rings.slice(1).some((h) => clipToCell(h, x, y, x + 1, y + 1).length)) holed = true;
+      const poly = clipToCell(sl.rings[0] ?? [], x, y, x + 1, y + 1);
+      if (poly.length >= 3 && areaOf(poly) > 1e-4) pieces.push({ top: sl.top, poly });
+    }
+    if (holed) continue;
+    out.set(k, pieces);
+  }
+  return out;
 }

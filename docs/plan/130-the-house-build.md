@@ -1103,3 +1103,7 @@ The user saw foundations flicker; every new piece was checked for faces drawn in
 - Fences and trims are now part of the floor's redraw key (view.ts freeSig): before it a fence added didn't draw until something else changed the floor.
 
 Probe: `e2e/zz-flicker.mts` (a free lot, as Bia; stills of the pad, the fences live, doors, the fireplace, an L with Auto Roof hips; releases the lot).
+
+### A foundation off the whole metre (11-26)
+
+The user's 12.5 m foundation showed its cap along one side: the floor was drawn by whole metre squares, a square in only if its middle was, so the last half metre had no floor. Now a square a slab's edge crosses off the whole metre is drawn as the slab clipped to it (build.ts `cutCells`, a test in relayout.test.ts). The open-sky map (light3d.ts) and the floor's shade (floors.ts aoCanvas) read such a square by its quarter points, so its half gets the sun and the snow like the rest. Probe: `e2e/zz-halfpad.mts`.
