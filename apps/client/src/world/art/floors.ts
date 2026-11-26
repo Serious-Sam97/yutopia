@@ -10,7 +10,7 @@ import {
   quarterOf,
   type WorldObjectDef,
 } from "@yutopia/shared";
-import { cellOf, hWallOf, vWallOf } from "@yutopia/shared/structure";
+import { cellOf, coverOf, hWallOf, isCover, vWallOf } from "@yutopia/shared/structure";
 
 // Floors, baked: each material is a seamless top-down texture (4×4 tiles, generated once), painted
 // over the floor's slabs in their own space — the plan, seen from straight above (docs/plan/72-the-3d-
@@ -469,6 +469,8 @@ export function aoCanvas(
 export interface FloorSlab {
   top: string;
   rings: [number, number][][];
+  /** (plan 130) a painted tile's part: drawn, but not what its tile's floor is */
+  part?: boolean;
 }
 
 // (a point in a slab's rings, even-odd)
@@ -512,7 +514,11 @@ export class FloorBake {
     // what each tile's floor is: the slab over its middle (the structure's), or its tile
     const matAt = slabs
       ? (x: number, y: number) => {
-          for (const sl of slabs) if (inRings(sl.rings, x + 0.5, y + 0.5)) return sl.top;
+          // (the last drawn on top wins, as the bake paints them; a painted tile's part isn't the tile's — plan 130)
+          for (let i = slabs.length - 1; i >= 0; i--) {
+            const sl = slabs[i];
+            if (!sl.part && inRings(sl.rings, x + 0.5, y + 0.5)) return sl.top;
+          }
           return cellOf(map, -1, -1);
         }
       : (x: number, y: number) => cellOf(map, x, y);
@@ -566,6 +572,9 @@ export class FloorBake {
     const ms = Math.round(T * res);
     const e = 0.6 / res; // overlap so materials meet without hairline gaps
     const pattern = (ch: string): string | CanvasPattern | null => {
+      // (plan 130 phase 9: a covering — its tint, flat; the library's material under it in the life look)
+      const cov = coverOf(ch, "floor");
+      if (cov) return cov.tint;
       const flat = this.fill?.[ch];
       if (typeof flat === "string") return flat;
       if (flat) {
@@ -590,7 +599,7 @@ export class FloorBake {
       // each slab in its own shape (less the wells), its material a hair past its edge all round —
       // where two meet, no hairline between them (as the tiles' squares overlapped)
       for (const sl of this.slabs) {
-        if (!isFloor(sl.top)) continue;
+        if (!isFloor(sl.top) && !isCover(sl.top, "floor")) continue;
         const pat = pattern(sl.top);
         if (!pat) continue;
         g.beginPath();

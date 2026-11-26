@@ -33,6 +33,7 @@ import {
   levelMap,
   liftFloorName,
   liftFront,
+  lotOfFloor,
   type MapDef,
   objLevel,
   onLevel,
@@ -74,7 +75,11 @@ import {
   edgeBack,
   edgeFront,
   floorAtPoint,
+  landHoles,
+  poolFloors,
+  poolWaterAt,
   type Structure,
+  setLandHoles,
   viewOf,
 } from "@yutopia/shared/structure";
 import { wears } from "@yutopia/shared/worn";
@@ -130,6 +135,7 @@ import { type Floor, radio, sound } from "./sound";
 import type { Space } from "./steps";
 import { hud, lampSay, type Person, toast } from "./store";
 import { strikeKeys } from "./strike/flag";
+import { setLandHoleUniforms } from "./tp/land-holes";
 import type { Body3, CamMode, ThirdPersonView } from "./tp/view";
 
 // map edits that act on a floor (the one I'm on, unless they say)
@@ -1316,6 +1322,12 @@ export class WorldController {
       this.tpDue = Math.max(this.tpDue, now + 1);
     }
     this.doors.updateDoors();
+    // (plan 130: the home lots on the land — a free one's stakes and sign; mine staked while I build on it)
+    if (this.tp && this.structure) {
+      this.tp.homeLots.update(this.structure, hud.get().build.on ? lotOfFloor(this.structure, this.level) : null);
+      // (on the land as it's drawn: shifted down by the floor I'm on — else from a fourth floor they stood at its height)
+      this.tp.homeLots.root.position.y = this.tp.groundsFrame().y;
+    }
     if (this.objectsDirty) {
       // batched: hundreds of objects arrive in the first patch
       this.objectsDirty = false;
@@ -1929,7 +1941,18 @@ export class WorldController {
       path: this.path,
       at: { x: this.me.x, y: this.me.y, z: this.height.z },
       // (the Grounds' pond and river, out on the land: docs/plan/66-the-water.md)
-      water: G && this.level === 0 ? (x, y) => this.water.waterAt(x, y) : undefined,
+      // (plan 130 phase 11: a lot's pools on its storey — their heights the storey's own)
+      water:
+        G && this.level === 0
+          ? (x, y) => this.water.waterAt(x, y)
+          : poolFloors().has(this.level)
+            ? (x, y) => {
+                const p = poolWaterAt(x, y, this.level);
+                if (!p) return null;
+                const fz = elevOf(this.level);
+                return { level: p.level - fz, bed: p.bed - fz, vx: 0, vy: 0 };
+              }
+            : undefined,
       camPitch: this.tp?.aimPitch,
       waterTemp: this.room?.state.weather?.water,
     });
@@ -2946,6 +2969,8 @@ export class WorldController {
     // (the town's storeys registered from the live structure: plan 113 review)
     const was = elevOf(this.level);
     setSpaceFloors(st.floors);
+    // (plan 130: the land's holes — basements, pools — for its drawing and its physics)
+    if (setLandHoles(st)) setLandHoleUniforms(landHoles());
     this.building = { ...viewOf(st), objects: [] };
     // (heights over a town storey read before its height was known — a fresh page's, the structure after the
     // players: mine and theirs again from the world's — plan 113 review)

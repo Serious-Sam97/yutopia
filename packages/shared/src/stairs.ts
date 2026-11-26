@@ -225,7 +225,8 @@ export function floorAt(
     const g = spaceGroundAt(p.x, p.y);
     if (g && floors.includes(g.index)) {
       const zg = z - g.z;
-      if (zg >= FLOOR_BAND[0] && zg <= riseOf(g.index) + FLOOR_BAND[0] && has(g.index, zg))
+      // (plan 130: a lot's house on a foundation — its yard, the land, is its ground storey's too, `found` under it)
+      if (zg >= FLOOR_BAND[0] - (g.found ?? 0) && zg <= riseOf(g.index) + FLOOR_BAND[0] && has(g.index, zg))
         return { level: g.index, dz: -g.z, at: across(m, 0, g.index, p) };
     }
   }

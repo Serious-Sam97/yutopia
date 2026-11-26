@@ -4,6 +4,7 @@
 // stretch is all of it. A room's faces: the stretches of its walls along its outline, the side that
 // looks into it. Glass and half walls have no sides to paint; an arc is painted whole.
 import { isArc } from "./arc.ts";
+import { isCover } from "./coverings.ts";
 import { FACE_PAINTS } from "./edit.ts";
 import type { StructOp } from "./ops.ts";
 import { frontNormal, onTiles } from "./query.ts";
@@ -32,8 +33,12 @@ function piece(w: Wall, t0: number, t1: number, id: string): Wall {
   return { ...w, id, a: lerp(w, t0), b: lerp(w, t1) };
 }
 
-/** A face painted: its front or back `mat` (a back like the front isn't kept). */
+/** A face painted: its front or back `mat` (a back like the front isn't kept); (plan 130) a covering over its
+ *  paint, or a paint taking the covering off. */
 function painted(w: Wall, side: 1 | -1, mat: string): Wall {
+  if (isCover(mat, "wall")) return { ...w, ...(side > 0 ? { coverF: mat } : { coverB: mat }) };
+  const { coverF, coverB, ...bare } = w;
+  w = { ...bare, ...(side > 0 ? (coverB ? { coverB } : {}) : coverF ? { coverF } : {}) } as Wall;
   const front = side > 0 ? mat : w.front;
   const back = side < 0 ? mat : (w.back ?? w.front);
   const { back: _b, ...rest } = w;
@@ -56,7 +61,8 @@ export function wallsPaint(
 ): { op: StructOp; moves: PaintMoves } | { why: string } {
   const byWall = new Map<string, PaintStretch[]>();
   for (const p of stretches) {
-    if (!(FACE_PAINTS as readonly string[]).includes(p.mat)) return { why: "not a wall's paint" };
+    if (!(FACE_PAINTS as readonly string[]).includes(p.mat) && !isCover(p.mat, "wall"))
+      return { why: "not a wall's paint" };
     byWall.set(p.id, [...(byWall.get(p.id) ?? []), p]);
   }
   const remove: string[] = [];
@@ -104,7 +110,12 @@ export function wallsPaint(
       for (const p of spans) if (mid > p.from && mid < p.to && p.to - p.from > EPS) q = painted(q, p.side, p.mat);
       pieces.push({ id: q.id, from: t0, to: t1, wall: q });
     }
-    const same = all && pieces[0].wall.front === w.front && (pieces[0].wall.back ?? w.front) === (w.back ?? w.front);
+    const same =
+      all &&
+      pieces[0].wall.front === w.front &&
+      (pieces[0].wall.back ?? w.front) === (w.back ?? w.front) &&
+      pieces[0].wall.coverF === w.coverF &&
+      pieces[0].wall.coverB === w.coverB;
     if (same) continue;
     remove.push(w.id);
     add.push(...pieces.map((p) => p.wall));

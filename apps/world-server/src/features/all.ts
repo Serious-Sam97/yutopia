@@ -4,6 +4,9 @@ import "./standup.ts";
 import "./whiteboard.ts";
 import "./vortex.ts";
 import "./mapedit.ts";
+// (plan 130: home lots)
+import "./homes.ts";
+import "./house.ts";
 import "./history.ts";
 import "./furnish.ts";
 import "./held.ts";

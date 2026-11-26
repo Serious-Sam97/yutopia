@@ -1,3 +1,5 @@
+import type { LotClaim } from "../homes.ts";
+
 // The world's structure (docs/plan/72-the-3d-core.md, phase 6): what the building is made of, in
 // one frame — world metres, x/y the ground plane (the land's own coords), z up — instead of a tile
 // map per floor placed by its corner. Walls are segments with two faces, floors are slabs (polygons
@@ -39,6 +41,10 @@ export interface Floor {
   turn?: number;
   /** (plan 123; a ground storey's) the layout's rounds of additions its space has had (furnishings.ts Piece.since) */
   added?: number;
+  /** (plan 130; a home lot's ground storey) who it's whose, who else builds there */
+  claim?: LotClaim;
+  /** (plan 130; a home lot's ground storey) its foundation's height over the land (m): its floors and walls stand on it */
+  found?: number;
 }
 
 /** A floor surface: one material, an outline with holes, at its floor's height. */
@@ -76,6 +82,15 @@ export interface Wall {
   shell?: boolean;
   /** its openings the kit cut (a shell's windows and door): along it from a (m), over its base (m) */
   gaps?: [number, number, number, number][];
+  /** (plan 130 phase 3) not a wall but a fence, a railing, a spandrel, a gate (edit.ts WALL_STYLES): drawn as itself,
+   *  solid as its box (a gate: open), never closing a room, taking no paint, door or window */
+  style?: string;
+  /** (plan 130 phase 3) its trims, both faces: "base" (skirting), "chair" (a rail at 0.9 m), "crown" (moulding at its
+   *  top), "frieze" (a band under its top, outside) */
+  /** (plan 130 phase 9) its faces' coverings (coverings.ts keys: a library material and its tint) over their paint */
+  coverF?: string;
+  coverB?: string;
+  trim?: string[];
 }
 
 /** A room: an outline on a floor, with everything the old area kept (name, kind, owner, lock…). */
@@ -106,6 +121,9 @@ export interface Structure {
   rooms: Room[];
   /** roofs over closed sets of walls (phase 11.7; none in older structures) */
   roofs?: Roof[];
+  /** (plan 130) a floor's other layers, by name then floor: "tiles" (floors painted tile by tile — tiles.ts),
+   *  "found" (foundations), "pools" — each its own shape, kept and sent as the structure's */
+  layers?: Record<string, Record<string, unknown>>;
 }
 
 /** A roof over a closed set of walls (phase 11.7; the user's call: flat and pitched — gable, hip —
@@ -116,7 +134,26 @@ export interface Roof {
   floor: number;
   outline: XY[];
   z: number;
-  kind: "flat" | "gable" | "hip";
+  /** (plan 130 phase 7) and shed, half-hip, mansard, gambrel, Dutch gable, round; a dormer (a little gabled box on a
+   *  roof's slope, its window in front), a chimney (a brick stack, `z` its foot, `top` its top) */
+  kind:
+    | "flat"
+    | "gable"
+    | "hip"
+    | "shed"
+    | "halfhip"
+    | "mansard"
+    | "gambrel"
+    | "dutch"
+    | "round"
+    | "dormer"
+    | "chimney";
   pitch: number;
   ridge?: 0 | 1;
+  /** (plan 130) how far past its walls (m; none: ROOF_OVERHANG) */
+  over?: number;
+  /** (plan 130) what it's covered with (roof.ts ROOF_MATS; none: slate) */
+  mat?: string;
+  /** (plan 130) a chimney's top (world m) */
+  top?: number;
 }

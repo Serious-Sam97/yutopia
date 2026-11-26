@@ -477,7 +477,11 @@ export class PhysicsWorld {
     const out = new Float32Array(J.HEAPF32.buffer, J.getPointer(at), n * n);
     this.forget(samples, at); // (the settings' own: gone with them)
     for (let j = 0; j < n; j++)
-      for (let i = 0; i < n; i++) out[j * n + i] = i < land.n && j < land.n ? land.h[j * land.n + i] : hole;
+      for (let i = 0; i < n; i++) {
+        // (plan 130: a NaN sample a hole — a basement's, a pool's)
+        const v = i < land.n && j < land.n ? land.h[j * land.n + i] : hole;
+        out[j * n + i] = Number.isNaN(v) ? hole : v;
+      }
     const shape = this.shape(hs);
     if (!shape) return false;
     this.keep(key, this.make(this.settings(shape, 0, 0, 0, 0, J.EMotionType_Static, LAYER.land), false));

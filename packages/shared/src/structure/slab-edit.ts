@@ -158,3 +158,37 @@ export function slabAt(s: Pick<Structure, "floors" | "slabs">, floor: number, p:
   );
   return here.at(-1) ?? null;
 }
+
+/** (plan 130 phase 4) A hole cut in a floor — a box dragged over it: the ring left out of every slab of the floor at its
+ *  own height it overlaps (its floor's; a mezzanine's at `over`). The operation, or why not. */
+export function slabsHoleOps(s: Structure, floor: number, ring: XY[], over = 0): StructOp | string {
+  const f = s.floors.find((q) => q.index === floor);
+  if (!f) return "no such floor";
+  if (
+    ring.length < 3 ||
+    ring.length > SLAB_MAX_POINTS ||
+    !ring.every((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]))
+  )
+    return "not a shape";
+  if (Math.abs(area2(ring)) / 2 < SLAB_MIN_AREA) return "too small";
+  const xs = ring.map((p) => p[0]);
+  const ys = ring.map((p) => p[1]);
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const z = f.z + over;
+  let hit = false;
+  const slabs = s.slabs
+    .filter((x) => x.floor === floor)
+    .map((x) => {
+      if (Math.abs(x.z - z) > 1e-3 || x.top === "g") return x;
+      const ox = x.outline.map((p) => p[0]);
+      const oy = x.outline.map((p) => p[1]);
+      if (Math.max(...ox) <= x0 || Math.min(...ox) >= x1 || Math.max(...oy) <= y0 || Math.min(...oy) >= y1) return x;
+      hit = true;
+      return {
+        ...x,
+        holes: [...x.holes, ring.map((p): XY => [Math.round(p[0] * 1000) / 1000, Math.round(p[1] * 1000) / 1000])],
+      };
+    });
+  if (!hit) return "no floor there";
+  return { op: "slabs", floor, slabs };
+}

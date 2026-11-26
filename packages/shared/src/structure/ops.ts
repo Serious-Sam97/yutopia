@@ -20,7 +20,9 @@ export type StructOp =
   /** the floors (their places, names, sizes), in order */
   | { op: "floors"; floors: Floor[] }
   /** the world's own: where people arrive, the core, the home floor */
-  | { op: "meta"; spawn?: XY; core?: XY | null; home?: number };
+  | { op: "meta"; spawn?: XY; core?: XY | null; home?: number }
+  /** (plan 130) a floor's layer, all of it as it is now (null: none) */
+  | { op: "layer"; name: string; floor: number; data: unknown };
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -32,6 +34,7 @@ export function applyOps(s: Structure, ops: StructOp[]): Structure {
   let rooms = s.rooms;
   let roofs = s.roofs ?? [];
   let floors = s.floors;
+  let layers = s.layers;
   let meta: Partial<Structure> = {};
   for (const o of ops) {
     if (o.op === "walls") {
@@ -59,12 +62,33 @@ export function applyOps(s: Structure, ops: StructOp[]): Structure {
       slabs = slabs.filter((x) => have.has(x.floor));
       rooms = rooms.filter((r) => have.has(r.floor));
       roofs = roofs.filter((r) => have.has(r.floor));
+      if (layers)
+        layers = Object.fromEntries(
+          Object.entries(layers).map(([n, by]) => [
+            n,
+            Object.fromEntries(Object.entries(by).filter(([f]) => have.has(Number(f)))),
+          ]),
+        );
+    } else if (o.op === "layer") {
+      const by = { ...(layers?.[o.name] ?? {}) };
+      if (o.data === null || o.data === undefined) delete by[String(o.floor)];
+      else by[String(o.floor)] = o.data;
+      layers = { ...(layers ?? {}), [o.name]: by };
     } else if (o.op === "meta") {
       const { op: _op, core, ...rest } = o;
       meta = { ...meta, ...rest, ...(core !== undefined ? { core: core ?? undefined } : {}) };
     }
   }
-  const out: Structure = { ...s, ...meta, walls, slabs, rooms, floors, ...(roofs.length || s.roofs ? { roofs } : {}) };
+  const out: Structure = {
+    ...s,
+    ...meta,
+    walls,
+    slabs,
+    rooms,
+    floors,
+    ...(roofs.length || s.roofs ? { roofs } : {}),
+    ...(layers ? { layers } : {}),
+  };
   if (out.core === undefined) delete out.core;
   return out;
 }
@@ -92,8 +116,12 @@ export function invertOps(s: Structure, ops: StructOp[]): StructOp[] {
           back.push({ op: "slabs", floor: i, slabs: at.slabs.filter((x) => x.floor === i) });
           back.push({ op: "rooms", floor: i, rooms: at.rooms.filter((r) => r.floor === i) });
           back.push({ op: "roofs", floor: i, roofs: (at.roofs ?? []).filter((r) => r.floor === i) });
+          for (const [n, by] of Object.entries(at.layers ?? {}))
+            if (by[String(i)] !== undefined) back.push({ op: "layer", name: n, floor: i, data: by[String(i)] });
         }
       }
+    } else if (o.op === "layer") {
+      back.push({ op: "layer", name: o.name, floor: o.floor, data: at.layers?.[o.name]?.[String(o.floor)] ?? null });
     } else if (o.op === "meta")
       back.push({
         op: "meta",
@@ -128,6 +156,11 @@ export function diffStructures(a: Structure, b: Structure): StructOp[] {
     const oa = (a.roofs ?? []).filter((r) => r.floor === f.index);
     const ob = (b.roofs ?? []).filter((r) => r.floor === f.index);
     if (!same(oa, ob)) ops.push({ op: "roofs", floor: f.index, roofs: ob });
+    for (const n of new Set([...Object.keys(a.layers ?? {}), ...Object.keys(b.layers ?? {})])) {
+      const la = a.layers?.[n]?.[String(f.index)];
+      const lb = b.layers?.[n]?.[String(f.index)];
+      if (!same(la ?? null, lb ?? null)) ops.push({ op: "layer", name: n, floor: f.index, data: lb ?? null });
+    }
   }
   const meta: StructOp & { op: "meta" } = { op: "meta" };
   if (!same(a.spawn, b.spawn)) meta.spawn = b.spawn;

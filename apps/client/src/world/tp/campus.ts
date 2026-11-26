@@ -8,6 +8,7 @@ import {
   lotLayout,
   type MapDef,
   openingCut,
+  openingCutOf,
   STOREY,
   WALL_H,
   type WallCut,
@@ -307,8 +308,8 @@ export function facadeWindows(
     const w = on ? walls.get(on.wall) : undefined;
     if (!on || !w || isArc(w)) continue;
     const L = wallLength(w) || 1;
-    const n = openingSpan(o.kind) / 2;
-    const [z0, z1] = openingCut(o.kind);
+    const n = openingSpan(o) / 2;
+    const [z0, z1] = openingCutOf(o);
     out.push({
       a: at(wallPoint(w, (on.at - n) / L)),
       b: at(wallPoint(w, (on.at + n) / L)),

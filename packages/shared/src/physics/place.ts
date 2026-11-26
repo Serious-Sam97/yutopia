@@ -10,6 +10,7 @@
 // height, its own walkable test (grounds.ts) — the land is ground, never in the way. With no Jolt
 // world at all yet (the browser's, the second before it's in) the floor's map says: its floor tiles
 // can be stood on, at its height.
+
 import { entry, footprint, quarterOf, type WorldObjectDef } from "../catalog.ts";
 import { FAM_CHAIRS } from "../fam/index.ts";
 import { isFreeThing, thingCorners } from "../free-things.ts";
@@ -18,6 +19,7 @@ import { BODY_R, chairAt, DESK_PULL, type Outdoors, outdoorsOf, type Seat, STEP,
 import { across, belowOf, elevOf, floorOf, objLevel, onLevel, spaceFloor } from "../levels.ts";
 import { isFloor, type MapDef, tileInMap } from "../map.ts";
 import { inRamp, type Ramp, rampHeight, type SlabUnder, stairsRamps, stairsRise, stairsWell } from "../stairs.ts";
+import { POOL_FREEBOARD, poolWaterAt } from "../structure/pools.ts";
 import { cellOf, floorAtPoint } from "../structure/query.ts";
 import { STOREY } from "../units.ts";
 import type { Through } from "./body.ts";
@@ -189,7 +191,8 @@ export class Place {
     // (its box from a step over its feet — what it steps up on isn't in its way — to its top; a small body's step
     // its own, so the box is never over it)
     const step = Math.min(STEP, h * 0.4);
-    if (this.through.mask === "all" && !world.fits(x, Y + step, y, r, h - step, "tops", this.through.pass)) return false;
+    if (this.through.mask === "all" && !world.fits(x, Y + step, y, r, h - step, "tops", this.through.pass))
+      return false;
     return world.groundUnder(x, Y + STEP, y, r, DEEP, "all") !== null;
   }
   /** What a body there stands on, its feet z over the floor (over it: within a step), the floor's. */
@@ -309,17 +312,27 @@ export function slabsOf(
     // (what holds a body up through walls — the floors' slabs, the stairs' treads, the land: not
     // what stands on them, a plant, a parked car)
     const top = Math.max(z, 0) + 0.3;
-    const bottom = Math.min(z, 0) - 0.6;
+    // (plan 130: a lot's ground storey on a foundation — its yard, the land, under it)
+    // (plan 130 phase 11: in a pool, down to its bottom)
+    const pw = poolWaterAt(p.x, p.y, l);
+    const bottom = Math.min(z, 0) - 0.6 - (spaceFloor(l)?.found ?? 0) - (pw ? pw.depth + POOL_FREEBOARD + 0.3 : 0);
     const g = world.groundUnder(p.x, elevOf(l) + top, p.y, 0.05, top - bottom, "clip");
     if (g === null) return false;
     const k = world.underKey() ?? "";
     if (k.startsWith(`slab:${l}:`)) return true;
+    // (plan 130: stairs built with the stair tool — their treads the floors' they join, as a staircase's are)
+    if (k.startsWith("flight:")) return true;
+    // (plan 130 phase 11: a pool's floor — its yard's)
+    if (k.startsWith(`pool:${l}:`)) return true;
     // (a town building's storey: its slab's where the land meets it — its floor at the land's, its ground storey
     // in its plot — plan 112)
     const sf = spaceFloor(l);
     if (sf) {
       const { x0, y0, w, h } = sf.grid;
       if (p.x > x0 && p.y > y0 && p.x < x0 + w && p.y < y0 + h && Math.abs(g - sf.z) < 0.08) return true;
+      // (plan 130: a lot's yard under its foundation — the land there is its ground storey's)
+      if (sf.found && p.x > x0 && p.y > y0 && p.x < x0 + w && p.y < y0 + h && Math.abs(g - (sf.z - sf.found)) < 0.08)
+        return true;
     }
     return k.startsWith("thing:") && isStairs(k.slice(6));
   };

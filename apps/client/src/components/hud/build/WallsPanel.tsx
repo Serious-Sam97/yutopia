@@ -1,6 +1,6 @@
 "use client";
 
-import { ROOF_PITCHES, WALL_HEIGHTS, WALL_THICKS, workingHeights } from "@yutopia/shared/structure";
+import { coverOf, ROOF_PITCHES, WALL_HEIGHTS, WALL_THICKS, workingHeights } from "@yutopia/shared/structure";
 import { Fragment } from "react";
 import { type Key, useTr } from "@/lib/i18n";
 import { hud, type PaintMode, useHud, type WallMode, type WallView } from "@/world/store";
@@ -46,6 +46,11 @@ export const MODES: [PaintMode, Key][] = [
   ["adjust", "buildAdjust"],
   ["fill", "buildFill"],
   ["erase", "buildErase"],
+  ["tile", "buildTile"],
+  ["half", "buildHalf"],
+  ["quarter", "buildQuarter"],
+  ["tri", "buildTri"],
+  ["hole", "buildHole"],
 ];
 export const MODE_HINT: Record<PaintMode, Key> = {
   line: "buildHintLine",
@@ -54,6 +59,11 @@ export const MODE_HINT: Record<PaintMode, Key> = {
   box: "buildHintBox",
   fill: "buildHintFill",
   erase: "buildHintErase",
+  tile: "buildHintTile",
+  half: "buildHintTile",
+  quarter: "buildHintTile",
+  tri: "buildHintTile",
+  hole: "buildHintHole",
 };
 
 // A short wall seen from the room's camera: front face lit, side in shade.
@@ -176,9 +186,15 @@ export const WALL_HINT: Record<WallMode, Key> = {
   floors: "wallHintFloors",
   roof: "wallHintRoof",
   select: "wallHintSelect",
+  found: "buildHintFound",
+  flights: "buildHintFlights",
 };
 export const matLabel = (m: string | null): string =>
-  m === "g" ? "Glass" : m === "h" ? "Half wall" : (WALL_SWATCHES.find((w) => w.ch === `w:${m}`)?.label ?? "");
+  m === "g"
+    ? "Glass"
+    : m === "h"
+      ? "Half wall"
+      : (WALL_SWATCHES.find((w) => w.ch === `w:${m}`)?.label ?? coverOf(m, "wall")?.label ?? "");
 
 const mode0 = (m: WallMode) => m;
 // new mezzanines' heights over the floor (m): a floor's own and the ones it has are offered too

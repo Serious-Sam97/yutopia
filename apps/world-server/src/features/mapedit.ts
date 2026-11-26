@@ -27,19 +27,27 @@ import {
 } from "@yutopia/shared";
 import {
   applyOps,
+  autoRoofDrafts,
+  columnsOf,
   floorPieces,
   footprintRows,
   freeCuts,
   movedOn,
   NEW_ROOM,
+  ON_ROOF,
   onOf,
   type PaintStretch,
+  ROOF_KINDS,
+  type Roof,
+  type RoofDraft,
+  roofSetOps,
   roofsEdit,
   roomStretches,
   roomsAfterWalls,
   SLABS_AT_ONCE,
   type Structure,
   slabsEdit,
+  supportEditWhy,
   viewOf,
   WALLS_AT_ONCE,
   wallsEdit,
@@ -135,6 +143,8 @@ registerFeature((room: WorldRoom) => {
       bow: d?.bow == null ? undefined : Number(d.bow),
       thick: d?.thick == null ? undefined : Number(d.thick),
       over: d?.over == null ? undefined : Number(d.over),
+      // (plan 130: a fence's, a rail's style)
+      style: typeof d?.style === "string" ? d.style.slice(0, 20) : undefined,
     }));
     const set = (Array.isArray(m?.set) ? m.set : []).slice(0, WALLS_AT_ONCE).map((c: Record<string, unknown>) => ({
       id: String(c?.id ?? ""),
@@ -142,6 +152,7 @@ registerFeature((room: WorldRoom) => {
       thick: c?.thick == null ? undefined : Number(c.thick),
       front: c?.front == null ? undefined : String(c.front),
       back: c?.back == null ? undefined : String(c.back),
+      trim: Array.isArray(c?.trim) ? (c.trim as unknown[]).slice(0, 4).map(String) : undefined,
     }));
     const remove = (Array.isArray(m?.remove) ? m.remove : []).slice(0, WALLS_AT_ONCE).map(String);
     if (!add.length && !remove.length && !set.length) return;
@@ -161,6 +172,9 @@ registerFeature((room: WorldRoom) => {
     const walled = applyOps(room.structure, [r.op]);
     const rooms = roomsAfterWalls(room.structure, walled, level, roomKeys());
     const ops = rooms ? [r.op, rooms.op] : [r.op];
+    // (an upper storey's walls over something on the storey under them; a wall holding one up stays — the quality pass)
+    const held = supportEditWhy(room.structure, level, ops, (f) => columnsOf(objects(), f));
+    if (held) return warn(client, `That wall can't go: ${held}.`);
     const why = room.lockBreak(p, viewOf(rooms ? applyOps(walled, [rooms.op]) : walled), [], level);
     if (why) return warn(client, `${why}.`);
     room.applyStruct(ops);
@@ -259,6 +273,9 @@ registerFeature((room: WorldRoom) => {
     const remove = (Array.isArray(m?.remove) ? m.remove : []).slice(0, SLABS_AT_ONCE).map(String);
     const r = slabsEdit(room.structure, level, add, remove, newSlabId);
     if ("why" in r) return warn(client, `That floor can't go: ${r.why}.`);
+    // (an upper storey's floor over something on the storey under it — the quality pass)
+    const held = supportEditWhy(room.structure, level, [r.op], (f) => columnsOf(objects(), f));
+    if (held) return warn(client, `That floor can't go: ${held}.`);
     const why = room.lockBreak(p, viewOf(applyOps(room.structure, [r.op])), [], level);
     if (why) return warn(client, `${why}.`);
     room.applyStruct([r.op]);
@@ -272,7 +289,7 @@ registerFeature((room: WorldRoom) => {
     const level = floor(m, client);
     const p = room.state.players.get(client.sessionId);
     if (!builder(client) || level === null || !p) return;
-    const add = (Array.isArray(m?.add) ? m.add : []).slice(0, 16).map((d: Record<string, unknown>) => ({
+    const add: RoofDraft[] = (Array.isArray(m?.add) ? m.add : []).slice(0, 16).map((d: Record<string, unknown>) => ({
       outline: (Array.isArray(d?.outline) ? d.outline : [])
         .slice(0, 256)
         .map((q: unknown) =>
@@ -280,11 +297,47 @@ registerFeature((room: WorldRoom) => {
             ? ([Number(q[0]), Number(q[1])] as [number, number])
             : ([Number.NaN, Number.NaN] as [number, number]),
         ),
-      kind: (["flat", "gable", "hip"].includes(String(d?.kind)) ? d.kind : "flat") as "flat" | "gable" | "hip",
+      kind: ((ROOF_KINDS as readonly string[]).includes(String(d?.kind)) ? d.kind : "flat") as Roof["kind"],
       pitch: d?.pitch == null ? undefined : Number(d.pitch),
       ridge: d?.ridge === 1 ? (1 as const) : (0 as const),
+      ...(d?.over == null ? {} : { over: Number(d.over) }),
+      ...(typeof d?.mat === "string" ? { mat: d.mat } : {}),
+      ...(d?.z == null ? {} : { z: Number(d.z) }),
+      ...(d?.top == null ? {} : { top: Number(d.top) }),
     }));
-    const remove = (Array.isArray(m?.remove) ? m.remove : []).slice(0, 16).map(String);
+    let remove = (Array.isArray(m?.remove) ? m.remove : []).slice(0, 16).map(String);
+    // (plan 130 phase 7) a roof changed where it is
+    if (m?.set && typeof m.set === "object") {
+      const c = m.set as Record<string, unknown>;
+      const num = (v: unknown) => (v == null ? undefined : Number(v));
+      const op = roofSetOps(room.structure, level, String(c.id), {
+        kind: typeof c.kind === "string" ? (c.kind as Roof["kind"]) : undefined,
+        pitch: num(c.pitch),
+        over: num(c.over),
+        mat: typeof c.mat === "string" ? c.mat : undefined,
+        z: num(c.z),
+        ridge: c.ridge === 1 ? 1 : c.ridge === 0 ? 0 : undefined,
+      });
+      if (typeof op === "string") return warn(client, `That roof can't change: ${op}.`);
+      return room.applyStruct([op]);
+    }
+    // (plan 130 phase 7) Auto Roof: the floor's roofs made again over its rooms, its dormers and chimneys kept
+    if (m?.auto && typeof m.auto === "object") {
+      const a = m.auto as Record<string, unknown>;
+      const kind = ((ROOF_KINDS as readonly string[]).includes(String(a.kind)) ? a.kind : "gable") as Roof["kind"];
+      if (ON_ROOF.has(kind)) return warn(client, "Auto Roof makes roofs.");
+      const drafts = autoRoofDrafts(room.structure, level, kind, a.pitch == null ? 30 : Number(a.pitch), {
+        ...(a.over == null ? {} : { over: Number(a.over) }),
+        ...(typeof a.mat === "string" ? { mat: a.mat } : {}),
+      });
+      if (!drafts.length) return warn(client, "No rooms on this floor to roof.");
+      const old = (room.structure.roofs ?? [])
+        .filter((q) => q.floor === level && !ON_ROOF.has(q.kind))
+        .map((q) => q.id);
+      add.splice(0, add.length, ...drafts.slice(0, Math.max(1, 16 - old.length)));
+      remove = old;
+      if (add.length + remove.length > 16) remove = remove.slice(0, 16 - add.length);
+    }
     const r = roofsEdit(
       room.structure,
       level,

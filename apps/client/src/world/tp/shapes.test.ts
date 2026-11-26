@@ -44,6 +44,31 @@ const SOFT = new Set<string>([
   // board's lanterns and the daises' rails stand on its border, walked past)
   "chess_table",
   "wizard_chess",
+  // (plan 130: a column's capital, a log post's bands, a pergola post's beams over heads; a fireplace's hearth walked
+  // onto, its mantel, a stove's flue; the yard's roofs walked under — only their posts solid; a climber's leaves)
+  "ionic_column",
+  "log_post",
+  "pergola_post",
+  "fp_brick",
+  "fp_stone",
+  "fp_marble",
+  "fp_modern",
+  "fp_stove",
+  "fp_victorian",
+  "corinthian_column",
+  "baluster_rail",
+  "fp_corner",
+  "fp_rustic",
+  "fp_tiled",
+  "pergola_cedar",
+  "pergola_white",
+  "pergola_louvre",
+  "porch_roof",
+  "gazebo",
+  "pavilion",
+  "garden_arbor",
+  "carport",
+  "trellis",
 ]);
 
 function solidsBounds(ss: Solid3[]): Bounds3 | null {

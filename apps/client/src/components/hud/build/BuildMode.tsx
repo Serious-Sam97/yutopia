@@ -1,7 +1,7 @@
 "use client";
 
-import { spaceFloor } from "@yutopia/shared";
-import { wallLength, workingHeights } from "@yutopia/shared/structure";
+import { homeKeyOf, isHomeSpace, lotWhy, STOREY_RISES, type StoreyRise, spaceFloor } from "@yutopia/shared";
+import { coverOf, WALL_STYLES, WALL_TRIMS, wallLength, workingHeights } from "@yutopia/shared/structure";
 import { useEffect, useRef, useState } from "react";
 import { yutopia } from "@/lib/api";
 import { addStrings, type Key, tr, trMaybe, useTr } from "@/lib/i18n";
@@ -52,6 +52,17 @@ addStrings(
     bvFloorUp: ["Up a floor (PgUp)", "Subir um andar (PgUp)"],
     bvFloorDown: ["Down a floor (PgDn)", "Descer um andar (PgDn)"],
     bvFloorMore: ["Floors", "Andares"],
+    // (plan 130) a wall's trims
+    bvTrims: ["Trims", "Acabamentos"],
+    bvTrim_base: ["Skirting", "Rodapé"],
+    bvTrim_chair: ["Chair rail", "Meia-parede"],
+    bvTrim_crown: ["Crown", "Sanca"],
+    bvTrim_frieze: ["Frieze", "Friso"],
+    // (plan 130) a home lot's storeys
+    bvStoreyUp: ["A storey on top", "Um andar em cima"],
+    bvBasement: ["Dig a basement", "Cavar um porão"],
+    bvStoreyRemove: ["Take this storey away", "Remover este andar"],
+    bvStoreyRemoveAsk: ["Take this storey away, and everything on it?", "Remover este andar, e tudo nele?"],
   },
   "yutopia-build",
 );
@@ -72,10 +83,19 @@ export function BuildMode() {
   const floor = useHud((s) => s.floor);
   const isAdmin = useHud((s) => s.isAdmin);
   useEffect(() => {
-    if (!b.on || isAdmin || !spaceFloor(floor)) return;
+    const sp = spaceFloor(floor);
+    if (!b.on || isAdmin || !sp) return;
+    // (plan 130: a home lot's — its owner's and their roommates')
+    if (isHomeSpace(sp.space)) {
+      const why = w?.structure ? lotWhy(w.structure, floor, { uid: w.myUid(), admin: false }) : null;
+      if (!why) return;
+      hud.set((s) => ({ build: { ...s.build, on: false } }));
+      toast(`${why[0].toUpperCase()}${why.slice(1)}.`, "warn");
+      return;
+    }
     hud.set((s) => ({ build: { ...s.build, on: false } }));
     toast(tr("spaceAdminsOnly"), "warn");
-  }, [b.on, floor, isAdmin]);
+  }, [b.on, floor, isAdmin, w]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: redraw the ghost when the tool changes
   useEffect(() => {
     w?.refreshGhost();
@@ -284,6 +304,7 @@ function FloorStepper() {
   const floor = useHud((s) => s.floor);
   const floors = useHud((s) => s.floors);
   const [open, setOpen] = useState(false);
+  const [rise, setRise] = useState<StoreyRise>("normal");
   const step = (up: boolean) => {
     const i = floors.indexOf(floor) + (up ? 1 : -1);
     if (i < 0 || i >= floors.length) return;
@@ -317,6 +338,9 @@ function FloorStepper() {
   const top = floors[floors.length - 1];
   const home = w.building ? (w.building.floor ?? 0) : 0;
   const inSpace = !!spaceFloor(floor);
+  // (plan 130: a home lot's storeys — one on top, a basement under, the top or the lowest taken away)
+  const sp = spaceFloor(floor);
+  const lotKey = sp && isHomeSpace(sp.space) ? homeKeyOf(sp.space) : null;
   const name = w.floorName(floor);
   return (
     <div className="relative flex items-center gap-1.5">
@@ -375,6 +399,58 @@ function FloorStepper() {
               <span className="truncate">{w.floorName(f)}</span>
             </button>
           ))}
+          {lotKey && (
+            <>
+              <fieldset className="flex gap-1 px-1 pt-1 border-0 m-0" aria-label="storey height">
+                {(["short", "normal", "tall"] as const).map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    className={`gl-btn gl-sm flex-1 ${rise === r ? "gl-on" : ""}`}
+                    onClick={() => setRise(r)}
+                  >
+                    {STOREY_RISES[r].toFixed(1)} m
+                  </button>
+                ))}
+              </fieldset>
+              <button
+                type="button"
+                className="gl-btn gl-sm !justify-start"
+                data-testid="lot-storey-up"
+                onClick={() => {
+                  setOpen(false);
+                  w.send("lot:storey", { key: lotKey, dir: "up", rise });
+                }}
+              >
+                <Icon name="plus" size={14} /> {bv("bvStoreyUp")}
+              </button>
+              <button
+                type="button"
+                className="gl-btn gl-sm !justify-start"
+                data-testid="lot-storey-down"
+                onClick={() => {
+                  setOpen(false);
+                  w.send("lot:storey", { key: lotKey, dir: "down", rise });
+                }}
+              >
+                <Icon name="plus" size={14} /> {bv("bvBasement")}
+              </button>
+              {(floor === top || floor === floors[0]) && spaceFloor(floor)?.storey !== 0 && (
+                <button
+                  type="button"
+                  className="gl-btn gl-sm gl-bad !justify-start"
+                  onClick={() => {
+                    setOpen(false);
+                    void ask(bv("bvStoreyRemoveAsk"), true).then(
+                      (ok) => ok && w.send("lot:storey:remove", { key: lotKey, level: floor }),
+                    );
+                  }}
+                >
+                  <Icon name="bin" size={14} /> {bv("bvStoreyRemove")}
+                </button>
+              )}
+            </>
+          )}
           {!inSpace && (
             <button
               type="button"
@@ -665,7 +741,7 @@ function WallTagChip() {
     square: "snapSquare",
   };
   const swatch = (m: string | null) => {
-    const c = WALL_SWATCHES.find((s) => s.ch === `w:${m}`)?.face;
+    const c = WALL_SWATCHES.find((s) => s.ch === `w:${m}`)?.face ?? coverOf(m, "wall")?.tint;
     return c ? (
       <span className="inline-block w-2.5 h-2.5 rounded-sm align-[-1px] mr-1" style={{ background: c }} />
     ) : null;
@@ -774,11 +850,36 @@ function FreeWallInspector() {
   }, [w]);
   const wall = w?.build?.freeWall(id ?? null);
   if (!wall) return null;
-  const faced = /^[pwfbk]$/.test(wall.front);
-  const kind = wall.front === "g" ? t("wallGlass") : wall.front === "h" ? t("wallHalf") : t("wallInspect");
+  const faced = /^[pwfbk]$/.test(wall.front) && !wall.style;
+  const kind = wall.style
+    ? (WALL_STYLES[wall.style]?.label ?? t("wallInspect"))
+    : wall.front === "g"
+      ? t("wallGlass")
+      : wall.front === "h"
+        ? t("wallHalf")
+        : t("wallInspect");
+  // (plan 130: its trims, each on or off)
+  const trims = wall.trim ?? [];
+  const trim = (k: string) => (
+    <button
+      key={k}
+      type="button"
+      className="mono text-[11px] uppercase tracking-wide px-2 h-7 rounded-md"
+      aria-pressed={trims.includes(k)}
+      data-testid={`wall-trim-${k}`}
+      style={{
+        border: "1px solid var(--edge)",
+        background: trims.includes(k) ? "var(--glass-accent, #2a84dc)" : "transparent",
+        color: trims.includes(k) ? "#fff" : "var(--cream)",
+      }}
+      onClick={() => w?.build?.wallTrim(k)}
+    >
+      {bv(`bvTrim_${k}`)}
+    </button>
+  );
   const len = wallLength(wall);
   const face = (m: string, label: Key) => {
-    const c = WALL_SWATCHES.find((s) => s.ch === `w:${m}`)?.face;
+    const c = WALL_SWATCHES.find((s) => s.ch === `w:${m}`)?.face ?? coverOf(m, "wall")?.tint;
     return (
       <div className="flex items-center gap-2 text-[12px]">
         <span
@@ -814,8 +915,13 @@ function FreeWallInspector() {
           {`${len.toFixed(2)} m`} · {t("wallHigh").replace("{h}", wall.height.toFixed(2))} ·{" "}
           {t("wallThickTag").replace("{t}", String(wall.thick ?? 0.2))}
         </div>
-        {face(wall.front, "wallThisSide")}
-        {face(wall.back ?? wall.front, "wallOtherSide")}
+        {!wall.style && face(wall.front, "wallThisSide")}
+        {!wall.style && face(wall.back ?? wall.front, "wallOtherSide")}
+        {!wall.style && (
+          <div className="flex flex-wrap gap-1" aria-label={bv("bvTrims")}>
+            {WALL_TRIMS.map(trim)}
+          </div>
+        )}
         <div className="flex flex-wrap gap-1.5">
           {faced && act("wallSame", "same")}
           {faced && act("wallSwap", "swap")}

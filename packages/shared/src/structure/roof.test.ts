@@ -103,3 +103,92 @@ test("a hip on a square comes to a point; a flat one is a lid; Jolt has a lid at
   const lid = [...b.statics.entries()].filter(([k]) => k.startsWith("roof:3:")).flatMap(([, v]) => v.solids);
   assert.ok(lid.some((q) => q.t === "box" && Math.abs(q.x - 24) <= q.hx + 1e-6 && Math.abs(q.z - 12) <= q.hz + 1e-6));
 });
+
+// plan 130 phase 7: the new kinds, Auto Roof, dormers and chimneys, a roof changed
+import { autoRoofRects, onRoofDraft, ROOF_KINDS, roofHeightAt, roofSetOps } from "./roof.ts";
+import type { Roof, Structure } from "./types.ts";
+
+test("every kind draws finite faces over a rectangle, none below its eaves' overhang", () => {
+  for (const kind of ROOF_KINDS) {
+    const r: Roof = {
+      id: "k",
+      floor: 3,
+      outline: box,
+      z: 10,
+      kind,
+      pitch: 30,
+      ...(kind === "chimney" ? { top: 13 } : {}),
+    };
+    const fs = roofFaces(r);
+    assert.ok(fs.length > 0, kind);
+    for (const f of fs)
+      for (const p of f.pts) assert.ok(p.every(Number.isFinite) && p[2] > 9 && p[2] < 16, `${kind} ${p}`);
+    if (kind !== "dormer" && kind !== "chimney") assert.ok((roofHeightAt(r, 24, 12) ?? 0) > 10, kind);
+  }
+});
+
+test("Auto Roof: an L is two crossing rectangles covering it", () => {
+  const L = [
+    [0, 0],
+    [10, 0],
+    [10, 4],
+    [4, 4],
+    [4, 10],
+    [0, 10],
+  ] as XY[];
+  const st = { rooms: [{ key: "a", floor: 1, outline: L }] } as unknown as Structure;
+  const rs = autoRoofRects(st, 1);
+  assert.equal(rs.length, 2);
+  const inR = (o: XY[], x: number, y: number) => x > o[0][0] && x < o[2][0] && y > o[0][1] && y < o[2][1];
+  for (const [x, y] of [
+    [1, 1],
+    [9, 3],
+    [2, 9],
+  ])
+    assert.ok(
+      rs.some((o) => inR(o, x, y)),
+      `${x},${y}`,
+    );
+});
+
+test("a dormer faces the nearer eave on a gable; a chimney goes past the ridge", () => {
+  const g: Roof = { id: "g", floor: 3, outline: box, z: 10, kind: "gable", pitch: 30 };
+  const st = { roofs: [g] } as Pick<Structure, "roofs">;
+  const d = onRoofDraft(st, 3, "dormer", 24, 11);
+  assert.ok(typeof d !== "string");
+  // (its front, the first edge, lower down the slope than its back)
+  const fy = (d.outline[0][1] + d.outline[1][1]) / 2;
+  const by = (d.outline[2][1] + d.outline[3][1]) / 2;
+  assert.ok(fy < by);
+  const c = onRoofDraft(st, 3, "chimney", 24, 12.5);
+  assert.ok(typeof c !== "string" && (c.top ?? 0) > 10 + 2 * Math.tan(Math.PI / 6));
+  assert.equal(typeof onRoofDraft(st, 3, "dormer", 50, 50), "string");
+});
+
+test("a roof changed in place keeps its id; a bad change says why", () => {
+  const g: Roof = { id: "g", floor: 3, outline: box, z: 10, kind: "gable", pitch: 30 };
+  const st = { roofs: [g] } as Structure;
+  const op = roofSetOps(st, 3, "g", { kind: "gambrel", mat: "clay", over: 0.6 });
+  assert.ok(typeof op !== "string" && op.op === "roofs");
+  assert.deepEqual(op.roofs[0], { ...g, kind: "gambrel", mat: "clay", over: 0.6 });
+  assert.equal(typeof roofSetOps(st, 3, "g", { pitch: 80 }), "string");
+  assert.equal(typeof roofSetOps(st, 3, "g", { mat: "gold" }), "string");
+});
+
+test("a chimney's stack is small but a roof's piece all the same", () => {
+  const g: Roof = { id: "g", floor: 3, outline: box, z: 10, kind: "gable", pitch: 30 };
+  const c = onRoofDraft({ roofs: [g] }, 3, "chimney", 24, 12.5);
+  assert.ok(typeof c !== "string");
+  assert.equal(roofWhy(s, 3, c), null);
+});
+
+test("a dormer sits down again when its roof changes", () => {
+  const g: Roof = { id: "g", floor: 3, outline: box, z: 10, kind: "gable", pitch: 30 };
+  const d = onRoofDraft({ roofs: [g] }, 3, "dormer", 24, 11);
+  assert.ok(typeof d !== "string");
+  const dormer: Roof = { id: "d", floor: 3, kind: "dormer", pitch: 30, outline: d.outline, z: d.z ?? 0 };
+  const op = roofSetOps({ roofs: [g, dormer] } as Structure, 3, "g", { pitch: 45 });
+  assert.ok(typeof op !== "string" && op.op === "roofs");
+  const after = op.roofs.find((r) => r.id === "d");
+  assert.ok(after && after.z > dormer.z + 0.05, `${after?.z} vs ${dormer.z}`);
+});

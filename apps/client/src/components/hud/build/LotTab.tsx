@@ -1,10 +1,11 @@
 "use client";
 
-import { DECOR, entry, TEXT_DEFAULT } from "@yutopia/shared";
+import { DECOR, entry, lotOf, lotOfFloor, TEXT_DEFAULT } from "@yutopia/shared";
 import { addStrings, trMaybe, useTr } from "@/lib/i18n";
 import { hud, useHud } from "@/world/store";
 import { useWorld } from "../ctx";
 import { Icon, type IconName } from "../icons";
+import { BlueprintsPanel } from "./BlueprintsPanel";
 import type { Member } from "./BuildMode";
 import { FABRICS, ItemCard, Layouts, Setups } from "./Catalog";
 import { DesksPanel } from "./DesksPanel";
@@ -23,6 +24,12 @@ addStrings(
     bvLot_setups: ["My setups", "Meus conjuntos"],
     bvLot_desks: ["Desks", "Mesas"],
     bvLot_map: ["The floor", "O andar"],
+    bvLot_mine: ["My lot", "Meu terreno"],
+    bvLot_blueprints: ["Blueprints", "Plantas"],
+    bvLotHint_blueprints: [
+      "Save the house on your lot as a blueprint, and build it again on an empty lot of yours. Your own saves only.",
+      "Salve a casa do seu terreno como planta e construa de novo num terreno vazio seu. Só as suas.",
+    ],
     bvLotHint_layouts: [
       "Furnish the room you're standing in from a plan — Undo puts it back.",
       "Mobilie o cômodo onde você está com um plano — Desfazer volta.",
@@ -56,6 +63,7 @@ const lw = (k: string) => trMaybe(k) ?? k;
 const PARTS: { key: LotPart; icon: IconName }[] = [
   { key: "layouts", icon: "home" },
   { key: "setups", icon: "pin" },
+  { key: "blueprints", icon: "blueprint" },
   { key: "desks", icon: "tag" },
   { key: "map", icon: "map" },
 ];
@@ -63,6 +71,10 @@ const PARTS: { key: LotPart; icon: IconName }[] = [
 export function LotColumn({ lot }: { lot: LotPart }) {
   const t = useTr();
   const w = useWorld();
+  useHud((s) => s.mapVersion);
+  // (the lot I stand on if I build there, else mine)
+  const here = w?.structure ? lotOfFloor(w.structure, w.level) : null;
+  const myLot = here ?? (w?.structure ? lotOf(w.structure, w.myUid()) : null);
   return (
     <div className="flex flex-col gap-1.5 p-3 min-w-0" style={{ borderRight: "1px solid var(--glass-hair)" }}>
       <span className="gl-lab">{t("buildMode")}</span>
@@ -83,6 +95,18 @@ export function LotColumn({ lot }: { lot: LotPart }) {
           {lw(`bvLot_${p.key}`)}
         </button>
       ))}
+      {/* (plan 130) my home lot's card: roommates, storeys, going there, giving it back */}
+      {myLot && (
+        <button
+          type="button"
+          className="gl-btn !justify-start !h-[38px]"
+          data-testid="lot-part-mine"
+          onClick={() => hud.set({ panel: { kind: "lot", objectId: myLot } })}
+        >
+          <Icon name="home" size={18} />
+          {lw("bvLot_mine")}
+        </button>
+      )}
     </div>
   );
 }
@@ -92,6 +116,7 @@ export function LotMain({ lot, members }: { lot: LotPart; members: Member[] }) {
     <div className="flex flex-col min-h-0 min-w-0 overflow-y-auto gl-scroll py-2.5 px-3.5">
       {lot === "layouts" && <Layouts />}
       {lot === "setups" && <Setups />}
+      {lot === "blueprints" && <BlueprintsPanel />}
       {lot === "desks" && <DesksPanel members={members} />}
       {lot === "map" && <MapPanel />}
     </div>

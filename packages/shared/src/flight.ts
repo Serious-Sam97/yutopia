@@ -9,7 +9,8 @@ export const FLIGHT_RISE = 1.75;
 /** A flight's rise (m): its own (props.rise, 0.5–2.5), else the usual. */
 export const flightRise = (o: { props?: Record<string, unknown> | null }): number => {
   const r = Number(o.props?.rise);
-  return Number.isFinite(r) && r >= 0.5 && r <= 2.5 ? r : FLIGHT_RISE;
+  // (plan 130: steps up to a foundation — a quarter metre up)
+  return Number.isFinite(r) && r >= 0.2 && r <= 2.5 ? r : FLIGHT_RISE;
 };
 
 /** Its steps, along v from its foot to its top, `rise` up: as many as keep each under 0.2 m, each a

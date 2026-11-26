@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AnimalTrustController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BiosController;
 use App\Http\Controllers\DarkController;
@@ -9,7 +10,6 @@ use App\Http\Controllers\GamesController;
 use App\Http\Controllers\GroundsController;
 use App\Http\Controllers\InternalController;
 use App\Http\Controllers\InviteController;
-use App\Http\Controllers\AnimalTrustController;
 use App\Http\Controllers\NpcBondsController;
 use App\Http\Controllers\NpcsController;
 use App\Http\Controllers\PerfController;
@@ -46,6 +46,10 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::get('/setups', [WorldController::class, 'setups']);
     Route::post('/setups', [WorldController::class, 'saveSetup'])->middleware('throttle:30,1,setups');
     Route::delete('/setups/{setupId}', [WorldController::class, 'deleteSetup'])->whereNumber('setupId');
+    // (plan 130 phase 12) house blueprints: a person's own
+    Route::get('/blueprints', [WorldController::class, 'blueprints']);
+    Route::post('/blueprints', [WorldController::class, 'saveBlueprint'])->middleware('throttle:20,1,blueprints');
+    Route::delete('/blueprints/{blueprintId}', [WorldController::class, 'deleteBlueprint'])->whereNumber('blueprintId');
     Route::get('/members', [WorldController::class, 'members']);
 
     // VortexOS on the computers: sign in with Yutopia (a one-time code its backend redeems)

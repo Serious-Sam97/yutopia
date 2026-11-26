@@ -23,10 +23,11 @@ import type { WorldController } from "../controller";
 import { layDraft, layings, onPublished, publishedEdits, recheckEdits } from "../grounds-load";
 import { GOD_READY, GOD_TOOLS, type GodDraftRow, type GodHud, type GodTool, hud, toast } from "../store";
 import type { GodInput, ThirdPersonView } from "../tp/view";
+import { AnimalsTool } from "./animals";
 import { BridgesTool } from "./bridges";
 import { BuildingsTool } from "./buildings";
 import { GrowTool } from "./grow";
-import { AnimalsTool } from "./animals";
+import { LotsTool } from "./lots";
 import { NpcsTool } from "./npcs";
 import { BrushRing } from "./ring";
 import { RoadsTool } from "./roads";
@@ -140,6 +141,9 @@ export class GodController {
   private npcDrag: number | null = null;
   // the bridges (docs/plan/109: ./bridges.ts), and the pointer dragging an end of one
   private bridges: BridgesTool | null = null;
+  // (plan 130) the home lots, and the pointer dragging one
+  private lots: LotsTool | null = null;
+  private lotDrag: number | null = null;
   private bridgeDrag: number | null = null;
   // the grow tool (plan 69's phase 10: ./grow.ts), and the pointer drawing a piece (where it went
   // down: a click or a drag)
@@ -240,6 +244,8 @@ export class GodController {
     this.npcDrag = null;
     this.bridges?.dispose();
     this.bridges = null;
+    this.lots?.dispose();
+    this.lots = null;
     this.vehicleDrag = null;
     this.grow?.dispose();
     this.grow = null;
@@ -357,6 +363,8 @@ export class GodController {
       else this.things?.hide();
       if (tool === "buildings") this.buildingsTool()?.frame(this.under, f);
       else this.buildings?.hide();
+      if (tool === "lots") this.lotsTool()?.frame(this.under, f);
+      else this.lots?.hide();
     }
     if (tool === "grow") this.growTool()?.frame(this.under, f);
     else this.grow?.hide();
@@ -539,6 +547,17 @@ export class GodController {
         return true;
       }
     }
+    // (plan 130) the lots tool: Delete takes the picked lot away, Esc lets it go
+    if (hud.get().god.tool === "lots" && this.lots && !hud.get().god.publish && !e.repeat && hud.get().god.lots.sel) {
+      if (e.key === "Delete" || e.key === "Backspace") {
+        this.lots.removePicked();
+        return true;
+      }
+      if (e.key === "Escape") {
+        hud.set({ god: { ...hud.get().god, lots: { ...hud.get().god.lots, sel: null, signing: false } } });
+        return true;
+      }
+    }
     // the bridges tool: Delete takes the picked one away, Esc lets a stretch being laid (or the picked one) go
     const brt = hud.get().god.tool === "bridges" ? this.bridges : null;
     if (brt && !hud.get().god.publish && !e.repeat) {
@@ -629,6 +648,7 @@ export class GodController {
     else if (k === "b") this.setTool("bridges");
     else if (k === "n") this.setTool("npcs");
     else if (k === "j") this.setTool("animals");
+    else if (k === "h") this.setTool("lots");
     else this.keys.add(e.code);
     return true;
   }
@@ -669,6 +689,10 @@ export class GodController {
       }
       if (tool === "buildings" && e.button === 0 && !touches && this.buildingsTool()?.down(this.landAt(e))) {
         this.buildingDrag = e.pointerId;
+        return;
+      }
+      if (tool === "lots" && e.button === 0 && !touches && this.lotsTool()?.down(this.landAt(e))) {
+        this.lotDrag = e.pointerId;
         return;
       }
       // the bridges tool: an end of a bridge grabbed to drag (Edit's; else a click)
@@ -744,6 +768,7 @@ export class GodController {
       if (this.roadDrag === e.pointerId) return this.roads?.move(this.landAt(e));
       if (this.thingDrag === e.pointerId) return this.things?.move(this.landAt(e));
       if (this.buildingDrag === e.pointerId) return this.buildings?.move(this.landAt(e));
+      if (this.lotDrag === e.pointerId) return this.lots?.move(this.landAt(e));
       if (this.vehicleDrag === e.pointerId) return this.vehicles?.move(this.landAt(e));
       if (this.npcDrag === e.pointerId) return this.npcs?.move(this.npcs.spotAt(e.clientX, e.clientY));
       if (this.bridgeDrag === e.pointerId) return this.bridges?.move(this.landAt(e));
@@ -793,6 +818,11 @@ export class GodController {
       if (this.buildingDrag === e.pointerId) {
         this.buildingDrag = null;
         this.buildings?.up(this.landAt(e), false);
+        return;
+      }
+      if (this.lotDrag === e.pointerId) {
+        this.lotDrag = null;
+        this.lots?.up(this.landAt(e), false);
         return;
       }
       if (this.vehicleDrag === e.pointerId) {
@@ -847,6 +877,7 @@ export class GodController {
         else if (tool === "bridges") this.bridgesTool()?.up(this.landAt(e), true);
         else if (tool === "things") this.thingsTool()?.up(this.landAt(e), true, e);
         else if (tool === "buildings") this.buildingsTool()?.up(this.landAt(e), true);
+        else if (tool === "lots" && this.lotDrag === null) this.lotsTool()?.up(this.landAt(e), true);
         else if (tool === "vehicles") {
           this.vehicles?.deselect();
           this.vehiclesTool()?.place(this.landAt(e));
@@ -1122,6 +1153,13 @@ export class GodController {
     if (!sel?.away) return;
     this.w.send("god:car-home", { id: sel.key });
     this.set({ vehicles: { ...hud.get().god.vehicles, sel: { ...sel, away: false } } });
+  }
+  /** (plan 130) The home lots tool (made the first time it's needed). */
+  lotsTool(): LotsTool | null {
+    const tp = this.w.tp;
+    if (!this.lots && tp)
+      this.lots = new LotsTool({ draft: () => this.draftNow(), change: (next) => this.change(next) }, tp.scene);
+    return this.lots;
   }
   /** The buildings tool (made the first time it's needed). */
   buildingsTool(): BuildingsTool | null {

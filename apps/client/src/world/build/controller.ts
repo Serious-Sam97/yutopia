@@ -21,10 +21,13 @@ import {
   isDoorKind,
   isFreeThing,
   isOpening,
+  isWindowKind,
   lifted,
   liftRect,
   lockedEdge,
   type MapDef,
+  OPENING_LIMITS,
+  openingCut,
   openingEdges,
   openingNear,
   type Point,
@@ -34,6 +37,7 @@ import {
   quarterOf,
   quarterYaw,
   type Ray,
+  riseOf,
   type ServerMessages,
   surfaceAt,
   takenId,
@@ -49,12 +53,16 @@ import {
   wallTakes,
 } from "@yutopia/shared";
 import {
+  coverOf,
   FACE_PAINTS,
   freeOpeningWhy,
   frontNormal,
   isArc,
+  isCover,
   openingAlong,
+  openingOutside,
   placeOnWall,
+  type Roof,
   roomStretches,
   stopOnDeckWhy,
   stretchAt,
@@ -62,7 +70,7 @@ import {
   wallPoints,
   workingHeights,
 } from "@yutopia/shared/structure";
-
+import { ask } from "@/components/hud/build/Dialogs";
 import type { SetupItem } from "@/lib/api";
 import { tr, trMaybe } from "@/lib/i18n";
 import { C } from "../art/palette";
@@ -70,10 +78,14 @@ import type { WorldController } from "../controller";
 import type { Outline, Pick, SegGhost } from "../model";
 import { hud, toast, type WallTag, type WallView } from "../store";
 import { BuildCam } from "./camera";
+import { FlightTool } from "./flighttool";
+import { FoundTool } from "./foundtool";
 import { FreeFloors, FreeRoofs } from "./freefloors";
 import { FreeWalls } from "./freewalls";
+import { altHeld, HouseTools } from "./house";
 import { buildMusic } from "./music";
 import { buildSound } from "./sounds";
+import { TileBrushTool } from "./tilebrush";
 
 // Marks this chunk for `pnpm budget` (build mode loads on demand).
 export const BUILD_CHUNK = "yutopia-build";
@@ -141,11 +153,88 @@ export class BuildController {
   hoverPick: Pick | null = null;
   // Floors: drawn free (plan 72 phase 11.7)
   private floors = new FreeFloors({
+    things: () => this.w.objs.values(),
     structure: () => this.w.structure,
     level: () => this.w.level,
     send: (m) => this.send("struct:slabs", m),
     show: (polys, marks) => this.model?.setPolyGhosts(polys, marks),
     shift: () => this.shift,
+  });
+  // (plan 130 phase 4) the floors' tile brush
+  private tiles = new TileBrushTool({
+    structure: () => this.w.structure,
+    level: () => this.w.level,
+    brush: () => {
+      const m = hud.get().build.paintMode;
+      return m === "half" || m === "quarter" || m === "tri" || m === "hole" ? m : "tile";
+    },
+    over: () => hud.get().build.over ?? 0,
+    sendHole: (m) => {
+      this.send("struct:hole", m);
+      buildSound("remove");
+    },
+    mat: () => {
+      const ch = hud.get().build.brush;
+      // (plan 130 phase 9: a floor's covering too)
+      return this.removing || ch === " " || (ch.length !== 1 && !isCover(ch, "floor")) ? null : ch;
+    },
+    shift: () => this.shift,
+    ctrl: () => this.removing,
+    alt: () => altHeld(),
+    pick: (m) => {
+      this.setBuild({ brush: m, coverTint: m.includes("#") ? (coverOf(m, "floor")?.tint ?? null) : null });
+      buildSound("select");
+    },
+    send: (m) => {
+      this.send("struct:tiles", m);
+      buildSound("drop");
+    },
+    show: (polys) => this.model?.setPolyGhosts(polys),
+  });
+  private tileMode(): boolean {
+    const b = hud.get().build;
+    return (
+      b.tool === "walls" && b.wallMode === "floors" && ["tile", "half", "quarter", "tri", "hole"].includes(b.paintMode)
+    );
+  }
+  // (plan 130 phase 5) the Foundation part: pads, steps, basements dug
+  private found = new FoundTool({
+    structure: () => this.w.structure,
+    level: () => this.w.level,
+    mode: () => hud.get().build.foundMode,
+    style: () => hud.get().build.foundStyle,
+    height: () => hud.get().build.foundHeight,
+    send: (m) => {
+      this.send("struct:found", m);
+      buildSound(m.remove ? "remove" : "drop");
+    },
+    dig: (m) => {
+      this.send("struct:dig", m);
+      buildSound("drop");
+    },
+    pool: () => hud.get().build.pool,
+    sendPool: (m) => {
+      this.send("struct:pool", m);
+      buildSound(m.remove ? "remove" : "drop");
+    },
+    put: (m) => {
+      this.send("obj:put", m);
+      buildSound("drop");
+    },
+    show: (polys) => this.model?.setPolyGhosts(polys),
+  });
+  // (plan 130 phase 6) the stair tool
+  private flights = new FlightTool({
+    structure: () => this.w.structure,
+    level: () => this.w.level,
+    opts: () => hud.get().build.flight,
+    rise: () => riseOf(this.w.level),
+    removing: () => this.removing,
+    send: (m) => {
+      this.send("struct:flight", m);
+      buildSound(m.remove ? "remove" : "drop");
+    },
+    show: (polys) => this.model?.setPolyGhosts(polys),
   });
   // Roofs (plan 72 phase 11.7)
   private roofs = new FreeRoofs({
@@ -154,7 +243,16 @@ export class BuildController {
     send: (m) => this.send("struct:roofs", m),
     show: (polys) => this.model?.setPolyGhosts(polys),
     removing: () => this.removing,
+    shift: () => this.shift,
   });
+  /** (plan 130 phase 7) Auto Roof over this floor's rooms. */
+  autoRoof() {
+    this.roofs.auto();
+  }
+  /** (the quality pass) The picked roof changed from its card. */
+  roofSet(c: { kind?: Roof["kind"]; pitch?: number; over?: number; z?: number; mat?: string }) {
+    this.roofs.setPicked(c);
+  }
   /** How high a new flight of steps rises (plan 72 phase 11.8): to the working height (a mezzanine's),
    *  else this floor's highest mezzanine, else the usual. */
   private riseNow(): number {
@@ -172,8 +270,32 @@ export class BuildController {
     const t = (over - r.o.z) / r.d.z;
     return t > 0 ? [r.o.x + r.d.x * t, r.o.y + r.d.y * t] : [x, y];
   }
+  // (plan 130 phase 2) Select's walls dragged and rooms moved, turned, copied, knocked down whole
+  readonly house = new HouseTools({
+    structure: () => this.w.structure,
+    level: () => this.w.level,
+    wallSel: () => hud.get().build.freeSel,
+    roomSel: () => hud.get().build.roomSel,
+    pickRoom: (key) => this.setBuild({ roomSel: key }),
+    sendWalls: (m) => {
+      this.send("struct:wallmove", m);
+      buildSound("drop");
+    },
+    sendRoom: (m) => {
+      this.send("struct:room", m);
+      buildSound(m.remove ? "remove" : "drop");
+    },
+    show: (segs, polys) => {
+      this.model?.setSegGhosts(segs);
+      this.model?.setPolyGhosts(polys);
+    },
+    alt: () => altHeld(),
+    snap: () => hud.get().build.snapGrid ?? 0.5,
+  });
+  private houseDragged = false;
   // Build's Line, Box and Erase: walls drawn free (plan 72 phase 11)
   private free = new FreeWalls({
+    things: () => this.w.objs.values(),
     structure: () => this.w.structure,
     ray: () => this.model?.pointerRay() ?? null,
     level: () => this.w.level,
@@ -346,12 +468,16 @@ export class BuildController {
       if (this.slotting() && this.aim?.free) {
         // into a wall drawn free: its middle at the pointer, along that wall
         const { wall, p } = this.aim.free;
-        const on = { wall: wall.id, at: openingAlong(wall, p, def.kind) };
-        def = { ...def, ...placeOnWall(wall, on.at, def.kind), props: { ...(def.props ?? {}), free: true, on } };
+        // (plan 130 phase 8: its own width, height and sill)
+        const on = { wall: wall.id, at: openingAlong(wall, p, def) };
+        def = { ...def, ...placeOnWall(wall, on.at, def), props: { ...(def.props ?? {}), free: true, on } };
+        // (its shutters out of doors, as the server will have them)
+        const st = this.w.structure;
+        if (st && isWindowKind(def.kind) && def.props) def.props.out = openingOutside(st, this.w.level, def);
         freeWhy = freeOpeningWhy(
           { walls: this.free.wallsHere(), floors: this.w.structure?.floors },
           this.w.level,
-          def.kind,
+          def,
           on,
           rest,
           h.origin?.id,
@@ -797,6 +923,21 @@ export class BuildController {
       }),
     );
     buildSound("select");
+  }
+  /** (plan 130 phase 8) A window slid up or down its wall (PgUp / PgDn): the one in hand, or the one picked. */
+  private slideOpening(d: number): boolean {
+    const b = hud.get().build;
+    const sel = b.mode === "place" ? null : this.selectedObjects()[0];
+    const kind = b.mode === "place" ? b.kind : sel?.kind;
+    if (!kind || !isWindowKind(kind)) return false;
+    const props = b.mode === "place" ? (b.props ?? {}) : (sel?.props ?? {});
+    const now = typeof props.sill === "number" ? props.sill : openingCut(kind)[0];
+    const [lo, hi] = OPENING_LIMITS.window.sill;
+    const sill = Math.round(Math.max(lo, Math.min(hi, now + d)) * 100) / 100;
+    if (b.mode === "place") this.placeLook({ sill });
+    else if (sel?.props?.free === true) this.setLook({ sill });
+    else return false;
+    return true;
   }
   /** The next look of what's being placed, or of what's selected. */
   nextLook() {
@@ -1366,7 +1507,9 @@ export class BuildController {
       if (!this.remove()) return false;
     } else if (furn && key === "i") this.setMode(b.mode === "eyedrop" ? "hand" : "eyedrop");
     else if (furn && key === "l") this.nextLook();
-    else if (furn && key === "h") this.setMode("hand");
+    else if (furn && (key === "pageup" || key === "pagedown")) {
+      if (!this.slideOpening(key === "pageup" ? 0.1 : -0.1)) return false;
+    } else if (furn && key === "h") this.setMode("hand");
     else if (furn && key === "k") this.setMode(b.mode === "sledge" ? "hand" : "sledge");
     else if (key === "g") {
       this.setBuild({ grid: !b.grid });
@@ -1507,8 +1650,11 @@ export class BuildController {
     if (bb.tool === "walls") {
       this.lastFloor = { x, y };
       if (bb.wallMode === "paint") return this.paintHover();
-      if (bb.wallMode === "select") return this.selectHover();
+      if (bb.wallMode === "select") return this.house.hover(x, y) ? undefined : this.selectHover();
       if (bb.wallMode === "build") return this.free.hover(...this.atWorking(x, y));
+      if (bb.wallMode === "found") return this.found.hover(x, y);
+      if (bb.wallMode === "flights") return this.flights.hover(x, y);
+      if (bb.wallMode === "floors" && this.tileMode()) return this.tiles.hover(...this.atWorking(x, y));
       if (bb.wallMode === "floors") return this.floors.hover(...this.atWorking(x, y));
       if (bb.wallMode === "roof") return this.roofs.hover(...this.atWorking(x, y));
     }
@@ -1681,6 +1827,14 @@ export class BuildController {
   private paintDown() {
     const fp = this.paintFreeAim();
     if (!fp) return;
+    // (plan 130 phase 9: Alt — the eyedropper: the face's covering, or its paint, picked up)
+    if (altHeld()) {
+      const w = fp.wall;
+      const k = fp.side > 0 ? (w.coverF ?? w.front) : (w.coverB ?? w.back ?? w.front);
+      if (!isCover(k, "wall") && !(FACE_PAINTS as readonly string[]).includes(k)) return void buildSound("nope");
+      this.setBuild({ paint: k, coverTint: k.includes("#") ? (coverOf(k, "wall")?.tint ?? null) : null });
+      return void buildSound("select");
+    }
     if (!(FACE_PAINTS as readonly string[]).includes(fp.wall.front)) return void buildSound("nope");
     this.paintFrom = fp;
     this.paintTo = fp.t;
@@ -1731,6 +1885,10 @@ export class BuildController {
       ...(picked ? [ghost(picked, true)] : []),
       ...(fp && fp.wall !== picked ? [ghost(fp.wall, true)] : []),
     ]);
+    // (plan 130: the picked room's outline)
+    const rk = hud.get().build.roomSel;
+    const room = rk ? this.w.structure?.rooms.find((q) => q.key === rk && q.floor === this.w.level) : null;
+    e.setPolyGhosts(room ? [{ pts: room.outline, ok: true, closed: true }] : []);
     this.setTag(null);
   }
   private selectClick() {
@@ -1747,10 +1905,16 @@ export class BuildController {
     if (b.tool === "walls") {
       this.lastFloor = { x, y };
       if (b.wallMode === "paint") return this.paintDown();
-      if (b.wallMode === "select") return;
+      if (b.wallMode === "select") {
+        this.houseDragged = false;
+        this.house.down(x, y);
+        return;
+      }
       if (b.wallMode === "build") return this.free.down(...this.atWorking(x, y));
       if (b.wallMode === "roof") return this.roofs.down(...this.atWorking(x, y));
-      // floors: drawn free (phase 11.7)
+      if (b.wallMode === "found") return this.found.down(x, y);
+      // floors: drawn free (phase 11.7); (plan 130) painted tile by tile
+      if (this.tileMode()) return this.tiles.down(...this.atWorking(x, y));
       return this.floors.down(...this.atWorking(x, y));
     }
   }
@@ -1758,7 +1922,13 @@ export class BuildController {
   private upOther(x: number, y: number) {
     const b = hud.get().build;
     if (b.tool === "walls" && b.wallMode === "paint") return this.paintUp();
+    if (b.tool === "walls" && b.wallMode === "select" && this.house.dragging) {
+      this.houseDragged = this.house.up();
+      return;
+    }
     if (b.tool === "walls" && b.wallMode === "build") return this.free.up(...this.atWorking(x, y));
+    if (b.tool === "walls" && b.wallMode === "found") return this.found.up(x, y);
+    if (b.tool === "walls" && b.wallMode === "floors" && this.tileMode()) return this.tiles.up(...this.atWorking(x, y));
     if (b.tool === "walls" && b.wallMode === "floors") return this.floors.up(...this.atWorking(x, y));
     if (b.tool === "walls" && b.wallMode === "roof") return this.roofs.up(...this.atWorking(x, y));
   }
@@ -1804,7 +1974,22 @@ export class BuildController {
   private clickOther(x: number, y: number) {
     const b = hud.get().build;
     if (b.tool === "walls") {
-      if (b.wallMode === "select") return this.selectClick();
+      if (b.wallMode === "flights") return this.flights.click(x, y);
+      if (b.wallMode === "select") {
+        if (this.houseDragged) {
+          this.houseDragged = false;
+          return;
+        }
+        // (a wall under the pointer: picked; else the room whose floor it's on — plan 130)
+        if (this.paintFreeAim()) {
+          this.setBuild({ roomSel: null });
+          return this.selectClick();
+        }
+        const rk = this.house.roomAt(x, y);
+        this.setBuild({ roomSel: rk, freeSel: null });
+        buildSound("select");
+        return this.selectHover();
+      }
       if (b.wallMode === "floors") return; // (freefloors.ts: on the release)
       return;
     }
@@ -1836,6 +2021,33 @@ export class BuildController {
     }
     // (I: the eyedropper's key — E turns the build camera now, plan 124)
     if (key === "i" && b.wallMode === "paint") return this.sampleFace();
+    // (plan 130 phase 6) the stair tool: R a quarter round, T an L's or a U's turn the other way
+    if (b.wallMode === "flights" && (key === "r" || key === "t")) {
+      const f = b.flight;
+      this.setBuild({
+        flight:
+          key === "r" ? { ...f, dir: (f.dir + Math.PI / 2) % (2 * Math.PI) } : { ...f, turn: f.turn === 1 ? -1 : 1 },
+      });
+      buildSound("rotate");
+      if (this.lastFloor) this.flights.hover(this.lastFloor.x, this.lastFloor.y);
+      return true;
+    }
+    // (plan 130) a picked room: R a quarter round, Delete knocks it down (asked), Esc lets it go
+    if (b.wallMode === "select" && b.roomSel) {
+      if (key === "r") return this.house.turn();
+      if (key === "delete" || key === "backspace") {
+        void ask(trMaybe("bvRoomRemoveAsk") ?? "Knock this room down, and everything in it?", true).then(
+          (ok) => ok && this.house.remove(),
+        );
+        return true;
+      }
+      if (key === "escape") {
+        this.house.cancel();
+        this.setBuild({ roomSel: null });
+        this.refreshOther();
+        return true;
+      }
+    }
     if (key === "escape") {
       if (this.paintFrom) {
         this.paintFrom = null;
@@ -1872,6 +2084,15 @@ export class BuildController {
       level: this.w.level,
       set: [act === "swap" ? { id: w.id, front: back, back: w.front } : { id: w.id, back: w.front }],
     });
+    buildSound("drop");
+  }
+  /** (plan 130) The picked wall's trim `k` on or off. */
+  wallTrim(k: string) {
+    const w = this.freeWall(hud.get().build.freeSel);
+    if (!w || w.style) return;
+    const now = w.trim ?? [];
+    const trim = now.includes(k) ? now.filter((q) => q !== k) : [...now, k];
+    this.send("struct:walls", { level: this.w.level, set: [{ id: w.id, trim }] });
     buildSound("drop");
   }
   wallAnchor(): { x: number; y: number } | null {

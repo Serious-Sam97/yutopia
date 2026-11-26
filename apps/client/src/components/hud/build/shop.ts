@@ -6,6 +6,81 @@ import { entry, FAM_KINDS } from "@yutopia/shared";
 import { addStrings, type Key, trMaybe } from "@/lib/i18n";
 import type { IconName } from "../icons";
 
+/** (plan 130 phase 10) the house family's porch and yard pieces (its fireplaces in Decor, its columns in Columns) */
+const PORCH_KINDS = [
+  "pergola_cedar",
+  "pergola_white",
+  "pergola_louvre",
+  "porch_roof",
+  "gazebo",
+  "pavilion",
+  "garden_arbor",
+  "carport",
+  "trellis",
+  "lattice_screen",
+  "awning_stripe",
+  "awning_metal",
+  "door_hood",
+  "house_numbers",
+  "porch_lantern",
+  "wall_mailbox",
+  "porch_bracket",
+  "baluster_rail",
+];
+
+// (plan 130 phase 8) the house's doors and windows: [key, kind, props] — named bv_<key>
+type Preset = [string, string, Record<string, unknown>];
+const DOOR_PRESETS: Preset[] = [
+  ["door:six", "door", { look: "six" }],
+  ["door:flush", "door", { look: "flush" }],
+  ["door:half", "door", { look: "half" }],
+  ["door:french", "door", { look: "french" }],
+  ["door:plank", "door", { look: "plank", color: "#6b4a2e" }],
+  ["door:cottage", "door", { look: "plank", ow: 0.8, oh: 2.05, color: "#4f6b4a" }],
+  ["door:dutch", "door", { look: "dutch", color: "#3b5a7a" }],
+  ["door:craftsman", "door", { look: "craftsman", color: "#7a5230" }],
+  ["door:entry", "door", { look: "craftsman", ow: 1.2, oh: 2.45, color: "#6a2f2a" }],
+  ["door:modern", "door", { look: "modern", color: "#2d2d2d" }],
+  ["door:tall", "door", { look: "six", oh: 2.45 }],
+  ["door:narrow", "door", { look: "flush", ow: 0.8 }],
+  ["door_double:french", "door_double", { look: "french" }],
+  ["door_double:patio", "door_double", { look: "french", ow: 2.4, oh: 2.45 }],
+  ["door_double:six", "door_double", { look: "six" }],
+  ["door_double:craftsman", "door_double", { look: "craftsman", oh: 2.45 }],
+  ["door_double:modern", "door_double", { look: "modern", ow: 2.4, oh: 2.7 }],
+  ["door_double:plank", "door_double", { look: "plank", color: "#7a4a2c" }],
+  ["door_barn:wide", "door_barn", { ow: 1.6 }],
+  ["door_garage:wide", "door_garage", { ow: 2.6 }],
+];
+const WINDOW_PRESETS: Preset[] = [
+  ["window:grid", "window", { look: "grid" }],
+  ["window:hung", "window", { look: "hung" }],
+  ["window:picture", "window", { look: "picture" }],
+  ["window:transom", "window", { look: "transom" }],
+  ["window:awning", "window", { look: "awning" }],
+  ["window:louvre", "window", { look: "louvre" }],
+  ["window:leaded", "window", { look: "diamond" }],
+  ["window:prairie", "window", { look: "prairie" }],
+  ["window:slider", "window", { look: "slider", ow: 1.5 }],
+  ["window:shuttered", "window", { look: "hung", shutters: "#4a5f3c" }],
+  ["window:cottage", "window", { look: "grid", shutters: "#2f4a6a", curtains: "#c9b48a" }],
+  ["window:curtained", "window", { look: "casement", curtains: "#7a2f2f" }],
+  ["window:small", "window", { look: "picture", ow: 0.6, oh: 0.6, sill: 1.4 }],
+  ["window:bath", "window", { look: "louvre", ow: 0.6, oh: 0.6, sill: 1.8 }],
+  ["window:kitchen", "window", { look: "slider", ow: 1.2, oh: 0.9, sill: 1.1 }],
+  ["window:attic", "window", { look: "awning", ow: 0.9, oh: 0.6, sill: 1 }],
+  ["window:square", "window", { look: "grid", ow: 0.9, oh: 0.9, sill: 1.1 }],
+  ["window_wide:picture", "window_wide", { look: "picture", ow: 2.4 }],
+  ["window_wide:ribbon", "window_wide", { look: "casement", ow: 4, oh: 0.9, sill: 1.2 }],
+  ["window_wide:slider", "window_wide", { look: "slider" }],
+  ["window_wide:grid", "window_wide", { look: "grid", ow: 2.4, oh: 1.35 }],
+  ["window_wide:prairie", "window_wide", { look: "prairie" }],
+  ["window_wide:transom", "window_wide", { look: "transom", ow: 3, oh: 1.6, sill: 0.6 }],
+  ["window_wide:clerestory", "window_wide", { look: "picture", ow: 3, oh: 0.6, sill: 1.8 }],
+  ["window_tall:grid", "window_tall", { look: "grid" }],
+  ["window_tall:full", "window_tall", { look: "picture", ow: 1.2, oh: 2.4, sill: 0 }],
+];
+
 // A catalog entry: a kind, and for decor what it is (props.d).
 export interface Item {
   key: string;
@@ -191,6 +266,8 @@ export const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] 
       { key: "door_saloon", kind: "door_saloon", props: { state: "closed" } },
       ...["door_auto", "door_revolving", "door_garage"].map((k) => ({ key: k, kind: k, props: { state: "closed" } })),
       it("archway"),
+      // (plan 130 phase 8) the house's: leaves in each look, sizes of their own (in a wall drawn free)
+      ...DOOR_PRESETS.map(([key, kind, props]) => ({ key, kind, props: { state: "closed", ...props } })),
     ],
   },
   {
@@ -208,6 +285,8 @@ export const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] 
       it("window_stained"),
       it("window_blinds"),
       it("window_studio"),
+      // (plan 130 phase 8) glazings, sizes and sills of their own, shutters and curtains
+      ...WINDOW_PRESETS.map(([key, kind, props]) => ({ key, kind, props })),
       ...fam("doors2"),
     ],
   },
@@ -219,7 +298,8 @@ export const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] 
       it("plant"),
       decor("decor", "plant"),
       it("fireplace"),
-      it("column"),
+      // (plan 130 phase 10) the house's fireplaces
+      ...fam("house").filter((i) => i.kind.startsWith("fp_")),
       decor("decor", "boxes"),
       decor("decor", "bin"),
       decor("decor", "cable"),
@@ -227,6 +307,20 @@ export const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] 
     ],
   },
   { key: "floor", label: "catFloor", icon: "marquee", items: ["rug", "standup_mat"].map(it).concat(fam("floor2")) },
+  {
+    // (plan 130 phase 3) a house's columns: a porch's, the orders, piers, posts
+    key: "columns",
+    label: "catColumns",
+    icon: "home",
+    items: [it("column"), ...fam("house").filter((i) => !i.kind.startsWith("fp_") && !PORCH_KINDS.includes(i.kind))],
+  },
+  {
+    // (plan 130 phase 10) a house's outside: pergolas, a porch roof, a gazebo, a carport, awnings, a door's details
+    key: "porches",
+    label: "catPorches",
+    icon: "home",
+    items: fam("house").filter((i) => PORCH_KINDS.includes(i.kind)),
+  },
   {
     // the building (docs/plan/25): stairs up to the floor above, an elevator's
     // stop (it joins the shaft of the ones above or below), and outside
@@ -320,7 +414,7 @@ export type Func =
   | "pets"
   | "seasonal";
 /** What the Build tab holds of the catalog (set into walls, or the way up). */
-export type BuildPart = "doors" | "windows" | "stairs";
+export type BuildPart = "doors" | "windows" | "stairs" | "columns" | "porches";
 
 /** A room's or a function's face in the category column: one of its own things' pictures. */
 export const ROOMS: { key: Room; face: string }[] = [
@@ -353,6 +447,8 @@ export const BUILD_PARTS: { key: BuildPart; face: string }[] = [
   { key: "doors", face: "door" },
   { key: "windows", face: "window" },
   { key: "stairs", face: "stairs" },
+  { key: "columns", face: "porch_column" },
+  { key: "porches", face: "pergola_cedar" },
 ];
 
 /** A thing in the shop: the catalog's item with its places. */
@@ -380,6 +476,8 @@ const CAT_FUNC: Record<string, [Func, string] | BuildPart> = {
   decor: ["decor", "more"],
   floor: ["decor", "floor"],
   building: "stairs",
+  columns: "columns",
+  porches: "porches",
   pets: ["pets", "pets"],
   parkour: ["play", "parkour"],
   seasonal: ["seasonal", "christmas"],
@@ -755,6 +853,8 @@ addStrings(
     bv_build_doors: ["Doors", "Portas"],
     bv_build_windows: ["Windows", "Janelas"],
     bv_build_stairs: ["Stairs & lifts", "Escadas e elevadores"],
+    bv_build_columns: ["Columns", "Colunas"],
+    bv_build_porches: ["Porches & yard", "Varandas e quintal"],
   },
   "yutopia-build",
 );
@@ -762,6 +862,11 @@ addStrings(
 export const bw = (k: string): string => trMaybe(k) ?? k;
 
 export function labelOf(i: Item): string {
+  // (plan 130 phase 8: a preset of the house's, by its key)
+  if (i.key.includes(":")) {
+    const named = trMaybe(`bv_${i.key.replace(":", "_")}`);
+    if (named) return named;
+  }
   if (i.props?.d) return trMaybe(`decor_${String(i.props.d)}`) ?? entry(i.kind).label;
   if (i.kind === "door" && i.props?.glass) return trMaybe("bv_glass_door") ?? "Glass door";
   return entry(i.kind).label;
@@ -769,6 +874,53 @@ export function labelOf(i: Item): string {
 addStrings(
   {
     bv_glass_door: ["Glass door", "Porta de vidro"],
+    // (plan 130 phase 8) the house's doors and windows
+    bv_door_six: ["Six-panel door", "Porta de seis almofadas"],
+    bv_door_flush: ["Flush door", "Porta lisa"],
+    bv_door_half: ["Half-glass door", "Porta meio vidro"],
+    bv_door_french: ["French door", "Porta francesa"],
+    bv_door_plank: ["Plank door", "Porta de tábuas"],
+    bv_door_cottage: ["Cottage door", "Porta de chalé"],
+    bv_door_dutch: ["Dutch door", "Porta holandesa"],
+    bv_door_craftsman: ["Craftsman door", "Porta artesanal"],
+    bv_door_entry: ["Front door, wide", "Porta de entrada larga"],
+    bv_door_modern: ["Modern door", "Porta moderna"],
+    bv_door_tall: ["Tall six-panel door", "Porta alta de seis almofadas"],
+    bv_door_narrow: ["Narrow door", "Porta estreita"],
+    bv_door_double_french: ["French doors", "Portas francesas"],
+    bv_door_double_patio: ["Patio doors", "Portas de varanda"],
+    bv_door_double_six: ["Double six-panel", "Dupla de seis almofadas"],
+    bv_door_double_craftsman: ["Craftsman double", "Dupla artesanal"],
+    bv_door_double_modern: ["Modern double, tall", "Dupla moderna alta"],
+    bv_door_double_plank: ["Plank gates", "Portões de tábuas"],
+    bv_door_barn_wide: ["Wide barn door", "Porta de celeiro larga"],
+    bv_door_garage_wide: ["Wide garage door", "Garagem larga"],
+    bv_window_grid: ["Colonial window", "Janela colonial"],
+    bv_window_hung: ["Double-hung window", "Janela guilhotina"],
+    bv_window_picture: ["Picture window", "Janela fixa"],
+    bv_window_transom: ["Transom window", "Janela com bandeira"],
+    bv_window_awning: ["Awning window", "Janela maxim-ar"],
+    bv_window_louvre: ["Louvre window", "Janela basculante"],
+    bv_window_leaded: ["Leaded window", "Janela de losangos"],
+    bv_window_prairie: ["Prairie window", "Janela pradaria"],
+    bv_window_slider: ["Sliding window", "Janela de correr"],
+    bv_window_shuttered: ["Shuttered window", "Janela com venezianas"],
+    bv_window_cottage: ["Cottage window", "Janela de chalé"],
+    bv_window_curtained: ["Window with curtains", "Janela com cortinas"],
+    bv_window_small: ["Small window", "Janela pequena"],
+    bv_window_bath: ["Bathroom window", "Janela de banheiro"],
+    bv_window_kitchen: ["Kitchen window", "Janela de cozinha"],
+    bv_window_attic: ["Attic window", "Janela de sótão"],
+    bv_window_square: ["Square window", "Janela quadrada"],
+    bv_window_wide_picture: ["Wide picture window", "Janela fixa larga"],
+    bv_window_wide_ribbon: ["Ribbon window", "Janela em fita"],
+    bv_window_wide_slider: ["Wide slider", "Janela de correr larga"],
+    bv_window_wide_grid: ["Wide colonial", "Colonial larga"],
+    bv_window_wide_prairie: ["Wide prairie", "Pradaria larga"],
+    bv_window_wide_transom: ["Living room window", "Janela de sala"],
+    bv_window_wide_clerestory: ["Clerestory", "Janela alta em faixa"],
+    bv_window_tall_grid: ["Tall colonial", "Colonial alta"],
+    bv_window_tall_full: ["Floor-to-ceiling glass", "Vidro do piso ao teto"],
     // the walls', floors' and fabrics' names (WallsPanel, Catalog: English in their lists)
     bv_sw_Plaster: ["Plaster", "Reboco"],
     bv_sw_Walnut: ["Walnut", "Nogueira"],

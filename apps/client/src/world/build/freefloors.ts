@@ -5,13 +5,18 @@
 // pointer. All at the working height (the floor's own, or a mezzanine's over it — the panel's
 // Height, PgUp/PgDn). They go to the server as the structure's operation (struct:slabs), undone and
 // redone through its history.
-import type { ClientMessages } from "@yutopia/shared";
+import type { ClientMessages, WorldObjectDef } from "@yutopia/shared";
 import { isFloor } from "@yutopia/shared";
 import {
   floorFaces,
+  heldWhy,
   inRing,
+  ON_ROOF,
+  onRoofDraft,
+  type Roof,
   type RoofDraft,
   roofAt,
+  roofSetOps,
   roofWhy,
   type Slab,
   type SnapOpts,
@@ -25,6 +30,7 @@ import {
 import { type Key, tr } from "@/lib/i18n";
 import type { SnapMark } from "../model";
 import { hud, toast } from "../store";
+import { altHeld } from "./house";
 import { buildSound } from "./sounds";
 
 /** A floor about to go in (or out), as build3d draws it: its corners, whether it fits. */
@@ -38,6 +44,8 @@ export interface PolyGhost {
 }
 
 export interface FloorHost {
+  /** (the quality pass) the things here: the columns that hold an upper storey up */
+  things?(): Iterable<WorldObjectDef>;
   structure(): Structure | null;
   level(): number;
   send(msg: ClientMessages["struct:slabs"]): void;
@@ -87,7 +95,11 @@ export class FreeFloors {
   private why(outline: XY[], holes?: XY[][]): string | null {
     const s = this.h.structure();
     if (!s) return "not loaded";
-    return slabWhy(s, this.h.level(), { outline, holes, top: hud.get().build.brush, over: this.over() });
+    return (
+      slabWhy(s, this.h.level(), { outline, holes, top: hud.get().build.brush, over: this.over() }) ??
+      // (an upper storey's: over something on the storey under it — the quality pass)
+      heldWhy(s, this.h.level(), { ring: outline }, this.h.things?.() ?? [])
+    );
   }
   private slabHere(p: XY): Slab | null {
     const s = this.h.structure();
@@ -267,13 +279,22 @@ export interface RoofHost {
   send(msg: ClientMessages["struct:roofs"]): void;
   show(polys: PolyGhost[]): void;
   removing(): boolean;
+  shift(): boolean;
 }
 
 /** Roofs (phase 11.7): the room under the pointer roofed, its outline shown first; ⌘/Ctrl: the roof
- *  over it taken off; R turns a gable's ridge. */
+ *  over it taken off; R turns a gable's ridge. (plan 130 phase 7) Shift: the roof under it changed to
+ *  these choices in place; a dormer or a chimney put on the roof under the pointer; Auto Roof (the card). */
 export class FreeRoofs {
   private pointer: XY | null = null;
   constructor(private h: RoofHost) {}
+  /** What's shown, and the picked roof's outline with it (the quality pass). */
+  private show(polys: PolyGhost[]) {
+    const s = this.h.structure();
+    const id = hud.get().build.roofSel;
+    const r = s && id ? (s.roofs ?? []).find((q) => q.id === id) : null;
+    this.h.show(r ? [...polys, { pts: r.outline, ok: true, closed: true }] : polys);
+  }
 
   static owns(): boolean {
     const b = hud.get().build;
@@ -281,7 +302,39 @@ export class FreeRoofs {
   }
   private draft(outline: XY[]): RoofDraft {
     const b = hud.get().build;
-    return { outline, kind: b.roofKind, pitch: b.roofPitch, ridge: b.roofRidge };
+    return { outline, kind: b.roofKind, pitch: b.roofPitch, ridge: b.roofRidge, mat: b.roofMat, over: b.roofOver };
+  }
+  /** A dormer's or a chimney's draft at the pointer, or why not. */
+  private piece(p: XY): RoofDraft | string {
+    const s = this.h.structure();
+    const b = hud.get().build;
+    if (!s) return "no roof there";
+    const d = onRoofDraft(s, this.h.level(), b.roofKind as "dormer" | "chimney", p[0], p[1], b.roofPitch);
+    // (a dormer in its roof's covering — onRoofDraft's; a chimney's brick)
+    return d;
+  }
+  /** The roof under the pointer as these choices would make it (Shift), or why not. */
+  private restyle(p: XY) {
+    const s = this.h.structure();
+    const r = s && roofAt(s, this.h.level(), p);
+    if (!s || !r) return null;
+    const b = hud.get().build;
+    const c = ON_ROOF.has(r.kind)
+      ? { mat: b.roofMat }
+      : { kind: b.roofKind, pitch: b.roofPitch, mat: b.roofMat, over: b.roofOver, ridge: b.roofRidge };
+    if (!ON_ROOF.has(r.kind) && ON_ROOF.has(b.roofKind)) return { r, c, why: "pick a roof's kind" };
+    const op = roofSetOps(s, this.h.level(), r.id, c);
+    return { r, c, why: typeof op === "string" ? op : null };
+  }
+  /** Auto Roof: this floor's roofs made again over its rooms. */
+  auto() {
+    const b = hud.get().build;
+    if (ON_ROOF.has(b.roofKind)) return void toast(tr("roofAutoPick"), "warn");
+    this.h.send({
+      level: this.h.level(),
+      auto: { kind: b.roofKind, pitch: b.roofPitch, mat: b.roofMat, over: b.roofOver },
+    });
+    buildSound("drop");
   }
   private faceAt(p: XY): { outline: XY[]; holes: XY[][] } | null {
     const s = this.h.structure();
@@ -304,12 +357,20 @@ export class FreeRoofs {
     if (!s) return;
     if (this.h.removing()) {
       const r = roofAt(s, this.h.level(), p);
-      return this.h.show(r ? [{ pts: r.outline, ok: true, closed: true, remove: true }] : []);
+      return this.show(r ? [{ pts: r.outline, ok: true, closed: true, remove: true }] : []);
+    }
+    if (this.h.shift()) {
+      const q = this.restyle(p);
+      return this.show(q ? [{ pts: q.r.outline, ok: !q.why, closed: true }] : []);
+    }
+    if (ON_ROOF.has(hud.get().build.roofKind)) {
+      const d = this.piece(p);
+      return this.show(typeof d === "string" ? [] : [{ pts: d.outline, ok: true, closed: true }]);
     }
     const f = this.faceAt(p);
-    if (!f) return this.h.show([]);
+    if (!f) return this.show([]);
     const why = roofWhy(s, this.h.level(), this.draft(f.outline));
-    this.h.show([{ pts: f.outline, ok: !why, closed: true }]);
+    this.show([{ pts: f.outline, ok: !why, closed: true }]);
   }
   down(x: number, y: number) {
     this.hover(x, y);
@@ -326,6 +387,32 @@ export class FreeRoofs {
       }
       return;
     }
+    // (Alt: a roof picked — its card edits it; the quality pass)
+    if (altHeld()) {
+      const r = roofAt(s, this.h.level(), p);
+      hud.set((st) => ({ build: { ...st.build, roofSel: r?.id ?? null } }));
+      buildSound(r ? "select" : "nope");
+      return;
+    }
+    if (this.h.shift()) {
+      const q = this.restyle(p);
+      if (!q) return;
+      if (q.why) {
+        buildSound("nope");
+        return void toast(q.why, "warn");
+      }
+      this.h.send({ level: this.h.level(), set: { id: q.r.id, ...q.c } });
+      return void buildSound("drop");
+    }
+    if (ON_ROOF.has(hud.get().build.roofKind)) {
+      const d = this.piece(p);
+      if (typeof d === "string") {
+        buildSound("nope");
+        return void toast(d === "no roof there" ? tr("roofNoRoof") : d, "warn");
+      }
+      this.h.send({ level: this.h.level(), add: [d] });
+      return void buildSound("drop");
+    }
     const f = this.faceAt(p);
     if (!f) {
       buildSound("nope");
@@ -335,15 +422,56 @@ export class FreeRoofs {
     const why = roofWhy(s, this.h.level(), d);
     if (why) {
       buildSound("nope");
-      const k: Key | null = why.startsWith("a gable") ? "roofWhyGable" : why.startsWith("a hip") ? "roofWhyHip" : null;
+      const k: Key | null = why.includes("needs a rectangle")
+        ? why.startsWith("a hip")
+          ? "roofWhyHip"
+          : "roofWhyGable"
+        : null;
       return void toast(k ? tr(k) : why, "warn");
     }
-    // (a roof there already: this one instead)
-    const was = roofAt(s, this.h.level(), p);
+    // (a roof there already: this one instead — not a dormer or chimney on it)
+    const was = (s.roofs ?? [])
+      .filter((q) => q.floor === this.h.level() && !ON_ROOF.has(q.kind) && inRing(q.outline, p[0], p[1]))
+      .at(-1);
     this.h.send({ level: this.h.level(), add: [d], ...(was ? { remove: [was.id] } : {}) });
     buildSound("drop");
   }
+  /** The picked roof changed (the card's, the keys'): its kind, pitch, overhang, eaves' height. */
+  setPicked(c: { kind?: Roof["kind"]; pitch?: number; over?: number; z?: number; mat?: string }) {
+    const s = this.h.structure();
+    const id = hud.get().build.roofSel;
+    const r = s && id ? (s.roofs ?? []).find((q) => q.id === id) : null;
+    if (!s || !r) return false;
+    const next = {
+      ...c,
+      ...(c.pitch !== undefined ? { pitch: Math.max(10, Math.min(60, Math.round(c.pitch))) } : {}),
+      ...(c.over !== undefined ? { over: Math.max(0, Math.min(1.5, Math.round(c.over * 100) / 100)) } : {}),
+      ...(c.z !== undefined ? { z: Math.round(c.z * 1000) / 1000 } : {}),
+    };
+    const why = roofSetOps(s, r.floor, r.id, next);
+    if (typeof why === "string") {
+      buildSound("nope");
+      toast(why, "warn");
+      return true;
+    }
+    this.h.send({ level: r.floor, set: { id: r.id, ...next } });
+    buildSound("rotate");
+    return true;
+  }
   key(key: string): boolean {
+    // (a picked roof: [ ] its pitch, PgUp/PgDn its eaves' height, , . its overhang)
+    const s = this.h.structure();
+    const sel = hud.get().build.roofSel;
+    const r = s && sel ? (s.roofs ?? []).find((q) => q.id === sel) : null;
+    if (r) {
+      if (key === "[" || key === "]") return this.setPicked({ pitch: r.pitch + (key === "]" ? 5 : -5) });
+      if (key === "pageup" || key === "pagedown") return this.setPicked({ z: r.z + (key === "pageup" ? 0.25 : -0.25) });
+      if (key === "," || key === ".") return this.setPicked({ over: (r.over ?? 0.3) + (key === "." ? 0.1 : -0.1) });
+      if (key === "escape") {
+        hud.set((st) => ({ build: { ...st.build, roofSel: null } }));
+        return true;
+      }
+    }
     if (key !== "r") return false;
     hud.set((s) => ({ build: { ...s.build, roofRidge: s.build.roofRidge ? 0 : 1 } }));
     buildSound("rotate");
@@ -351,6 +479,6 @@ export class FreeRoofs {
     return true;
   }
   end() {
-    this.h.show([]);
+    this.show([]);
   }
 }

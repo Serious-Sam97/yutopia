@@ -2,6 +2,7 @@ import {
   applyStep,
   diffStep,
   HISTORY_LIMIT,
+  isHomeSpace,
   objLevel,
   type Snapshot,
   STEP_LABELS,
@@ -27,6 +28,14 @@ const BUILDING_EDITS = new Set([
   "struct:slabs",
   "struct:roofs",
   "struct:paint",
+  "struct:wallmove",
+  "struct:room",
+  "struct:tiles",
+  "struct:hole",
+  "struct:found",
+  "struct:dig",
+  "struct:pool",
+  "struct:flight",
   "map:room:update",
   "map:room:remove",
   "map:new",
@@ -129,6 +138,9 @@ registerFeature((room: WorldRoom) => {
     const now = new Map(objects().map((o) => [o.id, o]));
     const touched = [...res.put, ...[...res.put.map((o) => o.id), ...res.remove].flatMap((id) => now.get(id) ?? [])];
     // (the building's: its operations — and if what they undo was changed by someone since, not at all)
+    const same = (a: { index: number; space?: string }, b: { index: number; space?: string }) =>
+      a.index === b.index && a.space === b.space;
+    const sameNow = (f: { index: number; space?: string }) => room.structure.floors.some((q) => same(q, f));
     // (the town's storeys always as they are now: a step's whole list of floors never takes one back to where its
     // building stood before a publish — plan 113 review)
     const ops = step.struct
@@ -138,9 +150,13 @@ registerFeature((room: WorldRoom) => {
               ? o
               : {
                   ...o,
+                  // (plan 130: a home lot's storeys are its builders' — their heights, its foundation — undone as
+                  // they were, while the lot's storey is there still)
                   floors: [
-                    ...o.floors.filter((f) => f.space === undefined),
-                    ...room.structure.floors.filter((f) => f.space !== undefined),
+                    ...o.floors.filter((f) => f.space === undefined || (isHomeSpace(f.space) && sameNow(f))),
+                    ...room.structure.floors.filter(
+                      (f) => f.space !== undefined && !(isHomeSpace(f.space) && o.floors.some((q) => same(q, f))),
+                    ),
                   ].sort((x, y) => x.index - y.index),
                 },
         )

@@ -233,7 +233,9 @@ const MAT_DIR = join(DIR, "mat");
 /** The whole library's budget: what it costs to download all of it (each material loads only when
  *  used), and on the GPU with everything in. Low's half-size set a quarter of it. (6.5 MB: plan 110's ten building
  *  skins and roofs took it to 6.2 — each loads only where a building wears it; measured 2026-11-20.) */
-const LIB_BUDGET = { mb: 6.5, gpuMb: 64 };
+// (8.5 MB on 2026-11-26, the user's standing call on budgets: plan 130's quality pass — 15 CC0 photo materials for
+// the house build's floors, walls and roofs; 7.8 MB measured; each material is fetched only when it's drawn)
+const LIB_BUDGET = { mb: 8.5, gpuMb: 72 }; // (gpu 72: the same pass, ~69 MB if every material were drawn at once)
 
 test(
   "material library: every material's three maps, full and half, within budget",

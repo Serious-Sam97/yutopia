@@ -11,6 +11,7 @@ import {
   entry,
   floorOf,
   floorsOf,
+  GROUND_TOP,
   HANDS_AT,
   hangSpot,
   homeOf,
@@ -48,7 +49,18 @@ import {
 import { BEAM, type Beam, beamOf } from "@yutopia/shared/beam";
 import { type StreetThing, terrainAt } from "@yutopia/shared/grounds";
 import { ALOFT, KH_MOVE, MV_AIM, MV_CROUCH } from "@yutopia/shared/move";
-import { cellOf, layoutSig as floorLayoutSig, isFreeOpening, onOf } from "@yutopia/shared/structure";
+import {
+  cellOf,
+  flightsOf,
+  layoutSig as floorLayoutSig,
+  isFreeOpening,
+  onOf,
+  padsOf,
+  partTri,
+  poolsOf,
+  type TileLayer,
+  tilesOf,
+} from "@yutopia/shared/structure";
 import { localThing, localView } from "@yutopia/shared/structure/fold";
 import {
   AdditiveBlending,
@@ -128,6 +140,7 @@ import { FollowCam } from "./follow-cam";
 import { type GameScene3, GamesIn3D, HAND_SIT, HAND_STAND } from "./games3d";
 import { CASTER_LAYER } from "./grounds-stream";
 import { Hands1P, handsDoing } from "./hands1p";
+import { HomeLots3 } from "./lots3d";
 
 const tmpWallDir = new Vector3();
 
@@ -367,6 +380,39 @@ export interface GodInput {
   wheel(e: WheelEvent): void;
 }
 
+/** (plan 130 phase 4) A floor's painted tiles as the bake's pieces (floor-local): a whole tile a square, a part a
+ *  triangle (`part`: not the tile's material for its texture — the bake shows it). */
+function tilePieces(
+  layer: TileLayer,
+  corner: { x: number; y: number },
+): { top: string; rings: [number, number][][]; part?: boolean }[] {
+  const out: { top: string; rings: [number, number][][]; part?: boolean }[] = [];
+  for (const [k, cell] of Object.entries(layer)) {
+    const [x, y] = k.split(",").map(Number);
+    const [ox, oy] = [x - corner.x, y - corner.y];
+    if (typeof cell === "string") {
+      out.push({
+        top: cell,
+        rings: [
+          [
+            [ox, oy],
+            [ox + 1, oy],
+            [ox + 1, oy + 1],
+            [ox, oy + 1],
+          ],
+        ],
+      });
+      continue;
+    }
+    cell.forEach((m, i) => {
+      if (!m) return;
+      const t = partTri(i).map(([u, v]): [number, number] => [ox + u, oy + v]);
+      out.push({ top: m, rings: [t], part: true });
+    });
+  }
+  return out;
+}
+
 /** A floor as tp/build.ts and the light maps draw it: in its own frame (its corner at 0, 0 — shared
  *  structure/fold.ts localView), its things and its stairwells' tiles with it; `corner` where that
  *  frame sits in the world (its World3 and light map placed there). Everything else in the scene is
@@ -386,10 +432,39 @@ function drawnFloor(lm: MapDef, here: WorldObjectDef[], all: WorldObjectDef[], s
   // (its walls from the structure — walls3d.ts: phase 8 — or, with none, the map's edges)
   // (the floor's height: its slabs there are what's walked on; one over it a mezzanine — phase 11.7)
   const fz = structure?.floors.find((f) => f.index === floorOf(lm))?.z ?? 0;
-  const own = (sl: { z: number }) => Math.abs(sl.z - fz) < 1e-3;
+  // (plan 130: a home lot's ground — the land itself — isn't drawn: neither floor nor ceiling)
+  const own = (sl: { z: number; top?: string }) => Math.abs(sl.z - fz) < 1e-3 && sl.top !== GROUND_TOP;
   // (a wall with a door or window placed free in it: drawn free, round its hole)
   const holed = new Set(here.flatMap((o) => (isFreeOpening(o) ? [onOf(o)?.wall ?? ""] : [])));
-  const edges = structure ? edgesOfWalls(structure.walls, floorOf(lm), corner, fz, holed) : edgesOfMap(map);
+  const edges0 = structure ? edgesOfWalls(structure.walls, floorOf(lm), corner, fz, holed) : edgesOfMap(map);
+  // (plan 130: a lot's foundation — its pads under the floor, drawn with the walls' fences and trims)
+  const found = structure?.floors.find((f) => f.index === floorOf(lm))?.found ?? 0;
+  const flights = structure ? flightsOf(structure, floorOf(lm)) : [];
+  const pools = structure ? poolsOf(structure, floorOf(lm)) : [];
+  const edges = {
+    ...edges0,
+    ...(structure && found > 0
+      ? {
+          found,
+          pads: padsOf(structure, floorOf(lm)).map((p) => ({
+            style: p.style,
+            ring: p.ring.map(([x, y]): [number, number] => [x - corner.x, y - corner.y]),
+          })),
+        }
+      : {}),
+    // (plan 130 phase 6: its stairs built with the stair tool)
+    ...(flights.length ? { flights: flights.map((f) => ({ ...f, x: f.x - corner.x, y: f.y - corner.y })) } : {}),
+    // (plan 130 phase 11: its pools)
+    ...(pools.length
+      ? {
+          found,
+          pools: pools.map((p) => ({
+            ...p,
+            ring: p.ring.map(([x, y]): [number, number] => [x - corner.x, y - corner.y]),
+          })),
+        }
+      : {}),
+  };
   // (its indoor slabs' rings — the lot's asphalt and concrete are open sky: no ceiling — for the
   // ceiling over them)
   // (a slab's together: each read even-odd, the floor any of them — they may overlap)
@@ -406,14 +481,18 @@ function drawnFloor(lm: MapDef, here: WorldObjectDef[], all: WorldObjectDef[], s
   const floorRings = ringsOf(() => true);
   // (each with its material: the floor's look painted per slab — art/floors.ts, phase 9)
   const slabs = structure
-    ? structure.slabs
-        .filter((sl) => sl.floor === floorOf(lm) && own(sl))
-        .map((sl) => ({
-          top: sl.top,
-          rings: [sl.outline, ...sl.holes].map((r) =>
-            r.map(([x, y]): [number, number] => [x - corner.x, y - corner.y]),
-          ),
-        }))
+    ? [
+        ...structure.slabs
+          .filter((sl) => sl.floor === floorOf(lm) && own(sl))
+          .map((sl) => ({
+            top: sl.top,
+            rings: [sl.outline, ...sl.holes].map((r) =>
+              r.map(([x, y]): [number, number] => [x - corner.x, y - corner.y]),
+            ),
+          })),
+        // (plan 130: its tiles painted, over the slabs — a tile whole, or its parts)
+        ...tilePieces(tilesOf(structure, floorOf(lm)), corner),
+      ]
     : null;
   return {
     map,
@@ -432,12 +511,25 @@ function drawnFloor(lm: MapDef, here: WorldObjectDef[], all: WorldObjectDef[], s
             ...r,
             outline: r.outline.map(([x, y]): [number, number] => [x - corner.x, y - corner.y]),
             z: Math.round((r.z - fz) * 1000) / 1000,
+            // (a chimney's top, floor-local as its foot — the quality pass: world, it stood a storey too tall)
+            ...(r.top !== undefined ? { top: Math.round((r.top - fz) * 1000) / 1000 } : {}),
+            // (the walls under its edges: its gable ends in their faces' covering — the quality pass)
+            under: structure.walls
+              .filter((w) => w.floor === r.floor && !w.style)
+              .map((w) => ({
+                a: [w.a[0] - corner.x, w.a[1] - corner.y] as [number, number],
+                b: [w.b[0] - corner.x, w.b[1] - corner.y] as [number, number],
+                front: w.front,
+                back: w.back ?? w.front,
+                ...(w.coverF ? { coverF: w.coverF } : {}),
+                ...(w.coverB ? { coverB: w.coverB } : {}),
+              })),
           }))
       : null,
     // (its mezzanines: drawn at their height — World3's decks)
     decks: structure
       ? structure.slabs
-          .filter((sl) => sl.floor === floorOf(lm) && !own(sl))
+          .filter((sl) => sl.floor === floorOf(lm) && !own(sl) && sl.top !== GROUND_TOP)
           .map((sl) => ({
             top: sl.top,
             over: Math.round((sl.z - fz) * 1000) / 1000,
@@ -528,12 +620,18 @@ const aroundShape = (building: MapDef, out: { key: string; shape: string }) =>
   `${building.width}x${building.height}|${(building.levels ?? []).map((l) => l.index).join(",")}|${out.key ? 1 : 0}|${out.shape}`;
 
 /** (what the layout signature can't see: the walls off the lattice) */
-const freeSig = (e: WallEdges) => (e.free.length ? JSON.stringify(e.free) : "");
+// (plan 130: its fences and trims too — a fence added must draw the floor again)
+const freeSig = (e: WallEdges) =>
+  (e.free.length ? JSON.stringify(e.free) : "") +
+  (e.styled?.length ? `|s${JSON.stringify(e.styled)}` : "") +
+  (e.trims?.length ? `|t${JSON.stringify(e.trims)}` : "");
 
 /** The life look's people have no ink line (plan 73 F4): their line meshes drawn with nothing. */
 const NO_LINE = new MeshBasicMaterial({ visible: false });
 
 export class ThirdPersonView {
+  /** (plan 130) the home lots on the land: free ones staked with their signs */
+  readonly homeLots = new HomeLots3();
   readonly warmup: Warmup = new Warmup(this);
 
   readonly body: Body = new Body(this);
@@ -1002,6 +1100,8 @@ export class ThirdPersonView {
     this.scene.add(this.hemi);
     this.lifts3 = new Lifts3(this.renderer);
     this.scene.add(this.lifts3.root, this.stairs3.root);
+    // (plan 130: the home lots staked out on the land)
+    this.scene.add(this.homeLots.root);
     // the stairwells and the elevators' landings take the hour as the rooms round
     // them do (the well is in the same place on every floor: my floor's light
     // map lights it); the cars have their own (lift3d.ts liftCarMats), lit
@@ -4114,6 +4214,7 @@ void main() {
 
   gone = false;
   destroy() {
+    this.homeLots.dispose();
     this.mood.bubbles?.dispose();
     this.body.sway?.dispose();
     this.body.sway = null;

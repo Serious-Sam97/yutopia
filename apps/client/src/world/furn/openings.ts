@@ -1,4 +1,4 @@
-import { doorShut, openingCut } from "@yutopia/shared";
+import { doorShut, openingCut, openingCutOf } from "@yutopia/shared";
 import { type BufferGeometry, CylinderGeometry, ExtrudeGeometry, Path, Shape, TorusGeometry } from "three";
 import { ball, box, cyl, Model, merged } from "./kit";
 import { P, shade } from "./palette";
@@ -25,6 +25,18 @@ export interface OpeningLook {
   glass: boolean;
   color: number | null;
   passing: boolean;
+  /** (plan 130 phase 8) its hole (m up: its own height and sill in a wall drawn free), its leaf's or glazing's look,
+   *  its shutters' and curtains' colours */
+  z0: number;
+  z1: number;
+  look: string | null;
+  shutters: number | null;
+  curtains: number | null;
+  /** which face is out of doors (+z or −z): its shutters' */
+  out: 1 | -1;
+  /** (the quality pass) joined to a window beside it, left or right: one frame */
+  joinL: boolean;
+  joinR: boolean;
 }
 
 /** What makes two of a kind look different (the cache's key). */
@@ -35,7 +47,18 @@ export function openingLook(
   a1: number,
 ): OpeningLook {
   const c = o.props?.color;
+  const hex = (v: unknown) =>
+    typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? Number.parseInt(v.slice(1), 16) : null;
+  const [z0, z1] = openingCutOf(o);
   return {
+    z0,
+    z1,
+    look: typeof o.props?.look === "string" ? o.props.look : null,
+    shutters: hex(o.props?.shutters),
+    curtains: hex(o.props?.curtains),
+    out: o.props?.out === -1 ? -1 : 1,
+    joinL: o.props?._joinL === true,
+    joinR: o.props?._joinR === true,
     kind: o.kind,
     n,
     a0,
@@ -53,31 +76,49 @@ export function openingLook(
 
 /** The lining of the hole x0..x1 × y0..y1 (through the wall), and its casings on both faces;
  *  `apron`: a casing under it too (a window). */
-function frame(m: Model, x0: number, x1: number, y0: number, y1: number, c: number, apron: boolean, w = 0.075) {
+function frame(
+  m: Model,
+  x0: number,
+  x1: number,
+  y0: number,
+  y1: number,
+  c: number,
+  apron: boolean,
+  w = 0.075,
+  join: { l?: boolean; r?: boolean } = {},
+) {
   const d = 2 * T + 0.01;
   const lt = 0.03;
-  m.add(box([lt, y1 - y0, d]), c, { at: [x0 + lt / 2, (y0 + y1) / 2, 0] });
-  m.add(box([lt, y1 - y0, d]), c, { at: [x1 - lt / 2, (y0 + y1) / 2, 0] });
+  // (joined to the window beside it — the quality pass: no lining or casing between them, the casings run on into
+  // its; the one on the left draws the mullion they share)
+  if (!join.l) m.add(box([lt, y1 - y0, d]), c, { at: [x0 + lt / 2, (y0 + y1) / 2, 0] });
+  if (!join.r) m.add(box([lt, y1 - y0, d]), c, { at: [x1 - lt / 2, (y0 + y1) / 2, 0] });
+  else m.add(box([0.07, y1 - y0, d - 0.04]), c, { at: [x1, (y0 + y1) / 2, 0] });
   m.add(box([x1 - x0, lt, d]), c, { at: [(x0 + x1) / 2, y1 - lt / 2, 0] });
   if (apron) m.add(box([x1 - x0, lt, d]), c, { at: [(x0 + x1) / 2, y0 + lt / 2, 0] });
   const f = shade(c, 0.94);
+  const el = join.l ? 0 : w - 0.01;
+  const er = join.r ? 0 : w - 0.01;
   for (const s of [-1, 1]) {
     const z = s * (T + 0.008);
-    m.add(box([w, y1 - y0 + w, 0.016], 0.003), f, {
-      at: [x0 - w / 2 + 0.01, (y0 + y1 + w) / 2 - (apron ? w / 2 : 0), z],
-    });
-    m.add(box([w, y1 - y0 + w, 0.016], 0.003), f, {
-      at: [x1 + w / 2 - 0.01, (y0 + y1 + w) / 2 - (apron ? w / 2 : 0), z],
-    });
-    m.add(box([x1 - x0 + 2 * w - 0.02, w, 0.018], 0.003), f, { at: [(x0 + x1) / 2, y1 + w / 2, z] });
-    if (apron) m.add(box([x1 - x0 + 2 * w - 0.02, w, 0.016], 0.003), f, { at: [(x0 + x1) / 2, y0 - w / 2, z] });
+    if (!join.l)
+      m.add(box([w, y1 - y0 + w, 0.016], 0.003), f, {
+        at: [x0 - w / 2 + 0.01, (y0 + y1 + w) / 2 - (apron ? w / 2 : 0), z],
+      });
+    if (!join.r)
+      m.add(box([w, y1 - y0 + w, 0.016], 0.003), f, {
+        at: [x1 + w / 2 - 0.01, (y0 + y1 + w) / 2 - (apron ? w / 2 : 0), z],
+      });
+    else m.add(box([0.09, y1 - y0, 0.016], 0.003), f, { at: [x1, (y0 + y1) / 2, z] });
+    m.add(box([x1 - x0 + el + er, w, 0.018], 0.003), f, { at: [(x0 - el + x1 + er) / 2, y1 + w / 2, z] });
+    if (apron) m.add(box([x1 - x0 + el + er, w, 0.016], 0.003), f, { at: [(x0 - el + x1 + er) / 2, y0 - w / 2, z] });
   }
 }
 
 /** A sill board on both faces, the window's foot. */
-function sills(m: Model, x0: number, x1: number, y: number, c: number) {
-  for (const s of [-1, 1])
-    m.add(box([x1 - x0 + 0.12, 0.03, 0.09], 0.004), c, { at: [(x0 + x1) / 2, y - 0.015, s * (T + 0.03)] });
+function sills(m: Model, x0: number, x1: number, y: number, c: number, join: { l?: boolean; r?: boolean } = {}) {
+  const [a, b] = [x0 - (join.l ? 0 : 0.06), x1 + (join.r ? 0 : 0.06)];
+  for (const s of [-1, 1]) m.add(box([b - a, 0.03, 0.09], 0.004), c, { at: [(a + b) / 2, y - 0.015, s * (T + 0.03)] });
 }
 
 /** A plate filling x0..x1 × y0..y1 through the wall, a hole cut in it (a round or an arched window,
@@ -229,7 +270,7 @@ function saloonLeaf(put: Put, lw: number, c: number) {
 // ── the doors ────────────────────────────────────────────────────────────────────────────────────
 
 function door(m: Model, L: OpeningLook) {
-  const D = openingCut(L.kind)[1];
+  const D = L.z1;
   const [x0, x1] = [L.a0, L.a1];
   const open = !L.shut;
   const kind = L.kind;
@@ -270,13 +311,13 @@ function door(m: Model, L: OpeningLook) {
           at: [(x0 + x1) / 2, D + 0.2, T + 0.057],
           glow: L.shut,
         });
-      } else panelLeaf(put, lw, lh, col, L.glass);
+      } else lookLeaf(put, lw, lh, col, L.look, L.glass);
       break;
     }
     case "door_double": {
       const lw = (inner1 - inner0) / 2 - 0.006;
-      panelLeaf(leafPutter(m, inner0 + 0.003, 1, open, L.side), lw, lh, col, true);
-      panelLeaf(leafPutter(m, inner1 - 0.003, -1, open, L.side), lw, lh, col, true);
+      lookLeaf(leafPutter(m, inner0 + 0.003, 1, open, L.side), lw, lh, col, L.look, true);
+      lookLeaf(leafPutter(m, inner1 - 0.003, -1, open, L.side), lw, lh, col, L.look, true);
       break;
     }
     case "door_saloon": {
@@ -408,9 +449,9 @@ function door(m: Model, L: OpeningLook) {
 // ── the windows ──────────────────────────────────────────────────────────────────────────────────
 
 function window(m: Model, L: OpeningLook) {
-  const [p0, p1] = openingCut(L.kind);
-  const y0 = p0;
-  const y1 = p1;
+  const y0 = L.z0;
+  const y1 = L.z1;
+  dressing(m, L);
   const [x0, x1] = [L.a0, L.a1];
   const kind = L.kind;
   const studio = kind === "window_studio";
@@ -456,8 +497,14 @@ function window(m: Model, L: OpeningLook) {
       });
     return;
   }
-  frame(m, x0, x1, y0, y1, c, true, studio ? 0.05 : 0.075);
-  if (kind !== "window_high") sills(m, x0, x1, y0, studio ? P.graphite : P.white);
+  const join = { l: L.joinL, r: L.joinR };
+  frame(m, x0, x1, y0, y1, c, true, studio ? 0.05 : 0.075, join);
+  if (kind !== "window_high") sills(m, x0, x1, y0, studio ? P.graphite : P.white, join);
+  // (plan 130 phase 8: a look of its own — the glazing drawn for it, mullions every metre or so when it's wide)
+  if (L.look && kind !== "window_stained" && kind !== "window_studio") {
+    glazing(L.look, i0, i1, j0, j1, pane, bar, m);
+    return;
+  }
   switch (kind) {
     case "window":
     case "window_blinds": {
@@ -537,7 +584,7 @@ function window(m: Model, L: OpeningLook) {
 
 /** An archway: the plate round its arch, the keystone, its casing round the arch on both faces. */
 function archway(m: Model, L: OpeningLook) {
-  const D = openingCut(L.kind)[1];
+  const D = L.z1 || openingCut(L.kind)[1];
   const [x0, x1] = [L.a0, L.a1];
   const cx = (x0 + x1) / 2;
   const r = (x1 - x0) / 2 - 0.05;
@@ -573,4 +620,281 @@ export function openingModel(L: OpeningLook): BufferGeometry {
   else if (L.kind.startsWith("window")) window(m, L);
   else door(m, L);
   return m.geometry();
+}
+
+// ── (plan 130 phase 8) the doors' leaves and the windows' glazing by look; shutters and curtains ─────────────────
+
+/** A leaf in a look (DOOR_LOOKS): none — the panelled one, glazed or not as it was. */
+function lookLeaf(put: Put, lw: number, lh: number, c: number, look: string | null, glass: boolean) {
+  const h = TH / 2;
+  const raised = (u0: number, u1: number, y0: number, y1: number, k = 1.07, d = 0.01) => {
+    for (const s of [-1, 1]) put(u0, u1, y0, y1, s > 0 ? h : -h - d, s > 0 ? h + d : -h, shade(c, k));
+  };
+  const lever = () => {
+    for (const s of [-1, 1]) {
+      put(lw - 0.09, lw - 0.06, 0.98, 1.02, s * (h + 0.012) - 0.008, s * (h + 0.012) + 0.008, P.brass);
+      put(lw - 0.2, lw - 0.06, 1.0, 1.02, s * (h + 0.03) - 0.008, s * (h + 0.03) + 0.008, P.brass);
+    }
+    for (const y of [0.25, lh - 0.3]) put(-0.006, 0.012, y, y + 0.1, -0.008, 0.008, P.brass);
+  };
+  // a stile-and-rail leaf round a glass opening u0..u1 × y0..y1, bars `nx` × `ny`
+  const glazed = (gu0: number, gu1: number, gy0: number, gy1: number, nx: number, ny: number) => {
+    put(0, gu0, 0, lh, -h, h, c);
+    put(gu1, lw, 0, lh, -h, h, c);
+    put(gu0, gu1, gy1, lh, -h, h, c);
+    put(gu0, gu1, 0, gy0, -h, h, c);
+    put(gu0, gu1, gy0, gy1, -0.006, 0.006, GLASS, { glass: 0.3 });
+    for (let i = 1; i < nx; i++) {
+      const u = gu0 + ((gu1 - gu0) * i) / nx;
+      put(u - 0.011, u + 0.011, gy0, gy1, -0.012, 0.012, c);
+    }
+    for (let j = 1; j < ny; j++) {
+      const y = gy0 + ((gy1 - gy0) * j) / ny;
+      put(gu0, gu1, y - 0.011, y + 0.011, -0.012, 0.012, c);
+    }
+  };
+  switch (look) {
+    case "six":
+      put(0, lw, 0, lh, -h, h, c);
+      for (const [y0, y1] of [
+        [0.14, 0.7],
+        [0.84, 1.4],
+        [1.54, lh - 0.14],
+      ])
+        for (const [u0, u1] of [
+          [0.1, lw / 2 - 0.04],
+          [lw / 2 + 0.04, lw - 0.1],
+        ])
+          raised(u0, u1, y0, y1);
+      return lever();
+    case "flush":
+      // (one slab: a plate a hair over its face flickered)
+      put(0, lw, 0, lh, -h, h, c);
+      return lever();
+    case "glass":
+      glazed(0.11, lw - 0.11, 0.95, lh - 0.12, 2, 2);
+      raised(0.2, lw - 0.2, 0.25, 0.75);
+      return lever();
+    case "half":
+      glazed(0.11, lw - 0.11, 1.15, lh - 0.12, 1, 1);
+      raised(0.16, lw - 0.16, 0.2, 0.95);
+      return lever();
+    case "french":
+      glazed(0.09, lw - 0.09, 0.22, lh - 0.1, 2, 5);
+      return lever();
+    case "plank": {
+      const n = Math.max(3, Math.round(lw / 0.14));
+      for (let k = 0; k < n; k++)
+        put((k * lw) / n + 0.002, ((k + 1) * lw) / n - 0.002, 0, lh, -h, h, shade(c, k % 2 ? 1 : 0.93));
+      // its ledges and the Z's brace on the room's side
+      for (const y of [0.3, lh - 0.35]) put(0.04, lw - 0.04, y - 0.06, y + 0.06, -h - 0.02, -h, shade(c, 0.85));
+      put(lw / 2 - 0.04, lw / 2 + 0.04, 0.36, lh - 0.41, -h - 0.02, -h, shade(c, 0.85));
+      for (const s of [-1, 1])
+        put(lw - 0.12, lw - 0.08, 0.92, 1.12, s * (h + 0.02) - 0.01, s * (h + 0.02) + 0.01, P.graphite);
+      return;
+    }
+    case "dutch":
+      // two halves, a shelf on the bottom one
+      put(0, lw, 0, 1.04, -h, h, c);
+      put(0, lw, 1.06, lh, -h, h, c);
+      put(-0.01, lw + 0.01, 1.0, 1.046, -h - 0.06, h + 0.06, shade(c, 0.9));
+      raised(0.12, lw - 0.12, 0.16, 0.86);
+      raised(0.12, lw - 0.12, 1.2, lh - 0.14);
+      return lever();
+    case "craftsman":
+      // three lights stepped up top, a dentil shelf under them, two tall panels below
+      put(0, lw, 0, lh, -h, h, c);
+      for (let k = 0; k < 3; k++) {
+        const u0 = 0.1 + (k * (lw - 0.2)) / 3 + 0.015;
+        const u1 = 0.1 + ((k + 1) * (lw - 0.2)) / 3 - 0.015;
+        const y0 = lh - 0.55 + (k === 1 ? 0.04 : 0);
+        put(u0, u1, y0, lh - 0.12, -h - 0.006, h + 0.006, GLASS, { glass: 0.3 });
+      }
+      put(0.06, lw - 0.06, lh - 0.66, lh - 0.6, -h - 0.05, h + 0.05, shade(c, 0.92));
+      raised(0.12, lw / 2 - 0.04, 0.16, lh - 0.75, 1.06);
+      raised(lw / 2 + 0.04, lw - 0.12, 0.16, lh - 0.75, 1.06);
+      return lever();
+    case "modern":
+      put(0, lw, 0, lh, -h, h, c);
+      put(lw * 0.18, lw * 0.18 + 0.12, 0.2, lh - 0.2, -h - 0.006, h + 0.006, GLASS, { glass: 0.25 });
+      for (const s of [-1, 1])
+        put(lw - 0.1, lw - 0.075, 0.5, 1.6, s * (h + 0.04) - 0.01, s * (h + 0.04) + 0.01, P.steelLight);
+      return;
+    default:
+      return panelLeaf(put, lw, lh, c, glass || look === "panel-glass");
+  }
+}
+
+type PaneFn = (px0: number, px1: number, py0: number, py1: number, col?: number, op?: number, z?: number) => unknown;
+type BarFn = (bx0: number, bx1: number, by0: number, by1: number, d?: number) => unknown;
+/** A window's glass and bars in a look (WINDOW_LOOKS), over i0..i1 × j0..j1; mullions every metre or so wide. */
+function glazing(look: string, i0: number, i1: number, j0: number, j1: number, pane: PaneFn, bar: BarFn, m: Model) {
+  const W = i1 - i0;
+  const H = j1 - j0;
+  const lights = Math.max(1, Math.round(W / 1.1));
+  const vbar = (u: number, d = 0.05, a = j0, b = j1) => bar(u - 0.022, u + 0.022, a, b, d);
+  const hbar = (y: number, d = 0.045, a = i0, b = i1) => bar(a, b, y - 0.018, y + 0.018, d);
+  const thin = (u: number, a = j0, b = j1) => bar(u - 0.01, u + 0.01, a, b, 0.025);
+  const thinH = (y: number, a = i0, b = i1) => bar(a, b, y - 0.01, y + 0.01, 0.025);
+  // (the mullions between its lights)
+  for (let k = 1; k < lights; k++) vbar(i0 + (W * k) / lights, 0.07);
+  const each = (fn: (a: number, b: number) => void) => {
+    for (let k = 0; k < lights; k++)
+      fn(i0 + (W * k) / lights + (k ? 0.022 : 0), i0 + (W * (k + 1)) / lights - (k < lights - 1 ? 0.022 : 0));
+  };
+  switch (look) {
+    case "grid":
+      pane(i0, i1, j0, j1);
+      each((a, b) => {
+        const nx = Math.max(2, Math.round((b - a) / 0.3));
+        const ny = Math.max(2, Math.round(H / 0.3));
+        for (let i = 1; i < nx; i++) thin(a + ((b - a) * i) / nx);
+        for (let j = 1; j < ny; j++) thinH(j0 + (H * j) / ny, a, b);
+      });
+      return;
+    case "hung":
+      // two sashes, the upper one outside the lower, a meeting rail; the top in two by two
+      pane(i0, i1, (j0 + j1) / 2, j1, undefined, undefined, 0.025);
+      pane(i0, i1, j0, (j0 + j1) / 2, undefined, undefined, -0.025);
+      hbar((j0 + j1) / 2, 0.08);
+      each((a, b) => {
+        thin((a + b) / 2, (j0 + j1) / 2, j1);
+        thinH((3 * j1 + j0) / 4, a, b);
+      });
+      return;
+    case "picture":
+      pane(i0, i1, j0, j1);
+      return;
+    case "transom":
+      pane(i0, i1, j0, j1);
+      hbar(j1 - Math.min(0.35, H * 0.25), 0.06);
+      each((a, b) => thin((a + b) / 2, j0, j1 - Math.min(0.35, H * 0.25)));
+      return;
+    case "awning": {
+      pane(i0, i1, j0, j1);
+      const n = Math.max(2, Math.round(H / 0.45));
+      for (let j = 1; j < n; j++) hbar(j0 + (H * j) / n, 0.05);
+      return;
+    }
+    case "louvre": {
+      const n = Math.max(4, Math.round(H / 0.09));
+      for (let j = 0; j < n; j++)
+        m.add(box([W, 0.006, 0.08], 0.001), GLASS, {
+          at: [(i0 + i1) / 2, j0 + (H * (j + 0.5)) / n, 0],
+          rot: [0.6, 0, 0],
+          glass: 0.35,
+        });
+      for (const u of [i0 + 0.02, i1 - 0.02]) vbar(u, 0.09);
+      return;
+    }
+    case "diamond": {
+      pane(i0, i1, j0, j1);
+      // (lead cames on the diagonals, 0.25 m apart)
+      const step = 0.25;
+      const cx = (i0 + i1) / 2;
+      const cy = (j0 + j1) / 2;
+      const len = Math.hypot(W, H);
+      for (const a of [Math.PI / 4, -Math.PI / 4])
+        for (let k = -Math.ceil(len / step); k <= Math.ceil(len / step); k++) {
+          // a came along direction a through the point k steps across it, clipped to the pane (roughly: the
+          // part whose middle is in it)
+          const nx = -Math.sin(a);
+          const ny = Math.cos(a);
+          const px = cx + nx * k * step;
+          const py = cy + ny * k * step;
+          // (its reach either way inside the pane)
+          let t0 = -len;
+          let t1 = len;
+          for (const [d, p, lo, hi] of [
+            [Math.cos(a), px, i0, i1],
+            [Math.sin(a), py, j0, j1],
+          ] as const) {
+            if (Math.abs(d) < 1e-9) continue;
+            const [ta, tb] = [(lo - p) / d, (hi - p) / d];
+            t0 = Math.max(t0, Math.min(ta, tb));
+            t1 = Math.min(t1, Math.max(ta, tb));
+          }
+          if (t1 - t0 < 0.05) continue;
+          const tm = (t0 + t1) / 2;
+          m.add(box([t1 - t0, 0.012, 0.018]), P.graphite, {
+            at: [px + Math.cos(a) * tm, py + Math.sin(a) * tm, 0],
+            rot: [0, 0, a],
+          });
+        }
+      return;
+    }
+    case "prairie":
+      pane(i0, i1, j0, j1);
+      each((a, b) => {
+        const e = Math.min(0.14, (b - a) / 5);
+        thin(a + e);
+        thin(b - e);
+        thinH(j0 + e, a, b);
+        thinH(j1 - e, a, b);
+      });
+      return;
+    case "slider":
+      each((a, b) => {
+        pane(a, (a + b) / 2 + 0.03, j0, j1, undefined, undefined, 0.02);
+        pane((a + b) / 2 - 0.03, b, j0, j1, undefined, undefined, -0.02);
+        bar((a + b) / 2 - 0.03, (a + b) / 2 + 0.03, j0, j1, 0.07);
+      });
+      return;
+    default:
+      // casement: each light in two, a rail across
+      pane(i0, i1, j0, j1);
+      each((a, b) => {
+        vbar((a + b) / 2, 0.06);
+        hbar((j0 + j1) / 2, 0.045, a, b);
+      });
+  }
+}
+
+/** A window's shutters (louvred, folded back on its outside face — L.side's) and curtains (on a rod, on the room's). */
+function dressing(m: Model, L: OpeningLook) {
+  const [x0, x1, y0, y1] = [L.a0, L.a1, L.z0, L.z1];
+  const out = L.out;
+  if (L.shutters !== null) {
+    const w = Math.min(0.9, (x1 - x0) / 2);
+    const z = out * (T + 0.035);
+    for (const [a, b] of [
+      ...(L.joinL ? [] : [[x0 - 0.09 - w, x0 - 0.09]]),
+      ...(L.joinR ? [] : [[x1 + 0.09, x1 + 0.09 + w]]),
+    ]) {
+      const c = L.shutters;
+      m.add(box([b - a, y1 - y0, 0.025], 0.003), shade(c, 0.85), { at: [(a + b) / 2, (y0 + y1) / 2, z] });
+      // (its stiles and rails, the louvres between)
+      for (const u of [a + 0.03, b - 0.03]) m.add(box([0.05, y1 - y0, 0.035]), c, { at: [u, (y0 + y1) / 2, z] });
+      for (const y of [y0 + 0.03, (y0 + y1) / 2, y1 - 0.03])
+        m.add(box([b - a, 0.05, 0.035]), c, { at: [(a + b) / 2, y, z] });
+      for (let y = y0 + 0.08; y < y1 - 0.06; y += 0.06) {
+        if (Math.abs(y - (y0 + y1) / 2) < 0.04) continue;
+        m.add(box([b - a - 0.1, 0.008, 0.04]), shade(c, 1.08), { at: [(a + b) / 2, y, z], rot: [0.5, 0, 0] });
+      }
+    }
+  }
+  if (L.curtains !== null) {
+    const z = -out * (T + 0.09);
+    const top = y1 + 0.16;
+    const foot = Math.max(0.02, y0 - 0.12);
+    const c = L.curtains;
+    // the rod and its finials, a hand past the frame each side
+    m.add(cyl(0.012, 0.012, x1 - x0 + 0.7, 6).rotateZ(Math.PI / 2), P.brass, { at: [(x0 + x1) / 2, top, z] });
+    for (const u of [x0 - 0.35, x1 + 0.35]) m.add(ball(0.025, 6), P.brass, { at: [u, top, z] });
+    // two drapes drawn back, folds by alternate shade
+    const dw = Math.max(0.3, (x1 - x0) * 0.28);
+    for (const [a, b] of [
+      [x0 - 0.3, x0 - 0.3 + dw],
+      [x1 + 0.3 - dw, x1 + 0.3],
+    ]) {
+      const n = Math.max(3, Math.round((b - a) / 0.07));
+      for (let k = 0; k < n; k++) {
+        const u0 = a + ((b - a) * k) / n;
+        const u1 = a + ((b - a) * (k + 1)) / n;
+        m.add(box([u1 - u0 + 0.004, top - foot, 0.03]), shade(c, k % 2 ? 1 : 0.86), {
+          at: [(u0 + u1) / 2, (top + foot) / 2, z + (k % 2 ? 0.012 : -0.012)],
+        });
+      }
+    }
+  }
 }

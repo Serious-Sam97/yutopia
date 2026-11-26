@@ -985,6 +985,8 @@ mkdirSync(pngDir, { recursive: true });
 mkdirSync(OUT, { recursive: true });
 for (const id of MAT_IDS) {
   if (only && !only.includes(id)) continue;
+  // (a photo material's maps are photo-materials.mts's)
+  if ((LIBRARY[id] as MatDef).photo) continue;
   const t0 = Date.now();
   const m = paint(id);
   encode(id, m, false);

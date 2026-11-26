@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Avatar;
+use App\Models\HouseBlueprint;
 use App\Models\Setup;
 use App\Models\User;
 use App\Services\Avatars;
@@ -92,6 +93,41 @@ class WorldController extends Controller
     public function deleteSetup(Request $request, int $setupId): JsonResponse
     {
         Setup::where('user_id', $request->user()->id)->findOrFail($setupId)->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
+    // (plan 130 phase 12) A person's house blueprints: listed (names and sizes; one asked for whole), saved, deleted.
+    public function blueprints(Request $request): JsonResponse
+    {
+        $list = HouseBlueprint::where('user_id', $request->user()->id)->latest('id')->get(['id', 'name', 'data', 'created_at']);
+
+        return response()->json(['blueprints' => $list]);
+    }
+
+    public function saveBlueprint(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:40'],
+            'data' => ['required', 'array'],
+            'data.v' => ['required', 'integer'],
+            'data.w' => ['required', 'numeric', 'between:1,200'],
+            'data.d' => ['required', 'numeric', 'between:1,200'],
+            'data.found' => ['required', 'numeric', 'between:0,2'],
+            'data.storeys' => ['required', 'array', 'min:1', 'max:8'],
+            'data.things' => ['present', 'array', 'max:2000'],
+        ]);
+        abort_if(strlen(json_encode($data['data'])) > HouseBlueprint::MAX_BYTES, 422, 'That house is too big to save.');
+        $user = $request->user();
+        abort_if(HouseBlueprint::where('user_id', $user->id)->count() >= HouseBlueprint::MAX, 422, 'You have plenty of blueprints already.');
+        $bp = HouseBlueprint::create(['user_id' => $user->id, 'name' => trim($data['name']), 'data' => $data['data']]);
+
+        return response()->json(['blueprint' => $bp->only(['id', 'name', 'data'])], 201);
+    }
+
+    public function deleteBlueprint(Request $request, int $blueprintId): JsonResponse
+    {
+        HouseBlueprint::where('user_id', $request->user()->id)->findOrFail($blueprintId)->delete();
 
         return response()->json(['ok' => true]);
     }

@@ -1398,3 +1398,30 @@ The user: "the parking lot has an old design, it does not connect right with the
   with Buy · Build · Lot tabs and By Room / By Function, a view cluster, a Design tool, and the fix for a top on a
   table that couldn't be moved alone. Forks decided 2026-11-24 (three looks mocked for the user to pick; no price yet
   but room left for money; desktop only). Not built yet.
+
+## Build a house (2026-11-26, plan `130-the-house-build.md`, phases 0–14 built and checked, uncommitted)
+
+- Build mode as The Sims' house builder: lots members claim, foundations and basements (two deep), walls moved and
+  rooms moved whole, fences/railings/columns/trims, a tile brush for floors, storey heights, a modular stair tool,
+  Auto Roof and dragged roofs with handles, sized and joined windows, CC0 coverings tinted, pools, your own blueprints,
+  and the pieces counted in the plan. Forks decided 2026-11-26 one by one. Phase 0 mocked 2026-11-26 (`design/house-build/`).
+- Built straight through 2026-11-26 ("Go all"), each phase recorded in the plan's Built section:
+  - phase 1 lots claimed by their For Sale signs;
+  - phase 2 rooms and walls moved;
+  - phase 3 fences, columns and trims;
+  - phase 4 the tile brush and holes;
+  - phase 5 foundations and basements;
+  - phase 6 the stair tool;
+  - phase 7 nine roof kinds, dormers, chimneys and Auto Roof;
+  - phase 8 sized doors and windows (30 / 35), shutters, curtains;
+  - phase 9 61 wall and 50 floor coverings, tinted;
+  - phase 10 24 pieces (fireplaces, porches, awnings);
+  - phase 11 pools you wade and swim in;
+  - phase 12 blueprints through the API;
+  - phase 13 cost.
+- **Checks:**
+  - `e2e/zz-house.mts`: a whole house built as Bia, 74 checks, stills per phase;
+  - shared 954/954;
+  - client shapes, walls3d, relayout and others near the change.
+- **Budget:** world page 520.6 KB ≤ 522 (three's core had slipped onto the page through `tp/land-holes.ts`: 622.5
+  before the fix); `yutopia-build` 68.4 ≤ 70.

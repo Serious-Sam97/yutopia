@@ -5,6 +5,7 @@ import type { BuildingKind, WayKind } from "@yutopia/shared/grounds";
 import type { LandMode, Paint, TreePick } from "@yutopia/shared/grounds-brush";
 import type { BridgeRails, BridgeStyle, GrowBiome, ThingKind } from "@yutopia/shared/grounds-edits";
 import type { BattleEvent, Needs, PetLook, PetOutfit, Species } from "@yutopia/shared/pets";
+import type { Roof } from "@yutopia/shared/structure";
 import { WALL_H } from "@yutopia/shared/units";
 import { useRef, useSyncExternalStore } from "react";
 import type { Setup } from "@/lib/api";
@@ -78,6 +79,7 @@ export type PanelKind =
   | "admin" // Run the place: admins only (docs/plan/48-the-admin.md)
   | "chess" // at a chess table: the HUD strip (docs/plan/70-the-chess.md)
   | "npc" // a placed NPC's card: their needs, mood, work, how they feel about me (docs/plan/123, F8b; objectId: theirs)
+  | "lot" // (plan 130) a home lot's card: free (claim it) or mine (roommates, give it back) — objectId: its key
   | null;
 
 // A pet in the room (shared/pets.ts), as the panel and the menus see it.
@@ -281,8 +283,32 @@ export interface GameView {
 
 export type BuildTool = "furniture" | "walls" | "rooms" | "desks" | "map";
 /** (plan 124) Build mode's Build tab: what it holds, The Sims 3's way. */
-export type BuildPartKey = "walls" | "floors" | "paint" | "roof" | "rooms" | "doors" | "windows" | "stairs";
-export type PaintMode = "line" | "arc" | "box" | "adjust" | "fill" | "erase";
+export type BuildPartKey =
+  | "walls"
+  | "floors"
+  | "paint"
+  | "roof"
+  | "rooms"
+  | "doors"
+  | "windows"
+  | "stairs"
+  | "columns"
+  | "porches"
+  | "found"
+  | "flights";
+// (plan 130 phase 4: the floors' tile brush — a tile, a half, a quarter, a triangle)
+export type PaintMode =
+  | "line"
+  | "arc"
+  | "box"
+  | "adjust"
+  | "fill"
+  | "erase"
+  | "tile"
+  | "half"
+  | "quarter"
+  | "tri"
+  | "hole";
 /** God mode's tools (the bottom bar): Select, then each kind of edit (phases 6–9 of plan 53; Grow,
  *  plan 69's phase 10). */
 export const GOD_TOOLS = [
@@ -301,6 +327,8 @@ export const GOD_TOOLS = [
   "npcs",
   // (plan 126: herds, dens, nests, places kept empty; J picks it)
   "animals",
+  // (plan 130: home lots members claim; H picks it)
+  "lots",
 ] as const;
 export type GodTool = (typeof GOD_TOOLS)[number];
 /** The tools built so far (the rest: phases 7–9 of plan 53). */
@@ -317,6 +345,7 @@ export const GOD_READY: ReadonlySet<GodTool> = new Set<GodTool>([
   "bridges",
   "npcs",
   "animals",
+  "lots",
 ]);
 /** One of my drafts, as the list has it (the API's row: no data). */
 export interface GodDraftRow {
@@ -445,6 +474,18 @@ export interface GodHud {
    *  one placed), one placed in this draft, standing away from its home; its look, role and plate */
   /** (plan 121) the NPCs tool: the cast (the API's), the one held to place, the picked one, the step under way, the
    *  inside shown (a town building's storey, a studio floor) */
+  /** (plan 130) the home lots tool: the lot's size, name and neighbourhood; the picked one; why the one under the
+   *  pointer can't go there */
+  lots: {
+    w: number;
+    d: number;
+    name: string;
+    area: string;
+    sel: string | null;
+    why: string | null;
+    /** placing the picked lot's For Sale sign: the next click on the land puts it there */
+    signing?: boolean;
+  };
   /** (plan 126) the Animals tool: the kind of place to put down, its species, how many, how far round (an empty
    *  place's, a den's territory), its young; the place picked */
   animals: {
@@ -532,7 +573,7 @@ export interface GodHud {
 
 // The Walls tool, Sims-style (docs/plan/11-wall-building.md): build walls and
 // openings, paint wall faces, paint floors, or select walls (the inspector).
-export type WallMode = "build" | "paint" | "floors" | "roof" | "select";
+export type WallMode = "build" | "paint" | "floors" | "roof" | "select" | "found" | "flights";
 // how walls show while building: all up, cut away round what you point at, all down
 export type WallView = "up" | "cut" | "down";
 // The chip by the pointer in the Walls tool: the face it's on (which side, the
@@ -703,7 +744,7 @@ export interface HudState {
     shopSub: string;
     /** Build's part, Lot's part */
     part: BuildPartKey;
-    lotPart: "layouts" | "setups" | "desks" | "map";
+    lotPart: "layouts" | "setups" | "desks" | "map" | "blueprints";
     /** the floor's grid shown while building (G) */
     grid: boolean;
     /** the build camera looks straight down (T) */
@@ -730,13 +771,44 @@ export interface HudState {
     foundRoom: string | null;
     // a wall drawn free picked in Select (its id; plan 72 phase 11.11): the inspector's
     freeSel: string | null;
+    /** (plan 130 phase 2) the room picked in Walls › Select: moved, turned, copied, knocked down whole */
+    roomSel: string | null;
+    /** (plan 130's quality pass) the roof picked in the Roof part (Alt-click): its card edits it */
+    roofSel: string | null;
+    /** (plan 130 phase 5) the Foundation part: what a drag does (a pad, a basement dug), a click (a pad taken away,
+     *  steps put by one); the next pad's sides; the foundation's height */
+    foundMode: "box" | "remove" | "steps" | "dig" | "pool";
+    /** (plan 130 phase 11) the Pool tool's: how deep, its tiles, its coping, its ladder's side (−1 none), lights */
+    pool: {
+      depth: number;
+      tile: string;
+      coping: "stone" | "brick" | "concrete" | "wood";
+      ladder: number;
+      lights: boolean;
+    };
+    foundStyle: string;
+    foundHeight: number;
+    /** (plan 130 phase 6) the stair tool's stairs: their shape, width, look, rail, which way they climb, an L's turn */
+    flight: {
+      shape: "straight" | "l" | "u" | "spiral" | "ladder";
+      width: number;
+      style: string;
+      rail: string;
+      dir: number;
+      turn: 1 | -1;
+    };
     // the working height: m over the floor walls and floors are drawn at (0: the floor; a
     // mezzanine's — plan 72 phase 11.7)
     over: number;
     // the Roof tool's (plan 72 phase 11.7): what kind, how steep (°), a gable's ridge turned
-    roofKind: "flat" | "gable" | "hip";
+    roofKind: Roof["kind"];
     roofPitch: number;
     roofRidge: 0 | 1;
+    /** (plan 130 phase 7) the covering (roof.ts ROOF_MATS), the overhang (m) */
+    roofMat: string;
+    roofOver: number;
+    /** (plan 130 phase 9) a covering's own tint (null: the covering's), for walls and floors */
+    coverTint: string | null;
     paint: string; // the material Paint puts on faces (p w f b k)
     wallView: WallView;
     wallTag: WallTag | null;
@@ -873,10 +945,20 @@ const initial: HudState = {
     wallThick: 0.2,
     foundRoom: null,
     freeSel: null,
+    roomSel: null,
+    roofSel: null,
+    foundMode: "box",
+    pool: { depth: 1.4, tile: "blue", coping: "stone", ladder: 0, lights: true },
+    foundStyle: "stone",
+    foundHeight: 0.75,
+    flight: { shape: "l", width: 1, style: "oak", rail: "balusters", dir: -Math.PI / 2, turn: 1 },
     over: 0,
     roofKind: "gable",
     roofPitch: 30,
     roofRidge: 0,
+    roofMat: "slate",
+    roofOver: 0.3,
+    coverTint: null,
     paint: "b",
     wallView: "cut",
     wallTag: null,
@@ -934,6 +1016,7 @@ const initial: HudState = {
       blocked: null,
     },
     npcs: { cast: null, failed: false, q: "", held: null, a: 0, sel: null, step: "", floor: null, blocked: null },
+    lots: { w: 22, d: 28, name: "", area: "", sel: null, why: null },
     animals: {
       kind: "herd",
       species: "deer",

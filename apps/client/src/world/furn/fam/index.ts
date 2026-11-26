@@ -4,6 +4,7 @@ import * as desktop2 from "./desktop2";
 import * as doors2 from "./doors2";
 import * as floor2 from "./floor2";
 import * as gameroom from "./gameroom";
+import * as house from "./house";
 import * as kitchen from "./kitchen";
 import * as lights2 from "./lights2";
 import * as music from "./music";
@@ -43,6 +44,7 @@ export const FAM_LOOKS: Record<string, readonly string[]> = {
   ...seasons.LOOKS,
   ...skate.LOOKS,
   ...town.LOOKS,
+  ...house.LOOKS,
 };
 export const FAM_DRAW: Record<string, (m: Model, o: Look) => void> = {
   ...seating2.DRAW,
@@ -65,4 +67,5 @@ export const FAM_DRAW: Record<string, (m: Model, o: Look) => void> = {
   ...seasons.DRAW,
   ...skate.DRAW,
   ...town.DRAW,
+  ...house.DRAW,
 };

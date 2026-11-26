@@ -17,6 +17,7 @@ export * from "./ground.ts";
 export * from "./hang.ts";
 export * from "./hearing.ts";
 export * from "./held.ts";
+export * from "./homes.ts";
 export * from "./history.ts";
 export * from "./jump.ts";
 export * from "./levels.ts";

@@ -5,6 +5,7 @@ import {
   type BuildingSolids,
   buildingSolids,
   CharacterMover,
+  chunksOfHoles,
   type Frame,
   GroundsFlow,
   groundsThingAt,
@@ -20,7 +21,7 @@ import {
 } from "@yutopia/shared/physics";
 import type { Solid3 } from "@yutopia/shared/shapes";
 import { solidsInSteps } from "@yutopia/shared/shapes/grounds";
-import type { Structure } from "@yutopia/shared/structure";
+import { landHoles, type Structure } from "@yutopia/shared/structure";
 import { BufferGeometry, Float32BufferAttribute, LineBasicMaterial, LineSegments, type Scene } from "three";
 import { afterFrameSteps } from "../after-frame";
 
@@ -80,6 +81,8 @@ export class BrowserPhysics {
   private placesOf: unknown = null;
   // the chunks changed since they were built here (made again when their land is)
   private readonly stale = new Set<string>();
+  private holesSig = "[]";
+  private holesWere: { x0: number; z0: number; x1: number; z1: number }[] = [];
   // (plan 92) a car driven here: where it is and goes, and when it last said so
   private ahead: { x: number; z: number; vx: number; vz: number } | null = null;
   private aheadAt = 0;
@@ -244,6 +247,15 @@ export class BrowserPhysics {
     if (objects === this.seen && building === this.seenMap) return 0;
     this.seen = objects;
     this.seenMap = building;
+    // (plan 130: a basement dug, a pool — the land's holes: its chunks there made again)
+    const holes = landHoles();
+    const sig = JSON.stringify(holes);
+    if (sig !== this.holesSig) {
+      for (const [cx, cz] of chunksOfHoles([...this.holesWere, ...holes]))
+        if (this.world.has(`land:${cx},${cz}`)) this.stale.add(`${cx},${cz}`);
+      this.holesSig = sig;
+      this.holesWere = [...holes];
+    }
     this.solids = buildingSolids(building, objects, structure ?? undefined);
     // (a parked car driven here on Jolt: its parked box not made again under it — docs/plan/92)
     for (const id of this.onJolt) this.solids.cars.delete(id);

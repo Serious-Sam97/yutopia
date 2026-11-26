@@ -10,10 +10,11 @@
 // high and as thick as the panel says. Box draws four round a rectangle; Erase (or
 // ⌘/Ctrl) takes a whole wall away, every wall a drag crosses. They go to the server as the
 // structure's operations (struct:walls), undone and redone through its history.
-import type { ClientMessages, Ray, ServerMessages } from "@yutopia/shared";
+import type { ClientMessages, Ray, ServerMessages, WorldObjectDef } from "@yutopia/shared";
 import { HALF_WALL_H, WALL_H, WALL_T } from "@yutopia/shared";
 import {
   bowThrough,
+  heldWhy,
   isArc,
   nearOnWall,
   onTiles,
@@ -26,6 +27,7 @@ import {
   WALL_LOWEST,
   WALL_MATERIALS,
   WALL_MIN,
+  WALL_STYLES,
   WALLS_AT_ONCE,
   type Wall,
   type WallDraft,
@@ -41,6 +43,8 @@ import { hud, toast, type WallTag } from "../store";
 import { buildSound } from "./sounds";
 
 export interface FreeHost {
+  /** (the quality pass) the things here: the columns that hold an upper storey up */
+  things?(): Iterable<WorldObjectDef>;
   structure(): Structure | null;
   /** the ray from the camera through the pointer (floor metres, z up off the floor) */
   ray(): Ray | null;
@@ -99,7 +103,8 @@ export class FreeWalls {
   /** Whether the tile map holds this wall (the tile tool's openings go in it, by edges). */
   onTilesHere(w: Wall): boolean {
     const f = this.h.structure()?.floors.find((q) => q.index === w.floor);
-    return !!f && onTiles(w, f);
+    // (plan 130: a home lot's walls take them free, any size — free-openings.ts)
+    return !!f && onTiles(w, f) && !f.space?.startsWith("home:");
   }
   private walls(): Wall[] {
     const s = this.h.structure();
@@ -158,8 +163,13 @@ export class FreeWalls {
     return hud.get().build.paintMode === "box";
   }
   /** The brush's wall: what it's made of and how high. */
-  private brush(): { front: string; height: number; thick: number } | null {
+  private brush(): { front: string; height: number; thick: number; style?: string } | null {
     const b = hud.get().build;
+    // (plan 130: a fence, a rail, a spandrel, a gate — its own height and thickness)
+    if (b.brush.startsWith("s:")) {
+      const st = WALL_STYLES[b.brush.slice(2)];
+      return st ? { front: "p", height: st.h, thick: st.t, style: b.brush.slice(2) } : null;
+    }
     const ch = b.brush.slice(2);
     if (!(WALL_MATERIALS as readonly string[]).includes(ch)) return null;
     // (up on a mezzanine, a wall to the ceiling is as high as there's room for)
@@ -175,7 +185,12 @@ export class FreeWalls {
   private why(d: WallDraft): string | null {
     const s = this.h.structure();
     if (!s) return "not loaded";
-    return wallWhy(s, this.h.level(), d) ?? (d.bow || uncovered(this.walls(), d.a, d.b).length ? null : THERE);
+    return (
+      wallWhy(s, this.h.level(), d) ??
+      (d.bow || uncovered(this.walls(), d.a, d.b).length ? null : THERE) ??
+      // (an upper storey's: over something on the storey under it — the quality pass)
+      heldWhy(s, this.h.level(), d, this.h.things?.() ?? [])
+    );
   }
 
   /** The wall nearest the pointer, near enough to pick. */
@@ -277,6 +292,7 @@ export class FreeWalls {
         front: br.front,
         height: br.height,
         thick: br.thick,
+        ...(br.style ? { style: br.style } : {}),
         ...this.overOf(),
         ...(bow ? { bow } : {}),
       };
@@ -316,7 +332,15 @@ export class FreeWalls {
       this.h.show([], [this.mark(s, null)]);
       return this.h.tag(br ? null : this.tagWhy(tr("wallWhyNone")));
     }
-    const d: WallDraft = { a: from, b: s.p, front: br.front, height: br.height, thick: br.thick, ...this.overOf() };
+    const d: WallDraft = {
+      a: from,
+      b: s.p,
+      front: br.front,
+      height: br.height,
+      thick: br.thick,
+      ...(br.style ? { style: br.style } : {}),
+      ...this.overOf(),
+    };
     const why = dist(from, s.p) < WALL_MIN ? null : this.why(d);
     const done = this.chain ? this.chain.pts.length - 1 : 0;
     this.h.show(
@@ -489,6 +513,7 @@ export class FreeWalls {
       front: br.front,
       height: br.height,
       thick: br.thick,
+      ...(br.style ? { style: br.style } : {}),
       ...this.overOf(),
       ...(bow ? { bow } : {}),
     };
@@ -543,6 +568,7 @@ export class FreeWalls {
       front: br.front,
       height: br.height,
       thick: br.thick,
+      ...(br.style ? { style: br.style } : {}),
       ...this.overOf(),
     }));
   }

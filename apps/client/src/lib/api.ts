@@ -98,6 +98,12 @@ export interface Invite {
   expiresAt: string;
 }
 
+// (plan 130 phase 12) a house blueprint of mine (its data: shared blueprints.ts BlueprintData)
+export interface SavedBlueprint {
+  id: number;
+  name: string;
+  data: { storeys?: unknown[]; things?: unknown[]; w?: number; d?: number } & Record<string, unknown>;
+}
 // "My setups": a group of things saved in build mode, placed again anywhere
 // (offsets from the group's corner; things on a desk keep their cell).
 export interface SetupItem {
@@ -134,6 +140,11 @@ export const yutopia = {
   setups: () => api<{ setups: Setup[] }>("/api/setups"),
   saveSetup: (name: string, items: SetupItem[]) => api<{ setup: Setup }>("/api/setups", post({ name, items })),
   deleteSetup: (id: number) => api(`/api/setups/${id}`, { method: "DELETE" }),
+  // (plan 130 phase 12) house blueprints: my own
+  blueprints: () => api<{ blueprints: SavedBlueprint[] }>("/api/blueprints"),
+  saveBlueprint: (name: string, data: unknown) =>
+    api<{ blueprint: SavedBlueprint }>("/api/blueprints", post({ name, data })),
+  deleteBlueprint: (id: number) => api(`/api/blueprints/${id}`, { method: "DELETE" }),
   // everyone with an account (to hand a room or a desk to)
   members: () => api<{ members: { id: number; name: string }[] }>("/api/members"),
   // admins: single-use sign-up links

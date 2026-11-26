@@ -1,6 +1,7 @@
 "use client";
 
 import { CAR_COLOURS } from "@yutopia/shared";
+import { ANIMAL_KINDS, ANIMALS, type AnimalKind } from "@yutopia/shared/animals/species";
 import { KINDS as BKINDS, GROUPS, isKit, KIT_KINDS, type KitKind, PALETTES } from "@yutopia/shared/building-styles";
 import { type CarKind, nearestColour, SPECS, twoToneOf, variantsOf } from "@yutopia/shared/car";
 import {
@@ -28,7 +29,6 @@ import type { GrowBiome, ThingKind } from "@yutopia/shared/grounds-edits";
 import { catalogThing, THINGS } from "@yutopia/shared/grounds-things";
 import { GROW_BIOMES, GROW_LIMITS, GROW_NAMES, GROW_SNAP } from "@yutopia/shared/grow";
 import type { Biome } from "@yutopia/shared/land";
-import { ANIMAL_KINDS, ANIMALS, type AnimalKind } from "@yutopia/shared/animals/species";
 import { JOB_SPOTS, JOBS, type Job, type SpotKind } from "@yutopia/shared/npc/mind";
 import { PLACE_LIMITS, PLACED_TYPES, placesOf } from "@yutopia/shared/npc/places";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -416,6 +416,7 @@ const TOOL_WORDS: Record<GodTool, [string, string]> = {
   grow: ["Grow", "Crescer"],
   npcs: ["NPCs", "NPCs"],
   animals: ["Animals", "Animais"],
+  lots: ["Lots", "Terrenos"],
 };
 const TOOL_ICONS: Record<GodTool, IconName> = {
   select: "cursor",
@@ -430,6 +431,7 @@ const TOOL_ICONS: Record<GodTool, IconName> = {
   npcs: "people",
   animals: "paw",
   grow: "map",
+  lots: "flag",
 };
 const READY = GOD_READY;
 const MODE_WORDS: Record<LandMode, [string, string]> = {
@@ -464,6 +466,7 @@ export function GodHud() {
       {(g.tool === "land" || g.tool === "paint") && <ToolOptions g={g} />}
       {g.tool === "roads" && <RoadOptions g={g} />}
       {g.tool === "bridges" && <BridgeOptions g={g} />}
+      {g.tool === "lots" && <LotOptions g={g} />}
       {(g.tool === "bridges" || (g.tool === "select" && g.picked === "bridge")) && g.bridges.sel && (
         <BridgesPanel g={g} />
       )}
@@ -684,7 +687,7 @@ function Tools({ g }: { g: GodState }) {
           onClick={() => w?.god?.setTool(k)}
         >
           <span className="absolute top-1 right-1.5 text-[9px] opacity-60 hidden sm:block">
-            {k === "bridges" ? "B" : k === "npcs" ? "N" : k === "animals" ? "J" : i + 1}
+            {k === "bridges" ? "B" : k === "npcs" ? "N" : k === "animals" ? "J" : k === "lots" ? "H" : i + 1}
           </span>
           <Icon name={TOOL_ICONS[k]} size={18} />
           <span className="text-[11px]">{TOOL_WORDS[k][pt ? 1 : 0]}</span>
@@ -1215,6 +1218,124 @@ const BRIDGE_COLOURS = [
   0x56606a, 0x8e3b2f, 0x3f5e4a, 0x3d5a7a, 0x5a4636, 0x7a5c3e, 0x9aa0a6, 0xc9c3b6, 0x8a8174, 0x6d5f52,
 ] as const;
 const hex6 = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
+// (plan 130) the home lots tool: the next lot's size, its name and neighbourhood; the picked one sized, renamed, taken
+// away; who has it (claims are the structure's: a claimed lot stays where it is)
+const LOT_WORDS: Record<string, [string, string]> = {
+  hint: [
+    "Click the land to lay a lot · drag one to move it · Delete takes the picked one away",
+    "Clique no chão para pôr um terreno · arraste para mover · Delete remove o escolhido",
+  ],
+  size: ["Size (m)", "Tamanho (m)"],
+  name: ["Name", "Nome"],
+  area: ["Neighbourhood", "Bairro"],
+  resize: ["Size it", "Redimensionar"],
+  remove: ["Take it away", "Remover"],
+  claimed: ["{who}'s — free it before moving it", "De {who} — libere antes de mover"],
+  free: ["Free", "Livre"],
+  notThere: ["Not there: {why}", "Aí não: {why}"],
+  sign: ["Place sign", "Pôr a placa"],
+  signing: [
+    "Click where its sign goes (on the lot or within 3 m of it) · Esc stops",
+    "Clique onde a placa vai (no terreno ou até 3 m dele) · Esc para",
+  ],
+  signBack: ["Sign to its corner", "Placa no canto"],
+};
+function LotOptions({ g }: { g: GodState }) {
+  const pt = useLang() === "pt";
+  const w = useWorld();
+  const o = g.lots;
+  const L = (k: string) => LOT_WORDS[k][pt ? 1 : 0];
+  const set = (p: Partial<GodState["lots"]>) => hud.set((s) => ({ god: { ...s.god, lots: { ...s.god.lots, ...p } } }));
+  const lot = o.sel ? w?.G?.HOME_LOTS.find((l) => l.key === o.sel) : null;
+  const claim =
+    lot && w?.structure ? w.structure.floors.find((f) => f.space === `home:${lot.key}` && f.claim)?.claim : null;
+  const tool = (
+    w?.god as unknown as {
+      lotsTool?: () => { resizePicked(): void; removePicked(): void; set(k: string, c: object): void } | null;
+    }
+  )?.lotsTool?.();
+  return (
+    <div
+      className="pointer-events-auto cabinet absolute bottom-[86px] left-3 right-3 sm:right-auto sm:left-1/2 sm:-translate-x-1/2 px-3 py-2 flex flex-col gap-1.5 max-w-[calc(100vw-24px)]"
+      data-testid="god-lots"
+    >
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+        <span className="mono text-xs opacity-70">{L("size")}</span>
+        <input
+          className="field !w-16 !py-1"
+          type="number"
+          min={12}
+          max={48}
+          value={o.w}
+          onChange={(e) => set({ w: Number(e.target.value) || 22 })}
+        />
+        <span>×</span>
+        <input
+          className="field !w-16 !py-1"
+          type="number"
+          min={12}
+          max={48}
+          value={o.d}
+          onChange={(e) => set({ d: Number(e.target.value) || 28 })}
+        />
+        <input
+          className="field !w-32 !py-1"
+          placeholder={L("name")}
+          value={o.name}
+          maxLength={40}
+          onChange={(e) => set({ name: e.target.value })}
+        />
+        <input
+          className="field !w-36 !py-1"
+          placeholder={L("area")}
+          value={o.area}
+          maxLength={40}
+          onChange={(e) => set({ area: e.target.value })}
+        />
+        {lot && (
+          <>
+            <button type="button" className="chip" onClick={() => tool?.resizePicked()}>
+              {L("resize")}
+            </button>
+            <button
+              type="button"
+              className="chip"
+              onClick={() => tool?.set(lot.key, { name: o.name.trim() || lot.name, area: o.area.trim() || undefined })}
+            >
+              ✓ {L("name")}
+            </button>
+            <button
+              type="button"
+              className="chip"
+              aria-pressed={!!o.signing}
+              data-testid="god-lot-sign"
+              onClick={() => set({ signing: !o.signing })}
+            >
+              {L("sign")}
+            </button>
+            {lot.sign && (
+              <button type="button" className="chip" onClick={() => tool?.set(lot.key, { sign: undefined })}>
+                {L("signBack")}
+              </button>
+            )}
+            <button type="button" className="chip" onClick={() => tool?.removePicked()}>
+              {L("remove")}
+            </button>
+          </>
+        )}
+      </div>
+      <p className="text-xs opacity-80">
+        {lot && o.signing
+          ? L("signing")
+          : lot
+            ? `${lot.name}${lot.area ? ` · ${lot.area}` : ""} · ${lot.x1 - lot.x0} × ${lot.z1 - lot.z0} m · ${claim ? L("claimed").replace("{who}", claim.ownerName.split(" ")[0]) : L("free")}`
+            : o.why
+              ? L("notThere").replace("{why}", o.why)
+              : L("hint")}
+      </p>
+    </div>
+  );
+}
 function BridgeOptions({ g }: { g: GodState }) {
   const t = useW();
   const pt = useLang() === "pt";
@@ -3122,6 +3243,10 @@ function PublishDialog({ g }: { g: GodState }) {
     ...(c.bridges.add || c.bridges.change || c.bridges.remove
       ? [[TOOL_WORDS.bridges[pt ? 1 : 0], moves(c.bridges)] as [string, string]]
       : []),
+    // (plan 130: home lots laid, moved, their signs placed, taken away)
+    ...(c.homeLots.add || c.homeLots.change || c.homeLots.remove
+      ? [[TOOL_WORDS.lots?.[pt ? 1 : 0] ?? "Lots", moves(c.homeLots)] as [string, string]]
+      : []),
   ];
   const mb = (b: number) => (b / 1e6).toFixed(b < 1e5 ? 2 : 1);
   return (
@@ -3337,7 +3462,8 @@ function AnimalsPanel({ g }: { g: GodState }) {
   const w = useWorld();
   const a = g.animals;
   const [, bump] = useState(0);
-  const set = (o: Partial<GodState["animals"]>) => hud.set({ god: { ...hud.get().god, animals: { ...hud.get().god.animals, ...o } } });
+  const set = (o: Partial<GodState["animals"]>) =>
+    hud.set({ god: { ...hud.get().god, animals: { ...hud.get().god.animals, ...o } } });
   const KINDS: [GodState["animals"]["kind"], string, string][] = [
     ["herd", "Herd", "Bando"],
     ["den", "Den", "Toca"],
@@ -3364,7 +3490,12 @@ function AnimalsPanel({ g }: { g: GodState }) {
         >
           {pt ? `Animais (${a.inView.land + a.inView.placed})` : `Animals (${a.inView.land + a.inView.placed})`}
         </button>
-        <button type="button" className="deck-btn px-2 py-1" aria-pressed={a.layers.dark} onClick={() => set({ layers: { ...a.layers, dark: !a.layers.dark } })}>
+        <button
+          type="button"
+          className="deck-btn px-2 py-1"
+          aria-pressed={a.layers.dark}
+          onClick={() => set({ layers: { ...a.layers, dark: !a.layers.dark } })}
+        >
           {pt ? `O escuro (${a.inView.dark})` : `The dark (${a.inView.dark})`}
         </button>
       </div>
@@ -3375,7 +3506,13 @@ function AnimalsPanel({ g }: { g: GodState }) {
       </p>
       <div className="flex flex-wrap gap-1">
         {KINDS.map(([k, en, ptw]) => (
-          <button key={k} type="button" className="deck-btn px-2 py-1" aria-pressed={a.kind === k} onClick={() => set({ kind: k })}>
+          <button
+            key={k}
+            type="button"
+            className="deck-btn px-2 py-1"
+            aria-pressed={a.kind === k}
+            onClick={() => set({ kind: k })}
+          >
             {pt ? ptw : en}
           </button>
         ))}
@@ -3383,7 +3520,11 @@ function AnimalsPanel({ g }: { g: GodState }) {
       {(a.kind === "herd" || a.kind === "den" || a.kind === "nest") && (
         <label className="flex flex-col gap-1">
           {pt ? "Espécie" : "Species"}
-          <select className="input" value={a.species} onChange={(e) => set({ species: e.target.value as GodState["animals"]["species"] })}>
+          <select
+            className="input"
+            value={a.species}
+            onChange={(e) => set({ species: e.target.value as GodState["animals"]["species"] })}
+          >
             {wild.map((k) => (
               <option key={k} value={k}>
                 {ANIMALS[k].label[pt ? 1 : 0]}
@@ -3394,20 +3535,47 @@ function AnimalsPanel({ g }: { g: GodState }) {
       )}
       {(a.kind === "herd" || a.kind === "den" || a.kind === "nest" || a.kind === "dnest") && (
         <label className="flex flex-col gap-1">
-          {pt ? `Quantos: ${a.kind === "dnest" ? Math.min(4, a.n) : a.n}` : `How many: ${a.kind === "dnest" ? Math.min(4, a.n) : a.n}`}
-          <input type="range" min={1} max={a.kind === "dnest" ? 4 : 20} value={a.kind === "dnest" ? Math.min(4, a.n) : a.n} onChange={(e) => set({ n: Number(e.target.value) })} />
+          {pt
+            ? `Quantos: ${a.kind === "dnest" ? Math.min(4, a.n) : a.n}`
+            : `How many: ${a.kind === "dnest" ? Math.min(4, a.n) : a.n}`}
+          <input
+            type="range"
+            min={1}
+            max={a.kind === "dnest" ? 4 : 20}
+            value={a.kind === "dnest" ? Math.min(4, a.n) : a.n}
+            onChange={(e) => set({ n: Number(e.target.value) })}
+          />
         </label>
       )}
       {(a.kind === "den" || a.kind === "nest") && (
         <label className="flex flex-col gap-1">
           {pt ? `Filhotes: ${a.young}` : `Young: ${a.young}`}
-          <input type="range" min={0} max={6} value={a.young} onChange={(e) => set({ young: Number(e.target.value) })} />
+          <input
+            type="range"
+            min={0}
+            max={6}
+            value={a.young}
+            onChange={(e) => set({ young: Number(e.target.value) })}
+          />
         </label>
       )}
       {(a.kind === "empty" || a.kind === "den" || a.kind === "dclear") && (
         <label className="flex flex-col gap-1">
-          {a.kind === "den" ? (pt ? `Território: ${a.r} m` : `Territory: ${a.r} m`) : pt ? `Raio: ${a.r} m` : `Radius: ${a.r} m`}
-          <input type="range" min={10} max={600} step={10} value={a.r} onChange={(e) => set({ r: Number(e.target.value) })} />
+          {a.kind === "den"
+            ? pt
+              ? `Território: ${a.r} m`
+              : `Territory: ${a.r} m`
+            : pt
+              ? `Raio: ${a.r} m`
+              : `Radius: ${a.r} m`}
+          <input
+            type="range"
+            min={10}
+            max={600}
+            step={10}
+            value={a.r}
+            onChange={(e) => set({ r: Number(e.target.value) })}
+          />
         </label>
       )}
       <p className="opacity-70">
@@ -3423,10 +3591,22 @@ function AnimalsPanel({ g }: { g: GodState }) {
         <div className="flex flex-col gap-2 border-t border-white/15 pt-2">
           <p className="opacity-80">
             {picked.land ? (pt ? "Da terra: " : "The land's own: ") : ""}
-            {picked.species ? ANIMALS[picked.species].label[pt ? 1 : 0] : picked.kind === "dclear" ? (pt ? "Sem ninhos" : "Kept clear") : pt ? "Ninho do escuro" : "Dark nest"}
+            {picked.species
+              ? ANIMALS[picked.species].label[pt ? 1 : 0]
+              : picked.kind === "dclear"
+                ? pt
+                  ? "Sem ninhos"
+                  : "Kept clear"
+                : pt
+                  ? "Ninho do escuro"
+                  : "Dark nest"}
           </p>
           {picked.species && picked.kind !== "pen" && (
-            <select className="input" value={picked.species} onChange={(e) => change({ species: e.target.value as AnimalKind })}>
+            <select
+              className="input"
+              value={picked.species}
+              onChange={(e) => change({ species: e.target.value as AnimalKind })}
+            >
               {wild.map((k) => (
                 <option key={k} value={k}>
                   {ANIMALS[k].label[pt ? 1 : 0]}
@@ -3447,7 +3627,12 @@ function AnimalsPanel({ g }: { g: GodState }) {
             </label>
           )}
           <div className="flex gap-1">
-            <button type="button" className="deck-btn px-2 py-1" aria-pressed={a.moving} onClick={() => w?.god?.moveAnimalPlace()}>
+            <button
+              type="button"
+              className="deck-btn px-2 py-1"
+              aria-pressed={a.moving}
+              onClick={() => w?.god?.moveAnimalPlace()}
+            >
               {pt ? "Mover" : "Move"}
             </button>
             <button type="button" className="deck-btn px-2 py-1" onClick={() => w?.god?.removeAnimalPlace()}>

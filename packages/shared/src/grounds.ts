@@ -134,6 +134,7 @@ import {
   TREE_MASK,
   type WayDef,
 } from "./grounds-edits.ts";
+import { BASE_HOME_LOTS, type HomeLotDef, inLot, lotFault } from "./homes.ts";
 import type { LotLayout } from "./lot.ts";
 import { type AreaDef, type MapDef, worldShift } from "./map.ts";
 import type { GroundWhat } from "./shapes/grounds.ts";
@@ -910,6 +911,31 @@ if (STRIKE_LAND) {
     ),
   );
 }
+/** (plan 130) The home lots as they are: the generator's (Pine Meadow), God mode's edits laid over them. */
+export const HOME_LOTS: HomeLotDef[] = [];
+function layHomeLots() {
+  const next = homeLotsFor(EDITS);
+  HOME_LOTS.length = 0;
+  HOME_LOTS.push(...next);
+}
+/** The lots a set of God mode's edits would have. */
+export function homeLotsFor(edits: GroundsEdits): HomeLotDef[] {
+  const e = keep<HomeLotDef>(edits.homeLots);
+  const out: HomeLotDef[] = [];
+  for (const d of [...BASE_HOME_LOTS, ...e.add]) {
+    if (e.gone.has(d.key)) continue;
+    const c = e.change[d.key];
+    out.push(c ? { ...d, ...c } : d);
+  }
+  return out;
+}
+layHomeLots();
+/** The home lot holding (x, z) (`pad` m round it too), or null. */
+export function homeLotAt(x: number, z: number, pad = 0): HomeLotDef | null {
+  for (const l of HOME_LOTS) if (inLot(l, x, z, pad)) return l;
+  return null;
+}
+
 /** The buildings as they are: the generator's, edited. */
 export const BUILDINGS: Building[] = [];
 function layBuildings() {
@@ -1305,6 +1331,8 @@ export function pavedAt(x: number, z: number): number {
   }
   return best;
 }
+/** A home lot's height, all of it (its middle's, as the land would have it). */
+const lotPadH = (l: HomeLotDef) => macro((l.x0 + l.x1) / 2, (l.z0 + l.z1) / 2);
 function nearBuildings(x: number, z: number): Building[] {
   return bCells.get(cellKey(Math.floor(x / CELL), Math.floor(z / CELL))) ?? [];
 }
@@ -1921,6 +1949,8 @@ export function terrainAt(x: number, z: number): number {
     }),
   );
   if (x > SITE.x0 - 12 && x < SITE.x1 + 12 && z > SITE.z0 - 12 && z < SITE.z1 + 12) pads.push({ ...SITE, h: 0 });
+  // (plan 130: a home lot, flat to a metre round it at its middle's height)
+  for (const l of HOME_LOTS) if (inLot(l, x, z, 8)) pads.push({ ...l, h: lotPadH(l), m: 1 });
   if (x > PLAZA.x0 - 8 && x < PLAZA.x1 + 8 && z > PLAZA.z0 - 8 && z < PLAZA.z1 + 8)
     pads.push({ ...PLAZA, h: macro(STATUE.x, STATUE.z) });
   // (the outdoor skate park's concrete, levelled: docs/plan/103-the-skate.md F7c)
@@ -2202,6 +2232,7 @@ export function insideFence(x: number, z: number): boolean {
  *  the water (god mode's planted ones: docs/plan/53-the-god-mode.md, phase 8). */
 export function treeRoom(x: number, z: number): boolean {
   for (const bd of nearBuildings(x, z)) if (rectDist(bd, x, z) < 2) return false;
+  if (homeLotAt(x, z, 2)) return false;
   if (inSkateYard(x, z, 2)) return false;
   if (((x - POND.cx) / POND.rx) ** 2 + ((z - POND.cz) / POND.rz) ** 2 < 1.15) return false;
   for (const [f, n] of nearLines(x, z)) {
@@ -2234,6 +2265,7 @@ export function treeDensity(x: number, z: number): number {
     return longForest(x, z, h, slope);
   }
   if (!inLandDrawn(x, z)) return 0;
+  if (homeLotAt(x, z, 3)) return 0;
   const lawn = inLawn(x, z);
   if (lawn < 1) return 0;
   if (Math.hypot(x - CLEARING.x, z - CLEARING.z) < CLEARING.r) return 0;
@@ -4326,6 +4358,12 @@ function sigs(): Map<string, { sig: string; r: Rect }> {
       r: { x0: b.x0 - 12, z0: b.z0 - 12, x1: b.x1 + 12, z1: b.z1 + 12 },
     });
   for (const l of LAMPS) out.set(l.key, { sig: `${l.kind} ${l.x} ${l.z} ${l.ry}`, r: around(l.x, l.z, 3) });
+  // (plan 130: a home lot — its pad eased in, its trees cleared, its sign and stakes)
+  for (const l of HOME_LOTS)
+    out.set(`homelot:${l.key}`, {
+      sig: JSON.stringify(l),
+      r: { x0: l.x0 - 10, z0: l.z0 - 10, x1: l.x1 + 10, z1: l.z1 + 10 },
+    });
   // (a piece of grown land: its drawn land and the ridges round it, 300 out — its start height and
   // side in its look: they're read from the land it meets, another piece's added beside it too)
   for (const g of grownNow())
@@ -4399,6 +4437,7 @@ export function applyEdits(next: GroundsEdits): [number, number][] {
   layLand();
   layWays();
   layBuildings();
+  layHomeLots();
   layIndex();
   layLevels();
   layLamps();
@@ -4770,6 +4809,26 @@ export function checkEdits(e: GroundsEdits): string[] {
       (b) => b !== d && (b as Building).key !== k && b.x0 < d.x1 && d.x0 < b.x1 && b.z0 < d.z1 && d.z0 < b.z1,
     );
     if (over) no(`${k}: on top of ${(over as Building).name ?? "another building"}`);
+  }
+  // (plan 130) home lots: their size, on nothing else, on ground that can be built on
+  const hk = new Set<string>();
+  const lots = homeLotsFor(e);
+  for (const d of e.homeLots?.add ?? []) {
+    if (!fresh(d.key, "homelot:", hk)) continue;
+    if (typeof d.name !== "string" || !d.name.trim() || d.name.length > 40) no(`${d.key}: a name, 40 at most`);
+  }
+  for (const d of lots) {
+    if (!(e.homeLots?.add ?? []).some((q) => q.key === d.key) && !(d.key in (e.homeLots?.change ?? {}))) continue;
+    const f = lotFault(d, [...lots, ...plots.map((b, i) => ({ key: `b${i}`, ...b }))]);
+    if (f) no(`${d.name}: ${f}`);
+    const hit = [
+      [d.x0, d.z0],
+      [d.x1, d.z1],
+      [(d.x0 + d.x1) / 2, (d.z0 + d.z1) / 2],
+    ].find(([x, z]) => anchoredHere(x, z) || !inWorld(x, z));
+    if (hit) no(`${d.name}: on ground that stays as it is`);
+    const across = wayOver(d);
+    if (across) no(`${d.name}: on ${across}`);
   }
   // things
   const tk = new Set<string>();

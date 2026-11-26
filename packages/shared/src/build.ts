@@ -5,6 +5,7 @@ import type { Part } from "./fam/units.ts";
 import type { Point } from "./geom.ts";
 import { chairAt, outdoorsOf } from "./ground.ts";
 import { hangEdges, hangFits, hangOf } from "./hang.ts";
+import { GROUND_TOP } from "./homes.ts";
 import { onLevel } from "./levels.ts";
 import { liftHere, stopOver } from "./lift.ts";
 import { type Edge, isFloor, type MapDef } from "./map.ts";
@@ -33,10 +34,11 @@ export function canPlace(map: MapDef, others: WorldObjectDef[], o: WorldObjectDe
     for (let dx = 0; dx < w; dx++) {
       const tx = o.x + dx;
       const ty = o.y + dy;
-      const floor = isFloor(cellOf(map, tx, ty));
+      const ch = cellOf(map, tx, ty);
+      const floor = isFloor(ch);
       if (!floor && !out?.walkable(tx, ty)) return false;
-      // (parkour's out of doors: on the land, never a floor)
-      if (e.outdoor && floor) return false;
+      // (parkour's out of doors: on the land, never a floor — a home lot's ground is the land, plan 130)
+      if (e.outdoor && floor && ch !== GROUND_TOP) return false;
       if (e.solid && (base.solid.has(`${tx},${ty}`) || base.boxOn(tx, ty))) return false;
       // never straddling a wall
       if (dx > 0 && wallBetweenOf(map, tx - 1, ty, tx, ty) !== ".") return false;

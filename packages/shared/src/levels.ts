@@ -35,6 +35,8 @@ export interface SpaceFloor {
   grid: { x0: number; y0: number; w: number; h: number };
   up: number | null;
   down: number | null;
+  /** (plan 130) a home lot's ground storey on a foundation: how far its yard is under it (m) */
+  found?: number;
 }
 const SPACE_FLOORS = new Map<number, SpaceFloor>();
 /** each space's ground storey (by its plot) */
@@ -47,6 +49,7 @@ type FloorLike = {
   storey?: number;
   ceil?: number;
   away?: boolean;
+  found?: number;
 };
 /** The structure's town storeys (those of buildings in the world, not taken away), registered. */
 export function setSpaceFloors(floors: readonly FloorLike[]): void {
@@ -71,9 +74,11 @@ export function setSpaceFloors(floors: readonly FloorLike[]): void {
         grid: f.grid,
         up: list[i + 1]?.index ?? null,
         down: list[i - 1]?.index ?? null,
+        ...(f.found ? { found: f.found } : {}),
       };
       SPACE_FLOORS.set(f.index, sf);
-      if (i === 0) grounds.push(sf);
+      // (its ground storey: a home lot's basements are under it — plan 130)
+      if (sf.storey === 0) grounds.push(sf);
     });
   }
   SPACE_GROUNDS = grounds;

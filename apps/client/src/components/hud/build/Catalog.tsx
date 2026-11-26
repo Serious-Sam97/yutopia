@@ -9,6 +9,7 @@ import { hud, useHud } from "@/world/store";
 import { useWorld } from "../ctx";
 import { Icon } from "../icons";
 import { ask } from "./Dialogs";
+import { OpeningOptions } from "./OpeningOptions";
 import {
   type BuildPart,
   buildShelf,
@@ -421,6 +422,10 @@ export function ItemCard() {
     const item: Item = { key: sel.id, kind: sel.kind, props: sel.props ?? undefined };
     return (
       <Details item={item}>
+        {/* (plan 130 phase 8) a door's or window's own size, look, shutters, curtains — in a wall drawn free */}
+        {entry(sel.kind).opening && sel.props?.free === true && (
+          <OpeningOptions kind={sel.kind} props={sel.props ?? {}} apply={(p) => w?.build?.setLook(p)} />
+        )}
         <div className="flex gap-1.5 mt-auto">
           <button type="button" className="gl-btn gl-sm" onClick={() => w?.build?.pickSelection()}>
             <Icon name="move" size={15} />
@@ -736,6 +741,9 @@ function HeldCard({ item }: { item: Item }) {
             ))}
           </div>
         </fieldset>
+      )}
+      {e.opening && !b.styling && (
+        <OpeningOptions kind={item.kind} props={props} apply={(p) => w?.build?.placeLook(p)} />
       )}
       {(e.text ?? 0) > 0 && !b.styling && (
         <input

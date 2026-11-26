@@ -8,10 +8,11 @@ import {
   WALL_H,
   type WorldObjectDef,
 } from "@yutopia/shared";
-import { cellOf } from "@yutopia/shared/structure";
+import { cellOf, coverOf } from "@yutopia/shared/structure";
 import {
   BoxGeometry,
   BufferGeometry,
+  Color,
   CylinderGeometry,
   DoubleSide,
   EdgesGeometry,
@@ -254,7 +255,10 @@ export class BuildLayer {
       const good = g.ok && !g.remove;
       const col = ok(good);
       const faceMat = cue(
-        good && g.mat ? (MAT_COLOR[g.mat] ?? AMBER) : col,
+        good && g.mat
+          ? (MAT_COLOR[g.mat] ??
+              (coverOf(g.mat, "wall") ? new Color(coverOf(g.mat, "wall")?.tint).getHex() : AMBER))
+          : col,
         g.remove ? 0.12 : good && g.mat ? 0.5 : 0.25,
       );
       const stripMat = cue(col, 0.6);

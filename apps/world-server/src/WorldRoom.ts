@@ -37,15 +37,19 @@ import {
   hostOf,
   hungOnEdge,
   isFreeThing,
+  isHomeSpace,
   isJump,
   isKind,
   isOpening,
+  isWindowKind,
   LAYOUT_VERSION,
   levelMap,
   liftFront,
   liftRect,
   lockedRooms,
   lotLayout,
+  lotsFix,
+  lotWhy,
   type MapDef,
   mapFromLayout,
   objLevel,
@@ -79,6 +83,7 @@ import {
   stopOver,
   TEMPLATES,
   TICK_HZ,
+  thingMiddle,
   thunderOf,
   tileInMap,
   topCell,
@@ -106,6 +111,7 @@ import {
   editsNow,
   groundsAreaAt,
   groundsOutdoors,
+  HOME_LOTS,
   inDeepWater,
   setUnderfoot,
 } from "@yutopia/shared/grounds";
@@ -122,14 +128,19 @@ import {
   applyOps,
   attachAll,
   attachable,
+  columnsHoldWhy,
+  columnsOf,
   diffStructures,
   freeOpeningWhy,
   isFreeOpening,
   onOf,
+  openingOutside,
+  overAt,
   placeOnWall,
   STRUCTURE_VERSION,
   type StructOp,
   type Structure,
+  SUPPORT_KINDS,
   stopOnDeckWhy,
   structureFromMap,
   viewOf,
@@ -142,12 +153,12 @@ import { ApiError, api, type PresenceEntry, type WorldInfo } from "./api.ts";
 import { verifyWorldToken, type WorldClaims } from "./auth.ts";
 import { castMap, loadCast, placedKeys } from "./cast.ts";
 import { config } from "./config.ts";
+import type { AnimalHooks } from "./features/animals.ts";
 import type { DarkHooks } from "./features/dark.ts";
 import { type Feature, featureNames, installFeatures } from "./features/index.ts";
 import type { PballHooks } from "./features/pballs.ts";
 import type { StrikeHooks } from "./features/strike.ts";
 import type { SurvivalHooks } from "./features/survival.ts";
-import type { AnimalHooks } from "./features/animals.ts";
 import type { VortexHooks } from "./features/vortex.ts";
 import { landEdits } from "./land.ts";
 import { removeParticipant, setCanPublish } from "./livekit.ts";
@@ -1712,6 +1723,8 @@ export class WorldRoom extends Room<WorldState> {
   inShaft: ((level: number, p: { x: number; y: number }) => boolean) | null = null;
   /** The room's physics world being built (features/physics.ts); onCreate waits for it. */
   physicsReady: Promise<void> | null = null;
+  /** (plan 130) the things of a lot's yard set on the land again (features/house.ts) */
+  yardThings: ((level: number) => void) | null = null;
   /** Every floor's navmesh (shared nav: recast — plan 72 phase 7), kept matching the building by
    *  features/physics.ts; the locked doors by key and whose they are. */
   readonly nav = new BuildingNav();
@@ -1946,10 +1959,22 @@ export class WorldRoom extends Room<WorldState> {
 
   /** Why `p` can't build on floor `level` (null: they can): a town building's inside is built by admins only
    *  (docs/plan/112-the-insides.md, F1a — members walk in). */
-  spaceWhy(p: { admin?: boolean } | undefined, level: number): string | null {
+  spaceWhy(p: { admin?: boolean; uid?: number } | undefined, level: number): string | null {
     const f = this.structure.floors.find((q) => q.index === level);
     if (!f?.space) return null;
+    // (plan 130: a home lot's — its owner's, their roommates', admins')
+    if (isHomeSpace(f.space)) return lotWhy(this.structure, level, p && { uid: p.uid ?? 0, admin: p.admin });
     return p?.admin ? null : "only admins build inside the town's buildings";
+  }
+
+  /** (plan 130) Why a thing can't stand at (x, y) on a home lot's floor: off the lot (null: on it, or not a lot's). */
+  lotEdgeWhy(level: number, x: number, y: number): string | null {
+    const f = this.structure.floors.find((q) => q.index === level);
+    if (!f || !isHomeSpace(f.space)) return null;
+    const g = f.grid;
+    return x < g.x0 - 0.01 || y < g.y0 - 0.01 || x > g.x0 + g.w + 0.01 || y > g.y0 + g.h + 0.01
+      ? "it's off the lot"
+      : null;
   }
 
   /** Why a door or window on the tiles' edges can't go where it is (plan 112, F4a): in a town building's own wall. */
@@ -1976,6 +2001,14 @@ export class WorldRoom extends Room<WorldState> {
    *  structure/spaces.ts): at loading (`boot`: the structure and things set in place, saved) and after a publish
    *  (applied as any edit). The things a newly laid space starts with, added. */
   fixSpaces(objects: WorldObjectDef[], boot = false, turned: ReadonlySet<string> = new Set()): WorldObjectDef[] {
+    // (plan 130: a home lot's storeys out of the world while God mode's taken its lot away, back when it's back)
+    const lots = lotsFix(this.structure, HOME_LOTS);
+    if (lots.length) {
+      if (boot) {
+        this.structure = applyOps(this.structure, lots);
+        setSpaceFloors(this.structure.floors);
+      } else this.applyStruct(lots);
+    }
     const fix = spacesFix(this.structure);
     let touched = false;
     const put = (t: WorldObjectDef) => {
@@ -2217,7 +2250,8 @@ export class WorldRoom extends Room<WorldState> {
       (existing ? this.spaceWhy(p, objLevel(fromSchema(existing), this.map)) : null) ??
       (m.kind === "elevator" && this.structure.floors.some((f) => f.index === level && f.space)
         ? "no lifts in the town's buildings"
-        : null);
+        : null) ??
+      this.lotEdgeWhy(level, x, y);
     if (spaceNo) {
       this.send(client, "toast", { text: `Can't put it there: ${spaceNo}.`, tone: "warn" });
       return;
@@ -2278,13 +2312,20 @@ export class WorldRoom extends Room<WorldState> {
     const freeOn = isOpening(def.kind) && props0.free === true ? onOf({ props: props0 }) : null;
     if (freeOn) {
       const on = { wall: String(freeOn.wall), at: Math.round(Number(freeOn.at) * 1e4) / 1e4 };
-      const why = freeOpeningWhy(this.structure, level, def.kind, on, sameFloor, def.id);
+      // (plan 130 phase 8: its own width, height, sill, look, shutters, curtains — checked with it)
+      const why = freeOpeningWhy(this.structure, level, { kind: def.kind, props: def.props }, on, sameFloor, def.id);
       const w = this.structure.walls.find((q) => q.id === on.wall);
       if (why || !w) {
         this.send(client, "toast", { text: `Can't put it there: ${why ?? "no wall there"}.`, tone: "warn" });
         return;
       }
-      def = { ...def, ...placeOnWall(w, on.at, def.kind), props: { ...(def.props ?? {}), free: true, on } };
+      def = {
+        ...def,
+        ...placeOnWall(w, on.at, { kind: def.kind, props: def.props }),
+        props: { ...(def.props ?? {}), free: true, on },
+      };
+      // (which face is out of doors: its shutters' — plan 130 phase 8)
+      if (isWindowKind(def.kind) && def.props) def.props.out = openingOutside(this.structure, level, def);
       const locked = this.lockBreak(p, null, existing ? [fromSchema(existing), def] : [def], level);
       if (locked) {
         this.send(client, "toast", { text: `Can't put it there: ${locked}.`, tone: "warn" });
@@ -2322,6 +2363,12 @@ export class WorldRoom extends Room<WorldState> {
       return;
     }
     const before = existing ? fromSchema(existing) : null;
+    // (plan 130: in a lot's yard, off its foundation — on the land, its height under the floor)
+    {
+      const over = onOf(def) ? 0 : overAt(this.structure, level, thingMiddle(def));
+      const { over: _o, ...rest } = def.props ?? {};
+      def = { ...def, props: over ? { ...rest, over } : rest };
+    }
     const saved = config.offline ? def : (await api.putObject(def)).object;
     this.state.objects.set(id, toSchema(saved));
     if (before) await this.carryTabletops(before, saved);
@@ -2360,6 +2407,24 @@ export class WorldRoom extends Room<WorldState> {
     if (locked) {
       this.send(client, "toast", { text: `${locked}.`, tone: "warn" });
       return;
+    }
+    // (a column holding up the storey over it stays — the quality pass)
+    if (SUPPORT_KINDS.has(o.kind)) {
+      const lv = objLevel(fromSchema(o), this.map);
+      const all = [...this.state.objects.values()].map(fromSchema);
+      const held = columnsHoldWhy(
+        this.structure,
+        lv,
+        columnsOf(all, lv),
+        columnsOf(
+          all.filter((q) => q.id !== id),
+          lv,
+        ),
+      );
+      if (held) {
+        this.send(client, "toast", { text: `That column stays: ${held}.`, tone: "warn" });
+        return;
+      }
     }
     // what sits on it goes with it
     const riders = surfaceRiders(fromSchema(o), [...this.state.objects.values()].map(fromSchema));
@@ -2543,6 +2608,14 @@ export function cleanProps(
     out.z = entry(hostOf(others, def)?.kind ?? "").surface ?? 0;
   }
   if ((SPLIT_KINDS as readonly string[]).includes(kind)) out.split = 1;
+  // (plan 130 phase 8) a door's or window's own size: to the centimetre (openingSizeWhy says whether it'll do)
+  if (isOpening(kind))
+    for (const k of ["ow", "oh", "sill"])
+      if (out[k] !== undefined) {
+        const v = Number(out[k]);
+        if (Number.isFinite(v)) out[k] = Math.round(v * 100) / 100;
+        else delete out[k];
+      }
   // on a wall: where along it (a quarter-tile shift, 0..3) and how high (steps
   // that keep it on the wall); without wu it's an older save's spot
   // words on it (plan 68): what the sign's face can draw, at most its length; none on anything else

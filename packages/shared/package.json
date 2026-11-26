@@ -12,6 +12,7 @@
     "./worn": "./src/worn.ts",
     "./facing": "./src/facing.ts",
     "./structure": "./src/structure/index.ts",
+    "./blueprints": "./src/blueprints.ts",
     "./structure/finish": "./src/structure/finish.ts",
     "./structure/spaces": "./src/structure/spaces.ts",
     "./structure/fold": "./src/structure/fold.ts",

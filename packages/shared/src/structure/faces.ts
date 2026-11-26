@@ -222,7 +222,8 @@ export function doorways(walls: readonly { a: XY; b: XY }[]): { a: XY; b: XY }[]
  *  close round), closed across their doorways. */
 export function floorFaces(s: Pick<Structure, "walls">, floor: number) {
   // (an arc as its chords)
-  const walls = s.walls.filter((w: Wall) => w.floor === floor).flatMap(chordsOf);
+  // (plan 130: a fence, a rail, a spandrel, a gate closes no room)
+  const walls = s.walls.filter((w: Wall) => w.floor === floor && !w.style).flatMap(chordsOf);
   return wallFaces([...walls, ...doorways(walls)]);
 }
 

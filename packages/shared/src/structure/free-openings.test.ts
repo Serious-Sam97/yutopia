@@ -132,3 +132,54 @@ test("a door in an arc: placed across its curve, its hole cut from the chords it
   assert.ok(!near(base + 1), "open where the door is");
   assert.ok(near(base + 3), "the wall over it");
 });
+
+// plan 130 phase 8: a door or window's own width, height and sill; joined windows; looks, shutters, curtains
+import { openingCutOf, openingSizeWhy, openingSpanOf } from "../openings.ts";
+
+test("its own size: the hole, its place along the wall, what's checked", () => {
+  const props = { free: true, on: { wall: wall.id, at: L / 2 }, ow: 2.4, oh: 1.2, sill: 0.6 };
+  const w: WorldObjectDef = { id: "w1", kind: "window", ...placeOnWall(wall, L / 2, { kind: "window", props }), props };
+  assert.equal(openingSpanOf(w), 2.4);
+  assert.deepEqual(openingCutOf(w), [0.6, 1.8]);
+  const cut = freeCuts([w], wall.id)[0];
+  assert.ok(Math.abs(cut.u1 - cut.u0 - 2.4) < 1e-9 && cut.z0 === 0.6 && cut.z1 === 1.8);
+  // (its start 1.2 m back from its middle, along the wall)
+  assert.ok(Math.abs(Math.hypot(w.x - 23, w.y - 13) - 1.2) < 1e-3);
+  const why = (p: Record<string, unknown>, others: WorldObjectDef[] = [], at = L / 2) =>
+    freeOpeningWhy(s, 3, { kind: "window", props: { ...p, free: true } }, { wall: wall.id, at }, others);
+  assert.equal(why({ ow: 2.4, oh: 1.2, sill: 0.6 }), null);
+  assert.equal(why({ ow: 9 }), "not a width it comes in");
+  assert.equal(why({ oh: 2.4, sill: 1.8 }), "the wall's too low");
+  assert.equal(why({ ow: 7.5 }), "not a width it comes in");
+  // (windows joined: one starting where the other ends)
+  assert.equal(why({ ow: 1 }, [w], L / 2 + 1.7), null, "side by side");
+  assert.equal(why({ ow: 1 }, [w], L / 2 + 1.6), "another's there");
+  assert.equal(openingSizeWhy({ kind: "door", props: { sill: 1 } }), "a door has no sill");
+  assert.equal(openingSizeWhy({ kind: "door", props: { look: "french" } }), null);
+  assert.equal(openingSizeWhy({ kind: "window", props: { look: "french" } }), "not a look it comes in");
+  assert.equal(openingSizeWhy({ kind: "window", props: { shutters: "#335544", curtains: "#aa2222" } }), null);
+  assert.equal(openingSizeWhy({ kind: "door", props: { shutters: "#335544" } }), "no shutters like that");
+  // (a tile line's door: the catalog's size whatever it says)
+  assert.equal(openingSpanOf({ kind: "door", props: { ow: 2 } }), 1);
+});
+
+test("a home lot's walls on the tile lines take them free", () => {
+  const f = s.floors.find((q) => q.index === 3);
+  assert.ok(f);
+  const tw: Wall = {
+    id: "tw",
+    floor: 3,
+    a: [f.grid.x0 + 2, f.grid.y0 + 2],
+    b: [f.grid.x0 + 8, f.grid.y0 + 2],
+    front: "p",
+    base: f.z,
+    height: 3.266,
+  } as Wall;
+  const st = { walls: [tw], floors: [{ ...f }] };
+  const on = { wall: "tw", at: 3 };
+  assert.ok(onTiles(tw, f), "on the tile lines");
+  {
+    assert.equal(freeOpeningWhy(st, 3, "window", on, []), "that wall takes doors and windows by its tiles");
+    assert.equal(freeOpeningWhy({ ...st, floors: [{ ...f, space: "home:x" }] }, 3, "window", on, []), null);
+  }
+});

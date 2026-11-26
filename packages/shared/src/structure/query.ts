@@ -63,8 +63,9 @@ function ix(s: Structure, floor: number): Ix | null {
   }
   const slabs: Ix["slabs"] = [];
   for (const slab of s.slabs) {
-    // (a mezzanine — over its floor's height — isn't the floor)
-    if (slab.floor !== floor || Math.abs(slab.z - f.z) >= 1e-3) continue;
+    // (a mezzanine — over its floor's height — isn't the floor; a home lot's ground is, under its foundation too — plan
+    // 130: its yard)
+    if (slab.floor !== floor || (Math.abs(slab.z - f.z) >= 1e-3 && slab.top !== "g")) continue;
     let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
     for (const [x, y] of slab.outline) {
       x0 = Math.min(x0, x);
@@ -159,6 +160,11 @@ export function floorSig(s: Structure, floor: number): string {
   for (const q of i.slabs)
     parts.push(q.slab.id, q.slab.top, JSON.stringify(q.slab.outline), JSON.stringify(q.slab.holes));
   for (const [k, v] of i.front) parts.push(k, v, i.back.get(k) ?? "");
+  // (plan 130: its tiles painted; its foundation's pads, its stairs, its pools — drawn with its walls)
+  for (const name of ["tiles", "found", "flights", "pools"]) {
+    const t = s.layers?.[name]?.[String(floor)];
+    if (t) parts.push(name, JSON.stringify(t));
+  }
   return parts.join("|");
 }
 
@@ -228,8 +234,11 @@ export function layoutSig(m: MapDef): string {
 export function floorsSig(m: MapDef): string {
   if (m.st) {
     const i = ix(m.st, levelOf(m));
+    // (plan 130: its tiles painted too)
+    const t = m.st.layers?.tiles?.[String(levelOf(m))];
     return i
-      ? i.slabs.map((q) => `${q.slab.id}:${q.slab.top}:${JSON.stringify([q.slab.outline, q.slab.holes])}`).join("|")
+      ? i.slabs.map((q) => `${q.slab.id}:${q.slab.top}:${JSON.stringify([q.slab.outline, q.slab.holes])}`).join("|") +
+          (t ? `|tiles:${JSON.stringify(t)}` : "")
       : "";
   }
   return rowsOf(m)?.tiles.join("\n") ?? "";

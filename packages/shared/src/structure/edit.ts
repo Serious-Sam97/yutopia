@@ -3,6 +3,7 @@
 // ghost's green or red) and on the server (what it takes), and turned into the structure's operation.
 import { WALL_H, WALL_T } from "../units.ts";
 import { isArc, wallPoints } from "./arc.ts";
+import { overAt } from "./found.ts";
 import type { StructOp } from "./ops.ts";
 import { workingHeights } from "./slab-edit.ts";
 import type { Structure, Wall, XY } from "./types.ts";
@@ -26,6 +27,8 @@ export interface WallDraft {
   a: XY;
   b: XY;
   front: string;
+  /** (plan 130) a fence's, a railing's, a spandrel's, a gate's style (WALL_STYLES) */
+  style?: string;
   height?: number;
   /** an arc: how far its middle stands off the line a–b, to its left (arc.ts) */
   bow?: number;
@@ -43,6 +46,8 @@ export interface WallSet {
   /** a face painted (phase 11.11): its front's material (its left, a to b), its back's */
   front?: string;
   back?: string;
+  /** (plan 130) its trims (WALL_TRIMS), all of them as they are now */
+  trim?: string[];
 }
 /** What a wall's face can be painted (Paint's swatches: plaster, walnut, foam, brick, cork). */
 export const FACE_PAINTS = ["p", "w", "f", "b", "k"] as const;
@@ -70,11 +75,44 @@ export function draftHeight(f: { ceil?: number }, d: { height?: number; over?: n
   return d.height;
 }
 
+/** (plan 130 phase 3) What a wall can be besides a wall: its height and thickness (m), what it is. `hang`: it hangs
+ *  from the ceiling (a spandrel over an opening); `open`: walked through (a gate). */
+export const WALL_STYLES: Record<string, { h: number; t: number; label: string; hang?: boolean; open?: boolean }> = {
+  picket: { h: 1.0, t: 0.08, label: "Picket fence" },
+  iron: { h: 1.2, t: 0.06, label: "Iron fence" },
+  ranch: { h: 1.1, t: 0.1, label: "Ranch fence" },
+  lattice: { h: 1.8, t: 0.06, label: "Lattice screen" },
+  hedge: { h: 1.3, t: 0.6, label: "Hedge" },
+  stone: { h: 0.8, t: 0.35, label: "Stone wall" },
+  rail: { h: 0.95, t: 0.1, label: "Porch rail" },
+  glassrail: { h: 1.0, t: 0.05, label: "Glass rail" },
+  ironrail: { h: 0.95, t: 0.05, label: "Iron rail" },
+  spandrel: { h: 0.55, t: 0.12, label: "Spandrel", hang: true },
+  gate: { h: 1.1, t: 0.08, label: "Gate", open: true },
+};
+export const WALL_TRIMS = ["base", "chair", "crown", "frieze"] as const;
+/** A styled wall's height on floor `f` (a spandrel hangs: its own), its base over the floor's (m). */
+export function styleShape(f: { ceil?: number }, style: string): { height: number; over: number } | null {
+  const st = WALL_STYLES[style];
+  if (!st) return null;
+  return { height: st.h, over: st.hang ? Math.max(0, ceilOf(f) - st.h) : 0 };
+}
+
 /** Why this wall can't go on floor `floor` (null: it can) — on the floor's ground, long enough, of a
  *  material there is, as high as a storey at most. */
 export function wallWhy(s: Structure, floor: number, d: WallDraft): string | null {
   const f = s.floors.find((q) => q.index === floor);
   if (!f) return "no such floor";
+  if (d.style !== undefined) {
+    if (!WALL_STYLES[d.style]) return "not a kind of fence or rail";
+    if (!finite(d.a) || !finite(d.b)) return "not a place";
+    const len = Math.hypot(d.b[0] - d.a[0], d.b[1] - d.a[1]);
+    if (len < WALL_MIN) return "too short";
+    if (len > WALL_MAX) return "too long";
+    const { x0, y0, w, h: gh } = f.grid;
+    const inside = (p: XY) => p[0] >= x0 - 0.01 && p[1] >= y0 - 0.01 && p[0] <= x0 + w + 0.01 && p[1] <= y0 + gh + 0.01;
+    return inside(d.a) && inside(d.b) ? null : "off the floor";
+  }
   if (!finite(d.a) || !finite(d.b)) return "not a place";
   const len = Math.hypot(d.b[0] - d.a[0], d.b[1] - d.a[1]);
   if (len < WALL_MIN) return "too short";
@@ -160,8 +198,13 @@ export function wallsEdit(
         (near(w.a, d.b) && near(w.b, d.a) && Math.abs((w.bow ?? 0) + bow) < 0.01));
     // (only walls up where it is stand in its way: a low wall under a mezzanine's rail on its line isn't
     // "there already")
-    const z0 = f.z + (d.over ?? 0);
-    const z1 = z0 + draftHeight(f, d);
+    // (plan 130: a fence, a rail, a spandrel — its own height, a spandrel up under the ceiling)
+    const ss = d.style !== undefined ? styleShape(f, d.style) : null;
+    // (plan 130 phase 5: in a lot's yard, off its foundation, a wall stands on the land — its foundation's height
+    // lower)
+    const yard = d.over === undefined ? overAt(s, floor, [(d.a[0] + d.b[0]) / 2, (d.a[1] + d.b[1]) / 2]) : 0;
+    const z0 = f.z + (d.over ?? 0) + yard + (ss?.over ?? 0);
+    const z1 = z0 + (ss ? ss.height : draftHeight(f, d));
     const there = standing.filter((w) => w.base < z1 - 1e-3 && w.base + w.height > z0 + 1e-3);
     const parts: [XY, XY][] = bow ? (there.some(same) ? [] : [[d.a, d.b]]) : uncovered(there, d.a, d.b);
     for (const [a, b] of parts) {
@@ -170,11 +213,15 @@ export function wallsEdit(
         floor,
         a: [r(a[0]), r(a[1])],
         b: [r(b[0]), r(b[1])],
-        base: r(f.z + (d.over ?? 0)),
-        height: r(draftHeight(f, d)),
-        front: d.front,
+        base: r(z0),
+        height: r(z1 - z0),
+        front: ss ? "p" : d.front,
         ...(bow ? { bow: r(bow) } : {}),
-        ...(d.thick !== undefined && Math.abs(d.thick - WALL_T) > 1e-6 ? { thick: d.thick } : {}),
+        ...(ss && d.style
+          ? { style: d.style, thick: WALL_STYLES[d.style].t }
+          : d.thick !== undefined && Math.abs(d.thick - WALL_T) > 1e-6
+            ? { thick: d.thick }
+            : {}),
       };
       added.push(w);
       standing.push(w);
@@ -218,22 +265,31 @@ export function wallsSet(
     if (!paint(c.front) || !paint(c.back)) return { why: "not a wall's paint" };
     if ((c.front !== undefined || c.back !== undefined) && !(FACE_PAINTS as readonly string[]).includes(w.front))
       return { why: "no sides to paint" };
+    // (plan 130: a fence, a rail, a spandrel — no sides, no height of its own to change, no trims)
+    if (w.style && (c.front !== undefined || c.back !== undefined || c.height !== undefined || c.trim !== undefined))
+      return { why: `a ${WALL_STYLES[w.style]?.label.toLowerCase() ?? "fence"} isn't a wall` };
+    if (c.trim !== undefined && !c.trim.every((t) => (WALL_TRIMS as readonly string[]).includes(t)))
+      return { why: "not a trim" };
     const front = c.front ?? w.front;
     const back = c.back ?? w.back ?? w.front;
     const { thick: _t, back: _b, ...rest } = w;
     const thick = c.thick === undefined ? w.thick : c.thick;
+    const { trim: _tr, ...base } = rest;
+    const trim = c.trim === undefined ? w.trim : [...new Set(c.trim)].sort();
     const next: Wall = {
-      ...rest,
+      ...base,
       front,
       height,
       ...(thick !== undefined && Math.abs(thick - WALL_T) > 1e-6 ? { thick } : {}),
       ...(back !== front ? { back } : {}),
+      ...(trim?.length ? { trim } : {}),
     };
     const same =
       next.height === w.height &&
       (next.thick ?? WALL_T) === (w.thick ?? WALL_T) &&
       next.front === w.front &&
-      (next.back ?? next.front) === (w.back ?? w.front);
+      (next.back ?? next.front) === (w.back ?? w.front) &&
+      JSON.stringify(next.trim ?? []) === JSON.stringify(w.trim ?? []);
     if (same) continue;
     remove.push(w.id);
     add.push(next);

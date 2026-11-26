@@ -43,6 +43,8 @@ export const TILE_FOOTING: Record<string, Footing> = {
   x: "grate",
   a: "asphalt",
   c: "concrete",
+  // (plan 130: a home lot's ground — the land's, snow over it)
+  g: "snow",
 };
 
 /** Lying flat on a floor: what's walked on over its tile. */

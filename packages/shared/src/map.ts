@@ -17,6 +17,8 @@ export const FLOORS = {
   // outdoors (the parking lot, levels.ts)
   a: "asphalt",
   c: "concrete",
+  // (plan 130) a home lot's ground: the land itself under its ground storey — walked, never drawn
+  g: "ground",
 } as const;
 export type FloorChar = keyof typeof FLOORS;
 export const WALL = "#"; // v1 maps only (walls were tiles); see convert.ts

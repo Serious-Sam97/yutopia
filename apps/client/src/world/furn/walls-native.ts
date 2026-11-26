@@ -146,6 +146,8 @@ export interface WallDraw {
   seed?: number;
   /** how far along its whole wall this piece's u 0 is (m): its patterns run on from piece to piece */
   along?: number;
+  /** (plan 130 phase 9) its face's covering: the library's material over it, tinted (one face: front's or back's) */
+  cover?: { mat: string; tint: string } | null;
 }
 
 /** One piece of a wall, in `out`. */
@@ -178,8 +180,25 @@ export function nativeWall(out: Out, f: WallFrame, d: WallDraw): void {
       box(out, f, u, v, s, rgba(col));
     };
     lay(0, SKIRT, WALNUT_DARK, 0.012);
-    body(out, f, d, mat, u, across, faces, b0, b1, top, seed, lay);
+    // (a covered face: plain plaster under it — a foam wall's wedges or a brick's courses would show through)
+    body(out, f, d, d.cover && !half ? "p" : mat, u, across, faces, b0, b1, top, seed, lay);
     lay(top - CAP, top, WALNUT_DARK, 0.008);
+    // (plan 130 phase 9: a covering over the face, between the skirting and the cap — a hair proud of it)
+    if (d.cover && !half) {
+      const s = span(b0, b1, SKIRT, top - CAP);
+      if (s) {
+        c.setStyle(d.cover.tint);
+        const col = [c.r, c.g, c.b, CEL_ALPHA];
+        const T = Math.max(Math.abs(across[0]), Math.abs(across[1]));
+        for (const side of faces) {
+          const v = side * (T + 0.006);
+          const q = [P(f, u[0], v, s[0]), P(f, u[1], v, s[0]), P(f, u[1], v, s[1]), P(f, u[0], v, s[1])] as const;
+          if (out.textured) out.mat(d.cover.mat).quadUV(q[0], q[1], q[2], q[3], N(f, 0, side, 0), col, false);
+          else if (side > 0) out.lit.quad(q[0], q[1], q[2], q[3], N(f, 0, side, 0), col);
+          else out.lit.quad(q[0], q[3], q[2], q[1], N(f, 0, side, 0), col);
+        }
+      }
+    }
   }
   if (window && d.part === "high" && d.side !== "back") windowFrame(out, f, u, t);
 }

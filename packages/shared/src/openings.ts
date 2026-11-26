@@ -90,6 +90,83 @@ export function openingCut(kind: string): [number, number] {
   return CUTS[kind] ?? (isDoorKind(kind) ? [0, 2.2456] : [0.9187, 2.2456]);
 }
 
+/** (plan 130 phase 8) A door or window as its size reads it: its kind, its props. */
+export type OpeningLike = { kind: string; props?: Record<string, unknown> | null };
+/** (plan 130 phase 8) How wide (m), how tall (m) and how high its sill (a window's, m up) one in a wall drawn free
+ *  may be made: `props.ow`, `props.oh`, `props.sill`. */
+export const OPENING_LIMITS = {
+  door: { w: [0.7, 2.6], h: [1.9, 2.8] },
+  window: { w: [0.4, 4], h: [0.3, 2.6], sill: [0, 2.4] },
+} as const;
+/** The widths, heights and sills the card offers. */
+export const OPENING_WIDTHS = {
+  door: [0.8, 0.9, 1, 1.2, 1.6, 2, 2.4],
+  window: [0.6, 0.9, 1, 1.2, 1.5, 2, 2.4, 3, 4],
+} as const;
+export const OPENING_HEIGHTS = { door: [2.05, 2.25, 2.45, 2.7], window: [0.6, 0.9, 1.2, 1.35, 1.6, 2, 2.4] } as const;
+export const OPENING_SILLS = [0, 0.3, 0.6, 0.9, 1.1, 1.4, 1.8] as const;
+/** (plan 130 phase 8) A door's leaf and a window's glazing (`props.look`): the kit draws each. */
+export const DOOR_LOOKS = [
+  "panel",
+  "six",
+  "flush",
+  "glass",
+  "half",
+  "french",
+  "plank",
+  "dutch",
+  "craftsman",
+  "modern",
+] as const;
+export const WINDOW_LOOKS = [
+  "casement",
+  "grid",
+  "hung",
+  "picture",
+  "transom",
+  "awning",
+  "louvre",
+  "diamond",
+  "prairie",
+  "slider",
+] as const;
+const sized = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+/** How wide one is along its wall (m): its own width in a wall drawn free (`props.ow`), else the catalog's. */
+export function openingSpanOf(o: OpeningLike): number {
+  const w = o.props?.free === true ? sized(o.props?.ow) : null;
+  return w ?? Math.max(1, entry(o.kind).w);
+}
+/** The hole one cuts (m up): in a wall drawn free its own height (`props.oh`) and a window's sill (`props.sill`). */
+export function openingCutOf(o: OpeningLike): [number, number] {
+  const [z0, z1] = openingCut(o.kind);
+  if (o.props?.free !== true) return [z0, z1];
+  const h = sized(o.props?.oh);
+  if (isDoorKind(o.kind)) return [0, h ?? z1];
+  const b = sized(o.props?.sill) ?? z0;
+  return [b, Math.round((b + (h ?? z1 - z0)) * 1e4) / 1e4];
+}
+/** Why its size, look, shutters or curtains won't do (null: they will). */
+export function openingSizeWhy(o: OpeningLike): string | null {
+  const p = o.props ?? {};
+  const door = isDoorKind(o.kind);
+  const lim = door ? OPENING_LIMITS.door : OPENING_LIMITS.window;
+  const inR = (v: unknown, [a, b]: readonly [number, number]) =>
+    v === undefined || (sized(v) !== null && (v as number) >= a - 1e-6 && (v as number) <= b + 1e-6);
+  if (!inR(p.ow, lim.w)) return "not a width it comes in";
+  if (!inR(p.oh, lim.h)) return "not a height it comes in";
+  if (!door && !inR(p.sill, OPENING_LIMITS.window.sill)) return "not a sill's height";
+  if (door && p.sill !== undefined) return "a door has no sill";
+  if (
+    p.look !== undefined &&
+    !(door ? (DOOR_LOOKS as readonly unknown[]) : (WINDOW_LOOKS as readonly unknown[])).includes(p.look)
+  )
+    return "not a look it comes in";
+  for (const k of ["shutters", "curtains"])
+    if (p[k] != null && (door || typeof p[k] !== "string" || !/^#[0-9a-f]{6}$/i.test(p[k] as string)))
+      return `no ${k} like that`;
+  return null;
+}
+
 export const openingDir = (o: { yaw?: number }): EdgeDir => (quarterOf(o) % 2 === 0 ? "h" : "v");
 
 // The edges it takes.
@@ -136,7 +213,7 @@ export function cutsSig(objects: Iterable<WorldObjectDef>): string {
   // (and those in walls drawn free: by their wall and spot — plan 72 phase 11.6)
   const free = list.flatMap((o) => {
     const on = o.props?.free === true && isOpening(o.kind) ? (o.props.on as { wall?: string; at?: number }) : null;
-    return on ? [`free:${on.wall}@${on.at}:${openingCut(o.kind).join("-")}:${entry(o.kind).w}`] : [];
+    return on ? [`free:${on.wall}@${on.at}:${openingCutOf(o).join("-")}:${openingSpanOf(o)}`] : [];
   });
   return [...[...wallCuts(list).entries()].map(([k, c]) => `${k}:${c.z0}-${c.z1}`), ...free].sort().join(";");
 }

@@ -9,6 +9,7 @@ import { KINDS, type KitKind, layoutOf } from "../building-styles.ts";
 import type { WorldObjectDef } from "../catalog.ts";
 import { CATALOG, entry, quarterYaw } from "../catalog.ts";
 import { BUILDINGS, type Building, type Fit, furnishingsOf, groundAt } from "../grounds.ts";
+import { isHomeSpace } from "../homes.ts";
 import { SPACE_BASE, SPACE_TOP } from "../levels.ts";
 import { kindSolids } from "../shapes/index.ts";
 import { STAIRS_D, STAIRS_W, stairsDoor, stairsPoint, stairsWell } from "../stairs.ts";
@@ -644,8 +645,10 @@ export function spacesFix(
   const want = new Map(buildings.filter(hasSpace).map((b) => [b.key, b]));
   let changed = false;
   const bySpace = new Map<string, Floor[]>();
-  for (const f of st.floors) if (f.space !== undefined) bySpace.set(f.space, [...(bySpace.get(f.space) ?? []), f]);
-  const floors: Floor[] = st.floors.filter((f) => f.space === undefined);
+  // (plan 130: a home lot's storeys are its own — homes.ts lotsFix — not a town building's)
+  for (const f of st.floors)
+    if (f.space !== undefined && !isHomeSpace(f.space)) bySpace.set(f.space, [...(bySpace.get(f.space) ?? []), f]);
+  const floors: Floor[] = st.floors.filter((f) => f.space === undefined || isHomeSpace(f.space));
   const ops: StructOp[] = [];
   const moves: { level: number; dx: number; dy: number }[] = [];
   const retired = new Set<string>();

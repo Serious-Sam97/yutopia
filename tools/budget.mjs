@@ -68,7 +68,11 @@ import { gzipSync } from "node:zlib";
 // (raised to 505 on 2026-11-24 under the user's standing call to raise as needed: plan 125 — the new UI: its HUD state
 // (store.ts `lamp`), the GTA loading screen, the ring's and queue's new look, the keys (Esc's pause, Tab's wheel, the
 // kinds), the root's class and their words; the HUD itself, its wheel and the route a chunk of their own (512.9 → 503.3))
-const BUDGETS = { "/page": 505, "/login/page": 160 }; // KB gzip
+// (raised to 522 on 2026-11-26 under the user's standing call to raise as needed: plan 130 — the house build: the new
+// kinds' entries and solids (fireplaces, porches, awnings), the roofs' new kinds, the pools' water and solids, the
+// stairs' and foundations' solids the physics reads, the coverings the floor bake draws — 504.7 → 520.6; a split bug
+// fixed on the way: tp/land-holes.ts took three's Vector4 onto the page through the controller, 622.5 before it)
+const BUDGETS = { "/page": 522, "/login/page": 160 }; // KB gzip
 // (/page raised from 491 on 2026-11-19 under the user's standing call: plan 109 — the God HUD's bridges state, the
 // bridge icon, the bridges' layout and kinds in the shared Grounds; measured 491.0)
 // (/page raised from 451 on 2026-11-04 under the same call: plan 72's phase 4 — the controller split
@@ -99,7 +103,12 @@ const LAZY = {
   "yutopia-themes": 30,
   // (raised to 50 on 2026-11-24, the user's standing call on budgets: plan 124 — the build camera, the shop's two
   //  sortings and their words in both languages, the Buy/Build/Lot screen, the Design tool: 46.9)
-  "yutopia-build": 50,
+  // (70 on 2026-11-26, the user's standing call on budgets: plan 130 — the house build's tools: the stair, tile,
+  // foundation and pool tools, the roof part's kinds and coverings, doors' and windows' own sizes, the blueprints
+  // panel, 46 door and window presets; 47.5 → 68.4)
+  // (74 on 2026-11-26, the same call: plan 130's quality pass — the picked roof's card, the blueprint preview, the photo
+  // coverings' lists and tint row; 68.4 → 70.0)
+  "yutopia-build": 74,
   "yutopia-pets": 40, // the drawings, animation, sounds and strings; the panel carries a copy
   "yutopia-slots": 20,
   "yutopia-tables": 40,

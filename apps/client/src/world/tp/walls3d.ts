@@ -9,6 +9,7 @@ import type { Edge, MapDef } from "@yutopia/shared";
 import { HALF_WALL, HALF_WALL_H, NO_WALL, spaceFloor, WALL_H, WALL_T } from "@yutopia/shared";
 import {
   backOf,
+  type Flight,
   type Floor,
   frontNormal,
   hWallOf,
@@ -18,6 +19,7 @@ import {
   type Wall,
   wallPoints,
 } from "@yutopia/shared/structure";
+import type { PadDraw, PoolDraw, StyledWall } from "./fences3d";
 import type { Out } from "./kit3d";
 
 /** A wall on neither axis, or off the metres: its two ends (floor-local), its faces. */
@@ -38,6 +40,9 @@ export interface FreeWall {
   gaps?: readonly [number, number, number, number][];
   /** a town building's shell (plan 112) */
   shell?: boolean;
+  /** (plan 130 phase 9) its faces' coverings (shared coverings.ts keys) */
+  coverF?: string;
+  coverB?: string;
 }
 
 /** How thick a town building's shell is drawn inside (plan 112): a skin on its inner face, the kit's wall outside
@@ -77,6 +82,16 @@ export interface WallEdges {
   v(x: number, y: number): string;
   back(e: Edge): string;
   free: readonly FreeWall[];
+  /** (plan 130 phase 3) fences, rails, spandrels, gates — drawn as themselves — and walls with trims */
+  styled?: readonly StyledWall[];
+  trims?: readonly StyledWall[];
+  /** (plan 130 phase 5) a lot's foundation's pads, floor-local, and how high it is */
+  pads?: readonly PadDraw[];
+  found?: number;
+  /** (plan 130 phase 6) the floor's stairs built with the stair tool, floor-local */
+  flights?: readonly Flight[];
+  /** (plan 130 phase 11) a lot's pools, floor-local */
+  pools?: readonly PoolDraw[];
   /** a key that changes when any of it does (the floor's layout signature's walls) */
   sig: string;
 }
@@ -100,16 +115,41 @@ export function edgesOfWalls(
   const hb = new Map<string, string>();
   const vb = new Map<string, string>();
   const free: FreeWall[] = [];
+  const styled: StyledWall[] = [];
+  const trims: StyledWall[] = [];
   const sig: string[] = [];
   for (const w of walls) {
     if (w.floor !== floor) continue;
     const a: [number, number] = [w.a[0] - corner.x, w.a[1] - corner.y];
     const b: [number, number] = [w.b[0] - corner.x, w.b[1] - corner.y];
+    // (plan 130: a fence, a rail, a spandrel, a gate — not a wall: drawn as itself, fences3d.ts)
+    const sw = (): StyledWall => ({
+      id: w.id,
+      a,
+      b,
+      ...(w.style ? { style: w.style } : {}),
+      ...(w.trim?.length ? { trim: w.trim } : {}),
+      height: w.height,
+      thick: w.thick ?? WALL_T,
+      base: z0 === undefined ? 0 : Math.round((w.base - z0) * 1000) / 1000,
+    });
+    if (w.style) {
+      styled.push(sw());
+      sig.push(`s:${w.id}:${a}:${b}:${w.style}:${w.height}:${w.base}`);
+      continue;
+    }
+    if (w.trim?.length) {
+      trims.push(sw());
+      sig.push(`t:${w.id}:${w.trim.join(",")}`);
+    }
     const back = w.back ?? NO_WALL;
     sig.push(`${w.id}:${a}:${b}:${w.front}:${back}:${w.bow ?? 0}`);
     const lift = z0 === undefined ? 0 : Math.round((w.base - z0) * 1000) / 1000;
     const shape = { ...ownShape(w), ...(lift ? { base: lift } : {}) };
     sig.push(`${w.height}:${w.thick ?? ""}:${lift}`);
+    // (plan 130 phase 9: a covered face — drawn free, its faces each their own)
+    const covers = { ...(w.coverF ? { coverF: w.coverF } : {}), ...(w.coverB ? { coverB: w.coverB } : {}) };
+    if (w.coverF || w.coverB) sig.push(`c:${w.coverF ?? ""}:${w.coverB ?? ""}`);
     // (a town building's shell: a skin inside its kit's wall, round its openings — plan 112)
     if (w.shell) {
       sig.push(JSON.stringify(w.gaps ?? []));
@@ -118,12 +158,12 @@ export function edgesOfWalls(
     }
     if (isArc(w)) {
       const pts = wallPoints(w).map((p): [number, number] => [p[0] - corner.x, p[1] - corner.y]);
-      free.push({ id: w.id, a, b, ch: w.front, back, pts, ...shape });
+      free.push({ id: w.id, a, b, ch: w.front, back, pts, ...shape, ...covers });
       continue;
     }
-    if (shape.height !== undefined || shape.thick !== undefined || lift || holed?.has(w.id)) {
+    if (shape.height !== undefined || shape.thick !== undefined || lift || holed?.has(w.id) || w.coverF || w.coverB) {
       // (its own height or thickness: drawn as a free wall, along its line)
-      free.push({ id: w.id, a, b, ch: w.front, back, ...shape });
+      free.push({ id: w.id, a, b, ch: w.front, back, ...shape, ...covers });
       continue;
     }
     const onX = Math.abs(a[1] - b[1]) < EPS;
@@ -154,6 +194,8 @@ export function edgesOfWalls(
     v: (x, y) => v.get(`${x},${y}`) ?? NO_WALL,
     back: (e) => (e.dir === "h" ? hb : vb).get(`${e.x},${e.y}`) ?? NO_WALL,
     free,
+    styled,
+    trims,
     sig: sig.join("|"),
   };
 }

@@ -1,4 +1,4 @@
-import type { StructOp, Structure } from "./structure/index.ts";
+import type { Roof, StructOp, Structure } from "./structure/index.ts";
 // Messages between client and world-server (Colyseus room "world": the one world).
 
 import type { Social } from "./actions.ts";
@@ -351,8 +351,22 @@ export interface ClientMessages {
   /** roofs over closed sets of walls (plan 72 phase 11.7): put on, taken off by id */
   "struct:roofs": {
     level?: number;
-    add?: { outline: [number, number][]; kind: "flat" | "gable" | "hip"; pitch?: number; ridge?: 0 | 1 }[];
+    add?: {
+      outline: [number, number][];
+      kind: Roof["kind"];
+      pitch?: number;
+      ridge?: 0 | 1;
+      /** (plan 130) overhang, covering, eaves' height, a chimney's top */
+      over?: number;
+      mat?: string;
+      z?: number;
+      top?: number;
+    }[];
     remove?: string[];
+    /** (plan 130 phase 7) a roof changed where it is */
+    set?: { id: string } & Partial<Pick<Roof, "kind" | "pitch" | "over" | "mat" | "z" | "ridge">>;
+    /** (plan 130 phase 7) Auto Roof: the floor's roofs (not dormers, chimneys) made again over its rooms */
+    auto?: { kind: Roof["kind"]; pitch?: number; over?: number; mat?: string };
   };
   /** floors drawn free (plan 72 phase 11.7): polygons of a material at the floor's height or a
    *  mezzanine's over it; slabs taken away by id */
@@ -380,9 +394,11 @@ export interface ClientMessages {
       bow?: number;
       thick?: number;
       over?: number;
+      /** (plan 130) a fence's, a rail's, a spandrel's, a gate's style (structure/edit.ts WALL_STYLES) */
+      style?: string;
     }[];
-    /** walls that are there: a new height, a new thickness (phase 11.4) */
-    set?: { id: string; height?: number; thick?: number; front?: string; back?: string }[];
+    /** walls that are there: a new height, a new thickness (phase 11.4); (plan 130) their trims */
+    set?: { id: string; height?: number; thick?: number; front?: string; back?: string; trim?: string[] }[];
     remove?: string[];
     n?: number;
   };
@@ -390,6 +406,78 @@ export interface ClientMessages {
   "map:spawn": { x: number; y: number };
   "struct:get": Record<string, never>;
   // floors: a blank one on top of the building (its footprint and core), the top one gone
+  // (plan 130 phase 2) walls moved — a wall pushed `d` m square to itself, or an end dragged — and rooms moved,
+  // turned, copied or knocked down whole
+  "struct:wallmove": {
+    level: number;
+    push?: { id: string; d: number };
+    end?: { id: string; end: "a" | "b"; to: [number, number] };
+  };
+  "struct:room": { key: string; d?: [number, number]; turn?: number; copy?: boolean; remove?: boolean };
+  // (plan 130 phase 4) floors painted tile by tile: tiles (their parts, a mask of 8), a room's (Shift), the storey's
+  // (Ctrl Shift); `mat` null takes the paint off
+  // (plan 130 phase 5) a foundation's pad laid (a box), its height changed, one taken away; a basement dug
+  "struct:found": {
+    level: number;
+    a?: [number, number];
+    b?: [number, number];
+    style?: string;
+    height?: number;
+    remove?: [number, number];
+  };
+  "struct:dig": { level: number; a: [number, number]; b: [number, number] };
+  /** (plan 130 phase 11) a pool dug in a lot's yard (a box, half metres), or one filled in */
+  "struct:pool": {
+    level: number;
+    add?: {
+      a: [number, number];
+      b: [number, number];
+      depth: number;
+      tile: string;
+      coping: string;
+      ladder: number;
+      lights: boolean;
+    };
+    remove?: string;
+  };
+  // (plan 130 phase 6) stairs built with the stair tool: one put down (up to the storey over it: its hole there,
+  // railed), one taken away
+  "struct:flight": {
+    level: number;
+    add?: {
+      x: number;
+      y: number;
+      dir: number;
+      shape: string;
+      turn: 1 | -1;
+      width: number;
+      rise?: number;
+      style: string;
+      rail: string;
+      closed?: boolean;
+    };
+    remove?: string;
+  };
+  // (plan 130 phase 4) a hole cut in a floor (its slabs there), at the working height
+  "struct:hole": { level: number; ring: [number, number][]; over?: number };
+  "struct:tiles": {
+    level: number;
+    cells?: { x: number; y: number; mask: number }[];
+    room?: string;
+    storey?: boolean;
+    mat: string | null;
+  };
+  // (plan 130) home lots: claimed, given back, roommates, storeys up and down; an admin's assign and free
+  "lot:claim": { key: string };
+  "lot:release": { key?: string };
+  "lot:mate": { key?: string; uid: number; add: boolean };
+  "lot:storey": { key?: string; dir: "up" | "down"; rise?: "short" | "normal" | "tall" };
+  "lot:storey:remove": { key?: string; level: number };
+  /** (plan 130 phase 12) a saved blueprint (shared blueprints.ts) built on my empty lot */
+  "lot:blueprint": { key?: string; data: unknown };
+  "lot:assign": { key: string; uid: number };
+  "lot:free": { key: string };
+  "lot:go": Record<string, never>;
   "level:add": Record<string, never>;
   "level:remove": { level: number };
   // elevators (features/lifts.ts): call the car to my floor (the stop's id),
@@ -748,14 +836,33 @@ export interface ServerMessages {
   "npc:about": NpcAbout;
   "npc:acted": { id: string; act: string; ok: boolean; react: string; bond: NpcAbout["bond"] };
   // (plan 126) what came of an animal act: what I got (items), its trust in me now (0..1), friends now
-  "animal:did": { id: string; act: string; ok: boolean; why?: string; got?: { id: string; n: number }[]; trust?: number; friend?: boolean };
+  "animal:did": {
+    id: string;
+    act: string;
+    ok: boolean;
+    why?: string;
+    got?: { id: string; n: number }[];
+    trust?: number;
+    friend?: boolean;
+  };
   // (plan 126) an animal struck me (a bite, a swipe, a kick, a charge): from where, how much
   "animal:strike": { id: string; kind: string; n: number; x: number; y: number };
   // (plan 128, F8a) an animal's call, heard far off (a howl over the woods, an owl, the dawn's birds): who, where, what
   "animal:call": { id: string; k: string; x: number; y: number; c: "call" | "alarm" };
   // (plan 128, F10a) the minds round me, for the dev overlay (admins who asked)
   "animal:debug": {
-    list: { id: string; d: string; why: string; to: [number, number] | null; path: number; aware: number; hunger: number; thirst: number; tired: number; fear: number }[];
+    list: {
+      id: string;
+      d: string;
+      why: string;
+      to: [number, number] | null;
+      path: number;
+      aware: number;
+      hunger: number;
+      thirst: number;
+      tired: number;
+      fear: number;
+    }[];
   };
   "god:refused": { reason: string; problems: string[] };
   "god:edits": GroundsEdits;

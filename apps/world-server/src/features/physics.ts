@@ -14,6 +14,7 @@ import { loadNav } from "@yutopia/shared/nav";
 import {
   type BuildingSolids,
   buildingSolids,
+  chunksOfHoles,
   loadJolt,
   PhysicsWorld,
   Place,
@@ -24,6 +25,7 @@ import {
   WorldBuilder,
 } from "@yutopia/shared/physics";
 import { STRIKE_WALL } from "@yutopia/shared/strike/land";
+import { landHoles, setLandHoles } from "@yutopia/shared/structure";
 import { landWorkerHeap, onLandChanged, prefetch } from "../land.ts";
 import { metrics } from "../metrics.ts";
 import { fromSchema, type WorldRoom } from "../WorldRoom.ts";
@@ -182,6 +184,7 @@ registerFeature((room) => {
   // (built before the room lets anyone in: WorldRoom.onCreate waits for it)
   room.physicsReady = (async () => {
     const t0 = performance.now();
+    setLandHoles(room.structure);
     const b = buildingSolids(room.map, objects(), room.structure);
     // (sizes for the whole world: every chunk's land and things, the building, 500 things, the cars)
     const chunks = Math.min(landChunks(CHUNK).length, MAX_CHUNKS);
@@ -250,6 +253,11 @@ registerFeature((room) => {
       // the building edited (a new grid every time): made again where it changed
       if (room.grid !== grid) {
         grid = room.grid;
+        // (plan 130: a basement dug, a pool — the land's holes changed: its chunks there again)
+        const was = [...landHoles()];
+        if (setLandHoles(room.structure))
+          for (const [cx, cz] of chunksOfHoles([...was, ...landHoles()]))
+            if (build.hasChunk(cx, cz)) again.add(`${cx},${cz}`);
         const t0 = performance.now();
         solids = buildingSolids(room.map, objects(), room.structure);
         build.building(solids);

@@ -20,8 +20,10 @@ const WALL_PART: Record<B["wallMode"], BuildPartKey> = {
   floors: "floors",
   paint: "paint",
   roof: "roof",
+  found: "found",
+  flights: "flights",
 };
-const FURNITURE_PARTS: BuildPartKey[] = ["doors", "windows", "stairs"];
+const FURNITURE_PARTS: BuildPartKey[] = ["doors", "windows", "stairs", "columns", "porches"];
 
 /** What the screen shows for this state. */
 export function viewOf(b: B): TabView {
@@ -42,8 +44,9 @@ export function partPatch(b: B, part: BuildPartKey): Partial<B> {
   const base: Partial<B> = { ...leave, tab: "build", part };
   if (part === "rooms") return { ...base, tool: "rooms" };
   if (FURNITURE_PARTS.includes(part)) return { ...base, tool: "furniture", mode: "hand", props: null };
-  const wallMode: B["wallMode"] = part === "walls" ? "build" : (part as "floors" | "paint" | "roof");
-  const floor = !b.brush.startsWith("w:");
+  const wallMode: B["wallMode"] = part === "walls" ? "build" : (part as "floors" | "paint" | "roof" | "found" | "flights");
+  // (plan 130: a fence's brush is a wall's too)
+  const floor = !b.brush.startsWith("w:") && !b.brush.startsWith("s:");
   const patch: Partial<B> = { ...base, tool: "walls", wallMode };
   if (wallMode === "floors" && !floor) patch.brush = ".";
   if (wallMode === "build" && floor) patch.brush = "w:p";

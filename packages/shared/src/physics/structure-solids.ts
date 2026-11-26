@@ -4,7 +4,7 @@
 // tile. World metres, Jolt's y up (a floor's height its z).
 import { entry, type WorldObjectDef } from "../catalog.ts";
 import { CHUNK } from "../grounds.ts";
-import { openingCut } from "../openings.ts";
+import { openingCut, openingCutOf, openingSpanOf } from "../openings.ts";
 import { box3, type Solid3, type SolidBox3, slabSolid, WALL_T } from "../shapes/index.ts";
 import { attachOf, onOf } from "../structure/attach.ts";
 import type { Ring, Structure, Wall } from "../structure/types.ts";
@@ -29,8 +29,8 @@ export function cutsOf(s: Pick<Structure, "walls">, things: Iterable<WorldObject
     if (!op) continue;
     const on = onOf(o) ?? attachOf(s, o, floor);
     if (!on) continue;
-    const n = Math.max(1, entry(o.kind).w);
-    const [z0, z1] = openingCut(o.kind);
+    const n = openingSpanOf(o);
+    const [z0, z1] = openingCutOf(o);
     const list = out.get(on.wall) ?? [];
     list.push({ u0: on.at - n / 2, u1: on.at + n / 2, z0, z1, pane: op === "window" });
     out.set(on.wall, list);

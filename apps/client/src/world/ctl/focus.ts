@@ -1,4 +1,13 @@
-import { entry, objLevel, reachOf, thingMiddle, type WorldObjectDef } from "@yutopia/shared";
+import {
+  entry,
+  type HomeLotDef,
+  lotGround,
+  lotSign,
+  objLevel,
+  reachOf,
+  thingMiddle,
+  type WorldObjectDef,
+} from "@yutopia/shared";
 import { isGameTv } from "@yutopia/shared/games";
 import { offBand, spanOf } from "@yutopia/shared/reach";
 import { rackBoard, rackNear } from "@yutopia/shared/skate/racks";
@@ -15,6 +24,8 @@ import { INTERACT_RANGE } from "./common";
 export type FocusHost = Pick<
   WorldController,
   | "camWanted"
+  | "G"
+  | "structure"
   | "animals"
   | "cars"
   | "skateRide"
@@ -192,6 +203,14 @@ export class Focus {
       if (cur?.objectId !== id) hud.set({ prompt: { objectId: id, kind: "skate:rack", label: `Take the ${rb.name}` } });
       return;
     }
+    // (plan 130) by a free home lot's sign, out on the land: its card
+    const sign = this.c.level === 0 ? this.lotSignNear() : null;
+    if (sign) {
+      const cur = hud.get().prompt;
+      if (cur?.objectId !== sign.key || cur.kind !== "lot:sign")
+        hud.set({ prompt: { objectId: sign.key, kind: "lot:sign", label: `${sign.name} · ${tr("lotFree")}` } });
+      return;
+    }
     // (plan 123 F9a) by an umbrella stand on my floor: one to take — not with one on me already (the server's rule:
     // one each), and not over what I'm looking at (a door, someone: theirs first)
     const stand = this.standNear();
@@ -304,12 +323,27 @@ export class Focus {
     return this.stand;
   }
 
+  /** (plan 130) A free home lot whose sign I stand by (2.5 m), or null. */
+  lotSignNear(): HomeLotDef | null {
+    const G = this.c.G;
+    const st = this.c.structure;
+    if (!G || !st) return null;
+    for (const l of G.HOME_LOTS) {
+      const s = lotSign(l);
+      // (its board's middle, half a metre along it from the post)
+      const [bx, bz] = [s.x + Math.cos(s.yaw) * 0.5, s.z + Math.sin(s.yaw) * 0.5];
+      if (Math.hypot(bx - this.c.me.x, bz - this.c.me.y) < 2.5 && !lotGround(st, l.key)) return l;
+    }
+    return null;
+  }
+
   /** Use, tapped: a car's door, the shuttle, else the focus's main action (docs/plan/56 C). */
   interact() {
     const p = hud.get().prompt;
     // (plan 103) a rack's board: into the left hand (if it's free), key 1 rides it
     if (p?.kind === "skate:rack") return this.c.send("skate:take", { variant: p.objectId.split("|")[1] });
     if (p?.kind === "umbrella:stand") return this.c.send("umbrella:take", {});
+    if (p?.kind === "lot:sign") return hud.set({ panel: { kind: "lot", objectId: p.objectId } });
     if (p && this.c.cars?.act(p.kind, p.objectId)) return;
     if (p?.kind === "ride" || p?.kind === "ride:leave")
       return this.c.send(p.kind === "ride" ? "ride:board" : "ride:leave", {});

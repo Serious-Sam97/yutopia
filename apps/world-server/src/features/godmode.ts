@@ -1,10 +1,26 @@
-import { worldZ } from "@yutopia/shared";
+import { isHomeSpace, worldZ } from "@yutopia/shared";
+import {
+  animalPlacesOf,
+  canBeAt,
+  checkAnimalPlace,
+  checkDefaultChange,
+  isGeneratedKey,
+} from "@yutopia/shared/animals/habitat";
 import { checkVehicles, isCarKind, validLook } from "@yutopia/shared/car";
-import { BUILDINGS, buildingsFor, CHUNK, checkEdits, editsNow, heightAt, insideOf } from "@yutopia/shared/grounds";
+import { checkNestPlace, nestPlacesOf } from "@yutopia/shared/dark/nests";
+import {
+  BUILDINGS,
+  buildingsFor,
+  CHUNK,
+  checkEdits,
+  editsNow,
+  HOME_LOTS,
+  heightAt,
+  homeLotsFor,
+  insideOf,
+} from "@yutopia/shared/grounds";
 import type { GroundsEdits } from "@yutopia/shared/grounds-edits";
 import { beyondLand, REACH_MARGIN } from "@yutopia/shared/land";
-import { animalPlacesOf, canBeAt, checkAnimalPlace, checkDefaultChange, isGeneratedKey } from "@yutopia/shared/animals/habitat";
-import { checkNestPlace, nestPlacesOf } from "@yutopia/shared/dark/nests";
 import { checkNpcPlaces } from "@yutopia/shared/npc/places";
 import { spaceShrinkWhy } from "@yutopia/shared/structure/spaces";
 import { api } from "../api.ts";
@@ -12,6 +28,7 @@ import { config } from "../config.ts";
 import { landEdits } from "../land.ts";
 import type { Player } from "../schema.ts";
 import { fromSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
+import { claimedKeys } from "./homes.ts";
 import { registerFeature } from "./index.ts";
 
 // God mode (docs/plan/53-the-god-mode.md): an admin's draft of edits to the Grounds published —
@@ -86,6 +103,16 @@ registerFeature((room: WorldRoom) => {
   };
   const spaceProblems = (e: GroundsEdits): string[] => {
     const out: string[] = [];
+    // (plan 130: a claimed lot stays as it is — given back or freed first)
+    const now = new Map(homeLotsFor(e).map((l) => [l.key, l]));
+    for (const key of claimedKeys(room.structure.floors)) {
+      const was = HOME_LOTS.find((l) => l.key === key);
+      const is = now.get(key);
+      if (!was) continue;
+      if (!is) out.push(`${was.name} is someone's: free it before taking it away`);
+      else if (is.x0 !== was.x0 || is.z0 !== was.z0 || is.x1 !== was.x1 || is.z1 !== was.z1)
+        out.push(`${was.name} is someone's: free it before moving it`);
+    }
     const things = [...room.state.objects.values()].map(fromSchema);
     const after = new Map(buildingsFor(e).map((b) => [b.key, b]));
     for (const was of BUILDINGS) {
@@ -109,7 +136,10 @@ registerFeature((room: WorldRoom) => {
       BUILDINGS.filter((b) => furnished.has(b.key) && furnished.get(b.key) !== !!b.enter).map((b) => b.key),
     );
     // (the town's buildings' insides with them: laid, moved, regrown, taken out of the world — plan 112)
-    const before = new Map(room.structure.floors.filter((f) => f.space !== undefined).map((f) => [f.index, f]));
+    // (plan 130: a home lot's storeys aren't a building's — never moved by a publish)
+    const before = new Map(
+      room.structure.floors.filter((f) => f.space !== undefined && !isHomeSpace(f.space)).map((f) => [f.index, f]),
+    );
     room.fixSpaces([...room.state.objects.values()].map(fromSchema), false, turned);
     // (whoever's inside one: with it where it moved; out at its door if it turned; back where they arrive if it's
     // gone — plan 113 review)
@@ -273,7 +303,11 @@ registerFeature((room: WorldRoom) => {
         // (plan 127) the land's own groups changed: sound, and one moved where it can be (F7a) — only those this draft
         // changes (one published long ago, its land changed since, doesn't hold every later publish up)
         ...Object.entries(draft.data.animals?.change ?? {})
-          .filter(([k, c]) => isGeneratedKey(k) && JSON.stringify(editsNow().animals?.change?.[k] ?? null) !== JSON.stringify(c ?? null))
+          .filter(
+            ([k, c]) =>
+              isGeneratedKey(k) &&
+              JSON.stringify(editsNow().animals?.change?.[k] ?? null) !== JSON.stringify(c ?? null),
+          )
           .map(([k, c]) => checkDefaultChange(k, c, canBeAt))
           .filter((w): w is string => !!w),
         ...(draft.data.animals?.remove ?? [])

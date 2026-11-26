@@ -98,3 +98,18 @@ test("grown land (docs/plan/69, phase 10): counted, and kept when brought up to 
     ["god-land-1", "god-land-9"],
   );
 });
+
+test("a home lot laid, moved or its sign placed is a change; a merge keeps it (plan 130)", () => {
+  const lot = { key: "god-lot-1", name: "Lot 4", x0: 200, z0: -50, x1: 222, z1: -22 };
+  const base: GroundsEdits = { rev: 0 };
+  const mine: GroundsEdits = { rev: 0, homeLots: { add: [lot] } };
+  const c = editsCount(base, mine);
+  assert.equal(c.homeLots.add, 1);
+  assert.equal(c.total, 1);
+  const signed: GroundsEdits = { rev: 0, homeLots: { change: { "pine-1": { sign: [130, -20] } } } };
+  assert.equal(editsCount(base, signed).homeLots.change, 1);
+  // (someone else published a road meanwhile: my lot's still in my draft)
+  const theirs: GroundsEdits = { rev: 1, ways: { add: [road("r9")] } };
+  const m = mergeEdits(base, mine, theirs).edits;
+  assert.deepEqual(m.homeLots?.add, [lot]);
+});

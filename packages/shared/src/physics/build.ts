@@ -57,10 +57,13 @@ import { blocksOf, box3, kindSolids, openingHole, type Solid3, type SolidBox3, W
 import { stairsTopRail, stairsWell } from "../stairs.ts";
 import { chordsOf } from "../structure/arc.ts";
 import { onOf } from "../structure/attach.ts";
+import { flightBoxes, flightsOf } from "../structure/flights.ts";
 import { foldMap, foldThings } from "../structure/fold.ts";
+import { landHoleAt, landHoles, padsOf } from "../structure/found.ts";
 import { structureFromMap } from "../structure/from-map.ts";
+import { poolsOf } from "../structure/pools.ts";
 import { cellOf } from "../structure/query.ts";
-import { ROOF_THICK } from "../structure/roof.ts";
+import { ROOF_THICK, rectOf } from "../structure/roof.ts";
 import type { Structure } from "../structure/types.ts";
 import { STOREY } from "../units.ts";
 import { alongWall, crossings, cutsOf, slabBoxes, wallPieces } from "./structure-solids.ts";
@@ -71,7 +74,26 @@ const LAT = 2; // the chunks' height samples a metre (grounds.ts)
 /** A Grounds chunk's land as a heightfield. */
 export function landOf(cx: number, cz: number): Land {
   const c = groundsChunk(cx, cz);
-  return { x0: cx * CHUNK, z0: cz * CHUNK, n: CHUNK * LAT + 1, step: 1 / LAT, h: c.h };
+  const land = { x0: cx * CHUNK, z0: cz * CHUNK, n: CHUNK * LAT + 1, step: 1 / LAT, h: c.h };
+  // (plan 130: a basement dug, a pool — no land there: its samples holes, NaN)
+  const holes = landHoles();
+  if (!holes.some((h) => h.x1 > land.x0 && h.x0 < land.x0 + CHUNK && h.z1 > land.z0 && h.z0 < land.z0 + CHUNK))
+    return land;
+  const h = Float32Array.from(c.h);
+  for (let j = 0; j < land.n; j++)
+    for (let i = 0; i < land.n; i++)
+      if (landHoleAt(land.x0 + i * land.step, land.z0 + j * land.step)) h[j * land.n + i] = Number.NaN;
+  return { ...land, h };
+}
+/** (plan 130) The chunks a set of land holes touches (to make again when they change). */
+export function chunksOfHoles(
+  holes: readonly { x0: number; z0: number; x1: number; z1: number }[],
+): [number, number][] {
+  const out = new Map<string, [number, number]>();
+  for (const h of holes)
+    for (let cx = Math.floor(h.x0 / CHUNK); cx <= Math.floor(h.x1 / CHUNK); cx++)
+      for (let cz = Math.floor(h.z0 / CHUNK); cz <= Math.floor(h.z1 / CHUNK); cz++) out.set(`${cx},${cz}`, [cx, cz]);
+  return [...out.values()];
 }
 
 const chunkOf = (x: number, z: number) => `${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`;
@@ -165,6 +187,8 @@ export function buildingSolids(map0: MapDef, objects: Iterable<WorldObjectDef>, 
       });
     });
     for (const { w, own } of pieces) {
+      // (plan 130: a gate's walked through)
+      if (w.style === "gate") continue;
       const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]) || 1;
       const [nx, ny] = [-(w.b[1] - w.a[1]) / len, (w.b[0] - w.a[0]) / len];
       const outside = (u: number) => {
@@ -184,12 +208,113 @@ export function buildingSolids(map0: MapDef, objects: Iterable<WorldObjectDef>, 
         for (const [x, y] of stairsWell(o)) wells.push([x, y, x + 1, y + 1]);
     // (and a lift's shaft going on down from here: open — its car's floor is its own)
     wells.push(...shaftHoles(shafts, level));
+    // (plan 130 phase 11: its pools — the lot's ground open over them)
+    const poolHoles: [number, number, number, number][] = poolsOf(st, level).map((p) => {
+      const xs = p.ring.map((q) => q[0]);
+      const ys = p.ring.map((q) => q[1]);
+      return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    });
+    wells.push(...poolHoles);
     for (const rings of own)
       for (const slab of slabBoxes(rings, wells, elev)) add(`slab:${level}:${at(slab)}`, "floor", slab);
+    // (plan 130 phase 6) the stairs built with the stair tool: their treads and landings stood on (the floor's), their
+    // strings and poles solid
+    for (const fl of flightsOf(st, level))
+      for (const b of flightBoxes(fl)) {
+        if (b.part === "riser" || b.part === "rail") continue;
+        const stood = b.part === "tread" || b.part === "landing";
+        // (stood on: the stairs' own key — any floor's they reach, as a staircase's is: physics/place.ts slabsOf)
+        add(`flight${stood ? "" : "-solid"}:${level}:${fl.id}`, stood ? "floor" : "solid", {
+          t: "box",
+          x: b.x,
+          y: elev + (b.y0 + b.y1) / 2,
+          z: b.y,
+          hx: b.hv,
+          hy: (b.y1 - b.y0) / 2,
+          hz: b.hu,
+          a: -b.a,
+        });
+      }
+    // (plan 130) a lot's foundation: its pads solid from the land up to the floor (a deck's on posts — open under)
+    const found = st.floors.find((f) => f.index === level)?.found ?? 0;
+    if (found > 0)
+      for (const p of padsOf(st, level)) {
+        if (p.style === "deck") continue;
+        const xs = p.ring.map((q) => q[0]);
+        const ys = p.ring.map((q) => q[1]);
+        const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+        const h = found - 0.02;
+        add(`found:${level}:${chunkOf((x0 + x1) / 2, (y0 + y1) / 2)}`, "wall", {
+          t: "box",
+          x: (x0 + x1) / 2,
+          y: elev - 0.02 - h / 2,
+          z: (y0 + y1) / 2,
+          hx: (x1 - x0) / 2,
+          hy: h / 2,
+          hz: (y1 - y0) / 2,
+          a: 0,
+        });
+      }
+    // (plan 130 phase 11) a lot's pools: their floor (stood on, the yard's — physics/place.ts), their walls, in the
+    // land's hole over them
+    {
+      const land = elev - (st.floors.find((f) => f.index === level)?.found ?? 0);
+      for (const p of poolsOf(st, level)) {
+        const xs = p.ring.map((q) => q[0]);
+        const ys = p.ring.map((q) => q[1]);
+        const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+        const bed = land - p.depth;
+        const T = 0.2;
+        add(`pool:${level}:${p.id}`, "floor", {
+          t: "box",
+          x: (x0 + x1) / 2,
+          y: bed - T / 2,
+          z: (y0 + y1) / 2,
+          hx: (x1 - x0) / 2 + T,
+          hy: T / 2,
+          hz: (y1 - y0) / 2 + T,
+          a: 0,
+        });
+        const side = (cx: number, cz: number, hx: number, hz: number, n: number) =>
+          add(`pool-wall:${level}:${p.id}:${n}`, "wall", {
+            t: "box",
+            x: cx,
+            y: (bed + land) / 2 - 0.05,
+            z: cz,
+            hx,
+            hy: (land - bed) / 2 - 0.05,
+            hz,
+            a: 0,
+          });
+        side((x0 + x1) / 2, y0 - T / 2, (x1 - x0) / 2 + T, T / 2, 0);
+        side((x0 + x1) / 2, y1 + T / 2, (x1 - x0) / 2 + T, T / 2, 1);
+        side(x0 - T / 2, (y0 + y1) / 2, T / 2, (y1 - y0) / 2, 2);
+        side(x1 + T / 2, (y0 + y1) / 2, T / 2, (y1 - y0) / 2, 3);
+      }
+    }
     // its roofs (phase 11.7): a lid at the eaves (a flat one's top), over it out of doors
-    for (const r of (st.roofs ?? []).filter((q) => q.floor === level))
+    // (plan 130: a dormer no lid — it's in the roof's; a chimney a stack, solid)
+    for (const r of (st.roofs ?? []).filter((q) => q.floor === level)) {
+      if (r.kind === "dormer") continue;
+      if (r.kind === "chimney") {
+        const rc = rectOf(r.outline);
+        const top = r.top ?? r.z + 1.5;
+        if (rc && top > r.z)
+          add(`chimney:${level}:${r.id}`, "wall", {
+            t: "box",
+            x: rc.c[0],
+            y: (r.z + top) / 2,
+            z: rc.c[1],
+            hx: rc.hu,
+            hy: (top - r.z) / 2,
+            hz: rc.hv,
+            a: -rc.ang,
+          });
+        continue;
+      }
       for (const lid of slabBoxes([r.outline], [], r.kind === "flat" ? r.z + ROOF_THICK : r.z))
         add(`roof:${level}:${at(lid)}`, "floor", lid);
+    }
     // (a mezzanine: its floor's too — you're on that floor up there)
     // (open where a lift's car passes it, as a floor's slab is — plan 72 phase 11)
     for (const d of decks) {
@@ -200,7 +325,7 @@ export function buildingSolids(map0: MapDef, objects: Iterable<WorldObjectDef>, 
         if (lo !== undefined && hi !== undefined && d.z > lo * STOREY + 1e-3 && d.z < hi * STOREY + 2.6)
           shaftsThrough.push(liftRect(list[0].o));
       }
-      for (const slab of slabBoxes([d.outline, ...d.holes], shaftsThrough, d.z))
+      for (const slab of slabBoxes([d.outline, ...d.holes], [...shaftsThrough, ...poolHoles], d.z))
         add(`slab:${level}:${at(slab)}`, "floor", slab);
     }
     // the top floor's roof: a slab over all of it, where the next floor's would be (one building,
@@ -277,7 +402,8 @@ export function buildingSolids(map0: MapDef, objects: Iterable<WorldObjectDef>, 
       // (and a flight of steps up to a mezzanine — phase 11.8)
       const stairs = o.kind === "stairs" || o.kind === "flight";
       if (!stairs && blocksOf(o.kind) !== "solid") continue;
-      const base = baseOf(lm, level, o.x + 0.5, o.y + 0.5);
+      // (plan 130: in a lot's yard, on the land — its foundation's height under the floor)
+      const base = baseOf(lm, level, o.x + 0.5, o.y + 0.5) + (Number(o.props?.over) || 0);
       const flow = level === 0 && !indoors(o.x + 0.5, o.y + 0.5) ? PARKOUR[o.kind] : undefined;
       for (const s of kindSolids(o, elev + base)) {
         add(`thing:${o.id}`, stairs ? "floor" : "solid", moved(s, ox, 0, oz));

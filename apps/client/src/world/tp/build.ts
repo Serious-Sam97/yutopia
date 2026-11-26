@@ -18,7 +18,9 @@ import {
   isWindowKind,
   type MapDef,
   NO_WALL,
+  openingCutOf,
   openingEdges,
+  openingSpanOf,
   placedFootprint,
   quarterOf,
   spaceFloor,
@@ -31,13 +33,17 @@ import {
 import { crossings, slabBoxes } from "@yutopia/shared/physics/structure-solids";
 import {
   cellOf,
+  coverOf,
+  flightBoxes,
   floorsSig,
   freeCuts,
   inRing,
   isFreeOpening,
   onOf,
   type Ring,
+  ROOF_MATS,
   type Roof,
+  type RoofFace,
   roofFaces,
 } from "@yutopia/shared/structure";
 import { SLAB, WALL_T } from "@yutopia/shared/units";
@@ -79,12 +85,14 @@ import { bayBoardWords } from "../furn/building-native";
 import { ChessMen3, isBoard } from "../furn/chessmen3d";
 import { animateLive } from "../furn/liveparts";
 import { isNative, isNativeDress, liveInto, nativeDressInto, nativeInto, openingInto } from "../furn/native";
+import { loadOrnate, ORNATE_KINDS, ornateReady } from "../furn/ornate";
 import { N_HALF, N_WALL, nativePost, nativeWall } from "../furn/walls-native";
 import type { MatId } from "../look/life-matlib-list";
 import { litMaterial } from "../look/lit";
 import { isLife, isLifeBuild, isLifeOut } from "../look/look-mode";
 import { CEL, fadePiece, type Piece, yuLit } from "../look/yulit";
 import { boxInParent, type Slab } from "./below-cull";
+import { drawFlight, drawPads, drawPool, drawStyled, drawTrims } from "./fences3d";
 import { floorMaterial, groundRelief, kitMaterial, kitRenderer, surfaceMaterial } from "./kit-mats";
 import { type Geo, Out } from "./kit3d";
 import { edgesOfMap, type FreeWall, piecesOf, turnOut, type WallEdges } from "./walls3d";
@@ -183,6 +191,14 @@ const FLOOR_LIB: Record<string, [MatId, number, number]> = {
   ":": ["carpet", 0xffffff, 1],
   _: ["tile-floor", 0xffffff, 0.6],
 };
+/** A floor's library material, tint and UV scale: its char's, or (plan 130 phase 9) a covering's — tinted by the
+ *  bake (its tint painted flat, multiplied over the library's). */
+function floorLib(ch: string): [MatId, number, number] | null {
+  const f = FLOOR_LIB[ch];
+  if (f) return f;
+  const c = coverOf(ch, "floor");
+  return c ? [c.mat as MatId, 0xffffff, c.scale ?? 1] : null;
+}
 // (the cream checker: its two tones flat, a tile each — plan 73 phase 7.2; its grout the library's)
 const FLOOR_FILL: Record<string, string | readonly [string, string]> = {
   ".": "#ffffff",
@@ -457,6 +473,37 @@ export class World3 {
       this.tagFade(b, f);
     }
     if (only) for (const k of only) if (!made.has(k)) this.setWallPart(k, null);
+    // (plan 130: the fences, rails, spandrels and gates, and the walls' trims — one piece, made again when they change)
+    const ssig = JSON.stringify([
+      E.styled ?? [],
+      E.trims ?? [],
+      E.pads ?? [],
+      E.found ?? 0,
+      E.flights ?? [],
+      E.pools ?? [],
+    ]);
+    if (ssig !== this.styledSig || !only) {
+      this.styledSig = ssig;
+      const out = new Out(BUILD_TEX);
+      for (const w of E.styled ?? []) drawStyled(out, w);
+      for (const w of E.trims ?? []) drawTrims(out, w);
+      if (E.pads?.length && E.found) drawPads(out, E.pads, E.found);
+      this.setWallPart("styled", out.geos.some((g) => !g.empty) ? { built: this.mount(out) } : null);
+      // (each stair its own piece: seen from upstairs through its hole, not culled with the whole floor's fences)
+      for (const k of [...this.wallParts.keys()]) if (k.startsWith("flight|")) this.setWallPart(k, null);
+      for (const f of E.flights ?? []) {
+        const fo = new Out(BUILD_TEX);
+        drawFlight(fo, flightBoxes(f), f.style, f.rail);
+        this.setWallPart(`flight|${f.id}`, { built: this.mount(fo) });
+      }
+      // (plan 130 phase 11: each pool its own piece — its water, its lamps)
+      for (const k of [...this.wallParts.keys()]) if (k.startsWith("pool|")) this.setWallPart(k, null);
+      for (const p of E.pools ?? []) {
+        const po = new Out(BUILD_TEX);
+        drawPool(po, p, -(E.found ?? 0));
+        this.setWallPart(`pool|${p.id}`, { built: this.mount(po) });
+      }
+    }
     // (the walls off the lattice drawn again: one of theirs that's gone, gone)
     if (only?.has(FREE))
       for (const k of [...this.wallParts.keys()])
@@ -515,10 +562,19 @@ export class World3 {
         // (drawn along +x from the origin, its patterns run on from the wall's start, then turned)
         const f = { dir: "h" as const, x: 0, y: 0 };
         const d = { part, a0, a1, cut: h ? ([h.z0, h.z1] as const) : null, top, t: halfT, along: p.u };
-        if (fw.back === NO_WALL) nativeWall(out, f, { ...d, ch: fw.ch, side: "both" });
+        // (plan 130 phase 9: its faces' coverings — each face its own)
+        const cf = coverOf(fw.coverF, "wall");
+        const cb = coverOf(fw.coverB, "wall");
+        if (fw.back === NO_WALL && !cf && !cb) nativeWall(out, f, { ...d, ch: fw.ch, side: "both" });
         else {
-          nativeWall(out, f, { ...d, ch: fw.ch, side: "front" });
-          nativeWall(out, f, { ...d, ch: isWindow(fw.ch) ? fw.back.toUpperCase() : fw.back, side: "back" });
+          const back = fw.back === NO_WALL ? fw.ch : fw.back;
+          nativeWall(out, f, { ...d, ch: fw.ch, side: "front", cover: cf && { mat: cf.mat, tint: cf.tint } });
+          nativeWall(out, f, {
+            ...d,
+            ch: isWindow(fw.ch) ? back.toUpperCase() : back,
+            side: "back",
+            cover: cb && { mat: cb.mat, tint: cb.tint },
+          });
         }
         turnOut(out, p.angle, p.at[0], p.at[1], fw.base ?? 0);
       }
@@ -572,6 +628,8 @@ export class World3 {
   }
 
   // a wall piece put in (or taken away: null), the one it replaces taken down
+  /** (plan 130) what the styled walls and trims were last drawn from */
+  private styledSig = "";
   private setWallPart(key: string, part: { built: Built; fade?: FadeGroup } | null) {
     const had = this.wallParts.get(key);
     if (had) this.unmount(had.built);
@@ -634,7 +692,7 @@ export class World3 {
   // Roofs (phase 11.7): each face of each (shared roof.ts roofFaces: slopes, gables, a flat lid and
   // its edge) a mesh, inked round; hidden while I'm under one (roofsFor).
   private roofRoot: Group | null = null;
-  private roofGroups: { outline: [number, number][]; g: Group }[] = [];
+  private roofGroups: { outline: [number, number][]; g: Group; on: boolean }[] = [];
   private dropRoofs() {
     if (!this.roofRoot) return;
     this.roofRoot.traverse((o) => {
@@ -659,26 +717,68 @@ export class World3 {
       this.light(m);
       return m;
     };
-    const mats = lib
+    const mats: Record<RoofFace["part"], Material> = lib
       ? {
           slope: libMat("roof-slate"),
           gable: libMat("plaster"),
           flat: libMat("concrete"),
           edge: libMat("plain"),
+          chimney: libMat("brick"),
+          glass: litMaterial({ color: 0x23323f, roughness: 0.15, metalness: 0.3 }),
         }
       : {
           slope: litMaterial({ color: 0x585e66, side: DoubleSide }),
           gable: litMaterial({ color: 0xefe4cc, side: DoubleSide }),
           flat: litMaterial({ color: 0x6f6a62, side: DoubleSide }),
           edge: litMaterial({ color: 0x3b3029, side: DoubleSide }),
+          chimney: litMaterial({ color: 0x8a4a38 }),
+          glass: litMaterial({ color: 0x23323f, roughness: 0.15, metalness: 0.3 }),
         };
-    const tint: Record<string, number> = { slope: 0xffffff, gable: 0xefe4cc, flat: 0xffffff, edge: 0x3b3029 };
+    const tint: Record<string, number> = {
+      slope: 0xffffff,
+      gable: 0xefe4cc,
+      flat: 0xffffff,
+      edge: 0x3b3029,
+      chimney: 0xffffff,
+      glass: 0xffffff,
+    };
+    // (plan 130 phase 7: a roof's covering — the library's slates, shingles or metal, tinted)
+    const slopeMats = new Map<string, Material>();
+    const slopeOf = (mat: string | undefined): Material => {
+      if (!lib) return mats.slope;
+      // (none: slate — the photograph's, as the picked slate)
+      const name = ROOF_LIB[mat ?? "slate"] ?? "roof-slate";
+      let m = slopeMats.get(name);
+      if (!m) {
+        m = name === "roof-slate" ? mats.slope : libMat(name);
+        slopeMats.set(name, m);
+      }
+      return m;
+    };
+    const faceMats = new Map<string, Material>();
+    const faceMat = (name: string): Material => {
+      let m = faceMats.get(name);
+      if (!m) {
+        m = libMat(name);
+        faceMats.set(name, m);
+      }
+      return m;
+    };
     const ink = new LineBasicMaterial({ color: 0x1e1712 });
     for (const r of this.roofs) {
       const g = new Group();
+      // (plan 130 phase 13: a roof's faces merged by material — a mesh each, one ink outline — not a mesh and a line
+      // a face: ~50 draw calls a house became ~8)
+      const buckets = new Map<
+        Material,
+        { pos: number[]; nor: number[]; uv: number[]; col: number[]; shadow: boolean }
+      >();
+      const loop: number[] = [];
       for (const f of roofFaces(r)) {
-        // (a face is flat: a flat roof's may be any shape — triangulated in its own x, y)
+        // (a face is flat: a flat roof's may be any shape — triangulated in its own x, y; a standing or
+        // sloped one with more corners — a gambrel's end, a round roof's — is convex: a fan)
         const pts = f.pts;
+        const level = pts.every((p) => Math.abs(p[2] - pts[0][2]) < 1e-6);
         const tris =
           pts.length === 3
             ? [[0, 1, 2]]
@@ -687,54 +787,95 @@ export class World3 {
                   [0, 1, 2],
                   [0, 2, 3],
                 ]
-              : ShapeUtils.triangulateShape(
-                  pts.map(([x, y]) => new Vector2(x, y)),
-                  [],
-                );
+              : level
+                ? ShapeUtils.triangulateShape(
+                    pts.map(([x, y]) => new Vector2(x, y)),
+                    [],
+                  )
+                : pts.slice(2).map((_, i) => [0, i + 1, i + 2]);
         const pos: number[] = [];
         for (const [a, b, c] of tris) for (const i of [a, b, c]) pos.push(pts[i][0], pts[i][2], pts[i][1]);
-        const geo = new BufferGeometry();
-        geo.setAttribute("position", new Float32BufferAttribute(pos, 3));
-        geo.computeVertexNormals();
+        if (pos.length < 9) continue;
+        // (its normal: its first triangle's, as its own geometry's were)
+        const n = new Vector3(pos[3] - pos[0], pos[4] - pos[1], pos[5] - pos[2])
+          .cross(new Vector3(pos[6] - pos[0], pos[7] - pos[1], pos[8] - pos[2]))
+          .normalize();
+        // (a gable end: the face of the wall under it, its covering or its paint — the quality pass)
+        const face = f.part === "gable" ? gableFace(r as RoofDrawn, pts) : null;
+        const mat = f.part === "slope" ? slopeOf(r.mat) : face ? faceMat(face.mat) : mats[f.part];
+        let bk = buckets.get(mat);
+        if (!bk) {
+          bk = { pos: [], nor: [], uv: [], col: [], shadow: f.part !== "glass" };
+          buckets.set(mat, bk);
+        }
+        bk.pos.push(...pos);
+        for (let i = 0; i < pos.length; i += 3) bk.nor.push(n.x, n.y, n.z);
         if (lib) {
           // (along the eaves: the face's level direction; up: across it in its plane)
-          const n = new Vector3().fromBufferAttribute(geo.getAttribute("normal") as BufferAttribute, 0);
           const along = Math.abs(n.y) > 0.99 ? new Vector3(1, 0, 0) : new Vector3(0, 1, 0).cross(n).normalize();
           const up = n.clone().cross(along).normalize();
           const p = new Vector3();
-          const uv: number[] = [];
-          const col: number[] = [];
-          const c = new Color(tint[f.part] ?? 0xffffff);
+          const c = new Color(
+            f.part === "slope"
+              ? (ROOF_TINT[r.mat ?? "slate"] ?? 0xffffff)
+              : face
+                ? face.tint
+                : (tint[f.part] ?? 0xffffff),
+          );
           for (let i = 0; i < pos.length; i += 3) {
             p.set(pos[i], pos[i + 1], pos[i + 2]);
-            uv.push(p.dot(along), p.dot(up));
-            col.push(c.r, c.g, c.b, 1);
+            bk.uv.push(p.dot(along), p.dot(up));
+            bk.col.push(c.r, c.g, c.b, 1);
           }
-          geo.setAttribute("uv", new Float32BufferAttribute(uv, 2));
-          geo.setAttribute("color", new Float32BufferAttribute(col, 4));
         }
-        const mesh = new Mesh(geo, mats[f.part]);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        g.add(mesh);
-        const loop: number[] = [];
         for (let i = 0; i < pts.length; i++) {
           const [p, q] = [pts[i], pts[(i + 1) % pts.length]];
           loop.push(p[0], p[2], p[1], q[0], q[2], q[1]);
         }
+      }
+      for (const [mat, bk] of buckets) {
+        const geo = new BufferGeometry();
+        geo.setAttribute("position", new Float32BufferAttribute(bk.pos, 3));
+        geo.setAttribute("normal", new Float32BufferAttribute(bk.nor, 3));
+        if (lib) {
+          geo.setAttribute("uv", new Float32BufferAttribute(bk.uv, 2));
+          geo.setAttribute("color", new Float32BufferAttribute(bk.col, 4));
+        }
+        geo.computeBoundingSphere();
+        const mesh = new Mesh(geo, mat);
+        mesh.castShadow = bk.shadow;
+        mesh.receiveShadow = true;
+        g.add(mesh);
+      }
+      if (loop.length) {
         const lg = new BufferGeometry();
         lg.setAttribute("position", new Float32BufferAttribute(loop, 3));
         g.add(new LineSegments(lg, ink));
       }
+      // (each roof a few millimetres over the one before: two overlapping at one pitch would share planes)
+      g.position.y = 0.004 * this.roofGroups.length;
       root.add(g);
-      this.roofGroups.push({ outline: r.outline, g });
+      this.roofGroups.push({ outline: r.outline, g, on: r.kind === "dormer" || r.kind === "chimney" });
     }
     this.root.add(root);
     this.roofRoot = root;
   }
   /** The roofs over this floor shown but the one over (x, y) — this floor's own frame (I'm under it). */
   roofsFor(x: number, y: number) {
-    for (const { outline, g } of this.roofGroups) g.visible = !inRing(outline, x, y);
+    // (plan 130: a dormer or a chimney hidden with the roof it's on)
+    const hidden: [number, number][][] = [];
+    for (const r of this.roofGroups) {
+      r.g.visible = r.on || !inRing(r.outline, x, y);
+      if (!r.g.visible) hidden.push(r.outline);
+    }
+    if (hidden.length)
+      for (const r of this.roofGroups) {
+        if (!r.on) continue;
+        const n = r.outline.length;
+        const cx = r.outline.reduce((a, p) => a + p[0], 0) / n;
+        const cy = r.outline.reduce((a, p) => a + p[1], 0) / n;
+        if (hidden.some((o) => inRing(o, cx, cy))) r.g.visible = false;
+      }
   }
 
   // Ceilings over every floor tile at the walls' height, facing down: seen
@@ -928,6 +1069,15 @@ export class World3 {
   // ── furniture + clutter (again where it changed) ────────────────────────────
   update(objects: WorldObjectDef[]) {
     this.objects = objects;
+    // (the house's ornate pieces: their Blender models loaded the first time one's here, the floor drawn again when
+    // they're in — the quality pass)
+    if (!ornateReady() && objects.some((o) => ORNATE_KINDS.has(o.kind)))
+      void loadOrnate().then((ok) => {
+        if (!ok) return;
+        for (const a of this.areas.values()) a.sig = "";
+        for (const t of this.tall.values()) t.sig = "";
+        this.update(this.objects);
+      });
     this.redrawn = null;
     // a door or window came, went or moved: the walls again, with their holes
     const sig = cutsSig(objects);
@@ -974,7 +1124,8 @@ export class World3 {
     const area = (k: string) => getOr(byArea, k, () => ({ objs: [], dress: [], sig: [] }));
     const tallNow = new Map<string, { o: WorldObjectDef; sig: string }>();
     for (const o of objects) {
-      const sig = objectSig(o);
+      // (a free window's joins in its key: one put beside it draws it again — the quality pass)
+      const sig = objectSig(isFreeOpening(o) ? joinedOf(o, objects) : o);
       if (this.tallIds.has(o.id)) {
         tallNow.set(o.id, { o, sig });
         continue;
@@ -1004,7 +1155,7 @@ export class World3 {
         if (one.tall) {
           // stands tall: on its own from now on (this area is redrawn without it)
           this.tallIds.add(o.id);
-          tallNow.set(o.id, { o, sig: objectSig(o) });
+          tallNow.set(o.id, { o, sig: objectSig(isFreeOpening(o) ? joinedOf(o, objects) : o) });
           continue;
         }
         if (one.pick) picks.push(one.pick);
@@ -1491,7 +1642,7 @@ export class World3 {
     } else if (isOpening(o.kind) && o.props?.free === true) {
       // in a wall drawn free (phase 11.6): its model along that wall from where it starts, turned by
       // the wall's heading (its yaw)
-      openingInto(out, o, 0, Math.max(1, e.w));
+      openingInto(out, joinedOf(o, this.objects), 0, openingSpanOf(o));
     } else if (isOpening(o.kind)) {
       // a door or window in its wall (plan 68 phase 13: world/furn/openings.ts): its frame stops at a
       // post at either end (the wall beside it ends in one), or its faces would lie in the post's
@@ -1510,7 +1661,10 @@ export class World3 {
       // (a bay's board: the owner's name and the bay's number painted on)
       if (o.kind === "bayboard") bayBoardWords(out, o);
     }
-    if (freeTurn) turnOut(out, freeTurn.yaw, freeTurn.x, freeTurn.y);
+    // (plan 130: in a lot's yard — its foundation's height under the floor: on the land)
+    const lift = Number(o0.props?.over) || 0;
+    if (freeTurn) turnOut(out, freeTurn.yaw, freeTurn.x, freeTurn.y, lift);
+    else if (lift) for (const g of out.geos) for (let i = 1; i < g.pos.length; i += 3) g.pos[i] += lift;
     const top = topOf(out);
     // what clicks reach: in the live world things to use, or with
     // something to do — a chair, my desk; in build mode, everything
@@ -1729,7 +1883,7 @@ export class World3 {
         // "#a" "#c"; plan 73 phase 8)
         const libOf = (x: number, y: number) => {
           const ch = bake.matAt(x, y);
-          if (BUILD_TEX && FLOOR_LIB[ch]) return ch;
+          if (BUILD_TEX && floorLib(ch)) return ch;
           return OUT_TEX && LOT_RELIEF[ch] ? `#${ch}` : "";
         };
         for (let y = cy; y < cy + h; y++) {
@@ -1750,9 +1904,10 @@ export class World3 {
             const g = getOr(groups, lib, () => ({ pos: [], nor: [], uv: [], buv: [] }));
             g.pos.push(x, 0, y, x, 0, y + 1, x1, 0, y + 1, x, 0, y, x1, 0, y + 1, x1, 0, y);
             const cuv = [u0, v0, u0, v1, u1, v1, u0, v0, u1, v1, u1, v0];
-            if (FLOOR_LIB[lib]) {
+            const fl = floorLib(lib);
+            if (fl) {
               // (the library's: metres across the plan; the bake's: the chunk's canvas)
-              const k = FLOOR_LIB[lib][2];
+              const k = fl[2];
               g.uv.push(...[x, y, x, y + 1, x1, y + 1, x, y, x1, y + 1, x1, y].map((q) => q * k));
               g.buv.push(...cuv);
             } else g.uv.push(...cuv);
@@ -1783,7 +1938,7 @@ export class World3 {
           pos.push(...g.pos);
           nor.push(...g.nor);
           uv.push(...g.uv);
-          const spec = FLOOR_LIB[lib] ?? null;
+          const spec = floorLib(lib);
           buv.push(...(spec ? g.buv : g.uv));
           const m = spec ? floorMaterial(spec[0], tex, spec[1]) : litMaterial({ map: tex });
           const worn = LOT_RELIEF[lib.slice(1)];
@@ -2071,7 +2226,8 @@ function freeHolesOf(objects: Iterable<WorldObjectDef>): Map<string, string> {
   for (const o of objects) {
     if (!isFreeOpening(o)) continue;
     const on = onOf(o);
-    if (on) getOr(out, on.wall, () => []).push(`${o.kind}@${on.at}`);
+    // (plan 130: its own size too)
+    if (on) getOr(out, on.wall, () => []).push(`${o.kind}@${on.at}:${openingSpanOf(o)}:${openingCutOf(o).join("-")}`);
   }
   return new Map([...out].map(([k, v]) => [k, v.sort().join(";")]));
 }
@@ -2158,6 +2314,12 @@ export function touchedWalls(
       out.add(`run|${runKey(d, rx, ry)}`);
     }
   }
+  // (plan 130: the fences and trims changed — buildWalls draws them again on their own signature)
+  if (
+    JSON.stringify([ea.styled, ea.trims, ea.pads, ea.found, ea.flights, ea.pools]) !==
+    JSON.stringify([eb.styled, eb.trims, eb.pads, eb.found, eb.flights, eb.pools])
+  )
+    out.add("styled");
   // (the walls off the lattice: all of them again when any changed — and the lattice's pieces at
   // their ends, where a post may have come or gone)
   if (JSON.stringify(ea.free) !== JSON.stringify(eb.free)) {
@@ -2369,4 +2531,79 @@ function share(geo: BufferGeometry, name: string, into: Float32Array, at: number
 function still(o: Object3D) {
   o.updateMatrix();
   o.matrixAutoUpdate = false;
+}
+
+/** (plan 130 phase 7) A roof's covering: the library material it's drawn with, and its tint. */
+const ROOF_LIB: Record<string, string> = {
+  // (the quality pass: clay and slate the CC0 photographs')
+  slate: "roof-slate-photo",
+  clay: "roof-shingle",
+  cedar: "roof-shingle",
+  moss: "roof-slate",
+  metal: "roof-metal",
+  thatch: "roof-shingle",
+  tar: "roof-tile-dark",
+  copper: "roof-metal",
+  blue: "roof-slate-photo",
+  red: "roof-shingle",
+  black: "roof-shingle",
+  sand: "roof-shingle",
+};
+const ROOF_TINT: Record<string, number> = { ...ROOF_MATS, tar: 0xffffff, slate: 0xffffff };
+
+/** (plan 130's quality pass) A roof as the floor draws it: the walls under its edges with it. */
+type UnderWall = {
+  a: [number, number];
+  b: [number, number];
+  front: string;
+  back: string;
+  coverF?: string;
+  coverB?: string;
+};
+export type RoofDrawn = Roof & { under?: UnderWall[] };
+/** A wall's paint as a library material and a tint (the walls' own look: plaster, brick, walnut). */
+const PAINT_LOOK: Record<string, [string, number]> = {
+  p: ["plaster", 0xefe4cc],
+  b: ["brick", 0xffffff],
+  w: ["walnut", 0xffffff],
+  f: ["plaster", 0x9e4a36],
+  k: ["plaster", 0xc49a6c],
+};
+/** A gable end's look: the face of the wall under it that looks out the gable's way — its covering, else its paint. */
+function gableFace(r: RoofDrawn, pts: readonly (readonly number[])[]): { mat: string; tint: number } | null {
+  const low = [...pts].sort((p, q) => p[2] - q[2]).slice(0, 2);
+  const near = (p: readonly number[], w: UnderWall) => {
+    const [dx, dy] = [w.b[0] - w.a[0], w.b[1] - w.a[1]];
+    const L2 = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, ((p[0] - w.a[0]) * dx + (p[1] - w.a[1]) * dy) / L2));
+    return Math.hypot(p[0] - (w.a[0] + dx * t), p[1] - (w.a[1] + dy * t)) < 0.35;
+  };
+  const w = (r.under ?? []).find((q) => low.every((p) => near(p, q)));
+  if (!w) return null;
+  // (out: from the roof's middle toward the gable)
+  const n = r.outline.length;
+  const cx = r.outline.reduce((s, p) => s + p[0], 0) / n;
+  const cy = r.outline.reduce((s, p) => s + p[1], 0) / n;
+  const [mx, my] = [(low[0][0] + low[1][0]) / 2 - cx, (low[0][1] + low[1][1]) / 2 - cy];
+  const front = -(w.b[1] - w.a[1]) * mx + (w.b[0] - w.a[0]) * my > 0;
+  const cov = coverOf(front ? w.coverF : w.coverB, "wall");
+  if (cov) return { mat: cov.mat, tint: new Color(cov.tint).getHex() };
+  const look = PAINT_LOOK[(front ? w.front : w.back).toLowerCase()];
+  return look ? { mat: look[0], tint: look[1] } : null;
+}
+
+/** (plan 130's quality pass) A free window with its joins: another window on its wall touching it, at its sill and
+ *  height, on its left (`_joinL`) or right (`_joinR`) — drawn as one frame with it. */
+function joinedOf(o: WorldObjectDef, objects: readonly WorldObjectDef[]): WorldObjectDef {
+  if (!isWindowKind(o.kind)) return o;
+  const on = onOf(o);
+  if (!on) return o;
+  const cuts = freeCuts(objects, on.wall);
+  const me = cuts.find((c) => c.id === o.id);
+  if (!me) return o;
+  const same = (c: (typeof cuts)[number]) =>
+    c.id !== o.id && isWindowKind(c.kind) && Math.abs(c.z0 - me.z0) < 1e-3 && Math.abs(c.z1 - me.z1) < 1e-3;
+  const l = cuts.some((c) => same(c) && Math.abs(c.u1 - me.u0) < 1e-3);
+  const r = cuts.some((c) => same(c) && Math.abs(c.u0 - me.u1) < 1e-3);
+  return l || r ? { ...o, props: { ...o.props, ...(l ? { _joinL: true } : {}), ...(r ? { _joinR: true } : {}) } } : o;
 }

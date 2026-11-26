@@ -47,6 +47,7 @@ import { afterFrame } from "../after-frame";
 import { litMaterial } from "../look/lit";
 import { BARE_LEAVES, BIRCH_LEAVES, bareTree3, crowned, snowCanvas, tinted } from "./campus";
 import { FarLand } from "./far3d";
+import { patchLandHoles } from "./land-holes";
 import {
   birchGeometry,
   farBareGeometry,
@@ -209,6 +210,8 @@ export class GroundsStream {
     wx.wxTex.value = this.snowTex;
     wx.wxTexOn.value = 1;
     patch(this.landMat);
+    // (plan 130: a basement dug, a pool — the land open there)
+    patchLandHoles(this.landMat);
     // the trees' kinds, one pool each (and its shadow casters)
     const r = T.rng(9);
     const treeMat = litMaterial({ vertexColors: true });

@@ -4,6 +4,7 @@ import {
   isFreeThing,
   isKind,
   isOpening,
+  openingSpanOf,
   quarterOf,
   SURFACE,
   TEXT_DEFAULT,
@@ -52,6 +53,7 @@ import { KIT_MATS } from "./life-mats";
 import { liveAt, liveGroup } from "./liveparts";
 import { CEL_ALPHA } from "./look";
 import { openingLook, openingModel } from "./openings";
+import { ORNATE_KINDS, ornateReady } from "./ornate";
 import {
   arcade,
   crtTerminal,
@@ -226,7 +228,8 @@ function lookOf(o: WorldObjectDef): Look {
 }
 const drawn = (draw: (m: Model, l: Look) => void, signed = false): Kind => ({
   signed,
-  look: (o) => JSON.stringify(lookOf(o)),
+  // (an ornate kind's model is its Blender one once that's in — till then its stand-in: keyed apart)
+  look: (o) => JSON.stringify(lookOf(o)) + (ORNATE_KINDS.has(o.kind) ? `|ornate${ornateReady() ? 1 : 0}` : ""),
   make: (o) => {
     const m = new Model(2);
     const l = lookOf(o);
@@ -795,7 +798,7 @@ const openings = new Map<string, BufferGeometry>();
  *  wall's middle its z 0 — a west wall's (odd rot) turned a quarter, x along the wall going south;
  *  its frame stopped `a0`/`a1` in at a post. */
 export function openingInto(out: Out, o: WorldObjectDef, a0: number, a1: number): void {
-  const L = openingLook(o, entry(o.kind).w, a0, a1);
+  const L = openingLook(o, openingSpanOf(o), a0, a1);
   const key = JSON.stringify(L);
   let g = openings.get(key);
   if (!g) {

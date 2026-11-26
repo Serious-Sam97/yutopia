@@ -40,6 +40,9 @@ export interface MatDef {
   sheen?: number;
   /** varnished woods, glazed tiles: a clear coat over it */
   clearcoat?: number;
+  /** (plan 130's quality pass) a photo material's source: its ambientCG id (CC0; tools/art/life/photo-materials.mts
+   *  makes its maps from the downloaded set — the painted ones are tools/art/life/materials.mts's) */
+  photo?: string;
 }
 
 const wood = (color = 0xffffff): MatDef => ({
@@ -73,6 +76,21 @@ const ground = (metres: number, roughness: number, normal: number, px = 1024): M
   roughness,
   metalness: 0,
   normal,
+});
+
+/** (plan 130's quality pass) a CC0 photo material: its family, its ambientCG id, a repeat's metres, its roughness
+ *  scale, a clear coat (a varnished floor's, a glazed tile's). */
+const photo = (family: MatFamily, id: string, metres: number, roughness: number, clearcoat?: number): MatDef => ({
+  family,
+  metres,
+  px: 512,
+  tint: false,
+  color: 0xffffff,
+  roughness,
+  metalness: 0,
+  normal: 1,
+  photo: id,
+  ...(clearcoat ? { clearcoat } : {}),
 });
 
 export const LIBRARY = {
@@ -341,6 +359,23 @@ export const LIBRARY = {
     metalness: 0,
     normal: 0.7,
   },
+  // (plan 130's quality pass) photo materials, CC0 from ambientCG: the house's floors, walls, roofs
+  "floor-herringbone": photo("floor", "WoodFloor034", 2, 0.9, 0.25),
+  "floor-parquet": photo("floor", "WoodFloor051", 2, 0.9, 0.3),
+  "floor-parquet-dark": photo("floor", "WoodFloor064", 2, 0.9, 0.3),
+  terrazzo: photo("tile", "Terrazzo013", 1, 0.8, 0.35),
+  "terrazzo-white": photo("tile", "Tiles040", 1.5, 0.8, 0.35),
+  "marble-tile": photo("tile", "Tiles074", 2.1, 0.7, 0.45),
+  "marble-tile-veined": photo("tile", "Tiles078", 2, 0.7, 0.45),
+  "hex-mosaic": photo("tile", "Tiles071", 0.45, 0.8, 0.4),
+  // (ambientCG's "clay" set is a dark grey tile: the tar-dark roof's; clay stays the painted shingle, tinted)
+  "roof-tile-dark": photo("masonry", "RoofingTiles013A", 2, 1),
+  "roof-slate-photo": photo("masonry", "RoofingTiles003", 2, 1),
+  "concrete-polished": photo("masonry", "Concrete048", 2, 0.75),
+  "wallpaper-woodchip": { ...photo("wall", "Wallpaper001A", 1, 1), tint: true },
+  "wallpaper-woodchip-fine": { ...photo("wall", "Wallpaper002A", 1, 1), tint: true },
+  "wallpaper-worn": photo("wall", "Wallpaper001B", 1, 1),
+  "pavers-hex": photo("ground", "PavingStones075", 2, 1),
 } satisfies Record<string, MatDef>;
 
 export type MatId = keyof typeof LIBRARY;
