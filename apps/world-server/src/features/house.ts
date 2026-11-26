@@ -10,6 +10,7 @@ import {
   quarterYaw,
   riseOf,
   roomKey,
+  roomsClosedOps,
   thingMiddle,
   type WorldObjectDef,
 } from "@yutopia/shared";
@@ -108,6 +109,9 @@ registerFeature((room: WorldRoom) => {
     if (why) warn(c, `${why}.`);
     return !!why;
   };
+  // (a floor laid by itself upstairs — roomsClosedOps: its slab's id)
+  let slabSeq = 0;
+  const slabKey = () => `f${Date.now().toString(36)}h${(slabSeq++).toString(36)}`;
   // (found rooms' keys for an edit: none a room has)
   const keys = () => {
     const used = new Set(room.structure.rooms.map((r) => r.key));
@@ -142,7 +146,13 @@ registerFeature((room: WorldRoom) => {
     const before = follow ? applyOps(room.structure, [follow]) : room.structure;
     const walled = applyOps(before, [op]);
     const rooms = roomsAfterWalls(before, walled, level, keys());
-    const ops = [...(follow ? [follow] : []), op, ...(rooms ? [rooms.op] : [])];
+    // (a room closed upstairs by a wall pushed: its floor, the roof under it lifted — as drawing walls does)
+    let closed = roomsClosedOps(rooms ? applyOps(walled, [rooms.op]) : walled, level, rooms?.found ?? [], slabKey);
+    const bare = [...(follow ? [follow] : []), op, ...(rooms ? [rooms.op] : [])];
+    // (a floor laid by itself that nothing under it holds up: left out, the wall still moves)
+    if (closed.length && supportEditWhy(room.structure, level, [...bare, ...closed], (f) => columnsOf(objects(), f)))
+      closed = [];
+    const ops = [...bare, ...closed];
     if (lockedOut(client, ops, level)) return;
     room.applyStruct(ops);
     room.rebuildGrid();

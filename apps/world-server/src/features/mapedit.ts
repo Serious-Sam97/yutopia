@@ -21,6 +21,7 @@ import {
   onLevel,
   ROOM_KINDS,
   roomKey,
+  roomsClosedOps,
   type TileMap,
   type WorldObjectDef,
   worldZ,
@@ -171,11 +172,19 @@ registerFeature((room: WorldRoom) => {
     // (the rooms its walls close round now: found, split — phase 11.5)
     const walled = applyOps(room.structure, [r.op]);
     const rooms = roomsAfterWalls(room.structure, walled, level, roomKeys());
-    const ops = rooms ? [r.op, rooms.op] : [r.op];
+    // (a room closed on a house's upper storey: its floor laid by itself, The Sims 4's — the room under it its ceiling)
+    // (…and the roof of the storey under it, there: up onto these walls — 2026-11-26)
+    const roomed = rooms ? applyOps(walled, [rooms.op]) : walled;
+    let closed = roomsClosedOps(roomed, level, rooms?.found ?? [], () => newSlabId());
+    const bare = [r.op, ...(rooms ? [rooms.op] : [])];
+    const cols = (f: number) => columnsOf(objects(), f);
+    // (a floor laid by itself that nothing under it holds up: left out — the walls still go up, 2026-11-26)
+    if (closed.length && supportEditWhy(room.structure, level, [...bare, ...closed], cols)) closed = [];
+    const ops = [...bare, ...closed];
     // (an upper storey's walls over something on the storey under them; a wall holding one up stays — the quality pass)
-    const held = supportEditWhy(room.structure, level, ops, (f) => columnsOf(objects(), f));
+    const held = supportEditWhy(room.structure, level, ops, cols);
     if (held) return warn(client, `That wall can't go: ${held}.`);
-    const why = room.lockBreak(p, viewOf(rooms ? applyOps(walled, [rooms.op]) : walled), [], level);
+    const why = room.lockBreak(p, viewOf(applyOps(roomed, closed)), [], level);
     if (why) return warn(client, `${why}.`);
     room.applyStruct(ops);
     // (the doors and windows in walls taken away go with them — phase 11.6; undone, back)

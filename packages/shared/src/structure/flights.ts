@@ -33,6 +33,10 @@ export interface Flight {
   rail: string;
   /** its sides closed (boards under the treads) */
   closed?: boolean;
+  /** (a foundation's steps, structure/steps.ts) its foot this far over the floor — the yard's land, under it */
+  base?: number;
+  /** (a foundation's steps) each tread a block down to its foot, no risers */
+  solid?: boolean;
 }
 
 /** A tread, a landing, a riser, a string as a box in the plan: its middle, half-sizes along its own u (the way it's
@@ -85,8 +89,8 @@ export function flightBoxes(f: Flight): FlightBox[] {
     for (let i = 0; i < k; i++) {
       const along = (i + 0.5) * tread;
       const top = (from + i + 1) * h;
-      box(u0 + du * along, v0 + dv * along, W / 2, tread / 2, ang, top - 0.05, top, "tread");
-      if (!f.closed && f.shape !== "ladder")
+      box(u0 + du * along, v0 + dv * along, W / 2, tread / 2, ang, f.solid ? 0 : top - 0.05, top, "tread");
+      if (!f.closed && !f.solid && f.shape !== "ladder")
         box(u0 + du * i * tread, v0 + dv * i * tread, W / 2 - 0.02, 0.012, ang, top - h, top - 0.05, "riser");
     }
     // its strings: either side, up its slope (a box from its foot to its top, as high as a tread)
@@ -185,6 +189,18 @@ export function flightWhy(s: Structure, floor: number, f: Flight): string | null
   return null;
 }
 
+/** The hole a flight comes up through in the floor over it (a hair round its bounds). */
+export function flightHole(f: Flight): XY[] {
+  const b = flightBounds(f);
+  const pad = 0.05;
+  return [
+    [r3(b.x0 - pad), r3(b.y0 - pad)],
+    [r3(b.x1 + pad), r3(b.y0 - pad)],
+    [r3(b.x1 + pad), r3(b.y1 + pad)],
+    [r3(b.x0 - pad), r3(b.y1 + pad)],
+  ];
+}
+
 /** A flight put on floor `floor` — up to the floor over it (`above`, when it climbs a storey: its hole there, railed
  *  round but where it comes up) — the operations. */
 export function flightAddOps(s: Structure, floor: number, f: Flight, above: number | null): StructOp[] {
@@ -192,14 +208,7 @@ export function flightAddOps(s: Structure, floor: number, f: Flight, above: numb
   if (above === null) return ops;
   const fa = s.floors.find((q) => q.index === above);
   if (!fa) return ops;
-  const b = flightBounds(f);
-  const pad = 0.05;
-  const ring: XY[] = [
-    [r3(b.x0 - pad), r3(b.y0 - pad)],
-    [r3(b.x1 + pad), r3(b.y0 - pad)],
-    [r3(b.x1 + pad), r3(b.y1 + pad)],
-    [r3(b.x0 - pad), r3(b.y1 + pad)],
-  ];
+  const ring = flightHole(f);
   // (the hole in every slab of the floor over it the stairs come up through)
   const slabs = s.slabs
     .filter((x) => x.floor === above)

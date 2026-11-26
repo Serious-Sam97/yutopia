@@ -264,6 +264,19 @@ export class BrowserPhysics {
     return made.made + made.removed;
   }
 
+  /** The building's edit in Jolt now, not at the next second's refresh — and whether floor `level` has its slab
+   *  there: a storey just put on, stood on before I'm taken up onto it (else the old roof under it held me, read as
+   *  the land's — 2026-11-26). */
+  floorReady(level: number): boolean {
+    if (this.dead) return false;
+    if (this.keepUp()) {
+      this.world.settle();
+      this.rev++;
+    }
+    for (const k of this.solids.statics.keys()) if (k.startsWith(`slab:${level}:`)) return true;
+    return false;
+  }
+
   private refresh() {
     if (this.dead) return;
     const edits = this.keepUp();

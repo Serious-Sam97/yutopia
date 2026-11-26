@@ -494,7 +494,7 @@ export class World3 {
       for (const k of [...this.wallParts.keys()]) if (k.startsWith("flight|")) this.setWallPart(k, null);
       for (const f of E.flights ?? []) {
         const fo = new Out(BUILD_TEX);
-        drawFlight(fo, flightBoxes(f), f.style, f.rail);
+        drawFlight(fo, flightBoxes(f), f.style, f.rail, f.base ?? 0);
         this.setWallPart(`flight|${f.id}`, { built: this.mount(fo) });
       }
       // (plan 130 phase 11: each pool its own piece — its water, its lamps)
@@ -862,6 +862,10 @@ export class World3 {
     this.roofRoot = root;
   }
   /** The roofs over this floor shown but the one over (x, y) — this floor's own frame (I'm under it). */
+  /** (2026-11-26) every roof of this floor shown, or none — build mode's, by its Roofs button */
+  roofsAll(on: boolean) {
+    for (const r of this.roofGroups) r.g.visible = on;
+  }
   roofsFor(x: number, y: number) {
     // (plan 130: a dormer or a chimney hidden with the roof it's on)
     const hidden: [number, number][][] = [];
@@ -888,7 +892,9 @@ export class World3 {
     // (its top storey's a hand under its roof's deck: what stands on a flat roof — a vent's foot, a unit's curb —
     // sits on the deck, and the kit can lie a few cm lower on sloping ground; seen from in, now it's drawn, they
     // poked through — plan 113 review)
-    const z = sf ? sf.ceil - (sf.up === null ? 0.1 : 0) : WALL_H;
+    // (a house on a home lot: a hair under its roof's eaves or the storey over it — its rings are what's over it, view.ts)
+    const home = !!sf?.space.startsWith("home:");
+    const z = sf ? sf.ceil - (sf.up === null ? 0.1 : home ? 0.01 : 0) : WALL_H;
     const pos: number[] = [];
     // from the structure: its indoor slabs less the wells going up (physics/structure-solids.ts
     // slabBoxes: the same rectangles Jolt's slabs are), each a quad wound to face down
@@ -899,7 +905,8 @@ export class World3 {
       });
       // (a town building's storey: over its whole floor — the hole in its slab is the stairs' from below, not one
       // in its ceiling; its roof's the kit's, seen only from outside: plan 113)
-      const rings = sf ? this.rings.map((r) => r.slice(0, 1)) : this.rings;
+      // (a home lot's: its holes are the stairs' up through the storey over it — kept)
+      const rings = sf && !home ? this.rings.map((r) => r.slice(0, 1)) : this.rings;
       for (const b of rings.flatMap((r) => slabBoxes(r, holes, 0))) {
         const [x0, x1, y0, y1] = [b.x - b.hx, b.x + b.hx, b.z - b.hz, b.z + b.hz];
         pos.push(x0, z, y0, x1, z, y0, x1, z, y1, x0, z, y0, x1, z, y1, x0, z, y1);

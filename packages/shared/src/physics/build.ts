@@ -63,7 +63,9 @@ import { landHoleAt, landHoles, padsOf } from "../structure/found.ts";
 import { structureFromMap } from "../structure/from-map.ts";
 import { poolsOf } from "../structure/pools.ts";
 import { cellOf } from "../structure/query.ts";
+import { inRing } from "../structure/rings.ts";
 import { ROOF_THICK, rectOf } from "../structure/roof.ts";
+import { doorSteps } from "../structure/steps.ts";
 import type { Structure } from "../structure/types.ts";
 import { STOREY } from "../units.ts";
 import { alongWall, crossings, cutsOf, slabBoxes, wallPieces } from "./structure-solids.ts";
@@ -219,7 +221,8 @@ export function buildingSolids(map0: MapDef, objects: Iterable<WorldObjectDef>, 
       for (const slab of slabBoxes(rings, wells, elev)) add(`slab:${level}:${at(slab)}`, "floor", slab);
     // (plan 130 phase 6) the stairs built with the stair tool: their treads and landings stood on (the floor's), their
     // strings and poles solid
-    for (const fl of flightsOf(st, level))
+    // (and a foundation's steps at its doors — worked out, not kept: structure/steps.ts)
+    for (const fl of [...flightsOf(st, level), ...doorSteps(st, level, here)])
       for (const b of flightBoxes(fl)) {
         if (b.part === "riser" || b.part === "rail") continue;
         const stood = b.part === "tread" || b.part === "landing";
@@ -227,7 +230,7 @@ export function buildingSolids(map0: MapDef, objects: Iterable<WorldObjectDef>, 
         add(`flight${stood ? "" : "-solid"}:${level}:${fl.id}`, stood ? "floor" : "solid", {
           t: "box",
           x: b.x,
-          y: elev + (b.y0 + b.y1) / 2,
+          y: elev + (fl.base ?? 0) + (b.y0 + b.y1) / 2,
           z: b.y,
           hx: b.hv,
           hy: (b.y1 - b.y0) / 2,
@@ -294,8 +297,23 @@ export function buildingSolids(map0: MapDef, objects: Iterable<WorldObjectDef>, 
     }
     // its roofs (phase 11.7): a lid at the eaves (a flat one's top), over it out of doors
     // (plan 130: a dormer no lid — it's in the roof's; a chimney a stack, solid)
+    // (plan 130, a roof waiting under a storey put on over it — it goes up when walls close a room up there —: no lid,
+    // the floor up there holds you; its lid a hand under that floor stood you on the roof — 2026-11-26)
+    const sfHere = st.floors.find((q) => q.index === level);
+    const upFloor =
+      sfHere?.space?.startsWith("home:") &&
+      st.floors.find((q) => q.space === sfHere.space && (q.storey ?? 0) === (sfHere.storey ?? 0) + 1);
+    const upSlabs = upFloor
+      ? st.slabs.filter((x) => x.floor === upFloor.index && Math.abs(x.z - upFloor.z) < 1e-3)
+      : [];
+    const waiting = (o: readonly (readonly number[])[]) => {
+      const mx = o.reduce((a, q) => a + q[0], 0) / o.length;
+      const my = o.reduce((a, q) => a + q[1], 0) / o.length;
+      return upSlabs.some((x) => inRing(x.outline, mx, my));
+    };
     for (const r of (st.roofs ?? []).filter((q) => q.floor === level)) {
       if (r.kind === "dormer") continue;
+      if (r.kind !== "chimney" && waiting(r.outline)) continue;
       if (r.kind === "chimney") {
         const rc = rectOf(r.outline);
         const top = r.top ?? r.z + 1.5;

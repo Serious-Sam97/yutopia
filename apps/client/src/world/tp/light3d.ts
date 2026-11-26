@@ -1,5 +1,5 @@
 import { type MapDef, STOREY, type WorldObjectDef } from "@yutopia/shared";
-import { cellOf, floorAtPoint, layoutSig } from "@yutopia/shared/structure";
+import { cellOf, floorAtPoint, inRing, layoutSig } from "@yutopia/shared/structure";
 import {
   Color,
   Data3DTexture,
@@ -262,8 +262,12 @@ export class Light3 {
   }
 
   // the floor's open tiles (the lot's asphalt and concrete: no ceiling over them)
-  private openSky(map: MapDef) {
-    const sig = `${map.width}x${map.height}|${map.ox ?? 0},${map.oy ?? 0}|${layoutSig(map)}`;
+  private openSky(map: MapDef, covered: [number, number][][][] | null = null) {
+    const sig = `${map.width}x${map.height}|${map.ox ?? 0},${map.oy ?? 0}|${layoutSig(map)}|${JSON.stringify(covered)}`;
+    // (a house on a home lot: what's under its ceiling — a roof, the storey over it — is in, whatever its floor's kind:
+    // a room on a foundation stands on the yard's open-sky concrete — no snow, no sun on it in there, 2026-11-26)
+    const under = (x: number, y: number) =>
+      !!covered?.some((g) => !!g[0] && inRing(g[0], x, y) && !g.slice(1).some((h) => inRing(h, x, y)));
     if (sig === this.skySig) return;
     this.skySig = sig;
     const W = map.width;
@@ -275,9 +279,8 @@ export class Light3 {
         // (plan 130: a tile a slab's edge cuts off the whole metre — its middle out of it — open if its part is)
         const open = (c: string) => c === "a" || c === "c";
         const part =
-          !open(ch) &&
-          [0.25, 0.75].some((u) => [0.25, 0.75].some((v) => open(floorAtPoint(map, x + u, y + v))));
-        d[(y * W + x) * 4] = open(ch) || part ? 255 : 0;
+          !open(ch) && [0.25, 0.75].some((u) => [0.25, 0.75].some((v) => open(floorAtPoint(map, x + u, y + v))));
+        d[(y * W + x) * 4] = (open(ch) || part) && !under(x + 0.5, y + 0.5) ? 255 : 0;
       }
     this.sky.dispose();
     this.sky = new DataTexture(d, W, H, RGBAFormat);
@@ -288,10 +291,15 @@ export class Light3 {
   }
 
   // Bake again when what gives or blocks light changed (cheap to call often).
-  update(map: MapDef, objects: WorldObjectDef[], free: readonly LightWall[] = []) {
+  update(
+    map: MapDef,
+    objects: WorldObjectDef[],
+    free: readonly LightWall[] = [],
+    covered: [number, number][][][] | null = null,
+  ) {
     const bake = lightSig(map, objects, free);
     // (the cars too: their headlights' beams are drawn here, not baked)
-    const sig = `${bake}|${JSON.stringify(headlights(objects))}`;
+    const sig = `${bake}|${JSON.stringify(headlights(objects))}|${covered ? JSON.stringify(covered) : ""}`;
     if (sig === this.sig) return;
     this.sig = sig;
     // (each floor's kept: art/light.ts; its volume made from the one before on the same floor —
@@ -306,7 +314,7 @@ export class Light3 {
       this.upload(v);
       this.vol = v;
     }
-    this.openSky(map);
+    this.openSky(map, covered);
     this.lampGlow(map, objects);
     this.composite();
   }

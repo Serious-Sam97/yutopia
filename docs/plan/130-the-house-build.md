@@ -1119,3 +1119,33 @@ The user changed F1a's "one lot each": a person claims as many free lots as they
 ### Freeing a lot from God mode (11-26)
 
 Publish refused taking Lot 1 away: "someone's" — it was Ana's own (the user's), claimed in testing. The message now names the owner and where to free it. God mode's lot panel shows **Free it** on a claimed lot (asks first: the owner loses it and everything on it goes — the same `lot:free` as the lot card's), and **Take it away** on a claimed lot is refused with a toast when clicked, not only at Publish. Not clicked through live: God mode needs Ana, the user's account.
+
+### Steps, ceilings, storeys (11-26)
+
+The user: steps up onto a foundation were missing; roofs and a second storey weren't intuitive; with only a roof, inside, you saw the sky. Asked which UX changes; all four chosen.
+
+- **Steps at doors** (`structure/steps.ts doorSteps`): every door out of a house on a foundation gets a flight of solid steps from the yard's land up to the pad's edge in front of it — worked out from the doors, never kept; drawn (view.ts → fences3d drawFlight with its base) and solid (physics/build.ts). `Flight.base` (the foot under the floor) and `Flight.solid` (treads as blocks). Walked up live in zz-roofin.mts. Test: steps.test.ts.
+- **Ceilings on a lot** (view.ts `homeCeil`): a house's ceiling is what's over it — the next storey's floor slabs (stair holes kept) and the roofs on this storey — not its floor's kind (a room on a foundation stood on the yard's open-sky concrete: no ceiling, so the sky). A hair under the eaves/next floor (build.ts buildCeiling).
+- **Indoors under it**: light3d openSky counts what's under a house's ceiling as in (no sun, no snow dusting on the floor); the falling snow and the dusting's roof list take the houses' roofs (sky.ts `houseRoofs`).
+- **▲ adds a storey**: on a lot's top floor the floor stepper's ▲ is a + that puts a storey on top (normal) and goes up onto it; the menu's "A storey on top" goes up too.
+- **Auto floor upstairs** (`homes.ts autoFloorOps`, mapedit struct:walls): a room closed on a house's upper storey gets an oak floor by itself, holes for the stairs from below kept — the room under it gets its ceiling. Test in homes.test.ts.
+- **A new storey's floor** (`storeyAddOps`): a floor over every room of the storey under it, stair holes kept — build mode shows only the floor you stand on, and a storey with no floor couldn't be gone up to at all.
+- **The roof moves up** (`homes.ts roofsUpOps`, mapedit struct:walls): not when the storey is put on (it floated over a storey with no walls — the user's "flying ceiling" on Lot 6) but when walls close a room up there under it: the roof (its dormers, chimneys) goes onto those walls' top. Asked again: "Empty storey, roof waits" over "walls go up with it". Test in homes.test.ts.
+- The ceiling under a roof covers only the rooms under it (walls round them), never open air.
+- **Roofs shown in build mode**, a Roofs button hides them (`build.roofs`, view.ts `buildRoofs`, World3 `roofsAll`).
+- The "A room · Name it" box moved under the Build chip (it covered the floor menu).
+
+#### The double check (11-26)
+
+An independent review of the diff, then fixes:
+- A roof goes up only when the rooms up there stand under most of its plan (`ROOF_UP_COVER` 0.6) — a small room under the middle of a whole house's roof took it all up.
+- Taking the top storey away puts its roofs back down on the storey under it (`storeyRemoveOps`), as high over those walls — they went with it.
+- The Roofs button (and leaving build mode) reaches every floor's roofs, not only mine.
+- Stairs built up from the top storey before a storey's on it (their rise the walls' height, a slab short) are made to reach the new floor, and it's holed over them.
+- A room closed under an existing storey gets its floor up there too (`roomsClosedOps`), the same on a wall moved (house.ts).
+- An automatic floor nothing holds up is left out rather than the wall refused.
+- Door steps never behind a wall; the floors drawn under mine get the covered rings for their light too.
+- A roof waiting under a storey's floor has no lid in physics (its lid, 23 cm under that floor, stood you on the roof — read as the land).
+- Going up with +: the client's physics reads the building through the view, a frame late, and refreshes once a second; + waits for the new floor's slab (`BrowserPhysics.floorReady`) before taking you up — it intermittently dropped you to the land.
+
+Probes: `e2e/zz-storey.mts` (4/4 after the fix), `zz-roofin.mts`, `zz-halfpad.mts`.

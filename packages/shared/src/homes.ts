@@ -10,8 +10,10 @@
 // (Not "lot": the parking lot's grounds.ts LOT and lot.ts are older.)
 
 import { SPACE_BASE, SPACE_TOP } from "./levels.ts";
-import type { StructOp } from "./structure/ops.ts";
-import type { Floor, Slab, Structure } from "./structure/types.ts";
+import { FLIGHTS, flightHole, flightsOf } from "./structure/flights.ts";
+import { applyOps, type StructOp } from "./structure/ops.ts";
+import { inRing } from "./structure/rings.ts";
+import type { Floor, Room, Slab, Structure } from "./structure/types.ts";
 import { SLAB, STOREY } from "./units.ts";
 
 /** A lot as God mode has it: its rectangle on the land (world x, z), its name and where it is. */
@@ -83,7 +85,8 @@ export function lotOf(st: Structure, uid: number): string | null {
 export function lotsOf(st: Structure, uid: number): string[] {
   const out: string[] = [];
   for (const f of st.floors)
-    if (isHomeSpace(f.space) && f.claim?.owner === uid && !out.includes(homeKeyOf(f.space))) out.push(homeKeyOf(f.space));
+    if (isHomeSpace(f.space) && f.claim?.owner === uid && !out.includes(homeKeyOf(f.space)))
+      out.push(homeKeyOf(f.space));
   return out;
 }
 /** The lot a floor is of (its key), or null: not a lot's. */
@@ -191,8 +194,171 @@ export function storeyAddOps(
     storey,
     ceil: ceilOf(h),
   };
-  return [{ op: "floors", floors: [...st.floors, floor].sort((a, b) => a.index - b.index) }];
+  const ops: StructOp[] = [{ op: "floors", floors: [...st.floors, floor].sort((a, b) => a.index - b.index) }];
+  // (a storey put on a house: a floor over every room of the storey under it — The Sims 4's, a room's top is floor up
+  // there —, holes kept for the stairs coming up: something to stand on and build on, the rooms under their ceiling;
+  // 2026-11-26, the new storey had no floor and build mode couldn't go up onto it)
+  if (dir === "up") {
+    // (stairs built up from the top storey before there was one over it climb its walls' height, a slab short: made to
+    // reach this floor)
+    const reach = flightsOf(st, top.index).map((fl) =>
+      Math.abs(top.z + (fl.base ?? 0) + fl.rise - (z - SLAB)) < 0.15
+        ? { ...fl, rise: r3(z - top.z - (fl.base ?? 0)) }
+        : fl,
+    );
+    if (reach.some((fl, i) => fl !== flightsOf(st, top.index)[i]))
+      ops.push({ op: "layer", name: FLIGHTS, floor: top.index, data: reach });
+    const holes = reach.filter((fl) => Math.abs(top.z + (fl.base ?? 0) + fl.rise - z) < 0.15).map(flightHole);
+    const slabs: Slab[] = st.rooms
+      .filter((r) => r.floor === top.index && r.outline.length > 2)
+      .map((r) => ({
+        id: `up${index}-${r.key}`,
+        floor: index,
+        z,
+        top: ".",
+        outline: r.outline.map(([x, y]) => [x, y]),
+        holes: holes.filter((h) => inRing(r.outline, (h[0][0] + h[2][0]) / 2, (h[0][1] + h[2][1]) / 2)),
+      }));
+    if (slabs.length) ops.push({ op: "slabs", floor: index, slabs });
+  }
+  return ops;
 }
+/** The holes for the stairs on floor `from` that come up to height `z` (a whole storey's flight — not a short one up
+ *  to a mezzanine): where a floor laid up there is left open. */
+function upTo(st: Structure, from: number, z: number): ReturnType<typeof flightHole>[] {
+  const fz = st.floors.find((q) => q.index === from)?.z ?? 0;
+  return flightsOf(st, from)
+    .filter((fl) => Math.abs(fz + (fl.base ?? 0) + fl.rise - z) < 0.15)
+    .map(flightHole);
+}
+/** (2026-11-26) Rooms just closed on a house's upper storey (`st` with them in it): their floor laid by itself and the
+ *  roof under them lifted onto their walls — autoFloorOps then roofsUpOps; every way walls close a room asks it. */
+export function roomsClosedOps(
+  st: Structure,
+  floor: number,
+  found: readonly string[],
+  newId: () => string,
+): StructOp[] {
+  if (!found.length) return [];
+  const rooms = st.rooms.filter((q) => found.includes(q.key));
+  const floored = autoFloorOps(st, floor, rooms, newId);
+  const lifted = roofsUpOps(floored ? applyOps(st, [floored]) : st, floor, rooms);
+  // (and the storey over them, if there's one: their floor up there too — their ceiling)
+  const f = st.floors.find((q) => q.index === floor);
+  const up = f && st.floors.find((q) => q.space === f.space && (q.storey ?? 0) === (f.storey ?? 0) + 1);
+  const after = applyOps(st, [...(floored ? [floored] : []), ...lifted]);
+  const over = up
+    ? autoFloorOps(
+        after,
+        up.index,
+        rooms.map((r) => ({ ...r, floor: up.index })),
+        newId,
+      )
+    : null;
+  return [...(floored ? [floored] : []), ...lifted, ...(over ? [over] : [])];
+}
+/** (asked 2026-11-26, The Sims 4's) The floor a room closed on an upper storey of a house gets by itself: an oak slab
+ *  in its outline where there's no floor yet — holes kept for the stairs coming up from the storey under it. It's what
+ *  the room under it has as its ceiling. Null: nothing to lay (not a house's upper storey, or floored already). */
+export function autoFloorOps(
+  st: Structure,
+  floor: number,
+  rooms: readonly Room[],
+  newId: () => string,
+  top = ".",
+): StructOp | null {
+  const f = st.floors.find((q) => q.index === floor);
+  if (!f || !isHomeSpace(f.space) || (f.storey ?? 0) <= 0) return null;
+  const mine = st.slabs.filter((x) => x.floor === floor);
+  const own = mine.filter((x) => Math.abs(x.z - f.z) < 1e-3 && x.top !== GROUND_TOP);
+  const under = (x: number, y: number) =>
+    own.some((q) => inRing(q.outline, x, y) && !q.holes.some((h) => inRing(h, x, y)));
+  // (the stairs up from the storey under it: the storeys of the same house, its next one down)
+  const below = st.floors
+    .filter((q) => q.space === f.space && (q.storey ?? 0) === (f.storey ?? 0) - 1)
+    .map((q) => q.index)[0];
+  const holes = below === undefined ? [] : upTo(st, below, f.z);
+  const add: Slab[] = [];
+  for (const r of rooms) {
+    if (r.floor !== floor || r.outline.length < 3) continue;
+    // (floored already: its middle — a point in it — on a slab)
+    const xs = r.outline.map((p) => p[0]);
+    const ys = r.outline.map((p) => p[1]);
+    const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+    const cross = r.outline
+      .map((p, i) => [p, r.outline[(i + 1) % r.outline.length]] as const)
+      .filter(([a, b]) => a[1] <= cy !== b[1] <= cy)
+      .map(([a, b]) => a[0] + ((cy - a[1]) / (b[1] - a[1])) * (b[0] - a[0]))
+      .sort((p, q) => p - q);
+    const cx = cross.length >= 2 ? (cross[0] + cross[1]) / 2 : (Math.min(...xs) + Math.max(...xs)) / 2;
+    if (under(cx, cy)) continue;
+    const inHere = holes.filter((h) => {
+      const mx = (h[0][0] + h[2][0]) / 2;
+      const my = (h[0][1] + h[2][1]) / 2;
+      return inRing(r.outline, mx, my);
+    });
+    add.push({ id: newId(), floor, z: f.z, top, outline: r.outline.map(([x, y]) => [x, y]), holes: inHere });
+  }
+  return add.length ? { op: "slabs", floor, slabs: [...mine, ...add] } : null;
+}
+
+/** How much of a roof's plan (its overhang in it) the rooms up there must stand under for it to go up onto them. */
+export const ROOF_UP_COVER = 0.6;
+/** (2026-11-26) A room closed on a house's upper storey under a roof of the storey beneath: that roof (its dormers and
+ *  chimneys with it) goes up onto the new walls, as high over their top as it stood over the old ones' — a roof rests
+ *  on the house's top walls. (Moved when the storey was put on, it floated over a storey with no walls yet.) */
+export function roofsUpOps(st: Structure, floor: number, rooms: readonly Room[]): StructOp[] {
+  const f = st.floors.find((q) => q.index === floor);
+  if (!f || !isHomeSpace(f.space) || (f.storey ?? 0) <= 0) return [];
+  const below = st.floors.find((q) => q.space === f.space && (q.storey ?? 0) === (f.storey ?? 0) - 1);
+  if (!below) return [];
+  const mine = rooms.filter((r) => r.floor === floor && r.outline.length > 2);
+  const mid = (o: readonly (readonly number[])[]) => [
+    o.reduce((a, p) => a + p[0], 0) / o.length,
+    o.reduce((a, p) => a + p[1], 0) / o.length,
+  ];
+  const roofs = (st.roofs ?? []).filter((r) => r.floor === below.index);
+  // (the big roofs the rooms up there now stand under — most of each, by its plan, under the storey's rooms: a small
+  // room under the middle of a whole house's roof doesn't take it up, it'd float over the rest)
+  const upRooms = st.rooms.filter((r) => r.floor === floor && r.outline.length > 2);
+  const covered = (o: readonly (readonly number[])[]) => {
+    const xs = o.map((p) => p[0]);
+    const ys = o.map((p) => p[1]);
+    let [n, hit] = [0, 0];
+    for (let x = Math.min(...xs) + 0.25; x < Math.max(...xs); x += 0.5)
+      for (let y = Math.min(...ys) + 0.25; y < Math.max(...ys); y += 0.5) {
+        if (!inRing(o as never, x, y)) continue;
+        n++;
+        if (upRooms.some((r) => inRing(r.outline, x, y))) hit++;
+      }
+    return n ? hit / n : 0;
+  };
+  const big = roofs.filter(
+    (r) =>
+      r.kind !== "chimney" &&
+      r.kind !== "dormer" &&
+      mine.some((m) => inRing(r.outline, ...(mid(m.outline) as [number, number]))) &&
+      covered(r.outline) >= ROOF_UP_COVER,
+  );
+  if (!big.length) return [];
+  // (and what stands on them: a dormer's or a chimney's middle in one of them)
+  const on = roofs.filter(
+    (r) => !big.includes(r) && big.some((q) => inRing(q.outline, ...(mid(r.outline) as [number, number]))),
+  );
+  const going = [...big, ...on];
+  const dz = r3(f.z + (f.ceil ?? STOREY - SLAB) - (below.z + (below.ceil ?? STOREY - SLAB)));
+  const up = going.map((r) => ({
+    ...r,
+    floor,
+    z: r3(r.z + dz),
+    ...(r.top !== undefined ? { top: r3(r.top + dz) } : {}),
+  }));
+  return [
+    { op: "roofs", floor: below.index, roofs: roofs.filter((r) => !going.includes(r)) },
+    { op: "roofs", floor, roofs: [...(st.roofs ?? []).filter((r) => r.floor === floor), ...up] },
+  ];
+}
+
 /** Where the storey over `f` stands: its walls and a slab over its own height (a ground storey's on its foundation
  *  already — plan 130 phase 5: its z is the foundation's top). */
 export const riseTop = (f: Floor): number => r3(f.z + (f.ceil ?? STOREY - SLAB) + SLAB);
@@ -203,7 +369,26 @@ export function storeyRemoveOps(st: Structure, key: string, level: number): Stru
   if (!f) return "not one of this lot's storeys";
   if ((f.storey ?? 0) === 0) return "the ground storey stays (give the lot back instead)";
   if (f !== list[0] && f !== list[list.length - 1]) return "only the top storey or the lowest basement goes";
-  return [{ op: "floors", floors: st.floors.filter((q) => q.index !== level) }];
+  const ops: StructOp[] = [{ op: "floors", floors: st.floors.filter((q) => q.index !== level) }];
+  // (the top storey taken away: its roofs — lifted onto it with its rooms — back down onto the storey under it, as high
+  // over its walls' top, not gone with it: the house kept its roof — 2026-11-26)
+  const below = list.find((q) => (q.storey ?? 0) === (f.storey ?? 0) - 1);
+  const roofs = (st.roofs ?? []).filter((r) => r.floor === level);
+  if ((f.storey ?? 0) > 0 && below && roofs.length) {
+    const dz = r3(below.z + (below.ceil ?? STOREY - SLAB) - (f.z + (f.ceil ?? STOREY - SLAB)));
+    const down = roofs.map((r) => ({
+      ...r,
+      floor: below.index,
+      z: r3(r.z + dz),
+      ...(r.top !== undefined ? { top: r3(r.top + dz) } : {}),
+    }));
+    ops.push({
+      op: "roofs",
+      floor: below.index,
+      roofs: [...(st.roofs ?? []).filter((r) => r.floor === below.index), ...down],
+    });
+  }
+  return ops;
 }
 /** A storey's name: Ground, Upstairs (first), Second…, Basement, Basement 2. */
 export function storeyLabel(storey: number): string {

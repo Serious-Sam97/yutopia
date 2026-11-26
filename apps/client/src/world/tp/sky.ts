@@ -114,6 +114,9 @@ export class Surroundings {
   readonly grounds: GroundsStream | null = null;
   private local = new Vector3();
   private tgt = new Vector3();
+  /** (plan 130) the houses' roofs on the home lots — their boxes on the plan and their eaves' height (the scene's):
+   *  no snow falling, no dusting under them (2026-11-26: it snowed in a house) */
+  houseRoofs: () => readonly { x0: number; z0: number; x1: number; z1: number; eaves: number }[] = () => [];
   private disposables: { dispose(): void }[] = [];
 
   // `cuts`: the walls' windows (shared wallCuts): the campus's façade opens there
@@ -466,9 +469,12 @@ export class Surroundings {
     const f = this.campus.footprint();
     const roof = f.roof - GROUND;
     const hq = [{ x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1, top: roof, eaves: roof }];
+    const houses = this.houseRoofs()
+      .map((b) => ({ ...b, top: b.eaves - GROUND, eaves: b.eaves - GROUND }))
+      .filter((b) => d(b) < 120);
     const near = [
       ...hq,
-      ...boxes
+      ...[...houses, ...boxes]
         .filter((b) => d(b) < 120)
         .sort((a, b) => d(a) - d(b))
         .slice(0, ROOFS - hq.length),
@@ -480,6 +486,8 @@ export class Surroundings {
       u[i * 2 + 1].set(b.eaves - 0.1, 0, 0, 0);
     }
     wx.wxRoofN.value = near.length;
+    // (the flakes too: the Grounds' buildings and the houses — the campus's coords are the Grounds')
+    this.campus.roofs = houses.length ? [...boxes, ...houses] : boxes;
   }
 
   // the dome and the snow go with the camera; the overcast drifts

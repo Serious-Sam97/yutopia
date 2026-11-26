@@ -811,6 +811,8 @@ export interface HudState {
     coverTint: string | null;
     paint: string; // the material Paint puts on faces (p w f b k)
     wallView: WallView;
+    /** (2026-11-26) the roofs drawn while building (The Sims'), a button hides them */
+    roofs: boolean;
     wallTag: WallTag | null;
     props: Record<string, unknown> | null; // what new furniture copies (C)
     fits: boolean; // the ghost under the pointer fits
@@ -961,6 +963,7 @@ const initial: HudState = {
     coverTint: null,
     paint: "b",
     wallView: "cut",
+    roofs: true,
     wallTag: null,
     props: null,
     fits: true,

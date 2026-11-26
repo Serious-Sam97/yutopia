@@ -51,8 +51,10 @@ import { type StreetThing, terrainAt } from "@yutopia/shared/grounds";
 import { ALOFT, KH_MOVE, MV_AIM, MV_CROUCH } from "@yutopia/shared/move";
 import {
   cellOf,
+  doorSteps,
   flightsOf,
   layoutSig as floorLayoutSig,
+  inRing,
   isFreeOpening,
   onOf,
   padsOf,
@@ -439,7 +441,8 @@ function drawnFloor(lm: MapDef, here: WorldObjectDef[], all: WorldObjectDef[], s
   const edges0 = structure ? edgesOfWalls(structure.walls, floorOf(lm), corner, fz, holed) : edgesOfMap(map);
   // (plan 130: a lot's foundation — its pads under the floor, drawn with the walls' fences and trims)
   const found = structure?.floors.find((f) => f.index === floorOf(lm))?.found ?? 0;
-  const flights = structure ? flightsOf(structure, floorOf(lm)) : [];
+  // (and its foundation's steps at its doors: worked out from them — structure/steps.ts)
+  const flights = structure ? [...flightsOf(structure, floorOf(lm)), ...doorSteps(structure, floorOf(lm), here)] : [];
   const pools = structure ? poolsOf(structure, floorOf(lm)) : [];
   const edges = {
     ...edges0,
@@ -476,7 +479,38 @@ function drawnFloor(lm: MapDef, here: WorldObjectDef[], all: WorldObjectDef[], s
             [sl.outline, ...sl.holes].map((r) => r.map(([x, y]): [number, number] => [x - corner.x, y - corner.y])),
           )
       : null;
-  const rings = ringsOf((t) => t !== "a" && t !== "c");
+  // (a house on a home lot: its ceiling is what's over it — the next storey's floor, holes for its stairs kept, and the
+  // roofs on this storey —, not its own floor's kind: a room built on a foundation stands on its concrete, the yard's
+  // open-sky kind, and had none: under a roof, from in, the sky — asked 2026-11-26)
+  const sfl = spaceFloor(floorOf(lm));
+  const homeCeil =
+    structure && sfl?.space.startsWith("home:")
+      ? [
+          // (its own floor up there — not a mezzanine on it, higher)
+          ...(sfl.up !== null
+            ? structure.slabs
+                .filter(
+                  (sl) =>
+                    sl.floor === sfl.up &&
+                    sl.top !== GROUND_TOP &&
+                    Math.abs(sl.z - (structure.floors.find((q) => q.index === sfl.up)?.z ?? sl.z)) < 1e-3,
+                )
+                .map((sl) => [sl.outline, ...sl.holes])
+            : []),
+          // (under a roof: its rooms — walls round them —, never open air: a roof over a storey with no walls yet
+          // drew a ceiling floating in the sky, 2026-11-26)
+          ...structure.rooms
+            .filter((rm) => {
+              if (rm.floor !== floorOf(lm) || rm.outline.length < 3) return false;
+              const mx = rm.outline.reduce((a, p) => a + p[0], 0) / rm.outline.length;
+              const my = rm.outline.reduce((a, p) => a + p[1], 0) / rm.outline.length;
+              return (structure.roofs ?? []).some((r) => r.floor === floorOf(lm) && inRing(r.outline, mx, my));
+            })
+            .map((rm) => [rm.outline]),
+        ].map((rs) => rs.map((r) => r.map(([x, y]): [number, number] => [x - corner.x, y - corner.y])))
+      : null;
+  const rings = homeCeil ?? ringsOf((t) => t !== "a" && t !== "c");
+  const covered = homeCeil;
   // (and all of them: what's floor at all — below-cull's)
   const floorRings = ringsOf(() => true);
   // (each with its material: the floor's look painted per slab — art/floors.ts, phase 9)
@@ -501,6 +535,7 @@ function drawnFloor(lm: MapDef, here: WorldObjectDef[], all: WorldObjectDef[], s
     corner,
     edges,
     rings,
+    covered,
     floorRings,
     slabs,
     // (its roofs: their eaves over the floor — World3's roofs)
@@ -624,7 +659,9 @@ const aroundShape = (building: MapDef, out: { key: string; shape: string }) =>
 const freeSig = (e: WallEdges) =>
   (e.free.length ? JSON.stringify(e.free) : "") +
   (e.styled?.length ? `|s${JSON.stringify(e.styled)}` : "") +
-  (e.trims?.length ? `|t${JSON.stringify(e.trims)}` : "");
+  (e.trims?.length ? `|t${JSON.stringify(e.trims)}` : "") +
+  // (a foundation's steps come and go with its doors: structure/steps.ts)
+  (e.flights?.length ? `|f${JSON.stringify(e.flights)}` : "");
 
 /** The life look's people have no ink line (plan 73 F4): their line meshes drawn with nothing. */
 const NO_LINE = new MeshBasicMaterial({ visible: false });
@@ -682,6 +719,30 @@ export class ThirdPersonView {
   /** the building's structure (the controller's: plan 72 phase 6) — its walls and slabs are the
    *  physics' (physics3d.ts) */
   structure: Structure | null = null;
+  /** (2026-11-26) building: the roofs shown (true) or hidden (false); null: not building — hidden over me */
+  buildRoofs: boolean | null = null;
+  // (plan 130) the home lots' roofs as boxes for the weather (sky.ts houseRoofs), kept till the structure changes
+  private houseRoofsOf: {
+    st: Structure | null;
+    out: { x0: number; z0: number; x1: number; z1: number; eaves: number }[];
+  } = {
+    st: null,
+    out: [],
+  };
+  private houseRoofs() {
+    const st = this.structure;
+    if (this.houseRoofsOf.st === st) return this.houseRoofsOf.out;
+    const homes = new Set((st?.floors ?? []).filter((f) => f.space?.startsWith("home:")).map((f) => f.index));
+    const out = (st?.roofs ?? [])
+      .filter((r) => homes.has(r.floor))
+      .map((r) => {
+        const xs = r.outline.map((p) => p[0]);
+        const ys = r.outline.map((p) => p[1]);
+        return { x0: Math.min(...xs), z0: Math.min(...ys), x1: Math.max(...xs), z1: Math.max(...ys), eaves: r.z };
+      });
+    this.houseRoofsOf = { st, out };
+    return out;
+  }
   level: number;
   // every floor built so far (mine is `world`); `lit`: the light map its things take
   floors = new Map<number, Floor3>();
@@ -1332,6 +1393,7 @@ void main() {
     this.around = new Surroundings(building, opts.themes, wallCuts(home), out.outline());
     this.around.floorLit = (m) => this.light.patch(m);
     this.around.compileAhead = (o) => this.compileAhead(o);
+    this.around.houseRoofs = () => this.houseRoofs();
     this.prepareGrounds();
     this.scene.add(this.around.root);
     this.floors.set(this.level, {
@@ -1820,7 +1882,8 @@ void main() {
     // things it touched; docs/plan/72 phase 8, an edit's cost)
     const lightNow = () => {
       this.lightLater = null;
-      this.light.update(drawn.map, drawn.objects, lightWalls(drawn.edges));
+      // (a house's: what's under its ceiling is in — light3d.ts openSky)
+      this.light.update(drawn.map, drawn.objects, lightWalls(drawn.edges), drawn.covered);
     };
     if (relay && !moved && mine?.world === this.world) {
       this.lightLater = lightNow;
@@ -1942,6 +2005,7 @@ void main() {
     this.around = new Surroundings(building, this.opts.themes, wallCuts(home), this.outline().outline());
     this.around.floorLit = (m) => this.light.patch(m);
     this.around.compileAhead = (o) => this.compileAhead(o);
+    this.around.houseRoofs = () => this.houseRoofs();
     this.prepareGrounds();
     this.scene.add(this.around.root);
     this.placeAround();
@@ -2025,7 +2089,7 @@ void main() {
       const wlm = levelMap(this.building, f);
       if (!wlm) continue;
       const drawn = drawnFloor(wlm, onLevel(all, wlm), all, this.structure);
-      const { map: lm, objects: objs, wells, edges, rings, floorRings, slabs, decks, roofs } = drawn;
+      const { map: lm, objects: objs, wells, edges, rings, floorRings, slabs, decks, roofs, covered } = drawn;
       const wk = wellsKey(wells);
       const sig = `${layoutSig(lm)}|${wk}|${freeSig(edges)}|${slabSig(drawn)}`;
       let relaid = false;
@@ -2040,7 +2104,7 @@ void main() {
         b = undefined;
       }
       const o = this.cornerTo(f);
-      const lit = this.belowLight(f, lm, objs, edges);
+      const lit = this.belowLight(f, lm, objs, edges, covered);
       lit.setOffset(o.x, o.y, o.h);
       if (!b) {
         const world = new World3(
@@ -2075,14 +2139,21 @@ void main() {
   }
 
   // A floor below mine's light: baked from its own lamps and windows, at the hour.
-  private belowLight(f: number, lm: MapDef, objs: WorldObjectDef[], edges?: WallEdges): Light3 {
+  private belowLight(
+    f: number,
+    lm: MapDef,
+    objs: WorldObjectDef[],
+    edges?: WallEdges,
+    covered: [number, number][][][] | null = null,
+  ): Light3 {
     let l = this.below.get(f);
     if (!l) {
       l = new Light3();
       l.setHour(this.hour); // (before the bake: it's composited at this hour)
       this.below.set(f, l);
     }
-    l.update(lm, objs, edges ? lightWalls(edges) : []);
+    // (a house's: what's under its ceiling is in — as my floor's, light3d openSky)
+    l.update(lm, objs, edges ? lightWalls(edges) : [], covered);
     return l;
   }
 
@@ -2377,9 +2448,10 @@ void main() {
       slabs,
       decks,
       roofs,
+      covered,
     } = drawnFloor(wlm, onLevel(all, wlm), all, this.structure);
     const o = this.cornerTo(f);
-    const lit = this.belowLight(f, lm, objs, edges);
+    const lit = this.belowLight(f, lm, objs, edges, covered);
     lit.setOffset(o.x, o.y, o.h);
     const world = new World3(
       lm,
@@ -3761,8 +3833,12 @@ void main() {
   private fadeWalls(dt: number) {
     const cam = this.camera.position;
     const t = this.target;
-    // (a roof over me on my floor: not drawn while I'm under it — phase 11.7)
-    this.world.roofsFor(t.x - this.world.root.position.x, t.z - this.world.root.position.z);
+    // (a roof over me on my floor: not drawn while I'm under it — phase 11.7; building, all of them or none, by build
+    // mode's Roofs button — 2026-11-26)
+    // (every floor's: hidden on one I've left, they'd stay hidden after — the double check, 2026-11-26)
+    for (const b of this.floors.values()) if (b.world !== this.world) b.world.roofsAll(this.buildRoofs ?? true);
+    if (this.buildRoofs !== null) this.world.roofsAll(this.buildRoofs);
+    else this.world.roofsFor(t.x - this.world.root.position.x, t.z - this.world.root.position.z);
     // (first person: the camera is you — nothing stands between)
     const inside = this.mode === "first";
     for (const f of this.world.fades) {

@@ -47,6 +47,7 @@ addStrings(
     bvRightDrag: ["Right drag", "Arrastar direito"],
     bvTopDown: ["Look straight down (T)", "Olhar de cima (T)"],
     bvGrid: ["The grid (G)", "A grade (G)"],
+    bvRoofs: ["Roofs: shown or hidden", "Telhados: mostrar ou esconder"],
     bvTurnL: ["Turn left (Q)", "Girar à esquerda (Q)"],
     bvTurnR: ["Turn right (E)", "Girar à direita (E)"],
     bvFloorUp: ["Up a floor (PgUp)", "Subir um andar (PgUp)"],
@@ -60,6 +61,7 @@ addStrings(
     bvTrim_frieze: ["Frieze", "Friso"],
     // (plan 130) a home lot's storeys
     bvStoreyUp: ["A storey on top", "Um andar em cima"],
+    bvStoreyAdd: ["Add a storey on top (normal height)", "Adicionar um andar em cima (altura normal)"],
     bvBasement: ["Dig a basement", "Cavar um porão"],
     bvStoreyRemove: ["Take this storey away", "Remover este andar"],
     bvStoreyRemoveAsk: ["Take this storey away, and everything on it?", "Remover este andar, e tudo nele?"],
@@ -227,6 +229,15 @@ function ViewCluster() {
     ["cut", "wCut", "wallViewCut"],
     ["down", "wDown", "wallViewDown"],
   ];
+  // (the roofs while building: shown, or hidden by the button; not building, the view's own — hidden over me)
+  useEffect(() => {
+    const tp = w?.tp;
+    if (!tp) return;
+    tp.buildRoofs = b.on ? b.roofs : null;
+    return () => {
+      tp.buildRoofs = null;
+    };
+  }, [w, b.on, b.roofs]);
   const btn = (icon: IconName, title: string, onClick: () => void, pressed?: boolean, disabled?: boolean) => (
     <button
       type="button"
@@ -265,6 +276,7 @@ function ViewCluster() {
       <span className="gl-sep" aria-hidden />
       {btn("top", bv("bvTopDown"), () => w?.build?.topDown(), b.topDown)}
       {btn("grid", bv("bvGrid"), () => w?.buildKey("g"), b.grid)}
+      {btn("roof", bv("bvRoofs"), () => hud.set((s) => ({ build: { ...s.build, roofs: !s.build.roofs } })), b.roofs)}
       {btn("turnL", bv("bvTurnL"), () => w?.build?.turnCam(-1))}
       {btn("turnR", bv("bvTurnR"), () => w?.build?.turnCam(1))}
       <span className="gl-sep" aria-hidden />
@@ -305,6 +317,35 @@ function FloorStepper() {
   const floors = useHud((s) => s.floors);
   const [open, setOpen] = useState(false);
   const [rise, setRise] = useState<StoreyRise>("normal");
+  // (a storey asked for: once it's there, up onto it — the ▲ on a lot's top floor, or the menu's)
+  const goUp = useRef<readonly number[] | null>(null);
+  useEffect(() => {
+    const was = goUp.current;
+    if (was === null || !w) return;
+    // (the floor that wasn't there: the new storey — the house's highest)
+    const fresh = floors.filter((f) => !was.includes(f));
+    if (!fresh.length) return;
+    goUp.current = null;
+    const top = fresh.sort((a, b) => (spaceFloor(b)?.storey ?? 0) - (spaceFloor(a)?.storey ?? 0))[0];
+    hud.set((s) => ({ build: { ...s.build, over: 0 } }));
+    // (once its floor's solid here — the physics catches up a frame after the view —: else I'm taken up onto nothing)
+    let tries = 0;
+    const go = () => {
+      if (w.tp?.body.physics?.floorReady(top) || ++tries > 40) w.goToFloor(top);
+      else setTimeout(go, 100);
+    };
+    go();
+  }, [floors, w]);
+  const addStorey = (key: string, r: StoreyRise) => {
+    if (!w) return;
+    const was = [...floors];
+    goUp.current = was;
+    w.send("lot:storey", { key, dir: "up", rise: r });
+    // (refused — the most storeys a house has —: not waiting on a storey someone else puts on later)
+    setTimeout(() => {
+      if (goUp.current === was) goUp.current = null;
+    }, 10_000);
+  };
   const step = (up: boolean) => {
     const i = floors.indexOf(floor) + (up ? 1 : -1);
     if (i < 0 || i >= floors.length) return;
@@ -367,16 +408,30 @@ function FloorStepper() {
           {floorShort(name) || floorLabel(floor)}
         </b>
       </button>
-      <button
-        type="button"
-        className="gl-btn gl-round"
-        title={bv("bvFloorUp")}
-        aria-label={bv("bvFloorUp")}
-        disabled={i >= floors.length - 1}
-        onClick={() => step(true)}
-      >
-        <Icon name="chevUp" size={18} />
-      </button>
+      {lotKey && i >= floors.length - 1 ? (
+        // (a house's top floor: ▲ puts a storey on top and goes up — no menu to find, 2026-11-26)
+        <button
+          type="button"
+          className="gl-btn gl-round"
+          title={bv("bvStoreyAdd")}
+          aria-label={bv("bvStoreyAdd")}
+          data-testid="floor-up-add"
+          onClick={() => addStorey(lotKey, "normal")}
+        >
+          <Icon name="plus" size={18} />
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="gl-btn gl-round"
+          title={bv("bvFloorUp")}
+          aria-label={bv("bvFloorUp")}
+          disabled={i >= floors.length - 1}
+          onClick={() => step(true)}
+        >
+          <Icon name="chevUp" size={18} />
+        </button>
+      )}
       {open && (
         <div
           className="gl-panel gl-pop absolute top-[52px] left-1/2 -translate-x-1/2 p-2 flex flex-col gap-1 min-w-[200px] z-20"
@@ -419,7 +474,7 @@ function FloorStepper() {
                 data-testid="lot-storey-up"
                 onClick={() => {
                   setOpen(false);
-                  w.send("lot:storey", { key: lotKey, dir: "up", rise });
+                  addStorey(lotKey, rise);
                 }}
               >
                 <Icon name="plus" size={14} /> {bv("bvStoreyUp")}
@@ -684,7 +739,8 @@ function FoundRoom({ roomKey }: { roomKey: string }) {
   return (
     <div
       data-testid="found-room"
-      className="gl gl-panel pointer-events-auto fixed left-1/2 -translate-x-1/2 top-[88px] z-30 px-3 py-2.5 flex items-center gap-2 gl-pop"
+      // (under the Build chip, top left: centred, it covered the floor menu — 2026-11-26)
+      className="gl gl-panel pointer-events-auto fixed left-4 top-[88px] z-30 px-3 py-2.5 flex items-center gap-2 gl-pop"
     >
       <span className="mono text-[11px] uppercase tracking-wide" style={{ color: "var(--vfd)" }}>
         {t("roomFound")}
@@ -918,9 +974,9 @@ function FreeWallInspector() {
         {!wall.style && face(wall.front, "wallThisSide")}
         {!wall.style && face(wall.back ?? wall.front, "wallOtherSide")}
         {!wall.style && (
-          <div className="flex flex-wrap gap-1" aria-label={bv("bvTrims")}>
+          <fieldset className="flex flex-wrap gap-1 border-0 m-0 p-0 min-w-0" aria-label={bv("bvTrims")}>
             {WALL_TRIMS.map(trim)}
-          </div>
+          </fieldset>
         )}
         <div className="flex flex-wrap gap-1.5">
           {faced && act("wallSame", "same")}

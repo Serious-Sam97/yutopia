@@ -141,7 +141,16 @@ registerFeature((room: WorldRoom) => {
     if (typeof ops === "string") return warn(client, `${ops[0].toUpperCase()}${ops.slice(1)}.`);
     room.applyStruct(ops);
     room.rebuildGrid();
-    say(client, dir === "up" ? "A new storey on top." : "A basement dug.");
+    // (up with no room under it: nothing to stand on up there yet — its floor comes over the rooms under it)
+    const floored = ops.some((o) => o.op === "slabs");
+    say(
+      client,
+      dir === "down"
+        ? "A basement dug."
+        : floored
+          ? "A new storey on top."
+          : "A new storey on top — close a room with walls under it to have a floor up there.",
+    );
   });
 
   room.on("lot:storey:remove", (client, m) => {
